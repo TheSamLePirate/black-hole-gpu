@@ -3,8 +3,10 @@
 // atmosphere's rim, the stars behind. Over both: the zones, the trail coloured by height, the path predicted with its
 // minutes, the plan, every unit about (the real traffic, a mission's, the ships) and the players — their labels never
 // covering one another.
+import { drawFields } from "../../world/runwaydraw";
+import { fieldShown, fieldsNearCached } from "../../world/runways";
 import coastlines from "../coastlines.json";
-import { C, D, fmt, Labels, type Pen, ramp, SIDE, unitSymbol, type Point, type Rect } from "./kit";
+import { C, D, fmt, Labels, missileCue, type Pen, ramp, SIDE, trailDots, unitSymbol, type Point, type Rect } from "./kit";
 import { LAND } from "./land";
 import { mercX, mercY, metresPerPx, night, TILE_CREDIT, type Tiles } from "./tiles";
 import { EARTH_CREDIT, type EarthGlobe } from "./earth";
@@ -200,6 +202,23 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
     c.fillStyle = vg;
     c.fillRect(r.x, r.y, W, H);
   }
+  // the world's airfields (src/world/runways.ts — PLAN-RADAR-AAA RD11): the map's level of detail, about its centre
+  if (earth && !v.globe) {
+    const reach = (Math.max(W, H) / 2) * mpp;
+    drawFields(c, fieldsNearCached(`geo${Math.round(reach)}`, v.lat, v.lon, reach * 1.2, (f) => fieldShown(f, reach)).slice(0, 300), {
+      at,
+      mpp,
+      labels: true,
+      marked: new Set((sc.snap?.route ?? []).map((q) => q.name.toUpperCase())),
+      box: r,
+    });
+  } else if (earth && v.globe && R > 3000) {
+    drawFields(c, fieldsNearCached("globe", v.lat, v.lon, (6.371e6 * 2) / Math.max(R / 400, 1), (f) => f.kind === "large").slice(0, 200), {
+      at,
+      mpp,
+      labels: false,
+    });
+  }
   // the zones
   for (const z of sc.zones) {
     const q = at(z.lat, z.lon);
@@ -302,7 +321,14 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
   for (const t of sc.contacts) {
     const q = at(t.lat, t.lon);
     if (!q || q[0] < r.x - 20 || q[0] > r.x + W + 20 || q[1] < r.y - 20 || q[1] > r.y + H + 20) continue;
-    unitSymbol(p, q[0], q[1], t.kind, t.side, t.hdg, 0, t.kind === "sea" ? 6 : 5);
+    trailDots(p, t, sc.trails, at);
+    if (missileCue(p, q[0], q[1], t)) continue;
+    // (the truth on the map; what the pilot's sensors do not hold faded — RD6)
+    unitSymbol(p, q[0], q[1], t.kind, t.kind === "decoy" ? t.type : t.side, t.hdg, 0, t.kind === "sea" ? 6 : 5, {
+      tcas: t.adv,
+      ...(t.sensors === 0 || t.state === "truth" ? { state: "truth" as const } : {}),
+      ...(t.locked ? { locked: true } : {}),
+    });
     const col = SIDE[t.side] ?? C.white;
     if (nameZoom || t.side !== "traffic") {
       const alt = t.kind === "air" && t.alt !== null && v.zoom >= 9 && !v.globe ? ` ${fmt(u.alt(t.alt) / 100)}` : "";
@@ -353,7 +379,7 @@ export function drawGeo(p: Pen, r: Rect, sc: Scene, v: GeoView) {
   if (v.globe) c.restore();
   c.restore();
   if (photo)
-    p.text(EARTH_CREDIT, r.x + W - 8, r.y + H - 6, {
+    p.text(EARTH_CREDIT(), r.x + W - 8, r.y + H - 6, {
       col: "#9fb3bdcc",
       size: 9,
       align: "right",

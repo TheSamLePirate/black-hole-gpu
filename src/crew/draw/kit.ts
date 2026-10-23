@@ -1,4 +1,6 @@
+import { drawSym, PAL, type SymKind, type SymSide, type SymState } from "../../radar/symbols";
 import { wgs84Inverse } from "../../system/ellipsoid";
+import { L, locale } from "../lang";
 
 // The crew console's drawing kit: the avionics palette, a rectangle, and a pen over a 2D context with the few
 // strokes every display shares. Glows are wide translucent strokes under the line, never shadowBlur (slow on phones).
@@ -206,10 +208,10 @@ export function ramp(t: number): string {
   return `rgb(${Math.round(a[0] + (b[0] - a[0]) * u)},${Math.round(a[1] + (b[1] - a[1]) * u)},${Math.round(a[2] + (b[2] - a[2]) * u)})`;
 }
 
-/** French grouping, a fixed number of decimals; "—" when unknown */
+/** the console language's grouping (1 234,5 · 1,234.5), a fixed number of decimals; "—" when unknown */
 export function fmt(v: number | null | undefined, digits = 0): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
-  return v.toLocaleString("fr-FR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return v.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 /** a duration: 45 s, 12 min 05, 2 h 14 */
 export function dur(s: number | null | undefined): string {
@@ -217,7 +219,7 @@ export function dur(s: number | null | undefined): string {
   if (s < 60) return `${Math.round(s)} s`;
   if (s < 3600) return `${Math.floor(s / 60)} min ${String(Math.floor(s % 60)).padStart(2, "0")}`;
   if (s < 86400 * 3) return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}`;
-  return `${fmt(s / 86400, 1)} j`;
+  return `${fmt(s / 86400, 1)} ${L("j", "d")}`;
 }
 
 /** the distance [m] and initial bearing [rad] from a to b over the WGS84 ellipsoid */
@@ -226,69 +228,71 @@ export function polar(lat0: number, lon0: number, lat: number, lon: number): { d
   return { d: q.d, b: q.az };
 }
 
-/** the symbol of a unit about: a ship's hull, an aircraft's TCAS diamond or NATO shape, a ground unit's */
-export function unitSymbol(p: Pen, x: number, y: number, kind: string, side: string, hdg: number | null, rot: number, k = 7) {
-  const c = p.c;
-  const col = SIDE[side] ?? C.white;
-  c.save();
-  c.translate(x, y);
-  if (kind === "sea") {
-    c.rotate((hdg ?? 0) - rot);
-    c.beginPath();
-    c.moveTo(0, -k * 1.7);
-    c.quadraticCurveTo(k * 0.9, -k * 0.6, k * 0.7, k * 1.3);
-    c.lineTo(-k * 0.7, k * 1.3);
-    c.quadraticCurveTo(-k * 0.9, -k * 0.6, 0, -k * 1.7);
-    c.closePath();
-    p.fill(`${col}55`);
-    p.stroke(col, 1.6);
-    c.restore();
-    return;
-  }
-  c.beginPath();
-  if (side === "dead") {
-    c.moveTo(-k, -k);
-    c.lineTo(k, k);
-    c.moveTo(k, -k);
-    c.lineTo(-k, k);
-    p.stroke(col, 2);
-  } else if (side === "friend") {
-    c.arc(0, 0, k, 0, TAU);
-    p.stroke(col, 2);
-  } else if (side === "neutral") {
-    c.rect(-k * 0.8, -k * 0.8, k * 1.6, k * 1.6);
-    p.stroke(col, 2);
-  } else if (side === "hostile") {
-    c.moveTo(0, -k * 1.2);
-    c.lineTo(k * 1.2, 0);
-    c.lineTo(0, k * 1.2);
-    c.lineTo(-k * 1.2, 0);
-    c.closePath();
-    p.fill(`${col}44`);
-    p.stroke(col, 2);
-  } else {
-    // the real traffic: TCAS's open diamond
-    c.moveTo(0, -k);
-    c.lineTo(k * 0.8, 0);
-    c.lineTo(0, k);
-    c.lineTo(-k * 0.8, 0);
-    c.closePath();
-    p.stroke(col, 1.5);
-  }
-  if (hdg !== null && kind !== "ground" && side !== "dead") {
-    const a = hdg - rot;
-    p.seg(Math.sin(a) * k, -Math.cos(a) * k, Math.sin(a) * k * 2.6, -Math.cos(a) * k * 2.6, col, 1.5);
-  }
-  c.restore();
+/** the symbol of a unit about — the common symbology (radar/symbols.ts — PLAN-RADAR-AAA RD3), the pilot's screens' own:
+ *  an aircraft's NATO shape (the traffic's TCAS diamond), a ship's or a ground unit's whole one, a missile a dart, a
+ *  flare a star, chaff a cloud of dots; `hdg` its way [rad from north], `rot` the screen's up [rad from north] */
+export function unitSymbol(
+  p: Pen,
+  x: number,
+  y: number,
+  kind: string,
+  side: string,
+  hdg: number | null,
+  rot: number,
+  k = 7,
+  o: { state?: SymState; locked?: boolean; selected?: boolean; age?: number; tcas?: "proximate" | "TA" | "RA" } = {},
+) {
+  const sk: SymKind =
+    kind === "decoy"
+      ? side === "chaff"
+        ? "chaff"
+        : "flare"
+      : kind === "missile"
+        ? "missile"
+        : kind === "sea"
+          ? "sea"
+          : kind === "ground"
+            ? "ground"
+            : "air";
+  const ss: SymSide = kind === "decoy" ? "friend" : side in PAL ? (side as SymSide) : "unknown";
+  drawSym(p.c, x, y, { kind: sk, side: ss, trk: hdg === null || kind === "ground" ? null : hdg - rot, ...o }, k, 1.6);
 }
-export const SIDE: Record<string, string> = {
-  traffic: "#c9d7df",
-  hostile: C.red,
-  friend: C.cyan,
-  neutral: C.green,
-  dead: "#7d8890",
-  carrier: "#5b9dff",
-};
+/** A missile's cue under it (PLAN-RADAR-AAA RD8): its end where it ended (SPLASH, MISS — true: no symbol then), at
+ *  us, decoyed, its time to go. */
+export function missileCue(p: Pen, x: number, y: number, t: { kind: string; side: string; type: string }): boolean {
+  if (t.kind !== "missile" || !t.type) return false;
+  const col = t.side === "friend" ? PAL.friend : PAL.hostile;
+  if (t.type === "SPLASH" || t.type === "MISS") {
+    p.text(t.type === "SPLASH" ? "SPLASH" : L("RATÉ", "MISS"), x, y + 4, { col, size: 11, weight: 700, align: "center" });
+    return true;
+  }
+  const s = t.type.replace("→ US", L("→ NOUS", "→ US")).replace("DECOYED", L("LEURRÉ", "DECOYED"));
+  p.text(s, x, y + 17, { col, size: 9, weight: 700, align: "center" });
+  return false;
+}
+/** A contact's trail (PLAN-RADAR-AAA RD7): its past places within the span [s] (a missile's 5 s at least), dots fading
+ *  into the past; `at` the display's place of a latitude, longitude. */
+export function trailDots(
+  p: Pen,
+  t: { trail?: { lat: number; lon: number; age: number }[]; kind: string; side: string },
+  span: number,
+  at: (lat: number, lon: number) => Point | null,
+) {
+  const sp = t.kind === "missile" ? Math.max(span, 5) : t.kind === "decoy" ? 0 : span;
+  if (!sp || !t.trail?.length) return;
+  const c = p.c;
+  c.fillStyle = SIDE[t.side] ?? C.white;
+  for (const q of t.trail) {
+    if (q.age > sp) continue;
+    const xy = at(q.lat, q.lon);
+    if (!xy) continue;
+    c.globalAlpha = 0.15 + 0.6 * (1 - q.age / sp);
+    c.fillRect(xy[0] - 1.3, xy[1] - 1.3, 2.6, 2.6);
+  }
+  c.globalAlpha = 1;
+}
+/** each side's colour — the common palette's (radar/symbols.ts PAL) */
+export const SIDE: Record<string, string> = { ...PAL };
 
 /** the labels placed this frame: one is drawn only where it does not cover another */
 export class Labels {

@@ -974,6 +974,9 @@ function dockWant(
     D.phase = along >= 12 ? "APPROACH" : D.final ? "FINAL" : "HOLD 10 m";
     // the station's waypoints: stopped on each (its hold), then on — the crew's go
     const W = D.wp;
+    // (the axis joined well inside a waypoint not held yet — a start drifted off, the axis met short of it —: that
+    // one passed, not backed out to at a tenth of a metre a second)
+    while (W && W.left.length && W.held !== W.left[0] && along < DOCK_WAYPOINTS[W.left[0]!]!.along - 15) W.left.shift();
     const k = W?.left[0];
     if (W && k !== undefined) {
       const P = DOCK_WAYPOINTS[k]!;

@@ -206,6 +206,36 @@ describe("the room server", () => {
     b2.close();
   });
 
+  test("the room's light delay (AUDIT-CREW priority 6): its owner's alone, his token never passed on, told to newcomers", async () => {
+    const a = client("Ana");
+    const b = client("Ben");
+    const { code, owner } = await a.create("Delay", 0);
+    await b.join(code);
+    await until(() => a.server.f.includes("room-delay") && b.room?.members.length === 2);
+    const heard: Record<string, unknown>[] = [];
+    b.on("event", ({ ev }) => heard.push(ev as never));
+    const errors: string[] = [];
+    b.on("error", ({ code: c }) => errors.push(c));
+    // (Ben, not its owner: refused)
+    b.event({ kind: "room-delay", value: "off", owner: "nope" } as never);
+    await until(() => errors.length === 1);
+    expect(errors).toEqual(["owner"]);
+    // (Ana, its owner: passed on without her token)
+    a.event({ kind: "room-delay", value: "tenth", owner } as never);
+    await until(() => heard.some((e) => e.kind === "room-delay"));
+    expect(heard.find((e) => e.kind === "room-delay")).toEqual({ kind: "room-delay", value: "tenth" });
+    // (a newcomer told at once)
+    const c = client("Cid");
+    const late: Record<string, unknown>[] = [];
+    c.on("event", ({ ev }) => late.push(ev as never));
+    await c.join(code, "instruments");
+    await until(() => late.some((e) => e.kind === "room-delay"));
+    expect(late.find((e) => e.kind === "room-delay")).toEqual({ kind: "room-delay", value: "tenth" });
+    a.close();
+    b.close();
+    c.close();
+  });
+
   test("rooms kept across a restart, their clock carried on", async () => {
     const a = client("Ana");
     const { code } = await a.create("Persistent", 5000);

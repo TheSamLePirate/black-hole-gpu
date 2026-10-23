@@ -9,7 +9,7 @@ import type { CameraController } from "../controls";
 import { TELE_MIN } from "../controls";
 import { onEscape } from "./keys";
 import { cameraFrame } from "../camera";
-import { MOUNTS, type Mount } from "../mounts";
+import { MOUNTS, mountKeys, type Mount } from "../mounts";
 import type { Settings, Target } from "../settings";
 import { BODY_NAMES } from "../targeting";
 import { SOLAR_BODIES } from "../system/solar";
@@ -84,6 +84,7 @@ export const BODY_COLOURS: Record<Target, string> = {
   lander: "255, 160, 200",
   endurance: "200, 225, 255",
   f35: "190, 200, 210",
+  a320: "236, 238, 242",
   sun: "255, 236, 170",
   mercury: "190, 180, 170",
   venus: "240, 220, 170",
@@ -273,8 +274,9 @@ export class CameraPanel {
     return sec;
   }
 
-  private tile(icon: string, name: string, desc: string, active: boolean, on: () => void, key = "") {
+  private tile(icon: string, name: string, desc: string, active: boolean, on: () => void, key = "", testid = "") {
     const b = h("button", "cp-tile");
+    if (testid) b.dataset.testid = testid;
     b.classList.toggle("active", active);
     const i = h("span", "cp-ti");
     i.innerHTML = svg(icon);
@@ -308,7 +310,8 @@ export class CameraPanel {
     const sec = this.section(t("Placement"), "V · ⇧V");
     const tiles = h("div", "cp-tiles cp-tiles-5");
     const now = this.d.view();
-    for (const v of VIEWS) tiles.append(this.tile(VIEW_ICON[v], VIEW_LABEL[v], VIEW_HELP[v], now === v, () => this.d.setView(v)));
+    for (const v of VIEWS)
+      tiles.append(this.tile(VIEW_ICON[v], VIEW_LABEL[v], VIEW_HELP[v], now === v, () => this.d.setView(v), "", `cp-view-${v}`));
     const row = h("div", "cp-chips");
     row.append(
       this.chip(
@@ -334,11 +337,19 @@ export class CameraPanel {
     ] as const) {
       const sec = this.section(g, outside ? "" : "V · ⇧V");
       const tiles = h("div", "cp-tiles cp-tiles-3");
-      for (const m of Object.keys(MOUNTS) as Mount[]) {
+      for (const m of mountKeys()) {
         const o = (MOUNTS[m] as { outside?: "around" | "free" | "flyby" | "station" | "director" }).outside;
         if (!!o !== outside) continue;
         tiles.append(
-          this.tile(o ? MOUNT_ICON[o] : MOUNT_ICON.on, MOUNTS[m].short, MOUNTS[m].label, s.shipMount === m, () => this.d.setMount(m)),
+          this.tile(
+            o ? MOUNT_ICON[o] : MOUNT_ICON.on,
+            MOUNTS[m].short,
+            MOUNTS[m].label,
+            s.shipMount === m,
+            () => this.d.setMount(m),
+            "",
+            `cp-mount-${m}`,
+          ),
         );
       }
       sec.append(tiles);

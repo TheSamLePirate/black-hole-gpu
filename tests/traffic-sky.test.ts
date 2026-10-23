@@ -16,7 +16,7 @@ const D = Math.PI / 180;
 
 describe("the types", () => {
   test("an A320, a 777, a CRJ-900, a Falcon 7X, a Cessna 172, a helicopter, an unknown heavy", () => {
-    expect(airframeOf("A320")).toMatchObject({ mesh: "a320", len: 37.6 });
+    expect(airframeOf("A320")).toMatchObject({ mesh: "a320t", len: 37.6 });
     expect(airframeOf("B77W").len).toBe(73.9);
     expect(airframeOf("CRJ9")).toMatchObject({ mesh: "crj900", len: 36.2 });
     expect(airframeOf("FA7X").mesh).toBe("crj900");
@@ -102,7 +102,7 @@ describe("an aircraft between its reports", () => {
     console.log(`  carried 4 s along its 1.5°/s turn: ${miss.toFixed(1)} m from its next report; banked ${(c1.bank / D).toFixed(0)}°`);
     expect(miss).toBeLessThan(3);
     expect(c1.bank / D).toBeGreaterThan(15);
-    expect(c1.mesh).toBe("a320");
+    expect(c1.mesh).toBe("a320t");
   });
 
   test("a minute behind: flown on its path through reports 8 s apart, noisy — its turn as it was, its bank, no jump from frame to frame", () => {

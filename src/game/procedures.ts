@@ -24,6 +24,8 @@ export interface Procedure {
   kind: "runway" | "pad";
   /** the runway end's heading [°] (a pad: none) */
   rwy: number | null;
+  /** the runway's length [m] (a world runway's own — PLAN-RADAR-AAA RD13) */
+  len?: number;
   fixes: Fix[];
   /** the missed approach's fixes, in order */
   missed: Fix[];
@@ -74,6 +76,7 @@ export function procedureFor(site: Site): Procedure {
     return {
       kind: "runway",
       rwy: site.rwy,
+      len: site.len ?? RUNWAY_LENGTH,
       fixes: [
         { id: "IAF", along: -25000, across: 0, h: Math.round(finalGate(25e3)) },
         { id: "FAF", along: -12000, across: 0, h: Math.round(finalGate(12e3)) },
@@ -82,7 +85,7 @@ export function procedureFor(site: Site): Procedure {
         { id: "TD", along: LANDING.td, across: 0, h: 0 },
       ],
       missed: [
-        { id: "MA", along: RUNWAY_LENGTH + 3000, across: 0, h: MISSED_TURN_H },
+        { id: "MA", along: (site.len ?? RUNWAY_LENGTH) + 3000, across: 0, h: MISSED_TURN_H },
         { id: "MAHF", along: MISSED_HOLD, across: MISSED_SIDE, h: MISSED_TOP_H },
       ],
       minima: { dh: RUNWAY_DH, vis: 800 },

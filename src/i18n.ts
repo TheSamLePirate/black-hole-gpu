@@ -20,6 +20,7 @@ import frRadar from "./i18n/fr-radar";
 import frFlight from "./i18n/fr-flight";
 import frMission from "./i18n/fr-mission";
 import frProcedures from "./i18n/fr-procedures";
+import frAar from "./i18n/fr-aar";
 import frInstructor from "./i18n/fr-instructor";
 import frCopilot from "./i18n/fr-copilot";
 import frCourse from "./i18n/fr-course";
@@ -30,6 +31,9 @@ import frReplay from "./i18n/fr-replay";
 import frNetSpace from "./i18n/fr-netspace";
 import frSpaceMissions from "./i18n/fr-spacemissions";
 import frSpaceSchool from "./i18n/fr-spaceschool";
+import frA320 from "./i18n/fr-a320";
+import frA320Deck from "./i18n/fr-a320-deck";
+import frA320Ground from "./i18n/fr-a320-ground";
 
 export type Lang = "fr" | "en";
 export type Text = Record<Lang, string>;
@@ -89,8 +93,54 @@ export const tf = (en: string, ...v: (string | number)[]) => t(en).replace(/\{(\
 /** Is there French for it (the tests: what is left to translate). */
 export const hasFrench = (en: string) => FR.has(en);
 
+// (built once, at the first need: the French back to its English; the texts with values as patterns both ways)
+let back: Map<string, string> | null = null;
+let shapes: { en: RegExp; fr: RegExp; enT: string; frT: string }[] | null = null;
+const shape = (t: string) => new RegExp(`^${t.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{(\d)\}/g, "(?<v$1>.+?)")}$`, "s");
+/**
+ * A text of the game said in another language (`to`), whichever it was written in: a dictionary's English to its French,
+ * its French back to its English, a text with values ({0}, {1}…) matched by its pattern and its values carried over. A
+ * text the dictionaries do not know comes back as it is. (The crew console's answers in its own language — ui/crew-exec.ts.)
+ */
+export function translateTo(text: string, to: Lang, depth = 0): string {
+  if (!text) return text;
+  if (to === "fr" && FR.has(text)) return FR.get(text)!;
+  if (!back) {
+    back = new Map();
+    shapes = [];
+    for (const [en, fr] of FR) {
+      if (!back.has(fr)) back.set(fr, en);
+      // (a value twice in one text: no pattern for it — named groups are unique)
+      if (/\{\d\}/.test(en))
+        try {
+          shapes.push({ en: shape(en), fr: shape(fr), enT: en, frT: fr });
+        } catch {}
+    }
+    // (the most telling first: the pattern with the most words of its own — "{0}" alone would take anything)
+    const lit = (t: string) => t.replace(/\{\d\}/g, "").length;
+    shapes = shapes.filter((x) => lit(x.enT) >= 4).sort((a, b) => lit(b.enT) - lit(a.enT));
+  }
+  if (to === "en" && back.has(text)) return back.get(text)!;
+  if (to === "en" && FR.has(text)) return text;
+  if (to === "fr" && back.has(text)) return text;
+  for (const s of shapes!) {
+    const m = (to === "fr" ? s.en : s.fr).exec(text);
+    // (its own words half the text at least: a loose pattern — "{0} the {1}" — never takes a sentence it is not)
+    if (!m?.groups || (to === "fr" ? s.enT : s.frT).replace(/\{\d\}/g, "").length < text.length * 0.5) continue;
+    const g = m.groups;
+    // (its values said in the language too — "right hose" in a tanker's line —, once deep)
+    return (to === "fr" ? s.frT : s.enT).replace(/\{(\d)\}/g, (_, i: string) =>
+      depth ? (g[`v${i}`] ?? "") : translateTo(g[`v${i}`] ?? "", to, 1),
+    );
+  }
+  return text;
+}
+
 addFrench(frSettings);
 addFrench(frSpaceSchool);
+addFrench(frA320);
+addFrench(frA320Deck);
+addFrench(frA320Ground);
 addFrench(frSpaceMissions);
 addFrench(frNetSpace);
 addFrench(frCockpit);
@@ -104,6 +154,7 @@ addFrench(frRadar);
 addFrench(frFlight);
 addFrench(frMission);
 addFrench(frProcedures);
+addFrench(frAar);
 addFrench(frInstructor);
 addFrench(frCopilot);
 addFrench(frCourse);

@@ -4,7 +4,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // The docking assisted (C7) by real input, by the ISS: the ring's DOCK button, assisted — the card says what
 // the docking autopilot would do and why, its graph the closing rate against the distance along the port's
 // axis; handed to the autopilot (the card's button), it comes into the corridor on its profile, the contact
-// counted down.
+// counted down, the capture — the approach watched from the docking camera.
 
 describe.skipIf(!E2E)("the docking assisted", () => {
   let app: App;
@@ -17,7 +17,7 @@ describe.skipIf(!E2E)("the docking assisted", () => {
     stopServer();
   });
 
-  test("the ring's DOCK, assisted then flown: the phase explained, the corridor, the contact counted down", async () => {
+  test("the ring's DOCK, assisted then flown: the phase explained, the corridor, the contact counted down, docked", async () => {
     await Bun.sleep(1500);
     await app.press("F4", "F4", { shift: true });
     // (the scene opens on the docking camera, where the HUD is bare — the ring shows in the chase and dorsal
@@ -31,8 +31,17 @@ describe.skipIf(!E2E)("the docking assisted", () => {
     // (the card's mode button showing ASSISTED: the card up with its dock)
     await app.waitFor(`document.querySelector("[data-testid=hub-assist]")?.textContent === "ASSISTED"`, 5_000);
     await app.click("[data-testid=hub-assist]");
+    // (handed over: back to the docking camera — V four times — for the approach and the contact, as one watches a
+    // docking: the port ahead, the target's cross)
+    const dorsal = await app.js<string>("__bh.settings.shipMount");
+    for (let i = 0; i < 4; i++) await app.press("KeyV", "v");
+    await app.waitFor(`__bh.settings.shipMount === "dock"`, 5_000);
+    console.log(`  ${dorsal} → dock for the approach`);
     await app.waitFor(`__bh.camera.hubInfo()?.graph?.state === "on"`, 120_000);
     await app.waitFor(`(__bh.camera.hubInfo()?.say ?? []).some((l) => l.startsWith("CONTACT IN"))`, 30_000);
-    await app.press("KeyB", "b");
-  }, 300_000);
+    // (and on to the capture: the ring on the port, the craft held — the station 60 m off at the start, not drifting)
+    const t0 = performance.now();
+    await app.waitFor(`!!__bh.camera.docked`, 360_000);
+    console.log(`  docked ${((performance.now() - t0) / 1000).toFixed(0)} s after the countdown`);
+  }, 600_000);
 });

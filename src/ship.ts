@@ -20,6 +20,35 @@ import f35Normal1 from "../assets/f35/f35-normal-1.ktx2";
 import f35Mr0 from "../assets/f35/f35-mr-0.ktx2";
 import f35Mr1 from "../assets/f35/f35-mr-1.ktx2";
 import { nozzleExit, parseF35, partMatrices, restPose, type F35Mesh, type F35Pose } from "./f35/model";
+import a320Bin from "../assets/a320/a320.bin";
+import a320Albedo1 from "../assets/a320/a320-albedo-1.ktx2";
+import a320Albedo2 from "../assets/a320/a320-albedo-2.ktx2";
+import a320Normal0 from "../assets/a320/a320-normal-0.ktx2";
+import a320Normal1 from "../assets/a320/a320-normal-1.ktx2";
+import a320Normal2 from "../assets/a320/a320-normal-2.ktx2";
+import liveryKerr from "../assets/a320/a320-livery-kerr.ktx2";
+import liveryKerrEng from "../assets/a320/a320-livery-kerr-engine.ktx2";
+import liveryWhite from "../assets/a320/a320-livery-white.ktx2";
+import liveryWhiteEng from "../assets/a320/a320-livery-white-engine.ktx2";
+import liverySwr from "../assets/a320/a320-livery-SWR.ktx2";
+import liverySwrEng from "../assets/a320/a320-livery-SWR-engine.ktx2";
+import liveryAua from "../assets/a320/a320-livery-AUA.ktx2";
+import liveryAuaEng from "../assets/a320/a320-livery-AUA-engine.ktx2";
+import liveryDal from "../assets/a320/a320-livery-DAL.ktx2";
+import liveryDalEng from "../assets/a320/a320-livery-DAL-engine.ktx2";
+import liveryAal from "../assets/a320/a320-livery-AAL.ktx2";
+import liveryAalEng from "../assets/a320/a320-livery-AAL-engine.ktx2";
+import { parseA320, partCount, rigMatrices, type A320Mesh, type Props } from "./a320/rig";
+import a320DeckBin from "../assets/a320/a320-cockpit.bin";
+import a320Deck0 from "../assets/a320/a320-cockpit-0.ktx2";
+import a320Deck1 from "../assets/a320/a320-cockpit-1.ktx2";
+import a320Deck2 from "../assets/a320/a320-cockpit-2.ktx2";
+import a320Deck3 from "../assets/a320/a320-cockpit-3.ktx2";
+import { parseDeck, type DeckMesh } from "./a320/deck";
+import { restA320 } from "./a320/pose";
+
+/** the A320 at rest (gear down, everything neutral): the others' without their own pose */
+const A320_REST = restA320();
 import { PCD_H, PCD_W } from "./f35/pcd-size";
 import type { PcdRect } from "./f35/pcd";
 import { MipGen } from "./mipgen";
@@ -29,7 +58,17 @@ import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import { controlMesh, MAX_CONTROLS, POSE_VEC4, poseData } from "./cockpit/controls";
 import { placardLevels } from "./cockpit/placards";
 import { cabinUniform, screenLights, type ScreenLight } from "./cockpit/lights";
-import { F35_LAMPS, lampLevels, lampUniform, MAX_LAMPS, placeLamps, RANGER_LAMPS, type PlacedLamp } from "./ship-lights";
+import {
+  F35_LAMPS,
+  type Glare,
+  lampLevels,
+  lampUniform,
+  MAX_GLARES,
+  MAX_LAMPS,
+  placeLamps,
+  RANGER_LAMPS,
+  type PlacedLamp,
+} from "./ship-lights";
 import { GEAR_HINGES, gearMesh } from "./gear-mesh";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
@@ -46,6 +85,23 @@ import ferryUrl from "../assets/traffic/ferry.bin";
 import trawlerUrl from "../assets/traffic/trawler.bin";
 import sailboatUrl from "../assets/traffic/sailboat.bin";
 import frigateUrl from "../assets/traffic/frigate.bin";
+import mrttUrl from "../assets/traffic/mrtt.bin";
+import drogueUrl from "../assets/traffic/drogue.bin";
+import probeUrl from "../assets/traffic/probe.bin";
+import lampRedUrl from "../assets/traffic/lamp-red.bin";
+import gsTugUrl from "../assets/traffic/gs-tug.bin";
+import gsStairsUrl from "../assets/traffic/gs-stairs.bin";
+import gsGpuUrl from "../assets/traffic/gs-gpu.bin";
+import gsFuelUrl from "../assets/traffic/gs-fuel.bin";
+import gsCateringUrl from "../assets/traffic/gs-catering.bin";
+import gsCateringBoxUrl from "../assets/traffic/gs-catering-box.bin";
+import gsChockNoseUrl from "../assets/traffic/gs-chock-nose.bin";
+import gsChockLeftUrl from "../assets/traffic/gs-chock-left.bin";
+import gsChockRightUrl from "../assets/traffic/gs-chock-right.bin";
+import gsDeiceUrl from "../assets/traffic/gs-deice.bin";
+import gsBeltUrl from "../assets/traffic/gs-belt.bin";
+import lampAmberUrl from "../assets/traffic/lamp-amber.bin";
+import lampGreenUrl from "../assets/traffic/lamp-green.bin";
 import cargoHullUrl from "../assets/traffic/cargo-hull.jpg";
 import cargoBridgeUrl from "../assets/traffic/cargo-bridge.jpg";
 import cargoBoxesUrl from "../assets/traffic/cargo-boxes.jpg";
@@ -62,15 +118,33 @@ import implacable1Url from "../assets/carriers/implacable-1.jpg";
 
 /** The real traffic's airliners (scripts/build-airliners.ts, docs/PLAN-AVIATION-AAA.md T2) and ships
  *  (scripts/build-ships.ts, T3): drawn as the craft are. */
-export type AirlinerId = "a320" | "crj900";
+export type AirlinerId = "a320t" | "crj900";
 export type ShipTypeId = "cargo" | "tanker" | "ferry" | "trawler" | "sailboat" | "frigate";
 /** The carriers (scripts/build-carriers.ts, docs/PLAN-AVIATION-AAA.md M2). */
 export type CarrierId = "ford" | "kiev" | "implacable";
-export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId;
+/** The air refuelling's (scripts/build-tanker.ts, game/aar.ts): the tanker, its hose and drogue, the F-35's probe, the
+ *  pods' lights. */
+export type AarMeshId = "mrtt" | "drogue" | "probe" | "lamp-red" | "lamp-amber" | "lamp-green";
+/** The A320's ground vehicles (scripts/build-a320-services.py — FlightGear's Models/Services): the pushback tug, the
+ *  stairs, the external power box, the fuel truck, the catering loader and its box, the chocks, the de-icing
+ *  truck, the baggage belt — coloured per vertex (material 90, as the carriers' flat parts). */
+export type GroundMeshId =
+  | "gs-tug"
+  | "gs-stairs"
+  | "gs-gpu"
+  | "gs-fuel"
+  | "gs-catering"
+  | "gs-catering-box"
+  | "gs-chock-nose"
+  | "gs-chock-left"
+  | "gs-chock-right"
+  | "gs-deice"
+  | "gs-belt";
+export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId | AarMeshId | GroundMeshId;
 /** A mesh the craft's pass draws: a craft's, an airliner's, a ship's. */
 export type ShipMeshId = VesselId | TrafficMeshId;
 const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
-  a320: a320Url,
+  a320t: a320Url,
   crj900: crj900Url,
   cargo: cargoUrl,
   tanker: tankerUrl,
@@ -81,11 +155,38 @@ const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
   ford: fordUrl,
   kiev: kievUrl,
   implacable: implacableUrl,
+  mrtt: mrttUrl,
+  drogue: drogueUrl,
+  probe: probeUrl,
+  "lamp-red": lampRedUrl,
+  "lamp-amber": lampAmberUrl,
+  "lamp-green": lampGreenUrl,
+  "gs-tug": gsTugUrl,
+  "gs-stairs": gsStairsUrl,
+  "gs-gpu": gsGpuUrl,
+  "gs-fuel": gsFuelUrl,
+  "gs-catering": gsCateringUrl,
+  "gs-catering-box": gsCateringBoxUrl,
+  "gs-chock-nose": gsChockNoseUrl,
+  "gs-chock-left": gsChockLeftUrl,
+  "gs-chock-right": gsChockRightUrl,
+  "gs-deice": gsDeiceUrl,
+  "gs-belt": gsBeltUrl,
 };
 /** The traffic's colour maps, a layer each (ship.wgsl: the materials 40, 41, 44–46); the carriers' after them
  *  (80–86), added with the first carrier drawn. */
 const TRAFFIC_MAPS = [a320MapUrl, crj900MapUrl, cargoHullUrl, cargoBridgeUrl, cargoBoxesUrl];
 const CARRIER_MAPS = [ford0Url, ford1Url, ford2Url, kiev0Url, kiev1Url, implacable0Url, implacable1Url];
+/** The A320's liveries (assets/a320/liveries.json — scripts/build-a320-maps.py): its fuselage's paint (layer 0) and its
+ *  engines' (layer 2's first cell). */
+export const A320_LIVERIES: Record<string, [string, string]> = {
+  kerr: [liveryKerr, liveryKerrEng],
+  white: [liveryWhite, liveryWhiteEng],
+  SWR: [liverySwr, liverySwrEng],
+  AUA: [liveryAua, liveryAuaEng],
+  DAL: [liveryDal, liveryDalEng],
+  AAL: [liveryAal, liveryAalEng],
+};
 const isCarrier = (id: ShipMeshId): id is CarrierId => id === "ford" || id === "kiev" || id === "implacable";
 const isTraffic = (id: ShipMeshId): id is TrafficMeshId => id in TRAFFIC_MESHES;
 import { jetLevel } from "./jets";
@@ -102,6 +203,8 @@ export interface ShipInstance {
   shadow: boolean;
   /** an F-35's own pose (its gear, its surfaces — an aggressor's: docs/PLAN-F35.md F10); none: at rest */
   jet?: F35Pose;
+  /** an A320's rig's properties and spins (src/a320/pose.ts — another player's); none: at rest */
+  a320?: { props: Props; spins: Props };
   /** hidden where the traced image holds something nearer (default: yes) */
   far?: boolean;
   /** a carrier (docs/PLAN-AVIATION-AAA.md M2): the nearest one has the shadow map's second half — its shadow on
@@ -142,6 +245,8 @@ export interface ShipView {
   cabin?: { level: number; red: number; colours: Float32Array | null };
   /** the Ranger's lamps switched on (the cockpit's switches — ship-lights.ts), a clock for the strobes [s] */
   lamps?: { navLights: boolean; strobeLights: boolean; landingLights: boolean; t: number };
+  /** glares out in the scene, drawn as the lamps' (a fight's flares — PLAN-RADAR-AAA RD8a): on the camera's axes */
+  glares?: Glare[];
   mount: Mount | MountPose;
   /** the flown ship placed in the view directly (a spectator's): its axes in the camera's, its origin
    *  there [m] — instead of the mount's */
@@ -168,10 +273,17 @@ export interface ShipView {
   thrust?: Thrust | null;
   /** the flown F-35's moving parts (src/f35/model.ts) */
   jet?: F35Pose | null;
+  /** the flown A320's: its rig's properties and spins (src/a320/pose.ts) */
+  a320?: { props: Props; spins: Props } | null;
+  /** its flight deck's rig's properties (src/a320/deck.ts — drawn from inside) */
+  a320Deck?: Props | null;
   /** the F-35's panoramic display's look (ship.wgsl pcdLight): its brightness (0…1), its style (0 realistic, 1
    *  cinematic), the last touch (u, v on the display; its age [s]), the last page changed (its part, u0 v0 u1 v1;
    *  its age [s]) */
   pcd?: PcdLook | null;
+  /** the A320's windshield seen from its flight deck (src/a320/glass.ts): the rain on it, a clock [s], the airspeed
+   *  [m/s], the frost 0…1, each wiper's place on its sweep and rate [travel / s]; none: dry, the wipers at rest */
+  a320Glass?: { rain: number; clock: number; airspeed: number; frost: number; wipers: [number, number]; rates: [number, number] } | null;
   /** display-referred emission scale: pre-exposure / 2^EV (a flame as bright whatever the exposure) */
   glow?: number;
 }
@@ -222,13 +334,19 @@ const MAX_INST = 24;
 /** where the lamps start in it (S.lampN) */
 const LAMPS_AT = 512 + 16 + 8 * 3 * 16;
 /** after them: the carrier's shadow sphere, the sea's plane and state (S.bound2, S.sea, S.seaK) */
-const SEA_AT = LAMPS_AT + 16 + MAX_LAMPS * 3 * 16;
+const SEA_AT = LAMPS_AT + 16 + (MAX_LAMPS + MAX_GLARES) * 3 * 16;
 /** then the F-35's panoramic display's look (S.pcd0–2) */
 const PCD_AT = SEA_AT + 3 * 16;
-const SHIP_UNIFORM_BYTES = PCD_AT + 3 * 16;
+/** then the A320's windshield (S.wg0, S.wg1 — src/a320/glass.ts) */
+const GLASS_AT = PCD_AT + 3 * 16;
+const SHIP_UNIFORM_BYTES = GLASS_AT + 2 * 16;
 const INST_FLOATS = 20;
-/** the F-35's parts (src/f35/model.ts) at most, and how many F-35s drawn with their parts posed */
-const MAX_PARTS = 160;
+/** the posed aircraft's parts at most (the F-35's 119 — src/f35/model.ts —, the A320's 172 — src/a320/rig.ts), and how
+ *  many aircraft drawn with their parts posed */
+const MAX_PARTS = 192;
+/** the A320's flight deck's parts at most (its rig's 1 194 nodes — src/a320/deck.ts —): their records after the
+ *  aircraft's slots */
+const DECK_PARTS = 1280;
 const JET_SLOTS = 8;
 const JET_FLOATS = 16;
 
@@ -356,11 +474,36 @@ export class ShipRenderer {
   private trafficMapsLayers = 0;
   /** the instances' transforms and flags (the flown craft first) */
   private instBuf: GPUBuffer;
-  private instData = new Float32Array((MAX_INST + JET_SLOTS * MAX_PARTS) * INST_FLOATS);
+  private instData = new Float32Array((MAX_INST + JET_SLOTS * MAX_PARTS + DECK_PARTS) * INST_FLOATS);
   /** the F-35's mesh as built (its parts, their tracks), its maps (two layers each; 1 × 1 until loaded) */
   private jetMesh: F35Mesh | null = null;
   private jetMaps: { albedo: GPUTexture; normal: GPUTexture; mr: GPUTexture } | null = null;
   private jetMapsLoading = false;
+  /** the A320's mesh as built (its rig), its maps (three layers each: the livery's fuselage, the static elements,
+   *  the atlas — scripts/build-a320-maps.py), the livery painted on them and the one asked */
+  private a320Mesh: A320Mesh | null = null;
+  private a320Maps: { albedo: GPUTexture; normal: GPUTexture } | null = null;
+  private a320MapsLoading = false;
+  private a320Livery = "";
+  private a320LiveryWant = "kerr";
+  /** the flown A320's rig maps and properties this frame (its lamps ride its parts) */
+  private a320Now: { mats: Float32Array; props: Props } | null = null;
+  /** the A320's flight deck (src/a320/deck.ts): loaded with its first look from inside; its maps' layers added then */
+  private a320Deck: DeckMesh | null = null;
+  private deckMesh: Mesh | null = null;
+  private deckLoading = false;
+  private deckLayers = false;
+  /** the objects of the deck under the pointer (their indices: DeckMesh.objects) — lit over (main.ts); their runs */
+  deckHover: number[] | null = null;
+  private deckRuns: Map<number, [number, number][]> | null = null;
+  private hoverBind: { g: GPUBindGroup; gen: number; hdr: GPUTexture } | null = null;
+  /** the deck drawn this frame (the hull's glass then left out), its parts' maps (the pointer's picks: deckpick.ts) */
+  private deckDrawn = false;
+  private deckMatsNow: Float32Array<ArrayBuffer> | null = null;
+  /** The A320's flight deck drawn last frame: its parts' maps (rows of 3 × 4); null: not drawn. */
+  get deckMats(): Float32Array | null {
+    return this.deckDrawn ? this.deckMatsNow : null;
+  }
   /** What a pixel (ndc) of the F-35's cockpit view meets on its mesh (as built — the parts at rest): the
    *  distance, the material, the part, on its panoramic display the point (u, v). Null: nothing. */
   jetPick(
@@ -388,16 +531,17 @@ export class ShipRenderer {
   get jetVerts(): Float32Array | null {
     return this.jetMesh?.verts ?? null;
   }
-  /** the flown F-35's exhaust now (ship frame): its exit, its way, its radius [m], how strongly it shimmers */
-  private haze: { p: V3; d: V3; r: number; k: number } | null = null;
+  /** the flown F-35's exhaust now (ship frame): its exit, its way, its radius [m], how strongly it shimmers — the
+   *  A320's two CFM56s' (A13) */
+  private haze: { p: V3; d: V3; r: number; k: number }[] = [];
 
   /**
    * The heat haze behind the F-35's nozzle in the last frame's view (display.wgsl haze): the exhaust's
    * column from its exit to some 18 m downstream, in the image's uv, its radii there [uv of the height], its
    * strength (0: none). The hot gas bends the light behind it: the background seen through it shimmers.
    */
-  hazeView(): [number, number, number, number, number, number, number] | null {
-    const H = this.haze,
+  hazeView(k = 0): [number, number, number, number, number, number, number] | null {
+    const H = this.haze[k],
       C = this.lastCam;
     if (!H || !C || H.k <= 0.01) return null;
     const len = 18;
@@ -909,6 +1053,7 @@ export class ShipRenderer {
    */
   private async loadVessel(id: VesselId) {
     if (id === "f35") return this.loadJet();
+    if (id === "a320") return this.loadA320();
     const d = this.device;
     const url = id === "ranger" ? rangerUrl : id === "lander" ? landerUrl : enduranceUrl;
     const buf = await this.getter(url).then(inflated);
@@ -998,6 +1143,256 @@ export class ShipRenderer {
     d.queue.writeBuffer(ibuf, 0, idx);
     this.meshes.f35 = { vbuf, ibuf, count: idx.length, solid, bound: { c, r, lo, hi } };
     void this.loadJetMaps();
+  }
+
+  /**
+   * The A320 (assets/a320/a320.bin: scripts/build-a320.py): its vertices as built (everything at rest: the vertex
+   * shader poses each part by its rig node's map), its glass's and lenses' triangles last; its hull; its maps.
+   */
+  private async loadA320() {
+    const d = this.device;
+    const m = (this.a320Mesh = parseA320(await this.getter(a320Bin).then(inflated)));
+    const { verts, lo, hi } = m;
+    const nv = verts.length / 10;
+    // (the windshield 106, the lenses 107–109, the fan's blur disc 115: drawn by the glass pass)
+    const glass = (t: number) => {
+      const k = Math.round(verts[10 * m.idx[3 * t]! + 6]!);
+      return (k >= 106 && k <= 109) || k === 115;
+    };
+    const idx = new Uint32Array(m.idx.length);
+    let o = 0,
+      solid = 0;
+    for (const g of [false, true])
+      for (let t = 0; t < m.idx.length / 3; t++)
+        if (glass(t) === g) {
+          idx.set(m.idx.subarray(3 * t, 3 * t + 3), 3 * o++);
+          if (!g) solid = 3 * o;
+        }
+    const pos = new Float32Array(nv * 3);
+    for (let i = 0; i < nv; i++) pos.set(verts.subarray(10 * i, 10 * i + 3), 3 * i);
+    const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
+    const r = Math.hypot(...sub(hi, lo)) / 2;
+    const H = vesselHulls.a320;
+    H.points = samplePoints(verts, 10, nv, 0.6);
+    H.bvh = new TriBVH(pos, idx.slice(0, solid));
+    H.radius = r + Math.hypot(...c);
+    H.lo = lo;
+    H.hi = hi;
+    const vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(vbuf, 0, verts);
+    const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(ibuf, 0, idx);
+    this.meshes.a320 = { vbuf, ibuf, count: idx.length, solid, bound: { c, r, lo, hi } };
+    void this.loadA320Maps();
+  }
+
+  /** The flown A320's lamps now (src/a320/rig.ts lamps — FlightGear's light models): each on the part it rides,
+   *  its beam turned with it; the wingtip's those of the fences or of the sharklets fitted. */
+  private a320Lamps(): PlacedLamp[] {
+    const m = this.a320Mesh!;
+    const now = this.a320Now;
+    const sharklets = Number(now?.props["sim/multiplay/generic/int[12]"] ?? 0) > 0.5;
+    const COL: Record<string, V3> = { red: [3, 0.18, 0.09], green: [0.24, 3, 0.9], white: [2.4, 2.3, 2] };
+    const out: PlacedLamp[] = [];
+    m.lamps.forEach((L, k) => {
+      if (L.wingtip && (L.wingtip === "sharklet") !== sharklets) return;
+      const M = now && L.node !== undefined && L.node >= 0 ? now.mats.subarray((L.node + 1) * 12, (L.node + 2) * 12) : null;
+      const ap = (q: V3, w: number): V3 =>
+        M ? ([0, 1, 2].map((r) => M[r * 4]! * q[0] + M[r * 4 + 1]! * q[1] + M[r * 4 + 2]! * q[2] + w * M[r * 4 + 3]!) as V3) : q;
+      const side = L.p[0] >= 0 ? 1 : -1;
+      const beam: V3 | undefined =
+        L.kind === "landing"
+          ? norm([0, -0.1, 1])
+          : L.kind === "taxi"
+            ? norm([0, -0.22, 1])
+            : L.kind === "turnoff"
+              ? norm([side * 0.7, -0.12, 0.7])
+              : undefined;
+      const colour: V3 =
+        L.kind === "strobe"
+          ? [4, 4, 4.4]
+          : L.kind === "beacon"
+            ? [4, 0.25, 0.12]
+            : L.kind === "landing"
+              ? [7, 6.8, 6.2]
+              : L.kind === "taxi" || L.kind === "turnoff"
+                ? [5, 4.9, 4.5]
+                : COL[L.colour]!;
+      out.push({
+        id: `${L.kind}${k}`,
+        kind: L.kind,
+        at: L.p,
+        out: [0, 1, 0],
+        colour,
+        beam: beam && norm(ap(beam, 0)),
+        cone: beam ? Math.cos(((L.kind === "landing" ? 12 : L.kind === "taxi" ? 18 : 25) * Math.PI) / 180) : undefined,
+        p: ap(L.p, 1),
+        n: [0, 1, 0],
+      });
+    });
+    return out;
+  }
+
+  /** The A320's flight deck (assets/a320/a320-cockpit.bin: scripts/build-a320-cockpit.py): its vertices as built, its
+   *  glass last; its four layers of maps added to the A320's (layers 3–6). */
+  private async loadA320Deck() {
+    if (this.deckLoading) return;
+    this.deckLoading = true;
+    const d = this.device;
+    const m = (this.a320Deck = parseDeck(await this.getter(a320DeckBin).then(inflated)));
+    const { verts, lo, hi } = m;
+    const glass = (t: number) => {
+      const k = Math.round(verts[10 * m.idx[3 * t]! + 6]!);
+      return k >= 127 && k <= 129;
+    };
+    const idx = new Uint32Array(m.idx.length);
+    let o = 0,
+      solid = 0;
+    // (each object's runs of triangles as drawn — the pointer's highlight draws them again: deckHover)
+    const runs = new Map<number, [number, number][]>();
+    for (const g of [false, true])
+      for (let t = 0; t < m.idx.length / 3; t++)
+        if (glass(t) === g) {
+          const ob = m.triObj[t]!;
+          const list = runs.get(ob) ?? [];
+          const last = list[list.length - 1];
+          if (last && last[0] + last[1] === 3 * o) last[1] += 3;
+          else list.push([3 * o, 3]);
+          runs.set(ob, list);
+          idx.set(m.idx.subarray(3 * t, 3 * t + 3), 3 * o++);
+          if (!g) solid = 3 * o;
+        }
+    this.deckRuns = runs;
+    const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
+    const r = Math.hypot(...sub(hi, lo)) / 2;
+    const vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(vbuf, 0, verts);
+    const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(ibuf, 0, idx);
+    this.deckMesh = { vbuf, ibuf, count: idx.length, solid, bound: { c, r, lo, hi } };
+    void this.loadDeckLayers();
+    this.onLoaded?.();
+  }
+
+  /** The deck's maps: the A320's colour array made again with seven layers — its three, the deck's four. */
+  private async loadDeckLayers() {
+    if (this.deckLayers || !this.a320Maps) return;
+    this.deckLayers = true;
+    const d = this.device;
+    const target = ktxTarget(d);
+    try {
+      const imgs = await Promise.all([a320Deck0, a320Deck1, a320Deck2, a320Deck3].map((u) => ktxLevels(u, target)));
+      const old = this.a320Maps.albedo;
+      const tex = d.createTexture({
+        size: [old.width, old.height, 7],
+        format: old.format,
+        mipLevelCount: old.mipLevelCount,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC,
+      });
+      const enc = d.createCommandEncoder();
+      for (let l = 0; l < old.mipLevelCount; l++) {
+        const w = Math.max(1, old.width >> l),
+          h = Math.max(1, old.height >> l);
+        const bw = target === "rgba" ? w : Math.ceil(w / 4) * 4,
+          bh = target === "rgba" ? h : Math.ceil(h / 4) * 4;
+        enc.copyTextureToTexture({ texture: old, mipLevel: l }, { texture: tex, mipLevel: l }, [bw, bh, 3]);
+      }
+      d.queue.submit([enc.finish()]);
+      imgs.forEach((im, k) => writeLevels(d, tex, im.levels, im.width, im.height, target, 3 + k));
+      this.a320Maps = { ...this.a320Maps, albedo: tex };
+      // (a livery written meanwhile went to the old array: painted again on the new one — paintA320 sees it)
+      this.device.queue.onSubmittedWorkDone().then(() => old.destroy());
+      this.bind();
+      this.onLoaded?.();
+    } catch (e) {
+      console.error("A320 deck maps:", e);
+      this.deckLayers = false;
+    }
+  }
+
+  /** The A320's flight deck as built (its rig, its controls, its objects) — null: not loaded. */
+  get a320DeckMesh(): DeckMesh | null {
+    return this.a320Deck;
+  }
+
+  /** The A320's mesh as built (its rig, its lamps) — null: not loaded. */
+  get a320(): A320Mesh | null {
+    return this.a320Mesh;
+  }
+
+  /** The A320's maps: the static layers, then the livery asked; drawn white until then. */
+  private async loadA320Maps() {
+    if (this.a320MapsLoading) return;
+    this.a320MapsLoading = true;
+    const d = this.device;
+    const target = ktxTarget(d);
+    const fmt = (srgb: boolean): GPUTextureFormat =>
+      target === "bc7"
+        ? srgb
+          ? "bc7-rgba-unorm-srgb"
+          : "bc7-rgba-unorm"
+        : target === "astc"
+          ? srgb
+            ? "astc-4x4-unorm-srgb"
+            : "astc-4x4-unorm"
+          : srgb
+            ? "rgba8unorm-srgb"
+            : "rgba8unorm";
+    try {
+      const [a1, a2, n0, n1, n2] = await Promise.all(
+        [a320Albedo1, a320Albedo2, a320Normal0, a320Normal1, a320Normal2].map((u) => ktxLevels(u, target)),
+      );
+      const make = (srgb: boolean, w: number, h: number, mips: number) =>
+        d.createTexture({
+          size: [w, h, 3],
+          format: fmt(srgb),
+          mipLevelCount: mips,
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC,
+        });
+      const albedo = make(true, a1!.width, a1!.height, a1!.levels.length);
+      const normal = make(false, n0!.width, n0!.height, n0!.levels.length);
+      writeLevels(d, albedo, a1!.levels, a1!.width, a1!.height, target, 1);
+      writeLevels(d, albedo, a2!.levels, a2!.width, a2!.height, target, 2);
+      [n0, n1, n2].forEach((im, k) => writeLevels(d, normal, im!.levels, im!.width, im!.height, target, k));
+      this.a320Maps = { albedo, normal };
+      this.a320Livery = "";
+      await this.paintA320();
+      this.bind();
+      this.onLoaded?.();
+      // (the deck seen first — from the seat, at once —: its layers waited for these)
+      if (this.a320Deck) void this.loadDeckLayers();
+    } catch (e) {
+      console.error("A320 maps:", e);
+    }
+  }
+
+  /** The A320's livery (A320_LIVERIES — the house's "kerr" by default): painted when its maps are there. */
+  setA320Livery(id: string) {
+    this.a320LiveryWant = A320_LIVERIES[id] ? id : "kerr";
+    if (this.a320Maps) void this.paintA320();
+  }
+  private painting = false;
+  private async paintA320() {
+    const want = this.a320LiveryWant;
+    if (!this.a320Maps || this.painting || this.a320Livery === want) return;
+    this.painting = true;
+    try {
+      const target = ktxTarget(this.device);
+      const [fu, en] = A320_LIVERIES[want]!;
+      const [F, E] = await Promise.all([ktxLevels(fu, target), ktxLevels(en, target)]);
+      const tex = this.a320Maps.albedo;
+      writeLevels(this.device, tex, F.levels, F.width, F.height, target, 0);
+      writeLevels(this.device, tex, E.levels, E.width, E.height, target, 2, [0, 0]);
+      // (the array made again meanwhile — the deck's layers added —: painted again)
+      this.a320Livery = tex === this.a320Maps.albedo ? want : "";
+      this.onLoaded?.();
+    } catch (e) {
+      console.error("A320 livery:", e);
+    } finally {
+      this.painting = false;
+    }
+    // (asked for another while this one was painted)
+    if (this.a320LiveryWant !== this.a320Livery) void this.paintA320();
   }
 
   /** The F-35's maps: KTX2 transcoded for this GPU (BC7 / ASTC), two layers a map; drawn grey until then. */
@@ -1252,10 +1647,20 @@ export class ShipRenderer {
     const dummy = (format: GPUTextureFormat) => d.createTexture({ size: [1, 1], format, usage: GPUTextureUsage.TEXTURE_BINDING });
     const maps = this.maps ?? { albedo: dummy("rgba8unorm-srgb"), normal: dummy("rgba8unorm"), lights: dummy("rgba8unorm-srgb") };
     // (the F-35's: grey, flat, mid-rough until they load)
-    const dummyArray = (px: number[], format: GPUTextureFormat) => {
-      const t = d.createTexture({ size: [1, 1, 2], format, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-      d.queue.writeTexture({ texture: t }, new Uint8Array([...px, ...px]), { bytesPerRow: 4, rowsPerImage: 1 }, [1, 1, 2]);
+    const dummyArray = (px: number[], format: GPUTextureFormat, layers = 2) => {
+      const t = d.createTexture({ size: [1, 1, layers], format, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+      d.queue.writeTexture(
+        { texture: t },
+        new Uint8Array(Array.from({ length: layers }, () => px).flat()),
+        { bytesPerRow: 4, rowsPerImage: 1 },
+        [1, 1, layers],
+      );
       return t;
+    };
+    // (the A320's: white paint, flat, until they load)
+    const am = this.a320Maps ?? {
+      albedo: dummyArray([232, 233, 235, 255], "rgba8unorm-srgb", 3),
+      normal: dummyArray([128, 128, 255, 255], "rgba8unorm", 3),
     };
     const jm = this.jetMaps ?? {
       albedo: dummyArray([110, 112, 116, 255], "rgba8unorm-srgb"),
@@ -1278,12 +1683,14 @@ export class ShipRenderer {
       { binding: 22, resource: jm.albedo.createView({ dimension: "2d-array" }) },
       { binding: 23, resource: jm.normal.createView({ dimension: "2d-array" }) },
       { binding: 24, resource: jm.mr.createView({ dimension: "2d-array" }) },
-      { binding: 25, resource: this.jetScreenTexture().createView() },
+      { binding: 25, resource: this.screenBinding().createView() },
       // (the airliners' paint: a light grey until it loads)
       {
         binding: 26,
         resource: (this.trafficMaps ?? dummyArray([200, 202, 206, 255], "rgba8unorm-srgb")).createView({ dimension: "2d-array" }),
       },
+      { binding: 27, resource: am.albedo.createView({ dimension: "2d-array" }) },
+      { binding: 28, resource: am.normal.createView({ dimension: "2d-array" }) },
     ];
     this.bindGen++;
 
@@ -1358,7 +1765,7 @@ export class ShipRenderer {
   private writeJets(th: Thrust | null | undefined) {
     const out = this.jetData;
     let n = 0;
-    let haze: ShipRenderer["haze"] = null;
+    const haze: ShipRenderer["haze"] = [];
     if (th) {
       const air = Math.min(Math.max(th.air, 0), 1);
       const V = VESSELS[this.vessel];
@@ -1370,12 +1777,18 @@ export class ShipRenderer {
         if (level <= 0) continue;
         // (an air-breathing engine's — the F-35's: kind 2 — its afterburner's share in u.w: the flame is the
         // afterburner's, a few metres; dry, the exhaust is clear)
-        const jet = J.main && this.vessel === "f35";
+        const jet = J.main && (this.vessel === "f35" || this.vessel === "a320");
         // (the F-35B's nozzle swivelled: the plume from its exit, along it)
-        const ex = jet ? this.jetExit : null;
+        const ex = jet && this.vessel === "f35" ? this.jetExit : null;
         if (ex) J = { ...J, p: ex.p, d: ex.d };
         const ab = jet ? Math.min(Math.max(((th.boost ?? 1) - 1) / 0.5, 0), 1) : 0;
-        if (jet) haze = { p: J.p, d: J.d, r: J.half[0], k: air * Math.min(0.35 + 0.65 * level + 0.8 * ab, 1.4) };
+        // (the A320's: each CFM56's, its hot core within the bypass's cooler flow — a wider, gentler column)
+        if (jet)
+          haze.push(
+            this.vessel === "a320"
+              ? { p: J.p, d: J.d, r: J.half[0] * 1.6, k: air * Math.min(0.2 + 0.85 * level, 1.05) }
+              : { p: J.p, d: J.d, r: J.half[0], k: air * Math.min(0.35 + 0.65 * level + 0.8 * ab, 1.4) },
+          );
         const len = jet ? 2.5 + 8 * ab : J.main ? (4 + 20 * level) * (1 - 0.45 * air) * V.flame : 1.2 + 1.6 * level;
         out.set([...J.p, level, ...J.d, jet ? 2 : J.main ? 0 : 1, J.half[0], J.half[1], len, (i * 0.618) % 1, ...J.u, ab], n * JET_FLOATS);
         // (the camera inside its proxy — the shader's frustum, a margin for the near plane)
@@ -1426,7 +1839,7 @@ export class ShipRenderer {
           air,
         });
         if (level <= 0) return;
-        const jet = r.id === "f35";
+        const jet = r.id === "f35" || r.id === "a320";
         const J = jet && r.exit ? { ...J0, p: r.exit.p, d: r.exit.d } : J0;
         const ab = jet ? Math.min(Math.max((r.thrust.boost - 1) / 0.5, 0), 1) : 0;
         const len = jet ? 2.5 + 8 * ab : (4 + 20 * level) * (1 - 0.45 * air) * V.flame;
@@ -1474,16 +1887,30 @@ export class ShipRenderer {
     if (v.controls && this.ctlBuf) this.device.queue.writeBuffer(this.ctlBuf, 0, v.controls);
     // (the flown craft's lamps, those lit — ship.wgsl S.lampN, S.lamp: the Ranger's, the F-35's)
     {
-      const defs = this.vessel === "ranger" ? RANGER_LAMPS : this.vessel === "f35" ? F35_LAMPS : null;
-      const H = defs ? vesselHulls[this.vessel as "ranger" | "f35"].bvh : null;
-      if (defs && H && !this.lampsPlaced[this.vessel]) this.lampsPlaced[this.vessel] = placeLamps(H, defs);
-      const placed = this.lampsPlaced[this.vessel] ?? null;
+      const a320 = this.vessel === "a320" && this.a320Mesh ? this.a320Lamps() : null;
+      const defs = a320 ?? (this.vessel === "ranger" ? RANGER_LAMPS : this.vessel === "f35" ? F35_LAMPS : null);
+      const H = defs ? vesselHulls[this.vessel as "ranger" | "f35" | "a320"].bvh : null;
+      if (defs && H && !a320 && !this.lampsPlaced[this.vessel]) this.lampsPlaced[this.vessel] = placeLamps(H, defs);
+      const placed = a320 ?? this.lampsPlaced[this.vessel] ?? null;
       const on = this.flown && !!defs && !!v.lamps && !!placed;
       // (each hidden by the hull from where the eye is — a ray against its triangles, not its depth drawn
       // again: that cost 1.3 ms a frame —, stopped 60 cm short: the lips round a lamp, a wingtip's own skin seen from above, do not hide it)
       const levels = on ? lampLevels(defs!, v.lamps!, v.lamps!.t) : [];
       // (the F-35's landing light rides its nose gear: lit only with the gear down)
       if (on && this.vessel === "f35") defs!.forEach((L, i) => L.kind === "landing" && (v.jet?.gear ?? 1) < 0.97 && (levels[i] = 0));
+      // (the A320's: its landing lights shine extended, its taxi and turn-off lights with its nose gear down)
+      if (on && a320) {
+        const P = this.a320Now?.props ?? {};
+        const gear = Number(P["gear/gear[0]/position-norm"] ?? 1);
+        const ext = Number(P["controls/lighting/landing-light-pos-l"] ?? 0);
+        // (and the deck's switches: the taxi, turn-off and wing lights off — main.ts deck/…, 1 when never set)
+        const sw = (k: string) => Number(P[`deck/${k}`] ?? 1) > 0.5;
+        defs!.forEach((L, i) => {
+          if ((L.kind === "taxi" || L.kind === "turnoff") && gear < 0.97) levels[i] = 0;
+          if (L.kind === "landing" && ext < 0.9) levels[i] = 0;
+          if ((L.kind === "taxi" || L.kind === "turnoff" || L.kind === "wing") && !sw(L.kind)) levels[i] = 0;
+        });
+      }
       if (on && H)
         placed!.forEach((L, i) => {
           if (!levels[i]) return;
@@ -1492,8 +1919,8 @@ export class ShipRenderer {
           const k = Math.max(d - 0.6, 0) / d;
           if (H.segment(e, [e[0] + (L.p[0] - e[0]) * k, e[1] + (L.p[1] - e[1]) * k, e[2] + (L.p[2] - e[2]) * k])) levels[i] = 0;
         });
-      const u = on ? lampUniform(placed!, levels) : new Float32Array(4);
-      this.lampCount = u[0]!;
+      const u = lampUniform(on ? placed! : [], levels, v.glares ?? []);
+      this.lampCount = u[0]! + u[1]!;
       this.device.queue.writeBuffer(this.uniform, LAMPS_AT, u);
     }
     // (the cabin's light: the lamps, the screens — ship.wgsl S.cab, S.scr)
@@ -1519,7 +1946,8 @@ export class ShipRenderer {
       lander: 1,
       endurance: 2,
       f35: 3,
-      a320: 4,
+      a320: 21,
+      a320t: 4,
       crj900: 5,
       cargo: 6,
       tanker: 7,
@@ -1530,6 +1958,23 @@ export class ShipRenderer {
       kiev: 12,
       implacable: 13,
       frigate: 14,
+      mrtt: 15,
+      drogue: 16,
+      probe: 17,
+      "lamp-red": 18,
+      "lamp-amber": 19,
+      "lamp-green": 20,
+      "gs-tug": 22,
+      "gs-stairs": 22,
+      "gs-gpu": 22,
+      "gs-fuel": 22,
+      "gs-catering": 22,
+      "gs-catering-box": 22,
+      "gs-chock-nose": 22,
+      "gs-chock-left": 22,
+      "gs-chock-right": 22,
+      "gs-deice": 22,
+      "gs-belt": 22,
     } as const;
     let jetSlot = 0;
     // (inside the Ranger: its cabin instead of its hull — the Lander's and the Endurance's the same cabin placed at their
@@ -1547,6 +1992,7 @@ export class ShipRenderer {
       shadow: boolean;
       far: boolean;
       jet?: F35Pose;
+      a320?: ShipInstance["a320"];
       thrust?: ShipInstance["thrust"];
       big?: boolean;
       mirror: boolean;
@@ -1560,6 +2006,7 @@ export class ShipRenderer {
           shadow: o.shadow,
           far: o.far ?? true,
           jet: o.jet,
+          a320: o.a320,
           thrust: o.thrust,
           big: o.big,
           mirror: !!sea && (o.mirror ?? sea.flown),
@@ -1593,6 +2040,16 @@ export class ShipRenderer {
         this.writeParts(mats, parts);
         if (i === 0) this.jetExit = nozzleExit(this.jetMesh, mats);
         else if (it.thrust) lit.push({ id: "f35", R: it.R, t: it.t, thrust: it.thrust, exit: nozzleExit(this.jetMesh, mats) });
+      } else if (it.id === "a320" && this.a320Mesh && jetSlot < JET_SLOTS && partCount(this.a320Mesh) <= MAX_PARTS) {
+        // (an A320: its rig's maps — the flown one's, another's as it sent them, else at rest)
+        parts = MAX_INST + jetSlot++ * MAX_PARTS;
+        const R = i === 0 && this.flown ? v.a320 : it.a320;
+        const mats = rigMatrices(this.a320Mesh, R?.props ?? A320_REST.props, R?.spins ?? {});
+        this.writeParts(mats, parts);
+        // (its wings' bend: the tip's rise in its first part's record — ship.wgsl a320Flex, src/a320/flex.ts)
+        this.instData[parts * INST_FLOATS + 16] = Number(R?.props?.["sim/wing-flex"] ?? 0) || 0;
+        if (i === 0 && this.flown) this.a320Now = { mats, props: R?.props ?? A320_REST.props };
+        if (i > 0 && it.thrust) lit.push({ id: "a320", R: it.R, t: it.t, thrust: it.thrust, exit: null });
       } else if (i > 0 && it.thrust && !isTraffic(it.id)) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: null });
       // (in the shadow maps: the first half's — 1 —, the second's — 2 —; hidden behind the traced image — bit 0 —,
       // mirrored in the sea — bit 1)
@@ -1639,7 +2096,26 @@ export class ShipRenderer {
         }
       }
     });
-    this.device.queue.writeBuffer(this.instBuf, 0, this.instData, 0, list.length * INST_FLOATS);
+    // (inside the flown A320: its flight deck — its own instance after the others', its rig's maps after the jets')
+    let nInst = list.length;
+    this.deckDrawn = false;
+    if (this.vessel === "a320" && this.flown && v.inside) {
+      void this.loadA320Deck();
+      const dm = this.deckMesh,
+        deck = this.a320Deck;
+      if (dm && deck && nInst < MAX_INST && partCount(deck) <= DECK_PARTS) {
+        const at = MAX_INST + JET_SLOTS * MAX_PARTS;
+        model(R, t, this.instData, nInst * INST_FLOATS);
+        const mats = rigMatrices(deck, v.a320Deck ?? {}, {}, this.deckMatsNow ?? undefined);
+        this.deckMatsNow = mats;
+        this.writeParts(mats, at, DECK_PARTS);
+        this.instData.set([kind.a320, 1, v.place ? 1 : 0, at], nInst * INST_FLOATS + 16);
+        this.draws.push({ mesh: dm, shadow: true, inst: nInst++ });
+        this.deckDrawn = true;
+        this.device.queue.writeBuffer(this.instBuf, at * INST_FLOATS * 4, this.instData, at * INST_FLOATS, partCount(deck) * INST_FLOATS);
+      }
+    }
+    this.device.queue.writeBuffer(this.instBuf, 0, this.instData, 0, nInst * INST_FLOATS);
     if (jetSlot)
       this.device.queue.writeBuffer(
         this.instBuf,
@@ -1691,6 +2167,12 @@ export class ShipRenderer {
         ...(P?.change ? P.change.rect : [0, 0, 0, 0]),
       ]),
     );
+    const G = v.a320Glass;
+    this.device.queue.writeBuffer(
+      this.uniform,
+      GLASS_AT,
+      new Float32Array(G ? [G.rain, G.clock, G.airspeed, G.frost, ...G.wipers, ...G.rates] : [0, 0, 0, 0, 0, 0, 0, 0]),
+    );
     this.writeReentry(v.reentry, mesh);
     const tr = this.flown ? v.contrails : null;
     this.trailCount = tr ? Math.min(tr.n, MAX_SEGMENTS) : 0;
@@ -1731,8 +2213,8 @@ export class ShipRenderer {
   }
   /** The F-35's parts' maps (rows of 3 × 4, partMatrices) into the instance records from `base`: each a mat4,
    *  column-major (ship.wgsl jetMap). */
-  private writeParts(m: Float32Array, base: number) {
-    const n = Math.min(m.length / 12, MAX_PARTS);
+  private writeParts(m: Float32Array, base: number, max = MAX_PARTS) {
+    const n = Math.min(m.length / 12, max);
     for (let k = 0; k < n; k++) {
       const o = (base + k) * INST_FLOATS,
         r = 12 * k;
@@ -1823,6 +2305,33 @@ export class ShipRenderer {
       mipLevelCount: 11,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     }));
+  }
+  /** The A320's displays' atlas (src/a320/du: 4096², each display a cell — deck.ts screens), mip-mapped: made with
+   *  the first picture; bound in the F-35's display's place while the A320 is flown. */
+  private duTex: GPUTexture | null = null;
+  private screenBound: "jet" | "du" = "jet";
+  private screenBinding(): GPUTexture {
+    this.screenBound = this.vessel === "a320" && this.duTex ? "du" : "jet";
+    return this.screenBound === "du" ? this.duTex! : this.jetScreenTexture();
+  }
+  /** The A320's displays' new pictures: each canvas into its cell [px], then the atlas's mips. */
+  updateDu(parts: { src: OffscreenCanvas | HTMLCanvasElement; x: number; y: number; w: number; h: number }[]) {
+    if (!parts.length) return;
+    const fresh = !this.duTex;
+    const tex = (this.duTex ??= this.device.createTexture({
+      size: [4096, 4096],
+      format: "rgba8unorm-srgb",
+      mipLevelCount: 9,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+    }));
+    for (const p of parts)
+      this.device.queue.copyExternalImageToTexture({ source: p.src }, { texture: tex, mipLevel: 0, origin: { x: p.x, y: p.y } }, [
+        p.w,
+        p.h,
+      ]);
+    // (the cells redrawn alone: their mips — the whole atlas's at its first picture)
+    this.mips().run(tex, undefined, fresh ? undefined : parts.map((p) => [p.x, p.y, p.w, p.h] as [number, number, number, number]));
+    if (fresh) this.bind();
   }
   /** The F-35's panoramic display's picture (src/f35/pcd.ts), mip-mapped: made at its first use. */
   private jetScreen: GPUTexture | null = null;
@@ -1925,6 +2434,8 @@ export class ShipRenderer {
     // (none flown: only the others — the Ranger's mesh, always there, for the plumes' unused range)
     this.flown = !!v.vessel;
     this.vessel = v.vessel ?? "ranger";
+    // (the displays' texture bound: the A320's atlas while it is flown, else the F-35's)
+    if ((this.vessel === "a320" && this.duTex ? "du" : "jet") !== this.screenBound) this.bind();
     const mesh = this.meshes[this.vessel];
     if (!this.has(this.vessel) || !mesh) return;
     for (const o of v.others ?? []) this.has(o.id);
@@ -2044,7 +2555,8 @@ export class ShipRenderer {
     rp.setBindGroup(0, res.bind);
     rp.setBindGroup(1, res.occBind!.g);
     this.draws.forEach((dr) => {
-      if (dr.cabin || this.debugSkip.has("hull")) return;
+      if (dr.cabin || this.debugSkip.has("hull") || (dr.mesh === this.deckMesh && this.debugSkip.has("deck"))) return;
+      if (dr.inst === 0 && this.deckDrawn && this.debugSkip.has("a320-hull")) return;
       rp.setVertexBuffer(0, dr.mesh.vbuf);
       rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
       rp.drawIndexed(dr.mesh.solid ?? dr.mesh.count, 1, 0, 0, dr.inst);
@@ -2079,10 +2591,12 @@ export class ShipRenderer {
       }
     }
     // the F-35's glass, over all that (its canopy, the helmet's visor)
+    // (inside the A320: its hull's glass too — its windshield's water and frost only, ship.wgsl a320Glass: tinted, it
+    // would hide the view)
     const glassy = this.draws.filter((dr) => !dr.cabin && dr.mesh.solid !== undefined && dr.mesh.solid < dr.mesh.count);
     if (glassy.length && !this.debugSkip.has("glass")) {
       if (!res.jetGlassBind || res.jetGlassGen !== this.bindGen || res.jetGlassHdr !== hdr) {
-        const keep = [0, 1, 2, 3, 12, 16, 22];
+        const keep = [0, 1, 2, 3, 12, 16, 22, 27];
         res.jetGlassBind = this.device.createBindGroup({
           layout: this.pipes.jetGlass.getBindGroupLayout(0),
           entries: [...this.shipEntries!.filter((e) => keep.includes(e.binding)), { binding: 10, resource: hdr.createView() }],
@@ -2100,7 +2614,7 @@ export class ShipRenderer {
           ? this.device.createBindGroup({
               layout: gp.getBindGroupLayout(0),
               entries: [
-                ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22].includes(e.binding)),
+                ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27].includes(e.binding)),
                 { binding: 10, resource: hdr.createView() },
               ],
             })
@@ -2111,6 +2625,30 @@ export class ShipRenderer {
         rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
         rp.drawIndexed(dr.mesh.count - dr.mesh.solid!, 1, dr.mesh.solid!, 0, dr.inst);
       }
+    }
+    // the deck's control under the pointer: its triangles again, lit (FlightGear's highlight — GLASS_MODE 3)
+    const hov = this.deckDrawn && this.deckHover?.length && this.deckRuns && this.deckMesh ? this.deckHover : null;
+    const deckDraw = hov ? this.draws.find((dr) => dr.mesh === this.deckMesh) : null;
+    if (hov && deckDraw) {
+      this.glassModes[3] ??= this.glassPipe!(3);
+      const gp = this.glassModes[3]!;
+      if (!this.hoverBind || this.hoverBind.gen !== this.bindGen || this.hoverBind.hdr !== hdr)
+        this.hoverBind = {
+          g: this.device.createBindGroup({
+            layout: gp.getBindGroupLayout(0),
+            entries: [
+              ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27].includes(e.binding)),
+              { binding: 10, resource: hdr.createView() },
+            ],
+          }),
+          gen: this.bindGen,
+          hdr,
+        };
+      rp.setPipeline(gp);
+      rp.setBindGroup(0, this.hoverBind.g);
+      rp.setVertexBuffer(0, this.deckMesh!.vbuf);
+      rp.setIndexBuffer(this.deckMesh!.ibuf, "uint32");
+      for (const ob of hov) for (const [first, n] of this.deckRuns!.get(ob) ?? []) rp.drawIndexed(n, 1, first, 0, deckDraw.inst);
     }
     // the cabin (its own shader), then its glass, over the cabin and the view
     if (this.inCabin && this.cockpit) {
@@ -2184,11 +2722,12 @@ export class ShipRenderer {
       );
       mp.setPipeline(this.pipes.ownMask);
       mp.setBindGroup(0, this.ownBind);
+      // (the A320's flight deck too: its own instance)
       for (const dr of this.draws) {
-        if (dr.inst !== 0) continue;
+        if (dr.inst !== 0 && dr.mesh !== this.deckMesh) continue;
         mp.setVertexBuffer(0, dr.mesh.vbuf);
         mp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-        mp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, 0);
+        mp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, dr.inst);
       }
       mp.end();
       res.own.rect = [x0, y0, bw, bh];

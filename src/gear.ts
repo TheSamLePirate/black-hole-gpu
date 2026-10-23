@@ -79,6 +79,22 @@ export const GEARS: Record<string, GearDef> = {
     muBrake: 0.5,
     roll: 0.015,
   },
+  // the A320's tricycle (JSBSim's contacts, FDE/Config/a320-ground-reactions.xml: ship = (−y, z + 2.648, −x)): the nose
+  // wheel 11.2 m ahead of the centre of mass (28.5 % MAC) — a tenth of the weight —, the mains 1.3 m behind it,
+  // 8.65 m apart; their tyres 1.71 m under the belly fully out (0.4 m of stroke, 12 cm of it taken at rest)
+  a320: {
+    height: 1.59,
+    legs: [
+      { at: [0, legY(1.59, 0.4, 0.3), 13.652], stroke: 0.4, share: 0.103, wheel: true, steers: true, mu: 0.35 },
+      { at: [4.326, legY(1.59, 0.4, 0.3), 1.139], stroke: 0.4, share: 0.4485, wheel: true, brakes: true },
+      { at: [-4.326, legY(1.59, 0.4, 0.3), 1.139], stroke: 0.4, share: 0.4485, wheel: true, brakes: true },
+    ],
+    sag: 0.3,
+    zeta: 0.6,
+    mu: 0.8,
+    muBrake: 0.5,
+    roll: 0.015,
+  },
   lander: {
     height: 6,
     legs: [
@@ -106,6 +122,24 @@ export const BELLY: Record<string, GearDef> = {
       { at: [1.4, 0.05, 1], stroke: 0.08, share: 0.25, wheel: false },
       { at: [-1.4, 0.05, 1], stroke: 0.08, share: 0.25, wheel: false },
       { at: [0, 0.2, -4.5], stroke: 0.08, share: 0.25, wheel: false },
+    ],
+    sag: 0.3,
+    zeta: 0.9,
+    mu: 0.45,
+    muBrake: 0.45,
+    roll: 0,
+  },
+  // the A320's belly (JSBSim's structure contacts): the nose's underside, the belly's fairing, the engines' nacelles —
+  // they meet the ground first: ENG_1/2 —, the aft fuselage's underside where a tail strikes
+  a320: {
+    height: 0,
+    legs: [
+      { at: [0, 0.405, 14.053], stroke: 0.08, share: 1 / 6, wheel: false },
+      { at: [1.2, 0.02, 0.5], stroke: 0.08, share: 1 / 6, wheel: false },
+      { at: [-1.2, 0.02, 0.5], stroke: 0.08, share: 1 / 6, wheel: false },
+      { at: [5.631, -0.621, 5.351], stroke: 0.08, share: 1 / 6, wheel: false },
+      { at: [-5.631, -0.621, 5.351], stroke: 0.08, share: 1 / 6, wheel: false },
+      { at: [0, 0.457, -6.787], stroke: 0.08, share: 1 / 6, wheel: false },
     ],
     sag: 0.3,
     zeta: 0.9,

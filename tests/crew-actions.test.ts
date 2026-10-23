@@ -156,3 +156,56 @@ test("the flight plan's acts map to the plan's tool or the controller's point ed
   const navLines = src.split("\n").filter((l) => l.includes('"nav.'));
   for (const l of navLines) expect(l).not.toMatch(/lnav|vnav/);
 });
+
+test("station keeping from the crew: engaged, kept, never an undocking — docked, refused and said why", async () => {
+  const { installStationKeep } = await import("../src/controller/stationkeep");
+  const P = {} as { keepHold(this: unknown): string | null };
+  installStationKeep({ prototype: P as never });
+  const pilot = {
+    auto: "none",
+    setAuto(a: string) {
+      pilot.auto = pilot.auto === a ? "none" : a;
+    },
+  };
+  let undocked = 0;
+  const craft = { docked: false, netDocked: false, keepRun: null, pilot, undock: () => undocked++, keepKey: () => undocked++ };
+  expect(P.keepHold.call(craft)).toBeTruthy();
+  expect(pilot.auto).toBe("keep");
+  // (asked again: kept, not toggled off as ⇧8 would)
+  P.keepHold.call(craft);
+  expect(pilot.auto).toBe("keep");
+  craft.docked = true;
+  expect(P.keepHold.call(craft)).toBeNull();
+  // (through the executor: refused with its reason, nothing undocked)
+  const sent: Record<string, unknown>[] = [];
+  const net = {
+    room: {
+      role: "pilot",
+      slot: 0,
+      members: [
+        { slot: 0, role: "pilot", name: "P" },
+        { slot: 2, role: "instruments", name: "Ben" },
+      ],
+    },
+    event: (e: Record<string, unknown>) => sent.push(e),
+  };
+  const exec = new CrewExec({
+    camera: { ...craft, keepHold: () => P.keepHold.call(craft) } as never,
+    settings: {} as never,
+    tools: () => [],
+    toast: () => {},
+    nameOf: () => "Ben",
+    families: () => ["space"] as never,
+  });
+  await exec.handle(net as never, 2, { kind: "crew-cmd", v: 1, id: "k", to: 0, act: "sp.dock", args: { action: "keep" } });
+  expect(sent[0]).toMatchObject({ ok: false, act: "sp.dock" });
+  expect(String(sent[0]!.msg)).toMatch(/Désamarrer d'abord/);
+  expect(undocked).toBe(0);
+});
+
+test("an order's words in the reader's units: the MCP's selections in metres or feet", async () => {
+  const { sayOf } = await import("../src/net/crewcmd");
+  const { unitsOf } = await import("../src/ui/unitsys");
+  expect(sayOf("ap.set", { alt: 3000, spd: 200 }).fr).toBe("consigne ALT 3000 m · VIT 200 m/s");
+  expect(sayOf("ap.set", { alt: 3048, spd: 100 }, unitsOf("imperial")).fr).toBe("consigne ALT 10000 ft · VIT 194 kt");
+});

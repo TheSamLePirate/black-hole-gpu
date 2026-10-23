@@ -11,9 +11,11 @@ import { checkArgs } from "../ai/tool-schema";
 import type { Tool } from "../ai/agent";
 import type { CameraController } from "../controls";
 import type { Settings } from "../settings";
-import { tf, tr } from "../i18n";
+import { type Lang, tf, tr, translateTo } from "../i18n";
 import { CHECKLISTS, type FailureKind } from "../game/systems";
 import { M_SECONDS } from "../units";
+import { unitsFor } from "./unitsys";
+import { LPD } from "../controller/lowthrust";
 
 export interface CrewExecDeps {
   camera: CameraController;
@@ -26,15 +28,34 @@ export interface CrewExecDeps {
   families(): Family[];
   /** whether a player rides aboard our craft (PLAN-VAISSEAUX N3: our copilot — his orders as a crew screen's) */
   aboard?(slot: number): boolean;
+  /** an order to another pilot's spacecraft (N1 — ui/netsession.ts spaceOrder): what to say */
+  spaceOrder?(slot: number, order: "come" | "hold" | "dock"): string;
 }
 
 /** what an act does aboard: the game tool and its arguments, or the controller's own call; its words back */
 export interface ExecCtx {
   camera: CameraController;
+  /** the room's fleet orders (N1) */
+  spaceOrder?(slot: number, order: "come" | "hold" | "dock"): string;
+  /** the asking console's language: its own words for a refusal here */
+  lang: Lang;
   /** a game tool run with its arguments checked against its own schema; its result (short), or throws */
   tool(name: string, args: Args): Promise<unknown>;
 }
 type Run = (a: Args, x: ExecCtx) => unknown | Promise<unknown>;
+
+/** A crew's contact id as the picture's (RD6): a fight's f:N is cmb:N, the traffic's t:X trf:X — the others the same. */
+function picId(v: unknown): string | null {
+  const id = typeof v === "string" ? v : "";
+  if (!id) return null;
+  return id.startsWith("f:") ? `cmb:${id.slice(2)}` : id.startsWith("t:") ? `trf:${id.slice(2)}` : id;
+}
+/** The name an order names: its track's in the picture now when its id is given (the right one of two of a name). */
+function nameOf(a: Args, x: ExecCtx): string | undefined {
+  const pid = picId(a.id);
+  const T = pid ? x.camera.picture?.byId.get(pid) : undefined;
+  return T?.name ?? (typeof a.name === "string" ? a.name : undefined);
+}
 
 const RUN: Record<Act, Run> = {
   "cfg.ack": (_a, x) => x.tool("flight_action", { action: "acknowledge" }),
@@ -69,7 +90,7 @@ const RUN: Record<Act, Run> = {
     }),
   "nav.direct": (a, x) => x.tool("flight_plan", { action: "direct", index: a.index }),
   "nav.procedures": (_a, x) => x.tool("approach", { action: "procedures" }),
-  "nav.target": (a, x) => x.tool("set_target", { name: a.name }),
+  "nav.target": (a, x) => x.tool("set_target", { name: nameOf(a, x) }),
   // (the aircraft's autopilot: its selectors, its modes, its approaches — never the afterburner or the throttle)
   "ap.set": (a, x) =>
     x.camera.apSet({
@@ -85,9 +106,25 @@ const RUN: Record<Act, Run> = {
   "ap.ilsOff": (_a, x) => x.tool("approach", { action: "off" }),
   "ap.mode": (a, x) => {
     const { mode, ...rest } = a;
+    // (the refuelling let go alone — jet_mode's off would drop the orbit and the terrain following with it)
+    if (mode === "tankerOff") {
+      const C = x.camera;
+      if (!C.aar && C.tankerPending == null) return { ok: false, note: "No refuelling engaged" };
+      C.tankerPending = null;
+      if (C.icpt) C.icptOff();
+      C.aarOff();
+      return "Refuelling off";
+    }
+    // (the tanker always asked with its side: jet_mode's tanker alone toggles a refuelling off — a crew's order
+    // repeated across the light's delay never undoes itself)
+    if (mode === "tanker") return x.tool("jet_mode", { action: "tanker", side: rest.side ?? "right", ...rest });
+    if (mode === "refuelMode" && !rest.refuelMode) return { ok: false, note: "refuelMode: which way" };
     return x.tool("jet_mode", { action: mode, ...rest });
   },
-  "ap.traffic": (a, x) => x.tool("traffic", { action: a.action, ...(a.name ? { name: a.name } : {}) }),
+  "ap.traffic": (a, x) => {
+    const name = nameOf(a, x);
+    return x.tool("traffic", { action: a.action, ...(name ? { name } : {}) });
+  },
   "ap.goAround": (_a, x) => x.tool("flight_action", { action: "go_around" }),
   // (the spacecraft's flight computer: its tools, a manoeuvre or a mission previewed (execute: false) or flown)
   "sp.hold": (a, x) => x.tool("hold", { direction: a.direction }),
@@ -100,10 +137,21 @@ const RUN: Record<Act, Run> = {
   // (PLAN-VAISSEAUX K6: the controller's own calls — the docking's, the ring's, the plan's burns, the systems')
   "sp.dock": (a, x) => {
     const C = x.camera;
-    if (a.action === "undock") return C.docked ? (C.undock(), "Désamarré") : "Not docked";
+    if (a.action === "undock") return C.docked ? (C.undock(), x.lang === "fr" ? "Désamarré" : "Undocked") : "Not docked";
     if (a.action === "refuel") return C.refuelFromDocked();
     if (a.action === "rcs") return C.rcsModeToggle();
-    return C.keepKey();
+    // (station keeping alone — never the pilot's ⇧8, which undocks a docked craft: docked, refused, said why)
+    if (a.action === "keep")
+      return (
+        C.keepHold() ?? {
+          ok: false,
+          note:
+            x.lang === "fr"
+              ? "Amarré : le maintien à poste ne désamarre pas — Désamarrer d'abord"
+              : "Docked: station keeping never undocks — Undock first",
+        }
+      );
+    return { ok: false, note: x.lang === "fr" ? "Ordre d'amarrage inconnu" : "Unknown docking order" };
   },
   "sp.ring": (a, x) => (a.dir === 0 ? "No such direction" : x.camera.ringSet(Number(a.dir) > 0 ? 1 : -1)),
   "sp.node": (a, x) => {
@@ -112,28 +160,63 @@ const RUN: Record<Act, Run> = {
     if (!C.plan.nodes[i]) return "No such burn";
     if (a.action === "delete") {
       C.deleteNode(i);
-      return "Poussée supprimée";
+      return x.lang === "fr" ? "Poussée supprimée" : "Burn removed";
     }
     C.nudgeNode(i, [0, 0, 0], Number(a.dtS ?? 0) / M_SECONDS);
-    return "Poussée déplacée";
+    return x.lang === "fr" ? "Poussée déplacée" : "Burn moved";
   },
-  // (the refusals said as such, whatever the pilot's language: the console's French)
+  // (the landing point: taken at the landing's next step — only flying the powered landing to a point, under 5 km)
+  "sp.lpd": (a, x) => {
+    const C = x.camera;
+    const L = C.landRun;
+    if (C.pilot.auto !== "land" || !L || !(L.q || L.site))
+      return {
+        ok: false,
+        note:
+          x.lang === "fr" ? "Le point d'atterrissage : l'atterrissage motorisé d'abord" : "The landing point: the powered landing first",
+      };
+    const h = C.surfaceInfo()?.alt ?? Number.POSITIVE_INFINITY;
+    if (!(h < LPD.below))
+      return { ok: false, note: x.lang === "fr" ? "Le point d'atterrissage : sous 5 km" : "The landing point: below 5 km" };
+    if (a.lat !== undefined && a.lon !== undefined) C.lpdOrder = { lat: Number(a.lat), lon: Number(a.lon) };
+    else C.lpdOrder = { fwd: Number(a.fwd ?? 0), right: Number(a.right ?? 0) };
+    return x.lang === "fr" ? "Point d'atterrissage redésigné" : "Landing point redesignated";
+  },
+  "sp.fleet": (a, x) =>
+    x.spaceOrder ? x.spaceOrder(Number(a.slot), a.order as "come" | "hold" | "dock") : { ok: false, note: "Not in a room" },
+  // (the refusals said as such, whatever the pilot's language: the console's)
   "sys.step": (a, x) => {
     const k = a.kind as FailureKind;
-    if (!x.camera.systemsInfo()?.failures.some((f) => f.kind === k)) return { ok: false, note: "Cette panne n'est pas en cours" };
+    if (!x.camera.systemsInfo()?.failures.some((f) => f.kind === k))
+      return { ok: false, note: x.lang === "fr" ? "Cette panne n'est pas en cours" : "This failure is not under way" };
     return x.camera.systemsTick(k, Number(a.step), !!a.on);
   },
   "sys.fix": (a, x) => {
     const k = a.kind as FailureKind;
-    if (!x.camera.systemsInfo()?.failures.some((f) => f.kind === k)) return { ok: false, note: "Cette panne n'est pas en cours" };
+    if (!x.camera.systemsInfo()?.failures.some((f) => f.kind === k))
+      return { ok: false, note: x.lang === "fr" ? "Cette panne n'est pas en cours" : "This failure is not under way" };
     if ((x.camera.sysTicks.get(`f:${k}`)?.size ?? 0) < CHECKLISTS[k].steps.length)
-      return { ok: false, note: "La checklist d'abord : toutes les étapes cochées" };
+      return {
+        ok: false,
+        note: x.lang === "fr" ? "La checklist d'abord : toutes les étapes cochées" : "The checklist first: every step ticked",
+      };
     return x.camera.systemsFixChecked(k);
   },
   // (the F-35's weapons: the backseater's — the weapons tool's actions)
   "wp.radar": (a, x) => x.tool("weapons", { action: "radar", mode: a.mode }),
   "wp.select": (a, x) => x.tool("weapons", { action: "select", weapon: a.weapon }),
-  "wp.lock": (a, x) => x.tool("weapons", { action: "lock", ...(a.target ? { target: a.target } : {}) }),
+  // (by its id first — RD6: the track itself selected, the lock taking the selection —; its name the fallback)
+  "wp.lock": (a, x) => {
+    const pid = picId(a.id);
+    if (pid && x.camera.picture?.byId.has(pid)) x.camera.pictureSelect(pid, "order");
+    return x.tool("weapons", { action: "lock", ...(!pid && a.target ? { target: a.target } : {}) });
+  },
+  // (the crew's ids to the picture's: a fight's f:N is cmb:N, the traffic's t:X trf:X — the others the same)
+  "wp.designate": (a, x) => {
+    const pid = picId(a.id) ?? "";
+    const said = x.camera.pictureSelect(pid || null, "order");
+    return { ok: !!x.camera.picture?.byId.has(pid), note: `CREW ▸ ${said}` };
+  },
   "wp.fire": (_a, x) => x.tool("weapons", { action: "fire" }),
   "wp.gun": (a, x) => x.tool("weapons", { action: "gun", seconds: a.seconds ?? 1 }),
   "wp.cm": (_a, x) => x.tool("weapons", { action: "countermeasures" }),
@@ -175,11 +258,28 @@ function readResult(r: unknown): { line: string; refused: boolean; data: Record<
 }
 /** the tools' refusals come back as words, not throws: the usual ones read as a refusal */
 const REFUSED =
-  /^(no |not |nothing to fix|the checklist first|cannot|can't|unknown|only |the jet's systems: in|the autopilot's holds: in|in the air|nav: (no|in the air)|out of|nothing |the radar: in|stt: no)/i;
+  /^(no |not |orders to the fleet|nothing to fix|the checklist first|cannot|can't|unknown|only |the jet's systems: in|the autopilot's holds: in|in the air|nav: (no|in the air)|out of|nothing |the radar: in|stt: no)/i;
 
 export class CrewExec {
   private gate = new CrewGate(4);
   constructor(private d: CrewExecDeps) {}
+
+  /** an order from a ground station behind the wormhole: no live link — refused, said why in the console's language */
+  refuseCut(net: NetClient, from: number, raw: unknown) {
+    const r = raw as { id?: unknown; act?: unknown; to?: unknown; lang?: unknown };
+    if (r.to !== net.room?.slot || typeof r.id !== "string") return;
+    const lang = r.lang === "en" ? "en" : "fr";
+    net.event({
+      kind: "crew-ack",
+      v: 1,
+      id: r.id.slice(0, 40),
+      to: from,
+      act: String(r.act ?? "").slice(0, 32),
+      ok: false,
+      msg: lang === "fr" ? "Liaison coupée (trou de ver) : enregistrez un message" : "Link cut (wormhole): record a message",
+      what: String(r.act ?? "").slice(0, 32),
+    } satisfies CrewAck & { kind: string });
+  }
 
   /** an order heard in the room (from: the server's stamp) */
   async handle(net: NetClient, from: number, raw: unknown) {
@@ -191,25 +291,47 @@ export class CrewExec {
     if (to !== room.slot) return;
     const id = p.ok ? p.cmd.id : (p.id ?? "");
     const act = p.ok ? p.cmd.act : String((raw as { act?: unknown })?.act ?? "").slice(0, 32);
+    // (the asking console's language — an older one's none: French —, its answer all in it: what was asked, the
+    // gates' refusals, the game's own words through its dictionaries)
+    const lang: Lang = (raw as { lang?: unknown })?.lang === "en" ? "en" : "fr";
+    const say = (fr: string, en: string) => (lang === "fr" ? fr : en);
     const answer = (ok: boolean, msg: string, data?: CrewAck["data"]) => {
-      const what = p.ok ? sayOf(p.cmd.act, p.cmd.args).fr : act;
+      const what = p.ok ? sayOf(p.cmd.act, p.cmd.args)[lang] : act;
+      // (the arguments: every other screen says it again in its own language and units)
+      const args: CrewAck["args"] = {};
+      if (p.ok)
+        for (const [k, v] of Object.entries(p.cmd.args).slice(0, 12))
+          if (typeof v === "string" || typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v))) args[k] = v;
       if (id)
-        net.event({ kind: "crew-ack", v: 1, id, to: from, act, ok, msg, what, ...(data ? { data } : {}) } satisfies CrewAck & {
-          kind: string;
-        });
+        net.event({
+          kind: "crew-ack",
+          v: 1,
+          id,
+          to: from,
+          act,
+          ok,
+          msg: translateTo(msg, lang).slice(0, 200),
+          what,
+          ...(data ? { data } : {}),
+          ...(p.ok ? { args } : {}),
+        } satisfies CrewAck & { kind: string });
     };
-    // (the console's own words for the gates' refusals: it speaks French)
     const sender = room.members.find((m) => m.slot === from);
-    if (sender?.role !== "instruments" && !this.d.aboard?.(from)) return answer(false, "Seul un écran d'équipage donne des ordres");
-    if (this.d.settings.netCrewActions === false) return answer(false, "Le pilote a verrouillé les actions de l'équipage");
+    if (sender?.role !== "instruments" && !this.d.aboard?.(from))
+      return answer(false, say("Seul un écran d'équipage donne des ordres", "Only a crew screen gives orders"));
+    if (this.d.settings.netCrewActions === false)
+      return answer(false, say("Le pilote a verrouillé les actions de l'équipage", "The pilot has locked the crew's actions"));
     if (!p.ok) return answer(false, p.error);
     const pace = this.gate.pass(from, p.cmd.id, performance.now());
     if (pace === "again") return;
-    if (pace === "rate") return answer(false, "Trop d'ordres — un à la fois");
+    if (pace === "rate") return answer(false, say("Trop d'ordres — un à la fois", "Too many orders — one at a time"));
     const fam = ACTS[p.cmd.act].fam;
-    if (!this.d.families().includes(fam)) return answer(false, "Indisponible sur cet appareil ou dans ce mode");
+    if (!this.d.families().includes(fam))
+      return answer(false, say("Indisponible sur cet appareil ou dans ce mode", "Unavailable on this craft or in this mode"));
     const ctx: ExecCtx = {
       camera: this.d.camera,
+      ...(this.d.spaceOrder ? { spaceOrder: this.d.spaceOrder } : {}),
+      lang,
       tool: async (name, args) => {
         const tool = this.d.tools().find((x) => x.name === name);
         if (!tool) throw new Error(`no tool ${name}`);
@@ -231,7 +353,7 @@ export class CrewExec {
       msg = (e instanceof Error ? e.message : String(e)).slice(0, 160);
     }
     const who = this.d.nameOf(from);
-    const what = tr(sayOf(p.cmd.act, p.cmd.args));
+    const what = tr(sayOf(p.cmd.act, p.cmd.args, unitsFor(this.d.settings)));
     this.d.toast(ok ? tf("{0} (crew): {1}", who, what) : tf("{0} (crew): {1} — refused: {2}", who, what, msg));
     answer(ok, msg, data);
   }

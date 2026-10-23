@@ -18,11 +18,10 @@ export const MODES = {
   tfAhead: 14,
   tfClimb: 20 * D,
   tfDive: -12 * D,
-  /** the tanker: its height [m], speed [m/s], its racetrack's legs [m]; the pre-contact slot behind and below [m] */
+  /** the tanker: its height [m], speed [m/s], its racetrack's legs [m] (its hoses, the refuelling: game/aar.ts) */
   tankerH: 7000,
   tankerV: 210,
   tankerLeg: 30_000,
-  preContact: { right: 0, back: 50, up: -10 },
 };
 
 /**
@@ -51,12 +50,11 @@ export function tfGamma(h: number, V: number, agl: number, ground: (x: number) =
   return clamp(Math.max(want, under), MODES.tfDive, MODES.tfClimb);
 }
 
-/** The tanker's racetrack: four corners (east, north from its anchor [m]) — its legs along `hdg` [rad], 10 km apart. */
-export function tankerTrack(hdg: number): [number, number][] {
-  const L = MODES.tankerLeg;
+/** The tanker's racetrack: four corners (east, north from its anchor [m]) — its legs along `hdg` [rad], `W` apart (a
+ *  refuelling's: 20 km, its turns flown at 25° of bank). */
+export function tankerTrack(hdg: number, W = 10_000, L: number = MODES.tankerLeg): [number, number][] {
   const f: [number, number] = [Math.sin(hdg), Math.cos(hdg)];
   const r: [number, number] = [Math.cos(hdg), -Math.sin(hdg)];
-  const W = 10_000;
   return [
     [f[0] * L, f[1] * L],
     [f[0] * L + r[0] * W, f[1] * L + r[1] * W],

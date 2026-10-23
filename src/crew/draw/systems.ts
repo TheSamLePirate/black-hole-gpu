@@ -3,6 +3,8 @@
 // heat, the orbit drawn, the autopilot's and the assistance's modes, the alerts — cards laid out to the width.
 import { C, clamp, D, deg360, dur, fmt, type Pen, TAU, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { drawAar } from "./aar";
+import { L } from "../lang";
 
 const ok = (x: number | null | undefined): x is number => typeof x === "number" && Number.isFinite(x);
 
@@ -70,7 +72,7 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
   const cards: Card[] = [];
   // the engine
   cards.push({
-    title: `MOTEUR · ${(sys?.engine || "—").toUpperCase()}`,
+    title: `${L("MOTEUR", "ENGINE")} · ${(sys?.engine || "—").toUpperCase()}`,
     h: 190,
     draw: (q) => {
       const R = Math.max(14, Math.min(q.w * 0.19, 52));
@@ -78,14 +80,24 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
       const gx = q.x + R + 16;
       arc(p, gx, q.y + R + 34, R, ok(spool) ? spool * 100 : null, 0, 110, [[100, 110, "#ff4d4d66"]], C.green);
       p.text(ok(spool) ? `${fmt(spool * 100)}%` : "—", gx, q.y + R * 1.62 + 38, { col: C.white, size: 15, align: "center", weight: 700 });
-      p.text("RÉGIME", gx, q.y + R * 2 + 52, { col: C.dim, size: 9, align: "center", weight: 600 });
+      p.text(L("RÉGIME", "SPOOL"), gx, q.y + R * 2 + 52, { col: C.dim, size: 9, align: "center", weight: 600 });
       const x = q.x + R * 2 + 34,
         w = q.x + q.w - 12 - x;
-      bar(p, x, q.y + 46, w, 7, m.throttle ?? null, C.cyan, "GAZ", ok(m.throttle) ? `${fmt(m.throttle * 100)} %` : "—");
-      bar(p, x, q.y + 80, w, 7, ok(sys?.ab) ? sys!.ab! / 5 : null, C.amber, "PC", ok(sys?.ab) && sys!.ab! > 0 ? `${fmt(sys!.ab)}` : "—");
-      p.text("POUSSÉE", x, q.y + 108, { col: C.dim, size: 9, weight: 600 });
+      bar(p, x, q.y + 46, w, 7, m.throttle ?? null, C.cyan, L("GAZ", "THROTTLE"), ok(m.throttle) ? `${fmt(m.throttle * 100)} %` : "—");
+      bar(
+        p,
+        x,
+        q.y + 80,
+        w,
+        7,
+        ok(sys?.ab) ? sys!.ab! / 5 : null,
+        C.amber,
+        L("PC", "AB"),
+        ok(sys?.ab) && sys!.ab! > 0 ? `${fmt(sys!.ab)}` : "—",
+      );
+      p.text(L("POUSSÉE", "THRUST"), x, q.y + 108, { col: C.dim, size: 9, weight: 600 });
       p.text(ok(sys?.thrust) ? `${fmt(sys!.thrust, 1)} kN` : "—", x, q.y + 124, { col: C.white, size: 13, weight: 700 });
-      p.text("DÉBIT", x, q.y + 146, { col: C.dim, size: 9, weight: 600 });
+      p.text(L("DÉBIT", "FLOW"), x, q.y + 146, { col: C.dim, size: 9, weight: 600 });
       p.text(ok(sys?.flow) ? `${fmt(sys!.flow! * 3600)} kg/h` : "—", x, q.y + 162, { col: C.white, size: 13, weight: 700 });
     },
   });
@@ -94,7 +106,7 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
     full = sys?.fuelFull ?? null;
   const frac = ok(fuelKg) && ok(full) && full > 0 ? fuelKg / full : (m.fuel ?? null);
   cards.push({
-    title: "CARBURANT",
+    title: L("CARBURANT", "FUEL"),
     h: 190,
     draw: (q) => {
       const tx = q.x + 14,
@@ -125,18 +137,22 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
         p.text(k, x, y, { col: C.dim, size: 9, weight: 600 });
         p.text(v, x + w, y, { col, size: 12, align: "right", weight: 700 });
       };
-      row(q.y + 46, "RESTANT", ok(fuelKg) ? `${fmt(fuelKg)} kg` : ok(frac) ? `${fmt(frac * 100)} %` : "—");
+      row(q.y + 46, L("RESTANT", "LEFT"), ok(fuelKg) ? `${fmt(fuelKg)} kg` : ok(frac) ? `${fmt(frac * 100)} %` : "—");
       const flow = sys?.flow;
       const endu = ok(fuelKg) && ok(flow) && flow > 1e-4 ? fuelKg / flow : null;
-      row(q.y + 72, "AUTONOMIE", dur(endu));
-      row(q.y + 98, "RAYON", ok(endu) && ok(s.gs) ? `${fmt(u.dist(endu * s.gs))} ${u.distName.toLowerCase()}` : "—");
+      row(q.y + 72, L("AUTONOMIE", "ENDURANCE"), dur(endu));
+      row(q.y + 98, L("RAYON", "RANGE"), ok(endu) && ok(s.gs) ? `${fmt(u.dist(endu * s.gs))} ${u.distName.toLowerCase()}` : "—");
       if (nav && ok(nav.fuelToGo) && ok(fuelKg)) {
         const left = fuelKg - nav.fuelToGo;
-        row(q.y + 124, "ARRIVÉE", `${fmt(left)} kg`, ok(nav.bingo) && left < 0 ? C.red : left < 900 ? C.amber : C.green);
+        row(q.y + 124, L("ARRIVÉE", "AT DEST."), `${fmt(left)} kg`, ok(nav.bingo) && left < 0 ? C.red : left < 900 ? C.amber : C.green);
         row(q.y + 150, "BINGO", ok(nav.bingo) ? `${fmt(nav.bingo)} kg` : "—", C.amber);
-      } else if (ok(frac)) row(q.y + 124, "NIVEAU", `${fmt(frac * 100)} %`);
+      } else if (ok(frac)) row(q.y + 124, L("NIVEAU", "LEVEL"), `${fmt(frac * 100)} %`);
     },
   });
+  // the refuelling behind the tanker (its phase, the gap, the hose, the fuel taken)
+  const aar = snap?.aar;
+  if (aar)
+    cards.push({ title: L("RAVITAILLEMENT EN VOL", "AIR REFUELLING"), h: 190, draw: (q) => drawAar(p, { ...q, y: q.y + 14 }, aar, u) });
   // the configuration
   cards.push({
     title: "CONFIGURATION",
@@ -162,19 +178,35 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
         p.fill(col === "#33444e" ? "#0b141a" : `${col}44`);
         p.stroke(col, 1.6);
       }
-      const label = down ? (gear >= 0.99 ? "TRAIN SORTI" : "TRAIN EN SORTIE") : gear > 0.01 ? "TRAIN EN RENTRÉE" : "TRAIN RENTRÉ";
+      const label = down
+        ? gear >= 0.99
+          ? L("TRAIN SORTI", "GEAR DOWN")
+          : L("TRAIN EN SORTIE", "GEAR COMING DOWN")
+        : gear > 0.01
+          ? L("TRAIN EN RENTRÉE", "GEAR COMING UP")
+          : L("TRAIN RENTRÉ", "GEAR UP");
       p.text(label, cx, cy + size * 1.25 + 8, { col: gear > 0.01 || down ? col : C.dim, size: 10, align: "center", weight: 700 });
       const x = q.x + q.w * 0.56,
         w = q.w * 0.4;
-      bar(p, x, q.y + 46, w, 8, sys?.flaps ?? null, C.cyan, "VOLETS", ok(sys?.flaps) ? `${fmt(sys!.flaps * 100)} %` : "—");
-      bar(p, x, q.y + 84, w, 8, sys?.brake ?? null, C.amber, "AÉROFREIN", ok(sys?.brake) ? `${fmt(sys!.brake * 100)} %` : "—");
+      bar(p, x, q.y + 46, w, 8, sys?.flaps ?? null, C.cyan, L("VOLETS", "FLAPS"), ok(sys?.flaps) ? `${fmt(sys!.flaps * 100)} %` : "—");
+      bar(
+        p,
+        x,
+        q.y + 84,
+        w,
+        8,
+        sys?.brake ?? null,
+        C.amber,
+        L("AÉROFREIN", "AIR BRAKE"),
+        ok(sys?.brake) ? `${fmt(sys!.brake * 100)} %` : "—",
+      );
       lamp(p, x, q.y + 108, w, !!sys?.stovl, sys?.stovl ? `STOVL ${sys.stovl}` : "STOVL", C.cyan);
       lamp(p, x, q.y + 136, w, !!a?.sas, "SAS");
     },
   });
   // the load and the incidence
   cards.push({
-    title: "CHARGE · INCIDENCE",
+    title: L("CHARGE · INCIDENCE", "LOAD · INCIDENCE"),
     h: 190,
     draw: (q) => {
       const R = Math.max(14, Math.min(q.w * 0.17, 50));
@@ -196,7 +228,7 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
         g !== null && g > gMax * 0.9 ? C.red : C.cyan,
       );
       p.text(g === null ? "—" : `${fmt(g, 1)}g`, g1, q.y + R * 1.62 + 34, { col: C.white, size: 14, align: "center", weight: 700 });
-      p.text(`LIMITE ${fmt(gMax, 1)}`, g1, q.y + R * 2 + 50, { col: C.dim, size: 9, align: "center" });
+      p.text(`${L("LIMITE", "LIMIT")} ${fmt(gMax, 1)}`, g1, q.y + R * 2 + 50, { col: C.dim, size: 9, align: "center" });
       const cx = q.x + q.w * 0.73;
       const aoa = Number.isFinite(s.aoa) ? s.aoa / D : null;
       const st = ok(f?.stallAoa) ? f!.stallAoa! / D : 20;
@@ -212,9 +244,9 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
         aoa !== null && aoa > st * 0.85 ? C.amber : C.green,
       );
       p.text(aoa === null ? "—" : `${fmt(aoa, 1)}°`, cx, q.y + R * 1.62 + 34, { col: C.white, size: 14, align: "center", weight: 700 });
-      p.text("INCIDENCE α", cx, q.y + R * 2 + 50, { col: C.dim, size: 9, align: "center" });
+      p.text(L("INCIDENCE α", "INCIDENCE α"), cx, q.y + R * 2 + 50, { col: C.dim, size: 9, align: "center" });
       if (ok(f?.buffet) && f!.buffet! > 0.05)
-        p.text(`BUFFETING ${fmt(f!.buffet! * 100)} %`, q.x + q.w / 2, q.y + q.h - 10, {
+        p.text(`BUFFET ${fmt(f!.buffet! * 100)} %`, q.x + q.w / 2, q.y + q.h - 10, {
           col: C.amber,
           size: 10,
           align: "center",
@@ -224,7 +256,7 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
   });
   // the structure and the air
   cards.push({
-    title: "STRUCTURE · AIR",
+    title: L("STRUCTURE · AIR", "STRUCTURE · AIR"),
     h: 190,
     draw: (q) => {
       const x = q.x + 14,
@@ -237,15 +269,35 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
         8,
         sys?.hull ?? null,
         ok(sys?.hull) && sys!.hull! > 0.8 ? C.red : C.amber,
-        "TEMPÉRATURE COQUE",
+        L("TEMPÉRATURE COQUE", "HULL TEMPERATURE"),
         ok(sys?.hull) ? `${fmt(sys!.hull! * 100)} %` : "—",
       );
-      bar(p, x, q.y + 82, w, 8, sys?.shield ?? null, C.cyan, "BOUCLIER THERMIQUE", ok(sys?.shield) ? `${fmt(sys!.shield! * 100)} %` : "—");
-      bar(p, x, q.y + 118, w, 8, sys?.damage ?? null, C.red, "DOMMAGES", ok(sys?.damage) ? `${fmt(sys!.damage! * 100)} %` : "—");
+      bar(
+        p,
+        x,
+        q.y + 82,
+        w,
+        8,
+        sys?.shield ?? null,
+        C.cyan,
+        L("BOUCLIER THERMIQUE", "HEAT SHIELD"),
+        ok(sys?.shield) ? `${fmt(sys!.shield! * 100)} %` : "—",
+      );
+      bar(
+        p,
+        x,
+        q.y + 118,
+        w,
+        8,
+        sys?.damage ?? null,
+        C.red,
+        L("DOMMAGES", "DAMAGE"),
+        ok(sys?.damage) ? `${fmt(sys!.damage! * 100)} %` : "—",
+      );
       const cells: [string, string][] = [
-        ["MASSE", ok(sys?.mass) ? `${fmt(sys!.mass! / 1000, 1)} t` : "—"],
-        ["PRESSION DYN.", ok(m.q) ? `${fmt(m.q / 1000, 1)} kPa` : "—"],
-        ["FLUX", ok(m.heat) ? `${fmt(m.heat / 1e4, 1)} W/cm²` : "—"],
+        [L("MASSE", "MASS"), ok(sys?.mass) ? `${fmt(sys!.mass! / 1000, 1)} t` : "—"],
+        [L("PRESSION DYN.", "DYN. PRESSURE"), ok(m.q) ? `${fmt(m.q / 1000, 1)} kPa` : "—"],
+        [L("FLUX", "HEAT FLUX"), ok(m.heat) ? `${fmt(m.heat / 1e4, 1)} W/cm²` : "—"],
       ];
       cells.forEach(([k, v], i) => {
         const cx = q.x + (q.w / 3) * (i + 0.5);
@@ -256,21 +308,25 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
   });
   // the autopilot and the assistance
   cards.push({
-    title: "PILOTE AUTOMATIQUE · ASSISTANCE",
+    title: L("PILOTE AUTOMATIQUE · ASSISTANCE", "AUTOPILOT · ASSISTANCE"),
     h: 190,
     draw: (q) => {
       const cols = 3,
         gw = (q.w - 28 - (cols - 1) * 6) / cols;
       const lamps: [string, boolean, string][] = [
         [a?.alt != null ? `ALT ${fmt(u.alt(a.alt))}` : "ALT", a?.alt != null, C.green],
-        [a?.hdg != null ? `CAP ${String(Math.round(deg360(a.hdg)) % 360).padStart(3, "0")}` : "CAP", a?.hdg != null, C.green],
-        [a?.spd != null ? `VIT ${fmt(u.spd(a.spd))}` : "A/THR", a?.spd != null, C.green],
+        [
+          a?.hdg != null ? `${L("CAP", "HDG")} ${String(Math.round(deg360(a.hdg)) % 360).padStart(3, "0")}` : L("CAP", "HDG"),
+          a?.hdg != null,
+          C.green,
+        ],
+        [a?.spd != null ? `${L("VIT", "SPD")} ${fmt(u.spd(a.spd))}` : "A/THR", a?.spd != null, C.green],
         ["LNAV", !!a?.lnav, C.magenta],
         ["VNAV", !!a?.vnav, C.magenta],
-        ["PC", !!a?.ab, C.amber],
+        [L("PC", "AB"), !!a?.ab, C.amber],
         [a?.auto && a.auto !== "none" ? a.auto.toUpperCase() : "AUTO", !!a?.auto && a.auto !== "none", C.cyan],
-        [a?.hold && a.hold !== "none" ? a.hold.toUpperCase() : "TENUE", !!a?.hold && a.hold !== "none", C.cyan],
-        [a?.order || "ORDRE", !!a?.order, C.cyan],
+        [a?.hold && a.hold !== "none" ? a.hold.toUpperCase() : L("TENUE", "HOLD"), !!a?.hold && a.hold !== "none", C.cyan],
+        [a?.order || L("ORDRE", "ORDER"), !!a?.order, C.cyan],
       ];
       lamps.forEach(([t, on, col], i) =>
         lamp(p, q.x + 14 + (i % cols) * (gw + 6), q.y + 34 + Math.floor(i / cols) * 28, gw, on, t.slice(0, 14), col),
@@ -292,12 +348,13 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
   const orb = snap?.orbit;
   if (orb)
     cards.push({
-      title: `ORBITE · ${(snap?.body ?? "").toUpperCase()}`,
+      title: `${L("ORBITE", "ORBIT")} · ${(snap?.body ?? "").toUpperCase()}`,
       h: 190,
       draw: (q) => {
         const cx = q.x + q.w * 0.3,
           cy = q.y + 104;
-        const Rb = 6371,
+        // (the body's radius sent with the orbit; an older pilot's none: the Earth's mean)
+        const Rb = orb.radius != null && orb.radius > 0 ? orb.radius : 6371,
           rp = Rb + orb.pe,
           ra = orb.ap > 0 ? Rb + orb.ap : rp * 3;
         const aa = (rp + ra) / 2,
@@ -326,30 +383,34 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
           p.text(k2, x, y, { col: C.dim, size: 10, weight: 600 });
           p.text(v, x + w, y, { col: C.white, size: 12, align: "right", weight: 700 });
         };
-        row(q.y + 46, "APOGÉE", orb.ap > 0 ? `${fmt(orb.ap)} km` : "∞");
-        row(q.y + 68, "PÉRIGÉE", `${fmt(orb.pe)} km`);
-        row(q.y + 90, "INCLINAISON", `${fmt(orb.inc, 1)}°`);
-        row(q.y + 112, "EXCENTRICITÉ", fmt(orb.ecc, 3));
-        row(q.y + 134, "PÉRIODE", dur(orb.period));
+        row(q.y + 46, L("APOGÉE", "APOAPSIS"), orb.ap > 0 ? `${fmt(orb.ap)} km` : "∞");
+        row(q.y + 68, L("PÉRIGÉE", "PERIAPSIS"), `${fmt(orb.pe)} km`);
+        row(q.y + 90, L("INCLINAISON", "INCLINATION"), `${fmt(orb.inc, 1)}°`);
+        row(q.y + 112, L("EXCENTRICITÉ", "ECCENTRICITY"), fmt(orb.ecc, 3));
+        row(q.y + 134, L("PÉRIODE", "PERIOD"), dur(orb.period));
         row(q.y + 156, "→ Ap / Pe", `${dur(orb.tAp)} / ${dur(orb.tPe)}`);
       },
     });
   // the alerts and the next event
   const warn = snap?.warn ?? [];
   cards.push({
-    title: "ALERTES · ÉVÉNEMENTS",
+    title: L("ALERTES · ÉVÉNEMENTS", "ALERTS · EVENTS"),
     h: 190,
     draw: (q) => {
-      if (!warn.length) p.text("AUCUNE ALERTE", q.x + q.w / 2, q.y + 70, { col: C.green, size: 13, align: "center", weight: 700 });
+      if (!warn.length)
+        p.text(L("AUCUNE ALERTE", "NO ALERT"), q.x + q.w / 2, q.y + 70, { col: C.green, size: 13, align: "center", weight: 700 });
       const gw = (q.w - 34) / 2;
       warn.slice(0, 8).forEach((w, i) => {
-        const red = /PULL|FLY|STALL|G-LOC|MISSILE|OVER|IMPACT|FAIL/.test(w);
+        const red = /PULL|FLY|STALL|G-LOC|MISSILE|OVER|IMPACT|FAIL|BREAKAWAY/.test(w);
         const blink = red && Math.floor(sc.now * 2.5) % 2 === 0;
         lamp(p, q.x + 14 + (i % 2) * (gw + 6), q.y + 34 + Math.floor(i / 2) * 28, gw, !blink || !red, w, red ? C.red : C.amber);
       });
       const next = snap?.next;
       if (next) {
-        const name = { impact: "IMPACT", exit: "SORTIE SOI", enter: "ENTRÉE SOI", mouth: "BOUCHE" }[next.kind] ?? next.kind.toUpperCase();
+        const name =
+          { impact: "IMPACT", exit: L("SORTIE SOI", "SOI EXIT"), enter: L("ENTRÉE SOI", "SOI ENTRY"), mouth: L("BOUCHE", "MOUTH") }[
+            next.kind
+          ] ?? next.kind.toUpperCase();
         p.text(`${name} ${next.name} · ${dur(next.in)}`, q.x + 14, q.y + q.h - 14, {
           col: next.kind === "impact" ? C.red : C.cyan,
           size: 11,
@@ -357,7 +418,7 @@ export function drawSystems(p: Pen, r: Rect, sc: Scene) {
         });
       }
       if (ok(f?.terrain) && f!.terrain! < 60)
-        p.text(`SOL DANS ${dur(f!.terrain!)}`, q.x + 14, q.y + q.h - 32, {
+        p.text(`${L("SOL DANS", "GROUND IN")} ${dur(f!.terrain!)}`, q.x + 14, q.y + q.h - 32, {
           col: f!.terrain! < 15 ? C.red : C.amber,
           size: 11,
           weight: 700,

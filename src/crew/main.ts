@@ -1,3 +1,4 @@
+import { runwaysEvents, setRunwaysBase } from "../world/runways";
 import { NetClient } from "../net/client";
 import { isCode, normCode } from "../net/proto";
 import { serverUrl } from "../net/load";
@@ -7,15 +8,18 @@ import { unitsOf } from "../ui/unitsys";
 import { wgs84Inverse } from "../system/ellipsoid";
 import { CrewRadio } from "./radio";
 import { bindTalk } from "./ptt";
-import { CrewViews, VIEW_NAMES, type CrewView } from "./views";
+import { CrewViews, viewName, type CrewView } from "./views";
 import { dur } from "./draw/kit";
+import { sensorWords } from "./draw/lvlh";
 import { bodyName } from "./draw/orbit";
+import { eventName } from "./draw/spacestat";
 import { linkFor, Outbox, type Station, type StationId, STATIONS, stationOf } from "./station";
-import { CHECKLISTS_FR } from "./checklists";
-import { type CrewProfile, PROFILE_TILES, PROFILE_VIEWS, profileOf, type TileKey, viewIn } from "./profile";
+import { checklistOf } from "./checklists";
+import { craftTiles, craftViews, type CrewProfile, profileOf, type TileKey, viewIn } from "./profile";
 import { CrewActions, type Done } from "./actions";
-import { ACTS, type Act, AUTO_FR, AUTOS, HOLD_FR, HOLDS, MANEUVER_FR, MANEUVERS } from "../net/crewcmd";
+import { ACTS, type Act, AUTOS, autoWords, HOLDS, holdWords, MANEUVERS, maneuverWords } from "../net/crewcmd";
 import type { Args } from "../ai/tool-schema";
+import { applyStatic, L, lang, locale, Lp, onLang, setLang } from "./lang";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const button = (text: string, action: () => void, id?: string) => {
@@ -44,34 +48,22 @@ const device = Array.from(crypto.getRandomValues(new Uint8Array(16)), (x) => x.t
 const net = new NetClient({
   url: serverUrl(),
   build: "crew-v1",
-  id: { device: `crew:${device}`, name: store.get("kerr.crew.name") || "Équipage", colour: "#89dce5" },
+  id: { device: `crew:${device}`, name: store.get("kerr.crew.name") || L("Équipage", "Crew"), colour: "#89dce5" },
 });
 const model = new CrewModel(net);
 /** the station chosen at the lobby (PLAN-VAISSEAUX K5): aboard, live; on the ground, the light's time late */
 let station: Station = stationOf(store.get("kerr.crew.station"));
-model.linkFor = (link) => linkFor(station, link);
+model.linkFor = (link, accepted) => linkFor(station, link, accepted);
+/** the pilots asked to take this screen aboard, their answer (AUDIT-CREW priority 6: aboard on the pilot's agreement) */
+const aboardAsked = new Map<number, "asked" | "yes" | "no">();
 const outbox = new Outbox();
 const views = new CrewViews($<HTMLCanvasElement>("instruments"), model);
 const radio = new CrewRadio(net, () => syncRadio());
-// (the CAPCOM's Quindar tones: 2 525 Hz as the voice opens, 2 475 Hz as it closes — 250 ms, the Apollo loops')
-let quindarCtx: AudioContext | null = null;
-radio.onTalk = (active) => {
-  if (station.id !== "capcom") return;
-  try {
-    quindarCtx ??= new AudioContext();
-    const c = quindarCtx;
-    const o = c.createOscillator(),
-      g = c.createGain();
-    o.frequency.value = active ? 2525 : 2475;
-    g.gain.value = 0.12;
-    o.connect(g).connect(c.destination);
-    o.start();
-    o.stop(c.currentTime + 0.25);
-  } catch {
-    // (no audio: no tone)
-  }
-};
-const actions = new CrewActions(net, model);
+// (the CAPCOM's Quindar tones, on the radio — in the voice it sends: everyone hears them — AUDIT-CREW priority 6)
+radio.quindar = () => station.id === "capcom";
+// (a pilot behind the wormhole, this screen on the ground: his voice cut, as his text — never delayed)
+radio.cut = (slot) => net.room?.members.find((m) => m.slot === slot)?.role === "pilot" && model.linkOf(slot).cut;
+const actions = new CrewActions(net, model, () => unitsOf(views.units));
 actions.onChange(() => {
   board();
   views.request();
@@ -92,27 +84,31 @@ views.units = store.get("kerr.crew.units") === "imperial" ? "imperial" : "metric
 const initialParams = new URLSearchParams(location.hash.slice(1));
 name.value = store.get("kerr.crew.name") || net.o.id.name;
 // the lobby's stations: aboard, on the ground
-{
+function stationsList() {
   const sel = $<HTMLSelectElement>("station");
+  const keep = sel.value || station.id;
+  sel.replaceChildren();
   for (const [place, title] of [
-    ["aboard", "À bord"],
-    ["ground", "Au sol — contrôle de mission"],
+    ["aboard", L("À bord", "Aboard")],
+    ["ground", L("Au sol — contrôle de mission", "On the ground — mission control")],
   ] as const) {
     const g = document.createElement("optgroup");
     g.label = title;
     for (const st of STATIONS.filter((x) => x.place === place)) {
       const o = document.createElement("option");
       o.value = st.id;
-      o.textContent = st.place === "ground" ? `${st.call} — ${st.title}` : st.title;
-      o.selected = st.id === station.id;
+      o.textContent = st.place === "ground" ? `${st.call} — ${Lp(st.title)}` : Lp(st.title);
+      o.selected = st.id === keep;
       g.append(o);
     }
     sel.append(g);
   }
-  const role = () => ($("station-role").textContent = stationOf(sel.value).role);
-  sel.addEventListener("change", role);
-  role();
+  $("station-role").textContent = Lp(stationOf(sel.value).role);
 }
+$<HTMLSelectElement>("station").addEventListener("change", () => {
+  $("station-role").textContent = Lp(stationOf($<HTMLSelectElement>("station").value).role);
+});
+stationsList();
 code.value = normCode(initialParams.get("join") ?? "");
 code.addEventListener("input", () => {
   code.value = normCode(code.value).slice(0, 6);
@@ -122,25 +118,32 @@ function syncRadio() {
   talk.disabled = !radio.gate.ready || !radio.gate.online;
   talk.setAttribute("aria-pressed", String(radio.gate.active));
   $("talk-label").textContent = radio.gate.active
-    ? "TRANSMISSION · vous parlez"
+    ? L("TRANSMISSION · vous parlez", "TRANSMITTING · you are talking")
     : toggle.checked
-      ? "Toucher pour parler"
-      : "Maintenir pour parler";
-  $("microphone").textContent = radio.requesting ? "Annuler le micro" : radio.gate.ready ? "Couper le micro" : "Activer le micro";
+      ? L("Toucher pour parler", "Tap to talk")
+      : L("Maintenir pour parler", "Hold to talk");
+  $("microphone").textContent = radio.requesting
+    ? L("Annuler le micro", "Cancel the mic")
+    : radio.gate.ready
+      ? L("Couper le micro", "Turn the mic off")
+      : L("Activer le micro", "Turn the mic on");
   $("microphone").setAttribute("aria-pressed", String(radio.gate.ready));
   $("listen").setAttribute("aria-pressed", String(radio.listening));
-  $("listen").textContent = radio.listening ? "Écoute activée" : "Écouter";
+  $("listen").textContent = radio.listening ? L("Écoute activée", "Listening") : L("Écouter", "Listen");
   $("radio-status").textContent =
     radio.error ||
     (!net.room
-      ? "Rejoignez une salle pour communiquer."
+      ? L("Rejoignez une salle pour communiquer.", "Join a room to talk.")
       : !net.mesh
-        ? "WebRTC indisponible : instruments accessibles, voix indisponible."
+        ? L(
+            "WebRTC indisponible : instruments accessibles, voix indisponible.",
+            "WebRTC unavailable: instruments available, voice unavailable.",
+          )
         : radio.gate.active
-          ? "Votre microphone est transmis à la salle."
+          ? L("Votre microphone est transmis à la salle.", "Your microphone is sent to the room.")
           : radio.gate.ready
-            ? "Micro prêt · émission uniquement sur votre commande."
-            : "Écoute seule · activez le micro pour transmettre.");
+            ? L("Micro prêt · émission uniquement sur votre commande.", "Mic ready · transmitting only on your command.")
+            : L("Écoute seule · activez le micro pour transmettre.", "Listening only · turn the mic on to transmit."));
 }
 bindTalk(talk, radio.gate, () => toggle.checked);
 toggle.addEventListener("change", () => {
@@ -149,24 +152,24 @@ toggle.addEventListener("change", () => {
 });
 $("listen").addEventListener("click", () => {
   if (net.room) void radio.listen();
-  else notice("Rejoignez d’abord une salle.");
+  else notice(L("Rejoignez d’abord une salle.", "Join a room first."));
 });
 $("microphone").addEventListener("click", () => {
   if (radio.gate.ready || radio.requesting) radio.disableMic();
   else if (net.room) void radio.enableMic();
-  else notice("Rejoignez d’abord une salle.");
+  else notice(L("Rejoignez d’abord une salle.", "Join a room first."));
 });
 
 async function join(roomCode: string, displayName: string, pass = "") {
   if (busy) return;
   const normal = normCode(roomCode);
   if (!isCode(normal)) {
-    $("join-error").textContent = "Saisissez les six caractères du code de la salle.";
+    $("join-error").textContent = L("Saisissez les six caractères du code de la salle.", "Type the room code's six characters.");
     return;
   }
   busy = true;
   $<HTMLButtonElement>("join").disabled = true;
-  $("join-error").textContent = "Connexion…";
+  $("join-error").textContent = L("Connexion…", "Connecting…");
   try {
     if (net.room) {
       radio.stop();
@@ -175,7 +178,7 @@ async function join(roomCode: string, displayName: string, pass = "") {
     // (the station: its call after the name, in the room — FIDO, CAPCOM…)
     station = stationOf($<HTMLSelectElement>("station").value);
     store.set("kerr.crew.station", station.id);
-    const bare = displayName.trim().slice(0, 16) || "Équipage";
+    const bare = displayName.trim().slice(0, 16) || L("Équipage", "Crew");
     net.profile(`${bare} · ${station.call}`, "#89dce5");
     await net.join(normal, "instruments", pass || undefined);
     store.set("kerr.crew.name", bare);
@@ -190,13 +193,14 @@ async function join(roomCode: string, displayName: string, pass = "") {
     if (profile === "space") setView(station.view);
   } catch (error) {
     const errors: Record<string, string> = {
-      password: "Mot de passe incorrect.",
-      "unknown-room": "Cette salle n’existe plus.",
-      full: "La salle accueille déjà huit appareils.",
-      update: "Rechargez cette page pour mettre le réseau à jour.",
+      password: L("Mot de passe incorrect.", "Wrong password."),
+      "unknown-room": L("Cette salle n’existe plus.", "This room no longer exists."),
+      full: L("La salle accueille déjà huit appareils.", "The room already has eight devices."),
+      update: L("Rechargez cette page pour mettre le réseau à jour.", "Reload this page to update the network."),
     };
     const key = error && typeof error === "object" && "code" in error ? String(error.code) : "";
-    $("join-error").textContent = errors[key] ?? "Connexion impossible. Vérifiez le réseau et réessayez.";
+    $("join-error").textContent =
+      errors[key] ?? L("Connexion impossible. Vérifiez le réseau et réessayez.", "Cannot connect. Check the network and try again.");
     if (!net.room) net.close();
   } finally {
     busy = false;
@@ -246,6 +250,12 @@ function select(slot: number) {
   refresh();
 }
 pilot.addEventListener("change", () => select(Number(pilot.value)));
+// (the controls handed over — N3: the console follows the craft, flown now by the one who took them — RD1)
+model.handedTo = (slot) => {
+  const who = net.room?.members.find((m) => m.slot === slot)?.name ?? "?";
+  notice(L(`Les commandes passent à ${who} : la console suit le vaisseau`, `The controls go to ${who}: the console follows the craft`));
+  select(slot);
+};
 views.onSelect = select;
 const showCrew = (show: boolean) => {
   $("crew-panel").classList.toggle("open", show);
@@ -281,27 +291,58 @@ function segmented<T extends string>(items: [T, string][], current: T, title: st
   }
   return g;
 }
-const NOTES: Record<CrewView, string> = {
-  air: "Radar et carte côte à côte · l’objectif, les armes, les alertes · toucher un panneau pour l’ouvrir",
-  sdash: "L’orbite, l’attitude, l’ordinateur de vol · toucher un panneau pour l’ouvrir",
-  orbit: "L’orbite vue de dessus de son plan · périapside en haut · les poussées du plan en magenta",
-  system: "Glisser pour tourner · pincer pour zoomer · la prédiction à faire défiler",
-  navball: "L’attitude contre l’orbite · marqueurs prograde, normal, radial, nœud",
-  dock: "Le couloir d’approche de côté, le réticule de face · limites de vitesse et d’alignement",
-  budget: "Le Δv des ergols contre les poussées du plan · la marge",
-  eecom: "Énergie, oxygène, épurateurs · les pannes et leurs checklists",
-  timeline: "Le temps de mission · les événements des heures à venir",
-  rel: "Les deux horloges : dτ/dt, γ, le temps écoulé sur Terre",
-  ground: "Le corps survolé : la trace au sol, le point d’atterrissage, la nuit",
-  dash: "Toucher un panneau pour l’ouvrir · pincer pour la portée",
-  pfd: "Horizon, rubans vitesse et altitude, cap, modes du pilote automatique",
-  nd: "Pincer pour la portée · toucher un joueur ou un contact",
-  map: "Glisser pour déplacer · pincer pour zoomer · toucher un joueur",
-  globe: "Glisser pour tourner · pincer pour zoomer",
-  radar: "Pincer pour la portée · toucher un contact",
-  schematic: "Glisser pour faire défiler les systèmes",
-  plan: "Profil vertical et branches · glisser pour faire défiler",
-  telemetry: "Glisser pour lire une mesure · historique reçu sur cet écran",
+const NOTES: Record<CrewView, [string, string]> = {
+  air: [
+    "Radar et carte côte à côte · l’objectif, les armes, les alertes · toucher un panneau pour l’ouvrir",
+    "Radar and map side by side · the objective, the weapons, the alerts · tap a panel to open it",
+  ],
+  sdash: [
+    "L’orbite, l’attitude, l’ordinateur de vol · toucher un panneau pour l’ouvrir",
+    "The orbit, the attitude, the flight computer · tap a panel to open it",
+  ],
+  orbit: [
+    "L’orbite vue de dessus de son plan · périapside en haut · les poussées du plan en magenta",
+    "The orbit seen from above its plane · periapsis up · the plan's burns in magenta",
+  ],
+  system: [
+    "Glisser pour tourner · pincer pour zoomer · la prédiction à faire défiler",
+    "Drag to turn · pinch to zoom · scroll the prediction",
+  ],
+  navball: [
+    "L’attitude contre l’orbite · marqueurs prograde, normal, radial, nœud",
+    "The attitude against the orbit · prograde, normal, radial, node markers",
+  ],
+  dock: [
+    "Le couloir d’approche de côté, le réticule de face · limites de vitesse et d’alignement",
+    "The approach corridor from the side, the sight head-on · speed and alignment limits",
+  ],
+  budget: ["Le Δv des ergols contre les poussées du plan · la marge", "The propellant's Δv against the plan's burns · the margin"],
+  eecom: ["Énergie, oxygène, épurateurs · les pannes et leurs checklists", "Power, oxygen, scrubbers · the failures and their checklists"],
+  timeline: ["Le temps de mission · les événements des heures à venir", "The mission time · the events of the hours ahead"],
+  rel: ["Les deux horloges : dτ/dt, γ, le temps écoulé sur Terre", "The two clocks: dτ/dt, γ, the time gone by on Earth"],
+  ground: [
+    "Le corps survolé : la trace au sol, le point d’atterrissage, la nuit",
+    "The body flown over: the ground track, the landing point, the night",
+  ],
+  descent: [
+    "La hauteur, les vitesses, le stationnaire, le point d’atterrissage et sa portée",
+    "The height, the speeds, the hover, the landing point and its reach",
+  ],
+  dash: ["Toucher un panneau pour l’ouvrir · pincer pour la portée", "Tap a panel to open it · pinch for the range"],
+  pfd: [
+    "Horizon, rubans vitesse et altitude, cap, modes du pilote automatique",
+    "Horizon, speed and altitude tapes, heading, autopilot modes",
+  ],
+  nd: ["Pincer pour la portée · toucher un joueur ou un contact", "Pinch for the range · tap a player or a contact"],
+  map: ["Glisser pour déplacer · pincer pour zoomer · toucher un joueur", "Drag to move · pinch to zoom · tap a player"],
+  globe: ["Glisser pour tourner · pincer pour zoomer", "Drag to turn · pinch to zoom"],
+  radar: ["Pincer pour la portée · toucher un contact", "Pinch for the range · tap a contact"],
+  schematic: ["Glisser pour faire défiler les systèmes", "Drag to scroll the systems"],
+  plan: ["Profil vertical et branches · glisser pour faire défiler", "Vertical profile and legs · drag to scroll"],
+  telemetry: [
+    "Glisser pour lire une mesure · historique reçu sur cet écran",
+    "Drag to read a measure · the history received on this screen",
+  ],
 };
 function rangeControl() {
   const range = document.createElement("input");
@@ -311,7 +352,7 @@ function rangeControl() {
   range.max = "20000";
   range.step = "1";
   range.value = String(Math.round((views.range / 1000) * 10) / 10);
-  range.setAttribute("aria-label", "Portée en kilomètres");
+  range.setAttribute("aria-label", L("Portée en kilomètres", "Range in kilometres"));
   range.addEventListener("change", () => {
     const v = range.valueAsNumber;
     if (Number.isFinite(v)) views.range = Math.max(500, Math.min(2e7, v * 1000));
@@ -331,12 +372,12 @@ function controls() {
     bar.append(
       segmented(
         [
-          ["body", "Corps"],
-          ["craft", "Vaisseau"],
-          ["sun", "Soleil"],
+          ["body", L("Corps", "Body")],
+          ["craft", L("Vaisseau", "Craft")],
+          ["sun", L("Soleil", "Sun")],
         ],
         M.focus,
-        "Centre de la carte",
+        L("Centre de la carte", "The map's centre"),
         (o) => {
           M.focus = o;
           M.cam.zoom = 1;
@@ -345,18 +386,18 @@ function controls() {
       ),
       segmented(
         [
-          ["true", "Vraie"],
+          ["true", L("Vraie", "True")],
           ["log", "Log"],
         ],
         M.cam.log ? "log" : "true",
-        "Échelle",
+        L("Échelle", "Scale"),
         (o) => {
           M.cam.log = o === "log";
           views.request();
         },
       ),
       button(
-        "Dessus",
+        L("Dessus", "Top"),
         () => {
           M.cam.pitch = 1.55;
           views.request();
@@ -364,7 +405,7 @@ function controls() {
         "map-top",
       ),
       button(
-        "Profil",
+        L("Profil", "Edge-on"),
         () => {
           M.cam.pitch = 0.02;
           views.request();
@@ -378,7 +419,7 @@ function controls() {
     ahead.min = "0";
     ahead.max = "1000";
     ahead.value = "0";
-    ahead.setAttribute("aria-label", "Prédiction : temps à venir");
+    ahead.setAttribute("aria-label", L("Prédiction : temps à venir", "Prediction: time ahead"));
     ahead.addEventListener("input", () => {
       // (the slider's end: the longest path received, six hours at least — squared for a fine start)
       const span = Math.max(views.mapSpan, 6 * 3600);
@@ -387,16 +428,16 @@ function controls() {
     });
     bar.append(ahead);
   } else if (v === "map" || v === "globe") {
-    bar.append(button("Centrer", () => views.reset(), "recenter"));
+    bar.append(button(L("Centrer", "Centre"), () => views.reset(), "recenter"));
     const pan = document.createElement("details");
     pan.className = "pan-controls";
-    pan.append(el("summary", "Déplacer"));
+    pan.append(el("summary", L("Déplacer", "Move")));
     const directions = el("div");
     for (const [label, east, north] of [
-      ["← Ouest", -1, 0],
-      ["↑ Nord", 0, 1],
-      ["↓ Sud", 0, -1],
-      ["Est →", 1, 0],
+      [L("← Ouest", "← West"), -1, 0],
+      [L("↑ Nord", "↑ North"), 0, 1],
+      [L("↓ Sud", "↓ South"), 0, -1],
+      [L("Est →", "East →"), 1, 0],
     ] as const)
       directions.append(button(label, () => views.pan(east, north)));
     pan.append(directions);
@@ -407,8 +448,8 @@ function controls() {
       bar.append(
         segmented(
           [
-            ["heading", "Cap"],
-            ["north", "Nord"],
+            ["heading", L("Cap", "Heading")],
+            ["north", L("Nord", "North")],
           ],
           views.north ? "north" : "heading",
           "Orientation",
@@ -421,17 +462,34 @@ function controls() {
     bar.append(
       segmented(
         [
-          ["players", "Partagé"],
-          ["sensor", "Capteur"],
+          ["players", L("Partagé", "Shared")],
+          ["sensor", L("Capteur", "Sensor")],
         ],
         views.sensor ? "sensor" : "players",
-        "Source radar",
+        L("Source radar", "Radar source"),
         (o) => {
           views.sensor = o === "sensor";
           views.request();
         },
       ),
-      button("Ajuster", () => {
+      // (the tracks' trails — PLAN-RADAR-AAA RD7 —: kept on this console)
+      segmented(
+        [
+          ["off", L("Sans traînée", "No trails")],
+          ["short", "30 s"],
+          ["long", "3 min"],
+        ],
+        views.trails,
+        L("Traînées", "Trails"),
+        (o) => {
+          views.trails = o as "off" | "short" | "long";
+          try {
+            localStorage.setItem("crew.trails", views.trails);
+          } catch {}
+          views.request();
+        },
+      ),
+      button(L("Ajuster", "Fit"), () => {
         views.fit();
         controls();
       }),
@@ -450,11 +508,11 @@ function controls() {
     const q = document.createElement("input");
     q.type = "search";
     q.id = "plan-query";
-    q.placeholder = "OACI, terrain ou lieu";
-    q.setAttribute("aria-label", "Point à ajouter au plan");
+    q.placeholder = L("OACI, terrain ou lieu", "ICAO, airfield or place");
+    q.setAttribute("aria-label", L("Point à ajouter au plan", "Waypoint to add to the plan"));
     q.autocomplete = "off";
     const go = actButton(
-      "Ajouter",
+      L("Ajouter", "Add"),
       "nav.add",
       () => ({ query: q.value.trim().slice(0, 40) }),
       "plan-add",
@@ -467,15 +525,15 @@ function controls() {
     add.addEventListener("submit", (e) => e.preventDefault());
     const cruise = document.createElement("details");
     cruise.className = "pan-controls";
-    cruise.append(el("summary", "Croisière"));
+    cruise.append(el("summary", L("Croisière", "Cruise")));
     const nav = snapNow()?.nav;
-    const [altBox, altVal] = numberField("Niveau", nav?.cruiseAlt, u.alt, u.altName.toLowerCase());
-    const [spdBox, spdVal] = numberField("Vitesse", nav?.cruiseSpd, u.spd, u.spdName.toLowerCase());
+    const [altBox, altVal] = numberField(L("Niveau", "Level"), nav?.cruiseAlt, u.alt, u.altName.toLowerCase());
+    const [spdBox, spdVal] = numberField(L("Vitesse", "Speed"), nav?.cruiseSpd, u.spd, u.spdName.toLowerCase());
     const body = el("div", "", "cruise-box");
     body.append(
       altBox,
       spdBox,
-      actButton("Appliquer", "nav.cruise", () => ({
+      actButton(L("Appliquer", "Apply"), "nav.cruise", () => ({
         ...(Number.isFinite(altVal()) ? { alt: Math.round(altVal()) } : {}),
         ...(Number.isFinite(spdVal()) ? { spd: Math.round(spdVal()) } : {}),
       })),
@@ -483,54 +541,54 @@ function controls() {
     cruise.append(body);
     // (cleared only on a second press within 3 s)
     const clear = button(
-      "Vider",
+      L("Vider", "Clear"),
       () => {
         if (clear.dataset.armed) {
           delete clear.dataset.armed;
-          clear.textContent = "Vider";
+          clear.textContent = L("Vider", "Clear");
           void fire(clear, "nav.clear", {});
         } else {
           clear.dataset.armed = "1";
-          clear.textContent = "Confirmer ?";
+          clear.textContent = L("Confirmer ?", "Confirm?");
           setTimeout(() => {
             delete clear.dataset.armed;
-            clear.textContent = "Vider";
+            clear.textContent = L("Vider", "Clear");
           }, 3000);
         }
       },
       "plan-clear",
     );
     clear.dataset.act = "nav.clear";
-    bar.append(add, cruise, actButton("Procédures", "nav.procedures", {}, "plan-procedures"), clear);
+    bar.append(add, cruise, actButton(L("Procédures", "Procedures"), "nav.procedures", {}, "plan-procedures"), clear);
   } else if (v === "schematic") {
     // the configuration (PLAN-CREW-ACTIONS A1): what a copilot sets — every switch lit as the pilot's craft is
     const sys = () => snapNow()?.sys;
     bar.append(
-      actGroup("Train", [
-        ["Rentré", "cfg.gear", { down: false }, () => sys()?.gearDown === false],
-        ["Sorti", "cfg.gear", { down: true }, () => !!sys()?.gearDown],
+      actGroup(L("Train", "Gear"), [
+        [L("Rentré", "Up"), "cfg.gear", { down: false }, () => sys()?.gearDown === false],
+        [L("Sorti", "Down"), "cfg.gear", { down: true }, () => !!sys()?.gearDown],
       ]),
-      actGroup("Volets", [
+      actGroup(L("Volets", "Flaps"), [
         ["0", "cfg.flaps", { pos: 0 }, () => (sys()?.flaps ?? -1) === 0],
         ["½", "cfg.flaps", { pos: 0.5 }, () => sys()?.flaps === 0.5],
-        ["Pleins", "cfg.flaps", { pos: 1 }, () => sys()?.flaps === 1],
+        [L("Pleins", "Full"), "cfg.flaps", { pos: 1 }, () => sys()?.flaps === 1],
       ]),
-      actGroup("Aérofrein", [
-        ["Rentré", "cfg.brake", { on: false }, () => (sys()?.brake ?? 1) === 0],
-        ["Sorti", "cfg.brake", { on: true }, () => (sys()?.brake ?? 0) > 0],
+      actGroup(L("Aérofrein", "Air brake"), [
+        [L("Rentré", "In"), "cfg.brake", { on: false }, () => (sys()?.brake ?? 1) === 0],
+        [L("Sorti", "Out"), "cfg.brake", { on: true }, () => (sys()?.brake ?? 0) > 0],
       ]),
       actGroup("SAS", [
         ["Off", "cfg.sas", { on: false }, () => snapNow()?.auto?.sas === false],
         ["On", "cfg.sas", { on: true }, () => !!snapNow()?.auto?.sas],
       ]),
-      actButton("Acquitter l’alarme", "cfg.ack", {}, "ack-systems"),
+      actButton(L("Acquitter l’alarme", "Silence the alarm"), "cfg.ack", {}, "ack-systems"),
     );
   } else if (v === "telemetry") {
     bar.append(
       selectControl(
-        [["multi", "Vue d’ensemble"], ...METRICS.map((m) => [m.key, m.name] as [string, string])],
+        [["multi", L("Vue d’ensemble", "Overview")], ...METRICS.map((m) => [m.key, m.name()] as [string, string])],
         views.channel,
-        "Mesure affichée",
+        L("Mesure affichée", "Measure shown"),
         (c) => {
           views.channel = c as typeof views.channel;
           views.request();
@@ -544,7 +602,7 @@ function controls() {
           ["3600", "1 h"],
         ],
         String(views.window),
-        "Fenêtre de temps",
+        L("Fenêtre de temps", "Time window"),
         (w) => {
           views.window = Number(w);
           views.request();
@@ -552,7 +610,7 @@ function controls() {
       ),
     );
     const pause = button(
-      views.paused ? "Reprendre" : "Figer",
+      views.paused ? L("Reprendre", "Resume") : L("Figer", "Freeze"),
       () => {
         views.togglePause();
         controls();
@@ -565,7 +623,7 @@ function controls() {
     cursor.min = "0";
     cursor.max = "100";
     cursor.value = String(views.inspect * 100);
-    cursor.setAttribute("aria-label", "Instant de la courbe");
+    cursor.setAttribute("aria-label", L("Instant de la courbe", "The curve's instant"));
     cursor.addEventListener("input", () => {
       views.inspect = Number(cursor.value) / 100;
       views.request();
@@ -575,12 +633,18 @@ function controls() {
     };
     bar.append(pause, cursor, button("CSV", download));
   }
-  $("view-note").textContent = NOTES[v];
+  $("view-note").textContent = L(...NOTES[v]);
 }
 function setView(view: CrewView) {
   views.setView(view);
-  $("view-title").textContent = VIEW_NAMES[view];
-  $("instruments").setAttribute("aria-label", `${VIEW_NAMES[view]} du pilote suivi ; contrôles disponibles au-dessus de la vue`);
+  $("view-title").textContent = viewName(view);
+  $("instruments").setAttribute(
+    "aria-label",
+    L(
+      `${viewName(view)} du pilote suivi ; contrôles disponibles au-dessus de la vue`,
+      `The followed pilot's ${viewName(view)}; controls above the view`,
+    ),
+  );
   for (const b of $("views").querySelectorAll("button")) {
     b.classList.toggle("active", b.dataset.view === view);
     b.setAttribute("aria-pressed", String(b.dataset.view === view));
@@ -596,6 +660,7 @@ function setView(view: CrewView) {
     "timeline",
     "rel",
     "ground",
+    "descent",
   ].includes(view);
   if (view === "system") views.map3d.ahead = 0;
   // (the spacecraft's flight computer under every view of its console — K6: each station acts from its own)
@@ -616,6 +681,7 @@ const ICONS: Record<CrewView, string> = {
   timeline: '<path d="M3 12h18"/><circle cx="7" cy="12" r="2"/><circle cx="14" cy="12" r="2"/><path d="M19 9v6"/>',
   rel: '<circle cx="8" cy="12" r="5"/><circle cx="17" cy="12" r="4"/><path d="M8 12V9M17 12l2-2"/>',
   ground: '<circle cx="12" cy="12" r="9"/><path d="M5 15c4-6 10-6 14-3"/><circle cx="16" cy="11" r="1.5"/>',
+  descent: '<path d="M12 3v11M8 10l4 4 4-4"/><path d="M4 20h16"/><path d="M8 17l-2 3M16 17l2 3"/>',
   system:
     '<circle cx="12" cy="12" r="2.5"/><ellipse cx="12" cy="12" rx="9.5" ry="4"/><ellipse cx="12" cy="12" rx="5.5" ry="2.3"/><circle cx="21" cy="12" r="1.2"/>',
   orbit:
@@ -634,33 +700,53 @@ const ICONS: Record<CrewView, string> = {
 function syncBadge() {
   const c = snapNow()?.craft;
   // (a spacecraft's console: the station, aboard or on the ground — and the light's time from there)
-  const L = model.selected !== null ? model.linkOf(model.selected) : { delay: 0, cut: false };
-  const where = station.place === "aboard" ? "à bord" : L.cut ? "sol · liaison coupée" : L.delay >= 0.5 ? `sol +${dur(L.delay)}` : "sol";
+  const link = model.selected !== null ? model.linkOf(model.selected) : { delay: 0, cut: false };
+  // (aboard on the pilot's agreement: waiting for it, or refused — then on the ground, its light's time)
+  const asked = model.selected !== null ? aboardAsked.get(model.selected) : undefined;
+  const accepted = model.selected === null || model.aboardWith(model.selected);
+  const where =
+    station.place === "aboard" && accepted
+      ? L("à bord", "aboard")
+      : station.place === "aboard" && asked !== "no"
+        ? L("à bord · en attente du pilote", "aboard · waiting for the pilot")
+        : link.cut
+          ? L("sol · liaison coupée", "ground · link cut")
+          : link.delay >= 0.5
+            ? `${L("sol", "ground")} +${dur(link.delay)}`
+            : L("sol", "ground");
   $("profile-badge").textContent =
     profile === "jet"
-      ? `${c?.name ?? "F-35"} · TACTIQUE`.toUpperCase()
+      ? `${c?.name ?? "F-35"} · ${L("TACTIQUE", "TACTICAL")}`.toUpperCase()
       : profile === "space"
-        ? `VAISSEAU · ${c?.name ?? ""} — ${station.call} · ${where}`.toUpperCase()
+        ? `${L("VAISSEAU", "SPACECRAFT")} · ${c?.name ?? ""} — ${station.call} · ${where}`.toUpperCase()
         : "";
-  $("profile-badge").classList.toggle("cut", station.place === "ground" && L.cut);
+  $("profile-badge").classList.toggle("cut", link.cut);
 }
 /** the console's profile now (PLAN-VAISSEAUX K2 — profile.ts): the craft followed's — its views, its tiles, its theme */
 let profile: CrewProfile | null = null;
+/** the craft followed (its own views and tiles — AUDIT-CREW priority 4: the Lander's descent, the Endurance's ring) */
+let craftKey = "";
 function setProfile(p: CrewProfile) {
-  if (p === profile) return;
+  const craft = snapNow()?.craft;
+  const key = `${craft?.id ?? ""}:${!!craft?.lands}:${!!craft?.ring}`;
+  if (p === profile && key === craftKey) return;
   profile = p;
+  craftKey = key;
   document.body.dataset.profile = p;
   syncBadge();
   $("views").replaceChildren();
-  for (const view of PROFILE_VIEWS[p]) {
+  const list = craftViews(p, craft);
+  for (const view of list) {
     const b = button("", () => setView(view));
-    b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[view]}</svg><span>${VIEW_NAMES[view]}</span>`;
+    b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[view]}</svg><span>${viewName(view)}</span>`;
     b.dataset.view = view;
     $("views").append(b);
   }
   $("metrics").replaceChildren();
   // (the view kept when the other profile has it — the globe, the telemetry —, else the station's, the profile's first)
-  setView(PROFILE_VIEWS[p].includes(views.view) ? views.view : p === "space" ? station.view : viewIn(p, views.view));
+  const keep = list.includes(views.view) ? views.view : p === "space" && list.includes(station.view) ? station.view : viewIn(p, views.view);
+  setView(list.includes(keep) ? keep : list[0]!);
+  delete mcp.dataset.sig;
 }
 views.onOpen = setView;
 $("zoom-in").addEventListener("click", () => views.zoomBy(1.333));
@@ -669,7 +755,7 @@ const unitsButton = $("units-button");
 function setUnits(sys: "metric" | "imperial") {
   views.units = sys;
   store.set("kerr.crew.units", sys);
-  unitsButton.textContent = sys === "metric" ? "MÉTRIQUE" : "IMPÉRIAL";
+  unitsButton.textContent = sys === "metric" ? L("MÉTRIQUE", "METRIC") : L("IMPÉRIAL", "IMPERIAL");
   for (const e of $("metrics").children) (e as HTMLElement).dataset.unit = "";
   refresh();
   views.request();
@@ -685,33 +771,35 @@ function download() {
 
 /** the strip's tiles: the measures a glance needs, their state (amber, red) and trend — each profile its own
  *  (PLAN-VAISSEAUX K2: the spacecraft's Δv, propellant, apsides, period, next event, g, dτ/dt, the link) */
-const TILES: Record<TileKey, { name: string; unit: (u: ReturnType<typeof unitsOf>) => string }> = {
-  alt: { name: "Altitude", unit: (u) => u.altName.toLowerCase() },
-  speed: { name: "Vitesse", unit: (u) => u.spdName.toLowerCase() },
-  vz: { name: "Vario", unit: (u) => u.vsName.toLowerCase() },
-  mach: { name: "Mach", unit: () => "" },
-  g: { name: "Charge", unit: () => "g" },
-  hdg: { name: "Cap", unit: () => "°" },
-  fuel: { name: "Carburant", unit: () => "%" },
-  agl: { name: "Hauteur sol", unit: (u) => u.altName.toLowerCase() },
-  dv: { name: "Δv restant", unit: () => "m/s" },
-  prop: { name: "Ergols", unit: () => "%" },
-  pe: { name: "Périapside", unit: () => "km" },
-  ap: { name: "Apoapside", unit: () => "km" },
-  period: { name: "Période", unit: () => "" },
-  next: { name: "Prochain", unit: () => "" },
-  dtau: { name: "dτ/dt", unit: () => "" },
-  link: { name: "Liaison", unit: () => "" },
+const TILES: Record<TileKey, { name: () => string; unit: (u: ReturnType<typeof unitsOf>) => string }> = {
+  alt: { name: () => "Altitude", unit: (u) => u.altName.toLowerCase() },
+  speed: { name: () => L("Vitesse", "Speed"), unit: (u) => u.spdName.toLowerCase() },
+  vz: { name: () => L("Vario", "V/S"), unit: (u) => u.vsName.toLowerCase() },
+  mach: { name: () => "Mach", unit: () => "" },
+  g: { name: () => L("Charge", "Load"), unit: () => "g" },
+  hdg: { name: () => L("Cap", "Heading"), unit: () => "°" },
+  fuel: { name: () => L("Carburant", "Fuel"), unit: () => "%" },
+  agl: { name: () => L("Hauteur sol", "Height AGL"), unit: (u) => u.altName.toLowerCase() },
+  dv: { name: () => L("Δv restant", "Δv left"), unit: () => "m/s" },
+  prop: { name: () => L("Ergols", "Propellant"), unit: () => "%" },
+  pe: { name: () => L("Périapside", "Periapsis"), unit: () => "km" },
+  ap: { name: () => L("Apoapside", "Apoapsis"), unit: () => "km" },
+  period: { name: () => L("Période", "Period"), unit: () => "" },
+  next: { name: () => L("Prochain", "Next"), unit: () => "" },
+  dtau: { name: () => "dτ/dt", unit: () => "" },
+  link: { name: () => L("Liaison", "Link"), unit: () => "" },
+  hs: { name: () => L("Vitesse horiz.", "Horiz. speed"), unit: (u) => u.spdName.toLowerCase() },
+  ring: { name: () => L("Anneau", "Ring"), unit: () => L("tr/min", "rpm") },
 };
 function tiles(own: ReturnType<typeof model.own>) {
   const box = $("metrics");
   const u = unitsOf(views.units);
-  const keys = PROFILE_TILES[profile ?? "jet"];
+  const keys = craftTiles(profile ?? "jet", snapNow()?.craft);
   if (!box.childElementCount)
     for (const k of keys) {
       const e = el("div", "", "metric");
       e.dataset.key = k;
-      e.append(el("small", TILES[k].name), el("strong", "—"), el("em", ""));
+      e.append(el("small", TILES[k].name()), el("strong", "—"), el("em", ""));
       box.append(e);
     }
   const live = !!own && own.age < 3;
@@ -722,7 +810,7 @@ function tiles(own: ReturnType<typeof model.own>) {
   const fmt0 = (v: number | undefined | null, d = 0) =>
     v === undefined || v === null || !Number.isFinite(v)
       ? "—"
-      : v.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+      : v.toLocaleString(locale(), { minimumFractionDigits: d, maximumFractionDigits: d });
   for (const k of keys) {
     const e = box.querySelector<HTMLElement>(`[data-key=${k}]`)!;
     let text = "—",
@@ -769,9 +857,19 @@ function tiles(own: ReturnType<typeof model.own>) {
             state = frac === undefined ? "" : frac < 0.1 ? "alarm" : frac < 0.25 ? "warn" : "ok";
           }
           break;
-        case "agl":
-          text = f?.agl !== undefined && f.agl < 30_000 ? fmt0(u.alt(f.agl)) : "—";
-          state = f?.agl !== undefined && f.agl < 150 && (m.vz ?? 0) < -3 ? "warn" : "";
+        case "agl": {
+          // (a spacecraft's descent block first — the flight's radio altimeter else)
+          const h = snap?.desc?.agl ?? f?.agl;
+          text = snap?.craft?.status === "landed" ? L("posé", "landed") : h != null && h < 30_000 ? fmt0(u.alt(h)) : "—";
+          state = h != null && h < 150 && (m.vz ?? 0) < -3 ? "warn" : "";
+          break;
+        }
+        case "hs":
+          text = snap?.desc ? fmt0(u.spd(snap.desc.vh), snap.desc.vh < 10 ? 1 : 0) : "—";
+          state = snap?.desc && snap.desc.vh > 2 && (snap.desc.agl ?? 1e9) < 50 ? "warn" : "";
+          break;
+        case "ring":
+          text = snap?.ring ? fmt0(snap.ring.rpm, 1) : "—";
           break;
         case "dv": {
           const dv = snap?.budget?.dv;
@@ -788,11 +886,20 @@ function tiles(own: ReturnType<typeof model.own>) {
           break;
         }
         case "pe":
+          if (snap?.craft?.status === "landed") {
+            text = L("posé", "landed");
+            unit = "";
+            break;
+          }
           text = fmt0(snap?.orbit?.pe, Math.abs(snap?.orbit?.pe ?? 0) < 100 ? 1 : 0);
           state = snap?.orbit && snap.orbit.pe < 0 ? "alarm" : "";
           break;
         case "ap":
-          text = snap?.orbit ? (snap.orbit.ecc >= 1 ? "libre" : fmt0(snap.orbit.ap, Math.abs(snap.orbit.ap) < 100 ? 1 : 0)) : "—";
+          text = snap?.orbit
+            ? snap.orbit.ecc >= 1
+              ? L("libre", "escape")
+              : fmt0(snap.orbit.ap, Math.abs(snap.orbit.ap) < 100 ? 1 : 0)
+            : "—";
           if (snap?.orbit && snap.orbit.ecc >= 1) unit = "";
           break;
         case "period":
@@ -802,7 +909,7 @@ function tiles(own: ReturnType<typeof model.own>) {
           // (short: the tile is narrow — 15 min, not 14 min 57)
           text = !snap?.next ? "—" : snap.next.in < 60 || snap.next.in >= 3600 ? dur(snap.next.in) : `${Math.round(snap.next.in / 60)} min`;
           unit = "";
-          e.title = snap?.next ? `${snap.next.name || snap.next.kind} dans ${dur(snap.next.in)}` : "";
+          e.title = snap?.next ? `${eventName(snap.next)} ${L("dans", "in")} ${dur(snap.next.in)}` : "";
           state = snap?.next?.kind === "impact" ? "alarm" : "";
           break;
         case "dtau":
@@ -810,8 +917,8 @@ function tiles(own: ReturnType<typeof model.own>) {
           state = snap?.time && snap.time.dtau < 0.99 ? "warn" : "";
           break;
         case "link":
-          text = snap?.link ? (snap.link.cut ? "coupée" : dur(snap.link.light)) : "—";
-          unit = snap?.link && !snap.link.cut ? "lumière" : "";
+          text = snap?.link ? (snap.link.cut ? L("coupée", "cut") : dur(snap.link.light)) : "—";
+          unit = snap?.link && !snap.link.cut ? L("lumière", "light") : "";
           state = snap?.link?.cut ? "alarm" : "";
           break;
       }
@@ -829,8 +936,8 @@ function alerts(own: ReturnType<typeof model.own>) {
   if (key === alertKey) return;
   alertKey = key;
   $("alerts").replaceChildren(
-    ...list.map((w) => el("span", w, `alert${/PULL|FLY|STALL|G-LOC|MISSILE|OVER|IMPACT|FAIL/.test(w) ? " warning" : ""}`)),
-    ...(list.length ? [actButton("Acquitter", "cfg.ack", {}, "ack-alarm")] : []),
+    ...list.map((w) => el("span", w, `alert${/PULL|FLY|STALL|G-LOC|MISSILE|OVER|IMPACT|FAIL|BREAKAWAY/.test(w) ? " warning" : ""}`)),
+    ...(list.length ? [actButton(L("Acquitter", "Silence"), "cfg.ack", {}, "ack-alarm")] : []),
   );
   syncActs();
 }
@@ -853,7 +960,7 @@ async function fire(b: HTMLElement | null, act: Act, args: Args, done?: (ok: boo
   b?.classList.add(r.ok ? "ok" : "ko");
   const what = actions.label(act, args);
   const What = what.charAt(0).toUpperCase() + what.slice(1);
-  notice(r.ok ? `${What} ✓` : `${What} — ${r.msg || "refusé"}`);
+  notice(r.ok ? `${What} ✓` : `${What} — ${r.msg || L("refusé", "refused")}`);
   if (!r.ok) navigator.vibrate?.(60);
   done?.(r.ok, r);
   refresh();
@@ -915,11 +1022,11 @@ function holdButton(text: string, act: Act, args: () => Args, id: string, ms = 6
     } else {
       armed = performance.now();
       b.classList.add("armed");
-      notice(`${text} : appuyer encore pour confirmer`);
+      notice(L(`${text} : appuyer encore pour confirmer`, `${text}: press again to confirm`));
       setTimeout(() => b.classList.remove("armed"), 1500);
     }
   });
-  b.title = "Maintenir pour tirer";
+  b.title = L("Maintenir pour tirer", "Hold to fire");
   return b;
 }
 
@@ -937,7 +1044,7 @@ function syncActs() {
     const s = a?.stores ?? {};
     armsBox.textContent = !a
       ? ""
-      : `${a.live ? "ARMES ACTIVES" : "HORS COMBAT"} · 120×${s.aim120 ?? 0} 9X×${s.aim9x ?? 0} JDAM×${s.jdam ?? 0} JSM×${s.jsm ?? 0}${a.lock ? ` · VERROU ${a.lock}` : ""}`;
+      : `${a.live ? L("ARMES ACTIVES", "WEAPONS LIVE") : L("HORS COMBAT", "NO FIGHT")} · 120×${s.aim120 ?? 0} 9X×${s.aim9x ?? 0} JDAM×${s.jdam ?? 0} JSM×${s.jsm ?? 0}${a.lock ? ` · ${L("VERROU", "LOCK")} ${a.lock}` : ""}`;
     armsBox.dataset.live = String(!!a?.live);
   }
   for (const [b, on] of pressedOf) {
@@ -1024,7 +1131,12 @@ function selector(key: "alt" | "hdg" | "spd", title: string) {
     });
     return b;
   };
-  box.append(el("span", title, "knob-title"), hold(-1, "−", `${title} moins`), value, hold(1, "+", `${title} plus`));
+  box.append(
+    el("span", title, "knob-title"),
+    hold(-1, "−", `${title} ${L("moins", "down")}`),
+    value,
+    hold(1, "+", `${title} ${L("plus", "up")}`),
+  );
   return box;
 }
 /** the MCP's kind follows the pilot's craft: an aircraft's autopilot, or a spacecraft's flight computer */
@@ -1035,7 +1147,8 @@ function syncMcpKind() {
   if (mcp.hidden) return;
   const kind = views.view === "radar" || views.view === "air" ? "arms" : fam.includes("space") && !fam.includes("jet") ? "space" : "jet";
   // (the spacecraft's panel rebuilt for another station or craft — its pops' order, the Endurance's ring)
-  const sig = kind === "space" ? `space:${station.id}:${!!snapNow()?.craft?.ring}` : kind;
+  const sig =
+    kind === "space" ? `space:${station.id}:${snapNow()?.craft?.id ?? ""}:${!!snapNow()?.craft?.ring}:${!!snapNow()?.desc}` : kind;
   if ((mcp.dataset.sig ?? mcp.dataset.kind) === sig && mcp.childElementCount) return;
   // (its kind said plainly — "arms", "space", "jet" —, its signature beside it)
   if (kind === "arms") buildArms();
@@ -1055,7 +1168,7 @@ function buildArms() {
       ["TWS", "wp.radar", { mode: "TWS" }, () => arms()?.mode === "TWS"],
       ["STT", "wp.radar", { mode: "STT" }, () => arms()?.mode === "STT"],
     ]),
-    actGroup("Arme", [
+    actGroup(L("Arme", "Weapon"), [
       ["AIM-120", "wp.select", { weapon: "aim120" }, () => arms()?.sel === "aim120"],
       ["AIM-9X", "wp.select", { weapon: "aim9x" }, () => arms()?.sel === "aim9x"],
       ["GBU-32", "wp.select", { weapon: "jdam" }, () => arms()?.sel === "jdam"],
@@ -1064,10 +1177,10 @@ function buildArms() {
   );
   const shots = el("div", "", "mcp-sw arms-shots");
   shots.append(
-    actButton("Verrouiller", "wp.lock", {}, "wp-lock"),
-    holdButton("TIR", "wp.fire", () => ({}), "wp-fire"),
-    holdButton("Canon", "wp.gun", () => ({ seconds: 1 }), "wp-gun"),
-    actButton("Leurres", "wp.cm", {}, "wp-cm"),
+    actButton(L("Verrouiller", "Lock"), "wp.lock", {}, "wp-lock"),
+    holdButton(L("TIR", "FIRE"), "wp.fire", () => ({}), "wp-fire"),
+    holdButton(L("Canon", "Gun"), "wp.gun", () => ({ seconds: 1 }), "wp-gun"),
+    actButton(L("Leurres", "Decoys"), "wp.cm", {}, "wp-cm"),
     el("span", "", "arms-state"),
   );
   mcp.append(sw, shots);
@@ -1102,36 +1215,87 @@ function buildMcp() {
   app.append(el("summary", "APP"));
   const appBox = el("div");
   const field = document.createElement("input");
-  field.placeholder = "OACI (vide : le plus proche)";
-  field.setAttribute("aria-label", "Terrain de l'approche ILS");
+  field.placeholder = L("OACI (vide : le plus proche)", "ICAO (empty: the nearest)");
+  field.setAttribute("aria-label", L("Terrain de l'approche ILS", "The ILS approach's airfield"));
   appBox.append(
     field,
     actButton("ILS", "ap.ils", () => (field.value.trim() ? { field: field.value.trim().slice(0, 12) } : {}), "mcp-ils"),
-    actButton("Annuler l'ILS", "ap.ilsOff", {}, "mcp-ils-off"),
+    actButton(L("Annuler l'ILS", "Cancel the ILS"), "ap.ilsOff", {}, "mcp-ils-off"),
   );
   app.append(appBox);
   const modes = document.createElement("details");
   modes.className = "pan-controls mcp-pop";
-  modes.append(el("summary", "Modes"));
+  modes.append(el("summary", L("Modes", "Modes")));
   const modeBox = el("div");
+  // (the terrain following's height: shown in the console's units, kept in metres — syncMcp follows a units switch)
   const agl = document.createElement("input");
   agl.type = "number";
-  agl.value = "150";
-  agl.setAttribute("aria-label", "Hauteur du suivi de terrain en mètres");
+  agl.className = "mcp-agl";
+  agl.dataset.si = "150";
+  agl.addEventListener("input", () => {
+    const v = agl.valueAsNumber / unitsOf(views.units).alt(1);
+    if (Number.isFinite(v)) agl.dataset.si = String(Math.max(0, Math.min(1000, v)));
+  });
   const here = () => {
     const g = model.own()?.geo;
     return g ? { lat: Math.round(g.lat * 1e5) / 1e5, lon: Math.round(g.lon * 1e5) / 1e5 } : {};
   };
   modeBox.append(
-    actButton("Orbite ici", "ap.mode", () => ({ mode: "orbit", ...here() }), "mcp-orbit"),
-    actButton("Circuit d'attente", "ap.mode", () => ({ mode: "hold", inboundDeg: Math.round(mcpNow().hdg) % 360 }), "mcp-hold"),
+    actButton(L("Orbite ici", "Orbit here"), "ap.mode", () => ({ mode: "orbit", ...here() }), "mcp-orbit"),
+    actButton(
+      L("Circuit d'attente", "Holding pattern"),
+      "ap.mode",
+      () => ({ mode: "hold", inboundDeg: Math.round(mcpNow().hdg) % 360 }),
+      "mcp-hold",
+    ),
     agl,
-    actButton("Suivi de terrain", "ap.mode", () => ({ mode: "tf", aglM: Math.max(0, Math.min(1000, Number(agl.value) || 150)) }), "mcp-tf"),
-    actButton("Arrêter l'interception", "ap.traffic", { action: "stop" }, "mcp-stop"),
-    actButton("Couper le mode", "ap.mode", { mode: "off" }, "mcp-mode-off"),
+    actButton(
+      L("Suivi de terrain", "Terrain following"),
+      "ap.mode",
+      () => ({ mode: "tf", aglM: Math.round(Number(agl.dataset.si) || 150) }),
+      "mcp-tf",
+    ),
+    actButton(L("Arrêter l'interception", "Stop the intercept"), "ap.traffic", { action: "stop" }, "mcp-stop"),
+    actButton(L("Couper le mode", "Mode off"), "ap.mode", { mode: "off" }, "mcp-mode-off"),
   );
   modes.append(modeBox);
-  const go = actButton("Remise de gaz", "ap.goAround", {}, "mcp-ga");
+  // the refuelling (jet_mode's tanker): TEXACO set and joined behind a hose, the way it is flown, let go
+  const aar = () => snapNow()?.aar ?? null;
+  const fuel = document.createElement("details");
+  fuel.className = "pan-controls mcp-pop";
+  fuel.append(el("summary", "AAR"));
+  const fuelBox = el("div");
+  const near = document.createElement("label");
+  near.className = "mcp-check";
+  const nearBox = document.createElement("input");
+  nearBox.type = "checkbox";
+  nearBox.id = "mcp-tanker-near";
+  near.append(nearBox, L("à 1,5 km, à notre altitude", "1.5 km ahead, at our height"));
+  const aarModes = actGroup(L("Conduite", "Flown"), [
+    [L("Auto", "Auto"), "ap.mode", { mode: "refuelMode", refuelMode: "auto" }, () => aar()?.mode === "auto"],
+    [L("Assisté", "Assisted"), "ap.mode", { mode: "refuelMode", refuelMode: "assisted" }, () => aar()?.mode === "assisted"],
+    [L("Manuel", "Manual"), "ap.mode", { mode: "refuelMode", refuelMode: "manual" }, () => aar()?.mode === "manual"],
+  ]);
+  aarModes.id = "mcp-aar-mode";
+  fuelBox.append(
+    actButton(
+      L("Ravitailleur · tuyau droit", "Tanker · right hose"),
+      "ap.mode",
+      () => ({ mode: "tanker", side: "right", ...(nearBox.checked ? { near: true } : {}) }),
+      "mcp-tanker",
+    ),
+    actButton(
+      L("Tuyau gauche", "Left hose"),
+      "ap.mode",
+      () => ({ mode: "tanker", side: "left", ...(nearBox.checked ? { near: true } : {}) }),
+      "mcp-tanker-left",
+    ),
+    near,
+    aarModes,
+    actButton(L("Arrêter le ravitaillement", "Stop the refuelling"), "ap.mode", { mode: "tankerOff" }, "mcp-tanker-off"),
+  );
+  fuel.append(fuelBox);
+  const go = actButton(L("Remise de gaz", "Go-around"), "ap.goAround", {}, "mcp-ga");
   go.classList.add("mcp-ga");
   // the switches on one row (a phone scrolls it), the three selectors on the other
   const sw = el("div", "", "mcp-sw");
@@ -1140,14 +1304,15 @@ function buildMcp() {
       "AP",
       "ap.engage",
       (w) => ({ ap: w }),
-      () => a()?.alt != null || a()?.hdg != null,
+      // (the game's lamp; an older pilot's none: read off the selectors held)
+      () => a()?.ap ?? (a()?.alt != null || a()?.hdg != null),
       "mcp-ap",
     ),
     toggle(
       "A/THR",
       "ap.engage",
       (w) => ({ athr: w }),
-      () => a()?.spd != null,
+      () => a()?.athr ?? a()?.spd != null,
       "mcp-athr",
     ),
     toggle(
@@ -1166,22 +1331,23 @@ function buildMcp() {
     ),
     app,
     modes,
+    fuel,
     go,
   );
   const kn = el("div", "", "mcp-knobs");
-  kn.append(selector("spd", "VIT"), selector("hdg", "CAP"), selector("alt", "ALT"));
+  kn.append(selector("spd", L("VIT", "SPD")), selector("hdg", L("CAP", "HDG")), selector("alt", "ALT"));
   mcp.append(sw, kn);
   syncMcp();
 }
 // ---- the flight computer (PLAN-CREW-ACTIONS A4): a spacecraft's holds, autopilots, manoeuvres and missions
 /** a select of choices (their value, their words) */
-function choices(items: readonly string[], words: Record<string, string>, label: string, value?: string) {
+function choices(items: readonly string[], words: (k: string) => string, label: string, value?: string) {
   const s = document.createElement("select");
   s.setAttribute("aria-label", label);
   for (const v of items) {
     const o = document.createElement("option");
     o.value = v;
-    o.textContent = words[v] ?? v;
+    o.textContent = words(v);
     s.append(o);
   }
   if (value) s.value = value;
@@ -1202,11 +1368,11 @@ function fcCard(card: HTMLElement, r: { ok: boolean; msg: string; data?: Record<
   const d = r.data ?? {};
   const rows: [string, string][] = [];
   if (typeof d.dvTotalMs === "number") rows.push(["Δv total", `${Math.round(d.dvTotalMs)} m/s`]);
-  if (typeof d.burnsN === "number") rows.push(["Combustions", String(d.burnsN)]);
-  if (typeof d.burns1 === "string") rows.push(["Première", d.burns1]);
-  if (typeof d.executing === "boolean") rows.push(["Exécution", d.executing ? "en cours" : "non"]);
+  if (typeof d.burnsN === "number") rows.push([L("Combustions", "Burns"), String(d.burnsN)]);
+  if (typeof d.burns1 === "string") rows.push([L("Première", "First"), d.burns1]);
+  if (typeof d.executing === "boolean") rows.push([L("Exécution", "Executing"), d.executing ? L("en cours", "yes") : L("non", "no")]);
   card.replaceChildren(
-    el("strong", r.ok ? "Aperçu" : "Refusé"),
+    el("strong", r.ok ? L("Aperçu", "Preview") : L("Refusé", "Refused")),
     ...(r.msg ? [el("p", r.msg)] : []),
     ...rows.map(([k, v]) => {
       const row = el("div", "", "fc-row");
@@ -1228,16 +1394,33 @@ function buildFc() {
   };
   const num = (i: HTMLInputElement) => (i.value.trim() === "" ? undefined : Number(i.value));
   // the hold
-  const hold = choices(HOLDS, { none: "Aucune", ...HOLD_FR }, "Tenue d'attitude", "prograde");
+  const hold = choices(
+    HOLDS,
+    (k) => (k === "none" ? L("Aucune", "None") : Lp(holdWords(k))),
+    L("Tenue d'attitude", "Attitude hold"),
+    "prograde",
+  );
   // the autopilot (a site to land on or enter for, an orbit to take off to)
-  const auto = choices(AUTOS, { none: "Aucun", ...AUTO_FR }, "Autopilote", "circularize");
-  const site = field("Site d'atterrissage ou de rentrée", "site (atterrir, rentrée)");
-  const upAlt = field("Altitude d'orbite au décollage (km)", "orbite km", "number");
+  // (a craft that never lands — the Endurance —: no landing, no take-off, no entry, no hover)
+  const lands = snapNow()?.craft?.lands !== false;
+  const autos = AUTOS.filter((k) => lands || !["land", "takeoff", "entry", "hover"].includes(k));
+  const auto = choices(autos, (k) => (k === "none" ? L("Aucun", "None") : Lp(autoWords(k))), L("Autopilote", "Autopilot"), "circularize");
+  const site = field(L("Site d'atterrissage ou de rentrée", "Landing or entry site"), L("site (atterrir, rentrée)", "site (land, entry)"));
+  const upAlt = field(
+    L("Altitude d'orbite au décollage (km)", "Orbit altitude for the take-off (km)"),
+    L("orbite km", "orbit km"),
+    "number",
+  );
   // the manoeuvre and its card
-  const op = choices(MANEUVERS, MANEUVER_FR, "Manœuvre", "circularize");
-  const where = choices(["now", "pe", "ap"], { now: "maintenant", pe: "au périgée", ap: "à l'apogée" }, "Quand");
-  const mAlt = field("Altitude visée (km)", "altitude km", "number");
-  const mInc = field("Inclinaison visée (°)", "inclinaison °", "number");
+  const op = choices(MANEUVERS, (k) => Lp(maneuverWords(k)), L("Manœuvre", "Manoeuvre"), "circularize");
+  const when: Record<string, [string, string]> = {
+    now: ["maintenant", "now"],
+    pe: ["au périgée", "at periapsis"],
+    ap: ["à l'apogée", "at apoapsis"],
+  };
+  const where = choices(["now", "pe", "ap"], (k) => L(...when[k]!), L("Quand", "When"));
+  const mAlt = field(L("Altitude visée (km)", "Target altitude (km)"), L("altitude km", "altitude km"), "number");
+  const mInc = field(L("Inclinaison visée (°)", "Target inclination (°)"), L("inclinaison °", "inclination °"), "number");
   const mCard = el("div", "", "fc-card");
   const maneuver = (execute: boolean): Args => ({
     op: op.value,
@@ -1247,28 +1430,32 @@ function buildFc() {
     execute,
   });
   // the mission and its card
-  const target = field("Destination de la mission", "Lune, Mars, ISS…");
-  const arrival = choices(
-    ["orbit", "flyby", "freeReturn"],
-    { orbit: "mise en orbite", flyby: "survol", freeReturn: "retour libre" },
-    "Arrivée",
-  );
+  const target = field(L("Destination de la mission", "The mission's destination"), L("Lune, Mars, ISS…", "Moon, Mars, ISS…"));
+  const arr: Record<string, [string, string]> = {
+    orbit: ["mise en orbite", "orbit insertion"],
+    flyby: ["survol", "flyby"],
+    freeReturn: ["retour libre", "free return"],
+  };
+  const arrival = choices(["orbit", "flyby", "freeReturn"], (k) => L(...arr[k]!), L("Arrivée", "Arrival"));
   const sCard = el("div", "", "fc-card");
   const mission = (execute: boolean): Args => ({ target: target.value.trim().slice(0, 32), arrival: arrival.value, execute });
   // the target (sp.target: a body, the station, a craft of the room by its name)
-  const tgt = field("Cible", "Lune, Mars, ISS, Endurance…");
+  const tgt = field(L("Cible", "Target"), L("Lune, Mars, ISS, Endurance…", "Moon, Mars, ISS, Endurance…"));
   // the systems (X3 · K6): each failure's checklist, its steps ticked here as on the pilot's tablet, its action once
   // all are — rebuilt as the pilot's figures change (syncSys)
   const sys = el("div", "", "fc-sys");
   sys.id = "fc-sys";
+  // the fleet: the room's other pilots, three orders each (rebuilt as the roster changes — syncFleet)
+  const fleetBox = el("div", "", "fc-fleet");
+  fleetBox.id = "fc-fleet";
   const pops: Record<string, HTMLElement> = {
-    hold: fcPop("Tenue", [hold, actButton("Tenir", "sp.hold", () => ({ direction: hold.value }), "fc-hold")]),
-    auto: fcPop("Autopilote", [
+    hold: fcPop(L("Tenue", "Hold"), [hold, actButton(L("Tenir", "Hold"), "sp.hold", () => ({ direction: hold.value }), "fc-hold")]),
+    auto: fcPop(L("Autopilote", "Autopilot"), [
       auto,
       site,
       upAlt,
       actButton(
-        "Engager",
+        L("Engager", "Engage"),
         "sp.auto",
         () => ({
           mode: auto.value,
@@ -1278,20 +1465,20 @@ function buildFc() {
         "fc-auto",
       ),
     ]),
-    maneuver: fcPop("Manœuvre", [
+    maneuver: fcPop(L("Manœuvre", "Manoeuvre"), [
       op,
       where,
       mAlt,
       mInc,
       actButton(
-        "Aperçu",
+        L("Aperçu", "Preview"),
         "sp.maneuver",
         () => maneuver(false),
         "fc-preview",
         (_ok, r) => fcCard(mCard, r),
       ),
       actButton(
-        "Exécuter",
+        L("Exécuter", "Execute"),
         "sp.maneuver",
         () => maneuver(true),
         "fc-execute",
@@ -1303,14 +1490,14 @@ function buildFc() {
       target,
       arrival,
       actButton(
-        "Aperçu",
+        L("Aperçu", "Preview"),
         "sp.mission",
         () => mission(false),
         "fc-mission-preview",
         (_ok, r) => fcCard(sCard, r),
       ),
       actButton(
-        "Lancer",
+        L("Lancer", "Launch"),
         "sp.mission",
         () => mission(true),
         "fc-mission",
@@ -1319,50 +1506,107 @@ function buildFc() {
       sCard,
     ]),
     plan: fcPop("Plan", [
-      actButton("Exécuter le plan", "sp.plan", { action: "execute" }, "fc-plan-run"),
-      actButton("Effacer le plan", "sp.plan", { action: "clear" }, "fc-plan-clear"),
+      actButton(L("Exécuter le plan", "Execute the plan"), "sp.plan", { action: "execute" }, "fc-plan-run"),
+      actButton(L("Effacer le plan", "Clear the plan"), "sp.plan", { action: "clear" }, "fc-plan-clear"),
     ]),
-    target: fcPop("Cible", [
+    target: fcPop(L("Cible", "Target"), [
       tgt,
-      actButton("Prendre pour cible", "sp.target", () => ({ name: tgt.value.trim().slice(0, 32) }), "fc-target"),
+      actButton(L("Prendre pour cible", "Take as target"), "sp.target", () => ({ name: tgt.value.trim().slice(0, 32) }), "fc-target"),
     ]),
-    dock: fcPop("Amarrage", [
-      actButton("Maintien à poste", "sp.dock", { action: "keep" }, "fc-keep"),
-      actButton("Désamarrer", "sp.dock", { action: "undock" }, "fc-undock"),
-      actButton("Faire le plein", "sp.dock", { action: "refuel" }, "fc-refuel"),
-      actButton("Mode RCS", "sp.dock", { action: "rcs" }, "fc-rcs"),
+    dock: fcPop(L("Amarrage", "Docking"), [
+      actButton(L("Maintien à poste", "Station keeping"), "sp.dock", { action: "keep" }, "fc-keep"),
+      actButton(L("Désamarrer", "Undock"), "sp.dock", { action: "undock" }, "fc-undock"),
+      actButton(L("Faire le plein", "Refuel"), "sp.dock", { action: "refuel" }, "fc-refuel"),
+      actButton(L("Mode RCS", "RCS mode"), "sp.dock", { action: "rcs" }, "fc-rcs"),
     ]),
-    systems: fcPop("Systèmes", [sys]),
+    systems: fcPop(L("Systèmes", "Systems"), [sys]),
+    // (the room's fleet — N1: another pilot's spacecraft asked to come to ours, hold on it, dock to it)
+    fleet: fcPop(L("Flotte", "Fleet"), [fleetBox]),
+    ...(lands
+      ? {
+          // (the powered descent: the hover, the landing to a point, the point moved 100 m at a time — the LPD)
+          descent: fcPop(L("Descente", "Descent"), [
+            actButton(L("Stationnaire", "Hover"), "sp.auto", { mode: "hover" }, "fc-hover"),
+            actButton(L("Atterrir ici", "Land here"), "sp.auto", { mode: "land" }, "fc-land"),
+            el("span", L("Point d’atterrissage (LPD) :", "Landing point (LPD):"), "seg-title"),
+            actButton(L("▲ 100 m devant", "▲ 100 m ahead"), "sp.lpd", { fwd: 100, right: 0 }, "fc-lpd-fwd"),
+            actButton(L("▼ 100 m derrière", "▼ 100 m back"), "sp.lpd", { fwd: -100, right: 0 }, "fc-lpd-back"),
+            actButton(L("◄ 100 m à gauche", "◄ 100 m left"), "sp.lpd", { fwd: 0, right: -100 }, "fc-lpd-left"),
+            actButton(L("► 100 m à droite", "► 100 m right"), "sp.lpd", { fwd: 0, right: 100 }, "fc-lpd-right"),
+          ]),
+        }
+      : {}),
     ...(snapNow()?.craft?.ring
       ? {
-          ring: fcPop("Anneau", [
-            actButton("Anneau −", "sp.ring", { dir: -1 }, "fc-ring-down"),
-            actButton("Anneau +", "sp.ring", { dir: 1 }, "fc-ring-up"),
+          ring: fcPop(L("Anneau", "Ring"), [
+            actButton(L("Anneau −", "Ring −"), "sp.ring", { dir: -1 }, "fc-ring-down"),
+            actButton(L("Anneau +", "Ring +"), "sp.ring", { dir: 1 }, "fc-ring-up"),
           ]),
         }
       : {}),
   };
   // (the station's own first — PLAN-VAISSEAUX K6: FIDO the trajectory's, GUIDO the attitude's, EECOM the systems')
   const order: Record<StationId, string[]> = {
-    copilot: ["hold", "auto", "maneuver", "plan", "dock", "target", "mission", "systems", "ring"],
-    nav: ["maneuver", "mission", "plan", "target", "hold", "auto", "dock", "systems", "ring"],
-    engineer: ["systems", "ring", "dock", "hold", "auto", "maneuver", "plan", "target", "mission"],
-    flight: ["auto", "hold", "maneuver", "mission", "plan", "dock", "systems", "target", "ring"],
-    fido: ["maneuver", "mission", "plan", "target", "auto", "hold", "dock", "systems", "ring"],
-    guido: ["hold", "auto", "dock", "target", "maneuver", "plan", "mission", "systems", "ring"],
-    eecom: ["systems", "ring", "dock", "hold", "auto", "maneuver", "plan", "mission", "target"],
-    capcom: ["hold", "auto", "plan", "dock", "systems", "maneuver", "mission", "target", "ring"],
+    copilot: ["hold", "auto", "descent", "maneuver", "plan", "dock", "target", "mission", "systems", "ring", "fleet"],
+    nav: ["maneuver", "mission", "plan", "target", "hold", "auto", "descent", "dock", "systems", "ring", "fleet"],
+    engineer: ["systems", "ring", "dock", "hold", "auto", "descent", "maneuver", "plan", "target", "mission", "fleet"],
+    flight: ["auto", "descent", "hold", "maneuver", "mission", "plan", "dock", "fleet", "systems", "target", "ring"],
+    fido: ["maneuver", "mission", "plan", "target", "auto", "descent", "hold", "dock", "systems", "ring", "fleet"],
+    guido: ["hold", "auto", "descent", "dock", "target", "fleet", "maneuver", "plan", "mission", "systems", "ring"],
+    eecom: ["systems", "ring", "dock", "hold", "auto", "descent", "maneuver", "plan", "mission", "target", "fleet"],
+    capcom: ["hold", "auto", "descent", "plan", "dock", "fleet", "systems", "maneuver", "mission", "target", "ring"],
   };
+  // (a Lander low over a ground: its descent first, whatever the station)
+  const desc = !!snapNow()?.desc && snapNow()?.craft?.id === "lander";
   const sw = el("div", "", "mcp-sw");
-  const keys = order[station.id].filter((k) => pops[k]);
+  const keys = (desc ? ["descent", ...order[station.id].filter((k) => k !== "descent")] : order[station.id]).filter((k) => pops[k]);
   keys.forEach((k, i) => {
     if (i === 0) pops[k]!.classList.add("featured");
     sw.append(pops[k]!);
   });
-  sw.append(actButton("Relâcher", "sp.release", {}, "fc-release"));
+  sw.append(actButton(L("Relâcher", "Release"), "sp.release", {}, "fc-release"));
   mcp.append(sw);
-  sysKey = "";
+  sysKey = fleetKey = "";
   syncSys();
+  syncFleet();
+  syncActs();
+}
+
+/** the Fleet pop's pilots (N1): every other pilot of the room, its craft, the three orders to it — said from ours */
+let fleetKey = "";
+function syncFleet() {
+  const box = document.getElementById("fc-fleet");
+  if (!box) return;
+  const me = model.selected;
+  const others = model.crafts().filter((c) => c.member.slot !== me);
+  const key = JSON.stringify([lang(), others.map((c) => [c.member.slot, c.member.name, c.snapshot?.craft?.id])]);
+  if (key === fleetKey) return;
+  fleetKey = key;
+  if (!others.length) {
+    box.replaceChildren(el("p", L("Aucun autre pilote dans la salle.", "No other pilot in the room."), "muted small"));
+    return;
+  }
+  const W: [string, string, string][] = [
+    ["come", "Rejoins-moi", "Come to me"],
+    ["hold", "Maintiens-toi sur moi", "Hold on me"],
+    ["dock", "Amarre-toi à moi", "Dock to me"],
+  ];
+  box.replaceChildren(
+    ...others.map((c) => {
+      const card = el("div", "", "fc-card");
+      card.append(el("strong", `${c.member.name}${c.snapshot?.craft ? ` · ${c.snapshot.craft.name}` : ""}`));
+      for (const [o, fr, en] of W)
+        card.append(
+          actButton(
+            L(fr, en),
+            "sp.fleet",
+            { order: o, slot: c.member.slot, name: c.member.name.slice(0, 16) },
+            `fleet-${o}-${c.member.slot}`,
+          ),
+        );
+      return card;
+    }),
+  );
   syncActs();
 }
 
@@ -1376,16 +1620,16 @@ function syncSys() {
   if (key === sysKey) return;
   sysKey = key;
   if (!F.length) {
-    box.replaceChildren(el("p", "Aucune panne — systèmes nominaux.", "muted small"));
+    box.replaceChildren(el("p", L("Aucune panne — systèmes nominaux.", "No failure — systems nominal."), "muted small"));
     return;
   }
   box.replaceChildren(
     ...F.map((f) => {
-      const L = CHECKLISTS_FR[f.kind];
+      const cl = checklistOf(f.kind);
       const card = el("div", "", "fc-card");
-      card.append(el("strong", L?.title ?? f.kind));
+      card.append(el("strong", cl?.title ?? f.kind));
       const ticks = new Set(f.ticks ?? []);
-      (L?.steps ?? []).forEach((st, i) => {
+      (cl?.steps ?? []).forEach((st, i) => {
         const lab = document.createElement("label");
         lab.className = "fc-step";
         const cb = document.createElement("input");
@@ -1396,9 +1640,17 @@ function syncSys() {
         lab.append(cb, document.createTextNode(` ${st}`));
         card.append(lab);
       });
-      const all = (L?.steps ?? []).every((_, i) => ticks.has(i));
-      const b = actButton(f.fixing ? "En cours…" : (L?.action ?? "Action"), "sys.fix", { kind: f.kind }, `sys-fix-${f.kind}`);
-      if (!all || f.fixing) b.dataset.held = f.fixing ? "Réparation en cours" : "La checklist d'abord : toutes les étapes cochées";
+      const all = (cl?.steps ?? []).every((_, i) => ticks.has(i));
+      const b = actButton(
+        f.fixing ? L("En cours…", "Under way…") : (cl?.action ?? "Action"),
+        "sys.fix",
+        { kind: f.kind },
+        `sys-fix-${f.kind}`,
+      );
+      if (!all || f.fixing)
+        b.dataset.held = f.fixing
+          ? L("Réparation en cours", "Repair under way")
+          : L("La checklist d'abord : toutes les étapes cochées", "The checklist first: every step ticked");
       card.append(b);
       return card;
     }),
@@ -1410,6 +1662,13 @@ function syncSys() {
 function syncMcp() {
   if (mcp.hidden) return;
   const u = unitsOf(views.units);
+  const agl = mcp.querySelector<HTMLInputElement>(".mcp-agl");
+  if (agl && agl.dataset.sys !== u.sys && document.activeElement !== agl) {
+    agl.dataset.sys = u.sys;
+    agl.value = String(Math.round(u.alt(Number(agl.dataset.si) || 150)));
+    agl.title = `${L("Hauteur du suivi de terrain", "Terrain following's height")} (${u.altName.toLowerCase()})`;
+    agl.setAttribute("aria-label", agl.title);
+  }
   const now = mcpNow();
   const a = snapNow()?.auto;
   const recent = performance.now() - pend.at < 2500;
@@ -1421,7 +1680,7 @@ function syncMcp() {
       key === "hdg"
         ? String(Math.round(v) % 360).padStart(3, "0")
         : key === "alt"
-          ? Math.round(u.alt(v)).toLocaleString("fr-FR")
+          ? Math.round(u.alt(v)).toLocaleString(locale())
           : String(Math.round(u.spd(v)));
     const selected = key === "alt" ? a?.alt != null : key === "hdg" ? a?.hdg != null : a?.spd != null;
     out.dataset.state = recent && pend[key] !== undefined ? "turning" : selected ? "selected" : "off";
@@ -1432,17 +1691,21 @@ function syncMcp() {
 function board() {
   const own = model.own();
   const caps = own?.snapshot?.caps;
-  const state = !net.room || !own ? "" : !caps ? "lecture seule" : caps.on ? "actions" : "verrouillé";
+  const state = !net.room || !own ? "" : !caps ? "read" : caps.on ? "actions" : "locked";
   const s = $("act-state");
-  s.textContent = state === "actions" ? "ACTIONS ✓" : state === "verrouillé" ? "VERROUILLÉ" : state ? "LECTURE" : "";
+  s.textContent =
+    state === "actions" ? "ACTIONS ✓" : state === "locked" ? L("VERROUILLÉ", "LOCKED") : state ? L("LECTURE", "READ ONLY") : "";
   s.dataset.state = state;
   $("crew-lock").textContent = !own
-    ? "Aucun pilote suivi."
+    ? L("Aucun pilote suivi.", "No pilot followed.")
     : !caps
-      ? "Ce simulateur ne reçoit pas d'ordres : instruments en lecture seule."
+      ? L("Ce simulateur ne reçoit pas d'ordres : instruments en lecture seule.", "This simulator takes no orders: instruments read only.")
       : caps.on
-        ? `Vous pouvez agir à bord de ${own.member.name} — tout sauf piloter.`
-        : `${own.member.name} a verrouillé les actions de l'équipage.`;
+        ? L(
+            `Vous pouvez agir à bord de ${own.member.name} — tout sauf piloter.`,
+            `You can act aboard ${own.member.name}'s craft — anything but fly.`,
+          )
+        : L(`${own.member.name} a verrouillé les actions de l'équipage.`, `${own.member.name} has locked the crew's actions.`);
   const list = $("board");
   const key = JSON.stringify(actions.board.slice(0, 12).map((l) => [l.at, l.ok]));
   if (list.dataset.key !== key) {
@@ -1450,46 +1713,80 @@ function board() {
     list.replaceChildren(
       ...actions.board.slice(0, 12).map((l) => {
         const li = el("li", "", l.ok ? "ok" : "ko");
-        const time = new Date(l.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        li.append(el("time", time), el("strong", l.who), el("span", l.what), ...(l.ok ? [] : [el("em", l.msg || "refusé")]));
+        const time = new Date(l.at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        li.append(el("time", time), el("strong", l.who), el("span", l.what), ...(l.ok ? [] : [el("em", l.msg || L("refusé", "refused"))]));
         return li;
       }),
     );
-    if (!actions.board.length) list.append(el("li", "Aucun ordre pour l'instant.", "empty"));
+    if (!actions.board.length) list.append(el("li", L("Aucun ordre pour l'instant.", "No order yet."), "empty"));
   }
   syncActs();
 }
+
+/** a station aboard: the pilot followed asked once for his agreement (a pilot who asks for it — caps.hold) */
+function askAboard() {
+  const to = model.selected;
+  // (a spacecraft's alone — an aircraft has no light's time to the ground: nothing to agree to)
+  if (station.place !== "aboard" || to === null || !net.room || !model.holds(to) || model.aboardWith(to) || aboardAsked.has(to)) return;
+  if (model.crafts().find((c) => c.member.slot === to)?.snapshot?.craft?.kind !== "spacecraft") return;
+  aboardAsked.set(to, "asked");
+  net.event({ kind: "crew-aboard", v: 1, to, station: `${station.call} · ${Lp(station.title)}` });
+  notice(L("Demande au pilote : à bord", "Asked the pilot: aboard"));
+}
+net.on("event", ({ from, ev }) => {
+  if (ev.kind !== "crew-aboard-ok" || (ev as { to?: unknown }).to !== net.room?.slot) return;
+  const ok = (ev as { ok?: unknown }).ok === true;
+  aboardAsked.set(from, ok ? "yes" : "no");
+  notice(
+    ok
+      ? L("Le pilote vous prend à bord : en direct", "The pilot takes you aboard: live")
+      : L("Le pilote refuse : vous restez au sol", "The pilot refuses: you stay on the ground"),
+  );
+  syncBadge();
+});
+net.on("room", () => aboardAsked.clear());
 
 /** the message to the pilot (K5): live aboard; the light's time late from the ground; behind the wormhole recorded,
  *  delivered (its age with it) when the link comes back */
 function sendMessage(text: string) {
   const to = model.selected;
-  if (!net.room || to === null) return notice("Aucun pilote suivi.");
-  const L = model.linkOf(to);
-  if (L.cut) {
+  if (!net.room || to === null) return notice(L("Aucun pilote suivi.", "No pilot followed."));
+  const link = model.linkOf(to);
+  if (link.cut) {
     outbox.record(text, Date.now());
-    notice("Message enregistré : il partira au retour de la liaison.");
+    notice(L("Message enregistré : il partira au retour de la liaison.", "Message recorded: it will go when the link comes back."));
   } else {
     const go = () => net.event({ kind: "crew-msg", v: 1, to, text, rec: 0 });
-    if (L.delay > 0) setTimeout(go, L.delay * 1000);
+    // (a pilot who holds the ground's messages himself: sent at once — an older one: delayed here)
+    if (link.delay > 0 && !model.holds(to)) setTimeout(go, link.delay * 1000);
     else go();
-    notice(L.delay > 0 ? `Message envoyé : il arrive dans ${dur(L.delay)}.` : "Message envoyé.");
+    notice(
+      link.delay > 0
+        ? L(`Message envoyé : il arrive dans ${dur(link.delay)}.`, `Message sent: it arrives in ${dur(link.delay)}.`)
+        : L("Message envoyé.", "Message sent."),
+    );
   }
   syncMessages();
 }
 function syncMessages() {
   const to = model.selected;
-  const L = to !== null ? model.linkOf(to) : { delay: 0, cut: false };
+  const link = to !== null ? model.linkOf(to) : { delay: 0, cut: false };
   // (the link back: the recorded ones sent, each its age)
-  if (!L.cut && outbox.waiting.length && net.room && to !== null)
+  if (!link.cut && outbox.waiting.length && net.room && to !== null)
     for (const m of outbox.flush()) net.event({ kind: "crew-msg", v: 1, to, text: m.text, rec: Math.round((Date.now() - m.at) / 1000) });
-  $("msg-state").textContent = L.cut
-    ? `Liaison coupée (trou de ver) · ${outbox.waiting.length} message(s) enregistré(s)`
-    : station.place === "ground" && L.delay > 0
-      ? `Délai lumière ${dur(L.delay)} aller · ${dur(2 * L.delay)} aller-retour`
+  $("msg-state").textContent = link.cut
+    ? L(
+        `Liaison coupée (trou de ver) · ${outbox.waiting.length} message(s) enregistré(s)`,
+        `Link cut (wormhole) · ${outbox.waiting.length} message(s) recorded`,
+      )
+    : station.place === "ground" && link.delay > 0
+      ? L(
+          `Délai lumière ${dur(link.delay)} aller · ${dur(2 * link.delay)} aller-retour`,
+          `Light delay ${dur(link.delay)} one way · ${dur(2 * link.delay)} round trip`,
+        )
       : station.place === "ground"
-        ? "Liaison directe"
-        : "À bord : en direct";
+        ? L("Liaison directe", "Direct link")
+        : L("À bord : en direct", "Aboard: live");
 }
 $("msg-form").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -1505,9 +1802,13 @@ function refresh() {
     crafts = model.crafts(),
     own = model.own(crafts);
   $("connection").textContent =
-    net.status === "offline" ? "Reconnexion…" : room ? `${room.code} · ${room.members.length}/8` : "Hors connexion";
+    net.status === "offline"
+      ? L("Reconnexion…", "Reconnecting…")
+      : room
+        ? `${room.code} · ${room.members.length}/8`
+        : L("Hors connexion", "Offline");
   $("status-dot").className = room && net.status === "online" ? "online" : "";
-  $("room-button").textContent = room ? "Salle" : "Rejoindre";
+  $("room-button").textContent = room ? L("Salle", "Room") : L("Rejoindre", "Join");
   const pk = JSON.stringify([model.selected, room?.members]);
   if (pk !== pilotKey) {
     pilotKey = pk;
@@ -1522,11 +1823,12 @@ function refresh() {
       }
     if (!pilot.options.length) {
       const o = document.createElement("option");
-      o.textContent = "En attente d’un pilote";
+      o.textContent = L("En attente d’un pilote", "Waiting for a pilot");
       pilot.append(o);
     }
   }
   setProfile(profileOf(own?.snapshot));
+  askAboard();
   syncBadge();
   syncMessages();
   tiles(own);
@@ -1535,22 +1837,26 @@ function refresh() {
   syncMcpKind();
   syncMcp();
   syncSys();
+  syncFleet();
   const followed = room?.members.find((m) => m.slot === model.selected);
   $("pilot-dot").style.background = followed?.colour ?? "#4d606b";
   $("freshness").textContent =
     net.status === "offline"
-      ? "Connexion interrompue"
+      ? L("Connexion interrompue", "Connection lost")
       : !own
-        ? "En attente de données"
+        ? L("En attente de données", "Waiting for data")
         : model.selected !== null && model.linkOf(model.selected).cut
-          ? "Liaison coupée — derrière le trou de ver : son dernier mot"
+          ? L("Liaison coupée — derrière le trou de ver : son dernier mot", "Link cut — behind the wormhole: its last word")
           : own.age > 3
-            ? `Position ancienne · ${Math.round(own.age)} s`
+            ? L(`Position ancienne · ${Math.round(own.age)} s`, `Old position · ${Math.round(own.age)} s`)
             : own.snapshot
               ? model.selected !== null && model.linkOf(model.selected).delay > 0
-                ? `Mesures du pilote · différées de ${dur(model.linkOf(model.selected).delay)} (lumière)`
-                : "Mesures du pilote · direct"
-              : "Position reçue · mesures détaillées indisponibles";
+                ? L(
+                    `Mesures du pilote · différées de ${dur(model.linkOf(model.selected).delay)} (lumière)`,
+                    `The pilot's measures · ${dur(model.linkOf(model.selected).delay)} late (light)`,
+                  )
+                : L("Mesures du pilote · direct", "The pilot's measures · live")
+              : L("Position reçue · mesures détaillées indisponibles", "Position received · detailed measures unavailable");
   $("freshness").classList.toggle("stale", net.status === "offline" || (!!own && own.age > 3));
   const rk = JSON.stringify(room?.members);
   if (rk !== rosterKey) {
@@ -1563,23 +1869,29 @@ function refresh() {
       row.style.setProperty("--member", /^#[\da-f]{6}$/i.test(m.colour) ? m.colour : "#89dce5");
       const title = el("div", "", "member-title");
       title.append(el("span", "", "member-dot"), el("strong", m.name));
-      row.append(title, el("small", m.role === "pilot" ? "Pilote" : m.role === "instruments" ? "Équipage" : "Spectateur"));
+      row.append(
+        title,
+        el(
+          "small",
+          m.role === "pilot" ? L("Pilote", "Pilot") : m.role === "instruments" ? L("Équipage", "Crew") : L("Spectateur", "Spectator"),
+        ),
+      );
       if (m.slot !== room?.slot) {
         const actions = el("div", "", "member-actions");
         if (m.role === "pilot")
           actions.append(
-            button("Suivre", () => {
+            button(L("Suivre", "Follow"), () => {
               select(m.slot);
               showCrew(false);
             }),
           );
-        const mute = button(radio.isMuted(m.slot) ? "Rétablir" : "Couper", () => {
+        const mute = button(radio.isMuted(m.slot) ? L("Rétablir", "Unmute") : L("Couper", "Mute"), () => {
           const muted = radio.mute(m.slot);
-          mute.textContent = muted ? "Rétablir" : "Couper";
+          mute.textContent = muted ? L("Rétablir", "Unmute") : L("Couper", "Mute");
           mute.setAttribute("aria-pressed", String(muted));
         });
         mute.setAttribute("aria-pressed", String(radio.isMuted(m.slot)));
-        mute.setAttribute("aria-label", `Couper le son de ${m.name}`);
+        mute.setAttribute("aria-label", L(`Couper le son de ${m.name}`, `Mute ${m.name}`));
         actions.append(mute);
         row.append(actions);
         const vol = document.createElement("input");
@@ -1587,7 +1899,7 @@ function refresh() {
         vol.min = "0";
         vol.max = "100";
         vol.value = String(radio.volume(m.slot) * 100);
-        vol.setAttribute("aria-label", `Volume de ${m.name}`);
+        vol.setAttribute("aria-label", L(`Volume de ${m.name}`, `${m.name}'s volume`));
         vol.addEventListener("input", () => radio.volume(m.slot, Number(vol.value) / 100));
         const label = el("label", "Volume", "volume-label");
         label.append(vol);
@@ -1596,14 +1908,14 @@ function refresh() {
       row.append(el("small", "", "member-distance"));
       members.append(row);
     }
-    if (!room) members.append(el("p", "Rejoignez une salle pour voir son équipage.", "muted"));
+    if (!room) members.append(el("p", L("Rejoignez une salle pour voir son équipage.", "Join a room to see its crew."), "muted"));
   }
   const contacts = model.contacts();
   const count = (k: (c: (typeof contacts)[number]) => boolean) => String(contacts.filter(k).length);
   const summary: [string, string][] = [
-    ["Joueurs", String(crafts.length)],
-    ["Avions", count((c) => c.kind === "air")],
-    ["Navires", count((c) => c.kind === "sea")],
+    [L("Joueurs", "Players"), String(crafts.length)],
+    [L("Avions", "Aircraft"), count((c) => c.kind === "air")],
+    [L("Navires", "Ships"), count((c) => c.kind === "sea")],
   ];
   const sk = JSON.stringify(summary);
   if ($("traffic-summary").dataset.key !== sk) {
@@ -1623,13 +1935,17 @@ function refresh() {
     const craft = crafts.find((c) => c.member.slot === slot);
     const r = own && craft ? relative(own, craft) : null;
     row.querySelector(".member-distance")!.textContent = craft
-      ? `${craft.kind.toUpperCase()}${r ? ` · ${valueText(r.distance / 1000)} km` : ""}${craft.age > 3 ? " · signal ancien" : ""}`
+      ? `${craft.kind.toUpperCase()}${r ? ` · ${valueText(r.distance / 1000)} km` : ""}${craft.age > 3 ? ` · ${L("signal ancien", "old signal")}` : ""}`
       : "";
   }
   $("network-details").textContent = room
-    ? `Aller-retour ${Math.round(net.clock.rtt)} ms · Temps ×${valueText(net.roomWarp())} · ${net.mesh?.peers.size ?? 0} liens WebRTC`
+    ? L(
+        `Aller-retour ${Math.round(net.clock.rtt)} ms · Temps ×${valueText(net.roomWarp())} · ${net.mesh?.peers.size ?? 0} liens WebRTC`,
+        `Round trip ${Math.round(net.clock.rtt)} ms · Time ×${valueText(net.roomWarp())} · ${net.mesh?.peers.size ?? 0} WebRTC links`,
+      )
     : "";
   syncRadio();
+  radio.sync();
   const listBox = $("contact-list");
   if (listBox) {
     const sensor = views.sensor && views.view !== "dash";
@@ -1637,11 +1953,25 @@ function refresh() {
     const near = g
       ? [...contacts].sort((x, y) => Math.hypot(x.lat - g.lat, x.lon - g.lon) - Math.hypot(y.lat - g.lat, y.lon - g.lon)).slice(0, 24)
       : [];
+    // (« Capteur »: the pilot's picture's tracks his sensors hold — RD6 —, by threat then distance; an older pilot's
+    // radar list without one)
+    const rank = (c: (typeof contacts)[number]) =>
+      c.locked ? 0 : c.msl?.target === "own" ? 1 : c.kind === "missile" ? 2 : c.side === "hostile" || c.iff === "hostile" ? 3 : 4;
+    const sensed = contacts
+      .filter((c) => (c.sensors ?? 0) !== 0 && c.state !== "truth")
+      .sort((a, b) => rank(a) - rank(b) || (g ? Math.hypot(a.lat - g.lat, a.lon - g.lon) - Math.hypot(b.lat - g.lat, b.lon - g.lon) : 0))
+      .slice(0, 24);
     const items = sensor
-      ? (own?.snapshot?.radar?.contacts ?? []).map((p) => ({ id: p.id, name: p.name, slot: -1 }))
+      ? own?.snapshot?.pic
+        ? sensed.map((c) => ({ id: c.id, name: `${c.locked ? "◉ " : ""}${c.name}`, slot: -1 }))
+        : (own?.snapshot?.radar?.contacts ?? []).map((p) => ({ id: p.id, name: p.name, slot: -1 }))
       : [
           ...crafts.filter((c) => c !== own).map((c) => ({ id: "", name: `✈ ${c.member.name}`, slot: c.member.slot })),
-          ...near.map((c) => ({ id: c.id, name: `${c.kind === "sea" ? "⛴" : c.kind === "ground" ? "◆" : "◇"} ${c.name}`, slot: -1 })),
+          ...near.map((c) => ({
+            id: c.id,
+            name: `${c.kind === "sea" ? "⛴" : c.kind === "ground" ? "◆" : c.kind === "missile" ? "➶" : c.kind === "decoy" ? "✶" : "◇"} ${c.name}`,
+            slot: -1,
+          })),
         ];
     const signature = JSON.stringify([sensor, items]);
     if (listBox.dataset.signature !== signature) {
@@ -1654,7 +1984,16 @@ function refresh() {
             else views.onContact(item.id);
           }),
         );
-      if (!items.length) listBox.append(el("p", sensor ? "Aucune piste reçue du pilote." : "Aucun joueur ni trafic reçu.", "muted"));
+      if (!items.length)
+        listBox.append(
+          el(
+            "p",
+            sensor
+              ? L("Aucune piste reçue du pilote.", "No track received from the pilot.")
+              : L("Aucun joueur ni trafic reçu.", "No player nor traffic received."),
+            "muted",
+          ),
+        );
     }
   }
   const paint = JSON.stringify(crafts.map((c) => [c.member.slot, c.sample.seq, c.snapshot?.t, Math.floor(c.age)]));
@@ -1663,13 +2002,13 @@ function refresh() {
     views.request();
   }
 }
-const SIDES: Record<string, string> = {
-  traffic: "trafic réel",
-  hostile: "hostile",
-  friend: "ami",
-  neutral: "neutre",
-  dead: "détruit",
-  carrier: "porte-avions",
+const SIDES: Record<string, [string, string]> = {
+  traffic: ["trafic réel", "real traffic"],
+  hostile: ["hostile", "hostile"],
+  friend: ["ami", "friend"],
+  neutral: ["neutre", "neutral"],
+  dead: ["détruit", "destroyed"],
+  carrier: ["porte-avions", "carrier"],
 };
 // ---- the context menu (PLAN-CREW-ACTIONS A2): a waypoint, the ground, a contact touched — what can be ordered there
 const stage = document.querySelector<HTMLElement>(".stage")!;
@@ -1695,7 +2034,7 @@ function menu(x: number, y: number, title: string, sub: string, items: HTMLEleme
   head.append(el("strong", title), ...(sub ? [el("small", sub)] : []));
   const close = button("✕", closeMenu);
   close.className = "ctx-close";
-  close.setAttribute("aria-label", "Fermer");
+  close.setAttribute("aria-label", L("Fermer", "Close"));
   head.append(close);
   m.append(head, ...items);
   stage.append(m);
@@ -1724,7 +2063,7 @@ function chainButton(text: string, steps: () => [Act, Args][], id?: string) {
       b.classList.remove("ok", "ko");
       void b.offsetWidth;
       b.classList.add(r.ok ? "ok" : "ko");
-      notice(r.ok ? `${text} ✓` : `${text} — ${r.msg || "refusé"}`);
+      notice(r.ok ? `${text} ✓` : `${text} — ${r.msg || L("refusé", "refused")}`);
       if (r.ok) closeMenu();
       refresh();
     },
@@ -1750,13 +2089,13 @@ function numberField(
   return [box, () => (input.value.trim() === "" ? Number.NaN : input.valueAsNumber / toShown(1))];
 }
 const where = (at: { lat: number; lon: number }) =>
-  `${Math.abs(at.lat).toFixed(3)}° ${at.lat >= 0 ? "N" : "S"} · ${Math.abs(at.lon).toFixed(3)}° ${at.lon >= 0 ? "E" : "O"}`;
+  `${Math.abs(at.lat).toFixed(3)}° ${at.lat >= 0 ? "N" : "S"} · ${Math.abs(at.lon).toFixed(3)}° ${at.lon >= 0 ? "E" : L("O", "W")}`;
 const fromCraft = (at: { lat: number; lon: number }) => {
   const g = model.own()?.geo;
   if (!g) return "";
   const q = wgs84Inverse(g.lat, g.lon, at.lat, at.lon);
   const u = unitsOf(views.units);
-  return `à ${u.fDist(q.d)} · relèvement ${String(Math.round(((q.az * 180) / Math.PI + 360) % 360)).padStart(3, "0")}°`;
+  return `${L("à", "at")} ${u.fDist(q.d)} · ${L("relèvement", "bearing")} ${String(Math.round(((q.az * 180) / Math.PI + 360) % 360)).padStart(3, "0")}°`;
 };
 
 views.onWp = (i, x, y) => {
@@ -1765,7 +2104,7 @@ views.onWp = (i, x, y) => {
   if (!wp) return;
   const u = unitsOf(views.units);
   const [altBox, altVal] = numberField("Altitude", wp.alt, u.alt, u.altName.toLowerCase());
-  const [spdBox, spdVal] = numberField("Vitesse", wp.spd, u.spd, u.spdName.toLowerCase());
+  const [spdBox, spdVal] = numberField(L("Vitesse", "Speed"), wp.spd, u.spd, u.spdName.toLowerCase());
   const row = (box: HTMLElement, set: HTMLElement, clear: HTMLElement) => {
     const r = el("div", "", "ctx-row");
     r.append(box, set, clear);
@@ -1776,22 +2115,24 @@ views.onWp = (i, x, y) => {
     row(
       altBox,
       actButton(
-        "Fixer",
+        L("Fixer", "Set"),
         "nav.point",
         () => (Number.isFinite(altVal()) ? { index: i, alt: Math.round(altVal()) } : { index: i }),
         "ctx-alt-set",
       ),
-      actButton("Libre", "nav.point", { index: i, clearAlt: true }),
+      actButton(L("Libre", "Free"), "nav.point", { index: i, clearAlt: true }),
     ),
     row(
       spdBox,
-      actButton("Fixer", "nav.point", () => (Number.isFinite(spdVal()) ? { index: i, spd: Math.round(spdVal()) } : { index: i })),
-      actButton("Libre", "nav.point", { index: i, clearSpd: true }),
+      actButton(L("Fixer", "Set"), "nav.point", () => (Number.isFinite(spdVal()) ? { index: i, spd: Math.round(spdVal()) } : { index: i })),
+      actButton(L("Libre", "Free"), "nav.point", { index: i, clearSpd: true }),
     ),
-    actButton("Supprimer le point", "nav.remove", { index: i }, "ctx-wp-remove", (ok) => ok && closeMenu()),
+    actButton(L("Supprimer le point", "Remove the waypoint"), "nav.remove", { index: i }, "ctx-wp-remove", (ok) => ok && closeMenu()),
     el(
       "p",
-      views.view === "plan" ? "Sur la carte ou le ND : glisser un point le déplace." : "Glisser le point pour le déplacer.",
+      views.view === "plan"
+        ? L("Sur la carte ou le ND : glisser un point le déplace.", "On the map or the ND: drag a waypoint to move it.")
+        : L("Glisser le point pour le déplacer.", "Drag the waypoint to move it."),
       "ctx-hint",
     ),
   ]);
@@ -1801,24 +2142,45 @@ views.onMoveWp = (i, at) =>
 // a body touched on the system map (K6): taken for the target, a mission previewed to it
 views.onBody = (id, x, y) => {
   const name = bodyName(id);
-  menu(x, y, name, "Carte système", [
-    actButton("Prendre pour cible", "sp.target", { name: id }, "ctx-body-target", (ok) => ok && closeMenu()),
-    actButton(`Mission vers ${name} — aperçu`, "sp.mission", { target: id, arrival: "orbit", execute: false }, "ctx-body-mission"),
+  menu(x, y, name, L("Carte système", "System map"), [
+    actButton(L("Prendre pour cible", "Take as target"), "sp.target", { name: id }, "ctx-body-target", (ok) => ok && closeMenu()),
+    actButton(
+      L(`Mission vers ${name} — aperçu`, `Mission to ${name} — preview`),
+      "sp.mission",
+      { target: id, arrival: "orbit", execute: false },
+      "ctx-body-mission",
+    ),
   ]);
 };
 // a burn dragged along the orbit (K6): its new time
 views.onNodeMove = (i, dtS) => void fire(null, "sp.node", { action: "shift", index: i, dtS });
 views.onGround = (at, x, y) => {
   const snap = snapNow();
+  // (the Ground view of a spacecraft: the landing point designated where the finger touched — the LPD)
+  if (views.view === "ground") {
+    const q = { lat: Math.round(at.lat * 1e5) / 1e5, lon: Math.round(at.lon * 1e5) / 1e5 };
+    views.marker = [x, y];
+    views.request();
+    menu(x, y, L("Point choisi", "Point chosen"), `${q.lat.toFixed(4)}° ${q.lon.toFixed(4)}°`, [
+      actButton(
+        L("Désigner pour l’atterrissage (LPD)", "Designate for the landing (LPD)"),
+        "sp.lpd",
+        q,
+        "ctx-lpd",
+        (ok) => ok && closeMenu(),
+      ),
+    ]);
+    return;
+  }
   const own = model.own();
   const route = snap?.route ?? [];
   const active = snap?.nav?.active ?? route.length;
   const p = { lat: Math.round(at.lat * 1e5) / 1e5, lon: Math.round(at.lon * 1e5) / 1e5 };
   views.marker = [x, y];
   views.request();
-  menu(x, y, "Point choisi", `${where(p)} · ${fromCraft(p)}`, [
+  menu(x, y, L("Point choisi", "Point chosen"), `${where(p)} · ${fromCraft(p)}`, [
     chainButton(
-      "Direct ici",
+      L("Direct ici", "Direct here"),
       () =>
         route.length >= 2
           ? [
@@ -1832,9 +2194,17 @@ views.onGround = (at, x, y) => {
             ],
       "ctx-direct-here",
     ),
-    actButton("Ajouter à la fin du plan", "nav.add", p, "ctx-append", (ok) => ok && closeMenu()),
+    actButton(L("Ajouter à la fin du plan", "Add at the plan's end"), "nav.add", p, "ctx-append", (ok) => ok && closeMenu()),
     ...(route[active]
-      ? [actButton(`Insérer avant ${route[active]!.name}`, "nav.add", { ...p, index: active }, undefined, (ok) => ok && closeMenu())]
+      ? [
+          actButton(
+            L(`Insérer avant ${route[active]!.name}`, `Insert before ${route[active]!.name}`),
+            "nav.add",
+            { ...p, index: active },
+            undefined,
+            (ok) => ok && closeMenu(),
+          ),
+        ]
       : []),
   ]);
 };
@@ -1844,22 +2214,48 @@ views.onContact = (id, x = stage.clientWidth / 2, y = stage.clientHeight / 2) =>
   const own = model.own();
   const c = own?.snapshot?.radar?.contacts.find((c) => c.id === id);
   const t = model.contacts().find((t) => t.id === id);
-  const name = c?.name ?? t?.name ?? id;
-  const info = c
-    ? `${u.fDist(Math.hypot(c.e, c.n))} · Δh ${u.fAlt(c.dz)} · ${c.iff}`
-    : t
-      ? [t.type, SIDES[t.side] ?? t.side, t.alt !== null ? u.fAlt(t.alt) : "", t.spd !== null ? u.fSpd(t.spd) : "", fromCraft(t)]
-          .filter(Boolean)
-          .join(" · ")
-      : "";
+  // (a track of the spacecraft's sensors — PLAN-RADAR-AAA RD4 —: its range, its rate, who holds it; targeted only)
+  const sp = c || t ? undefined : own?.snapshot?.spacePic?.tracks.find((q) => q.id === id);
+  const name = c?.name ?? t?.name ?? sp?.name ?? id;
+  const info = sp
+    ? `${u.fDist(sp.range)} · ${sp.rate <= 0 ? "▼" : "▲"}${Math.abs(sp.rate).toFixed(1)} m/s · ${sp.hidden ? L("caché", "hidden") : sensorWords(sp.sensors)}`
+    : c
+      ? `${u.fDist(Math.hypot(c.e, c.n))} · Δh ${u.fAlt(c.dz)} · ${c.iff}`
+      : t
+        ? [
+            t.type,
+            SIDES[t.side] ? L(...SIDES[t.side]!) : t.side,
+            t.alt !== null ? u.fAlt(t.alt) : "",
+            t.spd !== null ? u.fSpd(t.spd) : "",
+            fromCraft(t),
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : "";
   const air = !!c || t?.kind === "air";
   menu(x, y, name, info, [
-    actButton("Cibler", "nav.target", { name }, "ctx-target", (ok) => ok && closeMenu()),
+    // (designated to the pilot: selected on all his screens — PLAN-RADAR-AAA RD9)
+    ...(sp
+      ? []
+      : [actButton(L("Désigner au pilote", "Designate to the pilot"), "wp.designate", { id }, "ctx-designate", (ok) => ok && closeMenu())]),
+    actButton(L("Cibler", "Target"), "nav.target", { name, id }, "ctx-target", (ok) => ok && closeMenu()),
     ...(air
       ? [
-          actButton("Intercepter", "ap.traffic", { action: "intercept", name }, "ctx-intercept", (ok) => ok && closeMenu()),
-          actButton("Rejoindre en formation", "ap.traffic", { action: "join", name }, "ctx-join", (ok) => ok && closeMenu()),
-          actButton("Verrouiller", "wp.lock", { target: name }, "ctx-lock", (ok) => ok && closeMenu()),
+          actButton(
+            L("Intercepter", "Intercept"),
+            "ap.traffic",
+            { action: "intercept", name, id },
+            "ctx-intercept",
+            (ok) => ok && closeMenu(),
+          ),
+          actButton(
+            L("Rejoindre en formation", "Join in formation"),
+            "ap.traffic",
+            { action: "join", name, id },
+            "ctx-join",
+            (ok) => ok && closeMenu(),
+          ),
+          actButton(L("Verrouiller", "Lock"), "wp.lock", { target: name, id }, "ctx-lock", (ok) => ok && closeMenu()),
         ]
       : []),
   ]);
@@ -1880,7 +2276,44 @@ addEventListener("pagehide", () => {
 setInterval(() => {
   if (!document.hidden) refresh();
 }, 250);
-Object.assign(window, { __crew: { net, model, views, radio, actions, join, setView } });
+// ---- the console's language (docs/CREW.md): chosen in its header or its lobby, the browser's by default; every text
+// redrawn at once — the page's own, the views' names, the tiles, the panels, the MCP, the journal
+const langButton = $("lang-button"),
+  langPick = $<HTMLSelectElement>("lang-pick");
+function relabel() {
+  applyStatic();
+  langButton.textContent = lang() === "fr" ? "EN" : "FR";
+  langButton.title = L("Passer la console en anglais", "Switch the console to French");
+  langPick.value = lang();
+  stationsList();
+  // (built once with their words: built again)
+  const p = profile;
+  profile = null;
+  setProfile(p ?? "jet");
+  $("metrics").replaceChildren();
+  mcp.replaceChildren();
+  delete mcp.dataset.sig;
+  delete $("board").dataset.key;
+  delete $("traffic-summary").dataset.key;
+  const list = document.getElementById("contact-list");
+  if (list) delete list.dataset.signature;
+  rosterKey = pilotKey = alertKey = sysKey = fleetKey = "";
+  closeMenu();
+  setUnits(views.units);
+  controls();
+  syncRadio();
+  views.request();
+}
+onLang(relabel);
+langButton.addEventListener("click", () => setLang(lang() === "fr" ? "en" : "fr"));
+langPick.addEventListener("change", () => setLang(langPick.value === "en" ? "en" : "fr"));
+applyStatic();
+langButton.textContent = lang() === "fr" ? "EN" : "FR";
+langPick.value = lang();
+// (the world's runways — PLAN-RADAR-AAA RD11 —: from the simulator's site, one level up; a tile in, the views redrawn)
+setRunwaysBase(new URL("../runways/v1/", location.href).href);
+runwaysEvents.onLoad = () => views.request();
+Object.assign(window, { __crew: { net, model, views, radio, actions, join, setView, lang, setLang } });
 setUnits(views.units);
 setProfile("jet");
 setView("air");

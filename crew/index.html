@@ -5,85 +5,87 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#05090e" />
-    <title>Kerr — Équipage</title>
+    <title data-en="Kerr — Crew">Kerr — Équipage</title>
     <link rel="stylesheet" href="../src/crew/style.css" />
   </head>
   <body>
     <header class="masthead">
-      <a class="brand" href="../" aria-label="Ouvrir le simulateur Kerr"><b>K</b>ERR<small>ÉQUIPAGE</small></a>
+      <a class="brand" href="../" aria-label="Ouvrir le simulateur Kerr" data-en-aria-label="Open the Kerr simulator"><b>K</b>ERR<small data-en="CREW">ÉQUIPAGE</small></a>
       <label class="pilot-pick"
-        ><span class="sr">Pilote suivi</span><span id="pilot-dot" class="pilot-dot"></span
-        ><select id="pilot" aria-label="Pilote suivi"><option value="">En attente d’un pilote</option></select></label
+        ><span class="sr" data-en="Pilot followed">Pilote suivi</span><span id="pilot-dot" class="pilot-dot"></span
+        ><select id="pilot" aria-label="Pilote suivi" data-en-aria-label="Pilot followed"><option value="">En attente d’un pilote</option></select></label
       >
-      <div class="connection" title="État de la salle"><span id="status-dot"></span><span id="connection">Hors connexion</span></div>
-      <span id="act-state" class="act-state" title="Actions de l'équipage à bord du pilote suivi"></span>
+      <div class="connection" title="État de la salle" data-en-title="The room's state"><span id="status-dot"></span><span id="connection">Hors connexion</span></div>
+      <span id="act-state" class="act-state" title="Actions de l'équipage à bord du pilote suivi" data-en-title="The crew's actions aboard the pilot followed"></span>
       <div class="head-actions">
-        <button id="units-button" class="chip" type="button" aria-label="Unités affichées">MÉTRIQUE</button>
-        <button id="crew-button" class="chip" type="button" aria-expanded="false" aria-controls="crew-panel">Équipage</button>
+        <button id="lang-button" class="chip" type="button" aria-label="Langue de la console" data-en-aria-label="The console's language">EN</button>
+        <button id="units-button" class="chip" type="button" aria-label="Unités affichées" data-en-aria-label="Units shown">MÉTRIQUE</button>
+        <button id="crew-button" class="chip" type="button" aria-expanded="false" aria-controls="crew-panel" data-en="Crew">Équipage</button>
         <button id="room-button" class="chip primary-chip" type="button">Rejoindre</button>
       </div>
     </header>
     <div id="alerts" class="alerts" role="alert" aria-live="assertive"></div>
     <main>
-      <section class="workspace" aria-label="Instruments partagés">
-        <div id="metrics" class="metrics" aria-label="Mesures du pilote"></div>
+      <section class="workspace" aria-label="Instruments partagés" data-en-aria-label="Shared instruments">
+        <div id="metrics" class="metrics" aria-label="Mesures du pilote" data-en-aria-label="The pilot's measures"></div>
         <div class="toolbar">
           <div class="view-id"><span id="profile-badge" class="profile-badge"></span><h1 id="view-title">Tableau</h1><span id="freshness">En attente de données</span></div>
-          <div id="view-controls" class="view-controls" aria-label="Contrôles de la vue"></div>
+          <div id="view-controls" class="view-controls" aria-label="Contrôles de la vue" data-en-aria-label="The view's controls"></div>
         </div>
         <div class="stage">
-          <canvas id="instruments" tabindex="0" role="img" aria-label="Instruments du pilote suivi"></canvas>
+          <canvas id="instruments" tabindex="0" role="img" aria-label="Instruments du pilote suivi" data-en-aria-label="The followed pilot's instruments"></canvas>
           <div class="zoom">
-            <button id="zoom-out" type="button" aria-label="Dézoomer">−</button>
-            <button id="zoom-in" type="button" aria-label="Zoomer">+</button>
+            <button id="zoom-out" type="button" aria-label="Dézoomer" data-en-aria-label="Zoom out">−</button>
+            <button id="zoom-in" type="button" aria-label="Zoomer" data-en-aria-label="Zoom in">+</button>
           </div>
         </div>
-        <div id="mcp" class="mcp" aria-label="Pilote automatique (MCP)" hidden></div>
+        <div id="mcp" class="mcp" aria-label="Pilote automatique (MCP)" data-en-aria-label="Autopilot (MCP)" hidden></div>
         <div class="view-foot"><span id="view-note">Toucher un panneau pour l’ouvrir</span><span>Made with Natural Earth</span></div>
       </section>
-      <aside id="crew-panel" aria-label="Équipage et radio">
-        <div class="aside-head"><h2>Équipage</h2><button id="close-crew" type="button" aria-label="Fermer l’équipage">Fermer</button></div>
-        <section class="board" aria-label="Journal de bord">
-          <h3>Journal de bord</h3>
+      <aside id="crew-panel" aria-label="Équipage et radio" data-en-aria-label="Crew and radio">
+        <div class="aside-head"><h2 data-en="Crew">Équipage</h2><button id="close-crew" type="button" aria-label="Fermer l’équipage" data-en-aria-label="Close the crew panel" data-en="Close">Fermer</button></div>
+        <section class="board" aria-label="Journal de bord" data-en-aria-label="Log">
+          <h3 data-en="Log">Journal de bord</h3>
           <p id="crew-lock" class="lock-state"></p>
           <ol id="board"></ol>
         </section>
-        <form id="msg-form" class="msg-form" aria-label="Message à l’équipage">
-          <h3>Message à l’équipage</h3>
+        <form id="msg-form" class="msg-form" aria-label="Message à l’équipage" data-en-aria-label="Message to the crew">
+          <h3 data-en="Message to the crew">Message à l’équipage</h3>
           <div class="msg-row">
-            <input id="msg-text" maxlength="280" autocomplete="off" placeholder="Votre message au pilote" aria-label="Message au pilote" />
-            <button id="msg-send" type="submit">Envoyer</button>
+            <input id="msg-text" maxlength="280" autocomplete="off" placeholder="Votre message au pilote" aria-label="Message au pilote" data-en-placeholder="Your message to the pilot" data-en-aria-label="Message to the pilot" />
+            <button id="msg-send" type="submit" data-en="Send">Envoyer</button>
           </div>
           <p id="msg-state" class="muted small"></p>
         </form>
         <div id="members"></div>
         <p id="network-details" class="muted small"></p>
         <div id="traffic-summary" class="traffic-summary"></div>
-        <p class="muted small">
+        <p class="muted small" data-en="The players' positions, the real traffic, the mission's units and the ships are shared by the pilots. The radar's sensor mode shows only the tracks received from the pilot's radar.">
           Les positions des joueurs, le trafic réel, les unités de mission et les navires sont partagés par les pilotes. Le mode capteur du radar
           n’affiche que les pistes reçues du radar du pilote.
         </p>
       </aside>
     </main>
-    <nav id="views" aria-label="Vues de la console"></nav>
+    <nav id="views" aria-label="Vues de la console" data-en-aria-label="The console's views"></nav>
     <footer class="radio">
       <div class="radio-tools">
-        <button id="listen" class="chip" type="button" aria-pressed="false">Écouter</button>
-        <button id="microphone" class="chip" type="button" aria-pressed="false">Activer le micro</button>
-        <label class="talk-mode"><input id="toggle-talk" type="checkbox" /> <span class="long">Toucher pour parler</span><span class="short">Bascule</span></label>
+        <button id="listen" class="chip" type="button" aria-pressed="false" data-en="Listen">Écouter</button>
+        <button id="microphone" class="chip" type="button" aria-pressed="false" data-en="Turn the mic on">Activer le micro</button>
+        <label class="talk-mode"><input id="toggle-talk" type="checkbox" /> <span class="long" data-en="Tap to talk">Toucher pour parler</span><span class="short" data-en="Toggle">Bascule</span></label>
       </div>
-      <button id="talk" class="talk" type="button" aria-pressed="false" disabled><span class="talk-dot"></span><span id="talk-label">Maintenir pour parler</span></button>
-      <p id="radio-status" role="status">Écoutez la salle, puis activez votre microphone pour parler.</p>
+      <button id="talk" class="talk" type="button" aria-pressed="false" disabled><span class="talk-dot"></span><span id="talk-label" data-en="Hold to talk">Maintenir pour parler</span></button>
+      <p id="radio-status" role="status" data-en="Listen to the room, then turn your microphone on to talk.">Écoutez la salle, puis activez votre microphone pour parler.</p>
     </footer>
     <div id="notice" role="status" aria-live="polite"></div>
     <dialog id="lobby">
       <form id="join-form">
-        <p class="eyebrow">KERR / ÉQUIPAGE</p>
-        <h2>Rejoindre le vol.</h2>
-        <p class="muted">Tous les instruments du pilote, le trafic, la radio — sur ordinateur, tablette ou téléphone.</p>
-        <label>Votre nom<input id="name" name="name" autocomplete="nickname" maxlength="24" required /></label>
+        <p class="eyebrow" data-en="KERR / CREW">KERR / ÉQUIPAGE</p>
+        <h2 data-en="Join the flight.">Rejoindre le vol.</h2>
+        <p class="muted" data-en="All the pilot's instruments, the traffic, the radio — on a computer, a tablet or a phone.">Tous les instruments du pilote, le trafic, la radio — sur ordinateur, tablette ou téléphone.</p>
+        <label><span data-en="Language">Langue</span><select id="lang-pick" name="lang"><option value="fr">Français</option><option value="en">English</option></select></label>
+        <label><span data-en="Your name">Votre nom</span><input id="name" name="name" autocomplete="nickname" maxlength="24" required /></label>
         <label
-          >Code de la salle<input
+          ><span data-en="Room code">Code de la salle</span><input
             id="code"
             name="code"
             autocapitalize="characters"
@@ -93,16 +95,16 @@
             pattern="[A-Za-z2-9]{6}"
             required
         /></label>
-        <label>Poste<select id="station" name="station" aria-describedby="station-role"></select></label>
+        <label><span data-en="Station">Poste</span><select id="station" name="station" aria-describedby="station-role"></select></label>
         <p id="station-role" class="muted small"></p>
-        <label>Mot de passe <span class="muted">(si nécessaire)</span><input id="password" name="password" type="password" autocomplete="off" /></label>
+        <label><span data-en="Password">Mot de passe</span> <span class="muted" data-en="(if needed)">(si nécessaire)</span><input id="password" name="password" type="password" autocomplete="off" /></label>
         <p id="join-error" class="error" role="alert"></p>
-        <button id="join" class="primary" type="submit">Rejoindre l’équipage</button>
-        <button id="leave" type="button" hidden>Quitter la salle</button>
-        <button id="close-lobby" type="button" hidden>Retour aux instruments</button>
+        <button id="join" class="primary" type="submit" data-en="Join the crew">Rejoindre l’équipage</button>
+        <button id="leave" type="button" hidden data-en="Leave the room">Quitter la salle</button>
+        <button id="close-lobby" type="button" hidden data-en="Back to the instruments">Retour aux instruments</button>
       </form>
     </dialog>
-    <noscript>JavaScript est nécessaire pour rejoindre une salle et afficher ses instruments.</noscript>
+    <noscript>JavaScript est nécessaire pour rejoindre une salle et afficher ses instruments. / JavaScript is needed to join a room and show its instruments.</noscript>
     <script type="module" src="../src/crew/main.ts"></script>
   </body>
 </html>

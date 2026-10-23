@@ -10,6 +10,7 @@
 // Translation is physical: a proper acceleration (c²/M) on the Kerr geodesic (geodesic.ts), in the
 // scene's time. Attitude runs in the pilot's (wall-clock) seconds.
 
+import { AirbusLaw, type AirbusCtx, type AirbusOut } from "./a320/fbw";
 import { TUNING } from "./game/tuning";
 import { t } from "./i18n";
 import type { M3, V3 } from "./mounts";
@@ -144,6 +145,8 @@ export interface FlightContext {
     law?: "normal" | "direct";
     /** the normal load factor now [g]: the air's force up the craft's top over its weight */
     nz?: number;
+    /** an Airbus's laws (the A320's — src/a320/fbw.ts —: its pitch attitude, configuration, speed, height, law) */
+    airbus?: AirbusCtx;
   } | null;
   /** the sci-fi flight computer: the velocity it flies (local 3-velocity), the feed-forward against
    *  gravity and the air (local, proper acceleration), the attitude it holds (local), and the part of
@@ -167,6 +170,9 @@ export interface FlightContext {
   /** the main engine's answer this frame: the share of the way from its thrust to the throttle's
    *  (1 − e^(−dt/τ) over the frame's flight time; 1 or none: at once) */
   spoolK?: number;
+  /** the engines' thrust now as a share of `thrust` (the A320's FADEC — src/a320/fcs.ts —: its own spooling;
+   *  reversed < 0) — none: the throttle's, lagged by spoolK */
+  engineNow?: number;
   /** the thrust's direction on the ship's axes (x left, y up, z the nose; unit) — none: along the nose (the
    *  F-35B's swivelling nozzle and lift fan: controller/stovl.ts) */
   thrustDir?: V3;
@@ -357,6 +363,9 @@ export class FlightComputer {
   pitchTrim = 0;
   /** the load law's integral [g s]: the load the speed's bleed takes away, made up */
   nInt = 0;
+  /** an Airbus's laws (src/a320/fbw.ts) and what they asked last (their protections) */
+  airbus = new AirbusLaw();
+  airbusOut: AirbusOut | null = null;
   /** what fired last step (the sound follows it): the main engine's throttle as applied, the RCS
    *  (fraction of its authority, the push sideways in the ship's frame: + to its right), the
    *  attitude effort (angular acceleration / the most the wheels give, 0…1) */
@@ -380,6 +389,8 @@ export class FlightComputer {
     this.bankHold = null;
     this.pitchTrim = 0;
     this.nInt = 0;
+    this.airbus.reset();
+    this.airbusOut = null;
     this.fired = { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0, force: [0, 0, 0], torque: [0, 0, 0] };
   }
 
@@ -584,6 +595,31 @@ export class FlightComputer {
       if (manual[0] === 0) this.pitchTrim = clamp(this.pitchTrim - 2.5 * this.omega[0] * dt, -acc3[0], acc3[0]);
       for (let i = 0; i < 3; i++) want[i] = this.omega[i]! + (manual[i]! * acc3[i]! + (i === 0 ? this.pitchTrim : 0)) * dt;
       this.gammaHold = this.alphaHold = this.bankHold = null;
+    } else if (planeLaw && c.air!.airbus && !c.air!.ground) {
+      // an Airbus's normal or alternate law (src/a320/fbw.ts): the stick a load factor and a roll rate, the path and
+      // the bank held let go, its protections
+      const P = c.air!;
+      const o = this.airbus.step(
+        {
+          alpha: P.alpha,
+          beta: P.beta,
+          gamma: P.gamma,
+          bank: P.bank,
+          path: P.path,
+          speed: P.speed ?? 0,
+          mach: P.mach,
+          nz: P.nz ?? 1,
+          ground: P.ground,
+          gammaCmd: P.gammaCmd,
+          bankCmd: P.bankCmd,
+        },
+        P.airbus!,
+        { pitch: manual[0] / fine, roll: -manual[2] / fine, yaw: manual[1] / fine },
+        dt,
+      );
+      this.airbusOut = o;
+      for (let i = 0; i < 3; i++) want[i] = o.want[i]!;
+      this.gammaHold = this.alphaHold = this.bankHold = null;
     } else if (planeLaw) {
       // the plane: the stick asks for rates (pitch 20°/s, yaw 8°/s, roll 70°/s); let go, the flight
       // path is held — the climb angle it had (more lift in a bank), no sideslip (the rudder
@@ -768,6 +804,7 @@ export class FlightComputer {
     this.engineNow = c.thrust > 0 ? this.engineNow + (throttle - this.engineNow) * Math.min(Math.max(k, 0), 1) : 0;
     // (spooling down towards nothing: nothing below a millionth — not a denormal, read as 1e-283 g)
     if (throttle === 0 && this.engineNow < 1e-6) this.engineNow = 0;
+    if (c.engineNow !== undefined && c.thrust > 0) this.engineNow = c.engineNow;
     throttle = this.engineNow;
     const rcsAuth = TUNING.rcs * c.thrust;
     const rl = len(rcsC);

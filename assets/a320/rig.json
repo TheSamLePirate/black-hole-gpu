@@ -1,0 +1,4824 @@
+{
+ "source": "FlightGear A320-family (legoboyvdlp/A320-family, GPL v2), Models/Fuselage/res/A320-216.ac + CFM56.ac, fuselage.xml, a320.cfm.xml, A320-common.xml",
+ "frame": "ship: x left, y up, z nose; FlightGear model (x aft, y right, z up) + 0.83109 m up",
+ "nodes": [
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "AileronL"
+   ],
+   "name": "Left aileron",
+   "prop": "sim/multiplay/generic/float[6]",
+   "factor": -1.0,
+   "offset": 0.0,
+   "axis": [
+    0.936492,
+    0.093197,
+    -0.338079
+   ],
+   "center": [
+    13.2833,
+    2.642183,
+    -1.44774
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "AileronR"
+   ],
+   "name": "Right aileron",
+   "prop": "sim/multiplay/generic/float[7]",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    -0.936492,
+    0.093197,
+    -0.338079
+   ],
+   "center": [
+    -13.2833,
+    2.642183,
+    -1.44774
+   ]
+  },
+  {
+   "type": "select",
+   "parent": -1,
+   "objects": [
+    "Antenna1"
+   ],
+   "cond": [
+    "prop",
+    "sim/multiplay/generic/int[14]"
+   ]
+  },
+  {
+   "type": "select",
+   "parent": -1,
+   "objects": [
+    "Antenna2"
+   ],
+   "cond": [
+    "prop",
+    "sim/multiplay/generic/int[13]"
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "AOASensorL1"
+   ],
+   "name": "AOA Vane L1",
+   "prop": "fdm/jsbsim/aero/alpha-deg-fixed",
+   "table": [
+    [
+     -60.0,
+     85.0
+    ],
+    [
+     -35.0,
+     60.0
+    ],
+    [
+     0.0,
+     25.0
+    ],
+    [
+     25.0,
+     0.0
+    ],
+    [
+     60.0,
+     -35.0
+    ]
+   ],
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    1.97097,
+    2.37761,
+    11.0935
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "AOASensorL2"
+   ],
+   "name": "AOA Vane L2",
+   "prop": "fdm/jsbsim/aero/alpha-deg-fixed",
+   "table": [
+    [
+     -60.0,
+     85.0
+    ],
+    [
+     -35.0,
+     60.0
+    ],
+    [
+     0.0,
+     25.0
+    ],
+    [
+     25.0,
+     0.0
+    ],
+    [
+     60.0,
+     -35.0
+    ]
+   ],
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    1.81232,
+    1.66159,
+    12.0842
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "AOASensorR"
+   ],
+   "name": "AOA Vane R",
+   "prop": "fdm/jsbsim/aero/alpha-deg-fixed",
+   "table": [
+    [
+     -60.0,
+     -85.0
+    ],
+    [
+     -35.0,
+     -60.0
+    ],
+    [
+     0.0,
+     -25.0
+    ],
+    [
+     25.0,
+     0.0
+    ],
+    [
+     60.0,
+     35.0
+    ]
+   ],
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    -1.96202,
+    2.37761,
+    11.0935
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "ApuFlap"
+   ],
+   "name": "APU Flap",
+   "prop": "controls/apu/inlet-flap/position-norm",
+   "factor": -10.0,
+   "offset": 0.0,
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    -0.000173,
+    2.139421,
+    -15.4039
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "Cargo1",
+    "Cargo1.Inner"
+   ],
+   "name": "Cargo Fwd door rotate",
+   "prop": "sim/model/door-positions/cargofwd/position-norm",
+   "factor": 125.0,
+   "offset": 0.0,
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "center": [
+    -1.87925,
+    1.93825,
+    10.8477
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "Cargo2",
+    "Cargo2.Inner"
+   ],
+   "name": "Cargo Aft door rotate",
+   "prop": "sim/model/door-positions/cargoaft/position-norm",
+   "factor": 125.0,
+   "offset": 0.0,
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "center": [
+    -1.86904,
+    1.924575,
+    -3.64802
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "Cargo3",
+    "Cargo3.Inner"
+   ],
+   "name": "Cargo bulk door rotate",
+   "prop": "sim/model/door-positions/cargobulk/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.1,
+     0.0
+    ],
+    [
+     1.0,
+     55.0
+    ]
+   ],
+   "axis": [
+    -0.062627,
+    -0.000656,
+    0.998037
+   ],
+   "center": [
+    -1.53011,
+    1.43577,
+    -7.8423
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 10,
+   "objects": [
+    "Cargo3",
+    "Cargo3.Inner"
+   ],
+   "name": "Cargo bulk door translate",
+   "prop": "sim/model/door-positions/cargobulk/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.1,
+     0.025
+    ],
+    [
+     1.0,
+     0.05
+    ]
+   ],
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "DoorHingeL1"
+   ],
+   "name": "Door L1 hinge",
+   "prop": "sim/model/door-positions/doorl1/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     -10.0
+    ],
+    [
+     0.85,
+     -45.0
+    ],
+    [
+     1.0,
+     -70.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "center": [
+    1.5992,
+    2.86931,
+    14.2723
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 12,
+   "objects": [
+    "DoorHingeL1"
+   ],
+   "name": "Door L1 hinge",
+   "prop": "sim/model/door-positions/doorl1/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     -0.15
+    ],
+    [
+     1.0,
+     -0.15
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "DoorHingeL2"
+   ],
+   "name": "Door L2 hinge",
+   "prop": "sim/model/door-positions/doorl4/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     -10.0
+    ],
+    [
+     0.85,
+     -45.0
+    ],
+    [
+     1.0,
+     -70.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "center": [
+    1.55292,
+    2.869315,
+    -10.3658
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 14,
+   "objects": [
+    "DoorHingeL2"
+   ],
+   "name": "Door L2 hinge",
+   "prop": "sim/model/door-positions/doorl4/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     -0.15
+    ],
+    [
+     1.0,
+     -0.15
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "DoorHingeR1"
+   ],
+   "name": "Door R1 hinge",
+   "prop": "sim/model/door-positions/doorr1/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     10.0
+    ],
+    [
+     0.85,
+     45.0
+    ],
+    [
+     1.0,
+     70.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "center": [
+    -1.5992,
+    2.86931,
+    14.2723
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 16,
+   "objects": [
+    "DoorHingeR1"
+   ],
+   "name": "Door R1 hinge",
+   "prop": "sim/model/door-positions/doorr1/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     -0.15
+    ],
+    [
+     1.0,
+     -0.15
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "DoorHingeR2"
+   ],
+   "name": "Door R2 hinge",
+   "prop": "sim/model/door-positions/doorr4/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     10.0
+    ],
+    [
+     0.85,
+     45.0
+    ],
+    [
+     1.0,
+     70.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ],
+   "center": [
+    -1.55292,
+    2.869315,
+    -10.3658
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 18,
+   "objects": [
+    "DoorHingeR2"
+   ],
+   "name": "Door R2 hinge",
+   "prop": "sim/model/door-positions/doorr4/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     -0.15
+    ],
+    [
+     1.0,
+     -0.15
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": -1,
+   "objects": [
+    "DoorL1",
+    "DoorL1.Inner",
+    "DoorL1.Placards"
+   ],
+   "name": "Door L1 translate",
+   "prop": "sim/model/door-positions/doorl1/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     0.0
+    ],
+    [
+     1.0,
+     -1.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 20,
+   "objects": [
+    "DoorL1",
+    "DoorL1.Inner",
+    "DoorL1.Placards"
+   ],
+   "name": "Door L1 translate",
+   "prop": "sim/model/door-positions/doorl1/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     -0.225
+    ],
+    [
+     1.0,
+     -0.2
+    ]
+   ],
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": -1,
+   "objects": [
+    "DoorL4",
+    "DoorL4.Inner",
+    "DoorL4.Placards"
+   ],
+   "name": "Door L2 translate",
+   "prop": "sim/model/door-positions/doorl4/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     0.0
+    ],
+    [
+     1.0,
+     -1.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 22,
+   "objects": [
+    "DoorL4",
+    "DoorL4.Inner",
+    "DoorL4.Placards"
+   ],
+   "name": "Door L2 translate",
+   "prop": "sim/model/door-positions/doorl4/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     -0.25
+    ],
+    [
+     1.0,
+     -0.4
+    ]
+   ],
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": -1,
+   "objects": [
+    "DoorR1",
+    "DoorR1.Inner",
+    "DoorR1.Placards"
+   ],
+   "name": "Door R1 translate",
+   "prop": "sim/model/door-positions/doorr1/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     0.0
+    ],
+    [
+     1.0,
+     -1.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 24,
+   "objects": [
+    "DoorR1",
+    "DoorR1.Inner",
+    "DoorR1.Placards"
+   ],
+   "name": "Door R1 translate",
+   "prop": "sim/model/door-positions/doorr1/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     0.225
+    ],
+    [
+     1.0,
+     0.2
+    ]
+   ],
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": -1,
+   "objects": [
+    "DoorR4",
+    "DoorR4.Inner",
+    "DoorR4.Placards"
+   ],
+   "name": "Door R2 translate",
+   "prop": "sim/model/door-positions/doorr4/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     0.0
+    ],
+    [
+     1.0,
+     -1.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 26,
+   "objects": [
+    "DoorR4",
+    "DoorR4.Inner",
+    "DoorR4.Placards"
+   ],
+   "name": "Door R2 translate",
+   "prop": "sim/model/door-positions/doorr4/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     0.25
+    ],
+    [
+     1.0,
+     0.4
+    ]
+   ],
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "FairingL1"
+   ],
+   "name": "FlapL1Fairing",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.25,
+     7.0
+    ],
+    [
+     0.375,
+     9.5
+    ],
+    [
+     0.5,
+     13.5
+    ],
+    [
+     1.0,
+     22.5
+    ]
+   ],
+   "axis": [
+    -0.990605,
+    -0.136755,
+    0.0
+   ],
+   "center": [
+    5.04032,
+    1.45205,
+    1.35375
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "FairingL2"
+   ],
+   "name": "FlapL2FairingInner",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.2,
+     5.75
+    ],
+    [
+     0.5,
+     11.75
+    ],
+    [
+     0.75,
+     15.25
+    ],
+    [
+     1.0,
+     19.0
+    ]
+   ],
+   "axis": [
+    -0.993903,
+    -0.110255,
+    0.0
+   ],
+   "center": [
+    8.46311,
+    1.858054,
+    0.75735
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "FairingL3"
+   ],
+   "name": "FlapL2FairingOuter",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.2,
+     5.75
+    ],
+    [
+     0.5,
+     11.75
+    ],
+    [
+     0.75,
+     15.25
+    ],
+    [
+     1.0,
+     19.0
+    ]
+   ],
+   "axis": [
+    -0.993898,
+    -0.110302,
+    0.0
+   ],
+   "center": [
+    12.0651,
+    2.303508,
+    -0.60609
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "FairingR1"
+   ],
+   "name": "FlapR1Fairing",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.25,
+     -7.0
+    ],
+    [
+     0.375,
+     -9.5
+    ],
+    [
+     0.5,
+     -13.5
+    ],
+    [
+     1.0,
+     -22.5
+    ]
+   ],
+   "axis": [
+    0.990605,
+    -0.136755,
+    0.0
+   ],
+   "center": [
+    -5.04032,
+    1.45205,
+    1.35375
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "FairingR2"
+   ],
+   "name": "FlapR2FairingInner",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.2,
+     -5.75
+    ],
+    [
+     0.5,
+     -11.75
+    ],
+    [
+     0.75,
+     -15.25
+    ],
+    [
+     1.0,
+     -19.0
+    ]
+   ],
+   "axis": [
+    0.993903,
+    -0.110255,
+    0.0
+   ],
+   "center": [
+    -8.46311,
+    1.858054,
+    0.75735
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "FairingR3"
+   ],
+   "name": "FlapR2FairingOuter",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.2,
+     -5.75
+    ],
+    [
+     0.5,
+     -11.75
+    ],
+    [
+     0.75,
+     -15.25
+    ],
+    [
+     1.0,
+     -19.0
+    ]
+   ],
+   "axis": [
+    0.993898,
+    -0.110302,
+    0.0
+   ],
+   "center": [
+    -12.0651,
+    2.303508,
+    -0.60609
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "FlapL1"
+   ],
+   "name": "FlapL1",
+   "prop": "sim/multiplay/generic/float[12]",
+   "factor": -40.0,
+   "offset": 0.0,
+   "axis": [
+    0.988419,
+    0.151748,
+    -2.7e-05
+   ],
+   "center": [
+    1.96981,
+    1.1755,
+    0.40897
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 34,
+   "objects": [
+    "FlapL1"
+   ],
+   "name": "FlapL1",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     0.2
+    ],
+    [
+     1.0,
+     0.3
+    ]
+   ],
+   "axis": [
+    0.0,
+    -0.447214,
+    -0.894427
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "FlapL2"
+   ],
+   "name": "FlapL2",
+   "prop": "sim/multiplay/generic/float[12]",
+   "factor": -40.0,
+   "offset": 0.0,
+   "axis": [
+    0.940212,
+    0.100798,
+    -0.325332
+   ],
+   "center": [
+    6.44122,
+    1.859919,
+    0.40519
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 36,
+   "objects": [
+    "FlapL2"
+   ],
+   "name": "FlapL2",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     0.16
+    ],
+    [
+     1.0,
+     0.27
+    ]
+   ],
+   "axis": [
+    -0.17609,
+    -0.440225,
+    -0.880451
+   ]
+  },
+  {
+   "type": "select",
+   "parent": -1,
+   "objects": [
+    "MLGLockstayActuatorL1",
+    "MLGLockstayActuatorR1",
+    "MLGLockstayActuatorL2",
+    "MLGLockstayActuatorR2"
+   ],
+   "cond": [
+    "prop",
+    "fdm/jsbsim/zero"
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "FlapR1"
+   ],
+   "name": "FlapR1",
+   "prop": "sim/multiplay/generic/float[12]",
+   "factor": 40.0,
+   "offset": 0.0,
+   "axis": [
+    -0.988419,
+    0.151748,
+    -2.7e-05
+   ],
+   "center": [
+    -1.96981,
+    1.1755,
+    0.40897
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 39,
+   "objects": [
+    "FlapR1"
+   ],
+   "name": "FlapR1",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     0.2
+    ],
+    [
+     1.0,
+     0.3
+    ]
+   ],
+   "axis": [
+    0.0,
+    -0.447214,
+    -0.894427
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "FlapR2"
+   ],
+   "name": "FlapR2",
+   "prop": "sim/multiplay/generic/float[12]",
+   "factor": 40.0,
+   "offset": 0.0,
+   "axis": [
+    -0.940212,
+    0.100798,
+    -0.325332
+   ],
+   "center": [
+    -6.44122,
+    1.859919,
+    0.40519
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 41,
+   "objects": [
+    "FlapR2"
+   ],
+   "name": "FlapR2",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.5,
+     0.16
+    ],
+    [
+     1.0,
+     0.27
+    ]
+   ],
+   "axis": [
+    0.17609,
+    -0.440225,
+    -0.880451
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": -1,
+   "objects": [
+    "GearLeftDoorActuator"
+   ],
+   "center": [
+    0.294007,
+    0.58416,
+    2.40532
+   ],
+   "lock": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "t": [
+    0.852131,
+    -0.523329,
+    0.0
+   ],
+   "u": [
+    -0.523329,
+    -0.852131,
+    0.0
+   ],
+   "targetCenter": [
+    0.838963,
+    0.24948,
+    2.40532
+   ],
+   "target": 76,
+   "B0": 0.0,
+   "slave": -1
+  },
+  {
+   "type": "translate",
+   "parent": 43,
+   "objects": [
+    "GearLDoorActuatorRodL"
+   ],
+   "prop": "gear/gear[1]/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.1,
+     0.25
+    ],
+    [
+     0.2,
+     0.3
+    ],
+    [
+     0.8,
+     0.3
+    ],
+    [
+     0.9,
+     0.25
+    ],
+    [
+     1.0,
+     0.0
+    ]
+   ],
+   "axis": [
+    0.852126,
+    -0.523337,
+    0.0
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": -1,
+   "objects": [
+    "GearRightDoorActuator"
+   ],
+   "center": [
+    -0.294007,
+    0.58416,
+    2.40532
+   ],
+   "lock": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "t": [
+    -0.852131,
+    -0.523329,
+    0.0
+   ],
+   "u": [
+    -0.523329,
+    0.852131,
+    0.0
+   ],
+   "targetCenter": [
+    -0.838963,
+    0.24948,
+    2.40532
+   ],
+   "target": 77,
+   "B0": 0.0,
+   "slave": -1
+  },
+  {
+   "type": "translate",
+   "parent": 45,
+   "objects": [
+    "GearLDoorActuatorRodR"
+   ],
+   "prop": "gear/gear[2]/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.1,
+     0.25
+    ],
+    [
+     0.2,
+     0.3
+    ],
+    [
+     0.8,
+     0.3
+    ],
+    [
+     0.9,
+     0.25
+    ],
+    [
+     1.0,
+     0.0
+    ]
+   ],
+   "axis": [
+    -0.851124,
+    -0.524964,
+    0.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "LightWingL"
+   ],
+   "name": "Landing Light left",
+   "prop": "controls/lighting/landing-light-pos-l",
+   "factor": 90.0,
+   "offset": 0.0,
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    2.23648,
+    1.06814,
+    2.11118
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 47,
+   "objects": [
+    "LightWingL"
+   ],
+   "name": "Landing Light left",
+   "prop": "controls/lighting/landing-light-pos-l",
+   "factor": 0.025,
+   "offset": 0.0,
+   "axis": [
+    0.707107,
+    -0.707107,
+    0.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "LightWingR"
+   ],
+   "name": "Landing Light right",
+   "prop": "controls/lighting/landing-light-pos-r",
+   "factor": 90.0,
+   "offset": 0.0,
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    2.23648,
+    1.06814,
+    2.11118
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 49,
+   "objects": [
+    "LightWingR"
+   ],
+   "name": "Landing Light right",
+   "prop": "controls/lighting/landing-light-pos-r",
+   "factor": 0.025,
+   "offset": 0.0,
+   "axis": [
+    0.707107,
+    -0.707107,
+    0.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "Hstabs",
+    "ElevatorL",
+    "ElevatorR"
+   ],
+   "name": "Hstab",
+   "prop": "sim/multiplay/generic/float[9]",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    0.0,
+    3.317353,
+    -15.1266
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": 51,
+   "objects": [
+    "ElevatorL"
+   ],
+   "name": "Left elevator",
+   "prop": "sim/multiplay/generic/float[4]",
+   "factor": -1.0,
+   "offset": 0.0,
+   "axis": [
+    0.933171,
+    0.147549,
+    -0.327753
+   ],
+   "center": [
+    0.909268,
+    3.306597,
+    -15.5724
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": 51,
+   "objects": [
+    "ElevatorR"
+   ],
+   "name": "Right elevator",
+   "prop": "sim/multiplay/generic/float[5]",
+   "factor": -1.0,
+   "offset": 0.0,
+   "axis": [
+    0.933171,
+    -0.147549,
+    0.327753
+   ],
+   "center": [
+    -6.1085,
+    4.12868,
+    -17.3985
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "MLGFittingL",
+    "MLGFittingL.Placards",
+    "MLGWheelsL",
+    "MLGCablesL1"
+   ],
+   "prop": "gear/gear[1]/position-norm",
+   "table": [
+    [
+     0.2,
+     -81.11
+    ],
+    [
+     0.8,
+     0.0
+    ]
+   ],
+   "axis": [
+    0.015443,
+    -0.174362,
+    0.984561
+   ],
+   "center": [
+    3.84617,
+    1.59309,
+    1.35004
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": 54,
+   "objects": [
+    "MLGLockStayL1"
+   ],
+   "center": [
+    3.87645,
+    1.19543,
+    1.97681
+   ],
+   "lock": [
+    -0.13707,
+    0.497581,
+    -0.856519
+   ],
+   "t": [
+    -0.834781,
+    -0.523507,
+    -0.170531
+   ],
+   "u": [
+    -0.533247,
+    0.691631,
+    0.487128
+   ],
+   "targetCenter": [
+    3.23597,
+    0.79376,
+    1.84599
+   ],
+   "target": 108,
+   "B0": 0.05353529194535724,
+   "slaveCenter": [
+    3.47957,
+    0.91943,
+    1.88007
+   ],
+   "a": 0.49299935294075214,
+   "s": 0.27621613873921264,
+   "sigma0": -0.14918693860675747,
+   "slave": -1
+  },
+  {
+   "type": "rotate",
+   "parent": 54,
+   "objects": [
+    "SideStayL2"
+   ],
+   "prop": "gear/gear[1]/position-norm",
+   "table": [
+    [
+     0.2,
+     -81.11
+    ],
+    [
+     0.8,
+     0.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.170271,
+    -0.985397
+   ],
+   "center": [
+    3.71472,
+    0.04613,
+    1.33776
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": 56,
+   "objects": [
+    "SideStayL2"
+   ],
+   "center": [
+    3.71481,
+    0.04623,
+    1.33776
+   ],
+   "lock": [
+    0.978743,
+    0.2012,
+    -0.039747
+   ],
+   "t": [
+    -0.152895,
+    0.844996,
+    0.51245
+   ],
+   "u": [
+    0.136691,
+    -0.49548,
+    0.857797
+   ],
+   "targetCenter": [
+    2.77511,
+    1.27874,
+    2.19175
+   ],
+   "target": 106,
+   "B0": 0.0,
+   "slave": -1
+  },
+  {
+   "type": "locked-track",
+   "parent": 57,
+   "objects": [
+    "SideStayL2"
+   ],
+   "center": [
+    3.71481,
+    0.04623,
+    1.33776
+   ],
+   "lock": [
+    -0.13707,
+    0.497581,
+    -0.856519
+   ],
+   "t": [
+    -0.530217,
+    0.693525,
+    0.487743
+   ],
+   "u": [
+    0.836709,
+    0.520996,
+    0.168764
+   ],
+   "targetCenter": [
+    2.77511,
+    1.27874,
+    2.19175
+   ],
+   "target": -1,
+   "B0": 0.009275779229517804,
+   "slaveCenter": [
+    3.22299,
+    0.70343,
+    1.79538
+   ],
+   "a": 0.9397950929857,
+   "s": 0.8298718379364367,
+   "sigma0": -0.01978025319302068,
+   "slave": -1
+  },
+  {
+   "type": "locked-track",
+   "parent": 54,
+   "objects": [
+    "MLGTorqueLinkL1"
+   ],
+   "center": [
+    3.87163,
+    -0.53772,
+    1.40821
+   ],
+   "lock": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "t": [
+    0.0,
+    -0.980905,
+    -0.194485
+   ],
+   "u": [
+    0.0,
+    -0.194485,
+    0.980905
+   ],
+   "targetCenter": [
+    3.87113,
+    -1.17049,
+    1.28275
+   ],
+   "target": 61,
+   "B0": 0.6386671201363008,
+   "slaveCenter": [
+    3.85151,
+    -0.90722,
+    1.58278
+   ],
+   "a": 0.409157364958765,
+   "s": 0.3996423878919755,
+   "sigma0": -1.2951301092594147,
+   "slave": 60
+  },
+  {
+   "type": "slave",
+   "parent": 59,
+   "objects": [
+    "MLGTorqueLinkL2"
+   ],
+   "master": 59
+  },
+  {
+   "type": "translate",
+   "parent": 54,
+   "objects": [
+    "MLGSlidingTubeAxleL",
+    "MLGWheelsL",
+    "MLGCablesL2"
+   ],
+   "name": "Compression (Left)",
+   "prop": "gear/gear[1]/compression-norm",
+   "factor": -0.3048,
+   "offset": 0.0,
+   "axis": [
+    -0.019123,
+    -0.990408,
+    -0.136846
+   ]
+  },
+  {
+   "type": "spin",
+   "parent": 61,
+   "objects": [
+    "MLGWheelsL"
+   ],
+   "name": "Tire rotation (Left)",
+   "prop": "gear/gear[1]/rollspeed-ms",
+   "factor": 17.2338866369,
+   "offset": 0.0,
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    3.87098,
+    -1.19687,
+    1.12983
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": 54,
+   "objects": [
+    "MLGSlaveLinkL1"
+   ],
+   "center": [
+    3.87165,
+    -0.50784,
+    1.09482
+   ],
+   "lock": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "t": [
+    0.0,
+    -0.993491,
+    -0.113912
+   ],
+   "u": [
+    0.0,
+    0.113912,
+    -0.993491
+   ],
+   "targetCenter": [
+    3.87137,
+    -1.11495,
+    1.02521
+   ],
+   "target": 61,
+   "B0": 0.5258878014237092,
+   "slaveCenter": [
+    3.87234,
+    -0.78812,
+    0.886121
+   ],
+   "a": 0.34944617196501077,
+   "s": 0.35519648044568247,
+   "sigma0": -1.0424046976444172,
+   "slave": 64
+  },
+  {
+   "type": "slave",
+   "parent": 63,
+   "objects": [
+    "MLGSlaveLinkL2"
+   ],
+   "master": 63
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "MLGFittingR",
+    "MLGFittingR.Placards",
+    "MLGWheelsR",
+    "MLGCablesR1"
+   ],
+   "prop": "gear/gear[2]/position-norm",
+   "table": [
+    [
+     0.2,
+     81.11
+    ],
+    [
+     0.8,
+     0.0
+    ]
+   ],
+   "axis": [
+    -0.015443,
+    -0.174362,
+    0.984561
+   ],
+   "center": [
+    -3.84613,
+    1.59308,
+    1.35004
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": 65,
+   "objects": [
+    "MLGLockStayR1"
+   ],
+   "center": [
+    -3.87645,
+    1.19543,
+    1.97681
+   ],
+   "lock": [
+    0.13707,
+    -0.497581,
+    0.856519
+   ],
+   "t": [
+    0.824816,
+    -0.421495,
+    -0.376857
+   ],
+   "u": [
+    0.548535,
+    0.758126,
+    0.352638
+   ],
+   "targetCenter": [
+    -3.24055,
+    0.79599,
+    1.8464
+   ],
+   "target": 114,
+   "B0": 0.05261726893271871,
+   "slaveCenter": [
+    -3.47957,
+    0.91943,
+    1.88007
+   ],
+   "a": 0.49299935294075214,
+   "s": 0.27111190106669975,
+   "sigma0": -0.1484005977890135,
+   "slave": -1
+  },
+  {
+   "type": "rotate",
+   "parent": 65,
+   "objects": [
+    "SideStayR2"
+   ],
+   "prop": "gear/gear[2]/position-norm",
+   "table": [
+    [
+     0.2,
+     81.11
+    ],
+    [
+     0.8,
+     0.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.170271,
+    -0.985397
+   ],
+   "center": [
+    -3.71472,
+    0.04613,
+    1.33776
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": 67,
+   "objects": [
+    "SideStayR2"
+   ],
+   "center": [
+    -3.71481,
+    0.04623,
+    1.33776
+   ],
+   "lock": [
+    0.978743,
+    -0.2012,
+    0.039747
+   ],
+   "t": [
+    -0.152895,
+    -0.844996,
+    -0.51245
+   ],
+   "u": [
+    0.136691,
+    0.49548,
+    -0.857797
+   ],
+   "targetCenter": [
+    -2.77511,
+    1.27874,
+    2.19175
+   ],
+   "target": 112,
+   "B0": 0.0,
+   "slave": -1
+  },
+  {
+   "type": "locked-track",
+   "parent": 68,
+   "objects": [
+    "SideStayR2"
+   ],
+   "center": [
+    -3.71481,
+    0.04623,
+    1.33776
+   ],
+   "lock": [
+    0.13707,
+    0.497581,
+    -0.856519
+   ],
+   "t": [
+    0.530217,
+    0.693525,
+    0.487743
+   ],
+   "u": [
+    0.836709,
+    -0.520996,
+    -0.168764
+   ],
+   "targetCenter": [
+    -2.77511,
+    1.27874,
+    2.19175
+   ],
+   "target": -1,
+   "B0": 0.009275779229517804,
+   "slaveCenter": [
+    -3.22299,
+    0.70343,
+    1.79538
+   ],
+   "a": 0.9397950929857,
+   "s": 0.8298718379364367,
+   "sigma0": -0.01978025319302068,
+   "slave": -1
+  },
+  {
+   "type": "locked-track",
+   "parent": 65,
+   "objects": [
+    "MLGTorqueLinkR1"
+   ],
+   "center": [
+    -3.87163,
+    -0.53772,
+    1.40821
+   ],
+   "lock": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "t": [
+    0.0,
+    -0.980905,
+    -0.194485
+   ],
+   "u": [
+    0.0,
+    -0.194485,
+    0.980905
+   ],
+   "targetCenter": [
+    -3.87113,
+    -1.17049,
+    1.28275
+   ],
+   "target": 72,
+   "B0": 0.6386671201363008,
+   "slaveCenter": [
+    -3.85151,
+    -0.90722,
+    1.58278
+   ],
+   "a": 0.409157364958765,
+   "s": 0.3996423878919755,
+   "sigma0": -1.2951301092594147,
+   "slave": 71
+  },
+  {
+   "type": "slave",
+   "parent": 70,
+   "objects": [
+    "MLGTorqueLinkR2"
+   ],
+   "master": 70
+  },
+  {
+   "type": "translate",
+   "parent": 65,
+   "objects": [
+    "MLGSlidingTubeAxleR",
+    "MLGWheelsR",
+    "MLGCablesR2"
+   ],
+   "name": "Compression (Right)",
+   "prop": "gear/gear[2]/compression-norm",
+   "factor": -0.3048,
+   "offset": 0.0,
+   "axis": [
+    0.019123,
+    -0.990408,
+    -0.136847
+   ]
+  },
+  {
+   "type": "spin",
+   "parent": 72,
+   "objects": [
+    "MLGWheelsR"
+   ],
+   "name": "Tire rotation (Right)",
+   "prop": "gear/gear[2]/rollspeed-ms",
+   "factor": 17.2338866369,
+   "offset": 0.0,
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    -3.85001,
+    -1.19687,
+    1.12983
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": 65,
+   "objects": [
+    "MLGSlaveLinkR1"
+   ],
+   "center": [
+    -3.87165,
+    -0.50784,
+    1.09482
+   ],
+   "lock": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "t": [
+    0.0,
+    -0.993491,
+    -0.113912
+   ],
+   "u": [
+    0.0,
+    0.113912,
+    -0.993491
+   ],
+   "targetCenter": [
+    -3.87137,
+    -1.11495,
+    1.02521
+   ],
+   "target": 72,
+   "B0": 0.5258878014237092,
+   "slaveCenter": [
+    -3.87234,
+    -0.78812,
+    0.886121
+   ],
+   "a": 0.34944617196501077,
+   "s": 0.35519648044568247,
+   "sigma0": -1.0424046976444172,
+   "slave": 75
+  },
+  {
+   "type": "slave",
+   "parent": 74,
+   "objects": [
+    "MLGSlaveLinkR2"
+   ],
+   "master": 74
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "MLGGearDoorL",
+    "MLGGearDoorL.Inner"
+   ],
+   "prop": "systems/hydraulic/gear/door-left",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     1.0,
+     -90.0
+    ]
+   ],
+   "axis": [
+    -1e-06,
+    -0.000788,
+    1.0
+   ],
+   "center": [
+    0.254655,
+    0.25485,
+    0.959303
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "MLGGearDoorR",
+    "MLGGearDoorR.Inner"
+   ],
+   "prop": "systems/hydraulic/gear/door-right",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     1.0,
+     90.0
+    ]
+   ],
+   "axis": [
+    1e-06,
+    -0.000788,
+    1.0
+   ],
+   "center": [
+    -0.254655,
+    0.25485,
+    0.959303
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "MLGWingDoorL2",
+    "MLGWingDoorL2.Inner"
+   ],
+   "prop": "gear/gear[1]/position-norm",
+   "table": [
+    [
+     0.2,
+     0.0
+    ],
+    [
+     0.8,
+     -121.5
+    ]
+   ],
+   "axis": [
+    -0.041186,
+    0.106754,
+    -0.993432
+   ],
+   "center": [
+    3.97265,
+    1.33076,
+    1.92859
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "MLGWingDoorR2",
+    "MLGWingDoorR2.Inner"
+   ],
+   "prop": "gear/gear[2]/position-norm",
+   "table": [
+    [
+     0.2,
+     0.0
+    ],
+    [
+     0.8,
+     121.5
+    ]
+   ],
+   "axis": [
+    0.041186,
+    0.106754,
+    -0.993432
+   ],
+   "center": [
+    -3.97026,
+    1.33076,
+    1.92859
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "NLGAftDoorL",
+    "NLGAftDoorL.Inner"
+   ],
+   "prop": "gear/gear[0]/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.2,
+     55.0
+    ],
+    [
+     0.8,
+     55.0
+    ],
+    [
+     1.0,
+     55.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "center": [
+    0.51956,
+    0.47292,
+    13.4018
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 80,
+   "objects": [
+    "NLGAftDoorL",
+    "NLGAftDoorL.Inner"
+   ],
+   "prop": "gear/gear[0]/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.8,
+     0.04
+    ]
+   ],
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "NLGAftDoorR",
+    "NLGAftDoorR.Inner"
+   ],
+   "prop": "gear/gear[0]/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.2,
+     55.0
+    ],
+    [
+     0.8,
+     55.0
+    ],
+    [
+     1.0,
+     55.0
+    ]
+   ],
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "center": [
+    -0.51686,
+    0.47292,
+    13.4018
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 82,
+   "objects": [
+    "NLGAftDoorR",
+    "NLGAftDoorR.Inner"
+   ],
+   "prop": "gear/gear[0]/position-norm",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.8,
+     0.04
+    ]
+   ],
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": -1,
+   "objects": [
+    "NLGDragStrutAssembly1"
+   ],
+   "center": [
+    8.1e-05,
+    1.47503,
+    14.6646
+   ],
+   "lock": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "t": [
+    0.0,
+    -0.839352,
+    -0.543588
+   ],
+   "u": [
+    0.0,
+    0.543588,
+    -0.839352
+   ],
+   "targetCenter": [
+    0.00059,
+    -0.1018,
+    13.6434
+   ],
+   "target": 88,
+   "B0": 0.00028840991760649984,
+   "slaveCenter": [
+    8e-05,
+    0.40983,
+    13.9746
+   ],
+   "a": 1.2691536707589823,
+   "s": 0.6094743284175309,
+   "sigma0": -0.0008889873421558114,
+   "slave": 85
+  },
+  {
+   "type": "slave",
+   "parent": 84,
+   "objects": [
+    "NLGDragStrutAssembly2"
+   ],
+   "master": 84
+  },
+  {
+   "type": "locked-track",
+   "parent": 85,
+   "objects": [
+    "NLGLockStay2"
+   ],
+   "center": [
+    -0.000205,
+    0.40769,
+    13.9064
+   ],
+   "lock": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "t": [
+    0.0,
+    0.356921,
+    -0.934135
+   ],
+   "u": [
+    0.0,
+    0.934135,
+    0.356921
+   ],
+   "targetCenter": [
+    7e-05,
+    0.55636,
+    13.5173
+   ],
+   "target": 88,
+   "B0": 0.02125081351092027,
+   "slaveCenter": [
+    7e-05,
+    0.48121,
+    13.701
+   ],
+   "a": 0.21816146778246526,
+   "s": 0.1984772342108788,
+   "sigma0": -0.044609569730474696,
+   "slave": 87
+  },
+  {
+   "type": "slave",
+   "parent": 86,
+   "objects": [
+    "NLGLockStay1"
+   ],
+   "master": 86
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "NLGFitting",
+    "NLGFitting.Placards",
+    "NLGFittingLower",
+    "NLGFittingLower.Placards"
+   ],
+   "prop": "gear/gear[0]/position-norm",
+   "table": [
+    [
+     0.2,
+     90.0
+    ],
+    [
+     0.8,
+     0.0
+    ]
+   ],
+   "axis": [
+    -1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    0.47053,
+    0.63562,
+    13.3241
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": 88,
+   "objects": [
+    "NLGSlidingTubeAxle",
+    "NLGWheels",
+    "NLGFittingLower",
+    "NLGFittingLower.Placards"
+   ],
+   "name": "Steering (Nose)",
+   "prop": "sim/multiplay/generic/float[1]",
+   "factor": 75.0,
+   "offset": 0.0,
+   "axis": [
+    -0.087299,
+    -0.985025,
+    0.148679
+   ],
+   "center": [
+    0.027617,
+    -0.46344,
+    13.5256
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 89,
+   "objects": [
+    "NLGSlidingTubeAxle",
+    "NLGWheels"
+   ],
+   "name": "Compression (Nose)",
+   "prop": "gear/gear[0]/compression-norm",
+   "factor": -0.3048,
+   "offset": 0.0,
+   "axis": [
+    6.9e-05,
+    -0.988545,
+    0.150926
+   ]
+  },
+  {
+   "type": "spin",
+   "parent": 90,
+   "objects": [
+    "NLGWheels"
+   ],
+   "name": "Tire rotation (nose)",
+   "prop": "gear/gear[0]/rollspeed-ms",
+   "factor": 25.3633375446,
+   "offset": 0.0,
+   "axis": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "center": [
+    0.0,
+    -1.31294,
+    13.6545
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": 89,
+   "objects": [
+    "NLGTorqueLink1"
+   ],
+   "center": [
+    0.006419,
+    -0.69589,
+    13.468
+   ],
+   "lock": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "t": [
+    0.0,
+    -0.984644,
+    0.174573
+   ],
+   "u": [
+    0.0,
+    -0.174573,
+    -0.984644
+   ],
+   "targetCenter": [
+    0.004744,
+    -1.26556,
+    13.569
+   ],
+   "target": 90,
+   "B0": 0.7188229844744307,
+   "slaveCenter": [
+    0.005584,
+    -1.02619,
+    13.2685
+   ],
+   "a": 0.3858743801096415,
+   "s": 0.38418609097675677,
+   "sigma0": -1.4414975637521015,
+   "slave": 93
+  },
+  {
+   "type": "slave",
+   "parent": 92,
+   "objects": [
+    "NLGTorqueLink2"
+   ],
+   "master": 92
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "NLGForewardDoorL",
+    "NLGForewardDoorL.Inner"
+   ],
+   "prop": "systems/hydraulic/gear/door-nose",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     1.0,
+     -73.0
+    ]
+   ],
+   "axis": [
+    -0.000254,
+    -0.083301,
+    -0.996524
+   ],
+   "center": [
+    0.52032,
+    0.63808,
+    15.6204
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 94,
+   "objects": [
+    "NLGForewardDoorL",
+    "NLGForewardDoorL.Inner"
+   ],
+   "prop": "systems/hydraulic/gear/door-nose",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.04
+    ]
+   ],
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "NLGForewardDoorR",
+    "NLGForewardDoorR.Inner"
+   ],
+   "prop": "systems/hydraulic/gear/door-nose",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     1.0,
+     73.0
+    ]
+   ],
+   "axis": [
+    0.000254,
+    -0.083301,
+    -0.996524
+   ],
+   "center": [
+    -0.51763,
+    0.63808,
+    15.6204
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 96,
+   "objects": [
+    "NLGForewardDoorR",
+    "NLGForewardDoorR.Inner"
+   ],
+   "prop": "systems/hydraulic/gear/door-nose",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     1.0,
+     0.04
+    ]
+   ],
+   "axis": [
+    0.0,
+    1.0,
+    0.0
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "OutflowValveDoor1"
+   ],
+   "name": "Outflow Valve Aft Flap",
+   "prop": "systems/pressurization/outflowpos-norm",
+   "factor": -75.0,
+   "offset": 0.0,
+   "axis": [
+    0.591792,
+    -0.806091,
+    0.000272
+   ],
+   "center": [
+    -1.53631,
+    1.71667,
+    -9.86024
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "OutflowValveDoor2"
+   ],
+   "name": "Outflow Valve Aft Flap",
+   "prop": "systems/pressurization/outflowpos-norm",
+   "factor": 75.0,
+   "offset": 0.0,
+   "axis": [
+    -0.629562,
+    0.776951,
+    -0.000291
+   ],
+   "center": [
+    -1.27348,
+    1.44964,
+    -10.197
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "RatDoorL",
+    "RatDoorL.Inner"
+   ],
+   "name": "RAT Door left",
+   "prop": "systems/hydraulic/sources/rat/door-position",
+   "factor": -105.0,
+   "offset": 0.0,
+   "axis": [
+    0.001708,
+    0.01027,
+    -0.999946
+   ],
+   "center": [
+    1.75372,
+    0.43283,
+    3.55938
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "RatDoorR",
+    "RatDoorR.Inner"
+   ],
+   "name": "RAT Door right",
+   "prop": "systems/hydraulic/sources/rat/door-position",
+   "factor": 135.0,
+   "offset": 0.0,
+   "axis": [
+    0.000884,
+    0.00605,
+    -0.999981
+   ],
+   "center": [
+    1.53239,
+    0.2882,
+    3.55938
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "Rudder"
+   ],
+   "name": "Rudder Animation",
+   "prop": "sim/multiplay/generic/float[8]",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.001,
+    0.918206,
+    -0.396102
+   ],
+   "center": [
+    -0.001397,
+    6.52892,
+    -15.6479
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "RatSpinner",
+    "Rat"
+   ],
+   "name": "RAT Deploy",
+   "prop": "systems/hydraulic/sources/rat/arm-position",
+   "factor": -90.0,
+   "offset": 90.0,
+   "axis": [
+    -0.965936,
+    -0.258783,
+    0.0
+   ],
+   "center": [
+    1.68915,
+    0.44336,
+    2.58751
+   ]
+  },
+  {
+   "type": "spin",
+   "parent": 103,
+   "objects": [
+    "RatSpinner"
+   ],
+   "name": "RAT Spin",
+   "prop": "systems/hydraulic/sources/rat/rat-speed-rpm",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "center": [
+    1.7928,
+    -0.13665,
+    2.78737
+   ],
+   "cond": [
+    "greater-than",
+    [
+     "prop",
+     "systems/hydraulic/sources/rat/arm-position"
+    ],
+    [
+     "val",
+     0.8
+    ]
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": -1,
+   "objects": [
+    "SideStayL1"
+   ],
+   "center": [
+    2.77511,
+    1.27874,
+    2.19175
+   ],
+   "lock": [
+    -0.978743,
+    -0.2012,
+    0.039747
+   ],
+   "t": [
+    0.152895,
+    -0.844996,
+    -0.51245
+   ],
+   "u": [
+    0.136691,
+    -0.49548,
+    0.857797
+   ],
+   "targetCenter": [
+    3.71481,
+    0.04623,
+    1.33776
+   ],
+   "target": 58,
+   "B0": 0.0,
+   "slave": -1
+  },
+  {
+   "type": "locked-track",
+   "parent": 105,
+   "objects": [
+    "SideStayL1"
+   ],
+   "center": [
+    2.77511,
+    1.27874,
+    2.19175
+   ],
+   "lock": [
+    0.13707,
+    -0.497581,
+    0.856519
+   ],
+   "t": [
+    0.530217,
+    -0.693525,
+    -0.487743
+   ],
+   "u": [
+    0.836709,
+    0.520996,
+    0.168764
+   ],
+   "targetCenter": [
+    3.71481,
+    0.04623,
+    1.33776
+   ],
+   "target": 54,
+   "B0": 0.010504473963532898,
+   "slaveCenter": [
+    3.22299,
+    0.70343,
+    1.79538
+   ],
+   "a": 0.8298718379364367,
+   "s": 0.9397950929857,
+   "sigma0": -0.01978025319302068,
+   "slave": -1
+  },
+  {
+   "type": "select",
+   "parent": 106,
+   "objects": [
+    "MLGLockstayActuatorL1",
+    "MLGLockstayActuatorR1",
+    "MLGLockstayActuatorL2",
+    "MLGLockstayActuatorR2"
+   ],
+   "cond": [
+    "prop",
+    "fdm/jsbsim/zero"
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": 106,
+   "objects": [
+    "MLGLockStayL2"
+   ],
+   "center": [
+    3.23597,
+    0.79376,
+    1.84599
+   ],
+   "lock": [
+    0.13707,
+    -0.497581,
+    0.856519
+   ],
+   "t": [
+    0.834781,
+    0.523507,
+    0.170531
+   ],
+   "u": [
+    -0.533247,
+    0.691631,
+    0.487128
+   ],
+   "targetCenter": [
+    3.87645,
+    1.19543,
+    1.97681
+   ],
+   "target": 55,
+   "B0": 0.09565164666139882,
+   "slaveCenter": [
+    3.47957,
+    0.91943,
+    1.88007
+   ],
+   "a": 0.27621613873921264,
+   "s": 0.49299935294075214,
+   "sigma0": -0.14918693860675747,
+   "slave": -1
+  },
+  {
+   "type": "select",
+   "parent": 108,
+   "objects": [
+    "MLGLockstayActuatorL1",
+    "MLGLockstayActuatorR1",
+    "MLGLockstayActuatorL2",
+    "MLGLockstayActuatorR2"
+   ],
+   "cond": [
+    "prop",
+    "fdm/jsbsim/zero"
+   ]
+  },
+  {
+   "type": "select",
+   "parent": -1,
+   "objects": [
+    "Sharklet",
+    "navglass.sharklet"
+   ],
+   "cond": [
+    "prop",
+    "sim/multiplay/generic/int[12]"
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": -1,
+   "objects": [
+    "SideStayR1"
+   ],
+   "center": [
+    -2.77511,
+    1.27874,
+    2.19175
+   ],
+   "lock": [
+    -0.978743,
+    0.2012,
+    -0.039747
+   ],
+   "t": [
+    0.152895,
+    0.844996,
+    0.51245
+   ],
+   "u": [
+    0.136691,
+    0.49548,
+    -0.857797
+   ],
+   "targetCenter": [
+    -3.71481,
+    0.04623,
+    1.33776
+   ],
+   "target": 69,
+   "B0": 0.0,
+   "slave": -1
+  },
+  {
+   "type": "locked-track",
+   "parent": 111,
+   "objects": [
+    "SideStayR1"
+   ],
+   "center": [
+    -2.77511,
+    1.27874,
+    2.19175
+   ],
+   "lock": [
+    -0.13707,
+    -0.497581,
+    0.856519
+   ],
+   "t": [
+    -0.530217,
+    -0.693525,
+    -0.487743
+   ],
+   "u": [
+    0.836709,
+    -0.520996,
+    -0.168764
+   ],
+   "targetCenter": [
+    -3.71481,
+    0.04623,
+    1.33776
+   ],
+   "target": 65,
+   "B0": 0.010504473963532898,
+   "slaveCenter": [
+    -3.22299,
+    0.70343,
+    1.79538
+   ],
+   "a": 0.8298718379364367,
+   "s": 0.9397950929857,
+   "sigma0": -0.01978025319302068,
+   "slave": -1
+  },
+  {
+   "type": "select",
+   "parent": 112,
+   "objects": [
+    "MLGLockstayActuatorL1",
+    "MLGLockstayActuatorR1",
+    "MLGLockstayActuatorL2",
+    "MLGLockstayActuatorR2"
+   ],
+   "cond": [
+    "prop",
+    "fdm/jsbsim/zero"
+   ]
+  },
+  {
+   "type": "locked-track",
+   "parent": 112,
+   "objects": [
+    "MLGLockStayR2"
+   ],
+   "center": [
+    -3.24055,
+    0.79599,
+    1.8464
+   ],
+   "lock": [
+    -0.13707,
+    0.497581,
+    -0.856519
+   ],
+   "t": [
+    -0.824816,
+    0.421495,
+    0.376857
+   ],
+   "u": [
+    0.548535,
+    0.758126,
+    0.352638
+   ],
+   "targetCenter": [
+    -3.87645,
+    1.19543,
+    1.97681
+   ],
+   "target": 66,
+   "B0": 0.09578332885629177,
+   "slaveCenter": [
+    -3.47957,
+    0.91943,
+    1.88007
+   ],
+   "a": 0.27111190106669975,
+   "s": 0.49299935294075214,
+   "sigma0": -0.1484005977890135,
+   "slave": -1
+  },
+  {
+   "type": "select",
+   "parent": 114,
+   "objects": [
+    "MLGLockstayActuatorL1",
+    "MLGLockstayActuatorR1",
+    "MLGLockstayActuatorL2",
+    "MLGLockstayActuatorR2"
+   ],
+   "cond": [
+    "prop",
+    "fdm/jsbsim/zero"
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SlatL1"
+   ],
+   "name": "Left inbd slats",
+   "prop": "sim/multiplay/generic/float[11]",
+   "factor": -27.0,
+   "offset": 0.0,
+   "axis": [
+    -0.89575,
+    -0.06254,
+    0.440137
+   ],
+   "center": [
+    5.19121,
+    1.36979,
+    3.79913
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SlatL2"
+   ],
+   "name": "Left otbd slats",
+   "prop": "sim/multiplay/generic/float[11]",
+   "factor": -27.0,
+   "offset": 0.0,
+   "axis": [
+    -0.885915,
+    -0.090854,
+    0.454863
+   ],
+   "center": [
+    16.34866,
+    2.63979,
+    -1.76797
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SlatR1"
+   ],
+   "name": "Right inbd slats",
+   "prop": "sim/multiplay/generic/float[11]",
+   "factor": 27.0,
+   "offset": 0.0,
+   "axis": [
+    0.89575,
+    -0.06254,
+    0.440137
+   ],
+   "center": [
+    -5.1891,
+    1.36979,
+    3.79913
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SlatR2"
+   ],
+   "name": "Right otbd slats",
+   "prop": "sim/multiplay/generic/float[11]",
+   "factor": 27.0,
+   "offset": 0.0,
+   "axis": [
+    0.885914,
+    -0.090854,
+    0.454865
+   ],
+   "center": [
+    -16.3465,
+    2.63979,
+    -1.76797
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerActuatorL1"
+   ],
+   "prop": "systems/fcs/spoiler-l1/final-deg",
+   "factor": -0.675,
+   "offset": 0.0,
+   "axis": [
+    -0.988081,
+    -0.149498,
+    -0.036678
+   ],
+   "center": [
+    5.41613,
+    1.820159,
+    1.23482
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 120,
+   "objects": [
+    "SpoilerActuatorRodL1"
+   ],
+   "prop": "systems/fcs/spoiler-l1/final-deg",
+   "table": [
+    [
+     0.0,
+     -0.02
+    ],
+    [
+     10.0,
+     -0.008
+    ],
+    [
+     20.0,
+     0.004
+    ],
+    [
+     30.0,
+     0.016
+    ],
+    [
+     40.0,
+     0.024
+    ],
+    [
+     50.0,
+     0.033
+    ]
+   ],
+   "axis": [
+    -0.027294,
+    0.404602,
+    -0.914085
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerActuatorL2"
+   ],
+   "prop": "systems/fcs/spoiler-l2/final-deg",
+   "factor": -0.8,
+   "offset": 0.0,
+   "axis": [
+    -0.937095,
+    -0.09841,
+    0.334916
+   ],
+   "center": [
+    7.80725,
+    2.114114,
+    0.68752
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 122,
+   "objects": [
+    "SpoilerActuatorRodL2"
+   ],
+   "prop": "systems/fcs/spoiler-l2/final-deg",
+   "table": [
+    [
+     0.0,
+     -0.02
+    ],
+    [
+     10.0,
+     -0.008
+    ],
+    [
+     20.0,
+     0.004
+    ],
+    [
+     30.0,
+     0.016
+    ],
+    [
+     40.0,
+     0.024
+    ],
+    [
+     50.0,
+     0.033
+    ]
+   ],
+   "axis": [
+    -0.348719,
+    0.323595,
+    -0.879592
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerActuatorL3"
+   ],
+   "prop": "systems/fcs/spoiler-l3/final-deg",
+   "factor": -0.8,
+   "offset": 0.0,
+   "axis": [
+    -0.937098,
+    -0.098378,
+    0.334918
+   ],
+   "center": [
+    9.42908,
+    2.268103,
+    0.105045
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 124,
+   "objects": [
+    "SpoilerActuatorRodL3"
+   ],
+   "prop": "systems/fcs/spoiler-l3/final-deg",
+   "table": [
+    [
+     0.0,
+     -0.02
+    ],
+    [
+     10.0,
+     -0.008
+    ],
+    [
+     20.0,
+     0.004
+    ],
+    [
+     30.0,
+     0.016
+    ],
+    [
+     40.0,
+     0.024
+    ],
+    [
+     50.0,
+     0.033
+    ]
+   ],
+   "axis": [
+    -0.348719,
+    0.323595,
+    -0.879592
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerActuatorL4"
+   ],
+   "prop": "systems/fcs/spoiler-l4/final-deg",
+   "factor": -0.8,
+   "offset": 0.0,
+   "axis": [
+    -0.937084,
+    -0.098397,
+    0.334949
+   ],
+   "center": [
+    10.9603,
+    2.413493,
+    -0.444885
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 126,
+   "objects": [
+    "SpoilerActuatorRodL4"
+   ],
+   "prop": "systems/fcs/spoiler-l4/final-deg",
+   "table": [
+    [
+     0.0,
+     -0.02
+    ],
+    [
+     10.0,
+     -0.008
+    ],
+    [
+     20.0,
+     0.004
+    ],
+    [
+     30.0,
+     0.016
+    ],
+    [
+     40.0,
+     0.024
+    ],
+    [
+     50.0,
+     0.033
+    ]
+   ],
+   "axis": [
+    -0.348719,
+    0.323595,
+    -0.879592
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerActuatorL5"
+   ],
+   "prop": "systems/fcs/spoiler-l5/final-deg",
+   "factor": -0.8,
+   "offset": 0.0,
+   "axis": [
+    -0.937074,
+    -0.098396,
+    0.334977
+   ],
+   "center": [
+    12.4253,
+    2.551653,
+    -0.96858
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 128,
+   "objects": [
+    "SpoilerActuatorRodL5"
+   ],
+   "prop": "systems/fcs/spoiler-l5/final-deg",
+   "table": [
+    [
+     0.0,
+     -0.02
+    ],
+    [
+     10.0,
+     -0.008
+    ],
+    [
+     20.0,
+     0.004
+    ],
+    [
+     30.0,
+     0.016
+    ],
+    [
+     40.0,
+     0.024
+    ],
+    [
+     50.0,
+     0.033
+    ]
+   ],
+   "axis": [
+    -0.348719,
+    0.323595,
+    -0.879592
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerActuatorR1"
+   ],
+   "prop": "systems/fcs/spoiler-r1/final-deg",
+   "factor": 0.675,
+   "offset": 0.0,
+   "axis": [
+    0.988081,
+    -0.149498,
+    -0.036678
+   ],
+   "center": [
+    -5.41613,
+    1.820159,
+    1.23482
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 130,
+   "objects": [
+    "SpoilerActuatorRodR1"
+   ],
+   "prop": "systems/fcs/spoiler-r1/final-deg",
+   "table": [
+    [
+     0.0,
+     -0.02
+    ],
+    [
+     10.0,
+     -0.008
+    ],
+    [
+     20.0,
+     0.004
+    ],
+    [
+     30.0,
+     0.016
+    ],
+    [
+     40.0,
+     0.024
+    ],
+    [
+     50.0,
+     0.033
+    ]
+   ],
+   "axis": [
+    0.027294,
+    0.404602,
+    -0.914085
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerActuatorR2"
+   ],
+   "prop": "systems/fcs/spoiler-r2/final-deg",
+   "factor": 0.8,
+   "offset": 0.0,
+   "axis": [
+    0.937095,
+    -0.09841,
+    0.334916
+   ],
+   "center": [
+    -7.80725,
+    2.114114,
+    0.68752
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 132,
+   "objects": [
+    "SpoilerActuatorRodR2"
+   ],
+   "prop": "systems/fcs/spoiler-r2/final-deg",
+   "table": [
+    [
+     0.0,
+     -0.02
+    ],
+    [
+     10.0,
+     -0.008
+    ],
+    [
+     20.0,
+     0.004
+    ],
+    [
+     30.0,
+     0.016
+    ],
+    [
+     40.0,
+     0.024
+    ],
+    [
+     50.0,
+     0.033
+    ]
+   ],
+   "axis": [
+    0.348719,
+    0.323595,
+    -0.879592
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerActuatorR3"
+   ],
+   "prop": "systems/fcs/spoiler-r3/final-deg",
+   "factor": 0.8,
+   "offset": 0.0,
+   "axis": [
+    0.937098,
+    -0.098378,
+    0.334918
+   ],
+   "center": [
+    -9.42908,
+    2.268103,
+    0.105045
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 134,
+   "objects": [
+    "SpoilerActuatorRodR3"
+   ],
+   "prop": "systems/fcs/spoiler-r3/final-deg",
+   "table": [
+    [
+     0.0,
+     -0.02
+    ],
+    [
+     10.0,
+     -0.008
+    ],
+    [
+     20.0,
+     0.004
+    ],
+    [
+     30.0,
+     0.016
+    ],
+    [
+     40.0,
+     0.024
+    ],
+    [
+     50.0,
+     0.033
+    ]
+   ],
+   "axis": [
+    0.348719,
+    0.323595,
+    -0.879592
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerActuatorR4"
+   ],
+   "prop": "systems/fcs/spoiler-r4/final-deg",
+   "factor": 0.8,
+   "offset": 0.0,
+   "axis": [
+    0.937084,
+    -0.098397,
+    0.334949
+   ],
+   "center": [
+    -10.9603,
+    2.413493,
+    -0.444885
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 136,
+   "objects": [
+    "SpoilerActuatorRodR4"
+   ],
+   "prop": "systems/fcs/spoiler-r4/final-deg",
+   "table": [
+    [
+     0.0,
+     -0.02
+    ],
+    [
+     10.0,
+     -0.008
+    ],
+    [
+     20.0,
+     0.004
+    ],
+    [
+     30.0,
+     0.016
+    ],
+    [
+     40.0,
+     0.024
+    ],
+    [
+     50.0,
+     0.033
+    ]
+   ],
+   "axis": [
+    0.348719,
+    0.323595,
+    -0.879592
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerActuatorR5"
+   ],
+   "prop": "systems/fcs/spoiler-r5/final-deg",
+   "factor": 0.8,
+   "offset": 0.0,
+   "axis": [
+    0.937074,
+    -0.098396,
+    0.334977
+   ],
+   "center": [
+    -12.4253,
+    2.551653,
+    -0.96858
+   ]
+  },
+  {
+   "type": "translate",
+   "parent": 138,
+   "objects": [
+    "SpoilerActuatorRodR5"
+   ],
+   "prop": "systems/fcs/spoiler-r5/final-deg",
+   "table": [
+    [
+     0.0,
+     -0.02
+    ],
+    [
+     10.0,
+     -0.008
+    ],
+    [
+     20.0,
+     0.004
+    ],
+    [
+     30.0,
+     0.016
+    ],
+    [
+     40.0,
+     0.024
+    ],
+    [
+     50.0,
+     0.033
+    ]
+   ],
+   "axis": [
+    0.348719,
+    0.323595,
+    -0.879592
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerL1"
+   ],
+   "name": "Left spoiler 1",
+   "prop": "systems/fcs/spoiler-l1/final-deg",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.988554,
+    0.150848,
+    0.002364
+   ],
+   "center": [
+    4.56129,
+    1.793854,
+    1.2047
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerL2"
+   ],
+   "name": "Left spoiler 2",
+   "prop": "systems/fcs/spoiler-l2/final-deg",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.937471,
+    0.088459,
+    -0.336634
+   ],
+   "center": [
+    6.96568,
+    2.091294,
+    0.98886
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerL3"
+   ],
+   "name": "Left spoiler 3",
+   "prop": "systems/fcs/spoiler-l3/final-deg",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.937372,
+    0.08841,
+    -0.336925
+   ],
+   "center": [
+    8.64393,
+    2.249849,
+    0.3862
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerL4"
+   ],
+   "name": "Left spoiler 4",
+   "prop": "systems/fcs/spoiler-l4/final-deg",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.937517,
+    0.088425,
+    -0.336516
+   ],
+   "center": [
+    10.2055,
+    2.397268,
+    -0.175515
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerL5"
+   ],
+   "name": "Left spoiler 5",
+   "prop": "systems/fcs/spoiler-l5/final-deg",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.937418,
+    0.088498,
+    -0.336771
+   ],
+   "center": [
+    11.6975,
+    2.538123,
+    -0.71227
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerR1"
+   ],
+   "name": "Right spoiler 1",
+   "prop": "systems/fcs/spoiler-r1/final-deg",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.988422,
+    -0.151707,
+    -0.002582
+   ],
+   "center": [
+    -6.10191,
+    2.029938,
+    1.20923
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerR2"
+   ],
+   "name": "Right spoiler 2",
+   "prop": "systems/fcs/spoiler-r2/final-deg",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.938266,
+    -0.088346,
+    0.334442
+   ],
+   "center": [
+    -8.51333,
+    2.236421,
+    0.435798
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerR3"
+   ],
+   "name": "Right spoiler 3",
+   "prop": "systems/fcs/spoiler-r3/final-deg",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.937415,
+    -0.088498,
+    0.33678
+   ],
+   "center": [
+    -10.0794,
+    2.384268,
+    -0.126834
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerR4"
+   ],
+   "name": "Right spoiler 4",
+   "prop": "systems/fcs/spoiler-r4/final-deg",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.937419,
+    -0.088495,
+    0.336769
+   ],
+   "center": [
+    -11.5802,
+    2.525947,
+    -0.665994
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "SpoilerR5"
+   ],
+   "name": "Right spoiler 5",
+   "prop": "systems/fcs/spoiler-r5/final-deg",
+   "factor": 1.0,
+   "offset": 0.0,
+   "axis": [
+    0.937418,
+    -0.088496,
+    0.336772
+   ],
+   "center": [
+    -13.0171,
+    2.661605,
+    -1.18224
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "WindshildWiperL"
+   ],
+   "prop": "fdm/jsbsim/fcs/left-wiper-pos-norm",
+   "factor": -56.0,
+   "offset": 0.0,
+   "axis": [
+    -0.330189,
+    -0.661803,
+    -0.673047
+   ],
+   "center": [
+    0.119353,
+    2.938889,
+    17.4353
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "WindshildWiperR"
+   ],
+   "prop": "fdm/jsbsim/fcs/right-wiper-pos-norm",
+   "factor": 56.0,
+   "offset": 0.0,
+   "axis": [
+    0.328484,
+    -0.65815,
+    -0.677449
+   ],
+   "center": [
+    -0.119445,
+    2.93916,
+    17.4335
+   ]
+  },
+  {
+   "type": "select",
+   "parent": -1,
+   "objects": [
+    "WingtipFence",
+    "navglass"
+   ],
+   "cond": [
+    "not",
+    [
+     "prop",
+     "sim/multiplay/generic/int[12]"
+    ]
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "EngineFairingL"
+   ],
+   "name": "EngineLFairing",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.25,
+     7.0
+    ],
+    [
+     0.375,
+     9.5
+    ],
+    [
+     0.5,
+     13.5
+    ],
+    [
+     1.0,
+     22.5
+    ]
+   ],
+   "axis": [
+    -0.998117,
+    -0.061332,
+    0.001113
+   ],
+   "center": [
+    5.72562,
+    1.58291,
+    1.05276
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "EngineFairingR"
+   ],
+   "name": "EngineRFairing",
+   "prop": "sim/multiplay/generic/float[12]",
+   "table": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     0.25,
+     -7.0
+    ],
+    [
+     0.375,
+     -9.5
+    ],
+    [
+     0.5,
+     -13.5
+    ],
+    [
+     1.0,
+     -22.5
+    ]
+   ],
+   "axis": [
+    0.998117,
+    -0.061332,
+    0.001113
+   ],
+   "center": [
+    -5.72562,
+    1.58291,
+    1.05276
+   ]
+  },
+  {
+   "type": "spin",
+   "parent": -1,
+   "objects": [
+    "FanLCFM56L"
+   ],
+   "name": "Fan spinning animation (slow)",
+   "prop": "engines/engine[3]/n1",
+   "factor": 50.0,
+   "offset": 0.0,
+   "axis": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "center": [
+    5.63082,
+    0.37857,
+    6.66773
+   ]
+  },
+  {
+   "type": "select",
+   "parent": 155,
+   "objects": [
+    "FanLCFM56L"
+   ],
+   "cond": [
+    "less-than-equals",
+    [
+     "prop",
+     "engines/engine[3]/n1"
+    ],
+    [
+     "val",
+     40.0
+    ]
+   ]
+  },
+  {
+   "type": "spin",
+   "parent": -1,
+   "objects": [
+    "FanLCFM56R"
+   ],
+   "name": "Fan spinning animation (slow)",
+   "prop": "engines/engine[4]/n1",
+   "factor": 50.0,
+   "offset": 0.0,
+   "axis": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "center": [
+    -5.62871,
+    0.37857,
+    6.66773
+   ]
+  },
+  {
+   "type": "select",
+   "parent": 157,
+   "objects": [
+    "FanLCFM56R"
+   ],
+   "cond": [
+    "less-than-equals",
+    [
+     "prop",
+     "engines/engine[4]/n1"
+    ],
+    [
+     "val",
+     40.0
+    ]
+   ]
+  },
+  {
+   "type": "spin",
+   "parent": -1,
+   "objects": [
+    "FanSpinningCFM56L"
+   ],
+   "name": "Fan spinning animation (fast)",
+   "prop": "engines/engine[3]/n1",
+   "factor": 5.0,
+   "offset": 0.0,
+   "axis": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "center": [
+    5.63082,
+    0.37857,
+    6.66773
+   ]
+  },
+  {
+   "type": "select",
+   "parent": 159,
+   "objects": [
+    "FanSpinningCFM56L"
+   ],
+   "cond": [
+    "greater-than",
+    [
+     "prop",
+     "engines/engine[3]/n1"
+    ],
+    [
+     "val",
+     40.0
+    ]
+   ]
+  },
+  {
+   "type": "spin",
+   "parent": -1,
+   "objects": [
+    "FanSpinningCFM56R"
+   ],
+   "name": "Fan spinning animation (fast)",
+   "prop": "engines/engine[4]/n1",
+   "factor": 5.0,
+   "offset": 0.0,
+   "axis": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "center": [
+    -5.62871,
+    0.37857,
+    6.66773
+   ]
+  },
+  {
+   "type": "select",
+   "parent": 161,
+   "objects": [
+    "FanSpinningCFM56R"
+   ],
+   "cond": [
+    "greater-than",
+    [
+     "prop",
+     "engines/engine[4]/n1"
+    ],
+    [
+     "val",
+     40.0
+    ]
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "ReverserLDoor1",
+    "ReverserLDoor1.Inner",
+    "ReverserLDoor1.Placards"
+   ],
+   "name": "Reverser Door LH 1",
+   "prop": "engines/engine[0]/reverser-pos-norm",
+   "factor": -70.0,
+   "offset": 0.0,
+   "axis": [
+    0.590781,
+    -0.80674,
+    0.012161
+   ],
+   "center": [
+    6.25156,
+    0.99253,
+    4.7738
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "ReverserLDoor2",
+    "ReverserLDoor2.Inner",
+    "ReverserLDoor2.Placards"
+   ],
+   "name": "Reverser Door LH 2",
+   "prop": "engines/engine[0]/reverser-pos-norm",
+   "factor": -70.0,
+   "offset": 0.0,
+   "axis": [
+    -0.577032,
+    -0.816689,
+    -0.007258
+   ],
+   "center": [
+    6.29253,
+    -0.17487,
+    4.77785
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "ReverserLDoor3",
+    "ReverserLDoor3.Inner",
+    "ReverserLDoor3.Placards"
+   ],
+   "name": "Reverser Door LH 3",
+   "prop": "engines/engine[0]/reverser-pos-norm",
+   "factor": 70.0,
+   "offset": 0.0,
+   "axis": [
+    -0.590698,
+    -0.806801,
+    0.012162
+   ],
+   "center": [
+    5.01022,
+    0.9925,
+    4.7738
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "ReverserLDoor4",
+    "ReverserLDoor4.Inner",
+    "ReverserLDoor4.Placards"
+   ],
+   "name": "Reverser Door LH 4",
+   "prop": "engines/engine[0]/reverser-pos-norm",
+   "factor": 70.0,
+   "offset": 0.0,
+   "axis": [
+    0.576763,
+    -0.816879,
+    -0.00726
+   ],
+   "center": [
+    4.96919,
+    -0.17464,
+    4.778
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "ReverserRDoor1",
+    "ReverserRDoor1.Inner",
+    "ReverserRDoor1.Placards"
+   ],
+   "name": "Reverser Door RH 1",
+   "prop": "engines/engine[1]/reverser-pos-norm",
+   "factor": -70.0,
+   "offset": 0.0,
+   "axis": [
+    0.590781,
+    -0.80674,
+    0.012161
+   ],
+   "center": [
+    -5.01008,
+    0.99253,
+    4.7738
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "ReverserRDoor2",
+    "ReverserRDoor2.Inner",
+    "ReverserRDoor2.Placards"
+   ],
+   "name": "Reverser Door RH 2",
+   "prop": "engines/engine[1]/reverser-pos-norm",
+   "factor": -70.0,
+   "offset": 0.0,
+   "axis": [
+    -0.576942,
+    -0.816753,
+    -0.007259
+   ],
+   "center": [
+    -4.96912,
+    -0.17487,
+    4.77785
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "ReverserRDoor3",
+    "ReverserRDoor3.Inner",
+    "ReverserRDoor3.Placards"
+   ],
+   "name": "Reverser Door RH 3",
+   "prop": "engines/engine[1]/reverser-pos-norm",
+   "factor": 70.0,
+   "offset": 0.0,
+   "axis": [
+    -0.590698,
+    -0.806801,
+    0.012162
+   ],
+   "center": [
+    -6.25142,
+    0.9925,
+    4.7738
+   ]
+  },
+  {
+   "type": "rotate",
+   "parent": -1,
+   "objects": [
+    "ReverserRDoor4",
+    "ReverserRDoor4.Inner",
+    "ReverserRDoor4.Placards"
+   ],
+   "name": "Reverser Door RH 4",
+   "prop": "engines/engine[1]/reverser-pos-norm",
+   "factor": 70.0,
+   "offset": 0.0,
+   "axis": [
+    0.576763,
+    -0.816879,
+    -0.00726
+   ],
+   "center": [
+    -6.29245,
+    -0.17464,
+    4.778
+   ]
+  }
+ ],
+ "lamps": [
+  {
+   "kind": "nav",
+   "colour": "red",
+   "p": [
+    16.6504,
+    2.965012,
+    -1.89364
+   ],
+   "wingtip": "fence"
+  },
+  {
+   "kind": "nav",
+   "colour": "red",
+   "p": [
+    16.38,
+    2.965012,
+    -1.54364
+   ],
+   "wingtip": "sharklet"
+  },
+  {
+   "kind": "nav",
+   "colour": "green",
+   "p": [
+    -16.648,
+    2.965018,
+    -1.89364
+   ],
+   "wingtip": "fence"
+  },
+  {
+   "kind": "nav",
+   "colour": "green",
+   "p": [
+    -16.38,
+    2.965012,
+    -1.54364
+   ],
+   "wingtip": "sharklet"
+  },
+  {
+   "kind": "nav",
+   "colour": "white",
+   "p": [
+    -0.049567,
+    3.318205,
+    -18.8029
+   ]
+  },
+  {
+   "kind": "strobe",
+   "colour": "white",
+   "p": [
+    16.7246,
+    2.967212,
+    -2.03967
+   ],
+   "wingtip": "fence"
+  },
+  {
+   "kind": "strobe",
+   "colour": "white",
+   "p": [
+    17.1,
+    3.338,
+    -2.31
+   ],
+   "wingtip": "sharklet"
+  },
+  {
+   "kind": "strobe",
+   "colour": "white",
+   "p": [
+    -16.7222,
+    2.967218,
+    -2.03967
+   ],
+   "wingtip": "fence"
+  },
+  {
+   "kind": "strobe",
+   "colour": "white",
+   "p": [
+    -17.1,
+    3.338,
+    -2.31
+   ],
+   "wingtip": "sharklet"
+  },
+  {
+   "kind": "strobe",
+   "colour": "white",
+   "p": [
+    0.049567,
+    3.318205,
+    -18.8029
+   ]
+  },
+  {
+   "kind": "beacon",
+   "colour": "red",
+   "p": [
+    0.001033,
+    4.59788,
+    3.58595
+   ]
+  },
+  {
+   "kind": "beacon",
+   "colour": "red",
+   "p": [
+    0.001032,
+    0.14406,
+    3.97011
+   ]
+  },
+  {
+   "kind": "wing",
+   "colour": "white",
+   "p": [
+    1.97792,
+    2.445375,
+    9.99483
+   ]
+  },
+  {
+   "kind": "wing",
+   "colour": "white",
+   "p": [
+    -1.97792,
+    2.445375,
+    9.99483
+   ]
+  },
+  {
+   "kind": "landing",
+   "colour": "white",
+   "p": [
+    2.22016,
+    0.95766,
+    2.08
+   ],
+   "node": 48
+  },
+  {
+   "kind": "landing",
+   "colour": "white",
+   "p": [
+    -2.22016,
+    0.95766,
+    2.08
+   ],
+   "node": 50
+  },
+  {
+   "kind": "taxi",
+   "colour": "white",
+   "p": [
+    0.185175,
+    0.34053,
+    13.5119
+   ],
+   "node": 88
+  },
+  {
+   "kind": "taxi",
+   "colour": "white",
+   "p": [
+    -0.20414,
+    0.35981,
+    13.461
+   ],
+   "node": 88
+  },
+  {
+   "kind": "turnoff",
+   "colour": "white",
+   "p": [
+    0.20993,
+    -0.19121,
+    13.5034
+   ],
+   "node": 88
+  },
+  {
+   "kind": "turnoff",
+   "colour": "white",
+   "p": [
+    -0.208994,
+    -0.19121,
+    13.5034
+   ],
+   "node": 88
+  }
+ ]
+}

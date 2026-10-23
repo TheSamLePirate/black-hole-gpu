@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { detectRange, Radar, type RadarObject, type RadarOwn, radarHorizon } from "../src/game/radar";
+import { AIR_RADARS, APG81, detectRange, Radar, RANGER_NOSE, type RadarObject, type RadarOwn, radarHorizon } from "../src/game/radar";
 
 // The F-35's radar (docs/PLAN-AVIATION-AAA.md, C1; game/radar.ts): seen as its beam crosses, by its size's range,
 // over the radar's horizon, not behind the ground, not in the Doppler notch; tracked, carried on, dropped; the IFF
@@ -126,5 +126,37 @@ describe("the APG-81", () => {
     const T = new Radar();
     run(T, 2.2, [obj({ id: "a", r: [0, 30_000, 0] })]);
     expect(T.tracks.get("a")!.v).toEqual([0, -200, 0]);
+  });
+});
+
+describe("the Ranger's nose radar (RD4's leftover)", () => {
+  test("≈ 60 % of the APG-81's reach, the same ±60° scan; a radar per craft in the air, none for the Lander", () => {
+    expect(detectRange(5, RANGER_NOSE) / detectRange(5, APG81)).toBeCloseTo(0.6, 2);
+    expect(RANGER_NOSE.az).toBeCloseTo(APG81.az, 9);
+    expect(AIR_RADARS.ranger).toBe(RANGER_NOSE);
+    expect(AIR_RADARS.f35).toBe(APG81);
+    expect(AIR_RADARS.lander).toBeUndefined();
+    expect(AIR_RADARS.endurance).toBeUndefined();
+  });
+
+  test("a fighter at 120 km: the APG-81's, not the nose's; at 60 km, both", () => {
+    const far = [obj({ id: "far", r: [0, 120_000, 0] }), obj({ id: "near", r: [5_000, 60_000, 0] })];
+    const big = new Radar(APG81),
+      nose = new Radar(RANGER_NOSE);
+    run(big, 3, far);
+    run(nose, 3, far);
+    expect(big.tracks.has("far")).toBe(true);
+    expect(nose.tracks.has("far")).toBe(false);
+    expect(nose.tracks.has("near")).toBe(true);
+  });
+
+  test("its narrower ±30° in elevation: a contact 32° up seen by the APG-81 (±35°) only", () => {
+    const up32 = obj({ id: "u", r: [0, 10_000, 10_000 * Math.tan((32 * Math.PI) / 180)] });
+    const big = new Radar(APG81),
+      nose = new Radar(RANGER_NOSE);
+    run(big, 3, [up32]);
+    run(nose, 3, [up32]);
+    expect(big.tracks.has("u")).toBe(true);
+    expect(nose.tracks.has("u")).toBe(false);
   });
 });

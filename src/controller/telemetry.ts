@@ -5,6 +5,7 @@ import { ground } from "./gcas";
 import { distM } from "../game/mission";
 import { avionicsData } from "../f35/cockpit";
 import { enuToCam } from "./combat";
+import { sensed } from "../radar/picture";
 import type { JetModes } from "../game/jet";
 import { blToCartesian, cameraFrame } from "../camera";
 import { horizon, isco, photonOrbits, type Vec3 } from "../physics";
@@ -15,7 +16,7 @@ import { toU, type Auto, type Director } from "../pilot";
 import type { ManeuverNode } from "../maneuver";
 import { shipToCamera } from "../mounts";
 import { fleet } from "../fleet";
-import { VESSELS } from "../vessels";
+import { isAircraft, VESSELS } from "../vessels";
 import { sphericalFrame } from "../wormhole";
 import { OUR_BODIES, repToHomeVec } from "../system/our-side";
 import { groundVelocity } from "../system/our-surface";
@@ -45,6 +46,26 @@ type Dir = Vec3 | null;
  * sound, the renderer's re-entry glow, the game's status and tools). Directions are in camera
  * coordinates; distances in M (the hole's mass) unless said otherwise.
  */
+/** A track of the picture in the view (PLAN-RADAR-AAA RD9): on the camera's axes, its figures for the selection's card. */
+export interface PicView {
+  id: string;
+  name: string;
+  type: string;
+  kind: string;
+  iff: string;
+  side: string;
+  cam: Vec3 | null;
+  /** its range [m], its altitude [m over the sea], its bearing [rad from north], its aspect [rad: 0 its tail to us, + its
+   *  right side], the closing speed [m/s] */
+  dist: number;
+  alt: number;
+  brg: number;
+  aspect: number | null;
+  closing: number;
+  locked: boolean;
+  selected: boolean;
+}
+
 export interface FlightInfo {
   // ---- where, and the spacetime there
   region: "hole" | "throat";
@@ -97,6 +118,8 @@ export interface FlightInfo {
   dockBore?: Vec3 | null;
   /** the spacecraft's own panel (game/craftpanel.ts): the Lander's descent, the Endurance's mothership's */
   craftPanel?: CraftPanel | null;
+  /** the Lander's landing radar (radar/landing.ts — PLAN-RADAR-AAA, RD4's leftover): its locks, its figures */
+  landRadar?: import("../radar/landing").LandingRadarOut | null;
   /** the Endurance's ring: its turn [rpm], the weight in its modules [g], the turn asked (controller/ring.ts) */
   ring?: { rpm: number; g: number; asked: number | null } | null;
   /** the powered landing's point (the LPD): seen from the eye (camera coordinates), its distance [m], redesignated */
@@ -222,12 +245,23 @@ export interface FlightInfo {
   chal: ReturnType<CameraController["challengeHud"]>;
   /** the F-35's radar: its picture and its lock (controller/radar.ts) */
   radar: (ReturnType<CameraController["radarHud"]> & { lock?: { cam?: Vec3 | null; collCam?: Vec3 | null } | null }) | null;
+  /** the tactical picture's tracks the sensors hold, on the camera's axes — what a click in the view selects; the one
+   *  selected with its BRAA (PLAN-RADAR-AAA RD9) */
+  pic: PicView[] | null;
+  /** a spacecraft's sensors' tracks (PLAN-RADAR-AAA RD4 — controller/spacepic.ts) */
+  spacePic: import("../radar/space").SpaceTrack[] | null;
+  /** the designation cursor on the HUD's scope (input/tdc.ts) */
+  tdc: { x: number; y: number } | null;
+  /** the TCAS's most urgent advisory (PLAN-RADAR-AAA RD4 — ui/hud/symbology.ts drawTcas) */
+  tcas: import("../ui/hud/symbology").SymInfo["tcas"];
   /** the pilot's eyes and body (game/gstrain.ts) */
   body: { grey: number; black: number; red: number; strain: number; gloc: boolean; felt: number };
   /** an aerobatic figure flown: its banner, its cue, its entry, its guide, its result (controller/aerobatics.ts) */
   aero: ReturnType<CameraController["aeroHud"]>;
   /** a fight flown: its targets, missiles, lead, zone, warnings (controller/combat.ts) */
   combat: ReturnType<CameraController["combatHud"]>;
+  /** the air refuelling's cues (controller/aar.ts) */
+  aar: ReturnType<CameraController["aarHud"]>;
   /** the F-35B's STOVL mode (controller/stovl.ts): on, converted 0…1, the nozzle's swivel 0…1, the hover law
    *  flying, the vertical speed it holds [m/s], too heavy to hover */
   stovl: { on: boolean; conv: number; swivel: number; hover: boolean; vz: number; heavy: boolean } | null;
@@ -239,6 +273,8 @@ export interface FlightInfo {
   target: Target;
   targetDist: number;
   targetRate: number;
+  /** our universe's target: its place [M, home frame] (the crew's map draws a station, a craft — ui/crew-space.ts) */
+  targetPos?: Vec3 | null;
   /** our universe: the body of the sphere of influence, the altitude above it [M], the radial speed,
    *  the closest approach to the target on straight lines (distance over its surface, in) */
   ref: string | null;
@@ -320,9 +356,9 @@ function flightInfo(this: CameraController): FlightInfo {
           : this.pilot.throttle,
     // (the SAS flown: the level's when it imposes one)
     sas: this.spaceRate ? this.spaceRate.law === "damped" : this.pilot.sas,
-    spaceAssist: fleet.active === "f35" ? undefined : this.assistLevel(),
+    spaceAssist: isAircraft(fleet.active) ? undefined : this.assistLevel(),
     spaceDrift: this.spaceDrift,
-    rcsTranslate: this.rcsMode === "translate" && fleet.active !== "f35",
+    rcsTranslate: this.rcsMode === "translate" && !isAircraft(fleet.active),
     spaceGuard: this.spaceGuard ?? null,
     ring: this.ringInfo(),
     craftPanel: null,
@@ -349,7 +385,7 @@ function flightInfo(this: CameraController): FlightInfo {
       normal: C(normal),
       antinormal: C(normal && lin(normal, -1, normal, 0)),
       // (the F-35 flown: no planet to aim at — its targets are its radar's)
-      target: fleet.active === "f35" ? null : C(this.targetDir(cam)),
+      target: isAircraft(fleet.active) ? null : C(this.targetDir(cam)),
       burn: C(this.pilot.burn),
       maneuver: C(this.maneuverDir(cam)),
       // velocity relative to the target (approach, docking)
@@ -423,6 +459,65 @@ function flightInfo(this: CameraController): FlightInfo {
         lock: { ...R.lock, cam: M ? M(R.lock.r) : null, collCam: M && k ? M([k[0]! * 5000, k[1]! * 5000, k[2]! * 5000]) : null },
       };
     })(),
+    // (a spacecraft's sensors — RD4 —: its tracks on its LVLH axes)
+    spacePic: this.spacePic?.tracks ?? null,
+    // (the designation cursor on the HUD's scope — constat 29)
+    tdc: this.tdc.on && this.tdc.screen?.kind === "scope" ? { x: this.tdc.x, y: this.tdc.y } : null,
+    // (the TCAS's most urgent advisory — RD4 —: every craft in the air; the intruder's place on the camera's axes)
+    tcas: (() => {
+      const a = this.tcas.find((x) => x.level === "TA" || x.level === "RA");
+      const T = a ? this.picture?.byId.get(a.id) : undefined;
+      if (!a || !T) return null;
+      const M = enuToCam(this, C);
+      return {
+        level: a.level as "TA" | "RA",
+        sense: a.sense,
+        name: T.name,
+        dist: Math.hypot(...T.rt),
+        dh: T.rt[2],
+        tau: a.tau,
+        cam: M ? M(T.rt) : null,
+      };
+    })(),
+    // (the picture's tracks in the view: clicked to select — PLAN-RADAR-AAA RD9 —, the selected one's figures)
+    pic: (() => {
+      const P = this.picture;
+      if (!P || !this.airFlight.inAir) return null;
+      const M = enuToCam(this, C);
+      if (!M) return null;
+      const out: PicView[] = [];
+      const ov = P.fix;
+      for (const T of P.tracks) {
+        if (!sensed(T) || T.kind === "flare" || T.kind === "chaff") continue;
+        const d = Math.hypot(...T.r);
+        if (d > 120_000 && T.id !== this.pictureSelected) continue;
+        const sel = T.id === this.pictureSelected;
+        // (its bearing, its aspect — the angle off its tail to us —, the closing speed)
+        const brg = (Math.atan2(T.r[0], T.r[1]) + 2 * Math.PI) % (2 * Math.PI);
+        const sp = Math.hypot(T.v[0], T.v[1]);
+        const aspect = sp > 3 ? Math.atan2(-T.r[0] * T.v[1] + T.r[1] * T.v[0], -(T.r[0] * T.v[0] + T.r[1] * T.v[1])) : null;
+        const own = this.radarFix(true)?.own.v ?? [0, 0, 0];
+        const closing = -((T.v[0] - own[0]) * T.r[0] + (T.v[1] - own[1]) * T.r[1] + (T.v[2] - own[2]) * T.r[2]) / Math.max(d, 1);
+        out.push({
+          id: T.id,
+          name: T.name,
+          type: T.type,
+          kind: T.kind,
+          iff: T.iff,
+          side: T.side,
+          cam: M(T.r),
+          dist: d,
+          alt: ov.alt + T.r[2],
+          brg,
+          aspect,
+          closing,
+          locked: T.locked,
+          selected: sel,
+        });
+        if (out.length >= 64 && !sel) break;
+      }
+      return out;
+    })(),
     // (the pilot's eyes and body: the grey-out, the black-out, the red-out, the straining, G-LOC)
     body: (() => {
       const B = this.gStrain;
@@ -431,6 +526,7 @@ function flightInfo(this: CameraController): FlightInfo {
     aero: this.aeroHud(),
     avionics: fleet.active === "f35" ? avionicsData(this, s) : null,
     combat: this.combatHud(C),
+    aar: this.aarHud(C),
     nav: (() => {
       const N = this.nav,
         o = N.last.l;
@@ -450,7 +546,8 @@ function flightInfo(this: CameraController): FlightInfo {
     ils: this.ilsRun ? this.ilsInfo() : null,
     aimRing: this.aimRing ? { ...this.aimRing } : null,
     relief: (() => {
-      if (fleet.active !== "f35" || !this.airFlight.inAir) return null;
+      // (under a radar's scope in the air: the F-35's, the Ranger's nose radar's)
+      if (!this.airRadar()) return null;
       const g = this.geoNow();
       const hd = (this.attitudeNow() as { heading?: number }).heading;
       return g ? { lat: g.lat, lon: g.lon, hdg: hd !== undefined && Number.isFinite(hd) ? hd : g.track, alt: g.alt, at: ground } : null;
@@ -588,6 +685,7 @@ function flightInfo(this: CameraController): FlightInfo {
     info.X = nav.X;
     info.V = nav.V;
     const T = ourTarget(s, s.target, nav.t);
+    info.targetPos = T.pos;
     // (the autopilot's wanted velocity — absolute, home frame — in the tape's own frames: relative to the
     // reference body, over the ground, to the target. Its absolute size, the heliocentric ~30 km/s, once set
     // the tape's bug next to a 7.8 km/s orbital speed)
@@ -637,6 +735,7 @@ function flightInfo(this: CameraController): FlightInfo {
       };
     });
   // the spacecraft's own panel (X4): the Lander's descent over an airless world (or low), the Endurance's mothership's
+  info.landRadar = this.landingRadarNow(info);
   info.craftPanel = this.craftPanelNow(info);
   // the powered landing's point, as the eye sees it (the HUD's LPD)
   if (nav && this.pilot.auto === "land" && this.lpdPad) {

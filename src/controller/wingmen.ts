@@ -6,6 +6,7 @@
 // their radio — the orders acknowledged, the contacts called, Fox, Splash, hit, down —; drawn, on the radar by
 // the datalink, sent to the room (the host flies them).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { runwaySitesNear } from "../world/fieldsite";
 import { AiJet, AIJET, type AiCmd, type Ground, headingOf } from "../game/aijet";
 import { bankAccel, type FormCraft, type FormSlot, formationBank } from "../game/formation";
 import { type CrossTurn, crossTurnNew, crossTurnStep, easeSlot, landingSlot, TAKEOFF, TAKEOFF_SLOTS } from "../game/formflow";
@@ -714,7 +715,8 @@ function wingOrder(this: CameraController, o: Order) {
         break;
       case "rtb": {
         const here = g0 ?? g;
-        const fields = SITES.filter((x) => x.body === "earth" && x.runway);
+        // (the nearest a jet lands on: the game's sites, the world's within 300 km — PLAN-RADAR-AAA RD13)
+        const fields = [...SITES.filter((x) => x.body === "earth" && x.runway), ...runwaySitesNear(here.lat, here.lon, 300_000)];
         let best = fields[0]!,
           bd = Infinity;
         for (const x of fields) {

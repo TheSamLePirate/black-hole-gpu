@@ -1055,6 +1055,15 @@ __bh.game.save("before TMI");
 ```
 *Used in:* none under tests/e2e or scripts.
 
+### `__bh.game.savedAt` → number | null
+
+When the game was last saved or loaded in this page (`Date.now()` ms; null: not yet) — the pause menu's "last save" and
+its question before going back to the title unsaved (docs/MENUS.md, E8).
+
+```js
+__bh.game.save("before"); __bh.game.savedAt !== null   // true
+```
+
 ### `__bh.game.saves()` → `{ name, summary, savedAt }[]`
 
 The named slots, newest first. `summary` is the one-line state (`"Earth · IN ORBIT 400 km · 2026-10-10 12:00"`); `savedAt` a locale string.
@@ -1483,6 +1492,63 @@ unit vectors, `vel` [c]. No settings argument (the settings are captured). Write
 // tests/wormhole-arrival.test.ts:43 (vitest, direct import): X = our mouth's x + r, fwd -x, up +z, vel -0.01 c along x
 __bh.sys.setHomePose([M0 + r, M1, M2], [-1, 0, 0], [0, 0, 1], [-0.01, 0, 0]);
 ```
+
+### `__bh.radar` (the tactical picture)
+
+The tactical picture (src/radar/picture.ts, PLAN-RADAR-AAA RD2). The pilot's radar screens, the crew's console and the
+network all read this one list of tracks, built once a frame. Each track carries:
+
+- the truth (`side`, `rt`, `lat`, `lon`, `h` over the WGS84 ellipsoid);
+- what the sensors know (`sensors` bits RADAR 1, DATALINK 2, TCAS 4, AIS 8, DAS 16, EOTS 32, BRIEF 64; `iff`, `state`
+  firm | coast | datalink | truth, `r` the sensors' estimate).
+
+Missiles (`msl:`) and decoys (`cm:`) are tracks too.
+
+### `__bh.radar.picture()` → `Picture \| null`
+
+The picture this frame: `{t, fix, mode, beam, lock, selected, tracks, byId}`. Null away from the Earth's air.
+
+### `__bh.radar.track(id)` → `PicTrack \| null`
+
+One track by its id (`cmb:3`, `trf:4ca7b2`, `msl:12`, `cm:40`…).
+
+### `__bh.radar.select(id)` → `id`
+
+Selects a track on all the pilot's screens (`null`: none).
+
+### `__bh.radar.hits()` → `{id, x, y, r}[]`
+
+What a click in the view may select this frame (RD9): the HUD's scope's symbols and the tracks seen in the view, their
+place and reach in CSS px.
+
+### `__bh.radar.scope()` → `{range, disc}`
+
+The HUD's scope as drawn last: its range [m] (the automatic choice too) and its disc (`{x, y, r}` CSS px, `at` when
+drawn) — where the wheel steps its range (P11). *Used in:* `tests/e2e/radar-select.e2e.test.ts`.
+
+### The TCAS and the spacecraft's sensors (RD4) — on `__bh.camera`
+
+- `__bh.camera.tcas` → `TcasAdvisory[]` (src/radar/tcas.ts): the transponders heard, graded as TCAS II does —
+  `{id, level: "other" | "proximate" | "TA" | "RA", tau, missD, missH, sense?: "climb" | "descend"}` —, the most urgent
+  first. Each picture track also carries `tcas` and `ra`. `settings.tcas` off: empty.
+- `__bh.camera.spacePic` → `SpacePic \| null` (controller/spacepic.ts): flying the Ranger, the Lander or the Endurance in
+  our universe, `{ref, refPos, refVel, own: {p, v}, tracks, at}` — the body it is about and that body's state (home
+  frame [M, c]), our place about it [m, m/s], the tracks on our LVLH axes (`lvlh` V-bar, H-bar, R-bar [m], `vlvlh`,
+  `range`, `rate`, `sensors` RADAR 1 · LIDAR 2 · DATALINK 4, `hidden`, `ca`). Refreshed five times a second.
+- `__bh.camera.radarSources` → `Map<string, (fix) => RadarObject[]>`: the radar's sources; a test may add its own
+  (`tests/e2e/tcas.e2e.test.ts` puts an airliner head-on).
+
+*Used in:* `tests/e2e/tcas.e2e.test.ts`, `tests/e2e/space-sensors.e2e.test.ts`, `tests/e2e/missile-cues.e2e.test.ts`.
+
+### `__bh.flight.hud` → FlightHud
+
+The flight HUD (ui/flighthud.ts). `tacMap` is its tactical map (ui/jetmap.ts, PLAN-RADAR-AAA RD15): `rangeKm`, `range`
+(the step), `northUp`, `hitsNow()` (where each track was drawn, in CSS px on its canvas), `draw(data)`. `tacRangeKm()`
+gives the range, `pickTrack(x, y)` the track under a click in the view.
+
+### `__bh.radar.stats()` → `{n, bySource, ms}`
+
+The track count, the count per source prefix, and the building time [ms, smoothed].
 
 ### `__bh.iss` (the space station)
 

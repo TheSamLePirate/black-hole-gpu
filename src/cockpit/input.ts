@@ -8,6 +8,23 @@
 import { CONTROLS, type ControlDef } from "./controls";
 import type { CockpitTarget } from "./pointer";
 
+/** What works a cockpit under the pointer (this file's CockpitInput — the Ranger's cabin —, the A320's flight deck:
+ *  src/a320/deckctl.ts): what it is over, held, lit; the pointer's events; `middle`: it takes the middle button
+ *  (FlightGear's knobs pulled). */
+export interface CockpitPointer {
+  hover: string | null;
+  pressed: string | null;
+  over: { kind: string } | null;
+  overTab: boolean;
+  readonly focus: string | null;
+  readonly middle?: boolean;
+  move(ndcX: number, ndcY: number): { kind: string } | null;
+  down(ndcX: number, ndcY: number, button?: number): boolean;
+  drag(dx: number, dy: number): void;
+  up(click: boolean): void;
+  wheel(notches: number): boolean;
+}
+
 export interface CockpitHost {
   /** a pixel's ray in the ship's frame (ndc −1…1, y up), and what it meets */
   target(ndcX: number, ndcY: number): CockpitTarget | null;

@@ -10,6 +10,7 @@
 // from bun test's output (the dashboard matches them in order). On only through the preload
 // (tests/e2e/lib/preload.ts, which `bun run e2e` passes); E2E_TELEMETRY=0, or App.boot({ telemetry: false }),
 // leaves a page without it.
+import { showBanner } from "./banner";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
@@ -138,6 +139,8 @@ class Recorder {
       this.k = 0;
       this.open();
     }
+    // (the banner on a Chrome one sees: the file, the test running, what it proves — lib/banner.ts)
+    await showBanner(page, file, this.k);
     this.timer ??= setInterval(() => this.pull(), 1500);
   }
 
@@ -164,6 +167,7 @@ class Recorder {
     if (this.k === 0 && this.dir) this.summary();
     this.k++;
     this.open();
+    await showBanner(this.page, this.file, this.k);
     await this.page?.js("window.__e2e?.fresh()").catch(() => {});
   }
 

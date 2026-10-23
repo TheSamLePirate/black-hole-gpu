@@ -5,6 +5,9 @@
 // flight controls (the surfaces as they stand), the engine, the fuel, the STOVL, the navigation, the standby
 // attitude, the checklists. Pure drawing from a PcdData — no state of the flight read here.
 
+import { drawFields } from "../world/runwaydraw";
+import { type Airfield, fieldShown } from "../world/runways";
+import { drawSym, PAL, type SymSide, symColour } from "../radar/symbols";
 import { PCD_H, PCD_W } from "./pcd-size";
 import { type Units, type UnitSys, unitsOf } from "../ui/unitsys";
 
@@ -18,6 +21,8 @@ export type PcdAction =
   | { kind: "weapon"; w: "aim120" | "aim9x" | "jdam" | "jsm" }
   | { kind: "radar"; mode: "RWS" | "TWS" | "STT" }
   | { kind: "lock" }
+  /** a track touched on the TSD or the FCR: selected (a second touch locks it — PLAN-RADAR-AAA RD9) */
+  | { kind: "select"; id: string }
   | { kind: "cm" }
   /** the autopilot: its selectors (SI, radians), AP and A/THR engaged or let go */
   | { kind: "ap"; set: { alt?: number; hdg?: number; spd?: number; ap?: boolean; athr?: boolean } }
@@ -113,6 +118,15 @@ export interface PcdData {
     datalink: boolean;
     name: string;
     colour?: string;
+    /** selected on the pilot's screens (RD9); carried on since its last measure (RD2); its picture's id */
+    selected?: boolean;
+    state?: string;
+    id?: string;
+    /** its history (RD7): east, north of us [m], its freshness (1 new … 0 the span's end) */
+    hist?: { e: number; n: number; f: number }[];
+    /** the TCAS's grading (RD4); the civil traffic */
+    tcas?: "other" | "proximate" | "TA" | "RA";
+    traffic?: boolean;
   }[];
   /** a mission's places (controller/mission.ts missionMarks — P2): its zones to reach (amber), the SAMs' reach (red) */
   marks?: { kind: "zone" | "threat"; lat: number; lon: number; r: number; label: string; active: boolean }[];
@@ -133,9 +147,34 @@ export interface PcdData {
   } | null;
   /** a lesson flown (controller/course.ts): its id, how, its steps (whose), the step now, the instructor's last words */
   lesson?: { id: string; mode: string; steps: { name: string; who: "tars" | "you" }[]; i: number; said: string } | null;
+  /** what the DAS holds of the aircraft about (RD4 — their heat, all round): heading up as the radar's contacts [m] */
+  das?: { x: number; y: number; dz: number; iff: string }[];
   /** the missiles in flight (a fight's — the DAS sees their motors): heading up as the radar's contacts (x right, y
    *  ahead, dz above [m]), the ones at us */
-  missiles?: { x: number; y: number; dz: number; atUs: boolean }[];
+  missiles?: { x: number; y: number; dz: number; atUs: boolean; trk?: number | null }[];
+  /** the picture's missiles (RD8 — the TSD's): heading up [m], their way, target's place and time to go, decoyed, end */
+  msls?: {
+    x: number;
+    y: number;
+    trk: number | null;
+    red: boolean;
+    atUs: boolean;
+    decoyed: boolean;
+    end?: "splash" | "miss";
+    tti: number | null;
+    tx: number | null;
+    ty: number | null;
+    pitbull?: boolean;
+    apole?: number | null;
+    fpole?: number | null;
+  }[];
+  /** the world's airfields about the craft (src/world/runways.ts — PLAN-RADAR-AAA RD11), the nearest first */
+  world?: Airfield[];
+  /** the craft's trace and the path ahead (controller/owntrack.ts — PLAN-RADAR-AAA RD15) */
+  trail?: { lat: number; lon: number }[];
+  pred?: { lat: number; lon: number; t: number }[];
+  /** the decoys in the air (a fight's flares and chaff — PLAN-RADAR-AAA RD8a): heading up as the missiles, their age [s] */
+  decoys?: { x: number; y: number; dz: number; kind: "flare" | "chaff"; age: number }[];
   /** the ground's height at a place [m over the ellipsoid; the sea 0] (the TSD's relief; none: not drawn) */
   ground?: (lat: number, lon: number) => number;
   /** the radar (controller/radar.ts radarHud): its mode, its beam's azimuth off the nose [rad], its contacts heading
@@ -154,6 +193,8 @@ export interface PcdData {
       locked: boolean;
       datalink: boolean;
       name: string;
+      selected?: boolean;
+      id?: string;
     }[];
     lock: { name: string; iff: string; range: number; closure: number; alt: number; hdg: number; gs: number } | null;
   } | null;
@@ -286,6 +327,15 @@ export class Pcd {
   private grain: OffscreenCanvas | null = null;
   /** each slot's buttons inside its page (the AP's), as last drawn: where, what they do */
   private hits = new Map<number, { r: PcdRect; act: () => string | null }[]>();
+  /** the portal being drawn (its symbols' touch targets go to its hits) */
+  private drawSlot = 0;
+  /** A track's symbol a touch selects (PLAN-RADAR-AAA RD9). */
+  private symHit(x: number, y: number, id: string | undefined) {
+    if (!id) return;
+    this.hits
+      .get(this.drawSlot)
+      ?.push({ r: { x: x - 20, y: y - 20, w: 40, h: 40 }, act: () => this.act?.({ kind: "select", id }) ?? null });
+  }
   /** the TSD's relief shown (north up, centred at lat, lon, ±half [m]) and the one being built (its rows so far) */
   private relief: { canvas: OffscreenCanvas; lat: number; lon: number; half: number; key: string } | null = null;
   private reliefJob: { im: ImageData; row: number; lat: number; lon: number; half: number; alt: number; key: string } | null = null;
@@ -307,6 +357,10 @@ export class Pcd {
   /** the last touch on the display (u, v; when [ms]) and the last page changed (its part [px]; when [ms]) — the
    *  shader's ring and sweep (ship.wgsl pcdLight) */
   lastTouch: { u: number; v: number; at: number } | null = null;
+  /** the designation cursor on the display (u, v — PLAN-RADAR-AAA constat 29: input/tdc.ts), null: none; its portal
+   *  drawn each frame while it is */
+  tdc: { u: number; v: number } | null = null;
+  private tdcKey: string | null = null;
   lastChange: { rect: PcdRect; at: number } | null = null;
   /** the touch's and the page change's age held [s] (a capture, a test: the ring and the sweep caught mid-way) */
   ageHeld: number | null = null;
@@ -413,6 +467,61 @@ export class Pcd {
     return null;
   }
 
+  /** The page shown at (u, v) on the display and its body's place there (u, v from its corners — the TDC's room). */
+  pageRect(u: number, v: number): { page: PcdPage; rect: { u0: number; v0: number; u1: number; v1: number } } | null {
+    const x = u * PCD_W,
+      y = v * PCD_H;
+    for (const P of this.portals()) {
+      const f = P.frame;
+      if (x < f.x || x > f.x + f.w || y < f.y || y > f.y + f.h || this.menu === P.slot) continue;
+      return {
+        page: this.pages[P.slot]!,
+        rect: { u0: f.x / PCD_W, v0: (f.y + HEAD) / PCD_H, u1: (f.x + f.w) / PCD_W, v1: (f.y + f.h - FOOT) / PCD_H },
+      };
+    }
+    return null;
+  }
+
+  /** The page shown at (u, v) on the display (its body, under its title; null: none) — the tests' and the wheel's. */
+  pageAt(u: number, v: number): PcdPage | null {
+    const x = u * PCD_W,
+      y = v * PCD_H;
+    for (const P of this.portals()) {
+      const f = P.frame;
+      if (x >= f.x && x <= f.x + f.w && y >= f.y + HEAD && y <= f.y + f.h - FOOT) return this.pages[P.slot]!;
+    }
+    return null;
+  }
+
+  /** The wheel at (u, v) on the display (PLAN-RADAR-AAA P11): over a TSD or an FCR, its range a step out (dir > 0)
+   *  or in; what it did (null: no range there — the wheel left to the rest). */
+  wheel(u: number, v: number, dir: number): string | null {
+    const x = u * PCD_W,
+      y = v * PCD_H;
+    for (const P of this.portals()) {
+      const f = P.frame;
+      if (x < f.x || x > f.x + f.w || y < f.y || y > f.y + f.h) continue;
+      const page = this.pages[P.slot]!;
+      const s = Math.sign(dir);
+      let said: string | null = null;
+      if (page === "TSD") {
+        const j = Math.max(0, RANGES.indexOf(this.range));
+        this.range = RANGES[Math.min(Math.max(j + s, 0), RANGES.length - 1)]!;
+        said = `RNG ${this.range}`;
+      } else if (page === "FCR") {
+        const j = Math.max(0, FCR_RANGES.indexOf(this.fcrRange));
+        this.fcrRange = FCR_RANGES[Math.min(Math.max(j + s, 0), FCR_RANGES.length - 1)]!;
+        said = `FCR ${this.fcrRange}`;
+      }
+      if (said) {
+        this.forced.add(P.key);
+        this.lastChange = { rect: P.region, at: performance.now() };
+      }
+      return said;
+    }
+    return null;
+  }
+
   /** A page's keys at its portal's foot. */
   private keys(page: PcdPage): PcdKey[] {
     const step = (s: number) => () => {
@@ -514,6 +623,11 @@ export class Pcd {
     if (d.ground && shown("TSD")) this.reliefStep(d, d.ground);
     if (d.ground && shown("EOTS")) this.ridgeStep(d, d.ground);
     const regions = this.regions();
+    // (the designation cursor: its portal drawn each frame — and the one it left, once)
+    const tk = this.tdc ? (this.portals().find((P) => this.inFrame(P, this.tdc!.u, this.tdc!.v))?.key ?? null) : null;
+    if (this.tdcKey && this.tdcKey !== tk) this.forced.add(this.tdcKey);
+    if (tk) this.forced.add(tk);
+    this.tdcKey = tk;
     const when = (key: string) => this.drawn.get(key) ?? -Infinity;
     let out = regions.filter((R) => this.forced.has(R.key));
     this.forced.clear();
@@ -694,7 +808,30 @@ export class Pcd {
     if (P) this.portal(P, d);
     else if (key === "top") this.topStrip(d);
     else this.bottomStrip(d);
+    if (P && this.tdc && this.inFrame(P, this.tdc.u, this.tdc.v)) this.tdcCursor(this.tdc.u * PCD_W, this.tdc.v * PCD_H);
     g.restore();
+  }
+
+  private inFrame(P: Portal, u: number, v: number) {
+    const f = P.frame,
+      x = u * PCD_W,
+      y = v * PCD_H;
+    return x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h;
+  }
+
+  /** The designation cursor: the F-35's two bars, a dot between (PLAN-RADAR-AAA constat 29). */
+  private tdcCursor(x: number, y: number) {
+    const g = this.g;
+    g.strokeStyle = C.white;
+    g.lineWidth = 4;
+    g.beginPath();
+    g.moveTo(x - 14, y - 18);
+    g.lineTo(x - 14, y + 18);
+    g.moveTo(x + 14, y - 18);
+    g.lineTo(x + 14, y + 18);
+    g.stroke();
+    g.fillStyle = C.white;
+    g.fillRect(x - 2, y - 2, 4, 4);
   }
 
   // ---- the frame
@@ -808,6 +945,7 @@ export class Pcd {
     if (menu) g.fillRect(f.x + f.w / 2 - 40, f.y + HEAD - 4, 128, 3);
     const r = this.content(P);
     this.hits.set(P.slot, []);
+    this.drawSlot = P.slot;
     g.save();
     g.beginPath();
     g.rect(f.x + 2, r.y, f.w - 4, r.h);
@@ -922,6 +1060,39 @@ export class Pcd {
         s = Math.sin(d.heading);
       return [cx + (e * c - n * s) * px, cy - (e * s + n * c) * px];
     };
+    // the craft's trace (the last minutes) and the path ahead, its minutes ticked (PLAN-RADAR-AAA RD15)
+    if (d.trail && d.trail.length > 1) {
+      g.strokeStyle = "rgba(95, 210, 255, 0.55)";
+      g.lineWidth = 3;
+      g.beginPath();
+      d.trail.forEach((p, k) => {
+        const [x, y] = where(p.lat, p.lon);
+        if (k) g.lineTo(x, y);
+        else g.moveTo(x, y);
+      });
+      g.stroke();
+    }
+    if (d.pred && d.pred.length > 1) {
+      g.strokeStyle = "rgba(255, 255, 255, 0.8)";
+      g.lineWidth = 2.5;
+      g.setLineDash([12, 8]);
+      g.beginPath();
+      d.pred.forEach((p, k) => {
+        const [x, y] = where(p.lat, p.lon);
+        if (k) g.lineTo(x, y);
+        else g.moveTo(x, y);
+      });
+      g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = "#ffffff";
+      for (const p of d.pred)
+        if (p.t > 0 && p.t % 60 === 0) {
+          const [x, y] = where(p.lat, p.lon);
+          g.beginPath();
+          g.arc(x, y, 4, 0, 2 * Math.PI);
+          g.fill();
+        }
+    }
     // range rings and the compass
     g.strokeStyle = C.dim;
     g.lineWidth = 2;
@@ -949,23 +1120,20 @@ export class Pcd {
           "center",
         );
     }
-    // the airfields: their runway (4.5 km) and their names
-    for (const f of d.fields) {
-      const [x, y] = where(f.lat, f.lon);
-      if (Math.abs(x - cx) > r.w || Math.abs(y - cy) > r.h * 1.4) continue;
-      g.strokeStyle = C.cyan;
-      g.lineWidth = 4;
-      const h = (f.rwy ?? 0) * D - d.heading;
-      const L = Math.max(4500 * px, 8);
-      g.beginPath();
-      g.moveTo(x, y);
-      g.lineTo(x + Math.sin(h) * L, y - Math.cos(h) * L);
-      g.stroke();
-      g.beginPath();
-      g.arc(x, y, 7, 0, 2 * Math.PI);
-      g.stroke();
-      if (!this.declutter) this.text(f.icao ?? f.name.slice(0, 6), x + 14, y + 18, C.cyan, 22);
-    }
+    // the world's airfields (src/world/runways.ts — PLAN-RADAR-AAA RD11): by the range's level of detail — their
+    // runways at scale where they show, a dot farther —, the codes but decluttered
+    const R0 = this.range * this.u.distM;
+    drawFields(
+      g,
+      (d.world ?? []).filter((f) => fieldShown(f, R0)),
+      {
+        at: (la, lo) => where(la, lo),
+        mpp: 1 / px,
+        k: 2,
+        labels: !this.declutter,
+        box: { x: r.x, y: r.y, w: r.w, h: r.h },
+      },
+    );
     // a mission's places: the zones to reach (amber, the waiting dashed), the SAMs' reach (red, dashed)
     for (const m of d.marks ?? []) {
       const [x, y] = where(m.lat, m.lon);
@@ -1048,12 +1216,19 @@ export class Pcd {
       const x = cx + (T.e * c0 - T.n * s0) * px,
         y = cy - (T.e * s0 + T.n * c0) * px;
       if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
-      const col = T.colour ?? (T.iff === "friend" ? C.cyan : T.iff === "hostile" ? "#ff5a46" : T.iff === "neutral" ? C.white : "#ffd23f");
-      g.strokeStyle = col;
-      g.fillStyle = col;
-      g.lineWidth = 3;
-      const k = 13;
+      const side: SymSide = T.traffic && T.iff !== "hostile" ? "traffic" : T.colour && T.iff !== "hostile" ? "player" : (T.iff as SymSide);
+      const col = symColour({ kind: T.air ? "air" : "sea", side, colour: side === "player" ? T.colour : undefined });
+      // (its trail — RD7 —: its past places, dots fading)
+      if (T.hist?.length) {
+        g.fillStyle = col;
+        for (const q of T.hist) {
+          g.globalAlpha = 0.15 + 0.6 * q.f;
+          g.fillRect(cx + (q.e * c0 - q.n * s0) * px - 2.5, cy - (q.e * s0 + q.n * c0) * px - 2.5, 5, 5);
+        }
+        g.globalAlpha = 1;
+      }
       if (T.locked) {
+        g.strokeStyle = col;
         g.setLineDash([6, 6]);
         g.lineWidth = 1.5;
         g.beginPath();
@@ -1061,46 +1236,70 @@ export class Pcd {
         g.lineTo(x, y);
         g.stroke();
         g.setLineDash([]);
-        g.lineWidth = 3;
       }
-      g.beginPath();
-      if (T.air) {
-        if (T.iff === "friend") g.arc(x, y + k * 0.4, k, Math.PI, 2 * Math.PI);
-        else if (T.iff === "hostile") {
-          g.moveTo(x - k, y + k * 0.5);
-          g.lineTo(x, y - k * 0.6);
-          g.lineTo(x + k, y + k * 0.5);
-        } else {
-          g.moveTo(x - k * 0.8, y + k * 0.6);
-          g.lineTo(x - k * 0.8, y - k * 0.6);
-          g.lineTo(x + k * 0.8, y - k * 0.6);
-          g.lineTo(x + k * 0.8, y + k * 0.6);
-        }
-      } else if (T.iff === "friend") g.arc(x, y, k * 0.8, 0, 2 * Math.PI);
-      else if (T.iff === "hostile") {
-        g.moveTo(x, y - k);
-        g.lineTo(x + k, y);
-        g.lineTo(x, y + k);
-        g.lineTo(x - k, y);
-        g.closePath();
-      } else g.rect(x - k * 0.75, y - k * 0.75, k * 1.5, k * 1.5);
-      if (T.datalink) g.setLineDash([5, 4]);
-      g.stroke();
-      g.setLineDash([]);
-      if (T.hdg !== null) {
-        const a = T.hdg - d.heading;
+      // (the common symbology — radar/symbols.ts, PLAN-RADAR-AAA RD3)
+      drawSym(
+        g,
+        x,
+        y,
+        {
+          kind: T.air ? "air" : "sea",
+          side,
+          colour: side === "player" ? T.colour : undefined,
+          state: T.datalink ? "datalink" : T.state === "coast" ? "coast" : "firm",
+          trk: T.hdg !== null ? T.hdg - d.heading : null,
+          locked: T.locked,
+          selected: T.selected,
+          tcas: T.tcas,
+        },
+        13,
+        3,
+      );
+      this.symHit(x, y, T.id);
+      if (!this.declutter || T.locked || T.selected) this.text(T.name.slice(0, 10), x + 18, y - 14, col, 20);
+    }
+    // the missiles in flight (red: at us) and the decoys (PLAN-RADAR-AAA RD8a): heading up already
+    // (the picture's — RD8 —: their line to their target, the time to go, DECOYED, SPLASH or MISS where they ended)
+    for (const M of d.msls ?? []) {
+      const x = cx + M.x * px,
+        y = cy - M.y * px;
+      if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
+      const col = symColour({ kind: "missile", side: M.red ? "hostile" : "friend" });
+      if (M.end) {
+        this.text(M.end === "splash" ? "SPLASH" : "MISS", x, y, col, 20, "center", true);
+        if (M.fpole !== null && M.fpole !== undefined) this.text(`F-POLE ${this.u.dist(M.fpole).toFixed(1)}`, x, y + 22, col, 15, "center");
+        continue;
+      }
+      if (M.tx !== null && M.ty !== null) {
+        const tx = cx + M.tx * px,
+          ty = cy - M.ty * px;
+        g.strokeStyle = col;
+        g.lineWidth = 1.5;
+        g.setLineDash([5, 6]);
         g.beginPath();
         g.moveTo(x, y);
-        g.lineTo(x + Math.sin(a) * 34, y - Math.cos(a) * 34);
+        g.lineTo(tx, ty);
         g.stroke();
+        g.setLineDash([]);
+        if (M.tti !== null && M.tti < 600) this.text(`${Math.round(M.tti)}s`, (x + tx) / 2 + 10, (y + ty) / 2, col, 18);
       }
-      if (T.locked) {
-        g.lineWidth = 2;
-        g.beginPath();
-        g.arc(x, y, k + 9, 0, 2 * Math.PI);
-        g.stroke();
-      }
-      if (!this.declutter || T.locked) this.text(T.name.slice(0, 10), x + 18, y - 14, col, 20);
+      drawSym(g, x, y, { kind: "missile", side: M.red ? "hostile" : "friend", trk: M.trk, atUs: M.atUs }, 12, 3);
+      if (M.decoyed) this.text("DECOYED", x, y + 26, col, 16, "center", true);
+      else if (M.pitbull)
+        this.text(
+          `PITBULL${M.apole !== null && M.apole !== undefined ? ` A ${this.u.dist(M.apole).toFixed(1)}` : ""}`,
+          x,
+          y + 26,
+          col,
+          15,
+          "center",
+        );
+    }
+    for (const q of d.decoys ?? []) {
+      const x = cx + q.x * px,
+        y = cy - q.y * px;
+      if (x < r.x || x > r.x + r.w || y < r.y || y > r.y + r.h) continue;
+      this.decoyMark(x, y, q.kind, q.age, 1.6);
     }
     // the bingo's reach: how far we fly before the fuel left is the bingo (at this flow and ground speed)
     if (d.flow > 1e-3 && d.gs > 20) {
@@ -1201,6 +1400,14 @@ export class Pcd {
     g.moveTo(bx, T);
     g.lineTo(bx, B);
     g.stroke();
+    // (chaff: a bright echo blooming where it was cut — PLAN-RADAR-AAA RD8a —; a flare is no echo)
+    for (const q of d.decoys ?? []) {
+      if (q.kind !== "chaff") continue;
+      const rg = Math.hypot(q.x, q.y),
+        az = Math.atan2(q.x, q.y);
+      if (Math.abs(az) > AZ || rg > range || q.y < 0) continue;
+      this.decoyMark(X(az), Y(rg), "chaff", q.age, 1.8);
+    }
     // the contacts
     for (const K of F.contacts) {
       const rg = Math.hypot(K.x, K.y);
@@ -1208,41 +1415,31 @@ export class Pcd {
       if (Math.abs(az) > AZ || rg > range || K.y < 0) continue;
       const x = X(az),
         y = Y(rg);
-      const col = K.iff === "friend" ? C.cyan : K.iff === "hostile" ? "#ff5a46" : K.iff === "neutral" ? C.white : C.yellow;
+      const col = symColour({ kind: "air", side: K.iff as SymSide });
       const dim = F.mode === "STT" && !K.locked;
       g.globalAlpha = dim ? 0.35 : 1;
-      g.strokeStyle = col;
       g.fillStyle = col;
-      g.lineWidth = 3;
+      // (RWS: the raw hits, bricks — no way known; else the common symbology — radar/symbols.ts, RD3)
       if (F.mode === "RWS" && !K.locked && !K.datalink) g.fillRect(x - 9, y - 5, 18, 10);
       else {
-        const k = 12;
-        g.beginPath();
-        if (K.iff === "friend") g.arc(x, y, k, Math.PI, 2 * Math.PI);
-        else if (K.iff === "hostile") {
-          g.moveTo(x, y - k);
-          g.lineTo(x + k, y);
-          g.lineTo(x, y + k);
-          g.lineTo(x - k, y);
-          g.closePath();
-        } else g.rect(x - k * 0.8, y - k * 0.8, k * 1.6, k * 1.6);
-        if (K.datalink) g.setLineDash([5, 4]);
-        g.stroke();
-        g.setLineDash([]);
-        if (K.trk !== null) {
-          g.beginPath();
-          g.moveTo(x, y);
-          g.lineTo(x + Math.sin(K.trk) * 30, y - Math.cos(K.trk) * 30);
-          g.stroke();
-        }
+        drawSym(
+          g,
+          x,
+          y,
+          {
+            kind: "air",
+            side: K.iff as SymSide,
+            state: K.datalink ? "datalink" : "firm",
+            trk: K.trk,
+            locked: K.locked,
+            selected: K.selected,
+          },
+          12,
+          3,
+        );
+        this.symHit(x, y, K.id);
         // (its altitude, in thousands of the altitude's unit — as a real scope)
         this.text(`${(this.u.alt(d.alt + K.dz) / 1000).toFixed(0)}`, x, y + 24, col, 18, "center");
-      }
-      if (K.locked) {
-        g.lineWidth = 2;
-        g.beginPath();
-        g.arc(x, y, 22, 0, 2 * Math.PI);
-        g.stroke();
       }
       if (!this.declutter && (K.locked || F.mode !== "RWS")) this.text(K.name.slice(0, 10), x + 18, y - 16, col, 18);
       g.globalAlpha = 1;
@@ -1256,7 +1453,7 @@ export class Pcd {
         `${this.u.dist(lk.range).toFixed(1)} ${this.u.distName}  VC ${Math.round(vc)}`,
         `${Math.round(this.u.alt(lk.alt)).toLocaleString("en")} ${this.u.altName}  ${String(Math.round(lk.hdg / D)).padStart(3, "0")}°  ${Math.round(this.u.spd(lk.gs))}`,
       ];
-      this.text(rows[0]!, r.x + r.w - 20, r.y + 20, lk.iff === "hostile" ? "#ff5a46" : C.yellow, 24, "right", true);
+      this.text(rows[0]!, r.x + r.w - 20, r.y + 20, symColour({ kind: "air", side: lk.iff as SymSide }), 24, "right", true);
       this.text(`${rows[1]}  ·  ${rows[2]}`, r.x + r.w - 20, r.y + 44, C.white, 18, "right");
     }
   }
@@ -1533,7 +1730,7 @@ export class Pcd {
       g.arc(b.x + b.w / 2 + az * bk, Math.max(b.y + 6, Math.min(b.y + b.h - 6, by - el * elK)), size, 0, 2 * Math.PI);
       g.fill();
     };
-    for (const K of d.fcr?.contacts ?? []) dot(K.x, K.y, K.dz, K.iff === "hostile" ? "#ff5a46" : K.iff === "friend" ? C.cyan : C.white, 3);
+    for (const K of d.das ?? []) dot(K.x, K.y, K.dz, symColour({ kind: "air", side: K.iff as SymSide }), 3);
     for (const M of d.missiles ?? []) {
       dot(M.x, M.y, M.dz, M.atUs ? C.red : C.amber, M.atUs ? 6 : 4);
       if (M.atUs) {
@@ -1541,7 +1738,15 @@ export class Pcd {
         this.text("MSL", b.x + b.w / 2 + az * bk, b.y + 12, C.red, 16, "center", true);
       }
     }
+    // (the flares: hot points the DAS sees all round — PLAN-RADAR-AAA RD8a)
+    for (const q of d.decoys ?? []) if (q.kind === "flare" && q.age < 5) dot(q.x, q.y, q.dz, PAL.flare, 3.5);
     this.text("DAS", b.x + 8, b.y + 14, C.grey, 16, "left", true);
+  }
+
+  /** A decoy's mark (PLAN-RADAR-AAA RD8a): a flare an orange star dying in its last two seconds, chaff a cloud of grey
+   *  dots spreading as it blooms. */
+  private decoyMark(x: number, y: number, kind: "flare" | "chaff", age: number, k: number) {
+    drawSym(this.g, x, y, { kind, side: "friend", age }, 7 * k, 1.4 * k);
   }
 
   /** A button inside a page (lit: its colour; dim: nothing to do now), kept for the touch. */
@@ -2150,7 +2355,12 @@ export class Pcd {
 /** The nearest airfield: its distance [m] and bearing [°]. */
 function nearest(d: PcdData): { f: PcdField; dist: number; brg: number } | null {
   let best: { f: PcdField; dist: number; brg: number } | null = null;
-  for (const f of d.fields) {
+  // (the game's sites and the world's airfields a jet lands on — a paved runway of 1 200 m: PLAN-RADAR-AAA RD13)
+  const world: PcdField[] = (d.world ?? [])
+    .map((f) => ({ f, w: f.runways.filter((x) => x.surface === "paved" && x.len >= 1200).sort((a, b) => b.len - a.len)[0] }))
+    .filter((x) => x.w)
+    .map(({ f, w }) => ({ name: f.name, icao: f.icao || f.ident, lat: f.lat, lon: f.lon, rwy: w!.hdg }));
+  for (const f of [...d.fields, ...world]) {
     const p1 = d.lat * D,
       p2 = f.lat * D,
       dl = (f.lon - d.lon) * D;

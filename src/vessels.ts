@@ -1,5 +1,5 @@
-// The craft the player flies: Interstellar's Ranger, its Lander and the Endurance itself — and a fighter,
-// the F-35B (docs/PLAN-F35.md), for the Earth's air. One is flown at a time — the camera rides it (controls.ts); the others coast on Kepler orbits, or stay docked
+// The craft the player flies: Interstellar's Ranger, its Lander and the Endurance itself — and for the Earth's
+// air a fighter, the F-35B (docs/PLAN-F35.md), and an airliner, the A320 (docs/PLAN-A320.md). One is flown at a time — the camera rides it (controls.ts); the others coast on Kepler orbits, or stay docked
 // (fleet.ts). Each has its mesh (ship.ts draws them together), its mass and engines, how fast it turns,
 // its docking ports, its thrusters and the camera's attach points on it.
 //
@@ -9,14 +9,19 @@
 import type { V3 } from "./mounts";
 import type { VesselAero } from "./aero";
 import { F135, type TurbofanDef } from "./f35/engine";
+import { CFM56_PAIR } from "./a320/engine";
+// (the A320's JSBSim aerodynamics registered: VesselAero.model "a320")
+import "./a320/aero";
 
-export type VesselId = "ranger" | "lander" | "endurance" | "f35";
-export const VESSEL_IDS: VesselId[] = ["ranger", "lander", "endurance", "f35"];
-/** The spacecraft: the fleet near the Earth, always somewhere (fleet.ts fleetStart). The F-35 is only where
- *  it is flown — put on a runway when chosen (controller/fleet.ts). */
-export type SpacecraftId = Exclude<VesselId, "f35">;
+export type VesselId = "ranger" | "lander" | "endurance" | "f35" | "a320";
+export const VESSEL_IDS: VesselId[] = ["ranger", "lander", "endurance", "f35", "a320"];
+/** The aircraft: only where they are flown — put on a runway when chosen (controller/fleet.ts). */
+export type AircraftId = "f35" | "a320";
+export const isAircraft = (id: VesselId): id is AircraftId => id === "f35" || id === "a320";
+/** The spacecraft: the fleet near the Earth, always somewhere (fleet.ts fleetStart). */
+export type SpacecraftId = Exclude<VesselId, AircraftId>;
 /** The craft that fly as aeroplanes in the air (the plane law by default, a runway's take-off and landing). */
-export const isPlane = (id: VesselId) => id === "ranger" || id === "f35";
+export const isPlane = (id: VesselId) => id === "ranger" || isAircraft(id);
 export const SPACECRAFT: SpacecraftId[] = ["ranger", "lander", "endurance"];
 
 /** A docking port: the centre of its ring and the axis out of it (ship frame). */
@@ -527,6 +532,82 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       belly: { eye: [0.4, -0.35, -2.4], aim: [0.1, 0.1, 20] },
       rear: { eye: [0, 1.9, 10.5], aim: [0, 1.3, -6] },
       dock: { eye: [0, 1.9, 4.55], aim: [0, 1.72, 30] },
+    },
+  },
+  // the A320-214 (assets/a320: scripts/build-a320.py from FlightGear's A320-family — 37.57 m long, 35.80 m span, its
+  // belly at y = 0, the wheels 1.74 m under it; ship = (−y, z + 2.648, −x) of JSBSim's frame): 43.3 t empty (the FDM's),
+  // 150 passengers and their bags 13.5 t, 8 t of fuel — 64.8 t (docs/PLAN-A320.md: A3 reads the rest of the FDM)
+  a320: {
+    id: "a320",
+    name: "A320",
+    mass: 43277 + 13500 + 8000,
+    fuelKg: 8000,
+    turbofan: CFM56_PAIR,
+    // (Airbus's normal law: 15°/s of roll at full stick, +2.5 / −1 g, the angle of attack held under α max)
+    fbw: { rates: [0.12, 0.05, 0.26], gMax: 2.5, gMin: -1, alphaMax: 0.26 },
+    accel: 1,
+    slThrust: 1,
+    spool: CFM56_PAIR.spool,
+    gyr: 7,
+    // (the FDM's inertia, empty: Ixx 0.96, Iyy 2.49, Izz 1.89 × 10⁶ kg m² — radii 7.6, 6.6, 4.7 m)
+    rg: [7.6, 6.6, 4.7],
+    tank: [0, 1.6, 1.5],
+    agility: 0.02,
+    // (28.5 % of the mean chord: JSBSim's CG at x = −2.4335, z = −0.934)
+    com: [0, 1.714, 2.43],
+    centre: [0, 2.6, 0],
+    viewDist: 52,
+    ports: [],
+    lands: true,
+    // (its two CFM56s' exhausts: their cores at JSBSim's x = 4.5, y = ±5.63, z = −2.22 — FlightGear's contrails)
+    jets: [5.63, -5.63].map((x) => ({
+      p: [x, 0.43, -1.5] as V3,
+      d: [0, 0, -1] as V3,
+      half: [0.45, 0.45] as [number, number],
+      u: [1, 0, 0] as V3,
+      main: true,
+    })),
+    flame: 0.2,
+    flies: true,
+    wingtip: [17.0, 2.95, -2.0],
+    aero: {
+      // (its own: FlightGear's JSBSim model — src/a320/aero.ts —; the rest below its heat's and limits', and the
+      // generic model's figures for what reads them — the map's drag, a stand-in's)
+      model: "a320",
+      area: [90, 150, 0.5],
+      // (C_D0 0.019 on 122.6 m²: the FDM's)
+      cdA0: 2.33,
+      wing: { S: 122.6, AR: 10.45, cla: 4.8, stall: 0.22, e: 0.78, dihedral: 0.087 },
+      fin: { S: 21.5, cla: 2.5, at: [0, 5.4, -17.9] },
+      cp: [
+        [0, 0.5, -3.0],
+        [0, 0, -1.0],
+        [0, 0.3, 0],
+      ],
+      cw: [0, 0, -0.17],
+      curve: [0, 0.2, 0.6],
+      damp: [2.0, 2.0, 0.03],
+      len: 37.57,
+      noseR: 2.0,
+      shield: null,
+      hull: { tMax: 400, cap: 8e3, eps: 0.85 },
+      gMax: 3.75,
+      ctrl: [0.05, 0.07, 0.3],
+    },
+    mounts: {
+      // (the captain's eyes: FlightGear's "Captain View" — 0.45 m left, 1.403 m up, 16.193 m ahead of its origin —, the
+      // look 12° down: the PFD, the ND and the runway together — FlightGear's 16°, the panel's)
+      cockpit: { eye: [0.45, 3.22, 16.193], aim: [0.45, -6.13, 60.193] },
+      cabin: { eye: [0.45, 3.22, 16.193], aim: [0.45, 3.22, 60.193] },
+      quarter: { eye: [22, 9, -26], aim: [-2, 2.4, 8] },
+      chase: { eye: [0, 8.5, -48], aim: [0, 2.6, 10] },
+      dorsal: { eye: [0, 5.2, 6], aim: [0, 4.6, 40] },
+      // (along the left wing from the fuselage's window line, aft of its trailing edge: the flaps, the spoilers, the
+      // engine — PLAN-A320 A13)
+      wing: { eye: [2.5, 3.6, -3.5], aim: [9.5, 0.9, 6] },
+      belly: { eye: [0.4, -0.5, 2], aim: [0.1, -0.2, 30] },
+      rear: { eye: [0, 4.5, 30], aim: [0, 2.6, -10] },
+      dock: { eye: [0.45, 3.22, 16.193], aim: [0.45, -6.13, 60.193] },
     },
   },
 };

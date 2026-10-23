@@ -116,6 +116,8 @@ export interface Scene {
   history: HistoryPoint[];
   /** everything about (the traffic, the units, the ships) and the mission's zones */
   contacts: Contact[];
+  /** the trails' span shown [s] (0: none — RD7; the missiles' 5 s always) */
+  trails: number;
   zones: InstrumentZone[];
   /** seconds, for the animations (the sweep, the blinking) */
   now: number;

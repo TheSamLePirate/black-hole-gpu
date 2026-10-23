@@ -2,8 +2,9 @@
 // everything shared — the players, the real traffic, a mission's units, the ships — with their bearings, distances and
 // heights; the nearest listed beside it when there is room.
 import { relative } from "../model";
-import { C, deg360, fmt, type Pen, polar, SIDE, TAU, unitSymbol, type Point, type Rect } from "./kit";
+import { C, deg360, fmt, missileCue, type Pen, polar, SIDE, TAU, trailDots, unitSymbol, type Point, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { L } from "../lang";
 
 export interface RadarOpts {
   range: number;
@@ -16,6 +17,8 @@ export interface RadarOpts {
 interface Blip {
   e: number;
   n: number;
+  /** its past places (RD7) */
+  trail?: { lat: number; lon: number; age: number }[];
   dz: number | null;
   name: string;
   col: string;
@@ -25,6 +28,12 @@ interface Blip {
   locked: boolean;
   id: string;
   slot?: number;
+  /** a missile's cue (RD8): its end, at us, decoyed, its time to go */
+  cue?: string;
+  /** how the pilot's sensors hold it (RD6): a truth's faded in « Partagé » */
+  state?: "firm" | "coast" | "datalink" | "truth";
+  /** a missile at the pilot (the list's order) */
+  atUs?: boolean;
 }
 
 export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
@@ -39,23 +48,79 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
   const R = Math.max(20, Math.min(area.w, area.h) * 0.42);
   const up = o.north || !Number.isFinite(s.hdg) ? 0 : s.hdg;
   const k = R / o.range;
-  // the blips
+  // the blips (the pilot's selection ringed as the crew's — PLAN-RADAR-AAA RD9)
+  const pilotSel = sc.snap?.radar?.selected ?? null;
+  // (the pilot's picture — RD6: « Capteur » what his sensors hold, coloured by their IFF; « Partagé » the truth, what
+  // they do not hold faded)
+  const pic = sc.snap?.pic ?? null;
   const blips: Blip[] = [];
-  if (own && o.sensor)
+  if (pic && own?.geo)
+    for (const t of sc.contacts) {
+      const sensed = (t.sensors ?? 0) !== 0 && t.state !== "truth";
+      if (o.sensor && !sensed) continue;
+      const q = polar(own.geo.lat, own.geo.lon, t.lat, t.lon);
+      // (the side drawn: the IFF known — the civil traffic's and a player's own looks kept — or the truth)
+      const side =
+        o.sensor && t.kind !== "missile" && t.kind !== "decoy"
+          ? t.side === "dead"
+            ? "dead"
+            : (t.side === "traffic" || t.side === "player") && t.iff !== "hostile"
+              ? t.side
+              : (t.iff ?? "unknown")
+          : t.kind === "decoy"
+            ? t.type
+            : t.side;
+      blips.push({
+        e: Math.sin(q.b) * q.d,
+        n: Math.cos(q.b) * q.d,
+        dz: t.alt !== null && Number.isFinite(s.alt) ? t.alt - s.alt : null,
+        name: t.name,
+        col: SIDE[side] ?? C.white,
+        kind: t.kind,
+        side,
+        hdg: t.hdg,
+        trail: t.trail,
+        locked: !!t.locked,
+        id: t.id,
+        cue: t.kind === "missile" ? t.type : undefined,
+        state: !o.sensor && !sensed ? "truth" : t.state === "coast" ? "coast" : t.state === "datalink" ? "datalink" : "firm",
+        atUs: t.msl?.target === "own",
+      });
+    }
+  if (own && o.sensor && !pic)
     for (const t of sc.snap?.radar?.contacts ?? [])
       blips.push({
         e: t.e,
         n: t.n,
         dz: t.dz,
         name: t.name,
-        col: t.iff === "hostile" ? C.red : t.iff === "friend" ? C.cyan : C.amber,
+        // (the IFF as the pilot's sensors know it — the common palette, the pilot's screens' own: PLAN-RADAR-AAA RD3)
+        col: SIDE[t.iff] ?? SIDE.unknown!,
         kind: "air",
-        side: t.iff === "hostile" ? "hostile" : t.iff === "friend" ? "friend" : "neutral",
+        side: t.iff in SIDE ? t.iff : "unknown",
         hdg: null,
         locked: t.locked,
         id: t.id,
       });
-  else if (own) {
+  // (the missiles and decoys in the air: on the Sensor view too — the pilot's DAS sees them)
+  if (own?.geo && o.sensor && !pic)
+    for (const t of sc.contacts.filter((x) => x.kind === "missile" || x.kind === "decoy")) {
+      const q = polar(own.geo.lat, own.geo.lon, t.lat, t.lon);
+      blips.push({
+        e: Math.sin(q.b) * q.d,
+        n: Math.cos(q.b) * q.d,
+        dz: t.alt !== null && Number.isFinite(s.alt) ? t.alt - s.alt : null,
+        name: t.name,
+        col: SIDE[t.side] ?? C.white,
+        kind: t.kind,
+        side: t.kind === "decoy" ? t.type : t.side,
+        hdg: t.hdg,
+        locked: false,
+        id: t.id,
+        cue: t.kind === "missile" ? t.type : undefined,
+      });
+    }
+  if (own && !o.sensor) {
     for (const cr of sc.crafts) {
       if (cr === own) continue;
       const rel = cr.geo && own.geo ? null : relative(own, cr);
@@ -81,7 +146,7 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
         slot: cr.member.slot,
       });
     }
-    if (own.geo)
+    if (own.geo && !pic)
       for (const t of sc.contacts) {
         const q = polar(own.geo.lat, own.geo.lon, t.lat, t.lon);
         blips.push({
@@ -91,8 +156,9 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
           name: t.name,
           col: SIDE[t.side] ?? C.white,
           kind: t.kind,
-          side: t.side,
+          side: t.kind === "decoy" ? t.type : t.side,
           hdg: t.hdg,
+          trail: t.trail,
           locked: false,
           id: t.id,
         });
@@ -112,13 +178,30 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
   bg.addColorStop(1, "#03080a");
   c.fillStyle = bg;
   c.fillRect(r.x, r.y, r.w, r.h);
-  // the sweep: a conic gradient trailing the beam
-  const sweep = (sc.now * 1.4) % TAU;
+  // the sweep: a conic gradient trailing the beam — the pilot's real one when his picture says it (RD6: its sector
+  // ±60° about his nose, his beam in it), none in « Partagé » (a tactical screen, no false sweep); else the old phosphor
+  const realBeam = pic && o.sensor && pic.b !== null && Number.isFinite(s.hdg) ? s.hdg + pic.b - up : null;
+  const sweep = realBeam !== null ? (realBeam + TAU) % TAU : pic ? -10 : (sc.now * 1.4) % TAU;
   const beam = sweep - Math.PI / 2;
   c.save();
   p.circle(cx, cy, R);
   c.clip();
-  if (c.createConicGradient) {
+  if (pic && o.sensor && Number.isFinite(s.hdg)) {
+    // (the scan's limits, ±60° off the pilot's nose)
+    const nose = s.hdg - up - Math.PI / 2;
+    c.fillStyle = "#3ff2c40d";
+    c.beginPath();
+    c.moveTo(cx, cy);
+    c.arc(cx, cy, R, nose - Math.PI / 3, nose + Math.PI / 3);
+    c.closePath();
+    c.fill();
+    for (const a of [nose - Math.PI / 3, nose + Math.PI / 3])
+      p.seg(cx, cy, cx + Math.cos(a) * R, cy + Math.sin(a) * R, "#2f8f7f", 1, [3, 4]);
+  }
+  if (realBeam !== null) p.seg(cx, cy, cx + Math.cos(beam) * R, cy + Math.sin(beam) * R, "#7dffd8cc", 1.5);
+  else if (pic) {
+    /* (« Partagé »: no sweep) */
+  } else if (c.createConicGradient) {
     const g = c.createConicGradient(beam - 1.2, cx, cy);
     g.addColorStop(0, "#3ff2c400");
     g.addColorStop(0.19, "#3ff2c42a");
@@ -127,7 +210,7 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
     c.fillStyle = g;
     c.fillRect(cx - R, cy - R, R * 2, R * 2);
   }
-  p.seg(cx, cy, cx + Math.cos(beam) * R, cy + Math.sin(beam) * R, "#7dffd8aa", 1.5);
+  if (!pic) p.seg(cx, cy, cx + Math.cos(beam) * R, cy + Math.sin(beam) * R, "#7dffd8aa", 1.5);
   c.restore();
   // the rings, the spokes
   for (let j = 1; j <= 4; j++) {
@@ -139,7 +222,7 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
   for (let d = 0; d < 360; d += 30) {
     const a = d * (Math.PI / 180) - up;
     p.seg(cx, cy, cx + Math.sin(a) * R, cy - Math.cos(a) * R, "#123a34", 1);
-    const name = { 0: "N", 90: "E", 180: "S", 270: "O" }[d] ?? String(d).padStart(3, "0");
+    const name = { 0: "N", 90: "E", 180: "S", 270: L("O", "W") }[d] ?? String(d).padStart(3, "0");
     p.text(name, cx + Math.sin(a) * (R + 14), cy - Math.cos(a) * (R + 14) + 4, {
       col: d % 90 ? "#5fb3a3" : C.cyan,
       size: 11,
@@ -153,7 +236,8 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
     const [x, y] = scr(b);
     const ang = Math.atan2(x - cx, -(y - cy));
     const since = (((sweep - ang) % TAU) + TAU) % TAU;
-    const glow = 0.45 + 0.55 * Math.exp(-since / 1.6);
+    // (the phosphor's afterglow on the old sweep; the picture's echoes steady — a truth's faded by its symbol)
+    const glow = pic ? 1 : 0.45 + 0.55 * Math.exp(-since / 1.6);
     c.globalAlpha = glow;
     if (b.kind === "player") {
       c.save();
@@ -161,20 +245,25 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
       c.rotate((b.hdg ?? 0) - up);
       p.aircraft(16, b.col);
       c.restore();
-    } else if (o.sensor) {
-      p.round(x - 6, y - 6, 12, 12, 2);
-      p.fill(`${b.col}33`);
-      p.stroke(b.col, 1.8);
-    } else unitSymbol(p, x, y, b.kind, b.side, b.hdg, up, 6);
-    if (b.locked) {
-      p.round(x - 11, y - 11, 22, 22, 3);
-      p.stroke(b.col, 2);
-      p.seg(cx, cy, x, y, `${b.col}99`, 1, [3, 4]);
+    } else {
+      // (its trail — RD7 —: the echoes before it)
+      const g0 = own?.geo;
+      if (b.trail && g0)
+        trailDots(p, { trail: b.trail, kind: b.kind, side: SIDE[b.side] ? b.side : "traffic" }, sc.trails, (la, lo) => {
+          const qq = polar(g0.lat, g0.lon, la, lo);
+          if (qq.d > o.range * 1.05) return null;
+          const a = qq.b - up;
+          return [cx + Math.sin(a) * qq.d * k, cy - Math.cos(a) * qq.d * k];
+        });
+      if (!missileCue(p, x, y, { kind: b.kind, side: b.side, type: b.cue ?? "" }))
+        unitSymbol(p, x, y, b.kind, b.side, b.hdg, up, 6, {
+          locked: b.locked,
+          selected: b.id === o.selected || b.id === pilotSel,
+          ...(b.state ? { state: b.state } : {}),
+        });
     }
-    if (b.id === o.selected) {
-      p.circle(x, y, 15);
-      p.stroke(C.amber, 2, [4, 3]);
-    }
+    // (the lock joined to us, as on the TSD)
+    if (b.locked) p.seg(cx, cy, x, y, `${b.col}99`, 1, [3, 4]);
     c.globalAlpha = 1;
     p.text(b.name, x + 12, y - 1, { col: b.col, size: 10, weight: 700 });
     if (b.dz !== null) {
@@ -190,24 +279,42 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
   p.aircraft(18, C.amber, "#000");
   c.restore();
   c.restore();
-  p.text(o.sensor ? `CAPTEUR · ${sc.snap?.radar?.mode || "—"}` : "PARTAGÉ · JOUEURS + TRAFIC", r.x + 12, r.y + 20, {
-    col: C.green,
-    size: 11,
-    weight: 700,
-  });
   p.text(
-    `${o.north ? "NORD" : "CAP"} EN HAUT · ${fmt(o.range / u.distM, o.range / u.distM < 10 ? 1 : 0)} ${u.distName}`,
+    o.sensor
+      ? `${L("CAPTEUR", "SENSOR")} · ${pic?.m || sc.snap?.radar?.mode || "—"}`
+      : pic
+        ? L("PARTAGÉ · VÉRITÉ", "SHARED · TRUTH")
+        : L("PARTAGÉ · JOUEURS + TRAFIC", "SHARED · PLAYERS + TRAFFIC"),
+    r.x + 12,
+    r.y + 20,
+    {
+      col: C.green,
+      size: 11,
+      weight: 700,
+    },
+  );
+  p.text(
+    `${o.north ? L("NORD EN HAUT", "NORTH UP") : L("CAP EN HAUT", "HEADING UP")} · ${fmt(o.range / u.distM, o.range / u.distM < 10 ? 1 : 0)} ${u.distName}${pic && !o.sensor ? L(" · estompé : hors capteurs", " · faded: out of the sensors") : ""}`,
     r.x + 12,
     r.y + 36,
     { col: C.dim, size: 10 },
   );
-  if (o.sensor && !sc.snap?.radar) p.text("Radar du pilote indisponible", cx, r.y + r.h - 18, { col: C.amber, size: 12, align: "center" });
+  if (o.sensor && !sc.snap?.radar && !pic)
+    p.text(L("Radar du pilote indisponible", "The pilot's radar is unavailable"), cx, r.y + r.h - 18, {
+      col: C.amber,
+      size: 12,
+      align: "center",
+    });
   // the nearest, listed
   if (list) {
     const x0 = r.x + r.w - 240,
       y0 = r.y + 14;
     p.panel({ x: x0, y: y0, w: 228, h: r.h - 28 }, `CONTACTS · ${inRange.length}`);
-    const rows = [...inRange].sort((a, b) => Math.hypot(a.e, a.n) - Math.hypot(b.e, b.n)).slice(0, Math.floor((r.h - 70) / 34));
+    // (by threat, then distance — RD6: the lock first, a missile at the pilot, the hostiles, the rest)
+    const rank = (b: Blip) => (b.locked ? 0 : b.atUs ? 1 : b.kind === "missile" ? 2 : b.side === "hostile" ? 3 : 4);
+    const rows = [...inRange]
+      .sort((a, b) => rank(a) - rank(b) || Math.hypot(a.e, a.n) - Math.hypot(b.e, b.n))
+      .slice(0, Math.floor((r.h - 70) / 34));
     rows.forEach((b, i) => {
       const y = y0 + 44 + i * 34;
       if (b.id === o.selected) {
@@ -223,6 +330,7 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
         p.text(`${b.dz >= 0 ? "+" : "−"}${fmt(u.alt(Math.abs(b.dz)))}`, x0 + 218, y, { col: C.dim, size: 10, align: "right" });
       o.pick?.([x0 + 110, y - 2], b.slot !== undefined ? { slot: b.slot } : { contact: b.id });
     });
-    if (!rows.length) p.text("Aucun contact dans la portée", x0 + 114, y0 + 60, { col: C.dim, size: 11, align: "center" });
+    if (!rows.length)
+      p.text(L("Aucun contact dans la portée", "No contact in range"), x0 + 114, y0 + 60, { col: C.dim, size: 11, align: "center" });
   }
 }

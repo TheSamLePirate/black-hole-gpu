@@ -101,7 +101,7 @@ export class ChartsPage {
 
   /** the along range charted [m]: from before the entry fix to past the missed approach's turn */
   private range(p: Procedure): [number, number] {
-    return p.kind === "runway" ? [-28000, RUNWAY_LENGTH + 4000] : [-2600, 400];
+    return p.kind === "runway" ? [-28000, (p.len ?? RUNWAY_LENGTH) + 4000] : [-2600, 400];
   }
 
   /** the plan, the approach up the chart: the runway (or the pad), the final course, the missed approach, the fixes */
@@ -122,8 +122,9 @@ export class ChartsPage {
       s += `<line x1="${x(0)}" y1="${y(a0)}" x2="${x(0)}" y2="${y(0)}" class="ch-course"/>`;
       // (the missed approach: ahead to the turn, left round, out along the reciprocal to the hold, round onto the axis again)
       const P = (a: number, c: number) => `${x(c).toFixed(1)},${y(a).toFixed(1)}`;
-      s += `<path d="M${P(RUNWAY_LENGTH, 0)} L${P(ma!.along, 0)} C${P(ma!.along + 3000, 0)} ${P(ma!.along + 3000, hold!.across)} ${P(ma!.along, hold!.across)} L${P(hold!.along, hold!.across)} C${P(hold!.along - 4000, hold!.across)} ${P(hold!.along - 4000, 0)} ${P(hold!.along + 2000, 0)}" class="ch-missed"/>`;
-      s += `<rect x="${(x(0) - 3).toFixed(1)}" y="${y(RUNWAY_LENGTH).toFixed(1)}" width="6" height="${(y(0) - y(RUNWAY_LENGTH)).toFixed(1)}" class="ch-rwy"/>`;
+      const RL = p.len ?? RUNWAY_LENGTH;
+      s += `<path d="M${P(RL, 0)} L${P(ma!.along, 0)} C${P(ma!.along + 3000, 0)} ${P(ma!.along + 3000, hold!.across)} ${P(ma!.along, hold!.across)} L${P(hold!.along, hold!.across)} C${P(hold!.along - 4000, hold!.across)} ${P(hold!.along - 4000, 0)} ${P(hold!.along + 2000, 0)}" class="ch-missed"/>`;
+      s += `<rect x="${(x(0) - 3).toFixed(1)}" y="${y(RL).toFixed(1)}" width="6" height="${(y(0) - y(RL)).toFixed(1)}" class="ch-rwy"/>`;
     } else {
       s += `<line x1="${x(0)}" y1="${y(a0)}" x2="${x(0)}" y2="${y(0)}" class="ch-course"/>`;
       s += `<circle cx="${x(0)}" cy="${y(0)}" r="6" class="ch-rwy"/>`;
@@ -162,7 +163,7 @@ export class ChartsPage {
     }
     s += `<line x1="${x(a0)}" y1="${g}" x2="${x(a1)}" y2="${g}" class="ch-ground"/>`;
     if (runway) {
-      s += `<rect x="${x(0).toFixed(1)}" y="${g - 2}" width="${(x(RUNWAY_LENGTH) - x(0)).toFixed(1)}" height="4" class="ch-rwy"/>`;
+      s += `<rect x="${x(0).toFixed(1)}" y="${g - 2}" width="${(x(p.len ?? RUNWAY_LENGTH) - x(0)).toFixed(1)}" height="4" class="ch-rwy"/>`;
       s += `<line x1="${x(a0)}" y1="${y(p.minima.dh).toFixed(1)}" x2="${x(a1)}" y2="${y(p.minima.dh).toFixed(1)}" class="ch-dh"/>`;
       // (the Ranger's profile: the steep outer glide, the pull-up, the shallow glide, the flare)
       const fix = { go: LANDING.goNom, lb: 3000 };

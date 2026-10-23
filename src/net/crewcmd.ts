@@ -5,12 +5,14 @@
 // The sender is the server's stamp (`from`), its role the room's roster's: neither can be forged. Every act is in
 // the catalogue below with its arguments' schema (the game tools' own checker), checked again where it runs.
 import { checkArgs, type Args, type Param } from "../ai/tool-schema";
+import { type Units, unitsOf } from "../ui/unitsys";
 
 /** the families a pilot opens (the instruments' `caps`): what can be done now, on this craft, in this mode */
 export const FAMILIES = ["nav", "config", "jet", "space", "weapons"] as const;
 export type Family = (typeof FAMILIES)[number];
 
-type Say = (a: Args) => { fr: string; en: string };
+/** an act's words, its figures in the units of who reads them (the pilot's settings, the console's switch) */
+type Say = (a: Args, u: Units) => { fr: string; en: string };
 
 /** the spacecraft's holds, autopilots and manoeuvres (the game's own lists — src/ai/game-tools.ts) */
 export const HOLDS = [
@@ -103,6 +105,49 @@ export const MANEUVER_FR: Record<string, string> = {
   fine_tune: "ajustement fin",
   align_over_site: "passage au-dessus d'un site",
 };
+export const HOLD_EN: Record<string, string> = {
+  prograde: "prograde",
+  retrograde: "retrograde",
+  radialOut: "radial out",
+  radialIn: "radial in",
+  normal: "normal",
+  antinormal: "anti-normal",
+  target: "to the target",
+  antiTarget: "away from the target",
+  maneuver: "on the node",
+};
+export const AUTO_EN: Record<string, string> = {
+  hover: "hover",
+  circularize: "circularize",
+  approach: "approach the target",
+  orbit: "orbit the target",
+  node: "execute the node",
+  transfer: "transfer",
+  land: "landing",
+  takeoff: "take-off to orbit",
+  dock: "docking",
+  entry: "entry",
+  burns: "the plan's burns",
+  keep: "station keeping",
+};
+export const MANEUVER_EN: Record<string, string> = {
+  circularize: "circularization",
+  apoapsis: "apoapsis",
+  periapsis: "periapsis",
+  hohmann: "Hohmann",
+  inclination: "inclination",
+  match_planes: "planes matched",
+  resonant: "resonant orbit",
+  rendezvous: "rendezvous",
+  intercept: "intercept",
+  match_velocities: "velocities matched",
+  fine_tune: "fine tuning",
+  align_over_site: "pass over a site",
+};
+/** a hold's, an autopilot's, a manoeuvre's words in both languages (an unknown one: its own name) */
+export const holdWords = (k: string) => ({ fr: HOLD_FR[k] ?? k, en: HOLD_EN[k] ?? k });
+export const autoWords = (k: string) => ({ fr: AUTO_FR[k] ?? k, en: AUTO_EN[k] ?? k });
+export const maneuverWords = (k: string) => ({ fr: MANEUVER_FR[k] ?? k, en: MANEUVER_EN[k] ?? k });
 export interface ActSpec {
   fam: Family;
   params?: Record<string, Param>;
@@ -211,7 +256,8 @@ export const ACTS = {
   },
   "nav.target": {
     fam: "nav",
-    params: { name: { type: "string" } },
+    // (its picture's id beside its name — PLAN-RADAR-AAA RD6: two craft of one name, the right one)
+    params: { name: { type: "string" }, id: { type: "string" } },
     required: ["name"],
     say: (a) => ({ fr: `cible : ${String(a.name).slice(0, 24)}`, en: `target: ${String(a.name).slice(0, 24)}` }),
   },
@@ -223,11 +269,11 @@ export const ACTS = {
       hdgDeg: { type: "number", minimum: 0, maximum: 360 },
       spd: { type: "number", minimum: 30, maximum: 700 },
     },
-    say: (a) => {
+    say: (a, u) => {
       const parts: string[] = [];
-      if (a.alt !== undefined) parts.push(`ALT ${Math.round(Number(a.alt))} m`);
+      if (a.alt !== undefined) parts.push(`ALT ${u.fAlt(Number(a.alt))}`);
       if (a.hdgDeg !== undefined) parts.push(`CAP ${String(Math.round(Number(a.hdgDeg)) % 360).padStart(3, "0")}°`);
-      if (a.spd !== undefined) parts.push(`VIT ${Math.round(Number(a.spd))} m/s`);
+      if (a.spd !== undefined) parts.push(`VIT ${u.fSpd(Number(a.spd))}`);
       const s = parts.join(" · ") || "—";
       return { fr: `consigne ${s}`, en: `selected ${s.replace("CAP", "HDG").replace("VIT", "SPD")}` };
     },
@@ -265,29 +311,48 @@ export const ACTS = {
   "ap.mode": {
     fam: "jet",
     params: {
-      mode: { type: "string", enum: ["orbit", "hold", "tf", "off"] },
+      // (the refuelling too — jet_mode's: the tanker set and joined, the way it is flown, let go)
+      mode: { type: "string", enum: ["orbit", "hold", "tf", "tanker", "tankerOff", "refuelMode", "off"] },
       lat: { type: "number", minimum: -90, maximum: 90 },
       lon: { type: "number", minimum: -180, maximum: 180 },
       radiusKm: { type: "number", minimum: 1, maximum: 50 },
       dir: { type: "string", enum: ["right", "left"] },
       inboundDeg: { type: "number", minimum: 0, maximum: 360 },
       aglM: { type: "number", minimum: 0, maximum: 1000 },
+      near: { type: "boolean" },
+      side: { type: "string", enum: ["right", "left"] },
+      refuelMode: { type: "string", enum: ["auto", "assisted", "manual"] },
     },
     required: ["mode"],
     say: (a) => {
+      const how = { auto: ["automatique", "automatic"], assisted: ["assisté", "assisted"], manual: ["manuel", "manual"] }[
+        String(a.refuelMode)
+      ];
+      const side = a.side === "left" ? ["tuyau gauche", "left hose"] : ["tuyau droit", "right hose"];
       const fr: Record<string, string> = {
         orbit: "orbite",
         hold: "circuit d'attente",
         tf: "suivi de terrain",
+        tanker: `ravitailleur TEXACO, ${side[0]}${how ? ` — ${how[0]}` : ""}`,
+        tankerOff: "ravitaillement arrêté",
+        refuelMode: `ravitaillement ${how?.[0] ?? ""}`.trim(),
         off: "mode du pilote automatique coupé",
       };
-      const en: Record<string, string> = { orbit: "orbit", hold: "holding pattern", tf: "terrain following", off: "autopilot mode off" };
+      const en: Record<string, string> = {
+        orbit: "orbit",
+        hold: "holding pattern",
+        tf: "terrain following",
+        tanker: `tanker TEXACO, ${side[1]}${how ? ` — ${how[1]}` : ""}`,
+        tankerOff: "refuelling stopped",
+        refuelMode: `refuelling ${how?.[1] ?? ""}`.trim(),
+        off: "autopilot mode off",
+      };
       return { fr: fr[String(a.mode)] ?? "mode", en: en[String(a.mode)] ?? "mode" };
     },
   },
   "ap.traffic": {
     fam: "jet",
-    params: { action: { type: "string", enum: ["intercept", "join", "stop"] }, name: { type: "string" } },
+    params: { action: { type: "string", enum: ["intercept", "join", "stop"] }, name: { type: "string" }, id: { type: "string" } },
     required: ["action"],
     say: (a) => {
       const n = typeof a.name === "string" ? ` ${a.name.slice(0, 16)}` : "";
@@ -304,7 +369,7 @@ export const ACTS = {
     required: ["direction"],
     say: (a) => ({
       fr: a.direction === "none" ? "tenue d'attitude coupée" : `tenue ${HOLD_FR[String(a.direction)] ?? a.direction}`,
-      en: `hold ${a.direction}`,
+      en: a.direction === "none" ? "attitude hold off" : `hold ${HOLD_EN[String(a.direction)] ?? a.direction}`,
     }),
   },
   "sp.auto": {
@@ -318,7 +383,7 @@ export const ACTS = {
     required: ["mode"],
     say: (a) => ({
       fr: a.mode === "none" ? "autopilote coupé" : `autopilote ${AUTO_FR[String(a.mode)] ?? a.mode}`,
-      en: `autopilot ${a.mode}`,
+      en: a.mode === "none" ? "autopilot off" : `autopilot ${AUTO_EN[String(a.mode)] ?? a.mode}`,
     }),
   },
   "sp.maneuver": {
@@ -337,7 +402,7 @@ export const ACTS = {
       const op = MANEUVER_FR[String(a.op)] ?? String(a.op);
       return {
         fr: a.execute ? `manœuvre ${op} exécutée` : `manœuvre ${op} — aperçu`,
-        en: `${a.op} ${a.execute ? "executed" : "previewed"}`,
+        en: `${MANEUVER_EN[String(a.op)] ?? a.op} ${a.execute ? "executed" : "— preview"}`,
       };
     },
   },
@@ -404,6 +469,44 @@ export const ACTS = {
             en: `burn ${Number(a.index) + 1} moved ${Math.round(Number(a.dtS ?? 0))} s`,
           },
   },
+  // (the powered landing's point redesignated from the console — PLAN-VAISSEAUX K4/K6, the Lander's LPD: a place on
+  // the body, or a step over the ground forward and right [m])
+  "sp.lpd": {
+    fam: "space",
+    params: {
+      lat: { type: "number", minimum: -90, maximum: 90 },
+      lon: { type: "number", minimum: -180, maximum: 180 },
+      fwd: { type: "number", minimum: -5000, maximum: 5000 },
+      right: { type: "number", minimum: -5000, maximum: 5000 },
+    },
+    say: (a) =>
+      a.lat !== undefined
+        ? { fr: "point d'atterrissage désigné", en: "landing point designated" }
+        : {
+            fr: `point d'atterrissage déplacé de ${Math.round(Number(a.fwd ?? 0))} m devant, ${Math.round(Number(a.right ?? 0))} m à droite`,
+            en: `landing point moved ${Math.round(Number(a.fwd ?? 0))} m ahead, ${Math.round(Number(a.right ?? 0))} m right`,
+          },
+  },
+  // (the room's fleet — N1: the pilot followed asks another pilot's spacecraft to come to him, hold on him, dock to him)
+  "sp.fleet": {
+    fam: "space",
+    params: {
+      order: { type: "string", enum: ["come", "hold", "dock"] },
+      slot: { type: "number", minimum: 0, maximum: 15, integer: true },
+      name: { type: "string" },
+    },
+    required: ["order", "slot"],
+    say: (a) => {
+      const who = typeof a.name === "string" ? a.name.slice(0, 16) : `#${a.slot}`;
+      const W: Record<string, [string, string]> = {
+        come: [`${who} : rejoins-moi`, `${who}: come to me`],
+        hold: [`${who} : maintiens-toi sur moi`, `${who}: hold on me`],
+        dock: [`${who} : amarre-toi à moi`, `${who}: dock to me`],
+      };
+      const w = W[String(a.order)] ?? [who, who];
+      return { fr: `ordre de flotte — ${w[0]}`, en: `fleet order — ${w[1]}` };
+    },
+  },
   // (the failures' short names, the console's French and the pilot's English)
   "sys.step": {
     fam: "space",
@@ -445,11 +548,17 @@ export const ACTS = {
   },
   "wp.lock": {
     fam: "weapons",
-    params: { target: { type: "string" } },
+    params: { target: { type: "string" }, id: { type: "string" } },
     say: (a) => ({
       fr: a.target ? `verrouillage ${String(a.target).slice(0, 20)}` : "verrouillage de la piste suivante",
       en: a.target ? `lock ${String(a.target).slice(0, 20)}` : "lock the next track",
     }),
+  },
+  /** a track designated to the pilot — selected on all his screens, not locked (PLAN-RADAR-AAA RD9) */
+  "wp.designate": {
+    fam: "weapons",
+    params: { id: { type: "string" } },
+    say: (a) => ({ fr: `désignation ${String(a.id ?? "").slice(0, 24)}`, en: `designate ${String(a.id ?? "").slice(0, 24)}` }),
   },
   "wp.fire": { fam: "weapons", say: () => ({ fr: "tir", en: "fire" }) },
   "wp.gun": {
@@ -493,6 +602,8 @@ export interface CrewCmd {
   to: number;
   act: Act;
   args: Args;
+  /** the console's language: the pilot answers in it (absent: an older console's — French) */
+  lang?: "fr" | "en";
 }
 export interface CrewAck {
   v: 1;
@@ -501,8 +612,10 @@ export interface CrewAck {
   act: string;
   ok: boolean;
   msg: string;
-  /** what was asked, in the crew console's words (French: its language) */
+  /** what was asked, in the asking console's language */
   what: string;
+  /** what was asked's arguments (primitives): every screen says it again in its own language and units */
+  args?: Record<string, string | number | boolean>;
   /** a few figures back (a manoeuvre previewed: its Δv, its burns…), primitives only */
   data?: Record<string, string | number | boolean>;
 }
@@ -519,7 +632,10 @@ export function readCrewCmd(x: unknown): { ok: true; cmd: CrewCmd } | { ok: fals
   const spec = SPECS[x.act]!;
   const chk = checkArgs({ name: x.act, description: "", params: spec.params ?? {}, required: spec.required }, x.args ?? {});
   if (!chk.ok) return { ok: false, error: chk.error, id };
-  return { ok: true, cmd: { v: 1, id, to: x.to, act: x.act as Act, args: chk.args } };
+  return {
+    ok: true,
+    cmd: { v: 1, id, to: x.to, act: x.act as Act, args: chk.args, ...(x.lang === "en" || x.lang === "fr" ? { lang: x.lang } : {}) },
+  };
 }
 
 /** An answer heard (untrusted, bounded). */
@@ -532,11 +648,29 @@ export function readCrewAck(x: unknown): CrewAck | null {
       if (typeof v === "string") data[k.slice(0, 24)] = v.slice(0, 120);
       else if ((typeof v === "number" && Number.isFinite(v)) || typeof v === "boolean") data[k.slice(0, 24)] = v;
     }
-  return { v: 1, id: x.id.slice(0, 40), to: x.to, act: s(x.act, 32), ok: x.ok, msg: s(x.msg, 200), what: s(x.what, 80), data };
+  let args: CrewAck["args"];
+  if (record(x.args)) {
+    args = {};
+    for (const [k, v] of Object.entries(x.args).slice(0, 12)) {
+      if (typeof v === "string") args[k.slice(0, 24)] = v.slice(0, 64);
+      else if ((typeof v === "number" && Number.isFinite(v)) || typeof v === "boolean") args[k.slice(0, 24)] = v;
+    }
+  }
+  return {
+    v: 1,
+    id: x.id.slice(0, 40),
+    to: x.to,
+    act: s(x.act, 32),
+    ok: x.ok,
+    msg: s(x.msg, 200),
+    what: s(x.what, 80),
+    data,
+    ...(args ? { args } : {}),
+  };
 }
 
 export const familyOf = (act: string): Family | null => SPECS[act]?.fam ?? null;
-export const sayOf = (act: string, args: Args) => SPECS[act]?.say(args) ?? { fr: act, en: act };
+export const sayOf = (act: string, args: Args, u: Units = unitsOf("metric")) => SPECS[act]?.say(args, u) ?? { fr: act, en: act };
 export { onOff };
 
 /** a sender's pace: at most `n` orders a second (a burst of 2n), each id once */

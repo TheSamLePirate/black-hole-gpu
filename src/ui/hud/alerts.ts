@@ -217,7 +217,8 @@ export function alertsOf(i: AlertInput): Alert[] {
       add("hull", air.margins.hull > 0.95 ? "warning" : "caution", tf("HULL {0} K · {1}", Math.round(air.hull), pc(air.margins.hull)));
     if (air.margins.g > 0.75)
       add("load", air.margins.g > 0.92 ? "warning" : "caution", tf("LOAD {0} g · {1}", air.g.toFixed(1), pc(air.margins.g)));
-    if (air.stalled && air.mach < 3) add("stall", "warning", t("STALL"));
+    // (none on the wheels: a craft pushed back or taxiing reads the air from anywhere)
+    if (air.stalled && air.mach < 3 && !onGround && !i.surface?.rolling) add("stall", "warning", t("STALL"));
     // (the F-35 without its computer, its incidence past 30°: the departure near)
     if (air.aoaWarn) add("aoa", "warning", t("ANGLE OF ATTACK"));
     if (air.gearWarn) add("gear", "warning", t("GEAR UP · TOO LOW"));

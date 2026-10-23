@@ -562,6 +562,30 @@ Fiche : [`progress/aviation/ECOLE-RESEAU.md`](progress/aviation/ECOLE-RESEAU.md)
 - **En salle** : l'ailier d'un joueur par la roue, à la première place libre (l'événement `fml`) ; l'Auto-ACAS qui ne fuit plus son ailier ; le combat libre en F-35 (tout appareil est une cible, tir ami) ; la coopération dans un seul camp ; le verrou radar demandé avant le premier contact.
 - Mesuré : 1 321 tests unitaires ; `net-wing-fight`, `net-formation-ap` 4/4, `net-orders`, `net-coop`, `net-battle` 4/4 deux fois sur kerr-mini.
 
+## PLAN-A320 : l'avion de ligne sur Terre (commencé le 22/10/2026)
+
+Plan : [`PLAN-A320.md`](PLAN-A320.md), étapes A0 à A19, d'après l'A320-family de FlightGear (GPL v2).
+
+- **Décisions** : livrée maison par défaut et les 12 réelles en option ; les sons enregistrés de FlightGear ; l'A320-214
+  CFM56 d'abord, puis IAE et neo ; tout le métier autour (vols de ligne et ATC, sol, école et pannes, équipage à deux).
+- **Fait** (22/10) : A0–A2 l'avion dans le jeu (extérieur, 171 pièces mobiles rejouées comme SimGear, livrées), A3 le vol
+  (FDM JSBSim évalué tel quel, FADEC, carburant, freinage automatique, inverseurs), A4 les lois Airbus, **A5 le poste de
+  pilotage** (`fd_complete` de FlightGear : 442 k triangles, 1 194 nœuds animés, 583 commandes, éclairage intégré de nuit —
+  planche `docs/progress/a320/a5-cockpit.jpg`), **A6 tout le poste cliquable** (583 commandes jouées comme FlightGear,
+  reliées au jeu là où son système existe — planche `a6-cliquable.jpg`), **A7 les écrans** (PFD, ND, E/WD, SD et ses 13
+  pages, ISIS, DCDU redessinés depuis FlightGear — planche `a7-ecrans.jpg`), **A8 le FCU et le pilote automatique**
+  (modes Airbus, A/THR, autoland mesuré — planche `a8-fcu-ap.jpg`), **A9 les MCDU et le FMS** (planche `a9-mcdu.jpg`),
+  **A10 les systèmes** (les 13 fichiers JSBSim de FlightGear exécutés tels quels, son Nasal APU/ADIRS/feu porté, le
+  démarrage moteur, cold & dark jusqu'aux deux moteurs à la souris — planche `a10-systemes.jpg`), **A11 l'ECAM et les pannes** (l'ECAM de FlightGear porté : 759 messages et
+  leurs procédures, 76 pannes injectables à V1/au décollage/au hasard et leurs effets sur les lois, l'hydraulique, les
+  ADR ; les 13 pages SD réelles ; les check-lists montrées dans le poste — planche `a11-ecam.jpg`), **A12 le son** (les fichiers son de FlightGear joués tels quels : 205 sons, 131
+  enregistrements Opus, le CFM56 par couches, APU, PTU, alarmes de l'ECAM, annonces et EGPWS, clics ; le moteur audio
+  joue désormais des échantillons — planche `a12-son.jpg`), **A13 les effets** (condensation, tourbillons, vortex d'entrée d'air, fumée des pneus,
+  gerbes et inverseurs, chaleur ; flexion des ailes ; tremblements ; caméras aile, passager, train, dérive ; pluie,
+  essuie-glaces et givre sur le pare-brise — planche `a13-effets.jpg`), **A14 le sol et les aéroports** (le réseau d'OpenStreetMap : postes, voies,
+  itinéraire et clairance, carte d'aéroport sur le ND, départ à un poste ; véhicules de FlightGear et services, plein
+  réel, GPU, repoussage Autopush le long du réseau — planche `a14-sol.jpg`). Suit A15 : les vols de ligne et l'ATC.
+
 ## Ce qui reste pour l'AAA (au 10/10/2026)
 
 Par ordre de gain :

@@ -5,6 +5,7 @@
 // every target destroyed; lost: shot down, out of time). For the renderer: the aircraft as F-35 instances; for
 // the HUD: the targets, the lock, the missiles, the gun's lead, the launch zone, the warnings.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { TANKER } from "./jetmodes";
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
 import { restPose, type F35Pose } from "../f35/model";
@@ -49,6 +50,7 @@ declare module "../controls" {
     combatFocus: typeof combatFocus;
     focusShip: typeof focusShip;
     combatShips: typeof combatShips;
+    combatGlares: typeof combatGlares;
     combatHud: typeof combatHud;
   }
 }
@@ -155,7 +157,7 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
   // (the stores' mass on the jet — fleet.ts: the payload)
   fleet.payload.f35 = loadoutMass(L);
   // (its targets on the radar — controller/radar.ts —, briefed: hostile from the start, swept at once)
-  this.radarSources.set("cmb", () => {
+  this.radarSources.set("cmb", (fix) => {
     const C = this.combat;
     const P = C?.last;
     if (!C || !P) return [];
@@ -164,12 +166,15 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
       .filter((q) => q.alive && !q.proxy)
       .map((q) => ({
         id: `cmb:${q.id}`,
-        r: [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]] as V3,
+        // (from the fight's flat frame to ours, exactly — PLAN-RADAR-AAA constat 11)
+        r: this.combatToLocal(fix, q.p) as V3,
         v: [...q.v] as V3,
         rcs: q.rcs,
         kind: q.kind === "ship" ? ("sea" as const) : isGround(q) ? ("ground" as const) : ("air" as const),
         iff: q.friendly ? ("friend" as const) : q.neutral ? ("neutral" as const) : ("hostile" as const),
         name: q.name,
+        // (what it is — the crew's lists: the tanker an A330 MRTT, the others their kind)
+        type: q.name === TANKER ? "A330 MRTT" : String(q.kind ?? "").slice(0, 16),
         squawk: (!!q.friendly || q.kind === "airliner") && !q.squawkOff,
         known: true,
         offboard: !!q.friendly,
@@ -414,8 +419,46 @@ function combatShips(this: CameraController): { id: ShipMeshId; rel: Vec3; axes:
       hidden = P.p[2] + r[2] * s < C.world.groundZ(x, y);
     }
     out.push({ id: (q.mesh ?? "f35") as ShipMeshId, rel: M(r), axes: [M(left), M(u), M(f)], jet: pose, hidden });
+    // (a tanker refuelling us: its hoses, its pods' lights, our probe — controller/aar.ts)
+    if (this.aar?.tanker === q.id && q.alive && !hidden) out.unshift(...this.aarShips(P, M));
   }
   return out.slice(0, 12);
+}
+
+/**
+ * A fight's decoys as the eye sees them (PLAN-RADAR-AAA RD8a — the renderer's lamps' glare, ship.wgsl lampVs): each
+ * flare a burning star — lit in a tenth of a second, white-hot, flickering, dying over its last second and a half —,
+ * each chaff bundle's first seconds a silver glint as it blooms; the nearest first, within 30 km, ours, the
+ * aggressors', the others' in a room alike (game/combat.ts decoys). Their smoke: the trails (computer.ts).
+ */
+function combatGlares(this: CameraController): { rel: Vec3; r: number; rgb: Vec3 }[] {
+  const C = this.combat;
+  const P = C?.last;
+  if (!C || !P || !C.world.decoys.length) return [];
+  const M = enuToCam(this, camMap(this));
+  if (!M) return [];
+  const out: { rel: Vec3; r: number; rgb: Vec3; d: number }[] = [];
+  const t = C.world.t;
+  for (const q of C.world.decoys) {
+    const r: V3 = [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]];
+    const d = Math.hypot(...r);
+    if (d > 30_000) continue;
+    if (q.kind === "flare") {
+      const k = Math.min(q.t / 0.1, 1) * (1 - Math.min(Math.max((q.t - 3.5) / 1.5, 0), 1));
+      if (k <= 0) continue;
+      const fl = 0.8 + 0.2 * Math.sin(37 * t + q.id * 1.7) * Math.sin(23 * t + q.id);
+      const w = k * fl;
+      out.push({ rel: M(r), r: 0.6, rgb: [26 * w, 20 * w, 11 * w], d });
+    } else if (q.t < 2) {
+      const tw = 0.5 + 0.5 * Math.sin(53 * t + q.id * 2.3);
+      const w = (1 - q.t / 2) * tw;
+      out.push({ rel: M(r), r: 0.3, rgb: [2.2 * w, 2.3 * w, 2.6 * w], d });
+    }
+  }
+  return out
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 24)
+    .map(({ rel, r, rgb }) => ({ rel, r, rgb }));
 }
 
 /** What the HUD draws of the fight: the targets (their place on the camera's axes, their kind, locked,
@@ -467,11 +510,14 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
             ...hu(r),
             dz: r[2],
             trk: trk(q.v),
+            // (its speed over the ground [m/s]: a crew's picture carries it on between two snapshots)
+            spd: Math.round(Math.hypot(q.v[0], q.v[1])),
             air: !isGround(q),
             alive: q.alive,
             locked: q.id === W.lock,
             seen: W.seen.includes(q.id),
             name: q.name,
+            side: q.friendly ? ("friend" as const) : q.neutral ? ("neutral" as const) : ("hostile" as const),
             // (another player: a team-mate's blue, an enemy's red)
             colour:
               q.peer === undefined
@@ -484,6 +530,7 @@ function combatHud(this: CameraController, Cm: (v: Vec3 | null) => Vec3 | null) 
           };
         }),
       missiles: W.missiles.filter((m) => m.alive).map((m) => ({ ...hu(rel(m.p)), trk: trk(m.v), red: m.owner === "red" })),
+      decoys: W.decoys.map((d) => ({ ...hu(rel(d.p)), kind: d.kind, age: d.t })),
     },
     title: tr(C.def.title),
     t: C.t,
@@ -594,6 +641,7 @@ export function installCombat(Ctl: { prototype: CameraController }) {
     combatTrigger,
     combatPlayer,
     combatShips,
+    combatGlares,
     combatHud,
     combatFocus,
     focusShip,

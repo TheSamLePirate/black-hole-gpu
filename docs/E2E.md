@@ -60,6 +60,10 @@ How it shows, and how to override it:
   `App.load`), so whoever watches the mini sees how each test runs. A test about that meter sets it itself.
 - `E2E_HEADED=1` forces full screen, `E2E_HEADED=0` headless (`remote.ts run --headless` sets 0).
 - `E2E_HOLD=<s>` keeps each Chrome open `<s>` seconds after its test, to see where it ended
+- On a Chrome one sees (the mini's full screen, a window — never headless) a banner in the page's lower left says
+  what is being tried: the file, the test (its place, its title — the `-t` filter applied) and what the file proves
+  (its header comment), read from the test file itself (`tests/e2e/lib/banner.ts`). See-through to the pointer,
+  hidden for every screenshot; `E2E_BANNER=0` leaves it out. So every e2e file's header comment says what it proves.
   (`remote.ts run --hold 20` / `bun run e2e --remote --hold 20 …`).
 - Measurement scripts (`bench.ts`, `trace-ab.ts`, `gallery.ts`, `quality.ts`, `check-wgsl.ts`) are always
   headless: a window's frame rate follows the display. They still take the lock.
@@ -206,6 +210,7 @@ page** — a unit test, faster, for autopilot logic.
 | `E2E_URL=http://localhost:3000/` | use a server already running instead of starting one (e.g. the dev server — but its bundles can be stale, see §7) |
 | `E2E_HEADED=1` / `0` | full screen / headless, whatever the Mac's config says |
 | `E2E_HOLD=<s>` | Chrome kept open `<s>` s at close |
+| `E2E_BANNER=0` | no banner (the file, the test, what it proves) on a Chrome one sees |
 | `E2E_CDP_TIMEOUT=<s>` | a DevTools call fails after this (300 s): nothing waits forever |
 | `CHROME=<path>` | another Chrome binary |
 | `KERR_CHROME_LOCK=0` | no lock (dedicated machine only) |

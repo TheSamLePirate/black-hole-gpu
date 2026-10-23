@@ -1,5 +1,6 @@
 // The CameraController — low thrust, and the views of the flight the interface reads (telemetry, runway, hub, future).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { worldRunwaysNow } from "../world/runways3d";
 import { nearWormhole, type WormholePath } from "../system/wormhole-predict";
 import { tunnelEntrySide, wormholeMapPose } from "../system/wormhole-map";
 import { blToCartesian, cameraFrame } from "../camera";
@@ -33,7 +34,7 @@ import { airTopKm } from "../game/place";
 import { airTop, entryInterface } from "../aero";
 import { AUTO_NAMES, circularSpeed, type Auto, type Want } from "../pilot";
 import { fleet } from "../fleet";
-import { VESSELS } from "../vessels";
+import { isAircraft, VESSELS } from "../vessels";
 import { mouth, sphericalFrame } from "../wormhole";
 import { circularVelocity } from "../system/geopotential";
 import { gravityHome, OUR_BODIES, ourState, repToHomeVec, soiOf } from "../system/our-side";
@@ -809,6 +810,27 @@ function landWant(
     const step = Math.max(LPD.minRate, LPD.rate * h) * dtL;
     L.q0 ??= toBodyFixed(id, padX, t0);
     let to = lin(padX, 1, lin(fwd, this.lpdIn.fwd, right, this.lpdIn.right), step / M_METRES);
+    const o = fromBodyFixed(id, L.q0, t0);
+    const off = lin(sub3(to, o), M_METRES, to, 0);
+    const lim = Math.max(LPD.minReach, h);
+    const ol = Math.hypot(...off);
+    if (ol > lim) to = lin(o, 1, off, lim / ol / M_METRES);
+    L.q = toBodyFixed(id, to, t0);
+    if (L.site) L.site = null;
+    L.moved = true;
+    padX = to;
+  }
+  // (a crew's redesignation — the console's LPD: a place touched on its Ground view, or a step forward, back, left, right —:
+  // the same reach as the stick's, at once)
+  const O = this.lpdOrder;
+  this.lpdOrder = null;
+  if (padX && O && h < LPD.below) {
+    const hz = (v: Vec3) => unitV(lin(v, 1, up, -dot3(v, up)));
+    const vh = lin(va, 1, up, -dot3(va, up));
+    const fwd = Math.hypot(...vh) * C > 2 ? hz(vh) : hz(L.heading ?? this.levelHeading(up));
+    const right = cross(fwd, up);
+    L.q0 ??= toBodyFixed(id, padX, t0);
+    let to = "lat" in O ? sitePlace(O) : lin(padX, 1, lin(fwd, O.fwd, right, O.right), 1 / M_METRES);
     const o = fromBodyFixed(id, L.q0, t0);
     const off = lin(sub3(to, o), M_METRES, to, 0);
     const lim = Math.max(LPD.minReach, h);
@@ -1643,7 +1665,7 @@ function descentCard(this: CameraController, sf: SurfaceLike): HubInfo {
  */
 function glideAssist(this: CameraController, rw: RunwayView): Pick<HubInfo, "graph" | "say"> {
   // (the F-35: the ILS's straight 3° — controller/util.ts jetProfile)
-  const prof0 = fleet.active === "f35" ? jetProfile : landingProfile;
+  const prof0 = isAircraft(fleet.active) ? jetProfile : landingProfile;
   const fix = rw.fix!;
   // (the height the profile reads — over the threshold on the autopilot's final — for the trace, the curve, the dot)
   const hRw = rw.hp ?? rw.agl;
@@ -2666,7 +2688,7 @@ function runwayView(this: CameraController): RunwayView | null {
 
 function runwayCompute(this: CameraController): RunwayView | null {
   // (the F-35: the ILS's straight 3° — controller/util.ts jetProfile)
-  const prof0 = fleet.active === "f35" ? jetProfile : landingProfile;
+  const prof0 = isAircraft(fleet.active) ? jetProfile : landingProfile;
   const cam = cameraFrame(this.s);
   const fr = this.entryFrame(cam);
   if (!fr) return null;
@@ -2674,10 +2696,23 @@ function runwayCompute(this: CameraController): RunwayView | null {
   const R = this.entryRun;
   let site: Site | null = R?.site?.runway ? R.site : null;
   const agl = this.aglNow(cam, Math.hypot(...x) - fr.env.R);
+  // (the F-35's ILS flown: its runway — a world one's too, PLAN-RADAR-AAA RD13 —, its end landed, its length)
+  const I = this.ilsRun?.rwy;
+  if (!site && I && fr.body === "earth")
+    site = { body: "earth", name: I.name, lat: I.lat, lon: I.lon, runway: true, rwy: I.hdg, icao: I.icao, elev: I.elev, len: I.len };
   if (!site) {
     if (agl > 20e3) return null;
     let best = 80e3;
-    for (const st of SITES) {
+    // (the game's sites, and the world's runways near — graded and drawn: src/world/runways3d.ts —, the paved ones)
+    const cands: Site[] = [
+      ...SITES,
+      ...(fr.body === "earth"
+        ? worldRunwaysNow()
+            .filter((r) => (r.flags & 14) === 0 && r.len >= 800)
+            .map((r) => ({ ...r.site, len: r.len }))
+        : []),
+    ];
+    for (const st of cands) {
       if (st.body !== fr.body || !st.runway) continue;
       const T = fr.place(st);
       const ang = Math.acos(clamp(dot3(unitV(T), unitV(x)), -1, 1));
@@ -2701,10 +2736,13 @@ function runwayCompute(this: CameraController): RunwayView | null {
   const rgt = cross(along, tu);
   const see = (P: Vec3) => {
     const d = sub3(P, x);
-    return { d: C(fr.toLocal(d)), r: Math.hypot(...d) };
+    return {
+      d: C(fr.toLocal(d)),
+      r: Math.hypot(...d),
+    };
   };
-  const L = 4500,
-    Wd = 90;
+  const L = site.len ?? 4500,
+    Wd = site.len ? 60 : 90;
   const at = (a: number, b: number) => lin(lin(T, 1, along, a), 1, rgt, b);
   const rel = sub3(x, T);
   const sAl = dot3(rel, along),
@@ -2777,6 +2815,7 @@ function runwayCompute(this: CameraController): RunwayView | null {
   return {
     papi,
     gates,
+    len: L,
     name: site.name.split(",")[0]!,
     rwy: site.rwy ?? 0,
     along: sAl,

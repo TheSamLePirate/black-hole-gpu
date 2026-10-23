@@ -39,7 +39,8 @@ export type HeldAxis =
   | "camUp"
   | "camDown"
   | "camRollLeft"
-  | "camRollRight";
+  | "camRollRight"
+  | "tdc";
 
 /** The held keys' defaults, by physical position (KSP's layout: W S A D Q E… on QWERTY, Z S Q D A E on AZERTY). */
 export const HELD_DEFAULTS: Record<HeldAxis, string> = {
@@ -65,6 +66,9 @@ export const HELD_DEFAULTS: Record<HeldAxis, string> = {
   camDown: "KeyQ",
   camRollLeft: "KeyZ",
   camRollRight: "KeyX",
+  // (the designation cursor, held — PLAN-RADAR-AAA constat 29: no key free in flight on AZERTY and QWERTY alike; a
+  // HOTAS's button the usual one, or a key the player gives it)
+  tdc: "F15",
 };
 
 /** The free camera's moves: [forward, right, up, roll] per held axis. */
@@ -244,6 +248,7 @@ const HELD_LABELS: Record<HeldAxis, Text> = {
   camDown: { fr: "Descendre", en: "Down" },
   camRollLeft: { fr: "Roulis à gauche", en: "Roll left" },
   camRollRight: { fr: "Roulis à droite", en: "Roll right" },
+  tdc: { fr: "Curseur de désignation (TDC, maintenu)", en: "Designation cursor (TDC, held)" },
 };
 
 const ACTION_LABELS: Partial<Record<KeyAction, Text>> = {
@@ -275,6 +280,7 @@ const ACTION_LABELS: Partial<Record<KeyAction, Text>> = {
   combat: { fr: "Combat (arme, leurres)", en: "Combat (weapon, decoys)" },
   gear: { fr: "Train d'atterrissage", en: "Landing gear" },
   tars: { fr: "Parler à TARS", en: "Talk to TARS" },
+  designate: { fr: "Désigner sous le curseur (TDC)", en: "Designate under the cursor (TDC)" },
   pathInView: { fr: "Trajectoire dans la vue", en: "Path in the view" },
   hudDensity: { fr: "Densité du HUD", en: "HUD density" },
   missions: { fr: "Ordinateur de vol (missions)", en: "Flight computer (missions)" },

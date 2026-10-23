@@ -15,6 +15,22 @@ export interface InstrumentCraft {
   /** it lands (its descent's views), it has a ring (the Endurance) */
   lands: boolean;
   ring: boolean;
+  /** what it does where (game/status.ts): its state — landed, flight (in the air), suborbital, orbit, escape, hyperbolic, bound,
+   *  unbound, plunge, throat —, the body of its sphere (miller, gargantua…); absent from an older pilot */
+  status?: string;
+  where?: string;
+}
+/** A powered descent (a craft that lands, near a solid ground): its height over the ground [m], vertical and horizontal
+ *  speeds [m/s], hovering, the autopilot flying it, the time to the ground at this rate [s]; the landing point
+ *  designated: its distance [m] and how far it can still be moved (the LPD's reach) [m]. */
+export interface InstrumentDescent {
+  agl: number | null;
+  vz: number;
+  vh: number;
+  hover: boolean;
+  auto: string;
+  ttg: number | null;
+  lpd: { dist: number; reach: number } | null;
 }
 /** The craft's state about its body: position [km], velocity [km/s], the body's GM [km³/s²], radius and sphere [km]. */
 export interface InstrumentState {
@@ -65,6 +81,8 @@ export interface InstrumentHole {
 }
 /** The target: distance [m], closing rate [m/s, + closing], the closest approach [m] and its time [s]. */
 export interface InstrumentTarget {
+  /** a station's, a craft's place about the state's body [km] (the map draws it; a body's is in `bodies`) */
+  r?: V3;
   id: string;
   name: string;
   dist: number;
@@ -93,6 +111,10 @@ export interface InstrumentTime {
   tau: number;
   /** the mission's elapsed time [s] (since the flight began) */
   met?: number;
+  /** since the flight began: the far-away clock's time [s] and how far it is ahead of the craft's own (the time gone by
+   *  on the Earth beyond the crew's) [s] — the proper time starts again at each flight: `room − tau` is not it */
+  since?: number;
+  lag?: number;
 }
 /** The link to the Earth: the light's time one way [s]; the delay the room plays for its ground stations [s] (the
  *  pilot's setting: real, a tenth, none — K5); cut (behind the wormhole: no live link). */
@@ -126,6 +148,23 @@ export interface InstrumentOther {
   r: V3;
 }
 
+/** A track of the craft's sensors (PLAN-RADAR-AAA RD4 — radar/space.ts, controller/spacepic.ts): its place on our
+ *  LVLH axes [m] (V-bar along our way, H-bar our orbit's normal, R-bar up), its velocity on them [m/s], its range [m],
+ *  its rate [m/s, + opening], the sensors holding it (bits: 1 the radar, 2 the lidar, 4 the datalink), hidden by the
+ *  body, the closest approach on straight lines [m] and when [s] (null: opening). */
+export interface InstrumentSpaceTrack {
+  id: string;
+  name: string;
+  kind: "station" | "craft" | "player";
+  lvlh: V3;
+  vlvlh: V3;
+  range: number;
+  rate: number;
+  sensors: number;
+  hidden: boolean;
+  ca: { d: number; t: number } | null;
+}
+
 export interface InstrumentSpace {
   craft?: InstrumentCraft | null;
   /** the craft's attitude: its nose and its up on the home frame's axes (the navball's) */
@@ -133,6 +172,8 @@ export interface InstrumentSpace {
   dock?: InstrumentDock | null;
   /** the landing point: its name, its place [°] on its body, redesignated by the pilot (the LPD) */
   land?: { body: string; name: string; lat: number; lon: number; moved: boolean } | null;
+  /** the powered descent (a craft that lands, near the ground) */
+  desc?: InstrumentDescent | null;
   state?: InstrumentState | null;
   traj?: InstrumentTraj | null;
   nodes?: InstrumentNode[];
@@ -141,6 +182,8 @@ export interface InstrumentSpace {
   /** the propellant: the Δv it still holds [m/s] (null: not counted), the tank's share */
   budget?: { dv: number | null; prop: number | null } | null;
   bodies?: InstrumentBody[];
+  /** the craft's sensors' picture (PLAN-RADAR-AAA RD4): the body it is about, its tracks the nearest first */
+  spacePic?: { ref: string; tracks: InstrumentSpaceTrack[] } | null;
   /** the room's other spacecraft about the same body (N6) */
   others?: InstrumentOther[] | null;
   target?: InstrumentTarget | null;
@@ -154,8 +197,8 @@ export interface InstrumentSpace {
   hole?: InstrumentHole | null;
 }
 
-/** the bounds: segments, points a segment, nodes, bodies, failures, ports */
-export const SPACE_BOUNDS = { segs: 6, pts: 96, nodes: 16, bodies: 32, failures: 8, ports: 6, others: 8 };
+/** the bounds: segments, points a segment, nodes, bodies, failures, ports, others, the sensors' tracks */
+export const SPACE_BOUNDS = { segs: 6, pts: 96, nodes: 16, bodies: 32, failures: 8, ports: 6, others: 8, tracks: 12 };
 
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
 const finite = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -197,6 +240,19 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
       name: label(c.name),
       lands: c.lands === true,
       ring: c.ring === true,
+      ...(typeof c.status === "string" ? { status: label(c.status, 16) } : {}),
+      ...(typeof c.where === "string" ? { where: label(c.where, 16) } : {}),
+    };
+  const ds = x.desc;
+  if (record(ds) && finite(ds.vz))
+    out.desc = {
+      agl: finite(ds.agl) ? ds.agl : null,
+      vz: ds.vz,
+      vh: Math.max(0, num(ds.vh)),
+      hover: ds.hover === true,
+      auto: label(ds.auto, 16),
+      ttg: finite(ds.ttg) ? Math.max(0, ds.ttg) : null,
+      lpd: record(ds.lpd) && finite(ds.lpd.dist) ? { dist: Math.max(0, ds.lpd.dist), reach: Math.max(0, num(ds.lpd.reach)) } : null,
     };
   const s = x.state;
   if (record(s) && v3(s.r) && v3(s.v) && finite(s.mu))
@@ -224,6 +280,26 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
         vessel: label(o.vessel, 16),
         r: [...(o.r as V3)],
       }));
+  const sp = x.spacePic;
+  if (record(sp) && Array.isArray(sp.tracks))
+    out.spacePic = {
+      ref: label(sp.ref, 16),
+      tracks: sp.tracks
+        .slice(0, SPACE_BOUNDS.tracks)
+        .filter((T): T is Record<string, unknown> => record(T) && v3(T.lvlh) && finite(T.range) && T.range >= 0)
+        .map((T) => ({
+          id: label(T.id, 24),
+          name: label(T.name, 24),
+          kind: T.kind === "station" || T.kind === "player" ? T.kind : "craft",
+          lvlh: [...(T.lvlh as V3)],
+          vlvlh: v3(T.vlvlh) ? [...T.vlvlh] : [0, 0, 0],
+          range: T.range as number,
+          rate: num(T.rate),
+          sensors: Number.isInteger(T.sensors) ? (T.sensors as number) & 7 : 0,
+          hidden: T.hidden === true,
+          ca: record(T.ca) && finite(T.ca.d) && finite(T.ca.t) ? { d: Math.max(0, T.ca.d), t: Math.max(0, T.ca.t) } : null,
+        })),
+    };
   if (Array.isArray(x.bodies))
     out.bodies = x.bodies
       .slice(0, SPACE_BOUNDS.bodies)
@@ -260,6 +336,7 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
   const g = x.target;
   if (record(g) && finite(g.dist))
     out.target = {
+      ...(v3(g.r) ? { r: [...g.r] as V3 } : {}),
       id: label(g.id, 16),
       name: label(g.name),
       dist: g.dist,
@@ -297,6 +374,8 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
       dtau: num(ti.dtau, 1),
       tau: num(ti.tau, ti.room),
       ...(finite(ti.met) ? { met: Math.max(0, ti.met) } : {}),
+      ...(finite(ti.since) ? { since: Math.max(0, ti.since) } : {}),
+      ...(finite(ti.lag) ? { lag: ti.lag } : {}),
     };
   const l = x.link;
   if (record(l) && finite(l.light))

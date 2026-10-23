@@ -163,7 +163,8 @@ describe.skipIf(!E2E)("crew actions", () => {
     await press("#fc-preview");
     const card = await app.js<string>(`document.querySelector('#crew-frame').contentDocument.querySelector('.fc-card').textContent`);
     console.log(`  preview: ${card.replace(/\n/g, " · ")}`);
-    expect(card).toMatch(/Δv total|Refusé/);
+    expect(card).toMatch(/Δv total/);
+    expect(card).not.toMatch(/Refusé/);
     expect(await app.js<string>("__bh.camera.pilot.auto")).not.toBe("node");
     await app.js(
       `(() => { const d = document.querySelector('#crew-frame').contentDocument; d.querySelector('.fc-pop:nth-of-type(3)').open = true; return true; })()`,
@@ -173,34 +174,88 @@ describe.skipIf(!E2E)("crew actions", () => {
     await press("#fc-release");
     expect(await app.js<string>("__bh.camera.pilot.hold")).toBe("none");
   }, 120_000);
-  test("A5 — the F-35's weapons from the crew's radar: the weapon, the radar's mode, the decoys, a shot held", async () => {
+  test("A5 — the F-35's weapons from the crew's radar: the weapon, the radar's mode, a lock kept first, decoys, a missile", async () => {
     await app.js(`(() => { __bh.settings.vessel = "f35"; return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
     await app.js(`(() => { __bh.game.flyAt(45.85, 6.75, 3000, 110, 200); return 1; })()`);
     await app.waitFor(`${crew("__crew.model.own()?.snapshot?.caps?.fam.includes('weapons')")}`, 20_000);
-    // (the free fight of a room: the weapons live)
-    await app.waitFor(`__bh.camera.combat?.status === "run"`, 20_000);
+    // (the drone hunt: targets to lock and shoot — the room's free fight has none, the traffic off; its card pressed
+    // with the crew's frame out of the pointer's way)
+    await app.js(
+      `(() => { document.querySelector('#crew-frame').style.visibility = 'hidden'; __bh.flight.challenges.open(); return 1; })()`,
+    );
+    await app.waitFor(`!!document.querySelector("[data-testid=challenge-panel]")`, 5000);
+    await app.click(`[data-testid="chp-fight-drones"]`);
+    await app.js(`(() => { document.querySelector('#crew-frame').style.visibility = ''; return 1; })()`);
+    await app.waitFor(`__bh.camera.combat?.status === "run" && __bh.camera.combat.world.targets.length === 5`, 20_000);
+    // (the holds, so it flies straight while the crew works)
+    await app.js(
+      `(() => { const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr"); return 1; })()`,
+    );
     await app.js(crew("__crew.setView('radar')"));
     await app.waitFor(`!!document.querySelector('#crew-frame').contentDocument.querySelector('#wp-fire')`, 3000);
-    await press(`.act-seg[aria-label="Arme"] button:nth-of-type(2)`);
-    expect(await app.js<string>("__bh.camera.combat.weapon")).toBe("aim9x");
+    await press(`.act-seg[aria-label="Arme"] button:nth-of-type(1)`);
+    expect(await app.js<string>("__bh.camera.combat.weapon")).toBe("aim120");
     await press(`.act-seg[aria-label="Radar"] button:nth-of-type(2)`);
     expect(await app.js<string>("__bh.camera.radar.mode")).toBe("TWS");
+    // (the lock: the pilot's radar's, the crew's snapshot's, its contact first of the list sent — once it tracks)
+    await app.waitFor("__bh.camera.radar.tracks.size > 0", 15_000);
+    await press("#wp-lock");
+    expect((await lastBoard()).ok).toBe(true);
+    expect(await app.js<boolean>("__bh.camera.combat.world.lock !== null")).toBe(true);
+    await app.waitFor(`!!${crew("__crew.model.own()?.snapshot?.arms?.lock")}`, 3000);
+    // (the lock in the crew's picture — RD6 —, the pilot's own)
+    await app.waitFor(`${crew("__crew.model.contacts().some((c) => c.locked)")} === true`, 3000);
+    // (the drones on the crew's map: the fight's own side, hostile — the pilot's picture, with their speed, RD5)
+    await app.waitFor(
+      `${crew("__crew.model.contacts().filter((t) => /^cmb:/.test(t.id) && t.side === 'hostile' && t.spd > 0).length")} >= 4`,
+      5000,
+    );
     await press("#wp-cm");
     expect((await lastBoard()).ok).toBe(true);
-    // (the shot: the button held 0.7 s — let go early, nothing)
-    const fireBtn = "document.querySelector('#crew-frame').contentDocument.querySelector('#wp-fire')";
-    await app.js(`(${fireBtn}.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })), true)`);
+    // (the shot: the button held 0.7 s by a real pointer — let go early, nothing)
+    const fireAt = await app.js<{ x: number; y: number }>(`(() => {
+      const f = document.querySelector('#crew-frame'), F = f.getBoundingClientRect();
+      const b = f.contentDocument.querySelector('#wp-fire').getBoundingClientRect();
+      return { x: F.left + b.left + b.width / 2, y: F.top + b.top + b.height / 2 };
+    })()`);
+    const stores0 = await app.js<number>("__bh.camera.combat.world.stores.aim120");
+    await app.mouse("move", fireAt.x, fireAt.y);
+    await app.mouse("down", fireAt.x, fireAt.y);
     await Bun.sleep(200);
-    await app.js(`(${fireBtn}.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })), true)`);
+    await app.mouse("up", fireAt.x, fireAt.y);
     await Bun.sleep(500);
     expect((await lastBoard()).what).not.toBe("tir");
-    await app.js(`(${fireBtn}.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })), true)`);
-    await Bun.sleep(800);
+    expect(await app.js<number>("__bh.camera.combat.world.stores.aim120")).toBe(stores0);
+    await app.mouse("down", fireAt.x, fireAt.y);
+    await Bun.sleep(900);
+    await app.mouse("up", fireAt.x, fireAt.y);
     await app.waitFor(`!${crew("__crew.actions.busy")}`, 5000);
     const shot = await lastBoard();
     console.log(`  fire: ${JSON.stringify(shot)}`);
     expect(shot.what).toBe("tir");
+    expect(shot.ok).toBe(true);
+    // (a missile away: the stores one fewer, a blue missile flying)
+    expect(await app.js<number>("__bh.camera.combat.world.stores.aim120")).toBe(stores0 - 1);
+    expect(await app.js<number>(`__bh.camera.combat.world.missiles.filter((m) => m.owner === "blue").length`)).toBeGreaterThan(0);
     await app.shot(`${process.env.E2E_SHOTS ?? "remote-results"}/crew-actions-a5.png`);
   }, 120_000);
+
+  test("A6 — a track designated to the pilot from the crew's radar: selected on his screens, ringed on the crew's (RD9)", async () => {
+    // (a radar track not locked, from the crew's « Capteur » — the picture's)
+    const free = "__crew.model.contacts().find((c) => (c.sensors & 1) && !c.locked && c.kind === 'air')";
+    await app.waitFor(`!!${crew(free)}`, 10_000);
+    const id = await app.js<string>(crew(`${free}.id`));
+    await app.js(crew(`__crew.views.onContact(${JSON.stringify(id)})`));
+    await app.waitFor(`!!document.querySelector('#crew-frame').contentDocument.querySelector('#ctx-designate')`, 3000);
+    await press("#ctx-designate");
+    await app.waitFor(`!${crew("__crew.actions.busy")}`, 5000);
+    const b = await lastBoard();
+    console.log(`  designated ${id}: ${JSON.stringify(b)}`);
+    expect(b.ok).toBe(true);
+    expect(await app.js<string | null>("__bh.camera.pictureSelected")).toBe(id);
+    // (not locked by it: a designation)
+    expect(await app.js<string | null>("__bh.camera.radar.lock")).not.toBe(id);
+    await app.waitFor(`${crew("__crew.model.own()?.snapshot?.radar?.selected")} === ${JSON.stringify(id)}`, 3000);
+  }, 60_000);
 });

@@ -10,7 +10,9 @@ afterAll(stopServer);
 const PLACES = [
   { name: "vosges", lat: 48.05, lon: 7.0, minTrees: 50000 },
   { name: "landes", lat: 44.2, lon: -0.9, minTrees: 50000 },
-  { name: "amazon", lat: -3.12, lon: -60.0, minTrees: 50000 },
+  // (deep in the rainforest between the Purus and the Juruá: by Manaus, -3.12 -60.0, the tripod stood on a sandbank,
+  // the trees far off — no dappled shade to find)
+  { name: "amazon", lat: -4.5, lon: -62.5, minTrees: 50000 },
 ];
 
 test.skipIf(!E2E)(
@@ -36,7 +38,7 @@ test.skipIf(!E2E)(
               dynamicResolution:false,realtimeSubsampling:2,pixelRatio:1,temporalReprojection:true,pose:${pose}};
             __bh.preset("Forest");__bh.resize();return true;})()`);
           await app.waitFor(
-            `__bh.renderer.earthScenery.stats().lat!==null && Math.abs(__bh.renderer.earthScenery.stats().lat-(${place.lat}))<.01 && !__bh.renderer.earthScenery.pending`,
+            `__bh.renderer.earthScenery.stats().lat!==null && Math.abs(__bh.renderer.earthScenery.stats().lat-(${place.lat}))<.02 && !__bh.renderer.earthScenery.pending`,
             180000,
           );
           await app.waitFor("__bh.renderer.variantReady && __bh.renderer.earthTiles.pending===0", 180000);

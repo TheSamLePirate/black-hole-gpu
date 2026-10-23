@@ -129,6 +129,8 @@ function gcasStep(this: CameraController, dt: number) {
         !(o.id.startsWith("cmb:") && (this.combat?.world.target(Number(o.id.slice(4)))?.peer ?? 0) < 0) &&
         // (the aircraft joined on purpose — an intercept's shadow, a tanker's pre-contact —: not a conflict)
         !(this.icpt && this.icpt.id === o.id && this.icpt.phase !== "run" && this.icpt.phase !== "turn") &&
+        // (the tanker refuelling us behind its hose — controller/aar.ts —: close on purpose)
+        !(this.aar?.stage === "hose" && o.id === `cmb:${this.aar.tanker}`) &&
         // (a room's player flying on our wing — he said so: his place in our formation —, his craft or its stand-in in
         // a fight: close on purpose, never a conflict to climb away from — the free fight's frame gave him a few m/s)
         !this.formWithMe?.has(slotOfTrack(this, o.id)) &&
@@ -140,7 +142,9 @@ function gcasStep(this: CameraController, dt: number) {
   const k = acasConflict(others, S.escape ? 2 * ACAS.miss : ACAS.miss);
   if (k && !S.escape) {
     // (away from its side: up when it will pass below — or level and we are not low —, else down)
-    const up = k.above < 0 || (Math.abs(k.above) < 30 && g.alt - along(0) > 600);
+    // (the TCAS's RA on that craft — RD4 —: its sense, the one said aloud, flown)
+    const ra = this.tcas.find((a) => a.id === k.id && a.sense)?.sense;
+    const up = ra ? ra === "climb" : k.above < 0 || (Math.abs(k.above) < 30 && g.alt - along(0) > 600);
     S.escape = { name: k.name, up, quiet: 0 };
     this.onRadio?.(tf("Auto-ACAS: {0} — {1}", k.name, up ? t("climb") : t("descend")));
   } else if (S.escape) {

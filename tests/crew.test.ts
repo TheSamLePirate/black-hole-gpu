@@ -124,8 +124,10 @@ test("crew build stays independent: one small JS, no shader files, workers, imag
   const scripts = build.outputs.filter((o) => o.path.endsWith(".js"));
   expect(scripts).toHaveLength(1);
   // (its budget: the instruments, the actions, the globe's renderer, the coasts — 197 KB minified; the spacecraft
-  // console, its 3D map, its views and stations (PLAN-VAISSEAUX K2–K5) — 257 KB on 2026-10-18, ~70 KB gzipped)
-  expect(scripts[0]!.size).toBeLessThan(320_000);
+  // console, its 3D map, its views and stations (PLAN-VAISSEAUX K2–K5) — 257 KB on 2026-10-18, ~70 KB gzipped; the
+  // tactical picture (PLAN-RADAR-AAA: the common symbology, the world's airfields, the compact picture's decoder and
+  // the track store) — 326 KB on 2026-10-21)
+  expect(scripts[0]!.size).toBeLessThan(360_000);
   // (WebGPU only for the globe's photographed Earth, its shader inline — asked once the globe is shown: the e2e counts it)
   expect(await scripts[0]!.text()).not.toMatch(/audio-worklet|basis_transcoder|\.wgsl|ktx2|scenery-worker|plan-worker/);
 });
@@ -205,4 +207,29 @@ test("the map: Web Mercator round trips, the land's rings closed and Antarctica 
   for (const r of LAND)
     for (let k = 1; k < r.pts.length; k++)
       if (Math.abs(r.pts[k]![1]) !== 90) expect(Math.abs(r.pts[k]![0] - r.pts[k - 1]![0])).toBeLessThanOrEqual(180);
+});
+
+test("the AP and A/THR lamps and the next event's body: optional, read when sent, absent from an older pilot", async () => {
+  const { eventName } = await import("../src/crew/draw/spacestat");
+  const { setLang } = await import("../src/crew/lang");
+  setLang("fr");
+  const now = readInstruments({
+    v: 1,
+    t: 1,
+    metrics: {},
+    auto: { mode: "plane", alt: 9000, hdg: null, spd: null, ap: true, athr: "yes" },
+    next: { kind: "impact", name: "Moon", in: 60, body: "moon" },
+  })!;
+  expect(now.auto?.ap).toBe(true);
+  expect(now.auto?.athr).toBeUndefined();
+  expect(now.next?.body).toBe("moon");
+  // (in the console's language: French, English)
+  expect(eventName(now.next!)).toBe("Impact · Lune");
+  setLang("en");
+  expect(eventName(now.next!)).toBe("Impact · Moon");
+  setLang("fr");
+  const old = readInstruments({ v: 1, t: 1, metrics: {}, auto: { mode: "plane" }, next: { kind: "exit", name: "Earth", in: 9 } })!;
+  expect(old.auto?.ap).toBeUndefined();
+  expect(eventName(old.next!)).toBe("Sortie de sphère · Earth");
+  expect(eventName({ kind: "mouth", name: "Wormhole", body: "wormhole" })).toBe("Bouche du trou de ver");
 });

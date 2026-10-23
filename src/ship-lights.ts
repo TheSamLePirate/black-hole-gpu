@@ -9,7 +9,9 @@
 
 type V3 = [number, number, number];
 
-export type LampKind = "nav" | "strobe" | "landing";
+/** (the A320's — docs/PLAN-A320.md, A2 —: its red anticollision beacons, its nose gear's taxi and runway turn-off
+ *  lights, its wings' inspection lights) */
+export type LampKind = "nav" | "strobe" | "landing" | "beacon" | "taxi" | "turnoff" | "wing";
 
 export interface LampDef {
   id: string;
@@ -75,8 +77,18 @@ export const F35_LAMPS: LampDef[] = [
   },
 ];
 
-/** The lamps the shader takes (ship.wgsl S.lamp: three vec4s each). */
-export const MAX_LAMPS = 8;
+/** The lamps the shader takes (ship.wgsl S.lamp: three vec4s each — an A320 at night lights thirteen). */
+export const MAX_LAMPS = 16;
+/** After them, the glares out in the scene the same pass draws (a fight's flares — PLAN-RADAR-AAA RD8a): at most. */
+export const MAX_GLARES = 24;
+
+/** A glare out in the scene: where it is on the camera's axes [m] (the view's frame), its size [m], its colour
+ *  (display-referred, as the lamps'). */
+export interface Glare {
+  c: V3;
+  r: number;
+  rgb: V3;
+}
 
 /** A lamp set on the hull: its place [m], the hull's normal there. */
 export interface PlacedLamp extends LampDef {
@@ -111,21 +123,45 @@ export function strobeAt(t: number): number {
   return k < 0.05 || (k >= 0.15 && k < 0.2) ? 1 : 0;
 }
 
-/** What each lamp shows now: its share of its light (0: off) — the cockpit's switches, the strobes' rhythm. */
+/** An anticollision beacon's light at time t [s]: a red flash of 0.12 s every second (the two of an airliner — its
+ *  phase — half a second apart), its rise and fall soft (a xenon tube's). */
+export function beaconAt(t: number, phase = 0): number {
+  const f = (((t + phase) % 1) + 1) % 1;
+  return f < 0.12 ? Math.sin((f / 0.12) * Math.PI) ** 0.5 : 0;
+}
+
+/** What each lamp shows now: its share of its light (0: off) — the cockpit's switches, the strobes' rhythm (the
+ *  beacons with the navigation lights, the taxi and turn-off lights with the landing lights). */
 export function lampLevels(
   lamps: LampDef[],
   s: { navLights: boolean; strobeLights: boolean; landingLights: boolean },
   t: number,
 ): number[] {
-  return lamps.map((L) =>
-    L.kind === "nav" ? (s.navLights ? 1 : 0) : L.kind === "strobe" ? (s.strobeLights ? strobeAt(t) : 0) : s.landingLights ? 1 : 0,
+  return lamps.map((L, i) =>
+    L.kind === "nav"
+      ? s.navLights
+        ? 1
+        : 0
+      : L.kind === "strobe"
+        ? s.strobeLights
+          ? strobeAt(t)
+          : 0
+        : L.kind === "beacon"
+          ? s.navLights
+            ? beaconAt(t, i % 2 ? 0.5 : 0)
+            : 0
+          : L.kind === "wing"
+            ? 0
+            : s.landingLights
+              ? 1
+              : 0,
   );
 }
 
 /** The lamps' uniform (ship.wgsl S.lampN then S.lamp): the count; per lamp its place and lens radius, its
  *  colour × level, its beam and cone's cosine (−2: all round). Those off left out. */
-export function lampUniform(lamps: PlacedLamp[], levels: number[]): Float32Array<ArrayBuffer> {
-  const u = new Float32Array(4 + MAX_LAMPS * 12);
+export function lampUniform(lamps: PlacedLamp[], levels: number[], glares: Glare[] = []): Float32Array<ArrayBuffer> {
+  const u = new Float32Array(4 + (MAX_LAMPS + MAX_GLARES) * 12);
   let n = 0;
   lamps.forEach((L, i) => {
     const k = levels[i] ?? 0;
@@ -136,5 +172,13 @@ export function lampUniform(lamps: PlacedLamp[], levels: number[]): Float32Array
     n++;
   });
   u[0] = n;
+  // (the glares after the lamps' slots — their place already the view's: −3 says so —, their count apart: the hull's
+  // lenses are lit by the lamps alone)
+  const g = Math.min(glares.length, MAX_GLARES);
+  for (let j = 0; j < g; j++) {
+    const G = glares[j]!;
+    u.set([...G.c, G.r, ...G.rgb, 0, 0, 0, 0, -3], 4 + (MAX_LAMPS + j) * 12);
+  }
+  u[1] = g;
   return u;
 }

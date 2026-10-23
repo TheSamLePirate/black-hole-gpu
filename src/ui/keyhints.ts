@@ -88,6 +88,20 @@ const HINTS = {
     [`${key("KeyG", "G")} · ${key("KeyP", "P")}`, { fr: "train · volets", en: "gear · flaps" }],
     [tr({ fr: "Échap", en: "Esc" }), { fr: "pause", en: "pause" }],
   ],
+  // (the A320: an airliner's — its reversers, its autobrake, its FCU's keys)
+  airlinerLanded: (): Hint[] => [
+    [key("KeyZ", "Z"), { fr: "plein gaz", en: "full throttle" }],
+    [`⇧${key("KeyZ", "Z")}`, { fr: "inverseurs", en: "reversers" }],
+    [`⇧${key("KeyB", "B")}`, { fr: "freinage automatique", en: "autobrake" }],
+    [`⇧${key("KeyO", "O")}`, { fr: "plan de vol", en: "flight plan" }],
+    [tr({ fr: "Échap", en: "Esc" }), { fr: "pause", en: "pause" }],
+  ],
+  airlinerAir: (): Hint[] => [
+    ["' · ⇧'", { fr: "pilote auto · auto-poussée", en: "autopilot · autothrust" }],
+    [`⇧${key("KeyM", "M")}`, { fr: "NAV : suivre le plan de vol", en: "NAV: fly the flight plan" }],
+    [`${key("KeyG", "G")} · ${key("KeyP", "P")}`, { fr: "train · volets", en: "gear · flaps" }],
+    [tr({ fr: "Échap", en: "Esc" }), { fr: "pause", en: "pause" }],
+  ],
   jetFight: (): Hint[] => [
     [tr({ fr: "Espace", en: "Space" }), { fr: "canon (maintenu)", en: "gun (held)" }],
     [tr({ fr: "Entrée", en: "Enter" }), { fr: "tirer l'arme choisie", en: "fire the weapon chosen" }],
@@ -102,8 +116,10 @@ const HINTS = {
   ],
 } satisfies Record<string, () => Hint[]>;
 
-/** The hints for a phase (none for an offline render); `jet` the F-35 flown (in a fight or not). */
-export function hintsFor(p: FlightPhase, jet: "plane" | "fight" | null = null): Hint[] {
+/** The hints for a phase (none for an offline render); `jet` the F-35 flown (in a fight or not), the A320. */
+export function hintsFor(p: FlightPhase, jet: "plane" | "fight" | "airliner" | null = null): Hint[] {
+  if (jet === "airliner" && (p.mode === "flight" || p.mode === "landed"))
+    return p.mode === "landed" ? HINTS.airlinerLanded() : HINTS.airlinerAir();
   if (jet && (p.mode === "flight" || p.mode === "landed"))
     return jet === "fight" ? HINTS.jetFight() : p.mode === "landed" ? HINTS.jetLanded() : HINTS.jetAir();
   switch (p.mode) {
@@ -140,7 +156,7 @@ export class KeyHints {
   }
 
   /** The frame's phase (null: nothing to show — hints off, a menu open, the interface hidden). */
-  update(p: FlightPhase | null, now: number, jet: "plane" | "fight" | null = null) {
+  update(p: FlightPhase | null, now: number, jet: "plane" | "fight" | "airliner" | null = null) {
     const hints = p ? hintsFor(p, jet) : [];
     const sig = hints.map(([k, t]) => k + t.en).join("|") + (p?.mode === "flight" ? "f" : "");
     if (sig !== this.sig) {

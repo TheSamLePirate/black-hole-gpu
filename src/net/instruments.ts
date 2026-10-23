@@ -2,6 +2,7 @@
 // radians for angles (heading, attitude, track); radar offsets east/north/up in metres. No dependency on the simulator.
 // Version 1 grows only by optional blocks: an older console ignores them, a newer one shows what an older pilot sends.
 import { type InstrumentSpace, readSpace } from "./instruments-space";
+import { type PicBlock, readPicBlock } from "./picture";
 export const INSTRUMENT_KEYS = ["alt", "speed", "vz", "g", "q", "mach", "heat", "throttle", "fuel", "tau"] as const;
 export type InstrumentKey = (typeof INSTRUMENT_KEYS)[number];
 export interface InstrumentContact {
@@ -51,6 +52,10 @@ export interface InstrumentAuto {
   sas: boolean;
   order: string;
   hub: { title: string; phase: string; next: string; bar: number | null } | null;
+  /** the jet's holds (AP: its altitude or heading held) and autothrottle (its speed held) engaged — the game's own
+   *  lamps, its PCD's; absent from an older pilot (the console then reads them off the selectors) */
+  ap?: boolean;
+  athr?: boolean;
 }
 /** The flight plan's guidance: to the active waypoint and the vertical profile. */
 export interface InstrumentNav {
@@ -95,7 +100,8 @@ export interface InstrumentSystems {
 export interface InstrumentTraffic {
   id: string;
   name: string;
-  kind: "air" | "sea" | "ground";
+  /** a missile, a decoy (a flare, chaff — PLAN-RADAR-AAA RD8's first step: on the crew's screens) */
+  kind: "air" | "sea" | "ground" | "missile" | "decoy";
   side: string;
   lat: number;
   lon: number;
@@ -103,6 +109,34 @@ export interface InstrumentTraffic {
   hdg: number | null;
   spd: number | null;
   type: string;
+  /** the pilot's TCAS's grading of it (PLAN-RADAR-AAA RD4): proximate, a traffic or resolution advisory */
+  adv?: "proximate" | "TA" | "RA";
+}
+/** The air-to-air refuelling (game/aar.ts, controller/aar.ts): the stage (the rendezvous `join`, behind the `hose`),
+ *  the HUD's word (JOIN, PRE-CONTACT, CLEARED, CONTACT, FUEL FLOW, FULL, BREAKAWAY, DEPART), the way it is flown (auto,
+ *  assisted, manual), the tanker's callsign and the hose's side; the fuel given and asked [kg], a practice's (the tanks
+ *  not taking it); the probe's gap to the basket along the hose and off it [m], the closing speed [m/s], the hose
+ *  pushed in [m] (locked) and its flow range and breakaway [m]; the pod's lights; the contacts and the misses; the
+ *  tanker's distance [m]. */
+export interface InstrumentAar {
+  stage: "join" | "hose";
+  phase: string;
+  mode: "auto" | "assisted" | "manual";
+  tanker: string;
+  side: "left" | "right";
+  given: number;
+  want: number;
+  practice: boolean;
+  along: number | null;
+  off: number | null;
+  closure: number | null;
+  takeup: number | null;
+  flow: [number, number];
+  whip: number;
+  lights: "off" | "amber" | "green" | "red";
+  contacts: number;
+  misses: number;
+  dist: number | null;
 }
 /** A mission's places: the zones to reach, a SAM's reach [m]. */
 export interface InstrumentZone {
@@ -119,7 +153,8 @@ export interface InstrumentSnapshot extends InstrumentSpace {
   body: string;
   metrics: Partial<Record<InstrumentKey, number>>;
   geo: { lat: number; lon: number; heading: number } | null;
-  radar: { mode: string; contacts: InstrumentContact[] } | null;
+  /** the radar: its mode, its contacts; the track the pilot selected (its picture's id — PLAN-RADAR-AAA RD9) */
+  radar: { mode: string; contacts: InstrumentContact[]; selected?: string | null } | null;
   route: { lat: number; lon: number; name: string; alt?: number; spd?: number }[];
   /** the predicted path; t its seconds from now, h its height [m] when sent */
   ahead: { lat: number; lon: number; t?: number; h?: number }[];
@@ -143,7 +178,7 @@ export interface InstrumentSnapshot extends InstrumentSpace {
     a?: number;
   } | null;
   /** the next event on the free-fall path, and the mission's objective */
-  next?: { kind: string; name: string; in: number } | null;
+  next?: { kind: string; name: string; in: number; body?: string } | null;
   msn?: { name: string; brg: number; dist: number; dz: number } | null;
   /** the alerts lit (STALL, GEAR, PULL UP, BINGO…) */
   warn?: string[];
@@ -152,10 +187,25 @@ export interface InstrumentSnapshot extends InstrumentSpace {
   arms?: { live: boolean; sel: string; stores: Record<string, number>; mode: string; lock: string } | null;
   /** the Sun seen from the body flown about: the point under it [°] on the body's own axes (the globe's day and night) */
   sun?: { lat: number; lon: number } | null;
+  /** the air-to-air refuelling engaged (absent: none, or an older pilot) */
+  aar?: InstrumentAar | null;
   /** the crew's orders (net/crewcmd.ts): the pilot's lock open, the families that can be done now */
-  caps?: { on: boolean; fam: string[] } | null;
+  caps?: {
+    on: boolean;
+    fam: string[];
+    /** the pilot holds the ground stations' orders and messages the light's time himself (AUDIT-CREW priority 6): a
+     *  console sends them at once — absent (an older pilot): the console delays them */
+    hold?: boolean;
+    /** the crew screens the pilot has accepted aboard (their slots): live; the others are on the ground */
+    aboard?: number[];
+  } | null;
   /** sent once a second at most: absent, the last list stands */
   traffic?: InstrumentTraffic[];
+  /** the fight about the pilot every snapshot (RD1): its targets, its missiles, its decoys — newer than `traffic` */
+  tracks?: InstrumentTraffic[];
+  /** the pilot's tactical picture, compact (PLAN-RADAR-AAA RD5 — net/picture.ts): every track, the truth and what his
+   *  sensors hold, four times a second */
+  pic?: PicBlock;
   zones?: InstrumentZone[];
 }
 
@@ -215,6 +265,8 @@ function readAuto(x: unknown): InstrumentAuto | null {
     sas: x.sas === true,
     order: label(x.order, 16),
     hub: h ? { title: label(h.title), phase: label(h.phase), next: label(h.next, 96), bar: opt(h.bar) } : null,
+    ...(typeof x.ap === "boolean" ? { ap: x.ap } : {}),
+    ...(typeof x.athr === "boolean" ? { athr: x.athr } : {}),
   };
 }
 function readNav(x: unknown): InstrumentNav | null {
@@ -259,7 +311,35 @@ function readSystems(x: unknown): InstrumentSystems | null {
   };
 }
 
-const KINDS = new Set(["air", "sea", "ground"]);
+const AAR_MODES = new Set(["auto", "assisted", "manual"]);
+const LIGHTS = new Set(["off", "amber", "green", "red"]);
+function readAar(x: unknown): InstrumentAar | null {
+  if (!record(x) || !finite(x.given) || !finite(x.want)) return null;
+  const fl =
+    Array.isArray(x.flow) && finite(x.flow[0]) && finite(x.flow[1]) ? (x.flow as [number, number]) : ([0.9, 4.6] as [number, number]);
+  return {
+    stage: x.stage === "join" ? "join" : "hose",
+    phase: label(x.phase, 16),
+    mode: AAR_MODES.has(x.mode as string) ? (x.mode as InstrumentAar["mode"]) : "manual",
+    tanker: label(x.tanker, 24),
+    side: x.side === "left" ? "left" : "right",
+    given: Math.max(0, x.given),
+    want: Math.max(0, x.want),
+    practice: x.practice === true,
+    along: opt(x.along),
+    off: opt(x.off),
+    closure: opt(x.closure),
+    takeup: opt(x.takeup),
+    flow: [fl[0], fl[1]],
+    whip: num(x.whip) ?? 6.5,
+    lights: LIGHTS.has(x.lights as string) ? (x.lights as InstrumentAar["lights"]) : "off",
+    contacts: Math.max(0, Math.round(num(x.contacts) ?? 0)),
+    misses: Math.max(0, Math.round(num(x.misses) ?? 0)),
+    dist: opt(x.dist),
+  };
+}
+
+const KINDS = new Set(["air", "sea", "ground", "missile", "decoy"]);
 function readTraffic(list: unknown[]): InstrumentTraffic[] {
   const out: InstrumentTraffic[] = [];
   for (const t of list.slice(0, 128)) {
@@ -276,6 +356,7 @@ function readTraffic(list: unknown[]): InstrumentTraffic[] {
       hdg: opt(r.hdg),
       spd: opt(r.spd),
       type: label(r.type, 16),
+      ...(r.adv === "proximate" || r.adv === "TA" || r.adv === "RA" ? { adv: r.adv } : {}),
     });
   }
   return out;
@@ -291,7 +372,7 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
   const geo = place(rawGeo) && finite(heading) ? { lat: rawGeo.lat, lon: rawGeo.lon, heading } : null;
   let radar: InstrumentSnapshot["radar"] = null;
   if (record(x.radar) && Array.isArray(x.radar.contacts)) {
-    radar = { mode: label(x.radar.mode), contacts: [] };
+    radar = { mode: label(x.radar.mode), contacts: [], selected: typeof x.radar.selected === "string" ? label(x.radar.selected) : null };
     for (const c of x.radar.contacts.slice(0, 48)) {
       if (!record(c) || !finite(c.e) || !finite(c.n) || !finite(c.dz)) continue;
       radar.contacts.push({ id: label(c.id), name: label(c.name), e: c.e, n: c.n, dz: c.dz, iff: label(c.iff), locked: c.locked === true });
@@ -341,7 +422,14 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
           ...numbers<{ radius: number; a: number }>(orbit, ["radius", "a"]),
         }
       : null,
-    next: next ? { kind: label(next.kind, 16), name: label(next.name), in: next.in as number } : null,
+    next: next
+      ? {
+          kind: label(next.kind, 16),
+          name: label(next.name),
+          in: next.in as number,
+          ...(typeof next.body === "string" ? { body: label(next.body, 24) } : {}),
+        }
+      : null,
     msn: msn ? { name: label(msn.name), brg: msn.brg as number, dist: msn.dist as number, dz: num(msn.dz) ?? 0 } : null,
     arms: record(x.arms)
       ? {
@@ -359,6 +447,7 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
           lock: label(x.arms.lock, 32),
         }
       : null,
+    ...(x.aar !== undefined ? { aar: readAar(x.aar) } : {}),
     sun: place(x.sun) ? { lat: (x.sun as { lat: number }).lat, lon: (x.sun as { lon: number }).lon } : null,
     caps:
       record(x.caps) && Array.isArray(x.caps.fam)
@@ -368,9 +457,18 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
               .slice(0, 8)
               .filter((f): f is string => typeof f === "string")
               .map((f) => f.slice(0, 12)),
+            ...(x.caps.hold === true ? { hold: true } : {}),
+            ...(Array.isArray(x.caps.aboard)
+              ? { aboard: x.caps.aboard.slice(0, 8).filter((k): k is number => Number.isInteger(k) && k >= 0 && k < 64) }
+              : {}),
           }
         : null,
     ...(Array.isArray(x.traffic) ? { traffic: readTraffic(x.traffic) } : {}),
+    ...(Array.isArray(x.tracks) ? { tracks: readTraffic(x.tracks.slice(0, 64)) } : {}),
+    ...(() => {
+      const pic = readPicBlock(x.pic);
+      return pic ? { pic } : {};
+    })(),
     ...(Array.isArray(x.zones)
       ? {
           zones: x.zones

@@ -9,7 +9,7 @@ import { TUNING } from "../game/tuning";
 import { tf } from "../i18n";
 import { dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { G0, M_METRES } from "../units";
-import { VESSELS } from "../vessels";
+import { isAircraft, VESSELS } from "../vessels";
 import type { CameraController } from "../controls";
 
 export interface SpaceGuard {
@@ -50,7 +50,7 @@ function spaceGuardStep(this: CameraController) {
     }
     this.guardTook = null;
   }
-  if (fleet.active === "f35" || P.auto !== "none" || this.docked || this.landed || this.rolling) return;
+  if (isAircraft(fleet.active) || P.auto !== "none" || this.docked || this.landed || this.rolling) return;
   const level = this.assistLevel();
   const armed = level === "assisted" || level === "beginner" || (level === "realistic" && this.s.spaceAutoProtect !== false);
   // the ground: on the engines — not a plane flying on its wings (its own GPWS)

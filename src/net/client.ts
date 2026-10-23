@@ -73,13 +73,16 @@ type Events = {
 /** the craft of those away are read as slots from here on (R7) */
 export const AWAY_SLOT = 200;
 
+/** the server's limit on a room event, its relayed message (server/rooms.ts) [characters] */
+export const EVENT_MAX = 16_384;
+
 export class NetClient {
   status: NetStatus = "off";
   room: Room | null = null;
   readonly clock = new NetClock();
   readonly remotes = new RemoteRegistry();
   /** the server's version once welcomed */
-  server = { v: 0, build: "" };
+  server: { v: number; build: string; f: string[] } = { v: 0, build: "", f: [] };
   /** the direct links to the room's others (WebRTC), null: none */
   mesh: PeerMesh | null = null;
   /** the ICE servers the room server gave (STUN, its TURN) */
@@ -235,7 +238,7 @@ export class NetClient {
     }
     switch (m.type) {
       case "welcome":
-        this.server = { v: m.v, build: m.build };
+        this.server = { v: m.v, build: m.build, f: Array.isArray(m.f) ? m.f.filter((x) => typeof x === "string").slice(0, 16) : [] };
         this.retry = 0;
         this.setStatus("online");
         this.ping();
@@ -389,9 +392,24 @@ export class NetClient {
     this.sendMsg({ type: "profile", name, colour });
   }
 
-  /** a reliable event to the room */
-  event(ev: NetEvent) {
-    if (this.room) this.sendMsg({ type: "event", ev });
+  /** the reliable events sent, their characters, and those kept back for being too long (RD1: the server drops one
+   *  over 16 384 characters as it reaches it — silently: counted here, the last one's kind named) */
+  readonly sent = { events: 0, chars: 0, oversize: 0, lastOversize: "" };
+
+  /** a reliable event to the room — false: not sent (no room, or too long for the server once stamped) */
+  event(ev: NetEvent): boolean {
+    if (!this.room) return false;
+    const json = JSON.stringify({ type: "event", ev } satisfies ClientMsg);
+    // (the server's relayed message: this one with its sender's slot — some 12 characters more)
+    if (json.length + 16 > EVENT_MAX) {
+      this.sent.oversize++;
+      this.sent.lastOversize = String(ev.kind).slice(0, 24);
+      return false;
+    }
+    this.sent.events++;
+    this.sent.chars += json.length;
+    this.link?.send(json);
+    return true;
   }
 
   /** The warp we ask for (× real time; 0: paused): the room runs at its pilots' slowest (R6). A slowdown of ours is

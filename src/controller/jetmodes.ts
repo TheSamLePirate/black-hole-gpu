@@ -1,15 +1,17 @@
 // The CameraController — the F-35's new autopilot modes (game/jetmodes.ts, A3): the orbit over a point (its heading
 // set on the heading hold each frame, the altitude held), the hold on a racetrack over a point (controller/orders.ts),
 // the terrain following (its flight path in place of the altitude hold's: the ground ahead cleared by the height
-// asked), the rendezvous with a tanker (one set flying its racetrack ahead, friendly, the intercept to its pre-contact
-// slot, 50 m behind and 10 m below). The stick's roll lets the orbit and the hold go, its pitch the terrain following
-// for as long as it is held.
+// asked), the rendezvous with a tanker (one set flying its racetrack ahead — an A330 MRTT's hoses under its wings —,
+// friendly, the intercept to the observation slot behind the hose given, then the refuelling: controller/aar.ts). The
+// stick's roll lets the orbit and the hold go, its pitch the terrain following for as long as it is held.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { AAR, type AarSide } from "../game/aar";
 import { altHoldGamma } from "../game/jet";
 import { MODES, orbitHeading, tankerTrack, tfGamma } from "../game/jetmodes";
 import type { Scenario } from "../game/scenarios";
 import { t, tf } from "../i18n";
 import type { PilotInput } from "../pilot";
+import { fleet } from "../fleet";
 import { ground } from "./gcas";
 import type { CameraController } from "../controls";
 
@@ -20,8 +22,9 @@ declare module "../controls" {
   interface CameraController {
     orbitMode?: { lat: number; lon: number; R: number; dir: 1 | -1 } | null;
     tfAgl?: number | null;
-    /** the tanker set and waited for on the radar (its fight's id) */
+    /** the tanker set and waited for on the radar (its fight's id); the hose asked */
     tankerPending?: number | null;
+    tankerSide?: AarSide;
     orbitStart: typeof orbitStart;
     tfStart: typeof tfStart;
     tankerStart: typeof tankerStart;
@@ -81,14 +84,42 @@ function tfStart(this: CameraController, agl: number | null): string {
   return tf("Terrain following: {0} m over the ground", agl);
 }
 
-/** A tanker set flying its racetrack 25 km ahead at 7 000 m, the intercept engaged to its pre-contact slot once the
- *  radar has it. What to say. */
-function tankerStart(this: CameraController): string {
+/** the tanker's callsign */
+export const TANKER = "TEXACO 11";
+
+/** The observation slot behind a hose (the intercept's: our craft there, the probe some 45 m behind the basket). */
+export const observation = (side: AarSide) => ({ right: (side === "left" ? -1 : 1) * AAR.pod.x - 1, back: 45, up: -8 });
+
+/**
+ * A tanker set flying its racetrack 25 km ahead at 7 000 m (`near`: 1.5 km ahead at our height, on our heading — a
+ * practice's), the intercept engaged to the observation slot behind its hose (`side`) once the radar has it, the
+ * refuelling then (controller/aar.ts). One already flying: that one joined again. Again while refuelling: off. What to
+ * say.
+ */
+function tankerStart(this: CameraController, o: { near?: boolean; side?: AarSide } = {}): string {
   const g = this.geoNow();
   const f = this.jetFigures();
   if (!g || !f) return t("Tanker: in the air");
+  if (fleet.active !== "f35") return t("Tanker: the F-35's");
+  if ((this.aar || this.tankerPending != null) && o.near === undefined && o.side === undefined) {
+    this.tankerPending = null;
+    if (this.icpt) this.icptOff();
+    this.aarOff();
+    return t("Refuelling off");
+  }
+  const side = o.side ?? "right";
+  // (one flying already: joined again)
+  const old = this.combat?.world.targets.find((x) => x.alive && x.friendly && x.name === TANKER);
+  if (old) {
+    this.tankerPending = old.id;
+    this.tankerSide = side;
+    this.aarBegin(old.id, TANKER, side);
+    this.radarSweep = true;
+    return tf("Tanker: {0} — the rendezvous to its {1}", TANKER, side === "left" ? t("left hose") : t("right hose"));
+  }
   const h = Number.isFinite(f.hdg) ? f.hdg : g.track;
-  const anchor = offset(g.lat, g.lon, Math.sin(h) * 25_000, Math.cos(h) * 25_000);
+  const ahead = o.near ? 1500 : 25_000;
+  const anchor = offset(g.lat, g.lon, Math.sin(h) * ahead, Math.cos(h) * ahead);
   if (!this.combat) {
     const def: Scenario = {
       id: "tanker",
@@ -110,23 +141,31 @@ function tankerStart(this: CameraController): string {
     (p.lat - A.lat) * D * R_EARTH,
   ];
   const [e0, n0] = toEn(anchor);
-  const track = tankerTrack(h).map(
-    ([e, n]) => [e0 + e, n0 + n, Math.max(MODES.tankerH - W.groundZ(e0 + e, n0 + n), 1500)] as [number, number, number],
-  );
+  // (its height: 7 000 m — near, ours —, 1 500 m over the ground at least)
+  const hAt = (e: number, n: number) => Math.max((o.near ? f.h : MODES.tankerH) - W.groundZ(e, n), 1500);
+  // (its racetrack wide enough for its turns at 25° of bank — a 9 km radius at its speed —, its legs 40 km)
+  const track = tankerTrack(h, 20_000, 40_000).map(([e, n]) => [e0 + e, n0 + n, hAt(e0 + e, n0 + n)] as [number, number, number]);
   const id = W.addTarget({
     kind: "airliner",
-    at: [e0, n0, Math.max(MODES.tankerH - W.groundZ(e0, n0), 1500)],
+    mesh: "mrtt",
+    at: [e0, n0, hAt(e0, n0)],
     hdg: (h / D + 360) % 360,
     speed: MODES.tankerV,
-    name: "TEXACO 11",
+    name: TANKER,
     friendly: true,
     route: track,
     routeLoop: true,
+    bankMax: 25,
+    rollMax: 3,
   });
   this.tankerPending = id;
+  this.tankerSide = side;
+  this.aarBegin(id, TANKER, side);
   // (the radar sweeps it at once, as a fight's briefed targets)
   this.radarSweep = true;
-  return t("Tanker: TEXACO 11, 25 km ahead at 7 000 m — the rendezvous to pre-contact");
+  return o.near
+    ? tf("Tanker: {0}, 1.5 km ahead at your height — the rendezvous to its {1}", TANKER, side === "left" ? t("left hose") : t("right hose"))
+    : tf("Tanker: {0}, 25 km ahead at 7 000 m — the rendezvous to its {1}", TANKER, side === "left" ? t("left hose") : t("right hose"));
 }
 
 /** The modes let go. */
@@ -135,6 +174,11 @@ function modesOff(this: CameraController): string {
   this.tfAgl = null;
   this.jetModes.tf = undefined;
   this.tankerPending = null;
+  if (this.aar) {
+    if (this.icpt) this.icptOff();
+    this.aarOff();
+    return t("Orbit, terrain following and refuelling off");
+  }
   return t("Orbit and terrain following off");
 }
 
@@ -161,8 +205,8 @@ function modesStep(this: CameraController, inp: PilotInput, f: { h: number; hdg:
         seen: null,
         armed: false,
         last: null,
-        slot: MODES.preContact,
-        slotName: tf("Pre-contact on {0} — 50 m behind, 10 m below", o.name),
+        slot: observation(this.tankerSide ?? "right"),
+        slotName: tf("Behind {0}'s {1} — observation", o.name, this.tankerSide === "left" ? t("left hose") : t("right hose")),
       };
       this.s.flightMode = "plane";
       this.onPilotMessage?.(tf("Rendezvous: {0} · {1} km", o.name, (Math.hypot(...o.r) / 1000).toFixed(1)));

@@ -98,6 +98,8 @@ function apSet(this: CameraController, want: { alt?: number; hdg?: number; spd?:
  * "athr" the autothrottle (the speed now), "ab" the afterburner (the throttle full). Returns what to say.
  */
 function jetToggle(this: CameraController, what: "ap" | "athr" | "ab"): string {
+  // (the A320's own: its FMGC — controller/a320ap.ts)
+  if (fleet.active === "a320" && what !== "ab") return this.a320ApKey(what);
   if (!jetReady(this)) return t("The jet's systems: in plane mode (F)");
   const m = this.jetModes;
   // (the holds or the autothrottle taken while in formation: the formation let go, them on as they are)
@@ -162,6 +164,8 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   if (!jetReady(this)) {
     if (this.form && !formGrace(this.form)) this.formOff(t("Formation off — not flown as a plane"));
     if (this.icpt) this.icptOff(t("Intercept off — not flown as a plane"));
+    // (the refuelling kept: a moment out of the plane's law — a placing, the flight mode switched — and it takes up
+    // again where it was, its rendezvous too; the ground or another autopilot let it go below)
     if (!this.form && (m.alt !== null || m.hdg !== null || m.spd !== null || m.ab)) this.jetModes = noJetModes();
     return none;
   }
@@ -174,6 +178,10 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
     if (this.form && (this.pilot.auto !== "none" || !formGrace(this.form)))
       this.formOff(this.pilot.auto !== "none" ? t("Formation off — the autopilot") : t("Formation off — on the ground"));
     if (this.icpt) this.icptOff(this.pilot.auto !== "none" ? t("Intercept off — the autopilot") : t("Intercept off — on the ground"));
+    // (the refuelling let go by another autopilot or a real roll on the ground — not by a frame without the plane's
+    // figures, as just after a placing: taken up again)
+    if (this.aar && this.pilot.auto !== "none") this.aarOff(t("Refuelling off — the autopilot"));
+    else if (this.aar && this.rolling && f) this.aarOff(t("Refuelling off — on the ground"));
     m.alt = m.hdg = m.spd = null;
     this.jetCws.thr = Number.NaN;
     return none;
@@ -185,11 +193,13 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   // (the levels of assistance — controller/assistlevel.ts —: back to stable flight, the beginner's ring; the assisted
   // level's auto-throttle)
   this.assistThrottle(f);
-  const fm =
+  const fm: { gamma: number; bank: number; spd: number; acc: number; thr?: number } | null =
     this.gcasJet(inp) ??
     this.assistJet(inp, f, dt, "recover") ??
     // (a demonstration's guns: TARS's aim — controller/course.ts)
     this.courseJet(f) ??
+    // (the air refuelling — controller/aar.ts —: the probe flown into the basket; its rendezvous the intercept's)
+    this.aarJet(inp, f, dt) ??
     this.icptStep(inp, f) ??
     this.trapJet(inp) ??
     this.ilsJet(inp) ??
@@ -199,6 +209,15 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
   if (fm) {
     cws.pitch = cws.roll = false;
     // (the afterburner when the dry engine at full cannot keep up — he speeds up, we are behind —, out once eased)
+    // (a throttle set by the mode itself — the refuelling's last metres, flown on the speed over the ground: the
+    // autothrottle's on the air's would chase every gust)
+    if (fm.thr !== undefined) {
+      m.ab = false;
+      this.pilot.throttle = fm.thr;
+      this.jetAthr.reset();
+      cws.thr = this.pilot.throttle;
+      return { gamma: fm.gamma, bank: fm.bank };
+    }
     if (!m.ab && this.pilot.throttle >= 0.98 && fm.acc > 1.2) {
       m.ab = true;
       this.pilot.throttle = 1;

@@ -16,9 +16,12 @@ struct Display {
                 // canopy's drops) + 2 for Mars's dust (W6: grains, not drops), the vertical field's half tangent
   rainV: vec4f, // the drops' velocity relative to the camera [m/s, its axes: right, up, forward], their speed
   rainX: vec4f, // the rain's more (PLAN-PLUIE): the flown craft's distance from the camera [m] (0: none — the
-                // drops beyond it hidden by it), the gusts (0…1: the curtains), the camera's lens wet (0/1), unused
+                // drops beyond it hidden by it), the gusts (0…1: the curtains), the camera's lens wet (0/1), the A320's
+                // windows drawing their own drops (0/1)
   haze: vec4f,  // the F-35's heat haze: its exhaust's column in the image, from its exit to downstream (uv ×2)
   hazeR: vec4f, // its radii there [uv of the height], its strength (0: none), a clock [s]
+  haze2: vec4f, // a second engine's (the A320's right CFM56 — A13): the same
+  hazeR2: vec4f,
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -34,6 +37,30 @@ struct Display {
 @group(0) @binding(10) var lensDirt: texture_2d<f32>; // the lens's dust and smudges (black: none)
 
 const LUMA = vec3f(0.2126, 0.7152, 0.0722);
+
+// The heat haze's displacement at uv [uv] of a jet's column (its ends in the image, its radii, its strength, a clock):
+// the eddies' noise, strongest on its axis just downstream of the exit, fading along it
+fn hazeOffset(uv: vec2f, hz: vec4f, hr: vec4f) -> vec2f {
+  if (hr.z <= 0.0) { return vec2f(0.0); }
+  let hzA = hz.xy;
+  let hzB = hz.zw;
+  let asp = vec2f(D.img.x / D.img.y, 1.0);
+  let ab = (hzB - hzA) * asp;
+  let L2 = max(dot(ab, ab), 1e-8);
+  let ap = (uv - hzA) * asp;
+  let t = clamp(dot(ap, ab) / L2, 0.0, 1.0);
+  let rad = mix(hr.x, hr.y, t);
+  let dist = length(ap - ab * t);
+  let m = (1.0 - smoothstep(0.35 * rad, rad, dist)) * smoothstep(0.0, 0.08, t) * pow(1.0 - t, 1.3) * hr.z;
+  if (m <= 0.002) { return vec2f(0.0); }
+  let ax = normalize(ab + vec2f(1e-6, 0.0));
+  let s = dot(ap, ax) / max(rad, 1e-3);
+  let w = hr.w;
+  let q = vec2f(s * 2.3 - w * 9.0, dot(ap, vec2f(-ax.y, ax.x)) / max(rad, 1e-3) * 3.1);
+  let n = vec2f(sin(q.x + 1.7 * sin(q.y * 1.3 + w * 3.1)) + 0.5 * sin(2.1 * q.x - q.y + w * 5.0),
+                cos(1.3 * q.x + q.y * 0.9 - w * 4.0) + 0.5 * sin(1.9 * q.y + 0.7 * q.x + w * 6.3));
+  return n * m * 0.07 * rad / asp;
+}
 
 // The HDR image at uv by a Catmull–Rom spline (9 bilinear taps; Jimenez's): its negative lobes keep the
 // edges an upscale would blur; clamped at 0 (its ringing below black)
@@ -614,28 +641,12 @@ fn fs(in: VSOut) -> @location(0) vec4f {
       c = max(c + rcasDelta(vec2i(uv * vec2f(textureDimensions(hdr, 0))), D.lod.w, D.size.z), vec3f(0.0));
     }
   }
-  if (D.hazeR.z > 0.0) {
+  if (D.hazeR.z > 0.0 || D.hazeR2.z > 0.0) {
     // the heat haze behind a jet's nozzle: the hot exhaust's turbulent gradients of index bend the light —
     // what is behind it, seen through it, shimmers; its eddies carried downstream (the hull is drawn over
-    // it, sharp: only the background is bent)
-    let hzA = D.haze.xy;
-    let hzB = D.haze.zw;
-    let asp = vec2f(D.img.x / D.img.y, 1.0);
-    let ab = (hzB - hzA) * asp;
-    let L2 = max(dot(ab, ab), 1e-8);
-    let ap = (uv - hzA) * asp;
-    let t = clamp(dot(ap, ab) / L2, 0.0, 1.0);
-    let rad = mix(D.hazeR.x, D.hazeR.y, t);
-    let dist = length(ap - ab * t);
-    let m = (1.0 - smoothstep(0.35 * rad, rad, dist)) * smoothstep(0.0, 0.08, t) * pow(1.0 - t, 1.3) * D.hazeR.z;
-    if (m > 0.002) {
-      let ax = normalize(ab + vec2f(1e-6, 0.0));
-      let s = dot(ap, ax) / max(rad, 1e-3);
-      let w = D.hazeR.w;
-      let q = vec2f(s * 2.3 - w * 9.0, dot(ap, vec2f(-ax.y, ax.x)) / max(rad, 1e-3) * 3.1);
-      let n = vec2f(sin(q.x + 1.7 * sin(q.y * 1.3 + w * 3.1)) + 0.5 * sin(2.1 * q.x - q.y + w * 5.0),
-                    cos(1.3 * q.x + q.y * 0.9 - w * 4.0) + 0.5 * sin(1.9 * q.y + 0.7 * q.x + w * 6.3));
-      let off = n * m * 0.07 * rad / asp;
+    // it, sharp: only the background is bent); an airliner's two engines each their column
+    let off = hazeOffset(uv, D.haze, D.hazeR) + hazeOffset(uv, D.haze2, D.hazeR2);
+    if (dot(off, off) > 1e-12) {
       c = textureSampleLevel(hdr, samp, clamp(uv + off, vec2f(0.0), vec2f(1.0)), 0.0).rgb;
     }
   }
@@ -680,7 +691,8 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     let rs = rainStreaks(uv, shipA);
     let col = select((lit * 1.25 + glow * 3.0) * rs.y, rainLight(uv) * vec3f(1.25, 0.95, 0.68), dust);
     c = mix(c, col, rs.x * glass * select(1.0, 0.5, inCab));
-    if (!dust && inCab && glass > 0.0) { c = wetGlass(uv, c, glass, false); }
+    // (the A320's windows draw their own drops, their wipers' — ship.wgsl a320Wet: rainX.w)
+    if (!dust && inCab && glass > 0.0 && D.rainX.w < 0.5) { c = wetGlass(uv, c, glass, false); }
     // (outside: the camera's lens wet — a few soft drops — PLAN-PLUIE, the owner's choice)
     if (!dust && !inCab && D.rainX.z > 0.5) { c = wetGlass(uv, c, 1.0, true); }
   }

@@ -4,6 +4,7 @@
 // (RA, DZ, SH, TS, FG, BR, HZ, DU…), the cloud layers (FEW/SCT/BKN/OVC and their bases, CB/TCU, VV: the
 // sky hidden). Each runway site's station (sites.ts: icao); the nearest to the craft, cached half an hour.
 
+import { fieldsNear } from "./world/runways";
 import { type Site, SITES } from "./game/sites";
 import type { CloudLayer, WeatherState } from "./weather";
 
@@ -129,6 +130,24 @@ export function nearestStation(place: { lat: number; lon: number }, maxKm = 600)
       Math.sin(place.lat * D) * Math.sin(s.lat * D) + Math.cos(place.lat * D) * Math.cos(s.lat * D) * Math.cos((place.lon - s.lon) * D);
     const km = Math.acos(Math.min(Math.max(c, -1), 1)) * 6371;
     if (km <= maxKm && (!best || km < best.km)) best = { site: s, icao: s.icao, km };
+  }
+  // (a world airfield's station nearer — a large or medium one with an ICAO code: those report — PLAN-RADAR-AAA RD13)
+  const r = Math.min(maxKm, best ? best.km : maxKm, 150) * 1000;
+  for (const f of fieldsNear(place.lat, place.lon, r, (x) => (x.kind === "large" || x.kind === "medium") && /^[A-Z]{4}$/.test(x.icao))) {
+    const km =
+      Math.acos(
+        Math.min(
+          Math.max(
+            Math.sin(place.lat * D) * Math.sin(f.lat * D) +
+              Math.cos(place.lat * D) * Math.cos(f.lat * D) * Math.cos((place.lon - f.lon) * D),
+            -1,
+          ),
+          1,
+        ),
+      ) * 6371;
+    if (!best || km < best.km)
+      best = { site: { body: "earth", name: f.name, lat: f.lat, lon: f.lon, icao: f.icao, elev: f.elev }, icao: f.icao, km };
+    break;
   }
   return best;
 }

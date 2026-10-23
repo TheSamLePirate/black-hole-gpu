@@ -3,6 +3,7 @@
 // left of the time and the fuel at the arrival.
 import { C, clamp, dur, fmt, type Pen, polar, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { L, locale } from "../lang";
 
 /** the plan in r, scrolled; each leg's row given to `pick` (its rectangle, its waypoint's index) */
 export function drawPlan(p: Pen, r: Rect, sc: Scene, scroll = 0, pick?: (q: Rect, wp: number) => void) {
@@ -13,13 +14,23 @@ export function drawPlan(p: Pen, r: Rect, sc: Scene, scroll = 0, pick?: (q: Rect
   const route = snap?.route ?? [];
   const geo = sc.own?.geo;
   if (!route.length || !geo) {
-    p.panel(r, "PLAN DE VOL");
-    p.text("Aucun plan de vol transmis", r.x + r.w / 2, r.y + r.h / 2 - 10, { col: C.dim, size: 14, align: "center", weight: 700 });
-    p.text("Le pilote le crée dans son panneau Plan de vol (avion, Terre).", r.x + r.w / 2, r.y + r.h / 2 + 12, {
+    p.panel(r, L("PLAN DE VOL", "FLIGHT PLAN"));
+    p.text(L("Aucun plan de vol transmis", "No flight plan sent"), r.x + r.w / 2, r.y + r.h / 2 - 10, {
       col: C.dim,
-      size: 11,
+      size: 14,
       align: "center",
+      weight: 700,
     });
+    p.text(
+      L("Le pilote le crée dans son panneau Plan de vol (avion, Terre).", "The pilot makes it in his Flight plan panel (aircraft, Earth)."),
+      r.x + r.w / 2,
+      r.y + r.h / 2 + 12,
+      {
+        col: C.dim,
+        size: 11,
+        align: "center",
+      },
+    );
     const hub = snap?.auto?.hub,
       next = snap?.next;
     if (hub)
@@ -29,11 +40,16 @@ export function drawPlan(p: Pen, r: Rect, sc: Scene, scroll = 0, pick?: (q: Rect
         align: "center",
       });
     if (next)
-      p.text(`Prochain événement : ${next.kind} ${next.name} dans ${dur(next.in)}`, r.x + r.w / 2, r.y + r.h / 2 + 64, {
-        col: C.amber,
-        size: 11,
-        align: "center",
-      });
+      p.text(
+        `${L("Prochain événement", "Next event")} : ${next.kind} ${next.name} ${L("dans", "in")} ${dur(next.in)}`,
+        r.x + r.w / 2,
+        r.y + r.h / 2 + 64,
+        {
+          col: C.amber,
+          size: 11,
+          align: "center",
+        },
+      );
     return;
   }
   const act = clamp(nav?.active ?? 1, 0, route.length - 1);
@@ -52,7 +68,7 @@ export function drawPlan(p: Pen, r: Rect, sc: Scene, scroll = 0, pick?: (q: Rect
   const narrow = r.w < 620;
   const vsd = { x: r.x, y: r.y - scroll, w: r.w, h: narrow ? Math.max(200, r.h * 0.42) : Math.max(230, r.h * 0.48) };
   // ---- the profile
-  p.panel(vsd, "PROFIL VERTICAL");
+  p.panel(vsd, L("PROFIL VERTICAL", "VERTICAL PROFILE"));
   const g = { x: vsd.x + 58, y: vsd.y + 34, w: vsd.w - 76, h: vsd.h - 64 };
   const cruise = nav?.cruiseAlt ?? Math.max(...legs.map((l) => l.alt ?? 0), s.alt || 0);
   const ahead = snap?.ahead ?? [];
@@ -145,8 +161,20 @@ export function drawPlan(p: Pen, r: Rect, sc: Scene, scroll = 0, pick?: (q: Rect
         ["VIT", 0.97, "right"],
       ];
   const hy = ty + 42;
+  // (the columns' heads in the console's language — their keys stay)
+  const head: Record<string, string> = {
+    POINT: L("POINT", "WPT"),
+    BRANCHE: L("BRANCHE", "LEG"),
+    CUMUL: L("CUMUL", "CUM"),
+    VIT: L("VIT", "SPD"),
+  };
   for (const [t, f, al] of cols)
-    p.text(t as string, tbl.x + tbl.w * (f as number), hy, { col: C.dim, size: 10, align: al as CanvasTextAlign, weight: 700 });
+    p.text(head[t as string] ?? (t as string), tbl.x + tbl.w * (f as number), hy, {
+      col: C.dim,
+      size: 10,
+      align: al as CanvasTextAlign,
+      weight: 700,
+    });
   p.seg(tbl.x + 10, hy + 8, tbl.x + tbl.w - 10, hy + 8, C.grid2);
   const clock = new Date();
   legs.forEach((l, j) => {
@@ -165,7 +193,7 @@ export function drawPlan(p: Pen, r: Rect, sc: Scene, scroll = 0, pick?: (q: Rect
       DIST: `${fmt(u.dist(l.cum), 1)}`,
       CUMUL: `${fmt(u.dist(l.cum), 1)}`,
       ETE: dur(ete),
-      ETA: eta ? eta.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "—",
+      ETA: eta ? eta.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" }) : "—",
       ALT: l.alt !== undefined ? fmt(u.alt(l.alt)) : `(${fmt(u.alt(cruise))})`,
       VIT: l.spd !== undefined ? fmt(u.spd(l.spd)) : `(${fmt(u.spd(nav?.cruiseSpd ?? 0))})`,
     };
@@ -183,9 +211,13 @@ export function drawPlan(p: Pen, r: Rect, sc: Scene, scroll = 0, pick?: (q: Rect
   const fuel = snap?.sys?.fuelKg;
   const left = nav?.fuelToGo != null && fuel != null ? fuel - nav.fuelToGo : null;
   const items: [string, string, string][] = [
-    ["RESTE", `${fmt(u.dist(total), 1)} ${u.distName.toLowerCase()}`, C.white],
-    ["TEMPS", dur(nav?.timeToGo ?? (gs > 5 ? total / gs : null)), C.white],
-    ["CARB. ARRIVÉE", left !== null ? `${fmt(left)} kg` : "—", left !== null && nav?.bingo != null && left < 0 ? C.red : C.green],
+    [L("RESTE", "TO GO"), `${fmt(u.dist(total), 1)} ${u.distName.toLowerCase()}`, C.white],
+    [L("TEMPS", "TIME"), dur(nav?.timeToGo ?? (gs > 5 ? total / gs : null)), C.white],
+    [
+      L("CARB. ARRIVÉE", "FUEL AT DEST."),
+      left !== null ? `${fmt(left)} kg` : "—",
+      left !== null && nav?.bingo != null && left < 0 ? C.red : C.green,
+    ],
     ["PHASE", (nav?.phase || "—").toUpperCase(), C.cyan],
   ];
   items.forEach(([k, v, col], i) => {

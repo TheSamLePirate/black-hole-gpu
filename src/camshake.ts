@@ -22,6 +22,13 @@ export interface ShakeInput {
   rocket?: number;
   plasma?: number;
   ring?: number;
+  /** an airliner's (the A320's — PLAN-A320 A13): the runway's concrete slabs' joints thumped through the nose gear
+   *  (their spacing [m]; none: a fighter's smooth roll), the speed brakes' buffet (0 … 1), the air's turbulence (0 … 1),
+   *  its roughness felt softer (× the runway's — a heavier, softer-sprung craft) */
+  joints?: number;
+  brakes?: number;
+  turb?: number;
+  soft?: number;
 }
 
 /** The view's turn this frame [rad]: about its up (yaw), its right (pitch), its axis (roll). */
@@ -44,6 +51,9 @@ export class CamShake {
   private t = 0;
   /** the touchdown's jolt, decaying */
   private j = 0;
+  /** an airliner's: the way across the current slab (0 … 1), the last joint's thump, decaying */
+  private slab = 0;
+  private thump = 0;
   /** eased levels (the buffet does not switch on in a frame) */
   private lv = { buffet: 0, transonic: 0, ab: 0 };
 
@@ -58,7 +68,7 @@ export class CamShake {
     if (i.jolt > 0.3) this.j = Math.max(this.j, Math.min(i.jolt / 3, 1.5));
     this.j *= Math.exp(-dt / 0.18);
     // (the runway: its roughness's pace with the speed — 3 Hz at 10 m/s to 14 Hz at 80 —, its size too)
-    const rv = Math.min(i.roll / 80, 1.2);
+    const rv = Math.min(i.roll / 80, 1.2) * (i.soft ?? 1);
     const rollF = 3 + 11 * Math.min(rv, 1);
     let pitch =
       0.0028 * rv * band(t, rollF, 1.3) + 0.004 * bf * band(t, 7, 4.1) + 0.0022 * tr * band(t, 13, 2.2) + 0.0008 * ab * band(t, 24, 5.5);
@@ -71,6 +81,21 @@ export class CamShake {
     // (the touchdown: the head pressed down, then a ringing)
     pitch -= 0.022 * this.j * (0.6 + 0.4 * band(t, 9, 8.8));
     roll += 0.006 * this.j * band(t, 6, 3.1);
+    // (an airliner's: the slabs' joints — a thump each one the nose wheel crosses, its pace the speed over their
+    // spacing —, the speed brakes' buffet, the turbulence's slow lurches)
+    if (i.joints && i.roll > 1) {
+      this.slab += (i.roll * dt) / i.joints;
+      if (this.slab >= 1) {
+        this.slab -= Math.floor(this.slab);
+        this.thump = Math.min(0.25 + i.roll / 60, 1);
+      }
+    }
+    this.thump *= Math.exp(-dt / 0.06);
+    pitch -= 0.0035 * this.thump;
+    const sb = i.brakes ?? 0,
+      tb = i.turb ?? 0;
+    pitch += 0.0018 * sb * band(t, 8.5, 5.1) + 0.004 * tb * band(t, 1.3, 2.4);
+    roll += 0.0012 * sb * band(t, 6.2, 1.7) + 0.006 * tb * band(t, 0.9, 6.3);
     // (the engine's own hum through the seat, always a little)
     pitch += 0.00015 * i.engine * band(t, 31, 9.2);
     // (a rocket's roar through the frame, the re-entry's buffeting, the ring's slow groan — X7)

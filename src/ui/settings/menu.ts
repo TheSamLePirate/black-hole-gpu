@@ -38,7 +38,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
   { tab: "game", title: { fr: "À pied", en: "On foot" }, keys: ["walkSpeed", "runSpeed", "jumpSpeed", "characterDistance"] },
   {
     tab: "game",
-    title: { fr: "Vaisseaux", en: "Spacecraft" },
+    title: { fr: "Engins spatiaux", en: "Spacecraft" },
     keys: [
       "vessel",
       "shipMount",
@@ -64,6 +64,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
     title: { fr: "F-35", en: "F-35" },
     keys: [
       "f35Assist",
+      "f35AarMode",
       "f35Law",
       "f35Variant",
       "f35Instructor",
@@ -76,12 +77,15 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "f35Invulnerable",
       "f35Radar",
       "f35RadarRange",
+      "radarTrails",
+      "radarTrailLock",
+      "radarTrailMissiles",
       "f35ThreatCalls",
       "f35RadioRoles",
     ],
   },
   { tab: "game", title: { fr: "Formation", en: "Formation" }, keys: ["wingmen", "formShape", "formSpacing", "formPos"] },
-  { tab: "game", title: { fr: "Trafic réel", en: "Live traffic" }, keys: ["traffic", "trafficDelay"] },
+  { tab: "game", title: { fr: "Trafic réel", en: "Live traffic" }, keys: ["traffic", "trafficDelay", "tcas"] },
   { tab: "game", title: { fr: "Sauvegardes", en: "Saved games" }, keys: ["autosave", "autosaveEvery"] },
   // ---- graphics
   {
@@ -163,6 +167,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "f35RadarRelief",
     ],
   },
+  { tab: "display", title: { fr: "L'A320", en: "The A320" }, keys: ["a320Livery", "a320Start", "a320Effects"] },
   {
     tab: "display",
     title: { fr: "Cockpit", en: "Cockpit" },

@@ -20,37 +20,46 @@ import { drawOrbit, type OrbitPicks } from "./draw/orbit";
 import { timeBetween } from "./orbitmath";
 import { drawNavball } from "./draw/navball";
 import { drawBudget, drawDock, drawEecom, drawGround, drawRelativity, drawTimeline } from "./draw/spaceviews";
+import { drawDescent } from "./draw/descent";
 import { defaultMapState, drawSystemMap } from "./draw/system";
 import { SystemRenderer } from "./sys3d/gpu";
 import { drawAirStatus, drawSpaceStatus } from "./draw/spacestat";
 import type { CrewView } from "./profile";
+import { L } from "./lang";
+import { store } from "../util/storage";
 
 export type { CrewView } from "./profile";
-export const VIEW_NAMES: Record<CrewView, string> = {
-  air: "Mission aérienne",
-  sdash: "Tableau",
-  orbit: "Orbite",
-  system: "Carte système",
-  navball: "Boule",
-  dock: "Amarrage",
-  budget: "Δv",
-  eecom: "EECOM",
-  timeline: "Chronologie",
-  rel: "Relativité",
-  ground: "Sol",
-  dash: "Tableau",
-  pfd: "Vol",
-  nd: "Navigation",
-  map: "Carte",
-  globe: "Globe",
-  radar: "Radar",
-  schematic: "Systèmes",
-  plan: "Plan de vol",
-  telemetry: "Télémétrie",
+const VIEW_WORDS: Record<CrewView, [string, string]> = {
+  air: ["Mission aérienne", "Air mission"],
+  sdash: ["Tableau", "Dashboard"],
+  orbit: ["Orbite", "Orbit"],
+  system: ["Carte système", "System map"],
+  navball: ["Boule", "Navball"],
+  dock: ["Amarrage", "Docking"],
+  budget: ["Δv", "Δv"],
+  eecom: ["EECOM", "EECOM"],
+  timeline: ["Chronologie", "Timeline"],
+  rel: ["Relativité", "Relativity"],
+  ground: ["Sol", "Ground"],
+  descent: ["Descente", "Descent"],
+  dash: ["Tableau", "Dashboard"],
+  pfd: ["Vol", "Flight"],
+  nd: ["Navigation", "Navigation"],
+  map: ["Carte", "Map"],
+  globe: ["Globe", "Globe"],
+  radar: ["Radar", "Radar"],
+  schematic: ["Systèmes", "Systems"],
+  plan: ["Plan de vol", "Flight plan"],
+  telemetry: ["Télémétrie", "Telemetry"],
 };
+/** a view's name in the console's language */
+export const viewName = (v: CrewView) => L(...VIEW_WORDS[v]);
 const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
 type Pick = { point: Point; slot?: number; contact?: string; wp?: number; view?: CrewView; r?: Rect };
 type Where = { lat: number; lon: number };
+
+/** The scopes' ranges [m]: the game's radars' steps (2 … 320 km), then the space's (1 000, 10 000 km) — PLAN-RADAR-AAA P11. */
+export const RANGE_STEPS = [1_000, 2_000, 5_000, 10_000, 20_000, 40_000, 80_000, 160_000, 320_000, 1_000_000, 10_000_000];
 
 export class CrewViews {
   view: CrewView = "dash";
@@ -58,9 +67,41 @@ export class CrewViews {
   follow = true;
   lat = 20;
   lon = 0;
-  range = 50_000;
-  north = false;
-  sensor = false;
+  // (the scopes' range, north up, the sensor's view: kept across the visits — PLAN-RADAR-AAA RD6)
+  private _range = Number(store.get("kerr.crew.range")) || 50_000;
+  private _north = store.get("kerr.crew.north") === "1";
+  private _sensor = store.get("kerr.crew.sensor") === "1";
+  get range() {
+    return this._range;
+  }
+  set range(v: number) {
+    if (v === this._range) return;
+    this._range = v;
+    store.set("kerr.crew.range", String(Math.round(v)));
+  }
+  get north() {
+    return this._north;
+  }
+  set north(v: boolean) {
+    this._north = v;
+    store.set("kerr.crew.north", v ? "1" : "0");
+  }
+  get sensor() {
+    return this._sensor;
+  }
+  set sensor(v: boolean) {
+    this._sensor = v;
+    store.set("kerr.crew.sensor", v ? "1" : "0");
+  }
+  /** the tracks' trails (PLAN-RADAR-AAA RD7): none, 30 s, 3 min — kept */
+  trails: "off" | "short" | "long" = (() => {
+    try {
+      const v = localStorage.getItem("crew.trails");
+      return v === "short" || v === "long" ? v : "off";
+    } catch {
+      return "off";
+    }
+  })();
   channel: InstrumentKey | "multi" = "alt";
   window = 60;
   paused = false;
@@ -243,13 +284,15 @@ export class CrewViews {
         else if (near?.contact) this.onContact(near.contact, x, y);
         else if (near?.wp !== undefined) this.onWp(near.wp, x, y);
         else if (panel?.view) this.onOpen(panel.view);
-        else if (this.view === "map" || this.view === "nd") {
+        else if (this.view === "map" || this.view === "nd" || this.view === "ground") {
           const at = this.unproject?.(x, y);
           if (at) this.onGround(at, x, y);
         }
       }
       this.pointers.delete(e.pointerId);
+      const was = this.pinch;
       this.pinch = this.spread();
+      if (was > 0 && this.pinch === 0) this.snapRange();
     });
     for (const ev of ["pointercancel", "lostpointercapture"] as const)
       canvas.addEventListener(ev, (e) => {
@@ -261,7 +304,14 @@ export class CrewViews {
       (e) => {
         e.preventDefault();
         if (this.view === "schematic" || this.view === "plan") this.scrollBy(e.deltaY);
-        else this.zoomBy(Math.exp(-e.deltaY * 0.002));
+        else if (this.scoped()) {
+          // (the scopes by the game's own steps — PLAN-RADAR-AAA P11 —: a notch a step, 50 px a notch)
+          this.wheelAcc += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+          while (Math.abs(this.wheelAcc) >= 50) {
+            this.stepRange(Math.sign(this.wheelAcc));
+            this.wheelAcc -= 50 * Math.sign(this.wheelAcc);
+          }
+        } else this.zoomBy(Math.exp(-e.deltaY * 0.002));
       },
       { passive: false },
     );
@@ -304,7 +354,7 @@ export class CrewViews {
     this.onInspect();
   }
   private contentHeight() {
-    if (this.view === "schematic") return Math.max(this.H, systemsHeight(this.W - 16) + 16);
+    if (this.view === "schematic") return Math.max(this.H, systemsHeight(this.W - 16, this.model.own()?.snapshot?.aar ? 9 : 8) + 16);
     if (this.view === "plan") return planHeight(this.scene(false), this.W - 16, this.H - 16) + 16;
     return this.H;
   }
@@ -333,6 +383,26 @@ export class CrewViews {
   togglePause() {
     this.paused = !this.paused;
     this.pausedAt = this.model.history.get(this.model.selected ?? -1)?.at(-1)?.t ?? 0;
+    this.request();
+  }
+  private wheelAcc = 0;
+  /** a scope's view (the radar, the ND, the dash, the air status): its range by steps */
+  private scoped() {
+    return this.view === "radar" || this.view === "nd" || this.view === "dash" || this.view === "air";
+  }
+  /** The scope's range a step out (dir > 0) or in — the game's steps (2 … 320 km, then the space's 1 000 and 10 000 km). */
+  stepRange(dir: number) {
+    const i = RANGE_STEPS.reduce(
+      (b, r, k) => (Math.abs(Math.log(r / this.range)) < Math.abs(Math.log(RANGE_STEPS[b]! / this.range)) ? k : b),
+      0,
+    );
+    this.range = RANGE_STEPS[clamp(i + Math.sign(dir), 0, RANGE_STEPS.length - 1)]!;
+    this.request();
+  }
+  /** A pinch let go: its range settled on the nearest step. */
+  snapRange() {
+    if (!this.scoped()) return;
+    this.range = RANGE_STEPS.reduce((b, r) => (Math.abs(Math.log(r / this.range)) < Math.abs(Math.log(b / this.range)) ? r : b));
     this.request();
   }
   zoomBy(k: number) {
@@ -384,6 +454,7 @@ export class CrewViews {
       u: unitsOf(this.units),
       history: this.model.history.get(own?.member.slot ?? -1) ?? [],
       contacts: this.model.contacts(),
+      trails: this.trails === "long" ? 180 : this.trails === "short" ? 30 : 0,
       zones: this.model.zones(),
       now: performance.now() / 1000,
       stale: !own || own.age > 3,
@@ -444,7 +515,8 @@ export class CrewViews {
         drawNavball(p, r, sc);
         break;
       case "dock":
-        drawDock(p, r, sc);
+        // (the sensors' tracks touched: the contact's menu — PLAN-RADAR-AAA RD4)
+        drawDock(p, r, sc, (point, contact) => pick(point, { contact }));
         break;
       case "budget":
         drawBudget(p, r, sc);
@@ -460,7 +532,11 @@ export class CrewViews {
         drawRelativity(p, r, sc);
         break;
       case "ground":
-        drawGround(p, r, sc);
+        // (its projection back to the body: a place touched — the landing point designated from here)
+        this.unproject = drawGround(p, r, sc);
+        break;
+      case "descent":
+        drawDescent(p, r, sc);
         break;
       case "pfd":
         p.panel(r);
@@ -557,18 +633,31 @@ export class CrewViews {
       p.fill("#ff5ce122");
       p.stroke(C.magenta, 1.5, [4, 4]);
       p.star(d.x, d.y, 9, C.magenta, true);
-      p.text(`${name} → ici`, d.x + 22, d.y - 14, { col: C.white, size: 12, weight: 700, bg: "#050a0ee0" });
+      p.text(`${name} → ${L("ici", "here")}`, d.x + 22, d.y - 14, { col: C.white, size: 12, weight: 700, bg: "#050a0ee0" });
       animate = true;
     }
     if (!sc.own) {
       c.fillStyle = "#05090ecc";
       c.fillRect(0, this.H / 2 - 34, this.W, 68);
-      p.text("En attente d’un pilote connecté…", this.W / 2, this.H / 2 - 4, { col: C.white, size: 15, align: "center", weight: 700 });
-      p.text("Les instruments s’afficheront dès qu’un pilote vole dans la salle.", this.W / 2, this.H / 2 + 18, {
-        col: C.dim,
-        size: 11,
+      p.text(L("En attente d’un pilote connecté…", "Waiting for a pilot to connect…"), this.W / 2, this.H / 2 - 4, {
+        col: C.white,
+        size: 15,
         align: "center",
+        weight: 700,
       });
+      p.text(
+        L(
+          "Les instruments s’afficheront dès qu’un pilote vole dans la salle.",
+          "The instruments will show as soon as a pilot flies in the room.",
+        ),
+        this.W / 2,
+        this.H / 2 + 18,
+        {
+          col: C.dim,
+          size: 11,
+          align: "center",
+        },
+      );
     }
     return animate || ((this.view === "dash" || this.view === "sdash") && blink);
   }

@@ -10,6 +10,10 @@ import { sinkLimit } from "./callouts";
 /** How much the craft says about the ground: every callout, a fighter's few, or only the last-moment pull-up. */
 export type GroundAlerts = "full" | "reduced" | "off";
 
+/** The level a craft speaks at: the A320 an airliner's EGPWS — every callout — unless they are off. */
+export const alertsOf = (vessel: string | undefined, level: GroundAlerts): GroundAlerts =>
+  vessel === "a320" && level === "reduced" ? "full" : level;
+
 /** The seconds before the straight flight path meets the ground (Infinity: not within the look-ahead): the
  *  path from the craft along its ground-relative velocity, its height over the ground sampled ahead
  *  (`clearance(t)` [m], the gear's: < 0 under the ground), 0.5 s apart to 6 s, then 1 s apart. */

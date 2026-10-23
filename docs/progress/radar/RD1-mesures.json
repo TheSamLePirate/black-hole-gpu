@@ -1,0 +1,170 @@
+{
+  "ownFrame": 0,
+  "clocks": [
+    {
+      "crewRoom": 54020.44241813376,
+      "pilotRoom": 54020.44245109274,
+      "scene": 54020.43379629471,
+      "snapT": 54020.313780451004
+    },
+    {
+      "crewRoom": 54020.46391813376,
+      "pilotRoom": 54020.463951092745,
+      "scene": 54020.453798843664,
+      "snapT": 54020.313780451004
+    },
+    {
+      "crewRoom": 54020.4793180361,
+      "pilotRoom": 54020.47935123923,
+      "scene": 54020.472901253575,
+      "snapT": 54020.313780451004
+    }
+  ],
+  "raw": [
+    {
+      "name": "BQM-1",
+      "de": -2,
+      "dn": 0,
+      "dist": 37142,
+      "brg": 54
+    },
+    {
+      "name": "BQM-2",
+      "de": 1,
+      "dn": 3,
+      "dist": 44250,
+      "brg": 54
+    },
+    {
+      "name": "BQM-1",
+      "de": -3,
+      "dn": 0,
+      "dist": 37107,
+      "brg": 54
+    },
+    {
+      "name": "BQM-2",
+      "de": 0,
+      "dn": 2,
+      "dist": 44167,
+      "brg": 54
+    },
+    {
+      "name": "BQM-1",
+      "de": -2,
+      "dn": -1,
+      "dist": 37073,
+      "brg": 54
+    },
+    {
+      "name": "BQM-2",
+      "de": 0,
+      "dn": 3,
+      "dist": 44084,
+      "brg": 54
+    },
+    {
+      "name": "BQM-1",
+      "de": -2,
+      "dn": 0,
+      "dist": 37040,
+      "brg": 54
+    },
+    {
+      "name": "BQM-2",
+      "de": 0,
+      "dn": 2,
+      "dist": 44002,
+      "brg": 54
+    },
+    {
+      "name": "BQM-1",
+      "de": -3,
+      "dn": 0,
+      "dist": 37007,
+      "brg": 54
+    },
+    {
+      "name": "BQM-2",
+      "de": 0,
+      "dn": 2,
+      "dist": 43921,
+      "brg": 54
+    },
+    {
+      "name": "BQM-1",
+      "de": -2,
+      "dn": 0,
+      "dist": 36975,
+      "brg": 54
+    },
+    {
+      "name": "BQM-2",
+      "de": 1,
+      "dn": 2,
+      "dist": 43840,
+      "brg": 54
+    }
+  ],
+  "P1": {
+    "frames": 1339,
+    "tracks": 6094,
+    "mismatches": 16,
+    "share": 0.002625533311453889
+  },
+  "P2": {
+    "samples": 6695,
+    "p50": 3.4329313144130937,
+    "p95": 53.15163316223565,
+    "withinShare": 0.9011202389843167,
+    "ownPlaceP50": 2.4977703562566,
+    "contactPlaceP50": 1.5125047979237713,
+    "ownFrame": 0
+  },
+  "P3": {
+    "steps": 6690,
+    "jumps": 0,
+    "share": 0
+  },
+  "P4": {
+    "pausedDriftM": 0.0028826489613244105,
+    "warp4SpeedRatio": 3.9638829368528876
+  },
+  "P8": {
+    "maxChars": 7763,
+    "limit": 16384,
+    "bytesPerSecond": 23742,
+    "events": 158
+  },
+  "P9": {
+    "fired": {
+      "ok": true,
+      "msg": "FOX 3 — BQM-3 (3 AIM120 left)",
+      "data": {}
+    },
+    "flying": {
+      "missiles": 1,
+      "decoys": 2
+    },
+    "atCrew": 3
+  },
+  "P5": {
+    "palettesFiles": 5,
+    "sharedSymbols": false
+  },
+  "P6": {
+    "runwaysInGameSites": 8,
+    "worldBase": false
+  },
+  "P7": {
+    "note": "cost: measured by trace-ab, not in this probe"
+  },
+  "P10": {
+    "crewTouchOpensMenu": true,
+    "pilotRadarClick": false
+  },
+  "P11": {
+    "crewWheelStep": 0.909090909090909,
+    "commonSteps": false
+  }
+}

@@ -11,6 +11,7 @@ import type { CameraController } from "../controls";
 import { TELE_MIN, clamp } from "./util";
 import { freeCameraKeys } from "../input/bindings";
 import { fleet } from "../fleet";
+import { isAircraft } from "../vessels";
 import { JETPAD } from "../input/jetpad";
 import { shipToCamera } from "../mounts";
 
@@ -179,7 +180,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   const spacePadOn =
     !!pad &&
     !!pad.held &&
-    fleet.active !== "f35" &&
+    !isAircraft(fleet.active) &&
     this.piloting &&
     !this.spectator &&
     !this.character.active &&
@@ -197,6 +198,8 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   // (the controllers through their profiles — a HOTAS, a pad the player set: their buttons' keymap actions)
   const pc = this.scripted ? null : this.padControls.read();
   if (pc) for (const p of pc.pressed) this.onPadKeyAction?.(p.action, p.arg);
+  // (the designation cursor — controller/tdc.ts —: held, it takes the sticks' slew; the head stays)
+  this.tdcStep(dt, pc?.commands ?? null);
 
   if (s.ship !== this.piloting) this.setPilot(s.ship);
   if (s.shipMount !== this.lastMount) this.lookOff = [0, 0];
@@ -248,7 +251,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     this.setLook(s.shipLookYaw + kx * 90 * dt, s.shipLookPitch + ky * 70 * dt);
   // (a hat or a stick bound to the look: the pilot's head turned)
   const lk = pc?.commands.axes;
-  if (lk && pilotNow && !away && (lk.lookX || lk.lookY))
+  if (lk && pilotNow && !away && (lk.lookX || lk.lookY) && !this.tdc.on)
     this.setLook(s.shipLookYaw + (lk.lookX ?? 0) * 90 * dt, s.shipLookPitch + (lk.lookY ?? 0) * 70 * dt);
   // (the head locked on the fight's focus — the padlock, ⇧L, the pad's View held —: in the craft's own views it turns
   // to the lock, our missile's target, what was shot down falling, its crash, the lens zoomed on it; the pad's stick

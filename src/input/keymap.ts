@@ -31,12 +31,14 @@ export type KeyAction =
   | "resetShipView"
   | "hold"
   | "orders"
+  | "designate"
   | "auto"
   | "map"
   | "mount"
   | "spectator"
   | "assist"
   | "vessel"
+  | "pushback"
   | "flightMode"
   | "antigrav"
   | "flaps"
@@ -262,7 +264,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "⇧Z · ' · ⇧'",
-        text: "Plane mode, the jet's systems: afterburner (the throttle full, thrust ×1.5) · autopilot: the altitude and heading held (the stick flies through it; let go, the new ones held) · autothrottle: the speed held (⇧ Alt then set it) (' is ù on AZERTY)",
+        text: "Plane mode, the jet's systems: afterburner (the throttle full, thrust ×1.5 — the A320: its thrust reversers, on the ground at idle) · autopilot: the altitude and heading held (the stick flies through it; let go, the new ones held) · autothrottle: the speed held (⇧ Alt then set it) (' is ù on AZERTY)",
         bind: [
           fly("KeyZ", "jetSystem", { arg: "ab", shift: true }),
           fly("Quote", "jetSystem", { arg: "ap", shift: false }),
@@ -271,8 +273,13 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "⇧B",
-        text: "F-35B: STOVL mode — the lift fan, the nozzle swivelled down; below 65 m/s the hover law: the stick a speed over the ground, ⇧ Alt a vertical speed, let go held in place",
+        text: "F-35B: STOVL mode — the lift fan, the nozzle swivelled down; below 65 m/s the hover law: the stick a speed over the ground, ⇧ Alt a vertical speed, let go held in place · A320: the autobrake, OFF · LO · MED · MAX",
         bind: [fly("KeyB", "jetSystem", { arg: "stovl", shift: true })],
+      },
+      {
+        keys: "End",
+        text: "A320 on the ground: the pushback — the tug called, the push straight back (the tablet's Systems page: tail left or right), stopped, disconnected",
+        bind: [fly("End", "pushback")],
       },
       {
         keys: "⇧M · ⇧O",
@@ -293,6 +300,11 @@ export const KEYMAP: KeySection[] = [
         keys: "Tab held › Flight · F13",
         text: "The flight's leader: the orders' wheel (rejoin, formation, tighten, loosen, attack my target, engage, cover me, hold here, RTB, break) — to the room's wingmen and the AI wingmen; its key (F13) given another in the controls, or a HOTAS button",
         bind: [fly("F13", "orders")],
+      },
+      {
+        keys: "F15 held · F14 · LB + RB held, A",
+        text: "The designation cursor (TDC — without a mouse): held, a cursor on the HUD's radar scope, or in the F-35's cockpit on the PCD page looked at; the arrows, a HOTAS's slew or hat, the pad's right stick move it; designate selects what is under it (again: locks it) — the keys given a HOTAS's buttons in the controls; on the pad, both bumpers held and A",
+        bind: [fly("F14", "designate")],
       },
       {
         keys: "I K · J L · H N",

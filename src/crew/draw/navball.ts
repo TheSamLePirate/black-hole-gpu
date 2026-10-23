@@ -5,24 +5,15 @@
 import type { V3 } from "../orbitmath";
 import { C, fmt, type Pen, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { onHoleSide } from "./kerr";
+import { L, Lp } from "../lang";
+import { autoWords, holdWords } from "../../net/crewcmd";
 
 const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const unit = (a: V3): V3 => {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
-};
-const HOLD_FR: Record<string, string> = {
-  none: "manuel",
-  prograde: "prograde",
-  retrograde: "rétrograde",
-  radialOut: "radial ext.",
-  radialIn: "radial int.",
-  normal: "normal",
-  antinormal: "anti-normal",
-  target: "cible",
-  antiTarget: "anti-cible",
-  maneuver: "nœud",
 };
 
 /** the ball's image (the sky and the ground, the elevation's rings every 30°), cached by its attitude */
@@ -81,7 +72,29 @@ export function drawNavball(p: Pen, r: Rect, sc: Scene, compact = false) {
   const st = s?.state,
     at = s?.att;
   if (!st || !at) {
-    p.text("Attitude ou état orbital non reçus", r.x + r.w / 2, r.y + r.h / 2, { col: C.dim, size: 13, align: "center" });
+    // (Gargantua's side: no Kepler orbit to set the ball against — the Kerr figures are on the Orbit view)
+    if (s && onHoleSide(sc)) {
+      p.text(L("Côté Gargantua : pas de boule orbitale", "Gargantua's side: no orbital ball"), r.x + r.w / 2, r.y + r.h / 2, {
+        col: C.amber,
+        size: 13,
+        align: "center",
+      });
+      const K = s.kerr;
+      p.text(
+        K
+          ? `r ${fmt(K.r, 2)} M · E ${fmt(K.E, 4)} · L ${fmt(K.L, 3)} — ${L("voir la vue Orbite", "see the Orbit view")}`
+          : L("(les figures de Kerr sont sur la vue Orbite)", "(the Kerr figures are on the Orbit view)"),
+        r.x + r.w / 2,
+        r.y + r.h / 2 + 20,
+        { col: C.dim, size: 11, align: "center" },
+      );
+      return;
+    }
+    p.text(L("Attitude ou état orbital non reçus", "Attitude or orbital state not received"), r.x + r.w / 2, r.y + r.h / 2, {
+      col: C.dim,
+      size: 13,
+      align: "center",
+    });
     return;
   }
   const nose = unit(at.nose),
@@ -155,10 +168,10 @@ export function drawNavball(p: Pen, r: Rect, sc: Scene, compact = false) {
   p.seg(cx + 8, cy, cx, cy + 7, C.amber, 3);
   // the readouts
   const A = s.auto;
-  const hold = HOLD_FR[A?.hold ?? "none"] ?? A?.hold ?? "—";
+  const hold = !A?.hold || A.hold === "none" ? L("manuel", "manual") : Lp(holdWords(A.hold));
   const pitch = (Math.asin(Math.max(-1, Math.min(1, dot(nose, rad)))) * 180) / Math.PI;
   if (compact) {
-    p.text(`${A?.sas ? "SAS" : "SAS coupé"} · ${hold}`, r.x + 12, r.y + r.h - 10, {
+    p.text(`${A?.sas ? "SAS" : L("SAS coupé", "SAS off")} · ${hold}`, r.x + 12, r.y + r.h - 10, {
       col: A?.sas ? C.green : C.amber,
       size: 11,
       weight: 700,
@@ -172,21 +185,21 @@ export function drawNavball(p: Pen, r: Rect, sc: Scene, compact = false) {
     p.text(value, r.x + r.w - 14, y, { col, size: 13, weight: 700, align: "right" });
     y += 24;
   };
-  p.text("BOULE DE NAVIGATION · ORBITE", x0, r.y + 18, { col: C.cyan, size: 11, weight: 700 });
-  row("SAS", A?.sas ? "actif" : "coupé", A?.sas ? C.green : C.amber);
-  row("Maintien", hold, A?.hold && A.hold !== "none" ? C.green : C.text);
-  row("Autopilote", A?.auto && A.auto !== "none" ? A.auto : "—");
-  row("Assiette / horizon", `${fmt(pitch, 1)}°`);
-  row("Vitesse orbitale", `${fmt(Math.hypot(...st.v) * 1000)} m/s`);
-  row("Vitesse radiale", `${fmt(dot(st.v, rad) * 1000, 1)} m/s`);
-  if (n) row("Prochaine poussée", `${fmt(Math.hypot(...n.dv), 1)} m/s`, "#4d8cff");
+  p.text(L("BOULE DE NAVIGATION · ORBITE", "NAVBALL · ORBIT"), x0, r.y + 18, { col: C.cyan, size: 11, weight: 700 });
+  row("SAS", A?.sas ? L("actif", "on") : L("coupé", "off"), A?.sas ? C.green : C.amber);
+  row(L("Maintien", "Hold"), hold, A?.hold && A.hold !== "none" ? C.green : C.text);
+  row(L("Autopilote", "Autopilot"), A?.auto && A.auto !== "none" ? Lp(autoWords(A.auto)) : "—");
+  row(L("Assiette / horizon", "Pitch / horizon"), `${fmt(pitch, 1)}°`);
+  row(L("Vitesse orbitale", "Orbital speed"), `${fmt(Math.hypot(...st.v) * 1000)} m/s`);
+  row(L("Vitesse radiale", "Radial speed"), `${fmt(dot(st.v, rad) * 1000, 1)} m/s`);
+  if (n) row(L("Prochaine poussée", "Next burn"), `${fmt(Math.hypot(...n.dv), 1)} m/s`, "#4d8cff");
   // the legend
   y += 8;
   for (const [col, t] of [
-    ["#ffd84a", "prograde · rétrograde"],
+    ["#ffd84a", L("prograde · rétrograde", "prograde · retrograde")],
     [C.magenta, "normal · anti-normal"],
-    [C.cyan, "radial ext. · int."],
-    ["#4d8cff", "nœud de manœuvre"],
+    [C.cyan, L("radial ext. · int.", "radial out · in")],
+    ["#4d8cff", L("nœud de manœuvre", "manoeuvre node")],
   ] as const) {
     p.circle(x0 + 5, y - 4, 5);
     p.stroke(col, 2);

@@ -24,6 +24,30 @@ vrai sur les autres. Les ajouts :
 | sélection | **un clic sur un radar sélectionne la cible**, sur tous les radars (HUD, TSD, FCR, DAS, EOTS, carte de mission, crew) |
 | zoom | **la molette zoome le radar** sous le pointeur, sur tous les radars |
 
+### Décisions du 2026-10-21 (second lancement : « fais le plan radar », AAA)
+
+| question | réponse |
+|---|---|
+| la base mondiale (RD10) | **accord donné** pour OurAirports : `airports.csv` (12,7 Mo) et `runways.csv` (4,0 Mo), depuis davidmegginson.github.io/ourairports-data, domaine public. Les CSV bruts restent hors dépôt ; seules les tuiles construites sont versionnées (`assets/runways/`) |
+| « mêmes caractéristiques que les pistes déjà présentes » | **3D + ILS + autopilote** : les pistes revêtues proches de la caméra rendues comme les 8 `SITES` (nivelées, marquages, balisage OACI) ; un ILS synthétique et l'approche/atterrissage automatique sur les revêtues ≥ 1 800 m ; n'importe quel ICAO dans le plan de vol ; herbe, terre et eau en 3D plus simple (question ouverte 2 et 3 tranchées) |
+| un clic sur un avion | **sélectionne seulement** — sur un radar **et dans la vue 3D** : la cible est désignée (fiche, BRAA) ; le verrou demande un second clic ou la touche LOCK. En vol, seuls les objets (avions, navires, missiles, leurres) se sélectionnent, jamais la Terre, la Lune ni un corps (question 7 tranchée) |
+| les leurres | ils marchaient dans la simulation (ils détournent les missiles) mais **ne se voyaient nulle part** chez le pilote : ils doivent être visibles **dans la vue 3D** et **sur tous les radars** |
+| les cartes du F-35 | sur toutes les cartes, **la trace de l'avion et la prédiction de sa trajectoire** |
+| la mini-carte | **le panneau de droite** (la carte existante) en vol F-35 : il **suit l'avion**, se **zoome**, montre trace et prédiction, et sa **taille se règle en tirant son coin haut-gauche** |
+
+Les autres questions ouvertes prennent la proposition du plan : écrans du pilote sur ses capteurs, option « image
+complète » aux assistances élevées (1) ; pas d'AWACS (4) ; traînées `off` par défaut (5) ; héliports et hydrobases
+sous 20 km (6) ; le clic du crew désigne au pilote, par défaut quand ses actions sont ouvertes — une désignation, pas
+un verrou, comme le clic du pilote (8) ; paillettes en fausse piste au niveau « réaliste » seulement (9).
+
+**Solo et multijoueur** (consigne du 2026-10-21) : chaque système de ce plan doit marcher **aussi bien en solo qu'en
+salle** : leurres, image tactique, sélection, mini-carte, pistes du monde, ILS. Chaque phase se vérifie donc aussi
+dans un e2e réseau à deux navigateurs sur kerr-mini.
+
+**Ordre d'exécution retenu** (2026-10-21) : RD8a (les leurres visibles, tout de suite) → RD2 → RD3 → RD8 → RD9 (avec
+le clic dans la vue 3D) → RD15 (la mini-carte, trace et prédiction) → RD7 → RD10 → RD11 → RD13 (avec la 3D) → RD4 →
+RD5 → RD6 → RD12 → RD14.
+
 ## Définition de « parfait » (les critères d'acceptation)
 
 Chaque critère est mesuré par un test (phase RD14) :
@@ -593,6 +617,23 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 - e2e P10 et P11 en vrais événements CDP, un par écran (le point du PCD trouvé par `jetPick`, comme
   `f35-pcd.e2e`), et une fausse manette pour le curseur.
 
+### RD8a — Les leurres visibles (S, 2026-10-21)
+
+- Dans la vue 3D : la fusée IR (point très chaud, halo, petite traînée de fumée blanche qui pâlit en 5 s), la gerbe de
+  paillettes (nuage de reflets argentés qui s'étale et ralentit), les nôtres comme ceux des cibles et des autres
+  joueurs.
+- Sur le scope du HUD, le TSD, le FCR (paillettes : écho) et la bande DAS (fusées) : le symbole du §4.
+- e2e : un largage vu dans la vue (pixels chauds derrière l'avion) et compté sur chaque écran.
+
+### RD15 — La mini-carte et la route de l'avion (M, 2026-10-21)
+
+- Le panneau de droite (la carte 3D, `flighthud.ts`) affiché en vol F-35 : centré sur l'avion qui suit, zoom à la
+  molette et au pincement, taille réglable en tirant le coin haut-gauche (mémorisée).
+- Sur toutes les cartes du F-35 (ce panneau, la carte plein écran M, la carte de mission, le TSD, la trace au sol,
+  la carte de route ; crew : carte, ND, globe) : **la trace** de l'avion (les dernières minutes, colorée par la
+  hauteur) et **la prédiction** de sa trajectoire (virage en cours extrapolé, 30 s à 5 min selon l'échelle, minutée).
+- e2e : le panneau redimensionné à la souris (vrais événements CDP), la trace et la prédiction comptées.
+
 ### RD10 — La base mondiale des pistes (M)
 
 - **Demande d'accord pour le téléchargement** (OurAirports, noms, tailles).
@@ -631,6 +672,24 @@ Chaque phase : un commit, une fiche et une planche de captures (`docs/progress/r
 - **Les docs** : `docs/RADAR.md` et `RADAR.fr.md` ; `F35.md`, `CREW.md`, `BH-API.md` (`__bh.radar`),
   `E2E-CATALOGUE`.
 - La suppression des anciens blocs `radar.contacts` et `traffic` du flux. La planche finale.
+
+## Suivi
+
+| phase | état |
+|---|---|
+| RD0 | **fait** 2026-10-21 ([fiche](progress/radar/RD0.md)) : la sonde `radar-sync`, le point de départ mesuré |
+| RD1 | **fait côté crew** 2026-10-21 ([fiche](progress/radar/RD1.md)) : combat à 4 Hz avec vitesses et ids stables, place juste (problème direct WGS84), heure de salle, virages, convergence sans saut, joueurs prédits, événements sous 16 Ko comptés, reconnexion, passage des commandes, missiles et leurres au crew. **Reste** : les constats côté pilote 15, 18, 19 (laissés à RD2) |
+| RD8a | **fait** 2026-10-21 ([fiche](progress/radar/RD8a.md)) : les leurres visibles dans la vue et sur tous les radars |
+| RD2, RD3, RD9 | **faits** 2026-10-21 ([fiche](progress/radar/RD2-RD3-RD9.md)) : l'image unique, la symbologie commune, la sélection par clic (vue, scope, PCD, crew) |
+| RD15 | **fait** 2026-10-21 ([fiche](progress/radar/RD15.md)) : la carte tactique du panneau de droite, trace et prédiction |
+| RD10, RD11 | **faits** 2026-10-21 ([RD10](progress/radar/RD10.md), [RD11](progress/radar/RD11.md)) : la base mondiale (OurAirports), les terrains sur tous les radars et cartes |
+| RD13 | **fait** 2026-10-21 ([fiche](progress/radar/RD13.md)) : les pistes du monde en 3D aplanies, l'ILS et l'autopilote, partout |
+| RD7 | **fait** 2026-10-21 ([fiche](progress/radar/RD7.md)) : les traînées, pilote et crew, trois réglages ; le rattrapage d'un crew qui arrive fait avec RD5 |
+| RD8 | **fait** 2026-10-21 ([fiche](progress/radar/RD8.md)) : les missiles (cible, temps, PITBULL, A/F-pole, LEURRÉ, SPLASH/RATÉ) partout, la fausse piste des paillettes, l'autodestruction, solo et salle (repère du tireur), salle de démo |
+| RD4 | **fait** 2026-10-21 ([fiche](progress/radar/RD4.md)) : la spec radar, le DAS et l'EOTS capteurs, le TCAS (TA/RA, annonces, Auto-ACAS) pour tous, les capteurs et le scope LVLH des vaisseaux. **Suites** : le radar de nez du Ranger fait 2026-10-21 ([fiche](progress/radar/RD4-ranger-nose.md)), le radar d'atterrissage du Lander fait ([fiche](progress/radar/RD4-lander-lr.md)), l'image spatiale au crew faite ([fiche](progress/radar/RD4-crew-lvlh.md)) |
+| RD5, RD6 | **faits** 2026-10-21 ([fiche](progress/radar/RD5-RD6.md)) : l'image compacte au crew (dictionnaire, priorités, disparitions, faisceau, rattrapage des traînées), le magasin de pistes, Capteur et Partagé filtres d'une liste, le vrai faisceau, les ordres par id, les options gardées, la molette par pas |
+| RD12 | **fait** 2026-10-21 ([fiche](progress/radar/RD12.md)) : le Link 16 entre F-35 selon les règles du match, les règles annoncées à la salle |
+| RD14 | **fait** 2026-10-21 ([fiche](progress/radar/RD14.md)) : la campagne P1–P11, les docs `RADAR.md` et `RADAR.fr.md`, les anciens blocs retirés du flux. **P7** (l'A/B de l'image du pilote contre le commit de départ) **écarté à la demande du 2026-10-21**. **Suite** : le curseur de désignation (TDC) à la manette et au HOTAS fait 2026-10-21 ([fiche](progress/radar/TDC.md)) — constat 29 |
 
 ## Risques
 

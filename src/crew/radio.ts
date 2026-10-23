@@ -1,5 +1,6 @@
 import type { NetClient } from "../net/client";
 import { TalkGate } from "./ptt";
+import { L } from "./lang";
 
 /** A voice-only bus: no engines, worklets, radio synthesis or simulator imports. */
 export class CrewRadio {
@@ -22,8 +23,18 @@ export class CrewRadio {
   private muted = new Set<number>();
   private devices = new Map<number, string>();
   private buf = new Float32Array(256);
-  /** the transmission begun or ended (the CAPCOM's Quindar tones — PLAN-VAISSEAUX K5) */
+  /** the transmission begun or ended */
   onTalk?: (active: boolean) => void;
+  /** whether this screen's voice carries the Quindar tones (the CAPCOM's — PLAN-VAISSEAUX K5, AUDIT-CREW priority 6):
+   *  read when the microphone opens */
+  quindar: () => boolean = () => false;
+  /** whether a member's voice cannot reach this screen (a ground station, the pilot behind the wormhole — AUDIT-CREW
+   *  priority 6: the voice is never delayed, but cut where the text is) */
+  cut: (slot: number) => boolean = () => false;
+  /** the voice sent when it carries the tones: the microphone and the tones mixed (null: the microphone's own track) */
+  private mix: { dest: MediaStreamAudioDestinationNode; source: MediaStreamAudioSourceNode } | null = null;
+  /** the Quindar tones played on the radio: in the voice sent (everyone hears them), and here */
+  tones = 0;
 
   constructor(
     readonly net: NetClient,
@@ -32,6 +43,9 @@ export class CrewRadio {
     this.gate = new TalkGate((active) => {
       for (const track of this.mic?.getAudioTracks() ?? []) track.enabled = active;
       if (active) navigator.vibrate?.(12);
+      // (NASA's: 2 525 Hz as the voice opens, 2 475 Hz as it closes, a quarter second — in what is sent, the close's
+      // after the microphone is shut)
+      if (this.mix) this.tone(active ? 2525 : 2475);
       this.onTalk?.(active);
       changed();
     });
@@ -74,9 +88,9 @@ export class CrewRadio {
       this.listening = this.ctx.state === "running";
       for (const [slot, stream] of this.incoming) if (!this.peers.has(slot)) this.attach(slot, stream);
       for (const peer of this.peers.values()) await peer.el.play().catch(() => {});
-      this.error = this.listening ? "" : "Touchez Écouter pour reprendre le son.";
+      this.error = this.listening ? "" : L("Touchez Écouter pour reprendre le son.", "Tap Listen to get the sound back.");
     } catch {
-      this.error = "Le son est bloqué. Touchez Écouter pour réessayer.";
+      this.error = L("Le son est bloqué. Touchez Écouter pour réessayer.", "The sound is blocked. Tap Listen to try again.");
     }
     this.changed();
   }
@@ -85,7 +99,10 @@ export class CrewRadio {
     if (this.mic || this.pending || !this.net.room) return;
     this.pending = true;
     const generation = ++this.generation;
-    this.error = "Autorisez le microphone dans votre navigateur, ou annulez la demande.";
+    this.error = L(
+      "Autorisez le microphone dans votre navigateur, ou annulez la demande.",
+      "Allow the microphone in your browser, or cancel the request.",
+    );
     this.changed();
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error("https");
@@ -104,18 +121,49 @@ export class CrewRadio {
       if (!track) throw new Error("missing");
       track.addEventListener("ended", () => this.disableMic());
       track.addEventListener("mute", () => this.gate.cancel());
-      this.net.setMic(track);
+      // (the CAPCOM: the microphone through a mix the tones join — the mix's track sent)
+      if (this.quindar() && this.ctx) {
+        const dest = this.ctx.createMediaStreamDestination();
+        const source = this.ctx.createMediaStreamSource(stream);
+        source.connect(dest);
+        this.mix = { dest, source };
+        this.net.setMic(dest.stream.getAudioTracks()[0] ?? track);
+      } else this.net.setMic(track);
       this.gate.availability(true, this.net.status === "online");
       this.error = "";
     } catch (error) {
       if (generation !== this.generation) return;
       this.error =
         error instanceof Error && error.message === "https"
-          ? "Le microphone nécessite HTTPS (ou localhost)."
-          : "Microphone indisponible ou permission refusée. L’écoute reste possible.";
+          ? L("Le microphone nécessite HTTPS (ou localhost).", "The microphone needs HTTPS (or localhost).")
+          : L(
+              "Microphone indisponible ou permission refusée. L’écoute reste possible.",
+              "Microphone unavailable or permission refused. Listening still works.",
+            );
     } finally {
       if (generation === this.generation) this.pending = false;
       this.changed();
+    }
+  }
+
+  /** a Quindar tone a quarter second: into the voice sent, and heard here */
+  private tone(hz: number) {
+    const c = this.ctx,
+      m = this.mix;
+    if (!c || !m) return;
+    try {
+      const o = c.createOscillator(),
+        g = c.createGain();
+      o.frequency.value = hz;
+      g.gain.value = 0.12;
+      o.connect(g);
+      g.connect(m.dest);
+      g.connect(c.destination);
+      o.start();
+      o.stop(c.currentTime + 0.25);
+      this.tones++;
+    } catch {
+      // (no audio: no tone)
     }
   }
 
@@ -125,6 +173,8 @@ export class CrewRadio {
     this.error = "";
     this.gate.availability(false, !!this.net.room && this.net.status === "online");
     this.net.setMic(null);
+    this.mix?.source.disconnect();
+    this.mix = null;
     const mic = this.mic;
     this.mic = null;
     for (const track of mic?.getTracks() ?? []) track.stop();
@@ -142,7 +192,7 @@ export class CrewRadio {
     const gain = ctx.createGain();
     const meter = ctx.createAnalyser();
     meter.fftSize = 256;
-    gain.gain.value = this.muted.has(slot) ? 0 : (this.volumes.get(slot) ?? 1);
+    gain.gain.value = this.muted.has(slot) || this.cut(slot) ? 0 : (this.volumes.get(slot) ?? 1);
     source.connect(meter).connect(gain).connect(ctx.destination);
     this.peers.set(slot, { stream, el, source, gain, meter });
   }
@@ -151,8 +201,12 @@ export class CrewRadio {
     if (value !== undefined) this.volumes.set(slot, Math.max(0, Math.min(1, value)));
     const volume = this.volumes.get(slot) ?? 1;
     const peer = this.peers.get(slot);
-    if (peer) peer.gain.gain.value = this.muted.has(slot) ? 0 : volume;
+    if (peer) peer.gain.gain.value = this.muted.has(slot) || this.cut(slot) ? 0 : volume;
     return volume;
+  }
+  /** each voice's gain again (the link cut or back) */
+  sync() {
+    for (const slot of this.peers.keys()) this.volume(slot);
   }
   mute(slot: number) {
     if (this.muted.has(slot)) this.muted.delete(slot);

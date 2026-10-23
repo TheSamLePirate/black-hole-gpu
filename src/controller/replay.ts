@@ -5,6 +5,7 @@
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
+import { isAircraft } from "../vessels";
 import { EV, type TapeSample, type V3 } from "../game/replay";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { toBodyFixed } from "../system/our-surface";
@@ -65,7 +66,7 @@ function replayEvents(this: CameraController): number {
   const links = fleet.links.length;
   if (this.replayLinks !== null && links > this.replayLinks) ev |= EV.DOCK;
   this.replayLinks = links;
-  const lit = fleet.active !== "f35" && this.pilot.engineNow > 0.3;
+  const lit = !isAircraft(fleet.active) && this.pilot.engineNow > 0.3;
   if (lit && !this.replayLit) ev |= EV.BURN;
   this.replayLit = lit;
   return ev;

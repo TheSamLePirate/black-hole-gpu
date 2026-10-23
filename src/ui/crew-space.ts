@@ -15,8 +15,9 @@ import { bodyState } from "../system/ephemeris";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { SOLAR_BODIES, solarBody, solarState } from "../system/solar";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
-import { VESSELS, type VesselId } from "../vessels";
+import { isAircraft, VESSELS, type VesselId } from "../vessels";
 import type { Info } from "./flighthud";
+import { LPD } from "../controller/lowthrust";
 
 const KM = M_METRES / 1000;
 const KMS = C_MPS / 1000;
@@ -80,12 +81,44 @@ function bodiesNear(body: string, tm: number): InstrumentBody[] {
     });
 }
 
+/** The two clocks since the flight began (the Relativity view's time gone by on the Earth): taken together at the
+ *  start — again when the proper time goes back (a new flight: controller/rotation.ts) —; the room's clock set forward
+ *  (a date chosen, a scene's) not counted: its jump beyond what the craft's clock and its pace allow taken out. */
+export function clocksStep(
+  K: { t: number; tau: number; lastT: number; lastTau: number } | null,
+  t: number,
+  tau: number,
+  dtau: number,
+): { t: number; tau: number; lastT: number; lastTau: number } {
+  if (!K || tau < K.lastTau - 1e-6 || t < K.t) return { t, tau, lastT: t, lastTau: tau };
+  const dRoom = t - K.lastT,
+    expect = (tau - K.lastTau) / Math.max(dtau, 1e-6);
+  const shift = dRoom > expect * 1.5 + 5 ? dRoom - expect : 0;
+  return { t: K.t + shift, tau: K.tau, lastT: t, lastTau: tau };
+}
+
 /** The space blocks now; `heavy` the once-a-second tick (the paths, the bodies). */
-export function crewSpace(c: CameraController, i: Info, status: RangerStatus | null, t: number, heavy: boolean): InstrumentSpace {
+export function crewSpace(
+  c: CameraController,
+  i: Info,
+  status: RangerStatus | null,
+  t: number,
+  heavy: boolean,
+  /** the light delay played for the ground stations: the room's, its owner's (AUDIT-CREW priority 6) */
+  lightDelay: "real" | "tenth" | "off" = c.s.netLightDelay,
+): InstrumentSpace {
   const id = fleet.active as VesselId;
   const V = VESSELS[id];
   const out: InstrumentSpace = {
-    craft: { id, kind: id === "f35" ? "jet" : "spacecraft", name: V.name, lands: V.lands, ring: !!V.ring },
+    craft: {
+      id,
+      kind: isAircraft(id) ? "jet" : "spacecraft",
+      name: V.name,
+      lands: V.lands,
+      ring: !!V.ring,
+      // (landed, in orbit, a Kerr orbit…, and where: the console's « posé », its Gargantua side)
+      ...(status ? { status: status.status, where: status.soi } : {}),
+    },
   };
   const tm = t / M_SECONDS;
   const body = status?.soi ?? i.ref ?? "";
@@ -125,6 +158,26 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
         .slice(0, SPACE_BOUNDS.others);
     }
   }
+  // (the craft's sensors' picture — PLAN-RADAR-AAA RD4 —: its tracks on its LVLH axes, at each snapshot — a rendezvous
+  // moves fast —, the nearest first)
+  const P = i.region !== "hole" ? c.spacePic : null;
+  out.spacePic = P
+    ? {
+        ref: P.ref,
+        tracks: P.tracks.slice(0, SPACE_BOUNDS.tracks).map((T) => ({
+          id: T.id,
+          name: T.name,
+          kind: T.kind,
+          lvlh: [Math.round(T.lvlh[0]), Math.round(T.lvlh[1]), Math.round(T.lvlh[2])] as V3,
+          vlvlh: [r1(T.vlvlh[0]), r1(T.vlvlh[1]), r1(T.vlvlh[2])] as V3,
+          range: Math.round(T.range),
+          rate: r1(T.rate),
+          sensors: T.sensors,
+          hidden: T.hidden,
+          ca: T.ca ? { d: Math.round(T.ca.d), t: Math.round(T.ca.t) } : null,
+        })),
+      }
+    : null;
   const nodes = i.plan?.nodes ?? [];
   out.nodes = nodes.slice(0, SPACE_BOUNDS.nodes).map((n) => ({
     in: Math.round(n.t * M_SECONDS - t),
@@ -133,13 +186,17 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
   }));
   out.burn = i.plan?.burning && nodes[0] ? { left: r1(Math.hypot(...nodes[0].dv) * C_MPS) } : null;
   {
-    const dv = id === "f35" ? Number.NaN : c.fcBudget().dv;
-    const prop = id === "f35" ? null : (c.propellantOf(id)?.share ?? null);
+    const dv = isAircraft(id) ? Number.NaN : c.fcBudget().dv;
+    const prop = isAircraft(id) ? null : (c.propellantOf(id)?.share ?? null);
     out.budget = { dv: Number.isFinite(dv) ? Math.round(dv) : null, prop: prop === null ? null : r3(prop) };
   }
   const tg = status?.target;
+  // (a station's, a craft's place for the map — a body's is in its bodies)
+  const tp = tg && !solarBody(tg.id) && out.state && i.targetPos ? i.targetPos : null;
+  const tb = tp ? bodyAt(out.state!.body, tm).pos : null;
   out.target = tg
     ? {
+        ...(tp && tb ? { r: [r1((tp[0] - tb[0]) * KM), r1((tp[1] - tb[1]) * KM), r1((tp[2] - tb[2]) * KM)] as V3 } : {}),
         id: tg.id,
         name: tg.name,
         dist: Math.round(tg.distKm * 1000),
@@ -161,12 +218,19 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
       }
     : null;
   if (!Number.isFinite(c.metT0)) c.metT0 = t;
+  // (the two clocks since the flight began: the proper time starts again at each flight — controller/rotation.ts —, the
+  // room's does not; their start taken together, again when the proper time goes back)
+  const tau = c.properTime * M_SECONDS;
+  c.crewClock0 = clocksStep(c.crewClock0, t, tau, i.dtau);
+  const since = t - c.crewClock0.t;
   out.time = {
     warp: warpFactor(c.s),
     room: Math.round(t),
     dtau: r3(i.dtau),
-    tau: Math.round(c.properTime * M_SECONDS),
+    tau: Math.round(tau),
     met: Math.max(0, Math.round(t - c.metT0)),
+    since: Math.round(since),
+    lag: r1(since - (tau - c.crewClock0.tau)),
   };
   // the attitude: the flown craft's nose and up (its pose's axes, home frame — the HUD's S is the camera's)
   const pose = i.region !== "hole" ? c.activePoseNow() : null;
@@ -200,7 +264,43 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
       docked: D.docked,
       phase: c.dockAuto?.phase ?? "",
     };
+  } else if (i.region === "hole" && fleet.links.some((l) => l.a === id || l.b === id)) {
+    // (Gargantua's side: no geometry in its frame — but docked it is, and to whom)
+    const l = fleet.links.find((q) => q.a === id || q.b === id)!;
+    const other = l.a === id ? l.b : l.a;
+    const name = other === "iss" ? "ISS" : (VESSELS[other as VesselId]?.name ?? String(other));
+    out.dock = {
+      target: name,
+      port: "",
+      range: 0,
+      along: 0,
+      latX: 0,
+      latY: 0,
+      closing: 0,
+      latRate: 0,
+      angle: 0,
+      spin: 0,
+      docked: true,
+      phase: "",
+    };
   } else out.dock = null;
+  // the powered descent: a craft that lands, near a solid ground (landed, in its air, suborbital, or under 60 km)
+  const st = status?.status ?? "";
+  if (V.lands && status && i.surface && (st === "landed" || st === "flight" || st === "suborbital" || status.altKm < 60)) {
+    const agl = Number.isFinite(i.surface.alt) ? i.surface.alt : null;
+    const vz = Number.isFinite(status.vVert) ? status.vVert : 0;
+    const vh = Math.sqrt(Math.max(0, status.speed * status.speed - vz * vz));
+    const lp = i.lpd;
+    out.desc = {
+      agl: agl === null ? null : r1(agl),
+      vz: r1(vz),
+      vh: r1(vh),
+      hover: c.pilot.auto === "hover",
+      auto: c.pilot.auto,
+      ttg: agl !== null && vz < -0.3 && st !== "landed" ? Math.round(agl / -vz) : null,
+      lpd: lp ? { dist: Math.round(lp.dist), reach: Math.round(Math.max(LPD.minReach, agl ?? 0)) } : null,
+    };
+  } else out.desc = null;
   // the landing point: the site flown to, or the point designated (the LPD)
   const L = c.landRun;
   const LB = L ? solarBody(L.body) : null;
@@ -217,7 +317,7 @@ export function crewSpace(c: CameraController, i: Info, status: RangerStatus | n
       : i.X
         ? (() => {
             const light = (Math.hypot(i.X[0] - earth[0], i.X[1] - earth[1], i.X[2] - earth[2]) * M_METRES) / C_MPS;
-            const k = c.s.netLightDelay === "off" ? 0 : c.s.netLightDelay === "tenth" ? 0.1 : 1;
+            const k = lightDelay === "off" ? 0 : lightDelay === "tenth" ? 0.1 : 1;
             return { light: r1(light), delay: Math.round(light * k * 100) / 100, cut: false };
           })()
         : null;

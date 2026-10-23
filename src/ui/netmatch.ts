@@ -7,6 +7,7 @@
 // his countermeasures drawing our missiles too, shot down: said to all, flown again a few seconds later. Its score
 // sheet built from what is said; its end the host's; a bar, a kill feed, the big words and the end screen.
 
+import { IFF16, l16Key, l16Shares, readL16 } from "../net/link16";
 import "./netmatch.css";
 import type { CameraController } from "../controls";
 import type { MissileKind, V3 } from "../game/combat";
@@ -59,6 +60,9 @@ interface CombatState {
   ms: [number, MissileKind, number, number, number, number, number, number, string, 0 | 1][];
   /** [id, e, n, u, ve, vn, vu, fe, fn, fu, ue, un, uu, alive] */
   ai?: number[][];
+  /** the sender's own place in his world (PLAN-RADAR-AAA RD8: each page's free fight anchored where it began — his
+   *  missiles placed from him, as his craft is) */
+  o?: [number, number, number];
 }
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
@@ -251,6 +255,13 @@ export class NetMatch {
 
   private onEvent(from: number, ev: Record<string, unknown>) {
     const kind = ev.kind;
+    // (a teammate's Link 16 — RD12 —: his radar's tracks held here by the datalink, when the rules share them)
+    if (kind === "l16") {
+      if (!l16Shares(this.match?.mode ?? null, this.sameTeam(this.me, from))) return;
+      const now = performance.now();
+      for (const x of readL16(ev)) this.d.camera.l16In.set(x.key, { iff: x.iff, from, at: now });
+      return;
+    }
     if (kind === "match") return this.begin(ev.m as Match);
     // (another's craft destroyed out of a match: said, hidden until it is set down again)
     if (kind === "crash") {
@@ -321,7 +332,8 @@ export class NetMatch {
       case "impact":
         return this.onImpact(from, !!ev.broke, Array.isArray(ev.p) ? (ev.p as [number, number, number]) : null);
       case "cm":
-        if (W) W.addDecoys(ev.p as V3, ev.v as V3, ev.up as V3);
+        // (dropped where he is: his place here — each page's world its own anchor)
+        if (W) W.addDecoys(this.fromHere(from, ev.p as V3, ev.p as V3), ev.v as V3, ev.up as V3);
         return;
       case "result":
         this.sheet?.apply({ kind: "result", slot: from, value: Number(ev.value), medal: (ev.medal as string) ?? null });
@@ -454,6 +466,9 @@ export class NetMatch {
     this.endEl.hidden = true;
     this.root.hidden = false;
     this.d.toast(tf("Match: {0} — {1}", MODE_NAMES[m.mode](), this.titleOf(m)));
+    // (the rules told — PLAN-RADAR-AAA RD12 —: a pilot his sensors and his team's datalink; a crew screen the whole truth)
+    if (this.net?.room?.members.some((x) => x.role === "instruments"))
+      this.d.toast(t("The crew sees everything: its « Shared » view is the truth — the pilots, their sensors and their team's datalink"));
   }
 
   private titleOf(m: Match) {
@@ -584,6 +599,7 @@ export class NetMatch {
     const net = this.net;
     if (net !== this.bound) this.bind(net);
     this.freeStep(net);
+    this.l16Step(net);
     const m = this.match;
     if (!net?.room || !m) {
       if (!this.root.hidden && this.phase !== "over") this.root.hidden = true;
@@ -602,6 +618,26 @@ export class NetMatch {
     for (const [s, until] of this.down) if (now > until) this.down.delete(s), this.d.session.hidden.delete(s);
     this.drawUi(now);
   }
+
+  /** Our Link 16 (RD12): twice a second, in a room with another pilot, the F-35's radar's own tracks — their shared
+   *  key, the IFF known — sent to the room (each page takes them as its rules say: net/link16.ts l16Shares). */
+  private l16Step(net: Client | null) {
+    const c = this.d.camera;
+    c.l16Me = this.me;
+    c.l16InMatch = !!this.match;
+    const now = performance.now();
+    if (!net?.room || now - this.l16At < 500 || fleet.active !== "f35") return;
+    if (net.room.members.filter((m) => m.role === "pilot").length < 2) return;
+    this.l16At = now;
+    const tr: [string, number][] = [];
+    for (const T of c.radar.tracks.values()) {
+      if (T.datalink) continue;
+      const k = l16Key(T.id, this.me, !!this.match);
+      if (k) tr.push([k, Math.max(0, IFF16.indexOf(T.iff))]);
+    }
+    if (tr.length) net.event({ kind: "l16", tr: tr.slice(0, 120) });
+  }
+  private l16At = 0;
 
   // ---------------------------------------------------------------------------------- the free fight
 
@@ -659,6 +695,17 @@ export class NetMatch {
     const a = C?.def.anchor;
     const far = a ? Math.hypot((g.lat - a.lat) * 111_195, (g.lon - a.lon) * 111_195 * Math.cos(a.lat * (Math.PI / 180))) > 150_000 : true;
     if (!C || (far && C.downAt === null && !C.world.ownMissiles().length)) this.freeCombat();
+  }
+
+  /**
+   * A point of another pilot's world in ours (`o`: his own place there): from his craft as the network places it about
+   * ours — each page's fight anchored where it began. Unknown (no craft of his, no place of ours): as sent.
+   */
+  private fromHere(from: number, p: V3, o?: V3 | number[]): V3 {
+    const P = this.d.camera.combat?.last;
+    const ship = this.d.session.ships.find((s) => s.slot === from);
+    if (!P || !ship || !o) return p;
+    return [P.p[0] + ship.enu.r[0] + p[0] - o[0]!, P.p[1] + ship.enu.r[1] + p[1] - o[1]!, P.p[2] + ship.enu.r[2] + p[2] - o[2]!];
   }
 
   /** The free fight's world, anchored where we are. */
@@ -745,7 +792,7 @@ export class NetMatch {
           ms.push({
             key: `${from}:${x[0]}`,
             kind: x[1],
-            p: [x[2] + x[5] * age, x[3] + x[6] * age, x[4] + x[7] * age],
+            p: this.fromHere(from, [x[2] + x[5] * age, x[3] + x[6] * age, x[4] + x[7] * age], s.o),
             v: [x[5], x[6], x[7]],
             atMe: x[8] === `s${me}`,
             red: x[9] === 1 || !this.sameTeam(from, me),
@@ -781,6 +828,7 @@ export class NetMatch {
         this.csAt = now;
         const tgt = (q: number | null) => (q === null ? "" : q === -1 ? `s${me}` : q >= 10_000 ? `s${q - 10_000}` : `a${q}`);
         const s: CombatState = {
+          o: [r1(P.p[0]), r1(P.p[1]), r1(P.p[2])],
           ms: W.ownMissiles().map((x) => [
             x.id,
             x.kind,

@@ -63,6 +63,7 @@ pour cette manette (« personnalisée » dans l'écran des manettes) garde la pr
 | R3 (maintenu) | le zoom : le champ divisé par 2,5 ; relâché, le champ d'avant |
 | RT · LT | plus · moins de gaz (incrémental) |
 | LB · RB | palonnier gauche · droite |
+| LB + RB maintenus | le curseur de désignation (TDC) : le stick droit le déplace (la tête reste), A désigne dessous au lieu du canon — voir plus bas |
 | L3 | la postcombustion |
 | A (maintenu) | le canon |
 | B | tirer l'arme choisie (hors combat : acquitter l'alarme) — la touche Entrée |
@@ -81,6 +82,22 @@ pour cette manette (« personnalisée » dans l'écran des manettes) garde la pr
 - L'aide des commandes (?) a sa section « The F-35 on a controller ».
 
 ![Le stick droit poussé à droite : la tête tournée, le cockpit vu par-dessus l'épaule](progress/aviation/pad-head.jpg)
+
+## Le curseur de désignation (TDC)
+
+Sans souris, on désigne une piste avec le **curseur de désignation** (PLAN-RADAR-AAA, constat 29 ; `src/input/tdc.ts`,
+`src/controller/tdc.ts`).
+
+- **On le maintient** : les deux gâchettes hautes de la manette du F-35 ensemble ; ou la commande maintenue
+  **« Curseur de désignation (TDC, maintenu) »** donnée à un bouton du HOTAS dans l'écran des manettes (au clavier :
+  F15 par défaut, à changer dans les touches — aucune touche libre en vol, ni en AZERTY ni en QWERTY).
+- **Où il se pose** : en vol avec un radar (le F-35, le Ranger), sur le scope radar du HUD ; dans le cockpit du F-35, sur
+  la page du PCD au centre de la vue (la tête tournée vers elle). Lâché, il disparaît ; repris, il revient où on l'a
+  laissé sur cet écran.
+- **On le déplace** : le stick droit de la manette (la tête ne bouge plus), le mini-manche d'une manette des gaz (les
+  axes de translation RCS), un chapeau affecté au regard, ou les flèches.
+- **On désigne** : A sur la manette, ou l'action **« Désigner sous le curseur (TDC) »** (F14, ou la détente du HOTAS).
+  Comme un clic : une piste sélectionnée, une seconde fois verrouillée ; sur le PCD, ce qu'un toucher ferait là.
 
 ## Les profils connus
 

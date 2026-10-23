@@ -84,6 +84,71 @@ async function serve() {
   return server;
 }
 
+/** The page's daylight (App.load): __bh.game.flyAt and walk on the Earth first set the clock to the place's late morning
+ *  when it is night or the sun is low there (local solar time outside 8:30–16:00), unless the test set a date itself
+ *  or the page is in a network room (the room's one clock); the station's scene at a "now" it stays sunlit (a test's
+ *  own now kept). */
+const DAYLIGHT = `(() => {
+  const G = __bh.game;
+  if (!G || G.__e2eDaylight) return 1;
+  G.__e2eDaylight = true;
+  let chosen = false;
+  const setDate = G.setDate.bind(G);
+  G.setDate = (d) => ((chosen = true), setDate(d));
+  const day = (lon) => {
+    // (in a network room the clock is the room's — one for every page —: left alone)
+    if (chosen || window.__e2eKeepTime || !Number.isFinite(lon) || __bh.net?.net?.room) return;
+    const d = new Date(G.date().replace(" ", "T") + ":00Z");
+    if (!Number.isFinite(d.getTime())) return;
+    const solar = (((d.getUTCHours() + d.getUTCMinutes() / 60 + lon / 15) % 24) + 24) % 24;
+    if (solar >= 8.5 && solar <= 16) return;
+    setDate(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) + (11 - lon / 15) * 3600e3).toISOString());
+  };
+  const fly = G.flyAt.bind(G);
+  G.flyAt = (lat, lon, ...a) => ((a[3] ?? "earth") === "earth" && day(lon), fly(lat, lon, ...a));
+  const walk = G.walk.bind(G);
+  G.walk = (body, lat = 0, lon = 0) => (body === "earth" && day(lon), walk(body, lat, lon));
+  // (the station's scene — it takes the calendar's "now" — in the sun: a now when the station stays out of the Earth's
+  // shadow 25 minutes at least, the first in the next two hours; a "now" or a date the test fixed, its own)
+  const fixNow = __bh.setDate;
+  __bh.setDate = (ms) => ((chosen = true), fixNow(ms));
+  const ISS = "Earth: docking to the ISS";
+  window.__e2eSunlitIss = () => {
+    if (chosen || window.__e2eKeepTime || __bh.net?.net?.room) return null;
+    const M = 1476.625 * __bh.settings.massSolar, Ms = 4.925490947e-6 * __bh.settings.massSolar;
+    const d0 = Date.parse(G.date().replace(" ", "T") + ":00Z"), t0 = G.now();
+    const tOf = (ms) => t0 + (ms - d0) / 1000 / Ms;
+    const lit = (t) => {
+      const o = __bh.iss.orbit(t);
+      if (!o) return true;
+      const S = __bh.ourState("sun", t).pos, E = __bh.ourState("earth", t).pos;
+      const s = [0, 1, 2].map((k) => S[k] - E[k]), l = Math.hypot(...s), u = s.map((x) => x / l);
+      const X = [0, 1, 2].map((k) => o.X[k] - E[k]);
+      const a = X[0] * u[0] + X[1] * u[1] + X[2] * u[2];
+      return a > 0 || Math.hypot(...X.map((x, k) => x - u[k] * a)) * M > 6378137;
+    };
+    const now = Date.now();
+    for (let m = 0; m < 120; m += 2) {
+      const ms = now + m * 60e3;
+      let ok = true;
+      for (let k = 0; k <= 25 && ok; k += 5) ok = lit(tOf(ms + k * 60e3));
+      if (ok) return ms;
+    }
+    return null;
+  };
+  const sunlit = (name) => {
+    if (name !== ISS) return;
+    const ms = window.__e2eSunlitIss();
+    if (ms !== null) fixNow(ms);
+  };
+  for (const host of [__bh, G])
+    if (typeof host.preset === "function") {
+      const p = host.preset.bind(host);
+      host.preset = (name, ...a) => (sunlit(name), p(name, ...a));
+    }
+  return 1;
+})()`;
+
 export class App {
   private constructor(
     readonly cdp: Cdp,
@@ -97,6 +162,8 @@ export class App {
       width?: number;
       height?: number;
       lang?: "fr" | "en";
+      /** the crew console's language (crew/: its own, kerr.crew.lang) — French unless asked: its e2e read its French */
+      crewLang?: "fr" | "en";
       tiles?: boolean;
       sw?: boolean;
       initScript?: string;
@@ -127,7 +194,7 @@ export class App {
     // (the first-visit hint already seen: it would sit over what the tests look at)
     await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
       // (the intro seen: its short version, 1.5 s — tests/e2e/intro.e2e.test.ts plays it whole)
-      source: `try { localStorage.setItem("kerr.hint-seen", "1"); localStorage.setItem("kerr.lang", "${o.lang ?? "en"}"); if (!${!!o.fullIntro}) localStorage.setItem("kerr.intro.seen", "1"); } catch {}`,
+      source: `try { localStorage.setItem("kerr.hint-seen", "1"); localStorage.setItem("kerr.lang", "${o.lang ?? "en"}"); localStorage.setItem("kerr.crew.lang", "${o.crewLang ?? "fr"}"); if (!${!!o.fullIntro}) localStorage.setItem("kerr.intro.seen", "1"); } catch {}`,
     });
     if (o.initScript) await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: o.initScript });
     app.sw = !!o.sw;
@@ -171,6 +238,17 @@ export class App {
     // (the frame rate shown in its corner, the game's own meter — on every run, the screenshots too: who watches
     // sees how the test runs; a player's preference, kept across scenes. Not when the page failed to start)
     if (!startupFailure) await this.js("(__bh.settings.showFps = true, true)").catch(() => {});
+    // (in the sun: a craft put over the Earth or someone set on foot there by a test that chose no date — at night or
+    // with the sun low there — is put there at 11:00 local solar time of the same day; a date the test sets is its own
+    // from then on. E2E_DAYLIGHT=0: the scene's clock as it is)
+    if (!startupFailure && process.env.E2E_DAYLIGHT !== "0") {
+      await this.js(DAYLIGHT).catch(() => {});
+      // (a page booted on the station's scene: set again at a sunlit now — its first image in the Earth's shadow else
+      // one time in three)
+      if (/docking to the ISS/.test(decodeURIComponent(hash)))
+        await this.js(`(() => { const ms = window.__e2eSunlitIss?.(); if (ms === null || ms === undefined || ms - Date.now() < 60e3) return 0;
+          __bh.preset("Earth: docking to the ISS"); return 1; })()`).catch(() => {});
+    }
     if (this.recorded && !startupFailure) await recorder.attach(this, this.file).catch((e) => console.error(`e2e telemetry: ${e}`));
     // (the scene's own ray tracer compiled before the test begins — not its stale first image)
     if (!startupFailure) await this.settled(120_000);
@@ -237,8 +315,22 @@ export class App {
     await Bun.sleep(60);
   }
 
-  /** The element's centre, proven to receive the pointer there (else: the elements in the way). */
+  /** The element's centre, proven to receive the pointer there (else: the elements in the way) — tried again for up to
+   *  3 s: a page still sliding in (a menu's transition, 9 frames a second on the mini) is not yet under the pointer; an
+   *  overlay that swallows it for good still fails. */
   async hit(selector: string): Promise<{ x: number; y: number }> {
+    const until = performance.now() + 3000;
+    for (;;) {
+      try {
+        return await this.hitOnce(selector);
+      } catch (e) {
+        if (performance.now() > until) throw e;
+        await Bun.sleep(150);
+      }
+    }
+  }
+
+  private async hitOnce(selector: string): Promise<{ x: number; y: number }> {
     const r = await this.js<{ ok: boolean; x: number; y: number; stack: string[] }>(`(() => {
       const el = document.querySelector(${JSON.stringify(selector)});
       if (!el) return { ok: false, x: 0, y: 0, stack: ["(absent)"] };

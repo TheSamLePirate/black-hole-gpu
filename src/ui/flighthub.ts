@@ -3,6 +3,8 @@
 // day (dawn, morning, noon, dusk, night — or the clock as it is), the weather (weather.ts's presets, the real
 // one), the fuel aboard, a flight plan to an arrival field (game/flightplan.ts) — then flown at once.
 
+import { siteByName, worldSite } from "../world/fieldsite";
+import { fieldByCode } from "../world/runways";
 import "./flighthub.css";
 import type { CameraController } from "../controls";
 import { fleet } from "../fleet";
@@ -11,7 +13,7 @@ import { newPlan } from "../game/flightplan";
 import { SITES } from "../game/sites";
 import { t, tf, tr } from "../i18n";
 import type { Settings } from "../settings";
-import { VESSELS } from "../vessels";
+import { isAircraft, VESSELS } from "../vessels";
 import type { WeatherPreset } from "../weather";
 import { button, el as h, modal } from "./kit";
 
@@ -26,7 +28,7 @@ export interface HubHost {
   openRoute(): void;
 }
 
-type Start = "runway" | "final" | "cruise";
+type Start = "runway" | "final" | "cruise" | "stand";
 type Hour = "now" | "dawn" | "morning" | "noon" | "dusk" | "night";
 
 const FIELDS = SITES.filter((s) => s.body === "earth" && s.runway);
@@ -46,12 +48,14 @@ const WX_NAMES: Record<string, { fr: string; en: string }> = {
 
 export class FlightHub {
   private close: (() => void) | null = null;
-  private field = FIELDS.find((f) => f.icao === "KEDW") ?? FIELDS[0]!;
+  private field: (typeof FIELDS)[number] = FIELDS.find((f) => f.icao === "KEDW") ?? FIELDS[0]!;
   private start: Start = "runway";
   private hour: Hour = "now";
   private wx: WeatherPreset | null = null;
   private fuel = 1;
   private dest: string | null = null;
+  /** the A320's stand (its ref; empty: the nearest the airfield's middle) — the start at the gate */
+  private standRef = "";
 
   constructor(private host: HubHost) {}
 
@@ -63,7 +67,7 @@ export class FlightHub {
     if (this.close) return;
     const root = h("div", "fhb");
     const m = modal({
-      title: t("Prepare a flight — F-35B"),
+      title: fleet.active === "a320" ? t("Prepare a flight — A320") : t("Prepare a flight — F-35B"),
       body: [root],
       cls: "fhb-frame",
       testid: "flight-hub",
@@ -91,6 +95,46 @@ export class FlightHub {
     return box;
   }
 
+  /** Any airfield of the world by its code (PLAN-RADAR-AAA RD13): its longest paved runway the start's. */
+  private codeBox() {
+    const box = h("div", "fhb-block fhb-code");
+    const inp = h("input", "fhb-icao") as HTMLInputElement;
+    inp.placeholder = t("Any airfield: its ICAO code");
+    inp.dataset.testid = "fhb-icao";
+    inp.maxLength = 8;
+    const said = h("span", "k-label fhb-code-said", "");
+    inp.onchange = () => {
+      const q = inp.value.trim();
+      if (!q) return;
+      said.textContent = "…";
+      void fieldByCode(q).then((f) => {
+        const s = f ? worldSite(f, 1200) : null;
+        if (!s) {
+          said.textContent = f ? tf("{0}: no paved runway of 1 200 m", f.icao || f.ident) : tf("{0}: unknown", q.toUpperCase());
+          return;
+        }
+        this.field = s;
+        said.textContent = s.name;
+        this.host.toast(tf("Airfield: {0}", s.name));
+      });
+    };
+    box.append(h("span", "k-label", t("Airfield code")), inp, said);
+    return box;
+  }
+
+  /** The stand's ref (the A320's start at the gate): typed, or none — the nearest the airfield's middle. */
+  private standBox() {
+    const box = h("div", "fhb-block fhb-code");
+    const inp = h("input", "fhb-icao") as HTMLInputElement;
+    inp.placeholder = t("Stand (its number; empty: the nearest)");
+    inp.dataset.testid = "fhb-stand";
+    inp.maxLength = 8;
+    inp.value = this.standRef;
+    inp.onchange = () => (this.standRef = inp.value.trim());
+    box.append(h("span", "k-label", t("Stand")), inp, h("span", "k-label fhb-code-said", "© OpenStreetMap"));
+    return box;
+  }
+
   private build(root: HTMLElement) {
     const fieldItems = FIELDS.map((f) => [f.icao ?? f.name, f.icao ?? f.name, f.name] as [string, string, string]);
     root.append(
@@ -101,9 +145,20 @@ export class FlightHub {
         (v) => (this.field = FIELDS.find((f) => (f.icao ?? f.name) === v)!),
         "fhb-field",
       ),
+      this.codeBox(),
       this.seg<Start>(
         t("Start"),
         [
+          // (the A320: at a stand of the airfield — OpenStreetMap's —, its route out to the runway made)
+          ...(fleet.active === "a320"
+            ? [
+                ["stand", t("At a stand"), t("At a stand of the airfield, the parking brake set: push back, taxi out")] as [
+                  Start,
+                  string,
+                  string,
+                ],
+              ]
+            : []),
           ["runway", t("On the runway"), t("Lined up on the runway in use, the engine at idle")],
           ["final", t("On final"), t("15 km out, 900 m up, the runway ahead")],
           ["cruise", t("Cruising"), t("40 km out, 6 000 m up, 230 m/s")],
@@ -112,6 +167,7 @@ export class FlightHub {
         (v) => (this.start = v),
         "fhb-start",
       ),
+      ...(fleet.active === "a320" ? [this.standBox()] : []),
       this.seg<Hour>(
         t("Hour (the airfield's)"),
         [
@@ -165,20 +221,26 @@ export class FlightHub {
     root.append(foot);
   }
 
-  /** The flight set up as the card has it, then flown. */
+  /** The flight set up as the card has it, then flown (at a stand: lined up first, then moved to the stand once the
+   *  airport's ground network is in). */
   go() {
     try {
-      this.host.toast(
-        prepareFlight(this.host, {
-          field: this.field.icao ?? this.field.name,
-          start: this.start,
-          hour: this.hour,
-          weather: this.wx,
-          fuel: this.fuel,
-          dest: this.dest,
-        }),
-      );
+      const field = this.field.icao ?? this.field.name;
+      const said = prepareFlight(this.host, {
+        field,
+        start: this.start,
+        hour: this.hour,
+        weather: this.wx,
+        fuel: this.fuel,
+        dest: this.dest,
+      });
       this.close?.();
+      if (this.start !== "stand") return this.host.toast(said);
+      this.host.toast(t("The airport's ground network: loading…"));
+      void this.host.tools.atStand(field, this.standRef || null).then(
+        (note) => this.host.toast(note),
+        (e) => this.host.toast(tf("{0} — lined up on the runway instead", String((e as Error).message ?? e))),
+      );
     } catch (e) {
       this.host.toast(String((e as Error).message ?? e));
     }
@@ -205,7 +267,8 @@ const fieldOf = (q: string) => {
   return (
     FIELDS.find((f) => f.icao?.toLowerCase() === n || f.name.toLowerCase() === n) ??
     FIELDS.find((f) => f.name.toLowerCase().includes(n)) ??
-    null
+    // (any airfield of the world by its code, its tile in — PLAN-RADAR-AAA RD13)
+    siteByName(q)
   );
 };
 
@@ -220,7 +283,7 @@ export function prepareFlight(H: HubHost, o: FlightSetup): string {
   if (!F) throw new Error(`no airfield "${o.field}"`);
   const start = o.start ?? "runway",
     hour = o.hour ?? "now";
-  if (fleet.active !== "f35") T.set("vessel", "f35");
+  if (!isAircraft(fleet.active)) T.set("vessel", "f35");
   if (hour !== "now") {
     // (the airfield's mean solar hour → UTC, on the scene's day)
     const day = T.date().slice(0, 10);
@@ -233,15 +296,16 @@ export function prepareFlight(H: HubHost, o: FlightSetup): string {
     H.settings.weather = o.weather;
     H.weatherChanged();
   }
-  const name = F.name;
-  if (start === "runway") T.lineUp(name);
+  const name = F.len ? (F.icao ?? F.name) : F.name;
+  // (at a stand: lined up first — the stand once the airport's network is in: FlightHub.go)
+  if (start === "runway" || start === "stand") T.lineUp(F.len ? F : name);
   else if (start === "final") T.glideTo(name, 15, 0.9, 110);
   else T.glideTo(name, 40, 6, 230);
   // (the fuel after the placing: it fills the tanks)
   const full = VESSELS.f35.fuelKg ?? 0;
   fleet.fuel.f35 = full * Math.min(Math.max(o.fuel ?? 1, 0.05), 1);
   const C = H.camera;
-  if (start !== "runway") {
+  if (start !== "runway" && start !== "stand") {
     // (in the air: flown by hand — the glide's entry autopilot let go —, the engine at the power that
     // holds the speed; on final the gear down and half flaps, cruising clean)
     if (C.pilot.auto !== "none") C.pilot.setAuto(C.pilot.auto);

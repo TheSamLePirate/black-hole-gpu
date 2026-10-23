@@ -3,6 +3,7 @@
 // simulation frozen and stepped, offline renders and videos posted to the dev server, the bench.
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
+import { hudHits, scopeRange } from "./ui/hud/symbology";
 import type { BootReport } from "./boot-timeline";
 import { bodyFixedOf, GEAR, gearHeight, groundRelief, toBodyFixed } from "./system/our-surface";
 import { EARTH_RUNWAYS } from "./game/sites";
@@ -55,6 +56,10 @@ import { advanceFrameClock } from "./frameclock";
 import type { FlightPhase } from "./game/phase";
 import type { Pwa } from "./pwa";
 import type { GameMode, ModeState } from "./game/modes";
+import { DeckPicker } from "./a320/deckpick";
+
+/** the A320 deck's picker (a320DeckAt: the controls seen from the seat) */
+let deckPick: DeckPicker | null = null;
 
 export interface BhContext {
   /** the boot's timeline (boot-timeline.ts): its stages, the main thread's long tasks and frame gaps */
@@ -93,6 +98,8 @@ export interface BhContext {
     spaceChallenges?: unknown;
     spaceMissions?: unknown;
     replay?: unknown;
+    /** the flight HUD (ui/flighthud.ts): its tactical map (tacMap — PLAN-RADAR-AAA RD15) */
+    hud?: unknown;
   };
   /** playing together (ui/netpanel.ts): the panel, its client once a room was asked for */
   net?: import("./ui/netpanel").NetPanel;
@@ -322,6 +329,33 @@ export function installBh(c: BhContext) {
       refresh: refreshGui,
       skyLoading,
       mx: c.mx,
+      /** the tactical picture (src/radar/picture.ts — PLAN-RADAR-AAA RD2): the tracks this frame, one by id, the
+       *  selection; its cost */
+      radar: {
+        picture: () => camera.picture,
+        track: (id: string) => camera.picture?.byId.get(id) ?? null,
+        select: (id: string | null) => {
+          camera.pictureSelected = id;
+          return id;
+        },
+        /** what a click in the view may select this frame (the HUD's scope's symbols, the tracks seen): their id and
+         *  place [CSS px], their reach [CSS px] */
+        hits: () => {
+          const k = 1 / devicePixelRatio;
+          return hudHits.map((h) => ({ id: h.id, x: h.x * k, y: h.y * k, r: h.r * k }));
+        },
+        /** the HUD's scope as drawn last: its range [m], its disc (centre and radius, CSS px) — the wheel's (P11) */
+        scope: () => ({ range: scopeRange.m, disc: scopeRange.disc }),
+        stats: () => {
+          const P = camera.picture;
+          const by: Record<string, number> = {};
+          for (const T of P?.tracks ?? []) {
+            const k = T.id.slice(0, T.id.indexOf(":"));
+            by[k] = (by[k] ?? 0) + 1;
+          }
+          return { n: P?.tracks.length ?? 0, bySource: by, ms: camera.pictureMs };
+        },
+      },
       /** the space station: its orbit (SGP4), the tracker the game flies it with, its elements, its geometry */
       iss: {
         orbit: issOrbit,
@@ -374,6 +408,68 @@ export function installBh(c: BhContext) {
       /** what a pixel shows in the Ranger's cabin (ndc −1…1, y up): the face hit — point, normal, material,
        *  a screen's display and uv — or null (cockpit/pick.ts) */
       /** where a cockpit control is in the view (its box's centre): ndc (y up), or null (cockpit/controls.ts ids) */
+      /** The A320's flight deck (A6): a control (its FlightGear label, or an object of it) — the middle of its object as
+       *  posed now, in the ship's frame, and that point in the view (ndc; null behind the eye) */
+      a320DeckAt: (what: string) => {
+        const m = renderer.ship.a320DeckMesh;
+        const mats = renderer.ship.deckMats;
+        if (!m || !mats) return null;
+        const c = m.controls.find((x) => x.label === what || x.objects.includes(what));
+        if (!c) return null;
+        const o = m.objects.indexOf(c.objects.find((x) => m.objects.includes(x)) ?? "");
+        const p = [0, 0, 0];
+        let n = 0;
+        for (let t = 0; t < m.triObj.length; t++)
+          if (m.triObj[t] === o)
+            for (let k = 0; k < 3; k++) {
+              const v = m.idx[3 * t + k]!;
+              const r = 12 * Math.floor(m.verts[10 * v + 7]!);
+              const x = m.verts[10 * v]!,
+                y = m.verts[10 * v + 1]!,
+                z = m.verts[10 * v + 2]!;
+              for (let j = 0; j < 3; j++)
+                p[j]! += mats[r + 4 * j]! * x + mats[r + 4 * j + 1]! * y + mats[r + 4 * j + 2]! * z + mats[r + 4 * j + 3]!;
+              n++;
+            }
+        if (!n) return null;
+        let q = p.map((x) => x / n) as [number, number, number];
+        // (its middle hidden from the captain's eye — a button sunk in its bezel, seen aslant —: a point of its face
+        // that is seen, toward one of its corners)
+        const eye: [number, number, number] = [0.45, 3.22, 16.193];
+        const seen = (x: [number, number, number]) => {
+          const d = x.map((v, k) => v - eye[k]!) as [number, number, number];
+          const l = Math.hypot(...d);
+          const h = (deckPick ??= new DeckPicker(m)).pick(eye, d.map((v) => v / l) as [number, number, number], mats);
+          return !!h && c.objects.includes(h.object);
+        };
+        if (!seen(q)) {
+          // (its faces' middles, the nearest the eye first — an object holding the captain's and the first officer's
+          // twin lights has its middle between them)
+          const pose = (v: number) => {
+            const r = 12 * Math.floor(m.verts[10 * v + 7]!);
+            return [0, 1, 2].map(
+              (j) =>
+                mats[r + 4 * j]! * m.verts[10 * v]! +
+                mats[r + 4 * j + 1]! * m.verts[10 * v + 1]! +
+                mats[r + 4 * j + 2]! * m.verts[10 * v + 2]! +
+                mats[r + 4 * j + 3]!,
+            );
+          };
+          const mids: [number, number, number][] = [];
+          for (let t = 0; t < m.triObj.length; t++) {
+            if (m.triObj[t] !== o) continue;
+            const a = pose(m.idx[3 * t]!),
+              b = pose(m.idx[3 * t + 1]!),
+              c3 = pose(m.idx[3 * t + 2]!);
+            mids.push([0, 1, 2].map((k) => (a[k]! + b[k]! + c3[k]!) / 3) as [number, number, number]);
+          }
+          const dist = (x: number[]) => Math.hypot(x[0]! - eye[0], x[1]! - eye[1], x[2]! - eye[2]);
+          mids.sort((a, b) => dist(a) - dist(b));
+          const x = mids.find(seen);
+          if (x) q = x;
+        }
+        return { p: q, ndc: renderer.ship.cabinProject(q) };
+      },
       cockpitControlAt: (id: string) => {
         const c = CONTROLS.find((x) => x.id === id);
         return c ? renderer.ship.cabinProject(controlBox(c).c) : null;

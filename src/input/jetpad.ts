@@ -8,6 +8,8 @@
 //   Y  tap: lock the next target · hold: the intercept
 //   D-pad ▲ gear  ▼ flaps  ◀ flares and chaff  ▶ airbrake
 //   View  tap: the camera's view · hold: the head locked on the target     Menu  tap: the autopilot's holds · hold: the settings
+//   LB + RB held together   the designation cursor (TDC — input/tdc.ts): the right stick moves it (the head stays),
+//                           A designates under it (no gun then)
 //
 // Shaped for a fighter: the sticks' fine centre (their curve), the rudder eased in rather than banged, the head's
 // look a spring — where the stick points, back ahead as it is let go —, the zoom eased in and out.
@@ -44,6 +46,9 @@ export interface JetPadOut {
   throttle: number;
   /** the gun's trigger held */
   gun: boolean;
+  /** the designation cursor held (LB + RB together); its slew (the right stick: x right, y up) */
+  tdc: boolean;
+  tdcSlew: [number, number];
   /** the head's look now [°]: right +, up + */
   lookYaw: number;
   lookPitch: number;
@@ -111,6 +116,9 @@ export class JetPad {
     const held = p.held ?? [];
     const on = (i: number) => !!held[i];
     const actions: JetPadAction[] = [];
+    // (both bumpers held: the TDC — their rudders cancel anyway; A then designates)
+    const tdc = on(LB) && on(RB);
+    if (tdc && on(A) && !this.prev[A]) actions.push({ action: "designate" });
     for (let i = 0; i < Math.max(held.length, 16); i++) {
       const now = on(i),
         was = !!this.prev[i];
@@ -135,15 +143,18 @@ export class JetPad {
     const want = (on(RB) ? 1 : 0) - (on(LB) ? 1 : 0);
     const step = dt / JETPAD.rudderRamp;
     this.rudder = want > this.rudder ? Math.min(want, this.rudder + step) : Math.max(want, this.rudder - step);
-    // the head: where the right stick points (its edge a little farther), back ahead when it is let go
-    const [rx, ry] = p.look;
-    const reach = (x: number) => Math.sign(x) * Math.abs(x) ** 1.2;
-    const tYaw = reach(rx) * JETPAD.lookYaw;
-    const tPitch = ry >= 0 ? reach(ry) * JETPAD.lookUp : reach(ry) * JETPAD.lookDown;
-    this.lookYaw = ease(this.lookYaw, tYaw, dt, JETPAD.lookTau);
-    this.lookPitch = ease(this.lookPitch, tPitch, dt, JETPAD.lookTau);
-    if (Math.abs(this.lookYaw) < 0.05 && tYaw === 0) this.lookYaw = 0;
-    if (Math.abs(this.lookPitch) < 0.05 && tPitch === 0) this.lookPitch = 0;
+    // the head: where the right stick points (its edge a little farther), back ahead when it is let go — the TDC held:
+    // the stick slews it, the head stays where it was
+    if (!tdc) {
+      const [rx, ry] = p.look;
+      const reach = (x: number) => Math.sign(x) * Math.abs(x) ** 1.2;
+      const tYaw = reach(rx) * JETPAD.lookYaw;
+      const tPitch = ry >= 0 ? reach(ry) * JETPAD.lookUp : reach(ry) * JETPAD.lookDown;
+      this.lookYaw = ease(this.lookYaw, tYaw, dt, JETPAD.lookTau);
+      this.lookPitch = ease(this.lookPitch, tPitch, dt, JETPAD.lookTau);
+      if (Math.abs(this.lookYaw) < 0.05 && tYaw === 0) this.lookYaw = 0;
+      if (Math.abs(this.lookPitch) < 0.05 && tPitch === 0) this.lookPitch = 0;
+    }
     this.zoom = ease(this.zoom, on(R3) ? 1 : 0, dt, JETPAD.zoomTau);
     if (this.zoom < 1e-3) this.zoom = 0;
     return {
@@ -152,7 +163,9 @@ export class JetPad {
       roll: p.move[1],
       yaw: this.rudder,
       throttle: p.move[2],
-      gun: on(A),
+      gun: on(A) && !tdc,
+      tdc,
+      tdcSlew: tdc ? [p.look[0], p.look[1]] : [0, 0],
       lookYaw: this.lookYaw,
       lookPitch: this.lookPitch,
       zoom: this.zoom,

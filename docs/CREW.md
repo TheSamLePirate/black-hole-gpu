@@ -30,34 +30,68 @@ pour ce qu'un ancien pilote n'envoie pas.
 - `flight` : assiette, inclinaison, cap, route, pente, incidence, dérapage, TAS/EAS/GS, hauteur sol, facteur
   de charge et sa limite, buffeting, incidence de décrochage, vent, secondes avant le sol (GPWS) ;
 - `auto` : mode de vol, niveau d'assistance, consignes ALT/CAP/VIT, PC, LNAV/VNAV, tenue, ordre, assistant
-  (hub : titre, phase, prochaine étape, progression) ;
+  (hub : titre, phase, prochaine étape, progression), voyants AP et A/THR du jeu (`ap`, `athr`, ceux du PCD ;
+  absents d'un pilote plus ancien, la console les déduit alors des consignes) ;
 - `nav` : point actif, distance, relèvement, ETE, écart latéral, phase VNAV, T/D, consignes, croisière, bingo,
   carburant et temps restants du plan ;
 - `sys` : moteur (régime, poussée, PC, débit), carburant (kg, plein), train, volets, aérofrein, STOVL,
   température de coque, bouclier, dommages, masse ;
 - `ils`, `orbit` (apogée, périgée, inclinaison, période, temps aux apsides, rayon du corps, demi-grand axe),
-  `next` (prochain événement),
-  `msn` (objectif de mission), `warn` (alertes : FLY UP, PULL UP, STALL, GEAR, BINGO, MISSILE…) ;
-- les pistes du radar du pilote, leur identification et le verrouillage ;
+  `next` (prochain événement, avec son corps `body` : la console le nomme en français),
+  `msn` (objectif de mission), `warn` (alertes : FLY UP, PULL UP, STALL, GEAR, BINGO, MISSILE, BREAKAWAY…) ;
+- `aar` (le ravitaillement en vol derrière TEXACO 11, `controller/aar.ts aarCrew`) : l'étape (rendez-vous ou derrière
+  le tuyau), la phase du HUD (PRE-CONTACT, CLEARED, CONTACT, FUEL FLOW, FULL, BREAKAWAY, DEPART), la conduite
+  (automatique, assistée, manuelle), le ravitailleur et le côté du tuyau, le carburant transféré et demandé (un exercice
+  quand les réservoirs ne le prennent pas), l'écart de la sonde au panier le long du tuyau et hors de son axe, la vitesse
+  de rapprochement, le tuyau enfoncé contre sa plage de transfert et son dégagement, les feux du pod, les contacts et les
+  ratés, la distance au ravitailleur ;
+- **l'image tactique du pilote** (`pic`, PLAN-RADAR-AAA RD5 — [RADAR.fr.md](RADAR.fr.md)), quatre fois par seconde :
+  - chaque piste, la vérité et ce qu'en tiennent ses capteurs, en lignes compactes avec un dictionnaire des noms ;
+  - d'abord le verrou, la sélection, les hostiles, les missiles et les leurres ; le reste à tour de rôle ;
+  - le faisceau du radar et sa portée ;
+  - les deux dernières minutes de chaque traînée pour un crew qui arrive.
+
+  Elle remplace les anciens blocs (la liste radar, `tracks` et le trafic de `traffic`). Ceux-ci ne sont plus envoyés
+  que sans image ;
 - la route (32 points, avec contraintes d'altitude et de vitesse) et la trajectoire prévue (48 points, avec
   leur temps et leur hauteur géodésique) : pour un avion en vol, son virage actuel prolongé sur 3 minutes
   (pas à pas sur l'ellipsoïde WGS84), sinon la trajectoire de chute libre ou planifiée ;
+- à chaque envoi, `tracks` (PLAN-RADAR-AAA RD1) : le combat autour du pilote — ses cibles, unités de mission comprises,
+  avec vitesse, cap et id stable (`f:<id>` du combat), **les missiles en vol** (`msl:`) et **les leurres vivants**
+  (`cm:`, fusée ou paillettes) —, 48 au plus, les plus menaçants d'abord, placés depuis le plan tangent du pilote par le
+  problème direct de la géodésique (`wgs84Direct`) ;
 - une fois par seconde, `traffic` et `zones` : le trafic réel (les 64 avions ADS-B les plus proches), les
-  unités d'une mission (hostiles, amies, neutres, détruites), les porte-avions, les cibles d'un combat, les
-  zones d'objectif et la portée des SAM. La console fusionne les listes de tous les pilotes (sans doublon) et
-  les extrapole entre deux envois le long de leur cap (rayons de courbure WGS84).
+  unités d'une mission (hostiles, amies, neutres, détruites), les porte-avions, les cibles d'un combat (leur camp
+  réel, celui du monde de combat, et leur vitesse ; en mission, celles que ses unités ne montrent pas déjà ; le
+  ravitailleur TEXACO 11 y figure en ami, nommé « A330 MRTT »), les
+  zones d'objectif et la portée des SAM. La console fusionne les listes de tous les pilotes (sans doublon, la mesure la
+  plus fraîche gagnant) et les prolonge **en heure de salle** depuis leur envoi (`net.roomNow() − t` : en pause rien ne
+  bouge, en accéléré tout va plus vite d'autant), le long de leur cap et de leur virage (le taux tiré de leurs deux
+  derniers caps). Une nouvelle place est prise en 0,2 s, sans saut.
+- Les joueurs, dont celui qu'on suit, sont placés par la prédiction de leur piste à l'heure de salle
+  (`remotes.track(slot).at`), comme sur les pages des pilotes.
+- Un événement de plus de 16 384 caractères serait jeté en silence par le serveur : le client le refuse et le compte
+  (`net.sent.oversize`), et l'instantané est allégé avant l'envoi (`fitSnapshot` : le trafic, les corps, les
+  trajectoires… ; `netsession.crewCut`).
 
 Les blocs « espace » (PLAN-VAISSEAUX K1, `src/net/instruments-space.ts`), en km et km/s autour de chaque corps, sur
 les axes du repère du jeu :
 - à chaque envoi :
-  - `craft` : l'appareil suivi (avion ou vaisseau, s'il se pose, s'il a un anneau) ; la console choisit son profil
-    d'après lui ;
+  - `craft` : l'appareil suivi (avion ou vaisseau, s'il se pose, s'il a un anneau, son état — posé, en vol, suborbital,
+    en orbite, orbite de Kerr liée ou non… — et le corps de sa sphère) ; la console choisit son profil, ses vues et ses
+    tuiles d'après lui ;
+  - `desc` : la descente motorisée d'un vaisseau qui se pose, près d'un sol (sous 60 km, ou posé) : hauteur sol, vitesses
+    verticale et horizontale, stationnaire, autopilote, temps avant le sol, point d'atterrissage (distance, portée du
+    LPD) ;
   - `state` : position et vitesse autour du corps de la sphère d'influence, son GM, son rayon, sa sphère ;
   - `nodes` : les poussées du plan (dans combien de secondes, Δv prograde · normal · radial en m/s, rôle) ; `burn`
     (Δv restant de la poussée en cours) ;
-  - `target` : distance, rapprochement, approche minimale et sa date ;
+  - `target` : distance, rapprochement, approche minimale et sa date ; la place d'une station ou d'un vaisseau ciblé
+    (la carte système la dessine) ;
   - `sysx` : batterie, bilan, oxygène, épurateurs, équipage, pannes (X3) ;
-  - `time` : facteur de temps, horloge de salle, dτ/dt et temps propre ;
+  - `time` : facteur de temps, horloge de salle, dτ/dt et temps propre ; depuis le départ du vol, le temps de la salle
+    et son avance sur celui du vaisseau (`since`, `lag` : le temps propre repart de zéro à chaque vol, l'écart
+    « salle − temps propre » n'était que l'âge de la scène) ;
   - `link` : temps de la lumière vers la Terre, coupé derrière le trou de ver ;
   - `ring`, `ports` : l'anneau et les ports de l'Endurance ;
   - `kerr` : du côté de Gargantua, r, E et L ;
@@ -127,15 +161,33 @@ console s'ouvre sur la première vue du profil.
 | vue | contenu |
 |---|---|
 | Boule | la boule de navigation : l'attitude contre l'orbite (ciel du côté radial extérieur), marqueurs prograde, rétrograde, normal, anti-normal, radial, nœud de manœuvre ; SAS, maintien, autopilote, assiette, vitesses |
-| Amarrage | le couloir d'approche vu de côté (cône ±0,3 m + 10 % de la distance), le réticule de face (COAS), distance, rapprochement et sa limite, dérive, axes écartés, rotation relative, phase de l'autopilote |
+| Amarrage | le couloir d'approche vu de côté (cône ±0,3 m + 10 % de la distance), le réticule de face (COAS), distance, rapprochement et sa limite, dérive, axes écartés, rotation relative, phase de l'autopilote ; les pistes des capteurs de l'engin (radar, lidar, liaison) sous les chiffres — et, à plus de 5 km de tout port, leur scope LVLH (V-bar en haut, H-bar à droite, 100 m à 1 000 km) avec leur liste ; une piste touchée : **Cibler** |
 | Δv | les poussées du plan bout à bout contre le Δv des ergols, la marge, le réservoir, la poussée en cours |
 | EECOM | batterie, oxygène, épurateurs, bilan et autonomie ; chaque panne avec sa checklist (le français du jeu) |
 | Chronologie | le temps de mission (MET) ; les poussées, apsides, changements de sphère, approches minimales des 24 h à venir sur un axe en racine carrée |
-| Relativité | dτ/dt, « une heure à bord = … sur Terre », β, γ, horloge de salle contre temps propre, r · E · L côté Gargantua, liaison |
-| Sol | le corps survolé en projection orthographique autour du vaisseau : grille, terminateur, trace au sol, point d'atterrissage (et sa redésignation au LPD) |
+| Relativité | dτ/dt, « une heure à bord = … sur Terre », β, γ, horloge de salle, temps propre du vol, depuis le départ (Terre) et le temps écoulé en plus sur Terre (`time.lag`), r · E · L côté Gargantua, liaison |
+| Sol | le corps survolé en projection orthographique autour du vaisseau : grille, terminateur, trace au sol, point d'atterrissage (et sa redésignation au LPD). **Toucher un point le désigne pour l'atterrissage** (`sp.lpd`, pendant un atterrissage motorisé sous 5 km). Côté Gargantua : « Posé sur Miller », « Autour de Mann » |
+| Descente | (vaisseaux qui se posent ; la deuxième vue du Lander) la hauteur sol sur un ruban, sa tendance, les vitesses verticale et horizontale, le temps avant le sol, le stationnaire ou l'atterrissage piloté, ergols et Δv ; le point d'atterrissage vu de dessus autour du vaisseau et la portée du LPD ; posé : « POSÉ · LUNE » |
 
 Le Tableau vaisseau montre la boule à la place du PFD. Il faut pour cela les blocs `att` (nez et haut du vaisseau, axes
 de sa pose), `dock`, `land` et `time.met` de l'instantané.
+
+**Une console par vaisseau** (AUDIT-CREW priorité 4, `profile.ts craftViews/craftTiles`) :
+- le **Lander** : Tableau, **Descente**, Sol en tête ; tuiles hauteur sol, vario, vitesse horizontale, ergols, Δv ; dans
+  l'ordinateur de vol, le panneau **Descente** passe en premier quand il est bas au-dessus d'un sol (stationnaire,
+  « Atterrir ici », le point d'atterrissage déplacé de 100 m devant, derrière, à gauche, à droite) ;
+- le **Ranger** (il se pose aussi) : la Descente après le Sol ;
+- l'**Endurance** (elle ne se pose jamais) : ni Descente ni panneau Descente, ni atterrissage, décollage, rentrée ou
+  stationnaire dans ses autopilotes ; une tuile Anneau (tr/min) ;
+- tous : le panneau **Flotte** (N1) — chaque autre pilote de la salle et trois ordres (« Rejoins-moi », « Maintiens-toi
+  sur moi », « Amarre-toi à moi », `sp.fleet`) que le pilote suivi lui envoie ; l'autre reçoit sa carte Accepter / Refuser.
+- **Posé** : l'Orbite et la Descente disent « POSÉ » et où, les tuiles Périapside et Hauteur sol « posé ».
+- **Côté Gargantua** : l'Orbite dessine le trou de dessus (horizon, ergosphère, orbite des photons, ISCO pour son spin),
+  ses mondes, la chute du vaisseau, et r · E · L (orbite liée si E < 1, non liée, chute dans l'horizon) ; autour d'un
+  monde (Miller, Mann…), son orbite d'après ses apsides. La Boule le dit (« pas de boule orbitale »), l'Amarrage dit
+  « AMARRÉ · ENDURANCE » quand c'est le cas.
+- **Carte système** : les autres vaisseaux de la salle (à leur couleur) et une cible station ou vaisseau (l'ISS) y sont
+  dessinés.
 
 **Orbite** : la conique autour du corps de la sphère, vue de dessus de son plan (périapside en haut), reconstruite à
 partir de l'état reçu (`src/crew/orbitmath.ts`) ; le corps à l'échelle, Pe et Ap avec leurs hauteurs, le vaisseau,
@@ -147,16 +199,33 @@ système 3D).
 | vue | contenu |
 |---|---|
 | Tableau | PFD + ND ; sur grand écran aussi la carte et le plan de vol. Toucher un panneau l'ouvre |
-| Vol (PFD) | horizon, échelle de tangage, inclinaison et dérapage, vecteur vitesse, rubans vitesse (consigne, tendance) et altitude (consigne, sol), vario, cap (consigne, route, point actif, objectif), FMA, ILS, hauteur radio, G, α |
+| Vol (PFD) | horizon, échelle de tangage, inclinaison et dérapage, vecteur vitesse, rubans vitesse (consigne, tendance) et altitude (consigne, sol), vario, cap (consigne, route, point actif, objectif), FMA (la phase AAR à la place du mode pendant un ravitaillement), ILS, hauteur radio, G, α ; derrière le ravitailleur, le panneau AAR sur l'horizon |
 | Navigation (ND) | arc cap en haut ou rose nord en haut, route (branche active magenta), T/D, prédiction, vent, trafic façon TCAS (hauteur relative), navires, unités, zones, joueurs, pistes radar |
 | Carte | OpenStreetMap de nuit, Web Mercator, zoom continu ; traînée colorée par l'altitude, prédiction minutée, plan, zones, tous les contacts, joueurs ; étiquettes sans chevauchement |
 | Globe | la Terre photographiée : NASA Blue Marble (relief ombré et bathymétrie) le jour, Black Marble (lumières des villes) la nuit, terminateur à l'heure du simulateur du pilote (`sun` dans l'instantané), limbe assombri, halo de l'atmosphère, étoiles — en WebGPU (textures 4 096 px avec leurs mipmaps), sinon sur le processeur (2 048 px, une image par changement de vue), sinon (hors ligne) le globe vectoriel |
-| Radar | balayage et rémanence ; positions partagées (joueurs + trafic + unités) ou capteur du pilote ; liste triée par distance |
-| Systèmes | moteur, carburant (bingo, autonomie, rayon, à l'arrivée), configuration, charge/incidence, structure, pilote automatique et assistance, orbite, alertes |
+| Radar | deux filtres de l'image du pilote (RD6). **Capteur** : ce que tiennent ses capteurs, aux couleurs de leur IFF, son vrai secteur de ±60° et son faisceau. **Partagé** : toute la vérité, estompée hors de ses capteurs, sans faux balayage. Les **missiles** (trait, temps, LEURRÉ, SPLASH/RATÉ), les **leurres**, les avis TCAS ; la liste par menace puis distance ; la portée par les pas du jeu (molette ; le pincement se cale sur le plus proche), gardée avec le nord et la vue |
+| Systèmes | moteur, carburant (bingo, autonomie, rayon, à l'arrivée), **ravitaillement en vol** (phase, conduite, feux du pod, sonde → panier, hors axe, rapprochement, tuyau enfoncé sur sa plage, carburant transféré, contacts et ratés), configuration, charge/incidence, structure, pilote automatique et assistance, orbite, alertes |
 | Plan de vol | profil vertical (niveaux, contraintes, T/D, hauteurs prévues) et branches (distance, ETE, ETA, altitude, vitesse), carburant à l'arrivée |
 | Télémétrie | une mesure (min/moy/max, curseur) ou quatre empilées |
 
 Unités : métrique par défaut, impérial en option (bouton de l'en-tête ou TARS) ; seul l'affichage change.
+
+### Langue : français ou anglais
+
+La console parle français ou anglais (`src/crew/lang.ts`). Par défaut, elle prend la langue du navigateur ; on la
+change au lobby (« Langue ») ou par le bouton FR/EN de l'en-tête, et le choix est gardé (`kerr.crew.lang`). Tout est
+redessiné aussitôt : la page, les vues et leurs notes, les tuiles, les panneaux, le MCP et l'ordinateur de vol, les
+checklists de panne (celles du jeu, en anglais et dans leur traduction française), les phases de l'autopilote
+d'amarrage, le journal de bord, les nombres (1 234,5 ou 1,234.5).
+
+- La console garde son propre petit module de langue : les dictionnaires du simulateur alourdiraient son bundle.
+  Chaque texte est une paire écrite là où il sert, `L("…", "…")`. Un test (`tests/crew-lang.test.ts`) refuse tout texte
+  français hors d'une paire dans `src/crew/`.
+- **Les réponses du pilote arrivent dans la langue de la console**, quelle que soit celle du pilote. L'ordre porte la
+  langue de la console (`crew-cmd.lang`). Le pilote y répond : ce qui a été demandé, les refus de ses contrôles, et les
+  mots de ses outils, traduits par ses dictionnaires (`translateTo` dans `src/i18n.ts`, gabarits `{0}` compris).
+- L'accusé porte aussi les arguments de l'ordre (`crew-ack.args`). Chaque autre écran redit donc la ligne du journal
+  dans sa propre langue et ses propres unités.
 
 ### Géodésie
 
@@ -198,26 +267,40 @@ salle (« Brand · FIDO ») et la console vaisseau s'ouvre sur la vue de son pos
 | FIDO — dynamique de vol | sol | Orbite |
 | GUIDO — guidage | sol | Boule |
 | EECOM — systèmes | sol | EECOM |
-| CAPCOM — communications | sol | Chronologie (et les tonalités Quindar à chaque prise de parole : 2 525 Hz à l'ouverture, 2 475 Hz à la fermeture) |
+| CAPCOM — communications | sol | Chronologie ; les tonalités Quindar à chaque prise de parole (2 525 Hz à l'ouverture, 2 475 Hz à la fermeture) **mêlées à sa voix** : toute la salle les entend |
 
-- **À bord**, tout est en direct.
+- **Les droits** : tous les postes peuvent tout ordonner (décision du 2026-10-21) ; le poste choisit la vue d'accueil et
+  l'ordre des panneaux.
+- **À bord, sur accord du pilote** (2026-10-21) : une console à un poste de bord qui suit un vaisseau demande au pilote
+  (`crew-aboard`). Sa carte : Accepter / Refuser (`crew-aboard-ok`). Acceptée, elle est en direct ; en attente ou refusée,
+  elle est au sol. L'instantané porte les consoles acceptées (`caps.aboard`). Un avion n'a pas de délai : rien à
+  demander.
 - **Au sol**, la console reçoit les instantanés en retard du délai de la lumière ; ses ordres et leurs réponses
   partent en retard de la même façon.
-  - Le délai se règle dans la salle : c'est un réglage du pilote, *Réseau → Délai lumière vers le sol* (réel, un
-    dixième, aucun). L'instantané en porte la valeur (`link.delay`).
+  - **Le délai est tenu par le jeu du pilote** (`caps.hold`) : il retient les ordres et les messages d'une console non
+    acceptée à bord du temps de la lumière, quoi qu'elle ait fait (elle les lui envoie donc tout de suite ; à un pilote
+    plus ancien, elle les retarde elle-même).
+  - **Le délai est un réglage de salle, celui de son créateur** : *Réseau › Délai lumière vers le sol* (réel, un
+    dixième, aucun) chez celui qui a créé la salle part en `room-delay`. Le serveur vérifie son jeton de création, le
+    retire, et rejoue la valeur aux arrivants. Sans valeur de salle (ou un serveur plus ancien), chaque pilote garde la
+    sienne. L'instantané en porte la valeur (`link.delay`).
   - Exemples : la Lune 1,3 s, Mars plusieurs minutes. Pour les longs délais, la file ne garde qu'un instantané par
     seconde.
 - **Derrière le trou de ver**, la liaison est coupée pour le sol.
-  - Plus rien de neuf n'arrive et les ordres sont refusés.
+  - Plus rien de neuf n'arrive. Les ordres sont refusés : par la console, et par le jeu du pilote s'ils lui arrivent
+    quand même.
   - Les messages sont enregistrés ; ils partent au retour de la liaison, avec leur âge (« Message enregistré de Brand ·
     CAPCOM (il y a 2 h 10) : … »).
+  - **La voix** est coupée entre le sol et ce vaisseau, des deux côtés. Elle n'est **jamais retardée** (décision du
+    2026-10-21).
 - **Message à l'équipage** (panneau Équipage) : un texte de 280 caractères au plus pour le pilote suivi. En direct à
   bord, en différé depuis le sol. Le pilote le reçoit en toast (`crew-msg`).
 - Le badge indique le poste et la liaison (« VAISSEAU · RANGER — FIDO · SOL +2 S », en rouge quand la liaison est
   coupée). La ligne d'état indique les mesures différées.
 - Un poste au sol reconnaît un vaisseau déjà derrière le trou de ver à son dernier mot (son profil, son badge, sa
   carte) : « Liaison coupée — derrière le trou de ver : son dernier mot » (K7).
-- Les messages vocaux enregistrés ne sont pas encore faits : le texte seulement.
+- Pas de messages vocaux enregistrés : la voix n'a pas de délai (décision du 2026-10-21) ; derrière le trou de ver, le texte
+  seulement.
 
 ## Les actions vaisseau (K6)
 
@@ -229,15 +312,17 @@ FLIGHT.
 |---|---|
 | Tenue · Autopilote · Manœuvre · Mission · Plan | comme avant (PLAN-CREW-ACTIONS) |
 | **Cible** | `sp.target` : un corps, la station, un vaisseau par son nom |
-| **Amarrage** | `sp.dock` : maintien à poste, désamarrer, faire le plein, mode RCS |
+| **Amarrage** | `sp.dock` : maintien à poste (`keep` : l'engage seulement, jamais un désamarrage — amarré, refusé avec sa raison, contrairement au ⇧8 du pilote), désamarrer (`undock`), faire le plein, mode RCS |
 | **Systèmes** | chaque panne en cours avec sa checklist. Les cases sont **partagées** avec la tablette du pilote (`sys.step`) ; l'action (isoler le bloc, rallumer, passer sur la centrale de secours…) n'est permise qu'une fois toutes les étapes cochées (`sys.fix`) |
 | **Anneau** | `sp.ring` : l'anneau de l'Endurance plus ou moins vite |
+| **Descente** | (vaisseaux qui se posent) stationnaire, atterrir ici, le point d'atterrissage déplacé de 100 m (`sp.lpd {fwd, right}`) ; sur la vue Sol, un point touché (`sp.lpd {lat, lon}`) |
+| **Flotte** | `sp.fleet {order, slot}` : un ordre de flotte à un autre pilote de la salle (rejoindre, maintien, amarrage) |
 
 - **Carte système** : toucher un corps ouvre un menu : « Prendre pour cible », « Mission vers … — aperçu ».
 - **Orbite** : on fait glisser une poussée du plan le long de l'orbite. Son nouveau temps s'affiche pendant le geste
   (Kepler) et la poussée est déplacée d'autant (`sp.node`).
 - Comme toujours, « tout sauf piloter » : liste blanche, verrou du pilote, 4 ordres par seconde. Un ordre refusé l'est
-  avec sa raison, dans la langue de la console.
+  avec sa raison, dans la langue de la console (français ou anglais).
 
 ## Commandes tactiles et radio
 
@@ -279,7 +364,7 @@ du pilote ; le pilote voit un toast « Ben (équipage) : train sorti » et garde
 |---|---|---|
 | navigation (sur Terre) | Plan de vol (barre), Carte et ND (toucher, glisser un point), menu d'un contact | ajouter un terrain ou un lieu, un point touché (à la fin, avant le point actif, « Direct ici »), contraintes d'altitude et de vitesse, déplacer, supprimer, direct, croisière, procédures, vider (second appui), cibler |
 | configuration (appareil qui vole) | Systèmes (barre), bandeau des alertes | train, volets 0/½/plein, aérofrein, SAS, acquitter l'alarme |
-| pilote automatique avion | MCP sous le PFD et le Tableau | AP, A/THR, sélecteurs VIT/CAP/ALT (maintenir : plus vite), LNAV, VNAV, approche ILS, orbite ici, attente, suivi de terrain, interception et formation (menu d'un contact), remise de gaz |
+| pilote automatique avion | MCP sous le PFD et le Tableau | AP, A/THR, sélecteurs VIT/CAP/ALT (maintenir : plus vite), LNAV, VNAV, approche ILS, orbite ici, attente, suivi de terrain, interception et formation (menu d'un contact), remise de gaz ; **AAR** : le ravitailleur TEXACO posé et rejoint derrière le tuyau droit ou gauche (à 25 km et 7 000 m, ou à 1,5 km à notre altitude), la conduite automatique, assistée ou manuelle, l'arrêt du ravitaillement (`ap.mode` `tanker`, `refuelMode`, `tankerOff`) |
 | ordinateur de vol (vaisseau) | le même bandeau, hors de l'air | tenue d'attitude, autopilotes (atterrir, décoller vers une orbite…), manœuvres et missions en **aperçu** chiffré puis exécutées, plan, relâcher |
 | armement (F-35) | bandeau sous le Radar, menu d'un contact | mode radar, arme, verrouillage, **TIR** et canon à maintenir 0,6 s (au clavier : deux appuis), leurres |
 
@@ -288,7 +373,8 @@ l'attente de la réponse (3 s au plus), puis clignote vert ou rouge avec la rais
 bord** (panneau Équipage) liste qui a demandé quoi, sur tous les écrans.
 
 Le contrat est `src/net/crewcmd.ts` : `crew-cmd { v: 1, id, to, act, args }` vers le pilote suivi,
-`crew-ack { v: 1, id, to, act, ok, msg, what, data? }` entendu par tous. Chaque acte du catalogue a sa famille et
+`crew-ack { v: 1, id, to, act, ok, msg, what, data?, args? }` entendu par tous (l'ordre porte aussi `lang`, la langue
+de la console : la réponse vient dans celle-ci). Chaque acte du catalogue a sa famille et
 le schéma de ses arguments (le vérificateur des outils du jeu). À bord (`src/ui/crew-exec.ts`), l'ordre n'est
 exécuté que s'il vient d'un membre `instruments` (rôle de la liste, numéro estampillé par le serveur), qu'il
 vise ce pilote, que le verrou est ouvert, que sa famille est ouverte sur cet appareil et dans ce mode
@@ -313,12 +399,13 @@ L'interface d'automatisation est `window.__crew`, indépendante de `__bh` :
 | membre | usage |
 |---|---|
 | `net` | `NetClient` : salle, membres, état, horloge, mesh, microphone |
-| `model` | `crafts()`, `own()`, `selected`, `history`, `csv()` |
+| `model` | `crafts()`, `own()`, `selected`, `contacts()` (en heure de salle), `history`, `csv()` ; le pilote suivi retrouvé par son appareil après une reconnexion, et suivi d'un vaisseau à l'autre lors d'un passage des commandes (`helm`) |
 | `views` | vue, zoom, portée en mètres, orientation, suivi, canal, fenêtre en secondes, inspection ; `onGround`, `onWp`, `onMoveWp` (les touchers de la carte, du ND et du plan) |
 | `actions` | `send(act, args)` (Promise : `ok`, `msg`, `data`), `can(famille)`, `board` (journal), `busy` |
 | `radio` | `listen()`, `enableMic()`, `disableMic()`, `gate`, `speaking(slot)`, `volume(slot, value?)`, `mute(slot)` |
 | `join(code, name, password?)` | rejoindre comme instruments (Promise) |
 | `setView(view)` | `dash`, `pfd`, `nd`, `map`, `globe`, `radar`, `schematic` (systèmes), `plan`, `telemetry` |
+| `lang()`, `setLang("fr" \| "en")` | la langue de la console |
 
 ## Vérification
 

@@ -86,8 +86,11 @@ function netOwnWalker(
 }
 
 /** the network's kinds (src/net/proto.ts KINDS) → the craft */
-const KIND_IDS: VesselId[] = ["ranger", "lander", "endurance", "f35"];
-export const kindOf = (k: number): VesselId | null => (KIND_IDS[k] && VESSEL_IDS.includes(KIND_IDS[k]!) ? KIND_IDS[k]! : null);
+const KIND_IDS: (VesselId | "walker")[] = ["ranger", "lander", "endurance", "f35", "walker", "a320"];
+export const kindOf = (k: number): VesselId | null => {
+  const id = KIND_IDS[k];
+  return id && id !== "walker" && VESSEL_IDS.includes(id) ? id : null;
+};
 export const kindIndex = (id: VesselId) => Math.max(0, KIND_IDS.indexOf(id));
 
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];

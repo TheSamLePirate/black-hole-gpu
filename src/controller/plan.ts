@@ -1676,6 +1676,8 @@ function thrustMax(this: CameraController) {
   // (an aircraft's turbofan — the F-35's —: its dry thrust from the air it breathes, over its mass now;
   // none without fuel, nor out of the air)
   const J = VESSELS[fleet.active];
+  // (the A320: its two CFM56s' take-off thrust where it flies — its FADEC's, src/a320/fcs.ts)
+  if (fleet.active === "a320" && this.a320) return ((this.a320.thrustMax / fleet.massProps().mass) * 1476.625 * s.massSolar) / C_MPS ** 2;
   if (J.turbofan) {
     if ((fleet.fuel[fleet.active] ?? J.fuelKg ?? 1) <= 0) return 0;
     const e = this.jetAir();

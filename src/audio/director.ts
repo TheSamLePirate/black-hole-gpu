@@ -6,13 +6,14 @@
 import type { Settings } from "../settings";
 import { t } from "../i18n";
 import type { RangerStatus } from "../game/status";
-import { type GpwsFlight, gpwsOf } from "../game/gpws";
+import { alertsOf, type GpwsFlight, gpwsOf } from "../game/gpws";
 import { gameLog } from "../game/log";
 import { fleet } from "../fleet";
 import { GEARS, type GearOut } from "../gear";
 import { jetLevel, rcsClusters, type ThrustAsked } from "../jets";
 import { VESSELS } from "../vessels";
 import { sound, type Cue, type EngineSpace } from "./engine";
+import type { CraftVoice } from "../a320/sound/types";
 import { hapticMix, haptics } from "../input/haptics";
 import { airCutoff, centroid, doppler, hearing, radialSpeed, type ShipPose, shipSource, soundSpeed } from "./space";
 const HOLDS = ["prograde", "retrograde", "normal", "antinormal", "radialOut", "radialIn", "target", "antiTarget", "maneuver"];
@@ -341,12 +342,15 @@ export class SoundDirector {
       standing?: boolean;
       /** an aircraft's turbofan (engine.ts EngineState.jet) */
       jet?: { spool: number; thrust: number; ab: number; fan: number } | null;
+      /** a craft heard by its recordings (the A320's — src/a320/sound: FlightGear's): its voices this frame */
+      craft?: CraftVoice[] | null;
     },
   ) {
     const s = this.s;
     const { info, status, flying } = o;
     // ---- continuous: thrusters, cabin, wind
-    const fresh = flying && performance.now() - o.fired.at < 300;
+    // (a craft heard by its recordings: no rocket's synthesis under them)
+    const fresh = flying && performance.now() - o.fired.at < 300 && !o.craft?.length;
     const f = fresh ? o.fired : { throttle: 0, rcs: 0, rcsSide: 0, turn: 0, yaw: 0, at: 0 };
     this.spin += (f.yaw - this.spin) * Math.min(1, dt * 4);
     const sf = info?.surface ?? null;
@@ -394,6 +398,13 @@ export class SoundDirector {
       out: flying && !!info?.body?.gloc && s.f35GEffects,
       buffet: flying ? (info?.air?.buffet ?? 0) * Math.min((info?.air?.q ?? 0) / 4000, 1) : 0,
     });
+    // (a craft's recordings — the A320's —, placed about the ear as the engine is: through the cabin or outside)
+    const pose = o.pose ?? null;
+    sound.craftFrame(
+      flying && o.craft?.length ? o.craft : null,
+      { inside: hearing(s.shipMount, !!o.spectator) === "cabin", toEar: (p) => (pose ? shipSource(pose, p) : [0, 0, -1]) },
+      dt,
+    );
     if (!flying || !info) {
       sound.alarm("collision", false);
       sound.alarm("terrain", false);
@@ -460,8 +471,10 @@ export class SoundDirector {
     // closure. Higher, the free fall's impact within 45 s.
     const impact = status?.next?.kind === "impact" ? status.next.inS : Infinity;
     const horizon = info.path?.fate === "horizon";
-    const g = gpwsOf(info as GpwsFlight, s.groundAlerts ?? "reduced");
-    sound.alarm("collision", s.sound && !info.landed && (horizon || (g.low ? g.pullUp : impact < 45)), "warning");
-    sound.alarm("terrain", s.sound && !info.landed && g.terrain && !g.pullUp, "caution");
+    const g = gpwsOf(info as GpwsFlight, alertsOf(s.vessel, s.groundAlerts ?? "reduced"));
+    // (a craft with its own EGPWS — the A320's recordings: src/a320/sound/callouts.ts —: not these tones)
+    const own = fleet.active === "a320";
+    sound.alarm("collision", s.sound && !own && !info.landed && (horizon || (g.low ? g.pullUp : impact < 45)), "warning");
+    sound.alarm("terrain", s.sound && !own && !info.landed && g.terrain && !g.pullUp, "caution");
   }
 }

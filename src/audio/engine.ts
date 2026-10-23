@@ -1,4 +1,5 @@
-// The sound engine: everything synthesized with the Web Audio API — no sample, nothing downloaded.
+// The sound engine: everything synthesized with the Web Audio API — but an aircraft's own recordings (the A320's,
+// FlightGear's: audio/samples.ts — PLAN-A320 A12), fetched when first heard.
 //
 //   voices ─┬─ beeps (the flight computer) ──────────────┐
 //           ├─ engine (main engine: rumble, roar, sub) ──┤→ listener (cockpit / outside, air) ─┐
@@ -13,6 +14,9 @@
 //
 // The context starts on the first user gesture (browsers keep audio off until then) and sleeps
 // while the page is hidden.
+
+import type { CraftVoice } from "../a320/sound/types";
+import { CraftVoices, type Ear, SampleBank } from "./samples";
 
 export type Cue =
   | "sas-on"
@@ -222,6 +226,11 @@ export class SoundEngine {
   /** the creaks and the breaths played so far (tests) */
   private counts = { creaks: 0, breaths: 0, chirps: 0, joints: 0, docks: 0, booms: 0, transonic: 0 };
   private alarms = new Map<string, { stop: () => void }>();
+  /** an aircraft's recorded voices (the A320's — audio/samples.ts): made with their first frame */
+  private craft: CraftVoices | null = null;
+  /** the recordings for the cues played once (playSample: the ECAM's chimes, the callouts), the ones repeating by id */
+  private bank: SampleBank | null = null;
+  private samplesOn = new Map<string, () => void>();
   private started = false;
   meter: AnalyserNode | null = null;
   /** each bus metered (S8: the mix's balance, measured) */
@@ -275,6 +284,8 @@ export class SoundEngine {
 
   dispose() {
     for (const a of this.alarms.values()) a.stop();
+    this.craft?.stop();
+    for (const s of this.samplesOn.values()) s();
     this.alarms.clear();
     this.enabled = false;
     void this.ctx?.close();
@@ -360,6 +371,8 @@ export class SoundEngine {
                 beep: [...this.cab.beepAt],
               }
             : null,
+          // (an aircraft's recorded voices — A12 —: how many play, their gains wanted, the one-shots lately)
+          craft: this.craft?.state() ?? null,
           clusters: this.clusters.map((c) => ({
             x: c.panner.positionX.value,
             y: c.panner.positionY.value,
@@ -1840,6 +1853,67 @@ export class SoundEngine {
    * A repeating alarm while `on` (e.g. a collision course, terrain): two tones, `rate` per second.
    * kind "caution": slow and soft; "warning": fast and insistent.
    */
+  /**
+   * An aircraft's recorded voices this frame (the A320's — src/a320/sound, audio/samples.ts; null: all faded out), the
+   * ear (inside the cabin or not; the ship's places into its frame), the frame's time [s]. The engines' sounds go the
+   * ship's way to the ear (the thrusters' bus: the engines' mix, into the listener's path — the cabin's low-pass inside,
+   * update()'s), the alarms and the callouts into the beeps', the switches' clicks into the interface's; paused: all
+   * silent.
+   */
+  craftFrame(voices: CraftVoice[] | null, ear: Ear, dt: number) {
+    const ctx = this.ctx;
+    if (!ctx || !this.busses || ctx.state !== "running") return;
+    if (!this.craft) {
+      if (!voices?.length) return;
+      const B = this.busses;
+      this.craft = new CraftVoices(
+        ctx,
+        B.rcs,
+        B.rcs,
+        B.room,
+        (id) => (id.startsWith("alarm/") || id.startsWith("gpws/") ? B.beeps : id.startsWith("click/") ? B.ui : B.rcs),
+        () => (this.hrtf ? "HRTF" : "equalpower"),
+      );
+    }
+    this.craft.frame(voices, ear, dt, this.last?.live ?? true);
+  }
+
+  /**
+   * A recording played once (or looped) on a bus — the ECAM's chimes, the GPWS's callouts (A12) —: its gain; an id — a
+   * new play of the same id stops the old one (a callout repeating). Its stop. Nothing without sound; played as soon as
+   * the recording is decoded, unless stopped meanwhile.
+   */
+  playSample(url: string, o: { bus?: "beeps" | "ui" | "voice"; gain?: number; id?: string; loop?: boolean } = {}): () => void {
+    const ctx = this.ctx;
+    if (!ctx || !this.busses || !this.enabled) return () => {};
+    if (o.id) this.samplesOn.get(o.id)?.();
+    this.bank ??= new SampleBank(ctx);
+    let src: AudioBufferSourceNode | null = null;
+    let stopped = false;
+    const stop = () => {
+      stopped = true;
+      try {
+        src?.stop();
+      } catch {}
+      if (o.id && this.samplesOn.get(o.id) === stop) this.samplesOn.delete(o.id);
+    };
+    if (o.id) this.samplesOn.set(o.id, stop);
+    void this.bank.load(url).then((buf) => {
+      if (!buf || stopped || this.ctx !== ctx) return;
+      const s = new AudioBufferSourceNode(ctx, { buffer: buf, loop: !!o.loop });
+      src = s;
+      const g = new GainNode(ctx, { gain: o.gain ?? 1 });
+      s.connect(g).connect(this.busses[o.bus ?? "beeps"]);
+      s.onended = () => {
+        s.disconnect();
+        g.disconnect();
+        if (o.id && this.samplesOn.get(o.id) === stop) this.samplesOn.delete(o.id);
+      };
+      s.start();
+    });
+    return stop;
+  }
+
   alarm(id: string, on: boolean, kind: "caution" | "warning" = "warning") {
     const cur = this.alarms.get(id);
     if (!on || !this.running || !this.enabled) {

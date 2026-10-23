@@ -22,7 +22,10 @@ import { alertsOf, type AlertInput } from "./alerts";
 import type { HudKind } from "../../game/hudkind";
 import type { InterceptCues } from "../../game/intercept";
 import { unitsFor } from "../unitsys";
-import { drawApproachHud, drawSpaceHud, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
+import { drawSym, PAL, type SymSide, symColour } from "../../radar/symbols";
+import { drawFields } from "../../world/runwaydraw";
+import { fieldShown, fieldsNearCached } from "../../world/runways";
+import { drawApproachHud, drawSpaceHud, drawSpaceScope, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
 
 /** The phase lets this element show (hud/declutter.ts — none given: all). */
@@ -52,16 +55,51 @@ export interface RadarData {
     /** the IFF known (game/radar.ts); a track from the datalink only (drawn hollow) */
     iff?: string;
     datalink?: boolean;
+    /** a fight's target's side (game/combat.ts: a team-mate, a neutral, else a foe) — the crew's map's */
+    side?: "friend" | "neutral" | "hostile";
+    /** selected on the pilot's screens (PLAN-RADAR-AAA RD9); how the sensors hold it (RD2); its picture's id */
+    selected?: boolean;
+    state?: string;
+    id?: string;
+    /** its history (RD7): heading up as it [m], its age and the span shown [s] */
+    hist?: { x: number; y: number; age: number; span: number }[];
+    /** the TCAS's grading (RD4); the civil traffic (its diamond) */
+    tcas?: "other" | "proximate" | "TA" | "RA";
+    traffic?: boolean;
   }[];
-  missiles: { x: number; y: number; trk: number | null; red: boolean }[];
+  /** the missiles: heading up as the contacts [m], their way; at us, drawn off by a decoy, how they ended, their
+   *  target's place and time to go (RD8 — the picture's; a fight's own without them) */
+  missiles: {
+    x: number;
+    y: number;
+    trk: number | null;
+    red: boolean;
+    atUs?: boolean;
+    decoyed?: boolean;
+    end?: "splash" | "miss";
+    tti?: number | null;
+    tx?: number | null;
+    ty?: number | null;
+    /** ours by radar: its own radar on (its last 15 km); our distance to the target then (A-pole), to its end (F-pole) [m] */
+    pitbull?: boolean;
+    apole?: number | null;
+    fpole?: number | null;
+  }[];
+  /** a fight's decoys (PLAN-RADAR-AAA RD8a): heading up as the contacts [m], a flare or chaff, its age [s] */
+  decoys?: { x: number; y: number; kind: "flare" | "chaff"; age: number }[];
 }
 
 /** The F-35's radar as the HUD draws it (controller/radar.ts): its mode, its beam off the nose [rad], its picture,
  *  its lock (on the camera's axes: its designation box; its range [m], closure [m/s], altitude [m]). */
 export interface RadarPicture {
+  /** the radar's name (APG-81, NOSE — the Ranger's), its scan's half-width [rad] */
+  name?: string;
+  az?: number;
   mode: string;
   beam: number;
   contacts: RadarData["contacts"];
+  /** the picture's missiles (RD8) */
+  missiles?: RadarData["missiles"];
   lock: {
     name: string;
     iff: string;
@@ -80,6 +118,10 @@ export interface SymInfo {
   dockBore?: number[] | null;
   /** a spacecraft's own panel (game/craftpanel.ts) */
   craftPanel?: import("../../game/craftpanel").CraftPanel | null;
+  /** the designation cursor on the HUD's scope (input/tdc.ts): its place, a share of the scope's radius (x right, y up) */
+  tdc?: { x: number; y: number } | null;
+  /** the Lander's landing radar (radar/landing.ts) */
+  landRadar?: import("../../radar/landing").LandingRadarOut | null;
   /** the powered landing's point (the LPD, controller/telemetry.ts) */
   lpd?: { dir: number[] | null; dist: number; moved: boolean } | null;
   /** the F-35's avionics (f35/cockpit.ts): its status block on the helmet */
@@ -133,6 +175,21 @@ export interface SymInfo {
   } | null;
   /** the F-35's radar (controller/radar.ts) */
   radar?: RadarPicture | null;
+  /** a spacecraft's sensors' tracks (PLAN-RADAR-AAA RD4 — controller/spacepic.ts) */
+  spacePic?: import("../../radar/space").SpaceTrack[] | null;
+  /** the TCAS's most urgent advisory (PLAN-RADAR-AAA RD4): its level, an RA's sense, the intruder's name, distance
+   *  and height above us [m], its time to the closest approach [s], its place on the camera's axes */
+  tcas?: {
+    level: "TA" | "RA";
+    sense?: "climb" | "descend";
+    name: string;
+    dist: number;
+    dh: number;
+    tau: number;
+    cam: number[] | null;
+  } | null;
+  /** the picture's tracks in the view (controller/telemetry.ts — PLAN-RADAR-AAA RD9): clicked to select */
+  pic?: import("../../controller/telemetry").PicView[] | null;
   /** a fight flown (controller/combat.ts): every vector on the camera's axes from the craft [m] */
   combat?: {
     title: string;
@@ -178,6 +235,25 @@ export interface SymInfo {
     hitMark?: "hit" | "kill" | null;
     /** shot down in a match, waiting to fly again */
     down?: boolean;
+  } | null;
+  /** the air refuelling (controller/aar.ts): the basket and the probe's tip (the camera's axes, from the eye [m]), the
+   *  gap (the basket to the right, above, ahead of the tip [m]), the closing speed, the hose pushed in, the lights, the
+   *  fuel given */
+  aar?: {
+    phase: string;
+    mode: "auto" | "assisted" | "manual";
+    lights: "off" | "amber" | "green" | "red";
+    basket: V3 | null;
+    tip: V3 | null;
+    rim: number;
+    gap: V3;
+    closure: number;
+    takeup: number | null;
+    flow: readonly [number, number];
+    whip: number;
+    given: number;
+    want: number;
+    practice: boolean;
   } | null;
   /** a plane's flight plan: the active waypoint (its bearing [° true], its distance [m]) */
   nav?: { name: string; brg: number; dist: number; on: boolean } | null;
@@ -277,6 +353,9 @@ export interface SymFrame {
   kind?: HudKind;
   /** what the flight's phase lets the HUD draw (hud/declutter.ts; absent: everything) */
   show?: Record<HudItem, boolean>;
+  /** only the docking's aid — its guide and the COAS —: a view the whole HUD does not show in (the docking camera:
+   *  game/hudkind.ts hudInView "bare") */
+  only?: "dock";
   /** a small screen (a phone): the symbology in the view kept, the boxes, scopes, heading tape and bank
    *  scale left to the HUD's panels (set here) */
   compact?: boolean;
@@ -299,8 +378,13 @@ const comb = (a: V3, ka: number, b: V3, kb: number): V3 => [a[0] * ka + b[0] * k
 const crossW = (a: V3, b: V3): V3 => [-(a[1] * b[2] - a[2] * b[1]), -(a[2] * b[0] - a[0] * b[2]), -(a[0] * b[1] - a[1] * b[0])];
 const wrap360 = (a: number) => ((a % 360) + 360) % 360;
 
+/** What the HUD drew a click may select (PLAN-RADAR-AAA RD9): a track's id, its place [device px], its reach [device
+ *  px] — the scope's symbols, the tracks in the view. Refilled at each drawing. */
+export const hudHits: { id: string; x: number; y: number; r: number }[] = [];
+
 export function drawSymbology(F: SymFrame) {
   drawn.length = 0;
+  hudHits.length = 0;
   const { ctx, W, H, dpr, s, i } = F;
   F.compact = W / dpr < 1000 || H / dpr < 560;
   const tanH = Math.tan((F.fov * D) / 2);
@@ -345,6 +429,13 @@ export function drawSymbology(F: SymFrame) {
   };
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+
+  // (a bare view — the docking camera —: the docking's aid alone, as the style keeps its card)
+  if (F.only === "dock") {
+    if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock")) drawDock(F, pr, stroke, text, inside);
+    if (i.dockBore && i.dirs.dock && s.hudDock) drawCoas(F, i.dockBore as V3, i.dirs.dock as V3, pr, stroke, text, inside);
+    return;
+  }
 
   const up = i.dirs.up ?? null;
   const north = i.dirs.north ?? null;
@@ -664,17 +755,22 @@ export function drawSymbology(F: SymFrame) {
   if (i.combat) drawCombat(F, pr, stroke, text);
   // (flying together, out of a fight or a course: the others on the scope, each in his colour — ui/netsession.ts)
   // (the F-35's radar — always on in the air: its scope, a fight's missiles on it, a course's gates; its lock's box)
-  if (i.avionics && s.f35Radar && i.radar)
+  // (the Ranger's nose radar in the air — RD4's leftover —: the same scope, its narrower reach, out of space's HUD)
+  if ((i.avionics || (i.radar?.name === "NOSE" && F.kind !== "space")) && s.f35Radar && i.radar)
     drawRadar(
       F,
-      { contacts: i.radar.contacts, missiles: i.combat?.radar.missiles ?? [] },
+      { contacts: i.radar.contacts, missiles: i.radar.missiles ?? i.combat?.radar.missiles ?? [], decoys: i.combat?.radar.decoys ?? [] },
       i.chal?.radar?.contacts ?? null,
       text,
       stroke,
       i.radar,
     );
   if (i.radar?.lock && !i.combat) drawLockBox(F, pr, stroke, text, i.radar.lock);
-  if (i.radar?.lock?.icpt) drawIntercept(F, pr, stroke, text, i.radar.lock, i.radar.lock.icpt);
+  if (i.pic) drawPicked(F, pr, stroke, text, i.pic);
+  if (i.tcas && pilotView) drawTcas(F, pr, stroke, text, i.tcas);
+  if (i.radar?.lock?.icpt && !i.aar) drawIntercept(F, pr, stroke, text, i.radar.lock, i.radar.lock.icpt);
+  // (the air refuelling: the basket, the probe, the gap, the hose's range, the pod's lights)
+  if (i.aar && pilotView) drawAar(F, i.aar, pr, stroke, text, fpx, hmdRgb);
   if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock") && F.density < 2) drawDock(F, pr, stroke, text, inside);
   // (the docking's last 60 m: the COAS — the own port's boresight, a crosshair the target port's mark is flown into)
   if (i.dockBore && i.dirs.dock && s.hudDock && F.density < 2) drawCoas(F, i.dockBore as V3, i.dirs.dock as V3, pr, stroke, text, inside);
@@ -754,6 +850,9 @@ export function drawSymbology(F: SymFrame) {
   // deviations, its gear and flaps (the Atmosphere's: the fighter's, above)
   if (F.kind === "space" && pilotView && !F.compact && i.status && !i.status.kerr && i.region !== "hole")
     drawSpaceHud({ ctx, W, H, dpr }, { body: i.status.soiName, orbit: i.status.orbit, next: i.status.next, target: i.status.target }, text);
+  // (the spacecraft's sensors — PLAN-RADAR-AAA RD4 —: its scope on its LVLH axes)
+  if (F.kind === "space" && pilotView && !F.compact && i.spacePic && s.f35Radar !== false)
+    drawSpaceScope({ ctx, W, H, dpr }, i.spacePic, String(s.target), text);
   if (F.kind === "approach" && pilotView && i.surface && !(helmet && jet)) {
     const mls = F.runway?.mls;
     drawApproachHud(
@@ -765,6 +864,7 @@ export function drawSymbology(F: SymFrame) {
         el: mls?.elIn ? mls.el : null,
         az: mls?.azIn ? mls.az : null,
         landed: !!i.surface.landed,
+        lr: i.landRadar ? i.landRadar.alt : null,
       },
       text,
       blinkOn(),
@@ -1581,7 +1681,9 @@ function drawLpd(
     col,
     1.6,
   );
-  const d = L.dist >= 1000 ? `${(L.dist / 1000).toFixed(1)} km` : `${Math.round(L.dist)} m`;
+  // (the units shown — metric, or imperial: ui/unitsys.ts)
+  const U = unitsFor(F.s);
+  const d = L.dist >= 1000 ? U.fDist(L.dist) : U.fAlt(L.dist);
   text(`LPD ${d}`, p[0] + r * 1.9, p[1] - r * 0.4, col, 11, "left", true);
 }
 
@@ -2628,6 +2730,9 @@ function radarRelief(R: NonNullable<SymInfo["relief"]>, range: number): HTMLCanv
   return canvas;
 }
 
+/** The HUD's scope's range drawn last [m] (its automatic choice too): the crew's picture says it (RD5). */
+export const scopeRange: { m: number; disc: { x: number; y: number; r: number; at: number } | null } = { m: 0, disc: null };
+
 function drawRadar(
   F: SymFrame,
   R: RadarData | null,
@@ -2667,6 +2772,9 @@ function drawRadar(
         );
     range = [10_000, 20_000, 40_000, 80_000, 160_000].find((r) => r > Math.max(need, far) * 1.1) ?? 160_000;
   }
+  scopeRange.m = range;
+  // (its disc where the wheel finds it — CSS px, P11)
+  scopeRange.disc = { x: cx / dpr, y: cy / dpr, r: rad / dpr, at: performance.now() };
   const k = rad / range;
   // the scope: its disc, its rings, its compass ticks, the scan's limits
   ctx.save();
@@ -2688,7 +2796,7 @@ function drawRadar(
     ctx.restore();
   }
   for (const f of [1 / 3, 2 / 3, 1]) stroke(() => ctx.arc(cx, cy, rad * f, 0, 2 * Math.PI), `${GR}${f === 1 ? 0.6 : 0.3})`, 1);
-  const scan = (60 * Math.PI) / 180;
+  const scan = P?.az ?? (60 * Math.PI) / 180;
   stroke(
     () => {
       ctx.moveTo(cx, cy);
@@ -2701,7 +2809,15 @@ function drawRadar(
     [4, 4],
   );
   text(`${Math.round(range / 1000)} KM`, cx + rad, cy + rad + 2 * dpr, `${GR}0.9)`, 10.5, "right", true);
-  text(P ? P.mode : "RDR", cx - rad, cy + rad + 2 * dpr, `${GR}0.9)`, 10.5, "left", true);
+  text(
+    P ? (P.name && P.name !== "APG-81" ? `${P.name} ${P.mode}` : P.mode) : "RDR",
+    cx - rad,
+    cy + rad + 2 * dpr,
+    `${GR}0.9)`,
+    10.5,
+    "left",
+    true,
+  );
   // (the beam: where it sweeps now — on the lock in STT)
   if (P)
     stroke(
@@ -2719,6 +2835,33 @@ function drawRadar(
     const f = out ? rad / d : 1;
     return [cx + x * k * f, cy - y * k * f, out];
   };
+  // the world's airfields (PLAN-RADAR-AAA RD11): the scope's level of detail — at its ranges the big ones, their
+  // runways at scale once they show —, heading up as the tracks
+  const RL = F.i.relief;
+  if (RL) {
+    const D0 = Math.PI / 180;
+    const ch = Math.cos(RL.hdg),
+      sh = Math.sin(RL.hdg);
+    const toScope = (la: number, lo: number): [number, number] | null => {
+      const e = (lo - RL.lon) * 111_195 * Math.cos(RL.lat * D0),
+        n = (la - RL.lat) * 111_195;
+      const x = e * ch - n * sh,
+        y = e * sh + n * ch;
+      const [px, py, out] = at(x, y);
+      return out ? null : [px, py];
+    };
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad, 0, 2 * Math.PI);
+    ctx.clip();
+    drawFields(ctx, fieldsNearCached(`scope${range}`, RL.lat, RL.lon, range, (f) => fieldShown(f, range * 2.5)).slice(0, 60), {
+      at: toScope,
+      mpp: 1 / k,
+      k: dpr * 0.9,
+      labels: range <= 40_000,
+    });
+    ctx.restore();
+  }
   // gates: a bar across the way they are flown, numbered
   for (const g of gates ?? []) {
     const [px, py] = at(g.x, g.y);
@@ -2734,81 +2877,100 @@ function drawRadar(
     );
     if (g.gate) text(String(g.gate), px + 9 * dpr, py - 8 * dpr, col, 10, "left", true);
   }
-  // the targets
+  // the targets — the common symbology (radar/symbols.ts — PLAN-RADAR-AAA RD3): the IFF's shape and colour, the
+  // datalink's dashed, the lock ringed, the selection; the relative height in hundreds (the altitude's unit), the name
+  // for the lock, the selection and the players
   for (const c of R?.contacts ?? []) {
     const [px, py, out] = at(c.x, c.y);
-    const col = c.colour
-      ? c.colour
-      : !c.alive
-        ? "rgba(160, 160, 160, 0.7)"
-        : c.locked
-          ? "rgba(255, 70, 60, 1)"
-          : c.seen
-            ? "rgba(255, 120, 90, 0.95)"
-            : "rgba(255, 120, 90, 0.5)";
-    ctx.fillStyle = col;
-    // (a track from the datalink alone: drawn hollow — known, not the radar's own)
-    if (c.datalink) {
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 1.4 * dpr;
-      ctx.beginPath();
-      ctx.arc(px, py, 5.5 * dpr, 0, 2 * Math.PI);
-      ctx.stroke();
-      if (c.trk !== null) {
-        ctx.beginPath();
-        ctx.moveTo(px + Math.sin(c.trk) * 5.5 * dpr, py - Math.cos(c.trk) * 5.5 * dpr);
-        ctx.lineTo(px + Math.sin(c.trk) * 15 * dpr, py - Math.cos(c.trk) * 15 * dpr);
-        ctx.stroke();
+    // (its trail — RD7 —: the past echoes, dots fading into the past)
+    if (c.hist?.length) {
+      ctx.fillStyle = symColour({ kind: c.air ? "air" : "sea", side: (c.iff as SymSide) ?? "unknown", colour: c.colour });
+      for (const q of c.hist) {
+        const [hx, hy, ho] = at(q.x, q.y);
+        if (ho) continue;
+        ctx.globalAlpha = 0.15 + 0.6 * (1 - q.age / q.span);
+        ctx.fillRect(hx - 1.2 * dpr, hy - 1.2 * dpr, 2.4 * dpr, 2.4 * dpr);
       }
-      text(c.name, px, py - 13 * dpr, col, 9.5, "center", true);
-      continue;
+      ctx.globalAlpha = 1;
     }
-    if (c.air) {
-      // (a chevron along its track)
-      const a = c.trk ?? 0;
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.rotate(a);
-      ctx.beginPath();
-      ctx.moveTo(0, -8 * dpr);
-      ctx.lineTo(5.5 * dpr, 6 * dpr);
-      ctx.lineTo(0, 2.5 * dpr);
-      ctx.lineTo(-5.5 * dpr, 6 * dpr);
-      ctx.closePath();
-      ctx.fill();
-      // (its speed vector: a tick ahead)
-      if (c.trk !== null) {
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 1.2 * dpr;
-        ctx.beginPath();
-        ctx.moveTo(0, -8 * dpr);
-        ctx.lineTo(0, -18 * dpr);
-        ctx.stroke();
-      }
-      ctx.restore();
-      if (!out && c.alive) {
-        const dz = Math.round(c.dz / 100);
-        text(`${dz >= 0 ? "+" : ""}${dz}`, px + 9 * dpr, py + 8 * dpr, col, 9.5, "left", true);
-      }
-    } else ctx.fillRect(px - 4.5 * dpr, py - 4.5 * dpr, 9 * dpr, 9 * dpr);
-    if (c.locked) stroke(() => ctx.arc(px, py, 11 * dpr, 0, 2 * Math.PI), col, 1.6);
-    if (c.locked || c.colour) text(c.name, px, py - 16 * dpr, col, 10, "center", true);
+    const side: SymSide = !c.alive
+      ? "dead"
+      : c.traffic && c.iff !== "hostile"
+        ? "traffic"
+        : c.colour && c.iff !== "hostile"
+          ? "player"
+          : ((c.iff as SymSide | undefined) ?? "hostile");
+    drawSym(
+      ctx,
+      px,
+      py,
+      {
+        kind: c.air ? "air" : "sea",
+        side,
+        colour: c.colour && side === "player" ? c.colour : undefined,
+        state: c.datalink ? "datalink" : c.state === "coast" ? "coast" : "firm",
+        trk: c.trk,
+        locked: c.locked,
+        selected: c.selected,
+        tcas: c.tcas,
+      },
+      6 * dpr,
+      1.4 * dpr,
+    );
+    if (c.id && !out) hudHits.push({ id: c.id, x: px, y: py, r: 12 * dpr });
+    const col = symColour({ kind: c.air ? "air" : "sea", side, colour: c.colour && side === "player" ? c.colour : undefined });
+    if (c.air && !out && c.alive) {
+      const dz = Math.round(unitsFor(s).alt(c.dz) / 100);
+      text(`${dz >= 0 ? "+" : ""}${dz}`, px + 9 * dpr, py + 8 * dpr, col, 9.5, "left", true);
+    }
+    if (c.locked || c.selected || c.colour) text(c.name, px, py - 16 * dpr, col, 10, "center", true);
   }
-  // the missiles: a dot and its way
+  // the decoys (PLAN-RADAR-AAA RD8a) and the missiles — the common symbology: a flare a star, chaff a cloud, a missile
+  // a dart along its way (the one at us red, blinking)
+  for (const q of R?.decoys ?? []) {
+    const [px, py] = at(q.x, q.y);
+    drawSym(ctx, px, py, { kind: q.kind, side: "friend", age: q.age }, 6 * dpr, 1.3 * dpr);
+  }
   for (const m of R?.missiles ?? []) {
     const [px, py] = at(m.x, m.y);
-    const col = m.red ? "rgba(255, 50, 40, 1)" : "rgba(120, 225, 255, 1)";
-    ctx.fillStyle = col;
-    ctx.beginPath();
-    ctx.arc(px, py, 3 * dpr, 0, 2 * Math.PI);
-    ctx.fill();
-    if (m.trk !== null) {
-      ctx.strokeStyle = col;
-      ctx.lineWidth = 1.2 * dpr;
-      ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(px + Math.sin(m.trk) * 12 * dpr, py - Math.cos(m.trk) * 12 * dpr);
-      ctx.stroke();
+    const col = symColour({ kind: "missile", side: m.red ? "hostile" : "friend" });
+    // (its end — RD8 —: SPLASH or MISS 3 s where it did)
+    if (m.end) {
+      text(m.end === "splash" ? t("SPLASH") : t("MISS"), px, py - 4 * dpr, col, 10, "center", true);
+      if (m.fpole !== null && m.fpole !== undefined) {
+        const U = unitsFor(s);
+        text(`F-POLE ${U.dist(m.fpole).toFixed(1)}`, px, py + 9 * dpr, col, 8.5, "center", true);
+      }
+      continue;
+    }
+    // (its target: a dotted line to it, the time to go at its end; drawn off: DECOYED)
+    if (m.tx !== null && m.tx !== undefined && m.ty !== null && m.ty !== undefined) {
+      const [qx, qy] = at(m.tx, m.ty);
+      stroke(
+        () => {
+          ctx.moveTo(px, py);
+          ctx.lineTo(qx, qy);
+        },
+        col,
+        0.9,
+        [2, 3],
+      );
+      if (m.tti !== null && m.tti !== undefined && m.tti < 600)
+        text(`${Math.round(m.tti)}s`, (px + qx) / 2 + 5 * dpr, (py + qy) / 2, col, 9, "left", true);
+    }
+    drawSym(ctx, px, py, { kind: "missile", side: m.red ? "hostile" : "friend", trk: m.trk, atUs: m.atUs ?? m.red }, 6 * dpr, 1.4 * dpr);
+    if (m.decoyed) text(t("DECOYED"), px, py + 13 * dpr, col, 9, "center", true);
+    else if (m.pitbull) {
+      const U = unitsFor(s);
+      text(
+        `PITBULL${m.apole !== null && m.apole !== undefined ? ` A ${U.dist(m.apole).toFixed(1)}` : ""}`,
+        px,
+        py + 13 * dpr,
+        col,
+        8.5,
+        "center",
+        true,
+      );
     }
   }
   // the craft: at the centre, its nose up
@@ -2820,11 +2982,131 @@ function drawRadar(
   ctx.lineTo(cx - 6 * dpr, cy + 6 * dpr);
   ctx.closePath();
   ctx.fill();
+  // the designation cursor (TDC — PLAN-RADAR-AAA constat 29): two bars and a dot where it stands, « TDC » by the mode
+  const tdc = F.i.tdc;
+  if (tdc) {
+    const x = cx + tdc.x * rad,
+      y = cy - tdc.y * rad;
+    stroke(
+      () => {
+        ctx.moveTo(x - 7 * dpr, y - 9 * dpr);
+        ctx.lineTo(x - 7 * dpr, y + 9 * dpr);
+        ctx.moveTo(x + 7 * dpr, y - 9 * dpr);
+        ctx.lineTo(x + 7 * dpr, y + 9 * dpr);
+      },
+      "rgba(255, 255, 255, 0.95)",
+      1.8,
+    );
+    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+    ctx.fillRect(x - 1.2 * dpr, y - 1.2 * dpr, 2.4 * dpr, 2.4 * dpr);
+    text("TDC", cx - rad, cy + rad + 16 * dpr, "rgba(255, 255, 255, 0.9)", 10.5, "left", true);
+  }
   ctx.restore();
 }
 
 /** The radar's lock in the view (its target designation box): a square on it, its name, range, closure and
  *  altitude; out of the view, an arrow at the edge towards it. */
+/**
+ * The picture's tracks in the view (PLAN-RADAR-AAA RD9): each one a click's target where it is seen (registered in
+ * hudHits); the selected one marked — an amber diamond about it, its card under it (its name and type, its bearing,
+ * range, altitude, aspect, closing speed) —, or an amber arrow at the edge when out of the view.
+ */
+/**
+ * The TCAS's advisory (PLAN-RADAR-AAA RD4), every craft in the air: under the banner, TRAFFIC (amber: the intruder's
+ * distance, its height above or below, its time to the closest approach) or the RA's order (red: CLIMB or DESCEND,
+ * its arrow); the intruder in the view marked as the TCAS's own symbols are — an amber disc's ring, a red square.
+ */
+function drawTcas(
+  F: SymFrame,
+  pr: (d: V3 | null | undefined) => [number, number] | null,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+  a: NonNullable<SymInfo["tcas"]>,
+) {
+  const { W, dpr } = F;
+  const U = unitsFor(F.s);
+  const ra = a.level === "RA";
+  const col = ra ? PAL.ra : PAL.ta;
+  const y = 150 * dpr;
+  const dh = Math.round(U.alt(a.dh) / 100);
+  const fig = `${U.dist(a.dist).toFixed(1)} ${U.distName} · ${dh >= 0 ? "+" : "−"}${String(Math.abs(dh)).padStart(2, "0")}${Number.isFinite(a.tau) ? ` · ${Math.round(a.tau)} s` : ""}`;
+  if (ra) {
+    text(a.sense === "climb" ? `${t("CLIMB")} ↑` : `${t("DESCEND")} ↓`, W / 2, y, col, 22, "center", true);
+    text(`TCAS RA · ${a.name.toUpperCase()} · ${fig}`, W / 2, y + 22 * dpr, col, 11, "center", true);
+  } else text(`TCAS · ${t("TRAFFIC")} · ${a.name.toUpperCase()} · ${fig}`, W / 2, y, col, 13, "center", true);
+  const p = a.cam ? pr(a.cam as V3) : null;
+  if (p) {
+    const k = 14 * dpr;
+    stroke(
+      () => {
+        if (ra) F.ctx.rect(p[0] - k, p[1] - k, 2 * k, 2 * k);
+        else F.ctx.arc(p[0], p[1], k, 0, 2 * Math.PI);
+      },
+      col,
+      2,
+    );
+  }
+}
+
+function drawPicked(
+  F: SymFrame,
+  pr: (d: V3 | null | undefined) => [number, number] | null,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+  list: NonNullable<SymInfo["pic"]>,
+) {
+  const { ctx, W, H, dpr } = F;
+  const U = unitsFor(F.s);
+  for (const T of list) {
+    const p = T.cam ? pr(T.cam as V3) : null;
+    const inView = !!p && p[0] > 0 && p[0] < W && p[1] > 0 && p[1] < H;
+    if (inView) hudHits.push({ id: T.id, x: p![0], y: p![1], r: 16 * dpr });
+    if (!T.selected) continue;
+    const col = PAL.select;
+    const brg = String(Math.round((T.brg * 180) / Math.PI + 360) % 360).padStart(3, "0");
+    const asp = T.aspect === null ? "" : ` · ASP ${Math.round(Math.abs((T.aspect * 180) / Math.PI))}${T.aspect >= 0 ? "R" : "L"}`;
+    const cl = U.spd(T.closing);
+    const line1 = `${t("SEL")} ${T.name.toUpperCase()}${T.type ? ` · ${T.type}` : ""}`;
+    const line2 = `${brg}° ${U.dist(T.dist).toFixed(1)} ${U.distName} · ${Math.round(U.alt(T.alt) / 100) * 100} ${U.altName}${asp} · ${cl >= 0 ? "+" : ""}${Math.round(cl)} ${U.spdName}`;
+    if (inView) {
+      const s = 17 * dpr;
+      stroke(
+        () => {
+          ctx.moveTo(p![0], p![1] - s);
+          ctx.lineTo(p![0] + s, p![1]);
+          ctx.lineTo(p![0], p![1] + s);
+          ctx.lineTo(p![0] - s, p![1]);
+          ctx.closePath();
+        },
+        col,
+        1.8,
+        [5, 3],
+      );
+      text(line1, p![0], p![1] + s + 14 * dpr, col, 11, "center", true);
+      text(line2, p![0], p![1] + s + 28 * dpr, col, 10.5, "center", true);
+    } else if (T.cam) {
+      const a = Math.atan2(-T.cam[1], T.cam[0]);
+      const r = Math.min(W, H) * 0.3;
+      const x = W / 2 + Math.cos(a) * r,
+        y = H / 2 + Math.sin(a) * r;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(a);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(14 * dpr, 0);
+      ctx.lineTo(-6 * dpr, -9 * dpr);
+      ctx.lineTo(-6 * dpr, 9 * dpr);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+      text(line1, x, y + 20 * dpr, col, 10.5, "center", true);
+      text(line2, x, y + 34 * dpr, col, 10, "center", true);
+    }
+  }
+}
+
 function drawLockBox(
   F: SymFrame,
   pr: (d: V3 | null | undefined) => [number, number] | null,
@@ -2906,6 +3188,128 @@ function drawIntercept(
   const pur = I.pursuit === "PURE" ? "PURE" : `${I.pursuit} ${Math.round(I.pursuitDeg)}°`;
   const line = `INTC ${hdg(I.collHdg)}  TTI ${tti}  AA ${Math.round(I.aspect)}${I.side}  ${pur}  HCA ${Math.round(I.hca)}`;
   text(line, W / 2, H * 0.78, col, 11, "center", true);
+}
+
+/**
+ * The air refuelling's cues (controller/aar.ts): the basket's ring where it is (its size its own, its colour the pod's
+ * light), the probe's tip a diamond, the line between them and the way to steer (the basket to the right, above);
+ * under them the phase and the way it is flown, the gap and the closing speed (red past the basket's bounce), the
+ * hose's range locked (its fuel's band, its whip), the pod's three lights, the fuel given.
+ */
+function drawAar(
+  F: SymFrame,
+  A: NonNullable<SymInfo["aar"]>,
+  pr: (d: V3 | null | undefined) => [number, number] | null,
+  stroke: (draw: () => void, col: string, lw: number, dash?: number[]) => void,
+  text: (t: string, x: number, y: number, col: string, size: number, align?: CanvasTextAlign, mono?: boolean) => void,
+  fpx: number,
+  rgb: string,
+) {
+  const { ctx, W, H, dpr } = F;
+  const U = unitsFor(F.s);
+  const col = `rgba(${rgb}, 1)`;
+  const LIGHT = { off: "rgba(140, 140, 140, 0.6)", amber: "#ffc85a", green: "#5cff8a", red: "#ff5a46" } as const;
+  const lit = LIGHT[A.lights];
+  const m = (x: number, d = 1) => `${U.alt(x).toFixed(d)} ${U.altName.toLowerCase()}`;
+  const pb = A.basket ? pr(A.basket) : null;
+  const pt = A.tip ? pr(A.tip) : null;
+  const on = (p: [number, number] | null): p is [number, number] => !!p && p[0] > -W && p[0] < 2 * W && p[1] > -H && p[1] < 2 * H;
+  if (on(pb) && A.basket) {
+    const r = Math.max(6 * dpr, (A.rim / Math.max(A.basket[2], 0.5)) * fpx);
+    stroke(() => ctx.arc(pb[0], pb[1], r, 0, 2 * Math.PI), lit, 2);
+    stroke(() => ctx.arc(pb[0], pb[1], Math.max(2 * dpr, r * 0.3), 0, 2 * Math.PI), lit, 1.4);
+  }
+  if (on(pt)) {
+    const s = 6 * dpr;
+    stroke(
+      () => {
+        ctx.moveTo(pt[0], pt[1] - s);
+        ctx.lineTo(pt[0] + s, pt[1]);
+        ctx.lineTo(pt[0], pt[1] + s);
+        ctx.lineTo(pt[0] - s, pt[1]);
+        ctx.closePath();
+      },
+      col,
+      1.6,
+    );
+    if (on(pb) && A.takeup === null)
+      stroke(
+        () => {
+          ctx.moveTo(pt[0], pt[1]);
+          ctx.lineTo(pb[0], pb[1]);
+        },
+        col,
+        1,
+        [4, 4],
+      );
+  }
+  // the panel: above the centre, under the heading's annunciators (clear of the subtitles in the lower third)
+  const x = W / 2,
+    y0 = H * 0.3;
+  text(
+    `AAR · ${A.phase} · ${A.mode === "auto" ? "AUTO" : A.mode === "assisted" ? "ASSIST" : "MAN"}`,
+    x,
+    y0,
+    lit === LIGHT.off ? col : lit,
+    13,
+    "center",
+    true,
+  );
+  const [gr, gu, ga] = A.gap;
+  const steer = `${gu >= 0 ? "▲" : "▼"}${m(Math.abs(gu))}  ${gr >= 0 ? "▶" : "◀"}${m(Math.abs(gr))}`;
+  const fast = A.closure > 2.6;
+  const close = `${U.spd(A.closure).toFixed(1)} ${U.spdName}`;
+  text(
+    A.takeup === null ? `GAP ${m(Math.max(ga, 0))}   ${steer}   CLOSE ${close}` : `HOSE ${m(A.takeup)}   ${steer}`,
+    x,
+    y0 + 18 * dpr,
+    fast ? "#ff5a46" : col,
+    12,
+    "center",
+    true,
+  );
+  // (the hose's range, locked: its fuel's band green, its whip red, where it is)
+  if (A.takeup !== null) {
+    const w = 180 * dpr,
+      h = 7 * dpr,
+      bx = x - w / 2,
+      by = y0 + 30 * dpr;
+    const X = (v: number) => bx + (Math.min(Math.max(v, 0), A.whip) / A.whip) * w;
+    ctx.fillStyle = "rgba(92, 255, 138, 0.35)";
+    ctx.fillRect(X(A.flow[0]), by, X(A.flow[1]) - X(A.flow[0]), h);
+    ctx.fillStyle = "rgba(255, 90, 70, 0.35)";
+    ctx.fillRect(X(A.whip * 0.92), by, X(A.whip) - X(A.whip * 0.92), h);
+    stroke(() => ctx.rect(bx, by, w, h), col, 1);
+    const k = X(A.takeup);
+    stroke(
+      () => {
+        ctx.moveTo(k, by - 4 * dpr);
+        ctx.lineTo(k, by + h + 4 * dpr);
+      },
+      col,
+      2,
+    );
+  }
+  // (the pod's lights: red, amber, green — the one lit bright)
+  const lx = x + 120 * dpr,
+    ly = y0;
+  for (const [i, k] of (["red", "amber", "green"] as const).entries()) {
+    ctx.beginPath();
+    ctx.arc(lx, ly + i * 10 * dpr, 3.5 * dpr, 0, 2 * Math.PI);
+    ctx.fillStyle = A.lights === k ? LIGHT[k] : "rgba(60, 60, 60, 0.7)";
+    ctx.fill();
+  }
+  // (the fuel given)
+  const kg = (v: number) => Math.round(v).toLocaleString("en").replace(/,/g, " ");
+  text(
+    `FUEL ${kg(A.given)} / ${kg(A.want)} kg${A.practice ? " · PRACTICE" : ""}`,
+    x,
+    y0 + (A.takeup === null ? 34 : 50) * dpr,
+    col,
+    11,
+    "center",
+    true,
+  );
 }
 
 /**

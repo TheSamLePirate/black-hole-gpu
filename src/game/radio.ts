@@ -5,10 +5,10 @@
 // ("Paddles: power!", "F-35C, Mother: Charlie…") found its role by its words — the role's own name then left out
 // (the subtitles name who speaks). Pure.
 
-export type RadioRole = "tower" | "wingman" | "awacs" | "mother" | "lso";
+export type RadioRole = "tower" | "wingman" | "awacs" | "mother" | "lso" | "tanker";
 
 /** The roles shared on the flight's radio with the room (the others hear them): those about our own craft. */
-export const SHARED_ROLES: readonly RadioRole[] = ["wingman", "mother", "lso"];
+export const SHARED_ROLES: readonly RadioRole[] = ["wingman", "mother", "lso", "tanker"];
 
 /** The roles' Deepgram voices: a voice of its own for each (the French has two: the radar and the ship's apart). */
 export const ROLE_VOICE: Record<Exclude<RadioRole, "tower">, { fr: string; en: string }> = {
@@ -16,9 +16,11 @@ export const ROLE_VOICE: Record<Exclude<RadioRole, "tower">, { fr: string; en: s
   awacs: { fr: "aura-2-agathe-fr", en: "aura-2-athena-en" },
   mother: { fr: "aura-2-agathe-fr", en: "aura-2-zeus-en" },
   lso: { fr: "aura-2-hector-fr", en: "aura-2-mars-en" },
+  // (the tanker's boom operator — the refuelling: controller/aar.ts)
+  tanker: { fr: "aura-2-agathe-fr", en: "aura-2-orion-en" },
 };
 
-const PREFIX = /^(?:([^,:]{1,24}),\s*(?:ici\s+)?)?(Mother|Paddles|Shooter|Darkstar|AWACS|Tour|Tower)\s*:\s*/i;
+const PREFIX = /^(?:([^,:]{1,24}),\s*(?:ici\s+)?)?(Mother|Paddles|Shooter|Darkstar|AWACS|Tour|Tower|Texaco(?: \d+)?)\s*:\s*/i;
 
 /** A radio line's role by its words, and the line without the role's name (an addressee kept: "F-35C, …"). */
 export function roleOfLine(text: string): { role: RadioRole; text: string } {
@@ -26,7 +28,15 @@ export function roleOfLine(text: string): { role: RadioRole; text: string } {
   if (!m) return { role: "tower", text };
   const who = m[2]!.toLowerCase();
   const role: RadioRole =
-    who === "paddles" ? "lso" : who === "darkstar" || who === "awacs" ? "awacs" : who === "tour" || who === "tower" ? "tower" : "mother";
+    who === "paddles"
+      ? "lso"
+      : who === "darkstar" || who === "awacs"
+        ? "awacs"
+        : who === "tour" || who === "tower"
+          ? "tower"
+          : who.startsWith("texaco")
+            ? "tanker"
+            : "mother";
   const rest = text.slice(m[0].length);
   return { role, text: m[1] ? `${m[1]}, ${rest}` : rest.charAt(0).toUpperCase() + rest.slice(1) };
 }

@@ -5,7 +5,14 @@
 // (src/net/) is the network module's, loaded when a room was asked for.
 
 import { fmtFactor, realTimeSpeed, roomPace } from "../clock";
-import { crewFamilies, crewSnapshot } from "./crew-feed";
+import { crewFamilies, fitSnapshot, crewSnapshot, picCatchUp } from "./crew-feed";
+import { store } from "../util/storage";
+
+/** the light delay to the crew's ground stations (settings.netLightDelay's values) */
+export type LightDelay = "real" | "tenth" | "off";
+/** a room's owner token, kept by the page that created it (ui/netpanel.ts: its known rooms) */
+const ownerTokenOf = (code: string) =>
+  store.getJSON<{ code?: string; owner?: string }[]>("kerr.net.rooms", []).find((k) => k?.code === code)?.owner ?? null;
 import { CrewExec } from "./crew-exec";
 import type { Tool } from "../ai/agent";
 import type { Info } from "./flighthud";
@@ -42,7 +49,7 @@ import { keplerProp } from "../system/our-plan";
 import { zonalAccel } from "../system/geopotential";
 import { solarBody } from "../system/solar";
 import { vesselHulls } from "../system/collide";
-import { dockedFrame, type VesselId, VESSELS } from "../vessels";
+import { dockedFrame, isAircraft, type VesselId, VESSELS } from "../vessels";
 import type { NetPanel } from "./netpanel";
 import { formationLabel, formSlotFor } from "../controller/formation";
 import { orderOf } from "../game/orders";
@@ -81,7 +88,7 @@ type Vec3 = [number, number, number];
 const AWAY_SLOT = 200;
 
 /** a craft's door off its side [m] (controller/character.ts accessOffset) */
-const ACCESS: Record<VesselId, number> = { ranger: 9, lander: 13, endurance: 75, f35: 8 };
+const ACCESS: Record<VesselId, number> = { ranger: 9, lander: 13, endurance: 75, f35: 8, a320: 12 };
 
 /** an Earth-fixed place [m] and nose → geodetic latitude, longitude, heading [°] */
 function parkedAt(p: Vec3, fwd: Vec3) {
@@ -190,10 +197,61 @@ export class NetSession {
       nameOf: (slot) => this.nameOf(slot),
       families: () => crewFamilies(d.camera),
       aboard: (slot) => this.aboard.get(slot) === this.net?.room?.slot,
+      spaceOrder: (slot, o) => this.spaceOrder(slot, o),
     });
     return this.crewExecOf;
   }
   private crewAround = -Infinity;
+  /** the snapshots lightened to fit the room's limit (RD1: a long one would be dropped by the server) */
+  crewCut = 0;
+  /** the crew screens met (a new one: the picture's catch-up — RD5) */
+  private crewsSeen = new Set<number>();
+  /** the crew screens' stations aboard, as we answered them (AUDIT-CREW priority 6: aboard on the pilot's agreement) */
+  crewAboard = new Map<number, boolean>();
+  /** the light's link to the ground now (the last snapshot's): the ground stations' orders and messages held by it */
+  groundLink: { light: number; delay?: number; cut: boolean } | null = null;
+  /** the ground stations' messages held behind the wormhole, delivered when the link comes back */
+  private heldMsgs: (() => void)[] = [];
+  /** a crew screen on the ground (not accepted aboard): its orders and messages held the light's time, refused cut */
+  groundOf(from: number): { delay: number; cut: boolean } | null {
+    const m = this.net?.room?.members.find((x) => x.slot === from);
+    if (m?.role !== "instruments" || this.crewAboard.get(from) === true) return null;
+    const L = this.groundLink;
+    return L ? { delay: L.cut ? 0 : Math.max(0, L.delay ?? L.light), cut: L.cut } : { delay: 0, cut: false };
+  }
+  /** the room's light delay to the ground, its owner's (AUDIT-CREW priority 6 — server-checked: null, none said yet) */
+  roomDelay: LightDelay | null = null;
+  private roomDelayCode: string | null = null;
+  private delaySent: LightDelay | null = null;
+  /** the light delay played for the crew's ground stations: the room's, else our own setting (an older server) */
+  lightDelay(): LightDelay {
+    return this.roomDelay ?? this.d.settings.netLightDelay;
+  }
+  /** whether we own the room we are in (its token kept here: we created it) */
+  ownsRoom(): boolean {
+    const room = this.net?.room;
+    return !!room && !!ownerTokenOf(room.code);
+  }
+  /** the room's light delay: ours, its owner, said to the room when it changes — the server checks the token and keeps it
+   *  for newcomers (a server without the feature: nothing said, each pilot's own setting) */
+  private roomDelayStep() {
+    const net = this.net!;
+    const room = net.room!;
+    if (this.roomDelayCode !== room.code) {
+      this.roomDelayCode = room.code;
+      this.roomDelay = null;
+      this.delaySent = null;
+    }
+    if (!net.server.f.includes("room-delay")) return;
+    const owner = ownerTokenOf(room.code);
+    const want = this.d.settings.netLightDelay;
+    if (owner && this.delaySent !== want && net.status === "online") {
+      if (net.event({ kind: "room-delay", value: want, owner } as never)) {
+        this.delaySent = want;
+        this.roomDelay = want;
+      }
+    }
+  }
 
   /** At most 4 Hz, only while an instruments screen is present. No simulator on that screen. */
   instruments(info: Info, status: RangerStatus | null) {
@@ -203,10 +261,29 @@ export class NetSession {
     if (!net?.room || net.room.role !== "pilot" || this.follow || !this.d.camera.piloting || now - this.crewSent < 250) return;
     if (!net.room.members.some((m) => m.role === "instruments")) return;
     this.crewSent = now;
+    // (a crew come: the picture's dictionary and histories sent again — RD5)
+    const crews = net.room.members.filter((m) => m.role === "instruments").map((m) => m.slot);
+    if (crews.some((s) => !this.crewsSeen.has(s))) picCatchUp(this.d.camera);
+    this.crewsSeen = new Set(crews);
     // (the surroundings — the traffic, the units, the ships — once a second: the heavier part)
     const around = now - this.crewAround >= 1000;
     if (around) this.crewAround = now;
-    net.event({ kind: "instruments", data: crewSnapshot(this.d.camera, info, status, this.d.sceneTime(), around) });
+    // (under the room's limit on an event: the heaviest parts lightened first — what was cut counted, RD1)
+    const fit = fitSnapshot(
+      crewSnapshot(
+        this.d.camera,
+        info,
+        status,
+        this.d.sceneTime(),
+        around,
+        this.lightDelay(),
+        [...this.crewAboard].filter(([, v]) => v).map(([k]) => k),
+      ),
+    );
+    if (fit.cut.length) this.crewCut++;
+    this.groundLink = fit.data.link ?? null;
+    if (this.heldMsgs.length && !this.groundLink?.cut) for (const say of this.heldMsgs.splice(0)) say();
+    net.event({ kind: "instruments", data: fit.data });
   }
   /** the flight's status last told (main.ts, each frame: instruments) */
   private lastStatus: RangerStatus | null = null;
@@ -363,8 +440,12 @@ export class NetSession {
       if (netRadar.contacts.length) netRadar.contacts = [];
       this.d.camera.radarSources.delete("net");
       this.prev = null;
+      this.roomDelay = null;
+      this.roomDelayCode = null;
+      this.crewAboard.clear();
       return;
     }
+    this.roomDelayStep();
     const c = this.d.camera;
     const now = performance.now() / 1000;
     // (our co-op role's progress told to the room — N5)
@@ -453,8 +534,26 @@ export class NetSession {
       net.on("world", placeAway);
       net.on("event", ({ from, ev }) => {
         const e = ev as { kind?: string; to?: number };
-        if (e.kind === "crew-cmd") void this.crewExec.handle(net, from, ev);
-        else if (e.kind === "crew-msg") {
+        if (e.kind === "crew-cmd") {
+          // (a ground station's order: the light's time held here — whatever its console did —, refused behind the
+          // wormhole; one aboard, accepted: at once — AUDIT-CREW priority 6)
+          const G = e.to === net.room?.slot ? this.groundOf(from) : null;
+          if (G?.cut) return void this.crewExec.refuseCut(net, from, ev);
+          if (G && G.delay > 0.05) setTimeout(() => void this.crewExec.handle(net, from, ev), G.delay * 1000);
+          else void this.crewExec.handle(net, from, ev);
+        } else if (e.kind === "crew-aboard" && e.to === net.room?.slot) {
+          // (a crew screen asks for a station aboard: the pilot's agreement — its orders live then, no light's time)
+          const m = net.room?.members.find((x) => x.slot === from);
+          if (m?.role !== "instruments") return;
+          const st = String((ev as unknown as { station?: unknown }).station ?? "").slice(0, 24);
+          const answer = (yes: boolean) => {
+            this.crewAboard.set(from, yes);
+            this.net?.event({ kind: "crew-aboard-ok", to: from, ok: yes });
+            this.d.toast(yes ? tf("{0} is aboard", this.nameOf(from)) : tf("{0} stays on the ground", this.nameOf(from)));
+          };
+          if (this.d.ask) this.d.ask(tf("{0} asks to be aboard ({1})", this.nameOf(from), st), answer, "net-crew-aboard");
+          else answer(false);
+        } else if (e.kind === "crew-msg") {
           // (a crew member's message — PLAN-VAISSEAUX K5: the ground's arrive late; behind the wormhole, recorded and
           // delivered when the link came back, its age said)
           const m = ev as unknown as { text?: unknown; rec?: unknown; to?: unknown };
@@ -464,7 +563,13 @@ export class NetSession {
           if (!text) return;
           const rec = typeof m.rec === "number" && Number.isFinite(m.rec) && m.rec > 60 ? m.rec : 0;
           const who = this.nameOf(from);
-          this.d.toast(rec ? tf("Recorded message from {0} ({1} ago): {2}", who, formatAge(rec), text) : tf("{0}: {1}", who, text));
+          const say = () =>
+            this.d.toast(rec ? tf("Recorded message from {0} ({1} ago): {2}", who, formatAge(rec), text) : tf("{0}: {1}", who, text));
+          // (from the ground: the light's time held here, kept behind the wormhole until the link comes back)
+          const G = this.groundOf(from);
+          if (G?.cut) this.heldMsgs.push(say);
+          else if (G && G.delay > 0.05) setTimeout(say, G.delay * 1000);
+          else say();
         } else if (e.kind === "tel") this.tel.set(from, (ev as unknown as { v: Record<string, number> }).v);
         else if (e.kind === "wng") {
           // (another's AI wingmen — F3: his host's flying, drawn and on our radar here)
@@ -568,7 +673,7 @@ export class NetSession {
           if (!isShareWhat(a.what) || need === null) return;
           const what = a.what;
           const who = this.nameOf(from);
-          const reply = (amt: number, why?: string) => this.net?.event({ kind: "xgive", to: from, what, amt, why });
+          const reply = (amt: number, why?: string) => void this.net?.event({ kind: "xgive", to: from, what, amt, why });
           if (!this.dockedWith(from)) return reply(0, "not docked");
           const ask = tf("{0} asks for {1}", who, amountText(what, need));
           const answer = (yes: boolean) => {
@@ -628,12 +733,16 @@ export class NetSession {
           if (!A) return;
           const said = sayOf(A.act, {})[lang === "fr" ? "fr" : "en"];
           this.d.toast(A.ok ? tf("Copilot: {0}", A.msg || said) : tf("Copilot refused: {0}", A.msg || said));
+        } else if (e.kind === "room-delay") {
+          // (the room's light delay — its owner's, checked by the server: one without the feature passes anything on)
+          const v = (ev as unknown as { value?: unknown }).value;
+          if (net.server.f.includes("room-delay") && (v === "real" || v === "tenth" || v === "off")) this.roomDelay = v;
         } else if (e.kind === "helm-ask" && e.to === net.room?.slot) {
           // (our passenger asks for the controls — N3: ours to hand over, then we ride with him)
           if (this.aboard.get(from) !== net.room!.slot) return;
           const who = this.nameOf(from);
           const answer = (yes: boolean) => {
-            if (!yes) return this.net?.event({ kind: "helm-no", to: from });
+            if (!yes) return void this.net?.event({ kind: "helm-no", to: from });
             this.d.toast(this.handOver(from));
           };
           if (this.d.ask) this.d.ask(tf("{0} asks to take the controls", who), answer, "net-helm");
@@ -796,7 +905,7 @@ export class NetSession {
                 v[0] * fix.N[0] + v[1] * fix.N[1] + v[2] * fix.N[2],
                 v[0] * fix.U[0] + v[1] * fix.U[1] + v[2] * fix.U[2],
               ] as Vec3,
-              rcs: s.id === "f35" ? 0.005 : 20,
+              rcs: isAircraft(s.id) ? 0.005 : 20,
               kind: s.state.flags & 1 ? ("ground" as const) : ("air" as const),
               iff: "friend" as const,
               name: this.nameOf(s.slot),
@@ -1779,8 +1888,7 @@ export class NetSession {
       return;
     }
     if (!this.d.settings.ship) this.d.tools.set("ship", true);
-    const kinds = ["ranger", "lander", "endurance", "f35"] as const;
-    const kind = kinds[st.kind];
+    const kind = kindOf(st.kind);
     if (kind && fleet.active !== kind) {
       try {
         this.d.tools.set("vessel", kind);
@@ -1870,7 +1978,7 @@ export class NetSession {
     const body = NET_BODIES[W.body];
     if (!body) return tf("{0} walks where we cannot follow", name);
     if (craft && craft.body === W.body && craft.frame === 0 && craft.flags & 1) {
-      const half = (id: string) => (id === "f35" ? 5.4 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
+      const half = (id: string) => (id === "f35" ? 5.4 : id === "a320" ? 18 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
       const place = c.netPlaceBeside(craft, half(kindOf(craft.kind) ?? "f35") + half(fleet.active) + 8);
       if (place) {
         this.d.tools.placeAt({ ...place, frame: place.frame ?? "ours", note: tf("Parked by {0}'s craft", name) });
@@ -1945,8 +2053,8 @@ export class NetSession {
     if (!s || s.frame !== 0 || s.body !== 0 || (s.flags & 1) !== 0)
       return tf("{0} is not flying in the Earth's air — formation in the air only", p.name);
     if (!VESSELS[fleet.active].flies) return t("Formation: a craft that flies (the F-35, the Ranger)");
-    const half = (id: string) => (id === "f35" ? 5.4 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
-    const kinds = ["ranger", "lander", "endurance", "f35"];
+    const half = (id: string) => (id === "f35" ? 5.4 : id === "a320" ? 18 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
+    const kinds = ["ranger", "lander", "endurance", "f35", "walker", "a320"];
     // (an echelon: clear of both wingspans by 15 m, 15 m back — room for his roll into a turn, a gust)
     const gap = o.gap ?? half(kinds[s.kind] ?? "f35") + half(fleet.active) + 15;
     // (in his air, near enough to rejoin: from where we are — else Beside first)
@@ -2030,8 +2138,8 @@ export class NetSession {
     const c = this.d.camera;
     const s = o.state;
     // (clear of both wingspans: the other's half, ours, a margin)
-    const half = (id: string) => (id === "f35" ? 5.4 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
-    const kinds = ["ranger", "lander", "endurance", "f35"];
+    const half = (id: string) => (id === "f35" ? 5.4 : id === "a320" ? 18 : id === "ranger" ? 12 : id === "lander" ? 8 : 40);
+    const kinds = ["ranger", "lander", "endurance", "f35", "walker", "a320"];
     const g = gap ?? half(kinds[s.kind] ?? "f35") + half(fleet.active) + 8;
     const place = c.netPlaceBeside(s, g);
     if (!place) return t("The teleport needs your craft on our side of the wormhole");

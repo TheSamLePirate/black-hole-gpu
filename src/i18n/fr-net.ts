@@ -233,8 +233,8 @@ export default {
   "{0} h {1}": "{0} h {1}",
   "{0} d": "{0} j",
   "Light delay to the ground": "Délai lumière vers le sol",
-  "The crew's ground stations (mission control) see the craft late and their orders arrive late by the light's time from the Earth — the Moon 1.3 s, Mars minutes; behind the wormhole, no live link: only recorded messages, delivered when it comes back. The stations aboard are always live.":
-    "Les postes au sol de l'équipage (le contrôle de mission) voient le vaisseau en retard, et leurs ordres arrivent en retard, du temps que met la lumière depuis la Terre — la Lune 1,3 s, Mars des minutes ; derrière le trou de ver, plus de liaison directe : seulement des messages enregistrés, délivrés à son retour. Les postes à bord sont toujours en direct.",
+  "The crew's ground stations (mission control) see the craft late and their orders arrive late by the light's time from the Earth — the Moon 1.3 s, Mars minutes; behind the wormhole, no live link: only recorded messages, delivered when it comes back. The stations aboard (once the pilot has accepted them) are always live; the voice is never delayed. The room's setting: its creator's — in another's room, theirs applies.":
+    "Les postes au sol de l'équipage (le contrôle de mission) voient le vaisseau en retard, et leurs ordres arrivent en retard, du temps que met la lumière depuis la Terre — la Lune 1,3 s, Mars des minutes ; derrière le trou de ver, plus de liaison directe : seulement des messages enregistrés, délivrés à son retour. Les postes à bord (une fois acceptés par le pilote) sont toujours en direct ; la voix n'est jamais retardée. Un réglage de salle : celui de son créateur — dans la salle d'un autre, le sien s'applique.",
   Real: "Réel",
   "A tenth": "Un dixième",
   "The light's own time": "Le temps de la lumière",

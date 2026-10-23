@@ -9,7 +9,7 @@ import { t } from "../i18n";
 import { cameraFrame } from "../camera";
 import { dot as dot3 } from "../math/vec3";
 import { gearHeight, solidBody } from "../system/our-surface";
-import { VESSELS } from "../vessels";
+import { isAircraft, VESSELS } from "../vessels";
 import type { FlightContext, PilotInput } from "../pilot";
 import type { CameraController } from "../controls";
 
@@ -83,7 +83,7 @@ export function translateKeys(inp: PilotInput): PilotInput {
 
 /** ⇧9: the RCS mode switched — the attitude keys turning the craft, or translating it. What to say. */
 function rcsModeToggle(this: CameraController): string {
-  if (fleet.active === "f35") return t("RCS mode: the spacecraft's");
+  if (isAircraft(fleet.active)) return t("RCS mode: the spacecraft's");
   this.rcsMode = this.rcsMode === "translate" ? "rotate" : "translate";
   return this.rcsMode === "translate"
     ? t("RCS: translation — W S up · down, A D left · right, ⇧ Alt forward · back")
@@ -134,7 +134,7 @@ function spaceAssistStep(this: CameraController, inp: PilotInput, dt: number) {
   this.systemsStep(inp, dt);
   // (station keeping let go: its held point forgotten — controller/stationkeep.ts)
   if (this.pilot.auto !== "keep") this.keepRun = null;
-  if (fleet.active === "f35") {
+  if (isAircraft(fleet.active)) {
     this.spaceRate = null;
     this.spaceRecover = null;
     return;

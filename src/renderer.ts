@@ -1,4 +1,5 @@
 import { holeFleet } from "./holefleet";
+import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import { TerrainCache, withTerrainCache } from "./system/terrain-cache";
 import {
@@ -42,7 +43,7 @@ import { normalQuantile, seaCascades, seaSystems } from "./sea/spectrum";
 import { MarineFeed, type SeaState, windSea } from "./sea/marine";
 import { forestSource, withForest } from "./forest-shader";
 import { lampsOf } from "./cockpit/lights";
-import { EARTH_RUNWAYS, landingEnd, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayGrade, runwayPaved } from "./game/sites";
+import { EARTH_RUNWAYS, landingEnd, RUNWAY_LENGTH, runwayGrade, runwayPaved } from "./game/sites";
 import {
   bodyAxes,
   daysOf,
@@ -1369,7 +1370,7 @@ export class Renderer {
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-    this.displayBuf = device.createBuffer({ size: 224, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.displayBuf = device.createBuffer({ size: 256, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.chart = new ChartOverlay(device, src.overlay);
     // (trace.wgsl: the colours' LUTs at LUT_OFF — the synchrotron's from LUT_N = BB_LUT_SIZE)
     const lut = buildBlackbodyLUT();
@@ -3035,7 +3036,7 @@ export class Renderer {
         s.earthScenery,
         s.earthSurface !== "off",
         s.earthTerrain,
-        SCENERY_EXCLUSIONS,
+        this.sceneryExclusions,
         eye ? aheadFocus(eye, Math.hypot(...gazeS) > 0 ? gazeS : lead) : null,
         reach,
       );
@@ -3311,17 +3312,18 @@ export class Renderer {
         r?.gust ?? 0,
         // (outside, the camera's lens wet: a few soft drops — PLAN-PLUIE, the owner's choice)
         r && !r.dust && !inside ? 1 : 0,
-        0,
+        // (inside the A320: its windows' own drops, wiped — ship.wgsl a320Wet —, not the canopy's)
+        inside && s.vessel === "a320" && this.a320Deck ? 1 : 0,
       ]),
     );
     // (the F-35's heat haze — display.wgsl haze —: its exhaust's column in the image, its radii, its strength,
     // a clock)
-    const hz = target === this.live && s.ship && s.heatHaze ? this.ship.hazeView() : null;
-    this.device.queue.writeBuffer(
-      this.displayBuf,
-      192,
-      new Float32Array(hz ? [...hz, (performance.now() / 1000) % 3600] : [0, 0, 0, 0, 0, 0, 0, 0]),
-    );
+    // (the A320's: its two engines' columns)
+    const clock = (performance.now() / 1000) % 3600;
+    for (const k of [0, 1]) {
+      const hz = target === this.live && s.ship && s.heatHaze ? this.ship.hazeView(k) : null;
+      this.device.queue.writeBuffer(this.displayBuf, 192 + 32 * k, new Float32Array(hz ? [...hz, clock] : [0, 0, 0, 0, 0, 0, 0, 0]));
+    }
   }
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
@@ -3341,6 +3343,24 @@ export class Renderer {
    * [m/s, the Earth's axes] — the windsocks'.
    */
   private nearRunways(c: Vec3, s: Settings, time: number): Float32Array {
+    // (the world's runways about the eye brought in — src/world/runways3d.ts, PLAN-RADAR-AAA RD13 —: graded, drawn;
+    // the scenery kept off them)
+    {
+      const g = cartToGeodetic(WGS84_A, WGS84_F, [c[0] * WGS84_A, c[1] * WGS84_A, c[2] * (1 - WGS84_F) * WGS84_A]);
+      if (worldRunwaysUpdate((g.lat * 180) / Math.PI, (g.lon * 180) / Math.PI, performance.now())) {
+        this.sceneryExclusions = [
+          ...SCENERY_EXCLUSIONS,
+          ...worldRunwaysNow().map((r) => ({
+            lat: r.site.lat,
+            lon: r.site.lon,
+            heading: r.site.rwy ?? 0,
+            length: r.len,
+            halfWidth: r.halfWidth + 40,
+          })),
+        ];
+        this.invalidate();
+      }
+    }
     const out = new Float32Array(RUNWAY_VEC4S * 4);
     const near = EARTH_RUNWAYS.map((r) => {
       const d: Vec3 = [c[0] * WGS84_A - r.origin[0], c[1] * WGS84_A - r.origin[1], c[2] * (1 - WGS84_F) * WGS84_A - r.origin[2]];
@@ -3355,7 +3375,8 @@ export class Renderer {
       const rev = landingEnd(r.site, s, days, this.weatherReal).reverse ? 1 : 0;
       // (w: the runway's level [m] — its airfield graded to it (sites.ts runwayGrade), the windsocks' and the
       // buildings' feet)
-      out.set([...r.p, RUNWAY_LENGTH, ...r.along, RUNWAY_HALF_WIDTH, ...r.across, rev, ...d, r.elev], 4 + 16 * k);
+      // (its across's w: the landing end and its flags — trace.wgsl runwayFlags)
+      out.set([...r.p, r.len, ...r.along, r.halfWidth, ...r.across, rev | (r.flags & ~1), ...d, r.elev], 4 + 16 * k);
     });
     if (near.length) {
       const st = near[0]!.r.site;
@@ -5136,9 +5157,16 @@ export class Renderer {
             controls: this.cockpitControls ?? undefined,
             gear: this.shipGear ?? undefined,
             jet: s.vessel === "f35" && this.jetPose ? { ...this.jetPose, ...this.jetForce } : null,
+            a320:
+              s.vessel === "a320" && this.a320Pose
+                ? { props: { ...this.a320Pose.props, ...this.a320Force }, spins: this.a320Pose.spins }
+                : null,
+            a320Deck: s.vessel === "a320" && this.a320Deck ? { ...this.a320Deck, ...this.a320Force } : null,
             cabin: lampsOf(s, this.cockpitGlow),
             pcd: s.vessel === "f35" ? this.pcdLook : null,
+            a320Glass: s.vessel === "a320" && this.a320Deck ? this.a320Glass : null,
             lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: performance.now() / 1000 },
+            glares: this.glaresNow(s),
             mount: this.shipPose ?? (s.shipMount as Mount),
             look: [s.shipLookYaw, s.shipLookPitch],
             fov: s.fov,
@@ -5291,6 +5319,19 @@ export class Renderer {
   jetPose: import("./f35/model").F35Pose | null = null;
   /** parts of it held where a test or a capture wants them (scripts/f35-shots.ts: __bh.renderer.jetForce) */
   jetForce: Partial<import("./f35/model").F35Pose> = {};
+  /** the flown A320's moving parts: its rig's properties and spins (src/a320/pose.ts), and properties held where a
+   *  test or a capture wants them (FlightGear's paths: __bh.renderer.a320Force) */
+  a320Pose: { props: import("./a320/rig").Props; spins: import("./a320/rig").Props } | null = null;
+  /** the A320's ground vehicles (src/a320/services.ts — main.ts each frame): their meshes, places in its frame [m] and
+   *  turns about its up axis [rad] — drawn with it while it is flown */
+  a320Ground: import("./a320/services").GroundVehicle[] | null = null;
+  a320Force: import("./a320/rig").Props = {};
+  /** its displays (src/a320/du — main.ts: captures and tests read their canvases) */
+  a320Du: import("./a320/du").DuSet | null = null;
+  /** its flight deck's (src/a320/deck.ts — set each frame from inside by main.ts) */
+  a320Deck: import("./a320/rig").Props | null = null;
+  /** its windshield from inside (src/a320/glass.ts — main.ts): the rain on it, the wipers, the frost */
+  a320Glass: import("./ship").ShipView["a320Glass"] = null;
   /** the cockpit's displays' mean colours (cockpit/lights.ts displayColours): the screens' light in the cabin */
   cockpitGlow: Float32Array | null = null;
   /** the F-35's panoramic display's look (set each frame its cockpit is seen — src/f35/pcd.ts look) */
@@ -5524,6 +5565,11 @@ export class Renderer {
     big?: boolean;
     mirror?: boolean;
   }[] = [];
+  /** the scenery's exclusions: the sites' runways, the landscapes' viewpoints, the world's runways near (RD13) */
+  private sceneryExclusions: SceneryExclusion[] = SCENERY_EXCLUSIONS;
+  /** a fight's flares burning (controller/combat.ts combatGlares — PLAN-RADAR-AAA RD8a): each from the flown craft's
+   *  origin on the camera's axes [m], its size [m], its colour (display-referred) */
+  combatGlares: { rel: Vec3; r: number; rgb: Vec3 }[] = [];
   /** the ships under way near the camera, for their wakes (controller/seatraffic.ts seaWakes) */
   seaWakes: { p: Vec3; fwd: Vec3; U: number; len: number; beam: number }[] = [];
 
@@ -5543,8 +5589,35 @@ export class Renderer {
     thrust?: { throttle: number; boost: number; air: number };
   }[] = [];
 
+  /** The A320's ground vehicles as instances: placed in its frame, turned about its up axis — on its pose from the
+   *  camera. */
+  private groundShips(s: Settings): ShipInstance[] {
+    const G = this.a320Ground;
+    if (!G?.length || !s.ship || s.vessel !== "a320" || !this.shipPose) return [];
+    const P = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch);
+    const S = P.S as unknown as [Vec3, Vec3, Vec3];
+    return G.filter((v) => this.ship.has(v.id)).map((v) => {
+      const c = Math.cos(v.yaw),
+        n = Math.sin(v.yaw);
+      // (its axes: the ship's turned about y — x' = x c + z n, z' = −x n + z c —, then to the camera's)
+      const Ry: [Vec3, Vec3, Vec3] = [
+        [c, 0, n],
+        [0, 1, 0],
+        [-n, 0, c],
+      ];
+      const M = [0, 1, 2].map((r) => [0, 1, 2].map((k) => S[r]![0]! * Ry[0]![k]! + S[r]![1]! * Ry[1]![k]! + S[r]![2]! * Ry[2]![k]!)) as [
+        Vec3,
+        Vec3,
+        Vec3,
+      ];
+      const t = [0, 1, 2].map((r) => S[r]![0]! * v.p[0] + S[r]![1]! * v.p[1] + S[r]![2]! * v.p[2] + P.t[r]!) as Vec3;
+      // (on the ground beside the craft: not hidden by the traced ground's coarse depth — as the craft itself)
+      return { id: v.id, S: M, t, shadow: true, far: false };
+    });
+  }
+
   private shipOthers(s: Settings): ShipInstance[] {
-    const extra = [...this.netShips(s), ...this.combatShips(s), ...this.holeShips(s)];
+    const extra = [...this.groundShips(s), ...this.netShips(s), ...this.combatShips(s), ...this.holeShips(s)];
     return extra.length ? [...extra, ...this.fleetOthers(s)] : this.fleetOthers(s);
   }
 
@@ -5626,6 +5699,13 @@ export class Renderer {
     // (the flown craft's image under 500 m — higher, the waves have scattered it)
     const flown = h < 500 && groundRelief("earth", toBodyFixed("earth", Xc, time)) < 0.5;
     return { n, d: dot3(n, eye) - h, hs: this.seaHs, t: (performance.now() / 1000) % 3600, flown };
+  }
+
+  /** The fight's flares as the lamps' glares: their place from the eye (as the fight's aircraft's). */
+  private glaresNow(s: Settings): { c: Vec3; r: number; rgb: Vec3 }[] {
+    if (!this.combatGlares.length || !s.ship || !this.shipPose) return [];
+    const eye = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
+    return this.combatGlares.map((g) => ({ c: [g.rel[0] + eye[0], g.rel[1] + eye[1], g.rel[2] + eye[2]] as Vec3, r: g.r, rgb: g.rgb }));
   }
 
   /** The fight's aircraft as instances: their place from the eye, their axes. */
@@ -6953,6 +7033,8 @@ export class Renderer {
     this.cockpitControls = old.cockpitControls;
     this.shipGear = old.shipGear;
     this.jetPose = old.jetPose;
+    this.a320Pose = old.a320Pose;
+    this.a320Deck = old.a320Deck;
     this.prof.enabled = old.prof.enabled;
     this.water = { ...old.water };
     this.weatherReal = old.weatherReal;

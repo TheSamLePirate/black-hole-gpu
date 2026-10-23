@@ -73,7 +73,19 @@ export const OUR_TARGETS: OurBody[] = [
 /** "iss": the International Space Station, on its real orbit around the Earth (system/iss.ts); "ranger",
  *  "lander", "endurance": the fleet's craft not flown (fleet.ts). (Another player's craft in a room, "net:<slot>",
  *  is one too at run time: targeting.ts netTargetId — docs/PLAN-RESEAU.md R6) */
-export type Target = "hole" | "star" | "wormhole" | "barycentre" | SystemBody | OurBody | "iss" | "ranger" | "lander" | "endurance" | "f35";
+export type Target =
+  | "hole"
+  | "star"
+  | "wormhole"
+  | "barycentre"
+  | SystemBody
+  | OurBody
+  | "iss"
+  | "ranger"
+  | "lander"
+  | "endurance"
+  | "f35"
+  | "a320";
 export type RenderMode = "physical" | "redshift" | "temperature" | "order" | "steps";
 export type ShiftMode = "full" | "gravitational" | "noBeaming" | "none";
 export type Background = "real" | "stars" | "alien" | "checker" | "image";
@@ -379,7 +391,7 @@ export interface Settings {
   // the spaceship carrying the camera (Interstellar's Ranger)
   ship: boolean;
   /** the craft flown (vessels.ts): the Ranger, the Lander, the Endurance */
-  vessel: "ranger" | "lander" | "endurance" | "f35";
+  vessel: "ranger" | "lander" | "endurance" | "f35" | "a320";
   shipMount: string; // attach point of the camera (ship.ts MOUNTS)
   camSoft: "off" | "chase" | "hull"; // the hull views softened (controller/camrig.ts): none, the chase and the dorsal, every outside attach point on the hull
   camBinding: "lockToTarget" | "lockNoRoll" | "worldUp" | "world"; // how the softened view's offset turns with the craft (Cinemachine's binding modes)
@@ -409,6 +421,7 @@ export interface Settings {
   f35Law: "normal" | "direct"; // the F-35: its flight control law — the real one, or the stick on the surfaces (no computer)
   f35AutoProtect: boolean;
   f35Instructor: "off" | "calls" | "full"; // the instructor (A4): off, the calls only, the calls and its live panel // the F-35's Auto-GCAS and Auto-ACAS (A2): the ground's and the others' collisions avoided by the jet itself (always in the assisted levels)
+  f35AarMode: "level" | "auto" | "assisted" | "manual"; // the air refuelling (controller/aar.ts): as the assistance asks (the beginner's auto, else assisted) · the systems fly it all · they hold the probe on the basket's line, the throttle closes · the pilot flies it
   f35Assist: "manual" | "realistic" | "assisted" | "beginner"; // the F-35's assistance (A1): the direct law · the real one · auto-throttle, 20° of incidence, the ground's protection · aimed: the stick moves where it goes
   f35InfiniteFuel: boolean; // the F-35: the tanks never empty
   f35Variant: "B" | "C"; // the F-35: the B (short take-off, vertical landing) or the C (the carrier's: catapult, wires)
@@ -421,11 +434,15 @@ export interface Settings {
   wingmen: number; // the AI wingmen flying with the F-35 (controller/wingmen.ts): 0 to 3
   traffic: boolean; // the real air and sea traffic about the craft (traffic/feed.ts, the relay server/traffic.ts)
   seaFft: boolean; // the sea's waves by FFT (sea/fft-gpu.ts: three cascades, their foam and relief) — off: the twelve trains
+  tcas: boolean; // the TCAS for every craft in the air (PLAN-RADAR-AAA RD4): the transponders about graded, TA and RA shown and said
   trafficDelay: number; // the real aircraft drawn this far behind the real time [s] (0: live, carried on from their last report; a minute: on their smoothed path)
   f35EnemyMissiles: boolean; // the aggressors' and the SAM's missiles fired
   f35Radar: boolean; // the radar's scope on the helmet in a fight
   f35RadarRange: "auto" | "10" | "20" | "40" | "80" | "160"; // its range [km]
   f35RadarRelief: boolean; // the relief under the radar's scope: the ground above us red, near amber, below green, the sea
+  radarTrails: "off" | "short" | "long"; // each track's history on the radars and maps (PLAN-RADAR-AAA RD7): none, 30 s, 3 min
+  radarTrailLock: boolean; // the lock's and the selection's history kept even when the trails are off
+  radarTrailMissiles: boolean; // a missile's last 5 s always drawn (its smoke on the screens)
   f35ThreatCalls: boolean; // TARS calls the threats in a fight: the missiles at us (break, flares, notch), the bandits by their BRAA, a hit, a kill
   f35RadioRoles: boolean; // the flight's radio in its roles' voices: the wingmen, the AWACS Darkstar (the picture), the carrier Mother and its LSO Paddles — shared with the room
   f35WeaponPanel: boolean; // the weapons' panel in a fight
@@ -435,6 +452,9 @@ export interface Settings {
   f35HmdLook: "readable" | "realistic" | "cinematic"; // the helmet's symbology: outlined dark (the most readable), the light on a visor (a glow, a faint shade), or a wider glow
   f35PcdStyle: "realistic" | "cinematic"; // the panoramic display's look: a real PCD's, or with glow, rings and sweeps
   f35PcdBrightness: "auto" | "day" | "night" | "nvg"; // its brightness: the light's, or its knob's
+  a320Livery: "kerr" | "white" | "SWR" | "AUA" | "DAL" | "AAL"; // the A320's livery: the house's, white, or a real airline's (docs/PLAN-A320.md)
+  a320Effects: boolean; // the A320: the air and the ground it shows — the wing's vapour, its vortices, the inlets', the tyres' smoke, a wet runway's spray (A13)
+  a320Start: "cold" | "apu" | "ready"; // the A320 placed on the ground: cold and dark, the APU running, or ready for take-off (A10)
   netMenu: boolean; // the network's menu and buttons (docs/PLAN-RESEAU.md): off, the game shows no trace of it
   netFreeFight: boolean; // in a room, in the F-35, no match: the free fight — every craft a target, friendly fire on
   netCrewActions: boolean; // the crew screens (crew/) may act aboard — everything but flying (docs/PLAN-CREW-ACTIONS.md); off: the pilot's lock
@@ -465,10 +485,10 @@ export interface Settings {
   crashSpeed: number; // touching the ground faster than this is a crash [m/s]
   gearForgiving: boolean; // the landing gear's limits three times a real one's (an easier landing)
   spaceAssist: "manual" | "realistic" | "assisted" | "beginner"; // a spacecraft's assistance (PLAN-VAISSEAUX X0): no SAS · the pilot's SAS · SAS always, the drift held near a target · the same, gentle rates
-  spaceInfinitePropellant: boolean;
-  spaceAutoProtect: boolean;
+  spaceInfinitePropellant: boolean; // a spacecraft's tanks never empty (the crew engine's propellant)
+  spaceAutoProtect: boolean; // a spacecraft's protections act in the realistic level too (the ground: the hover; the keep-out sphere: station keeping)
   spaceFailures: "off" | "rare" | "realistic" | "hard"; // a spacecraft's failures drawn: none · rare · realistic · hard (off for a beginner)
-  spaceConsumables: boolean; // a spacecraft's electricity, oxygen and scrubbers counted // a spacecraft's protections act in the realistic level too (the ground: the hover; the keep-out sphere: station keeping) // a spacecraft's tanks never empty (the crew engine's propellant)
+  spaceConsumables: boolean; // a spacecraft's electricity, oxygen and scrubbers counted
   gyroscopes: boolean; // near the hole, the ship's axes carried as gyroscopes (Fermi–Walker: gyro.ts), else fixed on the distant stars
   wind: 0 | 1 | 2 | 3; // the wind and its turbulence: calm, light, moderate, strong (wind.ts) — the fair weather's
   weather: WeatherPreset; // the weather flown through (weather.ts): a preset, a draw, the airfields' real one
@@ -768,6 +788,7 @@ export function defaultSettings(): Settings {
     f35GLimit: 7,
     f35Law: "normal",
     f35Assist: "realistic",
+    f35AarMode: "level",
     f35AutoProtect: true,
     f35Instructor: "full",
     f35InfiniteFuel: false,
@@ -781,11 +802,15 @@ export function defaultSettings(): Settings {
     wingmen: 0,
     traffic: true,
     trafficDelay: 60,
+    tcas: true,
     seaFft: true,
     f35EnemyMissiles: true,
     f35Radar: true,
     f35RadarRange: "auto",
     f35RadarRelief: true,
+    radarTrails: "off",
+    radarTrailLock: true,
+    radarTrailMissiles: true,
     f35ThreatCalls: true,
     f35RadioRoles: true,
     f35WeaponPanel: true,
@@ -794,6 +819,9 @@ export function defaultSettings(): Settings {
     f35HmdBrightness: 1,
     f35HmdLook: "realistic",
     f35PcdStyle: "realistic",
+    a320Livery: "kerr",
+    a320Start: "ready",
+    a320Effects: true,
     f35PcdBrightness: "auto",
     netMenu: true,
     netFreeFight: true,
@@ -2142,6 +2170,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35GLimit: "pref",
   f35Law: "pref",
   f35Assist: "pref",
+  f35AarMode: "pref",
   f35AutoProtect: "pref",
   f35Instructor: "pref",
   f35InfiniteFuel: "pref",
@@ -2155,11 +2184,15 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   wingmen: "pref",
   traffic: "pref",
   trafficDelay: "pref",
+  tcas: "pref",
   seaFft: "pref",
   f35EnemyMissiles: "pref",
   f35Radar: "pref",
   f35RadarRange: "pref",
   f35RadarRelief: "pref",
+  radarTrails: "pref",
+  radarTrailLock: "pref",
+  radarTrailMissiles: "pref",
   f35ThreatCalls: "pref",
   f35RadioRoles: "pref",
   f35WeaponPanel: "pref",
@@ -2168,6 +2201,9 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35HmdBrightness: "pref",
   f35HmdLook: "pref",
   f35PcdStyle: "pref",
+  a320Livery: "pref",
+  a320Start: "pref",
+  a320Effects: "pref",
   f35PcdBrightness: "pref",
   netMenu: "pref",
   netFreeFight: "pref",

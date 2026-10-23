@@ -3,13 +3,13 @@
 // aircraft — none for a helicopter: its lights alone) and its length [m] (the mesh scaled to it), its wingspan for a
 // formation's clearance. Pure.
 
-export type AirlinerMesh = "a320" | "crj900";
+export type AirlinerMesh = "a320t" | "crj900";
 
 /** The meshes' own lengths and spans [m] (scripts/build-airliners.ts), and where on them [m, the mesh's frame: x its
  *  left, y up, z its nose] its lights are — a wingtip's navigation light (the left one: x > 0), the tail's, the
  *  beacon on its back, the landing lights under its nose — and how far its wheels are under its origin. */
 export const MESH = {
-  a320: {
+  a320t: {
     len: 37.7,
     span: 34.2,
     tip: [16.83, 0.87, -4.14],
@@ -32,50 +32,50 @@ export const MESH = {
 /** By type designator: its mesh and length [m]. */
 const TYPES: Record<string, [AirlinerMesh, number]> = {
   // narrow-bodies
-  A318: ["a320", 31.4],
-  A319: ["a320", 33.8],
-  A320: ["a320", 37.6],
-  A321: ["a320", 44.5],
-  A19N: ["a320", 33.8],
-  A20N: ["a320", 37.6],
-  A21N: ["a320", 44.5],
-  B736: ["a320", 31.2],
-  B737: ["a320", 33.6],
-  B738: ["a320", 39.5],
-  B739: ["a320", 42.1],
-  B37M: ["a320", 35.6],
-  B38M: ["a320", 39.5],
-  B39M: ["a320", 42.2],
-  B3XM: ["a320", 43.8],
-  B752: ["a320", 47.3],
-  B753: ["a320", 54.4],
-  C919: ["a320", 38.9],
+  A318: ["a320t", 31.4],
+  A319: ["a320t", 33.8],
+  A320: ["a320t", 37.6],
+  A321: ["a320t", 44.5],
+  A19N: ["a320t", 33.8],
+  A20N: ["a320t", 37.6],
+  A21N: ["a320t", 44.5],
+  B736: ["a320t", 31.2],
+  B737: ["a320t", 33.6],
+  B738: ["a320t", 39.5],
+  B739: ["a320t", 42.1],
+  B37M: ["a320t", 35.6],
+  B38M: ["a320t", 39.5],
+  B39M: ["a320t", 42.2],
+  B3XM: ["a320t", 43.8],
+  B752: ["a320t", 47.3],
+  B753: ["a320t", 54.4],
+  C919: ["a320t", 38.9],
   BCS1: ["crj900", 35.0],
   BCS3: ["crj900", 38.7],
   // wide-bodies
-  A332: ["a320", 58.8],
-  A333: ["a320", 63.7],
-  A338: ["a320", 58.8],
-  A339: ["a320", 63.7],
-  A343: ["a320", 63.7],
-  A346: ["a320", 75.3],
-  A359: ["a320", 66.8],
-  A35K: ["a320", 73.8],
-  A388: ["a320", 72.7],
-  B744: ["a320", 70.7],
-  B748: ["a320", 76.3],
-  B763: ["a320", 54.9],
-  B764: ["a320", 61.4],
-  B772: ["a320", 63.7],
-  B77L: ["a320", 63.7],
-  B77W: ["a320", 73.9],
-  B788: ["a320", 56.7],
-  B789: ["a320", 62.8],
-  B78X: ["a320", 68.3],
-  A310: ["a320", 46.7],
-  A306: ["a320", 54.1],
-  MD11: ["a320", 61.6],
-  B762: ["a320", 48.5],
+  A332: ["a320t", 58.8],
+  A333: ["a320t", 63.7],
+  A338: ["a320t", 58.8],
+  A339: ["a320t", 63.7],
+  A343: ["a320t", 63.7],
+  A346: ["a320t", 75.3],
+  A359: ["a320t", 66.8],
+  A35K: ["a320t", 73.8],
+  A388: ["a320t", 72.7],
+  B744: ["a320t", 70.7],
+  B748: ["a320t", 76.3],
+  B763: ["a320t", 54.9],
+  B764: ["a320t", 61.4],
+  B772: ["a320t", 63.7],
+  B77L: ["a320t", 63.7],
+  B77W: ["a320t", 73.9],
+  B788: ["a320t", 56.7],
+  B789: ["a320t", 62.8],
+  B78X: ["a320t", 68.3],
+  A310: ["a320t", 46.7],
+  A306: ["a320t", 54.1],
+  MD11: ["a320t", 61.6],
+  B762: ["a320t", 48.5],
   // regional
   CRJ2: ["crj900", 26.8],
   CRJ7: ["crj900", 32.5],
@@ -165,11 +165,11 @@ export function airframeOf(type: string, cat = ""): { mesh: AirlinerMesh | null;
   const byCat: Record<string, [AirlinerMesh, number]> = {
     A1: ["crj900", 8],
     A2: ["crj900", 16],
-    A3: ["a320", 37.6],
-    A4: ["a320", 47],
-    A5: ["a320", 64],
+    A3: ["a320t", 37.6],
+    A4: ["a320t", 47],
+    A5: ["a320t", 64],
   };
-  const c = byCat[cat] ?? ["a320", 37.6];
+  const c = byCat[cat] ?? ["a320t", 37.6];
   return { mesh: c[0], len: c[1], span: (MESH[c[0]].span * c[1]) / MESH[c[0]].len };
 }
 

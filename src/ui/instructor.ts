@@ -516,7 +516,7 @@ export function lessonCard(host: InstructorHost, L: Lesson, onClose?: () => void
 }
 
 /** The flight school: the lessons' cards, each its diagram in small. */
-export function flightSchool(host: InstructorHost) {
+export function flightSchool(host: InstructorHost, o: { spaceFirst?: boolean } = {}) {
   const grid = h("div", "ins-school");
   // (the spacecraft's school beside the aeroplane's — PLAN-VAISSEAUX X9: its lessons first in a spacecraft)
   const space = h("div", "ins-school");
@@ -528,7 +528,7 @@ export function flightSchool(host: InstructorHost) {
     c.onclick = () => (m.close(), spaceLessonCard(host, L));
     space.append(c);
   }
-  const inSpace = host.camera.piloting && host.camera.s.vessel !== "f35";
+  const inSpace = o.spaceFirst ?? (host.camera.piloting && host.camera.s.vessel !== "f35" && host.camera.s.vessel !== "a320");
   const body = inSpace
     ? [h("h4", "ins-h", t("The space school")), space, h("h4", "ins-h", t("The aeroplane school")), grid]
     : [grid, h("h4", "ins-h", t("The space school")), space];

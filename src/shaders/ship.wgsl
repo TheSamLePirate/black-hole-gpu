@@ -77,9 +77,10 @@ struct Ship {
   scr: array<vec4f, 24>,
   // the flown Ranger's lamps (ship-lights.ts — K6): how many lit; each one's place (ship frame) and lens
   // radius [m], its colour × level (display-referred), its beam (ship frame) and the cone's cosine (−2: all
-  // round)
+  // round); after the 16 lamps' slots, the glares out in the scene (a fight's flares — ship-lights.ts Glare): their
+  // place on the camera's axes (beam's w −3), their count in lampN.y
   lampN: vec4f,
-  lamp: array<vec4f, 24>,
+  lamp: array<vec4f, 120>,
   // the second shadow map's sphere (the nearest carrier's: its own half of the map — writeUniform), in C
   bound2: vec4f,
   // the sea under the craft, for their reflections in it (C: n·p = d its plane — the ellipsoid's h = 0 —, n up;
@@ -92,6 +93,11 @@ struct Ship {
   pcd0: vec4f,
   pcd1: vec4f,
   pcd2: vec4f,
+  // the A320's windshield from its flight deck (src/a320/glass.ts — a320Wet): the rain's strength (0: none or not
+  // inside), a clock [s], the airspeed [m/s], the frost (0…1); each wiper's place on its sweep (0…1) and its rate
+  // [travel / s, out > 0]
+  wg0: vec4f,
+  wg1: vec4f,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance, 3 F-35), in the shadow
@@ -277,6 +283,10 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 // its panoramic cockpit display's picture (src/f35/pcd.ts: drawn on a canvas, sRGB)
 @group(0) @binding(25) var jetScreen: texture_2d<f32>;
 @group(0) @binding(26) var trafficAlbedo: texture_2d_array<f32>; // the airliners' paint (sRGB; a layer each)
+// the A320 (docs/PLAN-A320.md — scripts/build-a320-maps.py): its colour (sRGB) and normal maps, three layers — 0 the
+// livery's fuselage, 1 the static elements, 2 an atlas of 2048² cells (the livery's engines, the gear / the placards)
+@group(0) @binding(27) var a320Albedo: texture_2d_array<f32>;
+@group(0) @binding(28) var a320Normal: texture_2d_array<f32>;
 @group(1) @binding(0) var stationDepth: texture_2d<f32>; // the station's box: distance [m], coverage
 
 struct VIn {
@@ -360,11 +370,54 @@ fn stickPos(v: VIn) -> vec3f {
 // ---- the F-35 (docs/PLAN-F35.md): its materials 30–34 (30 the airframe's layer, 31 the atlas's, 32 the
 // canopy's glass, 33 the lights, 34 the visor), each vertex's part in the integer of its AO; the part's map
 // (its control surface on its hinge, its gear leg on its track…) an instance record after the craft's
-fn isJet(m: f32) -> bool { return m > 29.5 && m < 39.5; }
+// (the A320's too: its materials 100–119, its flight deck's 120–139, their parts their rig's nodes — src/a320/rig.ts)
+fn isJet(m: f32) -> bool { return (m > 29.5 && m < 39.5) || (m > 99.5 && m < 139.5); }
 fn jetMap(v: VIn, ii: u32) -> mat4x4f { return inst[u32(inst[ii].flags.w + 0.5) + u32(v.ao)].model; }
+/** The A320's texel for a material and a UV in its own image: the layer, the UV in it (a cell of the atlas: its UV
+ *  wrapped — the engines' repeat —, kept half a texel off the cell's edges), the cell's scale (the derivatives'). */
+fn a320Map(part: u32, uv: vec2f) -> vec4f {
+  switch part {
+    case 100u, 101u: { return vec4f(0.0, uv, 1.0); }
+    case 102u: { return vec4f(1.0, uv, 1.0); }
+    case 103u, 104u, 114u, 115u: { return vec4f(2.0, clamp(fract(uv), vec2f(0.0005), vec2f(0.9995)) * 0.5, 0.5); }
+    case 112u, 113u: { return vec4f(2.0, vec2f(0.5, 0.0) + clamp(uv, vec2f(0.0005), vec2f(0.9995)) * 0.5, 0.5); }
+    case 105u: { return vec4f(2.0, vec2f(0.0, 0.5) + clamp(uv, vec2f(0.0005), vec2f(0.9995)) * 0.5, 0.5); }
+    default: { return vec4f(0.0, uv, 1.0); }
+  }
+}
+/** The A320's flight deck by night: 0 in daylight, 1 with no direct light on the craft (the Sun set, eclipsed) — as
+ *  the Ranger's cabin judges it (fsCabin). */
+fn deckNight() -> f32 {
+  let d = vec4f(fromProbe(sh[9].xyz), sh[9].w);
+  let Ek = select(irradiance(d.xyz) * d.w * 2.0, sh[11].rgb, sh[11].w > 0.5);
+  return 1.0 - smoothstep(0.004, 0.06, dot(Ek, vec3f(0.2126, 0.7152, 0.0722)) * S.light.x);
+}
+/** The A320's wings bent by their load (docs/PLAN-A320.md, A13 — src/a320/flex.ts): its tip's rise [m] in its first
+ *  part record's flags.x (ship.ts); a vertex outboard of the fuselage (|x| > 2 m) and ahead of the tail (z > −10 m) —
+ *  the wing, its engine, slats, flaps, ailerons and spoilers — up by the rise × the square of the way to the tip (17 m). */
+fn a320Tip(ii: u32) -> f32 { return inst[u32(inst[ii].flags.w + 0.5)].flags.x; }
+fn a320Bent(v: VIn) -> bool { return v.mat > 99.5 && v.mat < 119.5; }
+fn a320Flex(p: vec3f, tip: f32) -> vec3f {
+  let u = clamp((abs(p.x) - 2.0) / 15.0, 0.0, 1.05);
+  return p + vec3f(0.0, select(0.0, tip * u * u, p.z > -10.0), 0.0);
+}
+/** its normals turned with the wing's slope (about the ship's z: the left wing's, x > 0, inboard as it rises) */
+fn a320FlexN(p: vec3f, n: vec3f, tip: f32) -> vec3f {
+  let u = clamp((abs(p.x) - 2.0) / 15.0, 0.0, 1.05);
+  let a = select(0.0, sign(p.x) * atan(2.0 * tip * u / 15.0), p.z > -10.0);
+  let c = cos(a);
+  let s = sin(a);
+  return vec3f(n.x * c - n.y * s, n.x * s + n.y * c, n.z);
+}
+/** A part of the F-35's or the A320's where it is posed (its rig's map; the A320's wings bent). */
+fn jetPos(v: VIn, ii: u32) -> vec3f {
+  let p = (jetMap(v, ii) * vec4f(v.pos, 1.0)).xyz;
+  if (a320Bent(v)) { return a320Flex(p, a320Tip(ii)); }
+  return p;
+}
 /** A vertex where it is drawn, in its craft's frame (the F-35's parts posed; the Ranger's gear and sticks). */
 fn shipPos(v: VIn, ii: u32) -> vec3f {
-  if (isJet(v.mat)) { return (jetMap(v, ii) * vec4f(v.pos, 1.0)).xyz; }
+  if (isJet(v.mat)) { return jetPos(v, ii); }
   return stickPos(v);
 }
 fn jetAo(v: VIn) -> f32 { return select(v.ao, fract(v.ao), isJet(v.mat)); }
@@ -422,6 +475,9 @@ fn depthVs(v: VIn, @builtin(instance_index) ii: u32) -> DOut {
   var o: DOut;
   o.clip = project((inst[ii].model * vec4f(shipPos(v, ii), 1.0)).xyz);
   if (abs(v.mat - 71.0) < 0.5) { o.clip = vec4f(2.0, 2.0, 2.0, 1.0); }
+  // (the A320's flight deck's overlays — FlightGear's fd_glare, the atlas's cut-out cells —: their holes cut by the
+  // shading, not here)
+  if (abs(v.mat - 122.0) < 0.5 || abs(v.mat - 133.0) < 0.5 || abs(v.mat - 134.0) < 0.5) { o.clip = vec4f(2.0, 2.0, 2.0, 1.0); }
   return o;
 }
 
@@ -434,6 +490,7 @@ fn shipVertex(v: VIn, ii: u32) -> VOut {
   var nrm = v.nrm;
   if (abs(v.mat - 72.0) < 0.5) { nrm = stickRot(S.ctl.xyz) * v.nrm; }
   if (isJet(v.mat)) { nrm = (jetMap(v, ii) * vec4f(v.nrm, 0.0)).xyz; }
+  if (a320Bent(v)) { nrm = a320FlexN(pos, nrm, a320Tip(ii)); }
   let p = (M * vec4f(pos, 1.0)).xyz;
   o.p = p;
   o.clip = project(p);
@@ -481,7 +538,7 @@ fn lightClip(p: vec3f) -> vec3f { return lightClipB(p, S.bound); }
 fn shadowVs(v: VIn, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
   // (the cockpit's glass lets the light in: out of the map)
   if (abs(v.mat - 71.0) < 0.5) { return vec4f(2.0, 2.0, 2.0, 1.0); }
-  let q = select(v.pos, (jetMap(v, ii) * vec4f(v.pos, 1.0)).xyz, isJet(v.mat));
+  let q = select(v.pos, jetPos(v, ii), isJet(v.mat));
   // (its half: the sphere holds the caster — none crosses into the other)
   let second = inst[ii].flags.y > 1.5;
   let c = lightClipB((inst[ii].model * vec4f(q, 1.0)).xyz, select(S.bound, S.bound2, second));
@@ -851,6 +908,103 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       coat = 0.0;
       if (part == 33u) { emit = albedo * 1.5; }
     }
+    // the A320 (docs/PLAN-A320.md, A1–A2): FlightGear's maps — the livery's paint (glossy on the fuselage, the fin,
+    // the doors; matte on the wing and the tailplane), the static elements, the engines (painted, their bare lips
+    // chromed, their pylons matte), the gear (painted, its sliding tubes chromed), the placards (decals: their alpha
+    // cuts them out), a plain colour (its rgb in the UV); normals from FlightGear's maps by the same cotangent frame
+    case 100u, 101u, 102u, 103u, 104u, 105u, 112u, 113u, 114u: {
+      let c = a320Map(part, in.uv);
+      let L = i32(c.x + 0.5);
+      let a = textureSampleGrad(a320Albedo, mapSamp, c.yz, L, duvx * c.w, duvy * c.w);
+      if (part == 105u && a.a < 0.5) { discard; }
+      albedo = a.rgb;
+      var tn = textureSampleGrad(a320Normal, mapSamp, c.yz, L, duvx * c.w, duvy * c.w).xyz * 2.0 - 1.0;
+      tn.y = -tn.y;
+      let d2 = cross(dpy, ng);
+      let d1 = cross(ng, dpx);
+      let T = d2 * duvx.x + d1 * duvy.x;
+      let B = d2 * duvx.y + d1 * duvy.y;
+      let im = inverseSqrt(max(max(dot(T, T), dot(B, B)), 1e-30));
+      n = normalize(T * im * tn.x + B * im * tn.y + ng * max(tn.z, 0.05));
+      let lum = dot(albedo, vec3f(0.2126, 0.7152, 0.0722));
+      switch part {
+        case 100u: { metal = 0.0; rough = 0.24 + 0.1 * grime; coat = 0.6 * coat; }
+        case 101u: { metal = 0.25; rough = 0.42 + 0.12 * grime; coat = 0.0; }
+        case 102u: { metal = 0.3 * smoothstep(0.2, 0.6, lum); rough = 0.5 + 0.15 * grime; coat = 0.0; }
+        case 103u: { metal = 0.0; rough = 0.28 + 0.08 * grime; coat = 0.5 * coat; }
+        case 104u, 113u: { metal = 1.0; albedo = mix(vec3f(0.55), albedo, 0.4) * (0.9 + 0.2 * lum); rough = 0.14 + 0.1 * grime; coat = 0.0; }
+        case 114u: { metal = 0.1; rough = 0.5 + 0.1 * grime; coat = 0.0; }
+        case 112u: { metal = 0.15; rough = 0.42 + 0.15 * grime; coat = 0.2 * coat; }
+        default: { metal = 0.0; rough = 0.4; coat = 0.2 * coat; }
+      }
+    }
+    case 110u: {
+      let rg = in.uv.x;
+      let g = floor(rg / 256.0 + 1e-3);
+      albedo = pow(clamp(vec3f((rg - 256.0 * g) / 255.0, g / 255.0, in.uv.y), vec3f(0.0), vec3f(1.0)), vec3f(2.2)) * 0.6;
+      metal = 0.6;
+      rough = 0.4 + 0.1 * grime;
+      coat = 0.0;
+    }
+    // the A320's flight deck (docs/PLAN-A320.md, A5 — scripts/build-a320-cockpit.py): FlightGear's maps, the A320's
+    // array's layers 3–6 (the panels, the other panels, the glareshield, the atlas — their UVs in them) — matte
+    // painted panels, the glareshield's fabric, the knobs' satin plastic, the seats' leather; the push-buttons' lights,
+    // the INOP placards and the FCU's and radios' displays glowing; no grime inside
+    case 120u, 121u, 122u, 123u, 124u, 125u, 131u, 132u, 133u: {
+      let L = select(6, 3 + i32(part) - 120, part <= 122u);
+      let a = textureSampleGrad(a320Albedo, mapSamp, in.uv, L, duvx, duvy);
+      if (a.a < 0.5) { discard; }
+      albedo = a.rgb;
+      // (FlightGear's fd_glare: the integral lighting's overlay — the legends, the knobs' marks, the lit strips —:
+      // glowing by night at the CABIN knob's level, left out by day; display-referred, as the cabin's lamps)
+      if (part == 122u) {
+        let lit = S.cab.x * deckNight();
+        if (lit < 0.03) { discard; }
+        emit = mix(a.rgb, vec3f(1.4, 0.16, 0.05) * dot(a.rgb, vec3f(0.33)), S.cab.y) * lit * 0.6;
+        albedo = vec3f(0.02);
+      }
+      let lum = dot(albedo, vec3f(0.2126, 0.7152, 0.0722));
+      metal = 0.0;
+      coat = 0.0;
+      switch part {
+        // (FlightGear's panels' paint drawn darker than Airbus's grey-blue — its lightmaps lit it —: a half brighter)
+        case 120u, 121u: { rough = 0.62; albedo *= 1.5; }
+        case 122u: { rough = 0.9; }
+        case 123u: { rough = 0.42; coat = 0.15; }
+        case 124u: { rough = 0.35; emit = albedo * smoothstep(0.25, 0.7, lum) * 2.0; }
+        case 125u: { rough = 0.5; coat = 0.12; }
+        case 131u: { rough = 0.4; emit = albedo * 0.6; }
+        case 132u: { rough = 0.3; emit = albedo * smoothstep(0.15, 0.6, lum) * 1.5; }
+        default: { rough = 0.6; }
+      }
+    }
+    // (a display's screen: its picture — the displays' atlas, src/a320/du — as an LCD gives it, behind a dark glass)
+    case 126u: {
+      albedo = vec3f(0.006, 0.007, 0.008);
+      metal = 0.0;
+      rough = 0.08;
+      coat = 0.6;
+      emit = pcdLight(in.uv, duvx, duvy, abs(dot(ng, normalize(-pS)))) * 1.1;
+    }
+    case 130u: {
+      let rg = in.uv.x;
+      let g = floor(rg / 256.0 + 1e-3);
+      albedo = pow(clamp(vec3f((rg - 256.0 * g) / 255.0, g / 255.0, in.uv.y), vec3f(0.0), vec3f(1.0)), vec3f(2.2));
+      metal = 0.0;
+      rough = 0.55;
+      coat = 0.0;
+    }
+    // (the deck's texts — the FCU's windows, the radios, the clock: src/a320/du/texts.ts —, their segments lit, cut out
+    // of their quad where unlit)
+    case 134u: {
+      let tx = textureSampleGrad(jetScreen, mapSamp, in.uv, duvx, duvy);
+      if (tx.a < 0.08) { discard; }
+      albedo = vec3f(0.01);
+      metal = 0.0;
+      rough = 0.3;
+      coat = 0.0;
+      emit = tx.rgb / max(tx.a, 0.08) * tx.a * 1.4;
+    }
     // the real traffic's airliners (ship.ts AIRLINERS): their livery's colour (a layer each), a glossy painted
     // skin; their lights' lenses a clear glass
     case 40u, 41u: {
@@ -859,6 +1013,16 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       metal = 0.15;
       rough = 0.32 + 0.1 * grime;
       coat = 0.45 * coat;
+    }
+    // the tanker (scripts/build-tanker.ts): the A320's map painted over a military grey — its livery's colours and
+    // whites the paint, its windows, wheels and dark trims kept dark —, a satin finish
+    case 43u: {
+      let c = textureSampleGrad(trafficAlbedo, mapSamp, in.uv, 0, duvx, duvy).rgb;
+      let hi = max(c.r, max(c.g, c.b));
+      albedo = mix(c * 0.6, vec3f(0.165, 0.175, 0.185), smoothstep(0.12, 0.3, hi));
+      metal = 0.1;
+      rough = 0.45 + 0.12 * grime;
+      coat = 0.2 * coat;
     }
     // the ships (scripts/build-ships.ts): the container ship's hull, bridge, containers on their maps (layers 2–4) —
     // painted steel, weathered —; the drawn ships' paints: antifouling, white, navy, deck, sailcloth, steel, orange
@@ -892,6 +1056,17 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       metal = 0.2;
       rough = 0.55;
       coat = 0.0;
+    }
+    // (a lamp — the refuelling pod's lights —: its flat colour glowing — display-referred, as the F-35's own lights)
+    case 91u: {
+      let rg = in.uv.x;
+      let g = floor(rg / 256.0 + 1e-3);
+      let c = pow(clamp(vec3f((rg - 256.0 * g) / 255.0, g / 255.0, in.uv.y), vec3f(0.0), vec3f(1.0)), vec3f(2.2));
+      albedo = c * 0.2;
+      metal = 0.0;
+      rough = 0.2;
+      coat = 0.0;
+      emit = c * 3.0;
     }
     case 42u: { albedo = vec3f(0.03); metal = 0.0; rough = 0.08; coat = 0.0; }
     // the F-35's panoramic display: its picture's light through an LCD panel under an anti-reflective glass (an
@@ -941,10 +1116,20 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // (a craft away from the flown one is not in its shadow map)
   let shOn = I.flags.y > 0.5;
   let sd = select(1.0, shadowAt(pR, ng, dom.xyz), shOn);
-  let occD = mix(1.0, sd, dirW) * ao;
+  // (the A320's flight deck: its sky seen through its windows, and that light bounced about its grey panels — the
+  // ceiling lit from below by the floor and the panels: half the light from all sides alike, whiter, the occlusion
+  // softer)
+  let deck = part >= 120u && part <= 139u;
+  let occD = mix(1.0, sd, dirW) * select(ao, mix(0.4, 1.0, ao), deck);
   let so = clamp(pow(nv + ao, exp2(-16.0 * rough - 1.0)) - 1.0 + ao, 0.0, 1.0); // specular occlusion (Lagarde)
   let occS = so * horizon * horizon * mix(1.0, sd, specW);
-  let E = irradiance(n);
+  var E = irradiance(n);
+  if (deck) {
+    // (the irradiance averaged over all directions: the probe's constant term's — π Y₀₀ L₀₀)
+    let Eall = max(PI * 0.282095 * sh[0].rgb, vec3f(0.0));
+    let Ed = mix(E, Eall, 0.55);
+    E = mix(vec3f(dot(Ed, vec3f(0.2126, 0.7152, 0.0722))), Ed, 0.35) * 1.5;
+  }
 
   // base layer: metal/paint, with multiple-scattering energy compensation (Fdez-Agüera 2019)
   let f0 = mix(vec3f(select(0.04, 0.006, part == 36u)), albedo, metal);
@@ -1025,6 +1210,12 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // the hardware's plain mean of HDR values left the lit edges jagged; compFs undoes it)
   // (the thrusters light the flown craft; the lights, display-referred too: seen whatever the exposure)
   let own = select(0.0, 1.0, in.ii == 0u);
+  // (the A320's flight deck: its dome and flood lights — a warm fill at the CABIN knob's level, red with the NIGHT
+  // switch; faint by day — display-referred, as the Ranger's cabin's)
+  if (deck) {
+    let lampCol = mix(vec3f(1.0, 0.93, 0.82), vec3f(1.4, 0.16, 0.05), S.cab.y);
+    emit += (albedo * (1.0 - metal) + f0 * 0.2) * lampCol * (0.12 * S.cab.x * mix(0.15, 1.0, deckNight())) * mix(0.5, 1.0, ao);
+  }
   // (the flown Ranger's lamps: their lenses lit on its hull — their glare is drawn with the flames)
   if (in.ii == 0u) {
     for (var i = 0u; i < u32(S.lampN.x); i++) {
@@ -1407,7 +1598,9 @@ struct Seg {
   a: vec4f, // end a (ship frame), its width [m]
   b: vec4f,
   k: vec4f, // optical depths at a and b, distances along the trail [m]
-  m: vec4f, // kind (0 an engine's, 1 a wingtip's, 2 a wing's vapour sheet, 3 a fighter's wingtip thread, 4 a missile's smoke)
+  m: vec4f, // kind (0 an engine's, 1 a wingtip's, 2 a wing's vapour sheet, 3 a fighter's wingtip thread, 4 a missile's smoke,
+            // 5 a flare's, 6 a chaff bundle's cloud, 7 a wet runway's spray, 8 a tyre's smoke, 9 an airliner's wing's
+            // veil — contrails.ts TrailKind)
 };
 @group(0) @binding(19) var<storage, read> segs: array<Seg>;
 
@@ -1457,7 +1650,10 @@ fn trailFs(in: TOut) -> @location(0) vec4f {
   if (S.img.w > 0.5 && in.p.z > 0.0) {
     let px = vec2f((in.p.x / (in.p.z * S.proj.x) + 1.0) * 0.5, (1.0 - in.p.y / (in.p.z * S.proj.y)) * 0.5) * S.img.xy;
     let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
-    if (sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z < dist) { discard; }
+    // (a runway's spray, a tyre's smoke: lying on the ground — the traced depth's coarse steps would cut them, a
+    // margin as deep as they are wide)
+    let margin = select(0.0, 8.0, in.kind > 6.5 && in.kind < 8.5);
+    if (sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z < dist - margin) { discard; }
   }
   // across a round tube: the chord through it, a soft edge; puffs along it (fixed in the air) and
   // ragged edges, the wingtips' a twisting thread
@@ -1466,7 +1662,13 @@ fn trailFs(in: TOut) -> @location(0) vec4f {
   let tip = in.kind > 0.5;
   // (a vapour sheet's: finer, more ragged — it is torn off the wing in tatters)
   // (a missile's smoke: puffs a dozen metres apart, billowing)
-  let sc = select(45.0, select(select(6.0, 2.2, in.kind > 1.5 && in.kind < 2.5), 12.0, in.kind > 3.5), tip);
+  // (a flare's rope: tight puffs a couple of metres apart; a chaff bundle's cloud: clumps of four)
+  var sc = select(45.0, select(select(6.0, 2.2, in.kind > 1.5 && in.kind < 2.5), 12.0, in.kind > 3.5), tip);
+  if (in.kind > 4.5) { sc = select(2.0, 4.0, in.kind > 5.5); }
+  // (a runway's spray: clumps a metre and a half apart; a tyre's smoke: tight puffs)
+  if (in.kind > 6.5) { sc = select(1.6, 1.1, in.kind > 7.5); }
+  // (a wing's veil: torn in tatters, as a fighter's sheet)
+  if (in.kind > 8.5) { sc = 2.2; }
   let nz = vnoise(vec3f(in.s / sc, x * 1.7, in.kind * 7.3)) * 0.65 + vnoise(vec3f(in.s / (0.3 * sc), x * 4.1, 3.1)) * 0.35;
   let edge = smoothstep(0.0, 0.35, chord - 0.25 * (nz - 0.5));
   var tau = in.tau * chord * edge * (0.55 + 0.9 * nz);
@@ -1487,7 +1689,9 @@ fn trailFs(in: TOut) -> @location(0) vec4f {
   let ct = dot(-l, vdir);
   let hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * ct, 1.5);
   let Ea = 0.5 * (irradiance(vdir) + irradiance(-vdir));
-  let L = (0.85 / PI) * (Ek * (0.35 + 0.65 * hg) + Ea);
+  // (a tyre's smoke: a bluish grey — burnt rubber, a duller scatterer than ice or water)
+  let alb = select(0.85, 0.72, in.kind > 7.5 && in.kind < 8.5);
+  let L = (alb / PI) * (Ek * (0.35 + 0.65 * hg) + Ea);
   return vec4f(L * S.light.x * a, a);
 }
 
@@ -1506,14 +1710,18 @@ struct LOut {
 
 @vertex
 fn lampVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> LOut {
-  let L = S.lamp[3u * ii];
-  let c = (S.model * vec4f(L.xyz, 1.0)).xyz;
+  // (the lamps first, then the glares from their own slots on)
+  let si = select(16u + ii - u32(S.lampN.x), ii, ii < u32(S.lampN.x));
+  let L = S.lamp[3u * si];
+  let glare = S.lamp[3u * si + 2u].w < -2.5;
+  let c = select((S.model * vec4f(L.xyz, 1.0)).xyz, L.xyz, glare);
   let CX = array<f32, 6>(-1.0, 1.0, -1.0, -1.0, 1.0, 1.0);
   let CY = array<f32, 6>(-1.0, -1.0, 1.0, 1.0, -1.0, 1.0);
   // (a pixel's size there; the glare 20 cm — a landing light's 35 — or 12 px, whichever is more: close by,
   // the lens itself shows on the hull)
   let mpx = 2.0 * max(c.z, 0.05) * S.proj.y / max(S.img.y, 1.0);
-  let r = max(select(0.2, 0.35, S.lamp[3u * ii + 2u].w > -1.5), 12.0 * mpx);
+  // (a glare: its own size, or 16 px — a flare a burning star at any range)
+  let r = select(max(select(0.2, 0.35, S.lamp[3u * si + 2u].w > -1.5), 12.0 * mpx), max(L.w, 16.0 * mpx), glare);
   var o: LOut;
   // (hidden where the traced image holds something nearer — the lamp's own pixel, read here, once a corner:
   // read by each of the glare's fragments it cost 5 ms; a depth not traced yet — the image starting over as
@@ -1533,7 +1741,7 @@ fn lampVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> L
   if (o.clip.w > 0.0) { o.clip.z = clamp(o.clip.z, 1e-6 * o.clip.w, 0.99999 * o.clip.w); }
   o.c = c;
   o.uv = vec2f(CX[vi], CY[vi]);
-  o.i = ii;
+  o.i = si;
   o.rpx = r / mpx;
   return o;
 }
@@ -1822,6 +2030,222 @@ fn cabinShade(in: VOut, front: bool, glassPass: bool) -> vec4f {
 }
 
 // ------------------------------------------------------------------------------------ the F-35's glass
+// ------------------------------------------------------------------------- the A320's windshield, from inside
+// (docs/PLAN-A320.md, A13 — src/a320/glass.ts): the rain on the flight deck's windows — beads that sit and are renewed,
+// runners carried up and out by the air at speed, down by their weight when parked, a wet film —, the wipers' sweeps
+// cleared as the arms pass and wetted again by the rain, the frost; each bead a small lens — the scene behind it
+// shifted and inverted, its rim darker, a glint —; a hashed grid on the glass (one cell a layer, no loops).
+fn a320H22(p: vec2f) -> vec2f {
+  let q = vec2f(dot(p, vec2f(127.1, 311.7)), dot(p, vec2f(269.5, 183.3)));
+  return fract(sin(q) * 43758.5453);
+}
+
+// One layer of drops on the glass's plane [m]: its cells' size, the drops' motion [m/s] (0: they sit), their share
+// of the cells, their life [s] (each cell's drop drawn again after it), how they stretch along their motion: the
+// bead's height (0…1) and its slope on the glass's axes.
+fn a320Drops(p: vec2f, cell: f32, t: f32, vel: vec2f, dens: f32, life: f32, stretch: f32, seed: f32) -> vec3f {
+  let pm = p - vel * t;
+  let g = pm / cell;
+  let id = floor(g);
+  let f = fract(g) - 0.5;
+  let h0 = a320H22(id + vec2f(seed, seed * 1.7));
+  let ph = t / life + h0.x * 7.0;
+  let r = a320H22(id * 1.37 + vec2f(floor(ph) * 3.1 + seed, h0.y * 11.0));
+  if (r.x > dens) { return vec3f(0.0); }
+  let c = (vec2f(r.y, fract(r.x * 17.3)) - 0.5) * 0.5;
+  let rad = mix(0.12, 0.26, fract(r.y * 13.1));
+  // (stretched along the motion: a runner an oval, its tail a thin trail behind it)
+  let sp = length(vel);
+  let u = select(vec2f(0.0, 1.0), vel / max(sp, 1e-5), sp > 1e-4);
+  let w = vec2f(u.y, -u.x);
+  let d = f - c;
+  let e = vec2f(dot(d, w), dot(d, u) / stretch);
+  let q = length(e) / rad;
+  // (a drop fades in as it lands and out as it is renewed)
+  let age = fract(ph);
+  let fade = smoothstep(0.0, 0.08, age) * (1.0 - smoothstep(0.85, 1.0, age));
+  var hgt = 0.0;
+  var gr = vec2f(0.0);
+  if (q < 1.0) {
+    hgt = sqrt(1.0 - q * q) * fade;
+    gr = (w * e.x + u * e.y / stretch) / (rad * max(sqrt(1.0 - q * q), 0.08));
+  } else if (stretch > 1.05) {
+    // (the trail: behind it, narrow, thin)
+    let back = -dot(d, u);
+    let across = abs(dot(d, w));
+    let tl = rad * stretch * 2.5;
+    if (back > 0.0 && back < tl && across < rad * 0.28) {
+      hgt = 0.25 * (1.0 - back / tl) * (1.0 - across / (rad * 0.28)) * fade;
+      gr = w * sign(dot(d, w)) * 0.6;
+    }
+  }
+  return vec3f(hgt, gr);
+}
+
+// How wet a point of the glass is behind one wiper (1: untouched): its pivot, its axis, its blade's rest direction (the
+// exterior's rig), its place on its 56° sweep and its rate (100 + its time at rest: parked) — src/a320/glass.ts
+// sinceWiped, wetAfter.
+fn a320Wiped(q: vec3f, c: vec3f, ax: vec3f, tip: vec3f, pos: f32, rate: f32, rain: f32) -> f32 {
+  let d = q - c;
+  let dp = d - ax * dot(d, ax);
+  let rest = normalize((tip - c) - ax * dot(tip - c, ax));
+  var up = normalize(cross(ax, rest));
+  if (up.y < 0.0) { up = -up; }
+  let rr = length(dp);
+  if (rr < 0.18 || rr > 0.86) { return 1.0; }
+  let s = atan2(dot(dp, up), dot(dp, rest)) / radians(56.0);
+  if (s < -0.015 || s > 1.015) { return 1.0; }
+  let sc = clamp(s, 0.0, 1.0);
+  var t = 1e6;
+  if (rate >= 100.0) {
+    t = rate - 100.0 + sc / 3.167;
+  } else if (abs(rate) > 1e-3) {
+    let ar = abs(rate);
+    if (rate > 0.0) { t = select((sc + pos) / ar, (pos - sc) / ar, sc <= pos); } else { t = select((2.0 - sc - pos) / ar, (sc - pos) / ar, sc >= pos); }
+  }
+  return 1.0 - exp(-t * (0.25 + 2.2 * rain));
+}
+
+// The scene behind the glass (screenRefl), its odd texels — not finite, absurdly bright — left out: a bead's or the
+// frost's light from it.
+fn a320Behind(d: vec3f, a: f32) -> vec4f {
+  let sr = screenRefl(d, a);
+  let cap = 64.0 / max(S.light.x, 1e-30);
+  let ok = all(sr.rgb == sr.rgb) && all(abs(sr.rgb) < vec3f(cap)) && sr.w == sr.w;
+  return select(vec4f(0.0), vec4f(max(sr.rgb, vec3f(0.0)), clamp(sr.w, 0.0, 1.0)), ok);
+}
+
+// The water and the frost on a window of the flight deck: what to lay over the glass (premultiplied — the scene seen
+// through each bead, the frost's white), its cover.
+fn a320Wet(in: VOut, gn: vec3f, gv: vec3f) -> vec4f {
+  let rain = clamp(S.wg0.x, 0.0, 1.3);
+  let t = S.wg0.y;
+  let V = S.wg0.z;
+  let ice = S.wg0.w;
+  let q = in.q;
+  let qn = normalize(in.qn);
+  // (the glass's own axes: up along it, across it)
+  let e2 = normalize(vec3f(0.0, 1.0, 0.0) - qn * qn.y + vec3f(0.0, 1e-4, 0.0));
+  let e1 = cross(e2, qn);
+  let p = vec2f(dot(q, e1), dot(q, e2));
+  // (the wipers: the drops cleared behind them — the captain's on the left, x > 0)
+  var wet = 1.0;
+  if (rain > 0.0) {
+    if (q.x > -0.05) {
+      wet = min(wet, a320Wiped(q, vec3f(0.119353, 2.938889, 17.4353), vec3f(-0.330189, -0.661803, -0.673047), vec3f(0.843, 2.984, 16.972), S.wg1.x, S.wg1.z, rain));
+    }
+    if (q.x < 0.05) {
+      wet = min(wet, a320Wiped(q, vec3f(-0.119445, 2.93916, 17.4335), vec3f(0.328484, -0.65815, -0.677449), vec3f(-0.843, 2.984, 16.972), S.wg1.y, S.wg1.w, rain));
+    }
+  }
+  var h = vec3f(0.0);
+  if (rain > 0.0 && wet > 0.02) {
+    let k = clamp(rain, 0.0, 1.0);
+    // (the air's stream: past some 15 m/s the runners go up and out, the beads blown off past 90; parked, down)
+    let blow = smoothstep(12.0, 45.0, V);
+    let outward = sign(dot(e1, vec3f(q.x, 0.0, 0.0)) + 1e-4);
+    let vrun = mix(vec2f(0.0, -0.035), vec2f(0.22 * outward, 1.0) * clamp((V - 10.0) * 0.012, 0.0, 1.4), blow);
+    let keep = 1.0 - 0.8 * smoothstep(60.0, 110.0, V);
+    let beads = a320Drops(p, 0.0075, t, vec2f(0.0), (0.18 + 0.5 * k) * keep * wet, mix(2.5, 0.8, blow), 1.0, 3.0);
+    let runners = a320Drops(p, 0.028, t, vrun, (0.1 + 0.2 * k) * wet * mix(1.0, 0.6, blow), mix(5.0, 1.2, blow), mix(1.2, 1.8, blow), 11.0);
+    h = select(beads, runners, runners.x > beads.x);
+  }
+  // (the bead: the scene behind it bent — inverted at its heart —, its rim darker, a glint of the sky on its top)
+  var col = vec3f(0.0);
+  var a = 0.0;
+  if (h.x > 0.0) {
+    let m3 = mat3x3f(S.model[0].xyz, S.model[1].xyz, S.model[2].xyz);
+    let bend = (m3 * (e1 * h.y + e2 * h.z)) * 0.035;
+    let dir = normalize(-gv - bend);
+    // (what the bead shows: the scene bent — out of the traced image, the scene straight behind it, dimmed)
+    let sr = a320Behind(dir, 0.002);
+    let s0 = a320Behind(-gv, 0.002);
+    let behind = mix(s0.rgb * 0.8, sr.rgb, sr.w * s0.w) + (1.0 - s0.w) * irradiance(-gn) / PI * 0.5;
+    let rim = 1.0 - 0.6 * smoothstep(0.35, 0.95, 1.0 - h.x);
+    let gl = pow(max(dot(normalize(vec2f(h.y, h.z) + vec2f(1e-5)), vec2f(0.25, 0.97)), 0.0), 24.0) * smoothstep(0.25, 0.6, 1.0 - h.x);
+    let skyE = irradiance(m3 * e2) / PI;
+    col = behind * rim * 0.95 + skyE * gl * 0.8;
+    a = smoothstep(0.0, 0.2, h.x) * 0.92;
+  }
+  // (a film of water where the wipers have not been: the view a touch hazier)
+  if (rain > 0.0) {
+    let film = 0.06 * clamp(rain, 0.0, 1.0) * wet;
+    col = col * a + irradiance(gn) / PI * 0.3 * film * (1.0 - a);
+    a = a + film * (1.0 - a);
+  } else {
+    col = col * a;
+  }
+  // (the frost: rime from the panes' grain, more of it as it thickens — white, lit by the cabin's day; the scene behind
+  // it blurred)
+  if (ice > 0.0) {
+    // (rime: a thin veil first, then crystals — feathered patches growing from the grain of the glass, its plies —
+    // the light scattered through it: the scene behind blurred and paled, the cabin's day on it)
+    let n = vnoise(q * 45.0 + vec3f(vnoise(q * 140.0) * 2.0)) * 0.6 + vnoise(q * 420.0) * 0.4;
+    let crystals = smoothstep(1.05 - ice * 0.75, 1.3 - ice * 0.75, n);
+    let fa = (0.5 * smoothstep(0.0, 0.5, ice) + 0.45 * crystals) * smoothstep(0.0, 0.1, ice);
+    // (its light: the scene behind it scattered — paled —, its crystals the brighter: the light they catch)
+    let sr = a320Behind(-gv, 0.004);
+    let L = dot(sr.rgb * sr.w, vec3f(0.2126, 0.7152, 0.0722));
+    let fc = mix(sr.rgb * sr.w, vec3f(L), 0.65) * (1.0 + 0.6 * crystals);
+    col = fc * fa + col * (1.0 - fa);
+    a = fa + a * (1.0 - fa);
+  }
+  return vec4f(col, a);
+}
+
+// The A320's glass (docs/PLAN-A320.md, A2): the windshield (106) — from outside a dark glass mirroring the sky by
+// its Fresnel —, the lights' lenses (107 red, 108 green, 109 white: a coloured clear glass over the lamp), the fan's
+// blur disc (115: the spinning blades' smear, translucent). Premultiplied, as the canopy's.
+fn a320Glass(in: VOut, front: bool, part: u32, fan: vec4f) -> vec4f {
+  let gn = normalize(in.n) * select(-1.0, 1.0, front);
+  let gv = normalize(-in.p);
+  let gnv = clamp(dot(gn, gv), 1e-4, 1.0);
+  let E = irradiance(gn) / PI;
+  // (from the flight deck — its windshield set: the wipers' rates never 0 then —, the flown craft's hull glass: its
+  // front and fixed side panes — the deck's own sliding windows aft of them — only as their water and frost; the
+  // lenses, the fan unseen)
+  if (S.wg1.z != 0.0 && in.ii == 0u && part != 127u && part != 128u && part != 129u) {
+    if (part != 106u || (abs(in.q.x) > 0.8 && in.q.z < 16.9) || (S.wg0.x <= 0.0 && S.wg0.w <= 0.0)) { return vec4f(0.0); }
+    let w = a320Wet(in, gn, gv);
+    let wo = w.rgb * S.light.x;
+    return vec4f(wo / (1.0 + dot(wo, vec3f(0.2126, 0.7152, 0.0722))), w.a);
+  }
+  if (part == 115u) {
+    let o = fan.rgb * E * S.light.x;
+    let a = 0.8;
+    return vec4f(o * a / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), a);
+  }
+  let F = 0.04 + 0.96 * pow(1.0 - gnv, 5.0);
+  let r = reflect(-gv, gn);
+  let sr = screenRefl(r, 0.0004);
+  var refl = mix(envSpec(r, 0.02), sr.rgb, sr.w);
+  if (sh[11].w > 0.5) {
+    let l = fromProbe(sh[9].xyz);
+    let hv = normalize(l + gv);
+    refl += sh[11].rgb * pow(clamp(dot(gn, hv), 0.0, 1.0), 800.0) * 40.0 * (1.0 - inFrame(l));
+  }
+  var tint = vec3f(0.006, 0.007, 0.009);
+  var cover = 0.9;
+  if (part == 107u) { tint = vec3f(0.5, 0.02, 0.02); cover = 0.45; }
+  if (part == 108u) { tint = vec3f(0.02, 0.4, 0.06); cover = 0.45; }
+  if (part == 109u) { tint = vec3f(0.5, 0.5, 0.5); cover = 0.25; }
+  // (from the flight deck: its windows nearly clear — a faint green-grey —, the HUD's combiner, the displays' glass;
+  // their reflections the Fresnel's, fainter: the cockpit's dimness, not the sky, behind the eye)
+  var fk = 1.0;
+  if (part == 127u) { tint = vec3f(0.35, 0.4, 0.37); cover = 0.04; fk = 0.5; }
+  if (part == 128u) { tint = vec3f(0.3, 0.45, 0.35); cover = 0.03; fk = 0.3; }
+  if (part == 129u) { tint = vec3f(0.0); cover = 0.0; fk = 0.25; }
+  var a = clamp(cover + 0.6 * F * fk, 0.0, 0.98);
+  var o = (refl * F * fk + tint * E * (1.0 - F) * cover) * S.light.x;
+  // (the flight deck's windows: the rain and the frost on them, over the glass — A13)
+  if (part == 127u && (S.wg0.x > 0.0 || S.wg0.w > 0.0)) {
+    let w = a320Wet(in, gn, gv);
+    o = w.rgb * S.light.x + o * (1.0 - w.a);
+    a = w.a + a * (1.0 - w.a);
+  }
+  return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), a);
+}
+
 // The canopy and the helmet's visor (materials 32, 34), over what the opaque draws left: premultiplied, both
 // faces, their depth not written. The canopy's gold film (its map's colour) tints what is seen through it and
 // covers it by its map's alpha; its faces reflect the sky — the traced image where it holds the direction,
@@ -1831,7 +2255,18 @@ override GLASS_MODE: u32 = 0u;
 @fragment
 fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let base = textureSample(jetAlbedo, mapSamp, in.uv, 1);
+  // (the A320's deck: the control under the pointer lit over — a soft cyan added, its edges brighter)
+  if (GLASS_MODE == 3u) {
+    let gv = normalize(-in.p);
+    let rim = 1.0 - abs(dot(normalize(in.n), gv));
+    let c = vec3f(0.12, 0.3, 0.38) * (0.35 + 0.65 * rim * rim);
+    return vec4f(c / (1.0 + dot(c, vec3f(0.2126, 0.7152, 0.0722))), 0.0);
+  }
+  // (the A320's fan disc: its blur, in the engines' cell)
+  let fanUv = a320Map(115u, in.uv);
+  let fan = textureSample(a320Albedo, mapSamp, fanUv.yz, 2);
   let part = u32(in.mat + 0.5);
+  if ((part >= 106u && part <= 109u) || part == 115u || (part >= 127u && part <= 129u)) { return a320Glass(in, front, part, fan); }
   if (part != 32u && part != 34u) { discard; }
   if (GLASS_MODE == 2u) { return vec4f(0.002, 0.002, 0.0, 0.1); }
   let gn = normalize(in.n) * select(-1.0, 1.0, front);

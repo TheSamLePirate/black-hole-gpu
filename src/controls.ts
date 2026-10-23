@@ -1,10 +1,11 @@
+import type { TcasAdvisory } from "./radar/tcas";
 import type { MlsReading } from "./game/mls";
 import { JetPad, type JetPadOut } from "./input/jetpad";
 import { SpacePad, type SpacePadOut } from "./input/spacepad";
 import { Autothrottle, type JetModes, noJetModes } from "./game/jet";
 import { CineBrain } from "./cine/brain";
 import { Follow } from "./cine/follow";
-import type { CockpitInput } from "./cockpit/input";
+import type { CockpitPointer } from "./cockpit/input";
 import { setHomePose, type cameraFrame } from "./camera";
 import type { RealInfo } from "./realweather";
 import type { WeatherState } from "./weather";
@@ -54,6 +55,11 @@ import { type AeroRun, installAerobatics } from "./controller/aerobatics";
 import type { FigureId } from "./game/aerobatics";
 import { GStrain } from "./game/gstrain";
 import { installRadar, Radar, type RadarSource } from "./controller/radar";
+import { installSpacePic } from "./controller/spacepic";
+import { installTdc } from "./controller/tdc";
+import { Tdc } from "./input/tdc";
+import { installOwnTrack, type TrackPoint } from "./controller/owntrack";
+import { TrailStore } from "./radar/picture";
 import type { RadarObject } from "./game/radar";
 import { type FormState, installFormation } from "./controller/formation";
 import { type IcptState, installIntercept } from "./controller/intercept";
@@ -90,12 +96,18 @@ import { installSpaceCourse } from "./controller/spacecourse";
 import { installSystems } from "./controller/systems";
 import { installGcas } from "./controller/gcas";
 import { installJetModes } from "./controller/jetmodes";
+import { installAar } from "./controller/aar";
 import { installCopilot } from "./controller/copilot";
 import { installCourse } from "./controller/course";
 import { installReplay } from "./controller/replay";
 import { installInstructor } from "./controller/instructor";
 import { installNetcraft } from "./controller/netcraft";
 import { installStovl, noStovl, type StovlState } from "./controller/stovl";
+import type { A320Fcs } from "./a320/fcs";
+import { installA320 } from "./controller/a320";
+import { installA320Ap } from "./controller/a320ap";
+import { installA320Ground } from "./controller/a320ground";
+import { installA320Taxi } from "./controller/a320taxi";
 import { CamShake } from "./camshake";
 import { installCine } from "./controller/cine";
 import { installCamRig } from "./controller/camrig";
@@ -193,6 +205,8 @@ export interface DockInfo {
 export interface RunwayView {
   name: string;
   rwy: number;
+  /** its length [m] (a world runway's own — PLAN-RADAR-AAA RD13 —; the sites' 4 500) */
+  len?: number;
   along: number;
   across: number;
   agl: number;
@@ -344,6 +358,10 @@ export class CameraController {
   onPilotMessage?: (text: string) => void;
   /** a click in the F-35's cockpit (ndc): on its panoramic display, a touch — true: taken (main.ts) */
   onJetTouch?: (nx: number, ny: number) => boolean;
+  /** the wheel over a radar (PLAN-RADAR-AAA P11 — main.ts: the HUD's scope, the PCD's TSD and FCR): its range a step;
+   *  true: taken (the camera's field untouched). (x, y) CSS px in the canvas, (nx, ny) its NDC, `dir` the notch's sign */
+  onRadarWheel?: (x: number, y: number, nx: number, ny: number, dir: number) => boolean;
+  private radarWheelAcc = 0;
   /** the F-35 chosen where it is not: put it on a runway (main.ts: GameTools.lineUp) */
   onJetStart?: () => void;
   /** the flown craft entering the air (the last moment before an entry: a point to resume from) */
@@ -651,7 +669,7 @@ export class CameraController {
 
   /** The cockpit's controls under the pointer (PLAN-COCKPIT — main.ts sets it): their input, whether the
    *  cabin is what the view shows, the tip shown (a control's id, or none) */
-  cockpit: { input: CockpitInput; active(): boolean; tip(id: string | null, x: number, y: number): void } | null = null;
+  cockpit: { input: CockpitPointer; active(): boolean; tip(id: string | null, x: number, y: number): void } | null = null;
   /** a control held by the pointer: which pointer, where it was pressed and when, where it is */
   private ckHeld: { id: number; x0: number; y0: number; t: number; x: number; y: number } | null = null;
   private ckWheel = 0;
@@ -676,9 +694,11 @@ export class CameraController {
     // (in the cabin: pressed on a control, the control is held — the look's drags stay the right button's
     // and Shift's)
     const ck = this.cockpit;
-    if (ck && e.button === 0 && !e.shiftKey && this.pointers.size === 0 && ck.active()) {
+    // (the A320's: the middle button — or Alt with the left — pulls FlightGear's knobs)
+    const middle = !!ck?.input.middle && (e.button === 1 || (e.button === 0 && e.altKey));
+    if (ck && (e.button === 0 || middle) && !e.shiftKey && this.pointers.size === 0 && ck.active()) {
       const [nx, ny] = this.ndcOf(e);
-      if (ck.input.down(nx, ny)) {
+      if (ck.input.down(nx, ny, middle ? 1 : 0)) {
         this.canvas.setPointerCapture(e.pointerId);
         this.ckHeld = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now(), x: e.clientX, y: e.clientY };
         this.setHover(null);
@@ -741,6 +761,8 @@ export class CameraController {
       const [nx, ny] = this.ndcOf(e);
       // (the F-35's cockpit: a touch on its panoramic display — main.ts)
       if (this.onJetTouch?.(nx, ny)) return;
+      // (flying in the air: a click selects a track — in the view, on the HUD's scope —, never a body: PLAN-RADAR-AAA RD9)
+      if (this.onTrackPick?.(e.clientX - r.left, e.clientY - r.top)) return;
       const inside = this.cockpit?.active() ? this.cockpit.input.move(nx, ny) : null;
       if (inside) {
         // (nothing: the cabin hides the sky there)
@@ -885,6 +907,21 @@ export class CameraController {
       }
       if (this.cockpit.input.hover) {
         this.cockpit.tip(this.cockpit.input.focus, e.clientX, e.clientY);
+        return;
+      }
+    }
+    // (over a radar — the HUD's scope, the PCD's TSD or FCR —: a step of its range a notch, 50 px; the field untouched)
+    if (e.deltaY && this.onRadarWheel) {
+      const r = this.canvas.getBoundingClientRect();
+      const [nx, ny] = this.ndcOf(e);
+      const x = e.clientX - r.left,
+        y = e.clientY - r.top;
+      if (this.onRadarWheel(x, y, nx, ny, 0)) {
+        this.radarWheelAcc += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+        while (Math.abs(this.radarWheelAcc) >= 50) {
+          this.onRadarWheel(x, y, nx, ny, Math.sign(this.radarWheelAcc));
+          this.radarWheelAcc -= 50 * Math.sign(this.radarWheelAcc);
+        }
         return;
       }
     }
@@ -1065,6 +1102,48 @@ export class CameraController {
   shakeContact = 0;
   /** the F-35B's STOVL mode (controller/stovl.ts) */
   stovl: StovlState = noStovl();
+  /** the A320's systems, flown (src/a320/fcs.ts): made with its first frame */
+  a320: A320Fcs | null = null;
+  /** its flight guidance (src/a320/fmgc — controller/a320ap.ts): made with its first frame; its last inputs and orders;
+   *  the ILS it tunes */
+  a320Fmgc: import("./a320/fmgc/fmgc").Fmgc | null = null;
+  a320FmgcIn: import("./a320/fmgc/fmgc").FmgcIn | null = null;
+  a320FmgcOut: import("./a320/fmgc/fmgc").FmgcOut | null = null;
+  a320Ils: import("./game/ils").IlsRunway | null = null;
+  /** the A320's systems (src/a320/systems — controller/a320.ts): made with its first frame on its deck's bag, which
+   *  stays across flights (main.ts shares it with the deck's controls and displays) */
+  a320Sys: import("./a320/systems").A320Systems | null = null;
+  a320Props: import("./a320/rig").Props = {};
+  /** its failures (src/a320/failures.ts — controller/a320.ts), kept across flights (cleared at each), its ADRs and
+   *  what they read last; a failure happening told (main.ts: the toast, the log) */
+  a320Fail: import("./a320/failures").FailureSet | null = null;
+  a320Adr: import("./a320/failures").AdrSet | null = null;
+  a320AdrOut: ReturnType<import("./a320/failures").AdrSet["step"]> | null = null;
+  a320Failed: ((id: string) => void) | null = null;
+  /** its ground services and its pushback (src/a320/services.ts, pushback.ts — controller/a320ground.ts): made with
+   *  their first use; the push's frame's origin, the tug's last output; what they say (main.ts: the toast) */
+  a320Ground: import("./a320/services").GroundServices | null = null;
+  a320Push: import("./a320/pushback").Pushback | null = null;
+  a320PushOrigin: { lat: number; lon: number } | null = null;
+  a320PushOut: import("./a320/pushback").PushOut | null = null;
+  a320Said: ((m: string) => void) | null = null;
+  /** its wings' bend under their load (src/a320/flex.ts — controller/a320.ts): the spring, the tip's rise now [m] */
+  a320Flex: import("./a320/flex").WingFlex | null = null;
+  a320WingTip = 0;
+  /** the tip's rise forced (captures, tests: the bend at a load shown at rest), null: the flight's */
+  a320WingTipForce: number | null = null;
+  /** its ECAM (src/a320/ecam — controller/a320.ts): the E/WD's messages, the master lights, the SD's pages */
+  a320Ecam: import("./a320/ecam").Ecam | null = null;
+  /** its taxi (controller/a320taxi.ts): the airport's network, the route, the clearance, the guidance */
+  a320Taxi: import("./controller/a320taxi").TaxiState | null = null;
+  /** what its hydraulics still move (failures.ts surfacesPowered: the gear, the steering, the brakes…); its gear's
+   *  gravity extension pulled (the green system lost: the gear falls by its own weight — ui/a320page.ts) */
+  a320Pw: import("./a320/failures").Powered | null = null;
+  a320Gravity = false;
+  /** the A320's reverse lever 0…1 (its thrust reversers: on the ground, the levers at idle) */
+  a320Reverse = 0;
+  /** the A320's parking brake (its deck's handle — src/a320/deckgame.ts) */
+  a320Park = false;
   readonly jetAthr = new Autothrottle();
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
   /** a formation flown on another's craft (game/formation.ts — controller/formation.ts), null: none */
@@ -1097,9 +1176,34 @@ export class CameraController {
   readonly gStrain = new GStrain();
   /** the F-35's radar (game/radar.ts, controller/radar.ts), its clock [s], its sources by name */
   readonly radar = new Radar();
+  /** the designation cursor (input/tdc.ts, controller/tdc.ts — constat 29) */
+  readonly tdc = new Tdc();
   radarT = 0;
   /** a whole sweep asked (a fight begun) */
   radarSweep = false;
+  /** the tactical picture (controller/radar.ts pictureStep — PLAN-RADAR-AAA RD2) */
+  picture: import("./radar/picture").Picture | null = null;
+  /** the track selected on the pilot's screens (RD9) */
+  pictureSelected: string | null = null;
+  /** the picture's building time, smoothed [ms] */
+  pictureMs = 0;
+  /** the tracks' histories and their clock [s] (radar/picture.ts TrailStore — PLAN-RADAR-AAA RD7) */
+  trails = new TrailStore();
+  /** the TCAS's advisories now (PLAN-RADAR-AAA RD4 — radar/tcas.ts): the most urgent first */
+  tcas: TcasAdvisory[] = [];
+  /** the Link 16 heard (PLAN-RADAR-AAA RD12 — net/link16.ts): the things the room's teammates' radars hold, by their
+   *  shared key — their IFF, who said it, when [ms]; our slot and whether a match runs (the keys' own reading) */
+  readonly l16In = new Map<string, { iff: string; from: number; at: number }>();
+  l16Me = -1;
+  l16InMatch = false;
+  spacePic: import("./controller/spacepic").SpacePic | null = null;
+  trailT = 0;
+  /** the craft's own trace over the Earth and its track's rate (controller/owntrack.ts — PLAN-RADAR-AAA RD15) */
+  ownTrack: { pts: TrackPoint[]; clock: number; lastTrack: number | null; rate: number } = { pts: [], clock: 0, lastTrack: null, rate: 0 };
+  /** the selected track last in the picture [the radar's s] */
+  pictureSelectedSeen: number | null = null;
+  /** a click in the view (CSS px on the canvas): a track picked there (main.ts — PLAN-RADAR-AAA RD9) — true: taken */
+  onTrackPick?: (x: number, y: number) => boolean;
   readonly radarSources = new Map<string, RadarSource>();
   /** the sources' things at the radar's last frame (the picture shared: an intercept's target out of the beam) */
   radarObjects: RadarObject[] = [];
@@ -1189,6 +1293,10 @@ export class CameraController {
   /** The runway an autopilot's landing rolls out on (its nose wheel steered along it), until stopped. */
   rollSite: Site | null = null;
 
+  /** the A320's air and ground effects (src/a320/effects.ts: its vapour, its vortices, its tyres' smoke, the spray),
+   *  the scene's time of their last step */
+  a320Fx: import("./a320/effects").A320Fx | null = null;
+  a320FxAt: number | null = null;
   /** the engines' and the wingtips' condensation trails (contrails.ts), kept in the air */
   readonly contrails = new Contrails();
   contrailBuf = new Float32Array(MAX_SEGMENTS * SEG_FLOATS);
@@ -1405,6 +1513,11 @@ export class CameraController {
   } | null = null;
   /** the stick's redesignation of the landing point this frame (the LPD): forward, right (−1 … 1) */
   lpdIn: { fwd: number; right: number } | null = null;
+  /** a crew's redesignation of the landing point (PLAN-VAISSEAUX K6 · ui/crew-exec.ts sp.lpd), taken at the landing's
+   *  next step: a place on the body [°], or a shift over the ground (forward along the track, right) [m] */
+  lpdOrder: { lat: number; lon: number } | { fwd: number; right: number } | null = null;
+  /** the crew's two clocks taken together at the flight's start (ui/crew-space.ts: the time gone by on the Earth) */
+  crewClock0: { t: number; tau: number; lastT: number; lastTau: number } | null = null;
   /** the powered landing's point this frame (home frame [M]), for the HUD's LPD marker */
   lpdPad: Vec3 | null = null;
 
@@ -1530,6 +1643,9 @@ installTrap(CameraController);
 installQuals(CameraController);
 installAerobatics(CameraController);
 installRadar(CameraController);
+installSpacePic(CameraController);
+installTdc(CameraController);
+installOwnTrack(CameraController);
 installFplan(CameraController);
 installChallenge(CameraController);
 installCombat(CameraController);
@@ -1550,12 +1666,17 @@ installSpaceChallenge(CameraController);
 installSpaceMission(CameraController);
 installGcas(CameraController);
 installJetModes(CameraController);
+installAar(CameraController);
 installCopilot(CameraController);
 installCourse(CameraController);
 installReplay(CameraController);
 installInstructor(CameraController);
 installNetcraft(CameraController);
 installStovl(CameraController);
+installA320(CameraController);
+installA320Ap(CameraController);
+installA320Ground(CameraController);
+installA320Taxi(CameraController);
 installCine(CameraController);
 installCamRig(CameraController);
 installTravel(CameraController);

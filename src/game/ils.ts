@@ -268,10 +268,24 @@ export function ilsStep(
     const want = crs + clamp(-0.0015 * (r.across + 8 * xRate), -45 * D, 45 * D);
     if (!R.loc && r.locIn && Math.abs(r.across) < 150 && Math.abs(xRate) < 8) R.loc = true;
     const call = R.loc ? say("Localizer captured") : undefined;
-    const hHold = Math.max(iafH, Math.min(own.alt - W.elev, iafH + 300));
+    // (the level held to the glideslope's capture; on the localizer above it — a straight-in begun high —, the path
+    // joined from above: aimed 40 m under it, 5° down at most, captured as it is crossed)
+    // (above the path by the geometry itself — the glideslope's signal maybe not in reach yet, 16 km out)
+    const above = R.loc && r.along < 0 && r.h > gsHeight(r.along) + 30;
+    // (else, inside the initial fix: just under the path where we are — met from below, as an approach is flown —;
+    // farther: the initial fix's height — never the height the approach began at, 1 300 m kept down the final)
+    const hHold = above
+      ? Math.max(gsHeight(r.along) - 40, 120)
+      : r.along > -ILS.iaf
+        ? Math.max(Math.min(gsHeight(r.along) - 30, iafH), 150)
+        : iafH;
     // (the glideslope captured from below — or, established inside the final fix already, within a dot of it either
     // way: placed on a short final a little low, it went round at once)
-    if (R.loc && r.gsIn && (r.gs <= 0.05 || (r.along > -ILS.faf - 2000 && Math.abs(r.gs) < 1.2))) {
+    if (
+      R.loc &&
+      r.gsIn &&
+      (r.gs <= 0.05 || (r.along > -ILS.faf - 2000 && Math.abs(r.gs) < 1.2) || (r.h - gsHeight(r.along) < 15 && r.gs < 0.4))
+    ) {
       R.gs = true;
       R.phase = "final";
     }

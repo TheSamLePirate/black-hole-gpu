@@ -13,6 +13,7 @@ import type { SiteTrack } from "../fc/land-ops";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
 import type { Burn, FcContext, OpResult } from "../fc/ops";
 import { engineTrail, sheetTrail, tipTrail, type ContrailSource } from "../contrails";
+import { A320Fx, humidityOf } from "../a320/effects";
 import { MISSILES } from "../game/combat";
 import {
   kApoapsis,
@@ -1304,7 +1305,47 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
     // (from a little behind each exit: the exhaust condenses as it mixes)
     if (e > 0) V.jets.forEach((J, i) => J.main && src.push({ key: `e${i}`, p: at(lin(J.p, 1, J.d, 2)), kind: 0, str: e }));
     const wing = V.aero.wing;
-    const tip = V.wingtip;
+    // (the A320's own — src/a320/effects.ts: its wing's vapour, its vortices in humid air, its inlets', its tyres',
+    // a wet runway's spray —, in place of the generic wingtips')
+    const tip = fleet.active === "a320" ? null : V.wingtip;
+    if (fleet.active === "a320" && wing && this.s.a320Effects !== false) {
+      const A = this.a320;
+      const g = this.geoNow();
+      const onGround = !!this.rolling || !!this.ourLanded;
+      for (const f of (this.a320Fx ??= new A320Fx()).step({
+        dt: Math.min(Math.max(fr.now - (this.a320FxAt ?? fr.now), 0), 0.25),
+        cl: LA.out.q > 0 ? Math.abs(LA.out.L) / (LA.out.q * wing.S) : 0,
+        rho: LA.air.rho,
+        T: LA.air.T,
+        speed: LA.speed,
+        humidity: humidityOf(this.weatherNow),
+        flap: A?.surfaces.flap ?? 0,
+        onGround,
+        gs: g?.gs ?? LA.speed,
+        vz: g?.vs ?? 0,
+        engines: A ? A.engines.map((e) => ({ n1: e.n1, rev: e.rev })) : [],
+        wet: this.weatherNow?.rain ?? 0,
+        legs: this.gearLast?.legs.map((l) => l.load) ?? null,
+      }))
+        src.push({
+          key: f.key,
+          p: at(f.q),
+          kind: f.kind,
+          str: f.str,
+          ...(f.to ? { to: at(f.to) } : {}),
+          ...(f.mid ? { mid: at(f.mid) } : {}),
+        });
+      this.a320FxAt = fr.now;
+      // (the de-icing truck's boom spraying the wings — src/a320/services.ts —: its fluid's mist sweeping along the
+      // right wing's upper surface, then the left's)
+      const Gs = this.a320Ground;
+      if (Gs?.on.has("deice") && Gs.deiceLeft > 0) {
+        const u = (fr.now / 6) % 2;
+        const side = u < 1 ? -1 : 1;
+        const s = u % 1;
+        src.push({ key: "a320deice", p: at([side * (3 + 13 * s), 2.3 + 0.9 * s, -0.5 - 3.5 * s]), kind: 7, str: 0.9 });
+      }
+    }
     if (tip && wing && LA.out.q > 0) {
       const cl = Math.abs(LA.out.L) / (LA.out.q * wing.S);
       const t = tipTrail(cl, LA.air.rho, LA.air.T, LA.speed);
@@ -1441,6 +1482,15 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       if (Math.hypot(r[0]!, r[1]!, r[2]!) > 40_000) continue;
       const q = [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
       src.push({ key: `m${m.id}`, p: q, kind: 4, str: 1 });
+    }
+    // (the decoys — PLAN-RADAR-AAA RD8a —: a flare's white rope while it burns, a chaff bundle's puff as it blooms)
+    for (const d of CB.world.decoys) {
+      const burning = d.kind === "flare" ? d.t < 4.6 : d.t < 1.2;
+      if (!burning) continue;
+      const r = [d.p[0] - P.p[0], d.p[1] - P.p[1], d.p[2] - P.p[2]];
+      if (Math.hypot(r[0]!, r[1]!, r[2]!) > 30_000) continue;
+      const q = [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
+      src.push({ key: `d${d.id}`, p: q, kind: d.kind === "flare" ? 5 : 6, str: 1 });
     }
     // (an aircraft hit: its smoke, thicker the worse it is; destroyed, burning as it falls; crashed, a column of
     // smoke rising from where it hit for 45 s)

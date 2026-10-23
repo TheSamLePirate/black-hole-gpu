@@ -213,6 +213,11 @@ export const CREDITS: CreditSection[] = [
         url: "https://www.openstreetmap.org/copyright",
       },
       {
+        what: { fr: "Les terrains et les pistes du monde", en: "The world's airfields and runways" },
+        who: "OurAirports (public domain) — built into tiles by scripts/build-runways.ts",
+        url: "https://ourairports.com/data/",
+      },
+      {
         what: { fr: "Les adresses", en: "The addresses" },
         who: "Photon (komoot) · Nominatim — OpenStreetMap",
         url: "https://photon.komoot.io",

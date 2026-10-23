@@ -220,13 +220,19 @@ export interface Target {
     gMax: number;
     course?: { hdg: number; alt: number };
     route?: { pts: V3[]; next: number; loop?: boolean };
+    /** its bank at most [rad] (a tanker's 25° — its receivers on its hoses follow it —; else its g's); its roll rate
+     *  at most [rad/s] (a tanker's gentle 3°/s: its pods 11 m out rise and fall with its bank) */
+    bankMax?: number;
+    rollMax?: number;
+    /** its course held straight and level, its route left aside until let go (a tanker while it refuels) */
+    straight?: boolean;
     /** the lift's part across the path flown now [m/s²]; its bank [rad, + right], its vertical pull [m/s²] (eased
      *  towards the turn asked at its roll and pull rates) */
     lat?: V3;
     phi?: number;
     av?: number;
   };
-  /** the mesh it is drawn with (a mission's airliner: "a320"; else the F-35's) */
+  /** the mesh it is drawn with (a mission's airliner: "a320t"; else the F-35's) */
   mesh?: string;
   /** neither friend nor foe (a mission's airliner, until it turns hostile); its transponder off */
   neutral?: boolean;
@@ -269,6 +275,11 @@ export interface Missile {
   seen: Set<number>;
   /** another's (docs/PLAN-RESEAU.md R3): placed from the network, not stepped; its key there */
   remote?: string;
+  /** how it ended (PLAN-RADAR-AAA RD8: SPLASH or MISS shown 3 s where it did), the world's time then [s] */
+  end?: "splash" | "miss";
+  diedAt?: number;
+  /** its own time when it lost its target [s] (its self-destruct 6 s on) */
+  lostAt?: number;
 }
 
 export interface Bomb {
@@ -341,6 +352,9 @@ export interface TargetSpec {
   /** its route flown round and round (a tanker's racetrack) */
   routeLoop?: boolean;
   mesh?: string;
+  /** its bank at most [°] (a tanker's: 25), its roll rate at most [°/s] (a tanker's: 3) */
+  bankMax?: number;
+  rollMax?: number;
 }
 
 const SPEC: Record<TargetKind, { hp: number; rcs: number; speed: number; gMax: number; missiles: number }> = {
@@ -415,7 +429,7 @@ export class CombatWorld {
       diedAt: NaN,
       rcs: S.rcs,
       friendly: s.friendly,
-      mesh: s.mesh ?? (airliner ? "a320" : undefined),
+      mesh: s.mesh ?? (airliner ? "a320t" : undefined),
       ai: air
         ? {
             mode: airliner ? "course" : "patrol",
@@ -428,6 +442,8 @@ export class CombatWorld {
             route: s.route?.length
               ? { pts: s.route.map(([e, n, a]) => [e, n, this.groundZ(e, n) + a] as V3), next: 0, loop: s.routeLoop }
               : undefined,
+            bankMax: s.bankMax !== undefined ? s.bankMax * D : undefined,
+            rollMax: s.rollMax !== undefined ? s.rollMax * D : undefined,
           }
         : undefined,
       site: s.kind === "sam" || s.kind === "ship" ? { nextShot: 8, missiles: S.missiles } : undefined,
@@ -970,6 +986,9 @@ export class CombatWorld {
         }
       }
       const tg = this.aimOf(m, P);
+      // (its target lost — out of its cone, its decoy burnt out —: it destroys itself 6 s on, a MISS)
+      if (tg) m.lostAt = undefined;
+      else m.lostAt ??= m.t;
       let a: V3 = [0, 0, 0];
       if (tg) {
         // proportional navigation: a = N Vc (Ω × u) — the line of sight's turn rate, the closing speed
@@ -985,6 +1004,8 @@ export class CombatWorld {
         const close = segDist(m.p, add(m.p, mul(sub(m.v, tg.v), dt)), tg.p);
         if (close < M.fuze) {
           m.alive = false;
+          m.end = "splash";
+          m.diedAt = this.t;
           ev.push({ kind: "explode", p: [...m.p], size: 0.6 });
           if (m.target === -1) this.hurtPlayer(M.damage * (1 - (close / M.fuze) * 0.4), m.kind, ev);
           else if (m.target !== null && m.target > 0) {
@@ -1010,8 +1031,15 @@ export class CombatWorld {
       const acc = add(add(a, mul(u, thrust - M.drag * sp * sp)), [0, 0, tg ? 0 : -G]);
       m.v = add(m.v, mul(acc, dt));
       m.p = add(m.p, mul(m.v, dt));
-      if (m.t > M.life || (m.t > M.burn && len(m.v) < 200) || m.p[2] < this.groundZ(m.p[0], m.p[1])) {
+      if (
+        m.t > M.life ||
+        (m.t > M.burn && len(m.v) < 200) ||
+        (m.lostAt !== undefined && m.t - m.lostAt > LOST_DESTRUCT) ||
+        m.p[2] < this.groundZ(m.p[0], m.p[1])
+      ) {
         m.alive = false;
+        m.end = "miss";
+        m.diedAt = this.t;
         ev.push({ kind: "miss", missile: m.id });
         if (m.p[2] < this.groundZ(m.p[0], m.p[1]) + 5) ev.push({ kind: "explode", p: [...m.p], size: 0.5 });
       }
@@ -1116,9 +1144,13 @@ export class CombatWorld {
         A.mode = threat ? "defend" : d < (A.mode === "engage" ? 45_000 : 40_000) ? "engage" : "patrol";
       let want: V3;
       if (A.mode === "course") {
-        // (a course: its heading and height — or its route's next point, the last held —, no fight)
+        // (a course: its heading and height — or its route's next point, the last held —, no fight; held straight
+        // and level when asked — a tanker refuelling: its route's turns put off)
         const R = A.route;
-        if (R && R.next < R.pts.length) {
+        if (A.straight) {
+          const h = Math.hypot(q.fwd[0], q.fwd[1]) || 1;
+          want = [q.fwd[0] / h, q.fwd[1] / h, 0];
+        } else if (R && R.next < R.pts.length) {
           const to = sub(R.pts[R.next]!, q.p);
           if (len([to[0], to[1], 0]) < 1500) R.next++;
           if (R.next >= R.pts.length && R.loop) R.next = 0;
@@ -1201,7 +1233,7 @@ export class CombatWorld {
       const tl = len(turn);
       const gm = A.gMax * SKILL[this.opts.skill].g * G;
       const agile = A.gMax >= 7 ? 1 : A.gMax >= 3 ? 0.55 : 0.3;
-      const roll = (agile >= 1 ? 180 : agile > 0.5 ? 90 : 15) * D;
+      const roll = Math.min((agile >= 1 ? 180 : agile > 0.5 ? 90 : 15) * D, A.rollMax ?? Infinity);
       const ang = Math.acos(clamp(dot(want, u), -1, 1));
       const aWant: V3 = tl > 1e-6 ? mul(unit(turn), Math.min(gm, (sp * ang) / (1.2 / agile))) : [0, 0, 0];
       // (the bank asked — the horizontal pull over the weight and the vertical pull —, rolled to at its roll rate;
@@ -1212,7 +1244,8 @@ export class CombatWorld {
       const aH = dot(aWant, right),
         aV = dot(aWant, upP);
       const wt = G * Math.max(upP[2], 0.2);
-      const phiWant = clamp(Math.atan2(aH, Math.max(wt + aV, 0.3 * G)), -80 * D, 80 * D);
+      const bMax = A.bankMax ?? 80 * D;
+      const phiWant = clamp(Math.atan2(aH, Math.max(wt + aV, 0.3 * G)), -bMax, bMax);
       const phi = (A.phi ?? 0) + clamp(phiWant - (A.phi ?? 0), -roll * dt, roll * dt);
       const pull = (gm / 0.6) * agile * dt;
       const av = (A.av ?? 0) + clamp(aV - (A.av ?? 0), -pull, pull);
@@ -1232,6 +1265,8 @@ export class CombatWorld {
 }
 
 const M_KEEP = 120;
+/** A missile with no target this long destroys itself [s]. */
+const LOST_DESTRUCT = 6;
 
 /** Whether a target sits on the ground (a site, a vehicle, a building). */
 export const isGround = (q: Target) => !q.ai && q.peer === undefined;
