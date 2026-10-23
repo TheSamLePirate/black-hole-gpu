@@ -7,6 +7,8 @@ import { geoidN } from "../../src/system/geoid-grid";
 // ellipsoid, the ground its height above the sea plus N — the tracer's table read as the CPU reads it, the ground
 // stood on over the open sea at N, Paris's streets some 35 m above the sea, so ~80 m over the ellipsoid; then the
 // F-35 low over the sea off Toulon (N ≈ +49 m) in its cockpit, the altimeter over the sea. (E2E_SHOTS=<dir>: the view.)
+// Duration: ~3 min on kerr-mini.
+// Done when: the F-35 holds 150 m over the sea off Toulon on its autopilot (and its cockpit is shot).
 
 const trace = await Bun.file(new URL("../../src/shaders/trace.wgsl", import.meta.url)).text();
 const fn = (name: string) => {

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { orthoUrl } from "../src/system/earth-tiles";
 import {
   classify,
   evictions,
@@ -42,6 +43,10 @@ test("a request's kind: hashed assets, the shell, the tiles, the elements, the r
   expect(classify("https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/GoogleMapsCompatible/13/2924/4266.jpg", SITE)).toBe(
     "tile",
   );
+  // (the IGN's orthophotos: their tiles kept; the Géoplateforme's other services not)
+  expect(classify(orthoUrl(17, 66391, 45092), SITE)).toBe("tile");
+  expect(classify("https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetCapabilities", SITE)).toBe("pass");
+  expect(classify("https://data.geopf.fr/wms-r?SERVICE=WMS&REQUEST=GetMap", SITE)).toBe("pass");
   expect(classify("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=json", SITE)).toBe("elements");
   expect(classify("https://openrouter.ai/api/v1/chat/completions", SITE)).toBe("pass");
   expect(classify(`${O}/__snapshot?name=x`, `${O}/`)).toBe("pass");

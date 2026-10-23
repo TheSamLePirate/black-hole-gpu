@@ -73,6 +73,18 @@ comme le labo). À ajouter :
   s'applique dix fois plus à 0,5 m (chaque bâtiment, chaque arbre a son ombre peinte). Atténuer les basses
   luminances de l'ortho là où le décor dessine déjà ses ombres.
 
+**Fait le 23/10 (I1).** Quatre niveaux d'imagerie seule z 15–18 (fenêtres de 4 × 4 tuiles, dans des quadrants de
+1024² de couches de plus de la texture des tuiles, placés par la table du traceur `TABLE_ORTHO`) ; en France, les niveaux
+du relief z 9–14 prennent aussi l'ortho IGN au lieu de l'EOX (net jusqu'aux 6–20 km de leurs fenêtres). Recalage
+mesuré sur douze lieux : une courbe de tonalité sur la luminance L′ = 0,811·L^1,475 et des gains de couleur
+(0,82 ; 1,10 ; 0,39) estompés sur les surfaces claires (moyennes à 4 % de celles du jeu, le blanc neutre).
+L'imagerie IGN passe devant la couche régionale à 10 m et coupe sous elle les matériaux dessinés et les routes OSM
+peintes. Réglage « Photographies aériennes (France) », mention « © IGN BD ORTHO · Licence Ouverte 2.0 » à l'écran
+quand elles sont dessinées, dans le panneau et l'Atlas ; tuiles gardées par le PWA. Coût mesuré sur kerr-mini : aucun
+écart de FPS sensible (dans le bruit). Leçons des e2e : le débruiteur, fait pour le bruit de l'image tracée, étale le
+sol raster en aquarelle — c'était tout le « flou » des captures ; sur le M1 du mini, le régulateur abandonne le raster
+pour le tracé pendant les chargements.
+
 Débit en vol bas *(estimation)* : à 150 m/s, une rangée de 4 tuiles z 17 (200 m) toutes les 1,3 s, ≈ 3 tuiles/s
 par niveau, ≈ 15 Ko chacune : **< 0,2 Mo/s** pour toute l'imagerie fine. Latence 0,4 s : `MAX_INFLIGHT` (8) à
 augmenter et l'anneau d'avance (`ring`) utilisé dès la portée normale.
@@ -273,7 +285,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 | Étape | Contenu | Mesure de réussite |
 |---|---|---|
 | **I0** — fait (23/10) | Géoïde EGM2008 (sol, mer, IGN) — `src/system/geoid.ts`, la table du traceur, `seaAltitudeOver` ; voir §5 | vols de référence et atterrissages inchangés à l'issue près ; trafic ADS-B posé sur les pistes |
-| **I1** | Ortho IGN z 15–18 dans `earth-tiles.ts`, recalage couleur, attribution | captures A/B Chamonix, CdG, Paris en cockpit ; FPS inchangé (`raster-flight`) |
+| **I1** — fait (23/10) | Ortho IGN z 15–18 dans `earth-tiles.ts`, recalage couleur, attribution — et l'imagerie des niveaux z 9–14 prise à l'IGN en France ; voir §4.1 | captures A/B Chamonix, CdG, Paris en cockpit ; FPS inchangé (`raster-flight`) |
 | **I2** | Hauteurs RGE ALTI + LiDAR HD (WMS-R 3857), `TILE_RES_MIN` par source, bruit effacé | `shade` −5 ms attendu en France ; aucune couture au bord |
 | **I3** | Niveaux fins du cache de surface (2,4/1,2 m) et normales à 0,5 m | passe de visibilité mesurée, cible ≤ +2 ms |
 | **I4** | MNH → forêts | captures de lisières/haies contre l'ortho |

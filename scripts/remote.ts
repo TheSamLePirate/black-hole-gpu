@@ -128,7 +128,8 @@ async function pullClone() {
   const p = Bun.spawn(
     [
       ...ssh(HOST),
-      `cd '${CLONE}' && git fetch -q origin 2>&1 && git merge --ff-only -q '@{u}' 2>&1 && git log -1 --format='%h %s' | cut -c1-80`,
+      // (Homebrew's git-lfs on the PATH: the clone's LFS assets — a non-login ssh shell has not got it)
+      `export PATH=/opt/homebrew/bin:$PATH; cd '${CLONE}' && git fetch -q origin 2>&1 && git merge --ff-only -q '@{u}' 2>&1 && git log -1 --format='%h %s' | cut -c1-80`,
     ],
     { stdout: "pipe", stderr: "pipe" },
   );

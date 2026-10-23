@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
-import { EarthTiles, edge, FINE_Z, sampleLevel, TILE, TILE_PARAM_VEC4S, TILE_REACH, Z0, Z1 } from "../src/system/earth-tiles";
+import { EarthTiles, edge, FINE_Z, orthoLayers, sampleLevel, TILE, TILE_PARAM_VEC4S, TILE_REACH, Z0, Z1 } from "../src/system/earth-tiles";
 import { EARTH_RUNWAYS, runwayGrade, runwayWeight } from "../src/game/sites";
 import { earthHeightSampler, tileFallbackSampler } from "../src/terrain";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
@@ -216,7 +216,8 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   // (Far: the texture made again, 2048 texels a side, every level drawn anew — the fine ones 8 × 8 tiles, the coarser 4 × 4)
   t.setReach(TILE_REACH.far);
   expect(resized).toBe(1);
-  expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, Z1 - Z0 + 1]);
+  // (and the orthophotos' four 1024² quadrants in one more layer — I1)
+  expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, Z1 - Z0 + 1 + orthoLayers(2048)]);
   t.update(cam, 1e-3);
   expect(t.wanted().length).toBe(64 * (Z1 - FINE_Z + 1) + 16 * (FINE_Z - Z0));
   expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBe(1);

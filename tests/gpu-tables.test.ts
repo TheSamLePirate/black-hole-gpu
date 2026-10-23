@@ -16,6 +16,8 @@ import {
   TABLE_WARP,
   TABLE_GEOID,
   GEOID_VEC4S,
+  TABLE_ORTHO,
+  ORTHO_VEC4S,
 } from "../src/gpu-tables";
 import { GEOID_H, GEOID_W } from "../src/system/geoid-grid";
 import { TERRAIN_CACHE_VEC4S } from "../src/system/terrain-cache-layout";
@@ -43,9 +45,12 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(constU("WARP_N")).toBe(WARP_N);
   expect(TABLE_TERRAIN).toBe(TABLE_WARP + WARP_LEVELS * WARP_N * WARP_N);
   expect(TABLE_VEC4S).toBe(
-    TABLE_TERRAIN + TERRAIN_CACHE_VEC4S + SUN_SHADOW_VEC4S + SKY_AMBIENT_VEC4S + CSM_VEC4S + TSM_VEC4S + GEOID_VEC4S,
+    TABLE_TERRAIN + TERRAIN_CACHE_VEC4S + SUN_SHADOW_VEC4S + SKY_AMBIENT_VEC4S + CSM_VEC4S + TSM_VEC4S + GEOID_VEC4S + ORTHO_VEC4S,
   );
   expect(constU("GEOID_OFF")).toBe(TABLE_GEOID);
+  expect(constU("ORTHO_OFF")).toBe(TABLE_ORTHO);
+  expect(TABLE_ORTHO).toBe(TABLE_GEOID + GEOID_VEC4S);
+  expect(TABLE_VEC4S).toBe(TABLE_ORTHO + ORTHO_VEC4S);
   expect([constU("GEOID_W"), constU("GEOID_H")]).toEqual([GEOID_W, GEOID_H]);
 });
 

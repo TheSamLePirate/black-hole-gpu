@@ -1,5 +1,7 @@
 // French for the app's messages, the map and the dialogs (keyed by the English: see src/i18n.ts).
 export default {
+  "Aerial photographs © IGN BD ORTHO · ": "Photographies aériennes © IGN BD ORTHO · ",
+  "Licence Ouverte 2.0": "Licence Ouverte 2.0",
   "The menus are in this language now; the HUD and the panels already built follow at the next load":
     "Les menus sont maintenant dans cette langue ; le HUD et les panneaux déjà construits suivront au prochain chargement",
   "a rocket — the stick turns it, the throttle pushes along the nose":

@@ -77,6 +77,7 @@ import {
   TABLE_CSM,
   TABLE_TSM,
   TABLE_GEOID,
+  TABLE_ORTHO,
   TABLE_LUT,
   TABLE_PATH,
   TABLE_SKY,
@@ -769,6 +770,8 @@ export class Renderer {
   private earthJob = 0;
   /** the geoid's map in the tracer's table (gpu-tables.ts TABLE_GEOID), once */
   private geoidIn = false;
+  /** the orthophotos' levels last written to the tracer's table (gpu-tables.ts TABLE_ORTHO) */
+  private orthoSent: Float32Array | null = null;
   /** when its disk was last over 12 pixels [ms] */
   private earthSeenAt = 0;
   /** the finer maps of the body near the camera (one at a time), and the one being loaded */
@@ -3070,7 +3073,9 @@ export class Renderer {
       this.streamingState.gazeM = Math.hypot(...gazeT) * 6378137;
       // (and its windows 4 or 8 tiles a side, the tiles kept past them and the ring loaded ahead round them)
       this.earthTiles.setReach(TILE_REACH[detail.reach] ?? TILE_REACH.normal);
-      this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0]);
+      // (over France, the IGN's orthophotos finer than the relief's imagery — I1)
+      this.earthTiles.orthoOn = s.earthOrtho;
+      this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0], eye ? eyeH : undefined);
       this.earthSurface.update(eye, s.earthSurface, lead);
       this.earthScenery.update(
         eye,
@@ -3095,6 +3100,12 @@ export class Renderer {
       }
     }
     f.set(this.earthTiles.params(), 69 * 4);
+    // (the orthophotos' levels: in the tracer's table, written when they change)
+    const ortho = this.earthTiles.orthoParams();
+    if (!this.orthoSent || ortho.some((v, i) => v !== this.orthoSent![i])) {
+      this.device.queue.writeBuffer(this.bodyBuf, TABLE_ORTHO * 16, ortho);
+      this.orthoSent = ortho;
+    }
     f.set(this.earthSurface.params(), BASE_PARAM_VEC4S * 4);
     f.set(this.earthScenery.params(), (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4);
     if (!o.probe && this.character?.active && this.character.body === "earth")

@@ -17,6 +17,14 @@
 // moves, the part it keeps; once the new tiles are loaded, all of it. Beyond the windows, and while they
 // load, the tracer falls back on the global maps (earth-maps.ts: ETOPO 2022, 4.9 km; the day 2.4 km). The
 // same heights on the CPU (heightAt): the ground the ship stands on.
+//
+// Over France, finer still, imagery alone (docs/ANALYSE-IGN-LIDAR.md I1): the IGN's orthophotos (BD ORTHO through the
+// Géoplateforme's WMTS — Licence Ouverte 2.0, CORS open, no usage limit), z 15 … 18 (0.8 m down to 0.2 m a texel at
+// 48°), each a window of 4 × 4 tiles round the camera, in quadrants of the same texture's extra layers (their imagery
+// channel; the tracer's table places them — gpu-tables.ts TABLE_ORTHO, trace.wgsl earthImagery). The relief is
+// untouched; a tile the IGN has not (out at sea, abroad: 404) leaves the coarser levels' imagery there. The relief's own
+// levels take the IGN's too over France, z 9 … 14 (EOX's 10 m replaced by the survey's 20 cm resampled — sharp out to
+// their windows' 6–20 km), EOX's where it has none.
 
 import type { Vec3 } from "../physics";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
@@ -64,6 +72,44 @@ export const nightUrl = (z: number, x: number, y: number) =>
 // docs/systemes/03-univers-ephemerides.md)
 export const eoxUrl = (z: number, x: number, y: number) =>
   `https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/GoogleMapsCompatible/${z}/${y}/${x}.jpg`;
+
+/** the orthophotos' levels (IGN, France): imagery alone, finer than the relief's tiles */
+export const ORTHO_Z0 = 15;
+export const ORTHO_Z1 = 18;
+export const ORTHO_LEVELS = ORTHO_Z1 - ORTHO_Z0 + 1;
+/** their windows' tiles a side (always 4: 3.4 km at z 15 down to 425 m at z 18, at 48°) and its texels */
+const ORTHO_SPAN = 4;
+const ORTHO_CLIP = TILE * ORTHO_SPAN;
+/** the tracer's table for them (gpu-tables.ts TABLE_ORTHO): three vec4s a level, then the IGN's box [rad] and on */
+export const ORTHO_PARAM_VEC4S = 3 * ORTHO_LEVELS + 2;
+/** their loads at once (the Géoplateforme answers in 0.35–0.8 s), beside the relief's */
+const ORTHO_INFLIGHT = 8;
+/** where the IGN has them [°]: metropolitan France and Corsica (outside, a tile answers 404) */
+export const ORTHO_BOX = { west: -5.6, east: 9.8, south: 41.2, north: 51.2 } as const;
+export const orthoUrl = (z: number, x: number, y: number) =>
+  `https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX=${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image/jpeg`;
+/** the extra layers the orthophotos take in a texture of a side (a 1024² quadrant each, as many a layer as fit) */
+export const orthoLayers = (clip: number) => Math.ceil(ORTHO_LEVELS / (clip / ORTHO_CLIP) ** 2);
+
+/**
+ * The orthophotos' colours (an aerial survey's, graded bright: 2.7 times the ground's on average) into the Blue
+ * Marble's, which the tracer's ground and the coarser levels have — a tone curve on the luminance L′ = a·L^b and the
+ * colours' gains, fitted on twelve places' z 14 tiles against EOX's own brought there (fields, forests, vineyards,
+ * marshes, towns, the Alps; their distributions matched — the surveys' dates and seasons differ, no pixel's twin):
+ * means within 4 %, a white kept white. The gains fade out over the bright ground (snow, roofs, roads), as EOX's
+ * fit; sRGB 8-bit in and out.
+ */
+export const ORTHO_FIT = { tone: [0.8112, 1.4753], chroma: [0.8232, 1.0999, 0.3872] } as const;
+export function orthoColour(r: number, g: number, b: number): [number, number, number] {
+  const e = [LIN[r]!, LIN[g]!, LIN[b]!];
+  const L = 0.2126 * e[0]! + 0.7152 * e[1]! + 0.0722 * e[2]!;
+  if (L <= 0) return [0, 0, 0];
+  const Lo = ORTHO_FIT.tone[0] * L ** ORTHO_FIT.tone[1];
+  const x = Math.min(1, Math.max(0, (Lo - 0.06) / 0.29)),
+    t = x * x * (3 - 2 * x);
+  const out = (c: number) => TO_SRGB[Math.round(4095 * Math.min(1, ((e[c]! * Lo) / L) * (ORTHO_FIT.chroma[c]! * (1 - t) + t)))]!;
+  return [out(0), out(1), out(2)];
+}
 
 /**
  * EOX's colours (a mosaic graded for the eye: hazier, bluer) into the Blue Marble's, whose colours the
@@ -119,6 +165,15 @@ interface Level {
   data: (Float32Array | null)[];
   /** its imagery, held on the finest levels only (the ring's: kept past the window when it leaves it) */
   col: (Uint32Array | null)[];
+}
+
+/** An orthophotos' level: its window (4 × 4 tiles), the tile in each slot (none: not in yet) — imagery alone. */
+interface OrthoLevel {
+  z: number;
+  n: number;
+  want: Rect | null;
+  valid: Rect | null;
+  key: (string | null)[];
 }
 
 /** A tile's pixels (rgba, row by row), as they are in its file — or a square of it (x, y, side [px]) enlarged. */
@@ -192,9 +247,19 @@ export class EarthTiles {
   /** tiles loaded, failed (for the readouts) */
   loaded = 0;
   failed = 0;
+  /** the orthophotos (IGN, France — I1): wanted (settings.earthOrtho), their levels, their loads, the tiles they have
+   *  not (404: out at sea, abroad — not asked again), loaded */
+  orthoOn = true;
+  private orthoWas = true;
+  private ortho: OrthoLevel[] = [];
+  private orthoInflight = new Map<string, AbortController>();
+  private orthoNone = new Set<string>();
+  orthoLoaded = 0;
 
   constructor(private device: GPUDevice) {
     this.texture = this.makeTexture();
+    for (let k = 0; k < ORTHO_LEVELS; k++)
+      this.ortho.push({ z: ORTHO_Z0 + k, n: 2 ** (ORTHO_Z0 + k), want: null, valid: null, key: new Array(ORTHO_SPAN ** 2).fill(null) });
     for (let l = 0; l < LEVELS; l++) {
       const z = Z0 + l;
       const n = this.levelSpan(z);
@@ -213,7 +278,8 @@ export class EarthTiles {
 
   private makeTexture() {
     return this.device.createTexture({
-      size: [this.clip, this.clip, LEVELS],
+      // (the relief's levels, then the orthophotos' quadrants)
+      size: [this.clip, this.clip, LEVELS + orthoLayers(this.clip)],
       format: "rg32uint",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       label: "earth tiles",
@@ -244,6 +310,10 @@ export class EarthTiles {
       this.setReach({ span: SPAN, cache: this.cacheTiles, ring: this.ring });
     });
     void this.device.queue.onSubmittedWorkDone().then(() => old.destroy());
+    for (const O of this.ortho) {
+      O.key.fill(null);
+      O.valid = null;
+    }
     for (const L of this.levels) {
       L.span = this.levelSpan(L.z);
       L.key = new Array(L.span * L.span).fill(null);
@@ -292,6 +362,22 @@ export class EarthTiles {
     }
     return k;
   }
+  /** the orthophotos' tiles wanted and not yet in */
+  get orthoPending() {
+    let k = 0;
+    for (const O of this.ortho) {
+      if (!O.want) continue;
+      for (let y = O.want.y0; y < O.want.y1; y++)
+        for (let x = O.want.x0; x < O.want.x1; x++) if (O.key[orthoSlot(x, y)] !== this.orthoKey(O, x, y)) k++;
+    }
+    return k;
+  }
+  /** the finest orthophotos' level drawn (0: none) */
+  get orthoFinest() {
+    let z = 0;
+    for (const O of this.ortho) if (O.valid) z = O.z;
+    return z;
+  }
   /** the finest level drawn */
   get finest() {
     let z = 0;
@@ -318,6 +404,16 @@ export class EarthTiles {
       L.want = null;
       this.setValid(L, null);
     }
+    this.clearOrtho();
+  }
+
+  private clearOrtho() {
+    for (const c of this.orthoInflight.values()) c.abort();
+    this.orthoInflight.clear();
+    for (const O of this.ortho) {
+      O.want = null;
+      O.valid = null;
+    }
   }
 
   /**
@@ -326,7 +422,15 @@ export class EarthTiles {
    */
   private priorityLon = 0;
   private prioritySinLat = 0;
-  update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0], gaze: Vec3 = [0, 0, 0]) {
+  update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0], gaze: Vec3 = [0, 0, 0], agl?: number) {
+    // (the orthophotos switched: the relief's tiles' imagery taken again — over France the IGN's or EOX's —, the tiles
+    // kept past the windows dropped)
+    if (this.orthoOn !== this.orthoWas) {
+      this.orthoWas = this.orthoOn;
+      this.cache.clear();
+      for (const L of this.levels) L.key.fill(null);
+      this.clear();
+    }
     if (!c) return this.clear();
     // (the camera's geodetic place: the tracer reads the tiles at the geodetic latitude)
     const g = cartToGeodetic(1, WGS84_F, c);
@@ -370,6 +474,8 @@ export class EarthTiles {
         this.complete(L);
       }
     }
+    // (the orthophotos by the height over the ground — in the Alps a camera 150 m up is 1 400 m over the ellipsoid)
+    this.updateOrtho(agl ?? alt, pixAngle, cosLat, gLonT, gSinLat);
     const ahead = cartToGeodetic(1, WGS84_F, c.map((v, i) => v + lead[i]!) as Vec3);
     this.priorityLon = ahead.lon;
     this.prioritySinLat = Math.sin(ahead.lat);
@@ -410,6 +516,7 @@ export class EarthTiles {
         void this.load(L, x, y);
       }
     }
+    this.requestOrtho(lonT, sinLat);
     // (the windows whole: the next ring round the finest levels' loaded ahead into memory — nearest the lead (the
     // motion's, the gaze's) first, in metres —, half the loads at most: the tiles the windows enter as the craft goes
     // on, drawn at once)
@@ -453,7 +560,9 @@ export class EarthTiles {
     const relay = () => imgCtl.abort();
     ctl.signal.addEventListener("abort", relay, { once: true });
     // (the relay removed once the imagery is in or given up: none left on the tile's signal)
-    const img = (L.z <= IMG_Z1 ? imagery(L.z, xw, y, imgCtl.signal) : Promise.resolve(null)).finally(() => {
+    const img = (
+      L.z <= IMG_Z1 ? imagery(L.z, xw, y, imgCtl.signal, this.orthoOn && inOrthoBox(L.n, xw, y)) : Promise.resolve(null)
+    ).finally(() => {
       clearTimeout(imgTimer);
       ctl.signal.removeEventListener("abort", relay);
     });
@@ -609,6 +718,175 @@ export class EarthTiles {
   }
 
   /**
+   * The orthophotos' windows (I1): over France, the levels finer than the relief's the ground under the camera needs
+   * (its texel within the pixel's footprint there), each led ahead as the relief's; elsewhere, or off, none.
+   */
+  private updateOrtho(alt: number, pixAngle: number, cosLat: number, gLonT: number, gSinLat: number) {
+    const lat = (Math.asin(this.sinLat) * 180) / Math.PI,
+      lon = (this.lon * 180) / Math.PI;
+    const B = ORTHO_BOX;
+    if (!this.orthoOn || lat < B.south - 0.1 || lat > B.north + 0.1 || lon < B.west - 0.1 || lon > B.east + 0.1) {
+      if (this.ortho.some((O) => O.want)) this.clearOrtho();
+      return;
+    }
+    const zNeed = Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max(alt * pixAngle, 0.1)))), ORTHO_Z1);
+    for (const O of this.ortho) {
+      if (O.z > zNeed) {
+        if (O.want) {
+          O.want = null;
+          O.valid = null;
+        }
+        continue;
+      }
+      const cx0 = (this.lon / TAU + 0.5) * O.n,
+        cy0 = mercY(this.sinLat, O.n);
+      const gx = gLonT * O.n - cx0,
+        gy = mercY(gSinLat, O.n) - cy0;
+      const gl = Math.hypot(gx, gy);
+      const most = ORTHO_SPAN / 2 - 0.75;
+      const k = gl > most ? most / gl : 1;
+      const cx = cx0 + gx * k,
+        cy = cy0 + gy * k;
+      const mid = ORTHO_SPAN / 2;
+      let want = O.want;
+      if (!want || Math.abs(cx - (want.x0 + mid)) > 0.8 || Math.abs(cy - (want.y0 + mid)) > 0.8) {
+        const x0 = Math.round(cx) - mid,
+          y0 = Math.min(Math.max(Math.round(cy) - mid, 0), O.n - ORTHO_SPAN);
+        want = { x0, y0, x1: x0 + ORTHO_SPAN, y1: y0 + ORTHO_SPAN };
+      }
+      if (!same(want, O.want)) {
+        O.want = want;
+        O.valid = intersect(O.valid, want);
+        this.orthoComplete(O);
+      }
+    }
+  }
+
+  private orthoKey(O: OrthoLevel, x: number, y: number) {
+    return `o${O.z}/${((x % O.n) + O.n) % O.n}/${y}`;
+  }
+
+  /** The orthophotos' loads: the coarse levels first, each from the camera outwards, after the relief's. */
+  private requestOrtho(lonT: number, sinLat: number) {
+    for (const O of this.ortho) {
+      if (!O.want || same(O.valid, O.want)) continue;
+      const cx = lonT * O.n,
+        cy = mercY(sinLat, O.n);
+      const todo: [number, number, number][] = [];
+      for (let y = O.want.y0; y < O.want.y1; y++)
+        for (let x = O.want.x0; x < O.want.x1; x++) {
+          const key = this.orthoKey(O, x, y);
+          if (O.key[orthoSlot(x, y)] === key || this.orthoInflight.has(key)) continue;
+          // (one the IGN has not, or out of its box: none there at once — the coarser levels' imagery)
+          if (this.orthoNone.has(key) || !inOrthoBox(O.n, x, y)) {
+            this.putOrtho(O.z, x, y, null);
+            continue;
+          }
+          todo.push([x, y, (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2]);
+        }
+      todo.sort((a, b) => a[2] - b[2]);
+      for (const [x, y] of todo) {
+        if (this.orthoInflight.size >= ORTHO_INFLIGHT) return;
+        void this.loadOrtho(O, x, y);
+      }
+    }
+  }
+
+  private async loadOrtho(O: OrthoLevel, x: number, y: number) {
+    const key = this.orthoKey(O, x, y);
+    const ctl = new AbortController();
+    this.orthoInflight.set(key, ctl);
+    const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+    const xw = ((x % O.n) + O.n) % O.n;
+    let col: Uint32Array | null = null;
+    let none = false;
+    try {
+      const res = await fetch(orthoUrl(O.z, xw, y), { signal: ctl.signal });
+      if (res.status === 404) none = true;
+      else if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      else {
+        const px = await pixels(await res.blob());
+        col = new Uint32Array(TILE * TILE);
+        for (let i = 0; i < col.length; i++) {
+          const [r, g, b] = orthoColour(px[4 * i]!, px[4 * i + 1]!, px[4 * i + 2]!);
+          col[i] = (Math.max(r, 1) | (g << 8) | (b << 16) | (255 << 24)) >>> 0;
+        }
+      }
+    } catch {
+      // (refused, timed out — offline —: none there this time, asked again once the window comes back to it)
+    } finally {
+      clearTimeout(timer);
+    }
+    if (this.orthoInflight.get(key) !== ctl) return; // (cleared meanwhile)
+    this.orthoInflight.delete(key);
+    if (col) this.orthoLoaded++;
+    // (the IGN has none there: not asked again)
+    if (none) this.orthoNone.add(key);
+    if (this.orthoNone.size > 4096) this.orthoNone.clear();
+    this.putOrtho(O.z, x, y, col);
+    this.requestOrtho(cx0(this.priorityLon), this.prioritySinLat);
+  }
+
+  /** An orthophoto's tile into its window's slot (its imagery; null: none there — the coarser levels'). */
+  private putOrtho(z: number, x: number, y: number, col: Uint32Array | null) {
+    const k = z - ORTHO_Z0;
+    const O = this.ortho[k];
+    if (!O || !inside(O.want, x, y)) return;
+    const s = orthoSlot(x, y);
+    O.key[s] = this.orthoKey(O, x, y);
+    const texels = new Uint32Array(2 * TILE * TILE);
+    if (col) for (let i = 0; i < col.length; i++) texels[2 * i + 1] = col[i]!;
+    const q = orthoQuadrant(k, this.clip);
+    this.device.queue.writeTexture(
+      { texture: this.texture, origin: [q.x + (s % ORTHO_SPAN) * TILE, q.y + Math.floor(s / ORTHO_SPAN) * TILE, q.layer] },
+      texels,
+      { bytesPerRow: TILE * 8 },
+      [TILE, TILE, 1],
+    );
+    if (col) this.imagery++;
+    this.orthoComplete(O);
+  }
+
+  private orthoComplete(O: OrthoLevel) {
+    const w = O.want;
+    if (!w) return;
+    for (let y = w.y0; y < w.y1; y++) for (let x = w.x0; x < w.x1; x++) if (O.key[orthoSlot(x, y)] !== this.orthoKey(O, x, y)) return;
+    if (!same(O.valid, w)) {
+      O.valid = w;
+      this.imagery++;
+    }
+  }
+
+  /**
+   * The orthophotos' params (the tracer's table: gpu-tables.ts TABLE_ORTHO, trace.wgsl earthImagery), three vec4s a
+   * level: the reference in its valid rectangle [px] and the rectangle's corner in its window [px]; the rectangle's
+   * size [px], the level's pixels per radian, on (1); its layer, its quadrant's corner in it [px], its z.
+   */
+  orthoParams(): Float32Array<ArrayBuffer> {
+    const f = new Float32Array(ORTHO_PARAM_VEC4S * 4);
+    for (let k = 0; k < ORTHO_LEVELS; k++) {
+      const O = this.ortho[k]!;
+      const v = O.valid;
+      const q = orthoQuadrant(k, this.clip);
+      f.set([q.layer, q.x, q.y, O.z], 12 * k + 8);
+      if (!v) continue;
+      const S = O.n * TILE;
+      let ax = (this.lon / TAU + 0.5) * S - v.x0 * TILE;
+      if (ax > S / 2) ax -= S;
+      else if (ax < -S / 2) ax += S;
+      const ay = mercY(this.sinLat, O.n) * TILE - v.y0 * TILE;
+      f.set([ax, ay, (((v.x0 * TILE) % ORTHO_CLIP) + ORTHO_CLIP) % ORTHO_CLIP, (v.y0 * TILE) % ORTHO_CLIP], 12 * k);
+      f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, 1], 12 * k + 4);
+    }
+    // (the box the relief's levels take the IGN's imagery in — z 9 … 14: theirs a photograph there too —, and whether)
+    const B = ORTHO_BOX,
+      rad = Math.PI / 180;
+    f.set([B.west * rad, B.south * rad, B.east * rad, B.north * rad], 12 * ORTHO_LEVELS);
+    f.set([this.orthoOn ? 1 : 0, 0, 0, 0], 12 * ORTHO_LEVELS + 4);
+    return f;
+  }
+
+  /**
    * The levels' heights at q (unit, the Earth's axes) for a footprint foot [m], as the tracer weighs them
    * (trace.wgsl: earthTiles): the finest level within the footprint and the next coarser, blended by the
    * footprint and towards the windows' edges; what is left to the global map in rem.
@@ -680,7 +958,7 @@ function parentBlob(url: string): Promise<Blob> {
   }
   return p;
 }
-async function imagery(z: number, x: number, y: number, signal: AbortSignal): Promise<Uint32Array | null> {
+async function imagery(z: number, x: number, y: number, signal: AbortSignal, ortho = false): Promise<Uint32Array | null> {
   try {
     const get = async (url: string, crop?: [number, number, number]) => {
       // (the shared parent raced against this tile's own abort: a stalled request never holds the tile — nor its
@@ -703,18 +981,29 @@ async function imagery(z: number, x: number, y: number, signal: AbortSignal): Pr
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return pixels(await res.blob());
     };
-    // (finer than GIBS: EOX's day; the lights' z 8 parent, the tile's square of it enlarged)
+    // (finer than GIBS: EOX's day — over France the IGN's orthophotos instead, the same grid, EOX's where the IGN has
+    // none; the lights' z 8 parent, the tile's square of it enlarged)
     const fine = z > GIBS_Z1;
     const night = nightOf(z, x, y);
-    const [d, n] = await Promise.all([
-      get(fine ? eoxUrl(z, x, y) : dayUrl(z, x, y)),
-      get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined),
-    ]);
+    const day = async (): Promise<[Uint8ClampedArray, boolean]> => {
+      if (fine && ortho)
+        try {
+          return [await get(orthoUrl(z, x, y)), true];
+        } catch {
+          if (signal.aborted) throw new Error("aborted");
+        }
+      return [await get(fine ? eoxUrl(z, x, y) : dayUrl(z, x, y)), false];
+    };
+    const [[d, ign], n] = await Promise.all([day(), get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined)]);
     const out = new Uint32Array(TILE * TILE);
     for (let i = 0; i < out.length; i++) {
       const v = (n[4 * i]! * n[4 * i + 3]!) / (255 * 255);
       const lights = v > 0 ? Math.round(255 * (0.07 + 0.93 * Math.min(1.06 * Math.sqrt(v), 1))) : 0;
-      const [r, g, b] = fine ? eoxColour(d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!) : [d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!];
+      const [r, g, b] = ign
+        ? orthoColour(d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!)
+        : fine
+          ? eoxColour(d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!)
+          : [d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!];
       out[i] = (Math.max(r, 1) | (g << 8) | (b << 16) | (lights << 24)) >>> 0;
     }
     return out;
@@ -734,6 +1023,26 @@ export function nightOf(z: number, x: number, y: number): { z: number; x: number
 
 /** the reference's longitude in turns from −½ (Mercator's x over the level's width) */
 const cx0 = (lon: number) => lon / TAU + 0.5;
+
+/** an orthophotos' tile's slot in its 4 × 4 window */
+const orthoSlot = (x: number, y: number) =>
+  (((y % ORTHO_SPAN) + ORTHO_SPAN) % ORTHO_SPAN) * ORTHO_SPAN + (((x % ORTHO_SPAN) + ORTHO_SPAN) % ORTHO_SPAN);
+/** an orthophotos' level's place in the texture: its layer (after the relief's), its 1024² quadrant's corner [px] */
+export function orthoQuadrant(k: number, clip: number): { layer: number; x: number; y: number } {
+  const side = clip / ORTHO_CLIP,
+    per = side * side;
+  const q = k % per;
+  return { layer: LEVELS + Math.floor(k / per), x: (q % side) * ORTHO_CLIP, y: Math.floor(q / side) * ORTHO_CLIP };
+}
+/** whether a tile (of a level of n a side) touches the IGN's box */
+function inOrthoBox(n: number, x: number, y: number) {
+  const xw = ((x % n) + n) % n;
+  const lon0 = (xw / n) * 360 - 180,
+    lon1 = ((xw + 1) / n) * 360 - 180;
+  const lat = (t: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * t) / n))) * 180) / Math.PI;
+  const B = ORTHO_BOX;
+  return lon1 > B.west && lon0 < B.east && lat(y) > B.south && lat(y + 1) < B.north;
+}
 
 /** A level's weight towards its window's edges [px]: none within 2 px of it, full 48 px in. */
 export function edge(px: number, py: number, w: number, h: number) {

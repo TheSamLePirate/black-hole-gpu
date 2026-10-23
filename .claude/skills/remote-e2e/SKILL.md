@@ -16,6 +16,52 @@ what it wrote. Full reference: `docs/REMOTE-TESTS.md`; the options: the header o
 - **Here**: debugging step by step in the browser pane; any perf figure meant for this machine (the
   mini is an M1, 8 GPU cores — its figures compare only with its own: an A/B made there).
 
+## Every run shows what it is doing (the user's rule)
+
+Whoever looks at the mini's screen must see, for every e2e, its frame rate, what it is and how long it takes — and
+no figure or picture may come from a tracer still compiling.
+
+- **The FPS on screen.** Never `--headless` (nor `E2E_HEADED=0`) unless the user asks: in full screen `App.load`
+  turns the game's meter on (`__bh.settings.showFps = true`) after each load. A test that changes scene, reloads
+  or resets the settings sets it again; one that measures a rate says it in its log line too.
+- **The banner.** Never `E2E_BANNER=0`. The banner (`tests/e2e/lib/banner.ts`, lower left) reads the test file's
+  header comment, so **every e2e file you write or touch starts with**: what it proves (one paragraph), then
+  `// Duration: ~N min on kerr-mini` (the estimate per file; the measured median from `tests/e2e/durations.json`
+  replaces it once runs exist — refresh it with `bun scripts/e2e-durations.ts`) and `// Done when: …` (the last step
+  that ends it). Each `test(...)` title says what that test checks. Missing lines: add them before sending the run.
+- **The shaders compiled.** Before any measure, assertion on the image or frame rate, or screenshot:
+  `await app.settled()` (it waits `__bh.renderer.tracerSettled` — the tracer compiled, none compiling ahead —
+  then three frames). `app.shot` already does it; `fps()` loops, A/B toggles that respecialise the tracer
+  (a scene-effect setting) and every page of a two-page test need it explicitly. In the run's log,
+  `e2e: the scene's ray tracer still compiling — looked at anyway` means a picture or figure is not valid:
+  fix the wait and run again, never report it.
+- **The raster pipeline** (the user's preference): the e2e run in `earthPipeline: "raster"` (the default — set it
+  explicitly where a test depends on the look) and log `renderer.earthPipelineNow(settings)` beside each figure or
+  shot: a run that fell back to `"trace"` (`rasterFellBack`) is said, not passed off as raster. Offline stills
+  (`__bh.render`) are traced — not for the e2e's comparisons unless the user asks; for a converged image, freeze
+  the world and let the raster's shading go round every pixel (`app.settled()` then a few seconds).
+- **The right camera view.** The main view of every e2e is the cockpit (`__bh.settings.shipMount = "cockpit"`, set
+  after each `flyAt`, scenario start or vessel change — they reset it). Another mount (chase, around, free, target)
+  only for the shots that need it, set with its parameters (`Object.assign(__bh.camera.outside, { yaw, pitch, dist })`;
+  `pitch` is clamped — a "top-down" asks the ground in view, check it), given ~1 s to settle, then back to the
+  cockpit. Change the mount while the world runs: `__bh.freeze(true)` holds the camera's rig too (a mount set while
+  frozen is not applied). `dof: false`, `denoise: false` and `motionBlur: 0` for a shot meant to show the ground (scene presets turn the depth
+  of field on; the denoiser, made for the traced image's noise, smears the raster's sharp ground into a painting — found
+  2026-10-23: the whole "blurry" look of the mini's shots), and for a data comparison `dynamicResolution: false`,
+  `earthRasterShading: "every"`, `earthRasterScale: 1` — all put back after. Before a
+  view is reported, read `__bh.settings.shipMount` back in the log line, and **look at every picture** brought back:
+  the craft where expected, the ground in view, no UI covering it.
+- **The images loaded.** No shot or image assertion before the world under the view is in, with a bounded wait that
+  says what was still missing rather than failing silently:
+  `r.earthMaps.tier === "high" && r.earthTiles.pending === 0 && r.earthTiles.orthoPending === 0 &&
+  !r.earthSurface.pending && r.earthScenery.stats().status === "ready" && !r.earthScenery.stats().pending`
+  (`r = __bh.renderer`; the full list for a walker: `tests/e2e/lib/character-ready.ts`). Then `app.settled()`, and
+  for a still meant to compare data a converged image: `__bh.freeze(true)` then a few seconds (the raster's
+  shading round every pixel). A moving realtime image is rebuilt from a fraction of the pixels: never judge ground
+  detail (imagery, relief) on it. (`__bh.render` stills, when asked: read back with `renderer.exportPNG` — the e2e
+  server is a production one, `/__snapshot` is off — and they leave `animate: false`, their exposure and the offline
+  image on: `renderer.cancelOffline()` and the settings put back after.)
+
 ## How
 
 ```bash

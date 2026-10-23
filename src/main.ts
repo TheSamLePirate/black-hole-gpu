@@ -7484,6 +7484,14 @@ async function main() {
     creditLink("OpenFreeMap", "https://openfreemap.org"),
   );
   document.body.append(sceneryCredit);
+  // (the IGN's orthophotos drawn — I1 —: their source credited while they are)
+  const orthoCredit = Object.assign(document.createElement("div"), { className: "scenery-credit ortho-credit", hidden: true });
+  orthoCredit.dataset.testid = "ortho-credit";
+  orthoCredit.append(
+    t("Aerial photographs © IGN BD ORTHO · "),
+    creditLink(t("Licence Ouverte 2.0"), "https://www.etalab.gouv.fr/licence-ouverte-open-licence/"),
+  );
+  document.body.append(orthoCredit);
   // (the real traffic — traffic/feed.ts, T1 —: asked of the relay about the flown craft, its sources credited)
   const trafficFeed = new TrafficFeed();
   camera.traffic = trafficFeed;
@@ -7958,6 +7966,8 @@ async function main() {
     cpuProf.time("overlay (guide, marker)", () => viewOverlay.draw(chart && !renderer.offlineActive ? chart : null, chartKey));
     const hideSceneryCredit = !renderer.earthScenery.active;
     if (sceneryCredit.hidden !== hideSceneryCredit) sceneryCredit.hidden = hideSceneryCredit;
+    const hideOrthoCredit = renderer.earthTiles.orthoFinest === 0;
+    if (orthoCredit.hidden !== hideOrthoCredit) orthoCredit.hidden = hideOrthoCredit;
     applyTuning(settings);
     cpuProf.time("game tools window", () => toolsWin.tick());
     saveTimer += dt;

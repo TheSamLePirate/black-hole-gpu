@@ -2016,6 +2016,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "terrain relief elevation dem srtm mountains tiles earth ground",
   },
   {
+    key: "earthOrtho",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Aerial photographs (France)",
+    effect: "scene",
+    help: "Over metropolitan France and Corsica, the IGN's aerial photographs (BD ORTHO, 20–50 cm; Géoplateforme, Licence Ouverte 2.0) streamed in near the camera, finer than the satellite's imagery: 0.8 m a pixel down to 0.2 m on four levels, their colours graded to the rest of the Earth. The relief is unchanged. Where the IGN has none (at sea, abroad), the satellite's imagery. Requires real terrain.",
+    keywords: "ign orthophoto aerial photographs france imagery bd ortho geoplateforme ground",
+  },
+  {
     key: "earthTerrainCache",
     type: "toggle",
     section: "sky",

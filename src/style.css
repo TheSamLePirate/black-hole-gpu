@@ -2516,6 +2516,7 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .scenery-credit[hidden] { display: none; }
 /* (the real traffic's sources: a line above the scenery's) */
 .traffic-credit { bottom: calc(max(3px, env(safe-area-inset-bottom)) + 22px); }
+.ortho-credit { bottom: calc(max(3px, env(safe-area-inset-bottom)) + 44px); }
 .scenery-credit a { color: inherit; text-decoration: underline; }
 
 /* On-foot exploration shares the game, with a compact context-specific HUD. */

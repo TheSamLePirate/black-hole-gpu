@@ -369,6 +369,9 @@ const SKY_OFF = 814530u;
 const GEOID_OFF = 814642u;
 const GEOID_W = 1440u;
 const GEOID_H = 720u;
+// the orthophotos' levels (gpu-tables.ts TABLE_ORTHO, system/earth-tiles.ts orthoParams): three vec4s each
+const ORTHO_OFF = 1073842u;
+const ORTHO_LEVELS = 4u;
 const WARP_LEVELS = 3u;
 const WARP_N = 512u;
 // The solar system's maps (equirectangular, sRGB) and Saturn's rings' radial profile (sRGB + opacity,
@@ -5458,17 +5461,55 @@ const TILE_IMG_LEVELS = 9u; // (z 6 … 14: src/system/earth-tiles.ts, IMG_Z1)
 // within the footprint and the next coarser, blended by the footprint and towards their windows' edges
 // (as earthH); rgb the day's colour (linear), a the night's lights; w its weight — the global maps' the rest
 // (none beyond the windows, nor where a tile's imagery did not come)
-struct TileImage { c: vec4f, w: f32 };
+// (o: the IGN's orthophotos' share of it — earthGround draws them over the regional pilot's imagery)
+struct TileImage { c: vec4f, w: f32, o: f32 };
+// an orthophotos' level's texel at i (from its valid rectangle's corner): its 1024² quadrant of its layer, toroidal
+fn orthoImage(k: u32, i: vec2i) -> u32 {
+  let a = bodies[ORTHO_OFF + 3u * k];
+  let c = bodies[ORTHO_OFF + 3u * k + 2u];
+  let t = vec2i(c.yz) + ((vec2i(a.zw) + i) & vec2i(1023));
+  return textureLoad(earthTiles, t, u32(c.x), 0).g;
+}
 fn earthImagery(q: vec3f, foot: f32) -> TileImage {
   var o: TileImage;
   o.c = vec4f(0.0);
   o.w = 0.0;
+  o.o = 0.0;
   if (P.tiles.w < 0.5) { return o; }
   let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
   let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
   let sz = clamp(q.z, -0.999999, 0.999999);
   let dM = atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z));
-  let zf = log2(EARTH_RM * TAU * cosLat / (256.0 * max(foot, 0.5)));
+  let zf = log2(EARTH_RM * TAU * cosLat / (256.0 * max(foot, 0.1)));
+  // (over France, finer: the IGN's orthophotos, z 15 … 18 — their colour alone, over the coarser levels' below; the
+  // night's lights theirs)
+  var fine = vec3f(0.0);
+  var wf = 0.0;
+  for (var kk = 0; kk < i32(ORTHO_LEVELS); kk++) {
+    let k = ORTHO_LEVELS - 1u - u32(kk);
+    let a = bodies[ORTHO_OFF + 3u * k];
+    let b = bodies[ORTHO_OFF + 3u * k + 1u];
+    if (b.w < 0.5) { continue; }
+    let wz = clamp(zf - bodies[ORTHO_OFF + 3u * k + 2u].w + 1.0, 0.0, 1.0);
+    if (wz <= 0.0) { continue; }
+    let p = a.xy + vec2f(dlon, -dM) * b.z;
+    let d = min(min(p.x, p.y), min(b.x - p.x, b.y - p.y));
+    let w = wz * smoothstep(2.0, 48.0, d);
+    if (w <= 0.0) { continue; }
+    let x = p - 0.5;
+    let i0 = vec2i(floor(x));
+    let f = x - floor(x);
+    let t00 = orthoImage(k, i0);
+    let t10 = orthoImage(k, i0 + vec2i(1, 0));
+    let t01 = orthoImage(k, i0 + vec2i(0, 1));
+    let t11 = orthoImage(k, i0 + vec2i(1, 1));
+    if (min(min(t00, t10), min(t01, t11)) == 0u) { continue; }
+    let c = mix(mix(unpack4x8unorm(t00), unpack4x8unorm(t10), f.x), mix(unpack4x8unorm(t01), unpack4x8unorm(t11), f.x), f.y);
+    let lin = select(pow((c.rgb + 0.055) / 1.055, vec3f(2.4)), c.rgb / 12.92, c.rgb <= vec3f(0.04045));
+    fine += (1.0 - wf) * w * lin;
+    wf += (1.0 - wf) * w;
+    if (wf > 0.9999) { break; }
+  }
   var rem = 1.0;
   for (var li = 0; li < i32(TILE_IMG_LEVELS); li++) {
     let l = TILE_IMG_LEVELS - 1u - u32(li);
@@ -5499,6 +5540,21 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
     if (rem < 1e-4) { break; }
   }
   if (o.w > 0.0) { o.c /= o.w; }
+  // (over France, the orthophotos on: the relief's levels' imagery is the IGN's — a photograph as the finer ones, drawn
+  // over the regional pilot's 10 m as they are)
+  let box = bodies[ORTHO_OFF + 3u * ORTHO_LEVELS];
+  if (bodies[ORTHO_OFF + 3u * ORTHO_LEVELS + 1u].x > 0.5 && o.w > 0.0) {
+    let lat = asin(clamp(q.z, -1.0, 1.0));
+    let lon = atan2(q.y, q.x);
+    if (lon > box.x && lon < box.z && lat > box.y && lat < box.w) { o.o = o.w; }
+  }
+  if (wf > 0.0) {
+    // (the orthophotos over the coarser imagery — or over the global maps where none is)
+    let w = wf + (1.0 - wf) * o.w;
+    o.c = vec4f((fine + (1.0 - wf) * o.w * o.c.rgb) / w, o.c.a);
+    o.o = wf + (1.0 - wf) * o.o;
+    o.w = w;
+  }
   return o;
 }
 // a level's height at p [its px from the corner]: bilinear, or — its texel more than twice the footprint
@@ -7295,6 +7351,10 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   var surface = surfaceImage(gq, fx, fy);
   if ((TUNE_GSKIP & 64u) != 0u) { surface.w = 0.0; }
   A = mix(A, surface.c * P.earth2.z, surface.w);
+  // (the IGN's orthophotos over the regional pilot's 10 m: finer, and a photograph — no drawn cover, snow or rock over
+  // them, nor the map's roads)
+  A = mix(A, img.c.rgb * P.earth2.z, img.o);
+  let photo = max(surface.w, img.o);
   // (the relief: east and north components; the map's is faint — strengthened, P.earth.w)
   var east = vec3f(-q.y, q.x, 0.0);
   east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
@@ -7312,8 +7372,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (near: the ground's own materials from its height and slope — snow above the snow line (lower towards
   // the poles, ragged), bare rock on the steep faces of the mountains; blended in as the map's texel
   // grows under the pixel)
-  if (footM < texelM && ocean < 1.0 && surface.w < 0.999 && (TUNE_GSKIP & 4u) == 0u) {
-    let k = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean) * (1.0 - surface.w);
+  if (footM < texelM && ocean < 1.0 && photo < 0.999 && (TUNE_GSKIP & 4u) == 0u) {
+    let k = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean) * (1.0 - photo);
     let slope = 1.0 - clamp(dot(n, q), 0.0, 1.0);
     let lat = abs(asin(clamp(gq.z, -1.0, 1.0))) * 57.29578;
     let snowLine = snowLineAt(lat) + 300.0 * gnoise(q * 3000.0);
@@ -7323,8 +7383,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     A = mix(A, vec3f(0.16, 0.145, 0.13) * (0.8 + 0.4 * gnoise(q * 40000.0)), rock * k);
     A = mix(A, vec3f(0.82, 0.84, 0.88), snow * k);
   }
-  if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, footM), surface.w); }
-  A=mix(A,osm.color,osm.cover);
+  if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, footM), surface.w * (1.0 - img.o)); }
+  A=mix(A,osm.color,osm.cover*(1.0-img.o));
   // (a runway: its pavement and markings over the ground, flat; its lights added below)
   var rwyLamps = vec3f(0.0);
   // (the paving's cover here and its coordinates on its runway [m, along and across]: the rain's puddles

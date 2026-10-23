@@ -8,6 +8,7 @@ import { BODY_VEC4, MAX_BODIES } from "./system/scene-bodies";
 import { WARP_LEVELS, WARP_N } from "./system/warp-grid";
 import { TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { GEOID_H, GEOID_W } from "./system/geoid-grid";
+import { ORTHO_PARAM_VEC4S } from "./system/earth-tiles";
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -42,4 +43,7 @@ export const TSM_VEC4S = 4;
 /** the geoid's map (system/geoid.ts; trace.wgsl geoidN): its N [m] node by node, four a vec4, row by row from the north */
 export const TABLE_GEOID = TABLE_TSM + TSM_VEC4S;
 export const GEOID_VEC4S = (GEOID_W * GEOID_H) / 4;
-export const TABLE_VEC4S = TABLE_GEOID + GEOID_VEC4S;
+/** the orthophotos' levels (system/earth-tiles.ts orthoParams; trace.wgsl earthImagery): three vec4s each */
+export const TABLE_ORTHO = TABLE_GEOID + GEOID_VEC4S;
+export const ORTHO_VEC4S = ORTHO_PARAM_VEC4S;
+export const TABLE_VEC4S = TABLE_ORTHO + ORTHO_VEC4S;
