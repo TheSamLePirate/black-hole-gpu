@@ -1,6 +1,18 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
-import { EarthTiles, edge, FINE_Z, orthoLayers, sampleLevel, TILE, TILE_PARAM_VEC4S, TILE_REACH, Z0, Z1 } from "../src/system/earth-tiles";
+import {
+  EarthTiles,
+  edge,
+  FINE_Z,
+  orthoLayers,
+  sampleLevel,
+  TILE,
+  TILE_PARAM_VEC4S,
+  TILE_REACH,
+  Z0,
+  Z1,
+  ZG1,
+} from "../src/system/earth-tiles";
 import { EARTH_RUNWAYS, runwayGrade, runwayWeight } from "../src/game/sites";
 import { earthHeightSampler, tileFallbackSampler } from "../src/terrain";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
@@ -149,8 +161,9 @@ test("tiles that will not load keep the ground: a runway's the same, no terrace 
 }, 30_000);
 
 test("the imagery: every level; EOX's colours brought into the Blue Marble's; finer nights from z 8's lights", async () => {
-  const { IMG_Z1, Z1, GIBS_Z1, eoxColour, EOX_FIT, nightOf, eoxUrl } = await import("../src/system/earth-tiles");
-  expect(IMG_Z1).toBe(Z1);
+  const { IMG_Z1, ZG1, GIBS_Z1, eoxColour, EOX_FIT, nightOf, eoxUrl } = await import("../src/system/earth-tiles");
+  // (imagery on every level of the global data — the IGN's finer relief levels, z 15 … 17, have none: the orthophotos')
+  expect(IMG_Z1).toBe(ZG1);
   // black stays black; bright ground (snow, sand, rock) as it is — neutral, never tinted
   expect(eoxColour(0, 0, 0)).toEqual([0, 0, 0]);
   for (const v of [200, 240, 255]) for (const c of eoxColour(v, v, v)) expect(Math.abs(c - v)).toBeLessThanOrEqual(1);
@@ -219,7 +232,8 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   // (and the orthophotos' four 1024² quadrants in one more layer — I1)
   expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, Z1 - Z0 + 1 + orthoLayers(2048)]);
   t.update(cam, 1e-3);
-  expect(t.wanted().length).toBe(64 * (Z1 - FINE_Z + 1) + 16 * (FINE_Z - Z0));
+  // (the IGN's relief levels over France, z 15 … 17, 4 × 4 tiles whatever the reach)
+  expect(t.wanted().length).toBe(64 * (ZG1 - FINE_Z + 1) + 16 * (FINE_Z - Z0) + 16 * (Z1 - ZG1));
   expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBe(1);
   fill(t);
   expect(t.pending).toBe(0);

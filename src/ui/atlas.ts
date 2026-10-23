@@ -228,7 +228,7 @@ export class AtlasPage {
     this.map.setBody(b);
     this.attrib.textContent =
       b === "earth"
-        ? "NASA GIBS Blue Marble · EOX Sentinel-2 cloudless 2021 (CC BY-NC-SA 4.0) · © IGN BD ORTHO (Licence Ouverte 2.0) · © OpenStreetMap — Photon, Nominatim"
+        ? "NASA GIBS Blue Marble · EOX Sentinel-2 cloudless 2021 (CC BY-NC-SA 4.0) · © IGN BD ORTHO, RGE ALTI, LiDAR HD (Licence Ouverte 2.0) · © OpenStreetMap — Photon, Nominatim"
         : b === "moon"
           ? "NASA LRO LROC WAC · LOLA"
           : "NASA Viking MDIM · MGS MOLA";

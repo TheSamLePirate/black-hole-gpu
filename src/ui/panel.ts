@@ -1122,8 +1122,8 @@ export class SettingsPanel {
             h("a", { href: "https://s2maps.eu", target: "_blank", rel: "noopener" }, "Sentinel-2 cloudless 2021 by EOX IT Services GmbH"),
             " (modified Copernicus Sentinel data 2021), ",
             h("a", { href: "https://creativecommons.org/licenses/by-nc-sa/4.0/", target: "_blank", rel: "noopener" }, "CC BY-NC-SA 4.0"),
-            " · France: aerial photographs © ",
-            h("a", { href: "https://geoservices.ign.fr/bdortho", target: "_blank", rel: "noopener" }, "IGN BD ORTHO"),
+            " · France: aerial photographs and relief © ",
+            h("a", { href: "https://geoservices.ign.fr/bdortho", target: "_blank", rel: "noopener" }, "IGN BD ORTHO, RGE ALTI, LiDAR HD"),
             " (Géoplateforme), ",
             h(
               "a",

@@ -289,6 +289,7 @@ import { ORDERS, type OrderId } from "./game/orders";
 import { FORMATION_IDS, FORMATIONS } from "./game/formations";
 import { TrafficFeed } from "./traffic/feed";
 import { unitsFor } from "./ui/unitsys";
+import { ZG1 } from "./system/earth-tiles";
 
 /** The craft lost to the air's screen (ui/craftlost.ts) — made at once: a placing hides it. */
 const craftLost = new CraftLost();
@@ -7488,7 +7489,7 @@ async function main() {
   const orthoCredit = Object.assign(document.createElement("div"), { className: "scenery-credit ortho-credit", hidden: true });
   orthoCredit.dataset.testid = "ortho-credit";
   orthoCredit.append(
-    t("Aerial photographs © IGN BD ORTHO · "),
+    t("© IGN — aerial photographs, relief (BD ORTHO, RGE ALTI, LiDAR HD) · "),
     creditLink(t("Licence Ouverte 2.0"), "https://www.etalab.gouv.fr/licence-ouverte-open-licence/"),
   );
   document.body.append(orthoCredit);
@@ -7966,7 +7967,7 @@ async function main() {
     cpuProf.time("overlay (guide, marker)", () => viewOverlay.draw(chart && !renderer.offlineActive ? chart : null, chartKey));
     const hideSceneryCredit = !renderer.earthScenery.active;
     if (sceneryCredit.hidden !== hideSceneryCredit) sceneryCredit.hidden = hideSceneryCredit;
-    const hideOrthoCredit = renderer.earthTiles.orthoFinest === 0;
+    const hideOrthoCredit = renderer.earthTiles.orthoFinest === 0 && renderer.earthTiles.finest <= ZG1;
     if (orthoCredit.hidden !== hideOrthoCredit) orthoCredit.hidden = hideOrthoCredit;
     applyTuning(settings);
     cpuProf.time("game tools window", () => toolsWin.tick());

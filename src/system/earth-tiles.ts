@@ -44,14 +44,19 @@ export const TILE_REACH = {
   veryFar: { span: 8, cache: 256, ring: 3 },
 } as const;
 export const Z0 = 6;
-export const Z1 = 14;
+/** the finest level (z 15 … 17 over France alone: the IGN's relief — I2; the global data's last is z 14) */
+export const Z1 = 17;
+/** the finest level of the global data (Terrarium; GIBS and EOX's imagery) */
+export const ZG1 = 14;
 export const LEVELS = Z1 - Z0 + 1;
 /** the floats the tracer's params take: 1 + 2 per level vec4s */
 export const TILE_PARAM_VEC4S = 1 + 2 * LEVELS;
 /** The data's own resolution [m] (SRTM's 1″): no finer, whatever the level's texel. */
 export const TILE_RES_MIN = 25;
+/** a survey's own resolution [m] (the IGN's RGE ALTI, 1 m; its LiDAR HD 0.5 m — the texels are coarser anyway) */
+export const TILE_RES_FINE = 1;
 /** the finest level with imagery (EOX's Sentinel-2 cloudless, 10 m: every level) */
-export const IMG_Z1 = Z1;
+export const IMG_Z1 = ZG1;
 /** the finest level from GIBS (the Blue Marble's 500 m, VIIRS's lights): EOX's beyond */
 export const GIBS_Z1 = 8;
 
@@ -88,6 +93,30 @@ const ORTHO_INFLIGHT = 8;
 export const ORTHO_BOX = { west: -5.6, east: 9.8, south: 41.2, north: 51.2 } as const;
 export const orthoUrl = (z: number, x: number, y: number) =>
   `https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX=${z}&TILEROW=${y}&TILECOL=${x}&FORMAT=image/jpeg`;
+/** the IGN's relief over France (I2): from this level on the heights are its own — RGE ALTI (1 m, the whole country),
+ *  the LiDAR HD's terrain model from IGN_LIDAR_Z (0.5 m, where flown), through the Géoplateforme's WMS-R in Web
+ *  Mercator: one request a tile, its 256² float32 heights above the sea (the IGN's normal heights) */
+export const IGN_HZ0 = 11;
+export const IGN_LIDAR_Z = 16;
+export const ignHeightUrl = (layer: string, z: number, x: number, y: number) => {
+  const C = Math.PI * R,
+    s = (2 * C) / 2 ** z;
+  const box = [x * s - C, C - (y + 1) * s, (x + 1) * s - C, C - y * s].join(",");
+  return `https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLES=&CRS=EPSG:3857&BBOX=${box}&WIDTH=256&HEIGHT=256&FORMAT=image/x-bil;bits=32`;
+};
+export const IGN_RGEALTI = "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES";
+export const IGN_LIDAR = "IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
+/** A height's source, in its float's last bit (the tracer's tiles the same: trace.wgsl tileFine): 1 a survey's (the IGN's —
+ *  its resolution its texel's), 0 the global data's (Terrarium: SRTM's 25–30 m under its texel — whose k/256 values never
+ *  set that bit). The mark moves a height by one ulp: a tenth of a millimetre at 1 000 m. */
+const BITS = new Float32Array(1),
+  BITS_U = new Uint32Array(BITS.buffer);
+export function markFine(h: Float32Array, fine: boolean) {
+  const u = new Uint32Array(h.buffer, h.byteOffset, h.length);
+  for (let i = 0; i < u.length; i++) u[i] = fine ? u[i]! | 1 : u[i]! & ~1;
+}
+export const isFine = (h: number) => ((BITS[0] = h), (BITS_U[0]! & 1) === 1);
+
 /** the extra layers the orthophotos take in a texture of a side (a 1024² quadrant each, as many a layer as fit) */
 export const orthoLayers = (clip: number) => Math.ceil(ORTHO_LEVELS / (clip / ORTHO_CLIP) ** 2);
 
@@ -194,6 +223,74 @@ async function pixels(blob: Blob, crop?: [number, number, number]): Promise<Uint
   return ctx.getImageData(0, 0, TILE, TILE).data;
 }
 
+/** Terrarium's heights for a tile — beyond its z 15, its z 15 parent's square enlarged (bilinear) —, unmarked. */
+async function terrarium(z: number, x: number, y: number, signal: AbortSignal): Promise<Float32Array> {
+  const k = Math.max(z - 15, 0);
+  const res = await fetch(tileUrl(z - k, x >> k, y >> k), { signal });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const h = await res.blob().then(decode);
+  markFine(h, false);
+  if (!k) return h;
+  const side = TILE >> k,
+    ox = (x - ((x >> k) << k)) * side,
+    oy = (y - ((y >> k) << k)) * side;
+  const out = new Float32Array(TILE * TILE);
+  for (let j = 0; j < TILE; j++)
+    for (let i = 0; i < TILE; i++) {
+      const fx = Math.min(Math.max(ox + ((i + 0.5) * side) / TILE - 0.5, 0), TILE - 1),
+        fy = Math.min(Math.max(oy + ((j + 0.5) * side) / TILE - 0.5, 0), TILE - 1);
+      const x0 = Math.min(Math.floor(fx), TILE - 2),
+        y0 = Math.min(Math.floor(fy), TILE - 2);
+      const tx = fx - x0,
+        ty = fy - y0;
+      const a = h[y0 * TILE + x0]! + (h[y0 * TILE + x0 + 1]! - h[y0 * TILE + x0]!) * tx;
+      const b = h[(y0 + 1) * TILE + x0]! + (h[(y0 + 1) * TILE + x0 + 1]! - h[(y0 + 1) * TILE + x0]!) * tx;
+      out[j * TILE + i] = a + (b - a) * ty;
+    }
+  markFine(out, false);
+  return out;
+}
+
+/** One of the IGN's height grids for a tile (null: refused, or none there at all); its no-data — out at sea, abroad,
+ *  a gap in a survey — NaN. */
+async function ignGrid(layer: string, z: number, x: number, y: number, signal: AbortSignal): Promise<Float32Array | null> {
+  const res = await fetch(ignHeightUrl(layer, z, x, y), { signal });
+  if (!res.ok) return null;
+  const buf = await res.arrayBuffer();
+  if (buf.byteLength !== TILE * TILE * 4) return null;
+  const v = new Float32Array(buf);
+  let any = false;
+  for (let i = 0; i < v.length; i++) {
+    const h = v[i]!;
+    // (its no-data, and the values it resamples into it along a coast — hundreds of metres under the sea —: France's land
+    // is nowhere 10 m under it)
+    if (!Number.isFinite(h) || h < -100 || h > 9000) v[i] = Number.NaN;
+    else any = true;
+  }
+  return any ? v : null;
+}
+
+/**
+ * A tile's heights over France (I2): the LiDAR HD's terrain from IGN_LIDAR_Z on, RGE ALTI under it and where the LiDAR has
+ * none, marked as a survey's (markFine); where the IGN has none at all (the sea, the countries round), Terrarium's.
+ */
+async function ignHeights(z: number, x: number, y: number, signal: AbortSignal): Promise<Float32Array> {
+  let h = z >= IGN_LIDAR_Z ? await ignGrid(IGN_LIDAR, z, x, y, signal) : null;
+  const holes = (v: Float32Array | null) => !v || v.some((e) => Number.isNaN(e));
+  if (holes(h)) {
+    const r = await ignGrid(IGN_RGEALTI, z, x, y, signal);
+    if (!h) h = r;
+    else if (r) for (let i = 0; i < h.length; i++) if (Number.isNaN(h[i]!)) h[i] = r[i]!;
+  }
+  if (!h) return terrarium(z, x, y, signal);
+  markFine(h, true);
+  if (holes(h)) {
+    const t = await terrarium(z, x, y, signal);
+    for (let i = 0; i < h.length; i++) if (Number.isNaN(h[i]!)) h[i] = t[i]!;
+  }
+  return h;
+}
+
 /** The heights of a tile from its PNG (Terrarium's encoding). */
 async function decode(blob: Blob): Promise<Float32Array> {
   const px = await pixels(blob);
@@ -221,6 +318,8 @@ export class EarthTiles {
     return TILE * this.span;
   }
   private levelSpan(z: number) {
+    // (the IGN's finest relief, z 15 … 17: windows of 4 tiles whatever the reach — 3.4 km down to 850 m at 46°)
+    if (z > ZG1) return SPAN;
     return z >= FINE_Z ? this.span : SPAN;
   }
   /** the tiles kept past the windows — most recently used last — and how many (0: none) */
@@ -251,6 +350,10 @@ export class EarthTiles {
    *  not (404: out at sea, abroad — not asked again), loaded */
   orthoOn = true;
   private orthoWas = true;
+  /** the IGN's relief over France (I2, settings.earthIgnRelief): its heights on the levels from IGN_HZ0, and the levels
+   *  finer than the global data's (z 15 … 17); switched: every tile taken again */
+  reliefOn = true;
+  private reliefWas = true;
   private ortho: OrthoLevel[] = [];
   private orthoInflight = new Map<string, AbortController>();
   private orthoNone = new Set<string>();
@@ -425,8 +528,9 @@ export class EarthTiles {
   update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0], gaze: Vec3 = [0, 0, 0], agl?: number) {
     // (the orthophotos switched: the relief's tiles' imagery taken again — over France the IGN's or EOX's —, the tiles
     // kept past the windows dropped)
-    if (this.orthoOn !== this.orthoWas) {
+    if (this.orthoOn !== this.orthoWas || this.reliefOn !== this.reliefWas) {
       this.orthoWas = this.orthoOn;
+      this.reliefWas = this.reliefOn;
       this.cache.clear();
       for (const L of this.levels) L.key.fill(null);
       this.clear();
@@ -439,15 +543,31 @@ export class EarthTiles {
     const cosLat = Math.sqrt(Math.max(1 - this.sinLat * this.sinLat, 1e-6));
     const alt = Math.max(g.h * R, 1);
     // (the finest level the nearest ground needs: its texel within the pixel's footprint there)
-    const zNeed = Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max(alt * pixAngle, 0.5)))), Z1);
+    const zNeed = Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max(alt * pixAngle, 0.5)))), ZG1);
     if (zNeed < Z0) return this.clear();
+    // (finer, the IGN's relief alone — in France, on: by the height over the ground, as the orthophotos —; else none)
+    const latD = (g.lat * 180) / Math.PI,
+      lonD = (g.lon * 180) / Math.PI,
+      B = ORTHO_BOX;
+    const inFrance = latD > B.south - 0.1 && latD < B.north + 0.1 && lonD > B.west - 0.1 && lonD < B.east + 0.1;
+    const zFine =
+      this.reliefOn && inFrance
+        ? Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max((agl ?? alt) * pixAngle, 0.5)))), Z1)
+        : ZG1;
     // (each window centred ahead where the view looks — gaze: its offset, Earth-fixed —, by up to a tile and a quarter
     // of its own level: what is seen ahead gets the finest heights and imagery, the ground behind the view less)
     const gc = cartToGeodetic(1, WGS84_F, c.map((v, i) => v + gaze[i]!) as Vec3);
     const gLonT = gc.lon / TAU + 0.5,
       gSinLat = Math.sin(gc.lat);
     for (const L of this.levels) {
-      if (L.z > zNeed) continue;
+      if (L.z > ZG1 && L.z > zFine) {
+        if (L.want) {
+          L.want = null;
+          this.setValid(L, null);
+        }
+        continue;
+      }
+      if (L.z <= ZG1 && L.z > zNeed) continue;
       const cx0 = (this.lon / TAU + 0.5) * L.n,
         cy0 = mercY(this.sinLat, L.n);
       const gx = gLonT * L.n - cx0,
@@ -567,9 +687,11 @@ export class EarthTiles {
       ctl.signal.removeEventListener("abort", relay);
     });
     try {
-      const res = await fetch(tileUrl(L.z, xw, y), { signal: ctl.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const heights = await res.blob().then(decode);
+      // (over France the IGN's heights — the global data's where it has none —; elsewhere Terrarium's)
+      const heights =
+        this.reliefOn && L.z >= IGN_HZ0 && inOrthoBox(L.n, xw, y)
+          ? await ignHeights(L.z, xw, y, ctl.signal)
+          : await terrarium(L.z, xw, y, ctl.signal);
       h = heights;
       this.loaded++;
       if (ahead) {
@@ -686,6 +808,7 @@ export class EarthTiles {
         h[j * TILE + i] = this.fallback([Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)]);
       }
     }
+    markFine(h, false);
     return h;
   }
 
@@ -928,7 +1051,9 @@ export class EarthTiles {
       };
       const hz = sampleLevel(at, px, py, zf - L.z);
       h += rem * w * hz;
-      res += rem * w * Math.max(texel, TILE_RES_MIN);
+      // (the data's own resolution: a survey's its texel, the global data's no finer than SRTM's — the nearest texel's mark)
+      const fine = isFine(at(Math.floor(px), Math.floor(py)));
+      res += rem * w * Math.max(texel, fine ? TILE_RES_FINE : TILE_RES_MIN);
       rem *= 1 - w;
     }
     return { h, res, rem };

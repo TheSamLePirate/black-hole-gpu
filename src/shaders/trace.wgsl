@@ -102,7 +102,7 @@ struct Params {
   // rectangle [px], the rectangle's corner in its layer [px]; the rectangle's size [px], the level's
   // pixels per radian, on
   tiles: vec4f,
-  tileL: array<vec4f, 18>,
+  tileL: array<vec4f, 24>,
   // the runways near the camera (src/game/sites.ts, at most RWY_MAX): [0].x their count; then each its
   // threshold's geodetic unit direction (w: its length [m]), its landing direction (w: its half width [m]),
   // its right, and the camera from its threshold on the Earth's squashed axes [m] (float64 on the CPU)
@@ -5442,14 +5442,21 @@ fn earthH0(q: vec3f, foot: f32) -> f32 {
 }
 // ---- the terrain tiles (src/system/earth-tiles.ts: the same weights on the CPU, heightAt)
 const TILE_Z0 = 6u;
-const TILE_LEVELS = 9u;
+const TILE_LEVELS = 12u; // (z 6 … 17 — the last three over France alone, the IGN's relief: src/system/earth-tiles.ts Z1)
 const TILE_RES_MIN = 25.0;
+// a survey's own resolution [m] (earth-tiles.ts TILE_RES_FINE: the IGN's)
+const TILE_RES_FINE = 1.0;
 // a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo its window's side)
 fn tileTexel(l: u32, i: vec2i) -> f32 {
   // (a level's window: 4 or 8 tiles a side — EarthTiles.setReach, its fine levels —, its side a power of two in
   // P.tileL[2l + 1].w: wrapped by a mask)
   let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(i32(P.tileL[2u * l + 1u].w) - 1);
   return bitcast<f32>(textureLoad(earthTiles, t, l, 0).r);
+}
+// whether a level's texel at i is a survey's height (the IGN's: its float's last bit — earth-tiles.ts markFine)
+fn tileFine(l: u32, i: vec2i) -> bool {
+  let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(i32(P.tileL[2u * l + 1u].w) - 1);
+  return (textureLoad(earthTiles, t, l, 0).r & 1u) == 1u;
 }
 fn tileImage(l: u32, i: vec2i) -> u32 {
   // (its level's window's side: P.tileL[2l + 1].w — tileTexel)
@@ -5622,7 +5629,8 @@ fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
     let w = wz * smoothstep(2.0, 48.0, d);
     if (w <= 0.0) { continue; }
     h += rem * w * tileSample(l, p, select(zf - z, 0.0, cheap || TUNE_CHEAP > 0u));
-    res += rem * w * max(EARTH_RM * cosLat / b.z, TILE_RES_MIN);
+    // (the data's own resolution: a survey's its texel's, the global data's no finer than SRTM's — the nearest texel's mark)
+    res += rem * w * max(EARTH_RM * cosLat / b.z, select(TILE_RES_MIN, TILE_RES_FINE, tileFine(l, vec2i(floor(p)))));
     rem *= 1.0 - w;
     if (rem < 1e-4) { break; }
   }

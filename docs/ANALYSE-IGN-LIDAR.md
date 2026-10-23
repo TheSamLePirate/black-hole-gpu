@@ -108,6 +108,17 @@ Trois changements nécessaires :
    (la normale actuelle à trois lectures de hauteur coûte ≈ 0 ms d'après l'ablation). 129² nœuds par niveau : la
    mémoire est négligeable ; le coût est dans la passe de visibilité (≈ 4,6 ms aujourd'hui), à mesurer.
 
+**Fait le 23/10 (I2).** En France (réglage « Relief IGN (France) »), les niveaux z 11–14 prennent leurs hauteurs à
+la RGE ALTI au lieu de Terrarium, et trois niveaux de relief de plus, z 15–17 (3,2 → 0,8 m le texel ; fenêtres de 4
+tuiles), viennent de l'IGN seul — le LiDAR HD dès z 16, la RGE ALTI dans ses trous ; là où l'IGN n'a rien (en mer, à
+l'étranger), Terrarium (au-delà de son z 15, agrandi). Une requête WMS-R en EPSG:3857 par tuile ; les valeurs que la
+RGE ALTI rééchantillonne le long des côtes (jusqu'à −856 m) écartées sous −100 m. La source de chaque hauteur est
+dans le dernier bit de son flottant (Terrarium ne l'emploie jamais : ses k/256 tiennent sur 22 bits) : le CPU
+(`heightAt`) et le traceur (`tileFine`) en tirent la résolution de la donnée — 1 m pour l'IGN, 25 m pour le reste —,
+qui efface le détail procédural plus fin que le relevé. Mesuré à Étretat sur kerr-mini : la falaise à 84° de pente
+au lieu de 59°, la résolution de 1,2 m au lieu de 25 m. Pas fait : le maillage raster garde ses niveaux à 9,5 m (le
+relief fin n'y est que dans l'ombrage et les intersections affinées, pas dans les silhouettes : I3).
+
 Débit *(estimation)* : 256 Ko par tuile non compressée en WMS-R, ≈ 1,5 Mo/s en vol bas à 150 m/s sur z 15–17 :
 acceptable sur fibre, lourd en 4G — quantifier à 16 bits (cm) dans le worker avant le cache PWA, et réserver
 z 17 au‑dessous de ≈ 1 500 m de hauteur sol. 40 req/s par IP : large pour un joueur (8–16 en vol), **pas pour un
@@ -287,7 +298,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 |---|---|---|
 | **I0** — fait (23/10) | Géoïde EGM2008 (sol, mer, IGN) — `src/system/geoid.ts`, la table du traceur, `seaAltitudeOver` ; voir §5 | vols de référence et atterrissages inchangés à l'issue près ; trafic ADS-B posé sur les pistes |
 | **I1** — fait (23/10) | Ortho IGN z 15–18 dans `earth-tiles.ts`, recalage couleur, attribution — et l'imagerie des niveaux z 9–14 prise à l'IGN en France ; voir §4.1 | captures A/B Chamonix, CdG, Paris en cockpit ; FPS inchangé (`raster-flight`) |
-| **I2** | Hauteurs RGE ALTI + LiDAR HD (WMS-R 3857), `TILE_RES_MIN` par source, bruit effacé | `shade` −5 ms attendu en France ; aucune couture au bord |
+| **I2** — fait (23/10) | Hauteurs RGE ALTI + LiDAR HD (WMS-R 3857), `TILE_RES_MIN` par source, bruit effacé — voir §4.2 | `shade` −5 ms attendu en France ; aucune couture au bord |
 | **I3** | Niveaux fins du cache de surface (2,4/1,2 m) et normales à 0,5 m | passe de visibilité mesurée, cible ≤ +2 ms |
 | **I4** | MNH → forêts | captures de lisières/haies contre l'ortho |
 | **I5** | BD TOPO → bâtiments | hauteurs comparées au MNS sur un quartier |

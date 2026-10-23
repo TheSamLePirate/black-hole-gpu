@@ -47,6 +47,8 @@ export function classify(url: string, scope: string, method = "GET", dirs: reado
   if (u.hostname === "tiles.maps.eox.at" && u.pathname.startsWith("/wmts/")) return "tile";
   // (the IGN's orthophotos over France — I1 —: the Géoplateforme's WMTS tiles)
   if (u.hostname === "data.geopf.fr" && u.pathname === "/wmts" && u.searchParams.get("REQUEST") === "GetTile") return "tile";
+  // (and its heights — the IGN's relief, I2 —: the WMS-R's grids, one a tile)
+  if (u.hostname === "data.geopf.fr" && u.pathname === "/wms-r" && u.searchParams.get("REQUEST") === "GetMap") return "tile";
   if (u.hostname === "tiles.openfreemap.org" && u.pathname.startsWith("/planet/")) return "tile";
   if (u.hostname === "mapproxy.terrascope.be" && u.pathname === "/mapproxy/service" && u.searchParams.get("REQUEST") === "GetMap")
     return "tile";

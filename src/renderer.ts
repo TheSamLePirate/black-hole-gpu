@@ -3075,6 +3075,8 @@ export class Renderer {
       this.earthTiles.setReach(TILE_REACH[detail.reach] ?? TILE_REACH.normal);
       // (over France, the IGN's orthophotos finer than the relief's imagery — I1)
       this.earthTiles.orthoOn = s.earthOrtho;
+      // (and its relief — I2)
+      this.earthTiles.reliefOn = s.earthIgnRelief;
       this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0], eye ? eyeH : undefined);
       this.earthSurface.update(eye, s.earthSurface, lead);
       this.earthScenery.update(
