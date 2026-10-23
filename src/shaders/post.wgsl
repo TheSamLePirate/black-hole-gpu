@@ -156,7 +156,8 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
   var c: vec3f;
   var variance = -1.0; // variance of the pixel's estimate (−1: unknown)
   let mx = moments[idx].x;
-  if (mx < -2.5 && mx > -3.5) {
+  // (only while the raster shades at a rate this frame — R.f.y —: a mark left from before it stopped is not this frame's)
+  if (R.f.y > 1.5 && mx < -2.5 && mx > -3.5) {
     // A pixel the raster covers and its shading left this frame (trace.wgsl shadeMark, RASTER_STALE — the rate of
     // earthRasterShading above 1): rebuilt from the fresh shaded pixels round it (RASTER_MARK) on the same surface — their
     // depths within a few per cent of its own nearest surface's, so a crown does not bleed into the ground behind it nor
@@ -667,7 +668,8 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   // (a pixel of the raster's — shaded this frame, RASTER_MARK, or left and rebuilt, RASTER_STALE —: its depth is its own,
   // exact at every pixel, and its outline a pixel's; the block's scale is the traced rays')
   let mxp = moments[gid.y * W + gid.x].x;
-  let rasterPx = mxp > 1e29 || (mxp < -2.5 && mxp > -3.5);
+  // (R.f.y: the raster's rate this frame, 0 without it — marks from before it stopped are not this frame's)
+  let rasterPx = R.f.y > 0.5 && (mxp > 1e29 || (R.f.y > 1.5 && mxp < -2.5 && mxp > -3.5));
   if (!isFresh && TA.cc.w > 0.5 && !rasterPx) {
     let stp = i32(max(block / 2u, 1u));
     let hiD = vec2i(size) - 1;

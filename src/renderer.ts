@@ -65,7 +65,7 @@ import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./
 import { bakeNoise3d } from "./noise3d";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
 import { visibleTimeout } from "./util/visible-timeout";
-import { automaticQuality, effectiveQuality, earthMapQuality } from "./quality-policy";
+import { automaticQuality, earthDetailFor, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import {
@@ -239,6 +239,12 @@ const FEATURE_TERRAIN_CACHE = 1 << 15;
 const FEATURE_TERRAIN_RASTER = 1 << 30;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
+/** the raster's shading rates (settings.earthRasterShading: one pixel in so many shaded a frame) */
+const RASTER_RATE_OF: Record<string, number | undefined> = { every: 1, half: 2, quarter: 4, eighth: 8, sixteenth: 16 };
+/** the rates the automatic choice moves between (adaptRasterRate), finest first */
+const RASTER_RATES_AUTO = [2, 4, 8, 16] as const;
+/** the automatic rate's start by the hardware's tier (tier.ts: 0 software … 4 high-end) — then by the measure */
+const RASTER_RATE_START = [16, 8, 4, 4, 4] as const;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
 const HANDOVER_PASSES = 8;
 /** the runways' block after the tiles' (trace.wgsl: Params.runways) */
@@ -843,6 +849,8 @@ export class Renderer {
   shipContrails: { data: Float32Array<ArrayBuffer>; n: number } | null = null;
   /** the last frame's local patch (inspection) */
   lastNear: ReturnType<typeof localPatch> = null;
+  /** the body near the camera in the last camera frame is the Earth (its sky's and its clouds' shadow passes run then only) */
+  private nearEarthNow = false;
   /** the planets' light probes (system/planet-probe.ts), by body id */
   readonly planetProbes = new Map<string, PlanetProbe>();
   private probeBuf!: GPUBuffer;
@@ -1016,12 +1024,13 @@ export class Renderer {
         usage: U.TEXTURE_BINDING,
       });
     }
-    // (the trees' and buildings' shadow map — drawn by the scenery raster, bound to the tracer from the start)
+    // (the trees' and buildings' shadow map — drawn by the scenery raster, bound to the tracer from the start: a stand-in
+    // until the scenery raster first runs — its 16 MiB not taken on a device that never flies over the Earth's forests)
     this.treeShadow = device.limits.maxSampledTexturesPerShaderStage >= TREE_SHADOW_TEXTURE_LIMIT;
     if (this.treeShadow)
       this.tsmTex = device.createTexture({
-        label: "trees' shadow map",
-        size: [TREE_SHADOW_N, TREE_SHADOW_N],
+        label: "trees' shadow map: none yet",
+        size: [1, 1],
         format: "depth32float",
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
@@ -2156,6 +2165,7 @@ export class Renderer {
     t.temporal?.hist.forEach((h) => h.destroy());
     t.blur?.tex.destroy();
     this.dropTaau(t);
+    this.dropClouds(t);
     t.lut?.tex.forEach((x) => x.destroy());
     t.temporal?.buf.destroy();
   }
@@ -2220,15 +2230,29 @@ export class Renderer {
     ];
   }
 
+  /** A target's cloud-pass textures released (destroyTarget, or before they are made at a new size). */
+  private dropClouds(t: Target) {
+    for (const x of [t.cloudA, t.cloudB, t.cloudCurA, t.cloudCurB, t.cloudHistA]) x?.destroy();
+    t.cloudA = t.cloudB = t.cloudCurA = t.cloudCurB = t.cloudHistA = undefined;
+    t.cloudWrite = undefined;
+    t.cloudTemporalBind = undefined;
+    t.cloudHistValid = false;
+  }
+
   private bindTarget(t: Target) {
     this.eventFrames = 3; // (new resources: the next frames' times are not the scene's)
     const d = this.device;
     t.hintBind = undefined;
     t.cloudBind = undefined;
     this.csmBind0 = undefined;
-    if (this.cloudPass && this.cloudWriteLayout) {
-      for (const x of [t.cloudA, t.cloudB, t.cloudCurA, t.cloudCurB, t.cloudHistA]) x?.destroy();
-      const size = [Math.ceil(t.width / 2), Math.ceil(t.height / 2)];
+    // (the cloud pass's textures: the live view's only — the pass runs there alone —, made again when its size changes —
+    // not at every rebinding, an asset streamed in: their history kept)
+    const cw = Math.ceil(t.width / 2);
+    const ch = Math.ceil(t.height / 2);
+    const cloudsLive = t.gather.size > 16;
+    if (this.cloudPass && this.cloudWriteLayout && cloudsLive && (t.cloudA?.width !== cw || t.cloudA?.height !== ch)) {
+      this.dropClouds(t);
+      const size = [cw, ch];
       const U = GPUTextureUsage;
       const mk = (label: string, usage: number) => d.createTexture({ label, size, format: "rgba32float", usage });
       // (this frame's march, the history's result the kernels read, the history kept for the next frame)
@@ -2834,6 +2858,7 @@ export class Renderer {
     // beyond 3.5 radii, freed under 12 pixels for 5 s (hysteresis: no reload back and forth); its
     // clouds drift eastwards, a turn in 20 days
     const earthK = bodies.findIndex((b) => b.id === "earth" && b.surface >= SURFACE_MAPPED);
+    if (!o.probe) this.nearEarthNow = earthK >= 0 && !!near && near.index === earthK;
     if (!o.probe) {
       let dE = Infinity; // [its radii]
       if (earthK >= 0 && near && near.index === earthK) dE = Math.hypot(...near.centre);
@@ -3021,19 +3046,20 @@ export class Renderer {
           : null;
       const eyeH = eye && near ? Math.max(heightOverGround("earth", eye.map((x) => x * near.radius) as Vec3), 1) : 0;
       // (the detail's reach — settings.detailReach —: the scenery's box this many times wider, the relief's windows led
-      // out to 6, 12 or 20 km)
-      const reach = DETAIL_REACH[s.detailReach] ?? 1;
-      const gazeT = eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, GAZE_TILES_M[s.detailReach] ?? 6000) : ([0, 0, 0] as Vec3);
+      // out to 6, 12 or 20 km; both as this device draws them — quality-policy.ts earthDetailFor: lighter on a modest one)
+      const detail = earthDetailFor(s, this.tier);
+      const reach = DETAIL_REACH[detail.reach] ?? 1;
+      const gazeT = eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, GAZE_TILES_M[detail.reach] ?? 6000) : ([0, 0, 0] as Vec3);
       const gazeS =
-        eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, 0.6 * (s.earthScenery === "high" ? 3000 : 2000) * reach) : ([0, 0, 0] as Vec3);
+        eye && gazeDir ? gazeLead(eye, gazeDir, eyeH, 0.6 * (detail.scenery === "high" ? 3000 : 2000) * reach) : ([0, 0, 0] as Vec3);
       this.streamingState.gazeM = Math.hypot(...gazeT) * 6378137;
       // (and its windows 4 or 8 tiles a side, the tiles kept past them and the ring loaded ahead round them)
-      this.earthTiles.setReach(TILE_REACH[s.detailReach] ?? TILE_REACH.normal);
+      this.earthTiles.setReach(TILE_REACH[detail.reach] ?? TILE_REACH.normal);
       this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0]);
       this.earthSurface.update(eye, s.earthSurface, lead);
       this.earthScenery.update(
         eye,
-        s.earthScenery,
+        detail.scenery,
         s.earthSurface !== "off",
         s.earthTerrain,
         this.sceneryExclusions,
@@ -3113,8 +3139,11 @@ export class Renderer {
     // Keep reference rendering for optical/scientific kernels and contact with the walking patch.
     // (the raster inspector draws its own patch and reads the cache itself; it does not need the tracer to be free of the
     // wormhole's metric, which the Earth scenes always carry: only the tracer's *use* of the cache does)
+    // (the pipeline the near Earth is drawn by: the setting's, unless the raster proved too heavy for this device —
+    // rasterFellBack, main.ts's governor —, then traced)
+    const rasterWanted = this.earthPipelineNow(s) === "raster";
     const terrainRasterEligible = !!(
-      (s.earthTerrainCache || s.earthTerrainRasterView !== "off" || s.earthTerrainRasterUse || s.earthPipeline === "raster") &&
+      (s.earthTerrainCache || s.earthTerrainRasterView !== "off" || s.earthTerrainRasterUse || rasterWanted) &&
       s.earthTerrain &&
       this.earthMaps.tier &&
       t === this.live &&
@@ -3122,7 +3151,7 @@ export class Renderer {
       !s.polarization &&
       s.band === "visible" &&
       s.renderMode === "physical" &&
-      (this.tuneKey === 0 || s.earthPipeline === "raster") &&
+      (this.tuneKey === 0 || rasterWanted) &&
       !walking &&
       earthSurface &&
       Math.abs(earthSurface.lat) <= TERRAIN_CACHE_MAX_LAT &&
@@ -3134,16 +3163,14 @@ export class Renderer {
     // (the realtime kernel's ground march from the patch's distances: only where the device takes the texture, and in the
     // interleaved realtime frames — a still view converges on the quality kernel, which keeps the reference march)
     const hinting =
-      terrainRasterEligible &&
-      (s.earthTerrainRasterUse || s.earthPipeline === "raster") &&
-      this.rasterHint &&
-      (o.flags & FLAG_INTERLEAVED) !== 0;
+      terrainRasterEligible && (s.earthTerrainRasterUse || rasterWanted) && this.rasterHint && (o.flags & FLAG_INTERLEAVED) !== 0;
     // (the raster's primary visibility — docs/PLAN-RENDU-RASTER-AAA.md étape 1 —: the patch's pixels shaded one a pixel by
     // the kernel shade after the trace, which leaves them; trace.wgsl rasterPrimary reads it)
-    const rasterPrimary = hinting && s.earthPipeline === "raster";
+    const rasterPrimary = hinting && rasterWanted;
     if (!o.probe) this.rasterPrimaryOn = rasterPrimary;
-    // (… and its shading rate: 1 every pixel, 2 one in two, 4 one in 2 × 2 — trace.wgsl rasterRate)
-    this.rasterRate = { every: 1, half: 2, quarter: 4, eighth: 8, sixteenth: 16 }[s.earthRasterShading] ?? 1;
+    // (… and its shading rate: 1 every pixel, 2 one in two, 4 one in 2 × 2 … — trace.wgsl rasterRate; "auto": the
+    // governor's, by the device's measured load — adaptRasterRate)
+    this.rasterRate = this.rasterRateFor(s);
     // (the cloud pass's bit — CLOUD_PASS_FLAG — set once it is drawn this frame: dispatchTrace, when the frame's key is whole)
     this.cloudPassDrawn = false;
     // (16 written 15: the rate's four bits — trace.wgsl rasterRate)
@@ -3157,6 +3184,9 @@ export class Renderer {
     this.terrainCacheWanted = (terrainCacheEligible || inspecting || hinting) && (o.flags & FLAG_INTERLEAVED) !== 0;
     if (!o.probe) {
       this.terrainRasterRequested = inspecting || hinting;
+      // (a diagnostic's own GPU work — the inspector, the cache, the hints alone —: the automatic quality held while it
+      // runs; the raster pipeline is the image itself, governed as the traced one)
+      this.terrainRasterDiagnostic = inspecting || (terrainCacheEligible && s.earthTerrainCache) || (hinting && !rasterPrimary);
       this.terrainRasterLevel = Number.isFinite(s.earthTerrainRasterLevel)
         ? Math.max(0, Math.min(5, Math.round(s.earthTerrainRasterLevel)))
         : 2;
@@ -3429,7 +3459,7 @@ export class Renderer {
     this.device.queue.writeBuffer(
       t.resolveBuf,
       16,
-      new Float32Array([this.costViewMode ? 1 : preExposure(this.ev(s)), this.rasterPrimaryOn ? this.rasterRate : 1, 0, 0]),
+      new Float32Array([this.costViewMode ? 1 : preExposure(this.ev(s)), this.rasterPrimaryOn ? this.rasterRate : 0, 0, 0]),
     );
     if (s.polarization) {
       const { cs, gw, gh } = this.polCells(s, t);
@@ -3539,6 +3569,7 @@ export class Renderer {
     // (a storm's lightning — N5 —: the flash now, its place from the camera on the Earth's axes [m] and its light; the ground
     // under it, to the ground or not, its seed, its light's reach)
     if (live) {
+      this.lightning.eyeH = altKm * 1e3;
       const deck = g.params.slice(4, 16);
       const storm = w.kind === "storm" ? 1 : w.rain > 0.7 && deck[1]! - deck[0]! > 4500 ? 0.5 : 0;
       this.lightning.step(tSec, storm, deck[0]! || 1000, deck[1]! || 8000);
@@ -4269,6 +4300,13 @@ export class Renderer {
       ap.setBindGroup(1, this.aerialWrite);
       ap.dispatchWorkgroups(Math.ceil(AERIAL_SIZE[0] / 8), Math.ceil(AERIAL_SIZE[1] / 8));
       ap.end();
+    }
+    // (the raster's shading kernels compile after the image's — realtimeCascade —: until they are there for this key, its
+    // pixels traced as before, not left by the trace to a pass that cannot run — the ground missing for seconds, minutes on
+    // a slow D3D12 driver)
+    if (!quality && hint && this.rasterPrimaryOn) {
+      const sh = this.traceVariant("shade");
+      if (!sh || (this.rasterRate > 1 && !this.traceVariant("shadeMark"))) this.dropRasterPrimary(t);
     }
     // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
     if (!quality && hint && this.rasterPrimaryOn && this.cloudPass && this.cloudPassOn) {
@@ -6362,7 +6400,7 @@ export class Renderer {
    * the queue's stall limit, or failed, no longer counts: the kernel drawing is then for good). */
   get calibrationReady() {
     return (
-      !this.terrainRasterRequested &&
+      !this.terrainRasterDiagnostic &&
       (this.variantReady || !!this.variants.get(this.featureKey)?.rtGivenUp) &&
       this.earthSettled &&
       this.variantQueue.pending === 0 &&
@@ -6381,12 +6419,19 @@ export class Renderer {
   resetQualityTiming() {
     this.timingGeneration++;
     this.blockMs.clear();
+    this.rasterRateMs.clear();
     this.recentMs.length = 0;
     this.slowMs = this.fastMs = 0;
+    this.rateSlowMs = this.rateFastMs = 0;
     this.lastGpuMs = 0;
   }
   /** A new hardware tier: its precision caps (effectiveQuality) change the image — drawn anew. */
   setTier(tier: Tier) {
+    // (the automatic raster rate after a new tier: a demotion at least the new tier's start, coarser; a promotion — room
+    // measured — at most it, finer than a coarse measure had left it)
+    const start = RASTER_RATE_START[tier.level];
+    if (tier.level < this.tier.level || !this.autoRasterRate) this.autoRasterRate = Math.max(this.autoRasterRate, start);
+    else this.autoRasterRate = Math.min(this.autoRasterRate, start);
     this.tier = tier;
     this.resetQualityTiming();
     this.invalidate();
@@ -6412,6 +6457,9 @@ export class Renderer {
   private terrainCacheWanted = false;
   private terrainRaster: TerrainRaster | null = null;
   private terrainRasterRequested = false;
+  /** a terrain diagnostic adds its own GPU work this frame (the inspector, the cache, the hints without the raster
+   *  pipeline): the automatic quality held — main.ts reads it as terrainRasterInspecting */
+  private terrainRasterDiagnostic = false;
   private terrainRasterLevel = 2;
   /** the last camera frame shades the raster patch's pixels one a pixel (earthPipeline "raster", trace.wgsl shade) */
   private rasterPrimaryOn = false;
@@ -6429,7 +6477,7 @@ export class Renderer {
   private csmBind0?: { t: Target; bind: GPUBindGroup };
   private encodeCloudShadow(enc: GPUCommandEncoder, t: Target) {
     const d = this.device;
-    if (!this.cloudShadow || !this.cloudShadowOn || !this.lastNear) {
+    if (!this.cloudShadow || !this.cloudShadowOn || !this.lastNear || !this.nearEarthNow) {
       if (this.csmTableOn) d.queue.writeBuffer(this.bodyBuf, TABLE_CSM * 16, new Float32Array(CSM_VEC4S * 4));
       this.csmTableOn = false;
       return;
@@ -6505,7 +6553,7 @@ export class Renderer {
   private skyTableOn = false;
   private encodeSkyAmbient(enc: GPUCommandEncoder, t: Target) {
     const d = this.device;
-    if (!this.skyAmbientOn || !this.lastNear) {
+    if (!this.skyAmbientOn || !this.lastNear || !this.nearEarthNow) {
       if (this.skyTableOn) d.queue.writeBuffer(this.bodyBuf, TABLE_SKY * 16, new Float32Array(4));
       this.skyTableOn = false;
       return;
@@ -6538,7 +6586,9 @@ export class Renderer {
               constants: {
                 ...Object.fromEntries(off.map((f) => [`HAS_${f}`, 0])),
                 HAS_BODIES: 1,
-                HAS_WX: (this.featureKey & 1024) !== 0 ? 1 : 0,
+                // (the weather's haze and fog in the air's light — compiled in once and for all: a session begun in fair
+                // weather or in space would keep them out for good; the decks themselves are left out by the kernel)
+                HAS_WX: 1,
                 QUALITY_PIPELINE: 0,
               },
             },
@@ -6664,9 +6714,13 @@ export class Renderer {
     this.sceneryRaster?.setLod(this.pendingSceneryLod);
   }
   private pendingSceneryLod: SceneryRasterLod | null = null;
-  /** Freeze automatic quality policy while a diagnostic adds its own GPU work. */
+  /** Freeze automatic quality policy while a diagnostic adds its own GPU work (not the raster pipeline: the image itself). */
   get terrainRasterInspecting() {
-    return this.terrainRasterRequested;
+    return this.terrainRasterDiagnostic;
+  }
+  /** the near Earth drawn by the raster pipeline in the last camera frame (main.ts: its render scale in motion) */
+  get rasterPrimaryNow() {
+    return this.rasterPrimaryOn;
   }
   /** Geometry inspector only; its metric depth does not yet replace the scene's occlusion depth. */
   get terrainRasterStats() {
@@ -6862,6 +6916,17 @@ export class Renderer {
     let trees = false;
     if (this.sceneryRasterOn && this.rasterPrimaryOn && s.earthScenery !== "off" && sc.supported && sc.forestCells > 0) {
       if (!this.sceneryRaster) {
+        // (the trees' shadow map itself, now that it will be drawn: the targets bound to it again)
+        if (this.treeShadow && this.tsmTex && this.tsmTex.width < TREE_SHADOW_N) {
+          this.tsmTex = this.device.createTexture({
+            label: "trees' shadow map",
+            size: [TREE_SHADOW_N, TREE_SHADOW_N],
+            format: "depth32float",
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+          });
+          if (this.live) this.bindTarget(this.live);
+          if (this.offline) this.bindTarget(this.offline.target);
+        }
         this.sceneryRaster = new SceneryRaster(this.device, this.traceSource, this.tsmTex);
         if (this.pendingSceneryLod) this.sceneryRaster.setLod(this.pendingSceneryLod);
       }
@@ -7096,7 +7161,7 @@ export class Renderer {
       this.generalCompile.state === "ready" &&
       !sceneChanged &&
       !timeChanged &&
-      !this.terrainRasterRequested &&
+      !this.terrainRasterDiagnostic &&
       adaptive &&
       this.sampleIndex < targetSpp
     )
@@ -7198,12 +7263,17 @@ export class Renderer {
     this.chartDirty = false;
     const auto = s.realtimeSubsampling === "auto";
     const used = this.lastBlock;
+    // (the raster's shading rate this frame, when the governor chooses it — earthRasterShading "auto")
+    const rate = this.rasterPrimaryOn && s.earthRasterShading === "auto" ? this.rasterRate : 0;
     const generation = this.timingGeneration;
     this.submit(
       enc,
       (ms) => {
-        if (phase === "realtime" && auto && !this.terrainRasterRequested && generation === this.timingGeneration)
+        if (phase === "realtime" && auto && !this.terrainRasterDiagnostic && generation === this.timingGeneration) {
+          // (the rate first: adaptBlock leaves out — and counts down — the frames after new resources)
+          if (rate) this.adaptRasterRate(ms, this.frameBudget(s), rate, used);
           this.adaptBlock(ms, this.frameBudget(s), used);
+        }
         if (phase === "converging" && rows > 0) {
           const perRow = ms / rows;
           // (the bands sized to the quality's frame budget — the Game's 16 ms keeps 60 fps while the image
@@ -7301,6 +7371,86 @@ export class Renderer {
       this.realtimeBlock = finer;
       this.fastMs = 0;
     }
+  }
+
+  /** This frame without the raster's primary visibility (its shading kernels not compiled yet): the trace takes its pixels
+   *  — the parameters' rate and the reconstruction's rewritten for this submission. */
+  private dropRasterPrimary(t: Target) {
+    this.rasterPrimaryOn = false;
+    this.rasterHaltonNow = false;
+    this.paramsF[MOUTH_LIST_AT + 5] = 0;
+    this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
+    this.device.queue.writeBuffer(t.resolveBuf, 20, new Float32Array([0]));
+  }
+  /** The near Earth's pipeline this frame: the setting's, traced once the raster proved too heavy here (rasterFellBack). */
+  earthPipelineNow(s: Pick<Settings, "earthPipeline">): "raster" | "trace" {
+    return s.earthPipeline === "raster" && !this.rasterFellBack ? "raster" : "trace";
+  }
+  /** The raster's shading rate (1, 2, 4, 8, 16: one pixel in so many a frame): the setting's, or with "auto" the
+   *  governor's — from the hardware tier's start (RASTER_RATE_START), then by the measured frame time. */
+  private rasterRateFor(s: Pick<Settings, "earthRasterShading" | "realtimeSubsampling">): number {
+    const fixed = RASTER_RATE_OF[s.earthRasterShading];
+    if (fixed) return fixed;
+    if (!this.autoRasterRate) this.autoRasterRate = RASTER_RATE_START[this.tier.level];
+    return this.autoRasterRate;
+  }
+  /**
+   * The raster's automatic shading rate (earthRasterShading "auto"), as adaptBlock the traced block: a pixel in so many
+   * shaded a frame — the shading is the raster's main cost (docs/progress/raster-aaa/PERF-2026-10-21.md: 1/4 → 1/16, the
+   * surfaces' shading 17–23 → 5–8 ms) —, coarser once the frame stays over its budget with the sky's block already
+   * coarse (150 ms × 2: the block goes first), finer once it has had room for 1.5 s and the finer rate fits (measured,
+   * or guessed: the shading's share doubled). Between one in two and one in sixteen; BLOCK_MEMORY per rate.
+   */
+  private adaptRasterRate(ms: number, budget: number, rate: number, block: number) {
+    if (this.eventFrames > 0 || this.lastFrameDense) return;
+    const now = performance.now();
+    const fresh = (x: number) => {
+      const m = x ? this.rasterRateMs.get(x) : undefined;
+      return m && now - m.at < BLOCK_MEMORY ? m : undefined;
+    };
+    const rec = this.recentMs;
+    if (rec.length) {
+      const med = [...rec].sort((x, y) => x - y)[rec.length >> 1]!;
+      ms = Math.min(ms, 2 * med);
+    }
+    const m = fresh(rate);
+    const est = m ? 0.85 * m.ms + 0.15 * ms : ms;
+    this.rasterRateMs.set(rate, { ms: est, at: now });
+    if (rate !== this.autoRasterRate) return; // (a frame drawn before the last change)
+    const i = (RASTER_RATES_AUTO as readonly number[]).indexOf(rate);
+    const finer = i > 0 ? RASTER_RATES_AUTO[i - 1]! : 0;
+    const coarser = i >= 0 && i < RASTER_RATES_AUTO.length - 1 ? RASTER_RATES_AUTO[i + 1]! : 0;
+    const kf = fresh(finer);
+    const coarserPays = !!coarser && est > 1.1 * budget && block >= 4;
+    const finerFits = !!finer && (kf ? kf.ms <= 0.9 * budget : est < 0.55 * budget);
+    if (coarserPays) {
+      this.rateSlowMs += ms;
+      this.rateFastMs = 0;
+    } else if (finerFits) {
+      this.rateFastMs += ms;
+      this.rateSlowMs = 0;
+    } else {
+      this.rateSlowMs = this.rateFastMs = 0;
+    }
+    if (this.rateSlowMs >= 300) {
+      this.autoRasterRate = coarser;
+      this.rateSlowMs = 0;
+    } else if (this.rateFastMs >= 1500) {
+      this.autoRasterRate = finer;
+      this.rateFastMs = 0;
+    }
+  }
+  /** the automatic shading rate now (0: not chosen yet) and its frames' times by rate */
+  private autoRasterRate = 0;
+  private rasterRateMs = new Map<number, { ms: number; at: number }>();
+  private rateSlowMs = 0;
+  private rateFastMs = 0;
+  /** the raster pipeline given up for the traced one on this device, for the session: main.ts's governor, the frame over
+   *  its budget and a half at the coarsest rate and the smallest scale for 12 s (the setting changed: tried again) */
+  rasterFellBack = false;
+  /** the automatic shading rate (earthRasterShading "auto"): the coarsest it may go — main.ts's fallback watches it */
+  get rasterRateCoarsest() {
+    return this.rasterPrimaryOn && this.rasterRate >= RASTER_RATES_AUTO[RASTER_RATES_AUTO.length - 1]!;
   }
 
   /**

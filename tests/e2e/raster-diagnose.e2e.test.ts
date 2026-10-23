@@ -1,3 +1,4 @@
+// (a probe — no assertion, a measure to read —, not in `bun run e2e`: E2E_PROBE=1 to run it)
 // A diagnostic of the raster pipeline's passes (docs/PLAN-RENDU-RASTER-AAA.md, PLAN-NUAGES-AAA.md): a cloudy raster view, then
 // every 15 s the GPU passes that ran, the console's warnings and errors (a pipeline that failed to compile says why there),
 // the kernel variants' state and the passes' own switches. Not a pass/fail test: what a new pass that never shows needs.
@@ -7,7 +8,7 @@ import { App, E2E, stopServer } from "./lib/app";
 
 afterAll(stopServer);
 
-test.skipIf(!E2E)(
+test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
   "the raster pipeline's passes: what ran, what failed",
   async () => {
     const app = await App.boot({ hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`, width: 960, height: 600, tiles: false });

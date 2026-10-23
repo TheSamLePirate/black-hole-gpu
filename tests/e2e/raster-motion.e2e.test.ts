@@ -1,3 +1,4 @@
+// (a measuring campaign, not in `bun run e2e`: RASTER_BENCH=1 to run it — as scenery-bench)
 // The raster's image in motion (docs/PLAN-RENDU-RASTER-AAA.md étape 4, the temporal stabilisation): the F-35 from its
 // cockpit, flown FRAMES frames in a turn over the live relief (the scenery high, very far) — the history at work, the
 // view sliding — then the last realtime frame held (the clock stopped, the history kept) and captured, then left to
@@ -73,7 +74,7 @@ function psnr(a: Png, b: Png) {
 }
 const png = (f: string) => readPng(new Uint8Array(require("node:fs").readFileSync(f)));
 
-describe.skipIf(!E2E)("the raster's image in motion, against the converged one", () => {
+describe.skipIf(!E2E || process.env.RASTER_BENCH !== "1")("the raster's image in motion, against the converged one", () => {
   let app: App;
   const rows: unknown[] = [];
   beforeAll(async () => {

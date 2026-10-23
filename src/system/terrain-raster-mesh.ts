@@ -17,7 +17,8 @@ export function runwayMeshKey(runways: Float32Array): string {
   const values: string[] = [];
   for (let k = 0; k < count; k++) {
     const at = 4 + 16 * k;
-    values.push(runways.subarray(at, at + 11).join(","));
+    // (its place, length, heading, half width and its world flag — the landing end, bit 0 of its flags, changes no edge)
+    values.push(`${runways.subarray(at, at + 11).join(",")}|${Math.round(runways[at + 11] ?? 0) & ~1}`);
   }
   return values.sort().join(";");
 }
@@ -135,6 +136,14 @@ function earClip(ring: number[], at: (i: number) => Pt, out: number[]) {
 }
 
 const runwayCount = (runways: Float32Array) => Math.min(4, Math.max(0, Math.floor(runways[0] ?? 0)));
+/** Runway k's paved half width and its levelled zone's half width [m] (renderer nearRunways: its landing direction's w the
+ *  half width, its right's w the flags — 16 a world runway, its own width and 100 m levelled: sites.ts runwayGrade). */
+function runwaySides(runways: Float32Array, k: number): { hw: number; level: number } {
+  const at = 4 + 16 * k;
+  const hw = runways[at + 7]! > 0 ? runways[at + 7]! : RUNWAY_HALF_WIDTH;
+  const world = (Math.round(runways[at + 11] ?? 0) & 16) !== 0;
+  return { hw, level: world ? hw + 100 : RUNWAY_GRADE.levelSide };
+}
 
 /** A point of runway k, `a` m along and `c` m across it from its threshold, in the patch's grid coordinates. */
 function runwayPoint(window: TerrainWindow, level: number, runways: Float32Array, k: number, a: number, c: number): Pt {
@@ -155,10 +164,11 @@ export function runwayOutlines(window: TerrainWindow, level: number, runways: Fl
   const G = RUNWAY_GRADE;
   for (let k = 0; k < runwayCount(runways); k++) {
     const length = runways[4 + 16 * k + 3]!;
+    const { hw, level: side } = runwaySides(runways, k);
     const corner = (a: number, c: number) => runwayPoint(window, level, runways, k, a, c);
     for (const [a0, a1, c0, c1] of [
-      [0, length, -RUNWAY_HALF_WIDTH, RUNWAY_HALF_WIDTH],
-      [-G.levelPast, length + G.levelPast, -G.levelSide, G.levelSide],
+      [0, length, -hw, hw],
+      [-G.levelPast, length + G.levelPast, -side, side],
     ] as const)
       quads.push([corner(a0, c0), corner(a1, c0), corner(a1, c1), corner(a0, c1)]);
   }
@@ -184,9 +194,9 @@ export function terrainRasterMesh(window: TerrainWindow, level: number, runways:
   const G = RUNWAY_GRADE;
   for (let k = 0; k < runwayCount(runways); k++) {
     const length = runways[4 + 16 * k + 3]!;
+    const { hw, level: side } = runwaySides(runways, k);
     for (const a of [-G.levelPast, 0, length, length + G.levelPast])
-      for (const c of [-G.levelSide, -RUNWAY_HALF_WIDTH, RUNWAY_HALF_WIDTH, G.levelSide])
-        lattice.push(runwayPoint(window, level, runways, k, a, c));
+      for (const c of [-side, -hw, hw, side]) lattice.push(runwayPoint(window, level, runways, k, a, c));
   }
   const { grid: _grid, ...mesh } = rectilinearMesh(level, lattice, 1e-4);
   return mesh;

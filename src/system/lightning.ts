@@ -71,6 +71,12 @@ export class Lightning {
   }
 
   private base = 1000;
+  /** the camera's height over the sea [m] at the last step (the renderer's — the thunder's distance from the flash's height) */
+  eyeH = 0;
+  /** A flash's distance from the camera [m]: its place east and north of it, its height over the camera's. */
+  distance(f: Flash): number {
+    return Math.hypot(f.east, f.north, f.h - this.eyeH);
+  }
   /** A flash made now (tests, a mission's cue): `east`, `north` of the camera [m], to the ground or in the cloud — held at its
    *  first stroke's peak while the clock stands still. */
   strike(east: number, north: number, ground = true, h = this.base) {

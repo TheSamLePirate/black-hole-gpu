@@ -1,8 +1,10 @@
 # Plan — le vol terrestre en qualité AAA, temps réel, sur M1 Max (WebGPU)
 
 Date : **20 octobre 2026**. Branche **`plan-rendu-raster-aaa`**, créée depuis `main` à `38977554`.
-Statut : **plan seul — aucun code modifié**. Les chiffres marqués *(estimation)* sont des hypothèses de conception
-à mesurer, pas des résultats.
+Statut (23 octobre 2026) : **étape 1 faite, nuages N1–N6 faits, raster par défaut** — l'avancement et les mesures dans
+[progress/raster-aaa/ETAPE-1.md](progress/raster-aaa/ETAPE-1.md), [NUAGES.md](progress/raster-aaa/NUAGES.md) et
+[PERF-2026-10-21.md](progress/raster-aaa/PERF-2026-10-21.md) ; l'audit avant fusion et ses corrections dans ETAPE-1.md
+(« Audit du 23 octobre »). Les chiffres marqués *(estimation)* plus bas sont les hypothèses du plan d'origine.
 
 ## 0. La demande et le point de départ
 
@@ -63,8 +65,10 @@ flowchart TD
 
 Le **traceur reste** pour le ciel et les astres (directions apparentes, réfraction), les régions relativistes
 (trou de ver, Gargantua, orbite), la sonde de lumière, le mode photo/offline et comme **référence convergée** des
-comparaisons. Le choix du chemin se fait par un réglage `earthPipeline: "trace" | "raster"` (schéma, TARS, `__bh`),
-`"trace"` par défaut jusqu'à la validation de l'étape 4.
+comparaisons. Le choix du chemin se fait par un réglage `earthPipeline: "trace" | "raster"` (schéma, TARS, `__bh`,
+Réglages ▸ Graphismes ▸ Rendu de la Terre). Prévu « trace » par défaut jusqu'à l'étape 4 ; décidé le 23 octobre : **« raster »
+par défaut**, adapté à chaque appareil (taux d'ombrage automatique, retour automatique au tracé sur un GPU trop lent),
+« trace » au choix du joueur.
 
 ## 3. Les 4 étapes
 

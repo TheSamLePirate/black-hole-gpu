@@ -7,6 +7,10 @@ function still() {
   const state = {
     timingGeneration: 0,
     blockMs: new Map([[2, { ms: 9, at: 0 }]]),
+    rasterRateMs: new Map([[4, { ms: 9, at: 0 }]]),
+    rateSlowMs: 1,
+    rateFastMs: 1,
+    autoRasterRate: 16,
     recentMs: [9, 10],
     slowMs: 1,
     fastMs: 1,
@@ -28,6 +32,7 @@ test("a calibration change resets the timings, not a converging image or its tem
   renderer.resetQualityTiming();
   expect(state.timingGeneration).toBe(1);
   expect(state.blockMs.size).toBe(0);
+  expect(state.rasterRateMs.size).toBe(0);
   expect(state.recentMs).toEqual([]);
   expect(state.lastGpuMs).toBe(0);
   expect(state.sampleIndex).toBe(7);
@@ -39,6 +44,8 @@ test("a new tier changes the precision caps: the image is drawn anew", () => {
   const { renderer, state } = still();
   renderer.setTier(tierAt(3, "measured"));
   expect(state.tier.level).toBe(3);
+  // (the automatic raster rate: a promotion — room measured — brings it to at most the new tier's start)
+  expect(state.autoRasterRate).toBe(4);
   expect(state.timingGeneration).toBe(1);
   expect(state.sampleIndex).toBe(0);
   expect(state.epoch).toBe(41);

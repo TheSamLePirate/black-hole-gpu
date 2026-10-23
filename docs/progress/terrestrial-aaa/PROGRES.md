@@ -88,7 +88,7 @@ intégration est une exigence à démontrer, pas une validation déjà acquise.
 ## Lancement manuel
 
 ```sh
-cd /Users/olivierveinand/.codex/worktrees/aaa-terrestrial-renderer/black-hole-gpu
+# (depuis la racine du dépôt)
 bun run dev
 ```
 

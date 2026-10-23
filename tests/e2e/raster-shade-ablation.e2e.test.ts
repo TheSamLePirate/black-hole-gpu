@@ -1,3 +1,4 @@
+// (a measuring campaign, not in `bun run e2e`: RASTER_BENCH=1 to run it — as scenery-bench)
 // What the raster's primary visibility spends its shading on, in flight (docs/PLAN-RENDU-RASTER-AAA.md étape 1): the
 // F-35 from its cockpit (raster-flight.e2e.test.ts's places and detail: the scenery high, drawn very far), the clock
 // stopped on one view, `earthPipeline: "raster"`; the kernel shade's GPU time with each part left out in turn —
@@ -56,7 +57,7 @@ const ABLATIONS: { name: string; tune?: Record<string, number>; settings?: strin
 // (RP_ABL="scenery off,scenery shadows off": those alone)
 const CHOSEN = process.env.RP_ABL ? ABLATIONS.filter((a) => process.env.RP_ABL!.split(",").includes(a.name)) : ABLATIONS;
 
-test.skipIf(!E2E)(
+test.skipIf(!E2E || process.env.RASTER_BENCH !== "1")(
   "the raster's shading in flight: what each part costs",
   async () => {
     const app = await App.boot({ width: 1600, height: 1000, lang: "fr", hash: "scene=game:artemis", tiles: true });

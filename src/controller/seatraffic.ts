@@ -19,6 +19,7 @@ import type { TrafficMark } from "./traffic";
 import type { Ship } from "../traffic/feed";
 import type { Vec3 } from "../math/vec3";
 import type { CameraController } from "../controls";
+import { fleet } from "../fleet";
 
 declare module "../controls" {
   interface CameraController {
@@ -280,7 +281,8 @@ function seaWakes(this: CameraController): { p: Vec3; fwd: Vec3; U: number; len:
  * The flown craft's own mark on the sea (renderer.seaWakes' first; trace.wgsl seaWake: its downwash, its trail, its spray):
  * its place fixed to the Earth [m] (the eye's — the shader takes the craft's own where it is drawn), its course and speed over the ground (geoNow's track and ground speed), its span as the
  * beam, and — a negative length, the marker of a craft — how much of its weight its jets hold up straight down (−1 − share:
- * slow, an F-35B in the hover, its lift fan and nozzle on the water). None when it is not low over the Earth.
+ * an F-35B converted to STOVL, its lift fan and nozzle turned down on the water — controller/stovl.ts: the conversion times
+ * the nozzle's swivel —; any other craft none, slow or parked: its engines push aft). None when it is not low over the Earth.
  */
 export function ourWake(c: CameraController): { p: Vec3; fwd: Vec3; U: number; len: number; beam: number }[] {
   const g = c.geoNow();
@@ -292,8 +294,10 @@ export function ourWake(c: CameraController): { p: Vec3; fwd: Vec3; U: number; l
   const east = unit([-up[1]!, up[0]!, 0]);
   const north = [up[1]! * east[2]! - up[2]! * east[1]!, up[2]! * east[0]! - up[0]! * east[2]!, up[0]! * east[1]! - up[1]! * east[0]!];
   const fwd = [0, 1, 2].map((k) => east[k]! * Math.sin(g.track) + north[k]! * Math.cos(g.track)) as Vec3;
-  const hover = Math.min(Math.max((60 - g.gs) / 45, 0), 1);
-  return [{ p: [...p] as Vec3, fwd, U: g.gs, len: -1 - hover, beam: 10.7 }];
+  const S = fleet.active === "f35" ? c.stovl : null;
+  const hover = S?.on ? Math.min(Math.max(S.conv * Math.max(S.swivel, S.clutch), 0), 1) : 0;
+  // (its span: the downwash's and the trail's width — the A320's 35.8 m, the F-35's 10.7)
+  return [{ p: [...p] as Vec3, fwd, U: g.gs, len: -1 - hover, beam: fleet.active === "a320" ? 35.8 : 10.7 }];
 }
 const unit = (a: readonly number[]) => {
   const l = Math.hypot(a[0]!, a[1]!, a[2]!) || 1;

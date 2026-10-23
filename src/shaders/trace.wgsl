@@ -4112,10 +4112,18 @@ fn skyMirror(d: vec3f) -> vec3f {
   return mix(a, b, fj);
 }
 // the clear sky's light on the flat at a point q (its geodetic direction) and height h, physical when the frame has it, else
-// the old bluish tenth of the sun's (E: the sun's irradiance, mu0 its cosine there, sk the eclipse's share of the sky)
+// the old bluish tenth of the sun's (E: the sun's irradiance, mu0 its cosine there, sk the eclipse's share of the sky).
+// The physical light is the camera's place's (skyAmbient): carried to q by the Sun's height and the eclipse there over theirs
+// at the camera's place (the table's mu0 and sk — bodies[SKY_OFF + 1].w, + 2.w) — the Moon's shadow dark seen from outside
+// it, the night side unlit from orbit —; where the camera's own is too dim to scale (its night, its totality), the old model.
 fn skyFlat(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
+  let old = E * vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0) * sk;
   let s = skyIrradiance(h, q);
-  return select(s, E * vec3f(0.06, 0.1, 0.19) * smoothstep(-0.18, 0.25, mu0) * sk, s.x < 0.0);
+  if (s.x < 0.0) { return old; }
+  let wc = smoothstep(-0.18, 0.25, bodies[SKY_OFF + 1u].w);
+  let skc = bodies[SKY_OFF + 2u].w;
+  let carried = s * (smoothstep(-0.18, 0.25, mu0) / max(wc, 0.02)) * (sk / max(skc, 0.02));
+  return mix(old, carried, smoothstep(0.02, 0.1, wc) * smoothstep(0.02, 0.1, skc));
 }
 // the same over the sun's irradiance E (the clouds' light is written as E × factors)
 fn skyFlatFactor(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
@@ -6643,10 +6651,11 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   let rr = reflect(-V, n);
   // (a ray the waves send under the horizon mirrors the horizon's sky; lifted by the unresolved slopes — lift above)
   var rUp = normalize(rr + normal * max(0.02 - dot(rr, normal), 0.0));
-  if (lift > 0.0) {
+  let hzR = rUp - normal * dot(rUp, normal);
+  // (straight up along the normal: no horizontal part to lift towards — left as it is)
+  if (lift > 0.0 && dot(hzR, hzR) > 1e-12) {
     let e = min(asin(clamp(dot(rUp, normal), -1.0, 1.0)) + lift, 1.5);
-    let hz = rUp - normal * dot(rUp, normal);
-    rUp = normalize(hz) * cos(e) + normal * sin(e);
+    rUp = normalize(hzR) * cos(e) + normal * sin(e);
   }
   var skyR = sky * (1.5 / PI) * (1.75 - 1.15 * sqrt(clamp(dot(rr, normal), 0.0, 1.0)));
   // (the clear sky's own radiance there — skyMirror: its horizon's band, the glow on the Sun's side, the blue overhead —, in
@@ -6797,8 +6806,8 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
 // kernel alone): from the sea's point D (from the camera, the Earth's axes [m]) along r (the squashed space's), 20 steps
 // growing from a metre to 8 km, each projected into the image and met against the raster's nearest surface there
 // (terrainRasterDepth); a crossing just behind it — within 8 % or 15 m: not behind a ridge's silhouette — bisected, its
-// pixel's colour taken from the image as it stands (accum: this frame's or the last's) where the raster shaded it — not the
-// cockpit's, not the sky's —, faded at the image's rim. w 0: nothing met in the image (the sky's mirror, the probe's).
+// pixel's colour taken from the image as it stands (accum: the last frame's, a pixel this frame's pattern leaves) where the
+// raster shaded it — not the cockpit's, not the sky's —, faded at the image's rim. w 0: nothing met in the image (the sky's mirror, the probe's).
 fn seaScreen(X: vec3f) -> vec3f {
   let l = fromBody(X);
   let z = dot(l, P.camFwd.xyz);
@@ -6829,7 +6838,12 @@ fn seaSSR(D: vec3f, r: vec3f) -> vec4f {
         if (dm > 0.0 && sm.z > dm) { hi = m; } else { lo = m; }
       }
       let sh = seaScreen(D + r * hi);
-      let px = vec2u(clamp(sh.xy, vec2f(0.0), P.res.xy - 1.0));
+      var px = vec2u(clamp(sh.xy, vec2f(0.0), P.res.xy - 1.0));
+      // (a pixel this frame's shading writes — other threads of this very dispatch — read from its neighbour across, which
+      // no rate's pattern shades in the same frame: the last frame's colour, whole, not a value torn mid-write; at every
+      // pixel a frame, all are written: the nearest as it stands)
+      let rate = rasterRate();
+      if (rate > 1u && rasterShaded(px, rate, P.frame.x)) { px.x = select(px.x + 1u, px.x - 1u, px.x + 1u >= u32(P.res.x)); }
       let idx = px.y * u32(P.res.x) + px.x;
       let mk = moments[idx].x;
       if (mk != RASTER_MARK && mk != RASTER_STALE) { return vec4f(0.0); }
@@ -7960,7 +7974,9 @@ fn boltRadiance(ro: vec3f, rd: vec3f, tEnd: f32, E: vec3f) -> vec3f {
   let up = normalize(f.xyz);
   let h0 = (length(f.xyz) - 1.0) * EARTH_RM;
   let hg = P.wx[7].x;
-  let east = normalize(cross(vec3f(0.0, 0.0, 1.0), up));
+  // (under a pole — no east there —: any horizontal axis)
+  let ex = cross(vec3f(0.0, 0.0, 1.0), up);
+  let east = select(normalize(ex), vec3f(1.0, 0.0, 0.0), dot(ex, ex) < 1e-12);
   let north = cross(up, east);
   let seed = u32(P.wx[7].z);
   var prev = f.xyz;
@@ -8301,7 +8317,10 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
   var o: EarthLook;
   let earth = isEarth(k) && earthOn();
   var cs: EarthClouds;
-  if (CLOUDS_BUFFERED.alpha >= 0.0) { cs = CLOUDS_BUFFERED; } else { cs = earthClouds(k, ro, rd, tHit, Ls, E, gx, gy, fp0, fpK, jit, volume); }
+  // (the cloud pass's, unless its clouds begin beyond this ray's ground — a ray's pixel the raster does not bound, its
+  // texel marched to the sky's end: the clouds behind a far ridge then marched here, before it)
+  let buffered = CLOUDS_BUFFERED.alpha >= 0.0 && !(tHit > 0.0 && CLOUDS_BUFFERED.alpha > 0.0 && CLOUDS_BUFFERED.tc > tHit);
+  if (buffered) { cs = CLOUDS_BUFFERED; } else { cs = earthClouds(k, ro, rd, tHit, Ls, E, gx, gy, fp0, fpK, jit, volume); }
   let alpha = cs.alpha;
   let cl = cs.cl;
   let tc = cs.tc;
@@ -9615,19 +9634,25 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
 
 // The pixels the raster covers that shade leaves this frame (a shading rate above 1): their nearest surface's depth (the
 // visibility target's b, the ground's or a tree's proxy) and the mark that has resolve rebuild them, their colour and stamp
-// left as they were. One cheap thread a pixel.
+// left as they were. One cheap thread a pixel — every pixel: a mark an earlier frame left where the raster no longer covers
+// (the camera turned to the sky) or where shade found no ground this frame (the sky through a gap, a silhouette) is taken
+// off — resolve would rebuild that pixel as the ground it showed —, the pixel then the rays' (rebuilt from their samples).
 @compute @workgroup_size(8, 8)
 fn shadeMark(@builtin(global_invocation_id) gid: vec3u) {
   let W = u32(P.res.x);
   let H = u32(P.res.y);
-  let rate = rasterRate();
-  if (rate <= 1u || !rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5 || gid.x >= W || gid.y >= H) { return; }
-  if (rasterShaded(gid.xy, rate, P.frame.x)) { return; }
-  let centre = vec2f(gid.xy) + 0.5;
-  let d = terrainRasterDepth(centre);
-  if (d <= 0.0) { return; }
+  if (gid.x >= W || gid.y >= H) { return; }
   let idx = gid.y * W + gid.x;
-  if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
+  let m = moments[idx];
+  // (under the cockpit's mask: the mask's own marks)
+  if (m.x < -0.5 && m.x > -1.5) { return; }
+  let rate = rasterRate();
+  let on = rate > 1u && rasterPrimary() && HAS_BODIES && P.near0.w > 0.5;
+  let d = select(0.0, terrainRasterDepth(vec2f(gid.xy) + 0.5), on);
+  if (d <= 0.0 || rasterShaded(gid.xy, rate, P.frame.x)) {
+    if (m.x < -2.5 && m.x > -3.5) { moments[idx] = vec2f(0.0, m.y); }
+    return;
+  }
   let k = u32(P.near1.w);
   moments[idx] = vec2f(RASTER_STALE, d / EARTH_RM * bodyRadius(k));
 }
@@ -9712,6 +9737,8 @@ fn skyAmbient(@builtin(local_invocation_index) li: u32, @builtin(workgroup_id) w
   var up = vec3f(0.0, 0.0, 1.0);
   var east = vec3f(1.0, 0.0, 0.0);
   var north = vec3f(0.0, 1.0, 0.0);
+  var mu0c = 1.0;
+  var skc = 1.0;
   if (HAS_BODIES && P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     if (isEarth(k) && hasAir(k) && earthOn()) {
@@ -9724,6 +9751,8 @@ fn skyAmbient(@builtin(local_invocation_index) li: u32, @builtin(workgroup_id) w
       north = cross(up, east);
       let lt = nearLight(k);
       let Ls = normalize(squashed(toBody(lt.dir), ab));
+      mu0c = dot(up, Ls);
+      skc = skySeen(up, Ls);
       // (the direction: z up, the spiral over the hemisphere — equal solid angles)
       var z = (f32(li) + 0.5) / 64.0;
       var ph = f32(li) * 2.399963;
@@ -9758,9 +9787,11 @@ fn skyAmbient(@builtin(local_invocation_index) li: u32, @builtin(workgroup_id) w
       textureStore(skyOut, vec2i(i32(4u + lv * 9u + i), 0), vec4f(sum, 0.0));
     }
     if (lv == 0u) {
+      // (w: the Sun's height's cosine and the eclipse's share of the sky at the place — skyFlat carries the light to other
+      // places by theirs)
       textureStore(skyOut, vec2i(0, 0), vec4f(up, select(0.0, 1.0, on)));
-      textureStore(skyOut, vec2i(1, 0), vec4f(east, 0.0));
-      textureStore(skyOut, vec2i(2, 0), vec4f(north, 0.0));
+      textureStore(skyOut, vec2i(1, 0), vec4f(east, mu0c));
+      textureStore(skyOut, vec2i(2, 0), vec4f(north, skc));
       textureStore(skyOut, vec2i(3, 0), hs);
     }
   }
@@ -9818,7 +9849,8 @@ fn cloudShadow(@builtin(global_invocation_id) gid: vec3u) {
   if (HAS_BODIES && P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     let cam = nearCam();
-    if (isEarth(k) && earthOn() && length(cam) - 1.0 < 25000.0 / EARTH_RM) {
+    // (under 25 km over the ellipsoid — the squashed space's unit sphere, its radial metres to the normal's: earthSq)
+    if (isEarth(k) && earthOn() && (length(cam) - 1.0) * EARTH_RM * earthSq(normalize(cam)) < 25000.0) {
       let lt = nearLight(k);
       toward = normalize(squashed(toBody(lt.dir), squashOf(k)));
       let up = normalize(cam);

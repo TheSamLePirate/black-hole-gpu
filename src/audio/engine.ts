@@ -225,6 +225,8 @@ export class SoundEngine {
   private groundT = 0;
   /** the creaks and the breaths played so far (tests) */
   private counts = { creaks: 0, breaths: 0, chirps: 0, joints: 0, docks: 0, booms: 0, transonic: 0 };
+  /** when the thunders scheduled end [the context's s] (thunderAt: a few at once) */
+  private thunderEnds: number[] = [];
   private alarms = new Map<string, { stop: () => void }>();
   /** an aircraft's recorded voices (the A320's — audio/samples.ts): made with their first frame */
   private craft: CraftVoices | null = null;
@@ -1072,6 +1074,11 @@ export class SoundEngine {
     if (!this.running || !this.enabled) return;
     const d = Math.max(distM, 300);
     const at = d / 343;
+    // (a storm under a fast clock brings a flash nearly every frame: at most four thunders rolling at once, the rest unheard)
+    const now = this.ctx!.currentTime;
+    this.thunderEnds = this.thunderEnds.filter((e) => e > now);
+    if (this.thunderEnds.length >= 4) return;
+    this.thunderEnds.push(now + at + 8);
     const level = clamp(1.2 * (1000 / d) ** 0.8);
     const near = clamp(1 - (d - 1500) / 3500);
     if (near > 0) {

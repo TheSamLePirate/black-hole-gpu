@@ -1,4 +1,4 @@
-import { QUALITY, type Settings } from "./settings";
+import { defaultSettings, QUALITY, type Settings } from "./settings";
 import type { Tier } from "./tier";
 
 const STEPS = [150, 250, 350, Infinity, Infinity] as const;
@@ -102,4 +102,22 @@ export function demotionEligible(o: {
   budgetMs: number;
 }): boolean {
   return o.automatic && !o.benching && o.stable && o.scale === 0.5 && o.block >= 8 && o.measuredMs > 1.5 * o.budgetMs;
+}
+
+const DEFAULTS = defaultSettings();
+/**
+ * The Earth's detail as this device draws it: the defaults — the scenery high, its detail very far — kept on a capable
+ * machine; on a modest one (tier ≤ 1: a phone, a tablet, an integrated GPU, 4 GB of memory, the software adapter), with the
+ * realtime subsampling on automatic — the game adapting —, the lighter ones (balanced, normal: a quarter of the tiles, half
+ * the scenery's box). A value the player chose other than the default is theirs, kept as set (as effectiveQuality's).
+ */
+export function earthDetailFor(
+  s: Pick<Settings, "earthScenery" | "detailReach" | "realtimeSubsampling">,
+  tier: Pick<Tier, "level">,
+): { scenery: Settings["earthScenery"]; reach: Settings["detailReach"] } {
+  const modest = tier.level <= 1 && s.realtimeSubsampling === "auto";
+  return {
+    scenery: modest && s.earthScenery === DEFAULTS.earthScenery && s.earthScenery === "high" ? "balanced" : s.earthScenery,
+    reach: modest && s.detailReach === DEFAULTS.detailReach && s.detailReach !== "normal" ? "normal" : s.detailReach,
+  };
 }

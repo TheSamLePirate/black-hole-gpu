@@ -837,6 +837,8 @@ async function main() {
       refreshGui();
     }
     if (keys.includes("rotation")) camera.setRotation(settings.rotation);
+    // (the near Earth's pipeline or its shading chosen again: the raster tried again where it had been given up)
+    if (keys.includes("earthPipeline") || keys.includes("earthRasterShading")) renderer.rasterFellBack = false;
     if (keys.includes("a320Livery")) renderer.ship.setA320Livery(settings.a320Livery);
     if (keys.includes("target")) {
       const want = settings.target;
@@ -4964,14 +4966,15 @@ async function main() {
   let idleAtCap = 0; // (how long the GPU has idled with the image at the tier's pixel cap [s])
   let overAtFloor = 0; // (how long the GPU has been over budget at the coarsest block and smallest scale [s])
   let demotedAt = -Infinity; // (the last demotion [performance.now() ms]: no promotion for a minute after)
-  // (the raster pipeline's own scale in motion — earthRasterScale, 75 % by default, upscaled by the display —; the camera
-  // held, the full one: the refinement's; null: not the raster's, the scale as the rest has it)
+  let rasterOver = 0; // (how long the raster pipeline has been over budget at its floor [s]: the fallback to the traced one)
+  // (the raster pipeline draws the near Earth: its render scale in motion — earthRasterScale, 75 % by default, upscaled by
+  // the display — is the motion's ceiling; the camera held, the full one: the refinement's)
+  const rasterOn = () => forcedScale === null && renderer.rasterPrimaryNow;
+  const rasterTop = () => Math.max(0.5, Math.min(1, settings.earthRasterScale));
+  // (without the dynamic resolution, that scale itself in motion — with it, the governor's under it: below —; null: the scale
+  // as the rest has it)
   const rasterScale = (): number | null =>
-    forcedScale === null && renderer.terrainRasterInspecting && settings.earthPipeline === "raster" && settings.earthRasterScale < 1
-      ? heldFor > 0.4
-        ? 1
-        : Math.max(0.5, settings.earthRasterScale)
-      : null;
+    rasterOn() && !dynamicResolutionOn(settings) && settings.earthRasterScale < 1 ? (heldFor > 0.4 ? 1 : rasterTop()) : null;
   function resize() {
     const rs = rasterScale();
     if (rs !== null) renderScale = rs;
@@ -7690,7 +7693,7 @@ async function main() {
     viewer.weatherReal = camera.weatherReal;
     renderer.rain = viewer.rainView();
     // (a storm's lightning — N5 —: each new flash's thunder, after its sound's flight)
-    for (const f of renderer.lightning.drain()) audio.thunder(Math.hypot(f.east, f.north, f.h));
+    for (const f of renderer.lightning.drain()) audio.thunder(renderer.lightning.distance(f));
     renderer.meterSpot = telescopeSpot();
     // (the replay — S3 —: its frame drawn again under its camera; else the flight kept on the tape, while it runs)
     if (replay.active && !renderer.offlineActive) {
@@ -7794,8 +7797,14 @@ async function main() {
       gpuEma = 0;
       scaleHeld = 0;
       resize();
-    } else if (rs === null && terrainInspecting && forcedScale === null && !dynOn && renderScale !== 1) {
-      // (the raster's scale let go: the canvas's again)
+    } else if (rs === null && forcedScale === null && !dynOn && renderScale !== 1) {
+      // (the raster's scale let go — the traced pipeline, the Earth left —: the canvas's again)
+      resize();
+    } else if (dynOn && rasterOn() && !held && renderScale > rasterTop() + 1e-3) {
+      // (the governor's scale in motion under the raster's ceiling)
+      renderScale = rasterTop();
+      gpuEma = 0;
+      scaleHeld = 0;
       resize();
     }
     if (!terrainInspecting && dynOn && heldFor > 0.4 && renderScale < 1) {
@@ -7827,8 +7836,12 @@ async function main() {
         const m = scaleMs.get(x);
         return m && now - m.at < 30000 ? m.ms : undefined;
       };
+      // (the raster's: its scale in motion the ceiling; lowered only once its shading rate, chosen by the renderer, is at its
+      // coarsest — the shading is its cost, not the pixels' count)
+      const raster = rasterOn();
       const lower = Math.max(0.5, renderScale - 0.125),
-        higher = Math.min(1, renderScale + 0.125);
+        higher = Math.min(raster ? rasterTop() : 1, renderScale + 0.125);
+      const rateDone = !raster || settings.earthRasterShading !== "auto" || renderer.rasterRateCoarsest;
       const kl = known(lower),
         kh = known(higher);
       const budget = renderer.frameBudget(settings);
@@ -7840,7 +7853,7 @@ async function main() {
       else if (!settled) want = renderScale;
       // (down once the blocks are coarse: at the same rays a finer block on a smaller image is no better in
       // motion — measured, equal on Kerr, 2.6 dB worse on Saturn's stars and edges —, the full scale kept)
-      else if (gpuEma > 1.2 * budget && block >= 4 && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
+      else if (gpuEma > 1.2 * budget && block >= 4 && rateDone && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
       // (up when the larger scale was measured within the budget, or no slower; not measured lately, when
       // the frame grown as the pixels would stay within it)
       else if (
@@ -7903,6 +7916,31 @@ async function main() {
       })
         ? overAtFloor + 1.5
         : 0;
+      // (the raster pipeline too heavy for this device: over the budget and a half at its coarsest shading, its smallest
+      // scale and the coarsest blocks for 12 s, in motion — the traced pipeline for the session, said; the setting changed,
+      // tried again — onSettingsChange)
+      rasterOver =
+        raster &&
+        settings.earthRasterShading === "auto" &&
+        settings.realtimeSubsampling === "auto" &&
+        !bench.running &&
+        !held &&
+        settled &&
+        renderer.rasterRateCoarsest &&
+        block >= 8 &&
+        (!dynOn || renderScale <= 0.5 + 1e-3) &&
+        gpuEma > 1.5 * budget
+          ? rasterOver + 1.5
+          : 0;
+      if (rasterOver >= 12) {
+        rasterOver = 0;
+        renderer.rasterFellBack = true;
+        scaleMs.clear();
+        gpuEma = 0;
+        scaleHeld = 0;
+        resize();
+        panel.toast(t("The near Earth is drawn by the traced pipeline: the raster one is too heavy for this GPU"));
+      }
       if (overAtFloor >= 12) {
         const down = demoted(renderer.tier);
         overAtFloor = 0;

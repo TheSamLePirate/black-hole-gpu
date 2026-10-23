@@ -1,3 +1,4 @@
+// (a measuring campaign, not in `bun run e2e`: RASTER_BENCH=1 to run it — as scenery-bench)
 // Frame rates in flight (docs/PLAN-RENDU-RASTER-AAA.md): the F-35 flown — the clock running, the autopilot holding its
 // height, course and speed — over a few places, the details at their most, and for each realtime setting (the traced
 // pipeline at ×2 … ×8 and auto; the raster pipeline, its sky at ×2/×4/×6, its surfaces shaded every pixel, one in two, one in
@@ -55,7 +56,7 @@ afterAll(async () => {
 });
 
 for (const pl of places)
-  test.skipIf(!E2E)(
+  test.skipIf(!E2E || process.env.RASTER_BENCH !== "1")(
     `frame rates over ${pl}`,
     async () => {
       await app.js(`(() => { __bh.game.quality("realtime");

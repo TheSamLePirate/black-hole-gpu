@@ -124,6 +124,11 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "refraction",
     ],
   },
+  {
+    tab: "graphics",
+    title: { fr: "Rendu de la Terre", en: "Earth rendering" },
+    keys: ["earthPipeline", "earthRasterShading", "earthRasterScale"],
+  },
   // ---- display & HUD
   {
     tab: "display",

@@ -144,6 +144,10 @@ export class TerrainCache {
   private uniform: GPUBuffer | null = null;
   private windows: (TerrainWindow | null)[] = Array(TERRAIN_CACHE_LEVELS).fill(null);
   private ready = Array<boolean>(TERRAIN_CACHE_LEVELS).fill(false);
+  /** a level baked from tiles since replaced (a finer one streamed in): still drawn, baked again in turn — not dropped, or
+   *  the far rings went back to the camera's marches for frames at every tile (a cost spike, a pop) */
+  private dirty = Array<boolean>(TERRAIN_CACHE_LEVELS).fill(false);
+  private metadata = new Float32Array(TERRAIN_CACHE_HEADER * 4);
   private revision = "";
   private builds = 0;
   private invalidations = 0;
@@ -174,6 +178,7 @@ export class TerrainCache {
     this.input = null;
     this.revision = "";
     this.ready.fill(false);
+    this.dirty.fill(false);
   }
 
   encode(
@@ -185,23 +190,31 @@ export class TerrainCache {
   ): boolean {
     const { pipeline, sources } = this;
     if (this.disposed || !pipeline || !sources) return false;
-    const metadata = new Float32Array(TERRAIN_CACHE_HEADER * 4);
+    const metadata = this.metadata;
+    metadata.fill(0);
     if (revision !== this.revision) {
-      this.ready.fill(false);
+      // (new tiles: every level baked again in turn, the old bake drawn meanwhile)
+      this.dirty.fill(true);
       this.revision = revision;
       this.invalidations++;
     }
     for (let k = 0; k < TERRAIN_CACHE_LEVELS; k++) {
       const previous = this.windows[k]!;
       const w = at ? terrainWindow(previous, at.lon, at.lat, TERRAIN_CACHE_ROUNDS[k]!) : null;
+      // (a window moved: its bake elsewhere — not drawn until baked again)
       if (w !== previous) this.ready[k] = false;
       this.windows[k] = w;
       if (w) metadata.set(terrainWindowParams(w, TERRAIN_CACHE_ROUNDS[k]!, this.ready[k]!), 8 * k);
     }
-    const k =
-      this.windows[preferredLevel] && !this.ready[preferredLevel]
-        ? preferredLevel
-        : this.windows.findIndex((w, i) => w !== null && !this.ready[i]);
+    // (which level to bake: the patch's first, then its far rings' — the two coarser —, then the rest; a missing one before
+    // a dirty one)
+    const order =
+      preferredLevel >= 0
+        ? [preferredLevel, preferredLevel + 1, preferredLevel + 2, ...this.windows.map((_, i) => i)].filter((i) => i < TERRAIN_CACHE_LEVELS)
+        : this.windows.map((_, i) => i);
+    const wants = (i: number) => this.windows[i] !== null;
+    let k = order.find((i) => wants(i) && !this.ready[i]) ?? -1;
+    if (k < 0) k = order.find((i) => wants(i) && this.dirty[i]) ?? -1;
     if (k >= 0) {
       if (!this.staging) {
         this.staging = this.device.createBuffer({
@@ -242,6 +255,7 @@ export class TerrainCache {
         TERRAIN_CACHE_NODE_VEC4S * 16,
       );
       this.ready[k] = true;
+      this.dirty[k] = false;
       metadata[8 * k + 6] = 1;
       this.builds++;
     }

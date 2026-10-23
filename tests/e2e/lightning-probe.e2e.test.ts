@@ -1,3 +1,4 @@
+// (a probe — no assertion, a measure to read —, not in `bun run e2e`: E2E_PROBE=1 to run it)
 // A probe of a storm's lightning (docs/PLAN-NUAGES-AAA.md N5): a flash struck, what the tracer's weather block holds of it.
 // Not a pass/fail test.
 import { afterAll, test } from "bun:test";
@@ -5,7 +6,7 @@ import { App, E2E, stopServer } from "./lib/app";
 
 afterAll(stopServer);
 
-test.skipIf(!E2E)(
+test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
   "a flash in the weather block",
   async () => {
     const app = await App.boot({ width: 960, height: 600, lang: "fr", hash: "scene=game:artemis", tiles: false });

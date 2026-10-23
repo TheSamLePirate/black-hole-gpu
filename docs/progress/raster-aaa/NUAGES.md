@@ -108,8 +108,8 @@ l'aube, reflet et hauts-fonds), `show-strait`, `show-corsica`, `show-musa`, `sho
 
 A/B alterné (deuxième paire) : coût dans le bruit thermique (+0,7 à +2 ms sur 26–46 ms). Accord avec la convergée — reflets
 neufs contre anciens : Porto 35,4 → 37,8 dB, reflet du soir 27,1 → 34,7, vent fort 32,9 → 35,7 ; côte de Tarifa 23,7 → 43,4
-(la convergée a les hauts-fonds). Images : `img/vue-porto-soir.png`, `img/vue-gibraltar-matin.png`,
-`img/mer-tarifa-hauts-fonds.png`.
+(la convergée a les hauts-fonds). Images : `img/vue-porto-soir.jpg`, `img/vue-gibraltar-matin.jpg`,
+`img/mer-tarifa-hauts-fonds.jpg`.
 
 Reste pour la mer : l'écume texturée (traînées le long du vent), les reflets des nuages au loin depuis la passe de nuages,
 l'ombre des nuages sur l'eau (N3), le sable mouillé au rivage, le bruit du SSR stochastique en mouvement à mesurer.

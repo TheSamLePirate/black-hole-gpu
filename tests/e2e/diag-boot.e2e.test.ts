@@ -1,10 +1,11 @@
+// (a probe — no assertion, a measure to read —, not in `bun run e2e`: E2E_PROBE=1 to run it)
 // A boot's health at a scene (a diagnostic): the GPU's and the page's errors, the kernels, the tiles, the camera — every 15 s for a
 // minute. DIAG_SCENE (default Monument Valley's Mittens).
 import { afterAll, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
 afterAll(stopServer);
-test.skipIf(!E2E)(
+test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
   "a scene's boot health",
   async () => {
     const scene = process.env.DIAG_SCENE ?? "Earth: Monument Valley's Mittens";

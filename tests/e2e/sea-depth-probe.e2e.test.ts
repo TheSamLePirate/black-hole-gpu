@@ -1,3 +1,4 @@
+// (a probe — no assertion, a measure to read —, not in `bun run e2e`: E2E_PROBE=1 to run it)
 // A probe of the sea's depths under the near tiles (docs/PLAN-NUAGES-AAA.md N6): the cached tiles' heights' range off Tarifa
 // and the sea's state the shader gets. Not a pass/fail test.
 import { afterAll, test } from "bun:test";
@@ -5,7 +6,7 @@ import { App, E2E, stopServer } from "./lib/app";
 
 afterAll(stopServer);
 
-test.skipIf(!E2E)(
+test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
   "the sea's depths under the tiles",
   async () => {
     const app = await App.boot({ hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`, width: 960, height: 600, tiles: true });
