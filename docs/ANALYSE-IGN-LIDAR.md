@@ -270,7 +270,21 @@ la référence (`earthPipeline: "trace"`), sans travail spécifique.
    Ce n'est donc pas « le prix d'une lecture » : la cause probable est le repère de distance du raster. Ses anneaux
    lointains sont cuits avec l'empreinte de leurs nœuds (610 m), donc depuis des niveaux plus grossiers que z 11, sans le
    sursol ; la marche d'ombrage doit alors retrouver plus haut la surface relevée. Correction possible, non faite : cuire
-   ces anneaux sur le maximum du sursol à leur empreinte. Au téléobjectif (6°), la silhouette de Paris borde l'horizon
+   ces anneaux sur le maximum du sursol à leur empreinte.
+
+   **Essayé le 23/10, sans effet — retiré.** Les nœuds de 153 m et plus ont été cuits avec le plus haut sursol relevé sur
+   leur empreinte : une grille de 4 × 4 au niveau z 11–13, la hauteur dessinée moins le sol z 10, texels du relevé seuls. Le
+   repère majorait donc la surface, ce que la fourchette d'`earthMarchHinted` tolère (jusqu'à 4 `eps` au-delà) mieux qu'un
+   repère sous le sol (−3 dès `eps`, puis la marche complète). A/B sur kerr-mini dans la même vue sur la Marne, médianes
+   d'un avec / sans / avec / sans à un pixel sur deux : **+14,3 ms (+11,8 %) avec la cuisson, +12,0 ms (+9,9 %) sans**.
+   L'hypothèse ne tient pas, ou ne suffit pas ; le correctif est retiré. Un diagnostic en e2e par la vue de coût
+   (`costView` 14/15) et la teinte des chemins de marche (`tune: { TUNE_RASTER_PATHS: 2 }`) n'a rien donné d'exploitable :
+   variantes pas compilées au moment de la lecture, puis profilage revenu à zéro après les bascules. Le surcoût reste
+   gardé par l'e2e `hlod-cost` (sous 15 %). Pistes : refaire ce diagnostic ici, dans le panneau du navigateur, avant de
+   toucher au code ; mesurer la part des pixels dont la marche part du repère et de ceux qui la refont entière ; essayer
+   une cuisson sur la moyenne du sursol plutôt que son maximum ; vérifier si les marches d'ombre au soleil bas pèsent.
+
+   Au téléobjectif (6°), la silhouette de Paris borde l'horizon
    avec le sursol, et l'horizon est plat sans lui (`docs/progress/hlod/hlod-paris-skyline.jpg`). À 20 km, dans la brume
    d'un soir d'été, elle reste discrète en vue normale.
 2. **Une interface « source nationale », pas un cas IGN.** Les mêmes trois couches existent ailleurs, ouvertes :
@@ -390,7 +404,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 | **I3** — fait (23/10) | Niveaux fins du cache de surface (2,4/1,2 m) et normales à 0,5 m — voir §4.2 | passe de visibilité mesurée, cible ≤ +2 ms : +0,22 ms |
 | **I4** — fait (23/10) | MNH → forêts, leurs pieds et ceux des bâtiments sur le sol IGN — voir §4.3 | captures de lisières/haies contre l'ortho : 76 % des arbres sur sa canopée (69 sans), 36 % de sa canopée sous un arbre (23 sans) |
 | **I5** — fait (23/10) | BD TOPO → bâtiments (tuiles vectorielles z 15), OSM gardé pour les routes et l'eau — voir §4.4 | hauteurs comparées au MNS sur un quartier : 1,6 m d'écart médian, 74 % à 3 m près (OSM : 3,8 m, 39 %) |
-| **I6** — fait (23/10) | HLOD lointain par `MNS − MNT` sur z 11–13 (dessin seul, le CPU garde le sol nu) — voir §7 | silhouette de Paris à 20 km : Montparnasse à 262 m (LiDAR 264) ; coût mesuré 0 à +1,2 ms (Gonesse), +12 ms dans une vue basse sur des forêts |
+| **I6** — fait (23/10) | HLOD lointain par `MNS − MNT` sur z 11–13 (dessin seul, le CPU garde le sol nu) — voir §7 | silhouette de Paris à 20 km : Montparnasse à 262 m (LiDAR 264) ; coût mesuré 0 à +1,2 ms (Gonesse), +12 ms dans une vue basse sur des forêts (cuisson des anneaux sur le sursol essayée : sans effet, retirée) |
 | **I7** | Interface de source nationale ; swisstopo ensuite | Alpes suisses au même niveau |
 | **I8a** | Zones hors ligne, le socle : module pur `zoneTiles` (mêmes URL que le jeu, testé), cache `kerr-zones-v1` hors LRU dans le service worker, `storage.persist()`, téléchargement suspendable et repris, priorité au streaming du jeu, `__bh.pwa.zones` | test unitaire « URL de la zone = URL demandées en vol » ; e2e : zone de 5 km pré-cachée, réseau coupé, vol sans aucune requête de tuile et sol complet |
 | **I8b** | Réglages › Hors ligne : stockage, cache automatique, liste des zones, ajout avec estimation, progression ; raccourci dans la pause ; FR/EN | e2e à la souris et à la manette ; captures de l'onglet |
