@@ -45,9 +45,8 @@ no figure or picture may come from a tracer still compiling.
   only for the shots that need it, set with its parameters (`Object.assign(__bh.camera.outside, { yaw, pitch, dist })`;
   `pitch` is clamped — a "top-down" asks the ground in view, check it), given ~1 s to settle, then back to the
   cockpit. Change the mount while the world runs: `__bh.freeze(true)` holds the camera's rig too (a mount set while
-  frozen is not applied). `dof: false`, `denoise: false` and `motionBlur: 0` for a shot meant to show the ground (scene presets turn the depth
-  of field on; the denoiser, made for the traced image's noise, smears the raster's sharp ground into a painting — found
-  2026-10-23: the whole "blurry" look of the mini's shots), and for a data comparison `dynamicResolution: false`,
+  frozen is not applied). `dof: false` and `motionBlur: 0` for a shot meant to show the ground (scene presets turn the depth of field
+  on), and for a data comparison `dynamicResolution: false`,
   `earthRasterShading: "every"`, `earthRasterScale: 1` — all put back after. Before a
   view is reported, read `__bh.settings.shipMount` back in the log line, and **look at every picture** brought back:
   the craft where expected, the ground in view, no UI covering it.

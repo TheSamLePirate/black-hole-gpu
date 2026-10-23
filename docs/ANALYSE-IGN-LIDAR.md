@@ -81,9 +81,10 @@ mesuré sur douze lieux : une courbe de tonalité sur la luminance L′ = 0,811�
 L'imagerie IGN passe devant la couche régionale à 10 m et coupe sous elle les matériaux dessinés et les routes OSM
 peintes. Réglage « Photographies aériennes (France) », mention « © IGN BD ORTHO · Licence Ouverte 2.0 » à l'écran
 quand elles sont dessinées, dans le panneau et l'Atlas ; tuiles gardées par le PWA. Coût mesuré sur kerr-mini : aucun
-écart de FPS sensible (dans le bruit). Leçons des e2e : le débruiteur, fait pour le bruit de l'image tracée, étale le
-sol raster en aquarelle — c'était tout le « flou » des captures ; sur le M1 du mini, le régulateur abandonne le raster
-pour le tracé pendant les chargements.
+écart de FPS sensible (dans le bruit). Leçons des e2e : le « flou » des premières captures venait de l'imagerie IGN
+cachée sous la couche régionale à 10 m, du repli du raster en tracé (sur le M1 du mini, le régulateur abandonne le
+raster pendant les chargements) et d'images prises avant convergence — pas du débruiteur (vérifié : il ne tourne
+qu'en image accumulée, où le sol est tracé, pas en raster).
 
 Débit en vol bas *(estimation)* : à 150 m/s, une rangée de 4 tuiles z 17 (200 m) toutes les 1,3 s, ≈ 3 tuiles/s
 par niveau, ≈ 15 Ko chacune : **< 0,2 Mo/s** pour toute l'imagerie fine. Latence 0,4 s : `MAX_INFLIGHT` (8) à

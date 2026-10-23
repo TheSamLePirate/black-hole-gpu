@@ -106,7 +106,8 @@ describe.skipIf(!E2E)("the IGN's orthophotos", () => {
         const kept = await app.js<Record<string, unknown>>(
           `(({ dynamicResolution, earthRasterShading, earthRasterScale, shipMount, denoise, motionBlur }) => ({ dynamicResolution, earthRasterShading, earthRasterScale, shipMount, denoise, motionBlur }))(__bh.settings)`,
         );
-        // (no denoiser — made for the traced image's noise, it smears the raster's sharp ground —, no motion blur)
+        // (no motion blur; the denoiser off too — it runs on accumulated images only, never on the raster's: a held, still
+        // view's image stays the raster's frame for frame)
         // (set once frozen — in motion, every pixel shaded at the full scale is over a small GPU's budget: its governor would
         // give the raster up for the traced pipeline —; a change of the raster's shading arms it again)
         // (the raster given up by the governor in flight — rasterFellBack — said, then armed again: settings written
