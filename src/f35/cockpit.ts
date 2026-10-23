@@ -10,6 +10,7 @@ import { fleet } from "../fleet";
 import { SITES } from "../game/sites";
 import type { Settings } from "../settings";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { geoidN } from "../system/geoid-grid";
 import { toBodyFixed } from "../system/our-surface";
 import { C_MPS, M_METRES } from "../units";
 import { VESSELS } from "../vessels";
@@ -77,7 +78,8 @@ export function pcdData(
     time: date,
     lat: (geo.lat * 180) / Math.PI,
     lon: (geo.lon * 180) / Math.PI,
-    alt: geo.h,
+    // (over the sea: the geoid's — system/geoid.ts)
+    alt: geo.h - geoidN(geo.lat, geo.lon),
     agl: fr.h,
     heading: att.heading ?? 0,
     pitch: att.pitch ?? 0,

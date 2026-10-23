@@ -116,3 +116,8 @@ Earth figure: `src/system/ellipsoid.ts` — `WGS84_A`, `WGS84_F`, `cartToGeodeti
 - Latitude and longitude are geodetic (WGS84), heights over the ellipsoid (ADS-B's geometric altitude, GNSS's).
 - Flat local approximations (east/north offsets over a few tens of km) are fine for distances; heights and
   ground contact are always geodetic.
+- The sea lies on the geoid (EGM2008, `src/system/geoid.ts` / `geoid-grid.ts`: `geoidN`, `geoidDeg`, `geoidUnder`;
+  trace.wgsl `geoidN`), N = −107…+86 m over the ellipsoid. Data heights above the sea (Terrarium, ETOPO, runway
+  `elev`, mission `alt`, barometric ADS-B) are MSL: the ground over the ellipsoid is `max(H, 0) + N`
+  (`earthHeightSampler`, `earthHeightG`). Positions are ellipsoidal; altimeters, `geoNow().alt`, `jetFigures` and
+  the autopilots' holds are over the sea (`seaAltitudeOver`, h − N). Convert at that boundary, never mix.

@@ -13,6 +13,7 @@ import { C_MPS } from "../units";
 import { cross, dot, sub } from "../math/vec3";
 import { cartToGeodetic, flatteningOf, geodeticNormal, geodeticToCart, squashedHeight } from "./ellipsoid";
 import { poleOfDate } from "./geopotential";
+import { geoidUnder } from "./geoid-grid";
 
 export { GEAR };
 
@@ -92,6 +93,13 @@ export function fromBodyFixed(id: string, q: Vec3, t: number): Vec3 {
   const A = bodyAxes(solarBody(id)!, t);
   const P = solarState(id, t).pos;
   return [0, 1, 2].map((i) => P[i]! + q[0] * A[0][i]! + q[1] * A[1][i]! + q[2] * A[2][i]!) as Vec3;
+}
+
+/** A home-frame point's altitude over the sea [m] (an altimeter's: the Earth's over its geoid, h − N — system/geoid.ts;
+ *  the other worlds', altitudeOver). */
+export function seaAltitudeOver(id: string, X: Vec3, t: number): number {
+  const h = altitudeOver(id, X, t);
+  return id === "earth" ? h - geoidUnder(toBodyFixed(id, X, t)) : h;
 }
 
 /** A body's mean radius (the Earth's ellipsoid's: (2a + b)/3, 6 371,0 km; a sphere's own). */

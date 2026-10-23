@@ -5,15 +5,17 @@ export const TERRAIN_SUN_N = 2048;
 /** The visibility target: r the ground's distance [m], g the scenery's instance drawn nearest (system/scenery-raster.ts),
  *  b the nearest surface's distance [m] (the ground's, or the instance's proxy in front of it). */
 export const TERRAIN_RASTER_FORMAT: GPUTextureFormat = "rgba32float";
-import { terrainHeightLibrary, type TerrainCacheSources } from "./terrain-cache";
+import { geoidLibrary, terrainHeightLibrary, type TerrainCacheSources } from "./terrain-cache";
 import { TERRAIN_RASTER_MAX_PIXELS, TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 import { RASTER_MESH_INDEX_BYTES, RASTER_MESH_VERTEX_BYTES, runwayMeshKey, terrainRasterMesh } from "./terrain-raster-mesh";
 import type { TerrainWindow } from "./terrain-cache-layout";
 
 /** The pilot's geometry and inspector, deliberately separate from radiance and the reference tracer. */
 export function terrainRasterShader(trace: string): string {
+  const library = terrainHeightLibrary(trace, true, 1);
   return `
-${terrainHeightLibrary(trace, true, 1)}
+${library}
+${geoidLibrary(trace, library, "table")}
 const GRID_N = ${TERRAIN_CACHE_N}u;
 struct U {
   origin: vec4f, reference: vec4f, figure: vec4f,
@@ -58,6 +60,8 @@ fn terrainPoint(vertex: vec3f) -> vec3f {
   if (runwayGrade(normal).x > 0.0) {
     h = earthHeightExactG(normal, vertex.z);
   }
+  // (above the sea, the cache's and the exact heights: over the ellipsoid by the geoid — trace.wgsl earthHeightG)
+  h += geoidN(normal);
   let delta = vec3f(x * u.reference.x - y * u.reference.y, x * u.reference.y + y * u.reference.x, z);
   return u.origin.xyz + delta + vec3f(ca * cl, ca * sl, sa) * h;
 }

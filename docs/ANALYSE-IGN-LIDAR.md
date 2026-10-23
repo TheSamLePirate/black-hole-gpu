@@ -130,6 +130,18 @@ géométrique, un GNSS, la règle de `CLAUDE.md`).
 
 C'est un changement transversal mais borné ; il vaut pour toute la Terre, pas seulement la France.
 
+**Fait le 23/10 (I0).** La grille EGM2008 à 15′ (`assets/earth/geoid-egm2008-15.bin`, 0,92 Mo, construite par
+`scripts/build-geoid.py` depuis la grille 5′ de GeographicLib ; 7 cm rms, 2,5 m au pire) est lue de la même façon
+par le CPU (`src/system/geoid-grid.ts`) et par le traceur, où elle occupe 4 Mo de sa table (`TABLE_GEOID`,
+`trace.wgsl geoidN`). Les données restent des altitudes au-dessus de la mer — le détail procédural, les pistes
+nivelées, le cache de surface les lisent ainsi — et N s'ajoute à la sortie : `earthHeightSampler` (CPU),
+`earthHeightG`/`earthHeightStep` et le maillage raster (GPU), le décor par un plan du géoïde envoyé au worker. La
+mer est la surface h = N (ombrage, vagues, reflets). Les positions restent ellipsoïdales ; les altimètres (HUD,
+PFD de l'A320, PCD du F-35), `geoNow().alt` et les tenues d'altitude des pilotes automatiques sont au-dessus de la
+mer (`seaAltitudeOver`). Les navires flottent à N ; l'ADS-B barométrique est relevé de N. Non fait : l'atmosphère
+standard lit encore la hauteur ellipsoïdale (±0,5 % de densité) ; les étiquettes du trafic montrent sa hauteur
+géométrique.
+
 ## 6. Raster ou tracé ?
 
 | | Tracé | Raster + `shade` (défaut actuel) |
@@ -260,7 +272,7 @@ le focus, la navigation à la manette, les invites et le français/anglais du me
 
 | Étape | Contenu | Mesure de réussite |
 |---|---|---|
-| **I0** | Géoïde EGM2008 (sol, mer, IGN) | vols de référence et atterrissages inchangés à l'issue près ; trafic ADS-B posé sur les pistes |
+| **I0** — fait (23/10) | Géoïde EGM2008 (sol, mer, IGN) — `src/system/geoid.ts`, la table du traceur, `seaAltitudeOver` ; voir §5 | vols de référence et atterrissages inchangés à l'issue près ; trafic ADS-B posé sur les pistes |
 | **I1** | Ortho IGN z 15–18 dans `earth-tiles.ts`, recalage couleur, attribution | captures A/B Chamonix, CdG, Paris en cockpit ; FPS inchangé (`raster-flight`) |
 | **I2** | Hauteurs RGE ALTI + LiDAR HD (WMS-R 3857), `TILE_RES_MIN` par source, bruit effacé | `shade` −5 ms attendu en France ; aucune couture au bord |
 | **I3** | Niveaux fins du cache de surface (2,4/1,2 m) et normales à 0,5 m | passe de visibilité mesurée, cible ≤ +2 ms |

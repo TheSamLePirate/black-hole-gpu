@@ -365,6 +365,10 @@ const PATH_OFF = 1786u; // LUT_OFF + LUT_N + SYNC_N
 const WARP_OFF = 3115u;
 // the clear sky's light, physical (gpu-tables.ts TABLE_SKY; kernel skyAmbient writes it, skyIrradiance reads it)
 const SKY_OFF = 814530u;
+// the geoid's map (gpu-tables.ts TABLE_GEOID, system/geoid-grid.ts): N [m], GEOID_W × GEOID_H nodes, four a vec4
+const GEOID_OFF = 814642u;
+const GEOID_W = 1440u;
+const GEOID_H = 720u;
 const WARP_LEVELS = 3u;
 const WARP_N = 512u;
 // The solar system's maps (equirectangular, sRGB) and Saturn's rings' radial profile (sRGB + opacity,
@@ -5618,6 +5622,25 @@ fn seaDepthAt(q: vec3f, foot: f32) -> vec2f {
   if (wsum < 0.05) { return vec2f(1e4, 0.0); }
   return vec2f(acc / wsum, smoothstep(0.05, 0.6, wsum));
 }
+// The geoid's height N over the ellipsoid [m] at a geodetic direction g (system/geoid.ts geoidN: the same map, read
+// the same way): the mean sea's surface, and what the heights above the sea are raised by. 0 until the map is in.
+fn geoidNode(x: u32, y: u32) -> f32 {
+  let n = y * GEOID_W + x;
+  return bodies[GEOID_OFF + n / 4u][n % 4u];
+}
+fn geoidN(g: vec3f) -> f32 {
+  let lat = asin(clamp(g.z, -1.0, 1.0));
+  var x = (atan2(g.y, g.x) / TAU + 0.5) * f32(GEOID_W) - 0.5;
+  x -= floor(x / f32(GEOID_W)) * f32(GEOID_W);
+  let y = clamp((0.5 - lat / PI) * f32(GEOID_H) - 0.5, 0.0, f32(GEOID_H - 1u));
+  let x0 = min(u32(floor(x)), GEOID_W - 1u);
+  let y0 = min(u32(floor(y)), GEOID_H - 2u);
+  let x1 = select(x0 + 1u, 0u, x0 + 1u == GEOID_W);
+  let f = vec2f(x - f32(x0), y - f32(y0));
+  let a = mix(geoidNode(x0, y0), geoidNode(x1, y0), f.x);
+  let b = mix(geoidNode(x0, y0 + 1u), geoidNode(x1, y0 + 1u), f.x);
+  return mix(a, b, f.y);
+}
 fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
   let hr = earthH(q, foot, false);
   // (a runway's airfield graded: at its level, its detail off — the gear's ground the same)
@@ -5630,14 +5653,15 @@ fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
 // BEGIN_TERRAIN_CACHE (system/terrain-cache.ts supplies the existing table lookup)
 fn terrainCachedHeight(q: vec3f, foot: f32) -> f32 { return -1.0; }
 // END_TERRAIN_CACHE
+// (the heights above the sea — the cache's, the exact ones — over the ellipsoid: raised by the geoid)
 fn earthHeightG(q: vec3f, foot: f32) -> f32 {
   if (HAS_TERRAIN_CACHE) {
     if (!HAS_RWY || runwayGrade(q).x <= 0.0) {
       let h = terrainCachedHeight(q, foot);
-      if (h >= 0.0) { return h; }
+      if (h >= 0.0) { return h + geoidN(q); }
     }
   }
-  return earthHeightExactG(q, foot);
+  return earthHeightExactG(q, foot) + geoidN(q);
 }
 // The ground's height at a unit direction q of the squashed space, as a radial height there [m of a]: the
 // relief read at its geodetic direction (src/terrain.ts: earthHeightSampler, the same), over the scale
@@ -5645,7 +5669,8 @@ fn earthHeightG(q: vec3f, foot: f32) -> f32 {
 fn earthHeight(q: vec3f, foot: f32) -> f32 { return earthHeightG(geoQ(q), foot) / earthSq(q); }
 // the same, cheaply, for the march's steps: the map filtered by the hardware, the detail coarser (a
 // dispatch that takes seconds loses the GPU) — the crossing then refined on earthHeight
-fn earthHeightStep(q: vec3f, foot: f32) -> f32 { return earthHeightStepG(geoQ(q), foot) / earthSq(q); }
+fn earthHeightStep(q: vec3f, foot: f32) -> f32 { let g = geoQ(q); return (earthHeightStepG(g, foot) + geoidN(g)) / earthSq(q); }
+// (above the sea: earthHeightStep raises it by the geoid)
 fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
   var g = vec3f(0.0);
   if (HAS_RWY) { g = runwayGrade(q); }
@@ -8354,9 +8379,10 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     // (WS.w: a windsock, an airport's building — HAS_RWY — or a tree, a building of the world's scenery —
     // HAS_SCENERY — met: without either, windsockShade and all it calls compile out — R-H3)
     if ((HAS_RWY || HAS_SCENERY) && WS.w > 0.5) {
-      G = windsockShade(q, Ls, E, max(airHeight(ph), 0.0), airPhysicalDirection(rd));
+      G = windsockShade(q, Ls, E, max(airHeight(ph) - geoidN(geoQ(q)), 0.0), airPhysicalDirection(rd));
     } else if (earth) {
-      G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max(airHeight(ph), 0.0));
+      // (the height above the sea: the sea's surface at the geoid)
+      G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max(airHeight(ph) - geoidN(geoQ(q)), 0.0));
     } else {
       G = otherGround(k, airPhysicalNormal(q), airPhysicalDirection(rd), airPhysicalDirection(Ls), E, fp);
     }
@@ -8444,7 +8470,8 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let lt = nearLight(k);
   // (the sea's waves in relief near a low camera — over the sea only: its mean level met, h ≈ 0)
   if (isEarth(k) && t > 0.0 && P.seafft[0].x > 0.5 && P.sea[1].w > 0.0 && WS.w < 0.5 && earthOn()) {
-    if (abs(length(ro + rd * t) - 1.0) * EARTH_RM < 3.0) { t = seaSurfaceHit(look, t, m); }
+    let ps = ro + rd * t;
+    if (abs(airHeight(ps) - geoidN(geoQ(normalize(ps)))) < 3.0) { t = seaSurfaceHit(look, t, m); }
   }
   SEA_ON = isEarth(k) && t > 0.0 && P.sea[1].w > 0.0 && WS.w < 0.5;
   SEA_D = toBody(look) * (t / m * P.near4.w);

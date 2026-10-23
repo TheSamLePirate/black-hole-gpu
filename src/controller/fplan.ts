@@ -11,6 +11,7 @@ import { bingo, Lnav, newPlan, vnav, type FlightPlan, type LnavOut, type VnavOut
 import { t, tf } from "../i18n";
 import type { PilotInput } from "../pilot";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { geoidN } from "../system/geoid-grid";
 import { toBodyFixed } from "../system/our-surface";
 import { M_METRES } from "../units";
 import { VESSELS } from "../vessels";
@@ -66,7 +67,8 @@ function geoNow(this: CameraController): { lat: number; lon: number; alt: number
   return {
     lat: (g.lat * 180) / Math.PI,
     lon: (g.lon * 180) / Math.PI,
-    alt: g.h,
+    // (over the sea: h less the geoid — system/geoid.ts —, as the runways' levels, the fixes' and the altimeters')
+    alt: g.h - geoidN(g.lat, g.lon),
     gs: Math.hypot(ve, vn),
     track: (Math.atan2(ve, vn) + 2 * Math.PI) % (2 * Math.PI),
     vs: dot(v, fr.up as V3),

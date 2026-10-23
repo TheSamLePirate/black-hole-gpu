@@ -1452,6 +1452,21 @@ __bh.sys.heightOverGround("earth", legX, __bh.time())
 ```
 *Used in:* `ground-placement.e2e.test.ts`.
 
+### `__bh.sys.geoid(lat, lon)` → number
+
+The geoid's height N over the WGS84 ellipsoid [m] at a latitude, longitude [°] (`src/system/geoid.ts`, EGM2008): the
+sea's surface; the ground over the ellipsoid is its height above the sea plus N. 0 until the map is in (it loads
+with the Earth's maps). Synchronous.
+
+*Used in:* `geoid.e2e.test.ts`.
+
+### `__bh.sys.groundAt(lat, lon)` → number
+
+The Earth's ground [m over the ellipsoid] at a latitude, longitude [°], as stood on and drawn — the relief, the
+runways levelled, the sea at the geoid. Synchronous.
+
+*Used in:* `geoid.e2e.test.ts`.
+
 ### `__bh.sys.runways()` → `RunwayFrame[]`
 
 The Earth's runways as drawn (`sites.ts` `EARTH_RUNWAYS`): each its `site`, its threshold's `origin` on the WGS84

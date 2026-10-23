@@ -9,7 +9,7 @@ import type { Settings } from "../settings";
 import { BODY_NAMES } from "../targeting";
 import { M_METRES, M_SECONDS, solarBody, solarState } from "../system/solar";
 import { soiOf } from "../system/our-side";
-import { altitudeOver, figureUp } from "../system/our-surface";
+import { figureUp, seaAltitudeOver } from "../system/our-surface";
 import { flatteningOf } from "../system/ellipsoid";
 import { classify, elements, orbitClearsHeight, orbitExtreme, STATUS_LABEL, type Elements, type Status, type V3 } from "./orbit";
 import { airTopKm, equatorAxes, frameRate } from "./place";
@@ -161,7 +161,8 @@ export function rangerStatus(s: Settings, cam: CameraController, info: Info, t: 
     const el = elements(b.mass, r, v, equatorAxes(ref, t));
     const soi = soiOf(ref, t);
     const f = flatteningOf(ref);
-    const altitude = altitudeOver(ref, info.X as V3, t);
+    // (over the sea: the Earth's geoid — an altimeter's altitude)
+    const altitude = seaAltitudeOver(ref, info.X as V3, t);
     const top = airTopKm(ref) / kmM;
     const circ = el.e < 0.05 ? meanCircle(ref, b.mass, r as V3, v as V3, t, b.radius, kmM) : null;
     const st = classify(el, {

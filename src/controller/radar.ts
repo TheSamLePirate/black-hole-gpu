@@ -18,6 +18,7 @@ import { MISSILES } from "../game/combat";
 import { R_EARTH as R_CHAL } from "../game/challenges";
 import { buildPicture, type Picture, type PicWeapon, SENSOR, trailSpan } from "../radar/picture";
 import type { CameraController } from "../controls";
+import { geoidDeg } from "../system/geoid-grid";
 
 declare module "../controls" {
   interface CameraController {
@@ -106,7 +107,8 @@ function groundAt(lat: number, lon: number): number {
   let z = groundCache.get(k);
   if (z === undefined) {
     if (groundCache.size > 20_000) groundCache.clear();
-    z = groundRelief("earth", bodyFixedOf("earth", lat, lon, 0));
+    // (over the sea, as the fix's altitude: the geoid taken off)
+    z = groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon);
     groundCache.set(k, z);
   }
   return z;

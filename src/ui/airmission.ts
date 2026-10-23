@@ -15,6 +15,7 @@ import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { VESSELS } from "../vessels";
 import type { WeatherPreset } from "../weather";
 import { button, el as h, modal } from "./kit";
+import { geoidDeg } from "../system/geoid-grid";
 
 export interface MissionHost {
   tools: GameTools;
@@ -67,7 +68,8 @@ export function flyMission(host: MissionHost, spec: MissionSpec, o: { lead?: boo
   const hd = s.hdg * D;
   const lat = s.lat + (-side * Math.sin(hd)) / (D * R_EARTH);
   const lon = s.lon + (side * Math.cos(hd)) / (D * R_EARTH * Math.cos(s.lat * D));
-  const ground = Math.max(0, groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)));
+  // (the ground over the sea — the mission's altitudes': the geoid taken off)
+  const ground = Math.max(0, groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon));
   T.flyAt(lat, lon, Math.max(150, (s.alt ?? 1500) - ground), s.hdg, s.speed);
   C.airFlight.cfg.flaps = 0;
   C.pilot.throttle = C.pilot.engineNow = 0.85;

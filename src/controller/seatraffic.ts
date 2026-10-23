@@ -20,6 +20,7 @@ import type { Ship } from "../traffic/feed";
 import type { Vec3 } from "../math/vec3";
 import type { CameraController } from "../controls";
 import { fleet } from "../fleet";
+import { geoidDeg } from "../system/geoid-grid";
 
 declare module "../controls" {
   interface CameraController {
@@ -160,7 +161,8 @@ function seaNow(this: CameraController): SeaCraft[] {
     const sog = Math.hypot(ve, vn);
     const head = still ? (s.hdg ?? s.cog) * D : headingAt(T.hist, td, sog > 0.5 ? Math.atan2(ve, vn) : course);
     const m = shipMotion(Z.len, Z.beam, hs, td, s.mmsi);
-    const P = placeOf(lat, lon, e, n, m.heave);
+    // (afloat: the sea's surface at the geoid)
+    const P = placeOf(lat, lon, e, n, m.heave + geoidDeg(lat, lon));
     const la = lat + n / (D * R_EQ),
       lo = lon + e / (D * R_EQ * Math.cos(lat * D));
     const L = enuAt(la, lo);

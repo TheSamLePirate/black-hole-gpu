@@ -7,6 +7,7 @@ import { BB_LUT_SIZE, SYNC_LUT_SIZE } from "./physics";
 import { BODY_VEC4, MAX_BODIES } from "./system/scene-bodies";
 import { WARP_LEVELS, WARP_N } from "./system/warp-grid";
 import { TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
+import { GEOID_H, GEOID_W } from "./system/geoid-grid";
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -38,4 +39,7 @@ export const CSM_VEC4S = 4;
  *  towards the Sun (each with its half-extent), its centre in the scenery's frame and whether it is drawn */
 export const TABLE_TSM = TABLE_CSM + CSM_VEC4S;
 export const TSM_VEC4S = 4;
-export const TABLE_VEC4S = TABLE_TSM + TSM_VEC4S;
+/** the geoid's map (system/geoid.ts; trace.wgsl geoidN): its N [m] node by node, four a vec4, row by row from the north */
+export const TABLE_GEOID = TABLE_TSM + TSM_VEC4S;
+export const GEOID_VEC4S = (GEOID_W * GEOID_H) / 4;
+export const TABLE_VEC4S = TABLE_GEOID + GEOID_VEC4S;

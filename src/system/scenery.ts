@@ -2,6 +2,7 @@ import type { Vec3 } from "../physics";
 import { forestKindTable, forestSeason } from "./forest";
 import { SceneryContact } from "./scenery-contact";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
+import { geoidN } from "./geoid-grid";
 import {
   D,
   sceneryBudget,
@@ -272,6 +273,7 @@ export class EarthScenery {
         exclusions,
         reach,
         budget: this.budget(),
+        geoid: geoidPlane(c.lat, c.lon),
       } satisfies SceneryRequest);
     } catch (e) {
       this.lastError = String(e);
@@ -407,4 +409,11 @@ export class EarthScenery {
     this.data = null;
     this.busy = false;
   }
+}
+
+/** The geoid round a scenery's centre [°] as a plane (SceneryRequest.geoid): N and its slopes per degree. */
+export function geoidPlane(lat: number, lon: number): [number, number, number] {
+  const n = (a: number, b: number) => geoidN(a * D, b * D);
+  const e = 0.05;
+  return [n(lat, lon), (n(lat + e, lon) - n(lat - e, lon)) / (2 * e), (n(lat, lon + e) - n(lat, lon - e)) / (2 * e)];
 }

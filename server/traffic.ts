@@ -19,9 +19,11 @@ export interface Plane {
   cat: string;
   lat: number;
   lon: number;
-  /** its altitude [m] (geometric if known, else barometric), ground speed [m/s], track and heading [°], vertical
-   *  speed [m/s], roll [°] */
+  /** its altitude [m] (geometric — over the WGS84 ellipsoid — if known, else barometric: over the sea, `baro`), ground
+   *  speed [m/s], track and heading [°], vertical speed [m/s], roll [°] */
   alt: number;
+  /** its altitude barometric (over the sea, not the ellipsoid: the page raises it by the geoid — traffic/feed.ts) */
+  baro?: boolean;
   gs: number;
   trk: number;
   hdg: number | null;
@@ -105,6 +107,7 @@ export function fromAdsbLol(a: Record<string, unknown>, now: number): Plane | nu
     lat,
     lon,
     alt: gnd ? 0 : altFt * FT,
+    ...(!gnd && !Number.isFinite(Number(a.alt_geom)) && Number.isFinite(Number(a.alt_baro)) ? { baro: true } : {}),
     gs: Number(a.gs ?? 0) * KT,
     trk: Number(a.track ?? a.true_heading ?? 0),
     hdg: Number.isFinite(Number(a.true_heading)) ? Number(a.true_heading) : null,
@@ -132,6 +135,7 @@ export function fromOpenSky(s: unknown[], now: number): Plane | null {
     lat,
     lon,
     alt: s[8] ? 0 : alt,
+    ...(!s[8] && s[13] === null && s[7] !== null ? { baro: true } : {}),
     gs: Number(s[9] ?? 0),
     trk: Number(s[10] ?? 0),
     hdg: null,

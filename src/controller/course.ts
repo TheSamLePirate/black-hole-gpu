@@ -27,6 +27,7 @@ import { t, tf } from "../i18n";
 import { unitsOf } from "../ui/unitsys";
 import { VESSELS } from "../vessels";
 import type { CameraController } from "../controls";
+import { geoidDeg } from "../system/geoid-grid";
 
 const D = Math.PI / 180;
 const wrap180 = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
@@ -117,7 +118,8 @@ function lessonWorld(c: CameraController, S: CourseState): number | undefined {
   c.combatStart(def);
   const W = c.combat!.world;
   const ahead = (d: number, right = 0): [number, number] => [Math.sin(h) * d + Math.cos(h) * right, Math.cos(h) * d - Math.sin(h) * right];
-  const agl = (e: number, n: number, alt: number) => Math.max(alt - W.groundZ(e, n), 800);
+  // (alt over the sea, the fight's ground over the ellipsoid: the geoid between them)
+  const agl = (e: number, n: number, alt: number) => Math.max(alt + geoidDeg(g.lat, g.lon) - W.groundZ(e, n), 800);
   const hdgDeg = (h / D + 360) % 360;
   if (S.id === "formation") {
     const [e, n] = ahead(1500);

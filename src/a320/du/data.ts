@@ -11,6 +11,7 @@ import type { Settings } from "../../settings";
 import { cameraFrame } from "../../camera";
 import { toBodyFixed } from "../../system/our-surface";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "../../system/ellipsoid";
+import { geoidN } from "../../system/geoid-grid";
 import { M_METRES } from "../../units";
 import { alphaLimits } from "../fbw";
 import { CONF, confOf } from "../pose";
@@ -248,7 +249,8 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
     mach,
     tas: (L?.speed ?? 0) * KT,
     gs: gsMs * KT,
-    alt: geo.h * FT,
+    // (the altimeter: over the sea — the geoid —, not the ellipsoid)
+    alt: (geo.h - geoidN(geo.lat, geo.lon)) * FT,
     vs: vz * FT * 60,
     ra: ra < 2500 ? Math.max(ra - 6, 0) : null,
     baro: {

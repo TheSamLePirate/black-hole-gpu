@@ -4,6 +4,7 @@
 // own axes (x away from its primary, y along its orbit, z north).
 
 import { WGS84_A } from "./system/ellipsoid";
+import { geoidAt } from "./system/geoid-grid";
 
 export type V3 = [number, number, number];
 
@@ -362,7 +363,8 @@ export function tileFallbackSampler(map: Int16Array, W: number, H: number) {
  * W × H equirectangular, the sea floor below 0 — as the tracer holds them: half floats) as the tracer
  * samples it near — a cubic B-spline over its texels, wrapping in longitude — under the terrain tiles
  * near the camera (tiles: earth-tiles.ts, their heights and what they leave to the map), and the detail
- * finer than them; the sea at 0.
+ * finer than them; the sea at 0 — all above the sea, then over the ellipsoid: raised by the geoid (geoid-grid.ts,
+ * trace.wgsl earthHeightG), the sea's surface at N.
  */
 export function earthHeightSampler(
   map: Int16Array,
@@ -388,6 +390,6 @@ export function earthHeightSampler(
     const g = graded?.(q);
     const flat = g?.flat ?? 0;
     if (g && g.level > 0) h0 += (g.elev - h0) * g.level;
-    return Math.max(h0 + (flat < 1 ? (1 - flat) * earthDetail(q, h0, foot, res) : 0), 0);
+    return Math.max(h0 + (flat < 1 ? (1 - flat) * earthDetail(q, h0, foot, res) : 0), 0) + geoidAt(q);
   };
 }

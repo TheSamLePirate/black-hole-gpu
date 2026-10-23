@@ -6,6 +6,7 @@
 import { hudHits, scopeRange } from "./ui/hud/symbology";
 import type { BootReport } from "./boot-timeline";
 import { bodyFixedOf, GEAR, gearHeight, groundRelief, toBodyFixed } from "./system/our-surface";
+import { geoidDeg } from "./system/geoid-grid";
 import { EARTH_RUNWAYS } from "./game/sites";
 import { GEARS } from "./gear";
 import { cartToGeodetic, flatteningOf } from "./system/ellipsoid";
@@ -607,6 +608,11 @@ export function installBh(c: BhContext) {
         bodyFixed: (id: string, X: [number, number, number], t: number) => toBodyFixed(id, X, t),
         /** a home-frame point's height over a body's ground as drawn and flown [m] (the gear's measure: tests) */
         heightOverGround: (id: string, X: [number, number, number], t: number) => gearHeight(id, X, t) + GEAR,
+        /** the geoid's N [m] at a latitude, longitude [°]: the sea's surface over the WGS84 ellipsoid (system/geoid.ts;
+         *  0 until its map is in) */
+        geoid: (lat: number, lon: number) => geoidDeg(lat, lon),
+        /** the Earth's ground [m over the ellipsoid] at a latitude, longitude [°], as stood on (the sea at the geoid) */
+        groundAt: (lat: number, lon: number) => groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)),
         /** the craft's gear (gear.ts GEARS: each leg on the craft's axes) */
         gears: () => GEARS,
         /** the Earth's runways as drawn (sites.ts EARTH_RUNWAYS: threshold, landing direction — WGS84) */

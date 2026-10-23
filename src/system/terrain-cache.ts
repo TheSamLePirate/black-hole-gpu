@@ -107,6 +107,22 @@ fn cost(k: u32) {}
 ${[...selected.values()].join("\n")}`;
 }
 
+/**
+ * The tracer's geoid (trace.wgsl geoidN, geoidNode) for a shader beside it: its constants the library lacks, the
+ * table read through that shader's own binding of the same buffer (gpu-tables.ts TABLE_GEOID).
+ */
+export function geoidLibrary(trace: string, library: string, buffer: string): string {
+  const consts = ["GEOID_OFF", "GEOID_W", "GEOID_H", "PI", "TAU"]
+    .filter((name) => !new RegExp(`^const ${name}\\b`, "m").test(library))
+    .map((name) => {
+      const line = new RegExp(`^const ${name}\\b[^;]*;`, "m").exec(trace)?.[0];
+      if (!line) throw new Error(`terrain-cache: missing ${name}`);
+      return line;
+    });
+  const fns = ["geoidNode", "geoidN"].map((name) => wgslFunction(trace, name).replace(/\bbodies\[/g, `${buffer}[`));
+  return [...consts, ...fns].join("\n");
+}
+
 export function terrainCacheShader(trace: string): string {
   return `${terrainHeightLibrary(trace)}
 struct CacheU { reference: vec4f, scale: vec4f };

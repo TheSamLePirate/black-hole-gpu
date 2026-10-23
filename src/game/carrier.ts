@@ -6,6 +6,7 @@
 
 import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { shipMotion } from "./shiptypes";
+import { geoidN } from "../system/geoid-grid";
 
 export type CarrierId = "ford" | "kiev" | "implacable";
 
@@ -148,7 +149,8 @@ function frameAt(sp: CarrierSpawn, t: number, hs: number) {
     sr = Math.sin(m.roll);
   const right = [0, 1, 2].map((i) => stb[i]! * cr - up1[i]! * sr);
   const up = [0, 1, 2].map((i) => up1[i]! * cr + stb[i]! * sr);
-  const p = geodeticToCart(WGS84_A, WGS84_F, la, lo, m.heave) as number[];
+  // (afloat on the sea: its surface at the geoid)
+  const p = geodeticToCart(WGS84_A, WGS84_F, la, lo, m.heave + geoidN(la, lo)) as number[];
   return { p, bow, up, port: right.map((x) => -x), lat, lon };
 }
 

@@ -6,6 +6,7 @@
 // real time, between two of them (controller/traffic.ts). Its sources' attribution kept to be shown.
 
 import type { Plane, Ship } from "../../server/traffic";
+import { geoidDeg } from "../system/geoid-grid";
 
 export type { Plane, Ship };
 
@@ -108,6 +109,11 @@ export class TrafficFeed {
   /** A report taken: kept if newer than the one we have, the one before kept for the turn and the climb; what a
    *  poorer source leaves out (OpenSky: the registration, the type) kept from before. */
   private merge(p: Plane, now: number) {
+    // (a barometric altitude — over the sea —: over the ellipsoid, as the geometric ones and our places, by the geoid)
+    if (p.baro) {
+      p.alt += geoidDeg(p.lat, p.lon);
+      p.baro = false;
+    }
     const T = this.planes.get(p.id);
     if (T) {
       p.reg ||= T.p.reg;

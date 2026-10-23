@@ -167,6 +167,9 @@ export interface SceneryRequest {
   /** the detail's reach (DETAIL_REACH: 1, 1.5, 2) and the bytes the GPU takes for it */
   reach: number;
   budget: number;
+  /** the geoid round the centre (system/geoid.ts): N [m] there and its slopes [m per degree of latitude, of
+   *  longitude] — the ground over the ellipsoid, as the tracer's (a plane: within a few centimetres over the reach) */
+  geoid?: [number, number, number];
 }
 export interface SceneryReply {
   id: number;

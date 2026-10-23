@@ -19,6 +19,11 @@ Two tiers: `med` (faces 2048², equirectangular maps 4096 × 2048), loaded with 
   built by `python3 scripts/build-earth-relief.py` (the grid's format there). The relief's normals are
   computed from them on the GPU.
 
+- `geoid-egm2008-15.bin` (1440 × 720, 15′) — the geoid's height N over the WGS84 ellipsoid [cm], the same
+  format and grid convention, from NGA's EGM2008 (public domain) through GeographicLib's 5′ grid, built by
+  `python3 -I scripts/build-geoid.py egm2008-5.pgm`; read by `src/system/geoid.ts`: the sea's surface over
+  the ellipsoid, and what the heights above the sea are raised by.
+
 Cube faces: `ft` looks at Greenwich (lat 0°, lon 0°), `rt` at 90° E, `bk` at 180°, `lf` at 90° W, `up` at
 the north pole (Greenwich at its bottom edge), `dn` at the south pole (Greenwich at its top edge).
 

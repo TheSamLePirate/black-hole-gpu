@@ -76,6 +76,7 @@ import {
   CSM_VEC4S,
   TABLE_CSM,
   TABLE_TSM,
+  TABLE_GEOID,
   TABLE_LUT,
   TABLE_PATH,
   TABLE_SKY,
@@ -135,6 +136,7 @@ import {
   type EarthMaps,
   type EarthTier,
 } from "./system/earth-maps";
+import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/geoid";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
 import { WarpGrid } from "./system/warp-grid";
@@ -765,6 +767,8 @@ export class Renderer {
   private earthCap: EarthTier | "none" = "high";
   /** the Earth maps' latest request (an older one landing late is dropped) */
   private earthJob = 0;
+  /** the geoid's map in the tracer's table (gpu-tables.ts TABLE_GEOID), once */
+  private geoidIn = false;
   /** when its disk was last over 12 pixels [ms] */
   private earthSeenAt = 0;
   /** the finer maps of the body near the camera (one at a time), and the one being loaded */
@@ -1488,7 +1492,17 @@ export class Renderer {
     if (first) loading.stage("earth", t("The Earth — day, night, clouds and relief"), { weight: 3 });
     // (out of GPU memory while the maps load: the tier below, or none — not a lost device)
     this.device.pushErrorScope("out-of-memory");
-    const job = loadEarthMaps(this.device, tier, first ? (u) => loading.fetch(u, "earth") : undefined);
+    const fetcher = first ? (u: string) => loading.fetch(u, "earth") : undefined;
+    // (the geoid with them: the ground and the sea over the ellipsoid — system/geoid.ts — before the ground is stood on)
+    // (none — its file refused —: N stays 0 on both sides, the sea on the ellipsoid as before)
+    const geoidJob = loadGeoid(fetcher).catch((e) => (console.warn("Geoid unavailable:", e), null));
+    const job = Promise.all([loadEarthMaps(this.device, tier, fetcher), geoidJob]).then(([maps, geoid]) => {
+      if (geoid && !this.geoidIn) {
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_GEOID * 16, geoidTable(geoid));
+        this.geoidIn = true;
+      }
+      return maps;
+    });
     const oom = this.device.popErrorScope();
     (first ? loading.track("earth", "", job) : job)
       .then(async (maps) => {
@@ -2640,7 +2654,8 @@ export class Renderer {
       const alt = earthSurface.h * WGS84_A;
       let top = Math.max(this.earthTiles.top(), 0);
       top = Math.max(top, this.mapCells.around(earthSurface.lat, earthSurface.lon, horizonsReach(alt, 9600)));
-      f[28 * 4 + 3] = Math.min(9600, top + detailMargin(top));
+      // (both above the sea: the ground over the ellipsoid higher by the geoid — 86 m at most, anywhere)
+      f[28 * 4 + 3] = Math.min(9600, top + detailMargin(top) + GEOID_MAX);
     }
     if (!o.probe) this.lastNear = near;
     set(48, ...(near?.centre ?? [0, 0, 0]), near ? 1 : 0);
@@ -3517,7 +3532,8 @@ export class Renderer {
       lon = (surface.lon * 180) / Math.PI;
     const w = weatherAt(s, { body: "earth", lat, lon }, daysOf(time), this.weatherReal);
     if (w.layers.length === 0 && w.fogTop <= 0 && w.visibility >= 30e3) return out;
-    const ground = Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)), 0);
+    // (the sea's surface at the geoid: the ground never under it)
+    const ground = Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)), geoidN(surface.lat, surface.lon));
     // (a fog's valleys' floor: the relief's lowest on rings 2–18 km about the camera, found again every 2 km)
     if (
       w.fogTop > 0 &&
@@ -3529,7 +3545,10 @@ export class Renderer {
           const a = (k / 8) * 2 * Math.PI;
           const la = lat + (km / 111.2) * Math.cos(a),
             lo = lon + ((km / 111.2) * Math.sin(a)) / Math.max(Math.cos((lat * Math.PI) / 180), 0.1);
-          h = Math.min(h, Math.max(groundRelief("earth", bodyFixedOf("earth", la, lo, 0)), 0));
+          h = Math.min(
+            h,
+            Math.max(groundRelief("earth", bodyFixedOf("earth", la, lo, 0)), geoidN((la * Math.PI) / 180, (lo * Math.PI) / 180)),
+          );
         }
       this.fogFloor = { lat, lon, h };
     }
@@ -5726,7 +5745,10 @@ export class Renderer {
     const time = this.lastTime;
     const w = mouth(s).w;
     const Xc = homeOf(w, cam.ell, cam.n);
-    const h = altitudeOver("earth", Xc, time);
+    // (the height over the sea, its surface at the geoid)
+    const Xb = toBodyFixed("earth", Xc, time);
+    const sea = geoidUnder(Xb);
+    const h = altitudeOver("earth", Xc, time) - sea;
     if (!(h < 20_000) || !(h > -50)) return null;
     const upH = figureUp("earth", Xc, time);
     const r = homeToRep(w, cam.ell, cam.n, upH);
@@ -5735,7 +5757,7 @@ export class Renderer {
     const n: Vec3 = [n0[0] / l, n0[1] / l, n0[2] / l];
     const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
     // (the flown craft's image under 500 m — higher, the waves have scattered it)
-    const flown = h < 500 && groundRelief("earth", toBodyFixed("earth", Xc, time)) < 0.5;
+    const flown = h < 500 && groundRelief("earth", Xb) - sea < 0.5;
     return { n, d: dot3(n, eye) - h, hs: this.seaHs, t: (performance.now() / 1000) % 3600, flown };
   }
 

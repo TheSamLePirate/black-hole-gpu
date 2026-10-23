@@ -12,6 +12,7 @@ import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { EARTH_RUNWAYS, type RunwayFrame, runwayFrame, setWorldRunways, SITES, type Site } from "../game/sites";
 import { type Airfield, fieldsNear, type Runway } from "./runways";
+import { geoidN } from "../system/geoid-grid";
 
 /** How far from the eye [m], how many at most (the shader's four nearest drawn of them; the gear's all). */
 const REACH = 25_000;
@@ -52,19 +53,22 @@ function frameOf(f: Airfield, w: Runway): RunwayFrame {
 /** The level under a runway: the median of the bare relief at 11 points down its axis [m]. */
 function measure(fr: RunwayFrame): number {
   fr.world!.measuring = true;
-  const hs: number[] = [];
+  const hs: number[] = [],
+    raw: number[] = [];
   for (let k = 0; k <= 10; k++) {
     const a = (fr.len * k) / 10;
     const q = [0, 1, 2].map((i) => fr.origin[i]! + fr.along[i]! * a) as [number, number, number];
     // (its geodetic place — WGS84's, not the geocentric angle: 0.19° apart at 43°, twenty kilometres)
     const g = cartToGeodetic(WGS84_A, WGS84_F, q);
-    hs.push(groundRelief("earth", bodyFixedOf("earth", (g.lat * 180) / Math.PI, (g.lon * 180) / Math.PI, 0)));
+    raw.push(groundRelief("earth", bodyFixedOf("earth", (g.lat * 180) / Math.PI, (g.lon * 180) / Math.PI, 0)));
+    // (the level over the sea, as the grading takes it — terrain.ts earthHeightSampler —: the geoid taken off)
+    hs.push(raw[k]! - geoidN(g.lat, g.lon));
   }
   fr.world!.measuring = false;
   hs.sort((a, b) => a - b);
   const m = hs[5]!;
   // (no relief yet — the sea's 0 everywhere —: the published height kept)
-  return hs.every((h) => h === 0) ? fr.elev : Math.round(m * 10) / 10;
+  return raw.every((h) => h === 0) ? fr.elev : Math.round(m * 10) / 10;
 }
 
 /**

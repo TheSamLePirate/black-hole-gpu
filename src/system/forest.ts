@@ -588,6 +588,8 @@ export interface ForestSources {
   excluded(lat: number, lon: number): boolean;
   /** the ground's height at a place [m] (the tracer's relief) */
   ground(lat: number, lon: number): Promise<number>;
+  /** the sea's surface there over the ellipsoid [m] (the geoid): the kinds' altitudes above it (0 without) */
+  sea?(lat: number, lon: number): number;
   /** a place's frame metres at a height */
   local(lat: number, lon: number, h: number): Vec3;
   /** a source's failure (its trees left out) */
@@ -655,9 +657,10 @@ export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ c
       gy = (n(0, 1) - n(0, 0) + n(1, 1) - n(1, 0)) / (2 * span);
     if (gx * gx + gy * gy > FOREST_MAX_SLOPE * FOREST_MAX_SLOPE) continue;
     const [lat, lon] = forestPlaceOf(f.i0 + u, f.j0 + v, f.columns);
-    const kind = forestKind(io.cover(lat, lon), lat, ground, forestUnit(forestHash(gi, gj, 5)), forestUnit(forestHash(gi, gj, 6)));
+    const above = ground - (io.sea?.(lat, lon) ?? 0);
+    const kind = forestKind(io.cover(lat, lon), lat, above, forestUnit(forestHash(gi, gj, 5)), forestUnit(forestHash(gi, gj, 6)));
     if (kind === ForestKind.none) continue;
-    const tall = forestHeight(kind, lat, ground, forestUnit(forestHash(gi, gj, 7)));
+    const tall = forestHeight(kind, lat, above, forestUnit(forestHash(gi, gj, 7)));
     cells[c] = packCell(io.local(lat, lon, ground - FOREST_SINK)[2], kind, tall);
     trees++;
   }

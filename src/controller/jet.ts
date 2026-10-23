@@ -10,7 +10,7 @@ import { JET, jetCommands, noJetModes } from "../game/jet";
 import { formGrace } from "./formation";
 import { t, tf } from "../i18n";
 import type { PilotInput } from "../pilot";
-import { altitudeOver, solidBody } from "../system/our-surface";
+import { seaAltitudeOver, solidBody } from "../system/our-surface";
 import { C_MPS, M_METRES } from "../units";
 import { VESSELS } from "../vessels";
 import { wetRatio } from "../f35/engine";
@@ -36,7 +36,7 @@ function jetFigures(this: CameraController): { h: number; hdg: number; V: number
   if (!this.airFlight.inAir || !L) return null;
   const cam = cameraFrame(this.s);
   const nav = this.local ? null : this.ourNav(cam);
-  const h = nav && nav.ref !== "sun" && solidBody(nav.ref) ? altitudeOver(nav.ref, nav.X, nav.t) : L.h;
+  const h = nav && nav.ref !== "sun" && solidBody(nav.ref) ? seaAltitudeOver(nav.ref, nav.X, nav.t) : L.h;
   const att = this.attitudeNow() as { heading?: number };
   return { h, hdg: att.heading ?? Number.NaN, V: L.speed };
 }

@@ -26,6 +26,7 @@ import { enuAt } from "./traffic";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { sunHidden } from "../eclipse/earth-moon";
 import { utcOf } from "../system/solar";
+import { geoidDeg } from "../system/geoid-grid";
 
 const D = Math.PI / 180;
 
@@ -193,7 +194,8 @@ function spawnUnit(c: CameraController, u: MissionUnit, last = false) {
   const air = kind === "drone" || kind === "fighter" || kind === "airliner";
   live.target = W.addTarget({
     kind,
-    at: [e, n, air ? Math.max(300, (at.alt ?? 3000) - W.groundZ(e, n)) : 0],
+    // (its altitude over the sea, the fight's ground over the ellipsoid: the geoid between them)
+    at: [e, n, air ? Math.max(300, (at.alt ?? 3000) + geoidDeg(at.lat, at.lon) - W.groundZ(e, n)) : 0],
     hdg,
     speed,
     name,
@@ -201,7 +203,7 @@ function spawnUnit(c: CameraController, u: MissionUnit, last = false) {
     route: u.route?.map((p) => {
       const [pe, pn] = toEn(M.anchor, p);
       // (its heights over the sea: the fight's routes over the ground)
-      return [pe, pn, Math.max(300, (p.alt ?? at!.alt ?? 3000) - W.groundZ(pe, pn))] as [number, number, number];
+      return [pe, pn, Math.max(300, (p.alt ?? at!.alt ?? 3000) + geoidDeg(p.lat, p.lon) - W.groundZ(pe, pn))] as [number, number, number];
     }),
     mesh: kind === "airliner" ? (mesh ?? "a320t") : undefined,
   });
@@ -248,7 +250,8 @@ function worldOf(c: CameraController, M: MissionState): MissionWorld {
       const q = W?.targets.find((x) => x.id === L.target);
       if (!q) return null;
       const ll = toLl(M.anchor, q.p[0], q.p[1]);
-      return { ...ll, alt: q.p[2], alive: q.alive };
+      // (over the sea, as the mission's altitudes: the fight's height less the geoid)
+      return { ...ll, alt: q.p[2] - geoidDeg(ll.lat, ll.lon), alive: q.alive };
     },
     onCarrier: deckKind ? ([...M.units.entries()].find(([, L]) => L.carrier === deckKind)?.[0] ?? null) : null,
   };
@@ -298,9 +301,16 @@ function missionFrame(this: CameraController, dt: number) {
         const to = k.to ? toEn(M.anchor, k.to) : null;
         W.setCourse(q.id, {
           hdg: k.hdg,
-          alt: k.alt,
+          // (over the sea, the fight's heights over the ellipsoid: raised by the geoid)
+          alt: k.alt === undefined ? undefined : k.alt + geoidDeg(M.anchor.lat, M.anchor.lon),
           speed: k.speed,
-          to: to ? [to[0], to[1], Math.max(k.to!.alt ?? q.p[2], W.groundZ(to[0], to[1]) + 300)] : undefined,
+          to: to
+            ? [
+                to[0],
+                to[1],
+                Math.max(k.to!.alt === undefined ? q.p[2] : k.to!.alt + geoidDeg(k.to!.lat, k.to!.lon), W.groundZ(to[0], to[1]) + 300),
+              ]
+            : undefined,
         });
       }
     } else if ("side" in o) {
@@ -477,7 +487,8 @@ function missionCue(this: CameraController): { name: string; lat: number; lon: n
   if (!M || M.deckStart) return null;
   const R = M.run;
   const W = worldOf(this, M);
-  const ground = (lat: number, lon: number) => Math.max(0, groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)));
+  // (over the sea, as the objectives' altitudes: the geoid taken off)
+  const ground = (lat: number, lon: number) => Math.max(0, groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon));
   for (const o of R.spec.objectives) {
     if (R.state[o.id] !== "active") continue;
     const unit = (id: string) => {

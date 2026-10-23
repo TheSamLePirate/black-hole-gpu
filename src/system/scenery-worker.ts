@@ -126,6 +126,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // Keep each DEM tile at least 1.8 km wide at high latitudes, bounding root-data memory.
   const demZoom = Math.min(13, Math.max(6, Math.floor(Math.log2((40075016 * Math.cos(q.lat * D)) / 1800))));
   const heights = new Map<string, Promise<Uint8ClampedArray>>();
+  // (the sea's surface over the ellipsoid — the geoid's plane round the centre —: the ground as the tracer has it)
+  const [n0, nLat, nLon] = q.geoid ?? [0, 0, 0];
+  const sea = (lat: number, lon: number) => n0 + nLat * (lat - q.lat) + nLon * wrapLon(lon - q.lon);
   const height = async (lat: number, lon: number) => {
     const xx = tx(wrapLon(lon), demZoom),
       yy = ty(lat, demZoom),
@@ -167,7 +170,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const a = lat * D,
       b = lon * D,
       res = Math.max(25, (40075016 * Math.cos(a)) / (2 ** demZoom * 256));
-    return Math.max(0, h0 + earthDetail([Math.cos(a) * Math.cos(b), Math.cos(a) * Math.sin(b), Math.sin(a)], h0, 0.5, res));
+    return Math.max(0, h0 + earthDetail([Math.cos(a) * Math.cos(b), Math.cos(a) * Math.sin(b), Math.sin(a)], h0, 0.5, res)) + sea(lat, lon);
   };
   const excluded = (lat: number, lon: number) => sceneryExcluded(lat, lon, q.exclusions);
   const prims: Primitive[] = [];
@@ -490,6 +493,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     },
     excluded: (lat, lon) => excluded(lat, lon) || networkExcluded(lat, lon),
     ground: height,
+    sea,
     local: (lat, lon, h) => localPoint(frame, lat, lon, h),
     error: (e) => void (errors.length < 12 && errors.push(String(e).slice(0, 220))),
   });

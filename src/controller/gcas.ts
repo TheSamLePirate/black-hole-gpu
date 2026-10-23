@@ -12,6 +12,7 @@ import { t, tf } from "../i18n";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import type { PilotInput } from "../pilot";
 import type { CameraController } from "../controls";
+import { geoidDeg } from "../system/geoid-grid";
 
 const D = Math.PI / 180;
 const R_EARTH = 6_371_008.8;
@@ -47,7 +48,8 @@ export function ground(lat: number, lon: number) {
   let z = cache.get(k);
   if (z === undefined) {
     if (cache.size > 30_000) cache.clear();
-    z = Math.max(0, groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)));
+    // (over the sea, as the altitudes it is set against: the geoid taken off)
+    z = Math.max(0, groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon));
     cache.set(k, z);
   }
   return z;

@@ -11,6 +11,7 @@ import { unitsOf } from "../ui/unitsys";
 import type { WeaponSel } from "./combat";
 import { enuAt, placeOf } from "./traffic";
 import type { CameraController } from "../controls";
+import { geoidDeg } from "../system/geoid-grid";
 
 declare module "../controls" {
   interface CameraController {
@@ -79,7 +80,8 @@ function aircraftAround(this: CameraController, maxM = 150_000): Around[] {
   else {
     const g = this.geoNow();
     if (!g) return [];
-    const me = placeOf(g.lat, g.lon, 0, 0, g.alt);
+    // (the traffic's places over the ellipsoid: our altitude over the sea raised by the geoid)
+    const me = placeOf(g.lat, g.lon, 0, 0, g.alt + geoidDeg(g.lat, g.lon));
     const L = enuAt(g.lat, g.lon);
     const loc = (w: number[]) => [L.E, L.N, L.U].map((a) => a[0]! * w[0]! + a[1]! * w[1]! + a[2]! * w[2]!);
     list = [...trf.values()].map((c) => ({
