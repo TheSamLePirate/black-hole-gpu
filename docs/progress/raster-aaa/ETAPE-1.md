@@ -294,3 +294,12 @@ tracé pour la session et le dit (`renderer.rasterFellBack`) ; changer le régla
 
 Laissé : la carte d'ombres du relief redessinée à chaque image (0,2 ms mesuré — un cache de plus ne paie pas son risque) ;
 quelques petites allocations par image (négligeables).
+
+**Vérifié (kerr-mini, plein écran, 23 octobre).** `tsc`, 27 shaders, Biome ; tests unitaires 1 673 réussis (un seul échec,
+`entry.test.ts`, au-delà de son délai sous la charge parallèle du M1 — réussi seul). e2e : `raster-governor` (défauts,
+régulation : taux jusqu'à 1/16 puis repli sur le tracé annoncé, retour, taux plus fin avec de la marge ; ombre de la Lune
+sombre avec la lumière physique du ciel), `raster-primary` à Chamonix (raster contre tracé ×4 : 35,1 dB, 35,9 avant les
+corrections — l'écart d'une première mesure venait de tuiles fines pas encore arrivées : les tuiles attendues stables
+désormais), `raster-paths`, `terrain-raster`, `f35-sea-trail`, `monument-relief`, `smoke` (17/17 — deux échecs aussi sur
+main, réparés : le clic des tests fait défiler une ligne cachée sous la barre de son panneau). Le harnais : bandeau avec
+la durée (mesurée, `tests/e2e/durations.json`) et la condition de fin, ports refusés par Chrome évités.

@@ -229,6 +229,11 @@
   "here": null,
   "runs": 2
  },
+ "f35-sea-trail.e2e.test.ts": {
+  "mini": 146,
+  "here": null,
+  "runs": 1
+ },
  "f35-wingmen.e2e.test.ts": {
   "mini": 90,
   "here": null,
@@ -388,6 +393,11 @@
   "mini": 11,
   "here": 30,
   "runs": 10
+ },
+ "monument-relief.e2e.test.ts": {
+  "mini": 232,
+  "here": null,
+  "runs": 1
  },
  "multiexposure.e2e.test.ts": {
   "mini": 232,
@@ -579,6 +589,11 @@
   "here": null,
   "runs": 1
  },
+ "raster-paths.e2e.test.ts": {
+  "mini": 82,
+  "here": null,
+  "runs": 1
+ },
  "rates.e2e.test.ts": {
   "mini": 30,
   "here": 35,
@@ -630,9 +645,9 @@
   "runs": 10
  },
  "smoke.e2e.test.ts": {
-  "mini": 28,
+  "mini": 29,
   "here": 33,
-  "runs": 13
+  "runs": 14
  },
  "space-sensors.e2e.test.ts": {
   "mini": 17,
@@ -683,6 +698,11 @@
   "mini": 9,
   "here": 14,
   "runs": 10
+ },
+ "terrain-raster.e2e.test.ts": {
+  "mini": 1486,
+  "here": null,
+  "runs": 1
  },
  "time.e2e.test.ts": {
   "mini": 8,

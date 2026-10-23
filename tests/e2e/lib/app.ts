@@ -343,7 +343,11 @@ export class App {
       if (!el) return { ok: false, x: 0, y: 0, stack: ["(absent)"] };
       // (out of its scrolled box's view — a long panel's card —: scrolled to, as a player would)
       const b0 = el.getBoundingClientRect();
-      if (b0.bottom > innerHeight || b0.top < 0) el.scrollIntoView({ block: "center", behavior: "instant" });
+      // (… or in view but under its panel's own bar — a long list's row beneath the controls screen's buttons —: scrolled
+      // to the middle too)
+      const top0 = document.elementFromPoint(b0.left + b0.width / 2, b0.top + b0.height / 2);
+      const covered = !!top0 && top0 !== el && !el.contains(top0);
+      if (b0.bottom > innerHeight || b0.top < 0 || covered) el.scrollIntoView({ block: "center", behavior: "instant" });
       const b = el.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2;
       const top = document.elementFromPoint(x, y);
       const d = (e) => e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + (typeof e.className === "string" && e.className ? "." + e.className.trim().split(/\\s+/).join(".") : "");

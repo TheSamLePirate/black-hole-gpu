@@ -2,7 +2,12 @@
 // over Kennedy's oblique runway (heading 150°) in the three inspector views, reports a conforming mesh, resizes, releases
 // its targets when switched off — and what the `difference` view shows is measured from the captured pixels (its colour
 // scale inverted into metres), at three views and two cache levels. What the pilot adds to the frame is measured against
-// the same frames without it. Captures: remote-results/terrain-raster-<view>-<pose>.png; terrain-raster.json.
+// the same frames without it. Captures: remote-results/terrain-raster-<view>-<pose>.png; terrain-raster.json. The views:
+// depth grey (nearer lighter), difference green where the patch meets the scene's depth, red/blue by its error (yellow:
+// no reference). The relief's tiles and the satellite imagery blocked on purpose (App.boot's tiles: false; the surface, the
+// scenery and the clouds off): the global map alone, the figures the same from run to run — a geometry test, not the look.
+// Duration: ~15 min on kerr-mini, full screen (one ray a pixel, the views measured at two levels, three poses).
+// Done when: the inspector is switched off after a resize and its targets are released (targetBytes 0).
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 import { readPng } from "./lib/png";
@@ -104,6 +109,8 @@ test.skipIf(!E2E)(
               rows.push({ level, pose: pose.name, costs, error: differenceStats(png), stats });
             }
           }
+          // (the scene itself, the inspector's overlay off — the views above were drawn over it)
+          await view(app, "off");
           await app.shot(`remote-results/terrain-raster-off-${pose.name}-L${level}.png`).catch(() => {});
         }
       }
