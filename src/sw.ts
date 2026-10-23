@@ -31,7 +31,9 @@ import {
   type ZoneRecord,
   zoneRelease,
   type ZoneTile,
+  tileKind,
 } from "./pwa/rules";
+import { decodeRelief, encodeRelief, isReliefGrid, RELIEF_CODEC } from "./pwa/relief-codec";
 
 declare const self: ServiceWorkerGlobalScope;
 /** the build this worker belongs to (the build script substitutes it; dev: the time the worker was built) */
@@ -201,6 +203,38 @@ function shortOf(url: string, body: ArrayBuffer): boolean {
   }
   return url.includes("MNS") ? holes > 0.02 * v.length : holes > 0;
 }
+// ---- the relief's grids kept small (pwa/relief-codec.ts, I8c): packed as they are kept, unpacked as they are served
+/** A tile's response as kept: a relief grid packed (its type and the codec named in its headers), anything else as it came. */
+async function keepable(url: string, body: ArrayBuffer, from: Headers): Promise<Response> {
+  if (!isReliefGrid(url, body.byteLength)) return new Response(body, { status: 200, headers: from });
+  const packed = await encodeRelief(body);
+  const headers = new Headers(from);
+  headers.set("x-kerr-codec", RELIEF_CODEC);
+  headers.set("x-kerr-type", from.get("content-type") ?? "image/x-bil;bits=32");
+  headers.set("content-type", "application/octet-stream");
+  headers.set("content-length", String(packed.byteLength));
+  headers.delete("content-encoding");
+  return new Response(packed as BlobPart, { status: 200, headers });
+}
+/** A kept tile's bytes as the source sent them (a packed grid unpacked; null: a packing not read). */
+async function rawOf(kept: Response): Promise<ArrayBuffer | null> {
+  const body = await kept.arrayBuffer();
+  return kept.headers.get("x-kerr-codec") === RELIEF_CODEC ? decodeRelief(body) : body;
+}
+/** A kept tile served: its source's bytes and type, `mark` added to its headers (null: a packing not read). */
+async function serve(kept: Response, mark?: [string, string]): Promise<Response | null> {
+  const packed = kept.headers.get("x-kerr-codec") === RELIEF_CODEC;
+  if (!packed && !mark) return kept;
+  const headers = new Headers(kept.headers);
+  if (mark) headers.set(...mark);
+  if (!packed) return new Response(kept.body, { status: kept.status, headers });
+  const raw = await decodeRelief(await kept.arrayBuffer());
+  if (!raw) return null;
+  headers.set("content-type", kept.headers.get("x-kerr-type") ?? "image/x-bil;bits=32");
+  headers.set("content-length", String(raw.byteLength));
+  return new Response(raw, { status: 200, headers });
+}
+
 /**
  * A batch of a zone's chains into the zones' cache, ZONE_PARALLEL at a time (the WMS-R's spaced apart all the same —
  * gentle): a chain's links one after the other while each falls
@@ -216,10 +250,11 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
     const t = await storeGet<ZoneTile>(ZONE_TILES, url);
     const kept = t && (await cache.match(url));
     // (an update — the sources' new vintage —: asked again, the one kept if the network fails)
-    if (t && kept && !fresh) {
+    const keptRaw = t && kept && !fresh ? await rawOf(kept.clone()) : null;
+    if (t && keptRaw) {
       if (!t.zones.includes(id)) await storePut(ZONE_TILES, { ...t, zones: [...t.zones, id] });
       out.bytes += t.size;
-      return kept.arrayBuffer();
+      return keptRaw;
     }
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -234,20 +269,24 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
         // (a refusal over the rate — the WMS-R's 400 —, a 5xx: a while, then again)
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const body = await res.arrayBuffer();
-        await cache.put(url, new Response(body, { status: 200, headers: res.headers }));
+        // (kept as small as it can be: a relief grid packed — its size the one kept)
+        const keep = await keepable(url, body, res.headers);
+        const size = Number(keep.headers.get("content-length")) || body.byteLength;
+        await cache.put(url, keep);
         const zones = t?.zones.includes(id) ? t.zones : [...(t?.zones ?? []), id];
-        await storePut(ZONE_TILES, { url, zones, size: body.byteLength } satisfies ZoneTile);
-        out.bytes += body.byteLength;
+        await storePut(ZONE_TILES, { url, zones, size } satisfies ZoneTile);
+        out.bytes += size;
         return body;
       } catch {
         await new Promise((done) => setTimeout(done, 1000 * 2 ** attempt));
       }
     }
     // (an update failing: the tile kept as it was)
-    if (t && kept) {
+    const old = t && kept ? await rawOf(kept.clone()) : null;
+    if (t && old) {
       if (!t.zones.includes(id)) await storePut(ZONE_TILES, { ...t, zones: [...t.zones, id] });
       out.bytes += t.size;
-      return kept.arrayBuffer();
+      return old;
     }
     return null;
   };
@@ -293,6 +332,19 @@ async function stats() {
   const zoned = await storeAll<ZoneTile>(ZONE_TILES);
   let zoneBytes = 0;
   for (const t of zoned) zoneBytes += t.size;
+  // (by kind: the tiles and their bytes kept — the relief's packed grids' mean measured)
+  const kinds: Record<string, { lru: number; lruBytes: number; zone: number; zoneBytes: number }> = {};
+  const kind = (url: string) => (kinds[tileKind(url)] ??= { lru: 0, lruBytes: 0, zone: 0, zoneBytes: 0 });
+  for (const e of tiles) {
+    const k = kind(e.url);
+    k.lru++;
+    k.lruBytes += e.size;
+  }
+  for (const t of zoned) {
+    const k = kind(t.url);
+    k.zone++;
+    k.zoneBytes += t.size;
+  }
   return {
     build: BUILD,
     shell: (await shell.keys()).length,
@@ -301,6 +353,7 @@ async function stats() {
     tileBudget: await budget(),
     zoneTiles: zoned.length,
     zoneBytes,
+    kinds,
     served: { ...served },
   };
 }
@@ -349,19 +402,19 @@ let evicting: Promise<void> | null = null;
 async function tile(request: Request): Promise<Response> {
   // (an offline zone's first: kept whatever the budget)
   const zoned = await (await caches.open(ZONE_CACHE)).match(request);
-  if (zoned) {
+  // (marked as a zone's: the page — the tests — tells it from the network's)
+  const fromZone = zoned && (await serve(zoned, ["x-kerr-zone", "1"]));
+  if (fromZone) {
     served.zone++;
-    // (marked as a zone's: the page — the tests — tells it from the network's)
-    const headers = new Headers(zoned.headers);
-    headers.set("x-kerr-zone", "1");
-    return new Response(zoned.body, { status: zoned.status, headers });
+    return fromZone;
   }
   const cache = await caches.open(TILE_CACHE);
   const hit = await cache.match(request);
-  if (hit) {
+  const fromCache = hit && (await serve(hit));
+  if (hit && fromCache) {
     served.lru++;
     void indexPut({ url: request.url, t: Date.now(), size: Number(hit.headers.get("content-length")) || 0 });
-    return hit;
+    return fromCache;
   }
   served.network++;
   const res = await fetch(request);
@@ -369,8 +422,10 @@ async function tile(request: Request): Promise<Response> {
     const copy = res.clone();
     void (async () => {
       const body = await copy.arrayBuffer();
-      await cache.put(request, new Response(body, { status: 200, headers: copy.headers }));
-      await indexPut({ url: request.url, t: Date.now(), size: body.byteLength });
+      // (in flight too: a relief grid kept packed — the budget holds four to six times more of them)
+      const keep = await keepable(request.url, body, copy.headers);
+      await cache.put(request, keep);
+      await indexPut({ url: request.url, t: Date.now(), size: Number(keep.headers.get("content-length")) || body.byteLength });
       evicting ??= enforceBudget().finally(() => (evicting = null));
     })();
   }

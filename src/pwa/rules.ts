@@ -107,6 +107,14 @@ export function evictions(entries: TileEntry[], budget = TILE_BUDGET): string[] 
  */
 export const SHELL_CACHE = (scope: string, build: string) => `kerr-shell:${new URL(scope).pathname}:${build}`;
 export const TILE_CACHE = "kerr-tiles-v1";
+/** A tile's kind, for the caches' figures by kind (the sizes measured): the IGN's relief grids (256², 512²), the swisstopo
+ *  meshes, Terrarium's relief, the rest imagery. */
+export function tileKind(url: string): "relief" | "relief512" | "mesh" | "terrarium" | "imagery" {
+  if (url.includes("image/x-bil")) return url.includes("WIDTH=512") ? "relief512" : "relief";
+  if (url.includes(".terrain")) return "mesh";
+  if (url.includes("terrarium")) return "terrarium";
+  return "imagery";
+}
 /** the offline zones' tiles (I8a — system/zones.ts): never evicted by TILE_BUDGET, a tile kept while a zone holds it */
 export const ZONE_CACHE = "kerr-zones-v1";
 /** a zone's record (the worker's index) */

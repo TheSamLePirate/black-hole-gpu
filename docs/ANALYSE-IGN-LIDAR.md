@@ -376,7 +376,7 @@ Réglages ont huit onglets, construits depuis le schéma ([ui/settings/player.ts
 ### 9.3 Volumes *(estimation, à 46° N)*
 
 Ortho à 13–20 Ko la tuile (mesuré). Relief en WMS-R à 256 Ko la tuile en float32 brut ; quantifié sur 16 bits
-puis compressé, ≈ 80 Ko *(à mesurer)*. Téléchargement avec 8 requêtes en parallèle à 0,45 s chacune.
+puis compressé, ≈ 80 Ko visés — 41–44 Ko mesurés (I8c, ci-dessous). Téléchargement avec 8 requêtes en parallèle à 0,45 s chacune.
 
 | Profil | Rayon | Niveaux (image / relief) | Tuiles | Brut | Relief quantifié | Durée |
 |---|---|---|---|---|---|---|
@@ -389,6 +389,41 @@ puis compressé, ≈ 80 Ko *(à mesurer)*. Téléchargement avec 8 requêtes en 
 Conclusions : la quantification du relief est indispensable, puisqu'il pèse 80 % du brut. Une zone de vol bas tient
 dans les quotas des navigateurs : Chrome accorde à une origine jusqu'à ≈ 60 % du disque, Safari et Firefox des
 fractions comparables une fois le stockage persistant. **La France entière n'est pas proposée.**
+
+**Fait le 24/10 (I8c) : le relief gardé petit.** `src/pwa/relief-codec.ts` code les grilles WMS-R :
+- chaque hauteur est arrondie au centimètre, soit une erreur d'au plus 5 mm ;
+- elle est prédite par ses voisines (le prédicteur médian de LOCO-I : la gauche, celle du dessus, leur somme moins
+  la diagonale), et seule la différence est gardée, sur 16 bits ;
+- une falaise de plus de ±327 m passe par un code d'échappement qui porte la valeur entière, et un trou (ce que le jeu
+  lit comme tel) a son propre code ;
+- les octets de poids faible et de poids fort sont rangés en deux plans, puis le tout est compressé (deflate).
+
+Le service worker code les grilles quand il les garde, dans les zones comme dans le cache automatique en vol, et les
+sert de nouveau en float32, avec la valeur de trou d'origine et l'en-tête `x-kerr-codec: krh1`. Le jeu n'a pas changé.
+Le budget du cache tient donc 5 à 6 fois plus de relief.
+
+- **Taille par tuile** (`scripts/relief-codec-bench.ts`, 24 tuiles IGN : Chamonix, Paris, Étretat, la Beauce) : RGE
+  ALTI 256² ≈ 41 Ko au lieu de 256 (15,6 %), LiDAR HD 256² ≈ 39 Ko (≈ 15 %), MNS LiDAR 512² ≈ 236 Ko au lieu de
+  1 024 (≈ 23 %). Une tuile vide (hors relevé) pèse quelques centaines d'octets.
+- **e2e sur kerr-mini** (`tests/e2e/relief-codec.e2e.test.ts`, raster, Chamonix avec le relief IGN) :
+  - en vol, 398 grilles 256² gardées à **43,5 Ko** et 81 grilles 512² à **214 Ko** ;
+  - six grilles relues par le worker, comparées aux mêmes demandées directement à l'IGN : écart maximal **5,00 mm**,
+    trous aux mêmes places (10 850 dans l'une) ;
+  - le sol du jeu à 10 points, avant et après un rechargement depuis le cache : écart maximal **4 mm** ;
+  - une zone vol bas de 1 km avec le relief : 7 689 chaînes, 464 Mo (513 estimés), grilles à 44 Ko et 137 Ko.
+- **Les volumes refaits** (Chamonix, relief et silhouettes IGN, `zoneEstimate` sur les tailles mesurées) :
+
+  | Profil | Rayon | Chaînes | Relief brut | Relief codé | Durée |
+  |---|---|---|---|---|---|
+  | Aéroport, roulage | 5 km | ≈ 22 000 | 2,3 Go | **0,7 Go** | ≈ 19 min |
+  | Vol bas | 20 km | ≈ 63 000 | 5,4 Go | **2,3 Go** | ≈ 41 min |
+  | Vallée, massif | 50 km | ≈ 97 000 | 8,1 Go | **3,9 Go** | ≈ 56 min |
+  | Survol d'une région | 100 km | ≈ 100 000 | 9,6 Go | **4,3 Go** | ≈ 63 min |
+
+  Le relief n'est plus la plus grosse part : ce qui reste, ce sont les orthophotos et Terrarium. La durée suit le
+  WMS-R, qui sert ~5 grilles par seconde (2 987 en 588 s mesurées), et non 8.
+
+![Chamonix dessiné depuis les grilles codées](progress/relief-codec/relief-codec-chamonix.jpg)
 
 ### 9.4 Contraintes
 
@@ -501,7 +536,7 @@ toutes les 1,5 s tant qu'il est affiché.
   chaque tuile : `zone-fetch` avec `fresh`, et l'ancienne tuile est gardée si le réseau échoue.
 - **Ajouter une zone** : le lieu (la position actuelle sous 50 km d'altitude, les destinations de l'Atlas, une
   adresse ou des coordonnées), le profil (Aéroport, Vol bas, Vallée, Survol, chacun avec son rayon par défaut) et le
-  rayon de 1 à 100 km. L'estimation affiche les tuiles, la taille et la durée (`zoneDuration` : les grilles WMS-R à 8
+  rayon de 1 à 100 km. L'estimation affiche les tuiles, la taille et la durée (`zoneDuration` : les grilles WMS-R à 5
   par seconde, le reste à 35 chaînes par seconde), avec la place libre. Télécharger est grisé si la place manque. Une
   zone prise à la position actuelle porte le nom de la destination la plus proche, à moins de 30 km (« Près de Mont
   Blanc »).
@@ -531,7 +566,7 @@ toutes les 1,5 s tant qu'il est affiché.
 | **I7** — fait (23/10) | Interface de source nationale (`national.ts`) ; swisstopo : SWISSIMAGE, swissALTI3D par quantized-mesh — voir §7 | Alpes suisses au même niveau : voir le paragraphe |
 | **I8a** — fait (23/10) | Zones hors ligne, le socle : module pur `zoneTiles` (mêmes URL que le jeu, testé), cache `kerr-zones-v1` hors LRU dans le service worker, `storage.persist()`, téléchargement suspendable et repris, priorité au streaming du jeu, `__bh.pwa.zones` | test unitaire « URL de la zone = URL demandées en vol » ; e2e : zone pré-cachée, réseau coupé, vol sans aucune requête de tuile et sol complet — voir §9.4 : 529 tuiles de la zone, 0 du réseau |
 | **I8b** — fait (24/10) | Réglages › Hors ligne : stockage, cache automatique, liste des zones, ajout avec estimation, progression ; raccourci dans la pause ; FR/EN | e2e à la souris et à la manette ; captures de l'onglet — voir §9.5 |
-| **I8c** | Relief quantifié sur 16 bits et compressé dans le cache (en vol aussi) | taille par tuile mesurée (cible ≈ 80 Ko) ; hauteurs identiques au centimètre |
+| **I8c** — fait (24/10) | Relief quantifié sur 16 bits et compressé dans le cache (en vol aussi) | taille par tuile mesurée (cible ≈ 80 Ko) : 41–44 Ko ; hauteurs identiques au centimètre : 5 mm au plus — voir §9.3 |
 
 I1 seul apporte déjà l'essentiel de ce qui frappe dans le labo (le sol photographié à 0,5 m) ; I2–I3 donnent le
 relief ; I0 est indispensable avant de faire voler du trafic réel sur un sol mesuré. **I8a–b peuvent se faire dès

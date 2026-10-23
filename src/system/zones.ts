@@ -165,12 +165,13 @@ export function zoneChains(lat: number, lon: number, radius: number, profile: Zo
 export const zoneUrls = (lat: number, lon: number, radius: number, profile: ZoneProfile, o: ZoneSources): string[] =>
   zoneChains(lat, lon, radius, profile, o).flat();
 
-/** a URL's size by its kind's measured mean [bytes] (2026-10-23) */
+/** a URL's size by its kind's measured mean [bytes] (2026-10-23; the relief's grids as the worker keeps them, packed —
+ *  pwa/relief-codec.ts, I8c: scripts/relief-codec-bench.ts, 2026-10-24) */
 const sizeOf = (u: string) =>
   u.includes("wms-r")
     ? u.includes("WIDTH=512")
-      ? 1_048_576
-      : 262_144
+      ? 180_000
+      : 44_000
     : u.includes(".terrain")
       ? 250_000
       : u.includes("terrarium")
@@ -185,10 +186,11 @@ export function zoneEstimate(chains: readonly ZoneChain[]): number {
   for (const c of chains) for (let i = 0; i < c.length; i++) bytes += sizeOf(c[i]!) * (i ? 0.1 : 1);
   return bytes;
 }
-/** a zone's download time before it is fetched [s]: the WMS-R's grids spaced 8 a second (sw.ts gentle), the other
- *  tiles ~35 chains a second (measured on kerr-mini, 2026-10-23: 4 190 chains in 2 min) — the two at once */
+/** a zone's download time before it is fetched [s]: the WMS-R's grids ~5 a second (sw.ts gentle spaces them 8 a second,
+ *  their answers slower: 2 987 in 588 s on kerr-mini, 2026-10-24), the other tiles ~35 chains a second (4 190 chains in
+ *  2 min, 2026-10-23) — the two at once */
 export function zoneDuration(chains: readonly ZoneChain[]): number {
   let wms = 0;
   for (const c of chains) if (c[0]!.includes("wms-r")) wms++;
-  return Math.max((chains.length - wms) / 35, wms / 8);
+  return Math.max((chains.length - wms) / 35, wms / 5);
 }

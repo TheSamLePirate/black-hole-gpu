@@ -15,6 +15,9 @@ export interface PwaStats {
   /** the offline zones' tiles and bytes (I8a) */
   zoneTiles: number;
   zoneBytes: number;
+  /** by kind (pwa/rules.ts tileKind): the tiles and bytes kept in the budgeted cache and in the zones' — the relief's
+   *  grids packed (I8c) */
+  kinds?: Record<string, { lru: number; lruBytes: number; zone: number; zoneBytes: number }>;
   /** the tiles served since the worker started: from a zone, from the budgeted cache, from the network */
   served: { zone: number; lru: number; network: number };
 }

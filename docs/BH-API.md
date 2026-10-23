@@ -577,9 +577,9 @@ await __bh.pwa.ready()
 ```
 *Used in:* `tests/e2e/pwa.e2e.test.ts`.
 
-### `__bh.pwa.stats()` → Promise<{ build, shell, tiles, tileBytes, tileBudget, zoneTiles, zoneBytes, served } | null>
+### `__bh.pwa.stats()` → Promise<{ build, shell, tiles, tileBytes, tileBudget, zoneTiles, zoneBytes, kinds, served } | null>
 
-The cache's figures: the build's id, the shell's number of files, the tiles cached and their bytes against the budget; the offline zones' tiles and bytes (`kerr-zones-v1`, out of the budget); `served` — `{ zone, lru, network }`, the tiles the worker answered since it started from a zone, from the budgeted cache, from the network (a flight within a zone: `network` unchanged). `null` when the worker does not answer (3 s).
+The cache's figures: the build's id, the shell's number of files, the tiles cached and their bytes against the budget; the offline zones' tiles and bytes (`kerr-zones-v1`, out of the budget); `served` — `{ zone, lru, network }`, the tiles the worker answered since it started from a zone, from the budgeted cache, from the network (a flight within a zone: `network` unchanged); `kinds` — by kind (`pwa/rules.ts` tileKind: `relief` the IGN's 256² grids, `relief512`, `mesh` swisstopo's, `terrarium`, `imagery`), `{ lru, lruBytes, zone, zoneBytes }`, the tiles and the bytes kept, the relief's grids packed (`pwa/relief-codec.ts`, I8c: each height to the centimetre, served again as float32 — such a response carries `x-kerr-codec: krh1`). `null` when the worker does not answer (3 s).
 
 ```js
 (await __bh.pwa.stats())?.tiles > 5
@@ -601,7 +601,7 @@ The offline zones, once the worker is in (null before, or without one). A zone: 
 
 | member | → | what |
 |---|---|---|
-| `estimate({ lat, lon, radiusKm, profile })` | `{ chains, urls, bytes, seconds }` | what it would hold, its size by the kinds' means, its download time (`system/zones.ts` zoneDuration: the WMS-R's grids 8 a second, the rest 35 chains a second) |
+| `estimate({ lat, lon, radiusKm, profile })` | `{ chains, urls, bytes, seconds }` | what it would hold, its size by the kinds' means, its download time (`system/zones.ts` zoneDuration: the WMS-R's grids 5 a second, the rest 35 chains a second) |
 | `add({ name, lat, lon, radiusKm, profile })` | Promise<id \| null> | added (the storage asked to persist), its download started |
 | `list()` | Promise<ZoneRecord[]> | `{ id, name, lat, lon, radiusKm, profile, total, cursor, done, bytes, none, failed, state: "downloading" \| "paused" \| "ready", sources, created, updated?, fresh? }` |
 | `pause(id)` / `resume(id)` | Promise<void> | a pause resolves once its batch under way is in (nothing asked after); a ready zone's resume asks its failed again |

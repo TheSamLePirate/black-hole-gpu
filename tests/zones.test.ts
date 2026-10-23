@@ -171,9 +171,9 @@ test("a tile's chains: the next link asked only where the one before falls short
   expect(cs).toContainEqual([tileUrl(12, xs, ys)]);
 });
 
-test("a zone's download time: the WMS-R's grids 8 a second, the rest 35 chains a second, the two at once", () => {
+test("a zone's download time: the WMS-R's grids 5 a second, the rest 35 chains a second, the two at once", () => {
   expect(zoneDuration([])).toBe(0);
-  const wms = Array.from({ length: 80 }, () => ["https://data.geopf.fr/wms-r?REQUEST=GetMap"]);
+  const wms = Array.from({ length: 50 }, () => ["https://data.geopf.fr/wms-r?REQUEST=GetMap"]);
   const rest = Array.from({ length: 350 }, () => ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/14/1/2.png"]);
   expect(zoneDuration(wms)).toBeCloseTo(10);
   expect(zoneDuration(rest)).toBeCloseTo(10);
