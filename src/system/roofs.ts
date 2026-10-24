@@ -1,3 +1,5 @@
+import { earcut } from "./earcut";
+
 // The buildings' roofs (docs/PLAN-BATIMENTS-AAA.md B1): from a footprint and what the data say of it — the BD TOPO's eave
 // and ridge, its roof's and walls' materials, its storeys and use; OSM's height to the top and colour — the roof's shape
 // and the planes that make it. A roof is the surface z(x, y) = min of its planes over the footprint (the space under it
@@ -431,6 +433,8 @@ export interface RoofInput {
   region: Region;
   /** a stable number in [0, 1) of the building's own (its variations) */
   seed: number;
+  /** a part of a complex building (planBuilding): the building's shape and pitch, its convex part's own planes */
+  force?: { shape: RoofShape; k?: number; top?: number };
 }
 export interface RoofPlan {
   shape: RoofShape;
@@ -499,6 +503,27 @@ export function apexDistance(sides: Side[], sloped: Side[], box: Obb): number {
   );
 }
 
+/**
+ * A roof flat by the data alone — measured flat, a terrace, a low OSM height, a hall, a tower — whatever its outline: its
+ * material then (a hall's unknown one a terrace's), null when the data leave it to the outline.
+ */
+export function flatByData(b: RoofInput, area: number): RoofMaterial | null {
+  const H0 = b.top ? null : b.roof;
+  const mat = b.roofMat === RoofMaterial.Unknown ? (b.light ? RoofMaterial.Metal : REGION[b.region].roof) : b.roofMat;
+  if (b.top && b.height < 4) return mat;
+  if (H0 !== null && H0 <= 0.8) return mat;
+  if (b.roofMat === RoofMaterial.Concrete && (H0 === null || H0 <= 1.5)) return RoofMaterial.Concrete;
+  const usage = b.usage ?? "",
+    nature = b.nature ?? "";
+  const industrial = usage === "Industriel" || nature.startsWith("Industriel") || usage === "Agricole";
+  // (a hall without a measured roof: flat — not a block of flats, whose roof the registry names or its storeys tell)
+  const dwelling = usage === "Résidentiel" || (b.storeys ?? 0) >= 3 || (b.roofMat >= RoofMaterial.Tiles && b.roofMat <= RoofMaterial.Zinc);
+  if (H0 === null && ((area > 900 && !dwelling) || (industrial && area > 400)))
+    return b.roofMat === RoofMaterial.Unknown ? RoofMaterial.Concrete : mat;
+  if (H0 === null && b.top && b.height > 18) return mat;
+  return null;
+}
+
 /** the plane through a side at the eave `wall`, rising inwards at `k` (rise over run), `lift` over it from `run` in */
 function sidePlane(s: Side, wall: number, k: number, lift = 0, run = 0): Plane {
   return [-k * s.nx, -k * s.ny, wall + lift + k * (s.q - run)];
@@ -519,9 +544,7 @@ export function planRoof(b: RoofInput): RoofPlan {
   const convex = hullArea > 0 ? area / hullArea : 0;
   // (unknown: a light construction's sheet metal, else what the region builds — Paris's zinc, Brittany's slate)
   const mat = b.roofMat === RoofMaterial.Unknown ? (b.light ? RoofMaterial.Metal : REGION[b.region].roof) : b.roofMat;
-  const usage = b.usage ?? "",
-    nature = b.nature ?? "";
-  const industrial = usage === "Industriel" || nature.startsWith("Industriel") || usage === "Agricole";
+  const usage = b.usage ?? "";
   const storeysOf = (wall: number) => Math.max(1, Math.round(b.storeys ?? wall / 3));
   const flat = (wall: number, roofMat = mat): RoofPlan => ({
     shape: "flat",
@@ -534,19 +557,16 @@ export function planRoof(b: RoofInput): RoofPlan {
   });
   const H0 = b.top ? null : b.roof;
   const minWall = 2.2;
-  // ---- flat: measured so, a terrace, a complex outline (B4 cuts it into parts), a wide hall, a tower block
-  if (b.top && b.height < 4) return flat(b.height);
-  if (H0 !== null && H0 <= 0.8) return flat(b.height);
-  if (mat === RoofMaterial.Concrete && (H0 === null || H0 <= 1.5)) return flat(b.height, RoofMaterial.Concrete);
-  if (convex < 0.88 || b.rings.length > 1 || sides.length > 12) {
-    // (its measured roof's volume kept as a flat top halfway up it: the complex outlines' parts are B4's)
+  // ---- flat: what the data say (flatByData), a complex outline whole (planBuilding cuts it into parts)
+  const byData = flatByData(b, area);
+  if (byData !== null) return flat(b.height, byData);
+  if (!b.force && (convex < 0.88 || b.rings.length > 1 || sides.length > 12)) {
+    // (its measured roof's volume kept as a flat top halfway up it)
     return flat(b.height + (H0 !== null ? 0.5 * H0 : 0));
   }
-  if (H0 === null && (area > 900 || (industrial && area > 400)))
-    return flat(b.height, mat === RoofMaterial.Unknown ? RoofMaterial.Concrete : mat);
-  if (H0 === null && b.top && b.height > 18) return flat(b.height);
   const exterior = sides.filter((s) => !s.party);
-  if (!exterior.length) return flat(b.height + (H0 !== null ? 0.5 * H0 : 0));
+  // (a part with no free side — inside a block, between its wings —: flat at the building's top)
+  if (!exterior.length) return flat(b.height + (b.force?.top ?? (H0 !== null ? 0.5 * H0 : 0)));
 
   // ---- the sloped sides
   const vx = -box.uy,
@@ -565,7 +585,14 @@ export function planRoof(b: RoofInput): RoofPlan {
     !b.top && (mat === RoofMaterial.Zinc || mat === RoofMaterial.Slate) && (b.storeys ?? 0) >= 5 && b.height >= 12 && box.hv > 3.5;
   let shape: RoofShape;
   let sloped: Side[];
-  if (mansard) {
+  if (b.force?.shape === "hipped") {
+    shape = "hipped";
+    sloped = exterior;
+  } else if (b.force && b.force.shape !== "mansard") {
+    shape = "gabled";
+    sloped = exterior.filter(lenU >= 0.95 * lenV ? alongU : alongV);
+    if (!sloped.length) sloped = exterior;
+  } else if (mansard || b.force?.shape === "mansard") {
     shape = "mansard";
     sloped = exterior;
   } else if ((b.light || usage === "Annexe") && area < 40 && !allFree) {
@@ -605,7 +632,11 @@ export function planRoof(b: RoofInput): RoofPlan {
     return { shape, wall, top: wall + H, planes, pitch: 72, roofMat: mat, storeys: storeysOf(wall) };
   }
   const pitch = pitchOf(mat, b.region);
-  if (H0 !== null) {
+  if (b.force?.k !== undefined) {
+    // (a part of a complex building: the building's pitch — a narrower wing's ridge lower, as built)
+    k = b.force.k;
+    H = Math.min(H0 ?? 12, k * run);
+  } else if (H0 !== null) {
     H = H0;
     k = H / run;
     // (a measured roof too flat or too steep for its width: the pitch held within 12–60°, its top capped at the measure)
@@ -639,4 +670,202 @@ export function roofAt(planes: Plane[], x: number, y: number): number {
   let z = Infinity;
   for (const [a, b, c] of planes) z = Math.min(z, a * x + b * y + c);
   return z;
+}
+
+// ---- complex footprints (docs/PLAN-BATIMENTS-AAA.md B4): convex parts, each its own roof
+
+/** a ring simplified (Douglas–Peucker, `tol` [m]): the indices of the corners it keeps (open in) */
+export function simplifyRing(ring: Pt[], tol: number): number[] {
+  const r = openRing(ring);
+  if (r.length <= 4) return r.map((_, i) => i);
+  const keep = new Uint8Array(r.length);
+  // (closed: split at the point farthest from the first)
+  let far = 0;
+  for (let i = 1; i < r.length; i++)
+    if (Math.hypot(r[i]![0] - r[0]![0], r[i]![1] - r[0]![1]) > Math.hypot(r[far]![0] - r[0]![0], r[far]![1] - r[0]![1])) far = i;
+  keep[0] = keep[far] = 1;
+  const pts = [...r, r[0]!];
+  const stack: [number, number][] = [
+    [0, far],
+    [far, r.length],
+  ];
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    const A = pts[a]!,
+      B = pts[b]!;
+    const l = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1e-9;
+    let worst = -1,
+      wd = tol;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs((B[0] - A[0]) * (A[1] - pts[i]![1]) - (A[0] - pts[i]![0]) * (B[1] - A[1])) / l;
+      if (d > wd) {
+        wd = d;
+        worst = i;
+      }
+    }
+    if (worst > 0) {
+      keep[worst % r.length] = 1;
+      stack.push([a, worst], [worst, b]);
+    }
+  }
+  return r.map((_, i) => i).filter((i) => keep[i]);
+}
+/** the rings within `max` corners in all: simplified ever coarser (from 0.3 m), the courtyards lost when they collapse;
+ *  the outer ring's party flags carried over (an edge kept from a run: party when most of the run's length was) */
+export function simplifyFootprint(rings: Pt[][], max = 256, party?: boolean[]): { rings: Pt[][]; party?: boolean[] } {
+  const open = rings.map(openRing);
+  if (open.reduce((t, r) => t + r.length, 0) <= max) return { rings: open, party };
+  let kept = open.map((r) => r.map((_, i) => i));
+  for (let tol = 0.3; kept.reduce((t, r) => t + r.length, 0) > max && tol < 40; tol *= 1.6) kept = open.map((r) => simplifyRing(r, tol));
+  const out = kept.map((k, j) => k.map((i) => open[j]![i]!));
+  const outer = open[0]!,
+    k0 = kept[0]!;
+  const len = (i: number) => Math.hypot(outer[(i + 1) % outer.length]![0] - outer[i]![0], outer[(i + 1) % outer.length]![1] - outer[i]![1]);
+  const flags = party
+    ? k0.map((from, j) => {
+        const to = k0[(j + 1) % k0.length]!;
+        let all = 0,
+          shared = 0;
+        for (let i = from; i !== to; i = (i + 1) % outer.length) {
+          all += len(i);
+          if (party[i]) shared += len(i);
+        }
+        return shared > 0.5 * all;
+      })
+    : undefined;
+  return { rings: out.filter((r, i) => i === 0 || (r.length >= 3 && Math.abs(ringArea(r)) > 4)), party: flags };
+}
+
+/**
+ * A footprint (outer ring and courtyards, open) cut into convex parts: its triangles (earcut) merged across their shared
+ * edges while the union stays convex, the longest cuts first (Hertel–Mehlhorn: at most four times the fewest parts).
+ * Each part: its ring (anticlockwise) and a flag an edge — a party edge (`party`, the rings' own) or a cut inside the
+ * building: no roof slope down to either.
+ */
+export function convexParts(rings: Pt[][], party?: boolean[][]): { ring: Pt[]; flags: boolean[] }[] {
+  const open = rings.map(openRing).filter((r) => r.length >= 3);
+  const t = earcut(open);
+  const P = t.points;
+  // (the original edges, by their corners' indices: their party flags)
+  const original = new Map<string, boolean>();
+  let o = 0;
+  for (const [k, r] of open.entries()) {
+    for (let i = 0; i < r.length; i++) {
+      const a = o + i,
+        b = o + ((i + 1) % r.length);
+      original.set(a < b ? `${a},${b}` : `${b},${a}`, party?.[k]?.[i] ?? false);
+    }
+    o += r.length;
+  }
+  const key = (a: number, b: number) => (a < b ? `${a},${b}` : `${b},${a}`);
+  const polys: number[][] = [];
+  const owner: number[] = [];
+  const find = (i: number): number => (owner[i] === i ? i : (owner[i] = find(owner[i]!)));
+  const sharing = new Map<string, number[]>();
+  for (let k = 0; k < t.triangles.length; k += 3) {
+    const tri = [t.triangles[k]!, t.triangles[k + 1]!, t.triangles[k + 2]!];
+    const id = polys.length;
+    polys.push(tri);
+    owner.push(id);
+    for (let e = 0; e < 3; e++) {
+      const kk = key(tri[e]!, tri[(e + 1) % 3]!);
+      if (!original.has(kk)) (sharing.get(kk) ?? sharing.set(kk, []).get(kk)!).push(id);
+    }
+  }
+  const len = (kk: string) => {
+    const [a, b] = kk.split(",").map(Number) as [number, number];
+    return Math.hypot(P[a]![0] - P[b]![0], P[a]![1] - P[b]![1]);
+  };
+  const turn = (a: Pt, b: Pt, c: Pt) => (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
+  const convexPoly = (q: number[]) =>
+    q.every((v, i) => turn(P[q[(i + q.length - 1) % q.length]!]!, P[v]!, P[q[(i + 1) % q.length]!]!) >= -1e-6);
+  for (const kk of [...sharing.keys()].sort((x, y) => len(y) - len(x))) {
+    const ids = sharing.get(kk)!;
+    if (ids.length !== 2) continue;
+    const p = find(ids[0]!),
+      q = find(ids[1]!);
+    if (p === q) continue;
+    const [a, b] = kk.split(",").map(Number) as [number, number];
+    // (each polygon turned to run from one end of the cut to the other: p from b to a, q from a to b)
+    const rot = (poly: number[], from: number, to: number) => {
+      const i = poly.indexOf(from);
+      if (i < 0 || poly[(i + poly.length - 1) % poly.length] !== to) return null;
+      return [...poly.slice(i), ...poly.slice(0, i)];
+    };
+    const pa = rot(polys[p]!, b, a) ?? rot(polys[p]!, a, b);
+    if (!pa) continue;
+    const start = pa[0]!,
+      end = pa.at(-1)!;
+    const qa = rot(polys[q]!, end, start);
+    if (!qa) continue;
+    const merged = [...pa, ...qa.slice(1, -1)];
+    if (!convexPoly(merged)) continue;
+    polys[p] = merged;
+    owner[q] = p;
+  }
+  const out: { ring: Pt[]; flags: boolean[] }[] = [];
+  for (let i = 0; i < polys.length; i++) {
+    if (find(i) !== i) continue;
+    const q = polys[i]!;
+    const ring = q.map((v) => P[v]!);
+    if (Math.abs(ringArea(ring)) < 0.5) continue;
+    out.push({ ring, flags: q.map((v, j) => original.get(key(v, q[(j + 1) % q.length]!)) ?? true) });
+  }
+  return out;
+}
+
+/** a building's roof part: its footprint (a convex part, or the whole) and its plan */
+export interface RoofPart extends RoofPlan {
+  rings: Pt[][];
+}
+/**
+ * A building's roofs: a simple footprint its one roof (planRoof); a complex one — an L, a U, a courtyard block — cut into
+ * convex parts (convexParts), each with the building's shape and pitch over its own free sides, the cuts sloped by
+ * none: the parts' union the building (its cuts' walls inside it, a step where a wing's roof stands higher). Flat roofs
+ * whole; more than `maxParts` parts: flat.
+ */
+export function planBuilding(b: RoofInput, maxParts = 24): RoofPart[] {
+  const simplified = simplifyFootprint(b.rings, 256, b.party);
+  const rings = simplified.rings;
+  b = { ...b, party: simplified.party };
+  const whole = { ...b, rings };
+  const outer = rings[0]!;
+  const one = planRoof(whole);
+  const simple =
+    rings.length === 1 &&
+    Math.abs(ringArea(outer)) / Math.max(Math.abs(ringArea(convexHull(outer))), 1e-9) >= 0.88 &&
+    sidesOf(outer, b.party).length <= 12;
+  if (simple) return [{ ...one, rings }];
+  // (flat whole: measured so, a terrace, a hall — planRoof's rules, its complexity's apart)
+  const byData = flatByData(b, Math.abs(ringArea(outer)) - rings.slice(1).reduce((t, r) => t + Math.abs(ringArea(r)), 0));
+  if (byData !== null)
+    return [{ ...one, wall: b.height, top: b.height, planes: [[0, 0, b.height]], shape: "flat", pitch: 0, roofMat: byData, rings }];
+  const parts = convexParts(rings, [b.party ?? [], ...rings.slice(1).map(() => [])]);
+  if (!parts.length || parts.length > maxParts) return [{ ...one, rings }];
+  // (the building's shape: a mansard where its block's would be, else two slopes — four by the seed where the region hips)
+  const mat = one.roofMat;
+  const shape: RoofShape =
+    !b.top && (mat === RoofMaterial.Zinc || mat === RoofMaterial.Slate) && (b.storeys ?? 0) >= 5 && b.height >= 12
+      ? "mansard"
+      : b.seed < REGION[b.region].hip * 0.6
+        ? "hipped"
+        : "gabled";
+  // (its pitch: the largest part's — its measured roof over that part's width)
+  const largest = parts.reduce((m, p) => (Math.abs(ringArea(p.ring)) > Math.abs(ringArea(m.ring)) ? p : m));
+  const main = planRoof({ ...b, rings: [largest.ring], party: largest.flags, force: { shape } });
+  const k = main.shape === "flat" || main.shape === "mansard" ? undefined : Math.tan(main.pitch * DEG);
+  // (a part with no free side: flat at the main part's top)
+  const top = main.top - main.wall;
+  const planned = parts.map((p) => ({ ...planRoof({ ...b, rings: [p.ring], party: p.flags, force: { shape, k, top } }), rings: [p.ring] }));
+  // (the walls the same for all: OSM's height to the top shares out the roof per part — the lowest wall kept)
+  if (b.top) {
+    const wall = Math.min(...planned.map((p) => p.wall));
+    for (const p of planned) {
+      const lift = p.wall - wall;
+      p.planes = p.planes.map(([pa, pb, pc]) => [pa, pb, pc - lift]);
+      p.top -= lift;
+      p.wall = wall;
+    }
+  }
+  return planned;
 }

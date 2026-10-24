@@ -6,7 +6,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // ridges, slate and concrete), Munich's old town (OpenStreetMap alone) —; for each, the scene's buildings counted, the
 // view from the chase camera above the roofs and a lower one, and the kernel shade's GPU time on the held view
 // (the clock stopped, the view marked changed every frame: the same rays each frame — raster-shade-ablation's way).
-//   BLD_SITES=paris,stlo,munich (default all), BLD_MEASURE=0 to skip the timing.
+//   BLD_SITES=paris,stlo,munich (default all), BLD_MEASURE=0 to skip the timing, BLD_NIGHT=1 the low view at night too.
 // E2E_SHOTS=<dir>: buildings-<site>-high.png / -low.png; remote-results/buildings-<label>.json (BLD_LABEL, default "run" —
 // under scripts/ab-e2e.ts the side and the run, A1, B2…).
 // Duration: ~3 min a site on kerr-mini.
@@ -93,7 +93,7 @@ describe.skipIf(!E2E)("the buildings", () => {
       const site = SITES[key]!;
       await arrive(site, 700, 260);
       const stats = await app.js<Record<string, unknown>>(`(() => { const s = __bh.renderer.earthScenery.stats();
-          return { buildings: s.buildings, bdtopo: s.bdtopoBuildings, vertices: s.vertices, gpuBytes: s.gpuBytes, workerMs: s.workerMs, error: s.lastError ?? null }; })()`);
+          return { buildings: s.buildings, bdtopo: s.bdtopoBuildings, vertices: s.vertices, gpuBytes: s.gpuBytes, workerMs: s.workerMs, roofs: s.roofShapes, meshed: s.meshedBuildings, meshBytes: s.meshBytes, bytes: s.bytes, limited: s.budgetLimited, error: s.lastError ?? null }; })()`);
       console.log(`  ${site.name}: ${JSON.stringify(stats)}`);
       expect(stats.buildings as number).toBeGreaterThan(500);
       // (the chase camera looking down on the roofs ahead)
@@ -109,6 +109,16 @@ describe.skipIf(!E2E)("the buildings", () => {
       await app.js(`(__bh.camera.setLook(0, -12), 1)`);
       await hold();
       if (shots) await app.shot(`${shots}/buildings-${key}-low.png`);
+      if (shots && process.env.BLD_NIGHT === "1") {
+        // (the same view at night: the windows lit; then the morning again — the date set alone, its tick apart)
+        await app.js(`(() => { __bh.game.setDate("2026-07-10T21:45:00Z"); return 1; })()`);
+        await Bun.sleep(1500);
+        await hold();
+        await app.shot(`${shots}/buildings-${key}-night.png`);
+        await app.js(`(() => { __bh.game.setDate("2026-07-10T08:30:00Z"); return 1; })()`);
+        await Bun.sleep(1500);
+        await hold();
+      }
       const low = process.env.BLD_MEASURE === "0" ? null : await shadeMs();
       console.log(`  ${site.name}: shade ${high} ms high, ${low} ms low`);
       rows.push({ site: key, ...stats, shadeHigh: high, shadeLow: low });

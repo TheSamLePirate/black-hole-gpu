@@ -31,15 +31,21 @@ fn treeShadowAt(p: vec3f) -> f32 {
   let uv = vec2f(dot(q, R.xyz) / R.w * 0.5 + 0.5, 0.5 - dot(q, U.xyz) / U.w * 0.5);
   if (any(uv <= vec2f(0.01)) || any(uv >= vec2f(0.99))) { return -1.0; }
   let n = vec2i(textureDimensions(tsmTex));
-  let at = vec2i(uv * vec2f(n));
   let z = 0.5 - dot(q, L.xyz) / (2.0 * L.w) - (1.5 + 2.0 * R.w / f32(n.x)) / (2.0 * L.w);
   // (past either end of the map's depth range — a valley below a mesa's rim, the Sun low —: nothing known there, not a
   // shadow — beyond the far end the cleared map compared as an occluder, a whole plain shaded to a straight line; the rays)
   if (z <= 0.0 || z >= 1.0) { return -1.0; }
+  // (a box three texels wide at the point's own continuous place — its 4 × 4 texels each weighed by its overlap —: an
+  // edge's shadow ramps across the texels, not in a texel's steps — a building's edge near the camera spans a dozen pixels)
+  let g = uv * vec2f(n) - 1.5;
+  let at = vec2i(floor(g));
+  let f = g - floor(g);
+  var wx = vec4f(1.0 - f.x, 1.0, 1.0, f.x);
+  var wy = vec4f(1.0 - f.y, 1.0, 1.0, f.y);
   var lit = 0.0;
-  for (var j = -1; j <= 1; j++) {
-    for (var i = -1; i <= 1; i++) {
-      lit += select(0.0, 1.0, z <= textureLoad(tsmTex, clamp(at + vec2i(i, j), vec2i(0), n - 1), 0));
+  for (var j = 0; j < 4; j++) {
+    for (var i = 0; i < 4; i++) {
+      lit += wx[i] * wy[j] * select(0.0, 1.0, z <= textureLoad(tsmTex, clamp(at + vec2i(i, j), vec2i(0), n - 1), 0));
     }
   }
   return lit / 9.0;

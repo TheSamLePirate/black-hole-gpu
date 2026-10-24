@@ -26,7 +26,9 @@ import { buildingMesh } from "./roof-mesh";
 import {
   osmColour,
   partyEdges,
-  planRoof,
+  planBuilding,
+  type RoofInput,
+  type RoofPart,
   type Pt,
   regionOf,
   roofColour,
@@ -38,6 +40,7 @@ import {
 } from "./roofs";
 import {
   BUILDING_MESH_M,
+  BUILDING_PARTS_M,
   buildingPacked,
   D,
   localPoint,
@@ -447,7 +450,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
               })),
             );
           const outer = geo[0]!;
-          if (geo.reduce((s, r) => s + r.length, 0) > 256) continue;
+          // (a footprint of thousands of corners simplified within 256 — roofs.ts simplifyFootprint —, not left out)
+          if (geo.reduce((s, r) => s + r.length, 0) > 8192) continue;
           const lat = outer.reduce((s, v) => s + v.lat, 0) / outer.length,
             lon = outer.reduce((s, v) => s + v.lon, 0) / outer.length;
           if (index(lat, lon) < 0 || excluded(lat, lon)) continue;
@@ -494,7 +498,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
             })),
           );
           const outer = geo[0];
-          if (!outer?.length || geo.reduce((s, r) => s + r.length, 0) > 256) continue;
+          if (!outer?.length || geo.reduce((s, r) => s + r.length, 0) > 8192) continue;
           const lat = outer.reduce((s, v) => s + v.lat, 0) / outer.length,
             lon = outer.reduce((s, v) => s + v.lon, 0) / outer.length;
           if (index(lat, lon) < 0 || excluded(lat, lon)) continue;
@@ -714,9 +718,27 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     v.geo.map((ring) => ring.slice(0, -1).map((at) => localPoint(frame, at.lat, at.lon, 0).slice(0, 2) as Pt)),
   );
   const party = partyEdges(local);
+  // (the bytes before the buildings: the forest, the land cover's raster, the networks, the bridges)
+  const bytesBefore = storedBytes;
   let meshBytes = 0,
     meshed = 0;
   const meshBudget = budget / 4;
+  // (in two passes within the budget: every building first as one leaf — a complex outline's roof flat —, the nearest
+  // first until the budget is spent: the count as before; then the nearer ones' detail — their outlines cut into convex
+  // parts each with its roof, their triangles for the shadow map — nearest first, while it fits)
+  type Planned = {
+    i: number;
+    base: number;
+    seed: number;
+    input: RoofInput;
+    plans: RoofPart[];
+    mesh: (Primitive["mesh"] | undefined)[];
+    bytes: number;
+  };
+  const room4 = budget - 4 * 1024 * 1024 * room;
+  const leafBytes = (plans: RoofPart[]) =>
+    plans.reduce((t, p) => t + 112 + p.rings.reduce((e, r) => e + r.length, 0) * 16 + 16 + p.planes.length * 16, 0);
+  const planned: Planned[] = [];
   for (const [i, v] of choices.entries()) {
     try {
       const { lat, lon, h, low, a } = v;
@@ -724,7 +746,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (!rings.length) continue;
       const base = localPoint(frame, lat, lon, await height(lat, lon))[2];
       const s = seed(Math.round(lat * 1e5), Math.round(lon * 1e5));
-      const plan = planRoof({
+      const input: RoofInput = {
         rings,
         party: party[i]![0],
         height: h - (a.top ? low : 0),
@@ -738,15 +760,53 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         light: a.light,
         region,
         seed: s,
-      });
-      // (a raised part — OSM's min height —: its walls and roof from there)
-      const floor = base + (a.top ? low : 0);
+      };
+      const plans = planBuilding(input, 1);
+      const bytes = leafBytes(plans);
+      if (storedBytes + bytes > room4) {
+        budgetLimited = true;
+        break;
+      }
+      storedBytes += bytes;
+      planned.push({ i, base, seed: s, input, plans, mesh: [], bytes });
+    } catch (e) {
+      if (!errors.length) errors.push(String(e).slice(0, 220));
+    }
+  }
+  for (const b of planned) {
+    const v = choices[b.i]!;
+    if (v.d >= BUILDING_MESH_M && v.d >= BUILDING_PARTS_M) break;
+    try {
+      const floor = b.base + (v.a.top ? v.low : 0),
+        bottom = b.base + v.low - 1;
+      const plans = v.d < BUILDING_PARTS_M ? planBuilding(b.input, 24) : b.plans;
+      const bytes = leafBytes(plans);
+      const mesh = v.d < BUILDING_MESH_M && meshBytes < meshBudget ? plans.map((p) => buildingMesh(p.rings, bottom, floor, p.planes)) : [];
+      const mb = mesh.reduce((t, m) => t + m.positions.length * 4 + (m.triangles.length / 3) * 12, 0);
+      if (storedBytes + bytes - b.bytes + mb > room4) continue;
+      storedBytes += bytes - b.bytes + mb;
+      meshBytes += mb;
+      b.plans = plans;
+      b.bytes = bytes;
+      b.mesh = mesh.map((m) => (m.triangles.length ? m : undefined));
+    } catch (e) {
+      if (!errors.length) errors.push(String(e).slice(0, 220));
+    }
+  }
+  for (const b of planned) {
+    const v = choices[b.i]!;
+    const a = v.a;
+    const floor = b.base + (a.top ? v.low : 0),
+      bottom = b.base + v.low - 1;
+    const wall = osmColour(a.colour) ?? wallColour(a.wallMat, region, b.seed);
+    const roof = roofColour(b.plans[0]!.roofMat, region, (b.seed * 7.31) % 1);
+    for (const [k, plan] of b.plans.entries()) {
       const edges: number[] = [];
       let minX = Infinity,
         minY = Infinity,
         maxX = -Infinity,
         maxY = -Infinity;
-      for (const ring of rings)
+      for (const ring of plan.rings)
         for (let j = 0; j < ring.length; j++) {
           const p = ring[j]!,
             n = ring[(j + 1) % ring.length]!;
@@ -756,29 +816,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           minY = Math.min(minY, p[1]);
           maxY = Math.max(maxY, p[1]);
         }
-      const planes = plan.planes.flatMap(([pa, pb, pc]) => [pa, pb, pc + floor, 0]);
-      const bytes = 112 + edges.length * 4 + 16 + planes.length * 4;
-      if (storedBytes + bytes > budget - 4 * 1024 * 1024 * room) {
-        budgetLimited = true;
-        continue;
-      }
-      storedBytes += bytes;
-      const bottom = base + low - 1;
-      // (the nearer ones' triangles for the raster: their visibility and their shadows exact — the farther ones' boxes)
-      let mesh: Primitive["mesh"];
-      if (v.d < BUILDING_MESH_M && meshBytes < meshBudget) {
-        const m = buildingMesh(rings, bottom, floor, plan.planes);
-        const mb = m.positions.length * 4 + (m.triangles.length / 3) * 16;
-        if (m.triangles.length && storedBytes + mb <= budget - 4 * 1024 * 1024 * room) {
-          mesh = m;
-          meshBytes += mb;
-          storedBytes += mb;
-          meshed++;
-        }
-      }
-      const colour = osmColour(a.colour);
-      const wall = colour ?? wallColour(a.wallMat, region, s);
-      const roof = roofColour(plan.roofMat, region, (s * 7.31) % 1);
+      const mesh = b.mesh[k];
       prims.push({
         min: [minX, minY, bottom],
         max: [maxX, maxY, floor + plan.top],
@@ -796,16 +834,15 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           ...edges,
           ...roof,
           floor + plan.wall,
-          ...planes,
+          ...plan.planes.flatMap(([pa, pb, pc]) => [pa, pb, pc + floor, 0]),
         ],
         mesh,
       });
       shapes[plan.shape] = (shapes[plan.shape] ?? 0) + 1;
       vertices += edges.length / 4;
-      buildings++;
-    } catch (e) {
-      if (!errors.length) errors.push(String(e).slice(0, 220));
+      if (mesh) meshed++;
     }
+    buildings++;
   }
   const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget);
   return {
@@ -828,6 +865,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     roofShapes: shapes,
     meshedBuildings: meshed,
     meshBytes,
+    bytes: {
+      forest: forestVec4s(ff) * 16,
+      raster: pixels.byteLength,
+      before: bytesBefore,
+      buildings: storedBytes - bytesBefore - meshBytes,
+      budget,
+    },
     roads: keptSurfaces.filter((v) => v.data.length === 12 && v.data[5] === 1).length,
     railways: keptSurfaces.filter((v) => v.data.length === 12 && v.data[5] === 2).length,
     waterways: keptSurfaces.filter((v) => v.data.length === 12 && v.data[5] === 3).length,

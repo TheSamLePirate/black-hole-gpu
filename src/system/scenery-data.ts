@@ -73,9 +73,12 @@ export interface Primitive {
   /** a building's triangles for the raster (roof-mesh.ts): its visibility and its shadow map */
   mesh?: { positions: number[]; triangles: number[] };
 }
-/** the buildings within this of the scene's centre [m] get their triangles (the raster's visibility and shadow map: the
- *  shadow map's ±900 m round the camera, the camera within ~400 m of the centre); the farther ones their boxes */
-export const BUILDING_MESH_M = 1500;
+/** the buildings within this of the scene's centre [m] get their triangles for the shadow map (its ±900 m round the
+ *  camera, the camera within a few hundred metres of the centre); the farther ones their boxes */
+export const BUILDING_MESH_M = 1100;
+/** the buildings within this of the centre [m] have their complex outlines cut into convex parts, each its roof (roofs.ts
+ *  planBuilding: ~3 leaves a Paris block); the farther ones one leaf (a complex one flat) — the buffer's budget their count */
+export const BUILDING_PARTS_M = 2000;
 const SHAPES = ["flat", "gabled", "hipped", "mansard", "shed"];
 /** A building leaf's packed word (its geometry's vec4 2's w, an integer exact in a float): roof material (4 bits), wall
  *  material (4), storeys (6), roof planes (4), shape (3), has a mesh (1) — trace.wgsl reads it, scenery-raster.ts too. */
@@ -98,8 +101,6 @@ export interface ForestSection {
 function sceneryBVH(prims: Primitive[]) {
   const nodes: number[] = [],
     geometries: number[] = [];
-  // (each primitive's leaf: its node's index — a building's triangles name it)
-  const leaf = new Map<Primitive, number>();
   const build = (p: Primitive[]) => {
     const at = nodes.length;
     const lo = [Infinity, Infinity, Infinity],
@@ -112,7 +113,6 @@ function sceneryBVH(prims: Primitive[]) {
     nodes.push(...lo, 0, ...hi, -1);
     if (p.length === 1) {
       nodes[at + 7] = geometries.length / 4;
-      leaf.set(p[0]!, at / 8);
       for (const v of p[0]!.data) geometries.push(v);
     } else {
       let axis = 0;
@@ -125,14 +125,14 @@ function sceneryBVH(prims: Primitive[]) {
     nodes[at + 3] = nodes.length / 8;
   };
   if (prims.length) build([...prims]);
-  return { nodes, geometries, leaf };
+  return { nodes, geometries };
 }
 // A separate planar BVH keeps roads/water out of every primary and shadow ray; the trees are a grid of
 // their own (forest.ts), after the raster.
 //   vec4 0 (nodes, geometries at, raster at, raster side)  1 (surfaces' nodes at, count, geometries at, surfaces)
 //   2 (forest at: 0 none, —, —, —)  3 (the buildings' mesh: vertices at, count, triangles at, count)
 //   then the nodes, geometries, surfaces, raster, forest, the mesh's vertices (x, y, z floats packed), its triangles (three
-//   vertex indices and the leaf's node a triangle, u32)
+//   vertex indices a triangle, u32, packed)
 export function packScenery(
   prims: Primitive[],
   pixels: Uint32Array,
@@ -141,7 +141,7 @@ export function packScenery(
   grid = SCENERY_GRID,
   budget = SCENERY_BYTES,
 ) {
-  const { nodes, geometries, leaf } = sceneryBVH(prims);
+  const { nodes, geometries } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
   const nodeCount = nodes.length / 8,
     geomOffset = 4 + nodes.length / 4,
@@ -158,7 +158,7 @@ export function packScenery(
     }
   const meshOffset = forestOffset + (forest ? forestVec4s(forest.frame) : 0),
     triangleOffset = meshOffset + Math.ceil((vertexCount * 3) / 4);
-  const bytes = (triangleOffset + triangleCount) * 16;
+  const bytes = (triangleOffset + Math.ceil((triangleCount * 3) / 4)) * 16;
   if (bytes > budget) throw new Error("scenery budget exceeded");
   const buffer = new ArrayBuffer(bytes),
     f = new Float32Array(buffer),
@@ -180,15 +180,8 @@ export function packScenery(
       t = triangleOffset * 4;
     for (const p of prims) {
       if (!p.mesh) continue;
-      const node = leaf.get(p)!;
       f.set(p.mesh.positions, meshOffset * 4 + v * 3);
-      const tr = p.mesh.triangles;
-      for (let k = 0; k < tr.length; k += 3) {
-        u[t++] = v + tr[k]!;
-        u[t++] = v + tr[k + 1]!;
-        u[t++] = v + tr[k + 2]!;
-        u[t++] = node;
-      }
+      for (const k of p.mesh.triangles) u[t++] = v + k;
       v += p.mesh.positions.length / 3;
     }
   }
@@ -234,6 +227,9 @@ export interface SceneryReply {
   roofShapes?: Record<string, number>;
   meshedBuildings?: number;
   meshBytes?: number;
+  /** where the buffer's bytes went: the forest's grid, the land cover's raster, all before the buildings, the buildings'
+   *  leaves (their meshes apart), the budget */
+  bytes?: { forest: number; raster: number; before: number; buildings: number; budget: number };
   roads?: number;
   railways?: number;
   waterways?: number;

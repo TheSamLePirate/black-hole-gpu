@@ -381,6 +381,7 @@ export class EarthScenery {
       roofShapes: d?.roofShapes ?? {},
       meshedBuildings: d?.meshedBuildings ?? 0,
       meshBytes: d?.meshBytes ?? 0,
+      bytes: d?.bytes ?? null,
       roads: d?.roads ?? 0,
       railways: d?.railways ?? 0,
       waterways: d?.waterways ?? 0,

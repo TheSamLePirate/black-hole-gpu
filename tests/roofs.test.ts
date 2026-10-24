@@ -3,6 +3,10 @@ import { earcut } from "../src/system/earcut";
 import { buildingMesh } from "../src/system/roof-mesh";
 import {
   apexDistance,
+  convexParts,
+  planBuilding,
+  ringArea,
+  simplifyFootprint,
   materialCode,
   orientedBox,
   partyEdges,
@@ -190,5 +194,50 @@ describe("meshes", () => {
     const p = planRoof(house({ rings: [r], party: [false, true, false, true], height: 17.5, storeys: 7, roofMat: RoofMaterial.Zinc }));
     const m = buildingMesh([r], 0, 0, p.planes);
     expect(projected(m, true)).toBeCloseTo(280, 2);
+  });
+});
+
+describe("complex footprints", () => {
+  const L: Pt[] = [
+    [0, 0],
+    [20, 0],
+    [20, 8],
+    [8, 8],
+    [8, 20],
+    [0, 20],
+  ];
+  test("an L is two convex parts, its area whole, its cut flagged", () => {
+    const parts = convexParts([L]);
+    expect(parts.length).toBe(2);
+    expect(parts.reduce((t, p) => t + Math.abs(ringArea(p.ring)), 0)).toBeCloseTo(20 * 8 + 8 * 12, 6);
+    // (one cut between them: one flag set in each)
+    for (const p of parts) expect(p.flags.filter(Boolean).length).toBe(1);
+  });
+  test("a courtyard block: convex parts round its yard, the yard left out", () => {
+    const parts = convexParts([rect(0, 0, 30, 30), rect(10, 10, 20, 20)]);
+    expect(parts.length).toBeGreaterThanOrEqual(4);
+    expect(parts.reduce((t, p) => t + Math.abs(ringArea(p.ring)), 0)).toBeCloseTo(900 - 100, 6);
+  });
+  test("an L-shaped house: two gabled wings at one pitch, their ridges at the wings' middles", () => {
+    const parts = planBuilding(house({ rings: [L], roof: 3 }));
+    expect(parts.length).toBe(2);
+    expect(new Set(parts.map((p) => p.shape))).toEqual(new Set(["gabled"]));
+    expect(parts[0]!.pitch).toBeCloseTo(parts[1]!.pitch, 6);
+    expect(Math.max(...parts.map((p) => p.top))).toBeCloseTo(9, 4);
+  });
+  test("a courtyard block in zinc over seven storeys: mansards on its street and yard sides", () => {
+    const parts = planBuilding(
+      house({ rings: [rect(0, 0, 30, 30), rect(10, 10, 20, 20)], height: 17.5, storeys: 7, roofMat: RoofMaterial.Zinc }),
+    );
+    expect(parts.every((p) => p.shape === "mansard")).toBe(true);
+  });
+  test("a footprint of a thousand corners simplified within 256", () => {
+    const circle: Pt[] = Array.from({ length: 1000 }, (_, i) => [
+      50 * Math.cos((i * 2 * Math.PI) / 1000),
+      50 * Math.sin((i * 2 * Math.PI) / 1000),
+    ]);
+    const r = simplifyFootprint([circle]).rings;
+    expect(r[0]!.length).toBeLessThanOrEqual(256);
+    expect(Math.abs(ringArea(r[0]!))).toBeGreaterThan(0.98 * Math.PI * 2500);
   });
 });

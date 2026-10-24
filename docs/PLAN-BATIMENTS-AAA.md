@@ -184,4 +184,38 @@ selon la portée) reste celui d'aujourd'hui ; le compte de bâtiments passe avan
 
 ## 7. Suivi
 
-(mis à jour à chaque phase)
+### B0 — banc (24/10)
+
+`tests/e2e/buildings.e2e.test.ts` : Paris (l'Étoile), Saint-Lô, Munich, le F-35 en vue poursuite au-dessus des toits
+puis plus bas, vue tenue en raster ; `BLD_NIGHT=1` la vue basse de nuit. Coût : `tests/e2e/raster-shade-ablation.e2e.test.ts`
+aux lieux `paris-low` et `stlo-low` (le vol réel, cockpit), A/B entre commits par `scripts/ab-commit.ts` +
+`scripts/ab-e2e.ts` (A B B A). Mesure de `shade` dans mon e2e abandonnée : une vue tenue s'affine dans le traceur, la
+passe raster n'y tourne pas toujours.
+
+### B1–B2 — toits par plans, ombres par triangles (24/10, `38c1e3a6`)
+
+- `src/system/roofs.ts` (pur, 18 tests) : codes matériaux, régions (Paris : zinc par défaut ; Bretagne-Normandie :
+  ardoise), boîte orientée, côtés fusionnés (les décrochés cadastraux de quelques centimètres ne sont pas des côtés),
+  mitoyenneté (`partyEdges` : < 0,8 m, parallèle à 8°, > 50 % de la longueur), choix de la forme, plans.
+- Formes sur les tuiles mesurées (parties comprises, voir B4) — Saint-Lô : 1 200 deux pans, 116 appentis (annexes
+  adossées), 423 plats (béton mesuré plat), 67 quatre pans ; Paris : 13 300 parties en mansarde, 12 200 deux pans.
+- `trace.wgsl sceneryQuery` : murs jusqu'au toit, toit par l'entrée dans l'espace convexe sous les plans, un seul test
+  point-dans-polygone (deux avant).
+- Ombres : la carte d'ombres dessine les triangles des bâtiments proches (`roof-mesh.ts`, `earcut.ts`) — leurs pignons et
+  pentes — et non plus leurs boîtes est-nord. La visibilité garde les boîtes (élargies : l'antialiasing des silhouettes).
+
+![B2 Saint-Lô](progress/batiments/B2-toits-saint-lo.jpg)
+![B2 Paris](progress/batiments/B2-toits-paris.jpg)
+
+### B3–B4 — matériaux, lumière ; emprises complexes (24/10)
+
+- B3 (`trace.wgsl buildingLook`) : étages à la hauteur des données, travées de 3,2 m le long du mur, fenêtres en retrait
+  qui reflètent le ciel (Fresnel de Schlick, reflet du Soleil), vitrines au pied des immeubles, un quart des fenêtres
+  allumées la nuit ; pierre (assises), brique, enduit ; rangs de tuiles et d'ardoises dans la pente, joints debout et reflet
+  du zinc, gravillons des terrasses ; ciel vu selon l'orientation (`WS_AO`).
+- B4 (`roofs.ts convexParts`, `planBuilding`) : l'emprise complexe coupée en parties convexes (Hertel–Mehlhorn sur
+  `earcut`), chacune son toit sur ses côtés libres, à la pente du bâtiment ; les îlots parisiens à cour en mansardes
+  tout autour ; plus de bâtiment perdu au-delà de 256 sommets (simplifié, ses mitoyens reportés).
+- Budget : en deux passes — une feuille simple pour tous (le compte d'avant : 32 000 à Paris en portée très lointaine),
+  puis le détail (parties, triangles) pour les plus proches tant qu'il tient. Paris : bâtiments 13,4 Mo, triangles
+  7,6 Mo (17 500 parties), forêt 12,7 Mo, raster 4,2 Mo. Triangles à 12 octets (trois indices).

@@ -404,9 +404,8 @@ fn meshed(hi: vec4f) -> bool {
 // tracer's kernel tests, drawn from the Sun into the shadow map — their shadows their own shapes, gables and slopes, not
 // boxes along the frame's axes.
 fn meshVertex(vi: u32) -> vec3f {
-  let rec = bitcast<vec4u>(scenery[u32(scenery[3].z) + vi / 3u]);
-  let c = vi % 3u;
-  let f = u32(scenery[3].x) * 4u + select(select(rec.z, rec.y, c == 1u), rec.x, c == 0u) * 3u;
+  let t = u32(scenery[3].z) * 4u + vi;
+  let f = u32(scenery[3].x) * 4u + bitcast<u32>(scenery[t / 4u][t % 4u]) * 3u;
   return vec3f(scenery[f / 4u][f % 4u], scenery[(f + 1u) / 4u][(f + 1u) % 4u], scenery[(f + 2u) / 4u][(f + 2u) % 4u]);
 }
 @vertex fn meshShadowVs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {

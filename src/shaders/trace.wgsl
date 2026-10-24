@@ -5175,6 +5175,8 @@ var<private> RWY_HIT: vec4f = vec4f(0.0);
 var<private> WS: vec4f = vec4f(0.0);   // the hit's normal (the Earth's physical axes), w: on
 var<private> WS_A: vec3f = vec3f(0.0); // its albedo
 var<private> WS_T: vec3f = vec3f(0.0); // the light it lets through (leaves), over its albedo's sense
+var<private> WS_S: f32 = 0.0;          // its mirror's share at normal incidence (a window's glass, zinc): the sky's and the Sun's reflection
+var<private> WS_AO: f32 = 1.0;         // the sky it sees (a wall half of it, its foot less)
 // a ray from o (unit d, metres) against the cylinder from p0 along the unit ax, len long, r wide: x the
 // distance to it (−1: none), y along it (0 … 1) — from the ray's closest approach to the axis (the camera
 // kilometres away, the metres of the radius kept)
@@ -5254,11 +5256,20 @@ fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32, view: vec3f) -> vec3f {
   if (csT >= 0.0) { vl.x = csT * vl.y; }
   let Ts = sunThrough(h, mu0);
   let sky = max(skyFlat(q, h, E, mu0, 1.0), E * nightFloor(1.0, mu0));
-  let lit = E * Ts * max(dot(WS.xyz, Lp), 0.0) * vl.x * sceneryShadow(Lp,WS.xyz) + sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6;
+  let sun = E * Ts * vl.x * sceneryShadow(Lp,WS.xyz);
+  let lit = sun * max(dot(WS.xyz, Lp), 0.0) + (sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6) * WS_AO;
   // leaves against the Sun: the light through the crown's thin edge, brightest looking into the Sun
   let rim = 1.0 - abs(dot(WS.xyz, view));
   let through = WS_T / PI * E * Ts * vl.x * max(-dot(WS.xyz, Lp), 0.0) * rim * (0.3 + 0.7 * pow(max(dot(view, Lp), 0.0), 4.0));
-  return WS_A / PI * lit + through + WS_E * (luminance(E) / PI) * 30.0 * (1.0 - smoothstep(-0.12, 0.06, mu0));
+  // (a window's glass, a zinc roof: the sky mirrored at a grazing look — Schlick's Fresnel — and the Sun's glint)
+  var mirror = vec3f(0.0);
+  if (WS_S > 0.0) {
+    let c = clamp(-dot(view, WS.xyz), 0.0, 1.0);
+    let F = WS_S + (1.0 - WS_S) * pow(1.0 - c, 5.0);
+    let r = reflect(view, WS.xyz);
+    mirror = F * (sky / PI * 1.3 * WS_AO + sun * pow(max(dot(r, Lp), 0.0), 600.0) * 40.0);
+  }
+  return WS_A / PI * lit + through + mirror + WS_E * (luminance(E) / PI) * 30.0 * (1.0 - smoothstep(-0.12, 0.06, mu0));
 }
 
 // ---- The airport's buildings and its parked craft (PLAN-AEROPORTS A3), the published frame of each runway
@@ -7116,7 +7127,8 @@ fn sceneryColourAt(xy:vec2f)->vec4f {
   let c=mix(mix(sceneryColour(a,n),sceneryColour(a+vec2i(1,0),n),w.x),mix(sceneryColour(a+vec2i(0,1),n),sceneryColour(a+vec2i(1,1),n),w.x),w.y);
   return vec4f(c,select(1.0,0.0,dot(c,vec3f(1.0))<=0.0));
 }
-struct SceneryHit { t:f32, normal:vec3f, albedo:vec3f, kind:f32, root:f32 };
+// (a building's: geo its geometry's vec4 index, aux a wall's coordinate along it and its length [m])
+struct SceneryHit { t:f32, normal:vec3f, albedo:vec3f, kind:f32, root:f32, geo:u32, aux:vec2f };
 fn sceneryEllipsoid(o:vec3f,d:vec3f,c:vec3f,r:vec3f)->vec4f {
   let p=(o-c)/r;let v=d/r;let a=dot(v,v);let b=dot(p,v);let det=b*b-a*(dot(p,p)-1.0);
   if(det<0.0){return vec4f(-1.0);}
@@ -7136,7 +7148,7 @@ fn sceneryPolygon(p:vec2f,base:u32,count:u32)->bool {
   return inside;
 }
 fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
-  var out=SceneryHit(limit,vec3f(0.0),vec3f(0.0),-1.0,0.0);
+  var out=SceneryHit(limit,vec3f(0.0),vec3f(0.0),-1.0,0.0,0u,vec2f(0.0));
   let inv=1.0/select(d,vec3f(1e-8),abs(d)<vec3f(1e-8));
   let total=u32(scenery[0].x);var i=0u;
   // Stackless escape indices make the CPU/GPU storage bound independent of density.
@@ -7149,7 +7161,7 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
     if(far<max(near,0.0) || near>out.t){i=u32(lo.w);continue;}
     if(hi.w<0.0){i++;continue;}
     let base=u32(scenery[0].y+hi.w);let p=scenery[base];var alb=scenery[base+2u].xyz;
-    var h=vec4f(-1.0);
+    var h=vec4f(-1.0);var aux=vec2f(-1.0);
     {
       let count=u32(p.z);var best=out.t;
       // (a building's roof — kind 1, docs/PLAN-BATIMENTS-AAA.md B2 —: z = the least of its planes over its footprint, the
@@ -7168,7 +7180,7 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
         }
         if(tin<=tout && tin>0.001 && tin<best){
           let q=o+d*tin;
-          if(q.z>=p.x && sceneryPolygon(q.xy,base,count)){best=tin;h=vec4f(tin,normalize(nIn));alb=scenery[R-1u].xyz;}
+          if(q.z>=p.x && sceneryPolygon(q.xy,base,count)){best=tin;h=vec4f(tin,normalize(nIn));alb=scenery[R-1u].xyz;aux=vec2f(-1.0);}
         }
         // (its floor, from below alone)
         if(d.z>1e-7 && o.z<p.x){
@@ -7192,14 +7204,82 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
           // (a building's wall up to its roof there: a gable's peak, a mansard's eave)
           var top=p.y;
           for(var k=0u;k<np;k++){let pl=scenery[R+k];top=min(top,pl.x*(o.x+d.x*t)+pl.y*(o.y+d.y*t)+pl.z);}
-          if(z<=top){let norm=normalize(vec3f(v.y,-v.x,0.0));best=t;h=vec4f(t,select(norm,-norm,dot(norm,d)>0.0));alb=scenery[base+2u].xyz;}
+          if(z<=top){let norm=normalize(vec3f(v.y,-v.x,0.0));best=t;h=vec4f(t,select(norm,-norm,dot(norm,d)>0.0));alb=scenery[base+2u].xyz;aux=vec2f(u,1.0)*length(v);}
         }
       }
     }
-    if(h.x>0.0 && h.x<out.t){out=SceneryHit(h.x,h.yzw,alb,p.w,select(p.z,p.x,p.w>.5));if(shadow){return out;}}
+    if(h.x>0.0 && h.x<out.t){out=SceneryHit(h.x,h.yzw,alb,p.w,select(p.z,p.x,p.w>.5),base,aux);if(shadow){return out;}}
     i++;
   }
   return out;
+}
+// A building's look (docs/PLAN-BATIMENTS-AAA.md B3): its packed word's materials, storeys and shape (scenery-data.ts
+// buildingPacked). Walls: storeys at the data's height (the eave over the storeys), bays of ~3.2 m along the wall itself,
+// windows recessed and mirroring the sky, shop fronts at a tall block's foot, a quarter of a home's windows lit at
+// night; the stone's courses, the brick's tone. Roofs: tiles' and slates' courses down the slope, zinc's standing seams
+// and its sheen, a terrace's gravel; weathering. The detail fades with the distance (no shimmer past ~200 m).
+fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,vec3f>) {
+  let g=hit.geo;let head=scenery[g];let w=u32(scenery[g+2u].w);
+  let roofMat=w&15u;let wallMat=(w>>4u)&15u;let storeys=max(1u,(w>>8u)&63u);
+  let base=head.x+1.0;let eave=scenery[g+3u+u32(head.z)].w;
+  let near=1.0-smoothstep(120.0,260.0,hit.t);
+  let id=g;
+  // (a wall's hit has its coordinate along it — a mansard's steep brisis is roof)
+  let wall=hit.aux.y>0.0;
+  if(wall){
+    // (the sky a wall sees: half of it, less at its foot)
+    WS_AO=0.55*(0.7+0.3*smoothstep(0.0,4.0,p.z-base));
+    let along=hit.aux.x;let len=hit.aux.y;
+    // (a storey 2.6–4.2 m: a hall the registry counts one storey still has its windows a storey high)
+    let hs=clamp((eave-base)/f32(storeys),2.6,4.2);
+    let f=(p.z-base)/hs;let floorI=floor(f);let v=fract(f);
+    let bays=max(1.0,round(len/3.2));let bw=len/bays;let u=fract(along/bw);let bay=floor(along/bw);
+    // (the material's own grain: dressed stone's courses, brick's tone, render's stains)
+    if(wallMat==1u){*alb*=0.92+0.08*smoothstep(0.0,0.06,fract((p.z-base)/0.45))*near;}
+    else if(wallMat==4u){*alb*=0.85+0.3*hash31(vec3f(floor(along/0.25),floor((p.z-base)/0.075),f32(id)))*near;}
+    else{*alb*=0.9+0.2*gnoise(p*vec3f(0.15,0.15,0.4));}
+    // (above the eave a gable, a party wall's rise: blank)
+    if(p.z<eave-0.3 && len>2.4 && near>0.0){
+      let shop=floorI<0.5 && storeys>=4u;
+      let wu=select(0.26,0.12,shop);let wv0=select(0.28,0.08,shop);let wv1=select(0.86,0.82,shop);
+      let inWin=u>wu && u<1.0-wu && v>wv0 && v<wv1 && p.z>base+0.5;
+      if(inWin){
+        let frame=min(min(u-wu,1.0-wu-u)*bw,min(v-wv0,wv1-v)*hs);
+        if(frame>0.06){
+          *alb=mix(*alb,vec3f(0.035,0.045,0.055),near);WS_S=0.04*near;
+          // (lit at night: a third of a home's, more of a shop's — each its own warmth)
+          let hsh=hash3u(vec3u(id,u32(floorI),u32(bay+512.0)));
+          if(u2f(hsh)<select(0.28,0.55,shop)){WS_E=vec3f(1.0,0.8,0.52)*(0.05+0.09*u2f(pcg(hsh)))*near;}
+        }else{*alb*=0.75;}
+      }
+      // (a storey's line: the floor's slab, a cornice's shadow)
+      *alb*=1.0-0.12*near*(1.0-smoothstep(0.0,0.05,v));
+    }
+  }else if(hit.normal.z>0.98 || hit.normal.z<0.0){
+    // (a flat roof: a terrace's gravel and its patches; a zinc terrasson's seams too)
+    WS_AO=1.0;
+    *alb*=0.85+0.25*gnoise(p*vec3f(0.5,0.5,0.0))*near+0.1*gnoise(p*0.07);
+    if(roofMat==3u){*alb*=1.0-0.18*near*(1.0-smoothstep(0.0,0.04,fract(p.x/0.5)));WS_S=0.06*near;}
+  }else{
+    // (a slope: its courses across the fall line, its tiles or slates staggered along them; zinc's seams down it)
+    WS_AO=0.9;
+    let fall=normalize(hit.normal.xy);let across=vec2f(-fall.y,fall.x);
+    // (along the slope itself: its run over the pitch's cosine)
+    let s=dot(p.xy,fall)/max(hit.normal.z,0.2);let c=dot(p.xy,across);
+    if(roofMat==3u){
+      let seam=1.0-smoothstep(0.0,0.035,abs(fract(c/0.5)-0.5)*0.5);
+      *alb*=1.0+0.25*seam*near;WS_S=0.06*near;
+    }else if(roofMat==1u || roofMat==2u || roofMat==0u){
+      let row=select(0.32,0.21,roofMat==2u);let wide=select(0.25,0.3,roofMat==2u);
+      let r=s/row;let ri=floor(r);let t=fract(r);
+      let tile=hash31(vec3f(floor(c/wide+0.5*fract(ri*0.5)),ri,f32(id&1023u)));
+      // (each course shadowed under the one above it)
+      *alb*=mix(1.0,(0.72+0.28*smoothstep(0.0,0.35,t))*(0.85+0.3*tile),near);
+      *n=normalize(*n+vec3f(fall*0.25*(t-0.5),0.0)*near);
+    }
+    // (weathering: moss and soot down the slope)
+    *alb*=0.82+0.18*gnoise(vec3f(c*0.4,s*0.15,f32(id&255u)));
+  }
 }
 fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
   SC_DISTANCE=1e9;WS_T=vec3f(0.0);
@@ -7210,7 +7290,7 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
   let bld=!RASTER_SCENERY || RASTER_BLD || (TUNE_SC_SKIP&8u)!=0u;
   // (no building here: a miss at the full reach — the trees' bound —, no BVH walked)
   let lim=min(tMax,P.scenery[1].w);
-  var hit=SceneryHit(lim,vec3f(0.0),vec3f(0.0),-1.0,0.0);
+  var hit=SceneryHit(lim,vec3f(0.0),vec3f(0.0),-1.0,0.0,0u,vec2f(0.0));
   if((TUNE_SC_SKIP&1u)==0u && bld){hit=sceneryQuery(o,d,lim,false);}
   // (the raster's scenery — étape 1b —: the tree its instance drew at this pixel tested alone; a pixel it drew none at has
   // no tree before its ground; the instance's proxy wider than its tree there — a carved crown's gap —: the grid walked)
@@ -7246,7 +7326,7 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
       // leaves facing all ways: a fine flicker of their own
       alb=look.albedo*(.8+.2*gnoise(p*5.3));
     }
-    WS=vec4f(normalize(sceneryGlobal(n)),1.0);WS_A=alb;WS_E=vec3f(0.0);
+    WS=vec4f(normalize(sceneryGlobal(n)),1.0);WS_A=alb;WS_E=vec3f(0.0);WS_S=0.0;WS_AO=1.0;
     return tree.t;
   }
   if(hit.kind<0.0){return tMax;}
@@ -7254,13 +7334,10 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
   SC_POINT=p;SC_DISTANCE=hit.t;
   let rough=0.85+0.15*gnoise(p*.65);
   var alb=hit.albedo*rough;
-  if(hit.kind>.5 && hit.kind<1.5){
-    // Stable facade courses and recessed windows. Roofs their own colour (the worker's, from their material).
-    let wall=abs(hit.normal.z)<.5;
-    let win=wall && p.z-hit.root>1.6 && fract((p.x+p.y)*.24)<.6 && fract((p.z-hit.root)/3.0)<.55;
-    alb=select(alb,vec3f(.045,.065,.075),win);
-  }
-  WS=vec4f(normalize(sceneryGlobal(hit.normal)),1.0);WS_A=alb;WS_E=vec3f(0.0);
+  var n=hit.normal;
+  WS_S=0.0;WS_AO=1.0;WS_E=vec3f(0.0);
+  if(hit.kind>.5 && hit.kind<1.5){buildingLook(hit,p,&alb,&n);}
+  WS=vec4f(normalize(sceneryGlobal(n)),1.0);WS_A=alb;
   return hit.t;
 }
 
@@ -8590,6 +8667,8 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   }
   // (the windsocks beside the runways near: before the ground, they are what the ray meets)
   WS = vec4f(0.0);
+  WS_S = 0.0;
+  WS_AO = 1.0;
   if (HAS_RWY && isEarth(k) && rwyCount() > 0u) {
     let dp = vec3f(rd.xy, rd.z / ab);
     let kM = length(dp) * EARTH_RM;

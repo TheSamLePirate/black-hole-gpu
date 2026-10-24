@@ -4,7 +4,7 @@
 // stopped on one view, `earthPipeline: "raster"`; the kernel shade's GPU time with each part left out in turn —
 // a tuning of the kernel (renderer.tune: trace.wgsl TUNE_GSKIP's bits, TUNE_DETAIL, TUNE_HINT_GRAZE) or a setting
 // (the scenery, the clouds) —, alternated with the untouched view: a part's cost is the drop it leaves. A measure: the
-// images then differ, on purpose. RP_PLACE=tarifa-low (default) | tarifa | alps | forest-low.
+// images then differ, on purpose. RP_PLACE=tarifa-low (default) | tarifa | alps | forest-low | paris-low | stlo-low.
 // Measures remote-results/raster-shade-ablation-<place>.json.
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
@@ -20,6 +20,11 @@ const PLACES: Record<string, string> = {
     __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
   "forest-low": `__bh.game.setDate("2026-07-10T17:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.1);
     __bh.game.flyAt(36.30, -5.55, 150, 200, 120);`,
+  // (the towns' buildings — docs/PLAN-BATIMENTS-AAA.md —: Paris's blocks towards the Étoile, Saint-Lô's rebuilt centre)
+  "paris-low": `__bh.game.setDate("2026-07-10T08:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(48.866, 2.313, 250, 300, 160);`,
+  "stlo-low": `__bh.game.setDate("2026-07-10T08:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(49.108, -1.078, 220, 310, 160);`,
 };
 const PLACE = process.env.RP_PLACE ?? "tarifa-low";
 const DETAIL = `{ earthScenery: "high", detailReach: "veryFar", earthSceneryShadows: true, earthSurface: "satellite" }`;
@@ -55,7 +60,10 @@ const ABLATIONS: { name: string; tune?: Record<string, number>; settings?: strin
   { name: "detail reach normal", settings: `{ detailReach: "normal" }` },
 ];
 // (RP_ABL="scenery off,scenery shadows off": those alone)
-const CHOSEN = process.env.RP_ABL ? ABLATIONS.filter((a) => process.env.RP_ABL!.split(",").includes(a.name)) : ABLATIONS;
+// (or their indices in ABLATIONS, RP_ABL=1,3 — the remote runner passes no spaces)
+const CHOSEN = process.env.RP_ABL
+  ? ABLATIONS.filter((a, i) => process.env.RP_ABL!.split(",").some((w) => w === a.name || w === String(i)))
+  : ABLATIONS;
 
 test.skipIf(!E2E || process.env.RASTER_BENCH !== "1")(
   "the raster's shading in flight: what each part costs",
@@ -125,7 +133,10 @@ test.skipIf(!E2E || process.env.RASTER_BENCH !== "1")(
         console.log(JSON.stringify(row));
       }
       await app.js(`(() => { window.__t = false; __bh.renderer.tune = {}; return true; })()`);
-      await Bun.write(`remote-results/raster-shade-ablation-${PLACE}.json`, JSON.stringify({ place: PLACE, rows }, null, 2));
+      await Bun.write(
+        `remote-results/raster-shade-ablation-${PLACE}${process.env.AB_SIDE ? `-${process.env.AB_SIDE}${process.env.AB_RUN ?? ""}` : ""}.json`,
+        JSON.stringify({ place: PLACE, rows }, null, 2),
+      );
       for (const r of rows) expect(Number.isFinite(r.drop)).toBe(true);
     } finally {
       await app.close();
