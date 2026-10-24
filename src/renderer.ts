@@ -905,6 +905,8 @@ export class Renderer {
   private sampleIndex = 0;
   private bandY = 0;
   private bandRows = 64;
+  /** the refinement's trace pass's GPU time a row, last read back [ms] (0: not timed — no timestamps, or a new size) */
+  private bandRowMs = 0;
   private realtimeBlock = 2;
   /** the realtime subsampling of the last realtime frame (one ray per block × block pixels) — the
    *  automatic choice, or the fixed one the settings ask for */
@@ -2475,6 +2477,7 @@ export class Renderer {
     this.live = this.createTarget(width, height, this.livePol, true);
     if (old) this.device.queue.onSubmittedWorkDone().then(() => this.destroyTarget(old));
     this.blockMs.clear(); // (their times were measured at the old size)
+    this.bandRowMs = 0;
     this.invalidate();
   }
 
@@ -4260,7 +4263,15 @@ export class Renderer {
   }
 
   /** the trace's passes encoded; false: no kernel for the scene yet (still compiling) — nothing traced */
-  private dispatchTrace(enc: GPUCommandEncoder, t: Target, x: number, y: number, quality: boolean, s?: Settings): boolean {
+  private dispatchTrace(
+    enc: GPUCommandEncoder,
+    t: Target,
+    x: number,
+    y: number,
+    quality: boolean,
+    s?: Settings,
+    timed?: (ms: number) => void,
+  ): boolean {
     this.cameraKey = this.featureKey;
     // (the sea's FFT waves of this frame first: the tracer samples them)
     if (this.seaFftDue && this.seaFft) {
@@ -4373,7 +4384,8 @@ export class Renderer {
     // (the quality kernel still compiling — frame() keeps a still view on the realtime path until then;
     // the scene's realtime kernel still compiling at the start: no image yet)
     if (!pipeline) return false;
-    const pass = enc.beginComputePass(this.prof.pass(quality ? "trace (converging)" : "trace"));
+    const label = quality ? "trace (converging)" : "trace";
+    const pass = enc.beginComputePass(timed ? this.prof.timed(label, timed) : this.prof.pass(label));
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, hint ? this.hintBindFor(t, hint) : t.traceBind);
     pass.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
@@ -7358,7 +7370,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         noise: effective.noiseThreshold,
         minSpp: 8,
       });
-      traced = this.dispatchTrace(enc, t, t.width, rows, adaptive);
+      // (the band's trace timed on the GPU: its own cost a row — the bands' measure below)
+      traced = this.dispatchTrace(enc, t, t.width, rows, adaptive, undefined, (ms) => (this.bandRowMs = ms / rows));
       if (this.sampleIndex < 32) this.dispatchEnv(enc, t, s);
       // (no kernel yet: the band traced again next frame — the image does not converge on nothing)
       if (traced) {
@@ -7399,11 +7412,16 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
           this.adaptBlock(ms, this.frameBudget(s), used);
         }
         if (phase === "converging" && rows > 0) {
-          const perRow = ms / rows;
+          // (a row's cost: the trace pass's own, timed on the GPU — the frame's other passes, the cockpit's, the post's, are
+          // no row's: on an M1 their ~60 ms against an 18 ms budget held the bands at 8 rows, ~8.5 s a pass —; the whole
+          // frame's without the timestamps)
+          const perRow = this.bandRowMs > 0 ? this.bandRowMs : ms / rows;
           // (the bands sized to the quality's frame budget — the Game's 16 ms keeps 60 fps while the image
-          // refines —, 28 ms at most for the finer qualities)
+          // refines —, 28 ms at most for the finer qualities; twice the last band at most: the sky's rows cost little, the
+          // ground's below them much, and the time read back comes a frame or two late)
           const band = Math.min(28, this.frameBudget(s));
-          this.bandRows = Math.round(Math.min(t.height, Math.max(8, 0.5 * this.bandRows + 0.5 * (band / Math.max(perRow, 1e-3)))));
+          const want = 0.5 * this.bandRows + 0.5 * (band / Math.max(perRow, 1e-3));
+          this.bandRows = Math.round(Math.min(t.height, 2 * this.bandRows, Math.max(8, want)));
         }
       },
       traced,

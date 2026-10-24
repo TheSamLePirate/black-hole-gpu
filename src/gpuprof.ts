@@ -45,6 +45,32 @@ export class GpuProfiler {
   begin() {
     this.active = this.on && this.tick++ % this.every === 0;
     if (this.active) this.labels = [];
+    this.timedDone = null;
+    this.timedAt = -1;
+  }
+
+  /** the pass timed this frame (timed): its time's taker, its index among the labelled ones (−1: alone) */
+  private timedDone: ((ms: number) => void) | null = null;
+  private timedAt = -1;
+  /**
+   * One pass timed whether the profiler is on or not, its time handed to `done` once read back — the renderer's refinement
+   * sizes its bands on its trace pass's own cost, not the frame's (whose fixed part — the cockpit, the post — is no row's).
+   * Nothing without the feature, or while the last read is pending.
+   */
+  timed<T extends GPUComputePassDescriptor | GPURenderPassDescriptor>(label: string, done: (ms: number) => void, desc?: T): T {
+    const d = (desc ?? {}) as T;
+    if (this.active && this.on) {
+      const out = this.pass(label, d);
+      if (out.timestampWrites) {
+        this.timedDone = done;
+        this.timedAt = this.labels.length - 1;
+      }
+      return out;
+    }
+    if (!this.supported || this.reading || this.timedDone) return d;
+    this.timedDone = done;
+    this.timedAt = -1;
+    return { ...d, timestampWrites: { querySet: this.qs!, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 } };
   }
 
   /** A pass descriptor's timestamp writes, for a labelled pass (or nothing when off / full). */
@@ -58,6 +84,30 @@ export class GpuProfiler {
 
   /** At the end of the frame's encoder: resolves the timestamps. */
   end(enc: GPUCommandEncoder) {
+    const done = this.timedDone;
+    const at = this.timedAt;
+    this.timedDone = null;
+    if (done && at < 0) {
+      // (the timed pass alone, the profiler off this frame)
+      enc.resolveQuerySet(this.qs!, 0, 2, this.resolveBuf!, 0);
+      enc.copyBufferToBuffer(this.resolveBuf!, 0, this.readBuf!, 0, 16);
+      this.reading = true;
+      queueMicrotask(() =>
+        this.device.queue.onSubmittedWorkDone().then(() =>
+          this.readBuf!.mapAsync(GPUMapMode.READ).then(
+            () => {
+              const t = new BigUint64Array(this.readBuf!.getMappedRange().slice(0, 16));
+              this.readBuf!.unmap();
+              this.reading = false;
+              const ms = Number(t[1]! - t[0]!) / 1e6;
+              if (ms >= 0 && ms < 1e4) done(ms);
+            },
+            () => (this.reading = false),
+          ),
+        ),
+      );
+      return;
+    }
     if (!this.active || !this.on || !this.labels.length) return;
     const n = 2 * this.labels.length;
     enc.resolveQuerySet(this.qs!, 0, n, this.resolveBuf!, 0);
@@ -77,6 +127,7 @@ export class GpuProfiler {
             labels.forEach((l, i) => {
               const ms = Number(t[2 * i + 1]! - t[2 * i]!) / 1e6;
               if (!(ms >= 0 && ms < 1e4)) return;
+              if (i === at) done?.(ms);
               seen.set(l, (seen.get(l) ?? 0) + ms);
               sum += ms;
             });
