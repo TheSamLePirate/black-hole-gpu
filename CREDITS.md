@@ -43,6 +43,7 @@ them in More… › Credits.
 ## The maps, the weather, the traffic
 
 - [The buildings, the roads, the forests](https://www.openstreetmap.org/copyright) — © OpenStreetMap contributors (ODbL) · OpenMapTiles · OpenFreeMap
+- [The buildings outside France, their roofs](https://docs.overturemaps.org/attribution/) — © Overture Maps Foundation (ODbL, with OpenStreetMap's; Microsoft and Google footprints)
 - [The world's airfields and runways](https://ourairports.com/data/) — OurAirports (public domain) — built into tiles by scripts/build-runways.ts
 - [The addresses](https://photon.komoot.io) — Photon (komoot) · Nominatim — OpenStreetMap
 - [The weather](https://open-meteo.com) — Open-Meteo · CC BY 4.0
