@@ -42,6 +42,7 @@ import {
   BUILDING_MESH_M,
   BUILDING_PARTS_M,
   buildingPacked,
+  PARAPET_M,
   D,
   localPoint,
   packScenery,
@@ -726,6 +727,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (in two passes within the budget: every building first as one leaf — a complex outline's roof flat —, the nearest
   // first until the budget is spent: the count as before; then the nearer ones' detail — their outlines cut into convex
   // parts each with its roof, their triangles for the shadow map — nearest first, while it fits)
+  // (a terrace — a building flat whole, not a shed nor a hut —: its parapet round its roof)
+  const parapetOf = (v: Choice, plans: RoofPart[]) =>
+    plans.length === 1 && plans[0]!.shape === "flat" && !v.a.light && v.a.usage !== "Annexe" && plans[0]!.wall > 4;
   type Planned = {
     i: number;
     base: number;
@@ -781,7 +785,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         bottom = b.base + v.low - 1;
       const plans = v.d < BUILDING_PARTS_M ? planBuilding(b.input, 24) : b.plans;
       const bytes = leafBytes(plans);
-      const mesh = v.d < BUILDING_MESH_M && meshBytes < meshBudget ? plans.map((p) => buildingMesh(p.rings, bottom, floor, p.planes)) : [];
+      const mesh =
+        v.d < BUILDING_MESH_M && meshBytes < meshBudget
+          ? plans.map((p) => buildingMesh(p.rings, bottom, floor, p.planes, parapetOf(v, plans) ? PARAPET_M : 0))
+          : [];
       const mb = mesh.reduce((t, m) => t + m.positions.length * 4 + (m.triangles.length / 3) * 12, 0);
       if (storedBytes + bytes - b.bytes + mb > room4) continue;
       storedBytes += bytes - b.bytes + mb;
@@ -817,12 +824,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           maxY = Math.max(maxY, p[1]);
         }
       const mesh = b.mesh[k];
+      const lip = parapetOf(v, b.plans) ? PARAPET_M : 0;
       prims.push({
         min: [minX, minY, bottom],
-        max: [maxX, maxY, floor + plan.top],
+        max: [maxX, maxY, floor + plan.top + lip],
         data: [
           bottom,
-          floor + plan.top,
+          floor + plan.top + lip,
           edges.length / 4,
           1,
           minX,
@@ -830,7 +838,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           maxX,
           maxY,
           ...wall,
-          buildingPacked(plan.roofMat, a.wallMat, plan.storeys, plan.planes.length, plan.shape, !!mesh),
+          buildingPacked(plan.roofMat, a.wallMat, plan.storeys, plan.planes.length, plan.shape, !!mesh, lip > 0),
           ...edges,
           ...roof,
           floor + plan.wall,

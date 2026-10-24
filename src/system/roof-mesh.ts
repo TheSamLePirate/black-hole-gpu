@@ -41,7 +41,7 @@ const area = (r: Pt[]) => {
  * foot and `base` the height its planes are over (both local z), `planes` its roof's. Vertices shared where they meet
  * (to the millimetre): a wall's top corner is its roof face's.
  */
-export function buildingMesh(rings: Pt[][], bottom: number, base: number, planes: Plane[]): BuildingMesh {
+export function buildingMesh(rings: Pt[][], bottom: number, base: number, planes: Plane[], parapet = 0): BuildingMesh {
   const positions: number[] = [],
     triangles: number[] = [];
   const ids = new Map<string, number>();
@@ -120,8 +120,9 @@ export function buildingMesh(rings: Pt[][], bottom: number, base: number, planes
       for (let i = 0; i + 1 < kept.length; i++) {
         const p = at(kept[i]!),
           q = at(kept[i + 1]!);
-        const tp = Math.max(bottom, roof(p[0], p[1])),
-          tq = Math.max(bottom, roof(q[0], q[1]));
+        // (a terrace's walls a parapet over its roof)
+        const tp = Math.max(bottom, roof(p[0], p[1]) + parapet),
+          tq = Math.max(bottom, roof(q[0], q[1]) + parapet);
         const p0 = vertex(p[0], p[1], bottom),
           q0 = vertex(q[0], q[1], bottom),
           q1 = vertex(q[0], q[1], tq),

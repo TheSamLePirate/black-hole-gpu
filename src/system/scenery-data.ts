@@ -80,16 +80,20 @@ export const BUILDING_MESH_M = 1100;
  *  planBuilding: ~3 leaves a Paris block); the farther ones one leaf (a complex one flat) — the buffer's budget their count */
 export const BUILDING_PARTS_M = 2000;
 const SHAPES = ["flat", "gabled", "hipped", "mansard", "shed"];
+/** a terrace's parapet over its roof [m] (trace.wgsl PARAPET) */
+export const PARAPET_M = 0.8;
 /** A building leaf's packed word (its geometry's vec4 2's w, an integer exact in a float): roof material (4 bits), wall
- *  material (4), storeys (6), roof planes (4), shape (3), has a mesh (1) — trace.wgsl reads it, scenery-raster.ts too. */
-export function buildingPacked(roof: number, wall: number, storeys: number, planes: number, shape: string, mesh: boolean) {
+ *  material (4), storeys (6), roof planes (4), shape (3), has a mesh (1), has a parapet (1) — trace.wgsl reads it,
+ *  scenery-raster.ts too. */
+export function buildingPacked(roof: number, wall: number, storeys: number, planes: number, shape: string, mesh: boolean, parapet = false) {
   return (
     (roof & 15) |
     ((wall & 15) << 4) |
     (Math.min(63, Math.max(0, Math.round(storeys))) << 8) |
     ((planes & 15) << 14) |
     (Math.max(0, SHAPES.indexOf(shape)) << 18) |
-    (mesh ? 1 << 21 : 0)
+    (mesh ? 1 << 21 : 0) |
+    (parapet ? 1 << 22 : 0)
   );
 }
 /** a scenery's forest (forest.ts): its grid's frame, a word a cell, the trees in it */

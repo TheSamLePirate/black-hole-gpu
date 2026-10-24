@@ -7169,6 +7169,8 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
       // footprint test there —; the bridges' decks a flat top at p.y)
       let np=select(0u,(u32(scenery[base+2u].w)>>14u)&15u,p.w>.5&&p.w<1.5);
       let R=base+4u+count;
+      // (a terrace's parapet: its walls 0.8 m over its roof — scenery-data.ts PARAPET_M —, packed word's bit 22)
+      let lip=select(0.0,0.8,np>0u && ((u32(scenery[base+2u].w)>>22u)&1u)==1u);
       if(np>0u){
         var tin=-1e30;var tout=1e30;var nIn=vec3f(0.0,0.0,1.0);
         for(var k=0u;k<np;k++){
@@ -7202,8 +7204,9 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
         let z=o.z+d.z*t;
         if(t>0.001 && t<best && u>=0.0 && u<=1.0 && z>=p.x && z<=p.y){
           // (a building's wall up to its roof there: a gable's peak, a mansard's eave)
-          var top=p.y;
-          for(var k=0u;k<np;k++){let pl=scenery[R+k];top=min(top,pl.x*(o.x+d.x*t)+pl.y*(o.y+d.y*t)+pl.z);}
+          var roof=1e30;
+          for(var k=0u;k<np;k++){let pl=scenery[R+k];roof=min(roof,pl.x*(o.x+d.x*t)+pl.y*(o.y+d.y*t)+pl.z);}
+          let top=min(p.y,roof+lip);
           if(z<=top){let norm=normalize(vec3f(v.y,-v.x,0.0));best=t;h=vec4f(t,select(norm,-norm,dot(norm,d)>0.0));alb=scenery[base+2u].xyz;aux=vec2f(u,1.0)*length(v);}
         }
       }
@@ -7255,7 +7258,10 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
       // (a storey's line: the floor's slab, a cornice's shadow)
       *alb*=1.0-0.12*near*(1.0-smoothstep(0.0,0.05,v));
     }
-  }else if(hit.normal.z>0.98 || hit.normal.z<0.0){
+  }else{roofLook(hit,p,alb,n,roofMat,(w>>18u)&7u,eave,near,id);}
+}
+fn roofLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,vec3f>,roofMat:u32,shape:u32,eave:f32,near:f32,id:u32) {
+  if(hit.normal.z>0.98 || hit.normal.z<0.0){
     // (a flat roof: a terrace's gravel and its patches; a zinc terrasson's seams too)
     WS_AO=1.0;
     *alb*=0.85+0.25*gnoise(p*vec3f(0.5,0.5,0.0))*near+0.1*gnoise(p*0.07);
@@ -7279,6 +7285,18 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
     }
     // (weathering: moss and soot down the slope)
     *alb*=0.82+0.18*gnoise(vec3f(c*0.4,s*0.15,f32(id&255u)));
+    // (a mansard's brisis: its dormers, a bay's window each — their glass mirroring the sky, some lit at night)
+    if(shape==3u && hit.normal.z<0.6 && near>0.0){
+      let u=fract(c/3.2);let dz=p.z-eave;
+      if(u>0.32 && u<0.68 && dz>0.7 && dz<2.5){
+        let frame=min(min(u-0.32,0.68-u)*3.2,min(dz-0.7,2.5-dz));
+        if(frame>0.08){
+          *alb=mix(*alb,vec3f(0.035,0.045,0.055),near);WS_S=0.04*near;
+          let hsh=hash3u(vec3u(id,u32(floor(c/3.2)+4096.0),7u));
+          if(u2f(hsh)<0.3){WS_E=vec3f(1.0,0.8,0.52)*(0.05+0.09*u2f(pcg(hsh)))*near;}
+        }else{*alb=mix(*alb,vec3f(0.42,0.4,0.36),near);}
+      }
+    }
   }
 }
 fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {

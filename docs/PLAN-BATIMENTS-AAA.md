@@ -219,3 +219,41 @@ passe raster n'y tourne pas toujours.
 - Budget : en deux passes — une feuille simple pour tous (le compte d'avant : 32 000 à Paris en portée très lointaine),
   puis le détail (parties, triangles) pour les plus proches tant qu'il tient. Paris : bâtiments 13,4 Mo, triangles
   7,6 Mo (17 500 parties), forêt 12,7 Mo, raster 4,2 Mo. Triangles à 12 octets (trois indices).
+
+Coût (kerr-mini, `raster-shade-ablation` à `paris-low`, A B B A, A = `5cd59c23`) : `shade` 52,0 / 58,7 ms avant, 51,5 /
+49,3 ms après ; décor coupé ~33 ms des deux côtés — **aucun surcoût** (un premier A/B d'une seule paire, 48,6 contre 61,1,
+n'était que le bruit d'une session de Chrome à l'autre).
+
+![B3–B4](progress/batiments/B3-B4-materiaux-parties.jpg)
+
+### B5 — acrotères, lucarnes ; ombres adoucies (24/10)
+
+- Acrotères : un bâtiment plat tout entier (pas un abri, pas une annexe, murs > 4 m) a ses murs 0,8 m au-dessus de son
+  toit (`PARAPET_M`, bit 22 du mot de la feuille), dans le traceur et dans les triangles de la carte d'ombres.
+- Lucarnes peintes sur les brisis des mansardes : une par travée de 3,2 m, vitre qui reflète le ciel, un tiers allumées
+  la nuit — sans géométrie (dix lucarnes par immeuble en feuilles auraient coûté ~2,5 Ko chacun).
+- Carte d'ombres : une boîte de trois texels à position continue (4 × 4 texels pondérés) au lieu de 3 × 3 texels entiers —
+  le bord d'une ombre ne fait plus d'escaliers d'un texel (0,9 m, une douzaine de pixels à 100 m).
+- Validation par les données (`bdtopo.e2e`, Front de Seine, kerr-mini) : la médiane du toit modélisé contre celle du LiDAR
+  (MNS − MNT) aux mêmes points de chaque emprise — **BD TOPO 2,5 m d'écart médian, 58 % à 3 m près ; OSM 4,5 m, 34 %**
+  (1 274 parties et 661 bâtiments comparés). L'ancienne mesure (le sommet du prisme contre la médiane) ne valait plus avec
+  des toits en pente.
+
+### B7a — teinte des toits par l'orthophoto : essayé, rejeté (24/10)
+
+La couleur des toits proches prise dans l'orthophoto au point du toit (là où l'IGN ou swisstopo en a une fine), les motifs
+du matériau gardés : les toits de Paris sont sortis vert olive, ceux de Saint-Lô gris-vert — l'orthophoto n'est pas une
+orthophoto vraie (un immeuble y déverse de quelques mètres : au point du toit, c'est la rue, la cour, les arbres), et
+l'imagerie régionale s'y mêle. Retiré. Une teinte par bâtiment (la médiane de l'orthophoto sur l'emprise rétrécie, calculée
+par le worker) reste possible ; elle demande les dalles d'orthophoto au worker.
+
+### Reste à faire
+
+- **B6** — faîtages LiDAR là où la BD TOPO n'en a pas (Paris) : la MNH déjà lue pour les forêts (I4) sur l'emprise de chaque
+  bâtiment proche ; la mesure ci-dessus le dira.
+- **B2b** — la feuille désignée par le raster (comme les arbres) : le coût est déjà neutre, gain attendu en ville dense.
+- **Cheminées** (souches sur les murs mitoyens parisiens) : en feuilles près de la caméra seulement.
+- **Overture** hors de France (`roof_shape` à Munich sur 33 % des bâtiments) : décision à prendre (tuiles 3 à 10 fois plus
+  lourdes qu'OpenFreeMap, lecteur PMTiles, zones hors ligne).
+- **Ombres proches nettes** : une cascade fine (±150 m à 0,15 m le texel) pour les vues au ras des toits.
+

@@ -5,7 +5,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // measured heights in the scenery instead of OpenStreetMap's (settings.earthIgnRelief). Over Paris's Front de Seine — its
 // towers by the river, the 15th's Haussmann blocks round them —, held in the raster pipeline: each building of the scene
 // within 300 m of its centre against the LiDAR's own measure of it, a source apart — the median of the surface less the
-// ground (MNS − MNT, 0.75 m a texel) over its footprint —, its height in the scene its roof less the game's ground under it.
+// ground (MNS − MNT, 0.75 m a texel) over its footprint — against the median of the scene's roof (its planes, roofs.ts) at the
+// same points less the game's ground under it.
 // (E2E_SHOTS=<dir>: bdtopo-paris-on / -off.)
 // Duration: ~8 min on kerr-mini.
 // Done when: with the BD TOPO most buildings its own, their heights far nearer the LiDAR's than OSM's (median, share within 3 m).
@@ -69,17 +70,20 @@ describe.skipIf(!E2E)("the IGN's buildings", () => {
         if (f[b + 3] !== 1) return;
         const x0 = f[b + 4], y0 = f[b + 5], x1 = f[b + 6], y1 = f[b + 7], cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
         if (Math.hypot(cx, cy) > 300 || (x1 - x0) * (y1 - y0) < 30) return;
-        const hs = [];
+        // (the LiDAR's surface less its ground and the scene's roof there — its planes: docs/PLAN-BATIMENTS-AAA.md —, at the
+        // same points; their medians compared)
+        const hs = [], ms = [];
+        const [cla, clo] = place(cx, cy), rise = (cx * cx + cy * cy) / (2 * R), ground = __bh.sys.groundAt(cla, clo);
         for (let u = 1; u < 8; u++) for (let v = 1; v < 8; v++) {
           const p = [x0 + ((x1 - x0) * u) / 8, y0 + ((y1 - y0) * v) / 8, 0];
           if (!c.polygon(p, b)) continue;
           const [la, lo] = place(p[0], p[1]), h = at(mns, la, lo) - at(mnt, la, lo);
-          if (Number.isFinite(h) && h > -20 && h < 400) hs.push(h);
+          if (Number.isFinite(h) && h > -20 && h < 400) { hs.push(h); ms.push(c.topAt(b, p[0], p[1]) + rise - ground); }
         }
         if (hs.length < 5) return;
         hs.sort((p, q) => p - q);
-        const [la, lo] = place(cx, cy), rise = (cx * cx + cy * cy) / (2 * R);
-        errs.push(Math.abs(f[b + 1] + rise - __bh.sys.groundAt(la, lo) - hs[hs.length >> 1]));
+        ms.sort((p, q) => p - q);
+        errs.push(Math.abs(ms[ms.length >> 1] - hs[hs.length >> 1]));
       });
       errs.sort((p, q) => p - q);
       return { buildings: st.buildings, bdtopo: st.bdtopoBuildings, tiles: st.bdtopoTiles, error: st.surveyError ?? st.lastError, lat: lat0, lon: lon0,
