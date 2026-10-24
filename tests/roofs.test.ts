@@ -7,6 +7,7 @@ import {
   planBuilding,
   ringArea,
   simplifyFootprint,
+  stacksOf,
   materialCode,
   orientedBox,
   partyEdges,
@@ -239,5 +240,22 @@ describe("complex footprints", () => {
     const r = simplifyFootprint([circle]).rings;
     expect(r[0]!.length).toBeLessThanOrEqual(256);
     expect(Math.abs(ringArea(r[0]!))).toBeGreaterThan(0.98 * Math.PI * 2500);
+  });
+});
+
+describe("chimneys", () => {
+  test("a house: one stack on its ridge, near an end; a Paris block: two, across its top; a flat roof none", () => {
+    const h = planRoof(house({ rings: [rect(-6, -4, 6, 4)], roof: 3 }));
+    const one = stacksOf({ ...h, rings: [rect(-6, -4, 6, 4)] }, 0.2, false);
+    expect(one.length).toBe(1);
+    const c = one[0]!.ring.reduce((t, p) => [t[0] + p[0] / 4, t[1] + p[1] / 4], [0, 0]);
+    expect(Math.abs(c[1])).toBeLessThan(0.2);
+    expect(Math.abs(c[0])).toBeGreaterThan(4);
+    expect(one[0]!.top).toBeCloseTo(h.top + 1.1, 6);
+    const r = rect(0, 0, 20, 14);
+    const m = planRoof(house({ rings: [r], party: [false, true, false, true], height: 17.5, storeys: 7, roofMat: RoofMaterial.Zinc }));
+    expect(stacksOf({ ...m, rings: [r] }, 0.9, true).length).toBe(2);
+    const f = planRoof(house({ rings: [r], roofMat: RoofMaterial.Concrete }));
+    expect(stacksOf({ ...f, rings: [r] }, 0.1, false)).toEqual([]);
   });
 });

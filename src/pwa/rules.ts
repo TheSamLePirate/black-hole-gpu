@@ -56,6 +56,9 @@ export function classify(url: string, scope: string, method = "GET", dirs: reado
   if (u.hostname === "3d.geo.admin.ch" && u.pathname.startsWith("/ch.swisstopo.terrain.3d/") && u.pathname.endsWith(".terrain"))
     return "tile";
   if (u.hostname === "tiles.openfreemap.org" && u.pathname.startsWith("/planet/")) return "tile";
+  // (Overture Maps' buildings — PLAN-BATIMENTS-AAA B7 —: its archive's byte ranges, each kept under a key of its own, and
+  // its releases' listing — network first, kept for offline)
+  if (u.hostname === "overturemaps-extras-us-west-2.s3.us-west-2.amazonaws.com") return "tile";
   if (u.hostname === "mapproxy.terrascope.be" && u.pathname === "/mapproxy/service" && u.searchParams.get("REQUEST") === "GetMap")
     return "tile";
   // (the tactical map's ground — OpenStreetMap's tiles, PLAN-RADAR-AAA RD15 —: kept as tiles, their own headers obeyed)
@@ -113,11 +116,26 @@ export const TILE_CACHE = "kerr-tiles-v1";
  *  world's runways, the rest imagery. */
 export function tileKind(
   url: string,
-): "canopy" | "relief" | "relief512" | "mesh" | "terrarium" | "osm" | "buildings" | "cover" | "map" | "runways" | "imagery" {
+):
+  | "canopy"
+  | "relief"
+  | "relief512"
+  | "mesh"
+  | "terrarium"
+  | "osm"
+  | "buildings"
+  | "overture"
+  | "overture-list"
+  | "cover"
+  | "map"
+  | "runways"
+  | "imagery" {
   if (url.includes("LIDAR-HD_MNH")) return "canopy";
   if (url.includes("image/x-bil")) return url.includes("WIDTH=512") ? "relief512" : "relief";
   if (url.includes("tiles.openfreemap.org")) return "osm";
   if (url.includes("/BDTOPO/")) return "buildings";
+  // (its releases' listing apart: network first, asked again by every scene online)
+  if (url.includes("overturemaps-extras")) return url.includes("list-type=") ? "overture-list" : "overture";
   if (url.includes("mapproxy.terrascope.be")) return "cover";
   if (url.includes("tile.openstreetmap.org")) return "map";
   if (url.includes("/runways/")) return "runways";

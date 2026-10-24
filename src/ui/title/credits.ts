@@ -233,6 +233,11 @@ export const CREDITS: CreditSection[] = [
         url: "https://www.openstreetmap.org/copyright",
       },
       {
+        what: { fr: "Les bâtiments hors de France, leurs toits", en: "The buildings outside France, their roofs" },
+        who: "© Overture Maps Foundation (ODbL, with OpenStreetMap's; Microsoft and Google footprints)",
+        url: "https://docs.overturemaps.org/attribution/",
+      },
+      {
         what: { fr: "Les terrains et les pistes du monde", en: "The world's airfields and runways" },
         who: "OurAirports (public domain) — built into tiles by scripts/build-runways.ts",
         url: "https://ourairports.com/data/",

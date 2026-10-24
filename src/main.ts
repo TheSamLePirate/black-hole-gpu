@@ -903,7 +903,12 @@ async function main() {
           const d = earthDetailFor(settings, renderer.tier);
           return d.scenery === "off"
             ? null
-            : { mode: d.scenery, satellite: settings.earthSurface !== "off", reach: DETAIL_REACH[d.reach] ?? 1 };
+            : {
+                mode: d.scenery,
+                satellite: settings.earthSurface !== "off",
+                reach: DETAIL_REACH[d.reach] ?? 1,
+                overture: settings.earthOverture,
+              };
         })(),
       }),
     });
@@ -7541,6 +7546,11 @@ async function main() {
     " · ",
     creditLink("OpenFreeMap", "https://openfreemap.org"),
   );
+  // (Overture Maps' buildings in the scene — B7 —: credited while they are)
+  const overtureCredit = Object.assign(document.createElement("span"), { hidden: true });
+  overtureCredit.dataset.testid = "overture-credit";
+  overtureCredit.append(" · ", creditLink("© Overture Maps Foundation", "https://docs.overturemaps.org/attribution/"));
+  sceneryCredit.append(overtureCredit);
   document.body.append(sceneryCredit);
   // (the IGN's orthophotos drawn — I1 —: their source credited while they are)
   const orthoCredit = Object.assign(document.createElement("div"), { className: "scenery-credit ortho-credit", hidden: true });
@@ -8034,6 +8044,8 @@ async function main() {
     cpuProf.time("overlay (guide, marker)", () => viewOverlay.draw(chart && !renderer.offlineActive ? chart : null, chartKey));
     const hideSceneryCredit = !renderer.earthScenery.active;
     if (sceneryCredit.hidden !== hideSceneryCredit) sceneryCredit.hidden = hideSceneryCredit;
+    const hideOverture = renderer.earthScenery.overtureBuildings === 0;
+    if (overtureCredit.hidden !== hideOverture) overtureCredit.hidden = hideOverture;
     // (a national source's tiles drawn — orthophotos, its relief's finer levels —: the one under the camera credited)
     const nationalDrawn = renderer.earthTiles.orthoFinest > 0 || renderer.earthTiles.finest > ZG1;
     const hideOrthoCredit = !nationalDrawn || renderer.earthTiles.nationalAt === "swisstopo";

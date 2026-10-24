@@ -93,7 +93,7 @@ describe.skipIf(!E2E)("the buildings", () => {
       const site = SITES[key]!;
       await arrive(site, 700, 260);
       const stats = await app.js<Record<string, unknown>>(`(() => { const s = __bh.renderer.earthScenery.stats();
-          return { buildings: s.buildings, bdtopo: s.bdtopoBuildings, vertices: s.vertices, gpuBytes: s.gpuBytes, workerMs: s.workerMs, roofs: s.roofShapes, meshed: s.meshedBuildings, lidarRoofs: s.lidarRoofs, meshBytes: s.meshBytes, bytes: s.bytes, limited: s.budgetLimited, error: s.lastError ?? null }; })()`);
+          return { buildings: s.buildings, bdtopo: s.bdtopoBuildings, overture: s.overtureBuildings, overtureTiles: s.overtureTiles, surveyError: s.surveyError, vertices: s.vertices, gpuBytes: s.gpuBytes, workerMs: s.workerMs, roofs: s.roofShapes, meshed: s.meshedBuildings, lidarRoofs: s.lidarRoofs, stacks: s.stacks, meshBytes: s.meshBytes, bytes: s.bytes, limited: s.budgetLimited, error: s.lastError ?? null }; })()`);
       console.log(`  ${site.name}: ${JSON.stringify(stats)}`);
       expect(stats.buildings as number).toBeGreaterThan(500);
       // (the chase camera looking down on the roofs ahead)

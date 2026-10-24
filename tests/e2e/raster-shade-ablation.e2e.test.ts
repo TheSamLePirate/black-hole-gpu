@@ -58,6 +58,9 @@ const ABLATIONS: { name: string; tune?: Record<string, number>; settings?: strin
   { name: "relief shadow reach 300 m", tune: { TUNE_SHADOW_FAR: 300 } },
   { name: "scenery balanced", settings: `{ earthScenery: "balanced" }` },
   { name: "detail reach normal", settings: `{ detailReach: "normal" }` },
+  // (docs/PLAN-BATIMENTS-AAA.md B8: the buildings' shadows from their layer of the map everywhere, against their rays near the
+  // camera — the drop is what the near rays cost)
+  { name: "building shadows in the map", tune: { TUNE_SC_SKIP: 64 } },
 ];
 // (RP_ABL="scenery off,scenery shadows off": those alone)
 // (or their indices in ABLATIONS, RP_ABL=1,3 — the remote runner passes no spaces)

@@ -34,6 +34,7 @@ import {
   tileKind,
 } from "./pwa/rules";
 import { decodeRelief, encodeRelief, isReliefGrid, RELIEF_CODEC } from "./pwa/relief-codec";
+import { OVERTURE_LIST, overtureReleases, overtureUrl, parseOvertureZoneUrl, parseRange, PmTiles, rangeKey } from "./system/pmtiles";
 
 declare const self: ServiceWorkerGlobalScope;
 /** the build this worker belongs to (the build script substitutes it; dev: the time the worker was built) */
@@ -256,8 +257,63 @@ async function serve(kept: Response, mark?: [string, string]): Promise<Response 
 async function zoneFetch(id: string, chains: string[][], fresh = false) {
   const cache = await caches.open(ZONE_CACHE);
   const out = { done: 0, bytes: 0, none: 0, failed: [] as string[][] };
+  /** a range of an archive into this zone (its key's record marked this zone's too): its bytes */
+  const keepRange = async (url: string, offset: number, length: number): Promise<Uint8Array> => {
+    const key = rangeKey(url, offset, length);
+    const t = await storeGet<ZoneTile>(ZONE_TILES, key);
+    const kept = t && !fresh && (await cache.match(key));
+    if (t && kept) {
+      if (!t.zones.includes(id)) await storePut(ZONE_TILES, { ...t, zones: [...t.zones, id] });
+      return new Uint8Array(await kept.arrayBuffer());
+    }
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await fetch(url, { headers: { Range: `bytes=${offset}-${offset + length - 1}` } });
+        if (res.status !== 206) {
+          void res.body?.cancel();
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const body = await res.arrayBuffer();
+        if (body.byteLength !== length) throw new Error(`range ${body.byteLength} of ${length}`);
+        await cache.put(key, new Response(body.slice(0), { status: 200, headers: { "content-length": String(length) } }));
+        await storePut(ZONE_TILES, { url: key, zones: t?.zones.includes(id) ? t.zones : [...(t?.zones ?? []), id], size: length });
+        out.bytes += length;
+        return new Uint8Array(body);
+      } catch (e) {
+        if (attempt >= 2) throw e;
+        await new Promise((done) => setTimeout(done, 1000 * 2 ** attempt));
+      }
+    }
+  };
+  /** Overture's archive this batch reads (the release the scenery's worker would: the listing's latest that answers) */
+  let archive: Promise<PmTiles | null> | null = null;
+  const overture = () =>
+    (archive ??= (async () => {
+      const list = await listing(new Request(OVERTURE_LIST)).then((r) => r.text());
+      for (const r of overtureReleases(list)) {
+        const p = new PmTiles(overtureUrl(r), keepRange);
+        try {
+          await p.header();
+          return p;
+        } catch {
+          /* gone: the next release */
+        }
+      }
+      return null;
+    })());
   /** one link: its body (in, now or before), "none" (404), null (failed after every try) */
   const link = async (url: string): Promise<ArrayBuffer | "none" | null> => {
+    // (an Overture tile: its directories' and its bytes' ranges kept, each under its key)
+    const ov = parseOvertureZoneUrl(url);
+    if (ov)
+      try {
+        const p = await overture();
+        if (!p) return null;
+        const b = await p.tile(ov.z, ov.x, ov.y);
+        return b ? (b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer) : "none";
+      } catch {
+        return null;
+      }
     const t = await storeGet<ZoneTile>(ZONE_TILES, url);
     const kept = t && (await cache.match(url));
     // (a source's none kept as such — its 404 —: the next link asked, as the first time)
@@ -420,6 +476,10 @@ async function networkFirst(request: Request, name: string): Promise<Response> {
 /** A tile: from the cache (its last use refreshed), else fetched and kept — the budget enforced after. */
 let evicting: Promise<void> | null = null;
 async function tile(request: Request): Promise<Response> {
+  // (a byte range of an archive — Overture's —: kept under a key of its own; the releases' listing: network first)
+  const range = parseRange(request.headers.get("range"));
+  if (range) return rangeTile(request, range.offset, range.length);
+  if (request.url === OVERTURE_LIST) return listing(request);
   // (an offline zone's first: kept whatever the budget)
   const zoned = await (await caches.open(ZONE_CACHE)).match(request);
   // (marked as a zone's: the page — the tests — tells it from the network's)
@@ -450,6 +510,73 @@ async function tile(request: Request): Promise<Response> {
     })();
   }
   return res;
+}
+
+/** A range served as a 206 (its key's whole body as kept), `zone` marked. */
+function partial(body: ArrayBuffer, offset: number, zone: boolean): Response {
+  const headers = new Headers({
+    "content-type": "application/octet-stream",
+    "content-length": String(body.byteLength),
+    "content-range": `bytes ${offset}-${offset + body.byteLength - 1}/*`,
+  });
+  if (zone) headers.set("x-kerr-zone", "1");
+  return new Response(body, { status: 206, headers });
+}
+/** A byte range of an archive (the Cache API keeps no partial response: each range a whole one under rangeKey): a zone's,
+ *  the cache's, else the network's — kept under the budget as any tile. */
+async function rangeTile(request: Request, offset: number, length: number): Promise<Response> {
+  const key = rangeKey(request.url, offset, length);
+  const zoned = await (await caches.open(ZONE_CACHE)).match(key);
+  if (zoned) {
+    serving(key, "zone");
+    return partial(await zoned.arrayBuffer(), offset, true);
+  }
+  const cache = await caches.open(TILE_CACHE);
+  const hit = await cache.match(key);
+  if (hit) {
+    serving(key, "lru");
+    void indexPut({ url: key, t: Date.now(), size: length });
+    return partial(await hit.arrayBuffer(), offset, false);
+  }
+  serving(key, "network");
+  const res = await fetch(request);
+  if (res.status !== 206) return res;
+  const body = await res.arrayBuffer();
+  if (body.byteLength === length) {
+    void (async () => {
+      await cache.put(key, new Response(body.slice(0), { status: 200, headers: { "content-length": String(length) } }));
+      await indexPut({ url: key, t: Date.now(), size: length });
+      evicting ??= enforceBudget().finally(() => (evicting = null));
+    })();
+  }
+  return partial(body, offset, false);
+}
+/** Overture's releases' listing: the network's (kept), else a zone's or the cache's — a release may have gone since */
+async function listing(request: Request): Promise<Response> {
+  const cache = await caches.open(TILE_CACHE);
+  try {
+    const res = await fetch(request, { signal: AbortSignal.timeout(6000) });
+    if (res.ok) {
+      const body = await res.arrayBuffer();
+      void cache.put(request.url, new Response(body.slice(0), { status: 200, headers: res.headers }));
+      void indexPut({ url: request.url, t: Date.now(), size: body.byteLength });
+      serving(request.url, "network");
+      return new Response(body, { status: 200, headers: res.headers });
+    }
+    throw new Error(`HTTP ${res.status}`);
+  } catch (e) {
+    const zoned = await (await caches.open(ZONE_CACHE)).match(request.url);
+    if (zoned) {
+      serving(request.url, "zone");
+      return serve(zoned, ["x-kerr-zone", "1"]).then((r) => r ?? zoned);
+    }
+    const hit = await cache.match(request.url);
+    if (hit) {
+      serving(request.url, "lru");
+      return hit;
+    }
+    throw e;
+  }
 }
 
 async function enforceBudget() {

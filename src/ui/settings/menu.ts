@@ -120,6 +120,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "earthOrtho",
       "earthIgnRelief",
       "earthIgnSilhouettes",
+      "earthOverture",
       "earthSurface",
       "earthScenery",
       "detailReach",

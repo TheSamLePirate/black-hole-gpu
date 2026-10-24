@@ -51,6 +51,8 @@ export class EarthScenery {
   shadows = true;
   /** the IGN's survey over France for the trees and the buildings' ground (settings.earthIgnRelief — I4) */
   ign = false;
+  /** Overture Maps' buildings near the centre, outside France (settings.earthOverture — B7) */
+  overture = true;
   private started = 0;
   private attempted = -Infinity;
   private busy = false;
@@ -178,7 +180,7 @@ export class EarthScenery {
       // (the camera moved on: its new scene asked at once, not after the throttle)
       this.attempted = -Infinity;
     }
-    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}`;
+    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
     if (
@@ -277,6 +279,7 @@ export class EarthScenery {
         budget: this.budget(),
         geoid: geoidPlane(c.lat, c.lon),
         ign: this.ign,
+        overture: this.overture,
       } satisfies SceneryRequest);
     } catch (e) {
       this.lastError = String(e);
@@ -337,6 +340,10 @@ export class EarthScenery {
     o[23] = this.shadows ? 1 : 0;
     return o;
   }
+  /** the scene's buildings Overture Maps' (B7: credited while drawn) */
+  get overtureBuildings() {
+    return this.data?.overtureBuildings ?? 0;
+  }
   get active() {
     return !!this.data && this.mode !== "off";
   }
@@ -372,6 +379,9 @@ export class EarthScenery {
       /** of the buildings, the IGN's BD TOPO's (I5), and its tiles */
       bdtopoBuildings: d?.bdtopoBuildings ?? 0,
       bdtopoTiles: d?.bdtopoTiles ?? 0,
+      /** of the buildings, Overture Maps' (B7), and its tiles */
+      overtureBuildings: d?.overtureBuildings ?? 0,
+      overtureTiles: d?.overtureTiles ?? 0,
       /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */
       forestCells: d?.forestCells ?? 0,
       forestCellM: d?.forestCellM ?? 0,
@@ -381,6 +391,7 @@ export class EarthScenery {
       roofShapes: d?.roofShapes ?? {},
       meshedBuildings: d?.meshedBuildings ?? 0,
       lidarRoofs: d?.lidarRoofs ?? 0,
+      stacks: d?.stacks ?? 0,
       meshBytes: d?.meshBytes ?? 0,
       bytes: d?.bytes ?? null,
       roads: d?.roads ?? 0,

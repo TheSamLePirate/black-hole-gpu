@@ -1,4 +1,5 @@
 import { earcut } from "./earcut";
+import { clipHalf } from "./roof-mesh";
 
 // The buildings' roofs (docs/PLAN-BATIMENTS-AAA.md B1): from a footprint and what the data say of it — the BD TOPO's eave
 // and ridge, its roof's and walls' materials, its storeys and use; OSM's height to the top and colour — the roof's shape
@@ -33,6 +34,8 @@ export enum WallMaterial {
   Brick = 4,
   Render = 5,
   Wood = 6,
+  /** (not the registry's: a curtain wall's glass — Overture's facade_material) */
+  Glass = 7,
   Other = 9,
 }
 export type RoofShape = "flat" | "gabled" | "hipped" | "mansard" | "shed";
@@ -140,6 +143,8 @@ export function wallColour(mat: WallMaterial, region: Region, s: number): [numbe
       return lerp3([0.3, 0.11, 0.065], [0.24, 0.12, 0.08], s);
     case WallMaterial.Wood:
       return lerp3([0.19, 0.11, 0.055], [0.12, 0.08, 0.05], s);
+    case WallMaterial.Glass:
+      return lerp3([0.06, 0.08, 0.1], [0.08, 0.09, 0.09], s);
     default: {
       // (render: white to cream to the south's ochres and pinks)
       const warm = region === "france-south" || region === "mediterranean";
@@ -169,8 +174,11 @@ export function osmColour(v: unknown): [number, number, number] | null {
     const c = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
     return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   };
-  // (a painted wall's albedo between 0.05 and 0.7: a "white" no brighter than fresh render)
-  return [lin(0), lin(2), lin(4)].map((c) => 0.05 + 0.65 * c) as [number, number, number];
+  // (a painted wall's albedo between 0.05 and 0.6: a "white" no brighter than fresh render; its saturation halved — a
+  // mapper's "red", "green", "#ff0000" is a brick, a patina, a painted render, never a pure primary)
+  const c = [lin(0), lin(2), lin(4)];
+  const y = 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
+  return c.map((v) => 0.05 + 0.55 * (y + 0.45 * (v - y))) as [number, number, number];
 }
 
 // ---- footprints
@@ -435,6 +443,9 @@ export interface RoofInput {
   seed: number;
   /** a part of a complex building (planBuilding): the building's shape and pitch, its convex part's own planes */
   force?: { shape: RoofShape; k?: number; top?: number };
+  /** what the data name of its roof (Overture's roof_shape, roof_orientation, roof_direction): its shape, its ridge across
+   *  the footprint's long axis, the compass direction [°] a lean-to's slope faces */
+  hint?: { shape?: RoofShape; across?: boolean; direction?: number };
 }
 export interface RoofPlan {
   shape: RoofShape;
@@ -560,6 +571,7 @@ export function planRoof(b: RoofInput): RoofPlan {
   // ---- flat: what the data say (flatByData), a complex outline whole (planBuilding cuts it into parts)
   const byData = flatByData(b, area);
   if (byData !== null) return flat(b.height, byData);
+  if (b.hint?.shape === "flat") return flat(b.height);
   if (!b.force && (convex < 0.88 || b.rings.length > 1 || sides.length > 12)) {
     // (its measured roof's volume kept as a flat top halfway up it)
     return flat(b.height + (H0 !== null ? 0.5 * H0 : 0));
@@ -585,14 +597,30 @@ export function planRoof(b: RoofInput): RoofPlan {
     !b.top && (mat === RoofMaterial.Zinc || mat === RoofMaterial.Slate) && (b.storeys ?? 0) >= 5 && b.height >= 12 && box.hv > 3.5;
   let shape: RoofShape;
   let sloped: Side[];
-  if (b.force?.shape === "hipped") {
+  const hint = b.force ? undefined : b.hint?.shape;
+  if (b.force?.shape === "hipped" || hint === "hipped") {
     shape = "hipped";
     sloped = exterior;
+  } else if (hint === "gabled") {
+    shape = "gabled";
+    // (the ridge along the long axis — or across it, as the data say)
+    sloped = exterior.filter(b.hint?.across ? alongV : alongU);
+    if (!sloped.length) sloped = exterior;
+  } else if (hint === "shed") {
+    // (a lean-to: its slope facing the data's direction — east of north —, else away from its longest party wall)
+    shape = "shed";
+    const d = b.hint?.direction;
+    const toward = d !== undefined ? [Math.sin(d * DEG), Math.cos(d * DEG)] : null;
+    sloped = [
+      toward
+        ? exterior.reduce((m, s) => (s.nx * toward[0]! + s.ny * toward[1]! > m.nx * toward[0]! + m.ny * toward[1]! ? s : m))
+        : exterior.reduce((m, s) => (s.length > m.length ? s : m)),
+    ];
   } else if (b.force && b.force.shape !== "mansard") {
     shape = "gabled";
     sloped = exterior.filter(lenU >= 0.95 * lenV ? alongU : alongV);
     if (!sloped.length) sloped = exterior;
-  } else if (mansard || b.force?.shape === "mansard") {
+  } else if (mansard || b.force?.shape === "mansard" || hint === "mansard") {
     shape = "mansard";
     sloped = exterior;
   } else if ((b.light || usage === "Annexe") && area < 40 && !allFree) {
@@ -844,12 +872,15 @@ export function planBuilding(b: RoofInput, maxParts = 24): RoofPart[] {
   if (!parts.length || parts.length > maxParts) return [{ ...one, rings }];
   // (the building's shape: a mansard where its block's would be, else two slopes — four by the seed where the region hips)
   const mat = one.roofMat;
+  const hinted = b.hint?.shape;
   const shape: RoofShape =
-    !b.top && (mat === RoofMaterial.Zinc || mat === RoofMaterial.Slate) && (b.storeys ?? 0) >= 5 && b.height >= 12
-      ? "mansard"
-      : b.seed < REGION[b.region].hip * 0.6
-        ? "hipped"
-        : "gabled";
+    hinted === "gabled" || hinted === "hipped" || hinted === "mansard"
+      ? hinted
+      : !b.top && (mat === RoofMaterial.Zinc || mat === RoofMaterial.Slate) && (b.storeys ?? 0) >= 5 && b.height >= 12
+        ? "mansard"
+        : b.seed < REGION[b.region].hip * 0.6
+          ? "hipped"
+          : "gabled";
   // (its pitch: the largest part's — its measured roof over that part's width)
   const largest = parts.reduce((m, p) => (Math.abs(ringArea(p.ring)) > Math.abs(ringArea(m.ring)) ? p : m));
   const main = planRoof({ ...b, rings: [largest.ring], party: largest.flags, force: { shape } });
@@ -868,4 +899,125 @@ export function planBuilding(b: RoofInput, maxParts = 24): RoofPart[] {
     }
   }
   return planned;
+}
+
+// ---- Overture Maps' buildings (docs/PLAN-BATIMENTS-AAA.md B7): their roof_* and facade_* in this module's terms
+
+/** Overture's roof_shape (OSM's roof:shape) as one of ours: domes and onions the steepest hips, a gambrel a mansard */
+export function overtureShape(v: unknown): RoofShape | undefined {
+  switch (v) {
+    case "flat":
+      return "flat";
+    case "gabled":
+    case "saltbox":
+      return "gabled";
+    case "hipped":
+    case "half_hipped":
+    case "pyramidal":
+    case "dome":
+    case "onion":
+    case "round":
+      return "hipped";
+    case "mansard":
+    case "gambrel":
+      return "mansard";
+    case "skillion":
+      return "shed";
+    default:
+      return undefined;
+  }
+}
+export function overtureRoofMaterial(v: unknown): RoofMaterial {
+  switch (v) {
+    case "roof_tiles":
+      return RoofMaterial.Tiles;
+    case "slate":
+    case "stone":
+      return RoofMaterial.Slate;
+    case "metal":
+    case "copper":
+      return RoofMaterial.Metal;
+    case "concrete":
+    case "gravel":
+    case "tar_paper":
+    case "asbestos":
+    case "eternit":
+      return RoofMaterial.Concrete;
+    case undefined:
+    case null:
+    case "":
+      return RoofMaterial.Unknown;
+    default:
+      return RoofMaterial.Other;
+  }
+}
+export function overtureWallMaterial(v: unknown): WallMaterial {
+  switch (v) {
+    case "brick":
+      return WallMaterial.Brick;
+    case "stone":
+      return WallMaterial.Stone;
+    case "concrete":
+    case "cement_block":
+      return WallMaterial.Concrete;
+    case "plaster":
+    case "clay":
+      return WallMaterial.Render;
+    case "wood":
+    case "timber_framing":
+      return WallMaterial.Wood;
+    case "glass":
+      return WallMaterial.Glass;
+    case undefined:
+    case null:
+    case "":
+      return WallMaterial.Unknown;
+    default:
+      return WallMaterial.Other;
+  }
+}
+
+// ---- chimneys (docs/PLAN-BATIMENTS-AAA.md B9): stacks at the ends of a roof's top — a terraced house's and a Paris block's
+// on their party walls (their gables), a house's one on its ridge
+
+/** a chimney stack: its footprint (a rectangle, local metres) and its top over the base [m] */
+export interface Stack {
+  ring: Pt[];
+  top: number;
+}
+/**
+ * The stacks of a roof part: its top's region (the footprint where the roof is within 5 cm of its top — a ridge's strip, a
+ * terrasson's flat) along its long axis, a stack at each end 0.5 m in; a Paris mansard's (`block`) long across the ridge,
+ * as on a party wall (0.7 × 2.4 m, 1.6 m over the top), a house's square (0.6 m, 1.1 m over) at one end, chosen by `seed`
+ * — and none for a third of them. Flat roofs and lean-tos none.
+ */
+export function stacksOf(part: RoofPart, seed: number, block: boolean): Stack[] {
+  if (part.shape === "flat" || part.shape === "shed") return [];
+  if (!block && seed > 0.66) return [];
+  let top: Pt[] = openRing(part.rings[0]!);
+  for (const [a, b, c] of part.planes) {
+    // (the roof within 5 cm of the top: a·x + b·y + c ≥ top − 0.05)
+    top = clipHalf(top, -a, -b, part.top - 0.05 - c);
+    if (top.length < 3) return [];
+  }
+  const box = orientedBox(top);
+  if (box.hu < 0.8) return [];
+  const vx = -box.uy,
+    vy = box.ux;
+  const rect = (cu: number, du: number, dv: number): Pt[] => {
+    const cx = box.cx + cu * box.ux,
+      cy = box.cy + cu * box.uy;
+    return [
+      [cx - du * box.ux - dv * vx, cy - du * box.uy - dv * vy],
+      [cx + du * box.ux - dv * vx, cy + du * box.uy - dv * vy],
+      [cx + du * box.ux + dv * vx, cy + du * box.uy + dv * vy],
+      [cx - du * box.ux + dv * vx, cy - du * box.uy + dv * vy],
+    ];
+  };
+  const end = box.hu - 0.5;
+  if (block) {
+    const across = Math.min(1.2, Math.max(0.4, box.hv + 0.9));
+    return [-1, 1].map((s) => ({ ring: rect(s * (end - 0.35), 0.35, across), top: part.top + 1.6 }));
+  }
+  return [{ ring: rect((seed < 0.33 ? -1 : 1) * (end - 0.3), 0.3, 0.3), top: part.top + 1.1 }];
 }

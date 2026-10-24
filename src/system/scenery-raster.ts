@@ -695,24 +695,34 @@ export class SceneryRaster {
   /** The trees' and buildings' shadow map, seen from the Sun (after encodeCull, which culled its lists): false when not drawn. */
   encodeShadow(enc: GPUCommandEncoder, descriptor: GPURenderPassDescriptor["timestampWrites"]): boolean {
     if (!this.active || !this.sunOn || !this.drawBind || !this.shadowMap) return false;
-    const pass = enc.beginRenderPass({
-      label: "trees' shadow map",
-      colorAttachments: [],
-      depthStencilAttachment: { view: this.shadowMap.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
-      ...(descriptor ? { timestampWrites: descriptor } : {}),
-    });
+    // (two layers: the trees', the buildings' — B8: near the camera the tracer's rays stand for the buildings' layer)
+    const layer = (k: number) =>
+      enc.beginRenderPass({
+        label: k ? "buildings' shadow map" : "trees' shadow map",
+        colorAttachments: [],
+        depthStencilAttachment: {
+          view: this.shadowMap!.createView({ dimension: "2d", baseArrayLayer: k, arrayLayerCount: 1 }),
+          depthClearValue: 1,
+          depthLoadOp: "clear",
+          depthStoreOp: "store",
+        },
+        ...(descriptor && k === 0 ? { timestampWrites: descriptor } : {}),
+      });
+    const trees = layer(0);
     for (let l = 0; l < 2; l++) {
-      pass.setPipeline(this.shadowPipes[l]!);
-      pass.setBindGroup(0, this.drawBind);
-      pass.setVertexBuffer(0, this.meshes[2 + l]!);
-      pass.drawIndirect(this.draws, (LISTS + 1 + l) * 16);
+      trees.setPipeline(this.shadowPipes[l]!);
+      trees.setBindGroup(0, this.drawBind);
+      trees.setVertexBuffer(0, this.meshes[2 + l]!);
+      trees.drawIndirect(this.draws, (LISTS + 1 + l) * 16);
     }
-    pass.setPipeline(this.boxShadowPipe!);
-    pass.setBindGroup(0, this.drawBind);
-    pass.drawIndirect(this.draws, LISTS * 16);
-    pass.setPipeline(this.meshShadowPipe!);
-    pass.drawIndirect(this.draws, (LISTS + 3) * 16);
-    pass.end();
+    trees.end();
+    const buildings = layer(1);
+    buildings.setPipeline(this.boxShadowPipe!);
+    buildings.setBindGroup(0, this.drawBind);
+    buildings.drawIndirect(this.draws, LISTS * 16);
+    buildings.setPipeline(this.meshShadowPipe!);
+    buildings.drawIndirect(this.draws, (LISTS + 3) * 16);
+    buildings.end();
     return true;
   }
 

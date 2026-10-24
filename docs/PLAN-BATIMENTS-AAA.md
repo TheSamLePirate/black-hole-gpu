@@ -256,11 +256,40 @@ scène de l'Étoile. `bdtopo.e2e`, même centre de scène qu'en B5 : **1,4 m d'�
 OSM : 4,5 m, 34 %). Piège : deux machines sur la même IP doublent le débit vers la Géoplateforme — HTTP 429 ; un e2e IGN à la
 fois.
 
+### B7 — Overture Maps hors de France (24/10)
+
+Décision de l'utilisateur : « branche ». `src/system/pmtiles.ts` lit l'archive PMTiles d'Overture par plages d'octets
+(en-tête, répertoire racine, feuilles, tuile — gzip), la dernière version que la liste du seau donne (Overture n'en garde
+que trois : découverte à l'exécution). Le worker lit les tuiles z 14 à moins de 1,8 km du centre de la scène hors de la
+BD TOPO (France) : bâtiments d'OSM et emprises ML de Microsoft et Google, `roof_shape` / `roof_height` /
+`roof_orientation` / `roof_direction` / `roof_color` / `roof_material`, `facade_color` / `facade_material`, et les
+`building_part` à la place de leur bâtiment (nef, flèche, retraits d'une tour). OSM garde les bâtiments au-delà et là où une
+tuile Overture échoue. Façades vitrées (matériau 7) : murs-rideaux à meneaux, reflet du ciel. Couleurs déclarées désaturées
+(un « red » est une brique). Réglage « Bâtiments Overture (hors de France) » (FR/EN, actif par défaut), crédit à l'écran.
+
+Service Worker : l'API Cache ne garde pas de réponse partielle — chaque plage est gardée entière sous sa clé
+(`rangeKey` : `…?kerr-range=a-b`), servie en 206 ; un serveur qui ignorerait la plage (200 et l'archive entière, 181 Go) est
+refusé avant d'en lire le corps. Zones hors ligne : une pseudo-URL `kerr-overture:14/x/y` par tuile, que le Service Worker
+résout lui-même (la liste, l'en-tête, les répertoires, la tuile, chaque plage gardée dans la zone).
+
+Mesures : Munich 21 227 bâtiments Overture (9 tuiles) ; Tokyo 19 923, Sydney 14 014 (`earth-scenery`). `overture.e2e` :
+en ligne, puis rechargé (24 plages du cache, 0 du réseau), puis zone de 1 km (49 plages gardées, 7,6 Mo) et hors ligne
+(toutes les plages de la zone, 8 000 bâtiments comme en ligne).
+
+### B8 — ombres des bâtiments nettes près de la caméra (24/10)
+
+La carte d'ombres devient un tableau à deux couches (arbres, bâtiments). Près de la caméra, les bâtiments par leur rayon
+vers le Soleil (exact, bords nets, pénombre du disque solaire au fil des images) ; de 200 à 300 m une part des pixels, le
+passage fondu par l'accumulation ; au-delà, leur couche de la carte. Essai précédent — rayons partout, carte des arbres
+seule — mesuré à **+3,1 ms** de `shade` à Paris en vol bas : rejeté pour la portée lointaine.
+
+### B9 — cheminées (24/10)
+
+`roofs.ts stacksOf` : aux bouts de la région haute du toit (le faîtage, le terrasson), une souche — deux en travers sur les
+mansardes parisiennes (sur les murs mitoyens), une sur le faîtage de deux maisons sur trois ; une feuille par souche,
+à moins de 700 m du centre (1 095 à Saint-Lô), sans fenêtre (forme 5 du mot de la feuille).
+
 ### Reste à faire
 
 - **B2b** — la feuille désignée par le raster (comme les arbres) : le coût est déjà neutre, gain attendu en ville dense.
-- **Cheminées** (souches sur les murs mitoyens parisiens) : en feuilles près de la caméra seulement.
-- **Overture** hors de France (`roof_shape` à Munich sur 33 % des bâtiments) : décision à prendre (tuiles 3 à 10 fois plus
-  lourdes qu'OpenFreeMap, lecteur PMTiles, zones hors ligne).
-- **Ombres proches nettes** : une cascade fine (±150 m à 0,15 m le texel) pour les vues au ras des toits.
 

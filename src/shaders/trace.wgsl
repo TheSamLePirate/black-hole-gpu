@@ -5951,6 +5951,7 @@ fn cloudShadowAt(p: vec3f) -> f32 { return -1.0; }
 // BEGIN_TREE_SHADOW (system/tree-shadow.ts withTreeShadow supplies the trees' and buildings' shadow map's lookup)
 // (the share of the Sun a scenery-frame point sees past them: −1 where the map has nothing — the rays then, as before)
 fn treeShadowAt(p: vec3f) -> f32 { return -1.0; }
+fn buildingShadowAt(p: vec3f) -> f32 { return -1.0; }
 // END_TREE_SHADOW
 // (shade's ground point from the camera, the Earth's axes [m] — the relief's shadow map's lookup —, set by earthNear)
 var<private> SHADOW_REL: vec3f = vec3f(0.0);
@@ -7237,12 +7238,23 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
     let hs=clamp((eave-base)/f32(storeys),2.6,4.2);
     let f=(p.z-base)/hs;let floorI=floor(f);let v=fract(f);
     let bays=max(1.0,round(len/3.2));let bw=len/bays;let u=fract(along/bw);let bay=floor(along/bw);
+    // (a curtain wall — Overture's facade_material glass —: its mullions every 1.5 m, a spandrel a storey, the sky mirrored
+    // whole; a share of its panes lit at night)
+    if(wallMat==7u){
+      let mull=fract(along/1.5)<0.05 || v<0.1;
+      *alb=select(*alb,vec3f(0.16,0.17,0.18),mull);
+      WS_S=select(0.1,0.0,mull);
+      let hsh=hash3u(vec3u(id,u32(floorI),u32(floor(along/1.5)+512.0)));
+      if(!mull && u2f(hsh)<0.35){WS_E=vec3f(0.95,0.92,0.85)*(0.04+0.06*u2f(pcg(hsh)))*near;}
+      return;
+    }
     // (the material's own grain: dressed stone's courses, brick's tone, render's stains)
     if(wallMat==1u){*alb*=0.92+0.08*smoothstep(0.0,0.06,fract((p.z-base)/0.45))*near;}
     else if(wallMat==4u){*alb*=0.85+0.3*hash31(vec3f(floor(along/0.25),floor((p.z-base)/0.075),f32(id)))*near;}
     else{*alb*=0.9+0.2*gnoise(p*vec3f(0.15,0.15,0.4));}
     // (above the eave a gable, a party wall's rise: blank)
-    if(p.z<eave-0.3 && len>2.4 && near>0.0){
+    // (a chimney stack — shape 5 —: no window)
+    if(p.z<eave-0.3 && len>2.4 && near>0.0 && ((w>>18u)&7u)!=5u){
       let shop=floorI<0.5 && storeys>=4u;
       let wu=select(0.26,0.12,shop);let wv0=select(0.28,0.08,shop);let wv1=select(0.86,0.82,shop);
       let inWin=u>wu && u<1.0-wu && v>wv0 && v<wv1 && p.z>base+0.5;
@@ -7369,8 +7381,6 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || P.scenery[5].w<.5 || SC_DISTANCE>reach || dot(light,P.scenery[2].xyz)<=.015){return 1.0;}
   let sun=sceneryLocal(light);let n=sceneryLocal(normal);
   let fade=smoothstep(reach-200.0,reach,SC_DISTANCE);
-  // (the trees' and buildings' shadow map where it reaches — one read, no ray —; TUNE_SC_SKIP 32: the rays, as before)
-  if((TUNE_SC_SKIP&32u)==0u){let m=treeShadowAt(SC_POINT+n*.35);if(m>=0.0){return mix(m,1.0,fade);}}
   let axis=normalize(cross(sun,select(vec3f(0.0,0.0,1.0),vec3f(0.0,1.0,0.0),abs(sun.z)>.9)));
   let radius=.00465*sqrt(fract(SC_SAMPLE*7.31+.17));let phase=TAU*fract(SC_SAMPLE*13.73+.41);
   let d=normalize(sun+radius*(axis*cos(phase)+cross(sun,axis)*sin(phase)));
@@ -7380,6 +7390,23 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
   // TUNE_SC_SKIP 16: the full range, as before)
   let full=(TUNE_SC_SKIP&16u)!=0u;
   let sz=max(d.z,0.06);
+  // (the shadow map where it reaches — the trees' layer and the buildings' —; near the camera the buildings by their ray:
+  // exact, their edges sharp where the map's ~0.9 m texel spans a dozen pixels, their penumbra the Sun's disc over the
+  // frames — from 200 to 300 m a share of the pixels, the hand-over blended over the frames (docs/PLAN-BATIMENTS-AAA.md B8);
+  // TUNE_SC_SKIP 64: the map's alone (B2–B5); 32: every ray, as before the map)
+  if((TUNE_SC_SKIP&32u)==0u){
+    let m=treeShadowAt(SC_POINT+n*.35);
+    if(m>=0.0){
+      var b=1.0;
+      if((TUNE_SC_SKIP&64u)==0u && fract(SC_SAMPLE*5.17+.29)>smoothstep(200.0,300.0,SC_DISTANCE)){
+        if(sceneryQuery(start,d,select(min(range,300.0/sz),range,full),true).kind>=0.0){b=0.0;}
+      }else{
+        let mb=buildingShadowAt(SC_POINT+n*.35);
+        b=select(1.0,mb,mb>=0.0);
+      }
+      return mix(min(m,b),1.0,fade);
+    }
+  }
   let h=sceneryQuery(start,d,select(min(range,300.0/sz),range,full),true);
   var blocked=h.kind>=0.0;
   if(!blocked){blocked=forestQuery(start,d,select(min(range,60.0/sz),range,full),true,select(0.0,60.0,SC_DISTANCE<180.0)).kind>0u;}

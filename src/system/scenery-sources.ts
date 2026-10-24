@@ -5,6 +5,7 @@
 // ask the same URLs, to the character.
 
 import { BDTOPO_Z, bdtopoUrl } from "./bdtopo";
+import { OVERTURE_LIST, overtureZoneUrl } from "./pmtiles";
 import { tileUrl } from "./earth-tiles";
 import { inIgnBox, surveyChains, tilesWithin } from "./ign-canopy";
 import { SWISSTOPO, SWISS_GROUND_G, swissGroundTiles, swissTerrainUrl } from "./national";
@@ -112,7 +113,13 @@ export interface SceneryAsk {
   reach: number;
   /** the IGN's survey and buildings over France, swisstopo's ground over Switzerland (settings.earthIgnRelief) */
   ign: boolean;
+  /** Overture Maps' buildings near the centre outside the BD TOPO's France (settings.earthOverture) */
+  overture?: boolean;
 }
+/** Overture's buildings are read within this of a scene's centre [m] (its z 14 tiles 0.5–1.6 MB: OSM's beyond) */
+export const OVERTURE_REACH_M = 1800;
+/** the buildings within this of a scene's centre [m] have their chimneys (roofs.ts stacksOf: a leaf a stack) */
+export const STACKS_M = 700;
 /** the BD TOPO's tiles a scene asks (the nearest first, at most 256 a unit of reach²; fewer once its nearest buildings
  *  are in) */
 export const bdtopoTiles = (lat: number, lon: number, radius: number, reach: number) =>
@@ -144,5 +151,10 @@ export function sceneryChains(q: SceneryAsk): string[][] {
     for (const t of bdtopoTiles(q.lat, q.lon, radius, q.reach)) out.push([bdtopoUrl(t.x, t.y)]);
   } else if (survey === "swisstopo")
     for (const [x, y] of swissGroundTiles(q.lat, q.lon, surveyReach(radius))) out.push([swissTerrainUrl(SWISS_GROUND_G, x, y)]);
+  // (Overture's: its releases' listing, then each tile near the centre — the Service Worker resolves its byte ranges)
+  if (q.overture && survey !== "ign") {
+    out.push([OVERTURE_LIST]);
+    for (const t of osmTiles(q.lat, q.lon, bounds, q.reach).tiles) if (t.d <= OVERTURE_REACH_M) out.push([overtureZoneUrl(t.x, t.y)]);
+  }
   return out;
 }

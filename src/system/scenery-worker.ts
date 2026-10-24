@@ -5,6 +5,7 @@ import { earthDetail, toHalf } from "../terrain";
 import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
 import { CANOPY_NEAR, IgnLand } from "./ign-canopy";
+import { fetchRange, OVERTURE_LIST, OVERTURE_Z, overtureReleases, overtureUrl, PmTiles } from "./pmtiles";
 import { SwissGround } from "./national";
 import {
   bdtopoTiles as bdtopoWanted,
@@ -14,6 +15,8 @@ import {
   coverUrl,
   coverWidth,
   demTile,
+  OVERTURE_REACH_M,
+  STACKS_M,
   osmTiles,
   osmUrl,
   sceneryBox,
@@ -27,11 +30,15 @@ import {
   osmColour,
   partyEdges,
   planBuilding,
+  stacksOf,
   type RoofInput,
   type RoofPart,
   type Pt,
   regionOf,
   roofColour,
+  overtureRoofMaterial,
+  overtureShape,
+  overtureWallMaterial,
   RoofMaterial,
   roofMaterial,
   wallColour,
@@ -385,6 +392,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     nature?: string;
     light?: boolean;
     colour?: unknown;
+    /** the roof's colour and shape as the data name them (Overture's roof_color, roof_shape…) */
+    roofColour?: unknown;
+    hint?: RoofInput["hint"];
   };
   type Choice = { geo: { lat: number; lon: number }[][]; lat: number; lon: number; h: number; low: number; d: number; a: Attr };
   const choices: Choice[] = [];
@@ -471,6 +481,123 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     return { out, covered, tileCount };
   };
   const bdtopo = survey === "ign" ? bdtopoTiles() : null;
+  // ---- elsewhere, Overture Maps' buildings near the centre (B7, pmtiles.ts): OSM's with the ML footprints of Microsoft's
+  // and Google's, their roofs' shapes, heights, colours and materials where mapped — a z 14 tile 0.5–1.6 MB, so within
+  // OVERTURE_REACH_M alone; OSM's own buildings kept beyond, and where an Overture tile failed
+  const fetchRanged = async (url: string, init: RequestInit) => {
+    const r = await fetch(url, { ...init, signal });
+    count(r);
+    networkBytes += Number(r.headers.get("content-length")) || 0;
+    return r;
+  };
+  const overtureTiles = async () => {
+    const out: Choice[] = [],
+      covered = new Set<string>();
+    let tileCount = 0;
+    let pm: PmTiles | null = null;
+    try {
+      const list = await fetch(OVERTURE_LIST, { signal });
+      count(list);
+      if (!list.ok) throw new Error(`HTTP ${list.status}: ${OVERTURE_LIST}`);
+      // (the latest release whose archive answers: the bucket keeps three, the one a zone holds among them)
+      for (const r of overtureReleases(await list.text())) {
+        const p = new PmTiles(overtureUrl(r), fetchRange(fetchRanged));
+        try {
+          await p.header();
+          pm = p;
+          break;
+        } catch (e) {
+          if (surveyErrors.length < 4) surveyErrors.push(String(e).slice(0, 240));
+        }
+      }
+    } catch (e) {
+      if (surveyErrors.length < 4) surveyErrors.push(String(e).slice(0, 240));
+    }
+    if (!pm) return { out, covered, tileCount };
+    const n14 = 2 ** OVERTURE_Z;
+    const want = osm.tiles.filter((t) => t.d <= OVERTURE_REACH_M);
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    const one = async (x: number, y: number) => {
+      const raw = await pm!.tile(OVERTURE_Z, ((x % n14) + n14) % n14, y);
+      covered.add(`${x}/${y}`);
+      tileCount++;
+      if (!raw) return;
+      const layers = new VectorTile(new PbfReader(raw)).layers;
+      // (a building with its parts in the tile: its parts drawn — a tower, a nave, a spire —, not its outline)
+      const parted = new Set<string>();
+      const part = layers.building_part;
+      if (part) for (let i = 0; i < part.length; i++) parted.add(String(part.feature(i).properties.building_id));
+      const add = (layer: (typeof layers)[string] | undefined, parts: boolean) => {
+        if (!layer) return;
+        for (let i = 0; i < layer.length; i++) {
+          const feature = layer.feature(i);
+          const pr = feature.properties;
+          if (feature.type !== 3 || pr.is_underground === true) continue;
+          if (!parts && pr.has_parts === true && parted.has(String(pr.id))) continue;
+          for (const rings of classifyRings(feature.loadGeometry())) {
+            const e = feature.extent;
+            const centre = rings[0];
+            if (!centre?.length) continue;
+            const cx = centre.reduce((t, v) => t + v.x, 0) / centre.length,
+              cy = centre.reduce((t, v) => t + v.y, 0) / centre.length;
+            if (cx < 0 || cx >= e || cy < 0 || cy >= e) continue;
+            const geo = rings.map((r) =>
+              r.map((v) => ({
+                lon: ((x + v.x / e) / n14) * 360 - 180,
+                lat: Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + v.y / e)) / n14))) / D,
+              })),
+            );
+            const outer = geo[0]!;
+            if (geo.reduce((t, r) => t + r.length, 0) > 8192) continue;
+            const lat = outer.reduce((t, v) => t + v.lat, 0) / outer.length,
+              lon = outer.reduce((t, v) => t + v.lon, 0) / outer.length;
+            if (index(lat, lon) < 0 || excluded(lat, lon)) continue;
+            const floors = num(pr.num_floors);
+            const top = Math.min(500, Math.max(2, num(pr.height) ?? (floors !== null ? floors * 3.2 + 1 : 6)));
+            const low = Math.min(top - 1, Math.max(0, num(pr.min_height) ?? (num(pr.min_floor) ?? 0) * 3.2));
+            // (a measured roof: the walls under it, the roof its own — as the BD TOPO's —; else OSM's way, all to the top)
+            const rh = num(pr.roof_height);
+            const measured = rh !== null && rh > 0 && rh < top - low - 1;
+            const shape = overtureShape(pr.roof_shape);
+            out.push({
+              geo,
+              lat,
+              lon,
+              h: measured ? top - rh! : top,
+              low,
+              d: distance(lat, lon),
+              a: {
+                top: !measured,
+                roof: measured ? rh! : null,
+                storeys: floors,
+                roofMat: overtureRoofMaterial(pr.roof_material),
+                wallMat: overtureWallMaterial(pr.facade_material),
+                colour: pr.facade_color,
+                roofColour: pr.roof_color,
+                hint: shape
+                  ? { shape, across: pr.roof_orientation === "across", direction: num(pr.roof_direction) ?? undefined }
+                  : undefined,
+              },
+            });
+          }
+        }
+      };
+      add(layers.building, false);
+      add(part, true);
+    };
+    for (let k0 = 0; k0 < want.length; k0 += 4)
+      await Promise.all(
+        want.slice(k0, k0 + 4).map((w) =>
+          one(w.x, w.y).catch((e) => {
+            // (a tile failed: OSM's buildings there — the scene not degraded for it)
+            covered.delete(`${w.x}/${w.y}`);
+            if (surveyErrors.length < 4) surveyErrors.push(String(e).slice(0, 240));
+          }),
+        ),
+      );
+    return { out, covered, tileCount };
+  };
+  const overture = !bdtopo && q.overture ? overtureTiles() : null;
   const osmChoices: Choice[] = [];
   for (const { x, y } of osm.tiles) {
     try {
@@ -480,7 +607,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const layer = layers.building;
       if (!layer) continue;
       // (with the BD TOPO's, OSM's set aside: kept where it failed)
-      const into = bdtopo ? osmChoices : choices;
+      const into = bdtopo || overture ? osmChoices : choices;
       for (let i = 0; i < layer.length; i++) {
         const feature = layer.feature(i);
         if (feature.type !== 3 || feature.properties.hide_3d === true) continue;
@@ -546,6 +673,22 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       budgetLimited = true;
     }
     bdtopoBuildings = choices.filter((v) => b.covered.has(bdKey(v.lat, v.lon))).length;
+  }
+  let overtureBuildings = 0,
+    overtureTileCount = 0;
+  if (overture) {
+    const o = await overture;
+    overtureTileCount = o.tileCount;
+    const z14 = (lat: number, lon: number) =>
+      `${Math.floor(((lon + 180) / 360) * 2 ** OVERTURE_Z)}/${Math.floor(((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * 2 ** OVERTURE_Z)}`;
+    for (const v of o.out) choices.push(v);
+    for (const v of osmChoices) if (!o.covered.has(z14(v.lat, v.lon))) choices.push(v);
+    choices.sort((a, b) => a.d - b.d);
+    if (choices.length > limit) {
+      choices.length = limit;
+      budgetLimited = true;
+    }
+    overtureBuildings = choices.filter((v) => o.covered.has(z14(v.lat, v.lon))).length;
   }
   // Estimated bridge elevation is explicit: tile data provides layer, not surveyed deck/pier geometry.
   bridgeLines.sort((a, b) => a.d - b.d);
@@ -806,7 +949,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const input: RoofInput = {
         rings,
         party: party[i]![0],
-        height: h - (a.top ? low : 0),
+        height: h - low,
         top: a.top,
         roof: roofH,
         storeys: a.storeys,
@@ -817,6 +960,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         light: a.light,
         region,
         seed: s,
+        hint: a.hint,
       };
       const plans = planBuilding(input, 1);
       const bytes = leafBytes(plans);
@@ -834,7 +978,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const v = choices[b.i]!;
     if (v.d >= BUILDING_MESH_M && v.d >= BUILDING_PARTS_M) break;
     try {
-      const floor = b.base + (v.a.top ? v.low : 0),
+      const floor = b.base + v.low,
         bottom = b.base + v.low - 1;
       const plans = v.d < BUILDING_PARTS_M ? planBuilding(b.input, 24) : b.plans;
       const bytes = leafBytes(plans);
@@ -853,13 +997,16 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (!errors.length) errors.push(String(e).slice(0, 220));
     }
   }
+  // (the chimneys' brick, weathered; their count)
+  const stackColour = wallColour(WallMaterial.Brick, region, 0.7);
+  let stacks = 0;
   for (const b of planned) {
     const v = choices[b.i]!;
     const a = v.a;
-    const floor = b.base + (a.top ? v.low : 0),
+    const floor = b.base + v.low,
       bottom = b.base + v.low - 1;
     const wall = osmColour(a.colour) ?? wallColour(a.wallMat, region, b.seed);
-    const roof = roofColour(b.plans[0]!.roofMat, region, (b.seed * 7.31) % 1);
+    const roof = osmColour(a.roofColour) ?? roofColour(b.plans[0]!.roofMat, region, (b.seed * 7.31) % 1);
     for (const [k, plan] of b.plans.entries()) {
       const edges: number[] = [];
       let minX = Infinity,
@@ -902,6 +1049,42 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       shapes[plan.shape] = (shapes[plan.shape] ?? 0) + 1;
       vertices += edges.length / 4;
       if (mesh) meshed++;
+      // (its chimneys near the camera — B9 —: a leaf a stack, its render's or brick's colour, no window)
+      if (v.d < STACKS_M && storedBytes + 400 < room4)
+        for (const st of stacksOf(plan, (b.seed * 13.7 + k * 0.31) % 1, plan.shape === "mansard")) {
+          const se: number[] = [];
+          for (let j = 0; j < 4; j++) se.push(st.ring[j]![0], st.ring[j]![1], st.ring[(j + 1) % 4]![0], st.ring[(j + 1) % 4]![1]);
+          const xs = st.ring.map((p) => p[0]),
+            ys = st.ring.map((p) => p[1]);
+          const sb = floor + plan.top - 1.5;
+          prims.push({
+            min: [Math.min(...xs), Math.min(...ys), sb],
+            max: [Math.max(...xs), Math.max(...ys), floor + st.top],
+            data: [
+              sb,
+              floor + st.top,
+              4,
+              1,
+              Math.min(...xs),
+              Math.min(...ys),
+              Math.max(...xs),
+              Math.max(...ys),
+              ...stackColour,
+              buildingPacked(RoofMaterial.Concrete, WallMaterial.Brick, 1, 1, "stack", false),
+              ...se,
+              0.12,
+              0.11,
+              0.1,
+              floor + st.top,
+              0,
+              0,
+              floor + st.top,
+              0,
+            ],
+          });
+          storedBytes += 112 + 64 + 32;
+          stacks++;
+        }
     }
     buildings++;
   }
@@ -916,6 +1099,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     surveyedTrees,
     bdtopoBuildings,
     bdtopoTiles: bdtopoTileCount,
+    overtureBuildings,
+    overtureTiles: overtureTileCount,
     surveyRequests: land?.requests ?? 0,
     // (a block failed: its trees the land cover's — the scene not degraded for it)
     surveyError: land?.errors[0] ?? surveyErrors[0],
@@ -926,6 +1111,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     roofShapes: shapes,
     meshedBuildings: meshed,
     lidarRoofs,
+    stacks,
     meshBytes,
     bytes: {
       forest: forestVec4s(ff) * 16,

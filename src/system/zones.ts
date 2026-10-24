@@ -31,7 +31,18 @@ import { BDTOPO_Z, bdtopoUrl } from "./bdtopo";
 import { blockChains, blockSides, CANOPY_NEAR, CANOPY_Z, tilesWithin } from "./ign-canopy";
 import { SWISS_GROUND_G, swissTerrainUrl, tileSource } from "./national";
 import { D as DEG, type SceneryMode } from "./scenery-data";
-import { COVER_CELL, coverUrl, OSM_Z, osmUrl, sceneryBox, sceneryDemZoom, surveyOf, surveyReach } from "./scenery-sources";
+import { OVERTURE_LIST, OVERTURE_Z, overtureZoneUrl } from "./pmtiles";
+import {
+  COVER_CELL,
+  coverUrl,
+  OSM_Z,
+  osmUrl,
+  OVERTURE_REACH_M,
+  sceneryBox,
+  sceneryDemZoom,
+  surveyOf,
+  surveyReach,
+} from "./scenery-sources";
 
 /** a zone's levels: its relief's finest, its orthophotos' finest — §9.3's profiles */
 export interface ZoneProfile {
@@ -63,7 +74,7 @@ export interface ZoneSources {
   span?: number;
   /** the world scenery as the game draws it (quality-policy.ts earthDetailFor: its mode, DETAIL_REACH's reach; the land
    *  cover's true colours with settings.earthSurface on) — none, off or absent; its survey follows `relief` */
-  scenery?: { mode: SceneryMode; satellite: boolean; reach: number } | null;
+  scenery?: { mode: SceneryMode; satellite: boolean; reach: number; overture?: boolean } | null;
 }
 /**
  * A tile's fetches as the loads make them: a chain, each link asked only if the one before falls short — a height grid
@@ -239,12 +250,13 @@ export function sceneryZoneChains(
   }
   // (the surveys: where a scene's centre is under one — the disc's points every few hundred metres asked)
   const step = Math.max(500, rc / 40);
-  const under = { ign: false, swisstopo: false };
+  const under = { ign: false, swisstopo: false, other: false };
   for (let dy = -rc; dy <= rc; dy += step)
     for (let dx = -rc; dx <= rc; dx += step) {
       if (dx * dx + dy * dy > rc * rc) continue;
       const v = surveyOf({ lat: lat + dy / ky, lon: lon + dx / kx, ign });
-      if (v) under[v] = true;
+      under[v ?? "other"] = true;
+      if (v === "swisstopo") under.other = true;
     }
   const reach = surveyReach(box.radius),
     slack = 0.02 * rc + 100;
@@ -265,6 +277,12 @@ export function sceneryZoneChains(
       for (let x = Math.floor((lon - dLon - padLon + 180) / s0); x <= Math.floor((lon + dLon + padLon + 180) / s0); x++)
         if (meets(x * s0 - 180, y * s0 - 90, (x + 1) * s0 - 180, (y + 1) * s0 - 90, padLon, padLat))
           out.push([swissTerrainUrl(SWISS_GROUND_G, x, y)]);
+  }
+  // (Overture's buildings where a centre is not the BD TOPO's: its listing, its tiles near the centres — pseudo-URLs whose
+  // byte ranges the Service Worker resolves and keeps)
+  if (s.overture && under.other) {
+    out.push([OVERTURE_LIST]);
+    for (const t of tilesWithin(OVERTURE_Z, lat, lon, rc + OVERTURE_REACH_M + slack)) out.push([overtureZoneUrl(t.x, t.y)]);
   }
   return out;
 }

@@ -79,7 +79,7 @@ export const BUILDING_MESH_M = 1100;
 /** the buildings within this of the centre [m] have their complex outlines cut into convex parts, each its roof (roofs.ts
  *  planBuilding: ~3 leaves a Paris block); the farther ones one leaf (a complex one flat) — the buffer's budget their count */
 export const BUILDING_PARTS_M = 2000;
-const SHAPES = ["flat", "gabled", "hipped", "mansard", "shed"];
+const SHAPES = ["flat", "gabled", "hipped", "mansard", "shed", "stack"];
 /** a terrace's parapet over its roof [m] (trace.wgsl PARAPET) */
 export const PARAPET_M = 0.8;
 /** A building leaf's packed word (its geometry's vec4 2's w, an integer exact in a float): roof material (4 bits), wall
@@ -207,6 +207,8 @@ export interface SceneryRequest {
   /** the IGN's survey over France (settings.earthIgnRelief — I4, ign-canopy.ts): the trees where its canopy stands, their
    *  feet and the buildings' on its ground */
   ign?: boolean;
+  /** Overture Maps' buildings near the centre outside the BD TOPO's France (settings.earthOverture — B7, pmtiles.ts) */
+  overture?: boolean;
 }
 export interface SceneryReply {
   id: number;
@@ -223,6 +225,9 @@ export interface SceneryReply {
   /** of the buildings, the IGN's BD TOPO's over France (I5, bdtopo.ts); its tiles taken */
   bdtopoBuildings?: number;
   bdtopoTiles?: number;
+  /** of the buildings, Overture Maps' (B7); its z 14 tiles read */
+  overtureBuildings?: number;
+  overtureTiles?: number;
   forestCells?: number;
   forestCellM?: number;
   buildings?: number;
@@ -232,6 +237,8 @@ export interface SceneryReply {
   meshedBuildings?: number;
   /** of the roofs, measured by the IGN's canopy model (B6: the BD TOPO without their ridge) */
   lidarRoofs?: number;
+  /** the chimney stacks (B9) */
+  stacks?: number;
   meshBytes?: number;
   /** where the buffer's bytes went: the forest's grid, the land cover's raster, all before the buildings, the buildings'
    *  leaves (their meshes apart), the budget */

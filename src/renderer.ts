@@ -1041,7 +1041,7 @@ export class Renderer {
     if (this.treeShadow)
       this.tsmTex = device.createTexture({
         label: "trees' shadow map: none yet",
-        size: [1, 1],
+        size: [1, 1, 2],
         format: "depth32float",
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
@@ -1105,7 +1105,13 @@ export class Renderer {
           ? [{ binding: CLOUD_SHADOW_BINDING, visibility: C, texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout }]
           : []),
         ...(device.limits.maxSampledTexturesPerShaderStage >= TREE_SHADOW_TEXTURE_LIMIT
-          ? [{ binding: TREE_SHADOW_BINDING, visibility: C, texture: { sampleType: "depth" } as GPUTextureBindingLayout }]
+          ? [
+              {
+                binding: TREE_SHADOW_BINDING,
+                visibility: C,
+                texture: { sampleType: "depth", viewDimension: "2d-array" } as GPUTextureBindingLayout,
+              },
+            ]
           : []),
         ...(device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT
           ? [{ binding: 32, visibility: C, buffer: { type: "read-only-storage" } as GPUBufferBindingLayout }]
@@ -2247,7 +2253,7 @@ export class Renderer {
         : []),
       // (the clouds' shadow map: the stand-in for its own kernel, which writes it)
       ...(this.cloudShadow ? [{ binding: CLOUD_SHADOW_BINDING, resource: ((csm && this.csmTex) || this.csmDummy!).createView() }] : []),
-      ...(this.treeShadow ? [{ binding: TREE_SHADOW_BINDING, resource: this.tsmTex!.createView() }] : []),
+      ...(this.treeShadow ? [{ binding: TREE_SHADOW_BINDING, resource: this.tsmTex!.createView({ dimension: "2d-array" }) }] : []),
     ];
   }
 
@@ -3090,6 +3096,7 @@ export class Renderer {
       this.earthSurface.update(eye, s.earthSurface, lead);
       // (its trees and their ground over France by the IGN's survey — I4)
       this.earthScenery.ign = s.earthIgnRelief;
+      this.earthScenery.overture = s.earthOverture;
       this.earthScenery.update(
         eye,
         detail.scenery,
@@ -7056,7 +7063,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         if (this.treeShadow && this.tsmTex && this.tsmTex.width < TREE_SHADOW_N) {
           this.tsmTex = this.device.createTexture({
             label: "trees' shadow map",
-            size: [TREE_SHADOW_N, TREE_SHADOW_N],
+            // (two layers: the trees', the buildings' — B8)
+            size: [TREE_SHADOW_N, TREE_SHADOW_N, 2],
             format: "depth32float",
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
           });

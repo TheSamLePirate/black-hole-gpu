@@ -14,7 +14,7 @@ export interface BuildingMesh {
 }
 
 /** a ring (open) cut to the half-plane a·x + b·y + c ≤ 0 (Sutherland–Hodgman) */
-function clipHalf(ring: Pt[], a: number, b: number, c: number): Pt[] {
+export function clipHalf(ring: Pt[], a: number, b: number, c: number): Pt[] {
   const out: Pt[] = [];
   for (let i = 0; i < ring.length; i++) {
     const p = ring[i]!,

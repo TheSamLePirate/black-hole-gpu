@@ -2047,6 +2047,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "ign hlod far silhouettes skyline horizon towers paris city forest surface mns lidar france",
   },
   {
+    key: "earthOverture",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Overture buildings (outside France)",
+    effect: "scene",
+    help: "Outside France, the world scenery's buildings near the camera (within about 1.8 km of the scene's centre) from Overture Maps instead of OpenStreetMap's tiles: OpenStreetMap's own buildings joined with the footprints Microsoft's and Google's machine learning found where nobody mapped them, and, where they are mapped, their roofs' shapes, heights, colours and materials, their facades' colours and materials, and the parts of the buildings that have them (a nave, a spire, a tower's setbacks). Overture Maps Foundation, ODbL with OpenStreetMap's. Its tiles weigh three to ten times OpenFreeMap's: a few megabytes a scene, kept in the tiles' cache and in the offline zones. Off: OpenStreetMap's buildings everywhere, as before.",
+    keywords: "overture buildings roofs roof shape height colour material facade world osm microsoft google footprints parts",
+  },
+  {
     key: "earthTerrainCache",
     type: "toggle",
     section: "sky",

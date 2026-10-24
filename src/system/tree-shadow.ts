@@ -16,12 +16,15 @@ export function withTreeShadow(trace: string, supported: boolean): string {
   return trace.replace(
     marker,
     `
-@group(0) @binding(${TREE_SHADOW_BINDING}) var tsmTex: texture_depth_2d;
+@group(0) @binding(${TREE_SHADOW_BINDING}) var tsmTex: texture_depth_2d_array;
 const TSM_OFF = ${TABLE_TSM}u;
-// The share of the Sun a scenery-frame point p sees past the trees and the buildings (0…1), −1 off the map: a 3 × 3 of its
-// texels, each lit where nothing stands nearer the Sun than the point less a bias — the proxies are wider than the shapes
-// they stand for (a crown's lit side not shadowed by its own proxy): 1.5 m, and a texel's width along the slope.
-fn treeShadowAt(p: vec3f) -> f32 {
+// The share of the Sun a scenery-frame point p sees past the trees (layer 0) or the buildings (layer 1) (0…1), −1 off the
+// map: its texels round it, each lit where nothing stands nearer the Sun than the point less a bias — the proxies are wider
+// than the shapes they stand for (a crown's lit side not shadowed by its own proxy): 1.5 m, and a texel's width along the
+// slope.
+fn treeShadowAt(p: vec3f) -> f32 { return shadowLayerAt(p, 0); }
+fn buildingShadowAt(p: vec3f) -> f32 { return shadowLayerAt(p, 1); }
+fn shadowLayerAt(p: vec3f, layer: i32) -> f32 {
   let c = bodies[TSM_OFF + 3u];
   if (c.w < 0.5) { return -1.0; }
   let R = bodies[TSM_OFF];
@@ -45,7 +48,7 @@ fn treeShadowAt(p: vec3f) -> f32 {
   var lit = 0.0;
   for (var j = 0; j < 4; j++) {
     for (var i = 0; i < 4; i++) {
-      lit += wx[i] * wy[j] * select(0.0, 1.0, z <= textureLoad(tsmTex, clamp(at + vec2i(i, j), vec2i(0), n - 1), 0));
+      lit += wx[i] * wy[j] * select(0.0, 1.0, z <= textureLoad(tsmTex, clamp(at + vec2i(i, j), vec2i(0), n - 1), layer, 0));
     }
   }
   return lit / 9.0;
