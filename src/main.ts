@@ -5735,6 +5735,8 @@ async function main() {
     return why;
   }
   const atlas = new AtlasPage({
+    zones: () => offlineTab.zonesKnown,
+    refreshZones: () => offlineTab.readZones(),
     lang: () => lang,
     subsolar: (body) => {
       const time = camera.nowTime();

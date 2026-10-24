@@ -184,6 +184,21 @@
 .m-item.pls-go.off { opacity: 0.45; cursor: default; }
 .m-item.pls-danger .tt-act-row span { color: #ff7a6b; }
 .pls-offline .pls-cost .pls-bar { width: clamp(120px, 14vw, 220px); }
+/* the zone on a map (Settings › Offline): the side's place and estimate, the map focused as one item — the pad's arrows,
+   LB / RB its own */
+.pls-map-body { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 28px; min-height: 0; flex: 1 1 auto; }
+.pls-map-side { gap: 14px; }
+.pls-map-info { display: flex; flex-direction: column; gap: 10px; }
+.m-item.pls-map {
+  position: relative; display: block; padding: 0; min-height: 0; height: calc(100vh - var(--m-safe-y) * 2 - 230px);
+  border: 1px solid var(--m-line); border-radius: 6px; overflow: hidden; background: #04070d;
+}
+.m-item.pls-map:focus-visible, .m-item.pls-map:focus { outline: 2px solid var(--m-amber); outline-offset: 2px; }
+.pls-map .mv-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+@media (max-width: 900px) {
+  .pls-map-body { grid-template-columns: 1fr; }
+  .m-item.pls-map { height: 55vh; }
+}
 .pls-keep {
   position: absolute;
   left: 50%;

@@ -5,7 +5,8 @@
 // adding of one (its place — the On foot screen's search: the Atlas's destinations, an address, coordinates — or the
 // position now, its profile, its radius; its tiles, size and time estimated with the room left, before the download).
 // The rows are the menus' items: the keys, a click, the pad (← → change a value). Its figures read again every 1.5 s
-// while shown. The pages' side of the zones: src/pwa-zones.ts; the worker's: src/sw.ts.
+// while shown. A zone's place chosen on a map too (the Atlas's — ui/mapview.ts —, in this screen: the pad's there), its
+// circle at its radius over the zones kept; a zone's sheet shows it there. The pages' side of the zones: src/pwa-zones.ts; the worker's: src/sw.ts.
 
 import { geocode, parseCoords } from "../../game/geocode";
 import { POIS } from "../../game/pois";
@@ -14,6 +15,7 @@ import type { Pwa, PwaStats } from "../../pwa";
 import type { ZoneRecord } from "../../pwa/rules";
 import type { ZoneProfileId } from "../../system/zones";
 import { el, h } from "../kit";
+import { MapView, type ToScreen } from "../mapview";
 import type { MenuAction } from "../menu/actions";
 import type { MenuScreen } from "../menu/router";
 import { type FootPlace, placeCoords, placesOf } from "../title/foot";
@@ -101,6 +103,24 @@ const T = {
   download: { fr: "Télécharger", en: "Download" },
   started: { fr: "Zone « {0} » : téléchargement lancé", en: "Zone “{0}”: download started" },
   near: { fr: "Près de {0}", en: "Near {0}" },
+  onMap: { fr: "Choisir sur la carte", en: "Choose on the map" },
+  onMapHint: {
+    fr: "Le cercle de la zone, à son rayon, posé où l'on veut",
+    en: "The zone's circle, at its radius, set down anywhere",
+  },
+  mapPick: { fr: "La zone sur la carte", en: "The zone on the map" },
+  mapView: { fr: "Les zones sur la carte", en: "The zones on the map" },
+  mapHelp: {
+    fr: "Un clic pose la zone, un glisser déplace son cercle, la molette zoome.\nAu clavier et à la manette : les flèches la déplacent, Page ↑ ↓ (LB RB) zooment, Entrée (A) la pose ici.",
+    en: "A click sets the zone down, a drag moves its circle, the wheel zooms.\nOn the keyboard and the pad: the arrows move it, Page ↑ ↓ (LB RB) zoom, Enter (A) sets it here.",
+  },
+  mapViewHelp: {
+    fr: "Les zones gardées : ambre prête, bleu en téléchargement, gris en pause.\nLes flèches déplacent la carte, Page ↑ ↓ (LB RB) zooment.",
+    en: "The zones kept: amber ready, blue downloading, grey paused.\nThe arrows move the map, Page ↑ ↓ (LB RB) zoom.",
+  },
+  setHere: { fr: "Poser la zone ici", en: "Set the zone here" },
+  atlas: { fr: "Ouvrir dans l'Atlas", en: "Open in the Atlas" },
+  zoom: { fr: "Zoom", en: "Zoom" },
   search: { fr: "Un lieu, une adresse, des coordonnées…", en: "A place, an address, coordinates…" },
   point: { fr: "Coordonnées", en: "Coordinates" },
   addresses: { fr: "Adresses", en: "Addresses" },
@@ -167,7 +187,7 @@ export function fmtDuration(s: number): string {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`;
 }
 /** a zone's name on the position now: the Atlas's destination nearest within 30 km, else its coordinates */
-export function nearName(lat: number, lon: number): string {
+export function nearName(lat: number, lon: number, l = lang): string {
   const D = Math.PI / 180;
   let best: (typeof POIS)[number] | null = null;
   let dMin = 30;
@@ -180,7 +200,51 @@ export function nearName(lat: number, lon: number): string {
       best = p;
     }
   }
-  return best ? fill(tr(T.near), tr(best.name)) : placeCoords({ id: "", name: { fr: "", en: "" }, lat, lon });
+  return best ? fill(T.near[l], best.name[l]) : placeCoords({ id: "", name: { fr: "", en: "" }, lat, lon }, l);
+}
+
+/** A circle on the ground about a place [°, m]: its rim's points, `n` bearings apart (a great circle's distance). */
+export function circlePoints(lat: number, lon: number, radiusM: number, n = 72): [number, number][] {
+  const D = Math.PI / 180,
+    d = radiusM / 6_371_008.8;
+  const p1 = lat * D,
+    l1 = lon * D;
+  const out: [number, number][] = [];
+  for (let k = 0; k <= n; k++) {
+    const b = (2 * Math.PI * k) / n;
+    const p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(b));
+    const l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+    out.push([p2 / D, l2 / D]);
+  }
+  return out;
+}
+/** a zone's colour by its state: ready amber, downloading blue, paused grey */
+export const ZONE_COL: Record<ZoneRecord["state"], string> = { ready: "#ffb35c", downloading: "#6fd2ff", paused: "#9aa4b2" };
+/** Zones drawn on a map (the settings' own, the Atlas's): their discs and rims, their names. */
+export function drawZones(
+  ctx: CanvasRenderingContext2D,
+  to: ToScreen,
+  zones: readonly Pick<ZoneRecord, "lat" | "lon" | "radiusKm" | "name" | "state">[],
+  names = true,
+) {
+  for (const z of zones) {
+    const pts = circlePoints(z.lat, z.lon, z.radiusKm * 1000).map(([la, lo]) => to(la, lo));
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+    ctx.fillStyle = `${ZONE_COL[z.state]}26`;
+    ctx.fill();
+    ctx.strokeStyle = ZONE_COL[z.state];
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    if (!names) continue;
+    const [x, y] = to(z.lat, z.lon);
+    ctx.font = "600 11px Rajdhani, system-ui, sans-serif";
+    ctx.fillStyle = ZONE_COL[z.state];
+    ctx.textAlign = "center";
+    ctx.fillText(z.name, x, y - 4);
+    ctx.textAlign = "start";
+  }
 }
 /** a count in words, grouped as the language does */
 const fmtCount = (n: number) => n.toLocaleString(lang === "fr" ? "fr-FR" : "en-GB");
@@ -217,6 +281,12 @@ interface Figures {
   persisted: boolean;
 }
 
+/** the map's screen (its view, its place: the tests') */
+interface MapScreenState extends MenuScreen {
+  map: MapView;
+  at(): { lat: number; lon: number };
+}
+
 /** the zone's being added: where, how, how far */
 interface Draft {
   place: FootPlace;
@@ -230,6 +300,14 @@ export class OfflineTab {
   private draft: Draft | null = null;
 
   constructor(private d: OfflineDeps) {}
+
+  /** the zones as last read (the Atlas draws them), read again now */
+  get zonesKnown(): readonly ZoneRecord[] {
+    return this.f.zones;
+  }
+  async readZones(): Promise<readonly ZoneRecord[]> {
+    return (await this.read()).zones;
+  }
 
   /** The figures read again (the worker's, the storage's). */
   private async read(): Promise<Figures> {
@@ -546,7 +624,7 @@ export class OfflineTab {
               ),
             );
           }
-          acts.push(act("map", T.map, () => this.d.showOnMap({ lat: z.lat, lon: z.lon, name: z.name })));
+          acts.push(act("map", T.map, () => host.push(this.mapScreen(host, { view: id }))));
           // (deleting asks twice: the first press turns the item into its confirmation)
           // (its confirmation keeps the focus: the same item to the router)
           const del = act(
@@ -653,6 +731,14 @@ export class OfflineTab {
           chev: true,
         });
         place.dataset.autofocus = "";
+        const onMap = this.row(sub, {
+          id: "add-map",
+          label: tr(T.onMap),
+          value: () => [],
+          help: () => [tr(T.onMap), tr(T.onMapHint)],
+          go: () => host.push(this.mapScreen(host, {})),
+          chev: true,
+        });
         const profile = this.row(sub, {
           id: "add-profile",
           label: tr(T.profile),
@@ -709,9 +795,9 @@ export class OfflineTab {
           host.back();
         });
         go.addEventListener("focus", () => sub.explain(tr(T.download), go.querySelector("small")!.textContent ?? ""));
-        rows.push(place, profile, radius, estimate, go);
+        rows.push(place, onMap, profile, radius, estimate, go);
         go.render();
-        list.replaceChildren(place, profile, radius, estimate, go);
+        list.replaceChildren(place, onMap, profile, radius, estimate, go);
         page.append(
           h("header", { class: "pls-head" }, h("h2", { class: "pz-title" }, `${tr(T.tab)} · ${tr(T.add)}`)),
           h("div", { class: "pls-body" }, h("div", { class: "pls-side" }, list), about),
@@ -727,6 +813,212 @@ export class OfflineTab {
       },
       leave: () => clearInterval(this.timer),
     };
+  }
+
+  // ------------------------------------------------------------------ the map
+
+  /**
+   * The zone on a map (`view`: a zone kept, shown — else the draft's place chosen): its circle at its radius over the zones
+   * kept. The mouse: a click sets it down, a drag moves it, the wheel zooms. The keys and the pad, on the map focused:
+   * the arrows move it (the view: the map), Page ↑ ↓ (LB RB) zoom, Enter (A) sets it here and goes back.
+   */
+  private mapScreen(host: OfflineHost, o: { view?: string }): MapScreenState {
+    const map = new MapView();
+    const viewing = o.view ?? null;
+    const zoneNow = () => (viewing ? this.f.zones.find((z) => z.id === viewing) : null);
+    const D = this.draft;
+    let at = viewing ? { lat: zoneNow()?.lat ?? 0, lon: zoneNow()?.lon ?? 0 } : { lat: D!.place.lat, lon: D!.place.lon };
+    const radiusKm = () => (viewing ? (zoneNow()?.radiusKm ?? 1) : D!.radiusKm);
+    const screen: MapScreenState = {
+      id: "offline:map",
+      map,
+      at: () => at,
+      build: () => {
+        const page = h("div", { class: "tt-page pls-page pls-offline pls-map-page", "data-testid": "offline-map" });
+        const info = h("div", { class: "pls-map-info", "data-testid": "offline-map-info" });
+        const box = h(
+          "button",
+          {
+            class: "m-item pls-map",
+            type: "button",
+            "data-testid": "offline-map-canvas",
+            "data-focus-id": "map",
+            "data-autofocus": "",
+            "aria-label": tr(viewing ? T.mapView : T.mapPick),
+          },
+          map.canvas,
+        );
+        // (its map on it: the tests aim at the zone's circle by it)
+        (box as HTMLElement & { map?: MapView }).map = map;
+        const u = this.d.units();
+        const show = () => {
+          const z = zoneNow();
+          const e =
+            !viewing && this.d.pwa()?.zones
+              ? this.d.pwa()!.zones!.estimate({ lat: at.lat, lon: at.lon, radiusKm: D!.radiusKm, profile: D!.profile })
+              : null;
+          const lines: Node[] = [
+            el("h3", "tt-preview-title", viewing ? (z?.name ?? "") : nearName(at.lat, at.lon)),
+            el("p", "pls-default", `${placeCoords({ id: "", name: T.point, ...at })} · ${u.fDist(radiusKm() * 1000, 0)}`),
+          ];
+          if (e) lines.push(el("p", "pls-cost", fill(tr(T.estVal), fmtCount(e.chains), fmtBytes(e.bytes), fmtDuration(e.seconds))));
+          lines.push(el("p", "pls-help", tr(viewing ? T.mapViewHelp : T.mapHelp)));
+          info.replaceChildren(...lines);
+          box.dataset.lat = at.lat.toFixed(5);
+          box.dataset.lon = at.lon.toFixed(5);
+          box.dataset.zoom = map.zoom.toFixed(2);
+          box.dataset.zones = String(this.f.zones.length);
+        };
+        const moveTo = (lat: number, lon: number, follow = false) => {
+          at = { lat: Math.max(-85, Math.min(85, lat)), lon: ((((lon + 180) % 360) + 360) % 360) - 180 };
+          if (follow) map.flyTo(at.lat, at.lon, map.zoom, 220);
+          map.request();
+          show();
+        };
+        map.overlay = (ctx, to, W, H) => {
+          drawZones(
+            ctx,
+            to,
+            this.f.zones.filter((z) => z.id !== viewing || !viewing),
+            true,
+          );
+          if (viewing) {
+            const z = zoneNow();
+            if (z) drawZones(ctx, to, [z], false);
+          } else {
+            // (the zone being chosen: its circle dashed, white; its centre's cross)
+            const pts = circlePoints(at.lat, at.lon, radiusKm() * 1000).map(([la, lo]) => to(la, lo));
+            ctx.beginPath();
+            pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+            ctx.closePath();
+            ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
+            ctx.fill();
+            ctx.setLineDash([6, 5]);
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+          const [x, y] = to(at.lat, at.lon);
+          ctx.strokeStyle = viewing ? ZONE_COL[zoneNow()?.state ?? "ready"] : "#ffffff";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x - 9, y);
+          ctx.lineTo(x + 9, y);
+          ctx.moveTo(x, y - 9);
+          ctx.lineTo(x, y + 9);
+          ctx.stroke();
+          void W;
+          void H;
+        };
+        map.onMove = () => {
+          box.dataset.zoom = map.zoom.toFixed(2);
+        };
+        if (!viewing) {
+          map.onPick = (lat, lon) => moveTo(lat, lon);
+          // (a press inside the circle: the circle dragged, not the map)
+          map.grab = (px, py) => {
+            const [x, y] = map.toScreen(at.lat, at.lon);
+            const [ex] = map.toScreen(...circlePoints(at.lat, at.lon, radiusKm() * 1000, 4)[1]!);
+            return Math.hypot(px - x, py - y) <= Math.max(18, Math.abs(ex - x)) ? (lat, lon) => moveTo(lat, lon) : null;
+          };
+        }
+        // (the keys, the pad's as keys: the arrows a tenth of the view, Page ↑ ↓ a zoom step, Enter set down)
+        box.addEventListener("keydown", (e) => {
+          const W = map.canvas.clientWidth || 800,
+            H = map.canvas.clientHeight || 600;
+          const step: Record<string, [number, number]> = {
+            ArrowLeft: [-0.1 * W, 0],
+            ArrowRight: [0.1 * W, 0],
+            ArrowUp: [0, -0.1 * H],
+            ArrowDown: [0, 0.1 * H],
+          };
+          const s = step[e.key];
+          if (s) {
+            e.preventDefault();
+            e.stopPropagation();
+            const [x, y] = map.toScreen(at.lat, at.lon);
+            const [lat, lon] = map.placeAt(x + s[0], y + s[1]);
+            moveTo(lat, lon, true);
+            return;
+          }
+          if (e.key === "PageUp" || e.key === "PageDown") {
+            e.preventDefault();
+            e.stopPropagation();
+            const [x, y] = map.toScreen(at.lat, at.lon);
+            map.zoomAbout(e.key === "PageUp" ? 1 : -1, x, y);
+            show();
+            return;
+          }
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            setHere();
+          }
+        });
+        // (leaving: the focus put back on the map first — the router remembers it, the next visit's arrows the map's)
+        const leave = () => {
+          box.focus();
+          host.back();
+        };
+        const setHere = () => {
+          if (viewing || !D) return leave();
+          D.place = {
+            id: `map:${at.lat.toFixed(4)},${at.lon.toFixed(4)}`,
+            name: { fr: nearName(at.lat, at.lon, "fr"), en: nearName(at.lat, at.lon, "en") },
+            lat: at.lat,
+            lon: at.lon,
+            kind: "point",
+          };
+          leave();
+        };
+        const acts: HTMLElement[] = [];
+        const act = (testid: string, label: Text, go: () => void) => {
+          const b = h(
+            "button",
+            { class: "m-item tt-act", type: "button", "data-testid": `offline-map-${testid}`, "data-focus-id": `map-${testid}` },
+            h("span", { class: "tt-act-row" }, el("span", "", tr(label))),
+          );
+          b.addEventListener("click", go);
+          acts.push(b);
+        };
+        if (!viewing) act("here", T.setHere, setHere);
+        else {
+          const z = zoneNow();
+          if (z) act("atlas", T.atlas, () => this.d.showOnMap({ lat: z.lat, lon: z.lon, name: z.name }));
+        }
+        act("back", T.back, leave);
+        page.append(
+          h("header", { class: "pls-head" }, h("h2", { class: "pz-title" }, `${tr(T.tab)} · ${tr(viewing ? T.mapView : T.mapPick)}`)),
+          h("div", { class: "pls-map-body" }, h("div", { class: "pls-side pls-map-side" }, info, ...acts), box),
+          host.prompts([
+            ["up", T.change],
+            ["tabNext", T.zoom],
+            ["confirm", viewing ? T.back : T.setHere],
+            ["back", T.back],
+          ]),
+        );
+        show();
+        // (the view: the zone's circle about a fifth of the map's height — once the canvas has its size)
+        requestAnimationFrame(() => {
+          map.setBody("earth");
+          const H = map.canvas.clientHeight || 600;
+          const rWorld = (radiusKm() * 1000) / (2 * Math.PI * 6_378_137 * Math.cos((at.lat * Math.PI) / 180));
+          const z = Math.log2((0.2 * H) / (rWorld * 256));
+          map.flyTo(at.lat, at.lon, Math.max(map.minZoom(), Math.min(14, z)), 10);
+          show();
+        });
+        this.watch(page, () => {
+          map.request();
+          show();
+        });
+        return page;
+      },
+      // (the map's pad keys its own: the router not to move the focus off it)
+      action: (a) => a === "tabPrev" || a === "tabNext",
+      leave: () => clearInterval(this.timer),
+    };
+    return screen;
   }
 
   // ------------------------------------------------------------------ the place

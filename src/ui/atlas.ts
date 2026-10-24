@@ -15,6 +15,7 @@ import { effectiveBindings } from "../input/bindings";
 import { matchKey } from "../input/keymap";
 import { button, el, h, modal } from "./kit";
 import { MapView, type MapBody, type ToScreen } from "./mapview";
+import { drawZones } from "./settings/offline";
 
 export type AtlasAction = "orbit" | "land" | "walk" | "camera" | "tripod";
 export const ATLAS_ACTIONS: AtlasAction[] = ["orbit", "land", "walk", "camera", "tripod"];
@@ -54,6 +55,9 @@ export interface AtlasHost {
   ask?(q: string): void;
   /** a landscape's scene opened (its view as photographed) */
   view?(scene: string): void;
+  /** the offline zones kept (Settings › Offline — I8b), drawn on the Earth by their state; read again at the opening */
+  zones?(): readonly { lat: number; lon: number; radiusKm: number; name: string; state: "downloading" | "paused" | "ready" }[];
+  refreshZones?(): Promise<unknown>;
 }
 
 const BODIES: { id: MapBody; name: () => string }[] = [
@@ -202,6 +206,7 @@ export class AtlasPage {
     }
     if (o.query) this.search(o.query, true);
     this.input.focus();
+    void this.d.refreshZones?.().then(() => this.map.request());
   }
 
   hide() {
@@ -499,6 +504,10 @@ export class AtlasPage {
   // ------------------------------------------------------------------ the overlay
   private drawOverlay(ctx: CanvasRenderingContext2D, to: ToScreen, W: number, H: number) {
     const zoom = this.map.zoom;
+    // the offline zones (their discs under the rest, their names once a zone is wider than a few pixels)
+    const zones = this.body === "earth" ? (this.d.zones?.() ?? []) : [];
+    this.map.canvas.dataset.zones = String(zones.length);
+    if (zones.length) drawZones(ctx, to, zones, zoom > 6);
     // the terminator: the twilight's line (the night itself darkened by the map — its outline: nightPath)
     const sun = this.layers.night ? this.d.subsolar(this.body) : null;
     if (sun) {

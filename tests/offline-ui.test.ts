@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { BUDGETS, fmtBytes, fmtDuration, nearName, PROFILES, RADII } from "../src/ui/settings/offline";
+import { BUDGETS, circlePoints, fmtBytes, fmtDuration, nearName, PROFILES, RADII } from "../src/ui/settings/offline";
 import { ZONE_PROFILES } from "../src/system/zones";
 
 // Settings › Offline's words (ui/settings/offline.ts): the sizes, the times, a zone's name on the position now.
@@ -22,4 +22,21 @@ test("a zone on the position now named by the Atlas's place nearest within 30 km
 test("the profiles offered are the zones' own, their radii among those offered", () => {
   expect(PROFILES.map((p) => p.id as string).sort()).toEqual(Object.keys(ZONE_PROFILES).sort());
   for (const p of PROFILES) expect(RADII).toContain(p.radiusKm);
+});
+
+test("a zone's circle on the map: its rim at its radius from its centre, whatever the latitude", () => {
+  const D = Math.PI / 180;
+  const dist = (a: [number, number], b: [number, number]) => {
+    const h = Math.sin(((b[0] - a[0]) * D) / 2) ** 2 + Math.cos(a[0] * D) * Math.cos(b[0] * D) * Math.sin(((b[1] - a[1]) * D) / 2) ** 2;
+    return 2 * 6_371_008.8 * Math.asin(Math.sqrt(h));
+  };
+  for (const [lat, lon] of [
+    [45.92, 6.87],
+    [69.6, 18.9],
+    [-33.9, 151.2],
+  ] as const) {
+    const pts = circlePoints(lat, lon, 10_000, 36);
+    expect(pts.length).toBe(37);
+    for (const p of pts) expect(Math.abs(dist([lat, lon], p) - 10_000)).toBeLessThan(1);
+  }
 });

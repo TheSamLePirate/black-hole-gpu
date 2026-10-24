@@ -542,6 +542,16 @@ toutes les 1,5 s tant qu'il est affiché.
   Blanc »).
 - **Raccourci** : pause › Monde › « Garder cette zone hors ligne ». Il n'apparaît qu'au-dessus de la Terre, sous
   50 km d'altitude, et ouvre l'ajout sur la position actuelle. Échap revient à l'onglet, puis à la pause.
+- **Sur la carte** (ajouté le 24/10) : « Choisir sur la carte » ouvre, dans les Réglages, la carte de l'Atlas
+  (`ui/mapview.ts`). Le cercle de la zone y est tracé à son rayon (en pointillé blanc), au-dessus des zones gardées
+  (ambre prête, bleu en téléchargement, gris en pause), avec l'estimation à jour.
+  - À la souris : un clic pose la zone, un glisser déplace son cercle, la molette zoome.
+  - Au clavier et à la manette : les flèches la déplacent, Page ↑ ↓ (LB RB) zooment, Entrée (A) la pose.
+
+  La zone prend le nom de la destination la plus proche. La fiche d'une zone la montre sur cette carte, d'où l'on peut
+  passer à l'Atlas, qui dessine aussi les zones (`AtlasHost.zones`). e2e : `tests/e2e/offline-map.e2e.test.ts`.
+
+![Une zone choisie sur la carte](progress/offline/offline-map-pick.jpg)
 - **e2e sur kerr-mini** (`tests/e2e/offline-settings.e2e.test.ts`, ~6 min), à la souris et à la manette, sur
   Chamonix. Depuis la pause, une zone vol bas de 1 km (5 981 chaînes, 343 Mo) est suspendue puis reprise, et prête
   sans échec. Le budget passe à 1 Go puis revient. La zone est supprimée, ses tuiles avec elle. L'onglet est vérifié

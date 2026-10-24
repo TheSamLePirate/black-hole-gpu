@@ -77,9 +77,9 @@ describe.skipIf(!E2E)("Settings › Offline", () => {
     expect(await text("offline-add-profile")).toContain("Vol bas");
     await Bun.sleep(600);
     expect(await focused()).toBe("offline-add-place");
-    // (the D-pad: ▼ ▼ to the radius, ◀ until 1 km — 10, 5, 3, 2, 1 —, a step a press: a press the pad's poll missed
+    // (the D-pad: ▼ ▼ ▼ to the radius — past « Choisir sur la carte » and the profile, ◀ until 1 km — 10, 5, 3, 2, 1 —, a step a press: a press the pad's poll missed
     // pressed again, never two steps at once)
-    await press(DOWN, 2);
+    await press(DOWN, 3);
     expect(await focused()).toBe("offline-add-radius");
     const radii = [10, 5, 3, 2, 1];
     const km = async () => Number((await text("offline-add-radius")).match(/(\d+) km/)?.[1]);
