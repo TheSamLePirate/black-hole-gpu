@@ -93,6 +93,15 @@ const T = {
   here: { fr: "La position actuelle", en: "The position now" },
   profile: { fr: "Profil", en: "Profile" },
   radius: { fr: "Rayon", en: "Radius" },
+  core: { fr: "Cœur détaillé", en: "Detailed core" },
+  coreHelp: {
+    fr: "Autour du centre, les niveaux d'un aérodrome — orthophotos à 0,4 m, relief à 1 m — : ce que le jeu demande sous ≈ 1 km du sol, en plein écran. Ailleurs dans la zone, hors ligne, il s'en tient au profil sans rien demander au réseau.\n\n← → : son rayon.",
+    en: "Round the centre, an airfield's levels — orthophotos at 0.4 m, relief at 1 m —: what the game asks under ≈ 1 km over the ground, full screen. Elsewhere in the zone, offline, it keeps to the profile and asks the network nothing.\n\n← →: its radius.",
+  },
+  coreNone: { fr: "Aucun", en: "None" },
+  coreAll: { fr: "Toute la zone", en: "The whole zone" },
+  coreVal: { fr: "{0} · + {1}", en: "{0} · + {1}" },
+  coreOf: { fr: "Cœur détaillé de {0}.", en: "Detailed core of {0}." },
   estimate: { fr: "Estimation", en: "Estimate" },
   estVal: { fr: "{0} tuiles · {1} · ≈ {2}", en: "{0} tiles · {1} · ≈ {2}" },
   estHelp: {
@@ -133,35 +142,42 @@ const T = {
   tab: { fr: "Hors ligne", en: "Offline" },
 } satisfies Record<string, Text>;
 
-/** the profiles as the player reads them: their levels, their radius by default [km] */
-export const PROFILES: { id: ZoneProfileId; label: Text; hint: Text; radiusKm: number }[] = [
+/** the profiles as the player reads them: their levels, their radius and their detailed core's by default [km] (the
+ *  airfield's levels already its own) */
+export const PROFILES: { id: ZoneProfileId; label: Text; hint: Text; radiusKm: number; coreKm: number }[] = [
   {
     id: "airport",
     label: { fr: "Aéroport, roulage", en: "Airfield, taxiing" },
     hint: { fr: "Orthophotos à 0,4 m, relief à 1 m", en: "Orthophotos at 0.4 m, relief at 1 m" },
     radiusKm: 5,
+    coreKm: 0,
   },
   {
     id: "low",
     label: { fr: "Vol bas", en: "Low flight" },
     hint: { fr: "Orthophotos à 0,8 m, relief à 2 m", en: "Orthophotos at 0.8 m, relief at 2 m" },
     radiusKm: 10,
+    coreKm: 3,
   },
   {
     id: "valley",
     label: { fr: "Vallée, massif", en: "Valley, massif" },
     hint: { fr: "Orthophotos à 1,6 m, relief à 4 m", en: "Orthophotos at 1.6 m, relief at 4 m" },
     radiusKm: 30,
+    coreKm: 0,
   },
   {
     id: "overflight",
     label: { fr: "Survol d'une région", en: "Flying over a region" },
     hint: { fr: "Orthophotos à 3,2 m, relief à 8 m", en: "Orthophotos at 3.2 m, relief at 8 m" },
     radiusKm: 50,
+    coreKm: 0,
   },
 ];
 /** the radii offered [km] */
 export const RADII = [1, 2, 3, 5, 10, 15, 20, 30, 50, 75, 100];
+/** the detailed cores' radii offered [km] (0: none; at most the zone's) */
+export const CORES = [0, 0.5, 1, 2, 3, 5, 10, 20, 50];
 /** the automatic cache's budgets offered [bytes] */
 export const BUDGETS = [300 * 2 ** 20, 2 ** 30, 3 * 2 ** 30];
 
@@ -218,13 +234,25 @@ export function circlePoints(lat: number, lon: number, radiusM: number, n = 72):
   }
   return out;
 }
+/** a zone's detailed core on a map: its circle dotted */
+function drawCore(ctx: CanvasRenderingContext2D, to: ToScreen, lat: number, lon: number, coreKm: number, col: string) {
+  const pts = circlePoints(lat, lon, coreKm * 1000).map(([la, lo]) => to(la, lo));
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  ctx.closePath();
+  ctx.setLineDash([2, 4]);
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
 /** a zone's colour by its state: ready amber, downloading blue, paused grey */
 export const ZONE_COL: Record<ZoneRecord["state"], string> = { ready: "#ffb35c", downloading: "#6fd2ff", paused: "#9aa4b2" };
 /** Zones drawn on a map (the settings' own, the Atlas's): their discs and rims, their names. */
 export function drawZones(
   ctx: CanvasRenderingContext2D,
   to: ToScreen,
-  zones: readonly Pick<ZoneRecord, "lat" | "lon" | "radiusKm" | "name" | "state">[],
+  zones: readonly (Pick<ZoneRecord, "lat" | "lon" | "radiusKm" | "name" | "state"> & { coreKm?: number })[],
   names = true,
 ) {
   for (const z of zones) {
@@ -237,6 +265,8 @@ export function drawZones(
     ctx.strokeStyle = ZONE_COL[z.state];
     ctx.lineWidth = 1.6;
     ctx.stroke();
+    // (its detailed core, inside: dotted)
+    if (z.coreKm && z.coreKm < z.radiusKm) drawCore(ctx, to, z.lat, z.lon, z.coreKm, ZONE_COL[z.state]);
     if (!names) continue;
     const [x, y] = to(z.lat, z.lon);
     ctx.font = "600 11px Rajdhani, system-ui, sans-serif";
@@ -292,6 +322,7 @@ interface Draft {
   place: FootPlace;
   profile: ZoneProfileId;
   radiusKm: number;
+  coreKm: number;
 }
 
 export class OfflineTab {
@@ -433,7 +464,7 @@ export class OfflineTab {
       placeCoords({ id: "", name: { fr: "", en: "" }, lat: z.lat, lon: z.lon }),
       fmtCount(z.total),
       fmtBytes(z.bytes),
-      `${fill(tr(T.sources), src.join(", "))}${z.state === "ready" ? ` ${fill(tr(T.since), fmtDate(z.updated ?? z.created))}` : ""}`,
+      `${z.coreKm ? `${fill(tr(T.coreOf), u.fDist(Math.min(z.coreKm, z.radiusKm) * 1000, z.coreKm < 1 ? 1 : 0))} ` : ""}${fill(tr(T.sources), src.join(", "))}${z.state === "ready" ? ` ${fill(tr(T.since), fmtDate(z.updated ?? z.created))}` : ""}`,
     );
     return [z.name, text];
   }
@@ -686,6 +717,7 @@ export class OfflineTab {
         this.herePlace() ?? { id: "chamonix", name: { fr: "Chamonix", en: "Chamonix" }, lat: 45.9237, lon: 6.8694 },
       profile: p.id,
       radiusKm: this.draft?.radiusKm ?? p.radiusKm,
+      coreKm: this.draft?.coreKm ?? p.coreKm,
     };
   }
 
@@ -710,16 +742,21 @@ export class OfflineTab {
           explain: (title, text, extra = []) =>
             about.replaceChildren(el("h3", "tt-preview-title", title), el("p", "pls-help", text), ...extra),
         };
-        const est = () => {
-          const e = zones?.estimate({ lat: D.place.lat, lon: D.place.lon, radiusKm: D.radiusKm, profile: D.profile });
+        // (the detailed core at most the zone; none with the airfield's profile — its levels already)
+        const coreKm = () => (D.profile === "airport" ? 0 : Math.min(D.coreKm, D.radiusKm));
+        const est = (core = coreKm()) => {
+          const e = zones?.estimate({ lat: D.place.lat, lon: D.place.lon, radiusKm: D.radiusKm, profile: D.profile, coreKm: core });
           return e ?? { chains: 0, urls: 0, bytes: 0, seconds: 0 };
         };
         let e = est();
+        // (what the core adds: the estimate without it, read again with the zone)
+        let bare = coreKm() ? est(0) : e;
         const free = () => Math.max(0, this.f.quota - this.f.usage);
         const tooBig = () => this.f.quota > 0 && e.bytes > free();
         const rows: (HTMLElement & { render?: () => void })[] = [];
         const again = () => {
           e = est();
+          bare = coreKm() ? est(0) : e;
           for (const r of rows) r.render?.();
         };
         const place = this.row(sub, {
@@ -749,6 +786,7 @@ export class OfflineTab {
             const p = PROFILES[(i + dir + PROFILES.length) % PROFILES.length]!;
             D.profile = p.id;
             D.radiusKm = p.radiusKm;
+            D.coreKm = p.coreKm;
             again();
           },
         });
@@ -760,6 +798,30 @@ export class OfflineTab {
           step: (dir) => {
             const i = RADII.reduce((best, r, k) => (Math.abs(r - D.radiusKm) < Math.abs(RADII[best]! - D.radiusKm) ? k : best), 0);
             D.radiusKm = RADII[Math.min(RADII.length - 1, Math.max(0, i + dir))]!;
+            again();
+          },
+        });
+        const core = this.row(sub, {
+          id: "add-core",
+          label: tr(T.core),
+          value: () =>
+            D.profile === "airport"
+              ? [el("b", "", tr(T.coreAll))]
+              : this.choice(
+                  coreKm()
+                    ? fill(
+                        tr(T.coreVal),
+                        coreKm() >= D.radiusKm ? tr(T.coreAll) : u.fDist(coreKm() * 1000, coreKm() < 1 ? 1 : 0),
+                        fmtBytes(Math.max(0, e.bytes - bare.bytes)),
+                      )
+                    : tr(T.coreNone),
+                ),
+          help: () => [tr(T.core), tr(T.coreHelp)],
+          step: (dir) => {
+            if (D.profile === "airport") return;
+            const offered = CORES.filter((c) => c < D.radiusKm).concat(D.radiusKm);
+            const i = offered.reduce((best, c, k) => (Math.abs(c - coreKm()) < Math.abs(offered[best]! - coreKm()) ? k : best), 0);
+            D.coreKm = offered[Math.min(offered.length - 1, Math.max(0, i + dir))]!;
             again();
           },
         });
@@ -788,16 +850,23 @@ export class OfflineTab {
         go.addEventListener("click", async () => {
           if (tooBig() || !zones) return;
           const name = D.place.id.startsWith("here:") ? nearName(D.place.lat, D.place.lon) : tr(D.place.name);
-          const id = await zones.add({ name, lat: D.place.lat, lon: D.place.lon, radiusKm: D.radiusKm, profile: D.profile });
+          const id = await zones.add({
+            name,
+            lat: D.place.lat,
+            lon: D.place.lon,
+            radiusKm: D.radiusKm,
+            profile: D.profile,
+            coreKm: coreKm(),
+          });
           if (!id) return;
           this.d.toast(fill(tr(T.started), name));
           await this.read();
           host.back();
         });
         go.addEventListener("focus", () => sub.explain(tr(T.download), go.querySelector("small")!.textContent ?? ""));
-        rows.push(place, onMap, profile, radius, estimate, go);
+        rows.push(place, onMap, profile, radius, core, estimate, go);
         go.render();
-        list.replaceChildren(place, onMap, profile, radius, estimate, go);
+        list.replaceChildren(place, onMap, profile, radius, core, estimate, go);
         page.append(
           h("header", { class: "pls-head" }, h("h2", { class: "pz-title" }, `${tr(T.tab)} · ${tr(T.add)}`)),
           h("div", { class: "pls-body" }, h("div", { class: "pls-side" }, list), about),
@@ -855,7 +924,13 @@ export class OfflineTab {
           const z = zoneNow();
           const e =
             !viewing && this.d.pwa()?.zones
-              ? this.d.pwa()!.zones!.estimate({ lat: at.lat, lon: at.lon, radiusKm: D!.radiusKm, profile: D!.profile })
+              ? this.d.pwa()!.zones!.estimate({
+                  lat: at.lat,
+                  lon: at.lon,
+                  radiusKm: D!.radiusKm,
+                  profile: D!.profile,
+                  coreKm: D!.profile === "airport" ? 0 : Math.min(D!.coreKm, D!.radiusKm),
+                })
               : null;
           const lines: Node[] = [
             el("h3", "tt-preview-title", viewing ? (z?.name ?? "") : nearName(at.lat, at.lon)),
@@ -898,6 +973,8 @@ export class OfflineTab {
             ctx.lineWidth = 2;
             ctx.stroke();
             ctx.setLineDash([]);
+            const core = D!.profile === "airport" ? 0 : Math.min(D!.coreKm, D!.radiusKm);
+            if (core && core < D!.radiusKm) drawCore(ctx, to, at.lat, at.lon, core, "#ffffff");
           }
           const [x, y] = to(at.lat, at.lon);
           ctx.strokeStyle = viewing ? ZONE_COL[zoneNow()?.state ?? "ready"] : "#ffffff";

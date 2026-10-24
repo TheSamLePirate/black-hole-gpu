@@ -4,7 +4,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // Settings › Offline (docs/ANALYSE-IGN-LIDAR.md §9.5, I8b; ui/settings/offline.ts), by the mouse and by a game controller
 // (a pad of the page's own, as tests/e2e/pad.e2e.test.ts). Over Chamonix, the F-35 held 450 m over the valley: the pause,
 // its World drawer, « Garder cette zone hors ligne » (the mouse) — the adding of a zone on the position now —; its radius
-// brought down to 1 km (the D-pad), downloaded (the mouse); the tab's row of the zone and its progress; its sheet (the
+// brought down to 1 km (the D-pad), its detailed core down and back to the whole zone (the D-pad), downloaded (the mouse); the tab's row of the zone and its progress; its sheet (the
 // mouse), paused and resumed (A), ready; the automatic cache's budget changed and back (◀ ▶); the zone deleted, asked
 // twice (A, A); the tab in English. (E2E_SHOTS=<dir>: offline-add, offline-tab, offline-zone, offline-tab-en.)
 // Duration: ~3 min on kerr-mini (the zone's download ~1 of them).
@@ -89,6 +89,17 @@ describe.skipIf(!E2E)("Settings › Offline", () => {
       expect(radii.indexOf(await km()) - before).toBeLessThanOrEqual(1);
     }
     expect(await km()).toBe(1);
+    // (▼ to the detailed core — the low flight's 3 km, at most the zone's: all of it —, ◀ to 0.5 km, its cost smaller, ▶ back)
+    await press(DOWN);
+    expect(await focused()).toBe("offline-add-core");
+    expect(await text("offline-add-core")).toContain("Toute la zone");
+    const whole = await text("offline-add-estimate");
+    await press(LEFT);
+    expect(await text("offline-add-core")).toMatch(/0[.,]5 km · \+ \d+ Mo/);
+    const mo = (t: string) => Number(t.match(/(\d+) Mo/)?.[1]);
+    expect(mo(await text("offline-add-estimate"))).toBeLessThan(mo(whole));
+    await press(RIGHT);
+    expect(await text("offline-add-core")).toContain("Toute la zone");
     const est = await text("offline-add-estimate");
     console.log(`  the adding: ${await text("offline-add-place")} · ${await text("offline-add-profile")} · ${est}`);
     expect(est).toMatch(/\d[\d\s  ]* tuiles · \d+ Mo · ≈ /);
@@ -96,8 +107,9 @@ describe.skipIf(!E2E)("Settings › Offline", () => {
     await app.click("[data-testid=offline-download]");
     await app.waitFor(`document.querySelector(".pls-root [data-screen]")?.dataset.screen === "settings"`, 10_000);
     await app.waitFor(`!!document.querySelector('[data-testid^="offline-zone-zone-"]')`, 10_000);
-    const z = (await zones())[0]!;
+    const z = (await zones())[0]! as Awaited<ReturnType<typeof zones>>[number] & { coreKm?: number };
     expect(z.state).toBe("downloading");
+    expect(z.coreKm).toBe(1);
     await app.waitFor(`(async () => ((await __bh.pwa.zones.list())[0]?.cursor ?? 0) > 0)()`, 60_000);
     await Bun.sleep(1600);
     const row = await text(`offline-zone-${z.id}`);

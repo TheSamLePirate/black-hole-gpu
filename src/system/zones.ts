@@ -18,6 +18,7 @@ import {
   nightUrl,
   ORTHO_SPAN,
   ORTHO_Z0,
+  ORTHO_Z1,
   SPAN,
   tileUrl,
   Z0,
@@ -43,6 +44,10 @@ export const ZONE_PROFILES = {
   overflight: { reliefZ1: 14, orthoZ1: 15 },
 } as const satisfies Record<string, ZoneProfile>;
 export type ZoneProfileId = keyof typeof ZONE_PROFILES;
+/** a zone's detailed core (its record's coreKm: a disc round its centre): the airfield's levels there whatever its profile
+ *  — what a flight under ~1 km over the ground asks, full screen (earth-tiles.ts: the orthophotos' z 18 from the eye's
+ *  height and the pixel's angle; the relief's z 17 under ~1.7 km) —, its profile's past it */
+export const ZONE_CORE: ZoneProfile = ZONE_PROFILES.airport;
 
 /** the settings the URLs follow (earth-tiles.ts orthoOn, reliefOn, hlodOn; the fine levels' windows' side: setReach's
  *  TILE_REACH span, 4 or 8) */
@@ -64,8 +69,8 @@ export type ZoneChain = string[];
  * holds with the camera anywhere in the disc — its half-side (SPAN; 8 at the farthest reach from FINE_Z to ZG1, the IGN's
  * finer levels 4 whatever the reach), the lead ahead where the view looks (half a side less three quarters of a tile), the
  * window's recentring (0.8 of a tile off) and the ring of one tile loaded past it on the finest levels: a side and a half
- * round the camera. A flight lower than the profile's finest asks finer tiles: the
- * network's.
+ * round the camera. A flight lower than the profile's finest asks finer tiles: the network's — or, within the
+ * detailed core (`core` [m], capped at the radius), the airfield's levels (ZONE_CORE), held to its own radius.
  * The levels finer than the global data's (z 15 … 17) only where a national source holds the tile and its relief is on
  * (`relief`), the orthophotos only where a national source holds it.
  */
@@ -76,11 +81,13 @@ export function zoneTiles(
   profile: ZoneProfile,
   fineSpan = 8,
   relief = true,
+  core = 0,
 ): { relief: [number, number, number][]; ortho: [number, number, number][] } {
   const D = Math.PI / 180;
   const reliefs: [number, number, number][] = [],
     ortho: [number, number, number][] = [];
-  const level = (z: number, margin: number, out: [number, number, number][], national: boolean) => {
+  const coreR = Math.min(Math.max(core, 0), radius);
+  const level = (z: number, margin: number, out: [number, number, number][], national: boolean, radius: number) => {
     const n = 2 ** z,
       tileM = (2 * Math.PI * WGS84_A * Math.cos(lat * D)) / n;
     const cx = ((lon + 180) / 360) * n,
@@ -99,11 +106,15 @@ export function zoneTiles(
         out.push([z, xw, y]);
       }
   };
-  for (let z = Z0; z <= Math.min(profile.reliefZ1, relief ? Z1 : ZG1); z++) {
+  const top =
+    coreR > 0
+      ? { reliefZ1: Math.max(profile.reliefZ1, ZONE_CORE.reliefZ1), orthoZ1: Math.max(profile.orthoZ1, ZONE_CORE.orthoZ1) }
+      : profile;
+  for (let z = Z0; z <= Math.min(top.reliefZ1, relief ? Z1 : ZG1); z++) {
     const span = z >= FINE_Z && z <= ZG1 ? fineSpan : SPAN;
-    level(z, span + 1.5, reliefs, z > ZG1);
+    level(z, span + 1.5, reliefs, z > ZG1, z <= profile.reliefZ1 ? radius : coreR);
   }
-  for (let z = ORTHO_Z0; z <= profile.orthoZ1; z++) level(z, ORTHO_SPAN + 0.5, ortho, true);
+  for (let z = ORTHO_Z0; z <= top.orthoZ1; z++) level(z, ORTHO_SPAN + 0.5, ortho, true, z <= profile.orthoZ1 ? radius : coreR);
   return { relief: reliefs, ortho };
 }
 
@@ -146,9 +157,9 @@ export function orthoUrls(z: number, x: number, y: number): string[] {
 
 /** a zone's chains, each once (a parent's Terrarium, a lights' parent, shared by many tiles: the first's), the coarse
  *  levels first (a download cut short still holds the overview) */
-export function zoneChains(lat: number, lon: number, radius: number, profile: ZoneProfile, o: ZoneSources): ZoneChain[] {
+export function zoneChains(lat: number, lon: number, radius: number, profile: ZoneProfile, o: ZoneSources, core = 0): ZoneChain[] {
   // (the relief's survey off: no level finer than the global data's asked)
-  const t = zoneTiles(lat, lon, radius, profile, o.span, o.relief);
+  const t = zoneTiles(lat, lon, radius, profile, o.span, o.relief, core);
   const tiles = [...t.relief.map((v) => ["r", ...v] as const), ...(o.ortho ? t.ortho.map((v) => ["o", ...v] as const) : [])];
   tiles.sort((a, b) => a[1] - b[1]);
   const seen = new Set<string>(),
@@ -162,8 +173,46 @@ export function zoneChains(lat: number, lon: number, radius: number, profile: Zo
   return out;
 }
 /** a zone's URLs, every link of every chain, once each */
-export const zoneUrls = (lat: number, lon: number, radius: number, profile: ZoneProfile, o: ZoneSources): string[] =>
-  zoneChains(lat, lon, radius, profile, o).flat();
+export const zoneUrls = (lat: number, lon: number, radius: number, profile: ZoneProfile, o: ZoneSources, core = 0): string[] =>
+  zoneChains(lat, lon, radius, profile, o, core).flat();
+
+/** a zone as its record keeps it (pwa/rules.ts ZoneRecord) */
+export interface ZonePlace {
+  lat: number;
+  lon: number;
+  radiusKm: number;
+  profile: string;
+  coreKm?: number;
+  sources: Pick<ZoneSources, "ortho" | "relief">;
+}
+/** a place's distance [m] from a zone's centre [°] as zoneTiles measures its disc: in Web Mercator, at the centre's scale */
+export function zoneDistance(lat0: number, lon0: number, lat: number, lon: number): number {
+  const D = Math.PI / 180,
+    C = 2 * Math.PI * WGS84_A * Math.cos(lat0 * D);
+  const merc = (la: number) => Math.asinh(Math.tan(la * D)) / (2 * Math.PI);
+  let dl = (lon - lon0) / 360;
+  dl -= Math.round(dl);
+  return Math.hypot(dl * C, (merc(lat) - merc(lat0)) * C);
+}
+/**
+ * The finest levels the zones hold with the camera at a place [°] — their profile's within their disc, the airfield's
+ * within their core, none where their sources were off (the relief's survey: the global data's levels alone) —; null out
+ * of every zone. Offline the game asks nothing finer there (earth-tiles.ts held): those tiles are in no zone, each request
+ * would fail.
+ */
+export function zoneLevelsAt(zones: readonly ZonePlace[], lat: number, lon: number): ZoneProfile | null {
+  let out: ZoneProfile | null = null;
+  for (const z of zones) {
+    const d = zoneDistance(z.lat, z.lon, lat, lon);
+    if (d > z.radiusKm * 1000) continue;
+    const p: ZoneProfile = ZONE_PROFILES[z.profile as ZoneProfileId] ?? ZONE_PROFILES.low;
+    const core = (z.coreKm ?? 0) > 0 && d <= Math.min(z.coreKm!, z.radiusKm) * 1000;
+    const relief = z.sources.relief ? Math.max(p.reliefZ1, core ? ZONE_CORE.reliefZ1 : 0) : Math.min(p.reliefZ1, ZG1);
+    const ortho = z.sources.ortho ? Math.min(Math.max(p.orthoZ1, core ? ZONE_CORE.orthoZ1 : 0), ORTHO_Z1) : ORTHO_Z0 - 1;
+    out = out ? { reliefZ1: Math.max(out.reliefZ1, relief), orthoZ1: Math.max(out.orthoZ1, ortho) } : { reliefZ1: relief, orthoZ1: ortho };
+  }
+  return out;
+}
 
 /** a URL's size by its kind's measured mean [bytes] (2026-10-23; the relief's grids as the worker keeps them, packed —
  *  pwa/relief-codec.ts, I8c: scripts/relief-codec-bench.ts, 2026-10-24) */

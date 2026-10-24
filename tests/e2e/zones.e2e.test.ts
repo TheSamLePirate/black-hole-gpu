@@ -4,26 +4,28 @@ import { App, E2E, stopServer } from "./lib/app";
 // Offline zones (docs/ANALYSE-IGN-LIDAR.md §9, I8a; src/pwa-zones.ts, src/system/zones.ts, src/sw.ts): a region's tiles
 // fetched ahead into the Service Worker's zones' cache, then the network cut and a low flight across it — its ground whole,
 // not one tile asked of the network. Over Chamonix, a 1.5 km zone of the low flight's profile (the orthophotos to z 17,
-// 0.8 m), the detail's normal reach, the IGN's relief off in this test (its chains: tests/zones.test.ts); the download
+// 0.8 m) with a detailed core of 0.8 km (an airfield's levels: the orthophotos to z 18, 0.4 m), the detail's normal reach, the IGN's relief off in this test (its chains: tests/zones.test.ts); the download
 // paused half-way and resumed, its progress on screen; the tiles' own cache emptied, the network cut, the page loaded
-// again (no tile in its memory); the ground looked at, held still, its detail measured against the same view online;
-// then flown 2.4 km up the valley at 450 m over its floor, held level at 120 m/s, in the cockpit, the page's tile
-// responses counted (a zone's marked by the worker); the zone dropped at the end. The world scenery off: not in a zone
+// again (no tile in its memory); the ground looked at in the core, held still, its orthophotos to z 18, its detail
+// measured against the same view online; then flown 1.8 km up the valley at 450 m over its floor, out of the core,
+// held level at 120 m/s, in the cockpit, the page's tile responses counted (a zone's marked by the worker — the z 18
+// apart: the core's from the zone, none asked past it); the zone dropped at the end. The world scenery off: not in a zone
 // yet.
 // (E2E_SHOTS=<dir>: zones-chamonix-online, zones-chamonix-offline — the ground held still, every pixel shaded.)
 // Duration: ~4 min on kerr-mini (the download ~2 of them).
-// Done when: the zone ready, the flight's tiles all from it (none from the network), its ground whole, the zone dropped.
+// Done when: the zone ready, the flight's tiles all from it (none from the network, not even the finer than the profile's),
+// the z 18 drawn in the core, its ground whole, the zone dropped.
 
-// (the low flight's profile: the orthophotos to z 17 — 0.8 m; the game asks z 18 under ~1.5 km over the ground, full
-// screen: those not in the zone, asked of the network online, failing offline — the z 17 drawn there instead)
+// (the low flight's profile: the orthophotos to z 17 — 0.8 m; the game asks z 18 under ~1 km over the ground, full
+// screen: the core's in the zone; past it, offline, the game asks none — system/zones.ts zoneLevelsAt —, the z 17 drawn)
 const ORTHO_Z1 = 17;
-const ZONE = { name: "Chamonix (e2e)", lat: 45.92, lon: 6.87, radiusKm: 1.5, profile: "low" };
+const ZONE = { name: "Chamonix (e2e)", lat: 45.92, lon: 6.87, radiusKm: 1.5, profile: "low", coreKm: 0.8 };
 const D = Math.PI / 180;
-// (the flight: 1.1 km south-west of the centre, up the valley's axis at 45° — its floor 1 084–1 104 m over ±1.5 km, its
-// sides past 1 600 m 1.5 km off)
+// (the flight: 0.6 km south-west of the centre, in the core, up the valley's axis at 45° — its floor 1 084–1 104 m over
+// ±1.5 km, its sides past 1 600 m 1.5 km off —, 1.8 km flown: out of the core at 1.4, 1.2 km past the centre at the end)
 const START = {
-  lat: ZONE.lat - (1.1 * Math.cos(45 * D)) / 111.2,
-  lon: ZONE.lon - (1.1 * Math.sin(45 * D)) / (111.2 * Math.cos(ZONE.lat * D)),
+  lat: ZONE.lat - (0.6 * Math.cos(45 * D)) / 111.2,
+  lon: ZONE.lon - (0.6 * Math.sin(45 * D)) / (111.2 * Math.cos(ZONE.lat * D)),
 };
 const SETTINGS = `{ traffic: false, weather: "fair", earthClouds: 0, dof: false, earthPipeline: "raster", earthOrtho: true, earthIgnRelief: false, earthIgnSilhouettes: false, earthScenery: "off", earthSurface: "off", detailReach: "normal", f35AutoProtect: false }`;
 
@@ -41,9 +43,9 @@ const PROGRESS = `(() => {
   window.__zoneTimer = setInterval(async () => {
     const z = (await __bh.pwa?.zones?.list().catch(() => []))?.find((v) => v.name === ${JSON.stringify(ZONE.name)});
     const t = window.__tiles;
-    el.textContent = "Zone hors ligne « Chamonix » — 1,5 km, profil vol bas\\n" + (window.__zonePhase || "") +
+    el.textContent = "Zone hors ligne « Chamonix » — 1,5 km, profil vol bas, cœur détaillé 0,8 km\\n" + (window.__zonePhase || "") +
       (z ? "\\n" + z.cursor + " / " + z.total + " tuiles · " + mb(z.bytes) + " · " + (state[z.state] ?? z.state) : "") +
-      (t ? "\\ntuiles reçues en vol : " + t.zone + " de la zone · " + (t.other + t.failed) + " du réseau" + (t.finer ? " · " + t.finer + " plus fines que le profil" : "") : "");
+      (t ? "\\ntuiles reçues en vol : " + t.zone + " de la zone · " + (t.other + t.failed) + " du réseau" + (t.finer ? " · dont " + t.finer + " plus fines que le profil (cœur)" : "") : "");
   }, 1500);
   return 1; })()`;
 
@@ -116,6 +118,11 @@ describe.skipIf(!E2E)("an offline zone", () => {
       `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); __bh.renderer.rasterFellBack = false; return 1; })()`,
     );
     await app.settled();
+    // (in the core, at the full scale: the orthophotos to z 18 — 0.4 m)
+    await app
+      .waitFor(`(() => { const t = __bh.renderer.earthTiles; return t.orthoFinest >= 18 && t.orthoPending === 0; })()`, 60_000)
+      .catch(() => {});
+    const orthoFinest = await app.js<number>(`__bh.renderer.earthTiles.orthoFinest`);
     // (the game paused — held, a frozen view is still drawn as a moving one, in the governor's blocks —: the view refining,
     // its detail measured until two in a row agree — a slow GPU's shading sweeps the frame for seconds)
     await app.js(`(__bh.game.pause(true), 1)`);
@@ -133,6 +140,7 @@ describe.skipIf(!E2E)("an offline zone", () => {
       pipe: await app.js<string>(`__bh.renderer.earthPipelineNow(__bh.settings)`),
       phase: await app.js<string>(`__bh.renderer.lastPhase`),
       detail,
+      orthoFinest,
     };
     expect(look.phase).not.toBe("realtime");
     expect(look.pipe).toBe("raster");
@@ -204,10 +212,11 @@ describe.skipIf(!E2E)("an offline zone", () => {
     await app.cdp.send("Page.addScriptToEvaluateOnNewDocument", {
       source: `(() => { const hosts = ["s3.amazonaws.com", "gibs.earthdata.nasa.gov", "tiles.maps.eox.at", "data.geopf.fr", "geo.admin.ch"];
         const f = window.fetch.bind(window); window.__tiles = { zone: 0, other: 0, failed: 0, finer: 0, others: [] };
+        // (the finer than the profile's, z 18: counted with the others — the core's from the zone —, and apart)
         const finer = (url) => /ORTHOIMAGERY|swissimage/.test(url) && Number(url.match(/TILEMATRIX=(\\d+)/)?.[1] ?? url.match(/\\/(\\d+)\\/\\d+\\/\\d+\\.jpe?g/)?.[1]) > ${ORTHO_Z1};
         window.fetch = async (input, init) => { const url = String(input instanceof Request ? input.url : input);
           const tile = hosts.some((h) => url.includes(h));
-          if (tile && finer(url)) { window.__tiles.finer++; return f(input, init); }
+          if (tile && finer(url)) window.__tiles.finer++;
           try { const r = await f(input, init); if (tile) { if (r.headers.get("x-kerr-zone") === "1") window.__tiles.zone++; else { window.__tiles.other++; if (window.__tiles.others.length < 8) window.__tiles.others.push(r.status + " " + url.slice(0, 240)); } } return r; }
           catch (e) { if (tile) { window.__tiles.failed++; if (window.__tiles.others.length < 8) window.__tiles.others.push("failed " + url.slice(0, 150)); } throw e; } }; })();`,
     });
@@ -229,12 +238,14 @@ describe.skipIf(!E2E)("an offline zone", () => {
     console.log(
       `  offline, the ground looked at (${at.look.pipe}, ${at.look.phase}): detail ${at.look.detail.toFixed(2)} (online ${online.look.detail.toFixed(2)})`,
     );
-    console.log(`  placed at ${at.alt.toFixed(0)} m, ${(at.alt - at.ground).toFixed(0)} m over the floor; held at ${at.hold} m`);
+    console.log(
+      `  placed at ${at.alt.toFixed(0)} m, ${(at.alt - at.ground).toFixed(0)} m over the floor; held at ${at.hold} m; orthophotos to z ${at.look.orthoFinest} (online ${online.look.orthoFinest}); navigator.onLine ${await app.js<boolean>("navigator.onLine")}`,
+    );
     await Bun.sleep(5000);
     const f0 = await flying();
     expect(Math.abs(f0.pitch)).toBeLessThan(15);
-    // (15 s more: 2.4 km flown from the start, still in the disc)
-    await Bun.sleep(15_000);
+    // (10 s more: 1.8 km flown from the start, out of the core at 1.4, still in the disc)
+    await Bun.sleep(10_000);
     const f1 = await flying();
     console.log(
       `  flown: ${f1.alt.toFixed(0)} m (${f1.agl.toFixed(0)} m over the floor), ${f1.gs.toFixed(0)} m/s, pitch ${f1.pitch.toFixed(1)}°`,
@@ -247,8 +258,8 @@ describe.skipIf(!E2E)("an offline zone", () => {
       .waitFor(`(() => { const t = __bh.renderer.earthTiles; return t.pending === 0 && t.orthoPending === 0; })()`, 60_000)
       .catch(() => {});
     const seen = await app.js<{ zone: number; other: number; failed: number; finer: number; others: string[] }>(`window.__tiles`);
-    const ground = await app.js<{ pending: number; ortho: number; finest: number; orthoFinest: number; pipe: string }>(
-      `(() => { const t = __bh.renderer.earthTiles; return { pending: t.pending, ortho: t.orthoPending, finest: t.finest, orthoFinest: t.orthoFinest, pipe: __bh.renderer.earthPipelineNow(__bh.settings) }; })()`,
+    const ground = await app.js<{ pending: number; ortho: number; finest: number; orthoFinest: number; pipe: string; d: number }>(
+      `(() => { const t = __bh.renderer.earthTiles, g = __bh.camera.geoNow(); return { pending: t.pending, ortho: t.orthoPending, finest: t.finest, orthoFinest: t.orthoFinest, pipe: __bh.renderer.earthPipelineNow(__bh.settings), d: Math.hypot((g.lat - ${ZONE.lat}) * 111.2, (g.lon - ${ZONE.lon}) * 111.2 * Math.cos(${ZONE.lat * D})) }; })()`,
     );
     const net = seen.other + seen.failed;
     // (what was drawn of them: the tiles' loads, the orthophotos decoded — and one of the zone's decoded here, offline)
@@ -260,10 +271,10 @@ describe.skipIf(!E2E)("an offline zone", () => {
     );
     console.log(`  offline, drawn: ${JSON.stringify(drawn)}; a zone's orthophoto decoded: ${decode}`);
     console.log(
-      `  offline, loaded again and flown up the valley: ${seen.zone} tiles from the zone, ${seen.other} from elsewhere, ${seen.failed} failed, ${seen.finer} orthophotos finer than the profile's (z > ${ORTHO_Z1}: not in it, the z ${ORTHO_Z1} drawn instead)${seen.others.length ? ` (${seen.others.join(" · ")})` : ""}; ground pending ${ground.pending} (orthophotos ${ground.ortho}), levels to z ${ground.finest}, orthophotos to z ${ground.orthoFinest}, ${ground.pipe}, pitch ${f1.pitch.toFixed(1)}°`,
+      `  offline, loaded again and flown up the valley: ${seen.zone} tiles from the zone, ${seen.other} from elsewhere, ${seen.failed} failed, ${seen.finer} of them orthophotos finer than the profile's (z > ${ORTHO_Z1}: the core's)${seen.others.length ? ` (${seen.others.join(" · ")})` : ""}; at the end ${ground.d.toFixed(2)} km from the centre (out of the core): ground pending ${ground.pending} (orthophotos ${ground.ortho}), levels to z ${ground.finest}, orthophotos to z ${ground.orthoFinest}, ${ground.pipe}, pitch ${f1.pitch.toFixed(1)}°`,
     );
     await phase(
-      `Hors ligne : ${seen.zone} tuiles de la zone, ${net} du réseau, ${seen.finer} plus fines que le profil — sol complet : ${ground.pending === 0 ? "oui" : "non"}`,
+      `Hors ligne : ${seen.zone} tuiles de la zone (dont ${seen.finer} du cœur, z 18), ${net} du réseau — sol complet : ${ground.pending === 0 ? "oui" : "non"}`,
     );
     await app.cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
     expect(seen.zone).toBeGreaterThan(100);
@@ -272,7 +283,11 @@ describe.skipIf(!E2E)("an offline zone", () => {
     expect(net).toBe(0);
     expect(ground.pending).toBe(0);
     expect(ground.ortho).toBe(0);
-    expect(ground.orthoFinest).toBeGreaterThanOrEqual(17);
+    // (the core's z 18 drawn, from the zone; past it, the profile's z 17 — none finer asked)
+    expect(at.look.orthoFinest).toBeGreaterThanOrEqual(18);
+    expect(seen.finer).toBeGreaterThan(0);
+    expect(ground.d).toBeGreaterThan(ZONE.coreKm);
+    expect(ground.orthoFinest).toBe(17);
     // (dropped: its tiles gone with it)
     await app.js(`__bh.pwa.zones.remove(${JSON.stringify(id)})`);
     await phase("Zone supprimée");

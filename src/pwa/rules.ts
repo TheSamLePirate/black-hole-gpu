@@ -125,6 +125,8 @@ export interface ZoneRecord {
   lon: number;
   radiusKm: number;
   profile: string;
+  /** its detailed core's radius [km] (system/zones.ts ZONE_CORE: the airfield's levels round its centre; 0 or none: none) */
+  coreKm?: number;
   /** its tiles' chains of fetches (system/zones.ts zoneChains), and how many of their links are in */
   total: number;
   done: number;

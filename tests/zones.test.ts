@@ -15,7 +15,19 @@ import {
 } from "../src/system/earth-tiles";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 import { swissimageUrl } from "../src/system/national";
-import { reliefChains, reliefUrls, ZONE_PROFILES, zoneChains, zoneDuration, zoneEstimate, zoneTiles, zoneUrls } from "../src/system/zones";
+import {
+  reliefChains,
+  reliefUrls,
+  ZONE_CORE,
+  ZONE_PROFILES,
+  zoneChains,
+  zoneDistance,
+  zoneDuration,
+  zoneEstimate,
+  zoneLevelsAt,
+  zoneTiles,
+  zoneUrls,
+} from "../src/system/zones";
 
 // (no GPU: the textures a stub; the network a recorder refusing every request — the URLs the loads ask, kept)
 (globalThis as { GPUTextureUsage?: unknown }).GPUTextureUsage ??= { TEXTURE_BINDING: 4, COPY_DST: 2 };
@@ -73,6 +85,76 @@ test("a zone's tiles: every one the game's windows want with the camera anywhere
   // (the finer levels and the orthophotos to the profile's)
   expect(Math.max(...z.relief.map((v) => v[0]))).toBe(profile.reliefZ1);
   expect(Math.max(...z.ortho.map((v) => v[0]))).toBe(profile.orthoZ1);
+});
+
+test("a low flight at 400 m over the ground: the z 18 orthophotos it asks within the core in the zone, none outside it offline", () => {
+  const lat0 = 45.92,
+    lon0 = 6.87,
+    radius = 3000,
+    core = 1500,
+    profile = ZONE_PROFILES.low;
+  const zone = {
+    lat: lat0,
+    lon: lon0,
+    radiusKm: radius / 1000,
+    profile: "low",
+    coreKm: core / 1000,
+    sources: { ortho: true, relief: true },
+  };
+  const z = zoneTiles(lat0, lon0, radius, profile, 4, true, core);
+  const key = (v: readonly number[]) => v.join("/");
+  const relief = new Set(z.relief.map(key)),
+    ortho = new Set(z.ortho.map(key));
+  // (the core's levels held to its radius, the profile's to the zone's)
+  expect(Math.max(...z.ortho.map((v) => v[0]))).toBe(ZONE_CORE.orthoZ1);
+  expect(Math.max(...z.relief.map((v) => v[0]))).toBe(ZONE_CORE.reliefZ1);
+  const n18 = z.ortho.filter((v) => v[0] === 18).length;
+  expect(n18).toBeLessThan(z.ortho.filter((v) => v[0] === 17).length * 4);
+  expect(zoneTiles(lat0, lon0, radius, profile, 4, true).ortho.some((v) => v[0] === 18)).toBe(false);
+  // (flown straight across the zone every 45°, a sample every 25 m, 400 m over the ground — full screen, a pixel 0.4 or
+  // 1 mrad —, looking every way: the windows led to their most, recentred as they go)
+  const fly = (offline: boolean, pix: number, a: number, gazeA: number) => {
+    const t = new EarthTiles(fakeDevice());
+    if (offline) t.held = (la, lo) => zoneLevelsAt([zone], la, lo);
+    const got = { core18: 0, out18: 0, outside: [] as string[], inCore: [] as string[] };
+    for (let s = -radius; s <= radius; s += 25) {
+      const [la1, lo1] = north(lat0, lon0, s * Math.cos(a * D));
+      const [la, lo] = east(la1, lo1, s * Math.sin(a * D));
+      const d = zoneDistance(lat0, lon0, la, lo);
+      if (d > radius) continue;
+      const gaze = [Math.cos(gazeA * D) * 0.01, Math.sin(gazeA * D) * 0.01, 0.005] as Vec3;
+      t.update(camAt(la, lo, 1500), pix, [0, 0, 0], gaze, 400);
+      for (const w of t.orthoWanted()) {
+        const inZone = ortho.has(key(w));
+        if (w[0] === 18) d <= core ? got.core18++ : got.out18++;
+        if (!inZone) (d <= core ? got.inCore : got.outside).push(`o${key(w)}`);
+      }
+      for (const w of t.wanted()) if (!relief.has(key(w))) (d <= core ? got.inCore : got.outside).push(`r${key(w)}`);
+    }
+    return got;
+  };
+  let core18 = 0;
+  for (const pix of [4e-4, 1e-3])
+    for (const a of [0, 45, 90, 135, 180, 225, 270, 315])
+      for (const g of [0, 90, 180, 270]) {
+        // (online: within the core, everything it asks in the zone; past it the z 18 the network's)
+        const on = fly(false, pix, a, g);
+        expect(on.inCore).toEqual([]);
+        expect(on.out18).toBeGreaterThan(0);
+        expect(on.outside.length).toBeGreaterThan(0);
+        core18 += on.core18;
+        // (offline: within the core the same, past it nothing finer than the profile's — every tile asked in the zone)
+        const off = fly(true, pix, a, g);
+        expect(off.inCore).toEqual([]);
+        expect(off.outside).toEqual([]);
+        expect(off.out18).toBe(0);
+        expect(off.core18).toBe(on.core18);
+      }
+  expect(core18).toBeGreaterThan(1000);
+  // (out of every zone, no cap: the automatic cache's chance)
+  expect(zoneLevelsAt([zone], lat0 + 0.05, lon0)).toBeNull();
+  expect(zoneLevelsAt([zone], lat0, lon0)).toEqual({ reliefZ1: 17, orthoZ1: 18 });
+  expect(zoneLevelsAt([{ ...zone, sources: { ortho: false, relief: false } }], lat0, lon0)).toEqual({ reliefZ1: 14, orthoZ1: 14 });
 });
 
 test("a zone's URLs: every one the loads ask in flight within it is in the zone's list", async () => {

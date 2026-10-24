@@ -15,20 +15,24 @@ import {
   zoneChains,
   zoneDuration,
   zoneEstimate,
+  zoneLevelsAt,
 } from "./system/zones";
 
 export interface Zones {
   /** what a zone would hold: its tiles' chains of fetches, their links, its size [bytes] by the kinds' means, its download
    *  time [s] */
-  estimate(o: { lat: number; lon: number; radiusKm: number; profile: ZoneProfileId }): {
+  estimate(o: { lat: number; lon: number; radiusKm: number; profile: ZoneProfileId; coreKm?: number }): {
     chains: number;
     urls: number;
     bytes: number;
     seconds: number;
   };
   /** a zone added and its download started; its id */
-  add(o: { name: string; lat: number; lon: number; radiusKm: number; profile: ZoneProfileId }): Promise<string | null>;
+  add(o: { name: string; lat: number; lon: number; radiusKm: number; profile: ZoneProfileId; coreKm?: number }): Promise<string | null>;
   list(): Promise<ZoneRecord[]>;
+  /** the finest levels the zones hold with the camera at a place [°] (system/zones.ts zoneLevelsAt; the zones as last
+   *  read or saved): null out of every zone */
+  heldAt(lat: number, lon: number): { reliefZ1: number; orthoZ1: number } | null;
   /** resolves once its batch under way is in: nothing more asked from then */
   pause(id: string): Promise<void>;
   resume(id: string): Promise<void>;
@@ -58,9 +62,26 @@ export function createZones(o: {
   const paused = new Set<string>();
   const queue: string[] = [];
   const chainsOf = (z: ZoneRecord) =>
-    zoneChains(z.lat, z.lon, z.radiusKm * 1000, ZONE_PROFILES[z.profile as ZoneProfileId] ?? ZONE_PROFILES.low, z.sources);
-  const save = (zone: ZoneRecord) => o.talk({ type: "zone-save", zone });
-  const get = async (id: string) => ((await o.talk<ZoneRecord[]>({ type: "zones" })) ?? []).find((z) => z.id === id) ?? null;
+    zoneChains(
+      z.lat,
+      z.lon,
+      z.radiusKm * 1000,
+      ZONE_PROFILES[z.profile as ZoneProfileId] ?? ZONE_PROFILES.low,
+      z.sources,
+      (z.coreKm ?? 0) * 1000,
+    );
+  // (the zones as last read or saved: the game's levels offline follow them, at once — heldAt)
+  let known: ZoneRecord[] = [];
+  const zones = async () => {
+    const all = await o.talk<ZoneRecord[]>({ type: "zones" });
+    if (all) known = all;
+    return all ?? [];
+  };
+  const save = (zone: ZoneRecord) => {
+    known = [...known.filter((z) => z.id !== zone.id), zone];
+    return o.talk({ type: "zone-save", zone });
+  };
+  const get = async (id: string) => (await zones()).find((z) => z.id === id) ?? null;
   async function run() {
     if (active) return;
     while (queue.length) {
@@ -118,12 +139,12 @@ export function createZones(o: {
   }
   // (a download a reload cut short: taken up again)
   void (async () => {
-    for (const z of (await o.talk<ZoneRecord[]>({ type: "zones" })) ?? []) if (z.state === "downloading") queue.push(z.id);
+    for (const z of await zones()) if (z.state === "downloading") queue.push(z.id);
     void run();
   })();
   return {
-    estimate({ lat, lon, radiusKm, profile }) {
-      const chains = zoneChains(lat, lon, radiusKm * 1000, ZONE_PROFILES[profile], o.sources());
+    estimate({ lat, lon, radiusKm, profile, coreKm = 0 }) {
+      const chains = zoneChains(lat, lon, radiusKm * 1000, ZONE_PROFILES[profile], o.sources(), coreKm * 1000);
       return {
         chains: chains.length,
         urls: chains.reduce((s, c) => s + c.length, 0),
@@ -131,7 +152,7 @@ export function createZones(o: {
         seconds: zoneDuration(chains),
       };
     },
-    async add({ name, lat, lon, radiusKm, profile }) {
+    async add({ name, lat, lon, radiusKm, profile, coreKm }) {
       try {
         await navigator.storage?.persist?.();
       } catch {
@@ -145,6 +166,7 @@ export function createZones(o: {
         lon,
         radiusKm,
         profile,
+        ...(coreKm ? { coreKm } : {}),
         total: 0,
         done: 0,
         bytes: 0,
@@ -160,7 +182,8 @@ export function createZones(o: {
       void run();
       return id;
     },
-    list: async () => (await o.talk<ZoneRecord[]>({ type: "zones" })) ?? [],
+    list: zones,
+    heldAt: (lat, lon) => zoneLevelsAt(known, lat, lon),
     async pause(id) {
       paused.add(id);
       // (its batch under way let finish: nothing more asked once this resolves)
@@ -192,6 +215,7 @@ export function createZones(o: {
       paused.add(id);
       while (active === id) await new Promise((r) => setTimeout(r, 200));
       await o.talk({ type: "zone-delete", id }, 60_000);
+      known = known.filter((z) => z.id !== id);
       paused.delete(id);
     },
     get active() {

@@ -506,6 +506,10 @@ export class EarthTiles {
   private hlodWas = true;
   /** the national source under the camera (I7: "ign", "swisstopo"; null none) — its credit shown while its tiles are */
   nationalAt: NationalSource["id"] | null = null;
+  /** the finest levels the offline zones hold with the camera at a place [°] (main.ts: offline only — system/zones.ts
+   *  zoneLevelsAt —; null: online, or out of every zone, the automatic cache's chance): none finer asked there, each
+   *  request would fail */
+  held: ((latDeg: number, lonDeg: number) => { reliefZ1: number; orthoZ1: number } | null) | null = null;
   private ortho: OrthoLevel[] = [];
   private orthoInflight = new Map<string, AbortController>();
   private orthoNone = new Set<string>();
@@ -714,9 +718,11 @@ export class EarthTiles {
     const inNational = latD > B.south - 0.1 && latD < B.north + 0.1 && lonD > B.west - 0.1 && lonD < B.east + 0.1;
     // (the source under the camera: its credit on screen — main.ts)
     this.nationalAt = sourceAt(NATIONAL, latD, lonD)?.id ?? null;
+    // (offline within a zone, its levels there at most)
+    const held = this.held?.(latD, lonD) ?? null;
     const zFine =
       this.reliefOn && inNational
-        ? Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max((agl ?? alt) * pixAngle, 0.5)))), Z1)
+        ? Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max((agl ?? alt) * pixAngle, 0.5)))), Z1, held?.reliefZ1 ?? Z1)
         : ZG1;
     // (each window centred ahead where the view looks — gaze: its offset, Earth-fixed —, by up to a tile and a quarter
     // of its own level: what is seen ahead gets the finest heights and imagery, the ground behind the view less)
@@ -759,7 +765,7 @@ export class EarthTiles {
       }
     }
     // (the orthophotos by the height over the ground — in the Alps a camera 150 m up is 1 400 m over the ellipsoid)
-    this.updateOrtho(agl ?? alt, pixAngle, cosLat, gLonT, gSinLat);
+    this.updateOrtho(agl ?? alt, pixAngle, cosLat, gLonT, gSinLat, held?.orthoZ1 ?? ORTHO_Z1);
     const ahead = cartToGeodetic(1, WGS84_F, c.map((v, i) => v + lead[i]!) as Vec3);
     this.priorityLon = ahead.lon;
     this.prioritySinLat = Math.sin(ahead.lat);
@@ -1032,9 +1038,10 @@ export class EarthTiles {
 
   /**
    * The orthophotos' windows (I1): over France, the levels finer than the relief's the ground under the camera needs
-   * (its texel within the pixel's footprint there), each led ahead as the relief's; elsewhere, or off, none.
+   * (its texel within the pixel's footprint there), to `zMax` (offline, the zones' there), each led ahead as the relief's;
+   * elsewhere, or off, none.
    */
-  private updateOrtho(alt: number, pixAngle: number, cosLat: number, gLonT: number, gSinLat: number) {
+  private updateOrtho(alt: number, pixAngle: number, cosLat: number, gLonT: number, gSinLat: number, zMax: number) {
     const lat = (Math.asin(this.sinLat) * 180) / Math.PI,
       lon = (this.lon * 180) / Math.PI;
     const B = NATIONAL_BOX;
@@ -1042,7 +1049,7 @@ export class EarthTiles {
       if (this.ortho.some((O) => O.want)) this.clearOrtho();
       return;
     }
-    const zNeed = Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max(alt * pixAngle, 0.1)))), ORTHO_Z1);
+    const zNeed = Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max(alt * pixAngle, 0.1)))), zMax);
     for (const O of this.ortho) {
       if (O.z > zNeed) {
         if (O.want) {

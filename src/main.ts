@@ -899,6 +899,8 @@ async function main() {
         span: (TILE_REACH[earthDetailFor(settings, renderer.tier).reach] ?? TILE_REACH.normal).span,
       }),
     });
+    // (offline, within a zone: the game's levels at most the zones' there — the finer in none, each request failing)
+    renderer.earthTiles.held = (lat, lon) => (navigator.onLine ? null : (pwa.zones?.heldAt(lat, lon) ?? null));
   });
   // (the flight's jolts felt by the camera too — Cinemachine's impulses: controller/camrig.ts)
   haptics.onImpulse = (kind, k) => {

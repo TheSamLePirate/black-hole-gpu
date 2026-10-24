@@ -425,6 +425,49 @@ Le budget du cache tient donc 5 à 6 fois plus de relief.
 
 ![Chamonix dessiné depuis les grilles codées](progress/relief-codec/relief-codec-chamonix.jpg)
 
+**Fait le 24/10 : le vol bas détaillé, un cœur au niveau aérodrome.** Le profil vol bas (orthophotos z 17, relief
+z 16) ne tient pas ce que le jeu demande en vrai vol bas. Sous ≈ 1 km du sol en plein écran, `updateOrtho` veut les
+orthophotos z 18 (0,4 m) ; sous ≈ 1,7 km, avec le relief IGN, le relief veut z 17. Hors ligne, chacune de ces
+requêtes échouait (le jeu dessinait alors le niveau du dessous). Avec une zone mais en ligne, elles partaient au
+réseau : l'e2e en comptait 8 à 44 par vol. Mettre z 18 et z 17 partout coûterait trop cher. Pour une zone vol bas de
+20 km avec le relief, on passe de 2,3 à 6,8 Go estimés (+ 118 700 orthos z 18 et + 32 400 grilles z 17). On a donc
+fait deux choses :
+
+- **Un cœur détaillé** (`ZONE_CORE`, `ZoneRecord.coreKm`) : un disque autour du centre qui prend les niveaux du profil
+  aérodrome (orthophotos z 18, relief z 17), avec les mêmes marges de fenêtre que le reste de la zone
+  (`zoneTiles(…, core)`). Ailleurs dans la zone, c'est le profil qui s'applique. Dans l'écran d'ajout, la ligne
+  « Cœur détaillé » règle son rayon (aucun, 0,5 à 50 km, ou toute la zone) et affiche son surcoût (« 3 km · + 137 Mo »).
+  Le vol bas le met à 3 km par défaut ; les autres profils n'en ont pas, et l'aérodrome a déjà ces niveaux partout.
+  Sur les cartes, le cœur est tracé en pointillé.
+- **Hors ligne, le jeu ne demande que ce que la zone garde** (`zoneLevelsAt` ; `EarthTiles.held`, branché dans
+  `main.ts` quand `navigator.onLine` est faux) : caméra dans une zone, les fenêtres s'arrêtent aux niveaux que la zone
+  garde à cet endroit (cœur, profil, ou les données mondiales si ses sources étaient coupées). Plus aucune requête
+  n'échoue. Hors de toute zone, rien n'est plafonné : le cache automatique a sa chance.
+
+| Zone (Chamonix) | Relief IGN | Sans cœur | Avec cœur | Surcoût |
+|---|---|---|---|---|
+| Vol bas 10 km, cœur 3 km (le défaut) | oui | 22 174 chaînes, 812 Mo, 18 min | 27 355 chaînes, 949 Mo, 23 min | **+ 17 %** |
+| Vol bas 10 km, cœur 3 km | non | 461 Mo, 8 min | 529 Mo, 10 min | + 15 % |
+| Vol bas 20 km, cœur 3 km | oui | 2 290 Mo, 41 min | 2 427 Mo, 45 min | + 6 % |
+| Vol bas 20 km, cœur = toute la zone | oui | 2 290 Mo | 6 799 Mo, 128 min | × 3 |
+| e2e : 1,5 km, cœur 0,8 km | non | 4 190 chaînes, 182 Mo estimés | 4 769 chaînes, 192 Mo estimés, **211 Mo mesurés** | + 5 % estimés |
+
+Les tailles viennent de `zoneEstimate`, qui compte 18 Ko par orthophoto. Mesurées sur 40 tuiles par site, les z 18
+pèsent moins que les z 17, parce que chaque tuile est plus uniforme : 11,6 Ko contre 13,5 à Chamonix, 15,7 contre
+18,0 à Paris, 8,1 contre 9,1 en Beauce. La part orthophoto du cœur est donc surestimée d'environ un tiers.
+
+- **Test unitaire** (`tests/zones.test.ts`) : une zone vol bas de 3 km avec un cœur de 1,5 km, survolée à 400 m du sol
+  (pixel de 0,4 et 1 mrad), dans 8 directions, en regardant de 4 côtés. Toutes les tuiles z 18 et z 17 demandées
+  dans le cœur sont dans la zone. Hors du cœur, en ligne, des z 18 sont demandées hors de la zone ; hors ligne, plus
+  aucune, et chaque tuile demandée est dans la zone.
+- **e2e sur kerr-mini** (`tests/e2e/zones.e2e.test.ts`, ~4 min) : zone de 1,5 km avec un cœur de 0,8 km, réseau
+  coupé (`navigator.onLine` faux), page rechargée. Le sol est regardé à 0,6 km du centre, à 398 m au-dessus du fond :
+  orthophotos jusqu'à z 18, détail 3,57 contre 3,18 en ligne. Puis vol à 120 m/s jusqu'à 1,38 km du centre, donc
+  hors du cœur, où le jeu reste en z 17. Bilan : **493 tuiles servies par la zone, dont 16 orthos z 18 du cœur ;
+  0 du réseau, 0 en échec**, sol complet.
+
+![Chamonix hors ligne, dans le cœur détaillé](progress/offline/zones-core-chamonix.jpg)
+
 ### 9.4 Contraintes
 
 - **Les URL doivent être exactement celles du jeu.** Le service worker cherche une tuile par son URL. La liste de
@@ -536,7 +579,7 @@ toutes les 1,5 s tant qu'il est affiché.
   chaque tuile : `zone-fetch` avec `fresh`, et l'ancienne tuile est gardée si le réseau échoue.
 - **Ajouter une zone** : le lieu (la position actuelle sous 50 km d'altitude, les destinations de l'Atlas, une
   adresse ou des coordonnées), le profil (Aéroport, Vol bas, Vallée, Survol, chacun avec son rayon par défaut) et le
-  rayon de 1 à 100 km. L'estimation affiche les tuiles, la taille et la durée (`zoneDuration` : les grilles WMS-R à 5
+  rayon de 1 à 100 km, et son cœur détaillé (§9.3). L'estimation affiche les tuiles, la taille et la durée (`zoneDuration` : les grilles WMS-R à 5
   par seconde, le reste à 35 chaînes par seconde), avec la place libre. Télécharger est grisé si la place manque. Une
   zone prise à la position actuelle porte le nom de la destination la plus proche, à moins de 30 km (« Près de Mont
   Blanc »).
