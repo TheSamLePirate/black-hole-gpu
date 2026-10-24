@@ -230,6 +230,8 @@ export interface SceneryReply {
   /** the buildings' roofs by shape (roofs.ts), those with triangles for the raster and their bytes */
   roofShapes?: Record<string, number>;
   meshedBuildings?: number;
+  /** of the roofs, measured by the IGN's canopy model (B6: the BD TOPO without their ridge) */
+  lidarRoofs?: number;
   meshBytes?: number;
   /** where the buffer's bytes went: the forest's grid, the land cover's raster, all before the buildings, the buildings'
    *  leaves (their meshes apart), the budget */

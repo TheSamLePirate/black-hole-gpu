@@ -380,6 +380,7 @@ export class EarthScenery {
       /** the roofs by shape (roofs.ts), the buildings with triangles for the raster and their bytes */
       roofShapes: d?.roofShapes ?? {},
       meshedBuildings: d?.meshedBuildings ?? 0,
+      lidarRoofs: d?.lidarRoofs ?? 0,
       meshBytes: d?.meshBytes ?? 0,
       bytes: d?.bytes ?? null,
       roads: d?.roads ?? 0,

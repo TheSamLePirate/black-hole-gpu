@@ -247,10 +247,17 @@ orthophoto vraie (un immeuble y déverse de quelques mètres : au point du toit,
 l'imagerie régionale s'y mêle. Retiré. Une teinte par bâtiment (la médiane de l'orthophoto sur l'emprise rétrécie, calculée
 par le worker) reste possible ; elle demande les dalles d'orthophoto au worker.
 
+### B6 — hauteurs de toit mesurées par le LiDAR (24/10)
+
+Là où la BD TOPO n'a pas de faîtage (tout Paris), dans les 2 km du centre de la scène : la MNH de l'IGN (sursol, déjà lue
+pour les forêts en I4, ~3 m le texel) aux points intérieurs de l'emprise (à plus de 1,5 m des murs) ; leur 85ᵉ centile est
+le haut du toit, le toit la différence avec la gouttière (0,8–12 m ; en dessous, plat). 9 849 toits mesurés ainsi dans la
+scène de l'Étoile. `bdtopo.e2e`, même centre de scène qu'en B5 : **1,4 m d'écart médian, 70 % à 3 m près** (B5 : 2,5 m, 58 % ;
+OSM : 4,5 m, 34 %). Piège : deux machines sur la même IP doublent le débit vers la Géoplateforme — HTTP 429 ; un e2e IGN à la
+fois.
+
 ### Reste à faire
 
-- **B6** — faîtages LiDAR là où la BD TOPO n'en a pas (Paris) : la MNH déjà lue pour les forêts (I4) sur l'emprise de chaque
-  bâtiment proche ; la mesure ci-dessus le dira.
 - **B2b** — la feuille désignée par le raster (comme les arbres) : le coût est déjà neutre, gain attendu en ville dense.
 - **Cheminées** (souches sur les murs mitoyens parisiens) : en feuilles près de la caméra seulement.
 - **Overture** hors de France (`roof_shape` à Munich sur 33 % des bâtiments) : décision à prendre (tuiles 3 à 10 fois plus
