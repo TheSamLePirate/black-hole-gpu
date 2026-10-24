@@ -5010,8 +5010,17 @@ async function main() {
   const rasterTop = () => Math.max(0.5, Math.min(1, settings.earthRasterScale));
   // (without the dynamic resolution, that scale itself in motion — with it, the governor's under it: below —; null: the scale
   // as the rest has it)
+  // (moving: for 0.15 s — the frame after a resize is a realtime one whatever the camera does: taken for a move, it put the
+  // motion's scale back, its resize made the next frame realtime again, and a held view went back and forth between the
+  // two scales, its history lost at each, never refined; the same rule as the motion's scale given back, below)
   const rasterScale = (): number | null =>
-    rasterOn() && !dynamicResolutionOn(settings) && settings.earthRasterScale < 1 ? (heldFor > 0.4 ? 1 : rasterTop()) : null;
+    rasterOn() && !dynamicResolutionOn(settings) && settings.earthRasterScale < 1
+      ? heldFor > 0.4
+        ? 1
+        : movingFor > 0.15
+          ? rasterTop()
+          : renderScale
+      : null;
   function resize() {
     const rs = rasterScale();
     if (rs !== null) renderScale = rs;
@@ -7853,8 +7862,8 @@ async function main() {
     } else if (rs === null && forcedScale === null && !dynOn && renderScale !== 1) {
       // (the raster's scale let go — the traced pipeline, the Earth left —: the canvas's again)
       resize();
-    } else if (dynOn && rasterOn() && !held && renderScale > rasterTop() + 1e-3) {
-      // (the governor's scale in motion under the raster's ceiling)
+    } else if (dynOn && rasterOn() && movingFor > 0.15 && renderScale > rasterTop() + 1e-3) {
+      // (the governor's scale in motion under the raster's ceiling — moving for 0.15 s: rasterScale's rule)
       renderScale = rasterTop();
       gpuEma = 0;
       scaleHeld = 0;
@@ -7879,7 +7888,9 @@ async function main() {
     scaleTimer += dt;
     if (scaleTimer > 1.5) {
       scaleTimer = 0;
-      const on = dynOn && !held;
+      // (in motion: moving for 0.15 s — rasterScale's rule; a held view's own resize is not a move)
+      const moving = movingFor > 0.15;
+      const on = dynOn && moving;
       const block = renderer.realtimeBlockNow;
       const now = performance.now();
       scaleHeld += 1.5;
@@ -7902,7 +7913,7 @@ async function main() {
       if (forcedScale !== null) want = forcedScale;
       else if (terrainInspecting) want = renderScale;
       else if (!dynOn) want = 1;
-      else if (held) want = renderScale;
+      else if (!moving) want = renderScale;
       else if (!settled) want = renderScale;
       // (down once the blocks are coarse: at the same rays a finer block on a smaller image is no better in
       // motion — measured, equal on Kerr, 2.6 dB worse on Saturn's stars and edges —, the full scale kept)
@@ -7977,7 +7988,7 @@ async function main() {
         settings.earthRasterShading === "auto" &&
         settings.realtimeSubsampling === "auto" &&
         !bench.running &&
-        !held &&
+        moving &&
         settled &&
         renderer.rasterRateCoarsest &&
         block >= 8 &&

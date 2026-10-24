@@ -31,6 +31,9 @@ export class Simulation {
   mission: { update(dt: number): void } | null = null;
   private firedAt = -1e9;
   private lastFired = 0;
+  /** the playback clock and the firing of the last flames handed to the renderer */
+  private thrustPlay = Number.NaN;
+  private thrustFired = Number.NaN;
 
   constructor(
     private s: Settings,
@@ -161,7 +164,11 @@ export class Simulation {
           boost: c.jetThrust(),
         }
       : null;
-    if (firing || was) changed = true;
+    // (redrawn when the flames change: lit or put out, or the clock run on — held by __bh.freeze, the same flames as the
+    // last frame's, the view refines; they marked it changed every frame, and the frozen view stayed a moving one)
+    if (firing !== was || (firing && (this.play !== this.thrustPlay || fired.at !== this.thrustFired))) changed = true;
+    this.thrustPlay = this.play;
+    this.thrustFired = fired.at;
     return changed;
   }
 }

@@ -152,6 +152,49 @@ test.skipIf(!E2E)(
           `(() => { const t = __bh.renderer.earthTiles; return { finest: t.finest, orthoFinest: t.orthoFinest, orthoLoaded: t.orthoLoaded }; })()`,
         );
 
+        if (process.env.LF_FREEZE === "1") {
+          // (the held view's refinement, frame by frame: what the renderer does once __bh.freeze holds the flight — then the
+          // clock's animation off as the pause has it, the view still held)
+          await fly();
+          await Bun.sleep(4000);
+          const STATE = `(() => { const r = __bh.renderer, s = __bh.settings, v = r.variants?.get(r.featureKey);
+            return { phase: r.lastPhase, spp: r.sampleIndex, bandY: r.bandY, bandRows: r.bandRows, h: r.live?.height, gpu: +r.lastGpuMs.toFixed(1),
+              key: r.featureKey, camKey: r.cameraKey, rt: !!v?.rt, q: !!v?.q, qBusy: !!v?.qBusy, qWanted: !!v?.qWanted, qc: r.qualityCompile?.state,
+              gc: r.generalCompile?.state, adaptive: s.adaptiveIntegrator, target: r.liveTargetSpp, primary: r.rasterPrimaryOn, fell: r.rasterFellBack,
+              animate: s.animate, thrust: !!r.shipThrust, taPhase: r.taPhase, held: !!r.live?.temporal?.held, moving: !!r.live?.temporal?.moving,
+              scale: __bh.game.perf({ gpu: false }).renderScale }; })()`;
+          const log: Record<string, unknown>[] = [];
+          const t0 = Date.now();
+          const at = async (tag: string) =>
+            log.push({ t: +((Date.now() - t0) / 1000).toFixed(1), tag, ...(await app.js<Record<string, unknown>>(STATE)) });
+          await at("flying");
+          // (who restarts the refinement: the renderer's onAssets (main's touch), its resize, its exposure's redraw — counted,
+          // their last callers kept)
+          await app.js(`(() => { const r = __bh.renderer, w = (window.__why = { assets: 0, resize: 0, ev: 0, stacks: [] });
+            const keep = (k) => { w[k]++; if (w.stacks.length < 12) w.stacks.push(k + ": " + (new Error().stack ?? "").split("\\n").slice(2, 6).map((l) => l.trim()).join(" < ")); };
+            const oa = r.onAssets; r.onAssets = () => { keep("assets"); oa?.(); };
+            const rs = r.resize.bind(r); r.resize = (...a) => { keep("resize"); return rs(...a); };
+            let ev = r.evRedraw; Object.defineProperty(r, "evRedraw", { configurable: true, get: () => ev, set: (v) => { if (v) keep("ev"); ev = v; } });
+            return 1; })()`);
+          await app.js(`(__bh.freeze(true), 1)`);
+          for (let i = 0; i < 24; i++) {
+            await Bun.sleep(500);
+            await at("frozen");
+            if (i === 1 || i === 5 || i === 15) await app.shot(`${OUT}/lf-${label}-fz${i}.png`);
+          }
+          await app.js(`(__bh.settings.animate = false, 1)`);
+          for (let i = 0; i < 16; i++) {
+            await Bun.sleep(500);
+            await at("frozen, animate off");
+            if (i === 3 || i === 15) await app.shot(`${OUT}/lf-${label}-fzoff${i}.png`);
+          }
+          await app.js(`(__bh.settings.animate = true, __bh.freeze(false), 1)`);
+          for (const l of log) console.log(`  ${label}: ${JSON.stringify(l)}`);
+          console.log(`  ${label}: restarts ${JSON.stringify(await app.js(`window.__why`), null, 1)}`);
+          results.push({ side, round, log });
+          writeFileSync(`${OUT}/lowflight.json`, JSON.stringify(results, null, 1));
+          continue;
+        }
         if (process.env.LF_PROBE === "1") {
           // (the near body's frame over consecutive frames in flight: the centre's shift and the turn's share at the centre [m])
           await fly();
