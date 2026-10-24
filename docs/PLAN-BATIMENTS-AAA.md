@@ -291,5 +291,8 @@ mansardes parisiennes (sur les murs mitoyens), une sur le faîtage de deux maiso
 
 ### Reste à faire
 
-- **B2b** — la feuille désignée par le raster (comme les arbres) : le coût est déjà neutre, gain attendu en ville dense.
+- **B2b** — la feuille désignée par le raster (comme les arbres) : **inutile, mesuré** — l'ablation « bâtiments du rayon
+  caméra » ne coûte que −0,4 ms à Paris (les boîtes du raster évitent déjà le parcours du BVH hors des bâtiments).
+- Débords de toit (une dalle sous la pente au-delà des murs) ; détails de façade en relief (corniches, balcons en volume)
+  près de la caméra.
 

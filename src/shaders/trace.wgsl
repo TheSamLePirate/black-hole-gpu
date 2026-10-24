@@ -7269,6 +7269,9 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
       }
       // (a storey's line: the floor's slab, a cornice's shadow)
       *alb*=1.0-0.12*near*(1.0-smoothstep(0.0,0.05,v));
+      // (a Haussmann block — dressed stone, six storeys and more —: its wrought-iron balconies running along the 2nd and 5th
+      // floors, a dark band at their sills)
+      if(wallMat==1u && storeys>=6u && (floorI==2.0 || floorI==5.0) && v>0.22 && v<0.34){*alb=mix(*alb,vec3f(0.03,0.032,0.035),0.8*near);}
     }
   }else{roofLook(hit,p,alb,n,roofMat,(w>>18u)&7u,eave,near,id);}
 }
