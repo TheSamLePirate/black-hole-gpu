@@ -292,6 +292,7 @@ import { FORMATION_IDS, FORMATIONS } from "./game/formations";
 import { TrafficFeed } from "./traffic/feed";
 import { unitsFor } from "./ui/unitsys";
 import { TILE_REACH, ZG1 } from "./system/earth-tiles";
+import { DETAIL_REACH } from "./system/scenery-data";
 
 /** The craft lost to the air's screen (ui/craftlost.ts) — made at once: a placing hides it. */
 const craftLost = new CraftLost();
@@ -897,6 +898,13 @@ async function main() {
         relief: settings.earthIgnRelief,
         hlod: settings.earthIgnSilhouettes,
         span: (TILE_REACH[earthDetailFor(settings, renderer.tier).reach] ?? TILE_REACH.normal).span,
+        // (the world scenery as this device draws it: its trees and buildings flown over offline too)
+        scenery: (() => {
+          const d = earthDetailFor(settings, renderer.tier);
+          return d.scenery === "off"
+            ? null
+            : { mode: d.scenery, satellite: settings.earthSurface !== "off", reach: DETAIL_REACH[d.reach] ?? 1 };
+        })(),
       }),
     });
     // (offline, within a zone: the game's levels at most the zones' there — the finer in none, each request failing)

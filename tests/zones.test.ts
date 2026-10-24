@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
-import { zoneRelease } from "../src/pwa/rules";
+import { tileKind, zoneRelease } from "../src/pwa/rules";
 import {
   EarthTiles,
   eoxUrl,
@@ -15,9 +15,14 @@ import {
 } from "../src/system/earth-tiles";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 import { swissimageUrl } from "../src/system/national";
+import { EarthScenery } from "../src/system/scenery";
+import { DETAIL_REACH, type SceneryRequest } from "../src/system/scenery-data";
+import { sceneryChains } from "../src/system/scenery-sources";
+import { aheadFocus, gazeLead, streamingLead } from "../src/system/streaming-focus";
 import {
   reliefChains,
   reliefUrls,
+  sceneryZoneChains,
   ZONE_CORE,
   ZONE_PROFILES,
   zoneChains,
@@ -177,6 +182,108 @@ test("a zone's URLs: every one the loads ask in flight within it is in the zone'
   expect(missing).toEqual([]);
 });
 
+// (the scenes a flight asks — EarthScenery's own requests, its worker a recorder —: the camera within the zone, its scene
+// led where it looks or by its motion as renderer.ts leads it; every fetch of each scene — scenery-sources.ts sceneryChains,
+// the worker's — in the zone)
+function sceneryAsked(lat0: number, lon0: number, radius: number, mode: "balanced" | "high", reach: number, ign: boolean) {
+  (globalThis as { GPUBufferUsage?: unknown }).GPUBufferUsage ??= { STORAGE: 128, COPY_DST: 8 };
+  const device = {
+    limits: { maxStorageBuffersPerShaderStage: 9 },
+    createBuffer: () => ({ destroy() {} }),
+    queue: { writeBuffer() {}, onSubmittedWorkDone: () => Promise.resolve() },
+  } as unknown as GPUDevice;
+  const asked: SceneryRequest[] = [];
+  const recorder = () =>
+    ({
+      terminate() {},
+      postMessage: (q: SceneryRequest) => asked.push(q),
+    }) as unknown as Worker;
+  const lead = 0.6 * (mode === "high" ? 3000 : 2000) * reach;
+  for (let r = 0; r <= radius; r += radius / 3)
+    for (let a = 0; a < 360; a += r ? 30 : 360) {
+      const [la1, lo1] = north(lat0, lon0, r * Math.cos(a * D));
+      const [la, lo] = east(la1, lo1, r * Math.sin(a * D));
+      for (const h of [300, 1500])
+        for (let g = 0; g < 360; g += 45) {
+          const eye = camAt(la, lo, h);
+          // (the view's direction on the Earth's axes: level or a little down, toward bearing g)
+          const up = [Math.cos(la * D) * Math.cos(lo * D), Math.cos(la * D) * Math.sin(lo * D), Math.sin(la * D)];
+          const e = [-Math.sin(lo * D), Math.cos(lo * D), 0],
+            n = [-Math.sin(la * D) * Math.cos(lo * D), -Math.sin(la * D) * Math.sin(lo * D), Math.cos(la * D)];
+          const dir = [0, 1, 2].map((i) => Math.sin(g * D) * e[i]! + Math.cos(g * D) * n[i]! - 0.05 * up[i]!) as Vec3;
+          const velocity = [0, 1, 2].map((i) => 250 * dir[i]!) as Vec3;
+          for (const ahead of [gazeLead(eye, dir, h, lead), streamingLead(eye, velocity)]) {
+            const s0 = new EarthScenery(device, recorder);
+            s0.ign = ign;
+            s0.update(eye, mode, true, true, [], aheadFocus(eye, ahead), reach);
+          }
+        }
+    }
+  return asked;
+}
+
+test("a zone's scenery: every fetch of every scene the game asks with the camera anywhere in it — any gaze, any course", () => {
+  const sources = (mode: "balanced" | "high", reach: number) => ({
+    ortho: true,
+    relief: true,
+    hlod: false,
+    span: 8,
+    scenery: { mode, satellite: true, reach },
+  });
+  for (const [where, lat0, lon0, radius, mode, reach, kinds] of [
+    // (the bocage at Saint-Lô: the IGN's canopy and ground blocks, its BD TOPO's buildings)
+    ["Saint-Lô", 49.116, -1.09, 2000, "high", DETAIL_REACH.veryFar, ["terrascope", "openfreemap", "terrarium", "MNH", "BDTOPO"]],
+    // (Lauterbrunnen: swisstopo's ground under the trees)
+    ["Lauterbrunnen", 46.59, 7.91, 1500, "balanced", DETAIL_REACH.normal, ["terrascope", "openfreemap", ".terrain"]],
+    // (Bavaria: no survey, the land cover's and OSM's alone)
+    ["Garmisch", 47.49, 11.1, 1500, "high", DETAIL_REACH.far, ["terrascope", "openfreemap", "terrarium"]],
+    // (Taveuni, on the date line: the cells, the tiles wrapped)
+    ["Taveuni", -16.8, 179.99, 1500, "balanced", DETAIL_REACH.normal, ["terrascope", "openfreemap", "terrarium"]],
+  ] as const) {
+    const urls = new Set(zoneUrls(lat0, lon0, radius, ZONE_PROFILES.low, sources(mode, reach)));
+    const asked = sceneryAsked(lat0, lon0, radius, mode, reach, true);
+    expect(asked.length).toBeGreaterThan(100);
+    const wanted = new Set<string>();
+    for (const q of asked)
+      for (const c of sceneryChains({ lat: q.lat, lon: q.lon, mode, satellite: q.satellite, reach: q.reach ?? 1, ign: !!q.ign }))
+        for (const u of c) wanted.add(u);
+    const missing = [...wanted].filter((u) => !urls.has(u));
+    if (missing.length) console.log(where, missing.length, missing.slice(0, 3));
+    expect(missing).toEqual([]);
+    for (const k of kinds) expect([...wanted].some((u) => u.includes(k))).toBe(true);
+    // (the zone not much more than its scenes: every source's tiles within a few of theirs)
+    const extra = [...urls].filter((u) => !wanted.has(u) && /terrascope|openfreemap|BDTOPO|MNH/.test(u)).length;
+    const theirs = [...wanted].filter((u) => /terrascope|openfreemap|BDTOPO|MNH/.test(u)).length;
+    expect(extra).toBeLessThan(0.6 * theirs);
+  }
+  // (its kinds told apart in the caches' figures, its size counted)
+  const sl = zoneChains(49.116, -1.09, 2000, ZONE_PROFILES.low, sources("high", DETAIL_REACH.veryFar));
+  const kinds = new Set(sl.flat().map(tileKind));
+  for (const k of ["canopy", "osm", "buildings", "cover", "relief"] as const) expect(kinds.has(k)).toBe(true);
+  const bare0 = zoneChains(49.116, -1.09, 2000, ZONE_PROFILES.low, { ...sources("high", 2), scenery: null });
+  // (the scenery high, very far, at Saint-Lô: some 300 MB over the ground's — its canopy's blocks, the BD TOPO's tiles)
+  const more = zoneEstimate(sl) - zoneEstimate(bare0);
+  expect(more).toBeGreaterThan(150e6);
+  expect(more).toBeLessThan(600e6);
+  // (a scene's Terrarium met first as the relief's last fallback — under the IGN's grids, maybe never asked — kept as its
+  // own chain all the same)
+  const first = new Set(sl.map((c) => c[0]!));
+  const fallbacks = new Set(sl.flatMap((c) => c.slice(1)));
+  const sceneDem = sceneryZoneChains(49.116, -1.09, 2000, { mode: "high", satellite: true, reach: DETAIL_REACH.veryFar }, true)
+    .flat()
+    .filter((u) => u.includes("terrarium/"));
+  expect(sceneDem.length).toBeGreaterThan(0);
+  for (const u of sceneDem) expect(first.has(u)).toBe(true);
+  expect(sceneDem.some((u) => fallbacks.has(u))).toBe(true);
+  // (the scenery off, or not asked: none of its sources)
+  const bare = zoneUrls(49.116, -1.09, 2000, ZONE_PROFILES.low, { ortho: true, relief: true, hlod: false, scenery: null });
+  expect(bare.some((u) => /terrascope|openfreemap|BDTOPO|MNH/.test(u))).toBe(false);
+  // (the IGN's relief off: its survey's and buildings' left out, as the worker leaves them)
+  const noIgn = zoneUrls(49.116, -1.09, 2000, ZONE_PROFILES.low, { ...sources("balanced", 1), relief: false });
+  expect(noIgn.some((u) => /BDTOPO|MNH/.test(u))).toBe(false);
+  expect(noIgn.some((u) => /openfreemap/.test(u))).toBe(true);
+});
+
 test("a tile's URLs: its source's heights and their fallbacks, the global data's, its imagery and lights — the loads' own", () => {
   const o = { ortho: true, relief: true, hlod: true };
   // (a French z 16: the LiDAR, RGE ALTI under it, Terrarium's z 15 parent)
@@ -213,7 +320,10 @@ test("a zone's size, and a zone dropped: its tiles no other holds deleted, the s
   expect(urls.length).toBeLessThan(45000);
   expect(new Set(urls).size).toBe(urls.length);
   const chains = zoneChains(45.92, 6.87, 5000, ZONE_PROFILES.airport, { ortho: true, relief: true, hlod: false });
-  expect(chains.flat().length).toBe(urls.length);
+  expect(new Set(chains.flat()).size).toBe(urls.length);
+  // (each link first in one chain at most: asked once where it is sure to be)
+  const firsts = chains.map((c) => c[0]!);
+  expect(new Set(firsts).size).toBe(firsts.length);
   expect(zoneEstimate(chains)).toBeGreaterThan(100e6);
   const { drop, keep } = zoneRelease(
     [

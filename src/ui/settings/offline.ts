@@ -78,6 +78,7 @@ const T = {
   srcOrtho: { fr: "orthophotos", en: "orthophotos" },
   srcRelief: { fr: "relief IGN", en: "IGN relief" },
   srcHlod: { fr: "silhouettes lointaines", en: "far silhouettes" },
+  srcScenery: { fr: "décor (arbres, bâtiments)", en: "scenery (trees, buildings)" },
   srcGlobal: { fr: "données mondiales", en: "global data" },
   since: { fr: "Téléchargée le {0}.", en: "Downloaded on {0}." },
   pause: { fr: "Suspendre", en: "Pause" },
@@ -455,6 +456,7 @@ export class OfflineTab {
       z.sources.ortho ? tr(T.srcOrtho) : null,
       z.sources.relief ? tr(T.srcRelief) : null,
       z.sources.hlod && z.sources.relief ? tr(T.srcHlod) : null,
+      z.sources.scenery && z.sources.scenery.mode !== "off" ? tr(T.srcScenery) : null,
       tr(T.srcGlobal),
     ].filter(Boolean);
     const text = fill(

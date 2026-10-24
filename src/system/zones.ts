@@ -4,8 +4,9 @@
 // (earth-tiles.ts: the relief's levels and their imagery, the orthophotos' levels) — and their URLs, from the very
 // functions the loads use (the Service Worker finds a tile by its URL: one character off and the zone is useless).
 //
-// Not in a zone (yet): the world scenery's sources (OSM, WorldCover, the IGN's canopy and buildings), the regional pilot,
-// the map's tiles (OSM's policy forbids it — §9.4).
+// And the world scenery's (`scenery`: scenery-sources.ts — the land cover's cells, OpenFreeMap's vector tiles, the relief under
+// them, the IGN's canopy and ground blocks and its BD TOPO's buildings, swisstopo's ground) for every scene the camera
+// anywhere within it asks. Not in a zone: the regional pilot, the map's tiles (OSM's policy forbids it — §9.4).
 
 import {
   eoxUrl,
@@ -26,7 +27,11 @@ import {
   ZG1,
 } from "./earth-tiles";
 import { WGS84_A } from "./ellipsoid";
-import { tileSource } from "./national";
+import { BDTOPO_Z, bdtopoUrl } from "./bdtopo";
+import { blockChains, blockSides, CANOPY_NEAR, CANOPY_Z, tilesWithin } from "./ign-canopy";
+import { SWISS_GROUND_G, swissTerrainUrl, tileSource } from "./national";
+import { D as DEG, type SceneryMode } from "./scenery-data";
+import { COVER_CELL, coverUrl, OSM_Z, osmUrl, sceneryBox, sceneryDemZoom, surveyOf, surveyReach } from "./scenery-sources";
 
 /** a zone's levels: its relief's finest, its orthophotos' finest — §9.3's profiles */
 export interface ZoneProfile {
@@ -56,6 +61,9 @@ export interface ZoneSources {
   relief: boolean;
   hlod: boolean;
   span?: number;
+  /** the world scenery as the game draws it (quality-policy.ts earthDetailFor: its mode, DETAIL_REACH's reach; the land
+   *  cover's true colours with settings.earthSurface on) — none, off or absent; its survey follows `relief` */
+  scenery?: { mode: SceneryMode; satellite: boolean; reach: number } | null;
 }
 /**
  * A tile's fetches as the loads make them: a chain, each link asked only if the one before falls short — a height grid
@@ -155,26 +163,139 @@ export function orthoUrls(z: number, x: number, y: number): string[] {
   return src ? [src.orthoUrl(z, x, y)] : [];
 }
 
-/** a zone's chains, each once (a parent's Terrarium, a lights' parent, shared by many tiles: the first's), the coarse
- *  levels first (a download cut short still holds the overview) */
+/** how far a scene's centre lies from the camera [m]: led where the view looks (renderer.ts: 0.6 of the scene's radius) or
+ *  by its motion (streaming-focus.ts: 650 m at most), snapped to sceneryCentre's 0.005° grid (≤ 400 m off) */
+export const sceneryLead = (radius: number) => Math.max(650, 0.6 * radius) + 400;
+/**
+ * The world scenery's chains for a zone (scenery-sources.ts sceneryChains, their union over every scene a camera within the
+ * disc asks): the scenes' centres anywhere within the disc widened by their lead; each source's tiles those a scene's box —
+ * or its survey's disc — round such a centre meets. The IGN's survey and buildings where a centre is the IGN's (`ign`: the
+ * relief's setting), swisstopo's ground where it is swisstopo's.
+ */
+export function sceneryZoneChains(
+  lat: number,
+  lon: number,
+  radius: number,
+  s: NonNullable<ZoneSources["scenery"]>,
+  ign: boolean,
+): ZoneChain[] {
+  if (s.mode === "off") return [];
+  const box = sceneryBox(lat, lon, s.mode, s.reach);
+  const rc = radius + sceneryLead(box.radius);
+  // (in degrees round the zone's centre: a degree east the fewest metres at the disc's poleward edge, a degree north the
+  // fewest the meridian has — every cell a scene meets kept, a few more)
+  const edge = Math.min(84, Math.abs(lat) + rc / 110_500);
+  const kx = 111_320 * Math.max(Math.cos(edge * DEG), 0.1),
+    ky = 110_500;
+  const spanLat = box.span,
+    spanLon = box.span / Math.max(Math.cos(edge * DEG), 0.12);
+  /** whether a cell's box [°, west unwrapped near the zone's], widened by half-sides [°], meets the centres' disc */
+  const meets = (west: number, south: number, east: number, north: number, padLon: number, padLat: number) => {
+    const dx = Math.max(west - padLon - lon, 0, lon - east - padLon) * kx,
+      dy = Math.max(south - padLat - lat, 0, lat - north - padLat) * ky;
+    return dx * dx + dy * dy <= rc * rc;
+  };
+  const dLon = rc / kx,
+    dLat = rc / ky;
+  /** a Web Mercator level's tiles meeting it (x unwrapped) */
+  const mercator = (z: number, padLon: number, padLat: number) => {
+    const n = 2 ** z,
+      out: [number, number][] = [];
+    const mx = (v: number) => ((v + 180) / 360) * n,
+      my = (v: number) => ((1 - Math.asinh(Math.tan(Math.max(-85, Math.min(85, v)) * DEG)) / Math.PI) / 2) * n,
+      latOf = (y: number) => Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) / DEG;
+    for (let y = Math.max(0, Math.floor(my(lat + dLat + padLat))); y <= Math.min(n - 1, Math.floor(my(lat - dLat - padLat))); y++)
+      for (let x = Math.floor(mx(lon - dLon - padLon)); x <= Math.floor(mx(lon + dLon + padLon)); x++)
+        if (meets((x / n) * 360 - 180, latOf(y + 1), ((x + 1) / n) * 360 - 180, latOf(y), padLon, padLat)) out.push([x, y]);
+    return out;
+  };
+  const out: ZoneChain[] = [];
+  // (the land cover's cells, their true colours with them)
+  for (let row = Math.floor((lat - dLat - spanLat) / COVER_CELL); row <= Math.floor((lat + dLat + spanLat) / COVER_CELL); row++)
+    for (
+      let col = Math.floor((lon - dLon - spanLon + 180) / COVER_CELL);
+      col <= Math.floor((lon + dLon + spanLon + 180) / COVER_CELL);
+      col++
+    ) {
+      const west = col * COVER_CELL - 180,
+        south = row * COVER_CELL;
+      if (!meets(west, south, west + COVER_CELL, south + COVER_CELL, spanLon, spanLat)) continue;
+      out.push([coverUrl(false, col, row)]);
+      if (s.satellite) out.push([coverUrl(true, col, row)]);
+    }
+  // (the vector tiles under the boxes)
+  for (const [x, y] of mercator(OSM_Z, spanLon, spanLat)) out.push([osmUrl(x, y)]);
+  // (the global relief under them: their parents at the scenes' level, one more round — a line's points run past its tile)
+  const seen = new Set<string>();
+  for (const at of [lat - dLat, lat, lat + dLat]) {
+    const z = sceneryDemZoom(at),
+      n = 2 ** z,
+      pad = 360 / n + 360 / 2 ** OSM_Z;
+    for (const [x, y] of mercator(z, spanLon + pad, spanLat + pad * Math.cos(lat * DEG))) {
+      const u = tileUrl(z, ((x % n) + n) % n, y);
+      if (!seen.has(u)) out.push([u]);
+      seen.add(u);
+    }
+  }
+  // (the surveys: where a scene's centre is under one — the disc's points every few hundred metres asked)
+  const step = Math.max(500, rc / 40);
+  const under = { ign: false, swisstopo: false };
+  for (let dy = -rc; dy <= rc; dy += step)
+    for (let dx = -rc; dx <= rc; dx += step) {
+      if (dx * dx + dy * dy > rc * rc) continue;
+      const v = surveyOf({ lat: lat + dy / ky, lon: lon + dx / kx, ign });
+      if (v) under[v] = true;
+    }
+  const reach = surveyReach(box.radius),
+    slack = 0.02 * rc + 100;
+  if (under.ign) {
+    // (the IGN's blocks: the far ones' sides out to the forest's disc, the near ones' within CANOPY_NEAR of a centre)
+    for (const b of tilesWithin(CANOPY_Z, lat, lon, rc + reach + slack)) {
+      out.push(...blockChains(b.x, b.y, blockSides(Number.POSITIVE_INFINITY)));
+      if (b.d <= rc + CANOPY_NEAR + slack) out.push(...blockChains(b.x, b.y, blockSides(0)));
+    }
+    // (the BD TOPO's buildings within the scenes' radius)
+    for (const t of tilesWithin(BDTOPO_Z, lat, lon, rc + box.radius + slack)) out.push([bdtopoUrl(t.x, t.y)]);
+  }
+  if (under.swisstopo) {
+    const s0 = 180 / 2 ** SWISS_GROUND_G,
+      padLat = reach / 111_195,
+      padLon = reach / (111_195 * Math.max(Math.cos(edge * DEG), 0.12));
+    for (let y = Math.floor((lat - dLat - padLat + 90) / s0); y <= Math.floor((lat + dLat + padLat + 90) / s0); y++)
+      for (let x = Math.floor((lon - dLon - padLon + 180) / s0); x <= Math.floor((lon + dLon + padLon + 180) / s0); x++)
+        if (meets(x * s0 - 180, y * s0 - 90, (x + 1) * s0 - 180, (y + 1) * s0 - 90, padLon, padLat))
+          out.push([swissTerrainUrl(SWISS_GROUND_G, x, y)]);
+  }
+  return out;
+}
+
+/** a zone's chains, each link asked once at most where it is sure to be (a parent's Terrarium, a lights' parent, shared by
+ *  many tiles: the first's), the coarse
+ *  levels first (a download cut short still holds the overview), the world scenery's last */
 export function zoneChains(lat: number, lon: number, radius: number, profile: ZoneProfile, o: ZoneSources, core = 0): ZoneChain[] {
   // (the relief's survey off: no level finer than the global data's asked)
   const t = zoneTiles(lat, lon, radius, profile, o.span, o.relief, core);
   const tiles = [...t.relief.map((v) => ["r", ...v] as const), ...(o.ortho ? t.ortho.map((v) => ["o", ...v] as const) : [])];
   tiles.sort((a, b) => a[1] - b[1]);
-  const seen = new Set<string>(),
+  // (a link left out only where an earlier chain asks it first — surely fetched —: one met only as a fallback, past a link
+  // that may suffice, is never asked there — a scene's Terrarium under the relief's IGN grids)
+  const sure = new Set<string>(),
     out: ZoneChain[] = [];
-  for (const [kind, z, x, y] of tiles)
-    for (const chain of kind === "r" ? reliefChains(z, x, y, o) : [orthoUrls(z, x, y)]) {
-      const c = chain.filter((u) => !seen.has(u));
-      for (const u of c) seen.add(u);
-      if (c.length) out.push(c);
-    }
+  const add = (chain: ZoneChain) => {
+    const c = chain.filter((u) => !sure.has(u));
+    if (!c.length) return;
+    sure.add(c[0]!);
+    out.push(c);
+  };
+  for (const [kind, z, x, y] of tiles) for (const chain of kind === "r" ? reliefChains(z, x, y, o) : [orthoUrls(z, x, y)]) add(chain);
+  // (the world scenery's after the ground's)
+  if (o.scenery) for (const chain of sceneryZoneChains(lat, lon, radius, o.scenery, o.relief)) add(chain);
   return out;
 }
 /** a zone's URLs, every link of every chain, once each */
-export const zoneUrls = (lat: number, lon: number, radius: number, profile: ZoneProfile, o: ZoneSources, core = 0): string[] =>
-  zoneChains(lat, lon, radius, profile, o, core).flat();
+export const zoneUrls = (lat: number, lon: number, radius: number, profile: ZoneProfile, o: ZoneSources, core = 0): string[] => [
+  ...new Set(zoneChains(lat, lon, radius, profile, o, core).flat()),
+];
 
 /** a zone as its record keeps it (pwa/rules.ts ZoneRecord) */
 export interface ZonePlace {
@@ -215,19 +336,36 @@ export function zoneLevelsAt(zones: readonly ZonePlace[], lat: number, lon: numb
 }
 
 /** a URL's size by its kind's measured mean [bytes] (2026-10-23; the relief's grids as the worker keeps them, packed —
- *  pwa/relief-codec.ts, I8c: scripts/relief-codec-bench.ts, 2026-10-24) */
+ *  pwa/relief-codec.ts, I8c: scripts/relief-codec-bench.ts, 2026-10-24; the scenery's, 2026-10-24: a sample of each kind
+ *  round Saint-Lô, Chamonix, Paris, Lauterbrunnen, Garmisch — the canopy's grids packed too) */
 const sizeOf = (u: string) =>
   u.includes("wms-r")
-    ? u.includes("WIDTH=512")
-      ? 180_000
-      : 44_000
+    ? u.includes("LIDAR-HD_MNH")
+      ? u.includes("WIDTH=512")
+        ? 162_000
+        : 51_000
+      : u.includes("WIDTH=512")
+        ? 180_000
+        : u.includes("WIDTH=128")
+          ? 13_000
+          : 44_000
     : u.includes(".terrain")
-      ? 250_000
+      ? u.includes(`/${SWISS_GROUND_G}/`)
+        ? 74_000
+        : 250_000
       : u.includes("terrarium")
         ? 90_000
         : u.includes("VIIRS")
           ? 30_000
-          : 18_000;
+          : u.includes("terrascope")
+            ? u.includes("tcc")
+              ? 171_000
+              : 64_000
+            : u.includes("openfreemap")
+              ? 73_000
+              : u.includes("/BDTOPO/")
+                ? 135_000
+                : 18_000;
 /** a zone's size before it is fetched [bytes]: its chains' first links, a tenth of the fallbacks after them (the sea, a
  *  survey's gap) */
 export function zoneEstimate(chains: readonly ZoneChain[]): number {

@@ -107,10 +107,20 @@ export function evictions(entries: TileEntry[], budget = TILE_BUDGET): string[] 
  */
 export const SHELL_CACHE = (scope: string, build: string) => `kerr-shell:${new URL(scope).pathname}:${build}`;
 export const TILE_CACHE = "kerr-tiles-v1";
-/** A tile's kind, for the caches' figures by kind (the sizes measured): the IGN's relief grids (256², 512²), the swisstopo
- *  meshes, Terrarium's relief, the rest imagery. */
-export function tileKind(url: string): "relief" | "relief512" | "mesh" | "terrarium" | "imagery" {
+/** A tile's kind, for the caches' figures by kind (the sizes measured): the IGN's canopy grids (the scenery's survey) and
+ *  relief grids (256², 512²), the swisstopo meshes, Terrarium's relief, the scenery's vector tiles (OpenFreeMap's, the BD
+ *  TOPO's buildings) and land cover (WorldCover's cells), the tactical map's OSM tiles (never in a zone — §9.4), the
+ *  world's runways, the rest imagery. */
+export function tileKind(
+  url: string,
+): "canopy" | "relief" | "relief512" | "mesh" | "terrarium" | "osm" | "buildings" | "cover" | "map" | "runways" | "imagery" {
+  if (url.includes("LIDAR-HD_MNH")) return "canopy";
   if (url.includes("image/x-bil")) return url.includes("WIDTH=512") ? "relief512" : "relief";
+  if (url.includes("tiles.openfreemap.org")) return "osm";
+  if (url.includes("/BDTOPO/")) return "buildings";
+  if (url.includes("mapproxy.terrascope.be")) return "cover";
+  if (url.includes("tile.openstreetmap.org")) return "map";
+  if (url.includes("/runways/")) return "runways";
   if (url.includes(".terrain")) return "mesh";
   if (url.includes("terrarium")) return "terrarium";
   return "imagery";
@@ -139,7 +149,14 @@ export interface ZoneRecord {
   /** the next chain to ask (their list rebuilt from the record: system/zones.ts zoneChains) */
   cursor: number;
   /** the sources its URLs followed (earth-tiles.ts orthoOn, reliefOn, hlodOn; the fine windows' side) */
-  sources: { ortho: boolean; relief: boolean; hlod: boolean; span?: number };
+  sources: {
+    ortho: boolean;
+    relief: boolean;
+    hlod: boolean;
+    span?: number;
+    /** the world scenery's (system/zones.ts ZoneSources: absent in a zone of before — none) */
+    scenery?: { mode: "off" | "balanced" | "high"; satellite: boolean; reach: number } | null;
+  };
   created: number;
   /** its last download's end [ms since 1970] (an update's: the sources' vintage then) */
   updated?: number;

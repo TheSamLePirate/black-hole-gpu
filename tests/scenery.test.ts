@@ -6,7 +6,6 @@ import {
   sceneryCentre,
   sceneryFrame,
   sceneryExcluded,
-  rasterParts,
   SCENERY_BYTES,
   SCENERY_GRID,
   seed,
@@ -16,6 +15,7 @@ import {
   type SceneryReply,
 } from "../src/system/scenery-data";
 import { EarthScenery, sceneryShader } from "../src/system/scenery";
+import { COVER_CELL, coverCells, coverUrl } from "../src/system/scenery-sources";
 import { geodeticToCart, WGS84_F, WGS84_A } from "../src/system/ellipsoid";
 import { surfaceShader } from "../src/system/earth-surface";
 import { surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains, roadWidth } from "../src/system/scenery-geometry";
@@ -43,18 +43,29 @@ test("worldwide WGS84 frames stay precise in both hemispheres and on the date li
   expect(worldCoverUrl(44.2, 4.15, true)).toContain("N44E004");
   expect(worldCoverUrl(0, 180)).toContain("N00W180");
 });
-test("date-line images split into valid WMS bounds and full-width strips; entire runways stay clear", () => {
+test("the land cover's cells cover the box, their WMS bounds valid across the date line; entire runways stay clear", () => {
   for (const b of [
     [179.98, -1, 180.03, 1],
     [-180.04, -1, -179.97, 1],
     [-70, -1, -69, 1],
+    [6.8, 45.87, 6.94, 45.97],
   ] as [number, number, number, number][]) {
-    const parts = rasterParts(b, 512);
-    expect(parts.reduce((n, v) => n + v.width, 0)).toBe(512);
-    expect(parts[0]!.x).toBe(0);
-    for (const p of parts) {
-      expect(p.bounds[0]).toBeGreaterThanOrEqual(-180);
-      expect(p.bounds[2]).toBeLessThanOrEqual(180);
+    const cells = coverCells(b);
+    // (every corner of the box in a cell)
+    for (const [lon, lat] of [
+      [b[0], b[1]],
+      [b[2], b[3]],
+      [b[0], b[3]],
+      [b[2], b[1]],
+    ])
+      expect(cells.some((c) => lon! >= c.west && lon! < c.west + COVER_CELL && lat! >= c.south && lat! < c.south + COVER_CELL)).toBe(true);
+    for (const c of cells) {
+      const box = new URL(coverUrl(false, c.col, c.row)).searchParams.get("BBOX")!.split(",").map(Number);
+      expect(box[0]).toBeGreaterThanOrEqual(-180);
+      expect(box[2]).toBeLessThanOrEqual(180);
+      expect(box[2]! - box[0]!).toBe(COVER_CELL);
+      // (the same cell's URL whichever side of the date line it was reached from)
+      expect(coverUrl(true, c.col + 360 / COVER_CELL, c.row)).toBe(coverUrl(true, c.col, c.row));
     }
   }
   const zones = [{ lat: 0, lon: 179.99, heading: 90, length: 4500, halfWidth: 340 }];

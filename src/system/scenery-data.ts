@@ -31,19 +31,6 @@ export function sceneryExcluded(lat: number, lon: number, zones: SceneryExclusio
     return along > -300 && along < v.length + 300 && Math.abs(across) < v.halfWidth;
   });
 }
-export function rasterParts(bounds: [number, number, number, number], width: number) {
-  const cuts = [bounds[0], ...[-180, 180].filter((v) => v > bounds[0] && v < bounds[2]), bounds[2]];
-  return cuts
-    .slice(0, -1)
-    .map((west, i) => {
-      const east = cuts[i + 1]!,
-        shift = west < -180 ? 360 : east > 180 ? -360 : 0;
-      const x = Math.round(((west - bounds[0]) / (bounds[2] - bounds[0])) * width),
-        end = Math.round(((east - bounds[0]) / (bounds[2] - bounds[0])) * width);
-      return { bounds: [west + shift, bounds[1], east + shift, bounds[3]], x, width: end - x };
-    })
-    .filter((v) => v.width > 0);
-}
 export function sceneryFrame(lat: number, lon: number) {
   const a = lat * D,
     b = lon * D;
@@ -204,6 +191,10 @@ export interface SceneryReply {
   coverPixels?: number;
   rgbPixels?: number;
   networkBytes?: number;
+  /** its responses an offline zone served (the Service Worker's x-kerr-zone), and the others — the network's, the tiles'
+   *  cache's (sw.ts) */
+  zoneResponses?: number;
+  otherResponses?: number;
   workerMs?: number;
   errors?: string[];
   budgetLimited?: boolean;

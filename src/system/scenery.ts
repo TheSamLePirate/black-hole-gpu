@@ -395,6 +395,9 @@ export class EarthScenery {
       rgbPixels: d?.rgbPixels ?? 0,
       workerMs: d?.workerMs ?? 0,
       tileNetworkBytes: d?.networkBytes ?? 0,
+      /** the scene's responses from an offline zone, and from elsewhere (I8a) */
+      zoneResponses: d?.zoneResponses ?? 0,
+      otherResponses: d?.otherResponses ?? 0,
       uploadCpuMs: Math.round(this.uploaded * 100) / 100,
       lastError: this.lastError,
       coverage:

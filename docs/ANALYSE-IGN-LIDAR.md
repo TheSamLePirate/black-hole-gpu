@@ -537,11 +537,68 @@ demandée en vol, est dans la liste (`tests/zones.test.ts`).
   - Sous ~1,5 km au-dessus du sol en plein écran, le jeu demande l'ortho z 18. Le profil vol bas s'arrête à z 17
     (0,8 m) ; aller plus loin quadruplerait l'ortho à chaque niveau. Hors ligne, ces tuiles échouent et le jeu dessine
     z 17 à la place. Le test les compte à part.
-  - Les décors du monde (`earthScenery`) ne sont pas encore dans les zones.
+  - Les décors du monde (`earthScenery`) n'étaient pas encore dans les zones (fait le 24/10, ci-dessous).
   - L'émulation hors ligne de Chrome (CDP) ne coupe pas les requêtes du worker lui-même. La preuve du test est donc
     l'en-tête `x-kerr-zone`, pas l'échec des requêtes.
 
 ![Vol bas hors ligne dans la vallée de Chamonix, tout servi par la zone](progress/zones/zones-chamonix-offline.jpg)
+
+**Fait le 24/10 : le décor dans les zones.** Une zone garde aussi ce que demande le décor du monde
+(`settings.earthScenery`) : ses arbres et ses bâtiments s'affichent hors ligne, et plus seulement le sol et l'ortho.
+Le worker du décor ([scenery-worker.ts](../src/system/scenery-worker.ts)) demande, pour chaque scène :
+- la **carte d'occupation du sol** (ESA WorldCover, WMS de Terrascope), ses classes et ses vraies couleurs ;
+- les **tuiles vectorielles OpenFreeMap** z 14 : routes, eau, aérodromes, bâtiments OSM ;
+- **Terrarium** au niveau des scènes (z 13 à nos latitudes), sous leurs objets ;
+- en France, relief IGN activé : les **blocs du relevé** z 14 (MNH 512² près du centre, 256² au-delà ; le sol LiDAR,
+  RGE ALTI dans ses trous) et les **bâtiments de la BD TOPO** z 15 ;
+- en Suisse : les maillages swisstopo g 13 sous les arbres.
+
+Ces listes sortent maintenant d'un module pur, [scenery-sources.ts](../src/system/scenery-sources.ts), que le
+worker et les zones partagent. `sceneryZoneChains` ([zones.ts](../src/system/zones.ts)) en fait l'union sur toutes
+les scènes qu'une caméra dans le disque peut demander : le centre d'une scène est mené par le regard (0,6 de son
+rayon) ou par le mouvement (650 m), puis calé sur la grille de 0,005° (400 m de plus). Le décor suit les réglages
+(`ZoneSources.scenery` : mode, portée, vraies couleurs avec `earthSurface`), et son relevé suit le relief IGN.
+
+- **WorldCover par cellules fixes.** L'image était demandée centrée sur chaque scène, donc une URL nouvelle à chaque
+  pas de 555 m, qu'aucune zone ni aucun cache ne pouvait tenir. Elle est maintenant demandée par cellules de 1/16°
+  (7 × 4,6 km à 49°, 768 px de haut, ~9 m le pixel), assemblées au plus proche. Une scène en demande 4 à 12 par
+  couche, et les scènes suivantes les reprennent du cache. Effet de bord heureux : l'ancienne image, rééchantillonnée
+  par le serveur, mélangeait les couleurs des classes aux bords, et 13 % de ses pixels n'étaient d'aucune classe ;
+  il en reste 8 %. Sur kerr-mini (`ign-canopy.e2e`, Saint-Lô, occupation du sol seule) : 71 % des arbres sur la
+  canopée de la photo au lieu de 69 %, et 25 % de la canopée sous un arbre au lieu de 23 %. Avec le relevé IGN :
+  76 % et 36 %, inchangés.
+- **Les tailles mesurées** (échantillons à Saint-Lô, Chamonix, Paris, Lauterbrunnen et Garmisch ; grilles codées
+  I8c) : WorldCover 64 Ko (classes) et 171 Ko (couleurs) la cellule, OpenFreeMap 73 Ko, BD TOPO 135 Ko (Paris en
+  tire la moyenne ; 33 Ko à Chamonix), MNH 162 Ko en 512² et 51 Ko en 256², sol LiDAR 13 Ko en 128², maillage
+  swisstopo g 13 74 Ko. `tileKind` les distingue (`canopy`, `osm`, `buildings`, `cover`) dans les chiffres du cache.
+- **Le volume.** Décor haut et portée très lointaine (les défauts d'une machine capable) : il ajoute 230 à 270 Mo à
+  une zone aéroport de 5 km, et 440 à 470 Mo à une zone vol bas de 10 km. La plus grosse part, ce sont les blocs
+  de canopée et les tuiles BD TOPO.
+- **Deux défauts corrigés en route.**
+  - Une URL déjà vue n'était plus remise dans une chaîne. Or une URL vue seulement comme repli (Terrarium sous les
+    grilles IGN) n'est jamais téléchargée si le premier maillon suffit. On ne retire désormais d'une chaîne que les
+    URL qu'une autre chaîne demande en premier.
+  - Une tuile que la source n'a pas (son 404, confirmé deux fois) n'était pas gardée, et le jeu la redemandait au
+    réseau en vol. La zone garde maintenant ce 404 et le sert ; « Mettre à jour » le redemande.
+- **Tests.** `tests/zones.test.ts` fait passer le vrai `EarthScenery` (son worker remplacé par un enregistreur) en
+  4 lieux : Saint-Lô (IGN), Lauterbrunnen (swisstopo), Garmisch (sans relevé) et Taveuni (la ligne de changement de
+  date). La caméra parcourt tout le disque, menée dans 8 directions, par le regard ou par la vitesse. Chaque URL de
+  chaque scène demandée est dans la zone ; avec une marge plus courte de 700 m, le test échoue.
+- **e2e sur kerr-mini** (`tests/e2e/zones-scenery.e2e.test.ts`, ~9 min, raster, cockpit). Zone aéroport de 1,5 km
+  sur Chamonix, avec le relief IGN, le décor haut et les vraies couleurs ; le profil aéroport tient tout ce que demande
+  un vol à 450 m du sol, l'ortho z 18 comprise. Les chiffres :
+  - la zone : 7 484 chaînes, 344 Mo estimés, **291 Mo réels**, prête en 384 s, 0 échec. Dont 238 tuiles BD TOPO
+    (33 Ko), 127 grilles de canopée (89 Ko), 24 cellules WorldCover (127 Ko), 87 tuiles OpenFreeMap (13 Ko) ;
+  - en ligne, au-dessus de la vallée : 319 778 arbres, tous placés par la canopée IGN, et 8 000 bâtiments (7 744 de la
+    BD TOPO) ;
+  - puis cache LRU vidé, réseau coupé, page rechargée. Hors ligne : **319 700 arbres et 8 000 bâtiments**, 130 réponses
+    de la zone et 0 d'ailleurs ;
+  - après 1,8 km de vol, la scène redemandée : 308 731 arbres, 7 726 bâtiments, toujours 0 réponse d'ailleurs ;
+  - le service worker, par type : décor, sol et ortho, **0 tuile du réseau**. Restent 6 tuiles raster OSM de la carte
+    tactique (le TSD du cockpit), que leur politique exclut des zones : elles sont comptées à part (type `map`).
+
+![Hors ligne au-dessus de Chamonix : arbres et bâtiments servis par la zone](progress/zones/zones-scenery-chamonix-offline.jpg)
+
 
 ### 9.5 L'écran : Réglages › Hors ligne
 

@@ -4,8 +4,23 @@ import { PbfReader } from "pbf";
 import { earthDetail, toHalf } from "../terrain";
 import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
-import { IgnLand, inIgnBox, tilesWithin } from "./ign-canopy";
-import { SWISSTOPO, SwissGround } from "./national";
+import { IgnLand } from "./ign-canopy";
+import { SwissGround } from "./national";
+import {
+  bdtopoTiles as bdtopoWanted,
+  COVER_CELL,
+  COVER_ROWS,
+  coverCells,
+  coverUrl,
+  coverWidth,
+  demTile,
+  osmTiles,
+  osmUrl,
+  sceneryBox,
+  sceneryDemZoom,
+  surveyOf,
+  surveyReach,
+} from "./scenery-sources";
 import { roadWidth, surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains } from "./scenery-geometry";
 import {
   D,
@@ -15,7 +30,6 @@ import {
   sceneryGrid,
   SCENERY_BYTES,
   wrapLon,
-  rasterParts,
   sceneryExcluded,
   type Primitive,
   type SceneryRequest,
@@ -35,18 +49,22 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     N = sceneryGrid(k),
     budget = q.budget ?? SCENERY_BYTES,
     room = budget / SCENERY_BYTES;
-  const radius = (q.mode === "high" ? 3000 : 2000) * k,
-    span = (radius + 650) / 111320;
-  const lonSpan = span / Math.max(Math.cos(q.lat * D), 0.12);
-  const bounds: [number, number, number, number] = [q.lon - lonSpan, q.lat - span, q.lon + lonSpan, q.lat + span];
+  const { radius, bounds } = sceneryBox(q.lat, q.lon, q.mode, k);
   const frame = sceneryFrame(q.lat, q.lon),
     pixels = new Uint32Array(N * N),
     classes = new Uint8Array(N * N);
   let networkBytes = 0,
     rgbPixels = 0;
+  // (the responses an offline zone served — the Service Worker marks them —, and the others)
+  const served = { zone: 0, other: 0 };
+  const count = (r: Response) => {
+    if (r.headers.get("x-kerr-zone") === "1") served.zone++;
+    else served.other++;
+  };
   const errors: string[] = [];
   const fetchCount = async (url: string, within = signal) => {
     const r = await fetch(url, { signal: within });
+    count(r);
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
     const b = await r.arrayBuffer();
     networkBytes += b.byteLength;
@@ -71,30 +89,34 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     [95, 0, 207, 117],
     [100, 250, 230, 160],
   ];
+  // (the land cover's fixed cells — scenery-sources.ts — drawn over the scene's box, nearest pixel: its classes' colours
+  // kept exact; a cell failed left transparent, the scene's error said)
   async function raster(rgb: boolean) {
     try {
-      const layer = rgb ? "esa-worldcover-s2rgbnir-10m-2021-v2_tcc" : "esa-worldcover-map-10m-2021-v2_map";
       const canvas = new OffscreenCanvas(N, N),
         ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-      for (const part of rasterParts(bounds, N)) {
-        const query = new URLSearchParams({
-          SERVICE: "WMS",
-          VERSION: "1.1.1",
-          REQUEST: "GetMap",
-          LAYERS: layer,
-          STYLES: "",
-          SRS: "EPSG:4326",
-          BBOX: part.bounds.join(","),
-          WIDTH: String(part.width),
-          HEIGHT: String(N),
-          FORMAT: "image/png",
-          TRANSPARENT: "TRUE",
-        });
-        const bytes = await fetchCount("https://mapproxy.terrascope.be/mapproxy/service?" + query);
-        const image = await createImageBitmap(new Blob([bytes]), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
-        ctx.drawImage(image, part.x, 0);
-        image.close();
-      }
+      ctx.imageSmoothingEnabled = false;
+      const sx = N / (bounds[2] - bounds[0]),
+        sy = N / (bounds[3] - bounds[1]);
+      const cells = coverCells(bounds);
+      let next = 0,
+        failed: unknown = null;
+      const run = async () => {
+        while (next < cells.length) {
+          const c = cells[next++]!;
+          try {
+            const bytes = await fetchCount(coverUrl(rgb, c.col, c.row));
+            const image = await createImageBitmap(new Blob([bytes]), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+            if (image.width !== coverWidth(c.row) || image.height !== COVER_ROWS) throw new Error(`cell ${image.width}×${image.height}`);
+            ctx.drawImage(image, (c.west - bounds[0]) * sx, (bounds[3] - c.south - COVER_CELL) * sy, COVER_CELL * sx, COVER_CELL * sy);
+            image.close();
+          } catch (e) {
+            failed ??= e;
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: 6 }, run));
+      if (failed) errors.push(String(failed).slice(0, 220));
       const data = ctx.getImageData(0, 0, N, N).data;
       for (let i = 0; i < N * N; i++) {
         const r = data[i * 4]!,
@@ -129,23 +151,21 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const surveyed = AbortSignal.timeout(45_000);
   const fetchSurvey = async (url: string) => {
     const r = await fetch(url, { signal: surveyed });
+    count(r);
     if (!r.ok) throw new Error(`HTTP ${r.status} (${(await r.text()).replace(/\s+/g, " ").slice(0, 160)}): ${url}`);
     const b = await r.arrayBuffer();
     networkBytes += b.byteLength;
     return b;
   };
   // (over Switzerland, swisstopo's ground under the trees and the buildings — I7 —, its canopy none: the land cover's)
+  const survey = surveyOf(q);
   const land: IgnLand | SwissGround | null =
-    q.ign && inIgnBox(q.lat, q.lon)
-      ? new IgnLand(fetchSurvey)
-      : q.ign && SWISSTOPO.holds(q.lat, q.lon)
-        ? new SwissGround(fetchSurvey)
-        : null;
-  const landReady = land?.prepare(q.lat, q.lon, radius + 250);
+    survey === "ign" ? new IgnLand(fetchSurvey) : survey === "swisstopo" ? new SwissGround(fetchSurvey) : null;
+  const landReady = land?.prepare(q.lat, q.lon, surveyReach(radius));
   await raster(false);
   if (q.satellite) await raster(true);
   // Keep each DEM tile at least 1.8 km wide at high latitudes, bounding root-data memory.
-  const demZoom = Math.min(13, Math.max(6, Math.floor(Math.log2((40075016 * Math.cos(q.lat * D)) / 1800))));
+  const demZoom = sceneryDemZoom(q.lat);
   const heights = new Map<string, Promise<Uint8ClampedArray>>();
   // (the sea's surface over the ellipsoid — the geoid's plane round the centre —: the ground as the tracer has it)
   const [n0, nLat, nLon] = q.geoid ?? [0, 0, 0];
@@ -159,8 +179,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     }
     const xx = tx(wrapLon(lon), demZoom),
       yy = ty(lat, demZoom),
-      x = Math.floor(xx),
-      y = Math.floor(yy),
+      { x, y } = demTile(lat, lon, demZoom),
       key = `${x}/${y}`;
     let p = heights.get(key);
     if (!p) {
@@ -329,21 +348,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     }
   };
   // Buildings use actual OSM footprints, all rings including courtyard holes.
-  const z = 14,
-    n = 2 ** z,
-    urls: string[] = [];
-  for (let y = Math.floor(ty(bounds[3])); y <= Math.floor(ty(bounds[1])); y++)
-    for (let x = Math.floor(tx(bounds[0])); x <= Math.floor(tx(bounds[2])); x++) if (y >= 0 && y < n) urls.push(`${x}/${y}`);
-  const tileDistance = (key: string) => {
-    const [x, y] = key.split("/").map(Number);
-    return (
-      ((0.98 * 40075016 * Math.cos(q.lat * D)) / n) *
-      Math.hypot(Math.max(x! - tx(q.lon), 0, tx(q.lon) - x! - 1), Math.max(y! - ty(q.lat), 0, ty(q.lat) - y! - 1))
-    );
-  };
-  urls.sort((a, b) => tileDistance(a) - tileDistance(b));
-  const tiles = Math.ceil(64 * k2);
-  if (urls.length > tiles) budgetLimited = true;
+  const n = 2 ** 14;
+  const osm = osmTiles(q.lat, q.lon, bounds, k);
+  if (osm.limited) budgetLimited = true;
   const limit = Math.round((q.mode === "high" ? 8000 : 5000) * k2);
   type Choice = { geo: { lat: number; lon: number }[][]; lat: number; lon: number; h: number; low: number; d: number };
   const choices: Choice[] = [];
@@ -359,7 +366,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const out: Choice[] = [],
       covered = new Set<string>();
     let tileCount = 0;
-    const want = tilesWithin(BDTOPO_Z, q.lat, q.lon, radius).slice(0, Math.ceil(256 * k2));
+    const want = bdtopoWanted(q.lat, q.lon, radius, k);
     const t = 2 ** BDTOPO_Z;
     const one = async (x: number, y: number) => {
       let raw: ArrayBuffer | null = null;
@@ -413,12 +420,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     }
     return { out, covered, tileCount };
   };
-  const bdtopo = q.ign && inIgnBox(q.lat, q.lon) ? bdtopoTiles() : null;
+  const bdtopo = survey === "ign" ? bdtopoTiles() : null;
   const osmChoices: Choice[] = [];
-  for (const key of urls.slice(0, tiles)) {
+  for (const { x, y } of osm.tiles) {
     try {
-      const [x, y] = key.split("/").map(Number) as [number, number];
-      const raw = await fetchCount(`https://tiles.openfreemap.org/planet/latest/14/${((x % n) + n) % n}/${y}.pbf`);
+      const raw = await fetchCount(osmUrl(x, y));
       const layers = new VectorTile(new PbfReader(raw)).layers;
       readNetworks(layers, x, y);
       const layer = layers.building;
@@ -707,6 +713,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     coverPixels: classes.reduce((s, v) => s + Number(v > 0), 0),
     rgbPixels,
     networkBytes,
+    zoneResponses: served.zone,
+    otherResponses: served.other,
     workerMs: performance.now() - started,
     errors: errors.slice(0, 12),
     budgetLimited,

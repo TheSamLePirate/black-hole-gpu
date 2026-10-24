@@ -65,6 +65,23 @@ export function tilesWithin(z: number, lat: number, lon: number, reach: number):
 /** the survey's blocks within `reach` metres of a place (tilesWithin at CANOPY_Z) */
 export const blocksWithin = (lat: number, lon: number, reach: number) => tilesWithin(CANOPY_Z, lat, lon, reach);
 
+/** a block's grids' sides [px]: within CANOPY_NEAR of the scene's centre the full ones, half beyond */
+export const blockSides = (d: number) => {
+  const shrink = d <= CANOPY_NEAR ? 1 : 2;
+  return { canopy: CANOPY_N / shrink, ground: GROUND_N / shrink };
+};
+/** A block's fetches as IgnLand makes them, as chains (system/zones.ts ZoneChain): its canopy; its ground — the LiDAR's,
+ *  RGE ALTI's where it falls short. */
+export function blockChains(x: number, y: number, sides: { canopy: number; ground: number }): string[][] {
+  return [
+    [ignHeightUrl(IGN_MNH, CANOPY_Z, x, y, sides.canopy)],
+    [ignHeightUrl(IGN_LIDAR, CANOPY_Z, x, y, sides.ground), ignHeightUrl(IGN_RGEALTI, CANOPY_Z, x, y, sides.ground)],
+  ];
+}
+/** the survey's fetches for a scene of `reach` metres round a place (IgnLand.prepare's) */
+export const surveyChains = (lat: number, lon: number, reach: number): string[][] =>
+  blocksWithin(lat, lon, reach).flatMap((b) => blockChains(b.x, b.y, blockSides(b.d)));
+
 /** a place's block and its fractional pixel there (n a side; row 0 the north) */
 export function blockOf(lat: number, lon: number, n: number): { x: number; y: number; u: number; v: number } {
   const t = 2 ** CANOPY_Z;
@@ -107,7 +124,7 @@ export class IgnLand {
     const run = async () => {
       while (next < keys.length) {
         const { x, y, d } = keys[next++]!;
-        await this.block(x, y, d <= CANOPY_NEAR ? 1 : 2);
+        await this.block(x, y, blockSides(d));
       }
     };
     await Promise.all(Array.from({ length: INFLIGHT }, run));
@@ -131,10 +148,10 @@ export class IgnLand {
     return null;
   }
 
-  private async block(x: number, y: number, shrink: number) {
+  private async block(x: number, y: number, sides: { canopy: number; ground: number }) {
     const key = `${x}/${y}`,
-      cn = CANOPY_N / shrink,
-      gn = GROUND_N / shrink;
+      cn = sides.canopy,
+      gn = sides.ground;
     const [mnh, lidar] = await Promise.all([this.grid(IGN_MNH, x, y, cn), this.grid(IGN_LIDAR, x, y, gn)]);
     this.canopyBlocks.set(key, mnh && { n: cn, v: codeCanopy(mnh) });
     // (the ground: the LiDAR's terrain, RGE ALTI in its holes — earth-tiles' rule, its no-data and coastal junk dropped)

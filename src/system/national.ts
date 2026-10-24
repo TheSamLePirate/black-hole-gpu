@@ -164,6 +164,12 @@ export const SWISSTOPO: NationalSource = {
  *  terrain's meshes of SWISS_GROUND_G (~14 m between vertices in the Alps, a mesh 2.4 × 1.7 km) over the scene's box, each
  *  drawn into a grid of GROUND_CELLS² over its own box, read bilinear */
 export const SWISS_GROUND_G = 13;
+/** the scenery's ground's meshes over the box of `reach` metres round a place [°] (the offline zones' too: system/zones.ts) */
+export function swissGroundTiles(lat: number, lon: number, reach: number): [number, number][] {
+  const dLat = reach / 111_195,
+    dLon = reach / (111_195 * Math.cos(lat * D));
+  return geodeticTilesOver(SWISS_GROUND_G, lon - dLon, lat - dLat, lon + dLon, lat + dLat);
+}
 const GROUND_CELLS = 256;
 export class SwissGround {
   private grids = new Map<string, { box: [number, number, number, number]; v: Float32Array } | null>();
@@ -172,9 +178,7 @@ export class SwissGround {
   constructor(private fetchBytes: (url: string) => Promise<ArrayBuffer>) {}
   /** the meshes within `reach` metres of a place [°] */
   async prepare(lat: number, lon: number, reach: number) {
-    const dLat = reach / 111_195,
-      dLon = reach / (111_195 * Math.cos(lat * D));
-    const tiles = geodeticTilesOver(SWISS_GROUND_G, lon - dLon, lat - dLat, lon + dLon, lat + dLat);
+    const tiles = swissGroundTiles(lat, lon, reach);
     let next = 0;
     const run = async () => {
       while (next < tiles.length) {

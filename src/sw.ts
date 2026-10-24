@@ -178,8 +178,19 @@ self.addEventListener("message", (ev) => {
   if (m?.type === "zone-delete" && m.id) answer(zoneDelete(m.id));
 });
 
-/** what the tiles were served from since this worker started (the tests: a flight within a zone asks the network nothing) */
+/** what the tiles were served from since this worker started (the tests: a flight within a zone asks the network nothing),
+ *  by kind too (the scenery worker's fetches, out of the page's sight, among them), the last few asked of the network */
 const served = { zone: 0, lru: 0, network: 0 };
+const servedKinds: Record<string, { zone: number; lru: number; network: number }> = {};
+const servedNetwork: string[] = [];
+function serving(url: string, from: "zone" | "lru" | "network") {
+  served[from]++;
+  (servedKinds[tileKind(url)] ??= { zone: 0, lru: 0, network: 0 })[from]++;
+  if (from === "network") {
+    servedNetwork.push(url.slice(0, 240));
+    if (servedNetwork.length > 12) servedNetwork.shift();
+  }
+}
 /** the network's zones' requests to the Géoplateforme's WMS-R spaced (its 40 a second shared with the game's: 8 here) */
 let wmsNext = 0;
 async function gentle(url: string) {
@@ -249,8 +260,13 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
   const link = async (url: string): Promise<ArrayBuffer | "none" | null> => {
     const t = await storeGet<ZoneTile>(ZONE_TILES, url);
     const kept = t && (await cache.match(url));
+    // (a source's none kept as such — its 404 —: the next link asked, as the first time)
+    if (t && kept?.status === 404 && !fresh) {
+      if (!t.zones.includes(id)) await storePut(ZONE_TILES, { ...t, zones: [...t.zones, id] });
+      return "none";
+    }
     // (an update — the sources' new vintage —: asked again, the one kept if the network fails)
-    const keptRaw = t && kept && !fresh ? await rawOf(kept.clone()) : null;
+    const keptRaw = t && kept?.ok && !fresh ? await rawOf(kept!.clone()) : null;
     if (t && keptRaw) {
       if (!t.zones.includes(id)) await storePut(ZONE_TILES, { ...t, zones: [...t.zones, id] });
       out.bytes += t.size;
@@ -263,8 +279,12 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
         // (none there — out at sea, abroad —, though the IGN's WMTS answers a 404 now and then for a tile it has: asked
         // once more before the chain's next link, or nothing, is taken)
         if (res.status === 404) {
-          if (attempt > 0) return "none";
-          throw new Error("HTTP 404");
+          if (attempt === 0) throw new Error("HTTP 404");
+          // (kept too: offline, the game told there is none — as the network tells it — not left asking the network)
+          await cache.put(url, new Response(null, { status: 404, headers: { "x-kerr-none": "1" } }));
+          const zones = t?.zones.includes(id) ? t.zones : [...(t?.zones ?? []), id];
+          await storePut(ZONE_TILES, { url, zones, size: 0 } satisfies ZoneTile);
+          return "none";
         }
         // (a refusal over the rate — the WMS-R's 400 —, a 5xx: a while, then again)
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -282,7 +302,7 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
       }
     }
     // (an update failing: the tile kept as it was)
-    const old = t && kept ? await rawOf(kept.clone()) : null;
+    const old = t && kept?.ok ? await rawOf(kept.clone()) : null;
     if (t && old) {
       if (!t.zones.includes(id)) await storePut(ZONE_TILES, { ...t, zones: [...t.zones, id] });
       out.bytes += t.size;
@@ -354,7 +374,7 @@ async function stats() {
     zoneTiles: zoned.length,
     zoneBytes,
     kinds,
-    served: { ...served },
+    served: { ...served, kinds: structuredClone(servedKinds), recent: [...servedNetwork] },
   };
 }
 async function clearTiles() {
@@ -405,18 +425,18 @@ async function tile(request: Request): Promise<Response> {
   // (marked as a zone's: the page — the tests — tells it from the network's)
   const fromZone = zoned && (await serve(zoned, ["x-kerr-zone", "1"]));
   if (fromZone) {
-    served.zone++;
+    serving(request.url, "zone");
     return fromZone;
   }
   const cache = await caches.open(TILE_CACHE);
   const hit = await cache.match(request);
   const fromCache = hit && (await serve(hit));
   if (hit && fromCache) {
-    served.lru++;
+    serving(request.url, "lru");
     void indexPut({ url: request.url, t: Date.now(), size: Number(hit.headers.get("content-length")) || 0 });
     return fromCache;
   }
-  served.network++;
+  serving(request.url, "network");
   const res = await fetch(request);
   if (res.ok && res.type !== "opaque") {
     const copy = res.clone();
