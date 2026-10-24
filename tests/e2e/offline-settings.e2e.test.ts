@@ -7,7 +7,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // brought down to 1 km (the D-pad), its detailed core down and back to the whole zone (the D-pad), downloaded (the mouse); the tab's row of the zone and its progress; its sheet (the
 // mouse), paused and resumed (A), ready; the automatic cache's budget changed and back (◀ ▶); the zone deleted, asked
 // twice (A, A); the tab in English. (E2E_SHOTS=<dir>: offline-add, offline-tab, offline-zone, offline-tab-en.)
-// Duration: ~3 min on kerr-mini (the zone's download ~1 of them).
+// Duration: ~6 min on kerr-mini (the zone's download ~4 of them).
 // Done when: every screen reached by both, the zone downloaded, paused, resumed, ready, then gone with its tiles; the
 // budget the worker's.
 
@@ -135,13 +135,14 @@ describe.skipIf(!E2E)("Settings › Offline", () => {
     await Bun.sleep(600);
     expect(await focused()).toBe("offline-zone-resume");
     await press(A);
-    await app.waitFor(`(async () => (await __bh.pwa.zones.list())[0]?.state === "ready")()`, 240_000);
+    // (its detailed core the whole zone: ~4 min on kerr-mini)
+    await app.waitFor(`(async () => (await __bh.pwa.zones.list())[0]?.state === "ready")()`, 420_000);
     const r = (await zones())[0]!;
     console.log(`  ready: ${r.cursor} / ${r.total} chains, ${(r.bytes / 1e6).toFixed(0)} MB, ${r.failed} failed`);
     expect(r.failed).toBe(0);
     await app.waitFor(`!!document.querySelector('[data-testid="offline-zone-update"]')`, 10_000);
     expect(await text("offline-zone")).toContain("Téléchargée le");
-  }, 300_000);
+  }, 480_000);
 
   test("the automatic cache's budget by ◀ ▶ (the worker keeps it); the zone deleted, asked twice (A, A)", async () => {
     // (B: back to the tab, its zone's row focused; ▲ to the cache's)
