@@ -1,4 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
+import { sceneryBudget } from "../../src/system/scenery-data";
 import { App, E2E, stopServer } from "./lib/app";
 
 // (each measure profiles every frame — prof.every = 1, 2–3 % of GPU time: one in eight, the M1's kiosk at
@@ -66,7 +67,9 @@ test.skipIf(!E2E)(
         );
         const stats = await app.js("__bh.renderer.earthScenery.stats()");
         console.log(place.name, JSON.stringify(stats));
-        expect(stats.gpuBytes).toBe(16 * 1024 ** 2);
+        // (the buffer the scene's detail reach asks — DETAIL_REACH: 16 MiB at the normal one, 64 at the very far one, a
+        // capable machine's default)
+        expect(stats.gpuBytes).toBe(sceneryBudget(stats.reach));
         expect(stats.coverPixels).toBeGreaterThan(1000);
         expect(stats.rgbPixels).toBeGreaterThan(1000);
         expect(stats.roads).toBeGreaterThan(100);
@@ -195,13 +198,17 @@ test.skipIf(!E2E)(
       );
       expect(await app.js<string>("__bh.camera.flightModeNow()")).toBe("plane");
       expect(await app.js<number>("__bh.renderer.earthScenery.stats().buildings")).toBeGreaterThan(100);
-      expect(await app.js<number>("__bh.renderer.earthScenery.stats().gpuBytes")).toBe(16 * 1024 ** 2);
+      const held = await app.js<{ gpuBytes: number; reach: number }>("__bh.renderer.earthScenery.stats()");
+      expect(held.gpuBytes).toBe(sceneryBudget(held.reach));
       // (the trees: a world-fixed grid, one at most a cell — no count to cap)
       expect(await app.js<number>("__bh.renderer.earthScenery.stats().forestCells")).toBeGreaterThan(0);
       expect(await app.js<number>("__bh.renderer.earthScenery.stats().trees")).toBeLessThanOrEqual(
         await app.js<number>("__bh.renderer.earthScenery.stats().forestCells"),
       );
-      expect(await app.js<number>("__bh.renderer.earthScenery.stats().buildings")).toBeLessThanOrEqual(8000);
+      // (the buildings capped as the worker caps them: 8 000 a unit of reach², high)
+      expect(await app.js<number>("__bh.renderer.earthScenery.stats().buildings")).toBeLessThanOrEqual(
+        Math.round(8000 * held.reach * held.reach),
+      );
       await app.shot("remote-results/earth-scenery-plane-high.png");
       await Bun.write(
         "remote-results/earth-scenery-plane.json",
