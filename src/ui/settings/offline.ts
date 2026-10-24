@@ -672,7 +672,9 @@ export class OfflineTab {
               await zones.remove(id);
               this.d.toast(tr(T.deleted));
               await this.read();
-              host.back();
+              // (a big zone's deletion takes a while: the sheet's watch may have gone back already, seeing it gone — not
+              // twice, which would close the settings)
+              if (page.isConnected) host.back();
             },
             undefined,
             "delete",
