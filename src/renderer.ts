@@ -2468,6 +2468,8 @@ export class Renderer {
     height = Math.max(8, Math.floor(height));
     if (this.live && width === this.live.width && height === this.live.height && this.livePol === this.wantPol) return;
     const old = this.live;
+    // (its last image kept for the new target's history — encodeTemporal)
+    if (old?.temporal?.valid) this.keepHistory(old);
     // (its polarization buffer — 8 bytes a pixel — only while polarization is drawn)
     this.livePol = this.wantPol;
     this.live = this.createTarget(width, height, this.livePol, true);
@@ -4672,6 +4674,11 @@ export class Renderer {
   /** The temporal reprojection's pass; true when it ran (its camera motion written: the motion blur may follow). */
   private encodeTemporal(enc: GPUCommandEncoder, t: Target, s: Settings): boolean {
     const d = this.device;
+    const retired = this.carryRetired;
+    if (retired) {
+      this.carryRetired = null;
+      d.queue.onSubmittedWorkDone().then(() => retired.destroy());
+    }
     const cam = this.lastCam;
     if (!cam) return false;
     if (!t.temporal) {
@@ -4713,6 +4720,7 @@ export class Renderer {
         }),
       );
       t.temporal = { hist, buf, binds, idx: 0, valid: false, pre: 1, held: false, moving: false, from: 0, starBinds };
+      this.carryHistory(enc, t.temporal);
     }
     const ta = t.temporal;
     const tanH = Math.tan((s.fov * Math.PI) / 360);
@@ -5063,6 +5071,77 @@ export class Renderer {
    * the same pixels: the camera has not moved since) blended into the refined ones, into the other
    * image — the display's, and the next move's history (held).
    */
+  /**
+   * The live image carried over a resize: the camera held after moving, the image refines at the full scale — a new target,
+   * its history empty: no hand-over (encodeHandover), the first pass's rows not yet refined showed the bare samples (the
+   * raster's ground shaded one pixel in sixteen: black) for a pass's time, ~8 s on an M1. The old target's last history
+   * copied here at its resize; the new one's made from it, resampled, in encodeTemporal (and back the other way when the
+   * camera moves again: the refined image the motion's first history). Its weight a sample's at most (the history's α is
+   * its accumulated weight, up to 15): resampled, blurred, it fills the rows the refinement has not reached and gives way to
+   * it from the first pass — at its full weight the refined image was a fourteenth of a pixel after a pass, 8 s on an M1.
+   */
+  private historyCarry: { tex: GPUTexture; pre: number; moving: boolean } | null = null;
+  private resamplePipe: GPUComputePipeline | null = null;
+  private keepHistory(old: Target) {
+    const ta = old.temporal!;
+    const prev = this.historyCarry;
+    if (prev) this.device.queue.onSubmittedWorkDone().then(() => prev.tex.destroy());
+    const tex = this.device.createTexture({
+      size: [old.width, old.height],
+      format: "rgba16float",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    const enc = this.device.createCommandEncoder();
+    enc.copyTextureToTexture({ texture: ta.hist[ta.idx]! }, { texture: tex }, [old.width, old.height]);
+    this.device.queue.submit([enc.finish()]);
+    this.historyCarry = { tex, pre: ta.pre, moving: ta.moving || ta.held };
+  }
+  private carryHistory(enc: GPUCommandEncoder, ta: NonNullable<Target["temporal"]>) {
+    const c = this.historyCarry;
+    if (!c) return;
+    this.historyCarry = null;
+    this.resamplePipe ??= this.device.createComputePipeline({
+      layout: "auto",
+      compute: {
+        module: this.device.createShaderModule({
+          code: `@group(0) @binding(0) var src: texture_2d<f32>;
+@group(0) @binding(1) var samp: sampler;
+@group(0) @binding(2) var dst: texture_storage_2d<rgba16float, write>;
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) g: vec3u) {
+  let size = textureDimensions(dst);
+  if (g.x >= size.x || g.y >= size.y) { return; }
+  let c = textureSampleLevel(src, samp, (vec2f(g.xy) + 0.5) / vec2f(size), 0.0);
+  textureStore(dst, g.xy, vec4f(c.rgb, min(c.a, 1.0)));
+}`,
+        }),
+        entryPoint: "main",
+      },
+    });
+    const dst = ta.hist[ta.idx]!;
+    const pass = enc.beginComputePass();
+    pass.setPipeline(this.resamplePipe);
+    pass.setBindGroup(
+      0,
+      this.device.createBindGroup({
+        layout: this.resamplePipe.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: c.tex.createView() },
+          { binding: 1, resource: this.clampSampler },
+          { binding: 2, resource: dst.createView() },
+        ],
+      }),
+    );
+    pass.dispatchWorkgroups(Math.ceil(dst.width / 8), Math.ceil(dst.height / 8));
+    pass.end();
+    ta.valid = true;
+    ta.pre = c.pre;
+    ta.moving = c.moving;
+    // (let go once this frame is submitted: the next encodeTemporal)
+    this.carryRetired = c.tex;
+  }
+  private carryRetired: GPUTexture | null = null;
+
   private encodeHandover(enc: GPUCommandEncoder, t: Target, ta: NonNullable<Target["temporal"]>, pre: number, passes: number) {
     if (!ta.held) ta.from = this.frameStamp;
     const k = new Float32Array(52);
