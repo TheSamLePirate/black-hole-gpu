@@ -377,6 +377,10 @@ export class EarthScenery {
       forestCellM: d?.forestCellM ?? 0,
       buildings: d?.buildings ?? 0,
       footprintEdges: d?.vertices ?? 0,
+      /** the roofs by shape (roofs.ts), the buildings with triangles for the raster and their bytes */
+      roofShapes: d?.roofShapes ?? {},
+      meshedBuildings: d?.meshedBuildings ?? 0,
+      meshBytes: d?.meshBytes ?? 0,
       roads: d?.roads ?? 0,
       railways: d?.railways ?? 0,
       waterways: d?.waterways ?? 0,

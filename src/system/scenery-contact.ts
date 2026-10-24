@@ -63,6 +63,18 @@ export class SceneryContact {
     }
     return inside || edge;
   }
+  /** A leaf's top over a frame point: a building's roof there (its planes after its edges — roofs.ts, the least of them),
+   *  the others' flat top. */
+  topAt(base: number, x: number, y: number) {
+    const f = this.f,
+      top = f[base + 1]!;
+    if (f[base + 3] !== 1) return top;
+    const planes = (f[base + 11]! >>> 14) & 15,
+      at = base + 12 + f[base + 2]! * 4 + 4;
+    let z = top;
+    for (let k = 0; k < planes; k++) z = Math.min(z, f[at + k * 4]! * x + f[at + k * 4 + 1]! * y + f[at + k * 4 + 2]!);
+    return z;
+  }
   /** The scenery raster's pixel under q (WorldCover class << 24 | satellite sRGB), 0 outside it. */
   private pixel(q: Vec3) {
     const geo = cartToGeodetic(WGS84_A, WGS84_F, q),
@@ -193,7 +205,7 @@ export class SceneryContact {
       const f = this.f;
       if (this.polygon(p, b, radius)) {
         const bottom = f[b]!,
-          top = f[b + 1]!;
+          top = this.topAt(b, p[0], p[1]);
         if (top <= p[2] + step && top >= p[2] - 2) support = Math.max(support, top - p[2]);
         else if (bottom < p[2] + height - 0.02 && top > p[2] + 0.02) blocked = true;
       }

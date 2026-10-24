@@ -7148,11 +7148,34 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
     let far=min(min(max(a,b).x,max(a,b).y),max(a,b).z);
     if(far<max(near,0.0) || near>out.t){i=u32(lo.w);continue;}
     if(hi.w<0.0){i++;continue;}
-    let base=u32(scenery[0].y+hi.w);let p=scenery[base];let alb=scenery[base+2u].xyz;
+    let base=u32(scenery[0].y+hi.w);let p=scenery[base];var alb=scenery[base+2u].xyz;
     var h=vec4f(-1.0);
     {
       let count=u32(p.z);var best=out.t;
-      if(abs(d.z)>1e-7){
+      // (a building's roof — kind 1, docs/PLAN-BATIMENTS-AAA.md B2 —: z = the least of its planes over its footprint, the
+      // space under them convex — the ray enters it where the last of the planes it crosses downwards lets it in, a single
+      // footprint test there —; the bridges' decks a flat top at p.y)
+      let np=select(0u,(u32(scenery[base+2u].w)>>14u)&15u,p.w>.5&&p.w<1.5);
+      let R=base+4u+count;
+      if(np>0u){
+        var tin=-1e30;var tout=1e30;var nIn=vec3f(0.0,0.0,1.0);
+        for(var k=0u;k<np;k++){
+          let pl=scenery[R+k];
+          let A=pl.x*o.x+pl.y*o.y+pl.z-o.z;let B=pl.x*d.x+pl.y*d.y-d.z;
+          if(abs(B)<1e-9){if(A<0.0){tin=1e30;}continue;}
+          let tk=-A/B;
+          if(B>0.0){if(tk>tin){tin=tk;nIn=vec3f(-pl.x,-pl.y,1.0);}}else{tout=min(tout,tk);}
+        }
+        if(tin<=tout && tin>0.001 && tin<best){
+          let q=o+d*tin;
+          if(q.z>=p.x && sceneryPolygon(q.xy,base,count)){best=tin;h=vec4f(tin,normalize(nIn));alb=scenery[R-1u].xyz;}
+        }
+        // (its floor, from below alone)
+        if(d.z>1e-7 && o.z<p.x){
+          let t=(p.x-o.z)/d.z;
+          if(t>0.001 && t<best && sceneryPolygon((o+d*t).xy,base,count)){best=t;h=vec4f(t,0.0,0.0,-1.0);}
+        }
+      }else if(abs(d.z)>1e-7){
         for(var cap=0u;cap<2u;cap++){
           let z=select(p.x,p.y,cap==1u);let t=(z-o.z)/d.z;
           if(t>0.001 && t<best && sceneryPolygon((o+d*t).xy,base,count)){
@@ -7166,7 +7189,10 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
         let q=line.xy-o.xy;let t=(q.x*v.y-q.y*v.x)/den;let u=(q.x*d.y-q.y*d.x)/den;
         let z=o.z+d.z*t;
         if(t>0.001 && t<best && u>=0.0 && u<=1.0 && z>=p.x && z<=p.y){
-          let norm=normalize(vec3f(v.y,-v.x,0.0));best=t;h=vec4f(t,select(norm,-norm,dot(norm,d)>0.0));
+          // (a building's wall up to its roof there: a gable's peak, a mansard's eave)
+          var top=p.y;
+          for(var k=0u;k<np;k++){let pl=scenery[R+k];top=min(top,pl.x*(o.x+d.x*t)+pl.y*(o.y+d.y*t)+pl.z);}
+          if(z<=top){let norm=normalize(vec3f(v.y,-v.x,0.0));best=t;h=vec4f(t,select(norm,-norm,dot(norm,d)>0.0));alb=scenery[base+2u].xyz;}
         }
       }
     }
@@ -7229,11 +7255,10 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
   let rough=0.85+0.15*gnoise(p*.65);
   var alb=hit.albedo*rough;
   if(hit.kind>.5 && hit.kind<1.5){
-    // Stable facade courses and recessed windows. Roofs keep their own dull surface.
+    // Stable facade courses and recessed windows. Roofs their own colour (the worker's, from their material).
     let wall=abs(hit.normal.z)<.5;
     let win=wall && p.z-hit.root>1.6 && fract((p.x+p.y)*.24)<.6 && fract((p.z-hit.root)/3.0)<.55;
     alb=select(alb,vec3f(.045,.065,.075),win);
-    alb*=select(.72,1.0,wall);
   }
   WS=vec4f(normalize(sceneryGlobal(hit.normal)),1.0);WS_A=alb;WS_E=vec3f(0.0);
   return hit.t;

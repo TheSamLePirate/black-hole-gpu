@@ -22,7 +22,23 @@ import {
   surveyReach,
 } from "./scenery-sources";
 import { roadWidth, surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains } from "./scenery-geometry";
+import { buildingMesh } from "./roof-mesh";
 import {
+  osmColour,
+  partyEdges,
+  planRoof,
+  type Pt,
+  regionOf,
+  roofColour,
+  RoofMaterial,
+  roofMaterial,
+  wallColour,
+  WallMaterial,
+  wallMaterial,
+} from "./roofs";
+import {
+  BUILDING_MESH_M,
+  buildingPacked,
   D,
   localPoint,
   packScenery,
@@ -31,6 +47,7 @@ import {
   SCENERY_BYTES,
   wrapLon,
   sceneryExcluded,
+  seed,
   type Primitive,
   type SceneryRequest,
   type SceneryReply,
@@ -352,7 +369,20 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const osm = osmTiles(q.lat, q.lon, bounds, k);
   if (osm.limited) budgetLimited = true;
   const limit = Math.round((q.mode === "high" ? 8000 : 5000) * k2);
-  type Choice = { geo: { lat: number; lon: number }[][]; lat: number; lon: number; h: number; low: number; d: number };
+  // (what the data say of a building: its height — the BD TOPO's to the eave, OSM's to the top —, its roof's measured height,
+  // its storeys and materials, its use; roofs.ts plans its roof from them)
+  type Attr = {
+    top: boolean;
+    roof: number | null;
+    storeys: number | null;
+    roofMat: RoofMaterial;
+    wallMat: WallMaterial;
+    usage?: string;
+    nature?: string;
+    light?: boolean;
+    colour?: unknown;
+  };
+  type Choice = { geo: { lat: number; lon: number }[][]; lat: number; lon: number; h: number; low: number; d: number; a: Attr };
   const choices: Choice[] = [];
   const distance = (lat: number, lon: number) => Math.hypot((lat - q.lat) * 111320, wrapLon(lon - q.lon) * 111320 * Math.cos(q.lat * D));
   // ---- over France, the IGN's buildings (I5, bdtopo.ts): the BD TOPO's footprints and measured heights for OSM's, its z 15
@@ -362,6 +392,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     return `${Math.floor(((lon + 180) / 360) * t)}/${Math.floor(((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * t)}`;
   };
   const surveyErrors: string[] = [];
+  const region = regionOf(q.lat, q.lon);
   const bdtopoTiles = async () => {
     const out: Choice[] = [],
       covered = new Set<string>();
@@ -388,7 +419,21 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         const feature = layer.feature(i);
         if (feature.type !== 3 || !bdtopoStands(feature.properties)) continue;
         const e = feature.extent,
-          h = bdtopoHeight(feature.properties);
+          pr = feature.properties,
+          h = bdtopoHeight(pr);
+        // (the roof's measured height: its ridge less its eave, both over the sea — I5's `hauteur` is to the eave)
+        const ridge = pr.altitude_maximale_toit,
+          eave = pr.altitude_minimale_toit;
+        const a: Attr = {
+          top: false,
+          roof: typeof ridge === "number" && typeof eave === "number" && ridge >= eave ? Math.min(30, ridge - eave) : null,
+          storeys: typeof pr.nombre_d_etages === "number" && pr.nombre_d_etages > 0 ? pr.nombre_d_etages : null,
+          roofMat: roofMaterial(pr.materiaux_de_la_toiture, region),
+          wallMat: wallMaterial(pr.materiaux_des_murs),
+          usage: typeof pr.usage_1 === "string" ? pr.usage_1 : undefined,
+          nature: typeof pr.nature === "string" ? pr.nature : undefined,
+          light: pr.construction_legere === true,
+        };
         for (const rings of classifyRings(feature.loadGeometry())) {
           // (its part in this tile: the copy in the next one makes the rest)
           const clipped = rings.map((r) => clipRing(r, e));
@@ -406,7 +451,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           const lat = outer.reduce((s, v) => s + v.lat, 0) / outer.length,
             lon = outer.reduce((s, v) => s + v.lon, 0) / outer.length;
           if (index(lat, lon) < 0 || excluded(lat, lon)) continue;
-          out.push({ geo, lat, lon, h, low: 0, d: distance(lat, lon) });
+          out.push({ geo, lat, lon, h, low: 0, d: distance(lat, lon), a });
         }
       }
     };
@@ -455,7 +500,22 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           if (index(lat, lon) < 0 || excluded(lat, lon)) continue;
           const h = Math.min(500, Math.max(2, Number(feature.properties.render_height) || 6));
           const low = Math.min(h - 1, Math.max(0, Number(feature.properties.render_min_height) || 0));
-          into.push({ geo, lat, lon, h, low, d: distance(lat, lon) });
+          into.push({
+            geo,
+            lat,
+            lon,
+            h,
+            low,
+            d: distance(lat, lon),
+            a: {
+              top: true,
+              roof: null,
+              storeys: null,
+              roofMat: RoofMaterial.Unknown,
+              wallMat: WallMaterial.Unknown,
+              colour: feature.properties.colour,
+            },
+          });
         }
       }
       choices.sort((a, b) => a.d - b.d);
@@ -644,40 +704,103 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     error: (e) => void (errors.length < 12 && errors.push(String(e).slice(0, 220))),
   });
   const cells = grown.cells;
+  const shapes: Record<string, number> = {};
   trees = grown.trees;
   const surveyedTrees = grown.surveyed;
   // Select individual buildings by distance, so a dense tile cannot consume the budget before closer neighbours.
-  for (const v of choices) {
+  // (their footprints in the scene's metres first — the party walls are found among them all —, then each roof planned
+  // — roofs.ts —, packed with its planes, and the nearer ones' meshes for the raster — roof-mesh.ts)
+  const local = choices.map((v) =>
+    v.geo.map((ring) => ring.slice(0, -1).map((at) => localPoint(frame, at.lat, at.lon, 0).slice(0, 2) as Pt)),
+  );
+  const party = partyEdges(local);
+  let meshBytes = 0,
+    meshed = 0;
+  const meshBudget = budget / 4;
+  for (const [i, v] of choices.entries()) {
     try {
-      const { geo, lat, lon, h, low } = v;
+      const { lat, lon, h, low, a } = v;
+      const rings = local[i]!.filter((r) => r.length >= 3);
+      if (!rings.length) continue;
       const base = localPoint(frame, lat, lon, await height(lat, lon))[2];
+      const s = seed(Math.round(lat * 1e5), Math.round(lon * 1e5));
+      const plan = planRoof({
+        rings,
+        party: party[i]![0],
+        height: h - (a.top ? low : 0),
+        top: a.top,
+        roof: a.roof,
+        storeys: a.storeys,
+        roofMat: a.roofMat,
+        wallMat: a.wallMat,
+        usage: a.usage,
+        nature: a.nature,
+        light: a.light,
+        region,
+        seed: s,
+      });
+      // (a raised part — OSM's min height —: its walls and roof from there)
+      const floor = base + (a.top ? low : 0);
       const edges: number[] = [];
       let minX = Infinity,
         minY = Infinity,
         maxX = -Infinity,
         maxY = -Infinity;
-      for (const ring of geo)
-        for (let j = 0; j < ring.length - 1; j++) {
-          const a = localPoint(frame, ring[j]!.lat, ring[j]!.lon, 0),
-            b = localPoint(frame, ring[j + 1]!.lat, ring[j + 1]!.lon, 0);
-          edges.push(a[0], a[1], b[0], b[1]);
-          minX = Math.min(minX, a[0], b[0]);
-          maxX = Math.max(maxX, a[0], b[0]);
-          minY = Math.min(minY, a[1], b[1]);
-          maxY = Math.max(maxY, a[1], b[1]);
+      for (const ring of rings)
+        for (let j = 0; j < ring.length; j++) {
+          const p = ring[j]!,
+            n = ring[(j + 1) % ring.length]!;
+          edges.push(p[0], p[1], n[0], n[1]);
+          minX = Math.min(minX, p[0]);
+          maxX = Math.max(maxX, p[0]);
+          minY = Math.min(minY, p[1]);
+          maxY = Math.max(maxY, p[1]);
         }
-      if (!edges.length) continue;
-      const bytes = 112 + edges.length * 4;
-      if (storedBytes + bytes > budget) {
+      const planes = plan.planes.flatMap(([pa, pb, pc]) => [pa, pb, pc + floor, 0]);
+      const bytes = 112 + edges.length * 4 + 16 + planes.length * 4;
+      if (storedBytes + bytes > budget - 4 * 1024 * 1024 * room) {
         budgetLimited = true;
         continue;
       }
       storedBytes += bytes;
+      const bottom = base + low - 1;
+      // (the nearer ones' triangles for the raster: their visibility and their shadows exact — the farther ones' boxes)
+      let mesh: Primitive["mesh"];
+      if (v.d < BUILDING_MESH_M && meshBytes < meshBudget) {
+        const m = buildingMesh(rings, bottom, floor, plan.planes);
+        const mb = m.positions.length * 4 + (m.triangles.length / 3) * 16;
+        if (m.triangles.length && storedBytes + mb <= budget - 4 * 1024 * 1024 * room) {
+          mesh = m;
+          meshBytes += mb;
+          storedBytes += mb;
+          meshed++;
+        }
+      }
+      const colour = osmColour(a.colour);
+      const wall = colour ?? wallColour(a.wallMat, region, s);
+      const roof = roofColour(plan.roofMat, region, (s * 7.31) % 1);
       prims.push({
-        min: [minX, minY, base + low - 1],
-        max: [maxX, maxY, base + h],
-        data: [base + low - 1, base + h, edges.length / 4, 1, minX, minY, maxX, maxY, 0.38, 0.36, 0.32, 0, ...edges],
+        min: [minX, minY, bottom],
+        max: [maxX, maxY, floor + plan.top],
+        data: [
+          bottom,
+          floor + plan.top,
+          edges.length / 4,
+          1,
+          minX,
+          minY,
+          maxX,
+          maxY,
+          ...wall,
+          buildingPacked(plan.roofMat, a.wallMat, plan.storeys, plan.planes.length, plan.shape, !!mesh),
+          ...edges,
+          ...roof,
+          floor + plan.wall,
+          ...planes,
+        ],
+        mesh,
       });
+      shapes[plan.shape] = (shapes[plan.shape] ?? 0) + 1;
       vertices += edges.length / 4;
       buildings++;
     } catch (e) {
@@ -702,6 +825,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     forestCellM: ff.cell,
     buildings,
     vertices,
+    roofShapes: shapes,
+    meshedBuildings: meshed,
+    meshBytes,
     roads: keptSurfaces.filter((v) => v.data.length === 12 && v.data[5] === 1).length,
     railways: keptSurfaces.filter((v) => v.data.length === 12 && v.data[5] === 2).length,
     waterways: keptSurfaces.filter((v) => v.data.length === 12 && v.data[5] === 3).length,

@@ -210,8 +210,9 @@ fn forestData(i: u32) -> vec4f { return scenery[i]; }
 ${forest}
 const CAP = ${SCENERY_RASTER_CAP}u;
 struct Draw { vertices: u32, instances: atomic<u32>, first: u32, base: u32 };
-// (the four lists' draws, then the buildings' boxes': one a node of the scenery's BVH)
-@group(0) @binding(3) var<storage, read_write> draws: array<Draw, ${LISTS + 3}>;
+// (the four lists' draws, then the buildings' boxes': one a node of the scenery's BVH —, the two shadow lists', the
+// buildings' triangles')
+@group(0) @binding(3) var<storage, read_write> draws: array<Draw, ${LISTS + 4}>;
 @group(0) @binding(4) var<storage, read_write> listsOut: array<u32>;
 @group(0) @binding(5) var<storage, read> listsIn: array<u32>;
 
@@ -301,6 +302,8 @@ fn clampDraws(@builtin(local_invocation_index) i: u32) {
     atomicStore(&draws[${LISTS}].instances, u32(scenery[0].x));
     atomicStore(&draws[${LISTS + 1}].instances, min(atomicLoad(&draws[${LISTS + 1}].instances), CAP));
     atomicStore(&draws[${LISTS + 2}].instances, min(atomicLoad(&draws[${LISTS + 2}].instances), CAP));
+    // (the buildings' triangles: three vertices each — scenery-data.ts packScenery's mesh, vec4 3)
+    draws[${LISTS + 3}].vertices = u32(scenery[3].w) * 3u;
   }
 }
 
@@ -371,6 +374,13 @@ fn sunClip(p: vec3f) -> vec4f {
 // there alone (trace.wgsl worldScenery), not along every camera ray. Depth tested, not written; a box a little wider.
 const BOX = array<u32, 36>(0u, 1u, 3u, 0u, 3u, 2u, 4u, 6u, 7u, 4u, 7u, 5u, 0u, 4u, 5u, 0u, 5u, 1u, 2u, 3u, 7u, 2u, 7u, 6u,
   0u, 2u, 6u, 0u, 6u, 4u, 1u, 5u, 7u, 1u, 7u, 3u);
+// a leaf whose building has its triangles (packed word's bit 21): its shadow drawn by them, not by its box (its box still
+// marks its pixels for the kernel: wider than the building, the jittered rays' exact test decides its edges)
+fn meshed(hi: vec4f) -> bool {
+  let g = u32(scenery[0].y + hi.w);
+  let p = scenery[g];
+  return p.w > 0.5 && p.w < 1.5 && ((u32(scenery[g + 2u].w) >> 21u) & 1u) == 1u;
+}
 @vertex fn boxVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
   let lo = scenery[4u + ii * 2u];
   let hi = scenery[5u + ii * 2u];
@@ -385,10 +395,22 @@ const BOX = array<u32, 36>(0u, 1u, 3u, 0u, 3u, 2u, 4u, 6u, 7u, 4u, 7u, 5u, 0u, 4
 @vertex fn boxShadowVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
   let lo = scenery[4u + ii * 2u];
   let hi = scenery[5u + ii * 2u];
-  if (hi.w < 0.0) { return vec4f(2.0, 2.0, 0.5, 1.0); }
+  if (hi.w < 0.0 || meshed(hi)) { return vec4f(2.0, 2.0, 0.5, 1.0); }
   let c = BOX[vi];
   let k = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
   return sunClip(mix(lo.xyz, hi.xyz, k));
+}
+// The near buildings' triangles (roof-mesh.ts: their walls up to their roofs, their roofs' faces): the exact solid the
+// tracer's kernel tests, drawn from the Sun into the shadow map — their shadows their own shapes, gables and slopes, not
+// boxes along the frame's axes.
+fn meshVertex(vi: u32) -> vec3f {
+  let rec = bitcast<vec4u>(scenery[u32(scenery[3].z) + vi / 3u]);
+  let c = vi % 3u;
+  let f = u32(scenery[3].x) * 4u + select(select(rec.z, rec.y, c == 1u), rec.x, c == 0u) * 3u;
+  return vec3f(scenery[f / 4u][f % 4u], scenery[(f + 1u) / 4u][(f + 1u) % 4u], scenery[(f + 2u) / 4u][(f + 2u) % 4u]);
+}
+@vertex fn meshShadowVs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
+  return sunClip(meshVertex(vi));
 }
 `;
 }
@@ -408,6 +430,7 @@ export class SceneryRaster {
   private boxPipe: GPURenderPipeline | null = null;
   private shadowPipes: (GPURenderPipeline | null)[] = [null, null];
   private boxShadowPipe: GPURenderPipeline | null = null;
+  private meshShadowPipe: GPURenderPipeline | null = null;
   private sunU: GPUBuffer;
   private sunOn = false;
   private meshes: GPUBuffer[] = [];
@@ -416,7 +439,7 @@ export class SceneryRaster {
   private sceneryU: GPUBuffer;
   private draws: GPUBuffer;
   private lists: GPUBuffer;
-  private reset = new Uint32Array((LISTS + 3) * 4);
+  private reset = new Uint32Array((LISTS + 4) * 4);
   private sceneryBuf: GPUBuffer | null = null;
   private cullLayout: GPUBindGroupLayout;
   private drawLayout: GPUBindGroupLayout;
@@ -439,7 +462,7 @@ export class SceneryRaster {
     this.frameU = device.createBuffer({ size: TERRAIN_RASTER_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.sceneryU = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws = device.createBuffer({
-      size: (LISTS + 3) * 16,
+      size: (LISTS + 4) * 16,
       usage: S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
       label: "scenery raster draws",
     });
@@ -539,6 +562,14 @@ export class SceneryRaster {
         depthStencil: depthOnly,
       })
       .then((p) => (this.boxShadowPipe = p), fail);
+    void device
+      .createRenderPipelineAsync({
+        layout: drawPipeLayout,
+        vertex: { module: this.module, entryPoint: "meshShadowVs" },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: depthOnly,
+      })
+      .then((p) => (this.meshShadowPipe = p), fail);
   }
 
   private lod: SceneryRasterLod = SCENERY_RASTER_LOD;
@@ -556,6 +587,8 @@ export class SceneryRaster {
     }
     for (let l = 0; l < LISTS; l++) this.reset[l * 4] = this.meshCounts[l]!;
     this.reset[LISTS * 4] = 36;
+    // (the buildings' triangles: one instance, their vertices clampDraws's)
+    this.reset[(LISTS + 3) * 4 + 1] = 1;
     // (the shadow lists: the far round crown's and the far cone's meshes — an octahedron, a plain cone: the map's texels ~0.9 m,
     // a near proxy's 80 faces and trunk ten times the triangles for a shadow it cannot resolve)
     this.reset[(LISTS + 1) * 4] = this.meshCounts[2]!;
@@ -571,7 +604,7 @@ export class SceneryRaster {
   }
   /** the shadow map's pipelines compiled */
   get shadowReady() {
-    return this.ready && !!this.boxShadowPipe && this.shadowPipes.every((p) => !!p);
+    return this.ready && !!this.boxShadowPipe && !!this.meshShadowPipe && this.shadowPipes.every((p) => !!p);
   }
 
   /**
@@ -678,6 +711,8 @@ export class SceneryRaster {
     pass.setPipeline(this.boxShadowPipe!);
     pass.setBindGroup(0, this.drawBind);
     pass.drawIndirect(this.draws, LISTS * 16);
+    pass.setPipeline(this.meshShadowPipe!);
+    pass.drawIndirect(this.draws, (LISTS + 3) * 16);
     pass.end();
     return true;
   }
