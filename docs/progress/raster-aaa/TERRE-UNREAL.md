@@ -447,3 +447,20 @@ de la carte nocturne au niveau grossier (~10 km, ce qu'une base voit), orangées
 bases à travers le nuage sous le point (`CITY_GLOW_CLOUDS` 0,03 : le niveau du sol éclairé vu de près, quelle que soit
 l'altitude de la caméra — à 0,12 un couvert de nuit au-dessus de Paris était éclairé comme de jour). Un couvert nocturne au-dessus
 d'une ville gris-orangé, la campagne noire.
+
+**Les nuages de nuit, trop blancs** (l'utilisateur ; vu sur ce Mac, sans Lune — 14/07/2026 — et sous la pleine Lune — 29/07) :
+le plancher nocturne (`EARTH_NIGHT`, 6–11 % de la lumière du Soleil, forcé pour que le sol se voie) éclairait les nuages en
+entier — autant qu'une pleine Lune, bien plus que le ciel noir derrière eux : des nuages blancs sur un ciel noir, sans
+différence entre Lune et pas de Lune. `CLOUD_NIGHT_FLOOR` 0,15 sur les nuages (cartes, couches, cirrus, rideaux de pluie) : sans
+Lune des masses sombres où percent les étoiles, sous la Lune argentés, son halo à travers eux ; la lueur des villes orange
+(sodium, LED chaudes — le cœur blanc des rues les blanchissait) et plus faible (0,012).
+
+![nuages de nuit](img/u7-nuages-nuit.jpg)
+
+**La série météo après** (mini, même vol) — jour : clair 18,2 i/s, nuageux 16,7, couvert 14,1, brouillard 16,8, pluie 14,6,
+orage 11,1, vent 18,6, poussière 20,3 ; nuit : clair 17,2, nuageux 17,2, couvert 15, pluie 15, orage 10,9 — le portage de la
+météo au matériau ~1 ms ; l'orage reste le plus lourd (~87–91 ms), aucune image tracée.
+
+**Reste vu** : la Lune — un disque de ~6 px dessiné par les rayons du ciel (un pour 8 × 8 ou 16 × 16 pixels) — clignote,
+floue, et trop pâle pour une pleine Lune : à rastériser (un passage sur son empreinte, la même physique). Le sol de nuit plus
+clair que les nuages (le plancher nocturne du sol).

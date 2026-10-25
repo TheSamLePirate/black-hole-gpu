@@ -4165,13 +4165,20 @@ fn cityGlowUp(q: vec3f, E: vec3f, mu0: f32) -> vec3f {
   let lod = max(log2(f32(textureDimensions(earthNight).x) * 10.0 / 10007.0), 0.0);
   let l = textureSampleLevel(earthNight, bgSamp, eCube(geoQ(q)), lod).r;
   let lamp = max(l - 0.07, 0.0) / 0.93;
-  return mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * CITY_GLOW_CLOUDS * dark * luminance(E));
+  // (an orange — the sodium's and the warm LEDs' sky glow —, not the lit streets' whiter heart: a dense city's light whitened the
+  // bases cream)
+  return vec3f(1.0, 0.6, 0.3) * (pow(lamp, 1.4) * CITY_GLOW_CLOUDS * dark * luminance(E));
 }
+// (the night's floor on the clouds — the starlight and the airglow drawn brighter than they are, 6–11 % of the sunlight, for
+// the ground to show (EARTH_NIGHT) — a sixth and a bit: whole, a moonless night lit them as a full Moon does and far over the
+// dark sky behind them — white clouds on a black sky, the user's report; a moonless night's clouds dark masses, the Moon's
+// silvery, a city's orange underneath — U7)
+const CLOUD_NIGHT_FLOOR = 0.15;
 // (the cities' light on the clouds' bases: the lit ground's as it is drawn near it — a twentieth of the orbit's — whatever the
 // camera's height (P.earth.z follows it: from orbit the bases would glow twenty times brighter); a base sends back ~its
 // albedo of what the city under it gives — a city's overcast dim orange, the countryside's black; 0.12 lit a night's deck as a
-// day's)
-const CITY_GLOW_CLOUDS = 0.03;
+// day's, at 0.03 a dense city's bases outshone everything else at night)
+const CITY_GLOW_CLOUDS = 0.012;
 fn earthMoonlight(q: vec3f, n: vec3f, h: f32, mu0: f32) -> vec3f {
   let Lm = P.earth3.xyz;
   let mz = dot(airPhysicalNormal(q), Lm);
@@ -6395,7 +6402,7 @@ fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f
   let ct = dot(airPhysicalDirection(rd), airPhysicalDirection(Ls));
   let fwd = 0.25 * pow(max(ct, 0.0), 8.0);
   let sk = skySeen(q, Ls);
-  let amb = max(0.7 * skyFlatFactor(q, hc, E, mu0, sk), nightFloor(sk, mu0));
+  let amb = max(0.7 * skyFlatFactor(q, hc, E, mu0, sk), nightFloor(sk, mu0) * CLOUD_NIGHT_FLOOR);
   let top = 0.85 / PI * (E * Ts * (wrap * lit * select(cloudLongShadow(q, Ls), 1.0, below) + fwd) + E * amb + E * earthMoonlight(q, q, hc, mu0));
   // (its base: the top's light through it, and the cities' from below)
   return select(top, top * 0.2 + 0.85 / PI * cityGlowUp(q, E, mu0), below);
@@ -8215,7 +8222,7 @@ fn cirrusLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f) -> vec3f {
   let ct = dot(airPhysicalDirection(rd), airPhysicalDirection(Ls));
   let ph = min(0.75 * hgPhase(0.85, ct) + 0.25 * hgPhase(-0.1, ct), 1.0);
   let sk = skySeen(q, Ls);
-  let amb = max(0.7 * skyFlatFactor(q, 9000.0, E, mu0, sk), nightFloor(sk, mu0));
+  let amb = max(0.7 * skyFlatFactor(q, 9000.0, E, mu0, sk), nightFloor(sk, mu0) * CLOUD_NIGHT_FLOOR);
   return E * (Ts * ph * 4.0 + 0.6 / PI * amb);
 }
 
@@ -8335,7 +8342,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     // (the cloud below this point, to its base: the cities' light from below through it)
     let under = cloudDiffuseT(c * 25.0 * hn / max(top, 0.2));
     let sk = skySeen(q, Ls);
-    let amb = max(0.7 * skyFlatFactor(q, airHeight(p), E, mu0, sk), nightFloor(sk, mu0));
+    let amb = max(0.7 * skyFlatFactor(q, airHeight(p), E, mu0, sk), nightFloor(sk, mu0) * CLOUD_NIGHT_FLOOR);
     // (the octaves' dimming from one exponential: e^(−0.04 τ), its square, its cube; deep in the cloud — its base — the
     // many-times scattered sunlight dimmed by the depth over it too)
     let e1 = exp(-0.04 * tauSun);
@@ -8570,7 +8577,7 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
       skyG = skyFlatFactor(q, 0.0, E, mu0, sk);
       night = nightFloor(sk, mu0);
     }
-    let amb = max(0.7 * skyL, night);
+    let amb = max(0.7 * skyL, night * CLOUD_NIGHT_FLOOR);
     let e1 = exp(-0.04 * tauSun);
     let e2 = e1 * e1;
     let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75 * (0.35 + 0.65 * over);
@@ -8737,7 +8744,7 @@ fn wxRainShafts(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f32) 
     let csT = cloudShadowAt(p);
     let Ts = sunThrough(airHeight(p), mu0) * select(select(wxVeil(hM, w, 3u).x, csT, csT >= 0.0), 1.0, dbgRain);
     let sk = skySeen(q, Ls);
-    let amb = max(0.7 * skyFlatFactor(q, hM, E, mu0, sk), nightFloor(sk, mu0)) * wxVeil(hM, w, 3u).y;
+    let amb = max(0.7 * skyFlatFactor(q, hM, E, mu0, sk), nightFloor(sk, mu0) * CLOUD_NIGHT_FLOOR) * wxVeil(hM, w, 3u).y;
     // (the drops: a forward lobe — the sun's glow through a shaft against it —, half spread; the rainbows where the Sun is
     // behind — rainbowPhase —; a flash's light)
     let ph = vec3f(0.5 * hgPhase(0.7, ct) + 0.5 / (4.0 * PI)) + select(vec3f(0.0), rainbowPhase(ct), (TUNE_GSKIP & 131072u) == 0u);
