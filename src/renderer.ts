@@ -6862,8 +6862,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    * in 4 to 64 a frame), its colour rebuilt between and carried by the temporal history; the orthophoto's albedo, cheap, is
    * read at every pixel each frame (trace.wgsl rasterAlbedo) and swapped in for the albedo of the pixels the colour came from
    * (post.wgsl resolve, temporal) — the light stays sparse, the texture sharp, as a converged view's.
+   * Off by default (2026-10-25): in motion its swaps grained the ground and blotched it frame to frame, and the raster's way
+   * forward is every pixel shaded each frame (docs/progress/raster-aaa/TERRE-UNREAL.md), where it brings nothing.
    */
-  rasterDetail = true;
+  rasterDetail = false;
   /** RASTER_DETAIL this frame */
   private rasterDetailNow = false;
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */

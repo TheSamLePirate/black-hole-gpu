@@ -51,6 +51,12 @@ ligne ici.
 Vol net en raster : noyaux du raster prêts avant les bits du décor, historique gardé quand le cache recuit, repli tracé
 mesuré, orthophoto anisotrope, albédo par pixel accumulé. Voir [VOL-NET-2026-10-25.md](VOL-NET-2026-10-25.md).
 
+### 25/10 — le détail par pixel coupé par défaut
+
+L'échange d'albédo (`renderer.rasterDetail`) grainait le sol en mouvement et le tachait d'une image à l'autre ; à l'arrêt,
+il s'emballait (vue noire, croix blanches — corrigé, 26176b7c). À chaque pixel ombré, l'image est propre sans lui : coupé
+par défaut, gardé comme interrupteur.
+
 ### U0 — mesure
 
 _(en cours : `RASTER_BENCH=1 RP_PLACE=paris-low RP_RATE=every`, raster-shade-ablation sur le mini)_
