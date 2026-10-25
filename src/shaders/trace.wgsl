@@ -6871,7 +6871,9 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
       let T = exp(-Kd * SEA_DEPTH * (1.0 / cv + 1.0 / cs));
       let Tv = exp(-Kd * SEA_DEPTH * 2.0 / cv);
       let shallow = deep * (1.0 - Tv) + bed / PI * Ein * T;
-      water = mix(water, shallow, b * SEA_DEPTH_W);
+      // (with confidence alone: along the bathymetry's rim its few valid texels averaged to a metre or so — the bed's sand
+      // through a few centimetres of water, a white line round the data's edge)
+      water = mix(water, shallow, b * smoothstep(0.6, 1.0, SEA_DEPTH_W));
     }
     // (the aerated water of a wake: the bubbles under the surface scatter the light back — pale turquoise)
     water = mix(water, Ein * vec3f(0.02, 0.075, 0.085) / PI, clamp(wk.bub * b, 0.0, 1.0) * 0.8);
@@ -6971,7 +6973,9 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
         // (resolved where the bands are a few footprints apart — Tp √(g d) metres —, their mean white beyond)
         let res = smoothstep(0.5, 0.15, footM / max(Tp * sqrt(9.81 * max(SEA_DEPTH, 0.3)), 1.0));
         let surf = max(mix(0.3, band, res), inner) * smoothstep(dB, 0.6 * dB, SEA_DEPTH) * min(Hs / 0.4, 1.0);
-        W = max(W, surf * P.sea[1].w * SEA_DEPTH_W * (1.0 - calm));
+        // (only where the depth is known with confidence: along the bathymetry's edge, its few valid texels averaged to a metre
+        // or so, the surf drew a white line that followed the data's rim, not a shore)
+        W = max(W, surf * P.sea[1].w * smoothstep(0.6, 1.0, SEA_DEPTH_W) * (1.0 - calm));
       }
     }
   }
@@ -10236,6 +10240,10 @@ fn rasterNormal(px: vec2f, tM: f32, k: u32) -> vec3f {
   let tx = terrainRasterHint(px + vec2f(sx, 0.0));
   let ty = terrainRasterHint(px + vec2f(0.0, sy));
   if (tx <= 0.0 || ty <= 0.0 || abs(tx - tM) > 0.08 * tM || abs(ty - tM) > 0.08 * tM) { return vec3f(0.0); }
+  // (not across a seam between two of the relief's rings — their meshes meet within their tolerance, not smoothly: the normal
+  // there tipped, a line of false slope along the seam — the cascades' white water drew it over the sea)
+  let lv = terrainRasterLevelStep(px);
+  if (terrainRasterLevelStep(px + vec2f(sx, 0.0)) != lv || terrainRasterLevelStep(px + vec2f(0.0, sy)) != lv) { return vec3f(0.0); }
   let d0 = toBody(rasterRay(px, k).look);
   let p0 = d0 * tM;
   let ex = toBody(rasterRay(px + vec2f(sx, 0.0), k).look) * tx - p0;
@@ -10402,6 +10410,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   var water = 0.0;
   var calm = 0.0;
   var osmLake = false;
+  var dbgW = vec2f(0.0);
   if (!mesh && !isTree && (TUNE_LITE & 1u) == 0u) {
     let rel0 = earthRelief(gq, fx, fy);
     let sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hG));
@@ -10413,6 +10422,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     }
     water = max(sea0, osm.x);
     calm = osm.x * (1.0 - sea0) * osm.y;
+    dbgW = vec2f(sea0, osm.x);
     osmLake = osm.y > 0.8;
   }
   if (water > 0.0) {
@@ -10431,10 +10441,11 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     G = mix(G, wcol, water);
     RASTER_SHADE = false;
     SEA_ON = false;
-    // (falling water — a cascade, a rapid: where the water's ground is steep — the mesh's normal off the vertical —, white
+    // (falling water — a cascade, a rapid — on the inland water alone (the sea does not fall): where its ground is steep — the
+    // mesh's normal off the vertical —, white
     // water, aerated, in streaks drawn down the slope and running down it with the clock, lit as foam; the flat water's look
     // gone with the steepness)
-    let steep = smoothstep(0.96, 0.75, dot(n, gq)) * water;
+    let steep = smoothstep(0.96, 0.75, dot(n, gq)) * water * select(0.0, 1.0, calm > 0.0);
     if (steep > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5) {
       let toF = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
       let pL = P.scenery[3].xyz + (dirW * tM) * toF;
@@ -10451,6 +10462,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   }
   // (TUNE_LITE 512: the water's cover drawn red — a measure)
   if ((TUNE_LITE & 512u) != 0u) { G = mix(G, vec3f(0.5, 0.0, 0.0) * luminance(E), water); }
+  // (TUNE_LITE 1024: the sea's two masks — red the relief map's, green OSM's — a measure)
+  if ((TUNE_LITE & 1024u) != 0u) { G = vec3f(dbgW.x, dbgW.y, 0.0) * 0.4 * luminance(E); }
   // (the cities' lights at night)
   let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
   let lamp = max(lights - 0.07, 0.0) / 0.93;

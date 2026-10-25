@@ -225,3 +225,21 @@ prenait le relais, en `seaShade`. Les polygones `ocean` sont désormais marqués
 | Avant | Après |
 |---|---|
 | ![plate](img/u2d-mer-plate-avant.jpg) | ![mer](img/u2d-mer-apres.jpg) |
+
+**Le trait blanc à la frontière de la mer** (Tarifa) : l'effet cascade — la pente lue sur la normale du maillage, tirée des
+pixels voisins — basculait à la couture de deux anneaux du relief (leurs maillages s'y rejoignent à leur tolérance près) : une
+ligne d'eau blanche le long de la couture. Corrigé : la normale n'est plus prise à travers une couture d'anneaux ; les
+cascades ne sont que pour l'eau intérieure. Au passage : le ressac et le fond visible de `seaShade` ne s'appliquent plus que
+là où la bathymétrie est sûre (au bord de ses données, la profondeur moyennée sur quelques texels valides tombait au mètre).
+Reste : une langue sombre près de la côte, là où la bathymétrie (Terrarium z 10 — ETOPO, GEBCO — ; SRTM met la mer à 0 près des
+côtes) ne donne aucune profondeur et que la mer y est supposée profonde — une donnée à trouver (une bathymétrie côtière plus
+fine) ; deux essais pour la masquer (l'imagerie de la mer — trop sombre, la mosaïque Sentinel peint la mer d'un ton
+uniforme —, une profondeur devinée — une couture de plus) retirés.
+
+Les compilations : un réglage de mesure (`renderer.tune`) recompile **tous** les noyaux de chaque clé (le traceur principal,
+`shade`, `shadeMark`, `shadeLite`, le ciel, les nuages…) — plusieurs minutes ici ; `shadeLite`, qui porte désormais l'eau de
+la mer, les rivières, les arbres et le décor, est devenu gros : à découper (l'eau dans son propre noyau).
+
+| Avant (le trait, HUD masqué) | Après |
+|---|---|
+| ![avant](img/u2d-trait-avant.png) | ![après](img/u2d-trait-apres.png) |
