@@ -109,3 +109,11 @@ recentrait mais n'en recuisait qu'un par image ; les anneaux au-delà d'un nivea
 le lointain retombait dans les blocs tracés. Corrigé (system/terrain-cache.ts) : chaque niveau déplacé est recuit dans son
 image (un uniforme par niveau), puis un niveau périmé par de nouvelles tuiles par image. Mesuré : 0 chute sur 1 033 images
 de vol (une vingtaine en 15 s avant).
+
+**Sur le mini (vol Paris, « chaque pixel », avant ce dernier correctif)** : la netteté du sol mesurée **2,2** (médiane, contre
+0,8 avant U1), mais **9,4 img/s** : le réglage « chaque pixel » fait aussi ombrer à chaque pixel, par le vieux `shade`, les
+bâtiments, les arbres et la mer — la moitié de l'écran au-dessus de Paris. C'est U2 (le décor en matériau raster) qui
+rendra ce mode jouable sur le M1.
+
+Restent, relevés sur ce Mac : le gouverneur d'échelle qui change la résolution (0,5 ↔ 0,625) toutes les quelques secondes —
+l'historique repart à chaque fois ; des images à plus de 45 ms (~2 par seconde), à attribuer.
