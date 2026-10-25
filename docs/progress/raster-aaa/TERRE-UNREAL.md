@@ -269,3 +269,15 @@ Les fausses taches ont disparu ; la chute du Fer-à-Cheval elle-même n'est pas 
 | Avant (fausses cascades sur la rivière) | Après |
 |---|---|
 | ![taches](img/u2e-niagara-taches.jpg) | ![après](img/u2e-niagara-apres.jpg) |
+
+**Mesure kerr-mini après U2e** (c8ec0909 — vol bas sur Paris, train sorti, chaque pixel, échelle native, 40 s) :
+**8,4 i/s** (U2c : 8,9 — l'eau dans son noyau, la Seine comprise, dans le bruit de la mesure) ; aucune image tracée, le
+raster tenu tout le vol. Netteté médiane 2,98, p10 1,78 ; 19 creux sur 75 échantillons, isolés (un échantillon à chaque fois,
+sans période — plus la pulsation d'une seconde) : des images tardives à 8 i/s plutôt qu'un flou du sol. Le reste du budget
+est hors de la Terre : la cabine et le vaisseau (U5).
+
+![mini U2e](img/u2e-mini-paris.jpg)
+
+**La teinte du sol** (question de l'utilisateur, Paris) : le sol lu à l'écran est R≈G>B (ville proche 84/82/68, B/G ≈ 0,84),
+d'où un aspect olive ; le traceur donne la même chose (82/79/68) — ce n'est donc pas l'ombrage raster mais le commun :
+l'orthophoto d'été, la lumière du Soleil à travers l'air et la perspective aérienne. Jugé acceptable, laissé tel quel.
