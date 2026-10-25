@@ -5964,6 +5964,7 @@ fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
+fn terrainRasterMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
 // END_TERRAIN_RASTER
 // BEGIN_CLOUD_PASS (system/cloud-pass.ts withCloudPass supplies the cloud pass's texture reads)
@@ -7497,6 +7498,42 @@ fn sceneryMirror(rp:vec3f,Ls:vec3f,E:vec3f,sky:vec3f)->vec4f {
   let Lp=airPhysicalDirection(Ls);let nG=normalize(sceneryGlobal(h.n));let up=P.scenery[2].xyz;
   let L=look.albedo/PI*(E*sunThrough(max(p.z,0.0),dot(up,Lp))*max(dot(nG,Lp),0.0)+sky*0.5*(1.0+dot(nG,up)));
   return vec4f(L,h.t);
+}
+// shadeLite's trees (TERRE-UNREAL U2): the raster's tree at a pixel (its id) tested alone along the physical direction dW —
+// its plain shape, the carving's sphere tracing left out (clumps in the normal stand for it, as worldScenery's far trees) —,
+// the grid walked from it on a miss (crowns overlap on the screen), before tMax [m]; its look as worldScenery's in WS, WS_A,
+// WS_T; the distance [m], −1 none
+fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32) -> f32 {
+  WS = vec4f(0.0);
+  if (!HAS_SCENERY || P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5 || id == 0u) { return -1.0; }
+  let F = u32(forestData(2u).x);
+  if (F == 0u) { return -1.0; }
+  let d = sceneryLocal(dW);
+  let o = P.scenery[3].xyz;
+  let hd = forestHead(F);
+  let k = i32(id - 1u);
+  let ci = k % max(hd.w, 1);
+  let cj = k / max(hd.w, 1);
+  var tree = forestCandidate(o, d, ci, cj, 0.0, hd);
+  if (!(tree.t > 0.0 && tree.t < tMax)) { tree = forestQueryFrom(o, d, forestCandidateStart(o, d, ci, cj, hd), tMax, false, 0.0); }
+  if (tree.kind == 0u || tree.t <= 0.0 || tree.t >= tMax) { return -1.0; }
+  let p = o + d * tree.t;
+  SC_POINT = p;
+  SC_DISTANCE = tree.t;
+  var n = tree.n;
+  let look = forestLook(tree, n, p, sceneryColourAt(tree.base.xy));
+  WS_T = look.through;
+  var alb: vec3f;
+  if (tree.part == 1u) {
+    alb = look.albedo * (0.8 + 0.2 * gnoise(p * vec3f(5.0, 5.0, 0.7)));
+  } else {
+    let clump = vec3f(gnoise(p * 0.9), gnoise(p * 0.9 + vec3f(17.1, 3.7, -5.3)), gnoise(p * 0.9 + vec3f(-8.3, 11.9, 2.1)));
+    n = normalize(n + 0.55 * clump);
+    alb = look.albedo * (0.8 + 0.2 * gnoise(p * 5.3));
+  }
+  WS = vec4f(normalize(sceneryGlobal(n)), 1.0);
+  WS_A = alb;
+  return tree.t;
 }
 // The OSM water's cover at a ground point of the scenery's frame (shadeLite: the lakes and rivers its material draws as
 // water), the pixel's footprint and distance [m]
@@ -10069,9 +10106,15 @@ fn rasterPoint(r: RasterRay, tM: f32) -> vec3f {
 // the pixel's ground is shadeLite's: the patch's (not a tree's, a building's), not the sea's (its glint, waves, mirror are
 // shade's) — the same test in shade, shadeMark and shadeLite
 fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
-  if (!rasterLiteOn() || terrainRasterId(px) != 0u) { return false; }
+  if (!rasterLiteOn()) { return false; }
+  // (a building's own triangles — U2 —: the material's; its box alone — a building without triangles, the box's margin —: the
+  // rays', as before)
+  if (terrainRasterMesh(px)) { return true; }
+  if (terrainRasterBuilding(px)) { return false; }
   let tM = terrainRasterHint(px);
   if (tM <= 0.0) { return false; }
+  // (a tree before the ground — U2 —: the material's; against the sky, the rays')
+  if (terrainRasterId(px) != 0u) { return true; }
   let q = normalize(rasterPoint(rasterRay(px, k), tM));
   return earthRelief(geoQ(q), vec3f(0.0), vec3f(0.0)).b < 0.35;
 }
@@ -10118,6 +10161,16 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   var tM = terrainRasterHint(pos);
   if (tM <= 0.0) { tM = terrainRasterHint(centre); }
   let ray = rasterRay(pos, k);
+  // (a tree the raster drew here — U2 —: met along the ray before the ground, its point the surface; missed, the ground's)
+  var isTree = false;
+  let treeId = terrainRasterId(centre);
+  if (treeId != 0u) {
+    let tt = sceneryTreeLite(normalize(toBody(ray.look)), treeId, tM);
+    if (tt > 0.0) {
+      tM = tt;
+      isTree = true;
+    }
+  }
   let ab = squashOf(k);
   let ro = nearCam();
   let rd = ray.rd;
@@ -10143,9 +10196,13 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   A = mix(A, surface.c * P.earth2.z, surface.w);
   A = mix(A, img.c.rgb * P.earth2.z, img.o);
   if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, max(length(fx), length(fy)) * EARTH_RM), surface.w * (1.0 - img.o)); }
-  // (the normal: the mesh's, else the ellipsoid's)
+  // (the normal: the mesh's, else the ellipsoid's; a tree's its own, its colour its look)
   var n = rasterNormal(centre, terrainRasterHint(centre), k);
   if (dot(n, n) < 0.5) { n = gq; }
+  if (isTree) {
+    n = WS.xyz;
+    A = WS_A;
+  }
   let mu0 = dot(gq, Lp);
   // (the sunlight at the ground: through the air, under the clouds — their map, else the cover's shadow along the Sun's
   // slant —, the Sun's disc over the horizon, the relief's shadow map, the trees' and buildings')
@@ -10166,7 +10223,10 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(n, Lp) > 0.0) {
     // (the scenery's local frame — sceneryLocal's, written out: compiled out with the scenery)
     let toSc = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
-    let sp = P.scenery[3].xyz + (dirW * tM + n * 0.35) * toSc;
+    // (a building's own face — U2 —: its triangles are in the map, the point lifted off them, along its normal and towards
+    // the Sun — at 0.35 m its own depth shadowed it, a speckle over the roofs)
+    let lift = select(n * 0.35, n * 1.2 + Lp * 1.5, terrainRasterMesh(centre));
+    let sp = P.scenery[3].xyz + (dirW * tM + lift) * toSc;
     let m = treeShadowAt(sp);
     let b = buildingShadowAt(sp);
     var sh = 1.0;
@@ -10176,14 +10236,43 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // went in a block at each of its jumps, every second at 160 m/s)
     Eg *= mix(sh, 1.0, smoothstep(550.0, 750.0, tM));
   }
+  // (a building's own triangles — U2 —: its roof the orthophoto's — the photograph is the roof seen from above —, its walls
+  // stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —, the glass dark,
+  // the sky mirrored in it below)
+  let mesh = terrainRasterMesh(centre);
+  var glass = 0.0;
+  // (a roof: the photograph's light and shade kept, its colour mostly let go — the orthophoto leans, a roof's place on it
+  // the street's or a tree's beside it: zinc and slate grey, a fifth of the photograph's hue)
+  if (mesh && dot(n, gq) >= 0.35) {
+    let l = luminance(A);
+    A = mix(vec3f(l), A, 0.2) * vec3f(0.97, 0.99, 1.04);
+  }
+  if (mesh && dot(n, gq) < 0.35 && HAS_SCENERY && P.scenery[0].w > 0.5) {
+    let toB = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+    let spL = P.scenery[3].xyz + (dirW * tM) * toB;
+    let nL = n * toB;
+    let along = normalize(vec2f(-nL.y, nL.x) + vec2f(1e-6, 0.0));
+    let block = hash31(vec3f(floor(spL.xy / 25.0), 3.0));
+    A = vec3f(0.5, 0.46, 0.39) * (0.8 + 0.35 * block) * P.earth2.z;
+    let fw = fract(dot(spL.xy, along) / 2.6);
+    let fz = fract(spL.z / 3.1);
+    glass = select(0.0, 1.0, fw > 0.28 && fw < 0.72 && fz > 0.3 && fz < 0.82);
+    A = mix(A, vec3f(0.03) * P.earth2.z, glass);
+  }
   // (the sky's light — on a slope, a share of it, and the ground's bounce round it — as earthGround's)
   let sky = max(skyFlat(q, hG, E, mu0, skySeen(q, Ls)), E * nightFloor(skySeen(q, Ls), mu0));
   let up = dot(n, gq);
   let bounce = (E * sunThrough(hG, mu0) * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
   var G = A / PI * (Eg * max(dot(n, Lp), 0.0) + sky * 0.5 * (1.0 + up) + bounce);
+  // (a tree's leaves lit from behind: the light through them — forestLook's)
+  if (isTree) { G += WS_T / PI * Eg * max(-dot(n, Lp), 0.0) * 0.5; }
+  if (glass > 0.0) {
+    let F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(n, dirW)), 0.0, 1.0), 5.0);
+    G += glass * F * sky * 1.5 / PI;
+  }
   // (the lakes and rivers — OSM's water —: dark, the sky mirrored by Fresnel, the Sun's glint)
   var water = 0.0;
-  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
+  if (HAS_SCENERY && !mesh && !isTree && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
     let toW = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
     water = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
   }

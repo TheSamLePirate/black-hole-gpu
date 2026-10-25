@@ -27,6 +27,8 @@ fn terrainRasterId(px: vec2f) -> u32 { return u32(textureLoad(terrainDist, vec2i
 fn terrainRasterDepth(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).b; }
 // A building's box before the ground and the trees at this pixel (a: 2 — system/scenery-raster.ts boxFs).
 fn terrainRasterBuilding(px: vec2f) -> bool { return textureLoad(terrainDist, vec2i(floor(px)), 0).a > 1.5; }
+// A building's own triangles at this pixel (a: 3 — system/scenery-raster.ts meshFs): shadeLite's material.
+fn terrainRasterMesh(px: vec2f) -> bool { return textureLoad(terrainDist, vec2i(floor(px)), 0).a > 2.5; }
 // How many levels coarser than the near patch the ground here was drawn from (a: 1 the patch — 2 a building's box on it —,
 // ½ its first far ring, ¼ the next: system/terrain-raster.ts ringFs; 0 none).
 fn terrainRasterLevelStep(px: vec2f) -> f32 {

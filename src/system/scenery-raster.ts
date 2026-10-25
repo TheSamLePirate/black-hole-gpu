@@ -411,6 +411,18 @@ fn meshVertex(vi: u32) -> vec3f {
 @vertex fn meshShadowVs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
   return sunClip(meshVertex(vi));
 }
+// The same triangles in the camera's view (docs/progress/raster-aaa/TERRE-UNREAL.md U2): the buildings' exact solid, depth
+// written — after their boxes, before nothing —, the pixel's distance in r and b as the ground's, a 3: trace.wgsl shadeLite
+// draws them with its material, not the kernel shade's rays
+struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f };
+@vertex fn meshVs(@builtin(vertex_index) vi: u32) -> MV {
+  var o: MV;
+  let v = view(meshVertex(vi));
+  o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
+  o.p = v;
+  return o;
+}
+@fragment fn meshFs(v: MV) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, 3.0); }
 `;
 }
 
@@ -427,6 +439,10 @@ export class SceneryRaster {
   private clampPipe: GPUComputePipeline | null = null;
   private drawPipes: (GPURenderPipeline | null)[] = [null, null, null, null];
   private boxPipe: GPURenderPipeline | null = null;
+  /** the buildings' triangles in the camera's view (U2: shadeLite's buildings) */
+  private meshPipe: GPURenderPipeline | null = null;
+  /** draw them (renderer.rasterLite: the material draws them — false, their boxes alone, shade's rays as before) */
+  meshes3d = true;
   private shadowPipes: (GPURenderPipeline | null)[] = [null, null];
   private boxShadowPipe: GPURenderPipeline | null = null;
   private meshShadowPipe: GPURenderPipeline | null = null;
@@ -537,6 +553,16 @@ export class SceneryRaster {
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater" },
       })
       .then((p) => (this.boxPipe = p), fail);
+    // (the buildings' triangles: every channel, depth tested and written — the wall nearer than the box drawn before it)
+    void device
+      .createRenderPipelineAsync({
+        layout: drawPipeLayout,
+        vertex: { module: this.module, entryPoint: "meshVs" },
+        fragment: { module: this.module, entryPoint: "meshFs", targets: [{ format: TERRAIN_RASTER_FORMAT }] },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+      })
+      .then((p) => (this.meshPipe = p), fail);
     // (the shadow map: the trees' near proxies — their trunks too — and the buildings' boxes, depth only)
     const depthOnly = { format: "depth32float", depthWriteEnabled: true, depthCompare: "less" } as const;
     for (let l = 0; l < 2; l++)
@@ -690,6 +716,10 @@ export class SceneryRaster {
     pass.setPipeline(this.boxPipe!);
     pass.setBindGroup(0, this.drawBind);
     pass.drawIndirect(this.draws, LISTS * 16);
+    if (this.meshes3d && this.meshPipe) {
+      pass.setPipeline(this.meshPipe);
+      pass.drawIndirect(this.draws, (LISTS + 3) * 16);
+    }
   }
 
   /** The trees' and buildings' shadow map, seen from the Sun (after encodeCull, which culled its lists): false when not drawn. */
