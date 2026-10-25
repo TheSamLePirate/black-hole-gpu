@@ -217,3 +217,11 @@ Cascades non encore vues sur un vrai site.
 | La Seine (rivière) | La mer à Tarifa |
 |---|---|
 | ![seine](img/u2d-seine-riviere.png) | ![mer](img/u2d-tarifa-mer.jpg) |
+
+**La mer plate près de la côte, puis normale** : près des côtes, la mer vient des polygones OSM (classe `ocean`), que le
+matériau prenait pour des lacs — presque un miroir — jusqu'à la portée du décor, au-delà de laquelle le masque de mer du relief
+prenait le relais, en `seaShade`. Les polygones `ocean` sont désormais marqués (leur couleur, scenery-worker) et ombrés en mer.
+
+| Avant | Après |
+|---|---|
+| ![plate](img/u2d-mer-plate-avant.jpg) | ![mer](img/u2d-mer-apres.jpg) |

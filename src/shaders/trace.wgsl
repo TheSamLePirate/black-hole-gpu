@@ -7610,7 +7610,7 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32) -> f32 {
 // rank, and a line — a railway, a road in its tunnel, under the river — outranks a polygon: the Seine was cut by dark bands
 // along every line crossing it
 // x the cover, y the calm of its water (a lake's 0.92, a river's 0.6 — earthGround's; a river: its polygon of a river's class,
-// or a waterway's line)
+// or a waterway's line; the sea's polygon 0: the sea's style)
 fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> vec2f {
   if (!HAS_SCENERY || P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5 || dist > P.scenery[1].w) { return vec2f(0.0); }
   let point = p.xy;
@@ -7622,6 +7622,7 @@ fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> vec2f {
   var dryIsland = false;
   var bank = false;
   var lake = false;
+  var ocean = false;
   while (i < total) {
     let lo = scenery[u32(header.x) + i * 2u];
     let hi = scenery[u32(header.x) + i * 2u + 1u];
@@ -7635,8 +7636,10 @@ fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> vec2f {
         if (sceneryPolygon(point, base, u32(q.z))) {
           water = 1.0;
           bank = bank || q.w == 4.0;
-          // (a lake's polygon, not a river's — the worker's colour: a river's blue under 0.05)
+          // (a lake's polygon, not a river's — the worker's colour: a river's blue under 0.05 —; the sea's near the coast — its
+          // blue under 0.035 —: the sea's style, its calm 0, the waves the same both sides of the scenery's reach)
           lake = lake || scenery[base + 2u].z >= 0.05;
+          ocean = ocean || scenery[base + 2u].z < 0.035;
         } else if (q.w == 4.0 && sceneryPolygon(point, base, u32(scenery[base + 2u].w))) { dryIsland = true; }
       }
     } else if (size.y == 3.0 || size.y == 4.0) {
@@ -7649,7 +7652,7 @@ fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> vec2f {
   }
   // (an island of a river's polygon: dry, whatever other water's outline covers it — scenerySurface's rule)
   if (dryIsland && !bank) { water = 0.0; }
-  return vec2f(water * P.scenery[3].w * smoothstep(P.scenery[1].w, P.scenery[1].w - 300.0, dist), select(0.6, 0.92, lake));
+  return vec2f(water * P.scenery[3].w * smoothstep(P.scenery[1].w, P.scenery[1].w - 300.0, dist), select(select(0.6, 0.92, lake), 0.0, ocean));
 }
 // END_WORLD_SCENERY
 
