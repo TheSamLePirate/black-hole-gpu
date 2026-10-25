@@ -93,3 +93,11 @@ Vu en vol : bon ; deux défauts relevés et corrigés — les lacs sombres (l'ea
 ombres des arbres toutes les ~0,8 s (la carte d'ombre du décor, ±900 m, se recentre sur une grille de 128 m : lue jusqu'à
 son bord, ses ombres y apparaissaient en bloc — estompées désormais de 550 à 750 m). Reste : les ombres proches du relief
 (la carte ne compte que les reliefs au-delà de la portée de la marche de `shade`).
+
+Le « blip » de chaque seconde (relevé image par image en vol) : (1) l'historique temporel coupé presque tout le temps
+— le garde-fou de parallaxe (`taParallaxPx`, pensé pour les profondeurs approximatives des rayons clairsemés) le jetait, il
+revenait par salves de quelques images ; sans lui chaque image est un seul échantillon décalé qui scintille — levé quand
+`shadeLite` ombre le sol (sa profondeur est exacte), le poids d'un pixel frais porté à 0,3 (`RASTER_LITE_ALPHA` : au
+1/16 d'avant, l'historique rééchantillonné sous l'avance brouillait le sol) ; (2) le flou de mouvement d'une image en
+retard (pics à 45 ms et plus toutes les 0,5–1 s) deux à trois fois plus long — ramené à la durée d'une image habituelle
+(`shutterShare`). Les pics eux-mêmes restent à trouver.

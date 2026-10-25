@@ -252,6 +252,8 @@ const RASTER_RATES_AUTO = [2, 4, 8, 16] as const;
 const RASTER_DETAIL_FLAG = 64;
 /** the parameters' raster bit for the ground's material pass (trace.wgsl RASTER_LITE_FLAG) */
 const RASTER_LITE_FLAG = 128;
+/** the temporal pass's least weight of a fresh pixel with the raster's ground at every pixel (taParams[0]'s 1/16 otherwise) */
+const RASTER_LITE_ALPHA = 0.3;
 /** the automatic rate's start by the hardware's tier (tier.ts: 0 software … 4 high-end) — then by the measure */
 const RASTER_RATE_START = [16, 8, 4, 4, 4] as const;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
@@ -4790,6 +4792,22 @@ export class Renderer {
    * the refining frames, or after a jump, the history is only refreshed from the image.
    */
   /** The temporal reprojection's pass; true when it ran (its camera motion written: the motion blur may follow). */
+  /** this frame's share of the usual frame (its time since the last one against their median, 1 at most): the motion blur's
+   *  shutter is a frame's, not a late frame's */
+  private shutterShare() {
+    const now = performance.now();
+    const dt = now - this.shutterAt;
+    this.shutterAt = now;
+    if (!(dt > 0 && dt < 1000)) return 1;
+    const d = this.shutterDts;
+    d.push(dt);
+    if (d.length > 15) d.shift();
+    const med = [...d].sort((a, b) => a - b)[d.length >> 1]!;
+    return Math.min(1, (1.15 * med) / dt);
+  }
+  private shutterAt = 0;
+  private shutterDts: number[] = [];
+
   private encodeTemporal(enc: GPUCommandEncoder, t: Target, s: Settings): boolean {
     const d = this.device;
     const retired = this.carryRetired;
@@ -4867,7 +4885,11 @@ export class Renderer {
       (prev.at !== null || at !== null) &&
       (prev.at === null ||
         at === null ||
-        (shift > 0 && shift / this.nearestSurfaceM(ln!, mPerM) > (this.taParallaxPx * 2 * tanH) / t.height));
+        (shift > 0 &&
+          // (not with the raster's ground at every pixel — shadeLite —: its depth exact at each, the reprojection right; dropped
+          // there, the history came and went in bursts in flight, each frame's single jittered sample shimmering between)
+          !this.rasterLiteNow &&
+          shift / this.nearestSurfaceM(ln!, mPerM) > (this.taParallaxPx * 2 * tanH) / t.height));
     // (the image's motion this frame [px]: the camera's turn — its line of sight's and its up's — and the nearest ground's
     // parallax; what the motion's denser rays answer, next frame — motionBlock)
     if (prev && prev.region === cam.region) {
@@ -5037,7 +5059,9 @@ export class Renderer {
         // (the history's exposure to this frame's; on; a fresh pixel's least α, a pixel between rays' weight)
         pre / p.pre,
         1,
-        this.taParams[0],
+        // (the raster's ground fresh at every pixel each frame: a third of it — the history antialiases, it does not carry the
+        // image, its resampling under the motion's magnification smearing the ground at 1/16)
+        this.rasterLiteNow ? Math.max(this.taParams[0], RASTER_LITE_ALPHA) : this.taParams[0],
         this.taParams[1],
         // (w: the ground's reach — negative: carried with it, the same pixel)
         ...move,
@@ -5047,8 +5071,9 @@ export class Renderer {
         rigid ? 1 : 0,
         // (its turn between the frames: an offset from its centre now → then, Σ a_prev[i] (a_now[i] · v))
         ...turnRows.flatMap((r) => [...r, 0]),
-        // (the motion blur's shutter; w: the history's albedo beside it, the ground's detail swapped for this frame's — RASTER_DETAIL)
-        s.motionBlur,
+        // (the motion blur's shutter — over a frame of the usual length: a late frame's move, two or three times longer, smeared
+        // the ground for that frame, a blur every second or so; w: the history's albedo beside it — RASTER_DETAIL)
+        s.motionBlur * this.shutterShare(),
         0,
         0,
         this.rasterDetailNow && ta.albOk ? 1 : 0,
