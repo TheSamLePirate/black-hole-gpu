@@ -10548,22 +10548,43 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   G = mix(G, wcol, water);
   RASTER_SHADE = false;
   SEA_ON = false;
-  // (falling water — a cascade, a rapid — on the inland water alone (the sea does not fall): where its ground is steep — the
-  // mesh's normal off the vertical —, white water, aerated, in streaks drawn down the slope and running down it with the
-  // clock, lit as foam; the flat water's look gone with the steepness)
-  let steep = smoothstep(0.96, 0.75, dot(n, gq)) * water * select(0.0, 1.0, calm > 0.0);
-  if (steep > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5) {
+  // (falling water — a cascade, a rapid — on the inland water alone (the sea does not fall): where its ground falls steeply —
+  // the relief's own heights over ±25 m or two footprints, smooth: the mesh's facets' normals drew white triangles over a gorge
+  // and its banks, and over ±8 m the relief's noise under a river — SRTM's, its voids — streaked a river white —, white water, aerated, in streaks drawn down the slope and running down it with the clock, lit as foam;
+  // the flat water's look gone with the steepness)
+  if (calm > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5) {
+    var east = vec3f(-q.y, q.x, 0.0);
+    east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-12);
+    let north = cross(q, east);
+    let ds = max(25.0, 2.0 * footSea);
+    let e = ds / EARTH_RM;
+    let gE = (earthHeightStep(normalize(q + east * e), ds) - earthHeightStep(normalize(q - east * e), ds)) / (2.0 * ds);
+    let gN = (earthHeightStep(normalize(q + north * e), ds) - earthHeightStep(normalize(q - north * e), ds)) / (2.0 * ds);
+    let slope = length(vec2f(gE, gN));
+    // (from ~17° to ~39° over the ±25 m: the relief's 30 m grid softens a fall's cliff — Niagara's 51 m to a slope of ~0.6)
+    var steep = smoothstep(0.3, 0.8, slope) * water;
     let toF = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
     let pL = P.scenery[3].xyz + (dirW * tM) * toF;
-    let downW = dot(n, gq) * n - gq;
+    let downW = -(gE * east + gN * north);
     let dL = normalize((downW * toF).xy + vec2f(1e-6, 0.0));
-    let along = dot(pL.xy, dL) - pL.z * 0.6;
-    let across = dot(pL.xy, vec2f(-dL.y, dL.x));
-    let tclock = P.time.x * P.near5.w;
-    let streak = 0.5 + 0.5 * (0.65 * gnoise(vec3f(across * 0.9, along * 0.12 - tclock * 2.5, 1.7))
-      + 0.35 * gnoise(vec3f(across * 2.7, along * 0.4 - tclock * 4.0, 5.3)));
-    let white = 0.72 / PI * (Eg * max(dot(n, Lp), 0.0) + sky) * (0.75 + 0.35 * streak);
-    G = mix(G, white, steep * clamp(0.45 + 0.75 * streak, 0.0, 1.0));
+    // (a fall has water above it and below it; a steep bank, land on its upper side — the river's outline over its banks, the
+    // relief at 30 m softening them, made their slopes white: the water looked for a few metres up and down the slope)
+    if (steep > 0.0) {
+      let reach = max(12.0, 3.0 * footSea);
+      let above = sceneryWaterAt(vec3f(pL.xy - dL * reach, pL.z), footSea, tM).x;
+      let below = sceneryWaterAt(vec3f(pL.xy + dL * reach, pL.z), footSea, tM).x;
+      steep *= smoothstep(0.3, 0.8, min(above, below));
+    }
+    if (steep > 0.0) {
+      let along = dot(pL.xy, dL) - pL.z * 0.6;
+      let across = dot(pL.xy, vec2f(-dL.y, dL.x));
+      let tclock = P.time.x * P.near5.w;
+      let streak = 0.5 + 0.5 * (0.65 * gnoise(vec3f(across * 0.9, along * 0.12 - tclock * 2.5, 1.7))
+        + 0.35 * gnoise(vec3f(across * 2.7, along * 0.4 - tclock * 4.0, 5.3)));
+      let nF = normalize(gq - (gE * east + gN * north));
+      let white = 0.72 / PI * (Eg * max(dot(nF, Lp), 0.0) + sky) * (0.75 + 0.35 * streak);
+      G = mix(G, white, steep * clamp(0.45 + 0.75 * streak, 0.0, 1.0));
+    }
   }
   liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, false);
 }

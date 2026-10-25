@@ -254,3 +254,18 @@ cascades, puis l'air et les nuages (`liteFinish`, commun).
 
 Mesuré ici (Tarifa) : compilation `shadeLite` 2,8 s, `shadeWater` 2,9 s — l'attente de plus d'une minute vient du noyau
 principal du traceur (74 s pour une clé), pas du raster ; temps `earth lite` 2,2 ms, `earth water` 2,6 ms, `shade` 0,2 ms.
+
+**L'ordre des compilations** : pour chaque clé, le noyau principal spécialisé du traceur (~74 s ici) passait avant les noyaux
+raster (~3 s) : une fois le noyau général du traceur prêt (il dessine le ciel en attendant), les noyaux raster passent
+désormais en premier. Et le découpage paie : après une modification de l'eau seule, seul `shadeWater` recompile (10 s), les
+autres viennent du cache de Chrome — l'image raster complète 37 s après le chargement de la page.
+
+**Les cascades (Niagara)** : la pente lue sur les facettes du maillage dessinait des triangles blancs sur la gorge ; sur ±8 m
+des hauteurs, le bruit du relief sous la rivière (SRTM, ses vides) la striait de blanc. Désormais : la pente des hauteurs du
+relief sur ±25 m (de ~17° à ~39°), et une chute exige de l'eau au-dessus et en dessous d'elle (une berge a la terre en haut).
+Les fausses taches ont disparu ; la chute du Fer-à-Cheval elle-même n'est pas encore apparue blanche à l'écran — à vérifier
+(le polygone OSM sur la falaise, le relief à 30 m qui l'adoucit).
+
+| Avant (fausses cascades sur la rivière) | Après |
+|---|---|
+| ![taches](img/u2e-niagara-taches.jpg) | ![après](img/u2e-niagara-apres.jpg) |

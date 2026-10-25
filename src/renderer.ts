@@ -4115,17 +4115,25 @@ export class Renderer {
       entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "clouds",
       onStall?: () => void,
     ) => this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall, entry !== "lut" && entry !== "aerial");
-    const run = async () => {
-      if (!slot.rt) {
-        slot.rt = await compile("main", () => (slot.rtGivenUp = true));
-        if (!slot.rt) return;
-      }
-      // (the raster's primary visibility: its kernel right after the image's — the trace leaves the patch's pixels to it)
+    const raster = async () => {
       if (!slot.shade && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shade = await compile("shade");
       if (!slot.shadeMark && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shadeMark = await compile("shadeMark");
       if (!slot.shadeLite && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeLite = await compile("shadeLite");
       if (!slot.shadeWater && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeWater = await compile("shadeWater");
       if (!slot.clouds && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.cloudPass) slot.clouds = await compile("clouds");
+    };
+    const run = async () => {
+      // (the raster's kernels first once the general tracer is in to draw the rest — its sky — meanwhile: a few seconds each,
+      // against the specialised tracer's minute and more (74 s measured on an M1 Max for a scene's key) — the near Earth, the
+      // scene's look, comes first; before the general one, the trace's own kernel first, the image waiting on it)
+      const rasterFirst = (key & FEATURE_TERRAIN_RASTER) !== 0 && !!this.tracePipeline;
+      if (rasterFirst) await raster();
+      if (!slot.rt) {
+        slot.rt = await compile("main", () => (slot.rtGivenUp = true));
+        if (!slot.rt) return;
+      }
+      // (the raster's primary visibility: its kernels right after the image's — the trace leaves the patch's pixels to them)
+      if (!rasterFirst) await raster();
       if (!slot.env) {
         slot.env = await compile("env");
         if (!slot.env) return;
