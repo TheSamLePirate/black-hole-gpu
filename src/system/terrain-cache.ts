@@ -161,16 +161,16 @@ export interface TerrainCacheSources {
   sampler: GPUSampler;
 }
 
-/** One level baked per realtime frame; exact fallback until ready. No CPU terrain sampling or readback. */
+/** Every moved level baked in its frame, then one stale level a frame; exact fallback until ready. No CPU terrain sampling or readback. */
 export class TerrainCache {
   private pipeline: GPUComputePipeline | null = null;
   private error: string | null = null;
   private disposed = false;
   private sources: TerrainCacheSources | null = null;
   private input: GPUBindGroup | null = null;
-  private output: GPUBindGroup | null = null;
   private staging: GPUBuffer | null = null;
-  private uniform: GPUBuffer | null = null;
+  private uniforms: GPUBuffer[] = [];
+  private outputs: GPUBindGroup[] = [];
   private windows: (TerrainWindow | null)[] = Array(TERRAIN_CACHE_LEVELS).fill(null);
   private ready = Array<boolean>(TERRAIN_CACHE_LEVELS).fill(false);
   /** a level baked from tiles since replaced (a finer one streamed in): still drawn, baked again in turn — not dropped, or
@@ -242,22 +242,34 @@ export class TerrainCache {
         ? [preferredLevel, preferredLevel + 1, preferredLevel + 2, ...this.windows.map((_, i) => i)].filter((i) => i < TERRAIN_CACHE_LEVELS)
         : this.windows.map((_, i) => i);
     const wants = (i: number) => this.windows[i] !== null;
-    let k = order.find((i) => wants(i) && !this.ready[i]) ?? -1;
-    if (k < 0) k = order.find((i) => wants(i) && this.dirty[i]) ?? -1;
-    if (k >= 0) {
+    // (every level whose window moved this frame, baked in it: one a frame, the far rings past a moved one were not drawn
+    // for the frames it waited — the whole landscape beyond the patch's 150 m traced in blocks for one to three frames, a
+    // mush every second in flight. Then one level baked again from newer tiles a frame, the old bake drawn meanwhile)
+    const bake = order.filter((i, n) => wants(i) && !this.ready[i] && order.indexOf(i) === n);
+    if (!bake.length) {
+      const d = order.find((i) => wants(i) && this.dirty[i]);
+      if (d !== undefined) bake.push(d);
+    }
+    if (bake.length) {
       if (!this.staging) {
         this.staging = this.device.createBuffer({
           size: TERRAIN_CACHE_NODE_VEC4S * 16,
           usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
         });
-        this.uniform = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.output = this.device.createBindGroup({
-          layout: pipeline.getBindGroupLayout(1),
-          entries: [
-            { binding: 0, resource: { buffer: this.uniform } },
-            { binding: 1, resource: { buffer: this.staging } },
-          ],
-        });
+        // (a uniform a level: several baked in one submission, each its own window)
+        for (let l = 0; l < TERRAIN_CACHE_LEVELS; l++) {
+          const uniform = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+          this.uniforms.push(uniform);
+          this.outputs.push(
+            this.device.createBindGroup({
+              layout: pipeline.getBindGroupLayout(1),
+              entries: [
+                { binding: 0, resource: { buffer: uniform } },
+                { binding: 1, resource: { buffer: this.staging } },
+              ],
+            }),
+          );
+        }
       }
       this.input ??= this.device.createBindGroup({
         layout: pipeline.getBindGroupLayout(0),
@@ -268,28 +280,30 @@ export class TerrainCache {
           { binding: 28, resource: sources.tiles.createView({ dimension: "2d-array" }) },
         ],
       });
-      this.device.queue.writeBuffer(this.uniform!, 0, metadata.subarray(8 * k, 8 * k + 8));
-      const pass = enc.beginComputePass(timestamp?.());
-      pass.setPipeline(pipeline);
-      pass.setBindGroup(0, this.input);
-      pass.setBindGroup(1, this.output!);
-      pass.dispatchWorkgroups(Math.ceil(TERRAIN_CACHE_N / 8), Math.ceil(TERRAIN_CACHE_N / 8));
-      pass.end();
-      // Only publish a level after its bake; the tracer reads the table in a later pass.
-      enc.copyBufferToBuffer(
-        this.staging!,
-        0,
-        sources.table,
-        (TABLE_TERRAIN + TERRAIN_CACHE_HEADER + k * TERRAIN_CACHE_NODE_VEC4S) * 16,
-        TERRAIN_CACHE_NODE_VEC4S * 16,
-      );
-      this.ready[k] = true;
-      this.dirty[k] = false;
-      metadata[8 * k + 6] = 1;
-      this.builds++;
+      for (const k of bake) {
+        this.device.queue.writeBuffer(this.uniforms[k]!, 0, metadata.subarray(8 * k, 8 * k + 8));
+        const pass = enc.beginComputePass(timestamp?.());
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, this.input);
+        pass.setBindGroup(1, this.outputs[k]!);
+        pass.dispatchWorkgroups(Math.ceil(TERRAIN_CACHE_N / 8), Math.ceil(TERRAIN_CACHE_N / 8));
+        pass.end();
+        // Only publish a level after its bake; the tracer reads the table in a later pass.
+        enc.copyBufferToBuffer(
+          this.staging!,
+          0,
+          sources.table,
+          (TABLE_TERRAIN + TERRAIN_CACHE_HEADER + k * TERRAIN_CACHE_NODE_VEC4S) * 16,
+          TERRAIN_CACHE_NODE_VEC4S * 16,
+        );
+        this.ready[k] = true;
+        this.dirty[k] = false;
+        metadata[8 * k + 6] = 1;
+        this.builds++;
+      }
     }
     this.device.queue.writeBuffer(sources.table, TABLE_TERRAIN * 16, metadata);
-    return k >= 0;
+    return bake.length > 0;
   }
 
   /** Ready in the current submission, including any bake/copy encoded before the pilot's draw. */
@@ -306,17 +320,17 @@ export class TerrainCache {
       builds: this.builds,
       invalidations: this.invalidations,
       stagingBytes: this.staging?.size ?? 0,
-      uniformBytes: this.uniform?.size ?? 0,
+      uniformBytes: this.uniforms.length * 32,
     };
   }
 
   dispose() {
     this.disposed = true;
     this.staging?.destroy();
-    this.uniform?.destroy();
+    for (const u of this.uniforms) u.destroy();
     this.staging = null;
-    this.uniform = null;
+    this.uniforms = [];
     this.input = null;
-    this.output = null;
+    this.outputs = [];
   }
 }
