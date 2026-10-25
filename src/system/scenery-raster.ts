@@ -381,10 +381,13 @@ fn meshed(hi: vec4f) -> bool {
   let p = scenery[g];
   return p.w > 0.5 && p.w < 1.5 && ((u32(scenery[g + 2u].w) >> 21u) & 1u) == 1u;
 }
+// (BOX_SKIP_MESHED: the buildings with triangles left out — those drawn by them, meshVs: their boxes, wider than they are and
+// up to their roofs' tops, sent the pixels over a pitched roof and along their margins to the kernel shade's rays)
+override BOX_SKIP_MESHED: bool = false;
 @vertex fn boxVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
   let lo = scenery[4u + ii * 2u];
   let hi = scenery[5u + ii * 2u];
-  if (hi.w < 0.0) { return vec4f(2.0, 2.0, 0.5, 1.0); }
+  if (hi.w < 0.0 || (BOX_SKIP_MESHED && meshed(hi))) { return vec4f(2.0, 2.0, 0.5, 1.0); }
   let c = BOX[vi];
   let k = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
   let v = view(mix(lo.xyz - vec3f(0.5), hi.xyz + vec3f(0.5), k));
@@ -439,6 +442,8 @@ export class SceneryRaster {
   private clampPipe: GPUComputePipeline | null = null;
   private drawPipes: (GPURenderPipeline | null)[] = [null, null, null, null];
   private boxPipe: GPURenderPipeline | null = null;
+  /** the boxes of the buildings without triangles alone (with meshPipe) */
+  private boxPipeMeshed: GPURenderPipeline | null = null;
   /** the buildings' triangles in the camera's view (U2: shadeLite's buildings) */
   private meshPipe: GPURenderPipeline | null = null;
   /** draw them (renderer.rasterLite: the material draws them — false, their boxes alone, shade's rays as before) */
@@ -553,6 +558,19 @@ export class SceneryRaster {
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater" },
       })
       .then((p) => (this.boxPipe = p), fail);
+    void device
+      .createRenderPipelineAsync({
+        layout: drawPipeLayout,
+        vertex: { module: this.module, entryPoint: "boxVs", constants: { BOX_SKIP_MESHED: 1 } },
+        fragment: {
+          module: this.module,
+          entryPoint: "boxFs",
+          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }],
+        },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater" },
+      })
+      .then((p) => (this.boxPipeMeshed = p), fail);
     // (the buildings' triangles: every channel, depth tested and written — the wall nearer than the box drawn before it)
     void device
       .createRenderPipelineAsync({
@@ -713,11 +731,12 @@ export class SceneryRaster {
       pass.drawIndirect(this.draws, l * 16);
     }
     if (this.debugSkip & 2) return;
-    pass.setPipeline(this.boxPipe!);
+    const meshes = this.meshes3d && !!this.meshPipe && !!this.boxPipeMeshed;
+    pass.setPipeline(meshes ? this.boxPipeMeshed! : this.boxPipe!);
     pass.setBindGroup(0, this.drawBind);
     pass.drawIndirect(this.draws, LISTS * 16);
-    if (this.meshes3d && this.meshPipe) {
-      pass.setPipeline(this.meshPipe);
+    if (meshes) {
+      pass.setPipeline(this.meshPipe!);
       pass.drawIndirect(this.draws, (LISTS + 3) * 16);
     }
   }

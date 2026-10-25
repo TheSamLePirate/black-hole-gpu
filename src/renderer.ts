@@ -7169,6 +7169,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   }
 
   private encodeTerrainRasterVisibility(enc: GPUCommandEncoder, target: Target, s: Settings) {
+    // (the buildings' triangles drawn for the material's buildings — shadeLite, U2 —; without it, their boxes, the rays')
+    if (this.sceneryRaster) this.sceneryRaster.meshes3d = this.rasterLite;
     if (!this.terrainRasterRequested || !this.lastNear || !this.lastCam) {
       this.terrainRaster?.suspend();
       return;

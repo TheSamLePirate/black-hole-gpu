@@ -14,7 +14,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // Done when: every side flown, its figures written.
 
 const PARIS = { lat: 48.8566, lon: 2.3022 };
-const SETTINGS = `{ traffic: false, weather: "fair", earthClouds: 0, dof: false, earthPipeline: "raster", earthRasterShading: "every", earthRasterScale: 1, autoGear: false, f35AutoProtect: false }`;
+const SETTINGS = `{ traffic: false, weather: "fair", earthClouds: 0, dof: false, earthPipeline: "raster", earthRasterShading: "every", earthRasterScale: 1, dynamicResolution: false, autoGear: false, f35AutoProtect: false }`;
 const SIDES = [
   ["A", process.env.AB_A_URL],
   ["B", process.env.AB_B_URL],
@@ -75,6 +75,14 @@ test.skipIf(!E2E)(
           if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
           if (c.jetModes.spd !== null) c.jetModes.spd = 120; return 1; })()`);
         await Bun.sleep(5000);
+        // (the raster's kernels for the scene with its buildings — minutes of compiles on an M1: measured before them, the near
+        // Earth was the traced blocks' fallback)
+        await app
+          .waitFor(
+            `__bh.renderer.rasterLiteActive && (__bh.renderer.featureKey & 8192) !== 0 && __bh.renderer.variantQueue.pending === 0`,
+            600_000,
+          )
+          .catch(() => console.warn("  raster kernels not all in"));
         if (process.env.PULSE_LEVERS) {
           // (PULSE_LEVERS="name=js;name=js…": in the same flight, each lever's image 2.5 s after it is set — then undone —, its
           // detail and a shot; twice round)
