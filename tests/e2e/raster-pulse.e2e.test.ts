@@ -4,7 +4,8 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // The raster image's sharpness over time in low flight over Paris — does it pulse (a blur every second or so as the tiles
 // land and the terrain cache bakes its levels again)? The F-35 at 300 m over the city, 120 m/s (level, the nose on the horizon), gear down (the autopilot holds
-// the height, the autothrottle the speed), the cockpit view, the game's own settings (quality "game"), real tiles streaming.
+// the height, the autothrottle the speed), the cockpit view, the game's own settings (quality "game") but every pixel shaded at the native scale (the raster's
+// aim — docs/progress/raster-aaa/TERRE-UNREAL.md), real tiles streaming.
 // The ground's detail (the mean luminance step between neighbouring pixels over the city ahead) read from a screenshot ~4
 // times a second for 40 s: its median, its 10th percentile and its dips (under 0.8 × the median); the cache's bakes and the
 // frame rate over the same span. A/B between two builds in one Chrome (scripts/ab-commit.ts: AB_A_URL, AB_B_URL), rounds
@@ -13,7 +14,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // Done when: every side flown, its figures written.
 
 const PARIS = { lat: 48.8566, lon: 2.3022 };
-const SETTINGS = `{ traffic: false, weather: "fair", earthClouds: 0, dof: false, earthPipeline: "raster", autoGear: false, f35AutoProtect: false }`;
+const SETTINGS = `{ traffic: false, weather: "fair", earthClouds: 0, dof: false, earthPipeline: "raster", earthRasterShading: "every", earthRasterScale: 1, autoGear: false, f35AutoProtect: false }`;
 const SIDES = [
   ["A", process.env.AB_A_URL],
   ["B", process.env.AB_B_URL],

@@ -250,6 +250,8 @@ const RASTER_RATE_OF: Record<string, number | undefined> = { every: 1, half: 2, 
 const RASTER_RATES_AUTO = [2, 4, 8, 16] as const;
 /** the parameters' raster bit for the ground's albedo at every pixel (trace.wgsl RASTER_DETAIL_FLAG) */
 const RASTER_DETAIL_FLAG = 64;
+/** the parameters' raster bit for the ground's material pass (trace.wgsl RASTER_LITE_FLAG) */
+const RASTER_LITE_FLAG = 128;
 /** the automatic rate's start by the hardware's tier (tier.ts: 0 software … 4 high-end) — then by the measure */
 const RASTER_RATE_START = [16, 8, 4, 4, 4] as const;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
@@ -3932,6 +3934,8 @@ export class Renderer {
       shade: GPUComputePipeline | null;
       /** the pixels its shading rate leaves this frame marked for resolve (trace.wgsl shadeMark) */
       shadeMark: GPUComputePipeline | null;
+      /** the raster's ground at every pixel, every frame (trace.wgsl shadeLite — TERRE-UNREAL U1) */
+      shadeLite: GPUComputePipeline | null;
       /** the cloud pass (trace.wgsl clouds) */
       clouds: GPUComputePipeline | null;
       /** a still view asked for the quality cascade (q, lutq) */
@@ -3971,7 +3975,7 @@ export class Renderer {
    * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
   private traceVariant(
-    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "clouds",
+    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "shadeLite" | "clouds",
     key = this.featureKey,
     create = true,
   ): GPUComputePipeline | null {
@@ -3984,6 +3988,7 @@ export class Renderer {
       air: null,
       shade: null,
       shadeMark: null,
+      shadeLite: null,
       clouds: null,
     }[kind];
     if (key === FEATURES_ALL) {
@@ -4007,6 +4012,7 @@ export class Renderer {
         air: null,
         shade: null,
         shadeMark: null,
+        shadeLite: null,
         clouds: null,
         qWanted: false,
         busy: false,
@@ -4029,7 +4035,7 @@ export class Renderer {
         !v.env ||
         (lutOk && !v.lut) ||
         (airOk && !v.air) ||
-        (shadeOk && (!v.shade || !v.shadeMark || (this.cloudPass && !v.clouds))))
+        (shadeOk && (!v.shade || !v.shadeMark || (this.rasterLite && !v.shadeLite) || (this.cloudPass && !v.clouds))))
     )
       this.realtimeCascade(key, v);
     if (kind === "q" || kind === "lutq") v.qWanted = true;
@@ -4045,7 +4051,7 @@ export class Renderer {
    * mush. The shading and its marks taken from the same key.
    */
   private rasterStandIn(key: number, kind: string): GPUComputePipeline | null {
-    if (kind !== "shade" && kind !== "shadeMark" && kind !== "clouds") return null;
+    if (kind !== "shade" && kind !== "shadeMark" && kind !== "shadeLite" && kind !== "clouds") return null;
     let best: GPUComputePipeline | null = null;
     let bestN = -1;
     for (const [k, v] of this.variants) {
@@ -4079,7 +4085,8 @@ export class Renderer {
     if ((key & FEATURE_TERRAIN_RASTER) === 0) return true;
     const v = this.variants.get(key);
     if (v?.failed) return true;
-    return (!!v?.shade || !!this.coveringVariant(key, "shade")) && (!!v?.shadeMark || !!this.coveringVariant(key, "shadeMark"));
+    const has = (kind: "shade" | "shadeMark" | "shadeLite") => !!v?.[kind] || !!this.coveringVariant(key, kind);
+    return has("shade") && has("shadeMark") && (!this.rasterLite || has("shadeLite"));
   }
   private kernelReady(key: number) {
     if (key === FEATURES_ALL || this.tracePipeline) return true;
@@ -4096,7 +4103,7 @@ export class Renderer {
     const current = this.wanted(key, slot);
     // (the image's own kernels — the trace's, the raster's shading, its clouds, the probe — urgent: ahead of a quality kernel
     // a pause queued; the LUT and the aerial table after them, as queued)
-    const compile = (entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "clouds", onStall?: () => void) =>
+    const compile = (entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "clouds", onStall?: () => void) =>
       this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall, entry !== "lut" && entry !== "aerial");
     const run = async () => {
       if (!slot.rt) {
@@ -4106,6 +4113,7 @@ export class Renderer {
       // (the raster's primary visibility: its kernel right after the image's — the trace leaves the patch's pixels to it)
       if (!slot.shade && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shade = await compile("shade");
       if (!slot.shadeMark && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shadeMark = await compile("shadeMark");
+      if (!slot.shadeLite && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeLite = await compile("shadeLite");
       if (!slot.clouds && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.cloudPass) slot.clouds = await compile("clouds");
       if (!slot.env) {
         slot.env = await compile("env");
@@ -4154,7 +4162,7 @@ export class Renderer {
    *  of them): it draws this scene as it would — the extra features are switched off by the params. */
   private coveringVariant(
     key: number,
-    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "clouds",
+    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "shadeLite" | "clouds",
   ): GPUComputePipeline | null {
     // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants)
     for (const [k, v] of this.variants) if ((k & key) === key && k >>> 16 === key >>> 16 && v[kind]) return v[kind];
@@ -4163,7 +4171,11 @@ export class Renderer {
 
   /** mkVariant, its key and compile time in the diagnostic — every one, not only those the first image
    *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
-  private async timedVariant(key: number, entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "clouds", quality = false) {
+  private async timedVariant(
+    key: number,
+    entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "clouds",
+    quality = false,
+  ) {
     const t0 = performance.now();
     const p = await this.mkVariant(key, entry, quality);
     const s = ((performance.now() - t0) / 1000).toFixed(1);
@@ -4178,7 +4190,7 @@ export class Renderer {
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
   private mkVariant(
     key: number,
-    entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "clouds",
+    entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "clouds",
     quality: boolean,
   ): Promise<GPUComputePipeline> {
     const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
@@ -4186,7 +4198,7 @@ export class Renderer {
       layout:
         entryPoint === "clouds"
           ? this.cloudsLayout!
-          : entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark"
+          : entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark" || entryPoint === "shadeLite"
             ? this.mainLayout
             : entryPoint === "lut"
               ? this.lutLayout
@@ -4213,11 +4225,20 @@ export class Renderer {
           HAS_SCENERY: has(8192),
           HAS_AURORA: has(16384),
           HAS_TERRAIN_CACHE:
-            (entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark" || entryPoint === "clouds") && !quality
+            (entryPoint === "main" ||
+              entryPoint === "shade" ||
+              entryPoint === "shadeMark" ||
+              entryPoint === "shadeLite" ||
+              entryPoint === "clouds") &&
+            !quality
               ? has(FEATURE_TERRAIN_CACHE)
               : 0,
           HAS_TERRAIN_RASTER:
-            (entryPoint === "main" || entryPoint === "shade" || entryPoint === "shadeMark" || entryPoint === "clouds") &&
+            (entryPoint === "main" ||
+              entryPoint === "shade" ||
+              entryPoint === "shadeMark" ||
+              entryPoint === "shadeLite" ||
+              entryPoint === "clouds") &&
             !quality &&
             this.rasterHint
               ? has(FEATURE_TERRAIN_RASTER)
@@ -4427,6 +4448,14 @@ export class Renderer {
       const sh = this.traceVariant("shade");
       if (!sh || (this.rasterRate > 1 && !this.traceVariant("shadeMark"))) this.dropRasterPrimary(t);
     }
+    // (the ground at every pixel — shadeLite, TERRE-UNREAL U1 —: once its kernel is there, the parameters' bit written for this
+    // submission; shade and shadeMark leave it its pixels)
+    this.rasterLiteNow = false;
+    if (!quality && hint && this.rasterPrimaryOn && this.rasterLite && this.traceVariant("shadeLite")) {
+      this.rasterLiteNow = true;
+      this.paramsF[MOUTH_LIST_AT + 5] = this.paramsF[MOUTH_LIST_AT + 5]! + RASTER_LITE_FLAG;
+      this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
+    }
     // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
     if (!quality && hint && this.rasterPrimaryOn && this.cloudPass && this.cloudPassOn) {
       const cp = this.traceVariant("clouds");
@@ -4480,6 +4509,15 @@ export class Renderer {
         sp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
       }
       sp.end();
+      const lite = this.rasterLiteNow ? this.traceVariant("shadeLite") : null;
+      if (lite) {
+        const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
+        lp.setPipeline(lite);
+        lp.setBindGroup(0, this.hintBindFor(t, hint));
+        lp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+        lp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+        lp.end();
+      }
     }
     return true;
   }
@@ -6866,6 +6904,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    * forward is every pixel shaded each frame (docs/progress/raster-aaa/TERRE-UNREAL.md), where it brings nothing.
    */
   rasterDetail = false;
+  /** the raster's ground shaded at every pixel, every frame, by the material pass (trace.wgsl shadeLite — TERRE-UNREAL U1);
+   *  false: shade's, at the governor's rate, as before (a switch for comparisons) */
+  rasterLite = true;
+  /** shadeLite this frame */
+  private rasterLiteNow = false;
   /** RASTER_DETAIL this frame */
   private rasterDetailNow = false;
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */

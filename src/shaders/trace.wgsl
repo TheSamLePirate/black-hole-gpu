@@ -7498,6 +7498,14 @@ fn sceneryMirror(rp:vec3f,Ls:vec3f,E:vec3f,sky:vec3f)->vec4f {
   let L=look.albedo/PI*(E*sunThrough(max(p.z,0.0),dot(up,Lp))*max(dot(nG,Lp),0.0)+sky*0.5*(1.0+dot(nG,up)));
   return vec4f(L,h.t);
 }
+// The OSM water's cover at a ground point of the scenery's frame (shadeLite: the lakes and rivers its material draws as
+// water), the pixel's footprint and distance [m]
+fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> f32 {
+  SC_POINT = p;
+  SC_DISTANCE = dist;
+  let o = scenerySurface(foot);
+  return select(0.0, o.cover, o.kind == 3.0 || o.kind == 4.0);
+}
 // END_WORLD_SCENERY
 
 fn surfaceImage(q: vec3f, fx: vec3f, fy: vec3f) -> SurfaceImage {
@@ -9928,6 +9936,8 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   RASTER_ID = terrainRasterId(centre);
   RASTER_BLD = terrainRasterBuilding(centre);
   if (terrainRasterHint(centre) <= 0.0 && RASTER_ID == 0u) { return; }
+  // (the ground shadeLite shades at every pixel: not here)
+  if (rasterLiteTakes(centre, u32(P.near1.w))) { return; }
   RASTER_SCENERY = P.mouthList[1].z > 0.5;
   RASTER_SHADE = true;
   // (the clouds before this pixel's surface: the cloud pass's, read back, not marched again)
@@ -10019,6 +10029,8 @@ fn shadeMark(@builtin(global_invocation_id) gid: vec3u) {
     return;
   }
   let k = u32(P.near1.w);
+  // (the ground shadeLite shades at every pixel: fresh, not left)
+  if (rasterLiteTakes(vec2f(gid.xy) + 0.5, k)) { return; }
   // (its albedo read through a jittered point of the pixel, as shade's rays are: the temporal pass accumulates them — read at
   // the centre every frame, the texture aliased, flickering under the motion, the most where the ground grazes, at the horizon)
   var jit = vec2f(0.0);
@@ -10026,6 +10038,199 @@ fn shadeMark(@builtin(global_invocation_id) gid: vec3u) {
     jit = select(gaussJitter(hash4(vec3u(gid.xy, P.frame.x)).xy), rasterJitter(P.frame.x), rasterHalton());
   }
   moments[idx] = vec2f(rasterStale(rasterAlbedo(vec2f(gid.xy) + 0.5 + jit, k)), d / EARTH_RM * bodyRadius(k));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The raster's ground at every pixel, every frame — « façon Unreal » (docs/progress/raster-aaa/TERRE-UNREAL.md U1): a
+// material evaluated from prepared data, none of the tracer's marches. The surface is the raster patch's own (its nested
+// grids 1.2 m … 2.4 km apart: no march from its distance), its normal the mesh's from the neighbouring pixels' distances,
+// its colour the imagery read anisotropically, its light the Sun's and the sky's, its shadows read from the maps (the
+// relief's, the trees' and buildings', the clouds'), its air from the aerial table, its clouds from the cloud pass. The
+// sea and the scenery stay shade's (at the governor's rate).
+// renderer.rasterLite, mouthList[1].y + 128.
+const RASTER_LITE_FLAG = 128u;
+fn rasterLiteOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_LITE_FLAG) != 0u; }
+struct RasterRay { look: vec3f, rd: vec3f, kM: f32 };
+// the camera ray through an image point [px]: its look (the camera's frame), its unit direction in the squashed space, and
+// how many metres of the physical ray a unit of it is
+fn rasterRay(pos: vec2f, k: u32) -> RasterRay {
+  let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
+  let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
+  let ab = squashOf(k);
+  let rs = squashed(toBody(look), ab);
+  let rd = rs / length(rs);
+  return RasterRay(look, rd, length(vec3f(rd.xy, rd.z / ab)) * EARTH_RM);
+}
+// the point tM metres along it, in the squashed space from the body's centre [radii] (the camera split fine, as the hint's)
+fn rasterPoint(r: RasterRay, tM: f32) -> vec3f {
+  let fine = P.nearCam1.w > 0.5;
+  return select(nearCam(), P.nearCam0.xyz, fine) + select(vec3f(0.0), P.nearCam1.xyz, fine) + r.rd * (tM / r.kM);
+}
+// the pixel's ground is shadeLite's: the patch's (not a tree's, a building's), not the sea's (its glint, waves, mirror are
+// shade's) — the same test in shade, shadeMark and shadeLite
+fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
+  if (!rasterLiteOn() || terrainRasterId(px) != 0u) { return false; }
+  let tM = terrainRasterHint(px);
+  if (tM <= 0.0) { return false; }
+  let q = normalize(rasterPoint(rasterRay(px, k), tM));
+  return earthRelief(geoQ(q), vec3f(0.0), vec3f(0.0)).b < 0.35;
+}
+// the mesh's normal at a pixel (the body's physical axes), from its neighbours' distances — none where a neighbour is off
+// the surface (a silhouette, the sky): 0
+fn rasterNormal(px: vec2f, tM: f32, k: u32) -> vec3f {
+  let sx = select(1.0, -1.0, px.x + 1.0 >= P.res.x);
+  let sy = select(1.0, -1.0, px.y + 1.0 >= P.res.y);
+  let tx = terrainRasterHint(px + vec2f(sx, 0.0));
+  let ty = terrainRasterHint(px + vec2f(0.0, sy));
+  if (tx <= 0.0 || ty <= 0.0 || abs(tx - tM) > 0.08 * tM || abs(ty - tM) > 0.08 * tM) { return vec3f(0.0); }
+  let d0 = toBody(rasterRay(px, k).look);
+  let p0 = d0 * tM;
+  let ex = toBody(rasterRay(px + vec2f(sx, 0.0), k).look) * tx - p0;
+  let ey = toBody(rasterRay(px + vec2f(0.0, sy), k).look) * ty - p0;
+  var n = cross(ex, ey);
+  if (dot(n, n) < 1e-20) { return vec3f(0.0); }
+  n = normalize(n);
+  return select(n, -n, dot(n, d0) > 0.0);
+}
+
+@compute @workgroup_size(8, 8)
+fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
+  let W = u32(P.res.x);
+  let H = u32(P.res.y);
+  if (gid.x >= W || gid.y >= H || !rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5) { return; }
+  let k = u32(P.near1.w);
+  if (!isEarth(k) || !hasAir(k) || !earthOn()) { return; }
+  let idx = gid.y * W + gid.x;
+  // (under the cockpit's mask: the cabin there)
+  if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
+  let centre = vec2f(gid.xy) + 0.5;
+  if (!rasterLiteTakes(centre, k)) { return; }
+  setAir(k);
+  FOOT = 1.0;
+  FOOT_NEAR = 1.0;
+  FOOT_FAR = 1.0;
+  let flags = P.frame.z;
+  let frameStamp = P.frame.x;
+  // (the jittered ray of the frame — as shade's —: the temporal pass antialiases)
+  var jit = vec2f(0.0);
+  if ((flags & FLAG_TEMPORAL) != 0u) { jit = select(gaussJitter(hash4(vec3u(gid.xy, frameStamp)).xy), rasterJitter(frameStamp), rasterHalton()); }
+  let pos = centre + jit;
+  var tM = terrainRasterHint(pos);
+  if (tM <= 0.0) { tM = terrainRasterHint(centre); }
+  let ray = rasterRay(pos, k);
+  let ab = squashOf(k);
+  let ro = nearCam();
+  let rd = ray.rd;
+  let tH = tM / ray.kM;
+  let ph = rasterPoint(ray, tM);
+  let q = normalize(ph);
+  let gq = geoQ(q);
+  let hG = max(airHeight(ph) - geoidN(gq), 0.0);
+  // (the light: the Sun's — its direction in the squashed space for the air's functions, physical for the surface's —, E)
+  let lt = nearLight(k);
+  let Ls = normalize(squashed(toBody(lt.dir), ab));
+  let Lp = normalize(toBody(lt.dir));
+  let E = lt.e;
+  // (the pixel's footprint on the ground, its two axes — the imagery's anisotropic read)
+  let fp = pixFoot() * tH;
+  let fx = earthFoot(q, rd, squashed(toBody(P.camRight.xyz), ab), fp);
+  let fy = earthFoot(q, rd, squashed(toBody(P.camUp.xyz), ab), fp);
+  // (the colour: the day's map, the tiles' imagery over it, the regional surface, the orthophotos over all)
+  let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
+  let img = earthImageryAniso(gq, fx, fy);
+  var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
+  let surface = surfaceImage(gq, fx, fy);
+  A = mix(A, surface.c * P.earth2.z, surface.w);
+  A = mix(A, img.c.rgb * P.earth2.z, img.o);
+  if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, max(length(fx), length(fy)) * EARTH_RM), surface.w * (1.0 - img.o)); }
+  // (the normal: the mesh's, else the ellipsoid's)
+  var n = rasterNormal(centre, terrainRasterHint(centre), k);
+  if (dot(n, n) < 0.5) { n = gq; }
+  let mu0 = dot(gq, Lp);
+  // (the sunlight at the ground: through the air, under the clouds — their map, else the cover's shadow along the Sun's
+  // slant —, the Sun's disc over the horizon, the relief's shadow map, the trees' and buildings')
+  var Eg = E * sunThrough(hG, mu0);
+  let csT = cloudShadowAt(q * (1.0 + hG / EARTH_RM));
+  if (csT >= 0.0) {
+    Eg *= csT;
+  } else {
+    let marchMu = dot(q, Ls);
+    let qs = normalize(q + (Ls - q * marchMu) * (P.earth2.x / max(marchMu, 0.06)));
+    Eg *= 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
+  }
+  Eg *= sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
+  let dirW = toBody(ray.look);
+  let rel = dirW * tM;
+  let far = sunShadowFar(rel);
+  if (far.x >= 0.0) { Eg *= far.x; }
+  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(n, Lp) > 0.0) {
+    // (the scenery's local frame — sceneryLocal's, written out: compiled out with the scenery)
+    let toSc = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+    let sp = P.scenery[3].xyz + (dirW * tM + n * 0.35) * toSc;
+    let m = treeShadowAt(sp);
+    let b = buildingShadowAt(sp);
+    var sh = 1.0;
+    if (m >= 0.0) { sh = min(sh, m); }
+    if (b >= 0.0) { sh = min(sh, b); }
+    // (faded out before the map's edge — ±900 m about a centre on a 128 m grid: read to its edge, the shadows there came and
+    // went in a block at each of its jumps, every second at 160 m/s)
+    Eg *= mix(sh, 1.0, smoothstep(550.0, 750.0, tM));
+  }
+  // (the sky's light — on a slope, a share of it, and the ground's bounce round it — as earthGround's)
+  let sky = max(skyFlat(q, hG, E, mu0, skySeen(q, Ls)), E * nightFloor(skySeen(q, Ls), mu0));
+  let up = dot(n, gq);
+  let bounce = (E * sunThrough(hG, mu0) * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
+  var G = A / PI * (Eg * max(dot(n, Lp), 0.0) + sky * 0.5 * (1.0 + up) + bounce);
+  // (the lakes and rivers — OSM's water —: dark, the sky mirrored by Fresnel, the Sun's glint)
+  var water = 0.0;
+  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
+    let toW = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+    water = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
+  }
+  if (water > 0.0) {
+    let V = -dirW;
+    let cv = clamp(dot(gq, V), 0.0, 1.0);
+    let F = 0.02 + 0.98 * pow(1.0 - cv, 5.0);
+    let Gw = vec3f(0.015, 0.025, 0.03) / PI * (Eg * max(mu0, 0.0) + sky);
+    let glint = Eg * F * 12.0 * pow(max(dot(normalize(Lp + V), gq), 0.0), 300.0);
+    G = mix(G, Gw * (1.0 - F) + F * sky * 1.2 / PI + glint, water);
+  }
+  // (the cities' lights at night)
+  let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
+  let lamp = max(lights - 0.07, 0.0) / 0.93;
+  let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
+  G += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
+  // (the clouds before the ground: the cloud pass's; the air: the aerial table's — else marched, as earthLook)
+  let cs = cloudsBuffered(centre, terrainRasterDepth(centre));
+  let alpha = max(cs.alpha, 0.0);
+  if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
+  var air: EarthAir;
+  var useAp = AP_UV.x >= 0.0 && dot(ro, ro) < airTop() * airTop();
+  var tFar = 0.0;
+  if (useAp) {
+    tFar = apFar(ro);
+    useAp = apCovers(tH, tFar) && (alpha <= 0.0 || apCovers(cs.tc, tFar));
+  }
+  if (useAp) {
+    air = apRead(tH, tFar);
+    air.Tc = vec3f(1.0);
+    air.Lc = vec3f(0.0);
+    if (alpha > 0.0) {
+      let c = apRead(cs.tc, tFar);
+      air.Tc = c.T;
+      air.Lc = c.L;
+    }
+  } else {
+    air = earthAir(ro, rd, tH, Ls, E, fract(ign(centre) + f32(frameStamp % 1024u) * 0.618), select(3e38, cs.tc, alpha > 0.0));
+  }
+  AP_UV = vec2f(-1.0);
+  var col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cs.cl);
+  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+  let old = accum[idx];
+  if ((flags & FLAG_TEMPORAL) != 0u && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
+  accum[idx] = vec4f(col, 1.0);
+  moments[idx] = vec2f(RASTER_MARK, tM / EARTH_RM * bodyRadius(k));
+  stamps[idx] = frameStamp;
 }
 
 // The cloud pass (docs/PLAN-NUAGES-AAA.md N1): the clouds along each camera ray marched once a texel of half the image's

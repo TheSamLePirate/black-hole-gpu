@@ -57,6 +57,39 @@ L'échange d'albédo (`renderer.rasterDetail`) grainait le sol en mouvement et l
 il s'emballait (vue noire, croix blanches — corrigé, 26176b7c). À chaque pixel ombré, l'image est propre sans lui : coupé
 par défaut, gardé comme interrupteur.
 
-### U0 — mesure
+### U0 — mesure (kerr-mini, Paris bas, chaque pixel, 1920 × 1080)
 
-_(en cours : `RASTER_BENCH=1 RP_PLACE=paris-low RP_RATE=every`, raster-shade-ablation sur le mini)_
+`RASTER_BENCH=1 RP_PLACE=paris-low RP_RATE=every bun test tests/e2e/raster-shade-ablation.e2e.test.ts` — le banc gèle
+désormais le vol pendant les compilations (l'avion se posait sur le sol, train cassé). `shade` seul : **~161 ms** par image
+(~80 ms par Mpx). Ce qu'on gagne en retirant une partie (deuxième mesure de chaque paire ; la première est faussée par la
+compilation de la variante) :
+
+| Retiré | gain |
+|---|---|
+| le décor | −51 ms |
+| la marche des rayons rasants | −16 ms |
+| le détail procédural du relief | −30 ms |
+| les ombres du relief | −9 ms |
+| les ombres du décor | −4,5 ms |
+| la normale fine du relief | −3,5 ms |
+| les matériaux proches, l'imagerie, les nuages | ~0 |
+
+Même tout retiré, l'ombrage du sol par le code du traceur resterait à ~50 ms : régler le traceur ne suffit pas — il faut un
+noyau de sol neuf.
+
+### U1 — le sol à chaque pixel (`shadeLite`) — en cours
+
+Nouveau point d'entrée `shadeLite` (trace.wgsl), un fil par pixel à pleine résolution, chaque image : la surface du maillage
+raster (sans marche), sa normale depuis les distances des pixels voisins, l'imagerie anisotrope, la surface régionale, le
+soleil et le ciel, les ombres lues dans les cartes (relief `sunShadowFar`, arbres et bâtiments `treeShadowAt` /
+`buildingShadowAt`, nuages `cloudShadowAt`), l'air par la table aérienne, les nuages par la passe en demi-résolution, l'eau
+OSM (Fresnel, ciel, reflet du Soleil). La mer et le décor restent à `shade`. `renderer.rasterLite` (vrai par défaut) pour
+comparer.
+
+Première mesure (ce Mac, M1 Max, Paris, chaque pixel) : **`earth lite (raster)` 0,6 ms** pour tout le sol — contre ~160 ms
+pour `shade` sur le mini ; le reste de `shade` (le décor, la mer) 7,9 ms.
+
+Vu en vol : bon ; deux défauts relevés et corrigés — les lacs sombres (l'eau OSM n'était que l'orthophoto) ; un saut des
+ombres des arbres toutes les ~0,8 s (la carte d'ombre du décor, ±900 m, se recentre sur une grille de 128 m : lue jusqu'à
+son bord, ses ombres y apparaissaient en bloc — estompées désormais de 550 à 750 m). Reste : les ombres proches du relief
+(la carte ne compte que les reliefs au-delà de la portée de la marche de `shade`).
