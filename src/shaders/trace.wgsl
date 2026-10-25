@@ -7713,6 +7713,56 @@ fn surfaceMaterial(q: vec3f, cover: u32, footM: f32) -> vec3f {
 // left over —, and the whole probe's ground took the hull's shadow: the cockpit's ambient black in the sun — R-H1)
 var<private> EARTH_SHADOW_POINT:vec3f;
 var<private> EARTH_SHADOW_ON: bool = false;
+// A runway's paving over the ground — its pavement and markings, flat; its lamps; the paving's cover and the point's place on
+// it [m, along and across] (the rain's puddles) —: the tracer's ground (earthGround) and the raster's material (shadeLite).
+// hit: the point from the camera [m, the body's physical axes]
+struct RwyPave {
+  A: vec3f,
+  n: vec3f,
+  lamps: vec3f,
+  paved: f32,
+  at: vec2f,
+}
+fn runwayPave(hit: vec3f, gq: vec3f, q: vec3f, rd: vec3f, Ls: vec3f, fx: vec3f, fy: vec3f, A0: vec3f, nIn: vec3f) -> RwyPave {
+  var o = RwyPave(A0, nIn, vec3f(0.0), 0.0, vec2f(0.0));
+  for (var k = 0u; k < rwyCount(); k++) {
+    let rel = P.runways[4u + 4u * k].xyz + hit;
+    let ra = dot(rel, P.runways[2u + 4u * k].xyz);
+    let rc = dot(rel, P.runways[3u + 4u * k].xyz);
+    let L = P.runways[1u + 4u * k].w;
+    let hw = P.runways[2u + 4u * k].w;
+    // (the strip and its shoulders; beyond its ends, out to 1 km and 25 m wide, the approach lights alone —
+    // lit only: the markings reckoned over those fields cost the final's view 10 %)
+    // (the strip, its shoulders and the taxiway left of it — A2)
+    let onStrip = ra >= -120.0 && ra <= L + 120.0 && rc <= hw + 60.0 && rc >= -210.0;
+    let lit = P.runways[17].y > 0.01 || dot(gq, airPhysicalDirection(Ls)) < 0.06;
+    if (!onStrip && !(lit && ra > -1000.0 && ra < L + 1000.0 && abs(rc) < 25.0)) { continue; }
+    // (the pixel's footprint on this runway's ground, along and across it [m])
+    let ak = P.runways[2u + 4u * k].xyz;
+    let ck = P.runways[3u + 4u * k].xyz;
+    LAMP_F = vec4f(dot(fx, ak), dot(fx, ck), dot(fy, ak), dot(fy, ck)) * EARTH_RM;
+    let fl = runwayFlags(k);
+    let rev = (fl & 1u) != 0u;
+    if (!onStrip) {
+      if ((fl & 16u) == 0u || (fl & 32u) != 0u) { o.lamps += runwayLights(select(ra, L - ra, rev), select(rc, -rc, rev), L, hw, P.runways[17].x); }
+      continue;
+    }
+    // (its published end's designation: packed by fours in runways[17].zw — 37 to a place)
+    let pk = select(P.runways[17].z, P.runways[17].w, k >= 2u);
+    let n0 = u32(pk / select(1.0, 37.0, (k & 1u) == 1u)) % 37u;
+    let fw = max(vec2f(max(abs(LAMP_F.x), abs(LAMP_F.z)), max(abs(LAMP_F.y), abs(LAMP_F.w))), vec2f(0.02));
+    let rl = runwayShade(ra, rc, L, hw, fw, asin(clamp(dot(-rd, q), -1.0, 1.0)), rev, lit, n0, fl);
+    o.A = mix(o.A, rl.albedo, rl.cover);
+    o.n = normalize(mix(o.n, q, rl.cover));
+    o.lamps += rl.lamps;
+    if (rl.cover > o.paved) {
+      o.paved = rl.cover;
+      o.at = vec2f(ra, rc);
+    }
+  }
+  return o;
+}
+
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
   if ((TUNE_SKIP & 8192u) != 0u) { return vec3f(0.05) * max(dot(normalize(q), Ls), 0.0); }
   // (the maps at the geodetic latitude — q the squashed space's —, the geometry at q)
@@ -7783,41 +7833,12 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   var rwyPaved = 0.0;
   var rwyAt = vec2f(0.0);
   if (HAS_RWY && RWY_HIT.w > 0.5) {
-    for (var k = 0u; k < rwyCount(); k++) {
-      let rel = P.runways[4u + 4u * k].xyz + RWY_HIT.xyz;
-      let ra = dot(rel, P.runways[2u + 4u * k].xyz);
-      let rc = dot(rel, P.runways[3u + 4u * k].xyz);
-      let L = P.runways[1u + 4u * k].w;
-      let hw = P.runways[2u + 4u * k].w;
-      // (the strip and its shoulders; beyond its ends, out to 1 km and 25 m wide, the approach lights alone —
-      // lit only: the markings reckoned over those fields cost the final's view 10 %)
-      // (the strip, its shoulders and the taxiway left of it — A2)
-      let onStrip = ra >= -120.0 && ra <= L + 120.0 && rc <= hw + 60.0 && rc >= -210.0;
-      let lit = P.runways[17].y > 0.01 || dot(gq, airPhysicalDirection(Ls)) < 0.06;
-      if (!onStrip && !(lit && ra > -1000.0 && ra < L + 1000.0 && abs(rc) < 25.0)) { continue; }
-      // (the pixel's footprint on this runway's ground, along and across it [m])
-      let ak = P.runways[2u + 4u * k].xyz;
-      let ck = P.runways[3u + 4u * k].xyz;
-      LAMP_F = vec4f(dot(fx, ak), dot(fx, ck), dot(fy, ak), dot(fy, ck)) * EARTH_RM;
-      let fl = runwayFlags(k);
-      let rev = (fl & 1u) != 0u;
-      if (!onStrip) {
-        if ((fl & 16u) == 0u || (fl & 32u) != 0u) { rwyLamps += runwayLights(select(ra, L - ra, rev), select(rc, -rc, rev), L, hw, P.runways[17].x); }
-        continue;
-      }
-      // (its published end's designation: packed by fours in runways[17].zw — 37 to a place)
-      let pk = select(P.runways[17].z, P.runways[17].w, k >= 2u);
-      let n0 = u32(pk / select(1.0, 37.0, (k & 1u) == 1u)) % 37u;
-      let fw = max(vec2f(max(abs(LAMP_F.x), abs(LAMP_F.z)), max(abs(LAMP_F.y), abs(LAMP_F.w))), vec2f(0.02));
-      let rl = runwayShade(ra, rc, L, hw, fw, asin(clamp(dot(-rd, q), -1.0, 1.0)), rev, lit, n0, fl);
-      A = mix(A, rl.albedo, rl.cover);
-      n = normalize(mix(n, q, rl.cover));
-      rwyLamps += rl.lamps;
-      if (rl.cover > rwyPaved) {
-        rwyPaved = rl.cover;
-        rwyAt = vec2f(ra, rc);
-      }
-    }
+    let rp = runwayPave(RWY_HIT.xyz, gq, q, rd, Ls, fx, fy, A, n);
+    A = rp.A;
+    n = rp.n;
+    rwyLamps = rp.lamps;
+    rwyPaved = rp.paved;
+    rwyAt = rp.at;
   }
   // (the rain — PLAN-PLUIE P4 —: the ground wet, darker — the soil's pores and the asphalt's filled with water
   // —, and a sheen of the sky, strong at a grazing view; on the paving, water lying in its hollows and the
@@ -10413,6 +10434,17 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let mu0 = dot(gq, Lp);
   let dirW = toBody(ray.look);
   let mesh = terrainRasterMesh(centre);
+  // (a runway — its paving, markings and lamps, as the tracer's ground draws them: the material's, compiled in whether a
+  // runway is near or not — no other key, nothing compiled in flight —; the ground levelled under it the mesh's)
+  var rwyLamps = vec3f(0.0);
+  var lvl = 0.0;
+  if (!mesh && !isTree && rwyCount() > 0u) {
+    let rp = runwayPave(dirW * tM, gq, q, rd, Ls, fx, fy, A, n);
+    A = rp.A;
+    n = rp.n;
+    rwyLamps = rp.lamps;
+    lvl = runwayGrade(gq).y;
+  }
   let Eg = liteSun(q, gq, hG, Ls, Lp, E, fx, fy, dirW, tM, n, mesh);
   // (a building's own triangles — U2 —: its roof the orthophoto's — the photograph is the roof seen from above —, its walls
   // stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —, the glass dark,
@@ -10459,6 +10491,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let lamp = max(lights - 0.07, 0.0) / 0.93;
   let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
   G += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
+  G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), 3000.0, dark);
   // (the water — the sea, the lakes and rivers —: found here — its cover sharp, the polygon's edge alone softened; the sea's
   // mask the relief map's over the sea's level, OSM's by the coasts —, drawn by shadeWater: this pixel's surface under it left
   // to it in accum, its kind and cover in moments.x)
@@ -10471,7 +10504,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       osm = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
       osm.x = smoothstep(0.35, 0.65, osm.x);
     }
-    let water = max(sea0, osm.x);
+    // (an airfield levelled: land, even where the maps had water)
+    let water = max(sea0, osm.x) * (1.0 - lvl);
     // (TUNE_LITE 512: the water's cover drawn red — a measure)
     if ((TUNE_LITE & 512u) != 0u) { G = mix(G, vec3f(0.5, 0.0, 0.0) * luminance(E), water); }
     else if (water > 0.0 && rasterWaterOn()) {

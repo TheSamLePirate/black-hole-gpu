@@ -5038,7 +5038,7 @@ async function main() {
   // two scales, its history lost at each, never refined; the same rule as the motion's scale given back, below)
   const rasterScale = (): number | null =>
     rasterOn() && !dynamicResolutionOn(settings) && settings.earthRasterScale < 1
-      ? heldFor > 0.4
+      ? heldFor > 0.4 && !renderer.rasterHold
         ? 1
         : movingFor > 0.15
           ? rasterTop()
@@ -7846,6 +7846,8 @@ async function main() {
       else if (tape.frames.length) tape.clear();
     }
     replayEv = 0;
+    // (a still view refines, traced, in the photo mode alone: paused or held, the raster draws on)
+    renderer.rasterHold = !photoMode?.isOpen;
     const st = capped
       ? null
       : cpuProf.time("render (encode, submit)", () =>

@@ -2252,6 +2252,9 @@ fn a320Glass(in: VOut, front: bool, part: u32, fan: vec4f) -> vec4f {
 // the probe elsewhere — by their Fresnel, and the key light's highlight.
 // (GLASS_MODE, the e2e's A/B — ship.ts debugSkip: 1 without the traced image's reflection, 2 a flat tint)
 override GLASS_MODE: u32 = 0u;
+// (the A320's glass among the craft drawn — ship.ts: its own pipeline —: else its code out, its fan's map not read at each
+// of the F-35's canopy's pixels)
+override GLASS_A320: bool = false;
 @fragment
 fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let base = textureSample(jetAlbedo, mapSamp, in.uv, 1);
@@ -2262,11 +2265,13 @@ fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4
     let c = vec3f(0.12, 0.3, 0.38) * (0.35 + 0.65 * rim * rim);
     return vec4f(c / (1.0 + dot(c, vec3f(0.2126, 0.7152, 0.0722))), 0.0);
   }
-  // (the A320's fan disc: its blur, in the engines' cell)
-  let fanUv = a320Map(115u, in.uv);
-  let fan = textureSample(a320Albedo, mapSamp, fanUv.yz, 2);
   let part = u32(in.mat + 0.5);
-  if ((part >= 106u && part <= 109u) || part == 115u || (part >= 127u && part <= 129u)) { return a320Glass(in, front, part, fan); }
+  if (GLASS_A320) {
+    // (the A320's fan disc: its blur, in the engines' cell)
+    let fanUv = a320Map(115u, in.uv);
+    let fan = textureSample(a320Albedo, mapSamp, fanUv.yz, 2);
+    if ((part >= 106u && part <= 109u) || part == 115u || (part >= 127u && part <= 129u)) { return a320Glass(in, front, part, fan); }
+  }
   if (part != 32u && part != 34u) { discard; }
   if (GLASS_MODE == 2u) { return vec4f(0.002, 0.002, 0.0, 0.1); }
   let gn = normalize(in.n) * select(-1.0, 1.0, front);

@@ -3047,7 +3047,13 @@ export class Renderer {
       // physical body axes, in float64 (the markings to the centimetre: trace.wgsl runwayShade)
       if (near.index === earthK && this.earthMaps.tier) runways = this.nearRunways(c as Vec3, s, time);
       // (runways near: the kernel with their code — elsewhere compiled out, a tenth of the Earth's cost)
-      if (runways[0]! > 0) this.featureKey |= 256;
+      // (the raster's material drawing the ground — its kernels with the runways' code always —: no bit, the key as it was —
+      // an airfield coming into reach no longer compiles the tracer anew in flight; its sky and far ground without them)
+      // (the choice, not the raster's state this frame: it is off while its kernels compile — the bit back then, the key
+      // going back and forth, each side's kernels compiled in turn; the photo mode's still view traced, with them)
+      // (on foot the raster stands aside — the tracer draws the walker's ground —: the bit kept)
+      const rasterGround = this.earthPipelineNow(s) === "raster" && this.rasterLite && this.rasterHold && !this.character?.active;
+      if (runways[0]! > 0 && !rasterGround) this.featureKey |= 256;
     } else {
       set(67, 0, 0, 0, 0);
       set(68, 0, 0, 0, 0);
@@ -3221,6 +3227,7 @@ export class Renderer {
     // (the raster's primary visibility keeps its path under the debug tunings — renderer.tune: what each part of its shading costs)
     const terrainCacheEligible = terrainRasterEligible && this.tuneKey === 0 && (this.featureKey & 512) === 0;
     const inspecting = terrainRasterEligible && s.earthTerrainRasterView !== "off";
+    if (!o.probe && t === this.live) this.rasterEligibleNow = terrainRasterEligible && rasterWanted;
     // (the realtime kernel's ground march from the patch's distances: only where the device takes the texture, and in the
     // interleaved realtime frames — a still view converges on the quality kernel, which keeps the reference march)
     const hinting =
@@ -4114,7 +4121,15 @@ export class Renderer {
     const compile = (
       entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "clouds",
       onStall?: () => void,
-    ) => this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall, entry !== "lut" && entry !== "aerial");
+    ) =>
+      this.variantQueue.run(
+        current,
+        () => this.timedVariant(key, entry),
+        onStall,
+        // (a key compiled ahead — the scenery's, the surfaces' coming — not urgent until it is the frame's: the frame's own
+        // raster kernels went after its tracer, 102 s on an M1 Max, the near Earth traced meanwhile)
+        () => entry !== "lut" && entry !== "aerial" && key === this.featureKey,
+      );
     const raster = async () => {
       if (!slot.shade && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shade = await compile("shade");
       if (!slot.shadeMark && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shadeMark = await compile("shadeMark");
@@ -4126,7 +4141,8 @@ export class Renderer {
       // (the raster's kernels first once the general tracer is in to draw the rest — its sky — meanwhile: a few seconds each,
       // against the specialised tracer's minute and more (74 s measured on an M1 Max for a scene's key) — the near Earth, the
       // scene's look, comes first; before the general one, the trace's own kernel first, the image waiting on it)
-      const rasterFirst = (key & FEATURE_TERRAIN_RASTER) !== 0 && !!this.tracePipeline;
+      // (or another key's tracer, already in: the frame's own until this one's lands)
+      const rasterFirst = (key & FEATURE_TERRAIN_RASTER) !== 0 && (!!this.tracePipeline || [...this.variants.values()].some((v) => !!v.rt));
       if (rasterFirst) await raster();
       if (!slot.rt) {
         slot.rt = await compile("main", () => (slot.rtGivenUp = true));
@@ -4240,7 +4256,15 @@ export class Renderer {
           HAS_WH: has(32),
           HAS_THICK: has(64),
           HAS_BODIES: has(128),
-          HAS_RWY: has(256),
+          // (the raster's kernels: the runways' code in whether one is near or not — its parameters say — with the raster's
+          // primary visibility; the key then without its bit, writeParams)
+          HAS_RWY:
+            has(256) ||
+            ((entryPoint === "shade" || entryPoint === "shadeMark" || entryPoint === "shadeLite" || entryPoint === "shadeWater") &&
+              !quality &&
+              has(FEATURE_TERRAIN_RASTER))
+              ? 1
+              : 0,
           HAS_KERR: has(512),
           HAS_WX: has(1024),
           HAS_SHADE: has(2048),
@@ -6777,6 +6801,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private terrainRasterLevel = 0;
   /** the last camera frame shades the raster patch's pixels one a pixel (earthPipeline "raster", trace.wgsl shade) */
   private rasterPrimaryOn = false;
+  /** a still view keeps the raster's realtime frames (main.ts: the raster pipeline, not the photo mode) — else it refines,
+   *  traced */
+  rasterHold = true;
+  /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
+  private rasterEligibleNow = false;
   /** the clouds' transmittance map seen from the Sun (trace.wgsl cloudShadow — docs/PLAN-NUAGES-AAA.md N3; read by
    *  cloudShadowAt): the device binds it; a switch for comparisons (off: the old shadows, the 2D covers) */
   private cloudShadow = false;
@@ -7518,10 +7547,15 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the scene's quality kernel still compiling in the background — asked for here, the camera still:
     // traceVariant's quality cascade — a still view keeps the realtime path: sampleIndex stays at 0, the
     // convergence starts when the kernel lands)
+    // (the raster drawing the near Earth, held — the camera still, the game paused —: realtime frames go on, the image the
+    // flight's, its kernels the same — no other key, nothing to compile —; the tracer refines in the photo mode alone)
+    // (wanted and eligible — the near Earth, the raster chosen —: held before its kernels are in too, a pause at the load)
+    const rasterHeld = this.rasterHold && this.rasterEligibleNow;
     if (
       sceneChanged ||
       timeChanged ||
       rasterInspecting ||
+      rasterHeld ||
       (adaptive && this.sampleIndex < targetSpp && !(this.firstFrameDoneAt && this.traceVariant("q", this.cameraKey)))
     ) {
       phase = "realtime";

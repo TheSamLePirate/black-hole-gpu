@@ -19,6 +19,7 @@ import f35Normal0 from "../assets/f35/f35-normal-0.ktx2";
 import f35Normal1 from "../assets/f35/f35-normal-1.ktx2";
 import f35Mr0 from "../assets/f35/f35-mr-0.ktx2";
 import f35Mr1 from "../assets/f35/f35-mr-1.ktx2";
+import { thinGlass } from "./f35/glass-shell";
 import { nozzleExit, parseF35, partMatrices, restPose, type F35Mesh, type F35Pose } from "./f35/model";
 import a320Bin from "../assets/a320/a320.bin";
 import a320Albedo1 from "../assets/a320/a320-albedo-1.ktx2";
@@ -406,6 +407,7 @@ interface ShipTargetRes {
   jetGlassBind?: GPUBindGroup;
   jetGlassGen?: number;
   jetGlassHdr?: GPUTexture;
+  jetGlassPipe?: GPURenderPipeline;
   /** the station's depth bound (group 1), and which texture it holds */
   occBind?: { tex: GPUTexture; g: GPUBindGroup };
   /** the images in the sea's (pipes.mirror's own layouts): its bind groups, as the shading's */
@@ -740,14 +742,14 @@ export class ShipRenderer {
     };
     // (the F-35's canopy and visor: after the opaque draws, blended (premultiplied), the depth tested not written —
     // its mode the e2e's A/B: ship.wgsl GLASS_MODE)
-    const glassPipe = (mode: number) =>
+    const glassPipe = (mode: number, a320 = mode === 3) =>
       d.createRenderPipeline({
         layout: "auto",
         vertex,
         fragment: {
           module,
           entryPoint: "fsJetGlass",
-          constants: { GLASS_MODE: mode },
+          constants: { GLASS_MODE: mode, GLASS_A320: a320 ? 1 : 0 },
           targets: [
             {
               format: "rgba16float",
@@ -1113,20 +1115,26 @@ export class ShipRenderer {
     const m = (this.jetMesh = parseF35(await this.getter(f35Url).then(inflated)));
     const { verts, lo, hi } = m;
     const nv = verts.length / 10;
-    // (the glass — the canopy 32, the visor 34 — last: drawn by its own pass, out of the shadow map)
-    const glass = (t: number) => {
-      const k = Math.round(verts[10 * m.idx[3 * t]! + 6]!);
-      return k === 32 || k === 34;
-    };
-    const idx = new Uint32Array(m.idx.length);
-    let o = 0,
-      solid = 0;
-    for (const g of [false, true])
-      for (let t = 0; t < m.idx.length / 3; t++)
-        if (glass(t) === g) {
-          idx.set(m.idx.subarray(3 * t, 3 * t + 3), 3 * o++);
-          if (!g) solid = 3 * o;
-        }
+    // (the glass — the canopy 32, the visor 34 — last: drawn by its own pass, out of the shadow map; one surface of each —
+    // f35/glass-shell.ts: the model's four layers blended were the craft's whole cost)
+    const partOf = (t: number) => Math.round(verts[10 * m.idx[3 * t]! + 6]!);
+    const solidIdx: number[] = [];
+    const glassIdx: Record<number, number[]> = { 32: [], 34: [] };
+    for (let t = 0; t < m.idx.length / 3; t++) {
+      const k = partOf(t);
+      const into = k === 32 || k === 34 ? glassIdx[k]! : solidIdx;
+      into.push(m.idx[3 * t]!, m.idx[3 * t + 1]!, m.idx[3 * t + 2]!);
+    }
+    // (the pilot's head: the visor's centre — within the canopy's shell)
+    const head: V3 = [0, 0, 0];
+    for (const i of glassIdx[34]!) for (let j = 0; j < 3; j++) head[j] = head[j]! + verts[10 * i + j]! / glassIdx[34]!.length;
+    const inside: V3 = glassIdx[34]!.length ? head : [0, 1.95, 4.56];
+    const thin = [32, 34].map((k) => thinGlass(new Uint32Array(glassIdx[k]!), verts, 10, inside));
+    const idx = new Uint32Array(solidIdx.length + thin[0]!.length + thin[1]!.length);
+    idx.set(solidIdx);
+    idx.set(thin[0]!, solidIdx.length);
+    idx.set(thin[1]!, solidIdx.length + thin[0]!.length);
+    const solid = solidIdx.length;
     const pos = new Float32Array(nv * 3);
     for (let i = 0; i < nv; i++) pos.set(verts.subarray(10 * i, 10 * i + 3), 3 * i);
     const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
@@ -1724,7 +1732,9 @@ export class ShipRenderer {
    *  pre-pass), "hull" (the craft's solid triangles), "glass" (the F-35's canopy and visor; "glass-sr" without the
    *  traced image's reflection, "glass-flat" a flat tint), "plume" (the flames, trails, lamps). */
   debugSkip = new Set<string>();
-  private glassPipe?: (mode: number) => GPURenderPipeline;
+  private glassPipe?: (mode: number, a320?: boolean) => GPURenderPipeline;
+  /** the glass's pipeline with the A320's code (GLASS_A320): made when one is first drawn */
+  private a320GlassPipe?: GPURenderPipeline;
   private glassModes: GPURenderPipeline[] = [];
 
   /** Probe → box mips, GGX pre-filtered mips, spherical harmonics (after the tracer's env pass). */
@@ -2595,18 +2605,22 @@ export class ShipRenderer {
     // would hide the view)
     const glassy = this.draws.filter((dr) => !dr.cabin && dr.mesh.solid !== undefined && dr.mesh.solid < dr.mesh.count);
     if (glassy.length && !this.debugSkip.has("glass")) {
-      if (!res.jetGlassBind || res.jetGlassGen !== this.bindGen || res.jetGlassHdr !== hdr) {
+      // (an A320 among them: the pipeline with its glass's code — GLASS_A320)
+      const a320 = glassy.some((dr) => dr.mesh === this.meshes.a320);
+      const main = a320 ? (this.a320GlassPipe ??= this.glassPipe!(0, true)) : this.pipes.jetGlass;
+      if (!res.jetGlassBind || res.jetGlassGen !== this.bindGen || res.jetGlassHdr !== hdr || res.jetGlassPipe !== main) {
         const keep = [0, 1, 2, 3, 12, 16, 22, 27];
         res.jetGlassBind = this.device.createBindGroup({
-          layout: this.pipes.jetGlass.getBindGroupLayout(0),
+          layout: main.getBindGroupLayout(0),
           entries: [...this.shipEntries!.filter((e) => keep.includes(e.binding)), { binding: 10, resource: hdr.createView() }],
         });
         res.jetGlassGen = this.bindGen;
         res.jetGlassHdr = hdr;
+        res.jetGlassPipe = main;
       }
       const gm = this.debugSkip.has("glass-flat") ? 2 : this.debugSkip.has("glass-sr") ? 1 : 0;
       if (gm && !this.glassModes[gm]) this.glassModes[gm] = this.glassPipe!(gm);
-      const gp = gm ? this.glassModes[gm]! : this.pipes.jetGlass;
+      const gp = gm ? this.glassModes[gm]! : main;
       rp.setPipeline(gp);
       rp.setBindGroup(
         0,

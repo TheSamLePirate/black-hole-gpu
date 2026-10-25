@@ -48,7 +48,12 @@ test.skipIf(!E2E)(
       { const c = __bh.camera; c.gearDown = true; c.gearExt = 1; c.gearInit = true; }`;
     const STATE = `(() => { const r = __bh.renderer, p = __bh.game.perf({ gpu: false });
       return { builds: r.terrainSurfaceCache?.builds ?? 0, fps: p.renderFps, rate: p.terrainRaster?.rate ?? null, scale: +p.renderScale.toFixed(3),
-        block: p.block, pipe: r.earthPipelineNow(__bh.settings), gear: __bh.camera.gearDown, frames: r.completedFrames }; })()`;
+        block: p.block, pipe: r.earthPipelineNow(__bh.settings), gear: __bh.camera.gearDown, frames: r.completedFrames,
+        // (the main thread's loop rate, its sections; the GPU's own time a frame — between two completions, the median of the
+        // last 30: the GPU's when it is the bottleneck)
+        loop: +p.loopFps.toFixed(1), worstLoop: +p.worstLoopMs.toFixed(1),
+        gpuMs: +[...r.completedDurations].slice(-30).sort((a, b) => a - b)[15]?.toFixed(1),
+        cpu: p.cpu.sort((a, b) => b.ms - a.ms).slice(0, 6).map((c) => c.section + " " + c.ms.toFixed(1)).join(", ") }; })()`;
     const pct = (xs: number[], q: number) => [...xs].sort((a, b) => a - b)[Math.floor(q * (xs.length - 1))] ?? NaN;
 
     for (let round = 0; round < ROUNDS; round++) {
@@ -86,7 +91,9 @@ test.skipIf(!E2E)(
         if (process.env.PULSE_LEVERS) {
           // (PULSE_LEVERS="name=js;name=js…": in the same flight, each lever's image 2.5 s after it is set — then undone —, its
           // detail and a shot; twice round)
-          const levers = process.env.PULSE_LEVERS.split(";").map((x) => x.split("=") as [string, string]);
+          const levers = process.env.PULSE_LEVERS.split(";").map(
+            (x) => [x.slice(0, x.indexOf("=")), x.slice(x.indexOf("=") + 1)] as [string, string],
+          );
           for (let k = 0; k < 2; k++)
             for (const [name, js] of levers) {
               await app.js(`(() => { ${js}; return 1; })()`);
@@ -95,9 +102,15 @@ test.skipIf(!E2E)(
               const d = await detail();
               await app.shot(`${OUT}/pulse-${label}-${name}${k}.png`);
               const st = await app.js<Record<string, unknown>>(STATE);
+              // (the frame rate over 4 s: frames completed — the HUD's figure, over a second, is ±1 frame at 8 fps)
+              const f0 = st.frames as number;
+              await Bun.sleep(4000);
+              st.fps4 = +(((await app.js<number>(`__bh.renderer.completedFrames`)) - f0) / 4).toFixed(2);
               // (the GPU's passes this lever — the compute passes' timestamps are sound on Apple, the render passes' overlap)
-              const passes =
-                await app.js<string>(`(async () => { const r = __bh.renderer; r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
+              // (PULSE_PROF only: the timestamps cost the frame itself — ~10 ms on an M1 Max, every pass split)
+              const passes = !process.env.PULSE_PROF
+                ? ""
+                : await app.js<string>(`(async () => { const r = __bh.renderer; r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
                 await new Promise((q) => setTimeout(q, 1500));
                 return r.prof.table().filter((p) => p.last > 0.5).sort((a, b) => b.last - a.last).slice(0, 12).map((p) => p.label + " " + p.last.toFixed(1)).join(", "); })()`);
               console.log(`  ${label}: ${name} #${k} — detail ${d}, ${JSON.stringify(st)}\n    passes: ${passes}`);

@@ -60,7 +60,7 @@ export class CompileQueue {
   /** the longest compile completed so far [ms] */
   private longest = 0;
   /** the compiles not started yet, in order; `urgent` ones start first (a frame's own kernels before a still view's) */
-  private waiting: { urgent: boolean; start: () => void }[] = [];
+  private waiting: { urgent: boolean | (() => boolean); start: () => void }[] = [];
   /** a compile holds the slot */
   private running = false;
 
@@ -78,7 +78,7 @@ export class CompileQueue {
   /** the next compile into the free slot: the first urgent one waiting, else the first */
   private pump() {
     if (this.running) return;
-    const u = this.waiting.findIndex((j) => j.urgent);
+    const u = this.waiting.findIndex((j) => (typeof j.urgent === "function" ? j.urgent() : j.urgent));
     const job = this.waiting.splice(u >= 0 ? u : 0, 1)[0];
     if (!job) return;
     this.running = true;
@@ -88,9 +88,15 @@ export class CompileQueue {
   /**
    * `urgent`: ahead of every compile not started yet — the realtime image's kernels (the raster's shading among them) past a
    * still view's quality kernel queued during a pause: queued behind it, the flight after the pause drew the near Earth with
-   * the traced blocks for the minute it took on an M1.
+   * the traced blocks for the minute it took on an M1. A function: asked when the slot frees (a key compiled ahead urgent
+   * once it is the frame's own).
    */
-  run<T>(current: () => boolean, compile: () => Promise<T>, onStall: () => void = () => {}, urgent = false): Promise<T | null> {
+  run<T>(
+    current: () => boolean,
+    compile: () => Promise<T>,
+    onStall: () => void = () => {},
+    urgent: boolean | (() => boolean) = false,
+  ): Promise<T | null> {
     this.pending++;
     return new Promise<T | null>((resolve, reject) => {
       this.waiting.push({

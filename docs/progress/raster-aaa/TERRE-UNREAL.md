@@ -38,7 +38,7 @@ le coût par pixel restant est dans :
 | U2 | Le décor en raster : bâtiments (prismes déjà triangulés) et arbres (instances déjà) ombrés par un matériau simple | fait (1re version) |
 | U3 | Ombres du décor en carte (cascades), plus de rayons d'ombre | à faire |
 | U4 | Gouverneur : l'échelle et le taux retirés en raster ; le TAA à 1 échantillon par pixel | à faire |
-| U5 | Le cockpit du F-35 allégé (~8 ms mesurés) | à faire |
+| U5 | Le cockpit du F-35 allégé : la verrière d'une seule couche (~40 ms sur le mini) | fait |
 | U6 | Finition : netteté (RCAS), comparaison avec la vue convergée, mini à 50 Hz | à faire |
 
 Chaque phase : mesurée sur le mini (GPU par passe, img/s), une capture en vol au-dessus de Paris, un commit poussé, une
@@ -281,3 +281,43 @@ est hors de la Terre : la cabine et le vaisseau (U5).
 **La teinte du sol** (question de l'utilisateur, Paris) : le sol lu à l'écran est R≈G>B (ville proche 84/82/68, B/G ≈ 0,84),
 d'où un aspect olive ; le traceur donne la même chose (82/79/68) — ce n'est donc pas l'ombrage raster mais le commun :
 l'orthophoto d'été, la lumière du Soleil à travers l'air et la perspective aérienne. Jugé acceptable, laissé tel quel.
+
+### U5 — la verrière d'une seule couche ; la pause en raster ; les pistes au matériau (25/10)
+
+**Où passait le temps du mini** (vol bas sur Paris, chaque pixel, 1920 × 1080) : ~100 ms de GPU par image, le processeur à
+~5 ms — le temps GPU réel (entre deux images achevées), plus les horodatages des passes : activés, ils coûtent eux-mêmes ~10 ms
+par image (chaque passe coupée) et avaient faussé la première mesure. Leviers un à un : sans le vaisseau 50 ms ; **sans la
+verrière 54 ms** ; sans la coque −9 ms ; l'ombre, la pré-passe de profondeur, les flammes, le masque, le HUD, le
+post-traitement : dans le bruit. Sur la verrière seule : sans sa réflexion d'écran, rien ; teinte plate, −13 ms : le reste
+était le dessin lui-même.
+
+**Pourquoi** : un rayon de l'œil traversait **4 triangles de verrière** — la coque du modèle a deux parois à 5 mm l'une de
+l'autre et chacun de ses triangles deux fois (une copie par sens) ; dessinés sans élimination, mélangés en MSAA 4×, toute la
+vue couverte quatre fois. `src/f35/glass-shell.ts` (`thinGlass`, au chargement) : les copies une fois, la paroi intérieure
+retirée (de deux triangles face à face à travers l'épaisseur, le plus proche de la tête). Verrière 1 652 → 490 triangles,
+visière 534 → 416 ; une couche exactement dans toutes les directions de la vue (626 rayons de l'œil comptés), aucun trou
+nouveau. Le code de l'A320 (son disque de soufflante lu à chaque pixel de la verrière du F-35) sous une constante de
+pipeline (`GLASS_A320`).
+
+**Mini, même vol** : **~60 ms par image, 15–17 i/s** (9–10 avant) ; la verrière ne se mesure plus (sans elle : pareil), tout
+le vaisseau ~6 ms. Le reste : la Terre (le matériau `earth lite` en tête), le ciel tracé.
+
+| Avant (104 ms) | Après (56 ms) |
+|---|---|
+| ![avant](img/u5-verriere-avant.jpg) | ![après](img/u5-verriere-apres.jpg) |
+
+**La pause garde le raster** : une vue tenue (pause du jeu, `__bh.freeze`) restait à affiner par le traceur — une autre clé
+de noyaux, donc des compilations, et l'image changeait. `renderer.rasterHold` (main : tout sauf le mode photo) : les images
+temps réel continuent tant que le raster est voulu et éligible (même avant que ses noyaux soient prêts) ; seul le mode
+photo affine, tracé.
+
+**Les pistes au matériau raster, plus de compilation en approche** : une piste à moins de 150 km ajoutait un bit à la clé
+(256) — le traceur entier recompilé en vol à chaque aéroport. `runwayPave` (trace.wgsl) : le revêtement, les marquages et
+les feux d'une piste, partagés par le sol tracé et `shadeLite` ; les noyaux raster ont le code des pistes compilé quelle que
+soit la clé (leurs paramètres disent s'il y en a), et la clé en raster n'a plus ce bit (le choix du pipeline, pas l'état du
+raster à l'image : il s'éteint pendant ses compilations — la clé allait et venait). L'aérodrome nivelé est de la terre pour
+l'eau. En mode photo, à pied, ou dans le pipeline tracé : le bit, comme avant.
+
+**L'ordre des compilations** : une clé compilée d'avance (le décor, les surfaces qui arrivent) n'est plus urgente tant
+qu'elle n'est pas celle de l'image — son traceur (102 s ici) passait entre les noyaux raster de la clé courante, la Terre
+proche tracée pendant ce temps ; les noyaux raster d'abord dès qu'un traceur (général ou d'une autre clé) dessine déjà.
