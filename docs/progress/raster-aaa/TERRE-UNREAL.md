@@ -321,3 +321,35 @@ l'eau. En mode photo, à pied, ou dans le pipeline tracé : le bit, comme avant.
 **L'ordre des compilations** : une clé compilée d'avance (le décor, les surfaces qui arrivent) n'est plus urgente tant
 qu'elle n'est pas celle de l'image — son traceur (102 s ici) passait entre les noyaux raster de la clé courante, la Terre
 proche tracée pendant ce temps ; les noyaux raster d'abord dès qu'un traceur (général ou d'une autre clé) dessine déjà.
+
+### U6 (1) — le sol raster allégé : l'eau dans son propre arbre, la houle et les étoiles quand elles se voient (25/10)
+
+**La mesure propre** (kerr-mini, Paris bas, chaque pixel, 1920 × 1080, horodatages des passes de calcul seuls lus — ceux des
+passes de rendu se chevauchent sur Apple) : `earth lite` 17–21 ms, le ciel tracé 6–8, la reprojection 2,6, la sonde du
+vaisseau 1,7, la houle FFT 1,4–1,8 (à 150 km de la mer), l'ombre du relief 1,3–1,6, les étoiles ~1 (en plein jour), le
+reste ≤ 1,5 chacune.
+
+**Ce que coûte `earth lite`** (ce Mac, vue tenue, `renderer.liteSkip` : les bits de `TUNE_LITE` lus aussi à l'exécution —
+`P.jet2.w`, inutilisé —, une partie coupée sans recompiler ; 1024 la passe seule, 2048 sans l'air, 4096 sans la lumière) :
+3,6 ms dont **la recherche de l'eau 1,2** (un tiers), l'imagerie anisotrope 0,85, l'air 0,3, le Soleil et le ciel 0,6, les
+arbres 0,25, la passe seule 0,3.
+
+- **L'eau** : `sceneryWaterAt` parcourait l'arbre de toutes les surfaces du décor (routes, rails, zones) pour n'en garder que
+  l'eau, à chaque pixel. `packScenery` construit désormais un arbre de l'eau seule (`scenery[2].y/.z`), ses feuilles les
+  mêmes enregistrements (rien de copié) : loin de l'eau, un nœud ou deux. `earth lite` 3,6 → 2,4 ms ici ; la Seine reconnue
+  pareil (le masque rouge, `liteSkip` 512).
+- **La houle FFT** : calculée dès qu'on vole sous 30 km, même à Paris. Le noyau de l'eau marque l'image où il a dessiné de la
+  mer (le dernier mot du tampon `stamps`), relu toutes les 15 images (`seaProbeFor`) : sans mer depuis 120 images, plus de
+  FFT (les trains au loin) ; elle revient dès que la mer est dessinée. Vérifié : 0 à Paris, en marche au-dessus du détroit.
+- **Les étoiles** : leur passe plein écran tournait sous l'exposition du jour (EV 14,6 au-dessus d'une Terre éclairée, 16,3
+  dès le crépuscule) ; coupée près du sol sous EV 15,5 (ailleurs — le trou, son disque, ses étoiles lentillées — toujours).
+- **La sonde du vaisseau** : une image sur deux en mouvement quand le raster dessine la Terre.
+- **L'imagerie** : l'orthophoto couvrant tout, de jour, les niveaux plus grossiers des tuiles ne sont plus lus sous elle
+  (seule leur alpha servait — les lumières des villes la nuit).
+- **La vue tenue** ne lance plus en fond la compilation du noyau « qualité » général (des minutes pour un affinage qui ne
+  viendra pas : la pause garde le raster).
+
+**Mini, même vol** (temps GPU réel, sans horodatages) : **~53 ms par image, 19 i/s** (60 ms et 16–17 i/s avant ; 105 ms et
+9–10 i/s avant U5). Le palier suivant de l'écran à 50 Hz est 40 ms (25 i/s) : il reste `earth lite` (~12–14 ms estimés, son
+imagerie anisotrope en tête), le ciel tracé (6–8 ms : 32 pas d'air par rayon de ciel — une table de ciel n'en gagnerait que
+la moitié, le bloc 8 en trace déjà un sur 64), la visibilité raster, le vaisseau (~6 ms).

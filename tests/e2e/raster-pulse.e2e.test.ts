@@ -111,8 +111,9 @@ test.skipIf(!E2E)(
               const passes = !process.env.PULSE_PROF
                 ? ""
                 : await app.js<string>(`(async () => { const r = __bh.renderer; r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
-                await new Promise((q) => setTimeout(q, 1500));
-                return r.prof.table().filter((p) => p.last > 0.5).sort((a, b) => b.last - a.last).slice(0, 12).map((p) => p.label + " " + p.last.toFixed(1)).join(", "); })()`);
+                await new Promise((q) => setTimeout(q, 3000));
+                const t = r.prof.table().filter((p) => p.ms > 0.2).sort((a, b) => b.ms - a.ms).slice(0, 24).map((p) => p.label + " " + p.ms.toFixed(1)).join(", ");
+                r.prof.enabled = false; return t; })()`);
               console.log(`  ${label}: ${name} #${k} — detail ${d}, ${JSON.stringify(st)}\n    passes: ${passes}`);
               results.push({ side, round, lever: name, k, d, st });
             }

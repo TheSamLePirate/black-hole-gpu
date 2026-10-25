@@ -302,6 +302,11 @@ const FLAG_TEMPORAL = 4;
 /** Realtime: samples older than this much simulated time [M] are not shown while time runs. */
 const MAX_SAMPLE_AGE = 1.5;
 const FLAG_INTERLEAVED = 8;
+/** how often the raster's sea is probed (renderer.seaProbeFor) [frames]; how long unseen before its FFT stops */
+const SEA_PROBE_FRAMES = 15;
+const SEA_UNSEEN_FRAMES = 120;
+/** the exposure under which the stars are splatted (encodeStars): a day's sky (EV 14.6) hides them */
+const STARS_MIN_EV = 15.5;
 /** realtime pass under the temporal reprojection: rays prefiltered over their pixel, not their block */
 const FLAG_REPROJECT = 16;
 /** the far field's LUT is there (trace.wgsl: farLut) */
@@ -2112,7 +2117,8 @@ export class Renderer {
     const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE }); // Σ l², depth
     const sceneDepth = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE }); // the occlusion depth
-    const stamps = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE });
+    // (a word more: the frame the raster's sea was last drawn — trace.wgsl shadeWater, renderer seaProbe)
+    const stamps = d.createBuffer({ size: (px + 4) * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     // realtime reconstruction of stale pixels (live view only): horizontal pass of the gather
     const gather = d.createBuffer({ size: live ? px * 16 : 16, usage: GPUBufferUsage.STORAGE });
     const stars = d.createBuffer({
@@ -2604,7 +2610,7 @@ export class Renderer {
     set(13, o.y0, o.y1, o.accumulate ? 1 : 0, Math.random());
     set(14, s.limbDarkening ? 1 : 0, s.diskEmission === "bolometric" ? 1 : 0, s.diskBrightness, s.diskTau);
     set(15, s.jet ? 1 : 0, Math.sqrt(1 - 1 / (s.jetLorentz * s.jetLorentz)), s.jetWidth, s.jetIntensity);
-    set(16, s.jetLength, s.jetCutoff, s.jetKnots, 0);
+    set(16, s.jetLength, s.jetCutoff, s.jetKnots, this.liteSkip);
     u.set([this.frameStamp, t === this.live ? this.validFrom : 0, o.flags, o.minSpp ?? 0], 17 * 4);
     set(18, o.tol ?? 1e-5, o.noise ?? 0, o.shutter ?? 0, s.temporalBlend);
     set(19, o.offset?.[0] ?? 0, o.offset?.[1] ?? 0, s.diskThickness, 1); // w: opaque 1.0 (compensated sums)
@@ -2884,7 +2890,10 @@ export class Renderer {
       const texel = Math.PI / ENV_H;
       const slow = drift < texel / 256;
       this.envStride = this.envReset ? 1 : spread || !slow ? 2 : 4;
-      this.envEvery = this.envReset || spread ? 1 : !slow ? this.probeEveryMoving : 4;
+      // (the raster drawing the near Earth: every other frame at least — its rays are the sky's and the ground's around, a
+      // light that turns slowly; 1.8 ms a frame on an M1 — TERRE-UNREAL U6)
+      const every = this.rasterPrimaryOn ? Math.max(this.probeEveryMoving, 2) : this.probeEveryMoving;
+      this.envEvery = this.envReset || spread ? 1 : !slow ? every : 4;
       const window = Math.round(Math.min(512, Math.max(4, texel / ((slow ? 64 : 4) * drift))));
       set(
         47,
@@ -3755,6 +3764,9 @@ export class Renderer {
     const out = new Float32Array(SEAFFT_VEC4S * 4);
     const H = this.seaHere;
     if (!this.seaFft || !s.seaFft || !H || H.weight <= 0) return out;
+    // (the raster drawing the water and no sea of it for a while — over Paris, 150 km inland —: the waves not computed, ~2 ms
+    // on an M1; back within a probe's frames once some sea is drawn, its far trains meanwhile)
+    if (this.rasterWaterNow && this.frameStamp - this.seaSeenStamp > SEA_UNSEEN_FRAMES) return out;
     const base = this.seaOverride ?? this.marine.peek(H.lat, H.lon, utcOf(time)) ?? windSea(H.U, H.to);
     // (a swell imposed — a heavy sea's qualification: controller/quals.ts —, from the wind's way)
     const state = this.seaSwell ? { ...base, swell: { hs: this.seaSwell, tp: 11, to: H.to } } : base;
@@ -6631,12 +6643,42 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     rp.end();
   }
 
+  /** the sea's probe (seaSeenStamp): its copy encoded every SEA_PROBE_FRAMES frames while the raster draws the water */
+  private seaProbeFor(enc: GPUCommandEncoder): GPUBuffer | null {
+    const t = this.live;
+    if (!t || !this.rasterWaterNow || this.seaProbeBusy || this.frameStamp - this.seaProbeAt < SEA_PROBE_FRAMES) return null;
+    this.seaProbe ??= this.device.createBuffer({ size: 4, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    enc.copyBufferToBuffer(t.stamps, t.stamps.size - 4, this.seaProbe, 0, 4);
+    this.seaProbeAt = this.frameStamp;
+    return this.seaProbe;
+  }
+  private seaProbe: GPUBuffer | null = null;
+  private seaProbeBusy = false;
+  private seaProbeAt = 0;
+  /** the frame the raster last drew some sea (shadeWater's stamp, read back) */
+  private seaSeenStamp = 0;
+
   /** `traced`: the frame traced the scene (the first image: the first such frame completed) */
   private submit(enc: GPUCommandEncoder, done: (ms: number) => void, traced = true) {
     const t0 = performance.now();
     const dense = this.motionDenseOn;
     this.prof.end(enc);
+    // (the frame the raster's sea was last drawn — the stamps' last word, trace.wgsl shadeWater —: read back now and then,
+    // the FFT's waves computed only while some sea is in view — seaFftParams)
+    const probe = this.seaProbeFor(enc);
     this.device.queue.submit([enc.finish()]);
+    if (probe) {
+      this.seaProbeBusy = true;
+      probe
+        .mapAsync(GPUMapMode.READ)
+        .then(() => {
+          const v = new Uint32Array(probe.getMappedRange())[0]!;
+          probe.unmap();
+          if (v > 0) this.seaSeenStamp = Math.max(this.seaSeenStamp, v);
+        })
+        .catch(() => {})
+        .finally(() => (this.seaProbeBusy = false));
+    }
     this.inFlight++;
     void this.device.queue.onSubmittedWorkDone().then(
       () => {
@@ -6804,6 +6846,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** a still view keeps the raster's realtime frames (main.ts: the raster pipeline, not the photo mode) — else it refines,
    *  traced */
   rasterHold = true;
+  /** parts of the raster's material cut at run time (trace.wgsl liteSkip: TUNE_LITE's bits — 1 water, 2 scenery shadows, 4
+   *  relief shadow, 8 surfaces, 16 mesh normal, 32 cloud shadows, 64 trees, 128 imagery): a measure, the image then wrong */
+  liteSkip = 0;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
   private rasterEligibleNow = false;
   /** the clouds' transmittance map seen from the Sun (trace.wgsl cloudShadow — docs/PLAN-NUAGES-AAA.md N3; read by
@@ -7531,15 +7576,21 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       s.earthTerrainRasterView !== "off" &&
       t.width * t.height <= TERRAIN_RASTER_MAX_PIXELS &&
       !this.terrainRaster?.unavailable;
+    // (the raster drawing the near Earth, held — the camera still, the game paused —: realtime frames go on, the image the
+    // flight's, its kernels the same — no other key, nothing to compile —; the tracer refines in the photo mode alone)
+    // (wanted and eligible — the near Earth, the raster chosen —: held before its kernels are in too, a pause at the load)
+    const rasterHeld = this.rasterHold && this.rasterEligibleNow;
     // (the general quality kernel — every feature, the later scenes' fallback — only once the general
     // realtime one is in: two kernels this size compiling side by side are minutes on a slow D3D12 driver,
-    // 5 min each on an RX 5700 XT; the still view does not wait for it, below)
+    // 5 min each on an RX 5700 XT; the still view does not wait for it, below; not while the raster holds the view —
+    // minutes of a compile for a refinement that will not come)
     if (
       this.firstFrameDoneAt &&
       this.generalCompile.state === "ready" &&
       !sceneChanged &&
       !timeChanged &&
       !this.terrainRasterDiagnostic &&
+      !rasterHeld &&
       adaptive &&
       this.sampleIndex < targetSpp
     )
@@ -7547,10 +7598,6 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the scene's quality kernel still compiling in the background — asked for here, the camera still:
     // traceVariant's quality cascade — a still view keeps the realtime path: sampleIndex stays at 0, the
     // convergence starts when the kernel lands)
-    // (the raster drawing the near Earth, held — the camera still, the game paused —: realtime frames go on, the image the
-    // flight's, its kernels the same — no other key, nothing to compile —; the tracer refines in the photo mode alone)
-    // (wanted and eligible — the near Earth, the raster chosen —: held before its kernels are in too, a pause at the load)
-    const rasterHeld = this.rasterHold && this.rasterEligibleNow;
     if (
       sceneChanged ||
       timeChanged ||
@@ -7573,7 +7620,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       if (s.temporalReprojection) flags |= FLAG_REPROJECT;
       // (R8: under the reprojection, the catalogue stars splatted where they fall — added over the
       // reprojected image, encodeTemporal; the pre-exposed radiance in 16.16 fixed point)
-      this.starsSplat = s.temporalReprojection && this.splatStars;
+      // (not under a day's exposure near the ground — EV 14.6 over a sunlit Earth, 16.3 from the dusk on —: none would show,
+      // the pass over the whole image for nothing, ~1 ms on an M1 — TERRE-UNREAL U6; elsewhere — the hole, its bright disk,
+      // its lensed stars — always)
+      this.starsSplat = s.temporalReprojection && this.splatStars && !(this.rasterEligibleNow && this.ev(s) < STARS_MIN_EV);
       if (this.starsSplat) enc.clearBuffer(t.stars);
       this.writeParams(t, s, time, {
         block,

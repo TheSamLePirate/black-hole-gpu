@@ -103,9 +103,12 @@ export interface ForestSection {
   cells: Uint32Array;
   trees: number;
 }
-function sceneryBVH(prims: Primitive[]) {
+// (`placed`: the leaves' records already written by another tree — their offsets there, nothing written here: the water's
+// tree over the surfaces' records)
+function sceneryBVH(prims: Primitive[], placed?: Map<Primitive, number>) {
   const nodes: number[] = [],
     geometries: number[] = [];
+  const offsets = new Map<Primitive, number>();
   const build = (p: Primitive[]) => {
     const at = nodes.length;
     const lo = [Infinity, Infinity, Infinity],
@@ -117,8 +120,13 @@ function sceneryBVH(prims: Primitive[]) {
       }
     nodes.push(...lo, 0, ...hi, -1);
     if (p.length === 1) {
-      nodes[at + 7] = geometries.length / 4;
-      for (const v of p[0]!.data) geometries.push(v);
+      const there = placed?.get(p[0]!);
+      if (there !== undefined) nodes[at + 7] = there;
+      else {
+        nodes[at + 7] = geometries.length / 4;
+        offsets.set(p[0]!, geometries.length / 4);
+        for (const v of p[0]!.data) geometries.push(v);
+      }
     } else {
       let axis = 0;
       for (let i = 1; i < 3; i++) if (hi[i]! - lo[i]! > hi[axis]! - lo[axis]!) axis = i;
@@ -130,12 +138,17 @@ function sceneryBVH(prims: Primitive[]) {
     nodes[at + 3] = nodes.length / 8;
   };
   if (prims.length) build([...prims]);
-  return { nodes, geometries };
+  return { nodes, geometries, offsets };
 }
+/** a surface of water: a polygon of kind 4 (its colour's w the outer ring's edges), a line of kind 3 (scenery-geometry.ts) */
+const isWater = (p: Primitive) => (p.data[11]! > 0.5 ? p.data[3] === 4 : p.data[5] === 3);
 // A separate planar BVH keeps roads/water out of every primary and shadow ray; the trees are a grid of
 // their own (forest.ts), after the raster.
 //   vec4 0 (nodes, geometries at, raster at, raster side)  1 (surfaces' nodes at, count, geometries at, surfaces)
-//   2 (forest at: 0 none, —, —, —)  3 (the buildings' mesh: vertices at, count, triangles at, count)
+//   2 (forest at: 0 none, the water's nodes at, their count, —)  3 (the buildings' mesh: vertices at, count, triangles at,
+//   count)
+//   (the water's own tree over the surfaces' records — trace.wgsl sceneryWaterAt, the raster's material at each pixel: the
+//   surfaces' whole tree walked for the water alone was a third of its cost over a city — TERRE-UNREAL U6)
 //   then the nodes, geometries, surfaces, raster, forest, the mesh's vertices (x, y, z floats packed), its triangles (three
 //   vertex indices a triangle, u32, packed)
 export function packScenery(
@@ -148,11 +161,13 @@ export function packScenery(
 ) {
   const { nodes, geometries } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
+  const water = sceneryBVH(surfaces.filter(isWater), surface.offsets);
   const nodeCount = nodes.length / 8,
     geomOffset = 4 + nodes.length / 4,
     surfaceOffset = geomOffset + geometries.length / 4,
     surfaceGeom = surfaceOffset + surface.nodes.length / 4,
-    pixelOffset = surfaceGeom + surface.geometries.length / 4,
+    waterOffset = surfaceGeom + surface.geometries.length / 4,
+    pixelOffset = waterOffset + water.nodes.length / 4,
     forestOffset = pixelOffset + Math.ceil(pixels.length / 4);
   let vertexCount = 0,
     triangleCount = 0;
@@ -170,6 +185,8 @@ export function packScenery(
     u = new Uint32Array(buffer);
   f.set([nodeCount, geomOffset, pixelOffset, grid], 0);
   f.set([surfaceOffset, surface.nodes.length / 8, surfaceGeom, surfaces.length], 4);
+  f[9] = waterOffset;
+  f[10] = water.nodes.length / 8;
   if (forest) {
     f[8] = forestOffset;
     writeForest(f, u, forestOffset, forest.frame, forest.cells, forest.trees);
@@ -178,6 +195,7 @@ export function packScenery(
   f.set(geometries, geomOffset * 4);
   f.set(surface.nodes, surfaceOffset * 4);
   f.set(surface.geometries, surfaceGeom * 4);
+  f.set(water.nodes, waterOffset * 4);
   u.set(pixels, pixelOffset * 4);
   if (triangleCount) {
     f.set([meshOffset, vertexCount, triangleOffset, triangleCount], 12);

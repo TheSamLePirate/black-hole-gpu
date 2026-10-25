@@ -202,6 +202,9 @@ override TUNE_ANISO: u32 = 4u;
 // regional surface, 16 the mesh's normal (the ellipsoid's), 32 the clouds' shadows, 64 the trees' test, 128 the imagery;
 // 256 the trees' grid walked on a miss — off by default; 512 the water's cover drawn red)
 override TUNE_LITE: u32 = 0u;
+// (TUNE_LITE's bits at run time too — renderer.liteSkip, P.jet2.w (unused there) —: a part of the raster's material cut
+// without compiling every kernel again, to measure it — TERRE-UNREAL U6)
+fn liteSkip() -> u32 { return TUNE_LITE | u32(max(P.jet2.w, 0.0) + 0.5); }
 override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
 // (the relief's shadow march's reach [m]: beyond it, the ground is taken as lit — a measure of what its far steps cost)
@@ -5494,6 +5497,9 @@ fn orthoImage(k: u32, i: vec2i) -> u32 {
   let t = vec2i(c.yz) + ((vec2i(a.zw) + i) & vec2i(1023));
   return textureLoad(earthTiles, t, u32(c.x), 0).g;
 }
+// (the coarser levels' night lights — their alpha — wanted: the raster's material says when its ground is in the day, the
+// orthophotos covering it then all it reads — TERRE-UNREAL U6)
+var<private> IMG_LIGHTS: bool = true;
 fn earthImagery(q: vec3f, foot: f32) -> TileImage {
   var o: TileImage;
   o.c = vec4f(0.0);
@@ -5533,6 +5539,14 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
     fine += (1.0 - wf) * w * lin;
     wf += (1.0 - wf) * w;
     if (wf > 0.9999) { break; }
+  }
+  // (the orthophotos covering it all, by day: the coarser levels under them not read — their colour hidden, their alpha the
+  // night's lights)
+  if (wf > 0.9999 && !IMG_LIGHTS) {
+    o.c = vec4f(fine / wf, 0.0);
+    o.w = 1.0;
+    o.o = 1.0;
+    return o;
   }
   var rem = 1.0;
   for (var li = 0; li < i32(TILE_IMG_LEVELS); li++) {
@@ -7619,8 +7633,11 @@ fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> vec2f {
   if (!HAS_SCENERY || P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5 || dist > P.scenery[1].w) { return vec2f(0.0); }
   let point = p.xy;
   let aa = max(0.12, foot * 0.75);
+  // (the water's own tree — scenery-data.ts packScenery: scenery[2].y its nodes, .z their count —, its leaves the surfaces'
+  // records: away from the water, a node or two walked, not the city's every road)
   let header = scenery[1];
-  let total = u32(header.y);
+  let wt = scenery[2];
+  let total = u32(wt.z);
   var i = 0u;
   var water = 0.0;
   var dryIsland = false;
@@ -7628,8 +7645,8 @@ fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> vec2f {
   var lake = false;
   var ocean = false;
   while (i < total) {
-    let lo = scenery[u32(header.x) + i * 2u];
-    let hi = scenery[u32(header.x) + i * 2u + 1u];
+    let lo = scenery[u32(wt.y) + i * 2u];
+    let hi = scenery[u32(wt.y) + i * 2u + 1u];
     if (any(point < lo.xy - vec2f(aa)) || any(point > hi.xy + vec2f(aa))) { i = u32(lo.w); continue; }
     if (hi.w < 0.0) { i++; continue; }
     let base = u32(header.z + hi.w);
@@ -10281,7 +10298,7 @@ fn rasterNormal(px: vec2f, tM: f32, k: u32) -> vec3f {
 fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, E: vec3f, fx: vec3f, fy: vec3f, dirW: vec3f, tM: f32, n: vec3f, mesh: bool) -> vec3f {
   let mu0 = dot(gq, Lp);
   var Eg = E * sunThrough(hG, mu0);
-  let csT = select(cloudShadowAt(q * (1.0 + hG / EARTH_RM)), 1.0, (TUNE_LITE & 32u) != 0u);
+  let csT = select(cloudShadowAt(q * (1.0 + hG / EARTH_RM)), 1.0, (liteSkip() & 32u) != 0u);
   if (csT >= 0.0) {
     Eg *= csT;
   } else {
@@ -10290,11 +10307,11 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, E: vec3f, fx: vec
     Eg *= 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
   }
   Eg *= sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
-  if ((TUNE_LITE & 4u) == 0u) {
+  if ((liteSkip() & 4u) == 0u) {
     let far = sunShadowFar(dirW * tM);
     if (far.x >= 0.0) { Eg *= far.x; }
   }
-  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(n, Lp) > 0.0 && (TUNE_LITE & 2u) == 0u) {
+  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(n, Lp) > 0.0 && (liteSkip() & 2u) == 0u) {
     // (the scenery's local frame — sceneryLocal's, written out: compiled out with the scenery)
     let toSc = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
     // (a building's own face — U2 —: its triangles are in the map, the point lifted off them, along its normal and towards
@@ -10321,6 +10338,13 @@ fn liteSky(q: vec3f, hG: f32, E: vec3f, Ls: vec3f, mu0: f32) -> vec3f {
 fn liteFinish(idx: u32, centre: vec2f, pos: vec2f, G: vec3f, rd: vec3f, tH: f32, tM: f32, Ls: vec3f, E: vec3f, k: u32, blend: bool) {
   let flags = P.frame.z;
   let frameStamp = P.frame.x;
+  // (liteSkip 2048: no air nor clouds over the surface — a measure)
+  if ((liteSkip() & 2048u) != 0u) {
+    accum[idx] = vec4f(G, 1.0);
+    moments[idx] = vec2f(RASTER_MARK, tM / EARTH_RM * bodyRadius(k));
+    stamps[idx] = frameStamp;
+    return;
+  }
   let ro = nearCam();
   let cs = cloudsBuffered(centre, terrainRasterDepth(centre));
   let alpha = max(cs.alpha, 0.0);
@@ -10378,6 +10402,13 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
   let centre = vec2f(gid.xy) + 0.5;
   if (!rasterLiteTakes(centre, k)) { return; }
+  // (liteSkip 1024: the pass alone — its dispatch and what it takes —, a flat grey written: a measure)
+  if ((liteSkip() & 1024u) != 0u) {
+    accum[idx] = vec4f(0.1, 0.1, 0.1, 1.0);
+    moments[idx] = vec2f(RASTER_MARK, 1e-3);
+    stamps[idx] = P.frame.x;
+    return;
+  }
   setAir(k);
   FOOT = 1.0;
   FOOT_NEAR = 1.0;
@@ -10390,7 +10421,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (a tree the raster drew here — U2 —: met along the ray before the ground, its point the surface; missed, the ground's)
   var isTree = false;
   let treeId = terrainRasterId(centre);
-  if (treeId != 0u && (TUNE_LITE & 64u) == 0u) {
+  if (treeId != 0u && (liteSkip() & 64u) == 0u) {
     let tt = sceneryTreeLite(normalize(toBody(ray.look)), treeId, tM);
     if (tt > 0.0) {
       tM = tt;
@@ -10416,16 +10447,17 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (the colour: the day's map, the tiles' imagery over it, the regional surface, the orthophotos over all)
   let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
   var img: TileImage;
-  if ((TUNE_LITE & 128u) == 0u) { img = earthImageryAniso(gq, fx, fy); }
+  IMG_LIGHTS = dot(gq, Lp) < 0.1;
+  if ((liteSkip() & 128u) == 0u) { img = earthImageryAniso(gq, fx, fy); }
   var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
   var surface = SurfaceImage(vec3f(0.0), 0.0, 0u);
-  if ((TUNE_LITE & 8u) == 0u) { surface = surfaceImage(gq, fx, fy); }
+  if ((liteSkip() & 8u) == 0u) { surface = surfaceImage(gq, fx, fy); }
   A = mix(A, surface.c * P.earth2.z, surface.w);
   A = mix(A, img.c.rgb * P.earth2.z, img.o);
   if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, max(length(fx), length(fy)) * EARTH_RM), surface.w * (1.0 - img.o)); }
   // (the normal: the mesh's, else the ellipsoid's; a tree's its own, its colour its look)
   var n = gq;
-  if ((TUNE_LITE & 16u) == 0u) { n = rasterNormal(centre, terrainRasterHint(centre), k); }
+  if ((liteSkip() & 16u) == 0u) { n = rasterNormal(centre, terrainRasterHint(centre), k); }
   if (dot(n, n) < 0.5) { n = gq; }
   if (isTree) {
     n = WS.xyz;
@@ -10445,7 +10477,10 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     rwyLamps = rp.lamps;
     lvl = runwayGrade(gq).y;
   }
-  let Eg = liteSun(q, gq, hG, Ls, Lp, E, fx, fy, dirW, tM, n, mesh);
+  // (liteSkip 4096: the Sun's and the sky's light plain — their transmittances and shadows not read: a measure)
+  let plainLight = (liteSkip() & 4096u) != 0u;
+  var Eg = E;
+  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Lp, E, fx, fy, dirW, tM, n, mesh); }
   // (a building's own triangles — U2 —: its roof the orthophoto's — the photograph is the roof seen from above —, its walls
   // stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —, the glass dark,
   // the sky mirrored in it below)
@@ -10469,7 +10504,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     A = mix(A, vec3f(0.03) * P.earth2.z, glass);
   }
   // (the sky's light — on a slope, a share of it, and the ground's bounce round it — as earthGround's)
-  let sky = liteSky(q, hG, E, Ls, mu0);
+  var sky = E * 0.15;
+  if (!plainLight) { sky = liteSky(q, hG, E, Ls, mu0); }
   let up = dot(n, gq);
   let bounce = (E * sunThrough(hG, mu0) * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
   var G = A / PI * (Eg * max(dot(n, Lp), 0.0) + sky * 0.5 * (1.0 + up) + bounce);
@@ -10495,7 +10531,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (the water — the sea, the lakes and rivers —: found here — its cover sharp, the polygon's edge alone softened; the sea's
   // mask the relief map's over the sea's level, OSM's by the coasts —, drawn by shadeWater: this pixel's surface under it left
   // to it in accum, its kind and cover in moments.x)
-  if (!mesh && !isTree && (TUNE_LITE & 1u) == 0u) {
+  if (!mesh && !isTree && (liteSkip() & 1u) == 0u) {
     let rel0 = earthRelief(gq, fx, fy);
     let sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hG));
     var osm = vec2f(0.0);
@@ -10507,7 +10543,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // (an airfield levelled: land, even where the maps had water)
     let water = max(sea0, osm.x) * (1.0 - lvl);
     // (TUNE_LITE 512: the water's cover drawn red — a measure)
-    if ((TUNE_LITE & 512u) != 0u) { G = mix(G, vec3f(0.5, 0.0, 0.0) * luminance(E), water); }
+    if ((liteSkip() & 512u) != 0u) { G = mix(G, vec3f(0.5, 0.0, 0.0) * luminance(E), water); }
     else if (water > 0.0 && rasterWaterOn()) {
       let calm = osm.x * (1.0 - sea0) * osm.y;
       let kind = select(0.0, select(1.0, 2.0, osm.y > 0.8), calm > 0.0);
@@ -10578,7 +10614,12 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   // (the sea's style, or the inland water's — a river's, a lake's: not the sea's calmed)
   var wcol: vec3f;
   if (calm > 0.0) { wcol = inlandWater(q, -rd, Ls, Eg, sky, footSea, kind > 1.5); }
-  else { wcol = seaShade(q, -rd, Ls, Eg, sky, G, footSea, 0.0, vec4f(0.0)); }
+  else {
+    wcol = seaShade(q, -rd, Ls, Eg, sky, G, footSea, 0.0, vec4f(0.0));
+    // (the sea drawn this frame: its stamp in the stamps' last word — renderer seaSeenStamp: the FFT's waves only while
+    // some sea is in view, TERRE-UNREAL U6)
+    stamps[arrayLength(&stamps) - 1u] = P.frame.x;
+  }
   G = mix(G, wcol, water);
   RASTER_SHADE = false;
   SEA_ON = false;
