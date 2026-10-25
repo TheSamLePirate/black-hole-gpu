@@ -200,7 +200,7 @@ override TUNE_AIR_N: u32 = 32u;
 override TUNE_ANISO: u32 = 4u;
 // (measures — shadeLite's parts left out: 1 the OSM water, 2 the scenery's shadow maps, 4 the relief's shadow map, 8 the
 // regional surface, 16 the mesh's normal (the ellipsoid's), 32 the clouds' shadows, 64 the trees' test, 128 the imagery;
-// 256 the trees' grid walked on a miss — off by default)
+// 256 the trees' grid walked on a miss — off by default; 512 the water's cover drawn red)
 override TUNE_LITE: u32 = 0u;
 override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
@@ -10254,6 +10254,97 @@ fn rasterNormal(px: vec2f, tM: f32, k: u32) -> vec3f {
   return select(n, -n, dot(n, d0) > 0.0);
 }
 
+// The sunlight on a raster pixel's surface (shadeLite, shadeWater): through the air, under the clouds — their map, else the
+// cover's shadow along the Sun's slant —, the Sun's disc over the horizon, the relief's shadow map, the trees' and buildings'
+// (a building's own face lifted off its triangles, along its normal and towards the Sun)
+fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, E: vec3f, fx: vec3f, fy: vec3f, dirW: vec3f, tM: f32, n: vec3f, mesh: bool) -> vec3f {
+  let mu0 = dot(gq, Lp);
+  var Eg = E * sunThrough(hG, mu0);
+  let csT = select(cloudShadowAt(q * (1.0 + hG / EARTH_RM)), 1.0, (TUNE_LITE & 32u) != 0u);
+  if (csT >= 0.0) {
+    Eg *= csT;
+  } else {
+    let marchMu = dot(q, Ls);
+    let qs = normalize(q + (Ls - q * marchMu) * (P.earth2.x / max(marchMu, 0.06)));
+    Eg *= 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
+  }
+  Eg *= sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
+  if ((TUNE_LITE & 4u) == 0u) {
+    let far = sunShadowFar(dirW * tM);
+    if (far.x >= 0.0) { Eg *= far.x; }
+  }
+  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(n, Lp) > 0.0 && (TUNE_LITE & 2u) == 0u) {
+    // (the scenery's local frame — sceneryLocal's, written out: compiled out with the scenery)
+    let toSc = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+    // (a building's own face — U2 —: its triangles are in the map, the point lifted off them, along its normal and towards
+    // the Sun — at 0.35 m its own depth shadowed it, a speckle over the roofs)
+    let lift = select(n * 0.35, n * 1.2 + Lp * 1.5, mesh);
+    let sp = P.scenery[3].xyz + (dirW * tM + lift) * toSc;
+    let m = treeShadowAt(sp);
+    let b = buildingShadowAt(sp);
+    var sh = 1.0;
+    if (m >= 0.0) { sh = min(sh, m); }
+    if (b >= 0.0) { sh = min(sh, b); }
+    // (faded out before the map's edge — ±900 m about a centre on a 128 m grid: read to its edge, the shadows there came and
+    // went in a block at each of its jumps, every second at 160 m/s)
+    Eg *= mix(sh, 1.0, smoothstep(550.0, 750.0, tM));
+  }
+  return Eg;
+}
+// The sky's light at a raster pixel's surface (as earthGround's)
+fn liteSky(q: vec3f, hG: f32, E: vec3f, Ls: vec3f, mu0: f32) -> vec3f {
+  return max(skyFlat(q, hG, E, mu0, skySeen(q, Ls)), E * nightFloor(skySeen(q, Ls), mu0));
+}
+// A raster pixel's surface radiance G seen through the clouds before it (the cloud pass's) and the air (the aerial table's —
+// else marched, as earthLook), blended with its last colour (P.ext.w, temporal: not after shadeLite's own write), written
+fn liteFinish(idx: u32, centre: vec2f, pos: vec2f, G: vec3f, rd: vec3f, tH: f32, tM: f32, Ls: vec3f, E: vec3f, k: u32, blend: bool) {
+  let flags = P.frame.z;
+  let frameStamp = P.frame.x;
+  let ro = nearCam();
+  let cs = cloudsBuffered(centre, terrainRasterDepth(centre));
+  let alpha = max(cs.alpha, 0.0);
+  if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
+  var air: EarthAir;
+  var useAp = AP_UV.x >= 0.0 && dot(ro, ro) < airTop() * airTop();
+  var tFar = 0.0;
+  if (useAp) {
+    tFar = apFar(ro);
+    useAp = apCovers(tH, tFar) && (alpha <= 0.0 || apCovers(cs.tc, tFar));
+  }
+  if (useAp) {
+    air = apRead(tH, tFar);
+    air.Tc = vec3f(1.0);
+    air.Lc = vec3f(0.0);
+    if (alpha > 0.0) {
+      let c = apRead(cs.tc, tFar);
+      air.Tc = c.T;
+      air.Lc = c.L;
+    }
+  } else {
+    air = earthAir(ro, rd, tH, Ls, E, fract(ign(centre) + f32(frameStamp % 1024u) * 0.618), select(3e38, cs.tc, alpha > 0.0));
+  }
+  AP_UV = vec2f(-1.0);
+  var col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cs.cl);
+  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+  let old = accum[idx];
+  if (blend && (flags & FLAG_TEMPORAL) != 0u && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
+  accum[idx] = vec4f(col, 1.0);
+  moments[idx] = vec2f(RASTER_MARK, tM / EARTH_RM * bodyRadius(k));
+  stamps[idx] = frameStamp;
+}
+// The water split from shadeLite (renderer.rasterWater, mouthList[1].y + 256): shadeLite leaves its water's pixels to
+// shadeWater — their surface radiance under the water in accum (before the air), moments.x RASTER_WATER less their kind
+// (0 the sea, 1 a river, 2 a lake) and a quarter of their cover —; shadeLite keeps none of the water's code: smaller, quicker
+// to compile, lighter on its registers
+const RASTER_WATER_FLAG = 256u;
+const RASTER_WATER = -5.0;
+fn rasterWaterOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_WATER_FLAG) != 0u; }
+// a raster pixel's frame jitter (shadeLite, shadeWater alike)
+fn liteJitter(gid: vec2u) -> vec2f {
+  if ((P.frame.z & FLAG_TEMPORAL) == 0u) { return vec2f(0.0); }
+  return select(gaussJitter(hash4(vec3u(gid, P.frame.x)).xy), rasterJitter(P.frame.x), rasterHalton());
+}
+
 @compute @workgroup_size(8, 8)
 fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let W = u32(P.res.x);
@@ -10270,12 +10361,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   FOOT = 1.0;
   FOOT_NEAR = 1.0;
   FOOT_FAR = 1.0;
-  let flags = P.frame.z;
-  let frameStamp = P.frame.x;
   // (the jittered ray of the frame — as shade's —: the temporal pass antialiases)
-  var jit = vec2f(0.0);
-  if ((flags & FLAG_TEMPORAL) != 0u) { jit = select(gaussJitter(hash4(vec3u(gid.xy, frameStamp)).xy), rasterJitter(frameStamp), rasterHalton()); }
-  let pos = centre + jit;
+  let pos = centre + liteJitter(gid.xy);
   var tM = terrainRasterHint(pos);
   if (tM <= 0.0) { tM = terrainRasterHint(centre); }
   let ray = rasterRay(pos, k);
@@ -10290,7 +10377,6 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     }
   }
   let ab = squashOf(k);
-  let ro = nearCam();
   let rd = ray.rd;
   let tH = tM / ray.kM;
   let ph = rasterPoint(ray, tM);
@@ -10325,46 +10411,12 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     A = WS_A;
   }
   let mu0 = dot(gq, Lp);
-  // (the sunlight at the ground: through the air, under the clouds — their map, else the cover's shadow along the Sun's
-  // slant —, the Sun's disc over the horizon, the relief's shadow map, the trees' and buildings')
-  var Eg = E * sunThrough(hG, mu0);
-  let csT = select(cloudShadowAt(q * (1.0 + hG / EARTH_RM)), 1.0, (TUNE_LITE & 32u) != 0u);
-  if (csT >= 0.0) {
-    Eg *= csT;
-  } else {
-    let marchMu = dot(q, Ls);
-    let qs = normalize(q + (Ls - q * marchMu) * (P.earth2.x / max(marchMu, 0.06)));
-    Eg *= 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
-  }
-  Eg *= sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
-  // (the sunlight before the relief's and the scenery's shadows: the water's body lit by it — one tone a lake)
-  let Esun = Eg;
   let dirW = toBody(ray.look);
-  let rel = dirW * tM;
-  if ((TUNE_LITE & 4u) == 0u) {
-    let far = sunShadowFar(rel);
-    if (far.x >= 0.0) { Eg *= far.x; }
-  }
-  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(n, Lp) > 0.0 && (TUNE_LITE & 2u) == 0u) {
-    // (the scenery's local frame — sceneryLocal's, written out: compiled out with the scenery)
-    let toSc = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
-    // (a building's own face — U2 —: its triangles are in the map, the point lifted off them, along its normal and towards
-    // the Sun — at 0.35 m its own depth shadowed it, a speckle over the roofs)
-    let lift = select(n * 0.35, n * 1.2 + Lp * 1.5, terrainRasterMesh(centre));
-    let sp = P.scenery[3].xyz + (dirW * tM + lift) * toSc;
-    let m = treeShadowAt(sp);
-    let b = buildingShadowAt(sp);
-    var sh = 1.0;
-    if (m >= 0.0) { sh = min(sh, m); }
-    if (b >= 0.0) { sh = min(sh, b); }
-    // (faded out before the map's edge — ±900 m about a centre on a 128 m grid: read to its edge, the shadows there came and
-    // went in a block at each of its jumps, every second at 160 m/s)
-    Eg *= mix(sh, 1.0, smoothstep(550.0, 750.0, tM));
-  }
+  let mesh = terrainRasterMesh(centre);
+  let Eg = liteSun(q, gq, hG, Ls, Lp, E, fx, fy, dirW, tM, n, mesh);
   // (a building's own triangles — U2 —: its roof the orthophoto's — the photograph is the roof seen from above —, its walls
   // stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —, the glass dark,
   // the sky mirrored in it below)
-  let mesh = terrainRasterMesh(centre);
   var glass = 0.0;
   // (a roof: the photograph's light and shade kept, its colour mostly let go — the orthophoto leans, a roof's place on it
   // the street's or a tree's beside it: zinc and slate grey, a fifth of the photograph's hue)
@@ -10385,7 +10437,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     A = mix(A, vec3f(0.03) * P.earth2.z, glass);
   }
   // (the sky's light — on a slope, a share of it, and the ground's bounce round it — as earthGround's)
-  let sky = max(skyFlat(q, hG, E, mu0, skySeen(q, Ls)), E * nightFloor(skySeen(q, Ls), mu0));
+  let sky = liteSky(q, hG, E, Ls, mu0);
   let up = dot(n, gq);
   let bounce = (E * sunThrough(hG, mu0) * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
   var G = A / PI * (Eg * max(dot(n, Lp), 0.0) + sky * 0.5 * (1.0 + up) + bounce);
@@ -10402,15 +10454,14 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     let F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(n, dirW)), 0.0, 1.0), 5.0);
     G += glass * F * sky * 1.5 / PI;
   }
-  // (the water — the sea, the lakes and rivers — by seaShade, the tracer's own water, as earthGround has it: its waves (the
-  // resolved trains, the FFT's cascades near), Cox–Munk's glint, the mirror averaged over the unresolved slopes, the world
-  // mirrored in it near (seaSSR), the far clouds, the shallow bed, the foam and the surf; a lake or a river calmer — its
-  // fetch's ripples, the cat's paws. One water a lake: its cover sharp — the polygon's edge alone softened —, the sea's mask
-  // the relief map's over the sea's level)
-  var water = 0.0;
-  var calm = 0.0;
-  var osmLake = false;
-  var dbgW = vec2f(0.0);
+  // (the cities' lights at night)
+  let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
+  let lamp = max(lights - 0.07, 0.0) / 0.93;
+  let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
+  G += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
+  // (the water — the sea, the lakes and rivers —: found here — its cover sharp, the polygon's edge alone softened; the sea's
+  // mask the relief map's over the sea's level, OSM's by the coasts —, drawn by shadeWater: this pixel's surface under it left
+  // to it in accum, its kind and cover in moments.x)
   if (!mesh && !isTree && (TUNE_LITE & 1u) == 0u) {
     let rel0 = earthRelief(gq, fx, fy);
     let sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hG));
@@ -10420,86 +10471,101 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       osm = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
       osm.x = smoothstep(0.35, 0.65, osm.x);
     }
-    water = max(sea0, osm.x);
-    calm = osm.x * (1.0 - sea0) * osm.y;
-    dbgW = vec2f(sea0, osm.x);
-    osmLake = osm.y > 0.8;
-  }
-  if (water > 0.0) {
-    let footSea = sqrt(length(fx) * length(fy)) * EARTH_RM;
-    SEA_ON = P.sea[1].w > 0.0;
-    SEA_D = dirW * tM;
-    let dw = select(seaDepthAt(gq, footSea), vec2f(1e4, 0.0), calm > 0.0);
-    SEA_DEPTH = dw.x;
-    SEA_DEPTH_W = dw.y;
-    RND = fract(ign(centre) + f32(frameStamp % 1024u) * 0.6180339887);
-    RASTER_SHADE = true;
-    // (the sea's style, or the inland water's — a river's, a lake's: not the sea's calmed)
-    var wcol: vec3f;
-    if (calm > 0.0) { wcol = inlandWater(q, -rd, Ls, Eg, sky, footSea, osmLake); }
-    else { wcol = seaShade(q, -rd, Ls, Eg, sky, G, footSea, 0.0, vec4f(0.0)); }
-    G = mix(G, wcol, water);
-    RASTER_SHADE = false;
-    SEA_ON = false;
-    // (falling water — a cascade, a rapid — on the inland water alone (the sea does not fall): where its ground is steep — the
-    // mesh's normal off the vertical —, white
-    // water, aerated, in streaks drawn down the slope and running down it with the clock, lit as foam; the flat water's look
-    // gone with the steepness)
-    let steep = smoothstep(0.96, 0.75, dot(n, gq)) * water * select(0.0, 1.0, calm > 0.0);
-    if (steep > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5) {
-      let toF = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
-      let pL = P.scenery[3].xyz + (dirW * tM) * toF;
-      let downW = dot(n, gq) * n - gq;
-      let dL = normalize((downW * toF).xy + vec2f(1e-6, 0.0));
-      let along = dot(pL.xy, dL) - pL.z * 0.6;
-      let across = dot(pL.xy, vec2f(-dL.y, dL.x));
-      let tclock = P.time.x * P.near5.w;
-      let streak = 0.5 + 0.5 * (0.65 * gnoise(vec3f(across * 0.9, along * 0.12 - tclock * 2.5, 1.7))
-        + 0.35 * gnoise(vec3f(across * 2.7, along * 0.4 - tclock * 4.0, 5.3)));
-      let white = 0.72 / PI * (Eg * max(dot(n, Lp), 0.0) + sky) * (0.75 + 0.35 * streak);
-      G = mix(G, white, steep * clamp(0.45 + 0.75 * streak, 0.0, 1.0));
+    let water = max(sea0, osm.x);
+    // (TUNE_LITE 512: the water's cover drawn red — a measure)
+    if ((TUNE_LITE & 512u) != 0u) { G = mix(G, vec3f(0.5, 0.0, 0.0) * luminance(E), water); }
+    else if (water > 0.0 && rasterWaterOn()) {
+      let calm = osm.x * (1.0 - sea0) * osm.y;
+      let kind = select(0.0, select(1.0, 2.0, osm.y > 0.8), calm > 0.0);
+      accum[idx] = vec4f(G, 1.0);
+      moments[idx] = vec2f(RASTER_WATER - kind - 0.25 * water, tM / EARTH_RM * bodyRadius(k));
+      stamps[idx] = P.frame.x;
+      return;
     }
   }
-  // (TUNE_LITE 512: the water's cover drawn red — a measure)
-  if ((TUNE_LITE & 512u) != 0u) { G = mix(G, vec3f(0.5, 0.0, 0.0) * luminance(E), water); }
-  // (TUNE_LITE 1024: the sea's two masks — red the relief map's, green OSM's — a measure)
-  if ((TUNE_LITE & 1024u) != 0u) { G = vec3f(dbgW.x, dbgW.y, 0.0) * 0.4 * luminance(E); }
-  // (the cities' lights at night)
-  let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
-  let lamp = max(lights - 0.07, 0.0) / 0.93;
-  let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
-  G += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
-  // (the clouds before the ground: the cloud pass's; the air: the aerial table's — else marched, as earthLook)
-  let cs = cloudsBuffered(centre, terrainRasterDepth(centre));
-  let alpha = max(cs.alpha, 0.0);
-  if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
-  var air: EarthAir;
-  var useAp = AP_UV.x >= 0.0 && dot(ro, ro) < airTop() * airTop();
-  var tFar = 0.0;
-  if (useAp) {
-    tFar = apFar(ro);
-    useAp = apCovers(tH, tFar) && (alpha <= 0.0 || apCovers(cs.tc, tFar));
+  liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true);
+}
+
+// The water of the raster's ground (renderer.rasterWater — TERRE-UNREAL U2d): the pixels shadeLite left it, their surface
+// under the water in accum. The sea by seaShade — the tracer's own water: its waves (the resolved trains, the FFT's
+// cascades near), Cox–Munk's glint, the mirror averaged over the unresolved slopes, the world mirrored in it near (seaSSR),
+// the far clouds, the shallow bed, the foam and the surf —; a river or a lake by inlandWater, their own style; a cascade's
+// white water where the inland water's ground is steep. Then the air and the clouds, as shadeLite's.
+@compute @workgroup_size(8, 8)
+fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
+  let W = u32(P.res.x);
+  let H = u32(P.res.y);
+  if (gid.x >= W || gid.y >= H || !rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5) { return; }
+  let idx = gid.y * W + gid.x;
+  let mk = moments[idx].x;
+  if (!(mk <= RASTER_WATER && mk > RASTER_WATER - 3.0)) { return; }
+  let k = u32(P.near1.w);
+  setAir(k);
+  FOOT = 1.0;
+  FOOT_NEAR = 1.0;
+  FOOT_FAR = 1.0;
+  let code = RASTER_WATER - mk;
+  let kind = floor(code + 1e-4);
+  let water = clamp((code - kind) * 4.0, 0.0, 1.0);
+  let calm = select(0.0, select(0.6, 0.92, kind > 1.5), kind > 0.5);
+  let centre = vec2f(gid.xy) + 0.5;
+  let pos = centre + liteJitter(gid.xy);
+  var tM = terrainRasterHint(pos);
+  if (tM <= 0.0) { tM = terrainRasterHint(centre); }
+  let ray = rasterRay(pos, k);
+  let ab = squashOf(k);
+  let rd = ray.rd;
+  let tH = tM / ray.kM;
+  let ph = rasterPoint(ray, tM);
+  let q = normalize(ph);
+  let gq = geoQ(q);
+  let hG = max(airHeight(ph) - geoidN(gq), 0.0);
+  let lt = nearLight(k);
+  let Ls = normalize(squashed(toBody(lt.dir), ab));
+  let Lp = normalize(toBody(lt.dir));
+  let E = lt.e;
+  let fp = pixFoot() * tH;
+  let fx = earthFoot(q, rd, squashed(toBody(P.camRight.xyz), ab), fp);
+  let fy = earthFoot(q, rd, squashed(toBody(P.camUp.xyz), ab), fp);
+  var n = rasterNormal(centre, terrainRasterHint(centre), k);
+  if (dot(n, n) < 0.5) { n = gq; }
+  let dirW = toBody(ray.look);
+  let Eg = liteSun(q, gq, hG, Ls, Lp, E, fx, fy, dirW, tM, n, false);
+  let sky = liteSky(q, hG, E, Ls, dot(gq, Lp));
+  var G = accum[idx].rgb;
+  let footSea = sqrt(length(fx) * length(fy)) * EARTH_RM;
+  SEA_ON = P.sea[1].w > 0.0;
+  SEA_D = dirW * tM;
+  let dw = select(seaDepthAt(gq, footSea), vec2f(1e4, 0.0), calm > 0.0);
+  SEA_DEPTH = dw.x;
+  SEA_DEPTH_W = dw.y;
+  RND = fract(ign(centre) + f32(P.frame.x % 1024u) * 0.6180339887);
+  RASTER_SHADE = true;
+  // (the sea's style, or the inland water's — a river's, a lake's: not the sea's calmed)
+  var wcol: vec3f;
+  if (calm > 0.0) { wcol = inlandWater(q, -rd, Ls, Eg, sky, footSea, kind > 1.5); }
+  else { wcol = seaShade(q, -rd, Ls, Eg, sky, G, footSea, 0.0, vec4f(0.0)); }
+  G = mix(G, wcol, water);
+  RASTER_SHADE = false;
+  SEA_ON = false;
+  // (falling water — a cascade, a rapid — on the inland water alone (the sea does not fall): where its ground is steep — the
+  // mesh's normal off the vertical —, white water, aerated, in streaks drawn down the slope and running down it with the
+  // clock, lit as foam; the flat water's look gone with the steepness)
+  let steep = smoothstep(0.96, 0.75, dot(n, gq)) * water * select(0.0, 1.0, calm > 0.0);
+  if (steep > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5) {
+    let toF = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+    let pL = P.scenery[3].xyz + (dirW * tM) * toF;
+    let downW = dot(n, gq) * n - gq;
+    let dL = normalize((downW * toF).xy + vec2f(1e-6, 0.0));
+    let along = dot(pL.xy, dL) - pL.z * 0.6;
+    let across = dot(pL.xy, vec2f(-dL.y, dL.x));
+    let tclock = P.time.x * P.near5.w;
+    let streak = 0.5 + 0.5 * (0.65 * gnoise(vec3f(across * 0.9, along * 0.12 - tclock * 2.5, 1.7))
+      + 0.35 * gnoise(vec3f(across * 2.7, along * 0.4 - tclock * 4.0, 5.3)));
+    let white = 0.72 / PI * (Eg * max(dot(n, Lp), 0.0) + sky) * (0.75 + 0.35 * streak);
+    G = mix(G, white, steep * clamp(0.45 + 0.75 * streak, 0.0, 1.0));
   }
-  if (useAp) {
-    air = apRead(tH, tFar);
-    air.Tc = vec3f(1.0);
-    air.Lc = vec3f(0.0);
-    if (alpha > 0.0) {
-      let c = apRead(cs.tc, tFar);
-      air.Tc = c.T;
-      air.Lc = c.L;
-    }
-  } else {
-    air = earthAir(ro, rd, tH, Ls, E, fract(ign(centre) + f32(frameStamp % 1024u) * 0.618), select(3e38, cs.tc, alpha > 0.0));
-  }
-  AP_UV = vec2f(-1.0);
-  var col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cs.cl);
-  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
-  let old = accum[idx];
-  if ((flags & FLAG_TEMPORAL) != 0u && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
-  accum[idx] = vec4f(col, 1.0);
-  moments[idx] = vec2f(RASTER_MARK, tM / EARTH_RM * bodyRadius(k));
-  stamps[idx] = frameStamp;
+  liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, false);
 }
 
 // The cloud pass (docs/PLAN-NUAGES-AAA.md N1): the clouds along each camera ray marched once a texel of half the image's

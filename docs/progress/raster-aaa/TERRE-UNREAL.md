@@ -243,3 +243,14 @@ la mer, les rivières, les arbres et le décor, est devenu gros : à découper (
 | Avant (le trait, HUD masqué) | Après |
 |---|---|
 | ![avant](img/u2d-trait-avant.png) | ![après](img/u2d-trait-apres.png) |
+
+### U2e — l'eau dans son propre noyau (`shadeWater`) (25/10)
+
+`shadeLite` portait l'eau de la mer (`seaShade`), celle des rivières et des lacs, les arbres et le décor : gros à compiler et
+lourd en registres pour chaque pixel. Découpé : `shadeLite` trouve l'eau et laisse au pixel sa surface (`accum`, avant l'air)
+et un marqueur (`moments.x` : `RASTER_WATER` moins son genre — mer, rivière, lac — et un quart de sa couverture) ; `shadeWater`
+(`renderer.rasterWater`, bit 256) refait la géométrie et la lumière (`liteSun`, `liteSky`, communs), ombre l'eau et les
+cascades, puis l'air et les nuages (`liteFinish`, commun).
+
+Mesuré ici (Tarifa) : compilation `shadeLite` 2,8 s, `shadeWater` 2,9 s — l'attente de plus d'une minute vient du noyau
+principal du traceur (74 s pour une clé), pas du raster ; temps `earth lite` 2,2 ms, `earth water` 2,6 ms, `shade` 0,2 ms.
