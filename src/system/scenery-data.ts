@@ -73,9 +73,10 @@ export interface Primitive {
   /** a building's triangles for the raster (roof-mesh.ts): its visibility and its shadow map */
   mesh?: { positions: number[]; triangles: number[] };
 }
-/** the buildings within this of the scene's centre [m] get their triangles for the shadow map (its ±900 m round the
- *  camera, the camera within a few hundred metres of the centre); the farther ones their boxes */
-export const BUILDING_MESH_M = 1100;
+/** the buildings within this of the scene's centre [m] get their triangles — the shadow map's (its ±900 m round the camera)
+ *  and the raster's visibility, the material's buildings (docs/progress/raster-aaa/TERRE-UNREAL.md U2: out to where they are
+ *  cut into their parts, BUILDING_PARTS_M); the farther ones their boxes, drawn solid */
+export const BUILDING_MESH_M = 2000;
 /** the buildings within this of the centre [m] have their complex outlines cut into convex parts, each its roof (roofs.ts
  *  planBuilding: ~3 leaves a Paris block); the farther ones one leaf (a complex one flat) — the buffer's budget their count */
 export const BUILDING_PARTS_M = 2000;

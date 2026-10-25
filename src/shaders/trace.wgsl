@@ -198,6 +198,10 @@ override COST_VIEW: u32 = 0u;
 override TUNE_AIR_N: u32 = 32u;
 // the imagery's anisotropic taps at most (earthImageryAniso: 1 the isotropic read, on the footprint's long axis)
 override TUNE_ANISO: u32 = 4u;
+// (measures — shadeLite's parts left out: 1 the OSM water, 2 the scenery's shadow maps, 4 the relief's shadow map, 8 the
+// regional surface, 16 the mesh's normal (the ellipsoid's), 32 the clouds' shadows, 64 the trees' test, 128 the imagery;
+// 256 the trees' grid walked on a miss — off by default)
+override TUNE_LITE: u32 = 0u;
 override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
 // (the relief's shadow march's reach [m]: beyond it, the ground is taken as lit — a measure of what its far steps cost)
@@ -7515,7 +7519,11 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32) -> f32 {
   let ci = k % max(hd.w, 1);
   let cj = k / max(hd.w, 1);
   var tree = forestCandidate(o, d, ci, cj, 0.0, hd);
-  if (!(tree.t > 0.0 && tree.t < tMax)) { tree = forestQueryFrom(o, d, forestCandidateStart(o, d, ci, cj, hd), tMax, false, 0.0); }
+  // (missed — a crown behind it on the screen —: the ground there; the grid walked from it only with TUNE_LITE 256 — 40 % of
+  // the material's time over Paris for nothing seen at a pixel's size)
+  if (!(tree.t > 0.0 && tree.t < tMax) && (TUNE_LITE & 256u) != 0u) {
+    tree = forestQueryFrom(o, d, forestCandidateStart(o, d, ci, cj, hd), tMax, false, 0.0);
+  }
   if (tree.kind == 0u || tree.t <= 0.0 || tree.t >= tMax) { return -1.0; }
   let p = o + d * tree.t;
   SC_POINT = p;
@@ -10164,7 +10172,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (a tree the raster drew here — U2 —: met along the ray before the ground, its point the surface; missed, the ground's)
   var isTree = false;
   let treeId = terrainRasterId(centre);
-  if (treeId != 0u) {
+  if (treeId != 0u && (TUNE_LITE & 64u) == 0u) {
     let tt = sceneryTreeLite(normalize(toBody(ray.look)), treeId, tM);
     if (tt > 0.0) {
       tM = tt;
@@ -10190,14 +10198,17 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let fy = earthFoot(q, rd, squashed(toBody(P.camUp.xyz), ab), fp);
   // (the colour: the day's map, the tiles' imagery over it, the regional surface, the orthophotos over all)
   let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
-  let img = earthImageryAniso(gq, fx, fy);
+  var img: TileImage;
+  if ((TUNE_LITE & 128u) == 0u) { img = earthImageryAniso(gq, fx, fy); }
   var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
-  let surface = surfaceImage(gq, fx, fy);
+  var surface = SurfaceImage(vec3f(0.0), 0.0, 0u);
+  if ((TUNE_LITE & 8u) == 0u) { surface = surfaceImage(gq, fx, fy); }
   A = mix(A, surface.c * P.earth2.z, surface.w);
   A = mix(A, img.c.rgb * P.earth2.z, img.o);
   if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, max(length(fx), length(fy)) * EARTH_RM), surface.w * (1.0 - img.o)); }
   // (the normal: the mesh's, else the ellipsoid's; a tree's its own, its colour its look)
-  var n = rasterNormal(centre, terrainRasterHint(centre), k);
+  var n = gq;
+  if ((TUNE_LITE & 16u) == 0u) { n = rasterNormal(centre, terrainRasterHint(centre), k); }
   if (dot(n, n) < 0.5) { n = gq; }
   if (isTree) {
     n = WS.xyz;
@@ -10207,7 +10218,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (the sunlight at the ground: through the air, under the clouds — their map, else the cover's shadow along the Sun's
   // slant —, the Sun's disc over the horizon, the relief's shadow map, the trees' and buildings')
   var Eg = E * sunThrough(hG, mu0);
-  let csT = cloudShadowAt(q * (1.0 + hG / EARTH_RM));
+  let csT = select(cloudShadowAt(q * (1.0 + hG / EARTH_RM)), 1.0, (TUNE_LITE & 32u) != 0u);
   if (csT >= 0.0) {
     Eg *= csT;
   } else {
@@ -10216,11 +10227,15 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     Eg *= 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
   }
   Eg *= sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
+  // (the sunlight before the relief's and the scenery's shadows: the water's body lit by it — one tone a lake)
+  let Esun = Eg;
   let dirW = toBody(ray.look);
   let rel = dirW * tM;
-  let far = sunShadowFar(rel);
-  if (far.x >= 0.0) { Eg *= far.x; }
-  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(n, Lp) > 0.0) {
+  if ((TUNE_LITE & 4u) == 0u) {
+    let far = sunShadowFar(rel);
+    if (far.x >= 0.0) { Eg *= far.x; }
+  }
+  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(n, Lp) > 0.0 && (TUNE_LITE & 2u) == 0u) {
     // (the scenery's local frame — sceneryLocal's, written out: compiled out with the scenery)
     let toSc = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
     // (a building's own face — U2 —: its triangles are in the map, the point lifted off them, along its normal and towards
@@ -10279,15 +10294,19 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   }
   // (the lakes and rivers — OSM's water —: dark, the sky mirrored by Fresnel, the Sun's glint)
   var water = 0.0;
-  if (HAS_SCENERY && !mesh && !isTree && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
+  if (HAS_SCENERY && !mesh && !isTree && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && (TUNE_LITE & 1u) == 0u) {
     let toW = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
     water = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
   }
+  // (one water, a whole lake or river alike: its cover sharp — the polygon's edge alone softened, not shares of the ground
+  // under it —, the surface flat, its body one dark tone in the unshadowed sunlight, the sky mirrored by Fresnel over the
+  // view's angle; the trees' and buildings' shadows on the Sun's glint alone)
+  water = smoothstep(0.35, 0.65, water);
   if (water > 0.0) {
     let V = -dirW;
     let cv = clamp(dot(gq, V), 0.0, 1.0);
     let F = 0.02 + 0.98 * pow(1.0 - cv, 5.0);
-    let Gw = vec3f(0.015, 0.025, 0.03) / PI * (Eg * max(mu0, 0.0) + sky);
+    let Gw = vec3f(0.015, 0.025, 0.03) / PI * (Esun * max(mu0, 0.0) + sky);
     let glint = Eg * F * 12.0 * pow(max(dot(normalize(Lp + V), gq), 0.0), 300.0);
     G = mix(G, Gw * (1.0 - F) + F * sky * 1.2 / PI + glint, water);
   }

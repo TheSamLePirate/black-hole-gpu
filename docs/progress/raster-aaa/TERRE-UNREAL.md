@@ -165,3 +165,20 @@ Prochaines étapes : (1) les bâtiments sans triangles dessinés comme leurs bo�
 au matériau — plus aucun bâtiment par rayons ; (2) `earth lite` à ~22 ns par pixel sur le M1 : mesurer ses parties (l'eau
 OSM, qui parcourt des polygones à chaque pixel, en tête ; l'imagerie anisotrope ; les cartes d'ombre lues en 4 × 4) et les
 alléger — viser quelques ns par pixel.
+
+### U2c — plus aucun bâtiment par rayons, `earth lite` allégé, l'eau d'un seul tenant (25/10)
+
+Mesure des parties de `shadeLite` (ce Mac, Paris, 150 m, chaque pixel, ~0,5 Mpx ; `TUNE_LITE`) : base 5,4–7,2 ms ; tout
+retiré 0,66 ms ; les arbres — surtout la grille parcourue quand l'arbre désigné est manqué : **2,4 ms**, 40 % — en tête ;
+l'eau OSM −0,5 ; l'imagerie −0,3 ; les cartes d'ombre ~0.
+
+- La grille des arbres n'est plus parcourue sur un manqué (le sol là ; `TUNE_LITE` 256 pour la remettre) : rien de visible à
+  la taille d'un pixel.
+- Les bâtiments ont leurs triangles jusqu'à 2 000 m du centre du décor (`BUILDING_MESH_M`, 1 100 avant) ; au-delà, leurs
+  boîtes sont dessinées **pleines** (toit plat, `boxSolidVs`) au matériau — les boîtes de marquage ne sont plus dessinées.
+- L'eau : sa couverture franche (le bord du polygone seul adouci), une surface plate, un seul ton de fond éclairé par le
+  Soleil non ombré, le ciel réfléchi selon l'angle de vue ; les ombres sur le reflet du Soleil seul.
+
+Mesuré ici : `shade` **0,2 ms** (4–10 avant), `earth lite` 3,9 ms, visibilité 1,5 ms — 43 img/s à l'échelle 1.
+
+![U2c](img/u2c-paris.jpg)
