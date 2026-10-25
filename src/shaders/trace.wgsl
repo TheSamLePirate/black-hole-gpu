@@ -7545,11 +7545,45 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32) -> f32 {
 }
 // The OSM water's cover at a ground point of the scenery's frame (shadeLite: the lakes and rivers its material draws as
 // water), the pixel's footprint and distance [m]
+// — its own walk of the surfaces, the water's alone, the most cover of them: scenerySurface keeps the surface of the highest
+// rank, and a line — a railway, a road in its tunnel, under the river — outranks a polygon: the Seine was cut by dark bands
+// along every line crossing it
 fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> f32 {
-  SC_POINT = p;
-  SC_DISTANCE = dist;
-  let o = scenerySurface(foot);
-  return select(0.0, o.cover, o.kind == 3.0 || o.kind == 4.0);
+  if (!HAS_SCENERY || P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5 || dist > P.scenery[1].w) { return 0.0; }
+  let point = p.xy;
+  let aa = max(0.12, foot * 0.75);
+  let header = scenery[1];
+  let total = u32(header.y);
+  var i = 0u;
+  var water = 0.0;
+  var dryIsland = false;
+  var bank = false;
+  while (i < total) {
+    let lo = scenery[u32(header.x) + i * 2u];
+    let hi = scenery[u32(header.x) + i * 2u + 1u];
+    if (any(point < lo.xy - vec2f(aa)) || any(point > hi.xy + vec2f(aa))) { i = u32(lo.w); continue; }
+    if (hi.w < 0.0) { i++; continue; }
+    let base = u32(header.z + hi.w);
+    let q = scenery[base];
+    let size = scenery[base + 1u];
+    if (scenery[base + 2u].w > 0.5) {
+      if (q.w == 3.0 || q.w == 4.0) {
+        if (sceneryPolygon(point, base, u32(q.z))) {
+          water = 1.0;
+          bank = bank || q.w == 4.0;
+        } else if (q.w == 4.0 && sceneryPolygon(point, base, u32(scenery[base + 2u].w))) { dryIsland = true; }
+      }
+    } else if (size.y == 3.0 || size.y == 4.0) {
+      let line = q.zw - q.xy;
+      let len = max(length(line), 0.001);
+      let along = clamp(dot(point - q.xy, line) / (len * len), 0.0, 1.0);
+      water = max(water, 1.0 - smoothstep(max(0.0, size.x - aa), size.x + aa, length(point - q.xy - line * along)));
+    }
+    i++;
+  }
+  // (an island of a river's polygon: dry, whatever other water's outline covers it — scenerySurface's rule)
+  if (dryIsland && !bank) { water = 0.0; }
+  return water * P.scenery[3].w * smoothstep(P.scenery[1].w, P.scenery[1].w - 300.0, dist);
 }
 // END_WORLD_SCENERY
 
@@ -10310,6 +10344,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     let glint = Eg * F * 12.0 * pow(max(dot(normalize(Lp + V), gq), 0.0), 300.0);
     G = mix(G, Gw * (1.0 - F) + F * sky * 1.2 / PI + glint, water);
   }
+  // (TUNE_LITE 512: the water's cover drawn red — a measure)
+  if ((TUNE_LITE & 512u) != 0u) { G = mix(G, vec3f(0.5, 0.0, 0.0) * luminance(E), water); }
   // (the cities' lights at night)
   let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
   let lamp = max(lights - 0.07, 0.0) / 0.93;

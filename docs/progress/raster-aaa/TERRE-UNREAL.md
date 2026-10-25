@@ -182,3 +182,17 @@ l'eau OSM −0,5 ; l'imagerie −0,3 ; les cartes d'ombre ~0.
 Mesuré ici : `shade` **0,2 ms** (4–10 avant), `earth lite` 3,9 ms, visibilité 1,5 ms — 43 img/s à l'échelle 1.
 
 ![U2c](img/u2c-paris.jpg)
+
+**L'eau, d'un seul tenant (vue de près)** : des bandes sombres en diagonale coupaient la Seine — peinte en rouge (`TUNE_LITE`
+512), l'eau reconnue y montrait des lignes vides : `scenerySurface` garde la surface OSM du rang le plus haut, et une ligne
+(un rail, une route en tunnel sous le fleuve) l'emporte sur un polygone. `sceneryWaterAt` parcourt désormais les surfaces
+pour l'eau seule (polygones et cours d'eau en ligne, la plus forte couverture ; les îles d'un fleuve sèches, comme avant).
+
+| Avant (l'eau reconnue en rouge) | Après |
+|---|---|
+| ![bandes](img/u2c-seine-bandes.png) | ![seine](img/u2c-seine.png) |
+
+**Mini, Paris, « chaque pixel », 1920 × 1080, noyaux prêts (U2c)** : **8,9 img/s** (5 avant) ; `earth shade` hors du
+classement (< 1,6 ms) ; `earth lite` 26 ms ; visibilité 7 ms, ciel tracé 7 ms, cartes d'ombre des arbres 3 ms ; le reste
+dans les passes de rendu du cockpit et du vaisseau (MSAA à la pleine taille : leurs horodatages se chevauchent sur Apple,
+~50 ms d'après leur somme). Suite : `earth lite` (26 ms sur le M1, ~13 ns par pixel), le cockpit à la pleine taille (U5).
