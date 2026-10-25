@@ -2508,6 +2508,14 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
   font: 600 10px/13px var(--mono); color: #b8f5c8; letter-spacing: 0.02em; white-space: nowrap;
 }
 .fps-meter[hidden] { display: none; }
+/* the shaders compiling in the background: a thinking orb and their count, under the frame rate */
+.compile-meter {
+  position: fixed; top: 15px; left: 50%; transform: translateX(-50%); z-index: var(--z-toast); pointer-events: none;
+  display: flex; align-items: center; gap: 6px; padding: 1px 8px 1px 4px; border-radius: 4px;
+  background: rgba(4, 8, 14, 0.78); border: 1px solid rgba(124, 214, 255, 0.25);
+  font: 600 10px/14px var(--mono); color: #bfe9ff; letter-spacing: 0.02em; white-space: nowrap;
+}
+.compile-meter[hidden] { display: none; }
 .scenery-credit {
   position: fixed; right: 6px; bottom: max(3px, env(safe-area-inset-bottom)); z-index: 6;
   max-width: calc(100vw - 12px); padding: 3px 6px; border-radius: 3px;

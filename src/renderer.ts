@@ -6934,6 +6934,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   rasterLite = true;
   /** shadeLite this frame */
   private rasterLiteNow = false;
+  /** the tracer's compiles queued or running (the specialised kernels, the general and quality ones, the LUTs' — main.ts's
+   *  compile meter) */
+  get compilesPending() {
+    const busy = [this.generalCompile, this.qualityCompile, this.lutCompile, this.lutQCompile].filter((r) => r.state === "pending").length;
+    return this.variantQueue.pending + busy;
+  }
   /** the raster's ground drawn by shadeLite this frame (main.ts: its scale held, not the governor's) */
   get rasterLiteActive() {
     return this.rasterLiteNow;

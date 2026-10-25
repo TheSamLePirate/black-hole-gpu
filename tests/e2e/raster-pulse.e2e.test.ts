@@ -95,7 +95,12 @@ test.skipIf(!E2E)(
               const d = await detail();
               await app.shot(`${OUT}/pulse-${label}-${name}${k}.png`);
               const st = await app.js<Record<string, unknown>>(STATE);
-              console.log(`  ${label}: ${name} #${k} — detail ${d}, ${JSON.stringify(st)}`);
+              // (the GPU's passes this lever — the compute passes' timestamps are sound on Apple, the render passes' overlap)
+              const passes =
+                await app.js<string>(`(async () => { const r = __bh.renderer; r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
+                await new Promise((q) => setTimeout(q, 1500));
+                return r.prof.table().filter((p) => p.last > 0.5).sort((a, b) => b.last - a.last).slice(0, 12).map((p) => p.label + " " + p.last.toFixed(1)).join(", "); })()`);
+              console.log(`  ${label}: ${name} #${k} — detail ${d}, ${JSON.stringify(st)}\n    passes: ${passes}`);
               results.push({ side, round, lever: name, k, d, st });
             }
           writeFileSync(`${OUT}/pulse.json`, JSON.stringify(results, null, 1));

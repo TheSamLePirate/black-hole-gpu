@@ -10264,8 +10264,15 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let up = dot(n, gq);
   let bounce = (E * sunThrough(hG, mu0) * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
   var G = A / PI * (Eg * max(dot(n, Lp), 0.0) + sky * 0.5 * (1.0 + up) + bounce);
-  // (a tree's leaves lit from behind: the light through them — forestLook's)
-  if (isTree) { G += WS_T / PI * Eg * max(-dot(n, Lp), 0.0) * 0.5; }
+  // (a tree: lit as windsockShade lights it — the Sun on its face, six tenths of the sky, not the ground's open sky and
+  // bounce: they lit the crowns yellow —, its crown's underside in its own shade (the carving's occlusion, left out here),
+  // the light through its thin edge against the Sun)
+  if (isTree) {
+    let ao = 0.5 + 0.5 * clamp(0.5 + 0.5 * dot(n, gq), 0.0, 1.0);
+    let rim = 1.0 - abs(dot(n, dirW));
+    G = A / PI * (Eg * max(dot(n, Lp), 0.0) * sqrt(ao) + sky * 0.6 * ao)
+      + WS_T / PI * Eg * max(-dot(n, Lp), 0.0) * rim * (0.3 + 0.7 * pow(max(dot(dirW, Lp), 0.0), 4.0));
+  }
   if (glass > 0.0) {
     let F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(n, dirW)), 0.0, 1.0), 5.0);
     G += glass * F * sky * 1.5 / PI;

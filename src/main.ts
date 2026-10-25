@@ -1,4 +1,5 @@
 import { scopeRange } from "./ui/hud/symbology";
+import { TarsOrb, TINT } from "./ui/tars/orb";
 import { SystemsPage } from "./ui/systemspage";
 import { A320Page, type FailureWhen } from "./ui/a320page";
 import { Frost, Wiper } from "./a320/glass";
@@ -7542,6 +7543,14 @@ async function main() {
   const fpsMeter = Object.assign(document.createElement("div"), { className: "fps-meter", hidden: true });
   fpsMeter.dataset.testid = "fps-meter";
   document.body.append(fpsMeter);
+  // (the shaders compiling in the background — the scene's kernels, the raster's, a still view's quality one —: a thinking orb
+  // and their count under the frame rate, gone once all are in; data-pending for the tests)
+  const compileMeter = Object.assign(document.createElement("div"), { className: "compile-meter", hidden: true });
+  compileMeter.dataset.testid = "compile-meter";
+  compileMeter.dataset.pending = "0";
+  const compileText = document.createElement("span");
+  compileMeter.append(TarsOrb.mark("solving", TINT.blue, 14), compileText);
+  document.body.append(compileMeter);
   const sceneryCredit = Object.assign(document.createElement("div"), { className: "scenery-credit", hidden: true });
   const creditLink = (label: string, href: string) =>
     Object.assign(document.createElement("a"), { textContent: label, href, target: "_blank", rel: "noopener" });
@@ -7622,6 +7631,10 @@ async function main() {
       // (the frame rate in its corner, when asked — Settings › Render › Show the frame rate)
       fpsMeter.hidden = !settings.showFps;
       if (settings.showFps) fpsMeter.textContent = fps > 0 ? `${fps.toFixed(0)} fps · ${(1000 / fps).toFixed(1)} ms` : "— fps";
+      const compiling = renderer.compilesPending;
+      compileMeter.hidden = compiling === 0;
+      compileMeter.dataset.pending = String(compiling);
+      if (compiling) compileText.textContent = `${t("Compiling shaders")} · ${compiling}`;
     }
     // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
     // (frozen: an automation steps the simulation itself — __bh.step; an offline render or a video: the

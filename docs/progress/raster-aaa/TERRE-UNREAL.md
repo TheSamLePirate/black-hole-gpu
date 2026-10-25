@@ -141,3 +141,14 @@ Mesuré ici (M1 Max, Paris, 150 m, « chaque pixel », échelle 1, 839 × 596) :
 et surtout son lancement sur chaque pixel pour en rendre la plupart à `shadeLite`.
 
 ![U2 Paris](img/u2-paris.jpg)
+
+### U2 — suite (25/10)
+
+- Les boîtes des bâtiments à triangles retirées de la visibilité (`BOX_SKIP_MESHED`) : elles envoyaient aux rayons de
+  `shade` les pixels au-dessus des toits en pente et le long des marges — `shade` 10,4 → 3,9 ms, 42 img/s à l'échelle 1 ici.
+- Les arbres éclairés comme `windsockShade` les éclaire (six dixièmes du ciel, le dessous de la couronne dans son ombre, la
+  lumière à travers les feuilles au bord contre le Soleil) : l'ombrage du sol les rendait jaunes et trop clairs.
+- Un indicateur de compilation (un « thinking orb » et le nombre de compilations, sous le compteur d'images ;
+  `data-pending` pour les tests).
+- Mini, Paris, « chaque pixel » à l'échelle native (1920 × 1080), noyaux prêts : **5 img/s** avec le matériau comme avec
+  l'ancien `shade` — à cette taille, ce n'est plus l'ombrage du sol qui limite : passes mesurées en cours.
