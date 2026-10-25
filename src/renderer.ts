@@ -307,6 +307,12 @@ const MAX_SAMPLE_AGE = 1.5;
 const FLAG_INTERLEAVED = 8;
 /** the clear sky's light's period [frames] (encodeSkyAmbient) */
 const SKY_EVERY = 3;
+/** the parameters' raster bit for the stars drawn at their own pixels (trace.wgsl RASTER_STARS_FLAG) */
+const RASTER_STARS_FLAG = 512;
+/** the catalogue's stars at most (trace.wgsl shadeStars: a thread a star — 119 614 HYG/Hipparcos) */
+const STARS_MAX = 120_000;
+/** the sky's discs drawn at most (renderer.skyDiscs, discRects; trace.wgsl main's layers) */
+const SKY_DISCS_MAX = 4;
 /** the light meter's period [frames] (encodePost) */
 const METER_EVERY = 4;
 /** how often the raster's sea is probed (renderer.seaProbeFor) [frames]; how long unseen before its FFT stops */
@@ -821,7 +827,7 @@ export class Renderer {
   private meterTick = 0;
   /** the telescope's spot meter (main.ts sets it each frame): the target's disc — its centre (fractions of the
    *  width, the height) and its radius (a fraction of the height) —, the exposure set by it alone; null: the image's */
-  meterSpot: { x: number; y: number; r: number; key?: string } | null = null;
+  meterSpot: { x: number; y: number; r: number; key?: string; solid?: boolean } | null = null;
   /** what the spot last metered (a target's name; "": none): another one, the exposure found again at once */
   private spotKey = "";
   private spotBuf!: GPUBuffer;
@@ -2126,8 +2132,12 @@ export class Renderer {
     const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE }); // Σ l², depth
     const sceneDepth = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE }); // the occlusion depth
-    // (a word more: the frame the raster's sea was last drawn — trace.wgsl shadeWater, renderer seaProbe)
-    const stamps = d.createBuffer({ size: (px + 4) * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+    // (words past the image: the sky's discs' rectangles — trace.wgsl main's layers z ≥ 1, renderer discRects —, then the frame
+    // the raster's sea was last drawn — its last word: trace.wgsl shadeWater, renderer seaProbe)
+    const stamps = d.createBuffer({
+      size: (px + 4 * SKY_DISCS_MAX + 12 + 4) * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
     // realtime reconstruction of stale pixels (live view only): horizontal pass of the gather
     const gather = d.createBuffer({ size: live ? px * 16 : 16, usage: GPUBufferUsage.STORAGE });
     const stars = d.createBuffer({
@@ -3971,6 +3981,8 @@ export class Renderer {
       shadeLite: GPUComputePipeline | null;
       /** the raster's water, split from shadeLite (trace.wgsl shadeWater — TERRE-UNREAL U2d) */
       shadeWater: GPUComputePipeline | null;
+      /** the catalogue's stars over the raster's sky (trace.wgsl shadeStars — TERRE-UNREAL U8) */
+      shadeStars: GPUComputePipeline | null;
       /** the cloud pass (trace.wgsl clouds) */
       clouds: GPUComputePipeline | null;
       /** a still view asked for the quality cascade (q, lutq) */
@@ -4010,7 +4022,7 @@ export class Renderer {
    * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
   private traceVariant(
-    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "clouds",
+    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "clouds",
     key = this.featureKey,
     create = true,
   ): GPUComputePipeline | null {
@@ -4025,6 +4037,7 @@ export class Renderer {
       shadeMark: null,
       shadeLite: null,
       shadeWater: null,
+      shadeStars: null,
       clouds: null,
     }[kind];
     if (key === FEATURES_ALL) {
@@ -4050,6 +4063,7 @@ export class Renderer {
         shadeMark: null,
         shadeLite: null,
         shadeWater: null,
+        shadeStars: null,
         clouds: null,
         qWanted: false,
         busy: false,
@@ -4088,7 +4102,15 @@ export class Renderer {
    * mush. The shading and its marks taken from the same key.
    */
   private rasterStandIn(key: number, kind: string): GPUComputePipeline | null {
-    if (kind !== "shade" && kind !== "shadeMark" && kind !== "shadeLite" && kind !== "shadeWater" && kind !== "clouds") return null;
+    if (
+      kind !== "shade" &&
+      kind !== "shadeMark" &&
+      kind !== "shadeLite" &&
+      kind !== "shadeWater" &&
+      kind !== "shadeStars" &&
+      kind !== "clouds"
+    )
+      return null;
     let best: GPUComputePipeline | null = null;
     let bestN = -1;
     for (const [k, v] of this.variants) {
@@ -4141,7 +4163,7 @@ export class Renderer {
     // (the image's own kernels — the trace's, the raster's shading, its clouds, the probe — urgent: ahead of a quality kernel
     // a pause queued; the LUT and the aerial table after them, as queued)
     const compile = (
-      entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "clouds",
+      entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "clouds",
       onStall?: () => void,
     ) =>
       this.variantQueue.run(
@@ -4157,6 +4179,7 @@ export class Renderer {
       if (!slot.shadeMark && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shadeMark = await compile("shadeMark");
       if (!slot.shadeLite && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeLite = await compile("shadeLite");
       if (!slot.shadeWater && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeWater = await compile("shadeWater");
+      if (!slot.shadeStars && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeStars = await compile("shadeStars");
       if (!slot.clouds && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.cloudPass) slot.clouds = await compile("clouds");
     };
     const run = async () => {
@@ -4219,7 +4242,7 @@ export class Renderer {
    *  of them): it draws this scene as it would — the extra features are switched off by the params. */
   private coveringVariant(
     key: number,
-    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "clouds",
+    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "clouds",
   ): GPUComputePipeline | null {
     // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants)
     for (const [k, v] of this.variants) if ((k & key) === key && k >>> 16 === key >>> 16 && v[kind]) return v[kind];
@@ -4230,11 +4253,18 @@ export class Renderer {
    *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
   private async timedVariant(
     key: number,
-    entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "clouds",
+    entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "clouds",
     quality = false,
   ) {
     const t0 = performance.now();
-    const p = await this.mkVariant(key, entry, quality);
+    const label = this.compileLabel(key, entry, quality);
+    this.compiling.add(label);
+    let p: GPUComputePipeline;
+    try {
+      p = await this.mkVariant(key, entry, quality);
+    } finally {
+      this.compiling.delete(label);
+    }
     const s = ((performance.now() - t0) / 1000).toFixed(1);
     gpuDiagnostics.record(
       "pipeline-compiled",
@@ -4247,7 +4277,7 @@ export class Renderer {
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
   private mkVariant(
     key: number,
-    entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "clouds",
+    entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "clouds",
     quality: boolean,
   ): Promise<GPUComputePipeline> {
     const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
@@ -4259,7 +4289,8 @@ export class Renderer {
               entryPoint === "shade" ||
               entryPoint === "shadeMark" ||
               entryPoint === "shadeLite" ||
-              entryPoint === "shadeWater"
+              entryPoint === "shadeWater" ||
+              entryPoint === "shadeStars"
             ? this.mainLayout
             : entryPoint === "lut"
               ? this.lutLayout
@@ -4299,6 +4330,7 @@ export class Renderer {
               entryPoint === "shadeMark" ||
               entryPoint === "shadeLite" ||
               entryPoint === "shadeWater" ||
+              entryPoint === "shadeStars" ||
               entryPoint === "clouds") &&
             !quality
               ? has(FEATURE_TERRAIN_CACHE)
@@ -4309,6 +4341,7 @@ export class Renderer {
               entryPoint === "shadeMark" ||
               entryPoint === "shadeLite" ||
               entryPoint === "shadeWater" ||
+              entryPoint === "shadeStars" ||
               entryPoint === "clouds") &&
             !quality &&
             this.rasterHint
@@ -4556,12 +4589,51 @@ export class Renderer {
     // the scene's realtime kernel still compiling at the start: no image yet)
     if (!pipeline) return false;
     const label = quality ? "trace (converging)" : "trace";
+    // (the catalogue's stars at their own pixels — trace.wgsl shadeStars, TERRE-UNREAL U8 —: its kernel there, the stars
+    // splatted this frame, the matrix given: the parameters' bit — the rays then draw the Milky Way's map alone —, the matrix
+    // into the stamps' words after the discs')
+    const starsPipe =
+      !quality && this.rasterLiteNow && this.starsSplat && this.starMatrix && t === this.live ? this.traceVariant("shadeStars") : null;
+    this.starsRasterNow = !!starsPipe;
+    if (starsPipe) {
+      this.paramsF[MOUTH_LIST_AT + 5] = this.paramsF[MOUTH_LIST_AT + 5]! + RASTER_STARS_FLAG;
+      this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
+      this.device.queue.writeBuffer(t.stamps, (t.width * t.height + 4 * SKY_DISCS_MAX) * 4, this.starMatrix!);
+    }
+    // (the sky's bodies' discs at one ray a pixel — trace.wgsl main's layers z ≥ 1, TERRE-UNREAL U8 —: their rectangles in the
+    // stamps' words past the image, the dispatch as wide as the widest of them)
+    const discs = !quality && this.rasterLiteNow && t === this.live ? this.discRects(t) : [];
+    let gx = Math.max(1, Math.ceil(x / 8)),
+      gy = Math.max(1, Math.ceil(y / 8));
+    // (written each frame, none as zeros: the sky's rays leave the rectangles to the discs' layers)
+    if (t === this.live) {
+      const words = new Uint32Array(4 * SKY_DISCS_MAX);
+      discs.forEach((r, i) => words.set(r, 4 * i));
+      this.device.queue.writeBuffer(t.stamps, t.width * t.height * 4, words);
+      for (const r of discs) {
+        // (a block of 2 × 2 a thread for an interleaved one — trace.wgsl main)
+        const st = (r[3] >> 19) & 1 ? 4 : (r[3] >> 18) & 1 ? 2 : 1;
+        // (a block more for an interleaved one: its blocks on the image's grid — trace.wgsl main)
+        const extra = st > 1 ? st : 0;
+        gx = Math.max(gx, Math.ceil((r[2] + extra) / st / 8));
+        gy = Math.max(gy, Math.ceil(((r[3] & 0xffff) + extra) / st / 8));
+      }
+    }
+    this.discsDrawn = discs.length;
     const pass = enc.beginComputePass(timed ? this.prof.timed(label, timed) : this.prof.pass(label));
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, hint ? this.hintBindFor(t, hint) : t.traceBind);
     pass.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
-    pass.dispatchWorkgroups(Math.max(1, Math.ceil(x / 8)), Math.max(1, Math.ceil(y / 8)));
+    pass.dispatchWorkgroups(gx, gy, 1 + discs.length);
     pass.end();
+    if (starsPipe && hint) {
+      const sp = enc.beginComputePass(this.prof.pass("stars (raster)"));
+      sp.setPipeline(starsPipe);
+      sp.setBindGroup(0, this.hintBindFor(t, hint));
+      sp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+      sp.dispatchWorkgroups(Math.ceil(STARS_MAX / 64));
+      sp.end();
+    }
     // The raster's primary visibility (docs/PLAN-RENDU-RASTER-AAA.md étape 1): the patch's pixels, left by the trace,
     // shaded one a pixel at the image's full size — after it, before the reconstruction that reads both.
     // (a rate above 1: the frame's pattern alone, its threads packed — and the pixels it leaves marked for resolve)
@@ -6582,8 +6654,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // (a frame burnt flat — the image's own buffer full at an exposure pushed too far: every cell in a bin or two,
       // no contrast left to read — stepped down until it shows again; the spot never more than 6 EV over what the
       // image's own meter asks: a cloud's veil read as the object pushed it 10 EV and locked it there)
-      const filled = h.reduce((a, c) => Math.max(a, c), 0);
-      const flat = filled > 0.9 * total;
+      // (burnt: that bin over white at the exposure now — a frame dark throughout, the Moon's night side over the telescope's
+      // whole field at totality, is no burnt frame: read as one it stepped the exposure down to its floor and kept it there,
+      // the corona and the beads after it black)
+      let fb = 0;
+      for (let b = 1; b < 128; b++) if (h[b]! > h[fb]!) fb = b;
+      const flat = h[fb]! > 0.9 * total && fb > 0 && Lof(fb) * this.meterGain * 2 ** this.autoEV > 0.5;
       const base = m;
       if (flat) m = 2 ** (this.autoEV - 4);
       else if (core > 0) m = 0.85 / (this.meterGain * core);
@@ -6592,8 +6668,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // its median taken as the black point, as an astrophotographer stretches a frame; the object then bright on
       // black, not on a grey veil. Not past half the way to white: a disc with no object in it stays a sky)
       if (sky > 0) m = Math.min(m, 0.5 / (this.meterGain * sky));
-      // (an object over its sky, however thin a haze or a cloud's veil it shows through: stretched on black)
-      this.spotSky = !flat && sky > 0 && core > 1.15 * sky ? sky : 0;
+      // (an object over its sky, however thin a haze or a cloud's veil it shows through: stretched on black — not a solid
+      // body's disc: the spot's median there is its own ground, the Moon's maria put to black, its highlands burnt orange)
+      this.spotSky = !flat && !this.meterSpot?.solid && sky > 0 && core > 1.15 * sky ? sky : 0;
       this.spotRead = { core, sky, total, m, gain: this.meterGain, hist: Array.from(h) };
     }
     // (in the Earth's air, its sky is the scene, not a backdrop: a camera's meter besides — no more than a
@@ -6663,6 +6740,39 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     rp.end();
   }
 
+  /** The sky's discs' rectangles in the image's pixels [x0, y0, w, h | body << 16 | rays4 << 17] (skyDiscs, a margin of 3 px —
+   *  the jitter, the edge's antialiasing —, clipped to the image; none off it). However wide — the telescope's Moon over the
+   *  whole image, one ray a pixel (the sky's 16 × 16 blocks blurred it to a smear) —; four rays a pixel only for a small one
+   *  (96 × 96 px at most: its limb far past white, a single jittered ray flickering white or sky — trace.wgsl main) */
+  private discRects(t: Target): [number, number, number, number][] {
+    const out: [number, number, number, number][] = [];
+    for (const d of this.skyDiscs) {
+      if (out.length >= SKY_DISCS_MAX) break;
+      const cx = (0.5 + 0.5 * d.x) * t.width,
+        cy = (0.5 - 0.5 * d.y) * t.height,
+        r = 0.5 * d.r * t.height + 3;
+      const x0 = Math.max(0, Math.floor(cx - r)),
+        y0 = Math.max(0, Math.floor(cy - r)),
+        x1 = Math.min(t.width, Math.ceil(cx + r)),
+        y1 = Math.min(t.height, Math.ceil(cy + r));
+      if (x1 <= x0 || y1 <= y0) continue;
+      // (the body in the height's word's high bits: 1 the Moon — trace.wgsl DISC_KIND —, then the four rays' bit)
+      const area = (x1 - x0) * (y1 - y0);
+      // (a wide one held still in the view — discsStill: the stabilised telescope —: a 2 × 2 block's pixel a frame, in turn)
+      // (the Sun and the Moon still to each other — half an arcsecond a second —: either held, both)
+      const il = (this.discsStill === "moon" || this.discsStill === "sun") && area > 160 * 160;
+      // (the widest — over 256² px, the telescope's Sun or Moon over the field —: a 4 × 4 block's pixel a frame, four rays
+      // each — a quarter of a ray a pixel —, its full resolution in sixteen frames — the disc held to 0.05 px a frame)
+      const il4 = il && area > 256 * 256;
+      out.push([
+        x0,
+        y0,
+        x1 - x0,
+        (y1 - y0) | ((d.moon ? 1 : 0) << 16) | ((area <= 96 * 96 ? 1 : 0) << 17) | ((il ? 1 : 0) << 18) | ((il4 ? 1 : 0) << 19),
+      ]);
+    }
+    return out;
+  }
   /** the sea's probe (seaSeenStamp): its copy encoded every SEA_PROBE_FRAMES frames while the raster draws the water */
   private seaProbeFor(enc: GPUCommandEncoder): GPUBuffer | null {
     const t = this.live;
@@ -6866,6 +6976,19 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** a still view keeps the raster's realtime frames (main.ts: the raster pipeline, not the photo mode) — else it refines,
    *  traced */
   rasterHold = true;
+  /** the sky's bodies' discs this frame (main.ts: the Moon's, the Sun's — bodyDisc): their centre in the image [ndc] and their
+   *  radius [ndc of the height]; drawn at one ray a pixel over the raster's sky (trace.wgsl main, z ≥ 1) */
+  skyDiscs: { x: number; y: number; r: number; moon: boolean }[] = [];
+  /** the catalogue's ICRS directions to the camera's axes (main.ts starMatrixNow: three columns of four), or none — the
+   *  stars over the raster's sky drawn one a thread at their own pixel (trace.wgsl shadeStars) */
+  starMatrix: Float32Array<ArrayBuffer> | null = null;
+  /** the stars drawn so this frame (tests) */
+  starsRasterNow = false;
+  /** the discs drawn in the last frame (tests) */
+  discsDrawn = 0;
+  /** the body held still in the view (main.ts: the telescope locked on it, stabilised; null: none): its disc, wide, drawn a
+   *  2 × 2 block's pixel a frame (discRects) */
+  discsStill: string | null = null;
   /** the sky's coarser block while the raster draws all the near ground (RASTER_SKY_BLOCK; a switch for comparisons) */
   rasterSkyBlock = true;
   /** the rays' raster kernel (shade) left out while the material takes every pixel (a switch for comparisons) */
@@ -7078,6 +7201,41 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private rasterWaterNow = false;
   /** the tracer's compiles queued or running (the specialised kernels, the general and quality ones, the LUTs' — main.ts's
    *  compile meter) */
+  /** the shaders compiling now, as the player reads them (main.ts: the compile meter) — the kernel, and the scene's features
+   *  that made its variant */
+  private compiling = new Set<string>();
+  get compilingNow(): string[] {
+    const out = [...this.compiling];
+    if (this.generalCompile.state === "pending") out.push(t("the general tracer"));
+    if (this.qualityCompile.state === "pending") out.push(t("the refining tracer"));
+    if (this.lutCompile.state === "pending" || this.lutQCompile.state === "pending") out.push(t("the far field"));
+    return out;
+  }
+  private compileLabel(key: number, entry: string, quality: boolean): string {
+    const names: Record<string, string> = {
+      main: quality ? t("the refining tracer") : t("the tracer"),
+      env: t("the light probe"),
+      lut: t("the far field"),
+      aerial: t("the aerial perspective"),
+      shade: t("the ground's rays"),
+      shadeMark: t("the ground's rays"),
+      shadeLite: t("the ground's material"),
+      shadeWater: t("the water"),
+      shadeStars: t("the stars"),
+      clouds: t("the clouds"),
+    };
+    const f = [
+      [8192, t("scenery")],
+      [4096, t("surfaces")],
+      [1024, t("weather")],
+      [256, t("runways")],
+      [2048, t("eclipses")],
+      [16384, t("auroras")],
+    ]
+      .filter(([b]) => (key & (b as number)) !== 0)
+      .map(([, n]) => n as string);
+    return f.length ? `${names[entry] ?? entry} (${f.join(", ")})` : (names[entry] ?? entry);
+  }
   get compilesPending() {
     const busy = [this.generalCompile, this.qualityCompile, this.lutCompile, this.lutQCompile].filter((r) => r.state === "pending").length;
     return this.variantQueue.pending + busy;

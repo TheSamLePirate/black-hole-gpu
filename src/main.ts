@@ -166,7 +166,7 @@ import { POSE_KEYS } from "./controller/util";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
-import { BODY_NAMES, bodyLook, craftRadius, isCraft, isNetTarget, netTargets, onOurSide, type Body } from "./targeting";
+import { BODY_NAMES, bodyDisc, bodyLook, craftRadius, ourLook, isCraft, isNetTarget, netTargets, onOurSide, type Body } from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNTS, mountKeys, mountPose, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetSpinStart, fleetStart } from "./fleet";
@@ -1853,6 +1853,67 @@ async function main() {
       if (Math.abs(b) < 0.005 && Math.abs(e) < 0.005) break;
     }
     camera.setLook(settings.shipLookYaw + off[0], settings.shipLookPitch + off[1]);
+  }
+
+  /**
+   * The Moon's and the Sun's discs in the image this frame (renderer.skyDiscs — TERRE-UNREAL U8: drawn at one ray a pixel over
+   * the raster's sky, not by its sparse rays): their centres [ndc] and radii [ndc of the height], from the ephemerides with
+   * the light's time and the refraction (targeting.ts bodyDisc), in front of the camera; none off the raster's Earth.
+   */
+  function skyDiscsNow(): { x: number; y: number; r: number; moon: boolean }[] {
+    if (!renderer.rasterPrimaryNow) return [];
+    const view = camera.viewSettings();
+    const cam = cameraFrame(view);
+    const tanH = Math.tan((view.fov * Math.PI) / 360);
+    const aspect = canvas.width / Math.max(canvas.height, 1);
+    const dot = (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+    const out: { x: number; y: number; r: number; moon: boolean }[] = [];
+    const moon = bodyDisc(view, cam, "moon", sim.time),
+      sun = bodyDisc(view, cam, "sun", sim.time);
+    // (the Moon near the Sun's disc — an eclipse, from its first contact's approach —: the Sun's rectangle out to 4 of its
+    // radii, its corona there at one ray a pixel; beyond, faint, the sky's)
+    const eclipse = !!moon && !!sun && Math.acos(Math.min(1, dot(moon.look, sun.look))) < 1.5 * (moon.radius + sun.radius);
+    for (const [id, d] of [
+      ["moon", moon],
+      ["sun", sun],
+    ] as const) {
+      if (!d) continue;
+      const f = dot(d.look, cam.fwd);
+      if (f <= 0.05) continue;
+      out.push({
+        x: dot(d.look, cam.right) / f / (tanH * aspect),
+        y: dot(d.look, cam.up) / f / tanH,
+        r: (Math.tan(d.radius) / tanH / f) * (id === "sun" && eclipse ? 4 : 1),
+        moon: id === "moon",
+      });
+    }
+    return out;
+  }
+
+  /**
+   * The catalogue's ICRS directions to the camera's axes this frame (renderer.starMatrix — trace.wgsl shadeStars, TERRE-UNREAL
+   * U8): three columns — right, up, forward of each ICRS axis — from the home frame's J2000 ecliptic (realSky's obliquity)
+   * through ourLook (the mouth's frame, the aberration); none off the raster's Earth or off our side.
+   */
+  function starMatrixNow(): Float32Array<ArrayBuffer> | null {
+    if (!renderer.rasterPrimaryNow) return null;
+    const view = camera.viewSettings();
+    const cam = cameraFrame(view);
+    if (!onOurSide(view, cam)) return null;
+    const dot = (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+    // (ICRS → J2000 ecliptic: the rows of realSky's RX, RY, RZ — the obliquity ε = 84 381.448″)
+    const rows: [number, number, number][] = [
+      [1, 0, 0],
+      [0, 0.91748206, -0.39777716],
+      [0, 0.39777716, 0.91748206],
+    ];
+    const m = new Float32Array(12);
+    rows.forEach((d, j) => {
+      const L = ourLook(view, cam, d);
+      const l = Math.hypot(...L) || 1;
+      m.set([dot(L, cam.right) / l, dot(L, cam.up) / l, dot(L, cam.fwd) / l, 0], 4 * j);
+    });
+    return m;
   }
 
   // (a preset exposed for our side — sunlit Saturn, ~21 EV above the disk — does not pass its exposure on)
@@ -5961,7 +6022,7 @@ async function main() {
    * the wormhole, a little round a point) —; null: the image's own meter (no telescope, the option off, the target
    * out of the view).
    */
-  function telescopeSpot(): { x: number; y: number; r: number; key: string } | null {
+  function telescopeSpot(): { x: number; y: number; r: number; key: string; solid: boolean } | null {
     const vs = camera.viewSettings();
     if (!vs.telescope || !vs.telescopeSpot || !vs.autoExposure) return null;
     const info = camera.viewController().targetInfo();
@@ -5969,10 +6030,17 @@ async function main() {
     const tanH = Math.tan((vs.fov * Math.PI) / 360);
     const ndc = projectLook(info.cam, info.look, tanH, canvas.width / Math.max(canvas.height, 1));
     if (!ndc) return null;
-    const r = Math.min(Math.max(Math.tan(info.seen) / tanH / 2, 0.02), 0.5);
+    // (the disc wider than the image — the Sun at 0.4°, its crescent at the frame's edge —: the whole image is the target,
+    // its own meter; a spot within the disc read only what stood at its centre — the Moon's night side before it, exposed to
+    // white, the crescent burnt)
+    const raw = Math.tan(info.seen) / tanH / 2;
+    if (raw > 0.5) return null;
+    const r = Math.max(raw, 0.02);
     const x = (ndc[0] + 1) / 2,
       y = (1 - ndc[1]) / 2;
-    return x + r < 0 || x - r > 1 || y + r < 0 || y - r > 1 ? null : { x, y, r, key: String(vs.target) };
+    // (a body with a surface — the Moon, a planet, a craft —: its disc is the spot, its own ground no sky to take as black)
+    const solid = !["hole", "wormhole", "star", "barycentre"].includes(vs.target);
+    return x + r < 0 || x - r > 1 || y + r < 0 || y - r > 1 ? null : { x, y, r, key: String(vs.target), solid };
   }
   /** The observatory opened (a search typed), or why not. */
   function openObserve(query = "") {
@@ -7634,7 +7702,13 @@ async function main() {
       const compiling = renderer.compilesPending;
       compileMeter.hidden = compiling === 0;
       compileMeter.dataset.pending = String(compiling);
-      if (compiling) compileText.textContent = `${t("Compiling shaders")} · ${compiling}`;
+      // (which: the kernel and the features of its variant — the first one, the others counted)
+      if (compiling) {
+        const now = renderer.compilingNow;
+        compileText.textContent = now.length
+          ? `${t("Compiling shaders")} · ${now[0]}${compiling > 1 ? ` · +${compiling - 1}` : ""}`
+          : `${t("Compiling shaders")} · ${compiling}`;
+      }
     }
     // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
     // (frozen: an automation steps the simulation itself — __bh.step; an offline render or a video: the
@@ -7848,6 +7922,10 @@ async function main() {
     replayEv = 0;
     // (a still view refines, traced, in the photo mode alone: paused or held, the raster draws on)
     renderer.rasterHold = !photoMode?.isOpen;
+    renderer.skyDiscs = skyDiscsNow();
+    // (the telescope locked on its target — stabilised, controller/piloting.ts aimShipViews —: its disc still in the view)
+    renderer.discsStill = settings.telescope && settings.lookAt ? settings.target : null;
+    renderer.starMatrix = starMatrixNow();
     const st = capped
       ? null
       : cpuProf.time("render (encode, submit)", () =>

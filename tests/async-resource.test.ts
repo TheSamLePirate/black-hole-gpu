@@ -207,7 +207,7 @@ test("a learning queue never stalls before a first compile has completed", async
 });
 
 test("a learning queue's stall limit follows the longest compile seen", async () => {
-  const queue = new CompileQueue(20, true);
+  const queue = new CompileQueue(20, true, 0);
   expect(
     await queue.run(
       () => true,
@@ -249,4 +249,28 @@ test("an urgent compile starts ahead of the ones queued before it, after the run
   expect(await Promise.all([a, q, s])).toEqual(["A", "quality", "shade"]);
   expect(calls).toEqual(["A", "shade", "quality"]);
   expect(queue.pending).toBe(0);
+});
+
+test("a compile out of the browser's cache teaches a learning queue nothing", async () => {
+  // (its 0.2 s the limit's floor: the next real compile taken for hung, others started beside it)
+  const queue = new CompileQueue(20, true, 50);
+  expect(
+    await queue.run(
+      () => true,
+      async () => "cached",
+    ),
+  ).toBe("cached");
+  expect(queue.stallLimit).toBe(Number.POSITIVE_INFINITY);
+  const slow = deferred<string>();
+  let stalled = 0;
+  const a = queue.run(
+    () => true,
+    () => slow.promise,
+    () => stalled++,
+  );
+  await Bun.sleep(120);
+  expect(stalled).toBe(0);
+  slow.resolve("real");
+  expect(await a).toBe("real");
+  expect(queue.stallLimit).toBeGreaterThanOrEqual(360);
 });

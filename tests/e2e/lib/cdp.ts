@@ -31,6 +31,20 @@ const GPU =
     ? ["--no-sandbox", "--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-vulkan=swiftshader", "--use-webgpu-adapter=swiftshader"]
     : ["--enable-unsafe-webgpu", "--enable-gpu", "--ignore-gpu-blocklist"];
 
+// (every Chrome this process started and not yet closed: killed when it ends however it ends — a test that never closed
+// its own, a boot that failed, a run stopped — else each stayed, headless, on the GPU for good)
+const running = new Map<number, () => void>();
+const killRunning = () => {
+  for (const kill of running.values()) kill();
+  running.clear();
+};
+process.on("exit", killRunning);
+for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const)
+  process.on(sig, () => {
+    killRunning();
+    process.exit(128 + (sig === "SIGINT" ? 2 : sig === "SIGTERM" ? 15 : 1));
+  });
+
 export async function launch(o: { width?: number; height?: number; dpr?: number; args?: string[] } = {}): Promise<Cdp> {
   const W = o.width ?? 1440,
     H = o.height ?? 900;
@@ -66,6 +80,11 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     ],
     { stdout: "ignore", stderr: "ignore" },
   );
+  running.set(port, () => {
+    proc.kill();
+    Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
+    rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  });
   let page: { webSocketDebuggerUrl: string } | undefined;
   for (let i = 0; i < 300 && !page; i++) {
     page = await fetch(`http://127.0.0.1:${port}/json`)
@@ -75,6 +94,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     if (!page) await Bun.sleep(100);
   }
   if (!page) {
+    running.delete(port);
     proc.kill();
     rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
     release();
@@ -170,6 +190,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     close: () => {
       if (HOLD) Bun.sleepSync(HOLD * 1000);
       gone ??= "closed";
+      running.delete(port);
       ws.close();
       proc.kill();
       Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);

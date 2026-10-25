@@ -207,7 +207,13 @@ export class App {
     app.sw = !!o.sw;
     app.file = file;
     app.recorded = !o.entry && o.telemetry !== false;
-    await app.load(o.hash ?? "", !!o.startupFailure);
+    // (a boot that fails — no first image in time — closes its Chrome: the test never had it to close)
+    try {
+      await app.load(o.hash ?? "", !!o.startupFailure);
+    } catch (e) {
+      cdp.close();
+      throw e;
+    }
     return app;
   }
 

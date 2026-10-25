@@ -644,6 +644,19 @@ export function apparentDirection(
 }
 
 /**
+ * A solar-system body's disc as the camera sees it on our side (renderer.skyDiscs — TERRE-UNREAL U8): its centre's look
+ * (bodyLook's: the light's time, the Earth's refraction) and its angular radius [rad]; null off our side or for a body
+ * that is not one of the solar system's.
+ */
+export function bodyDisc(s: Settings, cam: CameraFrame, body: Body, time: number): { look: Vec3; radius: number } | null {
+  if (!onOurSide(s, cam) || !solarBody(body)) return null;
+  const home = cameraHome(s, cam);
+  const d = sub(seenFrom(body, time, home).pos, home);
+  const l = Math.hypot(...d);
+  return { look: bodyLook(s, cam, body, time).look, radius: Math.asin(Math.min(1, solarBody(body)!.radius / l)) };
+}
+
+/**
  * Where a body appears (camera components): its centre's image for the star and the mouth, the
  * direction of the hole's centre (aberrated) for the hole. `guess`: the previous answer (warm start).
  */

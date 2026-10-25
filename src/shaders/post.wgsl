@@ -56,7 +56,8 @@ fn gatherH(@builtin(global_invocation_id) gid: vec3u) {
     if (stamps[qi] < R.u.w) { continue; }
     // (a pixel the raster's primary visibility shaded — trace.wgsl shade, RASTER_MARK —: fresh itself, never rebuilt,
     // and kept out of the sky's pixels rebuilt round it — its dense samples outweighed the sky's one a block)
-    if (moments[qi].x > 1e29) { continue; }
+    // (but a disc's sky — trace.wgsl main's layers, the sky round the Moon at one ray a pixel, depth 1e9 —: a sky sample)
+    if (moments[qi].x > 1e29 && moments[qi].y < 5e8) { continue; }
     let a = accum[qi];
     acc += gatherWeight(dx, block) * vec4f(a.rgb / max(a.a, 1e-6), 1.0);
   }
@@ -156,6 +157,12 @@ fn polgrid(@builtin(global_invocation_id) gid: vec3u) {
   polGrid[gid.y * G.y + gid.x] = s;
 }
 
+// (a pixel the raster shaded, or a disc's body (trace.wgsl DISC_BODY_DEPTH): not the sky's to rebuild from)
+fn rasterCorner(i: u32) -> bool {
+  let m = moments[i];
+  return m.x > 1e29 && m.y < 5e8;
+}
+
 fn loadAvg(x: u32, y: u32, W: u32) -> vec3f {
   let s = accum[y * W + x];
   return s.rgb / max(s.a, 1e-6);
@@ -239,12 +246,13 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     // (gatherH: none)
     if (block >= 16u) {
       // (the corners the raster shaded left out — the ground's colour bled over the skyline otherwise —; none left: the
-      // pixel's own last colour)
+      // pixel's own last colour. A disc's sky — depth 1e9, trace.wgsl main's layers — kept: a fresh sky sample, the sky's
+      // own skipped there — left out, the pixels round a rectangle kept the disc's light, a bright frame round the eclipse)
       let ok = vec4f(
-        select(1.0, 0.0, moments[p00.y * W + p00.x].x > 1e29),
-        select(1.0, 0.0, moments[p00.y * W + p11.x].x > 1e29),
-        select(1.0, 0.0, moments[p11.y * W + p00.x].x > 1e29),
-        select(1.0, 0.0, moments[p11.y * W + p11.x].x > 1e29),
+        select(1.0, 0.0, rasterCorner(p00.y * W + p00.x)),
+        select(1.0, 0.0, rasterCorner(p00.y * W + p11.x)),
+        select(1.0, 0.0, rasterCorner(p11.y * W + p00.x)),
+        select(1.0, 0.0, rasterCorner(p11.y * W + p11.x)),
       );
       let wq = vec4f((1.0 - t.x) * (1.0 - t.y), t.x * (1.0 - t.y), (1.0 - t.x) * t.y, t.x * t.y) * ok;
       let ws = wq.x + wq.y + wq.z + wq.w;

@@ -519,9 +519,11 @@ function outsideView(this: CameraController): OutsideView | null {
 
 /**
  * The ship's views locked on the target (lookAt): on its mounts the look turns to it (eased; the drag
- * sets where it sits in the view), outside the views read its direction (mountTarget).
+ * sets where it sits in the view), outside the views read its direction (mountTarget). The telescope's a
+ * stabilised mount's: on it at once — a 0.12 s ease left a third of a 0.3° field behind a pitching jet —, and
+ * again once the craft has moved this frame (`settled`: after stepMount's reorient — else a frame of its turn).
  */
-function aimShipViews(this: CameraController, dt: number) {
+function aimShipViews(this: CameraController, dt: number, settled = false) {
   const s = this.s;
   // (the ship's axes as the camera had them last frame: the pose drawn — the outside views' placement
   // depends on the aim itself)
@@ -537,8 +539,9 @@ function aimShipViews(this: CameraController, dt: number) {
   const deg = 180 / Math.PI;
   const b = Math.atan2(c[0], c[2]) * deg - this.lookOff[0];
   const e = Math.asin(clamp(c[1], -1, 1)) * deg - this.lookOff[1];
-  if (Math.abs(b) + Math.abs(e) < 1e-4) return; // (on it: still — the image converges)
-  const k = 1 - Math.exp(-dt / 0.12);
+  // (on it: still — the image converges; the telescope's a thousandth of its narrowest field)
+  if (Math.abs(b) + Math.abs(e) < (s.telescope ? 2e-5 : 1e-4)) return;
+  const k = s.telescope || settled ? 1 : 1 - Math.exp(-dt / 0.12);
   this.setLook(s.shipLookYaw + b * k, s.shipLookPitch + e * k);
 }
 
@@ -722,7 +725,8 @@ function stepMount(this: CameraController, dt: number) {
   if (this.viewCarry) pose = this.applyCarry(pose ?? to, dt);
   // (a plane's flight shakes its views — the seat's, the chase's: camshake.ts)
   // (and every spacecraft's — its rocket, the plasma, a contact, the ring: PLAN-VAISSEAUX X7)
-  if (s.flightShake > 0 && !this.cinematic && this.piloting) pose = this.shakePose(pose ?? to, dt);
+  // (not the telescope's: its mount stabilised — at 0.02° the seat's shake would sweep the field)
+  if (s.flightShake > 0 && !this.cinematic && this.piloting && !(s.telescope && s.lookAt)) pose = this.shakePose(pose ?? to, dt);
   this.mountEff = pose;
   if (s.ship && !this.cinematic) this.reorient(S0, this.shipMatrix());
   this.lastPose = this.shipPose();

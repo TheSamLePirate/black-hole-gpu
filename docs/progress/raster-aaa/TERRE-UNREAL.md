@@ -464,3 +464,56 @@ météo au matériau ~1 ms ; l'orage reste le plus lourd (~87–91 ms), aucune i
 **Reste vu** : la Lune — un disque de ~6 px dessiné par les rayons du ciel (un pour 8 × 8 ou 16 × 16 pixels) — clignote,
 floue, et trop pâle pour une pleine Lune : à rastériser (un passage sur son empreinte, la même physique). Le sol de nuit plus
 clair que les nuages (le plancher nocturne du sol).
+
+### U8 — la Lune, le Soleil et les étoiles en raster ; le télescope stabilisé ; l'éclipse (25/10)
+
+**Le constat** : au-dessus du raster, le ciel n'a qu'un rayon pour 8 × 8 ou 16 × 16 pixels (U6 (3)) — la Lune, ~6 px, y
+était attrapée une image et manquée la suivante : floue, clignotante, et pâle (la nuit « compressée » du sol, U7). Les étoiles
+du catalogue, tracées avec le ciel, scintillaient de même.
+
+**Les disques** : une seconde série de couches du noyau principal (`main`, `gid.z ≥ 1`), une par disque — la Lune, le Soleil —
+sur le rectangle de son empreinte (`renderer.discRects`, depuis les éphémérides, la réfraction comprise ; `main.ts
+skyDiscsNow`). `trace()` lui-même, à chaque pixel : la même air, les mêmes nuages, la même courbure, `planetShade`,
+`shadeStar`. Le rectangle appartient au disque seul (les rayons du ciel s'en retirent : deux rayons sur un pixel dans le même
+dispatch faisaient un quadrillage 3 × 3 clignotant autour de la Lune) ; deux rectangles qui se chevauchent — une éclipse — : le
+premier. Un petit disque : quatre rayons par pixel, moyennés comme l'œil (pondérés par 1/(1 + L) — Karis) : le limbe à sa part
+d'un disque bien au-delà du blanc, pas blanc ou ciel au gré d'un rayon. La nuit, la Lune ×150 (`MOON_NIGHT_GAIN`) : le rapport
+d'une vraie nuit entre elle et le paysage éclairé par elle, éblouissante, son halo celui du bloom.
+
+**Les étoiles** : `shadeStars`, un passage par étoile du catalogue (HYG, 119 614) — sa direction ICRS vers les axes de la caméra
+(`starMatrix`), la réfraction inverse, l'occultation par le raster et la cabine, la transmission (Soleil, nuages), un
+gaussien 3 × 3 dans `starSplat` — ; le ciel tracé ne dessine plus que la Voie lactée.
+
+**Le télescope (Y)** : il était le regard verrouillé, lissé sur 0,12 s et calculé sur l'attitude de l'image d'avant — à
+1°/s de tangage, un tiers d'un champ de 0,3° de retard — et secoué avec le siège. Stabilisé : la visée exacte, refaite après le
+mouvement de l'avion de l'image (`aimShipViews(dt, settled)`), sans secousses ; la Lune tenue à 0,05 px près d'une image à
+l'autre en vol. Un grand disque tenu ainsi : un pixel d'un bloc 2 × 2 ou 4 × 4 par image (sur la grille de l'image, pas du
+rectangle — son coin bougeait d'un pixel et décalait les phases), quatre rayons chacun, les autres gardés : sa pleine
+résolution en 4 ou 16 images. Son posemètre spot ne prend plus la médiane d'un corps solide pour le noir (les mers de la Lune
+noires, ses terres orange), ni un disque plus large que l'image pour la cible (la face nocturne de la Lune exposée au blanc) ;
+une image sombre n'est plus « cramée » (l'exposition descendait au plancher et y restait).
+
+**L'éclipse** (12/08/2026, au-dessus de Burgos ; C2 18:28:22, C3 18:30:09 — 107 s) : le rectangle du Soleil étendu à 4 rayons
+pour la couronne (Baumbach, jets, chromosphère, protubérances — déjà là, mais dessinés hors du rectangle par les blocs du ciel) ;
+le limbe de la Lune avec son relief (`limbAt`, ±0,12 % du rayon — ±2 km —, sur les axes de la Lune : les grains de Baily,
+l'anneau de diamant ; des ondes et non un bruit : `ourSegment` est copié dans chaque appel, un bruit à trois octaves y doublait
+la compilation). Le ciel autour d'un rectangle reconstruit aussi depuis le ciel des disques (`DISC_BODY_DEPTH` : seuls les
+pixels de l'astre exclus — sans eux un cadre brillant autour de l'éclipse).
+
+![la totalité au télescope, 1,6°](img/u8-eclipse-totale.jpg)
+![juste avant C2 : les grains, la chromosphère, la dispersion de l'air aux cornes](img/u8-eclipse-c2.jpg)
+![la phase partielle à 0,5° : taches, granulation, assombrissement centre-bord (mini)](img/u8-eclipse-partielle.jpg)
+
+**Mesures** — la Lune (mini, 1920 × 1080, pleine Lune, nuit, 60°) : 12 images de suite, le disque rond et stable
+(img/u8-lune-12-images.jpg), 37 i/s (26,8 ms) ; au télescope la visée à 1,5 % du demi-champ (médiane, 6,6 % au pire) en vol.
+L'éclipse (mini, avant le 4 × 4 à quatre rayons) : 20° 30–34 i/s (~31 ms), 1,6° 14–15 i/s (64–71 ms), 0,5° 11–12 i/s ; ce Mac
+(panneau, 1515 × 1126, la version finale) : 20° 21 i/s, 1,6° 11 i/s (90 ms). Le télescope sur un disque qui emplit le champ
+reste lourd : chaque rayon du disque traverse l'air bas sur ~300 km (le Soleil à 5°) — l'air, presque uniforme sur 1,6°, à
+calculer une fois par tuile et non par rayon (la suite).
+
+**Aussi** : la file des compilations n'apprend plus sa limite d'une compilation sortie du cache du navigateur (0,2 s : la
+suivante, 90 s, prise pour bloquée au bout de 60 s, deux autres lancées à côté — 379 s pour les trois) ; le harnais e2e tue
+ses Chrome à la sortie, quelle qu'elle soit (trois restaient en headless sur le GPU) ; l'orbe de compilation nomme le shader.
+
+**Reste vu** : après un saut d'horloge ou de champ, un grand disque met 16 images à se remplacer (sa grille 4 × 4) ; le voile
+du halo (bloom 0,1) grise la Lune noire autour d'une couronne exposée haut.

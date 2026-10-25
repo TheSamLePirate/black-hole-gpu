@@ -497,6 +497,23 @@ export default {
   "The near Earth is drawn by the traced pipeline: the raster one is too heavy for this GPU":
     "La Terre proche est dessinée par le pipeline tracé : le raster est trop lourd pour ce GPU",
   "Compiling shaders": "Compilation des shaders",
+  "the general tracer": "le traceur général",
+  "the refining tracer": "le traceur d'affinage",
+  "the far field": "le champ lointain",
+  "the tracer": "le traceur",
+  "the light probe": "la sonde de lumière",
+  "the aerial perspective": "la perspective aérienne",
+  "the ground's rays": "les rayons du sol",
+  "the ground's material": "le matériau du sol",
+  "the water": "l'eau",
+  "the stars": "les étoiles",
+  "the clouds": "les nuages",
+  scenery: "décor",
+  surfaces: "surfaces",
+  weather: "météo",
+  runways: "pistes",
+  eclipses: "éclipses",
+  auroras: "aurores",
   "The near Earth is drawn by the raster pipeline again: the traced one is no faster here":
     "La Terre proche est de nouveau dessinée par le raster : le pipeline tracé n'est pas plus rapide ici",
 } satisfies Record<string, string>;

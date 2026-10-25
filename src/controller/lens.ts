@@ -366,6 +366,8 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   if (directing) this.cineStep(dt);
   else this.cineLeave();
   this.stepMount(dt);
+  // (the telescope held on its target once the craft has turned this frame — aimShipViews)
+  if (s.telescope) this.aimShipViews(dt, true);
   this.lensApply(
     directing
       ? this.cineFov

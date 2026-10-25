@@ -1396,7 +1396,9 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     if (b + reach < 0.0 || b - reach > tMax) { continue; }
     if (reach < 0.5 * beam() * (travel + length(c))) { continue; }
     let perp = c - b * d;
-    let h = R * R - dot(perp, perp);
+    // (a dusty airless world's limb its relief's — limbRelief: the Moon's mountains on the Sun's last light)
+    let Rl = R * (1.0 + limbAt(k, perp, R));
+    let h = Rl * Rl - dot(perp, perp);
     if (h < 0.0) { continue; }
     var t = b - sqrt(h);
     // (the Earth: its ellipsoid, inside that sphere — on its squashed axes the unit sphere)
@@ -1526,8 +1528,12 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
       let cj = bodies[BV * j].xyz - o;
       let bj = dot(cj, d);
       if (bj <= 0.0 || bj >= b) { continue; }
-      let Rj = bodyRadius(j);
-      let pj = length(cj - bj * d);
+      let Rj0 = bodyRadius(j);
+      let perpj = cj - bj * d;
+      let pj = length(perpj);
+      // (its limb's relief: the Sun's light through the Moon's valleys at the second and third contacts — Baily's beads,
+      // the diamond ring)
+      let Rj = Rj0 * (1.0 + limbAt(j, perpj, Rj0));
       vis *= 1.0 - clamp((Rj - pj) / max(beam() * (travel + bj), 1e-30) + 0.5, 0.0, 1.0);
       if (vis <= 0.0) { break; }
     }
@@ -1552,11 +1558,32 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     setMapLod(fp, fp, k);
     let N = bodies[BV * k + 5u].xyz;
     BODYW = transpose(spunAxes(k));
-    col = planetShade(k, nrm, spunAxes(k) * nrm, L, V, P.time.x, gObs, ringShadow(k, nrm, N, L));
+    col = planetShade(k, nrm, spunAxes(k) * nrm, L, V, P.time.x, gObs, ringShadow(k, nrm, N, L)) * BODY_GAIN;
   }
   (*out).glow += (*out).tint * col;
   (*out).tint = vec3f(0.0);
   return true;
+}
+
+// A dusty airless world's limb seen as a silhouette (TERRE-UNREAL U8): its radius's relief where the sight passes at `perp`
+// from its centre (the ray's nearest point, R its radius), a fraction of R — the Moon's limb profile ±~2 km (0.12 %:
+// Watts's charts, LOLA's —, its mountains and valleys; procedural on the body's own axes, so fixed on it, turned by the
+// libration). Only near the limb (0 elsewhere: no cost). At the second and third contacts the Sun's last light through its
+// valleys — Baily's beads, the diamond ring —, the chromosphere's pink between its peaks.
+const LIMB_RELIEF = 0.0012;
+fn limbAt(k: u32, perp: vec3f, R: f32) -> f32 {
+  let surf = u32(bodies[BV * k + 2u].z);
+  if (bodyKind(k) == 0u || surf < 4u || !regolith(surf - 4u)) { return 0.0; }
+  let pd = length(perp);
+  if (abs(pd - R) > 2.0 * LIMB_RELIEF * R) { return 0.0; }
+  let q = spunAxes(k) * (-perp / max(pd, 1e-30));
+  // (ridges and basins at ~200 km, mountains at ~60, peaks at ~20: the beads a few, a few arcseconds apart — waves along
+  // fixed directions, not a noise: ourSegment is inlined in every call of it, a three-octave noise there nearly doubled the
+  // tracer's compile)
+  let n = 0.3 * sin(dot(q, vec3f(7.1, -5.3, 3.2)) + 0.4) + 0.25 * sin(dot(q, vec3f(-4.4, 8.6, 5.9)) + 2.1)
+    + 0.17 * sin(dot(q, vec3f(21.0, 17.3, -9.8)) + 1.3) + 0.13 * sin(dot(q, vec3f(-14.2, 23.5, 19.1)) + 4.0)
+    + 0.09 * sin(dot(q, vec3f(61.0, -48.0, 39.0)) + 0.7) + 0.06 * sin(dot(q, vec3f(-55.0, 70.0, -47.0)) + 5.2);
+  return LIMB_RELIEF * n;
 }
 
 // the maps (solar.ts: MAPS_HI, then MAPS_LO) of dusty airless worlds: the Moon, Mars, Mercury; Ceres,
@@ -2785,6 +2812,9 @@ fn realSky(dB: vec3f, g: f32, fpB: Footprint, home: bool) -> vec3f {
   let reach = 3.0 * filt.radius;
   let w = smoothstep(0.25, 0.5, reach / cellAngle);
   let fluxScale = P.skyX.w;
+  // (the raster's sky — its catalogue stars drawn each by shadeStars at its own pixel, TERRE-UNREAL U8 —: here the Milky Way's
+  // map alone; through the block's one ray they flickered and, the filter as wide as the block, blurred into the radiance map)
+  if (home && rasterStarsOn()) { return col * 0.5; }
   if (w < 1.0) {
     let starsBase = 4u + 6u * grid * grid + 1u;
     var cells = array<u32, 4>(0xffffffffu, 0xffffffffu, 0xffffffffu, 0xffffffffu);
@@ -9991,6 +10021,40 @@ fn farLut(pos: vec2f, out: ptr<function, TraceOut>) -> bool {
   return true;
 }
 
+// (a pixel within one of the first `layers` discs' rectangles — the stamps' words past the image, renderer discRects; width
+// 0: none)
+fn inDiscRect(px: u32, py: u32, W: u32, layers: u32) -> bool {
+  let n = arrayLength(&stamps);
+  let base0 = W * u32(P.res.y);
+  for (var i = 0u; i < layers; i++) {
+    let b = base0 + 4u * i;
+    if (b + 3u >= n) { break; }
+    let w = stamps[b + 2u];
+    if (w == 0u) { continue; }
+    let rx = stamps[b];
+    let ry = stamps[b + 1u];
+    if (px >= rx && px < rx + w && py >= ry && py < ry + (stamps[b + 3u] & 0xffffu)) { return true; }
+  }
+  return false;
+}
+// (main's disc layers: the body the layer draws — renderer discRects: 0 the Sun, 1 the Moon)
+var<private> DISC_KIND: u32 = 0u;
+// (its rays a pixel: four for a small disc, its limb antialiased — renderer discRects —, one for a wide one)
+var<private> DISC_RAYS: u32 = 1u;
+// (a wide disc held still: its pixels a 2 × 2 block's one a frame — main —, this frame's within the block)
+var<private> DISC_IL: bool = false;
+// (a ray of this disc pixel met the body — or a cloud before it —: its depth DISC_BODY_DEPTH, not the sky's)
+var<private> DISC_HIT: bool = false;
+const DISC_BODY_DEPTH = 1e8;
+const DISC_BODY_W = 1.001;
+var<private> DISC_OFF: vec2u = vec2u(0u);
+// (the block's side: 1, 2 or 4)
+var<private> DISC_ST: u32 = 1u;
+// (a body's light's gain this ray — ourSegment's planetShade: the Moon's disc at night, main's disc layers)
+var<private> BODY_GAIN: f32 = 1.0;
+// the Moon's disc's gain at night (main's disc layers): the night's compression — EARTH_MOON's 8 % of the sunlight for the
+// moonlit ground against its real 1/400 000 —, a fraction of it: the disc ~10³ the moonlit ground, past white into the bloom
+const MOON_NIGHT_GAIN = 150.0;
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u,
         @builtin(local_invocation_index) li: u32) {
@@ -10011,7 +10075,49 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   var px: u32;
   var py: u32;
   var inRange: bool;
-  if (interleaved) {
+  // (TERRE-UNREAL U8 — a second dispatch of this kernel, its layers z ≥ 1: the sky's bodies' discs — the Moon, the Sun —
+  // at one ray a pixel over their footprint (renderer.skyDiscs: the rectangles in the stamps' words past the image, from
+  // the ephemerides, the refraction counted). The sky's own rays, one a 16 × 16 block over the raster's ground, caught a
+  // 12 px Moon one frame and missed it the next — flickering, blurred; here trace() itself — the same air, clouds, bending,
+  // planetShade, shadeStar — each pixel, the discs' kept as fresh samples, the sky's left to the rebuilding)
+  let disc = gid.z >= 1u;
+  if (disc) {
+    let base = W * H + 4u * (gid.z - 1u);
+    let rx = stamps[base];
+    let ry = stamps[base + 1u];
+    FOOT_NEAR = 1.0;
+    FOOT_FAR = 1.0;
+    FOOT = 1.0;
+    let w4 = stamps[base + 3u];
+    DISC_KIND = (w4 >> 16u) & 1u;
+    DISC_RAYS = select(1u, 4u, ((w4 >> 17u) & 1u) != 0u);
+    // (a wide disc held still in the view — the stabilised telescope's Moon over the image —: one pixel of each 2 × 2 a
+    // frame, in turn, the three others kept — re-stamped below —: its full resolution in four frames for a quarter of the
+    // rays; a thread a block, the SIMD's lanes all tracing)
+    // (4 × 4 for the widest — renderer discRects: the telescope's Sun over the whole field, a sixteenth of its rays a frame)
+    DISC_IL = ((w4 >> 18u) & 3u) != 0u;
+    let st = select(select(2u, 4u, ((w4 >> 19u) & 1u) != 0u), 1u, !DISC_IL);
+    DISC_ST = st;
+    // (an interleaved one's pixel four rays too: drawn one frame in four or sixteen, its one ray met or missed the limb — a
+    // dotted edge —; four, stratified, its share of the disc at each of its turns)
+    if (DISC_IL) { DISC_RAYS = 4u; }
+    let ph = frameStamp % (st * st);
+    DISC_OFF = select(vec2u(0u), vec2u(ph % st, ph / st), DISC_IL);
+    // (the blocks on the image's own grid, not the rectangle's: its corner moves a pixel now and then as the Moon slides over
+    // the Sun — on its grid each step shifted the phases, some pixels drawn twice, others not again, kept and re-stamped
+    // with their old light: a band smeared along the limb)
+    // (one block back: the rectangle's first columns and rows before its first aligned pixel — renderer: the dispatch a
+    // block wider)
+    let lxi = i32(gid.x * st + (DISC_OFF.x + st - rx % st) % st) - i32(select(0u, st, DISC_IL));
+    let lyi = i32(gid.y * st + (DISC_OFF.y + st - ry % st) % st) - i32(select(0u, st, DISC_IL));
+    let lx = u32(max(lxi, 0));
+    let ly = u32(max(lyi, 0));
+    inRange = lxi >= 0 && lyi >= 0 && lx < stamps[base + 2u] && ly < (w4 & 0xffffu) && rx + lx < W && ry + ly < H;
+    px = min(rx + lx, W - 1u);
+    py = min(ry + ly, H - 1u);
+    // (two discs overlapping — an eclipse, the Moon over the Sun —: the pixel the first layer's, not both in one dispatch)
+    if (inRange && gid.z > 1u && inDiscRect(px, py, W, gid.z - 1u)) { inRange = false; }
+  } else if (interleaved) {
     let block = u32(P.res.z);
     FOOT_NEAR = f32(block);
     FOOT_FAR = select(f32(block), 1.0, (flags & FLAG_REPROJECT) != 0u);
@@ -10019,6 +10125,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     inRange = gid.x * block < W && gid.y * block < H;
     px = min(gid.x * block + u32(P.ext2.x), W - 1u);
     py = min(gid.y * block + u32(P.ext2.y), H - 1u);
+    // (a disc's rectangle the disc's layer's alone: two rays on one pixel in one dispatch race, and the sky's, its body at
+    // its own gain, caught the limb at the block's pitch — a lattice flickering with the offset)
+    if (inRange && inDiscRect(px, py, W, 4u)) { inRange = false; }
   } else {
     px = gid.x;
     py = gid.y + u32(P.region.x);
@@ -10077,7 +10186,47 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     if (HAS_TERRAIN_RASTER) { RHINT = terrainRasterHint(pos); RHINT_TOL = rasterHintTol(pos); }
     // (the clouds of the cloud pass at this ray's pixel — the raster's frames —, read back instead of marched)
     if (interleaved) { CLOUDS_BUFFERED = cloudsBuffered(rasterAt, terrainRasterDepth(rasterAt)); }
-    if ((flags & FLAG_LUT) == 0u || !farLut(pos, &tr)) { tr = trace(ndc, rnd, tSample); }
+    // (the Moon's disc in a night drawn brighter than it is — the moonlit ground at ~8 % of the sunlight (EARTH_MOON), not
+    // 1/400 000 —: its light, lit by the full Sun as it is, given the night's own compression — the ratio to the landscape a
+    // real night's: dazzling white, its halo the bloom's —, faded in with the dark, before the air and the clouds before it;
+    // by day as it is)
+    if (disc && DISC_KIND == 1u && isEarth(u32(P.near1.w))) {
+      let kE = u32(P.near1.w);
+      let lt = nearLight(kE);
+      let dark = 1.0 - smoothstep(-0.12, 0.06, dot(normalize(nearCam()), normalize(squashed(toBody(lt.dir), squashOf(kE)))));
+      BODY_GAIN = mix(1.0, MOON_NIGHT_GAIN, dark);
+    }
+    // (a small disc's pixel: four rays, stratified, their grid turned each frame and pixel, averaged as the eye sees them — weighted by
+    // 1/(1 + L), L exposed (white ≈ 1/16 pre-exposed: post.wgsl downShip), Karis's —: a limb pixel its share of a disc far
+    // past white, not white or sky as one jittered ray falls. The loop's count a runtime one, around the one call of trace()
+    // — a constant four, unrolled, inlined it four times: minutes of compile)
+    let k = 16.0 * P.zamo2.y;
+    // (the turn the pixel's own: one shared by a frame's pixels shifted each 2 × 2 phase's image as a whole — a checker
+    // where the Moon's texture is sharp)
+    let turn = hash4(vec3u(px, py, frameStamp ^ 0x9e37u)).xy;
+    let rays = select(1u, DISC_RAYS, disc);
+    var sum = vec3f(0.0);
+    var wsum = 0.0;
+    DISC_HIT = false;
+    for (var s = 0u; s < rays; s++) {
+      var nd = ndc;
+      if (disc) {
+        let o = fract((vec2f(f32(s & 1u), f32(s >> 1u)) + 0.5) * 0.5 + turn) - 0.5;
+        let q = vec2f(f32(px) + 0.5, f32(py) + 0.5) + o;
+        nd = vec2f(2.0 * q.x / P.res.x - 1.0, 1.0 - 2.0 * q.y / P.res.y);
+      }
+      if (disc || (flags & FLAG_LUT) == 0u || !farLut(pos, &tr)) { tr = trace(nd, rnd, tSample); }
+      if (disc) {
+        var c = tr.col;
+        if (isNan(c.r + c.g + c.b)) { c = vec3f(0.0); }
+        let w = 1.0 / (1.0 + luminance(c) * k);
+        sum += c * w;
+        wsum += w;
+        if (tr.bgW <= 0.0) { DISC_HIT = true; }
+      }
+    }
+    if (disc) { tr.col = sum / max(wsum, 1e-30); }
+    BODY_GAIN = 1.0;
     CLOUDS_BUFFERED.alpha = -1.0;
     RHINT = 0.0;
     AP_UV = vec2f(-1.0);
@@ -10087,6 +10236,57 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   workgroupBarrier();
   if (!sampling) { return; }
 
+  // (a disc's pixel — the body, what stands before it (a cloud), the sky round it: the rectangle's every pixel —, fresh, as
+  // the raster's ground is: kept by the resolve, out of the sky's rebuilding)
+  if (disc) {
+    var dcol = tr.col;
+    if (isNan(dcol.r + dcol.g + dcol.b)) { dcol = vec3f(0.0); }
+    let dold = accum[idx];
+    // (the history: this epoch's — the camera's —, or for a disc held still in the view (the stabilised telescope: DISC_IL)
+    // its own last disc sample whatever the craft did — in flight each frame a new epoch, the limb's one ray a frame unmixed:
+    // a staircase flickering along it)
+    // (its own stamp, kept by its block's re-stamping below — not its mark: the cockpit's mask (mask.wgsl) rewrites every
+    // pixel's moments.x each frame)
+    let kept = (stamps[idx] >= epoch || (DISC_IL && stamps[idx] + 4u * DISC_ST * DISC_ST >= frameStamp));
+    // (its weight: the frame's — in flight ~1, no history: the camera moved —, a disc held still its own: each pixel drawn
+    // one frame in four or sixteen, averaged over a few of its turns)
+    let wNew = select(P.ext.w, 0.4, DISC_IL);
+    if ((temporal || DISC_IL) && kept && dold.a > 0.0) {
+      // (the history mixed as the average above, weighted: a flicker of the limb not a white flash)
+      let k = 16.0 * P.zamo2.y;
+      let o = dold.rgb / dold.a;
+      let a = (1.0 - wNew) / (1.0 + luminance(o) * k);
+      let b = wNew / (1.0 + luminance(dcol) * k);
+      dcol = (o * a + dcol * b) / max(a + b, 1e-30);
+    }
+    // (its weight 1, or 1.001 where a ray met the body — the colour the same, the re-stamping below telling body from sky)
+    let aw = select(1.0, DISC_BODY_W, DISC_HIT);
+    accum[idx] = vec4f(dcol * aw, aw);
+    // (its depth: the sky's, 1e9 — the sky's rebuilding round the rectangle may read it (post.wgsl resolve, gatherH: a
+    // fresh sky sample) —; where a ray met the body or a cloud before it, DISC_BODY_DEPTH: kept out, as the ground is)
+    moments[idx] = vec2f(RASTER_MARK, select(1e9, DISC_BODY_DEPTH, DISC_HIT));
+    stamps[idx] = frameStamp;
+    if (DISC_IL) {
+      // (the block's others, drawn by a disc's ray in the frames before (marked): kept, fresh — the disc still in the view)
+      for (var j = 0u; j < DISC_ST; j++) {
+        for (var i = 0u; i < DISC_ST; i++) {
+          if (i == DISC_OFF.x && j == DISC_OFF.y) { continue; }
+          let qx = px - DISC_OFF.x + i;
+          let qy = py - DISC_OFF.y + j;
+          if (qx >= W || qy >= H) { continue; }
+          let qi = qy * W + qx;
+          // (kept, fresh, marked again — the cockpit's mask cleared its mark —; not where the cabin hides it (−1) — behind
+          // the canopy's glass (−2, traced): kept, the telescope's whole view from the cockpit; a pixel of the rectangle not
+          // drawn yet by a disc's ray: its stamp too old, left to the sky's rebuilding)
+          if (moments[qi].x > -1.5 && stamps[qi] + 4u * DISC_ST * DISC_ST >= frameStamp) {
+            stamps[qi] = frameStamp;
+            moments[qi] = vec2f(RASTER_MARK, select(1e9, DISC_BODY_DEPTH, accum[qi].a > 1.0005));
+          }
+        }
+      }
+    }
+    return;
+  }
   var col = tr.col;
   if (COST_VIEW > 0u) { tr.bgW = 0.0; col = costHeat(); }
   if (tr.bgW > 0.0) {
@@ -11383,4 +11583,85 @@ fn probe(@builtin(global_invocation_id) gid: vec3u) {
   probeBuf[3u * gid.x] = s.x;
   probeBuf[3u * gid.x + 1u] = vec4f(s.p, fate, f32(steps));
   probeBuf[3u * gid.x + 2u] = cross;
+}
+
+// The catalogue's stars over the raster's sky (renderer: mouthList[1].y + 512 — TERRE-UNREAL U8): a thread a star of the
+// 119 614 — HYG/Hipparcos, realSky's catalogue —, each where it shows on the image: its ICRS direction to the camera's axes by
+// the renderer's matrix (stamps' words past the image: main.ts starMatrix — the frame's camera, the aberration), raised by the
+// Earth's refraction (airBend inverted: the same bending as the rays'), hidden by the raster's ground, its trees, its
+// buildings, dimmed by the air to space along it and by the cloud pass's clouds at its pixel; its flux realSky's — a
+// blackbody at its B−V temperature —, splatted as splatStar does it (its radiance F / Ω over a 3 × 3 Gaussian, normalized). One
+// a frame each, at its own place: neither caught nor missed by a block's ray — no flicker —, nor spread over a block's footprint.
+const RASTER_STARS_FLAG = 512u;
+fn rasterStarsOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_STARS_FLAG) != 0u; }
+// the stamps' words of the stars' matrix (renderer: after the discs' rectangles), its three columns
+const STARS_WORDS = 16u;
+fn starColumn(j: u32) -> vec3f {
+  let b = u32(P.res.x) * u32(P.res.y) + STARS_WORDS + 4u * j;
+  return vec3f(bitcast<f32>(stamps[b]), bitcast<f32>(stamps[b + 1u]), bitcast<f32>(stamps[b + 2u]));
+}
+@compute @workgroup_size(64)
+fn shadeStars(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nw: vec3u) {
+  if (!HAS_BODIES || P.near0.w < 0.5) { return; }
+  let i = gid.x + gid.y * nw.x * 64u;
+  let grid = max(catalogue[1], 1u);
+  if (i >= catalogue[4u + 6u * grid * grid]) { return; }
+  let k = u32(P.near1.w);
+  if (!isEarth(k) || !earthOn()) { return; }
+  setAir(k);
+  let b = 4u + 6u * grid * grid + 1u + 4u * i;
+  let sd = vec3f(bitcast<f32>(catalogue[b]), bitcast<f32>(catalogue[b + 1u]), bitcast<f32>(catalogue[b + 2u]));
+  // (on the camera's axes: right, up, forward)
+  let c = sd.x * starColumn(0u) + sd.y * starColumn(1u) + sd.z * starColumn(2u);
+  let tanH = P.cam.w;
+  let asp = P.camRight.w;
+  // (out of the field — the refraction's 0.03 rad at most round it —: not drawn)
+  if (c.z <= 0.0 || abs(c.x / c.z) > tanH * asp * 1.05 + 0.04 || abs(c.y / c.z) > tanH * 1.05 + 0.04) { return; }
+  let mt = unpack2x16float(catalogue[b + 3u]);
+  let F = blackbodyShifted(mt.y * 1000.0, 1.0) * (exp2(-1.3287712 * mt.x) * P.skyX.w * 0.5);
+  // (where it shows: the true look bent back by the refraction — the apparent a with airBend(a) = t, a few fixed-point steps)
+  let t = normalize(c.x * P.camRight.xyz + c.y * P.camUp.xyz + c.z * P.camFwd.xyz);
+  var a = t;
+  if (P.sky.x > 0.0) {
+    for (var it = 0; it < 3; it++) { a = normalize(a + (t - airBend(a))); }
+  }
+  let f = dot(a, P.camFwd.xyz);
+  if (f <= 0.0) { return; }
+  let p = vec2f((0.5 + 0.5 * dot(a, P.camRight.xyz) / f / (tanH * asp)) * P.res.x, (0.5 - 0.5 * dot(a, P.camUp.xyz) / f / tanH) * P.res.y);
+  let W = i32(P.res.x);
+  let H = i32(P.res.y);
+  let p0 = vec2i(floor(p));
+  if (p0.x < 0 || p0.y < 0 || p0.x >= W || p0.y >= H) { return; }
+  let pc = vec2f(p0) + 0.5;
+  // (behind the raster's ground, a tree, a building; under the cabin's mask)
+  if (terrainRasterHint(pc) > 0.0 || terrainRasterId(pc) > 0u) { return; }
+  let mx = moments[u32(p0.y) * u32(W) + u32(p0.x)].x;
+  if (mx < -0.5 && mx > -1.5) { return; }
+  // (the air to space along it — from the camera, the sun's way's column —, the cloud pass's clouds before it)
+  let ro = nearCam();
+  var T = sunThrough(airHeight(ro), dot(airPhysicalDirection(normalize(squashed(toBody(a), squashOf(k)))), airPhysicalNormal(normalize(ro))));
+  let cs = cloudsBuffered(pc, 3e38);
+  if (cs.alpha > 0.0) { T *= 1.0 - cs.alpha; }
+  // (the pixel's solid angle there — the plain camera's —, the splat's spread)
+  let om = pow(2.0 * tanH / P.res.y, 2.0) * f * f * f;
+  let sg = clamp(sqrt(0.1225 + P.time.w * P.time.w / om), 0.5, 1.2);
+  let L = T * F * (P.time.z * P.camFwd.w / om);
+  if (max(L.r, max(L.g, L.b)) < 0.5) { return; }
+  var wt: array<f32, 9>;
+  var ws = 0.0;
+  for (var q = 0; q < 9; q++) {
+    let e = vec2f(p0 + vec2i(q % 3 - 1, q / 3 - 1)) + 0.5 - p;
+    wt[q] = exp(-dot(e, e) / (2.0 * sg * sg));
+    ws += wt[q];
+  }
+  for (var q = 0; q < 9; q++) {
+    let o = p0 + vec2i(q % 3 - 1, q / 3 - 1);
+    if (o.x < 0 || o.y < 0 || o.x >= W || o.y >= H) { continue; }
+    let x = L * (wt[q] / ws);
+    if (max(x.r, max(x.g, x.b)) < 0.5) { continue; }
+    let j = 3u * u32(o.y * W + o.x);
+    atomicAdd(&starSplat[j], u32(min(x.r, 4e9) + 0.5));
+    atomicAdd(&starSplat[j + 1u], u32(min(x.g, 4e9) + 0.5));
+    atomicAdd(&starSplat[j + 2u], u32(min(x.b, 4e9) + 0.5));
+  }
 }

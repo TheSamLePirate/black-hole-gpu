@@ -67,6 +67,8 @@ export class CompileQueue {
   constructor(
     private readonly stallMs = 60_000,
     private readonly learn = false,
+    /** a compile shorter than this came out of the browser's pipeline cache: it says nothing of the driver's pace [ms] */
+    private readonly cacheHitMs = 5_000,
   ) {}
 
   /** the stall limit now [ms] (Infinity: none yet) */
@@ -130,7 +132,10 @@ export class CompileQueue {
           Promise.resolve()
             .then(compile)
             .then((value) => {
-              this.longest = Math.max(this.longest, performance.now() - t0);
+              // (a real compile only: one out of the browser's pipeline cache — 0.2 s — set the limit at its floor, the next
+              // real one — 90 s on an M1 Max — taken for hung after 60 s, two more started beside it: 379 s for the three)
+              const ms = performance.now() - t0;
+              if (ms > this.cacheHitMs) this.longest = Math.max(this.longest, ms);
               return value;
             })
             .finally(() => {
