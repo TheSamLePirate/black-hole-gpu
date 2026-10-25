@@ -517,3 +517,26 @@ ses Chrome à la sortie, quelle qu'elle soit (trois restaient en headless sur le
 
 **Reste vu** : après un saut d'horloge ou de champ, un grand disque met 16 images à se remplacer (sa grille 4 × 4) ; le voile
 du halo (bloom 0,1) grise la Lune noire autour d'une couronne exposée haut.
+
+### U9 — le télescope plein champ allégé : les disques ont leur propre noyau (25/10)
+
+**La mesure d'abord** (ce Mac, 1600 × 1000, la totalité au télescope à 1,6°, `tests/e2e/disc-cost.e2e.test.ts`) : 122 ms la
+frame ; chaque partie du rayon retirée à son tour (`renderer.tune`, `TUNE_SKIP`) — l'air 69 ms, la couronne 54, les disques
+des étoiles 67,6, les corps 54,5. Chacune « coûtait » la moitié : ça ne s'additionne pas — le noyau est limité par ses
+registres (l'Apple GPU, déjà vu en G1), le moindre chemin de code retiré rend de l'occupation à tout le reste. Calculer l'air
+une fois par tuile (le plan) n'y changeait rien : essayé, 70 ms et des pixels figés — retiré.
+
+**Le levier** : les couches des disques (`main`, z ≥ 1) dans leur propre noyau — `main` compilé avec `DISC_ONLY` (pseudo-entrée
+`discs` du renderer, sans le bit du raster ni du cache de terrain) : la marche du sol, ses manches à air, son décor, sa mer, son
+ombrage compilés hors (les rayons des disques ne rencontrent jamais le sol du raster — ses pixels sautés par l'indice du raster),
+dans une passe après celle du ciel ; tant qu'il compile, les disques restent dans `main`. La couronne : les casques et les
+protubérances (trois bruits) seulement où ils comptent (au-delà de 1,05 rayon, en deçà de 1,25).
+
+**Et** : au télescope, le masque du cockpit ne retire plus de rayons (ses cellules — l'arceau de la verrière, le combineur du
+HUD, grossis 37 fois, quasi transparents — laissaient le ciel derrière elles figé : un vieux croissant dans l'éclipse).
+
+**Mesures** — ce Mac : 122 → 32,4 ms (8,3 → 30,8 i/s) au même plan. Le mini (1920 × 1080, l'éclipse aux six moments) : 1,6°
+14–15 → 20 i/s (64–71 → 50 ms), 0,5° 11–12 → 15,7 i/s (80–87 → 63 ms), 20° ~32 → 34 i/s ; le reste de l'image (cockpit, post,
+ciel) ~29 ms de ces 50.
+
+![la totalité au télescope sur le mini, 50 ms](img/u9-mini-totalite.jpg)

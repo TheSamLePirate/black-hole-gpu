@@ -507,6 +507,7 @@ export default {
   "the ground's material": "le matériau du sol",
   "the water": "l'eau",
   "the stars": "les étoiles",
+  "the sky's discs": "les disques du ciel",
   "the clouds": "les nuages",
   scenery: "décor",
   surfaces: "surfaces",

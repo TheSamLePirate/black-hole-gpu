@@ -243,6 +243,10 @@ override TUNE_WARP: u32 = 1u;
 // discs —, 16 the whole ray past the near world; the Kerr loop's 1024 weak fields' kick, 2048 thick disk, 4096 the
 // equatorial crossings; 8192 the Earth's ground shaded flat)
 override TUNE_SKIP: u32 = 0u;
+// (TERRE-UNREAL U9 — the sky's discs' own kernel: main's layers z ≥ 1 alone (its z = 0 the sky's, returned), without the
+// ground's march, its scenery, its sea, its shading — the discs' rays never meet the ground the raster draws (left to it,
+// its pixels skipped by the raster's hint) —: the kernel's registers, the Apple GPU's limit, those of the sky's rays)
+override DISC_ONLY: bool = false;
 // (1: the wormhole's steps on our side merged into straight pieces for ourSegment while the ray holds straight to a
 // quarter of its pixel; 0: each step's chord on its own, as before)
 override TUNE_MERGE: u32 = 1u;
@@ -1851,17 +1855,23 @@ fn sunCorona(k: u32, dir: vec3f, r: f32, g: f32, tEm: f32) -> vec3f {
   let q = spunAxes(k) * dir;
   let lat = abs(q.z);
   let rays = 0.55 + 0.9 * smoothstep(-0.3, 0.8, gnoise(q * 7.0 + vec3f(0.0, 0.0, log(r) * 0.6)) + 0.5 * gnoise(q * 23.0));
-  let helmets = mix(1.35, 0.55, smoothstep(0.2, 0.75, lat)) + 0.5 * smoothstep(0.35, 0.9, gnoise(q * 2.2 + vec3f(3.1)));
-  let shape = rays * mix(1.0, helmets, smoothstep(1.05, 1.6, r));
+  // (the helmets' weight 0 under 1.05 radii, the prominences' and the chromosphere's e^(−10) and less past 1.25: their noises
+  // not drawn there — the same light, three noises fewer over most of the corona)
+  let hw = smoothstep(1.05, 1.6, r);
+  var helmets = 1.0;
+  if (hw > 0.0) { helmets = mix(1.35, 0.55, smoothstep(0.2, 0.75, lat)) + 0.5 * smoothstep(0.35, 0.9, gnoise(q * 2.2 + vec3f(3.1))); }
+  let shape = rays * mix(1.0, helmets, hw);
   let white = blackbodyShifted(5800.0, g) / max(luminance(blackbodyShifted(5800.0, 1.0)), 1e-6);
   var col = white * luminance(disk) * base * shape;
   // the chromosphere (a few thousand km: 0.01 of a radius) and the prominences (Hα red, up to ~0.08)
   let h = r - 1.0;
-  let halpha = shiftRatio(3000.0, g) * vec3f(1.0, 0.25, 0.32);
-  let loopN = 1.0 - abs(gnoise(q * 9.0 + vec3f(0.0, 0.0, h * 40.0)));
-  let region = smoothstep(0.2, 0.5, gnoise(q * 1.7 + vec3f(7.0, 3.0, 1.0)));
-  let prom = smoothstep(0.88, 0.97, loopN) * region * exp(-h / 0.025);
-  col += halpha * luminance(disk) * (1.5e-4 * exp(-h / 0.004) + 4e-4 * prom);
+  if (h < 0.25) {
+    let halpha = shiftRatio(3000.0, g) * vec3f(1.0, 0.25, 0.32);
+    let loopN = 1.0 - abs(gnoise(q * 9.0 + vec3f(0.0, 0.0, h * 40.0)));
+    let region = smoothstep(0.2, 0.5, gnoise(q * 1.7 + vec3f(7.0, 3.0, 1.0)));
+    let prom = smoothstep(0.88, 0.97, loopN) * region * exp(-h / 0.025);
+    col += halpha * luminance(disk) * (1.5e-4 * exp(-h / 0.004) + 4e-4 * prom);
+  }
   return col;
 }
 
@@ -9028,7 +9038,7 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
   }
   o.Lm = air.Lm;
   var G = vec3f(0.0);
-  if (tHit > 0.0) {
+  if (!DISC_ONLY && tHit > 0.0) {
     let ph = ro + rd * tHit;
     let q = normalize(ph);
     let fp = fp0 + fpK * tHit;
@@ -9100,7 +9110,8 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let m = length(rs);
   let rd = rs / m;
   var t = unitHit(ro, rd);
-  if (isEarth(k) && earthOn() && length(ro) < 1.5) {
+  // (the discs' kernel: no ground marched — DISC_ONLY)
+  if (!DISC_ONLY && isEarth(k) && earthOn() && length(ro) < 1.5) {
     t = -3.0;
     // (the raster patch's distance, the ground there found by two reads and a refinement instead of a march)
     if (HAS_TERRAIN_RASTER && RHINT > 0.0 && P.walk[0].w < 0.5) {
@@ -9112,7 +9123,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   WS = vec4f(0.0);
   WS_S = 0.0;
   WS_AO = 1.0;
-  if (HAS_RWY && isEarth(k) && rwyCount() > 0u) {
+  if (!DISC_ONLY && HAS_RWY && isEarth(k) && rwyCount() > 0u) {
     let dp = vec3f(rd.xy, rd.z / ab);
     let kM = length(dp) * EARTH_RM;
     let tw = windsocks(dp / length(dp), select(1e7, t * kM, t > 0.0));
@@ -9123,11 +9134,11 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
     let tm = airportScenery(dp / length(dp), select(1e7, t * kM, t > 0.0));
     if (WS.w > 0.5) { t = tm / kM; } else { WS = ws; WS_A = wa; }
   }
-  if (isEarth(k)) { let dp = vec3f(rd.xy, rd.z / ab); let kM = length(dp) * EARTH_RM; let tm = worldScenery(dp / length(dp), select(1e7, t * kM, t > 0.0),rnd); if (tm < select(1e7, t * kM, t > 0.0)) { t = tm / kM; } }
+  if (!DISC_ONLY && isEarth(k)) { let dp = vec3f(rd.xy, rd.z / ab); let kM = length(dp) * EARTH_RM; let tm = worldScenery(dp / length(dp), select(1e7, t * kM, t > 0.0),rnd); if (tm < select(1e7, t * kM, t > 0.0)) { t = tm / kM; } }
   if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u && WS.w < 0.5)); }
   let lt = nearLight(k);
   // (the sea's waves in relief near a low camera — over the sea only: its mean level met, h ≈ 0)
-  if (isEarth(k) && t > 0.0 && P.seafft[0].x > 0.5 && P.sea[1].w > 0.0 && WS.w < 0.5 && earthOn()) {
+  if (!DISC_ONLY && isEarth(k) && t > 0.0 && P.seafft[0].x > 0.5 && P.sea[1].w > 0.0 && WS.w < 0.5 && earthOn()) {
     let ps = ro + rd * t;
     if (abs(airHeight(ps) - geoidN(geoQ(normalize(ps)))) < 3.0) { t = seaSurfaceHit(look, t, m); }
   }
@@ -10057,7 +10068,7 @@ var<private> BODY_GAIN: f32 = 1.0;
 const MOON_NIGHT_GAIN = 150.0;
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u,
-        @builtin(local_invocation_index) li: u32) {
+        @builtin(local_invocation_index) li: u32, @builtin(workgroup_id) wid: vec3u) {
   let W = u32(P.res.x);
   let H = u32(P.res.y);
   let flags = P.frame.z;
@@ -10080,7 +10091,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   // the ephemerides, the refraction counted). The sky's own rays, one a 16 × 16 block over the raster's ground, caught a
   // 12 px Moon one frame and missed it the next — flickering, blurred; here trace() itself — the same air, clouds, bending,
   // planetShade, shadeStar — each pixel, the discs' kept as fresh samples, the sky's left to the rebuilding)
-  let disc = gid.z >= 1u;
+  // (the workgroup's layer — uniform: the discs' kernel returns its sky's whole groups before their barriers)
+  let disc = wid.z >= 1u;
+  if (DISC_ONLY && !disc) { return; }
   if (disc) {
     let base = W * H + 4u * (gid.z - 1u);
     let rx = stamps[base];
@@ -10139,7 +10152,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   let masked = interleaved && inRange && moments[idx].x < -0.5 && moments[idx].x > -1.5;
   // (the raster's primary visibility: a ray whose pixel the patch covers is shade's, not traced here)
   let rasterAt = vec2f(f32(px), f32(py)) + 0.5;
-  let rasterSkip = interleaved && inRange && rasterPrimary() && (terrainRasterHint(rasterAt) > 0.0 || terrainRasterId(rasterAt) > 0u);
+  let rasterSkip = interleaved && inRange && (rasterPrimary() || DISC_ONLY) && (terrainRasterHint(rasterAt) > 0.0 || terrainRasterId(rasterAt) > 0u);
 
   // Adaptive sampling, per 8×8 tile: the tile keeps sampling while any of its pixels has a relative
   // standard error of the mean (luminance) above the threshold (keeps ray differentials available).

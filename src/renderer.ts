@@ -3983,6 +3983,8 @@ export class Renderer {
       shadeWater: GPUComputePipeline | null;
       /** the catalogue's stars over the raster's sky (trace.wgsl shadeStars — TERRE-UNREAL U8) */
       shadeStars: GPUComputePipeline | null;
+      /** the sky's discs' own kernel (trace.wgsl main, DISC_ONLY — TERRE-UNREAL U9) */
+      discs: GPUComputePipeline | null;
       /** the cloud pass (trace.wgsl clouds) */
       clouds: GPUComputePipeline | null;
       /** a still view asked for the quality cascade (q, lutq) */
@@ -4022,7 +4024,20 @@ export class Renderer {
    * compiling is drawn by an earlier scene's covering its features, else not drawn (null).
    */
   private traceVariant(
-    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "clouds",
+    kind:
+      | "rt"
+      | "q"
+      | "env"
+      | "lut"
+      | "lutq"
+      | "air"
+      | "shade"
+      | "shadeMark"
+      | "shadeLite"
+      | "shadeWater"
+      | "shadeStars"
+      | "discs"
+      | "clouds",
     key = this.featureKey,
     create = true,
   ): GPUComputePipeline | null {
@@ -4038,6 +4053,7 @@ export class Renderer {
       shadeLite: null,
       shadeWater: null,
       shadeStars: null,
+      discs: null,
       clouds: null,
     }[kind];
     if (key === FEATURES_ALL) {
@@ -4064,6 +4080,7 @@ export class Renderer {
         shadeLite: null,
         shadeWater: null,
         shadeStars: null,
+        discs: null,
         clouds: null,
         qWanted: false,
         busy: false,
@@ -4108,6 +4125,7 @@ export class Renderer {
       kind !== "shadeLite" &&
       kind !== "shadeWater" &&
       kind !== "shadeStars" &&
+      kind !== "discs" &&
       kind !== "clouds"
     )
       return null;
@@ -4163,7 +4181,7 @@ export class Renderer {
     // (the image's own kernels — the trace's, the raster's shading, its clouds, the probe — urgent: ahead of a quality kernel
     // a pause queued; the LUT and the aerial table after them, as queued)
     const compile = (
-      entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "clouds",
+      entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "discs" | "clouds",
       onStall?: () => void,
     ) =>
       this.variantQueue.run(
@@ -4180,6 +4198,7 @@ export class Renderer {
       if (!slot.shadeLite && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeLite = await compile("shadeLite");
       if (!slot.shadeWater && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeWater = await compile("shadeWater");
       if (!slot.shadeStars && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeStars = await compile("shadeStars");
+      if (!slot.discs && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.discs = await compile("discs");
       if (!slot.clouds && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.cloudPass) slot.clouds = await compile("clouds");
     };
     const run = async () => {
@@ -4242,7 +4261,20 @@ export class Renderer {
    *  of them): it draws this scene as it would — the extra features are switched off by the params. */
   private coveringVariant(
     key: number,
-    kind: "rt" | "q" | "env" | "lut" | "lutq" | "air" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "clouds",
+    kind:
+      | "rt"
+      | "q"
+      | "env"
+      | "lut"
+      | "lutq"
+      | "air"
+      | "shade"
+      | "shadeMark"
+      | "shadeLite"
+      | "shadeWater"
+      | "shadeStars"
+      | "discs"
+      | "clouds",
   ): GPUComputePipeline | null {
     // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants)
     for (const [k, v] of this.variants) if ((k & key) === key && k >>> 16 === key >>> 16 && v[kind]) return v[kind];
@@ -4253,7 +4285,7 @@ export class Renderer {
    *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
   private async timedVariant(
     key: number,
-    entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "clouds",
+    entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "discs" | "clouds",
     quality = false,
   ) {
     const t0 = performance.now();
@@ -4277,7 +4309,7 @@ export class Renderer {
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
   private mkVariant(
     key: number,
-    entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "clouds",
+    entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "discs" | "clouds",
     quality: boolean,
   ): Promise<GPUComputePipeline> {
     const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
@@ -4290,7 +4322,8 @@ export class Renderer {
               entryPoint === "shadeMark" ||
               entryPoint === "shadeLite" ||
               entryPoint === "shadeWater" ||
-              entryPoint === "shadeStars"
+              entryPoint === "shadeStars" ||
+              entryPoint === "discs"
             ? this.mainLayout
             : entryPoint === "lut"
               ? this.lutLayout
@@ -4299,8 +4332,10 @@ export class Renderer {
                 : this.tracePipeLayout,
       compute: {
         module: this.traceModule,
-        entryPoint,
+        // (the sky's discs: main's own, its sky's layer and its ground compiled out — DISC_ONLY)
+        entryPoint: entryPoint === "discs" ? "main" : entryPoint,
         constants: {
+          DISC_ONLY: entryPoint === "discs" ? 1 : 0,
           HAS_RADIO: has(1),
           HAS_POL: has(2),
           HAS_JET: has(4),
@@ -4396,7 +4431,10 @@ export class Renderer {
       const pixelAngle = (2 * tanH) / t.height;
       // (a turn δ moves a pixel at an angle θ off the axis by δ sec²θ: the corners')
       const sec2 = 1 + tanH * tanH * (1 + (t.width / t.height) ** 2);
+      // (not the telescope's view: the instrument's, the cabin's parts magnified past recognition — the canopy's bow, the
+      // HUD's combiner, near clear — its cells left untraced kept the sky behind them stale, an old crescent in the eclipse)
       on =
+        !s.telescope &&
         [0, 1, 2, 3, 4, 5].every(same) &&
         turn(6) * sec2 + turn(9) * 0.5 * Math.hypot(t.width, t.height) * pixelAngle < SHAKE_PX * pixelAngle;
     }
@@ -4603,8 +4641,12 @@ export class Renderer {
     // (the sky's bodies' discs at one ray a pixel — trace.wgsl main's layers z ≥ 1, TERRE-UNREAL U8 —: their rectangles in the
     // stamps' words past the image, the dispatch as wide as the widest of them)
     const discs = !quality && this.rasterLiteNow && t === this.live ? this.discRects(t) : [];
+    // (their own kernel once in — TERRE-UNREAL U9 —: a pass after the sky's, else main's layers z ≥ 1)
+    const discsPipe = discs.length ? this.traceVariant("discs") : null;
     let gx = Math.max(1, Math.ceil(x / 8)),
       gy = Math.max(1, Math.ceil(y / 8));
+    let dgx = 1,
+      dgy = 1;
     // (written each frame, none as zeros: the sky's rays leave the rectangles to the discs' layers)
     if (t === this.live) {
       const words = new Uint32Array(4 * SKY_DISCS_MAX);
@@ -4615,8 +4657,8 @@ export class Renderer {
         const st = (r[3] >> 19) & 1 ? 4 : (r[3] >> 18) & 1 ? 2 : 1;
         // (a block more for an interleaved one: its blocks on the image's grid — trace.wgsl main)
         const extra = st > 1 ? st : 0;
-        gx = Math.max(gx, Math.ceil((r[2] + extra) / st / 8));
-        gy = Math.max(gy, Math.ceil(((r[3] & 0xffff) + extra) / st / 8));
+        dgx = Math.max(dgx, Math.ceil((r[2] + extra) / st / 8));
+        dgy = Math.max(dgy, Math.ceil(((r[3] & 0xffff) + extra) / st / 8));
       }
     }
     this.discsDrawn = discs.length;
@@ -4624,8 +4666,17 @@ export class Renderer {
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, hint ? this.hintBindFor(t, hint) : t.traceBind);
     pass.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
-    pass.dispatchWorkgroups(gx, gy, 1 + discs.length);
+    if (discsPipe) pass.dispatchWorkgroups(gx, gy, 1);
+    else pass.dispatchWorkgroups(Math.max(gx, dgx), Math.max(gy, dgy), 1 + discs.length);
     pass.end();
+    if (discsPipe) {
+      const dp = enc.beginComputePass(this.prof.pass("trace (discs)"));
+      dp.setPipeline(discsPipe);
+      dp.setBindGroup(0, hint ? this.hintBindFor(t, hint) : t.traceBind);
+      dp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+      dp.dispatchWorkgroups(dgx, dgy, 1 + discs.length);
+      dp.end();
+    }
     if (starsPipe && hint) {
       const sp = enc.beginComputePass(this.prof.pass("stars (raster)"));
       sp.setPipeline(starsPipe);
@@ -7222,6 +7273,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       shadeLite: t("the ground's material"),
       shadeWater: t("the water"),
       shadeStars: t("the stars"),
+      discs: t("the sky's discs"),
       clouds: t("the clouds"),
     };
     const f = [
