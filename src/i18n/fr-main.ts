@@ -496,4 +496,6 @@ export default {
   "{0}: crashed into {1} at {2} m/s, off its gear": "{0} : écrasé sur {1} à {2} m/s, hors de son train",
   "The near Earth is drawn by the traced pipeline: the raster one is too heavy for this GPU":
     "La Terre proche est dessinée par le pipeline tracé : le raster est trop lourd pour ce GPU",
+  "The near Earth is drawn by the raster pipeline again: the traced one is no faster here":
+    "La Terre proche est de nouveau dessinée par le raster : le pipeline tracé n'est pas plus rapide ici",
 } satisfies Record<string, string>;

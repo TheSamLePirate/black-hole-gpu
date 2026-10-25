@@ -55,11 +55,14 @@ export class AsyncResource<T> {
  * slow D3D12 driver's 3-minute compile (RX 5700 XT) is not taken for a hung one, and a second kernel
  * compiled beside it. */
 export class CompileQueue {
-  private tail = Promise.resolve();
   /** compiles queued or running, a stalled one no longer counted */
   pending = 0;
   /** the longest compile completed so far [ms] */
   private longest = 0;
+  /** the compiles not started yet, in order; `urgent` ones start first (a frame's own kernels before a still view's) */
+  private waiting: { urgent: boolean; start: () => void }[] = [];
+  /** a compile holds the slot */
+  private running = false;
 
   constructor(
     private readonly stallMs = 60_000,
@@ -72,42 +75,66 @@ export class CompileQueue {
     return this.longest > 0 ? Math.max(this.stallMs, 3 * this.longest) : Number.POSITIVE_INFINITY;
   }
 
-  run<T>(current: () => boolean, compile: () => Promise<T>, onStall: () => void = () => {}): Promise<T | null> {
+  /** the next compile into the free slot: the first urgent one waiting, else the first */
+  private pump() {
+    if (this.running) return;
+    const u = this.waiting.findIndex((j) => j.urgent);
+    const job = this.waiting.splice(u >= 0 ? u : 0, 1)[0];
+    if (!job) return;
+    this.running = true;
+    job.start();
+  }
+
+  /**
+   * `urgent`: ahead of every compile not started yet — the realtime image's kernels (the raster's shading among them) past a
+   * still view's quality kernel queued during a pause: queued behind it, the flight after the pause drew the near Earth with
+   * the traced blocks for the minute it took on an M1.
+   */
+  run<T>(current: () => boolean, compile: () => Promise<T>, onStall: () => void = () => {}, urgent = false): Promise<T | null> {
     this.pending++;
-    let freeSlot!: () => void;
-    const slot = new Promise<void>((resolve) => (freeSlot = resolve));
-    let held = true;
-    const release = () => {
-      if (!held) return;
-      held = false;
-      this.pending--;
-      freeSlot();
-    };
-    const task = this.tail
-      .then(() => {
-        if (!current()) return null;
-        // (checked every stallMs of visible time against the limit, which may have grown meanwhile)
-        let cancel = () => {};
-        const arm = (waited: number) => {
-          cancel = visibleTimeout(this.stallMs, () => {
-            const total = waited + this.stallMs;
-            if (total < this.stallLimit) return arm(total);
+    return new Promise<T | null>((resolve, reject) => {
+      this.waiting.push({
+        urgent,
+        start: () => {
+          let held = true;
+          const release = () => {
+            if (!held) return;
+            held = false;
+            this.pending--;
+            this.running = false;
+            queueMicrotask(() => this.pump());
+          };
+          if (!current()) {
             release();
-            onStall();
-          });
-        };
-        arm(0);
-        const t0 = performance.now();
-        return Promise.resolve()
-          .then(compile)
-          .then((value) => {
-            this.longest = Math.max(this.longest, performance.now() - t0);
-            return value;
-          })
-          .finally(() => cancel());
-      })
-      .finally(release);
-    this.tail = slot;
-    return task;
+            resolve(null);
+            return;
+          }
+          // (checked every stallMs of visible time against the limit, which may have grown meanwhile)
+          let cancel = () => {};
+          const arm = (waited: number) => {
+            cancel = visibleTimeout(this.stallMs, () => {
+              const total = waited + this.stallMs;
+              if (total < this.stallLimit) return arm(total);
+              release();
+              onStall();
+            });
+          };
+          arm(0);
+          const t0 = performance.now();
+          Promise.resolve()
+            .then(compile)
+            .then((value) => {
+              this.longest = Math.max(this.longest, performance.now() - t0);
+              return value;
+            })
+            .finally(() => {
+              cancel();
+              release();
+            })
+            .then(resolve, reject);
+        },
+      });
+      queueMicrotask(() => this.pump());
+    });
   }
 }

@@ -230,3 +230,23 @@ test("a learning queue's stall limit follows the longest compile seen", async ()
   expect(stalledAt).toBeGreaterThanOrEqual(180);
   hung.resolve("late");
 });
+
+test("an urgent compile starts ahead of the ones queued before it, after the running one", async () => {
+  const queue = new CompileQueue();
+  const first = deferred<string>();
+  const calls: string[] = [];
+  const job = (name: string) => async () => (calls.push(name), name);
+  const a = queue.run(
+    () => true,
+    () => (calls.push("A"), first.promise),
+  );
+  await Bun.sleep(0);
+  const q = queue.run(() => true, job("quality"));
+  const s = queue.run(() => true, job("shade"), undefined, true);
+  await Bun.sleep(0);
+  expect(calls).toEqual(["A"]);
+  first.resolve("A");
+  expect(await Promise.all([a, q, s])).toEqual(["A", "quality", "shade"]);
+  expect(calls).toEqual(["A", "shade", "quality"]);
+  expect(queue.pending).toBe(0);
+});

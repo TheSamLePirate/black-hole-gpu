@@ -842,7 +842,10 @@ async function main() {
     }
     if (keys.includes("rotation")) camera.setRotation(settings.rotation);
     // (the near Earth's pipeline or its shading chosen again: the raster tried again where it had been given up)
-    if (keys.includes("earthPipeline") || keys.includes("earthRasterShading")) renderer.rasterFellBack = false;
+    if (keys.includes("earthPipeline") || keys.includes("earthRasterShading")) {
+      renderer.rasterFellBack = false;
+      renderer.rasterKept = false;
+    }
     if (keys.includes("a320Livery")) renderer.ship.setA320Livery(settings.a320Livery);
     if (keys.includes("target")) {
       const want = settings.target;
@@ -5019,6 +5022,10 @@ async function main() {
   let overAtFloor = 0; // (how long the GPU has been over budget at the coarsest block and smallest scale [s])
   let demotedAt = -Infinity; // (the last demotion [performance.now() ms]: no promotion for a minute after)
   let rasterOver = 0; // (how long the raster pipeline has been over budget at its floor [s]: the fallback to the traced one)
+  // (the fallback measured: the raster's frame time when it was given up [ms], how long the traced one has flown since [s];
+  // renderer.rasterKept: the traced one proved no faster here — the raster kept, not given up again)
+  let rasterFellMs = 0;
+  let tracedFor = 0;
   // (the raster pipeline draws the near Earth: its render scale in motion — earthRasterScale, 75 % by default, upscaled by
   // the display — is the motion's ceiling; the camera held, the full one: the refinement's)
   const rasterOn = () => forcedScale === null && renderer.rasterPrimaryNow;
@@ -8015,11 +8022,32 @@ async function main() {
         renderer.rasterRateCoarsest &&
         block >= 8 &&
         (!dynOn || renderScale <= 0.5 + 1e-3) &&
+        !renderer.rasterKept &&
         gpuEma > 1.5 * budget
           ? rasterOver + 1.5
           : 0;
+      // (the traced pipeline flown 6 s in motion since the fallback: kept only if it is a tenth faster at least — over a city's
+      // buildings on an M1 it was not, 57 ms a frame at 14 fps and its blocks far blurrier than the raster's floor —, else the
+      // raster back, said)
+      if (renderer.rasterFellBack && rasterFellMs > 0 && moving && settled && gpuEma > 0) {
+        tracedFor += 1.5;
+        if (tracedFor >= 6) {
+          if (gpuEma > 0.9 * rasterFellMs) {
+            renderer.rasterFellBack = false;
+            renderer.rasterKept = true;
+            scaleMs.clear();
+            gpuEma = 0;
+            scaleHeld = 0;
+            resize();
+            panel.toast(t("The near Earth is drawn by the raster pipeline again: the traced one is no faster here"));
+          }
+          rasterFellMs = 0;
+        }
+      }
       if (rasterOver >= 12) {
         rasterOver = 0;
+        rasterFellMs = gpuEma;
+        tracedFor = 0;
         renderer.rasterFellBack = true;
         scaleMs.clear();
         gpuEma = 0;

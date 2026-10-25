@@ -248,6 +248,8 @@ const BLOCK_MEMORY = 20000;
 const RASTER_RATE_OF: Record<string, number | undefined> = { every: 1, half: 2, quarter: 4, eighth: 8, sixteenth: 16 };
 /** the rates the automatic choice moves between (adaptRasterRate), finest first */
 const RASTER_RATES_AUTO = [2, 4, 8, 16] as const;
+/** the parameters' raster bit for the ground's albedo at every pixel (trace.wgsl RASTER_DETAIL_FLAG) */
+const RASTER_DETAIL_FLAG = 64;
 /** the automatic rate's start by the hardware's tier (tier.ts: 0 software … 4 high-end) — then by the measure */
 const RASTER_RATE_START = [16, 8, 4, 4, 4] as const;
 /** the camera held after moving: the refinement's full passes over which the history hands over to it (at most its samples) */
@@ -493,6 +495,10 @@ interface Target {
    */
   temporal: {
     hist: GPUTexture[];
+    /** the ground's albedo history beside it (post.wgsl temporal, RASTER_DETAIL: r the albedo's luminance, g its coverage),
+     *  ping-pong with hist; albOk: the one at idx was written with hist's — not after a copy, a hand-over, a resize */
+    alb: GPUTexture[];
+    albOk: boolean;
     buf: GPUBuffer;
     binds: GPUBindGroup[];
     idx: number;
@@ -948,6 +954,8 @@ export class Renderer {
    *  scale's — the dynamic resolution (main.ts) and the automatic block (adaptBlock) leave it out */
   lastFrameDense = false;
   private lastPhase: FrameStats["phase"] = "realtime";
+  /** the trace being encoded is a realtime frame's (dispatchTrace: the terrain cache's bakes keep its history) */
+  private tracingRealtime = false;
   /** time spent over the budget, under it with room for a finer block [ms of frames] */
   private slowMs = 0;
   private fastMs = 0;
@@ -2190,6 +2198,7 @@ export class Renderer {
     t.denoise?.tex.destroy();
     t.denoise?.bufs.forEach((b) => b.destroy());
     t.temporal?.hist.forEach((h) => h.destroy());
+    t.temporal?.alb.forEach((h) => h.destroy());
     t.blur?.tex.destroy();
     this.dropTaau(t);
     this.dropClouds(t);
@@ -3220,8 +3229,16 @@ export class Renderer {
     // (the cloud pass's bit — CLOUD_PASS_FLAG — set once it is drawn this frame: dispatchTrace, when the frame's key is whole)
     this.cloudPassDrawn = false;
     // (16 written 15: the rate's four bits — trace.wgsl rasterRate)
-    f[MOUTH_LIST_AT + 5] = rasterPrimary ? Math.min(this.rasterRate, 15) + (this.rasterJitter === "halton" ? 16 : 0) : 0;
-    if (!o.probe) this.rasterHaltonNow = rasterPrimary && this.rasterJitter === "halton";
+    // (64: the ground's albedo read at every pixel — RASTER_DETAIL, trace.wgsl rasterAlbedo —, not with the temporal upsampling,
+    // whose history has no albedo beside it)
+    const detail = rasterPrimary && this.rasterDetail && !this.taauOn;
+    f[MOUTH_LIST_AT + 5] = rasterPrimary
+      ? Math.min(this.rasterRate, 15) + (this.rasterJitter === "halton" ? 16 : 0) + (detail ? RASTER_DETAIL_FLAG : 0)
+      : 0;
+    if (!o.probe) {
+      this.rasterHaltonNow = rasterPrimary && this.rasterJitter === "halton";
+      this.rasterDetailNow = detail;
+    }
     // (the trees drawn as raster instances this frame: set once they are — encodeTerrainRasterVisibility)
     f[MOUTH_LIST_AT + 6] = 0;
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
@@ -3252,10 +3269,10 @@ export class Renderer {
       this.aheadKey = this.firstFrameDoneAt && ahead !== this.featureKey ? ahead : -1;
       if (this.aheadKey >= 0) this.traceVariant("rt", this.aheadKey);
     }
-    const surfaceOn = this.earthSurface.active && this.kernelReady(this.featureKey | 4096);
+    const surfaceOn = this.earthSurface.active && this.kernelReady(this.featureKey | 4096) && this.rasterReady(this.featureKey | 4096);
     if (surfaceOn) this.featureKey |= 4096;
     else f.fill(0, BASE_PARAM_VEC4S * 4, (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4);
-    const sceneryOn = this.earthScenery.active && this.kernelReady(this.featureKey | 8192);
+    const sceneryOn = this.earthScenery.active && this.kernelReady(this.featureKey | 8192) && this.rasterReady(this.featureKey | 8192);
     if (sceneryOn) this.featureKey |= 8192;
     else f.fill(0, (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4, (BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S) * 4);
     if (!o.probe) {
@@ -3505,7 +3522,13 @@ export class Renderer {
     this.device.queue.writeBuffer(
       t.resolveBuf,
       16,
-      new Float32Array([this.costViewMode ? 1 : preExposure(this.ev(s)), this.rasterPrimaryOn ? this.rasterRate : 0, 0, 0]),
+      // (z: the ground's albedo at every pixel — RASTER_DETAIL: the stale pixels rebuilt with their own)
+      new Float32Array([
+        this.costViewMode ? 1 : preExposure(this.ev(s)),
+        this.rasterPrimaryOn ? this.rasterRate : 0,
+        this.rasterDetailNow && !this.costViewMode ? 1 : 0,
+        0,
+      ]),
     );
     if (s.polarization) {
       const { cs, gw, gh } = this.polCells(s, t);
@@ -4011,7 +4034,31 @@ export class Renderer {
       this.realtimeCascade(key, v);
     if (kind === "q" || kind === "lutq") v.qWanted = true;
     if (create && v.qWanted && !v.qBusy && !v.qFailed && (!v.q || (lutOk && !v.lutq))) this.qualityCascade(key, v);
-    return v[kind] ?? general ?? this.coveringVariant(key, kind);
+    return v[kind] ?? general ?? this.coveringVariant(key, kind) ?? this.rasterStandIn(key, kind);
+  }
+
+  /**
+   * The raster's shading while a new key's compiles (no general one to cover it): the nearest key's that has it — the most
+   * features in common, the latest used among equals —, the features it lacks (the buildings' bit switching on in flight,
+   * the scenery's 8192) not drawn until the key's own lands. Without it the raster was given up for the compile — a minute
+   * and more on an M1 —, the near Earth traced in blocks of 6 to 8 pixels: sharp in flight until the buildings came, then a
+   * mush. The shading and its marks taken from the same key.
+   */
+  private rasterStandIn(key: number, kind: string): GPUComputePipeline | null {
+    if (kind !== "shade" && kind !== "shadeMark" && kind !== "clouds") return null;
+    let best: GPUComputePipeline | null = null;
+    let bestN = -1;
+    for (const [k, v] of this.variants) {
+      if (k >>> 16 !== key >>> 16 || (k & FEATURE_TERRAIN_RASTER) === 0 || !v.shade || !v.shadeMark || !v[kind]) continue;
+      let n = 0;
+      for (let b = k & key & 0xffff; b; b &= b - 1) n++;
+      // (later in the map: used more lately — ties go to it)
+      if (n >= bestN) {
+        bestN = n;
+        best = v[kind];
+      }
+    }
+    return best;
   }
 
   /** whether a key's queued compile is still wanted: its slot kept, the device there, the camera on it —
@@ -4025,6 +4072,15 @@ export class Renderer {
    *  feature in: it draws the scene while the specialised compiles, as before the bits were held) —, or never will
    *  be (its compile failed or hung). Waiting for the specialised kernel itself held the scenery back for minutes
    *  on a cold shader cache (32 s for its main entry, 23 s for its probe, queued behind others) */
+  /** a raster key's shading kernels are there too (its own or a covering key's), or never will be: the surface's and the
+   *  scenery's bits switched on before them gave the raster up for their compile — a minute and more on an M1, the near
+   *  Earth traced in blocks meanwhile: sharp in flight until the buildings came, then a mush */
+  private rasterReady(key: number) {
+    if ((key & FEATURE_TERRAIN_RASTER) === 0) return true;
+    const v = this.variants.get(key);
+    if (v?.failed) return true;
+    return (!!v?.shade || !!this.coveringVariant(key, "shade")) && (!!v?.shadeMark || !!this.coveringVariant(key, "shadeMark"));
+  }
   private kernelReady(key: number) {
     if (key === FEATURES_ALL || this.tracePipeline) return true;
     const v = this.variants.get(key);
@@ -4038,8 +4094,10 @@ export class Renderer {
   private realtimeCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
     slot.busy = true;
     const current = this.wanted(key, slot);
+    // (the image's own kernels — the trace's, the raster's shading, its clouds, the probe — urgent: ahead of a quality kernel
+    // a pause queued; the LUT and the aerial table after them, as queued)
     const compile = (entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "clouds", onStall?: () => void) =>
-      this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall);
+      this.variantQueue.run(current, () => this.timedVariant(key, entry), onStall, entry !== "lut" && entry !== "aerial");
     const run = async () => {
       if (!slot.rt) {
         slot.rt = await compile("main", () => (slot.rtGivenUp = true));
@@ -4322,7 +4380,10 @@ export class Renderer {
         () => this.prof.pass("terrain surface cache"),
         this.terrainRasterRequested ? this.terrainRasterLevel : -1,
       );
-      if (changed && this.paramsF[MOUTH_LIST_AT + 7]! > 0.5) {
+      // (realtime: nothing rejected — a bake is the same ground, its window moved or its heights refined by new tiles, and
+      // the temporal pass's clamp takes the change; rejecting the history there threw it away for the eight frames of the
+      // levels' bakes at every tile landing — on an M1 at one pixel shaded in 64, a blur every second in low flight)
+      if (changed && !this.tracingRealtime && this.paramsF[MOUTH_LIST_AT + 7]! > 0.5) {
         // The level affects this submission: reject older samples/history in this very frame.
         this.frameTimes.length = 0;
         this.epoch = this.validFrom = this.frameStamp;
@@ -4708,6 +4769,13 @@ export class Renderer {
           usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST,
         }),
       );
+      const alb = [0, 1].map(() =>
+        d.createTexture({
+          size: [t.width, t.height],
+          format: "rgba16float",
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+        }),
+      );
       const buf = d.createBuffer({ size: 208, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       const hdr0 = t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 });
       // (bind k: reads history k, writes history 1 − k)
@@ -4725,6 +4793,8 @@ export class Renderer {
             { binding: 11, resource: { buffer: t.moments } },
             { binding: 21, resource: { buffer: buf } },
             { binding: 23, resource: { buffer: t.stars } },
+            { binding: 28, resource: alb[k]!.createView() },
+            { binding: 29, resource: alb[1 - k]!.createView() },
           ],
         }),
       );
@@ -4738,7 +4808,7 @@ export class Renderer {
           ],
         }),
       );
-      t.temporal = { hist, buf, binds, idx: 0, valid: false, pre: 1, held: false, moving: false, from: 0, starBinds };
+      t.temporal = { hist, alb, albOk: false, buf, binds, idx: 0, valid: false, pre: 1, held: false, moving: false, from: 0, starBinds };
       this.carryHistory(enc, t.temporal);
     }
     const ta = t.temporal;
@@ -4848,10 +4918,14 @@ export class Renderer {
       (ta.moving || ta.held) &&
       this.sampleIndex < passes;
     if (hold) {
+      ta.albOk = false;
       this.encodeHandover(enc, t, ta, pre, passes);
       return false;
     }
-    if (ta.held) ta.idx = 1 - ta.idx; // (the hand-over: the latest image)
+    if (ta.held) {
+      ta.idx = 1 - ta.idx; // (the hand-over: the latest image)
+      ta.albOk = false;
+    }
     ta.held = false;
     ta.moving = on;
     const stars = this.starsSplat && this.taPhase === "realtime";
@@ -4860,6 +4934,7 @@ export class Renderer {
       // splatted stars then drawn over it)
       enc.copyTextureToTexture({ texture: t.hdr, mipLevel: 0 }, { texture: ta.hist[ta.idx]! }, [t.width, t.height]);
       ta.valid = true;
+      ta.albOk = false;
       ta.pre = pre;
       if (stars) this.encodeStars(enc, t, ta.idx);
       return false;
@@ -4934,11 +5009,11 @@ export class Renderer {
         rigid ? 1 : 0,
         // (its turn between the frames: an offset from its centre now → then, Σ a_prev[i] (a_now[i] · v))
         ...turnRows.flatMap((r) => [...r, 0]),
-        // (the motion blur's shutter)
+        // (the motion blur's shutter; w: the history's albedo beside it, the ground's detail swapped for this frame's — RASTER_DETAIL)
         s.motionBlur,
         0,
         0,
-        0,
+        this.rasterDetailNow && ta.albOk ? 1 : 0,
       ]),
     );
     const pass = enc.beginComputePass(this.prof.pass("temporal"));
@@ -4947,6 +5022,7 @@ export class Renderer {
     pass.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
     pass.end();
     ta.idx = 1 - ta.idx;
+    ta.albOk = true;
     ta.pre = pre;
     // (the canvas's own image from it and this frame's samples, before the image is overwritten by the native result)
     this.encodeTaau(enc, t, stars);
@@ -5154,6 +5230,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     pass.dispatchWorkgroups(Math.ceil(dst.width / 8), Math.ceil(dst.height / 8));
     pass.end();
     ta.valid = true;
+    ta.albOk = false;
     ta.pre = c.pre;
     ta.moving = c.moving;
     // (let go once this frame is submitted: the next encodeTemporal)
@@ -6780,6 +6857,15 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   rasterJitter: "halton" | "gauss" = "gauss";
   /** the raster's shading rays jittered by the Halton sequence this frame (post.wgsl taau: where they went) */
   private rasterHaltonNow = false;
+  /**
+   * The ground's detail at every pixel (RASTER_DETAIL — a switch for comparisons): the raster's shading is sparse (one pixel
+   * in 4 to 64 a frame), its colour rebuilt between and carried by the temporal history; the orthophoto's albedo, cheap, is
+   * read at every pixel each frame (trace.wgsl rasterAlbedo) and swapped in for the albedo of the pixels the colour came from
+   * (post.wgsl resolve, temporal) — the light stays sparse, the texture sharp, as a converged view's.
+   */
+  rasterDetail = true;
+  /** RASTER_DETAIL this frame */
+  private rasterDetailNow = false;
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
   private sceneryRaster: SceneryRaster | null = null;
   /** the trees' and buildings' shadow map (system/tree-shadow.ts, drawn by the scenery raster): the device binds it; a switch
@@ -7350,7 +7436,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         stars: this.starsSplat ? preExposure(this.ev(s)) * 65536 : 0,
       });
       this.encodeCockpitMask(enc, t, s, block);
+      this.tracingRealtime = true;
       traced = this.dispatchTrace(enc, t, Math.ceil(t.width / block), Math.ceil(t.height / block), false, s);
+      this.tracingRealtime = false;
       this.dispatchEnv(enc, t, s);
       this.lastBlock = block;
       this.lastOffset = offset;
@@ -7528,6 +7616,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private dropRasterPrimary(t: Target) {
     this.rasterPrimaryOn = false;
     this.rasterHaltonNow = false;
+    this.rasterDetailNow = false;
     this.paramsF[MOUTH_LIST_AT + 5] = 0;
     this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
     this.device.queue.writeBuffer(t.resolveBuf, 20, new Float32Array([0]));
@@ -7598,6 +7687,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the raster pipeline given up for the traced one on this device, for the session: main.ts's governor, the frame over
    *  its budget and a half at the coarsest rate and the smallest scale for 12 s (the setting changed: tried again) */
   rasterFellBack = false;
+  /** the traced pipeline flown after a fallback and found no faster (main.ts): the raster kept, not given up again until the
+   *  setting changes */
+  rasterKept = false;
   /** the automatic shading rate (earthRasterShading "auto"): the coarsest it may go — main.ts's fallback watches it */
   get rasterRateCoarsest() {
     return this.rasterPrimaryOn && this.rasterRate >= RASTER_RATES_AUTO[RASTER_RATES_AUTO.length - 1]!;

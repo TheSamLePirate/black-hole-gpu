@@ -196,6 +196,8 @@ override COST_VIEW: u32 = 0u;
 // samples along a ray (earthAir), the relief's shadow steps and their growth (earthTerrainShadow — the same reach:
 // 1.18⁴⁸ ≈ 2 800 × the first step)
 override TUNE_AIR_N: u32 = 32u;
+// the imagery's anisotropic taps at most (earthImageryAniso: 1 the isotropic read, on the footprint's long axis)
+override TUNE_ANISO: u32 = 4u;
 override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
 // (the relief's shadow march's reach [m]: beyond it, the ground is taken as lit — a measure of what its far steps cost)
@@ -5575,6 +5577,34 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
   }
   return o;
 }
+// The tiles' imagery over a pixel's footprint (its axes fx, fy on the unit sphere), filtered anisotropically: read at the
+// level of the footprint's short axis, n taps spread along the long one (n its elongation, TUNE_ANISO at most) — one read at
+// the long axis's level (the isotropic) blurred a grazing ground both ways: in level flight, the city a kilometre ahead
+// drawn as a mush of its average colours, sharp only once a still view had accumulated hundreds of samples
+fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
+  let la = length(fx);
+  let lb = length(fy);
+  let fMaj = max(la, lb);
+  let fMin = max(min(la, lb), 1e-12);
+  let n = u32(clamp(ceil(fMaj / fMin - 0.25), 1.0, f32(max(TUNE_ANISO, 1u))));
+  if (n <= 1u) { return earthImagery(gq, fMaj * EARTH_RM); }
+  let ax = select(fy, fx, la >= lb);
+  let foot = max(fMaj / f32(n), fMin) * EARTH_RM;
+  var o: TileImage;
+  o.c = vec4f(0.0);
+  o.w = 0.0;
+  o.o = 0.0;
+  for (var i = 0u; i < n; i++) {
+    let t = earthImagery(normalize(gq + ax * ((f32(i) + 0.5) / f32(n) - 0.5)), foot);
+    o.c += t.c * t.w;
+    o.w += t.w;
+    o.o += t.o;
+  }
+  if (o.w > 0.0) { o.c /= o.w; }
+  o.w /= f32(n);
+  o.o /= f32(n);
+  return o;
+}
 // a level's height at p [its px from the corner]: bilinear, or — its texel more than twice the footprint
 // (mag: by how many octaves larger) — a cubic B-spline over its texels (no facets near), the two blended
 // over an octave
@@ -6990,7 +7020,7 @@ fn seaSSR(D: vec3f, r: vec3f) -> vec4f {
       if (rate > 1u && rasterShaded(px, rate, P.frame.x)) { px.x = select(px.x + 1u, px.x - 1u, px.x + 1u >= u32(P.res.x)); }
       let idx = px.y * u32(P.res.x) + px.x;
       let mk = moments[idx].x;
-      if (mk != RASTER_MARK && mk != RASTER_STALE) { return vec4f(0.0); }
+      if (mk < 1e29 && !(mk < -2.5 && mk > -3.5)) { return vec4f(0.0); }
       let c = accum[idx];
       if (c.a <= 0.0) { return vec4f(0.0); }
       let uv = sh.xy / P.res.xy;
@@ -7545,7 +7575,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let sea0 = smoothstep(0.35, 0.65, rel.b) * (1.0 - overSea);
   let ocean = max(sea0,osmWater) * (1.0 - lvl);
   // (near, the tiles' imagery over the maps: four to eight times finer)
-  var img = earthImagery(gq, max(length(fx), length(fy)) * EARTH_RM);
+  var img = earthImageryAniso(gq, fx, fy);
   if ((TUNE_GSKIP & 32u) != 0u) { img.w = 0.0; }
   var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
   A = mix(A, vec3f(0.11, 0.12, 0.065) * P.earth2.z, sea0 * lvl);
@@ -9789,6 +9819,45 @@ fn rasterRate() -> u32 { let c = u32(P.mouthList[1].y + 0.5) & 15u; return selec
 // frames: the visibility and the rays agree at every pixel, and the history gathers the outlines' sub-pixel coverage
 // (the image's antialiasing); else each pixel's own random offset, the visibility the pixel's centre's.
 fn rasterHalton() -> bool { return (u32(P.mouthList[1].y + 0.5) & 16u) != 0u; }
+// The ground's detail at every pixel (renderer.rasterDetail, mouthList[1].y + 64): the orthophoto's albedo read at each raster
+// pixel each frame, sharp, while the light is shaded sparsely — post.wgsl resolve and temporal swap it in for the albedo of
+// the pixels their colour came from
+const RASTER_DETAIL_FLAG = 64u;
+fn rasterDetailOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_DETAIL_FLAG) != 0u; }
+// The albedo's luminance of the ground the raster patch puts under the pixel's centre (its distance along the ray — the same
+// point for the shaded pixel and the ones left, so the ratio of two is the texture's alone), filtered to the pixel's
+// footprint; 0: none (no imagery, a tree or a building, the ground unlit — the city's lights at night are not its albedo).
+// Written in moments.x beside the raster's marks (rasterMark, rasterStale).
+fn rasterAlbedo(px: vec2f, k: u32) -> f32 {
+  // (not on the far rings: shaded one cycle in TUNE_RING_RATE, their few samples rebuilt over 4 × 4 cells — the albedo's swap
+  // drew those cells' crosses bright along the horizon, for detail too small to see there)
+  if (!rasterDetailOn() || terrainRasterId(px) != 0u || P.near3.w > 0.5 || terrainRasterLevelStep(px) > 0.5) { return 0.0; }
+  let tM = terrainRasterHint(px);
+  if (tM <= 0.0) { return 0.0; }
+  let ndc = vec2f(2.0 * px.x / P.res.x - 1.0, 1.0 - 2.0 * px.y / P.res.y);
+  let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
+  let ab = squashOf(k);
+  let rs = squashed(toBody(look), ab);
+  let rd = rs / length(rs);
+  let kM = length(vec3f(rd.xy, rd.z / ab)) * EARTH_RM;
+  let fine = P.nearCam1.w > 0.5;
+  let q = normalize(select(nearCam(), P.nearCam0.xyz, fine) + select(vec3f(0.0), P.nearCam1.xyz, fine) + rd * (tM / kM));
+  let gq = geoQ(q);
+  if (dot(gq, normalize(squashed(toBody(P.near4.xyz), ab))) < 0.03) { return 0.0; }
+  // (the pixel's footprint there: a pixel across, 1 / sin of the grazing angle along the ray's way over the ground — read
+  // anisotropically, as earthGround reads it)
+  let sinG = max(abs(dot(rd, q)), 0.02);
+  let pw = tM * P.camUp.w / EARTH_RM;
+  let along = rd - q * dot(rd, q);
+  let way = select(normalize(along), normalize(cross(q, vec3f(0.0, 0.0, 1.0))), dot(along, along) < 1e-12);
+  let img = earthImageryAniso(gq, way * (pw / sinG), cross(q, way) * pw);
+  if (img.w < 0.5) { return 0.0; }
+  return clamp(luminance(img.c.rgb), 0.004, 1.0);
+}
+// moments.x of a raster pixel with its albedo a (0: none): shaded this frame — RASTER_MARK and over —, left — RASTER_STALE and
+// under (post.wgsl rasterAlb reads it back; their tests are ranges: > 1e29, (−3.5, −2.5))
+fn rasterMark(a: f32) -> f32 { return RASTER_MARK * (1.0 + a); }
+fn rasterStale(a: f32) -> f32 { return RASTER_STALE - 0.45 * a; }
 fn halton(i: u32, b: u32) -> f32 {
   var f = 1.0;
   var r = 0.0;
@@ -9914,10 +9983,16 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   }
   HINT_PATH = 0u;
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+  // (its albedo where the surface shaded is the patch's — not a windsock, a building or a craft the march met before it —, read
+  // along its own jittered ray, as its colour: the two of one point — the temporal pass accumulates the albedos' jittered reads,
+  // the texture antialiased)
+  let dM = e.t * bodyRadius(k);
+  let hM = terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k);
+  let alb = select(0.0, rasterAlbedo(pos, k), abs(dM - hM) < 0.03 * hM);
   let old = accum[idx];
   if (temporal && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
   accum[idx] = vec4f(col, 1.0);
-  moments[idx] = vec2f(RASTER_MARK, e.t * bodyRadius(k));
+  moments[idx] = vec2f(rasterMark(alb), dM);
   stamps[idx] = frameStamp;
 }
 
@@ -9944,7 +10019,13 @@ fn shadeMark(@builtin(global_invocation_id) gid: vec3u) {
     return;
   }
   let k = u32(P.near1.w);
-  moments[idx] = vec2f(RASTER_STALE, d / EARTH_RM * bodyRadius(k));
+  // (its albedo read through a jittered point of the pixel, as shade's rays are: the temporal pass accumulates them — read at
+  // the centre every frame, the texture aliased, flickering under the motion, the most where the ground grazes, at the horizon)
+  var jit = vec2f(0.0);
+  if ((P.frame.z & FLAG_TEMPORAL) != 0u) {
+    jit = select(gaussJitter(hash4(vec3u(gid.xy, P.frame.x)).xy), rasterJitter(P.frame.x), rasterHalton());
+  }
+  moments[idx] = vec2f(rasterStale(rasterAlbedo(vec2f(gid.xy) + 0.5 + jit, k)), d / EARTH_RM * bodyRadius(k));
 }
 
 // The cloud pass (docs/PLAN-NUAGES-AAA.md N1): the clouds along each camera ray marched once a texel of half the image's

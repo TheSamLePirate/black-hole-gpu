@@ -115,6 +115,18 @@ fn beamH(@builtin(global_invocation_id) gid: vec3u) { beamBlur(gid.xy, vec2i(1, 
 fn beamV(@builtin(global_invocation_id) gid: vec3u) { beamBlur(gid.xy, vec2i(0, 1)); }
 
 fn luminance(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
+// The ground's albedo a raster pixel carries in moments.x (trace.wgsl rasterMark, rasterStale — RASTER_DETAIL; 0: none)
+fn rasterAlb(mx: f32) -> f32 {
+  if (mx > 1e29) { return clamp(mx * 1e-30 - 1.0, 0.0, 1.0); }
+  if (mx < -2.5 && mx > -3.5) { return clamp((-3.0 - mx) / 0.45, 0.0, 1.0); }
+  return 0.0;
+}
+// a colour taken at albedo b brought to albedo a — the texture swapped, the light kept (either none: as it is; bounded: a
+// texel's error, a coast's sea and land, not a blow-up)
+fn albSwap(a: f32, b: f32) -> f32 { return select(1.0, clamp(a / b, 0.25, 4.0), a > 0.0 && b > 0.0); }
+// the share of a frame's jittered albedo read in the accumulated one (post.wgsl temporal: ~5 frames — antialiased, still sharp
+// under the motion's resampling)
+const ALB_ALPHA = 0.2;
 
 // Polarization ticks: mean Stokes I, Q, U (luminance) over each cell of the tick grid.
 @compute @workgroup_size(8, 8)
@@ -168,6 +180,8 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     let wide = R.f.y > 6.0;
     let rr = select(2, 3, wide);
     let gk = select(0.5, 0.22, wide);
+    // (RASTER_DETAIL — R.f.z —: each sample's colour brought to this pixel's own albedo, the texture sharp between them)
+    let ap = select(0.0, rasterAlb(mx), R.f.z > 0.5);
     for (var j = -rr; j <= rr; j++) {
       for (var i = -rr; i <= rr; i++) {
         let q = vec2i(gid.xy) + vec2i(i, j);
@@ -179,7 +193,7 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
         // (a floor under the depths' likeness: where none is alike — a grazing ground's depth changes by more than 5 % a
         // row, a silhouette —, the nearest fresh samples still decide; the pixel's own old colour, the camera turned since,
         // put the sky's colour on the ground and the history's clamp then let its ghosts through)
-        acc += exp(-gk * f32(i * i + j * j)) * max(exp(-rel * rel), 0.002) * vec4f(loadAvg(u32(q.x), u32(q.y), W), 1.0);
+        acc += exp(-gk * f32(i * i + j * j)) * max(exp(-rel * rel), 0.002) * vec4f(loadAvg(u32(q.x), u32(q.y), W) * albSwap(ap, rasterAlb(m.x)), 1.0);
       }
     }
     c = select(loadAvg(gid.x, gid.y, W), acc.rgb / acc.w, acc.w > 0.0);
@@ -565,6 +579,35 @@ fn historyAt(uv: vec2f, size: vec2f) -> vec3f {
   return max(c, vec3f(0.0));
 }
 
+// The ground's albedo history (RASTER_DETAIL: r its luminance, g its coverage — 0 the sky's, a tree's), read as historyAt
+// reads the colour's — the same Catmull–Rom, so blurred alike — and written beside it each frame
+@group(0) @binding(28) var albPrev: texture_2d<f32>;
+@group(0) @binding(29) var albOut: texture_storage_2d<rgba16float, write>;
+fn albHistAt(uv: vec2f, size: vec2f) -> vec2f {
+  let sp = uv * size;
+  let t1 = floor(sp - 0.5) + 0.5;
+  let f = sp - t1;
+  let w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+  let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+  let w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+  let w3 = f * f * (-0.5 + 0.5 * f);
+  let w12 = w1 + w2;
+  let t0 = (t1 - 1.0) / size;
+  let t3 = (t1 + 2.0) / size;
+  let t12 = (t1 + w2 / w12) / size;
+  var c = vec2f(0.0);
+  c += textureSampleLevel(albPrev, samp, vec2f(t0.x, t0.y), 0.0).rg * w0.x * w0.y;
+  c += textureSampleLevel(albPrev, samp, vec2f(t12.x, t0.y), 0.0).rg * w12.x * w0.y;
+  c += textureSampleLevel(albPrev, samp, vec2f(t3.x, t0.y), 0.0).rg * w3.x * w0.y;
+  c += textureSampleLevel(albPrev, samp, vec2f(t0.x, t12.y), 0.0).rg * w0.x * w12.y;
+  c += textureSampleLevel(albPrev, samp, vec2f(t12.x, t12.y), 0.0).rg * w12.x * w12.y;
+  c += textureSampleLevel(albPrev, samp, vec2f(t3.x, t12.y), 0.0).rg * w3.x * w12.y;
+  c += textureSampleLevel(albPrev, samp, vec2f(t0.x, t3.y), 0.0).rg * w0.x * w3.y;
+  c += textureSampleLevel(albPrev, samp, vec2f(t12.x, t3.y), 0.0).rg * w12.x * w3.y;
+  c += textureSampleLevel(albPrev, samp, vec2f(t3.x, t3.y), 0.0).rg * w3.x * w3.y;
+  return c;
+}
+
 // A pixel's direction now (d0, the current camera's) as it was seen from the previous frame's camera:
 // what lies at a finite depth [M] moved by the camera's displacement — parallax —, a near body's ground
 // carried by the body's own rigid move (R4); the far sky by the turn alone
@@ -630,6 +673,11 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   let size = textureDimensions(dst);
   if (gid.x >= size.x || gid.y >= size.y) { return; }
   let cur = textureLoad(src, vec2i(gid.xy), 0);
+  // (RASTER_DETAIL — R.f.z —: this pixel's ground albedo, kept beside the history for the next frame — resampled as it is)
+  let aCur = select(0.0, rasterAlb(moments[gid.y * size.x + gid.x].x), R.f.z > 0.5 && R.f.y > 0.5);
+  textureStore(albOut, gid.xy, vec4f(aCur, select(0.0, 1.0, aCur > 0.0), 0.0, 0.0));
+  // (and its accumulated albedo, once the history gives one — below: written over the line above)
+  var aAcc = aCur;
   if (TA.k.y < 0.5) {
     textureStore(dst, gid.xy, cur);
     return;
@@ -713,6 +761,18 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     let underCabin = mx < -0.5 && mx > -1.5;
     if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0)) && !underCabin) {
       hist = historyAt(uv, vec2f(size)) * TA.k.x;
+      // (the ground's detail: the history's colour is its pixels' albedo resampled — blurred as it is —, swapped for the
+      // pixel's accumulated one: its jittered reads blended over a few frames (ALB_ALPHA), sharp and antialiased — the texture
+      // as a converged view's, the light the history's. Only where the albedo history is whole there — its coverage 1: not at a
+      // silhouette, the sky's pixels none —, written with this history — TA.mb.w)
+      if (TA.mb.w > 0.5 && aCur > 0.0) {
+        let ah = albHistAt(uv, vec2f(size));
+        if (ah.y > 0.97 && ah.y < 1.03 && ah.x > 0.0) {
+          let aH = ah.x / ah.y;
+          aAcc = mix(aH, aCur, ALB_ALPHA);
+          hist *= albSwap(aAcc, aH);
+        }
+      }
       // the range of the current frame around the pixel, at the block's scale (mean ± g σ, YCoCg of the
       // tone-mapped values; the fresh samples' alone, R2's suggestion, read the stamps nine times more for
       // +0.3 ms and nothing measurable)
@@ -724,7 +784,9 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       for (var j = -1; j <= 1; j++) {
         for (var i = -1; i <= 1; i++) {
           let qp = clamp(vec2i(gid.xy) + vec2i(i, j) * st, vec2i(0), hi);
-          let q = rgbToYcocg(tmFwd(textureLoad(src, qp, 0).rgb));
+          // (the range at this pixel's albedo: its neighbours' texture is theirs — RASTER_DETAIL)
+          let sw = select(1.0, albSwap(aAcc, rasterAlb(moments[u32(qp.y) * W + u32(qp.x)].x)), aAcc > 0.0);
+          let q = rgbToYcocg(tmFwd(textureLoad(src, qp, 0).rgb * sw));
           m1 += q;
           m2 += q * q;
           ws += 1.0;
@@ -744,7 +806,7 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
             let qp = clamp(vec2i(gid.xy) + vec2i(i, j), vec2i(0), hi);
             let qi = u32(qp.y) * W + u32(qp.x);
             if (moments[qi].x < 1e29 || stamps[qi] < R.u.w) { continue; }
-            let q = rgbToYcocg(tmFwd(textureLoad(src, qp, 0).rgb));
+            let q = rgbToYcocg(tmFwd(textureLoad(src, qp, 0).rgb * albSwap(aAcc, rasterAlb(moments[qi].x))));
             f1 += q;
             f2 += q * q;
             fc += 1.0;
@@ -786,7 +848,9 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       }
     }
   }
-  let c = mix(max(hist, vec3f(0.0)), cur.rgb, alpha);
+  // (this frame's colour brought to the accumulated albedo too — its own is this frame's jittered read)
+  let c = mix(max(hist, vec3f(0.0)), cur.rgb * albSwap(aAcc, aCur), alpha);
+  if (aAcc > 0.0) { textureStore(albOut, gid.xy, vec4f(aAcc, 1.0, 0.0, 0.0)); }
   // (the alpha: the history's weight — the variance the refining passes keep there is not needed while it moves)
   textureStore(dst, gid.xy, vec4f(c, nOut));
 }
