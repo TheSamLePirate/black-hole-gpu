@@ -14,7 +14,14 @@ import { App, E2E, stopServer } from "./lib/app";
 // Done when: every side flown, its figures written.
 
 const PARIS = { lat: 48.8566, lon: 2.3022 };
-const SETTINGS = `{ traffic: false, weather: "fair", earthClouds: 0, dof: false, earthPipeline: "raster", earthRasterShading: "every", earthRasterScale: 1, dynamicResolution: false, autoGear: false, f35AutoProtect: false }`;
+// (PULSE_WEATHER: the weather flown through — weather.ts's presets, "fair" by default —, PULSE_CLOUDS the Earth's cloud map's
+// cover, 0 by default: the image's cost and look in each)
+const WEATHER = process.env.PULSE_WEATHER ?? "fair";
+const CLOUDS = Number(process.env.PULSE_CLOUDS ?? 0);
+// (PULSE_DATE: the flight's moment — a summer's morning by default; e.g. 2026-07-10T23:30:00Z a night over Paris)
+const DATE = process.env.PULSE_DATE ?? "2026-07-10T10:30:00Z";
+const NIGHT = Number(DATE.slice(11, 13)) >= 21 || Number(DATE.slice(11, 13)) < 4;
+const SETTINGS = `{ traffic: false, weather: "${WEATHER}", earthClouds: ${CLOUDS}, dof: false, earthPipeline: "raster", earthRasterShading: "every", earthRasterScale: 1, dynamicResolution: false, autoGear: false, f35AutoProtect: false }`;
 const SIDES = [
   ["A", process.env.AB_A_URL],
   ["B", process.env.AB_B_URL],
@@ -64,7 +71,7 @@ test.skipIf(!E2E)(
         await app.load("scene=game:artemis");
         await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); return 1; })()`);
         await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
-        await app.js(`(() => { __bh.game.setDate("2026-07-10T10:30:00Z"); return 1; })()`);
+        await app.js(`(() => { __bh.game.setDate("${DATE}"); return 1; })()`);
         await Bun.sleep(1000);
         // (placed, held while the city's tiles come in, placed again over the ground they give)
         await app.js(`(() => { ${place} __bh.freeze(true); return 1; })()`);
@@ -141,7 +148,7 @@ test.skipIf(!E2E)(
             ),
           });
         const s1 = await app.js<Record<string, unknown>>(STATE);
-        await app.shot(`${OUT}/pulse-${label}.png`);
+        await app.shot(`${OUT}/pulse-${label}-${WEATHER}${NIGHT ? "-night" : ""}.png`);
         const ds = series.map((x) => x.d);
         const med = pct(ds, 0.5);
         const r = {

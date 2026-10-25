@@ -422,3 +422,28 @@ encore : leur ombrage au matériau, leurs instances), la coque 4,3, la reproject
 | Début de la journée (U2e, 8,4 i/s) | Fin de U6 (21,5 i/s en vol) |
 |---|---|
 | ![U2e](img/u2e-mini-paris.jpg) | ![U6](img/u6-mini-paris.jpg) |
+
+### U7 — la météo et la nuit au matériau raster ; les nuages ombrés dessous, la lueur des villes (25/10)
+
+**Les huit météos sur le mini** (vol bas sur Paris, chaque pixel, 1920 × 1080, les nuages de la carte allumés ; avant ce lot) :
+clair 18,6 i/s, nuageux 17,9, couvert 14,6, brouillard 17,2, pluie 15,0, **orage 11,1 (85 ms)**, vent 22,0, poussière 20,8 ;
+aucune image tracée.
+
+**Ce qui manquait au matériau raster** (`shadeLite` ignorait la météo) : le poids local de la météo (`WX_W` — le brouillard
+de la marche de secours, les couches proches : zéro), la lumière grise du ciel sous les couches (`wxVeil` — le sol éclairé
+sous un couvert comme par beau temps), l'ombre des couches au-delà de la carte d'ombre des nuages, l'éclair d'orage, **le sol
+mouillé** (plus sombre, le ciel en reflet par Fresnel ; sur les pistes, les flaques et les ronds des gouttes), **la Lune**
+(`earthMoonlight`, sous les couches). Portés du sol tracé, à l'identique.
+
+**Les nuages ombrés dessous** (le constat de l'utilisateur, et la série le montre : les bases des cumulus aussi blanches que
+leurs sommets) : la lumière d'en haut n'était atténuée par l'épaisseur du nuage qu'à un plancher de 30 %
+(`0.3 + 0.7 e^(−τ/4)`), le ciel des couches météo à ~60 % sous un nuage épais (`0.25 + 0.75 e^(−0.03 τ)`), la diffusion
+multiple du Soleil presque entière jusqu'à la base. `cloudDiffuseT(τ) = 1/(1 + 0.3 τ)` (deux flux, un nuage d'eau épais :
+~un dixième à la base d'un cumulus), le ciel des couches `0.1 + 0.9 cloudDiffuseT(0.4 τ)`, la diffusion multiple
+`× (0.35 + 0.65 ·)` — les cartes, les couches météo, la coquille 2D.
+
+**La nuit** : les nuages recevaient le ciel nocturne, la Lune, les éclairs — rien d'en dessous. `cityGlowUp` : les lumières
+de la carte nocturne au niveau grossier (~10 km, ce qu'une base voit), orangées comme le sol les dessine, renvoyées sur les
+bases à travers le nuage sous le point (`CITY_GLOW_CLOUDS` 0,03 : le niveau du sol éclairé vu de près, quelle que soit
+l'altitude de la caméra — à 0,12 un couvert de nuit au-dessus de Paris était éclairé comme de jour). Un couvert nocturne au-dessus
+d'une ville gris-orangé, la campagne noire.

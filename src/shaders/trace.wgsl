@@ -4152,6 +4152,26 @@ fn nightFloor(sk: f32, mu0: f32) -> vec3f {
 // moonlit landscape shows, silvery), and the moonlight at q: its direction's cosine on the normal n,
 // through the air, faded in as the night falls
 const EARTH_MOON = vec3f(0.07, 0.085, 0.11);
+// A cloud's diffuse transmission through the optical depth τ between a point and its top (or its base): two-stream for a
+// thick, forward-scattering water cloud — what reaches a deep cumulus's base of the light falling on its top, ~a tenth (the
+// grey, dark undersides; it was 0.3 + 0.7 e^(−τ/4): the bases lit at a third whatever the depth — the user's report, U7)
+fn cloudDiffuseT(tau: f32) -> f32 { return 1.0 / (1.0 + 0.3 * max(tau, 0.0)); }
+// The cities' light sent up onto a cloud over q (unit): the night ground's lamps averaged over the ~10 km a base sees — the
+// night map's coarse level —, as bright and as orange as the ground draws them (shadeLite, earthGround): an irradiance from
+// below; nothing by day, nothing over the dark countryside
+fn cityGlowUp(q: vec3f, E: vec3f, mu0: f32) -> vec3f {
+  let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
+  if (dark <= 0.0 || P.earth.z <= 0.0) { return vec3f(0.0); }
+  let lod = max(log2(f32(textureDimensions(earthNight).x) * 10.0 / 10007.0), 0.0);
+  let l = textureSampleLevel(earthNight, bgSamp, eCube(geoQ(q)), lod).r;
+  let lamp = max(l - 0.07, 0.0) / 0.93;
+  return mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * CITY_GLOW_CLOUDS * dark * luminance(E));
+}
+// (the cities' light on the clouds' bases: the lit ground's as it is drawn near it — a twentieth of the orbit's — whatever the
+// camera's height (P.earth.z follows it: from orbit the bases would glow twenty times brighter); a base sends back ~its
+// albedo of what the city under it gives — a city's overcast dim orange, the countryside's black; 0.12 lit a night's deck as a
+// day's)
+const CITY_GLOW_CLOUDS = 0.03;
 fn earthMoonlight(q: vec3f, n: vec3f, h: f32, mu0: f32) -> vec3f {
   let Lm = P.earth3.xyz;
   let mz = dot(airPhysicalNormal(q), Lm);
@@ -6377,7 +6397,8 @@ fn earthCloudLight(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, below: bool, lit: f
   let sk = skySeen(q, Ls);
   let amb = max(0.7 * skyFlatFactor(q, hc, E, mu0, sk), nightFloor(sk, mu0));
   let top = 0.85 / PI * (E * Ts * (wrap * lit * select(cloudLongShadow(q, Ls), 1.0, below) + fwd) + E * amb + E * earthMoonlight(q, q, hc, mu0));
-  return select(top, top * 0.35, below);
+  // (its base: the top's light through it, and the cities' from below)
+  return select(top, top * 0.2 + 0.85 / PI * cityGlowUp(q, E, mu0), below);
 }
 
 // The ground at q (unit), seen along rd; its footprint's axes fx, fy
@@ -8310,15 +8331,18 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let beer = select(exp(-tauSun), 0.0, mu0 < -0.1);
     let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
     // (the sky's and the moon's light from above, dimmed by the cloud over it: a grey base, a bright top)
-    let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
+    let over = cloudDiffuseT(tauUp);
+    // (the cloud below this point, to its base: the cities' light from below through it)
+    let under = cloudDiffuseT(c * 25.0 * hn / max(top, 0.2));
     let sk = skySeen(q, Ls);
     let amb = max(0.7 * skyFlatFactor(q, airHeight(p), E, mu0, sk), nightFloor(sk, mu0));
-    // (the octaves' dimming from one exponential: e^(−0.04 τ), its square, its cube)
+    // (the octaves' dimming from one exponential: e^(−0.04 τ), its square, its cube; deep in the cloud — its base — the
+    // many-times scattered sunlight dimmed by the depth over it too)
     let e1 = exp(-0.04 * tauSun);
     let e2 = e1 * e1;
-    let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75;
+    let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75 * (0.35 + 0.65 * over);
     let Lin = FLASH_TINT * luminance(E) * 0.25 * flashGlow(p) + E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
-      + 0.85 / PI * over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0));
+      + 0.85 / PI * (over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0)) + under * cityGlowUp(q, E, mu0));
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
     if (o.t < 0.0) { o.t = t; }
@@ -8536,7 +8560,7 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     if (CLOUD_LIGHT_MARCH || (QUALITY_PIPELINE && TUNE_CLOUD_LIGHT > 0u)) { tauSun = wxLightTau(p, i, Ls, fract(jit * 13.7 + f32(j) * 0.618)); }
     let beer = select(exp(-tauSun), 0.0, mu0 < -0.1);
     let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
-    let over = 0.3 + 0.7 * exp(-0.25 * tauUp);
+    let over = cloudDiffuseT(tauUp);
     var skyL = skyLayerE;
     var skyG = skyGroundE;
     var night = nightE;
@@ -8549,12 +8573,17 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     let amb = max(0.7 * skyL, night);
     let e1 = exp(-0.04 * tauSun);
     let e2 = e1 * e1;
-    let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75;
-    let skyTop = skyL * (0.25 + 0.75 * exp(-0.03 * tauUp));
-    // (the light the ground sends up onto the base — the sun's and the sky's on it, an albedo of 0.18 —, through the cloud below)
-    let bounce = 0.18 * (sunThrough(0.0, mu0) * max(mu0, 0.0) + skyG) * exp(-0.25 * a * L.w * hn);
+    let ms = (ms1 * e2 * e1 + 0.5 * ms2 * e2 + 0.25 * ms3 * e1) / 1.75 * (0.35 + 0.65 * over);
+    // (the sky's light through the layer's depth over the point — a deck's base the grey of what comes through it, not 60 % of
+    // the open sky's: the undersides too bright — U7)
+    let skyTop = skyL * (0.1 + 0.9 * cloudDiffuseT(0.4 * tauUp));
+    // (the light the ground sends up onto the base — the sun's and the sky's on it, an albedo of 0.18; at night the cities'
+    // lamps —, through the cloud below)
+    let below = cloudDiffuseT(a * L.w * hn / max(top, 0.3));
+    let bounce = 0.18 * (sunThrough(0.0, mu0) * max(mu0, 0.0) + skyG) * below;
     let Lin = FLASH_TINT * luminance(E) * 0.25 * flashGlow(p) + E * Ts * (hg * beer * powder * 2.5 + 0.25 * ms * smoothstep(-0.1, 0.1, mu0))
-      + 0.85 / PI * (over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0)) + E * skyTop * veil + 0.5 * E * bounce);
+      + 0.85 / PI * (over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0)) + E * skyTop * veil + 0.5 * E * bounce
+        + below * cityGlowUp(q, E, mu0));
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
     if (o.t < 0.0) { o.t = t; }
@@ -10405,7 +10434,21 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
   } else {
     let marchMu = dot(q, Ls);
     let qs = normalize(q + (Ls - q * marchMu) * (P.earth2.x / max(marchMu, 0.06)));
-    Eg *= 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
+    var shade = 1.0 - 0.8 * earthCloud(qs, fx * 3.0, fy * 3.0, Ls).x;
+    // (beyond the clouds' map: the weather's layers' shadows, each cast from its middle along the Sun's slant — as the
+    // tracer's ground)
+    let wg = wxNear(q);
+    if (HAS_WX && wg > 0.0) {
+      shade = mix(shade, 1.0, wg);
+      for (var i = 0u; i < 3u; i++) {
+        let L = P.wx[1u + i];
+        if (L.z <= 0.0 || hG >= L.y) { continue; }
+        let hm = 0.5 * (L.x + L.y) - hG;
+        let qi = normalize(q + (Ls - q * marchMu) * (hm / EARTH_RM / max(marchMu, 0.06)));
+        shade *= 1.0 - wg * wxLayerA(qi, i) * (1.0 - exp(-0.5 * L.w / max(marchMu, 0.06)));
+      }
+    }
+    Eg *= shade;
   }
   Eg *= sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
   if ((liteSkip() & 4u) == 0u) {
@@ -10511,6 +10554,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     return;
   }
   setAir(k);
+  // (the weather round the camera — its decks, haze, fog, rain: wxNear, the air's fallback march —, as the tracer's rays set it)
+  WX_W = select(0.0, P.wx[0].x, HAS_WX && earthOn());
+  WX_Q = normalize(nearCam());
   FOOT = 1.0;
   FOOT_NEAR = 1.0;
   FOOT_FAR = 1.0;
@@ -10571,11 +10617,15 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // runway is near or not — no other key, nothing compiled in flight —; the ground levelled under it the mesh's)
   var rwyLamps = vec3f(0.0);
   var lvl = 0.0;
+  var rwyPaved = 0.0;
+  var rwyAt = vec2f(0.0);
   if (!mesh && !isTree && rwyCount() > 0u) {
     let rp = runwayPave(dirW * tM, gq, q, rd, Ls, fx, fy, A, n);
     A = rp.A;
     n = rp.n;
     rwyLamps = rp.lamps;
+    rwyPaved = rp.paved;
+    rwyAt = rp.at;
     lvl = runwayGrade(gq).y;
   }
   // (liteSkip 4096: the Sun's and the sky's light plain — their transmittances and shadows not read: a measure)
@@ -10606,11 +10656,61 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     A = mix(A, vec3f(0.03) * P.earth2.z, glass);
   }
   // (the sky's light — on a slope, a share of it, and the ground's bounce round it — as earthGround's)
+  // (the rain — PLAN-PLUIE P4, as the tracer's ground —: the ground wet, darker, a sheen of the sky on it (below); on a
+  // runway's paving water lying in its hollows and the drops' rings spreading on it, near)
+  var wetS = 0.0;
+  var ripple = 0.0;
+  if (HAS_WX && WX_W > 0.0 && P.wx[5].x > 0.0 && !isTree) {
+    let wet = P.wx[5].x * WX_W;
+    var pud = 0.0;
+    if (rwyPaved > 0.0) {
+      let pn = vnoise(vec3f(rwyAt.x * 0.08, rwyAt.y * 0.2, 3.0)) * 0.6 + vnoise(vec3f(rwyAt.x * 0.31, rwyAt.y * 0.55, 7.0)) * 0.28
+        + vnoise(vec3f(rwyAt.x * 1.3, rwyAt.y * 1.7, 11.0)) * 0.12;
+      pud = smoothstep(0.7 - 0.06 * min(P.wx[5].y, 1.0), 0.8 - 0.06 * min(P.wx[5].y, 1.0), pn) * rwyPaved * wet;
+      let footM = max(length(fx), length(fy)) * EARTH_RM;
+      let near = smoothstep(0.1, 0.02, footM) * min(P.wx[5].y, 1.0);
+      if (near > 0.0) {
+        let cp = rwyAt / 0.3;
+        for (var dj = 0; dj < 2; dj++) {
+          for (var di = 0; di < 2; di++) {
+            let id = floor(cp) + vec2f(f32(di), f32(dj)) - vec2f(0.5);
+            let hh = vec2f(hash31(vec3f(id, 11.0)), hash31(vec3f(id, 23.0)));
+            let age = fract(P.wx[5].z * (0.9 + 0.5 * hh.x) + hh.y);
+            let ctr = (id + 0.5 + 0.5 * (vec2f(hash31(vec3f(id, 5.0)), hash31(vec3f(id, 7.0))) - 0.5)) * 0.3;
+            let d = length(rwyAt - ctr);
+            ripple += exp(-pow((d - age * 0.11) / 0.006, 2.0)) * (1.0 - age) * (1.0 - age);
+          }
+        }
+        ripple *= near * (0.35 + 0.65 * pud / max(wet, 1e-3));
+      }
+    }
+    // (a roof's slate and a wall's stone darker wet too, less than the soil — their pores fewer)
+    A *= mix(vec3f(1.0), vec3f(select(mix(0.58, 0.7, rwyPaved), 0.75, mesh)), wet);
+    A *= 1.0 - 0.35 * pud;
+    wetS = wet * select(mix(0.08, 0.3, rwyPaved), 0.12, mesh) + pud * 0.4;
+  }
   var sky = E * 0.15;
   if (!plainLight) { sky = liteSky(q, hG, E, Ls, mu0); }
+  // (under the weather's decks: the blue sky hidden by their cover, their own grey light instead — what comes through them,
+  // and for a broken sky what their sunlit sides and bases send down —, as the tracer's ground)
+  let wg = wxNear(q);
+  // (the Moon's light under the decks: what they let through)
+  var moonVeil = 1.0;
+  if (HAS_WX && wg > 0.0) {
+    let vl = wxVeil(hG, wg, 3u);
+    let side = 0.5 * vl.x * (1.0 - vl.x);
+    sky = sky * vl.x + (Esun * max(mu0, 0.0) * skySeen(q, Ls) + sky) * (vl.y - vl.x + side);
+    moonVeil = vl.y;
+  }
+  // (a lightning flash — N5 —: its light on the ground for kilometres round)
+  if (HAS_WX && P.wx[6].w > 0.0) {
+    let f = flashAt();
+    sky += FLASH_TINT * luminance(E) * 0.05 * f.w * exp(-length(q * (1.0 + hG / EARTH_RM) - f.xyz) * EARTH_RM / 10000.0);
+  }
   let up = dot(n, gq);
   let bounce = (Esun * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
-  var G = A / PI * (Eg * max(dot(n, Lp), 0.0) + sky * 0.5 * (1.0 + up) + bounce);
+  // (the moonlight — the tracer's ground's earthMoonlight: a moonlit landscape silvery —, through the decks)
+  var G = A / PI * (Eg * max(dot(n, Lp), 0.0) + sky * 0.5 * (1.0 + up) + bounce + E * earthMoonlight(q, n, hG, mu0) * moonVeil);
   // (a tree: lit as windsockShade lights it — the Sun on its face, six tenths of the sky, not the ground's open sky and
   // bounce: they lit the crowns yellow —, its crown's underside in its own shade (the carving's occlusion, left out here),
   // the light through its thin edge against the Sun)
@@ -10623,6 +10723,14 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (glass > 0.0) {
     let F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(n, dirW)), 0.0, 1.0), 5.0);
     G += glass * F * sky * 1.5 / PI;
+  }
+  // (the wet ground's sheen: the sky mirrored by the water on it, by Fresnel — a wet runway seen ahead silvery —, the rings
+  // breaking it)
+  if (wetS > 0.0) {
+    let cv = clamp(dot(n, -dirW), 0.0, 1.0);
+    let F = (0.02 + 0.98 * pow(1.0 - cv, 5.0)) * wetS;
+    G = G * (1.0 - F) + F * sky * 1.1 / PI * (1.0 + 2.5 * ripple);
+    G += ripple * 0.35 * sky / PI;
   }
   // (the cities' lights at night)
   let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
@@ -10673,6 +10781,8 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   if (!(mk <= RASTER_WATER && mk > RASTER_WATER - 3.0)) { return; }
   let k = u32(P.near1.w);
   setAir(k);
+  WX_W = select(0.0, P.wx[0].x, HAS_WX && earthOn());
+  WX_Q = normalize(nearCam());
   FOOT = 1.0;
   FOOT_NEAR = 1.0;
   FOOT_FAR = 1.0;
