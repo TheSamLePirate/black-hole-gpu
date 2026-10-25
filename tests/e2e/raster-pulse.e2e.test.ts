@@ -94,6 +94,12 @@ test.skipIf(!E2E)(
           const levers = process.env.PULSE_LEVERS.split(";").map(
             (x) => [x.slice(0, x.indexOf("=")), x.slice(x.indexOf("=") + 1)] as [string, string],
           );
+          // (PULSE_FREEZE: the flight held — the raster draws on, the same view each frame: the levers compared on one image, not
+          // over 30 km of a flight's changing city)
+          if (process.env.PULSE_FREEZE) {
+            await app.js(`(__bh.freeze(true), 1)`);
+            await Bun.sleep(3000);
+          }
           for (let k = 0; k < 2; k++)
             for (const [name, js] of levers) {
               await app.js(`(() => { ${js}; return 1; })()`);

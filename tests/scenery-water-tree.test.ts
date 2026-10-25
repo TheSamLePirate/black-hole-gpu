@@ -39,3 +39,42 @@ test("the water's tree points at the surfaces' records of the water alone", () =
     .sort();
   expect(kinds).toEqual(["line 3", "polygon 4"]);
 });
+
+// trace.wgsl sceneryPolygon: the crossings of a ray along +x from p, over a record's first `count` edges
+function inside(d: number[], p: [number, number], count: number) {
+  let c = false;
+  for (let i = 0; i < count; i++) {
+    const [ax, ay, bx, by] = d.slice(12 + 4 * i, 16 + 4 * i) as [number, number, number, number];
+    if (ay > p[1] !== by > p[1] && p[0] < ax + ((p[1] - ay) * (bx - ax)) / (by - ay)) c = !c;
+  }
+  return c;
+}
+test("a large water polygon cut into bands answers as the whole one — its water and its island", async () => {
+  const { waterBands } = await import("../src/system/scenery-data");
+  // (a ragged river 2 km long, 300 edges a bank, an island in it)
+  const ring: [number, number, number][] = [];
+  for (let i = 0; i <= 300; i++) ring.push([i * 7, 40 * Math.sin(i * 0.37) + 13 * Math.sin(i * 1.9), 0]);
+  for (let i = 300; i >= 0; i--) ring.push([i * 7, 160 + 30 * Math.sin(i * 0.23) + 11 * Math.cos(i * 2.3), 0]);
+  ring.push(ring[0]!);
+  const island: [number, number, number][] = [
+    [900, 80, 0],
+    [1000, 80, 0],
+    [1000, 110, 0],
+    [900, 110, 0],
+    [900, 80, 0],
+  ];
+  const river = polygonPrimitive([ring, island], 0, 0, 4, [0.02, 0.05, 0.04])!;
+  const bands = waterBands(river);
+  expect(bands.length).toBeGreaterThan(10);
+  let r = 1;
+  const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+  for (let k = 0; k < 4000; k++) {
+    const p: [number, number] = [-50 + rnd() * 2200, -80 + rnd() * 340];
+    const whole = inside(river.data, p, river.data[2]!);
+    const wholeOuter = inside(river.data, p, river.data[11]!);
+    // (the band holding p — its box —; outside every band's box: outside)
+    const b = bands.find((x) => p[0] >= x.min[0] && p[0] <= x.max[0] && p[1] >= x.min[1] && p[1] <= x.max[1]);
+    expect(b ? inside(b.data, p, b.data[2]!) : false).toBe(whole);
+    expect(b ? inside(b.data, p, Math.floor(b.data[11]!)) : false).toBe(wholeOuter);
+  }
+});

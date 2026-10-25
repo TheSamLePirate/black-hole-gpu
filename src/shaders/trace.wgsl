@@ -5600,28 +5600,129 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
 // the long axis's level (the isotropic) blurred a grazing ground both ways: in level flight, the city a kilometre ahead
 // drawn as a mush of its average colours, sharp only once a still view had accumulated hundreds of samples
 fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
+  // (TERRE-UNREAL U6: the taps' places on the tiles from the centre's and its axis's — linear over a pixel's footprint —, not
+  // each from its own atan2 and atanh; each level's window read once for all its taps; the sRGB curve once a level, over the
+  // taps' mean)
   let la = length(fx);
   let lb = length(fy);
   let fMaj = max(la, lb);
   let fMin = max(min(la, lb), 1e-12);
   let n = u32(clamp(ceil(fMaj / fMin - 0.25), 1.0, f32(max(TUNE_ANISO, 1u))));
-  if (n <= 1u) { return earthImagery(gq, fMaj * EARTH_RM); }
-  let ax = select(fy, fx, la >= lb);
-  let foot = max(fMaj / f32(n), fMin) * EARTH_RM;
   var o: TileImage;
   o.c = vec4f(0.0);
   o.w = 0.0;
   o.o = 0.0;
-  for (var i = 0u; i < n; i++) {
-    let t = earthImagery(normalize(gq + ax * ((f32(i) + 0.5) / f32(n) - 0.5)), foot);
-    o.c += t.c * t.w;
-    o.w += t.w;
-    o.o += t.o;
+  if (P.tiles.w < 0.5) { return o; }
+  let ax = select(fy, fx, la >= lb);
+  let foot = select(fMaj, max(fMaj / f32(n), fMin), n > 1u) * EARTH_RM;
+  let q = gq;
+  let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
+  let uv0 = imageryUv(q);
+  // (along the long axis, across its whole length: the taps at (i + ½)/n − ½ of it)
+  var duv = vec2f(0.0);
+  if (n > 1u) { duv = 2.0 * (imageryUv(normalize(q + ax * 0.5)) - uv0); }
+  let zf = log2(EARTH_RM * TAU * cosLat / (256.0 * max(foot, 0.1)));
+  let nf = f32(n);
+  var fine = vec3f(0.0);
+  var wf = 0.0;
+  for (var kk = 0; kk < i32(ORTHO_LEVELS); kk++) {
+    let k = ORTHO_LEVELS - 1u - u32(kk);
+    let a = bodies[ORTHO_OFF + 3u * k];
+    let b = bodies[ORTHO_OFF + 3u * k + 1u];
+    if (b.w < 0.5) { continue; }
+    let cc = bodies[ORTHO_OFF + 3u * k + 2u];
+    let wz = clamp(zf - cc.w + 1.0, 0.0, 1.0);
+    if (wz <= 0.0) { continue; }
+    let p0 = a.xy + uv0 * b.z;
+    let d = min(min(p0.x, p0.y), min(b.x - p0.x, b.y - p0.y));
+    let w = wz * smoothstep(2.0, 48.0, d);
+    if (w <= 0.0) { continue; }
+    let dp = duv * b.z;
+    let base = vec2i(cc.yz);
+    let corner = vec2i(a.zw);
+    var sum = vec4f(0.0);
+    var whole = true;
+    for (var i = 0u; i < n; i++) {
+      let x = p0 + dp * ((f32(i) + 0.5) / nf - 0.5) - 0.5;
+      let i0 = vec2i(floor(x));
+      let f = x - floor(x);
+      let t00 = textureLoad(earthTiles, base + ((corner + i0) & vec2i(1023)), u32(cc.x), 0).g;
+      let t10 = textureLoad(earthTiles, base + ((corner + i0 + vec2i(1, 0)) & vec2i(1023)), u32(cc.x), 0).g;
+      let t01 = textureLoad(earthTiles, base + ((corner + i0 + vec2i(0, 1)) & vec2i(1023)), u32(cc.x), 0).g;
+      let t11 = textureLoad(earthTiles, base + ((corner + i0 + vec2i(1, 1)) & vec2i(1023)), u32(cc.x), 0).g;
+      if (min(min(t00, t10), min(t01, t11)) == 0u) { whole = false; break; }
+      sum += mix(mix(unpack4x8unorm(t00), unpack4x8unorm(t10), f.x), mix(unpack4x8unorm(t01), unpack4x8unorm(t11), f.x), f.y);
+    }
+    if (!whole) { continue; }
+    let c = sum / nf;
+    let lin = select(pow((c.rgb + 0.055) / 1.055, vec3f(2.4)), c.rgb / 12.92, c.rgb <= vec3f(0.04045));
+    fine += (1.0 - wf) * w * lin;
+    wf += (1.0 - wf) * w;
+    if (wf > 0.9999) { break; }
+  }
+  if (wf > 0.9999 && !IMG_LIGHTS) {
+    o.c = vec4f(fine / wf, 0.0);
+    o.w = 1.0;
+    o.o = 1.0;
+    return o;
+  }
+  var rem = 1.0;
+  for (var li = 0; li < i32(TILE_IMG_LEVELS); li++) {
+    let l = TILE_IMG_LEVELS - 1u - u32(li);
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    let wz = clamp(zf - f32(TILE_Z0 + l) + 1.0, 0.0, 1.0);
+    if (wz <= 0.0) { continue; }
+    let p0 = a.xy + uv0 * b.z;
+    let d = min(min(p0.x, p0.y), min(b.x - p0.x, b.y - p0.y));
+    let w = wz * smoothstep(2.0, 48.0, d);
+    if (w <= 0.0) { continue; }
+    let dp = duv * b.z;
+    let corner = vec2i(a.zw);
+    let mask = vec2i(i32(b.w) - 1);
+    var sum = vec4f(0.0);
+    var whole = true;
+    for (var i = 0u; i < n; i++) {
+      let x = p0 + dp * ((f32(i) + 0.5) / nf - 0.5) - 0.5;
+      let i0 = vec2i(floor(x));
+      let f = x - floor(x);
+      let t00 = textureLoad(earthTiles, (corner + i0) & mask, l, 0).g;
+      let t10 = textureLoad(earthTiles, (corner + i0 + vec2i(1, 0)) & mask, l, 0).g;
+      let t01 = textureLoad(earthTiles, (corner + i0 + vec2i(0, 1)) & mask, l, 0).g;
+      let t11 = textureLoad(earthTiles, (corner + i0 + vec2i(1, 1)) & mask, l, 0).g;
+      if (min(min(t00, t10), min(t01, t11)) == 0u) { whole = false; break; }
+      sum += mix(mix(unpack4x8unorm(t00), unpack4x8unorm(t10), f.x), mix(unpack4x8unorm(t01), unpack4x8unorm(t11), f.x), f.y);
+    }
+    if (!whole) { continue; }
+    let c = sum / nf;
+    let lin = select(pow((c.rgb + 0.055) / 1.055, vec3f(2.4)), c.rgb / 12.92, c.rgb <= vec3f(0.04045));
+    o.c += rem * w * vec4f(lin, c.a);
+    o.w += rem * w;
+    rem *= 1.0 - w;
+    if (rem < 1e-4) { break; }
   }
   if (o.w > 0.0) { o.c /= o.w; }
-  o.w /= f32(n);
-  o.o /= f32(n);
+  let box = bodies[ORTHO_OFF + 3u * ORTHO_LEVELS];
+  if (bodies[ORTHO_OFF + 3u * ORTHO_LEVELS + 1u].x > 0.5 && o.w > 0.0) {
+    let lat = asin(clamp(q.z, -1.0, 1.0));
+    let lon = atan2(q.y, q.x);
+    if (lon > box.x && lon < box.z && lat > box.y && lat < box.w) { o.o = o.w; }
+  }
+  if (wf > 0.0) {
+    let w = wf + (1.0 - wf) * o.w;
+    o.c = vec4f((fine + (1.0 - wf) * o.w * o.c.rgb) / w, o.c.a);
+    o.o = wf + (1.0 - wf) * o.o;
+    o.w = w;
+  }
   return o;
+}
+// a direction's place on the tiles' Mercator: its longitude from their anchor's, its Mercator ordinate's from the anchor's,
+// negated (earthImagery's dlon, −dM)
+fn imageryUv(q: vec3f) -> vec2f {
+  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
+  let sz = clamp(q.z, -0.999999, 0.999999);
+  return vec2f(dlon, -atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z)));
 }
 // a level's height at p [its px from the corner]: bilinear, or — its texel more than twice the footprint
 // (mag: by how many octaves larger) — a cubic B-spline over its texels (no facets near), the two blended
@@ -10295,9 +10396,9 @@ fn rasterNormal(px: vec2f, tM: f32, k: u32) -> vec3f {
 // The sunlight on a raster pixel's surface (shadeLite, shadeWater): through the air, under the clouds — their map, else the
 // cover's shadow along the Sun's slant —, the Sun's disc over the horizon, the relief's shadow map, the trees' and buildings'
 // (a building's own face lifted off its triangles, along its normal and towards the Sun)
-fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, E: vec3f, fx: vec3f, fy: vec3f, dirW: vec3f, tM: f32, n: vec3f, mesh: bool) -> vec3f {
-  let mu0 = dot(gq, Lp);
-  var Eg = E * sunThrough(hG, mu0);
+fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: vec3f, fy: vec3f, dirW: vec3f, tM: f32, n: vec3f, mesh: bool) -> vec3f {
+  // (Esun: E through the air down to the ground — sunThrough, worked out once by the caller: the bounce reads it too)
+  var Eg = Esun;
   let csT = select(cloudShadowAt(q * (1.0 + hG / EARTH_RM)), 1.0, (liteSkip() & 32u) != 0u);
   if (csT >= 0.0) {
     Eg *= csT;
@@ -10479,8 +10580,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   }
   // (liteSkip 4096: the Sun's and the sky's light plain — their transmittances and shadows not read: a measure)
   let plainLight = (liteSkip() & 4096u) != 0u;
+  let Esun = E * sunThrough(hG, mu0);
   var Eg = E;
-  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Lp, E, fx, fy, dirW, tM, n, mesh); }
+  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Lp, Esun, fx, fy, dirW, tM, n, mesh); }
   // (a building's own triangles — U2 —: its roof the orthophoto's — the photograph is the roof seen from above —, its walls
   // stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —, the glass dark,
   // the sky mirrored in it below)
@@ -10507,7 +10609,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   var sky = E * 0.15;
   if (!plainLight) { sky = liteSky(q, hG, E, Ls, mu0); }
   let up = dot(n, gq);
-  let bounce = (E * sunThrough(hG, mu0) * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
+  let bounce = (Esun * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
   var G = A / PI * (Eg * max(dot(n, Lp), 0.0) + sky * 0.5 * (1.0 + up) + bounce);
   // (a tree: lit as windsockShade lights it — the Sun on its face, six tenths of the sky, not the ground's open sky and
   // bounce: they lit the crowns yellow —, its crown's underside in its own shade (the carving's occlusion, left out here),
@@ -10600,7 +10702,7 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   var n = rasterNormal(centre, terrainRasterHint(centre), k);
   if (dot(n, n) < 0.5) { n = gq; }
   let dirW = toBody(ray.look);
-  let Eg = liteSun(q, gq, hG, Ls, Lp, E, fx, fy, dirW, tM, n, false);
+  let Eg = liteSun(q, gq, hG, Ls, Lp, E * sunThrough(hG, dot(gq, Lp)), fx, fy, dirW, tM, n, false);
   let sky = liteSky(q, hG, E, Ls, dot(gq, Lp));
   var G = accum[idx].rgb;
   let footSea = sqrt(length(fx) * length(fy)) * EARTH_RM;

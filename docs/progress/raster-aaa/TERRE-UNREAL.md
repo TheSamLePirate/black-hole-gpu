@@ -353,3 +353,27 @@ arbres 0,25, la passe seule 0,3.
 9–10 i/s avant U5). Le palier suivant de l'écran à 50 Hz est 40 ms (25 i/s) : il reste `earth lite` (~12–14 ms estimés, son
 imagerie anisotrope en tête), le ciel tracé (6–8 ms : 32 pas d'air par rayon de ciel — une table de ciel n'en gagnerait que
 la moitié, le bloc 8 en trace déjà un sur 64), la visibilité raster, le vaisseau (~6 ms).
+
+### U6 (2) — l'imagerie anisotrope, l'eau en bandes, le Soleil une fois (25/10)
+
+**Mesurer sur une vue tenue** : les leviers pris en vol variaient de 47 à 96 ms (l'avion fait 36 km pendant la série, la
+ville change sous lui). `PULSE_FREEZE` (raster-pulse e2e) tient le vol : la pause garde le raster, la même image à chaque
+trame — les écarts d'une même série sont sûrs à ~1 ms près ; entre deux séries le mini dérive de ±3 ms (sa chaleur).
+
+**Ce que coûte `earth lite` sur le mini** (vue tenue, Paris, sans lui : la passe seule) : ~16 ms — l'eau 3–5, l'imagerie
+2,5–3, la lumière ~2, l'air ~1,5, les arbres ~1, le reste (la géométrie, l'écriture, les registres) ~5.
+
+- **L'imagerie anisotrope** réécrite (`earthImageryAniso`) : la place des échantillons sur les tuiles prise du centre et de
+  son axe (linéaire sur l'empreinte d'un pixel), plus un atan2 et un atanh par échantillon ; la boucle des niveaux dehors,
+  celle des échantillons dedans (chaque niveau lu une fois) ; la courbe sRGB une fois par niveau. **−2,4 ms sur le mini**
+  dans la même série (55,0 → 52,7 ; 58,5 → 56,1) ; l'image la même (écart moyen 2/255, le bruit d'une trame à l'autre).
+- **L'eau en bandes** : `sceneryPolygon` compte les arêtes croisées par un rayon le long de +x — toutes, à chaque pixel dans
+  la boîte du polygone : la Seine à Paris, des milliers. `waterBands` (scenery-data.ts) coupe un grand polygone d'eau en
+  bandes horizontales de ≤ 24 arêtes (celles qui atteignent la bande, entières : la même réponse — 4 000 points comparés,
+  l'île comprise). L'eau ~2,5 ms (3–5 avant).
+- **La transmittance du Soleil** (`sunThrough`, deux colonnes d'air) une fois par pixel, pas deux (la lumière directe, le
+  rebond).
+
+**Où on en est** : ~55 ms vue tenue, 19 i/s en vol. Sans `earth lite` du tout, ~41 ms : le palier de 40 ms (25 i/s) ne
+viendra pas du sol seul — le ciel tracé (6–8 ms), la visibilité raster, le vaisseau (~6 ms), le post-traitement (~8 ms) en
+sont l'autre moitié.

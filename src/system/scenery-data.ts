@@ -142,6 +142,52 @@ function sceneryBVH(prims: Primitive[], placed?: Map<Primitive, number>) {
 }
 /** a surface of water: a polygon of kind 4 (its colour's w the outer ring's edges), a line of kind 3 (scenery-geometry.ts) */
 const isWater = (p: Primitive) => (p.data[11]! > 0.5 ? p.data[3] === 4 : p.data[5] === 3);
+/** a water polygon's edges at most a band (waterBands) */
+const BAND_EDGES = 24;
+/**
+ * A large water polygon cut into horizontal bands for the water's tree (TERRE-UNREAL U6): trace.wgsl sceneryPolygon counts
+ * the edges a ray along +x crosses at the point's height — only the edges whose span takes in that height count, so a
+ * band keeps those that reach into it (whole: the same crossings, the same answer), its box their x extent over its height
+ * (left of them all: an even count, outside; right: none). The Seine through Paris, thousands of edges each tested at every
+ * pixel inside its box, now a few dozen. The same record's layout (polygonPrimitive); its outer ring's edges first, their
+ * count in the colour's w (the river's dry islands; ¾ for none: still a polygon's, over ½, its ring empty).
+ */
+export function waterBands(p: Primitive): Primitive[] {
+  const d = p.data;
+  const count = d[2]!,
+    outer = d[11]!;
+  if (count <= BAND_EDGES) return [p];
+  const y0 = d[5]!,
+    y1 = d[7]!;
+  const n = Math.max(1, Math.ceil(count / BAND_EDGES));
+  const h = Math.max((y1 - y0) / n, 1);
+  const out: Primitive[] = [];
+  for (let b = 0; b < n; b++) {
+    const lo = y0 + b * h,
+      hi = b === n - 1 ? y1 : y0 + (b + 1) * h;
+    const edges: number[] = [];
+    let kept = 0,
+      x0 = Infinity,
+      x1 = -Infinity;
+    for (let i = 0; i < count; i++) {
+      const e = 12 + 4 * i;
+      const ya = d[e + 1]!,
+        yb = d[e + 3]!;
+      if (Math.max(ya, yb) < lo || Math.min(ya, yb) > hi) continue;
+      edges.push(d[e]!, ya, d[e + 2]!, yb);
+      x0 = Math.min(x0, d[e]!, d[e + 2]!);
+      x1 = Math.max(x1, d[e]!, d[e + 2]!);
+      if (i < outer) kept++;
+    }
+    if (!edges.length) continue;
+    out.push({
+      min: [x0, lo, p.min[2]],
+      max: [x1, hi, p.max[2]],
+      data: [d[0]!, d[1]!, edges.length / 4, d[3]!, x0, lo, x1, hi, d[8]!, d[9]!, d[10]!, Math.max(kept, 0.75), ...edges],
+    });
+  }
+  return out;
+}
 // A separate planar BVH keeps roads/water out of every primary and shadow ray; the trees are a grid of
 // their own (forest.ts), after the raster.
 //   vec4 0 (nodes, geometries at, raster at, raster side)  1 (surfaces' nodes at, count, geometries at, surfaces)
@@ -161,12 +207,28 @@ export function packScenery(
 ) {
   const { nodes, geometries } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
-  const water = sceneryBVH(surfaces.filter(isWater), surface.offsets);
+  // (the water's tree: the surfaces' own records, a large polygon's bands — waterBands — appended after them)
+  const placed = new Map(surface.offsets);
+  const bands: number[] = [];
+  const leaves: Primitive[] = [];
+  for (const p of surfaces.filter(isWater)) {
+    const parts = p.data[11]! > 0.5 ? waterBands(p) : [p];
+    if (parts.length === 1 && parts[0] === p) {
+      leaves.push(p);
+      continue;
+    }
+    for (const b of parts) {
+      placed.set(b, (surface.geometries.length + bands.length) / 4);
+      for (const v of b.data) bands.push(v);
+      leaves.push(b);
+    }
+  }
+  const water = sceneryBVH(leaves, placed);
   const nodeCount = nodes.length / 8,
     geomOffset = 4 + nodes.length / 4,
     surfaceOffset = geomOffset + geometries.length / 4,
     surfaceGeom = surfaceOffset + surface.nodes.length / 4,
-    waterOffset = surfaceGeom + surface.geometries.length / 4,
+    waterOffset = surfaceGeom + (surface.geometries.length + bands.length) / 4,
     pixelOffset = waterOffset + water.nodes.length / 4,
     forestOffset = pixelOffset + Math.ceil(pixels.length / 4);
   let vertexCount = 0,
@@ -195,6 +257,7 @@ export function packScenery(
   f.set(geometries, geomOffset * 4);
   f.set(surface.nodes, surfaceOffset * 4);
   f.set(surface.geometries, surfaceGeom * 4);
+  f.set(bands, surfaceGeom * 4 + surface.geometries.length);
   f.set(water.nodes, waterOffset * 4);
   u.set(pixels, pixelOffset * 4);
   if (triangleCount) {
