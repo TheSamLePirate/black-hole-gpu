@@ -64,6 +64,11 @@ import {
   type SceneryReply,
 } from "./scenery-data";
 
+/** the water polygons of a river's kind (OpenMapTiles' water class): drawn in a river's style, not a lake's */
+const RIVER_CLASSES = new Set(["river", "canal", "stream", "ditch", "drain"]);
+/** their colour — its blue under 0.05: trace.wgsl sceneryWaterAt tells a river by it */
+const RIVER_COLOUR = [0.02, 0.05, 0.04];
+
 const g = globalThis as unknown as { onmessage: unknown; postMessage(v: SceneryReply, t?: Transferable[]): void };
 const tx = (lon: number, z = 14) => ((lon + 180) / 360) * 2 ** z;
 const ty = (lat: number, z = 14) => ((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * 2 ** z;
@@ -303,7 +308,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
               0,
               0,
               water ? 4 : 5,
-              water ? [0.018, 0.052, 0.055] : [0.12, 0.12, 0.115],
+              // (a river's polygon — OpenMapTiles' class — told from a lake's by its colour's blue: trace.wgsl sceneryWaterAt —
+              // the material's inland water, a river's style or a lake's)
+              water ? (RIVER_CLASSES.has(cls) ? RIVER_COLOUR : [0.018, 0.052, 0.055]) : [0.12, 0.12, 0.115],
             );
             if (p && surfaceDistance(p) <= radius + 500) {
               if (props.brunnel === "bridge" || cls === "bridge") {

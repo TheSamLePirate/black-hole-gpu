@@ -6995,6 +6995,67 @@ fn seaScreen(X: vec3f) -> vec3f {
   let ny = dot(l, P.camUp.xyz) / (z * P.cam.w);
   return vec3f((nx + 1.0) * 0.5 * P.res.x, (1.0 - ny) * 0.5 * P.res.y, length(X));
 }
+// The inland water (shadeLite: OSM's rivers and lakes — the sea is seaShade's): its own style, not the sea's calmed. A river:
+// a current's ripples, short, drawn out along the way the air moves over it and running with it, turbid green-brown water; a
+// lake: near a mirror, its ripples longer and fainter, a breath of wind here and not there (cat's paws), darker water. Both:
+// four trains of capillary-gravity ripples (ω² = gk + σk³/ρ) about the wind's way, each faded under the pixel's footprint
+// and its slopes' variance then the unresolved roughness; the sky mirrored by Fresnel over the rippled facet (the clear
+// sky's radiance there, skyMirror, in this sky's light), the world mirrored near (seaSSR), the Sun's glint (Beckmann).
+// q, view, light in the squashed space; SEA_D the point from the camera [m].
+fn inlandWater(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, footM: f32, lake: bool) -> vec3f {
+  let normal = geoQ(q);
+  let V = airPhysicalDirection(view);
+  let Ls = airPhysicalDirection(light);
+  var tu = P.sea[0].xyz - normal * dot(P.sea[0].xyz, normal);
+  tu = select(normalize(tu), normalize(cross(normal, vec3f(0.0, 0.0, 1.0))), dot(tu, tu) < 1e-10);
+  let tc = cross(normal, tu);
+  // (the surface's own coordinates [m], anchored as the sea's — whole kilometres —: still under the camera's motion)
+  let x = vec2f(dot(SEA_D, tu) + P.sea[2].x, dot(SEA_D, tc) + P.sea[2].y);
+  let t = P.time.x * P.near5.w;
+  let ang = select(vec4f(-0.45, -0.12, 0.18, 0.5), vec4f(-1.0, -0.3, 0.4, 1.1), lake);
+  let len = select(vec4f(0.3, 0.55, 1.0, 1.8), vec4f(0.6, 1.1, 2.0, 3.6), lake);
+  // (a lake's breath of wind: its ripples over 40 m patches)
+  let paws = select(1.0, 0.25 + 0.75 * smoothstep(-0.3, 0.6, gnoise(vec3f(x / 40.0, t * 0.03))), lake);
+  let amp = select(vec4f(0.07, 0.06, 0.05, 0.04), vec4f(0.03, 0.03, 0.025, 0.02), lake) * paws;
+  var g = vec2f(0.0);
+  var m2 = select(0.004, 0.0015, lake) * paws + 0.0005;
+  for (var i = 0; i < 4; i++) {
+    let d = vec2f(cos(ang[i]), sin(ang[i]));
+    let k = TAU / len[i];
+    let w = sqrt(9.81 * k + 7.4e-5 * k * k * k);
+    let fade = smoothstep(1.0 * footM, 3.0 * footM, len[i]);
+    let ph = k * dot(d, x) - w * t + f32(i) * 1.7;
+    g += amp[i] * fade * d * cos(ph);
+    m2 += 0.5 * amp[i] * amp[i] * (1.0 - fade);
+  }
+  let n = normalize(normal - g.x * tu - g.y * tc);
+  let nv = max(dot(n, V), 0.02);
+  let F = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
+  // (the sky it mirrors: brighter towards the horizon; a ray the ripples send under the horizon mirrors the horizon's)
+  let rr = reflect(-V, n);
+  let rUp = normalize(rr + normal * max(0.02 - dot(rr, normal), 0.0));
+  var refl = sky * (1.5 / PI) * (1.75 - 1.15 * sqrt(clamp(dot(rUp, normal), 0.0, 1.0)));
+  let clearM = skyMirror(rUp);
+  if (clearM.x >= 0.0) { refl = clearM * clamp(sky / max(skyIrradiance(0.0, normal), vec3f(1e-30)), vec3f(0.0), vec3f(2.0)); }
+  // (near, the world mirrored — the banks, the bridges, the buildings — from the raster's image)
+  if (RASTER_SHADE && dot(rUp, normal) > 0.005) {
+    let ssr = seaSSR(SEA_D, normalize(vec3f(rUp.xy, rUp.z * AIR.ab)));
+    refl = mix(refl, ssr.rgb, ssr.w);
+  }
+  // (the Sun's glint: Beckmann over the facet's unresolved slopes, Smith's masking)
+  let H = normalize(Ls + V);
+  let hz = max(dot(n, H), 1e-3);
+  let D = exp(-(1.0 - hz * hz) / (hz * hz * m2)) / (PI * m2 * hz * hz * hz * hz);
+  let nl = max(dot(n, Ls), 0.0);
+  let Gs = smithBeckmann(nl, m2) * smithBeckmann(nv, m2);
+  let FH = 0.02 + 0.98 * pow(1.0 - max(dot(V, H), 0.0), 5.0);
+  let glint = Eg * min(D * Gs * FH / (4.0 * nv), 8.0);
+  // (the water's own colour from the light into it: a river's silt green-brown, a lake's deeper green-blue)
+  let Ein = Eg * max(dot(normal, Ls), 0.0) + sky;
+  let body = Ein * select(vec3f(0.020, 0.024, 0.016), vec3f(0.006, 0.013, 0.015), lake) / PI;
+  return body * (1.0 - F) + F * refl + glint;
+}
+
 fn seaSSR(D: vec3f, r: vec3f) -> vec4f {
   let d0 = length(D);
   let s0 = 1.0 + 0.004 * d0;
@@ -7548,8 +7609,10 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32) -> f32 {
 // — its own walk of the surfaces, the water's alone, the most cover of them: scenerySurface keeps the surface of the highest
 // rank, and a line — a railway, a road in its tunnel, under the river — outranks a polygon: the Seine was cut by dark bands
 // along every line crossing it
-fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> f32 {
-  if (!HAS_SCENERY || P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5 || dist > P.scenery[1].w) { return 0.0; }
+// x the cover, y the calm of its water (a lake's 0.92, a river's 0.6 — earthGround's; a river: its polygon of a river's class,
+// or a waterway's line)
+fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> vec2f {
+  if (!HAS_SCENERY || P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5 || dist > P.scenery[1].w) { return vec2f(0.0); }
   let point = p.xy;
   let aa = max(0.12, foot * 0.75);
   let header = scenery[1];
@@ -7558,6 +7621,7 @@ fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> f32 {
   var water = 0.0;
   var dryIsland = false;
   var bank = false;
+  var lake = false;
   while (i < total) {
     let lo = scenery[u32(header.x) + i * 2u];
     let hi = scenery[u32(header.x) + i * 2u + 1u];
@@ -7571,6 +7635,8 @@ fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> f32 {
         if (sceneryPolygon(point, base, u32(q.z))) {
           water = 1.0;
           bank = bank || q.w == 4.0;
+          // (a lake's polygon, not a river's — the worker's colour: a river's blue under 0.05)
+          lake = lake || scenery[base + 2u].z >= 0.05;
         } else if (q.w == 4.0 && sceneryPolygon(point, base, u32(scenery[base + 2u].w))) { dryIsland = true; }
       }
     } else if (size.y == 3.0 || size.y == 4.0) {
@@ -7583,7 +7649,7 @@ fn sceneryWaterAt(p: vec3f, foot: f32, dist: f32) -> f32 {
   }
   // (an island of a river's polygon: dry, whatever other water's outline covers it — scenerySurface's rule)
   if (dryIsland && !bank) { water = 0.0; }
-  return water * P.scenery[3].w * smoothstep(P.scenery[1].w, P.scenery[1].w - 300.0, dist);
+  return vec2f(water * P.scenery[3].w * smoothstep(P.scenery[1].w, P.scenery[1].w - 300.0, dist), select(0.6, 0.92, lake));
 }
 // END_WORLD_SCENERY
 
@@ -10155,10 +10221,9 @@ fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
   if (terrainRasterBuilding(px)) { return false; }
   let tM = terrainRasterHint(px);
   if (tM <= 0.0) { return false; }
-  // (a tree before the ground — U2 —: the material's; against the sky, the rays')
-  if (terrainRasterId(px) != 0u) { return true; }
-  let q = normalize(rasterPoint(rasterRay(px, k), tM));
-  return earthRelief(geoQ(q), vec3f(0.0), vec3f(0.0)).b < 0.35;
+  // (a tree before the ground — U2 —: the material's; against the sky, the rays'; the ground, the sea's too — its water is the
+  // material's, seaShade — )
+  return true;
 }
 // the mesh's normal at a pixel (the body's physical axes), from its neighbours' distances — none where a neighbour is off
 // the surface (a silhouette, the sky): 0
@@ -10326,23 +10391,60 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     let F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(n, dirW)), 0.0, 1.0), 5.0);
     G += glass * F * sky * 1.5 / PI;
   }
-  // (the lakes and rivers — OSM's water —: dark, the sky mirrored by Fresnel, the Sun's glint)
+  // (the water — the sea, the lakes and rivers — by seaShade, the tracer's own water, as earthGround has it: its waves (the
+  // resolved trains, the FFT's cascades near), Cox–Munk's glint, the mirror averaged over the unresolved slopes, the world
+  // mirrored in it near (seaSSR), the far clouds, the shallow bed, the foam and the surf; a lake or a river calmer — its
+  // fetch's ripples, the cat's paws. One water a lake: its cover sharp — the polygon's edge alone softened —, the sea's mask
+  // the relief map's over the sea's level)
   var water = 0.0;
-  if (HAS_SCENERY && !mesh && !isTree && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && (TUNE_LITE & 1u) == 0u) {
-    let toW = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
-    water = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
+  var calm = 0.0;
+  var osmLake = false;
+  if (!mesh && !isTree && (TUNE_LITE & 1u) == 0u) {
+    let rel0 = earthRelief(gq, fx, fy);
+    let sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hG));
+    var osm = vec2f(0.0);
+    if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
+      let toW = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+      osm = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
+      osm.x = smoothstep(0.35, 0.65, osm.x);
+    }
+    water = max(sea0, osm.x);
+    calm = osm.x * (1.0 - sea0) * osm.y;
+    osmLake = osm.y > 0.8;
   }
-  // (one water, a whole lake or river alike: its cover sharp — the polygon's edge alone softened, not shares of the ground
-  // under it —, the surface flat, its body one dark tone in the unshadowed sunlight, the sky mirrored by Fresnel over the
-  // view's angle; the trees' and buildings' shadows on the Sun's glint alone)
-  water = smoothstep(0.35, 0.65, water);
   if (water > 0.0) {
-    let V = -dirW;
-    let cv = clamp(dot(gq, V), 0.0, 1.0);
-    let F = 0.02 + 0.98 * pow(1.0 - cv, 5.0);
-    let Gw = vec3f(0.015, 0.025, 0.03) / PI * (Esun * max(mu0, 0.0) + sky);
-    let glint = Eg * F * 12.0 * pow(max(dot(normalize(Lp + V), gq), 0.0), 300.0);
-    G = mix(G, Gw * (1.0 - F) + F * sky * 1.2 / PI + glint, water);
+    let footSea = sqrt(length(fx) * length(fy)) * EARTH_RM;
+    SEA_ON = P.sea[1].w > 0.0;
+    SEA_D = dirW * tM;
+    let dw = select(seaDepthAt(gq, footSea), vec2f(1e4, 0.0), calm > 0.0);
+    SEA_DEPTH = dw.x;
+    SEA_DEPTH_W = dw.y;
+    RND = fract(ign(centre) + f32(frameStamp % 1024u) * 0.6180339887);
+    RASTER_SHADE = true;
+    // (the sea's style, or the inland water's — a river's, a lake's: not the sea's calmed)
+    var wcol: vec3f;
+    if (calm > 0.0) { wcol = inlandWater(q, -rd, Ls, Eg, sky, footSea, osmLake); }
+    else { wcol = seaShade(q, -rd, Ls, Eg, sky, G, footSea, 0.0, vec4f(0.0)); }
+    G = mix(G, wcol, water);
+    RASTER_SHADE = false;
+    SEA_ON = false;
+    // (falling water — a cascade, a rapid: where the water's ground is steep — the mesh's normal off the vertical —, white
+    // water, aerated, in streaks drawn down the slope and running down it with the clock, lit as foam; the flat water's look
+    // gone with the steepness)
+    let steep = smoothstep(0.96, 0.75, dot(n, gq)) * water;
+    if (steep > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5) {
+      let toF = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+      let pL = P.scenery[3].xyz + (dirW * tM) * toF;
+      let downW = dot(n, gq) * n - gq;
+      let dL = normalize((downW * toF).xy + vec2f(1e-6, 0.0));
+      let along = dot(pL.xy, dL) - pL.z * 0.6;
+      let across = dot(pL.xy, vec2f(-dL.y, dL.x));
+      let tclock = P.time.x * P.near5.w;
+      let streak = 0.5 + 0.5 * (0.65 * gnoise(vec3f(across * 0.9, along * 0.12 - tclock * 2.5, 1.7))
+        + 0.35 * gnoise(vec3f(across * 2.7, along * 0.4 - tclock * 4.0, 5.3)));
+      let white = 0.72 / PI * (Eg * max(dot(n, Lp), 0.0) + sky) * (0.75 + 0.35 * streak);
+      G = mix(G, white, steep * clamp(0.45 + 0.75 * streak, 0.0, 1.0));
+    }
   }
   // (TUNE_LITE 512: the water's cover drawn red — a measure)
   if ((TUNE_LITE & 512u) != 0u) { G = mix(G, vec3f(0.5, 0.0, 0.0) * luminance(E), water); }

@@ -196,3 +196,24 @@ pour l'eau seule (polygones et cours d'eau en ligne, la plus forte couverture ; 
 classement (< 1,6 ms) ; `earth lite` 26 ms ; visibilité 7 ms, ciel tracé 7 ms, cartes d'ombre des arbres 3 ms ; le reste
 dans les passes de rendu du cockpit et du vaisseau (MSAA à la pleine taille : leurs horodatages se chevauchent sur Apple,
 ~50 ms d'après leur somme). Suite : `earth lite` (26 ms sur le M1, ~13 ns par pixel), le cockpit à la pleine taille (U5).
+
+### U2d — l'eau AAA : la mer, les rivières, les lacs, les cascades (25/10)
+
+- **La mer** quitte `shade` : `shadeLite` prend tout le sol, la mer comprise, et l'ombre par `seaShade` — le shader d'eau du
+  traceur, déjà complet : les trains d'ondes résolus et les cascades de la FFT près, le reflet du Soleil de Cox–Munk, le
+  miroir moyenné sur les pentes non résolues (Bruneton), le monde reflété près (`seaSSR`), les nuages lointains, le fond peu
+  profond, l'écume et le ressac.
+- **Les rivières et les lacs** ont leur propre style (`inlandWater`), pas la mer calmée : quatre trains de rides
+  capillaires-gravitaires autour du vent, chacun estompé sous l'empreinte du pixel (sa variance alors à la rugosité) ;
+  rivière : rides courtes, étirées, eau trouble vert-brun ; lac : presque un miroir, des risées par plaques de 40 m, eau
+  plus sombre. Le ciel par Fresnel sur la facette ridée, le monde reflété près, le reflet du Soleil (Beckmann). Une rivière
+  se reconnaît à sa classe OpenMapTiles (`river`, `canal`, `stream`…), portée par la couleur de son polygone.
+- **Les cascades** : là où le sol de l'eau penche (la normale du maillage à plus de ~16° de la verticale), une eau blanche
+  aérée en traînées tirées dans la pente, qui la descendent avec l'horloge.
+
+Mesuré ici (Paris, 60 m, chaque pixel) : `earth lite` 6,4 ms (+2,5 pour l'eau), `shade` 1,8 ms (les arbres sur le ciel).
+Cascades non encore vues sur un vrai site.
+
+| La Seine (rivière) | La mer à Tarifa |
+|---|---|
+| ![seine](img/u2d-seine-riviere.png) | ![mer](img/u2d-tarifa-mer.jpg) |
