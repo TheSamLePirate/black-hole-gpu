@@ -115,5 +115,10 @@ de vol (une vingtaine en 15 s avant).
 bâtiments, les arbres et la mer — la moitié de l'écran au-dessus de Paris. C'est U2 (le décor en matériau raster) qui
 rendra ce mode jouable sur le M1.
 
-Restent, relevés sur ce Mac : le gouverneur d'échelle qui change la résolution (0,5 ↔ 0,625) toutes les quelques secondes —
-l'historique repart à chaque fois ; des images à plus de 45 ms (~2 par seconde), à attribuer.
+Le dernier blip (vu par l'utilisateur : « les légères différences entre deux images ») : le gouverneur d'échelle changeait la
+résolution (0,5 ↔ 0,625) toutes les quelques secondes, l'historique rééchantillonné à chaque pas au poids d'un échantillon.
+Avec `shadeLite`, l'échelle est tenue à celle du raster (`earthRasterScale`, main.ts). Mesuré sur 30 s de vol : aucun
+changement d'échelle, l'historique toujours tenu, aucune chute d'anneau — mais 18 img/s à l'échelle 1 en « chaque pixel » sur
+ce Mac : le décor par `shade` à chaque pixel (U2).
+
+Reste : des images à plus de 45 ms (~2 par seconde), à attribuer.

@@ -7943,6 +7943,10 @@ async function main() {
       else if (terrainInspecting) want = renderScale;
       else if (!dynOn) want = 1;
       else if (!moving) want = renderScale;
+      // (the raster's ground at every pixel — shadeLite —: the scale held at the raster's own — each step resampled the history
+      // into the new size at a sample's weight, a blur pulse every few seconds in flight; the image is what is aimed at, at
+      // the raster's full scale, not the governor's)
+      else if (raster && renderer.rasterLiteActive) want = rasterTop();
       else if (!settled) want = renderScale;
       // (down once the blocks are coarse: at the same rays a finer block on a smaller image is no better in
       // motion — measured, equal on Kerr, 2.6 dB worse on Saturn's stars and edges —, the full scale kept)

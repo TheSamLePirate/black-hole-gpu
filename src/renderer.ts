@@ -6934,6 +6934,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   rasterLite = true;
   /** shadeLite this frame */
   private rasterLiteNow = false;
+  /** the raster's ground drawn by shadeLite this frame (main.ts: its scale held, not the governor's) */
+  get rasterLiteActive() {
+    return this.rasterLiteNow;
+  }
   /** RASTER_DETAIL this frame */
   private rasterDetailNow = false;
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
