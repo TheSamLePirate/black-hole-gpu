@@ -377,3 +377,21 @@ trame — les écarts d'une même série sont sûrs à ~1 ms près ; entre deux 
 **Où on en est** : ~55 ms vue tenue, 19 i/s en vol. Sans `earth lite` du tout, ~41 ms : le palier de 40 ms (25 i/s) ne
 viendra pas du sol seul — le ciel tracé (6–8 ms), la visibilité raster, le vaisseau (~6 ms), le post-traitement (~8 ms) en
 sont l'autre moitié.
+
+### U6 (3) — le ciel d'un rayon pour 16 × 16 pixels au-dessus du raster (25/10)
+
+**Le post-traitement** (mini, vue tenue) : sans flou de mouvement, halo ni netteté, −4 ms à peine — pas là. **Le ciel tracé
+9–10 ms** : sous 1,5 km, le dernier anneau du raster (±155 km) passe l'horizon, le traceur ne dessine que le ciel — à l'infini,
+l'historique le reprojette exactement quand la caméra tourne. `RASTER_SKY_BLOCK` : un rayon pour 16 × 16 pixels (8 × 8 avant)
+quand le matériau raster dessine le sol, sous `RASTER_SKY_KM` 1,5 (`renderer.rasterSkyBlock`, un interrupteur ; le régulateur
+de bloc garde le sien pour quand le traceur dessine à nouveau du sol). La reconstruction (`gatherH`, ±bloc lectures par
+pixel : 33 au bloc 16) coûtait alors plus que le traceur n'avait gagné : au bloc 16, le ciel reconstruit en bilinéaire des
+rayons de l'image (les coins du sol raster écartés — le sol ne bave pas sur la ligne des toits), l'historique l'affine ;
+`gatherH` sort aussi d'emblée sur les pixels du sol (frais, jamais reconstruits). Vérifié : le halo du Soleil couchant,
+l'horizon, le ciel pendant un regard qui tourne vite — sans blocs.
+
+**Mini** : trace 5,7 → 2,5 ms ; l'image **~46–48 ms, 22 i/s** vue tenue (51,5 au bloc 8 dans la même série).
+
+**Le vaisseau, vue tenue cette fois** : sans lui 39 ms ; **sans la coque 40 ms (−6,5)** — depuis le cockpit, la coque du
+modèle c'est tout le tableau de bord ; l'ombre, les flammes, le masque ~1 ms chacun ; la pré-passe de profondeur fait gagner
+(sans elle +1,5 ms).

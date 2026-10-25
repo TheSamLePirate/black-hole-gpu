@@ -227,6 +227,9 @@ const SRGB: GPUTextureFormat = "rgba8unorm-srgb";
 const srgbView = (t: GPUTexture, dimension: GPUTextureViewDimension) =>
   t.createView({ dimension, ...(t.format === "rgba8unorm" ? { format: SRGB } : {}) });
 const BLOCKS = [1, 2, 3, 4, 6, 8];
+/** the trace's block while it draws the sky alone over the raster's ground, under RASTER_SKY_KM (frame) */
+const RASTER_SKY_BLOCK = 16;
+const RASTER_SKY_KM = 1.5;
 /** how far the relief's finest windows are led towards the ground the view looks at [m], by the detail's reach */
 const GAZE_TILES_M: Record<string, number> = { normal: 6000, far: 12000, veryFar: 20000 };
 /** the camera's turn [px a second] past which the realtime rays are one block denser, and under which they go back
@@ -2947,6 +2950,7 @@ export class Renderer {
     // (the cities' lights: drawn bright from orbit — they show on the night side; near the ground, a
     // twentieth: seen from below, lit areas would glare like a sunlit field)
     const altKm = earthSurface ? (earthSurface.h * EARTH_RM) / 1e3 : 1e4;
+    if (!o.probe && t === this.live) this.liveAltKm = altKm;
     const lights = 0.6 * 20 ** Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 300) / Math.log10(300 / 5), -1), 0);
     // (the real weather: the clouds of the day, held still — each region as the satellite saw it)
     const dayOn = this.dayCloudsWanted(s, time);
@@ -6846,6 +6850,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** a still view keeps the raster's realtime frames (main.ts: the raster pipeline, not the photo mode) — else it refines,
    *  traced */
   rasterHold = true;
+  /** the sky's coarser block while the raster draws all the near ground (RASTER_SKY_BLOCK; a switch for comparisons) */
+  rasterSkyBlock = true;
+  /** the live view's height over the Earth's figure [km] (writeParams) */
+  private liveAltKm = 1e4;
   /** parts of the raster's material cut at run time (trace.wgsl liteSkip: TUNE_LITE's bits — 1 water, 2 scenery shadows, 4
    *  relief shadow, 8 surfaces, 16 mesh normal, 32 cloud shadows, 64 trees, 128 imagery): a measure, the image then wrong */
   liteSkip = 0;
@@ -7610,7 +7618,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       this.updateValidFrom(time);
       this.sampleIndex = 0;
       this.bandY = 0;
-      const block = this.motionBlock(s.realtimeSubsampling === "auto" ? this.realtimeBlock : s.realtimeSubsampling, s);
+      let block = this.motionBlock(s.realtimeSubsampling === "auto" ? this.realtimeBlock : s.realtimeSubsampling, s);
+      // (the raster's material drawing all the near ground — under RASTER_SKY_KM its last ring, ±155 km, past the horizon —:
+      // the trace's rays are the sky's alone, at infinity, the history reprojecting it exactly as the camera turns — one a
+      // 16 × 16 block, not 8 × 8: 9–10 ms of the M1's frame a quarter of it — TERRE-UNREAL U6; the governor's own block
+      // left as it was, for when the trace draws ground again)
+      if (this.rasterSkyBlock && this.rasterLiteNow && this.liveAltKm < RASTER_SKY_KM && s.realtimeSubsampling === "auto")
+        block = Math.max(block, RASTER_SKY_BLOCK);
       if (block !== this.lastBlock) this.interleaveIndex = 0;
       let order = this.orders.get(block);
       if (!order) this.orders.set(block, (order = interleaveOrder(block)));

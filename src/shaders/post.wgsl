@@ -37,6 +37,16 @@ fn gatherH(@builtin(global_invocation_id) gid: vec3u) {
   if (gid.x >= W || gid.y >= H) { return; }
   let block = max(R.u.x & 0xffu, 1u);
   if (block <= 1u) { return; }
+  // (the sky's block over the raster's ground — 16, renderer RASTER_SKY_BLOCK —: the sky alone rebuilt, smooth, from the
+  // frame's rays bilinearly — resolve —, the history refining it; its 33 taps a pixel cost more than the trace saved)
+  if (block >= 16u) { return; }
+  // (a pixel the raster shaded: fresh, never rebuilt — its row's sum read only by the sky's pixels rebuilt above or below it,
+  // the normalized convolution then over the other rows: its ±block taps not walked over the ground's half of the image —
+  // 33 a pixel at the sky's block of 16, TERRE-UNREAL U6)
+  if (moments[gid.y * W + gid.x].x > 1e29) {
+    gatherBuf[gid.y * W + gid.x] = vec4f(0.0);
+    return;
+  }
   let h = i32(block);
   var acc = vec4f(0.0);
   for (var dx = -h; dx <= h; dx++) {
@@ -225,15 +235,30 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     let c01 = loadAvg(p00.x, p11.y, W);
     let c11 = loadAvg(p11.x, p11.y, W);
     let bil = mix(mix(c00, c10, t.x), mix(c01, c11, t.x), t.y);
-    // vertical pass of the normalized convolution (horizontal sums in gatherBuf)
-    let h = i32(block);
-    var acc = vec4f(bil * 0.02, 0.02);
-    for (var dy = -h; dy <= h; dy++) {
-      let y = i32(gid.y) + dy;
-      if (y < 0 || y > maxP.y) { continue; }
-      acc += gatherWeight(dy, block) * gatherBuf[u32(y) * W + gid.x];
+    // vertical pass of the normalized convolution (horizontal sums in gatherBuf); the sky's block of 16: the bilinear alone
+    // (gatherH: none)
+    if (block >= 16u) {
+      // (the corners the raster shaded left out — the ground's colour bled over the skyline otherwise —; none left: the
+      // pixel's own last colour)
+      let ok = vec4f(
+        select(1.0, 0.0, moments[p00.y * W + p00.x].x > 1e29),
+        select(1.0, 0.0, moments[p00.y * W + p11.x].x > 1e29),
+        select(1.0, 0.0, moments[p11.y * W + p00.x].x > 1e29),
+        select(1.0, 0.0, moments[p11.y * W + p11.x].x > 1e29),
+      );
+      let wq = vec4f((1.0 - t.x) * (1.0 - t.y), t.x * (1.0 - t.y), (1.0 - t.x) * t.y, t.x * t.y) * ok;
+      let ws = wq.x + wq.y + wq.z + wq.w;
+      c = select(loadAvg(gid.x, gid.y, W), (c00 * wq.x + c10 * wq.y + c01 * wq.z + c11 * wq.w) / max(ws, 1e-6), ws > 1e-4);
+    } else {
+      let h = i32(block);
+      var acc = vec4f(bil * 0.02, 0.02);
+      for (var dy = -h; dy <= h; dy++) {
+        let y = i32(gid.y) + dy;
+        if (y < 0 || y > maxP.y) { continue; }
+        acc += gatherWeight(dy, block) * gatherBuf[u32(y) * W + gid.x];
+      }
+      c = acc.rgb / acc.w;
     }
-    c = acc.rgb / acc.w;
   }
   let pre = R.f.x;
   c = min(c * pre, vec3f(60000.0));
