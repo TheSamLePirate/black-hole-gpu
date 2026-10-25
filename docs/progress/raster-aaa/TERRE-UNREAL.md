@@ -33,13 +33,17 @@ le coût par pixel restant est dans :
 
 | Phase | Contenu | État |
 |---|---|---|
-| U0 | Mesurer ce que coûte chaque partie de `shade` à chaque pixel (Paris bas, mini) | en cours |
+| U0 | Mesurer ce que coûte chaque partie de `shade` à chaque pixel (Paris bas, mini) | fait |
 | U1 | Le sol léger à chaque pixel : sans marche, sans détail procédural, ombres en cartes ; taux 1, échelle 1 | fait |
 | U2 | Le décor en raster : bâtiments (prismes déjà triangulés) et arbres (instances déjà) ombrés par un matériau simple | fait (1re version) |
 | U3 | Ombres du décor en carte (cascades), plus de rayons d'ombre | à faire |
 | U4 | Gouverneur : l'échelle et le taux retirés en raster ; le TAA à 1 échantillon par pixel | à faire |
 | U5 | Le cockpit du F-35 allégé : la verrière d'une seule couche (~40 ms sur le mini) | fait |
-| U6 | Finition : netteté (RCAS), comparaison avec la vue convergée, mini à 50 Hz | à faire |
+| U6 | Allègements (eau en arbre et en bandes, imagerie, ciel 16 × 16, coque, exposition, halo) ; le mini à 25 i/s | fait en vue tenue (41 ms) ; en vol ~47 ms |
+| U7 | La météo et la nuit au matériau raster ; nuages ombrés dessous, lueur des villes | fait |
+| U8 | La Lune, le Soleil, les étoiles en raster ; le télescope stabilisé ; l'éclipse | fait |
+| U9 | Le télescope plein champ : les disques dans leur propre noyau | fait |
+| U10 | 25 i/s en vol sur le mini | en cours (la coupe sol / décor essayée, retirée) |
 
 Chaque phase : mesurée sur le mini (GPU par passe, img/s), une capture en vol au-dessus de Paris, un commit poussé, une
 ligne ici.
@@ -540,3 +544,18 @@ HUD, grossis 37 fois, quasi transparents — laissaient le ciel derrière elles 
 ciel) ~29 ms de ces 50.
 
 ![la totalité au télescope sur le mini, 50 ms](img/u9-mini-totalite.jpg)
+
+### U10 — vers 25 i/s en vol : la coupe du matériau en sol / décor, essayée et retirée (25/10)
+
+**Où on en est** (mini, Paris bas, vue tenue, réglages du jeu, chaque pixel) : **~41 ms, 24,5 i/s** ; les passes de calcul :
+earth lite 13,5 ms, la carte d'ombre du vaisseau ~5,5 (une image sur deux ; les passes de rendu se chevauchent dans les
+horodatages), la visibilité du raster 4,4, la trace 2,5, le temporel 2,4, la sonde du vaisseau 1,9, le masque du cockpit 1,6.
+
+**Essayé** : `shadeLite` coupé par ses pixels en deux noyaux (`LITE_PART` : le sol sans le code des bâtiments et des arbres, le
+décor sans celui des pistes), comme l'eau l'avait été (U2e) — la leçon d'U9 (les registres). A/B dans le même vol tenu :
+**pire** — earth lite 14,4–15,0 ms contre 12,2–12,9, l'image 44,3–44,8 contre 41,6–41,7 : deux passes sur toute l'image, chacune
+gardant l'essentiel (l'imagerie, la lumière, les ombres) ; retiré.
+
+**Reste à essayer** : à l'intérieur d'earth lite — `liteSun` (les ombres : cartes, nuages, relief) et l'imagerie anisotrope, les
+plus gros morceaux d'après U6 ; la visibilité du raster (4,4 ms) ; la carte d'ombre du vaisseau à mesurer pour de bon (sa
+passe seule, sans les chevauchements).
