@@ -765,7 +765,9 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       // pixel's accumulated one: its jittered reads blended over a few frames (ALB_ALPHA), sharp and antialiased — the texture
       // as a converged view's, the light the history's. Only where the albedo history is whole there — its coverage 1: not at a
       // silhouette, the sky's pixels none —, written with this history — TA.mb.w)
-      if (TA.mb.w > 0.5 && aCur > 0.0) {
+      // (not where the ground is carried with a held camera — the same pixel, unclamped, α 0.1: nothing resampled, nothing to
+      // sharpen, and the swap's feedback there ran away — the paused view black, white crosses over it)
+      if (TA.mb.w > 0.5 && aCur > 0.0 && !carried) {
         let ah = albHistAt(uv, vec2f(size));
         if (ah.y > 0.97 && ah.y < 1.03 && ah.x > 0.0) {
           let aH = ah.x / ah.y;
@@ -849,8 +851,12 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     }
   }
   // (this frame's colour brought to the accumulated albedo too — its own is this frame's jittered read)
-  let c = mix(max(hist, vec3f(0.0)), cur.rgb * albSwap(aAcc, aCur), alpha);
-  if (aAcc > 0.0) { textureStore(albOut, gid.xy, vec4f(aAcc, 1.0, 0.0, 0.0)); }
+  var c = mix(max(hist, vec3f(0.0)), cur.rgb * albSwap(aAcc, aCur), alpha);
+  // (a non-finite colour — the history's or the swap's — never kept: it would spread through the history's filter, a cross a
+  // frame)
+  // (by the exponent's bits: a fast-math compiler may drop c != c)
+  if (any((bitcast<vec3u>(c) & vec3u(0x7f800000u)) == vec3u(0x7f800000u)) || any(abs(c) > vec3f(6e4))) { c = cur.rgb; }
+  if (aAcc > 0.0 && aAcc <= 1.0) { textureStore(albOut, gid.xy, vec4f(aAcc, 1.0, 0.0, 0.0)); }
   // (the alpha: the history's weight — the variance the refining passes keep there is not needed while it moves)
   textureStore(dst, gid.xy, vec4f(c, nOut));
 }

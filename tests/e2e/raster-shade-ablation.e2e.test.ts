@@ -5,7 +5,7 @@
 // a tuning of the kernel (renderer.tune: trace.wgsl TUNE_GSKIP's bits, TUNE_DETAIL, TUNE_HINT_GRAZE) or a setting
 // (the scenery, the clouds) —, alternated with the untouched view: a part's cost is the drop it leaves. A measure: the
 // images then differ, on purpose. RP_PLACE=tarifa-low (default) | tarifa | alps | forest-low | paris-low | stlo-low.
-// Measures remote-results/raster-shade-ablation-<place>.json.
+// Measures remote-results/raster-shade-ablation-<place>.json. RP_RATE=every|half|quarter|eighth|sixteenth: the shading rate held.
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
@@ -82,14 +82,18 @@ test.skipIf(!E2E || process.env.RASTER_BENCH !== "1")(
       await app.js(`(() => { __bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 0 });
         ${PLACES[PLACE]} __bh.settings.shipMount = "cockpit"; Object.assign(__bh.settings, ${DETAIL});
         __bh.settings.earthPipeline = "raster"; __bh.game.set("realtimeSubsampling", 4);
+        ${process.env.RP_RATE ? `__bh.settings.earthRasterShading = ${JSON.stringify(process.env.RP_RATE)};` : ""}
         const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
-        c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; return 1; })()`);
+        c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; __bh.freeze(true); return 1; })()`);
+      // (the flight held while the kernels compile and the tiles come — minutes on an M1: flown meanwhile, the autopilot let
+      // the jet down onto the ground, its gear broken, the view a crash's)
       await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
       await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
         const t0 = performance.now(); let calm = 0;
         while (performance.now() - t0 < 120000) { const ok = r.earthTiles.pending === 0; calm = ok ? calm || performance.now() : 0;
           if (calm && performance.now() - calm > 4000) break; await frame(); }
-        __bh.settings.animate = false;
+        ${PLACES[PLACE]} __bh.settings.shipMount = "cockpit";
+        __bh.settings.animate = false; __bh.freeze(false);
         window.__t = true; const tick = () => { if (!window.__t) return; __bh.touch(); requestAnimationFrame(tick); }; requestAnimationFrame(tick);
         return 1; })()`);
       const measure = async (tune: Record<string, number>, settings: string) => {
