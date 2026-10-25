@@ -311,6 +311,8 @@ struct VOut {
 
 // the pipeline drawing the craft's images in the sea (ship.ts: pipes.mirror)
 override MIRROR: bool = false;
+// the F-35's own pipeline (ship.ts: pipes.shipJet): its maps alone, the other craft's procedural plating and grime left out
+override HULL_JET: bool = false;
 
 // the near plane [m] (reversed depth: 1 there, 0 at infinity)
 const NEAR = 0.01;
@@ -834,17 +836,22 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // plating projected along the dominant axis only (blending projections would cross two seam
   // grids), its plane picked by one-hot weights: one plate per sample, three in all. (No branches:
   // per-pixel branches here measured slower than the arithmetic they skip.)
-  let aq = abs(qn);
-  let w = select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), aq.y >= aq.z), vec3f(1.0, 0.0, 0.0), aq.x >= aq.y && aq.x >= aq.z);
-  let c = w.x * in.q.zy + w.y * in.q.xz + w.z * in.q.xy;
-  let size = w.x * vec2f(1.1, 0.7) + w.y * vec2f(0.7, 1.1) + w.z * vec2f(0.7, 0.7);
-  let axis = i32(w.y + 2.0 * w.z);
-  let e = max(0.5 * fw, 0.0015);
-  let h0 = plate(c, size, axis, fw);
-  let g = (vec2f(plate(c + vec2f(e, 0.0), size, axis, fw).x, plate(c + vec2f(0.0, e), size, axis, fw).x) - h0.x) / e;
-  var grad = w.x * vec3f(0.0, g.y, g.x) + w.y * vec3f(g.x, 0.0, g.y) + w.z * vec3f(g.x, g.y, 0.0);
-  grad -= dot(grad, qn) * qn;
-  let bumpOn = select(0.0, 1.0, kind == 0u && (part == 0u || part == 4u));
+  // (HULL_JET — the F-35's own pipeline, its maps its relief —: none of it, nor the grime below; TERRE-UNREAL U6)
+  var h0 = vec2f(0.0, 0.5);
+  var grad = vec3f(0.0);
+  if (!HULL_JET) {
+    let aq = abs(qn);
+    let w = select(select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), aq.y >= aq.z), vec3f(1.0, 0.0, 0.0), aq.x >= aq.y && aq.x >= aq.z);
+    let c = w.x * in.q.zy + w.y * in.q.xz + w.z * in.q.xy;
+    let size = w.x * vec2f(1.1, 0.7) + w.y * vec2f(0.7, 1.1) + w.z * vec2f(0.7, 0.7);
+    let axis = i32(w.y + 2.0 * w.z);
+    let e = max(0.5 * fw, 0.0015);
+    h0 = plate(c, size, axis, fw);
+    let g = (vec2f(plate(c + vec2f(e, 0.0), size, axis, fw).x, plate(c + vec2f(0.0, e), size, axis, fw).x) - h0.x) / e;
+    grad = w.x * vec3f(0.0, g.y, g.x) + w.y * vec3f(g.x, 0.0, g.y) + w.z * vec3f(g.x, g.y, 0.0);
+    grad -= dot(grad, qn) * qn;
+  }
+  let bumpOn = select(0.0, 1.0, kind == 0u && (part == 0u || part == 4u) && !HULL_JET);
   let qb = normalize(qn - grad * bumpOn);
   var n = normalize((model * vec4f(qb, 0.0)).xyz);
   // (the maps' footprint: the UV's and the position's derivatives, taken here — in uniform control flow)
@@ -856,7 +863,8 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // ---- material
   let tone = h0.y;
   let seamDepth = clamp(-h0.x / 0.003, 0.0, 1.0);
-  let grime = vnoise(in.q * 1.3) * 0.55 + vnoise(in.q * 6.1) * 0.3 + vnoise(in.q * 23.0) * 0.15;
+  var grime = 0.5;
+  if (!HULL_JET) { grime = vnoise(in.q * 1.3) * 0.55 + vnoise(in.q * 6.1) * 0.3 + vnoise(in.q * 23.0) * 0.15; }
   var albedo = vec3f(S.mat.x) * (0.92 + 0.12 * tone) * (1.0 - 0.22 * grime * grime) * mix(1.0, 0.45, seamDepth * bumpOn);
   var metal = S.mat.y;
   var rough = 0.5 + 0.2 * grime;
@@ -1115,7 +1123,9 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let specW = select(dom.w * smoothstep(0.5, 0.95, dot(r, dom.xyz)), 0.0, keyOn);
   // (a craft away from the flown one is not in its shadow map)
   let shOn = I.flags.y > 0.5;
-  let sd = select(1.0, shadowAt(pR, ng, dom.xyz), shOn);
+  // (its shadow map read once: the key light below is this same light — its 16 compared taps were read twice)
+  var sd = 1.0;
+  if (shOn) { sd = shadowAt(pR, ng, dom.xyz); }
   // (the A320's flight deck: its sky seen through its windows, and that light bounced about its grey panels — the
   // ceiling lit from below by the floor and the panels: half the light from all sides alike, whiter, the occlusion
   // softer)
@@ -1162,7 +1172,7 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     // (the bumped normal facing the light on a face turned away from it: no light)
     let face = smoothstep(-0.02, 0.08, dot(ng, l));
     if (nl > 0.0 && face > 0.0 && dot(Ek, Ek) > 0.0) {
-      let vis = select(1.0, shadowAt(pR, ng, l), shOn) * face;
+      let vis = sd * face;
       let hv = normalize(l + v);
       let nh = clamp(dot(n, hv), 0.0, 1.0);
       let vh = clamp(dot(v, hv), 0.0, 1.0);

@@ -727,8 +727,9 @@ export class SceneryRaster {
     return true;
   }
 
-  /** the least projected radius of a tree drawn [px] (renderer.treeMinPx) */
-  minPx = 1.2;
+  /** the least projected radius of a tree drawn [px] (renderer.treeMinPx) — 2.5, not 1.2: the far crowns under 5 px across
+   *  the orthophoto's green already, ~1.5–2.5 ms of an M1's frame over a city (TERRE-UNREAL U6) */
+  minPx = 2.5;
   /** parts left out of the visibility pass, to measure them (1 the trees, 2 the buildings' boxes) — the image then wrong */
   debugSkip = 0;
   /** The culled trees' proxies, in the terrain raster's pass (after the ground: its depth already there). */

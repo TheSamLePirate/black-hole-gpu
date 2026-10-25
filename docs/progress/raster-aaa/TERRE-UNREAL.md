@@ -395,3 +395,30 @@ l'horizon, le ciel pendant un regard qui tourne vite — sans blocs.
 **Le vaisseau, vue tenue cette fois** : sans lui 39 ms ; **sans la coque 40 ms (−6,5)** — depuis le cockpit, la coque du
 modèle c'est tout le tableau de bord ; l'ombre, les flammes, le masque ~1 ms chacun ; la pré-passe de profondeur fait gagner
 (sans elle +1,5 ms).
+
+### U6 (4) — la coque du F-35, les arbres, l'exposition, le halo, le ciel ambiant (25/10)
+
+Mesuré sur le mini vue tenue, levier par levier dans une même série :
+
+- **La coque du F-35** (−2,2 ms : 6,5 → 4,3) : le shader des coques est commun à tous les vaisseaux ; sur chaque pixel du
+  tableau de bord du F-35 il évaluait le relief procédural des tôles du Ranger (trois fois) et trois bruits de crasse, et
+  lisait **deux fois** la même carte d'ombre (16 comparaisons chacune : la lumière du ciel, puis le Soleil — la même lumière).
+  Un pipeline à lui (`shipJet`, ship.wgsl `HULL_JET` : ses cartes seules), l'ombre lue une fois pour tous.
+- **Les arbres de la visibilité raster** coûtaient ~5 ms (sans eux 39,9 contre 45) : sous 2,5 px de rayon (1,2 avant), une
+  couronne n'est plus dessinée — l'orthophoto en donne déjà le vert (−1,5 à 2,5 ms) ; les maillages proches simplifiés ou
+  raccourcis : rien.
+- **L'exposition** mesurée une image sur quatre (`METER_EVERY` ; d'emblée quand elle est à trouver ou qu'un spot est mesuré) ;
+  **le premier niveau du halo** en boîte 4 × 4 (quatre lectures bilinéaires, pas treize : chacune lit l'image, le vaisseau et
+  ses flammes — 1,4 → 0,6 ms) ; **la lumière du ciel clair** (`skyAmbient`) une image sur trois ; **l'ancien noyau des rayons
+  du raster** (`shade`) plus lancé quand le matériau prend chaque pixel (`shadeSkip`).
+- Vérifié à l'image : le cockpit, le coucher de Soleil et son halo, l'horizon.
+
+**Mini, fin de U6 (4)** : vue tenue **~41–43 ms, 23–24 i/s** ; en vol sur Paris **21,5 i/s (~47 ms)** — le vol coûte ~5 ms de
+plus (les tuiles qui arrivent, le cache qui recuit, le décor qui change) —, la netteté du sol en vol (médiane du détail de
+raster-pulse) **4,63** (2,98 à U2e), aucune image tracée. Le palier de 40 ms (25 i/s) pas encore franchi en vol. Restent :
+`earth lite` ~12 ms (la géométrie et l'écriture ~5, l'imagerie, la lumière, l'air, l'eau ~1,5–2 chacun), les arbres (~3 ms
+encore : leur ombrage au matériau, leurs instances), la coque 4,3, la reprojection 2,5, la passe de nuages ~2.
+
+| Début de la journée (U2e, 8,4 i/s) | Fin de U6 (21,5 i/s en vol) |
+|---|---|
+| ![U2e](img/u2e-mini-paris.jpg) | ![U6](img/u6-mini-paris.jpg) |

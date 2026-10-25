@@ -321,13 +321,11 @@ fn downShip(@builtin(global_invocation_id) gid: vec3u) {
   if (gid.x >= size.x || gid.y >= size.y) { return; }
   let texel = 1.0 / vec2f(textureDimensions(src));
   let uv = (vec2f(gid.xy) + 0.5) / vec2f(size);
-  var o = withShip(uv) * 0.125;
-  o += (withShip(uv + texel * vec2f(-2.0, -2.0)) + withShip(uv + texel * vec2f(2.0, -2.0))
-      + withShip(uv + texel * vec2f(-2.0, 2.0)) + withShip(uv + texel * vec2f(2.0, 2.0))) * 0.03125;
-  o += (withShip(uv + texel * vec2f(0.0, -2.0)) + withShip(uv + texel * vec2f(-2.0, 0.0))
-      + withShip(uv + texel * vec2f(2.0, 0.0)) + withShip(uv + texel * vec2f(0.0, 2.0))) * 0.0625;
-  o += (withShip(uv + texel * vec2f(-1.0, -1.0)) + withShip(uv + texel * vec2f(1.0, -1.0))
-      + withShip(uv + texel * vec2f(-1.0, 1.0)) + withShip(uv + texel * vec2f(1.0, 1.0))) * 0.125;
+  // (a 4 × 4 box — four bilinear taps —, not the 13-tap filter of the levels below: each tap here reads the image, the craft
+  // and its flames — over the whole view from the cockpit, 39 reads a pixel, ~1.4 ms on an M1; the halo is soft, its
+  // input the temporal pass's, antialiased — TERRE-UNREAL U6)
+  var o = (withShip(uv + texel * vec2f(-1.0, -1.0)) + withShip(uv + texel * vec2f(1.0, -1.0))
+      + withShip(uv + texel * vec2f(-1.0, 1.0)) + withShip(uv + texel * vec2f(1.0, 1.0))) * 0.25;
   // (the glare of what is far brighter than white — the Sun's disk, 10⁵ times the lit ground —
   // softly capped: its halo a camera's, not a blinding blob; white is ≈ 1/16 here, pre-exposed)
   let lo = dot(o, vec3f(0.2126, 0.7152, 0.0722));

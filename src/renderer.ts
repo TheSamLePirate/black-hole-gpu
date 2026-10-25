@@ -305,6 +305,10 @@ const FLAG_TEMPORAL = 4;
 /** Realtime: samples older than this much simulated time [M] are not shown while time runs. */
 const MAX_SAMPLE_AGE = 1.5;
 const FLAG_INTERLEAVED = 8;
+/** the clear sky's light's period [frames] (encodeSkyAmbient) */
+const SKY_EVERY = 3;
+/** the light meter's period [frames] (encodePost) */
+const METER_EVERY = 4;
 /** how often the raster's sea is probed (renderer.seaProbeFor) [frames]; how long unseen before its FFT stops */
 const SEA_PROBE_FRAMES = 15;
 const SEA_UNSEEN_FRAMES = 120;
@@ -813,6 +817,8 @@ export class Renderer {
   private histBuf!: GPUBuffer;
   private histStage!: GPUBuffer;
   private meterPending = false;
+  /** frames since the light meter last ran (METER_EVERY) */
+  private meterTick = 0;
   /** the telescope's spot meter (main.ts sets it each frame): the target's disc — its centre (fractions of the
    *  width, the height) and its radius (a fraction of the height) —, the exposure set by it alone; null: the image's */
   meterSpot: { x: number; y: number; r: number; key?: string } | null = null;
@@ -4567,16 +4573,21 @@ export class Renderer {
       const bh = this.rasterRate >= 16 ? 4 : this.rasterRate > 2 ? 2 : 1;
       const sx = Math.ceil(t.width / bw);
       const sy = Math.ceil(t.height / bh);
-      const sp = enc.beginComputePass(this.prof.pass("earth shade (raster)"));
-      sp.setPipeline(shade);
-      sp.setBindGroup(0, this.hintBindFor(t, hint));
-      sp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
-      sp.dispatchWorkgroups(Math.ceil(sx / 8), Math.ceil(sy / 8));
-      if (mark) {
-        sp.setPipeline(mark);
-        sp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+      // (the material taking every pixel — each one shaded, its buildings their triangles —: the rays' kernel would only
+      // return at each, a dispatch of the tracer's size over the whole image for nothing, ~0.6 ms on an M1 — TERRE-UNREAL U6)
+      const liteAll = this.rasterLiteNow && this.rasterRate === 1 && (this.sceneryRaster?.meshes3d ?? true) && this.shadeSkip;
+      if (!liteAll) {
+        const sp = enc.beginComputePass(this.prof.pass("earth shade (raster)"));
+        sp.setPipeline(shade);
+        sp.setBindGroup(0, this.hintBindFor(t, hint));
+        sp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+        sp.dispatchWorkgroups(Math.ceil(sx / 8), Math.ceil(sy / 8));
+        if (mark) {
+          sp.setPipeline(mark);
+          sp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+        }
+        sp.end();
       }
-      sp.end();
       const lite = this.rasterLiteNow ? this.traceVariant("shadeLite") : null;
       if (lite) {
         const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
@@ -5650,7 +5661,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       pass.end();
     }
     // the light meter, on the live view (the scene: the Ranger is composited at display)
-    if (s?.autoExposure && t === this.live && !this.meterPending) {
+    // (read every METER_EVERY frames — the exposure eases towards its reading each frame meanwhile —, at once while it is to
+    // be found afresh or a spot is metered: a pass over the whole image for a value that moves slowly, ~0.8 ms on an M1 —
+    // TERRE-UNREAL U6)
+    const meterDue = !this.autoEVSet || !!this.meterSpot || this.meterTick + 1 >= METER_EVERY;
+    if (s?.autoExposure && t === this.live && !this.meterPending) this.meterTick = meterDue ? 0 : this.meterTick + 1;
+    if (s?.autoExposure && t === this.live && !this.meterPending && meterDue) {
       this.device.queue.writeBuffer(this.histBuf, 0, new Uint32Array(128));
       const sp = this.meterSpot;
       // (another target, the spot taken or let go: its exposure found at once — not eased from the last one's,
@@ -6852,6 +6868,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   rasterHold = true;
   /** the sky's coarser block while the raster draws all the near ground (RASTER_SKY_BLOCK; a switch for comparisons) */
   rasterSkyBlock = true;
+  /** the rays' raster kernel (shade) left out while the material takes every pixel (a switch for comparisons) */
+  shadeSkip = true;
   /** the live view's height over the Earth's figure [km] (writeParams) */
   private liveAltKm = 1e4;
   /** parts of the raster's material cut at run time (trace.wgsl liteSkip: TUNE_LITE's bits — 1 water, 2 scenery shadows, 4
@@ -6999,6 +7017,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       }
       return;
     }
+    // (the clear sky's light changes as slowly as the Sun and the height: worked out every SKY_EVERY frames, the table kept
+    // between — ~0.5 ms a run on an M1, TERRE-UNREAL U6)
+    if (this.skyTableOn && ++this.skyTick < SKY_EVERY) return;
+    this.skyTick = 0;
     const p = enc.beginComputePass(this.prof.pass("sky ambient"));
     p.setPipeline(this.skyPipe);
     p.setBindGroup(0, t.traceBind);
@@ -7008,6 +7030,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     enc.copyTextureToBuffer({ texture: this.skyOut! }, { buffer: this.bodyBuf, offset: TABLE_SKY * 16 }, [SKY_AMBIENT_VEC4S, 1]);
     this.skyTableOn = true;
   }
+  private skyTick = 0;
   /** the cloud pass (trace.wgsl clouds — docs/PLAN-NUAGES-AAA.md N1): the device binds its buffers; a switch */
   private cloudPass = false;
   cloudPassOn = true;
@@ -7074,7 +7097,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the least projected radius [px] of a tree the raster draws (system/scenery-raster.ts: smaller ones left to the ground's
    *  imagery — micro-triangles); 0 every one */
   get treeMinPx() {
-    return this.sceneryRaster?.minPx ?? 1.2;
+    return this.sceneryRaster?.minPx ?? 2.5;
   }
   set treeMinPx(px: number) {
     if (this.sceneryRaster) this.sceneryRaster.minPx = px;

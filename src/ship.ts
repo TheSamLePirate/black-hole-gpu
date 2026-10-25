@@ -410,6 +410,12 @@ interface ShipTargetRes {
   jetGlassPipe?: GPURenderPipeline;
   /** the station's depth bound (group 1), and which texture it holds */
   occBind?: { tex: GPUTexture; g: GPUBindGroup };
+  /** the F-35's own shading pipeline's bind groups (pipes.shipJet), as the shading's */
+  jetBind?: GPUBindGroup;
+  jetBindGen?: number;
+  jetBindMoments?: GPUBuffer;
+  jetBindHdr?: GPUTexture;
+  jetOcc?: { tex: GPUTexture; g: GPUBindGroup };
   /** the images in the sea's (pipes.mirror's own layouts): its bind groups, as the shading's */
   mirrorBind?: GPUBindGroup;
   mirrorGen?: number;
@@ -604,6 +610,7 @@ export class ShipRenderer {
     ggx: GPUComputePipeline;
     sh: GPUComputePipeline;
     ship: GPURenderPipeline;
+    shipJet: GPURenderPipeline;
     shadow: GPURenderPipeline;
     mirror: GPURenderPipeline;
     comp: GPURenderPipeline;
@@ -779,6 +786,15 @@ export class ShipRenderer {
         primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
         // (reversed depth in float: a hatch at a metre and a craft tens of kilometres off, both exact;
         // after the depth pre-pass: the nearest surface only)
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
+        multisample: { count: 4 },
+      }),
+      // (the F-35's meshes: their maps alone — ship.wgsl HULL_JET)
+      shipJet: d.createRenderPipeline({
+        layout: "auto",
+        vertex,
+        fragment: { module, entryPoint: "fs", targets: [{ format: "rgba16float" }], constants: { HULL_JET: 1 } },
+        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
         multisample: { count: 4 },
       }),
@@ -2562,11 +2578,38 @@ export class ShipRenderer {
       res.bindGen = this.bindGen;
       res.bindMoments = mb;
     }
+    // (the F-35's own pipeline for its meshes — ship.wgsl HULL_JET: its maps alone, the other craft's procedural plating and
+    // grime out of its pixels, the whole cockpit's from inside —, its bind groups its own: an auto layout is its pipeline's)
+    if (!res.jetBind || res.jetBindGen !== this.bindGen || res.jetBindMoments !== mb || res.jetBindHdr !== hdr) {
+      res.jetBind = this.device.createBindGroup({
+        layout: this.pipes!.shipJet.getBindGroupLayout(0),
+        entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }, { binding: 11, resource: { buffer: mb } }],
+      });
+      res.jetBindGen = this.bindGen;
+      res.jetBindMoments = mb;
+      res.jetBindHdr = hdr;
+    }
+    if (res.jetOcc?.tex !== occTex)
+      res.jetOcc = {
+        tex: occTex,
+        g: this.device.createBindGroup({
+          layout: this.pipes.shipJet.getBindGroupLayout(1),
+          entries: [{ binding: 0, resource: occTex.createView() }],
+        }),
+      };
+    let jetNow = false;
     rp.setBindGroup(0, res.bind);
     rp.setBindGroup(1, res.occBind!.g);
     this.draws.forEach((dr) => {
       if (dr.cabin || this.debugSkip.has("hull") || (dr.mesh === this.deckMesh && this.debugSkip.has("deck"))) return;
       if (dr.inst === 0 && this.deckDrawn && this.debugSkip.has("a320-hull")) return;
+      const jet = dr.mesh === this.meshes.f35;
+      if (jet !== jetNow) {
+        rp.setPipeline(jet ? this.pipes!.shipJet : this.pipes!.ship);
+        rp.setBindGroup(0, jet ? res.jetBind! : res.bind!);
+        rp.setBindGroup(1, jet ? res.jetOcc!.g : res.occBind!.g);
+        jetNow = jet;
+      }
       rp.setVertexBuffer(0, dr.mesh.vbuf);
       rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
       rp.drawIndexed(dr.mesh.solid ?? dr.mesh.count, 1, 0, 0, dr.inst);
