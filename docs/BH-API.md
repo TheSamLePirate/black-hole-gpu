@@ -231,6 +231,61 @@ Re-reads the canvas size and resizes the renderer's targets to `pixelRatio` time
 
 Holds the render scale for the image (0.25 … 1, values out of range are clamped), upscaled by the display; `null` releases it to the governor. No caller in `src/bench/`, `tests/` or `scripts/` was found. Calls `resize()` itself.
 
+### `__bh.jitter` → object
+
+The flight's jitter probe (`src/jitter/probe.ts`, `src/jitter/analyze.ts`; docs/progress/JITTER-VOL.md). While on, it records
+every turn of the loop: the rAF stamp, the step given to the flight, whether an image was submitted and when the GPU
+finished it, the camera's axes, the view's mount on the craft (`shipMatrix`), the camera shake's turn, the display shake
+(`renderer.shake`), the field, the output size, the render scale, the raster's shading rate. Off, it gathers nothing.
+`scripts/jitter-lab.ts` drives it, with a screencast video beside it.
+
+### `__bh.jitter.start(max?: number)` → true
+
+Starts recording, clearing what was recorded before. `max` is the ring's size (20 000 turns by default).
+
+### `__bh.jitter.stop()` → true
+
+Stops recording. The samples are kept.
+
+### `__bh.jitter.mark(label: string)` → true
+
+Labels the samples from now on (a lever set, a view). `__bh.jitter.marks()` lists the labels with their rAF stamp.
+
+### `__bh.jitter.marks()` → `{ at, label }[]`
+
+The labels set by `mark`.
+
+### `__bh.jitter.active` → boolean
+
+Whether it is recording.
+
+### `__bh.jitter.recorded` → number
+
+How many turns it has recorded since `start`, the dropped ones included.
+
+### `__bh.jitter.samples(from?: number)` → JitterSample[]
+
+The recorded turns, from the rAF stamp `from` [ms] on.
+
+### `__bh.jitter.report(o?: { from?, to?, sigma? })` → JitterReport
+
+The image's jitter, in output pixels per frame, by cause, over the samples between `from` and `to` (rAF ms). Each layer's
+motion per frame is compared with the local trend of its rate (`sigma`, 0.1 s), and what is left is the jitter. Channels:
+`flight` (the craft's own attitude), `mount` (the rig and the camera shake), `camShake`, `display` (the whole-image offset),
+`view` (all of them together, as the eye gets it), `pacing` (the latency's variation times the image's speed). Each has
+`rms`, `p95`, `max`, `freqHz` (as the frames show it), `peakShare`. Also the steps' statistics (`dt`), the completions'
+(`present`), the renderer's scale and rate changes, a `ranking` and a `verdict`.
+
+```js
+__bh.jitter.start(); await new Promise((r) => setTimeout(r, 5000)); __bh.jitter.report().ranking
+```
+
+### `__bh.jitter.levers(o?: { airShake?: number; step?: number | null })` → `{ airShake, step }`
+
+Levers that take one cause out: `airShake` is the display shake's gain (0 removes it), and `step` makes the flight advance by
+this many seconds every turn, whatever the loop's interval (`null`: the interval, as played). The camera shake is the
+setting `flightShake`. Returns the levers as they are now.
+
 ### `__bh.spectate(on: boolean)` → boolean
 
 Puts the camera out of the ship as a free spectator (`on: true`; the ship goes on flying) or back into it (`false`). Returns whether the spectator is out. Refused with a toast ("fly one first (K)") when no craft is being flown: the spectator starts only from a piloted ship (`startSpectator` in `controller/spectator.ts`). No e2e test calls it.
@@ -508,6 +563,10 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `cloudPassOn`, `cloudHistoryOn`, `cloudPassStats` | boolean, boolean, object (read-only) | the half-resolution cloud pass (trace.wgsl `clouds`, N1) and its own history (post.wgsl `cloudTemporal`) — switches for comparisons, default true; `cloudPassStats`: `{ drawn, history, supported, on }` this frame |
 | `cloudShadowOn`, `skyAmbientOn`, `sunShadowOn`, `treeShadowOn` | boolean | the clouds' transmittance map from the Sun (N3), the physical sky light (N2b: `skyIrradiance`, carried to each point by its Sun's height and eclipse), the relief's shadow map, the trees' and buildings' shadow map — switches for comparisons, default true where the device binds them |
 | `rasterRingsOn` | boolean | the far raster rings about the patch (the height cache's two coarser levels) drawn; off: those pixels marched from the camera (default true) |
+| `rasterRingLast`, `rasterRingsInfo` | number, object (read-only) | the coarsest cache level drawn as a far ring (default `TERRAIN_CACHE_RING_LAST`, 6); the rings asked last frame — `{ patchLevel, drawn, rings: [{ level, step, window, hole, ratio }] }` (docs/progress/HORIZON-FLICKER.md) |
+| `rasterColumn(xFrac?)` | Promise<object \| null> | a diagnostic: one column of the raster's visibility target at that fraction of the width — `{ width, height, rows: [{ d, step, m, age }] }`: each row's ground distance [m] (0: no triangle, the tracer's), its level step (0 the patch, 1 its first far ring…, −1 none), the live target's moments.x there (≥ 1e30: a raster pixel shaded) and its stamp's age [frames]. `scripts/jitter-lab.ts` lists where the rings begin and end with it |
+| `traceColumn(xFrac, y0, n, frames)` | Promise<object[]> | a diagnostic: the next `frames` live frames, `n` rows from `y0` of a 32 px strip — each frame `{ stamp, validFrom, acc, res, tem, m, stale }`: the rows' mean luminance (and their first pixel's) as the kernels wrote it (`acc`), after the reconstruction (`res`), after the temporal pass (`tem`), the first pixel's moments.x, each row's share of pixels the tracer's stamp calls stale. Which pass makes a flicker (docs/progress/HORIZON-FLICKER.md) |
+| `horizonKeep`, `horizonFarAlpha` | boolean | the horizon's fixes (post.wgsl, docs/progress/HORIZON-FLICKER.md): a pixel of the raster's ground never rebuilt from the tracer's samples in `resolve`; its temporal history longer (α down to 1/16) where it barely moves on the image — switches for comparisons, default true |
 | `sceneryRasterOn`, `sceneryRasterLod`, `treeMinPx` | boolean, `{ nearM, near, far }`, number | the trees drawn as raster instances under the raster pipeline (default true; off: the forest's grid walked), their proxies' detail (`SCENERY_RASTER_LOD`), the least projected radius [px] of a tree drawn (smaller: the ground's imagery) |
 | `rasterJitter` | `"gauss" \| "halton"` | the raster's sub-pixel jitter: each pixel's own (default) or a frame-wide Halton offset shared by the projection and the rays (worse in motion: kept for comparisons) |
 | `taauOn`, `taauSigma`, `taauNative` | boolean, number, number | the temporal upsampling under the render scale (post.wgsl `taau`; off by default — no better than the display's Catmull–Rom at sparse shading, 2–3 ms more), its kernel's σ [output px], the native result's weight in its history |

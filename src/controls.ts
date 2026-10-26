@@ -1099,6 +1099,8 @@ export class CameraController {
   abLevel = 0;
   /** the flight's shake of a plane's views (camshake.ts — controller/camrig.ts shakePose), the gear's contacts last frame */
   camShake = new CamShake();
+  /** its turn this frame [rad]: yaw, pitch, roll (0 when not shaken — the jitter probe's, src/jitter/probe.ts) */
+  lastShake: [number, number, number] = [0, 0, 0];
   shakeContact = 0;
   /** the F-35B's STOVL mode (controller/stovl.ts) */
   stovl: StovlState = noStovl();

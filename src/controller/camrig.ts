@@ -299,6 +299,7 @@ function shakePose(this: CameraController, pose: MountPose, dt: number): MountPo
     },
     this.s.flightShake * (this.s.shipMount === "cockpit" || this.s.shipMount === "cabin" ? 1 : 0.55),
   );
+  this.lastShake = [sh.yaw, sh.pitch, sh.roll];
   const e = pose.eye as V3,
     d = vsub(pose.aim as V3, e);
   const up0 = (pose.up ?? [0, 1, 0]) as V3;

@@ -29,6 +29,8 @@ export class Simulation {
   timeDirty = false;
   /** the mission (mission.ts), stepped with the camera */
   mission: { update(dt: number): void } | null = null;
+  /** the display shake's gain (the jitter probe's lever — src/jitter: 0 takes it out) */
+  airShakeGain = 1;
   private firedAt = -1e9;
   private lastFired = 0;
   /** the playback clock and the firing of the last flames handed to the renderer */
@@ -100,24 +102,30 @@ export class Simulation {
       r.shake = [0, 0];
       return changed;
     }
-    // the air's buffeting: the camera shakes with the dynamic pressure, the plasma, through Mach 1 and
-    // on the wheels (not from the outside views' distance)
+    // the re-entry's buffeting: the whole image offset (and zoomed so no edge shows — renderer.writeDisplay) while the plasma
+    // burns round the craft, from its seat and its near views. Only then: an offset of the image is not a turn of the camera —
+    // the HUD, the cockpit's instruments drawn over it stand still while it slides —, and in ordinary flight it read as a
+    // tremble. It was once on in any flight, with the dynamic pressure — ±3 to 5 px at 6 to 11 Hz from 30 kPa, a low pass in
+    // any craft —, at 25 frames a second sampled near its Nyquist, an erratic shiver; measured (scripts/jitter-lab.ts,
+    // docs/progress/JITTER-VOL.md) as nearly all of the image's tremble in level flight. The air's own buffet — Mach 1, the
+    // runway, the stall, the turbulence — is camshake.ts's: the camera turned, under the flight-shake setting, as this is now.
+    // (Slow enough for the frame rate: 2.7 to 4.9 Hz, well under a 25-frame image's 12.5 Hz)
     const A = info?.air;
     const near = ["cockpit", "cabin", "dorsal", "belly", "rear", "wing", "chase", "quarter"].includes(this.s.shipMount);
     let amp = 0;
     if (A?.inAir && near) {
       const lev = Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1);
-      amp = 0.0018 * Math.min(A.q / 30000, 1) + 0.0025 * lev + 0.002 * Math.max(0, 1 - Math.abs(A.mach - 1) / 0.15) * Math.min(A.rho, 1);
-      if (A.rolling) amp += 0.0008 * Math.min(A.speed / 120, 1);
+      amp = 0.0025 * lev;
       if (this.s.shipMount === "cockpit" || this.s.shipMount === "cabin") amp *= 1.6;
     }
     if (c.spectating) amp = 0;
+    amp *= Math.max(this.s.flightShake, 0) * this.airShakeGain;
     const tt = this.play;
     r.shake =
       amp > 0
         ? [
-            amp * (Math.sin(tt * 71.3) * 0.6 + Math.sin(tt * 43.1 + 1.3) * 0.4),
-            amp * (Math.sin(tt * 59.7 + 0.7) * 0.6 + Math.sin(tt * 37.9 + 2.1) * 0.4),
+            amp * (Math.sin(tt * 30.7) * 0.6 + Math.sin(tt * 21.1 + 1.3) * 0.4),
+            amp * (Math.sin(tt * 26.3 + 0.7) * 0.6 + Math.sin(tt * 17.2 + 2.1) * 0.4),
           ]
         : [0, 0];
     // the re-entry's look: the plasma, the hot skin (cooling after, out of the air)

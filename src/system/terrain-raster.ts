@@ -373,7 +373,8 @@ export class TerrainRaster {
       label: "terrain raster metric distance",
       size: [width, height],
       format: TERRAIN_RASTER_FORMAT,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      // (copied from by renderer.rasterColumn — a diagnostic)
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
     });
     const depth = this.device.createTexture({
       label: "terrain raster reversed-Z",

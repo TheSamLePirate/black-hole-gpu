@@ -726,6 +726,7 @@ function stepMount(this: CameraController, dt: number) {
   // (a plane's flight shakes its views — the seat's, the chase's: camshake.ts)
   // (and every spacecraft's — its rocket, the plasma, a contact, the ring: PLAN-VAISSEAUX X7)
   // (not the telescope's: its mount stabilised — at 0.02° the seat's shake would sweep the field)
+  this.lastShake = [0, 0, 0];
   if (s.flightShake > 0 && !this.cinematic && this.piloting && !(s.telescope && s.lookAt)) pose = this.shakePose(pose ?? to, dt);
   this.mountEff = pose;
   if (s.ship && !this.cinematic) this.reorient(S0, this.shipMatrix());

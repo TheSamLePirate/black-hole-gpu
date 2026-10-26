@@ -465,6 +465,17 @@ export interface FrameStats {
   offline?: OfflineStatus;
 }
 
+/** one frame of renderer.traceColumn's capture (staging buffers, the frame's stamp and valid stamp) */
+interface ColFrame {
+  acc: GPUBuffer;
+  res: GPUBuffer;
+  tem: GPUBuffer;
+  mom: GPUBuffer;
+  st: GPUBuffer;
+  stamp: number;
+  validFrom: number;
+}
+
 interface Target {
   width: number;
   height: number;
@@ -2130,7 +2141,8 @@ export class Renderer {
     });
     const polGridBuf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
-    const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE }); // Σ l², depth
+    // (copied from by rasterColumn — a diagnostic)
+    const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC }); // Σ l², depth
     const sceneDepth = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE }); // the occlusion depth
     // (words past the image: the sky's discs' rectangles — trace.wgsl main's layers z ≥ 1, renderer discRects —, then the frame
     // the raster's sea was last drawn — its last word: trace.wgsl shadeWater, renderer seaProbe)
@@ -3569,7 +3581,9 @@ export class Renderer {
         this.costViewMode ? 1 : preExposure(this.ev(s)),
         this.rasterPrimaryOn ? this.rasterRate : 0,
         this.rasterDetailNow && !this.costViewMode ? 1 : 0,
-        0,
+        // (w: the horizon's fixes — docs/progress/HORIZON-FLICKER.md: 1 the raster's ground never rebuilt from the tracer's
+        // samples, 2 its history longer where it barely moves; switches for comparisons)
+        (this.horizonKeep ? 1 : 0) + (this.horizonFarAlpha ? 2 : 0),
       ]),
     );
     if (s.polarization) {
@@ -4643,7 +4657,7 @@ export class Renderer {
     const discs = !quality && this.rasterLiteNow && t === this.live ? this.discRects(t) : [];
     // (their own kernel once in — TERRE-UNREAL U9 —: a pass after the sky's, else main's layers z ≥ 1)
     const discsPipe = discs.length ? this.traceVariant("discs") : null;
-    let gx = Math.max(1, Math.ceil(x / 8)),
+    const gx = Math.max(1, Math.ceil(x / 8)),
       gy = Math.max(1, Math.ceil(y / 8));
     let dgx = 1,
       dgy = 1;
@@ -5647,8 +5661,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       }
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
+      const trace = s && i === r0 && t === this.live ? this.colTraceFrame(enc, t) : null;
       if (s && i === r0 && t === this.live && this.encodeTemporal(enc, t, s) && s.motionBlur > 0 && !this.costViewMode)
         this.encodeMotionBlur(enc, t);
+      if (trace) trace(enc);
       // the occlusion depth the raster passes below test against (Z-P1: fresh, not the stale pixels' own)
       if (s && i === r0) this.encodeSceneDepth(enc, t);
       // the space station, where it is on its orbit (before the Ranger: its glass reflects it)
@@ -6877,6 +6893,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         }
         this.completedDurations.push(ms);
         if (this.completedDurations.length > 512) this.completedDurations.shift();
+        this.onSubmitDone?.(t0, now);
         // Optional LUT work starts only after the first image has completed on the GPU — and the
         // general kernel, a heavier compile, has landed (its LUT is that kernel's companion).
         if (this.lutWanted && this.firstFrameDoneAt && this.generalCompile.state === "ready") void this.lutCompile.start();
@@ -6918,6 +6935,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   } | null = null;
   /** Completed GPU submissions, independent of browser animation callbacks. */
   completedFrames = 0;
+  /** each submission's time and its GPU end [performance.now() ms] (the jitter probe's — src/jitter/probe.ts) */
+  onSubmitDone: ((submittedAt: number, doneAt: number) => void) | null = null;
   firstFrameDoneAt = 0;
   private completedDurations: number[] = [];
   /** what the ground's heights are made of now (the Earth's terrain tiles, a world's finer relief): it changes
@@ -7227,6 +7246,14 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private sunTable = new Float32Array(20);
   /** the raster's shading rate (earthRasterShading): pixels a shaded one stands for, 1, 2 or 4 */
   private rasterRate = 1;
+  /** the live image's height [px] (its render scale's) */
+  get liveHeight() {
+    return this.live?.height ?? 0;
+  }
+  /** the raster's shading rate this frame (1 every pixel … 16; the jitter probe's) */
+  get rasterRateNow() {
+    return this.rasterRate;
+  }
   /** the raster's sub-pixel jitter: "gauss" — each ray its own, the raster unjittered —, or "halton" — one offset a frame
    *  for the raster's projection and its rays (trace.wgsl rasterJitter). Measured in motion (tests/e2e/raster-motion): the
    *  whole image moved half a pixel a frame and the history, reprojecting the pixels' centres, blurred it — 32.2 → 27.1 dB
@@ -7497,6 +7524,177 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the far raster rings about the patch (the relief's cache two levels coarser, each about the next finer): their ground
    *  drawn too, its hint the tracer's instead of a march from the camera (off: those pixels marched as before) */
   rasterRingsOn = true;
+  /**
+   * A diagnostic (docs/progress/HORIZON-FLICKER.md): one column of the raster's visibility target, at a fraction of the width —
+   * each row's ground distance [m] (0: no triangle, the tracer's), its level step (0 the patch, 1 its first far ring …; −1
+   * none) —, and the target's size.
+   */
+  async rasterColumn(
+    xFrac = 0.5,
+  ): Promise<{ width: number; height: number; rows: { d: number; step: number; m?: number; age?: number }[] } | null> {
+    const tex = this.terrainRaster?.distanceTexture();
+    if (!tex) return null;
+    const x = Math.min(Math.max(Math.round(xFrac * tex.width), 0), tex.width - 1);
+    const buf = this.device.createBuffer({ size: 256 * tex.height, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyTextureToBuffer({ texture: tex, origin: [x, 0] }, { buffer: buf, bytesPerRow: 256 }, [1, tex.height]);
+    this.device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ);
+    const f = new Float32Array(buf.getMappedRange().slice(0));
+    buf.unmap();
+    buf.destroy();
+    // (the live target's marks down the same column, when it is the visibility's size: moments.x — RASTER_MARK 1e30 and over a
+    // raster pixel shaded, −3 one left —, the stamp against this frame's)
+    const t = this.live;
+    let marks: { m: number; age: number }[] | null = null;
+    if (t && t.width === tex.width && t.height === tex.height) {
+      const mb = this.device.createBuffer({ size: 8 * tex.height, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      const sb = this.device.createBuffer({ size: 4 * tex.height, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      const e2 = this.device.createCommandEncoder();
+      for (let y = 0; y < tex.height; y++) {
+        e2.copyBufferToBuffer(t.moments, (y * t.width + x) * 8, mb, y * 8, 8);
+        e2.copyBufferToBuffer(t.stamps, (y * t.width + x) * 4, sb, y * 4, 4);
+      }
+      this.device.queue.submit([e2.finish()]);
+      await Promise.all([mb.mapAsync(GPUMapMode.READ), sb.mapAsync(GPUMapMode.READ)]);
+      const mf = new Float32Array(mb.getMappedRange().slice(0));
+      const su = new Uint32Array(sb.getMappedRange().slice(0));
+      mb.unmap();
+      sb.unmap();
+      mb.destroy();
+      sb.destroy();
+      marks = Array.from({ length: tex.height }, (_, y) => ({ m: mf[2 * y]!, age: this.frameStamp - su[y]! }));
+    }
+    const rows = Array.from({ length: tex.height }, (_, y) => {
+      const a = f[y * 64 + 3]!;
+      return { d: f[y * 64]!, step: a > 0 ? -Math.log2(Math.min(a, 1)) : -1, ...(marks ? marks[y] : {}) };
+    });
+    return { width: tex.width, height: tex.height, rows };
+  }
+  /** a column traced through the passes over a few frames (traceColumn — a diagnostic) */
+  private colTrace: {
+    x: number;
+    y0: number;
+    n: number;
+    want: number;
+    frames: ColFrame[];
+    done: (f: ColFrame[]) => void;
+  } | null = null;
+  /**
+   * A diagnostic (docs/progress/HORIZON-FLICKER.md): the next `frames` live frames, `n` rows of a 32 px wide strip from the
+   * column at `xFrac`, from row `y0` [the target's px] — what the kernels wrote (accum: colour / weight), the reconstruction's
+   * output (resolve), the temporal pass's: each row's mean luminance over the strip and its first pixel's —, the first pixel's
+   * moments, and the frame's stamp.
+   */
+  traceColumn(xFrac: number, y0: number, n: number, frames: number) {
+    const t = this.live;
+    if (!t) return Promise.resolve(null);
+    const x = Math.min(Math.max(Math.round(xFrac * t.width), 0), t.width - 32);
+    type Rows = { mean: number[]; px: number[] };
+    return new Promise<{ stamp: number; validFrom: number; acc: Rows; res: Rows; tem: Rows; m: number[]; stale: number[] }[]>((resolve) => {
+      this.colTrace = {
+        x,
+        y0,
+        n,
+        want: frames,
+        frames: [],
+        done: async (fs) => {
+          const lum = (r: number, g: number, b: number) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          const out = [];
+          for (const f of fs) {
+            await Promise.all([f.acc, f.res, f.tem, f.mom, f.st].map((b) => b.mapAsync(GPUMapMode.READ)));
+            const st = new Uint32Array(f.st.getMappedRange().slice(0));
+            const acc = new Float32Array(f.acc.getMappedRange().slice(0));
+            const mom = new Float32Array(f.mom.getMappedRange().slice(0));
+            const half = (b: GPUBuffer) => {
+              const u = new Uint16Array(b.getMappedRange().slice(0));
+              const h = (v: number) => {
+                const e = (v >> 10) & 31,
+                  m = v & 1023;
+                return (e ? 2 ** (e - 15) * (1 + m / 1024) : 2 ** -14 * (m / 1024)) * (v & 0x8000 ? -1 : 1);
+              };
+              const at = (k: number, i: number) => lum(h(u[k * 128 + 4 * i]!), h(u[k * 128 + 4 * i + 1]!), h(u[k * 128 + 4 * i + 2]!));
+              return {
+                mean: Array.from({ length: n }, (_, k) => Array.from({ length: 32 }, (_, i) => at(k, i)).reduce((a, b) => a + b, 0) / 32),
+                px: Array.from({ length: n }, (_, k) => at(k, 0)),
+              };
+            };
+            const accAt = (k: number, i: number) => {
+              const o = 4 * (32 * k + i);
+              return lum(acc[o]!, acc[o + 1]!, acc[o + 2]!) / Math.max(acc[o + 3]!, 1e-6);
+            };
+            out.push({
+              stamp: f.stamp,
+              acc: {
+                mean: Array.from(
+                  { length: n },
+                  (_, k) => Array.from({ length: 32 }, (_, i) => accAt(k, i)).reduce((a, b) => a + b, 0) / 32,
+                ),
+                px: Array.from({ length: n }, (_, k) => accAt(k, 0)),
+              },
+              res: half(f.res),
+              tem: half(f.tem),
+              m: Array.from({ length: n }, (_, k) => mom[2 * k]!),
+              validFrom: f.validFrom,
+              // (each row's share of the strip's pixels older than the frame's valid stamp — the reconstruction's "stale")
+              stale: Array.from(
+                { length: n },
+                (_, k) => Array.from({ length: 32 }, (_, i) => st[32 * k + i]!).filter((v) => v < f.validFrom).length / 32,
+              ),
+            });
+            for (const b of [f.acc, f.res, f.tem, f.mom, f.st]) b.destroy();
+          }
+          resolve(out);
+        },
+      };
+    });
+  }
+  /** this frame's capture, if one is asked: accum and the resolve's output now, the temporal's by the returned call */
+  private colTraceFrame(enc: GPUCommandEncoder, t: Target) {
+    const c = this.colTrace;
+    if (!c || c.frames.length >= c.want) return null;
+    const d = this.device;
+    const mk = (size: number) => d.createBuffer({ size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const f = {
+      acc: mk(512 * c.n),
+      res: mk(256 * c.n),
+      tem: mk(256 * c.n),
+      mom: mk(8 * c.n),
+      st: mk(128 * c.n),
+      stamp: this.frameStamp,
+      validFrom: this.validFrom,
+    };
+    for (let k = 0; k < c.n; k++) {
+      enc.copyBufferToBuffer(t.stamps, ((c.y0 + k) * t.width + c.x) * 4, f.st, 128 * k, 128);
+      enc.copyBufferToBuffer(t.accum, ((c.y0 + k) * t.width + c.x) * 16, f.acc, 512 * k, 512);
+      enc.copyBufferToBuffer(t.moments, ((c.y0 + k) * t.width + c.x) * 8, f.mom, 8 * k, 8);
+    }
+    enc.copyTextureToBuffer({ texture: t.hdr, mipLevel: 0, origin: [c.x, c.y0] }, { buffer: f.res, bytesPerRow: 256 }, [32, c.n]);
+    c.frames.push(f);
+    return (e: GPUCommandEncoder) => {
+      e.copyTextureToBuffer({ texture: t.hdr, mipLevel: 0, origin: [c.x, c.y0] }, { buffer: f.tem, bytesPerRow: 256 }, [32, c.n]);
+      if (c.frames.length >= c.want) {
+        const fs = c.frames;
+        this.colTrace = null;
+        void d.queue.onSubmittedWorkDone().then(() => c.done(fs));
+      }
+    };
+  }
+  /** the far rings asked last frame (a diagnostic: their level, step, window, hole) */
+  private lastRings: TerrainRing[] = [];
+  get rasterRingsInfo() {
+    return {
+      patchLevel: this.terrainRasterLevel,
+      drawn: (this.terrainRaster as unknown as { ringsDrawn?: number } | null)?.ringsDrawn ?? 0,
+      rings: this.lastRings.map((r) => ({ level: r.level, step: r.step, window: r.window, hole: r.hole, ratio: r.ratio })),
+    };
+  }
+  /** the horizon's fixes (post.wgsl resolve and temporal — docs/progress/HORIZON-FLICKER.md): the raster's ground kept from the
+   *  tracer's reconstruction; its history longer where it barely moves on the image — switches for comparisons */
+  horizonKeep = true;
+  horizonFarAlpha = true;
+  /** the coarsest cache level drawn as a far ring (a lever — docs/progress/HORIZON-FLICKER.md: TERRAIN_CACHE_RING_LAST) */
+  rasterRingLast = TERRAIN_CACHE_RING_LAST;
   /** The far rings to draw this frame: the cache's next coarser levels that are ready, each with its hole over the finer. */
   private terrainRings(frame: Float32Array, level: number, window: TerrainWindow, target: Target, s: Settings): TerrainRing[] {
     const out: TerrainRing[] = [];
@@ -7505,7 +7703,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     let finer = window;
     // (every coarser level out to the far rings' last — 2.4 km nodes —, each about the next finer; its step — the tracer's
     // tolerance and the rings' sparser shading — counted from the patch's level of before I3: the finer ones as that patch)
-    const last = Math.max(TERRAIN_CACHE_RING_LAST, level + 2);
+    const last = Math.max(this.rasterRingLast, level + 2);
     for (let lv = level + 1; lv <= last && lv < TERRAIN_CACHE_LEVELS; lv++) {
       const w = this.terrainSurfaceCache?.levelWindow(lv);
       // (a level not baked yet: none past it either — a ring's hole is the next finer one's)
@@ -7634,7 +7832,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       this.paramsF.subarray((69 + TILE_PARAM_VEC4S) * 4, (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4),
       (label, descriptor) => this.prof.pass(label, descriptor),
       trees ? (pass) => this.sceneryRaster!.draw(pass) : undefined,
-      this.terrainRings(frame, level, window, target, s),
+      (this.lastRings = this.terrainRings(frame, level, window, target, s)),
     );
     this.encodeSunShadow(enc, drawn);
     // (the trees' and buildings' shadow map, from the Sun — its frame into the table where drawn; else off: the rays)

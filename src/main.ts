@@ -61,7 +61,7 @@ import { bootMark, bootReport, bootWatchStop } from "./boot-timeline";
 import { Intro, introBuild } from "./intro/intro";
 import { downloadGpuDiagnostic, globalErrorRouter, gpuDiagnostics } from "./gpu-diagnostics";
 import { horizon, isco } from "./physics";
-import { cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
+import { basis, cameraFrame, repPose, setHolePose, setHomePose, switchAnchor } from "./camera";
 import { bodyView, earthGround, earthStart, ourState, referenceBody, saturnDeparture, tiltAway } from "./system/our-side";
 import { fromBodyFixed, toBodyFixed } from "./system/our-surface";
 import { lin as lin3, sub as sub3 } from "./math/vec3";
@@ -281,6 +281,8 @@ import { ephemerisUrls, JOVIAN } from "./system/ephemeris-files";
 import { store } from "./util/storage";
 import { caught, DEV, DEV_TOOLS } from "./debug";
 import { advanceFrameClock, frameNow } from "./frameclock";
+import { JitterProbe } from "./jitter/probe";
+import { analyze as analyzeJitter, type AnalyzeOptions } from "./jitter/analyze";
 import { dateNow } from "./util/now";
 import { KerrBench } from "./bench/runner";
 import { installVramHook } from "./bench/vram";
@@ -7596,6 +7598,28 @@ async function main() {
       hideBar: (on: boolean) => topBar.hide(on),
     },
     pwa,
+    // (the flight's jitter probe — src/jitter, docs/progress/JITTER-VOL.md —: what moved the image each frame, by layer)
+    jitter: {
+      start: (max?: number) => (jitterProbe.start({ max }), true),
+      stop: () => (jitterProbe.stop(), true),
+      mark: (label: string) => (jitterProbe.mark(label), true),
+      get active() {
+        return jitterProbe.active;
+      },
+      get recorded() {
+        return jitterProbe.recorded;
+      },
+      marks: () => jitterProbe.marks,
+      samples: (from?: number) => jitterProbe.samples().filter((s) => from === undefined || s.t >= from),
+      report: (o?: AnalyzeOptions) => analyzeJitter(jitterProbe.samples(), o),
+      /** the levers that take a cause out: the display shake's gain, the flight's step held [s] (null: the loop's
+       *  interval); the camera shake is the setting flightShake. Returns them. */
+      levers: (o: { airShake?: number; step?: number | null } = {}) => {
+        if (o.airShake !== undefined) sim.airShakeGain = o.airShake;
+        if (o.step !== undefined) jitterStep = o.step;
+        return { airShake: sim.airShakeGain, step: jitterStep };
+      },
+    },
     forceScale: (x: number | null) => {
       forcedScale = x === null ? null : Math.min(Math.max(x, 0.25), 1);
       if (forcedScale === null) renderScale = 1;
@@ -7672,6 +7696,12 @@ async function main() {
   const menuPad = new MenuPad();
   let lastStats: FrameStats | null = null;
   let saveTimer = 0;
+  // (the jitter probe: off, nothing gathered; its own clock — the steps the flight was given)
+  const jitterProbe = new JitterProbe();
+  let jitterClock = 0;
+  /** the probe's lever: the flight stepped by this each turn whatever the loop's interval [s] (null: the interval) */
+  let jitterStep: number | null = null;
+  renderer.onSubmitDone = (sub, done) => jitterProbe.submitted(sub, done);
 
   const loop = (now: number) => {
     if (startupFailed) return;
@@ -7774,7 +7804,7 @@ async function main() {
           }
         CB.events = [];
       } else sound.combatFrame(false, false);
-      if (cpuProf.time("flight (camera.update)", () => sim.step(dt))) {
+      if (cpuProf.time("flight (camera.update)", () => sim.step(jitterStep ?? dt))) {
         changed = true;
         guiDirty = true;
       }
@@ -7956,6 +7986,42 @@ async function main() {
         // turn lowered the scale, and its 30 s memory then held it down after the turn)
         if (!renderer.lastFrameDense) gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
       }
+    }
+    if (jitterProbe.active) {
+      const stepped = !frozen && !paused && !renderer.offlineActive && !replay.active ? (jitterStep ?? dt) : 0;
+      jitterClock += stepped;
+      const b = basis(settings.yaw, settings.pitch, settings.roll);
+      const S = camera.piloting ? camera.shipMatrix() : null;
+      const L = camera.airFlight.last;
+      const H = Math.max(1, Math.round(canvas.clientHeight * devicePixelRatio));
+      jitterProbe.record({
+        t: now,
+        dt: stepped,
+        rendered: !!st,
+        sub: Number.NaN,
+        done: Number.NaN,
+        sim: jitterClock,
+        cam: [b.right as [number, number, number], b.up as [number, number, number], b.fwd as [number, number, number]],
+        S: (S ?? [
+          [1, 0, 0],
+          [0, 1, 0],
+          [0, 0, 1],
+        ]) as [[number, number, number], [number, number, number], [number, number, number]],
+        sh: [...camera.lastShake],
+        ds: [renderer.shake[0], renderer.shake[1]],
+        fov: settings.fov,
+        W: Math.max(1, Math.round(canvas.clientWidth * devicePixelRatio)),
+        H,
+        scale: renderScale,
+        rate: renderer.rasterRateNow,
+        phase: lastStats?.phase ?? "",
+        groundPx: (renderer.imageGroundPx * H) / Math.max(renderer.liveHeight || H, 1),
+        speed: L?.speed ?? 0,
+        q: L?.out.q ?? 0,
+        omega: [...camera.pilot.omega] as [number, number, number],
+        gpuMs: renderer.lastGpuMs,
+        refreshMs: renderer.refreshMs,
+      });
     }
     // (a compile or a stream begun or ended: the timings measured afresh — the image untouched)
     const calibrationReady = renderer.calibrationReady;

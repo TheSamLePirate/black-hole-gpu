@@ -4229,8 +4229,8 @@ export const SCHEMA: ControlDef[] = [
     max: 1,
     step: 0.05,
     effect: "none",
-    enabled: (s) => s.ship && s.vessel === "f35",
-    help: "A plane's view shaken by its flight, from the seat and the chase: the runway under the wheels, the buffet near the stall, the transonic buffet through Mach 1, the afterburner's rumble, the touchdown's jolt. 0: steady.",
+    enabled: (s) => s.ship,
+    help: "Every craft's view shaken by its flight, from the seat and the chase: the runway under the wheels, the buffet near the stall, the transonic buffet through Mach 1, the afterburner's rumble, the touchdown's jolt, the re-entry's plasma. Smooth air does not shake. 0: steady.",
     keywords: "camera shake buffet runway vibration touchdown jolt afterburner",
   },
   {

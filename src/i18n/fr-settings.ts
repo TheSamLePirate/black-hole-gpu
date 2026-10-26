@@ -872,8 +872,8 @@ export default {
   "The jet's hot exhaust bending the light: the background seen through it shimmers, strongest with the afterburner lit.":
     "Les gaz chauds du réacteur courbent la lumière : le décor vu à travers eux ondule, surtout postcombustion allumée.",
   "Flight shake": "Tremblements en vol",
-  "A plane's view shaken by its flight, from the seat and the chase: the runway under the wheels, the buffet near the stall, the transonic buffet through Mach 1, the afterburner's rumble, the touchdown's jolt. 0: steady.":
-    "La vue d'un avion secouée par son vol, du siège et en poursuite : la piste sous les roues, le tremblement à l'approche du décrochage, le tremblement transsonique à Mach 1, le grondement de la postcombustion, le choc du toucher. 0 : stable.",
+  "Every craft's view shaken by its flight, from the seat and the chase: the runway under the wheels, the buffet near the stall, the transonic buffet through Mach 1, the afterburner's rumble, the touchdown's jolt, the re-entry's plasma. Smooth air does not shake. 0: steady.":
+    "La vue de chaque appareil secouée par son vol, du siège et en poursuite : la piste sous les roues, le tremblement à l'approche du décrochage, le tremblement transsonique à Mach 1, le grondement de la postcombustion, le choc du toucher, le plasma de la rentrée. L'air calme ne secoue pas. 0 : stable.",
   "Where the camera is fixed on the hull.": "Où la caméra est fixée sur la coque.",
   "Cockpit, the pilot's seat": "Cockpit, le siège du pilote",
   "Cabin, free — the keys move about it": "Cabine, libre — les touches s'y déplacent",

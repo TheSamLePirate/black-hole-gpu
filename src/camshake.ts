@@ -38,12 +38,23 @@ export interface Shake {
   roll: number;
 }
 
-/** A smooth band of noise in time: a few sines of incommensurate frequencies about `f` [Hz]. */
-function band(t: number, f: number, seed: number) {
+/**
+ * How much of a shake at `f` [Hz] the frames can show at `fps`: all of it up to 0.3 × the frame rate, none from 0.45 × (the
+ * Nyquist's 0.5, a margin). Past it a sine sampled by the frames folds back to a slower, erratic one: the engine's 31 Hz hum
+ * at 25 frames a second shown as a 6 Hz shiver — what reads as a tremble, not a vibration (docs/progress/JITTER-VOL.md).
+ */
+export function shownAt(f: number, fps: number) {
+  const x = (0.45 * fps - f) / (0.15 * fps);
+  const k = Math.min(Math.max(x, 0), 1);
+  return k * k * (3 - 2 * k);
+}
+
+/** A smooth band of noise in time: a few sines of incommensurate frequencies about `f` [Hz], those the frames cannot show left out. */
+function bandAt(t: number, f: number, seed: number, fps = Infinity) {
   return (
-    0.5 * Math.sin(2 * Math.PI * f * t + seed) +
-    0.3 * Math.sin(2 * Math.PI * f * 1.73 * t + 2.1 * seed) +
-    0.2 * Math.sin(2 * Math.PI * f * 2.91 * t + 3.7 * seed)
+    0.5 * shownAt(f, fps) * Math.sin(2 * Math.PI * f * t + seed) +
+    0.3 * shownAt(f * 1.73, fps) * Math.sin(2 * Math.PI * f * 1.73 * t + 2.1 * seed) +
+    0.2 * shownAt(f * 2.91, fps) * Math.sin(2 * Math.PI * f * 2.91 * t + 3.7 * seed)
   );
 }
 
@@ -57,10 +68,16 @@ export class CamShake {
   /** eased levels (the buffet does not switch on in a frame) */
   private lv = { buffet: 0, transonic: 0, ab: 0 };
 
+  /** the frame rate the shake is shown at, eased (its bands kept under its Nyquist) */
+  private fps = 60;
+
   step(i: ShakeInput, gain = 1): Shake {
     const dt = Math.min(Math.max(i.dt, 0), 0.1);
     this.t += dt;
+    if (dt > 0) this.fps += (1 / dt - this.fps) * 0.1;
     const t = this.t;
+    const fps = this.fps;
+    const band = (tt: number, f: number, seed: number) => bandAt(tt, f, seed, fps);
     const ease = (k: keyof CamShake["lv"], v: number, tau: number) => (this.lv[k] += (v - this.lv[k]) * Math.min(1, dt / tau));
     const bf = ease("buffet", i.buffet, 0.25),
       tr = ease("transonic", i.transonic, 0.3),

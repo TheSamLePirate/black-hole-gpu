@@ -142,6 +142,8 @@ export interface BhContext {
   freeze(on: boolean): void;
   /** Holds the render scale (0.25 … 1; null: the governor's again) — the benches, the tests */
   forceScale(x: number | null): void;
+  /** the flight's jitter probe (src/jitter): its samples by frame and their analysis by cause */
+  jitter: unknown;
   /** the spectator out (a free camera, the ship flying on) or back; whether it is out */
   spectate(on: boolean): boolean;
   /** the PWA (src/pwa.ts): the worker's state, the caches' figures */
@@ -642,6 +644,10 @@ export function installBh(c: BhContext) {
       freeze: (on: boolean) => c.freeze(on),
       /** holds the render scale (the image rendered at that share of the canvas, upscaled by the display); null: released */
       forceScale: (x: number | null) => c.forceScale(x),
+      /** the flight's jitter probe (src/jitter, docs/progress/JITTER-VOL.md): start(max?), stop(), mark(label), samples(from?),
+       *  report({ from, to, sigma }) — the image's jitter in pixels a frame by cause (flight, rig, camera shake, display
+       *  shake, pacing) */
+      jitter: c.jitter,
       spectate: (on: boolean) => c.spectate(on),
       /** the offline cache: ready(), stats(), clearTiles(), update(), waiting */
       pwa: c.pwa,

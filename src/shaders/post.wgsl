@@ -138,6 +138,9 @@ fn albSwap(a: f32, b: f32) -> f32 { return select(1.0, clamp(a / b, 0.25, 4.0), 
 // the share of a frame's jittered albedo read in the accumulated one (post.wgsl temporal: ~5 frames — antialiased, still sharp
 // under the motion's resampling)
 const ALB_ALPHA = 0.2;
+// the temporal pass's least weight of a fresh raster pixel that barely moves on the image (the far ground — renderer's
+// RASTER_LITE_ALPHA, a third, where it moves)
+const RASTER_FAR_ALPHA = 1.0 / 16.0;
 
 // Polarization ticks: mean Stokes I, Q, U (luminance) over each cell of the tick grid.
 @compute @workgroup_size(8, 8)
@@ -214,8 +217,13 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
       }
     }
     c = select(loadAvg(gid.x, gid.y, W), acc.rgb / acc.w, acc.w > 0.0);
-  } else if (block <= 1u || stamps[idx] >= R.u.w) {
-    // sample taken with the current camera (possibly a few frames old while animating)
+  } else if (block <= 1u || stamps[idx] >= R.u.w || ((u32(R.f.w) & 1u) != 0u && rasterCorner(idx) && stamps[idx] + 2u >= R.u.w)) {
+    // sample taken with the current camera (possibly a few frames old while animating) — or a pixel of the raster's ground
+    // (RASTER_MARK, written within the last two frames — a pixel the raster has left, the view pitched up, is the sky's to
+    // rebuild again) the tracer's stamp calls stale this frame: its own colour, the raster's last, never rebuilt from the
+    // tracer's samples round it. Those were the sky's alone within a block of the skyline (the raster's corners left out
+    // below): the ground under the horizon took more or less of the sky as the frame's offset moved the corners — a band a
+    // block high blinking along the whole horizon at random (docs/progress/HORIZON-FLICKER.md)
     c = loadAvg(gid.x, gid.y, W);
     let n = accum[idx].a;
     if (n >= 2.0) {
@@ -856,7 +864,17 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       let fresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w;
       // (the history's accumulated weight, capped: α = w / (n + w) — a pixel's first samples count fully,
       // then less and less, down to 1 / (n_max + 1); between rays w is small: the history kept)
-      let nMax = 1.0 / max(TA.k.z, 1e-3) - 1.0;
+      // (the raster's ground — its least α RASTER_LITE_ALPHA, a third: the history antialiases, it does not carry the
+      // image, smeared under the motion near — taken down towards 1/16 where its point barely moves on the image: the far
+      // ground near the horizon, under 0.3 px a frame, aliasing at its grazing angle — a row of pixels hundreds of metres of
+      // fields, every sub-pixel move of the view changing what a whole row shows — averaged over ~16 frames, not 3; moving
+      // over 1.5 px a frame, the third again — docs/progress/HORIZON-FLICKER.md)
+      var aMin = TA.k.z;
+      if (rasterPx && aMin > RASTER_FAR_ALPHA && (u32(R.f.w) & 2u) != 0u) {
+        let mv = length(uv * vec2f(size) - (vec2f(gid.xy) + 0.5));
+        aMin = mix(RASTER_FAR_ALPHA, aMin, smoothstep(0.3, 1.5, mv));
+      }
+      let nMax = 1.0 / max(aMin, 1e-3) - 1.0;
       var nPrev = clamp(textureSampleLevel(addTex, samp, uv, 0.0).a, 0.0, nMax);
       let w = select(TA.k.w, 1.0, fresh);
       if (carried) {
