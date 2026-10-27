@@ -11,7 +11,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // Done when: every lever measured.
 
 const OUT = process.env.AB_OUT ?? "remote-results";
-const LEVERS: [string, Record<string, number>][] = (
+// (a lever: its name, its tuning, and — optionally — JavaScript run before it: DISC_LEVERS='[["kernel",{},"__bh.renderer.discsKernel = true"],["main",{},"__bh.renderer.discsKernel = false"]]')
+const LEVERS: [string, Record<string, number>, string?][] = (
   process.env.DISC_LEVERS
     ? JSON.parse(process.env.DISC_LEVERS)
     : [
@@ -21,7 +22,7 @@ const LEVERS: [string, Record<string, number>][] = (
         ["no-star-discs", { TUNE_SKIP: 512 }],
         ["no-bodies", { TUNE_SKIP: 32 }],
       ]
-) as [string, Record<string, number>][];
+) as [string, Record<string, number>, string?][];
 const FIELD = Number(process.env.DISC_FIELD ?? 1.6);
 const SETTINGS = `{ traffic: false, weather: "fair", earthClouds: 0, dof: false, earthPipeline: "raster", earthRasterShading: "every", earthRasterScale: 1, dynamicResolution: false, autoGear: false, f35AutoProtect: false, telescopeSpot: true, showFps: true }`;
 
@@ -57,8 +58,8 @@ test.skipIf(!E2E)(
       await Bun.sleep(1000);
       if (!(await app.js<boolean>(`__bh.settings.telescope`))) await app.press("KeyY");
       const results: Record<string, unknown>[] = [];
-      for (const [name, tune] of LEVERS) {
-        await app.js(`(() => { __bh.renderer.tune = ${JSON.stringify(tune)}; return 1; })()`);
+      for (const [name, tune, js] of LEVERS) {
+        await app.js(`(() => { ${js ?? ""}; __bh.renderer.tune = ${JSON.stringify(tune)}; return 1; })()`);
         await Bun.sleep(1000);
         await settled(900_000);
         // (the clock back at mid-totality, the jet placed again — minutes of compile flown meanwhile)

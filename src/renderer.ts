@@ -4118,7 +4118,11 @@ export class Renderer {
         !v.env ||
         (lutOk && !v.lut) ||
         (airOk && !v.air) ||
-        (shadeOk && (!v.shade || !v.shadeMark || (this.rasterLite && (!v.shadeLite || !v.shadeWater)) || (this.cloudPass && !v.clouds))))
+        (shadeOk &&
+          ((this.shadeWanted && !v.shade) ||
+            !v.shadeMark ||
+            (this.rasterLite && (!v.shadeLite || !v.shadeWater)) ||
+            (this.cloudPass && !v.clouds))))
     )
       this.realtimeCascade(key, v);
     if (kind === "q" || kind === "lutq") v.qWanted = true;
@@ -4232,8 +4236,8 @@ export class Renderer {
     // (RASTER_SHADE_LATE) — and the discs' own kernel — main draws them meanwhile)
     const rasterLate = async () => {
       if (!R || !this.rasterLite) return;
-      if (!slot.shade) slot.shade = await compile("shade");
-      if (!slot.discs) slot.discs = await compile("discs");
+      if (!slot.shade && this.shadeWanted) slot.shade = await compile("shade");
+      if (!slot.discs && this.discsKernel) slot.discs = await compile("discs");
     };
     const run = async () => {
       // (the raster's first kernels before the tracer only when something already draws this key's trace — the general
@@ -4464,6 +4468,18 @@ export class Renderer {
   leanMain = true;
   /** the light probe coarse — the near ground's sub-pixel detail out of env, whatever the scene (P5); false: as before */
   coarseProbe = true;
+  /** the sky's discs in their own kernel (main compiled with DISC_ONLY — TERRE-UNREAL U9); false: in main's layers z ≥ 1, one
+   *  compile less (docs/PLAN-LEAN-TRACER-KERNELS.md P6) */
+  discsKernel = true;
+  /**
+   * The leftovers' kernel (shade) wanted: without the material (rasterLite off) it draws the whole ground; with it, only
+   * the pixels the material does not take — the scenery's: a tree against the sky, a box's margin. No scenery in, no
+   * leftovers: not compiled (a third of the tracer — 50 s of DXC — for no pixel); compiled when the scenery comes
+   * (docs/PLAN-LEAN-TRACER-KERNELS.md P6).
+   */
+  private get shadeWanted() {
+    return !this.rasterLite || this.earthScenery.active;
+  }
 
   /** keys compiled ahead of a launch (prewarm): their queued compiles wanted though the camera is elsewhere */
   private prewarmKeys = new Set<number>();
@@ -4784,7 +4800,7 @@ export class Renderer {
     // stamps' words past the image, the dispatch as wide as the widest of them)
     const discs = !quality && this.rasterLiteNow && t === this.live ? this.discRects(t) : [];
     // (their own kernel once in — TERRE-UNREAL U9 —: a pass after the sky's, else main's layers z ≥ 1)
-    const discsPipe = discs.length ? this.traceVariant("discs") : null;
+    const discsPipe = discs.length && this.discsKernel ? this.traceVariant("discs") : null;
     const gx = Math.max(1, Math.ceil(x / 8)),
       gy = Math.max(1, Math.ceil(y / 8));
     let dgx = 1,

@@ -21,7 +21,7 @@ Measurements: [BASELINE.md](BASELINE.md).
 | P3 stable profile | done | see git log "P3" | one compile set per Earth flight; D3D12 Earth raster 394 → 294 s; kerr-mini settled 238 → 204 s |
 | P4 lean main | done | see git log "P4" | D3D12 Earth raster main 149 → 97 s; kerr-mini raster image 62 → 42 s after launch; images within noise |
 | P5 coarse probe | done | see git log "P5" | D3D12 env: Earth raster 46 → 27 s, Earth traced 72 → 32 s, Kerr 4.6 → 1.8 s; craft light within the probe's noise |
-| P6 shade, discs | to do | | |
+| P6 shade, discs | done | see git log "P6" | shade only when the scenery is in; discs kernel kept (70 vs 90 ms in the telescope) |
 | P7 NEAR_KIND | to do | | |
 | P8 general on demand | to do | | |
 | P9 inlining | to do | | |
@@ -238,3 +238,22 @@ e2e green: `raster-primary`, `title` (4), `entry` (3), `kernel-compile`.
   - Ranger at Gargantua: 0.06 % (0.19 %).
 - e2e green: `kernel-equivalence` (six scenes, as at P1b), `eclipse-raster`, `kernel-compile`. Cold Earth launch on
   kerr-mini: the raster at 48 s, settled at 181 s.
+
+### P6 — shade only when it has pixels; the discs' kernel measured (27/10)
+
+- **`shade`, the leftovers' kernel** (about 50 s of DXC):
+  - with the material on (`rasterLite`), its only pixels are the scenery's: a tree against the sky, a box's margin;
+  - it now compiles only once the scenery is in (`shadeWanted`), lazily, and the cascade asks for it again when the
+    scenery comes. Without the material it draws the whole ground and is compiled as before.
+  - It was already off the hard path (P1, `RASTER_SHADE_LATE`).
+- **The discs' kernel** (`main` with `DISC_ONLY`, U9), A/B with the lean `main` drawing the discs in its layers instead
+  (`renderer.discsKernel`, `disc-cost.e2e` now taking JavaScript levers). Eclipse at Burgos in the telescope at 1.6°,
+  kerr-mini, 1920 × 1080:
+
+  | | GPU ms | fps |
+  |---|---:|---:|
+  | the kernel | 70.2 / 69.6 | 14.5 |
+  | `main`'s layers | 90.0 / 90.3 | 11.3 / 11.0 |
+
+  It still pays at the full field: kept, compiled late (P1), after the image.
+- e2e green: `kernel-compile` (raster at 42 s), `raster-companion` (lean = noise), `raster-primary` (as before).
