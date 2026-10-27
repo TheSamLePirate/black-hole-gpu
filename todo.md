@@ -114,3 +114,30 @@ de la fiche indiquée.
   `vessels.ts` ; `BODY_COLOURS` / `OUR_COLOURS` ; deux `seenFrom` et deux `poleAxes` ; `cycleVessel` vs
   `VESSEL_IDS` ; `renderdialog.ts` (`btnStart.onclick` recopie `options()`, `"Close" : "Close"`).
 - [ ] `cinematicSpeed` : 40 max dans le panneau caméra, 60 dans le schéma.
+
+## Après le plan des noyaux maigres (2026-10-27)
+
+Le plan [PLAN-LEAN-TRACER-KERNELS](docs/PLAN-LEAN-TRACER-KERNELS.md) est fini (P0–P10). Journal :
+[docs/progress/kernels/PROGRESS.md](docs/progress/kernels/PROGRESS.md) ; mesures : [BASELINE.md](docs/progress/kernels/BASELINE.md).
+Ce qui reste :
+
+- [ ] **Mesurer sur un vrai PC Windows.** Tous les chiffres Windows viennent du proxy D3D12 (Tint + DXC sur le Mac),
+  calibré sur deux relevés anciens (RX 5700 XT, RTX 5070 Ti). Attendu : la compilation avant l'image de la Terre vers
+  ~32 s sur RX 5700 XT, ~9 s sur RTX 5070 Ti, au premier lancement. Le diagnostic en jeu (`compileReport()`) note chaque
+  compilation : un rapport de joueur suffit.
+- [ ] **La troisième copie de `ourSegment` (dans `dnegTrace`).** Chaque site d'appel est une copie complète une fois
+  inliné par D3D12 (~19k lignes) ; P9 a fusionné les deux appels de `traceLook`, celui de l'intégration du trou de ver
+  reste. Dans tous les noyaux du jeu (son univers a le trou de ver), environ un tiers du code (estimé, pas mesuré).
+  Piste simple : une version allégée de `ourSegment` pour ce site (nos corps y sont lointains : sans le sol détaillé ni
+  le décor, comme `earthLookFar`), vérifiée par `kernel-golden` sur Interstellar ; la fusion complète demanderait
+  d'interrompre et de reprendre l'intégration de `dnegTrace`. Gain surtout au premier lancement sur Windows.
+- [ ] **Les FPS en vol (~23 FPS sur kerr-mini, cible 60 = 16,7 ms).** Vol cockpit à Tarifa : image 42,6 ms, dont le
+  traceur seulement 5,8 ms (`docs/progress/kernels/perf-p10.txt`). Les leviers ne sont plus dans le traceur :
+  - mesurer proprement le coût de l'avion et du cockpit (ombrage MSAA, carte d'ombres) — sur Apple, les horodatages des
+    passes de rendu se chevauchent (`ship: shading` affiche ~38 ms, presque toute l'image) : il faut une mesure par
+    ablation (passe coupée, A/B) ;
+  - l'ombrage du sol rastérisé (`earth lite`, 13 ms), le plus gros poste mesuré ;
+  - la mer (`earth water` 5,3 ms, `sea fft` 2,2 ms) et les nuages (`clouds` 4,9 ms).
+- [ ] **Une variante de plus au relancement à pied.** Au second lancement sur le même profil, la Terre tracée a compilé
+  une clé que le premier n'avait pas vue (67113952 : le décor pas encore là, 14 s) — selon le rythme du chargement.
+  Mineur ; un profil stable pour la Terre tracée (comme le profil Terre-raster de P3) le supprimerait.
