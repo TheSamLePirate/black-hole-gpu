@@ -802,6 +802,7 @@ le code mort comme le vivant.
 | kerr-mini à froid : première image de la Terre | 134 s | 19 s |
 | kerr-mini à froid : tout compilé | 276 s | 42 s |
 | kerr-mini : secondes de compilation d'un lancement | 443 s | 68 s |
+| kerr-mini, relancement (même profil Chrome) : première image / tout compilé | — | 3,8 s / 10 s |
 
 Images : chaque phase vérifiée au niveau du bruit (`kernel-equivalence`, `raster-companion`, `probe-coarse`,
 `kernel-golden`). Images par seconde (`perf-suite`, kerr-mini, avant le plan contre après) : aucune scène plus lente, le
@@ -812,7 +813,6 @@ référence de plus de 10 % (nouveau site d'appel du sol, d'un bruit, de `ourSeg
 
 **Restent** :
 - rien n'est mesuré sur un vrai PC Windows : les chiffres Windows sont ceux du proxy calibré ;
-- le lancement « à chaud » de la Terre sur Mac recompile encore 4–5 pipelines (première image 17 s) ;
 - la troisième copie de `ourSegment` (dans `dnegTrace`) ;
 - en vol, l'image (≈ 40 ms sur kerr-mini) est limitée par le raster et le décor, pas par le traceur (6 ms).
 

@@ -109,20 +109,26 @@ What a launch waits for, the scene's `main` (Tint + DXC) — and that estimate o
 | the general kernel (no longer at start) | 249 + 92 s | 178 + 32 s | — | — |
 
 **kerr-mini (Metal), `kernel-compile`, F-35 over Tarifa booted on `game:artemis`** (times from the Earth key's first
-compile; cold: `KC_COLD=1`, Chrome's Metal cache emptied; warm: the same run again):
+compile; cold: `KC_COLD=1`, the system's Metal cache emptied, a fresh Chrome profile; again: `KC_WARM=1`, the same case
+launched a second time on the same Chrome profile — a returning player):
 
-| | P0 | P8 | P9 | P10 cold | P10 warm |
+| | P0 | P8 | P9 | P10 cold | P10 again |
 |---|---:|---:|---:|---:|---:|
-| Earth raster: first image | 134 s | 31 s | 24 s | 19 s | 17 s |
-| Earth raster: all settled | 276 s | 73 s | 47 s | 42 s | 40 s |
-| Earth raster: compile in all | 443 s | 122 s | 75 s | 68 s | 54 s |
-| Earth traced: first trace / settled | — | — | — | 19 / 78 s | 15 / 75 s |
-| the Moon: settled | — | — | 7.9 s | 7.8 s | 3.3 s |
-| the wormhole: settled | — | — | 8.7 s | 8.6 s | 3.3 s |
-| Kerr: settled | — | — | 3.2 s | 3.1 s | 3.2 s |
+| Earth raster: first image | 134 s | 31 s | 24 s | 19–25 s | **3.8 s** |
+| Earth raster: all settled | 276 s | 73 s | 47 s | 42–64 s | **10 s** |
+| Earth raster: compile in all | 443 s | 122 s | 75 s | 68–91 s | 17 s (0 cold) |
+| Earth traced: first trace / settled | — | — | — | 18 / 65 s | 3.1 / 24 s |
+| the Moon: settled | — | — | 7.9 s | 7.9 s | 3.7 s |
+| the wormhole: settled | — | — | 8.7 s | 8.6 s | — |
+| Kerr: settled | — | — | 3.2 s | 3.1 s | — |
 
-The warm Earth launches still compile 4–5 pipelines cold (54–76 s of compile): Chrome's Metal cache does not keep them
-all from one launch to the next — not a seconds-long warm start on the Earth yet (left open).
+A cached pipeline still takes 2–4.5 s on the mini (the Metal library loaded from Chrome's cache). The Earth traced's
+second launch compiled one key the first had not met (67113952, the scenery not in yet: 14 s) — the load's timing.
+
+**The earlier "warm" figures were not a returning player's.** Each e2e Chrome had its own fresh profile, removed on
+close: Chrome's shader cache, which lives in the profile, was always empty; a second run only met the system's Metal
+cache, which kept some pipelines and not others (the Earth's `main` and `env`, the Moon's `main` compiled again in full).
+`App.boot({ profile })` now keeps a profile; `KC_WARM=1` uses it.
 
 **Frame cost, `perf-suite` on kerr-mini, before the plan (`85a1b645`, A) against P9 (`ccf68415`, B)**, A B B A, the
 mean of each side's two runs, 60 profiled frames, realtime subsampling ×4, full screen ([perf-p10.txt](perf-p10.txt)):

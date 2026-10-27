@@ -45,14 +45,18 @@ for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const)
     process.exit(128 + (sig === "SIGINT" ? 2 : sig === "SIGTERM" ? 15 : 1));
   });
 
-export async function launch(o: { width?: number; height?: number; dpr?: number; args?: string[] } = {}): Promise<Cdp> {
+export async function launch(o: { width?: number; height?: number; dpr?: number; args?: string[]; profile?: string } = {}): Promise<Cdp> {
   const W = o.width ?? 1440,
     H = o.height ?? 900;
   // (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here)
   const release = await chromeLock();
   const port = 9600 + Math.floor(Math.random() * 300);
-  // (its own profile, removed on close: a run leaves nothing behind — they were 300 MB each)
-  const profile = `${tmpdir()}/kerr-e2e-${port}`;
+  // (its own profile, removed on close: a run leaves nothing behind — they were 300 MB each; o.profile: that one, kept —
+  // a second launch on it finds Chrome's caches as a returning player does)
+  const profile = o.profile ?? `${tmpdir()}/kerr-e2e-${port}`;
+  const dropProfile = () => {
+    if (!o.profile) rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  };
   const proc = Bun.spawn(
     [
       CHROME,
@@ -83,7 +87,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
   running.set(port, () => {
     proc.kill();
     Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
-    rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    dropProfile();
   });
   let page: { webSocketDebuggerUrl: string } | undefined;
   for (let i = 0; i < 300 && !page; i++) {
@@ -96,7 +100,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
   if (!page) {
     running.delete(port);
     proc.kill();
-    rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    dropProfile();
     release();
     throw new Error(`Chrome did not start (${CHROME})`);
   }
@@ -194,7 +198,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
       ws.close();
       proc.kill();
       Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
-      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+      dropProfile();
       release();
     },
   };

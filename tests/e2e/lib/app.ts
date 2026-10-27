@@ -177,6 +177,9 @@ export class App {
       startupFailure?: boolean;
       /** Chrome's own flags for this run (a fake microphone: --use-file-for-fake-audio-capture…) */
       args?: string[];
+      /** Chrome's profile folder, kept after the close (default: a fresh one, removed) — a second boot on it is a
+       *  returning player's launch: Chrome's shader cache in it */
+      profile?: string;
       /** false: this page not recorded (tests/e2e/lib/telemetry.ts — on by default under `bun run e2e`) */
       telemetry?: boolean;
       /** the intro played whole, as on a first visit (otherwise its short version: it was seen) */
