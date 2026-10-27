@@ -4788,23 +4788,25 @@ export class Renderer {
         }
         sp.end();
       }
-      const lite = this.rasterLiteNow ? this.traceVariant("shadeLite") : null;
-      if (lite) {
-        const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
-        lp.setPipeline(lite);
-        lp.setBindGroup(0, this.hintBindFor(t, hint));
-        lp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
-        lp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
-        lp.end();
-        const water = this.rasterWaterNow ? this.traceVariant("shadeWater") : null;
-        if (water) {
-          const wp = enc.beginComputePass(this.prof.pass("earth water (raster)"));
-          wp.setPipeline(water);
-          wp.setBindGroup(0, this.hintBindFor(t, hint));
-          wp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
-          wp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
-          wp.end();
-        }
+    }
+    // (the material — shadeLite, its water — whether shade, the leftovers' kernel, is there or not: it was inside shade's block,
+    // and while shade compiled (RASTER_SHADE_LATE) the ground went undrawn, the image black — kerr-mini, P3)
+    const lite = !quality && hint && this.rasterLiteNow ? this.traceVariant("shadeLite") : null;
+    if (lite && hint) {
+      const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
+      lp.setPipeline(lite);
+      lp.setBindGroup(0, this.hintBindFor(t, hint));
+      lp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+      lp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+      lp.end();
+      const water = this.rasterWaterNow ? this.traceVariant("shadeWater") : null;
+      if (water) {
+        const wp = enc.beginComputePass(this.prof.pass("earth water (raster)"));
+        wp.setPipeline(water);
+        wp.setBindGroup(0, this.hintBindFor(t, hint));
+        wp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+        wp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+        wp.end();
       }
     }
     return true;
