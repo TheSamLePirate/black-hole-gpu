@@ -109,3 +109,27 @@ export function cappedRatio(ratio: number, w: number, h: number, capMpx: number)
   const area = Math.max(w * h, 1);
   return Math.min(ratio, Math.sqrt((capMpx * 1e6) / area));
 }
+
+/**
+ * On Windows, Chrome runs WebGPU on the GPU it gave the whole browser — on a laptop with two GPUs, the integrated one,
+ * whatever the page asks (`powerPreference` is ignored there): a laptop with an RTX GPU then draws, and compiles its shaders,
+ * on its Intel or AMD integrated graphics. What the adapter says is told here, and the way out — Windows' graphics
+ * settings, Chrome set to "High performance" — when it looks integrated: Intel, or an AMD "Radeon Graphics" with no model
+ * number (docs/PLAN-LEAN-TRACER-KERNELS.md P2). Null: nothing to say (not Windows, or a discrete GPU, or unknown).
+ */
+export function windowsIntegratedGpu(o: {
+  userAgent: string;
+  vendor: string;
+  description: string;
+  architecture?: string;
+}): "intel" | "amd" | null {
+  if (!/Windows/i.test(o.userAgent)) return null;
+  const vendor = o.vendor.toLowerCase();
+  const desc = `${o.description} ${o.architecture ?? ""}`.toLowerCase();
+  // (Intel's Arc A/B cards are discrete: their names say so)
+  if (vendor.includes("intel")) return /\barc\b|\ba\d{3}m?\b|\bb\d{3}\b/.test(desc) ? null : "intel";
+  // (AMD's integrated: "AMD Radeon(TM) Graphics", "Radeon 780M"…; the discrete have an "RX" model)
+  if (vendor.includes("amd") || vendor.includes("ati"))
+    return /\brx\b|radeon pro|\bw\d{4}\b/.test(desc) ? null : /graphics|\d{3}m\b|vega/.test(desc) ? "amd" : null;
+  return null;
+}

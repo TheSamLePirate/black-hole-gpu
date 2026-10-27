@@ -246,6 +246,8 @@
 .en-title { margin: 0; font: 700 clamp(22px, 2.6vw, 34px) var(--m-f-title); letter-spacing: 0.24em; text-transform: uppercase; color: var(--m-warm); }
 .en-orb { width: 96px; height: 96px; }
 .en-stage { margin: 0; font: 500 13px var(--m-f-value); color: var(--m-dim); }
+.en-first { margin: 0; max-width: 520px; font: 400 13px / 1.45 var(--m-f-text); color: var(--m-dim); }
+.en-first[hidden] { display: none; }
 .en-tip { margin: 22px 0 0; font: 400 15px / 1.5 var(--m-f-text); color: var(--m-ink); opacity: 0.85; }
 /* the HUD's start: each element lit in turn, with a flicker */
 body.hud-boot .fl-root > *, body.hud-boot canvas.fl-hud, body.hud-boot #topbar { animation: hud-on 520ms linear both; }

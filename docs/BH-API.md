@@ -523,6 +523,10 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `generation` | number | the renderer's generation (see `gpu.generation`) |
 | `pipelineStatus` | object | the compile states: `general`, `quality`, `qualityError`, `lut`, `lutQuality` (`"pending"`, `"ready"`… ) |
 | `variantReady` | boolean | the scene's specialised tracer compiled (or none needed) |
+| `compileReport()` | object | every tracer compile of the session: `compiles` (`pipeline` — the entry, `(quality)`, `general …` —, `key`, `startedAt`, `seconds`, `ok`, `cached` under 5 s, `beforeFirstImage`), `count`, `cold`, `seconds`, `pending`, `firstFrameDoneAt` ([PLAN-LEAN-TRACER-KERNELS.md](PLAN-LEAN-TRACER-KERNELS.md)) |
+| `sceneCompileEta()` | number \| null | the seconds left before the scene's own tracer is in, from this session's compile pace (null: nothing learnt yet; 0: in) |
+| `sourceSpecialise` | boolean | each specialised pipeline made from a module specialised as source (default true; `globalThis.__kernelSpecialise = false` before load turns it off — `tests/e2e/kernel-equivalence.e2e.test.ts`) |
+| `backgroundHold` | boolean | background compiles (the general kernel, a key's LUT and aerial table) held — set while the title screen holds the game |
 | `weatherBlock` | Float32Array | the weather near the camera's 24 params (the weight, the decks, the ground's height, the drift, the rain: `weatherParams`), as the tracer reads them (its offset in `paramsF` moves with the other blocks: read it here) |
 | `earthSettled` | boolean | the Earth's maps, terrain, requested surface pages and worldwide scenery are settled (failed requests use fallback) |
 | `earthSurface.stats()` | object | Regional Sentinel-2/WorldCover: `mode`, `supported`, `region`, `year`, `sourceResolutionM`, `format`, `loaded`, `pages`, `pending`, `inflight`, `failed`, `lastError`, `status`, `gpuBytes`, cumulative `uploadedBytes` and `uploadCpuMs`, `credit`. `settings.earthSurface`: `off`, `satellite`, `materials`; see [PLAN-TERRE-PHOTOREALISTE.md](PLAN-TERRE-PHOTOREALISTE.md). |

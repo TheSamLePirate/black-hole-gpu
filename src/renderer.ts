@@ -1922,7 +1922,12 @@ export class Renderer {
     // the scene's specialised kernel — at the first frame, the general one after it; optional LUT/quality
     // pipelines start later. Their independent failures preserve realtime
     // rendering and are exposed through pipelineStatus, the HUD and offlineStatus.error.)
-    loading.stage("pipelines", t("Compiling the ray tracer — first image"), { weight: 4, indeterminate: true, eta: 3 });
+    loading.stage("pipelines", t("Compiling the ray tracer — first image"), {
+      weight: 4,
+      indeterminate: true,
+      eta: 3,
+      remaining: () => r.sceneCompileEta(),
+    });
     // (its failure held as a value: told after the WGSL's own messages, which name the line; the
     // display's and the post chain's async compiles are part of what the first frame needs)
     const tracerFailure = r.auxCompiled.then(
@@ -4348,6 +4353,7 @@ export class Renderer {
     const t0 = performance.now();
     const label = this.compileLabel(key, entry, quality);
     this.compiling.add(label);
+    if (entry === "main" && !quality) this.mainStartedAt.set(key, t0);
     let p: GPUComputePipeline;
     try {
       try {
@@ -4370,7 +4376,14 @@ export class Renderer {
       this.compiling.delete(label);
     }
     this.noteCompile(`${entry}${quality ? " (quality)" : ""}`, key, t0, true);
-    const s = ((performance.now() - t0) / 1000).toFixed(1);
+    // (the pace: a large kernel's cold compile — not one out of the browser's cache —, by its source's size)
+    const took = (performance.now() - t0) / 1000;
+    const kb = this.codeKB.get(`${key}:${entry}:${quality ? 1 : 0}`);
+    if ((entry === "main" || entry === "env") && kb && took > 5) {
+      this.pace.s += took;
+      this.pace.kb += kb;
+    }
+    const s = took.toFixed(1);
     gpuDiagnostics.record(
       "pipeline-compiled",
       `tracer ${entry}${quality ? " (quality)" : ""}, features ${key}: ${s} s${this.firstFrameDoneAt ? "" : ", before the first image"}`,
@@ -4406,7 +4419,7 @@ export class Renderer {
                 ? this.aerialLayout
                 : this.tracePipeLayout,
       compute: {
-        module: specialised ? this.specialisedModule(constants, ep) : this.traceModule,
+        module: specialised ? this.specialisedModule(constants, ep, `${key}:${entryPoint}:${quality ? 1 : 0}`) : this.traceModule,
         // (the sky's discs: main's own, its sky's layer and its ground compiled out — DISC_ONLY)
         entryPoint: ep,
         constants,
@@ -4425,9 +4438,10 @@ export class Renderer {
   /** the specialised modules by their source (the same text, the same module: two keys whose constants prune alike share
    *  it — and the browser's shader cache keys on it, across sessions) */
   private specialisedModules = new Map<string, GPUShaderModule>();
-  private specialisedModule(constants: Record<string, number>, entryPoint: string): GPUShaderModule {
+  private specialisedModule(constants: Record<string, number>, entryPoint: string, id?: string): GPUShaderModule {
     this.specialiser ??= new WgslSpecialiser(this.traceSource);
     const code = this.specialiser.specialise(constants, entryPoint);
+    if (id) this.codeKB.set(id, code.length / 1024);
     let m = this.specialisedModules.get(code);
     if (m) {
       // (most recently used last: the oldest dropped first)
@@ -7335,6 +7349,35 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private compiling = new Set<string>();
   /** every tracer compile of the session, in order (compileReport) */
   private compileLog: { pipeline: string; key: number; startedAt: number; seconds: number; ok: boolean; beforeFirstImage: boolean }[] = [];
+  /** each specialised pipeline's source size [KB] ("key:entry:quality") — the measure of its compile's work */
+  private codeKB = new Map<string, number>();
+  /** the cold compiles of the large kernels this session (main, env): their seconds and their source's KB — the pace */
+  private pace = { s: 0, kb: 0 };
+  /** when each key's realtime tracer started compiling [performance.now ms] */
+  private mainStartedAt = new Map<number, number>();
+  /** the specialised size of each key's realtime tracer [KB] */
+  private mainKB = new Map<number, number>();
+  /**
+   * The seconds left before the scene's own tracer is in (the "Compiling the ray tracer for this scene" stage), from the
+   * pace of the large compiles this session — seconds per KB of specialised source, which is what DXC and Metal chew on —
+   * and the size of this key's: null when nothing has been learnt yet (the first compile of a session: its stage tells how
+   * long it has run instead) — docs/PLAN-LEAN-TRACER-KERNELS.md P2.
+   */
+  sceneCompileEta(): number | null {
+    if (this.pace.kb <= 0 || !this.sourceSpecialise) return null;
+    const key = this.featureKey;
+    if (this.variants.get(key)?.rt || this.coveringVariant(key, "rt")) return 0;
+    let kb = this.mainKB.get(key);
+    if (kb === undefined) {
+      this.specialiser ??= new WgslSpecialiser(this.traceSource);
+      const c = tracerConstants(key, "main", { rasterHint: this.rasterHint, tune: this.tunes.get((key >> 20) & 255) });
+      kb = this.specialiser.specialise(c, "main").length / 1024;
+      this.mainKB.set(key, kb);
+    }
+    const started = this.mainStartedAt.get(key);
+    const ran = started !== undefined ? (performance.now() - started) / 1000 : 0;
+    return Math.max(3, (kb * this.pace.s) / this.pace.kb - ran);
+  }
   private noteCompile(pipeline: string, key: number, t0: number, ok: boolean) {
     this.compileLog.push({
       pipeline,
@@ -8260,7 +8303,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private noteSceneTracer(waiting: boolean) {
     if (waiting === this.sceneTracerShown) return;
     this.sceneTracerShown = waiting;
-    if (waiting) loading.stage("scene-tracer", t("Compiling the ray tracer for this scene"), { indeterminate: true, eta: 30 });
+    if (waiting)
+      loading.stage("scene-tracer", t("Compiling the ray tracer for this scene"), {
+        indeterminate: true,
+        eta: 30,
+        remaining: () => this.sceneCompileEta(),
+      });
     else loading.done("scene-tracer");
   }
 

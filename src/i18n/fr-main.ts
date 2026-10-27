@@ -517,4 +517,8 @@ export default {
   auroras: "aurores",
   "The near Earth is drawn by the raster pipeline again: the traced one is no faster here":
     "La Terre proche est de nouveau dessinée par le raster : le pipeline tracé n'est pas plus rapide ici",
+  // (docs/PLAN-LEAN-TRACER-KERNELS.md P2: a compile's time left; the Windows laptop on its integrated GPU)
+  "time left": "restant",
+  "This PC draws on its integrated graphics: Chrome on Windows does not pick the dedicated GPU by itself. For it — a faster image and much shorter shader compiles —: Windows Settings › System › Display › Graphics › Google Chrome › High performance, then restart Chrome.":
+    "Ce PC dessine avec sa puce graphique intégrée : sous Windows, Chrome ne choisit pas seul la carte graphique dédiée. Pour l'utiliser — une image plus fluide et des compilations de shaders bien plus courtes — : Paramètres Windows › Système › Écran › Graphiques › Google Chrome › Performances élevées, puis redémarrez Chrome.",
 } satisfies Record<string, string>;

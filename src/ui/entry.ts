@@ -20,6 +20,11 @@ export interface EntryShow {
 const T = {
   tip: { fr: "Astuce", en: "Tip" },
   compiling: { fr: "Le tracé de rayons de cette scène se compile", en: "This scene's ray tracer is compiling" },
+  // (said once a compile has run a while: what it is, that it happens once — docs/PLAN-LEAN-TRACER-KERNELS.md P2)
+  firstTime: {
+    fr: "Première fois sur cet ordinateur : le tracé de rayons est compilé pour votre carte graphique, une seule fois — quelques minutes sur certains PC. Les lancements suivants seront rapides.",
+    en: "First time on this computer: the ray tracer is being compiled for your graphics card, once — a few minutes on some PCs. Later launches will be fast.",
+  },
 } satisfies Record<string, Text>;
 
 const reduced = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -78,6 +83,8 @@ export class GameEntry {
     veil.dataset.phase = "loading";
     const canvas = h("canvas", { class: "en-orb", width: "192", height: "192" }) as HTMLCanvasElement;
     const stage = el("p", "en-stage", tr(T.compiling));
+    const first = el("p", "en-first", tr(T.firstTime));
+    first.hidden = true;
     const card = h(
       "div",
       { class: "en-card", "data-testid": "entry-loading" },
@@ -88,6 +95,7 @@ export class GameEntry {
         el("h2", "en-title", show.title),
         canvas,
         stage,
+        first,
         h("p", { class: "en-tip" }, el("span", "pz-k", tr(T.tip)), tr(tipOf(show.tips, this.tipN++))),
       ),
     );
@@ -103,7 +111,12 @@ export class GameEntry {
         drawOrb(ctx, orbStateFor(ids, false), 0, 0, 192, (now - t0) / 1000, Math.min(1, (now - t0) / 400));
       }
       const p = loading.pending.find((s) => s.id === "scene-tracer") ?? loading.pending[0];
-      if (p) stage.textContent = `${p.label} · ${Math.floor(100 * loading.fracOf(p, now))} %`;
+      if (p) {
+        const d = loading.describe(p, now);
+        stage.textContent = d ? `${p.label} · ${d}` : p.label;
+        // (a compile that runs past 12 s: not the browser's shader cache — said what it is, and that it is once)
+        first.hidden = !(p.id === "scene-tracer" && now - p.startedAt > 12_000);
+      }
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);

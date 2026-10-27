@@ -17,7 +17,7 @@ Measurements: [BASELINE.md](BASELINE.md).
 | P0 measure | done | see git log "P0" | analyzer, proxy, compile report, kerr-mini baseline; **finding: dead code costs DXC as much as live code** (→ P1b) |
 | P1 queue fixes | done | see git log "P1" | Earth key's tracer 139 → 56 s after the launch (kerr-mini, cold) |
 | P1b source specialisation | done | see git log "P1b" | D3D12 proxy: Kerr 114 → 8 s, Earth-only 121 → 42 s, game Earth raster 460 → 394 s; same images |
-| P2 loading UI | to do | | |
+| P2 loading UI | done | see git log "P2" | time run / time left instead of "94 %"; first-time note; Windows iGPU tip (toast, TARS) |
 | P3 stable profile | to do | | |
 | P4 lean main | to do | | |
 | P5 coarse probe | to do | | |
@@ -132,3 +132,21 @@ copies).
 
 kerr-mini (Metal): no notable change. Metal already discards dead code cheaply. All e2e green:
 - `raster-primary`, `eclipse-raster`, `gpu-startup` (21), `entry`, `kernel-compile`.
+
+### P2 — an honest loading screen; the Windows laptop on its integrated GPU (27/10)
+
+- `loading.describe(stage)`: a stage with no measurable progress (a compile) says how long it has run (`2:17`) and, when
+  known, the time left (`1:00 · ~1:00 left`), never a share creeping towards 95 % — the "stuck at 94 %" that started this
+  plan. Its bar follows the time left when known (`Stage.remaining`).
+- `renderer.sceneCompileEta()`: the scene's tracer's seconds left.
+  - It works from the pace of this session's large cold compiles (`main`, `env`: seconds per KB of specialised source)
+    and the size of this key's `main` source.
+  - It is null until a first cold compile has taught the pace. It feeds the scene and first-image stages and the
+    compile meter.
+- The scene loading screen adds, after 12 s of compile: "First time on this computer: the ray tracer is being compiled
+  for your graphics card, once — a few minutes on some PCs. Later launches will be fast."
+- `tier.ts windowsIntegratedGpu()`: Windows with an Intel (not Arc) adapter, or an AMD "Radeon Graphics" without an RX
+  model. That is a laptop on its integrated GPU: Chrome ignores the page's `powerPreference` there.
+  - The tip (`ui/gpu-tip.ts`): Windows Settings › System › Display › Graphics › Chrome › High performance.
+  - It is shown once as a toast at the first image and recorded in the diagnostic.
+  - It is in TARS's `get_state` → `graphics`, with the compiles running and queued, the time left and the adapter.

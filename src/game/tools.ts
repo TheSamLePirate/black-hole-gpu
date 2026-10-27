@@ -10,6 +10,8 @@
 //   __bh.game.save("before TMI"); __bh.game.load("before TMI")
 //   await __bh.game.audit({ planner: true })
 
+import { windowsIntegratedGpu } from "../tier";
+import { gpuTipText } from "../ui/gpu-tip";
 import { runwaySitesNear, siteByName, worldSite } from "../world/fieldsite";
 import { fieldByCode } from "../world/runways";
 import { pushbackPath, standOf, standPlace } from "./airportnet";
@@ -1068,6 +1070,24 @@ export class GameTools {
       character: this.ctx.camera.character.state(),
       grass: r.characterRenderer.stats(),
       block: r.realtimeBlockNow,
+      // (the shader compiles: running, queued, the scene's tracer's time left; a Windows laptop on its integrated GPU, and
+      // the way out — docs/PLAN-LEAN-TRACER-KERNELS.md P2)
+      graphics: {
+        compiling: r.compilingNow,
+        compilesPending: r.compilesPending,
+        sceneCompileEtaS: r.sceneCompileEta(),
+        adapter: r.adapter ? `${r.adapter.vendor} ${r.adapter.description}`.trim() : null,
+        integratedGpu:
+          r.adapter &&
+          windowsIntegratedGpu({
+            userAgent: navigator.userAgent,
+            vendor: r.adapter.vendor,
+            description: r.adapter.description,
+            architecture: r.adapter.architecture,
+          })
+            ? gpuTipText()
+            : null,
+      },
       cpu: cpuProf.table().map((c) => ({ section: c.label, ms: r2(c.ms), worst: r2(c.max) })),
       gpu: r.prof.table().map((p) => ({ pass: p.label, ms: r2(p.ms), last: r2(p.last), frames: p.n })),
     };

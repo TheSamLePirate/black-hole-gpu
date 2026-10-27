@@ -349,7 +349,7 @@ function info(s: Stage, now: number) {
   if (s.state === "done") return s.total ? `${fmtMB(s.total)} MB` : "✓";
   if (s.total) return `${fmtMB(s.loaded)} / ${fmtMB(s.total)} MB`;
   if (s.loaded) return `${fmtMB(s.loaded)} MB`;
-  return `${Math.floor(100 * loading.fracOf(s, now))} %`;
+  return loading.describe(s, now);
 }
 
 /** Assets loaded on demand, after the start: a small pill with their progress — the loading orb at its head

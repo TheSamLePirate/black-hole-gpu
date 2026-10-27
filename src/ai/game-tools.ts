@@ -547,7 +547,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "get_state",
       description:
-        "The whole situation now: phase, status and orbit (km, m/s), fuel and Δv, target, next event, autopilot/hold/throttle, alerts, landing/runway state, mission, date, warp, view, craft, satellite surface region/availability/memory and worldwide 3D scenery availability, counts and memory. Call it before acting when unsure.",
+        "The whole situation now: phase, status and orbit (km, m/s), fuel and Δv, target, next event, autopilot/hold/throttle, alerts, landing/runway state, mission, date, warp, view, craft, satellite surface region/availability/memory and worldwide 3D scenery availability, counts and memory, graphics (shaders compiling now and queued, the scene's ray tracer's seconds left, the GPU adapter, and — on a Windows laptop drawing on its integrated GPU — how to switch Chrome to the dedicated one: tell the pilot when the game is slow or a compile long). Call it before acting when unsure.",
       run: () => {
         const st = tools.status();
         const rw = camera.runwayView?.();
@@ -586,6 +586,7 @@ export function gameTools(h: GameHost): Tool[] {
           grass: tools.perf({ gpu: false }).grass,
           localMap: h.localMap?.state(),
           streaming: tools.perf({ gpu: false }).streaming,
+          graphics: tools.perf({ gpu: false }).graphics,
         };
       },
     },

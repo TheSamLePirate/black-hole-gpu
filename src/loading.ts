@@ -22,6 +22,9 @@ export interface Stage {
   /** no measurable progress: eased towards 1 over ~`eta` seconds */
   indeterminate: boolean;
   eta: number;
+  /** the seconds left, when something can tell (renderer.sceneCompileEta: a compile's pace learnt this session); null:
+   *  unknown — the stage then says how long it has run, not a made-up share (docs/PLAN-LEAN-TRACER-KERNELS.md P2) */
+  remaining?: () => number | null;
   startedAt: number;
   /** when it finished [performance.now() ms] */
   doneAt?: number;
@@ -39,8 +42,9 @@ class LoadTracker {
     return this.stages.get(id)?.state === "active";
   }
 
-  stage(id: string, label: string, o: { weight?: number; indeterminate?: boolean; eta?: number } = {}) {
+  stage(id: string, label: string, o: { weight?: number; indeterminate?: boolean; eta?: number; remaining?: () => number | null } = {}) {
     const s: Stage = {
+      remaining: o.remaining,
       id,
       label,
       weight: o.weight ?? 1,
@@ -127,11 +131,28 @@ class LoadTracker {
     return [...this.stages.values()];
   }
 
-  /** A stage's fraction now (the indeterminate ones eased along 1 − e^(−t/eta), never quite 1). */
+  /** A stage's fraction now (the indeterminate ones: by the time left when it is known, else eased along 1 − e^(−t/eta),
+   *  never quite 1). */
   fracOf(s: Stage, now = performance.now()) {
     if (s.state === "done" || s.state === "failed") return 1;
     if (!s.indeterminate) return s.frac;
-    return Math.max(s.frac, 0.95 * (1 - Math.exp(-(now - s.startedAt) / 1000 / s.eta)));
+    const ran = (now - s.startedAt) / 1000;
+    const left = s.remaining?.() ?? null;
+    if (left !== null && Number.isFinite(left)) return Math.max(s.frac, Math.min(0.97, ran / Math.max(ran + left, 1e-3)));
+    return Math.max(s.frac, 0.95 * (1 - Math.exp(-ran / s.eta)));
+  }
+
+  /**
+   * What a stage says of its progress, for the player: the bytes of a download, a share where it is measured; for a stage
+   * with no measurable progress (a shader compile), how long it has run and, when it is known, how long is left — never a
+   * share that only creeps towards 95 % (a compile of minutes read "stuck at 94 %").
+   */
+  describe(s: Stage, now = performance.now()): string {
+    if (s.state === "done" || s.state === "failed") return "";
+    if (!s.indeterminate) return `${Math.floor(100 * this.fracOf(s, now))} %`;
+    const ran = clock((now - s.startedAt) / 1000);
+    const left = s.remaining?.() ?? null;
+    return left !== null && Number.isFinite(left) && left > 0 ? `${ran} · ~${clock(left)} ${leftWord()}` : ran;
   }
 
   /** The start's progress, 0…1, by weight. */
@@ -163,6 +184,18 @@ class LoadTracker {
       for (const f of this.listeners) f();
     });
   }
+}
+
+/** "m:ss" (or "s s" under a minute) */
+export function clock(seconds: number): string {
+  const t = Math.max(0, Math.round(seconds));
+  return t < 60 ? `${t} s` : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+}
+
+/** the word after the time left, in the page's language (no i18n import here: no DOM) */
+let leftWord = () => "left";
+export function setLeftWord(f: () => string) {
+  leftWord = f;
 }
 
 export const loading = new LoadTracker();

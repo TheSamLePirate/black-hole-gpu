@@ -207,7 +207,8 @@ import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
 import { demotionEligible, dynamicResolutionOn, earthDetailFor, promotionEligible } from "./quality-policy";
-import { adapterId, cappedRatio, demoted, promoted, rememberLevel } from "./tier";
+import { adapterId, cappedRatio, demoted, promoted, rememberLevel, windowsIntegratedGpu } from "./tier";
+import { gpuTipText } from "./ui/gpu-tip";
 import { cpuProf } from "./perf";
 import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
@@ -270,7 +271,7 @@ import { plan } from "./system/plan-client";
 import { C_MPS, M_SECONDS } from "./units";
 import { mouth, setSceneTime } from "./wormhole";
 import { fmtWarp, realTimeSpeed, stepWarp, warpLadder } from "./clock";
-import { loading } from "./loading";
+import { clock, loading, setLeftWord } from "./loading";
 import { preventPageZoom } from "./ui/nozoom";
 import { watchMobile } from "./ui/mobile";
 import { TouchFlight } from "./ui/touchflight";
@@ -491,6 +492,8 @@ async function main() {
   const jovianFirst =
     /[#&]save=/.test(location.hash) ||
     (startScene ? !presets[startScene] || JOVIAN.test(JSON.stringify(presets[startScene])) : JOVIAN.test(JSON.stringify(autosave.get())));
+  // (the time left of a compile, in the page's language: loading.describe)
+  setLeftWord(() => t("time left"));
   loading.stage("ephemeris", t("The solar system — NASA/JPL ephemerides (DE440)"), { weight: 2 });
   const ephemerides = loading.track("ephemeris", "", loadEphemerides(ephemerisUrls(jovianFirst ? ["de", "jup"] : ["de"]), ephemerisFetch));
   loading.stage("sky", t("Milky Way — the Gaia DR2 map"), { weight: 2 });
@@ -7703,6 +7706,24 @@ async function main() {
   let jitterStep: number | null = null;
   renderer.onSubmitDone = (sub, done) => jitterProbe.submitted(sub, done);
 
+  // (a Windows laptop drawing on its integrated GPU — Chrome ignores the page's "high-performance" there —: said once, with the
+  // way to the dedicated one; the same words in TARS's state and the diagnostic — docs/PLAN-LEAN-TRACER-KERNELS.md P2)
+  const GPU_TIP_KEY = "kerr.gpuTip";
+  const gpuTip = () => {
+    const a = renderer.adapter;
+    if (!a) return;
+    const which = windowsIntegratedGpu({
+      userAgent: navigator.userAgent,
+      vendor: a.vendor,
+      description: a.description,
+      architecture: a.architecture,
+    });
+    if (!which) return;
+    gpuDiagnostics.record("integrated-gpu", `${a.vendor} ${a.description}`.trim());
+    if (store.get(GPU_TIP_KEY)) return;
+    store.set(GPU_TIP_KEY, "1");
+    panel.toast(gpuTipText());
+  };
   const loop = (now: number) => {
     if (startupFailed) return;
     requestAnimationFrame(loop);
@@ -7735,9 +7756,12 @@ async function main() {
       // (which: the kernel and the features of its variant — the first one, the others counted)
       if (compiling) {
         const now = renderer.compilingNow;
+        // (and the scene's tracer's time left, once a compile's pace is known — renderer.sceneCompileEta)
+        const eta = renderer.sceneCompileEta();
+        const left = eta && eta > 0 ? ` · ~${clock(eta)}` : "";
         compileText.textContent = now.length
-          ? `${t("Compiling shaders")} · ${now[0]}${compiling > 1 ? ` · +${compiling - 1}` : ""}`
-          : `${t("Compiling shaders")} · ${compiling}`;
+          ? `${t("Compiling shaders")} · ${now[0]}${compiling > 1 ? ` · +${compiling - 1}` : ""}${left}`
+          : `${t("Compiling shaders")} · ${compiling}${left}`;
       }
     }
     // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
@@ -7968,6 +7992,7 @@ async function main() {
       gpuDiagnostics.ready();
       bootMark("first-image");
       splash.firstImage();
+      gpuTip();
       // (Jupiter's moons' ephemeris, when the start did not wait for it: now, the first image drawn and the sky
       // in — not sharing the link with it)
       if (!jovianFirst) void afterSkyPrefetch(2000).then(() => loadEphemerides(ephemerisUrls(["jup"])));
