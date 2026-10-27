@@ -8,6 +8,7 @@ import {
   FEATURE_RASTER_PRIMARY,
   FEATURE_TERRAIN_CACHE,
   FEATURE_TERRAIN_RASTER,
+  NEAR_KIND_SHIFT,
   tracerConstants,
   tracerEntryPoint,
 } from "./system/tracer-kernels";
@@ -124,6 +125,7 @@ import {
   BODY_PLANET,
   BODY_STAR,
   BODY_VEC4,
+  bodyHasAir,
   MAX_BODIES,
   ourStart,
   packBodies,
@@ -2767,6 +2769,13 @@ export class Renderer {
     packBodies(bodies, this.bodyData, origin);
     if (!o.probe) this.lastBodies = bodies;
     if (bodies.length) this.featureKey |= 128;
+    // (the body near the camera, for the camera's rays: the other near paths out of the kernel — P7; the probes' frames
+    // keep "any")
+    if (!o.probe && this.nearKinds) {
+      const nb = near ? bodies[near.index] : undefined;
+      const kind = !nb ? 4 : !bodyHasAir(nb.kind, nb.surface) ? 3 : nb.id === "earth" ? 1 : 2;
+      this.featureKey |= kind << NEAR_KIND_SHIFT;
+    }
     // (the Ranger's shadow on the near ground: its bounding sphere in the camera's axes; 0: none)
     // (the ship seen from outside — a spectator, the astronaut on foot — casts its shadow too)
     const sb = !o.probe && (s.ship || this.shipInView) && this.ship.ready && near ? this.ship.shadowBound : null;
@@ -4416,7 +4425,7 @@ export class Renderer {
     const constants = tracerConstants(key, entryPoint, {
       quality,
       rasterHint: this.rasterHint,
-      tune: this.tunes.get((key >> 20) & 255),
+      tune: this.tunes.get((key >> 20) & 63),
       companion: this.leanMain,
       coarseProbe: this.coarseProbe,
     });
@@ -4471,6 +4480,8 @@ export class Renderer {
   /** the sky's discs in their own kernel (main compiled with DISC_ONLY — TERRE-UNREAL U9); false: in main's layers z ≥ 1, one
    *  compile less (docs/PLAN-LEAN-TRACER-KERNELS.md P6) */
   discsKernel = true;
+  /** the near body's kind in the key (NEAR_KIND — P7): false, every near path in the camera's kernels, as before */
+  nearKinds = true;
   /**
    * The leftovers' kernel (shade) wanted: without the material (rasterLite off) it draws the whole ground; with it, only
    * the pixels the material does not take — the scenery's: a tree against the sky, a box's margin. No scenery in, no
@@ -5124,7 +5135,7 @@ export class Renderer {
     if (json !== "{}") {
       for (const [key, v] of this.tunes) if (JSON.stringify(v) === json) k = key;
       if (!k) {
-        k = (this.tunes.size % 255) + 1;
+        k = (this.tunes.size % 63) + 1;
         this.tunes.set(k, { ...t });
       }
     }
@@ -7455,7 +7466,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       this.specialiser ??= new WgslSpecialiser(this.traceSource);
       const c = tracerConstants(key, "main", {
         rasterHint: this.rasterHint,
-        tune: this.tunes.get((key >> 20) & 255),
+        tune: this.tunes.get((key >> 20) & 63),
         companion: this.leanMain,
         coarseProbe: this.coarseProbe,
       });

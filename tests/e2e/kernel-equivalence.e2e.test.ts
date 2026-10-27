@@ -16,15 +16,20 @@ const SCENES = (
 ).split("|");
 const OPTIONS = `{ width: 192, height: 120, spp: 4, tolerance: 1e-3, eps: 0.1, maxSteps: 4000, noiseThreshold: 0, minSpp: 4, shutter: 0, budgetMs: 40 }`;
 
-/** the scene rendered offline at the clock T, its tracer's pipelines from the whole module or specialised as source (the
- *  page's compiled variants dropped first: each render compiles its own) */
+// (KE_FLAG: the renderer's switch compared — sourceSpecialise (P1b), nearKinds (P7, the near body's kind), …)
+const FLAG = process.env.KE_FLAG ?? "sourceSpecialise";
+
+/** the scene rendered offline at the clock T, its tracer's pipelines with the switch off then on (the page's compiled
+ *  variants dropped first: each render compiles its own) */
 async function render(app: App, T: number, specialise: boolean) {
   // (the scene's own refining kernel compiled for this render, and drawing it — not the general one, which may be in: the
   // offline pass takes the key's kernel first)
   await app.js(`(async () => {
     const r = __bh.renderer;
-    r.sourceSpecialise = ${specialise};
+    r.${FLAG} = ${specialise};
     r.variants.clear();
+    // (the key as this switch makes it: a frame first)
+    __bh.touch(); await new Promise((q) => requestAnimationFrame(() => requestAnimationFrame(q)));
     const k = r.featureKey;
     const t0 = performance.now();
     while (!r.variants.get(k)?.q && performance.now() - t0 < 240000) {
@@ -55,6 +60,8 @@ describe.skipIf(!E2E)("the tracer's pipelines specialised as source draw the sam
       let a: Awaited<ReturnType<typeof render>>;
       let b: Awaited<ReturnType<typeof render>>;
       try {
+        // (the Earth's maps and tiles in first: a render while they stream in drew a coarser Earth than the next — kerr-mini)
+        await app.waitFor("__bh.renderer.earthSettled", 180_000).catch(() => {});
         // (one clock for both: the scene held)
         const T = await app.js<number>("(__bh.freeze(true), __bh.time())");
         a = await render(app, T, false);
@@ -62,7 +69,8 @@ describe.skipIf(!E2E)("the tracer's pipelines specialised as source draw the sam
         const before = await app.js<number>("__bh.renderer.specialisedModules.size");
         b = await render(app, T, process.env.KE_AA !== "1");
         // (the second render's pipelines did come from specialised modules)
-        if (process.env.KE_AA !== "1") expect(await app.js<number>("__bh.renderer.specialisedModules.size")).toBeGreaterThan(before);
+        if (process.env.KE_AA !== "1" && FLAG === "sourceSpecialise")
+          expect(await app.js<number>("__bh.renderer.specialisedModules.size")).toBeGreaterThan(before);
       } finally {
         app.close();
       }

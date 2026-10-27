@@ -8,7 +8,9 @@
 export const FEATURES_ALL = 16383;
 /** the terrain height cache read by the realtime kernels */
 export const FEATURE_TERRAIN_CACHE = 1 << 15;
-/** the realtime kernel's ground march starts from the raster patch's distances (bits 16–27: the cost view and the tune) */
+/** the body near the camera (bits 26–28: NEAR_KIND — 0 any, 1 the Earth, 2 another world with air, 3 airless, 4 none) */
+export const NEAR_KIND_SHIFT = 26;
+/** the realtime kernel's ground march starts from the raster patch's distances (bits 16–19: the cost view; 20–25: the tune) */
 export const FEATURE_TERRAIN_RASTER = 1 << 30;
 /**
  * The raster is the near Earth's primary visibility (renderer: rasterPrimary): its material kernels draw the ground, the
@@ -107,6 +109,8 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
     // it, whatever the scene — P5)
     NEAR_DETAIL:
       (profile && o.companion !== false && (entry === "main" || entry === "discs")) || (entry === "env" && o.coarseProbe !== false) ? 0 : 1,
+    // (the camera's rays only: the probes — env — see the near body from elsewhere — P7)
+    NEAR_KIND: entry === "main" || entry === "discs" ? (key >> NEAR_KIND_SHIFT) & 7 : 0,
     COST_VIEW: (key >> 16) & 15,
     ...(o.tune ?? {}),
     QUALITY_PIPELINE: quality ? 1 : 0,

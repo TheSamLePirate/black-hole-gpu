@@ -241,3 +241,10 @@ export function packBodies(list: GpuBody[], out: Float32Array, origin: Vec3 = [0
     out.set([...(b.pole ?? [0, 0, 1]), b.spin ?? 0], o + 20);
   });
 }
+
+/** the surfaces with air (trace.wgsl airOf: a body's surface code minus 4) — kept in step with it (tests/near-kind.test.ts) */
+export const AIR_SURFACES: readonly number[] = [0, 2, 4, 5, 6, 19, 20, 21, 22];
+/** a body with air, as the tracer tells (trace.wgsl hasAir): its kind not 0, its surface a world's with air */
+export function bodyHasAir(kind: number, surface: number): boolean {
+  return kind !== 0 && surface >= 4 && AIR_SURFACES.includes(surface - 4);
+}

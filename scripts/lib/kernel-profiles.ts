@@ -8,6 +8,7 @@ import {
   FEATURE_RASTER_PRIMARY,
   FEATURE_TERRAIN_CACHE,
   FEATURE_TERRAIN_RASTER,
+  NEAR_KIND_SHIFT,
   type TracerEntry,
   tracerConstants,
 } from "../../src/system/tracer-kernels";
@@ -36,6 +37,10 @@ const SHADE = 2048;
 const SURFACE = 4096;
 const SCENERY = 8192;
 const AURORA = 16384;
+/** the body near the camera (NEAR_KIND — P7): the Earth, a world without air, none */
+const NEAR_EARTH = 1 << NEAR_KIND_SHIFT;
+const NEAR_AIRLESS = 3 << NEAR_KIND_SHIFT;
+const NEAR_NONE = 4 << NEAR_KIND_SHIFT;
 const RASTER_ENTRIES: TracerEntry[] = ["shade", "shadeMark", "shadeLite", "shadeWater", "shadeStars", "discs", "clouds"];
 
 // (the game's universe — game:artemis — has Gargantua and the wormhole in it: their bits, 512, 64 and 32, stay on in every
@@ -46,37 +51,53 @@ export const PROFILES: KernelProfile[] = [
     id: "earth-raster",
     label: "Earth, low flight in the game, raster (Tarifa: surface, scenery; Gargantua and the wormhole in its universe)",
     // (the raster drawing the near Earth: the Earth-raster profile's constants — P3)
-    key: GAME | SURFACE | SCENERY | FEATURE_TERRAIN_RASTER | FEATURE_RASTER_PRIMARY,
+    key: GAME | SURFACE | SCENERY | FEATURE_TERRAIN_RASTER | FEATURE_RASTER_PRIMARY | NEAR_EARTH,
     entries: [...RASTER_ENTRIES, "main", "env", "aerial"],
   },
   {
     id: "earth-raster-wx",
     label: "Earth, raster, weather and aurora, the terrain cache (a cloudy night flight)",
-    key: GAME | WX | AURORA | SURFACE | SCENERY | FEATURE_TERRAIN_CACHE | FEATURE_TERRAIN_RASTER | FEATURE_RASTER_PRIMARY,
+    key: GAME | WX | AURORA | SURFACE | SCENERY | FEATURE_TERRAIN_CACHE | FEATURE_TERRAIN_RASTER | FEATURE_RASTER_PRIMARY | NEAR_EARTH,
     entries: [...RASTER_ENTRIES, "main", "env", "aerial"],
   },
   {
     id: "earth-trace",
     label: "Earth, traced (walking, the trace pipeline): runways, surface, scenery",
-    key: GAME | RWY | SURFACE | SCENERY,
+    key: GAME | RWY | SURFACE | SCENERY | NEAR_EARTH,
     entries: ["main", "env", "aerial"],
   },
   {
     id: "earth-photo",
     label: "Earth, photo mode (the refining kernel)",
-    key: GAME | RWY | SURFACE | SCENERY,
+    key: GAME | RWY | SURFACE | SCENERY | NEAR_EARTH,
     entries: ["main"],
     quality: true,
   },
   {
     id: "game-space",
     label: "The game's universe from space (key 736: the title, the Moon, the planets)",
-    key: GAME,
+    key: GAME | NEAR_NONE,
     entries: ["main", "env", "aerial"],
   },
-  { id: "earth-only", label: "An Earth-only scene (bodies, weather; no hole)", key: BODIES | WX, entries: ["main", "env", "aerial"] },
-  { id: "kerr-jet", label: "Kerr + jet (key 516)", key: KERR | 4, entries: ["main", "env", "lut"] },
-  { id: "eclipse", label: "Earth-only, a body's shadow on it (an eclipse)", key: BODIES | SHADE, entries: ["main", "env", "aerial"] },
+  {
+    id: "moon",
+    label: "The Moon's surface in the game's universe (a world without air near)",
+    key: GAME | NEAR_AIRLESS,
+    entries: ["main", "env", "aerial"],
+  },
+  {
+    id: "earth-only",
+    label: "An Earth-only scene (bodies, weather; no hole)",
+    key: BODIES | WX | NEAR_EARTH,
+    entries: ["main", "env", "aerial"],
+  },
+  { id: "kerr-jet", label: "Kerr + jet (key 516)", key: KERR | 4 | NEAR_NONE, entries: ["main", "env", "lut"] },
+  {
+    id: "eclipse",
+    label: "Earth-only, a body's shadow on it (an eclipse)",
+    key: BODIES | SHADE | NEAR_EARTH,
+    entries: ["main", "env", "aerial"],
+  },
   { id: "general", label: "The general kernel (every feature)", key: FEATURES_ALL, entries: ["main", "env", "lut"] },
 ];
 

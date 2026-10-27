@@ -12,62 +12,64 @@ A launch compiles a profile's pipelines; the scene's image waits for its `main` 
 
 Regenerate with `bun scripts/kernel-report.ts docs/progress/kernels/proxy-*.json`.
 
-| profile | pipeline | baseline [s] | p1b [s] | p3 [s] | p4 [s] |
-|---|---|---:|---:|---:|---:|
-| earth-raster | shade | 50.7 | 46.6 | 53.0 | 50.1 |
-| earth-raster | shadeMark | 0.9 | 0.1 | 0.1 | 0.1 |
-| earth-raster | shadeLite | 2.4 | 1.4 | 1.6 | 1.6 |
-| earth-raster | shadeWater | 3.9 | 2.8 | 3.0 | 2.9 |
-| earth-raster | shadeStars | 0.9 | 0.1 | 0.1 | 0.1 |
-| earth-raster | discs | 57.2 | 29.7 | 37.7 | 36.4 |
-| earth-raster | clouds | 1.3 | 0.4 | 0.8 | 0.8 |
-| earth-raster | main | 265.2 | 232.5 | 149.3 | 83.3 |
-| earth-raster | env | 76.5 | 80.8 | 48.5 | 47.3 |
-| earth-raster | aerial | 1.1 | 0.1 | 0.2 | 0.2 |
-| earth-raster-wx | shade | 94.0 | 98.8 | 103.4 | 99.1 |
-| earth-raster-wx | shadeMark | 1.0 | 0.1 | 0.1 | 0.1 |
-| earth-raster-wx | shadeLite | 2.3 | 1.6 | 1.6 | 1.6 |
-| earth-raster-wx | shadeWater | 3.5 | 2.9 | 2.9 | 2.9 |
-| earth-raster-wx | shadeStars | 0.8 | 0.1 | 0.1 | 0.1 |
-| earth-raster-wx | discs | 53.8 | 34.9 | 36.8 | 37.0 |
-| earth-raster-wx | clouds | 1.6 | 0.8 | 0.8 | 0.8 |
-| earth-raster-wx | main | 429.8 | 418.6 | 213.4 | 98.7 |
-| earth-raster-wx | env | 94.1 | 79.1 | 47.7 | 46.9 |
-| earth-raster-wx | aerial | 1.0 | 0.2 | 0.2 | 0.2 |
-| earth-trace | main | 233.6 | 202.6 | — | — |
-| earth-trace | env | 80.8 | 73.4 | — | — |
-| earth-trace | aerial | 0.9 | 0.1 | — | — |
-| earth-photo | main | 241.4 | 210.3 | — | — |
-| game-space | main | 116.6 | 100.0 | — | — |
-| game-space | env | 52.8 | 42.5 | — | — |
-| game-space | aerial | 1.0 | 0.1 | — | — |
-| earth-only | main | 86.0 | 31.4 | — | — |
-| earth-only | env | 34.6 | 10.2 | — | — |
-| earth-only | aerial | 0.9 | 0.2 | — | — |
-| kerr-jet | main | 43.0 | 1.9 | — | — |
-| kerr-jet | env | 31.1 | 5.4 | — | — |
-| kerr-jet | lut | 40.3 | 0.9 | — | — |
-| eclipse | main | 72.6 | 28.8 | — | — |
-| eclipse | env | 34.4 | 9.7 | — | — |
-| eclipse | aerial | 0.9 | 0.2 | — | — |
-| general | main | 249.1 | 247.0 | — | — |
-| general | env | 92.4 | 86.2 | — | — |
-| general | lut | 142.4 | 135.7 | — | — |
+| profile | pipeline | baseline [s] | p1b [s] | p3 [s] | p4 [s] | p5 [s] | p7 [s] |
+|---|---|---:|---:|---:|---:|---:|---:|
+| earth-raster | shade | 50.7 | 46.6 | 53.0 | 50.1 | — | — |
+| earth-raster | shadeMark | 0.9 | 0.1 | 0.1 | 0.1 | — | — |
+| earth-raster | shadeLite | 2.4 | 1.4 | 1.6 | 1.6 | — | — |
+| earth-raster | shadeWater | 3.9 | 2.8 | 3.0 | 2.9 | — | — |
+| earth-raster | shadeStars | 0.9 | 0.1 | 0.1 | 0.1 | — | — |
+| earth-raster | discs | 57.2 | 29.7 | 37.7 | 36.4 | — | 20.4 |
+| earth-raster | clouds | 1.3 | 0.4 | 0.8 | 0.8 | — | — |
+| earth-raster | main | 265.2 | 232.5 | 149.3 | 83.3 | — | 59.8 |
+| earth-raster | env | 76.5 | 80.8 | 48.5 | 47.3 | 28.3 | — |
+| earth-raster | aerial | 1.1 | 0.1 | 0.2 | 0.2 | — | — |
+| earth-raster-wx | shade | 94.0 | 98.8 | 103.4 | 99.1 | — | — |
+| earth-raster-wx | shadeMark | 1.0 | 0.1 | 0.1 | 0.1 | — | — |
+| earth-raster-wx | shadeLite | 2.3 | 1.6 | 1.6 | 1.6 | — | — |
+| earth-raster-wx | shadeWater | 3.5 | 2.9 | 2.9 | 2.9 | — | — |
+| earth-raster-wx | shadeStars | 0.8 | 0.1 | 0.1 | 0.1 | — | — |
+| earth-raster-wx | discs | 53.8 | 34.9 | 36.8 | 37.0 | — | — |
+| earth-raster-wx | clouds | 1.6 | 0.8 | 0.8 | 0.8 | — | — |
+| earth-raster-wx | main | 429.8 | 418.6 | 213.4 | 98.7 | — | — |
+| earth-raster-wx | env | 94.1 | 79.1 | 47.7 | 46.9 | — | — |
+| earth-raster-wx | aerial | 1.0 | 0.2 | 0.2 | 0.2 | — | — |
+| earth-trace | main | 233.6 | 202.6 | — | — | — | 168.9 |
+| earth-trace | env | 80.8 | 73.4 | — | — | 33.5 | — |
+| earth-trace | aerial | 0.9 | 0.1 | — | — | — | — |
+| earth-photo | main | 241.4 | 210.3 | — | — | — | — |
+| game-space | main | 116.6 | 100.0 | — | — | — | 41.5 |
+| game-space | env | 52.8 | 42.5 | — | — | 23.2 | — |
+| game-space | aerial | 1.0 | 0.1 | — | — | — | — |
+| earth-only | main | 86.0 | 31.4 | — | — | — | 19.3 |
+| earth-only | env | 34.6 | 10.2 | — | — | 5.7 | — |
+| earth-only | aerial | 0.9 | 0.2 | — | — | — | — |
+| kerr-jet | main | 43.0 | 1.9 | — | — | — | — |
+| kerr-jet | env | 31.1 | 5.4 | — | — | 2.2 | — |
+| kerr-jet | lut | 40.3 | 0.9 | — | — | — | — |
+| eclipse | main | 72.6 | 28.8 | — | — | — | — |
+| eclipse | env | 34.4 | 9.7 | — | — | — | — |
+| eclipse | aerial | 0.9 | 0.2 | — | — | — | — |
+| general | main | 249.1 | 247.0 | — | — | — | — |
+| general | env | 92.4 | 86.2 | — | — | — | — |
+| general | lut | 142.4 | 135.7 | — | — | — | — |
+| moon | main | — | — | — | — | — | 61.1 |
 
-| profile | baseline total [s] | p1b total [s] | p3 total [s] | p4 total [s] |
-|---|---:|---:|---:|---:|
-| earth-raster | 460 | 394 | 294 | 223 |
-| earth-raster-wx | 682 | 637 | 407 | 287 |
-| earth-trace | 315 | 276 | 0 | 0 |
-| earth-photo | 241 | 210 | 0 | 0 |
-| game-space | 170 | 143 | 0 | 0 |
-| earth-only | 121 | 42 | 0 | 0 |
-| kerr-jet | 114 | 8 | 0 | 0 |
-| eclipse | 108 | 39 | 0 | 0 |
-| general | 484 | 469 | 0 | 0 |
+| profile | baseline total [s] | p1b total [s] | p3 total [s] | p4 total [s] | p5 total [s] | p7 total [s] |
+|---|---:|---:|---:|---:|---:|---:|
+| earth-raster | 460 | 394 | 294 | 223 | 28 | 80 |
+| earth-raster-wx | 682 | 637 | 407 | 287 | 0 | 0 |
+| earth-trace | 315 | 276 | 0 | 0 | 34 | 169 |
+| earth-photo | 241 | 210 | 0 | 0 | 0 | 0 |
+| game-space | 170 | 143 | 0 | 0 | 23 | 41 |
+| earth-only | 121 | 42 | 0 | 0 | 6 | 19 |
+| kerr-jet | 114 | 8 | 0 | 0 | 2 | 0 |
+| eclipse | 108 | 39 | 0 | 0 | 0 | 0 |
+| general | 484 | 469 | 0 | 0 | 0 | 0 |
+| moon | 0 | 0 | 0 | 0 | 0 | 61 |
 
 `baseline`: P0, the whole module for every pipeline. `p1b`: the sources specialised as the renderer now makes them.
-`p3`: the Earth-raster profile's constants; `p4`: its lean companion (`NEAR_DETAIL` off) — only the two Earth-raster profiles were rerun.
+`p3`: the Earth-raster profile's constants; `p4`: its lean companion (`NEAR_DETAIL` off) — only the two Earth-raster profiles were rerun; `p5`: the coarse probe (`env` only); `p7`: the near body's kind (`main`, `discs`). Note: the profile keys gained NEAR_KIND at P7 (the earlier columns ran without it).
 
 ## kerr-mini, cold launches in the browser (Metal)
 

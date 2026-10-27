@@ -170,6 +170,12 @@ override HAS_TERRAIN_RASTER: bool = false; // the raster patch's distances (syst
 // companion kernels — the raster draws the near ground; the trace draws the sky, the far ground beyond the raster's rings
 // (sub-pixel there) and, while the raster's kernels compile, a coarser ground (docs/PLAN-LEAN-TRACER-KERNELS.md P4)
 override NEAR_DETAIL: bool = true;
+// the body near the camera, for the camera's rays (main, discs): 0 any — both paths —, 1 the Earth, 2 another world with
+// air (Mars, Titan), 3 a world without air (the Moon, Gargantua's worlds), 4 none. The other paths compiled out: the Earth's
+// near ground in a Moon scene, the airless worlds' relief in an Earth flight (docs/PLAN-LEAN-TRACER-KERNELS.md P7)
+override NEAR_KIND: u32 = 0u;
+// (the near body is the Earth — as far as the constants allow: the Earth's own near code out of the other worlds' kernels)
+fn nearEarth(k: u32) -> bool { return NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && isEarth(k); }
 
 // Kernel specialisation (renderer.ts: traceVariant): a feature the scene does not use compiled out —
 // the uber-kernel's branches and their registers, on the scenes that have none of them (the Gargantua
@@ -3398,17 +3404,19 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var veil = 1.0; // (the sky's glow hiding the stars behind it)
   var lookSky = look; // (the direction beyond the near body's air: bent by it — airBend)
   REFR_DELTA = 0.0;
-  if (HAS_BODIES && P.near0.w > 0.5) {
+  if (NEAR_KIND != 4u && HAS_BODIES && P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     let air = hasAir(k);
     // the body met (its air's own march for a world with air; its relief for the Gargantua planets)
     var hitT = -1.0;
     var hit: NearHit;
     var e: EarthNear;
-    if (air) {
+    // (the two paths apart, each out of the kernels whose near body cannot take it — NEAR_KIND)
+    if (NEAR_KIND != 3u && air) {
       e = earthNear(look, rnd, k);
       hitT = e.t;
-    } else {
+    }
+    if (NEAR_KIND != 1u && NEAR_KIND != 2u && !air) {
       hit = nearMarch(look);
       hitT = hit.t;
     }
@@ -3426,7 +3434,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         ring = vec4f(rl.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, rl.w);
       }
     }
-    if (air) {
+    if (NEAR_KIND != 3u && air) {
       if (hitT > 0.0) {
         var o = traceOut(ring.rgb + (1.0 - ring.w) * e.col);
         o.depth = hitT * bodyRadius(k);
@@ -3437,7 +3445,8 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       veil = e.veil;
       // (what lies beyond the air, seen through it: lower than it looks)
       if (isEarth(k) && P.sky.x > 0.0) { lookSky = airBend(look); }
-    } else {
+    }
+    if (NEAR_KIND != 1u && NEAR_KIND != 2u && !air) {
       // (on Gargantua's worlds the camera white-balances to the light there — the disk's orange, K2's —
       // part of the way: Mann's ice white, Miller's water grey-blue; the sky beyond keeps its colours)
       var wb = vec3f(1.0);
@@ -9138,7 +9147,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let rd = rs / m;
   var t = unitHit(ro, rd);
   // (the discs' kernel: no ground marched — DISC_ONLY)
-  if (!DISC_ONLY && isEarth(k) && earthOn() && length(ro) < 1.5) {
+  if (!DISC_ONLY && nearEarth(k) && earthOn() && length(ro) < 1.5) {
     t = -3.0;
     // (the raster patch's distance, the ground there found by two reads and a refinement instead of a march)
     if (HAS_TERRAIN_RASTER && RHINT > 0.0 && P.walk[0].w < 0.5) {
@@ -9150,7 +9159,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   WS = vec4f(0.0);
   WS_S = 0.0;
   WS_AO = 1.0;
-  if (!DISC_ONLY && HAS_RWY && isEarth(k) && rwyCount() > 0u) {
+  if (!DISC_ONLY && HAS_RWY && nearEarth(k) && rwyCount() > 0u) {
     let dp = vec3f(rd.xy, rd.z / ab);
     let kM = length(dp) * EARTH_RM;
     let tw = windsocks(dp / length(dp), select(1e7, t * kM, t > 0.0));
@@ -9161,17 +9170,17 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
     let tm = airportScenery(dp / length(dp), select(1e7, t * kM, t > 0.0));
     if (WS.w > 0.5) { t = tm / kM; } else { WS = ws; WS_A = wa; }
   }
-  if (NEAR_DETAIL && !DISC_ONLY && isEarth(k)) { let dp = vec3f(rd.xy, rd.z / ab); let kM = length(dp) * EARTH_RM; let tm = worldScenery(dp / length(dp), select(1e7, t * kM, t > 0.0),rnd); if (tm < select(1e7, t * kM, t > 0.0)) { t = tm / kM; } }
-  if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u && WS.w < 0.5)); }
+  if (NEAR_DETAIL && !DISC_ONLY && nearEarth(k)) { let dp = vec3f(rd.xy, rd.z / ab); let kM = length(dp) * EARTH_RM; let tm = worldScenery(dp / length(dp), select(1e7, t * kM, t > 0.0),rnd); if (tm < select(1e7, t * kM, t > 0.0)) { t = tm / kM; } }
+  if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, nearEarth(k) && t > 0.0 && rwyCount() > 0u && WS.w < 0.5)); }
   let lt = nearLight(k);
   // (the sea's waves in relief near a low camera — over the sea only: its mean level met, h ≈ 0)
-  if (NEAR_DETAIL && !DISC_ONLY && isEarth(k) && t > 0.0 && P.seafft[0].x > 0.5 && P.sea[1].w > 0.0 && WS.w < 0.5 && earthOn()) {
+  if (NEAR_DETAIL && !DISC_ONLY && nearEarth(k) && t > 0.0 && P.seafft[0].x > 0.5 && P.sea[1].w > 0.0 && WS.w < 0.5 && earthOn()) {
     let ps = ro + rd * t;
     if (abs(airHeight(ps) - geoidN(geoQ(normalize(ps)))) < 3.0) { t = seaSurfaceHit(look, t, m); }
   }
-  SEA_ON = isEarth(k) && t > 0.0 && P.sea[1].w > 0.0 && WS.w < 0.5;
+  SEA_ON = nearEarth(k) && t > 0.0 && P.sea[1].w > 0.0 && WS.w < 0.5;
   SEA_D = toBody(look) * (t / m * P.near4.w);
-  WX_W = select(0.0, P.wx[0].x, HAS_WX && isEarth(k) && earthOn());
+  WX_W = select(0.0, P.wx[0].x, HAS_WX && nearEarth(k) && earthOn());
   WX_Q = normalize(ro);
   EARTH_SHADOW_POINT=look*(max(t,0.0)/m*P.near4.w);
   EARTH_SHADOW_ON = true;

@@ -1,0 +1,81 @@
+{
+ "date": "2026-10-27T06:23:59.155Z",
+ "tint": "/Users/olivierveinand/.cache/bh-d3d12/dawn/out/tint",
+ "dxc": "/Users/olivierveinand/.cache/bh-d3d12/dawn/out/dxc",
+ "shaderModel": "6_6",
+ "specialise": true,
+ "rows": [
+  {
+   "profile": "earth-raster",
+   "entry": "discs",
+   "key": 1677734624,
+   "tintS": 0.8527090829999999,
+   "tintMB": 93.953125,
+   "hlslKB": 319.7470703125,
+   "dxcS": 19.589457708,
+   "dxcMB": 640.171875,
+   "dxilKB": 640.83984375,
+   "ok": true
+  },
+  {
+   "profile": "earth-raster",
+   "entry": "main",
+   "key": 1677734624,
+   "tintS": 1.3951092080000016,
+   "tintMB": 129.546875,
+   "hlslKB": 453.1513671875,
+   "dxcS": 58.42037150000001,
+   "dxcMB": 1142.75,
+   "dxilKB": 1288.7578125,
+   "ok": true
+  },
+  {
+   "profile": "earth-trace",
+   "entry": "main",
+   "key": 67122144,
+   "tintS": 1.798490042000005,
+   "tintMB": 148.46875,
+   "hlslKB": 542.859375,
+   "dxcS": 167.115861584,
+   "dxcMB": 2938.578125,
+   "dxilKB": 3023.27734375,
+   "ok": true
+  },
+  {
+   "profile": "game-space",
+   "entry": "main",
+   "key": 268436192,
+   "tintS": 1.2607351249999774,
+   "tintMB": 127.890625,
+   "hlslKB": 451.552734375,
+   "dxcS": 40.210263917000006,
+   "dxcMB": 1224.890625,
+   "dxilKB": 1216.921875,
+   "ok": true
+  },
+  {
+   "profile": "moon",
+   "entry": "main",
+   "key": 201327328,
+   "tintS": 1.4269231670000009,
+   "tintMB": 136.71875,
+   "hlslKB": 481.421875,
+   "dxcS": 59.66349166600005,
+   "dxcMB": 1466.828125,
+   "dxilKB": 1641.0703125,
+   "ok": true
+  },
+  {
+   "profile": "earth-only",
+   "entry": "main",
+   "key": 67110016,
+   "tintS": 1.307340375000029,
+   "tintMB": 130.8125,
+   "hlslKB": 458.0986328125,
+   "dxcS": 18.036347459000012,
+   "dxcMB": 630.65625,
+   "dxilKB": 582.609375,
+   "ok": true
+  }
+ ]
+}

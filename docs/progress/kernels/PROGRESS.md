@@ -22,7 +22,7 @@ Measurements: [BASELINE.md](BASELINE.md).
 | P4 lean main | done | see git log "P4" | D3D12 Earth raster main 149 → 97 s; kerr-mini raster image 62 → 42 s after launch; images within noise |
 | P5 coarse probe | done | see git log "P5" | D3D12 env: Earth raster 46 → 27 s, Earth traced 72 → 32 s, Kerr 4.6 → 1.8 s; craft light within the probe's noise |
 | P6 shade, discs | done | see git log "P6" | shade only when the scenery is in; discs kernel kept (70 vs 90 ms in the telescope) |
-| P7 NEAR_KIND | to do | | |
+| P7 NEAR_KIND | done | see git log "P7" | D3D12: Earth raster main 97 → 58 s, discs 36 → 20 s; space 98 → 40 s; kerr-mini raster at 37 s |
 | P8 general on demand | to do | | |
 | P9 inlining | to do | | |
 | P10 guard, docs | to do | | |
@@ -257,3 +257,45 @@ e2e green: `raster-primary`, `title` (4), `entry` (3), `kernel-compile`.
 
   It still pays at the full field: kept, compiled late (P1), after the image.
 - e2e green: `kernel-compile` (raster at 42 s), `raster-companion` (lean = noise), `raster-primary` (as before).
+
+### P7 — NEAR_KIND: the near body's kind in the camera's kernels (27/10)
+
+- `override NEAR_KIND` (trace.wgsl): 0 any, 1 the Earth, 2 another world with air, 3 a world without air, 4 none.
+  - In `trace()`, the world-with-air path (`earthNear`) and the airless path (`nearMarch`, `shadeNear`) are now two
+    `if`s, each out of the kernels whose near body cannot take it.
+  - In `earthNear`, the Earth's own code goes through `nearEarth(k)`, which is false for the other worlds.
+- Key bits 26–28 (the tune id shrinks to 6 bits, 20–25). Set by `writeParams` from the near body (`bodyHasAir`, kept in
+  step with trace.wgsl's `airOf` by `tests/near-kind.test.ts`).
+  - Only for `main` and `discs`: the probes see the near body from elsewhere.
+  - `renderer.nearKinds` turns it off.
+- Analyzer (`main`, inlined lines):
+
+  | scene | before | after |
+  |---|---:|---:|
+  | Earth raster | 76k | 55k |
+  | Earth raster, `discs` | 52k | 31k |
+  | Earth traced | 157k | 136k |
+  | the game's universe from space | 115k | 68k |
+  | the Moon | 115k | 89k |
+  | Earth-only | 58k | 37k |
+
+- Proxy (DXC):
+
+  | scene | before | after |
+  |---|---:|---:|
+  | Earth raster `main` | 97 s | 58 s |
+  | Earth raster `discs` | 36 s | 20 s |
+  | space | 98 s | 40 s |
+  | the Moon | 98 s | 60 s |
+  | Earth-only | 28 s | 18 s |
+  | Earth traced | 201 s | 167 s |
+
+- `kernel-equivalence` now takes `KE_FLAG` (the switch compared). With `KE_FLAG=nearKinds`, six offline scenes come
+  out the same. The Andes once differed on kerr-mini: the Earth's maps were still streaming in for the first render.
+  The test now waits for `earthSettled`, and locally gives 4 values off of 92 160.
+- kerr-mini, cold Earth launch: the raster at **37 s** (42 s at P6), settled at 166 s. The discs telescope is unchanged
+  (68 ms either way).
+- e2e green: `kernel-equivalence` (both switches), `kernel-compile` (Earth, Moon, Kerr), `raster-companion`,
+  `eclipse-raster`, `disc-cost`.
+- Trade-off noted: leaving the Earth for another body is now a new key for `main`. In practice it coincides with the
+  key changes that already happen (the raster's bits dropping above 100 km).
