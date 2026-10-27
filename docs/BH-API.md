@@ -526,6 +526,8 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `compileReport()` | object | every tracer compile of the session: `compiles` (`pipeline` — the entry, `(quality)`, `general …` —, `key`, `startedAt`, `seconds`, `ok`, `cached` under 5 s, `beforeFirstImage`), `count`, `cold`, `seconds`, `pending`, `firstFrameDoneAt` ([PLAN-LEAN-TRACER-KERNELS.md](PLAN-LEAN-TRACER-KERNELS.md)) |
 | `sceneCompileEta()` | number \| null | the seconds left before the scene's own tracer is in, from this session's compile pace (null: nothing learnt yet; 0: in) |
 | `sourceSpecialise` | boolean | each specialised pipeline made from a module specialised as source (default true; `globalThis.__kernelSpecialise = false` before load turns it off — `tests/e2e/kernel-equivalence.e2e.test.ts`) |
+| `stableProfiles` | boolean | the Earth-raster profile (default true): while the raster draws the near Earth, one set of kernel constants for the whole flight (`FEATURE_RASTER_PRIMARY`) |
+| `prewarmEarthFlight(settings)` / `prewarmStop()` | function | the Earth's low flight compiled ahead (main.ts: the title open; never on e2e pages — call it yourself), and its queued compiles dropped |
 | `backgroundHold` | boolean | background compiles (the general kernel, a key's LUT and aerial table) held — set while the title screen holds the game |
 | `weatherBlock` | Float32Array | the weather near the camera's 24 params (the weight, the decks, the ground's height, the drift, the rain: `weatherParams`), as the tracer reads them (its offset in `paramsF` moves with the other blocks: read it here) |
 | `earthSettled` | boolean | the Earth's maps, terrain, requested surface pages and worldwide scenery are settled (failed requests use fallback) |

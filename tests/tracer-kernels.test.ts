@@ -137,3 +137,25 @@ fn main() { let x = f(true); }
     expect(out).toContain("return 3.0");
   });
 });
+
+describe("the Earth-raster profile (P3)", () => {
+  test("one set of constants for the whole flight: the bits that come and go fixed", async () => {
+    const { FEATURE_RASTER_PRIMARY } = await import("../src/system/tracer-kernels");
+    const base = 128 | 512 | 64 | 32 | FEATURE_TERRAIN_RASTER | FEATURE_RASTER_PRIMARY;
+    for (const entry of ["main", "env", "shadeLite", "shade", "clouds", "discs"] as const) {
+      const a = tracerConstants(base, entry, { rasterHint: true });
+      // (surface, scenery, weather, aurora, a shadow: whatever the key says, the same constants)
+      for (const bits of [4096, 8192, 4096 | 8192, 1024, 16384, 2048, 1024 | 4096 | 8192 | 16384 | 2048])
+        expect(tracerConstants(base | bits, entry, { rasterHint: true })).toEqual(a);
+    }
+    // (the material's kernels carry the surface's and the scenery's code; the traced ones do not)
+    expect(tracerConstants(base, "shadeLite", { rasterHint: true }).HAS_SCENERY).toBe(1);
+    expect(tracerConstants(base, "main", { rasterHint: true }).HAS_SCENERY).toBe(0);
+    expect(tracerConstants(base, "main", { rasterHint: true }).HAS_SURFACE).toBe(0);
+    expect(tracerConstants(base, "main", { rasterHint: true }).HAS_WX).toBe(1);
+    // (the refining kernel — photo mode — and keys without the profile untouched)
+    expect(tracerConstants(base | 8192, "main", { quality: true }).HAS_SCENERY).toBe(1);
+    expect(tracerConstants((base & ~FEATURE_RASTER_PRIMARY) | 8192, "main", { rasterHint: true }).HAS_SCENERY).toBe(1);
+    expect(tracerConstants(base & ~FEATURE_RASTER_PRIMARY, "main", { rasterHint: true }).HAS_WX).toBe(0);
+  });
+});

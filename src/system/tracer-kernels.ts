@@ -10,6 +10,18 @@ export const FEATURES_ALL = 16383;
 export const FEATURE_TERRAIN_CACHE = 1 << 15;
 /** the realtime kernel's ground march starts from the raster patch's distances (bits 16–27: the cost view and the tune) */
 export const FEATURE_TERRAIN_RASTER = 1 << 30;
+/**
+ * The raster is the near Earth's primary visibility (renderer: rasterPrimary): its material kernels draw the ground, the
+ * traced kernels the sky, the far ground beyond the raster's rings and the light probe. The Earth-raster profile
+ * (docs/PLAN-LEAN-TRACER-KERNELS.md P3): one set of constants for the whole flight, whatever comes and goes —
+ * - the material kernels carry the regional surface's and the scenery's code (as they do the runways'), their parameters
+ *   saying whether there is any;
+ * - the traced kernels do not: the surface's pages and the scenery's buildings and trees are the raster's (a tree against
+ *   the sky is shade's, traced by main only while shade compiles);
+ * - all carry the weather's, the aurora's and a body's shadow's code, their parameters saying whether they are there:
+ *   these bits came and went in flight — each a recompile of minutes on D3D12 while the image waited.
+ */
+export const FEATURE_RASTER_PRIMARY = 1 << 29;
 
 /** the pipelines the renderer makes from trace.wgsl ("discs": main compiled with DISC_ONLY) */
 export type TracerEntry =
@@ -42,6 +54,8 @@ const REALTIME_GROUND: ReadonlySet<TracerEntry> = new Set([
 ]);
 /** the raster's material kernels: the runways' code always in (their parameters say whether one is near) */
 const RASTER_RUNWAYS: ReadonlySet<TracerEntry> = new Set(["shade", "shadeMark", "shadeLite", "shadeWater"]);
+/** the raster's material kernels (the Earth-raster profile: the surface's and the scenery's code always in) */
+const MATERIAL: ReadonlySet<TracerEntry> = new Set(["shade", "shadeMark", "shadeLite", "shadeWater", "shadeStars", "clouds"]);
 
 export interface TracerConstantsOptions {
   /** the refining (adaptive) pipeline */
@@ -55,8 +69,13 @@ export interface TracerConstantsOptions {
 /** The override constants of a tracer pipeline for a features key. */
 export function tracerConstants(key: number, entry: TracerEntry, o: TracerConstantsOptions = {}): Record<string, number> {
   const quality = !!o.quality;
-  const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
   const ground = REALTIME_GROUND.has(entry) && !quality;
+  // (the Earth-raster profile: the bits that came and went in flight fixed — FEATURE_RASTER_PRIMARY)
+  const profile = !quality && (key & FEATURE_RASTER_PRIMARY) !== 0;
+  const fixed: Record<number, number> = profile
+    ? { 1024: 1, 16384: 1, 2048: 1, 4096: MATERIAL.has(entry) ? 1 : 0, 8192: MATERIAL.has(entry) ? 1 : 0 }
+    : {};
+  const has = (bit: number) => fixed[bit] ?? ((key & bit) !== 0 ? 1 : 0);
   return {
     DISC_ONLY: entry === "discs" ? 1 : 0,
     HAS_RADIO: has(1),

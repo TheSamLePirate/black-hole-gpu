@@ -18,7 +18,7 @@ Measurements: [BASELINE.md](BASELINE.md).
 | P1 queue fixes | done | see git log "P1" | Earth key's tracer 139 → 56 s after the launch (kerr-mini, cold) |
 | P1b source specialisation | done | see git log "P1b" | D3D12 proxy: Kerr 114 → 8 s, Earth-only 121 → 42 s, game Earth raster 460 → 394 s; same images |
 | P2 loading UI | done | see git log "P2" | time run / time left instead of "94 %"; first-time note; Windows iGPU tip (toast, TARS) |
-| P3 stable profile | to do | | |
+| P3 stable profile | done | see git log "P3" | one compile set per Earth flight; D3D12 Earth raster 394 → 294 s; kerr-mini settled 238 → 204 s |
 | P4 lean main | to do | | |
 | P5 coarse probe | to do | | |
 | P6 shade, discs | to do | | |
@@ -150,3 +150,35 @@ kerr-mini (Metal): no notable change. Metal already discards dead code cheaply. 
   - The tip (`ui/gpu-tip.ts`): Windows Settings › System › Display › Graphics › Chrome › High performance.
   - It is shown once as a toast at the first image and recorded in the diagnostic.
   - It is in TARS's `get_state` → `graphics`, with the compiles running and queued, the time left and the adapter.
+
+### P3 — the Earth-raster profile, the pipeline memo, pre-warming (27/10)
+
+- `FEATURE_RASTER_PRIMARY` (bit 29): set while the raster draws the near Earth (`rasterPrimary`). Under it,
+  `tracerConstants` fixes the bits that came and went in flight:
+  - the material kernels carry the regional surface's and the scenery's code, their parameters (zero when absent)
+    saying whether any;
+  - the traced kernels (`main`, `discs`, `env`, `aerial`) do not;
+  - all carry the weather's, the aurora's and a body's shadow's code. Their code is guarded by their parameters
+    (`WX_W`, `P.bary.z`, the shadow count). Checked: a fair-weather raster view is the same within the run-to-run noise.
+- **Pipeline memo** in `mkVariant`: the same entry, quality, source and constants give the same pipeline. Another key
+  whose constants are the same (the surface's and the scenery's bits arriving) is now no compile at all.
+  - kerr-mini, cold: the second key's ten pipelines take 0.0 s (they were 100 s for its `main` alone);
+  - 23 compiles, 7 cold; settled 238 → 204 s.
+- `renderer.prewarmEarthFlight(settings)` compiles the Earth's low flight ahead while the title is open. main.ts calls
+  it 8 s after the intro with the title still open, not on e2e pages; `prewarmStop()` when the title closes. Its
+  compiles are not urgent: a launch elsewhere passes them.
+- **The bug P3's tests found (fixed in its own commit, "P1 (correctif)").** The material pass (`shadeLite` and its water)
+  sat inside `shade`'s block. While `shade` compiled (P1's `RASTER_SHADE_LATE`), the ground was not drawn: a black image
+  (raster-primary at 3 km on kerr-mini).
+
+**D3D12 proxy (Tint + DXC, s):**
+
+| | P0 | P1b | P3 |
+|---|---:|---:|---:|
+| Earth raster flight: `main` | 265 | 233 | **149** |
+| Earth raster flight: `env` | 77 | 81 | **49** |
+| Earth raster flight: total | 460 | 394 | **294** |
+| with weather, aurora, cache: `main` | 430 | 419 | **213** |
+| with weather, aurora, cache: total | 682 | 637 | **407** |
+
+e2e green: `raster-primary`, `title` (4), `entry` (3), `kernel-compile`.

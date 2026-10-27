@@ -5,6 +5,7 @@ import forestWGSL from "../../src/shaders/forest.wgsl" with { type: "text" };
 import traceWGSL from "../../src/shaders/trace.wgsl" with { type: "text" };
 import {
   FEATURES_ALL,
+  FEATURE_RASTER_PRIMARY,
   FEATURE_TERRAIN_CACHE,
   FEATURE_TERRAIN_RASTER,
   type TracerEntry,
@@ -44,13 +45,14 @@ export const PROFILES: KernelProfile[] = [
   {
     id: "earth-raster",
     label: "Earth, low flight in the game, raster (Tarifa: surface, scenery; Gargantua and the wormhole in its universe)",
-    key: GAME | SURFACE | SCENERY | FEATURE_TERRAIN_RASTER,
+    // (the raster drawing the near Earth: the Earth-raster profile's constants — P3)
+    key: GAME | SURFACE | SCENERY | FEATURE_TERRAIN_RASTER | FEATURE_RASTER_PRIMARY,
     entries: [...RASTER_ENTRIES, "main", "env", "aerial"],
   },
   {
     id: "earth-raster-wx",
     label: "Earth, raster, weather and aurora, the terrain cache (a cloudy night flight)",
-    key: GAME | WX | AURORA | SURFACE | SCENERY | FEATURE_TERRAIN_CACHE | FEATURE_TERRAIN_RASTER,
+    key: GAME | WX | AURORA | SURFACE | SCENERY | FEATURE_TERRAIN_CACHE | FEATURE_TERRAIN_RASTER | FEATURE_RASTER_PRIMARY,
     entries: [...RASTER_ENTRIES, "main", "env", "aerial"],
   },
   {

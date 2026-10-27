@@ -8971,11 +8971,31 @@ async function main() {
       },
       back: () => titleScreen.open(),
     });
+    /** the title open this long after the intro: the Earth flight's kernels compiled ahead (renderer.prewarmEarthFlight) */
+    const PREWARM_DELAY_MS = 8000;
+    let prewarmAsk = 0;
     titleHold = (on) => {
       paused = on;
       // (the background compiles — the general kernel, a key's LUT — wait while the title holds the game: the launch that
       // follows compiles its own scene, which they would slow — docs/PLAN-LEAN-TRACER-KERNELS.md P1)
       renderer.backgroundHold = on;
+      // (the title open, the player choosing: the Earth's low flight compiled ahead — its kernels minutes on a Windows
+      // PC —, dropped when the title closes; renderer.prewarmEarthFlight, docs/PLAN-LEAN-TRACER-KERNELS.md P3)
+      // (after the intro, the title still open some seconds: the intro's own shaders — and a page that navigates at once —
+      // not held behind a compile of minutes; macOS compiles shaders one service at a time)
+      if (on) {
+        const held = ++prewarmAsk;
+        void splash.gone.then(() =>
+          setTimeout(() => {
+            // (not on a test's page — ?e2e= —: its timings and its other pages' intros measured without it; a test calls
+            // __bh.renderer.prewarmEarthFlight itself)
+            if (held === prewarmAsk && titleScreen.isOpen && !/[?&]e2e=/.test(location.search)) renderer.prewarmEarthFlight(settings);
+          }, PREWARM_DELAY_MS),
+        );
+      } else {
+        prewarmAsk++;
+        renderer.prewarmStop();
+      }
       touch();
     };
     titleCurrent = () => tools.snapshot("now").summary;

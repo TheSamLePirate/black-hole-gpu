@@ -3,7 +3,14 @@ import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import { TerrainCache } from "./system/terrain-cache";
 import { composeTracer } from "./system/tracer-source";
-import { FEATURES_ALL, FEATURE_TERRAIN_CACHE, FEATURE_TERRAIN_RASTER, tracerConstants, tracerEntryPoint } from "./system/tracer-kernels";
+import {
+  FEATURES_ALL,
+  FEATURE_RASTER_PRIMARY,
+  FEATURE_TERRAIN_CACHE,
+  FEATURE_TERRAIN_RASTER,
+  tracerConstants,
+  tracerEntryPoint,
+} from "./system/tracer-kernels";
 import { WgslSpecialiser } from "./system/wgsl-specialise";
 import { RASTER_HINT_BINDING, RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_BINDING, SUN_SHADOW_TEXTURE_LIMIT } from "./system/terrain-raster-hint";
 import {
@@ -3290,6 +3297,8 @@ export class Renderer {
     // Keep a stable key when a still frame starts refining; its quality kernel compiles the cache out.
     if (terrainCacheEligible) this.featureKey |= FEATURE_TERRAIN_CACHE;
     if (hinting) this.featureKey |= FEATURE_TERRAIN_RASTER;
+    // (the Earth-raster profile: the raster draws the near Earth — its kernels' constants fixed for the flight, tracer-kernels.ts)
+    if (rasterPrimary && this.stableProfiles) this.featureKey |= FEATURE_RASTER_PRIMARY;
     this.terrainCacheWanted = (terrainCacheEligible || inspecting || hinting) && (o.flags & FLAG_INTERLEAVED) !== 0;
     if (!o.probe) {
       this.terrainRasterRequested = inspecting || hinting;
@@ -4154,7 +4163,8 @@ export class Renderer {
    *  a scene left, its remaining compiles (minutes each on a slow D3D12 driver) no longer hold the new
    *  scene's back */
   private wanted(key: number, slot: unknown) {
-    return () => this.variants.get(key) === slot && !this.lost && (key === this.cameraKey || key === this.aheadKey);
+    return () =>
+      this.variants.get(key) === slot && !this.lost && (key === this.cameraKey || key === this.aheadKey || this.prewarmKeys.has(key));
   }
 
   /** a key's realtime kernel is there — its own, an earlier scene's covering it, or the general one (every
@@ -4401,7 +4411,16 @@ export class Renderer {
   ): Promise<GPUComputePipeline> {
     const constants = tracerConstants(key, entryPoint, { quality, rasterHint: this.rasterHint, tune: this.tunes.get((key >> 20) & 255) });
     const ep = tracerEntryPoint(entryPoint);
-    return this.device.createComputePipelineAsync({
+    // (the same pipeline asked again — another key whose constants are the same: the Earth-raster profile's keys, the
+    // scenery's and the surface's bits coming and going —: the one compiled, not a second compile)
+    const memoKey = `${entryPoint}|${quality ? 1 : 0}|${specialised ? 1 : 0}|${JSON.stringify(constants)}`;
+    const hit = this.pipelineMemo.get(memoKey);
+    if (hit) {
+      this.pipelineMemo.delete(memoKey);
+      this.pipelineMemo.set(memoKey, hit);
+      return hit;
+    }
+    const made = this.device.createComputePipelineAsync({
       layout:
         entryPoint === "clouds"
           ? this.cloudsLayout!
@@ -4425,6 +4444,41 @@ export class Renderer {
         constants,
       },
     });
+    this.pipelineMemo.set(memoKey, made);
+    if (this.pipelineMemo.size > 64) this.pipelineMemo.delete(this.pipelineMemo.keys().next().value!);
+    made.catch(() => this.pipelineMemo.delete(memoKey));
+    return made;
+  }
+  /** the tracer's specialised pipelines by what defines them (entry, quality, source, constants), most recent last */
+  private pipelineMemo = new Map<string, Promise<GPUComputePipeline>>();
+  /** the Earth-raster profile on (FEATURE_RASTER_PRIMARY): off, every bit of the key its own compile, as before */
+  stableProfiles = true;
+
+  /** keys compiled ahead of a launch (prewarm): their queued compiles wanted though the camera is elsewhere */
+  private prewarmKeys = new Set<number>();
+  /**
+   * The likely next scene's kernels compiled ahead — the title open, the player choosing —: the Earth's low flight in the
+   * raster (its profile: the scene's own features, the hole's metric when the universe has a wormhole, the bodies, the
+   * raster's bits), its tracer, its probe and the raster's first kernels, as a launch would ask them. Not urgent: a launch
+   * that wants another key passes them (CompileQueue's second slot); dropped (prewarmStop) once the title closes. The
+   * browser keeps what lands in its shader cache: the next sessions find it too (docs/PLAN-LEAN-TRACER-KERNELS.md P3).
+   */
+  prewarmEarthFlight(s: Settings) {
+    if (!this.stableProfiles || !this.rasterHint || s.earthPipeline !== "raster" || this.lost) return;
+    const key =
+      this.featuresOf(s) |
+      (s.wormhole ? 512 : 0) |
+      128 |
+      FEATURE_TERRAIN_RASTER |
+      FEATURE_RASTER_PRIMARY |
+      ((this.costViewMode & 15) << 16);
+    if (this.variants.get(key)?.rt) return;
+    this.prewarmKeys.add(key);
+    this.traceVariant("rt", key);
+  }
+  /** the compiles queued ahead of a launch dropped (the one running finishes: a compile cannot be cancelled) */
+  prewarmStop() {
+    this.prewarmKeys.clear();
   }
 
   /**
