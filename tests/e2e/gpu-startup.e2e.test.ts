@@ -114,7 +114,9 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
       globalThis.__general = 0;
       GPUDevice.prototype.createComputePipelineAsync = function(desc) {
         const c = desc.compute.constants ?? {};
-        if ((desc.compute.entryPoint === "main" || desc.compute.entryPoint === "env") && !("HAS_RADIO" in c)) {
+        // (the general pipelines: the tracer's main and env at their defaults — QUALITY_PIPELINE 0, no feature constant —;
+        // not the cockpit mask's or the warp grid's main, which have no constants at all)
+        if ((desc.compute.entryPoint === "main" || desc.compute.entryPoint === "env") && c.QUALITY_PIPELINE === 0 && !("HAS_RADIO" in c)) {
           globalThis.__general++;
           return new Promise(() => {});
         }

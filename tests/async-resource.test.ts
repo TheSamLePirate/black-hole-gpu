@@ -274,3 +274,69 @@ test("a compile out of the browser's cache teaches a learning queue nothing", as
   expect(await a).toBe("real");
   expect(queue.stallLimit).toBeGreaterThanOrEqual(360);
 });
+
+test("the camera's tracer takes a second slot beside a running compile that is not urgent, not beside an urgent one", async () => {
+  const queue = new CompileQueue();
+  const lut = deferred<string>();
+  const calls: string[] = [];
+  let idle = 0;
+  queue.onIdle = () => idle++;
+  // (another key's LUT running — not urgent —: the camera's main passes it, in a second slot)
+  const a = queue.run(
+    () => true,
+    () => (calls.push("lut"), lut.promise),
+  );
+  await Bun.sleep(0);
+  const main = deferred<string>();
+  const m = queue.run(
+    () => true,
+    () => (calls.push("main"), main.promise),
+    undefined,
+    true,
+    true,
+  );
+  await Bun.sleep(0);
+  expect(calls).toEqual(["lut", "main"]);
+  expect(queue.urgentPending).toBe(true);
+  // (an urgent preempting job does not take a third slot, nor a second beside an urgent one)
+  const env = queue.run(
+    () => true,
+    async () => (calls.push("env"), "env"),
+    undefined,
+    true,
+    true,
+  );
+  await Bun.sleep(0);
+  expect(calls).toEqual(["lut", "main"]);
+  const idleBefore = idle;
+  main.resolve("main");
+  expect(await m).toBe("main");
+  expect(await env).toBe("env");
+  lut.resolve("lut");
+  expect(await a).toBe("lut");
+  // (the slot is given after a task: the idle hook told then)
+  await Bun.sleep(5);
+  expect(queue.pending).toBe(0);
+  expect(idle).toBeGreaterThan(idleBefore);
+});
+
+test("a compile that may not preempt waits for the slot", async () => {
+  const queue = new CompileQueue();
+  const lut = deferred<string>();
+  const calls: string[] = [];
+  const a = queue.run(
+    () => true,
+    () => (calls.push("lut"), lut.promise),
+  );
+  await Bun.sleep(0);
+  const b = queue.run(
+    () => true,
+    async () => (calls.push("shade"), "shade"),
+    undefined,
+    true,
+  );
+  await Bun.sleep(0);
+  expect(calls).toEqual(["lut"]);
+  lut.resolve("lut");
+  expect(await Promise.all([a, b])).toEqual(["lut", "shade"]);
+});

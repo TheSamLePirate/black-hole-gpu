@@ -8948,6 +8948,9 @@ async function main() {
     });
     titleHold = (on) => {
       paused = on;
+      // (the background compiles — the general kernel, a key's LUT — wait while the title holds the game: the launch that
+      // follows compiles its own scene, which they would slow — docs/PLAN-LEAN-TRACER-KERNELS.md P1)
+      renderer.backgroundHold = on;
       touch();
     };
     titleCurrent = () => tools.snapshot("now").summary;

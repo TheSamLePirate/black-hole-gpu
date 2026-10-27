@@ -247,6 +247,9 @@ const RASTER_DETAIL_FLAG = 64;
 const RASTER_LITE_FLAG = 128;
 /** the parameters' raster bit for the water's own pass (trace.wgsl RASTER_WATER_FLAG) */
 const RASTER_WATER_FLAG = 256;
+/** the parameters' raster bit for "shade not compiled yet": the pixels the material does not take are traced (trace.wgsl
+ *  RASTER_SHADE_LATE_FLAG) */
+const RASTER_SHADE_LATE_FLAG = 1024;
 /** the temporal pass's least weight of a fresh pixel with the raster's ground at every pixel (taParams[0]'s 1/16 otherwise) */
 const RASTER_LITE_ALPHA = 0.3;
 /** the automatic rate's start by the hardware's tier (tier.ts: 0 software … 4 high-end) — then by the measure */
@@ -1285,6 +1288,8 @@ export class Renderer {
       900_000,
       () => !this.lost,
     );
+    // (the general kernel's start, held while the frame's own compiles run: retried when the queue goes idle)
+    this.variantQueue.onIdle = () => this.maybeStartGeneral();
     // (a compile timed out but landing later, the device still there: taken after all)
     const optional = (label: string, make: () => Promise<GPUComputePipeline>, publish: (p: GPUComputePipeline) => void) => {
       const compile = async () => {
@@ -4158,7 +4163,9 @@ export class Renderer {
     const v = this.variants.get(key);
     if (v?.failed) return true;
     const has = (kind: "shade" | "shadeMark" | "shadeLite" | "shadeWater") => !!v?.[kind] || !!this.coveringVariant(key, kind);
-    return has("shade") && has("shadeMark") && (!this.rasterLite || (has("shadeLite") && has("shadeWater")));
+    // (the material's kernels — shade, the leftovers', may come after: its pixels traced meanwhile)
+    if (this.rasterLite) return has("shadeLite") && has("shadeWater");
+    return has("shade") && has("shadeMark");
   }
   private kernelReady(key: number) {
     if (key === FEATURES_ALL || this.tracePipeline) return true;
@@ -4186,35 +4193,52 @@ export class Renderer {
         // (a key compiled ahead — the scenery's, the surfaces' coming — not urgent until it is the frame's: the frame's own
         // raster kernels went after its tracer, 102 s on an M1 Max, the near Earth traced meanwhile)
         () => entry !== "lut" && entry !== "aerial" && key === this.featureKey,
+        // (the frame's own compiles pass a running one that is not — the title's probe, a LUT, a key compiled ahead — in a
+        // second slot)
+        true,
       );
-    const raster = async () => {
-      if (!slot.shade && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shade = await compile("shade");
-      if (!slot.shadeMark && (key & FEATURE_TERRAIN_RASTER) !== 0) slot.shadeMark = await compile("shadeMark");
-      if (!slot.shadeLite && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeLite = await compile("shadeLite");
-      if (!slot.shadeWater && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeWater = await compile("shadeWater");
-      if (!slot.shadeStars && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.shadeStars = await compile("shadeStars");
-      if (!slot.discs && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.rasterLite) slot.discs = await compile("discs");
-      if (!slot.clouds && (key & FEATURE_TERRAIN_RASTER) !== 0 && this.cloudPass) slot.clouds = await compile("clouds");
+    const R = (key & FEATURE_TERRAIN_RASTER) !== 0;
+    // (the raster's kernels the image needs — the material, its water, the marks, the stars, the clouds: seconds each)
+    const rasterEarly = async () => {
+      if (!R) return;
+      if (this.rasterLite) {
+        if (!slot.shadeLite) slot.shadeLite = await compile("shadeLite");
+        if (!slot.shadeWater) slot.shadeWater = await compile("shadeWater");
+        if (!slot.shadeMark) slot.shadeMark = await compile("shadeMark");
+        if (!slot.shadeStars) slot.shadeStars = await compile("shadeStars");
+      } else {
+        if (!slot.shade) slot.shade = await compile("shade");
+        if (!slot.shadeMark) slot.shadeMark = await compile("shadeMark");
+      }
+      if (!slot.clouds && this.cloudPass) slot.clouds = await compile("clouds");
+    };
+    // (… and those it can wait for: the leftovers' — shade, a third of the tracer, its pixels traced meanwhile
+    // (RASTER_SHADE_LATE) — and the discs' own kernel — main draws them meanwhile)
+    const rasterLate = async () => {
+      if (!R || !this.rasterLite) return;
+      if (!slot.shade) slot.shade = await compile("shade");
+      if (!slot.discs) slot.discs = await compile("discs");
     };
     const run = async () => {
-      // (the raster's kernels first once the general tracer is in to draw the rest — its sky — meanwhile: a few seconds each,
-      // against the specialised tracer's minute and more (74 s measured on an M1 Max for a scene's key) — the near Earth, the
-      // scene's look, comes first; before the general one, the trace's own kernel first, the image waiting on it)
-      // (or another key's tracer, already in: the frame's own until this one's lands)
-      const rasterFirst = (key & FEATURE_TERRAIN_RASTER) !== 0 && (!!this.tracePipeline || [...this.variants.values()].some((v) => !!v.rt));
-      if (rasterFirst) await raster();
+      // (the raster's first kernels before the tracer only when something already draws this key's trace — the general
+      // kernel, or another key's covering it: the near Earth, the scene's look, comes first then. Otherwise the trace's own
+      // kernel first: nothing draws the scene before it — another key's tracer that does not cover this one does not)
+      const rasterFirst = R && (!!this.tracePipeline || !!this.coveringVariant(key, "rt"));
+      if (rasterFirst) await rasterEarly();
       if (!slot.rt) {
         slot.rt = await compile("main", () => (slot.rtGivenUp = true));
         if (!slot.rt) return;
       }
       // (the raster's primary visibility: its kernels right after the image's — the trace leaves the patch's pixels to them)
-      if (!rasterFirst) await raster();
+      if (!rasterFirst) await rasterEarly();
       if (!slot.env) {
         slot.env = await compile("env");
         if (!slot.env) return;
       }
-      void this.generalCompile.start();
+      await rasterLate();
+      this.startGeneralWhenIdle();
       await this.firstImage;
+      await this.backgroundFree();
       if (!slot.lut && (key & LUT_BLOCKERS) === 0) slot.lut = await compile("lut");
       // (the aerial perspective's table: a world near the camera — its bodies' bit)
       if (!slot.air && (key & 128) !== 0 && this.aerialOK) slot.air = await compile("aerial");
@@ -4229,6 +4253,43 @@ export class Renderer {
         void this.generalCompile.start();
       },
     );
+  }
+
+  /** the general kernel wanted (the later scenes' fallback), its start held while the frame's own compiles run */
+  private generalWanted = false;
+  /**
+   * The general kernel — every feature, the slowest compile of all on D3D12 (115 s on kerr-mini, minutes on Windows) — started
+   * once no compile of the frame's own is waiting or running, and not while the title holds the game: two compiles of this size
+   * side by side slowed the scene's own (docs/PLAN-LEAN-TRACER-KERNELS.md P1). The queue's idle hook retries.
+   */
+  private startGeneralWhenIdle() {
+    this.generalWanted = true;
+    this.maybeStartGeneral();
+  }
+  private maybeStartGeneral() {
+    if (!this.generalWanted || this.generalCompile.state !== "idle" || this.lost) return;
+    if (this.backgroundHold || this.variantQueue.urgentPending) return;
+    void this.generalCompile.start();
+  }
+  /**
+   * Background compiles held (main.ts: while the title screen holds the game): the general kernel, a key's LUT and aerial
+   * table wait — the launch that follows compiles its own scene, which they would slow.
+   */
+  get backgroundHold() {
+    return this.bgHold;
+  }
+  set backgroundHold(on: boolean) {
+    if (on === this.bgHold) return;
+    this.bgHold = on;
+    if (!on) {
+      for (const f of this.bgWaiters.splice(0)) f();
+      this.maybeStartGeneral();
+    }
+  }
+  private bgHold = false;
+  private bgWaiters: (() => void)[] = [];
+  private backgroundFree(): Promise<void> {
+    return this.bgHold ? new Promise<void>((r) => this.bgWaiters.push(r)) : Promise.resolve();
   }
 
   private qualityCascade(key: number, slot: NonNullable<ReturnType<Renderer["variants"]["get"]>>) {
@@ -4533,19 +4594,32 @@ export class Renderer {
     // (the raster's shading kernels compile after the image's — realtimeCascade —: until they are there for this key, its
     // pixels traced as before, not left by the trace to a pass that cannot run — the ground missing for seconds, minutes on
     // a slow D3D12 driver)
+    // (with the material — shadeLite — the old per-pixel kernel, shade, is a leftover's: the pixels the material does not take,
+    // a tree against the sky, a box's margin. Its compile — a third of the tracer — no longer holds the raster back: until it
+    // is in, those pixels are the trace's (RASTER_SHADE_LATE, trace.wgsl main) — docs/PLAN-LEAN-TRACER-KERNELS.md P1)
+    let shadeLate = false;
     if (!quality && hint && this.rasterPrimaryOn) {
+      const lite = this.rasterLite && !!this.traceVariant("shadeLite");
       const sh = this.traceVariant("shade");
-      if (!sh || (this.rasterRate > 1 && !this.traceVariant("shadeMark"))) this.dropRasterPrimary(t);
+      const ready = !!sh && (this.rasterRate === 1 || !!this.traceVariant("shadeMark"));
+      if (!ready && !lite) this.dropRasterPrimary(t);
+      shadeLate = !ready && lite;
     }
     // (the ground at every pixel — shadeLite, TERRE-UNREAL U1 —: once its kernel is there, the parameters' bit written for this
     // submission; shade and shadeMark leave it its pixels)
     this.rasterLiteNow = false;
     this.rasterWaterNow = false;
+    this.rasterShadeLate = false;
     if (!quality && hint && this.rasterPrimaryOn && this.rasterLite && this.traceVariant("shadeLite")) {
       this.rasterLiteNow = true;
+      this.rasterShadeLate = shadeLate;
       // (its water's pass — shadeWater — once its kernel is there: shadeLite leaves it the water's pixels)
       this.rasterWaterNow = !!this.traceVariant("shadeWater");
-      this.paramsF[MOUTH_LIST_AT + 5] = this.paramsF[MOUTH_LIST_AT + 5]! + RASTER_LITE_FLAG + (this.rasterWaterNow ? RASTER_WATER_FLAG : 0);
+      this.paramsF[MOUTH_LIST_AT + 5] =
+        this.paramsF[MOUTH_LIST_AT + 5]! +
+        RASTER_LITE_FLAG +
+        (this.rasterWaterNow ? RASTER_WATER_FLAG : 0) +
+        (shadeLate ? RASTER_SHADE_LATE_FLAG : 0);
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
     }
     // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
@@ -4635,7 +4709,7 @@ export class Renderer {
     // The raster's primary visibility (docs/PLAN-RENDU-RASTER-AAA.md étape 1): the patch's pixels, left by the trace,
     // shaded one a pixel at the image's full size — after it, before the reconstruction that reads both.
     // (a rate above 1: the frame's pattern alone, its threads packed — and the pixels it leaves marked for resolve)
-    const shade = !quality && hint && this.rasterPrimaryOn ? this.traceVariant("shade") : null;
+    const shade = !quality && hint && this.rasterPrimaryOn && !this.rasterShadeLate ? this.traceVariant("shade") : null;
     const mark = shade && this.rasterRate > 1 ? this.traceVariant("shadeMark") : null;
     if (shade && hint && (this.rasterRate === 1 || mark)) {
       // (the frame's pattern's block — trace.wgsl rasterPixel: 2 × 1, 2 × 2, 4 × 2, 4 × 4 —: a thread a block)
@@ -7206,6 +7280,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the raster's ground shaded at every pixel, every frame, by the material pass (trace.wgsl shadeLite — TERRE-UNREAL U1);
    *  false: shade's, at the governor's rate, as before (a switch for comparisons) */
   rasterLite = true;
+  /** this frame: the material draws the ground, the old per-pixel kernel (shade) not compiled yet — its leftover pixels traced */
+  private rasterShadeLate = false;
   /** shadeLite this frame */
   private rasterLiteNow = false;
   /** shadeWater this frame (its water split from shadeLite) */

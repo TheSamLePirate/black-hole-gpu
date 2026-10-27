@@ -10152,7 +10152,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   let masked = interleaved && inRange && moments[idx].x < -0.5 && moments[idx].x > -1.5;
   // (the raster's primary visibility: a ray whose pixel the patch covers is shade's, not traced here)
   let rasterAt = vec2f(f32(px), f32(py)) + 0.5;
-  let rasterSkip = interleaved && inRange && (rasterPrimary() || DISC_ONLY) && (terrainRasterHint(rasterAt) > 0.0 || terrainRasterId(rasterAt) > 0u);
+  // (shade not compiled yet — RASTER_SHADE_LATE_FLAG —: only the material's pixels left, the others traced here)
+  let rasterSkip = interleaved && inRange && (rasterPrimary() || DISC_ONLY) && (terrainRasterHint(rasterAt) > 0.0 || terrainRasterId(rasterAt) > 0u) &&
+    (DISC_ONLY || !rasterShadeLate() || rasterLiteTakes(rasterAt, u32(P.near1.w)));
 
   // Adaptive sampling, per 8×8 tile: the tile keeps sampling while any of its pixels has a relative
   // standard error of the mean (luminance) above the threshold (keeps ray differentials available).
@@ -10590,6 +10592,9 @@ fn shadeMark(@builtin(global_invocation_id) gid: vec3u) {
 // renderer.rasterLite, mouthList[1].y + 128.
 const RASTER_LITE_FLAG = 128u;
 fn rasterLiteOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_LITE_FLAG) != 0u; }
+// the material's on, the leftovers' kernel (shade) not compiled yet: the pixels the material does not take are main's
+const RASTER_SHADE_LATE_FLAG = 1024u;
+fn rasterShadeLate() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_SHADE_LATE_FLAG) != 0u; }
 struct RasterRay { look: vec3f, rd: vec3f, kM: f32 };
 // the camera ray through an image point [px]: its look (the camera's frame), its unit direction in the squashed space, and
 // how many metres of the physical ray a unit of it is

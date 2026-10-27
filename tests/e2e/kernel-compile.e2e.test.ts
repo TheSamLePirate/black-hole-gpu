@@ -69,15 +69,21 @@ describe.skipIf(!E2E)("cold launches: what each scene compiles, and how long it 
           const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
           ${c.set}
           r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
-          const t0 = performance.now(); let first = 0;
+          const t0 = performance.now(); let first = 0, raster = 0, ready = 0;
           while (performance.now() - t0 < 600000) {
             __bh.touch(); await frame();
             if (!first && (r.prof.table().find((p) => p.label === "trace")?.last ?? 0) > 0) first = performance.now();
-            if (first && r.compilesPending === 0 && performance.now() - first > 3000) break;
+            // (the raster's material drawing the ground; the scene's own kernel there — or given up)
+            if (!raster && r.rasterLiteActive) raster = performance.now();
+            if (!ready && r.variantReady) ready = performance.now();
+            if (first && ready && r.compilesPending === 0 && performance.now() - first > 3000) break;
           }
-          window.__kc = { firstTraceS: first ? (first - t0) / 1000 : -1, settledS: (performance.now() - t0) / 1000, report: r.compileReport() };
+          const s = (t) => (t ? (t - t0) / 1000 : -1);
+          window.__kc = { t0, firstTraceS: s(first), firstRasterS: s(raster), variantReadyS: s(ready), settledS: (performance.now() - t0) / 1000, report: r.compileReport() };
         })(); return 1; })()`);
         let r: {
+          firstRasterS: number;
+          variantReadyS: number;
           firstTraceS: number;
           settledS: number;
           report: { count: number; cold: number; seconds: number; compiles: unknown[] };
@@ -87,7 +93,7 @@ describe.skipIf(!E2E)("cold launches: what each scene compiles, and how long it 
           r = await app.js(`window.__kc`);
         }
         console.log(
-          `  ${id}: first trace ${r.firstTraceS.toFixed(1)} s, settled ${r.settledS.toFixed(1)} s, ${r.report.count} compiles (${r.report.cold} cold), ${r.report.seconds.toFixed(0)} s of compile`,
+          `  ${id}: first trace ${r.firstTraceS.toFixed(1)} s, raster ${r.firstRasterS.toFixed(1)} s, the scene's kernel ${r.variantReadyS.toFixed(1)} s, settled ${r.settledS.toFixed(1)} s, ${r.report.count} compiles (${r.report.cold} cold), ${r.report.seconds.toFixed(0)} s of compile`,
         );
         for (const x of r.report.compiles as { pipeline: string; key: number; seconds: number; ok: boolean }[])
           console.log(

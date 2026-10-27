@@ -15,7 +15,7 @@ Baselines: [BASELINE.md](BASELINE.md).
 | Phase | State | Commit | Notes |
 |---|---|---|---|
 | P0 measure | done | see git log "P0" | analyzer, proxy, compile report, kerr-mini baseline; **finding: dead code costs DXC as much as live code** (→ P1b) |
-| P1 queue fixes | in progress | | |
+| P1 queue fixes | done | see git log "P1" | Earth key's tracer 139 → 56 s after the launch (kerr-mini, cold) |
 | P1b source specialisation | to do | | added after P0 |
 | P2 loading UI | to do | | |
 | P3 stable profile | to do | | |
@@ -61,3 +61,36 @@ Tint writes the same 649 KB of HLSL for every key: it does not remove the branch
 - Key 516 `main`: DXC 41 s → **1.6 s**, Tint 3.7 → 1.0 s.
 - Earth-raster `main`: 233 → 155 s.
 - The general kernel: unchanged (nothing to remove).
+
+### P1 — the compile queue (27/10)
+
+- **`rasterFirst` only when this key's trace can already be drawn** (the general kernel, or a covering key): before, the
+  boot key's tracer — which does not cover the Earth's — sent the raster group, `shade` and `discs` included, ahead of
+  the Earth's own `main`.
+- **`shade` off the hard path when the material is on** (`rasterLite`):
+  - the raster no longer drops without it;
+  - `rasterReady` waits for `shadeLite` + `shadeWater`;
+  - until `shade` lands, the pixels the material does not take are traced (`RASTER_SHADE_LATE_FLAG`, trace.wgsl `main`'s `rasterSkip`).
+  - `shade` and `discs` now compile late, after `env`.
+- **`CompileQueue`:**
+  - a second slot for the frame's own compiles beside a running one that is not urgent (another key's, the title's LUT);
+  - the slot handed over after a task, not a microtask: the cascade's next urgent compile is queued first (before, a key
+    compiled ahead took the slot: its 91 s tracer ran before the frame's 1-second raster kernels);
+  - an `onIdle` hook.
+- **The general kernel waits** until no compile of the frame's own is waiting or running, and while the title holds the
+  game (`renderer.backgroundHold`, set by main.ts `titleHold`). A key's LUT and aerial table wait for the title too.
+- `tests/e2e/gpu-startup`: the general pipelines are counted by their constants (the mask's and the warp grid's `main`
+  were counted too).
+
+Measured (kerr-mini, `KC_COLD=1`, the Metal cache emptied; F-35 over Tarifa, raster, boot on `game:artemis`):
+
+| | before (P0) | P1 |
+|---|---:|---:|
+| the Earth key's tracer lands (from its first compile) | 139 s | **56 s** |
+| its raster material | 45 s (useless before the tracer) | 58 s |
+| the key with surface + scenery: its tracer | 221 s | 184 s |
+| all compiles settled | 277 s | 253 s |
+
+Left for later phases:
+- the key compiled ahead still recompiles `main` + `env` (P3);
+- each `main` is still 50–100 s on the mini (P1b, P4).

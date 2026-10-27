@@ -60,9 +60,11 @@ export class CompileQueue {
   /** the longest compile completed so far [ms] */
   private longest = 0;
   /** the compiles not started yet, in order; `urgent` ones start first (a frame's own kernels before a still view's) */
-  private waiting: { urgent: boolean | (() => boolean); start: () => void }[] = [];
-  /** a compile holds the slot */
-  private running = false;
+  private waiting: Job[] = [];
+  /** the compiles holding a slot (one; two when a `preempt` job passes a running one that is not urgent) */
+  private running: Job[] = [];
+  /** told when no urgent compile is waiting or running any more (renderer: the general kernel's start, held till then) */
+  onIdle: () => void = () => {};
 
   constructor(
     private readonly stallMs = 60_000,
@@ -77,40 +79,65 @@ export class CompileQueue {
     return this.longest > 0 ? Math.max(this.stallMs, 3 * this.longest) : Number.POSITIVE_INFINITY;
   }
 
-  /** the next compile into the free slot: the first urgent one waiting, else the first */
+  /** an urgent compile waits or runs (the frame's own) */
+  get urgentPending() {
+    return this.waiting.some(isUrgent) || this.running.some(isUrgent);
+  }
+
+  /**
+   * The next compile into a free slot: the first urgent one waiting, else the first. A second slot only for an urgent
+   * `preempt` job (the camera's own tracer) while the running one is not urgent — another key's probe or LUT, the title's —:
+   * a WebGPU compile cannot be cancelled, and the scene's image waited minutes behind one no longer wanted
+   * (docs/PLAN-LEAN-TRACER-KERNELS.md P1).
+   */
   private pump() {
-    if (this.running) return;
-    const u = this.waiting.findIndex((j) => (typeof j.urgent === "function" ? j.urgent() : j.urgent));
-    const job = this.waiting.splice(u >= 0 ? u : 0, 1)[0];
-    if (!job) return;
-    this.running = true;
-    job.start();
+    for (;;) {
+      let i: number;
+      if (this.running.length === 0) {
+        const u = this.waiting.findIndex(isUrgent);
+        i = u >= 0 ? u : 0;
+      } else if (this.running.length === 1 && !this.running.some(isUrgent)) {
+        i = this.waiting.findIndex((j) => j.preempt && isUrgent(j));
+        if (i < 0) break;
+      } else break;
+      const job = this.waiting.splice(i, 1)[0];
+      if (!job) break;
+      this.running.push(job);
+      job.start();
+    }
+    if (!this.urgentPending) this.onIdle();
   }
 
   /**
    * `urgent`: ahead of every compile not started yet — the realtime image's kernels (the raster's shading among them) past a
    * still view's quality kernel queued during a pause: queued behind it, the flight after the pause drew the near Earth with
    * the traced blocks for the minute it took on an M1. A function: asked when the slot frees (a key compiled ahead urgent
-   * once it is the frame's own).
+   * once it is the frame's own). `preempt`: may take a second slot beside a running compile that is not urgent.
    */
   run<T>(
     current: () => boolean,
     compile: () => Promise<T>,
     onStall: () => void = () => {},
     urgent: boolean | (() => boolean) = false,
+    preempt = false,
   ): Promise<T | null> {
     this.pending++;
     return new Promise<T | null>((resolve, reject) => {
-      this.waiting.push({
+      const job: Job = {
         urgent,
+        preempt,
         start: () => {
           let held = true;
           const release = () => {
             if (!held) return;
             held = false;
             this.pending--;
-            this.running = false;
-            queueMicrotask(() => this.pump());
+            const k = this.running.indexOf(job);
+            if (k >= 0) this.running.splice(k, 1);
+            // (after a task, not a microtask: the compile's result reaches its cascade first, whose next compile — the
+            // frame's own, urgent — is then queued before the slot is given; a microtask gave it to whatever waited, a key
+            // compiled ahead whose tracer ran 91 s before the frame's raster kernels of a second each — kerr-mini)
+            setTimeout(() => this.pump(), 0);
           };
           if (!current()) {
             release();
@@ -144,8 +171,16 @@ export class CompileQueue {
             })
             .then(resolve, reject);
         },
-      });
+      };
+      this.waiting.push(job);
       queueMicrotask(() => this.pump());
     });
   }
 }
+
+interface Job {
+  urgent: boolean | (() => boolean);
+  preempt: boolean;
+  start: () => void;
+}
+const isUrgent = (j: Job) => (typeof j.urgent === "function" ? j.urgent() : j.urgent);
