@@ -1,15 +1,10 @@
 import { holeFleet } from "./holefleet";
 import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
-import { TerrainCache, withTerrainCache } from "./system/terrain-cache";
-import {
-  RASTER_HINT_BINDING,
-  RASTER_HINT_TEXTURE_LIMIT,
-  SUN_SHADOW_BINDING,
-  SUN_SHADOW_TEXTURE_LIMIT,
-  withSunShadow,
-  withTerrainRaster,
-} from "./system/terrain-raster-hint";
+import { TerrainCache } from "./system/terrain-cache";
+import { composeTracer } from "./system/tracer-source";
+import { FEATURES_ALL, FEATURE_TERRAIN_CACHE, FEATURE_TERRAIN_RASTER, tracerConstants, tracerEntryPoint } from "./system/tracer-kernels";
+import { RASTER_HINT_BINDING, RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_BINDING, SUN_SHADOW_TEXTURE_LIMIT } from "./system/terrain-raster-hint";
 import {
   TERRAIN_CACHE_LEVELS,
   TERRAIN_CACHE_MAX_LAT,
@@ -28,10 +23,10 @@ import {
   TREE_SHADOW_HALF_M,
   TREE_SHADOW_N,
 } from "./system/scenery-raster";
-import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT, withCloudPass } from "./system/cloud-pass";
+import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT } from "./system/cloud-pass";
 import { Lightning } from "./system/lightning";
-import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT, withTreeShadow } from "./system/tree-shadow";
-import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N, withCloudShadow } from "./system/cloud-shadow";
+import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT } from "./system/tree-shadow";
+import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N } from "./system/cloud-shadow";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
@@ -40,10 +35,10 @@ import { dot as dot3 } from "./math/vec3";
 import { sphericalFrame } from "./wormhole";
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import seafftWGSL from "./shaders/seafft.wgsl" with { type: "text" };
-import { SEA_TEXTURE_LIMIT, SeaFft, seaShader } from "./sea/fft-gpu";
+import { SEA_TEXTURE_LIMIT, SeaFft } from "./sea/fft-gpu";
 import { normalQuantile, seaCascades, seaSystems } from "./sea/spectrum";
 import { MarineFeed, type SeaState, windSea } from "./sea/marine";
-import { forestSource, withForest } from "./forest-shader";
+import { forestSource } from "./forest-shader";
 import { lampsOf } from "./cockpit/lights";
 import { EARTH_RUNWAYS, landingEnd, RUNWAY_LENGTH, runwayGrade, runwayPaved } from "./game/sites";
 import {
@@ -90,7 +85,7 @@ import {
 } from "./gpu-tables";
 import postWGSL from "./shaders/post.wgsl" with { type: "text" };
 import maskWGSL from "./shaders/mask.wgsl" with { type: "text" };
-import { AERIAL_TEXTURE_LIMIT, aerialShader } from "./system/aerial";
+import { AERIAL_TEXTURE_LIMIT } from "./system/aerial";
 import { detailMargin, horizonsReach, MapCells } from "./system/relief-ceiling";
 import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
@@ -143,8 +138,8 @@ import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/g
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
 import { WarpGrid } from "./system/warp-grid";
-import { EarthSurface, SURFACE_VEC4S, SURFACE_TEXTURE_LIMIT, surfaceShader } from "./system/earth-surface";
-import { EarthScenery, sceneryShader } from "./system/scenery";
+import { EarthSurface, SURFACE_VEC4S, SURFACE_TEXTURE_LIMIT } from "./system/earth-surface";
+import { EarthScenery } from "./system/scenery";
 import { DETAIL_REACH, SCENERY_VEC4S, SCENERY_STORAGE_LIMIT, type SceneryExclusion } from "./system/scenery-data";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
 const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
@@ -240,11 +235,6 @@ const MOTION_DENSE_OUT = 18;
  *  and under which they go back */
 const GROUND_DENSE_IN = 12;
 const GROUND_DENSE_OUT = 9;
-/** every feature of the tracer kept (the general pipelines) */
-const FEATURES_ALL = 16383;
-const FEATURE_TERRAIN_CACHE = 1 << 15;
-// the realtime kernel's ground march starts from the raster patch's distances (bits 16–27: the cost view and the tune)
-const FEATURE_TERRAIN_RASTER = 1 << 30;
 /** how long a block size's measured frame time is remembered [ms] (then tried again) */
 const BLOCK_MEMORY = 20000;
 /** the raster's shading rates (settings.earthRasterShading: one pixel in so many shaded a frame) */
@@ -1271,7 +1261,11 @@ export class Renderer {
             layout,
             compute: { module: traceModule, entryPoint: "env", constants: { QUALITY_PIPELINE: 0 } },
           }),
-        ]);
+        ]).catch((e) => {
+          this.noteCompile("general main + env", FEATURES_ALL, t0, false);
+          throw e;
+        });
+        this.noteCompile("general main + env", FEATURES_ALL, t0, true);
         gpuDiagnostics.record("pipeline-compiled", `general tracer (main + env): ${((performance.now() - t0) / 1000).toFixed(1)} s`);
         return pipelines;
       },
@@ -1292,7 +1286,18 @@ export class Renderer {
       () => !this.lost,
     );
     // (a compile timed out but landing later, the device still there: taken after all)
-    const optional = (compile: () => Promise<GPUComputePipeline>, publish: (p: GPUComputePipeline) => void) => {
+    const optional = (label: string, make: () => Promise<GPUComputePipeline>, publish: (p: GPUComputePipeline) => void) => {
+      const compile = async () => {
+        const t0 = performance.now();
+        try {
+          const p = await make();
+          this.noteCompile(label, FEATURES_ALL, t0, true);
+          return p;
+        } catch (e) {
+          this.noteCompile(label, FEATURES_ALL, t0, false);
+          throw e;
+        }
+      };
       const resource = new AsyncResource(
         compile,
         () => {
@@ -1309,6 +1314,7 @@ export class Renderer {
       return resource;
     };
     this.qualityCompile = optional(
+      "general main (quality)",
       () => mkTrace(true),
       (p) => {
         this.qualityPipeline = p;
@@ -1317,12 +1323,14 @@ export class Renderer {
       },
     );
     this.lutCompile = optional(
+      "general lut",
       () => mkLut(false),
       (p) => {
         this.lutPipeline = p;
       },
     );
     this.lutQCompile = optional(
+      "general lut (quality)",
       () => mkLut(true),
       (p) => {
         this.lutQPipeline = p;
@@ -1843,34 +1851,7 @@ export class Renderer {
     loading.done("gpu");
     gpuDiagnostics.enter("shader-download");
     const src = {
-      trace: aerialShader(
-        seaShader(
-          sceneryShader(
-            surfaceShader(
-              withTreeShadow(
-                withCloudShadow(
-                  withCloudPass(
-                    withSunShadow(
-                      withTerrainRaster(
-                        withTerrainCache(withForest(await wgsl(traceWGSL), await wgsl(forestSource))),
-                        device.limits.maxSampledTexturesPerShaderStage >= RASTER_HINT_TEXTURE_LIMIT,
-                      ),
-                      device.limits.maxSampledTexturesPerShaderStage >= SUN_SHADOW_TEXTURE_LIMIT,
-                    ),
-                    device.limits.maxSampledTexturesPerShaderStage >= CLOUD_PASS_TEXTURE_LIMIT,
-                  ),
-                  device.limits.maxSampledTexturesPerShaderStage >= CLOUD_SHADOW_TEXTURE_LIMIT,
-                ),
-                device.limits.maxSampledTexturesPerShaderStage >= TREE_SHADOW_TEXTURE_LIMIT,
-              ),
-              device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT,
-            ),
-            device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
-          ),
-          device.limits.maxSampledTexturesPerShaderStage >= SEA_TEXTURE_LIMIT,
-        ),
-        device.limits.maxSampledTexturesPerShaderStage >= AERIAL_TEXTURE_LIMIT,
-      ),
+      trace: composeTracer(await wgsl(traceWGSL), await wgsl(forestSource), device.limits),
       seafft: await wgsl(seafftWGSL),
       display: await wgsl(displayWGSL),
       post: await wgsl(postWGSL),
@@ -4308,9 +4289,13 @@ export class Renderer {
     let p: GPUComputePipeline;
     try {
       p = await this.mkVariant(key, entry, quality);
+    } catch (e) {
+      this.noteCompile(`${entry}${quality ? " (quality)" : ""}`, key, t0, false);
+      throw e;
     } finally {
       this.compiling.delete(label);
     }
+    this.noteCompile(`${entry}${quality ? " (quality)" : ""}`, key, t0, true);
     const s = ((performance.now() - t0) / 1000).toFixed(1);
     gpuDiagnostics.record(
       "pipeline-compiled",
@@ -4326,7 +4311,6 @@ export class Renderer {
     entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "discs" | "clouds",
     quality: boolean,
   ): Promise<GPUComputePipeline> {
-    const has = (bit: number) => ((key & bit) !== 0 ? 1 : 0);
     return this.device.createComputePipelineAsync({
       layout:
         entryPoint === "clouds"
@@ -4347,59 +4331,8 @@ export class Renderer {
       compute: {
         module: this.traceModule,
         // (the sky's discs: main's own, its sky's layer and its ground compiled out — DISC_ONLY)
-        entryPoint: entryPoint === "discs" ? "main" : entryPoint,
-        constants: {
-          DISC_ONLY: entryPoint === "discs" ? 1 : 0,
-          HAS_RADIO: has(1),
-          HAS_POL: has(2),
-          HAS_JET: has(4),
-          HAS_SPOT: has(8),
-          HAS_VOL: has(16),
-          HAS_WH: has(32),
-          HAS_THICK: has(64),
-          HAS_BODIES: has(128),
-          // (the raster's kernels: the runways' code in whether one is near or not — its parameters say — with the raster's
-          // primary visibility; the key then without its bit, writeParams)
-          HAS_RWY:
-            has(256) ||
-            ((entryPoint === "shade" || entryPoint === "shadeMark" || entryPoint === "shadeLite" || entryPoint === "shadeWater") &&
-              !quality &&
-              has(FEATURE_TERRAIN_RASTER))
-              ? 1
-              : 0,
-          HAS_KERR: has(512),
-          HAS_WX: has(1024),
-          HAS_SHADE: has(2048),
-          HAS_SURFACE: has(4096),
-          HAS_SCENERY: has(8192),
-          HAS_AURORA: has(16384),
-          HAS_TERRAIN_CACHE:
-            (entryPoint === "main" ||
-              entryPoint === "shade" ||
-              entryPoint === "shadeMark" ||
-              entryPoint === "shadeLite" ||
-              entryPoint === "shadeWater" ||
-              entryPoint === "shadeStars" ||
-              entryPoint === "clouds") &&
-            !quality
-              ? has(FEATURE_TERRAIN_CACHE)
-              : 0,
-          HAS_TERRAIN_RASTER:
-            (entryPoint === "main" ||
-              entryPoint === "shade" ||
-              entryPoint === "shadeMark" ||
-              entryPoint === "shadeLite" ||
-              entryPoint === "shadeWater" ||
-              entryPoint === "shadeStars" ||
-              entryPoint === "clouds") &&
-            !quality &&
-            this.rasterHint
-              ? has(FEATURE_TERRAIN_RASTER)
-              : 0,
-          COST_VIEW: (key >> 16) & 15,
-          ...(this.tunes.get((key >> 20) & 255) ?? {}),
-          QUALITY_PIPELINE: quality ? 1 : 0,
-        },
+        entryPoint: tracerEntryPoint(entryPoint),
+        constants: tracerConstants(key, entryPoint, { quality, rasterHint: this.rasterHint, tune: this.tunes.get((key >> 20) & 255) }),
       },
     });
   }
@@ -7282,6 +7215,34 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the shaders compiling now, as the player reads them (main.ts: the compile meter) — the kernel, and the scene's features
    *  that made its variant */
   private compiling = new Set<string>();
+  /** every tracer compile of the session, in order (compileReport) */
+  private compileLog: { pipeline: string; key: number; startedAt: number; seconds: number; ok: boolean; beforeFirstImage: boolean }[] = [];
+  private noteCompile(pipeline: string, key: number, t0: number, ok: boolean) {
+    this.compileLog.push({
+      pipeline,
+      key,
+      startedAt: t0,
+      seconds: (performance.now() - t0) / 1000,
+      ok,
+      beforeFirstImage: !this.firstFrameDoneAt,
+    });
+    if (this.compileLog.length > 400) this.compileLog.shift();
+  }
+  /** The tracer's compiles so far (docs/PLAN-LEAN-TRACER-KERNELS.md P0): each pipeline (its entry, "(quality)" for the
+   *  refining one, "general …" for the every-feature ones), its features key, when it started [performance.now ms], how
+   *  long it took [s] — under ~5 s: out of the browser's shader cache —, whether it compiled, whether before the first
+   *  image; and the totals. */
+  compileReport() {
+    const log = this.compileLog.map((c) => ({ ...c, cached: c.ok && c.seconds < 5 }));
+    return {
+      compiles: log,
+      count: log.length,
+      cold: log.filter((c) => !c.cached).length,
+      seconds: log.reduce((a, c) => a + c.seconds, 0),
+      pending: this.compilesPending,
+      firstFrameDoneAt: this.firstFrameDoneAt,
+    };
+  }
   get compilingNow(): string[] {
     const out = [...this.compiling];
     if (this.generalCompile.state === "pending") out.push(t("the general tracer"));

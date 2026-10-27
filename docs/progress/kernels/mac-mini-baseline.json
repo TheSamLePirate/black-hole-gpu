@@ -1,0 +1,441 @@
+[
+ {
+  "case": "earth-raster",
+  "firstTraceS": 134.10079999995233,
+  "settledS": 275.7257999999523,
+  "report": {
+   "compiles": [
+    {
+     "pipeline": "main",
+     "key": 736,
+     "startedAt": 11464.299999952316,
+     "seconds": 50.13140000009537,
+     "ok": true,
+     "beforeFirstImage": true,
+     "cached": false
+    },
+    {
+     "pipeline": "env",
+     "key": 736,
+     "startedAt": 61596.09999990463,
+     "seconds": 20.440799999952315,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "shade",
+     "key": 1073742560,
+     "startedAt": 82037,
+     "seconds": 15.337200000047684,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "shade",
+     "key": 1073754848,
+     "startedAt": 97374.29999995232,
+     "seconds": 27.543900000095366,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "shadeMark",
+     "key": 1073742560,
+     "startedAt": 124918.29999995232,
+     "seconds": 0.4595999999046326,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "shadeMark",
+     "key": 1073754848,
+     "startedAt": 125378.09999990463,
+     "seconds": 0.09760000014305115,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "shadeLite",
+     "key": 1073742560,
+     "startedAt": 125475.89999985695,
+     "seconds": 1.7684000000953675,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "shadeLite",
+     "key": 1073754848,
+     "startedAt": 127244.39999985695,
+     "seconds": 2.288300000190735,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "shadeWater",
+     "key": 1073742560,
+     "startedAt": 129532.79999995232,
+     "seconds": 2.101,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "shadeWater",
+     "key": 1073754848,
+     "startedAt": 131633.89999985695,
+     "seconds": 4.490700000047684,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "shadeStars",
+     "key": 1073742560,
+     "startedAt": 136124.70000004768,
+     "seconds": 0.3345999999046326,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "shadeStars",
+     "key": 1073754848,
+     "startedAt": 136459.39999985695,
+     "seconds": 0.08370000004768371,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "discs",
+     "key": 1073742560,
+     "startedAt": 136543.20000004768,
+     "seconds": 17.166,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "discs",
+     "key": 1073754848,
+     "startedAt": 153709.39999985695,
+     "seconds": 14.510600000143052,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "clouds",
+     "key": 1073742560,
+     "startedAt": 168220.09999990463,
+     "seconds": 0.8626000001430512,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "clouds",
+     "key": 1073754848,
+     "startedAt": 169082.79999995232,
+     "seconds": 0.07970000004768371,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "general main + env",
+     "key": 16383,
+     "startedAt": 82037.29999995232,
+     "seconds": 114.96270000004769,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "main",
+     "key": 1073742560,
+     "startedAt": 169162.59999990463,
+     "seconds": 51.49160000014305,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "main",
+     "key": 1073754848,
+     "startedAt": 220654.20000004768,
+     "seconds": 83.03319999980927,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "env",
+     "key": 1073754848,
+     "startedAt": 303687.39999985695,
+     "seconds": 34.86190000009537,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "aerial",
+     "key": 1073754848,
+     "startedAt": 338549.5,
+     "seconds": 0.5057000000476837,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    }
+   ],
+   "count": 21,
+   "cold": 10,
+   "seconds": 442.5512000010014,
+   "pending": 0,
+   "firstFrameDoneAt": 61681.700000047684
+  }
+ },
+ {
+  "case": "earth-trace",
+  "firstTraceS": 0.1655,
+  "settledS": 200.83990000009535,
+  "report": {
+   "compiles": [
+    {
+     "pipeline": "main",
+     "key": 736,
+     "startedAt": 1701.2000000476837,
+     "seconds": 0.4362000000476837,
+     "ok": true,
+     "beforeFirstImage": true,
+     "cached": true
+    },
+    {
+     "pipeline": "env",
+     "key": 736,
+     "startedAt": 2137.7000000476837,
+     "seconds": 0.7977000000476837,
+     "ok": true,
+     "beforeFirstImage": true,
+     "cached": true
+    },
+    {
+     "pipeline": "aerial",
+     "key": 736,
+     "startedAt": 2936.100000143051,
+     "seconds": 0.163,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "general main + env",
+     "key": 16383,
+     "startedAt": 2936,
+     "seconds": 0.4948000001907349,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "main",
+     "key": 992,
+     "startedAt": 7164.300000190735,
+     "seconds": 45.08609999990463,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "main",
+     "key": 5088,
+     "startedAt": 52250.5,
+     "seconds": 42.853300000190735,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "main",
+     "key": 13280,
+     "startedAt": 95103.80000019073,
+     "seconds": 74.89829999995231,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "env",
+     "key": 13280,
+     "startedAt": 170002.20000004768,
+     "seconds": 37.810900000095366,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": false
+    },
+    {
+     "pipeline": "aerial",
+     "key": 13280,
+     "startedAt": 207813.40000009537,
+     "seconds": 0.052200000047683714,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    }
+   ],
+   "count": 9,
+   "cold": 4,
+   "seconds": 202.59250000047683,
+   "pending": 0,
+   "firstFrameDoneAt": 2935.5
+  }
+ },
+ {
+  "case": "moon",
+  "firstTraceS": 0.10240000009536743,
+  "settledS": 3.4855,
+  "report": {
+   "compiles": [
+    {
+     "pipeline": "main",
+     "key": 736,
+     "startedAt": 7622.700000047684,
+     "seconds": 3.3782999999523162,
+     "ok": true,
+     "beforeFirstImage": true,
+     "cached": true
+    },
+    {
+     "pipeline": "env",
+     "key": 736,
+     "startedAt": 11001.5,
+     "seconds": 2.4461000001430513,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "aerial",
+     "key": 736,
+     "startedAt": 13448.100000143051,
+     "seconds": 0.5343999998569489,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "general main + env",
+     "key": 16383,
+     "startedAt": 13448,
+     "seconds": 3.3876000001430513,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    }
+   ],
+   "count": 4,
+   "cold": 0,
+   "seconds": 9.746400000095369,
+   "pending": 0,
+   "firstFrameDoneAt": 11326.100000143051
+  }
+ },
+ {
+  "case": "kerr",
+  "firstTraceS": 0.1397000000476837,
+  "settledS": 3.1601000001430513,
+  "report": {
+   "compiles": [
+    {
+     "pipeline": "main",
+     "key": 516,
+     "startedAt": 1289.5,
+     "seconds": 3.5292000000476835,
+     "ok": true,
+     "beforeFirstImage": true,
+     "cached": true
+    },
+    {
+     "pipeline": "env",
+     "key": 516,
+     "startedAt": 4819.299999952316,
+     "seconds": 2.570799999952316,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "general main + env",
+     "key": 16383,
+     "startedAt": 7390.299999952316,
+     "seconds": 0.19910000014305115,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    }
+   ],
+   "count": 3,
+   "cold": 0,
+   "seconds": 6.299100000143051,
+   "pending": 0,
+   "firstFrameDoneAt": 4931.700000047684
+  }
+ },
+ {
+  "case": "wormhole",
+  "firstTraceS": 0.2485,
+  "settledS": 3.360399999856949,
+  "report": {
+   "compiles": [
+    {
+     "pipeline": "main",
+     "key": 736,
+     "startedAt": 1180,
+     "seconds": 0.22610000014305115,
+     "ok": true,
+     "beforeFirstImage": true,
+     "cached": true
+    },
+    {
+     "pipeline": "env",
+     "key": 736,
+     "startedAt": 1406.4000000953674,
+     "seconds": 0.19079999995231628,
+     "ok": true,
+     "beforeFirstImage": true,
+     "cached": true
+    },
+    {
+     "pipeline": "aerial",
+     "key": 736,
+     "startedAt": 1711.7000000476837,
+     "seconds": 0.1752000000476837,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    },
+    {
+     "pipeline": "general main + env",
+     "key": 16383,
+     "startedAt": 1597.4000000953674,
+     "seconds": 0.3400999999046326,
+     "ok": true,
+     "beforeFirstImage": false,
+     "cached": true
+    }
+   ],
+   "count": 4,
+   "cold": 0,
+   "seconds": 0.9322000000476838,
+   "pending": 0,
+   "firstFrameDoneAt": 1711.2999999523163
+  }
+ }
+]

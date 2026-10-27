@@ -1,0 +1,82 @@
+import { afterAll, describe, test } from "bun:test";
+import { App, E2E, stopServer } from "./lib/app";
+
+// What a cold launch of each reference scene compiles, and how long until it is drawn (docs/PLAN-LEAN-TRACER-KERNELS.md,
+// P0): a fresh Chrome per case — its own profile, so the browser's shader cache is empty (the system's Metal cache is not:
+// macOS keeps it across profiles, a "cold" start here is warmer than a Windows player's first) —, the scene set, then the
+// time to its first traced frame and every tracer compile until the queue is empty (renderer.compileReport()). The same
+// cases before and after each phase of the plan: remote-results/kernel-compile.json.
+// Duration: ~3–6 min a case on kerr-mini (cold compiles)
+// Done when: every case's compiles are in (or 10 min passed) and the report is written.
+
+const CASES: Record<string, { boot: string; set: string; tiles?: boolean }> = {
+  // (the F-35 low over Tarifa: the raster pipeline, the ground's tiles and scenery — the game as it is played)
+  "earth-raster": {
+    boot: "scene=game:artemis",
+    tiles: true,
+    set: `Object.assign(__bh.settings, { vessel: "f35", traffic: false, autosave: false, f35AutoProtect: true, f35Invulnerable: true });
+      __bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.1);
+      __bh.settings.shipMount = "cockpit"; __bh.game.flyAt(36.08, -5.6, 700, 20, 240); __bh.settings.earthPipeline = "raster";`,
+  },
+  "earth-trace": {
+    boot: "scene=game:artemis",
+    tiles: true,
+    set: `Object.assign(__bh.settings, { vessel: "f35", traffic: false, autosave: false, f35AutoProtect: true, f35Invulnerable: true });
+      __bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.1);
+      __bh.settings.shipMount = "cockpit"; __bh.game.flyAt(36.08, -5.6, 700, 20, 240); __bh.settings.earthPipeline = "trace";`,
+  },
+  moon: { boot: `scene=${encodeURIComponent("Moon: an afternoon on the plains")}`, set: "" },
+  mars: { boot: `scene=${encodeURIComponent("Mars: the blue sunset")}`, set: "" },
+  kerr: { boot: `scene=${encodeURIComponent("Kerr a=0.94, near edge-on")}`, set: "" },
+  wormhole: { boot: `scene=${encodeURIComponent("Wormhole: strong lensing (W = 0.43 ρ)")}`, set: "" },
+  gargantua: { boot: `scene=${encodeURIComponent("Interstellar: wormhole to Gargantua")}`, set: "" },
+};
+const cases = (process.env.CASES ?? "earth-raster,moon,kerr,wormhole").split(",");
+
+describe.skipIf(!E2E)("cold launches: what each scene compiles, and how long it waits", () => {
+  const rows: unknown[] = [];
+  afterAll(async () => {
+    await Bun.write("remote-results/kernel-compile.json", `${JSON.stringify(rows, null, 1)}\n`);
+    stopServer();
+  });
+  for (const id of cases)
+    test(id, async () => {
+      const c = CASES[id];
+      if (!c) throw new Error(`no case ${id}: ${Object.keys(CASES).join(", ")}`);
+      const app = await App.boot({ width: 1600, height: 1000, hash: c.boot, tiles: c.tiles });
+      try {
+        // (the measure runs in the page — a DevTools call times out after 5 min —, polled)
+        await app.js(`(() => { window.__kc = null; (async () => {
+          const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
+          ${c.set}
+          r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
+          const t0 = performance.now(); let first = 0;
+          while (performance.now() - t0 < 600000) {
+            __bh.touch(); await frame();
+            if (!first && (r.prof.table().find((p) => p.label === "trace")?.last ?? 0) > 0) first = performance.now();
+            if (first && r.compilesPending === 0 && performance.now() - first > 3000) break;
+          }
+          window.__kc = { firstTraceS: first ? (first - t0) / 1000 : -1, settledS: (performance.now() - t0) / 1000, report: r.compileReport() };
+        })(); return 1; })()`);
+        let r: {
+          firstTraceS: number;
+          settledS: number;
+          report: { count: number; cold: number; seconds: number; compiles: unknown[] };
+        } | null = null;
+        while (!r) {
+          await Bun.sleep(3000);
+          r = await app.js(`window.__kc`);
+        }
+        console.log(
+          `  ${id}: first trace ${r.firstTraceS.toFixed(1)} s, settled ${r.settledS.toFixed(1)} s, ${r.report.count} compiles (${r.report.cold} cold), ${r.report.seconds.toFixed(0)} s of compile`,
+        );
+        for (const x of r.report.compiles as { pipeline: string; key: number; seconds: number; ok: boolean }[])
+          console.log(
+            `    ${x.pipeline.padEnd(26)} key ${String(x.key).padStart(10)}  ${x.seconds.toFixed(1).padStart(6)} s${x.ok ? "" : "  FAILED"}`,
+          );
+        rows.push({ case: id, ...r });
+      } finally {
+        app.close();
+      }
+    }, 900_000);
+});
