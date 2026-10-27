@@ -64,6 +64,8 @@ export interface TracerConstantsOptions {
   rasterHint?: boolean;
   /** a debug tuning's constants (renderer.tune: the key's bits 20–27 name it) */
   tune?: Record<string, number>;
+  /** the raster's companion kernels lean (NEAR_DETAIL off in the Earth-raster profile's main and discs; renderer.leanMain) */
+  companion?: boolean;
 }
 
 /** The override constants of a tracer pipeline for a features key. */
@@ -97,6 +99,9 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
     HAS_AURORA: has(16384),
     HAS_TERRAIN_CACHE: ground ? has(FEATURE_TERRAIN_CACHE) : 0,
     HAS_TERRAIN_RASTER: ground && o.rasterHint ? has(FEATURE_TERRAIN_RASTER) : 0,
+    // (the raster's companion: the traced kernels of the Earth-raster profile without the near ground's sub-pixel detail —
+    // the raster draws it; the probe's coarse ground is P5's)
+    NEAR_DETAIL: profile && o.companion !== false && (entry === "main" || entry === "discs") ? 0 : 1,
     COST_VIEW: (key >> 16) & 15,
     ...(o.tune ?? {}),
     QUALITY_PIPELINE: quality ? 1 : 0,

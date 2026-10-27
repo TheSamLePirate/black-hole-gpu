@@ -165,6 +165,11 @@ override QUALITY_PIPELINE: bool = false;
 // Experimental surface cache, compiled out of default and scientific/reference kernels.
 override HAS_TERRAIN_CACHE: bool = false;
 override HAS_TERRAIN_RASTER: bool = false; // the raster patch's distances (system/terrain-raster-hint.ts): the ground march starts from them
+// the near ground's sub-pixel detail (the relief's procedural detail under the map's cell, the scenery's traced trees,
+// buildings and their shadows, the sea's waves in relief, the near world mirrored in the sea): off in the raster's
+// companion kernels — the raster draws the near ground; the trace draws the sky, the far ground beyond the raster's rings
+// (sub-pixel there) and, while the raster's kernels compile, a coarser ground (docs/PLAN-LEAN-TRACER-KERNELS.md P4)
+override NEAR_DETAIL: bool = true;
 
 // Kernel specialisation (renderer.ts: traceVariant): a feature the scene does not use compiled out —
 // the uber-kernel's branches and their registers, on the scenes that have none of them (the Gargantua
@@ -5332,7 +5337,9 @@ fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32, view: vec3f) -> vec3f {
   if (csT >= 0.0) { vl.x = csT * vl.y; }
   let Ts = sunThrough(h, mu0);
   let sky = max(skyFlat(q, h, E, mu0, 1.0), E * nightFloor(1.0, mu0));
-  let sun = E * Ts * vl.x * sceneryShadow(Lp,WS.xyz);
+  var scShadow = 1.0;
+  if (NEAR_DETAIL) { scShadow = sceneryShadow(Lp,WS.xyz); }
+  let sun = E * Ts * vl.x * scShadow;
   let lit = sun * max(dot(WS.xyz, Lp), 0.0) + (sky * 0.6 * vl.x + E * Ts * max(mu0, 0.0) * (vl.y - vl.x) * 0.6) * WS_AO;
   // leaves against the Sun: the light through the crown's thin edge, brightest looking into the Sun
   let rim = 1.0 - abs(dot(WS.xyz, view));
@@ -5939,7 +5946,8 @@ fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
   if (HAS_RWY) { g = runwayGrade(q); }
   let h0 = mix(hr.x, g.z, g.y);
   if (g.x >= 1.0) { return max(h0, 0.0); }
-  return max(h0 + (1.0 - g.x) * earthDetail(q, h0, foot, hr.y), 0.0);
+  if (NEAR_DETAIL) { return max(h0 + (1.0 - g.x) * earthDetail(q, h0, foot, hr.y), 0.0); }
+  return max(h0, 0.0);
 }
 // BEGIN_TERRAIN_CACHE (system/terrain-cache.ts supplies the existing table lookup)
 fn terrainCachedHeight(q: vec3f, foot: f32) -> f32 { return -1.0; }
@@ -5968,11 +5976,13 @@ fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
   if (P.tiles.w > 0.5) {
     let hr = earthH(q, foot, true);
     let h1 = mix(hr.x, g.z, g.y);
-    return max(h1 + (1.0 - g.x) * earthDetail(q, h1, max(foot * 4.0, 1.0), hr.y), 0.0);
+    if (NEAR_DETAIL) { return max(h1 + (1.0 - g.x) * earthDetail(q, h1, max(foot * 4.0, 1.0), hr.y), 0.0); }
+    return max(h1, 0.0);
   }
   let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
   let h0 = mix(textureSampleLevel(earthElev, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).r, g.z, g.y);
-  return max(h0 + (1.0 - g.x) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0);
+  if (NEAR_DETAIL) { return max(h0 + (1.0 - g.x) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0); }
+  return max(h0, 0.0);
 }
 // the relief's own normal at q, no finer than the footprint
 // The relief's slopes from a survey's tiles at q (geodetic, unit) for a footprint foot [m], measured in the finest level's
@@ -7072,7 +7082,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     let g = sqrt(-2.0 * log(r1)) * vec2f(cos(TAU * r2), sin(TAU * r2));
     let nS = normalize(n - g.x * sqrt(su2) * tun - g.y * sqrt(sc2) * tcn);
     let rS = reflect(-V, nS);
-    if (dot(rS, normal) > 0.005) {
+    if (NEAR_DETAIL && dot(rS, normal) > 0.005) {
       let ssr = seaSSR(SEA_D, normalize(vec3f(rS.xy, rS.z * AIR.ab)));
       refl = mix(refl, ssr.rgb, ssr.w * P.sea[1].w);
       ssrW = ssr.w * P.sea[1].w;
@@ -7225,7 +7235,7 @@ fn inlandWater(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, footM
   let clearM = skyMirror(rUp);
   if (clearM.x >= 0.0) { refl = clearM * clamp(sky / max(skyIrradiance(0.0, normal), vec3f(1e-30)), vec3f(0.0), vec3f(2.0)); }
   // (near, the world mirrored — the banks, the bridges, the buildings — from the raster's image)
-  if (RASTER_SHADE && dot(rUp, normal) > 0.005) {
+  if (NEAR_DETAIL && RASTER_SHADE && dot(rUp, normal) > 0.005) {
     let ssr = seaSSR(SEA_D, normalize(vec3f(rUp.xy, rUp.z * AIR.ab)));
     refl = mix(refl, ssr.rgb, ssr.w);
   }
@@ -8094,7 +8104,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let csT = select(-1.0, cloudShadowAt(q * (1.0 + hG / EARTH_RM)), (TUNE_GSKIP & 8192u) == 0u);
   if (csT >= 0.0) { shade = csT; }
   var Eg = E * sunThrough(hG, mu0) * shade * sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
-  Eg *= sceneryShadow(physicalLs,physicalNormal);
+  if (NEAR_DETAIL) { Eg *= sceneryShadow(physicalLs,physicalNormal); }
   if (EARTH_SHADOW_ON) { Eg *= shipShadow(EARTH_SHADOW_POINT); }
   // (near, the mountains' shadows: a peak between the sun and the valley)
   let footS = max(length(fx), length(fy)) * EARTH_RM;
@@ -9134,11 +9144,11 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
     let tm = airportScenery(dp / length(dp), select(1e7, t * kM, t > 0.0));
     if (WS.w > 0.5) { t = tm / kM; } else { WS = ws; WS_A = wa; }
   }
-  if (!DISC_ONLY && isEarth(k)) { let dp = vec3f(rd.xy, rd.z / ab); let kM = length(dp) * EARTH_RM; let tm = worldScenery(dp / length(dp), select(1e7, t * kM, t > 0.0),rnd); if (tm < select(1e7, t * kM, t > 0.0)) { t = tm / kM; } }
+  if (NEAR_DETAIL && !DISC_ONLY && isEarth(k)) { let dp = vec3f(rd.xy, rd.z / ab); let kM = length(dp) * EARTH_RM; let tm = worldScenery(dp / length(dp), select(1e7, t * kM, t > 0.0),rnd); if (tm < select(1e7, t * kM, t > 0.0)) { t = tm / kM; } }
   if (HAS_RWY) { RWY_HIT = vec4f(vec3f(rd.xy, rd.z / ab) * (t * EARTH_RM), select(0.0, 1.0, isEarth(k) && t > 0.0 && rwyCount() > 0u && WS.w < 0.5)); }
   let lt = nearLight(k);
   // (the sea's waves in relief near a low camera — over the sea only: its mean level met, h ≈ 0)
-  if (!DISC_ONLY && isEarth(k) && t > 0.0 && P.seafft[0].x > 0.5 && P.sea[1].w > 0.0 && WS.w < 0.5 && earthOn()) {
+  if (NEAR_DETAIL && !DISC_ONLY && isEarth(k) && t > 0.0 && P.seafft[0].x > 0.5 && P.sea[1].w > 0.0 && WS.w < 0.5 && earthOn()) {
     let ps = ro + rd * t;
     if (abs(airHeight(ps) - geoidN(geoQ(normalize(ps)))) < 3.0) { t = seaSurfaceHit(look, t, m); }
   }

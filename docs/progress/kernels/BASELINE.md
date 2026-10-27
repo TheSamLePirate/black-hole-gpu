@@ -12,62 +12,62 @@ A launch compiles a profile's pipelines; the scene's image waits for its `main` 
 
 Regenerate with `bun scripts/kernel-report.ts docs/progress/kernels/proxy-*.json`.
 
-| profile | pipeline | baseline [s] | p1b [s] | p3 [s] |
-|---|---|---:|---:|---:|
-| earth-raster | shade | 50.7 | 46.6 | 53.0 |
-| earth-raster | shadeMark | 0.9 | 0.1 | 0.1 |
-| earth-raster | shadeLite | 2.4 | 1.4 | 1.6 |
-| earth-raster | shadeWater | 3.9 | 2.8 | 3.0 |
-| earth-raster | shadeStars | 0.9 | 0.1 | 0.1 |
-| earth-raster | discs | 57.2 | 29.7 | 37.7 |
-| earth-raster | clouds | 1.3 | 0.4 | 0.8 |
-| earth-raster | main | 265.2 | 232.5 | 149.3 |
-| earth-raster | env | 76.5 | 80.8 | 48.5 |
-| earth-raster | aerial | 1.1 | 0.1 | 0.2 |
-| earth-raster-wx | shade | 94.0 | 98.8 | 103.4 |
-| earth-raster-wx | shadeMark | 1.0 | 0.1 | 0.1 |
-| earth-raster-wx | shadeLite | 2.3 | 1.6 | 1.6 |
-| earth-raster-wx | shadeWater | 3.5 | 2.9 | 2.9 |
-| earth-raster-wx | shadeStars | 0.8 | 0.1 | 0.1 |
-| earth-raster-wx | discs | 53.8 | 34.9 | 36.8 |
-| earth-raster-wx | clouds | 1.6 | 0.8 | 0.8 |
-| earth-raster-wx | main | 429.8 | 418.6 | 213.4 |
-| earth-raster-wx | env | 94.1 | 79.1 | 47.7 |
-| earth-raster-wx | aerial | 1.0 | 0.2 | 0.2 |
-| earth-trace | main | 233.6 | 202.6 | — |
-| earth-trace | env | 80.8 | 73.4 | — |
-| earth-trace | aerial | 0.9 | 0.1 | — |
-| earth-photo | main | 241.4 | 210.3 | — |
-| game-space | main | 116.6 | 100.0 | — |
-| game-space | env | 52.8 | 42.5 | — |
-| game-space | aerial | 1.0 | 0.1 | — |
-| earth-only | main | 86.0 | 31.4 | — |
-| earth-only | env | 34.6 | 10.2 | — |
-| earth-only | aerial | 0.9 | 0.2 | — |
-| kerr-jet | main | 43.0 | 1.9 | — |
-| kerr-jet | env | 31.1 | 5.4 | — |
-| kerr-jet | lut | 40.3 | 0.9 | — |
-| eclipse | main | 72.6 | 28.8 | — |
-| eclipse | env | 34.4 | 9.7 | — |
-| eclipse | aerial | 0.9 | 0.2 | — |
-| general | main | 249.1 | 247.0 | — |
-| general | env | 92.4 | 86.2 | — |
-| general | lut | 142.4 | 135.7 | — |
+| profile | pipeline | baseline [s] | p1b [s] | p3 [s] | p4 [s] |
+|---|---|---:|---:|---:|---:|
+| earth-raster | shade | 50.7 | 46.6 | 53.0 | 50.1 |
+| earth-raster | shadeMark | 0.9 | 0.1 | 0.1 | 0.1 |
+| earth-raster | shadeLite | 2.4 | 1.4 | 1.6 | 1.6 |
+| earth-raster | shadeWater | 3.9 | 2.8 | 3.0 | 2.9 |
+| earth-raster | shadeStars | 0.9 | 0.1 | 0.1 | 0.1 |
+| earth-raster | discs | 57.2 | 29.7 | 37.7 | 36.4 |
+| earth-raster | clouds | 1.3 | 0.4 | 0.8 | 0.8 |
+| earth-raster | main | 265.2 | 232.5 | 149.3 | 83.3 |
+| earth-raster | env | 76.5 | 80.8 | 48.5 | 47.3 |
+| earth-raster | aerial | 1.1 | 0.1 | 0.2 | 0.2 |
+| earth-raster-wx | shade | 94.0 | 98.8 | 103.4 | 99.1 |
+| earth-raster-wx | shadeMark | 1.0 | 0.1 | 0.1 | 0.1 |
+| earth-raster-wx | shadeLite | 2.3 | 1.6 | 1.6 | 1.6 |
+| earth-raster-wx | shadeWater | 3.5 | 2.9 | 2.9 | 2.9 |
+| earth-raster-wx | shadeStars | 0.8 | 0.1 | 0.1 | 0.1 |
+| earth-raster-wx | discs | 53.8 | 34.9 | 36.8 | 37.0 |
+| earth-raster-wx | clouds | 1.6 | 0.8 | 0.8 | 0.8 |
+| earth-raster-wx | main | 429.8 | 418.6 | 213.4 | 98.7 |
+| earth-raster-wx | env | 94.1 | 79.1 | 47.7 | 46.9 |
+| earth-raster-wx | aerial | 1.0 | 0.2 | 0.2 | 0.2 |
+| earth-trace | main | 233.6 | 202.6 | — | — |
+| earth-trace | env | 80.8 | 73.4 | — | — |
+| earth-trace | aerial | 0.9 | 0.1 | — | — |
+| earth-photo | main | 241.4 | 210.3 | — | — |
+| game-space | main | 116.6 | 100.0 | — | — |
+| game-space | env | 52.8 | 42.5 | — | — |
+| game-space | aerial | 1.0 | 0.1 | — | — |
+| earth-only | main | 86.0 | 31.4 | — | — |
+| earth-only | env | 34.6 | 10.2 | — | — |
+| earth-only | aerial | 0.9 | 0.2 | — | — |
+| kerr-jet | main | 43.0 | 1.9 | — | — |
+| kerr-jet | env | 31.1 | 5.4 | — | — |
+| kerr-jet | lut | 40.3 | 0.9 | — | — |
+| eclipse | main | 72.6 | 28.8 | — | — |
+| eclipse | env | 34.4 | 9.7 | — | — |
+| eclipse | aerial | 0.9 | 0.2 | — | — |
+| general | main | 249.1 | 247.0 | — | — |
+| general | env | 92.4 | 86.2 | — | — |
+| general | lut | 142.4 | 135.7 | — | — |
 
-| profile | baseline total [s] | p1b total [s] | p3 total [s] |
-|---|---:|---:|---:|
-| earth-raster | 460 | 394 | 294 |
-| earth-raster-wx | 682 | 637 | 407 |
-| earth-trace | 315 | 276 | 0 |
-| earth-photo | 241 | 210 | 0 |
-| game-space | 170 | 143 | 0 |
-| earth-only | 121 | 42 | 0 |
-| kerr-jet | 114 | 8 | 0 |
-| eclipse | 108 | 39 | 0 |
-| general | 484 | 469 | 0 |
+| profile | baseline total [s] | p1b total [s] | p3 total [s] | p4 total [s] |
+|---|---:|---:|---:|---:|
+| earth-raster | 460 | 394 | 294 | 223 |
+| earth-raster-wx | 682 | 637 | 407 | 287 |
+| earth-trace | 315 | 276 | 0 | 0 |
+| earth-photo | 241 | 210 | 0 | 0 |
+| game-space | 170 | 143 | 0 | 0 |
+| earth-only | 121 | 42 | 0 | 0 |
+| kerr-jet | 114 | 8 | 0 | 0 |
+| eclipse | 108 | 39 | 0 | 0 |
+| general | 484 | 469 | 0 | 0 |
 
 `baseline`: P0, the whole module for every pipeline. `p1b`: the sources specialised as the renderer now makes them.
-`p3`: the Earth-raster profile's constants (only the two Earth-raster profiles were rerun).
+`p3`: the Earth-raster profile's constants; `p4`: its lean companion (`NEAR_DETAIL` off) — only the two Earth-raster profiles were rerun.
 
 ## kerr-mini, cold launches in the browser (Metal)
 
@@ -76,7 +76,7 @@ the raster, booted on `game:artemis`. Times are from the Earth key's first compi
 
 | | P0 | P1 | P1b |
 |---|---:|---:|---:|
-| the Earth key's tracer lands | 139 s | 56 s | ~60 s |
+| the Earth key's tracer lands | 139 s | 56 s | ~60 s (P4: raster at 42 s) |
 | its raster material | 45 s | 58 s | 61 s |
 | the key with surface + scenery: its tracer | 221 s | 184 s | 0 s at P3 (same pipeline) |
 | all compiles settled | 277 s | 253 s | 238 s (P3: 204 s) |

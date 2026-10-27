@@ -19,7 +19,7 @@ Measurements: [BASELINE.md](BASELINE.md).
 | P1b source specialisation | done | see git log "P1b" | D3D12 proxy: Kerr 114 → 8 s, Earth-only 121 → 42 s, game Earth raster 460 → 394 s; same images |
 | P2 loading UI | done | see git log "P2" | time run / time left instead of "94 %"; first-time note; Windows iGPU tip (toast, TARS) |
 | P3 stable profile | done | see git log "P3" | one compile set per Earth flight; D3D12 Earth raster 394 → 294 s; kerr-mini settled 238 → 204 s |
-| P4 lean main | to do | | |
+| P4 lean main | done | see git log "P4" | D3D12 Earth raster main 149 → 97 s; kerr-mini raster image 62 → 42 s after launch; images within noise |
 | P5 coarse probe | to do | | |
 | P6 shade, discs | to do | | |
 | P7 NEAR_KIND | to do | | |
@@ -182,3 +182,23 @@ kerr-mini (Metal): no notable change. Metal already discards dead code cheaply. 
 | with weather, aurora, cache: total | 682 | 637 | **407** |
 
 e2e green: `raster-primary`, `title` (4), `entry` (3), `kernel-compile`.
+
+### P4 — the raster's lean companion (27/10)
+
+- `override NEAR_DETAIL` (trace.wgsl) gates the near ground's sub-pixel detail:
+  - the relief's procedural detail under the map's cell (`earthDetail`, its three height functions);
+  - the scenery's traced trees and buildings (`worldScenery`) and their shadows (`sceneryShadow`);
+  - the sea's waves in relief (`seaSurfaceHit`) and the near world mirrored in it (`seaSSR`).
+- Off in the Earth-raster profile's `main` and `discs` (`renderer.leanMain`, default true). The raster draws the near
+  ground. The trace draws the sky, and the far ground beyond the raster's rings, where all this is sub-pixel.
+- Analyzer: the profile's `main` 131k → **76k** inlined lines. Proxy (DXC): **149 → 97 s**.
+- `tests/e2e/raster-companion.e2e.test.ts` captures the same raster view with the whole and the lean kernels, against
+  the realtime view's own noise (whole vs whole). Lean vs whole, PSNR (noise in brackets):
+  - Kennedy at 900 m: 44.34 dB (44.34);
+  - Alps at 3 km: 25.33 dB (25.34);
+  - Alps at 12 km: 53.44 dB (53.52);
+  - Alps at 60 km: 55.97 dB (55.97).
+
+  That is the noise, with the sky identical and the far ground within it.
+- kerr-mini, cold Earth launch: the raster draws at **42 s** (62 s at P3), all settled at 184 s.
+- e2e green: `raster-primary` (same figures as P3), `eclipse-raster`, `kernel-compile`.

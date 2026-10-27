@@ -4409,7 +4409,12 @@ export class Renderer {
     quality: boolean,
     specialised = this.sourceSpecialise,
   ): Promise<GPUComputePipeline> {
-    const constants = tracerConstants(key, entryPoint, { quality, rasterHint: this.rasterHint, tune: this.tunes.get((key >> 20) & 255) });
+    const constants = tracerConstants(key, entryPoint, {
+      quality,
+      rasterHint: this.rasterHint,
+      tune: this.tunes.get((key >> 20) & 255),
+      companion: this.leanMain,
+    });
     const ep = tracerEntryPoint(entryPoint);
     // (the same pipeline asked again — another key whose constants are the same: the Earth-raster profile's keys, the
     // scenery's and the surface's bits coming and going —: the one compiled, not a second compile)
@@ -4453,6 +4458,9 @@ export class Renderer {
   private pipelineMemo = new Map<string, Promise<GPUComputePipeline>>();
   /** the Earth-raster profile on (FEATURE_RASTER_PRIMARY): off, every bit of the key its own compile, as before */
   stableProfiles = true;
+  /** the profile's traced kernels lean — the near ground's sub-pixel detail out (NEAR_DETAIL), the raster drawing it (P4);
+   *  false: the whole near ground in them, as before */
+  leanMain = true;
 
   /** keys compiled ahead of a launch (prewarm): their queued compiles wanted though the camera is elsewhere */
   private prewarmKeys = new Set<number>();
@@ -7426,7 +7434,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     let kb = this.mainKB.get(key);
     if (kb === undefined) {
       this.specialiser ??= new WgslSpecialiser(this.traceSource);
-      const c = tracerConstants(key, "main", { rasterHint: this.rasterHint, tune: this.tunes.get((key >> 20) & 255) });
+      const c = tracerConstants(key, "main", {
+        rasterHint: this.rasterHint,
+        tune: this.tunes.get((key >> 20) & 255),
+        companion: this.leanMain,
+      });
       kb = this.specialiser.specialise(c, "main").length / 1024;
       this.mainKB.set(key, kb);
     }
