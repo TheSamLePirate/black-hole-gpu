@@ -1477,7 +1477,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
       let t1 = normalize(cross(rd, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(rd.z) > 0.9)));
       let li = u32(max(i32(bodies[BV * k + 3u].x), 0));
       let met = hit && k == kBest;
-      let e = earthLook(k, squashed(A * (-c / R), ab), rd, select(-1.0, tBest * m / R, met), normalize(squashed(A * normalize(bodies[BV * li].xyz - bodies[BV * k].xyz), ab)),
+      let e = earthLookFar(k, squashed(A * (-c / R), ab), rd, select(-1.0, tBest * m / R, met), normalize(squashed(A * normalize(bodies[BV * li].xyz - bodies[BV * k].xyz), ab)),
         earthSun(k, gObs), t1, cross(rd, t1), beam() * travel / R, beam(), 0.5, false);
       (*out).glow += (*out).tint * e.col;
       (*out).tint *= e.T;
@@ -3823,10 +3823,13 @@ fn reliefNormal(surf: u32, qb: vec3f, t: f32, tSec: f32, minFoot: f32) -> vec3f 
     let es = max(t * pixFoot(), 100.0 / mR);
     let a1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
     let a2 = cross(qb, a1);
-    let s0 = airlessSwell(surf - 4u, qb, foot, mR);
-    let s1 = airlessSwell(surf - 4u, normalize(qb + a1 * es), foot, mR);
-    let s2 = airlessSwell(surf - 4u, normalize(qb + a2 * es), foot, mR);
-    let g = gc - qb * dot(gc, qb) + ((s1 - s0) * a1 + (s2 - s0) * a2) / (es * mR);
+    // (the three samples in a loop: one copy of the swell — P9)
+    var sw: array<f32, 3>;
+    for (var j = 0u; j < 3u; j++) {
+      let qj = select(qb, normalize(qb + select(a1, a2, j == 2u) * es), j > 0u);
+      sw[j] = airlessSwell(surf - 4u, qj, foot, mR);
+    }
+    let g = gc - qb * dot(gc, qb) + ((sw[1] - sw[0]) * a1 + (sw[2] - sw[0]) * a2) / (es * mR);
     return normalize(fromBody(normalize(qb - g)));
   }
   // (no finer than 10 m: float32 directions on the unit sphere are ~0.4 m apart — finer, the normal
@@ -3834,10 +3837,13 @@ fn reliefNormal(surf: u32, qb: vec3f, t: f32, tSec: f32, minFoot: f32) -> vec3f 
   let e = max(t * pixFoot(), 2.0 * max(minFoot, 5.0) / mR);
   let t1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
   let t2 = cross(qb, t1);
-  let h0 = reliefBase(surf, qb, foot, mR, tSec);
-  let h1 = reliefBase(surf, normalize(qb + t1 * e), foot, mR, tSec);
-  let h2 = reliefBase(surf, normalize(qb + t2 * e), foot, mR, tSec);
-  let g = ((h1 - h0) * t1 + (h2 - h0) * t2) / (e * mR);
+  // (the three samples in a loop: one copy of the relief — P9)
+  var hs: array<f32, 3>;
+  for (var j = 0u; j < 3u; j++) {
+    let qj = select(qb, normalize(qb + select(t1, t2, j == 2u) * e), j > 0u);
+    hs[j] = reliefBase(surf, qj, foot, mR, tSec);
+  }
+  let g = ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / (e * mR);
   return normalize(fromBody(normalize(qb - g)));
 }
 
@@ -9096,6 +9102,26 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
   }
   return earthLookCompose(ro, rd, tHit, E, jit, s, G);
 }
+// earthLook for a world with air away from the camera (ourSegment): the Earth's own ground there only when the Earth is not
+// the body near the camera — that one is earthNear's, and ourSegment never meets it (bodyWhere 3): an Earth flight's
+// kernels then carry no further copy of the Earth's ground (NEAR_KIND, P9)
+fn earthLookFar(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
+  let s = earthLookSky(k, ro, rd, tHit, Ls, E, gx, gy, fp0, fpK, jit, volume);
+  var G = vec3f(0.0);
+  if (!DISC_ONLY && tHit > 0.0) {
+    let ph = ro + rd * tHit;
+    let q = normalize(ph);
+    let fp = fp0 + fpK * tHit;
+    if ((HAS_RWY || HAS_SCENERY) && WS.w > 0.5) {
+      G = windsockShade(q, Ls, E, max(airHeight(ph) - geoidN(geoQ(q)), 0.0), airPhysicalDirection(rd));
+    } else if (NEAR_KIND != 1u && s.earth) {
+      G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max(airHeight(ph) - geoidN(geoQ(q)), 0.0));
+    } else {
+      G = otherGround(k, airPhysicalNormal(q), airPhysicalDirection(rd), airPhysicalDirection(Ls), E, fp);
+    }
+  }
+  return earthLookCompose(ro, rd, tHit, E, jit, s, G);
+}
 // (a ray that never meets the ground: the sky's part alone)
 fn earthLookNoGround(k: u32, ro: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
   return earthLookCompose(ro, rd, -1.0, E, jit, earthLookSky(k, ro, rd, -1.0, Ls, E, gx, gy, fp0, fpK, jit, volume), vec3f(0.0));
@@ -9347,6 +9373,14 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   // from it along the ray — measured against the integrator: within 3 % at b = 20ρ, its error falling as
   // 1/b², under a quarter pixel beyond √(0.26 M / pixel) (and 4ρ: the throat's own shape)
   var outward = false; // (the ray never enters the Dneg region: nothing further to meet)
+  // (a straight piece through our bodies: 1 the camera's, up to the Dneg region; 2 the one out of our end of the wormhole.
+  // Both met at one call site, in the segments' loop: ourSegment is the kernel's largest function, and on D3D12 every
+  // call is a copy — docs/PLAN-LEAN-TRACER-KERNELS.md P9)
+  var piece = 0u;
+  var pieceO = vec3f(0.0);
+  var pieceD = vec3f(0.0);
+  var pieceT = 0.0;
+  var pieceTr = 0.0;
   var straight = !HAS_KERR;
   if (seg == 1u && P.wh2.y < 0.0) {
     let m = -P.ourCam.xyz;
@@ -9361,12 +9395,10 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         let hh = R2 - bb * bb;
         var tEnter = 3e38;
         if (!straight && hh > 0.0 && b > 0.0) { tEnter = b - sqrt(hh); } else { outward = true; }
-        var wo: WhOut;
-        wo.tint = vec3f(1.0);
-        let stop = ourSegment(vec3f(0.0), dH, tEnter, &wo, 1.0 / eloc, 0.0, false);
-        colW += thr * wo.glow;
-        thr *= wo.tint;
-        if (stop) { return traceOut(colW); }
+        piece = 1u;
+        pieceO = vec3f(0.0);
+        pieceD = dH;
+        pieceT = tEnter;
       }
       if (straight) {
         let al = P.wh.w / max(bb, 1e-9) * (1.0 + b / sqrt(b * b + bb * bb));
@@ -9382,8 +9414,22 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     skyG = 1.0 / eloc;
     skyId = SKY_HOME;
     skyOrg = vec4f(0.0);
-  } else {
-  for (var segN = 0u; segN < 6u; segN++) {
+  }
+  for (var segN = 0u; segN < 7u; segN++) {
+  if (piece != 0u) {
+    var wo: WhOut;
+    wo.tint = vec3f(1.0);
+    let stop = ourSegment(pieceO, pieceD, pieceT, &wo, 1.0 / eloc, pieceTr, false);
+    colW += thr * wo.glow;
+    thr *= wo.tint;
+    if (piece == 2u) {
+      if (stop) { thr = vec3f(0.0); }
+      break;
+    }
+    if (stop) { return traceOut(colW); }
+    piece = 0u;
+  }
+  if (straight || segN == 6u) { break; }
   if (seg == 1u) {
     let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w, fract(rnd * 61.8034 + 0.2718 * f32(segN)), 1.0 / eloc, travel);
     // light from beyond the liquid surface is tinted by it; what was gathered before is not
@@ -9404,12 +9450,12 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         let exitH = dnegR(-P.whN.w).x * repToHome(w.n, -w.n) - P.ourCam.xyz;
         skyOrg = vec4f(exitH, travel + length(exitH));
         if (ourStart() < bodyCount()) {
-          var wo: WhOut;
-          wo.tint = vec3f(1.0);
-          let stop = ourSegment(exitH, normalize(skyDir), 3e38, &wo, 1.0 / eloc, skyOrg.w, false);
-          colW += thr * wo.glow;
-          thr *= wo.tint;
-          if (stop) { thr = vec3f(0.0); }
+          piece = 2u;
+          pieceO = exitH;
+          pieceD = normalize(skyDir);
+          pieceT = 3e38;
+          pieceTr = skyOrg.w;
+          continue;
         }
       }
       break;
@@ -9859,7 +9905,6 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   }
   break;
   } // segments
-  } // (HAS_KERR)
 
   col = colW + thr * col;
   out.tint = thr;

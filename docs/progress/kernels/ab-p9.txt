@@ -1,0 +1,16 @@
+earth-raster discs       head.wgsl   20.5 s   641 KB   p9m.wgsl   15.4 s   526 KB
+earth-raster main        head.wgsl   58.0 s  1289 KB   p9m.wgsl   31.6 s   920 KB
+earth-raster env         head.wgsl   27.1 s  1138 KB   p9m.wgsl   22.8 s   927 KB
+earth-raster-wx discs    head.wgsl   19.3 s   641 KB   p9m.wgsl   15.4 s   526 KB
+earth-raster-wx main     head.wgsl   71.1 s  1388 KB   p9m.wgsl   42.5 s   996 KB
+earth-raster-wx env      head.wgsl   27.6 s  1138 KB   p9m.wgsl   23.1 s   927 KB
+earth-trace main         head.wgsl  167.1 s  3023 KB   p9m.wgsl   60.2 s  1408 KB
+earth-trace env          head.wgsl   32.8 s  1343 KB   p9m.wgsl   26.4 s  1079 KB
+game-space main          head.wgsl   41.0 s  1217 KB   p9m.wgsl   27.5 s   905 KB
+game-space env           head.wgsl   22.3 s  1080 KB   p9m.wgsl   19.5 s   882 KB
+moon main                head.wgsl   62.5 s  1641 KB   p9m.wgsl   38.8 s  1202 KB
+moon env                 head.wgsl   22.3 s  1080 KB   p9m.wgsl   19.6 s   882 KB
+earth-only main          head.wgsl   18.4 s   583 KB   p9m.wgsl   21.4 s   583 KB
+earth-only env           head.wgsl    4.8 s   303 KB   p9m.wgsl    7.0 s   303 KB
+
+[exited with code 0]

@@ -24,7 +24,7 @@ Measurements: [BASELINE.md](BASELINE.md).
 | P6 shade, discs | done | see git log "P6" | shade only when the scenery is in; discs kernel kept (70 vs 90 ms in the telescope) |
 | P7 NEAR_KIND | done | see git log "P7" | D3D12: Earth raster main 97 → 58 s, discs 36 → 20 s; space 98 → 40 s; kerr-mini raster at 37 s |
 | P8 general on demand | done | see git log "P8" | no general kernel at start; kerr-mini cold Earth: settled 166 → 73 s, raster at 31 s |
-| P9 inlining | to do | | |
+| P9 inlining | done | see git log "P9" | ourSegment once in traceLook; D3D12 Earth raster main 58 → 32 s, Earth traced 167 → 60 s; kerr-mini raster at 24 s, settled 47 s |
 | P10 guard, docs | to do | | |
 
 ## Journal
@@ -319,3 +319,40 @@ e2e green: `raster-primary`, `title` (4), `entry` (3), `kernel-compile`.
 - kerr-mini, cold Earth launch: the raster at **31 s**, all settled at **73 s** (166 s at P7), 122 s of compile in all
   (443 s at P0).
 - Unrelated and pre-existing: `offline-settings` fails twice the same way at P7 (a settings tab renamed).
+
+### P9 — fewer inlined copies (27/10)
+
+- **`ourSegment`** (the straight pieces through our solar system's bodies, the kernel's largest function): its two calls
+  in `traceLook` — the camera's piece up to the Dneg region, and the piece out of our end of the wormhole — are now one
+  call site at the head of the segments' loop (`piece` 1 or 2, pending; the loop runs one more turn for it). The third
+  copy, inside `dnegTrace`'s integration, stays: removing it would mean pausing and resuming that integration.
+- **`earthLookFar`**: `ourSegment`'s `earthLook` without the Earth's own ground when the Earth is the body near the camera
+  (`NEAR_KIND == 1`): that Earth is `earthNear`'s, and `ourSegment` never meets it (`bodyWhere` 3).
+- **`reliefNormal`**: its three relief samples (and the airless swell's three) in a loop, one copy each.
+- **Tried and dropped: `gnoise`'s corners in loops.** Fewer inlined lines, but DXC takes 15 % longer on every `env`
+  (21 → 24 s in space, 22 → 26 s on the Moon): it unrolls them back, through local arrays.
+- Not done: the plan's single call sites in the Earth's march (`waterMirror → earthHeight` …): within the traced
+  Earth's own kernel, which P9 already halves.
+
+**D3D12 proxy, DXC CPU seconds, HEAD (P8) → P9** (`d3d12-ab.ts`, two rounds; [ab-p9.txt](ab-p9.txt)):
+
+| pipeline | P8 | P9 | DXIL KB |
+|---|---:|---:|---:|
+| Earth raster `main` | 58.0 | **31.6** | 1289 → 920 |
+| Earth raster `discs` | 20.5 | 15.4 | 641 → 526 |
+| Earth raster `env` | 27.1 | 22.8 | 1138 → 927 |
+| Earth raster, weather `main` | 71.1 | **42.5** | 1388 → 996 |
+| Earth traced `main` (walking, photo) | 167.1 | **60.2** | 3023 → 1408 |
+| Earth traced `env` | 32.8 | 26.4 | 1343 → 1079 |
+| space `main` | 41.0 | 27.5 | 1217 → 905 |
+| space `env` | 22.3 | 19.5 | 1080 → 882 |
+| the Moon `main` | 62.5 | **38.8** | 1641 → 1202 |
+| the Moon `env` | 22.3 | 19.6 | 1080 → 882 |
+| Earth-only `main` | 18.4 | 21.4 | 583 → 583 (the same code: noise) |
+
+- **kerr-mini, cold launches** (`KC_COLD=1`): Earth raster — first trace 22.6 s, the raster at **24 s** (31 s at P8),
+  settled at **47 s** (73 s), 75 s of compile in all (122 s); the Moon settled at 7.9 s, the wormhole at 8.7 s, Kerr 3.2 s.
+- **Images** (`kernel-golden`, P8 recorded, P9 compared, the same state reloaded): values off by more than one level of
+  92 160 — Kerr 1, Interstellar 19, the Andes 0, Mars 1, the Moon's plains 6. Miller left out: two loads of its save
+  differ by ~14k values with the same code.
+- `tests/kernel-budget.test.ts` written (P10's guard), its budgets the P9 sizes + 10 %.
