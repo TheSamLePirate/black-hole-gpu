@@ -8,6 +8,8 @@
 //   bun scripts/d3d12-compile-proxy.ts earth-raster,kerr-jet   some profiles
 //   bun scripts/d3d12-compile-proxy.ts earth-raster --entries main,env
 //   bun scripts/d3d12-compile-proxy.ts --json out.json         results kept (docs/progress/kernels/)
+//   bun scripts/d3d12-compile-proxy.ts --specialise            the sources specialised as the renderer makes them (P1b)
+//   bun scripts/d3d12-compile-proxy.ts kerr-jet --entries main --equiv   both, and their DXIL compared (same code?)
 //   TINT=… DXC=… bun scripts/d3d12-compile-proxy.ts            the tools elsewhere
 //
 // Calibration (docs/ANALYSE-CHARGEMENT-GPU.md §9, Chrome 155 on Windows): the general kernel (main + env) 317 s on an
@@ -19,6 +21,7 @@ import { join } from "node:path";
 import type { TracerEntry } from "../src/system/tracer-kernels";
 import { tracerEntryPoint } from "../src/system/tracer-kernels";
 import { PROFILES, profileConstants, tracerSource } from "./lib/kernel-profiles";
+import { specialiseWgsl } from "./lib/wgsl-inline";
 
 const out = join(homedir(), ".cache/bh-d3d12/dawn/out");
 const TINT = process.env.TINT ?? join(out, "tint");
@@ -41,13 +44,20 @@ const opt = (name: string) => {
   return v;
 };
 const jsonOut = opt("--json");
+const flagOn = (name: string) => {
+  const i = args.indexOf(name);
+  if (i >= 0) args.splice(i, 1);
+  return i >= 0;
+};
+const specialise = flagOn("--specialise");
+const equiv = flagOn("--equiv");
 const entriesWanted = opt("--entries")?.split(",");
 const shaderModel = opt("--sm") ?? "6_6";
 const ids = args[0]?.split(",");
 
 /** Dawn's DXC arguments for a compute pipeline (dawn/native/d3d/ShaderUtils.cpp GetDXCArguments; ComputePipelineD3D12:
  *  optimisation level 3, row-major matrices, IEEE strictness; HLSL 2018 unless the 2021 toggle) */
-const dxcArgs = (entry: string, hlsl: string, dxil: string) => [
+const dxcArgs = (entry: string, hlsl: string, dxil: string, listing = false) => [
   "-T",
   `cs_${shaderModel}`,
   "-E",
@@ -59,10 +69,24 @@ const dxcArgs = (entry: string, hlsl: string, dxil: string) => [
   "/Zpr",
   "-HV",
   "2018",
-  "-Fo",
+  listing ? "-Fc" : "-Fo",
   dxil,
   hlsl,
 ];
+
+/** a DXIL listing with its names and numbering taken off (two compiles of the same code then read the same, but for the
+ *  order of a few phi nodes) */
+const normalise = (asm: string) =>
+  asm
+    .split("\n")
+    .filter((l) => !l.startsWith(";"))
+    .map((l) =>
+      l
+        .replace(/%[0-9]+/g, "%N")
+        .replace(/@[A-Za-z0-9_.]+/g, "@G")
+        .replace(/![0-9]+/g, "!M"),
+    )
+    .sort();
 
 /** a command's wall time and peak memory (macOS /usr/bin/time -l; Linux -v) */
 async function timed(cmd: string[]): Promise<{ s: number; mb: number; ok: boolean; err: string }> {
@@ -77,8 +101,9 @@ async function timed(cmd: string[]): Promise<{ s: number; mb: number; ok: boolea
 }
 
 const dir = mkdtempSync(join(tmpdir(), "bh-d3d12-"));
+const source = tracerSource();
 const wgsl = join(dir, "trace.wgsl");
-await Bun.write(wgsl, tracerSource());
+await Bun.write(wgsl, source);
 
 interface Row {
   profile: string;
@@ -103,7 +128,13 @@ for (const p of PROFILES.filter((x) => !ids || ids.includes(x.id))) {
     const hlsl = join(dir, `${p.id}-${entry}.hlsl`);
     const dxil = join(dir, `${p.id}-${entry}.dxil`);
     const ep = tracerEntryPoint(entry);
-    const t = await timed([TINT, "--format", "hlsl", "--ep", ep, "--overrides", overrides, "-o", hlsl, wgsl]);
+    // (the renderer's specialised source for this pipeline — P1b —, or the module as it was)
+    let input = wgsl;
+    if (specialise) {
+      input = join(dir, `${p.id}-${entry}.wgsl`);
+      await Bun.write(input, specialiseWgsl(source, c, ep));
+    }
+    const t = await timed([TINT, "--format", "hlsl", "--ep", ep, "--overrides", overrides, "-o", hlsl, input]);
     if (!t.ok) {
       console.log(`  ${entry.padEnd(11)} tint failed:\n${t.err}`);
       rows.push({ profile: p.id, entry, key: p.key, tintS: t.s, tintMB: t.mb, hlslKB: 0, dxcS: 0, dxcMB: 0, dxilKB: 0, ok: false });
@@ -114,6 +145,20 @@ for (const p of PROFILES.filter((x) => !ids || ids.includes(x.id))) {
     const hlslKB = statSync(hlsl).size / 1024;
     const dxilKB = d.ok ? statSync(dxil).size / 1024 : 0;
     rows.push({ profile: p.id, entry, key: p.key, tintS: t.s, tintMB: t.mb, hlslKB, dxcS: d.s, dxcMB: d.mb, dxilKB, ok: d.ok });
+    if (equiv && d.ok) {
+      // (the same pipeline from the other source: its DXIL listing against this one's)
+      const otherIn = specialise ? wgsl : join(dir, `${p.id}-${entry}.spec.wgsl`);
+      if (!specialise) await Bun.write(otherIn, specialiseWgsl(source, c, ep));
+      const oh = join(dir, `${p.id}-${entry}.other.hlsl`);
+      Bun.spawnSync([TINT, "--format", "hlsl", "--ep", ep, "--overrides", overrides, "-o", oh, otherIn]);
+      const la = join(dir, "a.asm");
+      const lb = join(dir, "b.asm");
+      Bun.spawnSync([DXC, ...dxcArgs(ep, hlsl, la, true)]);
+      Bun.spawnSync([DXC, ...dxcArgs(ep, oh, lb, true)]);
+      const [a, b] = [normalise(await Bun.file(la).text()), normalise(await Bun.file(lb).text())];
+      const same = a.length === b.length && a.every((x, k) => x === b[k]);
+      console.log(`  ${entry.padEnd(11)} DXIL ${same ? "identical" : "DIFFERS"} (${a.length} / ${b.length} lines, names and order aside)`);
+    }
     console.log(
       `  ${entry.padEnd(11)} tint ${t.s.toFixed(1).padStart(5)} s  hlsl ${hlslKB.toFixed(0).padStart(5)} KB  dxc ${d.s.toFixed(1).padStart(6)} s ${d.mb.toFixed(0).padStart(5)} MB  dxil ${dxilKB.toFixed(0).padStart(5)} KB${d.ok ? "" : `  FAILED\n${d.err}`}`,
     );
@@ -130,6 +175,9 @@ if (general.length === 2) {
   );
 }
 if (jsonOut) {
-  await Bun.write(jsonOut, `${JSON.stringify({ date: new Date().toISOString(), tint: TINT, dxc: DXC, shaderModel, rows }, null, 1)}\n`);
+  await Bun.write(
+    jsonOut,
+    `${JSON.stringify({ date: new Date().toISOString(), tint: TINT, dxc: DXC, shaderModel, specialise, rows }, null, 1)}\n`,
+  );
   console.log(`written ${jsonOut}`);
 }

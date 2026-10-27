@@ -22,6 +22,9 @@ import { withCloudPass } from "../src/system/cloud-pass";
 import { withCloudShadow } from "../src/system/cloud-shadow";
 import { withTreeShadow } from "../src/system/tree-shadow";
 import { CHROME, withGpuPage } from "./lib/headless-gpu";
+import { PROFILES, profileConstants, tracerSource } from "./lib/kernel-profiles";
+import { specialiseWgsl } from "./lib/wgsl-inline";
+import { tracerEntryPoint } from "../src/system/tracer-kernels";
 
 const shaders: Record<string, string> = {};
 for await (const f of new Glob("src/shaders/*.wgsl").scan(".")) shaders[f.split("/").pop()!] = await Bun.file(f).text();
@@ -45,6 +48,19 @@ shaders["trace.wgsl without the aerial table, surface textures, scenery"] = aeri
 );
 // (the mountains' warp's grid pass: the tracer's noise taken from its source)
 shaders["the warp grid's pass (system/warp-grid.ts)"] = warpShader(shaders["trace.wgsl"]!);
+// (each reference scene's pipelines as the renderer makes their modules: specialised as source, their dead branches and the
+// functions only those reached removed — src/system/wgsl-specialise.ts, docs/PLAN-LEAN-TRACER-KERNELS.md P1b)
+{
+  const full = tracerSource();
+  const seen = new Set<string>();
+  for (const p of PROFILES)
+    for (const entry of p.entries) {
+      const code = specialiseWgsl(full, profileConstants(p, entry), tracerEntryPoint(entry));
+      if (seen.has(code)) continue;
+      seen.add(code);
+      shaders[`specialised: ${p.id} ${entry}${p.quality ? " (quality)" : ""}`] = code;
+    }
+}
 
 try {
   const v = await withGpuPage((evaluate) =>

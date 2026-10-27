@@ -74,3 +74,66 @@ fn main() { let x = user() + big(); }
     expect(prune("if (HAS_X || y) { a(); }", { HAS_X: 0 }, new Set())).toContain("a()");
   });
 });
+
+describe("the source specialisation (P1b)", () => {
+  const src = `
+override HAS_A: bool = true;
+@group(0) @binding(1) var<storage, read> table: array<vec4f>;
+fn onlyA() -> f32 { return table[0].x; }
+@group(0) @binding(2) var<storage, read> other: array<vec4f>;
+fn always() -> f32 { return other[0].y; }
+// a comment
+fn helper(k: u32) -> bool { return HAS_A && k > 0u; }
+fn user(k: u32) -> f32 {
+  var r = 0.0;
+  if (HAS_A) { r += onlyA(); }
+  if (helper(k)) { r += 1.0; } else { r -= 1.0; }
+  if (HAS_A || k > 2u) { r += 2.0; }
+  return r + always();
+}
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) gid: vec3u) { let x = user(gid.x); }
+@compute @workgroup_size(64)
+fn other2() { let y = always(); }
+`;
+  test("dead branches and the functions only they reached go; the module's declarations stay", async () => {
+    const { WgslSpecialiser } = await import("../src/system/wgsl-specialise");
+    const out = new WgslSpecialiser(src).specialise({ HAS_A: 0 }, "main");
+    expect(out).not.toContain("fn onlyA");
+    expect(out).not.toContain("fn other2");
+    expect(out).toContain("var<storage, read> table");
+    expect(out).toContain("var<storage, read> other");
+    expect(out).toContain("fn always");
+    expect(out).toContain("override HAS_A");
+    // (the else of a dead if kept; an || condition left alone)
+    expect(out).toContain("r -= 1.0");
+    expect(out).toContain("HAS_A || k > 2u");
+    expect(out).not.toContain("a comment");
+  });
+  test("live branches untouched", async () => {
+    const { WgslSpecialiser } = await import("../src/system/wgsl-specialise");
+    const out = new WgslSpecialiser(src).specialise({ HAS_A: 1 }, "main");
+    expect(out).toContain("fn onlyA");
+    expect(out).toContain("r += onlyA()");
+    expect(out).toContain("r += 1.0");
+  });
+  test("a local of a module name, or declared twice, is not taken for a constant", async () => {
+    const { WgslSpecialiser } = await import("../src/system/wgsl-specialise");
+    const s2 = `
+override HAS_A: bool = false;
+fn f(on: bool) -> f32 {
+  if (on) { return 1.0; }
+  { let on2 = HAS_A && true; if (on2) { return 2.0; } }
+  { let on3 = HAS_A; }
+  { let on3 = true; if (on3) { return 3.0; } }
+  return 0.0;
+}
+@compute @workgroup_size(1)
+fn main() { let x = f(true); }
+`;
+    const out = new WgslSpecialiser(s2).specialise({}, "main");
+    expect(out).toContain("return 1.0");
+    expect(out).not.toContain("return 2.0");
+    expect(out).toContain("return 3.0");
+  });
+});

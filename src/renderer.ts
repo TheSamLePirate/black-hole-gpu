@@ -4,6 +4,7 @@ import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import { TerrainCache } from "./system/terrain-cache";
 import { composeTracer } from "./system/tracer-source";
 import { FEATURES_ALL, FEATURE_TERRAIN_CACHE, FEATURE_TERRAIN_RASTER, tracerConstants, tracerEntryPoint } from "./system/tracer-kernels";
+import { WgslSpecialiser } from "./system/wgsl-specialise";
 import { RASTER_HINT_BINDING, RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_BINDING, SUN_SHADOW_TEXTURE_LIMIT } from "./system/terrain-raster-hint";
 import {
   TERRAIN_CACHE_LEVELS,
@@ -4349,7 +4350,19 @@ export class Renderer {
     this.compiling.add(label);
     let p: GPUComputePipeline;
     try {
-      p = await this.mkVariant(key, entry, quality);
+      try {
+        p = await this.mkVariant(key, entry, quality);
+      } catch (e) {
+        // (the specialised source rejected — a pruning the compiler disagrees with —: the pipeline from the whole module, as
+        // before, and the diagnostic told: an image rather than none)
+        if (!this.sourceSpecialise || this.lost) throw e;
+        gpuDiagnostics.record(
+          "optional-pipeline-failure",
+          `specialised tracer ${entry}, features ${key}: ${String((e as Error)?.message ?? e)}`,
+        );
+        console.warn("Specialised tracer source rejected, the whole module used:", e);
+        p = await this.mkVariant(key, entry, quality, false);
+      }
     } catch (e) {
       this.noteCompile(`${entry}${quality ? " (quality)" : ""}`, key, t0, false);
       throw e;
@@ -4371,7 +4384,10 @@ export class Renderer {
     key: number,
     entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "discs" | "clouds",
     quality: boolean,
+    specialised = this.sourceSpecialise,
   ): Promise<GPUComputePipeline> {
+    const constants = tracerConstants(key, entryPoint, { quality, rasterHint: this.rasterHint, tune: this.tunes.get((key >> 20) & 255) });
+    const ep = tracerEntryPoint(entryPoint);
     return this.device.createComputePipelineAsync({
       layout:
         entryPoint === "clouds"
@@ -4390,12 +4406,38 @@ export class Renderer {
                 ? this.aerialLayout
                 : this.tracePipeLayout,
       compute: {
-        module: this.traceModule,
+        module: specialised ? this.specialisedModule(constants, ep) : this.traceModule,
         // (the sky's discs: main's own, its sky's layer and its ground compiled out — DISC_ONLY)
-        entryPoint: tracerEntryPoint(entryPoint),
-        constants: tracerConstants(key, entryPoint, { quality, rasterHint: this.rasterHint, tune: this.tunes.get((key >> 20) & 255) }),
+        entryPoint: ep,
+        constants,
       },
     });
+  }
+
+  /**
+   * Each specialised pipeline from a module of its own, specialised as source: its constant-false branches and the functions
+   * only they reached removed before the module is made (src/system/wgsl-specialise.ts — docs/PLAN-LEAN-TRACER-KERNELS.md
+   * P1b). Tint keeps dead code in what it hands the driver's compiler, and DXC paid for it as for live code: key 516's main,
+   * 41 s of DXC, 1.6 s specialised, the same DXIL. Off (false): every pipeline from the one module, as before.
+   */
+  sourceSpecialise = (globalThis as { __kernelSpecialise?: boolean }).__kernelSpecialise !== false;
+  private specialiser: WgslSpecialiser | null = null;
+  /** the specialised modules by their source (the same text, the same module: two keys whose constants prune alike share
+   *  it — and the browser's shader cache keys on it, across sessions) */
+  private specialisedModules = new Map<string, GPUShaderModule>();
+  private specialisedModule(constants: Record<string, number>, entryPoint: string): GPUShaderModule {
+    this.specialiser ??= new WgslSpecialiser(this.traceSource);
+    const code = this.specialiser.specialise(constants, entryPoint);
+    let m = this.specialisedModules.get(code);
+    if (m) {
+      // (most recently used last: the oldest dropped first)
+      this.specialisedModules.delete(code);
+    } else {
+      m = this.device.createShaderModule({ code, label: `trace ${entryPoint} (specialised)` });
+      if (this.specialisedModules.size >= 32) this.specialisedModules.delete(this.specialisedModules.keys().next().value!);
+    }
+    this.specialisedModules.set(code, m);
+    return m;
   }
 
   /** At most four keys (LRU): the current one, the one compiled ahead and those the game goes back and forth

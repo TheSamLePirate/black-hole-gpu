@@ -10,13 +10,13 @@ Tools (P0):
 - `E2E=1 CASES=… bun test tests/e2e/kernel-compile.e2e.test.ts`: cold launches in the browser, `renderer.compileReport()`.
 - `__bh.renderer.compileReport()`: every tracer compile of the session.
 
-Baselines: [BASELINE.md](BASELINE.md).
+Measurements: [BASELINE.md](BASELINE.md).
 
 | Phase | State | Commit | Notes |
 |---|---|---|---|
 | P0 measure | done | see git log "P0" | analyzer, proxy, compile report, kerr-mini baseline; **finding: dead code costs DXC as much as live code** (→ P1b) |
 | P1 queue fixes | done | see git log "P1" | Earth key's tracer 139 → 56 s after the launch (kerr-mini, cold) |
-| P1b source specialisation | to do | | added after P0 |
+| P1b source specialisation | done | see git log "P1b" | D3D12 proxy: Kerr 114 → 8 s, Earth-only 121 → 42 s, game Earth raster 460 → 394 s; same images |
 | P2 loading UI | to do | | |
 | P3 stable profile | to do | | |
 | P4 lean main | to do | | |
@@ -94,3 +94,41 @@ Measured (kerr-mini, `KC_COLD=1`, the Metal cache emptied; F-35 over Tarifa, ras
 Left for later phases:
 - the key compiled ahead still recompiles `main` + `env` (P3);
 - each `main` is still 50–100 s on the mini (P1b, P4).
+
+### P1b — source-level specialisation (27/10)
+
+- `src/system/wgsl-specialise.ts` (`WgslSpecialiser`): the module parsed once, then for each pipeline:
+  - its constant-false branches are removed (`if (false) {}` left, the `else` kept);
+  - only the functions its entry point still reaches are kept.
+- The sound rules: an override false (or `!X` with X true, or a numeric comparison of a constant); a `let` of such a
+  conjunction declared once, not a module or parameter name; a `bool` helper returning one; a `var` given a literal and
+  never another value nor its address. Conditions with `||` are left alone.
+- The renderer makes every specialised pipeline (the realtime cascade and the quality one) from such a module, cached
+  by its text (`renderer.sourceSpecialise`, `globalThis.__kernelSpecialise = false` before load to turn it off). If a
+  specialised source is ever rejected, the pipeline is rebuilt from the whole module and the diagnostic says so.
+- The general pipelines keep the whole module (P8 deals with them).
+- `scripts/check-wgsl.ts` validates every reference scene's specialised sources (61 shaders).
+- `scripts/d3d12-compile-proxy.ts --specialise [--equiv]`: specialised timings, and the DXIL of both sources compared.
+  `main` and `env` of key 516 are identical (names and order aside). `lut` loses 300 lines of DXIL: the dead code had
+  changed DXC's optimisation decisions, and the offline renders are identical.
+- `tests/e2e/kernel-equivalence.e2e.test.ts`: six scenes rendered offline, whole module against specialised, same page
+  and clock: at most 24 of 92 160 values off by more than one level (the A/A floor is 7 to 17).
+
+**D3D12 proxy (Tint + DXC, s), baseline → specialised:**
+
+| | before | after |
+|---|---:|---:|
+| Kerr + jet | 114 | 8 |
+| Earth-only scene | 121 | 42 |
+| eclipse | 108 | 39 |
+| the game's universe (736) | 170 | 143 |
+| the game's Earth raster flight | 460 | 394 |
+| Earth raster with weather and aurora | 682 | 637 |
+| the general kernel | 484 | 469 |
+
+The game's Earth kernels are large because they are genuinely full: the Kerr metric, the wormhole and the thick disk
+(the game's universe) and every Earth feature. Next: P3 (stable profile), P4 (lean companion), P9 (`ourSegment`
+copies).
+
+kerr-mini (Metal): no notable change. Metal already discards dead code cheaply. All e2e green:
+- `raster-primary`, `eclipse-raster`, `gpu-startup` (21), `entry`, `kernel-compile`.
