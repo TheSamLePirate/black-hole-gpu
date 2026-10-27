@@ -152,19 +152,40 @@ Le traceur est énorme (5 600 lignes de WGSL). Au démarrage, `Renderer.create()
    buffers par étage (le traceur en a besoin) ; demande `timestamp-query`, `texture-compression-bc`,
    `texture-compression-astc` s’ils existent, et les limites maximales de taille de buffer/texture.
 2. Configure le canvas au format préféré, `alphaMode: "opaque"`.
-3. Construit le `Renderer`. Les **cinq pipelines généraux du traceur** (`lut`, `lut` qualité, `main`
-   qualité, `main` temps réel, `env`) sont créés avec `createComputePipelineAsync` : sous D3D12, une
-   compilation synchrone peut prendre plus d’une minute et faire tuer le processus GPU par le watchdog.
-   Les pipelines de post-production, d’affichage et du ciel sont synchrones (petits).
+3. Construit le `Renderer`. Les pipelines du traceur sont tous créés avec `createComputePipelineAsync`, à la
+   demande de la scène (plus de pipelines généraux d’office) : sous D3D12, une compilation synchrone peut prendre plus
+   d’une minute et faire tuer le processus GPU par le watchdog. Les pipelines de post-production, d’affichage et du
+   ciel sont synchrones (petits).
 4. Vérifie `getCompilationInfo()` de chaque module pour afficher les erreurs avec leur ligne, attend les
    pipelines du traceur, puis le scope de validation.
 
-Ensuite, à chaque image, `featuresOf(settings)` calcule une clé de 8 bits (radio, polarisation, jet,
-point chaud, flot chaud, trou de ver, disque épais, corps — ce dernier ajouté dans `writeParams` dès
-qu’il y a des corps). `traceVariant(kind)` (`renderer.ts:1886`) renvoie une variante où les fonctions
-inutiles sont éliminées par des constantes `override HAS_*` ; la première demande lance en arrière-plan
-la chaîne de compilation rt → env → q → lut → lutq, et le pipeline général est utilisé tant que la
-variante n’est pas prête (~10 s). Les variantes restent en cache (`variants`), jamais libérées.
+Ensuite, à chaque image, `featuresOf(settings)` et `writeParams` calculent la **clé de fonctionnalités** de la scène
+(`featureKey`) : les bits `HAS_*` (radio, polarisation, jet, point chaud, flot chaud, trou de ver, disque épais, corps,
+pistes, météo, ombre portée, surface régionale, décor, aurores, Kerr), plus le profil Terre-raster
+(`FEATURE_RASTER_PRIMARY`) et la nature du corps proche (`NEAR_KIND`, bits 26–28). `traceVariant(kind, key)` compile les
+pipelines de cette clé (`tracerConstants` dans `src/system/tracer-kernels.ts` : les constantes `override` de chaque
+point d’entrée), dans l’ordre de la cascade `realtimeCascade` : `main` d’abord, puis `env`, les noyaux du raster, `discs`
+et `shade` plus tard. Depuis le plan [PLAN-LEAN-TRACER-KERNELS.md](../PLAN-LEAN-TRACER-KERNELS.md) (2026-10-27) :
+
+- **Source spécialisée** (`src/system/wgsl-specialise.ts`) : chaque pipeline est compilé depuis un module dont les branches
+  mortes de ses constantes et les fonctions que son point d’entrée n’atteint plus sont retirées — Tint ne le fait pas,
+  et DXC (D3D12) paie le code mort comme le vivant.
+- **Familles de noyaux** :
+  - les noyaux de la caméra (`main`, `discs`) portent `NEAR_KIND` ; en vol Terre au raster, ils sont « maigres »
+    (`NEAR_DETAIL` off : le raster dessine le sol proche) ;
+  - la sonde de lumière (`env`) est toujours grossière (pas de détail sous-pixel du sol proche) ;
+  - `shade` (les restes du matériau raster) ne compile qu’une fois le décor là ;
+  - le profil Terre-raster fige les bits qui vont et viennent en vol : un seul jeu de noyaux pour tout le vol ;
+  - un mémo (`mkVariant`) rend le même pipeline aux mêmes constantes.
+- **Le noyau général** (tous les `HAS_*` vrais) n’est plus compilé au démarrage (`generalOnDemand`) : il reste le repli
+  d’une scène dont les noyaux échouent, la clé `FEATURES_ALL`, ou un départ explicite.
+- **La file** (`CompileQueue`) passe les compilations de l’image avant les autres, avec un second créneau ; l’écran de
+  chargement montre le temps passé et le temps restant (`sceneCompileEta`).
+- **Gardes** : `tests/kernel-budget.test.ts` (la taille inlinée de chaque noyau de référence sous son budget) ;
+  les outils `scripts/wgsl-inline-size.ts`, `scripts/d3d12-compile-proxy.ts`, `scripts/d3d12-ab.ts` ; les e2e
+  `kernel-compile`, `kernel-equivalence`, `kernel-golden`.
+
+Les variantes restent en cache (`variants`), jamais libérées.
 
 Le helper `wgsl()` contourne une particularité du serveur de dev Bun : après un rechargement à chaud, un
 import `with { type: "text" }` peut arriver sous forme d’URL ; on la télécharge alors.

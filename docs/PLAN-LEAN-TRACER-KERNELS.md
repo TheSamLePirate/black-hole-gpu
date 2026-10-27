@@ -5,17 +5,17 @@
 
 ## Sidebar steps
 
-- [ ] **P0** — Measure: analyzer script, Mac baselines, local D3D12 proxy (Tint + DXC)
-- [ ] **P1** — Compile-queue fixes (order, shade optional, slots)
-- [ ] **P2** — Honest loading UI + Windows iGPU hint
-- [ ] **P3** — Stable Earth-raster profile + pre-warm
-- [ ] **P4** — Lean raster-companion main (near detail out)
-- [ ] **P5** — Coarse light probe (env, keyLight)
-- [ ] **P6** — Retire shade from the hard path; discs merge A/B
-- [ ] **P7** — NEAR_KIND: planets without Earth code
-- [ ] **P8** — General kernel family on demand only
-- [ ] **P9** — Cut inlining (single call sites, gnoise, wormhole)
-- [ ] **P10** — Budgets guard, docs, final proxy + Mac re-measure
+- [x] **P0** — Measure: analyzer script, Mac baselines, local D3D12 proxy (Tint + DXC)
+- [x] **P1** — Compile-queue fixes (order, shade optional, slots)
+- [x] **P2** — Honest loading UI + Windows iGPU hint
+- [x] **P3** — Stable Earth-raster profile + pre-warm
+- [x] **P4** — Lean raster-companion main (near detail out)
+- [x] **P5** — Coarse light probe (env, keyLight)
+- [x] **P6** — Retire shade from the hard path; discs merge A/B
+- [x] **P7** — NEAR_KIND: planets without Earth code
+- [x] **P8** — General kernel family on demand only
+- [x] **P9** — Cut inlining (single call sites, gnoise, wormhole)
+- [x] **P10** — Budgets guard, docs, final proxy + Mac re-measure
 ## Detailed plan
 
 # Plan — Lean tracer kernels in the raster era (fast loading on Windows/D3D12, RTX 4050 class)

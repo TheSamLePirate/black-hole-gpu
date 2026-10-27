@@ -1,0 +1,76 @@
+== 1-A
+  A trace  104.0  probes    0.0  LUT    0.0  post    5.5  compute  114.6  frame  120.1 ms  (×4, 60)
+Interstellar: along the disk (the film's close pass) [33283.28ms]
+  A trace   10.3  probes    0.0  LUT    0.0  post    5.5  compute   21.1  frame   20.2 ms  (×4, 60)
+Kerr a=0.94, near edge-on [5842.84ms]
+  A trace   75.3  probes    0.0  LUT    0.0  post    5.1  compute   85.2  frame   90.3 ms  (×4, 60)
+Cinematic: volumetric disk + jet [27164.13ms]
+  A trace  120.1  probes    9.0  LUT    0.0  post    5.2  compute  135.6  frame  159.3 ms  (×4, 60)
+Miller: Gargantua over the sea [102477.91ms]
+  A trace   56.3  probes    8.6  LUT    0.0  post    5.7  compute   72.4  frame   78.8 ms  (×4, 60)
+Saturn: backlit [15293.02ms]
+  A trace   67.4  probes    2.0  LUT    0.0  post    5.5  compute   79.1  frame   95.4 ms  (×4, 60)
+Moon: an afternoon on the plains [20761.00ms]
+  A trace    9.7  probes    0.0  LUT    0.0  post    2.6  compute   47.9  frame   48.7 ms  (×4, 60)
+Earth: Yosemite Valley from Tunnel View [179460.37ms]
+  A trace    7.9  probes    2.2  LUT    0.0  post    2.8  compute   27.6  frame   39.1 ms  (×4, 60)
+flight: the Alps, cockpit [71103.45ms]
+  A trace    8.3  probes    2.2  LUT    0.0  post    2.7  compute   43.1  frame   42.1 ms  (×4, 60)
+flight: Tarifa, cockpit [176307.66ms]
+== 2-B
+  A trace   97.7  probes    0.0  LUT    0.0  post    4.8  compute  107.2  frame  119.6 ms  (×4, 60)
+Interstellar: along the disk (the film's close pass) [29591.91ms]
+  A trace   10.9  probes    0.0  LUT    0.0  post    4.9  compute   20.5  frame   20.3 ms  (×4, 60)
+Kerr a=0.94, near edge-on [5637.08ms]
+  A trace   74.5  probes    0.0  LUT    0.0  post    4.8  compute   83.8  frame   96.5 ms  (×4, 60)
+Cinematic: volumetric disk + jet [20748.27ms]
+  A trace  122.5  probes   10.2  LUT    0.0  post    5.1  compute  138.2  frame  159.5 ms  (×4, 60)
+Miller: Gargantua over the sea [52294.61ms]
+  A trace   45.2  probes    5.2  LUT    0.0  post    5.2  compute   56.8  frame   61.2 ms  (×4, 60)
+Saturn: backlit [33624.30ms]
+  A trace   62.6  probes    1.9  LUT    0.0  post    5.0  compute   72.6  frame   82.0 ms  (×4, 60)
+Moon: an afternoon on the plains [18998.61ms]
+  A trace    3.8  probes    0.0  LUT    0.0  post    2.6  compute   45.8  frame   41.3 ms  (×4, 60)
+Earth: Yosemite Valley from Tunnel View [63815.45ms]
+  A trace    5.8  probes    2.1  LUT    0.0  post    2.9  compute   27.7  frame   38.8 ms  (×4, 60)
+flight: the Alps, cockpit [69273.15ms]
+  A trace    5.8  probes    2.1  LUT    0.0  post    2.8  compute   43.3  frame   42.6 ms  (×4, 60)
+flight: Tarifa, cockpit [28986.33ms]
+== 3-B
+  A trace   97.7  probes    0.0  LUT    0.0  post    4.8  compute  107.1  frame  112.4 ms  (×4, 60)
+Interstellar: along the disk (the film's close pass) [28272.38ms]
+  A trace   11.0  probes    0.0  LUT    0.0  post    4.9  compute   20.5  frame   20.5 ms  (×4, 60)
+Kerr a=0.94, near edge-on [5780.20ms]
+  A trace   73.8  probes    0.0  LUT    0.0  post    4.8  compute   83.2  frame   88.7 ms  (×4, 60)
+Cinematic: volumetric disk + jet [23293.57ms]
+  A trace  123.5  probes   10.4  LUT    0.0  post    5.1  compute  138.5  frame  154.7 ms  (×4, 53)
+Miller: Gargantua over the sea [35322.97ms]
+  A trace   45.4  probes    4.4  LUT    0.0  post    5.2  compute   55.8  frame   63.2 ms  (×4, 60)
+Saturn: backlit [17158.62ms]
+  A trace   62.7  probes    2.0  LUT    0.0  post    5.0  compute   73.7  frame   85.1 ms  (×4, 60)
+Moon: an afternoon on the plains [23583.23ms]
+  A trace    3.8  probes    0.0  LUT    0.0  post    2.6  compute   46.8  frame   41.8 ms  (×4, 60)
+Earth: Yosemite Valley from Tunnel View [39300.01ms]
+  A trace    5.9  probes    2.0  LUT    0.0  post    2.9  compute   27.6  frame   38.8 ms  (×4, 60)
+flight: the Alps, cockpit [72228.45ms]
+  A trace    5.7  probes    2.1  LUT    0.0  post    2.8  compute   43.2  frame   43.9 ms  (×4, 60)
+flight: Tarifa, cockpit [27195.53ms]
+== 4-A
+  A trace   98.6  probes    0.0  LUT    0.0  post    4.8  compute  108.0  frame  113.9 ms  (×4, 60)
+Interstellar: along the disk (the film's close pass) [37642.33ms]
+  A trace   11.3  probes    0.0  LUT    0.0  post    4.9  compute   20.9  frame   20.6 ms  (×4, 60)
+Kerr a=0.94, near edge-on [5862.06ms]
+  A trace   75.3  probes    0.0  LUT    0.0  post    4.8  compute   84.7  frame   90.0 ms  (×4, 60)
+Cinematic: volumetric disk + jet [29595.19ms]
+  A trace  125.2  probes   10.6  LUT    0.0  post    5.2  compute  140.9  frame  156.0 ms  (×4, 57)
+Miller: Gargantua over the sea [43262.98ms]
+  A trace   55.6  probes    5.4  LUT    0.0  post    5.2  compute   65.9  frame   73.2 ms  (×4, 60)
+Saturn: backlit [19988.06ms]
+  A trace   67.6  probes    1.9  LUT    0.0  post    5.0  compute   77.7  frame   91.0 ms  (×4, 60)
+Moon: an afternoon on the plains [25489.30ms]
+  A trace    9.8  probes    0.0  LUT    0.0  post    2.6  compute   48.5  frame   47.8 ms  (×4, 60)
+Earth: Yosemite Valley from Tunnel View [33622.76ms]
+  A trace    6.4  probes    1.9  LUT    0.0  post    2.8  compute   24.0  frame   20.5 ms  (×4, 60)
+flight: the Alps, cockpit [73112.30ms]
+  A trace    8.2  probes    2.1  LUT    0.0  post    2.7  compute   43.6  frame   42.7 ms  (×4, 60)
+flight: Tarifa, cockpit [42127.18ms]

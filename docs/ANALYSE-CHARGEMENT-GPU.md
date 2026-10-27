@@ -768,3 +768,51 @@ nouvelle scène compilant à côté.
 compilent (~10 min sur RX 5700 XT) ; un export juste après le démarrage attend le noyau qualité
 général ; à cache vide, une scène lourde (trou de ver, 213 s sur RX 5700 XT) — le levier est la taille
 du code inliné par D3D12 (analyse statique des sites d'appel, à faire).
+
+## 10. Des noyaux maigres : la taille inlinée (2026-10-27)
+
+Le levier laissé ouvert au §9 — la taille du code qu'inline D3D12 — a fait l'objet du plan
+[PLAN-LEAN-TRACER-KERNELS.md](PLAN-LEAN-TRACER-KERNELS.md) (P0–P10, journal :
+[progress/kernels/PROGRESS.md](progress/kernels/PROGRESS.md), mesures : [BASELINE.md](progress/kernels/BASELINE.md)).
+
+**Mesurer sans PC Windows.** Un proxy D3D12 (Tint + DXC au Dawn de Chrome 156, les arguments de Dawn :
+`scripts/d3d12-compile-proxy.ts`), calibré sur les deux relevés du §9 ; un analyseur de taille inlinée
+(`scripts/wgsl-inline-size.ts`) ; `renderer.compileReport()` ; les lancements à froid sur kerr-mini (`kernel-compile`,
+`KC_COLD=1`). **Constat de départ** : Tint ne retire pas les branches qu'une constante `override` rend mortes, et DXC paie
+le code mort comme le vivant.
+
+**Ce qui a changé** :
+- chaque pipeline compilé depuis une source **spécialisée** (branches mortes et fonctions inatteintes retirées) ;
+- la file : le traceur de la scène d'abord, `shade` et `discs` hors du chemin critique, un second créneau ;
+- un **seul jeu de noyaux pour tout le vol terrestre** (profil Terre-raster, mémo des pipelines, préchauffage sous le titre) ;
+- les noyaux tracés compagnons du raster **sans le détail sous-pixel du sol proche** (`NEAR_DETAIL`), la sonde de
+  lumière grossière, la **nature du corps proche** dans la clé (`NEAR_KIND`) ;
+- le **noyau général plus compilé au démarrage** (`generalOnDemand`) ;
+- `ourSegment` (le plus gros sous-arbre) appelé **une fois** dans `traceLook` ;
+- un écran de chargement qui donne le temps passé et le temps restant, et le conseil « GPU haute performance » aux
+  portables Windows sur leur puce intégrée.
+
+**Résultats** :
+
+| | avant (P0) | après (P10) |
+|---|---:|---:|
+| `main` du vol Terre au raster, proxy D3D12 | 265 s | 35 s |
+| … estimé RX 5700 XT / RTX 5070 Ti | ~245 s / ~70 s | ~32 s / ~9 s |
+| `main` Terre tracée (à pied, photo), proxy | 234–241 s | 64–66 s |
+| kerr-mini à froid : première image de la Terre | 134 s | 19 s |
+| kerr-mini à froid : tout compilé | 276 s | 42 s |
+| kerr-mini : secondes de compilation d'un lancement | 443 s | 68 s |
+
+Images : chaque phase vérifiée au niveau du bruit (`kernel-equivalence`, `raster-companion`, `probe-coarse`,
+`kernel-golden`). Images par seconde (`perf-suite`, kerr-mini, avant le plan contre après) : aucune scène plus lente, le
+traçage égal ou moins cher partout (Saturne 56 → 45 ms, Yosemite 9,8 → 3,8 ms, vols 7–8 → 6 ms).
+
+**Garde** : `tests/kernel-budget.test.ts` (dans `bun test`) fait échouer une modification qui fait grossir un noyau de
+référence de plus de 10 % (nouveau site d'appel du sol, d'un bruit, de `ourSegment`…).
+
+**Restent** :
+- rien n'est mesuré sur un vrai PC Windows : les chiffres Windows sont ceux du proxy calibré ;
+- le lancement « à chaud » de la Terre sur Mac recompile encore 4–5 pipelines (première image 17 s) ;
+- la troisième copie de `ourSegment` (dans `dnegTrace`) ;
+- en vol, l'image (≈ 40 ms sur kerr-mini) est limitée par le raster et le décor, pas par le traceur (6 ms).
+

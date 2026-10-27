@@ -527,6 +527,11 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `sceneCompileEta()` | number \| null | the seconds left before the scene's own tracer is in, from this session's compile pace (null: nothing learnt yet; 0: in) |
 | `sourceSpecialise` | boolean | each specialised pipeline made from a module specialised as source (default true; `globalThis.__kernelSpecialise = false` before load turns it off — `tests/e2e/kernel-equivalence.e2e.test.ts`) |
 | `stableProfiles` | boolean | the Earth-raster profile (default true): while the raster draws the near Earth, one set of kernel constants for the whole flight (`FEATURE_RASTER_PRIMARY`) |
+| `leanMain` | boolean | the Earth-raster profile's traced kernels (`main`, `discs`) without the near ground's sub-pixel detail (`NEAR_DETAIL` off — the raster draws it; default true, P4) |
+| `coarseProbe` | boolean | the light probe (`env`) without the near ground's sub-pixel detail, whatever the scene (default true, P5) |
+| `discsKernel` | boolean | the sky's discs in their own kernel (`main` with `DISC_ONLY`; default true); false: in `main`'s layers, one compile less (P6) |
+| `nearKinds` | boolean | the near body's kind in the camera's kernels' key (`NEAR_KIND`: the Earth, a world with air, without, none — default true, P7) |
+| `generalOnDemand` | boolean | the general kernel family (every feature) compiled only when asked — a scene's kernels failing, the `FEATURES_ALL` key, an explicit start (default true, P8); false: after every start, as before |
 | `prewarmEarthFlight(settings)` / `prewarmStop()` | function | the Earth's low flight compiled ahead (main.ts: the title open; never on e2e pages — call it yourself), and its queued compiles dropped |
 | `backgroundHold` | boolean | background compiles (the general kernel, a key's LUT and aerial table) held — set while the title screen holds the game |
 | `weatherBlock` | Float32Array | the weather near the camera's 24 params (the weight, the decks, the ground's height, the drift, the rain: `weatherParams`), as the tracer reads them (its offset in `paramsF` moves with the other blocks: read it here) |

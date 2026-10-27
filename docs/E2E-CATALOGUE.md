@@ -132,6 +132,17 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | worlds.e2e.test.ts | Gargantua's six worlds' scenes each flown 5 s at fixed steps; the Ranger is not broken at load; no sea crash. | game:artemis, then six world scenes (Miller, Mann, Edmunds) | 1 | fixed steps |
 | multiexposure.e2e.test.ts | Photo mode's analemma and the eclipse multiple exposure, by real clicks; composite shown, game restored. | game:artemis, 1440×900, lang fr | ? | `tiles: true` (Earth tiles streamed) |
 
+### The tracer's kernels (docs/PLAN-LEAN-TRACER-KERNELS.md)
+
+| file | what it proves | scene(s) booted | ~s on the mini | needs |
+|---|---|---|---|---|
+| kernel-compile.e2e.test.ts | Cold launches: what each scene compiles, in what order, how long its first trace, raster and settled state wait (`renderer.compileReport()`). `KC_COLD=1` empties Chrome's Metal cache before each case (a really cold start on the mini). | `CASES=` earth-raster (F-35 over Tarifa, boot on game:artemis), earth-trace, moon, kerr, wormhole | ~190 (four cases, P9) | `KC_COLD=1` only on the mini (it deletes Chrome's GPU cache) |
+| kernel-equivalence.e2e.test.ts | A kernel switch changes no pixel: six scenes rendered offline in one page, the switch off then on, at most 0.2 % of values off by more than a level. `KE_FLAG` the switch (`sourceSpecialise` by default, `nearKinds`…), `KE_AA=1` the A/A floor. | Kerr, Interstellar, the strong-lensing wormhole, the Moon's plains, the Andes, Saturn | ~2300 (P7) | — |
+| kernel-golden.e2e.test.ts | A shader change that must not change a pixel, across two builds: `KG=record` before (the image, the clock and the whole save kept in `KG_DIR`), `KG=compare` after (the save reloaded). | Kerr, Interstellar, the Andes, Mars, the Moon's plains (Miller does not reload the same) | ~60 a scene (this Mac) | the same machine for both runs |
+| raster-companion.e2e.test.ts | The raster's lean traced kernels (`leanMain`, no near sub-pixel detail) draw the same view as the whole ones, within the realtime view's own noise (PSNR lean vs whole against whole vs whole). | Kennedy at 900 m, the Alps at 3, 12, 60 km | ? | live terrain |
+| probe-coarse.e2e.test.ts | The coarse light probe (`coarseProbe`) gives the craft the same light (its harmonics) as the whole one, within two reads of the whole one. | F-35 over Tarifa, Ranger in low orbit, Ranger at Gargantua | ? | — |
+| disc-cost.e2e.test.ts | The sky's discs' GPU cost with JavaScript levers (`DISC_LEVERS`: e.g. `discsKernel` on/off), A B A B. | the eclipse at Burgos in the telescope at 1.6°, 1920 × 1080 | 99 | native WebGPU timestamps |
+
 ### Audio & voices
 
 | file | what it proves | scene(s) booted | ~s on the mini | needs |

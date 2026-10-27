@@ -25,7 +25,7 @@ Measurements: [BASELINE.md](BASELINE.md).
 | P7 NEAR_KIND | done | see git log "P7" | D3D12: Earth raster main 97 → 58 s, discs 36 → 20 s; space 98 → 40 s; kerr-mini raster at 37 s |
 | P8 general on demand | done | see git log "P8" | no general kernel at start; kerr-mini cold Earth: settled 166 → 73 s, raster at 31 s |
 | P9 inlining | done | see git log "P9" | ourSegment once in traceLook; D3D12 Earth raster main 58 → 32 s, Earth traced 167 → 60 s; kerr-mini raster at 24 s, settled 47 s |
-| P10 guard, docs | to do | | |
+| P10 guard, docs | done | see git log "P10" | budget test; docs; final proxy; kerr-mini cold Earth image 19 s, settled 42 s; perf-suite: no frame slower |
 
 ## Journal
 
@@ -356,3 +356,19 @@ e2e green: `raster-primary`, `title` (4), `entry` (3), `kernel-compile`.
   92 160 — Kerr 1, Interstellar 19, the Andes 0, Mars 1, the Moon's plains 6. Miller left out: two loads of its save
   differ by ~14k values with the same code.
 - `tests/kernel-budget.test.ts` written (P10's guard), its budgets the P9 sizes + 10 %.
+
+### P10 — the guard, the docs, the final measurements (27/10)
+
+- **Guard**: `tests/kernel-budget.test.ts` in `bun test` — each reference kernel's inlined size under its budget
+  (`tests/kernel-budget.json`, the P9 sizes + 10 %; `KB_WRITE=1` rewrites them).
+- **Docs**: `docs/ANALYSE-CHARGEMENT-GPU.md` §10; `docs/BH-API.md` (`leanMain`, `coarseProbe`, `discsKernel`,
+  `nearKinds`, `generalOnDemand`); `docs/E2E-CATALOGUE.md` (the kernels' six e2e); `docs/systemes/02-pipeline-rendu.md`
+  (the kernel families).
+- **Measurements** — the tables in [BASELINE.md](BASELINE.md) § P10:
+  - D3D12 proxy, every profile (`proxy-p10.json`): the Earth raster flight's `main` 265 → 35 s (P0 → P10), traced 234 → 64 s,
+    space 117 → 30 s; estimated ~32 s on the RX 5700 XT machine, ~9 s on the RTX 5070 Ti;
+  - kerr-mini, cold: the Earth's first image at 19 s (134 s at P0), all settled at 42 s (276 s); warm: 17 / 40 s — the
+    warm Earth launch still recompiles 4–5 pipelines (left open);
+  - `perf-suite` on kerr-mini, the commit before the plan against P9 (`scripts/perf-suite-ab.sh` under `ab-commit.ts`):
+    no scene's frame slower; the trace the same or cheaper everywhere (Saturn 56 → 45 ms, Yosemite 9.8 → 3.8 ms).
+- Not done (optional in the plan): a check on a real Windows machine.
