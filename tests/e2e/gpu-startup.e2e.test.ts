@@ -104,6 +104,18 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
 
   // (the general kernel — every feature compiled in, minutes on D3D12 — is no longer what the first image
   // waits for: the scene's specialised kernel draws it, the general one compiling after it)
+  test("a start compiles no general kernel at all (P8: on demand)", async () => {
+    const app = await App.boot({ hash: scene, width: 320, height: 240 });
+    try {
+      await app.waitFor("__bh.renderer.compilesPending === 0", 120_000);
+      await Bun.sleep(2000);
+      expect(await app.js<string>("__bh.renderer.pipelineStatus.general")).toBe("idle");
+      expect(await app.js<boolean>(`__bh.renderer.compileReport().compiles.some((c) => c.pipeline.startsWith("general"))`)).toBe(false);
+    } finally {
+      app.close();
+    }
+  }, 300_000);
+
   test("the first image waits for the scene's own kernel, not the general one", async () => {
     const app = await App.boot({
       hash: scene,
@@ -125,6 +137,8 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     })()`,
     });
     try {
+      // (the general kernel compiled after the scene's, as before P8: on demand now — asked for here)
+      await app.js("(__bh.renderer.generalOnDemand = false, __bh.renderer.startGeneralWhenIdle(), 1)");
       await app.waitFor("globalThis.__general === 2", 60_000);
       const seen = await app.js<{ first: number; general: number; status: string; compiled: string[] }>(`(() => {
         const d = __bh.graphicsDiagnostic();
@@ -132,7 +146,8 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
           compiled: d.events.filter((e) => e.kind === "pipeline-compiled").map((e) => e.message) };
       })()`);
       expect(seen.first).toBeGreaterThan(0);
-      // (asked for after the scene's kernel and its probe, and still compiling: not waited for)
+      // (asked for after the scene's kernel and its probe, and still compiling: not waited for; the general kernel on
+      // demand — renderer.generalOnDemand, P8 — set off for this test)
       expect(seen.general).toBe(2);
       expect(seen.status).toBe("pending");
       expect(seen.compiled.some((m) => m.startsWith("tracer main"))).toBe(true);
@@ -308,6 +323,8 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     })()`,
     });
     try {
+      // (the general kernel family — on demand since P8 — asked for: this is its quality kernel's and LUT's test)
+      await app.js("(__bh.renderer.generalOnDemand = false, __bh.renderer.startGeneralWhenIdle(), 1)");
       // (a still view the far field's LUT serves: time held, no jet)
       await app.js("(__bh.freeze(true), (__bh.settings.jet = false), __bh.touch(), true)");
       await app.waitFor(`__bh.renderer.qualityCompile.state === "pending" && __bh.renderer.lutWanted`, 30_000);
@@ -354,6 +371,8 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
   test("failed adaptive kernel: the still view and the adaptive export converge on fixed steps", async () => {
     const app = await App.boot({ hash: scene, width: 320, height: 240, initScript: fault("main") });
     try {
+      // (the general kernel family — on demand since P8 — asked for: its quality kernel's failure is what is tested)
+      await app.js("(__bh.renderer.generalOnDemand = false, __bh.renderer.startGeneralWhenIdle(), 1)");
       // (the live still view: refining on the fixed-step kernel, not drawing realtime frames for ever)
       await app.js("(__bh.freeze(true), __bh.touch(), true)");
       await app.waitFor(`__bh.renderer.pipelineStatus.quality === "failed"`, 30_000);

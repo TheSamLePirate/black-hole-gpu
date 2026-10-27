@@ -4292,9 +4292,19 @@ export class Renderer {
    * side by side slowed the scene's own (docs/PLAN-LEAN-TRACER-KERNELS.md P1). The queue's idle hook retries.
    */
   private startGeneralWhenIdle() {
+    // (on demand only — P8: the scene's own kernels are what draws it; the general one — every feature, the slowest compile
+    // of all — no longer compiled at every start: a scene's failure, the general key asked, an explicit start still compile it)
+    if (this.generalOnDemand) return;
     this.generalWanted = true;
     this.maybeStartGeneral();
   }
+  /**
+   * The general kernel family (every feature: main, env, its quality kernel, its LUTs) compiled only when asked (P8): the
+   * fallback of a scene whose own kernels fail, the FEATURES_ALL key, an explicit start (tests, the bench). Before, it was
+   * compiled after every start — 5 min of DXC on a Windows PC, in the background of the flight — to draw later scenes while
+   * theirs compiled; their own kernels are now a fraction of it. False: as before.
+   */
+  generalOnDemand = true;
   private maybeStartGeneral() {
     if (!this.generalWanted || this.generalCompile.state !== "idle" || this.lost) return;
     if (this.backgroundHold || this.variantQueue.urgentPending) return;
@@ -4361,8 +4371,21 @@ export class Renderer {
       | "discs"
       | "clouds",
   ): GPUComputePipeline | null {
-    // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants)
-    for (const [k, v] of this.variants) if ((k & key) === key && k >>> 16 === key >>> 16 && v[kind]) return v[kind];
+    // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants; the near body's
+    // kind — P7 — only in the camera's kernels: elsewhere — a planet's probe, its key without it, on the camera's env —
+    // left out of the comparison, and there a kernel for any near body covers a given one)
+    const NEAR = 7 << NEAR_KIND_SHIFT;
+    const nearMatters = kind === "rt" || kind === "q" || kind === "discs";
+    const kq = key & ~NEAR;
+    const nq = (key >> NEAR_KIND_SHIFT) & 7;
+    for (const [k, v] of this.variants) {
+      if (!v[kind]) continue;
+      const kk = k & ~NEAR;
+      if ((kk & kq) !== kq || kk >>> 16 !== kq >>> 16) continue;
+      const nk = (k >> NEAR_KIND_SHIFT) & 7;
+      if (nearMatters && nk !== nq && nk !== 0) continue;
+      return v[kind];
+    }
     return null;
   }
 

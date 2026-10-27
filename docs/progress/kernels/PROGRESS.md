@@ -23,7 +23,7 @@ Measurements: [BASELINE.md](BASELINE.md).
 | P5 coarse probe | done | see git log "P5" | D3D12 env: Earth raster 46 → 27 s, Earth traced 72 → 32 s, Kerr 4.6 → 1.8 s; craft light within the probe's noise |
 | P6 shade, discs | done | see git log "P6" | shade only when the scenery is in; discs kernel kept (70 vs 90 ms in the telescope) |
 | P7 NEAR_KIND | done | see git log "P7" | D3D12: Earth raster main 97 → 58 s, discs 36 → 20 s; space 98 → 40 s; kerr-mini raster at 37 s |
-| P8 general on demand | to do | | |
+| P8 general on demand | done | see git log "P8" | no general kernel at start; kerr-mini cold Earth: settled 166 → 73 s, raster at 31 s |
 | P9 inlining | to do | | |
 | P10 guard, docs | to do | | |
 
@@ -299,3 +299,23 @@ e2e green: `raster-primary`, `title` (4), `entry` (3), `kernel-compile`.
   `eclipse-raster`, `disc-cost`.
 - Trade-off noted: leaving the Earth for another body is now a new key for `main`. In practice it coincides with the
   key changes that already happen (the raster's bits dropping above 100 km).
+
+### P8 — the general kernel family on demand only (27/10)
+
+- `renderer.generalOnDemand` (default true): no start compiles the general kernels (every feature: `main` + `env`, then
+  their quality kernel and LUTs) any more. They are about 330 s of DXC on this Mac, minutes on a Windows PC, in the
+  background of every first session. They still compile:
+  - when a scene's own kernels fail (the fallback);
+  - for the `FEATURES_ALL` key;
+  - on an explicit start.
+- A still view converges on the scene's own refining kernel, and offline exports use it too (already so since §9 of the
+  analysis).
+- **Found with it:** since P7 the near body's kind made the planets' light probes' key (no kind) miss the camera's
+  `env`. `coveringVariant` now leaves the kind out where it is not compiled in (env, LUTs, the material kernels); a
+  kernel for "any" near body covers a given one. Before P8 the general `env` had been hiding it.
+- `tests/e2e/gpu-startup`:
+  - a new test: a start compiles no general kernel at all;
+  - the three tests of the general family's own quality kernel and LUTs ask for it explicitly (`generalOnDemand = false`).
+- kerr-mini, cold Earth launch: the raster at **31 s**, all settled at **73 s** (166 s at P7), 122 s of compile in all
+  (443 s at P0).
+- Unrelated and pre-existing: `offline-settings` fails twice the same way at P7 (a settings tab renamed).
