@@ -20,7 +20,7 @@ Measurements: [BASELINE.md](BASELINE.md).
 | P2 loading UI | done | see git log "P2" | time run / time left instead of "94 %"; first-time note; Windows iGPU tip (toast, TARS) |
 | P3 stable profile | done | see git log "P3" | one compile set per Earth flight; D3D12 Earth raster 394 → 294 s; kerr-mini settled 238 → 204 s |
 | P4 lean main | done | see git log "P4" | D3D12 Earth raster main 149 → 97 s; kerr-mini raster image 62 → 42 s after launch; images within noise |
-| P5 coarse probe | to do | | |
+| P5 coarse probe | done | see git log "P5" | D3D12 env: Earth raster 46 → 27 s, Earth traced 72 → 32 s, Kerr 4.6 → 1.8 s; craft light within the probe's noise |
 | P6 shade, discs | to do | | |
 | P7 NEAR_KIND | to do | | |
 | P8 general on demand | to do | | |
@@ -202,3 +202,39 @@ e2e green: `raster-primary`, `title` (4), `entry` (3), `kernel-compile`.
   That is the noise, with the sky identical and the far ground within it.
 - kerr-mini, cold Earth launch: the raster draws at **42 s** (62 s at P3), all settled at 184 s.
 - e2e green: `raster-primary` (same figures as P3), `eclipse-raster`, `kernel-compile`.
+
+### P5 — the coarse light probe (27/10)
+
+- `env`, the light probe (a low-resolution panorama for the craft's light), is compiled with `NEAR_DETAIL` off whatever
+  the scene (`renderer.coarseProbe`): the near ground's sub-pixel detail is invisible at its resolution.
+- `earthLook` is split into its sky (`earthLookSky`: the clouds, the air), its ground and their composition
+  (`earthLookCompose`). `keyLight` — the Sun's light on the craft, a ray that never meets the ground — calls
+  `earthLookNoGround` and no longer carries a copy of the ground's code. Its result is unchanged: `tHit = -1` drew no
+  ground before either.
+- Analyzer, `env` (inlined lines):
+
+  | scene | before | after |
+  |---|---:|---:|
+  | Earth raster | 115k | 59k |
+  | Earth traced | 161k | 67k |
+  | the game's universe | 109k | 52k |
+  | Kerr | 32k | 13k |
+  | Earth-only | 52k | 24k |
+
+- Proxy (DXC + Tint), `env`, before → after:
+
+  | scene | before | after |
+  |---|---:|---:|
+  | Earth raster | 46 s | 27 s |
+  | Earth traced | 72 s | 32 s |
+  | the game's universe | 41 s | 22 s |
+  | Earth-only | 8.7 s | 4.7 s |
+  | Kerr | 4.6 s | 1.8 s |
+
+- `tests/e2e/probe-coarse.e2e.test.ts` reads the craft's light (the probe's harmonics) with the whole and the coarse
+  probe, against two reads of the whole one. Coarse vs whole (noise in brackets):
+  - F-35 over Tarifa: 0.00 % (0.01 %);
+  - Ranger in low orbit: 1.05 % (2.26 %);
+  - Ranger at Gargantua: 0.06 % (0.19 %).
+- e2e green: `kernel-equivalence` (six scenes, as at P1b), `eclipse-raster`, `kernel-compile`. Cold Earth launch on
+  kerr-mini: the raster at 48 s, settled at 181 s.

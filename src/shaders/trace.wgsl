@@ -9014,8 +9014,11 @@ fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx:
   return EarthClouds(alpha, cl, tc);
 }
 
-fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
-  var o: EarthLook;
+// earthLook's sky — the clouds before the ground and the air to it —, its ground, and the two composed: split so that a
+// ray that never meets the ground (keyLight's, towards the Sun) does not carry the ground's code — every call is a copy of
+// all it calls on D3D12 (docs/PLAN-LEAN-TRACER-KERNELS.md P5)
+struct EarthLookSky { air: EarthAir, alpha: f32, cl: vec3f, tc: f32, earth: bool };
+fn earthLookSky(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLookSky {
   let earth = isEarth(k) && earthOn();
   var cs: EarthClouds;
   // (the cloud pass's, unless its clouds begin beyond this ray's ground — a ray's pixel the raster does not bound, its
@@ -9046,7 +9049,26 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
   } else {
     air = earthAir(ro, rd, select(3e38, tHit, tHit > 0.0), Ls, E, jit, select(3e38, tc, alpha > 0.0));
   }
+  return EarthLookSky(air, alpha, cl, tc, earth);
+}
+fn earthLookCompose(ro: vec3f, rd: vec3f, tHit: f32, E: vec3f, jit: f32, s: EarthLookSky, G: vec3f) -> EarthLook {
+  var o: EarthLook;
+  let air = s.air;
+  let alpha = s.alpha;
   o.Lm = air.Lm;
+  o.col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * s.cl);
+  // (a flash's channel to the ground — N5 —, dimmed by the clouds before it)
+  if (HAS_WX && s.earth && P.wx[6].w > 0.0) { o.col += boltRadiance(ro, rd, tHit, E) * air.T * (1.0 - 0.7 * alpha); }
+  // the auroras (S2): above the air and the clouds — from under them, hidden by a cloud; from above, before it
+  if (HAS_AURORA && s.earth && P.bary.z > 0.0) {
+    let aur = auroraLight(ro, rd, select(3e38, tHit, tHit > 0.0), jit);
+    o.col += aur * air.T * select(1.0 - alpha, 1.0, airHeight(ro) > 120e3);
+  }
+  o.T = select((1.0 - alpha) * air.T, vec3f(0.0), tHit > 0.0);
+  return o;
+}
+fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
+  let s = earthLookSky(k, ro, rd, tHit, Ls, E, gx, gy, fp0, fpK, jit, volume);
   var G = vec3f(0.0);
   if (!DISC_ONLY && tHit > 0.0) {
     let ph = ro + rd * tHit;
@@ -9056,23 +9078,18 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
     // HAS_SCENERY — met: without either, windsockShade and all it calls compile out — R-H3)
     if ((HAS_RWY || HAS_SCENERY) && WS.w > 0.5) {
       G = windsockShade(q, Ls, E, max(airHeight(ph) - geoidN(geoQ(q)), 0.0), airPhysicalDirection(rd));
-    } else if (earth) {
+    } else if (s.earth) {
       // (the height above the sea: the sea's surface at the geoid)
       G = earthGround(q, rd, Ls, E, earthFoot(q, rd, gx, fp), earthFoot(q, rd, gy, fp), max(airHeight(ph) - geoidN(geoQ(q)), 0.0));
     } else {
       G = otherGround(k, airPhysicalNormal(q), airPhysicalDirection(rd), airPhysicalDirection(Ls), E, fp);
     }
   }
-  o.col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cl);
-  // (a flash's channel to the ground — N5 —, dimmed by the clouds before it)
-  if (HAS_WX && earth && P.wx[6].w > 0.0) { o.col += boltRadiance(ro, rd, tHit, E) * air.T * (1.0 - 0.7 * alpha); }
-  // the auroras (S2): above the air and the clouds — from under them, hidden by a cloud; from above, before it
-  if (HAS_AURORA && earth && P.bary.z > 0.0) {
-    let aur = auroraLight(ro, rd, select(3e38, tHit, tHit > 0.0), jit);
-    o.col += aur * air.T * select(1.0 - alpha, 1.0, airHeight(ro) > 120e3);
-  }
-  o.T = select((1.0 - alpha) * air.T, vec3f(0.0), tHit > 0.0);
-  return o;
+  return earthLookCompose(ro, rd, tHit, E, jit, s, G);
+}
+// (a ray that never meets the ground: the sky's part alone)
+fn earthLookNoGround(k: u32, ro: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
+  return earthLookCompose(ro, rd, -1.0, E, jit, earthLookSky(k, ro, rd, -1.0, Ls, E, gx, gy, fp0, fpK, jit, volume), vec3f(0.0));
 }
 
 // The air's refraction (PLAN-CIEL C3): a ray from the camera that leaves the Earth's air comes out bent
@@ -11456,7 +11473,7 @@ fn keyLight() {
     // dimming from the look along the ray with no cloud — CLOUDS_BUFFERED: none —; the map's shell beyond it)
     let csT = select(-1.0, cloudShadowAt(nearCam()), isEarth(kn) && (TUNE_GSKIP & 8192u) == 0u);
     if (csT >= 0.0) { CLOUDS_BUFFERED = EarthClouds(0.0, vec3f(0.0), -1.0); }
-    let e = earthLook(kn, nearCam(), rd, -1.0, rd, lt.e, g1, cross(rd, g1), 0.0, rs, 0.5, false);
+    let e = earthLookNoGround(kn, nearCam(), rd, rd, lt.e, g1, cross(rd, g1), 0.0, rs, 0.5, false);
     CLOUDS_BUFFERED = EarthClouds(-1.0, vec3f(0.0), -1.0);
     E *= e.T * select(1.0, csT, csT >= 0.0);
     // (the Moon's shadow — a solar eclipse —: the Sun's share it leaves where the craft is; in totality none —

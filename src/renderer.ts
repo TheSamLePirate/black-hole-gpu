@@ -4414,6 +4414,7 @@ export class Renderer {
       rasterHint: this.rasterHint,
       tune: this.tunes.get((key >> 20) & 255),
       companion: this.leanMain,
+      coarseProbe: this.coarseProbe,
     });
     const ep = tracerEntryPoint(entryPoint);
     // (the same pipeline asked again — another key whose constants are the same: the Earth-raster profile's keys, the
@@ -4461,6 +4462,8 @@ export class Renderer {
   /** the profile's traced kernels lean — the near ground's sub-pixel detail out (NEAR_DETAIL), the raster drawing it (P4);
    *  false: the whole near ground in them, as before */
   leanMain = true;
+  /** the light probe coarse — the near ground's sub-pixel detail out of env, whatever the scene (P5); false: as before */
+  coarseProbe = true;
 
   /** keys compiled ahead of a launch (prewarm): their queued compiles wanted though the camera is elsewhere */
   private prewarmKeys = new Set<number>();
@@ -7438,6 +7441,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         rasterHint: this.rasterHint,
         tune: this.tunes.get((key >> 20) & 255),
         companion: this.leanMain,
+        coarseProbe: this.coarseProbe,
       });
       kb = this.specialiser.specialise(c, "main").length / 1024;
       this.mainKB.set(key, kb);

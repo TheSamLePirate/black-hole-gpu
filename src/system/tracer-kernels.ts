@@ -66,6 +66,8 @@ export interface TracerConstantsOptions {
   tune?: Record<string, number>;
   /** the raster's companion kernels lean (NEAR_DETAIL off in the Earth-raster profile's main and discs; renderer.leanMain) */
   companion?: boolean;
+  /** the light probe coarse (NEAR_DETAIL off in env; renderer.coarseProbe) */
+  coarseProbe?: boolean;
 }
 
 /** The override constants of a tracer pipeline for a features key. */
@@ -101,7 +103,10 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
     HAS_TERRAIN_RASTER: ground && o.rasterHint ? has(FEATURE_TERRAIN_RASTER) : 0,
     // (the raster's companion: the traced kernels of the Earth-raster profile without the near ground's sub-pixel detail —
     // the raster draws it; the probe's coarse ground is P5's)
-    NEAR_DETAIL: profile && o.companion !== false && (entry === "main" || entry === "discs") ? 0 : 1,
+    // (and the light probe — a low-resolution panorama for the ship's light: the near ground's sub-pixel detail invisible in
+    // it, whatever the scene — P5)
+    NEAR_DETAIL:
+      (profile && o.companion !== false && (entry === "main" || entry === "discs")) || (entry === "env" && o.coarseProbe !== false) ? 0 : 1,
     COST_VIEW: (key >> 16) & 15,
     ...(o.tune ?? {}),
     QUALITY_PIPELINE: quality ? 1 : 0,
