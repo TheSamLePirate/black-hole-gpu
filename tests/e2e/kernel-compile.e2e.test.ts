@@ -1,9 +1,13 @@
 import { afterAll, describe, test } from "bun:test";
+import { readdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { App, E2E, stopServer } from "./lib/app";
 
 // What a cold launch of each reference scene compiles, and how long until it is drawn (docs/PLAN-LEAN-TRACER-KERNELS.md,
 // P0): a fresh Chrome per case — its own profile, so the browser's shader cache is empty (the system's Metal cache is not:
-// macOS keeps it across profiles, a "cold" start here is warmer than a Windows player's first) —, the scene set, then the
+// macOS keeps it across profiles, a "cold" start here is warmer than a Windows player's first — unless KC_COLD=1, which
+// empties Chrome's GPU-process Metal cache before each case: only on the lab's mini, nothing else of Chrome running) —, the
+// scene set, then the
 // time to its first traced frame and every tracer compile until the queue is empty (renderer.compileReport()). The same
 // cases before and after each phase of the plan: remote-results/kernel-compile.json.
 // Duration: ~3–6 min a case on kerr-mini (cold compiles)
@@ -33,6 +37,20 @@ const CASES: Record<string, { boot: string; set: string; tiles?: boolean }> = {
 };
 const cases = (process.env.CASES ?? "earth-raster,moon,kerr,wormhole").split(",");
 
+/** macOS's Metal shader cache of Chrome's GPU process (per user, kept across Chrome profiles), emptied: a truly cold start */
+function emptyMetalCache() {
+  const base = Bun.spawnSync(["getconf", "DARWIN_USER_CACHE_DIR"]).stdout.toString().trim();
+  for (const app of ["com.google.Chrome.helper", "com.google.Chrome"])
+    for (const sub of ["com.apple.metal", "com.apple.metalfe"]) {
+      const dir = join(base, app, sub);
+      try {
+        for (const f of readdirSync(dir)) rmSync(join(dir, f), { recursive: true, force: true });
+      } catch {
+        /* (none yet) */
+      }
+    }
+}
+
 describe.skipIf(!E2E)("cold launches: what each scene compiles, and how long it waits", () => {
   const rows: unknown[] = [];
   afterAll(async () => {
@@ -43,6 +61,7 @@ describe.skipIf(!E2E)("cold launches: what each scene compiles, and how long it 
     test(id, async () => {
       const c = CASES[id];
       if (!c) throw new Error(`no case ${id}: ${Object.keys(CASES).join(", ")}`);
+      if (process.env.KC_COLD === "1") emptyMetalCache();
       const app = await App.boot({ width: 1600, height: 1000, hash: c.boot, tiles: c.tiles });
       try {
         // (the measure runs in the page — a DevTools call times out after 5 min —, polled)
