@@ -8,6 +8,9 @@ import { afterAll, beforeAll, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
 const PLACES: Record<string, string> = {
+  // (the Alps by day, as tests/e2e/raster-flight.e2e.test.ts and flight-quality's: the relief at its steepest)
+  alps: `__bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
   "tarifa-low": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.1);
     __bh.game.flyAt(36.08, -5.6, 700, 20, 240);`,
   "tarifa-cumulus": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 1);
