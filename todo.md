@@ -136,8 +136,18 @@ Ce qui reste :
 - [x] **Pourquoi le cache Dawn de Chrome rate sous Windows** (28/10, BASELINE.md) : une limite par entrée (un `main`
   de 920 Ko de DXIL n'est jamais gardé ; après P11 le DXIL l'est, le pilote recompile) et, dans le jeu, le total du cache
   WebGPU (~10 Mo) dépassé par tous ses pipelines : un cache LRU demandé dans le même ordre n'en rend aucun.
-- [ ] **Faire tenir les pipelines du jeu dans le cache de Chrome sous Windows** : mesurer leur total (DXIL et pipelines
-  de rendu), demander moins au lancement (la clé d'orbite et celle du vol), viser < ~10 Mo — sinon signaler à Chromium.
+- [ ] **Faire tenir les pipelines du jeu dans le cache de Chrome sous Windows** (plus tard). But : qu'au relancement sous
+  Windows tout revienne du cache en secondes au lieu de ~3,5 min. Le cache WebGPU de Chrome fait ~10 Mo ; le jeu en
+  demande plus au lancement et, toujours dans le même ordre, chaque nouvelle compilation chasse la suivante : rien ne
+  revient (mesures : docs/progress/kernels/BASELINE.md, « Why Chrome's cache gives nothing back »). Étapes :
+  1. mesurer (~½ j) : tout ce que le jeu compile au lancement et la taille de chacun (traceur, post, raster, avion,
+     cockpit) — dit si < 10 Mo est réaliste ; à faire seul d'abord, puis décider ;
+  2. demander moins au départ (½–1 j) : la clé d'orbite et celle du vol compilent deux jeux de gros noyaux — un seul
+     tant que l'autre ne sert pas ; regrouper les pipelines presque identiques ;
+  3. réduire encore les gros noyaux (plusieurs jours, incertain) : la 3e copie d'`ourSegment`, d'autres doublons, chaque
+     coupe vérifiée par `raster-companion` / `kernel-golden`.
+  Limites : seulement les relancements ; le pilote NVIDIA recompile quand même (bac à sable GPU de Chrome) → environ
+  la moitié du gain ; la taille du cache peut changer avec Chrome. Sinon : signaler à Chromium.
 - [ ] **La troisième copie de `ourSegment` (dans `dnegTrace`).** Chaque site d'appel est une copie complète une fois
   inliné par D3D12 (~19k lignes) ; P9 a fusionné les deux appels de `traceLook`, celui de l'intégration du trou de ver
   reste. Dans tous les noyaux du jeu (son univers a le trou de ver), environ un tiers du code (estimé, pas mesuré).
