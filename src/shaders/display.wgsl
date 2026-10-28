@@ -242,9 +242,10 @@ fn rainCells(a: f32, b0: f32, L: f32, w: f32, fwa: f32, dens: f32, seed: f32) ->
   let c = across * along * min(1.0, wd / max(fwa, 1e-4));
   return vec2f(c, c * sheen);
 }
-// The falling drops as the camera sees them in its exposure (1/60 s): seven layers, 0.9 to 13 m away. Still
-// or slow, streaks parallel — the fall and the wind; moving fast, they rush out of the point the drops come
-// from (the focus of expansion), log-polar about it. The near ones out of focus — wide and faint —, the far
+// The falling drops as the camera sees them in its exposure (1/60 s): seven layers, 0.9 to 13 m away, streaks
+// parallel — the fall and the wind. Moving fast they fade out (a drop a few metres off crosses the view in a frame: a blur
+// the eye does not see — no tunnel of lines rushing from ahead; the rain is then the air's — trace.wgsl wxRainShafts — and
+// the canopy's rivulets). The near ones out of focus — wide and faint —, the far
 // ones paler (the air between). Their density in curtains the wind drives (stronger in gusts and a storm),
 // behind them a veil of the rain further off. Those beyond the flown craft hidden by it (shipA: its cover
 // at the pixel). x: their cover, y: their sheen (cover-weighted)
@@ -257,16 +258,12 @@ fn rainStreaks(uv: vec2f, shipA: f32) -> vec2f {
   let T = 1.0 / 60.0;
   let k = clamp(D.rain.x, 0.0, 1.3);
   let dust = D.rain.z > 1.5;
-  // (the focus of expansion: where the drops come from, when they come at the camera)
-  let fz = max(-v.z, 1e-3);
-  let foe = -v.xy / fz;
-  let radial = select(0.0, 1.0 - smoothstep(0.8 * tanH * asp, 2.5 * tanH * asp, length(foe)), v.z < -1.0);
+  // (moving fast: gone)
+  let fast = 1.0 - smoothstep(20.0, 60.0, D.rainV.w);
+  if (fast <= 0.0) { return vec2f(0.0); }
   let mxy = length(v.xy);
   let dirP = select(vec2f(0.0, -1.0), v.xy / max(mxy, 1e-4), mxy > 0.05);
   let perp = vec2f(-dirP.y, dirP.x);
-  let dq = n - foe;
-  let r = max(length(dq), 1e-4);
-  let th = atan2(dq.y, dq.x);
   // (a screen pixel in the view's tangent — the image placed in the output: its scale)
   let pxT = 2.0 * tanH / max(D.size.y * D.view.y, 1.0);
   // (the curtains: how much the density swings, the gusts and a storm's rain driving it)
@@ -286,26 +283,14 @@ fn rainStreaks(uv: vec2f, shipA: f32) -> vec2f {
     let hid = select(1.0, 1.0 - shipA, D.rainX.x > 0.0 && z > D.rainX.x);
     // (the curtains at this depth: the density over the ground, metres across, carried by the wind)
     let xm = dot(n, perp) * z + t * 0.35 * mxy;
-    let dens0 = select(0.55, 0.35, radial > 0.5) * mix(1.0, 0.35 + 1.3 * rvn(vec2f(xm * 0.18, t * 0.25 + f32(i))), curt);
-    var c = vec2f(0.0);
-    if (radial < 0.999) {
-      let cellA = 0.1 / (z * sqrt(max(k, 0.05)));
-      let speed = mxy / z;
-      let L = speed * T;
-      let cellB = max(3.0 * cellA, 1.6 * L);
-      let a = dot(n, perp) / cellA;
-      let b = dot(n, dirP) / cellB - t * speed / cellB;
-      c += (1.0 - radial) * rainCells(a, b, L / cellB, wM / cellA, pxT / cellA, dens0, seed);
-    }
-    if (radial > 0.001) {
-      let rate = fz / z;
-      let N = floor(220.0 / sqrt(z) * sqrt(max(k, 0.05)));
-      let a = th * N / 6.2831853;
-      let cellR = 0.12;
-      let b = (log(r) - t * rate) / cellR;
-      let L = rate * T / cellR;
-      c += radial * rainCells(a, b, L, wM / r * N / 6.2831853, pxT / r * N / 6.2831853, dens0 * 0.25, seed + 3.3) * (1.0 - 0.1 * f32(i));
-    }
+    let dens0 = 0.55 * mix(1.0, 0.35 + 1.3 * rvn(vec2f(xm * 0.18, t * 0.25 + f32(i))), curt);
+    let cellA = 0.1 / (z * sqrt(max(k, 0.05)));
+    let speed = mxy / z;
+    let L = speed * T;
+    let cellB = max(3.0 * cellA, 1.6 * L);
+    let a = dot(n, perp) / cellA;
+    let b = dot(n, dirP) / cellB - t * speed / cellB;
+    let c = rainCells(a, b, L / cellB, wM / cellA, pxT / cellA, dens0, seed);
     cover += c.x * fade * hid;
     sheen += c.y * fade * hid;
   }
@@ -318,12 +303,10 @@ fn rainStreaks(uv: vec2f, shipA: f32) -> vec2f {
     let s1 = rvn(vec2f(vx * 180.0, vy * 3.0 - fall * 6.0));
     let s2 = rvn(vec2f(vx * 97.0 + 13.0, vy * 2.0 - fall * 4.0));
     let sheet = 0.35 + 0.65 * rvn(vec2f(vx * 2.5 + t * 0.05 * (1.0 + mxy), t * 0.07));
-    veil = smoothstep(0.6, 1.0, max(s1, s2)) * sheet * (1.0 - radial) * 0.22;
+    veil = smoothstep(0.6, 1.0, max(s1, s2)) * sheet * 0.22;
   }
   let kk = min(k, 1.0) * (0.85 + 0.25 * max(k - 1.0, 0.0) / 0.3);
-  // (rushing at the camera, the streaks long and many: much fainter — as a camera sees them, a shimmer, not a tunnel of lines;
-  // the rain itself is in the air — trace.wgsl wxRainShafts: its veil, its shafts, its rainbows)
-  let cv = clamp((cover * 0.95 * kk + veil * kk) * (1.0 - 0.75 * radial), 0.0, mix(0.75, 0.22, radial));
+  let cv = clamp((cover * 0.95 * kk + veil * kk) * fast, 0.0, 0.75);
   return vec2f(cv, sheen / max(cover, 1e-4));
 }
 // ---- The drops on the glass (PLAN-PLUIE P3): a height field of water on the canopy (or the lens) — its
@@ -365,38 +348,90 @@ fn dropletLayer(p: vec2f, t: f32, dens: f32, rMax: f32, seed: f32) -> Wet {
   o.g *= g;
   return o;
 }
-// big drops sliding: p in cells (a cell a column's stretch of glass); each slides down it in jerks (or up and
-// out in the air's stream), a beaded wet trail behind; trail: its cover (it wipes the droplets)
-fn slideLayer(p: vec2f, t: f32, dens: f32, blow: f32, xOut: f32, trail: ptr<function, f32>) -> Wet {
-  let id = floor(p);
-  let f = fract(p);
-  let h = rh22(id + 31.7);
+// drops sliding down the glass (still or slow): p in screen heights (x by the aspect), n columns a screen height; in each
+// column one drop in some, a few millimetres across, running down in stick-slip — held, then a slide —, wandering across,
+// a narrow beaded wet trail behind it; trail: its cover (it wipes the droplets)
+fn slideLayer(p: vec2f, t: f32, n: f32, dens: f32, seed: f32, trail: ptr<function, f32>) -> Wet {
+  let col = floor(p.x * n);
+  let h = rh22(vec2f(col, seed));
   var o: Wet;
-  if (rh21(id + 12.9) > dens) { return o; }
-  // (its run down the cell: a stick-slip — still, then a slide —, wrapping round; in the air's stream, up)
-  let rate = mix(0.12 + 0.12 * h.x, 0.9 + 0.6 * h.x, blow);
-  let ph = fract(t * rate + h.y);
-  let stick = ph + 0.06 * sin(ph * 31.0 + h.x * 6.0) * (1.0 - blow);
-  var y = mix(stick * 1.1 - 0.05, 1.05 - stick * 1.1, blow);
-  // (its wander across: a zig-zag down the glass; out from the middle in the stream)
-  let x = 0.5 + 0.18 * sin(stick * 8.0 + h.x * 9.0) * (1.0 - blow) + 0.3 * blow * (xOut - 0.5) * stick;
-  let r = (0.13 + 0.07 * h.x) * (1.0 - 0.45 * blow);
-  o = dome(f, vec2f(x, y), r, 1.0 + 1.6 * blow);
-  // (its trail: where it has been — above it sliding down, below it blown up —, narrower, beaded, drying)
-  let behind = select(y - f.y, f.y - y, blow > 0.5);
+  if (rh21(vec2f(col, seed + 12.9)) > dens) { return o; }
+  // (its run down the screen and past it, wrapping: a stick-slip — still, then a slide)
+  let ph = fract(t * (0.05 + 0.07 * h.x) + h.y);
+  let stick = ph + 0.05 * sin(ph * 37.0 + h.x * 6.0);
+  // (isotropic: x and y both in columns' widths)
+  let q = vec2f(fract(p.x * n), p.y * n);
+  let y = (stick * 1.25 - 0.1) * n;
+  let x = 0.5 + 0.2 * sin(stick * 9.0 + h.x * 9.0);
+  let r = 0.09 + 0.07 * h.x;
+  o = dome(q, vec2f(x, y), r, 1.25);
+  o.g *= n;
+  // (its trail above it: narrower, drying within a few of its lengths; its beads, a millimetre, left every few)
+  let behind = y - q.y;
   if (behind > 0.0) {
-    let w = 1.0 - smoothstep(0.25 * r, 0.6 * r, abs(f.x - x));
-    let fade = 1.0 - smoothstep(0.0, 0.85, behind);
+    let xt = 0.5 + 0.2 * sin((stick - behind / (1.25 * n)) * 9.0 + h.x * 9.0);
+    let w = 1.0 - smoothstep(0.2 * r, 0.55 * r, abs(q.x - xt));
+    let fade = 1.0 - smoothstep(0.0, 6.0 + 10.0 * h.y, behind);
     *trail = max(*trail, w * fade);
-    // (its beads: small drops left every few millimetres)
-    let by = fract(f.y * 9.0 + h.y);
-    let bead = dome(vec2f(f.x, by), vec2f(x, 0.5), 0.35 * r * 3.0, 1.0);
-    if (w * fade > 0.3) { o = wetMax(o, Wet(bead.h * 0.6 * fade, bead.g * 0.6 * fade / 9.0)); }
+    let by = (fract(q.y * 2.5 + h.y) - 0.5) / 2.5;
+    let bead = dome(vec2f(q.x, by), vec2f(xt, 0.0), 0.3 * r, 1.0);
+    if (w * fade > 0.2 && rh21(vec2f(col, floor(q.y * 2.5 + h.y) + seed)) > 0.4) {
+      o = wetMax(o, Wet(bead.h * 0.7 * fade, bead.g * 0.7 * fade * n));
+    }
   }
   return o;
 }
+// The rivulets the air's stream drives over the canopy in flight: from below the windscreen's foot (src: p's frame) they run
+// up and outwards over the glass, each a thin wet line a millimetre or two wide with a bead at its head, wavering, short-lived
+// — the rain struck and swept off —, faster with the speed (v: screen heights a second); dens their share of the lanes
+fn streamLayer(p: vec2f, src: vec2f, t: f32, v: f32, dens: f32, seed: f32) -> Wet {
+  var o: Wet;
+  let d = p - src;
+  let r = length(d);
+  let ef = d / max(r, 1e-4);
+  let ep = vec2f(-ef.y, ef.x);
+  // (lanes by the angle about src, ~2.5 mm apart where the eye looks; cells along them, each a rivulet's run)
+  let N = 520.0;
+  let a = atan2(d.x, -d.y) * N / 6.2831853;
+  let lane = floor(a);
+  let cellL = 0.16;
+  let b = (r - t * v * (0.75 + 0.5 * rh21(vec2f(lane, seed + 2.2)))) / cellL + rh21(vec2f(lane, seed));
+  let id = vec2f(lane, floor(b));
+  let h = rh22(id + seed);
+  if (h.x > dens) { return o; }
+  let g = rh22(id + seed + 5.3);
+  let fb = fract(b);
+  // (its head somewhere in the cell, its length behind it — towards src —, a few to tens of mm)
+  let head = 0.35 + 0.6 * g.x;
+  // (drawn out the faster they run)
+  let L = (0.15 + 0.5 * g.y) * head * (0.55 + 0.45 * min(v / 4.0, 1.0));
+  let u = (head - fb) / max(L, 1e-3);
+  if (u < -0.3 || u > 1.0) { return o; }
+  // (across, in screen heights: its wander — gentle, the air holding it to its lane —, its width)
+  let colW = r * 6.2831853 / N;
+  let wav = 0.07 * sin(fb * 6.0 + h.y * 40.0) * colW;
+  let x = (fract(a) - 0.5) * colW - wav;
+  // (never under a pixel and a half: a line, not dots)
+  let w = max((0.0011 + 0.0013 * h.y) * (1.15 - 0.4 * min(v / 5.0, 1.0)), 1.5 / max(D.img.y, 1.0));
+  let along = (fb - head) * cellL;
+  // (the line: its section a half-cylinder, thinning to nothing at its tail)
+  let thin = max(w * (1.0 - 0.6 * clamp(u, 0.0, 1.0)), 1.2 / max(D.img.y, 1.0));
+  if (u >= 0.0) {
+    let xx = x / thin;
+    if (abs(xx) < 1.0) {
+      let z = sqrt(1.0 - xx * xx);
+      o.h = z * (0.55 + 0.45 * (1.0 - u));
+      o.g = -ep * xx / max(z, 0.25) / thin;
+    }
+  }
+  // (its head a bead, wider)
+  let hb = dome(vec2f(x, along), vec2f(0.0), 1.9 * w, 1.4);
+  if (hb.h > o.h) { o.h = hb.h; o.g = ep * hb.g.x + ef * hb.g.y; }
+  return o;
+}
 // The water on the glass at uv: k the rain, blow 0…1 the air's stream over it, lens: the camera's lens (out
-// of focus, few and large) rather than the canopy
+// of focus, few and large) rather than the canopy. Still: droplets on three scales — the rain landing and drying —, and drops
+// sliding down in their trails, wiping them; in flight the air sweeps the droplets, the impacts stream off as rivulets.
 fn glassWater(uv: vec2f, k: f32, blow: f32, lens: bool) -> Wet {
   let asp = D.img.x / D.img.y;
   let t = D.rain.y;
@@ -409,23 +444,46 @@ fn glassWater(uv: vec2f, k: f32, blow: f32, lens: bool) -> Wet {
     w.g *= 4.0;
     return w;
   }
-  // (the air's stream thins them: past ~100 m/s the glass is swept)
-  let keep = 1.0 - 0.85 * smoothstep(60.0, 110.0, D.rainV.w);
-  var s = slideLayer(vec2f(p.x * 7.0, p.y * 2.2), t, (0.35 + 0.4 * k) * keep, blow, uv.x, &trail);
-  s.g *= vec2f(7.0, 2.2);
-  var d1 = dropletLayer(p * 22.0, t, (0.25 + 0.45 * k) * keep, 0.4, 3.0);
-  d1.g *= 22.0;
-  var d2 = dropletLayer(p * 55.0, t * 1.3, (0.3 + 0.4 * k) * keep, 0.42, 17.0);
-  d2.g *= 55.0 * 0.6;
-  d2.h *= 0.6;
-  // (the droplets wiped where a drop has slid)
+  // (the air's stream thins them: past ~100 m/s the glass is swept but for the rivulets)
+  let keep = (1.0 - 0.9 * smoothstep(40.0, 110.0, D.rainV.w)) * (1.0 - 0.6 * blow);
+  // (the droplets: the rain landing — a speck grows in a flash —, staying, drying; ~1, 2 and 4 mm)
+  var d0 = dropletLayer(p * 120.0, t * 1.6, (0.35 + 0.45 * k) * keep, 0.38, 29.0);
+  d0.g *= 120.0;
+  d0.h *= 0.5;
+  var d1 = dropletLayer(p * 62.0, t * 1.1, (0.25 + 0.45 * k) * keep, 0.4, 3.0);
+  d1.g *= 62.0;
+  d1.h *= 0.75;
+  var d2 = dropletLayer(p * 30.0, t * 0.7, (0.12 + 0.3 * k) * keep, 0.3, 17.0);
+  d2.g *= 30.0;
+  // (sliding drops, still or slow only: two sets of columns, their trails wiping the droplets)
+  var s = Wet(0.0, vec2f(0.0));
+  if (blow < 0.99) {
+    let sd = (0.2 + 0.45 * k) * (1.0 - blow) * keep;
+    s = wetMax(slideLayer(p, t, 18.0, sd, 3.7, &trail), slideLayer(p + vec2f(0.013, 0.0), t * 1.3, 11.0, 0.6 * sd, 8.1, &trail));
+  }
   let wipe = 1.0 - smoothstep(0.1, 0.5, trail);
+  d0.h *= wipe;
+  d0.g *= wipe;
   d1.h *= wipe;
   d1.g *= wipe;
   d2.h *= wipe;
   d2.g *= wipe;
-  w = wetMax(wetMax(d2, d1), s);
-  // (in the stream, every drop stretched along it: its slope across)
+  w = wetMax(wetMax(wetMax(d0, d1), d2), s);
+  // (in flight: the rivulets — driven by the air over the glass: from the stagnation line low on the windscreen, under where the
+  // relative wind comes from (its point in the view: the slip sets them slanting, the incidence lower or higher), up and out over
+  // the canopy; faster, thinner and longer with the airspeed — the film's speed a few % of it —, more in heavier rain)
+  if (blow > 0.01) {
+    let wv = D.rainV.xyz;
+    let tanH = D.rain.w;
+    let fromZ = max(-wv.z, 1.0);
+    let foe = clamp(vec2f(0.5 + wv.x / fromZ / (2.0 * tanH * asp), 0.5 - wv.y / fromZ / (2.0 * tanH)), vec2f(-0.5), vec2f(1.5));
+    let src = vec2f(foe.x * asp, foe.y + 0.95);
+    let air = D.rainV.w;
+    let v = blow * clamp(0.03 * air, 0.5, 7.0);
+    let dens = (0.08 + 0.22 * k) * blow * (0.7 + 0.3 * smoothstep(60.0, 200.0, air));
+    let sr = wetMax(streamLayer(p, src, t, v, dens, 4.3), streamLayer(p, src + vec2f(0.0, 0.07), t * 1.17, v * 0.8, 0.65 * dens, 9.9));
+    w = wetMax(w, sr);
+  }
   return w;
 }
 // The scene through the water: each bead a small lens — the scene behind it shifted, inverted at its

@@ -33,7 +33,7 @@ import { fmtS } from "./gametools";
 import { blinkOn } from "./clock";
 import { cpuProf } from "../perf";
 import { drawSymbology, hudHits, paintBoom, paintMotor } from "./hud/symbology";
-import { cameraInWorld, SpeedFx, speedFxLevel } from "./speedfx";
+import { SpeedFx, speedFxLevel } from "./speedfx";
 import { Map3D } from "./map3d/map3d";
 import type { WeatherState } from "../weather";
 import { GroundTrack } from "./groundtrack";
@@ -2533,57 +2533,24 @@ export class FlightHud {
     ctx.fillText(`${VESSELS[fleet.active].name.toUpperCase()} ${this.fmtMetres(d)}`, px + (px > W * 0.8 ? -1.6 : 1.6) * r, py - 1.2 * r);
   }
 
-  /** the speed's streaks, the edges, the grey-out (ui/speedfx.ts); the wall clock of the last frame drawn */
+  /** the speed's edges, the grey-out (ui/speedfx.ts) */
   private speedFx = new SpeedFx();
-  private fxAt = Number.NaN;
 
-  /** The speed felt, under the symbology: the air's streaks past the eye, the edges, a hard pull's grey-out. */
+  /** The speed felt, under the symbology: the edges darkened with the speed, a hard pull's grey-out. */
   private drawSpeed(ctx: CanvasRenderingContext2D, W: number, H: number, dpr: number, i: Info) {
-    const now = performance.now() / 1000;
-    const dt = Number.isFinite(this.fxAt) ? Math.min(now - this.fxAt, 0.1) : 0;
-    this.fxAt = now;
     const s = this.s;
     const A = i.air;
-    const up = i.dirs.up,
-      north = i.dirs.north;
     // (the air streaming past the eye: not past a still camera — the fly-by, the port's, the free one)
     const still = ["flyby", "free", "station", "around"].includes(String(i.mount));
-    if (!A || !A.inAir || !A.u || !up || !north || still || !s.animate) {
-      if (s.gVignette && A?.inAir)
-        this.speedFx.draw(ctx, {
-          W,
-          H,
-          dpr,
-          fov: s.fov,
-          dt,
-          M: [
-            [1, 0, 0],
-            [0, 1, 0],
-            [0, 0, 1],
-          ],
-          flow: [0, 0, 0],
-          level: 0,
-          body: i.body ?? null,
-          greyOut: s.vessel !== "f35" || s.f35GEffects,
-        });
-      return;
-    }
-    const S = i.S;
-    const u = A.u;
-    const vc: [number, number, number] = [0, 1, 2].map((r) => (S[r]![0]! * u[0]! + S[r]![1]! * u[1]! + S[r]![2]! * u[2]!) * A.speed) as [
-      number,
-      number,
-      number,
-    ];
-    const M = cameraInWorld(up as [number, number, number], north as [number, number, number]);
-    // (the flow past the eye in the world: the motion through the air, the other way)
-    const flow = [0, 1, 2].map((k) => -(M[0][k]! * vc[0] + M[1][k]! * vc[1] + M[2][k]! * vc[2])) as [number, number, number];
     const level =
-      (s.speedLines ?? 0.7) *
-      speedFxLevel({ speed: A.speed, rho: A.rho, agl: i.surface?.alt ?? Number.NaN, boost: i.jet?.modes.ab ? 1.5 : 1 });
+      !A || !A.inAir || still || !s.animate
+        ? 0
+        : (s.speedLines ?? 0.7) *
+          speedFxLevel({ speed: A.speed, rho: A.rho, agl: i.surface?.alt ?? Number.NaN, boost: i.jet?.modes.ab ? 1.5 : 1 });
+    if (level <= 0 && !(s.gVignette && A?.inAir)) return;
     // (the F-35's: its own setting — G effects)
     const grey = s.gVignette !== false && (s.vessel !== "f35" || s.f35GEffects);
-    this.speedFx.draw(ctx, { W, H, dpr, fov: s.fov, dt, M, flow, level, body: i.body ?? null, greyOut: grey });
+    this.speedFx.draw(ctx, { W, H, dpr, level, body: i.body ?? null, greyOut: grey });
   }
 
   private drawHud(i: Info) {

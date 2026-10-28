@@ -36,3 +36,25 @@ cockpit) :
 | P6 | **Doc, finitions** | `docs/AUDIO.md`, `docs/comment-jouer.html`, la fiche système ; e2e (la pause) ; planche finale | **fait** : `AUDIO.md` (la source « pluie »), `comment-jouer.html` (la pluie dans Météo &amp; aéroports), la fiche `systemes/11` ; e2e `rain` (la pause, le son) ; planche `p6-final.jpg` |
 
 Chaque étape : un commit, une planche dans `docs/progress/pluie/`, FR + EN.
+
+## P7 — la verrière et la pluie refaites, sans traits de vitesse (28 octobre 2026)
+
+Demande : « enlever les effets de vitesse (traits de vitesse) ; la pluie sur la vitre est nulle (grosses gouttes, peu de
+mouvement), pas réaliste ; améliorer la pluie en général ; en vol, prendre en compte la vitesse de l'air ; le test sur ce Mac. »
+
+- **Les traits de vitesse retirés** : `ui/speedfx.ts` ne dessine plus les traînées d'air devant l'œil (le réglage devient
+  *Vignettage de vitesse* : les bords assombris ; le voile gris, noir, rouge sous facteur de charge inchangés) ; la pluie
+  dans l'air (`display.wgsl rainStreaks`) n'a plus son tunnel de traits radiaux venant de devant — en vol rapide les gouttes
+  proches s'effacent (au-delà de ~40 m/s), la pluie est celle de l'air (`trace.wgsl wxRainShafts`) et de la verrière.
+- **L'eau sur la verrière** (`glassWater`) : des gouttelettes sur trois échelles (~1, 2 et 4 mm), qui naissent sans cesse et
+  sèchent ; au sol ou lent, des gouttes de quelques mm qui coulent par à-coups en zigzag (deux jeux de colonnes), leur
+  traînée perlée qui essuie les gouttelettes (avant : des gouttes de 2 à 9 % de l'image, ovales, presque immobiles).
+- **En vol, le vent relatif** (`streamLayer`) : l'air balaie les gouttelettes et fait courir l'eau en filets fins (1,5 px au
+  moins), une perle en tête, depuis la ligne d'arrêt au pied du pare-brise — sous le point d'où vient le vent relatif
+  (`rainV` : le dérapage les incline, l'incidence les monte ou descend) —, vers le haut et l'extérieur ; leur vitesse ~3 % de
+  la vitesse air (0,5 à 7 hauteurs d'écran par seconde), plus longs et plus fins plus vite, plus nombreux sous forte pluie.
+- Test `tests/e2e/rain-glass.e2e.test.ts` (sur ce Mac, raster, cockpit du F-35, FPS affichés) : arrêté sur la piste du
+  Bourget sous la pluie, à 150 m/s, dans l'orage à 220 m/s ; deux images à 0,25 s. Coût : la passe d'affichage
+  26,2 → 26,3 ms au sol, 19,4 → 21,5 en croisière, 31,1 → 28,0 dans l'orage (son chronomètre inclut l'attente de l'image :
+  aucune différence mesurable). Planches `p7-ground-avant/apres.jpg`, `p7-storm-avant/apres.jpg`, `p7-filets-zoom.jpg`.
+- Vu en route, non traité : dans l'orage, des taches blanches carrées dans le ciel (déjà là avant).

@@ -505,9 +505,9 @@ export default {
   major: "majeur",
   minor: "mineur",
   "Jet HUD": "HUD de chasseur",
-  "Speed effects": "Effets de vitesse",
-  "The speed felt in the air: streaks of moisture and dust rushing past the eye — more of them faster, low over the ground, with the afterburner; a turn sweeps them across the view — and the frame's edges darkened. 0: none.":
-    "La vitesse ressentie en vol : des traînées d'humidité et de poussière filant devant l'œil — plus nombreuses plus vite, près du sol, avec la postcombustion ; un virage les balaie dans la vue — et les bords de l'image assombris. 0 : aucun.",
+  "Speed vignette": "Vignettage de vitesse",
+  "The speed felt in the air: the frame's edges darkened — more fast, low over the ground, with the afterburner. 0: none.":
+    "La vitesse ressentie en vol : les bords de l'image assombris — plus vite, près du sol, avec la postcombustion. 0 : aucun.",
   "Grey-out under load": "Voile gris sous facteur de charge",
   "A hard pull narrows and greys the view, as a pilot's: from 5 g, a tunnel at 9 — eased in over a second, out faster.":
     "Une ressource serrée rétrécit et grise la vue, comme pour un pilote : dès 5 g, un tunnel à 9 — installé en une seconde, dissipé plus vite.",
