@@ -33,7 +33,7 @@ describe.skipIf(!E2E)("smoke: in flight (Artemis, low Earth orbit)", () => {
       5000,
     );
     const first = await app.js<string>(`document.querySelector(".kh .k-kbd").textContent`);
-    expect(first).toMatch(/^[ZW]$/); // (the full throttle's key, as this keyboard labels it)
+    expect(first).toMatch(/^[ZWY]$/); // (the full throttle's key, as this keyboard labels it: QWERTY Z, AZERTY W, QWERTZ Y)
   });
 
   test("the radial wheel: Tab held opens it, the pointer picks, Tab released does it; a tap is the next target", async () => {

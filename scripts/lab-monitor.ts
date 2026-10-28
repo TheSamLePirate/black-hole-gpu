@@ -1,4 +1,5 @@
-// What runs on each Mac of the lab, at a glance — this one and the other (kerr-mini, over ssh):
+// What runs on each machine of the lab, at a glance — this Mac and the others over ssh (scripts/lib/lab-hosts.ts:
+// kerr-mini, the Mac mini; kerr-pc, the Windows PC):
 //   - its Chrome (scripts/lib/chrome-lock.ts: one at a time): who holds it, since when, who waits;
 //   - the Chrome processes really alive (a leftover shows here);
 //   - the flight lab's campaigns (scripts/flightlab.ts registers each in ~/.kerr-lab/runs/): the scenario
@@ -6,19 +7,24 @@
 //   - the remote runner's jobs (scripts/remote-runner.ts: running, queued);
 //   - the test runs (bun test).
 //
-//   bun scripts/lab-monitor.ts                 both Macs, once
+//   bun scripts/lab-monitor.ts                 every machine, once
+//   bun scripts/lab-monitor.ts --host kerr-pc  this Mac and that one only
 //   bun scripts/lab-monitor.ts --watch [s]     refreshed every s seconds (5)
 //   bun scripts/lab-monitor.ts --local         this Mac only
-//   bun scripts/lab-monitor.ts --json          the state as JSON (what the other Mac answers over ssh)
+//   bun scripts/lab-monitor.ts --json          the state as JSON (what the other machines answer over ssh)
 //   bun scripts/lab-monitor.ts --sweep         and the orphan Chromes ended (a dead process's, still rendering)
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir, hostname } from "node:os";
-import { join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { holder, LAB_DIR, orphanChromes, waiters } from "./lib/chrome-lock";
+import { HOSTS, type LabHost, labHost, remoteCommand, takeHost } from "./lib/lab-hosts";
+import { alive, orphaned, processes, WINDOWS } from "./lib/procs";
 
-const HOST = process.env.KERR_REMOTE ?? "kerr-mini";
-const RUNNER_DIR = join(homedir(), process.env.KERR_REMOTE_DIR ?? "kerr-runner");
 const argv = process.argv.slice(2);
+const only = takeHost(argv);
+// (run from a runner's base — over ssh, --json —: that runner's folder; else this machine's default one)
+const HERE = resolve(import.meta.dir, "..");
+const RUNNER_DIR = basename(HERE) === "base" ? resolve(HERE, "..") : join(homedir(), process.env.KERR_REMOTE_DIR ?? "kerr-runner");
 
 interface Campaign {
   pid: number;
@@ -47,34 +53,23 @@ interface State {
   orphans: { pid: number; elapsed: string; what: string }[];
 }
 
-const alive = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const ps = (pattern: string) =>
-  Bun.spawnSync(["ps", "-axo", "pid=,etime=,command="], { stdout: "pipe" })
-    .stdout.toString()
-    .split("\n")
-    .map((l) => l.trim().match(/^(\d+)\s+(\S+)\s+(.*)$/))
-    .filter((m): m is RegExpMatchArray => !!m && new RegExp(pattern).test(m[3]!));
-
-/** A process's working directory (whose worktree it runs in). */
+/** A process's working directory (whose worktree it runs in) — none on Windows: no lsof there. */
 const cwdOf = (pid: number) =>
-  Bun.spawnSync(["lsof", "-a", "-p", String(pid), "-d", "cwd", "-Fn"], { stdout: "pipe" })
-    .stdout.toString()
-    .split("\n")
-    .find((l) => l.startsWith("n"))
-    ?.slice(1) ?? "";
+  WINDOWS
+    ? ""
+    : (Bun.spawnSync(["lsof", "-a", "-p", String(pid), "-d", "cwd", "-Fn"], { stdout: "pipe" })
+        .stdout.toString()
+        .split("\n")
+        .find((l) => l.startsWith("n"))
+        ?.slice(1) ?? "");
 
 async function local(): Promise<State> {
+  // (every process once a round: on Windows a PowerShell call, a second each)
+  const all = processes();
+  const ps = (pattern: string) => all.filter((p) => new RegExp(pattern).test(p.command));
   const chromes = ps("--remote-debugging-port=")
-    .filter((m) => !/--type=/.test(m[3]!))
-    .map((m) => ({ pid: Number(m[1]), elapsed: m[2]!, headless: m[3]!.includes("--headless"), cwd: cwdOf(Number(m[1])) }));
+    .filter((p) => !/--type=/.test(p.command) && /chrome/i.test(p.command))
+    .map((p) => ({ pid: p.pid, elapsed: p.elapsed, headless: p.command.includes("--headless"), cwd: cwdOf(p.pid) }));
   const runs = join(LAB_DIR, "runs");
   const campaigns: Campaign[] = [];
   for (const f of existsSync(runs) ? readdirSync(runs) : []) {
@@ -103,20 +98,21 @@ async function local(): Promise<State> {
       /* (not a job) */
     }
   }
-  const tests = ps("^(\\S*/)?bun (test|run e2e)").map((m) => ({
-    pid: Number(m[1]),
-    elapsed: m[2]!,
-    cmd: m[3]!.slice(0, 120),
-    cwd: cwdOf(Number(m[1])),
+  // (Windows: bun.exe's full path, maybe quoted)
+  const tests = ps('^"?(\\S*[/\\\\])?bun(\\.exe)?"? (test|run e2e)').map((p) => ({
+    pid: p.pid,
+    elapsed: p.elapsed,
+    cmd: p.command.slice(0, 120),
+    cwd: cwdOf(p.pid),
   }));
   const sweep = argv.includes("--sweep");
   const orphans = [
     ...orphanChromes(sweep).map((o) => ({ pid: o.pid, elapsed: o.elapsed, what: `Chrome ${o.profile}${sweep ? " — ended" : ""}` })),
     // (a test's production server outlives its process no longer — server.ts watches KERR_PARENT_PID —: an
     // older one still may)
-    ...ps("bun server\\.ts")
-      .filter((m) => Bun.spawnSync(["ps", "-o", "ppid=", "-p", m[1]!], { stdout: "pipe" }).stdout.toString().trim() === "1")
-      .map((m) => ({ pid: Number(m[1]), elapsed: m[2]!, what: `bun server.ts in ${where(cwdOf(Number(m[1])))}` })),
+    ...ps('bun(\\.exe)?"? server\\.ts')
+      .filter(orphaned)
+      .map((p) => ({ pid: p.pid, elapsed: p.elapsed, what: `bun server.ts in ${where(cwdOf(p.pid))}` })),
   ];
   return {
     host: hostname().replace(/\.local$/, ""),
@@ -131,29 +127,30 @@ async function local(): Promise<State> {
   };
 }
 
-async function remote(): Promise<State | string> {
+/** Another machine's state, its own monitor asked over ssh (an answer within 20 s, else said unreachable). */
+async function remoteState(h: LabHost): Promise<State | string> {
+  const opt = h.name === "kerr-mini" ? "" : `--host ${h.name} `;
   const p = Bun.spawn(
     [
       "ssh",
-      "-o",
-      "BatchMode=yes",
-      "-o",
-      "ConnectTimeout=8",
-      HOST,
-      `cd ${RUNNER_DIR}/base 2>/dev/null && ~/.bun/bin/bun scripts/lab-monitor.ts --json`,
+      ...["-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3"],
+      h.name,
+      remoteCommand(h, `cd ${h.dir}/base 2>/dev/null && ${h.bun} scripts/lab-monitor.ts --json`),
     ],
     { stdout: "pipe", stderr: "pipe" },
   );
+  const timer = setTimeout(() => p.kill(), 20_000);
   const out = await new Response(p.stdout).text();
   const err = await new Response(p.stderr).text();
+  clearTimeout(timer);
   if ((await p.exited) !== 0)
-    return /not found|Cannot find|ENOENT/.test(err)
-      ? `${HOST}: the monitor is not there yet — bun scripts/remote.ts sync`
-      : `${HOST}: unreachable — ${err.trim().split("\n").pop()} (bun scripts/remote.ts doctor)`;
+    return /not found|Cannot find|ENOENT/.test(err) || !err.trim()
+      ? `${h.name}: the monitor is not there yet — bun scripts/remote.ts ${opt}sync`
+      : `${h.name}: unreachable — ${err.trim().split("\n").pop()} (bun scripts/remote.ts ${opt}doctor)`;
   try {
     return JSON.parse(out) as State;
   } catch {
-    return `${HOST}: ${out.slice(0, 200)}`;
+    return `${h.name}: ${out.slice(0, 200)}`;
   }
 }
 
@@ -166,6 +163,7 @@ const age = (since: number) => {
       : `${s}s`;
 };
 const where = (cwd = "") => {
+  if (!cwd) return "";
   const w = cwd.match(/worktrees\/(agent-[0-9a-f]{6})/)?.[1];
   return w ? `worktree ${w}` : cwd.includes("kerr-runner") ? "remote job" : cwd.replace(homedir(), "~");
 };
@@ -183,7 +181,7 @@ function show(s: State | string, title: string) {
   for (const w of s.waiting) console.log(`    waiting: pid ${w.pid} · ${w.label} · ${where(w.cwd)} · ${age(w.since)}`);
   const n = s.chromes.length;
   console.log(
-    `  Chrome processes: ${n}${n ? ` — ${s.chromes.map((c) => `pid ${c.pid} ${c.headless ? "headless" : "on screen"} ${c.elapsed} (${where(c.cwd)})`).join(", ")}` : ""}${n > 1 ? "  ⚠ more than one" : ""}`,
+    `  Chrome processes: ${n}${n ? ` — ${s.chromes.map((c) => `pid ${c.pid} ${c.headless ? "headless" : "on screen"} ${c.elapsed}${c.cwd ? ` (${where(c.cwd)})` : ""}`).join(", ")}` : ""}${n > 1 ? "  ⚠ more than one" : ""}`,
   );
   if (s.campaigns.length) console.log("  Flight lab:");
   for (const c of s.campaigns) {
@@ -203,7 +201,7 @@ function show(s: State | string, title: string) {
   }
   for (const j of s.jobs) console.log(`  job ${j.state}: ${j.id} · ${j.cmd.slice(0, 90)}${j.started ? ` · ${age(j.started)}` : ""}`);
   for (const o of s.orphans ?? []) console.log(`  ⚠ orphan pid ${o.pid} ${o.elapsed}: ${o.what}`);
-  for (const t of s.tests) console.log(`  test pid ${t.pid} ${t.elapsed} · ${where(t.cwd)}: ${t.cmd}`);
+  for (const t of s.tests) console.log(`  test pid ${t.pid} ${t.elapsed}${t.cwd ? ` · ${where(t.cwd)}` : ""}: ${t.cmd}`);
   console.log("");
 }
 
@@ -212,11 +210,12 @@ else {
   const watch = argv.includes("--watch");
   const every = Number(argv[argv.indexOf("--watch") + 1]) || 5;
   for (;;) {
-    const [here, there] = await Promise.all([local(), argv.includes("--local") ? Promise.resolve(null) : remote()]);
+    const others = argv.includes("--local") ? [] : HOSTS.filter((h) => !only || h.name === only).map((h) => labHost(h.name));
+    const [here, ...there] = await Promise.all([local(), ...others.map(remoteState)]);
     if (watch) process.stdout.write("\x1b[2J\x1b[H");
     console.log(`lab — ${new Date().toLocaleTimeString()}\n`);
-    show(here, "this Mac");
-    if (there) show(there, "the other Mac");
+    show(here!, "this Mac");
+    there.forEach((s, i) => show(s, others[i]!.label));
     if (!watch) break;
     await Bun.sleep(every * 1000);
   }

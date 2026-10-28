@@ -12,6 +12,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
+import { alive, killTree, orphaned, processes } from "./procs";
 
 export const LAB_DIR = join(homedir(), ".kerr-lab");
 export const LOCK = join(LAB_DIR, "chrome.lock");
@@ -39,15 +40,6 @@ export interface Holder {
   since: number;
 }
 
-const alive = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === "EPERM";
-  }
-};
-
 const read = (f: string): Holder | null => {
   try {
     return JSON.parse(readFileSync(f, "utf8")) as Holder;
@@ -58,31 +50,18 @@ const read = (f: string): Holder | null => {
 
 /**
  * The test Chromes left behind — a browser started with a DevTools port whose process died hard (a crash,
- * a SIGKILL, an agent stopped) is adopted by launchd and runs on, its GPU taken: found by that (a main
- * Chrome process, --remote-debugging-port, parent 1 — the user's own Chrome has no such port) and, with
- * `kill`, ended. Swept whenever the lock is taken; scripts/lab-monitor.ts shows them.
+ * a SIGKILL, an agent stopped) runs on, its GPU taken: on a Mac adopted by launchd (parent 1), on Windows its
+ * parent simply gone (scripts/lib/procs.ts, orphaned) — a main Chrome process with --remote-debugging-port (the
+ * user's own Chrome has no such port) and, with `kill`, ended. Swept whenever the lock is taken;
+ * scripts/lab-monitor.ts shows them.
  */
 export function orphanChromes(kill = false): { pid: number; elapsed: string; profile: string }[] {
   const out: { pid: number; elapsed: string; profile: string }[] = [];
-  const ps = Bun.spawnSync(["ps", "-axo", "pid=,ppid=,etime=,command="], { stdout: "pipe" }).stdout.toString();
-  for (const line of ps.split("\n")) {
-    const m = line.trim().match(/^(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/);
-    if (
-      !m ||
-      m[2] !== "1" ||
-      !/Chrome|chromium|chrome/.test(m[4]!) ||
-      !m[4]!.includes("--remote-debugging-port=") ||
-      m[4]!.includes("--type=")
-    )
-      continue;
-    const o = { pid: Number(m[1]), elapsed: m[3]!, profile: m[4]!.match(/--user-data-dir=(\S+)/)?.[1] ?? "" };
+  for (const p of processes(/--remote-debugging-port=/)) {
+    if (!orphaned(p) || !/Chrome|chromium|chrome/.test(p.command) || p.command.includes("--type=")) continue;
+    const o = { pid: p.pid, elapsed: p.elapsed, profile: p.command.match(/--user-data-dir=("[^"]+"|\S+)/)?.[1]?.replace(/"/g, "") ?? "" };
     out.push(o);
-    if (kill)
-      try {
-        process.kill(o.pid, "SIGKILL");
-      } catch {
-        /* (gone meanwhile) */
-      }
+    if (kill) killTree(o.pid);
   }
   return out;
 }
@@ -125,7 +104,7 @@ const defaultLabel = () =>
     process.env.KERR_LAB_LABEL ??
     process.argv
       .slice(1)
-      .map((a) => a.replace(/^.*\/(scripts|tests)\//, "$1/"))
+      .map((a) => a.replace(/^.*[\\/](scripts|tests)[\\/]/, "$1/").replace(/\\/g, "/"))
       .join(" ")
   ).slice(0, 160);
 

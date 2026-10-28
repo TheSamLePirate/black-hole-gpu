@@ -12,6 +12,7 @@
 
 import { tmpdir } from "node:os";
 import { chromeLock } from "./lib/chrome-lock";
+import { CHROME, endChrome } from "./lib/procs";
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -107,8 +108,6 @@ if (FROM) {
 const port = 9430 + Math.floor(Math.random() * 40);
 const W = 1469,
   H = 965;
-const CHROME =
-  process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 await chromeLock();
 const chrome = Bun.spawn(
   [
@@ -131,8 +130,7 @@ const chrome = Bun.spawn(
 );
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const kill = () => {
-  chrome.kill();
-  Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
+  endChrome(chrome, port);
 };
 process.on("SIGINT", () => (kill(), process.exit(1)));
 

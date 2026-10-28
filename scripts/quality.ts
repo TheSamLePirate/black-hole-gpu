@@ -1,6 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { chromeLock } from "./lib/chrome-lock";
+import { CHROME, endChrome } from "./lib/procs";
 // Deterministic realtime-vs-converged quality: the camera turns 0.2° per rendered frame (frame-locked),
 // stops on a realtime frame, which is captured; the same view is then left to converge (reference).
 // PSNR of the realtime capture against it (centre crop), for each config, averaged over stops.
@@ -29,7 +30,7 @@ const port = 9570 + Math.floor(Math.random() * 20);
 await chromeLock();
 const chrome = Bun.spawn(
   [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    CHROME,
     "--headless=new",
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${S}/chrome-profile`,
@@ -123,8 +124,7 @@ m=((a-b)**2).mean(); print(10*np.log10(255**2/max(m,1e-9)))`,
         console.log(sc, cfg.name, k, v.toFixed(2));
       }
 } finally {
-  chrome.kill();
-  Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
+  endChrome(chrome, port);
 }
 for (const [k, v] of Object.entries(res))
   console.log(k.padEnd(48), (v.reduce((a, b) => a + b, 0) / v.length).toFixed(2), "dB", v.map((x) => x.toFixed(1)).join(" "));

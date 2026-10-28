@@ -1,10 +1,11 @@
-// The e2e runner (docs/E2E.md): the files named, or all of tests/e2e — here, or on kerr-mini.
+// The e2e runner (docs/E2E.md): the files named, or all of tests/e2e — here, on kerr-mini, or on kerr-pc.
 //
 //   bun run e2e                              every e2e, here (~20 min)
 //   bun run e2e smoke landing                tests/e2e/smoke.e2e.test.ts and landing's (a name, a path, or a glob's part)
 //   bun run e2e smoke -t "radial wheel"      bun test's own flags after the names (-t: a test's name)
 //   bun run e2e --remote smoke               the same on kerr-mini (bun scripts/remote.ts run): full screen there
 //   bun run e2e --remote --detach landing    …queued there, back at once (bun scripts/remote.ts logs <id> -f)
+//   bun run e2e --host kerr-pc smoke         on another machine of the lab (scripts/lib/lab-hosts.ts): the Windows PC
 //   bun run e2e --each [names…]              a bun test per file: a table of pass / fail / skip / seconds at the end,
 //                                            and remote-results/e2e-summary-<time>.json (with --remote: made there)
 //   bun run e2e --list                       the e2e files
@@ -36,6 +37,7 @@ if (argv.includes("--list")) {
 const REMOTE_FLAGS = new Set(["--headless", "--detach"]);
 const REMOTE_VALUED = new Set(["--hold", "--name"]);
 let remote = false;
+let host: string | undefined;
 let each = false;
 const remoteArgs: string[] = [];
 const names: string[] = [];
@@ -43,7 +45,10 @@ const testArgs: string[] = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]!;
   if (a === "--remote") remote = true;
-  else if (a === "--each") each = true;
+  else if (a === "--host") {
+    remote = true;
+    host = argv[++i];
+  } else if (a === "--each") each = true;
   else if (REMOTE_FLAGS.has(a)) remoteArgs.push(a);
   else if (REMOTE_VALUED.has(a)) remoteArgs.push(a, argv[++i] ?? "");
   else if (a.startsWith("-")) {
@@ -71,7 +76,7 @@ for (const n of names) {
 
 const targets = chosen.length ? chosen : files.map((f) => `${DIR}/${f}`);
 console.error(
-  `e2e: ${chosen.length || "all"} file${chosen.length === 1 ? "" : "s"}${each ? ", one process each" : ""}${remote ? " on kerr-mini" : ""}: ${chosen.map((c) => c.slice(DIR.length + 1)).join(" ") || DIR}`,
+  `e2e: ${chosen.length || "all"} file${chosen.length === 1 ? "" : "s"}${each ? ", one process each" : ""}${remote ? ` on ${host ?? process.env.KERR_REMOTE ?? "kerr-mini"}` : ""}: ${chosen.map((c) => c.slice(DIR.length + 1)).join(" ") || DIR}`,
 );
 
 if (remote) {
@@ -79,9 +84,12 @@ if (remote) {
   const there = each
     ? ["bun", "scripts/e2e.ts", "--each", ...chosen, ...testArgs]
     : ["bun", "test", ...PRELOAD, ...(chosen.length ? chosen : [DIR]), "--timeout", "600000", ...testArgs];
-  const p = Bun.spawn(["bun", "scripts/remote.ts", "run", ...remoteArgs, "--", `E2E=1 ${shellJoin(there)}`], {
-    stdio: ["inherit", "inherit", "inherit"],
-  });
+  const p = Bun.spawn(
+    ["bun", "scripts/remote.ts", ...(host ? ["--host", host] : []), "run", ...remoteArgs, "--", `E2E=1 ${shellJoin(there)}`],
+    {
+      stdio: ["inherit", "inherit", "inherit"],
+    },
+  );
   process.exit(await p.exited);
 }
 

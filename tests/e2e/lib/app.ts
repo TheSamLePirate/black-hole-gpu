@@ -189,7 +189,8 @@ export class App {
     } = {},
   ) {
     // (the test file booting it, for its report's folder: E2E_FILE when one file runs, else the caller's frame)
-    const file = process.env.E2E_FILE ?? new Error().stack?.match(/tests\/e2e\/([\w.-]+\.e2e\.test\.ts)/)?.[1] ?? "unknown.e2e.test.ts";
+    const file =
+      process.env.E2E_FILE ?? new Error().stack?.match(/tests[\\/]e2e[\\/]([\w.-]+\.e2e\.test\.ts)/)?.[1] ?? "unknown.e2e.test.ts";
     const s = await serve();
     const cdp = await launch(o);
     const app = new App(cdp, s.url);

@@ -91,7 +91,7 @@ interface LiveRun {
 // ------------------------------------------------------------------------------------------- state
 
 const S = {
-  lab: { here: null as Mac | null, mini: null as Mac | null },
+  lab: { here: null as Mac | null, mini: null as Mac | null, pc: null as Mac | null },
   live: new Map<string, LiveRun>(),
   probe: { state: "off", width: 1280, height: 800 } as Probe,
   history: null as Run[] | null,
@@ -102,7 +102,7 @@ const S = {
   connected: false,
   // the run picker's choices (kept across views)
   pick: new Set<string>(),
-  where: "mini" as "here" | "mini",
+  where: "mini" as "here" | "mini" | "pc",
   each: true,
   headless: false,
   hold: 0,
@@ -621,7 +621,7 @@ function paintSide() {
       m?.ok ? (m.lock ? "busy" : "idle") : m ? "down" : "…",
       m?.ok ? h("span", { class: "badge" }, m.chrome) : null,
     );
-  $("#side-macs")!.replaceChildren(mac("This Mac", S.lab.here), mac("kerr-mini", S.lab.mini));
+  $("#side-macs")!.replaceChildren(mac("This Mac", S.lab.here), mac("kerr-mini", S.lab.mini), mac("kerr-pc", S.lab.pc));
   const c = $("#conn")!;
   c.innerHTML = "";
   c.append(h("span", { class: `dot ${S.connected ? "ok" : "bad"}` }), ` ${S.connected ? "live" : "offline"}`);
@@ -749,34 +749,42 @@ function overview() {
         h(
           "div",
           { class: "sub" },
-          `${S.meta.host} · ${S.meta.commit}${S.meta.dirty ? " + uncommitted changes" : ""} — one test Chrome per Mac, headless here, full screen on kerr-mini`,
+          `${S.meta.host} · ${S.meta.commit}${S.meta.dirty ? " + uncommitted changes" : ""} — one test Chrome per machine, headless here, full screen on kerr-mini and kerr-pc`,
         ),
       ),
       h("span", { class: "grow" }),
       h("button", { class: "btn", onclick: () => api("/api/lab/refresh", {}).then(() => toast("Lab refreshed", "ok")) }, "↻ Refresh lab"),
-      h(
-        "button",
-        {
-          class: "btn",
-          onclick: async (e: Event) => {
-            const b = e.currentTarget as HTMLButtonElement;
-            b.disabled = true;
-            b.textContent = "Checking the mini…";
-            try {
-              const d = await api<{ code: number; text: string }>("/api/lab/doctor", {});
-              showModal("kerr-mini — doctor", h("pre", { class: "log", style: { maxHeight: "70vh" } }, d.text));
-            } catch (err) {
-              toast(String(err), "bad");
-            }
-            b.disabled = false;
-            b.textContent = "⚕ Doctor (mini)";
+      ...(["mini", "pc"] as const).map((w) =>
+        h(
+          "button",
+          {
+            class: "btn",
+            onclick: async (e: Event) => {
+              const b = e.currentTarget as HTMLButtonElement;
+              b.disabled = true;
+              b.textContent = `Checking the ${w}…`;
+              try {
+                const d = await api<{ code: number; text: string }>("/api/lab/doctor", { where: w });
+                showModal(`kerr-${w} — doctor`, h("pre", { class: "log", style: { maxHeight: "70vh" } }, d.text));
+              } catch (err) {
+                toast(String(err), "bad");
+              }
+              b.disabled = false;
+              b.textContent = `⚕ Doctor (${w})`;
+            },
           },
-        },
-        "⚕ Doctor (mini)",
+          `⚕ Doctor (${w})`,
+        ),
       ),
       h("a", { class: "btn primary", href: "#run" }, "▶ Run tests"),
     ),
-    h("div", { class: "grid g2", style: { marginBottom: "16px" } }, macCard("This Mac", S.lab.here), macCard("kerr-mini", S.lab.mini)),
+    h(
+      "div",
+      { class: "grid g3", style: { marginBottom: "16px" } },
+      macCard("This Mac", S.lab.here),
+      macCard("kerr-mini", S.lab.mini),
+      macCard("kerr-pc", S.lab.pc),
+    ),
     h(
       "div",
       { class: "grid g4", style: { marginBottom: "16px" } },
@@ -971,7 +979,7 @@ function runPage() {
   const groups = new Map<string, FileInfo[]>();
   for (const f of shown) groups.set(f.group, [...(groups.get(f.group) ?? []), f]);
   const sel = S.files.filter((f) => S.pick.has(f.name));
-  const est = sel.reduce((a, f) => a + (f.medianS ?? 20) + (S.each ? 8 : 0), 0) + (S.where === "mini" ? 15 : 0);
+  const est = sel.reduce((a, f) => a + (f.medianS ?? 20) + (S.each ? 8 : 0), 0) + (S.where !== "here" ? 15 : 0);
   const toggle = (f: FileInfo) => {
     S.pick.has(f.name) ? S.pick.delete(f.name) : S.pick.add(f.name);
     paint(false);
@@ -1121,7 +1129,7 @@ function runPage() {
           h(
             "div",
             { class: "seg" },
-            ...(["here", "mini"] as const).map((w) =>
+            ...(["here", "mini", "pc"] as const).map((w) =>
               h(
                 "button",
                 {
@@ -1131,22 +1139,22 @@ function runPage() {
                     paint(false);
                   },
                 },
-                w === "here" ? "This Mac · headless" : "kerr-mini · full screen",
+                w === "here" ? "This Mac · headless" : w === "mini" ? "kerr-mini · full screen" : "kerr-pc · Windows, full screen",
               ),
             ),
           ),
-          h("div", { class: "faint", style: { fontSize: "12px" } }, macLine(S.where === "here" ? S.lab.here : S.lab.mini)),
+          h("div", { class: "faint", style: { fontSize: "12px" } }, macLine(S.lab[S.where])),
         ),
         h(
           "div",
           { class: "opt" },
           h("label", { class: "l" }, "Options"),
           chk("One process per file (--each): a timed table at the end", S.each, (v) => (S.each = v)),
-          S.where === "mini"
-            ? chk("Headless on the mini (only if asked: full screen is the lab's choice)", S.headless, (v) => (S.headless = v))
+          S.where !== "here"
+            ? chk(`Headless on the ${S.where} (only if asked: full screen is the lab's choice)`, S.headless, (v) => (S.headless = v))
             : null,
           chk("Re-record goldens (UPDATE=1)", S.update, (v) => (S.update = v)),
-          S.where === "mini"
+          S.where !== "here"
             ? h(
                 "label",
                 { class: "check" },
@@ -1176,13 +1184,13 @@ function runPage() {
           h(
             "button",
             { class: "btn primary", style: { width: "100%", justifyContent: "center", padding: "11px" }, onclick: launch },
-            `▶ Launch on ${S.where === "here" ? "this Mac" : "kerr-mini"}`,
+            `▶ Launch on ${S.where === "here" ? "this Mac" : `kerr-${S.where}`}`,
           ),
         ),
         h(
           "div",
           { class: "faint", style: { fontSize: "12px", marginTop: "10px" } },
-          "Runs on one Mac queue for its Chrome. Run on both Macs at once to go twice as fast.",
+          "Runs on one machine queue for its Chrome. Run on several at once to go faster.",
         ),
       ),
     ),
@@ -1380,7 +1388,7 @@ function historyPage() {
   const list = S.history.filter(
     (r) =>
       (!f.q || `${r.title} ${r.cmd} ${r.id}`.toLowerCase().includes(f.q.toLowerCase())) &&
-      (!f.where || (f.where === "here" ? r.where !== "kerr-mini" : r.where === "kerr-mini")) &&
+      (!f.where || (f.where === "here" ? !/^kerr-(mini|pc)$/.test(r.where) : r.where === `kerr-${f.where}`)) &&
       (!f.status || verdict(r) === f.status) &&
       (!f.source || r.source === f.source),
   );
@@ -1427,9 +1435,10 @@ function historyPage() {
         },
       }),
       sel("where", [
-        ["", "Both Macs"],
+        ["", "Every machine"],
         ["here", "This Mac"],
         ["mini", "kerr-mini"],
+        ["pc", "kerr-pc"],
       ]),
       sel("status", [
         ["", "Any result"],

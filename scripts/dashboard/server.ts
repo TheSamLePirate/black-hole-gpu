@@ -11,7 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import type { ServerWebSocket } from "bun";
 import index from "./ui/index.html";
-import { doctor, flightCtl, lab, pollHere, pollMini } from "./lab";
+import { doctor, flightCtl, lab, pollHere, pollMini, pollPc } from "./lab";
 import { campaigns, e2eReports, report, reportRootOf, safeDir, scenarios, series } from "./reports";
 import { evalProbe, inputProbe, probeErrors, probeState, sceneProbe, shotProbe, startProbe, stopProbe } from "./probe";
 import {
@@ -227,12 +227,15 @@ const server = Bun.serve<{ frames: boolean }>({
     },
     "/api/lab/refresh": {
       POST: async () => {
-        await Promise.all([pollHere(), pollMini()]);
+        await Promise.all([pollHere(), pollMini(), pollPc()]);
         emit({ t: "lab", lab });
         return json(lab);
       },
     },
-    "/api/lab/doctor": { POST: () => guard(async () => json(await doctor())) },
+    "/api/lab/doctor": {
+      POST: (req: Req) =>
+        guard(async () => json(await doctor((await body<{ where?: "mini" | "pc" }>(req)).where === "pc" ? "pc" : "mini"))),
+    },
     "/api/probe/start": {
       POST: (req: Req) =>
         guard(async () => {
@@ -276,7 +279,7 @@ const server = Bun.serve<{ frames: boolean }>({
   },
 });
 
-// (the lab polled: this Mac often, the mini less — ssh costs; both at once on demand)
+// (the lab polled: this Mac often, the mini and the PC less — ssh costs; all at once on demand)
 const loop = async (fn: () => Promise<unknown>, ms: number) => {
   for (;;) {
     await fn().catch(() => {});
@@ -286,6 +289,8 @@ const loop = async (fn: () => Promise<unknown>, ms: number) => {
 };
 void loop(pollHere, 4000);
 void loop(pollMini, 10_000);
+// (the PC over the internet, and its monitor a PowerShell call: less often)
+void loop(pollPc, 15_000);
 
 // (anything new on disk — a run, a remote job fetched, an --each summary, a picture, made here or from the
 // command line —: the pages told to refresh their history, files and pictures)

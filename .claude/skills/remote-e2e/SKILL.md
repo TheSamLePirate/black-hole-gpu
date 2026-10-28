@@ -1,6 +1,6 @@
 ---
 name: remote-e2e
-description: Run this project's e2e tests, scripted flights, test suites or A/B measures on the second Mac on the network (kerr-mini) instead of this one, with scripts/remote.ts. Use when there are several or long e2e/test runs to do, when this Mac should stay free (its GPU, the browser pane), or when the user asks to run tests "on the mini" / "remote" / "à distance".
+description: Run this project's e2e tests, scripted flights, test suites or A/B measures on another machine of the lab — the Mac mini (kerr-mini) or the Windows PC with an RTX 5070 Ti (kerr-pc, --host kerr-pc) — instead of this one, with scripts/remote.ts. Use when there are several or long e2e/test runs to do, when this Mac should stay free (its GPU, the browser pane), or when the user asks to run tests "on the mini", "on the PC" / "sur le PC Windows" / "remote" / "à distance".
 ---
 
 # Remote tests on kerr-mini
@@ -8,6 +8,11 @@ description: Run this project's e2e tests, scripted flights, test suites or A/B 
 `scripts/remote.ts` sends this tree **as it is** (uncommitted and untracked files included, ignored ones
 left out) to the Mac mini, runs a command there in a copy of its own, streams the log and brings back
 what it wrote. Full reference: `docs/REMOTE-TESTS.md`; the options: the header of `scripts/remote.ts`.
+
+**The Windows PC** (kerr-pc: RTX 5070 Ti, over Tailscale) takes every command below with `--host kerr-pc`
+(`bun run e2e --host kerr-pc smoke`, `bun scripts/remote.ts --host kerr-pc doctor|status|logs …`); the monitor
+shows all machines. It needs its user logged in at the PC (full-screen Chrome in that session) and runs the
+pushed commit under this tree plus this tree's changes. How it differs: `docs/REMOTE-TESTS.md`, "Le PC Windows".
 
 ## When
 

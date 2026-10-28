@@ -25,6 +25,7 @@ import { existsSync, readdirSync, rmSync } from "node:fs";
 import { presets } from "../src/settings";
 import { sceneSlug } from "./scene-slug";
 import { chromeLock } from "./lib/chrome-lock";
+import { CHROME, killTree, WINDOWS } from "./lib/procs";
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -46,15 +47,13 @@ const moving = (name: string) => !!presets[name]!.ship || !!presets[name]!.missi
 const UPDATE = process.argv.includes("--update");
 const SCENES = arg("scenes", "") ? arg("scenes", "").split("|") : Object.keys(presets);
 for (const s of SCENES) if (!presets[s]) throw new Error(`no scene “${s}”`);
-const CHROME =
-  process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const port = 9500 + Math.floor(Math.random() * 40);
-const procs: { kill(): void }[] = [];
+const procs: { pid: number; kill(): void }[] = [];
 const kill = () => {
-  for (const p of procs) p.kill();
-  Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
+  for (const p of procs) WINDOWS ? killTree(p.pid) : p.kill();
+  if (!WINDOWS) Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
 };
 process.on("SIGINT", () => (kill(), process.exit(1)));
 

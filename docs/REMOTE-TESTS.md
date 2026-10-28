@@ -1,4 +1,4 @@
-# Les tests à distance — le Mac mini
+# Les tests à distance — le Mac mini et le PC Windows
 
 Les suites e2e, les vols scriptés et les mesures prennent des minutes et occupent le GPU. Le **Mac mini**
 du réseau (un M1, alias ssh `kerr-mini`) les fait pendant que ce Mac continue le travail.
@@ -30,6 +30,42 @@ Depuis le 2026-10-10 : `bun run e2e --remote [--each] <noms>` lance seulement ce
 complet (pour tout agent) : [E2E.md](E2E.md) ; le tableau de bord : `bun run dashboard`.
 
 ---
+
+## Le PC Windows (kerr-pc)
+
+Depuis le 2026-10-28 le lab a une troisième machine : un **PC Windows** (RTX 5070 Ti, Ryzen 9 5950X, 32 Go),
+joint par Tailscale (alias ssh `kerr-pc` dans `~/.ssh/config`, utilisateur `jerem`). Mêmes commandes, avec
+`--host kerr-pc` :
+
+```bash
+bun run e2e --host kerr-pc smoke                 # un e2e, plein écran sur le PC, journal ici en direct
+bun scripts/remote.ts --host kerr-pc doctor      # sa santé : session ouverte, Chrome, GPU, veille, clone en LF
+bun scripts/remote.ts --host kerr-pc status      # ses jobs
+bun scripts/lab-monitor.ts                       # ce Mac, le mini et le PC (--host kerr-pc : le PC seul)
+```
+
+Le dashboard (`bun run dashboard`) le montre aussi : sa carte, son « Doctor (pc) », et « kerr-pc » comme
+destination d'un run.
+
+Ce qui change sous Windows (les hôtes : [scripts/lib/lab-hosts.ts](../scripts/lib/lab-hosts.ts)) :
+
+- **Le shell.** OpenSSH y passe la commande à `cmd` ; chaque script part donc en base64 vers Git Bash
+  (`remoteCommand`) — ni guillemet ni `|` à interpréter par cmd, stdin et code de sortie transmis.
+- **L'envoi de l'arbre.** Pas de rsync : la base (`~/Desktop/sam/kerr-runner/base`) est un *git worktree* du
+  clone `~/Desktop/sam/benchmark-main`, mis au commit poussé dont vient l'arbre d'ici (HEAD s'il est poussé,
+  sinon sa merge-base avec origin/main) ; ce qui diffère ici (modifié, ajouté, non suivi) part en tar gzip et
+  s'y pose par-dessus, les fichiers supprimés y sont supprimés. Un commit non poussé passe donc aussi (par ses
+  fichiers). Le runner lui-même part d'abord dans `kerr-runner/bin/`.
+- **La copie d'un job.** robocopy (pas de clones APFS sous NTFS), `node_modules` en jonction.
+- **Le plein écran.** Un processus lancé par sshd n'a pas d'écran et meurt avec la connexion : le worker part
+  en **tâche planifiée** (`schtasks /IT`) dans la session ouverte de l'utilisateur. Il faut donc que `jerem`
+  soit connecté au PC (le doctor le vérifie) ; une fenêtre « kerr job … » s'ouvre derrière Chrome.
+- **Les processus.** Ni ps, ni pkill, ni groupes : `Win32_Process` par PowerShell et `taskkill /T`
+  ([scripts/lib/procs.ts](../scripts/lib/procs.ts)) — pour les e2e, les bancs, le verrou Chrome, le monitor.
+- **Les fins de ligne.** Git pour Windows convertit en CRLF par défaut (`core.autocrlf true`), et le
+  spécialiseur WGSL, qui lit des lignes, cassait tous les noyaux (« 'const' declaration does not accept
+  attributes »). `.gitattributes` impose LF (`* text=auto eol=lf`) et le clone du PC a `core.autocrlf false`.
+- **Le clavier** du PC est un QWERTZ : la touche de plein gaz s'y affiche `Y`.
 
 ## Les commandes
 

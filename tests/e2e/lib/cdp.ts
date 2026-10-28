@@ -7,9 +7,11 @@
 // follow the display's). In kiosk the page is the screen's size at 1:1; headless or in a window, the size
 // the test asked. docs/E2E.md.
 // E2E_HOLD=<s>: each Chrome left open <s> seconds at its close, to see where the test left it.
-import { rmSync } from "node:fs";
+import { readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { chromeLock, labConfig } from "../../../scripts/lib/chrome-lock";
+import { CHROME, endChrome, WINDOWS } from "../../../scripts/lib/procs";
 
 export interface Cdp {
   /** a DevTools call: its answer, or an error once Chrome is gone or `timeoutS` passed (E2E_CDP_TIMEOUT, 300 s) */
@@ -20,8 +22,6 @@ export interface Cdp {
   close(): void;
 }
 
-const CHROME =
-  process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
 export const SHOW =
   process.env.E2E_HEADED === "1" ? "kiosk" : process.env.E2E_HEADED === "0" ? "headless" : (labConfig().chrome ?? "headless");
 const HOLD = Number(process.env.E2E_HOLD || 0);
@@ -50,12 +50,28 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     H = o.height ?? 900;
   // (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here)
   const release = await chromeLock();
+  // (Windows: profiles an ended Chrome still held at their test's close, EBUSY, removed now — the lock is ours, no
+  // other test Chrome runs)
+  if (WINDOWS)
+    for (const d of readdirSync(tmpdir()).filter((d) => /^kerr-e2e-\d+$/.test(d)))
+      try {
+        rmSync(join(tmpdir(), d), { recursive: true, force: true });
+      } catch {
+        /* (still held: the next launch's) */
+      }
   const port = 9600 + Math.floor(Math.random() * 300);
   // (its own profile, removed on close: a run leaves nothing behind — they were 300 MB each; o.profile: that one, kept —
   // a second launch on it finds Chrome's caches as a returning player does)
   const profile = o.profile ?? `${tmpdir()}/kerr-e2e-${port}`;
   const dropProfile = () => {
-    if (!o.profile) rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    // (Windows lets go of an ended Chrome's files a moment after taskkill: longer retries there; a profile it still
+    // holds is left in the temp folder rather than failing the test)
+    if (!o.profile)
+      try {
+        rmSync(profile, { recursive: true, force: true, maxRetries: WINDOWS ? 20 : 5, retryDelay: WINDOWS ? 250 : 200 });
+      } catch (e) {
+        console.error(`e2e: the profile ${profile} not removed — ${(e as Error).message}`);
+      }
   };
   const proc = Bun.spawn(
     [
@@ -85,8 +101,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     { stdout: "ignore", stderr: "ignore" },
   );
   running.set(port, () => {
-    proc.kill();
-    Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
+    endChrome(proc, port);
     dropProfile();
   });
   let page: { webSocketDebuggerUrl: string } | undefined;
@@ -196,8 +211,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
       gone ??= "closed";
       running.delete(port);
       ws.close();
-      proc.kill();
-      Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
+      endChrome(proc, port);
       dropProfile();
       release();
     },

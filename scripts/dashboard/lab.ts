@@ -1,11 +1,15 @@
-// The lab's state for the dashboard: each Mac's Chrome lock, its waiters, its live test Chromes, the remote
-// runner's jobs, the flight lab's campaigns — scripts/lab-monitor.ts --json, here and over ssh on kerr-mini —
-// and each Mac's Chrome mode (~/.kerr-lab/config.json). Polled, the last answer kept.
+// The lab's state for the dashboard: each machine's Chrome lock, its waiters, its live test Chromes, the remote
+// runner's jobs, the flight lab's campaigns — scripts/lab-monitor.ts --json, here and over ssh on kerr-mini and
+// kerr-pc (scripts/lib/lab-hosts.ts) — and each one's Chrome mode (~/.kerr-lab/config.json). Polled, the last
+// answer kept.
 import { labConfig } from "../lib/chrome-lock";
+import { labHost, remoteCommand } from "../lib/lab-hosts";
 
 const HOST = process.env.KERR_REMOTE ?? "kerr-mini";
-const RUNNER_DIR = process.env.KERR_REMOTE_DIR ?? "kerr-runner";
 const SSH = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=6"];
+
+/** The dashboard's names of the remote machines → their ssh aliases. */
+export const REMOTES = { mini: HOST, pc: "kerr-pc" } as const;
 
 export interface MacState {
   host: string;
@@ -23,7 +27,7 @@ export interface MacState {
   orphans: { pid: number; elapsed: string; what: string }[];
 }
 
-export const lab: { here: MacState | null; mini: MacState | null } = { here: null, mini: null };
+export const lab: { here: MacState | null; mini: MacState | null; pc: MacState | null } = { here: null, mini: null, pc: null };
 
 const blank = (host: string, error: string): MacState => ({
   host,
@@ -58,31 +62,41 @@ export async function pollHere(): Promise<MacState> {
   return lab.here!;
 }
 
-export async function pollMini(): Promise<MacState> {
+/** A remote machine's state (the mini, the PC): its own monitor over ssh, its Chrome mode with it. */
+async function pollRemote(key: keyof typeof REMOTES): Promise<MacState> {
+  const h = labHost(REMOTES[key]);
   const r = await run(
     [
       "ssh",
       ...SSH,
-      HOST,
-      `cd ${RUNNER_DIR}/base 2>/dev/null && ~/.bun/bin/bun scripts/lab-monitor.ts --json; echo; sed -n 's/.*"chrome": *"\\([a-z]*\\)".*/\\1/p' ~/.kerr-lab/config.json 2>/dev/null`,
+      h.name,
+      remoteCommand(
+        h,
+        `cd ${h.dir}/base 2>/dev/null && ${h.bun} scripts/lab-monitor.ts --json; echo; sed -n 's/.*"chrome": *"\\([a-z]*\\)".*/\\1/p' ~/.kerr-lab/config.json 2>/dev/null`,
+      ),
     ],
-    20_000,
+    25_000,
   );
   // (the JSON's line, then the mode's — an empty line between when the config has none)
-  const lines = r.out.trim().split("\n");
+  const lines = r.out
+    .trim()
+    .split("\n")
+    .map((l) => l.replace(/\r$/, ""));
   const json = lines.find((l) => l.startsWith("{"));
   const mode = lines.at(-1)?.startsWith("{") ? "" : lines.at(-1);
   try {
-    lab.mini = { ...JSON.parse(json!), ok: true, chrome: mode?.trim() || "headless" };
+    lab[key] = { ...JSON.parse(json!), ok: true, chrome: mode?.trim() || "headless" };
   } catch {
-    lab.mini = blank(HOST, r.err.trim().split("\n").pop() || "unreachable");
+    lab[key] = blank(h.name, r.err.trim().split("\n").pop() || "unreachable");
   }
-  return lab.mini!;
+  return lab[key]!;
 }
+export const pollMini = () => pollRemote("mini");
+export const pollPc = () => pollRemote("pc");
 
-/** The mini's health, as `remote.ts doctor` prints it. */
-export async function doctor() {
-  const r = await run(["bun", "scripts/remote.ts", "doctor"], 60_000);
+/** A remote machine's health, as `remote.ts doctor` prints it. */
+export async function doctor(key: keyof typeof REMOTES = "mini") {
+  const r = await run(["bun", "scripts/remote.ts", "--host", REMOTES[key], "doctor"], 90_000);
   return { code: r.code, text: (r.out + r.err).trim() };
 }
 

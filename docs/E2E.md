@@ -16,6 +16,7 @@ evaluated through `__bh`. They run on **two Macs**: this one (headless) and **ke
 bun run e2e smoke                       # one e2e file, here, headless (name, path or part of a name)
 bun run e2e --remote landing gear       # two files on kerr-mini, full screen there; log streamed back
 bun run e2e --remote --detach golden    # queued on the mini, back at once with a job id
+bun run e2e --host kerr-pc smoke        # on the Windows PC (RTX 5070 Ti), full screen there (docs/REMOTE-TESTS.md)
 bun scripts/remote.ts logs <id> -f      # follow it; exits with the job's code; results in remote-results/<id>/
 bun scripts/lab-monitor.ts              # what runs on both Macs: the Chrome lock, its queue, jobs, campaigns
 bun run dashboard                       # the e2e dashboard, http://localhost:4700 — all of the above in a page (§8)
@@ -37,6 +38,10 @@ sets `E2E=1`.
 | Chrome shows | **headless**, the test's own viewport | **full screen (kiosk)**, the page at the screen's size 1:1 — whoever sits at it sees a test is running |
 | set by | `~/.kerr-lab/config.json` `{"chrome": "headless"}` | `~/.kerr-lab/config.json` `{"chrome": "kiosk"}` |
 | use it for | quick checks, debugging a test, perf figures meant for this machine | suites, long flights, queues of jobs — while this Mac keeps working |
+
+A third machine, **kerr-pc** (Windows 11, RTX 5070 Ti, over Tailscale), takes the same commands with
+`--host kerr-pc` — full screen there too, in the logged-in user's session; how it differs (Git Bash, a git
+worktree instead of rsync, scheduled tasks, taskkill): [REMOTE-TESTS.md](REMOTE-TESTS.md#le-pc-windows-kerr-pc).
 
 **One test Chrome at a time per Mac.** Every Chrome the repository starts (e2e tests, flight lab, benches,
 galleries, the WGSL check) first takes that Mac's lock, `~/.kerr-lab/chrome.lock`

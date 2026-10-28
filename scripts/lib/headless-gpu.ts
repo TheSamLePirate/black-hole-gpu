@@ -5,10 +5,10 @@
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { chromeLock } from "./chrome-lock";
+import { CHROME, endChrome } from "./procs";
 
 const linux = process.platform === "linux";
-export const CHROME =
-  process.env.CHROME ?? (process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : "google-chrome");
+export { CHROME };
 
 /**
  * Runs `use` with a page's evaluate (an expression → its value, awaited); Chrome closed after, whatever
@@ -66,7 +66,7 @@ export async function withGpuPage<T>(
       if (!page) await Bun.sleep(100);
     }
     if (!page) {
-      chrome.kill();
+      endChrome(chrome, port);
       const err = await new Response(chrome.stderr).text();
       throw new Error(`Chrome did not start (${CHROME})\n${err.split("\n").slice(-15).join("\n")}`);
     }
@@ -105,7 +105,7 @@ export async function withGpuPage<T>(
     );
   } finally {
     ws?.close();
-    chrome.kill();
+    endChrome(chrome, port);
     server.stop(true);
     rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }

@@ -13,7 +13,7 @@ export const FLIGHTS = "flight-results";
 export interface RunRequest {
   /** e2e names, paths or parts of names (scripts/e2e.ts); empty: all */
   files: string[];
-  where: "here" | "mini";
+  where: "here" | "mini" | "pc";
   /** one bun test per file, a summary at the end */
   each?: boolean;
   /** the mini without its full-screen window */
@@ -78,8 +78,8 @@ export function startRun(req: RunRequest, emit: Emit): Run {
   const dir = join(DASH, id);
   mkdirSync(dir, { recursive: true });
   const args = ["bun", "scripts/e2e.ts"];
-  if (req.where === "mini") {
-    args.push("--remote", "--name", `dash-${id.slice(9, 15)}`);
+  if (req.where !== "here") {
+    args.push(...(req.where === "pc" ? ["--host", "kerr-pc"] : ["--remote"]), "--name", `dash-${id.slice(9, 15)}`);
     if (req.headless) args.push("--headless");
     if (req.hold) args.push("--hold", String(req.hold));
   }
@@ -93,7 +93,7 @@ export function startRun(req: RunRequest, emit: Emit): Run {
     id,
     source: "dash",
     title: req.files.length ? req.files.join(" ") : "all e2e",
-    where: req.where === "mini" ? "kerr-mini" : "here",
+    where: req.where === "mini" ? "kerr-mini" : req.where === "pc" ? "kerr-pc" : "here",
     cmd: [...prefix, ...args].join(" "),
     state: "running",
     started: Date.now(),
@@ -248,6 +248,7 @@ export function history(): Run[] {
         ended?: number;
         exit?: number | null;
         headed?: boolean;
+        host?: string;
       }>(meta);
       if (!m) continue;
       const log = join(RESULTS, id, "log");
@@ -256,7 +257,7 @@ export function history(): Run[] {
         id,
         source: "remote",
         title: m.cmd.replace(/^E2E=1 /, "").slice(0, 120),
-        where: "kerr-mini",
+        where: m.host ?? "kerr-mini",
         cmd: m.cmd,
         state: m.state === "done" ? "done" : m.state === "queued" ? "queued" : "running",
         started: m.started ?? m.created,

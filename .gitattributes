@@ -1,3 +1,7 @@
+# Text files in LF on every checkout, Windows too (the lab's PC: core.autocrlf true there made the shaders CRLF,
+# and the WGSL specialiser, reading lines, broke every kernel — scripts/lib/lab-hosts.ts)
+* text=auto eol=lf
+
 # Git LFS (docs/ASSETS.md): the binaries rebuilt or added often — the regional surface packs (content-addressed: a
 # rebuild writes new names), the licensed astronaut, the F-35, the docs' captures and the gallery's videos. The older asset packs
 # stay in plain Git.
