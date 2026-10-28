@@ -58,7 +58,8 @@ const MAX_MODELS = 8;
  */
 const maxTurns = (m: MeanOrbit & { calls?: number }, t0: number) => ((t0 - m.t0) / Math.max(m.calls ?? 1, 1) < m.period ? 30 : 300);
 
-function railsModel(rails: { ref: string; mass: number }, X: Vec3, V: Vec3, t0: number): MeanOrbit {
+/** The index of the model in use the state is on (null: none) — not counted as a call. */
+function modelOf(rails: { ref: string }, X: Vec3, V: Vec3, t0: number): number | null {
   // (the same state, to a centimetre and a micrometre a second: what the model itself gave, through the
   // flight's frames' round trips — sub-millimetre)
   const tolX = 1e-2 / M_METRES,
@@ -67,11 +68,18 @@ function railsModel(rails: { ref: string; mass: number }, X: Vec3, V: Vec3, t0: 
     const m = models[k]!;
     if (m.ref !== rails.ref || t0 < m.t0 || t0 - m.t0 > maxTurns(m, t0) * m.period) continue;
     const s = meanOrbitState(m, t0);
-    if (Math.hypot(...sub(s.X, X)) < tolX && Math.hypot(...sub(s.V, V)) < tolV) {
-      m.calls = (m.calls ?? 0) + 1;
-      if (k > 0) models.unshift(...models.splice(k, 1));
-      return m;
-    }
+    if (Math.hypot(...sub(s.X, X)) < tolX && Math.hypot(...sub(s.V, V)) < tolV) return k;
+  }
+  return null;
+}
+
+function railsModel(rails: { ref: string; mass: number }, X: Vec3, V: Vec3, t0: number): MeanOrbit {
+  const k = modelOf(rails, X, V, t0);
+  if (k !== null) {
+    const m = models[k]!;
+    m.calls = (m.calls ?? 0) + 1;
+    if (k > 0) models.unshift(...models.splice(k, 1));
+    return m;
   }
   railsStats.builds++;
   const m = buildMeanOrbit(rails.ref, rails.mass, X, V, t0, (x, v, t, dt) => coastHome(x, v, t, dt));
@@ -83,7 +91,12 @@ function railsModel(rails: { ref: string; mass: number }, X: Vec3, V: Vec3, t0: 
 /** The fall over simDt [M] from (X, V) at t0 [home frame, c], the engine off: as the flown craft's (its end, t: tEnd unless subCap steps stopped short). */
 export function coastHome(X: Vec3, V: Vec3, t0: number, simDt: number, subCap = 400): { X: Vec3; V: Vec3; t: number } {
   const rails = stableOrbitOf(X, V, t0);
-  if (rails && simDt > 0.02 * rails.period) return { ...railsCoast(rails, X, V, t0, simDt), t: t0 + simDt };
+  // (on rails from a frame of 2 % of a turn; once on them — the state still the model's — down to 0.2 %: frames
+  // whose length wavers about the threshold went rails, steps, rails…, the steps leaving the model by ~10 cm and
+  // each return to the rails integrating a new turn, ~50 ms — near Gargantua, where the home time races, every
+  // frame of the fleet's craft: the bench's Ranger and volumetric scenes at 5–10 fps)
+  if (rails && (simDt > 0.02 * rails.period || (simDt > 0.002 * rails.period && modelOf(rails, X, V, t0) !== null)))
+    return { ...railsCoast(rails, X, V, t0, simDt), t: t0 + simDt };
   const ref = referenceBody(X, t0);
   const ground = solidBody(ref) ? ref : null;
   const atm = ref !== "sun" ? solarBody(ref)?.atmosphere : undefined;
