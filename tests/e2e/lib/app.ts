@@ -277,6 +277,12 @@ export class App {
     this.cdp.close();
   }
 
+  /** closed letting Chrome quit by itself first — its caches written to a kept profile (`boot({ profile })`) */
+  async quit() {
+    recorder.detach(this);
+    await this.cdp.quit();
+  }
+
   // biome-ignore lint/suspicious/noExplicitAny: what the page's code returns, typed at the call when it matters
   async js<T = any>(expr: string): Promise<T> {
     const r = await this.cdp.send<{ result?: { value?: T }; exceptionDetails?: { exception?: { description?: string }; text?: string } }>(

@@ -121,10 +121,16 @@ Le plan [PLAN-LEAN-TRACER-KERNELS](docs/PLAN-LEAN-TRACER-KERNELS.md) est fini (P
 [docs/progress/kernels/PROGRESS.md](docs/progress/kernels/PROGRESS.md) ; mesures : [BASELINE.md](docs/progress/kernels/BASELINE.md).
 Ce qui reste :
 
-- [ ] **Mesurer sur un vrai PC Windows.** Tous les chiffres Windows viennent du proxy D3D12 (Tint + DXC sur le Mac),
-  calibré sur deux relevés anciens (RX 5700 XT, RTX 5070 Ti). Attendu : la compilation avant l'image de la Terre vers
-  ~32 s sur RX 5700 XT, ~9 s sur RTX 5070 Ti, au premier lancement. Le diagnostic en jeu (`compileReport()`) note chaque
-  compilation : un rapport de joueur suffit.
+- [x] **Mesurer sur un vrai PC Windows.** Fait le 28/10 sur kerr-pc (RTX 5070 Ti) : l'image de la Terre attend
+  ~2 min (118–151 s), pas ~9 s — le proxy était 3,4 × trop optimiste (même source : ~moitié pilote NVIDIA, ~moitié DXC
+  de Chrome plus lent). Et le relancement ne gagne rien : le cache de Chrome ne garde pas les gros noyaux sous Windows,
+  et le bac à sable empêche le cache du pilote. Détail : [BASELINE.md](docs/progress/kernels/BASELINE.md), « Windows,
+  measured ».
+- [ ] **Sous Windows, montrer le sol raster sans attendre le `main` du traceur.** `shadeLite` est prêt en 4,5 s, mais
+  la première image raster arrive après le `main` (~2 min). Un ciel simple en attendant ramènerait la Terre à quelques
+  secondes au premier lancement comme aux suivants. Le plus gros levier Windows.
+- [ ] **Pourquoi le cache Dawn de Chrome rate sous Windows** (même `clouds`, petit) : une page minimale avec un pipeline
+  de ~1 Mo de DXIL lancée deux fois sur le même profil dirait si c'est la taille ou la clé.
 - [ ] **La troisième copie de `ourSegment` (dans `dnegTrace`).** Chaque site d'appel est une copie complète une fois
   inliné par D3D12 (~19k lignes) ; P9 a fusionné les deux appels de `traceLook`, celui de l'intégration du trou de ver
   reste. Dans tous les noyaux du jeu (son univers a le trou de ver), environ un tiers du code (estimé, pas mesuré).

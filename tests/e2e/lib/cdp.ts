@@ -20,6 +20,8 @@ export interface Cdp {
   /** a DevTools event listened to (Page.screencastFrame, Runtime.consoleAPICalled, …): the listener's removal */
   on(method: string, fn: (params: Record<string, unknown>) => void): () => void;
   close(): void;
+  /** Chrome asked to quit and given time to (its disk caches written — the shader cache of a kept profile), then closed */
+  quit(): Promise<void>;
 }
 
 export const SHOW =
@@ -206,14 +208,29 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
       listeners.get(method)!.add(fn);
       return () => listeners.get(method)?.delete(fn);
     },
-    close: () => {
-      if (HOLD) Bun.sleepSync(HOLD * 1000);
-      gone ??= "closed";
-      running.delete(port);
-      ws.close();
-      endChrome(proc, port);
-      dropProfile();
-      release();
+    quit: async () => {
+      // (Windows ends a Chrome with taskkill /F: its GPU disk cache never written — a kept profile's second launch met
+      // none of its compiles. Browser.close on the browser's own endpoint, its exit awaited, then the usual close)
+      try {
+        const v = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()) as { webSocketDebuggerUrl: string };
+        const b = new WebSocket(v.webSocketDebuggerUrl);
+        await new Promise((ok) => (b.onopen = ok));
+        b.send(JSON.stringify({ id: 1, method: "Browser.close" }));
+        await Promise.race([proc.exited, Bun.sleep(30_000)]);
+      } catch {
+        /* (gone already) */
+      }
+      close();
     },
+    close: () => close(),
   };
+  function close() {
+    if (HOLD) Bun.sleepSync(HOLD * 1000);
+    gone ??= "closed";
+    running.delete(port);
+    ws.close();
+    endChrome(proc, port);
+    dropProfile();
+    release();
+  }
 }

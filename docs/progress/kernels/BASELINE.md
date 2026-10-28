@@ -150,3 +150,48 @@ mean of each side's two runs, 60 profiled frames, realtime subsampling ×4, full
 No scene's frame got slower; the trace pass is the same or cheaper everywhere (smaller kernels, fewer registers). In the
 flights the trace is 6 ms of a 40 ms frame: the frame is the raster's and the scenery's, not the tracer's. The time to a
 measured frame in the suite fell with the compiles (Tarifa's test 176 → 29 s, Yosemite's 179 → 64 s).
+
+## Windows, measured — kerr-pc (RTX 5070 Ti, Ryzen 9 5950X, Chrome 156, D3D12 + DXC) — 28/10
+
+`kernel-compile` on the lab's PC (`--host kerr-pc`, full screen), `KC_WARM=1`: each case launched twice on one Chrome
+profile, the second closed by `Browser.close` (`App.quit()` — Windows' `taskkill /F` otherwise ends Chrome before it
+writes its caches). Commit 511285b1 (P10's kernels). Logs: [win-p10.txt](win-p10.txt).
+
+| | first launch | again (same profile) | again, `--disable-gpu-sandbox` |
+|---|---:|---:|---:|
+| Earth raster: first image (the scene's `main`) | 118–151 s | 116 s | 58–60 s |
+| Earth raster: all settled | 408–526 s | 406 s | 223 s |
+| the Moon: settled (`main` / `env`) | 74–90 s (127–157 / 76–91 s) | 72–86 s | 33 s (68 / 35 s) |
+| the wormhole: settled | 69–79 s | 68–79 s | 32 s |
+| Kerr: settled | 6.3 s (13.4 s `main`) | 3.0 s (0.3 s) | — |
+
+**The proxy was 3.4 × too optimistic.** The WGSL and constants the game handed Chrome on the PC, captured in the page
+(`createShaderModule` / `createComputePipelineAsync` wrapped), compiled here by the proxy's Tint + DXC:
+
+| pipeline | WGSL | DXIL | proxy here (M1 Max, DXC CPU) | on the PC (in Chrome) |
+|---|---:|---:|---:|---:|
+| Earth raster `main` (key 1677722336) | 243 KB | 920 KB | 33.6 s | 119.5 s |
+| its `env` | 234 KB | 927 KB | 24.2 s | 83.6 s |
+| `shade` | 217 KB | 1285 KB | 51.0 s | 143.5 s |
+| `discs` (DISC_ONLY) | 174 KB | 526 KB | 15.7 s | 48.1 s |
+| `shadeWater` | 94 KB | 315 KB | 2.7 s | 15.0 s |
+| `shadeLite` | 99 KB | 151 KB | 1.3 s | 4.5 s |
+
+Same source, so the gap is the machine's: roughly half the driver's own compile (DXIL → NVIDIA's code: what
+`--disable-gpu-sandbox` takes off a second launch — the sandboxed GPU process never writes NVIDIA's DXCache, nothing
+was written there during the runs), half Chrome's DXC being slower than the Mac's (~2 × on the same source).
+
+**A returning player gets nothing from Chrome's shader cache on Windows** for the big kernels: with the sandbox, the
+second launch compiles everything again (only Kerr's, small, come back cached); without it, only the driver's part goes.
+Dawn's blob cache did not hit for any of the Earth's pipelines, the small ones included (`clouds` 2.5 → 1.1 s, the
+driver's share) — why is open (Chrome's Dawn cache size, its eviction, the key?). On the Mac the same relaunch gives
+the Earth in 3.8 s.
+
+Levers, in order:
+1. **The raster's first image waits for the tracer's `main`** ("raster 120 s" a few seconds after "first trace"):
+   `shadeLite` is ready in 4.5 s. A ground drawn before the sky kernel (a plain sky until it comes) would bring the
+   Earth's first image on Windows from ~2 min to seconds.
+2. Smaller kernels still: the DXIL of `main`, `env`, `shade` is ~1 MB each; every KB counts double on Windows (DXC and
+   the driver). The third `ourSegment` copy (todo.md) is in `main`/`env` of every game kernel.
+3. Why Dawn's cache misses on Windows: a Chrome-side question (a minimal page with one ~1 MB-DXIL pipeline, launched
+   twice, would tell size from key).

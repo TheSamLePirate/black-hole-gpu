@@ -1,0 +1,134 @@
+# kernel-compile on kerr-pc (RTX 5070 Ti), 28/10 — sandboxed (KC_WARM=1)
+  earth-raster (first launch): first trace 151.1 s, raster 157.3 s, the scene's kernel 151.0 s, settled 525.9 s, 22 compiles (8 cold), 774 s of compile
+    main                       key   67109600   140.9 s
+    env                        key   67109600   107.1 s
+    main                       key 1677722336   150.8 s
+    shadeLite                  key 1677722336     6.3 s
+    shadeWater                 key 1677722336    19.5 s
+    shadeMark                  key 1677722336     0.3 s
+    shadeStars                 key 1677722336     0.3 s
+    clouds                     key 1677722336     3.5 s
+    env                        key 1677722336   106.8 s
+    shade                      key 1677722336   175.8 s
+    discs                      key 1677722336    61.8 s
+    main                       key 1677734624     0.0 s
+    aerial                     key 1677722336     0.7 s
+    shadeLite                  key 1677734624     0.0 s
+    shadeWater                 key 1677734624     0.0 s
+    shadeMark                  key 1677734624     0.0 s
+    shadeStars                 key 1677734624     0.0 s
+    clouds                     key 1677734624     0.0 s
+    env                        key 1677734624     0.0 s
+    shade                      key 1677734624     0.0 s
+    discs                      key 1677734624     0.0 s
+    aerial                     key 1677734624     0.0 s
+  earth-raster (again launch): first trace 0.5 s, raster 120.2 s, the scene's kernel 115.7 s, settled 406.4 s, 22 compiles (7 cold), 602 s of compile
+    main                       key   67109600   113.9 s
+    env                        key   67109600    81.5 s
+    main                       key 1677722336   115.4 s
+    shadeLite                  key 1677722336     4.5 s
+    shadeWater                 key 1677722336    14.0 s
+    shadeMark                  key 1677722336     0.2 s
+    shadeStars                 key 1677722336     0.2 s
+    clouds                     key 1677722336     2.5 s
+    env                        key 1677722336    81.6 s
+    shade                      key 1677722336   139.9 s
+    discs                      key 1677722336    47.4 s
+    main                       key 1677734624     0.0 s
+    aerial                     key 1677722336     0.4 s
+    shadeLite                  key 1677734624     0.0 s
+    shadeWater                 key 1677734624     0.0 s
+    shadeMark                  key 1677734624     0.0 s
+    shadeStars                 key 1677734624     0.0 s
+    clouds                     key 1677734624     0.0 s
+    env                        key 1677734624     0.0 s
+    shade                      key 1677734624     0.0 s
+    discs                      key 1677734624     0.0 s
+    aerial                     key 1677734624     0.0 s
+  moon (first launch): first trace 0.1 s, raster -1.0 s, the scene's kernel 0.0 s, settled 89.5 s, 3 compiles (2 cold), 248 s of compile
+    main                       key  201327328   156.6 s
+    env                        key  201327328    90.8 s
+    aerial                     key  201327328     0.4 s
+  moon (again launch): first trace 0.1 s, raster -1.0 s, the scene's kernel 0.0 s, settled 85.5 s, 3 compiles (2 cold), 228 s of compile
+    main                       key  201327328   140.7 s
+    env                        key  201327328    86.9 s
+    aerial                     key  201327328     0.5 s
+  kerr (first launch): first trace 0.0 s, raster -1.0 s, the scene's kernel 0.0 s, settled 6.3 s, 2 compiles (2 cold), 21 s of compile
+    main                       key  268435972    13.4 s
+    env                        key  268435972     8.0 s
+  kerr (again launch): first trace 0.0 s, raster -1.0 s, the scene's kernel 0.0 s, settled 3.0 s, 2 compiles (0 cold), 0 s of compile
+    main                       key  268435972     0.3 s
+    env                        key  268435972     0.1 s
+  wormhole (first launch): first trace 0.0 s, raster -1.0 s, the scene's kernel 0.0 s, settled 78.6 s, 3 compiles (2 cold), 174 s of compile
+    main                       key  268436192    93.7 s
+    env                        key  268436192    79.9 s
+    aerial                     key  268436192     0.4 s
+  wormhole (again launch): first trace 0.0 s, raster -1.0 s, the scene's kernel 0.0 s, settled 78.7 s, 3 compiles (2 cold), 171 s of compile
+    main                       key  268436192    90.2 s
+    env                        key  268436192    80.1 s
+    aerial                     key  268436192     0.4 s
+
+# --disable-gpu-sandbox (KC_WARM=1)
+kc-nosb.log:  moon (first launch): first trace 0.0 s, raster -1.0 s, the scene's kernel 0.0 s, settled 74.2 s, 3 compiles (2 cold), 203 s of compile
+kc-nosb.log:    main                       key  201327328   126.7 s
+kc-nosb.log:    env                        key  201327328    75.6 s
+kc-nosb.log:    aerial                     key  201327328     0.4 s
+kc-nosb.log:  moon (again launch): first trace 0.1 s, raster -1.0 s, the scene's kernel 0.0 s, settled 33.0 s, 3 compiles (2 cold), 103 s of compile
+kc-nosb.log:    main                       key  201327328    68.0 s
+kc-nosb.log:    env                        key  201327328    34.6 s
+kc-nosb.log:    aerial                     key  201327328     0.2 s
+kc-nosb.log:  wormhole (first launch): first trace 0.0 s, raster -1.0 s, the scene's kernel 0.0 s, settled 33.9 s, 3 compiles (2 cold), 119 s of compile
+kc-nosb.log:    main                       key  268436192    83.7 s
+kc-nosb.log:    env                        key  268436192    35.5 s
+kc-nosb.log:    aerial                     key  268436192     0.2 s
+kc-nosb.log:  wormhole (again launch): first trace 0.0 s, raster -1.0 s, the scene's kernel 0.0 s, settled 32.0 s, 3 compiles (2 cold), 79 s of compile
+kc-nosb.log:    main                       key  268436192    45.0 s
+kc-nosb.log:    env                        key  268436192    33.6 s
+kc-nosb.log:    aerial                     key  268436192     0.2 s
+kc-nosb.log:                  key  268436192     0.2 s
+kc-earth-nosb.log:  earth-raster (first launch): first trace 117.9 s, raster 122.2 s, the scene's kernel 117.9 s, settled 419.3 s, 22 compiles (7 cold), 574 s of compile
+kc-earth-nosb.log:    main                       key   67109600   113.4 s
+kc-earth-nosb.log:    env                        key   67109600    41.6 s
+kc-earth-nosb.log:    main                       key 1677722336   117.7 s
+kc-earth-nosb.log:    shadeLite                  key 1677722336     4.4 s
+kc-earth-nosb.log:    shadeWater                 key 1677722336    15.5 s
+kc-earth-nosb.log:    shadeMark                  key 1677722336     0.2 s
+kc-earth-nosb.log:    shadeStars                 key 1677722336     0.2 s
+kc-earth-nosb.log:    clouds                     key 1677722336     2.5 s
+kc-earth-nosb.log:    env                        key 1677722336    84.8 s
+kc-earth-nosb.log:    shade                      key 1677722336   144.9 s
+kc-earth-nosb.log:    discs                      key 1677722336    48.4 s
+kc-earth-nosb.log:    main                       key 1677734624     0.0 s
+kc-earth-nosb.log:    aerial                     key 1677722336     0.4 s
+kc-earth-nosb.log:    shadeLite                  key 1677734624     0.0 s
+kc-earth-nosb.log:    shadeWater                 key 1677734624     0.0 s
+kc-earth-nosb.log:    shadeMark                  key 1677734624     0.0 s
+kc-earth-nosb.log:    shadeStars                 key 1677734624     0.0 s
+kc-earth-nosb.log:    clouds                     key 1677734624     0.0 s
+kc-earth-nosb.log:    env                        key 1677734624     0.0 s
+kc-earth-nosb.log:    shade                      key 1677734624     0.0 s
+kc-earth-nosb.log:    discs                      key 1677734624     0.0 s
+kc-earth-nosb.log:    aerial                     key 1677734624     0.0 s
+kc-earth-nosb.log:  earth-raster (again launch): first trace 0.3 s, raster 60.4 s, the scene's kernel 0.0 s, settled 223.2 s, 22 compiles (6 cold), 323 s of compile
+kc-earth-nosb.log:    main                       key   67109600    61.3 s
+kc-earth-nosb.log:    env                        key   67109600    38.6 s
+kc-earth-nosb.log:    main                       key 1677722336    57.8 s
+kc-earth-nosb.log:    shadeLite                  key 1677722336     2.3 s
+kc-earth-nosb.log:    shadeWater                 key 1677722336     4.6 s
+kc-earth-nosb.log:    shadeMark                  key 1677722336     0.1 s
+kc-earth-nosb.log:    shadeStars                 key 1677722336     0.1 s
+kc-earth-nosb.log:    clouds                     key 1677722336     1.1 s
+kc-earth-nosb.log:    env                        key 1677722336    42.7 s
+kc-earth-nosb.log:    shade                      key 1677722336    85.7 s
+kc-earth-nosb.log:    discs                      key 1677722336    28.3 s
+kc-earth-nosb.log:    main                       key 1677734624     0.0 s
+kc-earth-nosb.log:    aerial                     key 1677722336     0.2 s
+kc-earth-nosb.log:    shadeLite                  key 1677734624     0.0 s
+kc-earth-nosb.log:    shadeWater                 key 1677734624     0.0 s
+kc-earth-nosb.log:    shadeMark                  key 1677734624     0.0 s
+kc-earth-nosb.log:    shadeStars                 key 1677734624     0.0 s
+kc-earth-nosb.log:    clouds                     key 1677734624     0.0 s
+kc-earth-nosb.log:    env                        key 1677734624     0.0 s
+kc-earth-nosb.log:    shade                      key 1677734624     0.0 s
+kc-earth-nosb.log:    discs                      key 1677734624     0.0 s
+kc-earth-nosb.log:    aerial                     key 1677734624     0.0 s

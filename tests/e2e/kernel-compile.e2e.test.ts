@@ -12,6 +12,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // time to its first traced frame and every tracer compile until the queue is empty (renderer.compileReport()). The same
 // cases before and after each phase of the plan: remote-results/kernel-compile.json.
 // KC_WARM=1: each case launched twice on one Chrome profile, the second measured as a returning player's launch.
+// KC_ARGS="--flag …": Chrome's own flags for the run (--disable-gpu-sandbox: the driver's own shader cache on Windows).
 // Duration: ~3–6 min a case on kerr-mini (cold compiles); twice that with KC_WARM
 // Done when: every case's compiles are in (or 10 min passed) and the report is written.
 
@@ -72,7 +73,14 @@ describe.skipIf(!E2E)("cold launches: what each scene compiles, and how long it 
       if (profile) rmSync(profile, { recursive: true, force: true });
       try {
         for (const launch of warm ? ["first", "again"] : ["first"]) {
-          const app = await App.boot({ width: 1600, height: 1000, hash: c.boot, tiles: c.tiles, profile });
+          const app = await App.boot({
+            width: 1600,
+            height: 1000,
+            hash: c.boot,
+            tiles: c.tiles,
+            profile,
+            args: process.env.KC_ARGS?.split(" ").filter(Boolean),
+          });
           try {
             // (the measure runs in the page — a DevTools call times out after 5 min —, polled)
             await app.js(`(() => { window.__kc = null; (async () => {
@@ -111,11 +119,19 @@ describe.skipIf(!E2E)("cold launches: what each scene compiles, and how long it 
               );
             rows.push({ case: id, launch, ...r });
           } finally {
-            app.close();
+            // (a kept profile: Chrome let quit, its shader cache written — Windows' taskkill otherwise loses it)
+            if (profile) await app.quit();
+            else app.close();
           }
         }
       } finally {
-        if (profile) rmSync(profile, { recursive: true, force: true });
+        // (Windows lets go of an ended Chrome's files a moment later)
+        if (profile)
+          try {
+            rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+          } catch (e) {
+            console.error(`  the profile ${profile} not removed — ${(e as Error).message}`);
+          }
       }
     }, 1_800_000);
 });
