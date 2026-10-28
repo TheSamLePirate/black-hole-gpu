@@ -918,7 +918,12 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
 // own was traced one to b² − 1 frames ago: the ground or the sky behind a trunk that now covers it, and the
 // grass 14 m away passed in front of the trunk. (Conservative: the grass may go a block short of a trunk's
 // edge, where the colour is reconstructed from the trunk's rays anyway.)
+// And the clouds before it (the cloud pass's half-size texels after their history — docs/PLAN-NUAGES-AAA.md N1 —; a 1 × 1 of
+// nothing when the pass did not draw this frame): where they cover the pixel more than half, their distance — an airliner, a
+// wingman, a contrail behind a cumulus hidden by it, as the traced image already shows the cloud before what lies there.
 @group(0) @binding(24) var<storage, read_write> sceneDepth: array<f32>;
+@group(0) @binding(47) var occCloudA: texture_2d<f32>; // light, cover
+@group(0) @binding(48) var occCloudB: texture_2d<f32>; // distance, bound, depth [M]
 @compute @workgroup_size(8, 8)
 fn occlusion(@builtin(global_invocation_id) gid: vec3u) {
   let W = R.u.x >> 16u;
@@ -944,6 +949,11 @@ fn occlusion(@builtin(global_invocation_id) gid: vec3u) {
     // (none fresh — the first frames after a jump —: its own, as before)
     if (dn < 3e38) { depth = dn; }
   }
+  let cn = vec2i(textureDimensions(occCloudA));
+  let cq = clamp(vec2i(gid.xy / 2u), vec2i(0), cn - 1);
+  let cA = textureLoad(occCloudA, cq, 0).a;
+  let cZ = textureLoad(occCloudB, cq, 0).z;
+  if (cA > 0.5 && cZ > 0.0) { depth = min(depth, cZ); }
   sceneDepth[idx] = depth;
 }
 

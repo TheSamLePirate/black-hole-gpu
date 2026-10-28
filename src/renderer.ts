@@ -491,6 +491,8 @@ interface Target {
   sceneDepth: GPUBuffer;
   /** its pass's bind group (made on first use) */
   sceneDepthBind: GPUBindGroup | null;
+  /** the occlusion depth's with the cloud pass's clouds (post.wgsl occlusion), made again with its textures */
+  sceneDepthCloudBind?: { tex: GPUTexture; bind: GPUBindGroup };
   /** the main trace pass's bind group holding the raster patch's distance texture of this frame (made when it changes) */
   hintBind?: { tex: GPUTexture; bind: GPUBindGroup };
   /** the cloud pass's buffers (half the target's size), their write bind group, and the tracer's bind group for the pass
@@ -634,6 +636,7 @@ export class Renderer {
   private postFlare!: GPUComputePipeline;
   /** (bound where a target has no depth-of-field image yet) */
   private dofDummy: GPUTexture;
+  private occlusionCloudDummy?: GPUTexture;
   private postUp!: GPUComputePipeline;
   private postPolGrid!: GPUComputePipeline;
   private postBeamH!: GPUComputePipeline;
@@ -5851,18 +5854,28 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    * vessels, the station and the Endurance are hidden by. moments.y stays the depth of field's.
    */
   private encodeSceneDepth(enc: GPUCommandEncoder, t: Target) {
-    t.sceneDepthBind ??= this.device.createBindGroup({
-      layout: this.postOcclusion.getBindGroupLayout(0),
-      entries: [
-        { binding: 5, resource: { buffer: t.resolveBuf } },
-        { binding: 6, resource: { buffer: t.stamps } },
-        { binding: 11, resource: { buffer: t.moments } },
-        { binding: 24, resource: { buffer: t.sceneDepth } },
-      ],
-    });
+    // (the clouds before it, the cloud pass's this frame — else a 1 × 1 of nothing)
+    const mk = (a: GPUTexture, b: GPUTexture) =>
+      this.device.createBindGroup({
+        layout: this.postOcclusion.getBindGroupLayout(0),
+        entries: [
+          { binding: 5, resource: { buffer: t.resolveBuf } },
+          { binding: 6, resource: { buffer: t.stamps } },
+          { binding: 11, resource: { buffer: t.moments } },
+          { binding: 24, resource: { buffer: t.sceneDepth } },
+          { binding: 47, resource: a.createView() },
+          { binding: 48, resource: b.createView() },
+        ],
+      });
+    this.occlusionCloudDummy ??= this.device.createTexture({ size: [1, 1], format: "rgba32float", usage: GPUTextureUsage.TEXTURE_BINDING });
+    let bind: GPUBindGroup;
+    if (this.cloudPassDrawn && t.cloudA && t.cloudB) {
+      if (t.sceneDepthCloudBind?.tex !== t.cloudA) t.sceneDepthCloudBind = { tex: t.cloudA, bind: mk(t.cloudA, t.cloudB) };
+      bind = t.sceneDepthCloudBind.bind;
+    } else bind = t.sceneDepthBind ??= mk(this.occlusionCloudDummy, this.occlusionCloudDummy);
     const pass = enc.beginComputePass(this.prof.pass("occlusion depth"));
     pass.setPipeline(this.postOcclusion);
-    pass.setBindGroup(0, t.sceneDepthBind);
+    pass.setBindGroup(0, bind);
     pass.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
     pass.end();
   }

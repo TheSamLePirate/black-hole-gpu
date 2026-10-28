@@ -4759,7 +4759,10 @@ fn wxLayerA(q: vec3f, i: u32) -> f32 {
   let c = P.wx[1u + i].z;
   let s = wxAt(q, 3200.0) + vec3f(f32(i) * 7.31, f32(i) * 3.17, 0.0);
   let n = 0.5 + 0.5 * (0.6 * dnoise(s) + 0.28 * dnoise(s * 2.0 + vec3f(1.7, 4.1, 2.3)) + 0.12 * dnoise(s * 4.0 + vec3f(3.3, 0.7, 5.9)));
-  return smoothstep(1.0 - c - 0.1, 1.0 - c + 0.12, n);
+  // (a scattered or broken sky's clouds in clumps and clear stretches tens of km across — not one even scatter to the
+  // horizon —, the mean cover kept; an overcast whole)
+  let cl = c * (1.0 + 0.35 * dnoise(wxAt(q, 6400.0) + vec3f(f32(i) * 1.3, 5.7, 3.1)) * (1.0 - smoothstep(0.75, 0.95, c)));
+  return smoothstep(1.0 - cl - 0.1, 1.0 - cl + 0.12, n);
 }
 // the sunlight under the layers above a height h [m] (but layer `skip`), the weather's weight w there:
 // x what comes straight through their gaps, y all of it — the diffuse light a deck lets through too
@@ -8506,11 +8509,20 @@ fn wxShape(q: vec3f, i: u32, hn: f32, w: f32, cheap: bool) -> vec3f {
   var top = 1.0;
   var a = 0.0;
   if (cu + st > 0.0 && aC > 0.01) {
-    let topC = clamp(0.55 + 0.35 * aC + 0.3 * sh, 0.3, 1.0);
-    let hpC = smoothstep(0.0, 0.04 + 0.1 * max(sh, 0.0), hn) * (1.0 - smoothstep(0.5 * topC, topC, hn));
-    let rC = hpC * clamp(1.4 * (aC * (0.7 + 0.6 * sh) - 0.15), 0.0, 1.0);
+    // (each cloud its own growth — a noise of 6.4 km cells: humilis low and flat beside congestus towering near the layer's
+    // top, not all cut at it —, its base wavering by a few % of the layer over kilometres: no ruled ceiling)
+    let gC = cloudNoise(wxAt(q, 6400.0) + vec3f(f32(i) * 2.9, 0.7, 0.02 * tev));
+    let dev = clamp(0.5 + 0.8 * gC.r, 0.0, 1.0);
+    let hb0 = 0.07 * gC.b;
+    let topC = clamp((0.45 + 0.5 * dev + 0.3 * sh) * (0.75 + 0.25 * aC), 0.25, 0.97);
+    // (the top rounded by a threshold rising with the height, not a fade: only the shape noise's peaks reach it — lumpy domes,
+    // not the cut of a plane)
+    let u = (hn - hb0) / max(topC - hb0, 0.05);
+    let rC = select(0.0, 1.0, u < 1.0) * smoothstep(0.0, 0.04 + 0.1 * max(sh, 0.0), u)
+      * clamp(1.4 * (aC * (0.7 + 0.6 * sh) - 0.15 - 0.75 * smoothstep(0.35, 1.0, u)), 0.0, 1.0);
     let topS = clamp(0.85 + 0.15 * sh, 0.6, 1.0);
-    let hpS = smoothstep(0.0, 0.12 + 0.15 * abs(sh), hn) * (1.0 - smoothstep(topS - 0.25, topS, hn));
+    let hbS = 0.03 + 0.1 * (gC.b - 0.5);
+    let hpS = smoothstep(hbS, hbS + 0.12 + 0.15 * abs(sh), hn) * (1.0 - smoothstep(topS - 0.25, topS, hn));
     let rS = hpS * clamp(1.6 * (aC * (0.85 + 0.3 * sh) - 0.1), 0.0, 1.0);
     let k = 1.0 / max(cu + st, 1e-3);
     rho = (cu * rC + st * rS) * k;
@@ -9070,6 +9082,14 @@ fn earthLookSky(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx
   }
   return EarthLookSky(air, alpha, cl, tc, earth);
 }
+// The clouds' transmittance for the direct light of what lies beyond them — the Sun's disc, the Moon's, the planets, the stars —
+// from their cover: (1 − α)³, the optical depth tripled. A disc is ~10⁵ times brighter than the cloud before it: the cover's
+// own 1 − α — the march stopped at 1 %, a cumulus's τ of 5–10, the half-size pass's blending at its edges — let it shine
+// through a cloud that looks opaque (its glow, faint, was hidden). A thin veil still shows a watery Sun.
+fn cloudsDirectT(alpha: f32) -> f32 {
+  let t = clamp(1.0 - alpha, 0.0, 1.0);
+  return t * t * t;
+}
 fn earthLookCompose(ro: vec3f, rd: vec3f, tHit: f32, E: vec3f, jit: f32, s: EarthLookSky, G: vec3f) -> EarthLook {
   var o: EarthLook;
   let air = s.air;
@@ -9083,7 +9103,7 @@ fn earthLookCompose(ro: vec3f, rd: vec3f, tHit: f32, E: vec3f, jit: f32, s: Eart
     let aur = auroraLight(ro, rd, select(3e38, tHit, tHit > 0.0), jit);
     o.col += aur * air.T * select(1.0 - alpha, 1.0, airHeight(ro) > 120e3);
   }
-  o.T = select((1.0 - alpha) * air.T, vec3f(0.0), tHit > 0.0);
+  o.T = select(cloudsDirectT(alpha) * air.T, vec3f(0.0), tHit > 0.0);
   return o;
 }
 fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
@@ -11125,7 +11145,9 @@ fn skyFill(@builtin(global_invocation_id) gid: vec3u) {
   let cs = cloudsBuffered(centre, terrainRasterDepth(centre));
   let alpha = max(cs.alpha, 0.0);
   let air = earthAir(ro, rd, tEnd, Ls, lt.e, ign(centre), select(3e38, cs.tc, alpha > 0.0));
-  var col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cs.cl);
+  // (the Sun's disc through the clouds' direct transmittance — earthLookCompose's —, the ground's through their cover)
+  let tG = select(cloudsDirectT(alpha), 1.0 - alpha, tEnd < 1e37);
+  var col = (1.0 - alpha) * air.L + tG * air.T * G + alpha * (air.Lc + air.Tc * cs.cl);
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   accum[idx] = vec4f(col, 1.0);
   moments[idx] = vec2f(0.0, select(depth, cs.tc / EARTH_RM * bodyRadius(k), alpha > 0.5));

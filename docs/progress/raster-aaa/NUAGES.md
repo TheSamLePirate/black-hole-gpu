@@ -213,3 +213,33 @@ l'ombre des nuages sur l'eau (N3), le sable mouillé au rivage, le bruit du SSR 
   substituts complétés ; il passe.
 - Scènes : `storm-bolt` + mode `bolt` (un éclair au sol à 2,5 km, tenu à son premier arc), `showers` (averses isolées, Soleil
   bas derrière — l'état météo posé comme le temps réel), `rainbow`, `alps-fog`. Sonde : `tests/e2e/lightning-probe.e2e.test.ts`.
+
+## N7 — les nuages devant les astres et les appareils, des cumulus variés (28 octobre 2026)
+
+Demande : « le soleil est visible derrière les nuages (son halo caché, pas son disque ; la Lune aussi) ; les avions visibles à
+travers les nuages ; les nuages : plafond droit, pas assez diversifiés, pas assez réalistes. »
+
+- **Le disque du Soleil, de la Lune, des planètes et les étoiles** (`cloudsDirectT`, `earthLookCompose`, `skyFill`) : ce qui est
+  au-delà des nuages était multiplié par leur 1 − α. Or un disque est ~10⁵ fois plus lumineux que le nuage devant lui, et
+  1 − α n'y descend jamais assez : la marche s'arrête à 1 %, un cumulus n'a qu'un τ de 5 à 10, la passe de demi-résolution
+  mélange ses bords. Le halo (faible) était caché, pas le disque. La lumière directe de ce qui est derrière traverse désormais
+  (1 − α)³ (la profondeur optique triplée) : caché derrière un nuage qui paraît opaque, un Soleil pâle derrière un voile mince.
+- **Les appareils derrière les nuages** (post.wgsl `occlusion`) : la profondeur d'occultation que testent les appareils, les
+  traînées, les panaches, le personnage était celle du sol ou du ciel tracé, sans les nuages. Elle prend désormais la distance
+  des nuages de la passe de nuages (après leur historique) là où ils couvrent le pixel à plus de moitié. L'appareil piloté
+  n'est pas concerné.
+- **Les cumulus** (`wxShape`) : chacun sa croissance (un bruit de 6,4 km : humilis bas et plats à côté de congestus qui montent
+  près du haut de la couche, jamais tous coupés à son sommet — le « plafond droit » venait de là), le sommet arrondi par un
+  seuil qui monte avec la hauteur (seuls les pics du bruit l'atteignent : dômes bosselés), la base qui ondule de quelques %
+  de la couche ; la base des stratus aussi. `wxLayerA` : un ciel épars ou fragmenté en amas et en trouées de dizaines de km,
+  la couverture moyenne gardée, un couvert entier. Une première version (le dôme de Nubis, la couverture érodée en sphère)
+  donnait des galettes plates vues d'au-dessus : écartée.
+- Test `tests/e2e/cloud-occlusion.e2e.test.ts` (raster, cockpit, FPS affichés) : le Soleil visé derrière une couche de
+  cumulus à 0,75 (Tarifa, 17 h 30 Z, quatre places) — pixels blancs au centre 44–52 → 0 ; un porte-avions sous un couvert vu
+  de 3 km au-dessus (beau temps d'abord : où il est) ; les cumulus d'en dessous, d'au-dessus, au soir, l'orage.
+
+Temps GPU (kerr-mini, 1600 × 1000, même test avant / après) : Soleil 26–29 → 27–30 ms, cumulus dessous 24,9 → 25,4,
+dessus 42,5 → 43,7, soir 36,6 → 37,6, orage 53,3 → 55,2 — dans le bruit à +4 % (une lecture de bruit de plus par échantillon
+de cumulus). Images : `img/nuages-soleil-avant.jpg` / `-apres`, `img/nuages-navire-avant.jpg` / `-apres` (un navire à
+travers le couvert, en bas à droite, avant), `img/nuages-cumulus-avant.jpg` / `-apres`, `img/nuages-dessous-avant.jpg` /
+`-apres`.
