@@ -126,7 +126,8 @@ Ce qui reste :
   de Chrome plus lent). Et le relancement ne gagne rien : le cache de Chrome ne garde pas les gros noyaux sous Windows,
   et le bac à sable empêche le cache du pilote. Détail : [BASELINE.md](docs/progress/kernels/BASELINE.md), « Windows,
   measured ».
-- [ ] **Sous Windows, montrer le sol raster sans attendre le `main` du traceur.** `shadeLite` est prêt en 4,5 s, mais
+- [x] **Sous Windows, montrer le sol raster sans attendre le `main` du traceur.** Fait le 28/10 (`skyFill`) : la Terre à
+  7,5 s au lieu de 122 s sur kerr-pc. `shadeLite` est prêt en 4,5 s, mais
   la première image raster arrive après le `main` (~2 min). Un ciel simple en attendant ramènerait la Terre à quelques
   secondes au premier lancement comme aux suivants. Le plus gros levier Windows.
 - [ ] **Pourquoi le cache Dawn de Chrome rate sous Windows** (même `clouds`, petit) : une page minimale avec un pipeline

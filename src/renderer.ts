@@ -4011,6 +4011,8 @@ export class Renderer {
       discs: GPUComputePipeline | null;
       /** the cloud pass (trace.wgsl clouds) */
       clouds: GPUComputePipeline | null;
+      /** the image while main compiles: the air beside the raster's ground (trace.wgsl skyFill) */
+      skyFill: GPUComputePipeline | null;
       /** a still view asked for the quality cascade (q, lutq) */
       qWanted: boolean;
       /** a cascade under way (realtime: rt, env, lut; quality: q, lutq) — stopped, its queued compiles
@@ -4061,7 +4063,8 @@ export class Renderer {
       | "shadeWater"
       | "shadeStars"
       | "discs"
-      | "clouds",
+      | "clouds"
+      | "skyFill",
     key = this.featureKey,
     create = true,
   ): GPUComputePipeline | null {
@@ -4079,6 +4082,7 @@ export class Renderer {
       shadeStars: null,
       discs: null,
       clouds: null,
+      skyFill: null,
     }[kind];
     if (key === FEATURES_ALL) {
       void this.generalCompile.start();
@@ -4106,6 +4110,7 @@ export class Renderer {
         shadeStars: null,
         discs: null,
         clouds: null,
+        skyFill: null,
         qWanted: false,
         busy: false,
         qBusy: false,
@@ -4212,7 +4217,19 @@ export class Renderer {
     // (the image's own kernels — the trace's, the raster's shading, its clouds, the probe — urgent: ahead of a quality kernel
     // a pause queued; the LUT and the aerial table after them, as queued)
     const compile = (
-      entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "discs" | "clouds",
+      entry:
+        | "main"
+        | "env"
+        | "lut"
+        | "aerial"
+        | "shade"
+        | "shadeMark"
+        | "shadeLite"
+        | "shadeWater"
+        | "shadeStars"
+        | "discs"
+        | "clouds"
+        | "skyFill",
       onStall?: () => void,
     ) =>
       this.variantQueue.run(
@@ -4254,6 +4271,12 @@ export class Renderer {
       // kernel first: nothing draws the scene before it — another key's tracer that does not cover this one does not)
       const rasterFirst = R && (!!this.tracePipeline || !!this.coveringVariant(key, "rt"));
       if (rasterFirst) await rasterEarly();
+      // (nothing to draw it until main — two minutes on a Windows PC, its driver's compile and DXC's, at every launch: the
+      // browser's cache does not keep it there —: the material and the waiting sky first, seconds, an image meanwhile)
+      else if (R && this.rasterLite && this.skyFillOn) {
+        if (!slot.shadeLite) slot.shadeLite = await compile("shadeLite");
+        if (!slot.skyFill) slot.skyFill = await compile("skyFill");
+      }
       if (!slot.rt) {
         slot.rt = await compile("main", () => (slot.rtGivenUp = true));
         if (!slot.rt) return;
@@ -4369,7 +4392,8 @@ export class Renderer {
       | "shadeWater"
       | "shadeStars"
       | "discs"
-      | "clouds",
+      | "clouds"
+      | "skyFill",
   ): GPUComputePipeline | null {
     // (the same debug views and tuning — the bits from 16 on are ids, not features: none other's constants; the near body's
     // kind — P7 — only in the camera's kernels: elsewhere — a planet's probe, its key without it, on the camera's env —
@@ -4393,7 +4417,19 @@ export class Renderer {
    *  waits for: a scene's feature bit switching on in flight (the scenery's 8192) recompiles for seconds (R-M4) */
   private async timedVariant(
     key: number,
-    entry: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "discs" | "clouds",
+    entry:
+      | "main"
+      | "env"
+      | "lut"
+      | "aerial"
+      | "shade"
+      | "shadeMark"
+      | "shadeLite"
+      | "shadeWater"
+      | "shadeStars"
+      | "discs"
+      | "clouds"
+      | "skyFill",
     quality = false,
   ) {
     const t0 = performance.now();
@@ -4441,7 +4477,19 @@ export class Renderer {
   /** A specialised pipeline of the tracer for a features key (the unused ones compiled out). */
   private mkVariant(
     key: number,
-    entryPoint: "main" | "env" | "lut" | "aerial" | "shade" | "shadeMark" | "shadeLite" | "shadeWater" | "shadeStars" | "discs" | "clouds",
+    entryPoint:
+      | "main"
+      | "env"
+      | "lut"
+      | "aerial"
+      | "shade"
+      | "shadeMark"
+      | "shadeLite"
+      | "shadeWater"
+      | "shadeStars"
+      | "discs"
+      | "clouds"
+      | "skyFill",
     quality: boolean,
     specialised = this.sourceSpecialise,
   ): Promise<GPUComputePipeline> {
@@ -4472,6 +4520,7 @@ export class Renderer {
               entryPoint === "shadeLite" ||
               entryPoint === "shadeWater" ||
               entryPoint === "shadeStars" ||
+              entryPoint === "skyFill" ||
               entryPoint === "discs"
             ? this.mainLayout
             : entryPoint === "lut"
@@ -4505,6 +4554,15 @@ export class Renderer {
   discsKernel = true;
   /** the near body's kind in the key (NEAR_KIND — P7): false, every near path in the camera's kernels, as before */
   nearKinds = true;
+  /**
+   * While the scene's tracer compiles, the raster's ground and a waiting sky (trace.wgsl skyFill: the clear air, the day
+   * map's far Earth) draw the image — their kernels compiled first, seconds. On a Windows PC main is two minutes of the
+   * driver's compile and DXC's at every launch (the browser's cache does not keep it there): the Earth's first image waited
+   * for it. False: no image before main, as before.
+   */
+  skyFillOn = true;
+  /** this frame drawn by the waiting sky (main still compiling) */
+  skyWaiting = false;
   /**
    * The leftovers' kernel (shade) wanted: without the material (rasterLite off) it draws the whole ground; with it, only
    * the pixels the material does not take — the scenery's: a tree against the sky, a box's margin. No scenery in, no
@@ -4703,7 +4761,9 @@ export class Renderer {
     // A bounded surface level, prepared before the rays; all atmosphere/optics remain in their existing path.
     // Wait for the specialised kernel: the general fallback draws the reference surface.
     const pipeline = this.traceVariant(quality ? "q" : "rt");
-    if (!quality && this.terrainCacheWanted && pipeline && pipeline !== this.tracePipeline) {
+    // (the scene's tracer still compiling: the raster's ground and the waiting sky — trace.wgsl skyFill — draw the image)
+    const waiting = !pipeline && !quality && this.skyFillOn && this.rasterLite ? this.traceVariant("skyFill") : null;
+    if (!quality && this.terrainCacheWanted && (pipeline ? pipeline !== this.tracePipeline : !!waiting)) {
       this.terrainSurfaceCache ??= TerrainCache.create(this.device, this.traceSource);
       this.terrainSurfaceCache.setSources({
         params: this.paramBuf,
@@ -4816,8 +4876,23 @@ export class Renderer {
       }
     }
     // (the quality kernel still compiling — frame() keeps a still view on the realtime path until then;
-    // the scene's realtime kernel still compiling at the start: no image yet)
-    if (!pipeline) return false;
+    // the scene's realtime kernel still compiling at the start: no image yet — unless the raster's ground and the waiting sky
+    // can draw it)
+    this.skyWaiting = false;
+    if (!pipeline) {
+      if (!waiting || !hint || !this.rasterLiteNow) return false;
+      this.starsRasterNow = false;
+      this.discsDrawn = 0;
+      const wp = enc.beginComputePass(this.prof.pass("sky (waiting)"));
+      wp.setPipeline(waiting);
+      wp.setBindGroup(0, this.hintBindFor(t, hint));
+      wp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+      wp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+      wp.end();
+      this.encodeLite(enc, t, hint);
+      this.skyWaiting = true;
+      return true;
+    }
     const label = quality ? "trace (converging)" : "trace";
     // (the catalogue's stars at their own pixels — trace.wgsl shadeStars, TERRE-UNREAL U8 —: its kernel there, the stars
     // splatted this frame, the matrix given: the parameters' bit — the rays then draw the Milky Way's map alone —, the matrix
@@ -4906,8 +4981,14 @@ export class Renderer {
     }
     // (the material — shadeLite, its water — whether shade, the leftovers' kernel, is there or not: it was inside shade's block,
     // and while shade compiled (RASTER_SHADE_LATE) the ground went undrawn, the image black — kerr-mini, P3)
-    const lite = !quality && hint && this.rasterLiteNow ? this.traceVariant("shadeLite") : null;
-    if (lite && hint) {
+    if (!quality && hint && this.rasterLiteNow) this.encodeLite(enc, t, hint);
+    return true;
+  }
+
+  /** the raster's material — shadeLite — and its water's pass, over the patch's pixels */
+  private encodeLite(enc: GPUCommandEncoder, t: Target, hint: GPUTexture) {
+    const lite = this.traceVariant("shadeLite");
+    if (lite) {
       const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
       lp.setPipeline(lite);
       lp.setBindGroup(0, this.hintBindFor(t, hint));
@@ -4924,7 +5005,6 @@ export class Renderer {
         wp.end();
       }
     }
-    return true;
   }
 
   /**

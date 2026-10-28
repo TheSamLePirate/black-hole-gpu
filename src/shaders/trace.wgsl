@@ -11072,6 +11072,51 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true);
 }
 
+// The image while the scene's tracer compiles (renderer.skyFillOn — its main: two minutes on a Windows PC, the driver's
+// compile and DXC's, every launch): the raster's ground by shadeLite as in flight, every other pixel here — the clear air
+// along the ray (earthAir, as the ground's), over the day map's Earth where the ray meets it past the rings —; no sky's
+// bodies, clouds or stars until main lands. A dozen lines of the tracer's, compiled in seconds: the first image no longer
+// waits for the largest kernel.
+@compute @workgroup_size(8, 8)
+fn skyFill(@builtin(global_invocation_id) gid: vec3u) {
+  let W = u32(P.res.x);
+  let H = u32(P.res.y);
+  if (gid.x >= W || gid.y >= H || !HAS_BODIES || P.near0.w < 0.5) { return; }
+  let k = u32(P.near1.w);
+  if (!isEarth(k) || !hasAir(k) || !earthOn()) { return; }
+  let idx = gid.y * W + gid.x;
+  // (under the cockpit's mask: the cabin there)
+  if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
+  let centre = vec2f(gid.xy) + 0.5;
+  // (the material's pixel: shadeLite's)
+  if (rasterPrimary() && rasterLiteTakes(centre, k)) { return; }
+  setAir(k);
+  let ray = rasterRay(centre, k);
+  let ro = nearCam();
+  let rd = ray.rd;
+  let lt = nearLight(k);
+  let Ls = normalize(squashed(toBody(lt.dir), squashOf(k)));
+  // (the ground past the rings: the squashed space's unit sphere, its day map lit by the Sun)
+  let b = dot(ro, rd);
+  let dq = b * b - dot(ro, ro) + 1.0;
+  var tEnd = 3e38;
+  var G = vec3f(0.0);
+  var depth = 1e9;
+  if (dq > 0.0 && -b - sqrt(dq) > 0.0) {
+    tEnd = -b - sqrt(dq);
+    let gq = geoQ(normalize(ro + rd * tEnd));
+    let A = textureSampleLevel(earthCube, bgSamp, eCube(gq), 0.0).rgb * P.earth2.z;
+    G = A / PI * lt.e * max(dot(gq, normalize(toBody(lt.dir))), 0.0);
+    depth = tEnd * ray.kM / EARTH_RM * bodyRadius(k);
+  }
+  let air = earthAir(ro, rd, tEnd, Ls, lt.e, ign(centre), 3e38);
+  var col = air.L + air.T * G;
+  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+  accum[idx] = vec4f(col, 1.0);
+  moments[idx] = vec2f(0.0, depth);
+  stamps[idx] = P.frame.x;
+}
+
 // The water of the raster's ground (renderer.rasterWater — TERRE-UNREAL U2d): the pixels shadeLite left it, their surface
 // under the water in accum. The sea by seaShade — the tracer's own water: its waves (the resolved trains, the FFT's
 // cascades near), Cox–Munk's glint, the mirror averaged over the unresolved slopes, the world mirrored in it near (seaSSR),

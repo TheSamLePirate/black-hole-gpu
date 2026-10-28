@@ -41,7 +41,7 @@ const AURORA = 16384;
 const NEAR_EARTH = 1 << NEAR_KIND_SHIFT;
 const NEAR_AIRLESS = 3 << NEAR_KIND_SHIFT;
 const NEAR_NONE = 4 << NEAR_KIND_SHIFT;
-const RASTER_ENTRIES: TracerEntry[] = ["shade", "shadeMark", "shadeLite", "shadeWater", "shadeStars", "discs", "clouds"];
+const RASTER_ENTRIES: TracerEntry[] = ["shade", "shadeMark", "shadeLite", "shadeWater", "shadeStars", "discs", "clouds", "skyFill"];
 
 // (the game's universe — game:artemis — has Gargantua and the wormhole in it: their bits, 512, 64 and 32, stay on in every
 // scene of it, the Earth's flight included — measured, kerr-mini, docs/progress/kernels/mac-mini-baseline.json)

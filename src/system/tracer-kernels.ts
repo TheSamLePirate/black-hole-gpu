@@ -37,7 +37,8 @@ export type TracerEntry =
   | "shadeWater"
   | "shadeStars"
   | "discs"
-  | "clouds";
+  | "clouds"
+  | "skyFill";
 
 /** the WGSL entry point a pipeline runs */
 export function tracerEntryPoint(entry: TracerEntry): string {
@@ -53,6 +54,7 @@ const REALTIME_GROUND: ReadonlySet<TracerEntry> = new Set([
   "shadeWater",
   "shadeStars",
   "clouds",
+  "skyFill",
 ]);
 /** the raster's material kernels: the runways' code always in (their parameters say whether one is near) */
 const RASTER_RUNWAYS: ReadonlySet<TracerEntry> = new Set(["shade", "shadeMark", "shadeLite", "shadeWater"]);

@@ -532,6 +532,7 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `discsKernel` | boolean | the sky's discs in their own kernel (`main` with `DISC_ONLY`; default true); false: in `main`'s layers, one compile less (P6) |
 | `nearKinds` | boolean | the near body's kind in the camera's kernels' key (`NEAR_KIND`: the Earth, a world with air, without, none — default true, P7) |
 | `generalOnDemand` | boolean | the general kernel family (every feature) compiled only when asked — a scene's kernels failing, the `FEATURES_ALL` key, an explicit start (default true, P8); false: after every start, as before |
+| `skyFillOn` | boolean | while the Earth-raster scene's `main` compiles, the raster's ground and a waiting sky (`skyFill`: the clear air, the far Earth of the day map) draw the image, their kernels compiled first (default true); false: no image before `main`, as before. `skyWaiting` (read): this frame drawn so |
 | `prewarmEarthFlight(settings)` / `prewarmStop()` | function | the Earth's low flight compiled ahead (main.ts: the title open; never on e2e pages — call it yourself), and its queued compiles dropped |
 | `backgroundHold` | boolean | background compiles (the general kernel, a key's LUT and aerial table) held — set while the title screen holds the game |
 | `weatherBlock` | Float32Array | the weather near the camera's 24 params (the weight, the decks, the ground's height, the drift, the rain: `weatherParams`), as the tracer reads them (its offset in `paramsF` moves with the other blocks: read it here) |
