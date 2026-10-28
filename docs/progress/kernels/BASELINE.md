@@ -191,7 +191,7 @@ Levers, in order:
 1. **(done, below)** **The raster's first image waits for the tracer's `main`** ("raster 120 s" a few seconds after "first trace"):
    `shadeLite` is ready in 4.5 s. A ground drawn before the sky kernel (a plain sky until it comes) would bring the
    Earth's first image on Windows from ~2 min to seconds.
-2. Smaller kernels still: the DXIL of `main`, `env`, `shade` is ~1 MB each; every KB counts double on Windows (DXC and
+2. **(P11, below)** Smaller kernels still: the DXIL of `main`, `env`, `shade` is ~1 MB each; every KB counts double on Windows (DXC and
    the driver). The third `ourSegment` copy (todo.md) is in `main`/`env` of every game kernel.
 3. Why Dawn's cache misses on Windows: a Chrome-side question (a minimal page with one ~1 MB-DXIL pipeline, launched
    twice, would tell size from key).
@@ -202,3 +202,17 @@ while `main` compiles they draw the image (`renderer.skyFillOn`, `skyWaiting`). 
 on screen at **7.5 s** (the first poll) instead of 122 s; `main` landed at 125 s and took over (clouds, the Sun's disc,
 stars come with it). [skyfill-waiting-pc.jpg](skyfill-waiting-pc.jpg) (waiting, 8 s) — [skyfill-main-pc.jpg](skyfill-main-pc.jpg)
 (after `main`).
+
+**Lever 2, P11 (28/10): the other universe's hole out, `shade` without the relief's noise.** kerr-pc, the F-35's launch,
+first launch (`kernel-compile`):
+
+| pipeline | P10 | P11 |
+|---|---:|---:|
+| Earth raster `main` | 116–151 s | 72 s |
+| its `env` | 82–107 s | 42 s |
+| `shade` | 140–176 s | 60 s |
+| `discs` | 46–62 s | 21 s |
+| the orbit's `main` / `env` (before the flight) | 114 / 85 s | 76 / 40 s |
+| all settled | 408–526 s | 208–220 s |
+
+Proxy (M1 Max): `main` 33.5 → 20 s, `env` 24 → 13 s, `shade` 53 → 18.5 s, `discs` 16 → 8.5 s (DXIL 3.7 → 2.1 MB).

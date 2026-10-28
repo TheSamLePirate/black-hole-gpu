@@ -72,6 +72,12 @@ export interface TracerConstantsOptions {
   companion?: boolean;
   /** the light probe coarse (NEAR_DETAIL off in env; renderer.coarseProbe) */
   coarseProbe?: boolean;
+  /** shade the raster's leftovers' kernel (the material on — renderer.rasterLite): the relief's procedural detail out of
+   *  it in the Earth-raster profile (GROUND_DETAIL) */
+  leftovers?: boolean;
+  /** the other universe's code — the wormhole, Gargantua's metric and disk — kept in the Earth-raster profile (renderer:
+   *  !otherUniverseOut); out by default */
+  otherUniverse?: boolean;
 }
 
 /** The override constants of a tracer pipeline for a features key. */
@@ -83,6 +89,13 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
   const fixed: Record<number, number> = profile
     ? { 1024: 1, 16384: 1, 2048: 1, 4096: MATERIAL.has(entry) ? 1 : 0, 8192: MATERIAL.has(entry) ? 1 : 0 }
     : {};
+  // (the wormhole's world (32) with the Earth near the camera (NEAR_KIND 1) — the game's flights, the raster's or from orbit —:
+  // the other universe's hole out of the realtime kernels — its metric (512), its disk's thickness (64). Gargantua is seen
+  // only through the mouth by Saturn, from the Earth a thousandth of an arcsecond: never a pixel, yet a third of main and
+  // half of env, a minute each of a Windows PC's compile. The wormhole's own code stays: our side of its world is ours — the
+  // rays straight through it, our bodies on them)
+  const earthNear = !quality && (key & 32) !== 0 && ((key >> NEAR_KIND_SHIFT) & 7) === 1;
+  if (earthNear && !o.otherUniverse) fixed[64] = fixed[512] = 0;
   const has = (bit: number) => fixed[bit] ?? ((key & bit) !== 0 ? 1 : 0);
   return {
     DISC_ONLY: entry === "discs" ? 1 : 0,
@@ -111,6 +124,7 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
     // it, whatever the scene — P5)
     NEAR_DETAIL:
       (profile && o.companion !== false && (entry === "main" || entry === "discs")) || (entry === "env" && o.coarseProbe !== false) ? 0 : 1,
+    GROUND_DETAIL: profile && entry === "shade" && o.leftovers !== false ? 0 : 1,
     // (the camera's rays only: the probes — env — see the near body from elsewhere — P7)
     NEAR_KIND: entry === "main" || entry === "discs" ? (key >> NEAR_KIND_SHIFT) & 7 : 0,
     COST_VIEW: (key >> 16) & 15,

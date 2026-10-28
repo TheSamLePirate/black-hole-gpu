@@ -374,3 +374,28 @@ e2e green: `raster-primary`, `title` (4), `entry` (3), `kernel-compile`.
   - `perf-suite` on kerr-mini, the commit before the plan against P9 (`scripts/perf-suite-ab.sh` under `ab-commit.ts`):
     no scene's frame slower; the trace the same or cheaper everywhere (Saturn 56 → 45 ms, Yosemite 9.8 → 3.8 ms).
 - Not done (optional in the plan): a check on a real Windows machine.
+
+### After the plan — Windows measured, the waiting sky, P11 the other universe out (28/10)
+
+- **Windows measured** on kerr-pc (RTX 5070 Ti): the Earth's image ~2 min, 3.4 × the proxy, and no gain on a relaunch
+  (BASELINE.md, "Windows, measured").
+- **The waiting sky** (`skyFill`, d5aa0321): `shadeLite` and a 21 KB-DXIL kernel compiled before `main`; the Earth on
+  screen at 7.5 s on the PC instead of 122 s.
+- **P11 — the three big kernels smaller**:
+  - the other universe's hole out of the realtime kernels of the wormhole's world with the Earth near the camera (the
+    game's flights, raster or from orbit): `HAS_KERR` and `HAS_THICK` fixed 0 (`renderer.otherUniverseOut`). Gargantua is
+    seen only through the mouth by Saturn — from the Earth never a pixel. With `HAS_KERR` off every ray is straight (the
+    Earth-only tracer's path): `dnegTrace` and the Kerr integration fold away. `HAS_WH` stays: our solar system is the
+    near side of the wormhole's world — a first try with it off drew a black sky (the rays had no sky direction, our
+    bodies were not met);
+  - `GROUND_DETAIL` (trace.wgsl): the relief's procedural detail alone, off in `shade` when the material is on
+    (`renderer.leanShade`) — the leftovers' kernel reads its heights from the terrain cache, which has the detail; the
+    trees and buildings (`NEAR_DETAIL`) kept.
+  - Proxy (DXC CPU, M1 Max), the Earth-raster profile: `main` 33.5 → 20 s (DXIL 920 → 600 KB), `env` 24 → 13 s
+    (927 → 544), `shade` 53 → 18.5 s (1285 → 689), `discs` 16 → 8.5 s (526 → 233). 127 → 60 s in all.
+  - kerr-pc, the F-35's launch (`kernel-compile`): `main` 120 → 72 s, `env` 85 → 41 s, `shade` 145 → 60 s, `discs`
+    48 → 21 s; the orbit's key before it `main` 114 → 76 s, `env` 85 → 40 s; all settled 408–526 → 208–220 s.
+  - Images: `raster-companion` with `RC_FLAG=otherUniverseOut,leanShade` (whole vs lean against whole vs whole) — Kennedy
+    44.34 / 44.34 dB, Alps 3 km 25.27 / 25.27, 12 km 53.52 / 53.53, 60 km 56.02 / 56.06, orbit 400 km 44.99 / 44.16: the
+    noise. `kernel-golden` not concerned (the quality kernels keep everything).
+  - Budgets rewritten (`KB_WRITE=1`): `shade` 55k → 26k.

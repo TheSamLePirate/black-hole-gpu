@@ -170,6 +170,10 @@ override HAS_TERRAIN_RASTER: bool = false; // the raster patch's distances (syst
 // companion kernels — the raster draws the near ground; the trace draws the sky, the far ground beyond the raster's rings
 // (sub-pixel there) and, while the raster's kernels compile, a coarser ground (docs/PLAN-LEAN-TRACER-KERNELS.md P4)
 override NEAR_DETAIL: bool = true;
+// the relief's procedural detail under the map's cell (earthDetail) alone: off in the raster's leftovers' kernel (shade, the
+// material on — renderer.rasterLite): its ground's heights are the terrain cache's, which has it; its marches' steps and the
+// relief's shadows then the map's — half its size gone, the scenery's trees and buildings kept
+override GROUND_DETAIL: bool = true;
 // the body near the camera, for the camera's rays (main, discs): 0 any — both paths —, 1 the Earth, 2 another world with
 // air (Mars, Titan), 3 a world without air (the Moon, Gargantua's worlds), 4 none. The other paths compiled out: the Earth's
 // near ground in a Moon scene, the airless worlds' relief in an Earth flight (docs/PLAN-LEAN-TRACER-KERNELS.md P7)
@@ -5961,7 +5965,7 @@ fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
   if (HAS_RWY) { g = runwayGrade(q); }
   let h0 = mix(hr.x, g.z, g.y);
   if (g.x >= 1.0) { return max(h0, 0.0); }
-  if (NEAR_DETAIL) { return max(h0 + (1.0 - g.x) * earthDetail(q, h0, foot, hr.y), 0.0); }
+  if (NEAR_DETAIL && GROUND_DETAIL) { return max(h0 + (1.0 - g.x) * earthDetail(q, h0, foot, hr.y), 0.0); }
   return max(h0, 0.0);
 }
 // BEGIN_TERRAIN_CACHE (system/terrain-cache.ts supplies the existing table lookup)
@@ -5991,12 +5995,12 @@ fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
   if (P.tiles.w > 0.5) {
     let hr = earthH(q, foot, true);
     let h1 = mix(hr.x, g.z, g.y);
-    if (NEAR_DETAIL) { return max(h1 + (1.0 - g.x) * earthDetail(q, h1, max(foot * 4.0, 1.0), hr.y), 0.0); }
+    if (NEAR_DETAIL && GROUND_DETAIL) { return max(h1 + (1.0 - g.x) * earthDetail(q, h1, max(foot * 4.0, 1.0), hr.y), 0.0); }
     return max(h1, 0.0);
   }
   let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
   let h0 = mix(textureSampleLevel(earthElev, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).r, g.z, g.y);
-  if (NEAR_DETAIL) { return max(h0 + (1.0 - g.x) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0); }
+  if (NEAR_DETAIL && GROUND_DETAIL) { return max(h0 + (1.0 - g.x) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0); }
   return max(h0, 0.0);
 }
 // the relief's own normal at q, no finer than the footprint

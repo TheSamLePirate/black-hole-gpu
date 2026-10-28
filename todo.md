@@ -130,6 +130,9 @@ Ce qui reste :
   7,5 s au lieu de 122 s sur kerr-pc. `shadeLite` est prêt en 4,5 s, mais
   la première image raster arrive après le `main` (~2 min). Un ciel simple en attendant ramènerait la Terre à quelques
   secondes au premier lancement comme aux suivants. Le plus gros levier Windows.
+- [x] **Réduire les trois gros noyaux** (P11, 28/10) : l'autre univers (Kerr, disque épais) hors des noyaux temps réel
+  quand la Terre est proche, `shade` sans le bruit du relief — sur kerr-pc `main` 120 → 72 s, `env` 85 → 41 s, `shade`
+  145 → 60 s, tout compilé 408–526 → 208–220 s ; images identiques au bruit près.
 - [ ] **Pourquoi le cache Dawn de Chrome rate sous Windows** (même `clouds`, petit) : une page minimale avec un pipeline
   de ~1 Mo de DXIL lancée deux fois sur le même profil dirait si c'est la taille ou la clé.
 - [ ] **La troisième copie de `ourSegment` (dans `dnegTrace`).** Chaque site d'appel est une copie complète une fois

@@ -177,6 +177,9 @@ et `shade` plus tard. Depuis le plan [PLAN-LEAN-TRACER-KERNELS.md](../PLAN-LEAN-
   - `shade` (les restes du matériau raster) ne compile qu’une fois le décor là ;
   - le profil Terre-raster fige les bits qui vont et viennent en vol : un seul jeu de noyaux pour tout le vol ;
   - un mémo (`mkVariant`) rend le même pipeline aux mêmes constantes.
+  - dans le monde du trou de ver, la Terre près de la caméra (les vols du jeu), les noyaux temps réel sans le trou noir de
+    l'autre univers (`HAS_KERR`, `HAS_THICK` : Gargantua ne se voit que par la bouche près de Saturne, jamais un pixel
+    depuis la Terre ; `otherUniverseOut`) ; `shade` sans le bruit procédural du relief (`GROUND_DETAIL`, `leanShade`) — P11 ;
   - **le ciel d'attente** (`skyFill`, `renderer.skyFillOn`) : en vol Terre au raster, tant que le `main` compile (deux
     minutes sur un PC Windows, à chaque lancement), `shadeLite` dessine le sol et `skyFill` le reste — l'air clair, la
     Terre lointaine de la carte du jour —, compilés d'abord (quelques secondes) : la première image n'attend plus le

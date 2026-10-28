@@ -4499,6 +4499,8 @@ export class Renderer {
       tune: this.tunes.get((key >> 20) & 63),
       companion: this.leanMain,
       coarseProbe: this.coarseProbe,
+      leftovers: this.rasterLite && this.leanShade,
+      otherUniverse: !this.otherUniverseOut,
     });
     const ep = tracerEntryPoint(entryPoint);
     // (the same pipeline asked again — another key whose constants are the same: the Earth-raster profile's keys, the
@@ -4549,6 +4551,13 @@ export class Renderer {
   leanMain = true;
   /** the light probe coarse — the near ground's sub-pixel detail out of env, whatever the scene (P5); false: as before */
   coarseProbe = true;
+  /** the Earth-raster profile's kernels without the other universe's code — the wormhole, Gargantua's metric and disk: from
+   *  the Earth's low flight never a pixel; a fifth of main, a quarter of env (docs/PLAN-LEAN-TRACER-KERNELS.md, after P10);
+   *  false: kept, as before */
+  otherUniverseOut = true;
+  /** the raster's leftovers' kernel (shade, the material on) without the relief's procedural detail (GROUND_DETAIL — its
+   *  heights the terrain cache's, which has it): half its size; false: kept, as before */
+  leanShade = true;
   /** the sky's discs in their own kernel (main compiled with DISC_ONLY — TERRE-UNREAL U9); false: in main's layers z ≥ 1, one
    *  compile less (docs/PLAN-LEAN-TRACER-KERNELS.md P6) */
   discsKernel = true;
@@ -7572,6 +7581,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         tune: this.tunes.get((key >> 20) & 63),
         companion: this.leanMain,
         coarseProbe: this.coarseProbe,
+        otherUniverse: !this.otherUniverseOut,
       });
       kb = this.specialiser.specialise(c, "main").length / 1024;
       this.mainKB.set(key, kb);

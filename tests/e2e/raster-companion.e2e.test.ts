@@ -7,6 +7,8 @@ import { readPng } from "./lib/png";
 // near ground in the traced kernels (renderer.leanMain = false) and without, against the run-to-run noise of the realtime
 // view (the whole kernels twice). Poses: low over Kennedy, 3 km over the Alps (the far ground beyond the raster's rings
 // traced), 12 km (the horizon's mountains), 60 km.
+// RC_FLAG: the renderer's switches compared instead (comma-separated, each on for "lean", off for "whole") — otherUniverseOut,
+// leanShade (the cuts after P10).
 // Duration: ~4–8 min on kerr-mini (the kernels compiled twice).
 // Done when: every pose's three captures are compared.
 
@@ -15,7 +17,10 @@ const POSES = [
   { name: "alps-3km", at: [45.9, 6.95], altKm: 3, off: [0, 82] },
   { name: "alps-12km", at: [45.9, 6.95], altKm: 12, off: [0, 86] },
   { name: "alps-60km", at: [45.9, 6.95], altKm: 60, off: [0, 75] },
+  // (from orbit: no raster — the traced Earth, the other universe's hole out of it too with otherUniverseOut)
+  { name: "orbit-400km", at: [45.9, 6.95], altKm: 400, off: [0, 70] },
 ];
+const FLAGS = (process.env.RC_FLAG ?? "leanMain").split(",");
 type Png = ReturnType<typeof readPng>;
 function psnr(a: Png, b: Png) {
   let sq = 0;
@@ -51,7 +56,7 @@ describe.skipIf(!E2E)("the raster's lean companion kernels draw the same image",
         ["lean", true],
         ["whole2", false],
       ] as const) {
-        await app.js(`(() => { __bh.renderer.leanMain = ${lean}; __bh.renderer.variants.clear(); __bh.game.setDate("2021-06-21T15:00:00Z");
+        await app.js(`(() => { ${FLAGS.map((f) => `__bh.renderer.${f} = ${lean};`).join(" ")} __bh.renderer.variants.clear(); __bh.game.setDate("2021-06-21T15:00:00Z");
           __bh.presets["RC"] = {...__bh.presets["Earth: the Blue Marble"], animate:false, ship:false, time:__bh.sim.time, earthClouds:0,
             volumetricClouds:false, dynamicResolution:false, realtimeSubsampling:4, pixelRatio:1, fpsCap:0, earthPipeline:"raster",
             pose:{body:"earth", at:${JSON.stringify(pose.at)}, altKm:${pose.altKm}, look:"earth", off:${JSON.stringify(pose.off)}}};
