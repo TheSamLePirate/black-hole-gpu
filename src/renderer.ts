@@ -505,6 +505,8 @@ interface Target {
   cloudCurA?: GPUTexture;
   cloudCurB?: GPUTexture;
   cloudHistA?: GPUTexture;
+  /** the history's distances (post.wgsl cloudTemporal: the cloud's distance averaged with its light) */
+  cloudHistB?: GPUTexture;
   cloudHistValid?: boolean;
   cloudTemporalBind?: { buf: GPUBuffer; bind: GPUBindGroup };
   stamps: GPUBuffer;
@@ -2315,8 +2317,8 @@ export class Renderer {
 
   /** A target's cloud-pass textures released (destroyTarget, or before they are made at a new size). */
   private dropClouds(t: Target) {
-    for (const x of [t.cloudA, t.cloudB, t.cloudCurA, t.cloudCurB, t.cloudHistA]) x?.destroy();
-    t.cloudA = t.cloudB = t.cloudCurA = t.cloudCurB = t.cloudHistA = undefined;
+    for (const x of [t.cloudA, t.cloudB, t.cloudCurA, t.cloudCurB, t.cloudHistA, t.cloudHistB]) x?.destroy();
+    t.cloudA = t.cloudB = t.cloudCurA = t.cloudCurB = t.cloudHistA = t.cloudHistB = undefined;
     t.cloudWrite = undefined;
     t.cloudTemporalBind = undefined;
     t.cloudHistValid = false;
@@ -2342,8 +2344,9 @@ export class Renderer {
       t.cloudCurA = mk("cloud pass: light, cover", U.STORAGE_BINDING | U.TEXTURE_BINDING | U.COPY_SRC);
       t.cloudCurB = mk("cloud pass: distance, bound, depth", U.STORAGE_BINDING | U.TEXTURE_BINDING | U.COPY_SRC);
       t.cloudA = mk("clouds: light, cover", U.STORAGE_BINDING | U.TEXTURE_BINDING | U.COPY_SRC | U.COPY_DST);
-      t.cloudB = mk("clouds: distance, bound, depth", U.STORAGE_BINDING | U.TEXTURE_BINDING | U.COPY_DST);
+      t.cloudB = mk("clouds: distance, bound, depth", U.STORAGE_BINDING | U.TEXTURE_BINDING | U.COPY_SRC | U.COPY_DST);
       t.cloudHistA = mk("clouds' history", U.TEXTURE_BINDING | U.COPY_DST);
+      t.cloudHistB = mk("clouds' history: distances", U.TEXTURE_BINDING | U.COPY_DST);
       t.cloudHistValid = false;
       t.cloudTemporalBind = undefined;
       t.cloudWrite = d.createBindGroup({
@@ -7854,6 +7857,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
             { binding: 40, resource: t.cloudCurA!.createView() },
             { binding: 41, resource: t.cloudCurB!.createView() },
             { binding: 42, resource: t.cloudHistA!.createView() },
+            { binding: 43, resource: t.cloudHistB!.createView() },
             { binding: 44, resource: t.cloudA!.createView() },
             { binding: 45, resource: t.cloudB!.createView() },
             { binding: 46, resource: { buffer: this.cloudCT } },
@@ -7867,6 +7871,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     p.dispatchWorkgroups(Math.ceil(size.width / 8), Math.ceil(size.height / 8));
     p.end();
     enc.copyTextureToTexture({ texture: t.cloudA! }, { texture: t.cloudHistA! }, size);
+    enc.copyTextureToTexture({ texture: t.cloudB! }, { texture: t.cloudHistB! }, size);
     t.cloudHistValid = true;
   }
 

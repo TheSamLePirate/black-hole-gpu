@@ -965,11 +965,20 @@ fn occlusion(@builtin(global_invocation_id) gid: vec3u) {
 @group(0) @binding(40) var cloudCurA: texture_2d<f32>;
 @group(0) @binding(41) var cloudCurB: texture_2d<f32>;
 @group(0) @binding(42) var cloudHistA: texture_2d<f32>;
+@group(0) @binding(43) var cloudHistB: texture_2d<f32>;
 @group(0) @binding(44) var cloudDstA: texture_storage_2d<rgba32float, write>;
 @group(0) @binding(45) var cloudDstB: texture_storage_2d<rgba32float, write>;
 @group(0) @binding(46) var<uniform> CT: vec4f;
+// (a non-finite light — a texel without cover may hold one — never premultiplied into the history: by the exponent's bits, a
+// fast-math compiler may drop x != x)
+fn cloudFinite(c: vec4f) -> bool { return !any((bitcast<vec4u>(c) & vec4u(0x7f800000u)) == vec4u(0x7f800000u)); }
+fn cloudLoad(t: texture_2d<f32>, q: vec2i) -> vec4f {
+  let a = textureLoad(t, q, 0);
+  if (!cloudFinite(a) || a.a <= 0.0) { return vec4f(0.0, 0.0, 0.0, max(select(0.0, a.a, cloudFinite(a)), 0.0)); }
+  return a;
+}
 fn cloudPremul(q: vec2i) -> vec4f {
-  let a = textureLoad(cloudCurA, q, 0);
+  let a = cloudLoad(cloudCurA, q);
   return vec4f(a.rgb * a.a, a.a);
 }
 @compute @workgroup_size(8, 8)
@@ -979,8 +988,9 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
   let p = vec2i(gid.xy);
   let cur = cloudPremul(p);
   let b = textureLoad(cloudCurB, p, 0);
-  textureStore(cloudDstB, p, b);
+  var bOut = b;
   var out = cur;
+  var cMax = cloudLoad(cloudCurA, p).rgb;
   if (CT.x > 0.5 && TA.k.y > 0.5) {
     // (the cloud's distance [M], else far: the sky's turn alone)
     let depth = select(1e9, b.z, b.z > 0.0 && cur.a > 0.0);
@@ -991,24 +1001,64 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
       let f = h - floor(h);
       let hi = vec2i(size) - 1;
       var hist = vec4f(0.0);
+      // (the history's distances — the cloud's along the ray, its depth —, weighted by its light: what its colour is the light of)
+      var hz = vec2f(0.0);
+      var hw = 0.0;
       for (var j = 0; j < 4; j++) {
         let o = vec2i(j & 1, j >> 1);
-        let a = textureLoad(cloudHistA, clamp(i0 + o, vec2i(0), hi), 0);
-        hist += select(1.0 - f.x, f.x, o.x == 1) * select(1.0 - f.y, f.y, o.y == 1) * vec4f(a.rgb * a.a, a.a);
+        let q = clamp(i0 + o, vec2i(0), hi);
+        let a = cloudLoad(cloudHistA, q);
+        let wb = select(1.0 - f.x, f.x, o.x == 1) * select(1.0 - f.y, f.y, o.y == 1);
+        hist += wb * vec4f(a.rgb * a.a, a.a);
+        let hb = textureLoad(cloudHistB, q, 0);
+        let wl = wb * a.a * dot(a.rgb, vec3f(0.2126, 0.7152, 0.0722));
+        if (hb.x > 0.0 && hb.z > 0.0 && wl > 0.0) {
+          hz += wl * hb.xz;
+          hw += wl;
+        }
       }
       var lo = cur;
       var up = cur;
+      var m1 = vec4f(0.0);
+      var m2 = vec4f(0.0);
       for (var j = -1; j <= 1; j++) {
         for (var i = -1; i <= 1; i++) {
-          let q = cloudPremul(clamp(p + vec2i(i, j), vec2i(0), hi));
+          let a = cloudLoad(cloudCurA, clamp(p + vec2i(i, j), vec2i(0), hi));
+          let q = vec4f(a.rgb * a.a, a.a);
           lo = min(lo, q);
           up = max(up, q);
+          m1 += q;
+          m2 += q * q;
+          if (a.a > 0.25) { cMax = max(cMax, a.rgb); }
         }
       }
-      out = mix(clamp(hist, lo, up), cur, 0.15);
+      // (the bounds the 3 × 3's spread — its mean ± 1.25 σ — inside its extremes: a far storm's march is sparse spikes, a
+      // tower's core met by one jittered sample in a few frames; min–max let the history hold every spike and grow it in
+      // blocks — white squares —, as the image's own history rejects them)
+      let mu = m1 / 9.0;
+      let sg = sqrt(max(m2 / 9.0 - mu * mu, vec4f(0.0)));
+      let hc = clamp(hist, max(lo, mu - 1.25 * sg), min(up, mu + 1.25 * sg));
+      out = mix(hc, cur, 0.15);
+      // (the cloud's distance and depth averaged as its light is — each frame's texel meets the near base of a storm or, through a
+      // gap, a far tower's sunlit side: their light averaged with the near one's distance, the far light composited as if near,
+      // through little air — white squares; the reference's average is of the two seen through their own air)
+      let wH = 0.85 * dot(hc.rgb, vec3f(0.2126, 0.7152, 0.0722));
+      let wC = 0.15 * dot(cur.rgb, vec3f(0.2126, 0.7152, 0.0722));
+      if (hw > 0.0 && wH > 0.0) {
+        let hzm = hz / hw;
+        let curOk = b.x > 0.0 && b.z > 0.0 && wC > 0.0;
+        let zc = select(hzm, b.xz, curOk);
+        let z = (wH * hzm + select(0.0, wC, curOk) * zc) / (wH + select(0.0, wC, curOk));
+        bOut = vec4f(z.x, b.y, z.y, b.w);
+      }
     }
   }
-  textureStore(cloudDstA, p, vec4f(select(vec3f(0.0), out.rgb / out.a, out.a > 1e-6), out.a));
+  // (the light and the cover clamped apart: a bright neighbour's light — a sunlit wisp far off, a few % of cover — over the cover of
+  // a dense one: their ratio, the colour, blown to white squares in a storm; held to the brightest colour of the 3 × 3's texels
+  // that are covered — over a quarter —, or its own)
+  let col = select(vec3f(0.0), min(out.rgb / max(out.a, 1e-6), cMax), out.a > 1e-6);
+  textureStore(cloudDstA, p, vec4f(col, out.a));
+  textureStore(cloudDstB, p, bOut);
 }
 
 // Temporal upsampling (TAAU): the realtime image rendered under the canvas (its render scale) accumulated at the canvas's

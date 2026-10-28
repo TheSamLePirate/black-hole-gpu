@@ -243,3 +243,20 @@ dessus 42,5 → 43,7, soir 36,6 → 37,6, orage 53,3 → 55,2 — dans le bruit 
 de cumulus). Images : `img/nuages-soleil-avant.jpg` / `-apres`, `img/nuages-navire-avant.jpg` / `-apres` (un navire à
 travers le couvert, en bas à droite, avant), `img/nuages-cumulus-avant.jpg` / `-apres`, `img/nuages-dessous-avant.jpg` /
 `-apres`.
+
+### N7b — les taches blanches carrées de l'orage (28 octobre 2026)
+
+Dans l'orage, sous la base, des carrés blancs flous dans le ciel ; absents de la référence tracée convergée et sans
+l'historique de la passe de nuages (`tests/e2e/storm-blotch.e2e.test.ts`, `STORM_DIAG=1` : la même vue figée, chaque partie
+coupée tour à tour, les textures de la passe relues).
+
+- **La cause** : chaque texel, d'une image à l'autre, rencontre soit la base proche et sombre de l'orage, soit — par une
+  trouée, la marche clairsemée au loin — le flanc éclairé d'une tour à 60 km (relu : la luminance alterne de 1,6 à 20 ×10⁻⁶,
+  la couverture ~1 les deux fois). L'historique moyennait leur lumière mais gardait la distance de l'image en cours (souvent la
+  proche) : la lumière lointaine composée comme proche, à travers presque pas d'air — blanche. Sans historique, chaque lumière
+  reste avec sa distance ; la référence moyenne les deux vues à travers leur propre air : sombre.
+- **Le correctif** (post.wgsl `cloudTemporal`) : la distance du nuage et sa profondeur ont leur historique (`cloudHistB`),
+  moyennées comme sa lumière (pondérées par elle). Aussi : l'historique borné par la dispersion du 3 × 3 (moyenne ± 1,25 σ,
+  dans ses extrêmes) plutôt que par ses seuls extrêmes ; aucune lumière non finie ni sans couverture prémultipliée ; la couleur
+  tenue sous la plus vive des voisines couvertes.
+- Images : `img/orage-taches-avant.jpg`, `-apres`, `-reference`.

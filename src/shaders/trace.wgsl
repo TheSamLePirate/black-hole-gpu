@@ -11320,7 +11320,9 @@ fn clouds(@builtin(global_invocation_id) gid: vec3u) {
       if (cs.tc > 0.0) { depthM = cs.tc / m * bodyRadius(k); }
     }
   }
-  textureStore(cloudOutA, gid.xy, vec4f(cs.cl, cs.alpha));
+  // (no light where there is no cover, nor a non-finite one: the history premultiplies it — post.wgsl cloudTemporal)
+  let clOk = cs.alpha > 0.0 && !isNan(cs.cl.r + cs.cl.g + cs.cl.b) && all(abs(cs.cl) < vec3f(1e30));
+  textureStore(cloudOutA, gid.xy, vec4f(select(vec3f(0.0), cs.cl, clOk), select(0.0, cs.alpha, cs.alpha > 0.0)));
   textureStore(cloudOutB, gid.xy, vec4f(cs.tc, bound, depthM, 0.0));
 }
 
