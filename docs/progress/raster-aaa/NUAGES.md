@@ -271,3 +271,13 @@ coupée tour à tour, les textures de la passe relues).
   Sous un orage à base basse (900 m), le Soleil bas passe dans la couche avant d'atteindre la pluie : elle est à l'ombre, pas
   d'arc — juste ; la vue de débogage (`RAINBOW_DEBUG=1`) montre les deux arcs entiers à leur place.
 - Images : `img/vue-sunset-0.jpg`, `vue-sunset-1.jpg`, `vue-rainbow-1.jpg`, `vue-rainbow-3.jpg`.
+
+### La mer prise pour de la terre au large des côtes (28 octobre 2026)
+
+Vol bas au coucher de soleil (`tests/e2e/ground-sunset.e2e.test.ts`) : dans le golfe de Porto, la mer proche reflétait le
+ciel, la mer au-delà d'une frontière en escalier était ombrée comme un sol, noire. Le raster (`shadeLite`) ne reconnaissait la
+mer qu'au masque grossier de la carte du relief (ETOPO, des texels de kilomètres : une côte y avance en mer) et aux polygones
+d'eau d'OSM, proches seulement. Désormais aussi : une surface au niveau de la mer sur un fond que la bathymétrie fine
+(`seaDepthAt`, fenêtres z 10…8) trouve plus profond que ~10 m — un polder, un marais à quelques mètres sous la mer restent
+terre. Vue de débogage de l'eau (`GS_TUNE='{"TUNE_LITE":512}'`) : toute la mer couverte, aucune pente. Images
+`img/mer-porto-escalier-avant.jpg` / `-apres`. Les ponts de la Seine (`PLACES=bridges`, de jour) : `img/seine-ponts-jour.jpg`.

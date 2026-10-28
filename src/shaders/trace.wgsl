@@ -11073,7 +11073,14 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // to it in accum, its kind and cover in moments.x)
   if (!mesh && !isTree && (liteSkip() & 1u) == 0u) {
     let rel0 = earthRelief(gq, fx, fy);
-    let sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hG));
+    var sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hG));
+    // (the sea the relief map's coarse mask misses — its texels of kilometres call the sea by a coast land: the water there shaded
+    // as ground, black, a staircase across a gulf —: a surface at the sea's level over a bottom the fine bathymetry finds deeper
+    // than ~10 m — seaDepthAt, the windows z 10…8 —; a polder, a marsh at the sea's level, a few metres under it: land)
+    if (sea0 < 0.99 && hG < 0.3) {
+      let dz = seaDepthAt(gq, max(length(fx), length(fy)) * EARTH_RM);
+      sea0 = max(sea0, smoothstep(6.0, 12.0, dz.x) * smoothstep(0.0, 0.25, dz.y) * (1.0 - smoothstep(0.1, 0.3, hG)));
+    }
     var osm = vec2f(0.0);
     if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
       let toW = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
