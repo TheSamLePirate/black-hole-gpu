@@ -6183,6 +6183,7 @@ fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
+fn terrainRasterBridge(px: vec2f) -> bool { return false; }
 fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
 // END_TERRAIN_RASTER
 // BEGIN_CLOUD_PASS (system/cloud-pass.ts withCloudPass supplies the cloud pass's texture reads)
@@ -7269,9 +7270,10 @@ fn inlandWater(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, footM
   let Gs = smithBeckmann(nl, m2) * smithBeckmann(nv, m2);
   let FH = 0.02 + 0.98 * pow(1.0 - max(dot(V, H), 0.0), 5.0);
   let glint = Eg * min(D * Gs * FH / (4.0 * nv), 8.0);
-  // (the water's own colour from the light into it: a river's silt green-brown, a lake's deeper green-blue)
+  // (the water's own colour from the light into it: a river's silt green-brown — turbid, the Seine's: ~5 % sent back, the sunlit
+  // water lighter than a bridge's shadow on it —, a lake's deeper green-blue)
   let Ein = Eg * max(dot(normal, Ls), 0.0) + sky;
-  let body = Ein * select(vec3f(0.020, 0.024, 0.016), vec3f(0.006, 0.013, 0.015), lake) / PI;
+  let body = Ein * select(vec3f(0.045, 0.05, 0.034), vec3f(0.006, 0.013, 0.015), lake) / PI;
   return body * (1.0 - F) + F * refl + glint;
 }
 
@@ -10583,8 +10585,8 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   RASTER_ID = terrainRasterId(centre);
   RASTER_BLD = terrainRasterBuilding(centre);
   if (terrainRasterHint(centre) <= 0.0 && RASTER_ID == 0u) { return; }
-  // (the ground shadeLite shades at every pixel: not here)
-  if (rasterLiteTakes(centre, u32(P.near1.w))) { return; }
+  // (the ground shadeLite shades at every pixel: not here — but a bridge's box: its deck the rays', shadeLite the water about it)
+  if (rasterLiteTakes(centre, u32(P.near1.w)) && !terrainRasterBridge(centre)) { return; }
   RASTER_SCENERY = P.mouthList[1].z > 0.5;
   RASTER_SHADE = true;
   // (the clouds before this pixel's surface: the cloud pass's, read back, not marched again)
@@ -10723,6 +10725,9 @@ fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
   // (a building's own triangles — U2 —: the material's; its box alone — a building without triangles, the box's margin —: the
   // rays', as before)
   if (terrainRasterMesh(px)) { return true; }
+  // (a bridge's box: the material's too — shadeLite tests its deck along the ray, leaves the deck to the rays' kernel, draws
+  // the water about it: one river, not the kernel's own shading in the box's patch)
+  if (terrainRasterBridge(px)) { return terrainRasterHint(px) > 0.0; }
   if (terrainRasterBuilding(px)) { return false; }
   let tM = terrainRasterHint(px);
   if (tM <= 0.0) { return false; }
@@ -10895,6 +10900,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   var tM = terrainRasterHint(pos);
   if (tM <= 0.0) { tM = terrainRasterHint(centre); }
   let ray = rasterRay(pos, k);
+  // (a bridge's box here: its deck met before the ground — the exact test, the scenery's BVH —, the rays' kernel's pixel)
+  if (HAS_SCENERY && terrainRasterBridge(centre) && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 &&
+      sceneryQuery(P.scenery[3].xyz, sceneryLocal(normalize(toBody(ray.look))), max(tM - 0.3, 0.0), false).kind >= 0.0) { return; }
   // (a tree the raster drew here — U2 —: met along the ray before the ground, its point the surface; missed, the ground's)
   var isTree = false;
   let treeId = terrainRasterId(centre);
@@ -11089,11 +11097,13 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     }
     // (an airfield levelled: land, even where the maps had water)
     let water = max(sea0, osm.x) * (1.0 - lvl);
-    // (TUNE_LITE 512: the water's cover drawn red — a measure)
-    if ((liteSkip() & 512u) != 0u) { G = mix(G, vec3f(0.5, 0.0, 0.0) * luminance(E), water); }
-    else if (water > 0.0 && rasterWaterOn()) {
-      let calm = osm.x * (1.0 - sea0) * osm.y;
-      let kind = select(0.0, select(1.0, 2.0, osm.y > 0.8), calm > 0.0);
+    let calm = osm.x * (1.0 - sea0) * osm.y;
+    let kind = select(0.0, select(1.0, 2.0, osm.y > 0.8), calm > 0.0);
+    // (TUNE_LITE 512: the water's cover drawn by its kind — red the sea, green a river, blue a lake: a measure)
+    if ((liteSkip() & 512u) != 0u) {
+      let kc = select(select(vec3f(0.5, 0.0, 0.0), vec3f(0.0, 0.5, 0.0), kind > 0.5), vec3f(0.0, 0.0, 0.6), kind > 1.5);
+      G = mix(G, kc * luminance(E), water);
+    } else if (water > 0.0 && rasterWaterOn()) {
       accum[idx] = vec4f(G, 1.0);
       moments[idx] = vec2f(RASTER_WATER - kind - 0.25 * water, tM / EARTH_RM * bodyRadius(k));
       stamps[idx] = P.frame.x;

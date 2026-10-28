@@ -288,3 +288,12 @@ la photo aérienne posée dessus (la « tuile » sous le pont), et son ombre un 
 sont désormais aux bâtiments seuls ; les tabliers, garde-corps et piles marquent leurs pixels (`boxMarkVs`), le noyau `shade`
 y teste leur forme exacte : la Seine de l'eau jusqu'à leurs bords, les ponts à leur vraie largeur et traversant tout le fleuve.
 Vue de débogage de l'eau : la rivière rouge partout hors des tabliers. Image `img/seine-ponts-eau-propre.jpg`.
+La Seine d'un seul morceau (29/10/2026) : vue de débogage de l'eau par type (`TUNE_LITE 512` — rouge la mer, vert une rivière,
+bleu un lac) : la Seine entière une rivière, mais découpée de trapèzes sous les ponts — les boîtes de marquage des ponts (et des
+surfaces de pont d'OSM, polygones à plusieurs coins) donnaient leurs pixels au noyau `shade`, qui ombre l'eau autrement que
+`shadeWater`. Désormais une boîte de pont marque 2,25 (`bridgeMarkFs`) : `shadeLite` prend ses pixels, teste le tablier le long
+du rayon (`sceneryQuery`) et le laisse au noyau seulement s'il est devant ; l'eau autour la sienne — la rivière d'un seul tenant.
+Les tabliers, garde-corps et piles (des bandes à quatre coins) dans la carte d'ombres par leur prisme exact (`stripCorner`), plus
+leur boîte. L'albédo propre d'une rivière : 2 → ~5 % (la Seine limoneuse ; l'eau au soleil plus claire que l'ombre d'un pont).
+Reste : l'ombre d'un tablier sur l'eau, vue de près, à peine visible (le reflet du ciel domine) — à vérifier par une A/B figée.
+Images `img/seine-un-seul-morceau-debug.jpg`, `img/seine-pont-mirabeau-dessus.jpg`.

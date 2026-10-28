@@ -400,19 +400,42 @@ fn boxClip(vi: u32, ii: u32) -> vec4f {
 @fragment fn boxFs() -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, 2.0); }
 // (with the buildings' solid boxes and triangles — the material's —: the rest's boxes — a bridge's — marking their pixels alone,
 // the kernel shade's exact test deciding what of the box the deck is, the water round it the water's)
+// A bridge's deck, parapet or pier — a strip, four corners: its polygon's edges' starts, in its ring's order —: the corner of its
+// own prism at a box's vertex k (0/1 a side), not of its box along the axes (far wider than a strip across at an angle); w 0: not a
+// strip (another shape)
+fn stripCorner(hi: vec4f, k: vec3f) -> vec4f {
+  let g = u32(scenery[0].y + hi.w);
+  let pr = scenery[g];
+  if (pr.z != 4.0) { return vec4f(0.0); }
+  let ci = select(select(0u, 1u, k.x > 0.5), select(3u, 2u, k.x > 0.5), k.y > 0.5);
+  return vec4f(scenery[g + 3u + ci].xy, mix(pr.x, pr.y, k.z), 1.0);
+}
+// (a bridge's mark: 2.25 — a building's box 2 —: shadeLite takes its pixels, the deck tested along the ray, the water about it its)
+@fragment fn bridgeMarkFs() -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, 2.25); }
 @vertex fn boxMarkVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
   let hi = scenery[5u + ii * 2u];
   if (hi.w < 0.0 || building(hi)) { return vec4f(2.0, 2.0, 0.5, 1.0); }
-  return boxClip(vi, ii);
+  // (its prism: only its own pixels to the kernel — the water about it shadeWater's, one river, not patches of the kernel's
+  // shading within its box)
+  let c = BOX[vi];
+  let s = stripCorner(hi, vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u)));
+  if (s.w < 0.5) { return boxClip(vi, ii); }
+  let v = view(s.xyz);
+  return vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
 }
 // the buildings' boxes from the Sun (the shadow map)
 @vertex fn boxShadowVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
   let lo = scenery[4u + ii * 2u];
   let hi = scenery[5u + ii * 2u];
-  // (a bridge's box not drawn: its square shadow on the water — the kernel's rays shade its own)
-  if (hi.w < 0.0 || meshed(hi) || !building(hi)) { return vec4f(2.0, 2.0, 0.5, 1.0); }
+  if (hi.w < 0.0 || meshed(hi)) { return vec4f(2.0, 2.0, 0.5, 1.0); }
   let c = BOX[vi];
   let k = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
+  if (!building(hi)) {
+    // (a bridge's strip: its own prism's shadow — its box's a square on the water far wider than the bridge —; another shape none)
+    let s = stripCorner(hi, k);
+    if (s.w < 0.5) { return vec4f(2.0, 2.0, 0.5, 1.0); }
+    return sunClip(s.xyz);
+  }
   return sunClip(mix(lo.xyz, hi.xyz, k));
 }
 // The near buildings' triangles (roof-mesh.ts: their walls up to their roofs, their roofs' faces): the exact solid the
@@ -597,7 +620,7 @@ export class SceneryRaster {
         vertex: { module: this.module, entryPoint: "boxMarkVs" },
         fragment: {
           module: this.module,
-          entryPoint: "boxFs",
+          entryPoint: "bridgeMarkFs",
           targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },

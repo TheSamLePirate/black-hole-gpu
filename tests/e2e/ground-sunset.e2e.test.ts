@@ -34,6 +34,10 @@ const PLACES: Record<string, { lat: number; lon: number; alt: number; date: stri
   seine: { lat: 48.858, lon: 2.29, alt: 250, date: "2026-07-10T19:15:00Z" },
   // (the same by day, low and close: from the Pont Mirabeau up the Seine, its bridges near — heading set by "lit": 50°)
   bridges: { lat: 48.8452, lon: 2.2735, alt: 150, date: "2026-07-10T11:30:00Z", heading: 45, pitch: -14 },
+  // (the same in the late afternoon: the decks' shadows long across the water)
+  // (looking down on the Pont Mirabeau: the water's own colour more than the sky's mirror — its deck's shadow on it)
+  "bridges-down": { lat: 48.8446, lon: 2.2726, alt: 130, date: "2026-07-10T16:30:00Z", heading: 45, pitch: -30 },
+  "bridges-pm": { lat: 48.8452, lon: 2.2735, alt: 150, date: "2026-07-10T16:30:00Z", heading: 45, pitch: -14 },
 };
 const places = (process.env.PLACES ?? Object.keys(PLACES).join(",")).split(",");
 
