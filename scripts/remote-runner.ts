@@ -57,6 +57,8 @@ interface Job {
   hold: number;
   /** the lab's name of the machine it runs on (scripts/lib/lab-hosts.ts) — the dashboard files the run under it */
   host?: string;
+  /** the commit the tree was sent from ("+": changed since) — KERR_COMMIT in the job */
+  commit?: string;
 }
 interface Meta extends Job {
   id: string;
@@ -289,7 +291,14 @@ async function worker(id: string) {
   m.state = "running";
   m.started = Date.now();
   writeMeta(m);
-  const env = { ...process.env, PATH, KERR_REMOTE_JOB: id, E2E_HEADED: m.headed ? "1" : "0", E2E_HOLD: m.hold ? String(m.hold) : "" };
+  const env = {
+    ...process.env,
+    PATH,
+    KERR_REMOTE_JOB: id,
+    KERR_COMMIT: m.commit ?? "",
+    E2E_HEADED: m.headed ? "1" : "0",
+    E2E_HOLD: m.hold ? String(m.hold) : "",
+  };
   const child = WINDOWS
     ? spawn(BASH, ["-c", m.cmd], { cwd: run, env, stdio: ["ignore", log, log], windowsHide: true })
     : spawn("/bin/zsh", ["-c", m.cmd], { cwd: run, env, detached: true, stdio: ["ignore", log, log] });

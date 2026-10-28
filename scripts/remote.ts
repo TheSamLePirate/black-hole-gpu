@@ -417,7 +417,10 @@ if (sub === "run") {
     return i >= 0 ? opts[i + 1] : undefined;
   };
   const cpu = flag("cpu");
-  const job = { cmd, gpu: !cpu, headed: !cpu && !flag("headless"), hold: Number(val("hold") ?? 0), host: HOST };
+  // (the commit the tree comes from, "+" if changed since: the job's KERR_COMMIT — its copy has no .git)
+  const dirty = !!(await Bun.$`git status --porcelain --untracked-files=no`.quiet().nothrow().text()).trim();
+  const commit = `${(await Bun.$`git rev-parse --short HEAD`.quiet().nothrow().text()).trim()}${dirty ? "+" : ""}`;
+  const job = { cmd, gpu: !cpu, headed: !cpu && !flag("headless"), hold: Number(val("hold") ?? 0), host: HOST, commit };
   // (its name: --name, or the test file's, or the command's first word)
   // (a test file first — not bun test's --preload one, named before it)
   const words = cmd.split(/\s+/);

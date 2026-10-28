@@ -40,7 +40,8 @@ const SHOTS = !process.argv.includes("--no-shots");
 const COMPARE = arg("compare", "");
 // (the suites beyond the reference scenes — src/bench/suites.ts —: "all", or a list; the default, the reference alone)
 const SUITES = arg("suites", "core") === "all" ? ["core", "worlds", "vessels", "weather", "flights"] : arg("suites", "core").split(",");
-const sha = (await Bun.$`git rev-parse --short HEAD`.text()).trim();
+// (a remote job's copy has no .git: remote.ts gives it the commit it was sent from)
+const sha = (await Bun.$`git rev-parse --short HEAD`.nothrow().quiet().text()).trim() || process.env.KERR_COMMIT || "unknown";
 const label = arg("label", sha);
 const port = 9350 + Math.floor(Math.random() * 40);
 const W = 1469,
