@@ -281,3 +281,7 @@ d'eau d'OSM, proches seulement. Désormais aussi : une surface au niveau de la m
 (`seaDepthAt`, fenêtres z 10…8) trouve plus profond que ~10 m — un polder, un marais à quelques mètres sous la mer restent
 terre. Vue de débogage de l'eau (`GS_TUNE='{"TUNE_LITE":512}'`) : toute la mer couverte, aucune pente. Images
 `img/mer-porto-escalier-avant.jpg` / `-apres`. Les ponts de la Seine (`PLACES=bridges`, de jour) : `img/seine-ponts-jour.jpg`.
+Les ponts : leurs tabliers 3D (dalles estimées depuis la couche des tuiles, garde-corps, piles) ne sont plus construits
+(`scenery-worker.ts BRIDGE_DECKS`, demande du 28/10/2026 : « les tabliers ne devraient pas se voir ») ; la route d'un pont et sa
+surface tracées au sol comme les autres ; un personnage sur un pont n'a plus de tablier sous lui. Image
+`img/seine-sans-tabliers.jpg`.

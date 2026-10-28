@@ -88,6 +88,10 @@ describe.skipIf(!E2E)("low flight at sunset: the ground's shading and colour", (
           for (let i = 0; i < 120; i++) await frame();
           return +(gpu / done).toFixed(2); })()`);
         const agl = await app.js<number>(`Math.round(__bh.camera.last?.agl ?? __bh.game.geoNow?.()?.agl ?? -1)`).catch(() => -1);
+        const sc = await app.js<Record<string, unknown> | null>(
+          `(() => { const s = __bh.renderer.earthScenery?.stats?.(); return s && { status: s.status, buildings: s.buildings, bridges: s.bridges, error: s.lastError ?? s.error ?? null }; })()`,
+        );
+        console.log(`  scenery: ${JSON.stringify(sc)}`);
         const file = `${shots}/ground-sunset-${pl}-${side}.png`;
         await app.shot(file);
         rows.push({ place: pl, side, heading: +heading.toFixed(1), sun, gpuMs, tilesLeft: left, agl, file });
