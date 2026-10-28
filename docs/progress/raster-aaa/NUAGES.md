@@ -260,3 +260,14 @@ coupée tour à tour, les textures de la passe relues).
   dans ses extrêmes) plutôt que par ses seuls extrêmes ; aucune lumière non finie ni sans couverture prémultipliée ; la couleur
   tenue sous la plus vive des voisines couvertes.
 - Images : `img/orage-taches-avant.jpg`, `-apres`, `-reference`.
+
+### Vues de contrôle : coucher de soleil, arc-en-ciel (28 octobre 2026)
+
+`tests/e2e/sky-showcase.e2e.test.ts` (ce Mac, raster, cockpit, FPS affichés, chaque noyau compilé avant la capture) :
+- **coucher de soleil** sur le détroit sous des cumulus fragmentés (19 h 05 et 19 h 20 Z, le Soleil à 5,8° et 3,1°, 700 m) : le
+  disque caché derrière eux puis vu par une trouée, leurs bords dorés, un rayon de lumière sous la couche — 14 à 23 ms GPU ;
+- **averse du soir et arc-en-ciel** (18 h 50 Z, le Soleil à 8,6° derrière, une couche de cumulus bourgeonnants à 2–4,5 km qui
+  pleut) : les arcs par morceaux là où un rideau de pluie est au soleil, le rouge dehors, l'intérieur plus clair — 28 à 36 ms.
+  Sous un orage à base basse (900 m), le Soleil bas passe dans la couche avant d'atteindre la pluie : elle est à l'ombre, pas
+  d'arc — juste ; la vue de débogage (`RAINBOW_DEBUG=1`) montre les deux arcs entiers à leur place.
+- Images : `img/vue-sunset-0.jpg`, `vue-sunset-1.jpg`, `vue-rainbow-1.jpg`, `vue-rainbow-3.jpg`.
