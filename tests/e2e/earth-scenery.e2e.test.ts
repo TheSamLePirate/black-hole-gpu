@@ -20,8 +20,7 @@ test.skipIf(!E2E)(
       await app.waitFor("__bh.renderer.earthScenery.active&&!__bh.renderer.earthScenery.pending", 120000);
       await app.waitFor("__bh.renderer.variantReady&&__bh.renderer.earthTiles.pending===0", 180000);
       const stats = await app.js("__bh.renderer.earthScenery.stats()");
-      // (no 3D bridge decks since 28/10/2026 — scenery-worker.ts BRIDGE_DECKS: the river's bridges the imagery's and their roads)
-      expect(stats.bridges).toBe(0);
+      expect(stats.bridges).toBeGreaterThan(0);
       expect(stats.waterPolygons).toBeGreaterThan(0);
       expect(stats.shadows).toBe(true);
       await app.js("(()=>{__bh.renderer.prof.every=1;__bh.renderer.prof.reset();window.__profT0=performance.now();return true;})()");
@@ -77,7 +76,7 @@ test.skipIf(!E2E)(
         expect(stats.osmLayers.transportation.fields).toContain("brunnel");
         expect(stats.osmLayers.water).toBeDefined();
         if (place.name === "paris") {
-          expect(stats.bridges).toBe(0);
+          expect(stats.bridges).toBeGreaterThan(0);
           expect(stats.waterPolygons).toBeGreaterThan(0);
         }
         if (place.name === "tokyo") expect(stats.railways).toBeGreaterThan(0);

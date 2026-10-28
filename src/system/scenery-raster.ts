@@ -381,7 +381,14 @@ fn meshed(hi: vec4f) -> bool {
   let p = scenery[g];
   return p.w > 0.5 && p.w < 1.5 && ((u32(scenery[g + 2u].w) >> 21u) & 1u) == 1u;
 }
-@vertex fn boxVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
+// a leaf a building's (its primitive's kind 1) — not a bridge's deck, parapet or pier (polygons of kinds 2–4, strips across a
+// river at any angle: their boxes along the frame's axes far wider than they are)
+fn building(hi: vec4f) -> bool {
+  let p = scenery[u32(scenery[0].y + hi.w)];
+  return p.w > 0.5 && p.w < 1.5;
+}
+@vertex fn boxVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f { return boxClip(vi, ii); }
+fn boxClip(vi: u32, ii: u32) -> vec4f {
   let lo = scenery[4u + ii * 2u];
   let hi = scenery[5u + ii * 2u];
   if (hi.w < 0.0) { return vec4f(2.0, 2.0, 0.5, 1.0); }
@@ -391,11 +398,19 @@ fn meshed(hi: vec4f) -> bool {
   return vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
 }
 @fragment fn boxFs() -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, 2.0); }
+// (with the buildings' solid boxes and triangles — the material's —: the rest's boxes — a bridge's — marking their pixels alone,
+// the kernel shade's exact test deciding what of the box the deck is, the water round it the water's)
+@vertex fn boxMarkVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
+  let hi = scenery[5u + ii * 2u];
+  if (hi.w < 0.0 || building(hi)) { return vec4f(2.0, 2.0, 0.5, 1.0); }
+  return boxClip(vi, ii);
+}
 // the buildings' boxes from the Sun (the shadow map)
 @vertex fn boxShadowVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
   let lo = scenery[4u + ii * 2u];
   let hi = scenery[5u + ii * 2u];
-  if (hi.w < 0.0 || meshed(hi)) { return vec4f(2.0, 2.0, 0.5, 1.0); }
+  // (a bridge's box not drawn: its square shadow on the water — the kernel's rays shade its own)
+  if (hi.w < 0.0 || meshed(hi) || !building(hi)) { return vec4f(2.0, 2.0, 0.5, 1.0); }
   let c = BOX[vi];
   let k = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
   return sunClip(mix(lo.xyz, hi.xyz, k));
@@ -430,7 +445,8 @@ struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f };
   var o: MV;
   let lo = scenery[4u + ii * 2u];
   let hi = scenery[5u + ii * 2u];
-  if (hi.w < 0.0 || meshed(hi)) {
+  // (a building's alone: a bridge's box, solid, was a slab far wider than its deck, the aerial imagery drawn on it — boxMarkVs)
+  if (hi.w < 0.0 || meshed(hi) || !building(hi)) {
     o.clip = vec4f(2.0, 2.0, 0.5, 1.0);
     return o;
   }
@@ -459,6 +475,8 @@ export class SceneryRaster {
   private boxPipe: GPURenderPipeline | null = null;
   /** the buildings without triangles as their solid boxes (with meshPipe: the material's buildings) */
   private boxPipeMeshed: GPURenderPipeline | null = null;
+  /** with them, the rest's boxes — a bridge's — marking their pixels for the kernel's exact test (boxMarkVs) */
+  private boxMarkPipe: GPURenderPipeline | null = null;
   /** the buildings' triangles in the camera's view (U2: shadeLite's buildings) */
   private meshPipe: GPURenderPipeline | null = null;
   /** draw them (renderer.rasterLite: the material draws them — false, their boxes alone, shade's rays as before) */
@@ -573,6 +591,19 @@ export class SceneryRaster {
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater" },
       })
       .then((p) => (this.boxPipe = p), fail);
+    void device
+      .createRenderPipelineAsync({
+        layout: drawPipeLayout,
+        vertex: { module: this.module, entryPoint: "boxMarkVs" },
+        fragment: {
+          module: this.module,
+          entryPoint: "boxFs",
+          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }],
+        },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater" },
+      })
+      .then((p) => (this.boxMarkPipe = p), fail);
     void device
       .createRenderPipelineAsync({
         layout: drawPipeLayout,
@@ -743,13 +774,15 @@ export class SceneryRaster {
       pass.drawIndirect(this.draws, l * 16);
     }
     if (this.debugSkip & 2) return;
-    const meshes = this.meshes3d && !!this.meshPipe && !!this.boxPipeMeshed;
+    const meshes = this.meshes3d && !!this.meshPipe && !!this.boxPipeMeshed && !!this.boxMarkPipe;
     pass.setPipeline(meshes ? this.boxPipeMeshed! : this.boxPipe!);
     pass.setBindGroup(0, this.drawBind);
     pass.drawIndirect(this.draws, LISTS * 16);
     if (meshes) {
       pass.setPipeline(this.meshPipe!);
       pass.drawIndirect(this.draws, (LISTS + 3) * 16);
+      pass.setPipeline(this.boxMarkPipe!);
+      pass.drawIndirect(this.draws, LISTS * 16);
     }
   }
 

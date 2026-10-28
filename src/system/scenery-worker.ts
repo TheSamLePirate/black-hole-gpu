@@ -65,9 +65,6 @@ import {
 } from "./scenery-data";
 
 /** the water polygons of a river's kind (OpenMapTiles' water class): drawn in a river's style, not a lake's */
-// (bridges as 3D decks, parapets and piers over the water — off since 28/10/2026, the owner's choice: their slabs, estimated from
-// the tiles' layers, showed over the aerial imagery's own bridges; a bridge's road and its area drawn on the ground as any other)
-const BRIDGE_DECKS = false;
 const RIVER_CLASSES = new Set(["river", "canal", "stream", "ditch", "drain"]);
 /** their colour — its blue under 0.05: trace.wgsl sceneryWaterAt tells a river by it */
 const RIVER_COLOUR = [0.02, 0.05, 0.04];
@@ -324,7 +321,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                 : [0.12, 0.12, 0.115],
             );
             if (p && surfaceDistance(p) <= radius + 500) {
-              if (BRIDGE_DECKS && (props.brunnel === "bridge" || cls === "bridge")) {
+              if (props.brunnel === "bridge" || cls === "bridge") {
                 const outer = rings[0]!;
                 const cx = outer.reduce((sum, v) => sum + v.x, 0) / outer.length,
                   cy = outer.reduce((sum, v) => sum + v.y, 0) / outer.length;
@@ -362,7 +359,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                 : [0.095, 0.098, 0.1];
           for (const line of f.loadGeometry()) {
             const locals = line.map(point);
-            if (BRIDGE_DECKS && props.brunnel === "bridge") {
+            if (props.brunnel === "bridge") {
               // Buffered whole lines are owned by their midpoint's tile; omit duplicate volumes.
               const mid = line[Math.floor(line.length / 2)];
               if (mid && mid.x >= 0 && mid.x < e && mid.y >= 0 && mid.y < e && line.length < 512) {

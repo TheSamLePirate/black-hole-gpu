@@ -281,7 +281,10 @@ d'eau d'OSM, proches seulement. Désormais aussi : une surface au niveau de la m
 (`seaDepthAt`, fenêtres z 10…8) trouve plus profond que ~10 m — un polder, un marais à quelques mètres sous la mer restent
 terre. Vue de débogage de l'eau (`GS_TUNE='{"TUNE_LITE":512}'`) : toute la mer couverte, aucune pente. Images
 `img/mer-porto-escalier-avant.jpg` / `-apres`. Les ponts de la Seine (`PLACES=bridges`, de jour) : `img/seine-ponts-jour.jpg`.
-Les ponts : leurs tabliers 3D (dalles estimées depuis la couche des tuiles, garde-corps, piles) ne sont plus construits
-(`scenery-worker.ts BRIDGE_DECKS`, demande du 28/10/2026 : « les tabliers ne devraient pas se voir ») ; la route d'un pont et sa
-surface tracées au sol comme les autres ; un personnage sur un pont n'a plus de tablier sous lui. Image
-`img/seine-sans-tabliers.jpg`.
+Les ponts sur l'eau (29/10/2026 — « remets les ponts, mais l'eau en dessous doit être parfaite ») : la visibilité raster
+dessinait tout le décor sans triangles en boîtes pleines le long des axes du repère (`scenery-raster.ts boxSolidVs`, faites pour
+les bâtiments lointains) — le tablier d'un pont en biais y devenait une dalle bien plus large que lui, aux bords en escalier,
+la photo aérienne posée dessus (la « tuile » sous le pont), et son ombre un carré sur l'eau. Les boîtes pleines et leur ombre
+sont désormais aux bâtiments seuls ; les tabliers, garde-corps et piles marquent leurs pixels (`boxMarkVs`), le noyau `shade`
+y teste leur forme exacte : la Seine de l'eau jusqu'à leurs bords, les ponts à leur vraie largeur et traversant tout le fleuve.
+Vue de débogage de l'eau : la rivière rouge partout hors des tabliers. Image `img/seine-ponts-eau-propre.jpg`.
