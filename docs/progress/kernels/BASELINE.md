@@ -216,3 +216,33 @@ first launch (`kernel-compile`):
 | all settled | 408–526 s | 208–220 s |
 
 Proxy (M1 Max): `main` 33.5 → 20 s, `env` 24 → 13 s, `shade` 53 → 18.5 s, `discs` 16 → 8.5 s (DXIL 3.7 → 2.1 MB).
+
+**The waiting sky's clouds and Sun (28/10).** `skyFill` draws the Sun's disc (its true size, the rim antialiased) and the
+cloud pass's clouds before it; the clouds' kernel (2.5 s on the PC) compiled with the material, before `main`. kerr-pc,
+18:30 UTC looking west: [skyfill-clouds-sun-pc.jpg](skyfill-clouds-sun-pc.jpg) (~30 s after the launch, `main` still compiling).
+
+## Why Chrome's cache gives nothing back on Windows (kerr-pc, 28/10)
+
+- **The WGSL is the same from one launch to the next**: every pipeline's source and constants hashed in the page, two
+  launches on one profile — identical. The key is not the cause.
+- **Chrome's own limit, per entry.** A bare page (no game), the game's kernels alone, two launches on one profile
+  (P10 sources, DXIL from the proxy):
+
+  | kernel | DXIL | first | again |
+  |---|---:|---:|---:|
+  | `clouds` | 91 KB | 1.9 s | 0.02 s |
+  | `shadeLite` | 151 KB | 3.7 s | 0.03 s |
+  | `shadeWater` | 315 KB | 11 s | 6.4 s |
+  | `discs` | 526 KB | 36 s | 15 s |
+  | `main` | 920 KB | 80 s | 79 s |
+
+  Small kernels come back whole (DXC and the driver skipped: Dawn keeps the pipeline); middle ones half (the DXIL kept, the
+  driver's compile redone); the 920 KB `main` not at all. P11's sizes, the same bare page: `discs` 16.6 → **0.05 s**,
+  `env` 35 → 13 s, `main` 50 → 26 s — the DXIL now kept, the driver's part left.
+- **In the game, the cache's total.** The game's own relaunch (`KC_WARM=1`, P11) still gained nothing: its pipelines —
+  the tracer's, the post's, the raster's, the craft's — overflow Chrome's WebGPU cache (`DawnWebGPUCache`, ~10 MB on disk
+  after a launch), and a least-recently-used cache asked in the same order every launch then keeps none of what is asked
+  next. `--gpu-disk-cache-size-kb=204800` changed nothing (it does not size that cache).
+- So: what the page can still do is make its whole set smaller than that cache (or ask for less at the start); the rest
+  is Chrome's (its cache's size and entry limit for WebGPU on Windows, and the GPU sandbox that keeps NVIDIA's own cache
+  from being written).

@@ -4276,6 +4276,8 @@ export class Renderer {
       else if (R && this.rasterLite && this.skyFillOn) {
         if (!slot.shadeLite) slot.shadeLite = await compile("shadeLite");
         if (!slot.skyFill) slot.skyFill = await compile("skyFill");
+        // (its clouds — the cloud pass, seconds —: the waiting sky's, the ground's, and the Sun behind them)
+        if (!slot.clouds && this.cloudPass) slot.clouds = await compile("clouds");
       }
       if (!slot.rt) {
         slot.rt = await compile("main", () => (slot.rtGivenUp = true));

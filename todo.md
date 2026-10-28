@@ -133,8 +133,11 @@ Ce qui reste :
 - [x] **Réduire les trois gros noyaux** (P11, 28/10) : l'autre univers (Kerr, disque épais) hors des noyaux temps réel
   quand la Terre est proche, `shade` sans le bruit du relief — sur kerr-pc `main` 120 → 72 s, `env` 85 → 41 s, `shade`
   145 → 60 s, tout compilé 408–526 → 208–220 s ; images identiques au bruit près.
-- [ ] **Pourquoi le cache Dawn de Chrome rate sous Windows** (même `clouds`, petit) : une page minimale avec un pipeline
-  de ~1 Mo de DXIL lancée deux fois sur le même profil dirait si c'est la taille ou la clé.
+- [x] **Pourquoi le cache Dawn de Chrome rate sous Windows** (28/10, BASELINE.md) : une limite par entrée (un `main`
+  de 920 Ko de DXIL n'est jamais gardé ; après P11 le DXIL l'est, le pilote recompile) et, dans le jeu, le total du cache
+  WebGPU (~10 Mo) dépassé par tous ses pipelines : un cache LRU demandé dans le même ordre n'en rend aucun.
+- [ ] **Faire tenir les pipelines du jeu dans le cache de Chrome sous Windows** : mesurer leur total (DXIL et pipelines
+  de rendu), demander moins au lancement (la clé d'orbite et celle du vol), viser < ~10 Mo — sinon signaler à Chromium.
 - [ ] **La troisième copie de `ourSegment` (dans `dnegTrace`).** Chaque site d'appel est une copie complète une fois
   inliné par D3D12 (~19k lignes) ; P9 a fusionné les deux appels de `traceLook`, celui de l'intégration du trou de ver
   reste. Dans tous les noyaux du jeu (son univers a le trou de ver), environ un tiers du code (estimé, pas mesuré).

@@ -11078,9 +11078,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
 
 // The image while the scene's tracer compiles (renderer.skyFillOn — its main: two minutes on a Windows PC, the driver's
 // compile and DXC's, every launch): the raster's ground by shadeLite as in flight, every other pixel here — the clear air
-// along the ray (earthAir, as the ground's), over the day map's Earth where the ray meets it past the rings —; no sky's
-// bodies, clouds or stars until main lands. A dozen lines of the tracer's, compiled in seconds: the first image no longer
-// waits for the largest kernel.
+// along the ray (earthAir, as the ground's), over the day map's Earth where the ray meets it past the rings, the Sun's disc,
+// the cloud pass's clouds before them —; no Moon, planets or stars until main lands. A few dozen lines of the tracer's,
+// compiled in seconds: the first image no longer waits for the largest kernel.
 @compute @workgroup_size(8, 8)
 fn skyFill(@builtin(global_invocation_id) gid: vec3u) {
   let W = u32(P.res.x);
@@ -11113,11 +11113,22 @@ fn skyFill(@builtin(global_invocation_id) gid: vec3u) {
     G = A / PI * lt.e * max(dot(gq, normalize(toBody(lt.dir))), 0.0);
     depth = tEnd * ray.kM / EARTH_RM * bodyRadius(k);
   }
-  let air = earthAir(ro, rd, tEnd, Ls, lt.e, ign(centre), 3e38);
-  var col = air.L + air.T * G;
+  // (the Sun's disc in the open sky — its pixel's share, the rim antialiased: its light through the air, the clouds before it)
+  let li = u32(max(i32(bodies[BV * k + 3u].x), 0));
+  if (tEnd > 1e37 && li != k) {
+    let sunR = bodyRadius(li) / max(length(bodies[BV * li].xyz - bodies[BV * k].xyz), 1e-30);
+    let ang = acos(clamp(dot(normalize(ray.look), normalize(lt.dir)), -1.0, 1.0));
+    let cov = clamp((sunR - ang) / max(P.camUp.w, 1e-6) + 0.5, 0.0, 1.0);
+    G = lt.e * (cov / (PI * sunR * sunR));
+  }
+  // (the clouds of the cloud pass — compiled before main with the material —, over the air as liteFinish lays them)
+  let cs = cloudsBuffered(centre, terrainRasterDepth(centre));
+  let alpha = max(cs.alpha, 0.0);
+  let air = earthAir(ro, rd, tEnd, Ls, lt.e, ign(centre), select(3e38, cs.tc, alpha > 0.0));
+  var col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cs.cl);
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   accum[idx] = vec4f(col, 1.0);
-  moments[idx] = vec2f(0.0, depth);
+  moments[idx] = vec2f(0.0, select(depth, cs.tc / EARTH_RM * bodyRadius(k), alpha > 0.5));
   stamps[idx] = P.frame.x;
 }
 

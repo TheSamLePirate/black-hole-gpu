@@ -183,7 +183,7 @@ et `shade` plus tard. Depuis le plan [PLAN-LEAN-TRACER-KERNELS.md](../PLAN-LEAN-
   - **le ciel d'attente** (`skyFill`, `renderer.skyFillOn`) : en vol Terre au raster, tant que le `main` compile (deux
     minutes sur un PC Windows, à chaque lancement), `shadeLite` dessine le sol et `skyFill` le reste — l'air clair, la
     Terre lointaine de la carte du jour —, compilés d'abord (quelques secondes) : la première image n'attend plus le
-    plus gros noyau. Pas de nuages, de Soleil ni d'étoiles avant le `main` (`renderer.skyWaiting`).
+    plus gros noyau. Le disque du Soleil et les nuages de la passe nuages (compilée avec eux) y sont ; ni Lune, ni planètes, ni étoiles avant le `main` (`renderer.skyWaiting`).
 - **Le noyau général** (tous les `HAS_*` vrais) n’est plus compilé au démarrage (`generalOnDemand`) : il reste le repli
   d’une scène dont les noyaux échouent, la clé `FEATURES_ALL`, ou un départ explicite.
 - **La file** (`CompileQueue`) passe les compilations de l’image avant les autres, avec un second créneau ; l’écran de
