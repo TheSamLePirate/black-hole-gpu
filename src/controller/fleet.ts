@@ -9,6 +9,7 @@ import { fleet, type Pose } from "../fleet";
 import { dockedFrame, isAircraft, isPlane, VESSEL_IDS, VESSELS, type VesselId } from "../vessels";
 import { mouth } from "../wormhole";
 import { repToHomeVec } from "../system/our-side";
+import { toBodyFixed } from "../system/our-surface";
 import { cockpitHull } from "../system/collide";
 import { M_METRES } from "../units";
 import { tf } from "../i18n";
@@ -190,6 +191,8 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   const group = fleet.assembly(old);
   // (the craft left: its assembly coasts as it — unless the new one or the station holds it)
   if (me && !group.includes(id) && !group.includes("iss")) fleet.setFree(old, me, t, this.coastCom(), this.groundBody());
+  // (the new one left on a ground — the F-35 on its runway —: found there at rest, not in the air)
+  const leftOn = fleet.free[id]?.ground?.body;
   for (const v of fleet.assembly(id)) if (v !== "iss") delete fleet.free[v];
   fleet.active = id;
   s.vessel = id;
@@ -216,6 +219,12 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   // pilot's rates: per second of the pilot's clock, the other way round from the right-hand rule)
   this.placeOnPose(fleet.flownAssembly().length > 1 && to.Vc ? { ...to, V: to.Vc } : to);
   this.spin = null;
+  // (back at rest on its gear, set on the ground as it is now — the relief may have come in since it was left: flown
+  // from its pose instead, it was a plane let go over its runway — slow frames, a compile's, and it fell through it)
+  if (leftOn) {
+    this.setOurLanded({ body: leftOn, q: toBodyFixed(leftOn, to.X, t) });
+    this.groundChanged();
+  }
   if (to.w && Math.hypot(...to.w) > 0) this.pilot.omega = to.ax.map((a) => -dot3(to.w!, a) * timeRate(s)) as Vec3;
   this.dockInfo = null;
   this.carryCommit(before, Math.max(1.2, viewBlend(s).time * 1.5));
