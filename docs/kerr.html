@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KERR — le vrai monde, le ciel vivant, jusqu'à Gargantua</title>
+<meta name="description" content="KERR : un simulateur de vol dans le navigateur. F-35B et A320 au-dessus de la vraie Terre, 5 000 aéroports, une météo vivante, puis l'orbite, la Lune et le trou noir Gargantua. Gratuit, sans installation.">
+<meta property="og:title" content="KERR — le vrai monde, le ciel vivant, jusqu'à Gargantua">
+<meta property="og:description" content="Un simulateur de vol dans le navigateur : la vraie Terre, une météo vivante, l'espace et Gargantua.">
+<meta property="og:image" content="img/showcase/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#050507">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050507;
+    --bg2: #0b0c11;
+    --line: rgba(255, 255, 255, 0.1);
+    --text: #f1eee8;
+    --muted: #a3a29d;
+    --gold: #e2aa5c;
+    --gold2: #ff8a3d;
+    --display: "Rajdhani", "Avenir Next", system-ui, sans-serif;
+    --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --gutter: clamp(16px, 4vw, 48px);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.65 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  img { display: block; max-width: 100%; }
+  a { color: inherit; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 var(--gutter); }
+  .eyebrow { font: 600 0.8rem/1 var(--display); letter-spacing: 0.32em; text-transform: uppercase; color: var(--gold); }
+  h1, h2, h3 { font-family: var(--display); font-weight: 700; letter-spacing: 0.02em; margin: 0; }
+  h2 { font-size: clamp(2.2rem, 5.4vw, 4.2rem); line-height: 1; margin: 16px 0 20px; text-transform: uppercase; }
+  h2 em { font-style: normal; color: var(--gold); }
+  .lead { color: var(--muted); font-size: clamp(1.02rem, 1.4vw, 1.18rem); max-width: 620px; margin: 0; }
+  section { padding: clamp(80px, 12vw, 160px) 0; position: relative; }
+
+  /* ---- the bar */
+  .bar { position: fixed; inset: 0 0 auto 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 14px var(--gutter); transition: background 0.4s, backdrop-filter 0.4s; }
+  .bar.solid { background: rgba(5, 5, 7, 0.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; font: 700 1.35rem/1 var(--display); letter-spacing: 0.34em; }
+  .brand img { width: 42px; }
+  .bar nav { display: flex; align-items: center; gap: 22px; font: 600 0.82rem/1 var(--display); letter-spacing: 0.18em; text-transform: uppercase; }
+  .bar nav a { text-decoration: none; color: var(--muted); transition: color 0.2s; }
+  .bar nav a:hover { color: var(--text); }
+  .lang { display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+  .lang button { background: none; border: 0; color: var(--muted); font: 600 0.75rem/1 var(--display); letter-spacing: 0.12em; padding: 7px 11px; cursor: pointer; }
+  .lang button[aria-pressed="true"] { background: var(--gold); color: #120c04; }
+  @media (max-width: 760px) { .bar nav a:not(.play-sm) { display: none; } }
+
+  /* ---- buttons */
+  .btn { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font: 700 0.95rem/1 var(--display); letter-spacing: 0.22em;
+    text-transform: uppercase; padding: 17px 30px; border-radius: 4px; transition: transform 0.2s, box-shadow 0.2s, background 0.2s; }
+  .btn.primary { background: linear-gradient(135deg, var(--gold), var(--gold2)); color: #140c03; box-shadow: 0 10px 40px -10px rgba(255, 138, 61, 0.6); }
+  .btn.primary:hover { transform: translateY(-2px); box-shadow: 0 16px 50px -10px rgba(255, 138, 61, 0.75); }
+  .btn.ghost { border: 1px solid rgba(255, 255, 255, 0.28); color: var(--text); backdrop-filter: blur(6px); }
+  .btn.ghost:hover { background: rgba(255, 255, 255, 0.08); }
+  .play-sm { color: var(--gold) !important; }
+
+  /* ---- hero */
+  .hero { min-height: 100svh; display: flex; align-items: flex-end; padding: 0 0 clamp(56px, 9vh, 110px); overflow: hidden; }
+  .hero .bg { position: absolute; inset: 0; }
+  .hero .bg img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.06); animation: drift 26s ease-out forwards; }
+  @keyframes drift { to { transform: scale(1) translateY(-1%); } }
+  .hero::after { content: ""; position: absolute; inset: 0; background:
+    linear-gradient(180deg, rgba(5,5,7,0.55) 0%, rgba(5,5,7,0) 26%, rgba(5,5,7,0) 48%, rgba(5,5,7,0.9) 86%, var(--bg) 100%),
+    radial-gradient(ellipse at 20% 90%, rgba(5,5,7,0.6), transparent 60%); }
+  .hero .wrap { position: relative; z-index: 2; width: 100%; }
+  .hero h1 { font-size: clamp(4.2rem, 15vw, 11.5rem); line-height: 0.82; letter-spacing: 0.24em; margin: 18px 0 22px -0.06em;
+    background: linear-gradient(180deg, #fff 30%, #d9cfbf); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero .tag { font: 600 clamp(1.1rem, 2.4vw, 1.8rem)/1.25 var(--display); letter-spacing: 0.06em; max-width: 760px; margin: 0 0 34px; }
+  .hero .tag b { color: var(--gold); font-weight: 700; }
+  .cta { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .cta small { color: var(--muted); font-size: 0.86rem; flex-basis: 100%; margin-top: 4px; }
+  .scroll-hint { position: absolute; right: var(--gutter); bottom: 40px; z-index: 2; font: 600 0.72rem/1 var(--display); letter-spacing: 0.3em; color: var(--muted);
+    writing-mode: vertical-rl; display: flex; align-items: center; gap: 12px; }
+  .scroll-hint::after { content: ""; width: 1px; height: 64px; background: linear-gradient(var(--gold), transparent); animation: hint 2.4s infinite; }
+  @keyframes hint { 0% { transform: scaleY(0); transform-origin: top; } 50% { transform: scaleY(1); transform-origin: top; } 51% { transform-origin: bottom; } 100% { transform: scaleY(0); transform-origin: bottom; } }
+  @media (max-width: 760px) { .scroll-hint { display: none; } }
+
+  /* ---- a big statement band */
+  .statement { padding: clamp(70px, 10vw, 130px) 0; text-align: center; }
+  .statement p { font: 600 clamp(1.6rem, 4vw, 3.2rem)/1.18 var(--display); letter-spacing: 0.01em; max-width: 1000px; margin: 0 auto; }
+  .statement p span { color: var(--muted); }
+
+  /* ---- reveal on scroll */
+  .rv { opacity: 0; transform: translateY(36px); transition: opacity 1s cubic-bezier(.2,.7,.2,1), transform 1s cubic-bezier(.2,.7,.2,1); }
+  .rv.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .rv { opacity: 1; transform: none; transition: none; } .hero .bg img { animation: none; transform: none; } }
+
+  /* ---- the real world: a mosaic */
+  .head { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: clamp(36px, 5vw, 64px); }
+  @media (min-width: 900px) { .head.split { grid-template-columns: 1.1fr 1fr; align-items: end; gap: 60px; } }
+  .mosaic { display: grid; gap: 12px; grid-template-columns: repeat(12, 1fr); grid-auto-rows: clamp(120px, 15vw, 210px); }
+  .tile { position: relative; overflow: hidden; border-radius: 6px; cursor: zoom-in; background: var(--bg2); border: 0; padding: 0; color: inherit; text-align: left; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.2s cubic-bezier(.2,.7,.2,1), filter 0.6s; filter: saturate(1.02); }
+  .tile:hover img, .tile:focus-visible img { transform: scale(1.05); filter: saturate(1.12); }
+  .tile .cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 40px 18px 14px; background: linear-gradient(transparent, rgba(0,0,0,0.75));
+    font: 600 0.82rem/1.2 var(--display); letter-spacing: 0.18em; text-transform: uppercase; }
+  .tile .cap small { display: block; font: 400 0.8rem/1.3 var(--sans); letter-spacing: 0; text-transform: none; color: var(--muted); margin-top: 3px; }
+  .t-a { grid-column: span 8; grid-row: span 3; } .t-b { grid-column: span 4; grid-row: span 2; } .t-c { grid-column: span 4; grid-row: span 1; }
+  .t-d { grid-column: span 4; grid-row: span 2; } .t-e { grid-column: span 4; grid-row: span 2; } .t-f { grid-column: span 4; grid-row: span 2; }
+  @media (max-width: 760px) { .mosaic { grid-template-columns: 1fr 1fr; grid-auto-rows: 150px; } .mosaic .tile { grid-column: span 1; grid-row: span 1; } .mosaic .t-a { grid-column: span 2; grid-row: span 2; } }
+
+  /* ---- the living sky: a viewer, its weathers and hours */
+  .sky { background: radial-gradient(ellipse at 50% 0%, #10131c 0%, var(--bg) 70%); }
+  .viewer { position: relative; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 40px 120px -40px rgba(0,0,0,0.9); border: 1px solid var(--line); }
+  .viewer img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 0.9s ease; }
+  .viewer .label { position: absolute; left: 20px; top: 18px; z-index: 2; font: 600 0.78rem/1 var(--display); letter-spacing: 0.26em; text-transform: uppercase;
+    background: rgba(0,0,0,0.45); backdrop-filter: blur(8px); padding: 9px 13px; border-radius: 999px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; }
+  .chips button { font: 600 0.8rem/1 var(--display); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); background: rgba(255,255,255,0.04);
+    border: 1px solid var(--line); border-radius: 999px; padding: 11px 16px; cursor: pointer; transition: all 0.2s; }
+  .chips button:hover { color: var(--text); border-color: rgba(255,255,255,0.3); }
+  .chips button[aria-pressed="true"] { color: #140c03; background: var(--gold); border-color: var(--gold); }
+  .hours { margin-top: 26px; display: grid; gap: 10px; }
+  .hours label { font: 600 0.78rem/1 var(--display); letter-spacing: 0.26em; text-transform: uppercase; color: var(--muted); }
+  .hours input { width: 100%; accent-color: var(--gold); }
+  .hours .ticks { display: flex; justify-content: space-between; font: 500 0.76rem/1 var(--display); letter-spacing: 0.14em; color: var(--muted); text-transform: uppercase; }
+  .sky-grid { display: grid; gap: 28px; }
+  @media (min-width: 980px) { .sky-grid { grid-template-columns: 2.1fr 1fr; align-items: start; } }
+  .moments { display: grid; gap: 12px; }
+  .moments .tile { aspect-ratio: 16 / 9; }
+
+  /* ---- the two cockpits */
+  .duo { display: grid; gap: 22px; }
+  @media (min-width: 900px) { .duo { grid-template-columns: 1fr 1fr; } }
+  .card { position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--bg2); }
+  .card .pic { aspect-ratio: 16 / 10; overflow: hidden; }
+  .card .pic img { width: 100%; height: 100%; object-fit: cover; transition: transform 1.4s cubic-bezier(.2,.7,.2,1); }
+  .card:hover .pic img { transform: scale(1.04); }
+  .card .body { padding: 26px 28px 30px; }
+  .card h3 { font-size: 1.9rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  .card p { color: var(--muted); margin: 10px 0 18px; }
+  .card ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .card li { font: 600 0.74rem/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; padding: 8px 11px; border: 1px solid var(--line); border-radius: 3px; color: #d8d3c9; }
+
+  /* ---- beyond: full-bleed panels */
+  .panel { position: relative; min-height: min(92vh, 900px); display: flex; align-items: flex-end; overflow: hidden; }
+  .panel > img { position: absolute; inset: 0; width: 100%; height: 115%; object-fit: cover; will-change: transform; }
+  .panel::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, var(--bg) 0%, transparent 22%, transparent 55%, rgba(5,5,7,0.92) 100%); }
+  .panel .wrap { position: relative; z-index: 2; width: 100%; padding-bottom: clamp(50px, 8vw, 110px); }
+  .panel.right .wrap { text-align: right; } .panel.right .lead { margin-left: auto; }
+  /* (a split panel: the picture on the right, faded into the black on its left — the craft there, the words beside it) */
+  @media (min-width: 761px) {
+    .panel.split { align-items: center; }
+    .panel.split > img { left: auto; right: 0; width: 74%; mask-image: linear-gradient(90deg, transparent 0%, #000 34%); -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 34%); }
+    .panel.split::before { display: none; }
+    .panel.split .lead, .panel.split h2 { max-width: 44%; }
+  }
+  /* (the side the words stand on darkened: legible over a bright disk) */
+  .panel::before { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(90deg, rgba(5,5,7,0.82) 0%, rgba(5,5,7,0.45) 38%, transparent 62%); }
+  .panel.right::before { background: linear-gradient(270deg, rgba(5,5,7,0.85) 0%, rgba(5,5,7,0.5) 40%, transparent 66%); }
+  .panel h2, .panel .lead, .panel .eyebrow { text-shadow: 0 2px 24px rgba(0,0,0,0.85); }
+  .panel .lead { color: #c9c6be; }
+  /* (a phone: the picture whole, a band over the words — a tall crop of a wide frame would show only its sky) */
+  @media (max-width: 760px) {
+    .panel { display: block; min-height: 0; padding: 0; }
+    .panel > img { position: relative; height: auto; aspect-ratio: 16 / 9; transform: none !important; }
+    .panel::before { display: none; }
+    .panel::after { background: linear-gradient(180deg, transparent 40%, var(--bg) calc(100vw * 0.5625)); }
+    .panel .wrap, .panel.right .wrap { text-align: left; margin-top: -40px; padding-bottom: 50px; }
+    .panel.right .lead { margin-left: 0; }
+    .final { min-height: 70vh; }
+  }
+  .strip { display: grid; gap: 12px; grid-template-columns: repeat(4, 1fr); margin-top: 12px; }
+  .strip .tile { aspect-ratio: 16 / 10; }
+  @media (max-width: 760px) { .strip { grid-template-columns: 1fr 1fr; } }
+
+  /* ---- numbers */
+  .nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .num { background: var(--bg); padding: 30px 26px; }
+  .num b { display: block; font: 700 clamp(2.4rem, 4vw, 3.3rem)/1 var(--display); color: var(--gold); letter-spacing: 0.02em; }
+  .num span { display: block; margin-top: 10px; color: var(--muted); font-size: 0.95rem; }
+
+  /* ---- the last call */
+  .final { min-height: 90vh; display: flex; align-items: center; text-align: center; overflow: hidden; }
+  .final > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.85; }
+  .final::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(5,5,7,0.25), rgba(5,5,7,0.85) 75%), linear-gradient(var(--bg), transparent 25%, transparent 75%, var(--bg)); }
+  .final .wrap { position: relative; z-index: 2; }
+  .final img.mark { position: static; width: clamp(110px, 14vw, 170px); margin: 0 auto 10px; opacity: 1; }
+  .final h2 { font-size: clamp(2.6rem, 7vw, 5.6rem); }
+  .final .cta { justify-content: center; }
+
+  footer { border-top: 1px solid var(--line); padding: 40px 0 60px; color: var(--muted); font-size: 0.82rem; }
+  footer .wrap { display: grid; gap: 14px; }
+  footer a { color: var(--text); }
+
+  /* ---- the lightbox */
+  .lb { position: fixed; inset: 0; z-index: 50; background: rgba(2,2,4,0.94); display: none; align-items: center; justify-content: center; padding: 3vw; }
+  .lb.open { display: flex; }
+  .lb img { max-width: 100%; max-height: 86vh; border-radius: 6px; box-shadow: 0 30px 120px rgba(0,0,0,0.8); }
+  .lb p { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; margin: 0; font: 600 0.85rem/1 var(--display); letter-spacing: 0.24em; text-transform: uppercase; color: var(--muted); }
+  .lb button { position: absolute; background: rgba(255,255,255,0.06); border: 1px solid var(--line); color: var(--text); width: 48px; height: 48px; border-radius: 50%; font-size: 1.3rem; cursor: pointer; }
+  .lb .x { top: 18px; right: 18px; } .lb .prev { left: 18px; top: 50%; } .lb .next { right: 18px; top: 50%; }
+</style>
+</head>
+<body>
+
+<header class="bar" id="bar">
+  <a class="brand" href="#top" aria-label="KERR"><img src="img/showcase/kerr-mark.webp" alt="">KERR</a>
+  <nav>
+    <a href="#monde" data-en="World">Monde</a>
+    <a href="#ciel" data-en="Sky">Ciel</a>
+    <a href="#avions" data-en="Aircraft">Avions</a>
+    <a href="#espace" data-en="Space">Espace</a>
+    <a class="play-sm" href="../" data-en="Play">Jouer</a>
+    <span class="lang" role="group" aria-label="Langue / Language">
+      <button type="button" data-lang="fr" aria-pressed="true">FR</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN</button>
+    </span>
+  </nav>
+</header>
+
+<main id="top">
+  <!-- ---- hero -->
+  <section class="hero">
+    <div class="bg"><img src="img/showcase/f35-diamond-montblanc.webp" alt="Quatre F-35 en losange au-dessus du massif du Mont-Blanc au soleil couchant" data-en-alt="Four F-35s in diamond over the Mont Blanc massif at sunset" fetchpriority="high"></div>
+    <div class="wrap">
+      <div class="eyebrow" data-en="Flight simulator · in your browser">Simulateur de vol · dans le navigateur</div>
+      <h1>KERR</h1>
+      <p class="tag" data-en="The <b>real</b> world. A <b>living</b> sky. And all the way to <b>Gargantua</b>.">Le <b>vrai</b> monde. Un ciel <b>vivant</b>. Et jusqu'à <b>Gargantua</b>.</p>
+      <div class="cta">
+        <a class="btn primary" href="../" data-en="Play now">Jouer maintenant</a>
+        <a class="btn ghost" href="#monde" data-en="Discover">Découvrir</a>
+        <small data-en="Free · nothing to install · a WebGPU browser (Chrome, Edge, Safari 26)">Gratuit · rien à installer · un navigateur WebGPU (Chrome, Edge, Safari 26)</small>
+      </div>
+    </div>
+    <div class="scroll-hint" data-en="SCROLL">DÉFILER</div>
+  </section>
+
+  <div class="statement">
+    <div class="wrap rv">
+      <p data-en="Every mountain where it stands. Every cloud lit by its own Sun. <span>And every image you see here was made by the game itself, in real time.</span>">Chaque montagne à sa place. Chaque nuage éclairé par son propre Soleil. <span>Et chaque image de cette page a été faite par le jeu lui-même, en temps réel.</span></p>
+    </div>
+  </div>
+
+  <!-- ---- the real world -->
+  <section id="monde">
+    <div class="wrap">
+      <div class="head split rv">
+        <div>
+          <div class="eyebrow" data-en="The real world">Le vrai monde</div>
+          <h2 data-en="The whole Earth, <em>to scale</em>">Toute la Terre, <em>à l'échelle</em></h2>
+        </div>
+        <p class="lead" data-en="The planet's true shape and relief, satellite imagery everywhere — and over France the IGN's 20 cm aerial photographs, its LiDAR relief, every building. Forests, rivers, coasts and the sea's waves, out to the horizon.">La vraie forme et le vrai relief de la planète, l'imagerie satellite partout — et en France les photographies aériennes à 20 cm de l'IGN, son relief LiDAR, chaque bâtiment. Forêts, rivières, côtes et houle de la mer, jusqu'à l'horizon.</p>
+      </div>
+      <div class="mosaic rv">
+        <button class="tile t-a" data-full="img/showcase/f35-echelon-corsica.webp"><img loading="lazy" src="img/showcase/f35-echelon-corsica.webp" alt=""><span class="cap" data-en="Gulf of Porto, Corsica<small>Two F-35s in echelon, late afternoon</small>">Golfe de Porto, Corse<small>Deux F-35 en échelon, fin d'après-midi</small></span></button>
+        <button class="tile t-b" data-full="img/showcase/f35-grand-canyon.webp"><img loading="lazy" src="img/showcase/f35-grand-canyon-s.webp" alt=""><span class="cap" data-en="Grand Canyon<small>At dawn</small>">Grand Canyon<small>À l'aube</small></span></button>
+        <button class="tile t-c" data-full="img/showcase/f35-himalaya.webp"><img loading="lazy" src="img/showcase/f35-himalaya-s.webp" alt=""><span class="cap" data-en="Himalaya">Himalaya</span></button>
+        <button class="tile t-d" data-full="img/showcase/f35-fjords.webp"><img loading="lazy" src="img/showcase/f35-fjords-s.webp" alt=""><span class="cap" data-en="Norway's fjords">Fjords de Norvège</span></button>
+        <button class="tile t-e" data-full="img/showcase/f35-patagonia.webp"><img loading="lazy" src="img/showcase/f35-patagonia-s.webp" alt=""><span class="cap" data-en="Patagonia<small>Over a sea of clouds</small>">Patagonie<small>Au-dessus d'une mer de nuages</small></span></button>
+        <button class="tile t-f" data-full="img/showcase/f35-iceland.webp"><img loading="lazy" src="img/showcase/f35-iceland-s.webp" alt=""><span class="cap" data-en="Iceland<small>The midnight Sun</small>">Islande<small>Le soleil de minuit</small></span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---- the living sky -->
+  <section class="sky" id="ciel">
+    <div class="wrap">
+      <div class="head split rv">
+        <div>
+          <div class="eyebrow" data-en="A living sky">Un ciel vivant</div>
+          <h2 data-en="Weather you can <em>fly into</em>">Une météo où l'on <em>entre</em></h2>
+        </div>
+        <p class="lead" data-en="Volumetric clouds, each its own height and shape; rain, storms and lightning; fog in the valleys; the real weather of any airport. The Sun's light through it all: crepuscular rays, rainbows, the glint on the sea. Try it — same place, same moment, another sky.">Des nuages en volume, chacun sa hauteur et sa forme&#8239;; pluie, orages et éclairs&#8239;; brouillard dans les vallées&#8239;; la vraie météo de n'importe quel aéroport. Et la lumière du Soleil à travers&#8239;: rayons crépusculaires, arcs-en-ciel, reflet sur la mer. Essayez — même lieu, même instant, un autre ciel.</p>
+      </div>
+      <div class="sky-grid">
+        <div class="rv">
+          <div class="viewer" id="viewer">
+            <span class="label" id="vlabel">Clair</span>
+            <img id="vimg" src="img/showcase/wx-fair.webp" alt="" data-en-alt="">
+          </div>
+          <div class="chips" id="wx" role="group" aria-label="Météo / Weather">
+            <button type="button" data-img="wx-fair" aria-pressed="true" data-en="Fair">Clair</button>
+            <button type="button" data-img="wx-cloudy" data-en="Cloudy">Nuageux</button>
+            <button type="button" data-img="wx-overcast" data-en="Overcast">Couvert</button>
+            <button type="button" data-img="wx-rain" data-en="Rain">Pluie</button>
+            <button type="button" data-img="wx-storm" data-en="Storm">Orage</button>
+            <button type="button" data-img="wx-windy" data-en="Strong wind">Vent fort</button>
+            <button type="button" data-img="wx-fog" data-en="Fog">Brouillard</button>
+          </div>
+          <div class="hours">
+            <label for="hour" data-en="The hour of the day — off Gibraltar's Rock">L'heure du jour — devant le rocher de Gibraltar</label>
+            <input id="hour" type="range" min="0" max="4" step="1" value="1">
+            <div class="ticks"><span data-en="Dawn">Aube</span><span data-en="Morning">Matin</span><span data-en="Noon">Midi</span><span data-en="Dusk">Crépuscule</span><span data-en="Night">Nuit</span></div>
+          </div>
+        </div>
+        <div class="moments rv">
+          <button class="tile" data-full="img/showcase/f35-crepuscular.webp"><img loading="lazy" src="img/showcase/f35-crepuscular-s.webp" alt=""><span class="cap" data-en="Crepuscular rays">Rayons crépusculaires</span></button>
+          <button class="tile" data-full="img/showcase/f35-rainbow.webp"><img loading="lazy" src="img/showcase/f35-rainbow-s.webp" alt=""><span class="cap" data-en="A rainbow in the shower">Un arc-en-ciel dans l'averse</span></button>
+          <button class="tile" data-full="img/showcase/f35-sea-glint.webp"><img loading="lazy" src="img/showcase/f35-sea-glint-s.webp" alt=""><span class="cap" data-en="The Sun on the sea">Le soleil sur la mer</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---- the aircraft -->
+  <section id="avions">
+    <div class="wrap">
+      <div class="head rv">
+        <div class="eyebrow" data-en="Two cockpits">Deux cockpits</div>
+        <h2 data-en="Fighter or <em>airliner</em>">Chasseur ou <em>avion de ligne</em></h2>
+        <p class="lead" data-en="Take off from any of the world's 5,000 airports — at the hour you choose, in the weather you choose.">Décollez de n'importe lequel des 5 000 aéroports du monde — à l'heure choisie, sous la météo choisie.</p>
+      </div>
+      <div class="duo">
+        <article class="card rv">
+          <div class="pic"><img loading="lazy" src="img/showcase/f35-vic-provence.webp" alt=""></div>
+          <div class="body">
+            <h3>F-35B Lightning II</h3>
+            <p data-en="The stealth fighter that lands vertically: its full cockpit and panoramic display, the helmet's symbology, AI wingmen in formation, missions, air refuelling, carriers.">Le chasseur furtif qui se pose à la verticale&#8239;: son cockpit complet et son écran panoramique, la symbologie du casque, des ailiers IA en formation, des missions, le ravitaillement en vol, les porte-avions.</p>
+            <ul><li data-en="Hover">Stationnaire</li><li data-en="Formation">Formation</li><li data-en="Combat">Combat</li><li data-en="Aerobatics">Voltige</li></ul>
+          </div>
+        </article>
+        <article class="card rv">
+          <div class="pic"><img loading="lazy" src="img/showcase/a320-above-clouds.webp" alt=""></div>
+          <div class="body">
+            <h3>Airbus A320</h3>
+            <p data-en="The airliner from gate to gate: its flight deck's screens, the MCDU and the flight plan, the autopilot and autothrust, the ECAM, the wipers in the rain.">L'avion de ligne de porte à porte&#8239;: les écrans du poste, le MCDU et le plan de vol, le pilote et la poussée automatiques, l'ECAM, les essuie-glaces sous la pluie.</p>
+            <ul><li>MCDU</li><li data-en="Autopilot">Pilote auto</li><li>ECAM</li><li data-en="Any airport">Tout aéroport</li></ul>
+          </div>
+        </article>
+      </div>
+      <div class="strip rv">
+        <button class="tile" data-full="img/showcase/a320-paris-dusk.webp"><img loading="lazy" src="img/showcase/a320-paris-dusk-s.webp" alt=""><span class="cap" data-en="Paris at dusk">Paris au crépuscule</span></button>
+        <button class="tile" data-full="img/showcase/a320-alps.webp"><img loading="lazy" src="img/showcase/a320-alps-s.webp" alt=""><span class="cap" data-en="Over the Alps">Au-dessus des Alpes</span></button>
+        <button class="tile" data-full="img/showcase/a320-runway.webp"><img loading="lazy" src="img/showcase/a320-runway-s.webp" alt=""><span class="cap" data-en="Lined up, Le Bourget">Aligné, Le Bourget</span></button>
+        <button class="tile" data-full="img/showcase/f35-storm.webp"><img loading="lazy" src="img/showcase/f35-storm-s.webp" alt=""><span class="cap" data-en="Above the storm">Au-dessus de l'orage</span></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---- beyond -->
+  <div id="espace">
+    <section class="panel split">
+      <img data-par src="img/showcase/ship-ranger-terminator.webp" alt="">
+      <div class="wrap rv">
+        <div class="eyebrow" data-en="Beyond the sky">Au-delà du ciel</div>
+        <h2 data-en="Climb until the sky <em>turns black</em>">Montez jusqu'à ce que le ciel <em>devienne noir</em></h2>
+        <p class="lead" data-en="The Ranger in orbit, the Earth's limb and the Milky Way. The Moon, the planets where they truly are tonight — the Solar System to scale.">Le Ranger en orbite, le limbe de la Terre et la Voie lactée. La Lune, les planètes là où elles sont vraiment ce soir — le Système solaire à l'échelle.</p>
+      </div>
+    </section>
+    <section class="panel right">
+      <img data-par src="img/showcase/gargantua-disk.webp" alt="">
+      <div class="wrap rv">
+        <div class="eyebrow" data-en="Gargantua">Gargantua</div>
+        <h2 data-en="A black hole, <em>ray by ray</em>">Un trou noir, <em>rayon par rayon</em></h2>
+        <p class="lead" data-en="Through the wormhole to Interstellar's black hole: every ray of light bent by Einstein's equations, computed live on your graphics card. Its disk, its lensed sky, Miller's world and its waves.">À travers le trou de ver, jusqu'au trou noir d'Interstellar&#8239;: chaque rayon de lumière courbé par les équations d'Einstein, calculé en direct sur votre carte graphique. Son disque, son ciel déformé, la planète de Miller et ses vagues.</p>
+      </div>
+    </section>
+    <div class="wrap" style="padding-bottom: 40px">
+      <div class="strip rv">
+        <button class="tile" data-full="img/showcase/moon-earthrise.webp"><img loading="lazy" src="img/showcase/moon-earthrise-s.webp" alt=""><span class="cap" data-en="Earthrise">Lever de Terre</span></button>
+        <button class="tile" data-full="img/showcase/foot-alps-sunset.webp"><img loading="lazy" src="img/showcase/foot-alps-sunset-s.webp" alt=""><span class="cap" data-en="On foot, above the clouds">À pied, au-dessus des nuages</span></button>
+        <button class="tile" data-full="img/showcase/ship-endurance-gargantua.webp"><img loading="lazy" src="img/showcase/ship-endurance-gargantua-s.webp" alt=""><span class="cap" data-en="The Endurance">L'Endurance</span></button>
+        <button class="tile" data-full="img/showcase/miller.webp"><img loading="lazy" src="img/showcase/miller-s.webp" alt=""><span class="cap" data-en="Miller's world">La planète de Miller</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---- numbers -->
+  <section>
+    <div class="wrap">
+      <div class="head rv">
+        <div class="eyebrow" data-en="In numbers">En chiffres</div>
+        <h2 data-en="One world, <em>whole</em>">Un monde, <em>entier</em></h2>
+      </div>
+      <div class="nums rv">
+        <div class="num"><b>5 026</b><span data-en="airports to take off from, anywhere on Earth">aéroports d'où décoller, partout sur Terre</span></div>
+        <div class="num"><b>20 cm</b><span data-en="aerial imagery over France (IGN), satellite everywhere else">d'imagerie aérienne en France (IGN), satellite partout ailleurs</span></div>
+        <div class="num"><b>7</b><span data-en="weathers — or the real one, live from the airports">météos — ou la vraie, en direct des aéroports</span></div>
+        <div class="num"><b>4</b><span data-en="pilots together in the same sky">pilotes ensemble dans le même ciel</span></div>
+        <div class="num"><b>0</b><span data-en="install: it runs in the browser, on your GPU">installation&#8239;: tout tourne dans le navigateur, sur votre carte graphique</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---- the last call -->
+  <section class="final">
+    <img src="img/showcase/ship-endurance-gargantua.webp" alt="">
+    <div class="wrap rv">
+      <img class="mark" src="img/showcase/kerr-mark.webp" alt="">
+      <h2 data-en="Take <em>off</em>">Décollez</h2>
+      <p class="lead" style="margin: 0 auto 34px" data-en="From the runway at Nice to the edge of Gargantua: one game, in your browser.">De la piste de Nice au bord de Gargantua&#8239;: un seul jeu, dans votre navigateur.</p>
+      <div class="cta">
+        <a class="btn primary" href="../" data-en="Play now">Jouer maintenant</a>
+        <a class="btn ghost" href="decouvrir.html" data-en="Read more (FR)">En savoir plus</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><b style="color: var(--text)">KERR</b> — © SamLePirate · <span data-en="Every image on this page was rendered by the game, in real time.">Toutes les images de cette page ont été rendues par le jeu, en temps réel.</span></div>
+    <div data-en="Earth data: © IGN (BD ORTHO, RGE ALTI, LiDAR HD, BD TOPO — Licence Ouverte 2.0), © ESA WorldCover / Copernicus (CC BY 4.0), © OpenStreetMap contributors, OpenMapTiles, OpenFreeMap, OurAirports (public domain), NASA. An independent project, not affiliated with Lockheed Martin, Airbus, or the makers of Interstellar.">Données terrestres&#8239;: © IGN (BD ORTHO, RGE ALTI, LiDAR HD, BD TOPO — Licence Ouverte 2.0), © ESA WorldCover / Copernicus (CC BY 4.0), © contributeurs OpenStreetMap, OpenMapTiles, OpenFreeMap, OurAirports (domaine public), NASA. Projet indépendant, sans lien avec Lockheed Martin, Airbus ni les auteurs d'Interstellar.</div>
+  </div>
+</footer>
+
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Image">
+  <button class="x" type="button" aria-label="Fermer / Close">✕</button>
+  <button class="prev" type="button" aria-label="Précédente / Previous">‹</button>
+  <img alt="">
+  <button class="next" type="button" aria-label="Suivante / Next">›</button>
+  <p></p>
+</div>
+
+<script>
+(() => {
+  // ---- the language: French, or English for an English browser; kept
+  let lang = "fr";
+  try { lang = localStorage.getItem("kerr.site.lang") || (navigator.language.startsWith("fr") ? "fr" : "en"); } catch { lang = navigator.language.startsWith("fr") ? "fr" : "en"; }
+  const setLang = (l) => {
+    lang = l;
+    document.documentElement.lang = l;
+    for (const el of document.querySelectorAll("[data-en]")) {
+      if (el.dataset.fr === undefined) el.dataset.fr = el.innerHTML;
+      el.innerHTML = l === "en" ? el.dataset.en : el.dataset.fr;
+    }
+    for (const el of document.querySelectorAll("[data-en-alt]")) {
+      if (el.dataset.frAlt === undefined) el.dataset.frAlt = el.alt;
+      el.alt = l === "en" ? el.dataset.enAlt : el.dataset.frAlt;
+    }
+    for (const b of document.querySelectorAll(".lang button")) b.setAttribute("aria-pressed", String(b.dataset.lang === l));
+    try { localStorage.setItem("kerr.site.lang", l); } catch {}
+    showSky();
+  };
+  for (const b of document.querySelectorAll(".lang button")) b.addEventListener("click", () => setLang(b.dataset.lang));
+
+  // ---- the bar solid once scrolled; the panels' slow parallax
+  const bar = document.getElementById("bar");
+  const pars = [...document.querySelectorAll("[data-par]")];
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const onScroll = () => {
+    bar.classList.toggle("solid", scrollY > 40);
+    if (reduce) return;
+    for (const img of pars) {
+      const r = img.parentElement.getBoundingClientRect();
+      const k = (r.top + r.height / 2 - innerHeight / 2) / innerHeight;
+      img.style.transform = `translateY(${(k * -8 - 6).toFixed(2)}%)`;
+    }
+  };
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // ---- reveal on scroll
+  const io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && (e.target.classList.add("in"), io.unobserve(e.target))), { rootMargin: "0px 0px -8% 0px" });
+  document.querySelectorAll(".rv").forEach((el) => io.observe(el));
+
+  // ---- the sky's viewer: a weather, or an hour of the day
+  const HOURS = [["hour-dawn", "Aube", "Dawn"], ["hour-morning", "Matin", "Morning"], ["hour-noon", "Midi", "Noon"], ["hour-dusk", "Crépuscule", "Dusk"], ["hour-night", "Nuit", "Night"]];
+  const vimg = document.getElementById("vimg"), vlabel = document.getElementById("vlabel"), viewer = document.getElementById("viewer");
+  let sky = { img: "wx-fair", fr: "Clair", en: "Fair" };
+  const preload = (n) => { const i = new Image(); i.src = `img/showcase/${n}.webp`; };
+  const showSky = () => {
+    vlabel.textContent = sky[lang];
+    if (vimg.dataset.cur === sky.img) return;
+    const next = document.createElement("img");
+    next.src = `img/showcase/${sky.img}.webp`;
+    next.alt = "";
+    next.style.opacity = "0";
+    viewer.append(next);
+    next.decode().catch(() => {}).then(() => {
+      requestAnimationFrame(() => (next.style.opacity = "1"));
+      setTimeout(() => { for (const o of viewer.querySelectorAll("img")) if (o !== next) o.remove(); }, 950);
+    });
+    vimg.dataset.cur = sky.img;
+  };
+  vimg.dataset.cur = "wx-fair";
+  const wxButtons = [...document.querySelectorAll("#wx button")];
+  for (const b of wxButtons) {
+    preload(b.dataset.img);
+    b.addEventListener("click", () => {
+      wxButtons.forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      sky = { img: b.dataset.img, fr: b.dataset.fr ?? b.textContent, en: b.dataset.en };
+      showSky();
+    });
+  }
+  const hour = document.getElementById("hour");
+  HOURS.forEach((h) => preload(h[0]));
+  hour.addEventListener("input", () => {
+    const h = HOURS[+hour.value];
+    wxButtons.forEach((x) => x.setAttribute("aria-pressed", "false"));
+    sky = { img: h[0], fr: h[1], en: h[2] };
+    showSky();
+  });
+
+  // ---- the lightbox: every tile's picture, ← → between them
+  const tiles = [...document.querySelectorAll(".tile[data-full]")];
+  const lb = document.getElementById("lb"), lbImg = lb.querySelector("img"), lbCap = lb.querySelector("p");
+  let at = 0;
+  const show = (i) => {
+    at = (i + tiles.length) % tiles.length;
+    const t = tiles[at];
+    lbImg.src = t.dataset.full;
+    lbCap.textContent = t.querySelector(".cap")?.firstChild?.textContent ?? "";
+  };
+  tiles.forEach((t, i) => t.addEventListener("click", () => { show(i); lb.classList.add("open"); lb.querySelector(".x").focus(); }));
+  const close = () => lb.classList.remove("open");
+  lb.querySelector(".x").addEventListener("click", close);
+  lb.querySelector(".prev").addEventListener("click", () => show(at - 1));
+  lb.querySelector(".next").addEventListener("click", () => show(at + 1));
+  lb.addEventListener("click", (e) => { if (e.target === lb) close(); });
+  addEventListener("keydown", (e) => {
+    if (!lb.classList.contains("open")) return;
+    if (e.key === "Escape") close();
+    else if (e.key === "ArrowLeft") show(at - 1);
+    else if (e.key === "ArrowRight") show(at + 1);
+  });
+
+  setLang(lang);
+})();
+</script>
+</body>
+</html>

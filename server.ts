@@ -120,6 +120,17 @@ const server = Bun.serve({
       if (!(await file.exists())) return new Response("not found", { status: 404 });
       return new Response(file, { headers: { "content-type": path.endsWith(".ktx2") ? "image/ktx2" : "application/gzip" } });
     },
+    // the game's pages beside it (docs/kerr.html — the presentation —, how to play, discover) and their images, as Pages
+    // publishes them under docs/
+    "/kerr": () => Response.redirect("/docs/kerr.html", 302),
+    "/docs/*": async (req) => {
+      const path = decodeURIComponent(new URL(req.url).pathname.replace(/^\/docs\//, ""));
+      if (!/^((kerr|decouvrir|comment-jouer)\.html|img\/[\w./-]+\.(webp|jpg|png|svg))$/.test(path) || path.includes(".."))
+        return new Response("not found", { status: 404 });
+      const file = Bun.file(`docs/${path}`);
+      if (!(await file.exists())) return new Response("not found", { status: 404 });
+      return new Response(file);
+    },
     // the world's airfields and runways (scripts/build-runways.ts — PLAN-RADAR-AAA RD10): their tiles, index, codes
     "/runways/*": async (req) => {
       const path = new URL(req.url).pathname.replace(/^.*\/runways\//, "");
