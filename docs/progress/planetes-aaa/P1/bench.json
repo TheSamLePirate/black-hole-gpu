@@ -1,0 +1,3430 @@
+{
+ "earth-low": {
+  "gpu": 23.799999952316284,
+  "gpu90": 25.40000009536743,
+  "frame": 24.25,
+  "block": 1,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 4,
+  "trace": 14.813066,
+  "probes": 0.87078,
+  "lut": 0,
+  "post": 0.404659,
+  "passes": [
+   [
+    "display",
+    21.84
+   ],
+   [
+    "ship: shading (MSAA)",
+    21.16
+   ],
+   [
+    "ship: shadow map",
+    20.23
+   ],
+   [
+    "trace",
+    14.81
+   ],
+   [
+    "earth lite (raster)",
+    5.01
+   ],
+   [
+    "ship probe: trace",
+    0.39
+   ],
+   [
+    "temporal",
+    0.31
+   ]
+  ],
+  "gpuFixed": 10.5,
+  "blockFixed": 4,
+  "body": "earth",
+  "view": "low",
+  "date": "2067-07-01 10:29"
+ },
+ "earth-orbit": {
+  "gpu": 13.599999904632568,
+  "gpu90": 14.5,
+  "frame": 16.59999990463257,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 4,
+  "trace": 9.809141,
+  "probes": 0.710821,
+  "lut": 0,
+  "post": 1.322479,
+  "passes": [
+   [
+    "display",
+    12.48
+   ],
+   [
+    "ship: shading (MSAA)",
+    11.71
+   ],
+   [
+    "ship: shadow map",
+    9.94
+   ],
+   [
+    "trace",
+    9.81
+   ],
+   [
+    "temporal",
+    0.73
+   ],
+   [
+    "light meter",
+    0.45
+   ],
+   [
+    "gather",
+    0.3
+   ]
+  ],
+  "gpuFixed": 8.5,
+  "blockFixed": 4,
+  "body": "earth",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "earth-foot": {
+  "gpu": 22.100000143051147,
+  "gpu90": 24.09999990463257,
+  "frame": 16.899999856948853,
+  "block": 6,
+  "scale": 1,
+  "raster": false,
+  "rate": 4,
+  "trace": 14.099993,
+  "probes": 1.0461500000000001,
+  "lut": 0,
+  "post": 1.532018,
+  "passes": [
+   [
+    "display",
+    19.36
+   ],
+   [
+    "ship: shading (MSAA)",
+    18.4
+   ],
+   [
+    "character shadow on traced terrain",
+    17.12
+   ],
+   [
+    "character HDR",
+    16.99
+   ],
+   [
+    "ship: shadow map",
+    16.89
+   ],
+   [
+    "trace",
+    14.1
+   ],
+   [
+    "temporal",
+    0.68
+   ],
+   [
+    "ship probe: trace",
+    0.56
+   ],
+   [
+    "resolve",
+    0.48
+   ],
+   [
+    "sea fft",
+    0.41
+   ],
+   [
+    "gather",
+    0.38
+   ],
+   [
+    "light meter",
+    0.3
+   ]
+  ],
+  "gpuFixed": 35.799999952316284,
+  "blockFixed": 4,
+  "body": "earth",
+  "view": "foot",
+  "date": "2067-07-01 08:30"
+ },
+ "earth-cine": {
+  "gpu": 12.100000143051147,
+  "gpu90": 13.599999904632568,
+  "frame": 16.699999809265137,
+  "block": 16,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 4,
+  "trace": 1.856055,
+  "probes": 0,
+  "lut": 0,
+  "post": 0.597323,
+  "passes": [
+   [
+    "display",
+    10.38
+   ],
+   [
+    "earth lite (raster)",
+    5.48
+   ],
+   [
+    "trace",
+    1.86
+   ],
+   [
+    "temporal",
+    0.48
+   ],
+   [
+    "light meter",
+    0.33
+   ]
+  ],
+  "gpuFixed": 12.299999952316284,
+  "blockFixed": 4,
+  "body": "earth",
+  "view": "cine",
+  "date": "2026-08-12 07:30"
+ },
+ "miller-orbit": {
+  "gpu": 20.40000009536743,
+  "gpu90": 28.5,
+  "frame": 17.59999990463257,
+  "block": 4,
+  "scale": 1,
+  "raster": false,
+  "rate": 4,
+  "trace": 13.999162,
+  "probes": 8.404791,
+  "lut": 0,
+  "post": 2.0131360000000003,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    17.25
+   ],
+   [
+    "ship: shadow map",
+    14.49
+   ],
+   [
+    "trace",
+    14
+   ],
+   [
+    "display",
+    12.31
+   ],
+   [
+    "planet probe",
+    8.13
+   ],
+   [
+    "ship probe: trace",
+    6.94
+   ],
+   [
+    "temporal",
+    0.9
+   ],
+   [
+    "light meter",
+    0.56
+   ],
+   [
+    "gather",
+    0.51
+   ],
+   [
+    "resolve",
+    0.5
+   ],
+   [
+    "ship probe: SH",
+    0.37
+   ]
+  ],
+  "gpuFixed": 19.700000047683716,
+  "blockFixed": 4,
+  "body": "miller",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "miller-low": {
+  "gpu": 15.5,
+  "gpu90": 26,
+  "frame": 16.700000047683716,
+  "block": 8,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 3.074037,
+  "probes": 8.712992000000002,
+  "lut": 0,
+  "post": 8.211875,
+  "passes": [
+   [
+    "display",
+    13.58
+   ],
+   [
+    "ship: shading (MSAA)",
+    10.84
+   ],
+   [
+    "planet probe",
+    10.62
+   ],
+   [
+    "ship: own mask",
+    8.37
+   ],
+   [
+    "ship probe: trace",
+    7.07
+   ],
+   [
+    "ship: shadow map",
+    3.31
+   ],
+   [
+    "trace",
+    3.07
+   ],
+   [
+    "cockpit mask",
+    0.98
+   ],
+   [
+    "body raster visibility",
+    0.97
+   ],
+   [
+    "resolve",
+    0.7
+   ],
+   [
+    "temporal",
+    0.49
+   ],
+   [
+    "gather",
+    0.46
+   ]
+  ],
+  "gpuFixed": 22.200000047683716,
+  "blockFixed": 4,
+  "body": "miller",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "miller-foot": {
+  "gpu": 18.700000047683716,
+  "gpu90": 27.299999952316284,
+  "frame": 16.90000009536743,
+  "block": 6,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 8.509036,
+  "probes": 0,
+  "lut": 0,
+  "post": 2.859622,
+  "passes": [
+   [
+    "display",
+    15.29
+   ],
+   [
+    "character HDR",
+    14.34
+   ],
+   [
+    "character shadow on traced terrain",
+    14.09
+   ],
+   [
+    "trace",
+    8.51
+   ],
+   [
+    "body lite (raster)",
+    1.73
+   ],
+   [
+    "body raster visibility",
+    1.38
+   ],
+   [
+    "aerial perspective",
+    1.36
+   ],
+   [
+    "resolve",
+    1.26
+   ],
+   [
+    "temporal",
+    1.26
+   ],
+   [
+    "light meter",
+    0.32
+   ]
+  ],
+  "gpuFixed": 32.5,
+  "blockFixed": 4,
+  "body": "miller",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "miller-cine": {
+  "gpu": 36.700000047683716,
+  "gpu90": 43.799999952316284,
+  "frame": 34,
+  "block": 6,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 25.49032,
+  "probes": 11.326325,
+  "lut": 0,
+  "post": 1.827014,
+  "passes": [
+   [
+    "display",
+    33.11
+   ],
+   [
+    "ship: shading (MSAA)",
+    32.59
+   ],
+   [
+    "ship: shadow map",
+    28.35
+   ],
+   [
+    "trace",
+    25.49
+   ],
+   [
+    "ship probe: trace",
+    6.87
+   ],
+   [
+    "planet probe",
+    4.71
+   ],
+   [
+    "aerial perspective",
+    1.29
+   ],
+   [
+    "body raster visibility",
+    1.24
+   ],
+   [
+    "body lite (raster)",
+    0.94
+   ],
+   [
+    "temporal",
+    0.79
+   ],
+   [
+    "resolve",
+    0.73
+   ]
+  ],
+  "gpuFixed": 69.29999995231628,
+  "blockFixed": 4,
+  "body": "miller",
+  "view": "cine",
+  "date": "2067-01-01 14:59"
+ },
+ "mann-orbit": {
+  "gpu": 22.700000047683716,
+  "gpu90": 29.699999809265137,
+  "frame": 18,
+  "block": 3,
+  "scale": 1,
+  "raster": false,
+  "rate": 16,
+  "trace": 14.694401,
+  "probes": 6.687816000000001,
+  "lut": 0,
+  "post": 2.013927,
+  "passes": [
+   [
+    "ship: shadow map",
+    20.09
+   ],
+   [
+    "ship: shading (MSAA)",
+    17.33
+   ],
+   [
+    "trace",
+    14.69
+   ],
+   [
+    "display",
+    11.03
+   ],
+   [
+    "planet probe",
+    9.22
+   ],
+   [
+    "ship probe: trace",
+    6.04
+   ],
+   [
+    "temporal",
+    1.05
+   ],
+   [
+    "light meter",
+    0.56
+   ],
+   [
+    "resolve",
+    0.48
+   ],
+   [
+    "gather",
+    0.45
+   ],
+   [
+    "ship probe: SH",
+    0.38
+   ]
+  ],
+  "gpuFixed": 12.200000047683716,
+  "blockFixed": 4,
+  "body": "mann",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "mann-low": {
+  "gpu": 16.5,
+  "gpu90": 22.5,
+  "frame": 16.700000047683716,
+  "block": 4,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 1.258023,
+  "probes": 21.087512,
+  "lut": 0,
+  "post": 8.930573,
+  "passes": [
+   [
+    "display",
+    13.01
+   ],
+   [
+    "ship probe: trace",
+    12.44
+   ],
+   [
+    "ship: shading (MSAA)",
+    11.07
+   ],
+   [
+    "planet probe",
+    7.87
+   ],
+   [
+    "resolve",
+    3.35
+   ],
+   [
+    "ship: shadow map",
+    3.18
+   ],
+   [
+    "gather",
+    2.52
+   ],
+   [
+    "body lite (raster)",
+    1.27
+   ],
+   [
+    "trace",
+    1.26
+   ],
+   [
+    "ship: own mask",
+    1.15
+   ],
+   [
+    "body raster visibility",
+    1.13
+   ],
+   [
+    "temporal",
+    0.77
+   ]
+  ],
+  "gpuFixed": 18.200000047683716,
+  "blockFixed": 4,
+  "body": "mann",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "mann-foot": {
+  "gpu": 21.799999952316284,
+  "gpu90": 30.399999856948853,
+  "frame": 17,
+  "block": 6,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 10.196303,
+  "probes": 8.980614,
+  "lut": 0,
+  "post": 2.892664,
+  "passes": [
+   [
+    "display",
+    17.73
+   ],
+   [
+    "character HDR",
+    16.8
+   ],
+   [
+    "character shadow on traced terrain",
+    16.56
+   ],
+   [
+    "trace",
+    10.2
+   ],
+   [
+    "ship probe: trace",
+    4.7
+   ],
+   [
+    "planet probe",
+    4.14
+   ],
+   [
+    "body lite (raster)",
+    2.33
+   ],
+   [
+    "resolve",
+    1.33
+   ],
+   [
+    "temporal",
+    1.27
+   ],
+   [
+    "body raster visibility",
+    1.17
+   ],
+   [
+    "aerial perspective",
+    1.13
+   ],
+   [
+    "light meter",
+    0.4
+   ]
+  ],
+  "gpuFixed": 39.299999952316284,
+  "blockFixed": 4,
+  "body": "mann",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "mann-cine": {
+  "gpu": 33.80000019073486,
+  "gpu90": 41.5,
+  "frame": 33.40000009536743,
+  "block": 8,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 19.325206,
+  "probes": 12.327145000000002,
+  "lut": 0,
+  "post": 2.0085960000000003,
+  "passes": [
+   [
+    "display",
+    27.56
+   ],
+   [
+    "ship: shading (MSAA)",
+    26.6
+   ],
+   [
+    "ship: shadow map",
+    22.8
+   ],
+   [
+    "trace",
+    19.33
+   ],
+   [
+    "planet probe",
+    6.46
+   ],
+   [
+    "ship probe: trace",
+    5.64
+   ],
+   [
+    "body lite (raster)",
+    1.29
+   ],
+   [
+    "body raster visibility",
+    1.15
+   ],
+   [
+    "aerial perspective",
+    1.12
+   ],
+   [
+    "resolve",
+    0.85
+   ],
+   [
+    "temporal",
+    0.84
+   ],
+   [
+    "light meter",
+    0.46
+   ]
+  ],
+  "gpuFixed": 55,
+  "blockFixed": 4,
+  "body": "mann",
+  "view": "cine",
+  "date": "2067-01-01 14:59"
+ },
+ "edmunds-orbit": {
+  "gpu": 20,
+  "gpu90": 33,
+  "frame": 17.5,
+  "block": 3,
+  "scale": 1,
+  "raster": false,
+  "rate": 16,
+  "trace": 6.68944,
+  "probes": 2.271339,
+  "lut": 0,
+  "post": 5.412127,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    13.03
+   ],
+   [
+    "display",
+    12.42
+   ],
+   [
+    "planet probe",
+    12.01
+   ],
+   [
+    "ship: shadow map",
+    7.02
+   ],
+   [
+    "trace",
+    6.69
+   ],
+   [
+    "temporal",
+    1.38
+   ],
+   [
+    "ship probe: trace",
+    1.38
+   ],
+   [
+    "resolve",
+    0.66
+   ],
+   [
+    "light meter",
+    0.66
+   ],
+   [
+    "gather",
+    0.58
+   ],
+   [
+    "ship probe: SH",
+    0.49
+   ],
+   [
+    "ship probe: GGX",
+    0.32
+   ]
+  ],
+  "gpuFixed": 12.200000047683716,
+  "blockFixed": 4,
+  "body": "edmunds",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "edmunds-low": {
+  "gpu": 24,
+  "gpu90": 30.300000190734863,
+  "frame": 22.59999990463257,
+  "block": 2,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 0.257538,
+  "probes": 8.98832,
+  "lut": 0,
+  "post": 4.016855,
+  "passes": [
+   [
+    "display",
+    18.33
+   ],
+   [
+    "ship: shading (MSAA)",
+    10.7
+   ],
+   [
+    "ship: own mask",
+    8.45
+   ],
+   [
+    "planet probe",
+    8.13
+   ],
+   [
+    "body lite (raster)",
+    5.29
+   ],
+   [
+    "ship: shadow map",
+    5.22
+   ],
+   [
+    "resolve",
+    1.15
+   ],
+   [
+    "body raster visibility",
+    0.99
+   ],
+   [
+    "temporal",
+    0.77
+   ],
+   [
+    "aerial perspective",
+    0.55
+   ],
+   [
+    "light meter",
+    0.49
+   ],
+   [
+    "ship probe: SH",
+    0.37
+   ]
+  ],
+  "gpuFixed": 35.39999985694885,
+  "blockFixed": 4,
+  "body": "edmunds",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "edmunds-foot": {
+  "gpu": 22.800000190734863,
+  "gpu90": 27.5,
+  "frame": 17.100000143051147,
+  "block": 6,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 7.287097,
+  "probes": 7.726839,
+  "lut": 0,
+  "post": 2.8817070000000005,
+  "passes": [
+   [
+    "display",
+    20.29
+   ],
+   [
+    "character HDR",
+    19.4
+   ],
+   [
+    "character shadow on traced terrain",
+    19.09
+   ],
+   [
+    "body lite (raster)",
+    8.08
+   ],
+   [
+    "planet probe",
+    7.33
+   ],
+   [
+    "trace",
+    7.29
+   ],
+   [
+    "resolve",
+    1.34
+   ],
+   [
+    "temporal",
+    1.33
+   ],
+   [
+    "body raster visibility",
+    1.22
+   ],
+   [
+    "aerial perspective",
+    1.17
+   ],
+   [
+    "character solar shadow",
+    0.84
+   ],
+   [
+    "ship probe: trace",
+    0.54
+   ]
+  ],
+  "gpuFixed": 49.09999990463257,
+  "blockFixed": 4,
+  "body": "edmunds",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "edmunds-cine": {
+  "gpu": 29.200000047683716,
+  "gpu90": 34.40000009536743,
+  "frame": 33.299999952316284,
+  "block": 6,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 13.430254,
+  "probes": 11.136913999999999,
+  "lut": 0,
+  "post": 2.099009,
+  "passes": [
+   [
+    "display",
+    22.94
+   ],
+   [
+    "ship: shading (MSAA)",
+    22.93
+   ],
+   [
+    "ship: shadow map",
+    20.16
+   ],
+   [
+    "trace",
+    13.43
+   ],
+   [
+    "planet probe",
+    10
+   ],
+   [
+    "body lite (raster)",
+    6.24
+   ],
+   [
+    "body raster visibility",
+    1.03
+   ],
+   [
+    "aerial perspective",
+    1
+   ],
+   [
+    "temporal",
+    0.98
+   ],
+   [
+    "resolve",
+    0.91
+   ],
+   [
+    "ship probe: trace",
+    0.6
+   ],
+   [
+    "light meter",
+    0.37
+   ]
+  ],
+  "gpuFixed": 60.700000047683716,
+  "blockFixed": 4,
+  "body": "edmunds",
+  "view": "cine",
+  "date": "2067-01-01 14:59"
+ },
+ "moon-orbit": {
+  "gpu": 11.100000143051147,
+  "gpu90": 13.299999952316284,
+  "frame": 16.700000047683716,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 16,
+  "trace": 7.040892,
+  "probes": 0.794279,
+  "lut": 0,
+  "post": 1.562186,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    9.22
+   ],
+   [
+    "display",
+    9.04
+   ],
+   [
+    "trace",
+    7.04
+   ],
+   [
+    "ship: shadow map",
+    6.99
+   ],
+   [
+    "temporal",
+    0.84
+   ],
+   [
+    "light meter",
+    0.56
+   ],
+   [
+    "gather",
+    0.36
+   ],
+   [
+    "resolve",
+    0.36
+   ],
+   [
+    "ship probe: SH",
+    0.3
+   ]
+  ],
+  "gpuFixed": 8.900000095367432,
+  "blockFixed": 4,
+  "body": "moon",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "moon-low": {
+  "gpu": 21.90000009536743,
+  "gpu90": 24.5,
+  "frame": 17.299999952316284,
+  "block": 1,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 14.326489,
+  "probes": 0.924986,
+  "lut": 0,
+  "post": 2.357214,
+  "passes": [
+   [
+    "display",
+    20.72
+   ],
+   [
+    "ship: shading (MSAA)",
+    19.7
+   ],
+   [
+    "ship: shadow map",
+    17.62
+   ],
+   [
+    "trace",
+    14.33
+   ],
+   [
+    "body lite (raster)",
+    2.49
+   ],
+   [
+    "temporal",
+    1.24
+   ],
+   [
+    "resolve",
+    1.09
+   ],
+   [
+    "body raster visibility",
+    0.48
+   ],
+   [
+    "light meter",
+    0.45
+   ],
+   [
+    "ship probe: SH",
+    0.36
+   ]
+  ],
+  "gpuFixed": 12.199999809265137,
+  "blockFixed": 4,
+  "body": "moon",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "moon-foot": {
+  "gpu": 22.09999990463257,
+  "gpu90": 25.600000143051147,
+  "frame": 17.09999990463257,
+  "block": 4,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 8,
+  "trace": 21.651503,
+  "probes": 3.364157,
+  "lut": 0,
+  "post": 0.9970669999999999,
+  "passes": [
+   [
+    "character shadow on traced terrain",
+    22.74
+   ],
+   [
+    "trace",
+    21.65
+   ],
+   [
+    "character solar shadow",
+    10.31
+   ],
+   [
+    "display",
+    9.22
+   ],
+   [
+    "character HDR",
+    8.38
+   ],
+   [
+    "ship probe: trace",
+    2.71
+   ],
+   [
+    "temporal",
+    0.47
+   ],
+   [
+    "light meter",
+    0.41
+   ],
+   [
+    "ship probe: SH",
+    0.38
+   ]
+  ],
+  "gpuFixed": 22.90000009536743,
+  "blockFixed": 4,
+  "body": "moon",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "moon-cine": {
+  "gpu": 27.40000009536743,
+  "gpu90": 29.799999952316284,
+  "frame": 32.700000047683716,
+  "block": 3,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 8,
+  "trace": 15.243101,
+  "probes": 0.9780279999999999,
+  "lut": 0,
+  "post": 2.283925,
+  "passes": [
+   [
+    "display",
+    27.7
+   ],
+   [
+    "ship: shading (MSAA)",
+    26.58
+   ],
+   [
+    "ship: shadow map",
+    20.24
+   ],
+   [
+    "trace",
+    15.24
+   ],
+   [
+    "body lite (raster)",
+    4.38
+   ],
+   [
+    "resolve",
+    1.02
+   ],
+   [
+    "temporal",
+    0.96
+   ],
+   [
+    "body raster visibility",
+    0.5
+   ],
+   [
+    "ship probe: trace",
+    0.39
+   ],
+   [
+    "ship probe: SH",
+    0.32
+   ]
+  ],
+  "gpuFixed": 25,
+  "blockFixed": 4,
+  "body": "moon",
+  "view": "cine",
+  "date": "2067-01-15 02:59"
+ },
+ "mars-orbit": {
+  "gpu": 10.900000095367432,
+  "gpu90": 22.799999952316284,
+  "frame": 16.799999952316284,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 8.179917,
+  "probes": 2.7015849999999997,
+  "lut": 0,
+  "post": 1.4653100000000001,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    10.51
+   ],
+   [
+    "trace",
+    8.18
+   ],
+   [
+    "ship: shadow map",
+    7.87
+   ],
+   [
+    "display",
+    5.96
+   ],
+   [
+    "ship probe: trace",
+    2.19
+   ],
+   [
+    "temporal",
+    0.72
+   ],
+   [
+    "light meter",
+    0.45
+   ],
+   [
+    "gather",
+    0.35
+   ],
+   [
+    "resolve",
+    0.33
+   ]
+  ],
+  "gpuFixed": 8.599999904632568,
+  "blockFixed": 4,
+  "body": "mars",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "mars-low": {
+  "gpu": 24.90000009536743,
+  "gpu90": 28.90000009536743,
+  "frame": 29.59999990463257,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 22.539364,
+  "probes": 3.7575670000000003,
+  "lut": 0,
+  "post": 1.283063,
+  "passes": [
+   [
+    "trace",
+    22.54
+   ],
+   [
+    "display",
+    14.43
+   ],
+   [
+    "ship: shading (MSAA)",
+    13.27
+   ],
+   [
+    "ship: shadow map",
+    11.87
+   ],
+   [
+    "ship probe: trace",
+    3.03
+   ],
+   [
+    "temporal",
+    0.85
+   ],
+   [
+    "light meter",
+    0.56
+   ],
+   [
+    "ship probe: SH",
+    0.36
+   ]
+  ],
+  "gpuFixed": 8,
+  "blockFixed": 4,
+  "body": "mars",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "mars-foot": {
+  "gpu": 16.299999952316284,
+  "gpu90": 19,
+  "frame": 16.600000143051147,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 11.932275,
+  "probes": 0,
+  "lut": 0,
+  "post": 1.972219,
+  "passes": [
+   [
+    "display",
+    17.25
+   ],
+   [
+    "character HDR",
+    15.98
+   ],
+   [
+    "character shadow on traced terrain",
+    15.54
+   ],
+   [
+    "trace",
+    11.93
+   ],
+   [
+    "ship probe: trace",
+    3.44
+   ],
+   [
+    "temporal",
+    1.09
+   ],
+   [
+    "light meter",
+    0.61
+   ],
+   [
+    "resolve",
+    0.43
+   ],
+   [
+    "gather",
+    0.43
+   ],
+   [
+    "ship probe: SH",
+    0.41
+   ]
+  ],
+  "gpuFixed": 9.5,
+  "blockFixed": 4,
+  "body": "mars",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "mars-cine": {
+  "gpu": 16.90000009536743,
+  "gpu90": 21.299999952316284,
+  "frame": 16.59999990463257,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 9.09932,
+  "probes": 3.8726930000000004,
+  "lut": 0,
+  "post": 1.945886,
+  "passes": [
+   [
+    "display",
+    19.48
+   ],
+   [
+    "ship: shading (MSAA)",
+    17.48
+   ],
+   [
+    "ship: shadow map",
+    9.59
+   ],
+   [
+    "trace",
+    9.1
+   ],
+   [
+    "ship probe: trace",
+    3.22
+   ],
+   [
+    "temporal",
+    1.03
+   ],
+   [
+    "gather",
+    0.45
+   ],
+   [
+    "resolve",
+    0.43
+   ],
+   [
+    "ship probe: SH",
+    0.38
+   ],
+   [
+    "bloom down 1",
+    0.34
+   ]
+  ],
+  "gpuFixed": 11.199999809265137,
+  "blockFixed": 4,
+  "body": "mars",
+  "view": "cine",
+  "date": "2067-01-01 14:59"
+ },
+ "mercury-orbit": {
+  "gpu": 10.599999904632568,
+  "gpu90": 13.5,
+  "frame": 16.600000143051147,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 5.718495,
+  "probes": 3.601071,
+  "lut": 0,
+  "post": 1.476937,
+  "passes": [
+   [
+    "display",
+    8.24
+   ],
+   [
+    "ship: shading (MSAA)",
+    7.9
+   ],
+   [
+    "ship: shadow map",
+    5.9
+   ],
+   [
+    "trace",
+    5.72
+   ],
+   [
+    "ship probe: trace",
+    2.7
+   ],
+   [
+    "temporal",
+    0.77
+   ],
+   [
+    "light meter",
+    0.45
+   ],
+   [
+    "gather",
+    0.34
+   ],
+   [
+    "ship probe: SH",
+    0.33
+   ],
+   [
+    "resolve",
+    0.32
+   ]
+  ],
+  "gpuFixed": 8.099999904632568,
+  "blockFixed": 4,
+  "body": "mercury",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "mercury-low": {
+  "gpu": 16.700000047683716,
+  "gpu90": 20.100000143051147,
+  "frame": 16.799999952316284,
+  "block": 1,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 8,
+  "trace": 8.68745,
+  "probes": 3.468196,
+  "lut": 0,
+  "post": 2.548212,
+  "passes": [
+   [
+    "display",
+    17.31
+   ],
+   [
+    "ship: shading (MSAA)",
+    16.53
+   ],
+   [
+    "ship: shadow map",
+    13.53
+   ],
+   [
+    "trace",
+    8.69
+   ],
+   [
+    "body lite (raster)",
+    4.25
+   ],
+   [
+    "ship probe: trace",
+    2.84
+   ],
+   [
+    "resolve",
+    1.31
+   ],
+   [
+    "temporal",
+    1.15
+   ],
+   [
+    "light meter",
+    0.55
+   ],
+   [
+    "body raster visibility",
+    0.45
+   ],
+   [
+    "ship probe: SH",
+    0.37
+   ]
+  ],
+  "gpuFixed": 12,
+  "blockFixed": 4,
+  "body": "mercury",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "mercury-foot": {
+  "gpu": 27.100000143051147,
+  "gpu90": 32.19999980926514,
+  "frame": 32.89999985694885,
+  "block": 4,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 8,
+  "trace": 7.259597,
+  "probes": 3.782276,
+  "lut": 0,
+  "post": 4.683305,
+  "passes": [
+   [
+    "display",
+    26.53
+   ],
+   [
+    "character HDR",
+    25.57
+   ],
+   [
+    "character shadow on traced terrain",
+    25.31
+   ],
+   [
+    "body lite (raster)",
+    12.09
+   ],
+   [
+    "trace",
+    7.26
+   ],
+   [
+    "ship probe: trace",
+    3.15
+   ],
+   [
+    "resolve",
+    1.74
+   ],
+   [
+    "temporal",
+    1.39
+   ],
+   [
+    "body raster visibility",
+    0.89
+   ],
+   [
+    "character solar shadow",
+    0.78
+   ],
+   [
+    "ship probe: SH",
+    0.38
+   ]
+  ],
+  "gpuFixed": 37.299999952316284,
+  "blockFixed": 4,
+  "body": "mercury",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "mercury-cine": {
+  "gpu": 23.700000047683716,
+  "gpu90": 26.700000047683716,
+  "frame": 17.399999856948853,
+  "block": 8,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 8,
+  "trace": 3.21266,
+  "probes": 3.393115,
+  "lut": 0,
+  "post": 3.072078,
+  "passes": [
+   [
+    "display",
+    18.75
+   ],
+   [
+    "ship: shading (MSAA)",
+    17.55
+   ],
+   [
+    "ship: shadow map",
+    12.34
+   ],
+   [
+    "body lite (raster)",
+    8.69
+   ],
+   [
+    "trace",
+    3.21
+   ],
+   [
+    "ship probe: trace",
+    2.76
+   ],
+   [
+    "resolve",
+    1.36
+   ],
+   [
+    "temporal",
+    1.15
+   ],
+   [
+    "body raster visibility",
+    0.81
+   ],
+   [
+    "light meter",
+    0.46
+   ],
+   [
+    "gather",
+    0.38
+   ],
+   [
+    "ship probe: SH",
+    0.37
+   ]
+  ],
+  "gpuFixed": 31.5,
+  "blockFixed": 4,
+  "body": "mercury",
+  "view": "cine",
+  "date": "2067-01-01 14:59"
+ },
+ "venus-orbit": {
+  "gpu": 14.199999809265137,
+  "gpu90": 19.299999952316284,
+  "frame": 16.699999809265137,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 10.684254,
+  "probes": 3.7823610000000003,
+  "lut": 0,
+  "post": 1.736266,
+  "passes": [
+   [
+    "display",
+    16.09
+   ],
+   [
+    "ship: shading (MSAA)",
+    15.66
+   ],
+   [
+    "ship: shadow map",
+    13.36
+   ],
+   [
+    "trace",
+    10.68
+   ],
+   [
+    "ship probe: trace",
+    2.79
+   ],
+   [
+    "temporal",
+    0.85
+   ],
+   [
+    "light meter",
+    0.56
+   ],
+   [
+    "ship probe: SH",
+    0.43
+   ],
+   [
+    "gather",
+    0.42
+   ],
+   [
+    "resolve",
+    0.38
+   ]
+  ],
+  "gpuFixed": 10.200000047683716,
+  "blockFixed": 4,
+  "body": "venus",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "venus-low": {
+  "gpu": 12.600000143051147,
+  "gpu90": 14.400000095367432,
+  "frame": 16.59999990463257,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 9.345941,
+  "probes": 0,
+  "lut": 0,
+  "post": 1.8597639999999998,
+  "passes": [
+   [
+    "display",
+    15.27
+   ],
+   [
+    "ship: shading (MSAA)",
+    13.72
+   ],
+   [
+    "ship: shadow map",
+    9.9
+   ],
+   [
+    "trace",
+    9.35
+   ],
+   [
+    "temporal",
+    0.99
+   ],
+   [
+    "light meter",
+    0.58
+   ],
+   [
+    "gather",
+    0.44
+   ],
+   [
+    "resolve",
+    0.43
+   ]
+  ],
+  "gpuFixed": 8.299999952316284,
+  "blockFixed": 4,
+  "body": "venus",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "venus-cine": {
+  "gpu": 17.5,
+  "gpu90": 22.5,
+  "frame": 17,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 13.302297,
+  "probes": 3.858275,
+  "lut": 0,
+  "post": 2.5357119999999997,
+  "passes": [
+   [
+    "display",
+    15.87
+   ],
+   [
+    "ship: shading (MSAA)",
+    15.17
+   ],
+   [
+    "trace",
+    13.3
+   ],
+   [
+    "ship: shadow map",
+    11.04
+   ],
+   [
+    "ship probe: trace",
+    3.48
+   ],
+   [
+    "temporal",
+    1.35
+   ],
+   [
+    "light meter",
+    0.75
+   ],
+   [
+    "resolve",
+    0.53
+   ],
+   [
+    "gather",
+    0.52
+   ],
+   [
+    "ship probe: SH",
+    0.49
+   ],
+   [
+    "ship probe: GGX",
+    0.35
+   ]
+  ],
+  "gpuFixed": 8.799999952316284,
+  "blockFixed": 4,
+  "body": "venus",
+  "view": "cine",
+  "date": "2067-01-01 14:59"
+ },
+ "io-orbit": {
+  "gpu": 16.299999952316284,
+  "gpu90": 18.5,
+  "frame": 16.600000143051147,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 8.373706,
+  "probes": 1.0603159999999998,
+  "lut": 0,
+  "post": 2.1395910000000002,
+  "passes": [
+   [
+    "display",
+    12.13
+   ],
+   [
+    "ship: shading (MSAA)",
+    11.27
+   ],
+   [
+    "ship: shadow map",
+    9.32
+   ],
+   [
+    "trace",
+    8.37
+   ],
+   [
+    "temporal",
+    1.04
+   ],
+   [
+    "light meter",
+    0.76
+   ],
+   [
+    "resolve",
+    0.55
+   ],
+   [
+    "gather",
+    0.51
+   ],
+   [
+    "ship probe: SH",
+    0.38
+   ],
+   [
+    "ship probe: trace",
+    0.36
+   ]
+  ],
+  "gpuFixed": 8.400000095367432,
+  "blockFixed": 4,
+  "body": "io",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "io-low": {
+  "gpu": 22.799999952316284,
+  "gpu90": 33.39999985694885,
+  "frame": 18.09999990463257,
+  "block": 2,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 8,
+  "trace": 3.710277,
+  "probes": 1.079732,
+  "lut": 0,
+  "post": 3.1181609999999997,
+  "passes": [
+   [
+    "display",
+    12.46
+   ],
+   [
+    "ship: shading (MSAA)",
+    11.73
+   ],
+   [
+    "ship: shadow map",
+    8.22
+   ],
+   [
+    "body lite (raster)",
+    4.06
+   ],
+   [
+    "trace",
+    3.71
+   ],
+   [
+    "resolve",
+    1.53
+   ],
+   [
+    "temporal",
+    1.27
+   ],
+   [
+    "light meter",
+    0.54
+   ],
+   [
+    "body raster visibility",
+    0.49
+   ],
+   [
+    "ship probe: SH",
+    0.36
+   ],
+   [
+    "ship probe: trace",
+    0.36
+   ]
+  ],
+  "gpuFixed": 12.799999952316284,
+  "blockFixed": 4,
+  "body": "io",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "io-foot": {
+  "gpu": 20.09999990463257,
+  "gpu90": 22.90000009536743,
+  "frame": 16.799999952316284,
+  "block": 8,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 8,
+  "trace": 3.375199,
+  "probes": 1.196899,
+  "lut": 0,
+  "post": 3.741192,
+  "passes": [
+   [
+    "display",
+    20.54
+   ],
+   [
+    "character HDR",
+    19.61
+   ],
+   [
+    "character shadow on traced terrain",
+    19.35
+   ],
+   [
+    "body lite (raster)",
+    10.23
+   ],
+   [
+    "trace",
+    3.38
+   ],
+   [
+    "resolve",
+    1.74
+   ],
+   [
+    "temporal",
+    1.4
+   ],
+   [
+    "body raster visibility",
+    0.85
+   ],
+   [
+    "ship probe: trace",
+    0.59
+   ],
+   [
+    "light meter",
+    0.47
+   ],
+   [
+    "gather",
+    0.38
+   ],
+   [
+    "ship probe: SH",
+    0.33
+   ]
+  ],
+  "gpuFixed": 25.300000190734863,
+  "blockFixed": 4,
+  "body": "io",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "io-cine": {
+  "gpu": 19.799999952316284,
+  "gpu90": 21.899999856948853,
+  "frame": 16.90000009536743,
+  "block": 2,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 8,
+  "trace": 18.556217,
+  "probes": 0.338536,
+  "lut": 0,
+  "post": 1.131108,
+  "passes": [
+   [
+    "display",
+    21.92
+   ],
+   [
+    "ship: shading (MSAA)",
+    20.7
+   ],
+   [
+    "ship: shadow map",
+    18.93
+   ],
+   [
+    "trace",
+    18.56
+   ],
+   [
+    "body raster visibility",
+    0.84
+   ],
+   [
+    "temporal",
+    0.62
+   ],
+   [
+    "light meter",
+    0.55
+   ],
+   [
+    "ship probe: SH",
+    0.37
+   ],
+   [
+    "ship probe: trace",
+    0.34
+   ]
+  ],
+  "gpuFixed": 9.299999952316284,
+  "blockFixed": 4,
+  "body": "io",
+  "view": "cine",
+  "date": "2067-01-02 13:18"
+ },
+ "europa-orbit": {
+  "gpu": 17.299999952316284,
+  "gpu90": 34.5,
+  "frame": 17.100000143051147,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 4,
+  "trace": 7.950129,
+  "probes": 1.36302,
+  "lut": 0,
+  "post": 2.0926780000000003,
+  "passes": [
+   [
+    "display",
+    11.17
+   ],
+   [
+    "ship: shading (MSAA)",
+    10.7
+   ],
+   [
+    "ship: shadow map",
+    8.13
+   ],
+   [
+    "trace",
+    7.95
+   ],
+   [
+    "temporal",
+    0.99
+   ],
+   [
+    "light meter",
+    0.66
+   ],
+   [
+    "gather",
+    0.55
+   ],
+   [
+    "ship probe: trace",
+    0.48
+   ],
+   [
+    "ship probe: SH",
+    0.47
+   ],
+   [
+    "resolve",
+    0.44
+   ],
+   [
+    "ship probe: GGX",
+    0.35
+   ]
+  ],
+  "gpuFixed": 8,
+  "blockFixed": 4,
+  "body": "europa",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "europa-low": {
+  "gpu": 23.40000009536743,
+  "gpu90": 27,
+  "frame": 25.299999952316284,
+  "block": 1,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 4,
+  "trace": 12.14169,
+  "probes": 0.945526,
+  "lut": 0,
+  "post": 1.0658590000000001,
+  "passes": [
+   [
+    "display",
+    22.32
+   ],
+   [
+    "ship: shading (MSAA)",
+    21.25
+   ],
+   [
+    "ship: shadow map",
+    19.85
+   ],
+   [
+    "trace",
+    12.14
+   ],
+   [
+    "body lite (raster)",
+    7.04
+   ],
+   [
+    "resolve",
+    0.57
+   ],
+   [
+    "temporal",
+    0.46
+   ],
+   [
+    "light meter",
+    0.46
+   ],
+   [
+    "body raster visibility",
+    0.42
+   ],
+   [
+    "ship probe: trace",
+    0.37
+   ],
+   [
+    "ship probe: SH",
+    0.32
+   ]
+  ],
+  "gpuFixed": 11.099999904632568,
+  "blockFixed": 4,
+  "body": "europa",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "europa-foot": {
+  "gpu": 29.40000009536743,
+  "gpu90": 33.299999952316284,
+  "frame": 33.10000014305115,
+  "block": 3,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 4,
+  "trace": 7.959213,
+  "probes": 1.064066,
+  "lut": 0,
+  "post": 1.338856,
+  "passes": [
+   [
+    "display",
+    26.01
+   ],
+   [
+    "character HDR",
+    25.06
+   ],
+   [
+    "character shadow on traced terrain",
+    24.84
+   ],
+   [
+    "body lite (raster)",
+    14.74
+   ],
+   [
+    "trace",
+    7.96
+   ],
+   [
+    "body raster visibility",
+    0.71
+   ],
+   [
+    "resolve",
+    0.7
+   ],
+   [
+    "character solar shadow",
+    0.69
+   ],
+   [
+    "ship probe: trace",
+    0.59
+   ],
+   [
+    "temporal",
+    0.47
+   ],
+   [
+    "light meter",
+    0.4
+   ],
+   [
+    "ship probe: SH",
+    0.32
+   ]
+  ],
+  "gpuFixed": 23.899999856948853,
+  "blockFixed": 4,
+  "body": "europa",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "europa-cine": {
+  "gpu": 29.299999952316284,
+  "gpu90": 32.299999952316284,
+  "frame": 33,
+  "block": 6,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 16,
+  "trace": 0.069749,
+  "probes": 3.514072,
+  "lut": 0,
+  "post": 4.278894,
+  "passes": [
+   [
+    "display",
+    30.32
+   ],
+   [
+    "ship: shading (MSAA)",
+    29.02
+   ],
+   [
+    "ship: shadow map",
+    12.46
+   ],
+   [
+    "body lite (raster)",
+    11.91
+   ],
+   [
+    "ship probe: trace",
+    2.8
+   ],
+   [
+    "resolve",
+    2.23
+   ],
+   [
+    "temporal",
+    1.68
+   ],
+   [
+    "body raster visibility",
+    0.81
+   ],
+   [
+    "ship probe: SH",
+    0.41
+   ],
+   [
+    "gather",
+    0.33
+   ]
+  ],
+  "gpuFixed": 37.299999952316284,
+  "blockFixed": 4,
+  "body": "europa",
+  "view": "cine",
+  "date": "2067-01-02 03:57"
+ },
+ "titan-orbit": {
+  "gpu": 19.699999809265137,
+  "gpu90": 26.09999990463257,
+  "frame": 17.600000143051147,
+  "block": 3,
+  "scale": 1,
+  "raster": false,
+  "rate": 16,
+  "trace": 15.319307,
+  "probes": 7.294555999999999,
+  "lut": 0,
+  "post": 1.635183,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    18.35
+   ],
+   [
+    "display",
+    16.73
+   ],
+   [
+    "ship: shadow map",
+    15.61
+   ],
+   [
+    "trace",
+    15.32
+   ],
+   [
+    "ship probe: trace",
+    6.66
+   ],
+   [
+    "temporal",
+    0.81
+   ],
+   [
+    "light meter",
+    0.46
+   ],
+   [
+    "resolve",
+    0.42
+   ],
+   [
+    "gather",
+    0.38
+   ],
+   [
+    "ship probe: SH",
+    0.37
+   ]
+  ],
+  "gpuFixed": 14.299999952316284,
+  "blockFixed": 4,
+  "body": "titan",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "titan-low": {
+  "gpu": 25.600000143051147,
+  "gpu90": 34.5,
+  "frame": 32.59999990463257,
+  "block": 3,
+  "scale": 1,
+  "raster": false,
+  "rate": 16,
+  "trace": 21.613045,
+  "probes": 8.552829000000001,
+  "lut": 0,
+  "post": 1.7086,
+  "passes": [
+   [
+    "display",
+    25.58
+   ],
+   [
+    "ship: shading (MSAA)",
+    24.27
+   ],
+   [
+    "trace",
+    21.61
+   ],
+   [
+    "ship: shadow map",
+    18.37
+   ],
+   [
+    "ship probe: trace",
+    8.24
+   ],
+   [
+    "temporal",
+    0.85
+   ],
+   [
+    "light meter",
+    0.58
+   ],
+   [
+    "resolve",
+    0.42
+   ],
+   [
+    "gather",
+    0.4
+   ],
+   [
+    "ship probe: SH",
+    0.37
+   ]
+  ],
+  "gpuFixed": 15.799999952316284,
+  "blockFixed": 4,
+  "body": "titan",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "titan-foot": {
+  "gpu": 15.700000047683716,
+  "gpu90": 22.799999952316284,
+  "frame": 16.700000047683716,
+  "block": 3,
+  "scale": 1,
+  "raster": false,
+  "rate": 16,
+  "trace": 12.169815,
+  "probes": 0,
+  "lut": 0,
+  "post": 1.618519,
+  "passes": [
+   [
+    "display",
+    16.3
+   ],
+   [
+    "character HDR",
+    15.26
+   ],
+   [
+    "character shadow on traced terrain",
+    15.01
+   ],
+   [
+    "trace",
+    12.17
+   ],
+   [
+    "ship probe: trace",
+    6.12
+   ],
+   [
+    "temporal",
+    0.83
+   ],
+   [
+    "light meter",
+    0.51
+   ],
+   [
+    "resolve",
+    0.42
+   ],
+   [
+    "gather",
+    0.38
+   ],
+   [
+    "ship probe: SH",
+    0.37
+   ]
+  ],
+  "gpuFixed": 11.200000047683716,
+  "blockFixed": 4,
+  "body": "titan",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "titan-cine": {
+  "gpu": 26.100000143051147,
+  "gpu90": 33.89999985694885,
+  "frame": 32.89999985694885,
+  "block": 3,
+  "scale": 1,
+  "raster": false,
+  "rate": 16,
+  "trace": 19.887614,
+  "probes": 6.135987999999999,
+  "lut": 0,
+  "post": 1.472937,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    22.59
+   ],
+   [
+    "ship: shadow map",
+    19.97
+   ],
+   [
+    "trace",
+    19.89
+   ],
+   [
+    "display",
+    19.7
+   ],
+   [
+    "ship probe: trace",
+    5.52
+   ],
+   [
+    "temporal",
+    0.76
+   ],
+   [
+    "light meter",
+    0.46
+   ],
+   [
+    "resolve",
+    0.34
+   ],
+   [
+    "gather",
+    0.33
+   ]
+  ],
+  "gpuFixed": 17,
+  "blockFixed": 4,
+  "body": "titan",
+  "view": "cine",
+  "date": "2067-01-01 14:59"
+ },
+ "ceres-orbit": {
+  "gpu": 9.700000047683716,
+  "gpu90": 25.899999856948853,
+  "frame": 17.09999990463257,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 16,
+  "trace": 9.440148,
+  "probes": 2.803831,
+  "lut": 0,
+  "post": 1.2921470000000002,
+  "passes": [
+   [
+    "display",
+    15.45
+   ],
+   [
+    "ship: shading (MSAA)",
+    14.33
+   ],
+   [
+    "trace",
+    9.44
+   ],
+   [
+    "ship: shadow map",
+    8.9
+   ],
+   [
+    "ship probe: trace",
+    2.32
+   ],
+   [
+    "temporal",
+    0.85
+   ],
+   [
+    "light meter",
+    0.56
+   ],
+   [
+    "resolve",
+    0.39
+   ]
+  ],
+  "gpuFixed": 8.5,
+  "blockFixed": 4,
+  "body": "ceres",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "ceres-low": {
+  "gpu": 17.299999952316284,
+  "gpu90": 25.59999990463257,
+  "frame": 17.09999990463257,
+  "block": 1,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 8,
+  "trace": 12.156565,
+  "probes": 1.033401,
+  "lut": 0,
+  "post": 2.163426,
+  "passes": [
+   [
+    "display",
+    19.31
+   ],
+   [
+    "ship: shading (MSAA)",
+    18.43
+   ],
+   [
+    "ship: shadow map",
+    15.14
+   ],
+   [
+    "trace",
+    12.16
+   ],
+   [
+    "body lite (raster)",
+    3.38
+   ],
+   [
+    "resolve",
+    1.1
+   ],
+   [
+    "temporal",
+    1.04
+   ],
+   [
+    "light meter",
+    0.46
+   ],
+   [
+    "body raster visibility",
+    0.39
+   ],
+   [
+    "ship probe: SH",
+    0.33
+   ],
+   [
+    "ship probe: trace",
+    0.31
+   ]
+  ],
+  "gpuFixed": 10.100000143051147,
+  "blockFixed": 4,
+  "body": "ceres",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "ceres-foot": {
+  "gpu": 22.59999990463257,
+  "gpu90": 25.5,
+  "frame": 17.40000009536743,
+  "block": 3,
+  "scale": 0.75,
+  "raster": true,
+  "rate": 8,
+  "trace": 9.01257,
+  "probes": 2.975998,
+  "lut": 0,
+  "post": 2.6028360000000004,
+  "passes": [
+   [
+    "display",
+    20.97
+   ],
+   [
+    "character HDR",
+    20.22
+   ],
+   [
+    "character shadow on traced terrain",
+    20
+   ],
+   [
+    "trace",
+    9.01
+   ],
+   [
+    "body lite (raster)",
+    7.7
+   ],
+   [
+    "ship probe: trace",
+    2.34
+   ],
+   [
+    "resolve",
+    1.38
+   ],
+   [
+    "temporal",
+    1.13
+   ],
+   [
+    "body raster visibility",
+    0.68
+   ],
+   [
+    "character solar shadow",
+    0.61
+   ],
+   [
+    "ship probe: SH",
+    0.37
+   ],
+   [
+    "light meter",
+    0.33
+   ]
+  ],
+  "gpuFixed": 22.799999952316284,
+  "blockFixed": 4,
+  "body": "ceres",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "ceres-cine": {
+  "gpu": 27.200000047683716,
+  "gpu90": 33,
+  "frame": 32.700000047683716,
+  "block": 4,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 16.10242,
+  "probes": 2.111258,
+  "lut": 0,
+  "post": 2.042219,
+  "passes": [
+   [
+    "display",
+    26.27
+   ],
+   [
+    "ship: shading (MSAA)",
+    25.45
+   ],
+   [
+    "trace",
+    16.1
+   ],
+   [
+    "ship: shadow map",
+    15.97
+   ],
+   [
+    "ship probe: trace",
+    1.16
+   ],
+   [
+    "bloom down 1",
+    1.12
+   ],
+   [
+    "temporal",
+    0.95
+   ],
+   [
+    "resolve",
+    0.57
+   ],
+   [
+    "gather",
+    0.51
+   ],
+   [
+    "ship probe: SH",
+    0.41
+   ]
+  ],
+  "gpuFixed": 27.90000009536743,
+  "blockFixed": 4,
+  "body": "ceres",
+  "view": "cine",
+  "date": "2067-01-01 15:00"
+ },
+ "pluto-orbit": {
+  "gpu": 18.09999990463257,
+  "gpu90": 21.700000047683716,
+  "frame": 16.700000047683716,
+  "block": 3,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 12.09294,
+  "probes": 1.389813,
+  "lut": 0,
+  "post": 5.503584,
+  "passes": [
+   [
+    "display",
+    20.78
+   ],
+   [
+    "ship: shading (MSAA)",
+    19.07
+   ],
+   [
+    "trace",
+    12.09
+   ],
+   [
+    "ship: shadow map",
+    11.78
+   ],
+   [
+    "temporal",
+    1.28
+   ],
+   [
+    "light meter",
+    0.87
+   ],
+   [
+    "gather",
+    0.78
+   ],
+   [
+    "resolve",
+    0.66
+   ],
+   [
+    "ship probe: trace",
+    0.5
+   ],
+   [
+    "ship probe: SH",
+    0.46
+   ],
+   [
+    "ship probe: GGX",
+    0.35
+   ]
+  ],
+  "gpuFixed": 10.599999904632568,
+  "blockFixed": 4,
+  "body": "pluto",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "pluto-low": {
+  "gpu": 16.799999952316284,
+  "gpu90": 21.09999990463257,
+  "frame": 16.700000047683716,
+  "block": 3,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 9.66906,
+  "probes": 1.4234779999999998,
+  "lut": 0,
+  "post": 3.821027,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    15.76
+   ],
+   [
+    "display",
+    14.92
+   ],
+   [
+    "ship: shadow map",
+    10.07
+   ],
+   [
+    "trace",
+    9.67
+   ],
+   [
+    "temporal",
+    1.2
+   ],
+   [
+    "gather",
+    0.74
+   ],
+   [
+    "light meter",
+    0.71
+   ],
+   [
+    "resolve",
+    0.66
+   ],
+   [
+    "ship probe: trace",
+    0.58
+   ],
+   [
+    "ship probe: SH",
+    0.4
+   ]
+  ],
+  "gpuFixed": 10.399999856948853,
+  "blockFixed": 4,
+  "body": "pluto",
+  "view": "low",
+  "date": "2067-01-01 14:59"
+ },
+ "pluto-foot": {
+  "gpu": 21.700000047683716,
+  "gpu90": 30.200000047683716,
+  "frame": 17.200000047683716,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 16.028297,
+  "probes": 1.242272,
+  "lut": 0,
+  "post": 3.4651119999999995,
+  "passes": [
+   [
+    "character shadow on traced terrain",
+    19.29
+   ],
+   [
+    "display",
+    18.22
+   ],
+   [
+    "character HDR",
+    17.2
+   ],
+   [
+    "trace",
+    16.03
+   ],
+   [
+    "character solar shadow",
+    2.99
+   ],
+   [
+    "temporal",
+    1.14
+   ],
+   [
+    "light meter",
+    0.6
+   ],
+   [
+    "ship probe: trace",
+    0.46
+   ],
+   [
+    "resolve",
+    0.45
+   ],
+   [
+    "gather",
+    0.43
+   ],
+   [
+    "ship probe: SH",
+    0.36
+   ]
+  ],
+  "gpuFixed": 10.600000143051147,
+  "blockFixed": 4,
+  "body": "pluto",
+  "view": "foot",
+  "date": "2067-01-01 15:00"
+ },
+ "pluto-cine": {
+  "gpu": 14,
+  "gpu90": 16.799999952316284,
+  "frame": 16.600000143051147,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 9.184485,
+  "probes": 0.8573199999999999,
+  "lut": 0,
+  "post": 1.6206,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    11.4
+   ],
+   [
+    "ship: shadow map",
+    9.28
+   ],
+   [
+    "trace",
+    9.18
+   ],
+   [
+    "display",
+    5.39
+   ],
+   [
+    "temporal",
+    0.9
+   ],
+   [
+    "light meter",
+    0.56
+   ],
+   [
+    "gather",
+    0.37
+   ],
+   [
+    "resolve",
+    0.35
+   ],
+   [
+    "ship probe: trace",
+    0.3
+   ],
+   [
+    "ship probe: SH",
+    0.3
+   ]
+  ],
+  "gpuFixed": 8.5,
+  "blockFixed": 4,
+  "body": "pluto",
+  "view": "cine",
+  "date": "2067-01-01 14:59"
+ },
+ "jupiter-orbit": {
+  "gpu": 17,
+  "gpu90": 21.5,
+  "frame": 16.700000047683716,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 15.095353,
+  "probes": 4.784179,
+  "lut": 0,
+  "post": 2.294215,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    20.48
+   ],
+   [
+    "display",
+    20.48
+   ],
+   [
+    "trace",
+    15.1
+   ],
+   [
+    "ship: shadow map",
+    14.91
+   ],
+   [
+    "ship probe: trace",
+    3.74
+   ],
+   [
+    "temporal",
+    1.08
+   ],
+   [
+    "light meter",
+    0.66
+   ],
+   [
+    "ship probe: SH",
+    0.49
+   ],
+   [
+    "gather",
+    0.48
+   ],
+   [
+    "resolve",
+    0.43
+   ],
+   [
+    "ship probe: GGX",
+    0.35
+   ]
+  ],
+  "gpuFixed": 9.599999904632568,
+  "blockFixed": 4,
+  "body": "jupiter",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "saturn-orbit": {
+  "gpu": 24,
+  "gpu90": 28.299999952316284,
+  "frame": 24.799999952316284,
+  "block": 8,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 8.548827,
+  "probes": 2.222507,
+  "lut": 0,
+  "post": 2.453421,
+  "passes": [
+   [
+    "display",
+    20.84
+   ],
+   [
+    "ship: shading (MSAA)",
+    18.08
+   ],
+   [
+    "trace",
+    8.55
+   ],
+   [
+    "ship: shadow map",
+    7.98
+   ],
+   [
+    "ship probe: trace",
+    1.51
+   ],
+   [
+    "temporal",
+    0.94
+   ],
+   [
+    "resolve",
+    0.86
+   ],
+   [
+    "gather",
+    0.62
+   ],
+   [
+    "bloom down 1",
+    0.43
+   ],
+   [
+    "ship probe: SH",
+    0.41
+   ]
+  ],
+  "gpuFixed": 32.700000047683716,
+  "blockFixed": 4,
+  "body": "saturn",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "saturn-cine": {
+  "gpu": 15.100000143051147,
+  "gpu90": 24.299999952316284,
+  "frame": 16.800000190734863,
+  "block": 6,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 7.782214,
+  "probes": 9.054777,
+  "lut": 0,
+  "post": 2.497336,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    12.41
+   ],
+   [
+    "display",
+    12.15
+   ],
+   [
+    "ship: shadow map",
+    8.51
+   ],
+   [
+    "ship probe: trace",
+    8.42
+   ],
+   [
+    "trace",
+    7.78
+   ],
+   [
+    "temporal",
+    1.06
+   ],
+   [
+    "resolve",
+    0.88
+   ],
+   [
+    "gather",
+    0.65
+   ],
+   [
+    "light meter",
+    0.63
+   ],
+   [
+    "ship probe: SH",
+    0.37
+   ]
+  ],
+  "gpuFixed": 34.700000047683716,
+  "blockFixed": 4,
+  "body": "saturn",
+  "view": "cine",
+  "date": "2067-01-01 14:59"
+ },
+ "uranus-orbit": {
+  "gpu": 18.600000143051147,
+  "gpu90": 25,
+  "frame": 16.800000190734863,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 14.28349,
+  "probes": 5.659081,
+  "lut": 0,
+  "post": 2.421841,
+  "passes": [
+   [
+    "display",
+    17.51
+   ],
+   [
+    "ship: shading (MSAA)",
+    17.33
+   ],
+   [
+    "trace",
+    14.28
+   ],
+   [
+    "ship: shadow map",
+    14.12
+   ],
+   [
+    "ship probe: trace",
+    4.76
+   ],
+   [
+    "temporal",
+    1.07
+   ],
+   [
+    "light meter",
+    0.67
+   ],
+   [
+    "gather",
+    0.57
+   ],
+   [
+    "resolve",
+    0.44
+   ],
+   [
+    "ship probe: SH",
+    0.42
+   ]
+  ],
+  "gpuFixed": 9.299999952316284,
+  "blockFixed": 4,
+  "body": "uranus",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ },
+ "neptune-orbit": {
+  "gpu": 21.200000047683716,
+  "gpu90": 26.90000009536743,
+  "frame": 25.200000047683716,
+  "block": 2,
+  "scale": 1,
+  "raster": false,
+  "rate": 8,
+  "trace": 12.190814,
+  "probes": 5.3147079999999995,
+  "lut": 0,
+  "post": 2.3298389999999998,
+  "passes": [
+   [
+    "ship: shading (MSAA)",
+    15.91
+   ],
+   [
+    "display",
+    15.8
+   ],
+   [
+    "trace",
+    12.19
+   ],
+   [
+    "ship: shadow map",
+    11.53
+   ],
+   [
+    "ship probe: trace",
+    4.66
+   ],
+   [
+    "temporal",
+    1.06
+   ],
+   [
+    "light meter",
+    0.66
+   ],
+   [
+    "gather",
+    0.46
+   ],
+   [
+    "resolve",
+    0.42
+   ],
+   [
+    "ship probe: SH",
+    0.39
+   ]
+  ],
+  "gpuFixed": 11.100000143051147,
+  "blockFixed": 4,
+  "body": "neptune",
+  "view": "orbit",
+  "date": "2067-01-01 14:59"
+ }
+}

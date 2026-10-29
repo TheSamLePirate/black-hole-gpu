@@ -135,6 +135,8 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | worlds.e2e.test.ts | Gargantua's six worlds' scenes each flown 5 s at fixed steps; the Ranger is not broken at load; no sea crash. | game:artemis, then six world scenes (Miller, Mann, Edmunds) | 1 | fixed steps |
 | multiexposure.e2e.test.ts | Photo mode's analemma and the eclipse multiple exposure, by real clicks; composite shown, game restored. | game:artemis, 1440×900, lang fr | ? | `tiles: true` (Earth tiles streamed) |
 | planets-baseline.e2e.test.ts | PLAN-PLANETES-AAA P0: 17 worlds × 4 views (orbit, 3 km low, on foot, showcase) — GPU time as the game sets it and at a fixed quality (blocks 4 × 4, raster 1 in 2 × 2), the Earth's figures the budget; one shot per view. `ONLY=`, `VIEWS=`. | Earth: the Blue Marble, then every world's scenes, 1600×1000 | ~1500 here | `tiles: true`; this Mac (docs/progress/planetes-aaa/P0.md) |
+| body-raster.e2e.test.ts | PLAN-PLANETES-AAA P1: Miller, Mann, Edmunds and the Moon 3 km up drawn by the body raster (system/body-raster.ts, trace.wgsl bodyLite) — its target drawn, every world's pixels shaded, no GPU error —, the same view traced (renderer.bodyRasterOn false); both shots side by side and their GPU time. `ONLY=`, `LEVERS=`, `PASSES=1`. | Kerr a=0.94, then each world, 1600×1000 | ~600 here | WebGPU |
+| planets-ab.e2e.test.ts | Two builds A/B on the planets' views (tests/e2e/lib/planet-views.ts), A B B A in one Chrome, the GPU's time at a fixed quality; run by `scripts/ab-commit.ts <rev>` with `AB_CMD`. `ONLY=`, `VIEWS=`, `AB_ROUNDS=`. | Earth: the Blue Marble, then the views, 1600×1000 | ~2000 here | AB_A_URL, AB_B_URL |
 
 ### The tracer's kernels (docs/PLAN-LEAN-TRACER-KERNELS.md)
 

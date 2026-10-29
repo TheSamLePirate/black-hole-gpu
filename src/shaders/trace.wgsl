@@ -3992,7 +3992,7 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
       // the relief's shadows (a light source: its penumbra half a degree), and on our airless worlds the
       // fresh craters' bright ejecta, the regolith's mottling
       let foot = reliefFoot(t);
-      sh = nearShadow(surf, qb, hit.h, toBody(P.near4.xyz), foot, tSec);
+      sh = select(nearShadow(surf, qb, hit.h, toBody(P.near4.xyz), foot, tSec), 1.0, NEAR_SHADOW_OFF);
       // (and the Ranger's, the ground within reach of it)
       sh *= shipShadow(look * t * P.near4.w);
       if (airless(surf)) {
@@ -10684,8 +10684,13 @@ fn shadeMark(@builtin(global_invocation_id) gid: vec3u) {
     return;
   }
   let k = u32(P.near1.w);
-  // (the ground shadeLite shades at every pixel: fresh, not left)
-  if (rasterLiteTakes(vec2f(gid.xy) + 0.5, k)) { return; }
+  // (the ground shadeLite shades at every pixel: fresh, not left — the Earth's; another world's, bodyLite, at the rate's)
+  let body = !hasAir(k) && bodyKind(k) != 0u;
+  if (!body && rasterLiteTakes(vec2f(gid.xy) + 0.5, k)) { return; }
+  if (body) {
+    moments[idx] = vec2f(rasterStale(0.0), d / P.near4.w * bodyRadius(k));
+    return;
+  }
   // (its albedo read through a jittered point of the pixel, as shade's rays are: the temporal pass accumulates them — read at
   // the centre every frame, the texture aliased, flickering under the motion, the most where the ground grazes, at the horizon)
   var jit = vec2f(0.0);
@@ -10886,12 +10891,75 @@ fn liteJitter(gid: vec2u) -> vec2f {
   return select(gaussJitter(hash4(vec3u(gid, P.frame.x)).xy), rasterJitter(P.frame.x), rasterHalton());
 }
 
+// (bodyLite's relief shadows left out — liteSkip 4: a measure)
+var<private> NEAR_SHADOW_OFF: bool = false;
+// A world without the Earth's air near (Gargantua's, the Moon, Mercury, the airless moons — the tracer's nearMarch worlds):
+// its ground drawn by the raster (system/body-raster.ts, PLAN-PLANETES-AAA P1), shaded here a pixel at a time — the point
+// from the raster's distance instead of the march, then the tracer's own shading (shadeNear: the relief's normal and shadows,
+// the world's material, its light) and its air (nearAir), as main shades a nearMarch hit
+// At a shading rate above 1 (the governor's — earthRasterShading), a thread a pixel of the frame's pattern only, the threads
+// packed as shade's; the others are shadeMark's, rebuilt by post.wgsl resolve from the fresh ones round them.
+fn bodyLite(gid: vec2u, k: u32) {
+  let W = u32(P.res.x);
+  let px = rasterPixel(gid, rasterRate(), P.frame.x);
+  if (px.x >= W || px.y >= u32(P.res.y)) { return; }
+  let idx = px.y * W + px.x;
+  // (under the cockpit's mask: the cabin there)
+  if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
+  let centre = vec2f(px) + 0.5;
+  if (terrainRasterHint(centre) <= 0.0) { return; }
+  FOOT = 1.0;
+  FOOT_NEAR = 1.0;
+  FOOT_FAR = 1.0;
+  let pos = centre + liteJitter(px);
+  var tM = terrainRasterHint(pos);
+  if (tM <= 0.0) { tM = terrainRasterHint(centre); }
+  let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
+  let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
+  let mR = P.near4.w;
+  let tR = tM / mR;
+  // (the point on the body's axes from the camera there in float64 — nearCam —; its height the relief's own, not the
+  // distance's rounding: a float32 radius is ±0.5 m on an Earth-sized world)
+  let surf = u32(bodies[BV * k + 2u].z);
+  let tSec = P.time.x * P.near5.w;
+  var hit: NearHit;
+  hit.t = tR;
+  hit.qb = normalize(nearCam() + toBody(look) * tR);
+  hit.h = relief(surf, hit.qb, reliefFoot(tR), mR, tSec);
+  RND = fract(ign(centre) + f32(P.frame.x % 1024u) * 0.618);
+  NEAR_SHADOW_OFF = (liteSkip() & 4u) != 0u;
+  // (Gargantua's worlds: the camera white-balanced to their light part of the way — as main's nearMarch hit)
+  var wb = vec3f(1.0);
+  if (k < ourStart() && bodyKind(k) != 0u) {
+    let le = nearLight(k).e;
+    let ll = luminance(le);
+    if (ll > 0.0) { wb = ll / max(mix(vec3f(ll), le, 0.6), vec3f(1e-30)); }
+  }
+  let nair = nearAir(look, tR, k);
+  setMapLod(pixFoot() * tR, 0.0, k);
+  var col = (shadeNear(look, hit) * nair.T + nair.L) * wb;
+  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+  let old = accum[idx];
+  if ((P.frame.z & FLAG_TEMPORAL) != 0u && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
+  accum[idx] = vec4f(col, 1.0);
+  moments[idx] = vec2f(RASTER_MARK, tR * bodyRadius(k));
+  stamps[idx] = P.frame.x;
+}
+
 @compute @workgroup_size(8, 8)
 fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let W = u32(P.res.x);
   let H = u32(P.res.y);
-  if (gid.x >= W || gid.y >= H || !rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5) { return; }
+  if (!rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5) { return; }
   let k = u32(P.near1.w);
+  // (another world than the Earth, without its air: the body raster's — bodyLite, its threads the rate's pattern's; compiled out
+  // of the Earth's kernel — NEAR_KIND 1 — and the Earth's material out of the worlds' — 3)
+  if (NEAR_KIND != 1u && NEAR_KIND != 2u && !hasAir(k) && bodyKind(k) != 0u) {
+    bodyLite(gid.xy, k);
+    return;
+  }
+  if (NEAR_KIND == 3u) { return; }
+  if (gid.x >= W || gid.y >= H) { return; }
   if (!isEarth(k) || !hasAir(k) || !earthOn()) { return; }
   let idx = gid.y * W + gid.x;
   // (under the cockpit's mask: the cabin there)

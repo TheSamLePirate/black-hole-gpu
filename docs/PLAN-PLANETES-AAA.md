@@ -1,7 +1,7 @@
 # Plan — toutes les planètes au niveau de la Terre (AAA, détail maximal, jamais plus lent)
 
 Date : **29 octobre 2026**, sur `main` à `269ae823`.
-Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progress/planetes-aaa/P0.md](progress/planetes-aaa/P0.md).
+Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progress/planetes-aaa/P0.md](progress/planetes-aaa/P0.md). **P1 première partie faite** (30 octobre) — Miller et Mann éclairés sans le Ranger, le raster pour les mondes sans air : [P1.md](progress/planetes-aaa/P1.md).
 
 ## 0. La demande
 
@@ -59,7 +59,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   dépasser, pour toutes les planètes. Les mêmes chiffres par corps : la marge de chacun sous ce budget.
 - Inventaire des défauts visibles par corps (tableau dans `docs/progress/planetes-aaa/P0.md`).
 
-### P1 — Raster générique pour tout corps solide (le gros morceau)
+### P1 — Raster générique pour tout corps solide (le gros morceau) — **première partie faite**, [P1.md](progress/planetes-aaa/P1.md)
 - `terrain-raster-mesh` / `terrain-cache` paramétrés par **le corps** (rayon, figure, `reliefBase` + DEM) au lieu de
   la Terre ; éligibilité par corps dans `renderer.ts`.
 - Hauteurs du relief procédural cuites dans le cache (compute pass) : le raster les lit au lieu de marcher.

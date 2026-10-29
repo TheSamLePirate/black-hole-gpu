@@ -38,6 +38,7 @@ import { Lightning } from "./system/lightning";
 import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT } from "./system/tree-shadow";
 import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N } from "./system/cloud-shadow";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
+import { BodyRaster, reliefMax } from "./system/body-raster";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
 import type { PlanetCharacter } from "./controller/character";
@@ -254,6 +255,23 @@ const RASTER_RATE_OF: Record<string, number | undefined> = { every: 1, half: 2, 
 const RASTER_RATES_AUTO = [2, 4, 8, 16] as const;
 /** the parameters' raster bit for the ground's albedo at every pixel (trace.wgsl RASTER_DETAIL_FLAG) */
 const RASTER_DETAIL_FLAG = 64;
+/** a variant's slot → its kernel's entry (tracerConstants) */
+const VARIANT_ENTRY = {
+  rt: "main",
+  q: "main",
+  env: "env",
+  lut: "lut",
+  lutq: "lut",
+  air: "aerial",
+  shade: "shade",
+  shadeMark: "shadeMark",
+  shadeLite: "shadeLite",
+  shadeWater: "shadeWater",
+  shadeStars: "shadeStars",
+  discs: "discs",
+  clouds: "clouds",
+  skyFill: "skyFill",
+} as const;
 /** the parameters' raster bit for the ground's material pass (trace.wgsl RASTER_LITE_FLAG) */
 const RASTER_LITE_FLAG = 128;
 /** the parameters' raster bit for the water's own pass (trace.wgsl RASTER_WATER_FLAG) */
@@ -3280,14 +3298,37 @@ export class Renderer {
       Math.abs(earthSurface.lat) <= TERRAIN_CACHE_MAX_LAT &&
       earthSurface.h * WGS84_A < 100_000
     );
+    // (another world's ground — Gargantua's, the Moon, the airless worlds the tracer marches: NEAR_KIND 3 — drawn by the body
+    // raster, the same pipeline's choice: system/body-raster.ts, PLAN-PLANETES-AAA P1; under half a radius over it)
+    const nbR = near ? bodies[near.index] : undefined;
+    const bodyRasterEligible = !!(
+      this.bodyRasterOn &&
+      rasterWanted &&
+      nbR &&
+      nbR.id !== "earth" &&
+      nbR.kind !== 0 &&
+      !bodyHasAir(nbR.kind, nbR.surface) &&
+      reliefMax(nbR.surface) > 0 &&
+      near!.distance < 1.5 * near!.radius &&
+      t === this.live &&
+      !o.probe &&
+      !s.polarization &&
+      s.band === "visible" &&
+      s.renderMode === "physical" &&
+      this.tuneKey === 0
+    );
     // (the raster's primary visibility keeps its path under the debug tunings — renderer.tune: what each part of its shading costs)
     const terrainCacheEligible = terrainRasterEligible && this.tuneKey === 0 && (this.featureKey & 512) === 0;
     const inspecting = terrainRasterEligible && s.earthTerrainRasterView !== "off";
-    if (!o.probe && t === this.live) this.rasterEligibleNow = terrainRasterEligible && rasterWanted;
+    if (!o.probe && t === this.live) this.rasterEligibleNow = (terrainRasterEligible || bodyRasterEligible) && rasterWanted;
     // (the realtime kernel's ground march from the patch's distances: only where the device takes the texture, and in the
     // interleaved realtime frames — a still view converges on the quality kernel, which keeps the reference march)
     const hinting =
-      terrainRasterEligible && (s.earthTerrainRasterUse || rasterWanted) && this.rasterHint && (o.flags & FLAG_INTERLEAVED) !== 0;
+      (terrainRasterEligible || bodyRasterEligible) &&
+      (s.earthTerrainRasterUse || rasterWanted) &&
+      this.rasterHint &&
+      (o.flags & FLAG_INTERLEAVED) !== 0;
+    if (!o.probe) this.bodyRasterNow = bodyRasterEligible && hinting;
     // (the raster's primary visibility — docs/PLAN-RENDU-RASTER-AAA.md étape 1 —: the patch's pixels shaded one a pixel by
     // the kernel shade after the trace, which leaves them; trace.wgsl rasterPrimary reads it)
     const rasterPrimary = hinting && rasterWanted;
@@ -4408,7 +4449,7 @@ export class Renderer {
     // kind — P7 — only in the camera's kernels: elsewhere — a planet's probe, its key without it, on the camera's env —
     // left out of the comparison, and there a kernel for any near body covers a given one)
     const NEAR = 7 << NEAR_KIND_SHIFT;
-    const nearMatters = kind === "rt" || kind === "q" || kind === "discs";
+    const nearMatters = kind === "rt" || kind === "q" || kind === "discs" || kind === "shadeLite";
     const kq = key & ~NEAR;
     const nq = (key >> NEAR_KIND_SHIFT) & 7;
     // (a kernel that compiled out a bit the key needs does not cover it, whatever its own key says — strippedBits)
@@ -4423,6 +4464,33 @@ export class Renderer {
       const nk = (k >> NEAR_KIND_SHIFT) & 7;
       if (nearMatters && nk !== nq && nk !== 0) continue;
       return v[kind];
+    }
+    // (none by the keys' bits: by the constants the kernels were compiled with — a key's high bits are ids for the debug views
+    // and tunings, but the raster's too (FEATURE_TERRAIN_RASTER, FEATURE_RASTER_PRIMARY): a planet's probe, its key without
+    // them, found no kernel under another world's raster — its job stuck, the world unlit, PLAN-PLANETES-AAA P1) — the probes'
+    // only: a camera kernel covered so would pass for the scene's own (kernelReady), its own never compiled)
+    if (kind !== "env") return null;
+    const entry = VARIANT_ENTRY[kind];
+    const consts = (k: number) =>
+      tracerConstants(k, entry, {
+        quality,
+        rasterHint: this.rasterHint,
+        tune: this.tunes.get((k >> 20) & 63),
+        companion: this.leanMain,
+        coarseProbe: this.coarseProbe,
+        leftovers: this.rasterLite && this.leanShade,
+        otherUniverse: !this.otherUniverseOut,
+      });
+    const want = consts(key);
+    for (const [k, v] of this.variants) {
+      if (!v[kind]) continue;
+      const nk = (k >> NEAR_KIND_SHIFT) & 7;
+      if (nearMatters && nk !== nq && nk !== 0) continue;
+      const have = consts(k);
+      const covers = Object.entries(want).every(([name, x]) =>
+        name.startsWith("HAS_") || name === "NEAR_DETAIL" || name === "GROUND_DETAIL" ? (have[name] ?? 0) >= x : have[name] === x,
+      );
+      if (covers) return v[kind];
     }
     return null;
   }
@@ -4854,7 +4922,8 @@ export class Renderer {
     let shadeLate = false;
     if (!quality && hint && this.rasterPrimaryOn) {
       const lite = this.rasterLite && !!this.traceVariant("shadeLite");
-      const sh = this.traceVariant("shade");
+      // (another world's raster: shadeLite alone — bodyLite —, no leftovers)
+      const sh = this.bodyRasterNow || this.traceVariant("shade");
       const ready = !!sh && (this.rasterRate === 1 || !!this.traceVariant("shadeMark"));
       if (!ready && !lite) this.dropRasterPrimary(t);
       shadeLate = !ready && lite;
@@ -4877,7 +4946,8 @@ export class Renderer {
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
     }
     // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
-    if (!quality && hint && this.rasterPrimaryOn && this.cloudPass && this.cloudPassOn) {
+    // (the Earth's clouds: not over another world's raster ground)
+    if (!quality && hint && this.rasterPrimaryOn && !this.bodyRasterNow && this.cloudPass && this.cloudPassOn) {
       const cp = this.traceVariant("clouds");
       if (cp && t.cloudWrite) {
         if (t.cloudBind?.tex !== hint)
@@ -4921,7 +4991,9 @@ export class Renderer {
     // splatted this frame, the matrix given: the parameters' bit — the rays then draw the Milky Way's map alone —, the matrix
     // into the stamps' words after the discs')
     const starsPipe =
-      !quality && this.rasterLiteNow && this.starsSplat && this.starMatrix && t === this.live ? this.traceVariant("shadeStars") : null;
+      !quality && this.rasterLiteNow && !this.bodyRasterNow && this.starsSplat && this.starMatrix && t === this.live
+        ? this.traceVariant("shadeStars")
+        : null;
     this.starsRasterNow = !!starsPipe;
     if (starsPipe) {
       this.paramsF[MOUTH_LIST_AT + 5] = this.paramsF[MOUTH_LIST_AT + 5]! + RASTER_STARS_FLAG;
@@ -4930,7 +5002,8 @@ export class Renderer {
     }
     // (the sky's bodies' discs at one ray a pixel — trace.wgsl main's layers z ≥ 1, TERRE-UNREAL U8 —: their rectangles in the
     // stamps' words past the image, the dispatch as wide as the widest of them)
-    const discs = !quality && this.rasterLiteNow && t === this.live ? this.discRects(t) : [];
+    // (the Earth raster's sky discs — TERRE-UNREAL U9 —: not over another world's, whose sky main traces whole)
+    const discs = !quality && this.rasterLiteNow && !this.bodyRasterNow && t === this.live ? this.discRects(t) : [];
     // (their own kernel once in — TERRE-UNREAL U9 —: a pass after the sky's, else main's layers z ≥ 1)
     const discsPipe = discs.length && this.discsKernel ? this.traceVariant("discs") : null;
     const gx = Math.max(1, Math.ceil(x / 8)),
@@ -4978,7 +5051,9 @@ export class Renderer {
     // The raster's primary visibility (docs/PLAN-RENDU-RASTER-AAA.md étape 1): the patch's pixels, left by the trace,
     // shaded one a pixel at the image's full size — after it, before the reconstruction that reads both.
     // (a rate above 1: the frame's pattern alone, its threads packed — and the pixels it leaves marked for resolve)
-    const shade = !quality && hint && this.rasterPrimaryOn && !this.rasterShadeLate ? this.traceVariant("shade") : null;
+    // (the Earth's leftovers' kernel: none on another world's raster — bodyLite takes every pixel)
+    const shade =
+      !quality && hint && this.rasterPrimaryOn && !this.rasterShadeLate && !this.bodyRasterNow ? this.traceVariant("shade") : null;
     const mark = shade && this.rasterRate > 1 ? this.traceVariant("shadeMark") : null;
     if (shade && hint && (this.rasterRate === 1 || mark)) {
       // (the frame's pattern's block — trace.wgsl rasterPixel: 2 × 1, 2 × 2, 4 × 2, 4 × 4 —: a thread a block)
@@ -5011,6 +5086,26 @@ export class Renderer {
   /** the raster's material — shadeLite — and its water's pass, over the patch's pixels */
   private encodeLite(enc: GPUCommandEncoder, t: Target, hint: GPUTexture) {
     const lite = this.traceVariant("shadeLite");
+    if (lite && this.bodyRasterNow) {
+      // (another world's ground — trace.wgsl bodyLite —: a thread a pixel of the rate's pattern, packed as shade's; the pixels
+      // left marked for the reconstruction — shadeMark)
+      const rate = this.rasterRate;
+      const mark = rate > 1 ? this.traceVariant("shadeMark") : null;
+      // (the shadeMark kernel still compiling: the pattern's pixels shaded, the others kept from the last frames a moment)
+      const bw = rate >= 8 ? 4 : rate > 1 ? 2 : 1;
+      const bh = rate >= 16 ? 4 : rate > 2 ? 2 : 1;
+      const lp = enc.beginComputePass(this.prof.pass("body lite (raster)"));
+      lp.setPipeline(lite);
+      lp.setBindGroup(0, this.hintBindFor(t, hint));
+      lp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+      lp.dispatchWorkgroups(Math.ceil(Math.ceil(t.width / bw) / 8), Math.ceil(Math.ceil(t.height / bh) / 8));
+      if (mark) {
+        lp.setPipeline(mark);
+        lp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+      }
+      lp.end();
+      return;
+    }
     if (lite) {
       const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
       lp.setPipeline(lite);
@@ -7329,6 +7424,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private terrainSurfaceCache: TerrainCache | null = null;
   private terrainCacheWanted = false;
   private terrainRaster: TerrainRaster | null = null;
+  /** another world's ground drawn by the raster (system/body-raster.ts — PLAN-PLANETES-AAA P1) and its switch (off: the
+   *  tracer's march, as before) */
+  private bodyRaster: BodyRaster | null = null;
+  bodyRasterOn = true;
+  /** the body raster draws the near ground this frame (writeParams: eligible, the raster's frame) */
+  bodyRasterNow = false;
   private terrainRasterRequested = false;
   /** a terrain diagnostic adds its own GPU work this frame (the inspector, the cache, the hints without the raster
    *  pipeline): the automatic quality held — main.ts reads it as terrainRasterInspecting */
@@ -8084,6 +8185,52 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return out;
   }
 
+  /** another world's ground into the raster's target (system/body-raster.ts): its relief at the mesh's nodes, its distances */
+  private encodeBodyRaster(enc: GPUCommandEncoder, target: Target, s: Settings) {
+    const tr = this.terrainRaster!;
+    const near = this.lastNear!;
+    const nb = this.lastBodies[near.index];
+    if (target.width * target.height > TERRAIN_RASTER_MAX_PIXELS || !nb) {
+      tr.idle("pixel-budget");
+      return;
+    }
+    this.bodyRaster ??= new BodyRaster(this.device, this.traceSource);
+    const jitter = this.rasterJitter === "halton" && this.rasterPrimaryOn ? this.haltonNdc(target) : ([0, 0] as [number, number]);
+    const ready = this.bodyRaster.prepare(
+      {
+        near,
+        camera: this.lastCam!,
+        surf: nb.surface,
+        image: target,
+        fovDegrees: s.fov,
+        mPerM: 1476.625 * s.massSolar,
+        jitter,
+      },
+      { params: this.paramBuf, sampler: this.sampler, relief: this.hdMap.relief },
+    );
+    if (!ready) {
+      tr.idle(this.bodyRaster.ready ? "body-out-of-reach" : "compiling");
+      return;
+    }
+    tr.encodeBody(enc, target.width, target.height, this.bodyRaster, (label, descriptor) => this.prof.pass(label, descriptor));
+  }
+
+  /** the frame's sub-pixel jitter in NDC — the rays' own (trace.wgsl rasterJitter: the same Halton index) */
+  private haltonNdc(target: Target): [number, number] {
+    const i = (this.frameStamp % 16) + 1;
+    const halton = (n: number, b: number) => {
+      let f = 1,
+        r = 0;
+      while (n > 0) {
+        f /= b;
+        r += f * (n % b);
+        n = Math.floor(n / b);
+      }
+      return r;
+    };
+    return [(2 * (halton(i, 2) - 0.5)) / target.width, (-2 * (halton(i, 3) - 0.5)) / target.height];
+  }
+
   private encodeTerrainRasterVisibility(enc: GPUCommandEncoder, target: Target, s: Settings) {
     // (the buildings' triangles drawn for the material's buildings — shadeLite, U2 —; without it, their boxes, the rays')
     if (this.sceneryRaster) this.sceneryRaster.meshes3d = this.rasterLite;
@@ -8092,6 +8239,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       return;
     }
     this.terrainRaster ??= new TerrainRaster(this.device, this.traceSource);
+    if (this.bodyRasterNow) {
+      this.encodeBodyRaster(enc, target, s);
+      return;
+    }
     if (target.width * target.height > TERRAIN_RASTER_MAX_PIXELS) {
       this.terrainRaster.idle("pixel-budget");
       return;
@@ -8414,7 +8565,14 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // the trace's rays are the sky's alone, at infinity, the history reprojecting it exactly as the camera turns — one a
       // 16 × 16 block, not 8 × 8: 9–10 ms of the M1's frame a quarter of it — TERRE-UNREAL U6; the governor's own block
       // left as it was, for when the trace draws ground again)
-      if (this.rasterSkyBlock && this.rasterLiteNow && this.liveAltKm < RASTER_SKY_KM && s.realtimeSubsampling === "auto")
+      // (the Earth's: another world's sky — Gargantua's lensed disk — is not at infinity, its history does not fill a 16 × 16 block)
+      if (
+        this.rasterSkyBlock &&
+        this.rasterLiteNow &&
+        !this.bodyRasterNow &&
+        this.liveAltKm < RASTER_SKY_KM &&
+        s.realtimeSubsampling === "auto"
+      )
         block = Math.max(block, RASTER_SKY_BLOCK);
       if (block !== this.lastBlock) this.interleaveIndex = 0;
       let order = this.orders.get(block);
@@ -8428,7 +8586,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // (not under a day's exposure near the ground — EV 14.6 over a sunlit Earth, 16.3 from the dusk on —: none would show,
       // the pass over the whole image for nothing, ~1 ms on an M1 — TERRE-UNREAL U6; elsewhere — the hole, its bright disk,
       // its lensed stars — always)
-      this.starsSplat = s.temporalReprojection && this.splatStars && !(this.rasterEligibleNow && this.ev(s) < STARS_MIN_EV);
+      // (the Earth's blue sky's rule: another world's — the Moon's black one — keeps its stars, as traced)
+      this.starsSplat =
+        s.temporalReprojection && this.splatStars && !(this.rasterEligibleNow && !this.bodyRasterNow && this.ev(s) < STARS_MIN_EV);
       if (this.starsSplat) enc.clearBuffer(t.stars);
       this.writeParams(t, s, time, {
         block,

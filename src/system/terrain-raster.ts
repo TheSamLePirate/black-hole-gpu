@@ -482,6 +482,36 @@ export class TerrainRaster {
     return true;
   }
 
+  /**
+   * Another world's ground in the same target (system/body-raster.ts — PLAN-PLANETES-AAA P1): its distances where the tracer's
+   * kernels read the Earth's. False: nothing drawn (no room, a target retiring, its pipeline compiling).
+   */
+  encodeBody(
+    enc: GPUCommandEncoder,
+    width: number,
+    height: number,
+    body: { ready: boolean; draw: (pass: GPURenderPassEncoder) => void },
+    profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
+  ): boolean {
+    this.idle("compiling");
+    if (this.disposed || this.error || !body.ready) return false;
+    if (!this.resize(width, height)) return false;
+    const a = this.attachments!;
+    const pass = enc.beginRenderPass(
+      profile("body raster visibility", {
+        colorAttachments: [{ view: a.distance.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+        depthStencilAttachment: { view: a.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
+      }),
+    );
+    body.draw(pass);
+    pass.end();
+    this.ringsDrawn = 0;
+    this.active = true;
+    this.reason = "body";
+    this.encodedFrames++;
+    return true;
+  }
+
   private drawRing(pass: GPURenderPassEncoder, pipe: GPURenderPipeline, r: RingState, ring: TerrainRing, sources: TerrainCacheSources) {
     const d = this.device;
     const key = `${ring.level}:${ring.window.i}:${ring.window.j}:${ring.hole[0]}:${ring.hole[1]}:${ring.ratio}`;

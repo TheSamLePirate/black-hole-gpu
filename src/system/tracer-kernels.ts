@@ -134,7 +134,8 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
       (profile && o.companion !== false && (entry === "main" || entry === "discs")) || (entry === "env" && o.coarseProbe !== false) ? 0 : 1,
     GROUND_DETAIL: profile && entry === "shade" && o.leftovers !== false ? 0 : 1,
     // (the camera's rays only: the probes — env — see the near body from elsewhere — P7)
-    NEAR_KIND: entry === "main" || entry === "discs" ? (key >> NEAR_KIND_SHIFT) & 7 : 0,
+    // (and the raster's material: the Earth's — NEAR_KIND 1 — or another world's — 3, trace.wgsl bodyLite —, the other compiled out)
+    NEAR_KIND: entry === "main" || entry === "discs" || entry === "shadeLite" ? (key >> NEAR_KIND_SHIFT) & 7 : 0,
     COST_VIEW: (key >> 16) & 15,
     ...(o.tune ?? {}),
     QUALITY_PIPELINE: quality ? 1 : 0,
