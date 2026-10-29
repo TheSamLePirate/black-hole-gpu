@@ -183,15 +183,16 @@ que de CAM2 et peut avancer plus tôt si l'on veut la « vue depuis l'avion de l
 | P7 | **Coût nul au repos** : A/B à ±1 % (trace-ab sur vue figée) à β = 0 et en vol F-35 | trace-ab |
 | P8 | **Pause et temps respectés** : en pause tout se fige (y compris le voyage), à ×N tout va N fois plus vite, τ et t restent cohérents | e2e |
 
-## Questions encore ouvertes (proposition entre crochets)
+## Décisions du 2026-10-29 (second tour, questions ouvertes tranchées)
 
-1. Vitesse par défaut du panneau : [0,9 c de pointe, lecture auto ≈ 20 s].
-2. Cadrage d'arrivée : [orbite à 2,2 rayons pour un corps, poursuite à 4 longueurs pour un appareil, 3 km du hublot
-   de l'ISS, à distance de sécurité de l'horizon pour Gargantua].
-3. Le voyage vaisseau en mission : [demande confirmation et termine la mission, comme le placement].
-4. En réseau, le voyage vaisseau change la position de la salle : [oui, l'horloge commune avance de t ; la dilatation
-   du voyageur est son τ propre, comme la dilatation actuelle].
-5. Touche du voyage : [G = « aller à la cible » (voyage), ⇧G = « voyage ciné »], hors ZQSD/AE/WX.
+| question | réponse |
+|---|---|
+| vitesse par défaut | **en fonction du trajet** : la vitesse de pointe proposée croît avec la distance (quelques % de c vers la Lune, ≈ 0,9 c vers Mars, ≈ 0,999 c vers Gargantua) ; lecture auto ≈ 20 s |
+| cadrage d'arrivée | **oui** : orbite à 2,2 rayons pour un corps, poursuite pour un appareil, 3 km de l'ISS, distance de sécurité de l'horizon pour Gargantua |
+| voyage du vaisseau en mission | **la mission continue** (pas de fin de mission, pas de confirmation bloquante) |
+| réseau | **oui** : l'horloge commune avance de t, la dilatation du voyageur est son τ |
+| touches | **G** voyage, **⇧G** voyage ciné |
+| conduite | **chaque phase s'enchaîne sans demander** ; arrêt seulement pour une question importante, un problème ou une opération destructive ; **vidéos 720p** du résultat à la fin (outil vidéo du jeu, `scripts/jitter-lab.ts` / screencast) |
 
 ## Risques
 

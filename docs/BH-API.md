@@ -286,6 +286,46 @@ Levers that take one cause out: `airShake` is the display shake's gain (0 remove
 this many seconds every turn, whatever the loop's interval (`null`: the interval, as played). The camera shake is the
 setting `flightShake`. Returns the levers as they are now.
 
+### `__bh.cam` → object
+
+The camera's smoothness sensor (`src/camera/metrics.ts`, docs/PLAN-CAMERA-AAA.md CAM0). While on, it records every drawn
+frame: the view's place from the body it is nearest (on that body's ground for our bodies, so the planet's turn and orbit
+are not the view's motion), its height over that ground (WGS84 and relief), its look, up and field. Off, it gathers nothing.
+`tests/e2e/camera-smooth.e2e.test.ts` drives it.
+
+### `__bh.cam.start(max?: number)` → true
+
+Starts recording afresh (the ring keeps the last `max` frames, 20 000 by default).
+
+### `__bh.cam.stop()` → true
+
+Stops recording; the samples stay.
+
+### `__bh.cam.mark(label: string)` → true
+
+Labels the frames from now on (a situation). The label `"cut"` marks a cut made on purpose: the next frame's move is
+forgiven.
+
+### `__bh.cam.active` → boolean
+
+Whether it records.
+
+### `__bh.cam.recorded` → number
+
+The frames kept.
+
+### `__bh.cam.samples()` → CamSample[]
+
+The frames kept: `t` (rAF ms), `ref` (the body), `P` (m), `h` (m), `fwd`, `up`, `fov`, `moving`.
+
+### `__bh.cam.report(o?: { from?, to? })` → CamReport
+
+The faults between `from` and `to` (rAF ms): `jump` (a frame's move over 3× its neighbours' and over 2 % of the height),
+`turn` (a frame's turn of the look over 3× its neighbours' and over 1°), `fov` (the field over 3× its neighbours' change
+and over 0.5°), `speed` (the speed in heights a second halved or doubled in a frame, both frames moving). Each fault has
+its `kind`, frame `i`, `t`, `label`, `score` (the ratio to the neighbours), `size` and `h`. Also `counts`, `worstJump`,
+`p95Jump`, `worstTurn`, `frames`, `seconds`.
+
 ### `__bh.spectate(on: boolean)` → boolean
 
 Puts the camera out of the ship as a free spectator (`on: true`; the ship goes on flying) or back into it (`false`). Returns whether the spectator is out. Refused with a toast ("fly one first (K)") when no craft is being flown: the spectator starts only from a piloted ship (`startSpectator` in `controller/spectator.ts`). No e2e test calls it.

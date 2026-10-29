@@ -20,7 +20,8 @@ import { cartToGeodetic, flatteningOf, WGS84_A, WGS84_F } from "./system/ellipso
 import { setSceneryContact } from "./system/scenery-contact";
 import { setDrawnRefractivity } from "./system/refraction";
 import { projectLook } from "./shadow";
-import { groundVelocity } from "./system/our-surface";
+import { groundVelocity, heightOverGround } from "./system/our-surface";
+import { analyse as analyseCam, CamProbe, type CamAnalyseOptions } from "./camera/metrics";
 import { CharacterHud } from "./ui/characterhud";
 import { FootHud, type CompassMark } from "./ui/foothud";
 import { AtlasPage, type AtlasAction, type AtlasPlace } from "./ui/atlas";
@@ -7602,6 +7603,20 @@ async function main() {
       hideBar: (on: boolean) => topBar.hide(on),
     },
     pwa,
+    // (the camera's smoothness sensor — src/camera/metrics.ts, PLAN-CAMERA-AAA CAM0 —: jumps, snapped aims, fov jumps)
+    cam: {
+      start: (max?: number) => (camProbe.start(max), true),
+      stop: () => (camProbe.stop(), true),
+      mark: (label: string) => (camProbe.mark(label), true),
+      get active() {
+        return camProbe.active;
+      },
+      get recorded() {
+        return camProbe.recorded;
+      },
+      samples: () => camProbe.samples(),
+      report: (o?: CamAnalyseOptions) => analyseCam(camProbe.samples(), camProbe.marks, o),
+    },
     // (the flight's jitter probe — src/jitter, docs/progress/JITTER-VOL.md —: what moved the image each frame, by layer)
     jitter: {
       start: (max?: number) => (jitterProbe.start({ max }), true),
@@ -7702,6 +7717,7 @@ async function main() {
   let saveTimer = 0;
   // (the jitter probe: off, nothing gathered; its own clock — the steps the flight was given)
   const jitterProbe = new JitterProbe();
+  const camProbe = new CamProbe();
   let jitterClock = 0;
   /** the probe's lever: the flight stepped by this each turn whatever the loop's interval [s] (null: the interval) */
   let jitterStep: number | null = null;
@@ -8048,6 +8064,36 @@ async function main() {
         gpuMs: renderer.lastGpuMs,
         refreshMs: renderer.refreshMs,
       });
+    }
+    // (the camera's smoothness sensor — src/camera/metrics.ts, PLAN-CAMERA-AAA CAM0 —: the view's place from the body
+    // it is nearest, on that body's ground for ours — its turn and an orbit's motion not the view's —, look, field)
+    if (camProbe.active && st) {
+      const vc = camera.viewController();
+      const w = vc.rigWorld();
+      if (w) {
+        const n = vc.rigNearest(w.ours, w.X, vc.nowTime());
+        const mPerUnit = w.ours ? M_METRES : 1476.625 * settings.massSolar;
+        let P: Vec3 = w.X.map((x) => x * mPerUnit) as Vec3,
+          h = Number.POSITIVE_INFINITY;
+        if (n && w.ours && solarBody(n.id)) {
+          const q = toBodyFixed(n.id, w.X, sim.time);
+          P = q.map((x) => x * M_METRES) as Vec3;
+          h = heightOverGround(n.id, q);
+        } else if (n) {
+          P = [0, 1, 2].map((k) => (w.X[k]! - n.C[k]!) * mPerUnit) as Vec3;
+          h = (Math.hypot(...P) / mPerUnit - n.R) * mPerUnit;
+        }
+        camProbe.record({
+          t: now,
+          ref: n?.id ?? "",
+          P: P as [number, number, number],
+          h,
+          fwd: [...w.fwd] as [number, number, number],
+          up: [...w.up] as [number, number, number],
+          fov: camera.viewSettings().fov,
+          moving: !frozen && !paused,
+        });
+      }
     }
     // (a compile or a stream begun or ended: the timings measured afresh — the image untouched)
     const calibrationReady = renderer.calibrationReady;

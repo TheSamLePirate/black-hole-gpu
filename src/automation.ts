@@ -144,6 +144,8 @@ export interface BhContext {
   forceScale(x: number | null): void;
   /** the flight's jitter probe (src/jitter): its samples by frame and their analysis by cause */
   jitter: unknown;
+  /** the camera's smoothness sensor (src/camera/metrics.ts): its samples by frame and its faults */
+  cam: unknown;
   /** the spectator out (a free camera, the ship flying on) or back; whether it is out */
   spectate(on: boolean): boolean;
   /** the PWA (src/pwa.ts): the worker's state, the caches' figures */
@@ -648,6 +650,10 @@ export function installBh(c: BhContext) {
        *  report({ from, to, sigma }) — the image's jitter in pixels a frame by cause (flight, rig, camera shake, display
        *  shake, pacing) */
       jitter: c.jitter,
+      /** the camera's smoothness sensor (src/camera/metrics.ts, PLAN-CAMERA-AAA CAM0): start(max?), stop(), mark(label —
+       *  "cut" forgives the next frame's move), samples(), report({ from, to }) — the jumps, snapped aims, fov jumps and
+       *  speed breaks a viewer sees */
+      cam: c.cam,
       spectate: (on: boolean) => c.spectate(on),
       /** the offline cache: ready(), stats(), clearTiles(), update(), waiting */
       pwa: c.pwa,
