@@ -709,13 +709,26 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   bridgeLines.sort((a, b) => a.d - b.d);
   const bridgeLimit = Math.round((q.mode === "high" ? 256 : 128) * k2);
   if (bridgeLines.length + bridgeAreas.length > bridgeLimit) budgetLimited = true;
-  const addSolid = (p: Primitive | null) => {
-    if (!p || storedBytes + 64 + p.data.length * 4 > budget - 6 * 1024 * 1024 * room) {
+  // (a bridge's part with its triangles — a flat-topped prism, buildingMesh's —: the trees' and buildings' shadow map draws it
+  // as it is, whatever its outline — a deck's OSM area, a strip —, scenery-raster.ts; the view leaves it to the tracer's test)
+  const addSolid = (p: Primitive | null, rings?: number[][][]) => {
+    const mesh =
+      p && rings
+        ? buildingMesh(
+            rings.map((r) => r.map((v) => [v[0]!, v[1]!] as [number, number])),
+            p.data[0]!,
+            p.data[0]!,
+            [[0, 0, p.data[1]! - p.data[0]!]],
+          )
+        : null;
+    const meshB = mesh ? mesh.positions.length * 4 + mesh.triangles.length * 4 : 0;
+    if (!p || storedBytes + 64 + p.data.length * 4 + meshB > budget - 6 * 1024 * 1024 * room) {
       budgetLimited = true;
       return false;
     }
+    if (mesh && mesh.triangles.length) p.mesh = mesh;
     prims.push(p);
-    storedBytes += 64 + p.data.length * 4;
+    storedBytes += 64 + p.data.length * 4 + meshB;
     return true;
   };
   const selectedAreas: Primitive[] = [];
@@ -725,15 +738,15 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const outer = v.rings[0]!;
       const lat = outer.reduce((sum, p) => sum + p.lat, 0) / outer.length,
         lon = outer.reduce((sum, p) => sum + p.lon, 0) / outer.length;
-      const base = localPoint(frame, lat, lon, await height(lat, lon))[2];
-      const p = polygonPrimitive(
-        v.rings.map((r) => r.map((at) => localPoint(frame, at.lat, at.lon, 0))),
-        base + 4 * v.layer - 1.2,
-        base + 4 * v.layer,
-        2,
-        [0.095, 0.098, 0.1],
-      );
-      if (addSolid(p)) {
+      // (its deck over its banks — the highest of its outline's ground, as a bridge line's —, not over the water at its middle:
+      // a deck 4 m over the river, under its quays, its shadow hidden beneath it)
+      let base = localPoint(frame, lat, lon, await height(lat, lon))[2];
+      const step = Math.max(1, Math.floor(outer.length / 16));
+      for (let i = 0; i < outer.length; i += step)
+        base = Math.max(base, localPoint(frame, outer[i]!.lat, outer[i]!.lon, await height(outer[i]!.lat, outer[i]!.lon))[2]);
+      const rings = v.rings.map((r) => r.map((at) => localPoint(frame, at.lat, at.lon, 0)));
+      const p = polygonPrimitive(rings, base + 4 * v.layer - 1.2, base + 4 * v.layer, 2, [0.095, 0.098, 0.1]);
+      if (addSolid(p, rings)) {
         bridges++;
         selectedAreas.push(v.footprint);
       }

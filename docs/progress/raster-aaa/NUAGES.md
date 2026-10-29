@@ -297,3 +297,13 @@ Les tabliers, garde-corps et piles (des bandes à quatre coins) dans la carte d'
 leur boîte. L'albédo propre d'une rivière : 2 → ~5 % (la Seine limoneuse ; l'eau au soleil plus claire que l'ombre d'un pont).
 Reste : l'ombre d'un tablier sur l'eau, vue de près, à peine visible (le reflet du ciel domine) — à vérifier par une A/B figée.
 Images `img/seine-un-seul-morceau-debug.jpg`, `img/seine-pont-mirabeau-dessus.jpg`.
+L'ombre des ponts (29/10/2026) : une A/B figée (`GS_AB=1` : la même vue sans la carte d'ombres des arbres et bâtiments —
+`renderer.treeShadowOn` —, puis avec) et une vue de débogage de cette carte (`TUNE_LITE 8192` : rouge l'ombre, blanc le
+soleil, bleu hors carte) ont montré que les ponts n'y étaient pas : à Paris ce sont surtout des surfaces OSM (des polygones à
+beaucoup de coins), que le prisme à quatre coins ne dessinait pas. Elles ont désormais leurs triangles (`buildingMesh`, un
+prisme plat), rangés après ceux des bâtiments (`packScenery` : la vue ne dessine que les bâtiments, la carte d'ombres tout —
+un tirage indirect de plus) ; vérifié en grossissant les tabliers six fois dans la carte : leurs ombres sur l'eau. Le tablier
+d'une surface de pont posé sur le plus haut de son contour (ses berges), non sur l'eau en son milieu (4 m sur la Seine, sous
+ses quais). Reste vrai : un tablier fin à quelques mètres de l'eau y jette une ombre étroite, le plus souvent sous lui ou
+derrière lui vue d'en haut, et l'eau reste dominée par le reflet du ciel — l'ombre des ponts, juste, se voit peu.
+Images `img/ponts-ombres-exagerees-debug.jpg` (le test grossi ×6), `img/seine-pont-soleil-bas.jpg`.

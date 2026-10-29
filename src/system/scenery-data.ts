@@ -231,13 +231,16 @@ export function packScenery(
     waterOffset = surfaceGeom + (surface.geometries.length + bands.length) / 4,
     pixelOffset = waterOffset + water.nodes.length / 4,
     forestOffset = pixelOffset + Math.ceil(pixels.length / 4);
+  // (the buildings' triangles first — the view draws them alone —, the rest's — a bridge's deck — after: the shadow map's too)
+  const meshed = [...prims.filter((p) => p.mesh && p.data[3] === 1), ...prims.filter((p) => p.mesh && p.data[3] !== 1)];
   let vertexCount = 0,
-    triangleCount = 0;
-  for (const p of prims)
-    if (p.mesh) {
-      vertexCount += p.mesh.positions.length / 3;
-      triangleCount += p.mesh.triangles.length / 3;
-    }
+    triangleCount = 0,
+    buildingTriangles = 0;
+  for (const p of meshed) {
+    vertexCount += p.mesh!.positions.length / 3;
+    triangleCount += p.mesh!.triangles.length / 3;
+    if (p.data[3] === 1) buildingTriangles += p.mesh!.triangles.length / 3;
+  }
   const meshOffset = forestOffset + (forest ? forestVec4s(forest.frame) : 0),
     triangleOffset = meshOffset + Math.ceil((vertexCount * 3) / 4);
   const bytes = (triangleOffset + Math.ceil((triangleCount * 3) / 4)) * 16;
@@ -261,10 +264,11 @@ export function packScenery(
   f.set(water.nodes, waterOffset * 4);
   u.set(pixels, pixelOffset * 4);
   if (triangleCount) {
-    f.set([meshOffset, vertexCount, triangleOffset, triangleCount], 12);
+    f.set([meshOffset, vertexCount, triangleOffset, buildingTriangles], 12);
+    f[11] = triangleCount;
     let v = 0,
       t = triangleOffset * 4;
-    for (const p of prims) {
+    for (const p of meshed) {
       if (!p.mesh) continue;
       f.set(p.mesh.positions, meshOffset * 4 + v * 3);
       for (const k of p.mesh.triangles) u[t++] = v + k;

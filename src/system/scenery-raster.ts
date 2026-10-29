@@ -212,7 +212,7 @@ const CAP = ${SCENERY_RASTER_CAP}u;
 struct Draw { vertices: u32, instances: atomic<u32>, first: u32, base: u32 };
 // (the four lists' draws, then the buildings' boxes': one a node of the scenery's BVH —, the two shadow lists', the
 // buildings' triangles')
-@group(0) @binding(3) var<storage, read_write> draws: array<Draw, ${LISTS + 4}>;
+@group(0) @binding(3) var<storage, read_write> draws: array<Draw, ${LISTS + 5}>;
 @group(0) @binding(4) var<storage, read_write> listsOut: array<u32>;
 @group(0) @binding(5) var<storage, read> listsIn: array<u32>;
 
@@ -304,6 +304,8 @@ fn clampDraws(@builtin(local_invocation_index) i: u32) {
     atomicStore(&draws[${LISTS + 2}].instances, min(atomicLoad(&draws[${LISTS + 2}].instances), CAP));
     // (the buildings' triangles: three vertices each — scenery-data.ts packScenery's mesh, vec4 3)
     draws[${LISTS + 3}].vertices = u32(scenery[3].w) * 3u;
+    // (and the bridges' after them — scenery-data.ts: their count with the buildings' in vec4 2's w —: the shadow map's alone)
+    draws[${LISTS + 4}].vertices = u32(max(scenery[2].w, scenery[3].w)) * 3u;
   }
 }
 
@@ -515,7 +517,7 @@ export class SceneryRaster {
   private sceneryU: GPUBuffer;
   private draws: GPUBuffer;
   private lists: GPUBuffer;
-  private reset = new Uint32Array((LISTS + 4) * 4);
+  private reset = new Uint32Array((LISTS + 5) * 4);
   private sceneryBuf: GPUBuffer | null = null;
   private cullLayout: GPUBindGroupLayout;
   private drawLayout: GPUBindGroupLayout;
@@ -538,7 +540,7 @@ export class SceneryRaster {
     this.frameU = device.createBuffer({ size: TERRAIN_RASTER_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.sceneryU = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws = device.createBuffer({
-      size: (LISTS + 4) * 16,
+      size: (LISTS + 5) * 16,
       usage: S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
       label: "scenery raster draws",
     });
@@ -697,6 +699,7 @@ export class SceneryRaster {
     this.reset[LISTS * 4] = 36;
     // (the buildings' triangles: one instance, their vertices clampDraws's)
     this.reset[(LISTS + 3) * 4 + 1] = 1;
+    this.reset[(LISTS + 4) * 4 + 1] = 1;
     // (the shadow lists: the far round crown's and the far cone's meshes — an octahedron, a plain cone: the map's texels ~0.9 m,
     // a near proxy's 80 faces and trunk ten times the triangles for a shadow it cannot resolve)
     this.reset[(LISTS + 1) * 4] = this.meshCounts[2]!;
@@ -802,10 +805,11 @@ export class SceneryRaster {
     pass.setBindGroup(0, this.drawBind);
     pass.drawIndirect(this.draws, LISTS * 16);
     if (meshes) {
-      pass.setPipeline(this.meshPipe!);
-      pass.drawIndirect(this.draws, (LISTS + 3) * 16);
+      // (the bridges' marks before the buildings' triangles: where a building stands nearer, its own pixel)
       pass.setPipeline(this.boxMarkPipe!);
       pass.drawIndirect(this.draws, LISTS * 16);
+      pass.setPipeline(this.meshPipe!);
+      pass.drawIndirect(this.draws, (LISTS + 3) * 16);
     }
   }
 
@@ -838,7 +842,7 @@ export class SceneryRaster {
     buildings.setBindGroup(0, this.drawBind);
     buildings.drawIndirect(this.draws, LISTS * 16);
     buildings.setPipeline(this.meshShadowPipe!);
-    buildings.drawIndirect(this.draws, (LISTS + 3) * 16);
+    buildings.drawIndirect(this.draws, (LISTS + 4) * 16);
     buildings.end();
     return true;
   }

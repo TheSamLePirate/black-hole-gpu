@@ -7785,6 +7785,12 @@ fn sceneryMirror(rp:vec3f,Ls:vec3f,E:vec3f,sky:vec3f)->vec4f {
   let L=look.albedo/PI*(E*sunThrough(max(p.z,0.0),dot(up,Lp))*max(dot(nG,Lp),0.0)+sky*0.5*(1.0+dot(nG,up)));
   return vec4f(L,h.t);
 }
+// A bridge's deck — any of the scenery's solids — met along the camera's ray dW (the body's axes) before tMax [m]: shadeLite's
+// test at a bridge's marked pixel, the deck the rays' kernel's, the water about it its
+fn sceneryDeckBefore(dW: vec3f, tMax: f32) -> bool {
+  if (P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5) { return false; }
+  return sceneryQuery(P.scenery[3].xyz, sceneryLocal(dW), tMax, false).kind >= 0.0;
+}
 // shadeLite's trees (TERRE-UNREAL U2): the raster's tree at a pixel (its id) tested alone along the physical direction dW —
 // its plain shape, the carving's sphere tracing left out (clumps in the normal stand for it, as worldScenery's far trees) —,
 // the grid walked from it on a miss (crowns overlap on the screen), before tMax [m]; its look as worldScenery's in WS, WS_A,
@@ -10799,6 +10805,7 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
     let sp = P.scenery[3].xyz + (dirW * tM + lift) * toSc;
     let m = treeShadowAt(sp);
     let b = buildingShadowAt(sp);
+    LITE_SH_DBG = vec2f(m, b);
     var sh = 1.0;
     if (m >= 0.0) { sh = min(sh, m); }
     if (b >= 0.0) { sh = min(sh, b); }
@@ -10807,6 +10814,16 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
     Eg *= mix(sh, 1.0, smoothstep(550.0, 750.0, tM));
   }
   return Eg;
+}
+// (TUNE_LITE 8192 — a measure —: the trees' and buildings' shadow map as liteSun read it at the surface: x trees', y buildings'
+// (−1 off the map), drawn instead of the surface: red shadowed, white lit, blue off the map, black not read)
+var<private> LITE_SH_DBG: vec2f = vec2f(-2.0);
+fn liteShadowDebug(E: vec3f) -> vec3f {
+  let v = LITE_SH_DBG;
+  if (v.x < -1.5) { return vec3f(0.0); }
+  if (min(v.x, v.y) < -0.5) { return vec3f(0.0, 0.0, 0.3) * luminance(E); }
+  let s = min(v.x, v.y);
+  return vec3f(0.3, 0.3 * s, 0.3 * s) * luminance(E);
 }
 // The sky's light at a raster pixel's surface (as earthGround's)
 fn liteSky(q: vec3f, hG: f32, E: vec3f, Ls: vec3f, mu0: f32) -> vec3f {
@@ -10901,8 +10918,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (tM <= 0.0) { tM = terrainRasterHint(centre); }
   let ray = rasterRay(pos, k);
   // (a bridge's box here: its deck met before the ground — the exact test, the scenery's BVH —, the rays' kernel's pixel)
-  if (HAS_SCENERY && terrainRasterBridge(centre) && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 &&
-      sceneryQuery(P.scenery[3].xyz, sceneryLocal(normalize(toBody(ray.look))), max(tM - 0.3, 0.0), false).kind >= 0.0) { return; }
+  if (HAS_SCENERY && terrainRasterBridge(centre) && sceneryDeckBefore(normalize(toBody(ray.look)), max(tM - 0.3, 0.0))) { return; }
   // (a tree the raster drew here — U2 —: met along the ray before the ground, its point the surface; missed, the ground's)
   var isTree = false;
   let treeId = terrainRasterId(centre);
@@ -11110,6 +11126,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       return;
     }
   }
+  if ((liteSkip() & 8192u) != 0u) { G = liteShadowDebug(E); }
   liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true);
 }
 
@@ -11238,6 +11255,7 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
     stamps[arrayLength(&stamps) - 1u] = P.frame.x;
   }
   G = mix(G, wcol, water);
+  if ((liteSkip() & 8192u) != 0u) { G = liteShadowDebug(E); }
   RASTER_SHADE = false;
   SEA_ON = false;
   // (falling water — a cascade, a rapid — on the inland water alone (the sea does not fall): where its ground falls steeply —

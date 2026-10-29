@@ -36,6 +36,8 @@ const PLACES: Record<string, { lat: number; lon: number; alt: number; date: stri
   bridges: { lat: 48.8452, lon: 2.2735, alt: 150, date: "2026-07-10T11:30:00Z", heading: 45, pitch: -14 },
   // (the same in the late afternoon: the decks' shadows long across the water)
   // (looking down on the Pont Mirabeau: the water's own colour more than the sky's mirror — its deck's shadow on it)
+  // (the same at a low Sun: the deck's shadow a deck wide beside it on the water)
+  "bridges-low": { lat: 48.8446, lon: 2.2726, alt: 130, date: "2026-07-10T18:30:00Z", heading: 45, pitch: -30 },
   "bridges-down": { lat: 48.8446, lon: 2.2726, alt: 130, date: "2026-07-10T16:30:00Z", heading: 45, pitch: -30 },
   "bridges-pm": { lat: 48.8452, lon: 2.2735, alt: 150, date: "2026-07-10T16:30:00Z", heading: 45, pitch: -14 },
 };
@@ -93,11 +95,31 @@ describe.skipIf(!E2E)("low flight at sunset: the ground's shading and colour", (
           return +(gpu / done).toFixed(2); })()`);
         const agl = await app.js<number>(`Math.round(__bh.camera.last?.agl ?? __bh.game.geoNow?.()?.agl ?? -1)`).catch(() => -1);
         const sc = await app.js<Record<string, unknown> | null>(
-          `(() => { const s = __bh.renderer.earthScenery?.stats?.(); const r = __bh.renderer.terrainRasterStats?.scenery; return s && { status: s.status, buildings: s.buildings, bridges: s.bridges, rasterError: r?.error ?? null }; })()`,
+          `(() => { const s = __bh.renderer.earthScenery?.stats?.(); const r = __bh.renderer.terrainRasterStats?.scenery; const f = __bh.renderer.earthScenery?.contact?.f; return s && { status: s.status, buildings: s.buildings, bridges: s.bridges, rasterError: r?.error ?? null, triangles: f ? [f[15], f[11]] : null }; })()`,
         );
         console.log(`  scenery: ${JSON.stringify(sc)}`);
         const file = `${shots}/ground-sunset-${pl}-${side}.png`;
         await app.shot(file);
+        // (GS_AB=1: the same frozen view again without the trees' and buildings' shadow map — renderer.treeShadowOn —: its shadows where they fall)
+        if (process.env.GS_AB === "1") {
+          await app.js(`(() => { __bh.renderer.treeShadowOn = false; __bh.touch(); return 1; })()`);
+          await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
+            for (let i = 0; i < 30; i++) { __bh.touch(); await frame(); }
+            const t0 = performance.now(); let calm = 0;
+            while (performance.now() - t0 < 180000) { const sc = r.earthScenery?.stats?.(); const ok = r.compilingNow.length === 0 && !!r.variantReady && !(sc && (sc.pending || sc.status === "loading"));
+              calm = ok ? calm || performance.now() : 0; if (calm && performance.now() - calm > 4000) break; __bh.touch(); await frame(); }
+            for (let i = 0; i < 120; i++) await frame(); return 1; })()`);
+          await app.shot(file.replace(".png", "-noshadow.png"));
+          // (and on again, the same wait: the pair taken warm — the first shot of a run may be before its scenery)
+          await app.js(`(() => { __bh.renderer.treeShadowOn = true; __bh.touch(); return 1; })()`);
+          await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
+            for (let i = 0; i < 30; i++) { __bh.touch(); await frame(); }
+            const t0 = performance.now(); let calm = 0;
+            while (performance.now() - t0 < 180000) { const sc = r.earthScenery?.stats?.(); const ok = r.compilingNow.length === 0 && !!r.variantReady && !(sc && (sc.pending || sc.status === "loading"));
+              calm = ok ? calm || performance.now() : 0; if (calm && performance.now() - calm > 4000) break; __bh.touch(); await frame(); }
+            for (let i = 0; i < 120; i++) await frame(); return 1; })()`);
+          await app.shot(file.replace(".png", "-shadow.png"));
+        }
         rows.push({ place: pl, side, heading: +heading.toFixed(1), sun, gpuMs, tilesLeft: left, agl, file });
         console.log(`  ${pl} ${side}: ${gpuMs} ms GPU, tiles left ${left}, AGL ${agl} m`);
       }
