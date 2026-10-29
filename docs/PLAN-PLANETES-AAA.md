@@ -1,6 +1,7 @@
 # Plan — toutes les planètes au niveau de la Terre (AAA, détail maximal, jamais plus lent)
 
 Date : **29 octobre 2026**, sur `main` à `269ae823`.
+Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progress/planetes-aaa/P0.md](progress/planetes-aaa/P0.md).
 
 ## 0. La demande
 
@@ -52,7 +53,7 @@ Date : **29 octobre 2026**, sur `main` à `269ae823`.
 
 ## 3. Phases
 
-### P0 — Référence (≈ ½ journée)
+### P0 — Référence — **fait**, [P0.md](progress/planetes-aaa/P0.md)
 - Galerie « avant » : chaque corps × 4 vues (orbite, vol bas 2 km, au sol à pied, plan ciné) — `e2e/planets-baseline`.
 - Vues gelées et chiffres GPU (`trace-ab`, `gpuprof`) de **la Terre** dans les 4 vues : le budget à ne jamais
   dépasser, pour toutes les planètes. Les mêmes chiffres par corps : la marge de chacun sous ce budget.
