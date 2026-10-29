@@ -78,6 +78,7 @@ const NAMES: Record<string, string> = Object.fromEntries(
     lander: "Lander",
     endurance: "Endurance",
     f35: "F-35B",
+    a320: "A320",
     ...(Object.fromEntries(SOLAR_BODIES.map((b) => [b.id, b.name])) as Record<OurBody, string>),
   }).map(([k, v]) => [k, t(v)]),
 );

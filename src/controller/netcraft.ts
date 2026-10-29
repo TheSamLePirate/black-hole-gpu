@@ -251,6 +251,14 @@ function netOwnHole(c: CameraController): NetOwnState | null {
 }
 
 /** The Earth's frame now, seen from the flown craft: its axes, our place on them, the camera's mapping. */
+/** Where the view is in the Earth's coordinates [m] — a spectator's when one is out (it may be far from the craft
+ *  flown: the traffic and the ships it looks at are drawn about it, PLAN-CAMERA-AAA CAM8) —, else our place. */
+export function viewEcef(c: CameraController, E: { p0: Vec3; nav: { t: number } }): Vec3 {
+  const w = c.spectator?.rigWorld();
+  if (!w?.ours) return E.p0;
+  return scale(toBodyFixed("earth", w.X, E.nav.t), M_METRES);
+}
+
 export function earthView(c: CameraController) {
   const cam = cameraFrame(c.s);
   const nav = c.ourNav(cam);

@@ -422,6 +422,7 @@ export interface Settings {
   voyageWall: number; // the playback's length [s] (0: real time)
   voyageWho: "observer" | "ship";
   voyageCine: "sequence" | "montage"; // the cinematic voyage (⇧G): one continuous shot, or cuts
+  subjectView: "around" | "chase" | "aboard" | "tower"; // the view about a craft targeted (camera/subjectcam.ts)
   camSpeedFov: number; // the softened views' lens widened with the speed and the afterburner (its gain; 0: none)
   cineShot: "auto" | "chase" | "orbit" | "pass" | "tracking" | "planet" | "system"; // the director's view (cine/brain.ts): its shot, or the director choosing
   cineShake: number; // its noise: the air's buffeting, the engine's rumble, the hand (0 … 1)
@@ -801,6 +802,7 @@ export function defaultSettings(): Settings {
     voyageWall: 20,
     voyageWho: "observer",
     voyageCine: "sequence",
+    subjectView: "around",
     camSpeedFov: 1,
     cineShot: "auto",
     cineShake: 0.5,
@@ -2194,6 +2196,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   voyageWall: "pref",
   voyageWho: "pref",
   voyageCine: "pref",
+  subjectView: "pref",
   camSpeedFov: "pref",
   cineShot: "pref",
   cineShake: "pref",

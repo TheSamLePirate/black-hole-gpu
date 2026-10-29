@@ -114,6 +114,7 @@ import { installCamRig } from "./controller/camrig";
 import { installTravel } from "./controller/travel";
 import { installVoyager, type Voyage } from "./camera/voyager";
 import { installCineVoyage, type CineVoyage } from "./camera/cinevoyage";
+import { installSubjectCam, type Tower } from "./camera/subjectcam";
 import { isTyping } from "./controller/util";
 export { FLIGHT_KEYS, LANDING, TELE_MIN, finalGate, isTyping, landingProfile, wrapYaw } from "./controller/util";
 export type { LandingFix } from "./controller/util";
@@ -1094,6 +1095,15 @@ export class CameraController {
   voyage: Voyage | null = null;
   /** the cinematic voyage (camera/cinevoyage.ts, ⇧G): its legs — the low passes, the voyage — and its cuts */
   cineVoyage: CineVoyage | null = null;
+  /** the view about a craft (camera/subjectcam.ts): the head's or the chase's turn [deg], the chase's distance, its
+   *  lagging axes, the tower set down */
+  subject: { yaw: number; pitch: number; zoom: number; q: [number, number, number, number] | null; tower: Tower | null } = {
+    yaw: 0,
+    pitch: 0,
+    zoom: 1,
+    q: null,
+    tower: null,
+  };
   /** a cut made on purpose (a montage's): told to the camera's sensor */
   onCut: (() => void) | null = null;
   /** whose settings hold the clock (a spectator's: the ship's — its own copy synced from them each frame) */
@@ -1696,3 +1706,4 @@ installCamRig(CameraController);
 installTravel(CameraController);
 installVoyager(CameraController);
 installCineVoyage(CameraController);
+installSubjectCam(CameraController);

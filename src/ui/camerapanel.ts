@@ -13,7 +13,7 @@ import { onEscape } from "./keys";
 import { cameraFrame } from "../camera";
 import { MOUNTS, mountKeys, type Mount } from "../mounts";
 import type { Settings, Target } from "../settings";
-import { BODY_NAMES } from "../targeting";
+import { BODY_NAMES, isCraftLike } from "../targeting";
 import { SOLAR_BODIES } from "../system/solar";
 import { fmtAngle, focalLength } from "./telescope";
 import { el as h } from "./kit";
@@ -234,6 +234,7 @@ export class CameraPanel {
       s.voyageBy,
       s.voyageWho,
       s.voyageWall,
+      s.subjectView,
       c.viewController().voyage ? 1 : 0,
     ].join();
   }
@@ -263,6 +264,7 @@ export class CameraPanel {
     this.looks();
     this.lens();
     this.targets();
+    this.subjectViews();
     this.voyage();
     if (!s.ship) {
       this.motion();
@@ -586,6 +588,39 @@ export class CameraPanel {
           [t("Spacecraft"), craft],
         ];
     return g.filter(([, l]) => l.length);
+  }
+
+  /** The views about a craft targeted (camera/subjectcam.ts, PLAN-CAMERA-AAA CAM8): around it, chasing it, aboard, a tower. */
+  private subjectViews() {
+    const s = this.d.settings;
+    const { s: vs, c } = this.viewOf();
+    if (!isCraftLike(vs.target) || c.piloting) return;
+    const sec = this.section(tf("Camera on {0}", BODY_NAMES[vs.target]), t("drag: look · wheel: distance"));
+    const seg = h("div", "cp-seg");
+    for (const [k, label, tip] of [
+      ["around", t("Around"), t("The camera turns about it: drag to go round, wheel for the distance")],
+      ["chase", t("Chase"), t("Behind it and above, following its turns with a lag; the wheel sets the distance")],
+      ["aboard", t("Cockpit"), t("At its eye — the cockpit, the bridge —, looking ahead; drag to turn the head")],
+      ["tower", t("Tower"), t("Set down ahead of its way — on the ground, or in space —, turning to follow it")],
+    ] as const) {
+      const b = h("button", "", label);
+      b.classList.toggle("on", vs.subjectView === k);
+      b.dataset.tip = tip;
+      b.dataset.testid = `cp-subject-${k}`;
+      b.onclick = () => {
+        s.subjectView = vs.subjectView = k;
+        // (another view: a cut, on purpose — the camera's sensor told)
+        c.onCut?.();
+        c.subject.yaw = c.subject.pitch = 0;
+        c.subject.tower = null;
+        // (around: the rig's orbit about it)
+        if (k === "around" && this.d.view() !== "orbit") this.d.setView("orbit");
+        this.d.changed(["subjectView"]);
+        this.refresh(true);
+      };
+      seg.append(b);
+    }
+    sec.append(seg);
   }
 
   /** The voyage (camera/voyager.ts, PLAN-CAMERA-AAA CAM6): who goes, at what pace, played in how long — and go. */

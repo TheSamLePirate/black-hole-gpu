@@ -13,7 +13,7 @@ import { SHIP_MESH, shipLights, shipMotion, shipRcs, shipSize } from "../game/sh
 import { azAltAt } from "../eclipse/earth-moon";
 import { J2000_MS } from "../system/timescale";
 import { daysOf } from "../system/solar";
-import { earthView } from "./netcraft";
+import { earthView, viewEcef } from "./netcraft";
 import { enuAt, placeOf, R_EQ, radii, wrap } from "./traffic";
 import type { TrafficMark } from "./traffic";
 import type { Ship } from "../traffic/feed";
@@ -233,30 +233,34 @@ function seaShips(
   if (!list.length) return [];
   const E = earthView(this);
   if (!E) return [];
+  const pv = viewEcef(this, E);
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
   const n = (v: Vec3, k: number): Vec3 => {
     const l = Math.hypot(...v) || 1;
     return [(v[0] / l) * k, (v[1] / l) * k, (v[2] / l) * k];
   };
-  return list
-    .map((c) => ({ c, rel: cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]!)) }))
-    .map((x) => ({ ...x, d: Math.hypot(...x.rel) }))
-    .filter((x) => x.d < 20_000)
-    .sort((a, b) => a.d - b.d)
-    .slice(0, 8)
-    .map(({ c, rel }) => {
-      const M = SHIP_MESH[c.mesh];
-      const kz = c.len / M.len,
-        kx = c.beam / M.beam;
-      return {
-        id: c.mesh,
-        rel,
-        axes: [n(cam(c.right.map((x) => -x)), kx), n(cam(c.up), Math.sqrt(kx * kz)), n(cam(c.fwd), kz)] as [Vec3, Vec3, Vec3],
-        hidden: false,
-        far: true,
-        mirror: true,
-      };
-    });
+  return (
+    list
+      .map((c) => ({ c, rel: cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]!)) }))
+      // (near the view — a spectator's, far from the craft flown maybe —: those drawn)
+      .map((x) => ({ ...x, d: Math.hypot(x.c.p[0]! - pv[0], x.c.p[1]! - pv[1], x.c.p[2]! - pv[2]) }))
+      .filter((x) => x.d < 20_000)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 8)
+      .map(({ c, rel }) => {
+        const M = SHIP_MESH[c.mesh];
+        const kz = c.len / M.len,
+          kx = c.beam / M.beam;
+        return {
+          id: c.mesh,
+          rel,
+          axes: [n(cam(c.right.map((x) => -x)), kx), n(cam(c.up), Math.sqrt(kx * kz)), n(cam(c.fwd), kz)] as [Vec3, Vec3, Vec3],
+          hidden: false,
+          far: true,
+          mirror: true,
+        };
+      })
+  );
 }
 
 /** The ships' wakes for the sea's shader (renderer.seaWakes): the nearest eight under way within 15 km — their

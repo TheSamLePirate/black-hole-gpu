@@ -49,4 +49,16 @@ export default {
   "At rest where it is, with what it is near": "Au repos là où elle est, avec ce dont elle est proche",
   "At relativistic speed: the world's clock runs t, yours τ; drag to look around on the way":
     "À vitesse relativiste : l'horloge du monde compte t, la vôtre τ ; glissez pour regarder pendant le trajet",
+  "Camera on {0}": "Caméra sur {0}",
+  "drag: look · wheel: distance": "glisser : regarder · molette : distance",
+  "The camera turns about it: drag to go round, wheel for the distance":
+    "La caméra tourne autour : glisser pour en faire le tour, molette pour la distance",
+  Chase: "Poursuite",
+  "Behind it and above, following its turns with a lag; the wheel sets the distance":
+    "Derrière et au-dessus, suivant ses virages avec un temps de retard ; la molette règle la distance",
+  "At its eye — the cockpit, the bridge —, looking ahead; drag to turn the head":
+    "À son poste — le cockpit, la passerelle —, regard vers l'avant ; glisser pour tourner la tête",
+  Tower: "Tour",
+  "Set down ahead of its way — on the ground, or in space —, turning to follow it":
+    "Posée en avant de sa route — au sol, ou dans l'espace —, pivotant pour le suivre",
 } satisfies Record<string, string>;

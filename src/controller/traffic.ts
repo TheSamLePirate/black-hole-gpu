@@ -16,7 +16,7 @@ import type { FormCraft } from "../game/formation";
 import type { RadarObject } from "../game/radar";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
-import { earthView } from "./netcraft";
+import { earthView, viewEcef } from "./netcraft";
 import { formationLabel, formSlotFor } from "./formation";
 import { t, tf } from "../i18n";
 import type { Plane } from "../traffic/feed";
@@ -413,28 +413,32 @@ function trafficShips(this: CameraController): { id: AirlinerId; rel: Vec3; axes
   if (!list.length) return [];
   const E = earthView(this);
   if (!E) return [];
+  const pv = viewEcef(this, E);
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
   const n = (v: Vec3, k: number): Vec3 => {
     const l = Math.hypot(...v) || 1;
     return [(v[0] / l) * k, (v[1] / l) * k, (v[2] / l) * k];
   };
-  return list
-    .filter((c) => c.mesh)
-    .map((c) => ({ t: c, rel: cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]!)) }))
-    .map((x) => ({ ...x, d: Math.hypot(...x.rel) }))
-    .filter((x) => x.d < 25_000)
-    .sort((a, b) => a.d - b.d)
-    .slice(0, 12)
-    .map(({ t: c, rel }) => {
-      const s = c.len / (c.mesh === "a320t" ? 37.7 : 36.2);
-      return {
-        id: c.mesh!,
-        rel,
-        axes: [n(cam(c.right.map((x) => -x)), s), n(cam(c.up), s), n(cam(c.fwd), s)] as [Vec3, Vec3, Vec3],
-        hidden: false,
-        far: true,
-      };
-    });
+  return (
+    list
+      .filter((c) => c.mesh)
+      .map((c) => ({ t: c, rel: cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]!)) }))
+      // (near the view — a spectator's, far from the craft flown maybe —: those drawn)
+      .map((x) => ({ ...x, d: Math.hypot(x.t.p[0]! - pv[0], x.t.p[1]! - pv[1], x.t.p[2]! - pv[2]) }))
+      .filter((x) => x.d < 25_000)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 12)
+      .map(({ t: c, rel }) => {
+        const s = c.len / (c.mesh === "a320t" ? 37.7 : 36.2);
+        return {
+          id: c.mesh!,
+          rel,
+          axes: [n(cam(c.right.map((x) => -x)), s), n(cam(c.up), s), n(cam(c.fwd), s)] as [Vec3, Vec3, Vec3],
+          hidden: false,
+          far: true,
+        };
+      })
+  );
 }
 
 /** A label and its lights for the overlay: on the camera's axes [m] (x right, y up, z ahead). */

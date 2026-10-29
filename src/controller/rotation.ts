@@ -882,6 +882,11 @@ function dragBy(this: CameraController, dx: number, dy: number, dtEv: number, lo
     this.vYaw = smooth(this.vYaw, (-dx * kLook) / dtEv);
     this.vPitch = smooth(this.vPitch, (dy * kLook) / dtEv);
   };
+  // (about a craft, chased or aboard: the drag turns the head, swings the chase round — camera/subjectcam.ts)
+  if (!this.piloting && this.subjectActive() && s.subjectView !== "tower") {
+    this.subjectLook(-dx * kLook * (s.subjectView === "chase" ? 2 : 1), dy * kLook);
+    return;
+  }
   // (a voyage under way: the drag turns the look off its course — camera/voyager.ts)
   if (this.voyage && !this.piloting) {
     this.voyageLook(-dx * kLook, dy * kLook);
@@ -941,6 +946,11 @@ function zoomStep(this: CameraController, dy: number, alt: boolean) {
   if (this.flyMode) {
     // flight speed, like a game's throttle
     this.flySpeed = clamp(this.flySpeed * Math.exp(-dy * 0.002), FLY_SPEED_MIN, FLY_SPEED_MAX);
+    return;
+  }
+  // (a craft chased: the wheel its distance — camera/subjectcam.ts)
+  if (!alt && !this.piloting && this.subjectActive() && this.s.subjectView === "chase") {
+    this.subject.zoom = clamp(this.subject.zoom * Math.exp(dy * 0.0015), 0.3, 40);
     return;
   }
   if (!alt && this.rig.on && !this.piloting) {

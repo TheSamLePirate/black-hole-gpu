@@ -321,6 +321,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   const free = this.cinematic !== "dive" && this.cinematic !== "journey";
   const boost = this.travelBoost(dt, move);
   if (move.some((x) => x !== 0) && this.cinematic === "orbit") this.setCinematic(null);
+  let subjectPlaced = false;
   if (move[3] && free && !pilotNow) this.rotateView(0, 0, move[3] * 70 * dt);
   // moving the camera (flight, free fall) re-expresses its orientation: not a turn by the user,
   // so the tracking keeps its offset from the target
@@ -345,6 +346,10 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   } else if (this.travel || this.voyage || this.cineVoyage) {
     // (travelling to a body or a craft: placed at the frame's end — travelStep, voyageStep, below)
     this.flyVel = [0, 0, 0];
+  } else if (!this.gravity && free && this.subjectStep(dt)) {
+    // (about a craft: chased, aboard, from a tower — camera/subjectcam.ts —, its own look: no lock turning it)
+    this.flyVel = [0, 0, 0];
+    subjectPlaced = true;
   } else if (!this.gravity && free && this.rigStep(dt, move, fast, boost)) {
     // the rig moves the camera (around a body, following it, carried by it, on a tripod)
     this.flyVel = [0, 0, 0];
@@ -433,7 +438,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   this.updateMotion(dt);
   // (a travel: its pose, over the rest — controller/travel.ts)
   const travelling = (!this.piloting && this.travelStep(dt)) || (this.cineVoyage ? this.cineVoyageStep(dt) : this.voyageStep(dt));
-  if (this.tracking && !flying && !this.inThroat() && !travelling) this.track(dt);
+  if (this.tracking && !flying && !this.inThroat() && !travelling && !subjectPlaced) this.track(dt);
   // (tracking resumes from the orientation the flight left: offset recomputed, no jump)
   else this.offset = null;
   // (the view walked off where a scene set it down: that rest dropped — controller/motion.ts)
