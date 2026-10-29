@@ -80,6 +80,15 @@ export interface TracerConstantsOptions {
   otherUniverse?: boolean;
 }
 
+/** The feature bits a key's realtime kernels compile out although the key has them: the other universe's hole — its metric
+ *  (512), its disk's thickness (64) — with the Earth near the camera (tracerConstants). A kernel of such a key does not
+ *  cover another key that needs them (renderer coveringVariant): the Earth flight's light probe, lent to Miller's while its
+ *  own compiled, saw neither Gargantua nor its disk — Miller and Mann drawn black without the Ranger (PLAN-PLANETES-AAA P0, #1). */
+export function strippedBits(key: number, o: { quality?: boolean; otherUniverse?: boolean } = {}): number {
+  const earthNear = !o.quality && (key & 32) !== 0 && ((key >> NEAR_KIND_SHIFT) & 7) === 1;
+  return earthNear && !o.otherUniverse ? key & (64 | 512) : 0;
+}
+
 /** The override constants of a tracer pipeline for a features key. */
 export function tracerConstants(key: number, entry: TracerEntry, o: TracerConstantsOptions = {}): Record<string, number> {
   const quality = !!o.quality;
@@ -94,8 +103,7 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
   // only through the mouth by Saturn, from the Earth a thousandth of an arcsecond: never a pixel, yet a third of main and
   // half of env, a minute each of a Windows PC's compile. The wormhole's own code stays: our side of its world is ours — the
   // rays straight through it, our bodies on them)
-  const earthNear = !quality && (key & 32) !== 0 && ((key >> NEAR_KIND_SHIFT) & 7) === 1;
-  if (earthNear && !o.otherUniverse) fixed[64] = fixed[512] = 0;
+  for (const bit of [64, 512]) if (strippedBits(key, o) & bit) fixed[bit] = 0;
   const has = (bit: number) => fixed[bit] ?? ((key & bit) !== 0 ? 1 : 0);
   return {
     DISC_ONLY: entry === "discs" ? 1 : 0,

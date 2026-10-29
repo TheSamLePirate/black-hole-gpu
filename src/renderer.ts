@@ -9,6 +9,7 @@ import {
   FEATURE_TERRAIN_CACHE,
   FEATURE_TERRAIN_RASTER,
   NEAR_KIND_SHIFT,
+  strippedBits,
   tracerConstants,
   tracerEntryPoint,
 } from "./system/tracer-kernels";
@@ -4410,10 +4411,15 @@ export class Renderer {
     const nearMatters = kind === "rt" || kind === "q" || kind === "discs";
     const kq = key & ~NEAR;
     const nq = (key >> NEAR_KIND_SHIFT) & 7;
+    // (a kernel that compiled out a bit the key needs does not cover it, whatever its own key says — strippedBits)
+    const quality = kind === "q" || kind === "lutq";
+    const opts = { quality, otherUniverse: !this.otherUniverseOut };
+    const need = key & ~strippedBits(key, opts);
     for (const [k, v] of this.variants) {
       if (!v[kind]) continue;
       const kk = k & ~NEAR;
       if ((kk & kq) !== kq || kk >>> 16 !== kq >>> 16) continue;
+      if ((strippedBits(k, opts) & need) !== 0) continue;
       const nk = (k >> NEAR_KIND_SHIFT) & 7;
       if (nearMatters && nk !== nq && nk !== 0) continue;
       return v[kind];
