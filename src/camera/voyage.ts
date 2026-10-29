@@ -17,6 +17,9 @@ export interface VoyageBody {
   id: string;
   C: (t: number) => Vec3;
   R: number;
+  /** a point eased into and out of (the departure, the arrival): within `soft` of it the bound is k √(soft × d) —
+   *  a constant deceleration to rest, reached in a finite time —, beyond it k d; not kept clear of */
+  soft?: number;
 }
 
 export interface VoyageEnds {
@@ -24,6 +27,11 @@ export interface VoyageEnds {
   A: (t: number) => Vec3;
   B: (t: number) => Vec3;
   bodies: VoyageBody[];
+  /** the bodies the way leaves and reaches (ids among `bodies`): it spirals out of the one and into the other — its
+   *  direction from each turned, its distance eased geometrically —, so it never cuts through either, whichever side
+   *  of them the ends are on (a station behind the Earth when one gets there) */
+  from?: string;
+  to?: string;
 }
 
 /** what the player chose: the speed reached (peak β), a duration (the traveller's τ or the world's t, seconds), an
@@ -64,8 +72,9 @@ export interface VoyageState {
   /** the share of the way, the speed's phase */
   u: number;
   phase: "accel" | "cruise" | "decel" | "bound" | "done";
-  /** the distance left [M] */
+  /** the distance left [M], the height over the nearest thing there [M] (the ground's bound's) */
   left: number;
+  h: number;
 }
 
 export interface VoyagePlan {
@@ -83,6 +92,8 @@ export interface VoyagePlan {
   limited: boolean;
   /** the state at a coordinate time [M] */
   at(t: number): VoyageState;
+  /** the table: the world's time [M], the speed [c], the height [M] at each sample */
+  table: { t: Float64Array; b: Float64Array; h: Float64Array };
 }
 
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -177,9 +188,10 @@ function table(D: number, a: number, betaMax: number, vmax: (s: number) => numbe
     const dx = x1 - x0;
     let dt = dx / v;
     if (p === 3) {
-      const v0 = Math.max(vmax(x0), 1e-300),
-        v1 = Math.max(vmax(x1), 1e-300);
-      if (Math.abs(v1 - v0) > 1e-9 * v0) dt = (dx * Math.log(v1 / v0)) / (v1 - v0);
+      const v0 = vmax(x0),
+        v1 = vmax(x1);
+      // (linear between two speeds: a logarithm; one of them at rest — an eased end —: the midpoint's)
+      if (v0 > 1e-200 && v1 > 1e-200 && Math.abs(v1 - v0) > 1e-9 * v0) dt = (dx * Math.log(v1 / v0)) / (v1 - v0);
     }
     const g = 1 / Math.sqrt(1 - Math.min(v * v, 1 - 1e-15));
     return [dt, dt / g];
@@ -195,7 +207,12 @@ function table(D: number, a: number, betaMax: number, vmax: (s: number) => numbe
     return [dt, dtau];
   };
   for (let i = 1; i < N; i++) {
-    const [dt, dtau] = span(s[i - 1]!, s[i]!);
+    let [dt, dtau] = span(s[i - 1]!, s[i]!);
+    // (an interval the closed forms could not take — a speed of nothing at both ends —: its midpoint's)
+    if (!Number.isFinite(dt) || !Number.isFinite(dtau)) {
+      const [v] = speed(0.5 * (s[i]! + s[i - 1]!));
+      dt = dtau = (s[i]! - s[i - 1]!) / v;
+    }
     t[i] = t[i - 1]! + dt;
     tau[i] = tau[i - 1]! + dtau;
   }
@@ -216,11 +233,67 @@ function seek(A: Float64Array, x: number) {
   return lo;
 }
 
-/** The point at u of the path at time t, the bend's direction and size given. */
-function pathAt(e: VoyageEnds, t: number, u: number, n: Vec3, bend: number): Vec3 {
+/** The direction from a to b turned by a share w of their angle (Rodrigues; opposite: about any perpendicular). */
+function slerpDir(a: Vec3, b: Vec3, w: number): Vec3 {
+  const c = Math.min(1, Math.max(-1, dot(a, b)));
+  const ang = Math.acos(c);
+  if (ang < 1e-9) return b;
+  let ax = cross(a, b);
+  if (len(ax) < 1e-12) ax = cross(a, Math.abs(a[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0]);
+  ax = unit(ax);
+  const th = ang * w;
+  return addS(addS(addS([0, 0, 0], a, Math.cos(th)), cross(ax, a), Math.sin(th)), ax, dot(ax, a) * (1 - Math.cos(th)));
+}
+
+/** The way about a centre: its direction from it turned, its distance eased geometrically, from P0 to P1 (relative). */
+function spiral(P0: Vec3, P1: Vec3, w: number): Vec3 {
+  const r0 = Math.max(len(P0), 1e-300),
+    r1 = Math.max(len(P1), 1e-300);
+  const d = slerpDir(unit(P0), unit(P1), w);
+  const r = Math.exp(Math.log(r0) * (1 - w) + Math.log(r1) * w);
+  return [d[0] * r, d[1] * r, d[2] * r];
+}
+
+/** The way's shape at time t, its parameter w ∈ [0, 1]: out of the start's body, into the goal's, blended between. */
+function shapeAt(e: VoyageEnds, t: number, w: number): Vec3 {
   const A = e.A(t),
     B = e.B(t);
-  return addS(addS(A, sub(B, A), u), n, bend * Math.sin(Math.PI * u));
+  const around = (id: string | undefined): Vec3 => {
+    const b = id ? e.bodies.find((x) => x.id === id) : undefined;
+    if (!b) return addS(A, sub(B, A), w);
+    const C = b.C(t);
+    return addS(C, spiral(sub(A, C), sub(B, C), w), 1);
+  };
+  if (!e.from && !e.to) return addS(A, sub(B, A), w);
+  const k = Math.min(1, Math.max(0, (w - 0.2) / 0.6));
+  const m = k * k * (3 - 2 * k);
+  const X0 = m < 1 ? around(e.from) : B,
+    X1 = m > 0 ? around(e.to) : A;
+  return [X0[0] * (1 - m) + X1[0] * m, X0[1] * (1 - m) + X1[1] * m, X0[2] * (1 - m) + X1[2] * m];
+}
+
+/** The shape's length table at a time: w at each of its samples and the length so far [M]. */
+function arcTable(e: VoyageEnds, t: number, n = 2048) {
+  const w = new Float64Array(n + 1),
+    L = new Float64Array(n + 1);
+  let prev = shapeAt(e, t, 0);
+  for (let i = 1; i <= n; i++) {
+    w[i] = i / n;
+    const X = shapeAt(e, t, w[i]!);
+    L[i] = L[i - 1]! + len(sub(X, prev));
+    prev = X;
+  }
+  return { w, L };
+}
+
+/** The point a distance s along the way at time t (its length table given), the bend's direction and size added. */
+function pathAt(e: VoyageEnds, t: number, s: number, arc: { w: Float64Array; L: Float64Array }, n: Vec3, bend: number): Vec3 {
+  const D = arc.L[arc.L.length - 1]!;
+  const i = seek(arc.L, s);
+  const f = (s - arc.L[i]!) / Math.max(arc.L[i + 1]! - arc.L[i]!, 1e-300);
+  const w = Math.min(1, Math.max(0, arc.w[i]! + f * (arc.w[i + 1]! - arc.w[i]!)));
+  const u = D > 0 ? Math.min(1, Math.max(0, s / D)) : 1;
+  return addS(shapeAt(e, t, w), n, bend * Math.sin(Math.PI * u));
 }
 
 /** The bend needed to clear the bodies between A and B (none: 0) and its direction. */
@@ -233,6 +306,8 @@ function clearance(e: VoyageEnds, t0: number, t1: number): { n: Vec3; bend: numb
   if (D <= 0) return best;
   const f = unit(d);
   for (const b of e.bodies) {
+    // (the eased ends, and the bodies the way spirals out of and into: no bend for them)
+    if (b.soft !== undefined || b.id === e.from || b.id === e.to) continue;
     // (the body when the path passes it, its nearest point to the line)
     const C0 = b.C(t0);
     const u = Math.min(1, Math.max(0, dot(sub(C0, A), f) / D));
@@ -259,7 +334,11 @@ function clearance(e: VoyageEnds, t0: number, t1: number): { n: Vec3; bend: numb
 /** The height over the nearest body's sphere at a point and time [M] (∞: none). */
 function heightAt(e: VoyageEnds, X: Vec3, t: number) {
   let h = Number.POSITIVE_INFINITY;
-  for (const b of e.bodies) h = Math.min(h, len(sub(X, b.C(t))) - b.R);
+  for (const b of e.bodies) {
+    const d = len(sub(X, b.C(t))) - b.R;
+    if (!Number.isFinite(d)) continue;
+    h = Math.min(h, b.soft !== undefined && d < b.soft ? Math.sqrt(Math.max(d, 0) * b.soft) : d);
+  }
   return h;
 }
 
@@ -273,12 +352,25 @@ export function planVoyage(e: VoyageEnds, choice: VoyageChoice, t0: number, o: V
     a = AUTO_G * G_PER_M,
     D = len(sub(e.B(t0), e.A(t0))),
     cl = { n: [0, 0, 1] as Vec3, bend: 0 },
+    arc = arcTable(e, t0),
     limited = false;
+  let lastH: Float64Array<ArrayBufferLike> = new Float64Array(0);
+  let good: {
+    tab: Table;
+    T: number;
+    a: number;
+    D: number;
+    cl: { n: Vec3; bend: number };
+    arc: ReturnType<typeof arcTable>;
+    lastH: Float64Array<ArrayBufferLike>;
+  } | null = null;
   const h0 = Math.max(1e-12, Math.min(heightAt(e, e.A(t0), t0), heightAt(e, e.B(t0), t0), D));
   // (the arrival's time, the distance then, the bend, the table: iterated together — the goal met where it will be)
   for (let it = 0; it < 6; it++) {
     const t1 = t0 + T;
-    D = Math.max(len(sub(e.B(t1), e.A(t1))), 1e-15);
+    // (the way's length: its shape at the voyage's middle)
+    arc = arcTable(e, t0 + T / 2);
+    D = Math.max(arc.L[arc.L.length - 1]!, len(sub(e.B(t1), e.A(t1))), 1e-15);
     cl = clearance(e, t0, t1);
     const s = grid(D, h0, n);
     // (the bound along the way: the height at each sample, the sample's time from the last estimate)
@@ -288,10 +380,10 @@ export function planVoyage(e: VoyageEnds, choice: VoyageChoice, t0: number, o: V
       return t0 + tab.t[i]!;
     };
     const hs = new Float64Array(s.length);
+    lastH = hs;
     for (let i = 0; i < s.length; i++) {
-      const u = s[i]! / D;
       const tt = tEst(s[i]!);
-      hs[i] = Math.max(0, heightAt(e, pathAt(e, tt, u, cl.n, cl.bend), tt));
+      hs[i] = Math.max(0, heightAt(e, pathAt(e, tt, s[i]!, arc, cl.n, cl.bend), tt));
     }
     const vmax = (x: number) => {
       const i = seek(s, x);
@@ -319,8 +411,16 @@ export function planVoyage(e: VoyageEnds, choice: VoyageChoice, t0: number, o: V
       }
       a = Math.exp(hi);
     }
-    tab = build(a);
-    const T1 = tab.t[tab.t.length - 1]!;
+    const next = build(a);
+    const T1 = next.t[next.t.length - 1]!;
+    // (an iteration gone astray — the goal's motion over an unknown time, a duration unknown or a hundred times the
+    // last —: the last good one kept)
+    if (good && (!Number.isFinite(T1) || T1 > 100 * Math.max(good.T, 1e-12))) {
+      ({ tab, T, a, D, cl, arc, lastH } = good);
+      break;
+    }
+    tab = next;
+    if (Number.isFinite(T1)) good = { tab, T: T1, a, D, cl, arc, lastH };
     if (Math.abs(T1 - T) <= 1e-9 * Math.max(T1, 1e-12) && it > 0) {
       T = T1;
       break;
@@ -348,6 +448,11 @@ export function planVoyage(e: VoyageEnds, choice: VoyageChoice, t0: number, o: V
     return { s: x, tau: tb.tau[i]! + tb.span(tb.s[i]!, x)[1], i };
   };
   const PH = ["accel", "cruise", "decel", "bound"] as const;
+  const hAtS = (x: number) => {
+    const i = seek(tb.s, x);
+    const f = (x - tb.s[i]!) / Math.max(tb.s[i + 1]! - tb.s[i]!, 1e-300);
+    return lastH[i]! * (1 - f) + lastH[i + 1]! * f;
+  };
   return {
     t0,
     T,
@@ -357,17 +462,18 @@ export function planVoyage(e: VoyageEnds, choice: VoyageChoice, t0: number, o: V
     betaPeak,
     bend: cl.bend,
     limited,
+    table: { t: tb.t, b: tb.b, h: lastH },
     at(t: number): VoyageState {
       const dt = t - t0;
       const p = sAt(dt);
       const u = p.s / D;
-      const X = pathAt(e, t, u, cl.n, cl.bend);
+      const X = pathAt(e, t, p.s, arc, cl.n, cl.bend);
       // (the velocity: the path's at that time — the ends' motion and the way's —, by a symmetric difference)
       const h = Math.max(T * 1e-6, 1e-9);
       const pa = sAt(dt - h),
         pb = sAt(dt + h);
-      const Xa = pathAt(e, t - h, pa.s / D, cl.n, cl.bend),
-        Xb = pathAt(e, t + h, pb.s / D, cl.n, cl.bend);
+      const Xa = pathAt(e, t - h, pa.s, arc, cl.n, cl.bend),
+        Xb = pathAt(e, t + h, pb.s, arc, cl.n, cl.bend);
       const V: Vec3 = [(Xb[0] - Xa[0]) / (2 * h), (Xb[1] - Xa[1]) / (2 * h), (Xb[2] - Xa[2]) / (2 * h)];
       let beta = len(V);
       if (beta >= 0.99999) {
@@ -388,7 +494,43 @@ export function planVoyage(e: VoyageEnds, choice: VoyageChoice, t0: number, o: V
         u,
         phase: done ? "done" : PH[tb.ph[Math.min(p.i + 1, N - 1)]!]!,
         left: Math.max(0, D - p.s),
+        h: hAtS(p.s),
       };
     },
   };
+}
+
+/**
+ * The playback (the voyage's seconds on the screen): the time warp at each moment such that the view crosses its height
+ * at the rate k a wall second — real time near a world (its bound already k a world second), faster as the void opens —:
+ * warp = max(1, k h / v). `k` found so the whole lasts `wall` seconds (none: real time). `rt`: the world's M a second.
+ */
+export function playbackRate(plan: VoyagePlan, wall: number, rt: number): number {
+  const { t, b, h } = plan.table;
+  const length = (k: number) => {
+    let w = 0;
+    for (let i = 1; i < t.length; i++) {
+      const v = Math.max(0.5 * (b[i]! + b[i - 1]!), 1e-300),
+        hh = Math.min(0.5 * (h[i]! + h[i - 1]!), 1e30);
+      const warp = Math.max(1, (k * hh) / (v * rt));
+      w += (t[i]! - t[i - 1]!) / (rt * warp);
+    }
+    return w;
+  };
+  if (!(wall > 0)) return Number.POSITIVE_INFINITY;
+  let lo = Math.log(1e-3),
+    hi = Math.log(1e3);
+  for (let j = 0; j < 50; j++) {
+    const m = 0.5 * (lo + hi);
+    const L = length(Math.exp(m));
+    if (!Number.isFinite(L) || L > wall) lo = m;
+    else hi = m;
+  }
+  return Math.exp(hi);
+}
+
+/** The warp for a state, the playback's k given (≥ 1: never slower than real time). */
+export function warpAt(st: VoyageState, k: number, rt: number): number {
+  if (!Number.isFinite(k)) return 1;
+  return Math.max(1, (k * st.h) / (Math.max(st.beta, 1e-300) * rt));
 }

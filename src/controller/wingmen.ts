@@ -98,9 +98,9 @@ export interface RemoteWing {
 }
 
 /** A wingman's wreck still falling (shot down, not yet crashed). */
-const fallingW = (w: Wingman) => !w.alive && !!w.wreck && !w.wreck.end;
+export const fallingW = (w: Wingman) => !w.alive && !!w.wreck && !w.wreck.end;
 /** A wingman as drawn and sent: its place, velocity, nose and top — alive, its craft's; falling, its wreck's. */
-function poseOf(w: Wingman): { p: number[]; v: number[]; fwd: number[]; up: number[] } {
+export function poseOf(w: Wingman): { p: number[]; v: number[]; fwd: number[]; up: number[] } {
   if (w.wreck && !w.alive) return { p: w.wreck.p, v: w.wreck.v, fwd: w.wreck.fwd, up: w.wreck.up };
   const A = w.jet.axes();
   return { p: w.jet.p, v: w.jet.v, fwd: A.fwd, up: A.up };
@@ -142,7 +142,7 @@ export interface WingState {
   td?: { p: number[]; hdg: number } | null;
 }
 
-const nameOf = (k: number) => tr(NAMES[k] ?? { fr: `${k}`, en: `${k}` });
+export const nameOf = (k: number) => tr(NAMES[k] ?? { fr: `${k}`, en: `${k}` });
 
 /** Its place now: geodetic latitude, longitude [°], its altitude over the sea (the WGS84 ellipsoid — the Earth's
  *  figure) and its height over the ground [m] (the relief over that figure). */

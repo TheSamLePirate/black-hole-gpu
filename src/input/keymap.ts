@@ -78,6 +78,8 @@ export type KeyAction =
   | "standOn"
   | "fall"
   | "shadowGuide"
+  | "voyage"
+  | "voyageCine"
   | "constellations"
   | "grids"
   | "jet"
@@ -229,7 +231,12 @@ export const KEYMAP: KeySection[] = [
   {
     title: "Scene",
     rows: [
-      { keys: "J · G", text: "Jet · shadow guide", bind: [scene("j", "jet"), scene("g", "shadowGuide")] },
+      { keys: "J · ⇧J", text: "Jet · shadow guide", bind: [scene("j", "jet", off), scene("j", "shadowGuide", on)] },
+      {
+        keys: "G · ⇧G",
+        text: "Voyage to the target at relativistic speed (again: stop there) · the cinematic voyage",
+        bind: [scene("g", "voyage", off), scene("g", "voyageCine", on)],
+      },
       { keys: "L", text: "Cinematic mode: liquid wormhole surface", bind: [scene("l", "cinema")] },
       {
         keys: "K · ⇧K",

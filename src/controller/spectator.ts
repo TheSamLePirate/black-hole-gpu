@@ -11,7 +11,7 @@ import { properBodyAxes } from "../system/local-patch";
 
 import { CameraController } from "../controls";
 import type { Settings } from "../settings";
-import { cameraFrame, setHolePose, setHomePose } from "../camera";
+import { basis, cameraFrame, setHolePose, setHomePose } from "../camera";
 import { M_METRES } from "../system/solar";
 import type { Vec3 } from "../physics";
 import type { M3 } from "../mounts";
@@ -21,7 +21,6 @@ import { sphericalFrame } from "../wormhole";
 import { blendCurve, qFromAxes } from "../cine/follow";
 import { cross3, type V3 } from "../cine/rig";
 import { viewBlend } from "./camrig";
-import { unitV } from "./util";
 
 declare module "../controls" {
   interface CameraController {
@@ -76,6 +75,8 @@ function startSpectator(this: CameraController): boolean {
   // (the scene's clock from the start: left NaN, its nowTime read 0 — the worlds where they were when the scene
   // began, a tripod set at once stood on the Earth of then, a million kilometres from the Earth drawn)
   sp.time = this.nowTime();
+  // (the clock's settings are the ship's: a voyage's warp set there — camera/voyager.ts)
+  sp.timeHost = this.s;
   // (where the view is — the eye on its attach point, looking as it looks: no cut —, then glided back behind the
   // ship and a little up)
   const w = sp.rigWorld();
@@ -126,8 +127,11 @@ function stopSpectator(this: CameraController) {
   this.spectator = null;
   this.specGlide = null;
   if (!nav || !w || !w.ours) return;
-  const up = unitV(nav.toRep(w.up)) as V3,
-    fwd = unitV(nav.toRep(w.fwd)) as V3;
+  // (its look in the convention viewWorld reads the ship's view in — the angles' local axes, not the rep vectors: a
+  // look 90° off was carried back, the view snapped round)
+  const b = basis(sp.s.yaw, sp.s.pitch, sp.s.roll);
+  const up = b.up as V3,
+    fwd = b.fwd as V3;
   const p = nav.toRep(w.X).map((x) => x * M_METRES) as V3;
   this.carryCommit({ q: qFromAxes(cross3(up, fwd), up, fwd), p }, Math.max(0.8, viewBlend(this.s).time));
 }

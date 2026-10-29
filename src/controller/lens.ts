@@ -334,13 +334,16 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
       // (the view is the spectator's)
     } else if (this.outsideView() === "free") this.moveOutside(dt, move, fast, boost);
     else if (s.shipMount === "cabin") this.moveCabin(dt, move, fast);
-    // (a puppet — another player's craft followed —: its pose, not a flight)
-    if (!this.puppetStep()) this.flyShip(dt, pad);
+    // (a voyage of the craft itself — camera/voyager.ts —: its worldline, not a flight; a puppet — another player's
+    // craft followed —: its pose)
+    if (this.voyage) {
+      // (carried: placed by voyageStep below)
+    } else if (!this.puppetStep()) this.flyShip(dt, pad);
     // (a fight's clock and world run on while a puppet — the kill cam's wait)
     else if (this.combat) this.combatStep(dt);
     this.flyVel = [0, 0, 0];
-  } else if (this.travel) {
-    // (travelling to a body or a craft: placed at the frame's end — travelStep, below)
+  } else if (this.travel || this.voyage || this.cineVoyage) {
+    // (travelling to a body or a craft: placed at the frame's end — travelStep, voyageStep, below)
     this.flyVel = [0, 0, 0];
   } else if (!this.gravity && free && this.rigStep(dt, move, fast, boost)) {
     // the rig moves the camera (around a body, following it, carried by it, on a tripod)
@@ -429,7 +432,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   if (this.baryRest() && s.rotation === "free" && !this.rig.on) this.driftWithBarycentre();
   this.updateMotion(dt);
   // (a travel: its pose, over the rest — controller/travel.ts)
-  const travelling = !this.piloting && this.travelStep(dt);
+  const travelling = (!this.piloting && this.travelStep(dt)) || (this.cineVoyage ? this.cineVoyageStep(dt) : this.voyageStep(dt));
   if (this.tracking && !flying && !this.inThroat() && !travelling) this.track(dt);
   // (tracking resumes from the orientation the flight left: offset recomputed, no jump)
   else this.offset = null;

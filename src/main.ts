@@ -21,6 +21,9 @@ import { setSceneryContact } from "./system/scenery-contact";
 import { setDrawnRefractivity } from "./system/refraction";
 import { projectLook } from "./shadow";
 import { groundVelocity, heightOverGround } from "./system/our-surface";
+import { VoyageHud } from "./ui/voyagehud";
+import { voyageChoice, voyageFigures } from "./camera/voyager";
+import { G_PER_M, planVoyage } from "./camera/voyage";
 import { analyse as analyseCam, CamProbe, type CamAnalyseOptions } from "./camera/metrics";
 import { CharacterHud } from "./ui/characterhud";
 import { FootHud, type CompassMark } from "./ui/foothud";
@@ -165,10 +168,24 @@ import { fmtLatLon, greatCircle } from "./game/geo";
 import { hudKindName, nextHudKind } from "./game/hudkind";
 import { GAME_MODES, baseMode, modeOf, planMode, type GameMode, type ModeState, type ModeStep } from "./game/modes";
 import { POSE_KEYS } from "./controller/util";
+import { fallingW, nameOf, poseOf } from "./controller/wingmen";
 import { readPrefs, writePrefs } from "./game/prefs";
 import { events } from "./game/events";
 import { phaseOf, phaseText, PhaseWatcher } from "./game/phase";
-import { BODY_NAMES, bodyDisc, bodyLook, craftRadius, ourLook, isCraft, isNetTarget, netTargets, onOurSide, type Body } from "./targeting";
+import {
+  BODY_NAMES,
+  bodyDisc,
+  bodyLook,
+  craftRadius,
+  craftSubjects,
+  ourLook,
+  isCraft,
+  isNetTarget,
+  isOurBody,
+  netTargets,
+  onOurSide,
+  type Body,
+} from "./targeting";
 import { HidPads } from "./gamepad";
 import { MOUNTS, mountKeys, mountPose, setMountVessel, shipToCamera, type Mount } from "./mounts";
 import { fleet, fleetSpinStart, fleetStart } from "./fleet";
@@ -2223,7 +2240,7 @@ async function main() {
     if (camera.spectating && camera.spectatorFollow) camera.setSpectatorFollow(false);
   }
 
-  function travelTo(goal: (time: number) => TravelGoal, then: () => void): string | null {
+  function travelTo(goal: (time: number) => TravelGoal, then: () => void, name = "", target = ""): string | null {
     releaseFollow();
     const S = camera.viewSettings();
     const C = viewCamera();
@@ -2239,7 +2256,16 @@ async function main() {
       refreshGui();
       touch();
     };
-    if (!camera.spectating && C.startTravel(goal, finish)) {
+    // (the relativistic voyage — camera/voyager.ts —, the spectator's too; the kinematic travel where it cannot go)
+    // (⇧G: the cinematic voyage — camera/cinevoyage.ts —, its low passes over the worlds left and reached)
+    const cine = cineNext;
+    cineNext = null;
+    C.onCut = () => camProbe.mark("cut");
+    if (cine && C.startCineVoyage(goal, finish, name, target, cine)) {
+      touch();
+      return null;
+    }
+    if (C.startVoyage(goal, finish, name) || (!camera.spectating && C.startTravel(goal, finish))) {
       touch();
       return null;
     }
@@ -2250,8 +2276,15 @@ async function main() {
   }
 
   function goTo(b: Target): string | null {
+    // (a craft flown: the observer goes — the free camera out, the craft flying on, F1 back to it —, or the craft itself
+    // when the voyage is the ship's (settings.voyageWho): it rides the voyage's worldline, its mission going on, PLAN-CAMERA-AAA)
+    if (settings.ship && !camera.spectating && settings.voyageWho === "ship" && camera.piloting) return shipVoyage(b);
+    if (settings.ship && !camera.spectating) {
+      setGameMode("free", true);
+      if (!camera.spectating) return t("The Ranger flies there: the planner (O), the autopilot (0: approach)");
+      camera.viewSettings().target = b;
+    }
     releaseFollow();
-    if (settings.ship && !camera.spectating) return t("The Ranger flies there: the planner (O), the autopilot (0: approach)");
     // (a spectator out: it goes, the ship flies on — the view's settings and controller)
     const S = camera.viewSettings();
     const C = viewCamera();
@@ -2281,10 +2314,14 @@ async function main() {
         const l = Math.hypot(...d);
         return { X, fwd: [d[0]! / l, d[1]! / l, d[2]! / l], up: p.ax[1], V: p.V, C: p.X };
       };
-      return travelTo(goal, () => {
-        C.selectTarget(b, { focus: true });
-        panel.toast(tf("Camera: around the {0}", BODY_NAMES[b]));
-      });
+      return travelTo(
+        goal,
+        () => {
+          C.selectTarget(b, { focus: true });
+          panel.toast(tf("Camera: around the {0}", BODY_NAMES[b]));
+        },
+        BODY_NAMES[b],
+      );
     }
     if (b === "iss") {
       // the space station: the C 110 m off it — behind, to starboard, above —, moving with it,
@@ -2301,10 +2338,14 @@ async function main() {
         const l = Math.hypot(...d);
         return { X, fwd: [d[0]! / l, d[1]! / l, d[2]! / l], up: [-A[2]![0]!, -A[2]![1]!, -A[2]![2]!], V: st.V, C: st.X };
       };
-      return travelTo(goal, () => {
-        C.selectTarget("iss", { focus: true });
-        panel.toast(t("Camera: around the ISS"));
-      });
+      return travelTo(
+        goal,
+        () => {
+          C.selectTarget("iss", { focus: true });
+          panel.toast(t("Camera: around the ISS"));
+        },
+        BODY_NAMES.iss,
+      );
     }
     const id = b === "hole" ? "gargantua" : b;
     const u = universeOf(id);
@@ -2336,10 +2377,50 @@ async function main() {
           const q = ourOrbitPose({ body: id, altKm: alt }, time);
           return { X: q.X, fwd: q.fwd, up: q.up, V: q.vel, C: ourState(id, time).pos };
         };
-        return travelTo(goal, () => {
-          C.selectTarget(b, { focus: true });
-          panel.toast(tf("Camera: around {0}", BODY_NAMES[b]));
-        });
+        return travelTo(
+          goal,
+          () => {
+            C.selectTarget(b, { focus: true });
+            panel.toast(tf("Camera: around {0}", BODY_NAMES[b]));
+          },
+          BODY_NAMES[b],
+          b,
+        );
+      }
+      // (Gargantua's worlds and the hole: the voyage there too — camera/voyager.ts —, the hole approached from the side
+      // the view is on)
+      if (p.frame === "hole" && u === "gargantua") {
+        const w = C.rigWorld();
+        const nu = id === "gargantua" && w && !w.ours ? (Math.atan2(w.X[1], w.X[0]) * 180) / Math.PI : undefined;
+        const at = (time: number) =>
+          theirOrbitPose(
+            { body: id, rM: id === "gargantua" ? 40 : undefined, altKm: id === "gargantua" ? undefined : 20000, nu },
+            time,
+            S.spin,
+            S.massSolar,
+          );
+        const goal = (time: number): TravelGoal => {
+          const q = at(time);
+          const c = id === "gargantua" ? null : C.rigBody(b as never, false, time);
+          return { X: q.X, fwd: q.fwd, up: q.up, V: q.vel, C: c?.C ?? [0, 0, 0] };
+        };
+        const ok = C.startVoyage(
+          goal,
+          () => {
+            S.motion = "geodesic";
+            C.sync();
+            S.rotation = "orbit";
+            C.selectTarget(b, { focus: true });
+            panel.toast(tf("Camera: around {0}", BODY_NAMES[b]));
+            refreshGui();
+            touch();
+          },
+          BODY_NAMES[b],
+        );
+        if (ok) {
+          touch();
+          return null;
+        }
       }
       if (p.frame === "ours") setHomePose(S, p.X, p.fwd, p.up, p.vel);
       else setHolePose(S, p.X, p.fwd, p.up, p.vel);
@@ -2355,6 +2436,106 @@ async function main() {
     } catch (e) {
       return (e as Error).message;
     }
+  }
+  /** The flown craft's own voyage to a target of our side (its framing's place, at rest with it); null: begun. */
+  function shipVoyage(b: Target): string | null {
+    const S = settings;
+    const w = camera.rigWorld();
+    if (!w?.ours) return t("The craft's voyage runs in our universe (the free camera's goes anywhere)");
+    let C: ((time: number) => Vec3) | null = null,
+      R = 0;
+    if (isOurBody(b) && solarBody(b)) {
+      C = (time) => ourState(b, time).pos;
+      R = Math.max(solarBody(b)!.radius * M_METRES + defaultAltKm(b) * 1e3, 2.2 * solarBody(b)!.radius * M_METRES) / M_METRES;
+    } else if (b === "iss" && issTrack.peek(sim.time)) {
+      C = (time) => (issTrack.peek(time) ?? issTrack.peek(sim.time)!).X;
+      R = 400 / M_METRES;
+    } else if (isCraft(b) && fleet.pose(b, sim.time)) {
+      C = (time) => (fleet.pose(b, time) ?? fleet.pose(b, sim.time)!).X;
+      R = (4 * craftRadius(b)) / M_METRES;
+    }
+    if (!C) return tf("{0}: no voyage there", BODY_NAMES[b] ?? b);
+    const at = C;
+    const goal = (time: number): TravelGoal => {
+      const c = at(time);
+      return { X: [c[0] + R, c[1], c[2]], fwd: [-1, 0, 0], up: [0, 0, 1], V: [0, 0, 0], C: c };
+    };
+    const ok = camera.startVoyage(
+      goal,
+      () => {
+        S.target = b;
+        panel.toast(tf("The {0} has arrived: {1}", BODY_NAMES[S.vessel as Target] ?? t("craft"), BODY_NAMES[b] ?? b));
+        refreshGui();
+        touch();
+      },
+      BODY_NAMES[b],
+    );
+    if (!ok) return t("The craft's voyage runs in our universe (the free camera's goes anywhere)");
+    touch();
+    return null;
+  }
+  // the craft one can follow with the camera beyond the fleet (PLAN-CAMERA-AAA CAM8): the traffic's airliners, the
+  // ships at sea, the wingmen — those near now, their places from the Earth's axes (ECEF metres) into the home frame
+  {
+    type Ecef = { p: readonly number[]; v: readonly number[]; fwd: readonly number[]; up: readonly number[]; len: number; name: string };
+    const now = (): Map<string, Ecef> => {
+      const m = new Map<string, Ecef>();
+      for (const c of camera.trafficNow())
+        m.set(`trf:${c.id}`, { p: c.p, v: c.v, fwd: c.fwd, up: c.up, len: c.len, name: c.cs || c.reg || c.id.toUpperCase() });
+      for (const c of camera.seaNow()) m.set(`ais:${c.id}`, { p: c.p, v: c.v, fwd: c.fwd, up: c.up, len: c.len, name: c.name || c.id });
+      for (const w of camera.wing?.list ?? [])
+        if (w.alive || fallingW(w)) {
+          const P = poseOf(w);
+          m.set(`wing:${w.k}`, { p: P.p, v: P.v, fwd: P.fwd, up: P.up, len: 16, name: nameOf(w.k) });
+        }
+      return m;
+    };
+    let cache: { at: number; m: Map<string, Ecef> } = { at: -1, m: new Map() };
+    const fresh = () => {
+      const f = renderer.completedFrames;
+      if (cache.at !== f) cache = { at: f, m: now() };
+      return cache.m;
+    };
+    craftSubjects.list = () => [...fresh().keys()] as Target[];
+    craftSubjects.name = (id) => fresh().get(String(id))?.name ?? String(id);
+    craftSubjects.state = (id, t) => {
+      const c = fresh().get(String(id));
+      if (!c) return null;
+      // (known now: carried to t at its velocity — the traffic's clock is the wall's)
+      const t0 = sim.time;
+      const A = bodyAxes(solarBody("earth")!, t0);
+      const home = (q: readonly number[]): Vec3 => [0, 1, 2].map((k) => q[0]! * A[0][k]! + q[1]! * A[1][k]! + q[2]! * A[2][k]!) as Vec3;
+      const X0 = fromBodyFixed("earth", [c.p[0]! / M_METRES, c.p[1]! / M_METRES, c.p[2]! / M_METRES], t0);
+      const g = groundVelocity("earth", X0, t0);
+      const v = home(c.v);
+      const V = [0, 1, 2].map((k) => g[k]! + v[k]! / C_MPS) as Vec3;
+      const nose = home(c.fwd),
+        up = home(c.up);
+      const left: Vec3 = [up[1] * nose[2] - up[2] * nose[1], up[2] * nose[0] - up[0] * nose[2], up[0] * nose[1] - up[1] * nose[0]];
+      return {
+        pos: [0, 1, 2].map((k) => X0[k]! + V[k]! * (t - t0)) as Vec3,
+        vel: V,
+        ax: [left, up, nose],
+        radius: (0.5 * c.len) / M_METRES,
+        length: c.len,
+      };
+    };
+  }
+  /** the next travel a cinematic voyage (⇧G, settings.voyageCine) */
+  let cineNext: "sequence" | "montage" | null = null;
+  /** G (⇧G: the cinematic one): the voyage to the target; under way, it stops there. */
+  function voyageKey(cine: boolean) {
+    const vc = camera.viewController();
+    if (vc.voyage || vc.cineVoyage) {
+      vc.stopCineVoyage();
+      vc.endVoyage(false);
+      panel.toast(t("Voyage stopped here"));
+      return;
+    }
+    cineNext = cine ? settings.voyageCine : null;
+    const why = goTo(camera.viewSettings().target);
+    cineNext = null;
+    if (why) panel.toast(why);
   }
   /** The camera set down on a world, on its tripod, looking at the horizon (⇧T; the camera panel). */
   function standOn(b?: Target): string | null {
@@ -2384,6 +2565,17 @@ async function main() {
     standOn,
     changed: (keys) => onSettingsChange(keys),
     toast: (t) => panel.toast(t),
+    // (the voyage as the settings would make it: straight to the target's framing, the worlds' bound left out)
+    voyagePreview: (b) => {
+      const vc = camera.viewController();
+      const w = vc.rigWorld();
+      if (!w) return null;
+      const tb = vc.rigBody(b as never, w.ours, vc.nowTime());
+      if (!tb) return null;
+      const D = Math.max(Math.hypot(tb.C[0] - w.X[0], tb.C[1] - w.X[1], tb.C[2] - w.X[2]) - 2.2 * tb.R, 1e-12);
+      const p = planVoyage({ A: () => [0, 0, 0], B: () => [D, 0, 0], bodies: [] }, voyageChoice(settings), 0, { k: 1e9, n: 200 });
+      return { T: p.T * M_SECONDS, Tau: p.Tau * M_SECONDS, betaPeak: p.betaPeak, g: p.a / G_PER_M };
+    },
   });
 
   // ------------------------------------------------------------------ the sky chart (skychart.ts)
@@ -3890,6 +4082,8 @@ async function main() {
     },
     fall: () => setView(view() === "fall" ? "free" : "fall"),
     shadowGuide: () => toggle("shadowGuide"),
+    voyage: () => voyageKey(false),
+    voyageCine: () => voyageKey(true),
     constellations: (e) => toggleConstellations(e.shiftKey),
     grids: () => cycleGrids(),
     jet: () => toggle("jet"),
@@ -4954,7 +5148,12 @@ async function main() {
     const camKey = e.code in freeCameraKeys();
     // (a spectator on its tripod: an observer — the view's keys (Y, ⇧Y, C, Tab…), not the craft's it left)
     const observer = camera.spectating && camera.viewController().s.rotation === "tripod";
-    const b = matchKey(e, flying() && !observer && !(camera.spectating && camKey), camKey, effectiveBindings(), camera.character.active);
+    let b = matchKey(e, flying() && !observer && !(camera.spectating && camKey), camKey, effectiveBindings(), camera.character.active);
+    // (the free camera out: G is its voyage — the craft's gear stays on G aboard)
+    if (camera.spectating) {
+      const v = matchKey(e, false, false, effectiveBindings());
+      if (v && (v.do === "voyage" || v.do === "voyageCine")) b = v;
+    }
     if (!b) return;
     e.preventDefault();
     keyActions[b.do](e, b.arg);
@@ -5586,6 +5785,7 @@ async function main() {
     fly: (spec) => briefMission(spec, () => airMissions.fly(spec)),
   });
   const missionHud = new MissionHud(camera, () => missionMap.open());
+  const voyageHud = new VoyageHud(document.body);
   camera.onMissionSay = (text) => {
     panel.toast(text);
     // (a mission's line in a role's words — "Darkstar: …", "Mother: …" — said in that role's voice: I4, S1)
@@ -7603,6 +7803,11 @@ async function main() {
       hideBar: (on: boolean) => topBar.hide(on),
     },
     pwa,
+    // (the voyage under way — camera/voyager.ts —: its figures, null when none)
+    voyage: () => {
+      const v = camera.viewController().voyage;
+      return v ? voyageFigures(v) : null;
+    },
     // (the camera's smoothness sensor — src/camera/metrics.ts, PLAN-CAMERA-AAA CAM0 —: jumps, snapped aims, fov jumps)
     cam: {
       start: (max?: number) => (camProbe.start(max), true),
@@ -8067,6 +8272,7 @@ async function main() {
     }
     // (the camera's smoothness sensor — src/camera/metrics.ts, PLAN-CAMERA-AAA CAM0 —: the view's place from the body
     // it is nearest, on that body's ground for ours — its turn and an orbit's motion not the view's —, look, field)
+    voyageHud.update(camera.viewController().voyage, settings);
     if (camProbe.active && st) {
       const vc = camera.viewController();
       const w = vc.rigWorld();
@@ -8075,17 +8281,23 @@ async function main() {
         const mPerUnit = w.ours ? M_METRES : 1476.625 * settings.massSolar;
         let P: Vec3 = w.X.map((x) => x * mPerUnit) as Vec3,
           h = Number.POSITIVE_INFINITY;
+        let ref = n?.id ?? "";
         if (n && w.ours && solarBody(n.id)) {
+          // (near the ground — under a fiftieth of the radius, as the rig carries it —: on the ground, turning with it;
+          // higher: from the centre, the world's turn the world's — a warp's change no motion of the view)
           const q = toBodyFixed(n.id, w.X, sim.time);
-          P = q.map((x) => x * M_METRES) as Vec3;
           h = heightOverGround(n.id, q);
+          if (h < 0.02 * n.R * M_METRES) {
+            P = q.map((x) => x * M_METRES) as Vec3;
+            ref += ":ground";
+          } else P = [0, 1, 2].map((k) => (w.X[k]! - n.C[k]!) * M_METRES) as Vec3;
         } else if (n) {
           P = [0, 1, 2].map((k) => (w.X[k]! - n.C[k]!) * mPerUnit) as Vec3;
           h = (Math.hypot(...P) / mPerUnit - n.R) * mPerUnit;
         }
         camProbe.record({
           t: now,
-          ref: n?.id ?? "",
+          ref,
           P: P as [number, number, number],
           h,
           fwd: [...w.fwd] as [number, number, number],

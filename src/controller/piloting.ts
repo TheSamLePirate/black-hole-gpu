@@ -142,6 +142,7 @@ function setPilot(this: CameraController, on: boolean) {
   // (a travel of the free camera under way let go: flying, it waited, then went on from where it was when the
   // controls were left — the view jumped back to it)
   this.travel = null;
+  this.endVoyage(false);
   this.flyMode = false;
   s.rotation = "free";
   if (!this.gravity) this.setGravity(true);

@@ -413,6 +413,15 @@ export interface Settings {
   camImpulse: number; // the impulses' gain: the touchdown, the boom, the latches, a wheel (0: none)
   camBlend: "easeInOut" | "easeIn" | "easeOut" | "hardIn" | "hardOut" | "linear" | "cut"; // the blends between views (Cinemachine's default blend)
   camBlendTime: number; // their time [s]
+  // the voyage to a target (src/camera/voyage.ts, PLAN-CAMERA-AAA): by the trip's own pace, a peak speed, a duration
+  // (the traveller's or the world's), an acceleration; played back in so many seconds (0: real time); who goes
+  voyageBy: "auto" | "beta" | "tau" | "t" | "accel";
+  voyageBeta: number; // the peak speed [c]
+  voyageSeconds: number; // the duration chosen [s]
+  voyageG: number; // the proper acceleration [g]
+  voyageWall: number; // the playback's length [s] (0: real time)
+  voyageWho: "observer" | "ship";
+  voyageCine: "sequence" | "montage"; // the cinematic voyage (⇧G): one continuous shot, or cuts
   camSpeedFov: number; // the softened views' lens widened with the speed and the afterburner (its gain; 0: none)
   cineShot: "auto" | "chase" | "orbit" | "pass" | "tracking" | "planet" | "system"; // the director's view (cine/brain.ts): its shot, or the director choosing
   cineShake: number; // its noise: the air's buffeting, the engine's rumble, the hand (0 … 1)
@@ -785,6 +794,13 @@ export function defaultSettings(): Settings {
     camImpulse: 1,
     camBlend: "easeInOut",
     camBlendTime: 1.2,
+    voyageBy: "auto",
+    voyageBeta: 0.9,
+    voyageSeconds: 600,
+    voyageG: 1e5,
+    voyageWall: 20,
+    voyageWho: "observer",
+    voyageCine: "sequence",
     camSpeedFov: 1,
     cineShot: "auto",
     cineShake: 0.5,
@@ -2171,6 +2187,13 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   camImpulse: "pref",
   camBlend: "pref",
   camBlendTime: "pref",
+  voyageBy: "pref",
+  voyageBeta: "pref",
+  voyageSeconds: "pref",
+  voyageG: "pref",
+  voyageWall: "pref",
+  voyageWho: "pref",
+  voyageCine: "pref",
   camSpeedFov: "pref",
   cineShot: "pref",
   cineShake: "pref",

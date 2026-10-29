@@ -47,10 +47,13 @@ describe.skipIf(!E2E)("the camera's smoothness", () => {
     await app.shot(`${OUT}/${name.replace(/[^a-z0-9]+/gi, "-")}.png`);
     if (!BASELINE) expect(c.jump + c.turn + c.fov + c.speed).toBe(0);
   };
-  const travelling = `(() => { const v = __bh.camera.viewController(); return !!v.travel || !!v.flight; })()`;
+  const travelling = `(() => { const v = __bh.camera.viewController(); return !!v.travel || !!v.flight || !!v.voyage; })()`;
   const travel = async (id: string) => {
-    await app.js(`__bh.goTo(${JSON.stringify(id)})`);
-    await app.waitFor(`!${travelling}`, 60_000);
+    const why = await app.js<string | null>(`__bh.goTo(${JSON.stringify(id)})`);
+    if (why) console.log(`  goTo(${id}): ${why}`);
+    // (a travel that never began is no travel measured)
+    await app.waitFor(travelling, 5_000);
+    await app.waitFor(`!${travelling}`, 90_000);
     await Bun.sleep(800);
   };
 

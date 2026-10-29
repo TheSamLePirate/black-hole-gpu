@@ -26,6 +26,7 @@ import frCopilot from "./i18n/fr-copilot";
 import frCourse from "./i18n/fr-course";
 import frRadio from "./i18n/fr-radio";
 import frViews from "./i18n/fr-views";
+import frCamera from "./i18n/fr-camera";
 import frJetpad from "./i18n/fr-jetpad";
 import frReplay from "./i18n/fr-replay";
 import frNetSpace from "./i18n/fr-netspace";
@@ -137,6 +138,7 @@ export function translateTo(text: string, to: Lang, depth = 0): string {
 }
 
 addFrench(frSettings);
+addFrench(frCamera);
 addFrench(frSpaceSchool);
 addFrench(frA320);
 addFrench(frA320Deck);

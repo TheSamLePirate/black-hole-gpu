@@ -146,6 +146,8 @@ export interface BhContext {
   jitter: unknown;
   /** the camera's smoothness sensor (src/camera/metrics.ts): its samples by frame and its faults */
   cam: unknown;
+  /** the voyage under way (camera/voyager.ts): its figures [s, c, M] — null when none */
+  voyage: () => unknown;
   /** the spectator out (a free camera, the ship flying on) or back; whether it is out */
   spectate(on: boolean): boolean;
   /** the PWA (src/pwa.ts): the worker's state, the caches' figures */
@@ -654,6 +656,10 @@ export function installBh(c: BhContext) {
        *  "cut" forgives the next frame's move), samples(), report({ from, to }) — the jumps, snapped aims, fov jumps and
        *  speed breaks a viewer sees */
       cam: c.cam,
+      /** the voyage under way (camera/voyager.ts, PLAN-CAMERA-AAA CAM4): name, T and Tau (the world's and the traveller's
+       *  durations [s]), t and tau (so far [s]), beta, gamma, betaPeak, a [1/M], u (the share of the way), left [M], phase,
+       *  limited — null when none */
+      voyage: c.voyage,
       spectate: (on: boolean) => c.spectate(on),
       /** the offline cache: ready(), stats(), clearTiles(), update(), waiting */
       pwa: c.pwa,

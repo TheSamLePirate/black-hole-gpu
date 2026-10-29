@@ -112,6 +112,8 @@ import { CamShake } from "./camshake";
 import { installCine } from "./controller/cine";
 import { installCamRig } from "./controller/camrig";
 import { installTravel } from "./controller/travel";
+import { installVoyager, type Voyage } from "./camera/voyager";
+import { installCineVoyage, type CineVoyage } from "./camera/cinevoyage";
 import { isTyping } from "./controller/util";
 export { FLIGHT_KEYS, LANDING, TELE_MIN, finalGate, isTyping, landingProfile, wrapYaw } from "./controller/util";
 export type { LandingFix } from "./controller/util";
@@ -1088,6 +1090,14 @@ export class CameraController {
     t: number;
     T: number;
   } | null = null;
+  /** the relativistic voyage to a target (camera/voyager.ts, PLAN-CAMERA-AAA CAM4): its plan, its look, its state */
+  voyage: Voyage | null = null;
+  /** the cinematic voyage (camera/cinevoyage.ts, ⇧G): its legs — the low passes, the voyage — and its cuts */
+  cineVoyage: CineVoyage | null = null;
+  /** a cut made on purpose (a montage's): told to the camera's sensor */
+  onCut: (() => void) | null = null;
+  /** whose settings hold the clock (a spectator's: the ship's — its own copy synced from them each frame) */
+  timeHost: Settings | null = null;
   /** a teleport's view carried back to where it was, blended away (controller/camrig.ts carryCommit) */
   viewCarry: { dq: [number, number, number, number]; dp: [number, number, number]; t: number; T: number; style: string } | null = null;
   cineZoom = 1;
@@ -1429,6 +1439,8 @@ export class CameraController {
     yawOff: 0,
     pitchOff: 0,
     vel: [0, 0, 0] as Vec3,
+    /** around: the keys' push eased (in, out, about), as the free camera's speed is — no start or stop in a frame */
+    push: [0, 0, 0] as Vec3,
     dolly: 0,
     /** what the last placement was made from and wrote (the same again: nothing to redo) */
     stamp: "",
@@ -1682,3 +1694,5 @@ installA320Taxi(CameraController);
 installCine(CameraController);
 installCamRig(CameraController);
 installTravel(CameraController);
+installVoyager(CameraController);
+installCineVoyage(CameraController);

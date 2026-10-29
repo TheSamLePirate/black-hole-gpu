@@ -5,6 +5,8 @@
 // (on board, outside: around it, free, a fly-by) with the same look, lens and target. Opened by the
 // toolbar's camera button, the flight HUD's view button, or C / Y / V and Tab from the keyboard.
 
+import { FLY_SPEED_MAX, FLY_SPEED_MIN } from "../camera/speed";
+import { fmtDuration } from "./voyagehud";
 import type { CameraController } from "../controls";
 import { TELE_MIN } from "../controls";
 import { onEscape } from "./keys";
@@ -152,6 +154,8 @@ export interface CameraPanelDeps {
   standOn(b?: Target): string | null;
   /** settings the panel changed (routed like the settings panel's) */
   changed(keys: (keyof Settings)[]): void;
+  /** the voyage to a target as the settings would make it, on straight lines (null: none there) */
+  voyagePreview?(b: Target): { T: number; Tau: number; betaPeak: number; g: number } | null;
   toast(t: string): void;
 }
 
@@ -227,6 +231,10 @@ export class CameraPanel {
       s.motion,
       cameraFrame(s).region,
       c.availableTargets().join(),
+      s.voyageBy,
+      s.voyageWho,
+      s.voyageWall,
+      c.viewController().voyage ? 1 : 0,
     ].join();
   }
 
@@ -255,6 +263,7 @@ export class CameraPanel {
     this.looks();
     this.lens();
     this.targets();
+    this.voyage();
     if (!s.ship) {
       this.motion();
       this.cinematics();
@@ -579,14 +588,134 @@ export class CameraPanel {
     return g.filter(([, l]) => l.length);
   }
 
+  /** The voyage (camera/voyager.ts, PLAN-CAMERA-AAA CAM6): who goes, at what pace, played in how long — and go. */
+  private voyage() {
+    const s = this.d.settings;
+    const { s: vs, c } = this.viewOf();
+    const sec = this.section(t("Voyage"), "G · ⇧G");
+    const set = <K extends keyof Settings>(k: K, v: Settings[K]) => {
+      s[k] = v;
+      vs[k] = v;
+      this.d.changed([k]);
+      this.refresh(true);
+    };
+    // who goes: the free camera (the craft flying on), or the craft itself
+    if (s.ship) {
+      const who = h("div", "cp-seg cp-seg-2");
+      for (const [k, label, tip] of [
+        ["observer", t("Free camera"), t("The camera goes; the craft flies on where it is (F1: back aboard)")],
+        [
+          "ship",
+          t("The craft itself"),
+          t("The craft itself rides the voyage — its crew's clock runs the traveller's time; its mission goes on"),
+        ],
+      ] as const) {
+        const b = h("button", "", label);
+        b.classList.toggle("on", s.voyageWho === k);
+        b.dataset.tip = tip;
+        b.dataset.testid = `cp-voyage-who-${k}`;
+        b.onclick = () => set("voyageWho", k);
+        who.append(b);
+      }
+      sec.append(who);
+    }
+    // the pace: the trip's own, a peak speed, a duration (the traveller's, the world's), an acceleration
+    const pace = h("select", "cp-select") as HTMLSelectElement;
+    pace.dataset.testid = "cp-voyage-by";
+    for (const [k, label] of [
+      ["auto", t("By the trip (10⁵ g, up to 0.999 c)")],
+      ["beta", t("A peak speed")],
+      ["tau", t("A duration — your clock τ")],
+      ["t", t("A duration — the world's clock t")],
+      ["accel", t("An acceleration")],
+    ] as const) {
+      const o = h("option", "", label) as HTMLOptionElement;
+      o.value = k;
+      o.selected = s.voyageBy === k;
+      pace.append(o);
+    }
+    pace.onchange = () => set("voyageBy", pace.value as Settings["voyageBy"]);
+    sec.append(pace);
+    const num = (k: "voyageBeta" | "voyageSeconds" | "voyageG", label: string, min: number, max: number, step: number) => {
+      const row = h("label", "cp-speed");
+      const i = h("input") as HTMLInputElement;
+      i.type = "number";
+      i.min = String(min);
+      i.max = String(max);
+      i.step = String(step);
+      i.value = String(s[k]);
+      i.dataset.testid = `cp-${k}`;
+      i.onchange = () => {
+        const v = Math.min(max, Math.max(min, Number(i.value) || s[k]));
+        s[k] = vs[k] = v;
+        this.d.changed([k]);
+        this.refresh(true);
+      };
+      row.append(h("span", "cp-sub", label), i);
+      sec.append(row);
+    };
+    if (s.voyageBy === "beta") num("voyageBeta", t("Peak speed [c]"), 0.001, 0.9999, 0.01);
+    if (s.voyageBy === "tau" || s.voyageBy === "t") num("voyageSeconds", t("Duration [s]"), 1, 1e9, 60);
+    if (s.voyageBy === "accel") num("voyageG", t("Acceleration [g]"), 0.01, 1e9, 1000);
+    // played back in…
+    const wall = h("select", "cp-select") as HTMLSelectElement;
+    wall.dataset.testid = "cp-voyage-wall";
+    for (const [v, label] of [
+      [10, t("Played in 10 s")],
+      [20, t("Played in 20 s")],
+      [40, t("Played in 40 s")],
+      [60, t("Played in 1 min")],
+      [120, t("Played in 2 min")],
+      [0, t("Played in real time")],
+    ] as const) {
+      const o = h("option", "", label) as HTMLOptionElement;
+      o.value = String(v);
+      o.selected = s.voyageWall === v;
+      wall.append(o);
+    }
+    wall.onchange = () => set("voyageWall", Number(wall.value));
+    sec.append(wall);
+    // what it would be (straight, without the worlds' bound: an estimate)
+    const p = this.d.voyagePreview?.(vs.target);
+    if (p)
+      sec.append(
+        h(
+          "div",
+          "cp-sub cp-voyage-preview",
+          `≈ t ${fmtDuration(p.T)} · τ ${fmtDuration(p.Tau)} · ${p.betaPeak < 0.01 ? p.betaPeak.toExponential(1) : p.betaPeak.toFixed(3)} c · ${p.g >= 1e4 ? p.g.toExponential(1) : Math.round(p.g)} g`,
+        ),
+      );
+    const go = h("div", "cp-chips");
+    const on = !!c.voyage;
+    go.append(
+      this.chip(
+        ICON.go,
+        on ? t("Stop the voyage here") : tf("Voyage to {0}", BODY_NAMES[vs.target]),
+        on
+          ? t("At rest where it is, with what it is near")
+          : t("At relativistic speed: the world's clock runs t, yours τ; drag to look around on the way"),
+        on,
+        () => {
+          if (c.voyage) c.endVoyage(false);
+          else {
+            const why = this.d.goTo(vs.target);
+            if (why) this.d.toast(why);
+          }
+        },
+        "G",
+      ),
+    );
+    sec.append(go);
+  }
+
   private motion() {
     const { settings: s, camera: c } = this.d;
     const sec = this.section(t("Motion"));
     const speed = h("div", "cp-speed");
     const r = h("input") as HTMLInputElement;
     r.type = "range";
-    r.min = "-4";
-    r.max = "4";
+    r.min = String(Math.log2(FLY_SPEED_MIN));
+    r.max = String(Math.log2(FLY_SPEED_MAX));
     r.step = "0.1";
     r.setAttribute("aria-label", t("Flight speed"));
     r.value = String(Math.log2(c.flySpeed));

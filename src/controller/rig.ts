@@ -1,5 +1,6 @@
 // The CameraController — the camera rig: the mounts, the views of the ship.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { softHeight } from "../camera/speed";
 import { timeRate } from "../clock";
 import { blToCartesian, cameraFrame, homePosition, setHolePose, setHomePose } from "../camera";
 import type { Vec3 } from "../physics";
@@ -13,6 +14,7 @@ import {
   bodyMass,
   bodyRadius,
   isCraft,
+  isCraftLike,
   isOurBody,
   isOurs,
   onOurSide,
@@ -93,7 +95,7 @@ function rigBody(this: CameraController, b: Body | null, ours: boolean, t: numbe
   const s = this.s;
   if (!b || b === "hole" || b === "barycentre" || b === "wormhole") return null;
   if (ours) {
-    if (b === "iss" || isCraft(b)) {
+    if (isCraftLike(b)) {
       // (the space station, a craft: around it, moving with it)
       const T = ourTarget(s, b, t);
       return { id: b, C: T.pos, V: T.vel, R: T.radius };
@@ -227,13 +229,25 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
   // the keys' speed: 0.8 × the height above the surface per second (a metre at least), Shift × 3
   // (fixed on the world: from where it is fixed — the camera's last place is a frame behind the world)
   // (a spectator: no faster than its distance to the ship either — two metres a second at least by it)
+  // (the nearest taken softly among all the worlds — camera/speed.ts —: no jump of speed when another becomes it)
+  const others: number[] = [];
+  if (mode === "free")
+    for (const b of availableBodies(s, cameraFrame(s))) {
+      if (b === ref.id) continue;
+      const o = this.rigBody(b, w.ours, tNow);
+      if (o && o.R > 0) others.push(Math.hypot(...sub3(w.X, o.C)) - o.R);
+    }
   const h = Math.max(
-    Math.min(
-      Math.hypot(...(R.fixed ?? (mode === "follow" || mode === "free" ? R.off : rel))) -
-        ref.R -
-        this.reliefUnder(this.rigBody(ref.id, w.ours, tNow)!, w, tNow) / mR,
+    softHeight([
+      Math.max(
+        Math.hypot(...(R.fixed ?? (mode === "follow" || mode === "free" ? R.off : rel))) -
+          ref.R -
+          this.reliefUnder(this.rigBody(ref.id, w.ours, tNow)!, w, tNow) / mR,
+        1 / mR,
+      ),
       this.nearShip,
-    ),
+      ...others,
+    ]),
     (Number.isFinite(this.nearShip) ? 2 : 1) / mR,
   );
   // (the keys held: the boost — a tripod's 1.4 m/s at a tap, hundreds of m/s held a while)
@@ -335,12 +349,16 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     ].join();
   // (not while a turn runs: its own progress is in the stamp — skipped, a still scene's turn never went on, the view
   // left on the aim before: a multiple exposure's close frames aimed where the last one was)
-  if (!R.turn && step.every((x) => x === 0) && !move.some((x) => x !== 0) && R.stamp === stamp()) return true;
+  if (!R.turn && step.every((x) => x === 0) && !move.some((x) => x !== 0) && !R.push.some((x) => x !== 0) && R.stamp === stamp())
+    return true;
   if (mode === "orbit") {
     // around: the keys too — forwards / back the distance, sideways and up / down about it
-    R.alt = clamp(R.alt * Math.exp(-move[0]! * dt * (fast ? 3 : 1)), 1 / mR, 1e6);
-    R.az -= move[1]! * 40 * dt;
-    R.el = clamp(R.el + move[2]! * 40 * dt, -89, 89);
+    const k = 1 - Math.exp(-dt / 0.12);
+    for (let i = 0; i < 3; i++) R.push[i] = R.push[i]! + (move[i]! * (i === 0 && fast ? 3 : 1) - R.push[i]!) * k;
+    if (!move.some((x) => x !== 0) && Math.hypot(...R.push) < 1e-3) R.push = [0, 0, 0];
+    R.alt = clamp(R.alt * Math.exp(-R.push[0]! * dt), 1 / mR, 1e6);
+    R.az -= R.push[1]! * 40 * dt;
+    R.el = clamp(R.el + R.push[2]! * 40 * dt, -89, 89);
     const d = ref.R + R.alt;
     const a = (R.az * Math.PI) / 180,
       e = (R.el * Math.PI) / 180;

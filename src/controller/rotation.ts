@@ -1,5 +1,6 @@
 // The CameraController — the camera's rotation modes: orbiting, free look, pointer, wheel and keys.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { FLY_SPEED_MAX, FLY_SPEED_MIN } from "../camera/speed";
 import { basis, blToCartesian, cameraFrame, repPose, setHolePose, setHomePose, setRepPose, switchAnchor, yawPitchRoll } from "../camera";
 import { horizon, zamo, type Vec3 } from "../physics";
 import type { Settings, Target } from "../settings";
@@ -271,7 +272,8 @@ function lockView(this: CameraController) {
     const tc = uu > 1e-12 ? -pu / uu : 0;
     const miss = tc > 0 ? Math.hypot(...lin(p, 1, u, tc)) : Math.hypot(...p);
     let impact = NaN;
-    if (tc > 0 && miss < R) {
+    // (a voyage under way stops at its goal's framing: no collision course — camera/voyager.ts)
+    if (tc > 0 && miss < R && !this.voyage) {
       const disc = pu * pu - uu * (dot3(p, p) - R * R);
       if (disc >= 0) impact = (-pu - Math.sqrt(disc)) / uu;
     }
@@ -880,6 +882,11 @@ function dragBy(this: CameraController, dx: number, dy: number, dtEv: number, lo
     this.vYaw = smooth(this.vYaw, (-dx * kLook) / dtEv);
     this.vPitch = smooth(this.vPitch, (dy * kLook) / dtEv);
   };
+  // (a voyage under way: the drag turns the look off its course — camera/voyager.ts)
+  if (this.voyage && !this.piloting) {
+    this.voyageLook(-dx * kLook, dy * kLook);
+    return;
+  }
   const ov = this.piloting && !this.cinematic ? this.outsideView() : null;
   const rigTurn = !ov && this.rig.on && (s.rotation === "orbit" || (s.rotation === "tripod" && s.lookAt)) && !lookDrag;
   if (rigTurn && s.rotation === "orbit") {
@@ -933,7 +940,7 @@ function zoomStep(this: CameraController, dy: number, alt: boolean) {
   if (this.s.telescope) return this.zoomLens(Math.exp(dy * 0.0015));
   if (this.flyMode) {
     // flight speed, like a game's throttle
-    this.flySpeed = clamp(this.flySpeed * Math.exp(-dy * 0.002), 0.05, 30);
+    this.flySpeed = clamp(this.flySpeed * Math.exp(-dy * 0.002), FLY_SPEED_MIN, FLY_SPEED_MAX);
     return;
   }
   if (!alt && this.rig.on && !this.piloting) {

@@ -2669,3 +2669,31 @@ body.topbar-hidden .fh-compass { top: 26px; }
   pointer-events: none;
   z-index: 31;
 }
+
+/* the voyage's card (ui/voyagehud.ts, PLAN-CAMERA-AAA): top centre, the two clocks */
+.voyage-hud {
+  position: fixed; top: 112px; left: 50%; transform: translateX(-50%); z-index: 3; pointer-events: none;
+  min-width: 300px; max-width: calc(100vw - 32px); padding: 10px 14px 9px; box-sizing: border-box;
+  background: var(--hud-bg); border: 1px solid var(--hud-edge); border-radius: 6px;
+  font: 600 13px/1.35 var(--hud-font); color: var(--hud-text);
+}
+.voyage-hud[hidden] { display: none; }
+.voyage-hud .vh-head { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; letter-spacing: 0.04em; color: var(--hud-cyan); }
+.voyage-hud .vh-head i { font-style: normal; color: var(--hud-dim); font-size: 12px; }
+.voyage-hud .vh-bar { height: 3px; margin: 6px 0 7px; background: var(--hud-line); }
+.voyage-hud .vh-bar > div { height: 100%; background: var(--hud-cyan); }
+.voyage-hud .vh-row { display: flex; justify-content: space-between; gap: 16px; }
+.voyage-hud .vh-row span { color: var(--hud-dim); }
+.voyage-hud .vh-row b { font-variant-numeric: tabular-nums; }
+.voyage-hud .vh-tau b { color: var(--hud-green); }
+.voyage-hud .vh-gap b { color: var(--hud-amber); }
+.voyage-hud .vh-hint { margin-top: 5px; color: var(--hud-dim); font-size: 11px; }
+
+/* the camera panel's voyage (PLAN-CAMERA-AAA CAM6) */
+#cam-pop .cp-seg.cp-seg-2 { grid-template-columns: repeat(2, 1fr); }
+#cam-pop .cp-select, #cam-pop .cp-speed input[type="number"] {
+  width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--hud-edge);
+  background: rgba(0, 0, 0, 0.35); color: var(--hud-text); font: 600 12.5px var(--hud-font);
+}
+#cam-pop .cp-speed input[type="number"] { width: 120px; flex: 0 0 auto; }
+#cam-pop .cp-voyage-preview { font-variant-numeric: tabular-nums; color: var(--hud-cyan); }

@@ -71,6 +71,26 @@ describe("the relativistic voyage", () => {
     expect(Math.abs(end.V[1] - v[1]) / v[1]).toBeLessThan(0.02);
   });
 
+  test("a goal behind a world when one gets there: the way spirals round it, never through it", () => {
+    const Re = 6.371e6 / M_METRES;
+    const earth = { id: "earth", C: still([0, 0, 0]), R: Re };
+    // (a station 400 km up, half an orbit on — behind the Earth from the start — by the time one arrives)
+    const r = 6.771e6 / M_METRES;
+    const B = (t: number): Vec3 => [-r * Math.cos(t * 0.6), -r * Math.sin(t * 0.6), 0];
+    const e: VoyageEnds = { A: still([AU, 0, 0]), B, bodies: [earth, { id: "arrival", R: 0, soft: 2 / M_METRES, C: B }], to: "earth" };
+    const p = planVoyage(e, { kind: "auto" }, 0);
+    expect(Number.isFinite(p.T)).toBe(true);
+    let lowest = Infinity;
+    for (let i = 0; i <= 4000; i++) {
+      const X = p.at((p.T * i) / 4000).X;
+      lowest = Math.min(lowest, Math.hypot(...X) - Re);
+    }
+    expect(lowest * M_METRES).toBeGreaterThan(300e3);
+    const end = p.at(p.T).X,
+      goal = B(p.T);
+    expect(Math.hypot(end[0] - goal[0], end[1] - goal[1], end[2] - goal[2]) * M_METRES).toBeLessThan(1);
+  });
+
   test("a body in the way is cleared", () => {
     const R = 0.01 * AU;
     const e: VoyageEnds = { A: still([-AU, 0, 0]), B: still([AU, 0, 0]), bodies: [{ id: "x", C: still([0, 0, 0]), R }] };

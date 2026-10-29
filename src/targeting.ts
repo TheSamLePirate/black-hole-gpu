@@ -47,6 +47,21 @@ export const netTargets: {
   colour: (id: Body) => string;
 } = { list: () => [], state: () => null, name: (id) => id, colour: () => "255, 255, 255" };
 
+/** Anything else that flies or sails, as a target (docs/PLAN-CAMERA-AAA.md CAM8): "trf:<icao>" an airliner of the
+ *  traffic, "ais:<mmsi>" a ship at sea, "wing:<k>" a wingman — a Body at run time, as another player's craft is */
+export const isSubject = (b: Body | string) => typeof b === "string" && /^(trf|ais|wing):/.test(b);
+/** Any craft one can follow with the camera: the fleet's, the station, another player's, the traffic's, a ship */
+export const isCraftLike = (b: Body | string) => isCraft(b as Body) || b === "iss" || isNetTarget(b) || isSubject(b);
+/**
+ * Those craft, filled by main.ts from the traffic, the sea, the wingmen: those near now, where each is at a scene time
+ * t [M] (home frame: place [M], velocity [c], axes — left, up, nose —, its half-size [M]), its name.
+ */
+export const craftSubjects: {
+  list: () => Body[];
+  state: (id: Body, t: number) => { pos: Vec3; vel: Vec3; ax: [Vec3, Vec3, Vec3]; radius: number; length: number } | null;
+  name: (id: Body) => string;
+} = { list: () => [], state: () => null, name: (id) => String(id) };
+
 /** The bodies' names, in the interface's language (the language is fixed at load); a player's, his name. */
 const NAMES: Record<string, string> = Object.fromEntries(
   Object.entries({
@@ -67,7 +82,8 @@ const NAMES: Record<string, string> = Object.fromEntries(
   }).map(([k, v]) => [k, t(v)]),
 );
 export const BODY_NAMES = new Proxy(NAMES, {
-  get: (o, k: string) => (typeof k === "string" && k.startsWith("net:") ? netTargets.name(k as Body) : o[k]),
+  get: (o, k: string) =>
+    typeof k === "string" && k.startsWith("net:") ? netTargets.name(k as Body) : isSubject(k) ? craftSubjects.name(k as Body) : o[k],
 }) as Record<Body, string>;
 
 const isSystem = (b: Body): b is SystemBody => (SYSTEM_BODIES as string[]).includes(b);
@@ -76,7 +92,7 @@ export const isOurBody = (b: Body): b is OurBody => (OUR_TARGETS as string[]).in
 /** One of the fleet's craft (fleet.ts) */
 export const isCraft = (b: Body): b is VesselId => (VESSEL_IDS as string[]).includes(b);
 /** A target of our universe: a body of the solar system, the space station, a craft of the fleet */
-export const isOurs = (b: Body) => isOurBody(b) || b === "iss" || isCraft(b) || isNetTarget(b);
+export const isOurs = (b: Body) => isOurBody(b) || b === "iss" || isCraft(b) || isNetTarget(b) || isSubject(b);
 /** A craft's half-size, for framing and picking [m] (its hull's sphere; before its mesh loads, a guess) */
 export const craftRadius = (b: VesselId) => vesselHulls[b].radius || { ranger: 10, lander: 16, endurance: 40, f35: 9, a320: 25 }[b];
 /** The craft that can be targeted: the fleet's, but the one flown (and those docked to it) */
@@ -233,6 +249,7 @@ export function bodyRadius(s: Settings, body: Body) {
   if (isCraft(body)) return craftRadius(body) / M_METRES;
   // (another player's craft: a craft's size — not the hole's horizon, the fallback below)
   if (isNetTarget(body)) return NET_TARGET_RADIUS_M / M_METRES;
+  if (isSubject(body)) return craftSubjects.state(body, 0)?.radius ?? NET_TARGET_RADIUS_M / M_METRES;
   const sb = systemBody(s, body);
   if (sb) return sb.radius;
   return horizon(s.spin);
@@ -260,7 +277,7 @@ export function angularRadius(s: Settings, body: Body, d: number) {
 export function availableBodies(s: Settings, cam: CameraFrame): Body[] {
   const ours: Body[] =
     s.system === "gargantua" && s.wormhole
-      ? [...OUR_TARGETS, ...(s.iss ? (["iss"] as Body[]) : []), ...targetCrafts(s), ...netTargets.list()]
+      ? [...OUR_TARGETS, ...(s.iss ? (["iss"] as Body[]) : []), ...targetCrafts(s), ...netTargets.list(), ...craftSubjects.list()]
       : [];
   if (onOurSide(s, cam)) return ["wormhole", ...ours, ...(s.system === "gargantua" ? (["hole", ...SYSTEM_BODIES] as Body[]) : [])];
   const list: Body[] = ["hole"];
@@ -293,6 +310,11 @@ export function ourTarget(s: Settings, b: Body, t: number): { pos: Vec3; vel: Ve
     // (another player's: where his samples have him — a coasting craft along its orbit)
     const st = netTargets.state(b, t) ?? { pos: ourState("earth", t).pos, vel: ourState("earth", t).vel };
     return { pos: st.pos, vel: st.vel, radius: NET_TARGET_RADIUS_M / M_METRES, mass: 0 };
+  }
+  if (isSubject(b)) {
+    // (an airliner, a ship, a wingman: where the traffic, the sea, the fight have it now)
+    const st = craftSubjects.state(b, t) ?? { pos: ourState("earth", t).pos, vel: ourState("earth", t).vel, radius: 0 };
+    return { pos: st.pos, vel: st.vel, radius: st.radius, mass: 0 };
   }
   if (isCraft(b)) {
     // (where the fleet has it: its Kepler orbit, docked, or — flown — the camera's place)
@@ -510,7 +532,14 @@ export function pick(s: Settings, cam: CameraFrame, look: Vec3, time: number): B
     const X = cameraHome(s, cam);
     let best: Body | null = null,
       bestOff = Infinity;
-    for (const b of ["wormhole", ...OUR_TARGETS, ...(s.iss ? ["iss"] : []), ...targetCrafts(s)] as Body[]) {
+    for (const b of [
+      "wormhole",
+      ...OUR_TARGETS,
+      ...(s.iss ? ["iss"] : []),
+      ...targetCrafts(s),
+      ...netTargets.list(),
+      ...craftSubjects.list(),
+    ] as Body[]) {
       const T = ourTarget(s, b, time);
       const d = sub(T.pos, X);
       const D = Math.hypot(...d);

@@ -326,6 +326,14 @@ and over 0.5°), `speed` (the speed in heights a second halved or doubled in a f
 its `kind`, frame `i`, `t`, `label`, `score` (the ratio to the neighbours), `size` and `h`. Also `counts`, `worstJump`,
 `p95Jump`, `worstTurn`, `frames`, `seconds`.
 
+### `__bh.voyage()` → VoyageFigures | null
+
+The relativistic voyage under way (`src/camera/voyager.ts`, docs/PLAN-CAMERA-AAA.md CAM4), null when none: `name`, `T` and
+`Tau` (the world's and the traveller's whole durations [s]), `t` and `tau` (so far [s]), `beta`, `gamma`, `betaPeak`, `a`
+(the proper acceleration [1/M]), `u` (the share of the way), `left` [M], `phase` (`accel`, `cruise`, `decel`, `bound` —
+held by a nearby world —, `done`), `limited` (a duration asked shorter than the ground's bound allows). G starts one to
+the target (`__bh.goTo` too), G again stops it there.
+
 ### `__bh.spectate(on: boolean)` → boolean
 
 Puts the camera out of the ship as a free spectator (`on: true`; the ship goes on flying) or back into it (`false`). Returns whether the spectator is out. Refused with a toast ("fly one first (K)") when no craft is being flown: the spectator starts only from a piloted ship (`startSpectator` in `controller/spectator.ts`). No e2e test calls it.

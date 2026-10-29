@@ -146,7 +146,9 @@ export function analyse(all: CamSample[], marks: CamMark[] = [], o: CamAnalyseOp
   };
   const cut = new Set<number>();
   for (const m of marks) if (m.label === "cut") for (const d of [0, 1]) cut.add(m.at + d);
-  // per step k (from k-1 to k): the move [m], its rate in heights a second, the turn [deg], the field's change
+  // per step k (from k-1 to k), as rates — a frame late or early is the pacing's, not the camera's (the jitter lab's):
+  // the move [m/s], its rate in heights a second, the turn [deg/s], the field's change [deg/s]
+  const dts: number[] = [0];
   const move: (number | null)[] = [null],
     rate: (number | null)[] = [null],
     turn: (number | null)[] = [null],
@@ -157,11 +159,12 @@ export function analyse(all: CamSample[], marks: CamMark[] = [], o: CamAnalyseOp
     const dt = Math.max(1e-3, (b.t - a.t) / 1000);
     const same = a.ref === b.ref;
     const d = same ? len(sub(b.P, a.P)) : null;
-    move.push(d);
+    dts.push(dt);
+    move.push(d === null ? null : d / dt);
     const h = Math.max(1, Math.min(a.h, b.h));
     rate.push(d === null || !Number.isFinite(h) ? null : d / dt / h);
-    turn.push(angle(a.fwd, b.fwd));
-    dfov.push(Math.abs(b.fov - a.fov));
+    turn.push(angle(a.fwd, b.fwd) / dt);
+    dfov.push(Math.abs(b.fov - a.fov) / dt);
   }
   const faults: CamFault[] = [];
   const ratios: number[] = [];
@@ -169,23 +172,26 @@ export function analyse(all: CamSample[], marks: CamMark[] = [], o: CamAnalyseOp
     const s = S[k]!;
     if (cut.has(idx[k]!)) continue;
     const h = Number.isFinite(s.h) ? Math.max(0, s.h) : 1e12;
-    const d = move[k];
-    if (d !== null && d !== undefined) {
+    const dt = dts[k]!;
+    const vk = move[k];
+    if (vk !== null && vk !== undefined) {
       const e = median(around(move, k));
-      const r = d / (e + 1e-3 + 1e-6 * h);
+      const r = vk / (e + 0.06 + 6e-5 * h);
       ratios.push(r);
       // (a sensible share of the height, at least a metre: what the eye takes for a jump at that scale)
+      const d = vk * dt;
       if (r > 3 && d > Math.max(1, 0.02 * Math.max(h, 50)))
         faults.push({ kind: "jump", i: idx[k]!, t: s.t, label: labelAt(k), score: r, size: d, h });
     }
-    const th = turn[k]!;
+    // (the look's turn and the field's change: their rates over the neighbours', the frame's own share over 1° / 0.5°)
+    const wt = turn[k]!;
     const et = median(around(turn, k));
-    if (th > 1 && th > 3 * et + 0.2)
-      faults.push({ kind: "turn", i: idx[k]!, t: s.t, label: labelAt(k), score: th / (et + 0.05), size: th, h });
-    const df = dfov[k]!;
+    if (wt * dt > 1 && wt > 3 * et + 12)
+      faults.push({ kind: "turn", i: idx[k]!, t: s.t, label: labelAt(k), score: wt / (et + 3), size: wt * dt, h });
+    const wf = dfov[k]!;
     const ef = median(around(dfov, k));
-    if (df > 0.5 && df > 3 * ef + 0.1)
-      faults.push({ kind: "fov", i: idx[k]!, t: s.t, label: labelAt(k), score: df / (ef + 0.05), size: df, h });
+    if (wf * dt > 0.5 && wf > 3 * ef + 6)
+      faults.push({ kind: "fov", i: idx[k]!, t: s.t, label: labelAt(k), score: wf / (ef + 3), size: wf * dt, h });
     const u0 = rate[k - 1],
       u1 = rate[k];
     if (k > 1 && u0 != null && u1 != null && s.moving && S[k - 1]!.moving) {
@@ -206,6 +212,6 @@ export function analyse(all: CamSample[], marks: CamMark[] = [], o: CamAnalyseOp
     counts,
     worstJump: ratios.length ? ratios[ratios.length - 1]! : 1,
     p95Jump: ratios.length ? ratios[Math.floor(0.95 * (ratios.length - 1))]! : 1,
-    worstTurn: turn.reduce<number>((m, x) => Math.max(m, x ?? 0), 0),
+    worstTurn: turn.reduce<number>((m, x, k) => Math.max(m, (x ?? 0) * (dts[k] ?? 0)), 0),
   };
 }
