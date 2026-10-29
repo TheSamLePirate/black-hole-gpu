@@ -100,4 +100,41 @@ describe("the relativistic voyage", () => {
     for (let i = 0; i <= 1000; i++) closest = Math.min(closest, Math.hypot(...p.at((p.T * i) / 1000).X));
     expect(closest).toBeGreaterThan(1.2 * R);
   });
+  test("down the wormhole's throat (startThroat): a line through ℓ = 0, slowed in the throat, at rest at the far end", () => {
+    // (the game's wormhole: ρ = 0.05 M; from 8ρ-ish on our side to past the far mouth's gluing sphere)
+    const rho = 0.05,
+      l0 = -0.36,
+      l1 = 0.414;
+    const at = (l: number) => (): Vec3 => [l, 0, 0];
+    const D = l1 - l0;
+    const e: VoyageEnds = {
+      A: at(l0),
+      B: at(l1),
+      bodies: [
+        { id: "arrival", R: 0, soft: 0.02 * D, C: at(l1) },
+        { id: "departure", R: 0, soft: 0.02 * D, C: at(l0) },
+        { id: "throat", R: 0, soft: rho, C: at(0) },
+      ],
+    };
+    const p = planVoyage(e, { kind: "auto" }, 0, { k: 1.5, n: 1200 });
+    expect(Number.isFinite(p.T) && p.T > 0).toBe(true);
+    expect(p.Tau).toBeLessThan(p.T);
+    // (straight: never off the line)
+    let bThroat = 0,
+      bMax = 0,
+      lPrev = l0;
+    for (let i = 0; i <= 400; i++) {
+      const st = p.at((p.T * i) / 400);
+      expect(Math.abs(st.X[1]) + Math.abs(st.X[2])).toBeLessThan(1e-9);
+      expect(st.X[0]).toBeGreaterThanOrEqual(lPrev - 1e-12);
+      lPrev = st.X[0];
+      bMax = Math.max(bMax, st.beta);
+      if (Math.abs(st.X[0]) < 0.02 * rho) bThroat = Math.max(bThroat, st.beta);
+    }
+    // (the throat crossed slower than the way's peak; the end at the far mouth, at rest)
+    expect(bThroat).toBeLessThan(bMax);
+    const end = p.at(p.T);
+    expect(Math.abs(end.X[0] - l1)).toBeLessThan(1e-6);
+    expect(end.beta).toBeLessThan(0.01);
+  });
 });

@@ -1095,6 +1095,9 @@ export class CameraController {
   voyage: Voyage | null = null;
   /** the cinematic voyage (camera/cinevoyage.ts, ⇧G): its legs — the low passes, the voyage — and its cuts */
   cineVoyage: CineVoyage | null = null;
+  /** the wall seconds the view has been stepped (a pause's frames, a frozen film's steps counted as drawn): an
+   *  itinerary's holds between its legs (main.ts tour) */
+  playedWall = 0;
   /** the lens's spring: its field's rate of change (the logarithm's, a second) — controller/lens.ts easeLens */
   fovRate = 0;
   /** the view about a craft (camera/subjectcam.ts): the head's or the chase's turn [deg], the chase's distance, its

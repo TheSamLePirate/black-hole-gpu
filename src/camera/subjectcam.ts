@@ -157,10 +157,11 @@ function subjectStep(this: CameraController, dt: number): boolean {
     if (!T0 || (far > Math.max(25 * lenM, 1500) && dotV(sub(P.X, this.towerPlace(T0, t)), nose) > 0)) L.tower = this.towerSet(P, t);
     X = this.towerPlace(L.tower!, t);
     fwd = unit(sub(P.X, X));
-    // (the lens drawn in on it: the craft a fifth of the field, 3° … 60°)
+    // (the lens drawn in on it: its length two fifths of the field broadside — from ahead of its way it is mostly seen
+    // nose on, shorter by far: a fifth left it a speck —, 2° … 60°)
     const dist = len(sub(P.X, X)) * M_METRES;
     if (L.fov0 === null) L.fov0 = s.fov;
-    this.fovTarget = Math.min(60, Math.max(3, (2 * Math.atan((2.5 * lenM) / Math.max(dist, 1)) * 180) / Math.PI));
+    this.fovTarget = Math.min(60, Math.max(2, (2 * Math.atan((1.25 * lenM) / Math.max(dist, 1)) * 180) / Math.PI));
     const zen = L.tower!.body ? unit(sub(X, ourTarget(s, L.tower!.body as Body, t).pos)) : up;
     upV = unit(cross(cross(fwd, zen), fwd));
     L.q = null;

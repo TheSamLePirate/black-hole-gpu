@@ -180,6 +180,7 @@ import {
   craftSubjects,
   ourLook,
   isCraft,
+  isCraftLike,
   isNetTarget,
   isOurBody,
   netTargets,
@@ -2275,6 +2276,21 @@ async function main() {
     return null;
   }
 
+  /** The framing before a mouth of the wormhole (a voyage's goal): ours — eight throat radii off, at rest by it, the
+   *  home frame —, or the far one — out of its gluing sphere on its side away from the hole, moving with it. */
+  function mouthGoal(S: Settings, ours: boolean): (time: number) => TravelGoal {
+    return (time) => {
+      if (ours) {
+        const p = ourMouthPose(S, time, 8 * mouth(S).w.rho);
+        return { X: p.X, fwd: p.fwd, up: p.up, V: [0, 0, 0], C: [0, 0, 0] };
+      }
+      const m = mouth(S, time);
+      const d = 1.3 * m.rGlue;
+      const X = [0, 1, 2].map((k) => m.C[k]! - m.ex[k]! * d) as Vec3;
+      return { X, fwd: m.ex, up: m.ez, V: m.V, C: m.C };
+    };
+  }
+
   function goTo(b: Target): string | null {
     // (a craft flown: the observer goes — the free camera out, the craft flying on, F1 back to it —, or the craft itself
     // when the voyage is the ship's (settings.voyageWho): it rides the voyage's worldline, its mission going on, PLAN-CAMERA-AAA)
@@ -2288,16 +2304,47 @@ async function main() {
     // (a spectator out: it goes, the ship flies on — the view's settings and controller)
     const S = camera.viewSettings();
     const C = viewCamera();
-    if (camera.spectating && b === "wormhole" && S.wormhole) {
-      // (the spectator before our mouth, eight throat radii off, around it)
-      const p = ourMouthPose(S, sim.time, 8 * mouth(S).w.rho);
-      setHomePose(S, p.X, p.fwd, p.up, p.vel);
-      C.sync();
-      S.rotation = "orbit";
-      C.selectTarget("wormhole", { focus: true });
-      panel.toast(tf("Camera: around {0}", BODY_NAMES.wormhole));
-      touch();
-      return null;
+    if (b === "wormhole" && S.wormhole) {
+      // (a voyage to the mouth on the view's side — ours, eight throat radii off; the far one, out of its gluing
+      // sphere —, around it)
+      return travelTo(
+        mouthGoal(S, onOurSide(S, cameraFrame(S))),
+        () => {
+          C.selectTarget("wormhole", { focus: true });
+          panel.toast(tf("Camera: around {0}", BODY_NAMES.wormhole));
+        },
+        BODY_NAMES.wormhole,
+      );
+    }
+    // (a goal on the wormhole's other side: a voyage to the mouth, through its throat, and on to it)
+    if (S.system === "gargantua" && S.wormhole && b !== "wormhole") {
+      const id = b === "hole" ? "gargantua" : b;
+      const goalOurs = isCraftLike(b) || isCraft(b) || universeOf(id) === "ours";
+      const viewOurs = onOurSide(S, cameraFrame(S));
+      if (goalOurs !== viewOurs && (goalOurs || universeOf(id) === "gargantua")) {
+        const on = () => {
+          const e = goTo(b);
+          if (e) panel.toast(e);
+        };
+        // (by the mouth already: down its throat at once)
+        const m = mouth(S),
+          l = repPose(S).l;
+        if (
+          (viewOurs ? l > -(m.w.a + 12 * m.w.rho) : l < 2 * m.lGlue) &&
+          C.startThroat(on, viewOurs ? t("Gargantua side") : t("our side"))
+        ) {
+          releaseFollow();
+          touch();
+          return null;
+        }
+        return travelTo(
+          mouthGoal(S, viewOurs),
+          () => {
+            if (!C.startThroat(on, viewOurs ? t("Gargantua side") : t("our side"))) panel.toast(t("The throat: no way through from here"));
+          },
+          BODY_NAMES.wormhole,
+        );
+      }
     }
     if (isCraft(b)) {
       // a craft of the fleet: the C a few of its sizes off it — behind, to its side, above —, moving
@@ -2435,6 +2482,35 @@ async function main() {
       return null;
     } catch (e) {
       return (e as Error).message;
+    }
+  }
+  /** An itinerary (__bh.tour): its stops voyaged to one after the other — across the wormhole where one lies beyond
+   *  it —, a hold at each (the view's wall seconds) before the next. */
+  let tour: { stops: Target[]; i: number; hold: number; since: number } | null = null;
+  function startTour(stops: Target[], hold = 2.5): string | null {
+    if (!stops.length) return t("No stop");
+    tour = { stops, i: 0, hold, since: -Infinity };
+    tourStep();
+    return null;
+  }
+  function tourStep() {
+    if (!tour) return;
+    const C = viewCamera();
+    if (C.voyage || C.cineVoyage || C.travel) {
+      tour.since = C.playedWall;
+      return;
+    }
+    if (C.playedWall - tour.since < tour.hold) return;
+    if (tour.i >= tour.stops.length) {
+      tour = null;
+      return;
+    }
+    const b = tour.stops[tour.i++]!;
+    camera.viewSettings().target = b;
+    const e = goTo(b);
+    if (e) {
+      panel.toast(e);
+      tour = null;
     }
   }
   /** The flown craft's own voyage to a target of our side (its framing's place, at rest with it); null: begun. */
@@ -7803,6 +7879,9 @@ async function main() {
       hideBar: (on: boolean) => topBar.hide(on),
     },
     pwa,
+    // (an itinerary: its stops voyaged to in turn, through the wormhole where one lies beyond it; null: begun)
+    tour: (stops: Target[], hold?: number) => startTour(stops, hold),
+    touring: () => (tour ? { stop: tour.stops[Math.max(0, tour.i - 1)] ?? null, i: tour.i, of: tour.stops.length } : null),
     // (the voyage under way — camera/voyager.ts —: its figures, null when none)
     voyage: () => {
       const v = camera.viewController().voyage;
@@ -8273,6 +8352,7 @@ async function main() {
     // (the camera's smoothness sensor — src/camera/metrics.ts, PLAN-CAMERA-AAA CAM0 —: the view's place from the body
     // it is nearest, on that body's ground for ours — its turn and an orbit's motion not the view's —, look, field)
     voyageHud.update(camera.viewController().voyage, settings);
+    tourStep();
     if (camProbe.active && st) {
       const vc = camera.viewController();
       const w = vc.rigWorld();

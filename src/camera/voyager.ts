@@ -6,7 +6,7 @@
 // it was onto the goal, free to turn on the way (the drag), onto the goal's framing at the end.
 // (Its methods: installed on the controller's prototype — `this` the controller.)
 import { roomPace, realTimeSpeed, timeRate } from "../clock";
-import { setHolePose, setHomePose } from "../camera";
+import { repPose, setHolePose, setHomePose, setRepPose, switchAnchor } from "../camera";
 import { horizon } from "../physics";
 import { blendCurve, lookQ, qAxes, qSlerp } from "../cine/follow";
 import type { V3 } from "../cine/rig";
@@ -16,11 +16,22 @@ import { OUR_TARGETS, SYSTEM_BODIES, type Settings } from "../settings";
 
 import type { TravelGoal } from "../controller/travel";
 import { M_METRES, M_SECONDS } from "../units";
-import { planVoyage, playbackRate, warpAt, type VoyageBody, type VoyageChoice, type VoyagePlan, type VoyageState } from "./voyage";
+import { mouth } from "../wormhole";
+import {
+  planVoyage,
+  playbackRate,
+  warpAt,
+  type VoyageBody,
+  type VoyageChoice,
+  type VoyageEnds,
+  type VoyagePlan,
+  type VoyageState,
+} from "./voyage";
 
 declare module "../controls" {
   interface CameraController {
     startVoyage: typeof startVoyage;
+    startThroat: typeof startThroat;
     voyageStep: typeof voyageStep;
     voyageLook: typeof voyageLook;
     endVoyage: typeof endVoyage;
@@ -57,11 +68,24 @@ export interface Voyage {
   onCut?: () => void;
   /** the montage's shot now (0 back, 1 ahead, 2 on the goal) */
   shot?: number;
+  /** through the wormhole's throat (startThroat): the plan's places along this direction n of the wormhole's
+   *  coordinates — a place X there is ℓ = X·n, a vector there a rep vector —, not the home frame's nor the hole's */
+  rep?: Vec3;
+  /** the world the goal goes round (the Earth for the station, Gargantua for Miller): looked at from afar — the goal
+   *  whirling round it at the warp is no aim to follow —, the look sliding onto the goal as one nears it */
+  parent?: (t: number) => Vec3;
+  /** the framing's share of the look at the end (it only grows) */
+  kOut?: number;
+  /** the look's aim as followed (a quarter-second's lag: no turn in a frame) */
+  qAim?: [number, number, number, number];
 }
 
-/** The view placed (our side: the home frame; Gargantua's: the hole's). */
-function place(s: Settings, ours: boolean, X: Vec3, fwd: Vec3, up: Vec3, V: Vec3) {
-  if (ours) setHomePose(s, X, fwd, up, V);
+/** The view placed (our side: the home frame; Gargantua's: the hole's; in the throat: the wormhole's coordinates). */
+function place(s: Settings, v: Pick<Voyage, "ours" | "rep">, X: Vec3, fwd: Vec3, up: Vec3, V: Vec3) {
+  if (v.rep) {
+    const n = v.rep;
+    setRepPose(s, { l: X[0] * n[0] + X[1] * n[1] + X[2] * n[2], n, fwd, up, vel: V });
+  } else if (v.ours) setHomePose(s, X, fwd, up, V);
   else setHolePose(s, X, fwd, up, V);
 }
 
@@ -87,6 +111,118 @@ const K_WALL = 1.5;
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const len = (a: Vec3) => Math.hypot(a[0], a[1], a[2]);
 
+/** `up` made square to the look `f` (unit); along it: `alt` made so, else any square axis. */
+export function squareUp(up: Vec3, f: Vec3, alt: Vec3): Vec3 {
+  const lf = len(f) || 1;
+  const n = [f[0] / lf, f[1] / lf, f[2] / lf] as Vec3;
+  for (const u of [up, alt, [0, 0, 1] as Vec3, [1, 0, 0] as Vec3]) {
+    const d = u[0] * n[0] + u[1] * n[1] + u[2] * n[2];
+    const p = [u[0] - n[0] * d, u[1] - n[1] * d, u[2] - n[2] * d] as Vec3;
+    const l = len(p);
+    if (l > 0.2 * (len(u) || 1)) return [p[0] / l, p[1] / l, p[2] / l];
+  }
+  return [0, 0, 1];
+}
+
+/** The plan, played back in the voyage's seconds (settings.voyageWall: real time by a world, the warp rising in the
+ *  void so the view crosses its height at the same rate a wall second all the way; the ground's bound k a world second
+ *  is that rate: the plan and its playback found together. In a room: the room's pace, the bound at its warp) — the
+ *  clock set running at real time, what it was kept to give back; null: no plan (an ephemeris missing). */
+function planPlayed(c: CameraController, e: VoyageEnds, t0: number) {
+  const s = c.s;
+  const ts = c.timeHost ?? s;
+  const rt = realTimeSpeed(ts);
+  const room = Number.isFinite(roomPace.cap);
+  let k = room ? K_WALL / (roomPace.cap / rt) : K_WALL;
+  let plan = planVoyage(e, voyageChoice(s), t0, { n: 1200, k });
+  let kPlay = Number.POSITIVE_INFINITY;
+  if (!room && s.voyageWall > 0)
+    for (let i = 0; i < 3; i++) {
+      kPlay = playbackRate(plan, s.voyageWall, rt);
+      const want = Math.min(6, Math.max(0.4, kPlay));
+      if (Math.abs(want / k - 1) < 0.1) break;
+      k = want;
+      plan = planVoyage(e, voyageChoice(s), t0, { n: 1200, k });
+    }
+  // (a plan that came out unknown — an ephemeris missing —: none, the kinematic travel takes over, never a voyage stuck)
+  if (!Number.isFinite(plan.T) || !Number.isFinite(plan.Tau) || !Number.isFinite(kPlay === Number.POSITIVE_INFINITY ? 0 : kPlay)) {
+    console.warn("voyage: plan unknown", { T: plan.T, D: plan.D, from: e.from, to: e.to });
+    return null;
+  }
+  let restore: Voyage["restore"] = null;
+  if (!room) {
+    restore = { timeSpeed: ts.timeSpeed, animate: ts.animate };
+    ts.timeSpeed = s.timeSpeed = rt;
+    ts.animate = s.animate = true;
+  }
+  return { plan, kPlay, restore };
+}
+
+/**
+ * Through the wormhole (docs/PLAN-CAMERA-AAA.md): from where the view is by a mouth — ours (the home frame) or the far
+ * one (Gargantua's) —, straight down its throat along the line it is on and out of the other mouth beyond its gluing
+ * sphere, at rest there: the relativistic rocket's voyage like any other (its clocks, its warp, the look free on the
+ * way), its places along ℓ in the wormhole's own coordinates; slowed by the throat itself (a soft point of a throat's
+ * radius: the crossing seen, not a frame's flash). false: no wormhole, or the view not by a mouth.
+ */
+function startThroat(this: CameraController, done: () => void, name = ""): boolean {
+  const s = this.s;
+  if (!s.wormhole) return false;
+  const p = repPose(s);
+  const m = mouth(s);
+  const { rho, a } = m.w;
+  const l0 = p.l;
+  if (!Number.isFinite(l0) || Math.abs(l0) > 3 * Math.max(m.lGlue, a + 10 * rho)) return false;
+  const t0 = Number.isFinite(this.time) ? this.time : 0;
+  const l1 = l0 < 0 ? 1.15 * m.lGlue : -(a + 8 * rho);
+  const ln = Math.hypot(...p.n) || 1;
+  const n = [p.n[0] / ln, p.n[1] / ln, p.n[2] / ln] as Vec3;
+  const dir = Math.sign(l1 - l0);
+  const ahead = [n[0] * dir, n[1] * dir, n[2] * dir] as Vec3;
+  // (the head's up kept, square to the way — any square one when it was along it)
+  let up = p.up ?? ([0, 0, 1] as Vec3);
+  const ua = up[0] * ahead[0] + up[1] * ahead[1] + up[2] * ahead[2];
+  up = [up[0] - ahead[0] * ua, up[1] - ahead[1] * ua, up[2] - ahead[2] * ua];
+  if (len(up) < 1e-3) up = Math.abs(ahead[2]) < 0.9 ? [-ahead[1], ahead[0], 0] : [0, -ahead[2], ahead[1]];
+  up = up.map((x) => x / len(up)) as Vec3;
+  const at = (l: number) => [n[0] * l, n[1] * l, n[2] * l] as Vec3;
+  const D = Math.abs(l1 - l0);
+  const bodies: VoyageBody[] = [
+    { id: "arrival", R: 0, soft: 0.02 * D, C: () => at(l1) },
+    { id: "departure", R: 0, soft: 0.02 * D, C: () => at(l0) },
+    { id: "throat", R: 0, soft: rho, C: () => at(0) },
+  ];
+  const played = planPlayed(this, { A: () => at(l0), B: () => at(l1), bodies }, t0);
+  if (!played) return false;
+  const { plan, kPlay, restore } = played;
+  const beyond = at(l1 + dir * rho);
+  this.travel = null;
+  this.setCinematic(null);
+  this.voyage = {
+    plan,
+    goal: () => ({ X: at(l1), fwd: ahead, up, V: [0, 0, 0], C: beyond }),
+    done: () => {
+      // (out on Gargantua's side: the view about the hole again — its place, its look, its velocity unchanged)
+      if (l1 > 0) switchAnchor(s, "hole");
+      done();
+    },
+    q0: lookQ(p.fwd as V3, (p.up ?? up) as V3),
+    u0: up as V3,
+    yaw: 0,
+    pitch: 0,
+    wall: 0,
+    inT: 2,
+    restore,
+    state: null,
+    name,
+    ours: l1 < 0,
+    kPlay,
+    warp: 1,
+    rep: n,
+  };
+  return true;
+}
+
 /** A voyage begun from where the view is to a goal, on either side of the wormhole (the goal on the same side);
  *  false: none (in the throat). */
 function startVoyage(this: CameraController, goalNow: (t: number) => TravelGoal, done: () => void, name = ""): boolean {
@@ -103,7 +239,12 @@ function startVoyage(this: CameraController, goalNow: (t: number) => TravelGoal,
   const from = sub(w.X as Vec3, g0.C);
   const lf = len(from);
   const off = (lf > 0 && lf > d0 ? from.map((x) => (x / lf) * d0) : sub(g0.X, g0.C)) as Vec3;
-  const lookIn = (len(off) > 0 ? [-off[0], -off[1], -off[2]] : g0.fwd) as Vec3;
+  // (a unit vector: the poses read its pitch off its components — at a framing's length in M, a look 13° down came out level)
+  const lo = len(off);
+  const lookIn = (lo > 0 ? [-off[0] / lo, -off[1] / lo, -off[2] / lo] : g0.fwd) as Vec3;
+  // (its up square to that look: the framing's own up was square to its own look — on another side, it may lie along
+  // this one, the look's turn then unknown: Miller's arrival pitched 13° in its last frame)
+  const upIn = squareUp(g0.up, lookIn, g0.fwd);
   // (its centre where it is known — a station's track ends somewhere: past it, carried on at its velocity of now)
   const Vg0 = g0.V.every(Number.isFinite) ? g0.V : ([0, 0, 0] as Vec3);
   const centre = (t: number): Vec3 => {
@@ -116,7 +257,7 @@ function startVoyage(this: CameraController, goalNow: (t: number) => TravelGoal,
     const Ca = centre(t - h),
       Cb = centre(t + h);
     const V = [0, 1, 2].map((k) => (Cb[k]! - Ca[k]!) / (2 * h)) as Vec3;
-    return { X: [C[0] + off[0], C[1] + off[1], C[2] + off[2]], fwd: lookIn, up: g0.up, V, C };
+    return { X: [C[0] + off[0], C[1] + off[1], C[2] + off[2]], fwd: lookIn, up: upIn, V, C };
   };
   // (the start carried by what it is near — a planet's orbit, a craft's —; in the void, where it is)
   // (a body's centre at a time — where it is not known, a station's track beyond its window, a moon's ephemeris out of
@@ -187,35 +328,20 @@ function startVoyage(this: CameraController, goalNow: (t: number) => TravelGoal,
     into = nearestTo(goal(t0).X);
   const eps = Math.max(0.02 * len(off), 1 / M_METRES);
   const eps0 = Math.max(0.02 * len(sub(X0, C0 ?? X0)), eps);
+  // (the world the goal goes round: the nearest, in its radii, within 30 of them — not the goal's own)
+  let parent: VoyageBody | undefined,
+    pr = 30;
+  for (const b of bodies) {
+    const dc = len(sub(b.C(t0), g0.C));
+    if (b.R > 0 && dc > b.R && dc / b.R < pr) (pr = dc / b.R), (parent = b);
+  }
   bodies.push({ id: "arrival", R: 0, soft: eps, C: B }, { id: "departure", R: 0, soft: eps0, C: A });
   // (played back in the voyage's seconds — settings.voyageWall —: real time by a world, the warp rising in the void so
   // the view crosses its height at the same rate a wall second all the way; the ground's bound k a world second is that
   // rate: the plan and its playback found together. In a room: the room's pace, the bound at its warp)
-  const ts = this.timeHost ?? s;
-  const rt = realTimeSpeed(ts);
-  const room = Number.isFinite(roomPace.cap);
-  let k = room ? K_WALL / (roomPace.cap / rt) : K_WALL;
-  let plan = planVoyage({ A, B, bodies, from: outOf, to: into }, voyageChoice(s), t0, { n: 1200, k });
-  let kPlay = Number.POSITIVE_INFINITY;
-  if (!room && s.voyageWall > 0)
-    for (let i = 0; i < 3; i++) {
-      kPlay = playbackRate(plan, s.voyageWall, rt);
-      const want = Math.min(6, Math.max(0.4, kPlay));
-      if (Math.abs(want / k - 1) < 0.1) break;
-      k = want;
-      plan = planVoyage({ A, B, bodies, from: outOf, to: into }, voyageChoice(s), t0, { n: 1200, k });
-    }
-  // (a plan that came out unknown — an ephemeris missing —: none, the kinematic travel takes over, never a voyage stuck)
-  if (!Number.isFinite(plan.T) || !Number.isFinite(plan.Tau) || !Number.isFinite(kPlay === Number.POSITIVE_INFINITY ? 0 : kPlay)) {
-    console.warn("voyage: plan unknown", { T: plan.T, D: plan.D, outOf, into });
-    return false;
-  }
-  let restore: Voyage["restore"] = null;
-  if (!room) {
-    restore = { timeSpeed: ts.timeSpeed, animate: ts.animate };
-    ts.timeSpeed = s.timeSpeed = rt;
-    ts.animate = s.animate = true;
-  }
+  const played = planPlayed(this, { A, B, bodies, from: outOf, to: into }, t0);
+  if (!played) return false;
+  const { plan, kPlay, restore } = played;
   this.travel = null;
   this.setCinematic(null);
   this.voyage = {
@@ -252,6 +378,7 @@ function startVoyage(this: CameraController, goalNow: (t: number) => TravelGoal,
     ours,
     kPlay,
     warp: 1,
+    parent: parent?.C,
   };
   return true;
 }
@@ -297,13 +424,29 @@ function voyagePlace(this: CameraController, v: Voyage, st: VoyageState, g: Trav
   const tEnd = v.plan.t0 + st.t;
   // the look: from where it was onto the goal's centre (1.5–4 s, by the angle), the drag's turn off it, onto the goal's framing in
   // the voyage's last two seconds (wall: the world's time left at the warp played)
-  const toC = sub(g.C, st.X);
+  // (the aim: the world the goal goes round while the goal is near it as seen from here — within a twelfth of the
+  // distance —, the goal itself once it is a third of it away, eased between)
+  let aimC = g.C;
+  if (v.parent) {
+    const P = v.parent(tEnd);
+    const r = len(sub(g.C, st.X)) / Math.max(len(sub(g.C, P)), 1e-30);
+    const x = Math.min(1, Math.max(0, (r - 3) / 9));
+    const w = 1 - x * x * (3 - 2 * x);
+    if (P.every(Number.isFinite)) aimC = [0, 1, 2].map((k) => P[k]! + (g.C[k]! - P[k]!) * w) as Vec3;
+  }
+  const toC = sub(aimC, st.X);
   const upMid = [0, 1, 2].map((k) => v.u0[k]! * (1 - st.u) + g.up[k]! * st.u) as V3;
-  const qGoal = lookQ((len(toC) > 0 ? toC : g.fwd) as V3, upMid);
+  const qRaw = lookQ((len(toC) > 0 ? toC : g.fwd) as V3, upMid);
+  v.qAim = v.qAim ? qSlerp(v.qAim, qRaw, 1 - Math.exp(-Math.max(dt, 0) / 0.25)) : qRaw;
+  const qGoal = v.qAim;
   const kIn = blendCurve("easeInOut", Math.min(1, v.wall / v.inT));
   const rate = s.animate ? Math.max(timeRate(s), 1e-30) : Number.POSITIVE_INFINITY;
   const leftWall = (v.plan.T - (tEnd - v.plan.t0)) / rate;
-  const kOut = st.phase === "done" ? 1 : blendCurve("easeInOut", 1 - Math.min(1, leftWall / 2));
+  // (never back: the warp falling as one nears makes the wall time left grow again — the look swung to and fro between
+  // the aim and the framing; counted only near real time, where it is the wall time left)
+  const nearReal = !v.restore || v.warp < 1.5;
+  v.kOut = Math.max(v.kOut ?? 0, st.phase === "done" ? 1 : nearReal ? blendCurve("easeInOut", 1 - Math.min(1, leftWall / 2)) : 0);
+  const kOut = v.kOut;
   let q = qSlerp(v.q0, qGoal, kIn);
   // (a montage: its shots by the share of the way — back at the world left, ahead along the speed, on the goal —, cut)
   if (v.look === "montage") {
@@ -332,7 +475,7 @@ function voyagePlace(this: CameraController, v: Voyage, st: VoyageState, g: Trav
   }
   q = qSlerp(q, lookQ(g.fwd as V3, g.up as V3), kOut);
   const [, y, z] = qAxes(q);
-  place(s, v.ours, st.X, z as Vec3, y as Vec3, st.V);
+  place(s, v, st.X, z as Vec3, y as Vec3, st.V);
   s.motion = "geodesic";
   this.sync();
   if (st.phase === "done") {
@@ -372,15 +515,21 @@ function endVoyage(this: CameraController, arrived: boolean, at?: number) {
   if (arrived) {
     const t = at ?? (Number.isFinite(this.time) ? this.time : 0);
     const g = v.goal(t);
-    place(s, v.ours, g.X, g.fwd, g.up, g.V);
+    place(s, v, g.X, g.fwd, g.up, g.V);
     this.sync();
     v.done();
   } else {
-    // (stopped on the way: at rest with the body it is near)
+    // (stopped on the way: at rest with the body it is near — in the throat, with the wormhole)
+    if (v.rep) {
+      const p = repPose(s);
+      setRepPose(s, { ...p, vel: [0, 0, 0] });
+      this.sync();
+      return;
+    }
     const w = this.rigWorld();
     if (w) {
       const n = this.rigNearest(w.ours, w.X, this.time);
-      place(s, w.ours, w.X, w.fwd, w.up, n?.V ?? [0, 0, 0]);
+      place(s, { ours: w.ours }, w.X, w.fwd, w.up, n?.V ?? [0, 0, 0]);
       this.sync();
     }
   }
@@ -408,5 +557,5 @@ export function voyageFigures(v: Voyage) {
 }
 
 export function installVoyager(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { startVoyage, voyageStep, voyageLook, endVoyage });
+  Object.assign(C.prototype, { startVoyage, startThroat, voyageStep, voyageLook, endVoyage });
 }

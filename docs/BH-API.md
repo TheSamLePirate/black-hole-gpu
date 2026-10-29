@@ -332,7 +332,20 @@ The relativistic voyage under way (`src/camera/voyager.ts`, docs/PLAN-CAMERA-AAA
 `Tau` (the world's and the traveller's whole durations [s]), `t` and `tau` (so far [s]), `beta`, `gamma`, `betaPeak`, `a`
 (the proper acceleration [1/M]), `u` (the share of the way), `left` [M], `phase` (`accel`, `cruise`, `decel`, `bound` —
 held by a nearby world —, `done`), `limited` (a duration asked shorter than the ground's bound allows). G starts one to
-the target (`__bh.goTo` too), G again stops it there.
+the target (`__bh.goTo` too), G again stops it there. Down the wormhole's throat (a goal beyond it) the voyage's `name` is
+the wormhole's, its places along the throat's coordinate ℓ (`startThroat`).
+
+### `__bh.tour(stops: Target[], hold?: number)` → string | null
+
+An itinerary (`src/main.ts`, docs/CAMERA.md): a voyage to each stop in turn, `hold` wall seconds (2.5) at each before the
+next — through the wormhole by itself where a stop lies beyond it (a voyage to the mouth, down its throat, on). null: begun;
+else why not. `["saturn", "wormhole", "hole"]` from the Earth: Saturn, the wormhole, Gargantua. Used by
+`scripts/camera-video.ts tour`.
+
+### `__bh.touring()` → { stop, i, of } | null
+
+The itinerary under way: the stop voyaged to now, how many begun (`i`) of how many (`of`); null when none (its last stop
+reached and held).
 
 ### `__bh.spectate(on: boolean)` → boolean
 

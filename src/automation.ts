@@ -148,6 +148,8 @@ export interface BhContext {
   cam: unknown;
   /** the voyage under way (camera/voyager.ts): its figures [s, c, M] — null when none */
   voyage: () => unknown;
+  tour: (stops: Target[], hold?: number) => string | null;
+  touring: () => { stop: Target | null; i: number; of: number } | null;
   /** the spectator out (a free camera, the ship flying on) or back; whether it is out */
   spectate(on: boolean): boolean;
   /** the PWA (src/pwa.ts): the worker's state, the caches' figures */
@@ -660,6 +662,11 @@ export function installBh(c: BhContext) {
        *  durations [s]), t and tau (so far [s]), beta, gamma, betaPeak, a [1/M], u (the share of the way), left [M], phase,
        *  limited — null when none */
       voyage: c.voyage,
+      /** an itinerary (main.ts): tour(stops, hold? [s]) voyages to each stop in turn — through the wormhole where one
+       *  lies beyond it (a voyage to its mouth, down its throat, on) —, holding `hold` wall seconds at each; null: begun.
+       *  touring(): { stop, i, of } while under way, else null */
+      tour: c.tour,
+      touring: c.touring,
       spectate: (on: boolean) => c.spectate(on),
       /** the offline cache: ready(), stats(), clearTiles(), update(), waiting */
       pwa: c.pwa,

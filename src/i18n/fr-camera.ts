@@ -61,4 +61,6 @@ export default {
   Tower: "Tour",
   "Set down ahead of its way — on the ground, or in space —, turning to follow it":
     "Posée en avant de sa route — au sol, ou dans l'espace —, pivotant pour le suivre",
+  "The throat: no way through from here": "La gorge : aucun passage d'ici",
+  "No stop": "Aucune étape",
 } satisfies Record<string, string>;

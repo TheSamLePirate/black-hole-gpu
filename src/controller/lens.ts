@@ -457,6 +457,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   if (this.baryRest() && s.rotation === "free" && !this.rig.on) this.driftWithBarycentre();
   this.updateMotion(dt);
   // (a travel: its pose, over the rest — controller/travel.ts)
+  this.playedWall += dt;
   const travelling = (!this.piloting && this.travelStep(dt)) || (this.cineVoyage ? this.cineVoyageStep(dt) : this.voyageStep(dt));
   if (this.tracking && !flying && !this.inThroat() && !travelling && !subjectPlaced) this.track(dt);
   // (tracking resumes from the orientation the flight left: offset recomputed, no jump)

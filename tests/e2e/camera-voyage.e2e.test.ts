@@ -5,8 +5,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // The relativistic voyage by real keys (docs/PLAN-CAMERA-AAA.md CAM4–CAM6): F3 out of the Ranger, G to Mars — the trip's own pace peaks
 // near 0.9 c, the world's clock runs t while the traveller's runs τ < t, the card shows both, the view's speed reaches
 // the tracer (β), it arrives at Mars's framing where Mars then is; a drag turns the look off the course on the way;
-// Space holds it; G again stops it where it is — the camera sensor sees no jump in any of it.
-// Duration: ~3 min here (headless).
+// Space holds it; G again stops it where it is — the camera sensor sees no jump in any of it. Then G to Gargantua from our
+// side: a voyage to the wormhole's mouth, down its throat, on to the hole.
+// Duration: ~7 min here (headless).
 // Done when: the voyage to Jupiter is stopped by G and the view stays where it stopped.
 
 const OUT = "remote-results/camera-voyage";
@@ -194,6 +195,59 @@ describe.skipIf(!E2E)("the relativistic voyage", () => {
     for (const f of list) console.log(`    ${f.kind} at ${f.t} ms: ${f.size}, h ${f.h}`);
     console.log(`  faults: ${JSON.stringify(c)}`);
     expect(c.jump).toBe(0);
+    expect(app.cdp.errors).toEqual([]);
+  }, 240_000);
+
+  test("G to Gargantua from our side: a voyage to the mouth, down the throat (ℓ < 0 → ℓ > 0), on to the hole", async () => {
+    if (!(await app.js<boolean>(`__bh.camera.spectating`))) {
+      await app.press("F3", "F3");
+      await app.waitFor(`__bh.camera.spectating`, 10_000);
+    }
+    await app.js(`(() => { __bh.camera.viewController().s.target = "hole"; __bh.settings.target = "hole"; return 1; })()`);
+    await app.js(`__bh.cam.start()`);
+    await app.press("KeyG", "g");
+    // (the legs as they come: the mouth, the throat — its ℓ through 0 —, Gargantua)
+    const seen = new Set<string>();
+    let lMin = Infinity,
+      lMax = -Infinity,
+      betaThroat = 0;
+    const t0 = Date.now();
+    while (Date.now() - t0 < 180_000) {
+      const st = await app.js<{ name: string; beta: number; anchor: string; l: number } | null>(`(() => {
+        const v = __bh.voyage(), s = __bh.camera.viewSettings();
+        return v ? { name: v.name, beta: v.beta, anchor: s.anchor, l: s.whL } : null; })()`);
+      if (!st) {
+        if (seen.size) break;
+      } else {
+        seen.add(st.name);
+        if (st.anchor === "wormhole" && Math.abs(st.l) < 1) {
+          lMin = Math.min(lMin, st.l);
+          lMax = Math.max(lMax, st.l);
+          if (Math.abs(st.l) < 0.1) betaThroat = Math.max(betaThroat, st.beta);
+          if (Math.abs(st.l) < 0.05 && !seen.has("shot")) {
+            seen.add("shot");
+            await app.shot(`${OUT}/throat.png`);
+          }
+        }
+      }
+      await Bun.sleep(250);
+    }
+    const end = await app.js<{ anchor: string; d: number; target: string }>(
+      `(() => { const s = __bh.camera.viewSettings(); return { anchor: s.anchor, d: s.distance, target: s.target }; })()`,
+    );
+    await app.shot(`${OUT}/gargantua.png`);
+    console.log(
+      `  legs: ${[...seen].join(" → ")}; ℓ ${lMin.toFixed(3)} … ${lMax.toFixed(3)}, β in the throat ${betaThroat.toFixed(2)}; at ${JSON.stringify(end)}`,
+    );
+    expect(seen.has("Wormhole")).toBe(true);
+    expect(lMin).toBeLessThan(0);
+    expect(lMax).toBeGreaterThan(0);
+    expect(end.anchor).toBe("hole");
+    expect(end.target).toBe("hole");
+    expect(end.d).toBeLessThan(60);
+    const c = await faults();
+    console.log(`  faults: ${JSON.stringify(c)}`);
+    expect(c.jump).toBeLessThanOrEqual(1);
     expect(app.cdp.errors).toEqual([]);
   }, 240_000);
 });

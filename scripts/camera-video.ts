@@ -5,8 +5,9 @@
 //   cine     ⇧G Earth → Moon in one shot: the low pass over the Earth, the voyage, the low pass over the Moon
 //   montage  ⇧G to Mars, cut: looking back at the Earth, ahead in the void, on Mars coming
 //   subject  a craft (the Ranger; --subject iss): chase, cockpit, tower, around
+//   tour     the itinerary Earth → Saturn → the wormhole → down its throat → Gargantua (__bh.tour), a pause at each
 //
-//   bun scripts/camera-video.ts [voyage cine montage subject] [--out dir] [--seconds-max 90]
+//   bun scripts/camera-video.ts [voyage cine montage subject tour] [--out dir] [--seconds-max 90]
 // Takes the Mac's Chrome lock (tests/e2e/lib/app.ts). Needs ffmpeg.
 
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -139,6 +140,21 @@ async function main() {
           started = true;
         }
         return !started || (await app.js<boolean>(`!!__bh.camera.viewController().cineVoyage`)) || k < 12;
+      });
+    }
+    if (want("tour")) {
+      await app.js(`(__bh.settings.voyageWall = 20, 1)`);
+      let started = false,
+        tail = 0;
+      await film(app, "tour-saturn-gargantua", async (k) => {
+        if (k === 15) {
+          await app.js(`__bh.tour(["saturn", "wormhole", "hole"], 2.5)`);
+          started = true;
+        }
+        if (k % 150 === 0) console.log(`    ${JSON.stringify(await app.js(`[__bh.touring(), __bh.voyage()?.beta]`))}`);
+        if (started && !(await app.js<boolean>(`!!__bh.touring()`))) tail++;
+        // (at Gargantua: four seconds about it)
+        return !started || tail < 4 * FPS;
       });
     }
     if (want("subject")) {
