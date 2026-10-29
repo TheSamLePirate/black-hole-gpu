@@ -16,6 +16,8 @@ struct FftParams {
   L: vec4f,
   // the foam: each cascade's Jacobian threshold (renderer: the whitecaps' cover at this wind), the frame's time step [s]
   f: vec4f,
+  // the water: its gravity [m/s²], its depth [m] (0: deep — the Earth's sea; Miller's knee-deep: sea/spectrum.ts dispersion)
+  w: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> F: FftParams;
@@ -47,7 +49,8 @@ fn spectrum(@builtin(global_invocation_id) id: vec3u) {
   // (each mode's pulsation a whole multiple of 2π over the sea's repeat time — 1024 s —: the clock taken modulo
   // that on the CPU, in float64, the phases exact in float32 however far the scene's clock runs)
   let w0 = TAU / REPEAT;
-  let w = floor(sqrt(G * kl) / w0 + 0.5) * w0 * F.t.x;
+  let g = select(G, F.w.x, F.w.x > 0.0);
+  let w = floor(sqrt(g * kl * select(1.0, tanh(kl * F.w.y), F.w.y > 0.0)) / w0 + 0.5) * w0 * F.t.x;
   let e = vec2f(cos(w), sin(w));
   let h = cmul(a.xy, e) + cmul(a.zw, vec2f(e.x, -e.y));
   let ih = vec2f(-h.y, h.x); // i·h

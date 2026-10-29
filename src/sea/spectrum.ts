@@ -14,6 +14,28 @@ export const BANDS: [number, number][] = [
   [(2 * Math.PI * 6) / 16, (Math.PI * SEA_N) / 16],
 ];
 const G = 9.81;
+/** The water's physics: its gravity [m/s²] and depth [m] — the Earth's sea deep (ω² = g k); Miller's knee-deep, under 1.3 g
+ *  (ω² = g k tanh(k d): the long waves held to √(g d) — PLAN-PLANETES-AAA P2). */
+export interface SeaPhysics {
+  g: number;
+  depth: number;
+}
+export const EARTH_SEA: SeaPhysics = { g: G, depth: Infinity };
+/** Miller's water (Interstellar: "knee-deep"): 1.3 g (system/bodies.ts: its surface's gravity), half a metre deep */
+export const MILLER_SEA: SeaPhysics = { g: 1.3 * G, depth: 0.5 };
+/** Miller's wind: a steady breeze [m/s] and the way it blows towards [rad from the north, eastwards] */
+export const MILLER_WIND = { U: 9, to: 1.1 };
+/** a wave's pulsation [rad/s] at a wavenumber k [rad/m], and its group derivative dω/dk */
+export function dispersion(k: number, p: SeaPhysics = EARTH_SEA): { w: number; dwdk: number } {
+  if (!Number.isFinite(p.depth)) {
+    const w = Math.sqrt(p.g * k);
+    return { w, dwdk: p.g / (2 * w) };
+  }
+  const th = Math.tanh(k * p.depth);
+  const w = Math.sqrt(p.g * k * th);
+  const sech2 = 1 - th * th;
+  return { w, dwdk: (p.g * (th + k * p.depth * sech2)) / (2 * w) };
+}
 
 /** One of the sea's systems: significant height [m], peak period [s], its way in the cascades' frame [rad: 0
  *  along their x — the wind's way —, π/2 along their z], γ its peak's sharpness, s its spread's. */
@@ -66,11 +88,16 @@ function spreading(theta: number, s: number): number {
 }
 
 /** The sea's directional wavenumber spectrum at (kx, kz) [m⁴]: the systems' sum (deep water: S(k,θ) = S(ω) dω/dk / k). */
-export function seaSpectrum(kx: number, kz: number, systems: readonly SeaSystem[], alphas: readonly number[]): number {
+export function seaSpectrum(
+  kx: number,
+  kz: number,
+  systems: readonly SeaSystem[],
+  alphas: readonly number[],
+  phys: SeaPhysics = EARTH_SEA,
+): number {
   const k = Math.hypot(kx, kz);
   if (k < 1e-6) return 0;
-  const w = Math.sqrt(G * k);
-  const dwdk = G / (2 * w);
+  const { w, dwdk } = dispersion(k, phys);
   const th = Math.atan2(kz, kx);
   let S = 0;
   systems.forEach((sys, i) => {
@@ -103,7 +130,7 @@ export interface SeaCascades {
   slopeZ: number[];
 }
 
-export function seaCascades(systems: readonly SeaSystem[], seed = 1): SeaCascades {
+export function seaCascades(systems: readonly SeaSystem[], seed = 1, phys: SeaPhysics = EARTH_SEA): SeaCascades {
   const N = SEA_N;
   const alphas = systems.map(alphaOf);
   const out: SeaCascades = { h0: [], height: [], slopeX: [], slopeZ: [] };
@@ -124,7 +151,7 @@ export function seaCascades(systems: readonly SeaSystem[], seed = 1): SeaCascade
         const kx = (i < N / 2 ? i : i - N) * dk,
           kz = (j < N / 2 ? j : j - N) * dk;
         const k = Math.hypot(kx, kz);
-        const S = k >= lo && k < hi ? seaSpectrum(kx, kz, systems, alphas) : 0;
+        const S = k >= lo && k < hi ? seaSpectrum(kx, kz, systems, alphas, phys) : 0;
         // (each mode's mean square S Δk²/2 — its real and imaginary parts a quarter each —: the conjugate pair
         // together carry S Δk²)
         const a = Math.sqrt((S * dk * dk) / 4);

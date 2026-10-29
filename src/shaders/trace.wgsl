@@ -4032,20 +4032,37 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
     A = vec4f(A.rgb * mix(1.0, 0.6, smoothstep(0.08, 0.3, slope)), A.w);
   }
   var n = n0;
+  var whitecap = 0.0;
+  // (the slopes finer than the pixel resolves: their variance roughens the glint)
+  var rough = 0.08;
+  // (the bed's caustics under knee-deep water: the light focused where the surface converges — its Jacobian under 1 —)
+  var caustic = 1.0;
   if (surf == 0u) {
-    // (the sea's wind waves and swell on the giant ones: slopes of noise, as fine as the pixel resolves
-    // — the sky's reflection broken, glittering)
     let foot = reliefFoot(t);
-    var g = vec3f(0.0);
-    for (var i = 0u; i < 2u; i++) {
-      let lam = select(40.0, 400.0, i == 0u);
-      let w = smoothstep(lam * 0.5, lam * 0.1, foot);
-      if (w > 0.0) {
-        let p = qb * (P.near4.w / lam) + vec3f(f32(i) * 7.3, 0.0, tSec * 0.12 / lam);
-        g += w * 0.07 * vec3f(gnoise(p), gnoise(p + vec3f(17.1)), gnoise(p + vec3f(31.7)));
+    if (P.sea[1].w > 0.0) {
+      // (Miller's sea near — PLAN-PLANETES-AAA P2 —: its wind's chop by FFT, knee-deep under 1.3 g (renderer millerSeaParams,
+      // sea/spectrum.ts MILLER_SEA), on the giant waves' slopes; the whitecaps where its crests fold — the Jacobian under its
+      // cover's level —, and the foam they leave)
+      SEA_D = toBody(look) * (t * P.near4.w);
+      let sw = seaWavesFft(qb, P.sea[0].xyz, P.sea[1].xyz, foot);
+      n = normalize(n0 + fromBody(sw.n - qb));
+      whitecap = clamp(max(P.seafft[2].z - sw.foam, 0.0) / max(P.seafft[2].w, 1e-3), 0.0, 1.0) * 0.6 + 0.5 * sw.res;
+      rough = clamp(sqrt(sw.vu + sw.vc + P.seafft[2].x + P.seafft[2].y), 0.03, 0.4);
+      caustic = 1.0 + 2.5 * clamp(1.0 - sw.foam, -0.25, 0.5) * smoothstep(0.6, 0.05, foot);
+    } else {
+      // (far from it: the wind waves and swell on the giant ones as slopes of noise, as fine as the pixel resolves — the sky's
+      // reflection broken, glittering)
+      var g = vec3f(0.0);
+      for (var i = 0u; i < 2u; i++) {
+        let lam = select(40.0, 400.0, i == 0u);
+        let w = smoothstep(lam * 0.5, lam * 0.1, foot);
+        if (w > 0.0) {
+          let p = qb * (P.near4.w / lam) + vec3f(f32(i) * 7.3, 0.0, tSec * 0.12 / lam);
+          g += w * 0.07 * vec3f(gnoise(p), gnoise(p + vec3f(17.1)), gnoise(p + vec3f(31.7)));
+        }
       }
+      n = normalize(n0 + g - up * dot(g, up));
     }
-    n = normalize(n0 + g - up * dot(g, up));
   }
   let E = nearE(n);
   var col = A.rgb / PI * E;
@@ -4053,9 +4070,23 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
   if (surf == 0u) {
     // the sea: the bed seen through knee-deep water, the sky's reflection, foam on the crests
     let F = 0.02 + 0.98 * pow(1.0 - mu, 5.0);
+    col *= caustic;
     let refl = select(shIrradiance(reflect(look, n)) / PI, probeRadiance(camAxes(reflect(look, n))), ranger);
     col = col * (1.0 - F) + F * refl;
-    let foam = smoothstep(700.0, 1100.0, hit.h) * (0.5 + 0.5 * gnoise(qb * 4000.0));
+    // (the dominant light's glint — the disk's path of light on the water, Gargantua's or K2's —: GGX over the slopes the pixel
+    // does not resolve, Fresnel at the half vector)
+    let lt = nearLight(k);
+    let hv = normalize(lt.dir - look);
+    let nl = dot(n, lt.dir);
+    if (nl > 0.0) {
+      let nh = max(dot(n, hv), 0.0);
+      let a2 = rough * rough;
+      let dd = nh * nh * (a2 - 1.0) + 1.0;
+      let D = a2 / (PI * dd * dd);
+      let Fh = 0.02 + 0.98 * pow(1.0 - clamp(dot(hv, -look), 0.0, 1.0), 5.0);
+      col += lt.e * (D * Fh / (4.0 * max(mu, 0.05)));
+    }
+    let foam = max(smoothstep(700.0, 1100.0, hit.h) * (0.5 + 0.5 * gnoise(qb * 4000.0)), whitecap);
     col = mix(col, vec3f(0.85) / PI * E, foam * 0.8);
   }
   return col;

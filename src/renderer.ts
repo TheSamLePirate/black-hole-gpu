@@ -47,7 +47,7 @@ import { sphericalFrame } from "./wormhole";
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import seafftWGSL from "./shaders/seafft.wgsl" with { type: "text" };
 import { SEA_TEXTURE_LIMIT, SeaFft } from "./sea/fft-gpu";
-import { normalQuantile, seaCascades, seaSystems } from "./sea/spectrum";
+import { dispersion, EARTH_SEA, MILLER_SEA, MILLER_WIND, normalQuantile, type SeaPhysics, seaCascades, seaSystems } from "./sea/spectrum";
 import { MarineFeed, type SeaState, windSea } from "./sea/marine";
 import { forestSource } from "./forest-shader";
 import { lampsOf } from "./cockpit/lights";
@@ -827,6 +827,8 @@ export class Renderer {
   private seaKey = "";
   private seaFftT = 0;
   private seaFftDue = false;
+  /** the water the FFT's waves are of (the Earth's deep sea, Miller's knee-deep one) */
+  private seaPhys: SeaPhysics = EARTH_SEA;
   /** the choppiness of the FFT's crests */
   private seaLambda = 0.9;
   /** each FFT cascade's Jacobian under which its crests leave foam (seaFftParams; sea/fft-gpu.ts) */
@@ -3133,7 +3135,7 @@ export class Renderer {
       set(68, 0, 0, 0, 0);
     }
     f.set(runways, (69 + TILE_PARAM_VEC4S) * 4);
-    f.set(this.seaParams(near, bodies, earthK, altKm, time, tSec, s), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
+    f.set(this.seaParams(near, bodies, earthK, altKm, time, tSec, s, !!o.probe), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
     f.set(this.weatherParams(earthSurface, altKm, time, tSec, s, !o.probe), (BASE_PARAM_VEC4S - WX_VEC4S) * 4);
     // the shadows our bodies cast on one another (PLAN-CIEL C6): the pairs where one falls now
     // (a receiver under two pixels across left out: Io in Jupiter's shadow seen from the Earth would keep the
@@ -3792,9 +3794,14 @@ export class Renderer {
     time: number,
     tSec: number,
     s: Settings,
+    probe = false,
   ): Float32Array {
     const out = new Float32Array(SEA_VEC4S * 4);
+    // (a planet's probe — its camera at the planet's centre —: the frame's sea left as it is)
+    if (probe) return out;
     this.seaHere = null;
+    // (Miller's sea — PLAN-PLANETES-AAA P2: knee-deep, under 1.3 g, its own wind)
+    if (near && bodies[near.index]?.id === "miller") return this.millerSeaParams(near, out, tSec, s);
     if (!near || near.index !== earthK || !(altKm < 30)) return out;
     // (in metres as the shader has it: P.near4.w)
     const mR = near.radius * 1476.625 * s.massSolar;
@@ -3841,10 +3848,51 @@ export class Renderer {
     return out;
   }
 
+  /**
+   * Miller's sea's parameters (seaParams' for the Earth's, the same layout — trace.wgsl P.sea): its waves' axes at an anchor
+   * on the sphere under the camera, its wind (MILLER_WIND), the camera's place on them; the twelve trains' phases by its water's
+   * dispersion — knee-deep, 1.3 g (sea/spectrum.ts MILLER_SEA). Its FFT's state: seaFftParams.
+   */
+  private millerSeaParams(near: NonNullable<ReturnType<typeof localPatch>>, out: Float32Array, tSec: number, s: Settings): Float32Array {
+    const mR = near.radius * 1476.625 * s.massSolar;
+    const cb = near.axes.map((a) => -(a[0]! * near.centre[0]! + a[1]! * near.centre[1]! + a[2]! * near.centre[2]!) * mR);
+    const r = Math.hypot(cb[0]!, cb[1]!, cb[2]!);
+    // (the camera's place in the patch — the camera's rest frame, Miller at a third of light's speed in Gargantua's: its distance
+    // from the centre no measure of the height, 0.93 to 1.07 radii at a few metres —: within half a radius, the sea's waves on,
+    // whole; their detail fades with the pixels' footprint — trace.wgsl)
+    if (!(r < 1.5 * mR)) return out;
+    const camUp = cb.map((x) => x / r);
+    const A = this.millerSeaAnchor;
+    if (!A || A[0]! * camUp[0]! + A[1]! * camUp[1]! + A[2]! * camUp[2]! < Math.cos(50_000 / mR)) this.millerSeaAnchor = [...camUp];
+    const up = this.millerSeaAnchor!;
+    const eh = Math.hypot(up[0]!, up[1]!) || 1;
+    const east = [-up[1]! / eh, up[0]! / eh, 0];
+    const north = [up[1]! * east[2]! - up[2]! * east[1]!, up[2]! * east[0]! - up[0]! * east[2]!, up[0]! * east[1]! - up[1]! * east[0]!];
+    const { U, to } = MILLER_WIND;
+    const tu = [0, 1, 2].map((i) => east[i]! * Math.sin(to) + north[i]! * Math.cos(to));
+    const tc = [up[1]! * tu[2]! - up[2]! * tu[1]!, up[2]! * tu[0]! - up[0]! * tu[2]!, up[0]! * tu[1]! - up[1]! * tu[0]!];
+    const weight = 1;
+    this.seaHere = { U, to, lat: 0, lon: 0, weight, world: "miller" };
+    const uc = cb[0]! * tu[0]! + cb[1]! * tu[1]! + cb[2]! * tu[2]!;
+    const cc = cb[0]! * tc[0]! + cb[1]! * tc[1]! + cb[2]! * tc[2]!;
+    const u0 = Math.round(uc / 1024) * 1024,
+      c0 = Math.round(cc / 1024) * 1024;
+    out.set([...tu, U, ...tc, weight, uc - u0, cc - c0, u0 / 256, c0 / 256], 0);
+    // (the trains — the waves without the FFT —: a shallow chop, the long ones slowed by the depth)
+    const budget = 0.5 * (0.003 + 0.00512 * U) * 0.5;
+    SEA_WAVES.forEach((w, i) => {
+      const k = (2 * Math.PI * Math.hypot(...w.n)) / 1024;
+      const a = Math.sqrt((2 * budget) / SEA_WAVES.length) * Math.min(1, k * MILLER_SEA.depth * 4);
+      const phase = (dispersion(k, MILLER_SEA).w * tSec + w.phase0) % (2 * Math.PI);
+      out.set([w.n[0], w.n[1], a, phase], 12 + 4 * i);
+    });
+    return out;
+  }
+  private millerSeaAnchor: number[] | null = null;
   /** the sea's waves' anchor: the local vertical their axes are taken at (seaParams) */
   private seaAnchor: number[] | null = null;
   /** the wind and the place the sea's waves are drawn for this frame (seaParams; null: no sea near) */
-  private seaHere: { U: number; to: number; lat: number; lon: number; weight: number } | null = null;
+  private seaHere: { U: number; to: number; lat: number; lon: number; weight: number; world?: "miller" } | null = null;
 
   /**
    * The sea's FFT waves for this frame (trace.wgsl: Params.seafft; sea/fft-gpu.ts): the sea's state about the camera
@@ -3859,7 +3907,14 @@ export class Renderer {
     // (the raster drawing the water and no sea of it for a while — over Paris, 150 km inland —: the waves not computed, ~2 ms
     // on an M1; back within a probe's frames once some sea is drawn, its far trains meanwhile)
     if (this.rasterWaterNow && this.frameStamp - this.seaSeenStamp > SEA_UNSEEN_FRAMES) return out;
-    const base = this.seaOverride ?? this.marine.peek(H.lat, H.lon, utcOf(time)) ?? windSea(H.U, H.to);
+    const miller = H.world === "miller";
+    // (Miller: its wind's chop held by the depth — a breaking wave is no higher than ~0.8 of it —, no swell but the giant waves')
+    const base = miller
+      ? (() => {
+          const w = windSea(H.U, H.to);
+          return { ...w, wind: { ...w.wind, hs: Math.min(w.wind.hs, 0.78 * MILLER_SEA.depth), tp: Math.min(w.wind.tp, 3) } };
+        })()
+      : (this.seaOverride ?? this.marine.peek(H.lat, H.lon, utcOf(time)) ?? windSea(H.U, H.to));
     // (a swell imposed — a heavy sea's qualification: controller/quals.ts —, from the wind's way)
     const state = this.seaSwell ? { ...base, swell: { hs: this.seaSwell, tp: 11, to: H.to } } : base;
     this.seaState = state;
@@ -3874,10 +3929,12 @@ export class Renderer {
       r(state.swell.tp, 2),
       deg(state.swell.to),
       deg(H.to),
+      miller ? "miller" : "earth",
     ].join();
+    this.seaPhys = miller ? MILLER_SEA : EARTH_SEA;
     if (key !== this.seaKey) {
       this.seaKey = key;
-      this.seaFft.setSpectrum(seaCascades(seaSystems(state, H.to), 1));
+      this.seaFft.setSpectrum(seaCascades(seaSystems(state, H.to), 1, this.seaPhys));
     }
     // (the waves at this clock due before the next trace — the probe's params and the frame's alike: the same sea)
     if (frame || !this.seaFftDue) this.seaFftT = tSec;
@@ -4831,7 +4888,7 @@ export class Renderer {
     this.cameraKey = this.featureKey;
     // (the sea's FFT waves of this frame first: the tracer samples them)
     if (this.seaFftDue && this.seaFft) {
-      this.seaFft.encode(enc, this.seaFftT, this.seaLambda, this.prof.pass("sea fft"), this.seaFoamJ);
+      this.seaFft.encode(enc, this.seaFftT, this.seaLambda, this.prof.pass("sea fft"), this.seaFoamJ, this.seaPhys);
       this.seaFftDue = false;
     }
     // (the far field's LUT first: every realtime frame, once an epoch while a still view refines —
@@ -4937,7 +4994,8 @@ export class Renderer {
       this.rasterLiteNow = true;
       this.rasterShadeLate = shadeLate;
       // (its water's pass — shadeWater — once its kernel is there: shadeLite leaves it the water's pixels)
-      this.rasterWaterNow = !!this.traceVariant("shadeWater");
+      // (not another world's: its water is bodyLite's — and the Earth's unseen sea would stop the FFT, seaFftParams)
+      this.rasterWaterNow = !this.bodyRasterNow && !!this.traceVariant("shadeWater");
       this.paramsF[MOUTH_LIST_AT + 5] =
         this.paramsF[MOUTH_LIST_AT + 5]! +
         RASTER_LITE_FLAG +

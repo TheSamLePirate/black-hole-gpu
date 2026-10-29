@@ -70,7 +70,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 - **Gain attendu** : l'image en vol bas passe de blocs × N à un échantillon par pixel, la marche disparaît → c'est la
   marge qui paiera la qualité des phases suivantes.
 
-### P2 — Miller : la mer
+### P2 — Miller : la mer — **fait**, [P2.md](progress/planetes-aaa/P2.md)
 - Cascades FFT de `seafft` sur Miller (gravité 1,3 g dans la dispersion ; eau « aux genoux » : dispersion en eau peu
   profonde, fond pâle visible à travers l'eau, caustiques).
 - Maillage de mer raster, Fresnel, reflet du ciel de Gargantua (disque d'accrétion, lentille), écume par Jacobien

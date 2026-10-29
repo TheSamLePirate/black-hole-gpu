@@ -3,7 +3,7 @@
 // inverse FFTs, the texture array the tracer samples (nine layers: a cascade's displacement-and-Jacobian, its
 // slopes-and-their-squares; after the six, each cascade's foam — N6b, kept from frame to frame) and its mips. A few tenths of a millisecond of the GPU.
 
-import { CASCADES, SEA_N, type SeaCascades } from "./spectrum";
+import { CASCADES, EARTH_SEA, SEA_N, type SeaCascades, type SeaPhysics } from "./spectrum";
 
 const N = SEA_N;
 const C = CASCADES.length;
@@ -46,7 +46,7 @@ export class SeaFft {
       mipLevelCount: SEA_LEVELS,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
     });
-    this.uniform = d.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniform = d.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.foam = d.createBuffer({ size: C * N * N * 4, usage: GPUBufferUsage.STORAGE });
     this.h0 = d.createBuffer({ size: C * N * N * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.fld = d.createBuffer({ size: C * 4 * N * N * 8, usage: GPUBufferUsage.STORAGE });
@@ -100,7 +100,14 @@ export class SeaFft {
   /** (the frames' runs, the last clock: a test's view of it) */
   runs = 0;
   lastT = 0;
-  encode(enc: GPUCommandEncoder, t: number, lambda: number, desc: GPUComputePassDescriptor = { label: "sea fft" }, foamJ = [-9, -9, -9]) {
+  encode(
+    enc: GPUCommandEncoder,
+    t: number,
+    lambda: number,
+    desc: GPUComputePassDescriptor = { label: "sea fft" },
+    foamJ = [-9, -9, -9],
+    phys: SeaPhysics = EARTH_SEA,
+  ) {
     if (!this.ready) return;
     this.runs++;
     // (the foam's time step: the clock's, a frame's at most — a jump, a pause: nothing faded or made twice)
@@ -111,7 +118,22 @@ export class SeaFft {
     this.device.queue.writeBuffer(
       this.uniform,
       0,
-      new Float32Array([tm, lambda, C, N, ...CASCADES, 0, foamJ[0]!, foamJ[1]!, foamJ[2]!, dt]),
+      new Float32Array([
+        tm,
+        lambda,
+        C,
+        N,
+        ...CASCADES,
+        0,
+        foamJ[0]!,
+        foamJ[1]!,
+        foamJ[2]!,
+        dt,
+        phys.g,
+        Number.isFinite(phys.depth) ? phys.depth : 0,
+        0,
+        0,
+      ]),
     );
     const p = enc.beginComputePass(desc);
     p.setPipeline(this.pipes.spectrum);
