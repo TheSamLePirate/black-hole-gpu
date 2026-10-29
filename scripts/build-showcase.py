@@ -36,9 +36,10 @@ def webp(im, path, size, aspect, cx=0.5, cy=0.5, q=80):
 
 
 # ---- the ways to play: (shot, subject's centre)
-# (On foot's and By ship's kept: the astronaut on the Moon's limb, the Ranger in low orbit — scripts/title-art.ts)
 MODES = {
     "plane": ("f35-diamond-montblanc", 0.42, 0.45),
+    "foot": ("foot-alps-sunset", 0.48, 0.5),
+    "ship": ("ship-ranger-terminator", 0.6, 0.55),
     "free": ("gargantua-disk", 0.45, 0.5),
 }
 for mode, (name, cx, cy) in MODES.items():
@@ -93,6 +94,9 @@ POSTERS = [
     ("f35-rainbow", "KERR", "Une météo vivante", "A living weather"),
     ("f35-crepuscular", "KERR", "Chaque lumière, chaque nuage", "Every light, every cloud"),
     ("gargantua-disk", "KERR", "Au bord de Gargantua", "At the edge of Gargantua"),
+    ("foot-alps-sunset", "KERR", "Marchez sur les mondes", "Walk the worlds"),
+    ("ship-ranger-terminator", "KERR", "En orbite, la Terre sous vous", "In orbit, the Earth below"),
+    ("ship-endurance-gargantua", "KERR", "Jusqu'à Gargantua", "All the way to Gargantua"),
 ]
 for name, title, fr, en in POSTERS:
     im = shot(name)

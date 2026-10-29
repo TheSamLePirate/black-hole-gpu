@@ -72,7 +72,7 @@ warm 865 against 933 — medians of 6 starts on kerr-mini). The title answers 17
 
 Every picture of the menus is made by the game itself:
 
-- `scripts/title-art.ts` + `scripts/build-title-art.py` — On foot's and By ship's cards, the hangar's turntables (E3).
+- `scripts/title-art.ts` + `scripts/build-title-art.py` — the hangar's turntables (E3).
 - `scripts/showcase-shots.ts` + `scripts/build-showcase.py` (2026-10-29) — the showcase: some forty scenes (F-35s in
   formation over the Mont Blanc, Corsica, Provence, Gibraltar; the A320 above the clouds, at Paris, on a runway; the
   weathers and the hours of a day off Gibraltar's Rock; crepuscular rays, a rainbow, a storm; the fjords, the Himalaya,

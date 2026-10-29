@@ -237,6 +237,53 @@ const SHOTS: Record<string, Shot> = {
     setup: f35({ lat: 69.65, lon: 18.95, alt: 1500, hdg: 0, date: "2026-12-15T21:00:00Z", wingmen: 1 }),
     camera: around(180, 18, 45, 60),
   },
+  // ---- On foot's and By ship's cards: the astronaut on a world, a craft in orbit
+  ...Object.fromEntries(
+    (
+      [
+        // (the Moon's eastern limb 1.8 days after a new Moon: the Earth nearly full and low, looked at — scripts/title-art.ts's)
+        ["foot-moon-earth", "2026-08-14T12:00:00Z", "moon", 0.4, 87.5, "earth", 0.04, 7, 30],
+        // (a ridge over Chamonix at sunset, looking at the Sun over the range)
+        ["foot-alps-sunset", "2026-07-10T19:05:00Z", "earth", 45.879, 6.887, "sun", 0.06, 6, 40],
+        // (Mars, Gale crater: the blue sunset)
+        ["foot-mars-sunset", "2026-07-10T12:00:00Z", "mars", -4.6, 137.4, "sun", 0.05, 6, 40],
+      ] as const
+    ).map(([n, date, body, lat, lon, toward, pitch, dist, fov], i) => [
+      n,
+      {
+        group: i % 2 ? "b" : "a",
+        setup: `__bh.game.setDate("${date}"); __bh.settings.vessel = "lander"; __bh.settings.wingmen = 0; __bh.game.set("weather", "fair");
+          for (let i = 0; i < 5; i++) __bh.step(1 / 30);
+          __bh.game.walk("${body}", ${lat}, ${lon}); for (let i = 0; i < 60; i++) __bh.step(1 / 30);
+          const ch = __bh.camera.character;
+          const aim = () => { const e = ch.skyAzEl(__bh.ourState("${toward}", __bh.camera.nowTime()).pos); const p = ch.place();
+            if (e) ch.yaw += ((((e.az - p.viewDeg) % 360) + 540) % 360 - 180) * Math.PI / 180; return e; };
+          aim(); ch.move(1, 0, 10, true); for (let i = 0; i < 300; i++) __bh.step(1 / 30); ch.move(0, 0, 0);
+          for (let i = 0; i < 30; i++) __bh.step(1 / 30); aim();
+          ch.pitch = ${pitch}; ch.distance = ${dist}; __bh.settings.fov = ${fov}; for (let i = 0; i < 30; i++) __bh.step(1 / 30);`,
+      } satisfies Shot,
+    ]),
+  ),
+  "ship-ranger-terminator": {
+    group: "a",
+    setup: `__bh.game.setDate("2026-03-20T17:30:00Z"); __bh.settings.vessel = "ranger"; __bh.settings.wingmen = 0;
+      for (let i = 0; i < 5; i++) __bh.step(1 / 30); __bh.game.orbit("earth", { altKm: 420, inc: 51.6 }); for (let i = 0; i < 10; i++) __bh.step(1 / 30);`,
+    camera: around(230, 10, 22, 48),
+  },
+  "ship-ranger-europe": {
+    group: "b",
+    setup: `__bh.game.setDate("2026-07-10T12:00:00Z"); __bh.settings.vessel = "ranger"; __bh.settings.wingmen = 0;
+      for (let i = 0; i < 5; i++) __bh.step(1 / 30); __bh.game.orbitOver("earth", 44, 8, { altKm: 400 }); for (let i = 0; i < 10; i++) __bh.step(1 / 30);`,
+    camera: around(200, 18, 24, 50),
+  },
+  "ship-lander-moon": {
+    group: "a",
+    setup: `__bh.game.setDate("2026-08-14T12:00:00Z"); __bh.settings.vessel = "lander"; __bh.settings.wingmen = 0;
+      for (let i = 0; i < 5; i++) __bh.step(1 / 30); __bh.game.orbit("moon", { altKm: 40 }); for (let i = 0; i < 10; i++) __bh.step(1 / 30);`,
+    camera: around(210, 12, 40, 50),
+  },
+  "ship-endurance-gargantua": { group: "b", own: true, setup: `__bh.preset("Interstellar: the Endurance before Gargantua");` },
+  "ship-ranger-endurance": { group: "a", own: true, setup: `__bh.preset("Gargantua: the Ranger by the Endurance");` },
   // ---- space: the Moon, the stars, Gargantua
   ...Object.fromEntries(
     (
