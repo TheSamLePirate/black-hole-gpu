@@ -3,6 +3,21 @@
 // each craft from 36 sides, one sheet of 6 × 6 views (16:9) — turned by a drag, slowly on their own; On foot's
 // planispheres (E6).
 
+import fieldArt from "../../../assets/title/field.webp";
+import hourDawn from "../../../assets/title/hour-dawn.webp";
+import hourDusk from "../../../assets/title/hour-dusk.webp";
+import hourMorning from "../../../assets/title/hour-morning.webp";
+import hourNight from "../../../assets/title/hour-night.webp";
+import hourNoon from "../../../assets/title/hour-noon.webp";
+import planeA320 from "../../../assets/title/plane-a320.webp";
+import planeF35 from "../../../assets/title/plane-f35.webp";
+import wxCloudy from "../../../assets/title/wx-cloudy.webp";
+import wxFair from "../../../assets/title/wx-fair.webp";
+import wxFog from "../../../assets/title/wx-fog.webp";
+import wxOvercast from "../../../assets/title/wx-overcast.webp";
+import wxRain from "../../../assets/title/wx-rain.webp";
+import wxStorm from "../../../assets/title/wx-storm.webp";
+import wxWindy from "../../../assets/title/wx-windy.webp";
 import footCard from "../../../assets/title/mode-foot-card.webp";
 import footWide from "../../../assets/title/mode-foot-wide.webp";
 import mapEarth from "../../../assets/title/map-earth.webp";
@@ -17,7 +32,9 @@ import shipWide from "../../../assets/title/mode-ship-wide.webp";
 import turnEndurance from "../../../assets/title/turn-endurance.webp";
 import turnLander from "../../../assets/title/turn-lander.webp";
 import turnRanger from "../../../assets/title/turn-ranger.webp";
+import type { WeatherPreset } from "../../weather";
 import type { ModeId, VesselChoice } from "./activities";
+import type { Aircraft, Hour } from "./plane";
 
 export const MODE_ART: Record<ModeId, { card: string; wide: string }> = {
   foot: { card: footCard, wide: footWide },
@@ -30,6 +47,25 @@ export const MODE_ART: Record<ModeId, { card: string; wide: string }> = {
 export const WORLD_MAPS: Record<"earth" | "moon" | "mars", string> = { earth: mapEarth, moon: mapMoon, mars: mapMars };
 
 export const TURNTABLES: Record<VesselChoice, string> = { ranger: turnRanger, lander: turnLander, endurance: turnEndurance };
+
+// By plane's free flight (scripts/showcase-shots.ts, scripts/build-showcase.py): the setting focused shows its picture — the
+// aircraft, the airfield, the hour of the day, the weather (null: as it is — the aircraft's; real: the clear sky's)
+const AIRCRAFT_ART: Record<Aircraft, string> = { f35: planeF35, a320: planeA320 };
+export const aircraftArt = (a: Aircraft) => AIRCRAFT_ART[a] ?? planeWide;
+export const FIELD_ART: string = fieldArt;
+const HOUR_ART: Partial<Record<Hour, string>> = { dawn: hourDawn, morning: hourMorning, noon: hourNoon, dusk: hourDusk, night: hourNight };
+export const hourArt = (h: Hour) => HOUR_ART[h] ?? hourMorning;
+const WEATHER_ART: Partial<Record<WeatherPreset, string>> = {
+  fair: wxFair,
+  real: wxFair,
+  cloudy: wxCloudy,
+  overcast: wxOvercast,
+  rain: wxRain,
+  storm: wxStorm,
+  windy: wxWindy,
+  fog: wxFog,
+};
+export const weatherArt = (w: WeatherPreset | null) => (w ? WEATHER_ART[w] : undefined) ?? planeF35;
 
 /** the turntables' sheets: 36 views, 10° apart, 6 a row */
 const FRAMES = 36;

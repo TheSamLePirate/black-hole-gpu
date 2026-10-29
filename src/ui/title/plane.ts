@@ -18,10 +18,36 @@ export type Start = "runway" | "final" | "cruise";
 export type Hour = "now" | "dawn" | "morning" | "noon" | "dusk" | "night";
 export type LessonHow = "demo" | "try" | "guided";
 export type FigureHow = "fly" | "watch";
+export type Aircraft = "f35" | "a320";
+
+/** the aircraft a free flight is flown in: its name, its line */
+export const AIRCRAFT: { id: Aircraft; label: Text; text: Text }[] = [
+  {
+    id: "f35",
+    label: { fr: "F-35B Lightning II", en: "F-35B Lightning II" },
+    text: {
+      fr: "Chasseur furtif à décollage court et atterrissage vertical : poste de pilotage complet, casque, armement, ravitaillement en vol.",
+      en: "Short take-off, vertical landing stealth fighter: the full cockpit, the helmet, the weapons, air refuelling.",
+    },
+  },
+  {
+    id: "a320",
+    label: { fr: "Airbus A320", en: "Airbus A320" },
+    text: {
+      fr: "L'avion de ligne : écrans du poste, pilote automatique, MCDU, ECAM, vol d'aéroport en aéroport.",
+      en: "The airliner: the flight deck's displays, the autopilot, the MCDU, the ECAM, from airport to airport.",
+    },
+  },
+];
 
 /** A free flight's set-up (the Flight hub's FlightSetup: the weather null keeps it as it is). */
 export interface FlightChoice {
+  /** the aircraft flown */
+  aircraft: Aircraft;
+  /** the airfield: a site's id (ICAO or name) or any airport's code of the world (names.json, siteByName) */
   field: string;
+  /** that airport's name as found (shown; none: the site's own) */
+  fieldName?: string;
   start: Start;
   hour: Hour;
   weather: WeatherPreset | null;
@@ -62,12 +88,17 @@ export const WEATHERS: { id: WeatherPreset | null; label: Text }[] = [
 export const FUELS = [0.25, 0.5, 0.75, 1];
 
 const KEY = "kerr.title.flight";
-const DEFAULT: FlightChoice = { field: "KEDW", start: "runway", hour: "now", weather: null, fuel: 1 };
+const DEFAULT: FlightChoice = { aircraft: "f35", field: "KEDW", start: "runway", hour: "now", weather: null, fuel: 1 };
 
 /** The free flight set up last (kept from one visit to the next), checked against the lists. */
 export function lastFlight(): FlightChoice {
   const s = { ...DEFAULT, ...store.getJSON<Partial<FlightChoice>>(KEY, {}) };
-  if (!FIELDS.some((f) => f.id === s.field)) s.field = FIELDS.find((f) => f.id === DEFAULT.field)?.id ?? FIELDS[0]!.id;
+  if (!AIRCRAFT.some((a) => a.id === s.aircraft)) s.aircraft = DEFAULT.aircraft;
+  // (a site's, or any airport's code kept with its name)
+  if (typeof s.field !== "string" || !s.field || (!FIELDS.some((f) => f.id === s.field) && !s.fieldName)) {
+    s.field = FIELDS.find((f) => f.id === DEFAULT.field)?.id ?? FIELDS[0]!.id;
+    s.fieldName = undefined;
+  }
   if (!STARTS.some((x) => x.id === s.start)) s.start = DEFAULT.start;
   if (!HOURS.some((x) => x.id === s.hour)) s.hour = DEFAULT.hour;
   if (!WEATHERS.some((x) => x.id === s.weather)) s.weather = DEFAULT.weather;
@@ -82,12 +113,19 @@ export function cycle<T>(list: readonly T[], now: T, step: number): T {
   return list[(i + step + list.length * 4) % list.length]!;
 }
 
-/** A free flight's line: the field, the start, the hour, the weather, the fuel. */
-export function flightLine(c: FlightChoice, l = lang): string {
+/** A free flight's airfield as shown: its code · its name. */
+export function fieldLabel(c: FlightChoice): string {
   const f = FIELDS.find((x) => x.id === c.field);
+  if (f) return `${f.icao ? `${f.icao} · ` : ""}${f.name}`;
+  return c.fieldName ? `${c.field} · ${c.fieldName}` : c.field;
+}
+
+/** A free flight's line: the aircraft, the field, the start, the hour, the weather, the fuel. */
+export function flightLine(c: FlightChoice, l = lang): string {
   const pick = <T extends { id: unknown; label: Text }>(xs: T[], id: unknown) => xs.find((x) => x.id === id)?.label[l] ?? "";
   return [
-    f ? `${f.icao ? `${f.icao} · ` : ""}${f.name}` : c.field,
+    pick(AIRCRAFT, c.aircraft),
+    fieldLabel(c),
     pick(STARTS, c.start),
     pick(HOURS, c.hour),
     pick(WEATHERS, c.weather),
@@ -168,3 +206,55 @@ export const FIGURE_HOWS: { id: FigureHow; label: Text }[] = [
   { id: "fly", label: { fr: "La voler, jugée", en: "Fly it, judged" } },
   { id: "watch", label: { fr: "La regarder", en: "Watch it" } },
 ];
+
+/** an airport of the world found by name (names.json — scripts/build-airport-names.ts) */
+export interface AirportHit {
+  /** the code the flight is set up with (ICAO, else the local ident) */
+  id: string;
+  name: string;
+  /** its codes and town, its longest runway */
+  line: string;
+  large: boolean;
+}
+type NameRow = [string, string, string, string, string, number, number, number, number, number];
+let names: Promise<NameRow[]> | null = null;
+/** the world's large and medium airports, loaded once (served with the runways' tiles) */
+function airportNames(): Promise<NameRow[]> {
+  // (a failed load not kept: tried again at the next search — offline, then online)
+  names ??= fetch("runways/v1/names.json")
+    .then((r) => (r.ok ? r.json() : { a: [] }))
+    .then((j: { a: NameRow[] }) => j.a ?? [])
+    .catch(() => [] as NameRow[])
+    .then((a) => {
+      if (!a.length) names = null;
+      return a;
+    });
+  return names;
+}
+const fold = (x: string) =>
+  x
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+/**
+ * The airports matching a few letters — a code (ICAO, IATA, ident) first, then a name or a town —, the large first; any
+ * other code of the world typed whole is kept as it is (siteByName finds it at the launch). `max` at most.
+ */
+export async function airportSearch(q: string, max = 60): Promise<AirportHit[]> {
+  const n = fold(q.trim());
+  const rows = await airportNames();
+  const hit = (r: NameRow): AirportHit => ({
+    id: r[1] || r[0],
+    name: r[3],
+    line: [[r[1] || r[0], r[2]].filter(Boolean).join(" / "), r[4], `${(r[8] / 1000).toFixed(1)} km`].filter(Boolean).join(" · "),
+    large: r[5] === 0,
+  });
+  if (!n) return rows.slice(0, max).map(hit);
+  const code = rows.filter((r) => fold(r[1]) === n || fold(r[2]) === n || fold(r[0]) === n);
+  const starts = rows.filter(
+    (r) => !code.includes(r) && (fold(r[1]).startsWith(n) || fold(r[3]).startsWith(n) || fold(r[4]).startsWith(n)),
+  );
+  const inside =
+    n.length < 3 ? [] : rows.filter((r) => !code.includes(r) && !starts.includes(r) && (fold(r[3]).includes(n) || fold(r[4]).includes(n)));
+  return [...code, ...starts, ...inside].slice(0, max).map(hit);
+}

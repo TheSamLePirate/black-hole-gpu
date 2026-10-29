@@ -142,7 +142,7 @@ export const MODES: Mode[] = [
   {
     id: "plane",
     title: { fr: "En avion", en: "By plane" },
-    pitch: { fr: "F-35B : vol libre, combat, leçons, défis", en: "F-35B: free flight, combat, lessons, challenges" },
+    pitch: { fr: "F-35B, A320 : vol libre partout, combat, leçons, défis", en: "F-35B, A320: free flight anywhere, combat, lessons, challenges" },
     activities: [
       {
         id: "plane-takeoff",

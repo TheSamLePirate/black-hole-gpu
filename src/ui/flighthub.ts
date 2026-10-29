@@ -256,6 +256,8 @@ export interface FlightSetup {
   weather?: WeatherPreset | null;
   fuel?: number;
   dest?: string | null;
+  /** the aircraft flown (none: the one flown now if an aircraft, else the F-35) */
+  aircraft?: "f35" | "a320";
 }
 export const FLIGHT_STARTS: Start[] = ["runway", "final", "cruise"];
 export const FLIGHT_HOURS: Hour[] = ["now", "dawn", "morning", "noon", "dusk", "night"];
@@ -283,7 +285,8 @@ export function prepareFlight(H: HubHost, o: FlightSetup): string {
   if (!F) throw new Error(`no airfield "${o.field}"`);
   const start = o.start ?? "runway",
     hour = o.hour ?? "now";
-  if (!isAircraft(fleet.active)) T.set("vessel", "f35");
+  const ac = o.aircraft ?? (fleet.active === "a320" ? "a320" : "f35");
+  if (fleet.active !== ac || !isAircraft(fleet.active)) T.set("vessel", ac);
   if (hour !== "now") {
     // (the airfield's mean solar hour → UTC, on the scene's day)
     const day = T.date().slice(0, 10);
@@ -302,8 +305,8 @@ export function prepareFlight(H: HubHost, o: FlightSetup): string {
   else if (start === "final") T.glideTo(name, 15, 0.9, 110);
   else T.glideTo(name, 40, 6, 230);
   // (the fuel after the placing: it fills the tanks)
-  const full = VESSELS.f35.fuelKg ?? 0;
-  fleet.fuel.f35 = full * Math.min(Math.max(o.fuel ?? 1, 0.05), 1);
+  const full = VESSELS[ac].fuelKg ?? 0;
+  fleet.fuel[ac] = full * Math.min(Math.max(o.fuel ?? 1, 0.05), 1);
   const C = H.camera;
   if (start !== "runway" && start !== "stand") {
     // (in the air: flown by hand — the glide's entry autopilot let go —, the engine at the power that

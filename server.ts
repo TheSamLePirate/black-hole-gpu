@@ -123,7 +123,7 @@ const server = Bun.serve({
     // the world's airfields and runways (scripts/build-runways.ts — PLAN-RADAR-AAA RD10): their tiles, index, codes
     "/runways/*": async (req) => {
       const path = new URL(req.url).pathname.replace(/^.*\/runways\//, "");
-      if (!/^v1\/(t-?\d+_-?\d+|index|idents)\.json$/.test(path)) return new Response("not found", { status: 404 });
+      if (!/^v1\/(t-?\d+_-?\d+|index|idents|names)\.json$/.test(path)) return new Response("not found", { status: 404 });
       const file = Bun.file(`assets/runways/${path}`);
       if (!(await file.exists())) return new Response("not found", { status: 404 });
       return new Response(file, { headers: { "content-type": "application/json", "cache-control": "max-age=86400" } });

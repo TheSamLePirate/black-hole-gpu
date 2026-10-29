@@ -19,7 +19,7 @@ seul focus en deux dimensions pour le clavier, la souris, le toucher et la manet
 | **Intro** | le noir ; SAMLEPIRATE en carton de film ; KERR ; l'emblème (le trou noir du jeu lui-même) ; un fond procédural et l'orbe de chargement. Une touche, un clic ou un toucher la passe ; la version courte une fois vue. Tout est statique dans `index.html` et animé sur le compositeur : elle joue avant que le script du jeu n'arrive | `index.html`, `src/intro/` (intro.ts, intro.css ; worker.ts et painter.ts dessinent le fond et l'orbe sur un OffscreenCanvas) |
 | **Titre** | l'emblème et KERR (glissés depuis l'intro) ; Continuer ; quatre façons de jouer en cartes — À pied, En avion, En vaisseau, Caméra libre — ; Plus… ; Réglages. Construit au début de la page et utilisable pendant le chargement : un lancement choisi entre-temps est gardé et joué avant la première image | `src/ui/title/title.ts`, `activities.ts`, `art.ts` |
 | **À pied** | un onglet par monde (Terre, Lune, Mars), le lieu (les destinations de l'Atlas, une adresse, des coordonnées) épinglé sur son planisphère, l'heure du jour propre au lieu, la météo (Terre) | `src/ui/title/foot.ts` |
-| **En avion** | Vol libre (aérodrome, départ, heure, météo, carburant — gardés), Combat (les missions aériennes, les combats), École de vol, Défis (avec leurs meilleurs résultats). Un vol commence dans le cockpit | `src/ui/title/plane.ts` |
+| **En avion** | Vol libre (l'avion — F-35B ou A320 —, l'aérodrome — les sites du jeu ou n'importe lequel des 5 026 grands et moyens aéroports du monde, cherché par OACI, IATA, nom ou ville (`assets/runways/v1/names.json`, `scripts/build-airport-names.ts`), tout autre par son code —, départ, heure, météo, carburant — gardés ; chaque réglage montre son image : l'avion, l'aérodrome, l'heure, la météo), Combat (les missions aériennes, les combats), École de vol, Défis (avec leurs meilleurs résultats). Un vol commence dans le cockpit | `src/ui/title/plane.ts` |
 | **En vaisseau** | le hangar : un onglet par vaisseau avec sa fiche et sa rotation, les destinations qu'il peut atteindre (un sol fermé à l'Endurance, et pourquoi), ses missions et ses scènes | `src/ui/title/ship.ts` |
 | **Caméra libre** | la galerie en plein écran, un onglet par sorte (trous noirs, Gargantua, trou de ver, système solaire, Terre, paysages), la scène du focus derrière | `src/ui/title/free.ts` |
 | **Plus…** | Jouer (toutes les scènes, charger), Créer (photo, missions), Ensemble, Apprendre (comment jouer, découvrir, commandes), Mesurer (le Kerr Bench, confirmé), Le jeu (crédits, langue) ; le générique déroulant | `title.ts` (moreScreen, creditsScreen), `credits.ts` |
@@ -70,3 +70,16 @@ Le titre et l'intro ne coûtent rien à la première image. C'est mesuré en A/B
 E3), puis contre le code d'avant les menus à la clôture (E11, `bun scripts/ab-commit.ts e664e0aa` : à froid
 1 341 ms contre 1 355, à chaud 865 contre 933 — médianes de 6 démarrages sur kerr-mini). Le titre répond
 170–180 ms après le début de la page à froid, 40 ms à chaud, bien avant les graphismes.
+
+## Les images
+
+Toutes les images des menus sont faites par le jeu lui-même :
+
+- `scripts/title-art.ts` + `scripts/build-title-art.py` — les cartes À pied et En vaisseau, les plateaux tournants du hangar (E3).
+- `scripts/showcase-shots.ts` + `scripts/build-showcase.py` (29/10/2026) — la vitrine : une quarantaine de scènes (F-35 en
+  formation sur le Mont-Blanc, la Corse, la Provence, Gibraltar ; l'A320 au-dessus des nuages, à Paris, sur une piste ; les
+  météos et les heures d'une journée devant le rocher de Gibraltar ; rayons crépusculaires, arc-en-ciel, orage ; les fjords,
+  l'Himalaya, l'Islande, la Patagonie, le Grand Canyon ; la Lune, Saturne, Gargantua), l'interface masquée, figées,
+  convergées en mode photo, 1920 × 1080. Elles font les cartes En avion et Caméra libre, les images du vol libre
+  (`plane-*`, `field`, `wx-*`, `hour-*` dans `assets/title/`) et le jeu marketing : [`docs/marketing/`](marketing/) — les
+  meilleures vues en grand, des affiches avec l'emblème et une ligne (FR/EN), une planche contact.

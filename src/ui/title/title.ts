@@ -15,7 +15,7 @@ import { type MenuScreen, MenuRouter } from "../menu/router";
 import { SCENE_THUMBS } from "../scene-thumbs";
 import { type Activity, MODES, type ModeId, MORE, type Mode, type TitleGame, type VesselChoice } from "./activities";
 import { geocode, parseCoords } from "../../game/geocode";
-import { MODE_ART, TURNTABLES, turntable, WORLD_MAPS } from "./art";
+import { aircraftArt, FIELD_ART, hourArt, MODE_ART, TURNTABLES, turntable, WORLD_MAPS, weatherArt } from "./art";
 import {
   type FootChoice,
   type FootPlace,
@@ -32,10 +32,13 @@ import {
 } from "./foot";
 import { FREE_TABS, type FreeTab, freeScenes, sceneSlug } from "./free";
 import {
+  AIRCRAFT,
+  airportSearch,
   challengeItems,
   combatItems,
   cycle,
   FIELDS,
+  fieldLabel,
   FIGURE_HOWS,
   type FigureHow,
   type FlightChoice,
@@ -65,20 +68,28 @@ const PLANE_TABS: { id: PlaneTab; label: Text }[] = [
   { id: "challenges", label: { fr: "Défis", en: "Challenges" } },
 ];
 const P = {
+  aircraft: { fr: "Avion", en: "Aircraft" },
   field: { fr: "Aérodrome", en: "Airfield" },
   start: { fr: "Départ", en: "Start" },
   hour: { fr: "Heure", en: "Hour" },
   weather: { fr: "Météo", en: "Weather" },
   fuel: { fr: "Carburant", en: "Fuel" },
   fly: { fr: "Lancer le vol", en: "Fly" },
-  flyHint: { fr: "Le F-35B, là et comme réglé", en: "The F-35B, there and as set" },
+  flyHint: { fr: "L'avion choisi, là et comme réglé", en: "The aircraft chosen, there and as set" },
   how: { fr: "Comment", en: "How" },
   tab: { fr: "Onglet", en: "Tab" },
-  search: { fr: "Chercher un aérodrome (OACI, nom)", en: "Find an airfield (ICAO, name)" },
+  search: { fr: "Chercher un aéroport du monde (OACI, IATA, nom, ville)", en: "Find an airport of the world (ICAO, IATA, name, town)" },
   fieldTitle: { fr: "L'aérodrome", en: "The airfield" },
+  sites: { fr: "Sites du jeu", en: "The game's sites" },
+  world: { fr: "Aéroports du monde", en: "Airports of the world" },
+  anyCode: { fr: "Ce code, tel quel", en: "This code, as it is" },
+  anyCodeHint: {
+    fr: "N'importe quel aérodrome du monde par son code (OurAirports)",
+    en: "Any airfield of the world by its code (OurAirports)",
+  },
   freeText: {
-    fr: "Le F-35B à l'aérodrome choisi, aligné sur sa piste en service, en finale ou en croisière, à l'heure de son propre jour, sous la météo choisie.",
-    en: "The F-35B at the airfield chosen, lined up on its runway in use, on final or cruising, at the hour of its own day, under the weather chosen.",
+    fr: "L'avion choisi à l'aérodrome choisi — n'importe quel aéroport du monde —, aligné sur sa piste en service, en finale ou en croisière, à l'heure de son propre jour, sous la météo choisie.",
+    en: "The aircraft chosen at the airfield chosen — any airport of the world —, lined up on its runway in use, on final or cruising, at the hour of its own day, under the weather chosen.",
   },
 } satisfies Record<string, Text>;
 
@@ -1023,6 +1034,8 @@ export class TitleScreen {
   // ------------------------------------------------------------------ by plane (E4)
 
   private planeTab: PlaneTab = "free";
+  /** the preview's picture changed (By plane: the setting focused — the aircraft, the airfield, the hour, the weather) */
+  private previewArt: ((url: string) => void) | null = null;
   private flightChoice: FlightChoice = lastFlight();
   private lessonHow: LessonHow = "guided";
   private figureHow: FigureHow = "fly";
@@ -1060,8 +1073,15 @@ export class TitleScreen {
       }),
     );
     // the preview: the picture, the title, the text, a mark
-    const pImg = h("img", { class: "tt-preview-art", src: MODE_ART.plane.wide, alt: "" }) as HTMLImageElement;
+    const pImg = h("img", {
+      class: "tt-preview-art",
+      src: this.planeTab === "free" ? aircraftArt(this.flightChoice.aircraft) : MODE_ART.plane.wide,
+      alt: "",
+    }) as HTMLImageElement;
     pImg.style.viewTransitionName = "tt-art";
+    this.previewArt = (url) => {
+      if (pImg.getAttribute("src") !== url) pImg.src = url;
+    };
     const pTitle = el("h3", "tt-preview-title", "");
     const pText = el("p", "tt-preview-text", "");
     const pMark = el("p", "tt-preview-mark", "");
@@ -1088,7 +1108,15 @@ export class TitleScreen {
 
   /** A setting's row: its name, its value between ◂ ▸ — ← → (the D-pad) change it, a click the next, Enter its own
    *  (the airfield: its list). */
-  private selector(label: string, testid: string, value: () => string, step: (d: number) => void, changed: () => void, enter?: () => void) {
+  private selector(
+    label: string,
+    testid: string,
+    value: () => string,
+    step: (d: number) => void,
+    changed: () => void,
+    enter?: () => void,
+    art?: () => string,
+  ) {
     const val = el("b", "", "");
     const b = h(
       "button",
@@ -1100,11 +1128,17 @@ export class TitleScreen {
       val.textContent = value();
       b.setAttribute("aria-valuetext", value());
     };
+    const showArt = () => {
+      if (art) this.previewArt?.(art());
+    };
     const go = (d: number) => {
       step(d);
       render();
       changed();
+      showArt();
     };
+    b.addEventListener("focus", showArt);
+    b.addEventListener("pointerenter", showArt);
     b.addEventListener("keydown", (e) => {
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       e.preventDefault();
@@ -1131,12 +1165,26 @@ export class TitleScreen {
     const field = () => FIELDS.find((f) => f.id === c.field);
     side.append(
       this.selector(
+        tr(P.aircraft),
+        "title-flight-aircraft",
+        () => pick(AIRCRAFT, c.aircraft),
+        (d) => (c.aircraft = cycle(AIRCRAFT, AIRCRAFT.find((x) => x.id === c.aircraft)!, d).id),
+        changed,
+        undefined,
+        () => aircraftArt(c.aircraft),
+      ),
+      this.selector(
         tr(P.field),
         "title-flight-field",
-        () => (field() ? `${field()!.icao ? `${field()!.icao} · ` : ""}${field()!.name}` : c.field),
-        (d) => (c.field = cycle(FIELDS, field() ?? FIELDS[0]!, d).id),
+        () => fieldLabel(c),
+        (d) => {
+          // (◂ ▸: the game's sites; any other airport of the world by the list — Enter)
+          c.field = cycle(FIELDS, field() ?? FIELDS[0]!, d).id;
+          c.fieldName = undefined;
+        },
         changed,
         () => this.router?.push(this.fieldPicker()),
+        () => FIELD_ART,
       ),
       this.selector(
         tr(P.start),
@@ -1151,6 +1199,8 @@ export class TitleScreen {
         () => pick(HOURS, c.hour),
         (d) => (c.hour = cycle(HOURS, HOURS.find((x) => x.id === c.hour)!, d).id),
         changed,
+        undefined,
+        () => hourArt(c.hour),
       ),
       this.selector(
         tr(P.weather),
@@ -1158,6 +1208,8 @@ export class TitleScreen {
         () => pick(WEATHERS, c.weather),
         (d) => (c.weather = cycle(WEATHERS, WEATHERS.find((x) => x.id === c.weather)!, d).id),
         changed,
+        undefined,
+        () => weatherArt(c.weather),
       ),
       this.selector(
         tr(P.fuel),
@@ -1261,29 +1313,47 @@ export class TitleScreen {
           "data-autofocus": "",
         }) as HTMLInputElement;
         const list = h("nav", { class: "tt-acts tt-fields", "aria-label": tr(P.fieldTitle) });
-        const fill = () => {
-          const q = input.value.trim().toLowerCase();
+        const choose = (id: string, name: string | undefined) => {
+          this.flightChoice.field = id;
+          this.flightChoice.fieldName = name;
+          keepFlight(this.flightChoice);
+          this.router?.back();
+        };
+        const item = (id: string, title: string, sub: string, name: string | undefined) => {
+          const b = h(
+            "button",
+            { class: "m-item tt-act", type: "button", "data-testid": `title-field-${id}`, "data-focus-id": `field-${id}` },
+            el("span", "", title),
+            el("small", "", sub),
+          );
+          if (id === this.flightChoice.field) b.classList.add("on");
+          b.addEventListener("click", () => choose(id, name));
+          return b;
+        };
+        // (the game's sites first, then the world's airports — searched as the letters come, the last search's kept alone —,
+        // and a code typed whole that neither has: kept as it is, siteByName finds it at the launch)
+        let seq = 0;
+        const fill = async () => {
+          const q = input.value.trim();
+          const ql = q.toLowerCase();
+          const sites = FIELDS.filter((f) => !ql || f.name.toLowerCase().includes(ql) || (f.icao ?? "").toLowerCase().startsWith(ql));
+          const n = ++seq;
+          const world = await airportSearch(q, 80);
+          if (n !== seq) return;
+          const siteIds = new Set(sites.map((f) => f.icao ?? f.id));
+          // (a code: typed in capitals, or with a figure — a word typed in small letters is a name's search)
+          const code = /^[A-Z0-9-]{3,7}$/.test(q) || /^(?=.*\d)[A-Za-z0-9-]{3,7}$/.test(q) ? q.toUpperCase() : null;
           list.replaceChildren(
-            ...FIELDS.filter((f) => !q || f.name.toLowerCase().includes(q) || (f.icao ?? "").toLowerCase().startsWith(q))
-              .slice(0, 60)
-              .map((f) => {
-                const b = h(
-                  "button",
-                  { class: "m-item tt-act", type: "button", "data-testid": `title-field-${f.id}`, "data-focus-id": `field-${f.id}` },
-                  el("span", "", f.name),
-                  el("small", "", f.icao ?? ""),
-                );
-                if (f.id === this.flightChoice.field) b.classList.add("on");
-                b.addEventListener("click", () => {
-                  this.flightChoice.field = f.id;
-                  keepFlight(this.flightChoice);
-                  this.router?.back();
-                });
-                return b;
-              }),
+            ...(sites.length ? [el("h4", "tt-group", tr(P.sites))] : []),
+            ...sites.map((f) => item(f.id, f.name, f.icao ?? "", undefined)),
+            ...(world.length ? [el("h4", "tt-group", tr(P.world))] : []),
+            ...world.filter((x) => !siteIds.has(x.id)).map((x) => item(x.id, x.name, x.line, x.name)),
+            ...(code && !world.some((x) => x.id === code) && !sites.some((f) => f.icao === code)
+              ? [item(code, `${code} — ${tr(P.anyCode)}`, tr(P.anyCodeHint), code)]
+              : []),
           );
         };
-        input.addEventListener("input", fill);
+        input.addEventListener("input", () => void fill());
         // (↓ from the search: into the list; Enter: the first found)
         input.addEventListener("keydown", (e) => {
           if (e.key === "ArrowDown") {
@@ -1294,7 +1364,7 @@ export class TitleScreen {
             list.querySelector<HTMLElement>("button")?.click();
           }
         });
-        fill();
+        void fill();
         page.append(
           this.crumb(tr(P.fieldTitle)),
           h("div", { class: "tt-list-side tt-picker-body" }, input, list),

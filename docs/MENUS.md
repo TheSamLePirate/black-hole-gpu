@@ -1,6 +1,6 @@
 # The menus — intro, title, launch screens, pause, settings
 
-*[Version française](MENUS.fr.md)* — *up to date on 2026-10-20*
+*[Version française](MENUS.fr.md)* — *up to date on 2026-10-29*
 
 How one gets into KERR and moves about it: the intro played while the game loads, the title by way of playing, a
 launch screen per way to play, the way into the game, the pause, the player's settings and the Lab. One visual
@@ -19,7 +19,7 @@ dimensions for the keyboard, the mouse, touch and a controller.
 | **Intro** | black; SAMLEPIRATE as a film's card; KERR; the emblem (the game's own black hole); a procedural background and the loading orb. A key, a click or a touch passes it; the short version once seen. All of it static in `index.html` and animated on the compositor: it plays before the game's script arrives | `index.html`, `src/intro/` (intro.ts, intro.css; worker.ts and painter.ts draw the background and the orb on an OffscreenCanvas) |
 | **Title** | the emblem and KERR (glided from the intro); Continue; four ways to play as cards — On foot, By plane, By ship, Free camera —; More…; Settings. Built at the page's start, usable while the game loads: a launch chosen meanwhile is kept and run before the first image | `src/ui/title/title.ts`, `activities.ts`, `art.ts` |
 | **On foot** | a tab per world (Earth, Moon, Mars), the place (the Atlas's destinations, an address, coordinates) pinned on its planisphere, the hour of that place's own day, the weather (Earth) | `src/ui/title/foot.ts` |
-| **By plane** | Free flight (airfield, start, hour, weather, fuel — kept), Combat (the air missions, the fights), Flight school, Challenges (with their best marks). A flight starts in the cockpit | `src/ui/title/plane.ts` |
+| **By plane** | Free flight (the aircraft — F-35B or A320 —, the airfield — the game's sites or any of the world's 5 026 large and medium airports, found by ICAO, IATA, name or town (`assets/runways/v1/names.json`, `scripts/build-airport-names.ts`), any other by its code —, start, hour, weather, fuel — kept; each setting focused shows its picture: the aircraft, the airfield, the hour, the weather), Combat (the air missions, the fights), Flight school, Challenges (with their best marks). A flight starts in the cockpit | `src/ui/title/plane.ts` |
 | **By ship** | the hangar: a tab per craft with its sheet and turntable, the destinations it can reach (a ground closed to the Endurance, said), its missions and scenes; More: the missions and the Interstellar campaign, the spacecraft challenges, the space school (as the flight's wheel opens them), the craft placed anywhere, every mission's briefing | `src/ui/title/ship.ts` |
 | **Free camera** | the gallery full screen, a tab per kind (black holes, Gargantua, wormhole, solar system, Earth, landscapes), the focused scene behind | `src/ui/title/free.ts` |
 | **More…** | Play (every scene, load), Create (photo, missions), Together, Learn (how to play, discover, controls), Measure (the Kerr Bench, confirmed), The game (credits, language); the credits roll | `title.ts` (moreScreen, creditsScreen), `credits.ts` |
@@ -67,3 +67,19 @@ The title and the intro cost nothing to the first image: A/B on kerr-mini at eac
 the code before the menus at the close (E11, `bun scripts/ab-commit.ts e664e0aa`: cold 1 341 ms against 1 355,
 warm 865 against 933 — medians of 6 starts on kerr-mini). The title answers 170–180 ms after the page's start cold,
 40 ms warm, long before the graphics.
+
+## The pictures
+
+Every picture of the menus is made by the game itself:
+
+- `scripts/title-art.ts` + `scripts/build-title-art.py` — On foot's and By ship's cards, the hangar's turntables (E3).
+- `scripts/showcase-shots.ts` + `scripts/build-showcase.py` (2026-10-29) — the showcase: some forty scenes (F-35s in
+  formation over the Mont Blanc, Corsica, Provence, Gibraltar; the A320 above the clouds, at Paris, on a runway; the
+  weathers and the hours of a day off Gibraltar's Rock; crepuscular rays, a rainbow, a storm; the fjords, the Himalaya,
+  Iceland, Patagonia, the Grand Canyon; the Moon, Saturn, Gargantua), the interface hidden, frozen, converged in the photo
+  mode, 1920 × 1080. They make By plane's and the free camera's cards, the free flight's pictures (`plane-*`, `field`,
+  `wx-*`, `hour-*` in `assets/title/`) and the marketing set: [`docs/marketing/`](marketing/) — the best shots full size,
+  posters with the emblem and a line (FR/EN), a contact sheet.
+
+  `bun scripts/showcase-shots.ts [a|b|<names>]` (one half each machine: `bun scripts/remote.ts run --headless -- …`), then
+  `python3 scripts/build-showcase.py`.

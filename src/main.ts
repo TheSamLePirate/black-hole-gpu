@@ -10,6 +10,7 @@ import { SOUND_URL } from "./a320/sound/assets";
 import type { CraftVoice } from "./a320/sound/types";
 import { FAILURES, failureById } from "./a320/failures";
 import { type ServiceId, tugVehicle } from "./a320/services";
+import { siteByName } from "./world/fieldsite";
 import { fieldByCode, fieldCached } from "./world/runways";
 import type { FailureKind } from "./game/systems";
 import { holeFleet } from "./holefleet";
@@ -9066,8 +9067,22 @@ async function main() {
       flightHub: () => flightHub.open(),
       // (By plane — E4: the same paths as the Flight hub's card and TARS's tools)
       flight: (c) => {
-        placeShip(() => prepareFlight(hubHost, { field: c.field, start: c.start, hour: c.hour, weather: c.weather, fuel: c.fuel }));
-        setMount("cockpit");
+        const go = () => {
+          placeShip(() =>
+            prepareFlight(hubHost, {
+              field: c.field,
+              start: c.start,
+              hour: c.hour,
+              weather: c.weather,
+              fuel: c.fuel,
+              aircraft: c.aircraft,
+            }),
+          );
+          setMount("cockpit");
+        };
+        // (an airport of the world, not one of the game's sites: its tile read first — siteByName finds what is loaded)
+        if (siteByName(c.field)) go();
+        else void fieldByCode(c.field).then(go, (e) => panel.toast(String((e as Error).message ?? e)));
       },
       mission: (id) => airMissions.brief(id),
       fight: (id) => {
