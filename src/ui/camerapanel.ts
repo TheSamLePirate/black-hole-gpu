@@ -609,8 +609,10 @@ export class CameraPanel {
       b.dataset.testid = `cp-subject-${k}`;
       b.onclick = () => {
         s.subjectView = vs.subjectView = k;
-        // (another view: a cut, on purpose — the camera's sensor told)
+        // (another view: a cut, on purpose — the camera's sensor told; a free camera following the ship let go: the view
+        // is the craft's now)
         c.onCut?.();
+        if (k !== "around") this.d.camera.setSpectatorFollow(false);
         c.subject.yaw = c.subject.pitch = 0;
         c.subject.tower = null;
         // (around: the rig's orbit about it)

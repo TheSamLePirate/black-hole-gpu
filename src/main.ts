@@ -8290,9 +8290,15 @@ async function main() {
           if (h < 0.02 * n.R * M_METRES) {
             P = q.map((x) => x * M_METRES) as Vec3;
             ref += ":ground";
-          } else P = [0, 1, 2].map((k) => (w.X[k]! - n.C[k]!) * M_METRES) as Vec3;
+          } else {
+            const C = vc.rigBody(n.id, w.ours, sim.time)?.C ?? n.C;
+            P = [0, 1, 2].map((k) => (w.X[k]! - C[k]!) * M_METRES) as Vec3;
+          }
         } else if (n) {
-          P = [0, 1, 2].map((k) => (w.X[k]! - n.C[k]!) * mPerUnit) as Vec3;
+          // (its centre at the time drawn — Miller runs round Gargantua at a good share of c: a frame's difference of
+          // clocks at a warp is thousands of km)
+          const C = vc.rigBody(n.id, w.ours, sim.time)?.C ?? n.C;
+          P = [0, 1, 2].map((k) => (w.X[k]! - C[k]!) * mPerUnit) as Vec3;
           h = (Math.hypot(...P) / mPerUnit - n.R) * mPerUnit;
         }
         camProbe.record({

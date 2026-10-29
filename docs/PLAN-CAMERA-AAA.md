@@ -203,3 +203,19 @@ que de CAM2 et peut avancer plus tôt si l'on veut la « vue depuis l'avion de l
 - **Précision** à 30 au avec un décalage de 1 m : ancres locales + doubles ; jamais de position absolue en f32.
 - **Coût GPU** des effets relativistes : déjà dans le traceur ; maillages et étiquettes aberrés côté CPU (pas de
   nouvelle passe).
+
+## Suivi (2026-10-29)
+
+| phase | état | commit | notes |
+|---|---|---|---|
+| CAM0 | **fait** | 387be261 | capteur `__bh.cam` (`src/camera/metrics.ts`), e2e `camera-smooth` ; base : 7 défauts / 14 situations (et les voyages de notre système ne bougeaient pas : un Ranger est piloté dans la scène) |
+| CAM1–CAM2 | **adapté** | — | pas de réécriture du cœur : `src/camera/` pilote la pose par `setHomePose`/`setHolePose` (Settings reste la sortie) ; les nouveaux comportements (voyage, ciné, sujets) passent avant le rig dans `advance` ; un seul voyage (le relativiste) pour notre système et Gargantua, l'ancien `travel.ts` ne sert plus qu'en repli |
+| CAM3 | **fait** | 3d3823bc | `speed.ts` : minimum doux des hauteurs (plus de saut de vitesse quand le plus proche change), une plage ×1/16…×32 (molette = curseur), inertie des touches en orbite |
+| CAM4 | **fait** | 3d3823bc | `voyage.ts` / `voyager.ts` : fusée relativiste exacte, choix vitesse/τ/t/accélération, borne SOI, interception, spirales autour des mondes (jamais à travers), lecture variable ~20 s, observateur ou vaisseau (τ d'équipage) |
+| CAM5 | **fait** | 3d3823bc | β au traceur (aberration, Doppler, projecteur), regard libre en route, carte de voyage t/τ/écart/β/γ, plus de faux « IMPACT » |
+| CAM6 | **fait** | 3d3823bc | G / ⇧G (G = train d'atterrissage en vol, voyage en caméra libre), section Voyage du panneau caméra, `__bh.voyage()`, e2e `camera-voyage` |
+| CAM7 | **fait** | 3d3823bc | `cinevoyage.ts` / `skim.ts` : rase-mottes (relief anticipé, côté jour), plan-séquence et montage |
+| CAM8 | **fait** | 2fc57c49 | avions de ligne (`trf:`), bateaux (`ais:`), ailiers (`wing:`), joueurs, flotte, ISS ciblables ; Autour / Poursuite / Cockpit / Tour ; trafic dessiné autour de la vue ; e2e `camera-subject` |
+| CAM9 | partiel | (ce commit) | retour du spectateur 87° → 0° ; vues du F-35 50° → 0 ; focale à ressort critique (plus de saut au zoom) ; capteur mesuré au temps dessiné ; tour spatiale co-mobile (fly-by) ; restent : Gargantua (sauts vers Miller à re-mesurer), visée de l'ISS à l'arrivée, zoom automatique de la tour |
+| CAM10 | partiel | (ce commit) | `scripts/camera-video.ts` : films 720p 30 i/s image par image (jeu figé, pas de 1/30 s) — voyage Mars, ciné Terre→Lune, montage Mars, caméra sur le Ranger ; restent `docs/CAMERA.md` et l'écran des commandes |
+| CAM11 | à faire | — | campagne complète Mac + kerr-mini |

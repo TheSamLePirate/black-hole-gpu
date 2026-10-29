@@ -1095,15 +1095,19 @@ export class CameraController {
   voyage: Voyage | null = null;
   /** the cinematic voyage (camera/cinevoyage.ts, ⇧G): its legs — the low passes, the voyage — and its cuts */
   cineVoyage: CineVoyage | null = null;
+  /** the lens's spring: its field's rate of change (the logarithm's, a second) — controller/lens.ts easeLens */
+  fovRate = 0;
   /** the view about a craft (camera/subjectcam.ts): the head's or the chase's turn [deg], the chase's distance, its
    *  lagging axes, the tower set down */
-  subject: { yaw: number; pitch: number; zoom: number; q: [number, number, number, number] | null; tower: Tower | null } = {
-    yaw: 0,
-    pitch: 0,
-    zoom: 1,
-    q: null,
-    tower: null,
-  };
+  subject: {
+    yaw: number;
+    pitch: number;
+    zoom: number;
+    q: [number, number, number, number] | null;
+    tower: Tower | null;
+    /** the field before the tower drew the lens in (given back after) */
+    fov0: number | null;
+  } = { yaw: 0, pitch: 0, zoom: 1, q: null, tower: null, fov0: null };
   /** a cut made on purpose (a montage's): told to the camera's sensor */
   onCut: (() => void) | null = null;
   /** whose settings hold the clock (a spectator's: the ship's — its own copy synced from them each frame) */

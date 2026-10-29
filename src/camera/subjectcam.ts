@@ -19,7 +19,7 @@ import { issAxes } from "../system/iss";
 import { solarBody } from "../system/solar";
 import { fromBodyFixed, groundAboveSphere, toBodyFixed } from "../system/our-surface";
 import { craftRadius, craftSubjects, isCraft, isCraftLike, isSubject, ourTarget, type Body } from "../targeting";
-import { M_METRES } from "../units";
+import { C_MPS, M_METRES } from "../units";
 
 declare module "../controls" {
   interface CameraController {
@@ -90,10 +90,17 @@ function subjectLook(this: CameraController, dyaw: number, dpitch: number) {
 
 /** A frame of the view about a craft; false: none (the rig, the flight… place the view). */
 function subjectStep(this: CameraController, dt: number): boolean {
-  if (!this.subjectActive()) {
-    this.subject.q = null;
-    this.subject.tower = null;
-    return false;
+  if (!this.subjectActive() || this.s.subjectView !== "tower") {
+    // (the lens given back when the tower is left)
+    if (this.subject.fov0 !== null) {
+      this.fovTarget = this.subject.fov0;
+      this.subject.fov0 = null;
+    }
+    if (!this.subjectActive()) {
+      this.subject.q = null;
+      this.subject.tower = null;
+      return false;
+    }
   }
   const s = this.s;
   const t = Number.isFinite(this.frameEnd) ? this.frameEnd : this.nowTime();
@@ -147,9 +154,13 @@ function subjectStep(this: CameraController, dt: number): boolean {
     // when it is past and far
     const T0 = L.tower;
     const far = T0 ? len(sub(this.towerPlace(T0, t), P.X)) * M_METRES : Infinity;
-    if (!T0 || (far > Math.max(40 * lenM, 2500) && dotV(sub(P.X, this.towerPlace(T0, t)), nose) > 0)) L.tower = this.towerSet(P, t);
+    if (!T0 || (far > Math.max(25 * lenM, 1500) && dotV(sub(P.X, this.towerPlace(T0, t)), nose) > 0)) L.tower = this.towerSet(P, t);
     X = this.towerPlace(L.tower!, t);
     fwd = unit(sub(P.X, X));
+    // (the lens drawn in on it: the craft a fifth of the field, 3° … 60°)
+    const dist = len(sub(P.X, X)) * M_METRES;
+    if (L.fov0 === null) L.fov0 = s.fov;
+    this.fovTarget = Math.min(60, Math.max(3, (2 * Math.atan((2.5 * lenM) / Math.max(dist, 1)) * 180) / Math.PI));
     const zen = L.tower!.body ? unit(sub(X, ourTarget(s, L.tower!.body as Body, t).pos)) : up;
     upV = unit(cross(cross(fwd, zen), fwd));
     L.q = null;
@@ -166,10 +177,13 @@ export function installSubjectCam(C: { prototype: CameraController }) {
   Object.assign(C.prototype, { subjectStep, subjectLook, subjectActive, towerSet, towerPlace });
 }
 
-/** A tower: a point on a body's ground (body-fixed [M]) or in space (relative to the craft's world centre then). */
+/** A tower: a point on a body's ground (body-fixed [M]), or in space — set at t0 at X0 [M], moving at V [c]: with the
+ *  craft, a little slower, so it flies by it (a fly-by of a few seconds), not left behind at its 7 km/s. */
 export interface Tower {
   body: string | null;
   q: Vec3;
+  t0?: number;
+  V?: Vec3;
 }
 
 declare module "../controls" {
@@ -196,13 +210,15 @@ function towerSet(this: CameraController, P: SubjectPose, t: number): Tower {
     const r = Math.min(R, R0 + (g + 2) / M_METRES);
     return { body: "earth", q: [u[0] * r, u[1] * r, u[2] * r] };
   }
-  const E = ourTarget(this.s, "earth" as Body, t).pos;
-  return { body: null, q: sub(at, E) };
+  // (in space: moving with it, slower by the way ahead over six seconds — it comes up, passes, draws away)
+  const slow = ahead / 6 / C_MPS;
+  return { body: null, q: at, t0: t, V: [0, 1, 2].map((k) => P.V[k]! - P.ax[2][k]! * slow) as Vec3 };
 }
 
 /** The tower's place at t (home frame). */
 function towerPlace(this: CameraController, T: Tower, t: number): Vec3 {
   if (T.body) return fromBodyFixed(T.body, T.q, t);
-  const E = ourTarget(this.s, "earth" as Body, t).pos;
-  return [E[0] + T.q[0], E[1] + T.q[1], E[2] + T.q[2]];
+  const dt = t - (T.t0 ?? t),
+    V = T.V ?? [0, 0, 0];
+  return [T.q[0] + V[0] * dt, T.q[1] + V[1] * dt, T.q[2] + V[2] * dt];
 }

@@ -60,13 +60,33 @@ function stopZoom(this: CameraController) {
 
 function easeLens(this: CameraController, dt: number) {
   const s = this.s;
-  if (this.fovTarget === null) return;
+  if (this.fovTarget === null) {
+    this.fovRate = 0;
+    return;
+  }
+  // (a critically damped spring on the field's logarithm: its rate rising from rest and back — a zoom with no start
+  // in a frame, PLAN-CAMERA-AAA CAM9; settled in about a third of a second, as the old ease)
   const cur = Math.log(s.fov),
     tgt = Math.log(this.fovTarget);
-  if (Math.abs(tgt - cur) < 2e-4) {
+  if (Math.abs(tgt - cur) < 2e-4 && Math.abs(this.fovRate) < 1e-3) {
     s.fov = this.fovTarget;
     this.fovTarget = null;
-  } else s.fov = Math.exp(cur + (tgt - cur) * (1 - Math.exp(-12 * dt)));
+    this.fovRate = 0;
+    return;
+  }
+  const w = 14;
+  const h = Math.min(dt, 0.1);
+  // (in steps of a hundredth at most: stable at any frame rate)
+  let x = cur,
+    v = this.fovRate;
+  for (let left = h; left > 1e-9; ) {
+    const d = Math.min(left, 0.01);
+    v += (w * w * (tgt - x) - 2 * w * v) * d;
+    x += v * d;
+    left -= d;
+  }
+  this.fovRate = v;
+  s.fov = Math.exp(x);
 }
 
 /**
