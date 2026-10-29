@@ -8197,6 +8197,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.bodyRaster ??= new BodyRaster(this.device, this.traceSource);
     const jitter = this.rasterJitter === "halton" && this.rasterPrimaryOn ? this.haltonNdc(target) : ([0, 0] as [number, number]);
     const ready = this.bodyRaster.prepare(
+      enc,
       {
         near,
         camera: this.lastCam!,
@@ -8207,6 +8208,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         jitter,
       },
       { params: this.paramBuf, sampler: this.sampler, relief: this.hdMap.relief },
+      this.prof.pass("body raster heights"),
     );
     if (!ready) {
       tr.idle(this.bodyRaster.ready ? "body-out-of-reach" : "compiling");
