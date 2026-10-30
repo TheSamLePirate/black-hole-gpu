@@ -4100,13 +4100,16 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
     let pp = p0 + L * d;
     let r = length(pp);
     if (r - 1.0 > hmax) { break; }
-    let hh = (reliefStep(surf, pp / r, max(foot, d * mR * 0.02), mR, tSec) - b0) / mR;
+    // (past 32 m — the small craters' sharp shadows nearer —: the ground at a 4 % footprint, steps 1.45 longer — the airless
+    // worlds' measured heights made each of 56 steps dearer: half of Mercury's frame under a low Sun, PLAN-PLANETES-AAA P8)
+    let far = d * mR > 32.0 && airless(surf);
+    let hh = (reliefStep(surf, pp / r, max(foot, d * mR * select(0.02, 0.04, far)), mR, tSec) - b0) / mR;
     // (its clearance [m], less a bias: the ground there drawn at a coarser footprint than the pixel's)
     let cl = (r - 1.0 - hh) * mR + 0.5 + 0.01 * d * mR;
     s = min(s, smoothstep(-1.0, 1.0, cl / (d * mR * 0.0087)));
     if (s <= 0.0) { break; }
     // (the light probe's texels wide: its shadows coarser)
-    d *= select(select(1.23, 1.4, marsLike()), 1.6, probeBeam > 0.0);
+    d *= select(select(select(1.23, 1.45, far), 1.4, marsLike()), 1.6, probeBeam > 0.0);
   }
   return s;
 }
@@ -4171,7 +4174,8 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
       // the relief's shadows (a light source: its penumbra half a degree), and on our airless worlds the
       // fresh craters' bright ejecta, the regolith's mottling
       let foot = reliefFoot(t);
-      sh = select(nearShadow(surf, qb, hit.h, toBody(P.near4.xyz), foot, tSec), 1.0, NEAR_SHADOW_OFF);
+      // (an if, not a select: a select evaluates both — the measure's cut, liteSkip 4, cut nothing)
+      if (!NEAR_SHADOW_OFF) { sh = nearShadow(surf, qb, hit.h, toBody(P.near4.xyz), foot, tSec); }
       // (and the Ranger's, the ground within reach of it)
       sh *= shipShadow(look * t * P.near4.w);
       if (airless(surf)) {

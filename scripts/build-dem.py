@@ -17,7 +17,7 @@ The Moon's and Mars's height maps, from their laser altimeters (NASA PDS, public
     → assets/dem/ceres_hamo_dtm_60ppd.tif
   (kept in assets/dem/, not in the repository)
 
-Outputs, assets/planets-hd/<body>-dem.bin: W × W/2, equirectangular like the colour maps (u = 0.5 + east
+Outputs, assets/planets-hd/<body>-dem.bin: W × W/2 (4096 wide; Mercury's and Ceres's 2048), equirectangular like the colour maps (u = 0.5 + east
 longitude/360°, v = 0.5 − lat/180°, texel centres), each texel the mean of the grid's cells it covers (box
 filter), in the Earth's relief format (scripts/build-earth-relief.py: "ELV1", gzip; i16 heights [m], each
 row's first value whole and the others as the difference from the one before, low bytes then high bytes).
@@ -109,6 +109,8 @@ def write(name, z, W):
 if __name__ == "__main__":
     bodies = {"moon": moon, "mars": mars, "venus": venus, "mercury": mercury, "ceres": ceres}
     names = [sys.argv[1]] if len(sys.argv) > 1 else list(bodies)
-    W = int(sys.argv[2]) if len(sys.argv) > 2 else 4096
+    # (Mercury's and Ceres's 2048 wide: their relief tiles cover 64° round the camera, and a new binary over 8 MB is refused —
+    # docs/ASSETS.md; 4096 made 8.9 and 8.0 MB)
+    widths = {"mercury": 2048, "ceres": 2048}
     for n in names:
-        write(n, bodies[n](), W)
+        write(n, bodies[n](), int(sys.argv[2]) if len(sys.argv) > 2 else widths.get(n, 4096))

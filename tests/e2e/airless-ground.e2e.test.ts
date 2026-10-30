@@ -43,6 +43,8 @@ describe.skipIf(!E2E)("P8: the airless worlds' ground", () => {
       while (performance.now() - t1 < 6000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
       return 1; })()`);
   const shot = async (name: string) => {
+    // (no picture from a tracer still compiling — the refining one starts once the realtime one is in)
+    await app.settled();
     await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
     await app.shot(`${OUT}/${name}.png`);
     await app.js(`(() => { document.body.classList.remove("hide-ui"); return 1; })()`);

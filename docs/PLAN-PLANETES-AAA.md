@@ -130,7 +130,15 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   - V3 le détail radar de Magellan (75–225 m) en tuiles d'imagerie, comme celui de Titan.
   - V4 les dalles de basalte des Venera au sol fin ; mesures, e2e, docs.
   - **Fait** (30 octobre) : V1 à V4 — [P8.md](progress/planetes-aaa/P8.md).
-- **Les corps sans air** : leurs étapes écrites à leur tour.
+- **Les corps sans air** :
+  - A1 Mercure : le modèle de MESSENGER (665 m) en carte et en tuiles sur le serveur, le détail de son albédo par sa
+    mosaïque à faible incidence (Mercury Trek) ;
+  - A2 Cérès : le modèle HAMO de Dawn (137 m) en carte et en tuiles, sa vraie carte (celle du pack était inventée) ;
+  - A3 les lunes : leurs cartes vérifiées et recalées sur les mosaïques de l'USGS (Callisto, Pluton, Mimas décalées ;
+    Encelade, Rhéa, Phobos, Deimos à vérifier), puis leur relief procédural par type de sol (les rides et le chaos
+    d'Europe, les sillons de Ganymède, les plaines volcaniques d'Io, les rayures d'Encelade).
+  - **Fait** (30 octobre) : A1 et A2, et les ombres du relief allégées sur les mondes sans air —
+    [P8.md](progress/planetes-aaa/P8.md). La vue ciné de Mercure reste au-dessus du budget de la Terre (1,7 fois).
 
 ### P9 — Géantes gazeuses et anneaux
 - Bandes animées et tempêtes depuis l'orbite (Jupiter KTX existant), anneaux de Saturne détaillés (ombres, effet

@@ -61,7 +61,7 @@ weak) and Mars height map (an 8-bit copy of MOLA's).
 
 ## Mercury's and Ceres's heights, Ceres's map (PLAN-PLANETES-AAA P8)
 
-`mercury-dem.bin` and `ceres-dem.bin`: 4096 × 2048, `python3 scripts/build-dem.py mercury|ceres`, from
+`mercury-dem.bin` and `ceres-dem.bin`: 2048 × 1024 (3.7 and 1.4 km a texel: their tiles finer round the camera), `python3 scripts/build-dem.py mercury|ceres`, from
 
 - Mercury: **MESSENGER**'s USGS global model, 665 m (heights over a 2 439.4 km sphere; here over the game's 2 439.7 km) —
   <https://planetarymaps.usgs.gov/mosaic/Mercury_Messenger_USGS_DEM_Global_665m_v2.tif>
