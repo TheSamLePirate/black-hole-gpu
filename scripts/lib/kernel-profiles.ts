@@ -42,6 +42,7 @@ const NEAR_EARTH = 1 << NEAR_KIND_SHIFT;
 const NEAR_AIR = 2 << NEAR_KIND_SHIFT;
 const NEAR_AIRLESS = 3 << NEAR_KIND_SHIFT;
 const NEAR_TITAN = 5 << NEAR_KIND_SHIFT;
+const NEAR_VENUS = 6 << NEAR_KIND_SHIFT;
 const NEAR_NONE = 4 << NEAR_KIND_SHIFT;
 const RASTER_ENTRIES: TracerEntry[] = ["shade", "shadeMark", "shadeLite", "shadeWater", "shadeStars", "discs", "clouds", "skyFill"];
 
@@ -97,6 +98,12 @@ export const PROFILES: KernelProfile[] = [
     id: "titan",
     label: "Titan's surface in the game's universe (an air world whose relief is procedural — PLAN-PLANETES-AAA P8)",
     key: GAME | NEAR_TITAN,
+    entries: ["main", "env", "aerial", "shadeLite"],
+  },
+  {
+    id: "venus",
+    label: "Venus's surface in the game's universe (an air world with measured heights and its cloud deck — PLAN-PLANETES-AAA P8)",
+    key: GAME | NEAR_VENUS,
     entries: ["main", "env", "aerial", "shadeLite"],
   },
   {

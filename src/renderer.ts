@@ -2866,7 +2866,17 @@ export class Renderer {
     // keep "any")
     if (!o.probe && this.nearKinds) {
       const nb = near ? bodies[near.index] : undefined;
-      const kind = !nb ? 4 : !bodyHasAir(nb.kind, nb.surface) ? 3 : nb.id === "earth" ? 1 : nb.id === "titan" ? 5 : 2;
+      const kind = !nb
+        ? 4
+        : !bodyHasAir(nb.kind, nb.surface)
+          ? 3
+          : nb.id === "earth"
+            ? 1
+            : nb.id === "titan"
+              ? 5
+              : nb.id === "venus"
+                ? 6
+                : 2;
       this.featureKey |= kind << NEAR_KIND_SHIFT;
     }
     // (the Ranger's shadow on the near ground: its bounding sphere in the camera's axes; 0: none)

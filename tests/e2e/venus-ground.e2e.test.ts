@@ -4,7 +4,7 @@ import { App, E2E, stopServer } from "./lib/app";
 import { readPng } from "./lib/png";
 
 // PLAN-PLANETES-AAA P8 (Venus): its ground under its clouds — a solid surface at its radius (no longer the cloud deck drawn as
-// the ground), Magellan's altimetry marched as Mars's relief is and drawn by the body raster (NEAR_KIND 2), its ground's map
+// the ground), Magellan's altimetry marched as Mars's relief is and drawn by the body raster (its kernel, NEAR_KIND 6: Mars's paths and its cloud slab), its ground's map
 // from Magellan's radar (a basalt's albedo) with the radar's tiles for its detail, and its cloud deck as a slab in its air (trace.wgsl AIR_SLAB: 47–70 km, τ ≈ 30) —
 // bright from space, an orange glow and ~3 % of the sunlight on the ground: the disc from 15 000 km (its centre bright), the
 // plains from 3 km, the walker on them near the point under the Sun; Venus's map loaded, no GPU error.
@@ -74,7 +74,7 @@ describe.skipIf(!E2E)("P8: Venus's ground", () => {
     const st = await state();
     console.log(`  low: ${JSON.stringify(st)}`);
     await shot("low");
-    expect(st.kind).toBe(2);
+    expect(st.kind).toBe(6);
     expect(st.hd).toBe("venus");
     // (Magellan's radar's tiles in — its albedo's detail, moon-tiles.ts WORLDS.venus)
     expect(st.tiles).toMatchObject({ world: "venus", drawn: true, failed: 0 });

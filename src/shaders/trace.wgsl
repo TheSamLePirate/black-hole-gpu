@@ -176,16 +176,20 @@ override NEAR_DETAIL: bool = true;
 override GROUND_DETAIL: bool = true;
 // the body near the camera, for the camera's rays (main, discs): 0 any — both paths —, 1 the Earth, 2 another world with
 // air (Mars), 3 a world without air (the Moon, Gargantua's worlds), 4 none, 5 Titan (an air world — 2's paths — whose relief
-// is procedural: titanRelief, out of the others' kernels and theirs out of its own — PLAN-PLANETES-AAA P8). The other paths compiled out: the Earth's
+// is procedural: titanRelief, out of the others' kernels and theirs out of its own — PLAN-PLANETES-AAA P8), 6 Venus (2's paths
+// and its cloud deck's slab: AIR_SLAB, out of Mars's and Titan's kernels). The other paths compiled out: the Earth's
 // near ground in a Moon scene, the airless worlds' relief in an Earth flight (docs/PLAN-LEAN-TRACER-KERNELS.md P7)
 override NEAR_KIND: u32 = 0u;
 // (the near body is the Earth — as far as the constants allow: the Earth's own near code out of the other worlds' kernels)
-fn nearEarth(k: u32) -> bool { return NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && isEarth(k); }
+fn nearEarth(k: u32) -> bool { return NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && isEarth(k); }
 // (another world with air near: Mars's kind or Titan's — conjunctions, which wgsl-specialise.ts folds: a top-level || it
 // leaves alone)
 fn nearAirWorld() -> bool { return NEAR_KIND != 0u && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u; }
-// (an air world's or any near body's kernel — not the Earth's, not the airless worlds', not the empty one: Venus's cloud slab)
-fn airWorldOrAny() -> bool { return NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u; }
+// (Venus's cloud slab in this kernel: its own, and those for any near body — not Mars's nor Titan's: register-bound, it cost
+// them 4–8 % unused)
+fn venusKernel() -> bool { return NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u; }
+// (an air world whose heights are measured — Mars's kind, Venus's —: its relief marched, its shadows)
+fn marsLike() -> bool { return NEAR_KIND != 0u && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u; }
 // (Titan's relief in this kernel: its own, and those for any near body — the probes', the body raster's library)
 fn titanKernel() -> bool { return NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u; }
 
@@ -3456,7 +3460,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       e = earthNear(look, rnd, k);
       hitT = e.t;
     }
-    if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && !air) {
+    if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && NEAR_KIND != 6u && !air) {
       hit = nearMarch(look);
       hitT = hit.t;
     }
@@ -3486,7 +3490,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       // (what lies beyond the air, seen through it: lower than it looks)
       if (isEarth(k) && P.sky.x > 0.0) { lookSky = airBend(look); }
     }
-    if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && !air) {
+    if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && NEAR_KIND != 6u && !air) {
       // (on Gargantua's worlds the camera white-balances to the light there — the disk's orange, K2's —
       // part of the way: Mann's ice white, Miller's water grey-blue; the sky beyond keeps its colours)
       var wb = vec3f(1.0);
@@ -4090,7 +4094,7 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
   var s = 1.0;
   // (Mars's — earthNear's, NEAR_KIND 2 —: from 8 m, steps a 0.4 longer — its relief has no occluder under a few metres, and a
   // low Sun's ray took its 56 steps through every lit pixel: a third of the frame at sunset)
-  var d = max(select(0.5, 8.0, NEAR_KIND == 2u), foot) / mR * exp2(0.3 * RND);
+  var d = max(select(0.5, 8.0, marsLike()), foot) / mR * exp2(0.3 * RND);
   for (var i = 0u; i < 56u; i++) {
     cost(2u);
     let pp = p0 + L * d;
@@ -4102,7 +4106,7 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
     s = min(s, smoothstep(-1.0, 1.0, cl / (d * mR * 0.0087)));
     if (s <= 0.0) { break; }
     // (the light probe's texels wide: its shadows coarser)
-    d *= select(select(1.23, 1.4, NEAR_KIND == 2u), 1.6, probeBeam > 0.0);
+    d *= select(select(1.23, 1.4, marsLike()), 1.6, probeBeam > 0.0);
   }
   return s;
 }
@@ -4704,7 +4708,7 @@ fn airColumn(h: f32, mu: f32, H: f32) -> f32 {
 fn sunThrough(h: f32, mu: f32) -> vec3f {
   var tau = ((AIR.br + AIR.bo) * airColumn(h, mu, airHR()) + vec3f(AIR.bme * airColumn(h, mu, airHM()))) / airK();
   // (Venus's cloud deck — its column above, slant)
-  if (airWorldOrAny() && AIR_SLAB.z > 0.0) { tau += vec3f(AIR_SLAB.z * slabCol(h) / max(mu, 0.03)); }
+  if (venusKernel() && AIR_SLAB.z > 0.0) { tau += vec3f(AIR_SLAB.z * slabCol(h) / max(mu, 0.03)); }
   return exp(-tau);
 }
 
@@ -4919,7 +4923,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     // (Venus's cloud deck: its droplets' extinction — as much scattered —, forward — g 0.7)
     var dS = 0.0;
     var dW = VENUS_W;
-    if (airWorldOrAny() && AIR_SLAB.z > 0.0) {
+    if (venusKernel() && AIR_SLAB.z > 0.0) {
       dS = AIR_SLAB.z * slabD(h);
       ext += vec3f(dS);
       // (its tops' markings — the coarse map's streaks, Venus's: layer 0 of the small maps — in its droplets' albedo)
@@ -4945,7 +4949,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     let s1c = s1 * select(1.0, csT, csT >= 0.0);
     var sc = AIR.br * dR * (pR * s1c + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1c + 0.3 / (4.0 * PI) * sM);
     // (its droplets' albedo per colour: the unknown absorber's blue and ultraviolet taken — the pale cream of its disc)
-    if (airWorldOrAny() && dS > 0.0) { sc += dS * dW * hgPhase(0.7, mu) * s1c; }
+    if (venusKernel() && dS > 0.0) { sc += dS * dW * hgPhase(0.7, mu) * s1c; }
     var Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
     if (HAS_WX && WX_W > 0.0) {
       // the weather: under its decks the sunlight dimmed and spread (the air's own scattering with it);
@@ -4979,7 +4983,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
       var tauV = AIR.bme * airColumn(h, 1.0, airHM()) / airK();
       // (Venus: the cloud deck's column above in it, its droplets and its dense CO₂ — Rayleigh's τ of several — sources too)
       var src = AIR.bms * dM;
-      if (airWorldOrAny() && AIR_SLAB.z > 0.0) {
+      if (venusKernel() && AIR_SLAB.z > 0.0) {
         tauV += AIR_SLAB.z * slabCol(h) + (AIR.br.g * airColumn(h, 1.0, airHR()) / airK()) * 3.0;
         src += dS * dW + AIR.br * dR;
       }
@@ -9677,7 +9681,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let titan = titanKernel() && nsurf == TITAN_SURF;
   // (Titan from over 150 km: its relief and its seas under the haze's τ ≈ 4 unseen — the sphere, not 120 km of march a pixel)
   let titanHigh = titan && (length(ro) - 1.0) * P.near4.w > 1.5e5;
-  if (nearAirWorld() && !DISC_ONLY && !isEarth(k) && (titan || (NEAR_KIND == 2u && hasDem(nsurf))) && !titanHigh && (liteSkip() & 8u) == 0u) {
+  if (nearAirWorld() && !DISC_ONLY && !isEarth(k) && (titan || (marsLike() && hasDem(nsurf))) && !titanHigh && (liteSkip() & 8u) == 0u) {
     var nh: NearHit;
     if (NEAR_T > 0.0) {
       nh.t = NEAR_T;
@@ -11578,7 +11582,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let k = u32(P.near1.w);
   // (another world than the Earth, without its air: the body raster's — bodyLite, its threads the rate's pattern's; compiled out
   // of the Earth's kernel — NEAR_KIND 1 — and the Earth's material out of the worlds' — 3)
-  if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && !hasAir(k) && bodyKind(k) != 0u) {
+  if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && NEAR_KIND != 6u && !hasAir(k) && bodyKind(k) != 0u) {
     bodyLite(gid.xy, k);
     return;
   }
