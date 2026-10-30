@@ -1150,7 +1150,9 @@ export class SoundEngine {
     const ctx = this.ctx;
     if (!ctx || !this.eng || !this.rcsV || !this.amb || ctx.state !== "running") return;
     const t = ctx.currentTime;
-    const set = (p: AudioParam, v: number, tau = 0.06) => p.setTargetAtTime(v, t, tau);
+    // (within the parameter's range: a filter's frequency tops at the device's Nyquist — 12 kHz on a 24 kHz output, a Bluetooth
+    // headset's —, 20 kHz past it warned every frame)
+    const set = (p: AudioParam, v: number, tau = 0.06) => p.setTargetAtTime(Math.min(Math.max(v, p.minValue), p.maxValue), t, tau);
     const live = s.live ? 1 : 0;
     // in vacuum only the hull carries the sound: inside, muffled and heavy; outside, far quieter
     const air = clamp(s.air);
