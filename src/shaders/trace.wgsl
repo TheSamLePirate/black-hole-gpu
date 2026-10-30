@@ -4502,8 +4502,10 @@ struct AirSpec {
   moon: f32,   // the Moon's light scattered too, its eclipses dimming the Sun (the Earth: 1)
 };
 var<private> AIR: AirSpec;
-// Mars's dust storm now (setAir: P.earth4.z when the air is Mars's, else 0) — earthAir's diffuse light through it
+// a thick haze's many-times scattered light (setAir: Mars's dust storm now — P.earth4.z —, Titan's haze always; 0 none):
+// earthAir's diffuse field through it, its weight and its dimming per unit of the haze's depth above, per colour
 var<private> AIR_DUST: f32 = 0.0;
+var<private> AIR_MSC: vec3f = vec3f(0.22, 0.275, 0.352);
 // the maps (solar.ts: MAPS_HI, then MAPS_LO) of the worlds with air
 fn airOf(m: u32) -> bool { return m == 0u || m == 2u || m == 4u || m == 5u || m == 6u || m == 19u || m == 20u || m == 21u || m == 22u; }
 fn hasAir(k: u32) -> bool {
@@ -4514,6 +4516,7 @@ fn setAir(k: u32) {
   let m = u32(bodies[BV * k + 2u].z) - 4u;
   AIR_K = k;
   AIR_DUST = 0.0;
+  AIR_MSC = vec3f(0.22, 0.275, 0.352);
   // the Earth: Rayleigh, ozone, an ordinary day's aerosols (τ ≈ 0.03) — built whole (the constructor
   // names every field: none left at zero), the other worlds' below changing it
   var a = AirSpec(
@@ -4540,7 +4543,7 @@ fn setAir(k: u32) {
       a.bms = a.bme * mix(vec3f(0.94, 0.78, 0.6), vec3f(0.96, 0.74, 0.5), dust);
       a.g = mix(a.g, vec3f(0.7, 0.72, 0.76), dust);
       a.sky *= 1.0 + 3.0 * dust;
-      AIR_DUST = dust;
+      AIR_DUST = dust * 1.2;
     }
   } else if (m == 6u) {
     // Venus: above its cloud deck (the drawn ground), CO₂ and a yellowish sulphuric haze
@@ -4554,6 +4557,10 @@ fn setAir(k: u32) {
     a.br = vec3f(1.2e-5, 2.8e-5, 6.8e-5) * 0.15; a.bo = vec3f(0.0);
     a.bms = 6.7e-5 * vec3f(0.92, 0.66, 0.3); a.bme = 6.7e-5; a.g = vec3f(0.62); a.k = 1.0;
     a.sky = vec3f(0.12, 0.07, 0.025);
+    // (its light below the haze scattered many times: the sky an orange glow from the ground — Huygens's —, the disc
+    // bright from space; the beam's single scattering alone left both black under τ ≈ 4)
+    AIR_DUST = 1.0;
+    AIR_MSC = vec3f(0.22, 0.29, 0.4);
   } else if (m == 4u || m == 5u || m == 20u || m == 21u) {
     // the giants: hydrogen above their clouds (the drawn ground) — a thin haze, bluish on Uranus and
     // Neptune, yellowish on Jupiter and Saturn
@@ -4870,14 +4877,15 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
       Tv = exp(-tau) * select(ds * (1.0 - 0.5 * x), (1.0 - exp(-x)) / max(ext, vec3f(1e-30)), x > vec3f(1e-3));
     }
     o.L += sc * Ts * Tv;
-    // (a dust storm's thick air — τ ~ 4 —: the light scattered many times, its diffuse field through the
-    // dust above far less dimmed than the sun's beam — two-stream, e^(−0.22 τ), redder deeper —: the sky an
-    // opaque orange glow, not the black the beam's light alone left)
-    if (HAS_WX && AIR_DUST > 0.0) {
+    // (a thick air — a dust storm's, Titan's haze: τ ~ 4 —: the light scattered many times, its diffuse field through the
+    // haze above far less dimmed than the sun's beam — two-stream, e^(−0.22 τ), redder deeper —: the sky an opaque orange
+    // glow, not the black the beam's light alone left. In the weather's kernels and the air worlds' — NEAR_KIND 2 —, and those
+    // for every path — 0: the aerial table's, the probes')
+    if ((HAS_WX || NEAR_KIND == 0u || NEAR_KIND == 2u) && AIR_DUST > 0.0) {
       let tauV = AIR.bme * airColumn(h, 1.0, airHM()) / airK();
       let mz0 = dot(normal, physicalLs);
-      let Tdif = exp(-0.22 * tauV * vec3f(1.0, 1.25, 1.6)) * smoothstep(-0.1, 0.25, mz0) * 0.9;
-      o.L += AIR.bms * dM * (AIR_DUST * 1.2 / (4.0 * PI)) * Tdif * Tv;
+      let Tdif = exp(-tauV * AIR_MSC) * smoothstep(-0.1, 0.25, mz0) * 0.9;
+      o.L += AIR.bms * dM * (AIR_DUST / (4.0 * PI)) * Tdif * Tv;
     }
     let mz = dot(normal, Lm);
     let nightS = 1.0 - smoothstep(-0.12, 0.06, dot(normal, physicalLs));

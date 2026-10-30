@@ -103,6 +103,19 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 ### P8 — Les autres corps solides
 - Mercure (Messenger), Vénus (relief Magellan sous l'atmosphère épaisse : lumière diffuse orange), Titan (brume,
   **mers de méthane** avec la mer FFT de P2), Europe, Io, Ganymède, Callisto, Encelade, Cérès, Phobos, Deimos.
+- Décisions (30 octobre) : Titan, puis Vénus, puis les corps sans air ; des tuiles sur le serveur là où un MNT existe
+  (Mercure MESSENGER 665 m, Cérès Dawn HAMO, Vénus Magellan 4,6 km) ; Titan et les lunes glacées : leur mosaïque et un
+  relief procédural (leurs MNT ne couvrent que des bandes).
+- **Titan** :
+  - T1 la lumière sous la brume : la diffusion multiple de sa brume (τ ≈ 4), le ciel orange depuis le sol, le disque
+    clair depuis l'espace ;
+  - T2 ses cartes : la mosaïque ISS de Cassini (4 km, globale) pour la couleur, le radar SAR/HiSAR (351 m) pour le
+    détail et le masque de ses mers ;
+  - T3 son relief : dunes équatoriales, collines, vallées, marché comme celui de Mars, dessiné par le raster des corps ;
+  - T4 ses mers de méthane : Kraken, Ligeia, Punga, les lacs, la mer FFT de P2 (méthane : sombre, vagues de quelques
+    centimètres sous un vent faible) ;
+  - T5 mesures, e2e, docs.
+- **Vénus** et **les corps sans air** : leurs étapes écrites à leur tour.
 
 ### P9 — Géantes gazeuses et anneaux
 - Bandes animées et tempêtes depuis l'orbite (Jupiter KTX existant), anneaux de Saturne détaillés (ombres, effet
