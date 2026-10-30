@@ -47,7 +47,18 @@ import { sphericalFrame } from "./wormhole";
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import seafftWGSL from "./shaders/seafft.wgsl" with { type: "text" };
 import { SEA_TEXTURE_LIMIT, SeaFft } from "./sea/fft-gpu";
-import { dispersion, EARTH_SEA, MILLER_SEA, MILLER_WIND, normalQuantile, type SeaPhysics, seaCascades, seaSystems } from "./sea/spectrum";
+import {
+  dispersion,
+  EARTH_SEA,
+  MILLER_SEA,
+  MILLER_WIND,
+  normalQuantile,
+  type SeaPhysics,
+  seaCascades,
+  seaSystems,
+  TITAN_SEA,
+  TITAN_WIND,
+} from "./sea/spectrum";
 import { MarineFeed, type SeaState, windSea } from "./sea/marine";
 import { forestSource } from "./forest-shader";
 import { lampsOf } from "./cockpit/lights";
@@ -184,7 +195,7 @@ import {
   setGroundHeights,
   setGroundRelief,
 } from "./system/our-surface";
-import { EARTH_RM, earthHeightSampler, mapHeightSampler, setTitanSeas, tileFallbackSampler } from "./terrain";
+import { EARTH_RM, earthHeightSampler, mapHeightSampler, setTitanSeas, tileFallbackSampler, titanSeaAt } from "./terrain";
 import {
   cartToGeodetic,
   figureDiskShare,
@@ -1762,6 +1773,10 @@ export class Renderer {
   private groundHeights(m: HdMap, on: HdMap | null) {
     // (Titan's seas: their map to the CPU too — the ground the walker and the gear stand on, terrain.ts titanRelief)
     if (m.name === "titan") {
+      // (and its radar's tiles — imagery alone: its albedo's detail, moon-tiles.ts WORLDS.titan)
+      this.moonTiles.fallback = null;
+      if (on) this.moonTiles.setWorld("titan");
+      else this.moonTiles.clear();
       const url = HD_SETS.titan?.seas;
       if (!on || !url) setTitanSeas(null);
       else
@@ -3241,7 +3256,7 @@ export class Renderer {
       // the Moon's and Mars's relief tiles (P6, P7): round the camera while that world is the near body and its global map in
       const nearId = near ? bodies[near.index]?.id : undefined;
       const tw = nearId ? WORLDS[nearId] : undefined;
-      if (near && tw && nearId === this.moonTiles.world && this.hdMap.name === nearId && this.hdMap.dem) {
+      if (near && tw && nearId === this.moonTiles.world && this.hdMap.name === nearId && (this.hdMap.dem || tw.relief === false)) {
         const e = bodyEye(near);
         const r = Math.hypot(...e);
         const u = e.map((x) => x / r) as Vec3;
@@ -3869,6 +3884,8 @@ export class Renderer {
     this.seaHere = null;
     // (Miller's sea — PLAN-PLANETES-AAA P2: knee-deep, under 1.3 g, its own wind)
     if (near && bodies[near.index]?.id === "miller") return this.millerSeaParams(near, out, tSec, s);
+    // (Titan's seas of methane — P8: near one of them, its FFT's waves)
+    if (near && bodies[near.index]?.id === "titan") return this.millerSeaParams(near, out, tSec, s, "titan");
     if (!near || near.index !== earthK || !(altKm < 30)) return out;
     // (in metres as the shader has it: P.near4.w)
     const mR = near.radius * 1476.625 * s.massSolar;
@@ -3920,10 +3937,19 @@ export class Renderer {
    * on the sphere under the camera, its wind (MILLER_WIND), the camera's place on them; the twelve trains' phases by its water's
    * dispersion — knee-deep, 1.3 g (sea/spectrum.ts MILLER_SEA). Its FFT's state: seaFftParams.
    */
-  private millerSeaParams(near: NonNullable<ReturnType<typeof localPatch>>, out: Float32Array, tSec: number, s: Settings): Float32Array {
+  private millerSeaParams(
+    near: NonNullable<ReturnType<typeof localPatch>>,
+    out: Float32Array,
+    tSec: number,
+    s: Settings,
+    world: "miller" | "titan" = "miller",
+  ): Float32Array {
     const mR = near.radius * 1476.625 * s.massSolar;
     const cb = near.axes.map((a) => -(a[0]! * near.centre[0]! + a[1]! * near.centre[1]! + a[2]! * near.centre[2]!) * mR);
     const r = Math.hypot(cb[0]!, cb[1]!, cb[2]!);
+    // (Titan: a sea within ~150 km and the camera under 150 km — the tracer draws them so — or no waves: their FFT ~2 ms)
+    if (world === "titan" && (r - mR > 150e3 || titanSeaAt(cb.map((x) => x / r) as Vec3) < -150)) return out;
+    const phys = world === "titan" ? TITAN_SEA : MILLER_SEA;
     // (the camera's place in the patch — the camera's rest frame, Miller at a third of light's speed in Gargantua's: its distance
     // from the centre no measure of the height, 0.93 to 1.07 radii at a few metres —: within half a radius, the sea's waves on,
     // whole; their detail fades with the pixels' footprint — trace.wgsl)
@@ -3935,11 +3961,11 @@ export class Renderer {
     const eh = Math.hypot(up[0]!, up[1]!) || 1;
     const east = [-up[1]! / eh, up[0]! / eh, 0];
     const north = [up[1]! * east[2]! - up[2]! * east[1]!, up[2]! * east[0]! - up[0]! * east[2]!, up[0]! * east[1]! - up[1]! * east[0]!];
-    const { U, to } = MILLER_WIND;
+    const { U, to } = world === "titan" ? TITAN_WIND : MILLER_WIND;
     const tu = [0, 1, 2].map((i) => east[i]! * Math.sin(to) + north[i]! * Math.cos(to));
     const tc = [up[1]! * tu[2]! - up[2]! * tu[1]!, up[2]! * tu[0]! - up[0]! * tu[2]!, up[0]! * tu[1]! - up[1]! * tu[0]!];
     const weight = 1;
-    this.seaHere = { U, to, lat: 0, lon: 0, weight, world: "miller" };
+    this.seaHere = { U, to, lat: 0, lon: 0, weight, world };
     const uc = cb[0]! * tu[0]! + cb[1]! * tu[1]! + cb[2]! * tu[2]!;
     const cc = cb[0]! * tc[0]! + cb[1]! * tc[1]! + cb[2]! * tc[2]!;
     const u0 = Math.round(uc / 1024) * 1024,
@@ -3949,8 +3975,8 @@ export class Renderer {
     const budget = 0.5 * (0.003 + 0.00512 * U) * 0.5;
     SEA_WAVES.forEach((w, i) => {
       const k = (2 * Math.PI * Math.hypot(...w.n)) / 1024;
-      const a = Math.sqrt((2 * budget) / SEA_WAVES.length) * Math.min(1, k * MILLER_SEA.depth * 4);
-      const phase = (dispersion(k, MILLER_SEA).w * tSec + w.phase0) % (2 * Math.PI);
+      const a = Math.sqrt((2 * budget) / SEA_WAVES.length) * Math.min(1, k * phys.depth * 4);
+      const phase = (dispersion(k, phys).w * tSec + w.phase0) % (2 * Math.PI);
       out.set([w.n[0], w.n[1], a, phase], 12 + 4 * i);
     });
     return out;
@@ -3959,7 +3985,7 @@ export class Renderer {
   /** the sea's waves' anchor: the local vertical their axes are taken at (seaParams) */
   private seaAnchor: number[] | null = null;
   /** the wind and the place the sea's waves are drawn for this frame (seaParams; null: no sea near) */
-  private seaHere: { U: number; to: number; lat: number; lon: number; weight: number; world?: "miller" } | null = null;
+  private seaHere: { U: number; to: number; lat: number; lon: number; weight: number; world?: "miller" | "titan" } | null = null;
 
   /**
    * The sea's FFT waves for this frame (trace.wgsl: Params.seafft; sea/fft-gpu.ts): the sea's state about the camera
@@ -3975,13 +4001,19 @@ export class Renderer {
     // on an M1; back within a probe's frames once some sea is drawn, its far trains meanwhile)
     if (this.rasterWaterNow && this.frameStamp - this.seaSeenStamp > SEA_UNSEEN_FRAMES) return out;
     const miller = H.world === "miller";
-    // (Miller: its wind's chop held by the depth — a breaking wave is no higher than ~0.8 of it —, no swell but the giant waves')
+    // (Miller: its wind's chop held by the depth — a breaking wave is no higher than ~0.8 of it —, no swell but the giant waves';
+    // Titan: a fully developed sea at its gravity — Pierson–Moskowitz's Hs 0.21 U²/g, Tp 7.16 U/g: centimetres, seconds)
     const base = miller
       ? (() => {
           const w = windSea(H.U, H.to);
           return { ...w, wind: { ...w.wind, hs: Math.min(w.wind.hs, 0.78 * MILLER_SEA.depth), tp: Math.min(w.wind.tp, 3) } };
         })()
-      : (this.seaOverride ?? this.marine.peek(H.lat, H.lon, utcOf(time)) ?? windSea(H.U, H.to));
+      : H.world === "titan"
+        ? (() => {
+            const w = windSea(H.U, H.to);
+            return { ...w, wind: { ...w.wind, hs: (0.21 * H.U * H.U) / TITAN_SEA.g, tp: (7.16 * H.U) / TITAN_SEA.g } };
+          })()
+        : (this.seaOverride ?? this.marine.peek(H.lat, H.lon, utcOf(time)) ?? windSea(H.U, H.to));
     // (a swell imposed — a heavy sea's qualification: controller/quals.ts —, from the wind's way)
     const state = this.seaSwell ? { ...base, swell: { hs: this.seaSwell, tp: 11, to: H.to } } : base;
     this.seaState = state;
@@ -3996,9 +4028,9 @@ export class Renderer {
       r(state.swell.tp, 2),
       deg(state.swell.to),
       deg(H.to),
-      miller ? "miller" : "earth",
+      H.world ?? "earth",
     ].join();
-    this.seaPhys = miller ? MILLER_SEA : EARTH_SEA;
+    this.seaPhys = miller ? MILLER_SEA : H.world === "titan" ? TITAN_SEA : EARTH_SEA;
     if (key !== this.seaKey) {
       this.seaKey = key;
       this.seaFft.setSpectrum(seaCascades(seaSystems(state, H.to), 1, this.seaPhys));

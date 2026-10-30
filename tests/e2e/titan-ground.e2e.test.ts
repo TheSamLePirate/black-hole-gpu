@@ -5,8 +5,8 @@ import { readPng } from "./lib/png";
 
 // PLAN-PLANETES-AAA P8 (Titan): its ground under its haze — the sky's light many times scattered (trace.wgsl setAir: the
 // orange sky from the ground, the disc light from space), its relief (titanRelief: dunes, hills — the walker on the CPU's
-// twin) drawn by the body raster in its own kernel (NEAR_KIND 5), its finer map (Cassini ISS) and its seas (Cassini's radar:
-// Ontario Lacus, a methane mirror): the walker on the equatorial dunes, Ontario Lacus from 300 m at its local noon, the disc
+// twin) drawn by the body raster in its own kernel (NEAR_KIND 5), its finer map (Cassini ISS), its radar's tiles (its albedo's
+// detail) and its seas (Cassini's radar: Ontario Lacus, a methane mirror, its waves by FFT at Titan's gravity): the walker on the equatorial dunes, Ontario Lacus from 300 m at its local noon, the disc
 // from 6 000 km; Titan's kernel and raster in, its map loaded, no GPU error.
 // Duration: ~6 min on kerr-mini.
 // Done when: every view shot, the walker on the ground, no GPU error.
@@ -43,7 +43,7 @@ describe.skipIf(!E2E)("P8: Titan's ground", () => {
   };
   const state = () =>
     app.js<Record<string, unknown>>(
-      `(() => { const r = __bh.renderer; return { kind: (r.featureKey >> 26) & 7, raster: r.bodyRasterNow, hd: r.hdMap.name, pipeline: r.earthPipelineNow?.(__bh.settings), gpuErrors: r.gpuErrors }; })()`,
+      `(() => { const r = __bh.renderer; return { kind: (r.featureKey >> 26) & 7, raster: r.bodyRasterNow, hd: r.hdMap.name, pipeline: r.earthPipelineNow?.(__bh.settings), gpuErrors: r.gpuErrors, tiles: { world: r.moonTiles.world, drawn: r.moonTiles.drawn, imagery: r.moonTiles.imagery, failed: r.moonTiles.failed }, sea: r.seaHere?.world ?? null }; })()`,
     );
 
   test("the walker on the equatorial dunes, standing on the CPU's ground, Titan's kernel and raster in", async () => {
@@ -56,6 +56,8 @@ describe.skipIf(!E2E)("P8: Titan's ground", () => {
     await shot("dunes");
     expect(st.kind).toBe(5);
     expect(st.raster).toBe(true);
+    // (its radar's tiles in — the albedo's detail, moon-tiles.ts WORLDS.titan)
+    expect((st.tiles as { world: string }).world).toBe("titan");
     expect(st.hd).toBe("titan");
     expect(Math.abs(h)).toBeLessThan(0.1);
     expect(st.gpuErrors).toBe(0);
@@ -70,6 +72,8 @@ describe.skipIf(!E2E)("P8: Titan's ground", () => {
     console.log(`  ontario: ${JSON.stringify(st)}`);
     await shot("ontario");
     expect(st.kind).toBe(5);
+    // (its waves by FFT at Titan's gravity — renderer seaFftParams: the sea near)
+    expect(st.sea).toBe("titan");
     expect(st.gpuErrors).toBe(0);
   }, 900_000);
 

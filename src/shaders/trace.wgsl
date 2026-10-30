@@ -8632,7 +8632,9 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
       let aur = pow(max(dot(r, Ls), 0.0), 12.0);
       let day = smoothstep(-0.15, 0.25, mu0);
       let Lsky = AIR.sky / PI * (1.8 - 1.2 * max(dot(r, q), 0.0) + 4.0 * aur) * day;
-      let glint = sunThrough(0.0, mu0) * pow(max(dot(r, Ls), 0.0), 900.0) * 150.0;
+      // (the glint's spread: the unresolved slopes' — TITAN_WET over 1 —, a mirror's 900 by default)
+      let sp = select(900.0, 2.0 / max((TITAN_WET - 1.0) * (TITAN_WET - 1.0), 1e-4), TITAN_WET > 1.0001);
+      let glint = sunThrough(0.0, mu0) * pow(max(dot(r, Ls), 0.0), min(sp, 4000.0)) * (sp + 2.0) / 6.0;
       return E * (F * (Lsky + glint) + (1.0 - F) * 0.015 / PI * AIR.sky * day);
     }
   }
@@ -9674,8 +9676,17 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
           t = ts;
           nh.t = -1.0;
           TITAN_WET = 1.0;
-          let g = titanRipples(toBody(look * ts) * P.near4.w + P.fine1.xyz, reliefFoot(ts), P.time.x * P.near5.w);
-          HD_N = normalize(qs + g - qs * dot(g, qs));
+          if (P.seafft[0].x > 0.5 && P.sea[1].w > 0.0) {
+            // (its waves by FFT — the sea's spectrum at its gravity, renderer seaFftParams: Pierson–Moskowitz's, centimetres —,
+            // their slopes the pixel does not resolve widening the Sun's glint)
+            SEA_D = toBody(look) * (ts * P.near4.w);
+            let sw = seaWavesFft(qs, P.sea[0].xyz, P.sea[1].xyz, reliefFoot(ts));
+            HD_N = normalize(sw.n);
+            TITAN_WET = 1.0 + clamp(sqrt(sw.vu + sw.vc + P.seafft[2].x + P.seafft[2].y), 0.002, 0.3);
+          } else {
+            let g = titanRipples(toBody(look * ts) * P.near4.w + P.fine1.xyz, reliefFoot(ts), P.time.x * P.near5.w);
+            HD_N = normalize(qs + g - qs * dot(g, qs));
+          }
           HD_N_ON = true;
         }
       }
@@ -9692,7 +9703,9 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
         HD_N = normalize(moonNormal(nh.qb, foot) - gc);
       }
       HD_N_ON = true;
-      ALB_TINT = moonDetail(nh.qb, foot);
+      // (Titan's: its radar's — no visible albedo, a texture of its dunes and channels: two thirds of it)
+      let md = moonDetail(nh.qb, foot);
+      ALB_TINT = select(md, mix(vec3f(1.0), md, 0.65), titan);
       // (the finest ground, near — fineGround, the airless worlds' —: its slope by differences, its stones lighter)
       if (P.fine0.w > 0.5 && foot < 8.0) {
         let x = toBody(look * nh.t) * mR + P.fine1.xyz;

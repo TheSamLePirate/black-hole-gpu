@@ -25,6 +25,10 @@ export const EARTH_SEA: SeaPhysics = { g: G, depth: Infinity };
 export const MILLER_SEA: SeaPhysics = { g: 1.3 * G, depth: 0.5 };
 /** Miller's wind: a steady breeze [m/s] and the way it blows towards [rad from the north, eastwards] */
 export const MILLER_WIND = { U: 9, to: 1.1 };
+/** Titan's seas of methane (PLAN-PLANETES-AAA P8): 1.352 m/s², deep — Kraken, Ligeia over 100 m */
+export const TITAN_SEA: SeaPhysics = { g: 1.352, depth: Infinity };
+/** its wind over them: a breath of 0.6 m/s (Cassini's glints: seas mostly mirror-smooth, waves of centimetres) */
+export const TITAN_WIND = { U: 0.6, to: 0.9 };
 /** a wave's pulsation [rad/s] at a wavenumber k [rad/m], and its group derivative dω/dk */
 export function dispersion(k: number, p: SeaPhysics = EARTH_SEA): { w: number; dwdk: number } {
   if (!Number.isFinite(p.depth)) {
