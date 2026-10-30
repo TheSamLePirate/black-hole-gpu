@@ -3,9 +3,17 @@
 // noises a sample were half the cost of the thick disk) —; for the clouds (docs/PLAN-NUAGES-AAA.md N4: Nubis's noises),
 // g a Perlin–Worley — a Perlin fBm remapped by an inverted Worley fBm: billowing domes, the cauliflower's —, b and a two
 // inverted Worley fBms twice and four times finer — the detail that erodes a cloud's edges into wisps.
+// Its depth holds two contents (PLAN-PLANETES-AAA P9 G8): the noises in slices 1–128, a guard on each side (slice 0 a copy
+// of the noises' last, 129 of their first: the filtering wraps them as the sampler's repeat did — trace.wgsl noiseAt); then
+// the giants' turbulence tile (system/giant-tile.ts) in slices 131–258, its frames in time, a guard on each side again.
 
 const N = 128;
 export const NOISE_PERIOD = 32;
+/** the texture's depth: the noises and their guards, then the giants' tile and its guards (trace.wgsl NOISE_DZ) */
+export const NOISE_DEPTH = 260;
+/** the giants' tile's first frame's slice and its frames (trace.wgsl TILE_Z0, TILE_FRAMES) */
+export const TILE_Z0 = 131;
+export const TILE_FRAMES = 128;
 
 const BAKE = `
 fn pcg(v: u32) -> u32 {
@@ -81,10 +89,11 @@ struct Slice { z: f32 };
 
 export function bakeNoise3d(device: GPUDevice): GPUTexture {
   const tex = device.createTexture({
-    size: [N, N, N],
+    size: [N, N, NOISE_DEPTH],
     dimension: "3d",
     format: "rgba16float",
-    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+    // (the giants' tile written in by a compute pass: giant-tile.ts)
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
   });
   const mod = device.createShaderModule({ code: BAKE, label: "noise bake" });
   const pipe = device.createRenderPipeline({
@@ -96,12 +105,13 @@ export function bakeNoise3d(device: GPUDevice): GPUTexture {
   const bufs: GPUBuffer[] = [];
   const enc = device.createCommandEncoder();
   const view = tex.createView();
-  for (let z = 0; z < N; z++) {
+  // (slice s the noises' z = s − 1, wrapped: the guards 0 and N + 1 their last and first)
+  for (let s = 0; s < N + 2; s++) {
     const buf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    device.queue.writeBuffer(buf, 0, new Float32Array([z, 0, 0, 0]));
+    device.queue.writeBuffer(buf, 0, new Float32Array([(s + N - 1) % N, 0, 0, 0]));
     bufs.push(buf);
     const pass = enc.beginRenderPass({
-      colorAttachments: [{ view, depthSlice: z, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+      colorAttachments: [{ view, depthSlice: s, loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
     });
     pass.setPipeline(pipe);
     pass.setBindGroup(

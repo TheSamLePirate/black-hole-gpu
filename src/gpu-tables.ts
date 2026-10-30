@@ -52,4 +52,7 @@ export const RING_R0_KM = 69800;
 export const RING_N = 71100;
 export const TABLE_RING = TABLE_ORTHO + ORTHO_VEC4S;
 export const RING_VEC4S = RING_N / 4;
-export const TABLE_VEC4S = TABLE_RING + RING_VEC4S;
+/** the giants' zonal winds (system/giant-winds.ts; trace.wgsl giantWind): 146 values, four a vec4 */
+export const TABLE_WIND = TABLE_RING + RING_VEC4S;
+export const WIND_VEC4S = 37;
+export const TABLE_VEC4S = TABLE_WIND + WIND_VEC4S;

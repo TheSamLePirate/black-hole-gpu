@@ -143,5 +143,19 @@ export const SPOTS = [
     ...(SHOWCASE[b] !== `${b[0]!.toUpperCase()}${b.slice(1)}: from orbit`
       ? [{ body: b, view: "cine" as View, set: preset(SHOWCASE[b]!) }]
       : []),
+    // (P9 G8: Jupiter near, its turbulence tile on — the Great Red Spot from 25 000 km at its noon)
+    ...(b === "jupiter"
+      ? [
+          {
+            body: b,
+            view: "low" as View,
+            set: scene(
+              "P9 jupiter low",
+              "Jupiter: from orbit",
+              `time: ${109.6 + 49.7}, target: "jupiter", ship: false, pose: { body: "jupiter", altKm: 25000, at: [-22, 126.4], look: "jupiter", off: [0, 0] }`,
+            ),
+          },
+        ]
+      : []),
   ]),
 ] as Spot[];

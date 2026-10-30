@@ -3,11 +3,13 @@ import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 import { readPng } from "./lib/png";
 
-// PLAN-PLANETES-AAA P9 G1–G2 (the giants' clouds moving): Jupiter's and Saturn's bands carried by their zonal winds
-// (trace.wgsl giantFlow — two readings half a cycle apart, faded), the Great Red Spot turning on itself, eddies under the
-// map's texel up close — Jupiter from orbit at the scene's time and one turn later (the same face under the same Sun: only its
-// clouds moved, the two images differ), the Great Red Spot from 25 000 km at both times, Saturn from orbit. No GPU error.
-// Duration: ~7 min on kerr-mini.
+// PLAN-PLANETES-AAA P9 G1–G8 (the giants' clouds moving): Jupiter's and Saturn's bands carried by their zonal winds
+// (trace.wgsl giantFlow — two readings half a cycle apart, faded), the named vortices turning (the Great Red Spot, the
+// Oval BA; Saturn's polar cyclone and hexagon), the turbulence tile under the map's texel up close (giantTurb) — each view
+// at the scene's time and one turn later (the same face under the same Sun: only its clouds moved, the two images differ);
+// the Great Red Spot again at the first time after the jump — the same image: the clouds a function of the date alone —;
+// Saturn's rings among their blocks. No GPU error.
+// Duration: ~12 min on kerr-mini.
 // Done when: every view shot at both times, the images compared, no GPU error.
 
 const OUT = process.env.OUT ?? "remote-results/giants-flow";
@@ -18,6 +20,18 @@ const TURN = { jupiter: (9.925 * 3600) / (4.925490947e-6 * 1e8), saturn: (10.656
 const T0 = 109.6;
 // (the Great Red Spot at its noon: the Sun over Jupiter's 13.0° E at T0, 49.62° further west every 10 M)
 const GRS_NOON = T0 + 49.7;
+// (the Oval BA at its noon: 57.7° W, the Sun 70.7° west of where it was at T0)
+const OVAL_NOON = T0 + 14.25;
+// (Saturn's north pole lit: at the scenes' 2067 its polar night still reaches 11° from the pole, over the hexagon — its
+// northern summer solstice, 2076, 9.4 years on: 64 069 M a year)
+const SATURN_NORTH = T0 + 9.4 * 64069;
+// (the band's flank at 150° E: lit in the Great Red Spot's afternoon)
+const START: Record<string, number> = {
+  "jupiter-grs": GRS_NOON,
+  "jupiter-flank": GRS_NOON,
+  "jupiter-oval": OVAL_NOON,
+  "saturn-pole": SATURN_NORTH,
+};
 const view = (name: string, body: string, pose: string, time: number) =>
   `__bh.presets.${name} = { ...__bh.presets["Jupiter: from orbit"], time: ${time}, target: "${body}", ship: false, pose: ${pose} }; __bh.game.preset("${name}"); ${HOLD}`;
 
@@ -91,14 +105,18 @@ describe.skipIf(!E2E)("P9 G1–G2: the giants' clouds moving", () => {
   for (const [name, body, pose] of [
     ["jupiter-orbit", "jupiter", `{ tilt: 60, body: "jupiter", altKm: 200000, phase: 30, look: "jupiter" }`],
     ["jupiter-grs", "jupiter", `{ body: "jupiter", altKm: 25000, at: [-22, 126.4], look: "jupiter", off: [0, 0] }`],
+    // (G8: a band's flank from 8 000 km, under the map's texel; the Oval BA; Saturn's north pole from above)
+    ["jupiter-flank", "jupiter", `{ body: "jupiter", altKm: 8000, at: [-17, 150], look: "jupiter", off: [0, 0] }`],
+    ["jupiter-oval", "jupiter", `{ body: "jupiter", altKm: 25000, at: [-32, -57.7], look: "jupiter", off: [0, 0] }`],
+    ["saturn-pole", "saturn", `{ body: "saturn", altKm: 90000, at: [89, 0], look: "saturn", off: [0, 0] }`],
     ["saturn-orbit", "saturn", `{ tilt: 60, body: "saturn", altKm: 300000, phase: 40, at: [-30, 0], look: "saturn" }`],
     // (15 000 km over the rings' plane above the A ring, towards Saturn: Cassini's kilometre profile, the wakes, the spokes)
     ["saturn-rings", "saturn", `{ body: "saturn", altKm: 67664, at: [6.8, 0], look: "saturn", off: [0, 0] }`],
   ] as const)
     test(`${name}: at the scene's time and one turn later, the clouds moved`, async () => {
       for (const [k, t] of [
-        ["a", name === "jupiter-grs" ? GRS_NOON : T0],
-        ["b", (name === "jupiter-grs" ? GRS_NOON : T0) + TURN[body]],
+        ["a", START[name] ?? T0],
+        ["b", (START[name] ?? T0) + TURN[body]],
       ] as const) {
         await app.js(`(() => { ${view(`p9${name.replace("-", "")}${k}`, body, pose, t)} return 1; })()`);
         await settle(body);
@@ -106,6 +124,15 @@ describe.skipIf(!E2E)("P9 G1–G2: the giants' clouds moving", () => {
       }
       const d = await diff(`${name}-a`, `${name}-b`);
       console.log(`  ${name}: the two times differ by ${d.toFixed(2)} /255 over the image's middle`);
+      // (G8: back at the first time — the date jumped there and back —, the same clouds)
+      if (name === "jupiter-grs") {
+        await app.js(`(() => { ${view(`p9${name.replace("-", "")}c`, body, pose, GRS_NOON)} return 1; })()`);
+        await settle(body);
+        await shot(`${name}-c`);
+        const back = await diff(`${name}-a`, `${name}-c`);
+        console.log(`  ${name}: back at the first time, ${back.toFixed(3)} /255 from it`);
+        expect(back).toBeLessThan(0.1 * d);
+      }
       // (the rings' view: only their spokes move from one turn to the next)
       expect(d).toBeGreaterThan(name === "saturn-rings" ? 0.1 : 0.2);
       expect(await errors()).toBe(0);

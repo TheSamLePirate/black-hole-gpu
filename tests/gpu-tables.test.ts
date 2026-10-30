@@ -16,6 +16,8 @@ import {
   TABLE_WARP,
   TABLE_GEOID,
   TABLE_RING,
+  TABLE_WIND,
+  WIND_VEC4S,
   RING_VEC4S,
   RING_N,
   RING_R0_KM,
@@ -24,6 +26,7 @@ import {
   ORTHO_VEC4S,
 } from "../src/gpu-tables";
 import { GEOID_H, GEOID_W } from "../src/system/geoid-grid";
+import { GIANT_WINDS } from "../src/system/giant-winds";
 import { TERRAIN_CACHE_VEC4S } from "../src/system/terrain-cache-layout";
 import { WARP_LEVELS, WARP_N } from "../src/system/warp-grid";
 import { sceneryShader } from "../src/system/scenery";
@@ -57,13 +60,17 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
       TSM_VEC4S +
       GEOID_VEC4S +
       ORTHO_VEC4S +
-      RING_VEC4S,
+      RING_VEC4S +
+      WIND_VEC4S,
   );
   expect(constU("GEOID_OFF")).toBe(TABLE_GEOID);
   expect(constU("ORTHO_OFF")).toBe(TABLE_ORTHO);
   expect(TABLE_ORTHO).toBe(TABLE_GEOID + GEOID_VEC4S);
   expect(TABLE_RING).toBe(TABLE_ORTHO + ORTHO_VEC4S);
-  expect(TABLE_VEC4S).toBe(TABLE_RING + RING_VEC4S);
+  expect(TABLE_WIND).toBe(TABLE_RING + RING_VEC4S);
+  expect(TABLE_VEC4S).toBe(TABLE_WIND + WIND_VEC4S);
+  expect(constU("WIND_OFF")).toBe(TABLE_WIND);
+  expect(GIANT_WINDS.length).toBeLessThanOrEqual(WIND_VEC4S * 4);
   expect(constU("RING_OFF")).toBe(TABLE_RING);
   expect(constU("RING_N")).toBe(RING_N);
   expect(Number(/const RING_R0_KM = ([\d.]+);/.exec(wgsl)?.[1])).toBe(RING_R0_KM);

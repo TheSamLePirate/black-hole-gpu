@@ -82,6 +82,8 @@ import { moonLightShare, SHADE_VEC4S, shadowParams } from "./eclipse/shadows-gpu
 import { lookOf } from "./skychart";
 import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, seasPixels, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
+import { bakeGiantTile, readGiantTile } from "./system/giant-tile";
+import { GIANT_WINDS } from "./system/giant-winds";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
 import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, earthDetailFor, effectiveQuality, earthMapQuality } from "./quality-policy";
@@ -104,6 +106,7 @@ import {
   TABLE_VEC4S,
   TABLE_RING,
   RING_N,
+  TABLE_WIND,
   TABLE_WALK,
   TABLE_WARP,
 } from "./gpu-tables";
@@ -229,6 +232,7 @@ import {
   powerLawRGB,
 } from "./physics";
 import type { Settings } from "./settings";
+import { secondsPerM, timeRate } from "./clock";
 import { encodeEXR, encodePNG16 } from "./exporters";
 import { AU_M, C_MPS } from "./units";
 import { windFrom } from "./wind";
@@ -692,6 +696,9 @@ export class Renderer {
   private postOcclusion!: GPUComputePipeline;
   private postStars!: GPUComputePipeline;
   private noise3d!: GPUTexture;
+  /** the giants' turbulence tile (system/giant-tile.ts: PLAN-PLANETES-AAA P9 G8) in the noise texture: baked once a giant is
+   *  near (its finer maps' reach), the time its bake took [ms] — on the clock and the GPU's */
+  giantTile: { state: "none" | "baking" | "done"; ms: number; gpuMs: number } = { state: "none", ms: 0, gpuMs: 0 };
   private noiseSampler!: GPUSampler;
   private postBeamV!: GPUComputePipeline;
   /** the display's and the post chain's pipelines (async compiles, awaited with the tracer's core) */
@@ -1230,6 +1237,7 @@ export class Renderer {
     });
     // (the disk's turbulence: a tiling noise baked once)
     this.noise3d = bakeNoise3d(device);
+    this.giantTile = { state: "none", ms: 0, gpuMs: 0 };
     this.noiseSampler = device.createSampler({
       magFilter: "linear",
       minFilter: "linear",
@@ -1526,6 +1534,8 @@ export class Renderer {
     void loadRingProfile().then((f) => {
       if (f) device.queue.writeBuffer(this.bodyBuf, TABLE_RING * 16, f);
     });
+    // (the giants' zonal winds: system/giant-winds.ts)
+    device.queue.writeBuffer(this.bodyBuf, TABLE_WIND * 16, GIANT_WINDS);
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
@@ -3023,6 +3033,8 @@ export class Renderer {
           mouth: mouthAll ? -1 : mouth.length,
         };
     }
+    // (the clock's rate [game s / s]: the giants' eddies held when it is fast — trace.wgsl giantTurb)
+    const giantRate = s.animate ? Math.abs(timeRate(s) * secondsPerM(s)) : 0;
     // light probe for the spaceship: a new frame's weight (1 after a scene reset: no stale light);
     // its axes: the planet's probe camera's, else fixed (the ZAMO's, or the throat's), so that it
     // keeps a long running mean while the camera turns — shortened as what it sees moves (a texel
@@ -3032,7 +3044,7 @@ export class Renderer {
       // (a sixteenth of it: one texel of each 4×4 block, written over)
       if (o.probe.slice !== undefined) set(47, 1, o.probe.slice, 2, 1);
       else set(47, 1, 0, 1, 1);
-      set(55, ...cam.right, 0);
+      set(55, ...cam.right, giantRate);
       set(56, ...cam.up, 0);
       set(57, ...cam.fwd, 0);
     } else {
@@ -3059,7 +3071,7 @@ export class Renderer {
         this.envReset ? 1 : slow && !spread ? 2 : 0,
         window,
       );
-      set(55, 1, 0, 0, 0);
+      set(55, 1, 0, 0, giantRate);
       set(56, 0, 1, 0, 0);
       set(57, 0, 0, 1, 0);
       this.shipProbeAxes = [cam.right, cam.up, cam.fwd];
@@ -3134,6 +3146,8 @@ export class Renderer {
       if (pin) this.requestHd(pin);
       else if (nearMap && HD_SETS[nearMap] && dN < hdAt) this.requestHd(nearMap);
       else if (this.hdMap.name && !(nearMap === this.hdMap.name && dN < 2 * hdAt)) this.releaseHd();
+      // (the giants' turbulence: its tile baked the first time one is that near — trace.wgsl giantFlow)
+      if ((nearMap === "jupiter" || nearMap === "saturn") && dN < 2 * hdAt && this.giantTile.state === "none") void this.bakeGiantTile();
     }
     const hd = this.hdMap;
     const hdOn = !!hd.name && bodies.some((b) => solarBody(b.id)?.map === hd.name);
@@ -8632,6 +8646,23 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** The current kernel settled: its own, its realtime cascade done (its probe's, its aerial table's pass), the
    *  surface and the scenery asked for in it — a measure taken now is this kernel's (variantReady alone let a
    *  tuned variant be measured without its aerial table, or its scenery: tests/e2e/perf-suite.e2e.test.ts). */
+  /** Bakes the giants' turbulence tile into the noise texture (system/giant-tile.ts; its settings overridable: tests). */
+  async bakeGiantTile(o: Parameters<typeof bakeGiantTile>[2] = {}) {
+    const tex = this.noise3d;
+    this.giantTile = { state: "baking", ms: 0, gpuMs: 0 };
+    const t = await bakeGiantTile(this.device, tex, o);
+    if (tex !== this.noise3d) return;
+    this.giantTile = { state: "done", ...t };
+    if (!this.offline) this.invalidate();
+  }
+  /** The giants' tile read back (its frames and guards): tests, captures. */
+  readGiantTile() {
+    return readGiantTile(this.device, this.noise3d);
+  }
+  /** The noise texture (its noises, then the giants' tile): the e2e's shader slices read it. */
+  get noiseTexture() {
+    return this.noise3d;
+  }
   get kernelsSettled() {
     if (this.featureKey === FEATURES_ALL) return false;
     const v = this.variants.get(this.featureKey);

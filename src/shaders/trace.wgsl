@@ -75,7 +75,7 @@ struct Params {
                    // frame when it is there, else the mouth: 0); w = radius of the Dneg region (r(ℓ_far))
   // the light probe's axes (components along the ZAMO axes, like the look directions): the camera's
   // for a planet's probe; fixed ones for the Ranger's (its texels keep still when the camera turns)
-  envX: vec4f,
+  envX: vec4f,     // w: the clock's rate [game s / s] (the giants' eddies held when fast — giantTurb)
   envY: vec4f,
   envZ: vec4f,
   // the Earth (its maps loaded): on (0/1), the clouds' drift about its pole [rad], the city lights'
@@ -412,6 +412,8 @@ const GEOID_OFF = 822968u;
 const RING_OFF = 1082182u;
 const RING_N = 71100u;
 const RING_R0_KM = 69800.0;
+// the giants' zonal winds (gpu-tables.ts TABLE_WIND, system/giant-winds.ts): 146 values, four a vec4
+const WIND_OFF = 1099957u;
 const GEOID_W = 1440u;
 const GEOID_H = 720u;
 // the orthophotos' levels (gpu-tables.ts TABLE_ORTHO, system/earth-tiles.ts orthoParams): three vec4s each
@@ -1187,64 +1189,201 @@ fn planetMapAt(m: u32, uv: vec2f) -> vec3f {
   if (m < MAPS_HI) { return textureSampleLevel(mapHi, bgSamp, uv, i32(m), mapLod()).rgb; }
   return textureSampleLevel(mapLo, bgSamp, uv, i32(m - MAPS_HI), max(mapLod() - 1.0, 0.0)).rgb;
 }
-// The giants' clouds moving (PLAN-PLANETES-AAA P9 G1, G2): each latitude's band carried east by its zonal wind — Cassini's
-// profiles, approximated every 2.5° (Jupiter's alternating jets, 170 m/s at 24° N; Saturn's equatorial jet, 450 m/s),
-// System III —, read in two phases of GIANT_CYCLE seconds half a cycle apart and faded (the map not sheared without end);
-// Jupiter's Great Red Spot turning on itself (an anticyclone: anticlockwise in the south, ~6 days at its edge, its core
-// slower); and below the map's texel, eddies — a warped noise moving the reading by a texel or two, as the footprint
-// resolves it. u: the map's coordinates at lon, lat, τ seconds into the phase
+// The giants' clouds moving (PLAN-PLANETES-AAA P9 G1, G2, G8): each latitude's band carried east by its zonal wind —
+// Cassini's profiles, approximated every 2.5° (Jupiter's alternating jets, 170 m/s at 24° N; Saturn's equatorial jet, 450
+// m/s), System III —, read in two phases of GIANT_CYCLE seconds half a cycle apart and faded (the map not sheared without
+// end); Jupiter's Great Red Spot turning on itself (an anticyclone: anticlockwise in the south, ~6 days at its edge, its core
+// slower); and below the map's texel, the turbulence tile (system/giant-tile.ts: a β-plane flow baked into the noise
+// texture's second half, its frames in time) — its displacement moving the map's reading by a few texels, its dye adding the
+// contrast the map has not there — at two scales, each renewed by its own two phases (Neyret's advected textures: never
+// stretched without end), its strength the wind's shear (the jets' flanks roll up, their cores keep smooth). All a function of
+// the time alone: the same date, the same clouds.
 const GIANT_CYCLE = 36000.0;
+const GTILE_Z0 = 131.0;
+const GTILE_FRAMES = 128.0;
 // Jupiter's or Saturn's albedo at nrm (its axes) moving: two readings of giantFlow half a cycle apart, faded (in one loop:
 // every call site is a copy the compiler builds); b2y its albedo's scale
 fn giantAlbedo(m: u32, nrm: vec3f, tEm: f32, b2y: f32) -> vec3f {
   let lon = atan2(nrm.y, nrm.x);
   let lat = asin(clamp(nrm.z, -1.0, 1.0));
-  let ph = fract(tEm * P.near5.w / GIANT_CYCLE);
+  let tS = tEm * P.near5.w;
+  let ph = fract(tS / GIANT_CYCLE);
+  let wind = giantWind(m, lat);
+  // (the tile under the map's texel only, as the pixel's footprint resolves it: never from orbit. The footprint the
+  // pixel's own — mapLodV unclamped: mapLod() stops at the coarse map's texel, 220 km on Jupiter, above the finer map's)
+  let texA = TAU / select(f32(textureDimensions(mapHi).x), P.hd.w, i32(m) == i32(P.hd.x));
+  let fpA = exp2(mapLodV) * TAU / 2048.0;
+  let wd = clamp(log2(texA / max(fpA, 1e-9)) * 0.5, 0.0, 1.0);
   var t = vec3f(0.0);
   for (var j = 0u; j < 2u; j++) {
     let w = select(1.0 - abs(2.0 * ph - 1.0), abs(2.0 * ph - 1.0), j == 1u);
-    t += w * planetMapAt(m, giantFlow(m, lon, lat, fract(ph + 0.5 * f32(j)) * GIANT_CYCLE, nrm));
+    let tau = fract(ph + 0.5 * f32(j)) * GIANT_CYCLE;
+    let ll = giantFlow(m, lon, lat, tau, wind.x, tS);
+    var uv = vec2f(0.5 + ll.x / TAU, 0.5 - ll.y / PI);
+    var c = 1.0;
+    if (wd > 0.0) {
+      // (a named vortex's slow core calm: its collar's shear keeps the tile)
+      let d = giantTurb(ll.xy, tS, j, texA, fpA, wind.y) * wd * (1.0 - 0.7 * ll.z);
+      uv += d.xy;
+      c = 1.0 + d.z;
+    }
+    t += w * c * planetMapAt(m, uv);
+  }
+  // (Saturn's north pole: the hexagon's jet a darker lane, the polar cyclone's eye and its bright ring — the map has none)
+  if (m == 5u && lat > 1.13) {
+    let rho = 1.5707963 - lat;
+    t *= 1.0 - 0.22 * exp(-sq((rho - saturnHexRho(lon, tS)) / 0.016)) * smoothstep(1.13, 1.2, lat);
+    t *= (1.0 - 0.35 * exp(-sq(rho / 0.0175))) * (1.0 + 0.12 * exp(-sq((rho - 0.035) / 0.01)));
   }
   return min(t * b2y * select(1.0, P.hd.y, i32(m) == i32(P.hd.x)), vec3f(0.95));
 }
-fn giantWind(m: u32, lat: f32) -> f32 {
+// Saturn's hexagon (Cassini, Sánchez-Lavega et al. 2014): a Rossby wave of number 6 on the jet near 76° N planetocentric,
+// fixed in System III but for its drift (+0.0128°/day, 2008–2014): its colatitude at longitude lon [rad] — the vertices at
+// HEX_RHO, the edges' middles nearer the pole
+const HEX_RHO = 0.2443;
+fn saturnHexRho(lon: f32, tS: f32) -> f32 {
+  let th = lon - 2.234e-4 * tS / 86400.0;
+  let a = th - 1.0471976 * floor(th / 1.0471976) - 0.5235988;
+  return HEX_RHO * 0.8660254 / cos(a);
+}
+// the zonal wind at lat [m/s] and its shear (its change over 2.5° of latitude, smooth): Cassini's profiles every 2.5°, from
+// the tracer's tables (gpu-tables.ts TABLE_WIND — a constant array indexed at run time is copied to every call's stack)
+fn giantWind(m: u32, lat: f32) -> vec2f {
   let x = clamp((lat * 57.2957795 + 90.0) / 2.5, 0.0, 71.999);
   let i = u32(x) + select(73u, 0u, m == 4u);
-  let a = array<f32, 146>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 8.0, 15.0, 8.0, 0.0, 12.0, 25.0, 10.0, -5.0, 12.0, 30.0, 10.0, -10.0, 21.0, 25.0, -12.0, 13.0, 38.0, 27.0, -15.0, -40.0, -52.0, -5.0, 39.0, 70.0, 120.0, 110.0, 89.0, 70.0, 89.0, 113.0, 127.0, 60.0, 32.0, 0.0, -28.0, -20.0, 108.0, 97.0, 10.0, -7.0, 23.0, 40.0, 2.0, 10.0, 21.0, -1.0, 3.0, 25.0, 10.0, -5.0, 5.0, 15.0, 8.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 30.0, 55.0, 46.0, 28.0, 10.0, 35.0, 60.0, 76.0, 54.0, 32.0, 10.0, 13.0, 16.0, 19.0, 40.0, 65.0, 90.0, 130.0, 170.0, 210.0, 250.0, 288.0, 325.0, 362.0, 400.0, 412.0, 425.0, 438.0, 450.0, 450.0, 450.0, 450.0, 450.0, 438.0, 425.0, 412.0, 400.0, 362.0, 325.0, 288.0, 250.0, 210.0, 170.0, 130.0, 90.0, 65.0, 40.0, 24.0, 44.0, 55.0, 30.0, 14.0, 36.0, 58.0, 80.0, 61.0, 42.0, 24.0, 42.0, 71.0, 99.0, 82.0, 37.0, 0.0, 0.0, 0.0, 0.0);
-  return mix(a[i], a[i + 1u], x - floor(x));
+  // (the shear at the nodes — central differences —, interpolated: no step at the table's 2.5°)
+  var a: array<f32, 4>;
+  for (var n = 0u; n < 4u; n++) {
+    let k = clamp(i + n, 1u, 146u) - 1u;
+    a[n] = bodies[WIND_OFF + (k >> 2u)][k & 3u];
+  }
+  return vec2f(mix(a[1], a[2], x - floor(x)), mix(0.5 * (a[2] - a[0]), 0.5 * (a[3] - a[1]), x - floor(x)));
 }
-fn giantFlow(m: u32, lon0: f32, lat: f32, tau: f32, nrm: vec3f) -> vec2f {
+// the matter at lon0, lat now (the time tS [s]): where it was τ seconds ago — carried by the zonal wind u [m/s], or turned
+// by a named vortex (G8c) — its longitude and latitude; z: in a vortex's slow core (0…1)
+fn giantFlow(m: u32, lon0: f32, lat: f32, tau: f32, u: f32, tS: f32) -> vec3f {
   let R = select(60268e3, 71492e3, m == 4u);
-  var lon = lon0 - giantWind(m, lat) * tau / (R * max(cos(lat), 0.05));
-  var la = lat;
+  var ll = vec2f(lon0 - u * tau / (R * max(cos(lat), 0.05)), lat);
+  var core = 0.0;
   if (m == 4u) {
-    // (the Great Red Spot: 22° S, 126.4° E in the map, 18° × 10.5°)
-    let c = vec2f(2.2066, -0.384);
-    var d = vec2f(lon - c.x, la - c.y);
-    d.x -= TAU * round(d.x / TAU);
-    let e = vec2f(d.x / 0.157, d.y / 0.0916);
-    let r = length(e);
-    if (r < 1.3) {
-      let ang = -TAU * tau / 518400.0 * smoothstep(1.3, 0.8, r) * smoothstep(0.0, 0.7, r);
-      let cs = vec2f(cos(ang), sin(ang));
-      let er = vec2f(e.x * cs.x - e.y * cs.y, e.x * cs.y + e.y * cs.x);
-      lon = c.x + er.x * 0.157;
-      la = c.y + er.y * 0.0916;
+    // (the Great Red Spot, 22° S 126.4° E in the map, 18° × 10.5°: its high-speed ring ~180 m/s — Wong et al. 2021, HST
+    // 2009–2020 —, ~3.4 days round; the Oval BA, 32.1° S 57.7° W, 8.4° × 8°: 135 m/s at its rim — Hueso et al. 2009.
+    // Anticyclones: anticlockwise in the south. Their drift in System III a few m/s: none over a phase)
+    let V = array<vec4f, 2>(vec4f(2.2066, -0.384, 0.157, 0.0916), vec4f(-1.0071, -0.5603, 0.0733, 0.0698));
+    for (var i = 0u; i < 2u; i++) {
+      let a = giantVortex(lon0, lat, tau, V[i].xy, V[i].zw, select(135.0, 180.0, i == 0u), R);
+      ll = mix(ll, a.xy, a.z);
+      core = max(core, a.w);
+    }
+  } else {
+    // (Saturn's north: the polar cyclone — its jet ~150 m/s at 88° N, eastward —; the hexagon's jet, the matter along its
+    // sides: on its streamline, its colatitude's departure from the circle carried with it)
+    let rho = 1.5707963 - lat;
+    if (rho < 0.42) {
+      let cm = 0.0349;
+      let vp = 150.0 * (rho / cm) * exp(0.5 * (1.0 - sq(rho / cm)));
+      let g = exp(-sq((rho - HEX_RHO) / 0.07));
+      let lon = lon0 - u * tau / (R * max(sin(rho), 0.05)) - vp * tau / (R * max(sin(rho), 1e-4));
+      // (the departure at the matter's longitude then and now — one copy of the hexagon)
+      var dh = vec2f(0.0);
+      for (var i = 0u; i < 2u; i++) { dh[i] = saturnHexRho(select(lon0, lon, i == 1u), tS) - HEX_RHO; }
+      ll = vec2f(lon, 1.5707963 - (rho + g * (dh.y - dh.x)));
     }
   }
-  var uv = vec2f(0.5 + lon / TAU, 0.5 - la / PI);
-  // (the eddies: under the map's texel, as the pixel's footprint resolves them)
-  let texA = TAU / select(f32(textureDimensions(mapHi).x), P.hd.w, i32(m) == i32(P.hd.x));
-  let fpA = exp2(mapLod()) * TAU / 2048.0;
-  let wd = clamp(log2(texA / max(fpA, 1e-9)) * 0.5, 0.0, 1.0);
-  if (wd > 0.0) {
-    let p = nrm / (texA * 6.0) + vec3f(0.0, 0.0, tau * 1e-5);
-    let oc = clamp(log2(texA / max(fpA, 1e-9)) + 1.0, 1.0, 4.0);
-    var w = vec2f(0.0);
-    for (var k = 0u; k < 2u; k++) { w[k] = tfbmF(p + f32(k) * vec3f(5.2, 1.3, 2.8), oc); }
-    uv += wd * 2.0 * texA * vec2f(w.x / TAU, w.y / PI);
+  return vec3f(ll, core);
+}
+// a named vortex at centre c (lon, lat), semi-axes e [rad]: where the matter at lon0, lat was τ seconds ago — turned on its
+// ellipse at an angular rate from its tangential speed (peak vm [m/s] on its long side at 0.8 of its radius, the core slower
+// as r², fading out by 1.3) —; z its weight (1 inside, 0 beyond 1.3), w its slow core's
+fn giantVortex(lon0: f32, lat: f32, tau: f32, c: vec2f, e: vec2f, vm: f32, R: f32) -> vec4f {
+  var d = vec2f(lon0 - c.x, lat - c.y);
+  d.x -= TAU * round(d.x / TAU);
+  let q = d / e;
+  let r = length(q);
+  if (r >= 1.3) { return vec4f(0.0); }
+  let v = vm * select(exp(-sq((r - 0.8) / 0.25)), sq(r / 0.8), r < 0.8);
+  let ang = -v * tau / (max(r, 1e-4) * R * max(e.x * cos(c.y), e.y));
+  let cs = vec2f(cos(ang), sin(ang));
+  let qr = vec2f(q.x * cs.x - q.y * cs.y, q.x * cs.y + q.y * cs.x);
+  return vec4f(c + qr * e, smoothstep(1.3, 1.0, r), smoothstep(0.75, 0.4, r));
+}
+// The turbulence under the map's texel at the matter's place ll (lon, lat) — nrm its direction now —, the time tS [s], in
+// the zonal flow's phase j: the map's reading moved (uv) and the dye's contrast (z). Three scales, tile periods 16, 3 and 0.6
+// of the map's texels (eddies of 1, 0.2, 0.04 texel): the coarse one renewed with the zonal flow's phases, the others 4 and
+// 16 times as often (the smaller eddies turn faster), each by its own two phases. The tile laid on bands of latitude 6°
+// high, each its whole number of periods round the planet, its own offset each cycle, its place warped by a slow noise (the
+// tile's repetition not seen), blended over their edges; by the pole a plane on the axis' side. Its strength the shear: 0.25 in the bands'
+// smooth cores, 1 on the jets' flanks.
+fn giantTurb(ll: vec2f, tS: f32, j: u32, texA: f32, fpA: f32, shear: f32) -> vec3f {
+  let I = clamp(abs(shear) / 40.0, 0.25, 1.0);
+  // (the matter's direction: the polar plane's, and the warp's — a noise on the sphere, no seam)
+  let m3 = vec3f(cos(ll.y) * cos(ll.x), cos(ll.y) * sin(ll.x), sin(ll.y));
+  // (time faster than ~1 000 ×: the phases would flicker — the eddies held, mid-window, the first cycle's: P.envX.w the
+  // clock's rate)
+  let fr = smoothstep(1000.0, 3000.0, P.envX.w);
+  var r = vec3f(0.0);
+  for (var s = 0u; s < 5u; s++) {
+    // (s 0: the coarse scale, in the zonal flow's phase j; 1, 2: the middle one's two phases; 3, 4: the fine one's)
+    let sc = (s + 1u) / 2u;
+    let L = texA * select(select(0.6, 3.0, sc == 1u), 16.0, sc == 0u);
+    // (its eddies — a sixteenth of the tile — two pixels or more)
+    let ws = clamp(log2(L / (32.0 * max(fpA, 1e-9))), 0.0, 1.0);
+    if (ws <= 0.0) { continue; }
+    let T = GIANT_CYCLE / select(select(16.0, 4.0, sc == 1u), 1.0, sc == 0u);
+    let pk = select(f32((s + 1u) % 2u), f32(j), s == 0u);
+    let x = tS / T + 0.5 * pk;
+    let tn = mix(fract(x), 0.5, fr);
+    let cyc = select(u32(i32(floor(x)) & 0xffff), u32(s), fr > 0.5);
+    // (the finer scales' fades; the coarse one's the zonal flow's own, outside)
+    let wk = mix(select(1.0 - abs(2.0 * tn - 1.0), 1.0, s == 0u), select(0.0, 1.0, s == 0u || s == 1u || s == 3u), fr);
+    // (the tile's lattice broken: its place warped by half a period, over three — the noises' first half, gnoise and the
+    // Perlin–Worley)
+    let n = textureSampleLevel(noiseTex, noiseSamp, vec3f(m3.xy / (3.3 * L * 32.0), (1.0 + fract(m3.z / (3.3 * L * 32.0)) * 128.0) / NOISE_DZ), 0.0);
+    let tile = giantTileAt(ll, m3, L, tn, cyc * 8u + s, 0.5 * vec2f(n.x, 2.0 * n.y - 1.0));
+    let amp = ws * wk * I;
+    let dlon = tile.x * TAU / tile.w;
+    r += amp * vec3f(-dlon / TAU, tile.y * L / PI, tile.z * select(1.0, 0.8, sc == 0u || sc == 2u));
   }
-  return uv;
+  return r;
+}
+// the tile (dx, dy, dye — tile periods —; w: the periods round the band, the radians of longitude a period's) at the matter's
+// place ll (m3 its direction) for its period L [rad], time in its window tn, salt the cycle and scale's, warp [periods]
+fn giantTileAt(ll: vec2f, m3: vec3f, L: f32, tn: f32, salt: u32, warp: vec2f) -> vec4f {
+  let z = (GTILE_Z0 + 0.5 + tn * (GTILE_FRAMES - 1.0)) / NOISE_DZ;
+  let HB = 0.10472;
+  let alat = abs(ll.y);
+  var acc = vec4f(0.0);
+  var wsum = 0.0;
+  // (the bands: this one and the nearer neighbour by its edge; the polar plane from 66° to 74°)
+  let fb = (ll.y + 1.5707963) / HB;
+  let b0 = floor(fb);
+  let e = fract(fb);
+  let nb = select(b0 + 1.0, b0 - 1.0, e < 0.5);
+  let wn = 0.5 * smoothstep(0.3, 0.0, min(e, 1.0 - e));
+  let wpole = smoothstep(1.152, 1.2915, alat);
+  for (var q = 0u; q < 3u; q++) {
+    var w = select(select(wn, 1.0 - wn, q == 0u), wpole, q == 2u);
+    if (q < 2u) { w *= 1.0 - wpole; }
+    if (w <= 0.0) { continue; }
+    var X: vec2f;
+    var K = 1.0;
+    let band = select(select(nb, b0, q == 0u), 99.0, q == 2u);
+    if (q < 2u) {
+      let latc = (band + 0.5) * HB - 1.5707963;
+      K = max(round(TAU * cos(latc) / L), 1.0);
+      X = vec2f(ll.x / TAU * K, ll.y / L);
+    } else {
+      X = m3.xy / L;
+    }
+    let h = pcg(salt * 131u + u32(band + 8.0));
+    X += vec2f(f32(h & 0xffffu), f32(h >> 16u)) / 65536.0 + warp;
+    let v = textureSampleLevel(noiseTex, noiseSamp, vec3f(X, z), 0.0);
+    // (by the pole a period's longitude meaningless: its x displacement read as along the parallel near enough)
+    acc += w * vec4f(v.xyz, 0.0);
+    wsum += w;
+    if (q < 2u) { acc.w += w * K; } else { acc.w += w * TAU * max(cos(ll.y), 0.05) / L; }
+  }
+  return acc / max(wsum, 1e-6);
 }
 fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
   let b2 = bodies[BV * k + 2u];
@@ -2039,12 +2178,13 @@ fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f3
   }
   let cosi = max(dot(nrmL, ldir), 0.0);
   let mu = clamp(dot(nrm, view), 0.0, 1.0);
-  var A = planetAlbedo(k, pat, tEm);
-  // (Jupiter, Saturn: their clouds moving, the scene's clock running — PLAN-PLANETES-AAA P9)
-  let gm = u32(A.w) - 4u;
-  // (in the kernels that can draw them big: not the probes' — NEAR_DETAIL 0 —, nor the Earth's, the plain airless worlds',
+  // (Jupiter, Saturn: their clouds moving, the scene's clock running — PLAN-PLANETES-AAA P9 —, in place of the fixed map, in
+  // the kernels that can draw them big: not the probes' — NEAR_DETAIL 0 —, nor the Earth's, the plain airless worlds',
   // Venus's — a conjunction, folded)
-  if (NEAR_DETAIL && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 6u && u32(A.w) >= 4u && (gm == 4u || gm == 5u) && P.near5.w > 0.0) { A = vec4f(giantAlbedo(gm, pat, tEm, bodies[BV * k + 2u].y), A.w); }
+  let s0 = u32(bodies[BV * k + 2u].z);
+  let gm = s0 - 4u;
+  var A: vec4f;
+  if (NEAR_DETAIL && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 6u && s0 >= 4u && (gm == 4u || gm == 5u) && P.near5.w > 0.0) { A = vec4f(giantAlbedo(gm, pat, tEm, bodies[BV * k + 2u].y), f32(s0)); } else { A = planetAlbedo(k, pat, tEm); }
   A = vec4f(A.rgb * ALB_GAIN * ALB_TINT, A.w);
   let surf = u32(A.w);
   var spec = 0.0;
@@ -2293,10 +2433,17 @@ fn gnoise(p: vec3f) -> f32 {
 
 // gnoise read from the baked texture (trilinear, a quarter-unit lattice): the disk's 20–36 noises a
 // sample, one fetch each instead of 8 hashed gradients
-fn dnoise(p: vec3f) -> f32 { return textureSampleLevel(noiseTex, noiseSamp, p * (1.0 / 32.0), 0.0).r; }
+fn dnoise(p: vec3f) -> f32 {
+  return textureSampleLevel(noiseTex, noiseSamp, vec3f(p.xy * (1.0 / 32.0), (1.0 + fract(p.z * (1.0 / 32.0)) * 128.0) / NOISE_DZ), 0.0).r;
+}
 // the clouds' baked noises at p (src/noise3d.ts): r the gradient noise (signed), g the Perlin–Worley, b and a the inverted
 // Worley fBms twice and four times finer (0…1) — one fetch
-fn cloudNoise(p: vec3f) -> vec4f { return textureSampleLevel(noiseTex, noiseSamp, p * (1.0 / 32.0), 0.0); }
+fn cloudNoise(p: vec3f) -> vec4f {
+  return textureSampleLevel(noiseTex, noiseSamp, vec3f(p.xy * (1.0 / 32.0), (1.0 + fract(p.z * (1.0 / 32.0)) * 128.0) / NOISE_DZ), 0.0);
+}
+// (both: the noises in the texture's slices 1–128 between their guards — the giants' tile after them —, z wrapped by hand
+// as the sampler's repeat did when they filled it)
+const NOISE_DZ = 260.0;
 
 // The disk's gas (the look of Interstellar's Gargantua: hair-thin hot strands drawn out along the
 // orbits, breaking up into turbulent clouds, with dense cool smoke that darkens what lies behind it,
@@ -9005,9 +9152,13 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
 // the giants darkened towards the limb (Minnaert), the dusty worlds as regolith (Lommel–Seeliger)
 fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec3f {
   setMapLod(fp, fp, k);
-  var A = planetAlbedo(k, q, P.time.x).rgb * ALB_TINT;
-  if (isEarth(k)) { A = max(A, vec3f(0.015, 0.04, 0.07)); }
   let m = u32(bodies[BV * k + 2u].z) - 4u;
+  var A: vec3f;
+  // (Jupiter's, Saturn's cloud deck near — under their air: their clouds moving, in place of the fixed map, as planetShade's
+  // discs; Mars's kernel carries it, its branch never taken. Only where a giant can be the near body — NEAR_KIND 0, 2 —, and
+  // not the Earth's material kernels — NEAR_KIND 0 there, the regional surface's code in: a giant is never near with it)
+  if (NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && (m == 4u || m == 5u) && P.near5.w > 0.0) { A = giantAlbedo(m, q, P.time.x, bodies[BV * k + 2u].y) * ALB_TINT; } else { A = planetAlbedo(k, q, P.time.x).rgb * ALB_TINT; }
+  if (isEarth(k)) { A = max(A, vec3f(0.015, 0.04, 0.07)); }
   let mu0 = dot(q, Ls);
   let mu = max(dot(q, -rd), 0.02);
   // (Mars's relief marched: its normal and shadow from earthNear — HD_N, REL_SH)

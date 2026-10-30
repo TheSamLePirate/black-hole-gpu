@@ -213,6 +213,11 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   - Hors G8, pour plus tard : des nuages **volumiques** (couches d'ammoniac, de NH₄SH, d'eau) seulement si l'on descend
     dans l'atmosphère d'une géante — la tuile en serait alors le champ porteur ; une simulation vivante globale, relancée
     depuis l'état de la tuile à chaque saut de date, seulement si l'on accepte un jour des géantes non reproductibles.
+  - **Fait** (31 octobre) — [P9.md](progress/planetes-aaa/P9.md) : la tuile dans la seconde moitié de la texture de
+    bruit 3D (le 7ᵉ calque de `mapHi` est impossible : il est compressé en BC7 ou ASTC), trois échelles, les tourbillons
+    nommés, l'hexagone dessiné. Deux défauts de G1–G2 corrigés en chemin : de près, les nuages ne bougeaient pas
+    (`otherGround`), et rien ne s'allumait sous le texel de la carte fine. Jupiter 21,2 → 20,5 ms en orbite (la Terre
+    20,2), 20,1 → 19,5 de près ; Saturne, la Terre, Mars inchangées ; même date, même image.
 
 ### P10 — Compensations, campagne, docs
 - Optimisations restantes pour tenir « jamais plus lent » partout, campagne e2e complète (ce Mac), `docs/PLANETES.md`
