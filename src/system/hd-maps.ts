@@ -46,6 +46,8 @@ import mimasColor from "../../assets/planets-hd/mimas-color.jpg";
 import mimasNormal from "../../assets/planets-hd/mimas-normal.jpg";
 import ceresColor from "../../assets/planets-hd/ceres-color.jpg";
 import ceresNormal from "../../assets/planets-hd/ceres-normal.jpg";
+// (Titan: Cassini ISS's global mosaic at 938 nm — 4 km, under the haze —, tinted with its coarse map's colour: PLAN-PLANETES-AAA P8)
+import titanColor from "../../assets/planets-hd/titan-color.jpg";
 import { blockCompress, canBlockCompress } from "./bc-encode";
 import { type HeightMap, loadHeights } from "./heights-file";
 
@@ -77,6 +79,7 @@ export const HD_SETS: Partial<Record<MapName, HdSet>> = {
   deimos: { color: deimosColor, normal: deimosNormal },
   mimas: { color: mimasColor, normal: mimasNormal },
   ceres: { color: ceresColor, normal: ceresNormal },
+  titan: { color: titanColor },
 };
 
 export interface HdMap {
