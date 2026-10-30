@@ -4027,7 +4027,9 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
   var b0 = 0.0;
   if (hasDem(surf)) { b0 = demFine(q, foot, true) - demFine(q, foot, false); }
   var s = 1.0;
-  var d = max(0.5, foot) / mR * exp2(0.3 * RND);
+  // (Mars's — earthNear's, NEAR_KIND 2 —: from 8 m, steps a 0.4 longer — its relief has no occluder under a few metres, and a
+  // low Sun's ray took its 56 steps through every lit pixel: a third of the frame at sunset)
+  var d = max(select(0.5, 8.0, NEAR_KIND == 2u), foot) / mR * exp2(0.3 * RND);
   for (var i = 0u; i < 56u; i++) {
     cost(2u);
     let pp = p0 + L * d;
@@ -4039,7 +4041,7 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
     s = min(s, smoothstep(-1.0, 1.0, cl / (d * mR * 0.0087)));
     if (s <= 0.0) { break; }
     // (the light probe's texels wide: its shadows coarser)
-    d *= select(1.23, 1.6, probeBeam > 0.0);
+    d *= select(select(1.23, 1.4, NEAR_KIND == 2u), 1.6, probeBeam > 0.0);
   }
   return s;
 }
