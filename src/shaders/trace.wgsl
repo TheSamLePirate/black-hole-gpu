@@ -3823,6 +3823,15 @@ fn reliefFoot(t: f32) -> f32 { return max(t * pixFoot() * P.near4.w, 0.05); }
 
 // The ray against the relief: marched from the relief's bounding shell, steps a fraction of the
 // height above the ground (and of the distance: the far horizon), then bisected. t < 0: missed.
+// (the march's least step, a share of the distance, and its reach [m]: the airless worlds' 2 %, unbounded; Mars's — earthNear
+// —, through its dust, 5 % and 120 km — past which a level sight line keeps a few per cent of the ground, the haze the rest)
+var<private> MARCH_LEAST: f32 = 0.02;
+var<private> MARCH_REACH: f32 = 3e38;
+// (and the footprint its steps take the relief at, over the pixel's — Mars's 4: their craters a size coarser, the crossing
+// refined on the pixel's own)
+var<private> MARCH_FOOT: f32 = 1.0;
+// (and its crossing's bisections: 10; Mars's 6 — a sixty-fourth of its last step, metres at 10 km: its normal taken apart)
+var<private> MARCH_BISECT: u32 = 10u;
 fn nearMarch(look: vec3f) -> NearHit {
   var o: NearHit;
   o.t = -1.0;
@@ -3861,9 +3870,11 @@ fn nearMarch(look: vec3f) -> NearHit {
   let dem = hasDem(surf);
   let rmax = reliefMax(surf);
   // (the least step, a share of the distance: two of the probe's beams in the light probe — its texels wide)
-  let least = max(0.02, 2.0 * probeBeam);
+  let least = max(MARCH_LEAST, 2.0 * probeBeam);
+  let tReach = MARCH_REACH / mR;
   for (var i = 0u; i < 220u; i++) {
     cost(0u);
+    if (t > tReach) { break; }
     let v = oc + rd * t;
     let p = A + v;
     let r = length(p);
@@ -3885,13 +3896,13 @@ fn nearMarch(look: vec3f) -> NearHit {
         continue;
       }
     }
-    let h = reliefStep(surf, qb, reliefFoot(t), mR, tSec) / mR;
+    let h = reliefStep(surf, qb, reliefFoot(t) * MARCH_FOOT, mR, tSec) / mR;
     let f = hgt - h;
     if (f < 0.0) {
       // bisect between the last point above and this one
       var lo = tPrev;
       var hi = t;
-      for (var j = 0u; j < 10u; j++) {
+      for (var j = 0u; j < MARCH_BISECT; j++) {
         let m = 0.5 * (lo + hi);
         let vm = oc + rd * m;
         let pm = A + vm;
@@ -9524,10 +9535,19 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   // (another world with air whose heights are measured — Mars, PLAN-PLANETES-AAA P7 —: its relief marched as the airless
   // worlds' is — nearMarch —, not the sphere; its shadows, its finer normal — the tiles', its craters' — and the tiles'
   // imagery handed to otherGround)
-  if (NEAR_KIND == 2u && !DISC_ONLY && !isEarth(k) && hasDem(u32(bodies[BV * k + 2u].z))) {
+  // (renderer.liteSkip: 4 its shadows off, 8 the sphere again, 16 the march's hit shaded plainly — the A/B of their costs)
+  if (NEAR_KIND == 2u && !DISC_ONLY && !isEarth(k) && hasDem(u32(bodies[BV * k + 2u].z)) && (liteSkip() & 8u) == 0u) {
+    MARCH_LEAST = 0.05;
+    MARCH_REACH = 1.2e5;
+    MARCH_FOOT = 4.0;
+    MARCH_BISECT = 6u;
     let nh = nearMarch(look);
+    MARCH_LEAST = 0.02;
+    MARCH_REACH = 3e38;
+    MARCH_FOOT = 1.0;
+    MARCH_BISECT = 10u;
     t = nh.t;
-    if (nh.t > 0.0) {
+    if (nh.t > 0.0 && (liteSkip() & 16u) == 0u) {
       let surf = u32(bodies[BV * k + 2u].z);
       let foot = reliefFoot(nh.t);
       let mR = P.near4.w;
@@ -9547,7 +9567,12 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
         HD_N = normalize(HD_N - g * smoothstep(8.0, 2.0, foot));
         ALB_TINT *= 1.0 + clamp(h0 * 0.25, -0.15, 0.2);
       }
-      REL_SH = nearShadow(surf, nh.qb, nh.h, toBody(lt.dir), foot, P.time.x * P.near5.w);
+      // (the relief's shadows within 25 km — fading from 15: farther, the dust blurs them, and their march was a fifth of the
+      // frame at sunset)
+      let dKm = nh.t * mR * 1e-3;
+      if ((liteSkip() & 4u) == 0u && dKm < 25.0) {
+        REL_SH = mix(nearShadow(surf, nh.qb, nh.h, toBody(lt.dir), foot, P.time.x * P.near5.w), 1.0, smoothstep(15.0, 25.0, dKm));
+      }
     }
   }
   // (the sea's waves in relief near a low camera — over the sea only: its mean level met, h ≈ 0)
