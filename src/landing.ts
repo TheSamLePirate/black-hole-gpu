@@ -25,7 +25,7 @@ import { body as sysBody, GARGANTUA_SYSTEM, type BodyDef } from "./system/bodies
 import { bodyTrack, meanMotion } from "./system/ephemeris";
 import { circularOrbit } from "./system/kerr-orbits";
 import { sphericalFrame } from "./wormhole";
-import { relief, SURF } from "./terrain";
+import { millerWave, MW_HEIGHT, MW_LIP, relief, SURF } from "./terrain";
 import { C_MPS } from "./units";
 import { dot, len } from "./math/vec3";
 
@@ -66,6 +66,8 @@ export interface PlanetFrame {
   mPerM: number;
   /** c²/M in m/s² */
   aUnit: number;
+  /** the scene's clock [s] (Miller's giant waves: its ground moves) */
+  tSec: number;
 }
 
 export interface LocalState {
@@ -139,6 +141,7 @@ export function planetFrame(id: string, t: number, a: number, massSolar: number)
     surf: SURF[b.surface?.kind ?? "rock"],
     mPerM: 1476.625 * massSolar,
     aUnit: accelUnit({ massSolar }),
+    tSec: t * 4.925490947e-6 * massSolar,
   };
 }
 
@@ -211,7 +214,7 @@ export const localToZamo = (v: Vec3): Vec3 => [v[0], -v[2], v[1]];
 /** Radius of the ground under a local position (the relief of terrain.ts) [M]. */
 export function groundR(F: PlanetFrame, xi: Vec3): number {
   const d = len(xi);
-  return F.R + relief(F.surf, [xi[0] / d, xi[1] / d, xi[2] / d], F.R * F.mPerM) / F.mPerM;
+  return F.R + relief(F.surf, [xi[0] / d, xi[1] / d, xi[2] / d], F.R * F.mPerM, 0.05, F.tSec) / F.mPerM;
 }
 
 /** Air density at a height [kg/m³]. */
@@ -265,11 +268,22 @@ export function stepLocal(
   thrust: Vec3,
   aero?: AeroFn,
   wheels?: Wheels,
-): { impact: number | null; touchdown?: { vn: number; vh: number }; airborne?: boolean } {
+): { impact: number | null; touchdown?: { vn: number; vh: number }; airborne?: boolean; wave?: boolean } {
   const gear = GEAR / F.mPerM;
   const C = C_MPS;
   let touchdown: { vn: number; vh: number } | undefined;
   let airborne = false;
+  if (L.landed && F.surf === SURF.ocean) {
+    // Miller: the craft afloat rides its giant waves up and down — and the wall breaking over it is the end of it
+    // (PLAN-PLANETES-AAA P3: its lip, the crest's first MW_LIP metres ahead, over a wall of more than half its height)
+    const d = len(L.xi);
+    const q: Vec3 = [L.xi[0] / d, L.xi[1] / d, L.xi[2] / d];
+    const w = millerWave(q, F.tSec, F.R * F.mPerM);
+    if (w.crest > 0.5 * MW_HEIGHT && w.front > -0.2 * MW_LIP && w.front < MW_LIP && w.h > 0.5 * w.crest)
+      return { impact: 1000, wave: true };
+    const r = groundR(F, L.xi) + gear;
+    L.xi = [q[0] * r, q[1] * r, q[2] * r];
+  }
   if (L.landed) {
     // on the ground: stays, unless the thrust lifts it — or pushes it along past the wheels' resistance
     const up: Vec3 = [L.xi[0] / len(L.xi), L.xi[1] / len(L.xi), L.xi[2] / len(L.xi)];

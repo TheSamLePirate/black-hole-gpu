@@ -73,10 +73,11 @@ const sc = (q: V3, k: number, o = 0): V3 => [q[0] * k + o, q[1] * k + o, q[2] * 
 
 /**
  * The ground's height [m] at a unit direction on the body's axes, as the tracer draws it at a pixel
- * footprint `foot` [m] (the finest detail: 0.05 m) on a body of `mR` metres per radius. Miller: sea
- * level — its giant waves are drawn, not felt.
+ * footprint `foot` [m] (the finest detail: 0.05 m) on a body of `mR` metres per radius. Miller: its giant waves at the
+ * scene's clock `tSec` [s] (millerWave — felt, PLAN-PLANETES-AAA P3); without a clock, the sea's level.
  */
-export function relief(surf: number, q: V3, mR: number, foot = 0.05): number {
+export function relief(surf: number, q: V3, mR: number, foot = 0.05, tSec?: number): number {
+  if (surf === SURF.ocean) return tSec === undefined ? 0 : millerWaves(q, tSec, mR, foot);
   if (surf === SURF.ice) {
     let h = (0.5 + 0.5 * tfbm(sc(q, 6), Math.max(layerOct(6, foot, mR, 5), 1))) * 1400;
     h += ridged(sc(q, 24, 5), layerOct(24, foot, mR, 4)) * 900;
@@ -160,20 +161,62 @@ export function craterRelief(m: number, q: V3, mR: number, foot = 0.05): number 
   return h;
 }
 
-/**
- * Miller's giant waves (the tracer's: drawn, not felt): their height [m] at a unit direction q on its
- * axes, tSec seconds into the scene's clock.
- */
-export function millerWaves(q: V3, tSec: number, mR: number, foot = 0.05): number {
-  let h = 0;
+/** Miller's giant waves (PLAN-PLANETES-AAA P3; trace.wgsl reliefBase, the same): three trains of crests ~3 700 km apart,
+ *  each a wall ~1.2 km high — its front face steep (MW_FRONT m from the crest down to the sea: up to ~35°), its back a long
+ *  slope (MW_BACK m) —, moving at ~24–35 m/s; the crest's height varying along it. */
+export const MW_HEIGHT = 1200;
+export const MW_FRONT = 2500;
+export const MW_BACK = 18000;
+/** where a wall breaks: its lip [m from the crest, ahead] and the share of its height over which the lip curls */
+export const MW_LIP = 400;
+
+/** Miller's three trains at a unit direction q, tSec seconds into the scene's clock: each one's way (unit, Miller's axes),
+ *  the point's signed distance from its nearest crest [m, + ahead of it — the crest coming], its crest's height there [m]. */
+export function millerTrains(q: V3, tSec: number, mR: number, foot = 0.05): { way: V3; s: number; amp: number }[] {
+  const out: { way: V3; s: number; amp: number }[] = [];
   for (let i = 0; i < 3; i++) {
     const d = [Math.cos(i * 2.1 + 0.3), Math.sin(i * 2.1 + 0.3), 0.35 * i - 0.3];
     const l = Math.hypot(d[0]!, d[1]!, d[2]!);
     const ph = ((q[0] * d[0]! + q[1] * d[1]! + q[2] * d[2]!) / l) * 14 + i * 1.7 - tSec * (4e-5 + 1e-5 * i);
-    const crest = (0.5 + 0.5 * Math.sin(ph)) ** 40;
-    h += crest * (0.65 + 0.35 * tfbm(sc(q, 40, i), Math.max(layerOct(40, foot, mR, 5), 1)));
+    // (the crest at the sine's top, as the trains always were: ph = π/2; u the phase from it, (−π, π])
+    let u = ph - Math.PI / 2;
+    u -= 2 * Math.PI * Math.round(u / (2 * Math.PI));
+    out.push({
+      way: [d[0]! / l, d[1]! / l, d[2]! / l],
+      s: (u / 14) * mR,
+      amp: MW_HEIGHT * (0.65 + 0.35 * tfbm(sc(q, 40, i), Math.max(layerOct(40, foot, mR, 5), 1))),
+    });
   }
-  return h * 1200;
+  return out;
+}
+
+/** The giant waves at a unit direction q on Miller's axes, tSec seconds into the scene's clock: the sea's height [m], and the
+ *  tallest wave's — its crest's height [m] and the point's signed distance from that crest [m, + ahead of it: its face]. */
+export function millerWave(q: V3, tSec: number, mR: number, foot = 0.05): { h: number; crest: number; front: number } {
+  let h = 0;
+  let best = 0;
+  let crest = 0;
+  let front = Number.POSITIVE_INFINITY;
+  for (const t of millerTrains(q, tSec, mR, foot)) {
+    let prof: number;
+    if (t.s >= 0) {
+      const x = Math.min(t.s / MW_FRONT, 1);
+      prof = (1 - x) * (1 - x) * (1 + 2 * x);
+    } else prof = Math.exp(-((t.s / MW_BACK) ** 2));
+    const hi = t.amp * prof;
+    h += hi;
+    if (hi > best) {
+      best = hi;
+      crest = t.amp;
+      front = t.s;
+    }
+  }
+  return { h, crest, front };
+}
+
+/** Miller's giant waves' height [m] (millerWave's) — felt: the ground the ship lands on, flies into, rides up. */
+export function millerWaves(q: V3, tSec: number, mR: number, foot = 0.05): number {
+  return millerWave(q, tSec, mR, foot).h;
 }
 
 /** The Earth's radius [m] (its relief's scale): WGS84's a — the ellipsoid on its squashed axes the sphere (ellipsoid.ts). */

@@ -201,7 +201,11 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
       s.motion = "geodesic";
       this.targetDistance = s.distance;
       this.local!.key = this.poseKeyNow();
-      if (r.impact !== null && !was) {
+      // (Miller's giant wave breaking over the craft afloat — landing.ts stepLocal, PLAN-PLANETES-AAA P3)
+      if (r.wave) {
+        this.onPilotMessage?.(`The giant wave broke over the ${VESSELS[fleet.active].name}`);
+        this.crashed(`${VESSELS[fleet.active].name}: swept away by Miller's giant wave`);
+      } else if (r.impact !== null && !was) {
         // (the Ranger rests on its belly: levelled on the ground, nose on the horizon)
         this.levelShip(localToZamo([L.xi[0], L.xi[1], L.xi[2]]));
         const name = BODY_NAMES[F.id as Body];

@@ -140,7 +140,8 @@ export class PlanetCharacter {
   rawHeight(q = this.q) {
     if (this.ours) return heightOverGround(this.body, scale(q, 1 / M_METRES));
     const F = this.planet(this.lastTime);
-    return len(q) - F.R * F.mPerM - relief(F.surf, unit(q), F.R * F.mPerM);
+    // (Miller: its giant waves at the scene's clock — the walker rides them too)
+    return len(q) - F.R * F.mPerM - relief(F.surf, unit(q), F.R * F.mPerM, 0.05, F.tSec);
   }
   ground(q: Vec3) {
     return add(q, this.up(q), -this.height(q));

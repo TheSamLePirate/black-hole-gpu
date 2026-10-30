@@ -3697,20 +3697,48 @@ fn reliefBase(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
     }
     return h;
   }
-  if (surf == 0u) {
-    // Miller's giant waves: three trains of crests ~2 900 km apart, 1.2 km high walls ~60 km wide,
-    // moving at ~20 m/s (drawn, not felt; terrain.ts: millerWaves, the same)
-    var h = 0.0;
-    for (var i = 0u; i < 3u; i++) {
-      let fi = f32(i);
-      let dir = normalize(vec3f(cos(fi * 2.1 + 0.3), sin(fi * 2.1 + 0.3), 0.35 * fi - 0.3));
-      let ph = dot(q, dir) * 14.0 + fi * 1.7 - tSec * (4.0e-5 + 1.0e-5 * fi);
-      let crest = pow(0.5 + 0.5 * sin(ph), 40.0);
-      h += crest * (0.65 + 0.35 * tfbm(q * 40.0 + vec3f(fi), max(layerOct(40.0, foot, mR, 5), 1)));
-    }
-    return h * 1200.0;
-  }
+  if (surf == 0u) { return millerWave(q, foot, mR, tSec).x; }
   return 0.0;
+}
+
+// Miller's giant waves (PLAN-PLANETES-AAA P3; terrain.ts millerWave, the same — felt: the ship rides them, the wall breaking
+// over it is its end): three trains of crests ~3 700 km apart, each a wall ~1.2 km high — its front face steep (MW_FRONT m from
+// the crest down to the sea: up to ~35°), its back a long slope (MW_BACK m) —, moving at ~24–35 m/s, the crest's height varying
+// along it. x: the sea's height [m]; y: the tallest wave's crest [m]; z: the point's distance from that crest [m, + ahead: its face]
+const MW_HEIGHT = 1200.0;
+const MW_FRONT = 2500.0;
+const MW_BACK = 18000.0;
+const MW_LIP = 400.0;
+fn millerWave(q: vec3f, foot: f32, mR: f32, tSec: f32) -> vec3f {
+  var h = 0.0;
+  var best = 0.0;
+  var crest = 0.0;
+  var front = 3e38;
+  for (var i = 0u; i < 3u; i++) {
+    let fi = f32(i);
+    let dir = normalize(vec3f(cos(fi * 2.1 + 0.3), sin(fi * 2.1 + 0.3), 0.35 * fi - 0.3));
+    let ph = dot(q, dir) * 14.0 + fi * 1.7 - tSec * (4.0e-5 + 1.0e-5 * fi);
+    // (the crest at the sine's top — ph = π/2 —; u the phase from it, (−π, π])
+    var u = ph - 0.5 * PI;
+    u -= TAU * round(u / TAU);
+    let sM = u / 14.0 * mR;
+    let amp = MW_HEIGHT * (0.65 + 0.35 * tfbm(q * 40.0 + vec3f(fi), max(layerOct(40.0, foot, mR, 5), 1)));
+    var prof: f32;
+    if (sM >= 0.0) {
+      let x = min(sM / MW_FRONT, 1.0);
+      prof = (1.0 - x) * (1.0 - x) * (1.0 + 2.0 * x);
+    } else {
+      prof = exp(-(sM / MW_BACK) * (sM / MW_BACK));
+    }
+    let hi = amp * prof;
+    h += hi;
+    if (hi > best) {
+      best = hi;
+      crest = amp;
+      front = sM;
+    }
+  }
+  return vec3f(h, crest, front);
 }
 
 struct NearHit { t: f32, qb: vec3f, h: f32 };
@@ -4086,7 +4114,17 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
       let Fh = 0.02 + 0.98 * pow(1.0 - clamp(dot(hv, -look), 0.0, 1.0), 5.0);
       col += lt.e * (D * Fh / (4.0 * max(mu, 0.05)));
     }
-    let foam = max(smoothstep(700.0, 1100.0, hit.h) * (0.5 + 0.5 * gnoise(qb * 4000.0)), whitecap);
+    // (the giant wall — PLAN-PLANETES-AAA P3 —: its lip breaking white along the crest, the foam it pours down its face in
+    // streaks; the light through its thin crest, green, when the light is behind it)
+    let mw = millerWave(qb, reliefFoot(t), P.near4.w, tSec);
+    let rise = clamp(hit.h / max(mw.y, 1.0), 0.0, 1.0);
+    let churn = 0.5 + 0.5 * gnoise(qb * (P.near4.w / 60.0) + vec3f(0.0, 0.0, tSec * 0.4));
+    let lip = smoothstep(-0.25 * MW_LIP, 0.1 * MW_LIP, mw.z) * (1.0 - smoothstep(0.7 * MW_LIP, 1.5 * MW_LIP, mw.z)) * smoothstep(0.6, 0.9, rise);
+    let streak = 0.5 + 0.5 * gnoise(qb * (P.near4.w / 400.0) * vec3f(1.0, 1.0, 0.15) + vec3f(tSec * 0.01));
+    let face = step(0.0, mw.z) * (1.0 - smoothstep(0.6 * MW_FRONT, MW_FRONT, mw.z)) * smoothstep(0.15, 0.6, rise) * smoothstep(0.55, 0.85, streak);
+    let foam = max(max(lip * (0.6 + 0.4 * churn), 0.55 * face), whitecap);
+    let backlit = pow(max(dot(look, lt.dir), 0.0), 3.0) * smoothstep(0.75, 0.97, rise) * (1.0 - lip);
+    col += vec3f(0.12, 0.55, 0.45) * lt.e * (0.25 * backlit / PI);
     col = mix(col, vec3f(0.85) / PI * E, foam * 0.8);
   }
   return col;

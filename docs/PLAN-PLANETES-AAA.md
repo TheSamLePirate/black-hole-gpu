@@ -77,7 +77,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   gardée d'image en image, lumière à travers les crêtes.
 - Le traceur garde le lointain (orbite) avec la même mer filtrée.
 
-### P3 — Miller : la méga-vague
+### P3 — Miller : la méga-vague — **fait**, [P3.md](progress/planetes-aaa/P3.md)
 - Nouveau modèle : un **mur solitaire** (profil soliton + lèvre qui déferle) qui remplace les `pow(sin, 40)`, ses
   trains suivant les marées de Gargantua ; hauteur ≈ 1,2 km, CPU = GPU (`terrain.ts`).
 - **Ressentie** : l'eau soulève le Ranger posé, le contact suit la surface, la vague qui le prend = crash

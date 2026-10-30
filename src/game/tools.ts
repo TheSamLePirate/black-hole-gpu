@@ -28,6 +28,7 @@ import type { Renderer } from "../renderer";
 import { setHolePose, setHomePose, setRepPose } from "../camera";
 import { ellOfR, mouth, sphericalFrame } from "../wormhole";
 import { betaToCoord, planetFrame, toGlobal, toLocal, zamoBeta } from "../landing";
+import { millerTrains, MW_HEIGHT } from "../terrain";
 import { BODY_NAMES } from "../targeting";
 import { bodyAxes, EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState, spinVector, utcOf } from "../system/solar";
 import { bodyFixedOf, fromBodyFixed, GEAR, gearHeight, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
@@ -120,6 +121,7 @@ export class GameTools {
       "placeAt({frame, X, vel, fwd, up})   put it at a state (home frame / the hole's map)",
       "target(id) · targets()        select the target",
       "warp(x) · pause(on) · realTime()   time: x times real time",
+      "waveIn(s)                     Miller: the clock on until its tallest giant wave is s seconds from the craft afloat",
       "setDate('2067-03-01T12:00') · date()   the scene's clock (the bodies move; the ship keeps its place)",
       "set(key, value) · get(key) · settings()   any setting (see the panel, Game section)",
       "quality('game'|'realtime'|…) · perf()   performance: the quality level; frame rates, GPU passes, CPU sections",
@@ -825,6 +827,59 @@ export class GameTools {
     const note = `Clock set to ${fmtDate(t1)}${planned ? " — the plan made on the old clock dropped" : ""}`;
     this.log.add("info", note, t1);
     return { date: fmtDate(t1), planDropped: planned };
+  }
+
+  /**
+   * Miller: the craft landed on its sea where a giant wave's crest is `sec` seconds away — moved along the wave's way from where
+   * it was, the clock left as it is (PLAN-PLANETES-AAA P3: TARS's "the wave arrives in …", a test's view of the wall). Returns
+   * the wave's figures and the bearing it comes from [° from Miller's north, eastwards], seen from the craft.
+   */
+  waveIn(sec = 120) {
+    const c = this.ctx.camera;
+    const lc = c.local;
+    if (!lc || lc.F.id !== "miller") throw new Error("waveIn: on Miller's sea only");
+    const s = this.ctx.settings;
+    const t = this.ctx.time();
+    const xi = lc.L.xi;
+    const d = Math.hypot(xi[0], xi[1], xi[2]);
+    const q0: V3 = [xi[0] / d, xi[1] / d, xi[2] / d];
+    const mR = lc.F.R * lc.F.mPerM;
+    const tSec = t * 4.925490947e-6 * s.massSolar;
+    // (the trains move at ~24–35 m/s: the craft ~30 m/s × sec ahead of a crest — a wall of 55 % of the tallest at least, a
+    // place's crests their own heights —, sought back along each train's way, ~800 m a step, up to a train's spacing)
+    const want = 30 * sec;
+    for (let i = 0; i < 3; i++) {
+      const way0 = millerTrains(q0, tSec, mR)[i]!.way;
+      for (let a = 0; a < 0.5; a += 1e-4) {
+        const k0 = way0[0] * q0[0] + way0[1] * q0[1] + way0[2] * q0[2];
+        const tan = [way0[0] - k0 * q0[0], way0[1] - k0 * q0[1], way0[2] - k0 * q0[2]];
+        const tl = Math.hypot(tan[0]!, tan[1]!, tan[2]!) || 1;
+        const q = [0, 1, 2].map((j) => q0[j]! * Math.cos(a) - (tan[j]! / tl) * Math.sin(a)) as V3;
+        const tr = millerTrains(q, tSec, mR)[i]!;
+        if (!(tr.amp > 0.55 * MW_HEIGHT && tr.s > want - 300 && tr.s < want + 300)) continue;
+        // (where it comes from: −way along the ground, its bearing from Miller's north — its z axis — eastwards)
+        const k = tr.way[0] * q[0] + tr.way[1] * q[1] + tr.way[2] * q[2];
+        const from = [k * q[0] - tr.way[0], k * q[1] - tr.way[1], k * q[2] - tr.way[2]];
+        const eh = Math.hypot(q[0], q[1]) || 1;
+        const east = [-q[1] / eh, q[0] / eh, 0];
+        const north = [q[1] * east[2]! - q[2] * east[1]!, q[2] * east[0]! - q[0] * east[2]!, q[0] * east[1]! - q[1] * east[0]!];
+        const be = from.reduce((acc, x, j) => acc + x * east[j]!, 0);
+        const bn = from.reduce((acc, x, j) => acc + x * north[j]!, 0);
+        const bearing = ((Math.atan2(be, bn) * 180) / Math.PI + 360) % 360;
+        const D = 180 / Math.PI;
+        this.land("miller", Math.asin(Math.max(-1, Math.min(1, q[2]))) * D, Math.atan2(q[1], q[0]) * D);
+        const note = `The giant wave: ${(tr.amp / 1000).toFixed(1)} km high, ${(tr.s / 1000).toFixed(1)} km away`;
+        this.log.add("warn", note, t);
+        return {
+          inSec: sec,
+          crestM: Math.round(tr.amp),
+          awayM: Math.round(tr.s),
+          bearing: Math.round(bearing),
+          movedKm: Math.round((a * mR) / 1000),
+        };
+      }
+    }
+    throw new Error("waveIn: no wave found along their ways");
   }
 
   setDate(d: string | number) {

@@ -1971,11 +1971,16 @@ async function main() {
     music.stop();
     lastGrade = null;
     camera.setOurLanded(null);
+    // (a scene on one of Gargantua's worlds' ground: the craft set down there, at rest on it — as placeAt does —, not left
+    // to the flight to find from the pose: a few hundredths of a second off at a third of light's speed, it met Miller's sea
+    // at 346 m/s, or broke up — PLAN-PLANETES-AAA P3)
+    let landedAt: { body: string; xi: [number, number, number] } | null = null;
     if (typeof pose === "object" && universeOf(pose.body ?? "earth") === "gargantua" && pose.altKm === undefined) {
       // on the ground of one of Gargantua's worlds, Gargantua above the horizon: the nose level towards
       // it, the look raised to it (as the map has it: its light bent, the ship's speed, move it on the sky)
       const el = pose.holeEl ?? 20;
       const p = theirGroundPose(pose.body!, el, pose.holeAz ?? 0, time ?? sim.time, settings.spin, settings.massSolar);
+      landedAt = p.localLanded ?? null;
       settings.shipLookYaw = settings.shipLookPitch = 0;
       setHolePose(settings, p.X, p.fwd, p.up, p.vel);
       settings.motion = "geodesic";
@@ -2038,6 +2043,12 @@ async function main() {
     camera.setCinematic(null);
     camera.sync();
     if (settings.ship) camera.setPilot(true); // the Ranger starts afresh (on a circular orbit near the hole)
+    if (settings.ship && landedAt) {
+      const F = planetFrame(landedAt.body, sim.time, settings.spin, settings.massSolar);
+      camera.local = { F, L: { xi: [...landedAt.xi], w: [0, 0, 0], landed: true }, key: camera.poseKeyNow() };
+      camera.landed = true;
+      camera.gearDown = true;
+    }
     // the fleet near the Earth (fleet.ts): the Endurance 800 km up, the Lander 500 km up; the craft flown
     // where the scene puts it — or, "fleet", where the fleet's start has it
     setMountVessel(settings.vessel);

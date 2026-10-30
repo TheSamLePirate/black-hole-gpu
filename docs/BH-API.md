@@ -1379,6 +1379,21 @@ __bh.game.warp(1);   // real time
 ```
 *Used in:* `landing.e2e.test.ts`, `assist-burn.e2e.test.ts`, `cockpit.e2e.test.ts`, `assist-handover.e2e.test.ts`, `tests/flight/scenarios/gargantua.ts`, `landing.ts`, `missions.ts`, `orbit.ts`.
 
+### `__bh.game.waveIn(sec = 120)` → `{ inSec, crestM, awayM, bearing, movedKm }`
+
+Miller only, the craft afloat on its sea: lands it, along a giant wave's way from where it was, where that wave's crest is
+`sec` seconds away (~30 m/s × `sec`; a wall of 55 % of the tallest at least) — the clock left as it is. Returns the crest's
+height [m], its distance [m], the bearing it comes from [° from Miller's north, eastwards] and how far the craft was moved
+[km]. The wave is felt (`terrain.ts millerWave`, `landing.ts stepLocal`): the craft rides it up, and its breaking lip sweeps
+it away (the craft lost). PLAN-PLANETES-AAA P3.
+
+```js
+__bh.game.preset("Miller: Gargantua over the sea");
+__bh.game.waveIn(90);   // { crestM: 876, awayM: 2789, bearing: 15, … }
+__bh.game.warp(4);
+```
+*Used in:* `miller-wave.e2e.test.ts`.
+
 ### `__bh.game.watch(st)` → void
 
 Public. Journals the changes of the sphere of influence (`soi`) and of the status (`status`), given a RangerStatus. Called each tick by the main loop while the Ranger flies (`src/main.ts`) and by the F2 window (`src/ui/gametools.ts`); tests do not need it.
