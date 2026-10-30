@@ -41,6 +41,7 @@ const AURORA = 16384;
 const NEAR_EARTH = 1 << NEAR_KIND_SHIFT;
 const NEAR_AIR = 2 << NEAR_KIND_SHIFT;
 const NEAR_AIRLESS = 3 << NEAR_KIND_SHIFT;
+const NEAR_TITAN = 5 << NEAR_KIND_SHIFT;
 const NEAR_NONE = 4 << NEAR_KIND_SHIFT;
 const RASTER_ENTRIES: TracerEntry[] = ["shade", "shadeMark", "shadeLite", "shadeWater", "shadeStars", "discs", "clouds", "skyFill"];
 
@@ -90,6 +91,12 @@ export const PROFILES: KernelProfile[] = [
     id: "mars",
     label: "Mars's surface in the game's universe (a world with air near: its relief marched — PLAN-PLANETES-AAA P7)",
     key: GAME | NEAR_AIR,
+    entries: ["main", "env", "aerial", "shadeLite"],
+  },
+  {
+    id: "titan",
+    label: "Titan's surface in the game's universe (an air world whose relief is procedural — PLAN-PLANETES-AAA P8)",
+    key: GAME | NEAR_TITAN,
     entries: ["main", "env", "aerial", "shadeLite"],
   },
   {

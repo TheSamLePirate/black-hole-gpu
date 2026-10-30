@@ -175,11 +175,17 @@ override NEAR_DETAIL: bool = true;
 // relief's shadows then the map's — half its size gone, the scenery's trees and buildings kept
 override GROUND_DETAIL: bool = true;
 // the body near the camera, for the camera's rays (main, discs): 0 any — both paths —, 1 the Earth, 2 another world with
-// air (Mars, Titan), 3 a world without air (the Moon, Gargantua's worlds), 4 none. The other paths compiled out: the Earth's
+// air (Mars), 3 a world without air (the Moon, Gargantua's worlds), 4 none, 5 Titan (an air world — 2's paths — whose relief
+// is procedural: titanRelief, out of the others' kernels and theirs out of its own — PLAN-PLANETES-AAA P8). The other paths compiled out: the Earth's
 // near ground in a Moon scene, the airless worlds' relief in an Earth flight (docs/PLAN-LEAN-TRACER-KERNELS.md P7)
 override NEAR_KIND: u32 = 0u;
 // (the near body is the Earth — as far as the constants allow: the Earth's own near code out of the other worlds' kernels)
-fn nearEarth(k: u32) -> bool { return NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && isEarth(k); }
+fn nearEarth(k: u32) -> bool { return NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && isEarth(k); }
+// (another world with air near: Mars's kind or Titan's — conjunctions, which wgsl-specialise.ts folds: a top-level || it
+// leaves alone)
+fn nearAirWorld() -> bool { return NEAR_KIND != 0u && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u; }
+// (Titan's relief in this kernel: its own, and those for any near body — the probes', the body raster's library)
+fn titanKernel() -> bool { return NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u; }
 
 // Kernel specialisation (renderer.ts: traceVariant): a feature the scene does not use compiled out —
 // the uber-kernel's branches and their registers, on the scenes that have none of them (the Gargantua
@@ -3448,7 +3454,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       e = earthNear(look, rnd, k);
       hitT = e.t;
     }
-    if (NEAR_KIND != 1u && NEAR_KIND != 2u && !air) {
+    if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && !air) {
       hit = nearMarch(look);
       hitT = hit.t;
     }
@@ -3478,7 +3484,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       // (what lies beyond the air, seen through it: lower than it looks)
       if (isEarth(k) && P.sky.x > 0.0) { lookSky = airBend(look); }
     }
-    if (NEAR_KIND != 1u && NEAR_KIND != 2u && !air) {
+    if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && !air) {
       // (on Gargantua's worlds the camera white-balances to the light there — the disk's orange, K2's —
       // part of the way: Mann's ice white, Miller's water grey-blue; the sky beyond keeps its colours)
       var wb = vec3f(1.0);
@@ -3582,11 +3588,33 @@ fn tfbm(p0: vec3f, oct: i32) -> f32 {
 }
 
 fn reliefMax(surf: u32) -> f32 {
+  if (titanKernel() && surf == TITAN_SURF) { return 1100.0; }
   if (surf == 0u) { return 1300.0; }
   if (surf == 1u) { return 4600.0; }
   if (surf == 2u) { return 1800.0; }
   if (cratered(surf)) { return 500.0; }
   return 0.0;
+}
+// Titan's ground under its haze (PLAN-PLANETES-AAA P8 T3; terrain.ts titanRelief, the same on the CPU — the walker on it): a
+// swell of highlands and basins (±400 m over hundreds of km), ridged hills on the highlands (~300 m over ~40 km), the
+// equatorial belt's linear dunes in their seas — east–west, 2.5 km apart, ~90 m tall, Cassini's radar's —, a few metres'
+// roughness. Its map's index 19
+const TITAN_SURF = 23u;
+fn titanRelief(q: vec3f, foot: f32, mR: f32) -> f32 {
+  var h = tfbm(q * 4.0, max(layerOct(4.0, foot, mR, 4), 1)) * 400.0;
+  let hi = smoothstep(0.0, 0.25, tfbm(q * 10.0 + vec3f(3.0), 2));
+  let oh = layerOct(60.0, foot, mR, 4);
+  if (oh > 0) { h += (ridged(q * 60.0 + vec3f(5.0), oh) - 0.5) * 600.0 * hi; }
+  let lat = asin(clamp(q.z, -1.0, 1.0));
+  let field = smoothstep(0.45, 0.3, abs(lat)) * smoothstep(-0.05, 0.25, tfbm(q * 12.0 + vec3f(7.0), 2)) * (1.0 - hi);
+  if (layerOct(1030.0, foot, mR, 1) > 0 && field > 0.001) {
+    let x = fract(lat * mR / 2500.0 + 1.6 * tfbm(q * 150.0 + vec3f(11.0), 2));
+    let d = 1.0 - abs(2.0 * x - 1.0);
+    h += d * d * (3.0 - 2.0 * d) * 90.0 * field;
+  }
+  let os = layerOct(8580.0, foot, mR, 3);
+  if (os > 0) { h += tfbm(q * 8580.0, os) * 12.0; }
+  return h;
 }
 // the shell of the ground drawn: the relief's, over the measured heights where there are some
 fn reliefTop(surf: u32) -> f32 { return reliefMax(surf) + select(0.0, max(P.hd2.y, 0.0), hasDem(surf)); }
@@ -3699,6 +3727,7 @@ fn reliefStep(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
 // the relief alone (its normal: the measured heights' is the finer map's, hdNormal)
 // foot: the pixel's footprint on the ground [m], mR: metres per radius (the layers' detail)
 fn reliefBase(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
+  if (titanKernel() && surf == TITAN_SURF) { return titanRelief(q, foot, mR); }
   if (surf >= 4u) { return select(0.0, craterRelief(surf - 4u, q, foot, mR), cratered(surf)); }
   if (surf == 1u) {
     // Mann: ice sheets, ridges, hills, rubble, its glaciers' crevasses
@@ -4881,7 +4910,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     // haze above far less dimmed than the sun's beam — two-stream, e^(−0.22 τ), redder deeper —: the sky an opaque orange
     // glow, not the black the beam's light alone left. In the weather's kernels and the air worlds' — NEAR_KIND 2 —, and those
     // for every path — 0: the aerial table's, the probes')
-    if ((HAS_WX || NEAR_KIND == 0u || NEAR_KIND == 2u) && AIR_DUST > 0.0) {
+    if ((HAS_WX || NEAR_KIND == 0u || nearAirWorld()) && AIR_DUST > 0.0) {
       let tauV = AIR.bme * airColumn(h, 1.0, airHM()) / airK();
       let mz0 = dot(normal, physicalLs);
       let Tdif = exp(-tauV * AIR_MSC) * smoothstep(-0.1, 0.25, mz0) * 0.9;
@@ -8559,6 +8588,13 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
   if (ringOuter(k) > 0.0 && mu0 < 0.25) { shine = ringShine(k, q, Ls) * ((1.0 - 4.0 * max(mu0, 0.0)) / PI); }
   var direct = 1.0;
   var sky = AIR.sky * smoothstep(-0.15, 0.25, mu0);
+  // (Titan: under its haze the sky's light is nearly all of it — a dome brighter towards the Sun, the haze's forward scattering
+  // (g ≈ 0.6): the slopes read by it, the dunes' flanks, a pebble's side half lit; flat ground as before)
+  if (m == 19u) {
+    let dz = normalize(q + 1.5 * Ls);
+    let a = (0.5 + 0.5 * dot(nrm, dz)) / (0.5 + 0.5 * dot(q, dz));
+    sky *= 0.35 + 0.65 * a * a;
+  }
   if (isEarth(k)) {
     direct = sunSeenPhysical(earthSurface(q) / EARTH_RM, Ls);
     sky = max(sky * direct, nightFloor(direct, mu0));
@@ -9551,7 +9587,11 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   // worlds' is — nearMarch —, not the sphere; its shadows, its finer normal — the tiles', its craters' — and the tiles'
   // imagery handed to otherGround)
   // (renderer.liteSkip: 4 its shadows off, 8 the sphere again, 16 the march's hit shaded plainly — the A/B of their costs)
-  if (NEAR_KIND == 2u && !DISC_ONLY && !isEarth(k) && hasDem(u32(bodies[BV * k + 2u].z)) && (liteSkip() & 8u) == 0u) {
+  // (and Titan's, procedural — titanRelief, P8 —: its normal the relief's own, its shadows left out — under its haze the Sun's
+  // beam is a few per cent of its light, the sky's the rest)
+  let nsurf = u32(bodies[BV * k + 2u].z);
+  let titan = titanKernel() && nsurf == TITAN_SURF;
+  if (nearAirWorld() && !DISC_ONLY && !isEarth(k) && (titan || (NEAR_KIND == 2u && hasDem(nsurf))) && (liteSkip() & 8u) == 0u) {
     var nh: NearHit;
     if (NEAR_T > 0.0) {
       nh.t = NEAR_T;
@@ -9575,9 +9615,13 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
       let surf = u32(bodies[BV * k + 2u].z);
       let foot = reliefFoot(nh.t);
       let mR = P.near4.w;
-      _ = craterRelief(surf - 4u, nh.qb, foot, mR);
-      let gc = CRATER_GRAD - nh.qb * dot(CRATER_GRAD, nh.qb);
-      HD_N = normalize(moonNormal(nh.qb, foot) - gc);
+      if (titan) {
+        HD_N = toBody(reliefNormal(surf, nh.qb, nh.t, P.time.x * P.near5.w, 0.0));
+      } else if (NEAR_KIND != 5u) {
+        _ = craterRelief(surf - 4u, nh.qb, foot, mR);
+        let gc = CRATER_GRAD - nh.qb * dot(CRATER_GRAD, nh.qb);
+        HD_N = normalize(moonNormal(nh.qb, foot) - gc);
+      }
       HD_N_ON = true;
       ALB_TINT = moonDetail(nh.qb, foot);
       // (the finest ground, near — fineGround, the airless worlds' —: its slope by differences, its stones lighter)
@@ -9589,12 +9633,13 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
         let h0 = fineGround(x, foot);
         let g = ((fineGround(x + a1 * ef, foot) - h0) * a1 + (fineGround(x + a2 * ef, foot) - h0) * a2) / ef;
         HD_N = normalize(HD_N - g * smoothstep(8.0, 2.0, foot));
-        ALB_TINT *= 1.0 + clamp(h0 * 0.25, -0.15, 0.2);
+        // (Titan's pebbles water ice on its dark sand — Huygens's: far lighter)
+        ALB_TINT *= 1.0 + clamp(h0 * select(0.25, 1.2, titan), -0.15, select(0.2, 0.9, titan));
       }
       // (the relief's shadows within 25 km — fading from 15: farther, the dust blurs them, and their march was a fifth of the
       // frame at sunset)
       let dKm = nh.t * mR * 1e-3;
-      if ((liteSkip() & 4u) == 0u && dKm < 25.0) {
+      if ((liteSkip() & 4u) == 0u && dKm < 25.0 && !titan) {
         REL_SH = mix(nearShadow(surf, nh.qb, nh.h, toBody(lt.dir), foot, P.time.x * P.near5.w), 1.0, smoothstep(15.0, 25.0, dKm));
       }
     }
@@ -11405,12 +11450,12 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let k = u32(P.near1.w);
   // (another world than the Earth, without its air: the body raster's — bodyLite, its threads the rate's pattern's; compiled out
   // of the Earth's kernel — NEAR_KIND 1 — and the Earth's material out of the worlds' — 3)
-  if (NEAR_KIND != 1u && NEAR_KIND != 2u && !hasAir(k) && bodyKind(k) != 0u) {
+  if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && !hasAir(k) && bodyKind(k) != 0u) {
     bodyLite(gid.xy, k);
     return;
   }
   // (Mars — a world with air, not the Earth —: its body raster's ground shaded through earthNear — bodyLiteAir, P7)
-  if (NEAR_KIND == 2u && !isEarth(k) && hasAir(k) && bodyKind(k) != 0u) {
+  if (nearAirWorld() && !isEarth(k) && hasAir(k) && bodyKind(k) != 0u) {
     bodyLiteAir(gid.xy, k);
     return;
   }

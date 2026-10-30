@@ -7,7 +7,7 @@ import type { Vec3 } from "../physics";
 import { GEAR } from "../landing";
 import { TUNING } from "../game/tuning";
 import { bodyAxes, M_METRES, mapIndex, SOLAR_BODIES, solarBody, solarState, spinVector } from "./solar";
-import { craterRelief } from "../terrain";
+import { craterRelief, titanRelief } from "../terrain";
 import { airAt, airRaw } from "../aero";
 import { C_MPS } from "../units";
 import { cross, dot, sub } from "../math/vec3";
@@ -145,6 +145,14 @@ for (const b of SOLAR_BODIES) {
   if (m === 1 || m === 2 || m === 3 || (m >= 7 && m <= 18)) {
     const mR = b.radius * M_METRES;
     craters.set(b.id, (q) => craterRelief(m, q, mR));
+  }
+}
+// (and Titan's dunes and hills — trace.wgsl titanRelief, PLAN-PLANETES-AAA P8)
+{
+  const t = SOLAR_BODIES.find((b) => b.id === "titan");
+  if (t) {
+    const mR = t.radius * M_METRES;
+    craters.set("titan", (q) => titanRelief(q, mR));
   }
 }
 for (const [id, f] of craters) reliefs.set(id, f);

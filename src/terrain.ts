@@ -119,6 +119,28 @@ export function relief(surf: number, q: V3, mR: number, foot = 0.05, tSec?: numb
   return 0;
 }
 
+/**
+ * Titan's ground under its haze (trace.wgsl titanRelief, the same): a swell of highlands and basins, ridged hills on the
+ * highlands, the equatorial belt's linear dunes (east–west, 2.5 km apart, ~90 m), a few metres' roughness [m].
+ */
+export function titanRelief(q: V3, mR: number, foot = 0.05): number {
+  let h = tfbm(sc(q, 4), Math.max(layerOct(4, foot, mR, 4), 1)) * 400;
+  const hi = smooth(0, 0.25, tfbm(sc(q, 10, 3), 2));
+  const oh = layerOct(60, foot, mR, 4);
+  if (oh > 0) h += (ridged(sc(q, 60, 5), oh) - 0.5) * 600 * hi;
+  const lat = Math.asin(Math.min(Math.max(q[2], -1), 1));
+  const field = smooth(0.45, 0.3, Math.abs(lat)) * smooth(-0.05, 0.25, tfbm(sc(q, 12, 7), 2)) * (1 - hi);
+  if (layerOct(1030, foot, mR, 1) > 0 && field > 0.001) {
+    const y = (lat * mR) / 2500 + 1.6 * tfbm(sc(q, 150, 11), 2);
+    const x = y - Math.floor(y);
+    const d = 1 - Math.abs(2 * x - 1);
+    h += d * d * (3 - 2 * d) * 90 * field;
+  }
+  const os = layerOct(8580, foot, mR, 3);
+  if (os > 0) h += tfbm(sc(q, 8580), os) * 12;
+  return h;
+}
+
 const u2f = (h: number) => (h >>> 8) / 16777216;
 /** The tracer's hash4: four uniform numbers from a lattice cell (x ^ a, y ^ b, z ^ c). */
 function hash4(x: number, y: number, z: number): [number, number, number, number] {

@@ -2836,7 +2836,7 @@ export class Renderer {
     // keep "any")
     if (!o.probe && this.nearKinds) {
       const nb = near ? bodies[near.index] : undefined;
-      const kind = !nb ? 4 : !bodyHasAir(nb.kind, nb.surface) ? 3 : nb.id === "earth" ? 1 : 2;
+      const kind = !nb ? 4 : !bodyHasAir(nb.kind, nb.surface) ? 3 : nb.id === "earth" ? 1 : nb.id === "titan" ? 5 : 2;
       this.featureKey |= kind << NEAR_KIND_SHIFT;
     }
     // (the Ranger's shadow on the near ground: its bounding sphere in the camera's axes; 0: none)
@@ -3097,8 +3097,8 @@ export class Renderer {
     // in float64 — an anchor of whole metres (multiples of 64) near it, and the camera from the anchor
     const fineMap = near ? solarBody(bodies[near.index]!.id)?.map : undefined;
     const fm = fineMap ? mapIndex(fineMap) : -1;
-    // (and Mars's, its relief marched — PLAN-PLANETES-AAA P7)
-    if (near && (fm === 1 || fm === 2 || fm === 3 || (fm >= 7 && fm <= 18)) && Math.hypot(...near.centre) < 1.02) {
+    // (and Mars's, its relief marched — PLAN-PLANETES-AAA P7 —, Titan's: Huygens's rounded pebbles — P8)
+    if (near && (fm === 1 || fm === 2 || fm === 3 || (fm >= 7 && fm <= 19)) && Math.hypot(...near.centre) < 1.02) {
       const mR = near.radius * M_METRES;
       const cb = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]) * mR);
       const an = cb.map((c) => Math.round(c / 64) * 64);
@@ -3362,7 +3362,7 @@ export class Renderer {
       nbR.id !== "earth" &&
       nbR.kind !== 0 &&
       // (Mars's too, its air shaded through earthNear — trace.wgsl bodyLiteAir, P7)
-      (!bodyHasAir(nbR.kind, nbR.surface) || nbR.id === "mars") &&
+      (!bodyHasAir(nbR.kind, nbR.surface) || nbR.id === "mars" || nbR.id === "titan") &&
       reliefMax(nbR.surface) > 0 &&
       near!.distance < 1.5 * near!.radius &&
       t === this.live &&
