@@ -3832,6 +3832,9 @@ var<private> MARCH_REACH: f32 = 3e38;
 var<private> MARCH_FOOT: f32 = 1.0;
 // (and its crossing's bisections: 10; Mars's 6 — a sixty-fourth of its last step, metres at 10 km: its normal taken apart)
 var<private> MARCH_BISECT: u32 = 10u;
+// (and where it starts [radii]: 0, the camera; Mars's rays the body raster has not met, half its reach — its ground nearer is
+// all the raster's: their ~200 steps from a camera 2 m up through the relief's 21 km shell, gone)
+var<private> MARCH_T0: f32 = 0.0;
 // (Mars's ground met by the body raster — bodyLiteAir —: its distance [radii], earthNear's hit without its march; 0: marched)
 var<private> NEAR_T: f32 = 0.0;
 fn nearMarch(look: vec3f) -> NearHit {
@@ -3851,7 +3854,7 @@ fn nearMarch(look: vec3f) -> NearHit {
   let sq = sqrt(Rs * Rs - d2);
   let t1 = b + sq;
   if (t1 <= 0.0) { return o; }
-  var t = max(b - sq, 0.0);
+  var t = max(max(b - sq, 0.0), MARCH_T0);
   var tPrev = t;
   if (hmax <= 0.0) {
     // no relief (a gas giant): the sphere
@@ -9549,7 +9552,9 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
       MARCH_REACH = 1.2e5;
       MARCH_FOOT = 4.0;
       MARCH_BISECT = 6u;
+      MARCH_T0 = select(0.0, 0.5 * P.tileL[17].x / P.near4.w, rasterPrimary() && P.tileL[17].x > 0.0);
       nh = nearMarch(look);
+      MARCH_T0 = 0.0;
       MARCH_LEAST = 0.02;
       MARCH_REACH = 3e38;
       MARCH_FOOT = 1.0;

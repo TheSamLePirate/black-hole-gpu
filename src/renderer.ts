@@ -3265,6 +3265,8 @@ export class Renderer {
     f.set(this.earthTiles.params(), 69 * 4);
     // (the Moon's in their place while drawn: the Earth's are off then — not the near body)
     if (this.moonTiles.active) f.set(this.moonTiles.params(), 69 * 4);
+    // (and the body raster's reach [m] — P.tileL[17].x —: Mars's rays the raster has not met start their march there, P7)
+    f[(69 + 1 + 17) * 4] = this.bodyRasterNow && this.bodyRaster ? this.bodyRaster.reach : 0;
     // (the orthophotos' levels: in the tracer's table, written when they change)
     const ortho = this.earthTiles.orthoParams();
     if (!this.orthoSent || ortho.some((v, i) => v !== this.orthoSent![i])) {

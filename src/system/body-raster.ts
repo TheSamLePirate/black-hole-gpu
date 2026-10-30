@@ -221,7 +221,7 @@ const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0
 export function bodyRasterFrame(
   v: BodyRasterView,
   anchor: BodyAnchor | null,
-): { uniform: Float32Array<ArrayBuffer>; anchor: BodyAnchor; levels: number } | null {
+): { uniform: Float32Array<ArrayBuffer>; anchor: BodyAnchor; levels: number; reach: number } | null {
   const { near, camera } = v;
   const R = near.radius * v.mPerM;
   const hmax = reliefMax(v.surf);
@@ -266,7 +266,7 @@ export function bodyRasterFrame(
     const snap = (x: number) => Math.round(x / (2 * s)) * 2 * s;
     f.set([snap(ct[0]), snap(ct[1]), s, cell0 * 2 ** l], 32 + 4 * l);
   }
-  return { uniform: f, anchor: a, levels };
+  return { uniform: f, anchor: a, levels, reach: reach * R };
 }
 
 /** The pipeline, the grid and the bindings of the body raster (drawn into the Earth raster's target: TerrainRaster.encodeBody). */
@@ -297,6 +297,9 @@ export class BodyRaster {
   error: string | null = null;
   /** the last frame's levels and how many were worked out again (a diagnostic) */
   levels = 0;
+  /** how far its ground reaches from the camera's ground point [m] (the horizon and the relief over it): the rays not met by
+   *  it start their march there — trace.wgsl earthNear, Mars's (P7) */
+  reach = 0;
   rebuilt = 0;
 
   constructor(
@@ -371,6 +374,7 @@ export class BodyRaster {
     const reanchored = fr.anchor !== this.anchor;
     this.anchor = fr.anchor;
     this.levels = fr.levels;
+    this.reach = fr.reach;
     this.surf = v.surf;
     this.device.queue.writeBuffer(this.uniform, 0, fr.uniform);
     this.bind ??= this.device.createBindGroup({
