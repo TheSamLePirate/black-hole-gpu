@@ -97,7 +97,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 ### P6 — La Lune — **fait**, [P6.md](progress/planetes-aaa/P6.md) (rochers et traces reportés)
 - Tuiles LROC (WAC/NAC) et LOLA en flux ; BRDF de Hapke (pic d'opposition), régolithe au pied, rochers, traces.
 
-### P7 — Mars
+### P7 — Mars — **en grande partie fait**, [P7.md](progress/planetes-aaa/P7.md) (ciné au-dessus du budget de 10–17 % ; tourbillons, givre à venir)
 - MOLA / HRSC / CTX en flux ; atmosphère poussiéreuse (ciel ocre, couchers bleus), tourbillons, givre polaire.
 
 ### P8 — Les autres corps solides
