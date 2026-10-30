@@ -95,15 +95,23 @@ export function relief(surf: number, q: V3, mR: number, foot = 0.05, tSec?: numb
   if (surf === SURF.rock) {
     const base = 0.5 + 0.5 * tfbm(sc(q, 5), Math.max(layerOct(5, foot, mR, 5), 1));
     let h = base * 1000;
+    // (mesas: flat tops, steep cliffs — their strata are the albedo's, trace.wgsl planetAlbedo: stepped in the relief, a gentle
+    // flank drew them as contour lines in shadow — PLAN-PLANETES-AAA P5)
     const om = layerOct(300, foot, mR, 3);
-    if (om > 0) h += smooth(0.55, 0.62, 0.5 + 0.5 * tfbm(sc(q, 300), om)) * 380;
+    if (om > 0) h += smooth(0.572, 0.588, 0.5 + 0.5 * tfbm(sc(q, 300), om)) * 380;
+    // (canyons cut into the high plateaus: a network of steep-walled gorges, ~200 m deep)
+    const ocn = layerOct(200, foot, mR, 4);
+    if (ocn > 0) h -= smooth(0.8, 0.95, 1 - Math.abs(tfbm(sc(q, 200, 9), ocn))) * 200 * smooth(0.5, 0.62, base);
     const oh = layerOct(3000, foot, mR, 3);
     if (oh > 0) h += (0.5 + 0.5 * tfbm(sc(q, 3000, 3), oh)) * 200;
     const ou = layerOct(300000, foot, mR, 2);
     if (ou > 0) h += (0.5 + 0.5 * tfbm(sc(q, 300000), ou)) * 3;
     const od = layerOct(30000, foot, mR, 1);
     if (od > 0) {
-      const dune = 0.5 + 0.5 * Math.sin((q[0] * 0.6 + q[1] * 0.8) * 30000 + 4 * tfbm(sc(q, 80), 2));
+      // (the dunes: their long windward slope, their steep slip face downwind — a fifth of their wavelength)
+      const ph = (q[0] * 0.6 + q[1] * 0.8) * 30000 + 4 * tfbm(sc(q, 80), 2);
+      const x = ph / (2 * Math.PI) - Math.floor(ph / (2 * Math.PI));
+      const dune = x < 0.8 ? smooth(0, 0.8, x) : smooth(1, 0.8, x);
       h += dune * 25 * smooth(0.45, 0.25, base);
     }
     return h;

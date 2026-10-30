@@ -5,7 +5,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // PLAN-PLANETES-AAA P4: Mann — its frozen clouds (system/body-raster.ts bodyCloudVs, trace.wgsl bodyCloudLite: ice slabs ~2 km
 // up) and its glaciers' crevasses (terrain.ts mannCrevasse, the same on the GPU): the body raster drawing them, no GPU error;
 // shots from 3 km towards the horizon, from 6 km looking down, on foot.
-// Duration: ~4 min.
+// Duration: ~4 min here, ~7 min on kerr-mini.
 // Done when: every view shot without a GPU error.
 
 const OUT = process.env.OUT ?? "remote-results/mann-ice";

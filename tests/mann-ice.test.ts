@@ -66,3 +66,12 @@ test("Mann's frozen clouds: slabs ~2 km up, and a craft flown into one is struck
   expect(out.cloud).toBe(true);
   expect(out.impact!).toBeGreaterThan(50);
 });
+
+test("Edmunds' relief: its canyons' scale the tracer's, within its bound", () => {
+  expect(traceWGSL).toContain("q * 200.0 + vec3f(9.0)");
+  // (Edmunds' relief within its bound — trace.wgsl reliefMax 1800)
+  for (let i = 0; i < 200; i++) {
+    const q = unit([Math.cos(i * 0.31), Math.sin(i * 0.31), Math.sin(i * 0.17)]);
+    expect(relief(SURF.rock, q, 6.371e6)).toBeLessThan(1800);
+  }
+});

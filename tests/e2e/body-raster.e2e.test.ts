@@ -100,7 +100,9 @@ describe.skipIf(!E2E)("P1: other worlds' ground drawn by the raster", () => {
         }
         expect(st.gpuErrors).toBe(0);
       }
-      await Bun.$`python3 scripts/compose.py ${OUT}/${body}.jpg ${`P1 — ${body}, raster du corps / tracé`} ${shots[0]![0]} ${shots[0]![1]} ${shots[1]![0]} ${shots[1]![1]} --width 1600`.quiet();
+      await Bun.$`python3 scripts/compose.py ${OUT}/${body}.jpg ${`P1 — ${body}, raster du corps / tracé`} ${shots[0]![0]} ${shots[0]![1]} ${shots[1]![0]} ${shots[1]![1]} --width 1600`
+        .quiet()
+        .nothrow(); // (the sheet: PIL may be missing — kerr-mini)
       expect(app.cdp.errors).toEqual([]);
     }, 900_000);
 });

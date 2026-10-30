@@ -109,6 +109,10 @@ export class PlanetCharacter {
   private camClock = 0;
   /** the view's place [the walk's metres] as last placed (the free camera taken over from it) */
   private camQ: Vec3 | null = null;
+  /** The view as placeView left it: the rig's place read back, and the eye's own (body-fixed [m]) — frame() places the
+   *  astronaut from the latter while the view is still there (the rig's own coordinates, read back, lost millimetres a
+   *  frame: the walker shook against a still ground — PLAN-PLANETES-AAA P5). */
+  private placed: { X: Vec3; q: Vec3 } | null = null;
   constructor(private c: CameraController) {}
   /** the Gargantua world's frame walked on at a time (one a step: the height's samples, the sub-steps, the camera
    *  read it many times — each built anew allocated, 32 times for the camera's march alone) */
@@ -224,6 +228,7 @@ export class PlanetCharacter {
     this.pitch = 0.2;
     this.distance = this.camDistance = this.c.s.characterDistance;
     this.camPivot.reset();
+    this.placed = null;
     this.jolt = 0;
     this.runFov = 1;
     this.accumulator = 0;
@@ -770,13 +775,18 @@ export class PlanetCharacter {
       sp.rigPlace(false, X, world(unit(sub(target, q))), world(up), at.V);
     }
     sp.sync();
+    const placed = sp.rigWorld();
+    this.placed = placed ? { X: [...placed.X] as Vec3, q } : null;
   }
   frame(): CharacterFrame | null {
     if (!this.active) return null;
     const v = this.c.spectator?.rigWorld();
     if (!v) return null;
     const project = (p: Vec3): Vec3 => [dot(v.right, p), dot(v.up, p), dot(v.fwd, p)];
-    let origin = project(scale(sub(this.world(this.q), v.X), this.metres()));
+    // (from the eye he placed, exactly — the view not moved since —, else the view's place read back)
+    const P = this.placed;
+    const eye = P && P.X.every((x, i) => x === v.X[i]) ? sub(this.q, P.q) : null;
+    let origin = eye ? project(this.worldVector(eye)) : project(scale(sub(this.world(this.q), v.X), this.metres()));
     let bodyProject = (p: Vec3) => project(this.worldVector(p));
     if (!this.ours) {
       const cam = cameraFrame(this.c.spectator!.s),
@@ -786,7 +796,7 @@ export class PlanetCharacter {
         const z = [0, 1, 2].map((i) => axes.reduce((sum, a, j) => sum + a[i]! * p[j]!, 0)) as Vec3;
         return [dot(z, cam.right), dot(z, cam.up), dot(z, cam.fwd)];
       };
-      origin = bodyProject(sub(this.q, scale(toLocal(F, v.X, [0, 0, 0]).xi, F.mPerM)));
+      origin = bodyProject(eye ?? sub(this.q, scale(toLocal(F, v.X, [0, 0, 0]).xi, F.mPerM)));
     }
     const up = this.up(),
       right = unit(cross(this.forward, up));

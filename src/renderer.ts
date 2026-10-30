@@ -3337,18 +3337,21 @@ export class Renderer {
     if (!o.probe) this.rasterPrimaryOn = rasterPrimary;
     // (… and its shading rate: 1 every pixel, 2 one in two, 4 one in 2 × 2 … — trace.wgsl rasterRate; "auto": the
     // governor's, by the device's measured load — adaptRasterRate)
-    this.rasterRate = this.rasterRateFor(s);
+    // (another world's ground — bodyLite —: one pixel in 4 at the sparsest; at the Earth governor's 1 in 16 its rebuilt pixels
+    // shimmered round a walker on kerr-mini — PLAN-PLANETES-AAA P5)
+    this.rasterRate = this.bodyRasterNow ? Math.min(this.rasterRateFor(s), 4) : this.rasterRateFor(s);
     // (the cloud pass's bit — CLOUD_PASS_FLAG — set once it is drawn this frame: dispatchTrace, when the frame's key is whole)
     this.cloudPassDrawn = false;
     // (16 written 15: the rate's four bits — trace.wgsl rasterRate)
     // (64: the ground's albedo read at every pixel — RASTER_DETAIL, trace.wgsl rasterAlbedo —, not with the temporal upsampling,
     // whose history has no albedo beside it)
     const detail = rasterPrimary && this.rasterDetail && !this.taauOn;
-    f[MOUTH_LIST_AT + 5] = rasterPrimary
-      ? Math.min(this.rasterRate, 15) + (this.rasterJitter === "halton" ? 16 : 0) + (detail ? RASTER_DETAIL_FLAG : 0)
-      : 0;
+    // (no frame jitter under another world's raster with a walker on it: the ground's depth moving a sub-pixel each frame, the
+    // astronaut composited against it shook at its feet — kerr-mini, PLAN-PLANETES-AAA P5)
+    const halton = this.rasterJitter === "halton" && !(this.bodyRasterNow && this.character?.active);
+    f[MOUTH_LIST_AT + 5] = rasterPrimary ? Math.min(this.rasterRate, 15) + (halton ? 16 : 0) + (detail ? RASTER_DETAIL_FLAG : 0) : 0;
     if (!o.probe) {
-      this.rasterHaltonNow = rasterPrimary && this.rasterJitter === "halton";
+      this.rasterHaltonNow = rasterPrimary && halton;
       this.rasterDetailNow = detail;
     }
     // (the trees drawn as raster instances this frame: set once they are — encodeTerrainRasterVisibility)
@@ -8253,7 +8256,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       return;
     }
     this.bodyRaster ??= new BodyRaster(this.device, this.traceSource);
-    const jitter = this.rasterJitter === "halton" && this.rasterPrimaryOn ? this.haltonNdc(target) : ([0, 0] as [number, number]);
+    const jitter = this.rasterHaltonNow ? this.haltonNdc(target) : ([0, 0] as [number, number]);
     const ready = this.bodyRaster.prepare(
       enc,
       {

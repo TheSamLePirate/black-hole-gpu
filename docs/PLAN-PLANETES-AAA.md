@@ -91,7 +91,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 - **Nuages gelés** du film : bancs de glace suspendus, praticables (contact).
 - Ciel froid, lumière rasante, brillance spéculaire de la glace.
 
-### P5 — Edmunds
+### P5 — Edmunds — **fait**, [P5.md](progress/planetes-aaa/P5.md)
 - Plateaux, mesas, canyons, dunes vivantes, matériaux roche / sable, ciel et poussière ; site du camp.
 
 ### P6 — La Lune

@@ -1206,6 +1206,15 @@ fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
     alb = mix(alb, vec3f(0.76, 0.7, 0.58), smoothstep(0.25, 0.5, -f1) * 0.7);
     // (near: the rock's own mottling, kilometres down to metres)
     alb *= 0.8 + 0.4 * (0.5 + 0.5 * tfbmF(q * 300.0 + vec3f(4.4), max(oc - 6.0, 0.0)));
+    // (near — the ground's height known, EDM_H —: its strata, bands of rust, cream and grey every ~23 m, seen on the mesas'
+    // cliffs and the canyons' walls — PLAN-PLANETES-AAA P5)
+    if (EDM_H > -1e8) {
+      let band = EDM_H / 23.0 + 0.6 * tfbmF(q * 2000.0 + vec3f(1.3), 2.0);
+      let b = fract(band);
+      let layer = fract(floor(band) * 0.618);
+      let strata = mix(mix(vec3f(0.62, 0.36, 0.22), vec3f(0.78, 0.66, 0.5), smoothstep(0.3, 0.7, layer)), vec3f(0.45, 0.42, 0.4), step(0.85, layer));
+      alb = mix(alb, strata, 0.55 * smoothstep(0.0, 0.15, b) * smoothstep(1.0, 0.85, b));
+    }
   } else if (surf >= 4u) {
     // its map: longitude about the pole, latitude (linear: an sRGB view; scaled to its albedo)
     let lon = atan2(nrm.y, nrm.x);
@@ -1708,6 +1717,7 @@ fn demNormal(q: vec3f) -> vec3f {
 }
 // the body's axes in the frame planetShade is called in (columns): set by its callers for our worlds
 var<private> ALB_GAIN: f32 = 1.0; // (near: the ground's own brightening — fresh ejecta, regolith)
+var<private> EDM_H: f32 = -1e9; // (near Edmunds: the ground's height [m] — its strata's colours, planetAlbedo)
 var<private> BODYW: mat3x3f = mat3x3f(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
 
 // Lit by its source alone (the disk seen as one light, or its star): the far view's shading. nrm,
@@ -1815,7 +1825,13 @@ fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f3
   // does: Lommel–Seeliger, 2 cos i / (cos i + cos e) — no darkening towards the limb: the full Moon evenly
   // lit, a thin crescent bright; the gas giants, Venus and Titan's haze, as Lambert)
   var f = cosi;
-  if (surf >= 4u && regolith(surf - 4u)) { f = 2.0 * cosi / max(cosi + mu, 1e-4); }
+  if (surf >= 4u && regolith(surf - 4u)) {
+    f = 2.0 * cosi / max(cosi + mu, 1e-4);
+    // (and its opposition surge — Hapke's shadow hiding, B₀ 1, width h 0.06 —: the dust brighter as the light comes from behind
+    // the eye, the full Moon's glare, the halo round a walker's shadow; normalised to 1 at a quarter phase — PLAN-PLANETES-AAA P6)
+    let ta = tan(0.5 * acos(clamp(dot(ldir, view), -1.0, 1.0)));
+    f *= (1.0 + 1.0 / (1.0 + ta / 0.06)) / 1.0566;
+  }
   // (a ringed planet's night and twilight: the rings' light — its own axes, pat's: the pole z)
   var shine = vec3f(0.0);
   if (ringOuter(k) > 0.0 && cosi < 0.25) {
@@ -3686,15 +3702,23 @@ fn reliefBase(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
     // Edmunds: plateaus, mesas, dunes
     let base = 0.5 + 0.5 * tfbm(q * 5.0, max(layerOct(5.0, foot, mR, 5), 1));
     var h = base * 1000.0;
+    // (mesas: flat tops, steep cliffs — their strata are the albedo's, planetAlbedo: stepped in the relief, a gentle flank drew
+    // them as contour lines in shadow — PLAN-PLANETES-AAA P5)
     let om = layerOct(300.0, foot, mR, 3);
-    if (om > 0) { h += smoothstep(0.55, 0.62, 0.5 + 0.5 * tfbm(q * 300.0, om)) * 380.0; }
+    if (om > 0) { h += smoothstep(0.572, 0.588, 0.5 + 0.5 * tfbm(q * 300.0, om)) * 380.0; }
+    // (canyons cut into the high plateaus: a network of steep-walled gorges, ~200 m deep)
+    let ocn = layerOct(200.0, foot, mR, 4);
+    if (ocn > 0) { h -= smoothstep(0.8, 0.95, 1.0 - abs(tfbm(q * 200.0 + vec3f(9.0), ocn))) * 200.0 * smoothstep(0.5, 0.62, base); }
     let oh = layerOct(3000.0, foot, mR, 3);
     if (oh > 0) { h += (0.5 + 0.5 * tfbm(q * 3000.0 + vec3f(3.0), oh)) * 200.0; }
     let ou = layerOct(300000.0, foot, mR, 2);
     if (ou > 0) { h += (0.5 + 0.5 * tfbm(q * 300000.0, ou)) * 3.0; }
     let od = layerOct(30000.0, foot, mR, 1);
     if (od > 0) {
-      let dune = 0.5 + 0.5 * sin(dot(q, vec3f(0.6, 0.8, 0.0)) * 30000.0 + 4.0 * tfbm(q * 80.0, 2));
+      // (the dunes: their long windward slope, their steep slip face downwind — a fifth of their wavelength)
+      let ph = dot(q, vec3f(0.6, 0.8, 0.0)) * 30000.0 + 4.0 * tfbm(q * 80.0, 2);
+      let x = fract(ph / TAU);
+      let dune = select(smoothstep(1.0, 0.8, x), smoothstep(0.0, 0.8, x), x < 0.8);
       h += dune * 25.0 * smoothstep(0.45, 0.25, base);
     }
     return h;
@@ -4063,10 +4087,14 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
         }
       }
     }
-    // (in the shadows the light the lit ground around sheds: a few per cent)
+    // (in the shadows the light the lit ground around sheds: a few per cent — and a world's sky's, where it has air: a sixth —
+    // PLAN-PLANETES-AAA P5, Edmunds' canyons were black)
+    let fill = select(0.03, 0.16, P.near5.y > 0.0);
+    EDM_H = select(-1e9, hit.h, surf == 2u);
     let c = planetShade(k, n, qb, P.near4.xyz, -look, P.time.x, 1.0, ringShadow(k, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz));
     ALB_GAIN = 1.0;
-    return c * (sh + (1.0 - sh) * 0.03);
+    EDM_H = -1e9;
+    return c * (sh + (1.0 - sh) * fill);
   }
   // lit by a light probe (the environment of the planet: the lensed disk, Gargantua, the sky):
   // diffuse albedo/π · E(n); water mirroring the environment (Fresnel)

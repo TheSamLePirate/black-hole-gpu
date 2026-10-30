@@ -140,6 +140,8 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | miller-sea.e2e.test.ts | PLAN-PLANETES-AAA P2: Miller's sea by FFT (knee-deep, 1.3 g) — the FFT running for Miller, Gargantua over the sea, the water looked down at, on foot; shots held and running, no GPU error. `SEA_LEVERS=` (renderer.liteSkip shots). | Miller: the water world, then its scenes, 1600×1000 | ~300 here | WebGPU |
 | miller-wave.e2e.test.ts | PLAN-PLANETES-AAA P3: Miller's giant wave felt — the Ranger afloat, `__bh.game.waveIn(90)`, the clock ×4: the craft rides it up, then swept away by its lip; shots of the wall coming, three-quarters on. `SKIP_WAVE=1`, `NO_DAMAGE=1` (diagnostics). | Miller: Gargantua over the sea, 1600×1000 | ~50 here | WebGPU |
 | mann-ice.e2e.test.ts | PLAN-PLANETES-AAA P4: Mann's frozen clouds (body raster's slab layer) and its glaciers' crevasses — chase view 2.6 km, from high, on foot; no GPU error. | Mann: the ice world, then its views, 1600×1000 | ~250 here | WebGPU |
+| edmunds.e2e.test.ts | PLAN-PLANETES-AAA P5: Edmunds' mesas, canyons, asymmetric dunes and strata colours drawn by the body raster — chase view 2.6 km, from high, on foot; no GPU error. | Edmunds: the desert world, then its views, 1600×1000 | ~80 on kerr-mini | WebGPU |
+| walker-jitter.e2e.test.ts | PLAN-PLANETES-AAA P5: the astronaut standing on Mann, the Moon, Edmunds — 3 s of every frame (DevTools screencast), the helmet's shift frame to frame by block matching, the ground's beside it; body raster on and off; fails over 1.5 px; a dark view (night) said and skipped. `ONLY=`, `SAVE=dir` (frames kept). | Mann: the ice world, then each world on foot, 1600×1000 | ~250 on kerr-mini | WebGPU |
 
 ### The tracer's kernels (docs/PLAN-LEAN-TRACER-KERNELS.md)
 
