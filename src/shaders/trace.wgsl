@@ -3832,6 +3832,8 @@ var<private> MARCH_REACH: f32 = 3e38;
 var<private> MARCH_FOOT: f32 = 1.0;
 // (and its crossing's bisections: 10; Mars's 6 — a sixty-fourth of its last step, metres at 10 km: its normal taken apart)
 var<private> MARCH_BISECT: u32 = 10u;
+// (Mars's ground met by the body raster — bodyLiteAir —: its distance [radii], earthNear's hit without its march; 0: marched)
+var<private> NEAR_T: f32 = 0.0;
 fn nearMarch(look: vec3f) -> NearHit {
   var o: NearHit;
   o.t = -1.0;
@@ -9537,15 +9539,22 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   // imagery handed to otherGround)
   // (renderer.liteSkip: 4 its shadows off, 8 the sphere again, 16 the march's hit shaded plainly — the A/B of their costs)
   if (NEAR_KIND == 2u && !DISC_ONLY && !isEarth(k) && hasDem(u32(bodies[BV * k + 2u].z)) && (liteSkip() & 8u) == 0u) {
-    MARCH_LEAST = 0.05;
-    MARCH_REACH = 1.2e5;
-    MARCH_FOOT = 4.0;
-    MARCH_BISECT = 6u;
-    let nh = nearMarch(look);
-    MARCH_LEAST = 0.02;
-    MARCH_REACH = 3e38;
-    MARCH_FOOT = 1.0;
-    MARCH_BISECT = 10u;
+    var nh: NearHit;
+    if (NEAR_T > 0.0) {
+      nh.t = NEAR_T;
+      nh.qb = normalize(nearCam() + toBody(look) * NEAR_T);
+      nh.h = relief(u32(bodies[BV * k + 2u].z), nh.qb, reliefFoot(NEAR_T), P.near4.w, P.time.x * P.near5.w);
+    } else {
+      MARCH_LEAST = 0.05;
+      MARCH_REACH = 1.2e5;
+      MARCH_FOOT = 4.0;
+      MARCH_BISECT = 6u;
+      nh = nearMarch(look);
+      MARCH_LEAST = 0.02;
+      MARCH_REACH = 3e38;
+      MARCH_FOOT = 1.0;
+      MARCH_BISECT = 10u;
+    }
     t = nh.t;
     if (nh.t > 0.0 && (liteSkip() & 16u) == 0u) {
       let surf = u32(bodies[BV * k + 2u].z);
@@ -11338,6 +11347,41 @@ fn bodyLite(gid: vec2u, k: u32) {
   stamps[idx] = P.frame.x;
 }
 
+// Mars's ground drawn by the body raster (PLAN-PLANETES-AAA P7): bodyLite's pixels — the rate's pattern, its jitter —, each
+// shaded as earthNear shades a hit (its air, its light, its tiles' normal and imagery, its shadows), at the raster's distance
+// instead of its march (NEAR_T)
+fn bodyLiteAir(gid: vec2u, k: u32) {
+  let W = u32(P.res.x);
+  let px = rasterPixel(gid, rasterRate(), P.frame.x);
+  if (px.x >= W || px.y >= u32(P.res.y)) { return; }
+  let idx = px.y * W + px.x;
+  // (under the cockpit's mask: the cabin there)
+  if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
+  let centre = vec2f(px) + 0.5;
+  if (terrainRasterHint(centre) <= 0.0) { return; }
+  FOOT = 1.0;
+  FOOT_NEAR = 1.0;
+  FOOT_FAR = 1.0;
+  let pos = centre + liteJitter(px);
+  var tM = terrainRasterHint(pos);
+  if (tM <= 0.0) { tM = terrainRasterHint(centre); }
+  let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
+  let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
+  let tR = tM / P.near4.w;
+  let rnd = fract(ign(centre) + f32(P.frame.x % 1024u) * 0.6180339887);
+  RND = fract(rnd * 7.31 + 0.13);
+  NEAR_T = tR;
+  let e = earthNear(look, rnd, k);
+  NEAR_T = 0.0;
+  var col = e.col;
+  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+  let old = accum[idx];
+  if ((P.frame.z & FLAG_TEMPORAL) != 0u && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
+  accum[idx] = vec4f(col, 1.0);
+  moments[idx] = vec2f(RASTER_MARK, tR * bodyRadius(k));
+  stamps[idx] = P.frame.x;
+}
+
 @compute @workgroup_size(8, 8)
 fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let W = u32(P.res.x);
@@ -11348,6 +11392,11 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // of the Earth's kernel — NEAR_KIND 1 — and the Earth's material out of the worlds' — 3)
   if (NEAR_KIND != 1u && NEAR_KIND != 2u && !hasAir(k) && bodyKind(k) != 0u) {
     bodyLite(gid.xy, k);
+    return;
+  }
+  // (Mars — a world with air, not the Earth —: its body raster's ground shaded through earthNear — bodyLiteAir, P7)
+  if (NEAR_KIND == 2u && !isEarth(k) && hasAir(k) && bodyKind(k) != 0u) {
+    bodyLiteAir(gid.xy, k);
     return;
   }
   if (NEAR_KIND == 3u) { return; }

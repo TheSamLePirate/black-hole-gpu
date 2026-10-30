@@ -3357,7 +3357,8 @@ export class Renderer {
       nbR &&
       nbR.id !== "earth" &&
       nbR.kind !== 0 &&
-      !bodyHasAir(nbR.kind, nbR.surface) &&
+      // (Mars's too, its air shaded through earthNear — trace.wgsl bodyLiteAir, P7)
+      (!bodyHasAir(nbR.kind, nbR.surface) || nbR.id === "mars") &&
       reliefMax(nbR.surface) > 0 &&
       near!.distance < 1.5 * near!.radius &&
       t === this.live &&

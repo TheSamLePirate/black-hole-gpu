@@ -34,6 +34,7 @@
  "mars main": 83000,
  "mars env": 49000,
  "mars aerial": 1000,
+ "mars shadeLite": 36000,
  "earth-only main": 50000,
  "earth-only env": 39000,
  "earth-only aerial": 1000,

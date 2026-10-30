@@ -90,7 +90,7 @@ export const PROFILES: KernelProfile[] = [
     id: "mars",
     label: "Mars's surface in the game's universe (a world with air near: its relief marched — PLAN-PLANETES-AAA P7)",
     key: GAME | NEAR_AIR,
-    entries: ["main", "env", "aerial"],
+    entries: ["main", "env", "aerial", "shadeLite"],
   },
   {
     id: "earth-only",

@@ -668,10 +668,7 @@ export class MoonTiles {
       f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, L.S / TAU, CLIP], o + 4);
     }
     f.set([Math.cos(this.lon), Math.sin(this.lon), Math.sin(this.lat), this.drawn ? -1 : 0], 0);
-    f.set(
-      [this.top, this.levels.findIndex((L) => !L.image), this.levels.length - 1, this.W.imageRes],
-      4 + 8 * WORLD_LEVELS,
-    );
+    f.set([this.top, this.levels.findIndex((L) => !L.image), this.levels.length - 1, this.W.imageRes], 4 + 8 * WORLD_LEVELS);
     return f;
   }
 
