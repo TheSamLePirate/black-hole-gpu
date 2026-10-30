@@ -6,7 +6,7 @@
 version: "3.8"
 services:
   kerr:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:18b2dde-648.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:8ba9210-649.1
     ports:
       - "3000:80"
     restart: unless-stopped
@@ -28,15 +28,13 @@ services:
       - OPENSKY_CLIENT_ID=${OPENSKY_CLIENT_ID:-}
       - OPENSKY_CLIENT_SECRET=${OPENSKY_CLIENT_SECRET:-}
       - MOON_DIR=/moon/lola
-      - MARS_DIR=/moon/mars
     stop_grace_period: 10s
     restart: unless-stopped
-  # the worlds' relief tiles (server/moon-tiles.ts, PLAN-PLANETES-AAA P6, P7): the Moon's LOLA 118 m and Mars's HRSC and MOLA
-  # blend 200 m, read from the USGS's copies on AWS (8.5 and 11.4 GB once), cut into ~3–4 GB of tiles each in moon-data; then it
-  # exits (a later start only checks them)
+  # the Moon's relief tiles (server/moon-tiles.ts, PLAN-PLANETES-AAA P6): LOLA's 118 m model read from the USGS's copy on AWS
+  # (8.5 GB once), cut into ~3–4 GB of tiles in moon-data; then it exits (a later start only checks them)
   moon-tiles:
     image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-82bc258-40.1
-    command: ["sh", "-c", "bun server/moon-build.ts --body moon --out /moon/lola && bun server/moon-build.ts --body mars --out /moon/mars"]
+    command: ["bun", "server/moon-build.ts", "--out", "/moon/lola"]
     volumes:
       - moon-data:/moon
     restart: on-failure
