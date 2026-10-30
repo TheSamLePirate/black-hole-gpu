@@ -10,7 +10,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // Done when: every view shot, the tiles drawn and none failed.
 
 const OUT = process.env.OUT ?? "remote-results/moon-tiles";
-const HOLD = `Object.assign(__bh.settings, { animate: false, damage: false, crashSpeed: 1e9, dynamicResolution: false, showFps: true });`;
+// (shots of the ground compared: no depth of field — the scenes turn it on — nor motion blur, every pixel shaded, full scale)
+const HOLD = `Object.assign(__bh.settings, { animate: false, damage: false, crashSpeed: 1e9, dynamicResolution: false, showFps: true, dof: false, motionBlur: 0, earthRasterShading: "every", earthRasterScale: 1 });`;
 const view = (name: string, at: [number, number], altKm: number, off: [number, number]) =>
   `__bh.presets.${name} = { ...__bh.presets["Mars: from orbit"], target: "moon", fov: 60, ship: false, pose: { at: [${at}], body: "moon", altKm: ${altKm}, look: "moon", off: [${off}] } }; __bh.game.preset("${name}"); ${HOLD}`;
 

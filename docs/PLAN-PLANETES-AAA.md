@@ -94,7 +94,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 ### P5 — Edmunds — **fait**, [P5.md](progress/planetes-aaa/P5.md)
 - Plateaux, mesas, canyons, dunes vivantes, matériaux roche / sable, ciel et poussière ; site du camp.
 
-### P6 — La Lune
+### P6 — La Lune — **fait**, [P6.md](progress/planetes-aaa/P6.md) (rochers et traces reportés)
 - Tuiles LROC (WAC/NAC) et LOLA en flux ; BRDF de Hapke (pic d'opposition), régolithe au pied, rochers, traces.
 
 ### P7 — Mars
