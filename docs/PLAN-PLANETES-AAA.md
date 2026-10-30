@@ -115,6 +115,8 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   - T4 ses mers de méthane : Kraken, Ligeia, Punga, les lacs, la mer FFT de P2 (méthane : sombre, vagues de quelques
     centimètres sous un vent faible) ;
   - T5 mesures, e2e, docs.
+  - **Fait** (30 octobre) : T1, T2 (carte ISS), T3, T4a (les mers, leur miroir), T5 — [P8.md](progress/planetes-aaa/P8.md).
+    Reste : T2b (le détail radar en tuiles d'albédo), T4b (la mer FFT au méthane).
 - **Vénus** et **les corps sans air** : leurs étapes écrites à leur tour.
 
 ### P9 — Géantes gazeuses et anneaux
