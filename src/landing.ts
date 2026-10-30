@@ -25,7 +25,7 @@ import { body as sysBody, GARGANTUA_SYSTEM, type BodyDef } from "./system/bodies
 import { bodyTrack, meanMotion } from "./system/ephemeris";
 import { circularOrbit } from "./system/kerr-orbits";
 import { sphericalFrame } from "./wormhole";
-import { millerWave, MW_HEIGHT, MW_LIP, relief, SURF } from "./terrain";
+import { mannCloud, millerWave, MW_HEIGHT, MW_LIP, relief, SURF } from "./terrain";
 import { C_MPS } from "./units";
 import { dot, len } from "./math/vec3";
 
@@ -268,7 +268,7 @@ export function stepLocal(
   thrust: Vec3,
   aero?: AeroFn,
   wheels?: Wheels,
-): { impact: number | null; touchdown?: { vn: number; vh: number }; airborne?: boolean; wave?: boolean } {
+): { impact: number | null; touchdown?: { vn: number; vh: number }; airborne?: boolean; wave?: boolean; cloud?: boolean } {
   const gear = GEAR / F.mPerM;
   const C = C_MPS;
   let touchdown: { vn: number; vh: number } | undefined;
@@ -332,6 +332,14 @@ export function stepLocal(
     L.w = [0, 1, 2].map((i) => v0[i]! + (h / 6) * (k1v[i]! + 2 * k2v[i]! + 2 * k3v[i]! + k4v[i]!)) as Vec3;
     left -= h;
     const dn = len(L.xi);
+    // (Mann: flown into one of its frozen clouds — terrain.ts mannCloud, PLAN-PLANETES-AAA P4 —: struck, at its speed)
+    if (F.surf === SURF.ice) {
+      const alt = (dn - F.R) * F.mPerM;
+      if (alt > 1000 && alt < 3000) {
+        const c = mannCloud([L.xi[0] / dn, L.xi[1] / dn, L.xi[2] / dn]);
+        if (c.mask > 0.02 && alt > c.bottom && alt < c.top) return { impact: len(L.w) * C, cloud: true };
+      }
+    }
     const gr = groundR(F, L.xi);
     // rolling: held on the ground, the wheels' friction along it, the tyres' grip across
     if (L.rolling) {

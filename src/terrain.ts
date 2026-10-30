@@ -79,7 +79,8 @@ const sc = (q: V3, k: number, o = 0): V3 => [q[0] * k + o, q[1] * k + o, q[2] * 
 export function relief(surf: number, q: V3, mR: number, foot = 0.05, tSec?: number): number {
   if (surf === SURF.ocean) return tSec === undefined ? 0 : millerWaves(q, tSec, mR, foot);
   if (surf === SURF.ice) {
-    let h = (0.5 + 0.5 * tfbm(sc(q, 6), Math.max(layerOct(6, foot, mR, 5), 1))) * 1400;
+    const base = 0.5 + 0.5 * tfbm(sc(q, 6), Math.max(layerOct(6, foot, mR, 5), 1));
+    let h = base * 1400 - MANN_CREVASSE_DEPTH * mannCrevasse(q, base, foot, mR);
     h += ridged(sc(q, 24, 5), layerOct(24, foot, mR, 4)) * 900;
     const oh = layerOctF(300, foot, mR, 5);
     if (oh > 0) h += ridgedMF(sc(q, 300, 2), oh) * 1800;
@@ -217,6 +218,28 @@ export function millerWave(q: V3, tSec: number, mR: number, foot = 0.05): { h: n
 /** Miller's giant waves' height [m] (millerWave's) — felt: the ground the ship lands on, flies into, rides up. */
 export function millerWaves(q: V3, tSec: number, mR: number, foot = 0.05): number {
   return millerWave(q, tSec, mR, foot).h;
+}
+
+/** Mann's crevasses (PLAN-PLANETES-AAA P4; trace.wgsl mannCrevasse, the same — felt: a walker falls in): in its glaciers — the
+ *  continents' lows —, a network of cracks ~4 m wide, ~160 m apart (where a noise crosses zero), resolved from a footprint of
+ *  ~40 m down. Their depth's share (0 … 1) at q; `base` the continents' noise there (relief's). */
+export const MANN_CREVASSE_DEPTH = 14;
+export function mannCrevasse(q: V3, base: number, foot: number, mR: number): number {
+  const fc = Math.min(Math.max(Math.log2(mR / (50000 * 4 * Math.max(foot, 0.05))), 0), 1);
+  const glacier = smooth(0.5, 0.38, base);
+  if (fc <= 0 || glacier <= 0) return 0;
+  const n = gnoise(sc(q, 50000, 11));
+  return (1 - smooth(0, 0.03, Math.abs(n))) * glacier * fc;
+}
+
+/** Mann's frozen clouds (PLAN-PLANETES-AAA P4; trace.wgsl mannCloud, the same — the film's): slabs of ice ~1.8–2.2 km up, in
+ *  patches tens of km across, ~150–500 m thick at their middle, thinning to their edge. Their bottom and top [m over the sphere]
+ *  at q, and how much of one is there (0: none). */
+export function mannCloud(q: V3): { bottom: number; top: number; mask: number } {
+  const mask = smooth(0.6, 0.68, 0.5 + 0.5 * tfbm(sc(q, 120, 31), 4));
+  const mid = 1950 + 400 * tfbm(sc(q, 900, 7), 3);
+  const half = 0.5 * (150 + 350 * (0.5 + 0.5 * tfbm(sc(q, 3000, 5), 3))) * mask;
+  return { bottom: mid - half, top: mid + half, mask };
 }
 
 /** The Earth's radius [m] (its relief's scale): WGS84's a — the ellipsoid on its squashed axes the sphere (ellipsoid.ts). */

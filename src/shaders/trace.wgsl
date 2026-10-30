@@ -3666,9 +3666,11 @@ fn reliefStep(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
 fn reliefBase(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
   if (surf >= 4u) { return select(0.0, craterRelief(surf - 4u, q, foot, mR), airless(surf)); }
   if (surf == 1u) {
-    // Mann: ice sheets, ridges, hills, rubble
+    // Mann: ice sheets, ridges, hills, rubble, its glaciers' crevasses
     // (noise cells: continents 1 000 km, ridges 270 km, mountains 21 km, crags 2 km, rocks 210 m, rubble 21 m)
-    var h = (0.5 + 0.5 * tfbm(q * 6.0, max(layerOct(6.0, foot, mR, 5), 1))) * 1400.0;
+    let base = 0.5 + 0.5 * tfbm(q * 6.0, max(layerOct(6.0, foot, mR, 5), 1));
+    MANN_CREV = mannCrevasse(q, base, foot, mR);
+    var h = base * 1400.0 - MANN_CREVASSE_DEPTH * MANN_CREV;
     h += ridged(q * 24.0 + vec3f(5.0), layerOct(24.0, foot, mR, 4)) * 900.0;
     let oh = layerOctF(300.0, foot, mR, 5.0);
     if (oh > 0.0) { h += ridgedMF(q * 300.0 + vec3f(2.0), oh) * 1800.0; }
@@ -3739,6 +3741,28 @@ fn millerWave(q: vec3f, foot: f32, mR: f32, tSec: f32) -> vec3f {
     }
   }
   return vec3f(h, crest, front);
+}
+
+// Mann's crevasses (PLAN-PLANETES-AAA P4; terrain.ts mannCrevasse, the same — felt): in its glaciers — the continents' lows —,
+// a network of cracks ~4 m wide, ~160 m apart (where a noise crosses zero), resolved from a footprint of ~40 m down; their
+// depth's share (0 … 1). The last relief's: MANN_CREV (the ice's blue inside them)
+const MANN_CREVASSE_DEPTH = 14.0;
+var<private> MANN_CREV: f32 = 0.0;
+fn mannCrevasse(q: vec3f, base: f32, foot: f32, mR: f32) -> f32 {
+  let fc = clamp(log2(mR / (50000.0 * 4.0 * max(foot, 0.05))), 0.0, 1.0);
+  let glacier = smoothstep(0.5, 0.38, base);
+  if (fc <= 0.0 || glacier <= 0.0) { return 0.0; }
+  let n = gnoise(q * 50000.0 + vec3f(11.0));
+  return (1.0 - smoothstep(0.0, 0.03, abs(n))) * glacier * fc;
+}
+// Mann's frozen clouds (terrain.ts mannCloud, the same — the film's): slabs of ice ~1.8–2.2 km up, in patches tens of km
+// across, ~150–500 m thick at their middle, thinning to their edge. x: their bottom, y: their top [m over the sphere], z: how much
+// of one is there (0: none)
+fn mannCloud(q: vec3f) -> vec3f {
+  let mask = smoothstep(0.6, 0.68, 0.5 + 0.5 * tfbm(q * 120.0 + vec3f(31.0), 4));
+  let mid = 1950.0 + 400.0 * tfbm(q * 900.0 + vec3f(7.0), 3);
+  let half = 0.5 * (150.0 + 350.0 * (0.5 + 0.5 * tfbm(q * 3000.0 + vec3f(5.0), 3))) * mask;
+  return vec3f(mid - half, mid + half, mask);
 }
 
 struct NearHit { t: f32, qb: vec3f, h: f32 };
@@ -4056,6 +4080,9 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
   if (surf == 1u) {
     // ice: blue ice on the steep faces, snow on the heights
     A = vec4f(mix(A.rgb, vec3f(0.45, 0.62, 0.78), smoothstep(0.06, 0.25, slope)) * (0.9 + 0.1 * smoothstep(2400.0, 3600.0, hit.h)), A.w);
+    // (inside a crevasse — the last relief's MANN_CREV, PLAN-PLANETES-AAA P4 —: the glacier's deep blue ice, darker down it)
+    let crev = MANN_CREV;
+    A = vec4f(mix(A.rgb, vec3f(0.12, 0.38, 0.68), crev * 0.85) * (1.0 - 0.55 * crev), A.w);
   } else if (surf == 2u) {
     A = vec4f(A.rgb * mix(1.0, 0.6, smoothstep(0.08, 0.3, slope)), A.w);
   }
@@ -6254,6 +6281,7 @@ fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterBridge(px: vec2f) -> bool { return false; }
 fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
+fn terrainRasterCloud(px: vec2f) -> bool { return false; }
 // END_TERRAIN_RASTER
 // BEGIN_CLOUD_PASS (system/cloud-pass.ts withCloudPass supplies the cloud pass's texture reads)
 fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds { return EarthClouds(-1.0, vec3f(0.0), -1.0); }
@@ -10966,6 +10994,46 @@ var<private> NEAR_SHADOW_OFF: bool = false;
 // its ground drawn by the raster (system/body-raster.ts, PLAN-PLANETES-AAA P1), shaded here a pixel at a time — the point
 // from the raster's distance instead of the march, then the tracer's own shading (shadeNear: the relief's normal and shadows,
 // the world's material, its light) and its air (nearAir), as main shades a nearMarch hit
+// A frozen cloud's pixel (Mann — PLAN-PLANETES-AAA P4): the slab's normal from the neighbouring pixels' distances, its ice white
+// over blue — bluer where thick: its light through it —, lit by the world's probe (its sky, Gargantua's disk), the air before it
+fn bodyCloudLite(idx: u32, centre: vec2f, look: vec3f, tR: f32, k: u32) {
+  let mR = P.near4.w;
+  let p0 = toBody(look) * tR;
+  var n = -look;
+  let dx = terrainRasterHint(centre + vec2f(1.0, 0.0));
+  let dy = terrainRasterHint(centre + vec2f(0.0, 1.0));
+  if (dx > 0.0 && dy > 0.0 && terrainRasterCloud(centre + vec2f(1.0, 0.0)) && terrainRasterCloud(centre + vec2f(0.0, 1.0))) {
+    let lx = rasterLook(centre + vec2f(1.0, 0.0));
+    let ly = rasterLook(centre + vec2f(0.0, 1.0));
+    let ex = toBody(lx) * (dx / mR) - p0;
+    let ey = toBody(ly) * (dy / mR) - p0;
+    let nb = normalize(cross(ex, ey));
+    n = fromBody(nb);
+    if (dot(n, look) > 0.0) { n = -n; }
+  }
+  let q = normalize(nearCam() + p0);
+  let c = mannCloud(q);
+  let thick = clamp((c.y - c.x) / 500.0, 0.0, 1.0);
+  let lt = nearLight(k);
+  let A = mix(vec3f(0.88, 0.92, 0.96), vec3f(0.55, 0.72, 0.9), thick);
+  var col = A / PI * nearE(n);
+  // (the light through its thinner edge, from behind it)
+  col += vec3f(0.3, 0.55, 0.75) * lt.e * (pow(max(dot(look, lt.dir), 0.0), 4.0) * (1.0 - thick) * 0.15 / PI);
+  let nair = nearAir(look, tR, k);
+  col = col * nair.T + nair.L;
+  if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+  let old = accum[idx];
+  if ((P.frame.z & FLAG_TEMPORAL) != 0u && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
+  accum[idx] = vec4f(col, 1.0);
+  moments[idx] = vec2f(RASTER_MARK, tR * bodyRadius(k));
+  stamps[idx] = P.frame.x;
+}
+// the camera ray through an image point [px] (the camera's frame)
+fn rasterLook(pos: vec2f) -> vec3f {
+  let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
+  return normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
+}
+
 // At a shading rate above 1 (the governor's — earthRasterShading), a thread a pixel of the frame's pattern only, the threads
 // packed as shade's; the others are shadeMark's, rebuilt by post.wgsl resolve from the fresh ones round them.
 fn bodyLite(gid: vec2u, k: u32) {
@@ -10991,6 +11059,11 @@ fn bodyLite(gid: vec2u, k: u32) {
   // distance's rounding: a float32 radius is ±0.5 m on an Earth-sized world)
   let surf = u32(bodies[BV * k + 2u].z);
   let tSec = P.time.x * P.near5.w;
+  // (Mann's frozen clouds — the raster's slabs, a 1.5 —: ice in the air)
+  if (terrainRasterCloud(centre)) {
+    bodyCloudLite(idx, centre, look, tR, k);
+    return;
+  }
   var hit: NearHit;
   hit.t = tR;
   hit.qb = normalize(nearCam() + toBody(look) * tR);

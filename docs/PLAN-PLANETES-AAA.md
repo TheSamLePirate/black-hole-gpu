@@ -86,7 +86,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   translucidité verte de la crête, grondement spatialisé (audio M6), tremblement caméra.
 - e2e « la vague » : posé, la vague arrive, décollage à temps / crash.
 
-### P4 — Mann
+### P4 — Mann — **fait**, [P4.md](progress/planetes-aaa/P4.md)
 - Glace : glaciers et coulées, crevasses, sastrugis, neige soufflée par le vent, glace bleue translucide.
 - **Nuages gelés** du film : bancs de glace suspendus, praticables (contact).
 - Ciel froid, lumière rasante, brillance spéculaire de la glace.

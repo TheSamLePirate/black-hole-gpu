@@ -36,7 +36,9 @@ fn terrainRasterMesh(px: vec2f) -> bool { return textureLoad(terrainDist, vec2i(
 fn terrainRasterLevelStep(px: vec2f) -> f32 {
   let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a;
   return select(0.0, -log2(min(a, 1.0)), a > 0.0);
-}`,
+}
+// A frozen cloud's slab at this pixel (a: 1.5 — system/body-raster.ts bodyCloudFs, Mann's: PLAN-PLANETES-AAA P4).
+fn terrainRasterCloud(px: vec2f) -> bool { let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a; return a > 1.4 && a < 1.6; }`,
   );
 }
 

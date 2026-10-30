@@ -59,6 +59,8 @@ export function bodyReliefLibrary(trace: string): string {
     for (const [, callee] of body.matchAll(/\b(\w+)\s*\(/g)) if (functions.has(callee!)) add(callee!);
   };
   add("relief");
+  // (and Mann's frozen clouds: their slabs' layer — bodyCloudVs)
+  add("mannCloud");
   const declarations = new Map<string, string>();
   for (const [line, name] of trace.matchAll(/^(?:const|override)\s+(\w+)\b[^;]*;/gm)) declarations.set(name!, line!);
   for (const [line, name] of trace.matchAll(/^var<private>\s+(\w+)\b[^;]*;/gm)) declarations.set(name!, line!);
@@ -131,6 +133,26 @@ struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
   // (infinite reversed Z, the near plane in metres; the frame's sub-pixel jitter in NDC — the rays' own)
   v.clip = vec4f(v.p.x / u.right.w + u.image.z * v.p.z, v.p.y / u.up.w + u.image.w * v.p.z, u.forward.w, v.p.z);
   return v;
+}
+// Mann's frozen clouds (trace.wgsl mannCloud — PLAN-PLANETES-AAA P4): the slabs' bottoms and tops over the same grid, an
+// instance a level and a side (bit 0: the top), the place where none is cut away (bodyCloudFs)
+struct CloudVertex { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) mask: f32 };
+@vertex fn bodyCloudVs(@location(0) ij: vec2f, @builtin(instance_index) inst: u32) -> CloudVertex {
+  let level = inst >> 1u;
+  let n = node(ij, level);
+  let c = mannCloud(n.q);
+  let p = u.origin.xyz + n.d * u.origin.w + n.q * select(c.x, c.y, (inst & 1u) == 1u);
+  var v: CloudVertex;
+  v.p = vec3f(dot(p, u.right.xyz), dot(p, u.up.xyz), dot(p, u.forward.xyz));
+  v.clip = vec4f(v.p.x / u.right.w + u.image.z * v.p.z, v.p.y / u.up.w + u.image.w * v.p.z, u.forward.w, v.p.z);
+  v.mask = c.z;
+  return v;
+}
+// (a 1.5: a frozen cloud's — trace.wgsl bodyLite shades it as ice in the air)
+@fragment fn bodyCloudFs(v: CloudVertex) -> @location(0) vec4f {
+  if (v.mask < 0.02) { discard; }
+  let d = length(v.p);
+  return vec4f(d, 0.0, d, 1.5);
 }
 // (r: the ground's distance [m]; b the same — the nearest surface —; a 1: drawn by the raster's patch)
 @fragment fn bodyFs(v: Vertex) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, 1.0); }
@@ -249,6 +271,10 @@ export function bodyRasterFrame(
 export class BodyRaster {
   private pipe: GPURenderPipeline | null = null;
   private heightPipe: GPUComputePipeline | null = null;
+  private cloudPipe: GPURenderPipeline | null = null;
+  private cloudBind: GPUBindGroup | null = null;
+  /** the world drawn last frame (trace.wgsl surf): Mann's — 1 — has its frozen clouds */
+  private surf = -1;
   private module: GPUShaderModule;
   private uniform: GPUBuffer;
   private dirtyBuf: GPUBuffer;
@@ -308,6 +334,19 @@ export class BodyRaster {
     void device
       .createComputePipelineAsync({ layout: "auto", compute: { module: this.module, entryPoint: "bodyHeights" } })
       .then((p) => (this.heightPipe = p), failed);
+    void device
+      .createRenderPipelineAsync({
+        layout: "auto",
+        vertex: {
+          module: this.module,
+          entryPoint: "bodyCloudVs",
+          buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }],
+        },
+        fragment: { module: this.module, entryPoint: "bodyCloudFs", targets: [{ format: "rgba32float" }] },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+      })
+      .then((p) => (this.cloudPipe = p), failed);
   }
 
   get ready() {
@@ -330,6 +369,7 @@ export class BodyRaster {
     const reanchored = fr.anchor !== this.anchor;
     this.anchor = fr.anchor;
     this.levels = fr.levels;
+    this.surf = v.surf;
     this.device.queue.writeBuffer(this.uniform, 0, fr.uniform);
     this.bind ??= this.device.createBindGroup({
       layout: this.pipe.getBindGroupLayout(0),
@@ -403,6 +443,21 @@ export class BodyRaster {
     if (this.levels > 1) {
       pass.setIndexBuffer(this.ring, "uint32");
       pass.drawIndexed(this.ringCount, this.levels - 1, 0, 0, 1);
+    }
+    // (Mann: its frozen clouds over the ground, the same levels — a bottom and a top each)
+    if (this.surf === 1 && this.cloudPipe) {
+      this.cloudBind ??= this.device.createBindGroup({
+        layout: this.cloudPipe.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: this.uniform } }],
+      });
+      pass.setPipeline(this.cloudPipe);
+      pass.setBindGroup(0, this.cloudBind);
+      pass.setIndexBuffer(this.full, "uint32");
+      pass.drawIndexed(this.fullCount, 2, 0, 0, 0);
+      if (this.levels > 1) {
+        pass.setIndexBuffer(this.ring, "uint32");
+        pass.drawIndexed(this.ringCount, 2 * (this.levels - 1), 0, 0, 2);
+      }
     }
   }
 

@@ -139,6 +139,7 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | planets-ab.e2e.test.ts | Two builds A/B on the planets' views (tests/e2e/lib/planet-views.ts), A B B A in one Chrome, the GPU's time at a fixed quality; run by `scripts/ab-commit.ts <rev>` with `AB_CMD`. `ONLY=`, `VIEWS=`, `AB_ROUNDS=`. | Earth: the Blue Marble, then the views, 1600×1000 | ~2000 here | AB_A_URL, AB_B_URL |
 | miller-sea.e2e.test.ts | PLAN-PLANETES-AAA P2: Miller's sea by FFT (knee-deep, 1.3 g) — the FFT running for Miller, Gargantua over the sea, the water looked down at, on foot; shots held and running, no GPU error. `SEA_LEVERS=` (renderer.liteSkip shots). | Miller: the water world, then its scenes, 1600×1000 | ~300 here | WebGPU |
 | miller-wave.e2e.test.ts | PLAN-PLANETES-AAA P3: Miller's giant wave felt — the Ranger afloat, `__bh.game.waveIn(90)`, the clock ×4: the craft rides it up, then swept away by its lip; shots of the wall coming, three-quarters on. `SKIP_WAVE=1`, `NO_DAMAGE=1` (diagnostics). | Miller: Gargantua over the sea, 1600×1000 | ~50 here | WebGPU |
+| mann-ice.e2e.test.ts | PLAN-PLANETES-AAA P4: Mann's frozen clouds (body raster's slab layer) and its glaciers' crevasses — chase view 2.6 km, from high, on foot; no GPU error. | Mann: the ice world, then its views, 1600×1000 | ~250 here | WebGPU |
 
 ### The tracer's kernels (docs/PLAN-LEAN-TRACER-KERNELS.md)
 

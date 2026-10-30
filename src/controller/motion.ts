@@ -205,6 +205,10 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
       if (r.wave) {
         this.onPilotMessage?.(`The giant wave broke over the ${VESSELS[fleet.active].name}`);
         this.crashed(`${VESSELS[fleet.active].name}: swept away by Miller's giant wave`);
+      } else if (r.cloud) {
+        // (Mann's frozen cloud struck in flight — P4)
+        this.onPilotMessage?.(`Struck a frozen cloud at ${(r.impact ?? 0).toFixed(0)} m/s`);
+        this.crashed(`${VESSELS[fleet.active].name}: struck one of Mann's frozen clouds at ${(r.impact ?? 0).toFixed(0)} m/s`);
       } else if (r.impact !== null && !was) {
         // (the Ranger rests on its belly: levelled on the ground, nose on the horizon)
         this.levelShip(localToZamo([L.xi[0], L.xi[1], L.xi[2]]));
