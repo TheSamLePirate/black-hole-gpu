@@ -407,6 +407,11 @@ const WARP_OFF = 3115u;
 const SKY_OFF = 822856u;
 // the geoid's map (gpu-tables.ts TABLE_GEOID, system/geoid-grid.ts): N [m], GEOID_W × GEOID_H nodes, four a vec4
 const GEOID_OFF = 822968u;
+// Saturn's rings' optical depth every kilometre (gpu-tables.ts TABLE_RING, system/ring-profile.ts — Cassini's): RING_N values
+// from RING_R0_KM, four a vec4, −1 where none
+const RING_OFF = 1082182u;
+const RING_N = 71100u;
+const RING_R0_KM = 69800.0;
 const GEOID_W = 1440u;
 const GEOID_H = 720u;
 // the orthophotos' levels (gpu-tables.ts TABLE_ORTHO, system/earth-tiles.ts orthoParams): three vec4s each
@@ -1176,6 +1181,71 @@ fn bodyFixed(k: u32, n: vec3f, tEm: f32) -> vec3f {
 }
 
 // A planet's surface colour at a unit direction on its own axes (albedo rgb; w: surface kind)
+// A world's map at uv: its finer one when the camera is near (its level from the footprint), else its coarse one
+fn planetMapAt(m: u32, uv: vec2f) -> vec3f {
+  if (i32(m) == i32(P.hd.x)) { return textureSampleLevel(hdColor, bgSamp, uv, hdMapLod(P.hd.w)).rgb; }
+  if (m < MAPS_HI) { return textureSampleLevel(mapHi, bgSamp, uv, i32(m), mapLod()).rgb; }
+  return textureSampleLevel(mapLo, bgSamp, uv, i32(m - MAPS_HI), max(mapLod() - 1.0, 0.0)).rgb;
+}
+// The giants' clouds moving (PLAN-PLANETES-AAA P9 G1, G2): each latitude's band carried east by its zonal wind — Cassini's
+// profiles, approximated every 2.5° (Jupiter's alternating jets, 170 m/s at 24° N; Saturn's equatorial jet, 450 m/s),
+// System III —, read in two phases of GIANT_CYCLE seconds half a cycle apart and faded (the map not sheared without end);
+// Jupiter's Great Red Spot turning on itself (an anticyclone: anticlockwise in the south, ~6 days at its edge, its core
+// slower); and below the map's texel, eddies — a warped noise moving the reading by a texel or two, as the footprint
+// resolves it. u: the map's coordinates at lon, lat, τ seconds into the phase
+const GIANT_CYCLE = 36000.0;
+// Jupiter's or Saturn's albedo at nrm (its axes) moving: two readings of giantFlow half a cycle apart, faded (in one loop:
+// every call site is a copy the compiler builds); b2y its albedo's scale
+fn giantAlbedo(m: u32, nrm: vec3f, tEm: f32, b2y: f32) -> vec3f {
+  let lon = atan2(nrm.y, nrm.x);
+  let lat = asin(clamp(nrm.z, -1.0, 1.0));
+  let ph = fract(tEm * P.near5.w / GIANT_CYCLE);
+  var t = vec3f(0.0);
+  for (var j = 0u; j < 2u; j++) {
+    let w = select(1.0 - abs(2.0 * ph - 1.0), abs(2.0 * ph - 1.0), j == 1u);
+    t += w * planetMapAt(m, giantFlow(m, lon, lat, fract(ph + 0.5 * f32(j)) * GIANT_CYCLE, nrm));
+  }
+  return min(t * b2y * select(1.0, P.hd.y, i32(m) == i32(P.hd.x)), vec3f(0.95));
+}
+fn giantWind(m: u32, lat: f32) -> f32 {
+  let x = clamp((lat * 57.2957795 + 90.0) / 2.5, 0.0, 71.999);
+  let i = u32(x) + select(73u, 0u, m == 4u);
+  let a = array<f32, 146>(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 8.0, 15.0, 8.0, 0.0, 12.0, 25.0, 10.0, -5.0, 12.0, 30.0, 10.0, -10.0, 21.0, 25.0, -12.0, 13.0, 38.0, 27.0, -15.0, -40.0, -52.0, -5.0, 39.0, 70.0, 120.0, 110.0, 89.0, 70.0, 89.0, 113.0, 127.0, 60.0, 32.0, 0.0, -28.0, -20.0, 108.0, 97.0, 10.0, -7.0, 23.0, 40.0, 2.0, 10.0, 21.0, -1.0, 3.0, 25.0, 10.0, -5.0, 5.0, 15.0, 8.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 30.0, 55.0, 46.0, 28.0, 10.0, 35.0, 60.0, 76.0, 54.0, 32.0, 10.0, 13.0, 16.0, 19.0, 40.0, 65.0, 90.0, 130.0, 170.0, 210.0, 250.0, 288.0, 325.0, 362.0, 400.0, 412.0, 425.0, 438.0, 450.0, 450.0, 450.0, 450.0, 450.0, 438.0, 425.0, 412.0, 400.0, 362.0, 325.0, 288.0, 250.0, 210.0, 170.0, 130.0, 90.0, 65.0, 40.0, 24.0, 44.0, 55.0, 30.0, 14.0, 36.0, 58.0, 80.0, 61.0, 42.0, 24.0, 42.0, 71.0, 99.0, 82.0, 37.0, 0.0, 0.0, 0.0, 0.0);
+  return mix(a[i], a[i + 1u], x - floor(x));
+}
+fn giantFlow(m: u32, lon0: f32, lat: f32, tau: f32, nrm: vec3f) -> vec2f {
+  let R = select(60268e3, 71492e3, m == 4u);
+  var lon = lon0 - giantWind(m, lat) * tau / (R * max(cos(lat), 0.05));
+  var la = lat;
+  if (m == 4u) {
+    // (the Great Red Spot: 22° S, 126.4° E in the map, 18° × 10.5°)
+    let c = vec2f(2.2066, -0.384);
+    var d = vec2f(lon - c.x, la - c.y);
+    d.x -= TAU * round(d.x / TAU);
+    let e = vec2f(d.x / 0.157, d.y / 0.0916);
+    let r = length(e);
+    if (r < 1.3) {
+      let ang = -TAU * tau / 518400.0 * smoothstep(1.3, 0.8, r) * smoothstep(0.0, 0.7, r);
+      let cs = vec2f(cos(ang), sin(ang));
+      let er = vec2f(e.x * cs.x - e.y * cs.y, e.x * cs.y + e.y * cs.x);
+      lon = c.x + er.x * 0.157;
+      la = c.y + er.y * 0.0916;
+    }
+  }
+  var uv = vec2f(0.5 + lon / TAU, 0.5 - la / PI);
+  // (the eddies: under the map's texel, as the pixel's footprint resolves them)
+  let texA = TAU / select(f32(textureDimensions(mapHi).x), P.hd.w, i32(m) == i32(P.hd.x));
+  let fpA = exp2(mapLod()) * TAU / 2048.0;
+  let wd = clamp(log2(texA / max(fpA, 1e-9)) * 0.5, 0.0, 1.0);
+  if (wd > 0.0) {
+    let p = nrm / (texA * 6.0) + vec3f(0.0, 0.0, tau * 1e-5);
+    let oc = clamp(log2(texA / max(fpA, 1e-9)) + 1.0, 1.0, 4.0);
+    var w = vec2f(0.0);
+    for (var k = 0u; k < 2u; k++) { w[k] = tfbmF(p + f32(k) * vec3f(5.2, 1.3, 2.8), oc); }
+    uv += wd * 2.0 * texA * vec2f(w.x / TAU, w.y / PI);
+  }
+  return uv;
+}
 fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
   let b2 = bodies[BV * k + 2u];
   let nrm = qb;
@@ -1231,19 +1301,10 @@ fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
     // its map: longitude about the pole, latitude (linear: an sRGB view; scaled to its albedo)
     let lon = atan2(nrm.y, nrm.x);
     let lat = asin(clamp(nrm.z, -1.0, 1.0));
-    let uv = vec2f(0.5 + lon / TAU, 0.5 - lat / PI);
     let m = surf - 4u;
-    var t: vec3f;
-    var gain = 1.0;
-    if (i32(m) == i32(P.hd.x)) {
-      // (its finer map, the camera near: its level from the footprint, its brightness the coarse map's)
-      t = textureSampleLevel(hdColor, bgSamp, uv, hdMapLod(P.hd.w)).rgb;
-      gain = P.hd.y;
-    } else if (m < MAPS_HI) {
-      t = textureSampleLevel(mapHi, bgSamp, uv, i32(m), mapLod()).rgb;
-    } else {
-      t = textureSampleLevel(mapLo, bgSamp, uv, i32(m - MAPS_HI), max(mapLod() - 1.0, 0.0)).rgb;
-    }
+    let gain = select(1.0, P.hd.y, i32(m) == i32(P.hd.x));
+    // (Jupiter's and Saturn's clouds moving: giantAlbedo, where their discs are drawn — planetShade)
+    let t = planetMapAt(m, vec2f(0.5 + lon / TAU, 0.5 - lat / PI));
     return vec4f(min(t * b2.y * gain, vec3f(0.95)), f32(surf));
   } else {
     let band = 0.5 + 0.5 * sin(nrm.z * 22.0 + 2.0 * gnoise(q * vec3f(1.0, 1.0, 4.0)));
@@ -1269,6 +1330,8 @@ fn lightSource(k: u32) -> vec2f {
 // Saturn's map and rings: mip level from the pixel's footprint (set by the caller before shading)
 var<private> mapLodV: f32 = 0.0;
 var<private> ringLodV: f32 = 0.0;
+// (the footprint across the rings over their width, unclamped: Cassini's kilometre past the map's texel — ringSample)
+var<private> ringFootV: f32 = 1.0;
 fn mapLod() -> f32 { return clamp(mapLodV, 0.0, 11.0); }
 // Retain sub-texel footprints until the actual texture width is known. Clamping the 2K level
 // first forced a 6K map to level >= 1.55, throwing away its close-up detail.
@@ -1277,6 +1340,7 @@ fn hdMapLod(width: f32) -> f32 { return max(mapLodV + log2(width / 2048.0), 0.0)
 fn setMapLod(fpAngle: f32, fpRing: f32, k: u32) {
   mapLodV = log2(max(fpAngle * 2048.0 / TAU, 1e-6));
   let w = max(bodies[BV * k + 3u].w - bodies[BV * k + 2u].w, 1e-3);
+  ringFootV = fpRing / w;
   ringLodV = clamp(log2(max(fpRing * 2048.0 / w, 1e-6)), 0.0, 11.0);
 }
 fn ringOuter(k: u32) -> f32 { return bodies[BV * k + 3u].w; }
@@ -1290,7 +1354,25 @@ fn ringSample(k: u32, rr: f32) -> vec4f {
   let t = textureSampleLevel(ringTex, bgSamp, vec2f(clamp(f, 0.5 / 2048.0, 1.0 - 0.5 / 2048.0), 0.5), ringLodV);
   // (the map's colours are an appearance: the B ring's ≈ 0.2 in linear rgb; its icy particles' single
   // scattering albedo is ≈ 0.8)
-  return vec4f(min(t.rgb * 3.6, vec3f(0.95)), -log(1.0 - min(t.a, 0.995)));
+  var tau = -log(1.0 - min(t.a, 0.995));
+  // (finer than the map's texel — 35 km —: Cassini's kilometre, its ringlets and gaps, as the footprint resolves them —
+  // ringFootV, the footprint across the rings over their width; Saturn's rings alone: the profile's span is theirs)
+  let fw = clamp(log2(1.0 / (2048.0 * max(ringFootV, 1e-9))) / 3.0, 0.0, 1.0);
+  if (fw > 0.0 && abs(ringOuter(k) * 58232.0 - 140900.0) < 1.0) {
+    let fine = ringTauFine(rr * 58232.0);
+    if (fine >= 0.0) { tau = mix(tau, fine, fw); }
+  }
+  return vec4f(min(t.rgb * 3.6, vec3f(0.95)), tau);
+}
+// Cassini's optical depth at a radius [km] (linear between its kilometres), −1 where none
+fn ringTauFine(rKm: f32) -> f32 {
+  let x = rKm - RING_R0_KM - 0.5;
+  if (x < 0.0 || x >= f32(RING_N - 1u)) { return -1.0; }
+  let i = u32(x);
+  let a = bodies[RING_OFF + i / 4u][i % 4u];
+  let b = bodies[RING_OFF + (i + 1u) / 4u][(i + 1u) % 4u];
+  if (a < 0.0 || b < 0.0) { return -1.0; }
+  return mix(a, b, x - f32(i));
 }
 
 // Light scattered by a slab of icy particles towards V, lit along L, N its normal: the reflected radiance
@@ -1301,25 +1383,49 @@ fn ringSample(k: u32, rr: f32) -> vec4f {
 // larger the thinner the ring (the C ring, the Cassini division, the A ring's outer edge: what shines
 // backlit; the B ring dark) —, and towards the source the opposition surge (the coherent backscattering
 // within a degree, the shadows hidden within several: Cassini's and Hubble's rings ×1.5 at zero phase).
-fn ringPhase(ct: f32, tau: f32) -> f32 {
+fn ringPhase(ct: f32, tau: f32, spoke: f32) -> f32 {
   let gb = -0.3;
   let gf = 0.7;
   let hb = (1.0 - gb * gb) / pow(1.0 + gb * gb - 2.0 * gb * ct, 1.5);
   let hf = (1.0 - gf * gf) / pow(1.0 + gf * gf - 2.0 * gf * ct, 1.5);
-  let dust = 0.03 + 0.22 * (1.0 - smoothstep(0.05, 0.8, tau));
+  let dust = min(0.03 + 0.22 * (1.0 - smoothstep(0.05, 0.8, tau)) + spoke, 0.9);
   let alpha = acos(clamp(-ct, -1.0, 1.0)); // (the phase angle: the source and the eye seen from the ring)
   let surge = 1.0 + 0.35 * exp(-alpha / 0.012) + 0.25 * exp(-alpha / 0.1);
   return mix(hb * surge, hf, dust);
 }
-fn ringLight(k: u32, q: vec3f, N: vec3f, L: vec3f, V: vec3f) -> vec4f {
+// Saturn's rings' detail at q seen along V (PLAN-PLANETES-AAA P9 G4): x their optical depth's factor — the A ring's
+// self-gravity wakes, clumps canted ~20° to the orbit, gaps between them: its opacity seen along them less than across, the
+// quadrupole Cassini and Hubble measured, ±30 % —, y the B ring's spokes — dust lifted over it in radial streaks turning with
+// the planet's field, 10.66 h: bright backlit, dark towards the Sun —, a share of fine dust in the phase. (1, 0): none — the
+// other rings, the probes' and the Earth's kernels (a conjunction, folded)
+fn ringDetail(k: u32, q: vec3f, N: vec3f, V: vec3f) -> vec2f {
+  var d = vec2f(1.0, 0.0);
+  let rKm = length(q) * 58232.0;
+  if (NEAR_DETAIL && NEAR_KIND != 1u && NEAR_KIND != 6u && abs(ringOuter(k) * 58232.0 - 140900.0) < 1.0) {
+    if (rKm > 122200.0 && rKm < 136800.0) {
+      let vp = V - N * dot(V, N);
+      let rp = q - N * dot(q, N);
+      let ang = atan2(dot(cross(rp, vp), N), dot(rp, vp));
+      d.x = 1.0 + 0.3 * cos(2.0 * (ang - 0.35)) * smoothstep(122200.0, 125000.0, rKm) * smoothstep(136800.0, 133500.0, rKm);
+    }
+    if (rKm > 100000.0 && rKm < 117000.0) {
+      let A = poleAxes(N);
+      let az = atan2(dot(q, A[1]), dot(q, A[0])) - P.time.x * max(P.near5.w, 0.0) * TAU / 38362.0;
+      let n = gnoise(vec3f(cos(az) * 30.0, sin(az) * 30.0, rKm / 6000.0));
+      d.y = 0.45 * smoothstep(0.35, 0.7, n) * smoothstep(100000.0, 103000.0, rKm) * smoothstep(117000.0, 112000.0, rKm);
+    }
+  }
+  return d;
+}
+fn ringLight(k: u32, q: vec3f, N: vec3f, L: vec3f, V: vec3f, det: vec2f) -> vec4f {
   let rr = length(q);
   let smp = ringSample(k, rr);
-  let tau = smp.w;
+  let tau = smp.w * det.x;
   if (tau <= 0.0) { return vec4f(0.0); }
   let mu = max(abs(dot(N, V)), 0.01);
   let mu0 = max(abs(dot(N, L)), 0.01);
   let ct = -dot(L, V); // scattering angle: incident −L, out V
-  let ph = ringPhase(ct, tau);
+  let ph = ringPhase(ct, tau, det.y);
   var R: f32;
   if (dot(N, V) * dot(N, L) > 0.0) {
     R = ph * mu0 / (4.0 * (mu + mu0)) * (1.0 - exp(-tau * (1.0 / mu + 1.0 / mu0)));
@@ -1359,7 +1465,7 @@ fn ringShine(k: u32, q: vec3f, L: vec3f) -> vec3f {
     let u = dv * inverseSqrt(d2);
     let cq = dot(u, q);
     if (cq <= 0.0) { continue; }
-    let rl = ringLight(k, p, vec3f(0.0, 0.0, 1.0), L, -u);
+    let rl = ringLight(k, p, vec3f(0.0, 0.0, 1.0), L, -u, vec2f(1.0, 0.0));
     E += rl.rgb * (cq * abs(u.z) * r * 0.5 * w * 0.5 / d2);
   }
   return E;
@@ -1475,7 +1581,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let src = lightSource(k);
     let fp = beam() * (travel + sR) / R;
     setMapLod(fp, fp / max(abs(dn), 0.05), k);
-    let rl = ringLight(k, q, N, L, V);
+    let rl = ringLight(k, q, N, L, V, ringDetail(k, q, N, V));
     (*out).glow += (*out).tint * rl.rgb * blackbody(src.x * gObs, P.disk.w) * src.y * bodies[BV * k + 3u].y;
     (*out).tint *= 1.0 - rl.w;
   }
@@ -1834,6 +1940,11 @@ fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f3
   let cosi = max(dot(nrmL, ldir), 0.0);
   let mu = clamp(dot(nrm, view), 0.0, 1.0);
   var A = planetAlbedo(k, pat, tEm);
+  // (Jupiter, Saturn: their clouds moving, the scene's clock running — PLAN-PLANETES-AAA P9)
+  let gm = u32(A.w) - 4u;
+  // (in the kernels that can draw them big: not the probes' — NEAR_DETAIL 0 —, nor the Earth's, the plain airless worlds',
+  // Venus's — a conjunction, folded)
+  if (NEAR_DETAIL && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 6u && u32(A.w) >= 4u && (gm == 4u || gm == 5u) && P.near5.w > 0.0) { A = vec4f(giantAlbedo(gm, pat, tEm, bodies[BV * k + 2u].y), A.w); }
   A = vec4f(A.rgb * ALB_GAIN * ALB_TINT, A.w);
   let surf = u32(A.w);
   var spec = 0.0;
@@ -3478,7 +3589,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         let fp = pixFoot() * sR;
         setMapLod(fp, fp / max(abs(dn), 0.05), k);
         let src = lightSource(k);
-        let rl = ringLight(k, look * sR - P.near0.xyz, N, P.near4.xyz, -look);
+        let rl = ringLight(k, look * sR - P.near0.xyz, N, P.near4.xyz, -look, ringDetail(k, look * sR - P.near0.xyz, N, -look));
         ring = vec4f(rl.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, rl.w);
       }
     }

@@ -147,6 +147,19 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 ### P9 — Géantes gazeuses et anneaux
 - Bandes animées et tempêtes depuis l'orbite (Jupiter KTX existant), anneaux de Saturne détaillés (ombres, effet
   d'opposition, particules de près).
+- Décisions (30 octobre) : les vents et une turbulence de près ; le profil fin des anneaux et leurs blocs de glace de
+  près ; Jupiter et Saturne d'abord (Uranus et Neptune plus tard : peu de données).
+- Étapes :
+  - G1 les vents zonaux : chaque bande glisse à sa vitesse mesurée (Jupiter jusqu'à ±150 m/s, Saturne jusqu'à 450 m/s à
+    l'équateur), deux cycles fondus (pas d'étirement sans fin) ;
+  - G2 la turbulence de près : sous la résolution de la carte, un écoulement procédural qui fait vivre les tourbillons, la
+    Grande Tache rouge qui tourne sur elle-même ;
+  - G3 le profil fin des anneaux de Saturne (Cassini, ~1 km : annelets, divisions, bords nets) ;
+  - G4 leurs sillages et leurs rayons (le côté de l'anneau A plus clair, les spokes de l'anneau B) ;
+  - G5 leurs blocs de glace de près, tracés un à un dans une nappe de quelques dizaines de mètres ;
+  - G6 les vitrines de Saturne (P0 : Gargantua par le trou de ver, des anneaux par la tranche) et son coût (163 % de la
+    Terre en orbite) ;
+  - G7 mesures, e2e, docs.
 
 ### P10 — Compensations, campagne, docs
 - Optimisations restantes pour tenir « jamais plus lent » partout, campagne e2e complète (ce Mac), `docs/PLANETES.md`

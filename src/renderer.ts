@@ -102,6 +102,8 @@ import {
   TABLE_SKY,
   TABLE_SUN,
   TABLE_VEC4S,
+  TABLE_RING,
+  RING_N,
   TABLE_WALK,
   TABLE_WARP,
 } from "./gpu-tables";
@@ -121,6 +123,7 @@ import { vesselHulls } from "./system/collide";
 import { EnduranceRenderer } from "./endurance";
 import { StationRenderer, type StationView } from "./station";
 import { issAxes, issTrack, refreshIssElements, stationAngles } from "./system/iss";
+import { loadRingProfile } from "./system/ring-profile";
 import { GpuProfiler } from "./gpuprof";
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
@@ -1517,6 +1520,12 @@ export class Renderer {
     });
     // (the mountains' warp's grids in it, after the walking grid: system/warp-grid.ts)
     this.warpOut = new WarpGrid(device, this.bodyBuf, TABLE_WARP, traceWGSL);
+    // (Saturn's rings' optical depth every kilometre: Cassini's — system/ring-profile.ts, PLAN-PLANETES-AAA P9; none yet: −1, the
+    // ring map's alone)
+    device.queue.writeBuffer(this.bodyBuf, TABLE_RING * 16, new Float32Array(RING_N).fill(-1));
+    void loadRingProfile().then((f) => {
+      if (f) device.queue.writeBuffer(this.bodyBuf, TABLE_RING * 16, f);
+    });
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });

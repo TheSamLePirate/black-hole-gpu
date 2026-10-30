@@ -46,4 +46,10 @@ export const GEOID_VEC4S = (GEOID_W * GEOID_H) / 4;
 /** the orthophotos' levels (system/earth-tiles.ts orthoParams; trace.wgsl earthImagery): three vec4s each */
 export const TABLE_ORTHO = TABLE_GEOID + GEOID_VEC4S;
 export const ORTHO_VEC4S = ORTHO_PARAM_VEC4S;
-export const TABLE_VEC4S = TABLE_ORTHO + ORTHO_VEC4S;
+/** Saturn's rings' optical depth every kilometre (system/ring-profile.ts: Cassini's radio occultation — PLAN-PLANETES-AAA P9
+ *  G3; trace.wgsl ringTauFine): RING_N values from RING_R0_KM, four a vec4, −1 where none was measured */
+export const RING_R0_KM = 69800;
+export const RING_N = 71100;
+export const TABLE_RING = TABLE_ORTHO + ORTHO_VEC4S;
+export const RING_VEC4S = RING_N / 4;
+export const TABLE_VEC4S = TABLE_RING + RING_VEC4S;

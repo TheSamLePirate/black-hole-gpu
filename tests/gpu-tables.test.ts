@@ -15,6 +15,10 @@ import {
   TABLE_WALK,
   TABLE_WARP,
   TABLE_GEOID,
+  TABLE_RING,
+  RING_VEC4S,
+  RING_N,
+  RING_R0_KM,
   GEOID_VEC4S,
   TABLE_ORTHO,
   ORTHO_VEC4S,
@@ -45,12 +49,24 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(constU("WARP_N")).toBe(WARP_N);
   expect(TABLE_TERRAIN).toBe(TABLE_WARP + WARP_LEVELS * WARP_N * WARP_N);
   expect(TABLE_VEC4S).toBe(
-    TABLE_TERRAIN + TERRAIN_CACHE_VEC4S + SUN_SHADOW_VEC4S + SKY_AMBIENT_VEC4S + CSM_VEC4S + TSM_VEC4S + GEOID_VEC4S + ORTHO_VEC4S,
+    TABLE_TERRAIN +
+      TERRAIN_CACHE_VEC4S +
+      SUN_SHADOW_VEC4S +
+      SKY_AMBIENT_VEC4S +
+      CSM_VEC4S +
+      TSM_VEC4S +
+      GEOID_VEC4S +
+      ORTHO_VEC4S +
+      RING_VEC4S,
   );
   expect(constU("GEOID_OFF")).toBe(TABLE_GEOID);
   expect(constU("ORTHO_OFF")).toBe(TABLE_ORTHO);
   expect(TABLE_ORTHO).toBe(TABLE_GEOID + GEOID_VEC4S);
-  expect(TABLE_VEC4S).toBe(TABLE_ORTHO + ORTHO_VEC4S);
+  expect(TABLE_RING).toBe(TABLE_ORTHO + ORTHO_VEC4S);
+  expect(TABLE_VEC4S).toBe(TABLE_RING + RING_VEC4S);
+  expect(constU("RING_OFF")).toBe(TABLE_RING);
+  expect(constU("RING_N")).toBe(RING_N);
+  expect(Number(/const RING_R0_KM = ([\d.]+);/.exec(wgsl)?.[1])).toBe(RING_R0_KM);
   expect([constU("GEOID_W"), constU("GEOID_H")]).toEqual([GEOID_W, GEOID_H]);
 });
 
