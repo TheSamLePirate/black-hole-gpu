@@ -4918,9 +4918,17 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     var ext = (AIR.br + AIR.bo) * dR + vec3f(AIR.bme * dM);
     // (Venus's cloud deck: its droplets' extinction — as much scattered —, forward — g 0.7)
     var dS = 0.0;
+    var dW = VENUS_W;
     if (airWorldOrAny() && AIR_SLAB.z > 0.0) {
       dS = AIR_SLAB.z * slabD(h);
       ext += vec3f(dS);
+      // (its tops' markings — the coarse map's streaks, Venus's: layer 0 of the small maps — in its droplets' albedo)
+      if (dS > 0.0) {
+        let qv = p / r;
+        let uvv = vec2f(0.5 + atan2(qv.y, qv.x) / TAU, 0.5 - asin(clamp(qv.z, -1.0, 1.0)) / PI);
+        let cm = textureSampleLevel(mapLo, bgSamp, uvv, 0, 2.0).rgb;
+        dW = VENUS_W * clamp(mix(vec3f(1.0), cm / 0.45, 0.8), vec3f(0.5), vec3f(1.4));
+      }
     }
     let normal = airPhysicalNormal(p / r);
     var Ts = sunThrough(h, dot(normal, physicalLs));
@@ -4937,7 +4945,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     let s1c = s1 * select(1.0, csT, csT >= 0.0);
     var sc = AIR.br * dR * (pR * s1c + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1c + 0.3 / (4.0 * PI) * sM);
     // (its droplets' albedo per colour: the unknown absorber's blue and ultraviolet taken — the pale cream of its disc)
-    if (airWorldOrAny() && dS > 0.0) { sc += dS * VENUS_W * hgPhase(0.7, mu) * s1c; }
+    if (airWorldOrAny() && dS > 0.0) { sc += dS * dW * hgPhase(0.7, mu) * s1c; }
     var Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
     if (HAS_WX && WX_W > 0.0) {
       // the weather: under its decks the sunlight dimmed and spread (the air's own scattering with it);
@@ -4973,7 +4981,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
       var src = AIR.bms * dM;
       if (airWorldOrAny() && AIR_SLAB.z > 0.0) {
         tauV += AIR_SLAB.z * slabCol(h) + (AIR.br.g * airColumn(h, 1.0, airHR()) / airK()) * 3.0;
-        src += dS * VENUS_W + AIR.br * dR;
+        src += dS * dW + AIR.br * dR;
       }
       let mz0 = dot(normal, physicalLs);
       let Tdif = exp(-tauV * AIR_MSC) * smoothstep(-0.1, 0.25, mz0) * 0.9;
