@@ -231,6 +231,9 @@ import { AU_M, C_MPS } from "./units";
 import { windFrom } from "./wind";
 import { weatherAt, weatherGpu, windFromAt, type WeatherState } from "./weather";
 
+/** Venus's ground's mean albedo (a weathered basalt under its clouds — P8 V1; its coarse map's 0.689 its clouds') */
+const VENUS_GROUND = 0.12;
+
 /** the space station's loading stage, as the loading screen names it */
 const STATION_LOADING = t("The space station");
 
@@ -1789,7 +1792,8 @@ export class Renderer {
     const id = m.name && m.dem ? SOLAR_BODIES.find((b) => b.map === m.name)?.id : undefined;
     if (!id) return;
     const g = on?.dem ? mapHeightSampler(on.dem.map, on.dem.W, on.dem.H) : null;
-    // (the Moon, Mars: their relief tiles round the camera over the global map — moon-tiles.ts, the tracer's moonH)
+    // (the Moon, Mars: their relief tiles round the camera over the global map — moon-tiles.ts, the tracer's moonH; Venus: its
+    // radar's imagery tiles over its global relief)
     if (WORLDS[id]) {
       if (g) this.moonTiles.setWorld(id);
       this.moonTiles.fallback = g;
@@ -3109,7 +3113,9 @@ export class Renderer {
     const hd = this.hdMap;
     const hdOn = !!hd.name && bodies.some((b) => solarBody(b.id)?.map === hd.name);
     const hdRelief = !hd.hasRelief ? 0 : hd.dem || HD_SETS[hd.name!]?.height ? 1 : 1.2;
-    set(62, hdOn ? mapIndex(hd.name!) : -1, (this.planetMaps.mean.get(hd.name!) ?? hd.mean) / hd.mean, hdRelief, hd.color.width);
+    // (its brightness the coarse map's — but Venus's coarse map is its clouds: its ground a weathered basalt's, 0.12)
+    const hdGain = ((this.planetMaps.mean.get(hd.name!) ?? hd.mean) / hd.mean) * (hd.name === "venus" ? VENUS_GROUND / 0.689 : 1);
+    set(62, hdOn ? mapIndex(hd.name!) : -1, hdGain, hdRelief, hd.color.width);
     // (its measured heights: on, their highest and lowest [m] — the relief's shell —, the body's radius [m])
     const hdBody = hd.name ? SOLAR_BODIES.find((b) => b.map === hd.name) : undefined;
     set(
@@ -3123,8 +3129,9 @@ export class Renderer {
     // in float64 — an anchor of whole metres (multiples of 64) near it, and the camera from the anchor
     const fineMap = near ? solarBody(bodies[near.index]!.id)?.map : undefined;
     const fm = fineMap ? mapIndex(fineMap) : -1;
-    // (and Mars's, its relief marched — PLAN-PLANETES-AAA P7 —, Titan's: Huygens's rounded pebbles — P8)
-    if (near && (fm === 1 || fm === 2 || fm === 3 || (fm >= 7 && fm <= 19)) && Math.hypot(...near.centre) < 1.02) {
+    // (and Mars's, its relief marched — PLAN-PLANETES-AAA P7 —, Titan's: Huygens's rounded pebbles —, Venus's: the Veneras'
+    // basalt slabs — P8)
+    if (near && (fm === 1 || fm === 2 || fm === 3 || fm === 6 || (fm >= 7 && fm <= 19)) && Math.hypot(...near.centre) < 1.02) {
       const mR = near.radius * M_METRES;
       const cb = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]) * mR);
       const an = cb.map((c) => Math.round(c / 64) * 64);
@@ -3388,7 +3395,7 @@ export class Renderer {
       nbR.id !== "earth" &&
       nbR.kind !== 0 &&
       // (Mars's too, its air shaded through earthNear — trace.wgsl bodyLiteAir, P7)
-      (!bodyHasAir(nbR.kind, nbR.surface) || nbR.id === "mars" || nbR.id === "titan") &&
+      (!bodyHasAir(nbR.kind, nbR.surface) || nbR.id === "mars" || nbR.id === "titan" || nbR.id === "venus") &&
       reliefMax(nbR.surface) > 0 &&
       near!.distance < 1.5 * near!.radius &&
       t === this.live &&
@@ -7202,6 +7209,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private earthSunlight(bodies: GpuBody[], near: ReturnType<typeof localPatch>, surface: ReturnType<typeof patchGeodetic> | null) {
     // (Mars in a dust storm — W6 —: the day a third as bright under it; the eye opens to it)
     if (near && bodies[near.index]?.id === "mars") return 1 - 0.55 * this.marsDustNow;
+    // (Venus under its cloud deck — 47 to 70 km, trace.wgsl AIR_SLAB —: ~3.5 % of the sunlight below it, all of it above, its
+    // share through the slab between — the eye opens to the Veneras' day)
+    if (near && bodies[near.index]?.id === "venus") {
+      const h = (near.distance / near.radius - 1) * 6051.8e3;
+      return h >= 70e3 ? 1 : 0.035 ** Math.min((70e3 - h) / 23e3, 1);
+    }
     if (!near || bodies[near.index]?.id !== "earth") return 1;
     const place = surface ?? patchGeodetic(near, WGS84_F);
     const mu = place.up.reduce((v, n, i) => v + n * near.light[i]!, 0);

@@ -184,6 +184,8 @@ fn nearEarth(k: u32) -> bool { return NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR
 // (another world with air near: Mars's kind or Titan's — conjunctions, which wgsl-specialise.ts folds: a top-level || it
 // leaves alone)
 fn nearAirWorld() -> bool { return NEAR_KIND != 0u && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u; }
+// (an air world's or any near body's kernel — not the Earth's, not the airless worlds', not the empty one: Venus's cloud slab)
+fn airWorldOrAny() -> bool { return NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u; }
 // (Titan's relief in this kernel: its own, and those for any near body — the probes', the body raster's library)
 fn titanKernel() -> bool { return NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u; }
 
@@ -4565,6 +4567,14 @@ var<private> AIR: AirSpec;
 // earthAir's diffuse field through it, its weight and its dimming per unit of the haze's depth above, per colour
 var<private> AIR_DUST: f32 = 0.0;
 var<private> AIR_MSC: vec3f = vec3f(0.22, 0.275, 0.352);
+// Venus's cloud deck (setAir): a slab of sulphuric droplets from x to y [m] up, their extinction z [1/m] (ω ≈ 1: as much
+// scattered), its edges w [m] wide; z 0: none. Its density at a height and its vertical column above one [m]
+var<private> AIR_SLAB: vec4f = vec4f(0.0);
+fn slabD(h: f32) -> f32 {
+  return smoothstep(AIR_SLAB.x - AIR_SLAB.w, AIR_SLAB.x + AIR_SLAB.w, h) * (1.0 - smoothstep(AIR_SLAB.y - 2.0 * AIR_SLAB.w, AIR_SLAB.y + AIR_SLAB.w, h));
+}
+const VENUS_W = vec3f(1.0, 0.965, 0.86);
+fn slabCol(h: f32) -> f32 { return clamp(AIR_SLAB.y - max(h, AIR_SLAB.x), 0.0, AIR_SLAB.y - AIR_SLAB.x); }
 // the maps (solar.ts: MAPS_HI, then MAPS_LO) of the worlds with air
 fn airOf(m: u32) -> bool { return m == 0u || m == 2u || m == 4u || m == 5u || m == 6u || m == 19u || m == 20u || m == 21u || m == 22u; }
 fn hasAir(k: u32) -> bool {
@@ -4576,6 +4586,7 @@ fn setAir(k: u32) {
   AIR_K = k;
   AIR_DUST = 0.0;
   AIR_MSC = vec3f(0.22, 0.275, 0.352);
+  AIR_SLAB = vec4f(0.0);
   // the Earth: Rayleigh, ozone, an ordinary day's aerosols (τ ≈ 0.03) — built whole (the constructor
   // names every field: none left at zero), the other worlds' below changing it
   var a = AirSpec(
@@ -4605,11 +4616,16 @@ fn setAir(k: u32) {
       AIR_DUST = dust * 1.2;
     }
   } else if (m == 6u) {
-    // Venus: above its cloud deck (the drawn ground), CO₂ and a yellowish sulphuric haze
-    a.rm = 6.0518e6; a.top = 90e3; a.hr = 15900.0; a.hm = 6000.0;
-    a.br = vec3f(1.4e-6, 3.3e-6, 8.0e-6); a.bo = vec3f(0.0);
-    a.bms = 1.2e-5 * vec3f(1.0, 0.93, 0.78); a.bme = 1.2e-5; a.g = vec3f(0.72); a.k = 2.0;
-    a.sky = vec3f(0.12, 0.1, 0.06);
+    // Venus (PLAN-PLANETES-AAA P8 V2): its ground under 92 bar of CO₂ — Rayleigh's τ ≈ 2.5 … 9 down there, the horizon lost
+    // in it —, a thin lower haze, and its cloud deck from 47 to 70 km (τ ≈ 30 of sulphuric droplets, ω ≈ 1): bright from
+    // space, an orange glow from the ground, ~3 % of the sunlight below — the Veneras' — and no Sun's disc
+    a.rm = 6.0518e6; a.top = 90e3; a.hr = 15900.0; a.hm = 12000.0;
+    a.br = vec3f(1.6e-4, 3.0e-4, 5.6e-4); a.bo = vec3f(0.0);
+    a.bms = 2.0e-6 * vec3f(1.0, 0.85, 0.6); a.bme = 2.0e-6; a.g = vec3f(0.72); a.k = 1.0;
+    a.sky = vec3f(0.034, 0.024, 0.011);
+    AIR_SLAB = vec4f(47000.0, 70000.0, 1.3e-3, 2000.0);
+    AIR_DUST = 2.2;
+    AIR_MSC = vec3f(0.07, 0.078, 0.095);
   } else if (m == 19u) {
     // Titan: an orange photochemical haze, optically thick (τ ≈ 4) — the ground barely shows
     a.rm = 2.5747e6; a.top = 500e3; a.hr = 20000.0; a.hm = 60000.0;
@@ -4686,7 +4702,10 @@ fn airColumn(h: f32, mu: f32, H: f32) -> f32 {
 }
 // the sunlight's transmission down to a height h [m], the sun at mu from the zenith
 fn sunThrough(h: f32, mu: f32) -> vec3f {
-  return exp(-((AIR.br + AIR.bo) * airColumn(h, mu, airHR()) + vec3f(AIR.bme * airColumn(h, mu, airHM()))) / airK());
+  var tau = ((AIR.br + AIR.bo) * airColumn(h, mu, airHR()) + vec3f(AIR.bme * airColumn(h, mu, airHM()))) / airK();
+  // (Venus's cloud deck — its column above, slant)
+  if (airWorldOrAny() && AIR_SLAB.z > 0.0) { tau += vec3f(AIR_SLAB.z * slabCol(h) / max(mu, 0.03)); }
+  return exp(-tau);
 }
 
 // Directions transform by the inverse scale; normals by its transpose. Optical lengths are physical.
@@ -4897,6 +4916,12 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     let dR = exp(-h / airHR()) / airK();
     let dM = exp(-h / airHM()) / airK();
     var ext = (AIR.br + AIR.bo) * dR + vec3f(AIR.bme * dM);
+    // (Venus's cloud deck: its droplets' extinction — as much scattered —, forward — g 0.7)
+    var dS = 0.0;
+    if (airWorldOrAny() && AIR_SLAB.z > 0.0) {
+      dS = AIR_SLAB.z * slabD(h);
+      ext += vec3f(dS);
+    }
     let normal = airPhysicalNormal(p / r);
     var Ts = sunThrough(h, dot(normal, physicalLs));
     // (multiple scattering, roughly: the light the sunlit sky itself sheds, isotropic — as much again as
@@ -4911,6 +4936,8 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     let csT = select(-1.0, cloudShadowAt(p), (TUNE_GSKIP & 8192u) == 0u && !AIR_NO_CSM);
     let s1c = s1 * select(1.0, csT, csT >= 0.0);
     var sc = AIR.br * dR * (pR * s1c + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1c + 0.3 / (4.0 * PI) * sM);
+    // (its droplets' albedo per colour: the unknown absorber's blue and ultraviolet taken — the pale cream of its disc)
+    if (airWorldOrAny() && dS > 0.0) { sc += dS * VENUS_W * hgPhase(0.7, mu) * s1c; }
     var Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
     if (HAS_WX && WX_W > 0.0) {
       // the weather: under its decks the sunlight dimmed and spread (the air's own scattering with it);
@@ -4941,10 +4968,16 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     // glow, not the black the beam's light alone left. In the weather's kernels and the air worlds' — NEAR_KIND 2 —, and those
     // for every path — 0: the aerial table's, the probes')
     if ((HAS_WX || NEAR_KIND == 0u || nearAirWorld()) && AIR_DUST > 0.0) {
-      let tauV = AIR.bme * airColumn(h, 1.0, airHM()) / airK();
+      var tauV = AIR.bme * airColumn(h, 1.0, airHM()) / airK();
+      // (Venus: the cloud deck's column above in it, its droplets and its dense CO₂ — Rayleigh's τ of several — sources too)
+      var src = AIR.bms * dM;
+      if (airWorldOrAny() && AIR_SLAB.z > 0.0) {
+        tauV += AIR_SLAB.z * slabCol(h) + (AIR.br.g * airColumn(h, 1.0, airHR()) / airK()) * 3.0;
+        src += dS * VENUS_W + AIR.br * dR;
+      }
       let mz0 = dot(normal, physicalLs);
       let Tdif = exp(-tauV * AIR_MSC) * smoothstep(-0.1, 0.25, mz0) * 0.9;
-      o.L += AIR.bms * dM * (AIR_DUST / (4.0 * PI)) * Tdif * Tv;
+      o.L += src * (AIR_DUST / (4.0 * PI)) * Tdif * Tv;
     }
     let mz = dot(normal, Lm);
     let nightS = 1.0 - smoothstep(-0.12, 0.06, dot(normal, physicalLs));
@@ -9698,14 +9731,18 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
       if (titan) {
         HD_N = toBody(reliefNormal(surf, nh.qb, nh.t, P.time.x * P.near5.w, 0.0));
       } else if (NEAR_KIND != 5u) {
-        _ = craterRelief(surf - 4u, nh.qb, foot, mR);
-        let gc = CRATER_GRAD - nh.qb * dot(CRATER_GRAD, nh.qb);
+        // (the craters' slope where the relief has them — Mars's; Venus's measured heights alone)
+        var gc = vec3f(0.0);
+        if (cratered(surf)) {
+          _ = craterRelief(surf - 4u, nh.qb, foot, mR);
+          gc = CRATER_GRAD - nh.qb * dot(CRATER_GRAD, nh.qb);
+        }
         HD_N = normalize(moonNormal(nh.qb, foot) - gc);
       }
       HD_N_ON = true;
-      // (Titan's: its radar's — no visible albedo, a texture of its dunes and channels: two thirds of it)
+      // (Titan's and Venus's: their radar's — no visible albedo, a texture of dunes, channels, lava flows: two thirds of it)
       let md = moonDetail(nh.qb, foot);
-      ALB_TINT = select(md, mix(vec3f(1.0), md, 0.65), titan);
+      ALB_TINT = select(md, mix(vec3f(1.0), md, 0.65), titan || surf == 10u);
       // (the finest ground, near — fineGround, the airless worlds' —: its slope by differences, its stones lighter)
       if (P.fine0.w > 0.5 && foot < 8.0) {
         let x = toBody(look * nh.t) * mR + P.fine1.xyz;

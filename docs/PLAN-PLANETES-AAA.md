@@ -117,7 +117,19 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   - T5 mesures, e2e, docs.
   - **Fait** (30 octobre) : T1 à T5, T2b (le détail radar en tuiles) et T4b (la mer FFT au méthane) compris —
     [P8.md](progress/planetes-aaa/P8.md).
-- **Vénus** et **les corps sans air** : leurs étapes écrites à leur tour.
+- **Vénus** :
+  - V1 un sol sous les nuages :
+    - sa surface solide à son vrai rayon, et non plus le pont de nuages : on s'y pose, on y marche ;
+    - son relief par l'altimétrie de Magellan (4,6 km, une carte globale : à cette finesse, des tuiles n'apporteraient
+      rien), marché comme celui de Mars ;
+    - sa carte de surface tirée de la mosaïque radar de Magellan.
+  - V2 ses nuages en couche :
+    - entre 48 et 70 km, d'épaisseur optique ~30, très diffusants ;
+    - clairs depuis l'espace, une lueur orange depuis le sol, ~2–3 % de la lumière du Soleil en bas ;
+    - un CO₂ de 92 bar dessous, qui diffuse cette lumière : l'horizon s'y perd.
+  - V3 le détail radar de Magellan (75–225 m) en tuiles d'imagerie, comme celui de Titan.
+  - V4 les dalles de basalte des Venera au sol fin ; mesures, e2e, docs.
+- **Les corps sans air** : leurs étapes écrites à leur tour.
 
 ### P9 — Géantes gazeuses et anneaux
 - Bandes animées et tempêtes depuis l'orbite (Jupiter KTX existant), anneaux de Saturne détaillés (ombres, effet

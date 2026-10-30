@@ -41,6 +41,8 @@ export function reliefMax(surf: number): number {
   if (surf === 2) return 1800;
   // (and Mars's craters: trace.wgsl cratered; Titan's dunes and hills: titanRelief)
   if (surf === 23) return 1100;
+  // (Venus: its measured heights alone — Magellan's —, a margin for the raster's cells)
+  if (surf === 10) return 100;
   return airless(surf) || surf === 6 ? 500 : 0;
 }
 

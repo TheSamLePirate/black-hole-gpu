@@ -5,6 +5,9 @@ The Moon's and Mars's height maps, from their laser altimeters (NASA PDS, public
   Mars: MGS MOLA's MEGDR topography at 64 pixels a degree (925 m; metres over the areoid), in four tiles
     https://pds-geosciences.wustl.edu/mgs/mgs-m-mola-5-megdr-l3-v1/mgsl_300x/meg064/megt{00n000,00n180,90n000,90n180}gb.img
     (133 MB each)
+  Venus: Magellan's altimetry (GTDR, USGS: 4 641 m a pixel, metres over a 6 051.0 km sphere — over the game's 6 051.8 km one,
+    800 m less —, its gaps filled from the nearest measured; 8 % of it)
+    https://planetarymaps.usgs.gov/mosaic/Venus_Magellan_Topography_Global_4641m_v02.tif (67 MB) → assets/dem/venus_topo_4641m.tif
   (kept in assets/dem/, not in the repository)
 
 Outputs, assets/planets-hd/<body>-dem.bin: W × W/2, equirectangular like the colour maps (u = 0.5 + east
@@ -12,7 +15,7 @@ longitude/360°, v = 0.5 − lat/180°, texel centres), each texel the mean of t
 filter), in the Earth's relief format (scripts/build-earth-relief.py: "ELV1", gzip; i16 heights [m], each
 row's first value whole and the others as the difference from the one before, low bytes then high bytes).
 
-usage: python3 scripts/build-dem.py [moon|mars] [width]
+usage: python3 scripts/build-dem.py [moon|mars|venus] [width]
 """
 import gzip
 import os
@@ -39,6 +42,20 @@ def mars():
     return np.roll(z, 11520, axis=1)
 
 
+def venus():
+    import tifffile
+    from scipy import ndimage as nd
+
+    z = tifffile.imread(os.path.join(SRC, "venus_topo_4641m.tif")).astype(np.float32)
+    gap = z < -32000
+    idx = nd.distance_transform_edt(gap, return_distances=False, return_indices=True)
+    z = z[idx[0], idx[1]]
+    # (the filled gaps smoothed: their nearest-neighbour cells' edges gone)
+    z = np.where(gap, nd.gaussian_filter(z, 3), z)
+    # (its columns already from 180° west, east positive)
+    return z - 800.0
+
+
 def write(name, z, W):
     H = W // 2
     h = np.asarray(Image.fromarray(z, mode="F").resize((W, H), Image.BOX), dtype=np.float32)
@@ -55,7 +72,7 @@ def write(name, z, W):
 
 
 if __name__ == "__main__":
-    bodies = {"moon": moon, "mars": mars}
+    bodies = {"moon": moon, "mars": mars, "venus": venus}
     names = [sys.argv[1]] if len(sys.argv) > 1 else list(bodies)
     W = int(sys.argv[2]) if len(sys.argv) > 2 else 4096
     for n in names:

@@ -48,6 +48,9 @@ import ceresColor from "../../assets/planets-hd/ceres-color.jpg";
 import ceresNormal from "../../assets/planets-hd/ceres-normal.jpg";
 // (Titan: Cassini ISS's global mosaic at 938 nm — 4 km, under the haze —, tinted with its coarse map's colour: PLAN-PLANETES-AAA P8)
 import titanColor from "../../assets/planets-hd/titan-color.jpg";
+// (Venus: its ground under the clouds — Magellan's radar mosaic, cleaned, a basalt's tint — and Magellan's altimetry: P8 V1)
+import venusColor from "../../assets/planets-hd/venus-color.jpg";
+import venusDem from "../../assets/planets-hd/venus-dem.bin";
 // (and its seas: the signed distance to their shores from Cassini's radar — scripts in docs/progress/planetes-aaa/P8 —, in the
 // relief's blue: trace.wgsl titanSea, terrain.ts titanSeaAt)
 import titanSeas from "../../assets/planets-hd/titan-seas.png";
@@ -86,6 +89,7 @@ export const HD_SETS: Partial<Record<MapName, HdSet>> = {
   mimas: { color: mimasColor, normal: mimasNormal },
   ceres: { color: ceresColor, normal: ceresNormal },
   titan: { color: titanColor, seas: titanSeas },
+  venus: { color: venusColor, dem: venusDem },
 };
 
 export interface HdMap {

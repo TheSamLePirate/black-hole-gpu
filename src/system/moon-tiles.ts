@@ -52,6 +52,8 @@ export const WORLDS: Record<string, World> = {
   mars: { R: 3396190, path: "mars/dem", zs: [-4, -3, -2, -1, 0, 1, 2, 3], imageRes: 10 },
   // (Titan: Cassini's radar alone — 351 m to 2.8 km a texel — for the detail of its albedo; no relief: titanRelief's)
   titan: { R: 2574730, path: "", zs: [1, 2, 3, 4], imageRes: 351, relief: false },
+  // (Venus: Magellan's radar alone — 206 m to 1.6 km a texel — over its global relief map: P8 V3)
+  venus: { R: 6051800, path: "", zs: [-1, 0, 1, 2], imageRes: 225, relief: false },
 };
 
 /** where the tiles are: the room server's; on a local server, its own when it has a box built (data/…) */
@@ -112,6 +114,8 @@ interface Mosaic {
   holes?: boolean;
   /** its holes transparent texels (a WMS's: Titan's radar's gaps between its swaths) */
   alphaHoles?: boolean;
+  /** its holes white texels (Venus's WMS paints Magellan's gaps white) */
+  whiteHoles?: boolean;
 }
 /** Clementine's mosaic (Moon Trek's WMTS: z t a tile 180/2^t degrees, 256² grey PNGs, to z 6) */
 export const CLEM_URL = "https://trek.nasa.gov/tiles/Moon/EQ/Clem_UVVIS_Mosaic_Global_256ppd_v02/1.0.0/default/default028mm";
@@ -146,6 +150,20 @@ const TITAN_SAR: Mosaic = {
   inflight: 4,
   holes: true,
   alphaHoles: true,
+};
+/** Magellan's radar mosaic of Venus (the USGS's WMS: tiles of 180/2^t degrees, 256² PNGs, its gaps white) */
+const VENUS_SAR: Mosaic = {
+  url: (t, r, c) => {
+    const d = 180 / 2 ** t,
+      lon = -180 + c * d,
+      lat = 90 - r * d;
+    return `https://planetarymaps.usgs.gov/cgi-bin/mapserv?map=/maps/venus/venus_simp_cyl.map&service=WMS&version=1.1.1&request=GetMap&layers=MAGELLAN&styles=&srs=EPSG:4326&bbox=${lon},${lat - d},${lon + d},${lat}&width=256&height=256&format=image/png`;
+  },
+  px: 256,
+  deg: (t) => 180 / 2 ** t,
+  inflight: 4,
+  holes: true,
+  whiteHoles: true,
 };
 /** the radar's level for a level's texel (2^z/256 degrees): its pixel within it, to the mosaic's 128 a degree */
 const sarLevel = (z: number) => Math.min(7, Math.max(0, Math.ceil(Math.log2(180 / 2 ** z))));
@@ -238,6 +256,7 @@ async function resample(m: Mosaic, t: number, z: number, x: number, y: number): 
     const g = got.get(`${Math.floor(yy / P)}/${Math.floor(xx / P)}`);
     if (!g) return -1;
     const at4 = 4 * ((yy % P) * P + (xx % P));
+    if (m.whiteHoles && g[at4]! >= 250) return -1;
     return m.alphaHoles && g[at4 + 3] === 0 ? -1 : g[at4 + ch]!;
   };
   const out = new Float32Array(4 * TILE * TILE);
@@ -279,9 +298,9 @@ export async function worldImagery(world: string, z: number, x: number, y: numbe
     for (let i = 0; i < out.length; i++) out[i] = pack(c[4 * i]!, c[4 * i]!, c[4 * i]!, 255);
     return out;
   }
-  if (world === "titan") {
-    // (Titan: a flat grey in rgb — no colour of its own here —, the radar in alpha, 0 in its gaps: a coarser level's there)
-    const c = await resample(TITAN_SAR, sarLevel(z), z, x, y);
+  if (world === "titan" || world === "venus") {
+    // (Titan, Venus: a flat grey in rgb — no colour of its own here —, the radar in alpha, 0 in its gaps: a coarser level's there)
+    const c = await resample(world === "venus" ? VENUS_SAR : TITAN_SAR, sarLevel(z), z, x, y);
     if (!c) return null;
     for (let i = 0; i < out.length; i++) out[i] = pack(128, 128, 128, c[4 * i]! >= 0 ? Math.max(c[4 * i]!, 1) : 0);
     return out;

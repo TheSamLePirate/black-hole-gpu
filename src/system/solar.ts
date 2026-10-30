@@ -182,7 +182,9 @@ export const SOLAR_BODIES: SolarBody[] = [
     -5832.5,
     [272.76, 67.16],
     0.689,
-    "gas",
+    // (its ground under the clouds — PLAN-PLANETES-AAA P8 V1: Magellan's relief, the Veneras' basalt; "gas" drew the cloud
+    // deck as the ground, nothing to land on)
+    "rock",
     "venus",
     [
       [0.72333566, 0.00677672, 3.39467605, 181.9790995, 131.60246718, 76.67984255],
