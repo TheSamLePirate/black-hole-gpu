@@ -16,6 +16,10 @@
 //   in it, unlike LROC's WAC mosaic), 333 m at its finest, grey;
 //   Mars: Viking's colour mosaic (MDIM 2.1, Mars Trek, 232 m) in rgb and the Murray Lab's global CTX mosaic (Esri's OnMars
 //   service, ~5 m; "NASA/JPL/MSSS/Caltech Murray Lab/Esri") in alpha.
+//
+// Mercury and Ceres (P8): their models (MESSENGER's 665 m, Dawn's HAMO 137 m) from z 2 — finer would only repeat their texels
+// —; Mercury's imagery MESSENGER's low-incidence mosaic (Mercury Trek, 234 m, grey) over two finer levels (z 0, 1); Ceres none
+// finer than its global map (Dawn's mosaics all bake their Sun's shadows).
 
 import type { Vec3 } from "../physics";
 import { edge, pixels } from "./earth-tiles";
@@ -46,6 +50,8 @@ interface World {
   imageRes: number;
   /** relief tiles from the room server (false: its levels imagery alone — Titan's, no measured heights) */
   relief?: boolean;
+  /** its first relief level's z (the finer ones imagery alone: 0; Mercury's, Ceres's 2 — their models' 665 and 137 m) */
+  reliefZ?: number;
 }
 export const WORLDS: Record<string, World> = {
   moon: { R: 1737400, path: "moon/lola", zs: [0, 1, 2, 3], imageRes: 333 },
@@ -54,6 +60,10 @@ export const WORLDS: Record<string, World> = {
   titan: { R: 2574730, path: "", zs: [1, 2, 3, 4], imageRes: 351, relief: false },
   // (Venus: Magellan's radar alone — 206 m to 1.6 km a texel — over its global relief map: P8 V3)
   venus: { R: 6051800, path: "", zs: [-1, 0, 1, 2], imageRes: 225, relief: false },
+  // (Mercury: MESSENGER's 665 m model from z 2 — 4° tiles, 166 m … 2.7 km a texel —, its low-incidence mosaic over z 0 and 1;
+  // Ceres: Dawn's 137 m model, 128 … 512 m a texel — its global map 720 m —, no finer imagery: P8)
+  mercury: { R: 2439700, path: "mercury/dem", zs: [0, 1, 2, 3, 4], imageRes: 234, reliefZ: 2 },
+  ceres: { R: 469700, path: "ceres/dem", zs: [2, 3, 4], imageRes: 400, reliefZ: 2 },
 };
 
 /** where the tiles are: the room server's; on a local server, its own when it has a box built (data/…) */
@@ -170,6 +180,14 @@ const sarLevel = (z: number) => Math.min(7, Math.max(0, Math.ceil(Math.log2(180 
 /** the Trek level a level's imagery is taken from (Clementine, Viking): its finest but no more than ~6 tiles across a window */
 export const clemLevel = (z: number) => Math.min(6, Math.floor(Math.log2(270 / 2 ** z)));
 const vikingLevel = (z: number) => Math.min(7, Math.floor(Math.log2(270 / 2 ** z)));
+/** MESSENGER's low-incidence mosaic of Mercury (Mercury Trek, 256² grey JPEGs, to z 7: 234 m) — its Sun high, few shadows */
+const MDIS_LOI: Mosaic = {
+  url: (t, r, c) =>
+    `https://trek.nasa.gov/tiles/Mercury/EQ/Mercury_MESSENGER_MDIS_Basemap_LOI_Mosaic_Global_166m/1.0.0/default/default028mm/${t}/${r}/${c}.jpg`,
+  px: 256,
+  deg: (t) => 180 / 2 ** t,
+  inflight: 8,
+};
 /** the CTX level whose pixel is within the level's texel (to its 12th: ~10 m) */
 const ctxLevel = (z: number) => Math.min(12, Math.max(0, Math.ceil(Math.log2(90 / 2 ** z))));
 
@@ -292,8 +310,10 @@ export async function worldImagery(world: string, z: number, x: number, y: numbe
   const pack = (r: number, g: number, b: number, a: number) =>
     (Math.max(Math.round(r), 1) | (Math.round(g) << 8) | (Math.round(b) << 16) | (Math.round(a) << 24)) >>> 0;
   const out = new Uint32Array(TILE * TILE);
-  if (world === "moon") {
-    const c = await resample(CLEM, clemLevel(z), z, x, y);
+  // (Ceres: none finer than its global map)
+  if (world === "ceres") return null;
+  if (world === "moon" || world === "mercury") {
+    const c = await (world === "moon" ? resample(CLEM, clemLevel(z), z, x, y) : resample(MDIS_LOI, vikingLevel(z), z, x, y));
     if (!c) return null;
     for (let i = 0; i < out.length; i++) out[i] = pack(c[4 * i]!, c[4 * i]!, c[4 * i]!, 255);
     return out;
@@ -381,7 +401,7 @@ export class MoonTiles {
       cols: lolaCols(z),
       rows: lolaRows(z),
       S: lolaCols(z) * TILE,
-      image: z < 0 || this.W.relief === false,
+      image: z < (this.W.reliefZ ?? 0) || this.W.relief === false,
       want: null,
       valid: null,
       key: new Array(MOON_SPAN ** 2).fill(null),

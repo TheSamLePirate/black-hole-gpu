@@ -125,3 +125,54 @@ test("Mars's model resampled to 256 pixels a degree (P7): a plane comes out a pl
   expect(lolaUnit(lolaEncode(new Int16Array(n * n), 0, 1))).toBe(1);
   expect(lolaUnit(lolaEncode(new Int16Array(n * n), 0))).toBe(0.5);
 });
+
+test("Mercury's and Ceres's models (P8): their columns from 0° E turned to 180° W, their finest level z 2, the game's reference off", async () => {
+  // (a model laid out as the USGS's — its row y's sample x at data0 + 2 (y W + x) —, its columns from 0° east: x = lon·ppd)
+  const serve = (W: number, DATA0: number, value: (y: number, x: number) => number) =>
+    Bun.serve({
+      port: 0,
+      fetch(req) {
+        const [a, b] = /bytes=(\d+)-(\d+)/.exec(req.headers.get("range")!)!.slice(1).map(Number) as [number, number];
+        const out = new Int16Array((b - a + 1) / 2);
+        for (let q = 0; q < out.length; q++) {
+          const s = (a - DATA0) / 2 + q;
+          out[q] = value(Math.floor(s / W), s % W);
+        }
+        return new Response(out.buffer, { status: 206 });
+      },
+    });
+  const { tileRow, DEM_SOURCES, CERES_A, CERES_C } = await import("../server/moon-tiles");
+  const { lolaCols } = await import("../src/system/lola-codec");
+  // Mercury: 64 a degree, as they are at z 2 (4° a tile: 64 a degree) — an output texel its source sample, half-metres, 300 m off
+  const M = DEM_SOURCES.mercury!;
+  const mv = (y: number, x: number) => ((y * 7 + x * 3) % 4000) - 2000;
+  const ms = serve(M.width, M.data0, mv);
+  try {
+    const row = await tileRow({ ...M, url: `http://localhost:${ms.port}/m.tif` }, 20);
+    const N = lolaCols(2) * 256;
+    expect(row.length).toBe(256 * N);
+    // (output column i at east longitude −180 + (i + 0.5)/64: the source's column (i + 11 520) mod 23 040)
+    for (const [jj, i] of [
+      [0, 0],
+      [100, 5000],
+      [255, 23039],
+    ] as const)
+      expect(row[jj * N + i]).toBe(mv(20 * 256 + jj, (i + 11520) % M.width) - 600);
+  } finally {
+    ms.stop(true);
+  }
+  // Ceres: 60 a degree resampled to 64, metres, its spheroid's height off — a model at the spheroid exactly comes out 0
+  const C = DEM_SOURCES.ceres!;
+  const cs = serve(C.width, C.data0, (y) => {
+    const lat = ((90 - (y + 0.5) / 60) * Math.PI) / 180;
+    return Math.round((CERES_A * CERES_C) / Math.hypot(CERES_C * Math.cos(lat), CERES_A * Math.sin(lat)) - 470000);
+  });
+  try {
+    const row = await tileRow({ ...C, url: `http://localhost:${cs.port}/c.tif` }, 8);
+    let worst = 0;
+    for (let q = 0; q < row.length; q += 997) worst = Math.max(worst, Math.abs(row[q]!));
+    expect(worst).toBeLessThanOrEqual(2);
+  } finally {
+    cs.stop(true);
+  }
+});

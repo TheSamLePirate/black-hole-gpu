@@ -1,7 +1,7 @@
 // The room server on its own (deploy/Dockerfile.rooms → stream.samlepirate.org): the rooms over a WebSocket
 // at any path, /health and /version; SQLite in $DATA; stopped cleanly (the rooms written) on SIGTERM.
 
-import { createMoonTiles } from "./moon-tiles";
+import { createMoonTiles, DEM_PATHS } from "./moon-tiles";
 import { createRooms, defaultOrigin } from "./rooms";
 import { createTraffic } from "./traffic";
 
@@ -21,17 +21,20 @@ const traffic = createTraffic({
   openskySecret: process.env.OPENSKY_CLIENT_SECRET || undefined,
   log: (m) => console.log(m),
 });
-// (the Moon's and Mars's relief tiles — server/moon-tiles.ts —: built by the stack's moon-tiles service into their volume)
-const moon = createMoonTiles(process.env.MOON_DIR ?? `${dir}/moon/lola`);
-const mars = createMoonTiles(process.env.MARS_DIR ?? `${dir}/mars/dem`, "mars/dem");
+// (the worlds' relief tiles — server/moon-tiles.ts —: built by the stack's moon-tiles service into their volume; each body's
+// directory from its <BODY>_DIR)
+const worlds = Object.entries(DEM_PATHS).map(([body, path]) => {
+  const d = process.env[`${body.toUpperCase()}_DIR`] ?? `${dir}/${path}`;
+  return { prefix: `/svc/v1/${path.split("/")[0]}/`, svc: createMoonTiles(d, path) };
+});
 
 const server = Bun.serve({
   port,
   async fetch(req, srv) {
     const url = new URL(req.url);
     if (url.pathname.startsWith("/traffic")) return (await traffic.handle(req, srv.requestIP(req)?.address)) ?? new Response(null, { status: 404 });
-    if (url.pathname.startsWith("/svc/v1/moon/")) return (await moon.handle(url)) ?? new Response(null, { status: 404 });
-    if (url.pathname.startsWith("/svc/v1/mars/")) return (await mars.handle(url)) ?? new Response(null, { status: 404 });
+    const w = worlds.find((x) => url.pathname.startsWith(x.prefix));
+    if (w) return (await w.svc.handle(url)) ?? new Response(null, { status: 404 });
     if (url.pathname === "/health") return Response.json(rooms.health(), { headers: { "access-control-allow-origin": "*" } });
     if (url.pathname === "/version") return Response.json({ build }, { headers: { "access-control-allow-origin": "*" } });
     if (req.headers.get("upgrade")?.toLowerCase() === "websocket") return rooms.upgrade(req, srv);

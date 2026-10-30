@@ -3,11 +3,11 @@
 Streamed in by `src/system/hd-maps.ts` for the body near the camera, once its coarse map's texel outgrows a
 pixel under it (within ~4 of its radii at a 60° view; freed beyond twice that — `src/renderer.ts`), one
 body at a time: its colour map (`<body>-color.jpg`: 8192 wide for the Moon and Mars, 4096 for Jupiter's fallback,
-4096 for most, 2048 for Ceres and Phobos, 1600 for Mimas), its brightness kept to the coarse map's mean,
-and its relief: for the Moon and Mars their laser altimeters' heights (`<body>-dem.bin`, below) — the ground
+4096 for most — Ceres's too, Dawn's —, 2048 for Phobos, 1600 for Mimas), its brightness kept to the coarse map's mean,
+and its relief: for the Moon, Mars, Venus, Mercury and Ceres their measured heights (`<body>-dem.bin`, below) — the ground
 drawn, stood on and lit, its normals taken from them —; elsewhere a normal map (`<body>-normal.jpg`: red
-east, green south) or a height map from which the normals are computed on the GPU (`<body>-height.jpg`:
-Mercury); Jupiter and Saturn have colour only.
+east, green south) or a height map from which the normals are computed on the GPU (`<body>-height.jpg`: none
+now); Jupiter and Saturn have colour only.
 
 Except for Jupiter (below), these stay JPEG: the coarser maps of `assets/planets` have GPU-compressed KTX2 copies
 (`scripts/build-ktx2.ts`), but 8K maps in UASTC would add hundreds of MB to the repository.
@@ -58,3 +58,20 @@ whole metres, in the Earth's relief format ("ELV1", gzip: `src/system/heights-fi
 NASA data, public domain (NASA PDS Geosciences Node). The raw grids (1 GB) stay out of the repository, in
 `assets/dem/`. They replace the texture pack's Moon normal map (offset by a texel from LOLA, its relief
 weak) and Mars height map (an 8-bit copy of MOLA's).
+
+## Mercury's and Ceres's heights, Ceres's map (PLAN-PLANETES-AAA P8)
+
+`mercury-dem.bin` and `ceres-dem.bin`: 4096 × 2048, `python3 scripts/build-dem.py mercury|ceres`, from
+
+- Mercury: **MESSENGER**'s USGS global model, 665 m (heights over a 2 439.4 km sphere; here over the game's 2 439.7 km) —
+  <https://planetarymaps.usgs.gov/mosaic/Mercury_Messenger_USGS_DEM_Global_665m_v2.tif>
+- Ceres: **Dawn**'s HAMO model by the DLR, 137 m, taken over its spheroid (482.07 × 445.93 km, fitted to it) —
+  <https://planetarymaps.usgs.gov/mosaic/Ceres_Dawn_FC_HAMO_DTM_DLR_Global_60ppd_Oct2016.tif>
+
+Their finer relief streams in tiles from the room server (server/moon-tiles.ts), Mercury's albedo detail from MESSENGER's
+low-incidence mosaic (Mercury Trek).
+
+`ceres-color.jpg` (and `../planets/ceres.jpg`, its KTX2 copy): the texture pack's map was not Ceres (an invented one, no
+craters). Now **Dawn FC**'s global mosaic by the DLR (400 m, <https://planetarymaps.usgs.gov/mosaic/Ceres_Dawn_FC_DLR_global_20ppd_Oct2015.tif>),
+its baked shading taken off with Dawn's relief, its polar night filled — `python3 scripts/build-ceres-color.py`. Its
+normal map (flat) is gone: the heights give the relief. NASA/JPL-Caltech/UCLA/MPS/DLR/IDA, public domain.

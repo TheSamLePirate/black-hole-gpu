@@ -1,6 +1,6 @@
 // Builds a world's relief tiles (server/moon-tiles.ts) and exits — the stack's moon-tiles service (deploy/compose.yml), into
 // the volume the room server serves them from; a run after a finished one only checks the tiles are there.
-//   bun server/moon-build.ts [--body moon|mars] [--out dir] [--rows r0 r1] [--cols c0 c1]   (z 0 tile rows / columns: a box)
+//   bun server/moon-build.ts [--body moon|mars|mercury|ceres] [--out dir] [--rows r0 r1] [--cols c0 c1]   (the finest level's tile rows / columns: a box)
 
 import { buildLola, DEM_SOURCES } from "./moon-tiles";
 

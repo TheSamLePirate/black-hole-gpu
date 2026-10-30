@@ -53,6 +53,8 @@ const traffic = createTraffic({
 });
 const moonTiles = createMoonTiles("data/moon/lola");
 const marsTiles = createMoonTiles("data/mars/dem", "mars/dem");
+const mercuryTiles = createMoonTiles("data/mercury/dem", "mercury/dem");
+const ceresTiles = createMoonTiles("data/ceres/dem", "ceres/dem");
 const server = Bun.serve({
   port,
   routes: {
@@ -94,6 +96,8 @@ const server = Bun.serve({
     // (the Moon's relief tiles — server/moon-tiles.ts, P6 —: a box built locally into data/, as the room server serves them)
     "/svc/v1/moon/*": async (req: Request) => (await moonTiles.handle(new URL(req.url))) ?? new Response(null, { status: 404 }),
     "/svc/v1/mars/*": async (req: Request) => (await marsTiles.handle(new URL(req.url))) ?? new Response(null, { status: 404 }),
+    "/svc/v1/mercury/*": async (req: Request) => (await mercuryTiles.handle(new URL(req.url))) ?? new Response(null, { status: 404 }),
+    "/svc/v1/ceres/*": async (req: Request) => (await ceresTiles.handle(new URL(req.url))) ?? new Response(null, { status: 404 }),
     "/net": ((req: Request, srv: Parameters<typeof rooms.upgrade>[1]) =>
       req.headers.get("upgrade")?.toLowerCase() === "websocket" ? rooms.upgrade(req, srv) : Response.json(rooms.health())) as never,
     // The rocket engine's AudioWorklet (PLAN-AUDIO S2), bundled on its own

@@ -1,11 +1,11 @@
 // The solar system's worlds up close (assets/planets-hd): the finer map of the body near the camera,
 // streamed in as it nears — its colour (4096 or 8192 wide) and its relief, packed on the GPU:
 //   color (rgba8, or Jupiter's native BC7/ASTC): the map (sRGB), mip-mapped in linear light
-//   relief: the Moon's and Mars's heights from their laser altimeters (LOLA, MOLA: scripts/build-dem.py)
+//   relief: the Moon's, Mars's, Venus's, Mercury's and Ceres's measured heights (scripts/build-dem.py)
 //   — rg16float [m]: their mean and, down the mips, their highest (the marches' local bound); the
 //   tracer's ground and its normals —; elsewhere (rgba8) the normals'
-//   east and south components (0.5: flat), from the body's normal map or computed from its height map
-//   (Mercury), mip-mapped
+//   east and south components (0.5: flat), from the body's normal map or computed from a height map (none
+//   now), mip-mapped
 // One body at a time (the tracer's P.hd names it); its mean albedo measured, so that the finer map
 // keeps the body's brightness (the coarse map's mean sets it).
 
@@ -16,7 +16,8 @@ import moonDem from "../../assets/planets-hd/moon-dem.bin";
 import marsColor from "../../assets/planets-hd/mars-color.jpg";
 import marsDem from "../../assets/planets-hd/mars-dem.bin";
 import mercuryColor from "../../assets/planets-hd/mercury-color.jpg";
-import mercuryHeight from "../../assets/planets-hd/mercury-height.jpg";
+// (Mercury's heights: MESSENGER's USGS model, 665 m — scripts/build-dem.py mercury; its finer relief in tiles: moon-tiles.ts)
+import mercuryDem from "../../assets/planets-hd/mercury-dem.bin";
 import jupiterColor from "../../assets/planets-hd/jupiter-color.jpg";
 import jupiterKtx from "../../assets/planets-hd/jupiter-color.ktx2";
 import jupiterMetadata from "../../assets/planets-hd/jupiter.json";
@@ -44,8 +45,10 @@ import deimosColor from "../../assets/planets-hd/deimos-color.jpg";
 import deimosNormal from "../../assets/planets-hd/deimos-normal.jpg";
 import mimasColor from "../../assets/planets-hd/mimas-color.jpg";
 import mimasNormal from "../../assets/planets-hd/mimas-normal.jpg";
+// (Ceres: Dawn's global mosaic, its baked shading taken off — scripts/build-ceres-color.py —, and Dawn's HAMO heights:
+// PLAN-PLANETES-AAA P8)
 import ceresColor from "../../assets/planets-hd/ceres-color.jpg";
-import ceresNormal from "../../assets/planets-hd/ceres-normal.jpg";
+import ceresDem from "../../assets/planets-hd/ceres-dem.bin";
 // (Titan: Cassini ISS's global mosaic at 938 nm — 4 km, under the haze —, tinted with its coarse map's colour: PLAN-PLANETES-AAA P8)
 import titanColor from "../../assets/planets-hd/titan-color.jpg";
 // (Venus: its ground under the clouds — Magellan's radar mosaic, cleaned, a basalt's tint — and Magellan's altimetry: P8 V1)
@@ -74,7 +77,7 @@ interface HdSet {
 export const HD_SETS: Partial<Record<MapName, HdSet>> = {
   moon: { color: moonColor, dem: moonDem },
   mars: { color: marsColor, dem: marsDem },
-  mercury: { color: mercuryColor, height: mercuryHeight, relief: 5 },
+  mercury: { color: mercuryColor, dem: mercuryDem },
   jupiter: { color: jupiterColor },
   saturn: { color: saturnColor },
   io: { color: ioColor, normal: ioNormal },
@@ -87,7 +90,7 @@ export const HD_SETS: Partial<Record<MapName, HdSet>> = {
   phobos: { color: phobosColor, normal: phobosNormal },
   deimos: { color: deimosColor, normal: deimosNormal },
   mimas: { color: mimasColor, normal: mimasNormal },
-  ceres: { color: ceresColor, normal: ceresNormal },
+  ceres: { color: ceresColor, dem: ceresDem },
   titan: { color: titanColor, seas: titanSeas },
   venus: { color: venusColor, dem: venusDem },
 };

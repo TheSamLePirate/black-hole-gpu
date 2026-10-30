@@ -8,6 +8,13 @@ The Moon's and Mars's height maps, from their laser altimeters (NASA PDS, public
   Venus: Magellan's altimetry (GTDR, USGS: 4 641 m a pixel, metres over a 6 051.0 km sphere — over the game's 6 051.8 km one,
     800 m less —, its gaps filled from the nearest measured; 8 % of it)
     https://planetarymaps.usgs.gov/mosaic/Venus_Magellan_Topography_Global_4641m_v02.tif (67 MB) → assets/dem/venus_topo_4641m.tif
+  Mercury: MESSENGER's USGS global model (665 m, 64 pixels a degree; DN × 0.5 m over a 2 439.4 km sphere — over the game's
+    2 439.7 km one, 300 m less)
+    https://planetarymaps.usgs.gov/mosaic/Mercury_Messenger_USGS_DEM_Global_665m_v2.tif (531 MB) → assets/dem/mercury_dem_665m.tif
+  Ceres: Dawn's HAMO model by the DLR (137 m, 60 pixels a degree; radii less 470 km), taken over its spheroid (482.07 ×
+    445.93 km, fitted to it — server/moon-tiles.ts CERES_A, CERES_C: its relief tiles the same)
+    https://planetarymaps.usgs.gov/mosaic/Ceres_Dawn_FC_HAMO_DTM_DLR_Global_60ppd_Oct2016.tif (467 MB)
+    → assets/dem/ceres_hamo_dtm_60ppd.tif
   (kept in assets/dem/, not in the repository)
 
 Outputs, assets/planets-hd/<body>-dem.bin: W × W/2, equirectangular like the colour maps (u = 0.5 + east
@@ -15,7 +22,7 @@ longitude/360°, v = 0.5 − lat/180°, texel centres), each texel the mean of t
 filter), in the Earth's relief format (scripts/build-earth-relief.py: "ELV1", gzip; i16 heights [m], each
 row's first value whole and the others as the difference from the one before, low bytes then high bytes).
 
-usage: python3 scripts/build-dem.py [moon|mars|venus] [width]
+usage: python3 scripts/build-dem.py [moon|mars|venus|mercury|ceres] [width]
 """
 import gzip
 import os
@@ -56,6 +63,34 @@ def venus():
     return z - 800.0
 
 
+def geotiff(name, data0, W, H):
+    # (the USGS's GeoTIFFs: one little-endian int16 strip a row, rows contiguous from data0 — server/moon-tiles.ts DEM_SOURCES)
+    z = np.memmap(os.path.join(SRC, name), dtype="<i2", mode="r", offset=data0, shape=(H, W))
+    z = np.asarray(z).astype(np.float32)
+    gap = z < -32000
+    if gap.any():
+        from scipy import ndimage as nd
+
+        idx = nd.distance_transform_edt(gap, return_distances=False, return_indices=True)
+        z = z[idx[0], idx[1]]
+    # (its columns from 0° east: rolled to start at 180° west, like the maps)
+    return np.roll(z, W // 2, axis=1)
+
+
+def mercury():
+    return geotiff("mercury_dem_665m.tif", 92981, 23040, 11520) * 0.5 - 300.0
+
+
+CERES_A, CERES_C = 482074.8, 445930.7
+
+
+def ceres():
+    z = geotiff("ceres_hamo_dtm_60ppd.tif", 87217, 21600, 10800)
+    lat = np.deg2rad(90.0 - (np.arange(z.shape[0]) + 0.5) / 60.0)
+    ref = CERES_A * CERES_C / np.hypot(CERES_C * np.cos(lat), CERES_A * np.sin(lat)) - 470000.0
+    return z - ref[:, None].astype(np.float32)
+
+
 def write(name, z, W):
     H = W // 2
     h = np.asarray(Image.fromarray(z, mode="F").resize((W, H), Image.BOX), dtype=np.float32)
@@ -72,7 +107,7 @@ def write(name, z, W):
 
 
 if __name__ == "__main__":
-    bodies = {"moon": moon, "mars": mars, "venus": venus}
+    bodies = {"moon": moon, "mars": mars, "venus": venus, "mercury": mercury, "ceres": ceres}
     names = [sys.argv[1]] if len(sys.argv) > 1 else list(bodies)
     W = int(sys.argv[2]) if len(sys.argv) > 2 else 4096
     for n in names:

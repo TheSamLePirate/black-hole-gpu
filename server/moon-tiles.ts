@@ -5,7 +5,11 @@
 // resumable (a tile written is not made again).
 //   the Moon: LRO LOLA's 118 m model (256 pixels a degree already; half-metres over the 1 737.4 km sphere)
 //   Mars: the HRSC and MOLA blend, 200 m (296.37 pixels a degree, resampled bilinearly; metres over the areoid)
-// Served at /svc/v1/{moon/lola | mars/dem}/{z}/{row}/{col}.bin — gzipped, CORS open, immutable — and …/status (the build's
+//   Mercury (P8): MESSENGER's USGS model, 665 m (64 pixels a degree: its tiles from z 2 — 4°, 64 a degree —, read as they are;
+//   half-metres over the game's 2 439.7 km sphere)
+//   Ceres (P8): Dawn's HAMO model by the DLR, 137 m (60 pixels a degree: from z 2 too; metres over its spheroid — 482.07 ×
+//   445.93 km, fitted to it: its mean radius the game's 469.7 km —, the body drawn round as Mars over its areoid)
+// Served at /svc/v1/{moon/lola | mars/dem | mercury/dem | ceres/dem}/{z}/{row}/{col}.bin — gzipped, CORS open, immutable — and …/status (the build's
 // progress).
 
 import { mkdirSync } from "node:fs";
@@ -27,7 +31,17 @@ export interface DemSource {
   unit: number;
   /** its no-data value (none: undefined) */
   nodata?: number;
+  /** its first column's east longitude [°] (the USGS's: −180; Mercury's, Ceres's: 0) */
+  lon0?: number;
+  /** the finest level made (its texel no finer than the model's: Mercury's, Ceres's z 2) */
+  z0?: number;
+  /** the game's ground reference over the model's [m] at a latitude [rad] (none: the same) — subtracted */
+  ref?: (lat: number) => number;
 }
+/** Ceres's spheroid (fitted to Dawn's model: its volume's radius 469.71 km, the game's) [m] */
+export const CERES_A = 482074.8,
+  CERES_C = 445930.7;
+const ceresRef = (lat: number) => (CERES_A * CERES_C) / Math.hypot(CERES_C * Math.cos(lat), CERES_A * Math.sin(lat)) - 470000;
 
 export const LOLA_SRC = "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Lunar_LRO_LOLA_Global_LDEM_118m_Mar2014.tif";
 export const DEM_SOURCES: Record<string, DemSource> = {
@@ -43,9 +57,37 @@ export const DEM_SOURCES: Record<string, DemSource> = {
     unit: 1,
     nodata: -32768,
   },
+  mercury: {
+    url: "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Mercury_Messenger_USGS_DEM_Global_665m_v2.tif",
+    data0: 92981,
+    width: 23040,
+    height: 11520,
+    ppd: 64,
+    scale: 0.5,
+    unit: 0,
+    nodata: -32768,
+    lon0: 0,
+    z0: 2,
+    // (its heights over a 2 439.4 km sphere)
+    ref: () => 300,
+  },
+  ceres: {
+    url: "https://asc-pds-services.s3.us-west-2.amazonaws.com/mosaic/Ceres_Dawn_FC_HAMO_DTM_DLR_Global_60ppd_Oct2016.tif",
+    data0: 87217,
+    width: 21600,
+    height: 10800,
+    ppd: 60,
+    scale: 1,
+    unit: 1,
+    nodata: -32768,
+    lon0: 0,
+    z0: 2,
+    // (its radii less 470 km)
+    ref: ceresRef,
+  },
 };
 /** the services: the path under /svc/v1/ and the body's model */
-export const DEM_PATHS: Record<string, string> = { moon: "moon/lola", mars: "mars/dem" };
+export const DEM_PATHS: Record<string, string> = { moon: "moon/lola", mars: "mars/dem", mercury: "mercury/dem", ceres: "ceres/dem" };
 
 const tilePath = (dir: string, z: number, y: number, x: number) => `${dir}/${z}/${y}/${x}.bin`;
 
@@ -62,8 +104,8 @@ export interface LolaStatus {
 }
 
 /**
- * Builds a body's tiles into dir — all, or the box of z 0 tiles rows [r0, r1) × cols [c0, c1) (a local test: the coarser
- * levels then only where all their children are).
+ * Builds a body's tiles into dir — all, or the box of its finest level's (z0's) tiles rows [r0, r1) × cols [c0, c1) (a local
+ * test: the coarser levels then only where all their children are).
  */
 export async function buildLola(
   dir: string,
@@ -71,8 +113,9 @@ export async function buildLola(
 ) {
   const log = o.log ?? ((m) => console.log(m));
   const S = { ...(o.body ?? DEM_SOURCES.moon!), ...(o.src ? { url: o.src } : {}) };
-  const [r0, r1] = o.rows ?? [0, lolaRows(0)];
-  const [c0, c1] = o.cols ?? [0, lolaCols(0)];
+  const z0 = S.z0 ?? 0;
+  const [r0, r1] = o.rows ?? [0, lolaRows(z0)];
+  const [c0, c1] = o.cols ?? [0, lolaCols(z0)];
   const status: LolaStatus = { rows: 0, of: r1 - r0, levels: 0, done: false, startedAt: new Date().toISOString(), updatedAt: "" };
   const save = () => {
     status.updatedAt = new Date().toISOString();
@@ -83,30 +126,32 @@ export async function buildLola(
   try {
     for (let ty = r0; ty < r1; ty++) {
       const missing: number[] = [];
-      for (let tx = c0; tx < c1; tx++) if (!(await Bun.file(tilePath(dir, 0, ty, tx)).exists())) missing.push(tx);
+      for (let tx = c0; tx < c1; tx++) if (!(await Bun.file(tilePath(dir, z0, ty, tx)).exists())) missing.push(tx);
       if (missing.length) {
         const band = await tileRow(S, ty, log);
-        mkdirSync(`${dir}/0/${ty}`, { recursive: true });
+        const N = lolaCols(z0) * LOLA_TILE;
+        mkdirSync(`${dir}/${z0}/${ty}`, { recursive: true });
         for (const tx of missing) {
           const h = new Int16Array(LOLA_TILE * LOLA_TILE);
-          for (let y = 0; y < LOLA_TILE; y++) h.set(band.subarray(y * 360 * LOLA_TILE + tx * LOLA_TILE, y * 360 * LOLA_TILE + (tx + 1) * LOLA_TILE), y * LOLA_TILE);
-          await Bun.write(tilePath(dir, 0, ty, tx), gzipSync(lolaEncode(h, 0, S.unit), { level: 9 }));
+          for (let y = 0; y < LOLA_TILE; y++) h.set(band.subarray(y * N + tx * LOLA_TILE, y * N + (tx + 1) * LOLA_TILE), y * LOLA_TILE);
+          await Bun.write(tilePath(dir, z0, ty, tx), gzipSync(lolaEncode(h, z0, S.unit), { level: 9 }));
         }
       }
       status.rows = ty - r0 + 1;
-      if (missing.length) log(`dem: z 0 row ${ty} (${missing.length} tiles)`);
+      if (missing.length) log(`dem: z ${z0} row ${ty} (${missing.length} tiles)`);
       await save();
     }
     // the coarser levels, from their children (a child past the south pole: none — lolaParent holds the pole's rows)
-    for (let z = 1; z < LOLA_LEVELS; z++) {
+    for (let z = z0 + 1; z < z0 + LOLA_LEVELS; z++) {
       const read = async (y: number, x: number) => {
         if (y >= lolaRows(z - 1)) return null;
         const f = Bun.file(tilePath(dir, z - 1, y, x));
         return (await f.exists()) ? lolaDecode(gunzipSync(new Uint8Array(await f.arrayBuffer()))) : undefined;
       };
       let made = 0;
-      for (let ty = Math.floor(r0 / 2 ** z); ty < Math.ceil(r1 / 2 ** z) && ty < lolaRows(z); ty++)
-        for (let tx = Math.floor(c0 / 2 ** z); tx < Math.ceil(c1 / 2 ** z); tx++) {
+      const f = 2 ** (z - z0);
+      for (let ty = Math.floor(r0 / f); ty < Math.ceil(r1 / f) && ty < lolaRows(z); ty++)
+        for (let tx = Math.floor(c0 / f); tx < Math.ceil(c1 / f); tx++) {
           if (await Bun.file(tilePath(dir, z, ty, tx)).exists()) continue;
           const [nw, ne, sw, se] = await Promise.all([read(2 * ty, 2 * tx), read(2 * ty, 2 * tx + 1), read(2 * ty + 1, 2 * tx), read(2 * ty + 1, 2 * tx + 1)]);
           // (a child not made — a local box's edge —: no parent)
@@ -115,7 +160,7 @@ export async function buildLola(
           await Bun.write(tilePath(dir, z, ty, tx), gzipSync(lolaEncode(lolaParent(nw, ne, sw, se), z, S.unit), { level: 9 }));
           made++;
         }
-      status.levels = z;
+      status.levels = z - z0;
       log(`dem: z ${z} (${made} tiles)`);
       await save();
     }
@@ -129,14 +174,20 @@ export async function buildLola(
 }
 
 /**
- * z 0's tile row ty — 256 rows round the body at 256 pixels a degree, in the tiles' unit — from the model: its rows read
- * as they are (256 a degree already) or resampled bilinearly (its no-data left out of the weights; none at all: 0).
+ * The finest level's (z0's) tile row ty — 256 rows round the body at 256/2^z0 pixels a degree, in the tiles' unit — from
+ * the model: its rows read as they are (the Moon: 256 a degree already) or resampled bilinearly (its no-data left out of the
+ * weights; none at all: 0), its columns turned to start at 180° W, the game's reference taken off.
  */
 export async function tileRow(S: DemSource, ty: number, log: (m: string) => void = () => {}): Promise<Int16Array> {
-  const N = 360 * LOLA_TILE;
-  const k = S.ppd / LOLA_TILE;
-  const toUnit = S.scale / (S.unit === 1 ? 1 : 0.5);
-  if (k === 1 && S.width === N && toUnit === 1 && S.nodata === undefined) return fetchRows(S, ty * LOLA_TILE, LOLA_TILE, log);
+  const z0 = S.z0 ?? 0;
+  const N = lolaCols(z0) * LOLA_TILE;
+  const k = (S.ppd * 2 ** z0) / LOLA_TILE;
+  const unitM = S.unit === 1 ? 1 : 0.5;
+  const toUnit = S.scale / unitM;
+  // (its columns' offset: output column 0 at 180° W)
+  const shift = (-180 - (S.lon0 ?? -180)) * S.ppd;
+  if (k === 1 && S.width === N && toUnit === 1 && S.nodata === undefined && shift === 0 && !S.ref)
+    return fetchRows(S, ty * LOLA_TILE, LOLA_TILE, log);
   // (the source rows the 256 output rows fall between)
   const ys = (j: number) => (j + 0.5) * k - 0.5;
   const y0 = Math.max(Math.floor(ys(ty * LOLA_TILE)), 0);
@@ -149,13 +200,16 @@ export async function tileRow(S: DemSource, ty: number, log: (m: string) => void
     cb = new Int32Array(N),
     cf = new Float32Array(N);
   for (let i = 0; i < N; i++) {
-    const x = (i + 0.5) * k - 0.5;
+    const x = (i + 0.5) * k - 0.5 + shift;
     const xa = Math.floor(x);
     ca[i] = ((xa % S.width) + S.width) % S.width;
     cb[i] = (ca[i]! + 1) % S.width;
     cf[i] = x - xa;
   }
   for (let jj = 0; jj < LOLA_TILE; jj++) {
+    // (the reference under this row, in the tiles' unit)
+    const lat = ((90 - ((ty * LOLA_TILE + jj + 0.5) * 2 ** z0) / LOLA_TILE) * Math.PI) / 180;
+    const off = S.ref ? S.ref(lat) / unitM : 0;
     const y = Math.min(Math.max(ys(ty * LOLA_TILE + jj), y0), y1);
     const ya = Math.min(Math.floor(y), Math.max(y1 - 1, y0)),
       fy = Math.min(Math.max(y - ya, 0), 1);
@@ -191,7 +245,7 @@ export async function tileRow(S: DemSource, ty: number, log: (m: string) => void
         s += v3 * w;
         ws += w;
       }
-      out[jj * N + i] = ws > 0 ? Math.max(-32768, Math.min(32767, Math.round((s / ws) * toUnit))) : 0;
+      out[jj * N + i] = ws > 0 ? Math.max(-32768, Math.min(32767, Math.round((s / ws) * toUnit - off))) : 0;
     }
   }
   return out;
