@@ -93,9 +93,14 @@ test("a world's measured heights under its craters: the ground the gear stands o
   expect(groundRelief("moon", q)).toBeCloseTo(craters + dem(q), 9);
   setGroundHeights("moon", null);
   expect(groundRelief("moon", q)).toBe(craters);
-  // (a world without craters of its own: the heights alone, then none)
+  // (a world without craters of its own — Venus; Mars has its own since P7 —: the heights alone, then none)
+  setGroundHeights("venus", dem);
+  expect(groundRelief("venus", q)).toBeCloseTo(dem(q), 9);
+  setGroundHeights("venus", null);
+  expect(groundRelief("venus", q)).toBe(0);
+  // (and Mars's craters under its measured heights)
+  const marsCraters = groundRelief("mars", q);
   setGroundHeights("mars", dem);
-  expect(groundRelief("mars", q)).toBeCloseTo(dem(q), 9);
+  expect(groundRelief("mars", q)).toBeCloseTo(marsCraters + dem(q), 9);
   setGroundHeights("mars", null);
-  expect(groundRelief("mars", q)).toBe(0);
 });
