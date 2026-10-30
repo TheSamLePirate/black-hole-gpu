@@ -7,7 +7,7 @@ import type { Vec3 } from "../physics";
 import { GEAR } from "../landing";
 import { TUNING } from "../game/tuning";
 import { bodyAxes, M_METRES, mapIndex, SOLAR_BODIES, solarBody, solarState, spinVector } from "./solar";
-import { craterRelief, titanRelief } from "../terrain";
+import { craterRelief, titanRelief, titanSeaAt } from "../terrain";
 import { airAt, airRaw } from "../aero";
 import { C_MPS } from "../units";
 import { cross, dot, sub } from "../math/vec3";
@@ -152,7 +152,11 @@ for (const b of SOLAR_BODIES) {
   const t = SOLAR_BODIES.find((b) => b.id === "titan");
   if (t) {
     const mR = t.radius * M_METRES;
-    craters.set("titan", (q) => titanRelief(q, mR));
+    // (on a sea, its surface: no swimming — the walker, the gear on the methane, its bed under)
+    craters.set("titan", (q) => {
+      const h = titanRelief(q, mR);
+      return titanSeaAt(q) > 0 ? Math.max(h, 0) : h;
+    });
   }
 }
 for (const [id, f] of craters) reliefs.set(id, f);

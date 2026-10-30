@@ -48,6 +48,9 @@ import ceresColor from "../../assets/planets-hd/ceres-color.jpg";
 import ceresNormal from "../../assets/planets-hd/ceres-normal.jpg";
 // (Titan: Cassini ISS's global mosaic at 938 nm — 4 km, under the haze —, tinted with its coarse map's colour: PLAN-PLANETES-AAA P8)
 import titanColor from "../../assets/planets-hd/titan-color.jpg";
+// (and its seas: the signed distance to their shores from Cassini's radar — scripts in docs/progress/planetes-aaa/P8 —, in the
+// relief's blue: trace.wgsl titanSea, terrain.ts titanSeaAt)
+import titanSeas from "../../assets/planets-hd/titan-seas.png";
 import { blockCompress, canBlockCompress } from "./bc-encode";
 import { type HeightMap, loadHeights } from "./heights-file";
 
@@ -61,6 +64,9 @@ interface HdSet {
   normal?: string;
   height?: string;
   relief?: number;
+  /** its seas' signed distance to their shores (a grey map: 128 + 4 per km, the sea over 128) — in the relief's blue, its
+   *  normals flat */
+  seas?: string;
 }
 export const HD_SETS: Partial<Record<MapName, HdSet>> = {
   moon: { color: moonColor, dem: moonDem },
@@ -79,7 +85,7 @@ export const HD_SETS: Partial<Record<MapName, HdSet>> = {
   deimos: { color: deimosColor, normal: deimosNormal },
   mimas: { color: mimasColor, normal: mimasNormal },
   ceres: { color: ceresColor, normal: ceresNormal },
-  titan: { color: titanColor },
+  titan: { color: titanColor, seas: titanSeas },
 };
 
 export interface HdMap {
@@ -107,6 +113,8 @@ struct V { @builtin(position) p: vec4f, @location(0) uv: vec2f };
   return o;
 }
 @fragment fn copy(v: V) -> @location(0) vec4f { return textureSampleLevel(a, s, v.uv, 0.0); }
+// a seas' map into the relief's blue, texel for texel (its normals flat)
+@fragment fn fromSeas(v: V) -> @location(0) vec4f { return vec4f(0.5, 0.5, textureLoad(a, vec2u(v.p.xy), 0).r, 1.0); }
 // an altimeter's heights [m] as floats (the target's texels: the map's)
 @group(0) @binding(3) var dem: texture_2d<i32>;
 @fragment fn fromDem(v: V) -> @location(0) vec4f {
@@ -171,6 +179,21 @@ async function bitmap(url: string) {
   if (!response.ok) throw new Error(`HD map: HTTP ${response.status} (${url})`);
   const blob = await response.blob();
   return createImageBitmap(blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+}
+
+/** A seas' map's texels for the CPU (its grey, rows from the north) — the same bytes the GPU's relief takes (terrain.ts
+ *  setTitanSeas) */
+export async function seasPixels(url: string): Promise<{ px: Uint8Array; W: number; H: number }> {
+  const img = await bitmap(url);
+  const cv = new OffscreenCanvas(img.width, img.height);
+  const ctx = cv.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(img, 0, 0);
+  const d = ctx.getImageData(0, 0, img.width, img.height).data;
+  const px = new Uint8Array(img.width * img.height);
+  for (let i = 0; i < px.length; i++) px[i] = d[4 * i]!;
+  const out = { px, W: img.width, H: img.height };
+  img.close();
+  return out;
 }
 
 /** the compressed Jupiter failed this session (a fetch, the transcoder, the GPU's memory): not retried */
@@ -260,7 +283,8 @@ export async function loadHdMap(device: GPUDevice, name: MapName, tier: Pick<Tie
   const kBuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const draw = (entry: string, dst: GPUTexture, level: number, src: GPUTextureView) => {
     const p = pipe(entry, dst.format);
-    const uses = entry === "copy" ? [0, 1] : entry === "fromHeight" ? [0, 1, 2] : entry === "fromDem" ? [3] : [0];
+    const uses =
+      entry === "copy" ? [0, 1] : entry === "fromSeas" ? [0] : entry === "fromHeight" ? [0, 1, 2] : entry === "fromDem" ? [3] : [0];
     const bind = device.createBindGroup({
       layout: p.getBindGroupLayout(0),
       entries: uses.map((b) => ({ binding: b, resource: b === 0 || b === 3 ? src : b === 1 ? samp : { buffer: kBuf } })),
@@ -367,6 +391,19 @@ export async function loadHdMap(device: GPUDevice, name: MapName, tier: Pick<Tie
     rImg.close();
     rSrc.destroy();
     hasRelief = true;
+  } else if (set.seas) {
+    const sImg = await bitmap(set.seas);
+    relief = device.createTexture({
+      size: [sImg.width, sImg.height],
+      format: "rgba8unorm",
+      mipLevelCount: levels(sImg.width, sImg.height),
+      usage,
+    });
+    const sSrc = upload(sImg);
+    draw("fromSeas", relief, 0, sSrc.createView());
+    mips(relief, false);
+    sImg.close();
+    sSrc.destroy();
   } else {
     relief = device.createTexture({
       size: [1, 1],

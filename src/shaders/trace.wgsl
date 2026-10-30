@@ -3600,11 +3600,40 @@ fn reliefMax(surf: u32) -> f32 {
 // equatorial belt's linear dunes in their seas — east–west, 2.5 km apart, ~90 m tall, Cassini's radar's —, a few metres'
 // roughness. Its map's index 19
 const TITAN_SURF = 23u;
+// (its seas — Kraken, Ligeia, Punga, the lakes; Ontario in the south —: the signed distance [km] to their shores, > 0 in a sea,
+// from Cassini's radar — hd-maps.ts, its relief's blue; terrain.ts titanSeaAt, the same —; −100 without its map)
+fn titanSea(q: vec3f) -> f32 {
+  if (i32(P.hd.x) != 19) { return -100.0; }
+  let uv = vec2f(0.5 + atan2(q.y, q.x) / TAU, 0.5 - asin(clamp(q.z, -1.0, 1.0)) / PI);
+  return (textureSampleLevel(hdRelief, bgSamp, uv, 0.0).b * 255.0 - 128.0) / 4.0;
+}
+// (earthNear met a sea of Titan's: otherGround's liquid then)
+var<private> TITAN_WET: f32 = 0.0;
+// its surface's ripples — mirror-smooth under a wind of a few decimetres a second: centimetres over metres —, a slope at x
+// (the camera's metres on the body's axes from the fine ground's anchor), as fine as the pixel's footprint resolves
+fn titanRipples(x: vec3f, foot: f32, tSec: f32) -> vec3f {
+  var g = vec3f(0.0);
+  for (var i = 0u; i < 2u; i++) {
+    let lam = select(4.0, 0.7, i == 1u);
+    let w = smoothstep(lam * 0.5, lam * 0.1, foot);
+    if (w > 0.0) {
+      let p = x / lam + vec3f(f32(i) * 7.3, tSec * 0.05 / lam, 0.0);
+      g += w * 0.012 * vec3f(gnoise(p), gnoise(p + vec3f(17.1)), gnoise(p + vec3f(31.7)));
+    }
+  }
+  return g;
+}
 fn titanRelief(q: vec3f, foot: f32, mR: f32) -> f32 {
   var h = tfbm(q * 4.0, max(layerOct(4.0, foot, mR, 4), 1)) * 400.0;
   let hi = smoothstep(0.0, 0.25, tfbm(q * 10.0 + vec3f(3.0), 2));
   let oh = layerOct(60.0, foot, mR, 4);
   if (oh > 0) { h += (ridged(q * 60.0 + vec3f(5.0), oh) - 0.5) * 600.0 * hi; }
+  // (the land about its seas above their level, their beds sloping down to ~180 m)
+  let sd = titanSea(q);
+  if (sd > -80.0) {
+    h += (abs(h) * 0.25 + 8.0 - h) * smoothstep(-80.0, -15.0, sd);
+    h += (-2.0 - 6.0 * clamp(sd, 0.0, 30.0) - h) * smoothstep(-0.3, 0.3, sd);
+  }
   let lat = asin(clamp(q.z, -1.0, 1.0));
   let field = smoothstep(0.45, 0.3, abs(lat)) * smoothstep(-0.05, 0.25, tfbm(q * 12.0 + vec3f(7.0), 2)) * (1.0 - hi);
   if (layerOct(1030.0, foot, mR, 1) > 0 && field > 0.001) {
@@ -8594,6 +8623,17 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
     let dz = normalize(q + 1.5 * Ls);
     let a = (0.5 + 0.5 * dot(nrm, dz)) / (0.5 + 0.5 * dot(q, dz));
     sky *= 0.35 + 0.65 * a * a;
+    if (TITAN_WET > 0.5) {
+      // (a sea of methane: dark, a mirror — Fresnel's at n 1.29 — of its sky, brighter low and towards the Sun, and the Sun's
+      // glint through the haze)
+      let r = reflect(rd, nrm);
+      let F = 0.016 + 0.984 * pow(1.0 - max(dot(nrm, -rd), 0.0), 5.0);
+      let aur = pow(max(dot(r, Ls), 0.0), 12.0);
+      let day = smoothstep(-0.15, 0.25, mu0);
+      let Lsky = AIR.sky / PI * (1.8 - 1.2 * max(dot(r, q), 0.0) + 4.0 * aur) * day;
+      let glint = sunThrough(0.0, mu0) * pow(max(dot(r, Ls), 0.0), 900.0) * 150.0;
+      return E * (F * (Lsky + glint) + (1.0 - F) * 0.015 / PI * AIR.sky * day);
+    }
   }
   if (isEarth(k)) {
     direct = sunSeenPhysical(earthSurface(q) / EARTH_RM, Ls);
@@ -9611,6 +9651,23 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
       MARCH_BISECT = 10u;
     }
     t = nh.t;
+    // (Titan's seas: their surface — the sphere, their level — met before their bed: the liquid, not the ground)
+    if (titan) {
+      // (the shore the map's zero line — smooth —, not where the ground's cells cross the sea's level: a ground point the map
+      // puts in the sea is under it)
+      let ts = unitHit(ro, rd);
+      if (ts > 0.0 && (nh.t <= 0.0 || ts < nh.t || titanSea(nh.qb) > 0.0)) {
+        let qs = normalize(ro + rd * ts);
+        if (titanSea(qs) > 0.0) {
+          t = ts;
+          nh.t = -1.0;
+          TITAN_WET = 1.0;
+          let g = titanRipples(toBody(look * ts) * P.near4.w + P.fine1.xyz, reliefFoot(ts), P.time.x * P.near5.w);
+          HD_N = normalize(qs + g - qs * dot(g, qs));
+          HD_N_ON = true;
+        }
+      }
+    }
     if (nh.t > 0.0 && (liteSkip() & 16u) == 0u) {
       let surf = u32(bodies[BV * k + 2u].z);
       let foot = reliefFoot(nh.t);
@@ -9664,6 +9721,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   HD_N_ON = false;
   ALB_TINT = vec3f(1.0);
   REL_SH = 1.0;
+  TITAN_WET = 0.0;
   // (the cloud pass's clouds are this camera ray's alone: a reflection's or a probe's march their own)
   CLOUDS_BUFFERED.alpha = -1.0;
   AP_UV = vec2f(-1.0);

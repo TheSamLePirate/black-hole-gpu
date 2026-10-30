@@ -119,15 +119,46 @@ export function relief(surf: number, q: V3, mR: number, foot = 0.05, tSec?: numb
   return 0;
 }
 
+// Titan's seas (hd-maps.ts: its seas' map — 128 + 4 per km of signed distance to their shores, the sea over 128): the
+// map's texels, read as the tracer reads the relief's blue (trace.wgsl titanSea: bilinear, repeated east–west, clamped
+// north–south); none: no sea known
+let titanSeas: { px: Uint8Array; W: number; H: number } | null = null;
+/** Titan's seas' map's texels (its grey channel, rows from the north), or null */
+export function setTitanSeas(px: Uint8Array | null, W = 0, H = 0) {
+  titanSeas = px ? { px, W, H } : null;
+}
+/** The signed distance [km] from Titan's seas' shores at q (> 0 in a sea); −100 with no map */
+export function titanSeaAt(q: V3): number {
+  const m = titanSeas;
+  if (!m) return -100;
+  const u = 0.5 + Math.atan2(q[1], q[0]) / (2 * Math.PI);
+  const v = 0.5 - Math.asin(Math.min(Math.max(q[2], -1), 1)) / Math.PI;
+  const x = u * m.W - 0.5,
+    y = v * m.H - 0.5;
+  const x0 = Math.floor(x),
+    y0 = Math.floor(y),
+    fx = x - x0,
+    fy = y - y0;
+  const at = (i: number, j: number) => m.px[Math.min(Math.max(j, 0), m.H - 1) * m.W + (((i % m.W) + m.W) % m.W)]!;
+  const g = (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) + (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
+  return (g - 128) / 4;
+}
+
 /**
  * Titan's ground under its haze (trace.wgsl titanRelief, the same): a swell of highlands and basins, ridged hills on the
- * highlands, the equatorial belt's linear dunes (east–west, 2.5 km apart, ~90 m), a few metres' roughness [m].
+ * highlands, the polar seas' beds and the land about them above their level, the equatorial belt's linear dunes
+ * (east–west, 2.5 km apart, ~90 m), a few metres' roughness [m].
  */
 export function titanRelief(q: V3, mR: number, foot = 0.05): number {
   let h = tfbm(sc(q, 4), Math.max(layerOct(4, foot, mR, 4), 1)) * 400;
   const hi = smooth(0, 0.25, tfbm(sc(q, 10, 3), 2));
   const oh = layerOct(60, foot, mR, 4);
   if (oh > 0) h += (ridged(sc(q, 60, 5), oh) - 0.5) * 600 * hi;
+  const sd = titanSeaAt(q);
+  if (sd > -80) {
+    h += (Math.abs(h) * 0.25 + 8 - h) * smooth(-80, -15, sd);
+    h += (-2 - 6 * Math.min(Math.max(sd, 0), 30) - h) * smooth(-0.3, 0.3, sd);
+  }
   const lat = Math.asin(Math.min(Math.max(q[2], -1), 1));
   const field = smooth(0.45, 0.3, Math.abs(lat)) * smooth(-0.05, 0.25, tfbm(sc(q, 12, 7), 2)) * (1 - hi);
   if (layerOct(1030, foot, mR, 1) > 0 && field > 0.001) {

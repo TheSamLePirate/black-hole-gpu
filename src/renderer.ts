@@ -69,7 +69,7 @@ import { buildDayClouds, dayCloudsFor, dayCloudsUrl } from "./system/day-clouds"
 import { refractionParams, seaRefractivity } from "./system/refraction";
 import { moonLightShare, SHADE_VEC4S, shadowParams } from "./eclipse/shadows-gpu";
 import { lookOf } from "./skychart";
-import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, type HdMap } from "./system/hd-maps";
+import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, seasPixels, type HdMap } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
 import { visibleTimeout } from "./util/visible-timeout";
@@ -184,7 +184,7 @@ import {
   setGroundHeights,
   setGroundRelief,
 } from "./system/our-surface";
-import { EARTH_RM, earthHeightSampler, mapHeightSampler, tileFallbackSampler } from "./terrain";
+import { EARTH_RM, earthHeightSampler, mapHeightSampler, setTitanSeas, tileFallbackSampler } from "./terrain";
 import {
   cartToGeodetic,
   figureDiskShare,
@@ -1760,6 +1760,17 @@ export class Renderer {
 
   /** The ground a craft stands on: a world's measured heights while its finer maps are drawn (or not). */
   private groundHeights(m: HdMap, on: HdMap | null) {
+    // (Titan's seas: their map to the CPU too — the ground the walker and the gear stand on, terrain.ts titanRelief)
+    if (m.name === "titan") {
+      const url = HD_SETS.titan?.seas;
+      if (!on || !url) setTitanSeas(null);
+      else
+        void seasPixels(url).then(
+          (p) => this.hdMap === on && setTitanSeas(p.px, p.W, p.H),
+          () => {},
+        );
+      return;
+    }
     const id = m.name && m.dem ? SOLAR_BODIES.find((b) => b.map === m.name)?.id : undefined;
     if (!id) return;
     const g = on?.dem ? mapHeightSampler(on.dem.map, on.dem.W, on.dem.H) : null;
