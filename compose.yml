@@ -6,7 +6,7 @@
 version: "3.8"
 services:
   kerr:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:f623e71-660.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:858b10e-663.1
     ports:
       - "3000:80"
     restart: unless-stopped
