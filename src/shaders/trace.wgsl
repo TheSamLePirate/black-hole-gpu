@@ -1411,8 +1411,9 @@ fn ringDetail(k: u32, q: vec3f, N: vec3f, V: vec3f) -> vec2f {
     if (rKm > 100000.0 && rKm < 117000.0) {
       let A = poleAxes(N);
       let az = atan2(dot(q, A[1]), dot(q, A[0])) - P.time.x * max(P.near5.w, 0.0) * TAU / 38362.0;
-      let n = gnoise(vec3f(cos(az) * 30.0, sin(az) * 30.0, rKm / 6000.0));
-      d.y = 0.45 * smoothstep(0.35, 0.7, n) * smoothstep(100000.0, 103000.0, rKm) * smoothstep(117000.0, 112000.0, rKm);
+      // (streaks ~2 000 km wide across the orbit, ~10 000 km long along the radius)
+      let n = gnoise(vec3f(cos(az) * 55.0, sin(az) * 55.0, rKm / 9000.0));
+      d.y = 0.3 * smoothstep(0.3, 0.75, n) * smoothstep(100000.0, 103000.0, rKm) * smoothstep(117000.0, 112000.0, rKm);
     }
   }
   return d;
@@ -1438,6 +1439,105 @@ fn ringLight(k: u32, q: vec3f, N: vec3f, L: vec3f, V: vec3f, det: vec2f) -> vec4
   let b = dot(q, L);
   let lit = select(1.0, 0.0, b < 0.0 && dot(q, q) - b * b < 1.0);
   return vec4f(smp.rgb * R * lit, 1.0 - exp(-tau / mu));
+}
+
+// Saturn's rings' blocks of ice, the camera among them (PLAN-PLANETES-AAA P9 G5): within 20 km of their plane the renderer
+// anchors their frame (P.fine0: whole metres, its w 2; P.fine1: the camera from it, the body's axes — Saturn's), and the ray
+// walks a slab ±15 m thick through three grids — 4 m cells to 120 m, 16 m to 500 m, 64 m to 2 km: far, the small blocks under
+// a pixel, the big ones alone —, one block at most in each cell (its odds from the ring's optical depth there, Cassini's),
+// lit by the Sun through the slab above it (its optical depth's share), in Saturn's shadow or not, with a little of the
+// rings' own light. Out: its radiance per πF and 1; or 0, no block in the slab the ray left within its 2 km — the slab's
+// average not added again —; or −1, the slab beyond (ringLight). tMax: the planet's hit [radii]
+fn ringBlocks(k: u32, look: vec3f, tMax: f32) -> vec4f {
+  let mR = P.near4.w;
+  let rd = toBody(look);
+  let o = P.fine1.xyz;
+  let A = P.fine0.xyz;
+  let H = 15.0;
+  let zc = o.z + A.z;
+  var t0 = 0.0;
+  var t1 = 3e38;
+  if (abs(rd.z) > 1e-6) {
+    let ta = (-H - zc) / rd.z;
+    let tb = (H - zc) / rd.z;
+    t0 = max(min(ta, tb), 0.0);
+    t1 = max(ta, tb);
+  } else if (abs(zc) > H) {
+    return vec4f(-1.0);
+  }
+  if (t1 <= t0 || t0 > 2000.0) { return vec4f(-1.0); }
+  let tEnd = min(min(t1, 2000.0), tMax * mR);
+  let pe = o + rd * t0;
+  let smp = ringSample(k, length((A + pe).xy) / mR);
+  if (smp.w <= 0.0) { return vec4f(select(-1.0, 0.0, t1 <= 2000.0)); }
+  let odds = clamp(1.0 - exp(-0.8 * smp.w), 0.04, 0.85);
+  let Lb = toBody(P.near4.xyz);
+  for (var L = 0u; L < 3u; L++) {
+    let c = array<f32, 3>(4.0, 16.0, 64.0)[L];
+    let ba = max(array<f32, 3>(0.0, 120.0, 500.0)[L], t0);
+    let bb = min(array<f32, 3>(120.0, 500.0, 2000.0)[L], tEnd);
+    if (bb <= ba) { continue; }
+    let ac = vec3i(round(A / c));
+    let p = o + rd * ba;
+    var cell = vec3i(floor(p / c));
+    let st = vec3i(sign(rd));
+    let inv = 1.0 / select(rd, vec3f(1e-9), abs(rd) < vec3f(1e-9));
+    var tm = ((vec3f(cell) + max(vec3f(st), vec3f(0.0))) * c - o) * inv;
+    let td = abs(c * inv);
+    var t = ba;
+    for (var i = 0u; i < 48u; i++) {
+      if (t >= bb) { break; }
+      // (the cell's block: in it, its centre within the slab)
+      let zlo = f32(cell.z) * c + A.z;
+      if (zlo < H && zlo + c > -H) {
+        let h = hash4(bitcast<vec3u>(cell + ac) ^ vec3u(0x27d4eb2fu * (L + 1u), 0x165667b1u, 0xd3a2646cu));
+        if (h.x < odds) {
+          let r = c * (0.1 + 0.25 * h.w * h.w);
+          let m = 0.5 - r / c;
+          var ctr = (vec3f(cell) + 0.5 + (h.yzw - 0.5) * 2.0 * m) * c;
+          ctr.z = clamp(ctr.z, max(zlo, -H) + r - A.z, min(zlo + c, H) - r - A.z);
+          let oc = o - ctr;
+          let b = dot(oc, rd);
+          let d = b * b - (dot(oc, oc) - r * r);
+          if (d > 0.0) {
+            let th = -b - sqrt(d);
+            if (th > 0.0 && th < tEnd) {
+              let ph = o + rd * th;
+              let n = (ph - ctr) / r;
+              // (the slab above it towards the Sun: its share of the optical depth; Saturn's shadow)
+              let zp = ph.z + A.z;
+              let up = select(-1.0, 1.0, Lb.z > 0.0);
+              let tr = exp(-smp.w * clamp((H - zp * up) / (2.0 * H), 0.0, 1.0) / max(abs(Lb.z), 0.05));
+              let q = (A + ph) / mR;
+              let bq = dot(q, Lb);
+              let lit = select(1.0, 0.0, bq < 0.0 && dot(q, q) - bq * bq < 1.0);
+              let alb = smp.rgb * (0.8 + 0.4 * h.z);
+              // (and Saturn's own light on the face turned to it: its day side, a tenth of the Sun's from its distance there,
+              // as much as its lit share faces the block)
+              let toS = -normalize(A + ph);
+              let sat = 0.1 * max(dot(n, toS), 0.0) * max(dot(toS, -Lb) * -1.0 + 0.5, 0.0) / (dot(q, q));
+              return vec4f(alb * (max(dot(n, Lb), 0.0) * tr * lit + 0.04 * lit + sat), 1.0);
+            }
+          }
+        }
+      }
+      // (on to the next cell)
+      if (tm.x < tm.y && tm.x < tm.z) {
+        t = tm.x;
+        tm.x += td.x;
+        cell.x += st.x;
+      } else if (tm.y < tm.z) {
+        t = tm.y;
+        tm.y += td.y;
+        cell.y += st.y;
+      } else {
+        t = tm.z;
+        tm.z += td.z;
+        cell.z += st.z;
+      }
+    }
+  }
+  return vec4f(select(-1.0, 0.0, t1 <= 2000.0 || t1 >= tMax * mR));
 }
 
 // Ringshine: the light of the rings on the planet — its night side lit by their sunlit face, or by the
@@ -3585,7 +3685,17 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       let N = P.near3.xyz;
       let dn = dot(look, N);
       let sR = select(-1.0, dot(P.near0.xyz, N) / dn, abs(dn) > 1e-7);
-      if (sR > 0.0 && (hitT <= 0.0 || sR < hitT)) {
+      // (the camera among Saturn's rings' blocks — ringBlocks, P9 G5 —: one met, or none in the slab it crossed — the slab's
+      // average then not added again —, or the slab beyond the blocks drawn)
+      var blk = vec4f(-1.0);
+      if (NEAR_DETAIL && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u &&
+        P.fine0.w > 1.5) {
+        blk = ringBlocks(k, look, select(3e38, hitT, hitT > 0.0));
+      }
+      if (blk.w >= 0.0) {
+        let src = lightSource(k);
+        ring = vec4f(blk.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, blk.w);
+      } else if (sR > 0.0 && (hitT <= 0.0 || sR < hitT)) {
         let fp = pixFoot() * sR;
         setMapLod(fp, fp / max(abs(dn), 0.05), k);
         let src = lightSource(k);
@@ -4431,7 +4541,7 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
         _ = reliefBase(surf, qb, foot, P.near4.w, tSec);
         NO_SWELL = false;
         ALB_GAIN = 1.0 + 0.45 * CRATER_BRIGHT;
-        if (P.fine0.w > 0.5 && foot < 8.0) {
+        if (P.fine0.w > 0.5 && P.fine0.w < 1.5 && foot < 8.0) {
           // the finest ground, near: its slope by differences (exact: from the anchor), its stones lighter
           let x = toBody(look * t) * P.near4.w + P.fine1.xyz;
           let a1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
@@ -10010,7 +10120,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
       let md = moonDetail(nh.qb, foot);
       ALB_TINT = select(md, mix(vec3f(1.0), md, 0.65), titan || surf == 10u);
       // (the finest ground, near — fineGround, the airless worlds' —: its slope by differences, its stones lighter)
-      if (P.fine0.w > 0.5 && foot < 8.0) {
+      if (P.fine0.w > 0.5 && P.fine0.w < 1.5 && foot < 8.0) {
         let x = toBody(look * nh.t) * mR + P.fine1.xyz;
         let a1 = normalize(cross(nh.qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(nh.qb.z) > 0.9)));
         let a2 = cross(nh.qb, a1);

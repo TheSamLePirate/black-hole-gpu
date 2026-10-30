@@ -7,7 +7,7 @@ import { readPng } from "./lib/png";
 // (trace.wgsl giantFlow — two readings half a cycle apart, faded), the Great Red Spot turning on itself, eddies under the
 // map's texel up close — Jupiter from orbit at the scene's time and one turn later (the same face under the same Sun: only its
 // clouds moved, the two images differ), the Great Red Spot from 25 000 km at both times, Saturn from orbit. No GPU error.
-// Duration: ~4 min on kerr-mini.
+// Duration: ~7 min on kerr-mini.
 // Done when: every view shot at both times, the images compared, no GPU error.
 
 const OUT = process.env.OUT ?? "remote-results/giants-flow";
@@ -59,6 +59,35 @@ describe.skipIf(!E2E)("P9 G1–G2: the giants' clouds moving", () => {
   };
   const errors = () => app.js<number>(`(() => __bh.renderer.gpuErrors)()`);
 
+  // (G5: the camera among the rings' blocks, the A ring at 125 000 km — Saturn's mean radius 58 232 km —: 40 m over the
+  // plane towards Saturn, along it, and 600 m under it — the lit face at this date — looking up)
+  for (const [name, lat, off] of [
+    ["saturn-blocks-grazing", (40 / 125e6) * 57.2958, "[0, 0]"],
+    ["saturn-blocks-along", (40 / 125e6) * 57.2958, "[45, 0]"],
+    ["saturn-blocks-under", (-600 / 125e6) * 57.2958, "[0, 30]"],
+  ] as const)
+    test(`${name}: among the rings' blocks, some drawn`, async () => {
+      await app.js(
+        `(() => { ${view(`p9${name.replaceAll("-", "")}`, "saturn", `{ body: "saturn", altKm: 66768, at: [${lat}, 0], look: "saturn", off: ${off} }`, T0)} return 1; })()`,
+      );
+      await settle("saturn");
+      const anchor = await app.js<number>(`(() => __bh.renderer.ringBlocksOn ? 1 : 0)()`);
+      await shot(name);
+      // (blocks lit: a share of the image's lower half brighter than the sky)
+      const A = readPng(new Uint8Array(await Bun.file(`${OUT}/${name}.png`).arrayBuffer()));
+      let lit = 0,
+        n = 0;
+      for (let y = Math.floor(A.height * 0.2); y < A.height * 0.8; y += 2)
+        for (let x = 0; x < A.width; x += 2, n++) {
+          const i = (y * A.width + x) * A.channels;
+          if (A.data[i]! + A.data[i + 1]! + A.data[i + 2]! > 60) lit++;
+        }
+      console.log(`  ${name}: anchored ${anchor}, ${((100 * lit) / n).toFixed(1)} % of the middle lit`);
+      expect(anchor).toBe(1);
+      expect(lit / n).toBeGreaterThan(0.02);
+      expect(await errors()).toBe(0);
+    }, 600_000);
+
   for (const [name, body, pose] of [
     ["jupiter-orbit", "jupiter", `{ tilt: 60, body: "jupiter", altKm: 200000, phase: 30, look: "jupiter" }`],
     ["jupiter-grs", "jupiter", `{ body: "jupiter", altKm: 25000, at: [-22, 126.4], look: "jupiter", off: [0, 0] }`],
@@ -77,7 +106,8 @@ describe.skipIf(!E2E)("P9 G1–G2: the giants' clouds moving", () => {
       }
       const d = await diff(`${name}-a`, `${name}-b`);
       console.log(`  ${name}: the two times differ by ${d.toFixed(2)} /255 over the image's middle`);
-      expect(d).toBeGreaterThan(0.2);
+      // (the rings' view: only their spokes move from one turn to the next)
+      expect(d).toBeGreaterThan(name === "saturn-rings" ? 0.1 : 0.2);
       expect(await errors()).toBe(0);
     }, 600_000);
 });

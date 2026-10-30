@@ -160,6 +160,8 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   - G6 les vitrines de Saturne (P0 : Gargantua par le trou de ver, des anneaux par la tranche) et son coût (163 % de la
     Terre en orbite) ;
   - G7 mesures, e2e, docs.
+  - **Fait** (30 octobre) : G1 à G5, et les vitrines de G6 — [P9.md](progress/planetes-aaa/P9.md). Reste le coût de Saturne
+    en orbite (59,7 ms, 2,8 fois la Terre : le banc mesurait jusqu'ici une autre scène).
 
 ### P10 — Compensations, campagne, docs
 - Optimisations restantes pour tenir « jamais plus lent » partout, campagne e2e complète (ce Mac), `docs/PLANETES.md`

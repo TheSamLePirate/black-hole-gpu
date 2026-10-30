@@ -1527,12 +1527,14 @@ export const presets: Record<string, Preset> = {
     time: T0,
     pose: { tilt: 60, body: "saturn", altKm: 420000, phase: 40, at: [-30, 0], look: "saturn" },
   },
+  // (in Saturn's shadow, well over its rings' plane: the rings lit from behind — their dust bright, the C ring and the Cassini
+  // division glowing, the B ring dark —, as Cassini saw them in 2006; at 12°, they were seen edge-on — P9)
   "Saturn: backlit": {
     ...WORLD_VIEW,
     target: "saturn",
-    fov: 32,
+    fov: 34,
     time: T0,
-    pose: { tilt: 60, body: "saturn", altKm: 500000, phase: 155, at: [-12, 0], look: "saturn" },
+    pose: { tilt: 60, body: "saturn", altKm: 420000, phase: 168, at: [-35, 0], look: "saturn" },
   },
   "Titan: the orange haze": {
     ...WORLD_VIEW,

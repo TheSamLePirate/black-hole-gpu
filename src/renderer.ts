@@ -3162,9 +3162,21 @@ export class Renderer {
       const an = cb.map((c) => Math.round(c / 64) * 64);
       set(63, an[0]!, an[1]!, an[2]!, 1);
       set(64, cb[0]! - an[0]!, cb[1]! - an[1]!, cb[2]! - an[2]!, 0);
+    } else if (near && fm === mapIndex("saturn")) {
+      // (Saturn's rings' blocks — trace.wgsl ringBlocks, PLAN-PLANETES-AAA P9 G5 —: within 20 km of their plane, over them,
+      // their frame anchored so (w 2)
+      const mR = near.radius * M_METRES;
+      const cb = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]) * mR);
+      const rho = Math.hypot(cb[0]!, cb[1]!);
+      const on = Math.abs(cb[2]!) < 20e3 && rho > 69.8e6 && rho < 140.9e6;
+      this.ringBlocksOn = on;
+      const an = cb.map((c) => Math.round(c / 64) * 64);
+      set(63, on ? an[0]! : 0, on ? an[1]! : 0, on ? an[2]! : 0, on ? 2 : 0);
+      set(64, on ? cb[0]! - an[0]! : 0, on ? cb[1]! - an[1]! : 0, on ? cb[2]! - an[2]! : 0, 0);
     } else {
       set(63, 0, 0, 0, 0);
       set(64, 0, 0, 0, 0);
+      this.ringBlocksOn = false;
     }
     set(59, 6000 / EARTH_RM, s.earthClouds, 0.8, AIR_K);
     // the Moon's light on the Earth at night: its direction on the Earth's axes, its phase (the sunlit
@@ -7655,6 +7667,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   rasterSkyBlock = true;
   /** the rays' raster kernel (shade) left out while the material takes every pixel (a switch for comparisons) */
   shadeSkip = true;
+  /** the camera among Saturn's rings' blocks: their frame anchored (writeParams; trace.wgsl ringBlocks — P9 G5) */
+  ringBlocksOn = false;
   /** the live view's height over the Earth's figure [km] (writeParams) */
   private liveAltKm = 1e4;
   /** parts of the raster's material cut at run time (trace.wgsl liteSkip: TUNE_LITE's bits — 1 water, 2 scenery shadows, 4

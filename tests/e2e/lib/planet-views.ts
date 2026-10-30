@@ -133,7 +133,9 @@ export const SPOTS = [
   ]),
   // the giants: from orbit, and their showcase
   ...GIANTS.flatMap((b): Spot[] => [
-    { body: b, view: "orbit", set: preset(`${b[0]!.toUpperCase()}${b.slice(1)}: from orbit`) },
+    // (Saturn has no "from orbit" scene: its rings from above — a missing preset left the scene before it on, Gargantua and
+    // the wormhole measured as Saturn's orbit until P9)
+    { body: b, view: "orbit", set: preset(b === "saturn" ? "Saturn: the rings from above" : `${b[0]!.toUpperCase()}${b.slice(1)}: from orbit`) },
     ...(SHOWCASE[b] !== `${b[0]!.toUpperCase()}${b.slice(1)}: from orbit`
       ? [{ body: b, view: "cine" as View, set: preset(SHOWCASE[b]!) }]
       : []),
