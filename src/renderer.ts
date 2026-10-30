@@ -3947,8 +3947,9 @@ export class Renderer {
     const mR = near.radius * 1476.625 * s.massSolar;
     const cb = near.axes.map((a) => -(a[0]! * near.centre[0]! + a[1]! * near.centre[1]! + a[2]! * near.centre[2]!) * mR);
     const r = Math.hypot(cb[0]!, cb[1]!, cb[2]!);
-    // (Titan: a sea within ~150 km and the camera under 150 km — the tracer draws them so — or no waves: their FFT ~2 ms)
-    if (world === "titan" && (r - mR > 150e3 || titanSeaAt(cb.map((x) => x / r) as Vec3) < -150)) return out;
+    // (Titan: a sea within ~30 km — its map's distance stops at −32 — and the camera under 150 km — the tracer draws them so —,
+    // or no waves: their FFT ~2 ms)
+    if (world === "titan" && (r - mR > 150e3 || titanSeaAt(cb.map((x) => x / r) as Vec3) < -30)) return out;
     const phys = world === "titan" ? TITAN_SEA : MILLER_SEA;
     // (the camera's place in the patch — the camera's rest frame, Miller at a third of light's speed in Gargantua's: its distance
     // from the centre no measure of the height, 0.93 to 1.07 radii at a few metres —: within half a radius, the sea's waves on,

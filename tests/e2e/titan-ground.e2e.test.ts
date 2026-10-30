@@ -32,7 +32,7 @@ describe.skipIf(!E2E)("P8: Titan's ground", () => {
   const settle = () =>
     app.js(`(async () => { const r = __bh.renderer, t0 = performance.now();
       for (let i = 0; i < 4; i++) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
-      while ((!r.kernelsSettled || r.compilesPending > 0 || r.compilingNow.length > 0 || r.hdMap.name !== "titan") && performance.now() - t0 < 600000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
+      while ((!r.kernelsSettled || r.compilesPending > 0 || r.compilingNow.length > 0 || r.hdMap.name !== "titan" || r.moonTiles.pending > 0) && performance.now() - t0 < 600000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
       const t1 = performance.now();
       while (performance.now() - t1 < 6000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
       return 1; })()`);
@@ -57,7 +57,9 @@ describe.skipIf(!E2E)("P8: Titan's ground", () => {
     expect(st.kind).toBe(5);
     expect(st.raster).toBe(true);
     // (its radar's tiles in — the albedo's detail, moon-tiles.ts WORLDS.titan)
-    expect((st.tiles as { world: string }).world).toBe("titan");
+    expect(st.tiles).toMatchObject({ world: "titan", drawn: true, failed: 0 });
+    // (no sea within 30 km of the equator's dunes: no waves computed)
+    expect(st.sea).toBe(null);
     expect(st.hd).toBe("titan");
     expect(Math.abs(h)).toBeLessThan(0.1);
     expect(st.gpuErrors).toBe(0);
