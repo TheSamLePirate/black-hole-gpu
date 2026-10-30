@@ -131,7 +131,7 @@ function hash4(x: number, y: number, z: number): [number, number, number, number
 
 /** How cratered one of our airless worlds is, by its map's index (the tracer's craterDensity). */
 export function craterDensity(m: number) {
-  return m === 10 ? 0.03 : m === 11 ? 0.12 : m === 15 ? 0.5 : m === 12 ? 0.75 : 1;
+  return m === 2 ? 0.35 : m === 10 ? 0.03 : m === 11 ? 0.12 : m === 15 ? 0.5 : m === 12 ? 0.75 : 1;
 }
 
 /**

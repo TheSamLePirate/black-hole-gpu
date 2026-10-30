@@ -37,8 +37,9 @@ const SHADE = 2048;
 const SURFACE = 4096;
 const SCENERY = 8192;
 const AURORA = 16384;
-/** the body near the camera (NEAR_KIND — P7): the Earth, a world without air, none */
+/** the body near the camera (NEAR_KIND — P7): the Earth, a world with air, a world without air, none */
 const NEAR_EARTH = 1 << NEAR_KIND_SHIFT;
+const NEAR_AIR = 2 << NEAR_KIND_SHIFT;
 const NEAR_AIRLESS = 3 << NEAR_KIND_SHIFT;
 const NEAR_NONE = 4 << NEAR_KIND_SHIFT;
 const RASTER_ENTRIES: TracerEntry[] = ["shade", "shadeMark", "shadeLite", "shadeWater", "shadeStars", "discs", "clouds", "skyFill"];
@@ -83,6 +84,12 @@ export const PROFILES: KernelProfile[] = [
     id: "moon",
     label: "The Moon's surface in the game's universe (a world without air near)",
     key: GAME | NEAR_AIRLESS,
+    entries: ["main", "env", "aerial"],
+  },
+  {
+    id: "mars",
+    label: "Mars's surface in the game's universe (a world with air near: its relief marched — PLAN-PLANETES-AAA P7)",
+    key: GAME | NEAR_AIR,
     entries: ["main", "env", "aerial"],
   },
   {

@@ -9,9 +9,10 @@ test("the body raster's relief reach is the tracer's (trace.wgsl reliefMax)", ()
   const body = m![1]!;
   for (const [surf, h] of [...body.matchAll(/surf == (\d+)u\) \{ return ([\d.]+); \}/g)].map((x) => [Number(x[1]), Number(x[2])]))
     expect(reliefMax(surf!)).toBe(h!);
-  // (the airless worlds: 500 m; the Earth and the giants, none)
+  // (the airless worlds and Mars — its craters, P7 —: 500 m; the Earth and the giants, none)
   expect(reliefMax(4 + 1)).toBe(500);
-  expect(reliefMax(4 + 2)).toBe(0);
+  expect(reliefMax(4 + 2)).toBe(500);
+  expect(reliefMax(4 + 0)).toBe(0);
 });
 
 test("the vertex shader's library takes the relief and what it calls, with the craters' private globals", () => {

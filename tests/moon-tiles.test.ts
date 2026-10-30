@@ -73,7 +73,9 @@ test("the windows round the camera, a missing tile from the global map, heightAt
   const p = t.params();
   expect(p[3]).toBe(-1);
   expect(p[4 + 4 + 3]).toBe(1024);
-  expect(p.length).toBe((MOON_PARAM_VEC4S + 1) * 4);
+  expect(p.length).toBe(MOON_PARAM_VEC4S * 4);
+  // (the extra vec4: the first relief level, the coarsest — the Moon's four levels, all relief)
+  expect([p[4 + 8 * 8 + 1], p[4 + 8 * 8 + 2]]).toEqual([0, 3]);
   t.clear();
   expect(t.drawn).toBe(false);
 });
@@ -86,6 +88,5 @@ test("a latitude's difference from the reference: exact near it, as the tracer's
 
 test("Clementine's level by the window's, and the tracer's constants the codec's", () => {
   expect([0, 1, 2, 3].map(clemLevel)).toEqual([6, 6, 6, 5]);
-  expect(traceWGSL).toContain("const MOON_LEVELS = 4u;");
-  expect(traceWGSL).toContain("const MOON_R = 1737400.0;");
+  expect(traceWGSL).toContain("const MOON_LEVELS = 8u;");
 });

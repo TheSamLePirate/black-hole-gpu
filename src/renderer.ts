@@ -149,7 +149,7 @@ import {
 import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/geoid";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
-import { MoonTiles } from "./system/moon-tiles";
+import { MoonTiles, WORLDS } from "./system/moon-tiles";
 import { WarpGrid } from "./system/warp-grid";
 import { EarthSurface, SURFACE_VEC4S, SURFACE_TEXTURE_LIMIT } from "./system/earth-surface";
 import { EarthScenery } from "./system/scenery";
@@ -1763,8 +1763,9 @@ export class Renderer {
     const id = m.name && m.dem ? SOLAR_BODIES.find((b) => b.map === m.name)?.id : undefined;
     if (!id) return;
     const g = on?.dem ? mapHeightSampler(on.dem.map, on.dem.W, on.dem.H) : null;
-    // (the Moon: its relief tiles round the camera over the global map — moon-tiles.ts, the tracer's moonH)
-    if (id === "moon") {
+    // (the Moon, Mars: their relief tiles round the camera over the global map — moon-tiles.ts, the tracer's moonH)
+    if (WORLDS[id]) {
+      if (g) this.moonTiles.setWorld(id);
       this.moonTiles.fallback = g;
       if (!g) this.moonTiles.clear();
       const t = this.moonTiles;
@@ -3096,7 +3097,8 @@ export class Renderer {
     // in float64 — an anchor of whole metres (multiples of 64) near it, and the camera from the anchor
     const fineMap = near ? solarBody(bodies[near.index]!.id)?.map : undefined;
     const fm = fineMap ? mapIndex(fineMap) : -1;
-    if (near && (fm === 1 || fm === 3 || (fm >= 7 && fm <= 18)) && Math.hypot(...near.centre) < 1.02) {
+    // (and Mars's, its relief marched — PLAN-PLANETES-AAA P7)
+    if (near && (fm === 1 || fm === 2 || fm === 3 || (fm >= 7 && fm <= 18)) && Math.hypot(...near.centre) < 1.02) {
       const mR = near.radius * M_METRES;
       const cb = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]) * mR);
       const an = cb.map((c) => Math.round(c / 64) * 64);
@@ -3225,13 +3227,14 @@ export class Renderer {
       // (its far levels' overground — I6)
       this.earthTiles.hlodOn = s.earthIgnSilhouettes;
       this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0], eye ? eyeH : undefined);
-      // the Moon's relief tiles (P6): round the camera while the Moon is the near body and its global map in
-      const moonK = bodies.findIndex((b) => b.id === "moon");
-      if (near && moonK >= 0 && near.index === moonK && this.hdMap.name === "moon" && this.hdMap.dem) {
+      // the Moon's and Mars's relief tiles (P6, P7): round the camera while that world is the near body and its global map in
+      const nearId = near ? bodies[near.index]?.id : undefined;
+      const tw = nearId ? WORLDS[nearId] : undefined;
+      if (near && tw && nearId === this.moonTiles.world && this.hdMap.name === nearId && this.hdMap.dem) {
         const e = bodyEye(near);
         const r = Math.hypot(...e);
         const u = e.map((x) => x / r) as Vec3;
-        this.moonTiles.update(u, (r - 1) * 1737400 - (this.moonTiles.fallback?.(u) ?? 0), pixelAngle);
+        this.moonTiles.update(u, (r - 1) * tw.R - (this.moonTiles.fallback?.(u) ?? 0), pixelAngle);
       } else this.moonTiles.update(null, 0, 0);
       this.earthSurface.update(eye, s.earthSurface, lead);
       // (its trees and their ground over France by the IGN's survey — I4)

@@ -39,7 +39,8 @@ export function reliefMax(surf: number): number {
   if (surf === 0) return 1300;
   if (surf === 1) return 4600;
   if (surf === 2) return 1800;
-  return airless(surf) ? 500 : 0;
+  // (and Mars's craters: trace.wgsl cratered)
+  return airless(surf) || surf === 6 ? 500 : 0;
 }
 
 /**
