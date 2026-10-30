@@ -44,8 +44,8 @@ export function reliefMax(surf: number): number {
 
 /**
  * The library the vertex shader evaluates the relief with: trace.wgsl's `relief` and everything it calls, its constants and
- * private globals (the craters' `CRATER_*`), the parameters' struct; the tracer's own bindings of the parameters, the sampler
- * and the measured heights (0, 4, 23), in group 1.
+ * private globals (the craters' `CRATER_*`), the parameters' struct; the tracer's own bindings of the parameters, the sampler,
+ * the measured heights and the tiles (0, 4, 23, 28 — the Moon's, moon-tiles.ts), in group 1.
  */
 export function bodyReliefLibrary(trace: string): string {
   const functions = new Map<string, string>();
@@ -82,6 +82,7 @@ ${[...kept.values()].join("\n")}
 @group(1) @binding(0) var<uniform> P: Params;
 @group(1) @binding(4) var bgSamp: sampler;
 @group(1) @binding(23) var hdRelief: texture_2d<f32>;
+@group(1) @binding(28) var earthTiles: texture_2d_array<u32>;
 fn cost(k: u32) {}
 ${[...selected.values()].join("\n")}`;
 }
@@ -287,7 +288,7 @@ export class BodyRaster {
   private bind: GPUBindGroup | null = null;
   private heightBind: GPUBindGroup | null = null;
   private sourceBind: GPUBindGroup | null = null;
-  private sources: { params: GPUBuffer; sampler: GPUSampler; relief: GPUTexture } | null = null;
+  private sources: { params: GPUBuffer; sampler: GPUSampler; relief: GPUTexture; tiles: GPUTexture; stamp: number } | null = null;
   private anchor: BodyAnchor | null = null;
   /** each level's heights' key (its anchor, centre, cells, world, the measured heights' texture): worked out again when it changes */
   private levelKeys: string[] = [];
@@ -360,7 +361,7 @@ export class BodyRaster {
   prepare(
     enc: GPUCommandEncoder,
     v: BodyRasterView,
-    sources: { params: GPUBuffer; sampler: GPUSampler; relief: GPUTexture },
+    sources: { params: GPUBuffer; sampler: GPUSampler; relief: GPUTexture; tiles: GPUTexture; stamp: number },
     pass: GPUComputePassDescriptor = {},
   ): boolean {
     if (!this.pipe || !this.heightPipe) return false;
@@ -388,7 +389,12 @@ export class BodyRaster {
     });
     const old = this.sources;
     const sourcesChanged =
-      !this.sourceBind || !old || old.params !== sources.params || old.sampler !== sources.sampler || old.relief !== sources.relief;
+      !this.sourceBind ||
+      !old ||
+      old.params !== sources.params ||
+      old.sampler !== sources.sampler ||
+      old.relief !== sources.relief ||
+      old.tiles !== sources.tiles;
     if (sourcesChanged) {
       this.sourceBind = this.device.createBindGroup({
         layout: this.heightPipe.getBindGroupLayout(1),
@@ -396,11 +402,15 @@ export class BodyRaster {
           { binding: 0, resource: { buffer: sources.params } },
           { binding: 4, resource: sources.sampler },
           { binding: 23, resource: sources.relief.createView() },
+          { binding: 28, resource: sources.tiles.createView({ dimension: "2d-array" }) },
         ],
       });
       this.sources = sources;
       this.levelKeys = [];
     }
+    // (the Moon's tiles come in — moon-tiles.ts stamp —: every level's heights made again)
+    if (old && old.stamp !== sources.stamp) this.levelKeys = [];
+    this.sources = sources;
     if (reanchored) this.levelKeys = [];
     // (the levels whose nodes moved — a centre snapped to the next cells, the cells' size, the world —; Miller's waves move the
     // ground itself: its three finest levels each frame, a coarser one in turn)

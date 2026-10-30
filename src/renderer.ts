@@ -149,6 +149,7 @@ import {
 import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/geoid";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
+import { MoonTiles } from "./system/moon-tiles";
 import { WarpGrid } from "./system/warp-grid";
 import { EarthSurface, SURFACE_VEC4S, SURFACE_TEXTURE_LIMIT } from "./system/earth-surface";
 import { EarthScenery } from "./system/scenery";
@@ -811,6 +812,8 @@ export class Renderer {
   moonLight = 1;
   /** the Earth's real ground near the camera, streamed (src/system/earth-tiles.ts) */
   readonly earthTiles: EarthTiles;
+  /** the Moon's relief tiles round the camera (P6): drawn through the Earth's tiles' binding while the Moon is near */
+  readonly moonTiles: MoonTiles;
   readonly earthSurface: EarthSurface;
   readonly earthScenery: EarthScenery;
   private surfaceSampler: GPUSampler;
@@ -1396,6 +1399,16 @@ export class Renderer {
       if (this.offline) this.bindTarget(this.offline.target);
       if (!this.offline) this.invalidate();
     };
+    this.moonTiles = new MoonTiles(device);
+    this.moonTiles.onChange = () => {
+      if (!this.offline) this.invalidate();
+    };
+    // (the tracer's binding 28 the Moon's atlas while it is drawn, the Earth's else: the bind groups rebuilt)
+    this.moonTiles.onSwitch = () => {
+      if (this.live) this.bindTarget(this.live);
+      if (this.offline) this.bindTarget(this.offline.target);
+      if (!this.offline) this.invalidate();
+    };
     this.earthSurface = new EarthSurface(device, undefined, device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT);
     this.surfaceSampler = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", maxAnisotropy: 4 });
     this.earthSurface.onChange = () => {
@@ -1749,7 +1762,24 @@ export class Renderer {
   private groundHeights(m: HdMap, on: HdMap | null) {
     const id = m.name && m.dem ? SOLAR_BODIES.find((b) => b.map === m.name)?.id : undefined;
     if (!id) return;
-    setGroundHeights(id, on?.dem ? mapHeightSampler(on.dem.map, on.dem.W, on.dem.H) : null);
+    const g = on?.dem ? mapHeightSampler(on.dem.map, on.dem.W, on.dem.H) : null;
+    // (the Moon: its relief tiles round the camera over the global map — moon-tiles.ts, the tracer's moonH)
+    if (id === "moon") {
+      this.moonTiles.fallback = g;
+      if (!g) this.moonTiles.clear();
+      const t = this.moonTiles;
+      setGroundHeights(
+        id,
+        g
+          ? (q) => {
+              const f = t.heightAt(q, 0.05);
+              return f.rem >= 1 ? g(q) : f.h + (f.rem > 1e-4 ? f.rem * g(q) : 0);
+            }
+          : null,
+      );
+      return;
+    }
+    setGroundHeights(id, g);
   }
 
   /** Streams in a world's finer maps (the previous ones freed once loaded). */
@@ -2276,6 +2306,11 @@ export class Renderer {
     t.temporal?.buf.destroy();
   }
 
+  /** the tiles the tracer reads (binding 28): the Moon's while they are drawn, else the Earth's */
+  private get tilesTexture() {
+    return this.moonTiles.active ? this.moonTiles.texture : this.earthTiles.texture;
+  }
+
   /** The trace kernels' bind group entries for a target; `binding14` is the buffer of the probe or of the light probe. */
   private traceEntries(t: Target, binding14: GPUBuffer, raster?: GPUTexture, clouds = true, csm = true): GPUBindGroupEntry[] {
     return [
@@ -2303,7 +2338,7 @@ export class Renderer {
       { binding: 24, resource: this.noise3d.createView({ dimension: "3d" }) },
       { binding: 25, resource: this.noiseSampler },
       { binding: 26, resource: this.ship.shadowView },
-      { binding: 28, resource: this.earthTiles.texture.createView({ dimension: "2d-array" }) },
+      { binding: 28, resource: this.tilesTexture.createView({ dimension: "2d-array" }) },
       ...(this.earthScenery.supported ? [{ binding: 32, resource: { buffer: this.earthScenery.buffer } }] : []),
       ...(this.seaFft
         ? [
@@ -3190,6 +3225,14 @@ export class Renderer {
       // (its far levels' overground — I6)
       this.earthTiles.hlodOn = s.earthIgnSilhouettes;
       this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0], eye ? eyeH : undefined);
+      // the Moon's relief tiles (P6): round the camera while the Moon is the near body and its global map in
+      const moonK = bodies.findIndex((b) => b.id === "moon");
+      if (near && moonK >= 0 && near.index === moonK && this.hdMap.name === "moon" && this.hdMap.dem) {
+        const e = bodyEye(near);
+        const r = Math.hypot(...e);
+        const u = e.map((x) => x / r) as Vec3;
+        this.moonTiles.update(u, (r - 1) * 1737400 - (this.moonTiles.fallback?.(u) ?? 0), pixelAngle);
+      } else this.moonTiles.update(null, 0, 0);
       this.earthSurface.update(eye, s.earthSurface, lead);
       // (its trees and their ground over France by the IGN's survey — I4)
       this.earthScenery.ign = s.earthIgnRelief;
@@ -3217,6 +3260,8 @@ export class Renderer {
       }
     }
     f.set(this.earthTiles.params(), 69 * 4);
+    // (the Moon's in their place while drawn: the Earth's are off then — not the near body)
+    if (this.moonTiles.active) f.set(this.moonTiles.params(), 69 * 4);
     // (the orthophotos' levels: in the tracer's table, written when they change)
     const ortho = this.earthTiles.orthoParams();
     if (!this.orthoSent || ortho.some((v, i) => v !== this.orthoSent![i])) {
@@ -7391,7 +7436,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** what the ground's heights are made of now (the Earth's terrain tiles, a world's finer relief): it changes
    *  when finer heights come in — what stood on the coarser ground is set on them (main.ts) */
   get groundStamp() {
-    return `${this.earthTiles.stamp}:${this.hdMap.name ?? ""}:${this.hdMap.dem ? 1 : 0}`;
+    return `${this.earthTiles.stamp}:${this.moonTiles.stamp}:${this.hdMap.name ?? ""}:${this.hdMap.dem ? 1 : 0}`;
   }
   get frameTelemetry() {
     return { completedFrames: this.completedFrames, firstFrameDoneAt: this.firstFrameDoneAt, durationsMs: [...this.completedDurations] };
@@ -8268,7 +8313,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         mPerM: 1476.625 * s.massSolar,
         jitter,
       },
-      { params: this.paramBuf, sampler: this.sampler, relief: this.hdMap.relief },
+      { params: this.paramBuf, sampler: this.sampler, relief: this.hdMap.relief, tiles: this.tilesTexture, stamp: this.moonTiles.stamp },
       this.prof.pass("body raster heights"),
     );
     if (!ready) {

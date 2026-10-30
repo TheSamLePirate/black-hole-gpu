@@ -226,7 +226,7 @@ interface OrthoLevel {
 }
 
 /** A tile's pixels (rgba, row by row), as they are in its file — or a square of it (x, y, side [px]) enlarged. */
-async function pixels(blob: Blob, crop?: [number, number, number]): Promise<Uint8ClampedArray> {
+export async function pixels(blob: Blob, crop?: [number, number, number]): Promise<Uint8ClampedArray> {
   const o = { colorSpaceConversion: "none", premultiplyAlpha: "none" } as const;
   const img = crop
     ? await createImageBitmap(blob, crop[0], crop[1], crop[2], crop[2], {

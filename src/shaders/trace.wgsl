@@ -1697,8 +1697,10 @@ fn demTop(q: vec3f, reach: f32) -> f32 {
   let x1 = (x0 + 1) % dl.x;
   let y0 = clamp(i.y, 0, dl.y - 1);
   let y1 = clamp(i.y + 1, 0, dl.y - 1);
-  return max(max(textureLoad(hdRelief, vec2i(x0, y0), l).g, textureLoad(hdRelief, vec2i(x1, y0), l).g),
+  let peak = max(max(textureLoad(hdRelief, vec2i(x0, y0), l).g, textureLoad(hdRelief, vec2i(x1, y0), l).g),
     max(textureLoad(hdRelief, vec2i(x0, y1), l).g, textureLoad(hdRelief, vec2i(x1, y1), l).g));
+  // (the Moon's tiles' peaks over the global map's means: their windows' highest — moon-tiles.ts top)
+  return select(peak, max(peak, P.tileL[8].x), moonTilesOn());
 }
 // their normal at q (its axes), at the map's footprint (mapLod), no finer than half a texel (the cheap
 // heights: a slope's metres off are nothing over a texel)
@@ -1717,6 +1719,9 @@ fn demNormal(q: vec3f) -> vec3f {
 }
 // the body's axes in the frame planetShade is called in (columns): set by its callers for our worlds
 var<private> ALB_GAIN: f32 = 1.0; // (near: the ground's own brightening — fresh ejecta, regolith)
+// (near the Moon, its tiles drawn: the finer map's normal taken once by shadeNear — moonNormal —, not planetShade's own)
+var<private> HD_N: vec3f = vec3f(0.0, 0.0, 1.0);
+var<private> HD_N_ON: bool = false;
 var<private> EDM_H: f32 = -1e9; // (near Edmunds: the ground's height [m] — its strata's colours, planetAlbedo)
 var<private> BODYW: mat3x3f = mat3x3f(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
 
@@ -1806,7 +1811,11 @@ fn planetShade(k: u32, nrm: vec3f, pat: vec3f, ldir: vec3f, view: vec3f, tEm: f3
   // (the finer relief, near: the normal tilted by it)
   var nrmL = nrm;
   // (added to the relief's own normal, near: the map's tilt on it)
-  if (isHd(k)) { nrmL = normalize(nrm + BODYW * (hdNormal(k, pat) - pat)); }
+  if (isHd(k)) {
+    var hn = HD_N;
+    if (!HD_N_ON) { hn = hdNormal(k, pat); }
+    nrmL = normalize(nrm + BODYW * (hn - pat));
+  }
   let cosi = max(dot(nrmL, ldir), 0.0);
   let mu = clamp(dot(nrm, view), 0.0, 1.0);
   var A = planetAlbedo(k, pat, tEm);
@@ -3671,11 +3680,15 @@ fn ridged(p: vec3f, oct: i32) -> f32 {
 // these filtered by the hardware (the marches' steps)
 fn relief(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
   cost(1u);
-  return reliefBase(surf, q, foot, mR, tSec) + select(0.0, demH0(q, foot), hasDem(surf));
+  let base = reliefBase(surf, q, foot, mR, tSec);
+  if (!hasDem(surf)) { return base; }
+  return base + demFine(q, foot, false);
 }
 fn reliefStep(surf: u32, q: vec3f, foot: f32, mR: f32, tSec: f32) -> f32 {
   cost(1u);
-  return reliefBase(surf, q, foot, mR, tSec) + select(0.0, demStep(q, foot), hasDem(surf));
+  let base = reliefBase(surf, q, foot, mR, tSec);
+  if (!hasDem(surf)) { return base; }
+  return base + demFine(q, foot, true);
 }
 // the relief alone (its normal: the measured heights' is the finer map's, hdNormal)
 // foot: the pixel's footprint on the ground [m], mR: metres per radius (the layers' detail)
@@ -3989,7 +4002,8 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
   let p0 = q * (1.0 + h / mR);
   if (dot(L, q) < -0.2) { return 0.0; } // (the night side: in the planet's own shadow)
   // (the steps' cheap ground against the point's own: their difference there taken off — no self-shadow)
-  let b0 = select(0.0, demStep(q, foot) - demH0(q, foot), hasDem(surf));
+  var b0 = 0.0;
+  if (hasDem(surf)) { b0 = demFine(q, foot, true) - demFine(q, foot, false); }
   var s = 1.0;
   var d = max(0.5, foot) / mR * exp2(0.3 * RND);
   for (var i = 0u; i < 56u; i++) {
@@ -4085,6 +4099,12 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
           n = normalize(n - fromBody(g) * smoothstep(8.0, 2.0, foot));
           ALB_GAIN *= 1.0 + clamp(h0 * 0.25, -0.15, 0.2);
         }
+        // (the Moon's tiles — PLAN-PLANETES-AAA P6 —: their 118 m relief's normal, Clementine's albedo detail)
+        if (moonTilesOn() && hasDem(surf)) {
+          HD_N = moonNormal(qb, foot);
+          HD_N_ON = true;
+          ALB_GAIN *= moonDetail(qb, foot);
+        }
       }
     }
     // (in the shadows the light the lit ground around sheds: a few per cent — and a world's sky's, where it has air: a sixth —
@@ -4094,6 +4114,7 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
     let c = planetShade(k, n, qb, P.near4.xyz, -look, P.time.x, 1.0, ringShadow(k, look * t - P.near0.xyz, P.near3.xyz, P.near4.xyz));
     ALB_GAIN = 1.0;
     EDM_H = -1e9;
+    HD_N_ON = false;
     return c * (sh + (1.0 - sh) * fill);
   }
   // lit by a light probe (the environment of the planet: the lensed disk, Gargantua, the sky):
@@ -5977,6 +5998,131 @@ fn tileSample(l: u32, p: vec2f, mag: f32) -> f32 {
     b += wy[j] * row;
   }
   return mix(lin, b, k);
+}
+// ---- the Moon's relief tiles (PLAN-PLANETES-AAA P6, src/system/moon-tiles.ts: LOLA's 118 m in four equirectangular levels,
+// the same weights on the CPU — heightAt) through the Earth's tiles' binding and params while the Moon is the near body:
+// P.tiles.w −1 their mark, P.tileL[8].x their windows' highest height [m]
+const MOON_LEVELS = 4u;
+const MOON_R = 1737400.0;
+fn moonTilesOn() -> bool { return P.tiles.w < -0.5; }
+// their height at q (the Moon's axes) for a footprint [m] — the finest level within it and the next coarser, blended by the
+// footprint and towards their windows' edges, as earthH — and the weight left to the global map (y)
+fn moonH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
+  // (from the reference — the camera's place —: the longitude by a turned atan2, the latitude's difference by another, no
+  // float32 cancellation near the camera)
+  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
+  let cosRef = sqrt(max(1.0 - P.tiles.z * P.tiles.z, 0.0));
+  let rho = length(q.xy);
+  let dlat = atan2(q.z * cosRef - rho * P.tiles.z, rho * cosRef + q.z * P.tiles.z);
+  var h = 0.0;
+  var rem = 1.0;
+  for (var l = 0u; l < MOON_LEVELS; l++) {
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    // (its texel R / b.z [m] by the footprint: under half of it, the level left to the coarser one)
+    let zf = log2(MOON_R / (b.z * max(foot, 0.5)));
+    let wz = clamp(zf + 1.0, 0.0, 1.0);
+    if (wz <= 0.0) { continue; }
+    let p = a.xy + vec2f(dlon, -dlat) * b.z;
+    let w = wz * smoothstep(2.0, 48.0, min(min(p.x, p.y), min(b.x - p.x, b.y - p.y)));
+    if (w <= 0.0) { continue; }
+    h += rem * w * moonSample(l, p, cheap || TUNE_CHEAP > 0u);
+    rem *= 1.0 - w;
+    if (rem < 1e-4) { break; }
+  }
+  return vec2f(h, rem);
+}
+// a level's height at p [its px from the corner] (moon-tiles.ts moonSample, the same): a monotone cubic through its 4 × 4
+// texels — a crater's rim kept sharp —, or bilinear (cheap: the marches' steps); in loops, one copy of each read
+fn moonSample(l: u32, p: vec2f, cheap: bool) -> f32 {
+  let x = p - 0.5;
+  let i0 = vec2i(floor(x));
+  let f = x - floor(x);
+  if (cheap) {
+    var c: array<f32, 4>;
+    for (var k = 0; k < 4; k++) { c[k] = tileTexel(l, i0 + vec2i(k & 1, k >> 1)); }
+    return mix(mix(c[0], c[1], f.x), mix(c[2], c[3], f.x), f.y);
+  }
+  var rows: array<f32, 4>;
+  for (var j = 0; j < 4; j++) {
+    var t: array<f32, 4>;
+    for (var i = 0; i < 4; i++) { t[i] = tileTexel(l, i0 + vec2i(i - 1, j - 1)); }
+    rows[j] = monoCubic(t[0], t[1], t[2], t[3], f.x);
+  }
+  return monoCubic(rows[0], rows[1], rows[2], rows[3], f.y);
+}
+// a level's albedo at p [its px] (Clementine's grey in the imagery channel — moon-tiles.ts clemAlbedo —, bilinear) and whether
+// all four texels have it (y)
+fn moonGrey(l: u32, p: vec2f) -> vec2f {
+  let x = p - 0.5;
+  let i0 = vec2i(floor(x));
+  let f = x - floor(x);
+  let a = tileImage(l, i0);
+  let b = tileImage(l, i0 + vec2i(1, 0));
+  let c = tileImage(l, i0 + vec2i(0, 1));
+  let d = tileImage(l, i0 + vec2i(1, 1));
+  let ok = select(0.0, 1.0, a != 0u && b != 0u && c != 0u && d != 0u);
+  let g = mix(mix(unpack4x8unorm(a).r, unpack4x8unorm(b).r, f.x), mix(unpack4x8unorm(c).r, unpack4x8unorm(d).r, f.x), f.y);
+  return vec2f(g, ok);
+}
+// The Moon's albedo's finer detail at q for a footprint [m] (PLAN-PLANETES-AAA P6): the finest level's Clementine over the
+// coarsest's (z 3, ~670 m), a factor on the calibrated map's colour — 333 m detail, its tone the map's; 1 where none, and
+// fading as the footprint outgrows the level
+fn moonDetail(q: vec3f, foot: f32) -> f32 {
+  if (!moonTilesOn()) { return 1.0; }
+  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
+  let cosRef = sqrt(max(1.0 - P.tiles.z * P.tiles.z, 0.0));
+  let rho = length(q.xy);
+  let dlat = atan2(q.z * cosRef - rho * P.tiles.z, rho * cosRef + q.z * P.tiles.z);
+  let a3 = P.tileL[6];
+  let b3 = P.tileL[7];
+  if (b3.w < 0.5) { return 1.0; }
+  let p3 = a3.xy + vec2f(dlon, -dlat) * b3.z;
+  let e3 = smoothstep(2.0, 48.0, min(min(p3.x, p3.y), min(b3.x - p3.x, b3.y - p3.y)));
+  let coarse = moonGrey(3u, p3);
+  if (e3 <= 0.0 || coarse.y < 0.5) { return 1.0; }
+  for (var l = 0u; l < 3u; l++) {
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    let p = a.xy + vec2f(dlon, -dlat) * b.z;
+    let e = smoothstep(2.0, 48.0, min(min(p.x, p.y), min(b.x - p.x, b.y - p.y)));
+    // (its detail no finer than Clementine's 333 m: faded as the footprint outgrows that, or the level's texel)
+    let w = e * clamp(log2(max(333.0, MOON_R / b.z) / max(foot, 1.0)) + 1.0, 0.0, 1.0);
+    if (w <= 0.0) { continue; }
+    let fine = moonGrey(l, p);
+    if (fine.y < 0.5) { continue; }
+    return mix(1.0, clamp(fine.x / max(coarse.x, 0.02), 0.4, 2.5), w * e3);
+  }
+  return 1.0;
+}
+// the Moon's tiles' normal at q (its axes) for a footprint [m] — the near ground's (shadeNear: HD_N), no finer than half
+// the finest drawn level's texel (59 m at z 0), from the cubic heights
+fn moonNormal(q: vec3f, foot: f32) -> vec3f {
+  var texel = MOON_R * TAU / f32(textureDimensions(hdRelief).x);
+  for (var l = 0u; l < MOON_LEVELS; l++) {
+    let b = P.tileL[2u * l + 1u];
+    if (b.w > 0.5) { texel = min(texel, MOON_R / b.z); }
+  }
+  let e = max(foot, 0.5 * texel) / MOON_R;
+  let t1 = normalize(cross(q, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(q.z) > 0.9)));
+  let t2 = cross(q, t1);
+  var hs = array<f32, 3>(0.0, 0.0, 0.0);
+  for (var i = 0; i < 3; i++) {
+    let qi = select(select(q, normalize(q + t1 * e), i == 1), normalize(q + t2 * e), i == 2);
+    hs[i] = demFine(qi, foot, false);
+  }
+  return normalize(q - ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / (e * MOON_R));
+}
+// the measured heights [m] at q for a footprint: the tiles' over the global map's (demH0; cheap: demStep)
+fn demFine(q: vec3f, foot: f32, cheap: bool) -> f32 {
+  var t = vec2f(0.0, 1.0);
+  if (moonTilesOn()) { t = moonH(q, foot, cheap); }
+  if (t.y < 1e-4) { return t.x; }
+  var g = 0.0;
+  if (cheap) { g = demStep(q, foot); } else { g = demH0(q, foot); }
+  return t.x + t.y * g;
 }
 // The ground's height under the map's finer detail at q for a footprint foot [m]: the tiles' levels — the
 // finest within the footprint and the next coarser, blended by the footprint and towards their windows'
