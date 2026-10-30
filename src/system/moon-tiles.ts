@@ -302,8 +302,10 @@ export class MoonTiles {
   imagery = 0;
   /** where the tiles come from (lolaBase: the local server's box, or the room server's) */
   source = "";
-  /** the highest height in the windows [m] (the marches' bound over the global map's: trace.wgsl demTop) */
-  top = -Infinity;
+  /** how far the windows' heights rise over the global map's under them, at most [m] — the marches' bound over the map's
+   *  own (trace.wgsl demTop): the map's highest there plus this; the windows' highest anywhere was 20 km over a Martian plain
+   *  (Tharsis in the 8° window), every ray stepping finely from there */
+  top = 0;
   private tops = new WeakMap<Float32Array, number>();
 
   constructor(private device: GPUDevice) {
@@ -603,21 +605,41 @@ export class MoonTiles {
   }
 
   private updateTop() {
-    let m = -Infinity;
+    let m = 0;
     for (const L of this.levels) {
       if (!L.valid || L.image) continue;
-      for (const d of L.data) {
+      for (const [s, d] of L.data.entries()) {
         if (!d) continue;
         let t = this.tops.get(d);
         if (t === undefined) {
-          t = -Infinity;
-          for (let i = 0; i < d.length; i++) if (d[i]! > t) t = d[i]!;
+          t = this.excess(L, L.key[s] ?? null, d);
           this.tops.set(d, t);
         }
         if (t > m) m = t;
       }
     }
     this.top = m;
+  }
+
+  /** A tile's heights' rise over the global map's under them, at most [m]: every other texel, 100 m more for those between
+   *  (none: a tile filled from the map itself) */
+  private excess(L: Level, key: string | null, d: Float32Array) {
+    const f = this.fallback;
+    if (!f || !key) return 0;
+    const [, ys, xs] = key.split("/").map(Number) as [number, number, number];
+    const deg = 2 ** L.z;
+    let e = 0;
+    for (let j = 0; j < TILE; j += 2) {
+      const lat = ((90 - (ys + (j + 0.5) / TILE) * deg) * Math.PI) / 180;
+      const cl = Math.cos(lat),
+        sl = Math.sin(lat);
+      for (let i = 0; i < TILE; i += 2) {
+        const lon = ((-180 + (xs + (i + 0.5) / TILE) * deg) * Math.PI) / 180;
+        const rise = d[j * TILE + i]! - f([cl * Math.cos(lon), cl * Math.sin(lon), sl]);
+        if (rise > e) e = rise;
+      }
+    }
+    return e > 0 ? e + 100 : 0;
   }
 
   /** a level's reference place in its valid rectangle [px] */
@@ -647,7 +669,7 @@ export class MoonTiles {
     }
     f.set([Math.cos(this.lon), Math.sin(this.lon), Math.sin(this.lat), this.drawn ? -1 : 0], 0);
     f.set(
-      [Number.isFinite(this.top) ? this.top : 0, this.levels.findIndex((L) => !L.image), this.levels.length - 1, this.W.imageRes],
+      [this.top, this.levels.findIndex((L) => !L.image), this.levels.length - 1, this.W.imageRes],
       4 + 8 * WORLD_LEVELS,
     );
     return f;

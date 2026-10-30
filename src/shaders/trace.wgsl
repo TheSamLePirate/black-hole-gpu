@@ -1699,8 +1699,8 @@ fn demTop(q: vec3f, reach: f32) -> f32 {
   let y1 = clamp(i.y + 1, 0, dl.y - 1);
   let peak = max(max(textureLoad(hdRelief, vec2i(x0, y0), l).g, textureLoad(hdRelief, vec2i(x1, y0), l).g),
     max(textureLoad(hdRelief, vec2i(x0, y1), l).g, textureLoad(hdRelief, vec2i(x1, y1), l).g));
-  // (the Moon's tiles' peaks over the global map's means: their windows' highest — moon-tiles.ts top)
-  return select(peak, max(peak, P.tileL[16].x), moonTilesOn());
+  // (the Moon's and Mars's tiles' peaks over the global map's means: their windows' rise over it at most — moon-tiles.ts top)
+  return peak + select(0.0, P.tileL[16].x, moonTilesOn());
 }
 // their normal at q (its axes), at the map's footprint (mapLod), no finer than half a texel (the cheap
 // heights: a slope's metres off are nothing over a texel)
@@ -6008,7 +6008,7 @@ fn tileSample(l: u32, p: vec2f, mag: f32) -> f32 {
 }
 // ---- the Moon's and Mars's relief tiles (PLAN-PLANETES-AAA P6, P7; src/system/moon-tiles.ts: LOLA's 118 m, the HRSC and MOLA
 // blend's 200 m in equirectangular levels, the same weights on the CPU — heightAt) through the Earth's tiles' binding and
-// params while that world is the near body: P.tiles.w −1 their mark; P.tileL[16]: their windows' highest height [m], the
+// params while that world is the near body: P.tiles.w −1 their mark; P.tileL[16]: their windows' rise over the map [m], the
 // first relief level (Mars's finer ones carry imagery alone), the coarsest level, the imagery's finest [m]; the world's
 // radius P.hd2.w
 const MOON_LEVELS = 8u;
