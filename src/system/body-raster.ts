@@ -197,6 +197,9 @@ export interface BodyRasterView {
   mPerM: number;
   /** the frame's jitter in NDC (the rays' own) */
   jitter: [number, number];
+  /** the measured ground's height over the sphere under the camera [m] (the Moon's, Mars's maps: −9 … +21 km; 0 the
+   *  procedural worlds') — the camera's height taken over it, not over the sphere */
+  ground?: number;
 }
 
 /** The reference point and its tangent axes, kept from frame to frame (BodyRaster). */
@@ -230,7 +233,9 @@ export function bodyRasterFrame(
   const eye = near.axes.map((a) => -dot(near.centre, a) * R) as Vec3;
   const re = Math.hypot(eye[0], eye[1], eye[2]);
   const alt = re - R;
-  if (!(alt > -hmax) || alt > 0.5 * R) return null;
+  // (over the ground under it: a walker on Coprates's plateau, kilometres under Mars's sphere, was out of the relief's reach)
+  const above = alt - (v.ground ?? 0);
+  if (!(above > -hmax) || alt > 0.5 * R) return null;
   const sub = unit(eye);
   let a = anchor;
   if (!a || a.surf !== v.surf || dot(a.r0, sub) < Math.cos(REANCHOR)) {
@@ -238,9 +243,9 @@ export function bodyRasterFrame(
     const east = unit(cross(Math.abs(r0[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0], r0));
     a = { surf: v.surf, r0, east, north: cross(r0, east) };
   }
-  // the finest cell [m]: a hundredth of the height over the relief's floor, a power of two
-  const above = Math.max(alt, 1);
-  const cell0 = 2 ** Math.round(Math.log2(Math.min(256, Math.max(0.5, above / 100))));
+  // the finest cell [m]: a hundredth of the height over the ground, a power of two
+  const over = Math.max(above, 1);
+  const cell0 = 2 ** Math.round(Math.log2(Math.min(256, Math.max(0.5, over / 100))));
   const s0 = cell0 / R;
   // the levels to the horizon and the highest peaks beyond it (the angles from the ground point), and the reference's offset
   const horizon = Math.acos(Math.min(1, R / Math.max(re, R))) + Math.acos(R / (R + hmax));

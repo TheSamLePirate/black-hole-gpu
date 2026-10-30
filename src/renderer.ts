@@ -3266,7 +3266,9 @@ export class Renderer {
     // (the Moon's in their place while drawn: the Earth's are off then — not the near body)
     if (this.moonTiles.active) f.set(this.moonTiles.params(), 69 * 4);
     // (and the body raster's reach [m] — P.tileL[17].x —: Mars's rays the raster has not met start their march there, P7)
-    f[(69 + 1 + 17) * 4] = this.bodyRasterNow && this.bodyRaster ? this.bodyRaster.reach : 0;
+    // (only while it draws: its reach kept past its last frame — out of reach, compiling — sent the rays it leaves past the
+    // ground, which vanished under a walker on Mars)
+    f[(69 + 1 + 17) * 4] = this.bodyRasterNow && this.bodyRasterDrew && this.bodyRaster ? this.bodyRaster.reach : 0;
     // (the orthophotos' levels: in the tracer's table, written when they change)
     const ortho = this.earthTiles.orthoParams();
     if (!this.orthoSent || ortho.some((v, i) => v !== this.orthoSent![i])) {
@@ -7542,6 +7544,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   bodyRasterOn = true;
   /** the body raster draws the near ground this frame (writeParams: eligible, the raster's frame) */
   bodyRasterNow = false;
+  /** the body raster drew the last frame (its reach handed to the tracer only then — trace.wgsl MARCH_T0) */
+  private bodyRasterDrew = false;
   private terrainRasterRequested = false;
   /** a terrain diagnostic adds its own GPU work this frame (the inspector, the cache, the hints without the raster
    *  pipeline): the automatic quality held — main.ts reads it as terrainRasterInspecting */
@@ -8318,6 +8322,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         fovDegrees: s.fov,
         mPerM: 1476.625 * s.massSolar,
         jitter,
+        ground: this.bodyGroundUnder(near, nb.id),
       },
       { params: this.paramBuf, sampler: this.sampler, relief: this.hdMap.relief, tiles: this.tilesTexture, stamp: this.moonTiles.stamp },
       this.prof.pass("body raster heights"),
@@ -8327,6 +8332,17 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       return;
     }
     tr.encodeBody(enc, target.width, target.height, this.bodyRaster, (label, descriptor) => this.prof.pass(label, descriptor));
+    this.bodyRasterDrew = true;
+  }
+
+  /** the measured ground's height over the near world's sphere under the camera [m] — its global map's (the Moon's, Mars's:
+   *  moon-tiles.ts WORLDS) —, 0 for the procedural worlds (body-raster.ts BodyRasterView.ground) */
+  private bodyGroundUnder(near: NonNullable<Renderer["lastNear"]>, id: string): number {
+    const f = WORLDS[id] && this.moonTiles.world === id ? this.moonTiles.fallback : null;
+    if (!f) return 0;
+    const e = bodyEye(near);
+    const r = Math.hypot(...e);
+    return f(e.map((x) => x / r) as Vec3);
   }
 
   /** the frame's sub-pixel jitter in NDC — the rays' own (trace.wgsl rasterJitter: the same Halton index) */
@@ -8348,6 +8364,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private encodeTerrainRasterVisibility(enc: GPUCommandEncoder, target: Target, s: Settings) {
     // (the buildings' triangles drawn for the material's buildings — shadeLite, U2 —; without it, their boxes, the rays')
     if (this.sceneryRaster) this.sceneryRaster.meshes3d = this.rasterLite;
+    this.bodyRasterDrew = false;
     if (!this.terrainRasterRequested || !this.lastNear || !this.lastCam) {
       this.terrainRaster?.suspend();
       return;

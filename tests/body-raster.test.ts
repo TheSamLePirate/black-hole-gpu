@@ -62,4 +62,11 @@ test("the frame: the camera's ground point on the tangent plane, the levels to t
   // (too high — half a radius over the ground —: nothing drawn)
   const high = { ...near, centre: [0, 0, -1.6] } as unknown as LocalPatch;
   expect(bodyRasterFrame({ ...view, near: high }, null)).toBeNull();
+  // (a walker 2 m over a measured ground 4 km under the sphere — Mars's Coprates — drawn, its cells over that ground: out of
+  // the relief's 500 m below it, nothing was)
+  const deep = { ...near, centre: [0, 0, -(1 - 3998 / R)] } as unknown as LocalPatch;
+  expect(bodyRasterFrame({ ...view, near: deep }, null)).toBeNull();
+  const walker = bodyRasterFrame({ ...view, near: deep, ground: -4000 }, null)!;
+  expect(walker).not.toBeNull();
+  expect(walker.uniform[35]).toBe(0.5);
 });

@@ -45,7 +45,7 @@ describe.skipIf(!E2E)("P7: Mars's ground", () => {
   };
   const state = () =>
     app.js<Record<string, unknown>>(
-      `(() => { const r = __bh.renderer, m = r.moonTiles; return { world: m.world, drawn: m.drawn, loaded: m.loaded, failed: m.failed, imagery: m.imagery, top: Math.round(m.top), pipeline: r.earthPipelineNow?.(__bh.settings), gpuErrors: r.gpuErrors, from: m.source }; })()`,
+      `(() => { const r = __bh.renderer, m = r.moonTiles; return { world: m.world, drawn: m.drawn, loaded: m.loaded, failed: m.failed, imagery: m.imagery, top: Math.round(m.top), pipeline: r.earthPipelineNow?.(__bh.settings), gpuErrors: r.gpuErrors, from: m.source, body: { now: r.bodyRasterNow, ready: !!r.bodyRaster?.ready, reach: Math.round(r.bodyRaster?.reach ?? 0), tr: r.terrainRaster?.active ? "drawn" : r.terrainRaster?.reason, primary: r.rasterPrimaryOn } }; })()`,
     );
 
   test("Valles Marineris from 4 km: the tiles drawn, then the global maps alone", async () => {
