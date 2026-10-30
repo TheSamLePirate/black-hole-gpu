@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 # rooms-begin
   rooms:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-82bc258-40.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-2d8ddd2-41.1
     ports:
       - "3001:3001"
     volumes:
@@ -29,14 +29,17 @@ services:
       - OPENSKY_CLIENT_SECRET=${OPENSKY_CLIENT_SECRET:-}
       - MOON_DIR=/moon/lola
       - MARS_DIR=/moon/mars
+      - MERCURY_DIR=/moon/mercury
+      - CERES_DIR=/moon/ceres
     stop_grace_period: 10s
     restart: unless-stopped
-  # the worlds' relief tiles (server/moon-tiles.ts, PLAN-PLANETES-AAA P6, P7): the Moon's LOLA 118 m and Mars's HRSC and MOLA
-  # blend 200 m, read from the USGS's copies on AWS (8.5 and 11.4 GB once), cut into ~3–4 GB of tiles each in moon-data; then it
-  # exits (a later start only checks them)
+  # the worlds' relief tiles (server/moon-tiles.ts, PLAN-PLANETES-AAA P6, P7, P8): the Moon's LOLA 118 m and Mars's HRSC and
+  # MOLA blend 200 m, read from the USGS's copies on AWS (8.5 and 11.4 GB once), cut into ~3–4 GB of tiles each in moon-data;
+  # Mercury's MESSENGER 665 m and Ceres's Dawn HAMO 137 m (0.5 GB each, ~0.3 GB of tiles); then it exits (a later start only
+  # checks them)
   moon-tiles:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-82bc258-40.1
-    command: ["sh", "-c", "bun server/moon-build.ts --body moon --out /moon/lola && bun server/moon-build.ts --body mars --out /moon/mars"]
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-2d8ddd2-41.1
+    command: ["sh", "-c", "bun server/moon-build.ts --body moon --out /moon/lola && bun server/moon-build.ts --body mars --out /moon/mars && bun server/moon-build.ts --body mercury --out /moon/mercury && bun server/moon-build.ts --body ceres --out /moon/ceres"]
     volumes:
       - moon-data:/moon
     restart: on-failure
