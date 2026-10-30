@@ -1,5 +1,6 @@
 import index from "./index.html";
 import crew from "./crew/index.html";
+import { createMoonTiles } from "./server/moon-tiles";
 import { createRooms, type Peer } from "./server/rooms";
 import { createTraffic } from "./server/traffic";
 
@@ -50,6 +51,7 @@ const traffic = createTraffic({
   openskySecret: process.env.OPENSKY_CLIENT_SECRET,
   log: (m) => console.log(m),
 });
+const moonTiles = createMoonTiles("data/moon/lola");
 const server = Bun.serve({
   port,
   routes: {
@@ -88,6 +90,8 @@ const server = Bun.serve({
     // (the real traffic — server/traffic.ts, T1 —: the keys of .env, here as on the room server)
     "/traffic/*": ((req: Request, srv: { requestIP(r: Request): { address: string } | null }) =>
       traffic.handle(req, srv.requestIP(req)?.address)) as never,
+    // (the Moon's relief tiles — server/moon-tiles.ts, P6 —: a box built locally into data/, as the room server serves them)
+    "/svc/v1/moon/*": async (req: Request) => (await moonTiles.handle(new URL(req.url))) ?? new Response(null, { status: 404 }),
     "/net": ((req: Request, srv: Parameters<typeof rooms.upgrade>[1]) =>
       req.headers.get("upgrade")?.toLowerCase() === "websocket" ? rooms.upgrade(req, srv) : Response.json(rooms.health())) as never,
     // The rocket engine's AudioWorklet (PLAN-AUDIO S2), bundled on its own

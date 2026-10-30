@@ -5,6 +5,8 @@ FROM oven/bun:1.3-alpine
 WORKDIR /app
 COPY server/ server/
 COPY src/net/ src/net/
+# (the Moon's relief tiles' codec — server/moon-tiles.ts —: a file alone, no import)
+COPY src/system/lola-codec.ts src/system/lola-codec.ts
 ARG BUILD_SHA=dev
 ENV PORT=3001 DATA=/data BUILD_SHA=$BUILD_SHA NODE_ENV=production
 VOLUME /data

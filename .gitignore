@@ -92,3 +92,6 @@ assets/runways/raw/
 
 # Python bytecode (the asset builders)
 __pycache__/
+
+# the Moon's relief tiles built locally (server/moon-build.ts — the server builds its own)
+data/

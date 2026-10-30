@@ -113,6 +113,17 @@ subscription following the zones asked for in the last two minutes). `deploy/com
 Checked by `https://stream.samlepirate.org/traffic/health` (`ais`, `opensky` true once set; `aisOpen` while a page
 looks at the sea). In development the dev server serves the same from `.env`.
 
+### The Moon's relief tiles — `server/moon-tiles.ts` (PLAN-PLANETES-AAA P6)
+
+LRO LOLA's global 118 m model has no tiled copy a page can read: the USGS's GeoTIFF on AWS is 8.5 GB, one strip a row.
+The stack's `moon-tiles` service (the room server's image, `bun server/moon-build.ts`) reads it once, a band of 256
+rows at a time, and writes ~3–4 GB of tiles (`src/system/lola-codec.ts`: z 0 … 3, 1° … 8° a tile) into the `moon-data`
+volume, then exits; started again (a redeploy), it only checks they are all there. The room server serves them
+read-only at `https://stream.samlepirate.org/svc/v1/moon/lola/{z}/{row}/{col}.bin` (gzipped, CORS open, immutable) and
+the build's progress at `/svc/v1/moon/lola/status` (`rows` of `of`, `levels`, `done`, `error`). Locally,
+`bun server/moon-build.ts --out data/moon/lola --rows 76 88 --cols 172 188` builds a box (z 0 rows and columns) into the
+git-ignored `data/`, which the dev server serves at the same path.
+
 ## Rolling back
 
 Revert the last commit(s) on `deploy` (or push a commit naming an older tag): Portainer redeploys that

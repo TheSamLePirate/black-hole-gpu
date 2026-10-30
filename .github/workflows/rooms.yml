@@ -12,6 +12,7 @@ on:
     paths:
       - "server/**"
       - "src/net/**"
+      - "src/system/lola-codec.ts"
       - "deploy/Dockerfile.rooms"
       - "deploy/compose.yml"
       - "deploy/render-compose.sh"
@@ -37,7 +38,7 @@ jobs:
         with:
           bun-version: 1.3.14
       - name: The network's tests
-        run: bun test tests/net-core.test.ts tests/net-rooms.test.ts
+        run: bun test tests/net-core.test.ts tests/net-rooms.test.ts tests/lola-tiles.test.ts
       - name: Build and push the image
         id: image
         env:

@@ -1,6 +1,7 @@
 // The room server on its own (deploy/Dockerfile.rooms → stream.samlepirate.org): the rooms over a WebSocket
 // at any path, /health and /version; SQLite in $DATA; stopped cleanly (the rooms written) on SIGTERM.
 
+import { createMoonTiles } from "./moon-tiles";
 import { createRooms, defaultOrigin } from "./rooms";
 import { createTraffic } from "./traffic";
 
@@ -20,12 +21,15 @@ const traffic = createTraffic({
   openskySecret: process.env.OPENSKY_CLIENT_SECRET || undefined,
   log: (m) => console.log(m),
 });
+// (the Moon's relief tiles — server/moon-tiles.ts —: built by the stack's moon-tiles service into their volume)
+const moon = createMoonTiles(process.env.MOON_DIR ?? `${dir}/moon/lola`);
 
 const server = Bun.serve({
   port,
   async fetch(req, srv) {
     const url = new URL(req.url);
     if (url.pathname.startsWith("/traffic")) return (await traffic.handle(req, srv.requestIP(req)?.address)) ?? new Response(null, { status: 404 });
+    if (url.pathname.startsWith("/svc/v1/moon/")) return (await moon.handle(url)) ?? new Response(null, { status: 404 });
     if (url.pathname === "/health") return Response.json(rooms.health(), { headers: { "access-control-allow-origin": "*" } });
     if (url.pathname === "/version") return Response.json({ build }, { headers: { "access-control-allow-origin": "*" } });
     if (req.headers.get("upgrade")?.toLowerCase() === "websocket") return rooms.upgrade(req, srv);

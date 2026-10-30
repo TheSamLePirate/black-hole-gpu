@@ -17,6 +17,8 @@ services:
       - "3001:3001"
     volumes:
       - rooms-data:/data
+      # (the Moon's relief tiles, served at /svc/v1/moon/lola/… — made by moon-tiles below)
+      - moon-data:/moon:ro
     # (the TURN relay's shared secret — the stack's environment in Portainer; unset: STUN alone)
     environment:
       - TURN_SECRET=${TURN_SECRET:-}
@@ -25,8 +27,17 @@ services:
       - AISSTREAM_API_KEY=${AISSTREAM_API_KEY:-}
       - OPENSKY_CLIENT_ID=${OPENSKY_CLIENT_ID:-}
       - OPENSKY_CLIENT_SECRET=${OPENSKY_CLIENT_SECRET:-}
+      - MOON_DIR=/moon/lola
     stop_grace_period: 10s
     restart: unless-stopped
+  # the Moon's relief tiles (server/moon-tiles.ts, PLAN-PLANETES-AAA P6): LOLA's 118 m model read from the USGS's copy on AWS
+  # (8.5 GB once), cut into ~3–4 GB of tiles in moon-data; then it exits (a later start only checks them)
+  moon-tiles:
+    image: __ROOMS_IMAGE__
+    command: ["bun", "server/moon-build.ts", "--out", "/moon/lola"]
+    volumes:
+      - moon-data:/moon
+    restart: on-failure
   # the TURN relay for the voices and the direct links through a carrier's NAT (docs/DEPLOY.md): TURN_SECRET in
   # the stack's environment, 3478/udp+tcp and 49160-49200/udp open on the server
   coturn:
@@ -42,4 +53,5 @@ services:
     restart: unless-stopped
 volumes:
   rooms-data: {}
+  moon-data: {}
 # rooms-end
