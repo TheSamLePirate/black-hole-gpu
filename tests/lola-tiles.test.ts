@@ -79,3 +79,49 @@ test("a build from the model's ranges, then served gzipped with CORS", async () 
   expect((await (await svc.handle(new URL("http://x/svc/v1/moon/lola/status")))!.json()).done).toBe(true);
   expect(await svc.handle(new URL("http://x/other"))).toBeNull();
 });
+
+test("Mars's model resampled to 256 pixels a degree (P7): a plane comes out a plane, no-data left out, metres kept whole", async () => {
+  // (a model at 296.37 pixels a degree, metres, its row y's sample x a plane — one sample of no-data in it)
+  const W = 106694,
+    DATA0 = 854272,
+    k = 1 / 0.003374120830641 / 256;
+  const value = (y: number, x: number) => Math.round(-3000 + 0.05 * y + 0.02 * x);
+  const src = Bun.serve({
+    port: 0,
+    fetch(req) {
+      const [a, b] = /bytes=(\d+)-(\d+)/.exec(req.headers.get("range")!)!.slice(1).map(Number) as [number, number];
+      const out = new Int16Array((b - a + 1) / 2);
+      for (let q = 0; q < out.length; q++) {
+        const s = (a - DATA0) / 2 + q;
+        const y = Math.floor(s / W),
+          x = s % W;
+        out[q] = y === 26700 && x === 50000 ? -32768 : value(y, x);
+      }
+      return new Response(out.buffer, { status: 206 });
+    },
+  });
+  try {
+    const { tileRow, DEM_SOURCES } = await import("../server/moon-tiles");
+    const row = await tileRow({ ...DEM_SOURCES.mars!, url: `http://localhost:${src.port}/m.tif` }, 90);
+    // (an output pixel's source place: ((j + 0.5) k − 0.5, (i + 0.5) k − 0.5) — the plane there, within a metre's rounding)
+    for (const [jj, i] of [
+      [0, 1000],
+      [128, 40000],
+      [255, 90000],
+    ] as const) {
+      const ys = (90 * 256 + jj + 0.5) * k - 0.5,
+        xs = (i + 0.5) * k - 0.5;
+      expect(Math.abs(row[jj * 92160 + i]! - (-3000 + 0.05 * ys + 0.02 * xs))).toBeLessThanOrEqual(1);
+    }
+    // (beside the no-data sample: its neighbours' weights alone, no −32 768 pulled in)
+    let lowest = Infinity;
+    for (const v of row) lowest = Math.min(lowest, v);
+    expect(lowest).toBeGreaterThan(-4000);
+  } finally {
+    src.stop(true);
+  }
+  // (a Mars tile carries its unit: metres)
+  const { lolaUnit } = await import("../src/system/lola-codec");
+  expect(lolaUnit(lolaEncode(new Int16Array(n * n), 0, 1))).toBe(1);
+  expect(lolaUnit(lolaEncode(new Int16Array(n * n), 0))).toBe(0.5);
+});

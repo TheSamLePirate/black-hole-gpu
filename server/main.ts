@@ -21,8 +21,9 @@ const traffic = createTraffic({
   openskySecret: process.env.OPENSKY_CLIENT_SECRET || undefined,
   log: (m) => console.log(m),
 });
-// (the Moon's relief tiles — server/moon-tiles.ts —: built by the stack's moon-tiles service into their volume)
+// (the Moon's and Mars's relief tiles — server/moon-tiles.ts —: built by the stack's moon-tiles service into their volume)
 const moon = createMoonTiles(process.env.MOON_DIR ?? `${dir}/moon/lola`);
+const mars = createMoonTiles(process.env.MARS_DIR ?? `${dir}/mars/dem`, "mars/dem");
 
 const server = Bun.serve({
   port,
@@ -30,6 +31,7 @@ const server = Bun.serve({
     const url = new URL(req.url);
     if (url.pathname.startsWith("/traffic")) return (await traffic.handle(req, srv.requestIP(req)?.address)) ?? new Response(null, { status: 404 });
     if (url.pathname.startsWith("/svc/v1/moon/")) return (await moon.handle(url)) ?? new Response(null, { status: 404 });
+    if (url.pathname.startsWith("/svc/v1/mars/")) return (await mars.handle(url)) ?? new Response(null, { status: 404 });
     if (url.pathname === "/health") return Response.json(rooms.health(), { headers: { "access-control-allow-origin": "*" } });
     if (url.pathname === "/version") return Response.json({ build }, { headers: { "access-control-allow-origin": "*" } });
     if (req.headers.get("upgrade")?.toLowerCase() === "websocket") return rooms.upgrade(req, srv);

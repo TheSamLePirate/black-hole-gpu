@@ -3,15 +3,21 @@
 // level z a tile 2^z degrees a side (z 0: 118 m a texel at the equator … z 3: 948 m) —, read by src/system/moon-tiles.ts.
 // No import: the room server's image carries this file alone beside server/.
 //
-// A tile on the wire: 8 bytes (LLD1, its level, 0, 0, 0) then its 256² heights [half-metres], row by row from the north,
+// Mars's too (PLAN-PLANETES-AAA P7: the USGS's HRSC and MOLA blend, 200 m, resampled to 256 pixels a degree), in whole metres:
+// its 29 km of relief do not fit half-metres in 16 bits.
+//
+// A tile on the wire: 8 bytes (LLD1, its level, its unit — 0: half-metres, 1: metres —, 0, 0) then its 256² heights [its
+// unit], row by row from the north,
 // each as its difference from the plane through its west, north and north-west neighbours (the first row and column:
 // from the one before), modulo 2¹⁶ — exact whatever the cliffs —, gzipped (served with Content-Encoding: gzip).
 
 export const LOLA_TILE = 256;
 /** its levels: z 0 … 3 */
 export const LOLA_LEVELS = 4;
-/** half-metres a unit */
+/** half-metres a unit (the Moon's) */
 export const LOLA_SCALE = 0.5;
+/** a tile's unit's metres, by its header's code */
+export const LOLA_UNITS = [0.5, 1] as const;
 const MAGIC = [0x4c, 0x4c, 0x44, 0x31]; // "LLD1"
 
 /** a level's tile side [°] */
@@ -21,12 +27,13 @@ export const lolaTileDeg = (z: number) => 2 ** z;
 export const lolaCols = (z: number) => 360 / 2 ** z;
 export const lolaRows = (z: number) => Math.ceil(180 / 2 ** z);
 
-/** a tile's bytes before the gzip: the heights' differences [half-metres] */
-export function lolaEncode(h: Int16Array, z: number): Uint8Array {
+/** a tile's bytes before the gzip: the heights' differences [its unit: LOLA_UNITS[unit]] */
+export function lolaEncode(h: Int16Array, z: number, unit = 0): Uint8Array {
   const n = LOLA_TILE;
   const out = new Uint8Array(8 + 2 * n * n);
   out.set(MAGIC, 0);
   out[4] = z;
+  out[5] = unit;
   const r = new Uint16Array(out.buffer, 8, n * n);
   for (let y = 0; y < n; y++)
     for (let x = 0; x < n; x++) {
@@ -36,7 +43,10 @@ export function lolaEncode(h: Int16Array, z: number): Uint8Array {
   return out;
 }
 
-/** the heights [half-metres] back from a tile's bytes (gunzipped) */
+/** a tile's unit [m] (its header's code) */
+export const lolaUnit = (b: Uint8Array) => LOLA_UNITS[b[5]!] ?? 0.5;
+
+/** the heights [its unit] back from a tile's bytes (gunzipped) */
 export function lolaDecode(b: Uint8Array): Int16Array {
   const n = LOLA_TILE;
   if (b.length !== 8 + 2 * n * n || MAGIC.some((m, i) => b[i] !== m)) throw new Error("lola: not a tile");
