@@ -129,6 +129,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
     - un CO₂ de 92 bar dessous, qui diffuse cette lumière : l'horizon s'y perd.
   - V3 le détail radar de Magellan (75–225 m) en tuiles d'imagerie, comme celui de Titan.
   - V4 les dalles de basalte des Venera au sol fin ; mesures, e2e, docs.
+  - **Fait** (30 octobre) : V1 à V4 — [P8.md](progress/planetes-aaa/P8.md).
 - **Les corps sans air** : leurs étapes écrites à leur tour.
 
 ### P9 — Géantes gazeuses et anneaux
