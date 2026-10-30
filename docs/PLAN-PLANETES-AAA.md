@@ -162,6 +162,57 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   - G7 mesures, e2e, docs.
   - **Fait** (30 octobre) : G1 à G5, et les vitrines de G6 — [P9.md](progress/planetes-aaa/P9.md). Reste le coût de Saturne
     en orbite (59,7 ms, 2,8 fois la Terre : le banc mesurait jusqu'ici une autre scène).
+- **G8 — l'écoulement hybride des géantes** (décidé le 30 octobre ; remplace les tourbillons fBm de G2). Chaque échelle
+  reçoit l'outil qui lui convient, et l'aspect reste **une pure fonction du temps** : la même date donne la même image,
+  après un saut de date, en partie réseau (horloge commune) et dans l'e2e à un tour d'écart. Une simulation vivante est
+  donc écartée comme base : son état dépend de tout le passé et diverge d'un GPU à l'autre.
+  - Les trois couches :
+    - **grandes échelles** (au-dessus du texel de la carte, ~100 à 200 km) : les vents zonaux de G1, plus des **tourbillons
+      nommés analytiques**, placés et réglés sur des mesures — la Grande Tache rouge sur son champ de vitesse mesuré par
+      suivi de nuages (Galileo SSI, Hubble OPAL : un anneau rapide à ~150 m/s, un cœur lent), l'Ovale BA, l'hexagone de
+      Saturne (onde de Rossby de nombre 6 vers 78° N) et son vortex polaire nord. Une liste courte (quelques dizaines au
+      plus) dans les données des corps ou un uniforme, sans nouvelle liaison ;
+    - **échelles moyennes et fines** (sous le texel) : une **tuile de turbulence 2D précalculée** en (x, y, t), sur un
+      plan β (la rotation qui crée jets et tourbillons), périodique en espace et en temps, sa période égale à
+      `GIANT_CYCLE` ou à l'un de ses diviseurs. Elle stocke un **déplacement intégré** (et non une vitesse : pas
+      d'étirement ni de pulsation, pas de divergence grâce à une fonction de courant) et un **colorant** qui ajoute un
+      contraste réel sous le texel. Cuite sur le GPU au démarrage avec une graine fixe (le précédent : `bakeNoise3d`),
+      aucun binaire dans le dépôt (CI Pages : 8 Mo au plus) ; rangée en planche de 16 vignettes de 512 × 256 dans un
+      **7ᵉ calque de `mapHi`** (ses 6 calques sont pris : `MAPS_HI`, `planet-maps.ts mapArray`) — aucune liaison de plus,
+      aucun palier `maxSampledTexturesPerShaderStage` de plus, ~11 Mo de mémoire GPU avec les mips. Le calque est en
+      `rgba8unorm` : 8 bits suffisent pour un déplacement de quelques texels (à vérifier en G8a, sinon le bruit 3D
+      allongé en z) ; lu au niveau 0 seulement, car les mips mélangeraient les vignettes ;
+    - **renouvellement par échelle** (textures advectées de Neyret) : un cycle à deux phases par échelle, court pour le
+      fin, long pour le grand — le détail se renouvelle à son propre rythme, sans étirement, stable en accéléré.
+  - Le dosage : l'intensité de la turbulence suit le **cisaillement** de `giantWind` (forte aux flancs des jets, faible au
+    cœur des bandes) ; rotation et changement d'échelle de la tuile par bande, pour que sa répétition ne se voie pas ; la
+    tuile s'éteint au-dessus du texel (comme le `wd` de G2), et donc jamais depuis l'orbite ; repli sur la lecture sur
+    `nrm` aux pôles ; raccord doux entre les tourbillons nommés et la tuile autour d'eux ; mouvement figé au-delà d'un
+    facteur de temps où les phases clignoteraient.
+  - Étapes :
+    - G8a la tuile : simulation 2D vorticité-fonction de courant périodique sur plan β, forçage par jets, intégration du
+      déplacement sur la phase, colorant ; test unitaire de déterminisme (même graine, même tuile) et de divergence nulle ;
+    - G8b son intégration dans `giantFlow` / `giantAlbedo` à la place des `tfbmF`, multi-échelle, réglée par le
+      cisaillement ; un test de tranche WGSL (shader-slice) pour la boucle temporelle sans raccord ;
+    - G8c les tourbillons nommés : champ de la Grande Tache réglé sur le profil mesuré, l'Ovale BA, l'hexagone et le
+      vortex polaire de Saturne ; leur position suit la dérive mesurée en Système III ;
+    - G8d mesures, e2e, docs FR + EN.
+  - Critères d'acceptation :
+    - **performances** : A/B alterné dans un même Chrome sur kerr-mini contre le commit d'avant G8 (`planets-ab`, deux
+      tours) — Jupiter orbite et ciné **au plus au budget de la Terre** (aujourd'hui 21,1 contre 20,7 ms : G8 doit
+      ramener Jupiter dessous, la tuile remplaçant 16 `gnoise` par quelques lectures) ; Saturne **pas plus lente**
+      qu'avant G8 ; la Terre, la Lune et les autres corps inchangés ; `kernel-budget.test.ts` vert, les noyaux des
+      géantes plus petits ; la cuisson au démarrage sous 50 ms, et seulement quand une géante est en vue ;
+    - **qualité** : la Grande Tache vue à 25 000 km et une bande vue de près montrent enroulements, filaments et
+      instabilités aux flancs des jets, sans motif répété visible, sans étirement ni clignotement ; l'aspect depuis
+      l'orbite reste celui de la carte ; captures avant / après dans `progress/planetes-aaa/` ;
+    - **justesse** : les vitesses zonales restent celles de G1 (profils de Cassini) ; le sens et la période de rotation
+      de la Grande Tache et de l'Ovale BA, la position de l'hexagone suivent les mesures publiées (sources citées dans
+      P9.md) ; l'e2e `giants-flow` reste reproductible (deux passes à la même date, écart 0) et ses vues à un tour
+      d'écart ne bougent que là où le vent souffle ; même image après un saut de date aller-retour.
+  - Hors G8, pour plus tard : des nuages **volumiques** (couches d'ammoniac, de NH₄SH, d'eau) seulement si l'on descend
+    dans l'atmosphère d'une géante — la tuile en serait alors le champ porteur ; une simulation vivante globale, relancée
+    depuis l'état de la tuile à chaque saut de date, seulement si l'on accepte un jour des géantes non reproductibles.
 
 ### P10 — Compensations, campagne, docs
 - Optimisations restantes pour tenir « jamais plus lent » partout, campagne e2e complète (ce Mac), `docs/PLANETES.md`
@@ -176,3 +227,4 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 | Vague ressentie : désaccord CPU / GPU | fonction jumelle, test de tranche WGSL |
 | Tuiles NASA lentes ou indisponibles | cache, repli sur la carte globale, zones hors-ligne |
 | Budget « jamais plus lent » | P1 libère la marge ; chaque phase mesurée avant le push |
+| G8 : la tuile de turbulence se répète ou dérive de la carte réelle | éteinte au-dessus du texel, tournée par bande, fondu à deux phases (jamais d'advection sans fin) ; e2e à date fixe |
