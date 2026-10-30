@@ -75,3 +75,12 @@ low-incidence mosaic (Mercury Trek).
 craters). Now **Dawn FC**'s global mosaic by the DLR (400 m, <https://planetarymaps.usgs.gov/mosaic/Ceres_Dawn_FC_DLR_global_20ppd_Oct2015.tif>),
 its baked shading taken off with Dawn's relief, its polar night filled — `python3 scripts/build-ceres-color.py`. Its
 normal map (flat) is gone: the heights give the relief. NASA/JPL-Caltech/UCLA/MPS/DLR/IDA, public domain.
+
+## The moons set right (PLAN-PLANETES-AAA P8 A4)
+
+The pack's maps of Callisto (173.2°), Enceladus, Rhea, Mimas, Pluto (180°), Phobos (north and south swapped) and Deimos
+(both; its coarse map turned only) were not on the game's axes — a moon's longitude 0 towards its planet, east positive;
+Pluto's IAU — and are turned or flipped by `python3 scripts/fix-moon-maps.py` (from their originals at cf85871c; flipped
+normal maps' green negated). `callisto-color.jpg` and `enceladus-color.jpg` (4096 × 2048, new): their coarse maps' colour
+with the USGS's global mosaics' detail (Cassini ISS 100 m; Voyager–Galileo SSI 1 km, via its WMS, kept in assets/dem/) —
+`python3 scripts/build-moon-hd.py`. USGS / NASA / JPL-Caltech / SSI, public domain.

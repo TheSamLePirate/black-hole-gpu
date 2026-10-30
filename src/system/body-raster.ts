@@ -43,6 +43,8 @@ export function reliefMax(surf: number): number {
   if (surf === 23) return 1100;
   // (Venus: its measured heights alone — Magellan's —, a margin for the raster's cells)
   if (surf === 10) return 100;
+  // (the moons' own ground over their craters — trace.wgsl moonOwn: Io's massifs; the others' within the craters' 500 m)
+  if (surf === 14) return 8600;
   return airless(surf) || surf === 6 ? 500 : 0;
 }
 

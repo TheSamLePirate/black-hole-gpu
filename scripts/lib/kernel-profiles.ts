@@ -44,6 +44,7 @@ const NEAR_AIRLESS = 3 << NEAR_KIND_SHIFT;
 const NEAR_TITAN = 5 << NEAR_KIND_SHIFT;
 const NEAR_VENUS = 6 << NEAR_KIND_SHIFT;
 const NEAR_NONE = 4 << NEAR_KIND_SHIFT;
+const NEAR_MOONS = 7 << NEAR_KIND_SHIFT;
 const RASTER_ENTRIES: TracerEntry[] = ["shade", "shadeMark", "shadeLite", "shadeWater", "shadeStars", "discs", "clouds", "skyFill"];
 
 // (the game's universe — game:artemis — has Gargantua and the wormhole in it: their bits, 512, 64 and 32, stay on in every
@@ -87,6 +88,12 @@ export const PROFILES: KernelProfile[] = [
     label: "The Moon's surface in the game's universe (a world without air near)",
     key: GAME | NEAR_AIRLESS,
     entries: ["main", "env", "aerial"],
+  },
+  {
+    id: "moons",
+    label: "Europa's, Io's, Ganymede's, Enceladus's surface (airless, their own ground: moonOwn — PLAN-PLANETES-AAA P8 A4)",
+    key: GAME | NEAR_MOONS,
+    entries: ["main", "env", "aerial", "shadeLite"],
   },
   {
     id: "mars",

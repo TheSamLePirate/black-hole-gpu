@@ -83,3 +83,42 @@ test("Gargantua ground placement has a level, nonzero nose at the sub-primary po
       expect(Math.abs(dot(p.fwd, p.up))).toBeLessThan(1e-10);
     }
 });
+
+test("the moons' own ground (P8 A4): Io's paterae and massifs, Europa's ridges, Ganymede's grooves, Enceladus's stripes", async () => {
+  const { moonOwn } = await import("../src/terrain");
+  const at = (lat: number, lon: number): [number, number, number] => {
+    const a = (lat * Math.PI) / 180,
+      o = (lon * Math.PI) / 180;
+    return [Math.cos(a) * Math.cos(o), Math.cos(a) * Math.sin(o), Math.sin(a)];
+  };
+  const range = (m: number, R: number, lat0: number, lat1: number) => {
+    let lo = Infinity,
+      hi = -Infinity;
+    for (let i = 0; i < 4000; i++) {
+      const h = moonOwn(m, at(lat0 + (lat1 - lat0) * ((i * 0.618) % 1), ((i * 137.5) % 360) - 180), R, 1);
+      lo = Math.min(lo, h);
+      hi = Math.max(hi, h);
+    }
+    return [lo, hi];
+  };
+  // (Io: calderas down to −1.6 km, massifs up to 8 km; within the reach the march takes — reliefMax 8 600 m less the craters')
+  const [ioLo, ioHi] = range(10, 1821600, -80, 80);
+  expect(ioLo).toBeLessThan(-500);
+  expect(ioLo).toBeGreaterThan(-1700);
+  expect(ioHi).toBeLessThanOrEqual(8100);
+  // (Europa: ridges a few hundred metres; Ganymede: grooves 500 m deep)
+  const [euLo, euHi] = range(11, 1560800, -80, 80);
+  expect(euHi).toBeGreaterThan(80);
+  expect(euHi).toBeLessThan(400);
+  expect(euLo).toBeGreaterThan(-200);
+  const [gaLo, gaHi] = range(12, 2634100, -80, 80);
+  expect(gaLo).toBeLessThan(-100);
+  expect(gaHi).toBeLessThan(200);
+  // (Enceladus: the stripes in the south alone, 400 m deep)
+  expect(range(15, 252100, -10, 80)).toEqual([0, 0]);
+  expect(range(15, 252100, -89, -60)[0]).toBeLessThan(-300);
+  // (seen from afar — a footprint of kilometres —: faded out)
+  expect(moonOwn(12, at(10, 10), 2634100, 5000)).toBe(0);
+  // (the other worlds: none)
+  expect(moonOwn(1, at(10, 10), 1737400, 1)).toBe(0);
+});

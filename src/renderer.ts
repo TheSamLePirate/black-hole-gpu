@@ -650,6 +650,9 @@ function placeOnBody(near: { centre: Vec3; radius: number; axes: Vec3[] }, mPerM
   return bodyEye(near).map((x) => x * near.radius * mPerM) as Vec3;
 }
 
+/** the airless moons whose ground is their own (trace.wgsl moonOwn — PLAN-PLANETES-AAA P8 A4): their kernel, NEAR_KIND 7 */
+const OWN_GROUND = new Set(["io", "europa", "ganymede", "enceladus"]);
+
 export class Renderer {
   private device: GPUDevice;
   private context: GPUCanvasContext;
@@ -2869,7 +2872,10 @@ export class Renderer {
       const kind = !nb
         ? 4
         : !bodyHasAir(nb.kind, nb.surface)
-          ? 3
+          ? // (the moons with a ground of their own — trace.wgsl moonOwn, P8 A4 —: their kernel, out of the Moon's)
+            OWN_GROUND.has(nb.id)
+            ? 7
+            : 3
           : nb.id === "earth"
             ? 1
             : nb.id === "titan"
@@ -7643,7 +7649,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the live view's height over the Earth's figure [km] (writeParams) */
   private liveAltKm = 1e4;
   /** parts of the raster's material cut at run time (trace.wgsl liteSkip: TUNE_LITE's bits — 1 water, 2 scenery shadows, 4
-   *  relief shadow, 8 surfaces, 16 mesh normal, 32 cloud shadows, 64 trees, 128 imagery): a measure, the image then wrong */
+   *  relief shadow, 8 surfaces, 16 mesh normal, 32 cloud shadows, 64 trees, 128 imagery, 256 the moons' own ground): a measure,
+   *  the image then wrong */
   liteSkip = 0;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
   private rasterEligibleNow = false;

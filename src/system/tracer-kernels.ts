@@ -8,7 +8,8 @@
 export const FEATURES_ALL = 16383;
 /** the terrain height cache read by the realtime kernels */
 export const FEATURE_TERRAIN_CACHE = 1 << 15;
-/** the body near the camera (bits 26–28: NEAR_KIND — 0 any, 1 the Earth, 2 another world with air, 3 airless, 4 none) */
+/** the body near the camera (bits 26–28: NEAR_KIND — 0 any, 1 the Earth, 2 another world with air, 3 airless, 4 none,
+ * 5 Titan, 6 Venus, 7 the airless moons with a ground of their own) */
 export const NEAR_KIND_SHIFT = 26;
 /** the realtime kernel's ground march starts from the raster patch's distances (bits 16–19: the cost view; 20–25: the tune) */
 export const FEATURE_TERRAIN_RASTER = 1 << 30;

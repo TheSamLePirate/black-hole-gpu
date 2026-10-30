@@ -181,17 +181,17 @@ override GROUND_DETAIL: bool = true;
 // near ground in a Moon scene, the airless worlds' relief in an Earth flight (docs/PLAN-LEAN-TRACER-KERNELS.md P7)
 override NEAR_KIND: u32 = 0u;
 // (the near body is the Earth — as far as the constants allow: the Earth's own near code out of the other worlds' kernels)
-fn nearEarth(k: u32) -> bool { return NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && isEarth(k); }
+fn nearEarth(k: u32) -> bool { return NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && isEarth(k); }
 // (another world with air near: Mars's kind or Titan's — conjunctions, which wgsl-specialise.ts folds: a top-level || it
 // leaves alone)
-fn nearAirWorld() -> bool { return NEAR_KIND != 0u && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u; }
+fn nearAirWorld() -> bool { return NEAR_KIND != 0u && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 7u; }
 // (Venus's cloud slab in this kernel: its own, and those for any near body — not Mars's nor Titan's: register-bound, it cost
 // them 4–8 % unused)
-fn venusKernel() -> bool { return NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u; }
+fn venusKernel() -> bool { return NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 7u; }
 // (an air world whose heights are measured — Mars's kind, Venus's —: its relief marched, its shadows)
-fn marsLike() -> bool { return NEAR_KIND != 0u && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u; }
+fn marsLike() -> bool { return NEAR_KIND != 0u && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 7u; }
 // (Titan's relief in this kernel: its own, and those for any near body — the probes', the body raster's library)
-fn titanKernel() -> bool { return NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u; }
+fn titanKernel() -> bool { return NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 7u; }
 
 // Kernel specialisation (renderer.ts: traceVariant): a feature the scene does not use compiled out —
 // the uber-kernel's branches and their registers, on the scenes that have none of them (the Gargantua
@@ -3456,7 +3456,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     var hit: NearHit;
     var e: EarthNear;
     // (the two paths apart, each out of the kernels whose near body cannot take it — NEAR_KIND)
-    if (NEAR_KIND != 3u && air) {
+    if (NEAR_KIND != 3u && NEAR_KIND != 7u && air) {
       e = earthNear(look, rnd, k);
       hitT = e.t;
     }
@@ -3482,7 +3482,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         ring = vec4f(rl.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, rl.w);
       }
     }
-    if (NEAR_KIND != 3u && air) {
+    if (NEAR_KIND != 3u && NEAR_KIND != 7u && air) {
       if (hitT > 0.0) {
         var o = traceOut(ring.rgb + (1.0 - ring.w) * e.col);
         o.depth = hitT * bodyRadius(k);
@@ -3602,6 +3602,9 @@ fn reliefMax(surf: u32) -> f32 {
   if (surf == 0u) { return 1300.0; }
   if (surf == 1u) { return 4600.0; }
   if (surf == 2u) { return 1800.0; }
+  // (the moons' own ground over their craters — moonOwn: Io's massifs up to 8 km; Europa's ridges, Ganymede's grooves,
+  // Enceladus's stripes within the craters' 500 m — their rims ~100 m, the swell 90 m —: a higher shell, a longer march)
+  if (surf == 14u) { return 8600.0; }
   if (cratered(surf)) { return 500.0; }
   return 0.0;
 }
@@ -3730,13 +3733,104 @@ fn craterRelief(m: u32, q: vec3f, foot: f32, mR: f32) -> f32 {
   CRATER_GRAD = g;
   return h;
 }
-// (the shadows' near steps: the swell taken as a plane — nearShadow)
+// (the shadows' near steps: the swell taken as a plane — nearShadow; far ones past 600 m: the moons' own ground left out)
 var<private> NO_SWELL: bool = false;
-// the swell (a few km) under the craters
+var<private> NO_OWN: bool = false;
+// (the swell at the last normal's point — reliefNormal —: where (xyz) and its height [m] (w), its slope [m per radian])
+var<private> SWELL_AT: vec4f = vec4f(0.0, 0.0, 0.0, 0.0);
+var<private> SWELL_GRAD: vec3f = vec3f(0.0);
+// the swell (a few km) under the craters, and the moons' own ground over it (moonOwn)
 fn airlessSwell(m: u32, q: vec3f, foot: f32, mR: f32) -> f32 {
+  var h = moonOwn(m, q, foot, mR);
   let os = layerOctF(mR / 3000.0, foot, mR, 5.0);
-  if (os <= 0.0) { return 0.0; }
-  return tfbmF(q * (mR / 3000.0) + vec3f(f32(m) * 3.7), os) * min(os, 1.0) * 90.0;
+  if (os > 0.0) { h += tfbmF(q * (mR / 3000.0) + vec3f(f32(m) * 3.7), os) * min(os, 1.0) * 90.0; }
+  return h;
+}
+// a feature of size s [m] faded in as the pixel resolves it (8 … 16 footprints), as the craters are
+fn ownFade(s: f32, foot: f32) -> f32 { return clamp(log2(s / (8.0 * max(foot, 0.05))), 0.0, 1.0); }
+// The moons' own ground (PLAN-PLANETES-AAA P8 A4; terrain.ts moonOwn, the same — the walker on it), by their map's index:
+//   Europa (11): double ridges in three families (40, 14, 5 km), chaos where a broad noise is high — the ridges broken
+//   into hummocks;
+//   Ganymede (12): grooved lanes on its bright terrain — provinces (a 300 km lattice, warped) each with its grooves' own
+//   direction, 4 km apart, V-shaped troughs 500 m deep;
+//   Io (10): paterae — flat-floored calderas 0.7–1.6 km deep with steep scarps — and a few massifs 4–8 km high, one at most
+//   in each 120 km cell;
+//   Enceladus (15): its four tiger stripes about the south pole — troughs 400 m deep, 35 km apart, ~130 km long, flanked by
+//   ridges.
+// its noises (scale [m], offset, octaves, the feature's size [m] — faded out under the footprint: none read), up to five
+fn moonNoise(m: u32, i: u32) -> vec4f {
+  if (m == 11u) {
+    return array<vec4f, 5>(vec4f(250000.0, 3.3, 1.0, 6000.0), vec4f(40000.0, 0.0, 1.0, 2400.0), vec4f(14000.0, 7.3, 1.0, 840.0), vec4f(5000.0, 2.9, 1.0, 300.0), vec4f(6000.0, 1.1, 2.0, 6000.0))[i];
+  }
+  if (m == 12u) { return array<vec4f, 5>(vec4f(500000.0, 5.1, 1.0, 4000.0), vec4f(120000.0, 0.0, 1.0, 4000.0), vec4f(120000.0, 4.0, 1.0, 4000.0), vec4f(0.0), vec4f(0.0))[i]; }
+  if (m == 10u) { return array<vec4f, 5>(vec4f(20000.0, 0.0, 2.0, 120000.0), vec4f(0.0), vec4f(0.0), vec4f(0.0), vec4f(0.0))[i]; }
+  return vec4f(0.0);
+}
+fn moonOwn(m: u32, q: vec3f, foot: f32, mR: f32) -> f32 {
+  // (only where these moons are drawn: their own kernel — NEAR_KIND 7, the airless worlds' paths — and the general ones; out of
+  // the Moon's and Mercury's — they had grown a few per cent — a conjunction, folded)
+  if (NEAR_KIND != 0u && NEAR_KIND != 7u) { return 0.0; }
+  if (m != 10u && m != 11u && m != 12u && m != 15u) { return 0.0; }
+  // (the measure's cut — liteSkip 256: renderer.liteSkip —, what this ground costs; the shadows' far steps — NO_OWN)
+  if ((liteSkip() & 256u) != 0u || NO_OWN) { return 0.0; }
+  // (the noises in one loop: every call site is a copy the compiler builds)
+  var nz = array<f32, 5>(0.0, 0.0, 0.0, 0.0, 0.0);
+  // (a feature read only where the pixel resolves it at twice its fade — the shadows' far steps, their footprint coarse —,
+  // Europa's chaos's hummocks only where its mask — the first noise — is up: P8's cost)
+  for (var i = 0u; i < 5u; i++) {
+    let f = moonNoise(m, i);
+    let on = f.x > 0.0 && ownFade(0.5 * f.w, foot) > 0.0 && !(m == 11u && i == 4u && nz[0] < 0.25);
+    if (on) { nz[i] = tfbm(q * (mR / f.x) + vec3f(f.y), i32(f.z)); }
+  }
+  if (m == 11u) {
+    // (three families of double ridges — 40, 14 and 5 km noises' zero lines: 250, 150, 70 m —, the younger over the older)
+    var h = 0.0;
+    for (var k = 1u; k < 4u; k++) {
+      let w = ownFade(0.5 * moonNoise(m, k).w, foot);
+      let a = abs(nz[k]) / 0.06;
+      let r = (exp(-a * a) - 0.7 * exp(-9.0 * a * a)) * array<f32, 3>(250.0, 150.0, 70.0)[k - 1u];
+      h = max(h, w * r) + min(w * r, 0.0);
+    }
+    let c = smoothstep(0.25, 0.4, nz[0]);
+    let rd = 1.0 - abs(nz[4]);
+    return mix(h, (150.0 * rd * rd - 60.0) * ownFade(3000.0, foot), c);
+  }
+  if (m == 12u) {
+    let w = ownFade(2000.0, foot);
+    if (w <= 0.0) { return 0.0; }
+    let lane = smoothstep(-0.15, 0.05, nz[0]);
+    let c = floor(q * (mR / 300000.0) + 0.6 * vec3f(nz[1], nz[2], 0.0));
+    let r = hash4(bitcast<vec3u>(vec3i(c)) ^ vec3u(0x2545f491u, 0x68e31da4u, 0xb5297a4du));
+    // (its grooves 4 km apart, V-shaped troughs 500 m deep — Ganymede's grooved terrain, slopes up to ~20°)
+    let s = dot(q, normalize(r.xyz - 0.5)) * (mR / 4000.0);
+    return w * lane * 500.0 * (abs(sin(3.14159265 * s)) - 0.64);
+  }
+  if (m == 10u) {
+    let w = ownFade(60000.0, foot);
+    if (w <= 0.0) { return 0.0; }
+    let p = q * (mR / 120000.0);
+    let c = floor(p);
+    let r = hash4(bitcast<vec3u>(vec3i(c)) ^ vec3u(0x9e3779b9u, 0x2545f491u, 0x85ebca6bu));
+    let x = length(p - (c + vec3f(0.5) + (r.xyz - 0.5) * 0.1));
+    // (a patera: its floor flat, its scarp steep; a massif, its flanks ridged)
+    let pat = -(700.0 + 900.0 * fract(r.y * 5.7)) * (1.0 - smoothstep(0.92, 1.05, x / (0.12 + 0.18 * fract(r.x * 7.13))));
+    let rd = 1.0 - abs(nz[0]);
+    let mas = (4000.0 + 4000.0 * fract(r.x * 11.3)) * smoothstep(1.0, 0.2, x / (0.3 + 0.1 * fract(r.z * 3.1))) * (0.6 + 0.4 * rd * rd);
+    return w * select(select(0.0, mas, r.w > 0.95), pat, r.w < 0.35);
+  }
+  if (q.z < -0.45) {
+    let w = ownFade(2000.0, foot);
+    let x = q.x * mR;
+    let y = q.y * mR;
+    let along = x * 0.8253 + y * 0.5646;
+    let k = (-x * 0.5646 + y * 0.8253) / 35000.0;
+    let n = clamp(round(k - 0.5) + 0.5, -1.5, 1.5);
+    let d = (k - n) * 35000.0;
+    let ad = abs(d) - 2500.0;
+    let prof = -400.0 * exp(-d * d * 1e-6) + 150.0 * exp(-ad * ad * 1e-6);
+    return w * prof * smoothstep(75000.0, 55000.0, abs(along + 10000.0 * n)) * smoothstep(-0.45, -0.6, q.z);
+  }
+  return 0.0;
 }
 
 // octaves of a layer of base frequency f (cycles per radian) resolved at a footprint (metres)
@@ -4015,6 +4109,9 @@ fn reliefNormal(surf: u32, qb: vec3f, t: f32, tSec: f32, minFoot: f32) -> vec3f 
       let qj = select(qb, normalize(qb + select(a1, a2, j == 2u) * es), j > 0u);
       sw[j] = airlessSwell(surf - 4u, qj, foot, mR);
     }
+    // (the swell's height and slope here kept: the shadows' near plane — nearShadow —, not read three times more)
+    SWELL_AT = vec4f(qb, sw[0]);
+    SWELL_GRAD = ((sw[1] - sw[0]) * a1 + (sw[2] - sw[0]) * a2) / es;
     let g = gc - qb * dot(gc, qb) + ((sw[1] - sw[0]) * a1 + (sw[2] - sw[0]) * a2) / (es * mR);
     return normalize(fromBody(normalize(qb - g)));
   }
@@ -4108,14 +4205,17 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
     let t1 = normalize(cross(q, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(q.z) > 0.9)));
     let t2 = cross(q, t1);
     let e = 16.0 / mR;
+    // (the swell's plane: the normal's — reliefNormal, at this point —, else read here)
+    let kept = all(SWELL_AT.xyz == q);
     var hs: array<f32, 3>;
     for (var j = 0u; j < 3u; j++) {
       let qj = select(q, normalize(q + select(t1, t2, j == 2u) * e), j > 0u);
-      hs[j] = airlessSwell(surf - 4u, qj, foot, mR);
+      hs[j] = 0.0;
+      if (!kept) { hs[j] = airlessSwell(surf - 4u, qj, foot, mR); }
       if (hasDem(surf)) { hs[j] += demFine(qj, foot, true); }
     }
-    h0 = hs[0] - b0;
-    pl = ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / e;
+    h0 = hs[0] - b0 + select(0.0, SWELL_AT.w, kept);
+    pl = ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / e + select(vec3f(0.0), SWELL_GRAD, kept);
   }
   var s = 1.0;
   // (Mars's — earthNear's, NEAR_KIND 2 —: from 8 m, steps a 0.4 longer — its relief has no occluder under a few metres, and a
@@ -4133,8 +4233,10 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
     // (one call of each: every call site is a copy the compiler builds)
     let near = airless(surf) && !far;
     NO_SWELL = near;
+    NO_OWN = d * mR > 600.0;
     var hb = reliefBase(surf, pp / r, fs, mR, tSec);
     NO_SWELL = false;
+    NO_OWN = false;
     if (near) { hb += h0 + dot(pl, pp / r - q); } else if (hasDem(surf)) { hb += demFine(pp / r, fs, true) - b0; }
     let hh = hb / mR;
     // (its clearance [m], less a bias: the ground there drawn at a coarser footprint than the pixel's)
@@ -4212,7 +4314,11 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
       // (and the Ranger's, the ground within reach of it)
       sh *= shipShadow(look * t * P.near4.w);
       if (airless(surf)) {
-        _ = relief(surf, qb, foot, P.near4.w, tSec);
+        // (the craters alone, for their brightness: not the measured heights' cubic, nor the swell and the moons' own ground —
+        // a pixel's whole relief again, P8)
+        NO_SWELL = true;
+        _ = reliefBase(surf, qb, foot, P.near4.w, tSec);
+        NO_SWELL = false;
         ALB_GAIN = 1.0 + 0.45 * CRATER_BRIGHT;
         if (P.fine0.w > 0.5 && foot < 8.0) {
           // the finest ground, near: its slope by differences (exact: from the anchor), its stones lighter
@@ -11628,7 +11734,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     bodyLiteAir(gid.xy, k);
     return;
   }
-  if (NEAR_KIND == 3u) { return; }
+  if (NEAR_KIND == 3u || NEAR_KIND == 7u) { return; }
   if (gid.x >= W || gid.y >= H) { return; }
   if (!isEarth(k) || !hasAir(k) || !earthOn()) { return; }
   let idx = gid.y * W + gid.x;

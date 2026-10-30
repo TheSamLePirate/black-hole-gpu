@@ -31,6 +31,9 @@ import europaColor from "../../assets/planets-hd/europa-color.jpg";
 import europaNormal from "../../assets/planets-hd/europa-normal.jpg";
 import ganymedeColor from "../../assets/planets-hd/ganymede-color.jpg";
 import ganymedeNormal from "../../assets/planets-hd/ganymede-normal.jpg";
+// (Callisto, Enceladus: the USGS's mosaics' detail over their coarse maps' colour — scripts/build-moon-hd.py, P8 A4)
+import callistoColor from "../../assets/planets-hd/callisto-color.jpg";
+import enceladusColor from "../../assets/planets-hd/enceladus-color.jpg";
 import tethysColor from "../../assets/planets-hd/tethys-color.jpg";
 import tethysNormal from "../../assets/planets-hd/tethys-normal.jpg";
 import dioneColor from "../../assets/planets-hd/dione-color.jpg";
@@ -83,6 +86,8 @@ export const HD_SETS: Partial<Record<MapName, HdSet>> = {
   io: { color: ioColor, normal: ioNormal },
   europa: { color: europaColor, normal: europaNormal },
   ganymede: { color: ganymedeColor, normal: ganymedeNormal },
+  callisto: { color: callistoColor },
+  enceladus: { color: enceladusColor },
   tethys: { color: tethysColor, normal: tethysNormal },
   dione: { color: dioneColor, normal: dioneNormal },
   rhea: { color: rheaColor, normal: rheaNormal },

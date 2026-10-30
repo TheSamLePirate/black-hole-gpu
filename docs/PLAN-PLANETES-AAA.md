@@ -137,6 +137,10 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   - A4 les lunes : leurs cartes vérifiées et recalées sur les mosaïques de l'USGS (Callisto, Pluton, Mimas décalées ;
     Encelade, Rhéa, Phobos, Deimos à vérifier), puis leur relief procédural par type de sol (les rides et le chaos
     d'Europe, les sillons de Ganymède, les plaines volcaniques d'Io, les rayures d'Encelade).
+  - **Fait** (30 octobre) : A4 — les sept cartes remises sur les axes du jeu, les cartes fines de Callisto et d'Encelade,
+    le sol propre d'Europe, de Ganymède, d'Io et d'Encelade dans leur noyau (`NEAR_KIND 7`) — [P8.md](progress/planetes-aaa/P8.md).
+    Au budget de la Terre partout sauf la vue ciné d'Europe (1,9 fois ; 1,5 avant) : une carte d'ombre du Soleil pour les
+    corps, en P10.
   - **Fait** (30 octobre) : A1, A2 et l'optimisation de leur relief (A3 ci-dessous dans P8.md : les rayons de ciel, la
     marche des ombres ; Mercure ciné 76 → 43 ms, la Lune ciné 52 → 34) — [P8.md](progress/planetes-aaa/P8.md).
 

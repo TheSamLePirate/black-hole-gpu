@@ -218,9 +218,83 @@ export function craterRelief(m: number, q: V3, mR: number, foot = 0.05): number 
     }
     cell *= 0.33333;
   }
+  h += moonOwn(m, q, mR, foot);
   const os = layerOctF(mR / 3000, foot, mR, 5);
   if (os > 0) h += tfbmF(sc(q, mR / 3000, m * 3.7), os) * Math.min(os, 1) * 90;
   return h;
+}
+
+/** a feature of size s [m] faded in as the pixel resolves it (the tracer's ownFade) */
+const ownFade = (s: number, foot: number) => Math.min(Math.max(Math.log2(s / (8 * Math.max(foot, 0.05))), 0), 1);
+const fract = (x: number) => x - Math.floor(x);
+const add = (p: V3, o: V3): V3 => [p[0] + o[0], p[1] + o[1], p[2] + o[2]];
+
+/**
+ * The moons' own ground (PLAN-PLANETES-AAA P8 A4; trace.wgsl moonOwn, the same) [m], by their map's index: Europa's double
+ * ridges and chaos, Ganymede's grooved lanes, Io's paterae and massifs, Enceladus's tiger stripes.
+ */
+export function moonOwn(m: number, q: V3, mR: number, foot = 0.05): number {
+  if (m === 11) {
+    // (three families of double ridges, the younger over the older; the chaos's hummocks where its mask is up)
+    let h = 0;
+    for (let k = 0; k < 3; k++) {
+      const w = ownFade(0.5 * [2400, 840, 300][k]!, foot);
+      if (w <= 0) continue;
+      const o = [0, 7.3, 2.9][k]!;
+      const a = Math.abs(tfbm(add(sc(q, mR / [40000, 14000, 5000][k]!), [o, o, o]), 1)) / 0.06;
+      const r = (Math.exp(-a * a) - 0.7 * Math.exp(-9 * a * a)) * [250, 150, 70][k]!;
+      h = Math.max(h, w * r) + Math.min(w * r, 0);
+    }
+    const fc = ownFade(3000, foot);
+    if (fc <= 0) return h;
+    const n0 = tfbm(sc(q, mR / 250000, 3.3), 1);
+    if (n0 < 0.25) return h;
+    const c = smooth(0.25, 0.4, n0);
+    return h + ((150 * ridged(sc(q, mR / 6000, 1.1), 2) - 60) * fc - h) * c;
+  }
+  if (m === 12) {
+    const w = ownFade(2000, foot);
+    if (w <= 0) return 0;
+    const lane = smooth(-0.15, 0.05, tfbm(sc(q, mR / 500000, 5.1), 1));
+    if (lane <= 0) return 0;
+    const wx = tfbm(sc(q, mR / 120000), 1),
+      wy = tfbm(sc(q, mR / 120000, 4), 1);
+    const k = mR / 300000;
+    const c = [Math.floor(q[0] * k + 0.6 * wx), Math.floor(q[1] * k + 0.6 * wy), Math.floor(q[2] * k)];
+    const r = hash4(c[0]! ^ 0x2545f491, c[1]! ^ 0x68e31da4, c[2]! ^ 0xb5297a4d);
+    const d: V3 = [r[0] - 0.5, r[1] - 0.5, r[2] - 0.5];
+    const l = Math.hypot(...d);
+    const s = ((q[0] * d[0] + q[1] * d[1] + q[2] * d[2]) / l) * (mR / 4000);
+    return w * lane * 500 * (Math.abs(Math.sin(Math.PI * s)) - 0.64);
+  }
+  if (m === 10) {
+    const w = ownFade(60000, foot);
+    if (w <= 0) return 0;
+    const p = sc(q, mR / 120000);
+    const c = [Math.floor(p[0]), Math.floor(p[1]), Math.floor(p[2])];
+    const r = hash4(c[0]! ^ 0x9e3779b9, c[1]! ^ 0x2545f491, c[2]! ^ 0x85ebca6b);
+    const x = Math.hypot(...[0, 1, 2].map((i) => p[i]! - (c[i]! + 0.5 + (r[i]! - 0.5) * 0.1)));
+    if (r[3] < 0.35) return -w * (700 + 900 * fract(r[1] * 5.7)) * (1 - smooth(0.92, 1.05, x / (0.12 + 0.18 * fract(r[0] * 7.13))));
+    if (r[3] > 0.95) {
+      const u = x / (0.3 + 0.1 * fract(r[2] * 3.1));
+      return w * (4000 + 4000 * fract(r[0] * 11.3)) * smooth(1, 0.2, u) * (0.6 + 0.4 * ridged(sc(q, mR / 20000), 2));
+    }
+    return 0;
+  }
+  if (m === 15 && q[2] < -0.45) {
+    const w = ownFade(2000, foot);
+    if (w <= 0) return 0;
+    const x = q[0] * mR,
+      y = q[1] * mR;
+    const along = x * 0.8253 + y * 0.5646;
+    const k = (-x * 0.5646 + y * 0.8253) / 35000;
+    const n = Math.min(Math.max(Math.round(k - 0.5) + 0.5, -1.5), 1.5);
+    const d = (k - n) * 35000;
+    const ad = Math.abs(d) - 2500;
+    const prof = -400 * Math.exp(-d * d * 1e-6) + 150 * Math.exp(-ad * ad * 1e-6);
+    return w * prof * smooth(75000, 55000, Math.abs(along + 10000 * n)) * smooth(-0.45, -0.6, q[2]);
+  }
+  return 0;
 }
 
 /** Miller's giant waves (PLAN-PLANETES-AAA P3; trace.wgsl reliefBase, the same): three trains of crests ~3 700 km apart,
