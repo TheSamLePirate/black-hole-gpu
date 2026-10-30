@@ -1,14 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
+import { readPng } from "./lib/png";
 
 // PLAN-PLANETES-AAA P7: Mars's ground — its relief marched (trace.wgsl earthNear: nearMarch; the sphere before), its HRSC and
 // MOLA tiles (server/moon-tiles.ts made them on the room server; src/system/moon-tiles.ts streams them — from data/mars/dem
 // when the local server has a box built, else stream.samlepirate.org), Viking's colour and CTX's detail (Esri's OnMars), its
-// craters and finest ground: Valles Marineris (Coprates) from 4 km with the tiles then without (the global maps alone),
+// craters and finest ground: Valles Marineris (Coprates) from 4 km with the tiles then without (the global maps alone), the
+// disc from orbit,
 // Gale crater from 5 km, the walker on the canyon's plateau; each place at the same afternoon hour — the scene's clock set
 // for it —; the tiles drawn, none failed, no GPU error.
-// Duration: ~6 min on kerr-mini.
+// Duration: ~7 min on kerr-mini.
 // Done when: every view shot, the tiles drawn and none failed.
 
 const OUT = process.env.OUT ?? "remote-results/mars-tiles";
@@ -71,6 +73,27 @@ describe.skipIf(!E2E)("P7: Mars's ground", () => {
     console.log(`  gale: ${JSON.stringify(st)}`);
     await shot("gale");
     expect(st.drawn).toBe(true);
+    expect(st.gpuErrors).toBe(0);
+  }, 900_000);
+
+  test("Mars from orbit: the whole disc drawn — its march's reach counted from the relief's shell, not the camera", async () => {
+    await app.js(`(() => { __bh.game.preset("Mars: from orbit"); ${HOLD} return 1; })()`);
+    await settle();
+    const st = await state();
+    console.log(`  orbit: ${JSON.stringify(st)}`);
+    await shot("orbit");
+    // (the disc's centre lit ground, not the black of a ray gone through: its pixels' mean over a tenth of the shot)
+    const px = readPng(new Uint8Array(await Bun.file(`${OUT}/orbit.png`).arrayBuffer()));
+    let sum = 0,
+      n = 0;
+    for (let y = Math.floor(px.height * 0.45); y < px.height * 0.55; y++)
+      for (let x = Math.floor(px.width * 0.45); x < px.width * 0.55; x++, n++) {
+        const i = (y * px.width + x) * px.channels;
+        sum += (px.data[i]! + px.data[i + 1]! + px.data[i + 2]!) / 3;
+      }
+    const mid = sum / n;
+    console.log(`  orbit: the disc's centre ${mid.toFixed(1)} / 255`);
+    expect(mid).toBeGreaterThan(20);
     expect(st.gpuErrors).toBe(0);
   }, 900_000);
 

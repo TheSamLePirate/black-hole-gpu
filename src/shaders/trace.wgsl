@@ -3934,7 +3934,8 @@ fn nearMarch(look: vec3f) -> NearHit {
   let rmax = reliefMax(surf);
   // (the least step, a share of the distance: two of the probe's beams in the light probe — its texels wide)
   let least = max(MARCH_LEAST, 2.0 * probeBeam);
-  let tReach = MARCH_REACH / mR;
+  // (from where it enters the relief's shell — or starts: an orbit's rays thousands of km long before the ground)
+  let tReach = t + MARCH_REACH / mR;
   for (var i = 0u; i < 220u; i++) {
     cost(0u);
     if (t > tReach) { break; }
@@ -9644,6 +9645,15 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
       MARCH_BISECT = 6u;
       MARCH_T0 = select(0.0, 0.5 * P.tileL[17].x / P.near4.w, rasterPrimary() && P.tileL[17].x > 0.0);
       nh = nearMarch(look);
+      // (a ray past the march's reach that meets the sphere: the ground there drawn smooth, not gone — the haze hides its relief)
+      if (nh.t <= 0.0) {
+        let tsph = unitHit(ro, rd);
+        if (tsph > 0.0) {
+          nh.t = tsph;
+          nh.qb = normalize(ro + rd * tsph);
+          nh.h = 0.0;
+        }
+      }
       MARCH_T0 = 0.0;
       MARCH_LEAST = 0.02;
       MARCH_REACH = 3e38;
