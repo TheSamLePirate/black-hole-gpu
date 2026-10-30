@@ -9632,7 +9632,9 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   // beam is a few per cent of its light, the sky's the rest)
   let nsurf = u32(bodies[BV * k + 2u].z);
   let titan = titanKernel() && nsurf == TITAN_SURF;
-  if (nearAirWorld() && !DISC_ONLY && !isEarth(k) && (titan || (NEAR_KIND == 2u && hasDem(nsurf))) && (liteSkip() & 8u) == 0u) {
+  // (Titan from over 150 km: its relief and its seas under the haze's τ ≈ 4 unseen — the sphere, not 120 km of march a pixel)
+  let titanHigh = titan && (length(ro) - 1.0) * P.near4.w > 1.5e5;
+  if (nearAirWorld() && !DISC_ONLY && !isEarth(k) && (titan || (NEAR_KIND == 2u && hasDem(nsurf))) && !titanHigh && (liteSkip() & 8u) == 0u) {
     var nh: NearHit;
     if (NEAR_T > 0.0) {
       nh.t = NEAR_T;
