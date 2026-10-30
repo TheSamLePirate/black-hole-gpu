@@ -3461,7 +3461,11 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       hitT = e.t;
     }
     if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && NEAR_KIND != 6u && !air) {
+      // (the rays the body raster has not met start past half its reach, as Mars's — P8: under an airless world's measured
+      // heights, a shell kilometres over the camera, the sky's rays marched from the camera at 2 % of the distance)
+      MARCH_T0 = select(0.0, 0.5 * P.tileL[17].x / P.near4.w, rasterPrimary() && P.tileL[17].x > 0.0);
       hit = nearMarch(look);
+      MARCH_T0 = 0.0;
       hitT = hit.t;
     }
     // rings in front of the planet (or of the sky): their light, and what they let through
@@ -3721,11 +3725,13 @@ fn craterRelief(m: u32, q: vec3f, foot: f32, mR: f32) -> f32 {
     }
     cell *= 0.33333;
   }
-  h += airlessSwell(m, q, foot, mR);
+  if (!NO_SWELL) { h += airlessSwell(m, q, foot, mR); }
   CRATER_BRIGHT = min(br, 1.0);
   CRATER_GRAD = g;
   return h;
 }
+// (the shadows' near steps: the swell taken as a plane — nearShadow)
+var<private> NO_SWELL: bool = false;
 // the swell (a few km) under the craters
 fn airlessSwell(m: u32, q: vec3f, foot: f32, mR: f32) -> f32 {
   let os = layerOctF(mR / 3000.0, foot, mR, 5.0);
@@ -4085,12 +4091,32 @@ fn nearAir(look: vec3f, tEnd: f32, k: u32) -> Air {
 fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f32 {
   let mR = P.near4.w;
   // (the shell: the relief's over the measured heights' highest within the march's reach, ~60 km)
-  let hmax = select(reliefTop(surf), reliefMax(surf) + demTop(q, 6.0e4), hasDem(surf)) / mR;
+  // (an airless world's within 20 km: a low Sun's ray climbed through 60 km's highest — kilometres over the plain —, its steps
+  // through every lit pixel; a relief past 20 km high enough to hide the Sun there is rare, P8)
+  let hmax = select(reliefTop(surf), reliefMax(surf) + demTop(q, select(6.0e4, 2.0e4, airless(surf))), hasDem(surf)) / mR;
   let p0 = q * (1.0 + h / mR);
   if (dot(L, q) < -0.2) { return 0.0; } // (the night side: in the planet's own shadow)
   // (the steps' cheap ground against the point's own: their difference there taken off — no self-shadow)
   var b0 = 0.0;
   if (hasDem(surf)) { b0 = demFine(q, foot, true) - demFine(q, foot, false); }
+  // (an airless world's, within 32 m of it — 20 of the steps —: its swell — a noise of five octaves — and its measured heights
+  // a plane, their slope there; the craters alone stepped through. Each step read them all: Mercury's frame under a low Sun
+  // spent half its time in this march, P8)
+  var pl = vec3f(0.0);
+  var h0 = 0.0;
+  if (airless(surf)) {
+    let t1 = normalize(cross(q, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(q.z) > 0.9)));
+    let t2 = cross(q, t1);
+    let e = 16.0 / mR;
+    var hs: array<f32, 3>;
+    for (var j = 0u; j < 3u; j++) {
+      let qj = select(q, normalize(q + select(t1, t2, j == 2u) * e), j > 0u);
+      hs[j] = airlessSwell(surf - 4u, qj, foot, mR);
+      if (hasDem(surf)) { hs[j] += demFine(qj, foot, true); }
+    }
+    h0 = hs[0] - b0;
+    pl = ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / e;
+  }
   var s = 1.0;
   // (Mars's — earthNear's, NEAR_KIND 2 —: from 8 m, steps a 0.4 longer — its relief has no occluder under a few metres, and a
   // low Sun's ray took its 56 steps through every lit pixel: a third of the frame at sunset)
@@ -4103,13 +4129,20 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
     // (past 32 m — the small craters' sharp shadows nearer —: the ground at a 4 % footprint, steps 1.45 longer — the airless
     // worlds' measured heights made each of 56 steps dearer: half of Mercury's frame under a low Sun, PLAN-PLANETES-AAA P8)
     let far = d * mR > 32.0 && airless(surf);
-    let hh = (reliefStep(surf, pp / r, max(foot, d * mR * select(0.02, 0.04, far)), mR, tSec) - b0) / mR;
+    let fs = max(foot, d * mR * select(0.02, 0.06, far));
+    // (one call of each: every call site is a copy the compiler builds)
+    let near = airless(surf) && !far;
+    NO_SWELL = near;
+    var hb = reliefBase(surf, pp / r, fs, mR, tSec);
+    NO_SWELL = false;
+    if (near) { hb += h0 + dot(pl, pp / r - q); } else if (hasDem(surf)) { hb += demFine(pp / r, fs, true) - b0; }
+    let hh = hb / mR;
     // (its clearance [m], less a bias: the ground there drawn at a coarser footprint than the pixel's)
     let cl = (r - 1.0 - hh) * mR + 0.5 + 0.01 * d * mR;
     s = min(s, smoothstep(-1.0, 1.0, cl / (d * mR * 0.0087)));
     if (s <= 0.0) { break; }
     // (the light probe's texels wide: its shadows coarser)
-    d *= select(select(select(1.23, 1.45, far), 1.4, marsLike()), 1.6, probeBeam > 0.0);
+    d *= select(select(select(select(1.23, 1.3, airless(surf)), 1.6, far), 1.4, marsLike()), 1.6, probeBeam > 0.0);
   }
   return s;
 }
