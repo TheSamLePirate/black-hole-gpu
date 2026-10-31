@@ -160,8 +160,8 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   - G6 les vitrines de Saturne (P0 : Gargantua par le trou de ver, des anneaux par la tranche) et son coût (163 % de la
     Terre en orbite) ;
   - G7 mesures, e2e, docs.
-  - **Fait** (30 octobre) : G1 à G5, et les vitrines de G6 — [P9.md](progress/planetes-aaa/P9.md). Reste le coût de Saturne
-    en orbite (59,7 ms, 2,8 fois la Terre : le banc mesurait jusqu'ici une autre scène).
+  - **Fait** (30 octobre) : G1 à G5, et les vitrines de G6 — [P9.md](progress/planetes-aaa/P9.md). Le coût de Saturne en
+    orbite (59,7 ms, 2,8 fois la Terre : le banc mesurait jusqu'ici une autre scène) : réglé en P10 (21,3 ms).
 - **G8 — l'écoulement hybride des géantes** (décidé le 30 octobre ; remplace les tourbillons fBm de G2). Chaque échelle
   reçoit l'outil qui lui convient, et l'aspect reste **une pure fonction du temps** : la même date donne la même image,
   après un saut de date, en partie réseau (horloge commune) et dans l'e2e à un tour d'écart. Une simulation vivante est
@@ -219,8 +219,9 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
     (`otherGround`), et rien ne s'allumait sous le texel de la carte fine. Jupiter 21,2 → 20,5 ms en orbite (la Terre
     20,2), 20,1 → 19,5 de près ; Saturne, la Terre, Mars inchangées ; même date, même image.
 - **G9 — le relief des nuages des géantes** (décidé le 31 octobre). Après G8, le mouvement est juste mais l'image reste
-  plate : `giantAlbedo` donne une couleur posée sur la sphère, `otherGround` l'éclaire par Minnaert (k 0,88) avec la
-  normale de la sphère (`hdNormal` rend `q` : aucun relief pour les géantes). Il manque ce qui fait les images de Juno :
+  plate : `giantAlbedo` donne une couleur posée sur la figure, `otherGround` l'éclaire par Minnaert (k 0,88) avec la
+  normale de la figure (`hdNormal` rend `q` : aucun relief pour les géantes) — depuis P10 l'ellipsoïde à 1 bar
+  (`squashOf`, `airPhysicalNormal` : Saturne aplatie de 9,8 %, Jupiter de 6,5 %), plus la sphère. Il manque ce qui fait les images de Juno :
   le relief des sommets de nuages, leurs **ombres au terminateur**, les tours d'orage qui dépassent, la parallaxe en vue
   rasante. Le mouvement, lui, reste en 2D : c'est juste (des vents horizontaux de 100 à 180 m/s contre quelques m/s
   verticaux) ; G9 donne de la hauteur à ce qui bouge déjà.
@@ -242,15 +243,22 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
       des surfaces de pression suit la fonction de courant (h = f ψ / g) : les anticyclones sont hauts, les cyclones
       creux, dans les deux hémisphères. La tuile la stocke dans son 4ᵉ canal, aujourd'hui la vorticité, que le shader ne
       lit pas (`giantTileAt` ne prend que `v.xyz`) : **aucune lecture de plus**. Le signe est pris dans le repère de la
-      tuile, pour que ses anticyclones soient hauts partout ;
+      tuile, pour que ses anticyclones soient hauts partout. **Éteinte près de l'équateur** (sous ~±10° de latitude) : f s'y
+      annule et l'équilibre géostrophique n'y tient plus — sans cela du bruit, ou une bande plate ;
     - **les tours convectives** (les « pop-up clouds » de JunoCam) : de petits sommets clairs qui dépassent, dans les
       bandes turbulentes, tirés des pics du colorant ; optionnels, gardés seulement s'ils tiennent la comparaison.
   - **L'éclairage** :
     - une normale tirée du gradient de la hauteur (différences finies sur les échelles grande et moyenne, pas la fine),
-      dans `otherGround` à la place de `q` ; Minnaert gardé pour le limbe ;
-    - des ombres portées par une marche courte vers le Soleil (3 à 4 pas croissants sur la hauteur advectée) ;
+      qui **incline la normale de l'ellipsoïde** dans `otherGround` (les hauteurs comptées au-dessus de lui, à 1 bar) ;
+      Minnaert gardé pour le limbe ;
+    - des ombres portées par une marche courte vers le Soleil (3 à 4 pas croissants sur la hauteur advectée), **sur les
+      axes écrasés** de la géante (`AIR.ab`, comme son air), puis multipliées par l'ombre des anneaux sur Saturne
+      (`ringShadow`, depuis le point, profil de Cassini depuis P10) ;
     - tout ceci **allumé seulement là où ça se voit** : Soleil bas (μ₀ sous ~0,35) ou vue rasante, et empreinte du pixel
-      plus petite que l'ombre attendue ; ailleurs le chemin de G8, inchangé ;
+      plus petite que l'ombre attendue ; ailleurs le chemin de G8, inchangé. Cette porte **ne ferme pas le terminateur vu
+      d'orbite** : à 200 000 km un pixel couvre ~60 km sur Jupiter, une ombre de 20 km sous un Soleil à 2° en fait 570 —
+      une bande d'une dizaine de pixels le long du terminateur s'allume aussi depuis l'orbite (voulu : c'est là que le
+      relief se lit), son coût compté dans la vue d'orbite ;
     - **la brume du dessus** (approche B de l'analyse) : une nappe haute semi-transparente au-dessus du pont nuageux,
       décalée par la parallaxe en vue rasante, plus épaisse sur Saturne ; elle adoucit le relief au limbe.
   - **Hors G9** : un vrai volume marché (couches d'ammoniac, de NH₄SH, d'eau, comme la passe nuageuse de la Terre), utile
@@ -260,16 +268,21 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
       carte en bande du méthane si elle existe (licence, axes du jeu, Système III), sinon la calibration de la luminance ;
     - G9b la hauteur géostrophique dans la tuile (`giant-tile.ts`), un test de signe (anticyclone haut) et de cohérence
       (ψ et déplacement de la même fenêtre) ;
-    - G9c la normale et les ombres dans `otherGround` (le noyau 2 seulement : la Terre ne doit pas changer d'une ligne),
-      leurs portes μ₀ et empreinte ;
+    - G9c la normale et les ombres dans `otherGround`, leurs portes μ₀ et empreinte. `otherGround` ne sert pas que la vue
+      de près : les disques des géantes vus de loin y passent aussi (`earthLookFar`, dans le noyau général et ceux des
+      autres mondes). Le code de G9 est donc fermé par la même conjonction que `giantAlbedo` (`NEAR_DETAIL && NEAR_KIND
+      != 1, 3, 4, 5, 6, 7`, carte 4 ou 5, horloge qui tourne) et appelé une seule fois ; la Terre ne change pas d'une
+      ligne. Les budgets des noyaux sont serrés : en P10, 20 à 90 lignes inlinées de plus ont suffi à dépasser « moon
+      main » et « general lut » — `kernel-budget.test.ts` à chaque étape ;
     - G9d la brume du dessus et sa parallaxe ;
     - G9e mesures, e2e, docs FR + EN.
   - Critères d'acceptation :
     - **performances** : A/B alterné sur kerr-mini (deux tours) contre le commit d'avant G9. Jupiter en orbite inchangée
-      (±1 % : le relief éteint par ses portes) et au plus au budget de la Terre (20,2 ms) ; une **vue de terminateur**
-      nouvelle — le pire cas, toutes les portes ouvertes — au plus au budget de la Terre dans la vue équivalente ; Saturne
-      pas plus lente (déjà 2,8 fois la Terre en orbite : G9 n'y ajoute rien hors des vues proches) ; la Terre, la Lune,
-      Mars inchangées ; `kernel-budget.test.ts` vert, la Terre inchangée à la ligne près ;
+      (±1 % : le relief éteint par ses portes ; si la bande du terminateur entre dans la vue, au plus au budget de la
+      Terre, 20,1 ms) ; une **vue de terminateur** nouvelle — le pire cas, toutes les portes ouvertes — au plus au budget
+      de la Terre dans la vue équivalente ; Saturne, au budget de la Terre en orbite depuis P10 (21,3 contre 20,1 ms),
+      inchangée (±1 %) ; la Terre, la Lune, Mars inchangées ; `kernel-budget.test.ts` vert, la Terre inchangée à la ligne
+      près ;
     - **qualité** : au terminateur, à 25 000 et à 5 000 km, des sommets éclairés d'un côté, des ombres longues
       orientées à l'opposé du Soleil, les tours d'orage qui dépassent, la Grande Tache en relief ; comparé côte à côte avec
       des images JunoCam du terminateur (crédit NASA / JPL-Caltech / SwRI / MSSS) dans `progress/planetes-aaa/` ; aucune
@@ -277,7 +290,8 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
     - **justesse** : les hauteurs en kilomètres, aux ordres de grandeur publiés et cités ; un test de tranche WGSL pour
       la longueur d'ombre (h / tan e) et pour le signe géostrophique (anticyclone haut dans les deux hémisphères) ; les
       ombres dans le sens du Soleil réel de la date ; même date, même image (0/255) ; Saturne plus douce que Jupiter
-      (échelle de hauteur double, brume plus épaisse).
+      (échelle de hauteur double, brume plus épaisse) ; le relief posé sur l'ellipsoïde de P10 (la normale géodésique
+      inclinée, les cartes planétographiques lues au même `uv` que la hauteur).
 
 ### P10 — Compensations, campagne, docs
 - Optimisations restantes pour tenir « jamais plus lent » partout, campagne e2e complète (ce Mac), `docs/PLANETES.md`
@@ -285,7 +299,9 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 - La campagne et les docs de P10 couvrent aussi P11 : P11 se fait avant la campagne finale.
 - **Saturne — fait** (31 octobre) : sa vue en orbite 58,8 → 21,4 ms (la Terre 20,1), à contre-jour 63,3 → 26,0 — les
   rayons droits dans la région du trou de ver ; Jupiter et Saturne aplaties, au rendu et au vol ; le profil de Cassini à
-  toute distance ; ses vues en 2026 — [P10.md](progress/planetes-aaa/P10.md).
+  toute distance ; ses vues en 2026 — [P10.md](progress/planetes-aaa/P10.md). Reste pour Saturne : ses vues proches des
+  anneaux (les blocs de glace, la vue rasante) coûtent 100 à 150 ms sur ce Mac — à mesurer sur kerr-mini et ramener au
+  budget avant P11, dont la descente dans Saturne part de là.
 
 ### P11 — La descente dans les géantes (décidée le 31 octobre)
 Descendre dans Jupiter ou Saturne comme la sonde Galileo : entrer, traverser les couches de nuages, voir les éclairs,
@@ -293,6 +309,12 @@ s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le loi
 - **Le constat** : le pont nuageux est une surface (`otherGround`) ; dans `aero.ts`, Jupiter et Saturne **n'ont pas
   d'atmosphère** (seuls Vénus, la Terre, Mars et Titan en ont une) — un vaisseau qui y plonge ne rencontre ni traînée, ni
   échauffement, ni fond. La moitié du travail est donc côté jeu, pas côté rendu.
+- **Ce que P10 a posé** :
+  - les hauteurs au-dessus des géantes sont sur leur ellipsoïde à 1 bar (`altitudeOver`, `flatteningOf`) : l'air de D1
+    s'y branche, pas sur la sphère ; et l'air du traceur (`setAir` : échelles de hauteur 27 et 50 km, le rayon équatorial)
+    doit dire la même chose que celui d'`aero.ts` — le même profil des deux côtés, comme pour la Terre ;
+  - **Saturne est dans la région de Dneg du trou de ver** (100 ρ, ~5 UA autour de la bouche, 0,7 UA derrière elle) : le
+    noyau « dedans » garde le raccourci des rayons droits de P10 (`traceLook`), sinon chaque rayon y refait ~54 pas.
 - **Le rendu : la passe nuageuse de la Terre, généralisée** (PLAN-NUAGES N1–N5 : demi-résolution, historique reprojeté
   avec la profondeur des nuages, marche vers le Soleil, ambiante du ciel physique, éclairs ; 0,8 à 3,9 ms mesurés sur la
   Terre), dans un **noyau propre aux géantes « dedans »** (un genre `NEAR_KIND` comme Titan et Vénus) : la Terre ne change
@@ -306,7 +328,8 @@ s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le loi
   - **La lumière** : marche vers le Soleil à pas croissants, diffusion multiple en octaves, le ciel de H₂ (Rayleigh) au-dessus
     des ponts ; **l'obscurité qui monte avec la profondeur** selon l'épaisseur optique traversée — juste (Galileo : très peu de
     Soleil à quelques bars) : le spectacle se joue dans les premières couches, les trouées, les ombres des tours sur les
-    couches du dessous ;
+    couches du dessous ; sous Saturne, l'ombre des anneaux (`ringShadow`, depuis le point) et leur lumière (`ringShine`)
+    entrent dans la lumière du volume : le jour y est rayé par leurs annelets ;
   - **Les éclairs** dans les tours d'eau (et les éclairs peu profonds observés par Juno), avec le système de N5.
 - **Le jeu** :
   - **un air H₂/He dans `aero.ts`**, non isotherme : le profil température–pression mesuré par Galileo (165 K à 1 bar,
@@ -351,4 +374,5 @@ s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le loi
 | G8 : la tuile de turbulence se répète ou dérive de la carte réelle | éteinte au-dessus du texel, tournée par bande, fondu à deux phases (jamais d'advection sans fin) ; e2e à date fixe |
 | G9 : un relief inventé ou exagéré (les géantes « en plâtre »), ou des ombres qui bougent avec les phases | hauteurs en km aux ordres publiés, allumées seulement au terminateur et en vue rasante, lues au même uv advecté que la couleur ; comparaison JunoCam |
 | P11 : traînées de l'historique à 47 km/s, couture volume / lointain, une descente monotone dans le noir | historique effacé selon le mouvement, e2e d'entrée rapide ; raccord à la surface de G9 ; le spectacle placé dans les premières couches, les trouées et les éclairs |
+| G9, P11 : les budgets des noyaux (le code des géantes recopié dans le noyau général et ceux des autres mondes, par `earthLookFar`) | la conjonction de `giantAlbedo`, un appel unique, `kernel-budget.test.ts` à chaque étape |
 | P11 : la passe nuageuse généralisée touche la Terre | noyau propre aux géantes « dedans », Terre vérifiée à la ligne près et par A/B |
