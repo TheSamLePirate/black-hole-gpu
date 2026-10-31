@@ -37,7 +37,7 @@ test.skipIf(!E2E)(
     const seen: string[] = [];
     for (const h of STAGES) {
       const note = await app.js<string>(
-        `(() => { const n = __bh.game.hoverOver("jupiter", -12, 126.4, ${h}); __bh.settings.shipMount = "cockpit"; return n; })()`,
+        `(() => { const n = __bh.game.hoverOver("jupiter", -12, 126.4, ${h}); __bh.settings.shipMount = "cockpit"; __bh.camera.viewReset(); return n; })()`,
       );
       console.log(`  ${note}`);
       // (a few frames there: the calls' step, the panel)
@@ -70,13 +70,14 @@ test.skipIf(!E2E)(
       if (h === -2 || h === -132) {
         await app.settled();
         await app.shot(`${OUT}/cockpit-${h}km.png`);
-        // (the chase view: the HUD over the image, its AIR panel — once the altitude tape's infinite scale hung the page)
+        // (the chase view: the HUD over the image, its AIR panel — once the altitude tape's infinite scale hung the page; the view
+        // chosen as the game does, its look reset (main.ts setMount): the scene's look onto the planet kept the craft out of it)
         await app.js(
-          `(async () => { __bh.settings.shipMount = "chase"; for (let i = 0; i < 40; i++) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 1; })()`,
+          `(async () => { __bh.settings.shipMount = "chase"; __bh.camera.viewReset(); for (let i = 0; i < 90; i++) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 1; })()`,
         );
         await app.settled();
         await app.shot(`${OUT}/chase-${h}km.png`);
-        await app.js(`(() => { __bh.settings.shipMount = "cockpit"; return 1; })()`);
+        await app.js(`(() => { __bh.settings.shipMount = "cockpit"; __bh.camera.viewReset(); return 1; })()`);
       }
       if (h === -132) {
         expect(a!.p / 1e5).toBeGreaterThan(21);

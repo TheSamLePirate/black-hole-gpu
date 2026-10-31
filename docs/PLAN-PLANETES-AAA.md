@@ -360,14 +360,18 @@ s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le loi
   - D4 les éclairs ;
   - D5 cockpit, instruments, annonces ;
   - D6 mesures, e2e (dont une entrée rapide), docs FR + EN.
-- **En cours** (31 octobre) — [P11.md](progress/planetes-aaa/P11.md) : D0 (les profils de Galileo et de Cassini) et D1a
+- **Fait** (31 octobre) — [P11.md](progress/planetes-aaa/P11.md) : D0 (les profils de Galileo et de Cassini) et D1a
   (l'air des géantes dans `aero.ts`, l'entrée de Galileo rejouée : 252 g, 228 mesurés) et D1b (cet air donné à Jupiter et
   Saturne, après six groupes de corrections : les hauteurs signées sous 1 bar, « a un sol » plutôt que « a un air », leurs
   vents de G1 au CPU, le rendu inchangé) faits ; D2 (les nuages dedans, l'œil de Saturne), les orages de Jupiter, D3 (la
   lumière : ombres des plafonds, rayons, lumière roussie), D4 (les éclairs, fonction de l'horloge) et D5 (le panneau AIR,
   les annonces, le tonnerre ; le vol sous 1 bar rendu possible) et D1c (le rayonnement de la couche de choc calé sur
   Galileo, l'écrasement à la pression propre à chaque vaisseau, le plancher des géantes sur leur figure aplatie) faits.
-  Reste D6.
+  D6 fait : l'entrée rapide en e2e (le Ranger sur la trajectoire de Galileo : ~366 g à ~32 km, 1 bar en 98 s, la coque
+  brûlée avec les dégâts), les pôles de Saturne et de Jupiter de 4 rayons en e2e (le limbe sur leur figure à 0,004 près,
+  pas de bande de brume), les mesures sur le mini (dedans : 25 ms gouverné contre 30 pour la Terre en vol bas ; à qualité
+  fixe ~39 ms, au budget de la Terre dans ses nuages, sans marge). À décider : la hauteur géopotentielle des ponts près
+  des pôles, la lumière du puits de l'œil, un bouclier ablatif.
 - **Ce que nous apprend le projet d'Alex** (vr-solar-system, `docs/agent/`, 31 octobre ; à peser, rien n'est décidé par lui) :
   - **leurs mesures sur le Quest 3** (un test de cyclone, pas un design) : le volume en pleine résolution coûte ~1 ms par
     échantillon et par image ; à un quart de la résolution, 32 échantillons ajoutent +3,4 ms, une passe à part avant la passe
@@ -393,7 +397,7 @@ s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le loi
     connaît que la Terre, Jupiter et Saturne. **À décider par Sam** ;
   - **leur piège de la brume** : la brume d'hydrogène restée sur la sphère du rayon moyen dessinait une bande au-dessus des
     pôles aplatis, vue de 4 rayons. Notre air des géantes est sur leurs axes écrasés depuis P10 S2 (`squashOf`, `AIR.ab`),
-    mais aucun e2e ne regarde encore les pôles de Saturne de 4 rayons : à ajouter en D6 ;
+    et l'e2e `giant-poles` (D6) regarde les pôles de Saturne et de Jupiter de 4 rayons : pas de bande ;
   - **données partagées** : ils reprendront `GIANT_AIR` (aero.ts) et la table des sommets de G9 (OPAL) en nous citant.
     La tuile de G8 (128² × 128 images, `rgba16float`, 16 Mo, graine fixe) pourrait leur être livrée cuite hors ligne s'ils
     la demandent.

@@ -181,7 +181,7 @@ The live settings of the view and the game: every field of `src/settings.ts` `Se
 | `whL` | number | M (< 0: our side) | -14 | camera position ℓ when orbiting the wormhole |
 | `ship` | boolean | | false | the spaceship carrying the camera |
 | `vessel` | string | `"ranger"`, `"lander"`, `"endurance"` | `"ranger"` | the craft flown |
-| `shipMount` | string | attach point (`ship.ts` MOUNTS: `"quarter"`, `"cockpit"`, `"cabin"`, `"dorsal"`, `"chase"`, `"dock"`…) | `"quarter"` | where the camera sits on the craft (`refresh()` after a change) |
+| `shipMount` | string | attach point (`ship.ts` MOUNTS: `"quarter"`, `"cockpit"`, `"cabin"`, `"dorsal"`, `"chase"`, `"dock"`…) | `"quarter"` | where the camera sits on the craft (`refresh()` after a change). Chosen as the game does (`main.ts setMount`: the look reset), set it with `__bh.camera.viewReset()` after: otherwise the look the scene turned (its `tilt`, its `look` onto a body) stays, and a chase view can leave the craft out of the image (`giant-entry.e2e.test.ts`) |
 | `shipLookYaw` | number | degrees | 0 | free look: the camera turned on its mount |
 | `navLights` | boolean | | false | the navigation lights |
 | `nightLighting` | boolean | | false | the cabin lit red at night |

@@ -32,7 +32,7 @@ test.skipIf(!E2E)(
       const lost = () => app.js<string | null>(`document.querySelector(".craft-lost .cl-why")?.textContent ?? null`);
       const stage = async (h: number) => {
         const note = await app.js<string>(
-          `(() => { const n = __bh.game.hoverOver("jupiter", -12, 126.4, ${h}); __bh.settings.shipMount = "cockpit"; return n; })()`,
+          `(() => { const n = __bh.game.hoverOver("jupiter", -12, 126.4, ${h}); __bh.settings.shipMount = "cockpit"; __bh.camera.viewReset(); return n; })()`,
         );
         console.log(`  ${note}`);
         await app.js(
