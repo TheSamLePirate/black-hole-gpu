@@ -276,8 +276,6 @@ Lu dans `~/Documents/DEV/vr-solar-system` : `Sim/RefractiveAir.cs`, `Sim/Atmosph
   change. **Avec H1b**, la Lune est HD alors que la Terre est le corps proche : la liaison 29 sert alors à la
   surface régionale de la Terre et ne peut pas porter les horizons de la Lune. Il faut une autre place (une couche de
   plus dans `mapHi`, ou une liaison libérée), à trancher en H0.
-- **Un conflit en cours** : `planetShade`, où H2 s'insère, porte en ce moment des changements non commités d'une autre
-  session (`TUNE_SAT`, « TEMP Saturn measure »). Attendre qu'ils soient commités ou retirés avant H2.
 - **Équirectangulaire** : les 8 azimuts sont repérés par l'est et le nord locaux (comme `hdNormal`). Pôles
   sur-échantillonnés (sans gravité), axe singulier au pôle exact : un repli. Le pôle sud lunaire (Shackleton, Soleil
   toujours rasant) est **le meilleur cas d'usage** : à soigner.
