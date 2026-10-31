@@ -94,8 +94,10 @@ propre `bending()`). En minutes d'arc :
   (collisions, WGS84, hauteurs) ne bouge pas : c'est du dessin seulement. Six chemins doivent rester d'accord, sinon
   arbres flottants ou coutures.
 - **Les mirages et conduits** (le point fort de vr-solar-system : tables tracées par profil d'air, RK4, images
-  multiples) : hors de ce plan. Il faudrait des profils d'inversion tirés de la météo réelle et des images multiples
-  dans le traceur. À rouvrir après R3 si tu le veux.
+  multiples) : **R6** (ajouté le 31 octobre). Le coût n'est pas au GPU (le shader lit les mêmes tables, tracées dans un
+  autre profil) mais au CPU (RK4 à travers les points de retournement, dans un worker) et dans le profil à déduire de
+  la météo réelle. Notre traceur y est mieux placé qu'un raster : un rayon par pixel, les images multiples viennent
+  seules.
 
 ### 1.5 Ce que vr-solar-system a poussé depuis (4h, 4i, `b2f5e51`) et ce qu'on en reprend
 
@@ -137,8 +139,8 @@ Lu dans `~/Documents/DEV/vr-solar-system` : `Sim/RefractiveAir.cs`, `Sim/Atmosph
   l'auréole des transits), **Titan** (Huygens, 1,47 bar : 2° rasant, caché par la brume là où il compte), **Mars**
   (0,5′ : invisible). Chez nous, l'auréole de Vénus au transit (notre calculateur les prévoit, `eclipse/search.ts`
   `transit`) serait un vrai plus.
-- **Ce qu'on a et pas eux** : la météo réelle — N₀ à l'échelle de la température **et** de la pression du lieu. Ce
-  qu'ils ont et qu'on ne prend pas ici : les profils de mirage et les conduits (3n–3o).
+- **Ce qu'on a et pas eux** : la météo réelle — N₀ à l'échelle de la température **et** de la pression du lieu. Leurs
+  profils de mirage et conduits (3n–3o) : repris et tirés de la météo en R6.
 - **Leurs limites, à garder en tête** : rien au-delà de 50 000 km (zone < 5′, précision GPU près du nadir) ; pas de
   scintillation au limbe ; Mars/Vénus/Titan d'orbite seulement (pas depuis leur sol : l'horizon de Titan relevé de ~1°).
 
@@ -237,7 +239,7 @@ Lu dans `~/Documents/DEV/vr-solar-system` : `Sim/RefractiveAir.cs`, `Sim/Atmosph
 
 Deux chantiers indépendants (fichiers disjoints sauf `trace.wgsl`, à des fonctions différentes). **Ordre conseillé :
 H d'abord** (gain visible au premier coup d'œil, et Mercure repasse sous le budget), puis R1–R3. R4 et R5 seulement si tu
-le veux après avoir vu R1–R3. H0 et R0 tranchent ensemble la liaison des tables (une seule si possible).
+le veux après avoir vu R1–R3 ; R6 (les mirages) après R2, indépendant de R3–R5. H0 et R0 tranchent ensemble la liaison des tables (une seule si possible).
 
 ### H — Les cartes d'horizon
 
@@ -259,6 +261,7 @@ le veux après avoir vu R1–R3. H0 et R0 tranchent ensemble la liaison des tabl
 | **R3** | Le Soleil d'éclairage réfracté : la direction de la lumière du sol (`P.near4`, la carte d'ombre du Soleil, nuages, arbres, bâtiments) élevée de la courbure à la hauteur de l'œil, sous un seuil d'élévation. Coût nul | `renderer.ts`, `terrain-raster.ts` (encodeSunShadow) | Au couchant de Biarritz, le sol éclairé jusqu'à la disparition du disque ; aucune ombre décalée |
 | **R4** *(optionnel)* | Le sol relevé par la réfraction, **près du sol et vu d'orbite** : une fonction WGSL partagée `refrLift(d)` lisant le relèvement par distance de la table de l'œil (k terrestre dans l'air ; l'atterrissage des rayons au-dessus), **laissée de côté sous 0,1′** ; appliquée au dessin dans tous les rasters de la Terre, au test de hauteur du globe tracé (`earthMarch`, l'intersection d'orbite) et aux nuages ; l'ombrage reconstruit le point vrai ; CPU, collisions et WGS84 intouchés ; réglage à part | `terrain-raster*.ts`, `scenery-raster.ts`, `forest-shader.ts`, `runways3d.ts`, `roof-mesh.ts`, `trace.wgsl` | Les Alpes depuis 300 km relevées de ~10′ ; d'orbite, plus de trou entre le Soleil réfracté et le globe ; aucune couture ni arbre flottant (e2e dédiés) |
 | **R5** *(optionnel)* | Vénus et Titan d'orbite : `airBend` pour le corps proche qui a une table (la Terre seule aujourd'hui, `isEarth`) ; l'auréole de Vénus vérifiée au transit du 11/12/2117 (ou vue de quatre rayons, le Soleil derrière) ; Titan sous sa brume | `trace.wgsl`, `renderer.ts`, `refraction-air.ts` | L'arc du Soleil sur le limbe de Vénus ; coût nul hors de la bande du limbe |
+| **R6** *(après R2)* | **Les mirages tirés de la météo réelle.** (a) Le profil d'air près du sol déduit d'Open-Meteo au lieu et à l'heure du jeu : température à 2 m, du sol, de la mer (API marine), niveaux 1 000/975/950/925 hPa — mer plus chaude que l'air → couche chaude (mirage inférieur) ; air chaud sur mer froide ou inversion aux bas niveaux → couche froide (élévation, mirage supérieur, Fata Morgana) ; inversion forte et mince → conduit ; route ou sable au soleil → couche chaude de quelques mètres ; sinon l'atmosphère standard. Un tirage plausible hors de portée (comme la météo), un forçage dans les réglages et pour TARS. (b) Les tables de l'œil tracées dans ce profil en RK4 (r, θ, e) à travers les points de retournement (leur `Trace`, 3n), dans un worker ; refaites quand la hauteur ou le profil bougent assez, **seulement sous ~2 km** (au-dessus, R1–R2 seuls). (c) Au GPU, rien de neuf pour le ciel : chaque pixel lit sa vraie direction dans la table, les images multiples (Soleil inversé, « vase étrusque », tranches d'un conduit) viennent seules. Les rayons retournés vers le haut sous l'horizon montrent le ciel (le « lac » sur la mer ou l'asphalte) : dans `shadeLite`, ces pixels du raster remplacés par le ciel de leur direction vraie. (d) Option : le sol lointain inversé ou soulevé (ce qu'Alex n'a pas) — dans la mince bande de l'horizon, la marche du sol le long du rayon courbé à la place du raster. (e) La scintillation par masse d'air et par profil (leur 3o–3q) | `refraction-weather.ts`, `refraction-layered.ts` (le traceur RK4), `openmeteo.ts`, `trace.wgsl` (`airBend`, `shadeLite`), réglages, TARS | Côte et date réelles où un mirage est connu (ex. un jour de mer froide et d'air chaud) : le Soleil en « vase étrusque » au télé ; une route chaude à midi ; coût GPU nul hors de la bande de l'horizon, tables dans le worker sans à-coup d'image |
 
 ### Estimations
 
@@ -273,6 +276,7 @@ le veux après avoir vu R1–R3. H0 et R0 tranchent ensemble la liaison des tabl
 | R3 | ¼ j | faible | moyen au grand angle (2–3 min de lumière rasante) | 0 |
 | R4 | 2 j | **élevé** (6 chemins de dessin + le globe tracé) | moyen (sol lointain, horizon d'avion, limbe d'orbite) | ≈ 0 (relèvement sauté sous 0,1′) |
 | R5 | ½ j | faible | moyen, rare (l'auréole de Vénus) | 0 hors du limbe |
+| R6 | 2–3 j (+1 j pour le sol inversé) | moyen (le profil déduit de la météo est la vraie difficulté ; le rendu est le prolongement de R2) | **fort et unique** : des mirages réels au bon lieu et au bon jour | GPU ≈ 0 hors de la bande de l'horizon (eux : 69–72 fps avec chaque profil) ; CPU : 1 024 rayons RK4 par table, dans un worker, sous 2 km |
 
 ### Règles de livraison (habituelles)
 
@@ -286,5 +290,5 @@ le veux après avoir vu R1–R3. H0 et R0 tranchent ensemble la liaison des tabl
 
 1. Ordre : H avant R (conseillé), ou R d'abord ?
 2. R4 (le sol relevé, près du sol et d'orbite) et R5 (Vénus, Titan) dans ce plan, ou plus tard ?
-3. Les mirages de vr-solar-system : un plan à part plus tard ?
+3. ~~Les mirages : un plan à part ?~~ Décidé le 31 octobre : **R6**, dans ce plan, après R2.
 4. Résolution des cartes : demi-DEM (22 Mo Lune/Mars) ou quart (5,5 Mo, horizons plus doux) ?
