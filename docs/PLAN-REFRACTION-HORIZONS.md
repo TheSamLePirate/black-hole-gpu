@@ -1,6 +1,7 @@
 # Plan — la bonne réfraction, et les cartes d'horizon du relief
 
-Date : **31 octobre 2026**, sur `main` à `06ed0498`. Statut : **analyse et plan, rien d'implémenté**.
+Date : **31 octobre 2026**, sur `main` à `06ed0498`. Statut : **analyse et plan, rien d'implémenté**. **Volet réfraction (R0–R4) en attente** (31 octobre) : Alex a des
+changements non poussés sur la réfraction dans vr-solar-system ; les lire (`docs/agent/` et son code) avant de commencer.
 
 ## 0. La demande
 
