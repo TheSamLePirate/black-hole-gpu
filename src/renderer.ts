@@ -3242,8 +3242,8 @@ export class Renderer {
     let runways: Float32Array = new Float32Array(RUNWAY_VEC4S * 4);
     if (near) {
       const c = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]));
-      // (the Earth's on its squashed axes — z × a/b: its ellipsoid the unit sphere, trace.wgsl: EARTH_AB)
-      if (near.index === earthK) c[2] = c[2]! / (1 - WGS84_F);
+      // (the Earth's, the giants' on their squashed axes — z × a/b: their ellipsoid the unit sphere, trace.wgsl: squashOf)
+      c[2] = c[2]! / (1 - flatteningOf(bodies[near.index]!.id));
       const A = c.map((x) => Math.fround(x));
       this.nearAnchor = near.index === earthK ? (A as Vec3) : null;
       set(67, A[0]!, A[1]!, A[2]!, A[0]! * A[0]! + A[1]! * A[1]! + A[2]! * A[2]! - 1);

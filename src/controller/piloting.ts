@@ -35,6 +35,7 @@ import { mouth } from "../wormhole";
 import { gravityHome, ourState, repToHomeVec } from "../system/our-side";
 import { plan as runPlanner } from "../system/plan-client";
 import {
+  altitudeOver,
   bodyFixedOf,
   figureUp,
   fromBodyFixed,
@@ -994,8 +995,7 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     if (nav && b?.atmosphere && (s.wind > 0 || s.weather !== "fair")) {
       const P = ourState(nav.ref, nav.t).pos;
       const d = sub3(nav.X, P);
-      const r = Math.hypot(...d);
-      const h = solidBody(nav.ref) ? gearHeight(nav.ref, nav.X, nav.t) + GEAR : (r - b.radius) * M_METRES;
+      const h = solidBody(nav.ref) ? gearHeight(nav.ref, nav.X, nav.t) + GEAR : altitudeOver(nav.ref, nav.X, nav.t);
       if (h < 30e3) {
         const q = toBodyFixed(nav.ref, nav.X, nav.t);
         const ql = Math.hypot(...q);
@@ -1489,7 +1489,6 @@ function sfFrame(this: CameraController, cam: ReturnType<typeof cameraFrame>) {
     const id = nav.ref;
     const b = solarBody(id);
     if (id === "sun" || !b) return null;
-    const P = nav.refPos;
     const up = figureUp(id, nav.X, nav.t);
     const ax = spinAxis(id, nav.t);
     let north = lin(ax, 1, up, -dot3(ax, up));
@@ -1498,7 +1497,7 @@ function sfFrame(this: CameraController, cam: ReturnType<typeof cameraFrame>) {
     const east = cross(north, up);
     const gv = groundVelocity(id, nav.X, nav.t);
     const vRel = lin(sub3(nav.V, gv), c, nav.V, 0);
-    const h = solidBody(id) ? gearHeight(id, nav.X, nav.t) : (Math.hypot(...sub3(nav.X, P)) - b.radius) * M_METRES;
+    const h = solidBody(id) ? gearHeight(id, nav.X, nav.t) : altitudeOver(id, nav.X, nav.t);
     const top = Math.max(airTop(b.atmosphere), 100e3, 0.1 * b.radius * M_METRES);
     if (h > top) return null;
     const aU = (c * c) / M_METRES;
@@ -2141,11 +2140,9 @@ function weatherPlace(this: CameraController): { body: string; lat: number; lon:
   const b = solarBody(nav.ref);
   if (!b?.atmosphere) return null;
   const q = toBodyFixed(nav.ref, nav.X, nav.t);
-  // (its height over the ground — a solid world's, its relief and figure; the giants', over their sphere: the
+  // (its height over the ground — a solid world's, its relief and figure; the giants', over their ellipsoid at 1 bar: the
   // equator's sphere put a craft on Edwards's runway 6 km under it)
-  const h = solidBody(nav.ref)
-    ? gearHeight(nav.ref, nav.X, nav.t) + GEAR
-    : (Math.hypot(...sub3(nav.X, ourState(nav.ref, nav.t).pos)) - b.radius) * M_METRES;
+  const h = solidBody(nav.ref) ? gearHeight(nav.ref, nav.X, nav.t) + GEAR : altitudeOver(nav.ref, nav.X, nav.t);
   return {
     body: nav.ref,
     ...geodeticPlace(nav.ref, q),

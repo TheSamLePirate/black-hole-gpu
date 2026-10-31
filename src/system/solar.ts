@@ -228,7 +228,8 @@ export const SOLAR_BODIES: SolarBody[] = [
     [2.7675, 0.0785, 10.59, 153.6, 153.9, 80.3],
     [0, 0, 0, 7824.7, 0, 0],
   ]),
-  planet("jupiter", "Jupiter", 126686534, 69911, 9.925, [268.057, 64.495], 0.538, "gas", "jupiter", [
+  // (the giants' radii their equatorial ones at 1 bar — IAU 2015 —: their figure an ellipsoid, ellipsoid.ts flatteningOf)
+  planet("jupiter", "Jupiter", 126686534, 71492, 9.925, [268.057, 64.495], 0.538, "gas", "jupiter", [
     [5.202887, 0.04838624, 1.30439695, 34.39644051, 14.72847983, 100.47390909],
     [-0.00011607, -0.00013253, -0.00183714, 3034.74612775, 0.21252668, 0.20469106],
   ]),
@@ -236,7 +237,7 @@ export const SOLAR_BODIES: SolarBody[] = [
     "saturn",
     "Saturn",
     37931187,
-    58232,
+    60268,
     10.656,
     [40.589, 83.537],
     0.499,
@@ -247,7 +248,7 @@ export const SOLAR_BODIES: SolarBody[] = [
       [-0.0012506, -0.00050991, 0.00193609, 1222.49362201, -0.41897216, -0.28867794],
     ],
     // (the ring map's span, C ring to beyond A: 69 800 – 140 900 km)
-    { rings: { inner: 69.8e3 / 58232, outer: 140.9e3 / 58232 } },
+    { rings: { inner: 69.8e3 / 60268, outer: 140.9e3 / 60268 } },
   ),
   planet("uranus", "Uranus", 5793939, 25362, -17.24, [257.311, -15.175], 0.488, "gas", "uranus", [
     [19.18916464, 0.04725744, 0.77263783, 313.23810451, 170.9542763, 74.01692503],

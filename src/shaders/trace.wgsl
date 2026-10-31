@@ -1497,8 +1497,8 @@ fn ringSample(k: u32, rr: f32) -> vec4f {
   // (finer than the map's texel — 35 km —: Cassini's kilometre, its ringlets and gaps, as the footprint resolves them —
   // ringFootV, the footprint across the rings over their width; Saturn's rings alone: the profile's span is theirs)
   let fw = clamp(log2(1.0 / (2048.0 * max(ringFootV, 1e-9))) / 3.0, 0.0, 1.0);
-  if (fw > 0.0 && abs(ringOuter(k) * 58232.0 - 140900.0) < 1.0) {
-    let fine = ringTauFine(rr * 58232.0);
+  if (fw > 0.0 && abs(ringOuter(k) * 60268.0 - 140900.0) < 1.0) {
+    let fine = ringTauFine(rr * 60268.0);
     if (fine >= 0.0) { tau = mix(tau, fine, fw); }
   }
   return vec4f(min(t.rgb * 3.6, vec3f(0.95)), tau);
@@ -1539,8 +1539,8 @@ fn ringPhase(ct: f32, tau: f32, spoke: f32) -> f32 {
 // other rings, the probes' and the Earth's kernels (a conjunction, folded)
 fn ringDetail(k: u32, q: vec3f, N: vec3f, V: vec3f) -> vec2f {
   var d = vec2f(1.0, 0.0);
-  let rKm = length(q) * 58232.0;
-  if (NEAR_DETAIL && NEAR_KIND != 1u && NEAR_KIND != 6u && abs(ringOuter(k) * 58232.0 - 140900.0) < 1.0) {
+  let rKm = length(q) * 60268.0;
+  if (NEAR_DETAIL && NEAR_KIND != 1u && NEAR_KIND != 6u && abs(ringOuter(k) * 60268.0 - 140900.0) < 1.0) {
     if (rKm > 122200.0 && rKm < 136800.0) {
       let vp = V - N * dot(V, N);
       let rp = q - N * dot(q, N);
@@ -1574,8 +1574,9 @@ fn ringLight(k: u32, q: vec3f, N: vec3f, L: vec3f, V: vec3f, det: vec2f) -> vec4
   } else {
     R = ph * mu0 / (4.0 * (mu0 - mu)) * (exp(-tau / mu0) - exp(-tau / mu));
   }
-  // (the planet's shadow)
-  let b = dot(q, L);
+  // (the planet's shadow — on its squashed axes, along its pole N: its ellipsoid the unit sphere)
+  let Lq = normalize(L + (squashOf(k) - 1.0) * N * dot(L, N));
+  let b = dot(q, Lq);
   let lit = select(1.0, 0.0, b < 0.0 && dot(q, q) - b * b < 1.0);
   return vec4f(smp.rgb * R * lit, 1.0 - exp(-tau / mu));
 }
@@ -1786,12 +1787,13 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let h = Rl * Rl - dot(perp, perp);
     if (h < 0.0) { continue; }
     var t = b - sqrt(h);
-    // (the Earth: its ellipsoid, inside that sphere — on its squashed axes the unit sphere)
-    if (isEarth(k)) {
+    // (the Earth, Jupiter, Saturn: their ellipsoid, inside that sphere — on its squashed axes the unit sphere)
+    let ab = squashOf(k);
+    if (ab != 1.0) {
       let A = spunAxes(k);
-      let rs = squashed(A * d, EARTH_AB);
+      let rs = squashed(A * d, ab);
       let m = length(rs);
-      let te = unitHit(squashed(A * (-c / R), EARTH_AB), rs / m);
+      let te = unitHit(squashed(A * (-c / R), ab), rs / m);
       t = select(-1.0, te * R / m, te >= 0.0);
     }
     if (t >= 0.0 && t < tBest) {
@@ -1932,7 +1934,9 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
   let k = kBest;
   let c = bodies[BV * k].xyz - o;
   let X = d * tBest;
-  let nrm = normalize(X - c);
+  // (the point in its radii — the rings' shadow from there —; an ellipsoid's normal its gradient's: x, y, ab² z)
+  let pR = (X - c) / bodyRadius(k);
+  let nrm = normalize(pR + (sq(squashOf(k)) - 1.0) * bodies[BV * k + 5u].xyz * dot(pR, bodies[BV * k + 5u].xyz));
   var col: vec3f;
   if (bodyKind(k) == 0u) {
     col = vec3f(0.0); // (its light: above, with its edge's share)
@@ -1943,7 +1947,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     setMapLod(fp, fp, k);
     let N = bodies[BV * k + 5u].xyz;
     BODYW = transpose(spunAxes(k));
-    col = planetShade(k, nrm, spunAxes(k) * nrm, L, V, P.time.x, gObs, ringShadow(k, nrm, N, L)) * BODY_GAIN;
+    col = planetShade(k, nrm, spunAxes(k) * nrm, L, V, P.time.x, gObs, ringShadow(k, pR, N, L)) * BODY_GAIN;
   }
   (*out).glow += (*out).tint * col;
   (*out).tint = vec3f(0.0);
@@ -5001,8 +5005,15 @@ const EARTH_RM = 6.378137e6;  // metres per radius: WGS84's a, the equator's (sr
 // it is the unit sphere: its ground, relief, clouds and air are marched there as on a sphere, the rays
 // taken there (squashed, renormalised; their lengths back by m), the maps read at the geodetic latitude
 const EARTH_AB = 1.0033640898209764;
-// a world's z scale into its squashed axes (the others are spheres: 1)
-fn squashOf(k: u32) -> f32 { return select(1.0, EARTH_AB, isEarth(k)); }
+// Jupiter's, Saturn's: their equatorial over their polar radius at 1 bar (71 492 / 66 854 km, 60 268 / 54 364 km — IAU; their
+// radius in the game the equatorial one, solar.ts; ellipsoid.ts flatteningOf the same)
+const JUPITER_AB = 1.0693750560923805;
+const SATURN_AB = 1.1086012802589948;
+// a world's z scale into its squashed axes (the Earth's, the giants' — their map 4, 5 —; the others are spheres: 1)
+fn squashOf(k: u32) -> f32 {
+  let s = select(0u, u32(bodies[BV * k + 2u].z), bodyKind(k) != 0u);
+  return select(select(select(1.0, SATURN_AB, s == 9u), JUPITER_AB, s == 8u), EARTH_AB, s == EARTH_SURF);
+}
 fn squashed(v: vec3f, ab: f32) -> vec3f { return vec3f(v.x, v.y, v.z * ab); }
 // the geodetic direction (the ellipsoid's normal: the maps' latitude) at a unit direction of the squashed space
 fn geoQ(q: vec3f) -> vec3f { return normalize(vec3f(q.x, q.y, q.z * EARTH_AB)); }
@@ -9208,10 +9219,13 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
   } else if (regolith(m)) {
     f = 2.0 * cosi / (cosi + mu);
   }
-  // (the rings' shadow: their plane the equator's; their shine on the night and the twilight)
-  let rs = ringShadow(k, q, vec3f(0.0, 0.0, 1.0), Ls);
+  // (the rings' shadow: their plane the equator's; their shine on the night and the twilight — from the point, on its
+  // ellipsoid: the normal's (x, y, z / ab²), x² + y² + ab² z² = 1)
+  let abG = squashOf(k);
+  let qp = vec3f(q.xy, q.z / (abG * abG)) * inverseSqrt(dot(q.xy, q.xy) + q.z * q.z / (abG * abG));
+  let rs = ringShadow(k, qp, vec3f(0.0, 0.0, 1.0), Ls);
   var shine = vec3f(0.0);
-  if (ringOuter(k) > 0.0 && mu0 < 0.25) { shine = ringShine(k, q, Ls) * ((1.0 - 4.0 * max(mu0, 0.0)) / PI); }
+  if (ringOuter(k) > 0.0 && mu0 < 0.25) { shine = ringShine(k, qp, Ls) * ((1.0 - 4.0 * max(mu0, 0.0)) / PI); }
   var direct = 1.0;
   var sky = AIR.sky * smoothstep(-0.15, 0.25, mu0);
   // (Titan: under its haze the sky's light is nearly all of it — a dome brighter towards the Sun, the haze's forward scattering

@@ -106,8 +106,8 @@ const BODIES = [
     parent: "earth",
   },
   planet("mars", 1.524, 1.2, 42828, 3390),
-  planet("jupiter", 5.2, 2.7, 1.26687e8, 69911),
-  planet("saturn", 9.58, 4.6, 3.7931e7, 58232),
+  planet("jupiter", 5.2, 2.7, 1.26687e8, 71492),
+  planet("saturn", 9.58, 4.6, 3.7931e7, 60268),
 ];
 const holeSnap = (t: number) => ({
   v: 1,

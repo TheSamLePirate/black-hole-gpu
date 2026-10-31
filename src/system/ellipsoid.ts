@@ -1,5 +1,6 @@
 // The Earth's figure: the WGS84 ellipsoid (phase 2, audit: "la Terre est une sphère de 6 371 km") —
-// a = 6 378,137 km at the equator, flattened by 1/298,257 (the poles 21 km nearer the centre). The
+// a = 6 378,137 km at the equator, flattened by 1/298,257 (the poles 21 km nearer the centre). Jupiter and
+// Saturn too, at 1 bar (flattened 6.5 % and 9.8 %: their poles 4 600 and 5 900 km in — PLAN-PLANETES-AAA P10). The
 // other worlds stay spheres (flattening 0: every function here then is the sphere's).
 //
 // Two ways to measure a height:
@@ -17,9 +18,13 @@ import { add, dot, len, scale, sub, type Vec3 } from "../math/vec3";
 export const WGS84_A = 6378137;
 export const WGS84_F = 1 / 298.257223563;
 
-/** A body's flattening (the Earth's; the other worlds are drawn and flown as spheres). */
+/** Jupiter's and Saturn's flattenings: 1 − polar / equatorial radius at 1 bar (66 854 / 71 492, 54 364 / 60 268 km — IAU). */
+export const JUPITER_F = 1 - 66854 / 71492;
+export const SATURN_F = 1 - 54364 / 60268;
+
+/** A body's flattening (the Earth's, the giants'; the other worlds are drawn and flown as spheres). */
 export function flatteningOf(id: string): number {
-  return id === "earth" ? WGS84_F : 0;
+  return id === "earth" ? WGS84_F : id === "jupiter" ? JUPITER_F : id === "saturn" ? SATURN_F : 0;
 }
 
 /** Geodetic latitude, longitude [rad], height → body-fixed coordinates (the units of a). */
