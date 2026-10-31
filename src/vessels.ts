@@ -265,6 +265,8 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       noseR: 1.2,
       shield: { dir: [0, -0.94, 0.34], cos: 0.42, tMax: 1950, cap: 2.2e4, eps: 0.85 },
       hull: { tMax: 1150, cap: 9e3, eps: 0.7 },
+      // (its cabin a pressure hull built for Venus's floor — 92 bar, ~110 in its lowlands —: a Venera's margin)
+      pMax: 150e5,
       gMax: 9,
       ctrl: [0.22, 0.1, 0.45],
     },
@@ -324,6 +326,8 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       noseR: 3,
       shield: { dir: [0, -1, 0], cos: 0.5, tMax: 2300, cap: 3e4, eps: 0.85 },
       hull: { tMax: 1000, cap: 1e4, eps: 0.7 },
+      // (a lander for any world: Venus's floor — its hull, cooler-rated than the Ranger's, weakened there by its 737 K)
+      pMax: 140e5,
       gMax: 6,
       ctrl: [0.08, 0.04, 0.15],
     },
@@ -389,6 +393,8 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       noseR: 2,
       shield: null,
       hull: { tMax: 700, cap: 6e3, eps: 0.6 },
+      // (its modules built to hold 1 bar in, not to be squeezed: a couple of bars outside)
+      pMax: 3e5,
       gMax: 1.5,
       ctrl: [0, 0, 0],
     },
@@ -459,6 +465,8 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       noseR: 0.25,
       shield: null,
       hull: { tMax: 480, cap: 8e3, eps: 0.85 },
+      // (vented, an aircraft: but its canopy, its tanks' and bays' seals give way a few bars down)
+      pMax: 6e5,
       // (it breaks past 1.5 × its limit: the flight control system holds it at 7)
       gMax: 10.5,
       ctrl: [0.6, 0.25, 2.2],
@@ -591,6 +599,8 @@ export const VESSELS: Record<VesselId, VesselDef> = {
       noseR: 2.0,
       shield: null,
       hull: { tMax: 400, cap: 8e3, eps: 0.85 },
+      // (its relief valves let the air in: the doors', the tanks' seals give way a few bars down)
+      pMax: 6e5,
       gMax: 3.75,
       ctrl: [0.05, 0.07, 0.3],
     },

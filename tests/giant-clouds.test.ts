@@ -104,7 +104,7 @@ test("the flashes: the same for the same clock, two or three a second near a sto
   expect(ear.step(4, c, rm, 2060)).toEqual(ear.step(4, c, rm, 2060));
 });
 
-test("the AIR panel: Galileo's figures as met, the 22 bar marked; the calls each crossed once", () => {
+test("the AIR panel: Galileo's figures as met, the 22 bar marked, the hull's share; the calls each crossed once", () => {
   const air = (h: number, p: number, deck: string | null, sun: number) => ({ h, p, T: 166, deck, sun, mu0: 0.5, wind: -40, q: 0 });
   const P = giantAirPanel(air(-3e3, 1.4e5, null, 0.2), unitsOf("metric"), (s) => s);
   expect(P.title).toBe("AIR");
@@ -118,4 +118,12 @@ test("the AIR panel: Galileo's figures as met, the 22 bar marked; the calls each
   expect(calls).toEqual([{ kind: "deck", name: "NH₃" }, { kind: "bar", bar: 1 }, { kind: "dark" }]);
   expect(giantCalls(air(10e3, 1.05e5, "NH₃", 0.005), air(9e3, 1.1e5, "NH₃", 0.004))).toEqual([]);
   expect(giantCalls(null, air(9e3, 1.1e5, "NH₃", 0.004))).toEqual([]);
+  // (D1c: the hull — the share of what it holds, its tone; the call once past 80 %)
+  const deep = (p: number) => ({ ...air(-250e3, p, null, 0), pMax: 150e5 });
+  const H = giantAirPanel(deep(90e5), unitsOf("metric"), (s) => s);
+  expect(H.rows.find((r) => r.label === "HULL")!.value).toBe("60 % · 150 bar");
+  expect(H.rows[0]!.tone).toBe("norm");
+  expect(giantAirPanel(deep(125e5), unitsOf("metric"), (s) => s).rows[0]!.tone).toBe("warn");
+  expect(giantCalls(deep(118e5), deep(121e5))).toEqual([{ kind: "hull" }]);
+  expect(giantCalls(deep(121e5), deep(124e5))).toEqual([]);
 });

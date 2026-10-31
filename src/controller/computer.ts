@@ -1246,6 +1246,8 @@ function airInfo(this: CameraController) {
     gMax: V.gMax,
     gPeak: A.gPeak,
     margins: A.margins(),
+    // (the outside pressure, what the hull holds now: the giants' depths — D1c)
+    pressure: A.pressure(),
     failure: A.failure,
     damage: this.s.damage,
     body: A.body,

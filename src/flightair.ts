@@ -11,7 +11,9 @@ import { inv3 } from "./pilot";
 import {
   aeroForces,
   airAt,
+  airPressure,
   coldSkin,
+  crushLimit,
   heatStep,
   type AeroConfig,
   type AeroOut,
@@ -147,6 +149,8 @@ export class AirFlight {
       else if (this.skin.hull > A.hull.tMax)
         this.failure = `${name}: the hull burnt through at ${Math.round(this.skin.hull)} K (its limit ${A.hull.tMax} K)`;
       else if (this.overG > 0.25) this.failure = `${name}: broke up under ${this.g.toFixed(1)} g (its limit ${A.gMax} g)`;
+      else if (L && airPressure(L.air) > crushLimit(A, this.skin.hull))
+        this.failure = `${name}: the hull crushed at ${(airPressure(L.air) / 1e5).toFixed(0)} bar (its limit ${(crushLimit(A, this.skin.hull) / 1e5).toFixed(0)} bar at ${Math.round(this.skin.hull)} K)`;
     }
     if (!out) return [0, 0, 0];
     // (the air's moment over the inertia — the tensor's inverse: an asymmetric body answers off-axis)
@@ -156,13 +160,21 @@ export class AirFlight {
     return [0, 1, 2].map((i) => Ii[i]![0]! * M[0] + Ii[i]![1]! * M[1] + Ii[i]![2]! * M[2]) as V3;
   }
 
-  /** How close to its limits the craft is (0 … 1): the shield, the hull, the load. */
+  /** How close to its limits the craft is (0 … 1): the shield, the hull, the load, the outside pressure (its limit
+   *  lowered by the hull's heat). */
   margins() {
     const A = VESSELS[this.vessel].aero;
     return {
       shield: A.shield ? this.skin.shield / A.shield.tMax : 0,
       hull: this.skin.hull / A.hull.tMax,
       g: this.g / A.gMax,
+      p: this.last ? airPressure(this.last.air) / crushLimit(A, this.skin.hull) : 0,
     };
+  }
+
+  /** The outside pressure [Pa] and what the hull holds now [Pa]. */
+  pressure() {
+    const A = VESSELS[this.vessel].aero;
+    return { p: this.last ? airPressure(this.last.air) : 0, max: crushLimit(A, this.skin.hull) };
   }
 }

@@ -117,6 +117,7 @@ function giantAirFigures(this: CameraController): GiantAirIn | null {
     mu0,
     wind: giantWindAt(id, lat),
     q,
+    pMax: this.airFlight.pressure().max,
   };
 }
 
@@ -134,11 +135,13 @@ function giantCallStep(this: CameraController) {
               : t("Entering the water clouds")
           : c.kind === "dark"
             ? t("The Sun is gone — less than one percent of its light")
-            : c.bar === 1
-              ? t("One bar — the giant's reference level")
-              : c.bar === 10
-                ? t("Ten bar")
-                : t("Twenty-two bar — where Galileo's probe fell silent, 1995");
+            : c.kind === "hull"
+              ? t("Hull pressure eighty percent — climb")
+              : c.bar === 1
+                ? t("One bar — the giant's reference level")
+                : c.bar === 10
+                  ? t("Ten bar")
+                  : t("Twenty-two bar — where Galileo's probe fell silent, 1995");
       this.onPilotMessage?.(say);
     }
     // (the last place in a giant's clouds kept while out of them — a scene loading, a frame elsewhere: its crossings not

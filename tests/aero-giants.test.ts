@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { airAt, GASES, GIANT_AIR, giantT } from "../src/aero";
+import { airAt, GASES, GIANT_AIR, giantT, type V3 } from "../src/aero";
 
 // PLAN-PLANETES-AAA P11 D1: the giants' air — hydrostatic profiles from their measured temperatures, below the 1 bar level
 // too — and Galileo's entry into Jupiter flown through it.
@@ -87,4 +87,126 @@ test("D1b: the giants' air on the bodies — signed heights below 1 bar, G1's wi
   expect(giantWindAt("earth", 0)).toBe(0);
   // (the default orbit clear of the air — its warm thermosphere's top, not 12 scale heights)
   for (const id of ["jupiter", "saturn"]) expect(defaultAltKm(id) * 1e3).toBeGreaterThan(airTop(solarBody(id)!.atmosphere));
+});
+
+test("D1c: Galileo's entry heat — its peak ~30 kW/cm², a third of it the hydrogen's radiation; Saturn's entries convective", async () => {
+  const { heatFlux } = await import("../src/aero");
+  // (the same pass as above: the stagnation point's flux, Rₙ 0.222 m — Milos et al. 1999: peak ~30 kW/cm², ~300 kJ/cm²)
+  const m = 339,
+    A = Math.PI * 0.63 ** 2,
+    Cd = 1.05,
+    g = GIANT_AIR.jupiter.g,
+    Rn = 0.222;
+  let h = 450e3,
+    vx = 47.4e3 * Math.cos((8.6 * Math.PI) / 180),
+    vz = -47.4e3 * Math.sin((8.6 * Math.PI) / 180);
+  let peak = 0,
+    peakConv = 0,
+    load = 0;
+  const dt = 0.005;
+  const conv = { ...GASES.h2heJ, h2rad: 0 };
+  for (let t = 0; t < 400 && h > -50e3; t += dt) {
+    const v = Math.hypot(vx, vz);
+    const air = airAt(jupiter, h);
+    const q = heatFlux(air, v, Rn);
+    peak = Math.max(peak, q);
+    peakConv = Math.max(peakConv, heatFlux({ ...air, gas: conv }, v, Rn));
+    load += q * dt;
+    const a = (0.5 * air.rho * v * v * Cd * A) / m;
+    vx -= ((a * vx) / v) * dt;
+    vz += (-(a * vz) / v - g + (vx * vx) / (71492e3 + h)) * dt;
+    h += vz * dt;
+  }
+  console.log(
+    `  Galileo: peak ${(peak / 1e7).toFixed(1)} kW/cm² (convective ${(peakConv / 1e7).toFixed(1)}), load ${(load / 1e7).toFixed(0)} kJ/cm²`,
+  );
+  expect(peak / 1e7).toBeGreaterThan(27);
+  expect(peak / 1e7).toBeLessThan(33);
+  expect(peakConv / peak).toBeGreaterThan(0.55);
+  expect(peakConv / peak).toBeLessThan(0.8);
+  // (no ablation's blowing here: the load above Galileo's ~300 kJ/cm², below twice it)
+  expect(load / 1e7).toBeGreaterThan(300);
+  expect(load / 1e7).toBeLessThan(600);
+  // (the same probe into Saturn at 26 km/s, 10° down: at its peak the radiation a small part — a Saturn probe's heat shield
+  // sized on its convection)
+  let hs = 450e3,
+    ux = 26e3 * Math.cos((10 * Math.PI) / 180),
+    uz = -26e3 * Math.sin((10 * Math.PI) / 180);
+  let sPeak = 0,
+    sConv = 0;
+  for (let t = 0; t < 600 && hs > -50e3; t += dt) {
+    const v = Math.hypot(ux, uz);
+    const air = airAt(saturn, hs);
+    const q = heatFlux(air, v, Rn);
+    if (q > sPeak) {
+      sPeak = q;
+      sConv = heatFlux({ ...air, gas: { ...GASES.h2heS, h2rad: 0 } }, v, Rn);
+    }
+    const a = (0.5 * air.rho * v * v * Cd * A) / m;
+    ux -= ((a * ux) / v) * dt;
+    uz += (-(a * uz) / v - GIANT_AIR.saturn.g + (ux * ux) / (60268e3 + hs)) * dt;
+    hs += uz * dt;
+  }
+  console.log(`  Saturn at 26 km/s: peak ${(sPeak / 1e7).toFixed(2)} kW/cm², radiated ${(100 * (1 - sConv / sPeak)).toFixed(1)} %`);
+  expect(1 - sConv / sPeak).toBeLessThan(0.15);
+});
+
+test("D1c: the crushing — each hull's limit, lower when hot; every craft crushed above the giants' floor, Venus's floor held", async () => {
+  const { airPressure, crushLimit } = await import("../src/aero");
+  const { VESSELS } = await import("../src/vessels");
+  const { solarBody } = await import("../src/system/solar");
+  const { deepFloorR, flatteningOf } = await import("../src/system/ellipsoid");
+  const R = VESSELS.ranger.aero;
+  expect(crushLimit(R, 300)).toBe(R.pMax);
+  expect(crushLimit(R, R.hull.tMax)).toBeCloseTo(0.5 * R.pMax, 0);
+  // (the depth each craft gives way at, its hull at the air's temperature — the floor far below, at either pole)
+  for (const [id, Req] of [
+    ["jupiter", 71492e3],
+    ["saturn", 60268e3],
+  ] as const) {
+    const sb = solarBody(id)!;
+    const f = flatteningOf(id);
+    const floor = Math.min(Req - deepFloorR(id, Req, 0), Req * (1 - f) - deepFloorR(id, Req, 1));
+    const out: string[] = [];
+    for (const [vid, v] of Object.entries(VESSELS)) {
+      let z = 0;
+      for (; z > -floor; z -= 1e3) {
+        const a = airAt(sb.atmosphere, z);
+        if (airPressure(a) > crushLimit(v.aero, a.T)) break;
+      }
+      out.push(`${vid} ${(z / 1e3).toFixed(0)} km`);
+      expect(z).toBeGreaterThan(-floor + 100e3);
+    }
+    console.log(`  ${id} (floor ${(floor / 1e3).toFixed(0)} km down): ${out.join(", ")}`);
+  }
+  // (Venus's floor — 92 bar, 737 K —: the Ranger and the Lander rest there under 80 % of their limit, no alarm)
+  const ven = airAt(solarBody("venus")!.atmosphere, 0);
+  expect(airPressure(ven) / 1e5).toBeCloseTo(92, -1);
+  for (const v of [VESSELS.ranger.aero, VESSELS.lander.aero]) expect(airPressure(ven) / crushLimit(v, ven.T)).toBeLessThan(0.8);
+});
+
+test("D1c: a craft held in Jupiter's depths is lost to the pressure — with damage; the margin said first", async () => {
+  const { AirFlight } = await import("../src/flightair");
+  const { solarBody } = await import("../src/system/solar");
+  const atm = solarBody("jupiter")!.atmosphere;
+  const axes: [V3, V3, V3] = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ];
+  const fly = (h: number, damage: boolean) => {
+    const F = new AirFlight();
+    F.reset("ranger", 300);
+    F.forceFn(atm, "jupiter", 1e4, axes)(h, [0, 0, 5]);
+    F.after(0.1, [0, 0, 0], 1e4, 1e5, damage);
+    return F;
+  };
+  // (100 km down: ~14 bar, nothing)
+  expect(fly(-100e3, true).failure).toBeNull();
+  expect(fly(-100e3, true).margins().p).toBeLessThan(0.2);
+  // (deep: crushed — said with its bars; without damage, the margin past 1 and the craft kept)
+  const deep = fly(-400e3, true);
+  expect(deep.failure).toContain("crushed");
+  expect(deep.margins().p).toBeGreaterThan(1);
+  expect(fly(-400e3, false).failure).toBeNull();
 });

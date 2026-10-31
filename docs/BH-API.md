@@ -965,7 +965,11 @@ Places the Ranger `altKm` km (default 1.5) above one of our solid bodies' ground
 ```js
 __bh.game.hoverOver("moon", 0.674, 23.473, 1.5);   // over Tranquility Base
 ```
-*Used in:* `tests/e2e/tars-eval.e2e.test.ts`, `tests/flight/scenarios/vertical.ts`, `tests/e2e/giant-descent.e2e.test.ts`.
+Deep enough, with `damage` on, the hull gives way to the pressure (P11 D1c: `__bh.camera.airFlight.pressure()` — the
+outside pressure and what the hull holds now, in Pa; `.margins().p` their ratio).
+
+*Used in:* `tests/e2e/tars-eval.e2e.test.ts`, `tests/flight/scenarios/vertical.ts`, `tests/e2e/giant-descent.e2e.test.ts`,
+`tests/e2e/giant-crush.e2e.test.ts`.
 
 ### `__bh.game.importSave(json, store = true)` → string
 

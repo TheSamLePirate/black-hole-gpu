@@ -20,7 +20,8 @@ import { cross } from "./math/vec3";
 //  · the moments: each face's push and the wing's lift where they act (downstream of the centre of
 //    mass: the craft weathervanes into its motion), and damping −q S L²/(2V) C ω.
 // Heat. The stagnation point's convective flux, Sutton & Graves (1971): q = k √(ρ/Rₙ) V³ (k by the
-// gas); above 9 km/s in air the shock layer's radiation, Tauber & Sutton (1991). Two thermal nodes —
+// gas); above 9 km/s in air the shock layer's radiation, Tauber & Sutton (1991); in the giants' hydrogen and helium its
+// radiation too, a power law fitted on Galileo's entry (its peak 30 kW/cm²). Two thermal nodes —
 // the heat shield (where the craft has one) and the hull — each C dT/dt = q_in − εσ(T⁴ − T_sink⁴), the
 // convective flux scaled by (1 − T/T_r) (T_r the recovery temperature: the skin cools in slow air).
 
@@ -33,6 +34,8 @@ export interface Gas {
   ksg: number;
   /** the shock layer radiates (Tauber–Sutton's air fit) */
   radiative: boolean;
+  /** the hydrogen shock layer's radiation: q = h2rad Rₙ ρ^1.2 (V / 47.4 km/s)^10 [W/m²] (none: 0) */
+  h2rad?: number;
   /** the plasma's colour (linear rgb, the emission lines: N₂⁺/O in air, CO/C₂ in CO₂, CN in N₂/CH₄) */
   glow: V3;
 }
@@ -42,10 +45,11 @@ export const GASES = {
   co2: { gamma: 1.29, R: 188.92, ksg: 1.896e-4, radiative: false, glow: [1.0, 0.62, 0.38] as V3 },
   n2ch4: { gamma: 1.4, R: 296.8, ksg: 1.7407e-4, radiative: false, glow: [0.75, 0.42, 1.0] as V3 },
   // (the giants' hydrogen and helium — PLAN-PLANETES-AAA P11 D1 —: their molar masses 2.22 and 2.07 g/mol; the light gas's
-  // Sutton–Graves constant ~6.6e-5; its glow hydrogen's Balmer lines. Galileo's entry heat was mostly the shock layer's
-  // radiation: not fitted here — D1b)
-  h2heJ: { gamma: 1.43, R: 8.314462 / 2.22e-3, ksg: 6.56e-5, radiative: false, glow: [1.0, 0.45, 0.6] as V3 },
-  h2heS: { gamma: 1.43, R: 8.314462 / 2.07e-3, ksg: 6.56e-5, radiative: false, glow: [1.0, 0.45, 0.6] as V3 },
+  // Sutton–Graves constant ~6.6e-5; its glow hydrogen's Balmer lines. The shock layer's radiation (D1c): Galileo's peak
+  // 30 kW/cm² (Rₙ 0.222 m, 47.4 km/s) — of it ~20 the convection here (a cold wall, no ablation's blowing), ~10 radiated;
+  // steep in V: a hundredth of it at 30 km/s, Saturn's entries nearly all convective)
+  h2heJ: { gamma: 1.43, R: 8.314462 / 2.22e-3, ksg: 6.56e-5, radiative: false, h2rad: 1.94e13, glow: [1.0, 0.45, 0.6] as V3 },
+  h2heS: { gamma: 1.43, R: 8.314462 / 2.07e-3, ksg: 6.56e-5, radiative: false, h2rad: 1.94e13, glow: [1.0, 0.45, 0.6] as V3 },
 } satisfies Record<string, Gas>;
 export type GasId = keyof typeof GASES;
 
@@ -265,7 +269,10 @@ export const GIANT_AIR: Record<"jupiter" | "saturn", GiantAir> = {
     Texo: 400,
   },
 };
-/** a giant's table [height m, density kg/m³, temperature K] from 100 bar to 10⁻¹⁰ bar */
+/** the giants' tables' deepest pressure [bar] (D1c: past every hull's limit — the adiabat on, an ideal gas still; the real
+ *  fluid there is denser, its hydrogen supercritical) */
+const PDEEP = 1e4;
+/** a giant's table [height m, density kg/m³, temperature K] from PDEEP to 10⁻¹⁰ bar */
 function giantTable(G: GiantAir): [number, number, number][] {
   const step = 0.02;
   const rows: [number, number, number][] = [];
@@ -273,10 +280,10 @@ function giantTable(G: GiantAir): [number, number, number][] {
     const T = giantT(G, Math.exp(lnp));
     return [z, (Math.exp(lnp) * 1e5) / (G.R * T), T];
   };
-  // (down from 1 bar to 100, then up from 1 bar to 1e-7 — the trapezoid's dz on T)
+  // (down from 1 bar to PDEEP, then up from 1 bar to 1e-10 — the trapezoid's dz on T)
   const down: [number, number, number][] = [];
   let z = 0;
-  for (let lnp = 0; lnp < Math.log(100); lnp += step) {
+  for (let lnp = 0; lnp < Math.log(PDEEP); lnp += step) {
     const T0 = giantT(G, Math.exp(lnp)),
       T1 = giantT(G, Math.exp(lnp + step));
     z -= (G.R * 0.5 * (T0 + T1) * step) / G.g;
@@ -399,6 +406,9 @@ export interface VesselAero {
   shield: { dir: V3; cos: number; tMax: number; cap: number; eps: number } | null;
   /** the rest of the hull: its limit, capacity, emissivity */
   hull: { tMax: number; cap: number; eps: number };
+  /** the outside pressure the hull gives way to [Pa] (PLAN-PLANETES-AAA P11 D1c: the giants have no floor), less when hot —
+   *  crushLimit */
+  pMax: number;
   /** structural limit [g] */
   gMax: number;
   /** the control surfaces' authority: angular acceleration per kPa of dynamic pressure about the
@@ -549,7 +559,8 @@ export const cpMax = (g: number) => ((g + 1) ** 2 / (4 * g)) ** (g / (g - 1)) * 
 const TS_V = [9, 9.25, 9.5, 9.75, 10, 10.25, 10.5, 10.75, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 15.5, 16];
 const TS_F = [1.5, 4.3, 9.7, 19.5, 35, 55, 81, 115, 151, 238, 359, 495, 660, 850, 1065, 1313, 1550, 1780, 2040];
 
-/** The stagnation point's heat flux [W/m²]: Sutton–Graves' convection, Tauber–Sutton's radiation (air). */
+/** The stagnation point's heat flux [W/m²]: Sutton–Graves' convection, Tauber–Sutton's radiation (air), the hydrogen
+ *  shock layer's (the giants). */
 export function heatFlux(air: Air, V: number, noseR: number): number {
   if (air.rho <= 0 || V <= 0) return 0;
   const conv = air.gas.ksg * Math.sqrt(air.rho / noseR) * V ** 3;
@@ -562,6 +573,7 @@ export function heatFlux(air: Air, V: number, noseR: number): number {
     const a = Math.min(1.072e6 * V ** -1.88 * air.rho ** -0.325, 1);
     rad = 4.736e4 * noseR ** a * air.rho ** 1.22 * f * 1e4;
   }
+  if (air.gas.h2rad) rad += air.gas.h2rad * noseR * air.rho ** 1.2 * (V / 47.4e3) ** 10;
   return conv + rad;
 }
 
@@ -808,6 +820,13 @@ export function heatStep(A: VesselAero, th: Thermal, air: Air, out: AeroOut, u: 
   const H = node(th.hull, sh.hull, A.hull.cap, A.hull.eps);
   return { shield: S.T, hull: H.T, qShield: S.q, qHull: H.q };
 }
+
+/** The air's pressure [Pa] (an ideal gas: ρ R T). */
+export const airPressure = (air: Air) => air.rho * air.gas.R * air.T;
+
+/** The pressure a hull gives way to [Pa]: its own, less as it heats — half of it at its temperature limit (a metal's
+ *  strength from ~60 % of it on; Galileo's probe went silent at ~22 bar, its electronics too hot). */
+export const crushLimit = (A: VesselAero, hullT: number) => A.pMax * (1 - 0.5 * smooth(0.6, 1, hullT / A.hull.tMax));
 
 /** The radiative equilibrium temperature under a flux [K]. */
 export const equilibriumT = (q: number, eps: number) => (q / (eps * SIGMA)) ** 0.25;

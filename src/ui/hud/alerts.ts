@@ -69,6 +69,11 @@ function helpOf(id: string): { why: string; todo: string } {
         why: t("The hull's skin overheats where the shield does not shade it."),
         todo: t("Turn the shield to the flow (the nose up), lower the speed, avoid steep dives."),
       };
+    case "crush":
+      return {
+        why: t("The air outside nears the pressure the hull gives way to — less as it heats."),
+        todo: t("Climb: thrust up, out of the depths."),
+      };
     case "load":
       return {
         why: t("The acceleration nears what the structure bears."),
@@ -184,7 +189,11 @@ export type AlertInput = Pick<
     stovl?: FlightInfo["stovl"];
     /** a coordinate time [M] in words (the horizon's countdown) */
     fmtM: (t: number) => string;
+    /** a pressure [Pa] in the player's units (none: bars) */
+    fPress?: (pa: number) => string;
   };
+
+const fBar = (pa: number) => `${(pa / 1e5).toFixed(0)} bar`;
 
 const RANK: Record<AlertLevel, number> = { warning: 0, caution: 1, advisory: 2 };
 
@@ -204,7 +213,7 @@ export function alertsOf(i: AlertInput): Alert[] {
   if (p?.fate === "star" && !onGround && !orbiting && !flownAbout) add("collision", "warning", tf("COLLISION COURSE — {0}", nm(hit)));
   // the air's limits: the shield, the hull, the load
   const air = i.air;
-  if (air && (air.inAir || air.margins.shield > 0.6 || air.margins.hull > 0.6)) {
+  if (air && (air.inAir || air.margins.shield > 0.6 || air.margins.hull > 0.6 || air.margins.p > 0.6)) {
     const pc = (x: number) => `${Math.round(x * 100)} %`;
     if (air.failure) add("failure", "warning", air.failure.toUpperCase());
     if (air.margins.shield > 0.85)
@@ -215,6 +224,13 @@ export function alertsOf(i: AlertInput): Alert[] {
       );
     if (air.margins.hull > 0.8)
       add("hull", air.margins.hull > 0.95 ? "warning" : "caution", tf("HULL {0} K · {1}", Math.round(air.hull), pc(air.margins.hull)));
+    // (the outside pressure against what the hull holds — a giant's depths, Venus's floor)
+    if (air.margins.p > 0.8)
+      add(
+        "crush",
+        air.margins.p > 0.95 ? "warning" : "caution",
+        tf("PRESSURE {0} · HULL {1}", (i.fPress ?? fBar)(air.pressure.p), pc(air.margins.p)),
+      );
     if (air.margins.g > 0.75)
       add("load", air.margins.g > 0.92 ? "warning" : "caution", tf("LOAD {0} g · {1}", air.g.toFixed(1), pc(air.margins.g)));
     // (none on the wheels: a craft pushed back or taxiing reads the air from anywhere)

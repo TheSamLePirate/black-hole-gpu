@@ -39,6 +39,7 @@ import type { WeatherState } from "../weather";
 import { GroundTrack } from "./groundtrack";
 import { AMBER, COL, CYAN, FONT, fmtDist, fmtDur, fmtShort, GREEN, marker, MONO, OUR_COLOURS, RED } from "./hudkit";
 import { AU_M, C_MPS, G0, M_METRES, M_SECONDS } from "../units";
+import { unitsFor } from "./unitsys";
 import { sub } from "../math/vec3";
 import { store } from "../util/storage";
 import { onEscape } from "./keys";
@@ -2219,7 +2220,7 @@ export class FlightHud {
     }
     // the alerts (hud/alerts.ts) and the master caution: three lines at most, the gravest first; the
     // lamp lit — and the master warning sounding — until acknowledged (Enter, or a click on the lamp)
-    const alerts = alertsOf({ ...i, animate: s.animate, fmtM: (t) => fmtM(t, s) });
+    const alerts = alertsOf({ ...i, animate: s.animate, fmtM: (t) => fmtM(t, s), fPress: unitsFor(s).fPress });
     this.alerts = alerts;
     const mc = this.caution.update(alerts);
     sound.alarm("master", s.sound && mc.sound, "warning");

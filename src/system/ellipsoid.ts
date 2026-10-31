@@ -177,10 +177,17 @@ export function withinFigure(r2: number, z: number, a: number, f: number): boole
   return r2 - z * z + z * z * k * k < a * a;
 }
 
-/** The share of its radius a body's "surface" stands at for the flight (bodies with no ground): the giants' 1 % under their
- *  figure — ~700 km under Jupiter's 1 bar, past the 100 bar of their measured air: their clouds flown through, the crushing
- *  well above (PLAN-PLANETES-AAA P11 D5) —; the others' figure itself (the Sun's). */
-export const deepShare = (id: string) => (id === "jupiter" || id === "saturn" || id === "uranus" || id === "neptune" ? 0.99 : 1);
+/** The share of its radius a body's "surface" stands at for the flight (bodies with no ground): the giants' 2 % under their
+ *  figure — ~1 400 km under Jupiter's 1 bar, ~1 100 km under Saturn's pole, at hundreds to thousands of bars: their clouds
+ *  flown through, every hull crushed well above (PLAN-PLANETES-AAA P11 D5, D1c) —; the others' figure itself (the Sun's). */
+export const deepShare = (id: string) => (id === "jupiter" || id === "saturn" || id === "uranus" || id === "neptune" ? 0.98 : 1);
+
+/** A body's deep floor's radius (deepShare, on its flattened figure) along a direction whose cosine to its pole is `z`. */
+export function deepFloorR(id: string, radius: number, z: number): number {
+  const a = radius * deepShare(id);
+  const k = 1 / (1 - flatteningOf(id));
+  return a / Math.sqrt(1 + (k * k - 1) * z * z);
+}
 
 /** Within a body's figure — a giant's: under its deep floor (deepShare) — for the flight's gravity and its rest there. */
 export function withinBody(id: string, r: number, z: number, radius: number): boolean {

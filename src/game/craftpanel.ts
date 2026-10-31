@@ -123,6 +123,8 @@ export interface GiantAirIn {
   mu0: number;
   wind: number;
   q: number;
+  /** the pressure the flown craft's hull holds now [Pa] (crushLimit — less when hot; none: not said) */
+  pMax?: number;
 }
 
 /** The pressure Galileo's probe last spoke from (7 December 1995, 58 min into its fall) [Pa] */
@@ -143,7 +145,22 @@ export function giantAirPanel(
   return {
     title: loc("AIR"),
     rows: [
-      { label: "P", value: u.fPress(d.p), tone: d.p > GALILEO_LAST ? "bad" : d.p > 10e5 ? "warn" : "norm" },
+      // (against the craft's own limit when known — else Galileo's last word)
+      {
+        label: "P",
+        value: u.fPress(d.p),
+        tone: d.pMax
+          ? d.p > 0.95 * d.pMax
+            ? "bad"
+            : d.p > 0.8 * d.pMax
+              ? "warn"
+              : "norm"
+          : d.p > GALILEO_LAST
+            ? "bad"
+            : d.p > 10e5
+              ? "warn"
+              : "norm",
+      },
       { label: "T", value: u.fTemp(d.T), tone: d.T > 400 ? "warn" : "norm" },
       { label: loc("1 BAR"), value: `${sign(d.h)}${u.fDist(Math.abs(d.h))}` },
       { label: loc("CLOUD"), value: d.deck ?? "—", tone: d.deck ? "norm" : "dim" },
@@ -163,18 +180,29 @@ export function giantAirPanel(
             },
           ]
         : []),
+      // (the hull: the share of the pressure it holds that the air puts on it — D1c)
+      ...(d.pMax
+        ? [
+            {
+              label: loc("HULL"),
+              value: `${Math.round((100 * d.p) / d.pMax)} % · ${u.fPress(d.pMax)}`,
+              tone: (d.p > 0.95 * d.pMax ? "bad" : d.p > 0.8 * d.pMax ? "warn" : "norm") as PanelTone,
+            },
+          ]
+        : []),
     ],
   };
 }
 
 /** The giants' calls (P11 D5), each once as it is crossed going down: a deck entered (its name), the 1, 10 and 22 bar
- *  levels, the Sun's last percent. */
-export type GiantCall = { kind: "deck"; name: string } | { kind: "bar"; bar: 1 | 10 | 22 } | { kind: "dark" };
+ *  levels, the Sun's last percent; the hull at 80 % of what it holds (D1c). */
+export type GiantCall = { kind: "deck"; name: string } | { kind: "bar"; bar: 1 | 10 | 22 } | { kind: "dark" } | { kind: "hull" };
 export function giantCalls(before: GiantAirIn | null, now: GiantAirIn): GiantCall[] {
   if (!before) return [];
   const out: GiantCall[] = [];
   if (now.deck && now.deck !== before.deck) out.push({ kind: "deck", name: now.deck });
   for (const bar of [1, 10, 22] as const) if (before.p < bar * 1e5 && now.p >= bar * 1e5) out.push({ kind: "bar", bar });
   if (now.mu0 > -0.15 && before.sun >= 0.01 && now.sun < 0.01) out.push({ kind: "dark" });
+  if (now.pMax && before.pMax && before.p < 0.8 * before.pMax && now.p >= 0.8 * now.pMax) out.push({ kind: "hull" });
   return out;
 }

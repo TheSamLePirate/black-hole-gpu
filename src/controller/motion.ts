@@ -11,7 +11,8 @@ import { inv3 } from "../pilot";
 import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose } from "../camera";
 import { TUNING } from "../game/tuning";
 import { airTop } from "../aero";
-import { deepShare } from "../system/ellipsoid";
+import { deepFloorR } from "../system/ellipsoid";
+import { poleOfDate } from "../system/geopotential";
 import { horizon, type Vec3 } from "../physics";
 import { BODY_NAMES, type Body } from "../targeting";
 import { fromZamo, toZamo } from "../geodesic";
@@ -746,12 +747,14 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     // basin under it (the Moon's Tranquility 2 km, Jezero 2.6 km): the gear stands on that, not on the
     // sphere it once stopped on in mid-air)
     if (g.inside && g.inside !== ground) {
-      // (into a body with no ground to stand on: resting on its surface, moving with it — a giant's deep floor, ~700 km
-      // under its 1 bar: its clouds flown through — P11 D5; once its 1 bar sphere, 171 km over its clouds at 12° S)
+      // (into a body with no ground to stand on: resting on its surface, moving with it — a giant's deep floor, ~1 400 km
+      // under its 1 bar: its clouds flown through — P11 D5; once its 1 bar sphere, 171 km over its clouds at 12° S —, on
+      // its flattened figure: its equatorial sphere stood ~3 900 km over Jupiter's poles' clouds — D1c)
       const b = ourState(g.inside, t);
-      const r = OUR_BODIES.find((q) => q.id === g.inside)!.radius * deepShare(g.inside);
       const d = lin(X, 1, b.pos, -1);
-      X = lin(b.pos, 1, d, (r * 1.0000001) / Math.hypot(...d));
+      const dl = Math.hypot(...d);
+      const r = deepFloorR(g.inside, OUR_BODIES.find((q) => q.id === g.inside)!.radius, dot3(d, poleOfDate(g.inside, t)) / dl);
+      X = lin(b.pos, 1, d, (r * 1.0000001) / dl);
       V = b.vel;
       break;
     }
