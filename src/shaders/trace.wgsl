@@ -412,6 +412,10 @@ const GEOID_OFF = 822968u;
 const RING_OFF = 1082182u;
 const RING_N = 71100u;
 const RING_R0_KM = 69800.0;
+// (its first kilometre measured: the C ring's inner edge before it none; then the sums of its opacity — gpu-tables.ts
+// TABLE_RINGSUM —, RING_N + 1 values)
+const RING_FIRST_KM = 72761.0;
+const RINGSUM_OFF = 1099994u;
 // the giants' zonal winds (gpu-tables.ts TABLE_WIND, system/giant-winds.ts): 146 values, four a vec4
 const WIND_OFF = 1099957u;
 const GEOID_W = 1440u;
@@ -1483,6 +1487,14 @@ fn setMapLod(fpAngle: f32, fpRing: f32, k: u32) {
   ringLodV = clamp(log2(max(fpRing * 2048.0 / w, 1e-6)), 0.0, 11.0);
 }
 fn ringOuter(k: u32) -> f32 { return bodies[BV * k + 3u].w; }
+// A pixel's footprint fp across the rings at q (its radii, in their plane — N their pole) seen along d, along the radius:
+// the map's one axis. The footprint on the plane is stretched by 1/|d·N| along d's own way across it only — the ansae, the
+// radius seen side on, not blurred by the tilt (the map read two levels too coarse there, Cassini's kilometre never on)
+fn ringFoot(fp: f32, d: vec3f, N: vec3f, q: vec3f) -> f32 {
+  let dn = max(abs(dot(d, N)), 0.05);
+  let c2 = min(sq(dot(normalize(q - N * dot(q, N)), d)) / max(1.0 - dn * dn, 1e-6), 1.0);
+  return fp * sqrt(c2 / (dn * dn) + 1.0 - c2);
+}
 
 // The rings at rr (its radii): albedo of the particles (linear rgb) and normal optical depth τ, from
 // the map's profile (opacity 1 − e^(−τ))
@@ -1494,17 +1506,31 @@ fn ringSample(k: u32, rr: f32) -> vec4f {
   // (the map's colours are an appearance: the B ring's ≈ 0.2 in linear rgb; its icy particles' single
   // scattering albedo is ≈ 0.8)
   var tau = -log(1.0 - min(t.a, 0.995));
-  // (finer than the map's texel — 35 km —: Cassini's kilometre, its ringlets and gaps, as the footprint resolves them —
-  // ringFootV, the footprint across the rings over their width; Saturn's rings alone: the profile's span is theirs)
-  let fw = clamp(log2(1.0 / (2048.0 * max(ringFootV, 1e-9))) / 3.0, 0.0, 1.0);
-  if (fw > 0.0 && abs(ringOuter(k) * 60268.0 - 140900.0) < 1.0) {
-    let fine = ringTauFine(rr * 60268.0);
-    if (fine >= 0.0) { tau = mix(tau, fine, fw); }
+  // (Saturn's rings alone — the profile's span is theirs —: Cassini's, its ringlets and gaps at any distance, its mean over the
+  // pixel's footprint across them — ringFootV, over their width —; the map's softer profile where it has none)
+  if (abs(ringOuter(k) * 60268.0 - 140900.0) < 1.0) {
+    let fine = ringTauFine(rr * 60268.0, ringFootV * (ringOuter(k) - inner) * 60268.0);
+    if (fine >= 0.0) { tau = fine; }
   }
   return vec4f(min(t.rgb * 3.6, vec3f(0.95)), tau);
 }
-// Cassini's optical depth at a radius [km] (linear between its kilometres), −1 where none
-fn ringTauFine(rKm: f32) -> f32 {
+// Cassini's optical depth at a radius [km] over a footprint wKm across it: within 2 km its own (linear between its kilometres),
+// wider the mean of its opacity 1 − e^(−τ) over the footprint (its sums: RINGSUM_OFF, two reads) as an optical depth; −1 where
+// none, or the sums not in yet
+fn ringSumAt(x: f32) -> f32 {
+  let i = u32(clamp(x, 0.0, f32(RING_N) - 1.0));
+  let a = bodies[RINGSUM_OFF + i / 4u][i % 4u];
+  return a + (bodies[RINGSUM_OFF + (i + 1u) / 4u][(i + 1u) % 4u] - a) * (x - f32(i));
+}
+fn ringTauFine(rKm: f32, wKm: f32) -> f32 {
+  if (wKm > 2.0) {
+    let a = rKm - 0.5 * wKm - RING_R0_KM;
+    if (a < RING_FIRST_KM - RING_R0_KM || a + wKm > f32(RING_N) || bodies[RINGSUM_OFF + RING_N / 4u][RING_N % 4u] <= 0.0) { return -1.0; }
+    // (the two sums in one loop: one copy of ringSumAt — ringSample is inlined at every ring's call)
+    var dS = 0.0;
+    for (var j = 0u; j < 2u; j++) { dS = ringSumAt(a + f32(j) * wKm) - dS; }
+    return -log(1.0 - min(dS / wKm, 0.995));
+  }
   let x = rKm - RING_R0_KM - 0.5;
   if (x < 0.0 || x >= f32(RING_N - 1u)) { return -1.0; }
   let i = u32(x);
@@ -1821,7 +1847,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let L = normalize(bodies[BV * u32(max(li, 0))].xyz - o - d * sR);
     let src = lightSource(k);
     let fp = beam() * (travel + sR) / R;
-    setMapLod(fp, fp / max(abs(dn), 0.05), k);
+    setMapLod(fp, ringFoot(fp, d, N, q), k);
     let rl = ringLight(k, q, N, L, V, ringDetail(k, q, N, V));
     (*out).glow += (*out).tint * rl.rgb * blackbody(src.x * gObs, P.disk.w) * src.y * bodies[BV * k + 3u].y;
     (*out).tint *= 1.0 - rl.w;
@@ -3848,7 +3874,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         ring = vec4f(blk.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, blk.w);
       } else if (sR > 0.0 && (hitT <= 0.0 || sR < hitT)) {
         let fp = pixFoot() * sR;
-        setMapLod(fp, fp / max(abs(dn), 0.05), k);
+        setMapLod(fp, ringFoot(fp, look, N, look * sR - P.near0.xyz), k);
         let src = lightSource(k);
         let rl = ringLight(k, look * sR - P.near0.xyz, N, P.near4.xyz, -look, ringDetail(k, look * sR - P.near0.xyz, N, -look));
         ring = vec4f(rl.rgb * blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y, rl.w);
@@ -5165,7 +5191,7 @@ fn setAir(k: u32) {
   } else if (m == 4u || m == 5u || m == 20u || m == 21u) {
     // the giants: hydrogen above their clouds (the drawn ground) — a thin haze, bluish on Uranus and
     // Neptune, yellowish on Jupiter and Saturn
-    a.rm = select(select(select(2.4622e7, 2.5362e7, m == 20u), 5.8232e7, m == 5u), 6.9911e7, m == 4u);
+    a.rm = select(select(select(2.4622e7, 2.5362e7, m == 20u), 6.0268e7, m == 5u), 7.1492e7, m == 4u);
     a.hr = select(27000.0, 50000.0, m == 5u || m == 20u);
     a.top = 12.0 * a.hr; a.hm = a.hr * 0.7;
     a.br = vec3f(5.802e-6, 13.558e-6, 33.1e-6) * select(0.06, 0.3, m >= 20u); a.bo = vec3f(0.0);

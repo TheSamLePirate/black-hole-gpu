@@ -55,4 +55,8 @@ export const RING_VEC4S = RING_N / 4;
 /** the giants' zonal winds (system/giant-winds.ts; trace.wgsl giantWind): 146 values, four a vec4 */
 export const TABLE_WIND = TABLE_RING + RING_VEC4S;
 export const WIND_VEC4S = 37;
-export const TABLE_VEC4S = TABLE_WIND + WIND_VEC4S;
+/** Saturn's rings' opacity (1 − e^(−τ) of Cassini's τ, 0 where none) summed from RING_R0_KM, kilometre by kilometre (RING_N + 1
+ *  values — system/ring-profile.ts ringOpacitySums; trace.wgsl ringTauFine): the profile's mean over any footprint in two reads */
+export const TABLE_RINGSUM = TABLE_WIND + WIND_VEC4S;
+export const RINGSUM_VEC4S = Math.ceil((RING_N + 1) / 4);
+export const TABLE_VEC4S = TABLE_RINGSUM + RINGSUM_VEC4S;

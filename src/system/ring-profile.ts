@@ -19,3 +19,15 @@ export async function loadRingProfile(): Promise<Float32Array<ArrayBuffer> | nul
     return null;
   }
 }
+
+/** The profile's opacity, 1 − e^(−τ) (0 where none was measured), summed from its first kilometre: RING_N + 1 values, the
+ *  sum before each (float64 summed, float32 kept — over a footprint of a few kilometres or more its mean to 10⁻³). */
+export function ringOpacitySums(tau: Float32Array): Float32Array<ArrayBuffer> {
+  const s = new Float32Array(Math.ceil((tau.length + 1) / 4) * 4);
+  let acc = 0;
+  for (let i = 0; i < tau.length; i++) {
+    acc += tau[i]! < 0 ? 0 : 1 - Math.exp(-tau[i]!);
+    s[i + 1] = acc;
+  }
+  return s;
+}

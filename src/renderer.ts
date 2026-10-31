@@ -106,6 +106,7 @@ import {
   TABLE_SUN,
   TABLE_VEC4S,
   TABLE_RING,
+  TABLE_RINGSUM,
   RING_N,
   TABLE_WIND,
   TABLE_WALK,
@@ -127,7 +128,7 @@ import { vesselHulls } from "./system/collide";
 import { EnduranceRenderer } from "./endurance";
 import { StationRenderer, type StationView } from "./station";
 import { issAxes, issTrack, refreshIssElements, stationAngles } from "./system/iss";
-import { loadRingProfile } from "./system/ring-profile";
+import { loadRingProfile, ringOpacitySums } from "./system/ring-profile";
 import { GpuProfiler } from "./gpuprof";
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
@@ -1540,6 +1541,7 @@ export class Renderer {
     device.queue.writeBuffer(this.bodyBuf, TABLE_RING * 16, new Float32Array(RING_N).fill(-1));
     void loadRingProfile().then((f) => {
       if (f) device.queue.writeBuffer(this.bodyBuf, TABLE_RING * 16, f);
+      if (f) device.queue.writeBuffer(this.bodyBuf, TABLE_RINGSUM * 16, ringOpacitySums(f));
     });
     // (the giants' zonal winds: system/giant-winds.ts)
     device.queue.writeBuffer(this.bodyBuf, TABLE_WIND * 16, GIANT_WINDS);
