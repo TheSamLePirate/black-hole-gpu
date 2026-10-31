@@ -299,9 +299,9 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 - La campagne et les docs de P10 couvrent aussi P11 : P11 se fait avant la campagne finale.
 - **Saturne — fait** (31 octobre) : sa vue en orbite 58,8 → 21,4 ms (la Terre 20,1), à contre-jour 63,3 → 26,0 — les
   rayons droits dans la région du trou de ver ; Jupiter et Saturne aplaties, au rendu et au vol ; le profil de Cassini à
-  toute distance ; ses vues en 2026 — [P10.md](progress/planetes-aaa/P10.md). Reste pour Saturne : ses vues proches des
-  anneaux (les blocs de glace, la vue rasante) coûtent 100 à 150 ms sur ce Mac — à mesurer sur kerr-mini et ramener au
-  budget avant P11, dont la descente dans Saturne part de là.
+  toute distance ; ses vues en 2026 — [P10.md](progress/planetes-aaa/P10.md). Ses vues proches des anneaux, intégrées
+  parce qu'elles regardent du côté de la bouche : la lentille corrigée par un ajustement aux rayons exacts, 47–73 → 21–40
+  ms sur kerr-mini (S4).
 
 ### P11 — La descente dans les géantes (décidée le 31 octobre)
 Descendre dans Jupiter ou Saturne comme la sonde Galileo : entrer, traverser les couches de nuages, voir les éclairs,

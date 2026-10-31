@@ -73,7 +73,7 @@ describe.skipIf(!E2E)("P9 G1–G2: the giants' clouds moving", () => {
   };
   const errors = () => app.js<number>(`(() => __bh.renderer.gpuErrors)()`);
 
-  // (G5: the camera among the rings' blocks, the A ring at 125 000 km — Saturn's mean radius 58 232 km —: 40 m over the
+  // (G5: the camera among the rings' blocks, the A ring at 125 000 km — Saturn's equatorial radius 60 268 km —: 40 m over the
   // plane towards Saturn, along it, and 600 m under it — the lit face at this date — looking up)
   for (const [name, lat, off] of [
     ["saturn-blocks-grazing", (40 / 125e6) * 57.2958, "[0, 0]"],
@@ -82,7 +82,7 @@ describe.skipIf(!E2E)("P9 G1–G2: the giants' clouds moving", () => {
   ] as const)
     test(`${name}: among the rings' blocks, some drawn`, async () => {
       await app.js(
-        `(() => { ${view(`p9${name.replaceAll("-", "")}`, "saturn", `{ body: "saturn", altKm: 66768, at: [${lat}, 0], look: "saturn", off: ${off} }`, T0)} return 1; })()`,
+        `(() => { ${view(`p9${name.replaceAll("-", "")}`, "saturn", `{ body: "saturn", altKm: 64732, at: [${lat}, 0], look: "saturn", off: ${off} }`, T0)} return 1; })()`,
       );
       await settle("saturn");
       const anchor = await app.js<number>(`(() => __bh.renderer.ringBlocksOn ? 1 : 0)()`);

@@ -10572,7 +10572,15 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
     // (the nearest the ray comes: its line's closest approach ahead, else — moving away — the camera's own distance; the
     // formula's error gathered round it on both sides of a pass, on one moving away: half the bound)
     let dMin = select(length(m), bb, b > 0.0);
-    let wide = dMin > 4.0 * P.wh.y && dMin * dMin > select(0.13, 0.26, b > 0.0) * P.wh.w / P.camUp.w;
+    // (the game's mouths — lensing width W = 0.05 ρ, M/ρ = 0.05/1.42953 —: the formula corrected by a fit to the exact rays —
+    // the Dneg mouth no point mass near: 1 + x (0.6255 + 0.5964 x − 0.0024 s + 0.3956 x s), x = ρ/b, s the camera along the
+    // ray's cosine —, its error then ~0.255 M (ρ/b)^2.5 / ρ: under a quarter pixel from b ≈ 6 ρ, where the bare formula
+    // needed ~20 ρ — the integrated cone round the mouth much narrower. Other widths: the bare formula's bound)
+    let fitted = abs(P.wh.w / P.wh.y - 0.034977) < 1e-4;
+    let sA = b / sqrt(b * b + bb * bb);
+    let xA = P.wh.y / max(bb, 1e-9);
+    let wide = dMin > 4.0 * P.wh.y && select(dMin * dMin > select(0.13, 0.26, b > 0.0) * P.wh.w / P.camUp.w,
+      dMin > P.wh.y * pow(select(0.51, 1.02, b > 0.0) * P.wh.w / (P.camUp.w * P.wh.y), 0.4), fitted);
     if (dot(m, m) > R2 || wide) {
       straight = straight || wide;
       if (ourStart() < bodyCount()) {
@@ -10585,7 +10593,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
         pieceT = tEnter;
       }
       if (straight) {
-        let al = P.wh.w / max(bb, 1e-9) * (1.0 + b / sqrt(b * b + bb * bb));
+        let al = P.wh.w / max(bb, 1e-9) * (1.0 + sA) * select(1.0, 1.0 + xA * (0.6255 + 0.5964 * xA - 0.0024 * sA + 0.3956 * xA * sA), fitted);
         skyDir = normalize(dH * cos(al) + perp * (sin(al) / max(bb, 1e-9)));
       }
     }
