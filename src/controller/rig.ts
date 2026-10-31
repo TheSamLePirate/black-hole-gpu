@@ -268,6 +268,12 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     const r = sub3(X, ref!.C);
     const l = Math.hypot(...r);
     const g = w.ours && solidBody(ref!.id) && l < ref!.R * 1.01 ? groundAboveSphere(ref!.id, toBodyFixed(ref!.id, X, t)) : 0;
+    // (a giant of ours: no ground — its clouds' decks under its 1 bar level: the floor a hundredth of its radius under its
+    // ellipsoid, ~700 km — PLAN-PLANETES-AAA P11 D2)
+    if (w.ours && solarBody(ref!.id)?.surface === "gas") {
+      const h = altitudeOver(ref!.id, X, t) / mR + 0.01 * ref!.R;
+      return h < 0 ? lin(ref!.C, 1, r, (l - h) / l) : X;
+    }
     const m = ref!.R + (g + 1) / mR;
     return l < m ? lin(ref!.C, 1, r, m / l) : X;
   };

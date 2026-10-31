@@ -3895,7 +3895,11 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     var e: EarthNear;
     // (the two paths apart, each out of the kernels whose near body cannot take it — NEAR_KIND)
     if (NEAR_KIND != 3u && NEAR_KIND != 7u && air) {
-      e = earthNear(look, rnd, k);
+      // (a giant's clouds round the camera: their volume — P11 D2 —; else its deck from above)
+      // (the constants' conjunction written here: the specialiser folds it — the general kernel, the Earth's, without the volume)
+      if (NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && giantInsideOn(k)) {
+        e = giantInside(look, k);
+      } else { e = earthNear(look, rnd, k); }
       hitT = e.t;
     }
     if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && NEAR_KIND != 6u && !air) {
@@ -10508,6 +10512,241 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
 
 // The Earth's sunlight in the far view: the irradiance of its source (a blackbody at its temperature,
 // shifted by g), and its direction on the Earth's axes
+// ---- Inside a giant's clouds (PLAN-PLANETES-AAA P11 D2): the camera under its cloud tops — the 1 bar ellipsoid no longer a
+// ground but a level among its decks. Three layers by their condensates' levels in the giants' air (aero.ts GIANT_AIR —
+// Jupiter: ammonia ice at 0.6 bar, +12 km; ammonium hydrosulfide at 2 bar, −19 km; water at 5 bar, −52 km; Saturn's deeper:
+// −18, −89, −189 km), each a vertical profile × the map's cover (the zones thick, the belts opening on the decks below) ×
+// the clouds' Perlin–Worley noise (cloudNoise, the Earth's), carried by the zonal wind; lit by the Sun through the column
+// above it (its layers' cover, slant) and its own few kilometres (a short march: the billows' self-shadow), two-lobed with
+// Wrenninge's octaves — the darkness rising with depth as Galileo found it —; the hydrogen's sky between. Up out of the
+// decks: space beyond, through what is left; down: the deep's dark; level: the haze at ~400 km.
+// a layer i of the giant m: its centre and half thickness [m from 1 bar], its billows' scale [m], its density [1/m] — thin
+// decks with clear air between them (the camera between two: a ceiling and a floor)
+fn giantLayer(m: u32, i: u32) -> vec4f {
+  if (m == 4u) {
+    return select(select(vec4f(-52e3, 7e3, 6e3, 1.2e-3), vec4f(-19e3, 4.5e3, 3.5e3, 8e-4), i == 1u), vec4f(12e3, 5e3, 4e3, 6e-4), i == 0u);
+  }
+  return select(select(vec4f(-189e3, 14e3, 10e3, 1e-3), vec4f(-89e3, 9e3, 6e3, 6e-4), i == 1u), vec4f(-18e3, 9e3, 6e3, 4e-4), i == 0u);
+}
+// their colours (single-scattering albedo, linear): ammonia ice white-cream, the hydrosulfide's brown-orange, water's grey
+fn giantLayerAlbedo(i: u32, top: vec3f) -> vec3f {
+  return select(select(vec3f(0.80, 0.82, 0.86), vec3f(0.86, 0.47, 0.20), i == 1u), top, i == 0u);
+}
+// the camera inside: under the top layer's top, a giant, the kernels that draw one large (G9's conjunction)
+fn giantInsideOn(k: u32) -> bool {
+  let m = u32(bodies[BV * k + 2u].z) - 4u;
+  if (!(NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && (m == 4u || m == 5u))) { return false; }
+  let L = giantLayer(m, 0u);
+  return (length(nearCam()) - 1.0) * P.near4.w < L.x + 3.0 * L.y;
+}
+// the share of a layer's column above h (its profile exp(−((z − c)/w)²): a logistic for the normal's tail)
+fn giantColAbove(h: f32, L: vec4f) -> f32 { return L.y * 1.7725 / (1.0 + exp(2.5 * (h - L.x) / L.y)); }
+// a cyclone's eye about the pole (q unit, its north pole z): x 0 inside the clear well, 1 out; y the wall — its inner face
+// steep, its outer flank sloping down over ~half the eye's radius (an amphitheatre) — Saturn's north polar vortex (Cassini
+// 2012: an eye ~2 000 km across, its wall's clouds 30–75 km high), Jupiter's central north polar cyclone (Juno: ~4 000 km,
+// the eight round it left out); z the angle from the pole [rad], w the eye's radius
+fn giantEye(m: u32, q: vec3f) -> vec4f {
+  let rho = acos(clamp(q.z, -1.0, 1.0));
+  let re = select(0.0166, 0.0175, m == 4u);
+  let wall = smoothstep(0.8 * re, re, rho) * exp(-max(rho - re, 0.0) / (0.55 * re));
+  return vec4f(smoothstep(0.6 * re, re, rho), wall, rho, re);
+}
+// the clouds' extinction at p (squashed axes, radii; h its height [m]; det the fine erosion's share — near the camera —):
+// the three layers' sum and the eye's wall, their colours mixed in GI_ALB
+var<private> GI_ALB: vec3f = vec3f(0.0);
+var<private> GI_TOP: vec3f = vec3f(0.8);
+fn giantSigma(m: u32, p: vec3f, h: f32, cover: vec3f, rkm: f32, det: f32) -> f32 {
+  let q = normalize(p);
+  let pk = q * (rkm + h * 1e-3);
+  // (the banks and the holes between them, ~80 km — a large Perlin–Worley over the map's cover —; the eye's well)
+  let big = cloudNoise(pk * (1.0 / 80.0) + vec3f(3.1, 7.7, 1.3));
+  let eye = giantEye(m, q);
+  // (the water deck's towers: where the large noise is high, its top raised by up to ~18 km — convection —; where highest,
+  // the moist storms' columns — Galileo's and Juno's lightning cells — up through the ammonia, ~40 km tall, their outline
+  // and their turrets bulged by a ~20 km noise)
+  let tower = smoothstep(0.55, 0.85, big.g);
+  var nt = 0.5;
+  if (big.g > 0.68) { nt = cloudNoise(pk * (1.0 / 18.0) + vec3f(4.4)).g; }
+  let storm = smoothstep(0.8, 0.95, big.g + 0.25 * (nt - 0.5));
+  var s = 0.0;
+  var a = vec3f(0.0);
+  for (var i = 0u; i < 3u; i++) {
+    var L = giantLayer(m, i);
+    if (i == 2u) { L = vec4f(L.x + tower * 18e3 + storm * 25e3, L.y * (1.0 + 2.5 * tower + 2.5 * storm), L.z, L.w); }
+    // (the decks undulate by a half thickness with the large noise; its banks and holes their cover; a storm's turrets)
+    var hh = h;
+    if (i == 2u) { hh += (nt - 0.5) * storm * 16e3; }
+    let prof = exp(-sq((hh - L.x - big.r * L.y) / L.y));
+    if (prof < 0.02) { continue; }
+    let cv = clamp(cover[i] * 1.4 * smoothstep(0.3, 0.75, big.g) * eye.x, 0.0, 0.88);
+    let n = cloudNoise(pk * (1e3 / L.z) + vec3f(f32(i) * 7.3));
+    // (the Perlin–Worley's billows over the cover's threshold — never quite full: the tops follow the noise, not the profile's
+    // level —, the profile thinning their tops and bases, the Worley fBm
+    // eroding their edges — near the camera a finer one too, five times: crisp wisps)
+    var shape = smoothstep(0.0, 0.15, n.g * prof - (1.0 - cv));
+    shape = clamp(shape - (1.0 - n.b) * 0.45 * (1.0 - shape), 0.0, 1.0);
+    if (det > 0.0 && shape > 0.0) {
+      let nd = cloudNoise(pk * (5e3 / L.z) + vec3f(2.9));
+      let e = 0.5 * det * (1.0 - nd.a);
+      shape = clamp((shape - e) / (1.0 - e), 0.0, 1.0);
+    }
+    // (the ammonia thin where the map's cover is — the belts: an optical depth of a few, the zones' ~10)
+    let si = L.w * shape * select(1.0, 0.25 + 0.75 * cover[0], i == 0u);
+    s += si;
+    a += si * giantLayerAlbedo(i, GI_TOP);
+  }
+  // (the eye's wall: a cliff of towering clouds round the clear well, from the water deck up to ~50 km over the ammonia's —
+  // Cassini's 30–75 km —, its top falling outwards; the winds about the eye draw it into streaks along the circle — a noise
+  // in the eye's own frame, ~5 km across it, ~40 along, terraced every few km of height, wound into a slow spiral —, the big
+  // billows bulging it)
+  if (eye.y > 0.03) {
+    let base = giantLayer(m, 2u).x;
+    let topw = giantLayer(m, 0u).x + 55e3 * eye.y * (0.75 + 0.5 * big.g);
+    let hn = (h - base) / max(topw - base, 1.0);
+    if (hn > 0.0 && hn < 1.0) {
+      let rk = eye.z * rkm;
+      let ph = fract(atan2(q.y, q.x) / TAU + rk * 3e-4) * 160.0;
+      let ns = cloudNoise(vec3f(rk / 5.0, ph, h / 3e3) + vec3f(5.1));
+      let nb = cloudNoise(pk * (1.0 / 12.0) + vec3f(1.7));
+      let v = smoothstep(0.0, 0.08, hn) * (1.0 - smoothstep(0.75, 1.0, hn));
+      var w = smoothstep(0.35, 0.6, (0.5 * ns.g + 0.5 * nb.g) * v + 0.35 * eye.y - 0.25 * hn);
+      w = clamp(w - (1.0 - ns.b) * 0.35 * (1.0 - w), 0.0, 1.0);
+      if (det > 0.0 && w > 0.0) {
+        let nd = cloudNoise(pk * (1.0 / 1.2) + vec3f(8.3));
+        let e = 0.4 * det * (1.0 - nd.a);
+        w = clamp((w - e) / (1.0 - e), 0.0, 1.0);
+      }
+      let sw = 1.1e-3 * w;
+      s += sw;
+      a += sw * mix(vec3f(0.80, 0.80, 0.82), GI_TOP, hn);
+    }
+  }
+  GI_ALB = a / max(s, 1e-12);
+  return s;
+}
+fn giantInside(look: vec3f, k: u32) -> EarthNear {
+  setAir(k);
+  let m = u32(bodies[BV * k + 2u].z) - 4u;
+  let ab = squashOf(k);
+  let ro = nearCam();
+  let rs = squashed(toBody(look), ab);
+  let mm = length(rs);
+  let rd = rs / mm;
+  let rm = P.near4.w;
+  let rkm = rm * 1e-3;
+  let lt = nearLight(k);
+  let Ls = normalize(squashed(toBody(lt.dir), ab));
+  let E = lt.e;
+  let Lt = giantLayer(m, 0u);
+  let Lb = giantLayer(m, 2u);
+  let hTop = Lt.x + 3.0 * Lt.y + 70e3;
+  let hBot = Lb.x - 2.5 * Lb.y;
+  // (the map's cover over the camera's region — its luminance about its latitude's mean: the zones' ammonia thick, the
+  // belts thin —, and the top deck's colour, the map's own)
+  let qc = normalize(ro);
+  let latc = asin(clamp(qc.z, -1.0, 1.0));
+  let mapc = planetMapAt(m, vec2f(0.5 + atan2(qc.y, qc.x) / TAU, 0.5 - latc / PI));
+  let lz = luminance(mapc) - giantTop(m, 1u, latc);
+  let cover = vec3f(clamp(0.55 + 2.5 * lz, 0.2, 0.9), 0.6, 0.45);
+  GI_TOP = clamp(pow(mapc / max(luminance(mapc), 0.05), vec3f(1.3)) * 0.85, vec3f(0.3), vec3f(0.97));
+  // (the march: ~1 500 km at most; in the clear its steps growing with the distance — 6 % of it, 350 m at least —, in a cloud
+  // short — 1.5 % of it, 150 m at least: finer than the billows, or the jitter averages them into a blur —; jittered once)
+  let Dmax = 1.5e6;
+  let N = 112u;
+  var T = 1.0;
+  var col = vec3f(0.0);
+  var t = 350.0 * RND;
+  var tPrev = 0.0;
+  var tEnd = -1.0;
+  var hl = 0.0;
+  var sl = vec3f(0.0);
+  var inCloud = false;
+  for (var i = 0u; i < N; i++) {
+    let dc = max(350.0, 0.06 * t);
+    t += select(dc, clamp(0.015 * t, 150.0, dc), inCloud);
+    if (t > Dmax) { break; }
+    let dm = t;
+    let ds = dm - tPrev;
+    tPrev = dm;
+    let p = ro + rd * (dm * mm / rm);
+    let h = (length(p) - 1.0) * rm;
+    // (out of the decks: up, space beyond; down, the deep)
+    if (h > hTop && dot(p, rd) > 0.0) { break; }
+    if (h < hBot) { tEnd = dm; break; }
+    let q = normalize(p);
+    let mu0 = dot(q, Ls);
+    let sig = giantSigma(m, p, h, cover, rkm, 1.0 - smoothstep(15e3, 60e3, dm));
+    let alb = GI_ALB;
+    let clear = sig <= 0.0;
+    inCloud = !clear;
+    // (the air between: the hydrogen's Rayleigh and the deep haze — its chromophores, warm —, by the air's scale height:
+    // the distances fading to brown, ~500 km to the deck's level)
+    let dens = exp(-h / AIR.hr);
+    let br = AIR.br * dens;
+    // (and the upper haze over the ammonia — the photochemical smog's, an optical depth of ~¼ —: the sky's tan glow from below)
+    let bh = 2.2e-6 * exp(-h / (2.0 * AIR.hr)) + 1.2e-5 * exp(-sq((h - Lt.x - 20e3) / 12e3));
+    var sunT = 0.0;
+    if (mu0 > -0.15) {
+      // (towards the Sun through the decks above, marched — 3 steps to ~24 km: the holes in a ceiling let it through, beams
+      // and dapples, the billows' own shadows —; the column beyond, its layers' mean share, slant)
+      // (in the clear, one at ~12 km: the haze's beams)
+      var tl = 0.0;
+      var dPrev = 0.0;
+      for (var j = 0u; j < select(3u, 1u, clear); j++) {
+        let dl = 1500.0 * pow(4.0, select(f32(j), 1.5, clear));
+        let pl = p + Ls * (dl / rm);
+        tl += giantSigma(m, pl, (length(pl) - 1.0) * rm, cover, rkm, 0.0) * (dl - dPrev);
+        dPrev = dl;
+      }
+      let hEnd = h + dPrev * max(mu0, 0.0);
+      var tau = 0.0;
+      for (var j = 0u; j < 3u; j++) {
+        let L = giantLayer(m, j);
+        tau += L.w * cover[j] * 0.35 * giantColAbove(hEnd, L);
+      }
+      tau /= max(mu0 + 0.15, 0.03);
+      sunT = exp(-tau - tl) * smoothstep(-0.15, 0.05, mu0);
+    }
+    // (the in-scattered light: Wrenninge's octaves — each a half dimmer, its extinction a half less, its phase flatter —,
+    // and the sky's light from above, dimmer with the column; the hydrogen's own)
+    let ct = dot(rd, Ls);
+    var S = vec3f(0.0);
+    var a = 1.0;
+    var b = 1.0;
+    var c = 1.0;
+    for (var o = 0u; o < 3u; o++) {
+      S += a * cloudPhase(ct, c) * pow(sunT, b);
+      a *= 0.5;
+      b *= 0.4;
+      c *= 0.5;
+    }
+    // (the sky's light: the Sun's diffused down through the whole column above — μ₀/π by its diffuse transmission, a deck of
+    // optical depth 10 still passing a quarter: an overcast's light)
+    var tz = 0.0;
+    for (var j = 0u; j < 3u; j++) {
+      let L = giantLayer(m, j);
+      tz += L.w * cover[j] * 0.35 * giantColAbove(h, L);
+    }
+    let amb = 0.32 * max(mu0 + 0.1, 0.0) * cloudDiffuseT(tz) * (0.6 + 0.4 * pow(max(sunT, 1e-4), 0.15));
+    let src = E * (alb * sig * (S + vec3f(amb)) + br * (3.0 / (16.0 * PI)) * (1.0 + ct * ct) * sunT +
+      bh * vec3f(0.92, 0.72, 0.5) * (hgPhase(0.6, ct) * sunT + 0.4 * amb));
+    let ext = sig + luminance(br) + bh;
+    let tr = exp(-ext * ds);
+    col += T * src * (1.0 - tr) / max(ext, 1e-12);
+    T *= tr;
+    hl = h;
+    sl = src / max(ext, 1e-12);
+    if (T < 0.01) { tEnd = dm; break; }
+  }
+  // (level rays at the march's end: the haze beyond, its light as the last sample's; down: the deep's faint glow)
+  if (tEnd < 0.0 && t > Dmax) { tEnd = Dmax; }
+  if (tEnd > 0.0) {
+    col += T * sl * select(1.0, 0.25, hl < hBot);
+    return EarthNear(col, vec3f(0.0), tEnd / rm, 1.0);
+  }
+  return EarthNear(col, vec3f(T), -1.0, T);
+}
+
 fn earthSun(k: u32, gObs: f32) -> vec3f {
   let src = lightSource(k);
   return blackbody(src.x * gObs, P.disk.w) * src.y * bodies[BV * k + 3u].y * PI;
