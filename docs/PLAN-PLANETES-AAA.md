@@ -364,8 +364,9 @@ s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le loi
   (l'air des géantes dans `aero.ts`, l'entrée de Galileo rejouée : 252 g, 228 mesurés) et D1b (cet air donné à Jupiter et
   Saturne, après six groupes de corrections : les hauteurs signées sous 1 bar, « a un sol » plutôt que « a un air », leurs
   vents de G1 au CPU, le rendu inchangé) faits ; D2 (les nuages dedans, l'œil de Saturne), les orages de Jupiter, D3 (la
-  lumière : ombres des plafonds, rayons, lumière roussie) et D4 (les éclairs, fonction de l'horloge) faits. Restent
-  l'échauffement radiatif et l'écrasement (D1c), D5–D6.
+  lumière : ombres des plafonds, rayons, lumière roussie), D4 (les éclairs, fonction de l'horloge) et D5 (le panneau AIR,
+  les annonces, le tonnerre ; le vol sous 1 bar rendu possible) faits. Restent l'échauffement radiatif et l'écrasement (D1c),
+  D6.
 - **Ce que nous apprend le projet d'Alex** (vr-solar-system, `docs/agent/`, 31 octobre ; à peser, rien n'est décidé par lui) :
   - **leurs mesures sur le Quest 3** (un test de cyclone, pas un design) : le volume en pleine résolution coûte ~1 ms par
     échantillon et par image ; à un quart de la résolution, 32 échantillons ajoutent +3,4 ms, une passe à part avant la passe

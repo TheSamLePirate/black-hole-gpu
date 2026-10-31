@@ -960,12 +960,12 @@ Private in the class, callable at runtime: re-engages the hover autopilot at res
 
 ### `__bh.game.hoverOver(body, lat, lon, altKm = 1.5)` → string
 
-Places the Ranger `altKm` km (default 1.5) above one of our solid bodies' ground at latitude / east longitude (degrees), at rest over it (carried by the planet's turning), and engages the hover autopilot. G lands it from there (a powered landing's last minutes). Our worlds only.
+Places the Ranger `altKm` km (default 1.5) above one of our solid bodies' ground at latitude / east longitude (degrees), at rest over it (carried by the planet's turning), and engages the hover autopilot. G lands it from there (a powered landing's last minutes). Our worlds only. Over a giant (Jupiter, Saturn): `altKm` is over its 1 bar level, negative under it — in its clouds (PLAN-PLANETES-AAA P11 D5); the hover holds the place there.
 
 ```js
 __bh.game.hoverOver("moon", 0.674, 23.473, 1.5);   // over Tranquility Base
 ```
-*Used in:* `tests/e2e/tars-eval.e2e.test.ts`, `tests/flight/scenarios/vertical.ts`.
+*Used in:* `tests/e2e/tars-eval.e2e.test.ts`, `tests/flight/scenarios/vertical.ts`, `tests/e2e/giant-descent.e2e.test.ts`.
 
 ### `__bh.game.importSave(json, store = true)` → string
 

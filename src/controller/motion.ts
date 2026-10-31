@@ -11,6 +11,7 @@ import { inv3 } from "../pilot";
 import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose } from "../camera";
 import { TUNING } from "../game/tuning";
 import { airTop } from "../aero";
+import { deepShare } from "../system/ellipsoid";
 import { horizon, type Vec3 } from "../physics";
 import { BODY_NAMES, type Body } from "../targeting";
 import { fromZamo, toZamo } from "../geodesic";
@@ -594,8 +595,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       }
       // (a small part of the time the air takes to change the speed)
       if (aAir > 0) dt = Math.min(dt, Math.max(0.05 / aAir, 1e-6));
-      // (on the gear, or about to be: steps of 4 ms — its springs' few hertz)
-      if (gdef && gearHeight(ref, X, t) < 12) dt = Math.min(dt, 0.004 / secM);
+      // (on the gear, or about to be: steps of 4 ms — its springs' few hertz; a giant's signed height under its 1 bar is no
+      // gear's: its steps the air's — once 4 ms under it, a time warp's frame millions of them, the page hung)
+      if (gdef && ground && gearHeight(ref, X, t) < 12) dt = Math.min(dt, 0.004 / secM);
     }
     return dt;
   };
@@ -744,9 +746,10 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     // basin under it (the Moon's Tranquility 2 km, Jezero 2.6 km): the gear stands on that, not on the
     // sphere it once stopped on in mid-air)
     if (g.inside && g.inside !== ground) {
-      // (into a body with no ground to stand on: resting on its surface, moving with it)
+      // (into a body with no ground to stand on: resting on its surface, moving with it — a giant's deep floor, ~700 km
+      // under its 1 bar: its clouds flown through — P11 D5; once its 1 bar sphere, 171 km over its clouds at 12° S)
       const b = ourState(g.inside, t);
-      const r = OUR_BODIES.find((q) => q.id === g.inside)!.radius;
+      const r = OUR_BODIES.find((q) => q.id === g.inside)!.radius * deepShare(g.inside);
       const d = lin(X, 1, b.pos, -1);
       X = lin(b.pos, 1, d, (r * 1.0000001) / Math.hypot(...d));
       V = b.vel;
@@ -953,6 +956,8 @@ function ourSurfaceInfo(this: CameraController) {
     body: id as Body,
     // (a giant's: no ground under — the radio altimeter, the ground's guard, the descent card see none)
     alt: solid ? Math.max(alt, 0) : Number.POSITIVE_INFINITY,
+    // (a giant's: its signed height over its 1 bar level [m] — the readouts' — P11 D5)
+    level: solid ? undefined : alt,
     vVert: sp.vv,
     vHor: sp.vh,
     gLocal: (g * aUnit) / G0,

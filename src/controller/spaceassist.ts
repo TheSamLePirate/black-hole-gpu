@@ -128,8 +128,9 @@ function spaceAssistStep(this: CameraController, inp: PilotInput, dt: number) {
   // (the ring stopped, or another craft flown: its hold let go — the roll back to the stick's own pace)
   if (this.ringRpm != null && (!VESSELS[fleet.active].ring || (this.ringRpm === 0 && Math.abs(this.pilot.omega[2]) < 1e-3)))
     this.ringRpm = null;
-  // (the Lander's hover calls — controller/craftpanel.ts)
+  // (the Lander's hover calls, a giant's — controller/craftpanel.ts)
   this.hoverCallStep();
+  this.giantCallStep();
   // (its systems: consumables, failures, a stuck thruster's push — controller/systems.ts)
   this.systemsStep(inp, dt);
   // (station keeping let go: its held point forgotten — controller/stationkeep.ts)

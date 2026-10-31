@@ -2126,11 +2126,13 @@ export class FlightHud {
       T.vv!.className = "";
     }
     if (sf) {
+      // (a giant's height over its 1 bar level — its surface's own infinite: no ground)
+      const lvl = ("level" in sf ? sf.level : undefined) ?? 0;
       const m = (x: number) =>
         Math.abs(x) >= 1e4 ? `${(x / 1000).toFixed(Math.abs(x) >= 1e5 ? 0 : 1)} km` : `${x.toFixed(Math.abs(x) >= 100 ? 0 : 1)} m`;
       T.alt!.textContent = sf.landed
         ? tf("landed on {0}", BODY_NAMES[sf.body])
-        : `${m(sf.alt)}${sf.air > 1e-6 ? ` · ${t("air")} ${sf.air < 0.01 ? sf.air.toExponential(1) : sf.air.toFixed(2)} kg/m³` : ""}`;
+        : `${Number.isFinite(sf.alt) ? m(sf.alt) : `${lvl >= 0 ? "+" : "−"}${m(Math.abs(lvl))} · 1 bar`}${sf.air > 1e-6 ? ` · ${t("air")} ${sf.air < 0.01 ? sf.air.toExponential(1) : sf.air.toFixed(2)} kg/m³` : ""}`;
       T.vv!.textContent = `${sf.vVert >= 0 ? "▲" : "▼"} ${m(Math.abs(sf.vVert))}/s`;
       T.vv!.className = sf.vVert < -12 && sf.alt < 2000 ? "closing" : "";
       T.vh!.textContent = `${m(sf.vHor)}/s`;
@@ -3465,8 +3467,11 @@ export class FlightHud {
     const st = i.status;
     const sf = i.surface;
     // the height [m] and the vertical speed [m/s]: the ground's figures near it, else the orbit's
-    const near = !!sf && (!st || st.kerr || !Number.isFinite(st.altKm) || st.altKm < 50);
-    const alt = Math.max(0, near ? sf!.alt : st!.altKm * 1e3);
+    // (a giant's: no ground — its surface's height infinite —: the orbit's figures; an infinite scale's ticks never ended,
+    // the page hung in a giant's clouds — P11 D5)
+    const near = !!sf && Number.isFinite(sf.alt) && (!st || st.kerr || !Number.isFinite(st.altKm) || st.altKm < 50);
+    const alt = Math.max(0, near ? sf!.alt : (st?.altKm ?? 0) * 1e3);
+    if (!Number.isFinite(alt)) return;
     const vv = near ? sf!.vVert : (st?.vVert ?? 0);
     const o = st?.orbit;
     const pe = o ? o.peKm * 1e3 : NaN,

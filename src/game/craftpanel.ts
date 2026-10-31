@@ -110,3 +110,71 @@ export function mothershipPanel(d: MothershipIn, loc: (s: string) => string): Cr
     ],
   };
 }
+
+/** A giant's air about the craft (PLAN-PLANETES-AAA P11 D5): its height over the 1 bar level [m], the pressure [Pa], the
+ *  temperature [K], the deck it is in (its name) or none, the Sun's light left — direct, 0 … 1 —, the Sun over the horizon
+ *  (its height's sine), the wind eastward [m/s], the heat flux at the nose [W/m²]. */
+export interface GiantAirIn {
+  h: number;
+  p: number;
+  T: number;
+  deck: string | null;
+  sun: number;
+  mu0: number;
+  wind: number;
+  q: number;
+}
+
+/** The pressure Galileo's probe last spoke from (7 December 1995, 58 min into its fall) [Pa] */
+export const GALILEO_LAST = 22e5;
+
+/** The AIR panel, in a giant's clouds: what Galileo measured, as the craft meets it. `u` the units shown. */
+export function giantAirPanel(
+  d: GiantAirIn,
+  u: {
+    fPress: (pa: number) => string;
+    fTemp: (k: number) => string;
+    fDist: (m: number, d?: number) => string;
+    fSpd: (v: number) => string;
+  },
+  loc: (s: string) => string,
+): CraftPanel {
+  const sign = (x: number) => (x >= 0 ? "+" : "−");
+  return {
+    title: loc("AIR"),
+    rows: [
+      { label: "P", value: u.fPress(d.p), tone: d.p > GALILEO_LAST ? "bad" : d.p > 10e5 ? "warn" : "norm" },
+      { label: "T", value: u.fTemp(d.T), tone: d.T > 400 ? "warn" : "norm" },
+      { label: loc("1 BAR"), value: `${sign(d.h)}${u.fDist(Math.abs(d.h))}` },
+      { label: loc("CLOUD"), value: d.deck ?? "—", tone: d.deck ? "norm" : "dim" },
+      {
+        label: loc("SUN"),
+        // (a night: none; else the direct light's share left under the decks over the craft)
+        value: d.mu0 < -0.15 ? loc("night") : d.sun >= 0.995 ? "100 %" : d.sun >= 0.01 ? `${Math.round(d.sun * 100)} %` : "< 1 %",
+        tone: d.mu0 < -0.15 || d.sun < 0.01 ? "dim" : "norm",
+      },
+      { label: loc("WIND"), value: `${u.fSpd(Math.abs(d.wind))} ${d.wind >= 0 ? loc("E") : loc("W")}` },
+      ...(d.q > 1e3
+        ? [
+            {
+              label: loc("HEAT"),
+              value: `${(d.q / 1e6).toFixed(d.q < 1e6 ? 2 : 1)} MW/m²`,
+              tone: (d.q > 1e6 ? "bad" : "warn") as PanelTone,
+            },
+          ]
+        : []),
+    ],
+  };
+}
+
+/** The giants' calls (P11 D5), each once as it is crossed going down: a deck entered (its name), the 1, 10 and 22 bar
+ *  levels, the Sun's last percent. */
+export type GiantCall = { kind: "deck"; name: string } | { kind: "bar"; bar: 1 | 10 | 22 } | { kind: "dark" };
+export function giantCalls(before: GiantAirIn | null, now: GiantAirIn): GiantCall[] {
+  if (!before) return [];
+  const out: GiantCall[] = [];
+  if (now.deck && now.deck !== before.deck) out.push({ kind: "deck", name: now.deck });
+  for (const bar of [1, 10, 22] as const) if (before.p < bar * 1e5 && now.p >= bar * 1e5) out.push({ kind: "bar", bar });
+  if (now.mu0 > -0.15 && before.sun >= 0.01 && now.sun < 0.01) out.push({ kind: "dark" });
+  return out;
+}

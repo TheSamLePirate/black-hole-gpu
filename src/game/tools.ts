@@ -42,6 +42,7 @@ import {
   overPlace,
   ourGroundPose,
   ourGroundPoseOn,
+  ourLevelPose,
   ourMouthPose,
   ourNearPose,
   ourOrbitPose,
@@ -116,7 +117,7 @@ export class GameTools {
       "land(body, lat, lon)          put it on the ground (our solid bodies)",
       "walk(body, lat, lon)          on foot: the ship landed there, the astronaut out beside it (third person)",
       "near(body, {altKm, rM})       beside a body at rest (the hover autopilot holds it there)",
-      "hoverOver(body, lat, lon, altKm)   over a place of a ground, at rest over it, hovering (G lands it)",
+      "hoverOver(body, lat, lon, altKm)   over a place of a ground, at rest over it, hovering (G lands it); a giant's: over its 1 bar level",
       "wormhole('ours'|'gargantua', dM)   before a mouth of the wormhole, at rest",
       "placeAt({frame, X, vel, fwd, up})   put it at a state (home frame / the hole's map)",
       "target(id) · targets()        select the target",
@@ -537,7 +538,8 @@ export class GameTools {
   hoverOver(body: string, lat: number, lon: number, altKm = 1.5) {
     if (universeOf(body) !== "ours") throw new Error("hoverOver: our worlds");
     const t = this.ctx.time();
-    const g = ourGroundPose(body, lat, lon, t);
+    // (a giant: over its 1 bar level — under it too, altKm < 0: its clouds — P11 D5)
+    const g = solarBody(body)?.surface === "gas" ? ourLevelPose(body, lat, lon, t) : ourGroundPose(body, lat, lon, t);
     const k = (altKm * 1e3) / M_METRES;
     const X: V3 = [g.X[0] + g.up[0] * k, g.X[1] + g.up[1] * k, g.X[2] + g.up[2] * k];
     const note = this.placeAt({
@@ -690,6 +692,8 @@ export class GameTools {
   private hover() {
     const p = this.ctx.camera.pilot;
     p.auto = "none";
+    // (the place held: here — off and on in one breath, the last place's anchor stayed, the craft drawn back to it)
+    this.ctx.camera.ourAnchor = null;
     p.setAuto("hover");
   }
 

@@ -709,6 +709,10 @@ export class Renderer {
   giantTile: { state: "none" | "baking" | "done"; ms: number; gpuMs: number } = { state: "none", ms: 0, gpuMs: 0 };
   /** the camera's anchor on the Earth's squashed axes [radii] (params 67: float32), null away from the Earth */
   private nearAnchor: Vec3 | null = null;
+  /** the camera on the near body as the tracer has it this frame (PLAN-PLANETES-AAA P11 D5 — the giants' thunder, their
+   *  flashes the shader's to the millisecond: system/giant-clouds.ts): the body, the camera on its axes [its radii, z
+   *  squashed as the shader's], its metres a radius, the seconds clock (Params.zamo2.z); null: no near body */
+  nearCamera: { id: string; c: Vec3; mR: number; tc: number } | null = null;
   private noiseSampler!: GPUSampler;
   private postBeamV!: GPUComputePipeline;
   /** the display's and the post chain's pipelines (async compiles, awaited with the tracer's core) */
@@ -3255,6 +3259,13 @@ export class Renderer {
       c[2] = c[2]! / (1 - flatteningOf(bodies[near.index]!.id));
       const A = c.map((x) => Math.fround(x));
       this.nearAnchor = near.index === earthK ? (A as Vec3) : null;
+      if (!o.probe)
+        this.nearCamera = {
+          id: bodies[near.index]!.id,
+          c: c as Vec3,
+          mR: near.radius * 1476.625 * s.massSolar,
+          tc: (time * 4.925490947e-6 * s.massSolar) % 4096,
+        };
       set(67, A[0]!, A[1]!, A[2]!, A[0]! * A[0]! + A[1]! * A[1]! + A[2]! * A[2]! - 1);
       set(68, c[0]! - A[0]!, c[1]! - A[1]!, c[2]! - A[2]!, 1);
       // the runways within 150 km, nearest first: their frames, the camera from each threshold [m] — on the
@@ -3270,6 +3281,7 @@ export class Renderer {
       if (runways[0]! > 0 && !rasterGround) this.featureKey |= 256;
     } else {
       this.nearAnchor = null;
+      if (!o.probe) this.nearCamera = null;
       set(67, 0, 0, 0, 0);
       set(68, 0, 0, 0, 0);
     }

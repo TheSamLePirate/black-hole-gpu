@@ -18,6 +18,8 @@ import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
 import { cartToGeodetic, flatteningOf, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { setSceneryContact } from "./system/scenery-contact";
+import { GIANT_LAYERS, GiantThunder, isGiant } from "./system/giant-clouds";
+import { airAt } from "./aero";
 import { setDrawnRefractivity } from "./system/refraction";
 import { projectLook } from "./shadow";
 import { groundVelocity, heightOverGround } from "./system/our-surface";
@@ -330,6 +332,8 @@ const errorEl = $("error");
 
 // (the player's own settings as they left them — game/prefs.ts —, then a link's; the benchmark measures
 // from the defaults)
+/** the giants' thunder's ear (system/giant-clouds.ts — P11 D5) */
+const giantThunder = new GiantThunder();
 const settings: Settings = sanitize({
   ...defaultSettings(),
   ...(/[#&]bench\b/.test(location.hash) ? {} : readPrefs()),
@@ -8240,6 +8244,17 @@ async function main() {
     renderer.rain = viewer.rainView();
     // (a storm's lightning — N5 —: each new flash's thunder, after its sound's flight)
     for (const f of renderer.lightning.drain()) audio.thunder(renderer.lightning.distance(f));
+    // (a giant's lightning — P11 D5 —: the flashes the tracer draws there, found again on the CPU, each one's thunder after
+    // its flight at the hydrogen's speed of sound — ~1 km/s; the camera in its clouds, as the tracer's "inside")
+    const nc = renderer.nearCamera;
+    if (nc && isGiant(nc.id)) {
+      const top = GIANT_LAYERS[nc.id][0];
+      const h = (Math.hypot(...nc.c) - 1) * nc.mR;
+      if (h < top.c + 3 * top.w + 30e3) {
+        const a = airAt(solarBody(nc.id)?.atmosphere, h).a;
+        for (const x of giantThunder.step(nc.id === "jupiter" ? 4 : 5, nc.c, nc.mR, nc.tc)) audio.thunder(x.dist, a);
+      }
+    }
     renderer.meterSpot = telescopeSpot();
     // (the replay — S3 —: its frame drawn again under its camera; else the flight kept on the tape, while it runs)
     if (replay.active && !renderer.offlineActive) {

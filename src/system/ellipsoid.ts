@@ -177,6 +177,18 @@ export function withinFigure(r2: number, z: number, a: number, f: number): boole
   return r2 - z * z + z * z * k * k < a * a;
 }
 
+/** The share of its radius a body's "surface" stands at for the flight (bodies with no ground): the giants' 1 % under their
+ *  figure — ~700 km under Jupiter's 1 bar, past the 100 bar of their measured air: their clouds flown through, the crushing
+ *  well above (PLAN-PLANETES-AAA P11 D5) —; the others' figure itself (the Sun's). */
+export const deepShare = (id: string) => (id === "jupiter" || id === "saturn" || id === "uranus" || id === "neptune" ? 0.99 : 1);
+
+/** Within a body's figure — a giant's: under its deep floor (deepShare) — for the flight's gravity and its rest there. */
+export function withinBody(id: string, r: number, z: number, radius: number): boolean {
+  const a = radius * deepShare(id);
+  const f = flatteningOf(id);
+  return r < a && (f === 0 || withinFigure(r * r, z, a, f));
+}
+
 const DEG = Math.PI / 180;
 /**
  * Between two places on the WGS84 ellipsoid [° geodetic]: the distance along it [m] (Andoyer–Lambert: the sphere's

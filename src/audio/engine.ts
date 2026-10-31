@@ -1065,15 +1065,16 @@ export class SoundEngine {
   }
 
   /**
-   * Thunder from a flash `distM` metres off (docs/PLAN-NUAGES-AAA.md N5), heard after the sound's flight (distance / 343 m/s):
+   * Thunder from a flash `distM` metres off (docs/PLAN-NUAGES-AAA.md N5), heard after the sound's flight (distance / cSound —
+   * 343 m/s in the Earth's air, ~1 km/s in a giant's hydrogen):
    * near, its crack — the channel's shock, a sharp tearing —; then the channel's length rolling in, its kilometres arriving one
    * after the other — a train of low bursts over seconds —; the deep rumble under them. Farther, softer, and duller: the air
    * eats the highs (the crack gone past ~5 km, the rumble alone at 15).
    */
-  thunderAt(distM: number) {
+  thunderAt(distM: number, cSound = 343) {
     if (!this.running || !this.enabled) return;
     const d = Math.max(distM, 300);
-    const at = d / 343;
+    const at = d / cSound;
     // (a storm under a fast clock brings a flash nearly every frame: at most four thunders rolling at once, the rest unheard)
     const now = this.ctx!.currentTime;
     this.thunderEnds = this.thunderEnds.filter((e) => e > now);

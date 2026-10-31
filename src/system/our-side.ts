@@ -13,7 +13,7 @@ import { ellOfR, radius, repToSide, sidePosition, sideToRep, type Dneg } from ".
 import { GARGANTUA_SYSTEM } from "./bodies";
 import { bodyState } from "./ephemeris";
 import { poleOfDate, zonalAccel } from "./geopotential";
-import { flatteningOf, withinFigure } from "./ellipsoid";
+import { withinBody } from "./ellipsoid";
 import { mouthAccel, SOLAR_BODIES, solarState, spinVector } from "./solar";
 import { bodyFixedOf, figureUp, fromBodyFixed, groundPointOf, groundVelocity, toBodyFixed } from "./our-surface";
 import { M_METRES } from "../units";
@@ -63,8 +63,8 @@ export function gravityHome(X: Vec3, t: number, V?: Vec3): { acc: Vec3; inside: 
     const d: Vec3 = [P[0] - X[0], P[1] - X[1], P[2] - X[2]];
     const r = Math.hypot(...d);
     // (within its figure: the Earth's ellipsoid inside its equator's sphere — the poles 21 km in)
-    const within =
-      r < b.radius && (flatteningOf(b.id) === 0 || withinFigure(r * r, -dot(d, poleOfDate(b.id, t)), b.radius, flatteningOf(b.id)));
+    // (a giant's: under its deep floor — its clouds flown through: ellipsoid.ts deepShare)
+    const within = withinBody(b.id, r, -dot(d, poleOfDate(b.id, t)), b.radius);
     if (within) inside = b.id;
     const re = within ? Math.max(r, b.radius) : r;
     const k = b.mass / re ** 3;

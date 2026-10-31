@@ -3,7 +3,24 @@
 // (radar/landing.ts — PLAN-RADAR-AAA, RD4's leftover), and the Lander's hover calls (« 60 », « 30 »).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { fleet } from "../fleet";
-import { type CraftPanel, descentPanel, hoverCall, hoverSeconds, mothershipPanel } from "../game/craftpanel";
+import { airAt } from "../aero";
+import { cameraFrame } from "../camera";
+import {
+  type CraftPanel,
+  descentPanel,
+  type GiantAirIn,
+  giantAirPanel,
+  giantCalls,
+  hoverCall,
+  hoverSeconds,
+  mothershipPanel,
+} from "../game/craftpanel";
+import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
+import { GIANT_LAYERS, giantDaylight, giantDeckAt, isGiant } from "../system/giant-clouds";
+import { giantWindAt } from "../system/giant-winds";
+import { altitudeOver, toBodyFixed } from "../system/our-surface";
+import { solarBody, solarState } from "../system/solar";
+import { unitsFor } from "../ui/unitsys";
 import { LANDING_RADARS, type LandingRadarOut, landingRadar } from "../radar/landing";
 import { t } from "../i18n";
 import { G0 } from "../units";
@@ -18,6 +35,10 @@ declare module "../controls" {
   interface CameraController {
     /** the hover's seconds left last frame (the calls' crossing) */
     hoverSecPrev?: number;
+    /** a giant's air about the craft last frame (its calls' crossing — P11 D5) */
+    giantAirPrev?: GiantAirIn | null;
+    giantAirFigures: typeof giantAirFigures;
+    giantCallStep: typeof giantCallStep;
     craftPanelNow: typeof craftPanelNow;
     descentFigures: typeof descentFigures;
     landingRadarNow: typeof landingRadarNow;
@@ -66,9 +87,72 @@ function landingRadarNow(this: CameraController, i: FlightInfo): LandingRadarOut
   return spec && d ? landingRadar(spec, d) : null;
 }
 
+/**
+ * A giant's air about the flown craft (PLAN-PLANETES-AAA P11 D5) — from where the tracer draws its clouds from inside (the
+ * storms' anvils, ~30 km over the ammonia's top) down: the height over its 1 bar level, the pressure (ρ R T), the
+ * temperature, the deck it is in, the Sun's light left under the decks, the zonal wind, the heat flux; null elsewhere.
+ */
+function giantAirFigures(this: CameraController): GiantAirIn | null {
+  const nav = this.ourNav(cameraFrame(this.s));
+  if (!nav || !isGiant(nav.ref)) return null;
+  const id = nav.ref;
+  const top = GIANT_LAYERS[id][0];
+  const h = altitudeOver(id, nav.X, nav.t);
+  if (h > top.c + 3 * top.w + 30e3) return null;
+  const sb = solarBody(id)!;
+  const air = airAt(sb.atmosphere, h);
+  const lat = (cartToGeodetic(sb.radius, flatteningOf(id), toBodyFixed(id, nav.X, nav.t)).lat * 180) / Math.PI;
+  const c = solarState(id, nav.t).pos;
+  const sun = solarState("sun", nav.t).pos;
+  const up = [nav.X[0] - c[0], nav.X[1] - c[1], nav.X[2] - c[2]];
+  const to = [sun[0] - nav.X[0], sun[1] - nav.X[1], sun[2] - nav.X[2]];
+  const mu0 = (up[0]! * to[0]! + up[1]! * to[1]! + up[2]! * to[2]!) / (Math.hypot(...up) * Math.hypot(...to));
+  const q = (this.surfaceInfo() as { plasma?: { q: number } } | null)?.plasma?.q ?? 0;
+  return {
+    h,
+    p: air.rho * air.gas.R * air.T,
+    T: air.T,
+    deck: giantDeckAt(id, h)?.name ?? null,
+    sun: giantDaylight(id, h, mu0).direct,
+    mu0,
+    wind: giantWindAt(id, lat),
+    q,
+  };
+}
+
+/** The giants' calls (P11 D5): a deck entered, 1, 10 and 22 bar, the Sun gone — each once as the craft goes down. */
+function giantCallStep(this: CameraController) {
+  const now = this.giantAirFigures();
+  if (now) {
+    for (const c of giantCalls(this.giantAirPrev ?? null, now)) {
+      const say =
+        c.kind === "deck"
+          ? c.name === "NH₃"
+            ? t("Entering the ammonia ice clouds")
+            : c.name === "NH₄SH"
+              ? t("Entering the ammonium hydrosulfide clouds")
+              : t("Entering the water clouds")
+          : c.kind === "dark"
+            ? t("The Sun is gone — less than one percent of its light")
+            : c.bar === 1
+              ? t("One bar — the giant's reference level")
+              : c.bar === 10
+                ? t("Ten bar")
+                : t("Twenty-two bar — where Galileo's probe fell silent, 1995");
+      this.onPilotMessage?.(say);
+    }
+    // (the last place in a giant's clouds kept while out of them — a scene loading, a frame elsewhere: its crossings not
+    // lost)
+    this.giantAirPrev = now;
+  }
+}
+
 /** The flown craft's panel this frame, null when its profile has none to show now. */
 function craftPanelNow(this: CameraController, i: FlightInfo): CraftPanel | null {
   const me = fleet.active;
+  // (in a giant's clouds, any craft: its air — P11 D5)
+  const ga = this.giantAirFigures();
+  if (ga) return giantAirPanel(ga, unitsFor(this.s), t);
   const kind = VESSELS[me].space?.panel;
   if (kind === "descent") {
     const d = this.descentFigures(i);
@@ -114,5 +198,5 @@ function hoverCallStep(this: CameraController) {
 }
 
 export function installCraftPanel(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { craftPanelNow, descentFigures, landingRadarNow, hoverCallStep });
+  Object.assign(C.prototype, { craftPanelNow, descentFigures, landingRadarNow, hoverCallStep, giantAirFigures, giantCallStep });
 }

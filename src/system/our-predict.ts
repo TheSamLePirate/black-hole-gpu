@@ -7,7 +7,7 @@
 // A few thousand steps a call: the map's path is recomputed a few times a second.
 
 import { poleOfDate, zonalAccel } from "./geopotential";
-import { flatteningOf, withinFigure } from "./ellipsoid";
+import { withinBody } from "./ellipsoid";
 import { altitudeOver } from "./our-surface";
 import type { Vec3 } from "../physics";
 import { referenceBody, soiOf } from "./our-side";
@@ -77,8 +77,8 @@ function pull(X: Vec3, t: number, set: typeof SOLAR_BODIES, V?: Vec3) {
     const d = sub(P, X);
     const r = Math.hypot(...d);
     // (within its figure: the Earth's ellipsoid inside its equator's sphere — the poles 21 km in)
-    const within =
-      r < b.radius && (flatteningOf(b.id) === 0 || withinFigure(r * r, -dot(d, poleOfDate(b.id, t)), b.radius, flatteningOf(b.id)));
+    // (a giant's: under its deep floor — its clouds flown through: ellipsoid.ts deepShare)
+    const within = withinBody(b.id, r, -dot(d, poleOfDate(b.id, t)), b.radius);
     if (within) hit = b.id;
     const re = within ? Math.max(r, b.radius) : r;
     a = add(a, d, b.mass / re ** 3);

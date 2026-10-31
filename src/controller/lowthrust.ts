@@ -513,7 +513,14 @@ function ourWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, sa
     // low over a ground: the place over it held, carried by the ground's turning (at rest against the
     // body's centre the Moon's ground slides 4.6 m/s under it, the Earth's 400), the craft level on its
     // vectored thrust — a hover before a landing
-    if (!byMouth && nav.ref !== "sun" && solidBody(nav.ref) && gearHeight(nav.ref, nav.X, t) < HOVER_LOW) {
+    // (a giant's: in its clouds, over its 1 bar level's place — P11 D5; held against the stars, the planet's turn under it
+    // drew it away at its 12 km/s)
+    const lowOver =
+      nav.ref !== "sun" &&
+      (solidBody(nav.ref)
+        ? gearHeight(nav.ref, nav.X, t) < HOVER_LOW
+        : solarBody(nav.ref)?.surface === "gas" && altitudeOver(nav.ref, nav.X, t) < 100e3);
+    if (!byMouth && lowOver) {
       const id = nav.ref;
       const key = `ground:${id}`;
       if (this.ourAnchor?.ref !== key) this.ourAnchor = { ref: key, d: toBodyFixed(id, nav.X, t) };

@@ -136,6 +136,25 @@ export function ourGroundPose(id: string, lat: number, lon: number, t: number): 
   };
 }
 
+/** Over a giant's 1 bar level — its figure, no ground — at latitude / east longitude [°]: the pose ourGroundPose would give
+ *  there, not landed (PLAN-PLANETES-AAA P11 D5: hovering in its clouds, game/tools.ts hoverOver). */
+export function ourLevelPose(id: string, lat: number, lon: number, t: number): Pose {
+  const b = solarBody(id);
+  if (!b || b.surface !== "gas") throw new Error(`${b?.name ?? id}: not a giant`);
+  const X = fromBodyFixed(id, bodyFixedOf(id, lat, lon, 0), t);
+  const up = figureUp(id, X, t);
+  let east = cross(spinVector(b, t), up);
+  if (Math.hypot(...east) < 1e-12) east = cross([1, 0, 0], up);
+  return {
+    frame: "ours",
+    X,
+    vel: groundVelocity(id, X, t),
+    fwd: unit(east),
+    up,
+    note: `${b.name}: over ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`,
+  };
+}
+
 /**
  * Set down on the ground where its gear stands (our solid worlds): the relief sampled under each leg — the
  * craft's footprints, `legs` on its own axes (x left, z the nose) —, a plane through them (least squares), the

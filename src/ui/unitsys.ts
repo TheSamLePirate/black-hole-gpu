@@ -21,7 +21,12 @@ export interface Units {
   fSpd: (v: number) => string;
   fAlt: (m: number) => string;
   fDist: (m: number, digits?: number) => string;
+  /** a pressure [Pa], a temperature [K] written out: bar and kelvin with Celsius (a giant's air — P11 D5), psi and °F */
+  fPress: (pa: number) => string;
+  fTemp: (k: number) => string;
 }
+// (a pressure's digits: three significant)
+const sig3 = (x: number) => (x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x >= 1 ? x.toFixed(2) : x.toPrecision(2));
 
 const METRIC: Units = {
   sys: "metric",
@@ -37,6 +42,8 @@ const METRIC: Units = {
   fSpd: (v) => `${Math.round(v)} m/s`,
   fAlt: (m) => `${Math.round(m)} m`,
   fDist: (m, d = 1) => `${(m / 1000).toFixed(d)} km`,
+  fPress: (pa) => `${sig3(pa / 1e5)} bar`,
+  fTemp: (k) => `${Math.round(k)} K · ${Math.round(k - 273.15)} °C`,
 };
 
 const IMPERIAL: Units = {
@@ -53,6 +60,8 @@ const IMPERIAL: Units = {
   fSpd: (v) => `${Math.round(v * 1.943844)} kt`,
   fAlt: (m) => `${Math.round(m / 0.3048)} ft`,
   fDist: (m, d = 1) => `${(m / 1852).toFixed(d)} NM`,
+  fPress: (pa) => `${sig3(pa / 6894.757)} psi`,
+  fTemp: (k) => `${Math.round(((k - 273.15) * 9) / 5 + 32)} °F`,
 };
 
 /** The units of a system. */
