@@ -1,7 +1,18 @@
-# Les géantes gazeuses et le mouvement de leurs nuages
+# Les géantes gazeuses : leurs nuages, leur air, la descente
 
-Résumé du système tel qu'il est au 31 octobre 2026 (PLAN-PLANETES-AAA, phase P9, étapes G1 à G8). Le détail des mesures
-et du chemin parcouru : [progress/planetes-aaa/P9.md](progress/planetes-aaa/P9.md).
+Résumé du système tel qu'il est au 31 octobre 2026 au soir (PLAN-PLANETES-AAA : P9 étapes G1 à G9, P10, P11 entière). Le
+détail des mesures et du chemin parcouru : [progress/planetes-aaa/P9.md](progress/planetes-aaa/P9.md) (le mouvement et
+le relief), [P10.md](progress/planetes-aaa/P10.md) (Saturne, les figures aplaties),
+[P11.md](progress/planetes-aaa/P11.md) (la descente).
+
+**Où on en est.** Jupiter et Saturne sont complètes, de l'orbite à 22 bar et au-delà :
+- les nuages qui bougent (G1–G8) et leur relief au terminateur (G9) ;
+- les figures aplaties (P10) ;
+- l'air mesuré, les nuages en volume, leur lumière, les éclairs, le cockpit, la chaleur de l'entrée, l'écrasement (P11) ;
+- la caméra libre qui y descend, et un fondu continu entre la carte vue de haut et le volume (P11, après D6).
+
+Restent : les tours convectives vues d'orbite et la comparaison avec JunoCam (G9) ; quatre décisions en attente
+(§ 13) ; Uranus et Neptune, laissées de côté.
 
 ## En une phrase
 
@@ -10,6 +21,13 @@ chaque pixel. Les nuages ne sont pas simulés en direct ; on calcule seulement *
 qui est ici maintenant**, et on lit la carte à cet endroit. Les vents, les tourbillons nommés et une turbulence de près
 ne font que déplacer cette lecture. Tout est **une pure fonction de la date** : la même date donne la même image, après
 un saut dans le temps, en réseau comme en e2e.
+
+Trois façons de la dessiner, selon où est la caméra :
+- **de loin**, un disque (`planetShade`) ;
+- **sous son air**, le pont nuageux comme une surface en relief (`otherGround`, G9) ;
+- **dans ses nuages**, un volume marché (`giantInside`, P11).
+
+Entre les deux dernières, un fondu sur 450 km de hauteur (§ 9).
 
 ## Les quatre échelles du mouvement
 
@@ -107,7 +125,26 @@ relais.
   Elle ne s'allume donc jamais depuis l'orbite.
 - **Quand le temps va plus vite que ~1 000 ×**, elle se fige au milieu de sa fenêtre : les phases scintilleraient.
 
-## 5. Le chemin d'un pixel
+## 5. Le relief des sommets de nuages (G9)
+
+Une hauteur de 10⁻⁴ à 10⁻³ du rayon est invisible à midi, mais son ombre fait h / tan(e) : 12 km sous un Soleil à 2° en
+donnent 340. Le relief est donc calculé **au terminateur seulement**. Il est lu au même endroit déplacé que la couleur :
+les ombres suivent les nuages.
+
+- **Les zones et les bandes** : les cartes de Hubble OPAL dans la bande du méthane (FQ889N : un nuage haut est clair),
+  Jupiter avril 2018, Saturne 2024, moyennées par degré de latitude (`scripts/build-giant-tops.py` →
+  `system/giant-tops.ts`, `TABLE_TOPS`). Écart type ~3 km sur Jupiter, 5 sur Saturne. Leurs détails ne sont pas repris :
+  les ovales dérivent d'une année à l'autre, et la carte couleur est d'une autre date.
+- **Les détails** : la luminance de la carte couleur autour de sa moyenne de latitude (clair = haut). La Grande Tache et
+  l'Ovale BA sont des dômes (+8 km au cœur) ; l'œil du cyclone polaire de Saturne est creux (`giantHeight`).
+- **Sous le texel** : la tuile stocke dans son 4ᵉ canal la fonction de courant de ses tourbillons ψ′. La hauteur
+  géostrophique en découle, h = f ψ / g : un anticyclone haut, un cyclone creux, éteinte près de l'équateur.
+- **L'éclairage** (`otherGround`) : la pente incline la normale de l'ellipsoïde vers le Soleil ; les ombres portées
+  viennent d'une marche de cinq pas vers le Soleil. Tout s'allume sous μ₀ 0,35 et tant que la carte résout le relief ; la
+  bande du terminateur s'allume aussi vue d'orbite.
+- **Pas de brume ajoutée par-dessus** (G9d écartée) : les cartes sont des photos, leur brume y est déjà.
+
+## 6. Le chemin d'un pixel
 
 ```mermaid
 flowchart TD
@@ -120,7 +157,11 @@ flowchart TD
   G --> M[planetMapAt : la carte lue à l'endroit déplacé]
   M --> B[les deux phases fondues]
   B --> H[Saturne : l'allée de l'hexagone, l'œil du cyclone]
-  H --> S[planetShade / otherGround : l'éclairage]
+  H --> S[planetShade / otherGround : l'éclairage, le relief de G9 au terminateur]
+  S --> V{la caméra à moins de 450 km au-dessus du pont ?}
+  V -- oui --> X[giantInside : le volume, mêlé à la surface selon la distance — giantNearMix]
+  V -- non --> Z[l'image]
+  X --> Z
 ```
 
 - **De loin**, la planète est un disque dessiné par `planetShade`.
@@ -136,7 +177,76 @@ flowchart TD
   `mapLod()`. Ce dernier est borné au texel de la carte grossière (220 km), ce qui empêchait tout détail fin de
   s'allumer.
 
-## 6. Les anneaux de Saturne (pour mémoire)
+## 7. L'air des géantes (P11 D1)
+
+- **Le profil** (`aero.ts`, `GIANT_AIR`, les modèles `jupiter` et `saturn`) : hydrostatique, intégré depuis 1 bar dans
+  les deux sens sur les températures mesurées. Les sources : la sonde Galileo pour Jupiter (166 K à 1 bar, 429 K à
+  22 bar), Lindal et al. 1985 et Cassini pour Saturne (135 K à 1 bar). Il couvre de 10⁻¹⁰ à 10⁴ bar, l'adiabatique
+  prolongée au fond. Les hauteurs sous le niveau de 1 bar sont négatives. Les gaz : H₂/He, 2,22 et 2,07 g/mol.
+- **Les vents** de G1 entrent dans la vitesse relative à l'air, au CPU (`giant-winds.ts giantWindAt`).
+- **La chaleur de l'entrée** : la convection de Sutton–Graves, plus le rayonnement de la couche de choc d'hydrogène,
+  q = C Rₙ ρ^1,2 (V / 47,4 km/s)^10. Cette loi est calée sur le pic de Galileo, 30 kW/cm². Aucun vaisseau du jeu n'a de
+  bouclier ablatif : avec les dégâts, une entrée depuis l'espace est perdue.
+- **L'écrasement** : chaque vaisseau a sa pression de rupture (`VesselAero.pMax` : Ranger 150 bar, Lander 140,
+  Endurance 3, F-35 et A320 6), réduite de moitié à la température limite de sa coque (`crushLimit`).
+- **Le plancher** : un centième du rayon sous l'ellipsoïde de 1 bar pour la caméra, deux centièmes pour un vaisseau, sur
+  la figure aplatie (`ellipsoid.ts deepShare`, `deepFloorR`).
+
+## 8. Les nuages en volume (P11 D2–D4)
+
+- **Les trois ponts** (`giantLayer`, et leur jumeau `giant-clouds.ts GIANT_LAYERS`) :
+
+  | | ammoniac | hydrosulfure d'ammonium | eau |
+  |---|---|---|---|
+  | Jupiter | +12 km | −19 km | −52 km |
+  | Saturne | −18 km | −89 km | −189 km |
+
+  Ils sont modelés par le Perlin–Worley des nuages de la Terre, sur la couverture de la carte ; près de la caméra, une
+  érosion cinq fois plus fine.
+- **Les orages** : des colonnes nées au pont d'eau qui traversent les ponts et s'étalent en enclume ~25 km au-dessus de
+  l'ammoniac. Ils sont plus rares sur Saturne, et absents de l'œil.
+- **L'œil** (`giantEye`) : le vortex polaire nord de Saturne (~2 000 km) et le cyclone polaire central de Jupiter. Un
+  puits clair, un mur en gradins strié par les vents.
+- **La marche** : jusqu'à 1 500 km, en 112 pas au plus — 6 % de la distance dans le clair, 1,5 % dans un nuage, avec une
+  gigue à chaque pas. Un rayon à court de pas qui file vers le fond est arrêté par le fond.
+- **La lumière** (D3) :
+  - la marche vers le Soleil, puis le pont le plus proche au-dessus lu là où le rayon le traverse : rayons dans la brume,
+    ponts tachetés d'ombre ;
+  - la lumière roussie par les brumes ;
+  - la lumière du ciel donnée par la transmission diffuse de la colonne au-dessus.
+- **Les éclairs** (D4, `giantFlashes`) : une pure fonction de l'horloge de la scène. Quatre flux de demi-secondes ;
+  chaque flux cherche l'orage le plus fort autour de son point. Seul le plus brillant est dessiné.
+- **Les anneaux vus d'en dessous** : composés derrière le volume, à travers ce qu'il laisse passer, jamais à travers la
+  planète.
+
+## 9. Du dessus au dedans : la continuité
+
+- **Avant**, le volume prenait toute l'image d'un coup, 30 km au-dessus de l'ammoniac : les nuages apparaissaient en une
+  image.
+- **Désormais**, à moins de 450 km au-dessus du sommet du pont, la surface de G9 et le volume sont tracés tous deux, et
+  mêlés rayon par rayon (`giantInsideW`, `giantNearMix`).
+  - La part du volume dépend de la distance où le rayon rencontre le sommet du pont : entière jusqu'à 150 km, nulle
+    au-delà de 450.
+  - Les nuages proches sortent du pont en descendant ; les lointains se fondent dans la carte.
+  - Sous le sommet du pont, le volume seul.
+- **De si haut**, la marche commence à l'entrée de la coquille du volume (le sommet des nuages + 70 km).
+
+## 10. Le jeu dans les géantes (P11 D5–D6)
+
+- **Le panneau AIR** (`game/craftpanel.ts giantAirPanel`) : pression, température, hauteur sur 1 bar, le pont, le Soleil
+  qui reste, le vent, le flux thermique, la COQUE (la part de ce qu'elle tient). Métrique par défaut, psi et °F en option.
+- **Les annonces** : chaque pont, 1, 10 et 22 bar (là où Galileo s'est tue), le Soleil disparu, la pression sur la coque
+  à 80 %. En français et en anglais.
+- **Le tonnerre** : `system/giant-clouds.ts` refait au CPU les éclairs du shader à la milliseconde. Il porte les ponts,
+  la lumière qui passe et un port du bruit Perlin–Worley. Chaque éclair est entendu après son vol à la vitesse du son de
+  l'hydrogène, ~1 km/s.
+- **Le vol** : le stationnaire tient sa place portée par la rotation (`hoverOver`, hauteur sur 1 bar, négative dedans).
+- **La caméra libre** : sa vitesse va comme la distance au sommet des nuages (3 km au moins) ; sous les ponts, au plus
+  comme la distance au plancher, où elle s'arrête (`rig.ts`, `giantTop`). Avant, la caméra se réglait sur la sphère
+  équatoriale et restait bloquée 170 km au-dessus des nuages de Jupiter.
+- **Le film** : `scripts/giant-free-video.ts`, la caméra libre de l'orbite aux nuages, en 720p image par image.
+
+## 11. Les anneaux de Saturne (pour mémoire)
 
 - **Le profil** : une carte radiale de 2 048 texels (35 km). Sous ce texel, le profil de l'occultation radio de Cassini
   prend le relais, au kilomètre, de 69 800 à 140 900 km (`TABLE_RING`, G3).
@@ -150,7 +260,7 @@ flowchart TD
 - **De près** (G5), à moins de 20 km du plan : des blocs de glace un à un dans une nappe de ±15 m, sur trois grilles,
   jusqu'à 2 km.
 
-## 7. Ce que ça coûte (kerr-mini, médianes)
+## 12. Ce que ça coûte (kerr-mini, médianes)
 
 | Vue | ms | La Terre, même vue |
 |---|---|---|
@@ -158,12 +268,19 @@ flowchart TD
 | Jupiter de près (Grande Tache, tuile allumée) | 19,5 | — |
 | Saturne en orbite | 21,4 (58,5 avant P10) | 20,1 |
 | Saturne en vue ciné | 26,0 (64,0 avant P10) | 41,6 |
+| La Grande Tache au terminateur, 25 000 / 5 000 km (G9, toutes portes ouvertes) | 17,5 / 19,8 | 40 (en vol bas) |
+| Jupiter dedans, −3 km (P11), en jeu / à qualité fixe | 25,1 / 39,9 | 29,9 / 33,4 (vol bas, nuages coupés) |
+| Saturne dans l'œil, −25 km (P11), en jeu / à qualité fixe | 24,2 / 38,1 | idem |
+
+Dans la bande du fondu (§ 9), le coût reste au plus celui de la vue dedans. Sur ce Mac : 11,2 ms à 600 km (la surface
+seule), 15,7 à 250 km, 16,5 à 100 km, 27,1 à 40 km, 28,8 à −3 km (le volume seul). Les autres vues sont inchangées à
+±2 % (A/B sur le mini).
 
 Le mouvement des nuages ne coûte presque rien : Jupiter est même devenue plus rapide avec G8. Saturne coûtait 2,8 fois la
 Terre en orbite : pas ses anneaux, mais la région du trou de ver où la caméra se trouve (chaque rayon intégré pas à pas),
 corrigé en P10 — [progress/planetes-aaa/P10.md](progress/planetes-aaa/P10.md).
 
-## 8. Les limites connues
+## 13. Les limites connues et les décisions en attente
 
 - **La tuile** fait 128² : tout près (3 000 km), elle donne un voile marbré plutôt que des filaments nets.
 - **Les tourbillons nommés** ne suivent pas leur dérive sur des années. La carte (2018) les porte à leur place d'alors ;
@@ -176,7 +293,23 @@ corrigé en P10 — [progress/planetes-aaa/P10.md](progress/planetes-aaa/P10.md)
 - **L'éclairage du disque** : sous leur air (`earthLookFar` → `otherGround`, de loin comme de près), la loi de Minnaert
   (k 0,88 : l'assombrissement vers le bord) et une brume d'hydrogène mince. Le chemin des sondes et des noyaux sans air
   (`planetShade`) garde un éclairage de Lambert.
-- **Uranus et Neptune** : leur carte fixe seulement.
+- **Uranus et Neptune** : leur carte fixe seulement. Elles ne sont pas aplaties : `flatteningOf` ne connaît que la Terre,
+  Jupiter et Saturne.
+- **G9** : pas de tours convectives vues d'orbite, pas encore de comparaison côte à côte avec JunoCam.
+- **Le volume** :
+  - le dessous des orages reste plat sous le plafond ;
+  - les éclairs lointains font un voile gris ;
+  - l'œil de Saturne est terne, son puits sous-éclairé : les ponts absents y assombrissent encore le Soleil par leur
+    moyenne ;
+  - entre ~2 000 et 300 km d'altitude, la carte reste floue (son texel : 55 km).
+- **Les messages de perte du vaisseau** (`flightair.ts`) restent en anglais.
+- **À décider** :
+  - la hauteur des ponts près des pôles. Elle est aujourd'hui calculée dans l'espace aplati (0,902 de la hauteur
+    équatoriale au pôle de Saturne) ; la physique la voudrait géopotentielle (~0,75). Voir
+    `docs/agent/d2-frames-texels-heights-eye_2026-10-31-19-57-24.md` ;
+  - la lumière du puits de l'œil ;
+  - un bouclier ablatif pour un vaisseau ;
+  - côté projet d'Alex : un format commun des tourbillons, l'aplatissement d'Uranus et Neptune.
 
 ## Les tests
 
@@ -187,6 +320,18 @@ corrigé en P10 — [progress/planetes-aaa/P10.md](progress/planetes-aaa/P10.md)
 - **`tests/e2e/giants-flow.e2e.test.ts`** : 11 vues, chacune comparée à un tour de rotation d'écart (la même face sous
   le même Soleil : seuls les nuages ont bougé). La Grande Tache revenue à sa date après un saut donne **0,000/255**
   d'écart.
+- **Unitaires** :
+  - `tests/aero-giants.test.ts` : l'air ; l'entrée de Galileo rejouée avec la sonde elle-même (252 g pour 228 mesurés),
+    son flux (~30 kW/cm²) ; la profondeur où cède chaque coque ;
+  - `tests/giant-clouds.test.ts` : le jumeau CPU égal au shader, le panneau AIR, les annonces ;
+  - `tests/kernel-budget.test.ts` : les noyaux sous leur budget.
+- **e2e de P11** :
+  - `giant-lightning` : les éclairs du jumeau, retrouvés par le GPU ;
+  - `giant-descent` : de +25 km à 22 bar, le panneau, les annonces ;
+  - `giant-crush` : l'alarme, puis la coque écrasée ;
+  - `giant-entry` : la trajectoire de Galileo par le Ranger — ~366 g, 1 bar en 98 s ; avec les dégâts, la coque brûlée ;
+  - `giant-poles` : les deux géantes de 4 rayons, le limbe sur leur figure à 0,004 près, pas de bande de brume ;
+  - `giant-free-camera` : la caméra libre sous 1 bar, arrêtée au plancher.
 
 ---
 
@@ -210,3 +355,23 @@ The scales of motion:
 
 Cost: Jupiter is on the Earth's budget; Saturn too since P10 (21.4 ms in orbit, the Earth 20.1 — its cost was the wormhole
 region the camera sits in, not its rings). Since P10 both giants are oblate ellipsoids, in rendering and in flight.
+
+G9 gives the cloud tops relief at the terminator only, where shadows (h / tan e) make it visible. The heights come from
+Hubble OPAL's methane-band zones and belts, the map's luminance, the vortices as domes, and the tile's geostrophic
+height (h = f ψ / g). The light tilts the ellipsoid's normal and casts shadows with a five-step march.
+
+P11, the descent:
+- **The air.** Hydrostatic profiles from Galileo and Cassini, from 10⁻¹⁰ to 10⁴ bar, plus Cassini's winds.
+- **Heat and crushing.** The entry heat includes the hydrogen shock layer's radiation, fitted on Galileo's 30 kW/cm².
+  Each craft has its own crush pressure.
+- **The volume** (`giantInside`). Three decks with storms and Saturn's polar eye, lit through the decks above.
+  Lightning is a pure function of the clock, and a CPU twin plays its thunder.
+- **The cockpit.** An AIR panel and the calls.
+- **The free camera.** It now flies down into the clouds; its speed goes as the distance to the cloud tops.
+- **The continuity.** Within 450 km of the deck's top, the volume and G9's surface are mixed ray by ray, by the distance
+  at which the ray meets the deck. Near clouds come out of the deck as the camera comes down, far ones melt into the map.
+
+Inside cost on the mini: 25 ms in play (the Earth's low flight 30), ~39 ms at a fixed quality.
+
+Left: G9's convective towers and a JunoCam comparison. Four decisions are pending: geopotential deck heights near the
+poles, the eye's well light, an ablative shield, and Alex's proposals.

@@ -1,7 +1,13 @@
 # Plan — toutes les planètes au niveau de la Terre (AAA, détail maximal, jamais plus lent)
 
 Date : **29 octobre 2026**, sur `main` à `269ae823`.
-Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progress/planetes-aaa/P0.md](progress/planetes-aaa/P0.md). **P1 première partie faite** (30 octobre) — Miller et Mann éclairés sans le Ranger, le raster pour les mondes sans air : [P1.md](progress/planetes-aaa/P1.md).
+Statut au 31 octobre au soir : **P0, P2 à P8 et P11 faits** ; **P1 première partie faite** ; **P9 fait sauf les tours
+convectives et la comparaison JunoCam de G9** ; **P10 : Saturne faite, le reste à faire** (les vues encore au-dessus du
+budget, la campagne e2e finale, `docs/PLANETES.md` FR + EN, la galerie avant / après). Le détail par phase ci-dessous et
+dans [progress/planetes-aaa/](progress/planetes-aaa/) ; le système des géantes tel qu'il est :
+[GEANTES-GAZEUSES.md](GEANTES-GAZEUSES.md). En attente de décisions : § P11 (la hauteur des ponts près des pôles, la
+lumière du puits de l'œil, un bouclier ablatif ; le format commun des tourbillons et Uranus et Neptune aplaties, proposés
+par le projet d'Alex).
 
 ## 0. La demande
 
@@ -100,7 +106,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 ### P7 — Mars — **fait**, [P7.md](progress/planetes-aaa/P7.md) (au budget de la Terre ; tourbillons, givre à venir)
 - MOLA / HRSC / CTX en flux ; atmosphère poussiéreuse (ciel ocre, couchers bleus), tourbillons, givre polaire.
 
-### P8 — Les autres corps solides
+### P8 — Les autres corps solides — **fait**, [P8.md](progress/planetes-aaa/P8.md) (Europe ciné au-dessus du budget : P10)
 - Mercure (Messenger), Vénus (relief Magellan sous l'atmosphère épaisse : lumière diffuse orange), Titan (brume,
   **mers de méthane** avec la mer FFT de P2), Europe, Io, Ganymède, Callisto, Encelade, Cérès, Phobos, Deimos.
 - Décisions (30 octobre) : Titan, puis Vénus, puis les corps sans air ; des tuiles sur le serveur là où un MNT existe
@@ -144,7 +150,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   - **Fait** (30 octobre) : A1, A2 et l'optimisation de leur relief (A3 ci-dessous dans P8.md : les rayons de ciel, la
     marche des ombres ; Mercure ciné 76 → 43 ms, la Lune ciné 52 → 34) — [P8.md](progress/planetes-aaa/P8.md).
 
-### P9 — Géantes gazeuses et anneaux
+### P9 — Géantes gazeuses et anneaux — **fait**, [P9.md](progress/planetes-aaa/P9.md) (restent les tours convectives de G9 et la comparaison JunoCam)
 - Bandes animées et tempêtes depuis l'orbite (Jupiter KTX existant), anneaux de Saturne détaillés (ombres, effet
   d'opposition, particules de près).
 - Décisions (30 octobre) : les vents et une turbulence de près ; le profil fin des anneaux et leurs blocs de glace de
@@ -303,9 +309,22 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
     petits tourbillons convectifs sont cyclostrophiques. Dans la tolérance des hauteurs publiées : une note, pas un
     correctif ; la coupure à ±10° de l'équateur couvre l'autre limite.
 
-### P10 — Compensations, campagne, docs
+### P10 — Compensations, campagne, docs — **Saturne faite, le reste à faire**
 - Optimisations restantes pour tenir « jamais plus lent » partout, campagne e2e complète (ce Mac), `docs/PLANETES.md`
   FR + EN, galerie avant / après.
+- **Reste** (31 octobre au soir) :
+  - les vues encore au-dessus du budget de la Terre :
+    - Europe en vue ciné (1,9 fois : ses ombres — une carte d'ombre du Soleil pour les corps, prévue ici) ;
+    - Cérès en vue ciné (+11 %) ;
+    - Saturne tout près de ses anneaux, la vue tournée vers la bouche (~40 ms) ;
+    - les géantes dedans à qualité fixe (~39 ms, au budget de la Terre dans ses nuages, sans marge ; en jeu 25 ms) ;
+  - la campagne e2e complète, P11 comprise ;
+  - `docs/PLANETES.md` FR + EN, la galerie avant / après ;
+  - les restes reportés, à garder ou à abandonner :
+    - les rochers et les traces de pas de la Lune (P6) ;
+    - les tourbillons de poussière et le givre de Mars (P7) ;
+    - la seconde partie de P1 ;
+    - les tours convectives de G9 et sa comparaison JunoCam (P9).
 - La campagne et les docs de P10 couvrent aussi P11 : P11 se fait avant la campagne finale.
 - **Saturne — fait** (31 octobre) : sa vue en orbite 58,8 → 21,4 ms (la Terre 20,1), à contre-jour 63,3 → 26,0 — les
   rayons droits dans la région du trou de ver ; Jupiter et Saturne aplaties, au rendu et au vol ; le profil de Cassini à
@@ -313,7 +332,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
   parce qu'elles regardent du côté de la bouche : la lentille corrigée par un ajustement aux rayons exacts, 47–73 → 21–40
   ms sur kerr-mini (S4).
 
-### P11 — La descente dans les géantes (décidée le 31 octobre)
+### P11 — La descente dans les géantes (décidée le 31 octobre) — **fait**, [P11.md](progress/planetes-aaa/P11.md)
 Descendre dans Jupiter ou Saturne comme la sonde Galileo : entrer, traverser les couches de nuages, voir les éclairs,
 s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le lointain et les hauteurs.
 - **Le constat** : le pont nuageux est une surface (`otherGround`) ; dans `aero.ts`, Jupiter et Saturne **n'ont pas
