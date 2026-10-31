@@ -1406,7 +1406,8 @@ export const presets: Record<string, Preset> = {
     fov: 60,
     earthClouds: 0,
     time: (Date.UTC(2026, 7, 12, 7, 30) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
-    pose: { at: [44.233, 4.143], aim: [44.4262, 3.7391] },
+    // (over the village's roofs: at a person's height its street's houses — BD TOPO's — hid the hills)
+    pose: { at: [44.233, 4.143], aim: [44.4262, 3.7391], standM: 15 },
   },
   // ---- the exceptional landscapes (system/landscapes.ts): real photographs rebuilt — the camera where the
   // photographer stood, the way they looked, at their moment, through their lens

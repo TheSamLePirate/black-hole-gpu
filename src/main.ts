@@ -2021,6 +2021,8 @@ async function main() {
         settings.rotation = "tripod";
         camera.setRotation("tripod");
       }
+      // (the tripod raised over the roofs, as the scene asks: the rig holds it that high over the ground)
+      camera.viewController().rig.standH = v.landed && !settings.ship ? pose.standM : undefined;
       void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
     } else if (pose && pose !== "enduranceHole") {
       // (the station: at the real time now, unless the scene has its own)

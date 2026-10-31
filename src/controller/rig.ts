@@ -304,7 +304,8 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     // (a tripod in a town or by a craft parked: stood clear of the buildings, the trees, the hulls — set by its
     // coordinates it stood inside one, a multiple exposure's frames of walls —; read again when the scenery near it
     // comes in, the tripod moves, or a while has passed (a craft lands, takes off))
-    if (mode === "tripod" && w.ours && ref.id === "earth" && R.fixed) {
+    // (a person's tripod only: one raised over the roofs — by the keys or the scene — stands where it was put)
+    if (mode === "tripod" && w.ours && ref.id === "earth" && R.fixed && (R.standH ?? 1.7) < 3) {
       const C = sceneryContact();
       const crafts = parkedNear(R.fixed, t, mR);
       const stamp = `${R.fixed.join()}|${crafts.length}`;

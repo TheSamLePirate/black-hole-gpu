@@ -221,6 +221,9 @@ export interface BodyView {
   /** on the ground, no `look` nor `aim`: the nose level towards this azimuth [° from the north, eastwards] —
    *  a fixed view (a tripod for a multiple exposure: PLAN-CIEL C8); `off` then raises it */
   heading?: number;
+  /** on the ground, on the tripod: its eye that high over the ground [m] — a village's view over its roofs (a person's
+   *  1.7 m by default) */
+  standM?: number;
   off?: [number, number];
   /** in orbit: the ship's nose that far [°] below the body, its back towards it (the look turned onto
    *  the body passes over the cockpit: the hull out of the image) */
