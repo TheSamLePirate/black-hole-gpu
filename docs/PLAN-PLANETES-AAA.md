@@ -218,6 +218,67 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
     nommés, l'hexagone dessiné. Deux défauts de G1–G2 corrigés en chemin : de près, les nuages ne bougeaient pas
     (`otherGround`), et rien ne s'allumait sous le texel de la carte fine. Jupiter 21,2 → 20,5 ms en orbite (la Terre
     20,2), 20,1 → 19,5 de près ; Saturne, la Terre, Mars inchangées ; même date, même image.
+- **G9 — le relief des nuages des géantes** (décidé le 31 octobre). Après G8, le mouvement est juste mais l'image reste
+  plate : `giantAlbedo` donne une couleur posée sur la sphère, `otherGround` l'éclaire par Minnaert (k 0,88) avec la
+  normale de la sphère (`hdNormal` rend `q` : aucun relief pour les géantes). Il manque ce qui fait les images de Juno :
+  le relief des sommets de nuages, leurs **ombres au terminateur**, les tours d'orage qui dépassent, la parallaxe en vue
+  rasante. Le mouvement, lui, reste en 2D : c'est juste (des vents horizontaux de 100 à 180 m/s contre quelques m/s
+  verticaux) ; G9 donne de la hauteur à ce qui bouge déjà.
+  - **Les ordres de grandeur, qui fixent où ça se voit** :
+    - l'échelle de hauteur vers 1 bar : ~25 km sur Jupiter (165 K, g 24,8), ~50 km sur Saturne (135 K, g 10,4) ; les
+      couches : ammoniac vers 0,5–0,7 bar, NH₄SH vers 2 bar, eau vers 5 bar sur Jupiter, plus profondes et sous une brume
+      plus épaisse sur Saturne ; les écarts entre zones claires (montantes, plus hautes) et bandes sombres (descendantes,
+      plus profondes), et la Grande Tache au-dessus de ses voisines, se comptent en kilomètres à quelques dizaines (les
+      valeurs publiées sont reprises et citées en G9a) ;
+    - ces hauteurs font 10⁻⁴ à 10⁻³ du rayon : **invisibles à midi depuis l'orbite**, et c'est juste. Mais une ombre a
+      pour longueur h / tan(e) : 20 km sous un Soleil à 2° donnent ~570 km d'ombre, lisible depuis 25 000 km. Le relief
+      se joue donc au **terminateur** et en **vue rasante** — c'est là, et seulement là, qu'il doit être calculé.
+  - **Trois sources de hauteur, chacune à son échelle, toutes advectées comme la couleur** (la hauteur lue au même `uv`
+    déplacé que l'albédo : les ombres suivent les nuages, sans « bouillir » d'une phase à l'autre ; même date, même image) :
+    - **grande échelle (la carte)** : une carte de hauteur des sommets dérivée d'une mosaïque globale en bande du méthane
+      (à 889 nm, les nuages hauts sont clairs), si une telle carte existe avec une licence compatible (Hubble OPAL, à
+      vérifier en G9a) ; sinon la luminance de la carte, calibrée sur les écarts publiés entre zones et bandes ;
+    - **échelle de la tuile** : la **hauteur géostrophique** — dans un écoulement en équilibre géostrophique, la hauteur
+      des surfaces de pression suit la fonction de courant (h = f ψ / g) : les anticyclones sont hauts, les cyclones
+      creux, dans les deux hémisphères. La tuile la stocke dans son 4ᵉ canal, aujourd'hui la vorticité, que le shader ne
+      lit pas (`giantTileAt` ne prend que `v.xyz`) : **aucune lecture de plus**. Le signe est pris dans le repère de la
+      tuile, pour que ses anticyclones soient hauts partout ;
+    - **les tours convectives** (les « pop-up clouds » de JunoCam) : de petits sommets clairs qui dépassent, dans les
+      bandes turbulentes, tirés des pics du colorant ; optionnels, gardés seulement s'ils tiennent la comparaison.
+  - **L'éclairage** :
+    - une normale tirée du gradient de la hauteur (différences finies sur les échelles grande et moyenne, pas la fine),
+      dans `otherGround` à la place de `q` ; Minnaert gardé pour le limbe ;
+    - des ombres portées par une marche courte vers le Soleil (3 à 4 pas croissants sur la hauteur advectée) ;
+    - tout ceci **allumé seulement là où ça se voit** : Soleil bas (μ₀ sous ~0,35) ou vue rasante, et empreinte du pixel
+      plus petite que l'ombre attendue ; ailleurs le chemin de G8, inchangé ;
+    - **la brume du dessus** (approche B de l'analyse) : une nappe haute semi-transparente au-dessus du pont nuageux,
+      décalée par la parallaxe en vue rasante, plus épaisse sur Saturne ; elle adoucit le relief au limbe.
+  - **Hors G9** : un vrai volume marché (couches d'ammoniac, de NH₄SH, d'eau, comme la passe nuageuse de la Terre), utile
+    seulement si l'on descend sous le pont nuageux — aujourd'hui une surface (`otherGround`). Plusieurs ms : une phase à
+    part, si le jeu doit permettre cette descente.
+  - Étapes :
+    - G9a les données : les hauteurs publiées (échelles de hauteur, zones et bandes, Grande Tache, pop-up clouds), la
+      carte en bande du méthane si elle existe (licence, axes du jeu, Système III), sinon la calibration de la luminance ;
+    - G9b la hauteur géostrophique dans la tuile (`giant-tile.ts`), un test de signe (anticyclone haut) et de cohérence
+      (ψ et déplacement de la même fenêtre) ;
+    - G9c la normale et les ombres dans `otherGround` (le noyau 2 seulement : la Terre ne doit pas changer d'une ligne),
+      leurs portes μ₀ et empreinte ;
+    - G9d la brume du dessus et sa parallaxe ;
+    - G9e mesures, e2e, docs FR + EN.
+  - Critères d'acceptation :
+    - **performances** : A/B alterné sur kerr-mini (deux tours) contre le commit d'avant G9. Jupiter en orbite inchangée
+      (±1 % : le relief éteint par ses portes) et au plus au budget de la Terre (20,2 ms) ; une **vue de terminateur**
+      nouvelle — le pire cas, toutes les portes ouvertes — au plus au budget de la Terre dans la vue équivalente ; Saturne
+      pas plus lente (déjà 2,8 fois la Terre en orbite : G9 n'y ajoute rien hors des vues proches) ; la Terre, la Lune,
+      Mars inchangées ; `kernel-budget.test.ts` vert, la Terre inchangée à la ligne près ;
+    - **qualité** : au terminateur, à 25 000 et à 5 000 km, des sommets éclairés d'un côté, des ombres longues
+      orientées à l'opposé du Soleil, les tours d'orage qui dépassent, la Grande Tache en relief ; comparé côte à côte avec
+      des images JunoCam du terminateur (crédit NASA / JPL-Caltech / SwRI / MSSS) dans `progress/planetes-aaa/` ; aucune
+      ombre qui saute ou clignote d'une phase à l'autre ; à midi depuis l'orbite, l'image de G8 (pas de relief inventé) ;
+    - **justesse** : les hauteurs en kilomètres, aux ordres de grandeur publiés et cités ; un test de tranche WGSL pour
+      la longueur d'ombre (h / tan e) et pour le signe géostrophique (anticyclone haut dans les deux hémisphères) ; les
+      ombres dans le sens du Soleil réel de la date ; même date, même image (0/255) ; Saturne plus douce que Jupiter
+      (échelle de hauteur double, brume plus épaisse).
 
 ### P10 — Compensations, campagne, docs
 - Optimisations restantes pour tenir « jamais plus lent » partout, campagne e2e complète (ce Mac), `docs/PLANETES.md`
@@ -233,3 +294,4 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 | Tuiles NASA lentes ou indisponibles | cache, repli sur la carte globale, zones hors-ligne |
 | Budget « jamais plus lent » | P1 libère la marge ; chaque phase mesurée avant le push |
 | G8 : la tuile de turbulence se répète ou dérive de la carte réelle | éteinte au-dessus du texel, tournée par bande, fondu à deux phases (jamais d'advection sans fin) ; e2e à date fixe |
+| G9 : un relief inventé ou exagéré (les géantes « en plâtre »), ou des ombres qui bougent avec les phases | hauteurs en km aux ordres publiés, allumées seulement au terminateur et en vue rasante, lues au même uv advecté que la couleur ; comparaison JunoCam |
