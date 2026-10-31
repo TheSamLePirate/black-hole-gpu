@@ -19,6 +19,7 @@ import { envOf, type EnvDesc } from "../entry-env";
 import { landingEnd, siteDir, sitesOf, type Site } from "../game/sites";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { aeroForces, airAt, airTop, entryInterface, highAlphaAuthority } from "../aero";
+import { giantWindAt } from "../system/giant-winds";
 import { GEAR, groundR, localAccel, localToZamo, planetFrame, toGlobal, toLocal, zamoBeta, zamoToLocal } from "../landing";
 import { circularSpeed, type FlightMode, type PilotInput } from "../pilot";
 import { JET } from "../game/jet";
@@ -991,8 +992,16 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   {
     const nav = this.ourNav(cameraFrame(s));
     const b = nav && nav.ref !== "sun" ? solarBody(nav.ref) : undefined;
+    // (a giant: its zonal wind, Cassini's — G1's, the clouds' —, east at every height in its air; never the Earth's weather)
+    if (nav && b?.atmosphere && b.surface === "gas" && altitudeOver(nav.ref, nav.X, nav.t) < airTop(b.atmosphere)) {
+      const q = toBodyFixed(nav.ref, nav.X, nav.t);
+      const u = giantWindAt(nav.ref, (Math.asin(q[2] / Math.hypot(...q)) * 180) / Math.PI);
+      const east = unitV(cross(unitV(spinVector(b, nav.t)), unitV(sub3(nav.X, ourState(nav.ref, nav.t).pos))));
+      this.windHome = east.map((c) => (c * u) / C_MPS) as Vec3;
+      this.windNow = { speed: Math.abs(u), from: u >= 0 ? 270 : 90 };
+    }
     // (the fair weather calm: no wind, as before; any other weather has its own)
-    if (nav && b?.atmosphere && (s.wind > 0 || s.weather !== "fair")) {
+    else if (nav && b?.atmosphere && b.surface !== "gas" && (s.wind > 0 || s.weather !== "fair")) {
       const P = ourState(nav.ref, nav.t).pos;
       const d = sub3(nav.X, P);
       const h = solidBody(nav.ref) ? gearHeight(nav.ref, nav.X, nav.t) + GEAR : altitudeOver(nav.ref, nav.X, nav.t);
@@ -2138,7 +2147,8 @@ function weatherPlace(this: CameraController): { body: string; lat: number; lon:
   const nav = this.ourNav(cameraFrame(this.s));
   if (!nav || nav.ref === "sun") return null;
   const b = solarBody(nav.ref);
-  if (!b?.atmosphere) return null;
+  // (a giant's air has no weather of the Earth's kind: its winds are G1's)
+  if (!b?.atmosphere || !solidBody(nav.ref)) return null;
   const q = toBodyFixed(nav.ref, nav.X, nav.t);
   // (its height over the ground — a solid world's, its relief and figure; the giants', over their ellipsoid at 1 bar: the
   // equator's sphere put a craft on Edwards's runway 6 km under it)

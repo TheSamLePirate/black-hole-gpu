@@ -11,3 +11,13 @@ export const GIANT_WINDS = new Float32Array([
   412.0, 400.0, 362.0, 325.0, 288.0, 250.0, 210.0, 170.0, 130.0, 90.0, 65.0, 40.0, 24.0, 44.0, 55.0, 30.0, 14.0, 36.0, 58.0, 80.0, 61.0,
   42.0, 24.0, 42.0, 71.0, 99.0, 82.0, 37.0, 0.0, 0.0, 0.0, 0.0,
 ]);
+
+/** A giant's zonal wind at a latitude [deg] — eastward [m/s], linear between the table's 2.5° (the CPU's twin of trace.wgsl
+ *  giantWind): the wind a craft meets in its air (PLAN-PLANETES-AAA P11 D1b — Galileo measured it rising with depth, to
+ *  ~180 m/s near 5 bar: the cloud tops' kept at every height). 0 for any other body. */
+export function giantWindAt(id: string, latDeg: number): number {
+  if (id !== "jupiter" && id !== "saturn") return 0;
+  const x = Math.min(Math.max((latDeg + 90) / 2.5, 0), 71.999);
+  const i = Math.floor(x) + (id === "jupiter" ? 0 : 73);
+  return GIANT_WINDS[i]! + (GIANT_WINDS[i + 1]! - GIANT_WINDS[i]!) * (x - Math.floor(x));
+}

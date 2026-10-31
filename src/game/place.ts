@@ -17,7 +17,7 @@ import { millerWaves, SURF } from "../terrain";
 import { mouth, sphericalFrame } from "../wormhole";
 import { ECLIPTIC, elements, stateFrom, type Axes, type OrbitSpec } from "./orbit";
 import { add, cross, dot, sub } from "../math/vec3";
-import { airTop } from "../aero";
+import { type Atmosphere, airTop } from "../aero";
 import { C_MPS } from "../units";
 
 const unit = (a: Vec3): Vec3 => {
@@ -79,6 +79,8 @@ export function equatorAxes(id: string, t?: number): Axes {
 export function airTopKm(id: string) {
   const b = solarBody(id) ?? GARGANTUA_SYSTEM.bodies.find((q) => q.id === id);
   const atm = b && ("atmosphere" in b ? b.atmosphere : (b as { surface?: { atmosphere?: { H: number } } }).surface?.atmosphere);
+  // (a giant's measured air reaches far above its 12 scale heights at 1 bar — its warm thermosphere: where it thins away)
+  if (atm && "model" in atm && (atm.model === "jupiter" || atm.model === "saturn")) return airTop(atm as Atmosphere) / 1e3;
   return atm ? (12 * atm.H) / 1e3 : 0;
 }
 

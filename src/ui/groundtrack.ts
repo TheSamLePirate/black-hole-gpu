@@ -818,7 +818,7 @@ export class GroundTrack {
       ctx.drawImage(c, x0, y0, mw, mh);
     }
     // the weather (W2b): its radar, the wind's particles, the stations — a world with air, ours
-    if (this.weatherLayer && sc.ours && solarBody(sc.id)?.atmosphere) {
+    if (this.weatherLayer && sc.ours && solarBody(sc.id)?.atmosphere && solarBody(sc.id)?.surface !== "gas") {
       this.wxShown = true;
       (this.wxLayer ??= new WeatherMapLayer(this.stage)).draw(
         ctx,
@@ -982,7 +982,7 @@ export class GroundTrack {
     if (sc.entry?.length) path(sc.entry, "rgb(255, 154, 74)", 2, [6, 3]);
     // the world's landing sites: a ring (a runway: a bar), the chosen one bright — the weather's layer
     // shown, their station symbols stand for them (the chosen one still ringed)
-    const wxShown = this.weatherLayer && sc.ours && !!solarBody(sc.id)?.atmosphere;
+    const wxShown = this.weatherLayer && sc.ours && !!solarBody(sc.id)?.atmosphere && solarBody(sc.id)?.surface !== "gas";
     for (const st of (sc.sites ?? []).filter((x) => !wxShown || x.chosen)) {
       const p = at(st.q);
       if (!p) continue;

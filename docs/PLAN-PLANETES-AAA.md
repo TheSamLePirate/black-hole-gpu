@@ -356,8 +356,9 @@ s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le loi
   - D5 cockpit, instruments, annonces ;
   - D6 mesures, e2e (dont une entrée rapide), docs FR + EN.
 - **En cours** (31 octobre) — [P11.md](progress/planetes-aaa/P11.md) : D0 (les profils de Galileo et de Cassini) et D1a
-  (l'air des géantes dans `aero.ts`, l'entrée de Galileo rejouée : 252 g, 228 mesurés) faits ; D1b (le brancher aux corps)
-  passé en revue : six groupes de corrections avant.
+  (l'air des géantes dans `aero.ts`, l'entrée de Galileo rejouée : 252 g, 228 mesurés) et D1b (cet air donné à Jupiter et
+  Saturne, après six groupes de corrections : les hauteurs signées sous 1 bar, « a un sol » plutôt que « a un air », leurs
+  vents de G1 au CPU, le rendu inchangé) faits. Restent l'échauffement radiatif et l'écrasement (D1c), D2–D6.
 - Critères d'acceptation :
   - **performances** : la vue dans les nuages au plus au budget de la Terre en vol bas dans ses nuages (aujourd'hui ~39 ms
     sur kerr-mini ; Jupiter de près en coûte 19,5 : la marge est là) ; toutes les vues hors de l'air des géantes

@@ -69,3 +69,22 @@ test("Galileo's entry, flown through this air: its peak deceleration ~228 g (her
   expect(gs).toBeLessThan(280);
   expect(GASES.h2heJ.R).toBeCloseTo(3745, -1);
 });
+
+test("D1b: the giants' air on the bodies — signed heights below 1 bar, G1's winds, the default orbit above the air's top", async () => {
+  const { airDensity } = await import("../src/system/our-surface");
+  const { giantWindAt } = await import("../src/system/giant-winds");
+  const { defaultAltKm } = await import("../src/game/place");
+  const { airTop } = await import("../src/aero");
+  const { solarBody } = await import("../src/system/solar");
+  // (no ground: denser below the 1 bar level, not held at its density)
+  expect(airDensity("jupiter", -50e3)).toBeGreaterThan(1.5 * airDensity("jupiter", 0));
+  expect(airDensity("saturn", 0)).toBeCloseTo(0.1847, 2);
+  // (a solid world's still from its ground up)
+  expect(airDensity("earth", -1000)).toBeCloseTo(airDensity("earth", 0), 6);
+  // (the zonal winds: Saturn's equatorial jet, Jupiter's 24° N jet; none elsewhere)
+  expect(giantWindAt("saturn", 0)).toBeCloseTo(450, 0);
+  expect(giantWindAt("jupiter", 23.75)).toBeGreaterThan(100);
+  expect(giantWindAt("earth", 0)).toBe(0);
+  // (the default orbit clear of the air — its warm thermosphere's top, not 12 scale heights)
+  for (const id of ["jupiter", "saturn"]) expect(defaultAltKm(id) * 1e3).toBeGreaterThan(airTop(solarBody(id)!.atmosphere));
+});

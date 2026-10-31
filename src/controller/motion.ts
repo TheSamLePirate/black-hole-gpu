@@ -10,6 +10,7 @@ import { tf } from "../i18n";
 import { inv3 } from "../pilot";
 import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose } from "../camera";
 import { TUNING } from "../game/tuning";
+import { airTop } from "../aero";
 import { horizon, type Vec3 } from "../physics";
 import { BODY_NAMES, type Body } from "../targeting";
 import { fromZamo, toZamo } from "../geodesic";
@@ -486,7 +487,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
   const ref = referenceBody(X, t0);
   const ground = solidBody(ref) ? ref : null;
   const atm = ref !== "sun" ? solarBody(ref)?.atmosphere : undefined;
-  const airy = !!atm && flown;
+  // (a giant's air only within it: its sphere of influence tens of millions of km wide — the vacuum's steps outside)
+  const airy = !!atm && flown && (!!ground || altitudeOver(ref, X, t0) < 1.5 * airTop(atm));
   let g = gravityHome(X, t0, V);
   // (the flown craft's own aerodynamics — its attitude, its configuration — in the home frame)
   const right = cross(fwd, up);
@@ -584,9 +586,12 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     // (fourth order in the vacuum: longer steps — the map's prediction's own)
     let dt = airy ? 0.01 * g.tDyn : symmetricStep(0.025, g.tDyn, g.tDot);
     if (ground || airy) {
-      const h = Math.max(gearHeight(ref, X, t), 0) / M_METRES;
-      const vr = Math.hypot(...sub3(V, groundVelocity(ref, X, t))) + 1e-12;
-      dt = Math.min(dt, Math.max((0.1 * h) / vr, 2e-4));
+      // (a solid world's ground: a small part of the time to reach it; a giant has none)
+      if (ground) {
+        const h = Math.max(gearHeight(ref, X, t), 0) / M_METRES;
+        const vr = Math.hypot(...sub3(V, groundVelocity(ref, X, t))) + 1e-12;
+        dt = Math.min(dt, Math.max((0.1 * h) / vr, 2e-4));
+      }
       // (a small part of the time the air takes to change the speed)
       if (aAir > 0) dt = Math.min(dt, Math.max(0.05 / aAir, 1e-6));
       // (on the gear, or about to be: steps of 4 ms — its springs' few hertz)
@@ -926,7 +931,10 @@ function ourSurfaceInfo(this: CameraController) {
   const id = nav.ref;
   const sb = solarBody(id)!;
   const alt = gearHeight(id, nav.X, nav.t);
-  if (!(solidBody(id) || ourAir(id, 0) > 0) || alt > Math.max(30 * (sb.atmosphere?.H ?? 0), 0.5 * sb.radius * M_METRES)) return null;
+  const solid = solidBody(id);
+  // (a giant: its air without a ground — within its air's top; its height under the 1 bar level signed)
+  const reach = solid ? Math.max(30 * (sb.atmosphere?.H ?? 0), 0.5 * sb.radius * M_METRES) : airTop(sb.atmosphere);
+  if (!(solid || ourAir(id, 0) > 0) || alt > reach) return null;
   const sp = groundSpeeds(id, nav.X, nav.V, nav.t);
   const r = Math.hypot(...sub3(nav.X, nav.refPos));
   const g = sb.mass / (r * r);
@@ -943,7 +951,8 @@ function ourSurfaceInfo(this: CameraController) {
   return {
     plasma: { q, flow, level: Math.min(Math.max((Math.log10(Math.max(q, 1)) - 5) / 1.5, 0), 1) },
     body: id as Body,
-    alt: Math.max(alt, 0),
+    // (a giant's: no ground under — the radio altimeter, the ground's guard, the descent card see none)
+    alt: solid ? Math.max(alt, 0) : Number.POSITIVE_INFINITY,
     vVert: sp.vv,
     vHor: sp.vh,
     gLocal: (g * aUnit) / G0,

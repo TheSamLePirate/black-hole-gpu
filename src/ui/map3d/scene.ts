@@ -180,7 +180,8 @@ export function ourScene(t0: number, mouthRadius = 0.05): MapScene {
       orbitOff: off,
       light: b.kind === "star" ? null : "sun",
       rings: b.rings,
-      air: !!b.atmosphere,
+      // (the giants' air: their limb drawn as before — their discs are their clouds, PLAN-PLANETES-AAA P11 D2 to come)
+      air: !!b.atmosphere && b.surface !== "gas",
       period: T || undefined,
     });
   }

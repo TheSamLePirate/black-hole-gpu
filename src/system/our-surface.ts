@@ -35,16 +35,17 @@ export function groundVelocity(id: string, X: Vec3, t: number): Vec3 {
   return [st.vel[0] + v[0], st.vel[1] + v[1], st.vel[2] + v[2]];
 }
 
-/** Air density [kg/m³] at a height [m] above a body (none: 0). */
+/** Air density [kg/m³] at a height [m] above a body (none: 0) — a solid one's from its ground up, a giant's below its 1 bar
+ *  level too (PLAN-PLANETES-AAA P11: no ground there, its air denser down). */
 export function airDensity(id: string, hM: number) {
-  return airAt(solarBody(id)?.atmosphere, Math.max(hM, 0)).rho;
+  return airAt(solarBody(id)?.atmosphere, solidBody(id) ? Math.max(hM, 0) : hM).rho;
 }
 
 /** The thin air's density at a height [m] above a body, with no floor: the thermosphere's drag on an
  *  orbit (the ISS's 400 km: 3·10⁻¹² kg/m³, some fifty metres a day) — beyond 2 500 km, none. */
 export function thinAirDensity(id: string, hM: number) {
   const atm = solarBody(id)?.atmosphere;
-  return atm && hM < 2.5e6 ? airRaw(atm, Math.max(hM, 0)).rho : 0;
+  return atm && hM < 2.5e6 ? airRaw(atm, solidBody(id) ? Math.max(hM, 0) : hM).rho : 0;
 }
 
 /** The air's drag on the ship (home frame, c²/M): ½ ρ v² / B against its motion through the air — the
@@ -73,8 +74,9 @@ export function railsDecay(id: string, mu: number, r: Vec3, v: Vec3, dt: number,
   if (!(eps < 0)) return { r, v };
   const a = -mu / (2 * eps);
   if (Math.abs(R - a) > 0.05 * a) return { r, v };
-  // (over a turn, the figure's mean radius under it: the Earth's ellipsoid between 6 357 and 6 378 km)
-  const rho = thinAirDensity(id, (a - meanRadius(id)) * M_METRES);
+  // (over a turn, the figure's mean radius under it: the Earth's ellipsoid between 6 357 and 6 378 km; a giant's orbits near
+  // its equator — its rings' plane, its moons' —, its 1 bar level 6–10 % lower at the poles: its equatorial radius)
+  const rho = thinAirDensity(id, (a - (solidBody(id) ? meanRadius(id) : b.radius)) * M_METRES);
   if (!(rho > 0)) return { r, v };
   // (in the code's units: a and t in M, μ = GM/c²: da/dt = −(ρ/B) M √(μ a))
   const a1 = Math.max(a - (rho / B) * M_METRES * Math.sqrt(mu * a) * dt, b.radius);

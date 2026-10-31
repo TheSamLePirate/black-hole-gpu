@@ -10,7 +10,7 @@ import type { Vec3 } from "../physics";
 import { cross, dot, lin, sub } from "../math/vec3";
 import { symmetricStep, YOSHIDA } from "./our-predict";
 import { gravityHome, ourState, referenceBody, soiOf } from "./our-side";
-import { dragAccel, gearHeight, groundVelocity, solidBody } from "./our-surface";
+import { altitudeOver, dragAccel, gearHeight, groundVelocity, solidBody } from "./our-surface";
 import { buildMeanOrbit, type MeanOrbit, meanOrbitState } from "./mean-orbit";
 import { M_METRES, solarBody } from "./solar";
 import { C_MPS } from "../units";
@@ -101,8 +101,9 @@ export function coastHome(X: Vec3, V: Vec3, t0: number, simDt: number, subCap = 
   const ground = solidBody(ref) ? ref : null;
   const atm = ref !== "sun" ? solarBody(ref)?.atmosphere : undefined;
   // (about a world with air, the flown craft flies through it at every height — its steps a hundredth of
-  // the fall time, a kick-drift-kick, the air's pull in each kick: here the thin air's drag on the craft)
-  const airy = !!atm;
+  // the fall time, a kick-drift-kick, the air's pull in each kick: here the thin air's drag on the craft. A giant's air only
+  // within it — its sphere of influence tens of millions of km wide: the vacuum's long steps outside)
+  const airy = !!atm && (!!ground || altitudeOver(ref, X, t0) < 1.5 * airTop(atm));
   let g = gravityHome(X, t0, V);
   let aAir = 0;
   const accAt = (Xq: Vec3, Vq: Vec3, tq: number, gq: typeof g): Vec3 => {
@@ -117,9 +118,12 @@ export function coastHome(X: Vec3, V: Vec3, t0: number, simDt: number, subCap = 
   for (let i = 0; i < subCap && t < tEnd - 1e-12; i++) {
     let dt = airy ? 0.01 * g.tDyn : symmetricStep(0.025, g.tDyn, g.tDot);
     if (ground || airy) {
-      const h = Math.max(gearHeight(ref, X, t), 0) / M_METRES;
-      const vr = Math.hypot(...sub(V, groundVelocity(ref, X, t))) + 1e-12;
-      dt = Math.min(dt, Math.max((0.1 * h) / vr, 2e-4));
+      // (a solid world's ground: a small part of the time to reach it; a giant has none)
+      if (ground) {
+        const h = Math.max(gearHeight(ref, X, t), 0) / M_METRES;
+        const vr = Math.hypot(...sub(V, groundVelocity(ref, X, t))) + 1e-12;
+        dt = Math.min(dt, Math.max((0.1 * h) / vr, 2e-4));
+      }
       if (aAir > 0) dt = Math.min(dt, Math.max(0.05 / aAir, 1e-6));
     }
     dt = Math.min(dt, tEnd - t);

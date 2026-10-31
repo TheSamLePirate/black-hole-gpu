@@ -49,7 +49,7 @@ import { gravityHome, homeOf, homeToRep, ourState, referenceBody, repToHomeVec }
 import { nodeDvHome, predictOurs, type OurPath } from "../system/our-predict";
 import type { Arrival, OurPlanResult, PlanNode } from "../system/our-plan";
 import { plan as runPlanner } from "../system/plan-client";
-import { airDensity as ourAir, gearHeight, groundSpeeds, solidBody } from "../system/our-surface";
+import { gearHeight, groundSpeeds, solidBody } from "../system/our-surface";
 import { SOLAR_BODIES, solarBody, solarState } from "../system/solar";
 import { issTrack } from "../system/iss";
 import { craftPoint, freePort, planIssRendezvous, refineIssNode, rendezvousPoint } from "../system/iss-plan";
@@ -160,7 +160,8 @@ function railsLimit(this: CameraController, cam: ReturnType<typeof cameraFrame>)
     // metres at the pace of the last 20 — not a stable orbit's, clear of the ground and the air (over an
     // oblate Earth its height swings ~20 km a turn, its "vertical" speed never nil: once a ×100 ceiling
     // in a 400 km orbit)
-    if (!onRails && !this.ourLanded && (solidBody(nav.ref) || ourAir(nav.ref, 0) > 0) && nav.ref !== "sun") {
+    // (a solid world's ground only: a giant's air has none — its 1 bar level no floor)
+    if (!onRails && !this.ourLanded && solidBody(nav.ref) && nav.ref !== "sun") {
       const hM = Math.max(gearHeight(nav.ref, nav.X, nav.t), 20);
       const sp = groundSpeeds(nav.ref, nav.X, nav.V, nav.t);
       const vv = Math.abs(sp.vv) / C_MPS + 1e-12;

@@ -2876,7 +2876,8 @@ export class Renderer {
     const nb = near ? GARGANTUA_SYSTEM.bodies.find((q) => q.id === bodies[near.index]!.id) : undefined;
     const mR = near ? near.radius * 1476.625 * s.massSolar : 1;
     set(52, ...(near?.light ?? [0, 0, 1]), mR);
-    const atm = nb?.surface?.atmosphere;
+    // (the giants' air the tracer's own — trace.wgsl setAir —: their near5 as before, none)
+    const atm = nb?.surface?.kind === "gas" ? undefined : nb?.surface?.atmosphere;
     set(53, atm?.H ?? 8000, atm ? atm.rho0 / 1.225 : 0, atm ? 1 + (12 * atm.H) / mR : 1, 4.925490947e-6 * s.massSolar);
     // our universe: places relative to the camera there (else to the mouth); mapped bodies' albedo
     // over their map's mean
