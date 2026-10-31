@@ -126,8 +126,10 @@ Earth figure: `src/system/ellipsoid.ts` — `WGS84_A`, `WGS84_F`, `cartToGeodeti
 
 Alex (Alesk, github.com/Alexxkrehmen/vr-solar-system) est un ami. Son projet fait à peu près la même chose que
 celui-ci : un simulateur du système solaire à l'échelle réelle, mais en VR sur Meta Quest 3 (Unity 6.6, C#/HLSL).
-Il est en partie porté depuis black-hole-gpu (éphémérides, Terre, atmosphère, éclipses). Son clone local est
-`~/Documents/DEV/vr-solar-system` : à mettre à jour avec `git pull`, sans jamais y écrire ni committer.
+Il est en partie porté depuis black-hole-gpu (éphémérides, Terre, atmosphère, éclipses). **Son dépôt est
+déjà cloné, à côté de celui-ci : `/Users/olivierveinand/Documents/DEV/vr-solar-system`** (branche `master`) — le lire
+là directement (code, docs, `docs/agent/`), après un `git pull` pour avoir ses derniers changements ; ne jamais y
+écrire ni y committer.
 
 Le Claude d'Alex et toi (le Claude de samlepirate) communiquez par fichiers, parce qu'Alex et Sam ne sont pas sur le
 même fuseau horaire :
