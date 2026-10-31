@@ -254,8 +254,7 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
     - **la brume du dessus** (approche B de l'analyse) : une nappe haute semi-transparente au-dessus du pont nuageux,
       décalée par la parallaxe en vue rasante, plus épaisse sur Saturne ; elle adoucit le relief au limbe.
   - **Hors G9** : un vrai volume marché (couches d'ammoniac, de NH₄SH, d'eau, comme la passe nuageuse de la Terre), utile
-    seulement si l'on descend sous le pont nuageux — aujourd'hui une surface (`otherGround`). Plusieurs ms : une phase à
-    part, si le jeu doit permettre cette descente.
+    seulement si l'on descend sous le pont nuageux — aujourd'hui une surface (`otherGround`) : c'est la phase P11.
   - Étapes :
     - G9a les données : les hauteurs publiées (échelles de hauteur, zones et bandes, Grande Tache, pop-up clouds), la
       carte en bande du méthane si elle existe (licence, axes du jeu, Système III), sinon la calibration de la luminance ;
@@ -283,6 +282,59 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 ### P10 — Compensations, campagne, docs
 - Optimisations restantes pour tenir « jamais plus lent » partout, campagne e2e complète (ce Mac), `docs/PLANETES.md`
   FR + EN, galerie avant / après.
+- La campagne et les docs de P10 couvrent aussi P11 : P11 se fait avant la campagne finale.
+
+### P11 — La descente dans les géantes (décidée le 31 octobre)
+Descendre dans Jupiter ou Saturne comme la sonde Galileo : entrer, traverser les couches de nuages, voir les éclairs,
+s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le lointain et les hauteurs.
+- **Le constat** : le pont nuageux est une surface (`otherGround`) ; dans `aero.ts`, Jupiter et Saturne **n'ont pas
+  d'atmosphère** (seuls Vénus, la Terre, Mars et Titan en ont une) — un vaisseau qui y plonge ne rencontre ni traînée, ni
+  échauffement, ni fond. La moitié du travail est donc côté jeu, pas côté rendu.
+- **Le rendu : la passe nuageuse de la Terre, généralisée** (PLAN-NUAGES N1–N5 : demi-résolution, historique reprojeté
+  avec la profondeur des nuages, marche vers le Soleil, ambiante du ciel physique, éclairs ; 0,8 à 3,9 ms mesurés sur la
+  Terre), dans un **noyau propre aux géantes « dedans »** (un genre `NEAR_KIND` comme Titan et Vénus) : la Terre ne change
+  pas d'une ligne.
+  - **Le milieu, sans nouvelle grosse texture** : densité = profil vertical de chaque couche (analytique : ammoniac vers
+    0,5–0,7 bar, NH₄SH vers 2 bar, eau vers 5 bar sur Jupiter ; plus profondes sur Saturne — valeurs reprises et citées en
+    D0) sous le sommet de G9 × couverture (carte, tuile de G8, colorant) × détail 3D (les bruits Perlin-Worley de la
+    première moitié de `noiseTex`, ceux des nuages de la Terre). Tout reste fonction du temps : même date, même volume.
+  - **Le proche et le lointain** : le volume marché jusqu'à ~250 km (la portée de la passe de la Terre) ; au-delà — l'horizon
+    est à ~1 700 km à 20 km au-dessus du pont —, la surface en relief de G9 vue à travers la brume ; raccord sans couture.
+  - **La lumière** : marche vers le Soleil à pas croissants, diffusion multiple en octaves, le ciel de H₂ (Rayleigh) au-dessus
+    des ponts ; **l'obscurité qui monte avec la profondeur** selon l'épaisseur optique traversée — juste (Galileo : très peu de
+    Soleil à quelques bars) : le spectacle se joue dans les premières couches, les trouées, les ombres des tours sur les
+    couches du dessous ;
+  - **Les éclairs** dans les tours d'eau (et les éclairs peu profonds observés par Juno), avec le système de N5.
+- **Le jeu** :
+  - **un air H₂/He dans `aero.ts`**, non isotherme : le profil température–pression mesuré par Galileo (165 K à 1 bar,
+    ~420 K vers 22 bar) et les sondages radio pour Saturne ; sa constante (μ ≈ 2,3 g/mol sur Jupiter), son γ ; la traînée,
+    l'entrée et l'**échauffement radiatif** (Galileo est entrée à ~47 km/s) ; les **vents** de G1 dans la vitesse relative
+    (Galileo les a mesurés croissants en profondeur) ;
+  - **l'écrasement**, faute de sol : la coque cède à une pression propre au vaisseau (Galileo a tenu ~22 bar, ~58 min),
+    avec la chaleur ; selon les règles de destruction déjà décidées pour l'atmosphère ;
+  - **le cockpit et les instruments** : pression et température extérieures, flux thermique, le noir qui monte ; TARS et les
+    annonces ; le marcheur reste interdit (« gas ») ;
+  - réseau et sauvegardes : rien de neuf (le volume est fonction du temps, l'air une fonction de la position).
+- Étapes :
+  - D0 les données et références : profils p–T (Galileo, sondages radio de Saturne), niveaux des couches, mesures de lumière
+    de la sonde, éclairs (Juno) ; sources citées ;
+  - D1 l'air des géantes dans `aero.ts`, les vents, l'échauffement, l'écrasement ; tests unitaires ;
+  - D2 le volume dans le noyau des géantes « dedans », son raccord au lointain de G9 ;
+  - D3 sa lumière (Soleil, ciel, multiple, obscurité) ;
+  - D4 les éclairs ;
+  - D5 cockpit, instruments, annonces ;
+  - D6 mesures, e2e (dont une entrée rapide), docs FR + EN.
+- Critères d'acceptation :
+  - **performances** : la vue dans les nuages au plus au budget de la Terre en vol bas dans ses nuages (aujourd'hui ~39 ms
+    sur kerr-mini ; Jupiter de près en coûte 19,5 : la marge est là) ; toutes les vues hors de l'air des géantes
+    inchangées (±1 %), la Terre inchangée à la ligne près dans ses noyaux ; sous le palier de 25 textures de la passe
+    nuageuse, le repli sur la surface de G9, sans erreur ; A/B alterné, deux tours ;
+  - **qualité** : la traversée des ponts (le voile d'ammoniac clair, le NH₄SH brun, les tours d'eau), les trouées et leurs
+    rayons, les ombres des tours, les éclairs ; **aucune traînée** de l'historique à la vitesse d'entrée (historique qui
+    s'efface selon le mouvement) ; aucune couture entre le volume proche et le lointain ;
+  - **justesse** : un e2e qui **rejoue l'entrée de Galileo** (vitesse, angle, masse, forme) et retrouve sa décélération
+    maximale (~230 g) et sa durée de descente à une tolérance fixée en D0 ; le profil p–T de l'air égal aux mesures ; la
+    lumière qui décroît selon l'épaisseur optique ; même date, même image.
 
 ## 4. Risques
 
@@ -295,3 +347,5 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
 | Budget « jamais plus lent » | P1 libère la marge ; chaque phase mesurée avant le push |
 | G8 : la tuile de turbulence se répète ou dérive de la carte réelle | éteinte au-dessus du texel, tournée par bande, fondu à deux phases (jamais d'advection sans fin) ; e2e à date fixe |
 | G9 : un relief inventé ou exagéré (les géantes « en plâtre »), ou des ombres qui bougent avec les phases | hauteurs en km aux ordres publiés, allumées seulement au terminateur et en vue rasante, lues au même uv advecté que la couleur ; comparaison JunoCam |
+| P11 : traînées de l'historique à 47 km/s, couture volume / lointain, une descente monotone dans le noir | historique effacé selon le mouvement, e2e d'entrée rapide ; raccord à la surface de G9 ; le spectacle placé dans les premières couches, les trouées et les éclairs |
+| P11 : la passe nuageuse généralisée touche la Terre | noyau propre aux géantes « dedans », Terre vérifiée à la ligne près et par A/B |
