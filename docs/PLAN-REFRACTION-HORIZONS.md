@@ -267,8 +267,7 @@ Lu dans `~/Documents/DEV/vr-solar-system` : `Sim/RefractiveAir.cs`, `Sim/Atmosph
 
 - **Faisable** : la donnée (`hdRelief`, avec ses maxima en G) et le point d'ombrage (`planetShade`, `otherGround`,
   `nearShadow`) existent. Le code neuf tient dans une passe de cuisson séparée et ~40 lignes dans `trace.wgsl`.
-- **Les bindings** : le noyau est proche de `maxSampledTexturesPerShaderStage` (déjà 7 textures conditionnées dans
-  `renderer.ts`). Plutôt que d'en ajouter une, **réutiliser une liaison propre à la Terre**, jamais lue sur un monde
+- **Les bindings** : le noyau monte une échelle de textures conditionnées dans `renderer.ts` (voir le point suivant). Plutôt que d'en ajouter une, **réutiliser une liaison propre à la Terre**, jamais lue sur un monde
   rocheux (ex. `surfaceColour` : `texture_2d_array<f32>`, du même type) : sur un monde rocheux, les cartes d'horizon
   à sa place. À trancher en H0. Vérifié : la mise en page du noyau est explicite (`renderer.ts traceLayout`) ;
   la liaison 29 (`surfaceColour`) n'y figure que si `maxSampledTexturesPerShaderStage ≥ 18` (`SURFACE_TEXTURE_LIMIT`).
@@ -276,6 +275,31 @@ Lu dans `~/Documents/DEV/vr-solar-system` : `Sim/RefractiveAir.cs`, `Sim/Atmosph
   change. **Avec H1b**, la Lune est HD alors que la Terre est le corps proche : la liaison 29 sert alors à la
   surface régionale de la Terre et ne peut pas porter les horizons de la Lune. Il faut une autre place (une couche de
   plus dans `mapHi`, ou une liaison libérée), à trancher en H0.
+- **Le noyau, point fait le 31 octobre** (sur `main` à `4010ed75`, avec D2 de P11 non commité) — cinq limites, deux
+  serrées :
+  1. **La taille inlinée** (`tests/kernel-budget.test.ts`, qui garde le temps de compilation sur D3D12 ; chaque budget =
+     la mesure à sa création + 10 %) : 86 à 100 % partout. À 100 % : le noyau général (`main` 140 452 / 141 000 lignes,
+     `lut` 136 132 / 136 200), **la Lune `main`** (71 191 / 71 200), Kerr + jet `env`. À 98–99 % : **Mars `main`**,
+     Titan `shadeLite`, Terre raster `env`, Terre seule `env`, éclipse `env`. Pas une limite matérielle : un budget se
+     relève (`KB_WRITE=1`) en mesurant la compilation sous Windows (kerr-pc, `d3d12-ab`). **H2 grossit justement la Lune et
+     Mars** : un appel unique, fermé par les conjonctions des noyaux qui en ont besoin (comme `giantAlbedo`), puis leurs
+     budgets relevés sur mesure.
+  2. **Les buffers de stockage : pleins.** 8 (le minimum WebGPU, tous les appareils) + le 9ᵉ du décor si l'appareil
+     l'accepte (`SCENERY_STORAGE_LIMIT`). **R0/R2 rangent leurs tables dans un buffer existant** (celui du catalogue
+     d'étoiles), jamais dans un nouveau.
+  3. **Les textures échantillonnées : de la marge sur ordinateur.** Une échelle de repli de 18 (surface régionale) à 27
+     (ombre des arbres) ; on demande min(27, l'appareil) ; les Mac, le M1 Max, NVIDIA en offrent 48, l'iPad Pro 44, les
+     appareils minimaux 16. Une liaison neuve pour les horizons serait le 28ᵉ palier : possible sur ordinateur, absente
+     ailleurs (repli sur la marche). C'est l'autre réponse à H1b, à comparer en H0 avec une couche de `mapHi`.
+  4. **La clé des variantes : un seul bit libre** (le 31, le signe en JavaScript). Bits 0–13 les fonctions, 14 les
+     aurores, 15 le cache du relief, 16–19 la vue des coûts, 20–25 les réglages, 26–28 `NEAR_KIND` (8 valeurs, toutes
+     prises), 29–30 le raster. Les cartes d'horizon n'y ajoutent rien (un paramètre dit si elles sont là, comme la
+     météo). À noter pour P11 : Jupiter et Saturne partagent `NEAR_KIND` 2 avec Mars depuis D1b, et leur noyau
+     « dedans » prévu demanderait le bit 31 ou un `NEAR_KIND` élargi.
+  5. **Les paramètres uniformes** : quelques centaines de vec4, loin des 64 Ko.
+
+  Non chiffrable d'ici : la pression sur les registres sur Apple (la leçon de `HAS_SHADE`) — elle ne se voit qu'au
+  temps de rendu, par A/B (trace-ab, deux tours) à chaque étape de H.
 - **Équirectangulaire** : les 8 azimuts sont repérés par l'est et le nord locaux (comme `hdNormal`). Pôles
   sur-échantillonnés (sans gravité), axe singulier au pôle exact : un repli. Le pôle sud lunaire (Shackleton, Soleil
   toujours rasant) est **le meilleur cas d'usage** : à soigner.
