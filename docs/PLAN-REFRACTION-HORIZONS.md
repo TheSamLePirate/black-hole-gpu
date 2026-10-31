@@ -1,6 +1,6 @@
 # Plan — la bonne réfraction, et les cartes d'horizon du relief
 
-Date : **31 octobre 2026**, sur `main` à `06ed0498`. Statut : **analyse et plan, rien d'implémenté**. Volet réfraction **revu le 31 octobre** après les changements
+Date : **31 octobre 2026**, sur `main` à `06ed0498`. Statut : **plan décidé (§4, le 31 octobre), pas lancé** ; seul le repère de R2 est fait. Volet réfraction **revu le 31 octobre** après les changements
 d'Alex (vr-solar-system 4h, 4i, `b2f5e51` : le limbe vu d'orbite, le sol relevé, Mars/Vénus/Titan) — §1.5 et le
 tableau R réécrit. **R2, le repère : fait le 31 octobre** (`airBend` dans le repère aplati, le regard aplati comme `earthNear` : le défaut de 5,8′ à 45° vers le nord et le sud corrigé — e2e `refraction-wgs84` au coucher de La Hague, au 1,5° : 0,58′ d'écart au modèle du CPU avant, 0,06′ après ; le correctif est entré dans `efe4369a`, la session de Saturne, et l'e2e dans `346a48a8`). **Les réponses du Claude d'Alex (31 octobre, 05:10 UTC) intégrées** : leurs tables dans l'air sur la verticale géodésique (comme notre R2), leurs profils de mirage illustratifs (R6), le 1/22° de leur mip = un pixel du Quest (§2.2), leur conseil pour la météo dans R1, leur Lune éclipsée passée à la table du limbe (§1.1), leur lentille pour l'auréole de Vénus et l'anneau de la Terre vu de la Lune (R5). **Deuxième passe le 31 octobre** (code relu des deux côtés, réponse du Claude d'Alex) : §1.1, §1.5, §2.1–§2.5, H1b ajouté, R0–R2 et R6 corrigés.
 
@@ -297,9 +297,8 @@ Lu dans `~/Documents/DEV/vr-solar-system` : `Sim/RefractiveAir.cs`, `Sim/Atmosph
 
 ## 3. Le plan
 
-Deux chantiers indépendants (fichiers disjoints sauf `trace.wgsl`, à des fonctions différentes). **Ordre conseillé :
-H d'abord** (gain visible au premier coup d'œil, et Mercure repasse sous le budget), puis R1–R3. R4 et R5 seulement si tu
-le veux après avoir vu R1–R3 ; R6 (les mirages) après R2, indépendant de R3–R5. H0 et R0 tranchent ensemble la liaison des tables (une seule si possible).
+Deux chantiers indépendants (fichiers disjoints sauf `trace.wgsl`, à des fonctions différentes). **Ordre décidé
+(§4) : H d'abord** (gain visible au premier coup d'œil, et Mercure repasse sous le budget), puis R0–R3, puis R4 et R5 ; R6 (les mirages) après R2, indépendant de R3–R5. H0 et R0 tranchent ensemble la liaison des tables (une seule si possible).
 
 ### H — Les cartes d'horizon
 
@@ -348,10 +347,17 @@ le veux après avoir vu R1–R3 ; R6 (les mirages) après R2, indépendant de R3
 - e2e et A/B en raster, vue cockpit, partagés entre ce Mac et le mini.
 - WGS84 : R3 et R4 touchent au dessin seulement, jamais aux positions, hauteurs ou contacts.
 
-## 4. Questions ouvertes (H0)
+## 4. Décisions (31 octobre)
 
-1. Ordre : H avant R (conseillé), ou R d'abord ?
-2. R4 (le sol relevé, près du sol et d'orbite) et R5 (Vénus, Titan) dans ce plan, ou plus tard ?
-3. ~~Les mirages : un plan à part ?~~ Décidé le 31 octobre : **R6**, dans ce plan, après R2.
-5. H1b : charger le relief HD d'un astre regardé depuis la Terre (~55 Mo GPU pour la Lune) — d'accord ?
-4. Résolution des cartes : demi-DEM (22 Mo Lune/Mars) ou quart (5,5 Mo, horizons plus doux) ?
+Toutes les questions sont tranchées par Sam. **Le plan n'est pas lancé** : on attend son feu vert pour commencer.
+
+1. **L'ordre : les cartes d'horizon d'abord** (H0–H4, H1b), **puis la réfraction** (R0–R6).
+2. **R4** (le sol relevé, près du sol et d'orbite) **et R5** (Vénus et Titan, l'auréole de Vénus) **restent dans ce plan**.
+3. **Les mirages : R6**, dans ce plan, après R2.
+4. **H1b : oui**, pour le télescope (et les vues qui grossissent : trépied, photo, téléobjectif). Le relief seul de
+   l'astre regardé, environ 55 Mo GPU pour la Lune, chargé quand il dépasse le seuil `hdAt` à l'écran, puis libéré.
+5. **Résolution des cartes : la plus élevée qu'on peut se permettre.**
+   - Par défaut, la moitié du relief : environ 22 Mo pour la Lune ou Mars.
+   - La pleine résolution du relief (environ 88 Mo) si H0 et H4 montrent que la mémoire et le temps de cuisson le
+     permettent.
+   - Le quart seulement en repli, sur les appareils qui manquent de mémoire.
