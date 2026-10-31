@@ -49,6 +49,10 @@ fn gatherH(@builtin(global_invocation_id) gid: vec3u) {
   }
   let h = i32(block);
   var acc = vec4f(0.0);
+  // (edge-aware: a sample's weight × its depth's likeness to this pixel's last depth — a skyline, a ridge, a cloud's edge no
+  // longer smeared by the isotropic Gaussian; a floor keeps the nearest samples deciding where none is alike)
+  let dp = moments[gid.y * W + gid.x].y;
+  let guided = dp > 0.0 && dp < 5e8;
   for (var dx = -h; dx <= h; dx++) {
     let x = i32(gid.x) + dx;
     if (x < 0 || x >= i32(W)) { continue; }
@@ -59,7 +63,12 @@ fn gatherH(@builtin(global_invocation_id) gid: vec3u) {
     // (but a disc's sky — trace.wgsl main's layers, the sky round the Moon at one ray a pixel, depth 1e9 —: a sky sample)
     if (moments[qi].x > 1e29 && moments[qi].y < 5e8) { continue; }
     let a = accum[qi];
-    acc += gatherWeight(dx, block) * vec4f(a.rgb / max(a.a, 1e-6), 1.0);
+    var w = gatherWeight(dx, block);
+    if (guided) {
+      let rel = (moments[qi].y - dp) / (0.05 * dp + 1e-12);
+      w *= max(exp(-rel * rel), 0.02);
+    }
+    acc += w * vec4f(a.rgb / max(a.a, 1e-6), 1.0);
   }
   gatherBuf[gid.y * W + gid.x] = acc;
 }
@@ -268,10 +277,18 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     } else {
       let h = i32(block);
       var acc = vec4f(bil * 0.02, 0.02);
+      let dp = moments[idx].y;
+      let guided = dp > 0.0 && dp < 5e8;
       for (var dy = -h; dy <= h; dy++) {
         let y = i32(gid.y) + dy;
         if (y < 0 || y > maxP.y) { continue; }
-        acc += gatherWeight(dy, block) * gatherBuf[u32(y) * W + gid.x];
+        var w = gatherWeight(dy, block);
+        if (guided) {
+          // (each row's sum was weighted round its own pixel's depth: the rows whose depth is this pixel's count)
+          let rel = (moments[u32(y) * W + gid.x].y - dp) / (0.05 * dp + 1e-12);
+          w *= max(exp(-rel * rel), 0.02);
+        }
+        acc += w * gatherBuf[u32(y) * W + gid.x];
       }
       c = acc.rgb / acc.w;
     }

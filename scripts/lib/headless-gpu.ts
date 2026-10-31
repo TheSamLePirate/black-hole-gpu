@@ -107,6 +107,10 @@ export async function withGpuPage<T>(
     ws?.close();
     endChrome(chrome, port);
     server.stop(true);
-    rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {
+      // (Windows: Chrome may still hold its profile for a moment — a temp dir left behind must not hide the verdict)
+    }
   }
 }

@@ -3430,7 +3430,9 @@ export class Renderer {
       (s.ship || this.craftsShown) && this.ship.ready ? 1 : 0,
       this.dofOn(s, target) ? 1 : 0,
       // (the sharpening, RCAS — the live view and its refining; the instrument's beam left soft)
-      s.sharpen,
+      // (more of it as the rays thin out — a block of 4 → 8: up to ×1.6 —, the detail the reconstruction softens given back; RCAS
+      // is contrast-adaptive: it does not ring the edges)
+      s.sharpen * (1 + 0.6 * Math.min(Math.max((this.realtimeBlockNow - 4) / 4, 0), 1)),
     ]);
     // (the lens flare's strength: after the HDR peak)
     d[14] = s.lensFlare;

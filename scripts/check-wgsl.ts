@@ -27,7 +27,7 @@ import { specialiseWgsl } from "./lib/wgsl-inline";
 import { tracerEntryPoint } from "../src/system/tracer-kernels";
 
 const shaders: Record<string, string> = {};
-for await (const f of new Glob("src/shaders/*.wgsl").scan(".")) shaders[f.split("/").pop()!] = await Bun.file(f).text();
+for await (const f of new Glob("src/shaders/*.wgsl").scan(".")) shaders[f.split(/[\\/]/).pop()!] = await Bun.file(f).text();
 for (const host of ["trace.wgsl", "character.wgsl"]) shaders[`${host} + forest.wgsl`] = withForest(shaders[host]!, shaders["forest.wgsl"]!);
 // (the tracer as smaller devices build it: no world scenery — 8 storage buffers —, no surface textures)
 const traced = withTerrainCache(shaders["trace.wgsl + forest.wgsl"]!);
