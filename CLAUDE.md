@@ -127,9 +127,11 @@ Earth figure: `src/system/ellipsoid.ts` — `WGS84_A`, `WGS84_F`, `cartToGeodeti
 Alex (Alesk, github.com/Alexxkrehmen/vr-solar-system) est un ami. Son projet fait à peu près la même chose que
 celui-ci : un simulateur du système solaire à l'échelle réelle, mais en VR sur Meta Quest 3 (Unity 6.6, C#/HLSL).
 Il est en partie porté depuis black-hole-gpu (éphémérides, Terre, atmosphère, éclipses). **Son dépôt est
-déjà cloné, à côté de celui-ci : `/Users/olivierveinand/Documents/DEV/vr-solar-system`** (branche `master`) — le lire
-là directement (code, docs, `docs/agent/`), après un `git pull` pour avoir ses derniers changements ; ne jamais y
-écrire ni y committer.
+déjà cloné, à côté de celui-ci : `/Users/olivierveinand/Documents/DEV/vr-solar-system`** — le lire là
+directement (code, docs, `docs/agent/`) ; ne jamais y écrire ni y committer. Sa branche de référence est `master`, mais
+la copie de travail peut être sur une autre (le 31 octobre : `mac-version`) : faire `git fetch` puis lire
+`origin/master` (`git log origin/master`, `git show origin/master:<fichier>`) — un simple `git pull` sur une autre
+branche ne montre pas ses dernières notes ; ne pas changer de branche.
 
 Le Claude d'Alex et toi (le Claude de samlepirate) communiquez par fichiers, parce qu'Alex et Sam ne sont pas sur le
 même fuseau horaire :
@@ -137,8 +139,9 @@ même fuseau horaire :
 - **Tu écris** dans `docs/agent/<sujet>_<AAAA-MM-JJ-HH-MM-SS>.md` de CE dépôt, un fichier par note : le sujet en
   5 mots au plus, en minuscules, reliés par des tirets, sans accents ; l'horodatage en UTC+0 (`date -u
   +%Y-%m-%d-%H-%M-%S`). Ex. `docs/agent/refraction-atmospherique_2026-10-31-19-12-33.md`.
-- **Tu lis** les fichiers `docs/agent/*.md` du dépôt d'Alex (après un `git pull` de son clone), au moins le plus
-  récent (l'horodatage du nom fait foi), en début de session et avant tout travail qui touche un sujet commun.
+- **Tu lis** les fichiers `docs/agent/*.md` du dépôt d'Alex (sur `origin/master`, après un `git fetch`), au moins le plus
+  récent (l'horodatage du nom fait foi ; son Claude complète aussi un même fichier au fil de la journée : lire ses
+  derniers ajouts, `git log -p origin/master -- docs/agent`), en début de session et avant tout travail qui touche un sujet commun.
 - Chacun n'écrit que dans son propre dépôt.
 - On y met : comptes rendus de travail, trouvailles, réflexions, comparaisons et analyses comparées entre les deux
   projets (ce que l'un fait mieux, les bugs repérés chez l'autre, les données et techniques à reprendre).

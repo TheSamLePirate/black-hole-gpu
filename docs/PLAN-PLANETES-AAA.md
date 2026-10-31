@@ -297,6 +297,11 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
     couleur), G9b (la hauteur géostrophique dans la tuile, son signe testé), G9c (la pente et les ombres au terminateur).
     Mesures : ±2 % hors du terminateur, ses vues 17,5 et 19,8 ms (la Terre 40). G9d écartée (la brume est déjà dans les
     cartes, des photos). Restent les tours convectives et la comparaison JunoCam.
+  - **Une limite notée** (le Claude d'Alex, 31 octobre) : h = f ψ / g suppose un nombre de Rossby U / (f L) petit. La Grande
+    Tache est vers 0,1, et la géostrophie tient. Les cyclones polaires de Jupiter (~100 m/s sur ~1 000 km, f ≈ 3,5·10⁻⁴ s⁻¹)
+    sont vers 0,3 : l'équilibre du vent de gradient creuserait leur relief de quelques dizaines de pour cent de plus. Les
+    petits tourbillons convectifs sont cyclostrophiques. Dans la tolérance des hauteurs publiées : une note, pas un
+    correctif ; la coupure à ±10° de l'équateur couvre l'autre limite.
 
 ### P10 — Compensations, campagne, docs
 - Optimisations restantes pour tenir « jamais plus lent » partout, campagne e2e complète (ce Mac), `docs/PLANETES.md`
@@ -359,6 +364,35 @@ s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le loi
   (l'air des géantes dans `aero.ts`, l'entrée de Galileo rejouée : 252 g, 228 mesurés) et D1b (cet air donné à Jupiter et
   Saturne, après six groupes de corrections : les hauteurs signées sous 1 bar, « a un sol » plutôt que « a un air », leurs
   vents de G1 au CPU, le rendu inchangé) faits. Restent l'échauffement radiatif et l'écrasement (D1c), D2–D6.
+- **Ce que nous apprend le projet d'Alex** (vr-solar-system, `docs/agent/`, 31 octobre ; à peser, rien n'est décidé par lui) :
+  - **leurs mesures sur le Quest 3** (un test de cyclone, pas un design) : le volume en pleine résolution coûte ~1 ms par
+    échantillon et par image ; à un quart de la résolution, 32 échantillons ajoutent +3,4 ms, une passe à part avant la passe
+    opaque. Avec des pas cohérents (les mêmes sphères concentriques autour de l'œil pour tous les rayons), la paroi basse
+    se lit en 4 ou 5 marches horizontales : les pas lointains font plusieurs km. Notre remède, que nous leur avons décrit
+    (`docs/agent/nuages-geantes-reprojection-tuile_2026-10-31-08-55-57.md`) : une gigue par pixel changée à chaque image,
+    un historique reprojeté avec **la profondeur du front** (le premier échantillon de densité non nulle), moyennée dans
+    l'historique selon la lumière, la borne moyenne ± 1,25 σ du 3 × 3 ; et des pas courts dans le nuage (1,5 % de la
+    distance) plutôt qu'en air clair (6 %). D2 en hérite tel quel ;
+  - **l'échelle des vrais yeux** : l'œil du cyclone polaire nord de Saturne fait ~2 000 km (Cassini, 2012), les murs de
+    l'œil sud 30 à 75 km au-dessus de son fond (Dyudina et al. 2008) ; vu du centre, un mur de 50 km à 1 000 km n'est
+    qu'une bande de 3° sur l'horizon. « Entouré de murs » n'existe qu'à 50–100 km de la paroi : **la descente se fait le
+    long de la face intérieure du mur**, pas au milieu de l'œil. À viser pour le cadrage de D5–D6 ;
+  - **les vrais cyclones polaires en données** (D0, à compléter) : à Jupiter, un cyclone central entouré de huit autres au
+    pôle nord et de cinq au pôle sud, chacun de quelques milliers de km (Juno, Adriani et al. 2018) ; à Saturne,
+    l'hexagone et son œil. D2 ne dessine aujourd'hui qu'un œil par géante (le cyclone central de Jupiter, sans les huit) ;
+  - **un format commun des tourbillons**, proposé par leur Claude : des données brutes partagées par les deux projets —
+    latitudes planétographiques, hauteurs en km au-dessus de l'ellipsoïde à 1 bar selon sa normale, longitudes Système III
+    (ouest positif) ; centre, rayon de l'œil, rayon et évasement du mur selon la hauteur, sommets des nuages, profil des
+    vitesses, hauteurs des ponts. **À décider par Sam** (l'adopter et le tenir à jour, ou non) ;
+  - **Uranus et Neptune aplaties** : Alex a aplati les quatre géantes (IAU 2015 à 1 bar : Uranus 25 559 / 24 973 km,
+    f = 0,0229 ; Neptune 24 764 / 24 341 km, f = 0,0171), visible à quelques rayons. Chez nous, `flatteningOf` ne
+    connaît que la Terre, Jupiter et Saturne. **À décider par Sam** ;
+  - **leur piège de la brume** : la brume d'hydrogène restée sur la sphère du rayon moyen dessinait une bande au-dessus des
+    pôles aplatis, vue de 4 rayons. Notre air des géantes est sur leurs axes écrasés depuis P10 S2 (`squashOf`, `AIR.ab`),
+    mais aucun e2e ne regarde encore les pôles de Saturne de 4 rayons : à ajouter en D6 ;
+  - **données partagées** : ils reprendront `GIANT_AIR` (aero.ts) et la table des sommets de G9 (OPAL) en nous citant.
+    La tuile de G8 (128² × 128 images, `rgba16float`, 16 Mo, graine fixe) pourrait leur être livrée cuite hors ligne s'ils
+    la demandent.
 - Critères d'acceptation :
   - **performances** : la vue dans les nuages au plus au budget de la Terre en vol bas dans ses nuages (aujourd'hui ~39 ms
     sur kerr-mini ; Jupiter de près en coûte 19,5 : la marge est là) ; toutes les vues hors de l'air des géantes
