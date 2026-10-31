@@ -2,7 +2,7 @@
 
 Date : **31 octobre 2026**, sur `main` à `06ed0498`. Statut : **analyse et plan, rien d'implémenté**. Volet réfraction **revu le 31 octobre** après les changements
 d'Alex (vr-solar-system 4h, 4i, `b2f5e51` : le limbe vu d'orbite, le sol relevé, Mars/Vénus/Titan) — §1.5 et le
-tableau R réécrit. **Deuxième passe le 31 octobre** (code relu des deux côtés, réponse du Claude d'Alex) : §1.1, §1.5, §2.1–§2.5, H1b ajouté, R0–R2 et R6 corrigés.
+tableau R réécrit. **R2, le repère : fait le 31 octobre** (`airBend` dans le repère aplati, le regard aplati comme `earthNear` : le défaut de 5,8′ à 45° vers le nord et le sud corrigé — e2e `refraction-wgs84` au coucher de La Hague, au 1,5° : 0,58′ d'écart au modèle du CPU avant, 0,06′ après ; le correctif est entré dans `554eb230`). **Deuxième passe le 31 octobre** (code relu des deux côtés, réponse du Claude d'Alex) : §1.1, §1.5, §2.1–§2.5, H1b ajouté, R0–R2 et R6 corrigés.
 
 ## 0. La demande
 
