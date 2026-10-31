@@ -107,6 +107,7 @@ import {
   TABLE_VEC4S,
   TABLE_RING,
   TABLE_RINGSUM,
+  TABLE_TOPS,
   RING_N,
   TABLE_WIND,
   TABLE_WALK,
@@ -129,6 +130,7 @@ import { EnduranceRenderer } from "./endurance";
 import { StationRenderer, type StationView } from "./station";
 import { issAxes, issTrack, refreshIssElements, stationAngles } from "./system/iss";
 import { loadRingProfile, ringOpacitySums } from "./system/ring-profile";
+import { GIANT_TOPS_TABLE } from "./system/giant-tops";
 import { GpuProfiler } from "./gpuprof";
 import { shipToCamera, type M3, type Mount, type MountPose } from "./mounts";
 import milkyWayUrl from "../assets/sky/milkyway.webp";
@@ -1545,6 +1547,8 @@ export class Renderer {
     });
     // (the giants' zonal winds: system/giant-winds.ts)
     device.queue.writeBuffer(this.bodyBuf, TABLE_WIND * 16, GIANT_WINDS);
+    // (their cloud tops by latitude: system/giant-tops.ts)
+    device.queue.writeBuffer(this.bodyBuf, TABLE_TOPS * 16, GIANT_TOPS_TABLE);
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });

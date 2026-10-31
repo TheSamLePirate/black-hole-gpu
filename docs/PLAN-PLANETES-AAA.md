@@ -292,6 +292,11 @@ Statut : **P0 fait** (29 octobre) — budgets, tableau et défauts dans [progres
       ombres dans le sens du Soleil réel de la date ; même date, même image (0/255) ; Saturne plus douce que Jupiter
       (échelle de hauteur double, brume plus épaisse) ; le relief posé sur l'ellipsoïde de P10 (la normale géodésique
       inclinée, les cartes planétographiques lues au même `uv` que la hauteur).
+  - **Fait en partie** (31 octobre) — [P9.md](progress/planetes-aaa/P9.md) : G9a (les hauteurs publiées ; les zones et
+    les bandes tirées des cartes de Hubble OPAL dans la bande du méthane — leurs détails non : d'une autre date que la carte
+    couleur), G9b (la hauteur géostrophique dans la tuile, son signe testé), G9c (la pente et les ombres au terminateur).
+    Mesures : ±2 % hors du terminateur, ses vues 17,5 et 19,8 ms (la Terre 40). G9d écartée (la brume est déjà dans les
+    cartes, des photos). Restent les tours convectives et la comparaison JunoCam.
 
 ### P10 — Compensations, campagne, docs
 - Optimisations restantes pour tenir « jamais plus lent » partout, campagne e2e complète (ce Mac), `docs/PLANETES.md`

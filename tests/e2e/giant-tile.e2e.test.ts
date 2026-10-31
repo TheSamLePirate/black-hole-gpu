@@ -5,7 +5,8 @@ import { App, E2E, stopServer } from "./lib/app";
 import { overrideConsts } from "./lib/wgsl-slice";
 
 // PLAN-PLANETES-AAA P9 G8 (the giants' turbulence tile, system/giant-tile.ts): baked twice with the same seed, the same tile
-// to the bit, under 50 ms of GPU; its flow map keeps areas (a streamfunction's flow: no divergence); the noises it shares
+// to the bit, under 50 ms of GPU; its flow map keeps areas (a streamfunction's flow: no divergence), its 4th channel that
+// streamfunction (G9b: its Laplacian the displacement's curl — the eddies' heights' sign); the noises it shares
 // the texture with read as before, to the texel (their z wrapped by hand, the guards — trace.wgsl dnoise, cloudNoise); and
 // the tracer's reading of it (giantTurb, with the zonal flow's two phases) without a jump at any phase's end — the time
 // loop seamless —, held still when the clock runs fast. No GPU error.
@@ -44,7 +45,7 @@ describe.skipIf(!E2E)("P9 G8: the giants' turbulence tile", () => {
   });
 
   test("baked twice, the same tile to the bit, in under 50 ms of GPU; its flow map keeps areas", async () => {
-    const r = await app.js<{ same: boolean; gpuMs: number[]; rms: number[]; jac: number[]; div: number[] }>(`(async () => {
+    const r = await app.js<{ same: boolean; gpuMs: number[]; rms: number[]; jac: number[]; div: number[]; psi: number[] }>(`(async () => {
       const r = __bh.renderer, ms = [];
       await r.bakeGiantTile(); ms.push(r.giantTile.gpuMs);
       const a = await r.readGiantTile();
@@ -55,7 +56,7 @@ describe.skipIf(!E2E)("P9 G8: the giants' turbulence tile", () => {
       // (frames 4, 32, 64, 96 — the readback's guard first —: the displacement's rms [tile periods]; its divergence over
       // its curl — D ≈ u τ early in the window: a streamfunction's flow has none —; the flow map x − D's Jacobian's mean
       // departure from 1 — early, before the map folds under the grid)
-      const N = a.size, rms = [], jac = [], div = [];
+      const N = a.size, rms = [], jac = [], div = [], psi = [];
       for (const f of [5, 33, 65, 97]) {
         const at = (x, y, c) => a.data[((f * N + ((y + N) % N)) * N + ((x + N) % N)) * 4 + c];
         let s = 0, j = 0, dv = 0, cu = 0;
@@ -67,11 +68,21 @@ describe.skipIf(!E2E)("P9 G8: the giants' turbulence tile", () => {
           dv += (dxx + dyy) ** 2; cu += (dyx - dxy) ** 2;
         }
         rms.push(Math.sqrt(s / (N * N))); jac.push(j / (N * N)); div.push(Math.sqrt(dv / cu));
+        // (G9b: the 4th channel the eddies' streamfunction ψ′ — its Laplacian the vorticity, ∇²ψ = ω, the curl of the
+        // displacement's early in the window (D ≈ u τ): their correlation over the tile, positive near 1 — an anticyclone,
+        // ψ′'s high, its flow clockwise as the shader's heights take it)
+        let sxy = 0, sxx = 0, syy = 0;
+        for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+          const lap = (at(x + 1, y, 3) + at(x - 1, y, 3) + at(x, y + 1, 3) + at(x, y - 1, 3) - 4 * at(x, y, 3)) * N * N;
+          const curl = ((at(x + 1, y, 1) - at(x - 1, y, 1)) - (at(x, y + 1, 0) - at(x, y - 1, 0))) * N / 2;
+          sxy += lap * curl; sxx += lap * lap; syy += curl * curl;
+        }
+        psi.push(sxy / Math.sqrt(sxx * syy));
       }
-      return { same, gpuMs: ms, rms, jac, div };
+      return { same, gpuMs: ms, rms, jac, div, psi };
     })()`);
     console.log(
-      `  bakes: GPU ${r.gpuMs.map((m) => m.toFixed(1)).join(", ")} ms; displacement rms ${r.rms.map((v) => v.toFixed(4)).join(", ")} periods; |div| / |curl| ${r.div.map((v) => v.toFixed(3)).join(", ")}; |J − 1| ${r.jac.map((v) => v.toFixed(3)).join(", ")}`,
+      `  bakes: GPU ${r.gpuMs.map((m) => m.toFixed(1)).join(", ")} ms; displacement rms ${r.rms.map((v) => v.toFixed(4)).join(", ")} periods; |div| / |curl| ${r.div.map((v) => v.toFixed(3)).join(", ")}; |J − 1| ${r.jac.map((v) => v.toFixed(3)).join(", ")}; corr(∇²ψ′, curl D) ${r.psi.map((v) => v.toFixed(2)).join(", ")}`,
     );
     expect(r.same).toBe(true);
     for (const m of r.gpuMs) if (Number.isFinite(m)) expect(m).toBeLessThan(50);
@@ -82,6 +93,7 @@ describe.skipIf(!E2E)("P9 G8: the giants' turbulence tile", () => {
     // finite differences no longer a Jacobian —, the semi-Lagrangian's smoothing too: logged, not held)
     expect(r.div[0]!).toBeLessThan(0.1);
     expect(r.jac[0]!).toBeLessThan(0.05);
+    expect(r.psi[0]!).toBeGreaterThan(0.6);
     expect(await app.js<number>(`(() => __bh.renderer.gpuErrors)()`)).toBe(0);
   }, 300_000);
 
@@ -142,6 +154,9 @@ var<private> P: PP;
 const PI = 3.14159265358979;
 const TAU = 6.28318530717959;
 const GIANT_CYCLE = ${cycle};
+var<private> GT_ON: bool = false;
+var<private> GT_LAST: vec3f = vec3f(0.0);
+var<private> GT_SUM: vec3f = vec3f(0.0);
 ${wgslFunction(trace, "pcg")}
 fn giantTileAt(ll: vec2f, m3: vec3f, L: f32, tn: f32, salt: u32, warp: vec2f) -> vec4f {
   let h = f32(pcg(salt) & 1023u) / 1023.0;

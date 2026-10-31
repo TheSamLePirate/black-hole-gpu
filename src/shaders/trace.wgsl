@@ -416,6 +416,8 @@ const RING_R0_KM = 69800.0;
 // TABLE_RINGSUM —, RING_N + 1 values)
 const RING_FIRST_KM = 72761.0;
 const RINGSUM_OFF = 1099994u;
+// (the giants' cloud tops by latitude — gpu-tables.ts TABLE_TOPS, system/giant-tops.ts —: four profiles of 181 values)
+const TOPS_OFF = 1117770u;
 // the giants' zonal winds (gpu-tables.ts TABLE_WIND, system/giant-winds.ts): 146 values, four a vec4
 const WIND_OFF = 1099957u;
 const GEOID_W = 1440u;
@@ -1227,7 +1229,9 @@ fn giantAlbedo(m: u32, nrm: vec3f, tEm: f32, b2y: f32) -> vec3f {
     var c = 1.0;
     if (wd > 0.0) {
       // (a named vortex's slow core calm: its collar's shear keeps the tile)
+      let g0 = GT_SUM;
       let d = giantTurb(ll.xy, tS, j, texA, fpA, wind.y) * wd * (1.0 - 0.7 * ll.z);
+      GT_SUM = g0 + (GT_SUM - g0) * (w * wd * (1.0 - 0.7 * ll.z));
       uv += d.xy;
       c = 1.0 + d.z;
     }
@@ -1240,6 +1244,36 @@ fn giantAlbedo(m: u32, nrm: vec3f, tEm: f32, b2y: f32) -> vec3f {
     t *= (1.0 - 0.35 * exp(-sq(rho / 0.0175))) * (1.0 + 0.12 * exp(-sq((rho - 0.035) / 0.01)));
   }
   return min(t * b2y * select(1.0, P.hd.y, i32(m) == i32(P.hd.x)), vec3f(0.95));
+}
+// The giants' cloud tops' height [km, from an arbitrary zero — only its differences used] at the planetographic direction n
+// (the map's) at the scene's time tEm — PLAN-PLANETES-AAA P9 G9: the zones and belts by latitude from the methane band
+// (Hubble OPAL: the zones upwelling, high; the belts deep — a few km between them), the map's details about their
+// latitude's mean luminance (bright high), the named anticyclones' domes (the Great Red Spot ~8 km over its
+// neighbours), Saturn's polar cyclone's eye hollow; carried as the colour is — both phases, faded alike: the relief moves
+// with the clouds, never boils
+// a giant's profile f by latitude [rad] (giantHeight: 0 its methane band's brightness — Hubble OPAL, its spread the unit —,
+// 1 its colour map's mean luminance), linear between its degrees
+fn giantTop(m: u32, f: u32, lat: f32) -> f32 {
+  let x = clamp(lat * 57.2957795 + 90.0, 0.0, 179.999);
+  let o = select(362u, 0u, m == 4u) + f * 181u + u32(x);
+  return mix(bodies[TOPS_OFF + o / 4u][o % 4u], bodies[TOPS_OFF + (o + 1u) / 4u][(o + 1u) % 4u], fract(x));
+}
+fn giantHeight(m: u32, n: vec3f, tEm: f32) -> f32 {
+  let lon = atan2(n.y, n.x);
+  let lat = asin(clamp(n.z, -1.0, 1.0));
+  let tS = tEm * P.near5.w;
+  let ph = fract(tS / GIANT_CYCLE);
+  let u = giantWind(m, lat).x;
+  // (the zones and belts: the methane band's profile, ~3 km its spread on Jupiter, 5 on Saturn — its scale height double —;
+  // the map's details about its latitude's mean)
+  let Hl = select(40.0, 30.0, m == 4u);
+  var h = select(5.0, 3.0, m == 4u) * giantTop(m, 0u, lat) - Hl * giantTop(m, 1u, lat);
+  for (var j = 0u; j < 2u; j++) {
+    let ll = giantFlow(m, lon, lat, fract(ph + 0.5 * f32(j)) * GIANT_CYCLE, u, tS);
+    h += select(1.0 - abs(2.0 * ph - 1.0), abs(2.0 * ph - 1.0), j == 1u) *
+      (Hl * luminance(planetMapAt(m, vec2f(0.5 + ll.x / TAU, 0.5 - ll.y / PI))) + 8.0 * ll.z);
+  }
+  return h - select(0.0, 6.0 * exp(-sq((1.5707963 - lat) / 0.0175)), m == 5u);
 }
 // Saturn's hexagon (Cassini, Sánchez-Lavega et al. 2014): a Rossby wave of number 6 on the jet near 76° N planetocentric,
 // fixed in System III but for its drift (+0.0128°/day, 2008–2014): its colatitude at longitude lon [rad] — the vertices at
@@ -1345,6 +1379,9 @@ fn giantTurb(ll: vec2f, tS: f32, j: u32, texA: f32, fpA: f32, shear: f32) -> vec
     let n = textureSampleLevel(noiseTex, noiseSamp, vec3f(m3.xy / (3.3 * L * 32.0), (1.0 + fract(m3.z / (3.3 * L * 32.0)) * 128.0) / NOISE_DZ), 0.0);
     let tile = giantTileAt(ll, m3, L, tn, cyc * 8u + s, 0.5 * vec2f(n.x, 2.0 * n.y - 1.0));
     let amp = ws * wk * I;
+    // (its eddies' heights: geostrophic, h = f ψ / g — f's sign the hemisphere's, nil by the equator where the balance fails —,
+    // the coarse eddies' ~3 km, the finer smaller in proportion; a period L radians of arc)
+    if (GT_ON) { GT_SUM += amp * 3.0 * (L / (16.0 * texA)) * sign(ll.y) * smoothstep(0.1, 0.2, abs(ll.y)) * vec3f(GT_LAST.x, GT_LAST.yz / L); }
     let dlon = tile.x * TAU / tile.w;
     r += amp * vec3f(-dlon / TAU, tile.y * L / PI, tile.z * select(1.0, 0.8, sc == 0u || sc == 2u));
   }
@@ -1352,8 +1389,14 @@ fn giantTurb(ll: vec2f, tS: f32, j: u32, texA: f32, fpA: f32, shear: f32) -> vec
 }
 // the tile (dx, dy, dye — tile periods —; w: the periods round the band, the radians of longitude a period's) at the matter's
 // place ll (m3 its direction) for its period L [rad], time in its window tn, salt the cycle and scale's, warp [periods]
+// (P9 G9: the tile's relief wanted — otherGround, the Sun low on a giant —; its eddies' height and slope gathered: GT_LAST the
+// last tile read's ψ′ and its gradient [per tile period], GT_SUM the scales' and phases' — km, km per radian of arc)
+var<private> GT_ON: bool = false;
+var<private> GT_LAST: vec3f = vec3f(0.0);
+var<private> GT_SUM: vec3f = vec3f(0.0);
 fn giantTileAt(ll: vec2f, m3: vec3f, L: f32, tn: f32, salt: u32, warp: vec2f) -> vec4f {
   let z = (GTILE_Z0 + 0.5 + tn * (GTILE_FRAMES - 1.0)) / NOISE_DZ;
+  var gp = vec3f(0.0);
   let HB = 0.10472;
   let alat = abs(ll.y);
   var acc = vec4f(0.0);
@@ -1382,11 +1425,18 @@ fn giantTileAt(ll: vec2f, m3: vec3f, L: f32, tn: f32, salt: u32, warp: vec2f) ->
     let h = pcg(salt * 131u + u32(band + 8.0));
     X += vec2f(f32(h & 0xffffu), f32(h >> 16u)) / 65536.0 + warp;
     let v = textureSampleLevel(noiseTex, noiseSamp, vec3f(X, z), 0.0);
+    // (its ψ′ — the 4th channel — and its slope a texel east and north: the bands', not the polar plane's)
+    if (GT_ON && q < 2u) {
+      let ve = textureSampleLevel(noiseTex, noiseSamp, vec3f(X + vec2f(1.0 / 128.0, 0.0), z), 0.0).w;
+      let vn = textureSampleLevel(noiseTex, noiseSamp, vec3f(X + vec2f(0.0, 1.0 / 128.0), z), 0.0).w;
+      gp += w * vec3f(v.w, (ve - v.w) * 128.0, (vn - v.w) * 128.0);
+    }
     // (by the pole a period's longitude meaningless: its x displacement read as along the parallel near enough)
     acc += w * vec4f(v.xyz, 0.0);
     wsum += w;
     if (q < 2u) { acc.w += w * K; } else { acc.w += w * TAU * max(cos(ll.y), 0.05) / L; }
   }
+  GT_LAST = gp / max(wsum, 1e-6);
   return acc / max(wsum, 1e-6);
 }
 fn planetAlbedo(k: u32, qb: vec3f, tEm: f32) -> vec4f {
@@ -9226,6 +9276,9 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
 fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec3f {
   setMapLod(fp, fp, k);
   let m = u32(bodies[BV * k + 2u].z) - 4u;
+  // (P9 G9: the tile's relief gathered with the colour, the Sun low — below)
+  GT_ON = (m == 4u || m == 5u) && dot(q, Ls) > -0.02 && dot(q, Ls) < 0.35;
+  GT_SUM = vec3f(0.0);
   var A: vec3f;
   // (Jupiter's, Saturn's cloud deck near — under their air: their clouds moving, in place of the fixed map, as planetShade's
   // discs; Mars's kernel carries it, its branch never taken. Only where a giant can be the near body — NEAR_KIND 0, 2 —, and
@@ -9237,7 +9290,45 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
   // (Mars's relief marched: its normal and shadow from earthNear — HD_N, REL_SH)
   var nrm = HD_N;
   if (!HD_N_ON) { nrm = hdNormal(k, q); }
-  let cosi = max(dot(nrm, Ls), 0.0);
+  var cosi = max(dot(nrm, Ls), 0.0);
+  // (Jupiter's, Saturn's cloud tops in relief — P9 G9 —, where it shows: the Sun low — a 12 km height's shadow is 340 km at
+  // 2° — and the pixel finer than that shadow, from orbit too along the terminator; the slope towards the Sun and the
+  // shadows cast, by a short march towards it on the heights the clouds carry. Elsewhere the flat deck, as before. The same
+  // conjunction as giantAlbedo's: only in the kernels that draw a giant large)
+  if (NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && (m == 4u || m == 5u) && P.near5.w > 0.0 && mu0 > -0.02 && mu0 < 0.35) {
+    let rk = AIR.rm * 1e-3;
+    let te = max(mu0, 0.01) * inverseSqrt(1.0 - mu0 * mu0);
+    let Lsh = min(12.0 / te, 1500.0);
+    // (faded in as the Sun gets low — no edge where the relief starts —, and by the pixel against the shadow; its steps three
+    // of the map's texels at least: within one texel its bilinear slopes are a grid, not a relief)
+    let tx = 3.0 * TAU / select(f32(textureDimensions(mapHi).x), P.hd.w, i32(m) == i32(P.hd.x)) * rk;
+    // (the map's march only while the map resolves it — the pixel finer than a tenth of its texel, its bilinear smears —;
+    // under it the tile's relief)
+    let sun = smoothstep(0.35, 0.2, mu0);
+    let near = smoothstep(1.0, 0.3, fp * rk / Lsh) * sun * smoothstep(0.02, 0.05, fp * rk / tx);
+    let tz = normalize(Ls - q * mu0);
+    // (under the map's texel the turbulence tile's eddies — their slope along the Sun's way, gathered with the colour: GT_SUM)
+    let ea = normalize(vec3f(-q.y, q.x, 0.0) + vec3f(1e-9, 0.0, 0.0));
+    var sl = dot(GT_SUM.yz / rk, vec2f(dot(tz, ea), dot(tz, cross(q, ea)))) * sun;
+    var sh = 1.0;
+    if (near > 0.0) {
+      var h0 = 0.0;
+      var sm = 0.0;
+      var occ = -1e9;
+      for (var i = 0u; i < 5u; i++) {
+        let d = select(0.0, max(Lsh * 0.12, tx) * pow(2.3, f32(i) - 1.0), i > 0u);
+        let hi = giantHeight(m, normalize(q + tz * (d / rk)), P.time.x);
+        if (i == 0u) { h0 = hi; } else {
+          if (i == 1u) { sm = (hi - h0) / d; }
+          occ = max(occ, hi - h0 - d * te);
+        }
+      }
+      sl += near * sm;
+      sh = mix(1.0, 1.0 - smoothstep(0.0, 2.0, occ), near);
+    }
+    if (sun > 0.0) { cosi = max((mu0 - sl * sqrt(1.0 - mu0 * mu0)) * inverseSqrt(1.0 + sl * sl), 0.0) * sh; }
+  }
+  GT_ON = false;
   var f = cosi;
   if (m == 4u || m == 5u || m == 20u || m == 21u) {
     let km = select(0.88, 0.8, m >= 20u);

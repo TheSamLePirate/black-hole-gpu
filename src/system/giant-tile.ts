@@ -13,7 +13,9 @@
 //         drift (the jets' own: the zonal winds are G1's, Cassini's), in tile periods;
 //   b     a dye (a seeded pattern at the window's start, carried by the flow: x − D's), centred on 0 — the contrast under the
 //         map's texel;
-//   a     the vorticity, over the jets' — how much the flow turns there.
+//   a     the eddies' streamfunction ψ′ (ψ less its row's mean — the jets' own zonal part —), over the jets' U0 / n: in
+//         geostrophic balance the height of the pressure surfaces, h = f ψ / g — an anticyclone high, a cyclone hollow
+//         (PLAN-PLANETES-AAA P9 G9b: the cloud tops' relief at the tile's scales; trace.wgsl takes f's sign by hemisphere).
 // The same seed, the same tile (no atomics, fixed sums); a GPU's float rounding may differ from another's by a hair (the window
 // short: a few eddy turnovers, it does not grow to sight).
 
@@ -188,23 +190,28 @@ fn colsFwd(g: u32, k: u32) -> vec2f {
   W[i] = select(vec2f(0.0), (w + C.dt * (1.5 * nh - 0.5 * np + f - C.drag * w)) * filt, kept(q));
   NP[i] = nh;
 }
-// a frame: the displacement less its row's zonal drift, the dye, the vorticity (one workgroup a row)
+// a frame: the displacement less its row's zonal drift, the dye, the eddies' streamfunction (one workgroup a row)
 var<workgroup> sums: array<f32, N>;
+var<workgroup> psis: array<f32, N>;
 @compute @workgroup_size(${N}) fn frame(@builtin(workgroup_id) g: vec3u, @builtin(local_invocation_index) x: u32) {
   let y = g.x;
   let i = y * N + x;
   let d = Dout[i];
   sums[x] = d.x;
+  psis[x] = A[N2 + i].y;
   workgroupBarrier();
   for (var s = N / 2u; s > 0u; s >>= 1u) {
-    if (x < s) { sums[x] += sums[x + s]; }
+    if (x < s) {
+      sums[x] += sums[x + s];
+      psis[x] += psis[x + s];
+    }
     workgroupBarrier();
   }
   let e = d - vec2f(sums[0] / NF, 0.0);
   // (where its matter was at the window's start, in the square's units: the dye there)
   let p = (vec2f(f32(x), f32(y)) * (TAU / NF) - e) / TAU;
   let dye = 0.65 * gnoise2(p * 6.0, 6u, 37u) + 0.35 * gnoise2(p * 12.0, 12u, 41u);
-  let v = vec4f(e / TAU, 0.5 * dye, A[N2 + i].x / max(C.jetW * C.jetN, 1e-6));
+  let v = vec4f(e / TAU, 0.5 * dye, (A[N2 + i].y - psis[0] / NF) / max(C.jetW / C.jetN, 1e-6));
   textureStore(out, vec3u(x, y, u32(C.z)), v);
   if (C.frame == 0.0) { textureStore(out, vec3u(x, y, u32(C.z) - 1u), v); }
   if (C.frame == ${TILE_FRAMES - 1}.0) { textureStore(out, vec3u(x, y, u32(C.z) + 1u), v); }

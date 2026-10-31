@@ -59,4 +59,8 @@ export const WIND_VEC4S = 37;
  *  values — system/ring-profile.ts ringOpacitySums; trace.wgsl ringTauFine): the profile's mean over any footprint in two reads */
 export const TABLE_RINGSUM = TABLE_WIND + WIND_VEC4S;
 export const RINGSUM_VEC4S = Math.ceil((RING_N + 1) / 4);
-export const TABLE_VEC4S = TABLE_RINGSUM + RINGSUM_VEC4S;
+/** the giants' cloud tops by latitude (system/giant-tops.ts — PLAN-PLANETES-AAA P9 G9a; trace.wgsl giantTop): Jupiter's
+ *  methane-band profile, its map's luminance, Saturn's, each 181 values from 90 S, four a vec4 */
+export const TABLE_TOPS = TABLE_RINGSUM + RINGSUM_VEC4S;
+export const TOPS_VEC4S = 181;
+export const TABLE_VEC4S = TABLE_TOPS + TOPS_VEC4S;
