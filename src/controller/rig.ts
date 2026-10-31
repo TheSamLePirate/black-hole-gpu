@@ -35,6 +35,7 @@ import {
   toBodyFixed,
 } from "../system/our-surface";
 import { M_METRES, seenFrom, solarBody } from "../system/solar";
+import { giantTop } from "../system/giant-clouds";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 
 import { blendCurve, lookQ, qAxes, qSlerp } from "../cine/follow";
@@ -237,19 +238,24 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
       const o = this.rigBody(b, w.ours, tNow);
       if (o && o.R > 0) others.push(Math.hypot(...sub3(w.X, o.C)) - o.R);
     }
-  const h = Math.max(
-    softHeight([
-      Math.max(
-        Math.hypot(...(R.fixed ?? (mode === "follow" || mode === "free" ? R.off : rel))) -
-          ref.R -
-          this.reliefUnder(this.rigBody(ref.id, w.ours, tNow)!, w, tNow) / mR,
-        1 / mR,
-      ),
-      this.nearShip,
-      ...others,
-    ]),
-    (Number.isFinite(this.nearShip) ? 2 : 1) / mR,
-  );
+  // (a giant of ours: no ground — the height over its sphere (its equatorial radius) is nothing over its clouds, 170 km up at
+  // 12° S, 4 600 km at Jupiter's poles: the keys crawled there at a metre a second, the clouds never reached. The distance
+  // to its cloud tops instead — the top of its highest deck over its 1 bar ellipsoid —, 3 km at least: through the decks at
+  // a few km a second; below them, no more than the distance to the floor (a hundredth of the radius down: `floor` below)
+  // — PLAN-PLANETES-AAA P11)
+  const gas = w.ours && solarBody(ref.id)?.surface === "gas";
+  const giantAbove = () => {
+    const hb = altitudeOver(ref.id, w.X, tNow),
+      top = giantTop(ref.id),
+      bottom = -0.01 * ref.R * mR;
+    return Math.max(hb >= top ? hb - top : Math.min(top - hb, hb - bottom), 3e3) / mR;
+  };
+  const above = gas
+    ? giantAbove()
+    : Math.hypot(...(R.fixed ?? (mode === "follow" || mode === "free" ? R.off : rel))) -
+      ref.R -
+      this.reliefUnder(this.rigBody(ref.id, w.ours, tNow)!, w, tNow) / mR;
+  const h = Math.max(softHeight([Math.max(above, 1 / mR), this.nearShip, ...others]), (Number.isFinite(this.nearShip) ? 2 : 1) / mR);
   // (the keys held: the boost — a tripod's 1.4 m/s at a tap, hundreds of m/s held a while)
   // (near a solid world of ours: no more than the height over its ground as drawn and flown — the gear's —: the
   // sphere and its relief alone made a tripod's 1.7 m some hundreds, its keys a few hundred m/s)

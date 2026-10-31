@@ -3898,9 +3898,17 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
     if (NEAR_KIND != 3u && NEAR_KIND != 7u && air) {
       // (a giant's clouds round the camera: their volume — P11 D2 —; else its deck from above)
       // (the constants' conjunction written here: the specialiser folds it — the general kernel, the Earth's, without the volume)
+      // (in the band over the clouds both, mixed — giantInsideW —; earthNear called once: each call is a copy the compiler builds)
+      var w = 0.0;
+      var gv = EarthNear(vec3f(0.0), vec3f(1.0), -1.0, 1.0);
       if (NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && giantInsideOn(k)) {
-        e = giantInside(look, k);
-      } else { e = earthNear(look, rnd, k); }
+        gv = giantInside(look, k);
+        w = giantInsideW(k, look);
+      }
+      if (w < 1.0) {
+        e = earthNear(look, rnd, k);
+        if (w > 0.0) { e = giantNearMix(e, gv, w); }
+      } else { e = gv; }
       hitT = e.t;
     }
     if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && NEAR_KIND != 6u && !air) {
@@ -3936,12 +3944,15 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       }
     }
     if (NEAR_KIND != 3u && NEAR_KIND != 7u && air) {
+      // (in a giant's clouds — giantInside —: the rings beyond its volume, seen through what it lets through — 7 000 km and more
+      // away, past the march's end where it met something; the constants first: the other kernels fold it away)
+      let behind = NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && GI_IN;
       if (hitT > 0.0) {
-        var o = traceOut(ring.rgb + (1.0 - ring.w) * e.col);
+        var o = traceOut(select(ring.rgb + (1.0 - ring.w) * e.col, e.col, behind));
         o.depth = hitT * bodyRadius(k);
         return o;
       }
-      pre = ring.rgb + (1.0 - ring.w) * e.col;
+      pre = select(ring.rgb + (1.0 - ring.w) * e.col, e.col + e.T * ring.rgb, behind);
       T = (1.0 - ring.w) * e.T;
       veil = e.veil;
       // (what lies beyond the air, seen through it: lower than it looks)
@@ -10534,11 +10545,51 @@ fn giantLayerAlbedo(i: u32, top: vec3f) -> vec3f {
   return select(select(vec3f(0.80, 0.82, 0.86), vec3f(0.86, 0.47, 0.20), i == 1u), top, i == 0u);
 }
 // the camera inside: under the storms' anvils over the top layer, a giant, the kernels that draw one large (G9's conjunction)
-fn giantInsideOn(k: u32) -> bool {
-  let m = u32(bodies[BV * k + 2u].z) - 4u;
-  if (!(NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && (m == 4u || m == 5u))) { return false; }
+// (the volume's share of a ray, over G9's surface — both drawn and mixed —: as near clouds come out of the deck seen from
+// above and far ones melt into it — the distance along the ray to the top deck's top: all of it within GI_NEAR, none past
+// GI_FAR, eased between; a ray over the deck, by the camera's height over it the same way. Under that top, all of it. Before,
+// the volume took the whole image at once 30 km over the ammonia: the clouds appeared in a frame)
+const GI_NEAR = 150e3;
+const GI_FAR = 450e3;
+fn giantDeckTop(m: u32) -> f32 {
   let L = giantLayer(m, 0u);
-  return (length(nearCam()) - 1.0) * P.near4.w < L.x + 3.0 * L.y + 30e3;
+  return L.x + L.y;
+}
+fn giantVolumeOK(k: u32) -> bool {
+  let m = u32(bodies[BV * k + 2u].z) - 4u;
+  return NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && (m == 4u || m == 5u);
+}
+fn giantInsideW(k: u32, look: vec3f) -> f32 {
+  if (!giantVolumeOK(k)) { return 0.0; }
+  let m = u32(bodies[BV * k + 2u].z) - 4u;
+  let rm = P.near4.w;
+  let ro = nearCam();
+  let top = giantDeckTop(m);
+  let hc = (length(ro) - 1.0) * rm;
+  if (hc <= top) { return 1.0; }
+  let rs = squashed(toBody(look), squashOf(k));
+  let mm = length(rs);
+  let rd = rs / mm;
+  let rT = 1.0 + top / rm;
+  let b = dot(ro, rd);
+  let disc = b * b - (dot(ro, ro) - rT * rT);
+  let d = select(hc - top, (-b - sqrt(max(disc, 0.0))) * rm / mm, disc > 0.0 && b < 0.0);
+  return 1.0 - smoothstep(GI_NEAR, GI_FAR, d);
+}
+fn giantInsideOn(k: u32) -> bool {
+  if (!giantVolumeOK(k)) { return false; }
+  let m = u32(bodies[BV * k + 2u].z) - 4u;
+  return (length(nearCam()) - 1.0) * P.near4.w < giantDeckTop(m) + GI_FAR;
+}
+// (the surface's and the volume's paths mixed by the volume's share w: their light and what they let through; a hit where
+// neither lets anything through — the nearer —, else none: the sky beyond traced, seen through the mix)
+fn giantNearMix(a: EarthNear, b: EarthNear, w: f32) -> EarthNear {
+  let T = mix(a.T, b.T, w);
+  var t = -1.0;
+  if (max(T.x, max(T.y, T.z)) <= 0.0) {
+    t = select(max(a.t, b.t), min(a.t, b.t), a.t > 0.0 && b.t > 0.0);
+  }
+  return EarthNear(mix(a.col, b.col, w), T, t, mix(a.veil, b.veil, w));
 }
 // the share of a layer's column above h (its profile exp(−((z − c)/w)²): a logistic for the normal's tail)
 fn giantColAbove(h: f32, L: vec4f) -> f32 { return L.y * 1.7725 / (1.0 + exp(2.5 * (h - L.x) / L.y)); }
@@ -10556,6 +10607,8 @@ fn giantEye(m: u32, q: vec3f) -> vec4f {
 // the three layers' sum and the eye's wall, their colours mixed in GI_ALB
 var<private> GI_ALB: vec3f = vec3f(0.0);
 var<private> GI_TOP: vec3f = vec3f(0.8);
+// (the camera in a giant's clouds this ray: its volume in front of the rings — trace(): they composited behind it)
+var<private> GI_IN: bool = false;
 fn giantSigma(m: u32, p: vec3f, h: f32, cover: vec3f, rkm: f32, det: f32) -> f32 {
   let q = normalize(p);
   let pk = q * (rkm + h * 1e-3);
@@ -10733,6 +10786,7 @@ fn giantHazeCol(h: f32, lt: f32, hr: f32) -> f32 {
 }
 fn giantInside(look: vec3f, k: u32) -> EarthNear {
   setAir(k);
+  GI_IN = true;
   let m = u32(bodies[BV * k + 2u].z) - 4u;
   let ab = squashOf(k);
   let ro = nearCam();
@@ -10748,6 +10802,16 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   let Lb = giantLayer(m, 2u);
   let hTop = Lt.x + 3.0 * Lt.y + 70e3;
   let hBot = Lb.x - 2.5 * Lb.y;
+  // (the camera over the volume's shell — the band where it fades in over G9's surface —: the march from where the ray enters
+  // it; a ray missing it sees nothing of it)
+  var t0 = 0.0;
+  if ((length(ro) - 1.0) * rm > hTop) {
+    let rT = 1.0 + hTop / rm;
+    let b = dot(ro, rd);
+    let disc = b * b - (dot(ro, ro) - rT * rT);
+    if (disc <= 0.0 || b > 0.0) { return EarthNear(vec3f(0.0), vec3f(1.0), -1.0, 1.0); }
+    t0 = (-b - sqrt(disc)) * rm / mm;
+  }
   // (the map's cover over the camera's region — its luminance about its latitude's mean: the zones' ammonia thick, the
   // belts thin —, and the top deck's colour, the map's own)
   let qc = normalize(ro);
@@ -10763,7 +10827,7 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   let N = 112u;
   var T = 1.0;
   var col = vec3f(0.0);
-  var t = 0.0;
+  var t = t0;
   var tPrev = 0.0;
   var tEnd = -1.0;
   var hl = 0.0;
@@ -10876,6 +10940,14 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   }
   // (level rays at the march's end: the haze beyond, its light as the last sample's; down: the deep's faint glow)
   if (tEnd < 0.0 && t > Dmax) { tEnd = Dmax; }
+  // (the steps run out on a ray bound for the deep — its nearest approach to the centre ahead under the decks' floor —: the deep
+  // stops it there, no space beyond it; left open, Saturn's rings were drawn through the planet, seen from its clouds)
+  if (tEnd < 0.0) {
+    let b = dot(ro, rd);
+    let r2 = select(dot(ro, ro), dot(ro, ro) - b * b, b < 0.0);
+    let rf = 1.0 + hBot / rm;
+    if (r2 < rf * rf) { tEnd = t; }
+  }
   if (tEnd > 0.0) {
     col += T * sl * select(1.0, 0.25, hl < hBot);
     return EarthNear(col, vec3f(0.0), tEnd / rm, 1.0);

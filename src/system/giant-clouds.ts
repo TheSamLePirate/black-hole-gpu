@@ -32,6 +32,9 @@ export const GIANT_LAYERS: Record<"jupiter" | "saturn", [GiantLayer, GiantLayer,
 export type GiantId = keyof typeof GIANT_LAYERS;
 export const isGiant = (id: string): id is GiantId => id === "jupiter" || id === "saturn";
 
+/** the top of a giant's clouds [m over 1 bar]: its highest deck's — 0 for the giants without decks (Uranus, Neptune) */
+export const giantTop = (id: string) => (isGiant(id) ? GIANT_LAYERS[id][0].c + GIANT_LAYERS[id][0].w : 0);
+
 /** the deck at a height h [m over 1 bar] — within its half thickness —, or null between them */
 export function giantDeckAt(id: GiantId, h: number): GiantLayer | null {
   for (const L of GIANT_LAYERS[id]) if (Math.abs(h - L.c) <= L.w) return L;

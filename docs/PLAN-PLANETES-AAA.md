@@ -371,7 +371,10 @@ s'enfoncer dans le noir jusqu'à l'écrasement. Après G9, qui en fournit le loi
   brûlée avec les dégâts), les pôles de Saturne et de Jupiter de 4 rayons en e2e (le limbe sur leur figure à 0,004 près,
   pas de bande de brume), les mesures sur le mini (dedans : 25 ms gouverné contre 30 pour la Terre en vol bas ; à qualité
   fixe ~39 ms, au budget de la Terre dans ses nuages, sans marge). À décider : la hauteur géopotentielle des ponts près
-  des pôles, la lumière du puits de l'œil, un bouclier ablatif.
+  des pôles, la lumière du puits de l'œil, un bouclier ablatif. Ensuite : la caméra libre entre dans les nuages des
+  géantes (elle s'arrêtait à leur sphère équatoriale), les anneaux de Saturne ne se voient plus à travers la planète depuis
+  ses nuages, et le volume se fond dans la surface de G9 sur les 450 km au-dessus du pont, rayon par rayon, au lieu
+  d'apparaître d'un coup ; un film de l'orbite aux nuages (`scripts/giant-free-video.ts`).
 - **Ce que nous apprend le projet d'Alex** (vr-solar-system, `docs/agent/`, 31 octobre ; à peser, rien n'est décidé par lui) :
   - **leurs mesures sur le Quest 3** (un test de cyclone, pas un design) : le volume en pleine résolution coûte ~1 ms par
     échantillon et par image ; à un quart de la résolution, 32 échantillons ajoutent +3,4 ms, une passe à part avant la passe
