@@ -2751,7 +2751,9 @@ export class Renderer {
     set(4, ...cam.fwd, o.stars ?? 0);
     set(5, cam.zamo.alpha, cam.zamo.omega, cam.zamo.varpi, cam.zamo.sqrtSig);
     // (y: the aerial table's scale — trace.wgsl apScale)
-    set(6, cam.zamo.sqrtSigOverDel, this.aerialPreExposed ? preExposure(this.ev(s)) : 0, 0, 0);
+    // (z: the scene's clock in seconds, modulo 4 096 s, from the float64 time — the giants' lightning, P11 D4: a flash's
+    // milliseconds, the M's float32 too coarse — ~30 s — after decades of the game)
+    set(6, cam.zamo.sqrtSigOverDel, this.aerialPreExposed ? preExposure(this.ev(s)) : 0, (time * 4.925490947e-6 * s.massSolar) % 4096, 0);
     set(7, ...cam.beta, cam.gamma);
     set(8, a, horizon(a), dc.rIn, Math.max(s.diskOuter, dc.rIn + 0.5));
     set(9, s.diskTemp, dc.fmax, s.turbulence, dc.logY);

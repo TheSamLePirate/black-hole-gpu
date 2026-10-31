@@ -2,7 +2,7 @@
 // low flight (3 km up, looking at its horizon), on foot (the walker), its showcase scene —, set up the same way for each, the
 // clock held and the craft unbreakable. tests/e2e/planets-baseline.e2e.test.ts measures them all, planets-ab two builds.
 
-export type View = "orbit" | "low" | "foot" | "cine";
+export type View = "orbit" | "low" | "foot" | "cine" | "inside";
 /** set: the view's setup, or several — the brightest image kept (a world's sunlit side) */
 export type Spot = { body: string; view: View; set: string | string[]; foot?: [number, number] };
 
@@ -153,6 +153,23 @@ export const SPOTS = [
               "P9 jupiter low",
               "Jupiter: from orbit",
               `time: ${109.6 + 49.7}, target: "jupiter", ship: false, pose: { body: "jupiter", altKm: 25000, at: [-22, 126.4], look: "jupiter", off: [0, 0] }`,
+            ),
+          },
+        ]
+      : []),
+    // (P11 D2–D3: inside the clouds — Jupiter between its ammonia and its hydrosulfide 3 km under 1 bar near the Great Red
+    // Spot in its afternoon, a storm ahead; Saturn in its north polar vortex's eye, 25 km under 1 bar, its wall ahead, 2076)
+    ...(b === "jupiter" || b === "saturn"
+      ? [
+          {
+            body: b,
+            view: "inside" as View,
+            set: scene(
+              `P11 ${b} inside`,
+              "Jupiter: from orbit",
+              b === "jupiter"
+                ? `time: ${109.6 + 49.7 + 0.17 * ((9.925 * 3600) / (4.925490947e-6 * 1e8))}, target: "jupiter", ship: false, fov: 70, pose: { body: "jupiter", altKm: -3, at: [-12, 126.4], heading: 270, tilt: 4 }`
+                : `time: ${109.6 + 9.4 * 64069}, target: "saturn", ship: false, fov: 70, pose: { body: "saturn", altKm: -25, at: [89.35, 0], heading: 180, tilt: 1 }`,
             ),
           },
         ]
