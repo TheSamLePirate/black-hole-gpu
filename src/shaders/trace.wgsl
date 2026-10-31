@@ -10160,11 +10160,15 @@ fn earthLookNoGround(k: u32, ro: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, gx: vec3
 // setting Sun squashed). The CPU's constants for the camera's height (refraction.ts): P.sky = (N₀, N at
 // the camera, the Earth's radius and the camera's distance from its centre in scale heights). The
 // direction beyond: the look turned down by it in its vertical plane.
+// (on the Earth's squashed axes — its WGS84 ellipsoid the unit sphere, as earthNear's ground and air: nearCam is there,
+// the look squashed too. The stretch keeps tangency: the eye's horizontal there is the ellipsoid's — the geodetic
+// vertical's —, the air's shells spheres, a grazing ray's lowest point the true one. The true look against the squashed
+// vertical had the sky's elevations 5.8′ off at 45° of latitude, to the north and south: ~1′ of bending near the horizon)
 // (the bending of the ray traced now — green light's —, for the Sun's disc in each colour: PLAN-CIEL C4)
 var<private> REFR_DELTA: f32 = 0.0;
 fn airBend(look: vec3f) -> vec3f {
   let up = normalize(nearCam());
-  let rd = toBody(look);
+  let rd = normalize(squashed(toBody(look), EARTH_AB));
   let mu = dot(rd, up);
   let w = up - mu * rd;
   let wl = length(w);
@@ -10178,7 +10182,8 @@ fn airBend(look: vec3f) -> vec3f {
   }
   delta = clamp(delta, 0.0, 0.03);
   REFR_DELTA = delta;
-  return fromBody(rd * cos(delta) - w * (sin(delta) / max(wl, 1e-6)));
+  let bent = rd * cos(delta) - w * (sin(delta) / max(wl, 1e-6));
+  return fromBody(normalize(vec3f(bent.xy, bent.z / EARTH_AB)));
 }
 
 // The Earth in the local patch (the camera near it): its ground and air, or the sky behind them
@@ -10503,6 +10508,10 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   // g_tt = −1): from here to infinity α = (M/b)(1 − s₀/√(s₀² + b²)), b the closest approach, s₀ the camera
   // from it along the ray — measured against the integrator: within 3 % at b = 20ρ, its error falling as
   // 1/b², under a quarter pixel beyond √(0.26 M / pixel) (and 4ρ: the throat's own shape)
+  // The camera within the region too (Saturn's whole system: the region is 100 ρ round the mouth, ~5 AU across with
+  // Gargantua's mass — every ray of a view of Saturn was integrated, ~54 steps, the planet's view 2.8 times the Earth's):
+  // the same test, the same bend — the formula follows the camera along the ray, s₀ its place, inside the region or out —,
+  // the piece then on to infinity; a ray passing near the mouth integrated as before
   var outward = false; // (the ray never enters the Dneg region: nothing further to meet)
   // (a straight piece through our bodies: 1 the camera's, up to the Dneg region; 2 the one out of our end of the wormhole.
   // Both met at one call site, in the segments' loop: ourSegment is the kernel's largest function, and on D3D12 every
@@ -10516,12 +10525,16 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   if (seg == 1u && P.wh2.y < 0.0) {
     let m = -P.ourCam.xyz;
     let R2 = P.ourCam.w * P.ourCam.w;
-    if (dot(m, m) > R2) {
-      let dH = normalize(repToHome(wn, wd));
-      let b = dot(m, dH);
-      let perp = m - b * dH;
-      let bb = length(perp);
-      straight = straight || bb > max(4.0 * P.wh.y, sqrt(0.26 * P.wh.w / P.camUp.w));
+    let dH = normalize(repToHome(wn, wd));
+    let b = dot(m, dH);
+    let perp = m - b * dH;
+    let bb = length(perp);
+    // (the nearest the ray comes: its line's closest approach ahead, else — moving away — the camera's own distance; the
+    // formula's error gathered round it on both sides of a pass, on one moving away: half the bound)
+    let dMin = select(length(m), bb, b > 0.0);
+    let wide = dMin > 4.0 * P.wh.y && dMin * dMin > select(0.13, 0.26, b > 0.0) * P.wh.w / P.camUp.w;
+    if (dot(m, m) > R2 || wide) {
+      straight = straight || wide;
       if (ourStart() < bodyCount()) {
         let hh = R2 - bb * bb;
         var tEnter = 3e38;

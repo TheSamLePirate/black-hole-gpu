@@ -1046,6 +1046,8 @@ const GARGANTUA_WORLD: Preset = { ...EARTH_VIEW, anchor: "hole", fov: 40, time: 
 /** the game's start [M], a day [M] */
 const T0 = 109.6,
   DAY = 86400 / M_SECONDS;
+/** Saturn's views: 4 October 2026, its opposition [M] */
+const SATURN_2026 = (Date.UTC(2026, 9, 4, 12) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS;
 const SANTIAGO: [number, number] = [-33.45, -70.66];
 
 export const presets: Record<string, Preset> = {
@@ -1521,11 +1523,13 @@ export const presets: Record<string, Preset> = {
     time: T0 + 0.54 * DAY,
     pose: { body: "europa", at: [10, -136], look: "jupiter", off: [0, -10] },
   },
+  // (Saturn's views in 2026 — a time of the game too —: its equinox in May 2025 past, the Sun ~7° under the rings' plane, their
+  // south face lit; the camera on that side. In 2067, the game's start, the Sun grazes them — near the next equinox —, dark)
   "Saturn: the rings from above": {
     ...WORLD_VIEW,
     target: "saturn",
     fov: 32,
-    time: T0,
+    time: SATURN_2026,
     pose: { tilt: 60, body: "saturn", altKm: 420000, phase: 40, at: [-30, 0], look: "saturn" },
   },
   // (in Saturn's shadow, well over its rings' plane: the rings lit from behind — their dust bright, the C ring and the Cassini
@@ -1534,7 +1538,7 @@ export const presets: Record<string, Preset> = {
     ...WORLD_VIEW,
     target: "saturn",
     fov: 34,
-    time: T0,
+    time: SATURN_2026,
     pose: { tilt: 60, body: "saturn", altKm: 420000, phase: 168, at: [-35, 0], look: "saturn" },
   },
   "Titan: the orange haze": {
