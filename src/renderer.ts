@@ -84,6 +84,7 @@ import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, seasPixels, type HdMa
 import { bakeNoise3d } from "./noise3d";
 import { bakeGiantTile, readGiantTile } from "./system/giant-tile";
 import { GIANT_WINDS } from "./system/giant-winds";
+import { anchorTileCoord } from "./system/earth-tiles";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
 import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, earthDetailFor, effectiveQuality, earthMapQuality } from "./quality-policy";
@@ -301,6 +302,10 @@ const RASTER_WATER_FLAG = 256;
 /** the parameters' raster bit for "shade not compiled yet": the pixels the material does not take are traced (trace.wgsl
  *  RASTER_SHADE_LATE_FLAG) */
 const RASTER_SHADE_LATE_FLAG = 1024;
+/** the parameters' raster bit for the trees near the camera taken by the rays' kernel (trace.wgsl RASTER_NEAR_TREES_FLAG) */
+const RASTER_NEAR_TREES_FLAG = 2048;
+/** within this the trees are the rays' kernel's (trace.wgsl RASTER_NEAR_TREES_M) [m] */
+const RASTER_NEAR_TREES_M = 80;
 /** the temporal pass's least weight of a fresh pixel with the raster's ground at every pixel (taParams[0]'s 1/16 otherwise) */
 const RASTER_LITE_ALPHA = 0.3;
 /** the automatic rate's start by the hardware's tier (tier.ts: 0 software … 4 high-end) — then by the measure */
@@ -699,6 +704,8 @@ export class Renderer {
   /** the giants' turbulence tile (system/giant-tile.ts: PLAN-PLANETES-AAA P9 G8) in the noise texture: baked once a giant is
    *  near (its finer maps' reach), the time its bake took [ms] — on the clock and the GPU's */
   giantTile: { state: "none" | "baking" | "done"; ms: number; gpuMs: number } = { state: "none", ms: 0, gpuMs: 0 };
+  /** the camera's anchor on the Earth's squashed axes [radii] (params 67: float32), null away from the Earth */
+  private nearAnchor: Vec3 | null = null;
   private noiseSampler!: GPUSampler;
   private postBeamV!: GPUComputePipeline;
   /** the display's and the post chain's pipelines (async compiles, awaited with the tracer's core) */
@@ -3238,6 +3245,7 @@ export class Renderer {
       // (the Earth's on its squashed axes — z × a/b: its ellipsoid the unit sphere, trace.wgsl: EARTH_AB)
       if (near.index === earthK) c[2] = c[2]! / (1 - WGS84_F);
       const A = c.map((x) => Math.fround(x));
+      this.nearAnchor = near.index === earthK ? (A as Vec3) : null;
       set(67, A[0]!, A[1]!, A[2]!, A[0]! * A[0]! + A[1]! * A[1]! + A[2]! * A[2]! - 1);
       set(68, c[0]! - A[0]!, c[1]! - A[1]!, c[2]! - A[2]!, 1);
       // the runways within 150 km, nearest first: their frames, the camera from each threshold [m] — on the
@@ -3252,6 +3260,7 @@ export class Renderer {
       const rasterGround = this.earthPipelineNow(s) === "raster" && this.rasterLite && this.rasterHold && !this.character?.active;
       if (runways[0]! > 0 && !rasterGround) this.featureKey |= 256;
     } else {
+      this.nearAnchor = null;
       set(67, 0, 0, 0, 0);
       set(68, 0, 0, 0, 0);
     }
@@ -3294,6 +3303,7 @@ export class Renderer {
           ? (near.axes.map((a) => a[0]! * cam.fwd[0] + a[1]! * cam.fwd[1] + a[2]! * cam.fwd[2]) as Vec3)
           : null;
       const eyeH = eye && near ? Math.max(heightOverGround("earth", eye.map((x) => x * near.radius) as Vec3), 1) : 0;
+      if (t === this.live) this.liveEyeHM = eyeH;
       // (the detail's reach — settings.detailReach —: the scenery's box this many times wider, the relief's windows led
       // out to 6, 12 or 20 km; both as this device draws them — quality-policy.ts earthDetailFor: lighter on a modest one)
       const detail = earthDetailFor(s, this.tier);
@@ -3347,6 +3357,11 @@ export class Renderer {
       }
     }
     f.set(this.earthTiles.params(), 69 * 4);
+    // (the camera's anchor's place on the tiles, in float64 — envY.w, envZ.w —: the raster's ground near the camera read
+    // there from it, not from a unit-sphere point in float32 — 0.4 m, the orthophotos' texel: trace.wgsl tileAnchor)
+    const tA = this.nearAnchor ? anchorTileCoord(this.nearAnchor, f[69 * 4]!, f[69 * 4 + 1]!, f[69 * 4 + 2]!) : [0, 0];
+    f[56 * 4 + 3] = tA[0]!;
+    f[57 * 4 + 3] = tA[1]!;
     // (the Moon's in their place while drawn: the Earth's are off then — not the near body)
     if (this.moonTiles.active) f.set(this.moonTiles.params(), 69 * 4);
     // (and the body raster's reach [m] — P.tileL[17].x —: Mars's rays the raster has not met start their march there, P7)
@@ -5087,6 +5102,8 @@ export class Renderer {
         `${this.earthTiles.stamp}:${this.earthMaps.tier}`,
         () => this.prof.pass("terrain surface cache"),
         this.terrainRasterRequested ? this.terrainRasterLevel : -1,
+        // (the tiles' reference as the tracer has it this frame: the bake's nodes read from it exactly)
+        this.paramsF[69 * 4 + 3]! > 0.5 ? [this.paramsF[69 * 4]!, this.paramsF[69 * 4 + 1]!, this.paramsF[69 * 4 + 2]!] : null,
       );
       // (realtime: nothing rejected — a bake is the same ground, its window moved or its heights refined by new tiles, and
       // the temporal pass's clamp takes the change; rejecting the history there threw it away for the eight frames of the
@@ -5148,17 +5165,30 @@ export class Renderer {
     this.rasterLiteNow = false;
     this.rasterWaterNow = false;
     this.rasterShadeLate = false;
+    this.nearTreesNow = false;
     if (!quality && hint && this.rasterPrimaryOn && this.rasterLite && this.traceVariant("shadeLite")) {
       this.rasterLiteNow = true;
       this.rasterShadeLate = shadeLate;
       // (its water's pass — shadeWater — once its kernel is there: shadeLite leaves it the water's pixels)
       // (not another world's: its water is bodyLite's — and the Earth's unseen sea would stop the FFT, seaFftParams)
       this.rasterWaterNow = !this.bodyRasterNow && !!this.traceVariant("shadeWater");
+      // (the trees near the camera — within RASTER_NEAR_TREES_M, wide on the screen —: the rays' kernel's, which carves their
+      // crowns and finds what stands behind them — the material tests a proxy's tree alone, a ring of bare ground round each
+      // crown up close —; only while shade runs — ready, the camera low near the scenery: it is then dispatched, encodeRaster)
+      this.nearTreesNow =
+        !shadeLate &&
+        !this.bodyRasterNow &&
+        this.earthScenery.active &&
+        this.liveEyeHM > 0 &&
+        this.liveEyeHM - SCENERY_TOP_M < RASTER_NEAR_TREES_M &&
+        !!this.traceVariant("shade") &&
+        (this.rasterRate === 1 || !!this.traceVariant("shadeMark"));
       this.paramsF[MOUTH_LIST_AT + 5] =
         this.paramsF[MOUTH_LIST_AT + 5]! +
         RASTER_LITE_FLAG +
         (this.rasterWaterNow ? RASTER_WATER_FLAG : 0) +
-        (shadeLate ? RASTER_SHADE_LATE_FLAG : 0);
+        (shadeLate ? RASTER_SHADE_LATE_FLAG : 0) +
+        (this.nearTreesNow ? RASTER_NEAR_TREES_FLAG : 0);
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
     }
     // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
@@ -5278,8 +5308,16 @@ export class Renderer {
       const sx = Math.ceil(t.width / bw);
       const sy = Math.ceil(t.height / bh);
       // (the material taking every pixel — each one shaded, its buildings their triangles —: the rays' kernel would only
-      // return at each, a dispatch of the tracer's size over the whole image for nothing, ~0.6 ms on an M1 — TERRE-UNREAL U6)
-      const liteAll = this.rasterLiteNow && this.rasterRate === 1 && (this.sceneryRaster?.meshes3d ?? true) && this.shadeSkip;
+      // return at each, a dispatch of the tracer's size over the whole image for nothing, ~0.6 ms on an M1 — TERRE-UNREAL U6.
+      // But a bridge's deck is the rays' — shadeLite leaves it them —: with bridges in the scenery, run; skipped, the bridges
+      // were not drawn at all, the river seen through them. And the trees near the camera — nearTreesNow —: theirs too)
+      const liteAll =
+        this.rasterLiteNow &&
+        this.rasterRate === 1 &&
+        (this.sceneryRaster?.meshes3d ?? true) &&
+        this.shadeSkip &&
+        this.earthScenery.bridgeCount === 0 &&
+        !this.nearTreesNow;
       if (!liteAll) {
         const sp = enc.beginComputePass(this.prof.pass("earth shade (raster)"));
         sp.setPipeline(shade);
@@ -7896,6 +7934,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   rasterLite = true;
   /** this frame: the material draws the ground, the old per-pixel kernel (shade) not compiled yet — its leftover pixels traced */
   private rasterShadeLate = false;
+  /** the trees near the camera the rays' kernel's this frame (RASTER_NEAR_TREES_FLAG: shade run, the camera low near them) */
+  private nearTreesNow = false;
+  /** the live view's eye over the Earth's ground [m] (0: not over it) */
+  private liveEyeHM = 0;
   /** shadeLite this frame */
   private rasterLiteNow = false;
   /** shadeWater this frame (its water split from shadeLite) */

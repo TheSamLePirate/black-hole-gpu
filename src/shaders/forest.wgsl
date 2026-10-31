@@ -215,7 +215,8 @@ fn forestCandidateStart(o: vec3f, d: vec3f, i: i32, j: i32, hd: ForestHead) -> f
   return max(0.0, dot(foot - o, d) - r - height);
 }
 // A ray's crossing with the one tree of cell (i, j), or none (t −1): forestQuery's own test of a candidate, and the raster's
-// (the tree its instance drew at a pixel: docs/PLAN-RENDU-RASTER-AAA.md étape 1b)
+// (the tree its instance drew at a pixel: docs/PLAN-RENDU-RASTER-AAA.md étape 1b). detail < 0: its plain crown whole, not shrunk
+// as a far one's — the raster's material, the proxy drawn round that whole crown)
 fn forestCandidate(o: vec3f, d: vec3f, i: i32, j: i32, detail: f32, hd: ForestHead) -> ForestHit {
   let none = ForestHit(-1.0, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0);
   let F = hd.F; let w = hd.w; let hh = hd.h; let cellsAt = hd.cellsAt; let cell = hd.cell; let columns = hd.columns;
@@ -245,7 +246,7 @@ fn forestCandidate(o: vec3f, d: vec3f, i: i32, j: i32, detail: f32, hd: ForestHe
   let near = t0 + r + height < detail * (0.85 + 0.3 * forestUnit(forestHash(gi, gj, 8u)));
   // the plain crown (far: shrunk by half the carving, its mean)
   var crown = ForestCrown(kA.x > 0.5, vec3f(0.0), vec3f(0.0), amp, kD.y, kD.z);
-  let shrink = select(0.5 * amp, 0.0, near);
+  let shrink = select(0.5 * amp, 0.0, near || detail < 0.0);
   if (crown.cone) {
     crown.c = foot + vec3f(0.0, 0.0, height);
     crown.r = vec3f(kA.z * r - shrink, height * (1.0 - kA.y), 0.0);

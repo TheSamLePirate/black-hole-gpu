@@ -74,6 +74,11 @@ export function terrainHeightLibrary(trace: string, runways = false, group = 0):
   const functions = new Map<string, string>();
   for (const [, name] of trace.matchAll(/^fn (\w+)\(/gm)) functions.set(name!, wgslFunction(trace, name!));
   functions.set("earthWarp", "fn earthWarp(q: vec3f) -> vec3f { return earthWarpExact(q); }");
+  // (the heights' place on the tiles: the anchored one — the bake sets each node's, terrainCacheShader)
+  functions.set(
+    "tileHeightCoord",
+    "var<private> TILE_GQ: vec3f;\nfn tileHeightCoord(q: vec3f) -> vec2f { if (TILE_AT_ON && all(q == TILE_GQ)) { return TILE_AT; } return tilePlace(q); }",
+  );
   const selected = new Map<string, string>();
   const add = (name: string) => {
     if (name === "cost" || selected.has(name)) return;
@@ -84,7 +89,8 @@ export function terrainHeightLibrary(trace: string, runways = false, group = 0):
   };
   add("earthHeightExactG");
   const declarations = new Map<string, string>();
-  for (const [line, name] of trace.matchAll(/^(?:const|override)\s+(\w+)\b[^;]*;/gm)) declarations.set(name!, line!);
+  // (and the private variables they read — tileCoord's anchor, set by the bake for each node)
+  for (const [line, name] of trace.matchAll(/^(?:const|override|var<private>)\s+(\w+)\b[^;]*;/gm)) declarations.set(name!, line!);
   let source = [...selected.values()].join("\n");
   const constants = new Map<string, string>();
   let grew = true;
@@ -129,7 +135,7 @@ export function geoidLibrary(trace: string, library: string, buffer: string): st
 
 export function terrainCacheShader(trace: string): string {
   return `${terrainHeightLibrary(trace)}
-struct CacheU { reference: vec4f, scale: vec4f };
+struct CacheU { reference: vec4f, scale: vec4f, tiles: vec4f };
 @group(1) @binding(0) var<uniform> U: CacheU;
 @group(1) @binding(1) var<storage, read_write> outHeights: array<f32>;
 @compute @workgroup_size(8, 8)
@@ -141,6 +147,15 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let sa = U.reference.z * cos(d.y) + U.reference.w * sin(d.y);
   let ca = U.reference.w * cos(d.y) - U.reference.z * sin(d.y);
   let q = vec3f(ca * cl, ca * sl, sa);
+  // (the node's place on the tiles from the window's reference — float64 on the CPU: U.tiles, terrainCacheTiles —, exact: its
+  // unit-sphere point in float32 is good to ~0.4 m only, its sine of the latitude a step of 6e-8 — each row of nodes read off
+  // its place by a step that changed from one row to the next, the ground drawn as a stair of bands across)
+  if (U.tiles.w > 0.5) {
+    let ds = U.reference.w * sin(d.y) - 2.0 * U.reference.z * sin(0.5 * d.y) * sin(0.5 * d.y);
+    TILE_GQ = q;
+    TILE_AT_ON = true;
+    TILE_AT = vec2f(U.tiles.x + d.x, U.tiles.y + atanh(ds / (1.0 - (U.reference.z + ds) * U.reference.z)));
+  }
   var h = earthHeightExactG(q, U.scale.y);
   // (over a survey — France —: its tiles as the pixels read them, the finest held at the node, not at the node's footprint.
   // A coarse node's footprint reads the far levels (z 11 … 13), their overground on them — I6 —, where the camera's pixels see
@@ -216,6 +231,7 @@ export class TerrainCache {
     revision: string,
     timestamp?: () => GPUComputePassDescriptor,
     preferredLevel = -1,
+    tilesRef: readonly [number, number, number] | null = null,
   ): boolean {
     const { pipeline, sources } = this;
     if (this.disposed || !pipeline || !sources) return false;
@@ -258,7 +274,7 @@ export class TerrainCache {
         });
         // (a uniform a level: several baked in one submission, each its own window)
         for (let l = 0; l < TERRAIN_CACHE_LEVELS; l++) {
-          const uniform = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+          const uniform = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
           this.uniforms.push(uniform);
           this.outputs.push(
             this.device.createBindGroup({
@@ -282,6 +298,7 @@ export class TerrainCache {
       });
       for (const k of bake) {
         this.device.queue.writeBuffer(this.uniforms[k]!, 0, metadata.subarray(8 * k, 8 * k + 8));
+        this.device.queue.writeBuffer(this.uniforms[k]!, 32, terrainCacheTiles(this.windows[k]!, TERRAIN_CACHE_ROUNDS[k]!, tilesRef));
         const pass = enc.beginComputePass(timestamp?.());
         pass.setPipeline(pipeline);
         pass.setBindGroup(0, this.input);
@@ -333,4 +350,18 @@ export class TerrainCache {
     this.input = null;
     this.outputs = [];
   }
+}
+
+/**
+ * A cache window's reference — its node (0, 0) — on the tiles (trace.wgsl tileCoord: longitude, Mercator's y from the tiles'
+ * reference, as the tracer has it: cos, sin of its longitude, sine of its latitude in float32), in float64; w: on (none: the
+ * bake reads its nodes as unit-sphere points in float32).
+ */
+export function terrainCacheTiles(window: TerrainWindow, round: number, ref: readonly [number, number, number] | null) {
+  if (!ref) return new Float32Array(4);
+  const lon = (window.i / round) * 2 * Math.PI;
+  const lat = (window.j / round) * 2 * Math.PI;
+  let dl = lon - Math.atan2(ref[1], ref[0]);
+  dl -= 2 * Math.PI * Math.round(dl / (2 * Math.PI));
+  return new Float32Array([dl, Math.atanh(Math.sin(lat)) - Math.atanh(ref[2]), 0, 1]);
 }

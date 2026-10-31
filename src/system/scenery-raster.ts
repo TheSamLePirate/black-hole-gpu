@@ -18,10 +18,12 @@ import { TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
  *  of exact tests missed in shade, the image alike; a quad turned to the camera was worse on both counts. */
 export interface SceneryRasterLod {
   nearM: number;
-  near: "ico80" | "ico20";
+  near: "ico320" | "ico80" | "ico20";
   far: "ico20" | "octa";
 }
-export const SCENERY_RASTER_LOD: SceneryRasterLod = { nearM: 300, near: "ico80", far: "octa" };
+// (near, a round crown's 320 faces: the 80's corners 9 % out from it — a ring of what the proxy hides behind it, the next trees
+// gone from it, round each crown a few metres wide up to 200 m —, the 320's 2 %)
+export const SCENERY_RASTER_LOD: SceneryRasterLod = { nearM: 300, near: "ico320", far: "octa" };
 /** Instances a list holds at most (four lists, 4 bytes each: 16 MiB). */
 export const SCENERY_RASTER_CAP = 1 << 20;
 const LISTS = 4;
@@ -174,7 +176,7 @@ function pack(parts: [Tri, number][]): Float32Array<ArrayBuffer> {
 }
 /** the four lists' proxies: near round (+ trunk), near cone (+ trunk), far round, far cone — at the detail asked */
 export function sceneryRasterMeshes(lod: SceneryRasterLod = SCENERY_RASTER_LOD): Float32Array<ArrayBuffer>[] {
-  const nearRound = lod.near === "ico80" ? icosphere(1) : icosphere(0);
+  const nearRound = lod.near === "ico320" ? icosphere(2) : lod.near === "ico80" ? icosphere(1) : icosphere(0);
   const farRound = lod.far === "ico20" ? icosphere(0) : octahedron();
   return [
     pack([
@@ -182,7 +184,7 @@ export function sceneryRasterMeshes(lod: SceneryRasterLod = SCENERY_RASTER_LOD):
       [prism(6), 2],
     ]),
     pack([
-      [pyramid(lod.near === "ico80" ? 12 : 6), 1],
+      [pyramid(lod.near === "ico20" ? 6 : 12), 1],
       [prism(6), 2],
     ]),
     pack([[farRound, 0]]),

@@ -6396,9 +6396,9 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
   o.o = 0.0;
   if (P.tiles.w < 0.5) { return o; }
   let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
-  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
-  let sz = clamp(q.z, -0.999999, 0.999999);
-  let dM = atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z));
+  let tc = tileCoord(q);
+  let dlon = tc.x;
+  let dM = tc.y;
   let zf = log2(EARTH_RM * TAU * cosLat / (256.0 * max(foot, 0.1)));
   // (over France, finer: the IGN's orthophotos, z 15 … 18 — their colour alone, over the coarser levels' below; the
   // night's lights theirs)
@@ -6507,9 +6507,10 @@ fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
   let q = gq;
   let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
   let uv0 = imageryUv(q);
-  // (along the long axis, across its whole length: the taps at (i + ½)/n − ½ of it)
+  // (along the long axis, across its whole length: the taps at (i + ½)/n − ½ of it — its length on the tiles by their
+  // derivatives at the point, d atan2(y, x) and d atanh(z): no difference of two nearby places, their float32 rounding in it)
   var duv = vec2f(0.0);
-  if (n > 1u) { duv = 2.0 * (imageryUv(normalize(q + ax * 0.5)) - uv0); }
+  if (n > 1u) { duv = vec2f((q.x * ax.y - q.y * ax.x) / max(dot(q.xy, q.xy), 1e-12), -ax.z / max(1.0 - q.z * q.z, 1e-12)); }
   let zf = log2(EARTH_RM * TAU * cosLat / (256.0 * max(foot, 0.1)));
   let nf = f32(n);
   var fine = vec3f(0.0);
@@ -6609,9 +6610,43 @@ fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
 // a direction's place on the tiles' Mercator: its longitude from their anchor's, its Mercator ordinate's from the anchor's,
 // negated (earthImagery's dlon, −dM)
 fn imageryUv(q: vec3f) -> vec2f {
-  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
+  let tc = tileCoord(q);
+  return vec2f(tc.x, -tc.y);
+}
+// A point's place on the tiles from their reference — the camera's place —: x its longitude from it [rad], y Mercator's y
+// from it. From a unit-sphere point in float32 (~0.4 m: the orthophotos' texel, read a step at a time — the ground near the
+// camera in flat squares) the longitude by a turned atan2, Mercator's y by atanh(a) − atanh(b) = atanh((a − b)/(1 − ab)); the
+// raster's ground point near the camera from the camera's anchor instead — its place float64 on the CPU (renderer: envY.w,
+// envZ.w) — and its small offset from it (tileAnchor): TILE_AT, set by the material kernel round its imagery's and slopes'
+// reads of that very point (TILE_AT_ON), off at once after
+// (within this of the camera [m]: the levels finer than the float32 point's ~0.4 m read there — further, its footprint coarser)
+const TILE_ANCHOR_M = 2000.0;
+var<private> TILE_AT: vec2f = vec2f(0.0);
+var<private> TILE_AT_ON: bool = false;
+fn tileCoord(q: vec3f) -> vec2f {
+  if (TILE_AT_ON) { return TILE_AT; }
+  return tilePlace(q);
+}
+// (the heights' — earthH, in every march —: the plain place, the anchor's test left out of their loops; the terrain cache's
+// bake its anchored one — terrain-cache.ts)
+fn tileHeightCoord(q: vec3f) -> vec2f { return tilePlace(q); }
+fn tilePlace(q: vec3f) -> vec2f {
   let sz = clamp(q.z, -0.999999, 0.999999);
-  return vec2f(dlon, -atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z)));
+  return vec2f(atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y), atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z)));
+}
+// the place on the tiles of the point rel from the camera's anchor (P.nearCam0) on the squashed axes [radii]: the anchor's
+// float64 one plus the offset's, each exact from small numbers — the longitude's turn by atan2(A × r, A · (A + r)), the
+// sine of the latitude's change without a difference of nearby ones
+fn tileAnchor(rel: vec3f) -> vec2f {
+  let A = P.nearCam0.xyz;
+  let G = vec3f(A.xy, A.z * EARTH_AB);
+  let r = vec3f(rel.xy, rel.z * EARTH_AB);
+  let dl = atan2(G.x * r.y - G.y * r.x, dot(G.xy, G.xy) + dot(G.xy, r.xy));
+  let m = length(G);
+  let n = length(G + r);
+  let sA = G.z / m;
+  let ds = r.z / n - G.z * (2.0 * dot(G, r) + dot(r, r)) / ((m + n) * n * m);
+  return vec2f(P.envY.w + dl, P.envZ.w + atanh(ds / (1.0 - (sA + ds) * sA)));
 }
 // a level's height at p [its px from the corner]: bilinear, or — its texel more than twice the footprint
 // (mag: by how many octaves larger) — a cubic B-spline over its texels (no facets near), the two blended
@@ -6789,11 +6824,10 @@ fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
   let texelA = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
   if (P.tiles.w < 0.5) { return vec2f(earthH0(q, foot), texelA); }
   let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
-  // (from the reference — the camera's place —: the longitude by a turned atan2, Mercator's y by
-  // atanh(a) − atanh(b) = atanh((a − b)/(1 − ab)): no float32 cancellation near the camera)
-  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
-  let sz = clamp(q.z, -0.999999, 0.999999);
-  let dM = atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z));
+  // (from the reference — the camera's place —: tileHeightCoord)
+  let tc = tileHeightCoord(q);
+  let dlon = tc.x;
+  let dM = tc.y;
   let zf = log2(EARTH_RM * TAU * cosLat / (256.0 * max(foot, 0.5)));
   var h = 0.0;
   var res = 0.0;
@@ -6940,9 +6974,9 @@ fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
 fn earthSlopeFine(q: vec3f, foot: f32) -> vec3f {
   if (P.tiles.w < 0.5) { return vec3f(0.0); }
   let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
-  let dlon = atan2(-q.x * P.tiles.y + q.y * P.tiles.x, q.x * P.tiles.x + q.y * P.tiles.y);
-  let sz = clamp(q.z, -0.999999, 0.999999);
-  let dM = atanh((sz - P.tiles.z) / (1.0 - sz * P.tiles.z));
+  let tc = tileCoord(q);
+  let dlon = tc.x;
+  let dM = tc.y;
   for (var li = 0; li < i32(TILE_LEVELS); li++) {
     let l = TILE_LEVELS - 1u - u32(li);
     let a = P.tileL[2u * l];
@@ -8733,9 +8767,11 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32) -> f32 {
   let k = i32(id - 1u);
   let ci = k % max(hd.w, 1);
   let cj = k / max(hd.w, 1);
-  var tree = forestCandidate(o, d, ci, cj, 0.0, hd);
+  // (its plain crown whole — detail −1 —: the proxy the raster drew round it covers it, no more; a far crown's shrinking — half
+  // its carving — left a ring of it uncovered round each crown, the ground behind there, the trees behind it gone)
+  var tree = forestCandidate(o, d, ci, cj, -1.0, hd);
   // (missed — a crown behind it on the screen —: the ground there; the grid walked from it only with TUNE_LITE 256 — 40 % of
-  // the material's time over Paris for nothing seen at a pixel's size)
+  // the material's time over Paris for nothing seen at a pixel's size; near, the rays' kernel's — rasterLiteTakes)
   if (!(tree.t > 0.0 && tree.t < tMax) && (TUNE_LITE & 256u) != 0u) {
     tree = forestQueryFrom(o, d, forestCandidateStart(o, d, ci, cj, hd), tMax, false, 0.0);
   }
@@ -11776,6 +11812,11 @@ fn rasterLiteOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_LITE_FL
 // the material's on, the leftovers' kernel (shade) not compiled yet: the pixels the material does not take are main's
 const RASTER_SHADE_LATE_FLAG = 1024u;
 fn rasterShadeLate() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_SHADE_LATE_FLAG) != 0u; }
+// The trees within RASTER_NEAR_TREES_M of the camera the rays' kernel's, not the material's (renderer.nearTreesNow,
+// mouthList[1].y + 2048: shade run this frame, the camera low near the scenery)
+const RASTER_NEAR_TREES_FLAG = 2048u;
+const RASTER_NEAR_TREES_M = 80.0;
+fn rasterNearTreesOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_NEAR_TREES_FLAG) != 0u; }
 struct RasterRay { look: vec3f, rd: vec3f, kM: f32 };
 // the camera ray through an image point [px]: its look (the camera's frame), its unit direction in the squashed space, and
 // how many metres of the physical ray a unit of it is
@@ -11806,7 +11847,10 @@ fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
   let tM = terrainRasterHint(px);
   if (tM <= 0.0) { return false; }
   // (a tree before the ground — U2 —: the material's; against the sky, the rays'; the ground, the sea's too — its water is the
-  // material's, seaShade — )
+  // material's, seaShade — ; but near — RASTER_NEAR_TREES_FLAG, the rays' kernel run —, the rays': its crown carved, what
+  // stands behind it found — the material tests the proxy's tree alone, the trees and buildings behind it gone in a ring round
+  // each crown, glaring close by)
+  if (rasterNearTreesOn() && terrainRasterId(px) != 0u && terrainRasterDepth(px) < RASTER_NEAR_TREES_M) { return false; }
   return true;
 }
 // the mesh's normal at a pixel (the body's physical axes), from its neighbours' distances — none where a neighbour is off
@@ -12151,6 +12195,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let ph = rasterPoint(ray, tM);
   let q = normalize(ph);
   let gq = geoQ(q);
+  // (its place on the tiles from the camera's anchor — tileCoord —, near: its imagery's and slopes' reads below)
+  let anchored = tM < TILE_ANCHOR_M && P.nearCam1.w > 0.5 && P.tiles.w > 0.5;
+  if (anchored) { TILE_AT = tileAnchor(P.nearCam1.xyz + ray.rd * tH); }
   let hG = max(airHeight(ph) - geoidN(gq), 0.0);
   // (the light: the Sun's — its direction in the squashed space for the air's functions, physical for the surface's —, E)
   let lt = nearLight(k);
@@ -12165,7 +12212,11 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
   var img: TileImage;
   IMG_LIGHTS = dot(gq, Lp) < 0.1;
-  if ((liteSkip() & 128u) == 0u) { img = earthImageryAniso(gq, fx, fy); }
+  if ((liteSkip() & 128u) == 0u) {
+    TILE_AT_ON = anchored;
+    img = earthImageryAniso(gq, fx, fy);
+    TILE_AT_ON = false;
+  }
   var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
   var surface = SurfaceImage(vec3f(0.0), 0.0, 0u);
   if ((liteSkip() & 8u) == 0u) { surface = surfaceImage(gq, fx, fy); }
@@ -12183,6 +12234,20 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let mu0 = dot(gq, Lp);
   let dirW = toBody(ray.look);
   let mesh = terrainRasterMesh(centre);
+  // (near, over a survey's relief — the IGN's —: its own slopes, read in its grid at the point's anchored place; the mesh's
+  // triangles are flat, their facets a metre each from a person's height, in bands)
+  let fpM = fp * EARTH_RM;
+  if (!mesh && !isTree && fpM < 10.0 && (liteSkip() & 16u) == 0u) {
+    TILE_AT_ON = anchored;
+    let sf = earthSlopeFine(gq, fpM);
+    TILE_AT_ON = false;
+    if (sf.z > 0.0) {
+      var east = vec3f(-gq.y, gq.x, 0.0);
+      east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
+      let nf = normalize(gq + sf.x * east + sf.y * cross(gq, east));
+      n = normalize(mix(n, nf, sf.z * smoothstep(10.0, 4.0, fpM)));
+    }
+  }
   // (a runway — its paving, markings and lamps, as the tracer's ground draws them: the material's, compiled in whether a
   // runway is near or not — no other key, nothing compiled in flight —; the ground levelled under it the mesh's)
   var rwyLamps = vec3f(0.0);

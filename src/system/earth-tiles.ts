@@ -1410,3 +1410,19 @@ export function sampleLevel(at: (i: number, j: number) => number, px: number, py
   const b = monoCubic(rows[0]!, rows[1]!, rows[2]!, rows[3]!, fy);
   return lin + (b - lin) * k;
 }
+
+/**
+ * The tiles' coordinates (trace.wgsl tileCoord: longitude from the reference [rad], Mercator's y from it) of the camera's
+ * anchor A — on the Earth's squashed axes [radii], float32 values (renderer params 67) —, in float64, from the reference as
+ * the tracer has it (cos, sin of its longitude, sine of its latitude: float32): the raster's ground near the camera is read
+ * from there plus its small offset (trace.wgsl tileAnchor) — a unit-sphere point in float32 is good to ~0.4 m only.
+ */
+export function anchorTileCoord(A: readonly number[], cosRef: number, sinRef: number, sinLatRef: number): [number, number] {
+  // (geodetic: the squashed z stretched again — trace.wgsl geoQ, EARTH_AB as float32)
+  const ab = Math.fround(1.0033640898209764);
+  const gz = A[2]! * ab;
+  const s = gz / Math.hypot(A[0]!, A[1]!, gz);
+  let dl = Math.atan2(A[1]!, A[0]!) - Math.atan2(sinRef, cosRef);
+  dl -= TAU * Math.round(dl / TAU);
+  return [dl, Math.atanh(s) - Math.atanh(sinLatRef)];
+}

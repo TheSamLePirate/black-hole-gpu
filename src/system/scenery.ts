@@ -34,6 +34,10 @@ export class EarthScenery {
   readonly supported: boolean;
   private worker: Worker | null = null;
   private data: SceneryReply | null = null;
+  /** the bridges drawn (their decks the rays' kernel's: renderer — shade — not skipped while there are) */
+  get bridgeCount() {
+    return this.data?.bridges ?? 0;
+  }
   /** bumped whenever the buffer's contents change (a new upload, the season's trees): what is drawn from it — the trees'
    *  shadow map — drawn again */
   revision = 0;
