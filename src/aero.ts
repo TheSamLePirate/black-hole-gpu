@@ -41,6 +41,11 @@ export const GASES = {
   air: { gamma: 1.4, R: 287.05, ksg: 1.7415e-4, radiative: true, glow: [1.0, 0.36, 0.2] as V3 },
   co2: { gamma: 1.29, R: 188.92, ksg: 1.896e-4, radiative: false, glow: [1.0, 0.62, 0.38] as V3 },
   n2ch4: { gamma: 1.4, R: 296.8, ksg: 1.7407e-4, radiative: false, glow: [0.75, 0.42, 1.0] as V3 },
+  // (the giants' hydrogen and helium — PLAN-PLANETES-AAA P11 D1 —: their molar masses 2.22 and 2.07 g/mol; the light gas's
+  // Sutton–Graves constant ~6.6e-5; its glow hydrogen's Balmer lines. Galileo's entry heat was mostly the shock layer's
+  // radiation: not fitted here — D1b)
+  h2heJ: { gamma: 1.43, R: 8.314462 / 2.22e-3, ksg: 6.56e-5, radiative: false, glow: [1.0, 0.45, 0.6] as V3 },
+  h2heS: { gamma: 1.43, R: 8.314462 / 2.07e-3, ksg: 6.56e-5, radiative: false, glow: [1.0, 0.45, 0.6] as V3 },
 } satisfies Record<string, Gas>;
 export type GasId = keyof typeof GASES;
 
@@ -53,7 +58,7 @@ export interface Atmosphere {
   T?: number;
   gas?: GasId;
   /** a measured profile instead of the exponential: the Earth's standard, Venus's, Mars's, Titan's */
-  model?: "us76" | "venus" | "mars" | "titan";
+  model?: "us76" | "venus" | "mars" | "titan" | "jupiter" | "saturn";
 }
 
 /** The air at a height. */
@@ -204,7 +209,90 @@ const TITAN: [number, number, number][] = [
   [800, 2.5e-10, 160],
   [1000, 2.0e-11, 160],
 ].map(([h, r, T]) => [h! * 1e3, r!, T!]);
-const TABLES = { venus: VENUS, mars: MARS, titan: TITAN };
+// ---- the giants: no ground — their heights from the 1 bar level (their ellipsoid there: our-surface altitudeOver), down to
+// tens of bars: a hydrostatic profile built from their measured temperatures by pressure (PLAN-PLANETES-AAA P11 D1), dz =
+// −(R T / g) d ln p from 1 bar both ways, g the 1 bar one (over ±500 km on 60 000–71 000 km: a percent or two)
+interface GiantAir {
+  g: number;
+  R: number;
+  /** T at 1 bar, at the tropopause (and its pressure [bar]), at 1 mbar (the stratosphere's), the deep adiabat's exponent;
+   *  the thermosphere's: from Tstrat at pThermo [bar] up to Texo at 1 nbar */
+  T1: number;
+  Ttrop: number;
+  ptrop: number;
+  Tstrat: number;
+  kDeep: number;
+  pThermo: number;
+  Texo: number;
+  /** where the stratosphere reaches Tstrat [bar] */
+  pStrat: number;
+}
+/** a giant's temperature at p [bar] */
+export function giantT(G: GiantAir, p: number): number {
+  if (p >= 1) return G.T1 * p ** G.kDeep;
+  if (p >= G.ptrop) return G.T1 * Math.exp((Math.log(G.Ttrop / G.T1) * Math.log(p)) / Math.log(G.ptrop));
+  if (p >= G.pStrat) return G.Ttrop + ((G.Tstrat - G.Ttrop) * Math.log(p / G.ptrop)) / Math.log(G.pStrat / G.ptrop);
+  if (p >= G.pThermo) return G.Tstrat;
+  return G.Tstrat + ((G.Texo - G.Tstrat) * Math.log(p / G.pThermo)) / Math.log(1e-9 / G.pThermo);
+}
+export const GIANT_AIR: Record<"jupiter" | "saturn", GiantAir> = {
+  // (Galileo's probe, Seiff et al. 1998: 166.1 K at 1 bar, the tropopause ~112 K at ~260 mbar, ~160 K from ~20 mbar, heated
+  // above ~3 µbar to 900 K at 1 nbar; 429 K at 22 bar — T ∝ p^0.305 below 1 bar; g 24.79)
+  jupiter: {
+    g: 24.79,
+    R: GASES.h2heJ.R,
+    T1: 166.1,
+    Ttrop: 112,
+    ptrop: 0.26,
+    Tstrat: 160,
+    pStrat: 0.02,
+    kDeep: 0.305,
+    pThermo: 3e-6,
+    Texo: 900,
+  },
+  // (Lindal et al. 1985, Cassini's radio occultations: 134.8 K at 1 bar, ~82 K at ~80 mbar, ~140 K at 1 mbar, the deep
+  // adiabat T ∝ p^0.29; its thermosphere ~400 K — Cassini UVIS; g 10.44)
+  saturn: {
+    g: 10.44,
+    R: GASES.h2heS.R,
+    T1: 134.8,
+    Ttrop: 82,
+    ptrop: 0.08,
+    Tstrat: 140,
+    pStrat: 1e-3,
+    kDeep: 0.29,
+    pThermo: 3e-6,
+    Texo: 400,
+  },
+};
+/** a giant's table [height m, density kg/m³, temperature K] from 100 bar to 10⁻¹⁰ bar */
+function giantTable(G: GiantAir): [number, number, number][] {
+  const step = 0.02;
+  const rows: [number, number, number][] = [];
+  const at = (lnp: number, z: number): [number, number, number] => {
+    const T = giantT(G, Math.exp(lnp));
+    return [z, (Math.exp(lnp) * 1e5) / (G.R * T), T];
+  };
+  // (down from 1 bar to 100, then up from 1 bar to 1e-7 — the trapezoid's dz on T)
+  const down: [number, number, number][] = [];
+  let z = 0;
+  for (let lnp = 0; lnp < Math.log(100); lnp += step) {
+    const T0 = giantT(G, Math.exp(lnp)),
+      T1 = giantT(G, Math.exp(lnp + step));
+    z -= (G.R * 0.5 * (T0 + T1) * step) / G.g;
+    down.push(at(lnp + step, z));
+  }
+  rows.push(...down.reverse(), at(0, 0));
+  z = 0;
+  for (let lnp = 0; lnp > Math.log(1e-10); lnp -= step) {
+    const T0 = giantT(G, Math.exp(lnp)),
+      T1 = giantT(G, Math.exp(lnp - step));
+    z += (G.R * 0.5 * (T0 + T1) * step) / G.g;
+    rows.push(at(lnp - step, z));
+  }
+  return rows;
+}
+const TABLES = { venus: VENUS, mars: MARS, titan: TITAN, jupiter: giantTable(GIANT_AIR.jupiter), saturn: giantTable(GIANT_AIR.saturn) };
 
 /** A measured profile at a height [m]: log ρ and T interpolated; above its top, its last scale height on. */
 export function tableAir(table: [number, number, number][], h: number): { rho: number; T: number } {
