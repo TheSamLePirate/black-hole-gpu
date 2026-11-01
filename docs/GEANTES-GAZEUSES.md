@@ -326,7 +326,8 @@ corrigé en P10 — [progress/planetes-aaa/P10.md](progress/planetes-aaa/P10.md)
 - **Le volume** :
   - le dessous des orages reste plat sous le plafond ;
   - les éclairs lointains font un voile gris ;
-  - au fond du puits de Saturne, des stries sombres : les ombres des stries du mur, lues en un point ;
+  - au fond du puits de Saturne, des stries claires vers le Soleil : des rayons crépusculaires dans la brume, la lumière
+    passée par les trous du mur (voulus, D3) ; leurs bords restent nets ;
   - entre ~2 000 et 300 km d'altitude, la carte reste floue (son texel : 55 km).
 - **Les messages de perte du vaisseau** (`flightair.ts`) restent en anglais.
 - **À décider** :

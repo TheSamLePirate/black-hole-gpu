@@ -26,7 +26,9 @@ pixel), prises sur ce Mac ; les temps sont mesurés sur kerr-mini (`planets-ab`,
 - **Effet** : le puits est 2 à 3 % plus clair ; l'exposition automatique en reprend l'essentiel.
 - **Coût** : nul. Une première version, avec `giantEye` entier (trois `acos` par échantillon), coûtait +4 % dans l'œil ;
   `giantEyeX` prend l'angle au pôle par son sinus.
-- **Reste** : les stries sombres au fond du puits (les ombres des stries du mur, lues en un point) ; pas touchées ici.
+- **Les stries du fond du puits** : ce sont des rayons crépusculaires dans la brume (elles convergent vers le Soleil), la
+  lumière passée par les trous du mur — voulus depuis D3. Lire le mur plus à la moyenne dans la colonne du Soleil n'y
+  change rien.
 
 ## V3 — plus de ligne à l'horizon du pont (`b2037fb3`)
 
