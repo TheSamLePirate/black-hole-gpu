@@ -65,6 +65,11 @@ export function bodyReliefLibrary(trace: string): string {
     for (const [, callee] of body.matchAll(/\b(\w+)\s*\(/g)) if (functions.has(callee!)) add(callee!);
   };
   add("relief");
+  // (the airless worlds' rocks — boulders and cobbles in the geometry — over it)
+  add("airlessRocks");
+  add("rockDensity");
+  add("airless");
+  add("liteSkip");
   // (and Mann's frozen clouds: their slabs' layer — bodyCloudVs)
   add("mannCloud");
   const declarations = new Map<string, string>();
@@ -126,7 +131,16 @@ fn node(ij: vec2f, level: u32) -> Node {
   let level = g.z;
   if (g.x >= GRID_N || g.y >= GRID_N || level >= u32(u.ref0.w) || ((dirty.x >> level) & 1u) == 0u) { return; }
   let n = node(vec2f(g.xy), level);
-  heightsW[(level * GRID_N + g.y) * GRID_N + g.x] = relief(u32(u.east.w), n.q, u.level[level].w, u.origin.w, P.time.x * P.near5.w);
+  let surf = u32(u.east.w);
+  var h = relief(surf, n.q, u.level[level].w, u.origin.w, P.time.x * P.near5.w);
+  // (an airless world's boulders and cobbles — trace.wgsl airlessRocks —: the node on the sphere from the fine ground's anchor,
+  // exact — the camera from the anchor, the reference from the camera, the node from the reference —, the craters' ejecta
+  // just read by relief)
+  if (airless(surf) && P.fine0.w > 0.5 && P.fine0.w < 1.5 && (liteSkip() & 512u) == 0u) {
+    let xs = P.fine1.xyz + u.origin.xyz + n.d * u.origin.w;
+    h += airlessRocks(xs, n.q, u.level[level].w, CRATER_EJECTA, rockDensity(surf - 4u), 2u).x;
+  }
+  heightsW[(level * GRID_N + g.y) * GRID_N + g.x] = h;
 }
 struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
 
@@ -248,9 +262,10 @@ export function bodyRasterFrame(
     const east = unit(cross(Math.abs(r0[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0], r0));
     a = { surf: v.surf, r0, east, north: cross(r0, east) };
   }
-  // the finest cell [m]: a hundredth of the height over the ground, a power of two
+  // the finest cell [m]: a hundredth of the height over the ground, a power of two — a sixteenth of a metre at least on the airless
+  // worlds (their rocks in the geometry: trace.wgsl airlessRocks, the cobbles 0.25 to 0.9 m across), half a metre elsewhere
   const over = Math.max(above, 1);
-  const cell0 = 2 ** Math.round(Math.log2(Math.min(256, Math.max(0.5, over / 100))));
+  const cell0 = 2 ** Math.round(Math.log2(Math.min(256, Math.max(airless(v.surf) ? 0.0625 : 0.5, over / 100))));
   const s0 = cell0 / R;
   // the levels to the horizon and the highest peaks beyond it (the angles from the ground point), and the reference's offset
   const horizon = Math.acos(Math.min(1, R / Math.max(re, R))) + Math.acos(R / (R + hmax));

@@ -28,10 +28,10 @@
  "game-space main": 55000,
  "game-space env": 47000,
  "game-space aerial": 1000,
- "moon main": 71200,
+ "moon main": 71500,
  "moon env": 47000,
  "moon aerial": 1000,
- "mars main": 83000,
+ "mars main": 83200,
  "mars env": 49000,
  "mars aerial": 1000,
  "mars shadeLite": 36000,
@@ -51,12 +51,12 @@
  "earth-only env": 39000,
  "earth-only aerial": 1000,
  "kerr-jet main": 32000,
- "kerr-jet env": 26000,
+ "kerr-jet env": 26100,
  "kerr-jet lut": 28000,
  "eclipse main": 47000,
  "eclipse env": 35000,
  "eclipse aerial": 1000,
- "general main": 141000,
+ "general main": 141100,
  "general env": 67000,
- "general lut": 136200
+ "general lut": 136800
 }

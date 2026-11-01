@@ -19,7 +19,7 @@ struct Params {
   zamo: vec4f,     // α, ω, ϖ, √Σ at the camera
   zamo2: vec4f,    // √(Σ/Δ), the aerial table's scale (the frame's pre-exposure: its half floats hold the image's
                    // range, not the raw radiance's — a night's air 2⁻⁴⁰ of a day's; 0: 1), the scene's clock [s] modulo
-                   // 4 096 (the giants' lightning), unused
+                   // 4 096 (the giants' lightning, Mars's dust devils), the camera's height over Mars's ground [m] (marsDevils)
   boost: vec4f,    // observer velocity β in the ZAMO frame (r̂, θ̂, φ̂), w = γ
   bh: vec4f,       // a, r+, r_isco, r_out
   disk: vec4f,     // T_max [K], F_max, turbulence, log10 Y(T_max)
@@ -91,7 +91,8 @@ struct Params {
                    // kept (the coarse map's mean over the finer's), its relief's strength (0: none), width
   fine0: vec4f,    // an airless world's ground, finest: an anchor near the camera (whole metres, multiples of
                    // 64, on the body's axes); w: on (0/1)
-  fine1: vec4f,    // the camera from the anchor [m] (float64 on the CPU: the ground's centimetres exact)
+  fine1: vec4f,    // the camera from the anchor [m] (float64 on the CPU: the ground's centimetres exact); w: the anchor's
+                   // height over the body's sphere [m] (rockLight: a hit's own, exact)
   shipShadow: vec4f, // the Ranger's bounding sphere in the camera's axes (right, up, forward) [m]; w: radius (0: no shadow)
   eclipse: vec4f,  // the Moon as it shades the Earth: its centre on the Earth's axes [its radii] (where the light
                    // shows it: 1.3 s ago), w: its radius [the Earth's] (0: no eclipse near)
@@ -158,6 +159,9 @@ struct Params {
   // indices, 6 bits each, 4 a value (as path.w's list); [1].x their count + 0.5 (0: every body),
   // [1].w: experimental terrestrial height-cache lookup allowed in this realtime frame (0 otherwise)
   mouthList: array<vec4f, 2>,
+  // Mars's season (system/mars-season.ts): its seasonal CO₂ caps' edges [rad of latitude] north (π/2: none), south (−π/2: none);
+  // its dust devils' season (0 … 1) north, south (marsFrost, marsDevils)
+  mars: vec4f,
 };
 
 // Pipeline specialisation: the error-controlled integrator is compiled only into the quality
@@ -1275,6 +1279,89 @@ fn giantHeight(m: u32, n: vec3f, tEm: f32) -> f32 {
       (Hl * luminance(planetMapAt(m, vec2f(0.5 + ll.x / TAU, 0.5 - ll.y / PI))) + 8.0 * ll.z);
   }
   return h - select(0.0, 6.0 * exp(-sq((1.5707963 - lat) / 0.0175)), m == 5u);
+}
+// Jupiter's and Saturn's convective towers (PLAN-PLANETES-AAA P9 G9: JunoCam's "pop-up clouds" — bright domes 12 to 42 km in
+// radius, 8 to 22 km over the deck, their shadows hundreds of km long under a low Sun): in the turbulent belts — the wind's
+// shear —, one at most in each cell of 0.25° of the matter's own latitude and longitude (giantFlow: where the matter now here
+// was, each of the two phases of the winds' 10 h cycle — carried with the colour, a tower's life a cycle, faded in and out with
+// its phase), Saturn's fewer. Far finer than the map's march (its steps 165 km at least), so each tower is met as a thing: the
+// cells along the Sun's way over the deck (8 samples to the highest one's shadow, ≤ 1 500 km), each one's tower against the
+// ray where it passes nearest its centre. q: the point, tz: the Sun's way over the deck there, te: tan of the Sun's height,
+// tEm: the time → x its own tower's height [km], y its slope along the Sun's way, z the towers' shadow on it, w its tower's share
+fn giantTowers(m: u32, q: vec3f, tz: vec3f, te: f32, tEm: f32) -> vec4f {
+  let tS = tEm * P.near5.w;
+  let ph = fract(tS / GIANT_CYCLE);
+  let lat0 = asin(clamp(q.z, -1.0, 1.0));
+  let lon0 = atan2(q.y, q.x);
+  let R = select(60268.0, 71492.0, m == 4u);
+  let u = giantWind(m, lat0);
+  // (in groups — a slow noise, ~1 800 km —, where the shear stirs the belts)
+  let act = smoothstep(8.0, 40.0, abs(u.y)) * select(0.45, 1.0, m == 4u) * smoothstep(-0.15, 0.35, gnoise(q * 40.0 + vec3f(3.1)));
+  if (act <= 0.0) { return vec4f(0.0, 0.0, 1.0, 0.0); }
+  let east = normalize(vec3f(-q.y, q.x, 0.0) + vec3f(1e-9, 0.0, 0.0));
+  let north = cross(q, east);
+  // (the Sun's way, east and north [per km over the deck]; in the matter's lon, lat [rad per km])
+  let de = dot(tz, east);
+  let dn = dot(tz, north);
+  let cl0 = max(cos(lat0), 0.05);
+  let reach = min(22.0 / max(te, 0.013), 1500.0);
+  let D = 0.0043633;
+  var o = vec4f(0.0, 0.0, 1.0, 0.0);
+  var shade = 0.0;
+  for (var j = 0u; j < 2u; j++) {
+    let wph = select(1.0 - abs(2.0 * ph - 1.0), abs(2.0 * ph - 1.0), j == 1u);
+    let ll = giantFlow(m, lon0, lat0, fract(ph + 0.5 * f32(j)) * GIANT_CYCLE, u.x, tS);
+    let cyc = i32(floor(tS / GIANT_CYCLE + 0.5 * f32(j)));
+    // (none in a named vortex's calm core: the Great Red Spot's, the Oval BA's)
+    let calm = 1.0 - smoothstep(0.1, 0.4, ll.z);
+    var last = vec2f(1e9);
+    var sj = 1.0;
+    for (var n = 0u; n < 8u; n++) {
+      let d = reach * pow(f32(n) / 7.0, 1.5);
+      let pl = ll.xy + vec2f(de / (R * cl0), dn / R) * d;
+      let row = floor(pl.y / D);
+      let latc = (row + 0.5) * D;
+      let nc = max(floor(TAU * cos(latc) / D), 1.0);
+      let col = floor(fract(pl.x / TAU + 0.5) * nc);
+      if (all(vec2f(row, col) == last)) { continue; }
+      last = vec2f(row, col);
+      let r = hash4(bitcast<vec3u>(vec3i(i32(row), i32(col), i32(m) + 16 * cyc)) ^ vec3u(0x7f4a7c15u, 0xf39cc060u, 0x5ced1a3fu));
+      if (r.w > 0.3 * act * calm) { continue; }
+      // (its centre in its cell — kept a quarter in —, from the point's matter [km]: east, north)
+      let cx = (col + 0.25 + 0.5 * r.x) / nc * TAU - PI;
+      let cy = (row + 0.25 + 0.5 * r.y) * D;
+      var dx = cx - ll.x;
+      dx -= TAU * round(dx / TAU);
+      let c = vec2f(dx * R * cos(cy), (cy - ll.y) * R);
+      let rt = 12.0 + 30.0 * r.z * r.z;
+      let H = 8.0 + 14.0 * fract(r.z * 7.31 + r.x);
+      let dir = vec2f(de, dn);
+      if (n == 0u) {
+        // (the point on it: its height, its slope along the Sun's way — its flank away from the Sun dark by its slope, no shadow
+        // of its own)
+        let rho = length(c) / rt;
+        if (rho < 1.0) {
+          let f = 1.0 - rho * rho;
+          o.x += wph * H * f * sqrt(f);
+          o.y += wph * H * 3.0 * sqrt(f) * dot(c, dir) / (rt * rt);
+          o.w += wph * smoothstep(1.0, 0.6, rho);
+          continue;
+        }
+      }
+      // (its shadow — the point's own cell's tower too: a shadow, ≤ 100 km, mostly falls in its tower's cell, 312 km —: its
+      // height where the Sun's ray passes nearest, over the ray's there)
+      let tn = max(dot(c, dir), 0.0);
+      let rho = length(c - dir * tn) / rt;
+      if (rho < 1.0) {
+        let f = 1.0 - rho * rho;
+        let cl = o.x + tn * te - H * f * sqrt(f);
+        sj = min(sj, smoothstep(-0.5, 0.5, cl / max(tn * 0.0087, 0.3)));
+      }
+    }
+    shade += wph * (1.0 - sj);
+  }
+  o.z = 1.0 - shade;
+  return o;
 }
 // Saturn's hexagon (Cassini, Sánchez-Lavega et al. 2014): a Rossby wave of number 6 on the jet near 76° N planetocentric,
 // fixed in System III but for its drift (+0.0128°/day, 2008–2014): its colatitude at longitude lon [rad] — the vertices at
@@ -4146,11 +4233,13 @@ fn craterDensity(m: u32) -> f32 {
   return 1.0;
 }
 var<private> CRATER_BRIGHT: f32 = 0.0; // (the last relief's fresh ejecta: the albedo's)
+var<private> CRATER_EJECTA: f32 = 0.0; // (…and its craters' over 40 m only: the rocks' density — the same at any footprint they are seen at)
 var<private> CRATER_GRAD: vec3f = vec3f(0.0); // (…and its craters' slope, exact: dh/dq over the radius)
 fn craterRelief(m: u32, q: vec3f, foot: f32, mR: f32) -> f32 {
   let dens = craterDensity(m);
   var h = 0.0;
   var br = 0.0;
+  var ej = 0.0;
   var g = vec3f(0.0);
   var cell = 4000.0;
   for (var l = 0u; l < 7u; l++) {
@@ -4188,12 +4277,14 @@ fn craterRelief(m: u32, q: vec3f, foot: f32, mR: f32) -> f32 {
         // (dh/dq = dprof/dx · v/|v| / rad · mR/cell; over mR: the slope)
         g += w * dp * v / max(length(v) * rad * cell, 1e-9);
         br += w * pow(fresh, 6.0) * smoothstep(1.55, 0.9, x);
+        if (cell > 40.0) { ej += pow(fresh, 6.0) * smoothstep(1.55, 0.9, x); }
       }
     }
     cell *= 0.33333;
   }
   if (!NO_SWELL) { h += airlessSwell(m, q, foot, mR); }
   CRATER_BRIGHT = min(br, 1.0);
+  CRATER_EJECTA = min(ej, 1.0);
   CRATER_GRAD = g;
   return h;
 }
@@ -4730,6 +4821,169 @@ fn gnoiseI(base: vec3i, f0: vec3f) -> f32 {
   return 1.6 * mix(mix(mix(n[0], n[1], u.x), mix(n[2], n[3], u.x), u.y),
                    mix(mix(n[4], n[5], u.x), mix(n[6], n[7], u.x), u.y), u.z);
 }
+// Rocks on an airless world's ground (PLAN-PLANETES-AAA, P6 left them out): boulders, cobbles, pebbles — three lattices of 8, 2
+// and 0.5 m cells on the face of the cube the point is on (its two other body axes, metres from the anchor P.fine0: whole metres,
+// multiples of 64 — the cells' indices exact), at most one rock in each: a lumpy, squashed dome draped on the ground (its height
+// over the ground there), its footprint wholly inside its cell — no seam from a cell to the next —, none within two cells of the
+// face's edge (none cut there). More of them where a fresh crater threw its ejecta (ej: CRATER_EJECTA). The first `levels`
+// (2: the boulders and the cobbles, the ground's geometry — the body raster's heights, terrain.ts airlessRocks the same in
+// float64: the walker and the gear on them; 3: the pebbles too, the shading's).
+// xs: the point on the sphere from the anchor [m]; q: its direction (the ground's up); foot: the pixel's footprint [m];
+// dens: the world's share of them → x its height over the ground [m], yzw its slope (body axes); ROCK_COVER: how much of a rock
+var<private> ROCK_COVER: f32 = 0.0;
+// (and which rock: its shadow march leaves its own out — its flank away from the Sun dark by its slope already)
+var<private> ROCK_ID: f32 = -1.0;
+fn airlessRocks(xs: vec3f, q: vec3f, foot: f32, ej: f32, dens: f32, levels: u32) -> vec4f {
+  ROCK_COVER = 0.0;
+  ROCK_ID = -1.0;
+  let aq = abs(q);
+  let k = select(select(0u, 1u, aq.y >= aq.x), 2u, aq.z >= max(aq.x, aq.y));
+  let i = (k + 1u) % 3u;
+  let j = (k + 2u) % 3u;
+  // (about how far the face's edge is [m])
+  let edge = (aq[k] - max(aq[i], aq[j])) * P.near4.w;
+  let a = vec3i(P.fine0.xyz);
+  var e = vec3f(0.0);
+  e[k] = 1.0;
+  var o = vec4f(0.0);
+  for (var l = 0u; l < levels; l++) {
+    let S = array<f32, 3>(8.0, 2.0, 0.5)[l];
+    let w = clamp(log2(S / (8.0 * max(foot, 0.05))), 0.0, 1.0);
+    if (w <= 0.0) { break; }
+    if (edge < 2.0 * S) { continue; }
+    let ab = array<vec3i, 3>(a >> vec3u(3u), a >> vec3u(1u), a << vec3u(1u))[l];
+    let p2 = vec2f(xs[i], xs[j]) / S;
+    let c2 = floor(p2);
+    let cell = vec3i(vec2i(c2) + vec2i(ab[i], ab[j]), i32(k * 4u + l));
+    let r = hash4(bitcast<vec3u>(cell) ^ vec3u(0x2545f491u, 0x9e3779b9u, 0x68e31da4u));
+    let pr = array<f32, 3>(0.06, 0.08, 0.10)[l] + array<f32, 3>(0.6, 0.5, 0.4)[l] * ej;
+    if (r.w >= pr * dens) { continue; }
+    let r2 = hash4(bitcast<vec3u>(cell) ^ vec3u(0x85ebca6bu, 0xc2b2ae35u, 0x27d4eb2fu));
+    // (its radius [cells] — many small, few large —, its centre kept two radii inside the cell: its lobes and its fillet too)
+    let rad = 0.06 + 0.14 * r2.x * r2.x;
+    let ctr = c2 + vec2f(0.5) + (r.xy - 0.5) * (1.0 - 4.0 * rad);
+    var dl = vec3f(0.0);
+    dl[i] = (p2.x - ctr.x) * S;
+    dl[j] = (p2.y - ctr.y) * S;
+    // (the true distance over the ground: the face's plane brought onto the ground's tangent plane along the face's axis)
+    let dv = dl - e * (dot(dl, q) / q[k]);
+    let d = length(dv);
+    let R = rad * S;
+    let dir = dv / max(d, 1e-6);
+    // (irregular: its radius by the direction, three harmonics — 2, 3 and 5 lobes — of random phases)
+    let th = atan2(dl[j], dl[i]);
+    let ph = 6.2831853 * vec3f(r.z, r2.z, r2.w);
+    let am = vec3f(0.16, 0.11, 0.06) * (0.5 + vec3f(r2.y, fract(r2.y * 3.17), fract(r2.y * 5.3)));
+    let hm = vec3f(2.0, 3.0, 5.0);
+    let Re = R * (1.0 + dot(am, cos(hm * th + ph)));
+    let dRe = -R * dot(am * hm, sin(hm * th + ph));
+    if (d >= 1.3 * Re) { continue; }
+    // (a block over its radius's share ρ, 1 − ρ³ — its top nearly flat, its flank steep, 63° at its foot, not a wall: the
+    // raster's cells resolve it —, and the regolith piled against its foot — a fillet to 1.3 radii, as round the Moon's boulders)
+    let kv = 0.45 + 0.4 * fract(r2.y * 7.31);
+    let rho = d / Re;
+    let core = max(1.0 - rho * rho * rho, 0.0);
+    let fil = 0.16 * (1.0 - smoothstep(0.75, 1.3, rho));
+    let top = kv * R * (core + fil);
+    if (top <= 1e-4) { continue; }
+    if (w * top > o.x) {
+      // (its slope: through ρ — the distance's and its radius's by the direction, its derivative over the angle)
+      let perp = cross(q, dir) * sign(q[k]);
+      let grho = (dir - perp * (rho * dRe / max(d, 1e-4))) / Re;
+      let uf = clamp((rho - 0.75) / 0.55, 0.0, 1.0);
+      let dtop = kv * R * (-3.0 * rho * rho * step(rho, 1.0) - 0.16 * 6.0 * uf * (1.0 - uf) / 0.55);
+      o = vec4f(w * top, w * dtop * grho);
+      ROCK_COVER = w;
+      ROCK_ID = r.w + f32(l);
+    }
+  }
+  return o;
+}
+// A point's height over the body's sphere (x: from the anchor [m]), exact in float32: |A + x| − R = (|A| − R) + (2 A·x + x·x) /
+// (|A + x| + |A|), the anchor's own (P.fine1.w) from the CPU in float64.
+// The rocks at a hit (x: from the anchor [m]): its point on the sphere under it — along its own radial, as the body raster
+// raises its nodes —, the rocks' slope there, then their shadows on it (rockShade), the hit's own rock left out (its flank away
+// from the Sun dark by its slope).
+// → xyz the slope (body axes), w the shadow; ROCK_COVER: how much of a rock at the hit
+fn fineHeight(x: vec3f) -> f32 {
+  let A = P.fine0.xyz;
+  return P.fine1.w + (2.0 * dot(A, x) + dot(x, x)) / (length(A + x) + length(A));
+}
+fn rockLight(x: vec3f, q: vec3f, L: vec3f, foot: f32, ej: f32, dens: f32, shadows: bool) -> vec4f {
+  let xs = x - q * fineHeight(x);
+  let r = airlessRocks(xs, q, foot, ej, dens, 3u);
+  let cover = ROCK_COVER;
+  let own = ROCK_ID;
+  var s = 1.0;
+  if (shadows) { s = rockShade(xs, q, r.x, L, foot, ej, dens, own); }
+  ROCK_COVER = cover;
+  return vec4f(r.yzw, s);
+}
+// The rocks' shadows on a point (xs on the sphere from the anchor, h0 its height over the ground — a rock's top, or 0 —, own its
+// rock's id: left out): for each lattice, the cells along the Sun's way over the ground — half a cell a step, as far as the
+// lattice's highest rock's shadow reaches (≤ 25 m) —, each one's rock against the ray where it passes nearest its centre: its
+// height there (its profile, the lobes left out) over the ray's, the Sun's half degree a penumbra. A dozen cells, not a march.
+fn rockShade(xs: vec3f, q: vec3f, h0: f32, L: vec3f, foot: f32, ej: f32, dens: f32, own: f32) -> f32 {
+  let mu = dot(L, q);
+  if (mu <= 0.0) { return 1.0; }
+  let Lh = L - q * mu;
+  let lh = length(Lh);
+  if (lh < 1e-4) { return 1.0; }
+  let aq = abs(q);
+  let k = select(select(0u, 1u, aq.y >= aq.x), 2u, aq.z >= max(aq.x, aq.y));
+  let i = (k + 1u) % 3u;
+  let j = (k + 2u) % 3u;
+  let edge = (aq[k] - max(aq[i], aq[j])) * P.near4.w;
+  let a = vec3i(P.fine0.xyz);
+  var e = vec3f(0.0);
+  e[k] = 1.0;
+  // (the Sun's way on the face's plane, per metre over the ground)
+  let L2 = vec2f(Lh[i], Lh[j]) / lh;
+  var s = 1.0;
+  for (var l = 0u; l < 3u; l++) {
+    let S = array<f32, 3>(8.0, 2.0, 0.5)[l];
+    let w = clamp(log2(S / (8.0 * max(foot, 0.05))), 0.0, 1.0);
+    if (w <= 0.0) { break; }
+    if (edge < 2.0 * S) { continue; }
+    // (the lattice's highest rock: 0.85 × its largest radius, 0.2 cells, its fillet; its shadow's reach)
+    let reach = min((0.85 * 0.2 * S * 1.16 - h0) / mu * lh, 25.0);
+    if (reach <= 0.0) { continue; }
+    let ab = array<vec3i, 3>(a >> vec3u(3u), a >> vec3u(1u), a << vec3u(1u))[l];
+    let p0 = vec2f(xs[i], xs[j]) / S;
+    var last = vec2f(1e9);
+    let n = min(u32(ceil(2.0 * reach / S)) + 1u, 8u);
+    for (var m = 0u; m < n; m++) {
+      let c2 = floor(p0 + L2 * (0.5 * f32(m)));
+      if (all(c2 == last)) { continue; }
+      last = c2;
+      let cell = vec3i(vec2i(c2) + vec2i(ab[i], ab[j]), i32(k * 4u + l));
+      let r = hash4(bitcast<vec3u>(cell) ^ vec3u(0x2545f491u, 0x9e3779b9u, 0x68e31da4u));
+      let pr = array<f32, 3>(0.06, 0.08, 0.10)[l] + array<f32, 3>(0.6, 0.5, 0.4)[l] * ej;
+      if (r.w >= pr * dens || r.w + f32(l) == own) { continue; }
+      let r2 = hash4(bitcast<vec3u>(cell) ^ vec3u(0x85ebca6bu, 0xc2b2ae35u, 0x27d4eb2fu));
+      let rad = 0.06 + 0.14 * r2.x * r2.x;
+      let ctr = c2 + vec2f(0.5) + (r.xy - 0.5) * (1.0 - 4.0 * rad);
+      // (its centre from the point over the ground; the ray's nearest pass to it — along the Sun's way, ahead only)
+      var dl = vec3f(0.0);
+      dl[i] = (ctr.x - p0.x) * S;
+      dl[j] = (ctr.y - p0.y) * S;
+      let cv = dl - e * (dot(dl, q) / q[k]);
+      let tn = max(dot(cv, Lh) / (lh * lh), 0.0);
+      let b = length(cv - Lh * tn);
+      let R = rad * S;
+      let rho = b / R;
+      if (rho >= 1.3) { continue; }
+      let kv = 0.45 + 0.4 * fract(r2.y * 7.31);
+      let top = w * kv * R * (max(1.0 - rho * rho * rho, 0.0) + 0.16 * (1.0 - smoothstep(0.75, 1.3, rho)));
+      let cl = h0 + tn * mu - top;
+      s = min(s, smoothstep(-1.0, 1.0, cl / max(tn * 0.0087, 0.004)));
+      if (s <= 0.0) { return 0.0; }
+    }
+  }
+  return s;
+}
+// the rocks' share on a world (craterDensity's, no fewer than a quarter: Io's lava and Europa's young ice have their blocks)
+fn rockDensity(m: u32) -> f32 { return max(craterDensity(m), 0.25); }
 // An airless world's ground at its finest (x: from the anchor [m], body axes): the regolith's roughness,
 // 16 m down to 25 cm, and stones — shading only (the relief stops at its 5 m craters)
 fn fineGround(x: vec3f, foot: f32) -> f32 {
@@ -4774,7 +5028,11 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
       // fresh craters' bright ejecta, the regolith's mottling
       let foot = reliefFoot(t);
       // (an if, not a select: a select evaluates both — the measure's cut, liteSkip 4, cut nothing)
-      if (!NEAR_SHADOW_OFF) { sh = nearShadow(surf, qb, hit.h, toBody(P.near4.xyz), foot, tSec); }
+      // (from the point's own height: on a rock — airlessRocks, in the raster's geometry —, its flank over the ground under it;
+      // marched from the ground, the ground just by it shaded the flank in teeth)
+      var hs = hit.h;
+      if (airless(surf) && P.fine0.w > 0.5 && P.fine0.w < 1.5 && foot < 1.0) { hs = max(hit.h, fineHeight(toBody(look * t) * P.near4.w + P.fine1.xyz)); }
+      if (!NEAR_SHADOW_OFF) { sh = nearShadow(surf, qb, hs, toBody(P.near4.xyz), foot, tSec); }
       // (and the Ranger's, the ground within reach of it)
       sh *= shipShadow(look * t * P.near4.w);
       if (airless(surf)) {
@@ -4789,9 +5047,20 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
           let x = toBody(look * t) * P.near4.w + P.fine1.xyz;
           let a1 = normalize(cross(qb, select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(qb.z) > 0.9)));
           let a2 = cross(qb, a1);
+          // the rocks (airlessRocks, the raster's geometry): the hit's point on the sphere under it, their slope, their shadows,
+          // their fresher rock a little lighter
+          var cover = 0.0;
+          if (foot < 1.0 && (liteSkip() & 512u) == 0u) {
+            let rl = rockLight(x, qb, toBody(P.near4.xyz), foot, CRATER_EJECTA, rockDensity(surf - 4u), !NEAR_SHADOW_OFF);
+            cover = ROCK_COVER;
+            n = normalize(n - fromBody(rl.xyz));
+            ALB_GAIN *= 1.0 + 0.12 * cover;
+            sh *= rl.w;
+          }
           let e = max(foot, 0.03);
           let h0 = fineGround(x, foot);
           let g = ((fineGround(x + a1 * e, foot) - h0) * a1 + (fineGround(x + a2 * e, foot) - h0) * a2) / e;
+          // (on a rock too: amplified there, its faces near the terminator turned to patches of light and dark)
           n = normalize(n - fromBody(g) * smoothstep(8.0, 2.0, foot));
           ALB_GAIN *= 1.0 + clamp(h0 * 0.25, -0.15, 0.2);
         }
@@ -9289,6 +9558,46 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
 // Another world's ground (or cloud deck) seen through its air: its map (at the footprint's level), lit
 // by the sunlight come down through the air (reddened, dimmed low, none in the shadow) and by its sky;
 // the giants darkened towards the limb (Minnaert), the dusty worlds as regolith (Lommel–Seeliger)
+// Mars's frost (system/mars-season.ts, Params.mars): its seasonal CO₂ caps poleward of their edges at the season's Ls — ragged by
+// a noise of ~200 km and finer (±4°), farther on the slopes facing the pole (their winter shade: +3° on a 30° slope) —, a
+// dusty frost's albedo (~0.55, faintly blue: TES and MOC's); and the water frost of a winter's mornings at mid-latitudes —
+// Viking 2's at 48° N —, thin and patchy, gone as the Sun climbs. q: the point's direction (body axes: z the pole), n its
+// normal, Ls the Sun's direction, fm the pixel's footprint [m] (the noise's octaves)
+fn marsFrost(A: vec3f, q: vec3f, n: vec3f, Ls: vec3f, fm: f32) -> vec3f {
+  let lat = asin(clamp(q.z, -1.0, 1.0));
+  // (far from both caps' edges — more than their raggedness and slopes reach, 15° — and out of a winter morning's frost: none,
+  // before any noise is read)
+  let sd0 = Ls.z;
+  let morningMaybe = abs(lat) > 0.6 && -sd0 * sign(lat) > 0.0 && dot(q, Ls) < 0.45;
+  if (lat < P.mars.x - 0.26 && lat > P.mars.y + 0.26 && !morningMaybe) { return A; }
+  let toPole = normalize(vec3f(-q.x * q.z, -q.y * q.z, 1.0 - q.z * q.z) + vec3f(0.0, 0.0, 1e-6));
+  let tilt = dot(n - q * dot(n, q), toPole); // (the slope towards the north pole)
+  let oct = clamp(i32(log2(3.4e5 / max(fm * 4.0, 1.0))), 1, 6);
+  // (the caps' ragged edge, ~200 km and finer; the morning frost's patches, ~8 km and finer: one call of the noise — every call
+  // site is a copy the compiler builds)
+  var nz: array<f32, 2>;
+  for (var i = 0u; i < 2u; i++) {
+    nz[i] = tfbm(q * select(30.0, 900.0, i == 1u) + vec3f(select(5.3, 1.7, i == 1u)), select(oct, clamp(oct - 2, 1, 4), i == 1u));
+  }
+  let rag = nz[0];
+  // (the caps: poleward of their edge — the north's by lat, the south's by −lat —, the pole-facing slopes holding it longer)
+  // (receding caps are ragged — outliers left on the cold slopes, bays where it is gone —: ±4°; the frost thinning over its last
+  // 3°, uneven inside)
+  let dn = lat - P.mars.x + 0.14 * rag + 0.1 * tilt;
+  let ds = -lat + P.mars.y + 0.14 * rag - 0.1 * tilt;
+  var cov = max(smoothstep(-0.02, 0.05, dn) * step(P.mars.x, 1.5), smoothstep(-0.02, 0.05, ds) * step(-1.5, P.mars.y));
+  cov *= 0.82 + 0.18 * clamp(2.0 * rag + 0.5, 0.0, 1.0);
+  // (the morning frost: the winter's hemisphere — the Sun's declination against the latitude —, poleward of ~38°, the Sun low
+  // and in the east; patches)
+  let sd = dot(Ls, vec3f(0.0, 0.0, 1.0));
+  let east = normalize(vec3f(-q.y, q.x, 0.0) + vec3f(1e-6, 0.0, 0.0));
+  let mu0 = dot(q, Ls);
+  let morning = smoothstep(0.0, 0.2, dot(Ls, east)) * (1.0 - smoothstep(0.05, 0.4, mu0)) * step(0.0, mu0 + 0.05);
+  let winter = smoothstep(0.0, 0.15, -sd * sign(lat)) * smoothstep(0.62, 0.8, abs(lat));
+  cov = max(cov, 0.45 * winter * morning * smoothstep(0.1, 0.5, nz[1]));
+  if (cov <= 0.0) { return A; }
+  return mix(A, vec3f(0.56, 0.56, 0.6), cov * 0.92);
+}
 fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec3f {
   setMapLod(fp, fp, k);
   let m = u32(bodies[BV * k + 2u].z) - 4u;
@@ -9301,12 +9610,18 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
   // not the Earth's material kernels — NEAR_KIND 0 there, the regional surface's code in: a giant is never near with it)
   if (NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && (m == 4u || m == 5u) && P.near5.w > 0.0) { A = giantAlbedo(m, q, P.time.x, bodies[BV * k + 2u].y) * ALB_TINT; } else { A = planetAlbedo(k, q, P.time.x).rgb * ALB_TINT; }
   if (isEarth(k)) { A = max(A, vec3f(0.015, 0.04, 0.07)); }
+  // (Mars's frost: its seasonal CO₂ caps, its winter mornings' water frost — marsFrost; near and from orbit alike)
+  // (the constants first: only Mars's kernels — NEAR_KIND 2, the raster's lean main one too: the ground past the raster — and the
+  // general one with its detail — its disc from afar —; not the probes')
+  if ((NEAR_DETAIL || NEAR_KIND == 2u) && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && m == 2u) { A = marsFrost(A, q, select(q, HD_N, HD_N_ON), Ls, fp * AIR.rm); }
   let mu0 = dot(q, Ls);
   let mu = max(dot(q, -rd), 0.02);
   // (Mars's relief marched: its normal and shadow from earthNear — HD_N, REL_SH)
   var nrm = HD_N;
   if (!HD_N_ON) { nrm = hdNormal(k, q); }
   var cosi = max(dot(nrm, Ls), 0.0);
+  // (how much of a convective tower is here — giantTowers)
+  var towerShare = 0.0;
   // (Jupiter's, Saturn's cloud tops in relief — P9 G9 —, where it shows: the Sun low — a 12 km height's shadow is 340 km at
   // 2° — and the pixel finer than that shadow, from orbit too along the terminator; the slope towards the Sun and the
   // shadows cast, by a short march towards it on the heights the clouds carry. Elsewhere the flat deck, as before. The same
@@ -9342,7 +9657,20 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
       sl += near * sm;
       sh = mix(1.0, 1.0 - smoothstep(0.0, 2.0, occ), near);
     }
+    // (the convective towers — giantTowers —: faded in as the pixel gets finer than their shadows, ~20 km over tan of the Sun's height)
+    let tnear = sun * smoothstep(1.0, 0.3, fp * rk * te / 20.0);
+    if (tnear > 0.0 && (liteSkip() & 2048u) == 0u) {
+      let tw = giantTowers(m, q, tz, te, P.time.x);
+      sl += tnear * tw.y;
+      sh *= mix(1.0, tw.z, tnear);
+      // (their fresh ammonia ice: white)
+      A = mix(A, vec3f(0.93, 0.92, 0.88), 0.6 * tnear * tw.w);
+      towerShare = tnear * min(tw.w, 1.0);
+    }
     if (sun > 0.0) { cosi = max((mu0 - sl * sqrt(1.0 - mu0 * mu0)) * inverseSqrt(1.0 + sl * sl), 0.0) * sh; }
+    // (a tower's flank away from the Sun: lit by the sunlit deck about it — its albedo ~0.6, half of what the flank sees —, never
+    // black)
+    cosi = max(cosi, 0.3 * mu0 * towerShare);
   }
   GT_ON = false;
   var f = cosi;
@@ -10519,7 +10847,117 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
     col += BEACON * (luminance(lt.e) / PI) * mix(0.3, 300.0, 1.0 - smoothstep(-0.12, 0.06, mz));
     BEACON = vec3f(0.0);
   }
-  return EarthNear(col, e.T, select(t, t / m, t > 0.0), veil * veil);
+  // (Mars's dust devils — marsDevils —, between the camera and what the ray meets; constants first: Mars's kernel alone)
+  var Tn = e.T;
+  // (not NEAR_DETAIL: the raster's lean main kernel traces the sky and the ground past the raster)
+  if (NEAR_KIND != 0u && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u &&
+    u32(bodies[BV * k + 2u].z) == 6u) {
+    let dd = marsDevils(toBody(look), select(2e4, t / m * AIR.rm, t > 0.0), toBody(lt.dir), lt.e, AIR.sky);
+    col = dd.rgb + dd.a * col;
+    Tn *= dd.a;
+  }
+  return EarthNear(col, Tn, select(t, t / m, t > 0.0), veil * veil);
+}
+
+// Mars's dust devils (system/mars-season.ts: their season; Cantor et al. 2006, Greeley et al. 2006 — Spirit's at Gusev): columns
+// of lifted dust ~20 to 120 m across at their foot, widening up to ~0.5 to 3 km, drifting a few m/s with the wind, in the
+// afternoons of each hemisphere's spring and summer. A pure function of the scene's clock (the same devils for every player and
+// save): a lattice of 8 km cells on the face of the cube the camera is on, each cell's devil — if its draw is under the hour's
+// activity — living one slot of 512 s (4 096 / 8: the clock's wrap seamless), its slot shifted by its own hash; the 3 × 3 cells
+// about the camera. Each one integrated along the ray in 6 steps over its widening cylinder: its optical depth, the Sun's light
+// it scatters forward (Henyey–Greenstein 0.6), its own shade towards the Sun, the sky's. dir: the ray (body axes), tEnd: what
+// it meets [m], L: the Sun (body axes), E: its irradiance, sky: the sky's light → rgb the light added, a what shows through
+fn marsDevils(dir: vec3f, tEnd: f32, L: vec3f, E: vec3f, sky: vec3f) -> vec4f {
+  if (P.fine0.w < 0.5 || P.fine0.w > 1.5 || (liteSkip() & 4096u) != 0u) { return vec4f(0.0, 0.0, 0.0, 1.0); }
+  let A = P.fine0.xyz;
+  let cam = P.fine1.xyz;
+  let up = normalize(A + cam);
+  let lat = asin(clamp(up.z, -1.0, 1.0));
+  let mu0 = dot(up, L);
+  let east = normalize(vec3f(-up.y, up.x, 0.0) + vec3f(1e-6, 0.0, 0.0));
+  // (their season here — none past ~65° —, the Sun high, the afternoon the busiest)
+  let act = select(P.mars.w, P.mars.z, up.z > 0.0) * (1.0 - smoothstep(1.0, 1.15, abs(lat))) * smoothstep(0.3, 0.65, mu0) *
+    (0.35 + 0.65 * smoothstep(-0.1, 0.35, -dot(L, east)));
+  if (act <= 0.01) { return vec4f(0.0, 0.0, 0.0, 1.0); }
+  let aq = abs(up);
+  let kf = select(select(0u, 1u, aq.y >= aq.x), 2u, aq.z >= max(aq.x, aq.y));
+  let fi = (kf + 1u) % 3u;
+  let fj = (kf + 2u) % 3u;
+  var ek = vec3f(0.0);
+  ek[kf] = 1.0;
+  var ei = vec3f(0.0);
+  ei[fi] = 1.0;
+  var ej = vec3f(0.0);
+  ej[fj] = 1.0;
+  // (the anchor in 64 m units — exact —, the camera's 8 km cell: 128 of them)
+  let a64 = vec2i(i32(A[fi] / 64.0), i32(A[fj] / 64.0));
+  let cc = (a64 + vec2i(floor(vec2f(cam[fi], cam[fj]) / 64.0))) >> vec2u(7u);
+  let clock = P.zamo2.z;
+  let base = -max(P.zamo2.w, 0.0);
+  let mu = dot(dir, up);
+  let ct = dot(dir, L);
+  let phase = (1.0 - 0.36) / (4.0 * PI * pow(1.0 + 0.36 - 1.2 * ct, 1.5));
+  var Lsum = vec3f(0.0);
+  var T = 1.0;
+  for (var c = 0u; c < 9u; c++) {
+    let cell = cc + vec2i(i32(c % 3u) - 1, i32(c / 3u) - 1);
+    let h0 = hash4(bitcast<vec3u>(vec3i(cell, i32(kf))) ^ vec3u(0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u));
+    let ts = clock / 512.0 + h0.x;
+    let sl = floor(ts);
+    let age = ts - sl;
+    let r = hash4(bitcast<vec3u>(vec3i(cell.x, cell.y + 7919 * i32(sl), i32(kf))) ^ vec3u(0x510e527fu, 0x9b05688cu, 0x1f83d9abu));
+    if (r.w > 0.4 * act) { continue; }
+    // (its path: from a place in its cell, drifting 2 to 7 m/s; its life's fade in and out)
+    let ang = 6.2831853 * r.z;
+    let drift = vec2f(cos(ang), sin(ang)) * (2.0 + 5.0 * h0.y) * (age * 512.0);
+    let d2 = vec2f((cell * 128 - a64) * 64) + (0.15 + 0.7 * r.xy) * 8192.0 + drift - vec2f(cam[fi], cam[fj]);
+    let d3 = ei * d2.x + ej * d2.y;
+    let C = d3 - ek * (dot(d3, up) / up[kf]);
+    let life = sin(3.14159 * age);
+    // (its size: its foot's radius, its height, how dusty)
+    let r0 = 20.0 + 100.0 * h0.z * h0.z;
+    let H = 500.0 + 2500.0 * h0.w * h0.w;
+    let rmax = r0 * 3.5;
+    // (the ray against its widest cylinder, horizontally: the stretch within it)
+    let dh = dir - up * mu;
+    let Ch = C - up * dot(C, up);
+    let a2 = dot(dh, dh);
+    if (a2 < 1e-8) { continue; }
+    let tc = dot(Ch, dh) / a2;
+    let b2 = dot(Ch, Ch) - tc * tc * a2;
+    let half = rmax * rmax - b2;
+    if (half <= 0.0) { continue; }
+    let w = sqrt(half / a2);
+    let t0 = max(tc - w, 0.0);
+    let t1 = min(tc + w, tEnd);
+    if (t1 <= t0) { continue; }
+    let ds = (t1 - t0) / 6.0;
+    var tau = 0.0;
+    var lit = 0.0;
+    for (var n = 0u; n < 6u; n++) {
+      let tt = t0 + (f32(n) + 0.5) * ds;
+      let z = tt * mu - dot(C, up) - base;
+      if (z < -50.0 || z > H) { continue; }
+      let zr = max(z, 0.0) / H;
+      let rz = r0 * (1.0 + 2.5 * zr);
+      let q = dh * tt - Ch;
+      let rr = length(q);
+      // (a dusty wall, the core thinner; denser at its foot, thinning with height)
+      let prof = exp(-pow((rr - 0.6 * rz) / (0.55 * rz), 2.0)) + 0.35 * exp(-(rr * rr) / (rz * rz));
+      let rho = 0.02 * (r0 / rz) * exp(-2.0 * zr) * (1.0 - smoothstep(0.75, 1.0, zr)) * prof * life;
+      // (its own shade: the column between this point and the Sun, its side away from it darker)
+      let sideLit = 0.55 + 0.45 * dot(normalize(q + vec3f(1e-3)), normalize(L - up * dot(L, up) + vec3f(1e-6)));
+      let d = rho * ds;
+      lit += exp(-tau) * (1.0 - exp(-d)) * sideLit;
+      tau += d;
+    }
+    let dt = exp(-tau);
+    // (the sky's light a share of the Sun's — AIR.sky, as otherGround reads it —, scattered as a dusty ground's)
+    // (Mars's dust: single scattering albedo ~0.9 in the red — Pathfinder's, MER's —, its colour)
+    Lsum += T * E * (lit * phase * 0.9 + sky * (1.0 - dt) * (0.9 / PI)) * vec3f(0.85, 0.6, 0.42);
+    T *= dt;
+  }
+  return vec4f(Lsum, T);
 }
 
 // The Earth's sunlight in the far view: the irradiance of its source (a blackbody at its temperature,

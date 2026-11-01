@@ -26,7 +26,8 @@ test("craters: bowls and rims of every size, the same heights at any footprint f
     expect(Number.isFinite(h)).toBe(true);
     lo = Math.min(lo, h);
     hi = Math.max(hi, h);
-    if (Math.abs(h - craterRelief(1, q, mR, 0.3)) < 1e-9) n++;
+    // (0.12 m: finer than the smallest of them — the 5 m craters, the cobbles of 2 m cells; past ~0.25 m the cobbles fade out)
+    if (Math.abs(h - craterRelief(1, q, mR, 0.12)) < 1e-9) n++;
   }
   expect(lo).toBeLessThan(-5);
   expect(hi).toBeLessThan(500); // (the tracer's reliefMax for them)

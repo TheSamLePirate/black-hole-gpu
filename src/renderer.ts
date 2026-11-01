@@ -170,6 +170,7 @@ import {
 import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/geoid";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
+import { capEdges, devilSeason, marsLs } from "./system/mars-season";
 import { MoonTiles, WORLDS } from "./system/moon-tiles";
 import { WarpGrid } from "./system/warp-grid";
 import { EarthSurface, SURFACE_VEC4S, SURFACE_TEXTURE_LIMIT } from "./system/earth-surface";
@@ -334,7 +335,9 @@ const SEAFFT_VEC4S = 4;
 const WARP_VEC4S = 4;
 /** our bodies a ray from the mouth's region may meet (trace.wgsl: Params.mouthList), after the warp's */
 const MOUTH_LIST_AT = (BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S + WARP_VEC4S) * 4;
-const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S + WARP_VEC4S + 2;
+/** Mars's season (trace.wgsl: Params.mars — marsFrost, marsDevils; system/mars-season.ts), after the mouth's list [floats] */
+const MARS_AT = MOUTH_LIST_AT + 8;
+const PARAM_VEC4S = BASE_PARAM_VEC4S + SURFACE_VEC4S + SCENERY_VEC4S + 5 + WAKE_VEC4S + SEAFFT_VEC4S + WARP_VEC4S + 2 + 1;
 /**
  * The sea's twelve wave trains near the camera (trace.wgsl: seaWaves): wavenumbers in whole units of
  * 2π/1024 m on the wind's axes (along, across) — exact from an anchor of whole kilometres, in float32 —,
@@ -3184,6 +3187,23 @@ export class Renderer {
       hd.dem?.lo ?? 0,
       hdBody ? hdBody.radius * M_METRES : 1,
     );
+    // Mars's season (trace.wgsl Params.mars): its seasonal caps' edges [rad of latitude], its dust devils' season north and
+    // south — the Sun's place along its orbit at the scene's time (system/mars-season.ts), read every half M (~4 minutes of the
+    // scene's clock: Ls moves half a degree a day)
+    {
+      const key = Math.floor(time * 2);
+      if (key !== this.marsSeasonAt) {
+        this.marsSeasonAt = key;
+        const ls = marsLs(time);
+        const c = capEdges(ls),
+          d = devilSeason(ls);
+        this.marsSeason = [(c.north * Math.PI) / 180, (c.south * Math.PI) / 180, d.north, d.south];
+      }
+      f.set(this.marsSeason, MARS_AT);
+      // (and the camera's height over Mars's ground [m] — trace.wgsl marsDevils: where their columns stand — in zamo2.w)
+      const nearId = near ? bodies[near.index]?.id : undefined;
+      f[6 * 4 + 3] = near && nearId === "mars" ? heightOverGround("mars", bodyEye(near).map((x) => x * near.radius) as Vec3) : 0;
+    }
     // an airless world's finest ground (trace.wgsl: fineGround): the camera on the body's axes in metres,
     // in float64 — an anchor of whole metres (multiples of 64) near it, and the camera from the anchor
     const fineMap = near ? solarBody(bodies[near.index]!.id)?.map : undefined;
@@ -3195,7 +3215,8 @@ export class Renderer {
       const cb = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]) * mR);
       const an = cb.map((c) => Math.round(c / 64) * 64);
       set(63, an[0]!, an[1]!, an[2]!, 1);
-      set(64, cb[0]! - an[0]!, cb[1]! - an[1]!, cb[2]! - an[2]!, 0);
+      // (w: the anchor's height over the sphere — trace.wgsl rockLight —, in float64)
+      set(64, cb[0]! - an[0]!, cb[1]! - an[1]!, cb[2]! - an[2]!, Math.hypot(an[0]!, an[1]!, an[2]!) - mR);
     } else if (near && fm === mapIndex("saturn")) {
       // (Saturn's rings' blocks — trace.wgsl ringBlocks, PLAN-PLANETES-AAA P9 G5 —: within 20 km of their plane, over them,
       // their frame anchored so (w 2)
@@ -7744,8 +7765,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   ringBlocksOn = false;
   /** the live view's height over the Earth's figure [km] (writeParams) */
   private liveAltKm = 1e4;
+  /** Mars's season as last read (writeParams: Params.mars), and when (the clock in half-Ms) */
+  private marsSeason = [Math.PI / 2, -Math.PI / 2, 0, 0];
+  private marsSeasonAt = Number.NaN;
   /** parts of the raster's material cut at run time (trace.wgsl liteSkip: TUNE_LITE's bits — 1 water, 2 scenery shadows, 4
-   *  relief shadow, 8 surfaces, 16 mesh normal, 32 cloud shadows, 64 trees, 128 imagery, 256 the moons' own ground): a measure,
+   *  relief shadow, 8 surfaces, 16 mesh normal, 32 cloud shadows, 64 trees, 128 imagery, 256 the moons' own ground, 512 the airless
+   *  worlds' rocks — trace.wgsl airlessRocks, the body raster's heights and the shading both —, 1024 shadeLite's pass alone, 2048
+   *  the giants' convective towers — giantTowers —, 4096 Mars's dust devils — marsDevils): a measure,
    *  the image then wrong */
   liteSkip = 0;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */

@@ -1,6 +1,6 @@
 # Les géantes gazeuses : leurs nuages, leur air, la descente
 
-Résumé du système tel qu'il est au 31 octobre 2026 au soir (PLAN-PLANETES-AAA : P9 étapes G1 à G9, P10, P11 entière). Le
+Résumé du système tel qu'il est au 1er novembre 2026 (PLAN-PLANETES-AAA : P9 étapes G1 à G9, P10, P11 entière). Le
 détail des mesures et du chemin parcouru : [progress/planetes-aaa/P9.md](progress/planetes-aaa/P9.md) (le mouvement et
 le relief), [P10.md](progress/planetes-aaa/P10.md) (Saturne, les figures aplaties),
 [P11.md](progress/planetes-aaa/P11.md) (la descente).
@@ -11,8 +11,8 @@ le relief), [P10.md](progress/planetes-aaa/P10.md) (Saturne, les figures aplatie
 - l'air mesuré, les nuages en volume, leur lumière, les éclairs, le cockpit, la chaleur de l'entrée, l'écrasement (P11) ;
 - la caméra libre qui y descend, et un fondu continu entre la carte vue de haut et le volume (P11, après D6).
 
-Restent : les tours convectives vues d'orbite et la comparaison avec JunoCam (G9) ; quatre décisions en attente
-(§ 13) ; Uranus et Neptune, laissées de côté.
+Les tours convectives vues d'orbite et la comparaison avec JunoCam (G9) sont faites le 1er novembre. Restent : quatre
+décisions en attente (§ 13) ; Uranus et Neptune, laissées de côté.
 
 ## En une phrase
 
@@ -143,6 +143,13 @@ les ombres suivent les nuages.
   viennent d'une marche de cinq pas vers le Soleil. Tout s'allume sous μ₀ 0,35 et tant que la carte résout le relief ; la
   bande du terminateur s'allume aussi vue d'orbite.
 - **Pas de brume ajoutée par-dessus** (G9d écartée) : les cartes sont des photos, leur brume y est déjà.
+- **Les tours convectives** (G9e, `giantTowers`, 1er novembre) : les « pop-up clouds » de JunoCam, des dômes clairs de
+  12 à 42 km de rayon et 8 à 22 km de haut, dans les bandes turbulentes (le cisaillement du vent), jamais dans le cœur
+  calme d'un tourbillon nommé. Une tour au plus par cellule de 0,25° de la matière, emportée avec la couleur, qui vit un
+  cycle des vents. Trop fines pour la marche de la carte, elles sont testées comme des objets le long du chemin du
+  Soleil : leur pente, leur ombre portée, leur flanc à l'ombre éclairé par le pont autour. Visibles seulement sous un
+  Soleil bas, comme sur l'image JunoCam du 19 mai 2017 (12 858 km) qu'elles reprennent ;
+  [P9.md § G9e](progress/planetes-aaa/P9.md).
 
 ## 6. Le chemin d'un pixel
 
@@ -295,7 +302,8 @@ corrigé en P10 — [progress/planetes-aaa/P10.md](progress/planetes-aaa/P10.md)
   (`planetShade`) garde un éclairage de Lambert.
 - **Uranus et Neptune** : leur carte fixe seulement. Elles ne sont pas aplaties : `flatteningOf` ne connaît que la Terre,
   Jupiter et Saturne.
-- **G9** : pas de tours convectives vues d'orbite, pas encore de comparaison côte à côte avec JunoCam.
+- **G9** : à 12 858 km, la zone tropicale sud de JunoCam montre une texture fine (filaments, vagues) que la carte du jeu
+  n'a pas ; les tours n'en sont qu'une partie.
 - **Le volume** :
   - le dessous des orages reste plat sous le plafond ;
   - les éclairs lointains font un voile gris ;
@@ -373,5 +381,6 @@ P11, the descent:
 
 Inside cost on the mini: 25 ms in play (the Earth's low flight 30), ~39 ms at a fixed quality.
 
-Left: G9's convective towers and a JunoCam comparison. Four decisions are pending: geopotential deck heights near the
+G9's convective towers (JunoCam's pop-up clouds: bright domes with their shadows under a low Sun, carried with the
+clouds, none in a named vortex's calm core) and the JunoCam comparison were done on 1 November. Four decisions are pending: geopotential deck heights near the
 poles, the eye's well light, an ablative shield, and Alex's proposals.

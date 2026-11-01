@@ -1,8 +1,9 @@
 # Plan — toutes les planètes au niveau de la Terre (AAA, détail maximal, jamais plus lent)
 
 Date : **29 octobre 2026**, sur `main` à `269ae823`.
-Statut au 31 octobre au soir : **P0, P2 à P8 et P11 faits** ; **P1 première partie faite** ; **P9 fait sauf les tours
-convectives et la comparaison JunoCam de G9** ; **P10 : Saturne faite, le reste à faire** (les vues encore au-dessus du
+Statut au 1er novembre : **P0, P2 à P9 et P11 faits** (les rochers de la Lune, le givre et les tourbillons de Mars, les
+tours de G9 et la comparaison JunoCam faits le 1er novembre) ; **P1 première partie faite**, sa seconde partie (la carte
+d'ombre du Soleil pour les corps) en cours ; **P10 : Saturne faite, le reste à faire** (les vues encore au-dessus du
 budget, la campagne e2e finale, `docs/PLANETES.md` FR + EN, la galerie avant / après). Le détail par phase ci-dessous et
 dans [progress/planetes-aaa/](progress/planetes-aaa/) ; le système des géantes tel qu'il est :
 [GEANTES-GAZEUSES.md](GEANTES-GAZEUSES.md). En attente de décisions : § P11 (la hauteur des ponts près des pôles, la
@@ -100,10 +101,10 @@ par le projet d'Alex).
 ### P5 — Edmunds — **fait**, [P5.md](progress/planetes-aaa/P5.md)
 - Plateaux, mesas, canyons, dunes vivantes, matériaux roche / sable, ciel et poussière ; site du camp.
 
-### P6 — La Lune — **fait**, [P6.md](progress/planetes-aaa/P6.md) (rochers et traces reportés)
+### P6 — La Lune — **fait**, [P6.md](progress/planetes-aaa/P6.md) (rochers faits le 1er novembre ; traces de pas reportées)
 - Tuiles LROC (WAC/NAC) et LOLA en flux ; BRDF de Hapke (pic d'opposition), régolithe au pied, rochers, traces.
 
-### P7 — Mars — **fait**, [P7.md](progress/planetes-aaa/P7.md) (au budget de la Terre ; tourbillons, givre à venir)
+### P7 — Mars — **fait**, [P7.md](progress/planetes-aaa/P7.md) (au budget de la Terre ; givre et tourbillons faits le 1er novembre)
 - MOLA / HRSC / CTX en flux ; atmosphère poussiéreuse (ciel ocre, couchers bleus), tourbillons, givre polaire.
 
 ### P8 — Les autres corps solides — **fait**, [P8.md](progress/planetes-aaa/P8.md) (Europe ciné au-dessus du budget : P10)
@@ -150,7 +151,7 @@ par le projet d'Alex).
   - **Fait** (30 octobre) : A1, A2 et l'optimisation de leur relief (A3 ci-dessous dans P8.md : les rayons de ciel, la
     marche des ombres ; Mercure ciné 76 → 43 ms, la Lune ciné 52 → 34) — [P8.md](progress/planetes-aaa/P8.md).
 
-### P9 — Géantes gazeuses et anneaux — **fait**, [P9.md](progress/planetes-aaa/P9.md) (restent les tours convectives de G9 et la comparaison JunoCam)
+### P9 — Géantes gazeuses et anneaux — **fait**, [P9.md](progress/planetes-aaa/P9.md) (tours convectives de G9 et comparaison JunoCam faites le 1er novembre)
 - Bandes animées et tempêtes depuis l'orbite (Jupiter KTX existant), anneaux de Saturne détaillés (ombres, effet
   d'opposition, particules de près).
 - Décisions (30 octobre) : les vents et une turbulence de près ; le profil fin des anneaux et leurs blocs de glace de
@@ -321,10 +322,10 @@ par le projet d'Alex).
   - la campagne e2e complète, P11 comprise ;
   - `docs/PLANETES.md` FR + EN, la galerie avant / après ;
   - les restes reportés, à garder ou à abandonner :
-    - les rochers et les traces de pas de la Lune (P6) ;
-    - les tourbillons de poussière et le givre de Mars (P7) ;
-    - la seconde partie de P1 ;
-    - les tours convectives de G9 et sa comparaison JunoCam (P9).
+    - les traces de pas de la Lune (P6) ;
+    - la seconde partie de P1 (la carte d'ombre du Soleil pour les corps) ;
+    - faits le 1er novembre : les rochers de la Lune (P6), le givre et les tourbillons de Mars (P7), les tours convectives
+      de G9 et sa comparaison JunoCam (P9).
 - La campagne et les docs de P10 couvrent aussi P11 : P11 se fait avant la campagne finale.
 - **Saturne — fait** (31 octobre) : sa vue en orbite 58,8 → 21,4 ms (la Terre 20,1), à contre-jour 63,3 → 26,0 — les
   rayons droits dans la région du trou de ver ; Jupiter et Saturne aplaties, au rendu et au vol ; le profil de Cassini à

@@ -68,5 +68,6 @@ test("the frame: the camera's ground point on the tangent plane, the levels to t
   expect(bodyRasterFrame({ ...view, near: deep }, null)).toBeNull();
   const walker = bodyRasterFrame({ ...view, near: deep, ground: -4000 }, null)!;
   expect(walker).not.toBeNull();
-  expect(walker.uniform[35]).toBe(0.5);
+  // (an airless world's finest cell a sixteenth of a metre on foot: its cobbles in the geometry — trace.wgsl airlessRocks)
+  expect(walker.uniform[35]).toBe(0.0625);
 });

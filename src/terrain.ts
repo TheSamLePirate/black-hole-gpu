@@ -196,6 +196,7 @@ export function craterDensity(m: number) {
 export function craterRelief(m: number, q: V3, mR: number, foot = 0.05): number {
   const dens = craterDensity(m);
   let h = 0;
+  let ej = 0;
   let cell = 4000;
   for (let l = 0; l < 7; l++) {
     const w = Math.min(Math.max(Math.log2(cell / (8 * Math.max(foot, 0.05))), 0), 1);
@@ -214,14 +215,75 @@ export function craterRelief(m: number, q: V3, mR: number, foot = 0.05): number 
         const D = 0.4 * rad * cell * fresh;
         const Hr = 0.22 * D;
         h += w * (x < 1 ? (x * x - 1) * D + Hr : Hr * Math.exp(-4 * (x - 1)) * smooth(1.6, 1.15, x));
+        if (cell > 40) ej += fresh ** 6 * smooth(1.55, 0.9, x);
       }
     }
     cell *= 0.33333;
   }
+  // (the boulders and the cobbles on it — the airless worlds', not Mars's: the ground's geometry, as the body raster draws it)
+  if (m !== 2) h += airlessRocks(q, mR, foot, Math.min(ej, 1), Math.max(dens, 0.25), 2).h;
   h += moonOwn(m, q, mR, foot);
   const os = layerOctF(mR / 3000, foot, mR, 5);
   if (os > 0) h += tfbmF(sc(q, mR / 3000, m * 3.7), os) * Math.min(os, 1) * 90;
   return h;
+}
+
+/**
+ * Rocks on an airless world's ground (the tracer's airlessRocks, the same in float64): three lattices of 8, 2 and 0.5 m cells on
+ * the face of the cube the point is on (its two other body axes, metres), at most one rock in each — a lumpy, squashed dome draped
+ * on the ground, its footprint inside its cell —, none within two cells of the face's edge, more where a fresh crater threw its
+ * ejecta (ej). q: the direction (on the sphere, absolute: q·mR [m]); levels: 2 the geometry (boulders, cobbles), 3 the pebbles
+ * too → the height over the ground [m] and its slope (body axes).
+ */
+export function airlessRocks(q: V3, mR: number, foot: number, ej: number, dens: number, levels = 2): { h: number; g: V3 } {
+  const aq = q.map(Math.abs);
+  const k = aq[2]! >= Math.max(aq[0]!, aq[1]!) ? 2 : aq[1]! >= aq[0]! ? 1 : 0;
+  const i = (k + 1) % 3,
+    j = (k + 2) % 3;
+  const edge = (aq[k]! - Math.max(aq[i]!, aq[j]!)) * mR;
+  let best = { h: 0, g: [0, 0, 0] as V3 };
+  for (let l = 0; l < levels; l++) {
+    const S = [8, 2, 0.5][l]!;
+    const w = Math.min(Math.max(Math.log2(S / (8 * Math.max(foot, 0.05))), 0), 1);
+    if (w <= 0) break;
+    if (edge < 2 * S) continue;
+    const px = (q[i]! * mR) / S,
+      py = (q[j]! * mR) / S;
+    const cx = Math.floor(px),
+      cy = Math.floor(py),
+      cz = k * 4 + l;
+    const r = hash4(cx ^ 0x2545f491, cy ^ 0x9e3779b9, cz ^ 0x68e31da4);
+    const pr = [0.06, 0.08, 0.1][l]! + [0.6, 0.5, 0.4][l]! * ej;
+    if (r[3] >= pr * dens) continue;
+    const r2 = hash4(cx ^ 0x85ebca6b, cy ^ 0xc2b2ae35, cz ^ 0x27d4eb2f);
+    const rad = 0.06 + 0.14 * r2[0] * r2[0];
+    const ctr = [cx + 0.5 + (r[0] - 0.5) * (1 - 4 * rad), cy + 0.5 + (r[1] - 0.5) * (1 - 4 * rad)];
+    const dl: V3 = [0, 0, 0];
+    dl[i] = (px - ctr[0]!) * S;
+    dl[j] = (py - ctr[1]!) * S;
+    const t = (dl[0] * q[0] + dl[1] * q[1] + dl[2] * q[2]) / q[k]!;
+    const dv: V3 = [dl[0] - (k === 0 ? t : 0), dl[1] - (k === 1 ? t : 0), dl[2] - (k === 2 ? t : 0)];
+    const d = Math.hypot(...dv);
+    const R = rad * S;
+    const dir: V3 = [dv[0] / Math.max(d, 1e-6), dv[1] / Math.max(d, 1e-6), dv[2] / Math.max(d, 1e-6)];
+    // (irregular: its radius by the direction, three harmonics — 2, 3 and 5 lobes — of random phases)
+    const th = Math.atan2(dl[j]!, dl[i]!);
+    const am = [0.16, 0.11, 0.06].map((a, n) => a * (0.5 + [r2[1], fract(r2[1] * 3.17), fract(r2[1] * 5.3)][n]!));
+    const ph = [r[2], r2[2], r2[3]].map((x) => 6.2831853 * x);
+    const Re = R * (1 + am[0]! * Math.cos(2 * th + ph[0]!) + am[1]! * Math.cos(3 * th + ph[1]!) + am[2]! * Math.cos(5 * th + ph[2]!));
+    if (d >= 1.3 * Re) continue;
+    // (a block, 1 − ρ³, the regolith piled against its foot — trace.wgsl's)
+    const kv = 0.45 + 0.4 * fract(r2[1] * 7.31);
+    const rho = d / Re;
+    const core = Math.max(1 - rho * rho * rho, 0);
+    const fil = 0.16 * (1 - smooth(0.75, 1.3, rho));
+    const top = kv * R * (core + fil);
+    if (top <= 1e-4 || w * top <= best.h) continue;
+    const uf = Math.min(Math.max((rho - 0.75) / 0.55, 0), 1);
+    const gk = (w * kv * R * (-3 * rho * rho * (rho <= 1 ? 1 : 0) - (0.16 * 6 * uf * (1 - uf)) / 0.55)) / Re;
+    best = { h: w * top, g: [gk * dir[0], gk * dir[1], gk * dir[2]] };
+  }
+  return best;
 }
 
 /** a feature of size s [m] faded in as the pixel resolves it (the tracer's ownFade) */
