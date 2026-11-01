@@ -312,9 +312,10 @@ corrigé en P10 — [progress/planetes-aaa/P10.md](progress/planetes-aaa/P10.md)
   - entre ~2 000 et 300 km d'altitude, la carte reste floue (son texel : 55 km).
 - **Les messages de perte du vaisseau** (`flightair.ts`) restent en anglais.
 - **À décider** :
-  - la hauteur des ponts près des pôles. Elle est aujourd'hui calculée dans l'espace aplati (0,902 de la hauteur
-    équatoriale au pôle de Saturne) ; la physique la voudrait géopotentielle (~0,75). Voir
-    `docs/agent/d2-frames-texels-heights-eye_2026-10-31-19-57-24.md` ;
+  - ~~la hauteur des ponts près des pôles~~ : décidé le 1er novembre, ils suivront la pression (~0,75 de la hauteur
+    équatoriale au pôle de Saturne, au lieu de 0,902 dans l'espace aplati), l'air compris : PLAN-GEANTES-VOLUME V4 ;
+  - ~~les nuages du volume figés~~ : décidé le 1er novembre, emportés par le vent zonal (deux phases, mesurées), les
+    tourbillons ensuite : PLAN-GEANTES-VOLUME V7 ;
   - la lumière du puits de l'œil ;
   - un bouclier ablatif pour un vaisseau ;
   - côté projet d'Alex : un format commun des tourbillons, l'aplatissement d'Uranus et Neptune.

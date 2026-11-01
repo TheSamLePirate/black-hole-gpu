@@ -1,7 +1,8 @@
 # Plan : le volume des géantes, ce qu'on reprend de vr-solar-system
 
 Écrit le 1er novembre 2026, à partir des notes du Claude d'Alex (sessions 4p à 4t, `vr-solar-system/docs/agent/`,
-origin/master `88ee5b2`) et de notre code à `f3aa71e5`. **Rien n'est lancé : chaque phase attend le go de Sam.**
+origin/master `88ee5b2`) et de notre code à `f3aa71e5`. **Rien n'est lancé.** V4 et V7 sont décidés (Sam, 1er
+novembre : voir leurs sections) ; les autres phases attendent son go.
 
 Le contexte : Alex a porté nos nuages des géantes (P11 D2–D5, le fondu `58942157`) sur Quest 3, à 72 images/s. En
 chemin, son Claude a trouvé des défauts qu'on partage, et des astuces dont certaines valent chez nous. On ne garde ici
@@ -15,10 +16,10 @@ Notre état est décrit dans [GEANTES-GAZEUSES.md](GEANTES-GAZEUSES.md) (§ 8, 9
 | **V1** | L'éclair cherché une fois par image, au CPU | D4 coûte ~1,5–2 ms par pixel pour un résultat identique partout | moins 1 à 2 ms dedans | faible |
 | **V2** | Le puits de l'œil éclairé | les ponts absents assombrissent encore le Soleil et le ciel dans l'œil | ~0 | faible |
 | **V3** | La ligne sombre à l'horizon dans le fondu | le limbe de la surface G9 apparaît entre deux parts du volume | ~0 | faible |
-| **V4** | Les ponts à leur pression (géopotentiel) | près des pôles, nos ponts sont trop hauts (0,90 au lieu de ~0,75 sur Saturne) | ~0 | moyen (CPU, panneau, tests) |
+| **V4** | Les ponts à leur pression (géopotentiel) | près des pôles, nos ponts sont trop hauts (0,90 au lieu de ~0,75 sur Saturne) | ~0 | moyen (CPU, panneau, tests) — **décidé : oui, portée (b)** |
 | **V5** | Les sauts de l'air clair entre les ponts | des anneaux possibles d'en haut, et des pas perdus | gain probable | moyen |
 | **V6** | Un bruit bleu pour la gigue du volume | l'IGN laisse des diagonales à faible nombre d'échantillons | ~0 | faible |
-| **V7** | Les nuages du volume emportés par le vent | la surface coule, le volume est figé (le vaisseau dérive devant des nuages immobiles) | à mesurer (2 lectures) | élevé |
+| **V7** | Les nuages du volume emportés par le vent | la surface coule, le volume est figé (le vaisseau dérive devant des nuages immobiles) | à mesurer (2 lectures) | élevé — **décidé : oui, (a) mesurée, vent zonal d'abord** |
 | **V8** | Les orages sur le blanc de la carte | les enclumes sortent d'une carte qui n'a pas de tache dessous | 1 lecture de carte par échantillon d'orage | moyen |
 | **V9** | La couleur des pôles de Saturne, du dessus au dedans | bleu-gris vu de haut, beige dedans : le fondu montre le passage | à voir | à étudier |
 | **V10** | Les bruits du volume lus par la surface sous le texel de la carte | la carte est floue entre 1 000 et 250 km | quelques lectures | moyen |
@@ -63,12 +64,30 @@ Notre état est décrit dans [GEANTES-GAZEUSES.md](GEANTES-GAZEUSES.md) (§ 8, 9
 - **Constat.** `giantLayer` donne des hauteurs prises dans l'espace aplati : au pôle de Saturne les ponts sont à 0,902
   de leur hauteur équatoriale. Un pont suit une pression, et l'écart entre deux pressions va en 1/g : ~0,75 au pôle de
   Saturne, ~0,86 à celui de Jupiter. Alex l'a adopté (Somigliana entre g_eq et g_pôle, J2 de Juno et Cassini).
-- **Faire.** Un facteur `s(φ) = g_eq / g(φ)` sur toutes les hauteurs du volume (ponts, brumes, orages, mur de l'œil,
-  hauteur d'échelle de l'air) au shader, au jumeau CPU (`GIANT_LAYERS`, `giantDeckAt`, `giantDaylight`, les éclairs), au
-  panneau AIR et aux annonces, à `giantDeckTop` (fondu, `rig.ts giantTop`), au profil `aero.ts` si on veut la pression
-  juste aux pôles.
-- **Contrôle.** `giant-clouds.test.ts` (jumeau = shader), `aero-giants.test.ts`, e2e `giant-descent`, `giant-poles`.
-  Les légendes de D2 changent (« 28 km » au pôle de Saturne).
+- **Décidé par Sam (1er novembre) : oui, portée (b), la formule d'Alex.**
+  - **La formule** : celle d'Alex, pour que nos deux projets restent comparables. Le facteur `s(φ) = g_eq / g(φ)`, où
+    g(φ) est la gravité normale de Somigliana entre g_eq et g_pôle, avec le J2 de Juno (Jupiter) et de Cassini
+    (Saturne). Une hauteur au-dessus de 1 bar devient `h_réelle = s(φ) · h_équatoriale`, φ la latitude du point.
+    Valeurs attendues aux pôles : ~0,75 pour Saturne, ~0,86 pour Jupiter (contre 0,902 et ~0,935 aujourd'hui).
+  - **La portée (b) : tout ce qui se mesure en hauteur au-dessus de 1 bar.**
+    - Le shader : les ponts (`giantLayer`), les brumes (`giantHazeCol`, la brume stratosphérique à +45 km), les orages
+      (leur colonne, leur enclume à +25 km), le mur de l'œil, la hauteur d'échelle de l'air dans la marche, le sommet
+      du pont dans le fondu (`giantDeckTop`, `giantInsideW`, `giantInsideOn`) et la coquille du volume (`hTop`, `hBot`).
+    - Le jumeau CPU (`giant-clouds.ts` : `GIANT_LAYERS`, `giantTop`, `giantDeckAt`, `giantDaylight`, les éclairs).
+    - Le profil de l'air (`aero.ts`, `GIANT_AIR`) : la pression, la température et la densité lues à `h / s(φ)`. Ainsi
+      le panneau AIR, les annonces (chaque pont, 1, 10, 22 bar), la chaleur de l'entrée et l'écrasement restent cohérents
+      avec les nuages à toutes les latitudes.
+    - La caméra libre (`rig.ts giantTop`), le stationnaire (`hoverOver`).
+  - **Ce qui ne bouge pas** : la surface de 1 bar (l'ellipsoïde de P10), le plancher (`deepShare`, `deepFloorR`), la
+    surface vue de haut (G9).
+- **Contrôle.**
+  - Unitaires : `giant-clouds.test.ts` (le jumeau égal au shader, à plusieurs latitudes dont les pôles),
+    `aero-giants.test.ts` (l'équateur inchangé ; aux pôles, chaque pont à la même pression qu'à l'équateur). Un test
+    de `s(φ)` contre les valeurs d'Alex.
+  - e2e : `giant-descent`, `giant-poles`, `giant-lightning`, `giant-free-camera`.
+  - Images : les quatre vues D2 avant/après (l'œil de Saturne descend). Les légendes de D2 changent (« 28 km » au pôle
+    de Saturne) ; GEANTES-GAZEUSES.md (§ 8, § 13) à mettre à jour.
+  - Coût : ~0 attendu (un facteur par échantillon) ; A/B kerr-mini dedans pour le vérifier.
 
 ### V5. Les sauts de l'air clair
 
@@ -91,11 +110,34 @@ Notre état est décrit dans [GEANTES-GAZEUSES.md](GEANTES-GAZEUSES.md) (§ 8, 9
 
 - **Constat.** `giantSigma` lit le bruit à une place fixe : dedans, rien ne bouge (ni vent zonal, ni tourbillons), alors
   que la surface coule (G1, G8) et que le vaisseau dérive avec le vent (`giantWindAt`).
-- **Faire.** Décaler la lecture du bruit en longitude par le vent zonal de la latitude, avec le fondu à deux phases de
-  `giantFlow` (le cycle de 10 h). Option bon marché : une seule phase et un saut caché sous le bruit d'échantillonnage —
-  à juger à l'œil. Les tourbillons nommés ensuite.
-- **Coût.** Deux phases doublent les lectures du grand bruit : mesurer. À décider avec Sam (c'est un changement de
-  comportement visible, et le plus coûteux).
+- **Décidé par Sam (1er novembre) : oui.**
+  - **La méthode : (a), deux phases fondues, mesurée.** Comme la surface (`giantFlow`) : deux lectures du bruit, chacune
+    décalée en longitude par le vent de sa latitude sur l'âge de sa phase, fondues sur le cycle de 10 h (`GIANT_CYCLE`).
+    Rien ne saute, mais les lectures du bruit doublent.
+  - **Si (a) est trop cher, on passe à (b)** : une seule phase, remise à zéro toutes les quelques heures du jeu, le saut
+    caché autant que possible. Le seuil « trop cher » à fixer à la mesure : au plus le budget de la Terre en vol bas
+    sur le mini (aujourd'hui 25 ms dedans en jeu, la Terre 30).
+  - **(c) est écarté** : un décalage cumulé sans fin étire le bruit en filaments de plus en plus fins (le cisaillement
+    entre latitudes).
+  - **Ce qui bouge : le vent zonal d'abord.** Les tourbillons nommés (la Grande Tache, l'Ovale BA, le cyclone polaire de
+    Saturne et la spirale du mur de l'œil) dans un second temps, en phase V7b.
+  - **Le temps accéléré : la même règle que la surface.** Le mouvement se fige au-delà de ×1 000 à ×3 000, comme la
+    turbulence G8, sinon le bruit s'emmêle.
+- **Faire.**
+  - V7a : le décalage par le vent dans `giantSigma`, pour toutes ses lectures liées au lieu (le grand bruit, les ponts,
+    les orages, l'érosion fine) ; le vent lu une fois par échantillon (`giantWind` à sa latitude). Le mur de l'œil
+    garde son repère propre jusqu'à V7b.
+  - Le jumeau CPU : le même décalage dans `giant-clouds.ts`, sinon les éclairs et le tonnerre ne tombent plus sur les
+    orages qu'on voit.
+  - V7b : les tourbillons, par le même chemin que `giantVortex` à la surface.
+- **Mesurer.** A/B kerr-mini contre le commit d'avant : Jupiter et Saturne dedans (en jeu et à qualité fixe), la bande
+  du fondu (250 et 100 km). Décider (a) ou (b) sur ces chiffres.
+- **Contrôle.**
+  - Unitaires : le jumeau égal au shader avec le vent.
+  - e2e : `giant-lightning` (le GPU retrouve l'éclair du jumeau, à plusieurs heures d'écart) ; une vue dedans comparée
+    à un cycle de 10 h d'écart (comme `giants-flow` pour la surface) ; le temps accéléré figé au-delà du seuil.
+  - Images : un court film dedans, vaisseau dérivant avec le vent (les nuages presque immobiles) puis tenu contre lui
+    (les nuages qui défilent).
 
 ### V8. Les orages sur le blanc de la carte
 
