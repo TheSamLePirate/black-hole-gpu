@@ -210,3 +210,31 @@ test("D1c: a craft held in Jupiter's depths is lost to the pressure — with dam
   expect(deep.margins().p).toBeGreaterThan(1);
   expect(fly(-400e3, false).failure).toBeNull();
 });
+
+test("PLAN-GEANTES-VOLUME V4: the air at its level — the equator unchanged; over a pole each deck at the equator's pressure", async () => {
+  const { airLevelOver, bodyFixedOf, fromBodyFixed } = await import("../src/system/our-surface");
+  const { GIANT_LAYERS, giantLevelScale } = await import("../src/system/giant-clouds");
+  const { solarBody } = await import("../src/system/solar");
+  const t = 1000;
+  for (const id of ["jupiter", "saturn"] as const) {
+    const atm = solarBody(id)!.atmosphere!;
+    const p = (h: number) => {
+      const a = airAt(atm, h);
+      return a.rho * a.gas.R * a.T;
+    };
+    for (const L of GIANT_LAYERS[id]) {
+      // (the equator: the level the real height; a pole: the real height s(90°) × the equator's)
+      const eq = airLevelOver(id, fromBodyFixed(id, bodyFixedOf(id, 0, 30, L.c), t), t);
+      expect(Math.abs(eq - L.c)).toBeLessThan(1);
+      const s = giantLevelScale(id, Math.PI / 2 - 1e-6);
+      const pole = airLevelOver(id, fromBodyFixed(id, bodyFixedOf(id, 89.999, 30, L.c * s), t), t);
+      expect(Math.abs(pole - L.c)).toBeLessThan(5);
+      expect(Math.abs(p(pole) / p(eq) - 1)).toBeLessThan(1e-3);
+    }
+    // (the real height of a deck at the pole: s(90°) of the equator's — 0.86 Jupiter's, 0.75 Saturn's)
+    expect(giantLevelScale(id, Math.PI / 2)).toBeCloseTo(id === "jupiter" ? 0.859 : 0.753, 2);
+  }
+  // (a solid body's: its altitude)
+  const X = fromBodyFixed("earth", bodyFixedOf("earth", 60, 0, 1000), t);
+  expect(airLevelOver("earth", X, t)).toBeCloseTo(1000, 0);
+});

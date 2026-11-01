@@ -14,6 +14,7 @@ import { cross, dot, sub } from "../math/vec3";
 import { cartToGeodetic, flatteningOf, geodeticNormal, geodeticToCart, squashedHeight } from "./ellipsoid";
 import { poleOfDate } from "./geopotential";
 import { geoidUnder } from "./geoid-grid";
+import { giantLevelScale, isGiant } from "./giant-clouds";
 
 export { GEAR };
 
@@ -51,7 +52,7 @@ export function thinAirDensity(id: string, hM: number) {
 /** The air's drag on the ship (home frame, c²/M): ½ ρ v² / B against its motion through the air — the
  *  thermosphere's too, above the flight's air (B: the ballistic coefficient, the craft's or given). */
 export function dragAccel(id: string, X: Vec3, V: Vec3, t: number, B = TUNING.ballistic): Vec3 {
-  const h = altitudeOver(id, X, t);
+  const h = airLevelOver(id, X, t);
   const rho = thinAirDensity(id, h);
   if (rho <= 0) return [0, 0, 0];
   const va = sub(V, groundVelocity(id, X, t));
@@ -118,6 +119,25 @@ export function altitudeOver(id: string, X: Vec3, t: number): number {
   // (a figure of revolution: its pole alone — of date, kept an hour —, not the turning axes' nutation series)
   const z = dot(d, poleOfDate(id, t));
   return cartToGeodetic(b.radius, f, [Math.sqrt(Math.max(dot(d, d) - z * z, 0)), 0, z]).h * M_METRES;
+}
+
+/**
+ * The height to read a body's air at [m] (PLAN-GEANTES-VOLUME V4): a giant's at its level — the real height over its 1 bar
+ * ellipsoid over s(φ) = g_eq / g(φ) (system/giant-clouds.ts giantLevelScale: its isobars closer at the poles, Saturn's
+ * three quarters of the equator's), the decks drawn at their pressures there too —; any other body's altitudeOver.
+ */
+export function airLevelOver(id: string, X: Vec3, t: number): number {
+  const l = ourLevelAt(id, X, t);
+  return l.h / l.s;
+}
+/** The height over a body's figure [m] and s(φ) there (1 off the giants): airLevelOver's parts */
+export function ourLevelAt(id: string, X: Vec3, t: number): { h: number; s: number } {
+  const f = flatteningOf(id);
+  if (!isGiant(id) || f === 0) return { h: altitudeOver(id, X, t), s: 1 };
+  const d = sub(X, solarState(id, t).pos);
+  const z = dot(d, poleOfDate(id, t));
+  const g = cartToGeodetic(solarBody(id)!.radius, f, [Math.sqrt(Math.max(dot(d, d) - z * z, 0)), 0, z]);
+  return { h: g.h * M_METRES, s: giantLevelScale(id, g.lat) };
 }
 
 /** A place on a body: geodetic latitude, east longitude [°], height above its figure [m] → its own coordinates. */

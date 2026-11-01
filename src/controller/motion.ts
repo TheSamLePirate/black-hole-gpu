@@ -26,6 +26,7 @@ import { symmetricStep, YOSHIDA } from "../system/our-predict";
 import { railsCoast, stableOrbitOf } from "../system/our-coast";
 import {
   airDensity as ourAir,
+  airLevelOver,
   altitudeOver,
   dragAccel,
   figureUp,
@@ -572,7 +573,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     const aW = this.trapWire ? this.trapAccel(Xq, Vq, tq) : null;
     const aG = aW ? lin(gearAt(Xq, Vq, tq), 1, aW, kA) : gearAt(Xq, Vq, tq);
     if (!aero) return lin(gq.acc, 1, aG, 1);
-    const h = altitudeOver(ref, Xq, tq);
+    // (a giant's air at its level — PLAN-GEANTES-VOLUME V4: its isobars closer at the poles)
+    const h = airLevelOver(ref, Xq, tq);
     // (the wing's height over the ground: its ground effect — the reference point is the gear's height up)
     this.airFlight.cfg.agl = ground ? gearHeight(ground, Xq, tq) + GEAR : undefined;
     // (the air's own motion: the wind — the craft flies through the air, not over the ground)

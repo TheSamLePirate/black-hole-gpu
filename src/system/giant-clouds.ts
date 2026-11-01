@@ -1,9 +1,16 @@
-// The giants' clouds and lightning on the CPU (PLAN-PLANETES-AAA P11 D5): the twin of trace.wgsl's giantLayer, giantColAbove
-// and giantFlashes — the cockpit's figures (the deck the craft is in, the daylight left), the announcements, the thunder.
-// The flashes are the shader's to the millisecond: the same clock (the scene's seconds modulo 4 096 — Params.zamo2.z), the
-// same hashes (pcg), the same storms — the Perlin–Worley of src/noise3d.ts ported here (its texture's g channel, sampled
-// trilinearly and periodically as the GPU does), read where the shader reads it. tests/giant-clouds.test.ts holds the
-// layers equal to the shader's.
+// The giants' clouds and lightning on the CPU (PLAN-PLANETES-AAA P11 D5): the twin of trace.wgsl's giantLayer, giantColAbove,
+// giantLevel — the cockpit's figures (the deck the craft is in, the daylight left), the announcements, the thunder —, and the
+// lightning's own search (giantFlashes: the renderer's, once a frame, its brightest flash handed to the shader — PLAN-GEANTES-
+// VOLUME V1): the scene's clock (its seconds modulo 4 096 — Params.zamo2.z), pcg's hashes, the storms where the shader
+// draws them — the Perlin–Worley of src/noise3d.ts ported here (its texture's g channel, sampled trilinearly and
+// periodically as the GPU does), read where the shader reads it. tests/giant-clouds.test.ts holds the layers equal to the
+// shader's.
+//
+// The decks sit at pressures (PLAN-GEANTES-VOLUME V4, Alex's formula — vr-solar-system GiantAir.LevelScale): their heights,
+// every height over 1 bar the air sets — the decks, the hazes, the storms, the eye's wall, the air's profile (aero.ts) —, are
+// the equator's scaled by s(φ) = g_eq / g(φ), the isobars' spacing going as 1/g: g the normal gravity on the 1 bar
+// ellipsoid (Somigliana) between g_eq = GM/a² (1 + 3/2 J2) − ω² a and g_pole = GM/b² (1 − 3 J2 a²/b²), J2 Juno's and
+// Cassini's. At the poles 0.859 (Jupiter), 0.753 (Saturn). A "level" height is the equator's: the real one over s(φ).
 
 /** a deck: its middle [m over 1 bar], its half thickness [m], its billows' scale [m], its extinction [1/m] */
 export interface GiantLayer {
@@ -30,7 +37,39 @@ export const GIANT_LAYERS: Record<"jupiter" | "saturn", [GiantLayer, GiantLayer,
   ],
 };
 export type GiantId = keyof typeof GIANT_LAYERS;
+type V3 = [number, number, number];
 export const isGiant = (id: string): id is GiantId => id === "jupiter" || id === "saturn";
+
+/** a giant's figure for the isobars' spacing (trace.wgsl giantLevel): b/a, its 1 bar ellipsoid's, and g_pole / g_eq (Alex's
+ *  Somigliana — tests/giant-clouds.test.ts derives them from the bodies' masses, radii, spins and J2) */
+export const GIANT_FIGURE: Record<GiantId, { ba: number; gpg: number }> = {
+  jupiter: { ba: 0.935126, gpg: 1.164072 },
+  saturn: { ba: 0.902038, gpg: 1.32838 },
+};
+/** s(φ) = g_eq / g(φ) at a geodetic latitude [rad]: a level height × s the real one over 1 bar (1 off the giants) */
+export function giantLevelScale(id: string, lat: number): number {
+  if (!isGiant(id)) return 1;
+  const { ba, gpg } = GIANT_FIGURE[id];
+  const c2 = Math.cos(lat) ** 2,
+    s2 = 1 - c2;
+  return Math.sqrt(c2 + ba * ba * s2) / (c2 + ba * gpg * s2);
+}
+/**
+ * At q — a direction on the body's squashed axes (its 1 bar ellipsoid the unit sphere: trace.wgsl squashed) —: s(φ), and the
+ * level metres a metre of squashed height (|p| − 1)·a makes there (trace.wgsl giantLevel's y: the real height is the
+ * squashed one × k, k = 1 at the equator, b/a at the poles; the level one over s).
+ */
+export function giantLevel(id: GiantId, q: V3): { s: number; kl: number } {
+  const { ba, gpg } = GIANT_FIGURE[id];
+  const l = Math.hypot(...q);
+  const rho = Math.hypot(q[0], q[1]) / l,
+    z = q[2] / l;
+  const nl = Math.hypot(rho, z / ba);
+  const c = rho / nl,
+    sn = z / ba / nl;
+  const s = Math.sqrt(c * c + ba * ba * sn * sn) / (c * c + ba * gpg * sn * sn);
+  return { s, kl: 1 / ((c * rho + (sn * Math.abs(z)) / ba) * s) };
+}
 
 /** the top of a giant's clouds [m over 1 bar]: its highest deck's — 0 for the giants without decks (Uranus, Neptune) */
 export const giantTop = (id: string) => (isGiant(id) ? GIANT_LAYERS[id][0].c + GIANT_LAYERS[id][0].w : 0);
@@ -164,9 +203,7 @@ export function cloudNoiseG(x: number, y: number, z: number): number {
   );
 }
 
-// ---- the lightning (trace.wgsl giantFlashes) ----
-
-type V3 = [number, number, number];
+// ---- the lightning (once a frame: the renderer's, for trace.wgsl giantFlashGlow) ----
 /** a flash: its slot (stream j, slot n — each one once), its place (the body's squashed axes [its radii]), its light now,
  *  shallow (in the ammonia's clouds) */
 export interface GiantFlash {
@@ -178,9 +215,9 @@ export interface GiantFlash {
 }
 
 /**
- * The flashes the shader draws at the clock tc [s, modulo 4 096], seen from the camera c (the body's squashed axes [its
+ * The flashes at the clock tc [s, modulo 4 096], seen from the camera c (the body's squashed axes [its
  * radii] — the renderer's nearCam), the body m (4 Jupiter, 5 Saturn), rm its metres a radius: every stream's lit flash
- * found in a storm (the shader draws the brightest one).
+ * found in a storm (the renderer hands the brightest one to the shader: P.wx[6]).
  */
 export function giantFlashes(m: 4 | 5, c: V3, rm: number, tc: number): GiantFlash[] {
   const id: GiantId = m === 4 ? "jupiter" : "saturn";
@@ -195,6 +232,7 @@ export function giantFlashes(m: 4 | 5, c: V3, rm: number, tc: number): GiantFlas
   const nx: V3 = [q0[1] * ex[2] - q0[2] * ex[1], q0[2] * ex[0] - q0[0] * ex[2], q0[0] * ex[1] - q0[1] * ex[0]];
   const rare = m === 4 ? 0 : 0.05;
   const re = m === 4 ? 0.0175 : 0.0166;
+  const { kl } = giantLevel(id, q0);
   const out: GiantFlash[] = [];
   for (let j = 0; j < 4; j++) {
     const tj = tc + j * 0.137;
@@ -238,7 +276,8 @@ export function giantFlashes(m: 4 | 5, c: V3, rm: number, tc: number): GiantFlas
     const rho = Math.acos(Math.min(Math.max(q[2], -1), 1));
     const eyeClear = Math.min(Math.max((rho - 0.6 * re) / (0.4 * re), 0), 1);
     if (best < 0.7 + rare || eyeClear * eyeClear * (3 - 2 * eyeClear) < 0.95) continue;
-    const r = 1 + hf / rm;
+    // (its level height on the squashed axes — the shader's giantLevel at the camera, its decks' frame)
+    const r = 1 + hf / (kl * rm);
     out.push({ j, n, pos: [q[0] * r, q[1] * r, q[2] * r], light: I * (shallow ? 0.4 : 1), shallow });
   }
   return out;

@@ -18,7 +18,7 @@ import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
 import { cartToGeodetic, flatteningOf, WGS84_A, WGS84_F } from "./system/ellipsoid";
 import { setSceneryContact } from "./system/scenery-contact";
-import { GIANT_LAYERS, GiantThunder, isGiant } from "./system/giant-clouds";
+import { GIANT_LAYERS, GiantThunder, giantLevel, isGiant } from "./system/giant-clouds";
 import { airAt } from "./aero";
 import { setDrawnRefractivity } from "./system/refraction";
 import { projectLook } from "./shadow";
@@ -8249,7 +8249,8 @@ async function main() {
     const nc = renderer.nearCamera;
     if (nc && isGiant(nc.id)) {
       const top = GIANT_LAYERS[nc.id][0];
-      const h = (Math.hypot(...nc.c) - 1) * nc.mR;
+      // (at its level — PLAN-GEANTES-VOLUME V4 —: the squashed height by giantLevel, the shader's)
+      const h = (Math.hypot(...nc.c) - 1) * nc.mR * giantLevel(nc.id, nc.c).kl;
       if (h < top.c + 3 * top.w + 30e3) {
         const a = airAt(solarBody(nc.id)?.atmosphere, h).a;
         for (const x of giantThunder.step(nc.id === "jupiter" ? 4 : 5, nc.c, nc.mR, nc.tc)) audio.thunder(x.dist, a);

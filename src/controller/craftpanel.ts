@@ -16,7 +16,7 @@ import {
   mothershipPanel,
 } from "../game/craftpanel";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
-import { GIANT_LAYERS, giantDaylight, giantDeckAt, isGiant } from "../system/giant-clouds";
+import { GIANT_LAYERS, giantDaylight, giantDeckAt, giantLevelScale, isGiant } from "../system/giant-clouds";
 import { giantWindAt } from "../system/giant-winds";
 import { altitudeOver, toBodyFixed } from "../system/our-surface";
 import { solarBody, solarState } from "../system/solar";
@@ -98,10 +98,14 @@ function giantAirFigures(this: CameraController): GiantAirIn | null {
   const id = nav.ref;
   const top = GIANT_LAYERS[id][0];
   const h = altitudeOver(id, nav.X, nav.t);
-  if (h > top.c + 3 * top.w + 30e3) return null;
   const sb = solarBody(id)!;
-  const air = airAt(sb.atmosphere, h);
-  const lat = (cartToGeodetic(sb.radius, flatteningOf(id), toBodyFixed(id, nav.X, nav.t)).lat * 180) / Math.PI;
+  const latR = cartToGeodetic(sb.radius, flatteningOf(id), toBodyFixed(id, nav.X, nav.t)).lat;
+  // (the air, the deck, the daylight at its level — PLAN-GEANTES-VOLUME V4: the real height over s(φ), the decks at their
+  // pressures —; the height shown the real one)
+  const hl = h / giantLevelScale(id, latR);
+  if (hl > top.c + 3 * top.w + 30e3) return null;
+  const air = airAt(sb.atmosphere, hl);
+  const lat = (latR * 180) / Math.PI;
   const c = solarState(id, nav.t).pos;
   const sun = solarState("sun", nav.t).pos;
   const up = [nav.X[0] - c[0], nav.X[1] - c[1], nav.X[2] - c[2]];
@@ -112,8 +116,8 @@ function giantAirFigures(this: CameraController): GiantAirIn | null {
     h,
     p: air.rho * air.gas.R * air.T,
     T: air.T,
-    deck: giantDeckAt(id, h)?.name ?? null,
-    sun: giantDaylight(id, h, mu0).direct,
+    deck: giantDeckAt(id, hl)?.name ?? null,
+    sun: giantDaylight(id, hl, mu0).direct,
     mu0,
     wind: giantWindAt(id, lat),
     q,

@@ -210,6 +210,13 @@ flowchart TD
 
   Ils sont modelés par le Perlin–Worley des nuages de la Terre, sur la couverture de la carte ; près de la caméra, une
   érosion cinq fois plus fine.
+- **Les ponts à leur pression** (PLAN-GEANTES-VOLUME V4, la formule d'Alex) : ces hauteurs sont celles de l'équateur.
+  Ailleurs, toute hauteur que fixe l'air (les ponts, les brumes, les orages, le mur de l'œil, l'échelle de hauteur de
+  l'air, le profil de `aero.ts`) est multipliée par s(φ) = g_éq / g(φ), la gravité normale de Somigliana sur l'ellipsoïde
+  de 1 bar (J2 de Juno et de Cassini) : 0,859 au pôle de Jupiter, 0,753 à celui de Saturne (`giantLevel` dans le shader,
+  `giantLevelScale` et `giantLevel` dans le jumeau, `airLevelOver` pour l'air du vol). Avant, l'espace aplati seul les
+  mettait à 0,935 et 0,902. Le shader lit s(φ) une fois par rayon, à la latitude de la caméra (il varie de ~1 % sur les
+  1 500 km de la marche).
 - **Les orages** : des colonnes nées au pont d'eau qui traversent les ponts et s'étalent en enclume ~25 km au-dessus de
   l'ammoniac. Ils sont plus rares sur Saturne, et absents de l'œil.
 - **L'œil** (`giantEye`) : le vortex polaire nord de Saturne (~2 000 km) et le cyclone polaire central de Jupiter. Un
@@ -222,7 +229,10 @@ flowchart TD
   - la lumière roussie par les brumes ;
   - la lumière du ciel donnée par la transmission diffuse de la colonne au-dessus.
 - **Les éclairs** (D4, `giantFlashes`) : une pure fonction de l'horloge de la scène. Quatre flux de demi-secondes ;
-  chaque flux cherche l'orage le plus fort autour de son point. Seul le plus brillant est dessiné.
+  chaque flux cherche l'orage le plus fort autour de son point. Seul le plus brillant est dessiné. Depuis V1, la recherche
+  se fait une fois par image au CPU (le jumeau, dans le renderer) ; le shader reçoit l'éclair dans `P.wx[6]`.
+- **Le puits de l'œil** (V2) : la part moyenne des ponts au-dessus d'un point y est celle de l'œil, là où la colonne vers
+  le Soleil traverse chaque pont (`giantEyeX`) : le puits n'est plus assombri par des ponts absents.
 - **Les anneaux vus d'en dessous** : composés derrière le volume, à travers ce qu'il laisse passer, jamais à travers la
   planète.
 
@@ -237,6 +247,9 @@ flowchart TD
   - Les nuages proches sortent du pont en descendant ; les lointains se fondent dans la carte.
   - Sous le sommet du pont, le volume seul.
 - **De si haut**, la marche commence à l'entrée de la coquille du volume (le sommet des nuages + 70 km).
+- **L'horizon du pont** (V3) : un rayon qui touche le pont au-delà de 450 km mais dont le point tangent passe au-dessus de
+  1 bar prend la part du ciel ; sinon il montrait le limbe de l'air de G9, une ligne bleutée à l'horizon. La marche va
+  jusqu'à l'horizon du pont.
 
 ## 10. Le jeu dans les géantes (P11 D5–D6)
 
@@ -307,20 +320,19 @@ corrigé en P10 — [progress/planetes-aaa/P10.md](progress/planetes-aaa/P10.md)
 - **Le volume** :
   - le dessous des orages reste plat sous le plafond ;
   - les éclairs lointains font un voile gris ;
-  - l'œil de Saturne est terne, son puits sous-éclairé : les ponts absents y assombrissent encore le Soleil par leur
-    moyenne ;
+  - au fond du puits de Saturne, des stries sombres : les ombres des stries du mur, lues en un point ;
   - entre ~2 000 et 300 km d'altitude, la carte reste floue (son texel : 55 km).
 - **Les messages de perte du vaisseau** (`flightair.ts`) restent en anglais.
 - **À décider** :
-  - ~~la hauteur des ponts près des pôles~~ : décidé le 1er novembre, ils suivront la pression (~0,75 de la hauteur
+  - ~~la hauteur des ponts près des pôles~~ : ils suivent la pression depuis le 1er novembre (0,753 de la hauteur
     équatoriale au pôle de Saturne, au lieu de 0,902 dans l'espace aplati), l'air compris : PLAN-GEANTES-VOLUME V4 ;
   - ~~les nuages du volume figés~~ : décidé le 1er novembre, emportés par le vent zonal (deux phases, mesurées), les
     tourbillons ensuite : PLAN-GEANTES-VOLUME V7 ;
-  - la lumière du puits de l'œil ;
   - un bouclier ablatif pour un vaisseau ;
   - côté projet d'Alex : un format commun des tourbillons, l'aplatissement d'Uranus et Neptune.
 - **Le plan de reprise** des trouvailles de vr-solar-system (l'éclair au CPU, le puits de l'œil, la ligne d'horizon, les
-  ponts à leur pression, le volume emporté par le vent…) : [PLAN-GEANTES-VOLUME.md](PLAN-GEANTES-VOLUME.md), pas lancé.
+  ponts à leur pression, le volume emporté par le vent…) : [PLAN-GEANTES-VOLUME.md](PLAN-GEANTES-VOLUME.md) ; V1 à V4 faits
+  le 1er novembre ([le compte rendu](progress/geantes-volume.md)).
 
 ## Les tests
 
@@ -385,5 +397,9 @@ P11, the descent:
 Inside cost on the mini: 25 ms in play (the Earth's low flight 30), ~39 ms at a fixed quality.
 
 G9's convective towers (JunoCam's pop-up clouds: bright domes with their shadows under a low Sun, carried with the
-clouds, none in a named vortex's calm core) and the JunoCam comparison were done on 1 November. Four decisions are pending: geopotential deck heights near the
-poles, the eye's well light, an ablative shield, and Alex's proposals.
+clouds, none in a named vortex's calm core) and the JunoCam comparison were done on 1 November.
+
+PLAN-GEANTES-VOLUME (1 November, from Alex's sessions 4p–4t): V1 the lightning searched once a frame on the CPU (−2 to
+−3 % inside); V2 the eye's well no longer darkened by decks that are not there; V3 no more line at the deck's horizon in
+the fade band; V4 every height the air sets scaled by s(φ) = g_eq / g(φ) (Somigliana, Alex's formula: 0.859 at Jupiter's
+poles, 0.753 at Saturn's), the flight's air read at that level too. Still pending: an ablative shield.

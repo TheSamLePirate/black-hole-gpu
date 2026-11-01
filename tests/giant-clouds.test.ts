@@ -116,3 +116,44 @@ test("the AIR panel: Galileo's figures as met, the 22 bar marked, the hull's sha
   expect(giantCalls(deep(118e5), deep(121e5))).toEqual([{ kind: "hull" }]);
   expect(giantCalls(deep(121e5), deep(124e5))).toEqual([]);
 });
+
+test("V4: the decks at their pressures — Alex's s(φ) from the bodies' masses, radii, spins and J2; the shader's giantLevel", async () => {
+  const { GIANT_FIGURE, giantLevel, giantLevelScale } = await import("../src/system/giant-clouds");
+  const { solarBody } = await import("../src/system/solar");
+  const { flatteningOf } = await import("../src/system/ellipsoid");
+  const { ZONAL } = await import("../src/system/geopotential");
+  const { M_METRES } = await import("../src/units");
+  const body = fnBody("giantLevel");
+  for (const id of ["jupiter", "saturn"] as const) {
+    // (Somigliana between g_eq = GM/a² (1 + 3/2 J2) − ω² a and g_pole = GM/b² (1 − 3 J2 a²/b²) — vr-solar-system GiantAir)
+    const b = solarBody(id)!;
+    const a = b.radius * M_METRES,
+      f = flatteningOf(id),
+      bb = a * (1 - f);
+    const GM = b.mass * M_METRES * 299792458 ** 2;
+    const w = (2 * Math.PI) / (b.rotation! * 3600);
+    const J2 = ZONAL[id]!.J[0];
+    const gEq = (GM / (a * a)) * (1 + 1.5 * J2) - w * w * a;
+    const gP = (GM / (bb * bb)) * (1 - (3 * J2 * a * a) / (bb * bb));
+    expect(GIANT_FIGURE[id].ba).toBeCloseTo(1 - f, 5);
+    expect(GIANT_FIGURE[id].gpg).toBeCloseTo(gP / gEq, 4);
+    // (the shader's constants the twin's)
+    expect(body).toContain(String(GIANT_FIGURE[id].ba));
+    expect(body).toContain(String(GIANT_FIGURE[id].gpg));
+    // (Alex's: 0.86 and 0.75 at the poles; the equator 1; between, monotonic)
+    expect(giantLevelScale(id, 0)).toBeCloseTo(1, 9);
+    let prev = 1;
+    for (let d = 10; d <= 90; d += 10) {
+      const s = giantLevelScale(id, (d * Math.PI) / 180);
+      expect(s).toBeLessThan(prev);
+      prev = s;
+    }
+    expect(prev).toBeCloseTo(id === "jupiter" ? 0.86 : 0.75, 2);
+    // (giantLevel on the squashed axes: at the equator the level the squashed height; at the pole the real one b/a of it,
+    // the level that over s)
+    expect(giantLevel(id, [1, 0, 0]).kl).toBeCloseTo(1, 9);
+    const pole = giantLevel(id, [0, 0, 1]);
+    expect(pole.s).toBeCloseTo(prev, 6);
+    expect(pole.kl).toBeCloseTo((1 - f) / prev, 5);
+  }
+});

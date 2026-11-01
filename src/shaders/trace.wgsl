@@ -11022,6 +11022,22 @@ fn giantDeckTop(m: u32) -> f32 {
   let L = giantLayer(m, 0u);
   return L.x + L.y;
 }
+// The decks at their pressures (PLAN-GEANTES-VOLUME V4, Alex's formula — vr-solar-system GiantAir.LevelScale; the CPU's twin
+// system/giant-clouds.ts giantLevel): the isobars' spacing goes as 1/g, g the normal gravity on the 1 bar ellipsoid
+// (Somigliana between Juno's and Cassini's g_eq and g_pole): every height the air sets — the decks, the hazes, the storms,
+// the eye's wall, the air's scale height — is the equator's × s(φ) = g_eq / g(φ), 0.859 at Jupiter's poles, 0.753 at
+// Saturn's (the squashed axes alone made them 0.935 and 0.902). Their "level" heights are the equator's: a point's the real
+// one over s. At q (squashed, unit): x s, y the level metres a squashed metre of height makes — the real height the
+// squashed one × k (1 at the equator, b/a at the poles), over s. Read once a ray at the camera's latitude (as Alex's: s
+// moves ~1 % over the march's 1 500 km).
+fn giantLevel(m: u32, q: vec3f) -> vec2f {
+  let ba = select(0.902038, 0.935126, m == 4u);
+  let gpg = select(1.32838, 1.164072, m == 4u);
+  let rho = length(q.xy);
+  let n = normalize(vec2f(rho, q.z / ba));
+  let s = sqrt(n.x * n.x + ba * ba * n.y * n.y) / (n.x * n.x + ba * gpg * n.y * n.y);
+  return vec2f(s, 1.0 / ((n.x * rho + n.y * abs(q.z) / ba) * s));
+}
 fn giantVolumeOK(k: u32) -> bool {
   let m = u32(bodies[BV * k + 2u].z) - 4u;
   return NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && (m == 4u || m == 5u);
@@ -11032,16 +11048,17 @@ fn giantInsideW(k: u32, look: vec3f) -> f32 {
   let rm = P.near4.w;
   let ro = nearCam();
   let top = giantDeckTop(m);
-  let hc = (length(ro) - 1.0) * rm;
+  let lv = giantLevel(m, normalize(ro));
+  let hc = (length(ro) - 1.0) * rm * lv.y;
   if (hc <= top) { return 1.0; }
   let rs = squashed(toBody(look), squashOf(k));
   let mm = length(rs);
   let rd = rs / mm;
-  let rT = 1.0 + top / rm;
+  let rT = 1.0 + top / (rm * lv.y);
   let b = dot(ro, rd);
   let disc = b * b - (dot(ro, ro) - rT * rT);
   // (a ray over the deck's horizon — none met —: the camera's height over it instead)
-  let wSky = 1.0 - smoothstep(GI_NEAR, GI_FAR, hc - top);
+  let wSky = 1.0 - smoothstep(GI_NEAR, GI_FAR, (hc - top) * lv.x);
   if (disc <= 0.0 || b >= 0.0) { return wSky; }
   let d = (-b - sqrt(disc)) * rm / mm;
   // (the rays meeting it beyond GI_FAR but passing over the 1 bar level — G9's surface: its air's limb, a bright band between
@@ -11053,7 +11070,8 @@ fn giantInsideW(k: u32, look: vec3f) -> f32 {
 fn giantInsideOn(k: u32) -> bool {
   if (!giantVolumeOK(k)) { return false; }
   let m = u32(bodies[BV * k + 2u].z) - 4u;
-  return (length(nearCam()) - 1.0) * P.near4.w < giantDeckTop(m) + GI_FAR;
+  let ro = nearCam();
+  return (length(ro) - 1.0) * P.near4.w * giantLevel(m, normalize(ro)).y < giantDeckTop(m) + GI_FAR;
 }
 // (the surface's and the volume's paths mixed by the volume's share w: their light and what they let through; a hit where
 // neither lets anything through — the nearer —, else none: the sky beyond traced, seen through the mix)
@@ -11230,11 +11248,15 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   let Lb = giantLayer(m, 2u);
   let hTop = Lt.x + 3.0 * Lt.y + 70e3;
   let hBot = Lb.x - 2.5 * Lb.y;
+  // (the heights at their level — V4: a squashed metre KL level ones; a level metre SL real ones)
+  let lv = giantLevel(m, normalize(ro));
+  let SL = lv.x;
+  let KL = lv.y;
   // (the camera over the volume's shell — the band where it fades in over G9's surface —: the march from where the ray enters
   // it; a ray missing it sees nothing of it)
   var t0 = 0.0;
-  if ((length(ro) - 1.0) * rm > hTop) {
-    let rT = 1.0 + hTop / rm;
+  if ((length(ro) - 1.0) * rm * KL > hTop) {
+    let rT = 1.0 + hTop / (rm * KL);
     let b = dot(ro, rd);
     let disc = b * b - (dot(ro, ro) - rT * rT);
     if (disc <= 0.0 || b > 0.0) { return EarthNear(vec3f(0.0), vec3f(1.0), -1.0, 1.0); }
@@ -11254,8 +11276,8 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   // (the march: ~1 500 km at most; in the clear its steps growing with the distance — 6 % of it, 350 m at least —, in a cloud
   // short — 1.5 % of it, 150 m at least: finer than the billows, or the jitter averages them into a blur —; jittered)
   // (over the top deck — giantInsideW's grazing rays —: to its horizon at least)
-  let hd = (length(ro) - 1.0) * rm - giantDeckTop(m);
-  let Dmax = max(1.5e6, 1.1 * sqrt(2.0 * rm * max(hd, 0.0)));
+  let hd = (length(ro) - 1.0) * rm * KL - giantDeckTop(m);
+  let Dmax = max(1.5e6, 1.1 * sqrt(2.0 * rm * max(hd, 0.0) * SL));
   let N = 112u;
   var T = 1.0;
   var col = vec3f(0.0);
@@ -11275,7 +11297,7 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
     let dm = t - ds * RND;
     tPrev = t;
     let p = ro + rd * (dm * mm / rm);
-    let h = (length(p) - 1.0) * rm;
+    let h = (length(p) - 1.0) * rm * KL;
     // (out of the decks: up, space beyond; down, the deep)
     if (h > hTop && dot(p, rd) > 0.0) { break; }
     if (h < hBot) { tEnd = dm; break; }
@@ -11292,7 +11314,7 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
     // (thinning fast over the ammonia — its scale height there 0.4 of the air's: the cloud tops sharp from above —; and the
     // stratospheric haze ~45 km over them — the photochemical smog's, an optical depth of ~0.15 —: the sky's tan glow from below)
     let bh = 2.2e-6 * exp(-h / (2.0 * AIR.hr) - max(h - Lt.x, 0.0) / (0.4 * AIR.hr)) + 6e-6 * exp(-sq((h - Lt.x - 45e3) / 15e3));
-    let hz = giantHazeCol(h, Lt.x, AIR.hr);
+    let hz = giantHazeCol(h, Lt.x, AIR.hr) * SL;
     var sunT = vec3f(0.0);
     var sunM = vec3f(0.0);
     var tl = 0.0;
@@ -11303,13 +11325,13 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
       for (var j = 0u; j < select(3u, 1u, clear); j++) {
         let dl = 1500.0 * pow(4.0, select(f32(j), 1.5, clear));
         let pl = p + Ls * (dl / rm);
-        tl += giantSigma(m, pl, (length(pl) - 1.0) * rm, cover, rkm, 0.0) * (dl - dPrev);
+        tl += giantSigma(m, pl, (length(pl) - 1.0) * rm * KL, cover, rkm, 0.0) * (dl - dPrev);
         dPrev = dl;
       }
       // (beyond: the nearest deck wholly above read where the sunlight crosses it — one the point is in, by its mean: read, it
       // was counted twice, a black cloud — its holes let it through: beams in the haze, the
       // ceiling's banks dappling the decks below —, the others by their mean share; slant)
-      let hEnd = h + dPrev * max(mu0, 0.0);
+      let hEnd = h + dPrev * max(mu0, 0.0) / SL;
       let slant = max(mu0, 0.05);
       var tau = 0.0;
       var tauM = 0.0;
@@ -11317,15 +11339,15 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
       for (var jj = 0u; jj < 3u; jj++) {
         let j = 2u - jj;
         let L = giantLayer(m, j);
-        var mean = L.w * cover[j] * 0.35 * giantColAbove(hEnd, L) / max(mu0 + 0.15, 0.03);
-        if (eyeOn && mean > 1e-3) { mean *= giantEyeX(m, p + Ls * (max(L.x - h, 0.0) / slant / rm)); }
+        var mean = L.w * cover[j] * 0.35 * giantColAbove(hEnd, L) * SL / max(mu0 + 0.15, 0.03);
+        if (eyeOn && mean > 1e-3) { mean *= giantEyeX(m, p + Ls * (max(L.x - h, 0.0) / (slant * rm * KL))); }
         tauM += mean;
         if (!read && L.x - 1.5 * L.y > hEnd && mu0 > 0.0) {
           read = true;
-          let pl = p + Ls * ((L.x - h) / slant / rm);
+          let pl = p + Ls * ((L.x - h) / (slant * rm * KL));
           // (an eye's wall read half: its streaks' hard shadows scratched the well's floor)
           let ew = giantEye(m, normalize(pl)).y;
-          tau += mix(giantSigma(m, pl, (length(pl) - 1.0) * rm, cover, rkm, 0.0) * 1.77 * L.y / slant, mean, 0.5 * ew);
+          tau += mix(giantSigma(m, pl, (length(pl) - 1.0) * rm * KL, cover, rkm, 0.0) * 1.77 * L.y * SL / slant, mean, 0.5 * ew);
         } else {
           tau += mean;
         }
@@ -11354,7 +11376,7 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
     var tz = 0.0;
     for (var j = 0u; j < 3u; j++) {
       let L = giantLayer(m, j);
-      tz += L.w * cover[j] * 0.35 * giantColAbove(h, L);
+      tz += L.w * cover[j] * 0.35 * giantColAbove(h, L) * SL;
     }
     if (eyeOn) { tz *= giantEyeX(m, q); }
     // (and in a cloud, the less the deeper in it — the march towards the Sun's optical depth: a shaded billow keeps its shape)
@@ -11379,7 +11401,7 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   if (tEnd < 0.0) {
     let b = dot(ro, rd);
     let r2 = select(dot(ro, ro), dot(ro, ro) - b * b, b < 0.0);
-    let rf = 1.0 + hBot / rm;
+    let rf = 1.0 + hBot / (rm * KL);
     if (r2 < rf * rf) { tEnd = t; }
   }
   if (tEnd > 0.0) {

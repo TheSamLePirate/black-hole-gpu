@@ -26,6 +26,7 @@ import { mouth, sphericalFrame } from "../wormhole";
 import { ourState, repToHomeVec } from "../system/our-side";
 import {
   altitudeOver,
+  ourLevelAt,
   figureUp,
   fromBodyFixed,
   gearHeight,
@@ -245,8 +246,10 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
   // — PLAN-PLANETES-AAA P11)
   const gas = w.ours && solarBody(ref.id)?.surface === "gas";
   const giantAbove = () => {
-    const hb = altitudeOver(ref.id, w.X, tNow),
-      top = giantTop(ref.id),
+    // (its cloud tops at their pressure — PLAN-GEANTES-VOLUME V4: lower at the poles, three quarters at Saturn's)
+    const lv = ourLevelAt(ref.id, w.X, tNow);
+    const hb = lv.h,
+      top = giantTop(ref.id) * lv.s,
       bottom = -0.01 * ref.R * mR;
     return Math.max(hb >= top ? hb - top : Math.min(top - hb, hb - bottom), 3e3) / mR;
   };
