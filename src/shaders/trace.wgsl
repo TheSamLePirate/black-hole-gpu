@@ -11070,6 +11070,11 @@ fn giantEye(m: u32, q: vec3f) -> vec4f {
   let wall = smoothstep(0.8 * re, re, rho) * exp(-max(rho - re, 0.0) / (0.55 * re));
   return vec4f(smoothstep(0.6 * re, re, rho), wall, rho, re);
 }
+// (its well's share alone near the pole — giantEye's x, the angle from the pole its sine there —, at p, any length)
+fn giantEyeX(m: u32, p: vec3f) -> f32 {
+  let re = select(0.0166, 0.0175, m == 4u);
+  return smoothstep(0.6 * re, re, length(p.xy) / length(p));
+}
 // the clouds' extinction at p (squashed axes, radii; h its height [m]; det the fine erosion's share — near the camera —):
 // the three layers' sum and the eye's wall, their colours mixed in GI_ALB
 var<private> GI_ALB: vec3f = vec3f(0.0);
@@ -11232,6 +11237,9 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   // belts thin —, and the top deck's colour, the map's own)
   let qc = normalize(ro);
   let latc = asin(clamp(qc.z, -1.0, 1.0));
+  // (an eye near — the camera within ~10° of the north pole —: the decks' mean shares over a point are the eye's too, where
+  // the column crosses them — PLAN-GEANTES-VOLUME V2: the decks missing from its well darkened its Sun and sky —)
+  let eyeOn = qc.z > 0.985;
   let mapc = planetMapAt(m, vec2f(0.5 + atan2(qc.y, qc.x) / TAU, 0.5 - latc / PI));
   let lz = luminance(mapc) - giantTop(m, 1u, latc);
   let cover = vec3f(clamp(0.55 + 2.5 * lz, 0.2, 0.9), 0.6, 0.45);
@@ -11300,7 +11308,8 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
       for (var jj = 0u; jj < 3u; jj++) {
         let j = 2u - jj;
         let L = giantLayer(m, j);
-        let mean = L.w * cover[j] * 0.35 * giantColAbove(hEnd, L) / max(mu0 + 0.15, 0.03);
+        var mean = L.w * cover[j] * 0.35 * giantColAbove(hEnd, L) / max(mu0 + 0.15, 0.03);
+        if (eyeOn && mean > 1e-3) { mean *= giantEyeX(m, p + Ls * (max(L.x - h, 0.0) / slant / rm)); }
         tauM += mean;
         if (!read && L.x - 1.5 * L.y > hEnd && mu0 > 0.0) {
           read = true;
@@ -11338,6 +11347,7 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
       let L = giantLayer(m, j);
       tz += L.w * cover[j] * 0.35 * giantColAbove(h, L);
     }
+    if (eyeOn) { tz *= giantEyeX(m, q); }
     // (and in a cloud, the less the deeper in it — the march towards the Sun's optical depth: a shaded billow keeps its shape)
     let amb = 0.32 * max(mu0 + 0.1, 0.0) * cloudDiffuseT(tz) * (0.6 + 0.4 * pow(max(luminance(sunT), 1e-4), 0.15)) *
       (0.65 + 0.35 * exp(-0.3 * tl)) * exp(-1.6 * hz * vec3f(0.7, 1.0, 1.5));
