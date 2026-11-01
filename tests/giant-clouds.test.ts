@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
 import { GALILEO_LAST, giantAirPanel, giantCalls } from "../src/game/craftpanel";
 import { cloudNoiseG, GIANT_LAYERS, giantDaylight, giantDeckAt, giantFlashes, GiantThunder } from "../src/system/giant-clouds";
@@ -25,30 +26,18 @@ test("the decks are the shader's (giantLayer): Jupiter's and Saturn's, in their 
     GIANT_LAYERS[id].forEach((L, i) => expect([L.c, L.w, L.scale, L.sigma]).toEqual(v[i]!));
 });
 
-test("the eyes and the flashes' constants are the shader's (giantEye, giantFlashes)", () => {
+test("the eyes and the storms are the shader's (giantEye, giantSigma); the flash found on the CPU, its glow the shader's", () => {
   expect(fnBody("giantEye")).toContain("select(0.0166, 0.0175, m == 4u)");
-  const f = fnBody("giantFlashes");
-  for (const s of [
-    "let Ts = 0.5",
-    "f32(j) * 0.137",
-    "0x9e37u + m",
-    "0x51edu + m",
-    "0x7f4au + m",
-    "let t0 = 0.3 * u.w * Ts",
-    "1.0 + floor(u.z * 2.99)",
-    "0.07 + 0.05 * fract(u.z * 13.0 + k)",
-    "exp(-(tau - tk) / 0.035) * (1.0 - 0.3 * k)",
-    "fract(u.z * 7.0) < 0.17",
-    "giantLayer(m, 2u).x + 15e3, giantLayer(m, 0u).x - 8e3",
-    "300e3 * fract(u.x + f32(hi & 0xffu) / 255.0 * 0.15)",
-    "TAU * (u.y + f32(hi >> 24u) / 255.0 * 0.03)",
-    "(1.0 / 80.0) + vec3f(3.1, 7.7, 1.3)",
-    "best < 0.7 + rare || giantEye(m, q).x < 0.95",
-    "select(0.05, 0.0, m == 4u)",
-  ])
-    expect(f).toContain(s);
-  // (the clock the shader reads: the renderer's seconds modulo 4 096)
-  expect(f).toContain("P.zamo2.z");
+  // (the flashes searched where the shader's storms are: its large noise, its threshold — PLAN-GEANTES-VOLUME V1: the search
+  // once a frame here, the brightest flash passed in P.wx[6])
+  const sg = fnBody("giantSigma");
+  expect(sg).toContain("cloudNoise(pk * (1.0 / 80.0) + vec3f(3.1, 7.7, 1.3))");
+  expect(sg).toContain("let rare = select(0.05, 0.0, m == 4u)");
+  expect(wgsl).not.toContain("fn giantFlashes(");
+  expect(fnBody("giantFlashGlow")).toContain("let GF = P.wx[6]");
+  const renderer = readFileSync(new URL("../src/renderer.ts", import.meta.url), "utf8");
+  expect(renderer).toContain("f.set(giantFlash, (BASE_PARAM_VEC4S - WX_VEC4S + 6) * 4)");
+  expect(renderer).toContain("(time * 4.925490947e-6 * s.massSolar) % 4096");
 });
 
 test("the Perlin–Worley on the CPU: within 0…1, varied, wrapped every 32 lattice units", () => {

@@ -11172,66 +11172,15 @@ fn giantSigma(m: u32, p: vec3f, h: f32, cover: vec3f, rkm: f32, det: f32) -> f32
 // flashes ~1–2 bar, in the ammonia's clouds), seen as glows hundreds of km wide through the decks over them. A function of
 // the clock alone — the same for every player, every save —: four streams of half-second slots, each slot's hash placing a
 // candidate within ~300 km of the camera, kept if it falls in a storm's column (the large noise of giantSigma there) out of
-// an eye; its light two or three strokes, ~40 ms each, ~0.1 s apart. GF: the brightest flash now — its place (squashed
-// units), its light (a share of the Sun's irradiance, like the Earth's N5); one only: four held through the march cost ~4 ms
-// in registers, two at once rare.
-var<private> GF: vec4f = vec4f(0.0);
-var<private> GF_ON: bool = false;
-fn giantFlashes(m: u32, ro: vec3f, rm: f32, rkm: f32) {
-  GF_ON = false;
-  GF = vec4f(0.0);
-  let tc = P.zamo2.z;
-  let q0 = normalize(ro);
-  let ex = cross(vec3f(0.0, 0.0, 1.0), q0);
-  let east = select(normalize(ex), vec3f(1.0, 0.0, 0.0), dot(ex, ex) < 1e-12);
-  let north = cross(q0, east);
-  let Ts = 0.5;
-  let rare = select(0.05, 0.0, m == 4u);
-  for (var j = 0u; j < 4u; j++) {
-    let tj = tc + f32(j) * 0.137;
-    let n = u32(floor(tj / Ts));
-    let tau = tj - f32(n) * Ts;
-    let h1 = hash3u(vec3u(n, j, 0x9e37u + m));
-    let h2 = hash3u(vec3u(n, j, 0x51edu + m));
-    let u = vec4f(f32(h1 & 0xffffu), f32(h1 >> 16u), f32(h2 & 0xffffu), f32(h2 >> 16u)) / 65535.0;
-    // (when in the slot, its strokes — the first, then one or two more ~0.1 s apart —: none left, no flash)
-    let t0 = 0.3 * u.w * Ts;
-    let ns = 1.0 + floor(u.z * 2.99);
-    var I = 0.0;
-    for (var k = 0.0; k < 3.0; k += 1.0) {
-      if (k >= ns) { break; }
-      let tk = t0 + k * (0.07 + 0.05 * fract(u.z * 13.0 + k));
-      if (tau >= tk) { I += exp(-(tau - tk) / 0.035) * (1.0 - 0.3 * k); }
-    }
-    if (I < 0.01 || I * select(1.0, 0.4, fract(u.z * 7.0) < 0.17) <= GF.w) { continue; }
-    // (where: within ~300 km — uniform in distance: the near ones as many as the far, a storm beside the camera flickering
-    // often —, in a storm's column — its large noise high —, at the water deck's top, a sixth of them shallow, in the
-    // ammonia's)
-    let shallow = fract(u.z * 7.0) < 0.17;
-    let hf = select(giantLayer(m, 2u).x + 15e3, giantLayer(m, 0u).x - 8e3, shallow);
-    // (four tries about the draw, ~40 km apart — the stormiest kept: the flashes find the storms, rare as they are)
-    var q = q0;
-    var best = -1.0;
-    for (var i = 0u; i < 4u; i++) {
-      let hi = hash3u(vec3u(n, j * 4u + i, 0x7f4au + m));
-      let rr = 300e3 * fract(u.x + f32(hi & 0xffu) / 255.0 * 0.15);
-      let a = TAU * (u.y + f32(hi >> 24u) / 255.0 * 0.03);
-      let qi = normalize(q0 + (east * cos(a) + north * sin(a)) * (rr / rm));
-      let g = cloudNoise(qi * (rkm + hf * 1e-3) * (1.0 / 80.0) + vec3f(3.1, 7.7, 1.3)).g;
-      if (g > best) {
-        best = g;
-        q = qi;
-      }
-    }
-    if (best < 0.7 + rare || giantEye(m, q).x < 0.95) { continue; }
-    GF = vec4f(q * (1.0 + hf / rm), I * select(1.0, 0.4, shallow));
-    GF_ON = true;
-  }
-}
+// an eye; its light two or three strokes, ~40 ms each, ~0.1 s apart. Found once a frame on the CPU (system/giant-clouds.ts
+// giantFlashes, the renderer — PLAN-GEANTES-VOLUME V1: the same search in every pixel before, its 16 noise reads and its
+// registers ~1.5–2 ms): the brightest flash now in P.wx[6] near a giant (the Earth's weather's slot, empty there) — its
+// place (squashed units), its light (a share of the Sun's irradiance, like the Earth's N5); 0: none.
 // a flash's light reaching p (squashed units): a bright core ~5 km round the channel, a halo ~30 km spread by the clouds' many
 // scatterings — climbing the column above more readily than across it (the vertical distance counted a third): Juno's and
 // Galileo's flashes, spots tens to hundreds of km wide seen through the decks over them
 fn giantFlashGlow(p: vec3f, rm: f32) -> f32 {
+  let GF = P.wx[6];
   let dp = p - GF.xyz;
   let up = normalize(GF.xyz);
   let v = dot(dp, up);
@@ -11287,7 +11236,6 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   let lz = luminance(mapc) - giantTop(m, 1u, latc);
   let cover = vec3f(clamp(0.55 + 2.5 * lz, 0.2, 0.9), 0.6, 0.45);
   GI_TOP = clamp(pow(mapc / max(luminance(mapc), 0.05), vec3f(1.3)) * 0.85, vec3f(0.3), vec3f(0.97));
-  giantFlashes(m, ro, rm, rkm);
   // (the march: ~1 500 km at most; in the clear its steps growing with the distance — 6 % of it, 350 m at least —, in a cloud
   // short — 1.5 % of it, 150 m at least: finer than the billows, or the jitter averages them into a blur —; jittered)
   let Dmax = 1.5e6;
@@ -11396,7 +11344,7 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
     var src = E * (alb * sig * (S + amb) + br * (3.0 / (16.0 * PI)) * (1.0 + ct * ct) * sunT +
       bh * vec3f(0.92, 0.72, 0.5) * (hgPhase(0.6, ct) * mix(sunM, sunT, 0.6) + 0.4 * amb));
     // (a flash's light — D4 —, scattered by the clouds and the haze)
-    if (GF_ON) { src += FLASH_TINT * luminance(E) * giantFlashGlow(p, rm) * (alb * sig + vec3f(bh)); }
+    if (P.wx[6].w > 0.0) { src += FLASH_TINT * luminance(E) * giantFlashGlow(p, rm) * (alb * sig + vec3f(bh)); }
     let ext = sig + luminance(br) + bh;
     let tr = exp(-ext * ds);
     col += T * src * (1.0 - tr) / max(ext, 1e-12);

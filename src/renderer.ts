@@ -84,6 +84,7 @@ import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, seasPixels, type HdMa
 import { bakeNoise3d } from "./noise3d";
 import { bakeGiantTile, readGiantTile } from "./system/giant-tile";
 import { GIANT_WINDS } from "./system/giant-winds";
+import { type GiantFlash, giantFlashes, giantTop } from "./system/giant-clouds";
 import { anchorTileCoord } from "./system/earth-tiles";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
 import { visibleTimeout } from "./util/visible-timeout";
@@ -3288,6 +3289,8 @@ export class Renderer {
     // the camera on the near body's axes [radii], in float64: an anchor in float32 and the rest (trace.wgsl:
     // nearCam — turned there in float32, the ground shook by its rounding)
     let runways: Float32Array = new Float32Array(RUNWAY_VEC4S * 4);
+    // (a giant's lightning — PLAN-GEANTES-VOLUME V1 —: the brightest flash now, found here once a frame, P.wx[6])
+    let giantFlash: number[] | null = null;
     if (near) {
       const c = near.axes.map((a) => -(a[0] * near.centre[0] + a[1] * near.centre[1] + a[2] * near.centre[2]));
       // (the Earth's, the giants' on their squashed axes — z × a/b: their ellipsoid the unit sphere, trace.wgsl: squashOf)
@@ -3301,6 +3304,14 @@ export class Renderer {
           mR: near.radius * 1476.625 * s.massSolar,
           tc: (time * 4.925490947e-6 * s.massSolar) % 4096,
         };
+      const nearId = bodies[near.index]!.id;
+      if (nearId === "jupiter" || nearId === "saturn")
+        giantFlash = this.giantFlashNow(
+          nearId === "jupiter" ? 4 : 5,
+          c as Vec3,
+          near.radius * 1476.625 * s.massSolar,
+          (time * 4.925490947e-6 * s.massSolar) % 4096,
+        );
       set(67, A[0]!, A[1]!, A[2]!, A[0]! * A[0]! + A[1]! * A[1]! + A[2]! * A[2]! - 1);
       set(68, c[0]! - A[0]!, c[1]! - A[1]!, c[2]! - A[2]!, 1);
       // the runways within 150 km, nearest first: their frames, the camera from each threshold [m] — on the
@@ -3323,6 +3334,7 @@ export class Renderer {
     f.set(runways, (69 + TILE_PARAM_VEC4S) * 4);
     f.set(this.seaParams(near, bodies, earthK, altKm, time, tSec, s, !!o.probe), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
     f.set(this.weatherParams(earthSurface, altKm, time, tSec, s, !o.probe), (BASE_PARAM_VEC4S - WX_VEC4S) * 4);
+    if (giantFlash) f.set(giantFlash, (BASE_PARAM_VEC4S - WX_VEC4S + 6) * 4);
     // the shadows our bodies cast on one another (PLAN-CIEL C6): the pairs where one falls now
     // (a receiver under two pixels across left out: Io in Jupiter's shadow seen from the Earth would keep the
     // shadows' code in the kernel for a dot)
@@ -3898,6 +3910,25 @@ export class Renderer {
    * drift with the wind at their height (~2.5 × its 10 m speed), moved on with the clock. None (0): the fair
    * weather, its image as before — the Earth's own clouds and air.
    */
+  /**
+   * A giant's lightning for the tracer (PLAN-GEANTES-VOLUME V1): system/giant-clouds.ts giantFlashes — the shader's own search
+   * before, the same in every pixel — at the camera c (the body's squashed axes [radii]), rm its metres a radius, tc the
+   * scene's clock [s modulo 4 096]: the brightest flash, its place [squashed radii] and light, for P.wx[6]; null: none, or the
+   * camera too high for the clouds' volume (trace.wgsl giantInsideOn: within GI_FAR of the top deck). Kept for the frame's
+   * other passes (the probes).
+   */
+  private giantFlashKey = "";
+  private giantFlashKept: number[] | null = null;
+  private giantFlashNow(m: 4 | 5, c: Vec3, rm: number, tc: number): number[] | null {
+    if ((Math.hypot(...c) - 1) * rm > giantTop(m === 4 ? "jupiter" : "saturn") + 450e3) return null;
+    const key = `${m} ${tc} ${c.join(" ")}`;
+    if (key === this.giantFlashKey) return this.giantFlashKept;
+    this.giantFlashKey = key;
+    let best: GiantFlash | null = null;
+    for (const f of giantFlashes(m, c, rm, tc)) if (!best || f.light > best.light) best = f;
+    return (this.giantFlashKept = best ? [...best.pos, best.light] : null);
+  }
+
   private weatherParams(
     surface: ReturnType<typeof patchGeodetic> | null,
     altKm: number,
