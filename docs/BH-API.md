@@ -1683,6 +1683,12 @@ axes), `w` (its metric), `V` (the centre's coordinate velocity, c), `rGlue`, `lG
 The flown craft's navigation state on our side, the same as `__bh.camera.ourNav` with the camera's frame: `X` [M], `V` [c]
 (home frame), `t` [M], `ref`, `refPos`, `refVel`, `radial`. Null elsewhere. What the autopilots fly from. (No test uses it yet.)
 
+### `__bh.sys.viewUp()` → `[x, y, z] \| null`
+
+The local vertical — the world's figure's normal, WGS84's geodetic one on the Earth — in the camera's coordinates (right, up,
+forward), as the HUD's horizon takes it (`horizonAxes`). A direction `d` of `runwayView()` (same coordinates) is
+`asin(d · viewUp / |d|)` above the horizontal. Null away from a world. *Used in:* `tests/e2e/hud-runway.e2e.test.ts`.
+
 ### `__bh.sys.predictClosest(id, days = 5)` → `{km, t, steps} \| null`
 
 The planner's own prediction (no node) from the flown craft's state: its closest approach to body `id` within `days` days.

@@ -68,7 +68,7 @@ right from any mount); points (the future path, the runway, the docking gates) w
 
 | Aid | What |
 |---|---|
-| Runway | The entry's own, else the nearest on the world within 80 km below 20 km: its outline (4.5 km × 90 m), the threshold, the centreline drawn 15 km back. |
+| Runway | The entry's own, else the nearest on the world within 80 km below 20 km: its outline (its own length and width as drawn — the game's sites 4.5 km × 60 m), the threshold, the centreline drawn 15 km back; on the final the path's gates, fixed every 1.5 km back from the touchdown. All on the runway's level (the ground drawn at its threshold — on the Earth over WGS84: its height over the sea plus the geoid), the world's curve followed, up WGS84's geodetic normal. |
 | Aim point | The steep slope's (19° at most, ~3 km short of the threshold): the direction to it is the glide path — the flight path vector on the diamond, the craft on its glide path. The autopilot then pulls up at 90 m onto a 1.5° slope and flares onto the touchdown, 450 m past the threshold. |
 | Runway box | The runway, the distance to the threshold, the offset across the axis (L / R, ON AXIS), the glide path's error on the final; FLARE below 60 m. |
 | Drift scope | Low and slow (under 3 km): the velocity over the ground, heading up, its scale chosen for it; the vertical speed's bar; the height. |
@@ -365,5 +365,6 @@ closes.
 ![The wheel, 800 px across](progress/aviation/reseau-roue.jpg)
 
 Cost: the symbology is a few hundred canvas strokes a frame; the future path and the runway are
-recomputed ten times a second at most (`futureView`, `runwayView`). Full screen at 1280 × 720 and on a
+recomputed ten times a second at most (`futureView`, `runwayView`) — the runway's marks projected again at each
+call, from their places on it (never left in the camera's axes: `tests/e2e/hud-runway.e2e.test.ts`). Full screen at 1280 × 720 and on a
 phone: 16.7 ms a frame (median).

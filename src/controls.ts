@@ -46,7 +46,7 @@ import { installDocking, type NetDocked } from "./controller/docking";
 import { installPlan } from "./controller/plan";
 import { installPlanet } from "./controller/planet";
 import { installRig } from "./controller/rig";
-import { installLowthrust } from "./controller/lowthrust";
+import { installLowthrust, type RunwayGeo } from "./controller/lowthrust";
 import { installJourney } from "./controller/journey";
 import { installTelemetry } from "./controller/telemetry";
 import { PlanetCharacter } from "./controller/character";
@@ -1633,7 +1633,7 @@ export class CameraController {
    *  arrived more than a little off it (the aim's miss, a correction flown short), a Hohmann to it */
   heightGoal: { body: string; altKm: number } | null = null;
 
-  runwayCache: { at: number; v: RunwayView | null; key?: string } | null = null;
+  runwayCache: { at: number; v: RunwayView | null; key?: string; geo?: RunwayGeo } | null = null;
   /** a hand-flown final's profile, frozen as its pull-up nears (the runway it is for) */
   manualFix: { site: string; fix: LandingFix } | null = null;
   /** the final's trace for its graph: the runway, the path flown [along km, height m] */

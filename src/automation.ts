@@ -583,6 +583,15 @@ export function installBh(c: BhContext) {
         /** the flown craft's navigation state, our side (controller ourNav: home frame [M, c], its reference
          *  body's place and velocity, the time [M]) — what the autopilots fly from; null elsewhere */
         nav: () => camera.ourNav(cameraFrame(settings)),
+        /** the local vertical (the figure's normal — WGS84's geodetic one on the Earth) in the camera's coordinates —
+         *  right, up, forward —, as the HUD's horizon takes it (controller horizonAxes); null away from a world */
+        viewUp: () => {
+          const cam = cameraFrame(settings);
+          const u = camera.horizonAxes(cam)?.up;
+          if (!u) return null;
+          const d = (a: readonly number[]) => u[0] * a[0]! + u[1] * a[1]! + u[2] * a[2]!;
+          return [d(cam.right), d(cam.up), d(cam.fwd)] as [number, number, number];
+        },
         /** the planner's own prediction (our-predict.ts predictOurs, no node) from the flown craft's state: its
          *  closest approach to a body within `days` — its height [km] and time [M]; the lab measures the
          *  planner's physics against the flight's with it (null: no state, or not within reach) */

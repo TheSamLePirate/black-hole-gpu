@@ -26,7 +26,7 @@ import { accelToG, fuelOn, tank } from "../engine";
 import { epicycle, rendezvousPush, type State6 } from "../lowthrust";
 import { mlsReading } from "../game/mls";
 import { procedureFor } from "../game/procedures";
-import { runwayWind, type Site, SITES } from "../game/sites";
+import { EARTH_RUNWAYS, RUNWAY_HALF_WIDTH, RUNWAY_LENGTH, runwayWind, type Site, SITES } from "../game/sites";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
 import { circularize as fcCircularize, type Burn } from "../fc/ops";
 import { timeTo as kepTimeTo } from "../fc/kepler";
@@ -47,13 +47,16 @@ import {
   dragAccel,
   figureUp,
   fromBodyFixed,
+  bodyFixedOf,
   gearHeight,
   groundPointOf,
+  groundRelief,
   groundVelocity,
   solidBody,
   toBodyFixed,
 } from "../system/our-surface";
-import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
+import { cartToGeodetic, flatteningOf, geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { geoidN } from "../system/geoid-grid";
 import { bodyAxes, daysOf, solarBody, solarState } from "../system/solar";
 import { weatherAt, windFromAt } from "../weather";
 import { C_MPS, DAY_S, G0, M_METRES, M_SECONDS } from "../units";
@@ -2683,17 +2686,112 @@ function driftDir(this: CameraController, cam: ReturnType<typeof cameraFrame>, C
  * world within 80 km, the craft below 20 km — its outline, its centreline drawn 15 km back, the aim
  * point 2 km short of the threshold (the glide path's), as the eye sees them; the craft's place along
  * it and across it [m], the glide path asked and flown (the approach's, when it flies).
+ * (Its choice, its figures and its marks' places on the runway are worked out ten times a second at most; where
+ * the eye sees them, at each call — directions in camera coordinates kept 100 ms lagged the runway drawn behind
+ * the horizon in a roll, and froze it on the screen while the flight paused or a look turned.)
  */
 function runwayView(this: CameraController): RunwayView | null {
   const now = frameNow();
   const key = cacheKey(this);
-  if (this.runwayCache && now - this.runwayCache.at < 100 && this.runwayCache.key === key) return this.runwayCache.v;
-  const v = this.runwayCompute();
-  this.runwayCache = { at: now, v, key };
-  return v;
+  const c = this.runwayCache;
+  if (c && now - c.at < 100 && c.key === key) {
+    if (!c.v || !c.geo) return c.v;
+    const v = runwayProject(this, c.v, c.geo);
+    // (the craft gone from that world: worked out afresh)
+    if (v) return (c.v = v);
+  }
+  const b = runwayBuild.call(this);
+  this.runwayCache = { at: now, v: b?.v ?? null, key, geo: b?.geo };
+  return b?.v ?? null;
+}
+
+/** A place in a runway's frame [m]: along it from the threshold, across it to the right, up its threshold's
+ *  normal (the world's curve already taken off: the level of the threshold, followed round). */
+type RunwayLoc = [number, number, number];
+/** What a runway's marks are, as places on it (runwayBuild): projected at each call (runwayProject). */
+export interface RunwayGeo {
+  site: Site;
+  /** the threshold's height over the world's figure [m] (the Earth's: over WGS84 — the ground drawn there) */
+  hT: number;
+  corners: RunwayLoc[];
+  line: RunwayLoc[];
+  aim: RunwayLoc;
+  gates: RunwayLoc[][];
+  fixes: RunwayLoc[];
+}
+type EntryFr = NonNullable<ReturnType<CameraController["entryFrame"]>>;
+
+/** A runway's frame (home axes, metres): its threshold on its ground, its normal (the figure's — WGS84's
+ *  geodetic normal on the Earth, as the autopilot's and the runway drawn —), along it and to its right. */
+function runwayAxes(fr: EntryFr, site: Site, hT: number) {
+  const D = Math.PI / 180;
+  const T0 = fr.place(site);
+  const tu = fr.env.normal?.(T0) ?? unitV(T0);
+  // (the site's north: the body's pole on it — ours: the spin axis; Gargantua's worlds: their z)
+  const pole: Vec3 = fr.desc.universe === "ours" ? unitV(spinAxis(fr.body, fr.desc.t)) : [0, 0, 1];
+  const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
+  const east = cross(north, tu);
+  const hd = (site.rwy ?? 0) * D;
+  const along = lin(north, Math.cos(hd), east, Math.sin(hd));
+  return { T: lin(T0, 1, tu, hT), tu, along, rgt: cross(along, tu), Rc: Math.hypot(...T0) + hT };
+}
+
+/** Where the eye sees a runway's places: directions in camera coordinates, distances [m]. */
+function runwaySeer(cam: ReturnType<typeof cameraFrame>, fr: EntryFr, ax: ReturnType<typeof runwayAxes>) {
+  const x = fr.s.x;
+  return (p: RunwayLoc) => {
+    const d = sub3(lin(lin(lin(ax.T, 1, ax.along, p[0]), 1, ax.rgt, p[1]), 1, ax.tu, p[2]), x);
+    const l = fr.toLocal(d);
+    return { d: [dot3(l, cam.right), dot3(l, cam.up), dot3(l, cam.fwd)] as Vec3, r: Math.hypot(...d) };
+  };
+}
+
+/** A runway's marks where the eye sees them now (the view's figures kept); null: off that world. */
+function runwayProject(c: CameraController, v: RunwayView, g: RunwayGeo): RunwayView | null {
+  const cam = cameraFrame(c.s);
+  const fr = c.entryFrame(cam);
+  if (!fr || fr.body !== g.site.body) return null;
+  const see = runwaySeer(cam, fr, runwayAxes(fr, g.site, g.hT));
+  return {
+    ...v,
+    corners: g.corners.map(see),
+    line: g.line.map(see),
+    aim: see(g.aim),
+    gates: g.gates.map((q) => q.map(see)),
+    fixes: v.fixes.map((f, k) => ({ ...f, ...see(g.fixes[k]!) })),
+  };
+}
+
+/** A runway's threshold height over its world's figure [m]: the ground drawn there (the Earth's: its relief over
+ *  WGS84, graded to the runway's level — terrain.ts —; not read yet, its published level over the sea, the geoid
+ *  added), as the autopilot's final reads it (computer.ts hThr). Gargantua's worlds: on their sphere. */
+function runwayLevel(fr: EntryFr, site: Site): number {
+  if (fr.desc.universe !== "ours" || !solidBody(fr.body)) return 0;
+  const g = groundRelief(fr.body, bodyFixedOf(fr.body, site.lat, site.lon, 0));
+  if (g !== 0 || fr.body !== "earth" || !site.elev) return g;
+  return Math.max(site.elev, 0) + geoidN((site.lat * Math.PI) / 180, (site.lon * Math.PI) / 180);
+}
+
+/** A runway's half width as drawn [m]: its graded frame's (game/sites.ts EARTH_RUNWAYS — a world runway's own,
+ *  the game's 30 m —; either end landed), else the game's. */
+function runwayHalfWidth(site: Site): number {
+  if (site.body !== "earth") return RUNWAY_HALF_WIDTH;
+  const D = Math.PI / 180;
+  const q = geodeticToCart(WGS84_A, WGS84_F, site.lat * D, site.lon * D, 0);
+  for (const r of EARTH_RUNWAYS) {
+    if (Math.abs(Math.cos(((site.rwy ?? 0) - (r.site.rwy ?? 0)) * D)) < 0.998) continue;
+    const d = sub3(q, r.origin);
+    const a = dot3(d, r.along);
+    if (Math.abs(dot3(d, r.across)) < 25 && a > -80 && a < r.len + 80) return r.halfWidth;
+  }
+  return RUNWAY_HALF_WIDTH;
 }
 
 function runwayCompute(this: CameraController): RunwayView | null {
+  return runwayBuild.call(this)?.v ?? null;
+}
+
+function runwayBuild(this: CameraController): { v: RunwayView; geo: RunwayGeo } | null {
   // (the F-35: the ILS's straight 3° — controller/util.ts jetProfile)
   const prof0 = isAircraft(fleet.active) ? jetProfile : landingProfile;
   const cam = cameraFrame(this.s);
@@ -2730,27 +2828,19 @@ function runwayCompute(this: CameraController): RunwayView | null {
     if (site) site = this.runwayInUse(site);
   }
   if (!site) return null;
-  const C = (v: Vec3): Vec3 => [dot3(v, cam.right), dot3(v, cam.up), dot3(v, cam.fwd)];
-  const D = Math.PI / 180;
-  const T = fr.place(site);
-  const tu = unitV(T);
-  const nav = this.ourNav(cam);
-  const pole: Vec3 = nav ? unitV(spinAxis(fr.body, nav.t)) : [0, 0, 1];
-  const north = unitV(lin(pole, 1, tu, -dot3(pole, tu)));
-  const east = cross(north, tu);
-  const hd = (site.rwy ?? 0) * D;
-  const along = lin(north, Math.cos(hd), east, Math.sin(hd));
-  const rgt = cross(along, tu);
-  const see = (P: Vec3) => {
-    const d = sub3(P, x);
-    return {
-      d: C(fr.toLocal(d)),
-      r: Math.hypot(...d),
-    };
-  };
-  const L = site.len ?? 4500,
-    Wd = site.len ? 60 : 90;
-  const at = (a: number, b: number) => lin(lin(T, 1, along, a), 1, rgt, b);
+  // (its frame on its ground: the threshold at the height of the ground drawn there — on the Earth its level
+  // over the sea and the geoid, not the ellipsoid's 0: the outline was drawn as far under the runway, 160 m at
+  // Roissy —, up the figure's normal — WGS84's geodetic one, the runway drawn's and the autopilot's, not the
+  // radius: 0.19° apart at 45° —)
+  const hT = runwayLevel(fr, site);
+  const ax = runwayAxes(fr, site, hT);
+  const { T, tu, along, rgt } = ax;
+  const L = site.len ?? RUNWAY_LENGTH,
+    Wd = 2 * runwayHalfWidth(site);
+  // (a place on it [m]: along, across, up — the world's curve taken off, its level followed: 18 m 15 km out,
+  // 125 m at the approach's fixes 40 km out)
+  const at = (a: number, b: number, h = 0): RunwayLoc => [a, b, h - (a * a + b * b) / (2 * ax.Rc)];
+  const see = runwaySeer(cam, fr, ax);
   const rel = sub3(x, T);
   const sAl = dot3(rel, along),
     xt = dot3(rel, rgt);
@@ -2793,7 +2883,7 @@ function runwayCompute(this: CameraController): RunwayView | null {
   // the final's aids: the landing profile ahead — gates every 1.5 km down it, and the PAPI: the
   // height's deviation from it as an angle seen from the touchdown, in lights
   let papi: number | null = null;
-  const gates: { d: Vec3; r: number }[][] = [];
+  const gates: RunwayLoc[][] = [];
   let gRef: number | null = app?.final ? (app.gRef ?? null) : null;
   let flareIn: number | null = null;
   let aimX = R?.prof?.aim ?? -2000;
@@ -2810,27 +2900,37 @@ function runwayCompute(this: CameraController): RunwayView | null {
     if (sAl < xF && vAlong > 1) flareIn = (xF - sAl) / vAlong;
     const dev = (Math.atan2(hRef - profileH, Math.max(LANDING.td - sAl, 200)) * 180) / Math.PI;
     papi = dev > 1 ? 4 : dev > 0.35 ? 3 : dev >= -0.35 ? 2 : dev >= -1 ? 1 : 0;
-    for (let k = 1; k <= 5; k++) {
-      const xk = sAl + k * 1500;
-      if (xk > LANDING.td - 300) break;
+    // (the gates where they stand on the profile — every 1.5 km back from the touchdown, the first 300 m ahead at
+    // least —, flown through: not 1.5, 3, 4.5 km ahead of the craft whatever it does, sliding with it)
+    for (let m = Math.floor((LANDING.td - sAl - 300) / 1500); m >= 1 && gates.length < 5; m--) {
+      const xk = LANDING.td - m * 1500;
+      // (the gate hk over the threshold's level, as the profile reads it)
       const hk = prof0(xk, hRef, sp, fix).h;
-      // (the site's frame is in metres: the gate hk up its local vertical)
-      const corner = (b: number, dh: number) => see(lin(at(xk, b), 1, tu, hk + dh));
+      const corner = (b: number, dh: number) => at(xk, b, hk + dh);
       gates.push([corner(-100, -40), corner(100, -40), corner(100, 40), corner(-100, 40)]);
     }
   }
-  return {
+  const corners = [at(0, -Wd / 2), at(L, -Wd / 2), at(L, Wd / 2), at(0, Wd / 2)];
+  const line = Array.from({ length: 16 }, (_, k) => at(-k * 1000, 0));
+  const aim = at(aimX, 0);
+  // (its chart — A5 —: the fixes still ahead; flying the missed approach: its own fixes — the turn, then the
+  // hold —, until passed)
+  const fixes = (R?.ga ? procedureFor(site).missed.filter((f) => R.ga!.phase === "climb" || f.id === "MAHF") : procedureFor(site).fixes)
+    .filter((f) => (R?.ga ? true : f.along > sAl + 200) && f.along - sAl < 40e3)
+    .map((f) => ({ id: f.id, h: f.h, p: at(f.along, f.across, f.h) }));
+  const geo: RunwayGeo = { site, hT, corners, line, aim, gates, fixes: fixes.map((f) => f.p) };
+  const v: RunwayView = {
     papi,
-    gates,
+    gates: gates.map((g) => g.map(see)),
     len: L,
     name: site.name.split(",")[0]!,
     rwy: site.rwy ?? 0,
     along: sAl,
     across: xt,
     agl,
-    corners: [at(0, -Wd / 2), at(L, -Wd / 2), at(L, Wd / 2), at(0, Wd / 2)].map(see),
-    line: Array.from({ length: 16 }, (_, k) => see(at(-k * 1000, 0))),
-    aim: see(at(aimX, 0)),
+    corners: corners.map(see),
+    line: line.map(see),
+    aim: see(aim),
     aimAlong: aimX,
     gRef,
     gam: app?.final ? (app.gam ?? null) : manual ? Math.atan2(vv, vh) : null,
@@ -2844,13 +2944,11 @@ function runwayCompute(this: CameraController): RunwayView | null {
     // (the runway's guidance as the Shuttle's — A4: its azimuth, its elevation against the profile asked)
     mls: mlsReading({ along: sAl, across: xt, agl: hRef, profileH, length: L, td: LANDING.td }),
     hp: hRef,
-    // (its chart — A5 —: the fixes still ahead, where the eye sees them, and their heights)
     site,
-    // (flying the missed approach: its own fixes — the turn, then the hold —, until passed)
-    fixes: (R?.ga ? procedureFor(site).missed.filter((f) => R.ga!.phase === "climb" || f.id === "MAHF") : procedureFor(site).fixes)
-      .filter((f) => (R?.ga ? true : f.along > sAl + 200) && f.along - sAl < 40e3)
-      .map((f) => ({ id: f.id, h: f.h, ...see(lin(at(f.along, f.across), 1, tu, f.h)) })),
+    // (the fixes where the eye sees them, and their heights)
+    fixes: fixes.map((f) => ({ id: f.id, h: f.h, ...see(f.p) })),
   };
+  return { v, geo };
 }
 
 /** The surface wind on a runway (W4): the weather's at 10 m there, along and across its heading landed. */
