@@ -11040,8 +11040,15 @@ fn giantInsideW(k: u32, look: vec3f) -> f32 {
   let rT = 1.0 + top / rm;
   let b = dot(ro, rd);
   let disc = b * b - (dot(ro, ro) - rT * rT);
-  let d = select(hc - top, (-b - sqrt(max(disc, 0.0))) * rm / mm, disc > 0.0 && b < 0.0);
-  return 1.0 - smoothstep(GI_NEAR, GI_FAR, d);
+  // (a ray over the deck's horizon — none met —: the camera's height over it instead)
+  let wSky = 1.0 - smoothstep(GI_NEAR, GI_FAR, hc - top);
+  if (disc <= 0.0 || b >= 0.0) { return wSky; }
+  let d = (-b - sqrt(disc)) * rm / mm;
+  // (the rays meeting it beyond GI_FAR but passing over the 1 bar level — G9's surface: its air's limb, a bright band between
+  // the volume's sky and its deck —: the sky's share — PLAN-GEANTES-VOLUME V3, after Alex's fix; giantInside marches to the
+  // deck's horizon)
+  let hTan = (sqrt(max(dot(ro, ro) - b * b, 0.0)) - 1.0) * rm;
+  return max(1.0 - smoothstep(GI_NEAR, GI_FAR, d), wSky * smoothstep(0.0, 4e3, hTan));
 }
 fn giantInsideOn(k: u32) -> bool {
   if (!giantVolumeOK(k)) { return false; }
@@ -11246,7 +11253,9 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   GI_TOP = clamp(pow(mapc / max(luminance(mapc), 0.05), vec3f(1.3)) * 0.85, vec3f(0.3), vec3f(0.97));
   // (the march: ~1 500 km at most; in the clear its steps growing with the distance — 6 % of it, 350 m at least —, in a cloud
   // short — 1.5 % of it, 150 m at least: finer than the billows, or the jitter averages them into a blur —; jittered)
-  let Dmax = 1.5e6;
+  // (over the top deck — giantInsideW's grazing rays —: to its horizon at least)
+  let hd = (length(ro) - 1.0) * rm - giantDeckTop(m);
+  let Dmax = max(1.5e6, 1.1 * sqrt(2.0 * rm * max(hd, 0.0)));
   let N = 112u;
   var T = 1.0;
   var col = vec3f(0.0);
