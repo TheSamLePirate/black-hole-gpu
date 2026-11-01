@@ -64,6 +64,9 @@ const SS_OFF = ${TABLE_SUN}u;
 // map's texels with no relief more than the near reach (c.y) before it towards the Sun; y where its ray leaves the patch
 // (m along it — the march resumed there); z the near reach [m]; w how far along it the nearest of those texels' relief
 // stands [m] (the map orthographic along the Sun: a texel is the ray's own column), 3e38 none; x −1: no map here.
+// SUN_N (the ground's normal there, set: the bodies' — trace.wgsl nearShadow): the reach no less than what the 3 × 3's
+// texels span along the Sun on that ground, two texels over the tangent of the Sun's height over it (a grazing Sun's texel
+// is long on the ground: its sunward end ahead of the point by more than the reach, a shadow everywhere)
 fn sunShadowFar(rel: vec3f) -> vec4f {
   let c = bodies[SS_OFF + 3u];
   if (c.x < 0.5) { return vec4f(-1.0, 0.0, 0.0, 3e38); }
@@ -71,6 +74,11 @@ fn sunShadowFar(rel: vec3f) -> vec4f {
   let uv = vec2f(dot(rel, R.xyz) / R.w * 0.5 + 0.5, 0.5 - dot(rel, U.xyz) / U.w * 0.5);
   if (any(uv <= vec2f(0.0)) || any(uv >= vec2f(1.0))) { return vec4f(-1.0, 0.0, 0.0, 3e38); }
   let n = vec2i(textureDimensions(sunShadowMap));
+  var reach = c.y;
+  if (dot(SUN_N, SUN_N) > 0.5) {
+    let cl = clamp(dot(SUN_N, L.xyz), 0.05, 1.0);
+    reach = max(reach, 4.0 * R.w / f32(n.x) * sqrt(1.0 - cl * cl) / cl);
+  }
   let at = vec2i(uv * vec2f(n));
   let dz = 0.5 - dot(rel, L.xyz) / (2.0 * L.w);
   var lit = 0.0;
@@ -79,8 +87,8 @@ fn sunShadowFar(rel: vec3f) -> vec4f {
     for (var i = -1; i <= 1; i++) {
       let d = textureLoad(sunShadowMap, clamp(at + vec2i(i, j), vec2i(0), n - 1), 0);
       let ahead = (dz - d) * 2.0 * L.w;
-      lit += select(1.0, 0.0, ahead > c.y);
-      if (ahead > c.y) { occ = min(occ, ahead); }
+      lit += select(1.0, 0.0, ahead > reach);
+      if (ahead > reach) { occ = min(occ, ahead); }
     }
   }
   // (the ray's way out of the patch — a disc of radius c.z round the camera — on its horizontal, back along it)
@@ -91,7 +99,7 @@ fn sunShadowFar(rel: vec3f) -> vec4f {
     let ln = lh / lhl; let b = dot(ph, ln); let cc = dot(ph, ph) - c.z * c.z;
     exit = (-b + sqrt(max(b * b - cc, 0.0))) / lhl;
   }
-  return vec4f(lit / 9.0, exit, c.y, occ);
+  return vec4f(lit / 9.0, exit, reach, occ);
 }`,
   );
 }

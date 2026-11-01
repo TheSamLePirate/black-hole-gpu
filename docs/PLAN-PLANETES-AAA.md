@@ -2,8 +2,8 @@
 
 Date : **29 octobre 2026**, sur `main` à `269ae823`.
 Statut au 1er novembre : **P0, P2 à P9 et P11 faits** (les rochers de la Lune, le givre et les tourbillons de Mars, les
-tours de G9 et la comparaison JunoCam faits le 1er novembre) ; **P1 première partie faite**, sa seconde partie (la carte
-d'ombre du Soleil pour les corps) en cours ; **P10 : Saturne faite, le reste à faire** (les vues encore au-dessus du
+tours de G9 et la comparaison JunoCam faits le 1er novembre) ; **P1 fait** (sa seconde partie, la carte d'ombre du Soleil
+pour les corps, le 1er novembre : −9 à −20 % au sol et en vol bas sur la Lune, Mars, Mercure, Europe) ; **P10 : Saturne faite, le reste à faire** (les vues encore au-dessus du
 budget, la campagne e2e finale, `docs/PLANETES.md` FR + EN, la galerie avant / après). Le détail par phase ci-dessous et
 dans [progress/planetes-aaa/](progress/planetes-aaa/) ; le système des géantes tel qu'il est :
 [GEANTES-GAZEUSES.md](GEANTES-GAZEUSES.md). En attente de décisions : § P11 (la hauteur des ponts près des pôles, la
@@ -66,7 +66,7 @@ par le projet d'Alex).
   dépasser, pour toutes les planètes. Les mêmes chiffres par corps : la marge de chacun sous ce budget.
 - Inventaire des défauts visibles par corps (tableau dans `docs/progress/planetes-aaa/P0.md`).
 
-### P1 — Raster générique pour tout corps solide (le gros morceau) — **première partie faite**, [P1.md](progress/planetes-aaa/P1.md)
+### P1 — Raster générique pour tout corps solide (le gros morceau) — **fait** (la carte d'ombre du Soleil des corps le 1er novembre), [P1.md](progress/planetes-aaa/P1.md)
 - `terrain-raster-mesh` / `terrain-cache` paramétrés par **le corps** (rayon, figure, `reliefBase` + DEM) au lieu de
   la Terre ; éligibilité par corps dans `renderer.ts`.
 - Hauteurs du relief procédural cuites dans le cache (compute pass) : le raster les lit au lieu de marcher.
@@ -315,7 +315,8 @@ par le projet d'Alex).
   FR + EN, galerie avant / après.
 - **Reste** (31 octobre au soir) :
   - les vues encore au-dessus du budget de la Terre :
-    - Europe en vue ciné (1,9 fois : ses ombres — une carte d'ombre du Soleil pour les corps, prévue ici) ;
+    - Europe en vue ciné (73 → 63 ms avec la carte d'ombre du Soleil des corps, le 1er novembre ; la Terre ~43 : sans ses
+      ombres et son sol propre elle restait au-dessus, P8) ;
     - Cérès en vue ciné (+11 %) ;
     - Saturne tout près de ses anneaux, la vue tournée vers la bouche (~40 ms) ;
     - les géantes dedans à qualité fixe (~39 ms, au budget de la Terre dans ses nuages, sans marge ; en jeu 25 ms) ;
@@ -323,8 +324,7 @@ par le projet d'Alex).
   - `docs/PLANETES.md` FR + EN, la galerie avant / après ;
   - les restes reportés, à garder ou à abandonner :
     - les traces de pas de la Lune (P6) ;
-    - la seconde partie de P1 (la carte d'ombre du Soleil pour les corps) ;
-    - faits le 1er novembre : les rochers de la Lune (P6), le givre et les tourbillons de Mars (P7), les tours convectives
+    - faits le 1er novembre : la seconde partie de P1 (la carte d'ombre du Soleil des corps), les rochers de la Lune (P6), le givre et les tourbillons de Mars (P7), les tours convectives
       de G9 et sa comparaison JunoCam (P9).
 - La campagne et les docs de P10 couvrent aussi P11 : P11 se fait avant la campagne finale.
 - **Saturne — fait** (31 octobre) : sa vue en orbite 58,8 → 21,4 ms (la Terre 20,1), à contre-jour 63,3 → 26,0 — les

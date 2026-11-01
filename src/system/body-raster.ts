@@ -155,6 +155,18 @@ struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
   v.clip = vec4f(v.p.x / u.right.w + u.image.z * v.p.z, v.p.y / u.up.w + u.image.w * v.p.z, u.forward.w, v.p.z);
   return v;
 }
+// The ground seen from the Sun (the relief's shadow map — trace.wgsl sunShadowFar, the Earth's own: terrain-raster.ts
+// terrainSunVs, the same projection): an orthographic view along its direction, right and up over half-widths [m], the depth
+// the distance towards the Sun over twice its half-range, nearer the Sun less
+struct Sun { right: vec4f, up: vec4f, toward: vec4f };
+@group(0) @binding(4) var<uniform> sun: Sun;
+@vertex fn bodySunVs(@location(0) ij: vec2f, @builtin(instance_index) level: u32) -> @builtin(position) vec4f {
+  let n = node(ij, level);
+  let h = heights[(level * GRID_N + u32(ij.y)) * GRID_N + u32(ij.x)];
+  let p = u.origin.xyz + n.d * u.origin.w + n.q * h;
+  let z = clamp(0.5 - dot(p, sun.toward.xyz) / (2.0 * sun.toward.w), 0.0, 1.0);
+  return vec4f(dot(p, sun.right.xyz) / sun.right.w, dot(p, sun.up.xyz) / sun.up.w, z, 1.0);
+}
 // Mann's frozen clouds (trace.wgsl mannCloud — PLAN-PLANETES-AAA P4): the slabs' bottoms and tops over the same grid, an
 // instance a level and a side (bit 0: the top), the place where none is cut away (bodyCloudFs)
 struct CloudVertex { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) mask: f32 };
@@ -243,7 +255,7 @@ const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0
 export function bodyRasterFrame(
   v: BodyRasterView,
   anchor: BodyAnchor | null,
-): { uniform: Float32Array<ArrayBuffer>; anchor: BodyAnchor; levels: number; reach: number } | null {
+): { uniform: Float32Array<ArrayBuffer>; anchor: BodyAnchor; levels: number; reach: number; above: number } | null {
   const { near, camera } = v;
   const R = near.radius * v.mPerM;
   const hmax = reliefMax(v.surf);
@@ -291,7 +303,7 @@ export function bodyRasterFrame(
     const snap = (x: number) => Math.round(x / (2 * s)) * 2 * s;
     f.set([snap(ct[0]), snap(ct[1]), s, cell0 * 2 ** l], 32 + 4 * l);
   }
-  return { uniform: f, anchor: a, levels, reach: reach * R };
+  return { uniform: f, anchor: a, levels, reach: reach * R, above };
 }
 
 /** The pipeline, the grid and the bindings of the body raster (drawn into the Earth raster's target: TerrainRaster.encodeBody). */
@@ -300,6 +312,8 @@ export class BodyRaster {
   private heightPipe: GPUComputePipeline | null = null;
   private cloudPipe: GPURenderPipeline | null = null;
   private cloudBind: GPUBindGroup | null = null;
+  private sunPipe: GPURenderPipeline | null = null;
+  private sunBind: { buffer: GPUBuffer; bind: GPUBindGroup } | null = null;
   /** the world drawn last frame (trace.wgsl surf): Mann's — 1 — has its frozen clouds */
   private surf = -1;
   private module: GPUShaderModule;
@@ -325,6 +339,8 @@ export class BodyRaster {
   /** how far its ground reaches from the camera's ground point [m] (the horizon and the relief over it): the rays not met by
    *  it start their march there — trace.wgsl earthNear, Mars's (P7) */
   reach = 0;
+  /** the camera's height over the ground under it [m] (the relief's shadow map's width: renderer encodeBodySunShadow) */
+  above = 0;
   rebuilt = 0;
 
   constructor(
@@ -377,6 +393,19 @@ export class BodyRaster {
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       })
       .then((p) => (this.cloudPipe = p), failed);
+    // (the ground seen from the Sun: depth alone — the relief's shadow map, terrain-raster.ts encodeBodySun)
+    void device
+      .createRenderPipelineAsync({
+        layout: "auto",
+        vertex: {
+          module: this.module,
+          entryPoint: "bodySunVs",
+          buffers: [{ arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x2" }] }],
+        },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "less" },
+      })
+      .then((p) => (this.sunPipe = p), failed);
   }
 
   get ready() {
@@ -400,6 +429,7 @@ export class BodyRaster {
     this.anchor = fr.anchor;
     this.levels = fr.levels;
     this.reach = fr.reach;
+    this.above = fr.above;
     this.surf = v.surf;
     this.device.queue.writeBuffer(this.uniform, 0, fr.uniform);
     this.bind ??= this.device.createBindGroup({
@@ -499,6 +529,34 @@ export class BodyRaster {
         pass.drawIndexed(this.ringCount, 2 * (this.levels - 1), 0, 0, 2);
       }
     }
+  }
+
+  /** The levels seen from the Sun into an open depth pass (the relief's shadow map: terrain-raster.ts encodeBodySun), its view
+   *  in `sun` (right, up, the Sun: vec4s, the body's axes, camera-relative metres — terrainSunVs's). False: not drawn. */
+  drawSun(pass: GPURenderPassEncoder, sun: GPUBuffer): boolean {
+    if (!this.sunPipe || !this.bind || this.levels < 1) return false;
+    if (this.sunBind?.buffer !== sun)
+      this.sunBind = {
+        buffer: sun,
+        bind: this.device.createBindGroup({
+          layout: this.sunPipe.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: { buffer: this.uniform } },
+            { binding: 2, resource: { buffer: this.heights } },
+            { binding: 4, resource: { buffer: sun } },
+          ],
+        }),
+      };
+    pass.setPipeline(this.sunPipe);
+    pass.setBindGroup(0, this.sunBind.bind);
+    pass.setVertexBuffer(0, this.vertex);
+    pass.setIndexBuffer(this.full, "uint32");
+    pass.drawIndexed(this.fullCount, 1, 0, 0, 0);
+    if (this.levels > 1) {
+      pass.setIndexBuffer(this.ring, "uint32");
+      pass.drawIndexed(this.ringCount, this.levels - 1, 0, 0, 1);
+    }
+    return true;
   }
 
   dispose() {

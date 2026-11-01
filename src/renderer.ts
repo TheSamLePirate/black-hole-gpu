@@ -659,6 +659,20 @@ interface OfflineJob {
 const SCENERY_TOP_M = 60;
 
 /** The camera's eye on its near body's axes [its radii] (float64): where the tracer's rays start (trace.wgsl nearCam). */
+/** The relief's shadow map's axes (encodeSunShadow, encodeBodySunShadow): right across the Sun L and the vertical — any
+ *  perpendicular when the Sun stands overhead —, up across the Sun and right. */
+function sunAxes(L: Vec3, up: ArrayLike<number>): { r: number[]; u: number[] } {
+  let r = [L[1] * up[2]! - L[2] * up[1]!, L[2] * up[0]! - L[0] * up[2]!, L[0] * up[1]! - L[1] * up[0]!];
+  let rl = Math.hypot(...r);
+  if (rl < 1e-6) {
+    r = [L[1], -L[0], 0];
+    rl = Math.hypot(...r) || 1;
+  }
+  r = r.map((x) => x / rl);
+  const u = [r[1]! * L[2] - r[2]! * L[1], r[2]! * L[0] - r[0]! * L[2], r[0]! * L[1] - r[1]! * L[0]];
+  return { r, u };
+}
+
 function bodyEye(near: { centre: Vec3; axes: Vec3[] }): Vec3 {
   return near.axes.map((a) => -(a[0]! * near.centre[0] + a[1]! * near.centre[1] + a[2]! * near.centre[2])) as Vec3;
 }
@@ -7771,7 +7785,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** parts of the raster's material cut at run time (trace.wgsl liteSkip: TUNE_LITE's bits — 1 water, 2 scenery shadows, 4
    *  relief shadow, 8 surfaces, 16 mesh normal, 32 cloud shadows, 64 trees, 128 imagery, 256 the moons' own ground, 512 the airless
    *  worlds' rocks — trace.wgsl airlessRocks, the body raster's heights and the shading both —, 1024 shadeLite's pass alone, 2048
-   *  the giants' convective towers — giantTowers —, 4096 Mars's dust devils — marsDevils): a measure,
+   *  the giants' convective towers — giantTowers —, 4096 Mars's dust devils — marsDevils —, 8192 the bodies'
+   *  relief shadow map — nearShadow, the march whole): a measure,
    *  the image then wrong */
   liteSkip = 0;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
@@ -8219,17 +8234,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const tr = this.terrainRaster;
     let on = false;
     if (drawn && this.sunShadow && this.sunShadowOn && this.rasterPrimaryOn && near && tr) {
-      const L = near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!) as [number, number, number];
+      const L = near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!) as Vec3;
       const up = patchGeodetic(near, WGS84_F).normal;
-      // (right: across the Sun and the vertical — any perpendicular when the Sun stands overhead)
-      let r = [L[1] * up[2] - L[2] * up[1], L[2] * up[0] - L[0] * up[2], L[0] * up[1] - L[1] * up[0]];
-      let rl = Math.hypot(...r);
-      if (rl < 1e-6) {
-        r = [L[1], -L[0], 0];
-        rl = Math.hypot(...r) || 1;
-      }
-      r = r.map((x) => x / rl);
-      const u = [r[1]! * L[2] - r[2]! * L[1], r[2]! * L[0] - r[0]! * L[2], r[0]! * L[1] - r[1]! * L[0]];
+      const { r, u } = sunAxes(L, up);
       const H = Renderer.SUN_HALF_M,
         D = Renderer.SUN_DEPTH_M;
       this.sunOut.set([...r, H, ...u, H, ...L, D]);
@@ -8533,6 +8540,44 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     }
     tr.encodeBody(enc, target.width, target.height, this.bodyRaster, (label, descriptor) => this.prof.pass(label, descriptor));
     this.bodyRasterDrew = true;
+    this.encodeBodySunShadow(enc);
+  }
+
+  /** the near march's reach on another world's ground [m] (trace.wgsl nearShadow): its cheap steps — the airless worlds'
+   *  craters alone within 32 m —, the relief's shadow map past them */
+  static readonly BODY_SUN_NEAR_M = 32;
+  /**
+   * Another world's ground seen from the Sun (body-raster.ts drawSun) into the relief's shadow map, after its visibility —
+   * the Earth's map and table (encodeSunShadow), its vertical the body's radial under the camera: the shadows' march past its
+   * near reach read there (PLAN-PLANETES-AAA P1, its second part).
+   */
+  private encodeBodySunShadow(enc: GPUCommandEncoder) {
+    const near = this.lastNear;
+    const tr = this.terrainRaster;
+    const br = this.bodyRaster;
+    let on = false;
+    // (our worlds alone, lit by the Sun: Gargantua's by its disc — a wide source, its light's direction not one —, their march)
+    const ours = near ? !!solarBody(this.lastBodies[near.index]?.id ?? "") : false;
+    if (this.sunShadow && this.sunShadowOn && this.rasterPrimaryOn && near && tr && br && ours) {
+      const L = near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!) as Vec3;
+      const e = bodyEye(near);
+      const el = Math.hypot(...e) || 1;
+      const up = e.map((x) => x / el) as Vec3;
+      const { r, u } = sunAxes(L, up);
+      // (its half-width by the camera's height: 2.5 km on foot — texels of 2.4 m: a grazing Sun's texel long on the ground,
+      // sunShadowFar's reach by it, the march with it —, 10 km from 1 km up)
+      const H = Math.min(Math.max(10 * br.above, 2500), Renderer.SUN_HALF_M),
+        D = Renderer.SUN_DEPTH_M;
+      this.sunOut.set([...r, H, ...u, H, ...L, D]);
+      on = tr.encodeBodySun(enc, br, this.sunOut, (label, descriptor) => this.prof.pass(label, descriptor));
+      if (on) {
+        this.sunTable.set([...r, H, ...u, H, ...L, D, 1, Renderer.BODY_SUN_NEAR_M, H * 0.98, 0, ...up, 0]);
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_SUN * 16, this.sunTable);
+      }
+    }
+    if (!on && this.sunTableOn) this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 3) * 16, new Float32Array(4));
+    this.sunTableOn = on;
+    this.sunDrawn = on;
   }
 
   /** the measured ground's height over the near world's sphere under the camera [m] — its global map's (the Moon's, Mars's:

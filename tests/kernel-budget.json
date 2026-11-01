@@ -28,7 +28,7 @@
  "game-space main": 55000,
  "game-space env": 47000,
  "game-space aerial": 1000,
- "moon main": 71500,
+ "moon main": 71600,
  "moon env": 47000,
  "moon aerial": 1000,
  "mars main": 83200,
@@ -56,7 +56,7 @@
  "eclipse main": 47000,
  "eclipse env": 35000,
  "eclipse aerial": 1000,
- "general main": 141100,
+ "general main": 141200,
  "general env": 67000,
- "general lut": 136800
+ "general lut": 136900
 }

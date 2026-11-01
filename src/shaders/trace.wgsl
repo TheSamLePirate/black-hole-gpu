@@ -4739,8 +4739,16 @@ fn nearAir(look: vec3f, tEnd: f32, k: u32) -> Air {
 
 // The relief's shadow at a point of the ground (q: its direction, h: its height [m]) towards the light
 // (L: body axes): marched in growing steps from 0.5 m to ~60 km (their start jittered per sample: no
-// bands), soft over the source's half degree
+// bands), soft over the source's half degree. The body raster's pixels (SHADOW_REL_ON — bodyLite, Mars's earthNear): the
+// march to its near reach (32 m: its cheap steps), the relief's shadow map past it — the raster's mesh seen from the Sun
+// (body-raster.ts drawSun, terrain-raster-hint.ts sunShadowFar) —, the march resumed where the Sun's ray leaves the map's
+// patch (PLAN-PLANETES-AAA P1, its second part: the far steps were most of the shadows' cost)
 fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f32 {
+  var smap = vec4f(-1.0, 0.0, 0.0, 3e38);
+  if (SHADOW_REL_ON && (liteSkip() & 8192u) == 0u) { smap = sunShadowFar(SHADOW_REL); }
+  if (smap.x == 0.0) { return 0.0; }
+  let reach = select(1e30, smap.z, smap.x > 0.0);
+  var resumed = smap.x < 0.0;
   let mR = P.near4.w;
   // (the shell: the relief's over the measured heights' highest within the march's reach, ~60 km)
   // (an airless world's within 20 km: a low Sun's ray climbed through 60 km's highest — kilometres over the plain —, its steps
@@ -4781,6 +4789,14 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
     let pp = p0 + L * d;
     let r = length(pp);
     if (r - 1.0 > hmax) { break; }
+    // (past the near reach: on where the ray leaves the map's patch — the map's shadow taken below)
+    if (!resumed && d * mR > reach) {
+      resumed = true;
+      if (smap.y > d * mR) {
+        d = smap.y / mR;
+        continue;
+      }
+    }
     // (past 32 m — the small craters' sharp shadows nearer —: the ground at a 4 % footprint, steps 1.45 longer — the airless
     // worlds' measured heights made each of 56 steps dearer: half of Mercury's frame under a low Sun, PLAN-PLANETES-AAA P8)
     let far = d * mR > 32.0 && airless(surf);
@@ -4801,7 +4817,7 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
     // (the light probe's texels wide: its shadows coarser)
     d *= select(select(select(select(1.23, 1.3, airless(surf)), 1.6, far), 1.4, marsLike()), 1.6, probeBeam > 0.0);
   }
-  return s;
+  return select(s, min(s, smap.x), smap.x >= 0.0);
 }
 
 // Gradient noise on an integer lattice (base) plus a small offset f: exact far from the body's centre
@@ -5032,7 +5048,11 @@ fn shadeNear(look: vec3f, hit: NearHit) -> vec3f {
       // marched from the ground, the ground just by it shaded the flank in teeth)
       var hs = hit.h;
       if (airless(surf) && P.fine0.w > 0.5 && P.fine0.w < 1.5 && foot < 1.0) { hs = max(hit.h, fineHeight(toBody(look * t) * P.near4.w + P.fine1.xyz)); }
-      if (!NEAR_SHADOW_OFF) { sh = nearShadow(surf, qb, hs, toBody(P.near4.xyz), foot, tSec); }
+      if (!NEAR_SHADOW_OFF) {
+        SUN_N = toBody(n0);
+        sh = nearShadow(surf, qb, hs, toBody(P.near4.xyz), foot, tSec);
+        SUN_N = vec3f(0.0);
+      }
       // (and the Ranger's, the ground within reach of it)
       sh *= shipShadow(look * t * P.near4.w);
       if (airless(surf)) {
@@ -7539,6 +7559,9 @@ fn buildingShadowAt(p: vec3f) -> f32 { return -1.0; }
 // (shade's ground point from the camera, the Earth's axes [m] — the relief's shadow map's lookup —, set by earthNear)
 var<private> SHADOW_REL: vec3f = vec3f(0.0);
 var<private> SHADOW_REL_ON: bool = false;
+// (the ground's normal at SHADOW_REL, the body's axes — the bodies' (nearShadow): the shadow map's reach by its slope to the
+// Sun, terrain-raster-hint.ts sunShadowFar —; zero: none, the Earth's)
+var<private> SUN_N: vec3f = vec3f(0.0);
 // (shade's own rays: their ground point handed to the relief's shadow map)
 var<private> RASTER_SHADE: bool = false;
 // the raster patch's distance [m] along this sample's ray, 0 where it does not cover it (main sets it)
@@ -10802,7 +10825,13 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
       // frame at sunset)
       let dKm = nh.t * mR * 1e-3;
       if ((liteSkip() & 4u) == 0u && dKm < 25.0 && !titan) {
+        // (the raster's pixels: the relief's shadow map past the near reach — nearShadow)
+        SHADOW_REL = toBody(look) * (nh.t * mR);
+        SHADOW_REL_ON = NEAR_T > 0.0;
+        SUN_N = nh.qb;
         REL_SH = mix(nearShadow(surf, nh.qb, nh.h, toBody(lt.dir), foot, P.time.x * P.near5.w), 1.0, smoothstep(15.0, 25.0, dKm));
+        SHADOW_REL_ON = false;
+        SUN_N = vec3f(0.0);
       }
     }
   }
@@ -13126,7 +13155,11 @@ fn bodyLite(gid: vec2u, k: u32) {
   }
   let nair = nearAir(look, tR, k);
   setMapLod(pixFoot() * tR, 0.0, k);
+  // (the point from the camera on the body's axes [m]: the relief's shadow map's — nearShadow, past its near reach)
+  SHADOW_REL = toBody(look) * tM;
+  SHADOW_REL_ON = k >= ourStart();
   var col = (shadeNear(look, hit) * nair.T + nair.L) * wb;
+  SHADOW_REL_ON = false;
   if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
   let old = accum[idx];
   if ((P.frame.z & FLAG_TEMPORAL) != 0u && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }

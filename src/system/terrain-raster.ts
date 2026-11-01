@@ -627,6 +627,30 @@ export class TerrainRaster {
     return true;
   }
 
+  /**
+   * Another world's ground seen from the Sun (system/body-raster.ts drawSun: its levels' mesh and heights, after this frame's
+   * visibility) into the relief's shadow map — the Earth's own, read alike (trace.wgsl sunShadowFar). False: not drawn.
+   */
+  encodeBodySun(
+    enc: GPUCommandEncoder,
+    body: { drawSun: (pass: GPURenderPassEncoder, sun: GPUBuffer) => boolean },
+    sun: Float32Array,
+    profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
+  ): boolean {
+    if (this.disposed || this.error) return false;
+    this.device.queue.writeBuffer(this.sunUniform, 0, sun as Float32Array<ArrayBuffer>);
+    const pass = enc.beginRenderPass(
+      profile("body from the Sun", {
+        colorAttachments: [],
+        depthStencilAttachment: { view: this.sunDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
+      }),
+    );
+    const drawn = body.drawSun(pass, this.sunUniform);
+    pass.end();
+    if (drawn) this.sunFrames++;
+    return drawn;
+  }
+
   /** The distances drawn this frame (rgba32float: r the ground's metres from the camera, 0 where no triangle covers a pixel;
    *  g the scenery's instance; b the nearest surface's metres), else null. */
   distanceTexture(): GPUTexture | null {
