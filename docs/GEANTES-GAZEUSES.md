@@ -318,6 +318,8 @@ corrigé en P10 — [progress/planetes-aaa/P10.md](progress/planetes-aaa/P10.md)
   - la lumière du puits de l'œil ;
   - un bouclier ablatif pour un vaisseau ;
   - côté projet d'Alex : un format commun des tourbillons, l'aplatissement d'Uranus et Neptune.
+- **Le plan de reprise** des trouvailles de vr-solar-system (l'éclair au CPU, le puits de l'œil, la ligne d'horizon, les
+  ponts à leur pression, le volume emporté par le vent…) : [PLAN-GEANTES-VOLUME.md](PLAN-GEANTES-VOLUME.md), pas lancé.
 
 ## Les tests
 
