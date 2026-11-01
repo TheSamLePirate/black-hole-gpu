@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import trace from "../src/shaders/trace.wgsl" with { type: "text" };
-import { NOISE_DEPTH, TILE_FRAMES, TILE_Z0 } from "../src/noise3d";
+import { BLUE_Z, NOISE_DEPTH, TILE_FRAMES, TILE_Z0 } from "../src/noise3d";
 import { GIANT_TILE } from "../src/system/giant-tile";
 
 // The noise texture's two halves (PLAN-PLANETES-AAA P9 G8): the tracer reads them where noise3d.ts and giant-tile.ts write
@@ -14,7 +14,10 @@ test("the tracer's noise and tile slices are the textures'", () => {
   expect(constOf("GTILE_FRAMES")).toBe(TILE_FRAMES);
   // (the noises and their guards, then the tile's guard: its first frame just after)
   expect(TILE_Z0).toBe(128 + 2 + 1);
-  expect(TILE_Z0 + TILE_FRAMES + 1).toBe(NOISE_DEPTH);
+  // (the tile's last guard, then the blue noise's slice — PLAN-GEANTES-VOLUME V6 —, the last)
+  expect(TILE_Z0 + TILE_FRAMES + 1).toBe(BLUE_Z);
+  expect(constOf("BLUE_Z")).toBe(BLUE_Z);
+  expect(BLUE_Z + 1).toBe(NOISE_DEPTH);
 });
 
 test("the tile's flow is unstable where it should be: its jets roll up (U0 n² > β), its steps within the CFL", () => {

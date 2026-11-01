@@ -225,6 +225,8 @@ flowchart TD
   était la matière, deux phases à un demi-cycle de 10 h, chaque rayon en lisant une selon son poids (l'accumulation fait
   le fondu) ; le vent de la latitude de la caméra et son cisaillement ; figé au-delà de ×1 000 à ×3 000. L'œil garde son
   repère. Coût : +4–5 % dedans.
+- **Les tirages** (V6) : la gigue de la marche et le choix de phase viennent d'un bruit bleu (`blueDraws`, la dernière
+  tranche de `noiseTex`), un canal par usage.
 - **La marche** : jusqu'à 1 500 km, en 112 pas au plus — 6 % de la distance dans le clair, 1,5 % dans un nuage, avec une
   gigue à chaque pas. Un rayon à court de pas qui file vers le fond est arrêté par le fond.
 - **La lumière** (D3) :

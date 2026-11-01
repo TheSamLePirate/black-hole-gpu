@@ -106,3 +106,32 @@ pixel), prises sur ce Mac ; les temps sont mesurés sur kerr-mini (`planets-ab`,
   sur V4 : son contrôle « revenu à la même date » était déjà instable) ; `kernel-budget`.
 - **Pas fait** : le court film dedans (vaisseau dérivant avec le vent, puis tenu contre lui), et l'e2e « une vue dedans à
   10 h d'écart » ; V7b (les tourbillons nommés, la spirale du mur de l'œil).
+
+## V6 — un bruit bleu pour les tirages du traceur
+
+![En haut : le fondu de V7 dans Jupiter, avant | après (agrandi). En bas : un orage sur la Bretagne à 3 km, en mouvement (la caméra tourne), avant | après](geantes-volume/v6.jpg)
+
+- **Le défaut** (trouvé par le fil « Effet du bruit bleu sur le banding ») : au-delà du premier nombre aléatoire d'un
+  échantillon (l'IGN de Jimenez, avancé du nombre d'or à chaque image), les autres étaient tirés de lui par
+  `fract(rnd × 7,31 + c)`, `fract(jit × 13,7 + …)`, `fract(RND × 91,7 + …)`. Multiplier un IGN détruit son spectre : un
+  bruit presque blanc, avec des motifs. Touchés : la gigue des marches (le volume des géantes, l'ombre du relief), la
+  passe nuages de la Terre et sa marche vers le Soleil, l'échantillon dans le pas du disque épais, le trou de ver, le
+  reflet de la mer (un tirage 2D) et le tirage de phase de V7.
+- **Maintenant** : un bruit bleu à nous, 128², quatre canaux indépendants (`scripts/build-blue-noise.ts`, void-and-cluster
+  d'Ulichney ; aucune énergie sous le rayon 16 du spectre, canaux corrélés à moins de 2 %), dans la dernière tranche de
+  `noiseTex` (`assets/noise/blue-noise-128.bin`, 128 Kio, aucune nouvelle liaison). Chaque canal avance dans le temps par
+  sa suite de Kronecker : le nombre d'or pour la gigue des marches (la meilleure suite 1D), la paire R2 pour les tirages
+  2D, √2 − 1 pour le reste. Une première attribution (la gigue sur le canal de R2) perdait 1 dB dans Jupiter.
+  Le premier nombre (l'IGN + nombre d'or) ne change pas.
+- **Effet** :
+  - le fondu de V7 n'a plus sa trame ;
+  - les nuages d'orage de la Terre en mouvement : les hachures en diagonale de leurs bords deviennent un grain fin ;
+  - en mouvement (`scripts/quality.ts`, PSNR du temps réel contre l'image convergée, la caméra qui tourne, 6 arrêts,
+    deux passages) : Jupiter dedans 54,7–55,0 → 55,6–55,7 dB ; le disque volumique inchangé (31,0 dB).
+- **Coût** (kerr-mini, A/B contre 9147abf7) : ≤ 1 % partout (Terre en vol bas 40,6 → 40,9 ms et en cinéma, Jupiter,
+  Saturne).
+- **Tests** : `blue-noise.test.ts` (chaque canal une permutation des rangs, bleu, canaux indépendants, plus aucun
+  `fract(k × tirage)` dans le shader), `giant-tile.test.ts` (la tranche du bruit après celles du tourbillon).
+- **Pas fait** : le STBN (une pile 128² × 64 qui serait bleue aussi dans le temps : C1 du plan VIPER 11, à faire avec ses
+  nuages amortis, C2) ; le premier nombre aléatoire reste l'IGN ; `skyFill` (l'image pendant la compilation) garde son
+  bruit figé.

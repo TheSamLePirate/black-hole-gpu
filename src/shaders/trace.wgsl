@@ -2611,7 +2611,21 @@ fn cloudNoise(p: vec3f) -> vec4f {
 }
 // (both: the noises in the texture's slices 1–128 between their guards — the giants' tile after them —, z wrapped by hand
 // as the sampler's repeat did when they filled it)
-const NOISE_DZ = 260.0;
+const NOISE_DZ = 261.0;
+// A sample's random numbers beyond its first (PLAN-GEANTES-VOLUME V6): a 128² blue noise of our own (scripts/build-blue-
+// noise.ts — void-and-cluster, four independent channels) in noiseTex's last slice, read texel by texel, walked in time by
+// a Kronecker sequence a channel — x, y R2's pair (a 2D draw's two numbers: over the frames they fill the square), z the
+// golden ratio (the best 1D walk: RND, the marches' jitter), w √2 − 1 —: each frame blue in space, each pixel's values
+// spread in time; n the frame (the sample, a still). One channel a use, never fract(k x) of another — the IGN times 7.31,
+// 13.7 or 91.7 lost its spectrum: near-white noise with patterns. RNDV: the kernel's, set where its pixel is known (0.5:
+// none — the LUT, the shadow maps). Uses: z RND; x, y a 2D draw (the sea's reflected facet); y the clouds' jitter, the thick
+// disk's; x the clouds' light march; w the wormhole's, a giant's wind phase.
+const BLUE_Z = 260;
+var<private> RNDV: vec4f = vec4f(0.5);
+fn blueDraws(p: vec2u, n: u32) -> vec4f {
+  let b = textureLoad(noiseTex, vec3i(vec2i(p & vec2u(127u)), BLUE_Z), 0);
+  return fract(b + f32(n & 1023u) * vec4f(0.7548776662, 0.5698402910, 0.6180339887, 0.4142135624));
+}
 
 // The disk's gas (the look of Interstellar's Gargantua: hair-thin hot strands drawn out along the
 // orbits, breaking up into turbulent clouds, with dense cool smoke that darkens what lies behind it,
@@ -3959,7 +3973,7 @@ var<private> CROSSMIN: f32 = 1e30;
 
 var<private> RND: f32 = 0.5; // (the sample's random number: jitters the ground's shadow march)
 fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
-  RND = fract(rnd * 7.31 + 0.13);
+  RND = RNDV.z;
   FOOT = FOOT_NEAR;
   // Direction the camera looks at, in the camera rest frame (components along ZAMO axes).
   let tanH = P.cam.w;
@@ -8456,8 +8470,8 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   // their parallax —, along a facet drawn from the unresolved slopes' distribution — the frames' history sums their lobe:
   // sharp on a calm sea, smeared into long streaks under the wind)
   if (SEA_ON && RASTER_SHADE && (TUNE_GSKIP & 4096u) == 0u) {
-    let r1 = max(RND, 1e-4);
-    let r2 = fract(RND * 91.7 + 0.31);
+    let r1 = max(RNDV.x, 1e-4);
+    let r2 = RNDV.y;
     let g = sqrt(-2.0 * log(r1)) * vec2f(cos(TAU * r2), sin(TAU * r2));
     let nS = normalize(n - g.x * sqrt(su2) * tun - g.y * sqrt(sc2) * tcn);
     let rS = reflect(-V, nS);
@@ -10142,7 +10156,7 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     // cumulus lit, a tower's shadow on its neighbour; else the column of its cover over the point)
     var tauSun = 0.4 * tauUp / max(mu0, 0.12);
     // (and the converging kernel, the reference the realtime image is held to)
-    if (CLOUD_LIGHT_MARCH || (QUALITY_PIPELINE && TUNE_CLOUD_LIGHT > 0u)) { tauSun = wxLightTau(p, i, Ls, fract(jit * 13.7 + f32(j) * 0.618)); }
+    if (CLOUD_LIGHT_MARCH || (QUALITY_PIPELINE && TUNE_CLOUD_LIGHT > 0u)) { tauSun = wxLightTau(p, i, Ls, fract(RNDV.x + f32(j) * 0.6180339887)); }
     let beer = select(exp(-tauSun), 0.0, mu0 < -0.1);
     let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
     let over = cloudDiffuseT(tauUp);
@@ -10849,7 +10863,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   SHADOW_REL = toBody(look) * (max(t, 0.0) / m * P.near4.w);
   SHADOW_REL_ON = RASTER_SHADE && t > 0.0;
   let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
-    0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
+    0.0, pixFoot(), RNDV.y, P.earth4.w > 0.5);
   EARTH_SHADOW_ON = false;
   SHADOW_REL_ON = false;
   HD_N_ON = false;
@@ -11304,8 +11318,8 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   let om = wc.x / rc;
   let dom = wc.y / (0.0436332 * rc * max(length(qc.xy), 0.05));
   GI_ZC = qc.z;
-  // (the ray's phase, by its weight: a random number apart from the march's jitter)
-  let ag = select(age.x, age.y, fract(RND + 0.38196601) < w1);
+  // (the ray's phase, by its weight: its own random number — the march's jitter is RNDV.z)
+  let ag = select(age.x, age.y, RNDV.w < w1);
   GI_R = vec3f(cos(-om * ag), sin(-om * ag), -dom * ag);
   // (the march: ~1 500 km at most; in the clear its steps growing with the distance — 6 % of it, 350 m at least —, in a cloud
   // short — 1.5 % of it, 150 m at least: finer than the billows, or the jitter averages them into a blur —; jittered)
@@ -11651,7 +11665,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
   }
   if (straight || segN == 6u) { break; }
   if (seg == 1u) {
-    let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w, fract(rnd * 61.8034 + 0.2718 * f32(segN)), 1.0 / eloc, travel);
+    let w = dnegTrace(wl, wn, wd, P.wh2.w, P.whN.w, fract(RNDV.w + 0.2718 * f32(segN)), 1.0 / eloc, travel);
     // light from beyond the liquid surface is tinted by it; what was gathered before is not
     colW += thr * (col + w.glow);
     col = vec3f(0.0);
@@ -11947,7 +11961,7 @@ fn traceLook(look: vec3f, rnd: f32, tNow: f32) -> TraceOut {
       // (sampled at a random point of the step — a different one at each step and sample — so that
       // sharp structure along the ray, the smoke's outlines, is not sliced at the steps' spacing)
       var sm = n;
-      let js = fract(rnd * 7.13 + f32(i) * 0.6180339887);
+      let js = fract(RNDV.y + f32(i) * 0.6180339887);
       sm.x = mix(s.x, n.x, js);
       sm.p = mix(s.p, n.p, js);
       let d = diskVolume(sm, L, E0, h, tNow);
@@ -12485,6 +12499,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
       // (the rays' first-step offset — the volumes' sampling —: blue noise in space, a golden-ratio walk
       // in time, not white noise)
       rnd = fract(ign(vec2f(f32(px), f32(py))) + f32(frameStamp % 1024u) * 0.6180339887);
+      RNDV = blueDraws(vec2u(px, py), frameStamp);
     } else {
       // (R2 / Kronecker sequences per pixel, rotated by a hash — the first-step offset by blue noise)
       var rot = hash4(vec3u(px, py, 7u));
@@ -12492,6 +12507,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
       let seq = fract(rot + si * vec4f(0.7548776662, 0.5698402910, 0.6180339887, 0.4142135624));
       if (si > 0.0 || accumulate) { jit = gaussJitter(seq.xy); }
       rnd = seq.z;
+      RNDV = blueDraws(vec2u(px, py), u32(si));
       // motion blur: sample time uniformly within the shutter interval
       tSample = P.time.x + (seq.w - 0.5) * P.ext.z;
     }
@@ -12808,6 +12824,7 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   var jit = vec2f(0.0);
   if (temporal) { jit = select(gaussJitter(hash4(vec3u(px, frameStamp)).xy), rasterJitter(frameStamp), rasterHalton()); }
   let rnd = fract(ign(vec2f(px)) + f32(frameStamp % 1024u) * 0.6180339887);
+  RNDV = blueDraws(vec2u(px), frameStamp);
   let pos = vec2f(px) + 0.5 + jit;
   let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
   let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
@@ -12815,7 +12832,7 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   // (the patch's distance at the pixel's own texel: drawn along this very ray when the raster is jittered with it)
   RHINT = terrainRasterHint(select(pos, centre, rasterHalton()));
   RHINT_TOL = rasterHintTol(select(pos, centre, rasterHalton()));
-  RND = fract(rnd * 7.31 + 0.13);
+  RND = RNDV.z;
   REFR_DELTA = 0.0;
   let e = earthNear(look, rnd, k);
   RHINT = 0.0;
@@ -13167,7 +13184,8 @@ fn bodyLite(gid: vec2u, k: u32) {
   hit.t = tR;
   hit.qb = normalize(nearCam() + toBody(look) * tR);
   hit.h = relief(surf, hit.qb, reliefFoot(tR), mR, tSec);
-  RND = fract(ign(centre) + f32(P.frame.x % 1024u) * 0.618);
+  RNDV = blueDraws(vec2u(centre), P.frame.x);
+  RND = RNDV.z;
   NEAR_SHADOW_OFF = (liteSkip() & 4u) != 0u;
   // (Gargantua's worlds: the camera white-balanced to their light part of the way — as main's nearMarch hit)
   var wb = vec3f(1.0);
@@ -13213,7 +13231,8 @@ fn bodyLiteAir(gid: vec2u, k: u32) {
   let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
   let tR = tM / P.near4.w;
   let rnd = fract(ign(centre) + f32(P.frame.x % 1024u) * 0.6180339887);
-  RND = fract(rnd * 7.31 + 0.13);
+  RNDV = blueDraws(vec2u(centre), P.frame.x);
+  RND = RNDV.z;
   NEAR_T = tR;
   let e = earthNear(look, rnd, k);
   NEAR_T = 0.0;
@@ -13617,7 +13636,8 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   let dw = select(seaDepthAt(gq, footSea), vec2f(1e4, 0.0), calm > 0.0);
   SEA_DEPTH = dw.x;
   SEA_DEPTH_W = dw.y;
-  RND = fract(ign(centre) + f32(P.frame.x % 1024u) * 0.6180339887);
+  RNDV = blueDraws(vec2u(centre), P.frame.x);
+  RND = RNDV.z;
   RASTER_SHADE = true;
   // (the sea's style, or the inland water's — a river's, a lake's: not the sea's calmed)
   var wcol: vec3f;
@@ -13718,11 +13738,11 @@ fn clouds(@builtin(global_invocation_id) gid: vec3u) {
       let lt = nearLight(k);
       WX_W = select(0.0, P.wx[0].x, HAS_WX && earthOn());
       WX_Q = normalize(ro);
-      let rnd = fract(ign(vec2f(gid.xy)) + f32(frameStamp % 1024u) * 0.6180339887);
-      RND = fract(rnd * 7.31 + 0.13);
+      RNDV = blueDraws(gid.xy, frameStamp);
+      RND = RNDV.z;
       CLOUD_LIGHT_MARCH = TUNE_CLOUD_LIGHT > 0u;
       cs = earthClouds(k, ro, rd, tHit, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab),
-        squashed(toBody(P.camUp.xyz), ab), 0.0, pixFoot(), fract(rnd * 7.31 + 0.37), P.earth4.w > 0.5);
+        squashed(toBody(P.camUp.xyz), ab), 0.0, pixFoot(), RNDV.y, P.earth4.w > 0.5);
       CLOUD_LIGHT_MARCH = false;
       WX_W = 0.0;
       // (the cloud's distance as the image's depths have it [M] — the history's reprojection, post.wgsl cloudTemporal)
@@ -14054,6 +14074,8 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   physicalPoints = true;
   probeBeam = PI / f32(ENV_H);
   let h = hash4(vec3u(px, P.frame.x));
+  // (the probe's rays: few, white noise enough — their further draws its hash too)
+  RNDV = h;
   let u = (f32(px.x) + h.x) / f32(ENV_W);
   let v = (f32(px.y) + h.y) / f32(ENV_H);
   let ph = (u - 0.5) * TAU;

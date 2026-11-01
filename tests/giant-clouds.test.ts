@@ -168,7 +168,7 @@ test("V7: the volume carried by the zonal wind — two phases, each alone 70 % o
   expect(gi).toContain("let w1 = smoothstep(0.35, 0.65, abs(2.0 * fph - 1.0)) * (1.0 - fr);");
   expect(gi).toContain("let age = vec2f(mix(fph, 0.5, fr), fract(fph + 0.5)) * GIANT_CYCLE;");
   expect(gi).toContain("let dom = wc.y / (0.0436332 * rc * max(length(qc.xy), 0.05));");
-  expect(gi).toContain("let ag = select(age.x, age.y, fract(RND + 0.38196601) < w1);");
+  expect(gi).toContain("let ag = select(age.x, age.y, RNDV.w < w1);");
   expect(gi).toContain("GI_R = vec3f(cos(-om * ag), sin(-om * ag), -dom * ag);");
   expect(fnBody("giantSigma")).toContain("let d = GI_R.z * (q0.z - GI_ZC);");
   let alone = 0;

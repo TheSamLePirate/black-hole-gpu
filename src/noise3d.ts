@@ -5,12 +5,18 @@
 // inverted Worley fBms twice and four times finer — the detail that erodes a cloud's edges into wisps.
 // Its depth holds two contents (PLAN-PLANETES-AAA P9 G8): the noises in slices 1–128, a guard on each side (slice 0 a copy
 // of the noises' last, 129 of their first: the filtering wraps them as the sampler's repeat did — trace.wgsl noiseAt); then
-// the giants' turbulence tile (system/giant-tile.ts) in slices 131–258, its frames in time, a guard on each side again.
+// the giants' turbulence tile (system/giant-tile.ts) in slices 131–258, its frames in time, a guard on each side again;
+// last, slice 260, a blue noise (scripts/build-blue-noise.ts: four independent channels, read texel by texel — trace.wgsl
+// blueDraws, a sample's random numbers beyond its first: PLAN-GEANTES-VOLUME V6).
+
+import blueNoiseUrl from "../assets/noise/blue-noise-128.bin";
 
 const N = 128;
 export const NOISE_PERIOD = 32;
 /** the texture's depth: the noises and their guards, then the giants' tile and its guards (trace.wgsl NOISE_DZ) */
-export const NOISE_DEPTH = 260;
+export const NOISE_DEPTH = 261;
+/** the blue noise's slice (trace.wgsl BLUE_Z) */
+export const BLUE_Z = 260;
 /** the giants' tile's first frame's slice and its frames (trace.wgsl TILE_Z0, TILE_FRAMES) */
 export const TILE_Z0 = 131;
 export const TILE_FRAMES = 128;
@@ -93,7 +99,12 @@ export function bakeNoise3d(device: GPUDevice): GPUTexture {
     dimension: "3d",
     format: "rgba16float",
     // (the giants' tile written in by a compute pass: giant-tile.ts)
-    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+    usage:
+      GPUTextureUsage.TEXTURE_BINDING |
+      GPUTextureUsage.RENDER_ATTACHMENT |
+      GPUTextureUsage.STORAGE_BINDING |
+      GPUTextureUsage.COPY_SRC |
+      GPUTextureUsage.COPY_DST,
   });
   const mod = device.createShaderModule({ code: BAKE, label: "noise bake" });
   const pipe = device.createRenderPipeline({
@@ -123,5 +134,27 @@ export function bakeNoise3d(device: GPUDevice): GPUTexture {
   }
   device.queue.submit([enc.finish()]);
   void device.queue.onSubmittedWorkDone().then(() => bufs.forEach((b) => b.destroy()));
+  void loadBlueNoise(device, tex);
   return tex;
+}
+
+/** a float in [2⁻¹⁴, 1) as a half's bits (rounded to nearest; the two lowest ranks clamped to the smallest normal) */
+export function half(x: number): number {
+  const v = Math.min(Math.max(x, 2 ** -14), 1 - 2 ** -11);
+  const e = Math.floor(Math.log2(v));
+  const m = Math.round((v / 2 ** e - 1) * 1024);
+  return m === 1024 ? ((e + 16) << 10) | 0 : ((e + 15) << 10) | m;
+}
+
+/** the blue noise into its slice: each channel's rank r as (r + ½) / 16 384 — until it lands, the slice reads 0 (the draws
+ *  then the golden-ratio walk alone) */
+async function loadBlueNoise(device: GPUDevice, tex: GPUTexture) {
+  try {
+    const ranks = new Uint16Array(await (await fetch(blueNoiseUrl)).arrayBuffer());
+    const px = new Uint16Array(ranks.length);
+    for (let i = 0; i < ranks.length; i++) px[i] = half((ranks[i]! + 0.5) / (N * N));
+    device.queue.writeTexture({ texture: tex, origin: [0, 0, BLUE_Z] }, px, { bytesPerRow: N * 8, rowsPerImage: N }, [N, N, 1]);
+  } catch (e) {
+    console.warn("blue noise: not loaded", e);
+  }
 }

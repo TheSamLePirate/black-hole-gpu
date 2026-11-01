@@ -4,7 +4,8 @@
 origin/master `88ee5b2`) et de notre code à `f3aa71e5`. V4 et V7 sont décidés (Sam, 1er novembre : voir leurs
 sections). **Fait le 1er novembre : V1, V2, V3, V4** (compte rendu : [progress/geantes-volume.md](progress/geantes-volume.md)) ;
 V7a (le vent zonal) fait aussi, par un fondu stochastique (chaque rayon tire une phase : (a) lue en entier coûtait
-+36–45 % pendant les fondus) ; V7b, V5, V6, V8–V10 attendent le go de Sam.
++36–45 % pendant les fondus) ; V6 fait le 1er novembre aussi (un bruit bleu pour tous les tirages du traceur au-delà du premier) ;
+V7b, V5, V8–V10 attendent le go de Sam.
 
 Le contexte : Alex a porté nos nuages des géantes (P11 D2–D5, le fondu `58942157`) sur Quest 3, à 72 images/s. En
 chemin, son Claude a trouvé des défauts qu'on partage, et des astuces dont certaines valent chez nous. On ne garde ici
@@ -20,7 +21,7 @@ Notre état est décrit dans [GEANTES-GAZEUSES.md](GEANTES-GAZEUSES.md) (§ 8, 9
 | **V3** ✅ | La ligne sombre à l'horizon dans le fondu | le limbe de la surface G9 apparaît entre deux parts du volume | ~0 | faible |
 | **V4** ✅ | Les ponts à leur pression (géopotentiel) | près des pôles, nos ponts sont trop hauts (0,90 au lieu de ~0,75 sur Saturne) | ~0 | moyen (CPU, panneau, tests) — **décidé : oui, portée (b)** |
 | **V5** | Les sauts de l'air clair entre les ponts | des anneaux possibles d'en haut, et des pas perdus | gain probable | moyen |
-| **V6** | Un bruit bleu pour la gigue du volume | l'IGN laisse des diagonales à faible nombre d'échantillons | ~0 | faible |
+| **V6** ✅ | Un bruit bleu pour la gigue du volume | l'IGN laisse des diagonales à faible nombre d'échantillons | ~0 | faible |
 | **V7** ✅ (V7a) | Les nuages du volume emportés par le vent | la surface coule, le volume est figé (le vaisseau dérive devant des nuages immobiles) | à mesurer (2 lectures) | élevé — **décidé : oui, (a) mesurée, vent zonal d'abord** |
 | **V8** | Les orages sur le blanc de la carte | les enclumes sortent d'une carte qui n'a pas de tache dessous | 1 lecture de carte par échantillon d'orage | moyen |
 | **V9** | La couleur des pôles de Saturne, du dessus au dedans | bleu-gris vu de haut, beige dedans : le fondu montre le passage | à voir | à étudier |
