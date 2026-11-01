@@ -135,3 +135,27 @@ pixel), prises sur ce Mac ; les temps sont mesurés sur kerr-mini (`planets-ab`,
 - **Pas fait** : le STBN (une pile 128² × 64 qui serait bleue aussi dans le temps : C1 du plan VIPER 11, à faire avec ses
   nuages amortis, C2) ; le premier nombre aléatoire reste l'IGN ; `skyFill` (l'image pendant la compilation) garde son
   bruit figé.
+
+## V5 — vu d'en haut : pas d'anneaux, mais un grain
+
+![Jupiter (agrandi) et Saturne vus d'en haut, à 150 km au-dessus du pont, la caméra qui tourne : avant | après](geantes-volume/v5.jpg)
+
+- **Les anneaux d'Alex** (« touché / manqué » autour du nadir) : cherchés en regardant vers le bas, de 300 à 40 km
+  au-dessus du pont de Jupiter et de Saturne, en temps réel et en mouvement : **aucun**. La gigue de chaque pas suffit ; le
+  saut analytique entre les ponts n'est pas nécessaire pour ça.
+- **Le grain trouvé à la place** : vus d'en haut, les sommets des nuages grenaient fort. Un pas dans le clair fait ~9 km à
+  150 km ; son échantillon, n'importe où dans le pas, rendait le nuage opaque d'un coup avec la lumière d'une profondeur
+  au hasard.
+- **Quatre essais, mesurés** (kerr-mini, qualité fixe, contre 39376abc ; dedans Jupiter / Saturne, d'en haut) :
+
+  | | dedans | d'en haut |
+  |---|---|---|
+  | reculer au début du pas et repartir à pas fins | +9 % / +10 % | +8 à +15 % |
+  | trouver le sommet par deux bissections | +11 % / +12 % | +10 à +15 % |
+  | la même chose, branche jamais prise | **+9 % / +9 %** | +3 à +8 % |
+  | **retenu : des pas clairs deux fois plus courts à hauteur des ponts, la caméra au-dessus du pont seulement** | **0 %** | 0 à +1 % (Jupiter), +7 % (Saturne) |
+
+  La troisième ligne le montre : la seule présence d'une branche dans la boucle coûte ~9 % (des registres en plus). La
+  version retenue ne change qu'une constante de la boucle (la hauteur du dernier échantillon existe déjà) ; avec la caméra
+  dedans, les pas courts coûtaient 19 à 28 % (l'air clair entre les ponts), d'où la condition.
+- **Effet** : le pont brun de Jupiter vu d'en haut devient lisse ; sur Saturne le grain disparaît presque.

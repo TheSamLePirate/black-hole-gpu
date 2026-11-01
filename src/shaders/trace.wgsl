@@ -11335,8 +11335,12 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   var hl = 0.0;
   var sl = vec3f(0.0);
   var inCloud = false;
+  // (the camera over the top deck — the fade band —: in the clear at the decks' heights — the last sample's —, half the
+  // steps: a long step's one sample anywhere in a cloud lit it by a random depth — the tops' grain seen from above. Inside,
+  // the clear between the decks walked so cost 19–28 % more: not there)
+  let dTop = select(-1e9, giantDeckTop(m) + 10e3, hd > 0.0);
   for (var i = 0u; i < N; i++) {
-    let dc = max(350.0, 0.06 * t);
+    let dc = max(350.0, select(0.06, 0.03, hl < dTop) * t);
     let ds = select(dc, clamp(0.015 * t, 150.0, dc), inCloud);
     t += ds;
     if (t > Dmax) { break; }
