@@ -221,6 +221,10 @@ flowchart TD
   l'ammoniac. Ils sont plus rares sur Saturne, et absents de l'œil.
 - **L'œil** (`giantEye`) : le vortex polaire nord de Saturne (~2 000 km) et le cyclone polaire central de Jupiter. Un
   puits clair, un mur en gradins strié par les vents.
+- **Le vent** (PLAN-GEANTES-VOLUME V7a) : le volume est emporté par le vent zonal comme la surface — ses bruits lus là où
+  était la matière, deux phases à un demi-cycle de 10 h, chaque rayon en lisant une selon son poids (l'accumulation fait
+  le fondu) ; le vent de la latitude de la caméra et son cisaillement ; figé au-delà de ×1 000 à ×3 000. L'œil garde son
+  repère. Coût : +4–5 % dedans.
 - **La marche** : jusqu'à 1 500 km, en 112 pas au plus — 6 % de la distance dans le clair, 1,5 % dans un nuage, avec une
   gigue à chaque pas. Un rayon à court de pas qui file vers le fond est arrêté par le fond.
 - **La lumière** (D3) :
@@ -326,12 +330,12 @@ corrigé en P10 — [progress/planetes-aaa/P10.md](progress/planetes-aaa/P10.md)
 - **À décider** :
   - ~~la hauteur des ponts près des pôles~~ : ils suivent la pression depuis le 1er novembre (0,753 de la hauteur
     équatoriale au pôle de Saturne, au lieu de 0,902 dans l'espace aplati), l'air compris : PLAN-GEANTES-VOLUME V4 ;
-  - ~~les nuages du volume figés~~ : décidé le 1er novembre, emportés par le vent zonal (deux phases, mesurées), les
-    tourbillons ensuite : PLAN-GEANTES-VOLUME V7 ;
+  - ~~les nuages du volume figés~~ : emportés par le vent zonal depuis le 1er novembre (V7a) ; les tourbillons nommés
+    et la spirale du mur de l'œil restent fixes dedans (V7b) ;
   - un bouclier ablatif pour un vaisseau ;
   - côté projet d'Alex : un format commun des tourbillons, l'aplatissement d'Uranus et Neptune.
 - **Le plan de reprise** des trouvailles de vr-solar-system (l'éclair au CPU, le puits de l'œil, la ligne d'horizon, les
-  ponts à leur pression, le volume emporté par le vent…) : [PLAN-GEANTES-VOLUME.md](PLAN-GEANTES-VOLUME.md) ; V1 à V4 faits
+  ponts à leur pression, le volume emporté par le vent…) : [PLAN-GEANTES-VOLUME.md](PLAN-GEANTES-VOLUME.md) ; V1 à V4 et V7a faits
   le 1er novembre ([le compte rendu](progress/geantes-volume.md)).
 
 ## Les tests
@@ -402,4 +406,6 @@ clouds, none in a named vortex's calm core) and the JunoCam comparison were done
 PLAN-GEANTES-VOLUME (1 November, from Alex's sessions 4p–4t): V1 the lightning searched once a frame on the CPU (−2 to
 −3 % inside); V2 the eye's well no longer darkened by decks that are not there; V3 no more line at the deck's horizon in
 the fade band; V4 every height the air sets scaled by s(φ) = g_eq / g(φ) (Somigliana, Alex's formula: 0.859 at Jupiter's
-poles, 0.753 at Saturn's), the flight's air read at that level too. Still pending: an ablative shield.
+poles, 0.753 at Saturn's), the flight's air read at that level too; V7a the volume carried by the zonal wind (two phases
+half a 10 h cycle apart, each ray reading one by its weight — reading both cost +36–45 % during a fade —, +4–5 %). Still
+pending: an ablative shield, V7b (the named vortices inside).

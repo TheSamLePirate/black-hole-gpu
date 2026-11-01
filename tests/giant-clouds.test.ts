@@ -30,7 +30,7 @@ test("the eyes and the storms are the shader's (giantEye, giantSigma); the flash
   expect(fnBody("giantEye")).toContain("select(0.0166, 0.0175, m == 4u)");
   // (the flashes searched where the shader's storms are: its large noise, its threshold — PLAN-GEANTES-VOLUME V1: the search
   // once a frame here, the brightest flash passed in P.wx[6])
-  const sg = fnBody("giantSigma");
+  const sg = fnBody("giantSigmaAt");
   expect(sg).toContain("cloudNoise(pk * (1.0 / 80.0) + vec3f(3.1, 7.7, 1.3))");
   expect(sg).toContain("let rare = select(0.05, 0.0, m == 4u)");
   expect(wgsl).not.toContain("fn giantFlashes(");
@@ -156,4 +156,48 @@ test("V4: the decks at their pressures — Alex's s(φ) from the bodies' masses,
     expect(pole.s).toBeCloseTo(prev, 6);
     expect(pole.kl).toBeCloseTo((1 - f) / prev, 5);
   }
+});
+
+test("V7: the volume carried by the zonal wind — two phases, each alone 70 % of the cycle, held when the clock runs fast", async () => {
+  const { GIANT_CYCLE, giantFlowBack, giantFlowPhases } = await import("../src/system/giant-clouds");
+  const { giantWindAt } = await import("../src/system/giant-winds");
+  // (the shader's: its cycle, its fades, its hold, the reading place turned west by u τ / (R cos φ))
+  expect(wgsl).toContain(`const GIANT_CYCLE = ${GIANT_CYCLE.toFixed(1)};`);
+  const gi = fnBody("giantInside");
+  expect(gi).toContain("let fr = smoothstep(1000.0, 3000.0, P.envX.w);");
+  expect(gi).toContain("let w1 = smoothstep(0.35, 0.65, abs(2.0 * fph - 1.0)) * (1.0 - fr);");
+  expect(gi).toContain("let age = vec2f(mix(fph, 0.5, fr), fract(fph + 0.5)) * GIANT_CYCLE;");
+  expect(gi).toContain("let dom = wc.y / (0.0436332 * rc * max(length(qc.xy), 0.05));");
+  expect(gi).toContain("let ag = select(age.x, age.y, fract(RND + 0.38196601) < w1);");
+  expect(gi).toContain("GI_R = vec3f(cos(-om * ag), sin(-om * ag), -dom * ag);");
+  expect(fnBody("giantSigma")).toContain("let d = GI_R.z * (q0.z - GI_ZC);");
+  let alone = 0;
+  for (let i = 0; i < 1000; i++) {
+    const [a0, a1, w0, w1] = giantFlowPhases(((i + 0.5) / 1000) * GIANT_CYCLE + 7 * GIANT_CYCLE, 1);
+    expect(w0 + w1).toBeCloseTo(1, 9);
+    // (a phase seen only within its window: its age's start and end — its jump — never)
+    if (w0 > 0) expect(a0 / GIANT_CYCLE).toBeGreaterThan(0.17);
+    if (w0 > 0) expect(a0 / GIANT_CYCLE).toBeLessThan(0.83);
+    if (w1 > 0) expect(a1 / GIANT_CYCLE).toBeGreaterThan(0.17);
+    if (w1 > 0) expect(a1 / GIANT_CYCLE).toBeLessThan(0.83);
+    if (w0 === 0 || w1 === 0) alone++;
+  }
+  expect(alone / 1000).toBeCloseTo(0.7, 1);
+  // (fast: one phase, mid-window)
+  expect(giantFlowPhases(1234.5, 5000)).toEqual([0.5 * GIANT_CYCLE, expect.any(Number), 1, 0]);
+  // (the matter at 20° N on Jupiter, an hour ago: west of here by the wind's run along its parallel)
+  const rm = 71492e3;
+  const lat = (20 * Math.PI) / 180;
+  const q: [number, number, number] = [Math.cos(lat), 0, Math.sin(lat)];
+  const back = giantFlowBack("jupiter", q, 3600, rm);
+  const run = (-Math.atan2(back[1], back[0]) * rm * Math.cos(lat)) / 3600;
+  expect(run).toBeCloseTo(giantWindAt("jupiter", 20), 3);
+  // (half a degree north of a camera at 20° N: its wind by the table's smoothed shear there — central differences over
+  // 17.5–22.5° —, to first order)
+  const l2 = (20.5 * Math.PI) / 180;
+  const q2: [number, number, number] = [Math.cos(l2), 0, Math.sin(l2)];
+  const b2 = giantFlowBack("jupiter", q2, 3600, rm, q);
+  const run2 = (-Math.atan2(b2[1], b2[0]) * rm * Math.cos(l2)) / 3600;
+  const shear = (0.5 * (giantWindAt("jupiter", 22.5) - giantWindAt("jupiter", 17.5)) * 0.5) / 2.5;
+  expect(run2).toBeCloseTo(giantWindAt("jupiter", 20) + shear, 0);
 });

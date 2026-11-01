@@ -84,7 +84,7 @@ import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, seasPixels, type HdMa
 import { bakeNoise3d } from "./noise3d";
 import { bakeGiantTile, readGiantTile } from "./system/giant-tile";
 import { GIANT_WINDS } from "./system/giant-winds";
-import { type GiantFlash, giantFlashes, giantTop } from "./system/giant-clouds";
+import { type GiantFlash, type GiantFlowClock, giantFlashes, giantTop } from "./system/giant-clouds";
 import { anchorTileCoord } from "./system/earth-tiles";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
 import { visibleTimeout } from "./util/visible-timeout";
@@ -730,7 +730,7 @@ export class Renderer {
   /** the camera on the near body as the tracer has it this frame (PLAN-PLANETES-AAA P11 D5 — the giants' thunder, their
    *  flashes the shader's to the millisecond: system/giant-clouds.ts): the body, the camera on its axes [its radii, z
    *  squashed as the shader's], its metres a radius, the seconds clock (Params.zamo2.z); null: no near body */
-  nearCamera: { id: string; c: Vec3; mR: number; tc: number } | null = null;
+  nearCamera: { id: string; c: Vec3; mR: number; tc: number; flow: GiantFlowClock } | null = null;
   private noiseSampler!: GPUSampler;
   private postBeamV!: GPUComputePipeline;
   /** the display's and the post chain's pipelines (async compiles, awaited with the tracer's core) */
@@ -3303,6 +3303,7 @@ export class Renderer {
           c: c as Vec3,
           mR: near.radius * 1476.625 * s.massSolar,
           tc: (time * 4.925490947e-6 * s.massSolar) % 4096,
+          flow: { tS: tGpu * 4.925490947e-6 * s.massSolar, rate: giantRate },
         };
       const nearId = bodies[near.index]!.id;
       if (nearId === "jupiter" || nearId === "saturn")
@@ -3311,6 +3312,7 @@ export class Renderer {
           c as Vec3,
           near.radius * 1476.625 * s.massSolar,
           (time * 4.925490947e-6 * s.massSolar) % 4096,
+          { tS: tGpu * 4.925490947e-6 * s.massSolar, rate: giantRate },
         );
       set(67, A[0]!, A[1]!, A[2]!, A[0]! * A[0]! + A[1]! * A[1]! + A[2]! * A[2]! - 1);
       set(68, c[0]! - A[0]!, c[1]! - A[1]!, c[2]! - A[2]!, 1);
@@ -3919,13 +3921,13 @@ export class Renderer {
    */
   private giantFlashKey = "";
   private giantFlashKept: number[] | null = null;
-  private giantFlashNow(m: 4 | 5, c: Vec3, rm: number, tc: number): number[] | null {
+  private giantFlashNow(m: 4 | 5, c: Vec3, rm: number, tc: number, flow: GiantFlowClock): number[] | null {
     if ((Math.hypot(...c) - 1) * rm > giantTop(m === 4 ? "jupiter" : "saturn") + 450e3) return null;
-    const key = `${m} ${tc} ${c.join(" ")}`;
+    const key = `${m} ${tc} ${c.join(" ")} ${flow.tS} ${flow.rate}`;
     if (key === this.giantFlashKey) return this.giantFlashKept;
     this.giantFlashKey = key;
     let best: GiantFlash | null = null;
-    for (const f of giantFlashes(m, c, rm, tc)) if (!best || f.light > best.light) best = f;
+    for (const f of giantFlashes(m, c, rm, tc, flow)) if (!best || f.light > best.light) best = f;
     return (this.giantFlashKept = best ? [...best.pos, best.light] : null);
   }
 

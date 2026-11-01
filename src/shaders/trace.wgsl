@@ -11106,12 +11106,30 @@ var<private> GI_ALB: vec3f = vec3f(0.0);
 var<private> GI_TOP: vec3f = vec3f(0.8);
 // (the camera in a giant's clouds this ray: its volume in front of the rings — trace(): they composited behind it)
 var<private> GI_IN: bool = false;
+// The volume carried by the zonal wind (PLAN-GEANTES-VOLUME V7, Sam's choice: two phases faded, as the surface's giantFlow):
+// the matter at p was, τ seconds ago, u τ / (R cos φ) further west — its noises read there, the latitude's wind u [m/s] —,
+// two readings half a GIANT_CYCLE apart, each faded out before its age starts again (the noise never sheared without end);
+// the fade short — a phase alone 70 % of the cycle, faded 30 % of it —, and the fade drawn by the rays: each takes one phase
+// by its weight (its own random number), the passes' sum — the temporal one's, the still's samples — the mix. Both read in
+// every sample cost 36–45 % more over a fade, a loop over one 9–13 % always (kerr-mini). The turn found once a ray: the wind
+// at the camera's latitude, its shear about it to first order (the march's ±1–2° of latitude: the jets' flanks sliding by
+// each other) — per sample the wind's table and a cosine. GI_R: the ray's phase's turn (cos, sin), its shear's [rad per unit
+// of z off the camera's]; GI_ZC the camera's z. The eye's well and wall keep their own frame (their spin: V7b).
+var<private> GI_R: vec3f = vec3f(1.0, 0.0, 0.0);
+var<private> GI_ZC: f32 = 0.0;
 fn giantSigma(m: u32, p: vec3f, h: f32, cover: vec3f, rkm: f32, det: f32) -> f32 {
-  let q = normalize(p);
+  let q0 = normalize(p);
+  // (the turn, then the shear's small one: x − δ y, y + δ x)
+  let d = GI_R.z * (q0.z - GI_ZC);
+  let qt = vec2f(q0.x * GI_R.x - q0.y * GI_R.y, q0.x * GI_R.y + q0.y * GI_R.x);
+  return giantSigmaAt(m, vec3f(qt.x - d * qt.y, qt.y + d * qt.x, q0.z), q0, h, cover, rkm, det);
+}
+// (one phase's: q where the matter was — its noises' place —, q0 where it is — the eye's)
+fn giantSigmaAt(m: u32, q: vec3f, q0: vec3f, h: f32, cover: vec3f, rkm: f32, det: f32) -> f32 {
   let pk = q * (rkm + h * 1e-3);
   // (the banks and the holes between them, ~80 km — a large Perlin–Worley over the map's cover —; the eye's well)
   let big = cloudNoise(pk * (1.0 / 80.0) + vec3f(3.1, 7.7, 1.3));
-  let eye = giantEye(m, q);
+  let eye = giantEye(m, q0);
   // (the water deck's towers: where the large noise is high, its top raised by up to ~18 km — convection)
   let tower = smoothstep(0.55, 0.85, big.g);
   var s = 0.0;
@@ -11179,9 +11197,9 @@ fn giantSigma(m: u32, p: vec3f, h: f32, cover: vec3f, rkm: f32, det: f32) -> f32
     let hn = (h - base) / max(topw - base, 1.0);
     if (hn > 0.0 && hn < 1.0) {
       let rk = eye.z * rkm;
-      let ph = fract(atan2(q.y, q.x) / TAU + rk * 3e-4) * 320.0;
+      let ph = fract(atan2(q0.y, q0.x) / TAU + rk * 3e-4) * 320.0;
       let ns = cloudNoise(vec3f(rk / 7.0, ph, h / 3e3) + vec3f(5.1));
-      let nb = cloudNoise(pk * (1.0 / 12.0) + vec3f(1.7));
+      let nb = cloudNoise(q0 * (rkm + h * 1e-3) * (1.0 / 12.0) + vec3f(1.7));
       let v = smoothstep(0.0, 0.08, hn) * (1.0 - smoothstep(0.75, 1.0, hn));
       var w = smoothstep(0.35, 0.6, (0.5 * ns.g + 0.5 * nb.g) * v + 0.35 * eye.y - 0.25 * hn);
       w = clamp(w - (1.0 - ns.b) * 0.35 * (1.0 - w), 0.0, 1.0);
@@ -11273,6 +11291,22 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   let lz = luminance(mapc) - giantTop(m, 1u, latc);
   let cover = vec3f(clamp(0.55 + 2.5 * lz, 0.2, 0.9), 0.6, 0.45);
   GI_TOP = clamp(pow(mapc / max(luminance(mapc), 0.05), vec3f(1.3)) * 0.85, vec3f(0.3), vec3f(0.97));
+  // (the wind's two phases — V7 —: the scene's clock, the surface's (giantAlbedo); time faster than ~1 000 ×: held, one phase
+  // mid-window — the turbulence's rule, giantTurb —, the clouds would tangle)
+  let tS = P.time.x * P.near5.w;
+  let fph = fract(tS / GIANT_CYCLE);
+  let fr = smoothstep(1000.0, 3000.0, P.envX.w);
+  let w1 = smoothstep(0.35, 0.65, abs(2.0 * fph - 1.0)) * (1.0 - fr);
+  let age = vec2f(mix(fph, 0.5, fr), fract(fph + 0.5)) * GIANT_CYCLE;
+  // (the wind at the camera's latitude [rad/s about the axis], its shear per unit of z — the table's per 2.5°)
+  let wc = giantWind(m, latc);
+  let rc = rm * max(length(qc.xy), 0.05);
+  let om = wc.x / rc;
+  let dom = wc.y / (0.0436332 * rc * max(length(qc.xy), 0.05));
+  GI_ZC = qc.z;
+  // (the ray's phase, by its weight: a random number apart from the march's jitter)
+  let ag = select(age.x, age.y, fract(RND + 0.38196601) < w1);
+  GI_R = vec3f(cos(-om * ag), sin(-om * ag), -dom * ag);
   // (the march: ~1 500 km at most; in the clear its steps growing with the distance — 6 % of it, 350 m at least —, in a cloud
   // short — 1.5 % of it, 150 m at least: finer than the billows, or the jitter averages them into a blur —; jittered)
   // (over the top deck — giantInsideW's grazing rays —: to its horizon at least)

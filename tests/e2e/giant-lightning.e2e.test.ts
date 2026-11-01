@@ -34,7 +34,9 @@ test.skipIf(!E2E)(
     await app.js(`(async () => { const r = __bh.renderer, t0 = performance.now();
       while ((!r.kernelsSettled || r.compilingNow.length > 0 || r.variants.get(r.featureKey)?.qBusy) && performance.now() - t0 < 600000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
       return 1; })()`);
-    const nc = await app.js<{ id: string; c: [number, number, number]; mR: number; tc: number }>("__bh.renderer.nearCamera");
+    const nc = await app.js<{ id: string; c: [number, number, number]; mR: number; tc: number; flow: { tS: number; rate: number } }>(
+      "__bh.renderer.nearCamera",
+    );
     console.log(
       `  ${nc.id}: the camera ${(((Math.hypot(...nc.c) - 1) * nc.mR) / 1e3).toFixed(1)} km off 1 bar, the clock ${nc.tc.toFixed(3)} s`,
     );
@@ -43,7 +45,8 @@ test.skipIf(!E2E)(
     const lit: number[] = [];
     const dark: number[] = [];
     for (let dt = 0; dt < 120 && (lit.length < 5 || dark.length < 5); dt += 1 / 60) {
-      const f = giantFlashes(4, nc.c, nc.mR, nc.tc + dt);
+      // (the storms where the wind has carried them — PLAN-GEANTES-VOLUME V7 —: the clock moved with the flashes')
+      const f = giantFlashes(4, nc.c, nc.mR, nc.tc + dt, { tS: nc.flow.tS + dt, rate: 0 });
       const near = f.some((x) => x.light > 0.6 && Math.hypot(x.pos[0] - nc.c[0], x.pos[1] - nc.c[1], x.pos[2] - nc.c[2]) * nc.mR < 80e3);
       if (near && lit.length < 5 && (!lit.length || dt - lit[lit.length - 1]! > 1)) lit.push(dt);
       if (!f.length && dark.length < 5 && (!dark.length || dt - dark[dark.length - 1]! > 1)) dark.push(dt);

@@ -8253,7 +8253,7 @@ async function main() {
       const h = (Math.hypot(...nc.c) - 1) * nc.mR * giantLevel(nc.id, nc.c).kl;
       if (h < top.c + 3 * top.w + 30e3) {
         const a = airAt(solarBody(nc.id)?.atmosphere, h).a;
-        for (const x of giantThunder.step(nc.id === "jupiter" ? 4 : 5, nc.c, nc.mR, nc.tc)) audio.thunder(x.dist, a);
+        for (const x of giantThunder.step(nc.id === "jupiter" ? 4 : 5, nc.c, nc.mR, nc.tc, nc.flow)) audio.thunder(x.dist, a);
       }
     }
     renderer.meterSpot = telescopeSpot();

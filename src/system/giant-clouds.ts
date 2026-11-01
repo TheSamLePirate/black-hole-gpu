@@ -12,6 +12,8 @@
 // ellipsoid (Somigliana) between g_eq = GM/a² (1 + 3/2 J2) − ω² a and g_pole = GM/b² (1 − 3 J2 a²/b²), J2 Juno's and
 // Cassini's. At the poles 0.859 (Jupiter), 0.753 (Saturn). A "level" height is the equator's: the real one over s(φ).
 
+import { GIANT_WINDS, giantWindAt } from "./giant-winds";
+
 /** a deck: its middle [m over 1 bar], its half thickness [m], its billows' scale [m], its extinction [1/m] */
 export interface GiantLayer {
   c: number;
@@ -203,6 +205,51 @@ export function cloudNoiseG(x: number, y: number, z: number): number {
   );
 }
 
+// ---- the volume carried by the zonal wind (PLAN-GEANTES-VOLUME V7: trace.wgsl giantInside's GI_FLOW, giantSigma) ----
+
+/** the zonal flow's cycle [s] (trace.wgsl GIANT_CYCLE: the surface's and the volume's) */
+export const GIANT_CYCLE = 36000;
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+  return t * t * (3 - 2 * t);
+};
+/** the volume's two phases at the scene's clock tS [s] and its rate [game s / s]: their ages [s] and weights — each alone 70 %
+ *  of the cycle, faded in 30 %; held, the first mid-window, when the clock runs faster than ~1 000 × (giantTurb's rule) */
+export function giantFlowPhases(tS: number, rate: number): [number, number, number, number] {
+  const ph = (((tS / GIANT_CYCLE) % 1) + 1) % 1;
+  const fr = smooth(1000, 3000, rate);
+  const w1 = smooth(0.35, 0.65, Math.abs(2 * ph - 1)) * (1 - fr);
+  return [(ph + (0.5 - ph) * fr) * GIANT_CYCLE, ((ph + 0.5) % 1) * GIANT_CYCLE, 1 - w1, w1];
+}
+/** the zonal wind's shear at a latitude [deg]: its change over the table's 2.5° [m/s] — central differences at the nodes,
+ *  interpolated (trace.wgsl giantWind's y) */
+function giantWindShear(id: GiantId, latDeg: number): number {
+  const x = Math.min(Math.max((latDeg + 90) / 2.5, 0), 71.999);
+  const i = Math.floor(x) + (id === "jupiter" ? 0 : 73);
+  const a = [0, 1, 2, 3].map((n) => GIANT_WINDS[Math.min(Math.max(i + n, 1), 146) - 1]!);
+  const f = x - Math.floor(x);
+  return 0.5 * (a[2]! - a[0]!) + (0.5 * (a[3]! - a[1]!) - 0.5 * (a[2]! - a[0]!)) * f;
+}
+/** where the matter at q (squashed axes, unit) was age seconds ago — giantSigma's reading place: turned west about the axis by
+ *  the zonal wind — the shader's: the wind at the camera's latitude (qc, unit), its shear about it to first order in z —,
+ *  rm the body's metres a radius */
+export function giantFlowBack(id: GiantId, q: V3, age: number, rm: number, qc: V3 = q): V3 {
+  if (age === 0) return q;
+  const latc = (Math.asin(Math.min(Math.max(qc[2], -1), 1)) * 180) / Math.PI;
+  const cc = Math.max(Math.hypot(qc[0], qc[1]), 0.05);
+  const om = giantWindAt(id, latc) / (rm * cc);
+  const dom = giantWindShear(id, latc) / (0.0436332 * rm * cc * cc);
+  const a = -(om + dom * (q[2] - qc[2])) * age,
+    c = Math.cos(a),
+    s = Math.sin(a);
+  return [q[0] * c - q[1] * s, q[0] * s + q[1] * c, q[2]];
+}
+/** the scene's clock and its rate, as the tracer has them (renderer nearCamera.flow) */
+export interface GiantFlowClock {
+  tS: number;
+  rate: number;
+}
+
 // ---- the lightning (once a frame: the renderer's, for trace.wgsl giantFlashGlow) ----
 /** a flash: its slot (stream j, slot n — each one once), its place (the body's squashed axes [its radii]), its light now,
  *  shallow (in the ammonia's clouds) */
@@ -219,7 +266,7 @@ export interface GiantFlash {
  * radii] — the renderer's nearCam), the body m (4 Jupiter, 5 Saturn), rm its metres a radius: every stream's lit flash
  * found in a storm (the renderer hands the brightest one to the shader: P.wx[6]).
  */
-export function giantFlashes(m: 4 | 5, c: V3, rm: number, tc: number): GiantFlash[] {
+export function giantFlashes(m: 4 | 5, c: V3, rm: number, tc: number, flow: GiantFlowClock | null = null): GiantFlash[] {
   const id: GiantId = m === 4 ? "jupiter" : "saturn";
   const L = GIANT_LAYERS[id];
   const rkm = rm * 1e-3;
@@ -233,6 +280,9 @@ export function giantFlashes(m: 4 | 5, c: V3, rm: number, tc: number): GiantFlas
   const rare = m === 4 ? 0 : 0.05;
   const re = m === 4 ? 0.0175 : 0.0166;
   const { kl } = giantLevel(id, q0);
+  // (the storms where the wind has carried them — V7: the phase most seen)
+  const ph = flow ? giantFlowPhases(flow.tS, flow.rate) : null;
+  const age = ph ? (ph[3] > ph[2] ? ph[1] : ph[0]) : 0;
   const out: GiantFlash[] = [];
   for (let j = 0; j < 4; j++) {
     const tj = tc + j * 0.137;
@@ -266,7 +316,8 @@ export function giantFlashes(m: 4 | 5, c: V3, rm: number, tc: number): GiantFlas
       const vl = Math.hypot(...v);
       const qi: V3 = [v[0] / vl, v[1] / vl, v[2] / vl];
       const s = (rkm + hf * 1e-3) / 80;
-      const g = cloudNoiseG(qi[0] * s + 3.1, qi[1] * s + 7.7, qi[2] * s + 1.3);
+      const qn = giantFlowBack(id, qi, age, rm, q0);
+      const g = cloudNoiseG(qn[0] * s + 3.1, qn[1] * s + 7.7, qn[2] * s + 1.3);
       if (g > best) {
         best = g;
         q = qi;
@@ -290,7 +341,7 @@ export function giantFlashes(m: 4 | 5, c: V3, rm: number, tc: number): GiantFlas
 export class GiantThunder {
   private seen = new Set<string>();
   private last = Number.NaN;
-  step(m: 4 | 5, c: V3, rm: number, tc: number): { dist: number; flash: GiantFlash }[] {
+  step(m: 4 | 5, c: V3, rm: number, tc: number, flow: GiantFlowClock | null = null): { dist: number; flash: GiantFlash }[] {
     const back = !(tc > this.last) || tc - this.last > 2;
     this.last = tc;
     if (back) {
@@ -298,7 +349,7 @@ export class GiantThunder {
       return [];
     }
     const out: { dist: number; flash: GiantFlash }[] = [];
-    for (const f of giantFlashes(m, c, rm, tc)) {
+    for (const f of giantFlashes(m, c, rm, tc, flow)) {
       const key = `${f.j}/${f.n}`;
       if (this.seen.has(key)) continue;
       this.seen.add(key);

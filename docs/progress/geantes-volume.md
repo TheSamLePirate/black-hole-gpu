@@ -67,3 +67,42 @@ pixel), prises sur ce Mac ; les temps sont mesurés sur kerr-mini (`planets-ab`,
 - **Tests** : `giant-clouds.test.ts` (s(φ) recalculé à partir des masses, rayons, rotations et J2 du jeu ; les constantes
   du shader celles du jumeau ; 0,86 et 0,75 aux pôles), `aero-giants.test.ts` (l'équateur inchangé ; au pôle chaque pont
   à la pression qu'il a à l'équateur) ; sur le mini `giant-descent`, `giant-poles`, `giant-lightning`, `giant-free-camera`.
+
+## V7a — le volume emporté par le vent zonal
+
+![Jupiter 3 km sous 1 bar et 30 km au-dessus du pont : V4 | V7 | V7 30 min plus tard ; Saturne dans l'œil V4 | V7 ; au milieu d'un fondu (agrandi)](geantes-volume/v7.jpg)
+
+- **Avant** : `giantSigma` lisait le bruit à une place fixe. Dedans rien ne bougeait, alors que la surface coule (G1, G8)
+  et que le vaisseau dérive avec le vent : il glissait devant des nuages immobiles.
+- **Maintenant** : la matière en p était, τ secondes plus tôt, u τ / (R cos φ) plus à l'ouest ; tous les bruits du volume
+  (les bancs, les ponts, les orages, l'érosion fine) sont lus là. Deux phases à un demi-cycle de 10 h d'écart (le cycle de
+  la surface, `GIANT_CYCLE`), chacune effacée avant que son âge ne recommence : le bruit n'est jamais cisaillé sans fin.
+  Le mur et le puits de l'œil gardent leur repère (leur rotation : V7b).
+- **Le vent** : lu une fois par rayon, à la latitude de la caméra, avec son cisaillement autour d'elle au premier ordre (la
+  pente lissée de la table de Cassini) — les flancs des jets glissent l'un contre l'autre sur les ±1–2° de la marche.
+- **Le temps accéléré** : au-delà de ×1 000 à ×3 000, une seule phase, figée au milieu de sa fenêtre (la règle de la
+  turbulence G8).
+- **Le jumeau CPU** : les éclairs cherchent les orages là où le vent les a portés (`giantFlowPhases`, `giantFlowBack`, la
+  phase la plus vue) ; le tonnerre suit.
+- **La méthode, mesurée** (Sam : « (a), deux phases fondues, mesurée ; si trop cher, (b) ») — A/B kerr-mini contre V4,
+  qualité fixe, dedans Jupiter et Saturne, à une phase seule et au milieu d'un fondu :
+
+  | | phase seule | milieu d'un fondu |
+  |---|---|---|
+  | (a) les deux phases lues dans chaque échantillon, le vent lu à chaque échantillon | +13 % / +9 % | **+45 % / +36 %** |
+  | (a) avec le vent une fois par rayon | +13 % / +9 % | +45 % / +36 % |
+  | **retenu : chaque rayon tire une phase selon son poids** | **+4 % / +5 %** | **+5 % / +5 %** |
+
+  Lire les deux phases dans chaque échantillon dépasse le budget de la Terre (55 ms au lieu de 38 à qualité fixe, ~36 ms
+  en jeu pour 30). La version retenue garde les deux phases fondues, mais chaque rayon n'en lit qu'une, tirée selon son
+  poids : l'accumulation (la passe temporelle en jeu, les échantillons d'une image fixe) fait le mélange. Le fondu dure
+  30 % du cycle ; une phase seule les 70 % restants.
+- **Ce qu'on voit au milieu d'un fondu** : les deux champs de nuages superposés à moitié (l'orage à demi transparent, en
+  bas à droite de l'image), avec une fine trame de tramage sur l'image fixe. Le fondu (a) aurait le même fantôme, sans la
+  trame.
+- **Tests** : `giant-clouds.test.ts` (les phases : chacune vue seulement au milieu de sa fenêtre, une seule 70 % du cycle,
+  figée en temps rapide ; le vent et son cisaillement ; les constantes du shader) ; sur le mini `giant-lightning`
+  (le GPU retrouve les éclairs du jumeau), `giant-descent`, `giants-flow` (11 vues sur 12 ; `jupiter-grs` échoue aussi
+  sur V4 : son contrôle « revenu à la même date » était déjà instable) ; `kernel-budget`.
+- **Pas fait** : le court film dedans (vaisseau dérivant avec le vent, puis tenu contre lui), et l'e2e « une vue dedans à
+  10 h d'écart » ; V7b (les tourbillons nommés, la spirale du mur de l'œil).
