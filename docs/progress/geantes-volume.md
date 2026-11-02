@@ -221,3 +221,41 @@ de la planète, l'horloge accélérée.
 - **Sur cette carte**, peu de taches sont nettement blanches : 7 % des points dépassent leur moyenne de 0,07 ; l'Ovale BA,
   dans une zone déjà claire, ne la dépasse que de ~0,03 (son biais ~+0,04). Les plus blanches : la région turbulente à
   l'ouest de la Grande Tache (12–15° S, 87–113° E), une bande à 40° S.
+
+## V9 — la couleur des pôles de Saturne (étude, pas de code)
+
+![Saturne vers 80° N en 2076 (son été boréal), de 2 000, 500, 250 km, puis 120 et 40 km au-dessus de 1 bar, puis 20 km dessous](geantes-volume/v9.jpg)
+
+Couleurs mesurées (sRGB moyen, le bas de l'image ; puis la bande de l'horizon) :
+
+| | le pont | l'horizon |
+|---|---|---|
+| 500 km (la surface G9) | 69, 84, 111 — bleu-gris | 82, 95, 118 |
+| 120 km (le fondu) | 126, 136, 141 — gris ; des trous orange | 115, 122, 136 |
+| 40 km (le volume) | 147, 156, 154 — gris clair | 124, 127, 135 |
+| 20 km sous 1 bar (dedans) | **101, 61, 37 — brun-orange** | 74, 62, 57 — brun |
+| la carte à 80° N, 70°, 45°, 20° | 146, 155, 145 · 170, 163, 133 · 204, 185, 144 · 220, 192, 149 | |
+
+**Ce que montrent les images.**
+
+- De 2 000 km au-dessus du pont, la couleur suit : le bleu-gris d'en haut vient de la carte (grise à 80° N, presque
+  sans le beige des latitudes moyennes) et du Rayleigh de l'air de G9 ; le volume, à 120 et 40 km, la reprend
+  (`GI_TOP`, tiré de la carte).
+- **La rupture est sous le pont d'ammoniac** : dedans, tout devient brun-orange. Deux causes à nous, indépendantes de la
+  latitude :
+  - la brume des chromophores (`giantHazeCol`, `bh`) roussit la lumière partout pareil — 0,7 / 1 / 1,5 en R / V / B ;
+  - le pont d'hydrosulfure a une couleur fixe brun-orange (0,86 ; 0,47 ; 0,20), celle des chromophores de Jupiter.
+- Les trous orange vus de 120 km au-dessus d'un pôle bleu-gris viennent de ce même pont.
+
+**Ce que dit la physique.** Le bleu du pôle nord de Saturne vu par Cassini (2012–2017) s'explique par moins d'aérosols :
+la brume photochimique s'amincit dans la nuit polaire, l'air plus clair diffuse en Rayleigh. Sous une brume plus mince,
+la lumière devrait rester moins rousse, et le ciel plus bleu.
+
+**Ce que je proposerais** (à décider) :
+
+1. **La brume au pôle mince** : son épaisseur (`hz`, `bh`) multipliée, une fois par rayon, par un facteur tiré de la carte
+   sous la caméra — sa couleur bleue par rapport au beige moyen de la planète (b/r ≈ 1 à 80° N, 0,68 à 20° N) —, jusqu'à
+   ~0,35 aux pôles. Coût nul ; dedans le pôle redevient gris-bleu, le ciel moins brun.
+2. **Le pont d'hydrosulfure moins coloré** là où la carte est grise : sa couleur tirée vers le gris par le même facteur
+   (sa couleur réelle est inconnue ; celle de Jupiter n'a pas de raison de valoir au pôle de Saturne).
+3. **Rien de la surface G9** : d'en haut, la couleur suit déjà la carte.
