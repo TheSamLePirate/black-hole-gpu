@@ -87,7 +87,8 @@ export const PROFILES: KernelProfile[] = [
     id: "moon",
     label: "The Moon's surface in the game's universe (a world without air near)",
     key: GAME | NEAR_AIRLESS,
-    entries: ["main", "env", "aerial"],
+    // (its raster's pixels shaded by shadeLite — PLAN-PLANETES-AAA: raster for all —; its entry and budget M0b's)
+    entries: ["main", "env", "aerial", "shadeLite"],
   },
   {
     id: "moons",

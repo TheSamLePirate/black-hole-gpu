@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
-import { EARTH_SETTINGS, EARTH_VIEWS, WORLD_VIEWS } from "./lib/plan-views";
+import { EARTH_SETTINGS, EARTH_VIEWS, M0B_EARTH_VIEWS, SCENE_VIEWS, WORLD_VIEWS } from "./lib/plan-views";
 
 // The common plan's shared suite of views (docs/PLAN-REFRACTION-HORIZONS.md — M0a, M0b, then every phase: decision 36):
 // each view held still in the game's own settings (its governor on), measured the same way — the frame time over 120
@@ -11,7 +11,9 @@ import { EARTH_SETTINGS, EARTH_VIEWS, WORLD_VIEWS } from "./lib/plan-views";
 // profile); a shot of each. Then a 30 s flight over Chamonix: every completed frame's time and, each second, the tiles still
 // pending and the relief cache's bakes. One build (its own server), or two A/B in one Chrome (AB_A_URL, AB_B_URL — rounds
 // A B B A, AB_ROUNDS pairs: scripts/ab-commit.ts with AB_CMD). ONLY=name,name: some views; PV_FLIGHT=0: no flight;
-// PV_WORLDS=0: no rocky worlds. Figures in $PV_OUT/plan-views.json (remote-results/plan-views else), shots <side><round>-<view>.png.
+// PV_WORLDS=0: no rocky worlds. PV_M0B=1 (M0b's references): its coast, its scenes' views (the refraction's, the horizons' —
+// each with the Sun's or the Moon's place said, some with their relief shadows' share: liteSkip 4 and 8192), a shot every
+// second while the first view's tiles come (its tiles each second), the flight PV_FLIGHT_S long (30 s by default). Figures in $PV_OUT/plan-views.json (remote-results/plan-views else), shots <side><round>-<view>.png.
 // Duration: ~25 min on kerr-mini (one side, its shaders cached; the first compile more).
 // Done when: every view measured on every side, plan-views.json written.
 
@@ -24,7 +26,10 @@ const OUT = process.env.PV_OUT ?? process.env.AB_OUT ?? "remote-results/plan-vie
 const ONLY = process.env.ONLY?.split(",");
 const FLIGHT = process.env.PV_FLIGHT !== "0";
 const WORLDS = process.env.PV_WORLDS !== "0";
-const earth = EARTH_VIEWS.filter((v) => !ONLY || ONLY.includes(v.name));
+const M0B = process.env.PV_M0B === "1";
+const FLIGHT_S = Number(process.env.PV_FLIGHT_S ?? 30);
+const earth = [...EARTH_VIEWS, ...(M0B ? M0B_EARTH_VIEWS : [])].filter((v) => !ONLY || ONLY.includes(v.name));
+const scenes = M0B ? SCENE_VIEWS.filter((v) => !ONLY || ONLY.includes(v.name)) : [];
 const worlds = WORLDS ? WORLD_VIEWS.filter((v) => !ONLY || ONLY.includes(`${v.body}-${v.view}`)) : [];
 
 // (a view held, measured: 120 completed frames with the profiler off, then its passes with it on)
@@ -90,6 +95,21 @@ test.skipIf(!E2E)(
         const place = `__bh.game.flyAt(${v.at.join(", ")}); __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();`;
         const t0 = Date.now();
         await app.js(`(() => { ${place} __bh.freeze(true); return 1; })()`);
+        if (M0B && v === earth[0] && n === 0) {
+          // (M0b: the image while the tiles come — a shot and the tiles' state every second, 20 s)
+          const arrival: Record<string, unknown>[] = [];
+          for (let k = 0; k < 20; k++) {
+            await Bun.sleep(1000);
+            arrival.push(
+              await app.js(`(() => { const t = __bh.renderer.earthTiles, p = __bh.game.perf({ gpu: false });
+              return { s: ${k + 1}, pending: t.pending, finest: t.finest, orthoPending: t.orthoPending, orthoFinest: t.orthoFinest, builds: p.terrainCache?.builds ?? null }; })()`),
+            );
+            await shot(`${OUT}/${label}-${v.name}-arrival-${String(k + 1).padStart(2, "0")}.png`);
+          }
+          results.push({ side, round, view: `${v.name}-arrival`, what: `${v.what}: the first 20 s, a shot a second`, arrival });
+          save();
+          console.log(`  ${label} ${v.name}-arrival: ${JSON.stringify(arrival.at(-1))}`);
+        }
         const relief = await tiles("t.finest >= 14 && t.pending === 0", 180_000);
         const reliefS = (Date.now() - t0) / 1000;
         await app.js(`(() => { ${place} return 1; })()`);
@@ -124,7 +144,7 @@ test.skipIf(!E2E)(
           r.prof.enabled = false;
           const g = [], log = []; let done = r.completedFrames; const t0 = performance.now(); let next = 0;
           const builds0 = __bh.game.perf({ gpu: false }).terrainCache?.builds ?? 0;
-          while (performance.now() - t0 < 30000) { await frame();
+          while (performance.now() - t0 < ${FLIGHT_S * 1000}) { await frame();
             if (r.completedFrames !== done) { done = r.completedFrames; g.push(r.completedDurations[r.completedDurations.length - 1]); }
             if (performance.now() - t0 >= next) { next += 1000; const t = r.earthTiles, p = __bh.game.perf({ gpu: false });
               log.push({ s: +((performance.now() - t0) / 1000).toFixed(1), pending: t.pending, orthoPending: t.orthoPending, finest: t.finest,
@@ -132,7 +152,7 @@ test.skipIf(!E2E)(
           const s = [...g].sort((a, b) => a - b), q = (f) => +(s[Math.min(s.length - 1, Math.floor(f * s.length))] ?? 0).toFixed(2);
           return { frames: g.length, median: q(0.5), p95: q(0.95), p99: q(0.99), max: +(s[s.length - 1] ?? 0).toFixed(1), durations: g.map((x) => +x.toFixed(1)), log }; })()`);
         await shot(`${OUT}/${label}-chamonix-flight.png`);
-        results.push({ side, round, view: "chamonix-flight", what: "Chamonix, 30 s of flight at 120 m/s", ...flight });
+        results.push({ side, round, view: "chamonix-flight", what: `Chamonix, ${FLIGHT_S} s of flight at 120 m/s`, ...flight });
         save();
         console.log(`  ${label} chamonix-flight: ${flight.median} ms (p95 ${flight.p95}, max ${flight.max}) over ${flight.frames} frames`);
       }
@@ -144,15 +164,69 @@ test.skipIf(!E2E)(
           ${set}
           const t0 = performance.now();
           for (let i = 0; i < 4; i++) { __bh.touch(); await frame(); }
-          while ((!r.kernelsSettled || r.compilesPending > 0 || r.compilingNow.length > 0) && performance.now() - t0 < 600000) { __bh.touch(); await frame(); }
-          while (r.earthTiles.pending > 0 && performance.now() - t0 < 600000) { __bh.touch(); await frame(); }
+          while ((!r.kernelsSettled || r.compilesPending > 0 || r.compilingNow.length > 0) && performance.now() - t0 < 120000) { __bh.touch(); await frame(); }
+          while (r.earthTiles.pending > 0 && performance.now() - t0 < 120000) { __bh.touch(); await frame(); }
           return 1; })()`);
+        // (two minutes at most — what was still missing said, the view measured all the same)
+        const late = await app.js<string>(
+          `(() => { const r = __bh.renderer; return !r.kernelsSettled || r.compilesPending > 0 || r.compilingNow.length > 0 ? "compiling " + r.compilingNow.join(",") : r.earthTiles.pending > 0 ? "tiles " + r.earthTiles.pending : ""; })()`,
+        );
+        if (late) console.log(`  ${label} ${v.body}-${v.view}: not settled after 120 s — ${late}`);
         const m = await app.js<Record<string, unknown>>(MEASURE);
         const name = `${v.body}-${v.view}`;
         await shot(`${OUT}/${label}-${name}.png`);
         results.push({ side, round, view: name, what: name, ...m });
         save();
         console.log(`  ${label} ${name}: ${m.median} ms (p95 ${m.p95}), scale ${m.scale}`);
+      }
+
+      for (const v of scenes) {
+        await app.load(`scene=${encodeURIComponent("Earth: the Blue Marble")}&vram`);
+        await app.js(`(() => { ${v.set} return 1; })()`);
+        const ready = await app
+          .waitFor(
+            `(() => { const r = __bh.renderer; __bh.touch(); const sc = r.earthScenery?.stats?.(); return r.kernelsSettled && r.compilesPending === 0 && r.compilingNow.length === 0 && r.earthTiles.pending === 0 && (!sc || !sc.pending); })()`,
+            120_000,
+          )
+          .then(
+            () => "",
+            () => "not settled after 120 s",
+          );
+        if (ready) console.log(`  ${label} ${v.name}: ${ready}`);
+        const sky = await app.js<Record<
+          string,
+          unknown
+        > | null>(`(() => { const s = __bh.camera.skyInfo?.(); return s ? { over: s.over, lat: +s.latDeg.toFixed(3), lon: +s.lonDeg.toFixed(3), heightM: Math.round(s.heightM),
+          sun: s.sun && { alt: +s.sun.altDeg.toFixed(2), apparent: +s.sun.apparentAltDeg.toFixed(2), az: +s.sun.azDeg.toFixed(1) },
+          moon: s.moon && { alt: +s.moon.altDeg.toFixed(2), az: +s.moon.azDeg.toFixed(1) }, eclipse: s.eclipse ?? null, refraction: s.refraction } : null; })()`);
+        const m = await app.js<Record<string, unknown>>(MEASURE);
+        // (the shot without the interface — the panels, H's toggle, and the ship's symbology on #overlay: the sky and the ground
+        // judged)
+        await app.js(
+          `(() => { document.body.classList.add("hide-ui"); document.getElementById("overlay").style.visibility = "hidden"; __bh.touch(); return 1; })()`,
+        );
+        await Bun.sleep(600);
+        await shot(`${OUT}/${label}-${v.name}.png`);
+        await app.js(
+          `(() => { document.body.classList.remove("hide-ui"); document.getElementById("overlay").style.visibility = ""; return 1; })()`,
+        );
+        const extra: Record<string, unknown> = {};
+        if (v.shadows) {
+          // (the relief shadows' share: the frame and the passes without them — 4 —, then without the Sun's map — 8192)
+          for (const bit of [4, 8192]) {
+            await app.js(`(() => { __bh.renderer.liteSkip = ${bit}; __bh.touch(); return 1; })()`);
+            const w = await app.js<Record<string, unknown>>(MEASURE);
+            extra[`skip${bit}`] = { median: w.median, p95: w.p95, gpuFrameMs: w.gpuFrameMs, passes: w.passes };
+          }
+          await app.js(`(() => { __bh.renderer.liteSkip = 0; __bh.touch(); return 1; })()`);
+        }
+        results.push({ side, round, view: v.name, what: v.what, settled: !ready, sky, ...m, ...extra });
+        save();
+        const sk = extra.skip4 as { median?: number } | undefined,
+          sm = extra.skip8192 as { median?: number } | undefined;
+        console.log(
+          `  ${label} ${v.name}: ${m.median} ms (p95 ${m.p95})${sk ? `, no shadows ${sk.median}, no Sun map ${sm?.median}` : ""} · sky ${JSON.stringify(sky?.sun ?? null)} moon ${JSON.stringify(sky?.moon ?? null)}`,
+        );
       }
     }
     save();

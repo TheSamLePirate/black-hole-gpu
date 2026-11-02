@@ -70,3 +70,119 @@ export const WORLD_VIEWS = SPOTS.filter((s) =>
 
 /** the game's own settings for the Earth's views, the network's chance left out (no traffic), the F-35 in its cockpit */
 export const EARTH_SETTINGS = `{ traffic: false, weather: "fair", earthPipeline: "raster", f35AutoProtect: false, damage: false, crashSpeed: 1e9 }`;
+
+/** a view made from a scene (M0b — the refraction's, the horizons', the Earth's from a tripod or an orbit): `set` run on the
+ *  Blue Marble's page (a preset, or one made at runtime from a base, its pose and time replaced), measured as the worlds';
+ *  `shadows`: its relief shadows' share measured too (renderer.liteSkip 4 — the shadows —, 8192 — the Sun's map) */
+export type SceneView = { name: string; what: string; set: string; shadows?: boolean };
+const M_S = 492.5490947;
+/** a date (UTC) as the game's time [M] */
+const at = (iso: string) => (Date.parse(iso) - Date.UTC(2067, 0, 1)) / 1000 / M_S;
+const HOLDS = `Object.assign(__bh.settings, { animate: false, damage: false, crashSpeed: 1e9 });`;
+const made = (name: string, base: string, patch: string) =>
+  `__bh.presets[${JSON.stringify(name)}] = { ...__bh.presets[${JSON.stringify(base)}], ${patch} }; __bh.game.preset(${JSON.stringify(name)}); ${HOLDS}`;
+const cineOf = (b: string) => {
+  const v = SPOTS.find((x) => x.body === b && x.view === "cine")!.set;
+  return Array.isArray(v) ? v[0]! : v;
+};
+const scene = (name: string) => `__bh.game.preset(${JSON.stringify(name)}); ${HOLDS}`;
+
+export const SCENE_VIEWS: SceneView[] = [
+  // (the rocky worlds of the horizons' track — H —: the shadows' share, the terminator, the pole)
+  {
+    name: "mercury-cine-sun15",
+    what: "Mercury, the cratered plains, the Sun 15° up",
+    set: scene("Mercury: the cratered plains"),
+    shadows: true,
+  },
+  // (Ceres has no showcase scene: the ciné view of planet-views.ts, M0a's)
+  { name: "ceres-cine", what: "Ceres, M0a's ciné view", set: cineOf("ceres"), shadows: true },
+  { name: "europa-cine", what: "Europa, Jupiter over the ice", set: scene("Europa: Jupiter over the ice"), shadows: true },
+  {
+    name: "moon-terminator-500km",
+    what: "the Moon's terminator from 500 km",
+    set: made(
+      "M0b: the Moon's terminator",
+      "Moon: Earthrise",
+      `fov: 50, pose: { body: "moon", altKm: 500, phase: 88, look: "moon", tilt: 25 }`,
+    ),
+    shadows: true,
+  },
+  {
+    name: "moon-south-pole",
+    what: "the Moon's south pole on the ground, the Sun grazing",
+    set: made(
+      "M0b: the Moon's south pole",
+      "Moon: Earthrise",
+      `fov: 60, pose: { body: "moon", at: [-88.5, 0], sunEl: 1.5, look: "sun", off: [35, -4] }`,
+    ),
+    shadows: true,
+  },
+  { name: "mars-ground-sunset", what: "Mars on the ground at sunset", set: scene("Mars: the blue sunset"), shadows: true },
+  {
+    name: "moon-telescope-first-quarter",
+    what: "the first-quarter Moon through a telescope from the Andes (1°)",
+    set: made("M0b: the first quarter, telescope", "Earth: first quarter over the Andes", `fov: 1`),
+  },
+  // (the refraction's track — R —: the Sun at the horizon, the limb from orbit, an eclipsed Moon, a coast's far islands)
+  {
+    name: "biarritz-sun05-tele",
+    what: "Biarritz, 21 June 2026, the Sun ~0.5° up, telephoto 4°",
+    set: made(
+      "M0b: Biarritz, Sun 0.5°",
+      "Earth: sunset over the Andes",
+      `fov: 4, earthClouds: 0, time: ${at("2026-06-21T19:41:00Z")}, pose: { at: [43.4832, -1.5586], look: "sun", off: [0, 0] }`,
+    ),
+  },
+  {
+    name: "biarritz-sun2-tele",
+    what: "Biarritz, 21 June 2026, the Sun ~2° up, telephoto 4°",
+    set: made(
+      "M0b: Biarritz, Sun 2°",
+      "Earth: sunset over the Andes",
+      `fov: 4, earthClouds: 0, time: ${at("2026-06-21T19:31:00Z")}, pose: { at: [43.4832, -1.5586], look: "sun", off: [0, 0] }`,
+    ),
+  },
+  // (the Sun at the limb seen from 420 km: ~−19.8° — the limb's dip 20.6° less the refraction —; the phase, the place found by
+  // a sweep of the Sun's altitude by phase and longitude — docs/progress/refraction-horizons/M0b.md)
+  {
+    name: "iss-sunset-equator",
+    what: "a sunset from the ISS's height over the equator (420 km)",
+    set: made("M0b: ISS sunset, equator", "Earth: sunset from orbit", `pose: { altKm: 420, phase: 109.8, look: "sun", off: [0, -3] }`),
+  },
+  {
+    name: "iss-sunset-north",
+    what: "a sunset from the ISS's height above 70° N (420 km)",
+    set: made("M0b: ISS sunset, north", "Earth: sunset from orbit", `pose: { altKm: 420, at: [72, 39], look: "sun", off: [0, -3] }`),
+  },
+  {
+    name: "eclipsed-moon-2025-09-07",
+    what: "the eclipsed Moon of 7 Sept 2025 at greatest (18:12 UTC) from New Delhi, 2°",
+    set: made(
+      "M0b: the eclipsed Moon",
+      "Earth: first quarter over the Andes",
+      `fov: 2, earthClouds: 0, time: ${at("2025-09-07T18:12:00Z")}, pose: { at: [28.61, 77.21], look: "moon" }`,
+    ),
+  },
+  { name: "andes-sunset", what: "the Andes at sunset (Mendoza)", set: scene("Earth: sunset over the Andes") },
+  {
+    name: "la-hague",
+    what: "La Hague, the Nez de Jobourg looking west over the Channel, a June evening",
+    set: made(
+      "M0b: La Hague",
+      "Earth: sunset over the Andes",
+      `ship: false, fov: 20, earthClouds: 0, time: ${at("2026-06-21T20:15:00Z")}, pose: { at: [49.676, -1.94], heading: 285, off: [0, -1] }`,
+    ),
+  },
+];
+
+/** M0b's Earth views from the craft: a coast from 6 km offshore (the coast's teeth, the sea against the shore) */
+export const M0B_EARTH_VIEWS: EarthView[] = [
+  {
+    name: "coast-6km",
+    what: "the Basque coast from 6 km offshore, 800 m, midday",
+    date: "2026-06-21T12:00:00Z",
+    at: [43.47, -1.64, 800, 95, 140],
+    ortho: true,
+  },
+];

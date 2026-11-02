@@ -1,0 +1,46 @@
+{
+ "moon": {
+  "W": 4096,
+  "H": 2048,
+  "texelKm": 2.67,
+  "demMaxDeg": 49.7,
+  "dem999Deg": 27.4,
+  "dem99Deg": 21.4,
+  "proceduralMaxDeg": 73.7,
+  "procedural999Deg": 43.1,
+  "procedural99Deg": 23.3
+ },
+ "mars": {
+  "W": 4096,
+  "H": 2048,
+  "texelKm": 5.2,
+  "demMaxDeg": 39.7,
+  "dem999Deg": 15.2,
+  "dem99Deg": 8.1,
+  "proceduralMaxDeg": 40.8,
+  "procedural999Deg": 26.9,
+  "procedural99Deg": 12.6
+ },
+ "mercury": {
+  "W": 2048,
+  "H": 1024,
+  "texelKm": 7.48,
+  "demMaxDeg": 57.4,
+  "dem999Deg": 14.3,
+  "dem99Deg": 8.4,
+  "proceduralMaxDeg": 66.2,
+  "procedural999Deg": 43.1,
+  "procedural99Deg": 23.4
+ },
+ "ceres": {
+  "W": 2048,
+  "H": 1024,
+  "texelKm": 1.44,
+  "demMaxDeg": 60.3,
+  "dem999Deg": 36.5,
+  "dem99Deg": 29,
+  "proceduralMaxDeg": 89.9,
+  "procedural999Deg": 40.6,
+  "procedural99Deg": 23.3
+ }
+}

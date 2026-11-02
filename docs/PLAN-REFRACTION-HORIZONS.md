@@ -1253,3 +1253,8 @@ compilation) s'y ajoutent.
   coutures nul par construction, 96 px avant au 95ᵉ centile) et **T5** (les normales lisses dans le canal `a`, 2 × 9 bits ;
   plus de facettes ; visibilité au même coût à Yosemite) —
   [progress/refraction-horizons/T3-T5.md](progress/refraction-horizons/T3-T5.md).
+- **2 novembre, soir** : **M0b** mesuré sur kerr-mini (deux tours, 25 vues) — la part des ombres du relief sur les mondes
+  à cratères (5 à 14 ms), 16 cuissons par seconde en vol bas ; **H3a abandonné** (aucune borne de pente utile : 66 à 90°
+  pour les seuls cratères procéduraux), `reliefAt` = 8 × `hdAt`, les calottes à 78° et 256² gardées —
+  [progress/refraction-horizons/M0b.md](progress/refraction-horizons/M0b.md) ; **R3** fait (les deux Soleils) —
+  [progress/refraction-horizons/R3.md](progress/refraction-horizons/R3.md).
