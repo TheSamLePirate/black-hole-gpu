@@ -4,13 +4,20 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync, copyFileSync, chmodSync,
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fixture, CAP } from "./fixtures.ts";
-import { parseOsPressure } from "../src/legacy.ts";
+import { normalizeMacmon, parseOsPressure } from "../src/legacy.ts";
 import { normalizeSnapshot, powerFeed, powerArguments } from "../src/runtime.ts";
 import { thermalStateNative } from "../src/service.ts";
 import { latest } from "../src/files.ts";
 const directory = mkdtempSync(join(tmpdir(), "mac-thermal-service-"));
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
 const darwin = process.platform === "darwin" && process.arch === "arm64";
+
+test("macmon's 0 °C (no sensor: the M1's GPU) is unavailable, not a temperature", () => {
+  const n = normalizeMacmon({ temp: { cpu_temp_avg: 36.8, gpu_temp_avg: 0 } });
+  expect(n.cpuCelsius).toBe(36.8);
+  expect(n.gpuCelsius).toBeNull();
+  expect(normalizeMacmon({ temp: { cpu_temp_avg: -1, gpu_temp_avg: "x" } })).toMatchObject({ cpuCelsius: null, gpuCelsius: null });
+});
 
 test("notifyd's pressure level parses to powermetrics' spelling; garbage stays null", () => {
   expect(parseOsPressure("com.apple.system.thermalpressurelevel 2\n")).toEqual({ value: 2, label: "Heavy" });

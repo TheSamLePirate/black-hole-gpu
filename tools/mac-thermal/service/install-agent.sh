@@ -16,6 +16,9 @@ DOMAIN=gui/$(id -u)
 SEARCH=/opt/homebrew/bin:/usr/local/bin:$PATH
 
 launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+# (bootout returns before the service is gone: a bootstrap meanwhile fails with "5: Input/output error")
+i=0
+while [ $i -lt 20 ] && launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1; do sleep 0.5; i=$((i + 1)); done
 if [ "${1:-}" = "--uninstall" ]; then
   rm -f "$PLIST"
   echo "kerr-thermal agent removed (its files kept in $STATE)"
@@ -62,7 +65,12 @@ cat >"$PLIST" <<EOF
 </plist>
 EOF
 plutil -lint "$PLIST" >/dev/null
-launchctl bootstrap "$DOMAIN" "$PLIST"
+i=0
+until launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null; do
+  i=$((i + 1))
+  [ $i -lt 5 ] || { launchctl bootstrap "$DOMAIN" "$PLIST"; exit 1; }
+  sleep 1
+done
 
 # (its first sample: macmon's start, then one interval)
 i=0

@@ -58,7 +58,7 @@ bun scripts/thermal.ts install            # construit tools/mac-thermal en un se
 sudo sh ~/.local/share/kerr-thermal/install-root.sh     # Sam, une fois : le démon powermetrics
 ```
 
-kerr-mini :
+kerr-mini (fait le 2026-11-02, moitié utilisateur ; macmon 0.8.2 installé par Homebrew) :
 
 ```sh
 bun scripts/thermal.ts install --host kerr-mini         # installe macmon par Homebrew s'il manque, copie, charge l'agent
@@ -106,12 +106,14 @@ thermalWindow(t0, t1);                  // entre deux instants : nombre d'échan
 - `gpuMHz / gpuMaxMHz` : une horloge basse sur un GPU **peu chargé** est normale (le DVFS suit la charge). Sous
   pleine charge, elle est suspecte. Sans le démon root, `gpuBusyPct` est l'activité de macmon, pondérée par la fréquence
   (« scaled ») ; avec le démon, c'est le temps d'activité réel (« active »).
+- `gpuTempC` vaut `null` (« ? ») sur kerr-mini : c'est un M1, où macmon ne trouve pas de capteur de température GPU (il
+  écrit 0, que l'outil rend indisponible). La température CPU, l'horloge et la puissance du GPU y sont bien mesurées.
 - Les règles de l'outil restent valables : `null` veut dire indisponible, jamais zéro ; aucune conclusion de bridage
   matériel n'est tirée (`hardwareThrottling: "unknown"`).
 
 ## Tests
 
-`tools/mac-thermal/tests/` : les 29 tests de l'outil d'origine et 5 nouveaux (`service.test.ts` : la pression de l'OS,
+`tools/mac-thermal/tests/` : les 29 tests de l'outil d'origine et 6 nouveaux (`service.test.ts` : la pression de l'OS, les 0 °C de macmon,
 le flux root, `thermalState` par FFI, le service sur un faux macmon). Depuis la racine du dépôt, sous `bun test`, un
 sous-processus perd sa sortie standard (`tests/chrome-lock.test.ts` échoue de la même façon). Ces tests se lancent donc
 depuis un autre dossier : `cd / && bun test ~/Documents/DEV/black-hole-gpu/tools/mac-thermal`.

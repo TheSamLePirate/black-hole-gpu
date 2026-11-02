@@ -72,6 +72,7 @@ export function parseGpuRegistry(raw: string) {
 
 export function normalizeMacmon(m: Dict) {
   const number = (v: any) => typeof v === "number" && Number.isFinite(v) ? v : null;
+  const celsius = (v: any) => (number(v) ?? 0) > 0 ? v as number : null;
   const tier = (label: string, old: string) => {
     const current = m.cpu_tiers?.find((t: Dict) => t.label === label);
     return {
@@ -81,7 +82,8 @@ export function normalizeMacmon(m: Dict) {
     };
   };
   return {
-    cpuCelsius: number(m.temp?.cpu_temp_avg), gpuCelsius: number(m.temp?.gpu_temp_avg),
+    // (macmon writes 0 where it finds no sensor — the M1's GPU: unavailable, never 0 °C)
+    cpuCelsius: celsius(m.temp?.cpu_temp_avg), gpuCelsius: celsius(m.temp?.gpu_temp_avg),
     efficiency: tier("E", "ecpu"), performance: tier("P", "pcpu"),
     gpu: {
       frequencyMHz: number(m.gpu_freq_mhz ?? m.gpu_usage?.[0]),
