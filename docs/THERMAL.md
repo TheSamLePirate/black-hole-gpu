@@ -81,7 +81,9 @@ gêne pas une mesure GPU.
 Le démon root suit la même règle. Sa première version relançait `powermetrics -n 1` toutes les 5 s, et chaque lancement
 coûtait 2 à 4,5 s de CPU (mesuré le 2 novembre sur les deux Mac), soit un tiers d'un cœur en continu. Il garde maintenant
 un seul powermetrics en flux continu (`-n -1 -b 1`). awk découpe ce flux et publie chaque échantillon dès sa dernière
-ligne (`GPU Power:` de la section GPU). Un échantillon coupé par la fin du flux est jeté, et le précédent reste en place.
+ligne (`GPU Power:` de la section GPU). Un échantillon coupé par la fin du flux est jeté, et le précédent reste en place. Mesuré
+le même jour, une fois le démon lancé (sa mise en place, 2,6 à 3,7 s, n'est payée qu'une fois) : **0,06 s de CPU en 30 s**
+sur kerr-mini et **0,14 s** sur ce Mac, soit 0,2 et 0,5 % d'un cœur. Un échantillon complet arrive toutes les 5 s.
 
 ## Pour les e2e et les scripts
 
