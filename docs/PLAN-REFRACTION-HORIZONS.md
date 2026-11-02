@@ -1264,3 +1264,9 @@ compilation) s'y ajoutent.
   (`tileLayout`, `trace.wgsl tileAt`) : la texture « très loin » de 436 à 235 Mo (−192 Mio à la jauge du jeu), le pic
   au changement de portée 369 Mo ; les mêmes images (A/B sur kerr-mini dans le bruit A/A), aucun coût au temps d'image —
   [progress/refraction-horizons/T10.md](progress/refraction-horizons/T10.md).
+- **2 novembre, nuit** : **H1** fait (le pilote, la Lune) — la cuisson GPU générique (`horizon-maps.ts`, `horizon.wgsl` :
+  treillis lat/lon, fenêtre locale, calottes stéréographiques à 16 directions), ~150 ms de GPU en bandes de ~2 ms, 25 Mo,
+  le GPU à un code près du CPU sur 99,9 % des octets ; le pilote : depuis le haut du texel, **12,7 % de faux éclairage**
+  (2,65 % de fausse ombre) au-delà de `D_cuisson` ; l'option « distance par direction + moyennes » le divise par deux
+  (5,95 / 2,35 %) ; 0,1° contre la référence non tenu (±0,3°) — **porte de décision** posée à Sam —
+  [progress/refraction-horizons/H1.md](progress/refraction-horizons/H1.md).

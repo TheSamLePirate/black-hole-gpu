@@ -1,6 +1,6 @@
 // A minimal PNG reader for the e2e captures (8-bit, non-interlaced, RGB or RGBA): the pixels of a capture, to measure
 // what a diagnostic view shows rather than to look at it.
-import { inflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 
 export interface Pixels {
   width: number;
@@ -59,4 +59,34 @@ export function readPng(bytes: Uint8Array): Pixels {
     }
   }
   return { width, height, channels, data };
+}
+
+/** An RGB image (3 bytes a pixel, rows top first) as a PNG file's bytes — filter 0, zlib — for the e2e's computed plates. */
+export function writePng(width: number, height: number, rgb: Uint8Array): Uint8Array {
+  const raw = new Uint8Array(height * (1 + 3 * width));
+  for (let y = 0; y < height; y++) raw.set(rgb.subarray(y * 3 * width, (y + 1) * 3 * width), y * (1 + 3 * width) + 1);
+  const chunk = (type: string, data: Uint8Array) => {
+    const out = new Uint8Array(12 + data.length);
+    const v = new DataView(out.buffer);
+    v.setUint32(0, data.length);
+    for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+    out.set(data, 8);
+    v.setUint32(8 + data.length, Bun.hash.crc32(out.subarray(4, 8 + data.length)));
+    return out;
+  };
+  const ihdr = new Uint8Array(13);
+  const h = new DataView(ihdr.buffer);
+  h.setUint32(0, width);
+  h.setUint32(4, height);
+  ihdr.set([8, 2, 0, 0, 0], 8);
+  const parts = [
+    new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", new Uint8Array(0)),
+  ];
+  const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
+  let o = 0;
+  for (const p of parts) out.set(p, o), (o += p.length);
+  return out;
 }

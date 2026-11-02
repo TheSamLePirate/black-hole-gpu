@@ -1,0 +1,228 @@
+{
+ "bake": {
+  "body": "moon",
+  "state": "done",
+  "rows": 140,
+  "lastMs": 0.921445,
+  "frames": 101,
+  "bands": 100,
+  "doneMs": 13027,
+  "left": 0,
+  "bytes": 25165824,
+  "ranges": {
+   "map": {
+    "R": 1737400,
+    "texelSrc": 2665.138220872513,
+    "D0": 10660.552883490052,
+    "Dmax": 261702.70919499476,
+    "steps": 16,
+    "obsLevel": 1
+   },
+   "pole": {
+    "R": 1737400,
+    "texelSrc": 2665.138220872513,
+    "D0": 6185.991433227465,
+    "Dmax": 261702.70919499476,
+    "steps": 18,
+    "obsLevel": 0
+   }
+  },
+  "band": {
+   "ms": 2.567,
+   "last": 8.78,
+   "n": 37
+  },
+  "gpuErrors": 0
+ },
+ "ranges": {
+  "map": {
+   "R": 1737400,
+   "texelSrc": 2665.138220872513,
+   "D0": 10660.552883490052,
+   "Dmax": 261702.70919499476,
+   "steps": 16,
+   "obsLevel": 1
+  },
+  "cap": {
+   "R": 1737400,
+   "texelSrc": 2665.138220872513,
+   "D0": 6185.991433227465,
+   "Dmax": 261702.70919499476,
+   "steps": 18,
+   "obsLevel": 0
+  }
+ },
+ "parity": {
+  "map": {
+   "n": 3200,
+   "within1": 0.999375,
+   "worst": 3
+  },
+  "north cap": {
+   "n": 2400,
+   "within1": 0.9995833333333334,
+   "worst": 2
+  },
+  "south cap": {
+   "n": 2400,
+   "within1": 0.99125,
+   "worst": 16
+  }
+ },
+ "pilot": {
+  "map": {
+   "n": 2000,
+   "err": {
+    "p5": -5.048,
+    "p25": -1.154,
+    "median": -0.164,
+    "p75": 0.273,
+    "p95": 1.135,
+    "min": -12.844,
+    "max": 5.381
+   },
+   "errFromTop": {
+    "p5": 0.008,
+    "median": 0.666,
+    "p95": 1.999
+   },
+   "falseLight": 12.7,
+   "falseShadow": 2.65,
+   "hardFalseLight": 11.05,
+   "hardFalseShadow": 1.8,
+   "shadowed": 28.1
+  },
+  "caps": {
+   "n": 400,
+   "err": {
+    "p5": -2.349,
+    "p25": -0.227,
+    "median": 0.253,
+    "p75": 0.637,
+    "p95": 1.552,
+    "min": -7.116,
+    "max": 3.039
+   },
+   "errFromTop": {
+    "p5": -0.056,
+    "median": 0.676,
+    "p95": 2.212
+   },
+   "falseLight": 4.25,
+   "falseShadow": 5.25,
+   "hardFalseLight": 3.75,
+   "hardFalseShadow": 3,
+   "shadowed": 41.5
+  },
+  "option a — from the texel's top (CPU)": {
+   "n": 2000,
+   "err": {
+    "p5": -4.908,
+    "p25": -1.155,
+    "median": -0.153,
+    "p75": 0.278,
+    "p95": 1.198,
+    "min": -13.219,
+    "max": 5.086
+   },
+   "errFromTop": {
+    "p5": 0,
+    "median": 0,
+    "p95": 0
+   },
+   "falseLight": 12.3,
+   "falseShadow": 2.55,
+   "hardFalseLight": 10.7,
+   "hardFalseShadow": 1.65,
+   "shadowed": 28.1
+  },
+  "option b — from the texel's mean": {
+   "n": 2000,
+   "err": {
+    "p5": -0.157,
+    "p25": 0.294,
+    "median": 0.815,
+    "p75": 1.539,
+    "p95": 2.966,
+    "min": -4.203,
+    "max": 7.862
+   },
+   "errFromTop": {
+    "p5": 0,
+    "median": 0,
+    "p95": 0
+   },
+   "falseLight": 0.6,
+   "falseShadow": 13.45,
+   "hardFalseLight": 0.45,
+   "hardFalseShadow": 10.75,
+   "shadowed": 28.1
+  },
+  "option c — the blockers kept, the receiver's own height": {
+   "n": 2000,
+   "err": {
+    "p5": -0.823,
+    "p25": 0.111,
+    "median": 0.518,
+    "p75": 1.151,
+    "p95": 2.453,
+    "min": -9.301,
+    "max": 8.771
+   },
+   "errFromTop": {
+    "p5": 0,
+    "median": 0,
+    "p95": 0
+   },
+   "falseLight": 1.95,
+   "falseShadow": 9.85,
+   "hardFalseLight": 1.65,
+   "hardFalseShadow": 7.7,
+   "shadowed": 28.1
+  },
+  "option d — c, the rays reading the mean heights": {
+   "n": 2000,
+   "err": {
+    "p5": -2.227,
+    "p25": -0.56,
+    "median": -0.126,
+    "p75": 0.158,
+    "p95": 0.996,
+    "min": -12.758,
+    "max": 4.712
+   },
+   "errFromTop": {
+    "p5": 0,
+    "median": 0,
+    "p95": 0
+   },
+   "falseLight": 5.95,
+   "falseShadow": 2.35,
+   "hardFalseLight": 4.45,
+   "hardFalseShadow": 1.5,
+   "shadowed": 28.1
+  }
+ },
+ "plates": {
+  "terminator": {
+   "shadowed": 39.1,
+   "falseLight": 3.38,
+   "falseShadow": 1.64
+  },
+  "terminatorD": {
+   "shadowed": 40.3,
+   "falseLight": 2.2,
+   "falseShadow": 0.78
+  },
+  "southPole": {
+   "shadowed": 77.3,
+   "falseLight": 1.25,
+   "falseShadow": 2.43
+  },
+  "southPoleD": {
+   "shadowed": 76.8,
+   "falseLight": 1.7,
+   "falseShadow": 1.1
+  }
+ }
+}

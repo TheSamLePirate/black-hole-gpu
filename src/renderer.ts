@@ -178,6 +178,7 @@ import {
 import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/geoid";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
+import { HorizonMaps } from "./system/horizon-maps";
 import { capEdges, devilSeason, marsLs } from "./system/mars-season";
 import { MoonTiles, WORLDS } from "./system/moon-tiles";
 import { WarpGrid } from "./system/warp-grid";
@@ -879,6 +880,8 @@ export class Renderer {
   moonLight = 1;
   /** the Earth's real ground near the camera, streamed (src/system/earth-tiles.ts) */
   readonly earthTiles: EarthTiles;
+  /** the near body's horizon maps, baked a band a frame from its finer maps' heights (H1: the Moon) */
+  readonly horizonMaps: HorizonMaps;
   /** the Moon's relief tiles round the camera (P6): drawn through the Earth's tiles' binding while the Moon is near */
   readonly moonTiles: MoonTiles;
   readonly earthSurface: EarthSurface;
@@ -1458,6 +1461,7 @@ export class Renderer {
     this.ship.onLoaded = () => this.invalidate();
     this.endurance.onLoaded = () => this.invalidate();
     this.earthTiles = new EarthTiles(device);
+    this.horizonMaps = new HorizonMaps(device);
     this.earthTiles.onChange = () => {
       if (!this.offline) this.invalidate();
     };
@@ -1819,6 +1823,7 @@ export class Renderer {
   release() {
     this.earthScenery.dispose();
     this.earthSurface.dispose();
+    this.horizonMaps.cancel();
     this.terrainSurfaceCache?.dispose();
     this.terrainRaster?.dispose();
     this.sceneryRaster?.dispose();
@@ -9104,6 +9109,17 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.updateWarp(s, time);
     this.probePlanets(t, s, time);
     const enc = this.device.createCommandEncoder();
+    // (the near body's horizon maps: a band of their bake — H1 —, sized on the profiler's measure of the last one)
+    {
+      const hdBody = this.hdMap.name ? SOLAR_BODIES.find((b) => b.map === this.hdMap.name) : undefined;
+      this.horizonMaps.encode(
+        enc,
+        this.hdMap,
+        hdBody ? hdBody.radius * M_METRES : 1,
+        () => this.prof.pass("horizon bake", { label: "horizon bake" }),
+        this.prof.table().find((p) => p.label === "horizon bake")?.last,
+      );
+    }
     let phase: FrameStats["phase"];
     let rows = 0;
     // (the scene traced this frame — not yet while its kernel compiles at the start)
