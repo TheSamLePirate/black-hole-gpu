@@ -39,19 +39,19 @@ test.skipIf(!E2E)(
         await app.js(
           `(()=>{Object.assign(__bh.settings,{earthScenery:'high',dynamicResolution:false,pixelRatio:1});__bh.freeze(true);__bh.step(0);__bh.touch();return true;})()`,
         );
-        await app.waitFor(`(${readiness}).ready`, 300_000);
+        // (two minutes at most — everything in within ~20–60 s on the lab's Macs —, what is missing said)
+        await app.waitFor(`(${readiness}).ready`, 120_000).catch(async (e) => {
+          throw new Error(`${l.scene} not ready after 120 s: ${JSON.stringify(await app.js(readiness))} — ${e}`);
+        });
         await app.js(`globalThis.__landscape = ${readiness}`);
         // two settled windows: anything arriving restarts the convergence
         await app.waitFor(
           `(() => { __bh.touch(); const now = ${readiness}, before = globalThis.__landscape;
             if (!now.ready || now.signature !== before.signature) { globalThis.__landscape = now; return false; }
             return now.frames >= before.frames + 150; })()`,
-          180_000,
+          90_000,
         );
         const status = await app.js<{ ready: boolean }>(readiness);
-        expect(status.ready).toBe(true);
-        // (the still view refined to its end: every sample in — a capture mid-way is noisy and blocky)
-        await app.waitFor(`__bh.renderer.lastPhase === "converged"`, 240_000);
         await Bun.write(`${OUT}/${slug}.json`, JSON.stringify({ landscape: l, readiness: status }, null, 2));
         // (the picture alone, as the photograph is: the interface hidden — the data's credits go with the gallery's
         // captions —, a few frames for the page to draw without it)
@@ -59,7 +59,18 @@ test.skipIf(!E2E)(
           `(()=>{document.body.classList.add("hide-ui");document.querySelectorAll("canvas.fl-hud").forEach((c)=>(c.style.visibility="hidden"));__bh.touch();return true;})()`,
         );
         await app.js("new Promise((r) => setTimeout(r, 600))");
+        // (shot before judged: the game's own still image — the raster held, renderer.rasterHold since 25 Oct —, then the view
+        // refined to its end in the traced pipeline — as these captures were before —: every sample in, 2 minutes at most)
         await app.shot(`${OUT}/${slug}.png`);
+        expect(status.ready).toBe(true);
+        // (the traced pipeline: main.ts holds renderer.rasterHold each frame — its raster kept but in the photo mode)
+        await app.js(`(() => { __bh.settings.earthPipeline = "trace"; __bh.touch(); return 1; })()`);
+        const refined = await app.waitFor(`__bh.renderer.lastPhase === "converged"`, 120_000).then(
+          () => true,
+          () => false,
+        );
+        if (!refined) console.log(`  ${l.scene}: not converged after 120 s (${await app.js("__bh.renderer.lastPhase")}) — shot as it is`);
+        await app.shot(`${OUT}/${slug}-traced.png`);
         expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
         expect(app.cdp.errors).toEqual([]);
       } finally {

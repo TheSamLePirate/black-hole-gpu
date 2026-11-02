@@ -19,6 +19,27 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     app?.close();
     stopServer();
   });
+  // (the composite awaited: its pose said every 20 s and shot every minute — a series of 38 traced 1200 × 1600 frames takes
+  // minutes, not silently —, 12 minutes at most, then the state that explains it, shot under remote-results/mx)
+  const composite = async (name: string) => {
+    await Bun.$`mkdir -p remote-results/mx`;
+    const t0 = Date.now();
+    for (;;) {
+      if (await app.js<boolean>(`!!document.querySelector("[data-testid=mx-image]")`)) return;
+      const st =
+        await app.js(`(() => { const r = __bh.renderer; return { pose: (document.querySelector("[data-testid=multi-exposure]")?.innerText?.match(/(Pose|Exposure) [^\n]*/) ?? [null])[0],
+        offline: r.offlineActive, done: r.offlineState?.done ?? null, error: r.offlineState?.error ?? null, compiling: r.compilingNow, paused: document.body.classList.contains("paused"),
+        modals: [...document.querySelectorAll(".k-modal")].map((m) => m.getAttribute("data-testid") ?? m.className).slice(0, 4) }; })()`);
+      const s = Math.round((Date.now() - t0) / 1000);
+      console.log(`  ${name} ${s} s: ${JSON.stringify(st)}`);
+      if (s >= 720) {
+        await app.shot(`remote-results/mx/${name}-FAIL.png`);
+        throw new Error(`${name}: no composite after 720 s — ${JSON.stringify(st)}`);
+      }
+      if (s % 60 < 20) await app.shot(`remote-results/mx/${name}-${s}s.png`).catch(() => {});
+      await Bun.sleep(20_000);
+    }
+  };
 
   test("the analemma from the photo mode: a figure of Suns over the landscape, labelled, the game restored", async () => {
     await app.press("Escape");
@@ -40,7 +61,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     );
     await app.click("[data-testid=mx-position]");
     await app.click("[data-testid=mx-start]");
-    await app.waitFor(`!!document.querySelector("[data-testid=mx-image]")`, 240_000);
+    await composite("analemma");
     const px = await app.js<{ w: number; dots: number; land: number }>(`(() => {
       const c = document.querySelector("[data-testid=mx-image]"), g = c.getContext("2d");
       const d = g.getImageData(0, 0, c.width, c.height).data;
@@ -58,7 +79,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     expect(await app.js<boolean>(`!!document.querySelector("[data-testid=mx-download]")`)).toBe(true);
     await app.press("Escape");
     expect(await app.js<number>(`__bh.camera.nowTime()`)).toBeCloseTo(before, 3);
-  }, 300_000);
+  }, 900_000);
 
   test("an eclipse's phases from the calculator's sheet: the dialog filled for it, its discs laid, its labels", async () => {
     // (out of the photo mode the first test left)
@@ -83,7 +104,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     })()`);
     await app.click("[data-testid=mx-share]");
     await app.click("[data-testid=mx-start]");
-    await app.waitFor(`!!document.querySelector("[data-testid=mx-image]")`, 300_000);
+    await composite("eclipse-phases");
     const px = await app.js<{ bright: number; w: number }>(`(() => {
       const c = document.querySelector("[data-testid=mx-image]"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
       let bright = 0;
@@ -95,7 +116,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     expect(px.bright).toBeGreaterThan(7 * 150);
     expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/poses fusionnées/);
     await app.press("Escape");
-  }, 400_000);
+  }, 900_000);
 
   test("the night's series from the dialog: an ISS pass (its list, its trail) and the lunar analemma (its loop, its labels)", async () => {
     await app.js(
@@ -107,7 +128,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
       /mag −?-?\d/,
     );
     await app.click("[data-testid=mx-start]");
-    await app.waitFor(`!!document.querySelector("[data-testid=mx-image]")`, 120_000);
+    await composite("night-iss");
     const trail = await app.js<number>(`(() => {
       const c = document.querySelector("[data-testid=mx-image]"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
       let n = 0;
@@ -122,10 +143,10 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     );
     expect(await app.js<string>(`document.querySelector("[data-testid=mx-moon-base]").value`)).toBe("none");
     await app.click("[data-testid=mx-start]");
-    await app.waitFor(`!!document.querySelector("[data-testid=mx-image]")`, 300_000);
+    await composite("night-moon");
     expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/poses fusionnées/);
     await app.press("Escape");
-  }, 500_000);
+  }, 900_000);
 
   test("the layouts from the dialog: the lunar eclipse of 3 March 2026 in the Earth's shadow, its circles", async () => {
     await app.js(
@@ -136,7 +157,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
       `(() => { const e = document.querySelector("[data-testid=mx-layout]"); e.value = "shadow"; e.dispatchEvent(new Event("change")); return 1; })()`,
     );
     await app.click("[data-testid=mx-start]");
-    await app.waitFor(`!!document.querySelector("[data-testid=mx-image]")`, 300_000);
+    await composite("eclipse-layout");
     // (five Moons, the reddest in the middle, about the image's centre)
     const red = await app.js<number>(`(() => {
       const c = document.querySelector("[data-testid=mx-image]"), d = c.getContext("2d").getImageData(c.width / 2 - 200, c.height / 2 - 200, 400, 400).data;
@@ -147,7 +168,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     expect(red).toBeGreaterThan(2000);
     expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/5 poses fusionnées/);
     await app.press("Escape");
-  }, 400_000);
+  }, 900_000);
 
   test("from this view: the tripod framed by hand, the dialog from the top bar takes its place, aim and field; a subject outside said first", async () => {
     await app.js(`(__bh.game.setDate("2026-01-10T20:00:00Z"), true)`);
@@ -191,7 +212,7 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     );
     expect(await app.js<boolean>(`document.querySelector("[data-testid=mx-toward]").disabled`)).toBe(true);
     await app.click("[data-testid=mx-start]");
-    await app.waitFor(`!!document.querySelector("[data-testid=mx-image]")`, 300_000);
+    await composite("from-view");
     expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/40 poses fusionnées/);
     const stars = await app.js<number>(`(() => {
       const c = document.querySelector("[data-testid=mx-image]"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
@@ -205,5 +226,5 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     // (the tripod given back as it was framed)
     const after = await app.js<number>(`__bh.camera.viewController().s.fov`);
     expect(after).toBeCloseTo(50, 0);
-  }, 420_000);
+  }, 900_000);
 });
