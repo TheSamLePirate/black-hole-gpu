@@ -467,6 +467,19 @@ export class App {
       () => false,
     );
     if (!ok) console.error("e2e: the scene's ray tracer still compiling — looked at anyway");
+    // (and the kernels compiling beside it — renderer.compilingNow, the pill "Compiling the shaders · …": the ground's rays with
+    // the scenery, the clouds… — tracerSettled is the scene's kernel alone: a shot then had the pill and a part of the image
+    // missing (the observatory's wormhole black, 2 Nov 2026); 60 s at most, what still compiles said)
+    if (ok) {
+      const quiet = await this.waitFor(
+        "(() => { const r = __bh.renderer; return !r.compilesPending && !(r.compilingNow ?? []).length; })()",
+        60_000,
+      ).then(
+        () => true,
+        () => false,
+      );
+      if (!quiet) console.error(`e2e: still compiling after 60 s: ${await this.js("JSON.stringify(__bh.renderer.compilingNow)")}`);
+    }
     await this.js(
       "new Promise((r) => { let n = 0; const f = () => (++n >= 3 ? r(1) : requestAnimationFrame(f)); requestAnimationFrame(f); })",
     );

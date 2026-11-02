@@ -47,12 +47,14 @@ describe.skipIf(!E2E)("the camera's travel", () => {
     await app.hold(await fwd(), 300);
     await Bun.sleep(400);
     const p1 = await app.js<number[]>(pos);
-    await app.hold(await fwd(), 7000);
+    // (10 s: the boost grows with the game's time held — each frame's step capped at 0.1 s —, below 10 frames a second slower
+    // than the clock: 7 s left a headless Mac at 134 m)
+    await app.hold(await fwd(), 10_000);
     await Bun.sleep(500);
     const p2 = await app.js<number[]>(pos);
     const tap = at(p0, p1),
       held = at(p1, p2);
-    console.log(`  tripod: a tap ${tap.toFixed(1)} m, 7 s held ${held.toFixed(0)} m`);
+    console.log(`  tripod: a tap ${tap.toFixed(1)} m, 10 s held ${held.toFixed(0)} m`);
     expect(tap).toBeLessThan(5);
     expect(held).toBeGreaterThan(150);
     // (still on the ground there: not taken back to the ship in orbit)

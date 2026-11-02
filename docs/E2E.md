@@ -307,6 +307,20 @@ Plain `E2E=1 bun test …` (no preload) records nothing.
     pages (`for (const p of [a, b]) await p.waitFor("__bh.renderer.tracerSettled", 120_000)`) before holding a
     place or timing anything.
 
+12. **Measure or shoot only once nothing compiles.** `__bh.renderer.tracerSettled` is the scene's own kernel; the kernels
+    compiling beside it — the ground's rays with the scenery, the clouds, the surfaces: `renderer.compilingNow` (the
+    pill "Compiling the shaders · …") and `renderer.compilesPending` — draw part of the image or slow every frame while
+    they compile. `app.settled()` (and so `app.shot()`) waits for both (`tracerSettled`, then `compilingNow` empty and
+    `compilesPending` 0, 60 s at most, what still compiles printed). After an action that changes the kernel (a scene, a
+    tool, a setting), call `await app.settled()` before reading a figure — not a fixed sleep: the observatory's wormhole
+    was measured black with the pill still up (2 Nov 2026).
+13. **Shoot each step that matters, look at the shots, show them.** A pass/fail hides what the image shows (Monument
+    Valley "flat" was a tripod 2.5 km off; a bridge's deck colour was only seen in a shot). Take a shot at each state
+    judged — **before** the `expect` that judges it, so a failure is seen —, write it under `remote-results/`.
+14. **No long silent waits.** Cap a wait at what the lab needs (everything in within ~20–60 s on the Macs; a kernel 90 s;
+    a cold profile's first compile 180 s) and on a timeout throw with the state that explains it (where the camera is,
+    what is pending, what compiles) — never 240 s then 600 s of nothing on the mini's screen.
+
 ### A watchdog for long real-time flights
 
 A flight flown at real time by the game's own autopilots (a lesson, a mission) cannot be stepped in one call.
