@@ -1049,7 +1049,7 @@ Total **estimé** ≈ 115–155 jours de travail (T, H, R ≈ 44–54 j avec C0,
 
 ## 10. Décisions (Sam)
 
-Les décisions 1 à 10 datent du 31 octobre ; les décisions 11 à 32 du 2 novembre. **Le plan n'est pas lancé.**
+Les décisions 1 à 10 datent du 31 octobre ; les décisions 11 à 35 du 2 novembre. **Le plan n'est pas lancé.**
 
 1. **L'ordre : les cartes d'horizon d'abord** (H), **puis la réfraction** (R). *Amendé par la décision 8* : R3 passe
    avant. *Dans le plan commun* : M0a, C0, T1, T2, Q1 et M0b avant tout, T6 avec R3.
@@ -1115,7 +1115,7 @@ sur cette délégation :
     WebGPU.
 25. **Shackleton en données régionales** (H1c) : les DEM LOLA des sites du pôle sud ; à défaut, la promesse est limitée à
     la grande échelle et documentée.
-26. **Les budgets absolus** (proposés, à confirmer par Sam en C0) : kerr-mini (M1, écran 50 Hz) ≥ 25 i/s en vol
+26. **Les budgets absolus** (**confirmés par Sam le 2 novembre**) : kerr-mini (M1, écran 50 Hz) ≥ 25 i/s en vol
     (≤ 40 ms) ; M1 Max ≥ 40 i/s ; kerr-pc (RTX 5070 Ti) ≥ 60 i/s en 1440p ; iPad Pro ≥ 30 i/s ; mesurés à résolution
     effective et taux d'ombrage publiés, avec une mémoire de pic par palier. « Jamais plus lent que la Terre » reste une
     comparaison, pas un budget.
@@ -1144,9 +1144,24 @@ sur cette délégation :
     des aérodromes d'abord, puis en vol rasant par paliers ; (6) le mode GoPro hors cockpit, sans HUD par défaut, un HUD
     minimal en option ; (7) le coût d'abord : B1 (T9) avant la chaîne caméra.
 
+**Le mode de travail (Sam, 2 novembre)** :
+
+33. **En continu** : chaque phase se termine par un commit, un push et une planche dans `docs/progress/refraction-horizons/`,
+    puis la phase suivante, sans attendre. **On ne s'arrête que sur un problème ou une question.** Les portes de décision
+    du plan (pilote H1, go/no-go de L7, P9/P10, pré-filtre SRTM, réétalonnage de C2…) sont tranchées selon leurs critères
+    chiffrés et notées dans le journal de la phase ; arrêt seulement si un critère échoue sans solution évidente.
+    **Exception : arrêt après C0**, pour que Sam relise les contrats. Le profil Caméra par défaut (décision 32) est
+    confirmé.
+34. **Les téléchargements** de sources publiques et ouvertes (DEM LOLA, Copernicus GLO-30, orthos nationales, vidéos de
+    référence de la LUT…) sont autorisés jusqu'à ~2 Go par source, chacun noté (nom, source, taille, licence) ; au-delà,
+    ou si la licence est douteuse, on demande.
+35. **Les machines** : ce Mac et kerr-mini pour les e2e et les A/B, kerr-pc pour les compilations D3D12 — disponibles.
+    **`main` est à ce plan** : on y travaille directement (toujours sans `git stash`, en relisant `git log` avant chaque
+    phase).
+
 ## 11. Questions ouvertes
 
-**Pour Sam** : confirmer les budgets absolus de la décision 26 (en C0).
+**Pour Sam** : relire les contrats à la fin de C0 (décision 33). Les budgets de la décision 26 sont confirmés.
 
 **Les contrats de C0** tranchent les questions techniques que le challenge a rouvertes : la surface de raccord et les
 générations ; la disposition de la cible de visibilité ; la projection optique et ses consommateurs ; l'architecture
