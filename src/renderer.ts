@@ -8412,7 +8412,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         const grid = Math.max(1, Math.round((0.1 * H) / texel)) * texel;
         return [Math.round(cr / grid) * grid, Math.round(cu / grid) * grid];
       });
-      Renderer.SUN_CASCADES_M.forEach((H, k) => this.sunOuts[k]!.set([...r, H, ...u, H, ...L, D, centres[k]![0]! - cr, centres[k]![1]! - cu, 0, 0]));
+      Renderer.SUN_CASCADES_M.forEach((H, k) =>
+        this.sunOuts[k]!.set([...r, H, ...u, H, ...L, D, centres[k]![0]! - cr, centres[k]![1]! - cu, 0, 0]),
+      );
       on = tr.encodeSunShadow(
         enc,
         {
