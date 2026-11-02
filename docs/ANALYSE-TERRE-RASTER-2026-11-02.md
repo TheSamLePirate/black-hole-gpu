@@ -176,12 +176,21 @@ figée pendant qu'un niveau de tuiles arrive (Chamonix, 300 m sol), captures ima
 - `liteSun` (le matériau raster, presque tout le sol) lit `sunShadowFar(...).x` et **ne marche jamais**. Seul `shade`
   (le reste) reprend sa marche à la sortie annoncée, 9,8 km.
 
-**Conséquence** : en raster, aucune montagne n'ombre la vallée. Seul l'ombrage propre (n·L) reste, sur des facettes
-(§2a). C'est la plus grande perte « AAA » des vues basses au soleil rasant.
+- Pire : la table donne aussi `SUN_NEAR_M = 300` m (`c.y`), la portée en deçà de laquelle un bloqueur est ignoré, parce
+  que la marche est censée le trouver. Or `liteSun` ne marche pas. Un relief à moins de 300 m le long du rayon solaire
+  n'ombre donc **jamais** dans le matériau raster.
+- Les pixels tracés (`shade`, `main`, `earthTerrainShadow`) marchent jusqu'à 300 m, lisent ensuite la carte (vide), et ne
+  reprennent leur marche qu'à 9,8 km : il leur manque aussi tout ce qui est entre 300 m et 9,8 km.
+
+**Conséquence** : en raster, le relief ne porte **pratiquement aucune ombre**, ni près ni loin. Les seules restantes sont
+celles du sol du patch (à moins de 76 m de la caméra) sur des points à plus de 300 m en aval. Seul l'ombrage propre (n·L)
+reste, sur des facettes (§2a). C'est la plus grande perte « AAA » des vues basses au soleil rasant.
 
 **Correctif** :
 - Dessiner aussi les anneaux 1 à 4 dans la carte, avec leurs maillages et trous déjà calculés : ~130 k triangles de
   profondeur seule, < 0,2 ms.
+- Dans `liteSun`, une portée réglée sur la pente (comme `SUN_N` pour les corps) au lieu des 300 m : la carte contient
+  alors les bloqueurs proches (texels de 9,8 m).
 - Une seconde cascade (±80 km, anneaux 5–6) pour les grandes ombres de fin de journée.
 - Remettre la portée annoncée à celle qui est vraiment dessinée.
 
@@ -267,6 +276,7 @@ Ce qui s'ajoute en relisant `shadeLite` et `shadeWater` :
 | Pentes fines | `earthSlopeFine` : 4 `tileSample` bilinéaires (16 lectures). | À garder ; le généraliser (§2a) coûte autant, compensé par la normale lisse (plus de `rasterNormal` : 2 lectures et 3 `rasterRay`). |
 | Fil principal | Décodage des PNG et JPEG, et `writeTexture` ×2 par tuile, pendant le chargement. | Worker (§4-5). |
 | Carte d'ombre | Patch seul : peu coûteuse, mais vide (§3). | +130 k triangles de profondeur seule, mesurer. |
+| Mémoire des tuiles | En `veryFar` (le défaut), `rg32uint` 2048² × 13 couches = **436 Mo**. z6–10 et z15–17 (8 niveaux) n'ont que 4 tuiles et n'occupent qu'un quart de leur couche : **~200 Mo inutilisés**. | Ranger ces niveaux par quarts de couche, comme les orthos : ~200 Mo libérés (voir PLAN-REFRACTION-HORIZONS §12.6). |
 
 Déjà en bon état :
 - l'ombrage en damier gouverné ;
@@ -296,3 +306,19 @@ Chaque étape : A/B en raster (e2e de vol bas, captures journalisées) et `perf-
 
 Les étapes 1 et 2 sont de petits changements, sûrs et rapides à vérifier. 3, 4 et 6 corrigent ce qui reste des
 triangles et donnent le relief AAA. 8 et 9 sont des chantiers plus longs.
+
+## 8. Avec le plan réfraction + horizons
+
+Ce plan croise [PLAN-REFRACTION-HORIZONS.md](PLAN-REFRACTION-HORIZONS.md) en plusieurs endroits ; le détail est à son §12.
+En bref :
+
+- **Étape 6 avec R3** : R3 ajoute 2–3 min de lumière rasante, au moment où les ombres longues du relief comptent le plus.
+  Or le raster n'en a pas. En montagne, la vallée resterait éclairée derrière la crête.
+- **Étapes 1 et 2 avant les captures « avant »** de R0, R3 et H0 : la lumière rasante montre les marches et les facettes,
+  et brouillerait leurs critères.
+- **Étapes 3 et 5, et R4b** se font au même endroit (`terrainVs`, la cible de visibilité) : à concevoir ensemble.
+- **R4a sans R4b** fait une marche au bord du dernier anneau (~250 m de relèvement à 156 km).
+- **Étape 7 (mer) avant R6a** : les mirages se montrent sur l'horizon marin.
+- **Mémoire** : le rangement des tuiles (§6) paie la place de H1b et des cartes d'horizon.
+- **Pour plus tard (« H5 Terre »)** : les ombres au-delà de 10 km par un horizon dans l'azimut du Soleil, cuit sur les
+  niveaux 4–6 du cache avec le code de H1.
