@@ -2030,6 +2030,8 @@ async function main() {
       camera.viewController().rig.standH = v.landed && !settings.ship ? pose.standM : undefined;
       // (and on the ground place the scene gives — not where the camera will have drifted to by the tripod's first frame)
       camera.viewController().rig.pin = v.landed && !settings.ship ? { body: v.landed.body, q: [...v.landed.q] as Vec3, steps: 30 } : null;
+      // (and fixed there now: a still page — frozen, a test's — steps no rig before its view is drawn, the camera's drift kept)
+      if (v.landed && !settings.ship) camera.viewController().rig.fixed = [...v.landed.q] as Vec3;
       void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
     } else if (pose && pose !== "enduranceHole") {
       // (the station: at the real time now, unless the scene has its own)
