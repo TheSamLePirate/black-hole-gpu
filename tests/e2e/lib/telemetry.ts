@@ -246,7 +246,11 @@ class Recorder {
       if (this.enabled || !this.light) return;
       this.inTest = false;
       if (this.file && this.k > 0) {
-        this.live.ended(this.k, fileInfo(this.file).tests[this.k - 1] ?? `test ${this.k}`, Math.round((Date.now() - this.wall0) / 100) / 10);
+        this.live.ended(
+          this.k,
+          fileInfo(this.file).tests[this.k - 1] ?? `test ${this.k}`,
+          Math.round((Date.now() - this.wall0) / 100) / 10,
+        );
         this.live.write();
       }
       return;
