@@ -27,6 +27,18 @@ const SETTINGS = `{ traffic: false, weather: "fair", earthClouds: 0, earthPipeli
 
 describe.skipIf(!E2E)("Settings › Offline", () => {
   let app: App;
+  // (a screen awaited: on a timeout the page shot — remote-results/offline-settings — and the screen, the focus, the modals said)
+  const screen = async (name: string, ms = 10_000) => {
+    const expr = `document.querySelector(".pls-root [data-screen]")?.dataset.screen === ${JSON.stringify(name)}`;
+    await app.waitFor(expr, ms).catch(async (e) => {
+      await Bun.$`mkdir -p remote-results/offline-settings`;
+      await app.shot(`remote-results/offline-settings/screen-${name.replace(/[^a-z]/gi, "-")}-FAIL.png`);
+      const st =
+        await app.js(`({ screen: document.querySelector(".pls-root [data-screen]")?.dataset.screen ?? null, focus: document.activeElement?.getAttribute("data-testid") ?? document.activeElement?.className ?? null,
+        paused: document.body.classList.contains("paused"), modals: [...document.querySelectorAll(".k-modal")].map((m) => m.getAttribute("data-testid") ?? m.className).slice(0, 4) })`);
+      throw new Error(`the screen "${name}" never came: ${JSON.stringify(st)} — ${e}`);
+    });
+  };
   const shots = process.env.E2E_SHOTS;
   /** a button pressed for a few frames, then released — held 600 ms: the settings over a scene still streaming its
    *  tiles drew some frames slower than pad.e2e's 250 ms on kerr-mini, a press missed; a button never repeats (ui/padnav.ts:
@@ -72,7 +84,7 @@ describe.skipIf(!E2E)("Settings › Offline", () => {
     await app.waitFor(`!!document.querySelector("[data-testid=pause]")`);
     await app.click("[data-testid=pause-group-world]");
     await app.click("[data-testid=pause-offline]");
-    await app.waitFor(`document.querySelector(".pls-root [data-screen]")?.dataset.screen === "offline:add"`, 10_000);
+    await screen("offline:add");
     expect(await text("offline-add-place")).toContain("position actuelle");
     expect(await text("offline-add-profile")).toContain("Vol bas");
     await Bun.sleep(600);
@@ -105,7 +117,7 @@ describe.skipIf(!E2E)("Settings › Offline", () => {
     expect(est).toMatch(/\d[\d\s  ]* tuiles · \d+ Mo · ≈ /);
     await shot("offline-add");
     await app.click("[data-testid=offline-download]");
-    await app.waitFor(`document.querySelector(".pls-root [data-screen]")?.dataset.screen === "settings"`, 10_000);
+    await screen("settings");
     await app.waitFor(`!!document.querySelector('[data-testid^="offline-zone-zone-"]')`, 10_000);
     const z = (await zones())[0]! as Awaited<ReturnType<typeof zones>>[number] & { coreKm?: number };
     expect(z.state).toBe("downloading");
@@ -121,7 +133,7 @@ describe.skipIf(!E2E)("Settings › Offline", () => {
   test("its sheet (the mouse): paused and resumed by A, ready", async () => {
     const z = (await zones())[0]!;
     await app.click(`[data-testid="offline-zone-${z.id}"]`);
-    await app.waitFor(`document.querySelector(".pls-root [data-screen]")?.dataset.screen === "offline:zone"`, 10_000);
+    await screen("offline:zone");
     await Bun.sleep(600);
     expect(await focused()).toBe("offline-zone-pause");
     await press(A);
@@ -147,7 +159,7 @@ describe.skipIf(!E2E)("Settings › Offline", () => {
   test("the automatic cache's budget by ◀ ▶ (the worker keeps it); the zone deleted, asked twice (A, A)", async () => {
     // (B: back to the tab, its zone's row focused; ▲ to the cache's)
     await press(B);
-    await app.waitFor(`document.querySelector(".pls-root [data-screen]")?.dataset.screen === "settings"`, 10_000);
+    await screen("settings");
     await Bun.sleep(600);
     const z = (await zones())[0]!;
     expect(await focused()).toBe(`offline-zone-${z.id}`);
@@ -163,7 +175,7 @@ describe.skipIf(!E2E)("Settings › Offline", () => {
     await press(DOWN, 2);
     expect(await focused()).toBe(`offline-zone-${z.id}`);
     await press(A);
-    await app.waitFor(`document.querySelector(".pls-root [data-screen]")?.dataset.screen === "offline:zone"`, 10_000);
+    await screen("offline:zone");
     await Bun.sleep(600);
     await press(DOWN, 2);
     expect(await focused()).toBe("offline-zone-delete");
@@ -173,7 +185,7 @@ describe.skipIf(!E2E)("Settings › Offline", () => {
     expect(await focused()).toBe("offline-zone-delete-sure");
     await press(A);
     await app.waitFor(`(async () => (await __bh.pwa.zones.list()).length === 0)()`, 30_000);
-    await app.waitFor(`document.querySelector(".pls-root [data-screen]")?.dataset.screen === "settings"`, 10_000);
+    await screen("settings");
     expect(await app.js<number>(`__bh.pwa.stats().then((s) => s.zoneTiles)`)).toBe(0);
   }, 120_000);
 
