@@ -10,9 +10,9 @@
 // colours brought into the Blue Marble's (eoxColour: a power law per channel fitted on nine places), its
 // nights the z 8 lights' parent tile, enlarged — the same Web Mercator tiles throughout.
 //
-// A level's window lives in one layer of a 1024² rg32uint array — its heights' float bits, its imagery
-// (rgba8: the day's colour in sRGB, the night's lights; 0: none) —, its tiles at their coordinates modulo
-// 4 (a toroidal clipmap): the window follows the camera tile by tile, the tiles it leaves overwritten by
+// A level's window lives in an rg32uint array — its heights' float bits, its imagery (rgba8: the day's colour in sRGB,
+// the night's lights; 0: none) —, a layer of its own, or a 1024² quadrant of one for a 4-tile window in a 2048² texture
+// (tileLayout — T10), its tiles at their coordinates modulo its span (a toroidal clipmap): the window follows the camera tile by tile, the tiles it leaves overwritten by
 // the ones it enters. A level is drawn only where all its tiles are in (its "valid" rectangle): while it
 // moves, the part it keeps; once the new tiles are loaded, all of it. Beyond the windows, and while they
 // load, the tracer falls back on the global maps (earth-maps.ts: ETOPO 2022, 4.9 km; the day 2.4 km). The
@@ -144,8 +144,39 @@ export function markFine(h: Float32Array, fine: boolean) {
 }
 export const isFine = (h: number) => ((BITS[0] = h), (BITS_U[0]! & 1) === 1);
 
-/** the extra layers the orthophotos take in a texture of a side (a 1024² quadrant each, as many a layer as fit) */
-export const orthoLayers = (clip: number) => Math.ceil(ORTHO_LEVELS / (clip / ORTHO_CLIP) ** 2);
+/** a place in the tiles' texture: its layer, its corner [px] */
+export type TileSlot = { layer: number; x: number; y: number };
+/**
+ * Where each level's window and each orthophotos' level lives in a texture of a side (T10, the plan's §3.6): a window as
+ * wide as the texture its own layer (z 11 … 14 at the farther reaches), the 4-tile ones (1024², z 6 … 10 and z 15 … 17
+ * whatever the reach — 8 of the 12 levels) by quadrants of the layers after, the orthophotos' after them, the same. At the
+ * very far reach 7 layers of 2048² (235 MB) where each level took one (13: 436 MB, the 4-tile ones a quarter of theirs);
+ * at the normal one (1024²) one a level, as before. The tracer reads them through tileAt (trace.wgsl): the quadrant's
+ * corner in the bits of P.tileL[2l].zw above its window's mask, its layer in P.tileL[2l + 1].w's high bits.
+ */
+export function tileLayout(clip: number, sides: readonly number[]): { levels: TileSlot[]; ortho: TileSlot[]; layers: number } {
+  const side = clip / ORTHO_CLIP,
+    per = side * side;
+  let layer = 0,
+    q = 0;
+  const levels: TileSlot[] = sides.map(() => ({ layer: 0, x: 0, y: 0 }));
+  sides.forEach((C, l) => {
+    if (C >= clip) levels[l] = { layer: layer++, x: 0, y: 0 };
+  });
+  const quad = (): TileSlot => {
+    const k = q % per,
+      at = { layer: layer + Math.floor(q / per), x: (k % side) * ORTHO_CLIP, y: Math.floor(k / side) * ORTHO_CLIP };
+    q++;
+    return at;
+  };
+  sides.forEach((C, l) => {
+    if (C >= clip) return;
+    if (C !== ORTHO_CLIP) throw new Error(`tileLayout: a ${C}² window in a ${clip}² texture`);
+    levels[l] = quad();
+  });
+  const ortho = Array.from({ length: ORTHO_LEVELS }, quad);
+  return { levels, ortho, layers: layer + Math.ceil(q / per) };
+}
 
 /**
  * The orthophotos' colours (an aerial survey's, graded bright: 2.7 times the ground's on average) into the Blue
@@ -547,6 +578,14 @@ export class EarthTiles {
   private orthoNone = new Set<string>();
   orthoLoaded = 0;
 
+  /** where each level and orthophotos' level lives in the texture (tileLayout) */
+  private layout: ReturnType<typeof tileLayout> = { levels: [], ortho: [], layers: 0 };
+  /** the texture's bytes; those of the textures alive (an old one kept until the work submitted with it is done — setReach);
+   *  the most they reached (T10: the peak budget beside the resident one) */
+  textureBytes = 0;
+  private liveBytes = 0;
+  peakBytes = 0;
+
   constructor(private device: GPUDevice) {
     this.texture = this.makeTexture();
     for (let k = 0; k < ORTHO_LEVELS; k++)
@@ -569,20 +608,28 @@ export class EarthTiles {
   }
 
   private makeTexture() {
-    return this.device.createTexture({
-      // (the relief's levels, then the orthophotos' quadrants)
-      size: [this.clip, this.clip, LEVELS + orthoLayers(this.clip)],
+    // (the relief's levels, then the orthophotos' quadrants — tileLayout)
+    this.layout = tileLayout(
+      this.clip,
+      Array.from({ length: LEVELS }, (_, l) => TILE * this.levelSpan(Z0 + l)),
+    );
+    const t = this.device.createTexture({
+      size: [this.clip, this.clip, this.layout.layers],
       format: "rg32uint",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       label: "earth tiles",
     });
+    this.textureBytes = this.clip * this.clip * this.layout.layers * 8;
+    this.liveBytes += this.textureBytes;
+    this.peakBytes = Math.max(this.peakBytes, this.liveBytes);
+    return t;
   }
 
   /**
    * The detail's reach (TILE_REACH): the fine levels' windows' tiles a side — another one, the texture made again (the
    * old one destroyed once the work submitted with it is done) and every level drawn anew, its tiles from the cache or
    * loaded again —, the tiles kept past them, the ring loaded ahead. A texture the device cannot hold (out of memory:
-   * an iPad's 256 MiB) falls back to 4 tiles, and stays there.
+   * an iPad's 256 MiB — the 2048² texture 224 MiB since T10, 416 MiB before) falls back to 4 tiles, and stays there.
    */
   setReach(r: { span: number; cache: number; ring: number }) {
     this.cacheTiles = r.cache;
@@ -601,7 +648,11 @@ export class EarthTiles {
       this.spanMax = SPAN;
       this.setReach({ span: SPAN, cache: this.cacheTiles, ring: this.ring });
     });
-    void this.device.queue.onSubmittedWorkDone().then(() => old.destroy());
+    const oldBytes = this.liveBytes - this.textureBytes;
+    void this.device.queue.onSubmittedWorkDone().then(() => {
+      old.destroy();
+      this.liveBytes -= oldBytes;
+    });
     for (const O of this.ortho) {
       O.key.fill(null);
       O.valid = null;
@@ -1094,8 +1145,12 @@ export class EarthTiles {
       } else texels[2 * i] = hb[i]!;
       texels[2 * i + 1] = col ? col[i]! : 0;
     }
+    const slot = this.layout.levels[L.z - Z0]!;
     this.device.queue.writeTexture(
-      { texture: this.texture, origin: [(s % L.span) * TILE, Math.floor(s / L.span) * TILE, L.z - Z0] },
+      {
+        texture: this.texture,
+        origin: [slot.x + (s % L.span) * TILE, slot.y + Math.floor(s / L.span) * TILE, slot.layer],
+      },
       texels,
       { bytesPerRow: TILE * 8 },
       [TILE, TILE, 1],
@@ -1175,8 +1230,10 @@ export class EarthTiles {
       const ay = mercY(this.sinLat, L.n) * TILE - v.y0 * TILE;
       const o = 4 + 8 * l;
       const C = TILE * L.span;
-      f.set([ax, ay, (((v.x0 * TILE) % C) + C) % C, (v.y0 * TILE) % C], o);
-      f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, C], o + 4);
+      // (its quadrant's corner above the window's mask, its layer above 2¹⁶ — tileLayout, trace.wgsl tileAt)
+      const at = this.layout.levels[l]!;
+      f.set([ax, ay, at.x + ((((v.x0 * TILE) % C) + C) % C), at.y + ((((v.y0 * TILE) % C) + C) % C)], o);
+      f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, C + 65536 * at.layer], o + 4);
     }
     f.set([Math.cos(this.lon), Math.sin(this.lon), this.sinLat, on], 0);
     return f;
@@ -1305,7 +1362,7 @@ export class EarthTiles {
     O.key[s] = this.orthoKey(O, x, y);
     const texels = new Uint32Array(2 * TILE * TILE);
     if (col) for (let i = 0; i < col.length; i++) texels[2 * i + 1] = col[i]!;
-    const q = orthoQuadrant(k, this.clip);
+    const q = this.layout.ortho[k]!;
     this.device.queue.writeTexture(
       { texture: this.texture, origin: [q.x + (s % ORTHO_SPAN) * TILE, q.y + Math.floor(s / ORTHO_SPAN) * TILE, q.layer] },
       texels,
@@ -1336,7 +1393,7 @@ export class EarthTiles {
     for (let k = 0; k < ORTHO_LEVELS; k++) {
       const O = this.ortho[k]!;
       const v = O.valid;
-      const q = orthoQuadrant(k, this.clip);
+      const q = this.layout.ortho[k]!;
       f.set([q.layer, q.x, q.y, O.z], 12 * k + 8);
       if (!v) continue;
       const S = O.n * TILE;
@@ -1507,13 +1564,6 @@ const cx0 = (lon: number) => lon / TAU + 0.5;
 /** an orthophotos' tile's slot in its 4 × 4 window */
 const orthoSlot = (x: number, y: number) =>
   (((y % ORTHO_SPAN) + ORTHO_SPAN) % ORTHO_SPAN) * ORTHO_SPAN + (((x % ORTHO_SPAN) + ORTHO_SPAN) % ORTHO_SPAN);
-/** an orthophotos' level's place in the texture: its layer (after the relief's), its 1024² quadrant's corner [px] */
-export function orthoQuadrant(k: number, clip: number): { layer: number; x: number; y: number } {
-  const side = clip / ORTHO_CLIP,
-    per = side * side;
-  const q = k % per;
-  return { layer: LEVELS + Math.floor(k / per), x: (q % side) * ORTHO_CLIP, y: Math.floor(q / side) * ORTHO_CLIP };
-}
 /** A level's weight towards its window's edges [px]: none within 2 px of it, full 48 px in. */
 export function edge(px: number, py: number, w: number, h: number) {
   const d = Math.min(px, py, w - px, h - py);

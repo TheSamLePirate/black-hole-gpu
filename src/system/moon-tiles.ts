@@ -736,7 +736,8 @@ export class MoonTiles {
       const [ax, ay] = this.anchor(L, v);
       const o = 4 + 8 * L.l;
       f.set([ax, ay, (((v.x0 * TILE) % CLIP) + CLIP) % CLIP, (v.y0 * TILE) % CLIP], o);
-      f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, L.S / TAU, CLIP], o + 4);
+      // (its layer above 2¹⁶: trace.wgsl tileAt — the Earth's tiles' packing, T10 —; one a level here, a whole one each)
+      f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, L.S / TAU, CLIP + 65536 * L.l], o + 4);
     }
     f.set([Math.cos(this.lon), Math.sin(this.lon), Math.sin(this.lat), this.drawn ? -1 : 0], 0);
     // (no relief level — Titan's —: the first past the last, none read)

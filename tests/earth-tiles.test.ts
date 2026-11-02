@@ -5,11 +5,12 @@ import {
   edge,
   FINE_Z,
   markFine,
-  orthoLayers,
+  ORTHO_LEVELS,
   sampleLevel,
   TILE,
   TILE_PARAM_VEC4S,
   TILE_REACH,
+  tileLayout,
   Z0,
   Z1,
   ZG1,
@@ -296,8 +297,8 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   // (Far: the texture made again, 2048 texels a side, every level drawn anew — the fine ones 8 × 8 tiles, the coarser 4 × 4)
   t.setReach(TILE_REACH.far);
   expect(resized).toBe(1);
-  // (and the orthophotos' four 1024² quadrants in one more layer — I1)
-  expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, Z1 - Z0 + 1 + orthoLayers(2048)]);
+  // (the four fine levels a layer each, the eight 4-tile ones and the orthophotos' four by 1024² quadrants — I1, T10)
+  expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, ZG1 - FINE_Z + 1 + 3]);
   t.update(cam, 1e-3);
   // (the IGN's relief levels over France, z 15 … 17, 4 × 4 tiles whatever the reach)
   expect(t.wanted().length).toBe(64 * (ZG1 - FINE_Z + 1) + 16 * (FINE_Z - Z0) + 16 * (Z1 - ZG1));
@@ -365,4 +366,106 @@ test("the detail's reach on a device that cannot hold its texture: back to 4 til
   t.setReach(TILE_REACH.veryFar);
   expect(resized).toBe(2);
   expect((t.texture as unknown as { size: number[] }).size[0]).toBe(1024);
+});
+
+// T10: the texture as the GPU holds it — the writes kept —, read back the tracer's way (trace.wgsl tileAt, from params())
+const gpuDevice = () => {
+  const tex: { size: number[]; data: Uint32Array }[] = [];
+  const device = {
+    createTexture: (d: { size: number[] }) => {
+      const t = { size: d.size, data: new Uint32Array(d.size[0]! * d.size[1]! * d.size[2]! * 2), destroy() {} };
+      tex.push(t);
+      return t;
+    },
+    queue: {
+      writeTexture(
+        dst: { texture: { size: number[]; data: Uint32Array }; origin: number[] },
+        src: Uint32Array,
+        _l: unknown,
+        ext: number[],
+      ) {
+        const [W, H] = dst.texture.size as [number, number];
+        const [ox, oy, layer] = dst.origin as [number, number, number];
+        expect(ox + ext[0]!).toBeLessThanOrEqual(W);
+        expect(oy + ext[1]!).toBeLessThanOrEqual(H);
+        expect(layer).toBeLessThan(dst.texture.size[2]!);
+        for (let j = 0; j < ext[1]!; j++)
+          dst.texture.data.set(src.subarray(j * ext[0]! * 2, (j + 1) * ext[0]! * 2), ((layer * H + oy + j) * W + ox) * 2);
+      },
+      onSubmittedWorkDone: () => Promise.resolve(),
+    },
+  } as unknown as GPUDevice;
+  return { device, tex };
+};
+/** a level's texel at i from its valid rectangle's corner, as trace.wgsl tileAt reads it */
+function tileAt(t: EarthTiles, l: number, i: [number, number]): number {
+  const p = t.params();
+  const tx = t.texture as unknown as { size: number[]; data: Uint32Array };
+  const [W, H] = tx.size as [number, number];
+  const cx = p[4 + 8 * l + 2]!,
+    cy = p[4 + 8 * l + 3]!,
+    w = p[4 + 8 * l + 7]!;
+  const m = (w & 0xffff) - 1,
+    layer = w >>> 16;
+  const x = ((cx + i[0]) & m) | (cx & ~m),
+    y = ((cy + i[1]) & m) | (cy & ~m);
+  expect(x).toBeLessThan(W);
+  expect(y).toBeLessThan(H);
+  return tx.data[((layer * H + y) * W + x) * 2]!;
+}
+
+test("T10: the 4-tile levels packed by quadrants — 7 layers of 2048² where there were 13, every level read back whole", async () => {
+  // (the layout: the normal reach one layer a level as before; the very far one the fine levels a layer each, the rest by
+  // quadrants, the orthophotos after)
+  const n = tileLayout(1024, Array(Z1 - Z0 + 1).fill(1024));
+  expect(n.layers).toBe(Z1 - Z0 + 1 + ORTHO_LEVELS);
+  expect(n.levels.map((s) => s.layer)).toEqual([...Array(Z1 - Z0 + 1).keys()]);
+  const sides = Array.from({ length: Z1 - Z0 + 1 }, (_, l) => (Z0 + l >= FINE_Z && Z0 + l <= ZG1 ? 2048 : 1024));
+  const v = tileLayout(2048, sides);
+  expect(v.layers).toBe(7);
+  const seen = new Set([...v.levels, ...v.ortho].map((s) => `${s.layer},${s.x},${s.y}`));
+  expect(seen.size).toBe(Z1 - Z0 + 1 + ORTHO_LEVELS);
+  // (the tiles put in, read back through the tracer's params from the texture the writes made — every level's, each its
+  // own, at both reaches; the memory and its peak while the two textures live)
+  const { device, tex } = gpuDevice();
+  const t = new EarthTiles(device);
+  const cam = camAt(45.9, 6.87, 2);
+  expect(t.textureBytes).toBe(1024 * 1024 * 16 * 8);
+  for (const reach of [TILE_REACH.normal, TILE_REACH.veryFar]) {
+    t.setReach(reach);
+    t.update(cam, 1e-3);
+    fill(t);
+    expect(t.pending).toBe(0);
+    const levels = (
+      t as unknown as {
+        levels: {
+          z: number;
+          valid: { x0: number; y0: number; x1: number; y1: number } | null;
+          span: number;
+          data: (Float32Array | null)[];
+        }[];
+      }
+    ).levels;
+    let checked = 0;
+    for (const [l, L] of levels.entries()) {
+      const r = L.valid;
+      if (!r) continue;
+      for (let k = 0; k < 40; k++) {
+        const ix = Math.floor((((k * 37) % 97) / 97) * (r.x1 - r.x0) * TILE),
+          iy = Math.floor((((k * 61) % 89) / 89) * (r.y1 - r.y0) * TILE);
+        const tx = r.x0 + Math.floor(ix / TILE),
+          ty = r.y0 + Math.floor(iy / TILE);
+        const s = (((ty % L.span) + L.span) % L.span) * L.span + (((tx % L.span) + L.span) % L.span);
+        const h = L.data[s]!;
+        const bits = new Uint32Array(h.buffer, h.byteOffset, TILE * TILE);
+        expect(tileAt(t, l, [ix, iy])).toBe(bits[(iy % TILE) * TILE + (ix % TILE)]!);
+        checked++;
+      }
+    }
+    expect(checked).toBe(40 * (Z1 - Z0 + 1));
+  }
+  expect(t.textureBytes).toBe(2048 * 2048 * 7 * 8);
+  // (the very far texture made while the normal one lived: the peak their sum)
+  expect(t.peakBytes).toBe(1024 * 1024 * 16 * 8 + 2048 * 2048 * 7 * 8);
+  expect(tex.length).toBe(2);
 });

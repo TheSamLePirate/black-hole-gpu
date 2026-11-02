@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { LEVELS, orthoColour, orthoLayers, orthoQuadrant, orthoUrl, ORTHO_LEVELS } from "../src/system/earth-tiles";
+import { LEVELS, orthoColour, orthoUrl, ORTHO_LEVELS, tileLayout } from "../src/system/earth-tiles";
 
 test("the orthophotos' colours: the survey's brightness brought to the Earth's, a white kept white, a dark field greened", () => {
   const [r, g, b] = orthoColour(255, 255, 255);
@@ -18,10 +18,11 @@ test("the orthophotos' colours: the survey's brightness brought to the Earth's, 
 
 test("the orthophotos' levels in the texture: a 1024² quadrant each, after the relief's layers", () => {
   // (the normal reach — 1024² layers —: one level a layer; the far one — 2048² —: the four in one layer)
-  expect(orthoLayers(1024)).toBe(ORTHO_LEVELS);
-  expect(orthoLayers(2048)).toBe(1);
-  expect([0, 1, 2, 3].map((k) => orthoQuadrant(k, 1024))).toEqual([0, 1, 2, 3].map((k) => ({ layer: LEVELS + k, x: 0, y: 0 })));
-  expect([0, 1, 2, 3].map((k) => orthoQuadrant(k, 2048))).toEqual([
+  const quads = (clip: number) => tileLayout(clip, Array(LEVELS).fill(clip)).ortho;
+  expect(tileLayout(1024, Array(LEVELS).fill(1024)).layers).toBe(LEVELS + ORTHO_LEVELS);
+  expect(tileLayout(2048, Array(LEVELS).fill(2048)).layers).toBe(LEVELS + 1);
+  expect(quads(1024)).toEqual([0, 1, 2, 3].map((k) => ({ layer: LEVELS + k, x: 0, y: 0 })));
+  expect(quads(2048)).toEqual([
     { layer: LEVELS, x: 0, y: 0 },
     { layer: LEVELS, x: 1024, y: 0 },
     { layer: LEVELS, x: 0, y: 1024 },

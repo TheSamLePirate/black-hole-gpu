@@ -1,0 +1,57 @@
+{
+ "paris-300m": {
+  "w": 2048,
+  "layers": 13,
+  "bytes": 436207616,
+  "peak": null,
+  "finest": 17,
+  "ortho": 18,
+  "pending": 66,
+  "orthoPending": 0,
+  "gpuErrors": 0,
+  "tiles": true
+ },
+ "chamonix-noon": {
+  "w": 2048,
+  "layers": 13,
+  "bytes": 436207616,
+  "peak": null,
+  "finest": 17,
+  "ortho": 18,
+  "pending": 1,
+  "orthoPending": 0,
+  "gpuErrors": 0,
+  "tiles": true
+ },
+ "alps-30km": {
+  "w": 2048,
+  "layers": 13,
+  "bytes": 436207616,
+  "peak": null,
+  "finest": 14,
+  "ortho": 0,
+  "pending": 1,
+  "orthoPending": 0,
+  "gpuErrors": 0,
+  "tiles": true
+ },
+ "reach": {
+  "normal": {
+   "layers": 16,
+   "bytes": 134217728
+  },
+  "veryFar": {
+   "layers": 13,
+   "bytes": 436207616
+  },
+  "peak": null,
+  "gpuErrors": 0
+ },
+ "moon": {
+  "drawn": true,
+  "loaded": 64,
+  "failed": 0,
+  "gpuErrors": 0,
+  "ready": true
+ }
+}

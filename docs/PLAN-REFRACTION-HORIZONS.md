@@ -1260,3 +1260,7 @@ compilation) s'y ajoutent.
   [progress/refraction-horizons/R3.md](progress/refraction-horizons/R3.md) ; **T6** fait (les ombres du relief en deux
   cascades ±1,5 et ±10 km, les ombres de contact, le décor gardé jusqu'à 0,3° ; 2 à 5 % de l'image ombrés au Soleil bas à
   Chamonix, rien à midi ; +0,2 à 0,8 ms sur kerr-mini) — [progress/refraction-horizons/T6.md](progress/refraction-horizons/T6.md).
+- **2 novembre, nuit** : **T10** fait — les niveaux à 4 tuiles et les orthophotos rangés par quarts de couche
+  (`tileLayout`, `trace.wgsl tileAt`) : la texture « très loin » de 436 à 235 Mo (−192 Mio à la jauge du jeu), le pic
+  au changement de portée 369 Mo ; les mêmes images (A/B sur kerr-mini dans le bruit A/A), aucun coût au temps d'image —
+  [progress/refraction-horizons/T10.md](progress/refraction-horizons/T10.md).

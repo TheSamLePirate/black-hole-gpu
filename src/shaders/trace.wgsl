@@ -6784,23 +6784,20 @@ const TILE_RES_FINE = 1.0;
 // the relief's steepness [m/m] from which the tiles' cubic turns from the B-spline to the monotone one (tileSample;
 // earth-tiles.ts TILE_STEEP)
 const TILE_STEEP = vec2f(0.3, 0.8);
-// a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo its window's side)
-fn tileTexel(l: u32, i: vec2i) -> f32 {
-  // (a level's window: 4 or 8 tiles a side — EarthTiles.setReach, its fine levels —, its side a power of two in
-  // P.tileL[2l + 1].w: wrapped by a mask)
-  let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(i32(P.tileL[2u * l + 1u].w) - 1);
-  return bitcast<f32>(textureLoad(earthTiles, t, l, 0).r);
+// a level's texel at i (from its valid rectangle's corner) in the tiles' texture (T10, earth-tiles.ts tileLayout): its
+// window — 4 or 8 tiles a side (EarthTiles.setReach, its fine levels), a power of two, P.tileL[2l + 1].w's low 16 bits —
+// toroidal, wrapped by a mask, at its quadrant's corner (P.tileL[2l].zw's bits above the mask: a window smaller than the
+// texture shares a layer with three others), in its layer (P.tileL[2l + 1].w's high bits)
+fn tileAt(l: u32, i: vec2i) -> vec2u {
+  let c = vec2i(P.tileL[2u * l].zw);
+  let w = u32(P.tileL[2u * l + 1u].w);
+  let m = vec2i(i32(w & 0xffffu) - 1);
+  return textureLoad(earthTiles, ((c + i) & m) | (c & ~m), w >> 16u, 0).rg;
 }
+fn tileTexel(l: u32, i: vec2i) -> f32 { return bitcast<f32>(tileAt(l, i).x); }
 // whether a level's texel at i is a survey's height (the IGN's: its float's last bit — earth-tiles.ts markFine)
-fn tileFine(l: u32, i: vec2i) -> bool {
-  let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(i32(P.tileL[2u * l + 1u].w) - 1);
-  return (textureLoad(earthTiles, t, l, 0).r & 1u) == 1u;
-}
-fn tileImage(l: u32, i: vec2i) -> u32 {
-  // (its level's window's side: P.tileL[2l + 1].w — tileTexel)
-  let t = (vec2i(P.tileL[2u * l].zw) + i) & vec2i(i32(P.tileL[2u * l + 1u].w) - 1);
-  return textureLoad(earthTiles, t, l, 0).g;
-}
+fn tileFine(l: u32, i: vec2i) -> bool { return (tileAt(l, i).x & 1u) == 1u; }
+fn tileImage(l: u32, i: vec2i) -> u32 { return tileAt(l, i).y; }
 const TILE_IMG_LEVELS = 9u; // (z 6 … 14: src/system/earth-tiles.ts, IMG_Z1)
 // The tiles' imagery at q for a footprint foot [m] (src/system/earth-tiles.ts: GIBS, EOX's Sentinel-2): the finest level
 // within the footprint and the next coarser, blended by the footprint and towards their windows' edges
@@ -6998,18 +6995,16 @@ fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
     let w = wz * smoothstep(2.0, 48.0, d);
     if (w <= 0.0) { continue; }
     let dp = duv * b.z;
-    let corner = vec2i(a.zw);
-    let mask = vec2i(i32(b.w) - 1);
     var sum = vec4f(0.0);
     var whole = true;
     for (var i = 0u; i < n; i++) {
       let x = p0 + dp * ((f32(i) + 0.5) / nf - 0.5) - 0.5;
       let i0 = vec2i(floor(x));
       let f = x - floor(x);
-      let t00 = textureLoad(earthTiles, (corner + i0) & mask, l, 0).g;
-      let t10 = textureLoad(earthTiles, (corner + i0 + vec2i(1, 0)) & mask, l, 0).g;
-      let t01 = textureLoad(earthTiles, (corner + i0 + vec2i(0, 1)) & mask, l, 0).g;
-      let t11 = textureLoad(earthTiles, (corner + i0 + vec2i(1, 1)) & mask, l, 0).g;
+      let t00 = tileImage(l, i0);
+      let t10 = tileImage(l, i0 + vec2i(1, 0));
+      let t01 = tileImage(l, i0 + vec2i(0, 1));
+      let t11 = tileImage(l, i0 + vec2i(1, 1));
       if (min(min(t00, t10), min(t01, t11)) == 0u) { whole = false; break; }
       sum += mix(mix(unpack4x8unorm(t00), unpack4x8unorm(t10), f.x), mix(unpack4x8unorm(t01), unpack4x8unorm(t11), f.x), f.y);
     }
