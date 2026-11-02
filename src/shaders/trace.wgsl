@@ -11304,6 +11304,12 @@ fn giantTurn(v: vec3f, k: vec3f, cv: vec2f, cz: vec2f) -> vec3f {
   let u = v * cv.x + cross(k, v) * cv.y + k * dot(k, v) * (1.0 - cv.x);
   return vec3f(u.x * cz.x - u.y * cz.y, u.x * cz.y + u.y * cz.x, u.z);
 }
+// The Sun's light on the clouds against the sky's (PLAN-GEANTES-VOLUME V11, Alex's weights, Sam's choice): the single
+// scattering's octaves gave a sunlit top ~0.03 of the Sun's light an octave seen from the side, the sky's ~0.2 — the sky
+// two thirds of a sunlit top's light, sunlit sides hardly brighter than shaded ones, flat decks (reference cumulus and
+// storms: 3 to 10). The Sun × 3; the sky × 0.55 in the Sun's light, × 0.85 in shadow — under a ceiling the diffuse light is
+// all there is: a flat cut darkened every shaded scene by a third (Alex's 4u). The haze's sky light the same.
+const GI_KS = 3.0;
 fn giantInside(look: vec3f, k: u32) -> EarthNear {
   setAir(k);
   GI_IN = true;
@@ -11521,8 +11527,9 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
     // (and in a cloud, the less the deeper in it — the march towards the Sun's optical depth: a shaded billow keeps its shape)
     let amb = 0.32 * max(mu0 + 0.1, 0.0) * cloudDiffuseT(tz) * (0.6 + 0.4 * pow(max(luminance(sunT), 1e-4), 0.15)) *
       (0.65 + 0.35 * exp(-0.3 * tl)) * exp(-1.6 * hz * vec3f(0.7, 1.0, 1.5));
-    var src = E * (alb * sig * (S + amb) + br * (3.0 / (16.0 * PI)) * (1.0 + ct * ct) * sunT +
-      bh * vec3f(0.92, 0.72, 0.5) * (hgPhase(0.6, ct) * mix(sunM, sunT, 0.6) + 0.4 * amb));
+    let ka = mix(0.85, 0.55, smoothstep(0.05, 0.4, luminance(sunT)));
+    var src = E * (alb * sig * (GI_KS * S + ka * amb) + br * (3.0 / (16.0 * PI)) * (1.0 + ct * ct) * sunT +
+      bh * vec3f(0.92, 0.72, 0.5) * (hgPhase(0.6, ct) * mix(sunM, sunT, 0.6) + 0.4 * ka * amb));
     // (a flash's light — D4 —, scattered by the clouds and the haze; drowned in the day's — Galileo's and Juno's seen on the night
     // side: by day the clouds flashed white, flickering with the time warped)
     if (P.wx[6].w > 0.0) {

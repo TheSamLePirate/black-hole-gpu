@@ -272,3 +272,27 @@ la lumière devrait rester moins rousse, et le ciel plus bleu.
   teinte froide. De 120 km, les trous restent un peu bruns (le pont du dessous vu à travers la brume du dessus). Jupiter
   et les latitudes moyennes inchangés (le facteur nul sous 55°).
 - **Coût** : 0 à +2 % (kerr-mini contre 7a2a093c, dont une vue sous les nuages à 80° N).
+
+## V11 — le Soleil contre le ciel dans la marche (2 novembre, décision de Sam : les poids d'Alex)
+
+![Le bord de la Grande Tache, l'œil de Saturne, Jupiter d'en haut, Jupiter sous un Soleil bas — avant | après](geantes-volume/v11.jpg)
+
+- **Le constat** (le Claude d'Alex, session 4u) : sur un sommet au soleil, la lumière du ciel (`amb`) donnait ~2/3 de la
+  lumière, la diffusion simple du Soleil ~0,03 par octave : les côtés éclairés à peine plus clairs que les côtés à l'ombre,
+  des ponts plats. Les photos de référence (cumulus, orages) montrent un rapport éclairé / ombre de 3 à 10.
+- **L'A/B** : trois couples (Soleil ; ciel) — l'actuel (1 ; 1), un intermédiaire (2 ; 0,75), celui d'Alex (3 ; 0,55) —
+  sur six vues ([les essais](geantes-volume/v11-essais.jpg)) ; Sam a choisi celui d'Alex.
+- **Appliqué comme Alex le fait maintenant** (sa note du 2 novembre, 01:13 UTC) : le ciel × 0,55 dans la lumière du Soleil,
+  × 0,85 à l'ombre — sous un plafond, la lumière diffuse est tout ce qui reste : une coupe uniforme assombrissait d'un
+  tiers toute scène à l'ombre. Le passage par le Soleil direct reçu par l'échantillon. Le Soleil × 3 sur les nuages ; la
+  lumière du ciel dans la brume suit le même poids.
+- **Le contraste** (95e centile sur 10e de la luminance de la partie nuageuse) :
+
+  | | actuel | Alex, coupe uniforme | **retenu (Alex, l'ombre à 0,85)** |
+  |---|---|---|---|
+  | le bord de la Grande Tache, dedans | 2,54 | 3,59 | **2,74** |
+  | l'œil de Saturne | 3,53 | 5,27 | **5,14** |
+  | Jupiter d'en haut, 150 km | 1,47 | 1,95 | **1,70** |
+  | Jupiter dedans, Soleil bas | 1,69 | 2,00 | **1,84** |
+
+- **Coût** : nul (un tour A B B A sur le mini, le second interrompu par le chargement d'une page : B 0 à −5 %).

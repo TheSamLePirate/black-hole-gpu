@@ -280,3 +280,11 @@ test("V9: a pole's clear air — poleward of 55° where the map is blue, the haz
   // (55° in radians: none at Jupiter's GRS or the planets' mid-latitudes)
   expect(Math.abs(0.96 - (55 * Math.PI) / 180)).toBeLessThan(0.01);
 });
+
+test("V11: the Sun's light on the clouds × 3, the sky's × 0.55 in the Sun's light and × 0.85 in shadow (Alex's weights)", () => {
+  expect(wgsl).toContain("const GI_KS = 3.0;");
+  const gi = fnBody("giantInside");
+  expect(gi).toContain("let ka = mix(0.85, 0.55, smoothstep(0.05, 0.4, luminance(sunT)));");
+  expect(gi).toContain("alb * sig * (GI_KS * S + ka * amb)");
+  expect(gi).toContain("0.4 * ka * amb");
+});

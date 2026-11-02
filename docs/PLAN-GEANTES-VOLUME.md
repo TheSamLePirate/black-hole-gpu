@@ -6,7 +6,7 @@ sections). **Fait le 1er novembre : V1, V2, V3, V4** (compte rendu : [progress/g
 V7a (le vent zonal) fait aussi, par un fondu stochastique (chaque rayon tire une phase : (a) lue en entier coûtait
 +36–45 % pendant les fondus) ; V6 fait le 1er novembre aussi (un bruit bleu pour tous les tirages du traceur au-delà du premier) ; V5 le 2 novembre (pas
 d'anneaux ; le grain vu d'en haut réduit) et V10 (les bancs du volume sur la surface), V7b (les tourbillons dedans, les films), V8 (les orages sur le blanc de la carte) ; V9 fait le 2 novembre (aux pôles bleus, la brume amincie et l’hydrosulfure gris) : V1 à V10 sont finis. V11 (le ciel contre le Soleil, un A/B de la session 4u
-d'Alex) ajouté le 2 novembre : à faire bientôt (Sam).
+d'Alex) fait le 2 novembre : les poids d'Alex (Sam). Le plan est fini.
 
 Le contexte : Alex a porté nos nuages des géantes (P11 D2–D5, le fondu `58942157`) sur Quest 3, à 72 images/s. En
 chemin, son Claude a trouvé des défauts qu'on partage, et des astuces dont certaines valent chez nous. On ne garde ici
@@ -27,7 +27,7 @@ Notre état est décrit dans [GEANTES-GAZEUSES.md](GEANTES-GAZEUSES.md) (§ 8, 9
 | **V8** ✅ | Les orages sur le blanc de la carte | les enclumes sortent d'une carte qui n'a pas de tache dessous | 1 lecture de carte par échantillon d'orage | moyen |
 | **V9** ✅ (brume amincie, hydrosulfure gris) | La couleur des pôles de Saturne, du dessus au dedans | bleu-gris vu de haut, beige dedans : le fondu montre le passage | à voir | à étudier |
 | **V10** ✅ (couleur seule) | Les bruits du volume lus par la surface sous le texel de la carte | la carte est floue entre 1 000 et 250 km | quelques lectures | moyen |
-| **V11** | Le ciel contre le Soleil dans la marche (A/B) | le ciel donne ~2/3 de la lumière d'un sommet au soleil : ponts plats | ~0 (deux constantes) | faible — **à faire bientôt** |
+| **V11** ✅ (les poids d'Alex) | Le ciel contre le Soleil dans la marche (A/B) | le ciel donne ~2/3 de la lumière d'un sommet au soleil : ponts plats | ~0 (deux constantes) | faible — **à faire bientôt** |
 
 ### V1. L'éclair cherché une fois par image
 
