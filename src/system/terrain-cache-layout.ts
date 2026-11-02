@@ -23,8 +23,21 @@ export interface TerrainWindow {
   j: number;
 }
 
-/** Keep a window until the camera moves a quarter of its width; wrap longitude before comparing. */
-export function terrainWindow(previous: TerrainWindow | null, lon: number, lat: number, round: number): TerrainWindow | null {
+/** how far ahead along the motion a window is placed when it moves (T4), in its nodes: the camera then crosses 24 + 32 of
+ *  them before it moves again, not 32 — the finest levels' bakes in flight × 0.57 —, the detail kept ahead */
+export const TERRAIN_CACHE_LEAD = 24;
+
+/**
+ * Keep a window until the camera moves a quarter of its width; wrap longitude before comparing. Moved, it is placed ahead along
+ * `dir` (the motion's direction on the lattice — longitude, latitude —, unit; none: centred) by TERRAIN_CACHE_LEAD nodes.
+ */
+export function terrainWindow(
+  previous: TerrainWindow | null,
+  lon: number,
+  lat: number,
+  round: number,
+  dir: readonly [number, number] | null = null,
+): TerrainWindow | null {
   if (!Number.isFinite(lon + lat) || Math.abs(lat) > TERRAIN_CACHE_MAX_LAT) return null;
   const per = round / (2 * Math.PI);
   const centre = (TERRAIN_CACHE_N - 1) / 2;
@@ -34,7 +47,9 @@ export function terrainWindow(previous: TerrainWindow | null, lon: number, lat: 
     x += Math.round((previous.i + centre - x) / round) * round;
     if (Math.abs(x - previous.i - centre) <= centre / 2 && Math.abs(y - previous.j - centre) <= centre / 2) return previous;
   }
-  return { i: Math.floor(x) - centre, j: Math.floor(y) - centre };
+  const lx = dir ? dir[0] * TERRAIN_CACHE_LEAD : 0,
+    ly = dir ? dir[1] * TERRAIN_CACHE_LEAD : 0;
+  return { i: Math.floor(x + lx) - centre, j: Math.floor(y + ly) - centre };
 }
 
 /** Reference and scale in the tracer's table; ready is published only with the matching GPU copy. */

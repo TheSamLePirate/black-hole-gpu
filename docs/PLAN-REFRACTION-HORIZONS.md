@@ -1270,3 +1270,7 @@ compilation) s'y ajoutent.
   (2,65 % de fausse ombre) au-delà de `D_cuisson` ; l'option « distance par direction + moyennes » le divise par deux
   (5,95 / 2,35 %) ; 0,1° contre la référence non tenu (±0,3°) — **porte de décision** posée à Sam —
   [progress/refraction-horizons/H1.md](progress/refraction-horizons/H1.md).
+- **2 novembre, nuit** : **T4a** fait — les changements des tuiles triés par l'anneau que chaque niveau du cache dessine
+  (visibles : recuits groupés ; cachés sous les niveaux fins : 10 s plus tard), les niveaux dus recuits ensemble, les fenêtres
+  posées 24 nœuds en avant du mouvement : **13,3 → 7,3 cuissons par seconde** en vol bas à Chamonix (kerr-mini, A B B A), le
+  temps d'image inchangé ; le fondu (T4b) reste — [progress/refraction-horizons/T4.md](progress/refraction-horizons/T4.md).

@@ -1,4 +1,5 @@
 import { TABLE_TERRAIN } from "../gpu-tables";
+import type { TileChange } from "./earth-tiles";
 import { wgslFunction } from "./warp-grid";
 import {
   TERRAIN_CACHE_HEADER,
@@ -176,6 +177,43 @@ export interface TerrainCacheSources {
   sampler: GPUSampler;
 }
 
+/**
+ * Where a change of the tiles falls for a level (T4): outside its window, nothing; within the part it draws — its ring: its
+ * window less the finer level's, that one's geomorph band (16 nodes) and the ring's overlap (4 nodes and a coarse cell) kept —,
+ * visible; else hidden under the finer levels (a finer level not ready: visible).
+ */
+export function changeInRing(
+  k: number,
+  c: TileChange,
+  windows: readonly (TerrainWindow | null)[],
+  ready: readonly boolean[],
+): "none" | "visible" | "hidden" {
+  if (c.z < 0) return "visible";
+  const box = (w: TerrainWindow, round: number, shrink = 0) => {
+    const per = round / (2 * Math.PI);
+    return {
+      lon0: (w.i + shrink) / per,
+      lon1: (w.i + TERRAIN_CACHE_N - 1 - shrink) / per,
+      lat0: (w.j + shrink) / per,
+      lat1: (w.j + TERRAIN_CACHE_N - 1 - shrink) / per,
+    };
+  };
+  const w = windows[k];
+  if (!w) return "none";
+  const b = box(w, TERRAIN_CACHE_ROUNDS[k]!);
+  // (the change's longitudes brought next to the window's)
+  const mid = 0.5 * (b.lon0 + b.lon1),
+    cm = 0.5 * (c.lon0 + c.lon1);
+  const shift = Number.isFinite(cm) ? Math.round((mid - cm) / (2 * Math.PI)) * 2 * Math.PI : 0;
+  const lon0 = c.lon0 + shift,
+    lon1 = c.lon1 + shift;
+  if (lon1 < b.lon0 || lon0 > b.lon1 || c.lat1 < b.lat0 || c.lat0 > b.lat1) return "none";
+  const inner = k > 0 ? windows[k - 1] : null;
+  if (!inner || !ready[k - 1]) return "visible";
+  const i = box(inner, TERRAIN_CACHE_ROUNDS[k - 1]!, 17);
+  return lon0 >= i.lon0 && lon1 <= i.lon1 && c.lat0 >= i.lat0 && c.lat1 <= i.lat1 ? "hidden" : "visible";
+}
+
 /** Every moved level baked in its frame, then one stale level a frame; exact fallback until ready. No CPU terrain sampling or readback. */
 export class TerrainCache {
   private pipeline: GPUComputePipeline | null = null;
@@ -195,6 +233,26 @@ export class TerrainCache {
   private revision = "";
   private builds = 0;
   private invalidations = 0;
+  /** (T4) the tiles' changes each level has seen (their last order), and since when a level holds one hidden from its ring
+   *  (0: none) — baked again at last after HIDDEN_MS, coalesced */
+  private seen = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
+  private hiddenSince = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
+  static readonly HIDDEN_MS = 10_000;
+  /** a visible change's bake held until the changes calm (QUIET_MS without one), MAX_MS at most: several tiles' completions
+   *  in a row — a level's window whole, then the next's — one bake (T4: the updates coalesced) */
+  private visibleFirst = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
+  private visibleLast = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
+  static readonly QUIET_MS = 150;
+  /** (T4) the camera's motion on the lattice (longitude, latitude [rad/s], smoothed): the windows placed ahead along it */
+  private lastAt: { lon: number; lat: number; t: number } | null = null;
+  private motion: [number, number] = [0, 0];
+  static readonly MAX_MS = 500;
+  /** the changes seen by where they fell: in a level's ring (baked again at once), or hidden under the finer levels */
+  changesVisible = 0;
+  changesHidden = 0;
+  /** (T4) the bakes by level and by cause: the window moved (or never baked), or newer tiles (dirty) */
+  private bakesMoved = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
+  private bakesDirty = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
   private constructor(private device: GPUDevice) {}
 
   static create(device: GPUDevice, trace: string): TerrainCache {
@@ -232,6 +290,7 @@ export class TerrainCache {
     timestamp?: () => GPUComputePassDescriptor,
     preferredLevel = -1,
     tilesRef: readonly [number, number, number] | null = null,
+    changes: readonly TileChange[] = [],
   ): boolean {
     const { pipeline, sources } = this;
     if (this.disposed || !pipeline || !sources) return false;
@@ -243,13 +302,55 @@ export class TerrainCache {
       this.revision = revision;
       this.invalidations++;
     }
+    // (the motion: its direction on the lattice past 1e-7 rad/s — 0.6 m/s on the Earth —;
+    // a camera at rest or turning on itself: centred)
+    const t = performance.now();
+    if (at && this.lastAt && t > this.lastAt.t) {
+      let dl = at.lon - this.lastAt.lon;
+      dl -= Math.round(dl / (2 * Math.PI)) * 2 * Math.PI;
+      const dt = (t - this.lastAt.t) / 1000,
+        a = Math.min(1, dt / 0.5);
+      this.motion = [
+        this.motion[0] + a * (dl / dt - this.motion[0]),
+        this.motion[1] + a * ((at.lat - this.lastAt.lat) / dt - this.motion[1]),
+      ];
+    }
+    this.lastAt = at ? { lon: at.lon, lat: at.lat, t } : null;
+    const speed = Math.hypot(this.motion[0], this.motion[1]);
+    const dir: [number, number] | null = speed > 1e-7 ? [this.motion[0] / speed, this.motion[1] / speed] : null;
     for (let k = 0; k < TERRAIN_CACHE_LEVELS; k++) {
       const previous = this.windows[k]!;
-      const w = at ? terrainWindow(previous, at.lon, at.lat, TERRAIN_CACHE_ROUNDS[k]!) : null;
+      const w = at ? terrainWindow(previous, at.lon, at.lat, TERRAIN_CACHE_ROUNDS[k]!, dir) : null;
       // (a window moved: its bake elsewhere — not drawn until baked again)
       if (w !== previous) this.ready[k] = false;
       this.windows[k] = w;
       if (w) metadata.set(terrainWindowParams(w, TERRAIN_CACHE_ROUNDS[k]!, this.ready[k]!), 8 * k);
+    }
+    // (T4: the tiles' changes not yet seen — a level baked again at once where one shows in its ring, after HIDDEN_MS where all
+    // fell under the finer levels; every change at most once a level)
+    const now = performance.now();
+    const last = changes.length ? changes[changes.length - 1]!.seq : 0;
+    for (let k = 0; k < TERRAIN_CACHE_LEVELS; k++) {
+      if (!this.windows[k] || !this.ready[k]) {
+        this.seen[k] = last;
+        continue;
+      }
+      for (const c of changes) {
+        if (c.seq <= this.seen[k]!) continue;
+        const w = changeInRing(k, c, this.windows, this.ready);
+        if (w === "visible") {
+          this.changesVisible++;
+          if (!this.visibleFirst[k]) this.visibleFirst[k] = now;
+          this.visibleLast[k] = now;
+        } else if (w === "hidden") {
+          this.changesHidden++;
+          if (!this.hiddenSince[k]) this.hiddenSince[k] = now;
+        }
+      }
+      this.seen[k] = last;
+      if (this.hiddenSince[k] && now - this.hiddenSince[k]! >= TerrainCache.HIDDEN_MS) this.dirty[k] = true;
+      const first = this.visibleFirst[k]!;
+      if (first && (now - this.visibleLast[k]! >= TerrainCache.QUIET_MS || now - first >= TerrainCache.MAX_MS)) this.dirty[k] = true;
     }
     // (which level to bake: the patch's first, then its far rings' — the two coarser —, then the rest; a missing one before
     // a dirty one)
@@ -260,12 +361,10 @@ export class TerrainCache {
     const wants = (i: number) => this.windows[i] !== null;
     // (every level whose window moved this frame, baked in it: one a frame, the far rings past a moved one were not drawn
     // for the frames it waited — the whole landscape beyond the patch's 150 m traced in blocks for one to three frames, a
-    // mush every second in flight. Then one level baked again from newer tiles a frame, the old bake drawn meanwhile)
+    // mush every second in flight. Then the levels due again from newer tiles, all in one frame — T4: a generation, the
+    // neighbours published together, never one drawn against the other's older tiles —, the old bakes drawn until then)
     const bake = order.filter((i, n) => wants(i) && !this.ready[i] && order.indexOf(i) === n);
-    if (!bake.length) {
-      const d = order.find((i) => wants(i) && this.dirty[i]);
-      if (d !== undefined) bake.push(d);
-    }
+    if (!bake.length) for (const d of order) if (wants(d) && this.dirty[d] && !bake.includes(d)) bake.push(d);
     if (bake.length) {
       if (!this.staging) {
         this.staging = this.device.createBuffer({
@@ -313,8 +412,12 @@ export class TerrainCache {
           (TABLE_TERRAIN + TERRAIN_CACHE_HEADER + k * TERRAIN_CACHE_NODE_VEC4S) * 16,
           TERRAIN_CACHE_NODE_VEC4S * 16,
         );
+        if (this.ready[k]) this.bakesDirty[k]!++;
+        else this.bakesMoved[k]!++;
         this.ready[k] = true;
         this.dirty[k] = false;
+        this.hiddenSince[k] = 0;
+        this.visibleFirst[k] = 0;
         metadata[8 * k + 6] = 1;
         this.builds++;
       }
@@ -335,6 +438,10 @@ export class TerrainCache {
       error: this.error,
       levelsReady: this.ready.filter(Boolean).length,
       builds: this.builds,
+      bakesMoved: [...this.bakesMoved],
+      changesVisible: this.changesVisible,
+      changesHidden: this.changesHidden,
+      bakesDirty: [...this.bakesDirty],
       invalidations: this.invalidations,
       stagingBytes: this.staging?.size ?? 0,
       uniformBytes: this.uniforms.length * 32,

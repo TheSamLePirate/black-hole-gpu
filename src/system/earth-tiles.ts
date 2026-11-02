@@ -225,6 +225,16 @@ export function eoxColour(r: number, g: number, b: number): [number, number, num
 const mercY = (sinLat: number, n: number) => (0.5 - Math.atanh(Math.min(Math.max(sinLat, -0.999999), 0.999999)) / TAU) * n;
 
 /** tiles [x0, x1) × [y0, y1), x unwrapped (the date line: x0 < 0 or x1 > n) */
+/** (T4) a change of what a level draws: its z (−1: every level), the box it touched — the old rectangle and the new — in
+ *  longitude (unwrapped) and latitude [rad], its order */
+export interface TileChange {
+  z: number;
+  lon0: number;
+  lon1: number;
+  lat0: number;
+  lat1: number;
+  seq: number;
+}
 interface Rect {
   x0: number;
   y0: number;
@@ -546,6 +556,35 @@ export class EarthTiles {
   private sinLat = 0;
   /** bumped when what the tracer draws changes (a level's valid rectangle) */
   stamp = 0;
+  /** (T4) the changes behind the stamps, the last ones kept (the relief cache reads those it has not seen: a level baked
+   *  again at once only where the change shows in the ring it draws) */
+  changes: TileChange[] = [];
+  private changeSeq = 0;
+  /** logs a change of a level's drawn rectangle(s), its box from both (z −1: everything) */
+  private logChange(z: number, a: Rect | null, b: Rect | null) {
+    this.changeSeq++;
+    const n = 2 ** z;
+    const box = (r: Rect) => ({
+      lon0: (r.x0 / n) * TAU - Math.PI,
+      lon1: (r.x1 / n) * TAU - Math.PI,
+      lat0: Math.atan(Math.sinh(Math.PI * (1 - (2 * r.y1) / n))),
+      lat1: Math.atan(Math.sinh(Math.PI * (1 - (2 * r.y0) / n))),
+    });
+    const rs = [a, b].filter((r): r is Rect => !!r).map(box);
+    const c: TileChange =
+      z < 0 || !rs.length
+        ? { z: -1, lon0: -Infinity, lon1: Infinity, lat0: -Math.PI / 2, lat1: Math.PI / 2, seq: this.changeSeq }
+        : {
+            z,
+            lon0: Math.min(...rs.map((r) => r.lon0)),
+            lon1: Math.max(...rs.map((r) => r.lon1)),
+            lat0: Math.min(...rs.map((r) => r.lat0)),
+            lat1: Math.max(...rs.map((r) => r.lat1)),
+            seq: this.changeSeq,
+          };
+    this.changes.push(c);
+    if (this.changes.length > 256) this.changes.splice(0, this.changes.length - 256);
+  }
   /** heights of the global map (for a tile that will not load: terrain.ts, tileFallbackSampler) */
   fallback: ((q: Vec3) => number) | null = null;
   onChange: (() => void) | null = null;
@@ -664,6 +703,7 @@ export class EarthTiles {
       L.col = new Array(L.span * L.span).fill(null);
     }
     this.stamp++;
+    this.logChange(-1, null, null);
     this.onResize?.();
   }
 
@@ -767,6 +807,7 @@ export class EarthTiles {
 
   private setValid(L: Level, r: Rect | null) {
     if (same(L.valid, r)) return;
+    this.logChange(L.z, L.valid, r);
     L.valid = r;
     this.stamp++;
     this.onChange?.();
@@ -1186,6 +1227,7 @@ export class EarthTiles {
     // (taken again whole after a switch: its rectangle the same, its heights not — the ground built from them redone)
     if (L.stale && same(L.valid, w)) {
       L.stale = false;
+      this.logChange(L.z, w, null);
       this.stamp++;
       this.onChange?.();
       return;

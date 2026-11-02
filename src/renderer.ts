@@ -5249,11 +5249,13 @@ export class Renderer {
       const changed = this.terrainSurfaceCache.encode(
         enc,
         at,
-        `${this.earthTiles.stamp}:${this.earthMaps.tier}`,
+        // (T4: the tiles' changes apart — each level baked again where one shows in its ring —; the global maps' tier whole)
+        `${this.earthMaps.tier}`,
         () => this.prof.pass("terrain surface cache"),
         this.terrainRasterRequested ? this.terrainRasterLevel : -1,
         // (the tiles' reference as the tracer has it this frame: the bake's nodes read from it exactly)
         this.paramsF[69 * 4 + 3]! > 0.5 ? [this.paramsF[69 * 4]!, this.paramsF[69 * 4 + 1]!, this.paramsF[69 * 4 + 2]!] : null,
+        this.earthTiles.changes,
       );
       // (realtime: nothing rejected — a bake is the same ground, its window moved or its heights refined by new tiles, and
       // the temporal pass's clamp takes the change; rejecting the history there threw it away for the eight frames of the
