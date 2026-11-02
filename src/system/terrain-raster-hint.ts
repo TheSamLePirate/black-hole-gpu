@@ -99,39 +99,75 @@ const SS_OFF = ${TABLE_SUN}u;
 // SUN_N (the ground's normal there, set: the bodies' — trace.wgsl nearShadow): the reach no less than what the 3 × 3's
 // texels span along the Sun on that ground, two texels over the tangent of the Sun's height over it (a grazing Sun's texel
 // is long on the ground: its sunward end ahead of the point by more than the reach, a shadow everywhere)
-fn sunShadowFar(rel: vec3f) -> vec4f {
-  let c = bodies[SS_OFF + 3u];
-  if (c.x < 0.5) { return vec4f(-1.0, 0.0, 0.0, 3e38); }
-  let R = bodies[SS_OFF]; let U = bodies[SS_OFF + 1u]; let L = bodies[SS_OFF + 2u]; let up = bodies[SS_OFF + 4u].xyz;
-  let uv = vec2f(dot(rel, R.xyz) / R.w * 0.5 + 0.5, 0.5 - dot(rel, U.xyz) / U.w * 0.5);
-  if (any(uv <= vec2f(0.0)) || any(uv >= vec2f(1.0))) { return vec4f(-1.0, 0.0, 0.0, 3e38); }
+// (T6: the cascades — rows 6, 7: each its centre along R and U from the camera [m], its half-width, drawn — side by side in the
+// atlas, each N × N: the finest covering the point read, faded into the next over its last sixth; their texel the reach's floor)
+fn sunCascadeRead(k: u32, x: f32, y: f32, dz: f32, base: f32, H: f32, L: vec4f) -> vec3f {
   let n = vec2i(textureDimensions(sunShadowMap));
-  var reach = c.y;
+  let N = n.y;
+  var reach = max(base, 3.0 * H / f32(N));
   if (dot(SUN_N, SUN_N) > 0.5) {
     let cl = clamp(dot(SUN_N, L.xyz), 0.05, 1.0);
-    reach = max(reach, 4.0 * R.w / f32(n.x) * sqrt(1.0 - cl * cl) / cl);
+    reach = max(reach, 4.0 * H / f32(N) * sqrt(1.0 - cl * cl) / cl);
   }
-  let at = vec2i(uv * vec2f(n));
-  let dz = 0.5 - dot(rel, L.xyz) / (2.0 * L.w);
+  let at = vec2i(vec2f((x * 0.5 + 0.5) * f32(N), (0.5 - y * 0.5) * f32(N))) + vec2i(i32(k) * N, 0);
+  let lo = vec2i(i32(k) * N, 0);
+  let hi = vec2i(i32(k + 1u) * N - 1, N - 1);
   var lit = 0.0;
   var occ = 3e38;
   for (var j = -1; j <= 1; j++) {
     for (var i = -1; i <= 1; i++) {
-      let d = textureLoad(sunShadowMap, clamp(at + vec2i(i, j), vec2i(0), n - 1), 0);
+      let d = textureLoad(sunShadowMap, clamp(at + vec2i(i, j), lo, hi), 0);
       let ahead = (dz - d) * 2.0 * L.w;
       lit += select(1.0, 0.0, ahead > reach);
       if (ahead > reach) { occ = min(occ, ahead); }
     }
   }
-  // (the ray's way out of the patch — a disc of radius c.z round the camera — on its horizontal, back along it)
+  return vec3f(lit / 9.0, reach, occ);
+}
+// base: the reach below which the map's relief is left to a nearer march (the traced kernels' ≤ 300 m — sunShadowFar —; the
+// raster's ground none — liteSun: 0, the cascade's texels its floor)
+fn sunShadowFarAt(rel: vec3f, base: f32) -> vec4f {
+  let c = bodies[SS_OFF + 3u];
+  if (c.x < 0.5) { return vec4f(-1.0, 0.0, 0.0, 3e38); }
+  let R = bodies[SS_OFF]; let U = bodies[SS_OFF + 1u]; let L = bodies[SS_OFF + 2u]; let up = bodies[SS_OFF + 4u].xyz;
+  let a = dot(rel, R.xyz);
+  let b = dot(rel, U.xyz);
+  var r = vec3f(-1.0, base, 3e38);
+  for (var k = 0u; k < 2u; k++) {
+    // (C: the cascade's centre along R and U from the camera now [m], its half-width — 0: not drawn —, the camera's step towards
+    // the Sun since it was drawn [m]: its depths are from the camera then)
+    let C = bodies[SS_OFF + 6u + k];
+    if (C.z <= 0.0) { continue; }
+    let dz = 0.5 - (dot(rel, L.xyz) + C.w) / (2.0 * L.w);
+    let x = (a - C.x) / C.z;
+    let y = (b - C.y) / C.z;
+    let m = max(abs(x), abs(y));
+    if (m >= 0.98) { continue; }
+    r = sunCascadeRead(k, x, y, dz, base, C.z, L);
+    // (near its edge: faded into the next, coarser one where it covers)
+    let w = smoothstep(0.82, 0.98, m);
+    let C1 = bodies[SS_OFF + 7u];
+    if (k == 0u && w > 0.0 && C1.z > 0.0) {
+      let x1 = (a - C1.x) / C1.z;
+      let y1 = (b - C1.y) / C1.z;
+      if (max(abs(x1), abs(y1)) < 0.98) {
+        let r1 = sunCascadeRead(1u, x1, y1, 0.5 - (dot(rel, L.xyz) + C1.w) / (2.0 * L.w), base, C1.z, L);
+        r = vec3f(mix(r.x, r1.x, w), max(r.y, r1.y), min(r.z, r1.z));
+      }
+    }
+    break;
+  }
+  if (r.x < 0.0) { return vec4f(-1.0, 0.0, 0.0, 3e38); }
+  // (the ray's way out of the cascades — a disc of radius c.z round the camera — on its horizontal, back along it)
   let lh = L.xyz - dot(L.xyz, up) * up; let ph = rel - dot(rel, up) * up;
   let lhl = length(lh);
   var exit = 3e38;
   if (lhl > 1e-4) {
-    let ln = lh / lhl; let b = dot(ph, ln); let cc = dot(ph, ph) - c.z * c.z;
-    exit = (-b + sqrt(max(b * b - cc, 0.0))) / lhl;
+    let ln = lh / lhl; let bb = dot(ph, ln); let cc = dot(ph, ph) - c.z * c.z;
+    exit = (-bb + sqrt(max(bb * bb - cc, 0.0))) / lhl;
   }
-  return vec4f(lit / 9.0, exit, reach, occ);
-}`,
+  return vec4f(r.x, exit, r.y, r.z);
+}
+fn sunShadowFar(rel: vec3f) -> vec4f { return sunShadowFarAt(rel, bodies[SS_OFF + 3u].y); }`,
   );
 }

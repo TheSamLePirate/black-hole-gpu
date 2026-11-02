@@ -414,26 +414,26 @@ const WARP_OFF = 3115u;
 // refraction at the ground under the camera, faded out by 10° up — xyz on the body's axes, w 1 when set
 const SUNI_OFF = 822856u;
 // the clear sky's light, physical (gpu-tables.ts TABLE_SKY; kernel skyAmbient writes it, skyIrradiance reads it)
-const SKY_OFF = 822857u;
+const SKY_OFF = 822859u;
 // the geoid's map (gpu-tables.ts TABLE_GEOID, system/geoid-grid.ts): N [m], GEOID_W × GEOID_H nodes, four a vec4
-const GEOID_OFF = 822969u;
+const GEOID_OFF = 822971u;
 // Saturn's rings' optical depth every kilometre (gpu-tables.ts TABLE_RING, system/ring-profile.ts — Cassini's): RING_N values
 // from RING_R0_KM, four a vec4, −1 where none
-const RING_OFF = 1082183u;
+const RING_OFF = 1082185u;
 const RING_N = 71100u;
 const RING_R0_KM = 69800.0;
 // (its first kilometre measured: the C ring's inner edge before it none; then the sums of its opacity — gpu-tables.ts
 // TABLE_RINGSUM —, RING_N + 1 values)
 const RING_FIRST_KM = 72761.0;
-const RINGSUM_OFF = 1099995u;
+const RINGSUM_OFF = 1099997u;
 // (the giants' cloud tops by latitude — gpu-tables.ts TABLE_TOPS, system/giant-tops.ts —: four profiles of 181 values)
-const TOPS_OFF = 1117771u;
+const TOPS_OFF = 1117773u;
 // the giants' zonal winds (gpu-tables.ts TABLE_WIND, system/giant-winds.ts): 146 values, four a vec4
-const WIND_OFF = 1099958u;
+const WIND_OFF = 1099960u;
 const GEOID_W = 1440u;
 const GEOID_H = 720u;
 // the orthophotos' levels (gpu-tables.ts TABLE_ORTHO, system/earth-tiles.ts orthoParams): three vec4s each
-const ORTHO_OFF = 1082169u;
+const ORTHO_OFF = 1082171u;
 const ORTHO_LEVELS = 4u;
 const WARP_LEVELS = 3u;
 const WARP_N = 512u;
@@ -7616,6 +7616,7 @@ fn cloudDepthAtPixel(px: vec2f) -> f32 { return -1.0; }
 // END_CLOUD_PASS
 // BEGIN_SUN_SHADOW (system/terrain-raster-hint.ts withSunShadow supplies the relief's shadow map's lookup)
 fn sunShadowFar(rel: vec3f) -> vec4f { return vec4f(-1.0, 0.0, 0.0, 3e38); }
+fn sunShadowFarAt(rel: vec3f, base: f32) -> vec4f { return vec4f(-1.0, 0.0, 0.0, 3e38); }
 // END_SUN_SHADOW
 // BEGIN_CLOUD_SHADOW (system/cloud-shadow.ts withCloudShadow supplies the clouds' transmittance map's lookup — N3)
 // (the sunlight's share the clouds let through to a point p of the squashed space: −1 where the map has nothing)
@@ -13093,6 +13094,30 @@ fn rasterRay(pos: vec2f, k: u32) -> RasterRay {
   let rd = rs / length(rs);
   return RasterRay(look, rd, length(vec3f(rd.xy, rd.z / ab)) * EARTH_RM);
 }
+// The contact shadows (T6): the last metres the relief's cascades leave to a nearer march — their reach's floor, three texels
+// and the slope's —, walked in the image: from the surface's point p0 (from the camera, the body's axes [m]) towards the Sun L,
+// 12 steps out to `reach` [m], each projected onto the raster's target; a surface drawn nearer than the step by 0.4 to 15 m: in
+// its shadow. 1 lit, 0 shadowed (off the image: lit)
+fn rasterContactShadow(p0: vec3f, L: vec3f, reach: f32) -> f32 {
+  let F = toBody(P.camFwd.xyz);
+  let Rt = toBody(P.camRight.xyz);
+  let Up = toBody(P.camUp.xyz);
+  let sx = P.cam.w * P.camRight.w;
+  let sy = P.cam.w;
+  for (var i = 1u; i <= 12u; i++) {
+    let f = f32(i) / 12.0;
+    let p = p0 + L * (reach * f * f);
+    let z = dot(p, F);
+    if (z <= 0.5) { break; }
+    let ndc = vec2f(dot(p, Rt) / (z * sx), dot(p, Up) / (z * sy));
+    if (any(abs(ndc) >= vec2f(1.0))) { break; }
+    let px = vec2f((ndc.x + 1.0) * 0.5 * P.res.x, (1.0 - ndc.y) * 0.5 * P.res.y);
+    let d = terrainRasterHint(px);
+    let lp = length(p);
+    if (d > 0.0 && lp - d > 0.4 + 0.002 * lp && lp - d < 15.0) { return 0.0; }
+  }
+  return 1.0;
+}
 // the point tM metres along it, in the squashed space from the body's centre [radii] (the camera split fine, as the hint's)
 fn rasterPoint(r: RasterRay, tM: f32) -> vec3f {
   let fine = P.nearCam1.w > 0.5;
@@ -13170,9 +13195,19 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
     Eg *= shade;
   }
   Eg *= sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
-  if ((liteSkip() & 4u) == 0u) {
-    let far = sunShadowFar(dirW * tM);
+  if ((liteSkip() & 4u) == 0u && dot(n, Lp) > -0.05) {
+    // (T6: the cascades from the ground itself — no nearer march here: their texels the reach's floor —, the slope's own
+    // reach by the surface's normal — the mesh's: the map's triangles)
+    let sn = SUN_N;
+    SUN_N = n;
+    let far = sunShadowFarAt(dirW * tM, 0.0);
+    SUN_N = sn;
     if (far.x >= 0.0) { Eg *= far.x; }
+    // (the last metres under the cascades' reach: the contact shadows, in the image — lit and facing the Sun only, near)
+    // (a Sun under 25°: higher, the last metres' shadows are short — under the pixel at a few hundred metres)
+    if (far.x != 0.0 && dot(n, Lp) > 0.0 && dot(gq, Lp) < 0.42 && tM < 1500.0 && (liteSkip() & 16384u) == 0u) {
+      Eg *= rasterContactShadow(dirW * tM + n * 0.05, Lp, clamp(max(far.z, 4.0), 4.0, 24.0));
+    }
   }
   if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(n, Lp) > 0.0 && (liteSkip() & 2u) == 0u) {
     // (the scenery's local frame — sceneryLocal's, written out: compiled out with the scenery)

@@ -1257,4 +1257,6 @@ compilation) s'y ajoutent.
   à cratères (5 à 14 ms), 16 cuissons par seconde en vol bas ; **H3a abandonné** (aucune borne de pente utile : 66 à 90°
   pour les seuls cratères procéduraux), `reliefAt` = 8 × `hdAt`, les calottes à 78° et 256² gardées —
   [progress/refraction-horizons/M0b.md](progress/refraction-horizons/M0b.md) ; **R3** fait (les deux Soleils) —
-  [progress/refraction-horizons/R3.md](progress/refraction-horizons/R3.md).
+  [progress/refraction-horizons/R3.md](progress/refraction-horizons/R3.md) ; **T6** fait (les ombres du relief en deux
+  cascades ±1,5 et ±10 km, les ombres de contact, le décor gardé jusqu'à 0,3° ; 2 à 5 % de l'image ombrés au Soleil bas à
+  Chamonix, rien à midi ; +0,2 à 0,8 ms sur kerr-mini) — [progress/refraction-horizons/T6.md](progress/refraction-horizons/T6.md).

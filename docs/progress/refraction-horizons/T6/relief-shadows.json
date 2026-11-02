@@ -1,0 +1,72 @@
+{
+ "east-noon": {
+  "cascades": 0.0002275390625,
+  "contact": 0.000240234375,
+  "cost": {
+   "on": {
+    "frame": 11.9,
+    "sun": 0.56,
+    "lite": 5.54
+   },
+   "nocontact": {
+    "frame": 9.7,
+    "sun": 0,
+    "lite": 5.28
+   },
+   "off": {
+    "frame": 11.9,
+    "sun": 0,
+    "lite": 5.29
+   }
+  }
+ },
+ "east-1845": {
+  "cascades": 0.039623046875,
+  "contact": 0.0001904296875,
+  "cost": {
+   "on": {
+    "frame": 12.7,
+    "sun": 0,
+    "lite": 5.87
+   },
+   "nocontact": {
+    "frame": 11.8,
+    "sun": 0,
+    "lite": 5.67
+   },
+   "off": {
+    "frame": 9,
+    "sun": 0,
+    "lite": 5.79
+   }
+  }
+ },
+ "north-1830": {
+  "cascades": 0.0205302734375,
+  "contact": 0.00036328125,
+  "cost": {
+   "on": {
+    "frame": 7.9,
+    "sun": 0.7,
+    "lite": 3.38
+   },
+   "nocontact": {
+    "frame": 12.6,
+    "sun": 0,
+    "lite": 3.46
+   },
+   "off": {
+    "frame": 12.3,
+    "sun": 0,
+    "lite": 3.44
+   }
+  }
+ },
+ "flight": {
+  "frames": 479,
+  "drawn": 25,
+  "kept": 0.000201171875,
+  "noise": 0.0302841796875,
+  "drewOnStep": false
+ }
+}

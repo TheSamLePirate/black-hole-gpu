@@ -24,7 +24,7 @@ import {
   TERRAIN_CACHE_VEC4S,
   type TerrainWindow,
 } from "./system/terrain-cache-layout";
-import { TerrainRaster, type TerrainRing } from "./system/terrain-raster";
+import { TERRAIN_SUN_N, TerrainRaster, type TerrainRing } from "./system/terrain-raster";
 import {
   SCENERY_RASTER_LOD,
   SceneryRaster,
@@ -7878,7 +7878,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** Mars's season as last read (writeParams: Params.mars), and when (the clock in half-Ms) */
   private marsSeason = [Math.PI / 2, -Math.PI / 2, 0, 0];
   private marsSeasonAt = Number.NaN;
-  /** parts of the raster's material cut at run time (trace.wgsl liteSkip: TUNE_LITE's bits — 1 water, 2 scenery shadows, 4
+  /** parts of the raster's material cut at run time (trace.wgsl liteSkip: TUNE_LITE's bits — 16384 the contact shadows (T6), 1 water, 2 scenery shadows, 4
    *  relief shadow, 8 surfaces, 16 mesh normal, 32 cloud shadows, 64 trees, 128 imagery, 256 the moons' own ground, 512 the airless
    *  worlds' rocks — trace.wgsl airlessRocks, the body raster's heights and the shading both —, 1024 shadeLite's pass alone, 2048
    *  the giants' convective towers — giantTowers —, 4096 Mars's dust devils — marsDevils —, 8192 the bodies'
@@ -8253,7 +8253,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     let L = [dot(0), dot(4), dot(8)];
     const ll = Math.hypot(...L) || 1;
     L = L.map((x) => x / ll);
-    if (L[2]! < 0.03) return f;
+    // (T6: kept down to 0.3° — under 1.7° the trees' and buildings' shadows were cut, the low Sun's longest; the map's depth
+    // ±3 km along the Sun holds a 15 m tree's 2.9 km shadow at 0.3°)
+    if (L[2]! < 0.005) return f;
     let r = [L[1]!, -L[0]!, 0];
     const rl = Math.hypot(...r);
     r = rl < 1e-6 ? [1, 0, 0] : r.map((x) => x / rl);
@@ -8350,6 +8352,26 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   }
   /** half the relief's shadow map's width [m], the depth's half-range [m], the near march's reach [m] */
   static readonly SUN_HALF_M = 10_000;
+  /** the relief's shadow cascades' half-widths [m] (T6): 1.5 m and 9.8 m a texel */
+  static readonly SUN_CASCADES_M = [1_500, 10_000];
+  private sunOuts = Renderer.SUN_CASCADES_M.map(() => new Float32Array(16));
+  private sunCascadeRows = new Float32Array(8);
+  /** (T6) the cascades' key: the Sun's kept direction and their grid-snapped centres, and the heights' bakes — those taken at
+   *  most every half second (in low flight 16 bakes a second: each would draw the cascades again) */
+  private sunRevision(L: number[], centres: number[][]): string {
+    const builds = this.terrainSurfaceCache?.stats().builds ?? 0;
+    const now = performance.now();
+    if (builds !== this.sunBuilds && now - this.sunBuildsAt >= 500) {
+      this.sunBuilds = builds;
+      this.sunBuildsAt = now;
+    }
+    return `${this.sunBuilds}|${L.join(",")}|${centres.flat().join(",")}`;
+  }
+  private sunBuilds = -1;
+  private sunBuildsAt = 0;
+  /** the Sun's direction the cascades were last drawn along (T6), and the camera's place then (the body's axes [m]) */
+  private sunLKept: Vec3 | null = null;
+  private sunCamDraw: number[] | null = null;
   static readonly SUN_DEPTH_M = 20_000;
   static readonly SUN_NEAR_M = 300;
   /**
@@ -8367,12 +8389,30 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 5) * 16, this.incidentRow);
     this.incidentWritten = true;
     if (drawn && this.sunShadow && this.sunShadowOn && this.rasterPrimaryOn && near && tr) {
-      const L = Li ?? (near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!) as Vec3);
+      let L = Li ?? (near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!) as Vec3);
+      // (T6: the Sun's direction kept until it has turned 5e-5 rad — 0.003°, 0.7 s of its course; 2 m of shadow 20 km off —: the
+      // cascades drawn again then, not every frame — drawn and read with the same one)
+      const K = this.sunLKept;
+      if (K && K[0] * L[0] + K[1] * L[1] + K[2] * L[2] > Math.cos(5e-5)) L = K;
+      else this.sunLKept = L;
       const up = patchGeodetic(near, WGS84_F).normal;
       const { r, u } = sunAxes(L, up);
-      const H = Renderer.SUN_HALF_M,
-        D = Renderer.SUN_DEPTH_M;
-      this.sunOut.set([...r, H, ...u, H, ...L, D]);
+      const D = Renderer.SUN_DEPTH_M;
+      // (T6: the cascades — ±1.5 km (1.5 m a texel), ±10 km —, each centred on the camera snapped to its texels' grid in the
+      // Sun's plane: the camera's place on the body's axes in float64, the shadows' edges still while it moves)
+      const g = patchGeodetic(near, WGS84_F);
+      const cam = g.body.map((x) => x * WGS84_A);
+      const cr = cam[0]! * r[0]! + cam[1]! * r[1]! + cam[2]! * r[2]!;
+      const cu = cam[0]! * u[0]! + cam[1]! * u[1]! + cam[2]! * u[2]!;
+      // (each centre on a grid of a tenth of its half-width, a whole number of texels: the cascade kept while the camera moves
+      // within it — drawn again when it steps)
+      // (the cascades' absolute centres along r and u, and the Sun's kept direction: their key — drawn again when one changes)
+      const centres = Renderer.SUN_CASCADES_M.map((H) => {
+        const texel = (2 * H) / TERRAIN_SUN_N;
+        const grid = Math.max(1, Math.round((0.1 * H) / texel)) * texel;
+        return [Math.round(cr / grid) * grid, Math.round(cu / grid) * grid];
+      });
+      Renderer.SUN_CASCADES_M.forEach((H, k) => this.sunOuts[k]!.set([...r, H, ...u, H, ...L, D, centres[k]![0]! - cr, centres[k]![1]! - cu, 0, 0]));
       on = tr.encodeSunShadow(
         enc,
         {
@@ -8382,12 +8422,24 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
           tiles: this.earthTiles.texture,
           sampler: this.sampler,
         },
-        this.sunOut,
+        this.sunOuts,
         (label, descriptor) => this.prof.pass(label, descriptor),
+        // (the heights' bakes: a level baked again — new tiles —, the cascades drawn again)
+        this.sunRevision(L, centres),
       );
+      if (on && tr.sunDrewNow) this.sunCamDraw = cam;
+      // (read where they were drawn: each centre from the camera now, and the camera's step towards the Sun since — the maps'
+      // depths are from the camera then)
+      const cd = this.sunCamDraw ?? cam;
+      const dzOff = (cam[0]! - cd[0]!) * L[0] + (cam[1]! - cd[1]!) * L[1] + (cam[2]! - cd[2]!) * L[2];
+      const cascades = Renderer.SUN_CASCADES_M.map((H, k) => [centres[k]![0]! - cr, centres[k]![1]! - cu, H, dzOff]);
       if (on) {
-        this.sunTable.set([...r, H, ...u, H, ...L, D, 1, Renderer.SUN_NEAR_M, H * 0.98, 0, ...up, 0]);
+        const H0 = Renderer.SUN_CASCADES_M[0]!,
+          H1 = Renderer.SUN_CASCADES_M[Renderer.SUN_CASCADES_M.length - 1]!;
+        this.sunTable.set([...r, H0, ...u, H0, ...L, D, 1, Renderer.SUN_NEAR_M, H1 * 0.98, 0, ...up, 0]);
         this.device.queue.writeBuffer(this.bodyBuf, TABLE_SUN * 16, this.sunTable);
+        this.sunCascadeRows.set(cascades.flat());
+        this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 6) * 16, this.sunCascadeRows);
       }
     }
     if (!on && this.sunTableOn) this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 3) * 16, new Float32Array(4));
@@ -8711,6 +8763,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         D = Renderer.SUN_DEPTH_M;
       this.sunOut.set([...r, H, ...u, H, ...L, D]);
       on = tr.encodeBodySun(enc, br, this.sunOut, (label, descriptor) => this.prof.pass(label, descriptor));
+      // (its one map, the first cascade's square, centred on the camera; the second off)
+      if (on) {
+        this.sunCascadeRows.set([0, 0, H, 0, 0, 0, 0, 0]);
+        this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 6) * 16, this.sunCascadeRows);
+      }
       if (on) {
         this.sunTable.set([...r, H, ...u, H, ...L, D, 1, Renderer.BODY_SUN_NEAR_M, H * 0.98, 0, ...up, 0]);
         this.device.queue.writeBuffer(this.bodyBuf, TABLE_SUN * 16, this.sunTable);

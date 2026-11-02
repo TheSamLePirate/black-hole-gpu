@@ -1,7 +1,13 @@
-import { TERRAIN_CACHE_N } from "./terrain-cache-layout";
+import { TERRAIN_CACHE_N, TERRAIN_CACHE_RING_LAST } from "./terrain-cache-layout";
 
 /** The relief's shadow map's side [texels] (system/terrain-raster.ts encodeSunShadow, trace.wgsl sunShadowFar). */
+/** a cascade's side in the relief's shadow atlas [texels] (T6: two cascades side by side — 2N × N) */
 export const TERRAIN_SUN_N = 2048;
+/** the relief's shadow cascades (T6): their count in the atlas */
+export const TERRAIN_SUN_CASCADES = 2;
+/** the finest cache level drawn into the second cascade (9.8 m texels: the 9.5 m level and finer are the first's, which covers
+ *  them — its ±1.5 km about the camera) */
+const TERRAIN_CACHE_SUN_C1 = 3;
 /** The visibility target: r the ground's distance [m], g the scenery's instance drawn nearest (system/scenery-raster.ts),
  *  b the nearest surface's distance [m] (the ground's, or the instance's proxy in front of it). */
 export const TERRAIN_RASTER_FORMAT: GPUTextureFormat = "rgba32float";
@@ -161,12 +167,14 @@ fn terrainPoint(vertex: vec3f, graded: bool) -> vec3f {
 }
 // The relief seen from the Sun (its shadow map — trace.wgsl sunShadowFar): an orthographic view along its direction,
 // right and up over half-widths [m], the depth the distance towards the Sun over twice its half-range, nearer the Sun less
-struct Sun { right: vec4f, up: vec4f, toward: vec4f };
+// — T6: a cascade's, its centre (xy, along right and up [m] from the camera: on its texels' grid, the shadows' edges still while
+// the camera moves) —, drawn into its square of the cascades' atlas (the pass's viewport)
+struct Sun { right: vec4f, up: vec4f, toward: vec4f, centre: vec4f };
 @group(0) @binding(5) var<uniform> sun: Sun;
 @vertex fn terrainSunVs(@location(0) vertex: vec3f) -> @builtin(position) vec4f {
   let p = terrainPoint(vertex, vertexGraded(vertex.xy));
   let z = clamp(0.5 - dot(p, sun.toward.xyz) / (2.0 * sun.toward.w), 0.0, 1.0);
-  return vec4f(dot(p, sun.right.xyz) / sun.right.w, dot(p, sun.up.xyz) / sun.up.w, z, 1.0);
+  return vec4f((dot(p, sun.right.xyz) - sun.centre.x) / sun.right.w, (dot(p, sun.up.xyz) - sun.centre.y) / sun.up.w, z, 1.0);
 }
 // (r: the ground's distance [m]; g: the scenery's instance drawn there — none here, the scenery's draw writes it alone, and
 // its proxy's distance over b; a: the patch's code, 1, and its smooth normal — T5)
@@ -246,6 +254,9 @@ interface RingState {
   heightBind: GPUBindGroup | null;
   table: GPUBuffer | null;
   sources: TerrainCacheSources | null;
+  /** (T6) its bind groups for each cascade of the shadow atlas, and the table they were made with */
+  sunBinds: (GPUBindGroup | null)[];
+  sunTable: GPUBuffer | null;
 }
 
 interface Attachments {
@@ -288,7 +299,10 @@ export class TerrainRaster {
   readonly sunDepth: GPUTexture;
   private sunPipe: GPURenderPipeline | null = null;
   private sunUniform: GPUBuffer;
-  private sunBind: GPUBindGroup | null = null;
+  /** (T6) each cascade's view from the Sun — the patch's and each ring's bind groups with it */
+  private sunUniforms: GPUBuffer[];
+  private sunBinds: (GPUBindGroup | null)[] = [];
+  private sunTable: GPUBuffer | null = null;
   private sunHeightBind: GPUBindGroup | null = null;
   private sunSources: TerrainCacheSources | null = null;
   sunFrames = 0;
@@ -296,6 +310,13 @@ export class TerrainRaster {
   private ringPipe: GPURenderPipeline | null = null;
   private rings: RingState[] = [];
   ringsDrawn = 0;
+  /** the rings drawn this frame and their levels (T6: drawn again into the shadow cascades) */
+  private ringsLast: { r: RingState; level: number }[] = [];
+  /** (T6) what the cascades were last drawn from — skipped while it stays the same: a still view, a tripod */
+  private sunKey = "";
+  sunSkipped = 0;
+  /** whether the last encodeSunShadow drew the cascades (else they were kept: the caller's frame of them unchanged) */
+  sunDrewNow = false;
 
   constructor(
     private device: GPUDevice,
@@ -304,11 +325,14 @@ export class TerrainRaster {
     this.module = device.createShaderModule({ code: terrainRasterShader(trace), label: "terrain raster pilot" });
     this.sunDepth = device.createTexture({
       label: "relief seen from the Sun",
-      size: [TERRAIN_SUN_N, TERRAIN_SUN_N],
+      size: [TERRAIN_SUN_CASCADES * TERRAIN_SUN_N, TERRAIN_SUN_N],
       format: "depth32float",
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
-    this.sunUniform = device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.sunUniform = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.sunUniforms = Array.from({ length: TERRAIN_SUN_CASCADES }, () =>
+      device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }),
+    );
     void device
       .createRenderPipelineAsync({
         layout: "auto",
@@ -386,6 +410,8 @@ export class TerrainRaster {
         heightBind: null,
         table: null,
         sources: null,
+        sunBinds: [],
+        sunTable: null,
       };
       this.rings[k] = r;
     }
@@ -555,9 +581,14 @@ export class TerrainRaster {
     pass.drawIndexed(this.indexCount);
     // (the far rings beyond it: the farther ground found from them too, not marched from the camera)
     this.ringsDrawn = 0;
+    this.ringsLast = [];
     if (this.ringPipe)
       for (let k = 0; k < rings.length; k++) {
-        if (this.drawRing(pass, this.ringPipe, this.ringState(k), rings[k]!, sources)) this.ringsDrawn++;
+        const r = this.ringState(k);
+        if (this.drawRing(pass, this.ringPipe, r, rings[k]!, sources)) {
+          this.ringsDrawn++;
+          this.ringsLast.push({ r, level: rings[k]!.level });
+        }
       }
     // (the scenery's instances after the ground, against its depth, their ids in g alone — system/scenery-raster.ts)
     scenery?.(pass);
@@ -673,22 +704,30 @@ export class TerrainRaster {
   encodeSunShadow(
     enc: GPUCommandEncoder,
     sources: TerrainCacheSources,
-    sun: Float32Array,
+    suns: Float32Array[],
     profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
+    revision = "",
   ): boolean {
     if (!this.active || !this.sunPipe || !this.uniform || !this.table || this.disposed) return false;
+    // (the cascades kept while nothing they are drawn from changed: the Sun's view and the cascades' centres, the meshes' windows,
+    // the heights' bakes — the caller's revision)
+    // (the meshes' windows left out: a window recentred draws the same relief, its fine edge alone moved — the renderer's revision
+    // says when the heights changed, at most twice a second)
+    const key = revision;
+    this.sunDrewNow = false;
+    if (key === this.sunKey) {
+      this.sunSkipped++;
+      return true;
+    }
+    this.sunKey = key;
+    this.sunDrewNow = true;
+    const d = this.device;
+    const pipe = this.sunPipe;
     const old = this.sunSources;
-    if (!this.sunBind || !old || !(Object.keys(sources) as (keyof TerrainCacheSources)[]).every((k) => old[k] === sources[k])) {
-      this.sunBind = this.device.createBindGroup({
-        layout: this.sunPipe.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: { buffer: this.uniform } },
-          { binding: 1, resource: { buffer: this.table } },
-          { binding: 5, resource: { buffer: this.sunUniform } },
-        ],
-      });
-      this.sunHeightBind = this.device.createBindGroup({
-        layout: this.sunPipe.getBindGroupLayout(1),
+    const table = this.table;
+    if (!this.sunHeightBind || !old || !(Object.keys(sources) as (keyof TerrainCacheSources)[]).every((k) => old[k] === sources[k])) {
+      this.sunHeightBind = d.createBindGroup({
+        layout: pipe.getBindGroupLayout(1),
         entries: [
           { binding: 0, resource: { buffer: sources.params } },
           { binding: 4, resource: sources.sampler },
@@ -698,19 +737,55 @@ export class TerrainRaster {
       });
       this.sunSources = sources;
     }
-    this.device.queue.writeBuffer(this.sunUniform, 0, sun as Float32Array<ArrayBuffer>);
+    // (each cascade's bind groups: the patch's frame, or a ring's, the table, the cascade's view — made again with a new table)
+    const bind = (uniform: GPUBuffer, k: number) =>
+      d.createBindGroup({
+        layout: pipe.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: uniform } },
+          { binding: 1, resource: { buffer: table } },
+          { binding: 5, resource: { buffer: this.sunUniforms[k]! } },
+        ],
+      });
+    if (this.sunTable !== table) {
+      this.sunBinds = [];
+      this.sunTable = table;
+    }
     const pass = enc.beginRenderPass(
       profile("terrain from the Sun", {
         colorAttachments: [],
         depthStencilAttachment: { view: this.sunDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
       }),
     );
-    pass.setPipeline(this.sunPipe);
-    pass.setBindGroup(0, this.sunBind);
+    pass.setPipeline(pipe);
     pass.setBindGroup(1, this.sunHeightBind!);
-    pass.setIndexBuffer(this.index!, "uint32");
-    pass.setVertexBuffer(0, this.vertex!);
-    pass.drawIndexed(this.indexCount);
+    // (T6: each cascade in its square of the atlas — the patch and every ring drawn this frame, their surfaces geomorphosed as the
+    // image's: the ground's shadows cast by the same relief the camera sees, near and out to the cascade's edge)
+    const n = Math.min(suns.length, TERRAIN_SUN_CASCADES);
+    for (let k = 0; k < n; k++) {
+      d.queue.writeBuffer(this.sunUniforms[k]!, 0, suns[k]! as Float32Array<ArrayBuffer>);
+      pass.setViewport(k * TERRAIN_SUN_N, 0, TERRAIN_SUN_N, TERRAIN_SUN_N, 0, 1);
+      pass.setScissorRect(k * TERRAIN_SUN_N, 0, TERRAIN_SUN_N, TERRAIN_SUN_N);
+      this.sunBinds[k] ??= bind(this.uniform, k);
+      pass.setBindGroup(0, this.sunBinds[k]!);
+      pass.setIndexBuffer(this.index!, "uint32");
+      pass.setVertexBuffer(0, this.vertex!);
+      // (the finest levels in the first cascade alone — the second is read beyond it —; the coarsest ring, past the depth's reach,
+      // in neither: its window outside the finer ones' is ±40 km away and more)
+      if (k === 0) pass.drawIndexed(this.indexCount);
+      for (const { r, level } of this.ringsLast) {
+        if (level >= TERRAIN_CACHE_RING_LAST || (k > 0 && level < TERRAIN_CACHE_SUN_C1)) continue;
+        if (r.sunTable !== table) {
+          r.sunBinds = [];
+          r.sunTable = table;
+        }
+        r.sunBinds[k] ??= bind(r.uniform, k);
+        pass.setBindGroup(0, r.sunBinds[k]!);
+        pass.setIndexBuffer(r.index, "uint32");
+        pass.setVertexBuffer(0, r.vertex);
+        pass.drawIndexed(r.indexCount);
+      }
+    }
     pass.end();
     this.sunFrames++;
     return true;
@@ -734,6 +809,11 @@ export class TerrainRaster {
         depthStencilAttachment: { view: this.sunDepth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" },
       }),
     );
+    // (another world: the first cascade's square alone — sunShadowFar reads the second only where its row says it is drawn —;
+    // the Earth's cascades drawn again when it comes back)
+    this.sunKey = "";
+    pass.setViewport(0, 0, TERRAIN_SUN_N, TERRAIN_SUN_N, 0, 1);
+    pass.setScissorRect(0, 0, TERRAIN_SUN_N, TERRAIN_SUN_N);
     const drawn = body.drawSun(pass, this.sunUniform);
     pass.end();
     if (drawn) this.sunFrames++;
@@ -809,6 +889,7 @@ export class TerrainRaster {
     this.uniform?.destroy();
     this.sunDepth.destroy();
     this.sunUniform.destroy();
+    for (const b of this.sunUniforms) b.destroy();
     this.index?.destroy();
     this.vertex?.destroy();
     for (const r of this.rings) for (const b of [r.vertex, r.index, r.uniform, r.hole]) b.destroy();
