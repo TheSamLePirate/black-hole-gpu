@@ -3445,7 +3445,11 @@ export class Renderer {
     // (and the body raster's reach [m] — P.tileL[17].x —: Mars's rays the raster has not met start their march there, P7)
     // (only while it draws: its reach kept past its last frame — out of reach, compiling — sent the rays it leaves past the
     // ground, which vanished under a walker on Mars)
-    f[(69 + 1 + 17) * 4] = this.bodyRasterNow && this.bodyRasterDrew && this.bodyRaster ? this.bodyRaster.reach : 0;
+    // (another world's alone: P.tileL[17] is the Earth's z 14 window there — its width zeroed each frame since P7 (30 Oct), the
+    // tracer dropped the Earth's finest global level: Tarifa, Monument Valley a level coarser — 2 Nov 2026)
+    const nearBody = near ? bodies[near.index]?.id : undefined;
+    if (nearBody !== "earth")
+      f[(69 + 1 + 17) * 4] = this.bodyRasterNow && this.bodyRasterDrew && this.bodyRaster ? this.bodyRaster.reach : 0;
     // (the orthophotos' levels: in the tracer's table, written when they change)
     const ortho = this.earthTiles.orthoParams();
     if (!this.orthoSent || ortho.some((v, i) => v !== this.orthoSent![i])) {

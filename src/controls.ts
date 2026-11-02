@@ -1440,6 +1440,10 @@ export class CameraController {
     fixed: null as Vec3 | null,
     /** tripod: its height over the ground [m] (none: 1.7 m — set by the up and down keys) */
     standH: undefined as number | undefined,
+    /** tripod: the ground place a scene gave it (body, body-fixed [M]) — held over its first `steps` steps (the scene's
+     *  anchors still settling re-fix it), dropped at the first move: from the camera's place it stood where the camera had
+     *  drifted to by then (controller/rig.ts) */
+    pin: null as { body: string; q: Vec3; steps: number } | null,
     /** tripod: the scenery and the stand it was last cleared against (controller/rig.ts: not read again while both hold) */
     clearOf: null as object | null,
     clearAt: "",

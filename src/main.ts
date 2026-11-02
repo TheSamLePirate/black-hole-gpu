@@ -2028,6 +2028,8 @@ async function main() {
       }
       // (the tripod raised over the roofs, as the scene asks: the rig holds it that high over the ground)
       camera.viewController().rig.standH = v.landed && !settings.ship ? pose.standM : undefined;
+      // (and on the ground place the scene gives — not where the camera will have drifted to by the tripod's first frame)
+      camera.viewController().rig.pin = v.landed && !settings.ship ? { body: v.landed.body, q: [...v.landed.q] as Vec3, steps: 30 } : null;
       void aimAt(pose.look ?? null, pose.off ?? [0, 0]);
     } else if (pose && pose !== "enduranceHole") {
       // (the station: at the real time now, unless the scene has its own)

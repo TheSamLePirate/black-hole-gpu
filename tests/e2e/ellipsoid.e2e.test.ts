@@ -83,6 +83,7 @@ test.skipIf(!E2E)(
       "figureSunShare",
       "earthSurface",
       "rwyCount",
+      "runwayFlags",
       "runwayGrade",
     ]
       .map(shaderFunction)
@@ -96,13 +97,14 @@ test.skipIf(!E2E)(
     const initRunway = runwayCases
       .map(
         (c, i) =>
-          `case ${cases.length + sourceCases.length + i}u: {q=${vec(c.q)}; P.runways[0].x=1.0;P.runways[1]=${vec([...c.r.p, 4500])};P.runways[2]=${vec([...c.r.along, 30])};P.runways[3]=${vec([...c.r.across, 0])};P.runways[4]=${vec([0, 0, 0, c.r.elev])};}`,
+          `case ${cases.length + sourceCases.length + i}u: {q=${vec(c.q)}; P.runways[0].x=1.0;P.runways[1]=${vec([...c.r.p, c.r.len])};P.runways[2]=${vec([...c.r.along, c.r.halfWidth])};P.runways[3]=${vec([...c.r.across, c.r.flags])};P.runways[4]=${vec([0, 0, 0, c.r.elev])};}`,
       )
       .join("\n");
     const count = cases.length + sourceCases.length + runwayCases.length,
       bytes = count * 8 * 4;
     const shader = `
     const PI=3.141592653589793; const EARTH_AB=1.0033640898209764; const EARTH_SURF=4u; const BV=7u;
+    ${["SATURN_AB", "JUPITER_AB"].map((n) => /^const \w+ = [^;]+;/m.exec(trace.slice(trace.indexOf(`const ${n} `)))![0]).join(" ")}
     const EARTH_MOON=vec3f(0.07,0.085,0.11); const EARTH_RM=6378137.0; const HAS_RWY=true; const RWY_MAX=4u;
     struct Params {earth:vec4f,earth3:vec4f,runways:array<vec4f,17>}; var<private> P:Params;
     struct AirSpec {ab:f32,rm:f32}; var<private> AIR:AirSpec;
@@ -130,7 +132,10 @@ test.skipIf(!E2E)(
     try {
       const values = await app.js<number[]>(`(async()=>{
       const device=__bh.renderer.device;device.pushErrorScope("validation");
-      const pipeline=await device.createComputePipelineAsync({layout:"auto",compute:{module:device.createShaderModule({code:${JSON.stringify(shader)}}),entryPoint:"check"}});
+      const module=device.createShaderModule({code:${JSON.stringify(shader)}});
+      const info=(await module.getCompilationInfo()).messages.filter((m)=>m.type==="error");
+      if(info.length) throw new Error(info.map((m)=>m.lineNum+":"+m.linePos+" "+m.message).join(" | "));
+      const pipeline=await device.createComputePipelineAsync({layout:"auto",compute:{module,entryPoint:"check"}});
       const out=device.createBuffer({size:${bytes},usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});
       const read=device.createBuffer({size:${bytes},usage:GPUBufferUsage.MAP_READ|GPUBufferUsage.COPY_DST});
       try{

@@ -221,13 +221,21 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     R.alt = Math.max(d - ref.R, 50 / mR);
     R.az = (Math.atan2(rel[1], rel[0]) * 180) / Math.PI;
     R.el = (Math.asin(clamp(rel[2] / d, -1, 1)) * 180) / Math.PI;
-    R.fixed = mode === "tripod" ? this.rigFix(ref.id, w.ours, w.X, tNow) : null;
+    // (a scene's tripod — a cut — on the ground place it was given, body-fixed: from the camera's place it stood where the
+    // camera had drifted to by its first frame here — the boot's ~9 s of geodesic fall and the world's turn: Monument Valley's
+    // Mittens 2.5 km off, behind the view, 2 Nov 2026)
+    const given = mode === "tripod" && w.ours && R.pin?.body === ref.id ? R.pin.q : null;
+    R.fixed = mode === "tripod" ? (given ? ([...given] as Vec3) : this.rigFix(ref.id, w.ours, w.X, tNow)) : null;
     R.look = null;
     // (the view turned to its new aim from where it looked)
     // (a scene, a multiple exposure's frame: a cut — no turn from the aim before)
     R.turn = R.placed && !R.cut ? { q: lookQ(w.fwd as V3, w.up as V3), t: 0, T: Math.max(0.5, viewBlend(s).time) } : null;
     R.cut = false;
   }
+  // (a scene's ground place, held over its first steps — the behaviour unchanged, a tripod already: taken all the same —;
+  // the player's first move lets it go)
+  if (R.pin && (move.some((x) => x !== 0) || --R.pin.steps < 0)) R.pin = null;
+  if (mode === "tripod" && w.ours && R.pin?.body === ref.id) R.fixed = [...R.pin.q] as Vec3;
   // the keys' speed: 0.8 × the height above the surface per second (a metre at least), Shift × 3
   // (fixed on the world: from where it is fixed — the camera's last place is a frame behind the world)
   // (a spectator: no faster than its distance to the ship either — two metres a second at least by it)

@@ -21,7 +21,9 @@ test.skipIf(!E2E)(
         const ready = r.variantReady && r.calibrationReady && !r.hdLoading && r.earthMaps.tier === 'high' && r.earthTiles.pending === 0 &&
           !r.earthSurface.pending && s.status === 'ready' && !s.pending && !g.pending && g.reason !== 'loading';
         return { ready }; })()`;
-      await app.waitFor(`(${readiness}).ready`, 240_000).catch(() => console.log("  (not all in: going on)"));
+      // (everything is in within ~20 s on the lab's Macs: a minute is a fault to say, not a wait — Sam, 2 Nov 2026: no test
+      // waits minutes for nothing)
+      await app.waitFor(`(${readiness}).ready`, 60_000).catch(() => console.log("  (not all in after 60 s: going on)"));
       // (the camera — the renderer's, the tripod's: geoNow is the craft's, hidden here — standing over the ground drawn, not
       // under it: set on the sea-level sphere until the relief is known)
       const above = `(() => { __bh.touch(); const n = __bh.renderer.lastNear, T = __bh.renderer.earthTiles; if (!n) return false;
@@ -30,8 +32,17 @@ test.skipIf(!E2E)(
         let la = Math.atan2(Z, P * (1 - E2)), h = 0;
         for (let i = 0; i < 6; i++) { const N = A / Math.sqrt(1 - E2 * Math.sin(la) ** 2); h = P / Math.cos(la) - N; la = Math.atan2(Z, P * (1 - E2 * N / (N + h))); }
         const lo = Math.atan2(Y, X), g = T.heightAt([Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)], 2);
-        return g.rem < 0.5 && h > g.h - 2 && h < g.h + 200; })()`;
-      await app.waitFor(above, 600_000);
+        // (the ground over the ellipsoid as the game stands on it — the tiles' heights are over the sea: N, −22 m here, apart
+        // since the geoid, 23 Oct 2026; compared with them the camera was always "under" it)
+        const ground = __bh.relief("earth", la * 180 / Math.PI, lo * 180 / Math.PI);
+        return g.rem < 0.5 && h > ground - 2 && h < ground + 200; })()`;
+      // (30 s, then failed with where the camera is: a tripod never set on the ground — the scene's pose not applied, the
+      // camera on the craft or under the relief — waited 600 s before)
+      await app.waitFor(above, 30_000).catch(async () => {
+        const where = await app.js(`(() => { const g = __bh.camera.geoNow(); return { craft: g && { lat: g.lat, lon: g.lon, alt: g.alt },
+          eyeOverGround: __bh.renderer.liveEyeHM, mount: __bh.settings.shipMount, ship: __bh.settings.ship, rotation: __bh.settings.rotation }; })()`);
+        throw new Error(`the camera is not standing over the drawn ground after 30 s: ${JSON.stringify(where)}`);
+      });
       // (then a while for the tripod to settle on the finest ground)
       for (let i = 0; i < 15; i++) await app.js("new Promise((r) => { __bh.touch(); setTimeout(r, 1000); })");
       // (the ground truth: the relief's profile seen from the camera — the tiles' heights on the CPU, as the tracer weighs them —
@@ -65,7 +76,7 @@ test.skipIf(!E2E)(
       for (const [name, set] of Object.entries(modes)) {
         await app.js(`(async () => { ${set} __bh.settings.targetSpp = 0; window.__t = true;
           const tick = () => { if (!window.__t) return; __bh.touch(); requestAnimationFrame(tick); }; requestAnimationFrame(tick); return 1; })()`);
-        await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+        await app.waitFor(`!!__bh.renderer.variantReady`, 90_000).catch(() => console.log(`  ${name}: its kernel not ready after 90 s`));
         await app.js(`new Promise((r) => setTimeout(r, 4000))`);
         await app.shot(`remote-results/monument-${name}.png`);
         console.log(
@@ -75,7 +86,7 @@ test.skipIf(!E2E)(
         await app.js(`(() => { window.__t = false; return 1; })()`);
       }
       await app.js(`(() => { __bh.settings.earthPipeline = "trace"; __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`);
-      await app.waitFor(`__bh.renderer.lastPhase === "converged"`, 240_000).catch(() => {});
+      await app.waitFor(`__bh.renderer.lastPhase === "converged"`, 120_000).catch(() => console.log("  not converged after 120 s"));
       await app.shot("remote-results/monument-converged.png");
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
     } finally {
