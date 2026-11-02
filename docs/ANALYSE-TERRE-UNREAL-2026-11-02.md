@@ -289,8 +289,134 @@ Un **volet Q** (« qualité Unreal ») dans [PLAN-REFRACTION-HORIZONS.md](PLAN-R
 - C2 avec R1 (la même USSA-76) et la séance M0 ;
 - le canal libre de la visibilité partagé entre T5, R4b et B1 (P5 le prévoit).
 
-**Questions pour Sam** :
-1. Intégrer le volet Q au plan commun, et dans quel ordre (je propose Q1 tout de suite après T1/T2, puis Q2) ?
-2. C2, l'air à sa vraie épaisseur : accepté malgré le ré-étalonnage de tout le rendu de la Terre ?
-3. L7, le dé-éclairage des photos : dans le plan, ou en recherche d'abord ?
-4. D1, le monde habité (voitures, lignes HT, éoliennes) : dans le périmètre ?
+**Décision de Sam (2 novembre)** : « fais au mieux, AAA qualité et perf, tout dans le périmètre ». Le volet Q est intégré
+au plan commun (phases Q1–Q9, décisions 16 à 20 de son §10), dans l'ordre de son §8 ; rien n'est lancé.
+
+---
+
+## 9. Enlever les ombres cuites des photos (L7) — la méthode
+
+### Le problème
+
+Chaque photo a été prise sous **son** Soleil :
+- **IGN BD ORTHO** et SWISSIMAGE (z15–18, 20 cm) : un avion, au printemps ou en été, vers midi (Soleil à 40–65°). Les
+  bâtiments et les arbres y portent des ombres nettes vers le nord.
+- **Sentinel-2 / EOX** (z9–14, 10 m) : un satellite vers 10 h 30 solaire. Les ombres d'objets y sont sous le pixel,
+  mais l'**estompage du relief** (les versants nord plus sombres) et les ombres des montagnes y sont.
+- **Blue Marble** (z6–8) : un peu d'estompage, sans importance à cette échelle.
+
+Le moteur ajoute ses propres ombres (relief T6, arbres et bâtiments S1). Le soir, la photo garde donc ses ombres de midi
+**et** reçoit celles du couchant. Elle double les ombres là où elles coïncident, et laisse des ombres « fantômes » dans la
+mauvaise direction.
+
+Le but est un albédo **dé-éclairé** :
+
+> albédo ≈ photo / (l'éclairage au moment de la prise de vue)
+
+Le moteur y applique ensuite sa propre lumière.
+
+### Le modèle physique
+
+À l'échelle du pixel, une photo vaut :
+
+- au soleil : `I = ρ · (E_soleil · cos i + E_ciel · V)` ;
+- à l'ombre : `I = ρ · E_ciel · V`.
+
+Ici ρ est l'albédo, i l'angle d'incidence du Soleil de la prise de vue et V la part de ciel visible.
+
+Le rapport **soleil / ombre** d'un même matériau, `k = 1 + E_soleil·cos i / (E_ciel·V)`, vaut typiquement 3 à 8, et plus
+dans le rouge que dans le bleu : l'ombre est éclairée par un ciel bleu. Défaire une ombre revient à multiplier ses
+pixels par k, couleur par couleur, avec une transition douce dans la pénombre.
+
+### Trois traitements, un par source
+
+**L7a — Sentinel-2 / EOX : la correction topographique** (méthode classique de la télédétection).
+- Hauteurs et imagerie sont **dans le même texel de la même tuile** (la texture `rg32uint`). La normale du relief se lit
+  sur place, sans rien charger de plus.
+- **Le Soleil de la prise de vue** :
+  - l'heure est connue (~10 h 30 solaire) ;
+  - l'élévation est **ajustée par tuile** : la régression de la luminance sur cos i pour quelques élévations candidates.
+    La bonne est celle qui explique le mieux la luminance par la pente. EOX ne publie pas la date de chaque pixel de sa
+    mosaïque.
+- **Correction SCS+C** (Soenen 2005), recommandée pour les forêts : `ρ ∝ I · (cos θ·cos α + c) / (cos i + c)`.
+  - θ est l'angle du Soleil au zénith, α la pente.
+  - c est le rapport ordonnée / pente de la même régression, par classe WorldCover quand elle est chargée, sinon par
+    tuile.
+- Les **ombres portées des montagnes** (rares dans une mosaïque d'été) : l'horizon dans la direction du Soleil de la prise
+  de vue, lu sur le relief de la tuile. Dans l'ombre, multiplier par k.
+- Seulement là où la pente compte : les plaines ne changent pas.
+
+**L7b — les orthophotos (IGN, swisstopo) : les ombres des bâtiments et des arbres.**
+1. **Le Soleil de la prise de vue.**
+   - D'abord la source : l'IGN publie le **graphe de mosaïquage** de la BD ORTHO, la date de prise de vue de chaque pièce
+     (date sûre, heure **à vérifier**). Avec la date et l'heure, nos éphémérides donnent le Soleil exact.
+   - Sinon, l'estimer sur l'image elle-même : rendre les ombres prédites (point 2) pour une vingtaine de Soleils
+     candidats (azimut 120–240°, élévation 30–65°), garder celui dont les ombres recouvrent le mieux les pixels sombres,
+     affiner autour.
+   - Le résultat est gardé par km² (IndexedDB) : un vol couvre des dizaines de km² sous le même Soleil.
+2. **Les ombres prédites, rendues par notre propre décor** :
+   - on a déjà, sur le GPU, le moteur des cartes d'ombre des arbres et des bâtiments (`scenery-raster encodeShadow`) ;
+   - ses données : bâtiments BD TOPO avec leurs hauteurs et toits, arbres posés sur la canopée LiDAR (MNH), relief IGN ;
+   - le même rendu, **vu du Soleil de la prise de vue**, projeté sur la grille de la tuile d'ortho, donne un masque
+     d'ombre géométrique.
+3. **Le masque affiné par l'image**.
+   - La géométrie seule ne suffit pas : les orthos ne sont pas « vraies » (les bâtiments penchent, les toits sont décalés
+     de leurs emprises) et la canopée réelle diffère des arbres posés.
+   - Un pixel est dans l'ombre s'il est prédit à l'ombre (ou près d'une ombre prédite) **et** sombre et bleuté pour sa
+     région (les indices d'ombre classiques : luminance basse, rapport bleu / rouge haut).
+   - Le bord suit les contours de l'image (filtre guidé). Le masque devient doux (α de 0 à 1, la pénombre).
+   - **Le décor évite les faux positifs** : un toit noir ou un asphalte sombre ne sont jamais prédits à l'ombre, donc pas
+     éclaircis.
+4. **Le rapport k**, mesuré dans chaque tuile :
+   - des paires de pixels de part et d'autre des bords d'ombre (le même matériau au soleil et à l'ombre), la médiane par
+     couleur ;
+   - borné (2–10) et lissé entre tuiles voisines, pour éviter des sauts de teinte.
+5. **Le relèvement** : `I' = I · (1 + (k − 1)·α)` par couleur.
+   - Puis un débruitage doux **dans la zone relevée seulement** : ×5 amplifie le bruit et les blocs JPEG des ombres.
+   - Rien sur l'eau (OSM, WorldCover).
+6. **Selon la distance** :
+   - pleinement là où le moteur dessine ses propres ombres d'arbres et de bâtiments (750 m aujourd'hui, ~5 km avec S1) ;
+   - en partie au-delà : de loin, les ombres d'une ville font partie de sa couleur moyenne, et leur direction ne se voit
+     plus.
+7. **Les ajustements de couleur `ORTHO_FIT` et `EOX_FIT` réajustés** après coup : ils visaient les moyennes de photos
+   éclairées.
+
+**L7c — un réseau de neurones de suppression d'ombres** (il en existe pour l'imagerie aérienne) : **écarté**.
+- Poids de plusieurs dizaines de Mo à charger et à faire tourner dans le navigateur.
+- Il invente du contenu dans les ombres profondes.
+- Licences variables.
+- Il ne sait rien de notre géométrie, alors que nous la connaissons.
+
+### Où et quand le calcul se fait
+
+- **Sur le GPU, une fois par tuile, à son arrivée** : un compute qui écrit l'albédo dé-éclairé dans la texture
+  d'imagerie de T9 (rgba8 avec mips).
+- Coût estimé : ~0,1–0,3 ms par tuile d'ortho (le rendu du masque + le compute), étalé sur les images ; rien à chaque
+  image ensuite ; aucune mémoire de plus ; aucun travail sur le fil principal.
+- **Dépendances** :
+  - T9, pour une imagerie dans sa propre texture, inscriptible ;
+  - le décor chargé, à 6 km autour de la caméra : c'est là que ça compte. Au-delà, L7b s'efface ; L7a, qui n'a besoin
+    que du relief, s'applique partout ;
+  - S1, pour que nos ombres remplacent celles qu'on efface jusqu'à ~5 km.
+- Hors ligne (zones I8) : le même calcul, sur les tuiles servies par le cache.
+
+### Comment on sait que c'est réussi
+
+- **Une même place, deux campagnes IGN** (millésimes à des dates et des heures différentes ; la Géoplateforme sert des
+  millésimes historiques, **à vérifier**). Après dé-éclairage, les deux doivent se ressembler bien plus qu'avant, surtout
+  dans les ombres. C'est la mesure objective.
+- **Synthétique** :
+  - notre propre scène rendue à midi sert de « photo » ;
+  - on la dé-éclaire, et on compare à l'albédo connu.
+- **À l'œil**, Paris et Chamonix au couchant :
+  - plus d'ombre de midi sous les ombres du soir ;
+  - pas de halo au bord des bâtiments ;
+  - pas de « trou » clair au pied des arbres ;
+  - pas de bruit dans les zones relevées.
+
+**Premier temps : une étude de 2 jours** (Paris, Chamonix, un relief Sentinel), avant/après sous 3 Soleils. Feu vert si :
+- halo < 1 m ;
+- bruit des zones relevées < 1,5 × celui des zones au soleil ;
+- plus aucune double ombre visible au couchant.
+
+Sinon on garde L7a seul (sûr) et on revoit L7b.

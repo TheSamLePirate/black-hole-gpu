@@ -1,18 +1,22 @@
 # Plan commun — la Terre raster AAA, la bonne réfraction, les cartes d'horizon du relief
 
-Date : **2 novembre 2026**, relu sur `main` à `b896c0b2`. Statut : **décidé, pas lancé.**
+Date : **2 novembre 2026**, relu sur `main` à `c884ef25`. Statut : **décidé, pas lancé.**
 
 - **Quand** : on commence **dès que les géantes sont finies** (PLAN-GEANTES-VOLUME : V8 et V9 restent), décision 11 du
   §10.
 - **Ce qui est fait** : seul le repère de R2 (`efe4369a`, e2e `346a48a8`).
-- **D'où vient ce plan** : il réunit trois chantiers qui touchent les mêmes fonctions, les mêmes vues et les mêmes mesures.
+- **D'où vient ce plan** : il réunit quatre chantiers qui touchent les mêmes fonctions, les mêmes vues et les mêmes mesures.
   - **T — la Terre raster** : les escaliers, les triangles, les ombres du relief, la mer, le chargement. Analyse
     détaillée : [ANALYSE-TERRE-RASTER-2026-11-02.md](ANALYSE-TERRE-RASTER-2026-11-02.md), suite de
     [celle du 28/10](ANALYSE-TERRE-RASTER-2026-10-28.md).
   - **H — les cartes d'horizon** des planètes rocheuses (troisième passe du 31 octobre au soir).
   - **R — la réfraction** (troisième passe du 31 octobre au soir).
+  - **Q — la qualité Unreal** : la lumière du sol, les villes, le volume, l'air et les nuages, l'image, les photos
+    dé-éclairées, le monde habité, la perf qui paie tout ça. Analyse :
+    [ANALYSE-TERRE-UNREAL-2026-11-02.md](ANALYSE-TERRE-UNREAL-2026-11-02.md).
 - **Le but** : qualité AAA **et** performance. Aucune phase ne rend une vue plus lente qu'avant sans que le gain d'image
-  soit mesuré et accepté. Une partie des phases (T4, T9, H3a, H3) doit faire **gagner** du temps.
+  soit mesuré et accepté. Une partie des phases (Q1, T4, T9, H3a, H3, Q9) doit faire **gagner** du temps : **Q1, la
+  perf, passe avant tout ajout de qualité** et le finance.
 - Le nom du fichier est gardé : les notes de `docs/agent/`, l'e2e `refraction-wgs84` et les autres plans y renvoient.
 - Les numéros de ligne cités sont indicatifs (`trace.wgsl` bouge sans cesse) ; les noms de fonctions font foi.
 
@@ -27,6 +31,13 @@ Date : **2 novembre 2026**, relu sur `main` à `b896c0b2`. Statut : **décidé, 
 
 > « Mets à jour ces plans pour en faire un plan commun. On le commence dès que les planètes géantes sont finies. AAA
 > quality et performances. » (2 novembre)
+
+> « Analyse encore plus loin : vois-tu des choses à ajouter, modifier, améliorer, implémenter pour augmenter la qualité
+> graphique, les performances, le réalisme (photoréalisme) des vues de la Terre ? Je veux vraiment une qualité Unreal
+> Engine AAA. » (2 novembre)
+
+> « Mes décisions : fais au mieux, AAA qualité et perf, tout dans le périmètre. Mets à jour avec les meilleures décisions.
+> N'exécute pas encore le plan. Enlever les ombres cuites des photos ? Comment on pourrait s'y prendre ? » (2 novembre)
 
 Origine du volet H et R : l'analyse de `vr-solar-system` (Alesk, portage Quest 3 de ce jeu, cloné dans
 `~/Documents/DEV/vr-solar-system`). Leur rapport `docs/reports/2026-10-31_refraction-models_05.md` compare leur modèle au
@@ -46,12 +57,19 @@ nôtre. Leurs cartes d'horizon sont dans `docs/modules/Terrain.txt` (FAR CAST SH
 | **T9** | un sol net et stable au loin en vue rasante (filtrage matériel, mips, aniso 16) | le vol, le téléobjectif | **gain** GPU |
 | H (disques lointains, avec H1b) | les ombres longues du terminateur (Copernic, les Apennins, les remparts des cirques), et le relief HD de la Lune, absent aujourd'hui | la Lune au télescope, au trépied, en photo depuis la Terre | 0 hors des pixels du corps HD |
 | H (le corps proche) | une portée d'ombre de 2,5–10 km (la carte du Soleil) à ~170–340 km ; les plaines mises dans l'ombre par une chaîne lointaine ; le pôle sud | la Lune, Mercure, Mars et Cérès en orbite, en approche, au sol au Soleil bas | **négatif** : des marches sautées (§2.4) |
-| H5 (option, la Terre) | les ombres des Alpes au couchant au-delà de 10 km | la montagne au Soleil bas | à mesurer |
+| H5 (la Terre, 8 directions) | les ombres des Alpes au couchant au-delà de 10 km, pour tout azimut ; la visibilité du ciel des vallées (Q4) | la montagne au Soleil bas | à mesurer |
 | R1–R2 | la hauteur et la forme du Soleil et de la Lune près de l'horizon (0,74 → 0,82), le coucher vu de l'ISS, les prédictions du CPU d'accord avec une table publiée, la Lune éclipsée | le téléobjectif, le planificateur photo, TARS, l'orbite | ≈ 0 |
 | R3 | le sol éclairé jusqu'à la disparition du disque (2–3 min de lumière rasante) | **toutes** les vues au couchant, même au grand angle | 0 |
 | R4 | le sol lointain relevé, l'horizon d'avion, plus de « trou » au limbe vu d'orbite | le téléobjectif, l'orbite | ≈ 0 |
 | R5 | l'auréole de Vénus, l'anneau rouge de la Terre vu de la Lune éclipsée | des vues rares et spectaculaires | 0 hors du limbe |
 | R6 | des mirages (Soleil en « vase étrusque », Fata Morgana, le « lac » d'une route chaude) | le téléobjectif à la côte | 0 au GPU hors de la bande de l'horizon |
+| **Q1** | ~4–8 ms rendues (culling, caches, tampons), la netteté du vol égale à celle de l'arrêt, un gouverneur qui tient la cadence | tout, tout le temps | **gain** |
+| **Q2–Q3** | un sol éclairé comme dans Unreal (ciel directionnel, reflets du Soleil, point chaud de la végétation) ; des villes avec leurs façades, leurs matériaux, leurs fenêtres la nuit, leurs routes | toute vue basse, les villes de jour et de nuit | ≤ +0,8 ms |
+| **Q4** | l'occlusion ambiante, les ombres du décor à toute distance, le vent, des forêts en volume jusqu'à 30 km, les rayons d'ombre des montagnes | le vol bas, la montagne, le couchant | ≤ +2,5 ms (payées par Q1) |
+| **Q5** | une atmosphère physique (tables de Hillaire, l'air à sa vraie épaisseur, les aérosols du jour), les nuages là où sont les vrais | tous les ciels, l'heure bleue, la météo | gain sur les nuages |
+| **Q6** | un upscaler temporel de classe TSR, l'exposition locale, une optique de caméra | le vol, le cockpit | ≈ 0, et l'échelle peut baisser |
+| **Q7** | des photos sans leurs ombres cuites, des matériaux sous la photo, la neige et les saisons, des orthos ailleurs qu'en France | le sol de près, l'hiver, l'Europe | ≈ 0 par image |
+| **Q8** | la nuit des rues, le trafic, les lignes haute tension, les éoliennes, les vignes ; façades PBR, imposteurs d'arbres, neige qui tombe | le monde habité | au budget |
 
 ---
 
@@ -446,7 +464,7 @@ Trois chemins dessinent un corps rocheux, et **H ne les touche pas de la même f
 - **Les tuiles fines** (`moon-tiles`) n'entrent pas dans la carte (globale, au texel du DEM) : la carte du Soleil et la
   marche gardent ce détail.
 - **Exclus** : Vénus, les géantes, les petites lunes sans DEM (cartes de normales seules).
-- **La Terre n'est plus exclue** : voir §3.4 (T6, puis H5 en option).
+- **La Terre n'est plus exclue** : voir §3.4 (T6, puis H5 à 8 directions, décision 17).
 - **Noté, hors plan** : la lumière cendrée de la Lune (absente du traceur aujourd'hui) pourrait lire la même carte dans la
   direction de la Terre.
 
@@ -514,10 +532,10 @@ mécanismes, les chiffres et les leviers de confirmation y sont détaillés).
   - les anneaux 1 à 4 dans la carte, avec leurs maillages, trous et hauteurs (géomorphosées après T3) ;
   - la sortie annoncée = ce qui est dessiné ;
   - dans `liteSun`, la portée réglée sur la pente (comme `SUN_N` pour les corps) au lieu des 300 m.
-- **Au-delà de 10 km (H5, option)** : Soleil à 1–2°, les Alpes portent leurs ombres à 50–150 km. Un **horizon dans
-  l'azimut du Soleil** sur les niveaux 4 à 6 du cache (3 × 129² nœuds, ±156 km), cuit par `horizon.wgsl` (l'API générique
-  de H1) quand un niveau est recuit ou que le Soleil tourne de plus de ~0,5° ; lu par `liteSun` et `earthTerrainShadow`
-  au-delà de la carte.
+- **Au-delà de 10 km (H5, décision 17)** : Soleil à 1–2°, les Alpes portent leurs ombres à 50–150 km. Un **horizon à 8
+  directions** sur les niveaux 3 à 6 du cache (jusqu'à ±156 km), cuit par `horizon.wgsl` (l'API générique de H1) quand un
+  niveau est recuit — pas quand le Soleil tourne ; lu par `liteSun` et `earthTerrainShadow` au-delà de la carte, et par
+  Q4 comme visibilité du ciel (l'occlusion des vallées).
 
 ### 3.5 La mer
 
@@ -561,6 +579,27 @@ mécanismes, les chiffres et les leviers de confirmation y sont détaillés).
 | H1 | la Terre aura besoin de la même cuisson (H5) | **API de cuisson générique dès H1** |
 | H2, T9 | des textures en plus dans les noyaux de la Terre | **un seul décompte** face au palier 29 |
 
+### 3.8 Ce qui manque pour une qualité Unreal (volet Q)
+
+Résumé de [ANALYSE-TERRE-UNREAL-2026-11-02.md](ANALYSE-TERRE-UNREAL-2026-11-02.md) (lecture du code, constats lourds
+revérifiés à la main) :
+
+1. **La lumière du sol** : Lambert pur, ciel plat sans occlusion, rebond fixe qui ignore les nuages, aucun reflet du Soleil
+   sur la terre ; les photos gardent leurs ombres cuites, et les nôtres s'y ajoutent.
+2. **Les villes en raster** : le `buildingLook` (façades, matériaux et couleurs des données, fenêtres allumées) ne tourne que
+   dans le traceur ; en raster, des murs beiges et des toits désaturés. Les routes (`scenerySurface`) n'y sont pas.
+3. **L'image** : le gouverneur est inerte en raster (échelle clouée à 0,75), RCAS ne passe qu'à pleine taille (net à
+   l'arrêt, mou en vol), le TAAU est éteint, pas de vecteurs de mouvement.
+4. **L'air** : `AIR_K = 3` (trop mince au sol), diffusion multiple constante, pas de rayons d'ombre du relief ; près de la
+   caméra, des nuages de bruit et pas les vrais.
+5. **Le lointain** : plus d'ombres du décor au-delà de 750 m, plus d'arbres au-delà de ~2,6 km, la forêt lointaine est
+   une couleur ; aucun vent.
+6. **La perf** : anneaux du relief, bâtiments et carte d'ombre du relief dessinés en entier à chaque image, tampons et
+   copies superflus — de quoi financer le reste.
+7. **Les photos** : la méthode pour en ôter les ombres cuites (L7) est au §9 de l'analyse : correction topographique de
+   Sentinel-2 sur le relief de la même tuile ; ombres des orthos rendues par notre propre décor vu du Soleil de la prise
+   de vue, affinées par l'image, relevées par le rapport soleil/ombre mesuré ; sur le GPU, une fois par tuile.
+
 ---
 
 ## 4. Cohérence avec les systèmes existants — ce que chaque phase modifie
@@ -593,14 +632,23 @@ mécanismes, les chiffres et les leviers de confirmation y sont détaillés).
 | `nearShadow`, `shadeNear`, `bodyLite`, Mars `REL_SH` | `trace.wgsl` | les sorties (1)(2)(3) (§2.4), la carte d'horizon après la carte du Soleil ; `keyRelief` sans carte | H3a, H3 | A/B `planets-ab` ; images ≤ 1–2 % de pixels changés hors ombres nouvelles |
 | Les disques lointains | `ourSegment` | l'ombre de la carte passée par l'argument `rs0` de `planetShade` (**sa signature ne change pas**) | H2 | trace-ab : vues sans corps HD ±1 % |
 | Mars au loin | `otherGround` (2 appels) | la carte dans sa lumière directe | H2 | profil `mars` (qui porte aussi les géantes) |
-| L'horizon solaire de la Terre | `horizon.wgsl` (API générique), `liteSun`, `earthTerrainShadow` | sur les niveaux 4–6 du cache, dans l'azimut du Soleil | H5 (option) | e2e Alpes au couchant |
+| L'horizon de la Terre | `horizon.wgsl` (API générique), `liteSun`, `earthTerrainShadow`, l'occlusion de Q4 | sur les niveaux 3–6 du cache, 8 directions | H5 | e2e Alpes au couchant ; vallées |
 | Les budgets des noyaux | `scripts/lib/kernel-profiles.ts`, `tests/kernel-budget.json` | + l'entrée `moon shadeLite` ; les budgets relevés sur mesure, jamais d'avance | M0, chaque phase | `KB_WRITE=1` après la compilation mesurée sous D3D12 (kerr-pc, `d3d12-ab`) |
 | Les qualités par appareil | `tier.ts` | la résolution des cartes d'horizon selon `tier.level` (≤ 1 : 1024 ; 2 : 2048 ; 3 : 4096 si M0/H4 le permettent) | H1 | e2e iPad (`docs/IPAD-TESTS.md`) |
 | Les réglages | `settings.ts` | `horizonMaps` (pref, allumé), à côté de `refraction` ; plus tard le profil de mirage forcé (R6a) | H2, R6a | `set_settings` |
 | TARS | `ai/game-tools.ts`, `sky-now.ts` | « sky » : la pression, le modèle, le Soleil d'éclairage ; l'état des cartes d'horizon | H4, R1, R3 | `tests/tars-tools` |
 | L'API d'automatisation | `automation.ts`, `docs/BH-API.md` | `hdMap.mode`, `horizon` (`body`, `ready`, `bytes`, `bakeMs`), l'état d'air ; pour la Terre : les cuissons par niveau, la validité des tuiles | H1, H1b, R1, T4, T8 | `bun scripts/bh-api.ts` |
 | Les vues de mesure | `tests/e2e/lib/planet-views.ts`, e2e de vol bas | les vues de M0 (§7) | M0 | `scripts/ab-commit.ts` (A B B A) |
-| Les docs | `PLAN-CIEL.md` (C3), `PLAN-PLANETES-AAA.md` (P8, P10), `WEBGPU-MATERIELS.md`, `E2E-CATALOGUE.md`, `PERFORMANCE.md`, `AAA-PROGRESS.md`, `ANALYSE-TERRE-RASTER-*` | à jour à chaque phase, FR + EN | toutes | — |
+| Le dessin du relief et du décor | `terrain-raster.ts` (blocs cullés), `scenery-raster.ts` (bâtiments cullés, arbres par blocs), la cible de visibilité (rg32 + l'attache de T5), le masque du cockpit en profondeur | Q1 | trace-ab ±1 % ; passe de visibilité mesurée |
+| Le gouverneur et la netteté | `main.ts` (l'échelle en raster), `renderer.ts adaptRasterRate`, `display.wgsl` (RCAS après l'agrandissement), `post.wgsl` (copies → ping-pong) | Q1, Q6 | netteté vol = arrêt (mesure) ; cadence tenue |
+| La lumière du sol | `shadeLite`, `liteSun`, `liteSky`, `skyIrradiance` (avec la normale), un module de matériaux (classe → rugosité, F0), BRDF de végétation | Q2 | captures à 3 Soleils ; ≤ +0,3 ms |
+| Les bâtiments et les routes en raster | `meshFs`/`boxSolidVs` (l'indice), `buildingLook` allégé dans `shadeLite`, `scenerySurface` allégé ou passe de décalques | Q3 | Paris jour/nuit ; ≤ +0,5 ms en ville |
+| L'occlusion, les ombres lointaines, le vent, la canopée | GTAO (post), H5 à 8 directions, `scenery-raster` cascades, `forest.ts` = `forest.wgsl` (vent), couche de canopée cuite avec le relief, la table aérienne (rayons du relief) | Q4 | captures ; ≤ +2,5 ms |
+| L'air et les nuages | `earthAir` (tables de Hillaire dans `bodies`), `earth-air.ts` (`AIR_K`), `setAir` (aérosols), une carte des nuages ±250 km dans `bodies`, `wxCloud`/`cloudVolume`, la carte d'ombre des nuages | Q5 | M0 contre photos réelles ; nuages −1 à −3 ms |
+| L'image | `post.wgsl` (TSR, vecteurs, exposition locale), `display.wgsl` (optique) | Q6 | netteté à 0,6 d'échelle ≈ natif |
+| Les photos et le sol de près | un compute de dé-éclairage à l'arrivée des tuiles (T9), un atlas de matériaux `texture_2d_array`, la neige et les saisons dans `shadeLite`, de nouvelles `NationalSource` | Q7 | §9 de l'analyse (go/no-go chiffré) |
+| Le monde habité | lampadaires et trafic tirés d'OSM (worker du décor), lignes HT, éoliennes, vignes ; atlas de façades ; imposteurs | Q8 | au budget |
+| Les docs | `PLAN-CIEL.md` (C3), `PLAN-PLANETES-AAA.md` (P8, P10), `WEBGPU-MATERIELS.md`, `E2E-CATALOGUE.md`, `PERFORMANCE.md`, `AAA-PROGRESS.md`, `ANALYSE-TERRE-RASTER-*`, `ANALYSE-TERRE-UNREAL-*`, `TERRE-UNREAL.md` (U3, U4, U10 soldés par Q1, Q4, Q6) | à jour à chaque phase, FR + EN | toutes | — |
 
 ---
 
@@ -639,6 +687,13 @@ mécanismes, les chiffres et les leviers de confirmation y sont détaillés).
   - **le pôle sud lunaire** contre les cartes d'éclairement publiées tirées de LOLA (Mazarico et al. 2011) ;
   - **la Terre** contre l'orthophoto (la côte, les ombres d'une vallée au couchant à une date connue) et contre les
     données elles-mêmes (le relief IGN à 0,5 m, sans marche).
+- **La lumière d'Unreal** (Q2, Q4, Q7) :
+  - aucune surface ne reçoit tout le ciel sans occlusion ; aucune double ombre (photo + temps réel) ;
+  - le Soleil se reflète là où il le fait vraiment (routes, toits de zinc, vitres, serres, sol mouillé, eau) ;
+  - la végétation a son point chaud et son contre-jour ;
+  - la nuit est noire sans Lune, argentée sous la pleine Lune, et les rues sont éclairées par leurs lampadaires.
+- **L'image** (Q1, Q6) : la même netteté à l'arrêt et en vol ; aucun fantôme sur ce qui bouge ; une cadence régulière.
+- **Le monde vit** (Q4, Q8) : le vent dans les arbres, le trafic sur les routes, les éoliennes qui tournent.
 - **Pas de régression ailleurs** :
   - la Terre, les géantes et les vues sans corps HD restent à ±1 % en trace-ab, sauf les gains voulus ;
   - les e2e existants restent verts (`refraction-wgs84`, `moon-telescope`, `airless-ground`, `moons-ground`,
@@ -675,6 +730,13 @@ mécanismes, les chiffres et les leviers de confirmation y sont détaillés).
      - les planètes : jamais plus lentes que la Terre dans la même vue (P10) ;
      - la Terre : **jamais plus lente qu'avant le plan** sur les vues de M0, sauf T6 (≤ 0,3 ms pour des ombres qui
        manquaient) et ce que Sam accepte au vu des images.
+- **Le budget des textures** (Q) — le palier de 29 est le plafond à tenir :
+  - les tables de Q5 (Hillaire) et la carte des nuages de C5 vont dans le buffer `bodies`, **pas** dans des textures ;
+  - L8 (matériaux de détail) et B2 (façades, toits) partagent **un seul** atlas `texture_2d_array` ;
+  - T9 ajoute la texture d'imagerie ; H ses deux cartes ;
+  - le GTAO, l'exposition locale et le TSR sont dans le post, pas dans le traceur ;
+  - donc les noyaux de la Terre gagnent au plus 2 textures (T9, l'atlas) en plus des 2 de H, comptées ensemble ; sous le
+    palier, l'atlas devient un talon (pas de matériaux de détail), rien ne casse.
 - **Les noyaux et passes touchés, par phase** :
 
   | Phase | Fonctions | Entrées du budget à remesurer |
@@ -693,6 +755,12 @@ mécanismes, les chiffres et les leviers de confirmation y sont détaillés).
   | R4a | `earthMarch`, l'intersection d'orbite | `earth-trace main`, `earth-raster main`, `earth-only main` |
   | R5 | `airBend` pour Vénus et Titan | `venus main`, `titan main` |
   | R6 | `airBend`, le pixel du raster rendu au traceur | `earth-raster main/shadeLite` (le « lac » n'est **pas** ombré dans `shadeLite`, le pixel est rendu à `main`) |
+  | Q1 | passes de rendu et post (pas le traceur) ; `rasterLiteTakes` si le masque du cockpit passe en profondeur | presque aucune ; la passe de visibilité mesurée |
+  | Q2, Q3 | `shadeLite`, `shadeWater`, `liteSun`, `liteSky`, `buildingLook` allégé, `scenerySurface` allégé | `earth-raster shadeLite`, `shadeWater` |
+  | Q4 | `shadeLite` (occlusion, contact), la table aérienne, `forestCandidate` (vent) | `earth-raster shadeLite`, `shade`, `main`, `env` |
+  | Q5 | `earthAir`, `cloudVolume`, `wxCloud`, `clouds`, `skyAmbient` | tous les `earth-*`, `general` |
+  | Q7 | `shadeLite` (neige, saisons, atlas), compute de dé-éclairage (à part) | `earth-raster shadeLite` |
+  | Q9 | `shadeLite` découpé par tuiles, f16 | `earth-raster shadeLite`, post |
 
 - **Le protocole de mesure** :
   - `scripts/ab-commit.ts <rev>` avec `planets-ab` (A B B A, deux tours) pour les planètes ; `scripts/trace-ab.ts` et les
@@ -738,7 +806,7 @@ Trois volets, une séance de mesure commune. L'ordre est au §8.
 | **H2** | **Les disques lointains** : `horizonSeen(q, Ls, sunR, foot)` (2 lectures, azimut interpolé, smoothstep sur le rayon du Soleil, mip selon l'empreinte) dans `ourSegment`, passé par `rs0` ; pour Mars, dans `otherGround`. Pas de bit. Réglage `horizonMaps` | `trace.wgsl`, `renderer.ts`, `settings.ts` | Captures du terminateur contre une photo réelle à la même colongitude ; le pôle sud lunaire vu d'orbite ; trace-ab : la Terre et les vues sans corps HD inchangées (±1 %) ; budgets remesurés |
 | **H3** | **Le corps proche** (réécrit le 2 novembre, après P1-2) : `nearShadow` = (1) carte d'horizon au-dessus du Soleil + marge → 0 sans rien d'autre ; (2) H3a ; (3) sinon la marche ≤ 32 m et la carte du Soleil jusqu'à sa sortie, puis **la carte d'horizon au-delà de D**, à la place de la marche reprise ; le min des parties. Mars : la carte au-delà de D, et au-delà des 25 km de `REL_SH` dans `otherGround` (H2). `keyRelief` sans carte | `trace.wgsl nearShadow`, `shadeNear`, `bodyLite*` | Mercure ciné ≤ la Terre ; Cérès ciné mesuré ; **le pôle sud lunaire** près de Shackleton sur un jour lunaire accéléré (le rebord éclairé, le fond jamais, contre LOLA) ; images identiques hors ombres lointaines nouvelles et pénombres (≤ 1–2 % des pixels) |
 | **H4** | **Mesures et doc** : A/B sur les vues de M0 ; e2e en raster, vue cockpit, captures ; la planche avant/après (et contre la photo réelle) ; la décision sur la pleine résolution et sur la distance par direction ; TARS ; docs FR + EN | `docs/progress/refraction-horizons/H4.md`, AAA-PROGRESS, `E2E-CATALOGUE.md`, `WEBGPU-MATERIELS.md`, `BH-API.md` | Tableau des coûts, planche, poussé |
-| **H5** *(option, jugée par Sam après T6 — décision 13)* | **L'horizon solaire de la Terre** : sur les niveaux 4 à 6 du cache (3 × 129² nœuds, ±156 km), l'élévation de l'horizon dans l'azimut du Soleil (et ses deux voisins pour l'interpolation), cuite par l'API de H1 quand un niveau est recuit ou que le Soleil tourne de plus de ~0,5° ; lue par `liteSun` et `earthTerrainShadow` au-delà de la carte de T6, en min avec elle | `horizon-maps.ts`, `terrain-cache.ts`, `trace.wgsl` | Les Alpes au couchant : les ombres portées à 50–150 km, sans pop au passage de la carte ; coût mesuré (visé < 0,2 ms et une cuisson de < 1 ms par recuisson) |
+| **H5** *(dans le plan — décision 17)* | **L'horizon de la Terre, 8 directions** : sur les niveaux 3 à 6 du cache (4 × 129² nœuds, jusqu'à ±156 km), l'élévation de l'horizon dans 8 secteurs (chacun le maximum de son secteur, encodage en racine signée comme H1), cuite par l'API de H1 quand un niveau est recuit — **pas quand le Soleil tourne** ; lue par `liteSun` et `earthTerrainShadow` au-delà de la carte de T6, en min avec elle (ombres pour tout azimut), **et par Q4 (L2b) comme visibilité du ciel** (l'occlusion des vallées) | `horizon-maps.ts`, `terrain-cache.ts`, `trace.wgsl` | Les Alpes au couchant : les ombres portées à 50–150 km, sans pop au passage de la carte ; les vallées assombries sous le ciel (avec Q4) ; coût mesuré (visé < 0,2 ms et une cuisson de < 1 ms par recuisson) |
 
 ### R — La réfraction
 
@@ -752,6 +820,24 @@ Trois volets, une séance de mesure commune. L'ordre est au §8.
 | **R6a** *(après T7)* | **Les mirages, profils forcés** : les profils d'air près du sol (mer chaude, inversion, conduit, route chaude), illustratifs, choisis dans les réglages et par TARS ; les tables de l'œil tracées en RK4 (r, θ, e) à travers les points de retournement, dans un worker, **sous ~2 km seulement**, trois couleurs ; au GPU, chaque pixel lit sa vraie direction ; les rayons retournés vers le haut sous l'horizon rendus au traceur ; l'inverse des étoiles par la table de l'élévation vraie, les images secondaires ignorées ; `apparentAltitude` et la visée sur la branche de l'image droite | `refraction-layered.ts` (RK4), `trace.wgsl`, `settings.ts`, `ai/game-tools.ts` | Le Soleil en « vase étrusque » au télé sur un profil forcé, sur une mer sans moiré ; une route chaude à midi ; coût GPU nul hors de la bande de l'horizon ; tables sans à-coup |
 | **R6b** | **Les mirages tirés de la météo** : le profil déduit d'Open-Meteo (T à 2 m, du sol, de la mer par l'API marine, niveaux 1 000/975/950/925 hPa, à ajouter aux requêtes) ; un tirage plausible hors de portée. **Une recherche d'abord** (radiosondages, mirages publiés), puis un go/no-go sur des dates réelles. Option : le sol lointain inversé ; la scintillation | `refraction-weather.ts`, `openmeteo.ts` | Une côte et une date réelles où un mirage est documenté : le phénomène au bon jour, aucun les jours ordinaires |
 
+### Q — La qualité Unreal
+
+Détail, constats et chiffres : [ANALYSE-TERRE-UNREAL-2026-11-02.md](ANALYSE-TERRE-UNREAL-2026-11-02.md) (les codes P, I, L,
+B, F, S, A, D, C, G y renvoient). Chaque phase : A/B sur kerr-mini contre la précédente, captures en raster, vue cockpit ;
+**jamais plus lent que le budget fixé à la fin de Q1**, sauf ce que Sam accepte au vu des images.
+
+| Phase | Contenu | Fichiers | Fait quand |
+|---|---|---|---|
+| **Q1** | **La perf d'abord**, sans changer l'image : **P1** les anneaux du relief découpés en blocs de 8 × 8 nœuds cullés (tronc de vue, au CPU ou en compute → `drawIndexedIndirect`), de même pour la carte d'ombre (tronc du Soleil) ; **P2** les bâtiments cullés (tronc + Hi-Z de la profondeur du relief) ; **P3** le cull des arbres par blocs de 8 × 8 (bornes déjà stockées) ; **P4** la carte d'ombre du relief en cache (redessinée quand le Soleil tourne ou que sa fenêtre bouge) ; **P5** la cible de visibilité compactée (rg32 : la distance ; un mot pour l'identifiant du bâtiment ou de l'arbre et le marqueur de niveau de T2), **conçue avec l'attache de T5** (la normale) et la place du relèvement de R4b ; **P6** plus de copies plein écran (ping-pong), l'historique d'albédo coupé quand `rasterDetail` est éteint ; **P7** le cockpit dans la profondeur de la visibilité ; **P12** les petits nettoyages ; **I1** RCAS après l'agrandissement ; **I4** le gouverneur en raster (des niveaux de qualité du matériau au lieu du taux inerte, un plafond à 25 i/s sur 50 Hz quand le budget ne tient pas ; l'échelle libre attend Q6) | `terrain-raster.ts`, `scenery-raster.ts`, `renderer.ts`, `main.ts`, `post.wgsl`, `display.wgsl` | Sur le mini, Paris bas en vol : **−4 à −8 ms** (visé : ≤ 40 ms en vol) ; images identiques (trace-ab ±1 %) sauf la netteté d'I1 ; la netteté en vol mesurée égale à celle de l'arrêt |
+| **Q2** | **La lumière du sol** (après T5) : **L1** le ciel directionnel (`skyIrradiance` avec la normale lisse) ; **L4** un spéculaire GGX par matériau (classe WorldCover des cellules du décor, sinon la couleur comme `earthCover` : asphalte, zinc, ardoise, vitres, serres, sol mouillé avec un lobe solaire ; reflets par `skyMirror(reflect)`) ; **L5** la BRDF de la végétation (Ross-Li ou RPV normalisée au nadir : le point chaud, le contre-jour) ; **L6** le rebond sous les nuages et la météo, à l'albédo local ; **C9** le ciel du sol atténué sous les nuages de la carte ; les niveaux de nuit (sans Lune 50–100 × plus sombre que la pleine Lune ; la radiance des villes fixe, l'exposition fait le reste) ; les lumières des villes hors des couronnes et des murs | `trace.wgsl` (`shadeLite`, `liteSun`, `liteSky`), `renderer.ts` | Captures à 3 Soleils (midi, 10°, couchant) à Paris, Chamonix, en Beauce : le point chaud autour de l'ombre de l'avion, les routes qui brillent au Soleil rasant, les versants éclairés par le ciel ; ≤ +0,3 ms |
+| **Q3** | **Les villes et les routes** : **B1** l'indice du bâtiment dans la visibilité, un `buildingLook` allégé dans `shadeLite` (murs, fenêtres, couleurs et matériaux BD TOPO / Overture, vitres au GGX, fenêtres allumées la nuit ; toits par matériau en gardant la lumière de la photo) ; **B3** les boîtes lointaines orientées sur le bâtiment ; **B4** les routes en raster (un `scenerySurface` allégé ou une passe de décalques : asphalte, marquages, trottoirs, mouillé) ; **A1** les objets des aérodromes du jeu en raster (vérifier d'abord qu'ils manquent) | `scenery-raster.ts`, `trace.wgsl`, `scenery-worker.ts` | Paris de jour et de nuit : façades haussmanniennes, fenêtres allumées, routes marquées ; les aérodromes du jeu complets ; ≤ +0,5 ms en ville |
+| **Q4** | **Le volume** : **L2a** GTAO demi-résolution sur la profondeur du raster (ciel et rebond seulement) ; **L2b** la visibilité du ciel tirée de H5 (les vallées) ; **L3** les ombres de contact en espace écran ; **S1** les ombres du décor en 2–3 cascades jusqu'à ~5 km (chacune en cache, redessinée quand elle bouge) ; **F1** le vent dans les arbres (`forest.ts` = `forest.wgsl`) ; **F2** la forêt lointaine en canopée de 2,5 à 30 km (hauteur × couverture, surface rugueuse auto-ombrée, BRDF de L5), cuite avec le relief ; **F4** les couronnes à la taille de l'espèce, les hauteurs au-delà de 33,5 m ; **C4** les rayons d'ombre du relief dans la table aérienne (après T6), avec jitter et historique | `post.wgsl` (GTAO), `trace.wgsl`, `scenery-raster.ts`, `forest.ts`, `forest.wgsl`, `terrain-cache.ts` | Les vallées et les pieds de murs assombris ; les forêts en volume jusqu'à 30 km ; les ombres de la ville à 3 km ; le vent ; les rayons au couchant en montagne ; ≤ +2,5 ms (payées par Q1) |
+| **Q5** | **L'atmosphère et les nuages** (avec R1, R2 : le même air USSA-76) : **C1** les tables de Hillaire (transmittance, diffusion multiple 32², vue du ciel) dans `bodies` ; **C2** l'air à sa vraie épaisseur sous ~50 km d'altitude de la caméra, fondu vers ×3 au-dessus, avec le réétalonnage de l'exposition et des couleurs contre les photos réelles de M0 ; **C3** les aérosols du jour (CAMS par l'API qualité de l'air d'Open-Meteo, **à vérifier**) ; **C5** une carte couverture × type des nuages de ±250 km (grille Open-Meteo + mosaïque GIBS du jour) dans `bodies`, à la place du bruit seuillé ; **C6** l'auto-ombrage des nuages par leur carte d'ombre, la marche de lumière de la couche de la carte, la carte d'ombre aux pas proportionnels avec jitter et historique ; **C7** le cirrus lié à la météo, le halo de 22° ; **C10** la fin du plancher de transmittance, le saut de 30 km fondu ; **P8** l'amortissement (carte d'ombre des nuages et table aérienne une image sur 2–4 avec historique, passe des nuages en damier ¼, pas adaptatifs) ; la brume météo corrigée | `trace.wgsl`, `earth-air.ts`, `cloud-pass.ts`, `cloud-shadow.ts`, `weather.ts`, `openmeteo.ts`, `day-clouds.ts`, `gpu-tables.ts` | L'heure bleue et le crépuscule justes ; les cumulus où sont les vrais (contre la photo satellite du jour) ; les couchers contre des photos ; le Soleil caché derrière un cumulus épais ; nuages −1 à −3 ms |
+| **Q6** | **L'image** : **I2** un upscaler temporel de classe TSR par défaut (la visibilité jitterée avec la reconstruction dans le pixel de sortie, le test de profondeur précédente, l'historique pondéré par la vitesse, un canal de confiance, RCAS après) ; **I3** les vecteurs de mouvement (vaisseau, trafic, mer) ; **I5** l'exposition locale (grille bilatérale sur les mips du halo) ; **I6** l'optique (vignettage, grain fin, aberration discrète, poussière d'objectif indépendante du flare ; halo par PSF en option ; tout éteint en mode scientifique) ; **I7** la cadence réglée sur la présentation. Puis **I4 complet** : l'échelle libre de 0,5 à 1 en vol | `post.wgsl`, `display.wgsl`, `renderer.ts`, `main.ts`, `terrain-raster.ts` (jitter) | À 0,6 d'échelle en vol, une netteté mesurée ≈ celle du natif figé ; aucun fantôme sur la mer et les avions ; le cockpit et le paysage lisibles ensemble |
+| **Q7** | **Les photos et le sol de près** (après T9 et S1) : **L7** le dé-éclairage des photos (méthode : §9 de l'analyse Unreal) — une **étude de 2 jours** avec go/no-go chiffré, puis **L7a** (correction topographique de Sentinel-2 sur le relief de la même tuile, SCS+C) et **L7b** (ombres des orthos rendues par notre décor vu du Soleil de la prise de vue, affinées par l'image, relevées par le rapport soleil/ombre mesuré ; GPU, une fois par tuile), `ORTHO_FIT`/`EOX_FIT` réajustés ; **L8** les matériaux de détail par classe (l'atlas, tuilage stochastique, triplanaire, de 0 à ~300 m, la classe WorldCover partout où le décor est chargé) ; **L9** la neige et les saisons en raster (la neige et la roche du traceur portées, l'exposition, le jour de l'année ; la neige réelle du jour — MODIS/VIIRS par GIBS, **à vérifier**, sinon NOAA IMS ; l'étalonnage saisonnier par classe ; **G3** le proche infrarouge gardé pour le NDVI) ; **G1** des orthos nationales hors de France (PNOA, PDOK, basemap.at, Länder… licence et CORS une à une) ; **G2** un relief plus fin hors de France (Copernicus GLO-30 à la place de SRTM, AHN, PNOA-LiDAR) | `earth-tiles.ts`, un compute de dé-éclairage, `scenery-raster.ts` (le rendu du masque), `trace.wgsl`, `national.ts`, `scripts/earth-surface-build.py` | Plus de double ombre au couchant ; deux millésimes IGN plus proches après dé-éclairage ; le sol de près net ; les Alpes enneigées selon la date et la donnée du jour |
+| **Q8** | **Le monde habité et la nuit** : **L10** les lampadaires tirés des routes OSM près de la caméra (flaques de lumière), les fenêtres via B1 ; **D1** le trafic routier (densité par classe de route, phares la nuit), les lignes haute tension et leurs pylônes (OSM `power`), les éoliennes qui tournent, les vignes et vergers (`landuse`) ; **B2** les façades et toits PBR (l'atlas de L8) ; **F3** les imposteurs octaédriques par espèce et saison ; **C8** la neige qui tombe, les traînées persistantes | `scenery-worker.ts`, `scenery-raster.ts`, `trace.wgsl`, `forest.ts`, `weather.ts`, `contrails.ts` | Paris la nuit, rues éclairées ; le trafic de l'A1 ; les lignes HT et les éoliennes vues du cockpit ; chaque élément au budget |
+| **Q9** | **La perf, seconde passe** : **P9** le classement par tuiles 8 × 8 et le dispatch indirect des noyaux du matériau ; **P10** shader-f16 pour le post et les couleurs du matériau, avec repli. Gardés seulement si l'A/B gagne | `trace.wgsl`, `renderer.ts`, `post.wgsl` | Mesurés ; gardés ou retirés |
+
 ## 8. Ordre et estimations
 
 **Départ : dès que les géantes sont finies** (PLAN-GEANTES-VOLUME, V8 et V9 ; décision 11). Avant de lancer : relire
@@ -760,16 +846,20 @@ Trois volets, une séance de mesure commune. L'ordre est au §8.
 | # | Phases | Pourquoi là |
 |---:|---|---|
 | 1 | **T1, T2** | petites, sans coût ; sans elles, les captures « avant » mesurent les marches et les coutures |
-| 2 | **M0** | une seule séance « avant », sur l'état réel (P1-2 compris) |
-| 3 | **R3 + T6** | le premier des R (décision 8), avec les ombres du relief qui le rendent jugeable |
-| 4 | **H3a** | petit, sans carte, sert aussi à Europe |
-| 5 | **T10**, puis **H1** (API générique), **H1b**, **H2**, **H3**, **H4** | les cartes d'horizon (décision 1), la mémoire d'abord libérée |
-| 6 | **T3**, **T4**, **T5** | la Terre sans triangles ; l'attache de T5 prête pour R4b |
-| 7 | **T7** | la mer, avant les mirages |
-| 8 | **R1**, **R2** | la réfraction en couches (la séance D3D12 regroupée avec T5 et T7 si elles se suivent) |
-| 9 | **R4** (R4a + R4b), **R5**, **R6a**, **R6b** | dans l'ordre décidé |
-| 10 | **T8**, **T9** | indépendants (`earth-tiles.ts`) : peuvent glisser plus tôt si un créneau se libère ; T9 compté avec H pour les textures |
-| — | **H5** | option : Sam la juge au vu des captures de T6 (décision 13) |
+| 2 | **Q1** | la perf d'abord : elle finance tous les ajouts, et M0 mesure l'état qui restera |
+| 3 | **M0** | une seule séance « avant », sur l'état réel (P1-2 compris) |
+| 4 | **R3 + T6** | le premier des R (décision 8), avec les ombres du relief qui le rendent jugeable |
+| 5 | **T3**, **T4**, **T5** | la Terre sans triangles ; les normales lisses que Q2 éclaire ; l'attache prête pour R4b et B1 |
+| 6 | **Q2**, **Q3** | le plus gros saut photoréaliste par jour de travail |
+| 7 | **H3a** ; **T10** ; **H1** (API générique) ; **H1b** ; **H2** ; **H3** ; **H5** (8 directions) ; **H4** | les cartes d'horizon (décision 1), la mémoire d'abord libérée ; H5 avant Q4 qui la lit |
+| 8 | **Q4** | le volume, avec H5 (L2b) et T6 (C4) |
+| 9 | **T7** | la mer, avant les mirages |
+| 10 | **R1**, **R2**, **Q5** | le même air (USSA-76) pour la réfraction et l'atmosphère ; la séance D3D12 regroupée |
+| 11 | **Q6** | l'image ; puis l'échelle libre (I4 complet) |
+| 12 | **R4** (R4a + R4b), **R5**, **R6a**, **R6b** | dans l'ordre décidé |
+| 13 | **T8**, **T9**, **Q9** | le chargement, l'imagerie filtrée, la seconde passe de perf |
+| 14 | **Q7** | après T9 (l'imagerie inscriptible) et S1 (nos ombres remplacent celles qu'on ôte) |
+| 15 | **Q8** | le monde habité, en dernier, au budget |
 
 | Phase | Effort | Risque | Gain qualité | Effet perf |
 |---|---|---|---|---|
@@ -797,9 +887,18 @@ Trois volets, une séance de mesure commune. L'ordre est au §8.
 | R6b | 2–4 j (recherche comprise) | **élevé** | fort si ça marche | 0 |
 | T8 | 2–3 j | moyen (validité par tuile, worker) | **fort** à chaque arrivée | réseau ; fil principal soulagé |
 | T9 | 2 j | moyen (mips dans le tore, layout) | **fort** au loin | **gain** du matériau |
-| H5 | 1–1,5 j | moyen | fort en montagne au couchant | à mesurer |
+| H5 | 1,5–2 j (8 directions) | moyen | fort en montagne au couchant, et les vallées (Q4) | à mesurer |
+| Q1 | 4–6 j | faible à moyen | moyen (la netteté du vol) | **−4 à −8 ms** |
+| Q2 | 3–4 j | faible | **fort** | ≤ +0,3 ms |
+| Q3 | 3–4 j | faible à moyen | **fort** en ville | ≤ +0,5 ms |
+| Q4 | 8–12 j | moyen | **fort** | ≤ +2,5 ms |
+| Q5 | 8–11 j | **élevé** (C2 : le réétalonnage) | **fort** | nuages −1 à −3 ms |
+| Q6 | 5–7 j | moyen (fantômes) | **fort** en vol | ≈ 0, l'échelle peut baisser |
+| Q7 | 10–14 j | **élevé** (L7b) | **fort** | ≈ 0 par image |
+| Q8 | 12–18 j | moyen | fort (la vie) | au budget |
+| Q9 | 3–5 j | moyen | — | à mesurer |
 
-Total ≈ 29–34 jours de travail, R6b compris ; H5 (1–1,5 j) en plus si Sam la retient après T6.
+Total ≈ 87–117 jours de travail : T, H et R ≈ 31–36 j (H5 compris), Q ≈ 56–81 j.
 
 ## 9. Règles de livraison (habituelles)
 
@@ -818,7 +917,7 @@ Total ≈ 29–34 jours de travail, R6b compris ; H5 (1–1,5 j) en plus si Sam 
 
 ## 10. Décisions (Sam)
 
-Les décisions 1 à 10 datent du 31 octobre ; les décisions 11 à 15 du 2 novembre. **Le plan n'est pas lancé.**
+Les décisions 1 à 10 datent du 31 octobre ; les décisions 11 à 20 du 2 novembre. **Le plan n'est pas lancé.**
 
 1. **L'ordre : les cartes d'horizon d'abord** (H), **puis la réfraction** (R). *Amendé par la décision 8* : R3 passe
    avant. *Dans le plan commun* : T1, T2 et M0 avant tout, T6 avec R3.
@@ -846,18 +945,39 @@ Les décisions 1 à 10 datent du 31 octobre ; les décisions 11 à 15 du 2 novem
 
 12. **T1 : la fonction hybride seule d'abord.** Le pré-filtre des tuiles SRTM au décodage n'est pas fait d'avance ; il
     ne revient que si les captures de T1 montrent encore des marches (hors d'Europe), et sur décision de Sam.
-13. **H5 : une option, jugée après T6.** Elle n'entre pas dans l'ordre ; au vu des captures de T6 (les vallées jusqu'à
-    10 km), Sam décide si les ombres au-delà de 10 km valent la phase. L'API de cuisson générique de H1 est gardée, pour
-    qu'elle reste possible sans réécriture.
+13. ~~**H5 : une option, jugée après T6.**~~ *Remplacée par la décision 17* (H5 dans le plan, à 8 directions).
 14. **T8 et T9 restent dans ce plan**, en fin d'ordre (§8) : le chargement et la netteté au loin font partie de la Terre
     « parfaite AAA ».
 15. **R4 : R4a attend R4b.** Les deux sont livrés ensemble, jamais R4a seul (pas même limité à l'orbite).
 
+**Sam, le 2 novembre : « fais au mieux, AAA qualité et perf, tout dans le périmètre »** — les décisions 16 à 20 sont prises
+sur cette délégation :
+
+16. **Le volet Q entre en entier** (Q1–Q9), dans l'ordre du §8. **La perf passe d'abord** : Q1 avant tout ajout de
+    qualité ; à sa fin, le budget en vol sur le mini est fixé (visé ≤ 40 ms), et aucune phase suivante ne le dépasse sans
+    que Sam l'accepte au vu des images.
+17. **H5 est dans le plan, étendu à 8 directions** : les ombres du relief au-delà de 10 km pour tout azimut (pas de
+    recuisson quand le Soleil tourne) **et** la visibilité du ciel des vallées (Q4, L2b). Un seul calcul pour deux gains.
+18. **C2, l'air à sa vraie épaisseur : oui**, sous ~50 km d'altitude de la caméra, fondu vers ×3 au-dessus ; fait avec R1
+    (le même USSA-76) et réétalonné contre les photos réelles de M0. Si l'image s'éloigne des photos, on abaisse
+    l'altitude du fondu plutôt que de renoncer.
+19. **L7, le dé-éclairage des photos : oui**, par la méthode du §9 de l'analyse Unreal — L7a (le relief, sûr) partout,
+    L7b (les ombres des orthos) après une étude de 2 jours avec un go/no-go chiffré (halo < 1 m, bruit des zones
+    relevées < 1,5 × celui des zones au soleil, plus aucune double ombre au couchant). Pas de réseau de neurones.
+20. **D1, le monde habité : oui** (Q8, en dernier) : trafic, lignes HT, éoliennes, vignes et vergers, lampadaires ; chaque
+    élément mesuré au budget.
+
 ## 11. Questions ouvertes
 
-Aucune pour l'instant : les quatre du plan commun sont tranchées (§10, décisions 12 à 15). Restent les décisions prévues
-**pendant** le plan, au vu des mesures : le pré-filtre SRTM (après T1, s'il le faut), H5 (après T6), la pleine
-résolution des cartes d'horizon et la distance par direction (H4), le go/no-go de R6b.
+Aucune : tout est tranché (§10, décisions 1 à 20). Restent les décisions prévues **pendant** le plan, au vu des mesures :
+- le pré-filtre SRTM (après T1, s'il le faut) ;
+- le budget en vol fixé à la fin de Q1 ;
+- l'altitude du fondu de C2 (Q5, contre les photos de M0) ;
+- le go/no-go de L7b (après son étude) ;
+- P9 et P10 gardés ou retirés (Q9) ;
+- Copernicus GLO-30 à la place de SRTM (G2), les orthos nationales retenues (G1) ;
+- la pleine résolution des cartes d'horizon et la distance par direction (H4) ;
+- le go/no-go de R6b.
 
 ## 12. Historique
 
@@ -881,3 +1001,7 @@ résolution des cartes d'horizon et la distance par direction (H4), le go/no-go 
   - Le nom du fichier est gardé.
 - **2 novembre, plus tard** : les réponses de Sam aux quatre questions (§10, décisions 12 à 15) — T1 la fonction seule
   d'abord ; H5 en option jugée après T6 ; T8 et T9 gardés ici ; R4a attend R4b.
+- **2 novembre, plus tard encore** : le volet **Q** (« qualité Unreal », Q1–Q9) après
+  [ANALYSE-TERRE-UNREAL-2026-11-02.md](ANALYSE-TERRE-UNREAL-2026-11-02.md) ; Sam : « fais au mieux, tout dans le
+  périmètre » → décisions 16 à 20 (Q en entier, la perf d'abord ; H5 dans le plan à 8 directions ; C2 oui ; L7 oui avec sa
+  méthode et son go/no-go ; D1 oui) ; §3.8, §4, §5, §6, §7 (Q), §8 (l'ordre, ≈ 87–117 j), §11 mis à jour.
