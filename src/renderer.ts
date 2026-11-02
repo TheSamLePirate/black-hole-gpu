@@ -8791,6 +8791,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         sc.buffer,
         sc.forestCells,
         moved ? fr : this.tsmOff,
+        sc.nodeCount,
       );
     }
     const drawn = this.terrainRaster.encodeVisibility(

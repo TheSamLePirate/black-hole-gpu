@@ -214,7 +214,8 @@ const CAP = ${SCENERY_RASTER_CAP}u;
 struct Draw { vertices: u32, instances: atomic<u32>, first: u32, base: u32 };
 // (the four lists' draws, then the buildings' boxes': one a node of the scenery's BVH —, the two shadow lists', the
 // buildings' triangles')
-@group(0) @binding(3) var<storage, read_write> draws: array<Draw, ${LISTS + 5}>;
+// (then — Q1, 2 Nov 2026 — the buildings' boxes in view, the bridges' parts in view)
+@group(0) @binding(3) var<storage, read_write> draws: array<Draw, ${LISTS + 7}>;
 @group(0) @binding(4) var<storage, read_write> listsOut: array<u32>;
 @group(0) @binding(5) var<storage, read> listsIn: array<u32>;
 
@@ -308,7 +309,35 @@ fn clampDraws(@builtin(local_invocation_index) i: u32) {
     draws[${LISTS + 3}].vertices = u32(scenery[3].w) * 3u;
     // (and the bridges' after them — scenery-data.ts: their count with the buildings' in vec4 2's w —: the shadow map's alone)
     draws[${LISTS + 4}].vertices = u32(max(scenery[2].w, scenery[3].w)) * 3u;
+
   }
+}
+// The scenery's nodes' boxes in view (Q1, 2 Nov 2026 — before, the visibility pass ran its box shaders over every node of
+// the scenery's BVH: two pipelines × 36 vertices × ~64 000 nodes over Paris, 1.6 ms of kerr-mini's frame for the bridges' marks
+// alone): a building's box into its list, a bridge's part into the marks' — the field of view's sides tested against each box's
+// sphere, as the trees' (the shadow map's boxes all drawn still: the Sun's view is another)
+@compute @workgroup_size(64)
+fn cullBoxes(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec3u) {
+  let k = g.y * n.x * 64u + g.x;
+  if (k >= u32(scenery[0].x)) { return; }
+  let lo = scenery[4u + k * 2u];
+  let hi = scenery[5u + k * 2u];
+  if (hi.w < 0.0) { return; }
+  let R = 0.5 * length(hi.xyz - lo.xyz) + 1.0;
+  let v = view(0.5 * (lo.xyz + hi.xyz));
+  let tx = u.right.w; let ty = u.up.w;
+  if (v.z < -R) { return; }
+  if (abs(v.x) - tx * v.z > R * sqrt(1.0 + tx * tx)) { return; }
+  if (abs(v.y) - ty * v.z > R * sqrt(1.0 + ty * ty)) { return; }
+  let b = building(hi);
+  let list = select(${LISTS + 3}u, ${LISTS + 2}u, b);
+  let at = atomicAdd(&draws[select(${LISTS + 6}u, ${LISTS + 5}u, b)].instances, 1u);
+  if (at < CAP) { listsOut[list * CAP + at] = k; }
+}
+@compute @workgroup_size(1)
+fn clampBoxes() {
+  atomicStore(&draws[${LISTS + 5}].instances, min(atomicLoad(&draws[${LISTS + 5}].instances), CAP));
+  atomicStore(&draws[${LISTS + 6}].instances, min(atomicLoad(&draws[${LISTS + 6}].instances), CAP));
 }
 
 override LIST: u32 = 0u;
@@ -391,7 +420,9 @@ fn building(hi: vec4f) -> bool {
   let p = scenery[u32(scenery[0].y + hi.w)];
   return p.w > 0.5 && p.w < 1.5;
 }
-@vertex fn boxVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f { return boxClip(vi, ii); }
+// (the boxes in view — cullBoxes' list: the instance its index there)
+fn boxInView(ii: u32) -> u32 { return listsIn[${LISTS + 2}u * CAP + ii]; }
+@vertex fn boxVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f { return boxClip(vi, boxInView(ii)); }
 fn boxClip(vi: u32, ii: u32) -> vec4f {
   let lo = scenery[4u + ii * 2u];
   let hi = scenery[5u + ii * 2u];
@@ -416,7 +447,8 @@ fn stripCorner(hi: vec4f, k: vec3f) -> vec4f {
 }
 // (a bridge's mark: 2.25 — a building's box 2 —: shadeLite takes its pixels, the deck tested along the ray, the water about it its)
 @fragment fn bridgeMarkFs() -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, 2.25); }
-@vertex fn boxMarkVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
+@vertex fn boxMarkVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) mi: u32) -> @builtin(position) vec4f {
+  let ii = listsIn[${LISTS + 3}u * CAP + mi];
   let hi = scenery[5u + ii * 2u];
   if (hi.w < 0.0 || building(hi)) { return vec4f(2.0, 2.0, 0.5, 1.0); }
   // (its prism: only its own pixels to the kernel — the water about it shadeWater's, one river, not patches of the kernel's
@@ -468,8 +500,9 @@ struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f };
 // The buildings without triangles — the far ones, past BUILDING_MESH_M — as their boxes, solid (no margin, the top flat):
 // the material's buildings too, none left to the kernel shade's rays (their marking boxes, wider than they are and up to their
 // roofs' tops, had sent the pixels over a pitched roof and along their margins there too)
-@vertex fn boxSolidVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> MV {
+@vertex fn boxSolidVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
   var o: MV;
+  let ii = boxInView(bi);
   let lo = scenery[4u + ii * 2u];
   let hi = scenery[5u + ii * 2u];
   // (a building's alone: a bridge's box, solid, was a slab far wider than its deck, the aerial imagery drawn on it — boxMarkVs)
@@ -497,6 +530,8 @@ export function forestModuleOf(traceSource: string): string {
 export class SceneryRaster {
   private module: GPUShaderModule;
   private cullPipe: GPUComputePipeline | null = null;
+  private cullBoxesPipe: GPUComputePipeline | null = null;
+  private clampBoxesPipe: GPUComputePipeline | null = null;
   private clampPipe: GPUComputePipeline | null = null;
   private drawPipes: (GPURenderPipeline | null)[] = [null, null, null, null];
   private boxPipe: GPURenderPipeline | null = null;
@@ -519,7 +554,7 @@ export class SceneryRaster {
   private sceneryU: GPUBuffer;
   private draws: GPUBuffer;
   private lists: GPUBuffer;
-  private reset = new Uint32Array((LISTS + 5) * 4);
+  private reset = new Uint32Array((LISTS + 7) * 4);
   private sceneryBuf: GPUBuffer | null = null;
   private cullLayout: GPUBindGroupLayout;
   private drawLayout: GPUBindGroupLayout;
@@ -542,11 +577,11 @@ export class SceneryRaster {
     this.frameU = device.createBuffer({ size: TERRAIN_RASTER_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.sceneryU = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws = device.createBuffer({
-      size: (LISTS + 5) * 16,
+      size: (LISTS + 7) * 16,
       usage: S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
       label: "scenery raster draws",
     });
-    this.lists = device.createBuffer({ size: (LISTS + 2) * SCENERY_RASTER_CAP * 4, usage: S, label: "scenery raster instances" });
+    this.lists = device.createBuffer({ size: (LISTS + 4) * SCENERY_RASTER_CAP * 4, usage: S, label: "scenery raster instances" });
     this.sunU = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
     this.setLod(SCENERY_RASTER_LOD);
@@ -584,6 +619,12 @@ export class SceneryRaster {
     void device
       .createComputePipelineAsync({ layout: cullPipeLayout, compute: { module: this.module, entryPoint: "clampDraws" } })
       .then((p) => (this.clampPipe = p), fail);
+    void device
+      .createComputePipelineAsync({ layout: cullPipeLayout, compute: { module: this.module, entryPoint: "cullBoxes" } })
+      .then((p) => (this.cullBoxesPipe = p), fail);
+    void device
+      .createComputePipelineAsync({ layout: cullPipeLayout, compute: { module: this.module, entryPoint: "clampBoxes" } })
+      .then((p) => (this.clampBoxesPipe = p), fail);
     for (let l = 0; l < LISTS; l++)
       void device
         .createRenderPipelineAsync({
@@ -699,6 +740,9 @@ export class SceneryRaster {
     }
     for (let l = 0; l < LISTS; l++) this.reset[l * 4] = this.meshCounts[l]!;
     this.reset[LISTS * 4] = 36;
+    // (the boxes in view, the bridges' parts in view: cullBoxes' counts)
+    this.reset[(LISTS + 5) * 4] = 36;
+    this.reset[(LISTS + 6) * 4] = 36;
     // (the buildings' triangles: one instance, their vertices clampDraws's)
     this.reset[(LISTS + 3) * 4 + 1] = 1;
     this.reset[(LISTS + 4) * 4 + 1] = 1;
@@ -713,7 +757,15 @@ export class SceneryRaster {
   }
 
   get ready() {
-    return !this.error && !!this.cullPipe && !!this.clampPipe && !!this.boxPipe && this.drawPipes.every((p) => !!p);
+    return (
+      !this.error &&
+      !!this.cullPipe &&
+      !!this.clampPipe &&
+      !!this.cullBoxesPipe &&
+      !!this.clampBoxesPipe &&
+      !!this.boxPipe &&
+      this.drawPipes.every((p) => !!p)
+    );
   }
   /** the shadow map's pipelines compiled */
   get shadowReady() {
@@ -733,6 +785,8 @@ export class SceneryRaster {
     buffer: GPUBuffer,
     forestCells: number,
     sun: Float32Array | null = null,
+    /** the scenery's BVH nodes (scenery.ts nodeCount): cullBoxes' grid */
+    nodes = 0,
   ): boolean {
     this.active = false;
     if (!this.ready || forestCells <= 0) return false;
@@ -779,6 +833,14 @@ export class SceneryRaster {
     pass.dispatchWorkgroups(gx, Math.ceil(groups / gx));
     pass.setPipeline(this.clampPipe!);
     pass.dispatchWorkgroups(1);
+    // (over every node — their count the CPU's: an indirect dispatch would read the draws' buffer while the pass writes it)
+    const bg = Math.ceil(nodes / 64);
+    if (bg > 0) {
+      pass.setPipeline(this.cullBoxesPipe!);
+      pass.dispatchWorkgroups(Math.min(bg, 65535), Math.ceil(bg / 65535));
+    }
+    pass.setPipeline(this.clampBoxesPipe!);
+    pass.dispatchWorkgroups(1);
     pass.end();
     this.cells = forestCells;
     this.active = true;
@@ -803,15 +865,23 @@ export class SceneryRaster {
     }
     if (this.debugSkip & 2) return;
     const meshes = this.meshes3d && !!this.meshPipe && !!this.boxPipeMeshed && !!this.boxMarkPipe;
-    pass.setPipeline(meshes ? this.boxPipeMeshed! : this.boxPipe!);
     pass.setBindGroup(0, this.drawBind);
-    pass.drawIndirect(this.draws, LISTS * 16);
+    // (debugSkip 4, 8, 16: the boxes, the bridges' marks, the buildings' triangles left out — what each costs, Q1)
+    // (the boxes and the bridges' marks in view alone: cullBoxes' lists)
+    if (!(this.debugSkip & 4)) {
+      pass.setPipeline(meshes ? this.boxPipeMeshed! : this.boxPipe!);
+      pass.drawIndirect(this.draws, (LISTS + 5) * 16);
+    }
     if (meshes) {
       // (the bridges' marks before the buildings' triangles: where a building stands nearer, its own pixel)
-      pass.setPipeline(this.boxMarkPipe!);
-      pass.drawIndirect(this.draws, LISTS * 16);
-      pass.setPipeline(this.meshPipe!);
-      pass.drawIndirect(this.draws, (LISTS + 3) * 16);
+      if (!(this.debugSkip & 8)) {
+        pass.setPipeline(this.boxMarkPipe!);
+        pass.drawIndirect(this.draws, (LISTS + 6) * 16);
+      }
+      if (!(this.debugSkip & 16)) {
+        pass.setPipeline(this.meshPipe!);
+        pass.drawIndirect(this.draws, (LISTS + 3) * 16);
+      }
     }
   }
 

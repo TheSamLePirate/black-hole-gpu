@@ -247,6 +247,8 @@ export class EarthScenery {
         this.device.queue.writeBuffer(this.buffer, 0, r.buffer);
         this.revision++;
         this.forestAt = new Float32Array(r.buffer, 0, 16)[8] ?? 0;
+        // (its BVH's nodes — the header's first float —: the raster's box culling dispatched over them, SceneryRaster.encodeCull)
+        this.nodeCount = new Float32Array(r.buffer, 0, 16)[0] ?? 0;
         this.seasonKey = "";
         this.contact = new SceneryContact(r, r.buffer);
         this.uploaded += performance.now() - t;
@@ -307,6 +309,8 @@ export class EarthScenery {
     return Math.min(300000, 30000 * 2 ** Math.max(0, this.failures - 1));
   }
   /** the drawn scene's forest grid: its cells (w × h, one tree at most each; 0: none) — the raster's cull walks them */
+  /** the scenery's BVH nodes uploaded (their boxes culled for the raster — scenery-raster.ts cullBoxes) */
+  nodeCount = 0;
   get forestCells() {
     return this.data?.forestCells ?? 0;
   }
