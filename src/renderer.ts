@@ -77,7 +77,7 @@ import {
   utcOf,
 } from "./system/solar";
 import { buildDayClouds, dayCloudsFor, dayCloudsUrl } from "./system/day-clouds";
-import { refractionParams, seaRefractivity } from "./system/refraction";
+import { incidentAltitude, refractionParams, seaRefractivity } from "./system/refraction";
 import { moonLightShare, SHADE_VEC4S, shadowParams } from "./eclipse/shadows-gpu";
 import { lookOf } from "./skychart";
 import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, seasPixels, type HdMap } from "./system/hd-maps";
@@ -5265,7 +5265,14 @@ export class Renderer {
     // The raster patch's visibility, after the cache it reads and before the rays that start from it.
     this.tsmDrawn = false;
     this.sunDrawn = false;
+    this.incidentNow = null;
+    this.incidentWritten = false;
     if (!quality && s) this.encodeTerrainRasterVisibility(enc, t, s);
+    // (the incident Sun's row — R3 — cleared when no Earth raster wrote it this frame: another world, the traced pipeline)
+    if (!quality && !this.incidentWritten && this.incidentRow[3] !== 0) {
+      this.incidentRow.fill(0);
+      this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 5) * 16, this.incidentRow);
+    }
     // (the same for the relief's shadow map)
     if (!quality && !this.sunDrawn && this.sunTableOn) {
       this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 3) * 16, new Float32Array(4));
@@ -8240,7 +8247,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const f = this.tsmAsk;
     f.fill(0);
     if (!near || !this.treeShadow || !this.treeShadowOn) return f;
-    const Le = near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!);
+    // (towards the incident Sun — R3: the shadows the ground's light casts, the disc's own refraction lifted in)
+    const Le = this.incidentNow ?? near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!);
     const dot = (o: number) => Le[0]! * scp[o]! + Le[1]! * scp[o + 1]! + Le[2]! * scp[o + 2]!;
     let L = [dot(0), dot(4), dot(8)];
     const ll = Math.hypot(...L) || 1;
@@ -8309,6 +8317,37 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return t.hintBind.bind;
   }
 
+  /** the incident Sun this frame (R3 — incidentSun), on the Earth's axes; null: the geometric one */
+  private incidentNow: Vec3 | null = null;
+  private incidentRow = new Float32Array(4);
+  private incidentWritten = false;
+  /** the incident Sun's lift (R3: a switch for comparisons — off, the geometric Sun lights the ground, as before) */
+  incidentSunOn = true;
+  /**
+   * The incident Sun (R3, contract C0-5): the geometric direction (near.light, on the body's axes) lifted towards the zenith by
+   * the refraction at the ground under the camera — the disc seen where the air bends it, the ground lit from there —, whole
+   * at the horizon and below, faded out by 10° up (5′ there); null where there is no air drawn (refraction off, 120 km up).
+   * One direction for the scene: 10 km off, the lift differs by less than the disc's pixel.
+   */
+  private incidentSun(near: ReturnType<typeof localPatch>, s: Settings): Vec3 | null {
+    if (!near || !this.incidentSunOn || !s.refraction) return null;
+    const g = patchGeodetic(near, WGS84_F);
+    const h = g.h * WGS84_A;
+    if (!(h < 120e3)) return null;
+    const L = near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!) as Vec3;
+    const up = g.normal;
+    const sinE = L[0] * up[0] + L[1] * up[1] + L[2] * up[2];
+    const e = Math.asin(Math.max(-1, Math.min(1, sinE)));
+    const lift = incidentAltitude(e, Math.max(h, 0), this.refractivity(s)) - e;
+    if (lift === 0) return L;
+    let t = [up[0] - sinE * L[0], up[1] - sinE * L[1], up[2] - sinE * L[2]];
+    const tl = Math.hypot(...t);
+    if (tl < 1e-9) return L;
+    t = t.map((v) => v / tl);
+    const c = Math.cos(lift),
+      sn = Math.sin(lift);
+    return [L[0] * c + t[0]! * sn, L[1] * c + t[1]! * sn, L[2] * c + t[2]! * sn];
+  }
   /** half the relief's shadow map's width [m], the depth's half-range [m], the near march's reach [m] */
   static readonly SUN_HALF_M = 10_000;
   static readonly SUN_DEPTH_M = 20_000;
@@ -8322,8 +8361,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const near = this.lastNear;
     const tr = this.terrainRaster;
     let on = false;
+    // (the incident Sun — R3 —, its row written every frame: shadeLite's light whether the map is drawn or not)
+    const Li = this.incidentNow;
+    this.incidentRow.set(Li ? [...Li, 1] : [0, 0, 0, 0]);
+    this.device.queue.writeBuffer(this.bodyBuf, (TABLE_SUN + 5) * 16, this.incidentRow);
+    this.incidentWritten = true;
     if (drawn && this.sunShadow && this.sunShadowOn && this.rasterPrimaryOn && near && tr) {
-      const L = near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!) as Vec3;
+      const L = Li ?? (near.axes.map((a) => a[0]! * near.light[0]! + a[1]! * near.light[1]! + a[2]! * near.light[2]!) as Vec3);
       const up = patchGeodetic(near, WGS84_F).normal;
       const { r, u } = sunAxes(L, up);
       const H = Renderer.SUN_HALF_M,
@@ -8726,6 +8770,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       this.terrainRaster.idle("cache-not-ready");
       return;
     }
+    // (R3: the incident Sun of this frame — the ground's light, its shadow maps' orientation)
+    this.incidentNow = this.incidentSun(this.lastNear, s);
     const cv = this.context.canvas as HTMLCanvasElement;
     const frame = terrainRasterFrame(
       this.lastNear,

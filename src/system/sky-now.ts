@@ -7,7 +7,7 @@ import type { Settings } from "../settings";
 import { altAzOf, horizonAt } from "../skychart";
 import { cameraHome } from "../targeting";
 import { cartToGeodetic, flatteningOf } from "./ellipsoid";
-import { apparentAltitude, bending } from "./refraction";
+import { apparentAltitude, bending, incidentAltitude } from "./refraction";
 import { bodyAxes, M_METRES, seenFrom, solarBody, utcOf } from "./solar";
 import { eclipseNow } from "../eclipse/earth-moon";
 
@@ -20,6 +20,9 @@ export interface SkyBody {
   altDeg: number;
   /** where it is seen through the air [°] (= altDeg without refraction) */
   apparentAltDeg: number;
+  /** the Sun's: the altitude the ground is lit from [°] — the incident Sun (R3): the apparent one at the horizon, the true one
+   *  from 10° up (refraction.ts incidentAltitude) */
+  lightAltDeg?: number;
   /** from the north through the east [°] */
   azDeg: number;
 }
@@ -75,6 +78,7 @@ export function skyNow(s: Settings, t: number, n0: number): SkyNow | null {
     return { altDeg: r3(alt), apparentAltDeg: r3(air ? apparentAltitude(alt * D, h, n0) / D : alt), azDeg: r1(az) };
   };
   const sun = body("sun");
+  sun.lightAltDeg = r3(air ? incidentAltitude(sun.altDeg * D, h, n0) / D : sun.altDeg);
   const moon = hz.body === "earth" ? body("moon") : undefined;
   const ecl = moon ? eclipseNow(g.lat, g.lon, h, utcOf(t), sun.altDeg, moon.altDeg) : null;
   return {

@@ -7,6 +7,7 @@ import {
   TABLE_SH,
   TABLE_TERRAIN,
   TABLE_SKY,
+  TABLE_SUN,
   SUN_SHADOW_VEC4S,
   SKY_AMBIENT_VEC4S,
   CSM_VEC4S,
@@ -53,6 +54,7 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(TABLE_WARP).toBe(TABLE_WALK + Math.ceil((65 * 65) / 4));
   expect(constU("WARP_OFF")).toBe(TABLE_WARP);
   expect(constU("SKY_OFF")).toBe(TABLE_SKY);
+  expect(constU("SUNI_OFF")).toBe(TABLE_SUN + 5);
   expect(constU("WARP_LEVELS")).toBe(WARP_LEVELS);
   expect(constU("WARP_N")).toBe(WARP_N);
   expect(TABLE_TERRAIN).toBe(TABLE_WARP + WARP_LEVELS * WARP_N * WARP_N);

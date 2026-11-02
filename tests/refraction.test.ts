@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { apparentAltitude, bending, bennett, seaRefractivity } from "../src/system/refraction";
+import { apparentAltitude, bending, bennett, incidentAltitude, seaRefractivity } from "../src/system/refraction";
 
 // PLAN-CIEL C3: the Earth's air bending the light — the tracer's model (airBend) against Bennett's table.
 
@@ -29,4 +29,24 @@ test("cold dense air bends more; high up, less; grazing the air from orbit, abou
   // (from 400 km, the ray grazing the sea: the dip is acos(R/(R+h)))
   const dip = Math.acos(6371 / 6771);
   expect(bending(-dip + 1e-4, 400e3) / bending(0, 0)).toBeGreaterThan(1.7);
+});
+
+// R3 (contract C0-5): the incident Sun — the ground lit from where the air shows the disc at the horizon, the true Sun from 10° up
+test("the incident Sun's altitude: the apparent one at the horizon, the true one from 10° up, continuous", () => {
+  const D = Math.PI / 180;
+  // (at the horizon and below: the whole lift — the disc seen, the ground lit from it)
+  expect(incidentAltitude(0) / D).toBeCloseTo(apparentAltitude(0) / D, 6);
+  expect(incidentAltitude(-0.5 * D)).toBeGreaterThan(0);
+  // (from 10° up: none)
+  expect(incidentAltitude(10 * D)).toBe(10 * D);
+  expect(incidentAltitude(30 * D)).toBe(30 * D);
+  // (between: continuous, never above the apparent one nor below the true one)
+  let last = incidentAltitude(-2 * D);
+  for (let a = -2; a <= 12; a += 0.05) {
+    const v = incidentAltitude(a * D);
+    expect(v).toBeGreaterThanOrEqual(a * D - 1e-12);
+    expect(v).toBeLessThanOrEqual(apparentAltitude(a * D) + 1e-12);
+    expect(Math.abs(v - last)).toBeLessThan(0.002);
+    last = v;
+  }
 });

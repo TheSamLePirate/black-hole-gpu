@@ -27,7 +27,9 @@ export const TABLE_TERRAIN = TABLE_WARP + WARP_LEVELS * WARP_N * WARP_N;
 /** the relief's shadow map's view from the Sun (system/terrain-raster-hint.ts withSunShadow): right, up, the Sun, the
  *  march's split (on, near reach, the patch's radius), the camera's vertical */
 export const TABLE_SUN = TABLE_TERRAIN + TERRAIN_CACHE_VEC4S;
-export const SUN_SHADOW_VEC4S = 5;
+/** (its sixth row, R3: the incident Sun — the geometric one lifted by the refraction at the ground under the camera, faded out
+ *  by 10° up: xyz on the body's axes, w 1 when set — renderer.ts incidentSun, trace.wgsl incidentSun) */
+export const SUN_SHADOW_VEC4S = 6;
 /** the clear sky's light, physical (trace.wgsl skyAmbient): its frame, four altitudes' second-order spherical harmonics */
 export const TABLE_SKY = TABLE_SUN + SUN_SHADOW_VEC4S;
 // (its frame, the harmonics at four heights, the sea level's radiance on an 8 × 8 grid: trace.wgsl skyAmbient, skyMirror)

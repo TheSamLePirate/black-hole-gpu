@@ -410,27 +410,30 @@ const LUT_OFF = 250u; // SH_BASE + 10 harmonics
 const PATH_OFF = 1786u; // LUT_OFF + LUT_N + SYNC_N
 // the mountains' warp's grids (system/warp-grid.ts: TABLE_WARP — after the walking grid), their levels and nodes a side
 const WARP_OFF = 3115u;
+// the incident Sun (R3, contract C0-5: gpu-tables.ts TABLE_SUN + 5, renderer.ts incidentSun): the geometric one lifted by the
+// refraction at the ground under the camera, faded out by 10° up — xyz on the body's axes, w 1 when set
+const SUNI_OFF = 822856u;
 // the clear sky's light, physical (gpu-tables.ts TABLE_SKY; kernel skyAmbient writes it, skyIrradiance reads it)
-const SKY_OFF = 822856u;
+const SKY_OFF = 822857u;
 // the geoid's map (gpu-tables.ts TABLE_GEOID, system/geoid-grid.ts): N [m], GEOID_W × GEOID_H nodes, four a vec4
-const GEOID_OFF = 822968u;
+const GEOID_OFF = 822969u;
 // Saturn's rings' optical depth every kilometre (gpu-tables.ts TABLE_RING, system/ring-profile.ts — Cassini's): RING_N values
 // from RING_R0_KM, four a vec4, −1 where none
-const RING_OFF = 1082182u;
+const RING_OFF = 1082183u;
 const RING_N = 71100u;
 const RING_R0_KM = 69800.0;
 // (its first kilometre measured: the C ring's inner edge before it none; then the sums of its opacity — gpu-tables.ts
 // TABLE_RINGSUM —, RING_N + 1 values)
 const RING_FIRST_KM = 72761.0;
-const RINGSUM_OFF = 1099994u;
+const RINGSUM_OFF = 1099995u;
 // (the giants' cloud tops by latitude — gpu-tables.ts TABLE_TOPS, system/giant-tops.ts —: four profiles of 181 values)
-const TOPS_OFF = 1117770u;
+const TOPS_OFF = 1117771u;
 // the giants' zonal winds (gpu-tables.ts TABLE_WIND, system/giant-winds.ts): 146 values, four a vec4
-const WIND_OFF = 1099957u;
+const WIND_OFF = 1099958u;
 const GEOID_W = 1440u;
 const GEOID_H = 720u;
 // the orthophotos' levels (gpu-tables.ts TABLE_ORTHO, system/earth-tiles.ts orthoParams): three vec4s each
-const ORTHO_OFF = 1082168u;
+const ORTHO_OFF = 1082169u;
 const ORTHO_LEVELS = 4u;
 const WARP_LEVELS = 3u;
 const WARP_N = 512u;
@@ -4719,6 +4722,12 @@ fn nearLight(k: u32) -> NearLight {
     o.e = blackbody(src.x, P.disk.w) * src.y * bodies[BV * k + 3u].y * PI;
   }
   return o;
+}
+// The Sun the ground is lit from (R3, contract C0-5): the incident one — the geometric Lp lifted by the refraction where the
+// camera stands — when the frame has it (the Earth's raster), else Lp itself. The disc, the eclipses and the air keep Lp.
+fn incidentSun(Lp: vec3f) -> vec3f {
+  let r = bodies[SUNI_OFF];
+  return select(Lp, normalize(r.xyz), r.w > 0.5);
 }
 
 fn nearE(n: vec3f) -> vec3f {
@@ -13467,6 +13476,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let lt = nearLight(k);
   let Ls = normalize(squashed(toBody(lt.dir), ab));
   let Lp = normalize(toBody(lt.dir));
+  // (R3: the ground lit from the incident Sun — the refraction's lift at the horizon —; the sky, the air, the night's lights
+  // and the eclipses from the geometric one)
+  let Li = incidentSun(Lp);
   let E = lt.e;
   // (the pixel's footprint on the ground, its two axes — the imagery's anisotropic read)
   let fp = pixFoot() * tH;
@@ -13503,7 +13515,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     ng = n;
     A = WS_A;
   }
-  let mu0 = dot(gq, Lp);
+  let mu0 = dot(gq, Li);
+  let mu0g = dot(gq, Lp);
   let dirW = toBody(ray.look);
   let mesh = terrainRasterMesh(centre);
   // (near, over a survey's relief — the IGN's —: its own slopes, read in its grid at the point's anchored place; the mesh's
@@ -13539,7 +13552,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let plainLight = (liteSkip() & 4096u) != 0u;
   let Esun = E * sunThrough(hG, mu0);
   var Eg = E;
-  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Lp, Esun, fx, fy, dirW, tM, ng, mesh); }
+  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Li, Esun, fx, fy, dirW, tM, ng, mesh); }
   // (a building's own triangles — U2 —: its roof the orthophoto's — the photograph is the roof seen from above —, its walls
   // stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —, the glass dark,
   // the sky mirrored in it below)
@@ -13600,7 +13613,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     wetS = wet * select(mix(0.08, 0.3, rwyPaved), 0.12, mesh) + pud * 0.4;
   }
   var sky = E * 0.15;
-  if (!plainLight) { sky = liteSky(q, hG, E, Ls, mu0); }
+  if (!plainLight) { sky = liteSky(q, hG, E, Ls, mu0g); }
   // (under the weather's decks: the blue sky hidden by their cover, their own grey light instead — what comes through them,
   // and for a broken sky what their sunlit sides and bases send down —, as the tracer's ground)
   let wg = wxNear(q);
@@ -13620,15 +13633,15 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let up = dot(n, gq);
   let bounce = (Esun * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
   // (the moonlight — the tracer's ground's earthMoonlight: a moonlit landscape silvery —, through the decks)
-  var G = A / PI * (Eg * max(dot(n, Lp), 0.0) + sky * 0.5 * (1.0 + up) + bounce + E * earthMoonlight(q, n, hG, mu0) * moonVeil);
+  var G = A / PI * (Eg * max(dot(n, Li), 0.0) + sky * 0.5 * (1.0 + up) + bounce + E * earthMoonlight(q, n, hG, mu0g) * moonVeil);
   // (a tree: lit as windsockShade lights it — the Sun on its face, six tenths of the sky, not the ground's open sky and
   // bounce: they lit the crowns yellow —, its crown's underside in its own shade (the carving's occlusion, left out here),
   // the light through its thin edge against the Sun)
   if (isTree) {
     let ao = 0.5 + 0.5 * clamp(0.5 + 0.5 * dot(n, gq), 0.0, 1.0);
     let rim = 1.0 - abs(dot(n, dirW));
-    G = A / PI * (Eg * max(dot(n, Lp), 0.0) * sqrt(ao) + sky * 0.6 * ao)
-      + WS_T / PI * Eg * max(-dot(n, Lp), 0.0) * rim * (0.3 + 0.7 * pow(max(dot(dirW, Lp), 0.0), 4.0));
+    G = A / PI * (Eg * max(dot(n, Li), 0.0) * sqrt(ao) + sky * 0.6 * ao)
+      + WS_T / PI * Eg * max(-dot(n, Li), 0.0) * rim * (0.3 + 0.7 * pow(max(dot(dirW, Li), 0.0), 4.0));
   }
   if (glass > 0.0) {
     let F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(n, dirW)), 0.0, 1.0), 5.0);
@@ -13645,7 +13658,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (the cities' lights at night)
   let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
   let lamp = max(lights - 0.07, 0.0) / 0.93;
-  let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
+  let dark = 1.0 - smoothstep(-0.12, 0.06, mu0g);
   G += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
   G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), 3000.0, dark);
   // (the water — the sea, the lakes and rivers —: found here — its cover sharp, the polygon's edge alone softened; the sea's
@@ -14054,7 +14067,8 @@ fn cloudShadow(@builtin(global_invocation_id) gid: vec3u) {
     // (under 25 km over the ellipsoid — the squashed space's unit sphere, its radial metres to the normal's: earthSq)
     if (isEarth(k) && earthOn() && (length(cam) - 1.0) * EARTH_RM * earthSq(normalize(cam)) < 25000.0) {
       let lt = nearLight(k);
-      toward = normalize(squashed(toBody(lt.dir), squashOf(k)));
+      // (towards the incident Sun — R3: the shadows the ground's light casts)
+      toward = normalize(squashed(incidentSun(normalize(toBody(lt.dir))), squashOf(k)));
       let up = normalize(cam);
       if (dot(up, toward) > -0.05) {
         on = true;

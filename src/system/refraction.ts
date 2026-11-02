@@ -43,6 +43,16 @@ export function apparentAltitude(trueAlt: number, h = 0, N0 = seaRefractivity())
   return a;
 }
 
+/** The incident Sun's altitude [rad] (R3, contract C0-5): the ground lit from where the air shows the disc — the true altitude
+ *  lifted by the refraction, whole at the horizon and below, faded out by 10° up (5′ there): the renderer's incidentSun, the
+ *  sky's report (sky-now.ts). */
+export function incidentAltitude(trueAlt: number, h = 0, N0 = seaRefractivity()): number {
+  const top = (10 * Math.PI) / 180;
+  if (trueAlt >= top) return trueAlt;
+  const x = Math.min(Math.max(trueAlt / top, 0), 1);
+  return trueAlt + (apparentAltitude(trueAlt, h, N0) - trueAlt) * (1 - x * x * (3 - 2 * x));
+}
+
 /** The tracer's constants (trace.wgsl airBend, P.sky) for the camera h [m] above an Earth of radius R [m]:
  *  the sea-level refractivity, the camera's, R and R + h in scale heights. */
 export function refractionParams(N0: number, h: number, R = R_EARTH): [number, number, number, number] {
