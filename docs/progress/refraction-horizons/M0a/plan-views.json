@@ -1,0 +1,1830 @@
+[
+ {
+  "side": "H",
+  "round": 0,
+  "view": "paris-low",
+  "what": "Paris, 450 m, a July morning",
+  "reliefReady": true,
+  "reliefS": 88.779,
+  "orthoS": 88.781,
+  "tiles": {
+   "finest": 17,
+   "orthoFinest": 18,
+   "loaded": 454,
+   "failed": 0,
+   "kept": 5
+  },
+  "frames": 120,
+  "median": 42.3,
+  "p95": 46.7,
+  "p99": 50.8,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 42.2,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 33.47
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 32.23
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 27.22
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 13.66
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 10.42
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 5.44
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 4.51
+   },
+   {
+    "pass": "earth shade (raster)",
+    "ms": 2.64
+   },
+   {
+    "pass": "trace",
+    "ms": 1.44
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.33
+   },
+   {
+    "pass": "cockpit mask",
+    "ms": 1.18
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 1.16
+   },
+   {
+    "pass": "terrain from the Sun",
+    "ms": 1.1
+   },
+   {
+    "pass": "scenery raster cull",
+    "ms": 0.94
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.77
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 0.62
+   }
+  ],
+  "vramMiB": 1554,
+  "peakMiB": 1573
+ },
+ {
+  "side": "H",
+  "round": 0,
+  "view": "chamonix-low-sun",
+  "what": "Chamonix valley, 450 m, the Sun ~11° up",
+  "reliefReady": true,
+  "reliefS": 52.824,
+  "orthoS": 54.959,
+  "tiles": {
+   "finest": 17,
+   "orthoFinest": 18,
+   "loaded": 545,
+   "failed": 0,
+   "kept": 68
+  },
+  "frames": 120,
+  "median": 48.4,
+  "p95": 51.5,
+  "p99": 63,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 45.5,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 44.85
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 44.36
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 34.61
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 22.11
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 16.19
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 15.67
+   },
+   {
+    "pass": "trace",
+    "ms": 1.79
+   },
+   {
+    "pass": "cockpit mask",
+    "ms": 1.63
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 1.42
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.3
+   },
+   {
+    "pass": "terrain from the Sun",
+    "ms": 1.07
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 0.84
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.76
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.56
+   },
+   {
+    "pass": "gather",
+    "ms": 0.55
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.54
+   }
+  ],
+  "vramMiB": 1434,
+  "peakMiB": 1468
+ },
+ {
+  "side": "H",
+  "round": 0,
+  "view": "srtm-steppe",
+  "what": "Mongolian steppe (SRTM only), 300 m, the Sun ~20° up",
+  "reliefReady": true,
+  "reliefS": 15.134,
+  "orthoS": null,
+  "tiles": {
+   "finest": 14,
+   "orthoFinest": 0,
+   "loaded": 596,
+   "failed": 0,
+   "kept": 144
+  },
+  "frames": 120,
+  "median": 34,
+  "p95": 37.1,
+  "p99": 39.5,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 34.7,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 30.68
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 28.91
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 12.81
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 11.1
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 7.82
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 3.4
+   },
+   {
+    "pass": "trace",
+    "ms": 2.41
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.34
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 1.2
+   },
+   {
+    "pass": "cockpit mask",
+    "ms": 1.01
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.86
+   },
+   {
+    "pass": "scenery raster cull",
+    "ms": 0.81
+   },
+   {
+    "pass": "gather",
+    "ms": 0.6
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 0.59
+   },
+   {
+    "pass": "terrain from the Sun",
+    "ms": 0.58
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.55
+   }
+  ],
+  "vramMiB": 1554,
+  "peakMiB": 1554
+ },
+ {
+  "side": "H",
+  "round": 0,
+  "view": "biarritz-sunset",
+  "what": "Biarritz coast, 1 500 m, sunset (Sun ~2°)",
+  "reliefReady": true,
+  "reliefS": 58.209,
+  "orthoS": null,
+  "tiles": {
+   "finest": 16,
+   "orthoFinest": 16,
+   "loaded": 600,
+   "failed": 0,
+   "kept": 123
+  },
+  "frames": 120,
+  "median": 50.8,
+  "p95": 55.6,
+  "p99": 55.9,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 53.5,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 41
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 39.84
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 36.91
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 13.4
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 11.3
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 8.09
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 5.42
+   },
+   {
+    "pass": "trace",
+    "ms": 2.22
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 2.08
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.34
+   },
+   {
+    "pass": "sea fft",
+    "ms": 1.33
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 1.15
+   },
+   {
+    "pass": "trace (discs)",
+    "ms": 0.82
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.8
+   },
+   {
+    "pass": "earth shade (raster)",
+    "ms": 0.78
+   },
+   {
+    "pass": "scenery raster cull",
+    "ms": 0.75
+   }
+  ],
+  "vramMiB": 1554,
+  "peakMiB": 1573
+ },
+ {
+  "side": "H",
+  "round": 0,
+  "view": "chamonix-flight",
+  "what": "Chamonix, 30 s of flight at 120 m/s",
+  "frames": 601,
+  "median": 49.8,
+  "p95": 54.6,
+  "p99": 57.2,
+  "max": 59.9,
+  "durations": [
+   52.7,
+   50.2,
+   50.2,
+   52.9,
+   51.7,
+   47.4,
+   56.2,
+   47.7,
+   49.4,
+   53.6,
+   53.8,
+   47.6,
+   53.5,
+   46.9,
+   51.4,
+   52.8,
+   44.5,
+   56.8,
+   44.6,
+   50,
+   51.8,
+   53,
+   47.8,
+   52.2,
+   47.3,
+   51.4,
+   51.2,
+   46.9,
+   50.4,
+   47.7,
+   51.2,
+   49,
+   53.1,
+   50,
+   46.2,
+   48.5,
+   50.4,
+   47.3,
+   50.5,
+   46.1,
+   50.6,
+   50.1,
+   53.2,
+   45.9,
+   52.1,
+   46.2,
+   53.7,
+   46.1,
+   46.4,
+   50.5,
+   47.8,
+   51.4,
+   47.1,
+   50.8,
+   47,
+   48.3,
+   52.6,
+   43.6,
+   48.1,
+   50.9,
+   46.9,
+   51.4,
+   49.5,
+   45.4,
+   49.8,
+   49.1,
+   45.8,
+   51.5,
+   46.2,
+   54.5,
+   43.8,
+   49.5,
+   51.2,
+   46.9,
+   52.8,
+   47.5,
+   51.7,
+   47.9,
+   50.5,
+   44.8,
+   53,
+   44.4,
+   51.2,
+   47,
+   47.1,
+   50.4,
+   48.9,
+   50.9,
+   49.9,
+   49.1,
+   52.1,
+   48.5,
+   54.1,
+   49.8,
+   48.6,
+   53.2,
+   54.8,
+   43.7,
+   57.2,
+   47.9,
+   47.5,
+   50.2,
+   48.8,
+   52,
+   51,
+   47.3,
+   55.1,
+   47.1,
+   49.8,
+   52.8,
+   53.2,
+   49.6,
+   50.9,
+   48,
+   51.9,
+   50.2,
+   48.4,
+   51.4,
+   50,
+   55.7,
+   47.4,
+   48.2,
+   54.8,
+   50,
+   49.3,
+   53.1,
+   49,
+   48.8,
+   52.9,
+   48.5,
+   58.1,
+   47.1,
+   59.2,
+   43.9,
+   52.4,
+   48,
+   52.7,
+   49.6,
+   48.6,
+   53.5,
+   53.5,
+   46.6,
+   53.4,
+   52,
+   48,
+   51.7,
+   50.1,
+   53.4,
+   49.9,
+   50.3,
+   52.8,
+   49.2,
+   56.3,
+   49.4,
+   53.6,
+   46,
+   50.6,
+   49.2,
+   52.5,
+   48.8,
+   49.7,
+   53.2,
+   49,
+   55.6,
+   47.5,
+   53.6,
+   44.8,
+   53.9,
+   45.5,
+   54.8,
+   47.5,
+   49,
+   51.9,
+   50.6,
+   54.8,
+   48.9,
+   48.9,
+   52.5,
+   50.3,
+   48.2,
+   51.3,
+   50.6,
+   52.9,
+   52.7,
+   48.8,
+   52.9,
+   50,
+   48.8,
+   52.9,
+   47.7,
+   49,
+   52.7,
+   54.2,
+   46.1,
+   53,
+   49.1,
+   53.5,
+   51.6,
+   47.2,
+   53.2,
+   48.9,
+   48.9,
+   54,
+   51.5,
+   56.2,
+   46.9,
+   52.8,
+   44.8,
+   55,
+   52.9,
+   47.7,
+   50.9,
+   49.5,
+   53.6,
+   49.9,
+   48.9,
+   52.3,
+   47.7,
+   53.1,
+   48.2,
+   48.6,
+   51.5,
+   49,
+   52,
+   47.8,
+   51,
+   51.3,
+   48.6,
+   48.8,
+   51.5,
+   54.8,
+   45.8,
+   52.5,
+   47.6,
+   53.5,
+   49.3,
+   45.8,
+   51.7,
+   49.5,
+   46.6,
+   51.5,
+   47.8,
+   53.1,
+   46.4,
+   50.6,
+   50.8,
+   47.8,
+   52.8,
+   48.4,
+   47.5,
+   51.9,
+   54.5,
+   43.1,
+   51.2,
+   49,
+   54.1,
+   49.7,
+   47.3,
+   52.7,
+   48.7,
+   51.3,
+   48.6,
+   51.9,
+   43.8,
+   52.3,
+   47.1,
+   52.5,
+   48.8,
+   46.8,
+   50.5,
+   47.3,
+   51.7,
+   48.1,
+   49.4,
+   50.9,
+   59.1,
+   46.3,
+   53.7,
+   46.4,
+   54.1,
+   48.8,
+   48.2,
+   53.6,
+   47.8,
+   48.2,
+   52.7,
+   51.3,
+   46.8,
+   55.9,
+   45.5,
+   51.9,
+   49.9,
+   49,
+   51.7,
+   49.5,
+   53.6,
+   50.9,
+   48.8,
+   57.2,
+   48.3,
+   46,
+   54.9,
+   47.5,
+   48.3,
+   50.7,
+   51.4,
+   53.4,
+   48.8,
+   48.7,
+   52.3,
+   49.8,
+   53,
+   49.4,
+   48.2,
+   48.4,
+   52.8,
+   46.9,
+   51.3,
+   49.4,
+   51,
+   46.7,
+   50.3,
+   48.1,
+   51.2,
+   46.1,
+   52.2,
+   52.8,
+   44.6,
+   50.5,
+   47.5,
+   51.6,
+   48.1,
+   47.2,
+   51.8,
+   52.8,
+   45.4,
+   51.9,
+   46.4,
+   53.8,
+   48.5,
+   50.7,
+   47.7,
+   52.3,
+   43.4,
+   55.8,
+   42.7,
+   56.5,
+   49.4,
+   46.2,
+   51.9,
+   47.2,
+   52.7,
+   49.2,
+   47.5,
+   53.8,
+   46.6,
+   51.9,
+   53.7,
+   47.9,
+   51,
+   50.4,
+   46.3,
+   53.5,
+   47.8,
+   48.5,
+   51.2,
+   48.9,
+   52.4,
+   52.1,
+   45.8,
+   54.4,
+   48.2,
+   53.4,
+   46.2,
+   50.4,
+   48.8,
+   48.8,
+   51.9,
+   52.7,
+   49.3,
+   53.2,
+   49,
+   49.8,
+   49.2,
+   48.8,
+   48.6,
+   53.7,
+   47.8,
+   49.5,
+   53.6,
+   47.8,
+   59.2,
+   46.5,
+   48.2,
+   51.2,
+   47.8,
+   48.1,
+   50.8,
+   48.9,
+   58.4,
+   44.4,
+   49.6,
+   50.1,
+   48.9,
+   51.8,
+   48.4,
+   51.4,
+   49.3,
+   52.9,
+   47.8,
+   54,
+   51.1,
+   46.3,
+   52.2,
+   48.6,
+   48.1,
+   52.4,
+   48.1,
+   53.2,
+   46.3,
+   52.3,
+   56.2,
+   48,
+   54.5,
+   47,
+   49.4,
+   49.1,
+   49.8,
+   49,
+   50.9,
+   48.7,
+   46.6,
+   51.2,
+   47,
+   51.9,
+   51.6,
+   44.3,
+   51.4,
+   49.4,
+   47.6,
+   51,
+   46.7,
+   53.7,
+   47.2,
+   46.7,
+   52.2,
+   47,
+   52.6,
+   45.8,
+   53.8,
+   48.3,
+   49.9,
+   45.5,
+   50.7,
+   46.4,
+   52.1,
+   47.9,
+   47,
+   51.8,
+   46.8,
+   52.9,
+   48.2,
+   55,
+   48.4,
+   46.9,
+   47,
+   52.3,
+   46.9,
+   52.3,
+   48.9,
+   47.2,
+   53,
+   50.6,
+   46.5,
+   53.6,
+   46.3,
+   51.7,
+   47.8,
+   47.5,
+   49.4,
+   56.2,
+   46.7,
+   54.3,
+   48.5,
+   52.2,
+   47.9,
+   47.7,
+   51.6,
+   49.1,
+   46.9,
+   53.2,
+   46.1,
+   51.8,
+   46.2,
+   47.6,
+   51.1,
+   45.1,
+   51,
+   48.5,
+   45.5,
+   50.4,
+   46.2,
+   51.3,
+   46.2,
+   46.7,
+   52.4,
+   47,
+   50.7,
+   47,
+   46.6,
+   50,
+   46.5,
+   49.9,
+   48.8,
+   47,
+   50.9,
+   50.6,
+   44.6,
+   52.3,
+   44.8,
+   51,
+   46.3,
+   50.3,
+   48.7,
+   45.8,
+   48.9,
+   50.2,
+   46.3,
+   51.9,
+   44.4,
+   53.6,
+   46.6,
+   46.3,
+   53.7,
+   47,
+   51.4,
+   47,
+   46.4,
+   51.7,
+   47.5,
+   50,
+   50.4,
+   46.5,
+   51.1,
+   51.6,
+   46.9,
+   53,
+   47.3,
+   50.6,
+   54.2,
+   44.6,
+   51.7,
+   49.5,
+   48.1,
+   52.4,
+   48.2,
+   51.5,
+   53.1,
+   43.3,
+   52.7,
+   49.3,
+   46.2,
+   54.6,
+   47.9,
+   54.9,
+   48.5,
+   52.7,
+   59.9,
+   47.7,
+   55.1,
+   54.1,
+   52.3,
+   46.1,
+   52.7,
+   51.1,
+   47.6,
+   53.2,
+   47.3,
+   52.6,
+   49.8,
+   46,
+   51.8,
+   50.2,
+   48.1,
+   51.8,
+   49.5,
+   53.7,
+   50.2,
+   49,
+   52.1,
+   50.2,
+   47.8,
+   52.8,
+   47.7,
+   53.5,
+   50.3,
+   47.3,
+   51.2,
+   49.4,
+   54.2,
+   47.2
+  ],
+  "log": [
+   {
+    "s": 0,
+    "pending": 8,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 0,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 1,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 9,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 2,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 27,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 3,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 41,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 4,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 46,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 5,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 53,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 6,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 66,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 7,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 81,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 8,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 87,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 9,
+    "pending": 8,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 95,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 10,
+    "pending": 2,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 108,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 11,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 125,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 12,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 131,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 13,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 137,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 14,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 143,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 15,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 157,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 16,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 162,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 17,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 169,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 18,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 181,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 19,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 195,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 20,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 200,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 21,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 205,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 22,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 212,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 23,
+    "pending": 0,
+    "orthoPending": 4,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 218,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 24,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 231,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 25,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 236,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 26,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 249,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 27,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 261,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 28,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 277,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 29,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 286,
+    "scale": 0.75,
+    "rate": 16
+   },
+   {
+    "s": 30,
+    "pending": 0,
+    "orthoPending": 0,
+    "finest": 16,
+    "orthoFinest": 16,
+    "builds": 292,
+    "scale": 0.75,
+    "rate": 16
+   }
+  ]
+ },
+ {
+  "side": "H",
+  "round": 0,
+  "view": "earth-orbit",
+  "what": "earth-orbit",
+  "frames": 120,
+  "median": 15.6,
+  "p95": 16.3,
+  "p99": 16.5,
+  "scale": 1,
+  "block": 8,
+  "rate": 4,
+  "primary": false,
+  "rings": null,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 15.9,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 13.09
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 10.92
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 2.54
+   },
+   {
+    "pass": "temporal",
+    "ms": 2.47
+   },
+   {
+    "pass": "trace",
+    "ms": 2.13
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.61
+   },
+   {
+    "pass": "gather",
+    "ms": 1.34
+   },
+   {
+    "pass": "light meter",
+    "ms": 1.25
+   },
+   {
+    "pass": "stars",
+    "ms": 1.05
+   },
+   {
+    "pass": "motion blur",
+    "ms": 0.94
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.68
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.65
+   },
+   {
+    "pass": "bloom up 1",
+    "ms": 0.15
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.12
+   }
+  ],
+  "vramMiB": 1231,
+  "peakMiB": 1271
+ },
+ {
+  "side": "H",
+  "round": 0,
+  "view": "moon-cine",
+  "what": "moon-cine",
+  "frames": 120,
+  "median": 25,
+  "p95": 62.5,
+  "p99": 138.5,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 24.1,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 23.64
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 21.8
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 9.3
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 6.78
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.38
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.3
+   },
+   {
+    "pass": "trace",
+    "ms": 1.23
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 0.88
+   },
+   {
+    "pass": "gather",
+    "ms": 0.83
+   },
+   {
+    "pass": "stars",
+    "ms": 0.57
+   },
+   {
+    "pass": "motion blur",
+    "ms": 0.5
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 0.47
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.36
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.34
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.22
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.18
+   }
+  ],
+  "vramMiB": 1210,
+  "peakMiB": 1558
+ },
+ {
+  "side": "H",
+  "round": 0,
+  "view": "mars-low",
+  "what": "mars-low",
+  "frames": 120,
+  "median": 29.9,
+  "p95": 104.1,
+  "p99": 187.8,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 32.6,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 23.81
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 21.9
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 19.69
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 17.33
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 1.98
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.35
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.05
+   },
+   {
+    "pass": "trace",
+    "ms": 0.97
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 0.69
+   },
+   {
+    "pass": "gather",
+    "ms": 0.57
+   },
+   {
+    "pass": "stars",
+    "ms": 0.56
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.54
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 0.52
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.49
+   },
+   {
+    "pass": "motion blur",
+    "ms": 0.49
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.32
+   }
+  ],
+  "vramMiB": 1104,
+  "peakMiB": 1558
+ },
+ {
+  "side": "H",
+  "round": 0,
+  "view": "mercury-cine",
+  "what": "mercury-cine",
+  "frames": 120,
+  "median": 35.9,
+  "p95": 69,
+  "p99": 96.1,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 33.4,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 33.54
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 31.66
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 22.55
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 20.4
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 1.6
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.45
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.32
+   },
+   {
+    "pass": "trace",
+    "ms": 0.9
+   },
+   {
+    "pass": "gather",
+    "ms": 0.86
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 0.55
+   },
+   {
+    "pass": "stars",
+    "ms": 0.55
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 0.53
+   },
+   {
+    "pass": "motion blur",
+    "ms": 0.47
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.32
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.31
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.19
+   }
+  ],
+  "vramMiB": 1016,
+  "peakMiB": 1386
+ },
+ {
+  "side": "H",
+  "round": 0,
+  "view": "europa-cine",
+  "what": "europa-cine",
+  "frames": 120,
+  "median": 58.6,
+  "p95": 62.5,
+  "p99": 63.6,
+  "scale": 0.75,
+  "block": 6,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 38.1,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 32.87
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 31.26
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 17.93
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 13.89
+   },
+   {
+    "pass": "trace",
+    "ms": 4.28
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.35
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.32
+   },
+   {
+    "pass": "gather",
+    "ms": 0.89
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 0.61
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 0.59
+   },
+   {
+    "pass": "stars",
+    "ms": 0.59
+   },
+   {
+    "pass": "motion blur",
+    "ms": 0.48
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.34
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.32
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.28
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.21
+   }
+  ],
+  "vramMiB": 976,
+  "peakMiB": 1558
+ },
+ {
+  "side": "H",
+  "round": 0,
+  "view": "ceres-cine",
+  "what": "ceres-cine",
+  "frames": 120,
+  "median": 21.9,
+  "p95": 28.9,
+  "p99": 30.2,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": false,
+  "rings": null,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 19.1,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 18.35
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 17.17
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 5.06
+   },
+   {
+    "pass": "trace",
+    "ms": 4.42
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.29
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.87
+   },
+   {
+    "pass": "gather",
+    "ms": 0.69
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.6
+   },
+   {
+    "pass": "stars",
+    "ms": 0.56
+   },
+   {
+    "pass": "motion blur",
+    "ms": 0.48
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.34
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.32
+   },
+   {
+    "pass": "ship probe: GGX",
+    "ms": 0.17
+   },
+   {
+    "pass": "ship probe: SH",
+    "ms": 0.16
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.09
+   },
+   {
+    "pass": "bloom up 1",
+    "ms": 0.07
+   }
+  ],
+  "vramMiB": 915,
+  "peakMiB": 1558
+ }
+]
