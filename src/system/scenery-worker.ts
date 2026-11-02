@@ -795,35 +795,23 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           b = points[i + 1]!,
           length = Math.hypot(b[0] - a[0], b[1] - a[1]);
         if (length < 0.5) continue;
+        // (each part with its triangles — its strip's outline —: the view draws them as the buildings', 2 Nov 2026; before, their
+        // boxes marked the pixels the tracer's rays then shaded, 6.5 ms of kerr-mini's frame over the Seine)
+        const deck = [stripPolygon(a, b, v.width)];
         made =
-          addSolid(
-            polygonPrimitive(
-              [stripPolygon(a, b, v.width)],
-              top - 1.2,
-              top,
-              v.water ? 4 : 2,
-              v.water ? [0.018, 0.052, 0.055] : [0.095, 0.098, 0.1],
-            ),
-          ) || made;
-        for (const side of [-1, 1])
-          addSolid(polygonPrimitive([stripPolygon(a, b, 0.28, (side * v.width) / 2)], top, top + 1, 3, [0.28, 0.27, 0.25]));
+          addSolid(polygonPrimitive(deck, top - 1.2, top, v.water ? 4 : 2, v.water ? [0.018, 0.052, 0.055] : [0.095, 0.098, 0.1]), deck) ||
+          made;
+        for (const side of [-1, 1]) {
+          const rail = [stripPolygon(a, b, 0.28, (side * v.width) / 2)];
+          addSolid(polygonPrimitive(rail, top, top + 1, 3, [0.28, 0.27, 0.25]), rail);
+        }
         // Generic piers every 40 m, excluding the short spans. Anchored below the filtered DEM.
         for (let d = 20 - (distance % 40); d < length; d += 40) {
           if (d < 2 || d > length - 2) continue;
           const t = d / length,
             p: [number, number, number] = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])];
-          if (
-            addSolid(
-              polygonPrimitive(
-                [stripPolygon([p[0] - 1, p[1], 0], [p[0] + 1, p[1], 0], Math.min(3, v.width * 0.5))],
-                p[2] - 5,
-                top - 1.2,
-                3,
-                [0.27, 0.26, 0.24],
-              ),
-            )
-          )
-            bridgePiers++;
+          const pier = [stripPolygon([p[0] - 1, p[1], 0], [p[0] + 1, p[1], 0], Math.min(3, v.width * 0.5))];
+          if (addSolid(polygonPrimitive(pier, p[2] - 5, top - 1.2, 3, [0.27, 0.26, 0.24]), pier)) bridgePiers++;
         }
         distance += length;
       }

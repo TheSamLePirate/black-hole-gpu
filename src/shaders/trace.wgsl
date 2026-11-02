@@ -7578,6 +7578,7 @@ fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
+fn terrainRasterBridgeMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterBridge(px: vec2f) -> bool { return false; }
 fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterSeam(px: vec2f) -> f32 { return 0.0; }
@@ -13521,6 +13522,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (mesh && dot(n, gq) >= 0.35) {
     let l = luminance(A);
     A = mix(vec3f(l), A, 0.2) * vec3f(0.97, 0.99, 1.04);
+    // (a bridge's deck: its stone and its roadway — the photograph under it is the river's: a speckled dark slab)
+    if (terrainRasterBridgeMesh(centre)) { A = vec3f(0.36, 0.34, 0.31) * P.earth2.z; }
   }
   if (mesh && dot(n, gq) < 0.35 && HAS_SCENERY && P.scenery[0].w > 0.5) {
     let toB = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
@@ -13531,7 +13534,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     A = vec3f(0.5, 0.46, 0.39) * (0.8 + 0.35 * block) * P.earth2.z;
     let fw = fract(dot(spL.xy, along) / 2.6);
     let fz = fract(spL.z / 3.1);
-    glass = select(0.0, 1.0, fw > 0.28 && fw < 0.72 && fz > 0.3 && fz < 0.82);
+    // (a bridge's part — its deck's sides, its parapets, its piers —: stone, no windows)
+    glass = select(0.0, 1.0, fw > 0.28 && fw < 0.72 && fz > 0.3 && fz < 0.82 && !terrainRasterBridgeMesh(centre));
     A = mix(A, vec3f(0.03) * P.earth2.z, glass);
   }
   // (the sky's light — on a slope, a share of it, and the ground's bounce round it — as earthGround's)

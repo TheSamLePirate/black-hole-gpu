@@ -31,6 +31,8 @@ fn terrainRasterBuilding(px: vec2f) -> bool { return textureLoad(terrainDist, ve
 fn terrainRasterBridge(px: vec2f) -> bool { let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a; return a > 2.1 && a < 2.4; }
 // A building's own triangles at this pixel (a: 3 — system/scenery-raster.ts meshFs): shadeLite's material.
 fn terrainRasterMesh(px: vec2f) -> bool { return textureLoad(terrainDist, vec2i(floor(px)), 0).a > 2.5; }
+// A bridge's part's own triangles at this pixel (a: 3.25 — system/scenery-raster.ts meshFs): the material's, no windows.
+fn terrainRasterBridgeMesh(px: vec2f) -> bool { let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a; return a > 3.1 && a < 3.4; }
 // How many levels coarser than the near patch the ground here was drawn from (a: 1 the patch — 2 a building's box on it —,
 // ½ its first far ring, ¼ the next, each times 1 − rank/64 — its rank from the patch, rounded off here: system/terrain-raster.ts
 // ringFs; 0 none).

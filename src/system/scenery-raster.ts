@@ -305,8 +305,9 @@ fn clampDraws(@builtin(local_invocation_index) i: u32) {
     atomicStore(&draws[${LISTS}].instances, u32(scenery[0].x));
     atomicStore(&draws[${LISTS + 1}].instances, min(atomicLoad(&draws[${LISTS + 1}].instances), CAP));
     atomicStore(&draws[${LISTS + 2}].instances, min(atomicLoad(&draws[${LISTS + 2}].instances), CAP));
-    // (the buildings' triangles: three vertices each — scenery-data.ts packScenery's mesh, vec4 3)
-    draws[${LISTS + 3}].vertices = u32(scenery[3].w) * 3u;
+    // (the buildings' triangles and the bridges' after them — scenery-data.ts packScenery's mesh, vec4 3; all of them in vec4 2's
+    // w —: three vertices each)
+    draws[${LISTS + 3}].vertices = u32(max(scenery[2].w, scenery[3].w)) * 3u;
     // (and the bridges' after them — scenery-data.ts: their count with the buildings' in vec4 2's w —: the shadow map's alone)
     draws[${LISTS + 4}].vertices = u32(max(scenery[2].w, scenery[3].w)) * 3u;
 
@@ -488,15 +489,17 @@ fn meshVertex(vi: u32) -> vec3f {
 // The same triangles in the camera's view (docs/progress/raster-aaa/TERRE-UNREAL.md U2): the buildings' exact solid, depth
 // written — after their boxes, before nothing —, the pixel's distance in r and b as the ground's, a 3: trace.wgsl shadeLite
 // draws them with its material, not the kernel shade's rays
-struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f };
+// (bridge: a bridge's part's triangle — past the buildings' in the mesh —, marked 3.25 — terrainRasterBridgeMesh)
+struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) @interpolate(flat) bridge: f32 };
 @vertex fn meshVs(@builtin(vertex_index) vi: u32) -> MV {
   var o: MV;
+  o.bridge = select(0.0, 1.0, vi / 3u >= u32(scenery[3].w));
   let v = view(meshVertex(vi));
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
   return o;
 }
-@fragment fn meshFs(v: MV) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, 3.0); }
+@fragment fn meshFs(v: MV) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, 3.0 + 0.25 * v.bridge); }
 // The buildings without triangles — the far ones, past BUILDING_MESH_M — as their boxes, solid (no margin, the top flat):
 // the material's buildings too, none left to the kernel shade's rays (their marking boxes, wider than they are and up to their
 // roofs' tops, had sent the pixels over a pitched roof and along their margins there too)
@@ -873,8 +876,9 @@ export class SceneryRaster {
       pass.drawIndirect(this.draws, (LISTS + 5) * 16);
     }
     if (meshes) {
-      // (the bridges' marks before the buildings' triangles: where a building stands nearer, its own pixel)
-      if (!(this.debugSkip & 8)) {
+      // (the bridges' parts their own triangles now, with the buildings' — no marks: their boxes' pixels went to the rays'
+      // kernel, 6.5 ms over the Seine; debugSkip 8 draws the marks again, for comparison)
+      if (this.debugSkip & 8) {
         pass.setPipeline(this.boxMarkPipe!);
         pass.drawIndirect(this.draws, (LISTS + 6) * 16);
       }
