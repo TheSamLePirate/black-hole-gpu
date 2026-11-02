@@ -79,6 +79,35 @@ async function indexPut(e: TileEntry) {
   const d = await db();
   await req(d.transaction(STORE, "readwrite").objectStore(STORE).put(e));
 }
+/** a served tile's last use, written with the others in one transaction half a second later — one transaction a hit made the
+ *  warm start's thousands of tiles wait on IndexedDB (2 Nov 2026, T8: ~35 tiles a second from the cache). Only the refreshes:
+ *  a new tile's entry (its size, the budget's) is written at once. */
+const touched = new Map<string, TileEntry>();
+let touchFlush: ReturnType<typeof setTimeout> | null = null;
+function indexTouch(e: TileEntry) {
+  touched.set(e.url, e);
+  touchFlush ??= setTimeout(() => {
+    touchFlush = null;
+    const list = [...touched.values()];
+    touched.clear();
+    void db().then((d) => {
+      const st = d.transaction(STORE, "readwrite").objectStore(STORE);
+      for (const x of list) st.put(x);
+    });
+  }, 500);
+}
+/** the two caches kept open (each request opened them again) */
+let tileCacheP: Promise<Cache> | null = null,
+  zoneCacheP: Promise<Cache> | null = null;
+const tileCache = () => (tileCacheP ??= caches.open(TILE_CACHE));
+const zoneCache = () => (zoneCacheP ??= caches.open(ZONE_CACHE));
+/** whether any offline zone's tile is kept (most players: none — then no lookup in the zones' cache for every tile) */
+let zonesHeld: Promise<boolean> | null = null;
+const anyZoneTiles = () =>
+  (zonesHeld ??= db()
+    .then((d) => req(d.transaction(ZONE_TILES, "readonly").objectStore(ZONE_TILES).count()))
+    .then((n) => n > 0)
+    .catch(() => true));
 async function indexAll(): Promise<TileEntry[]> {
   const d = await db();
   return req(d.transaction(STORE, "readonly").objectStore(STORE).getAll());
@@ -255,6 +284,7 @@ async function serve(kept: Response, mark?: [string, string]): Promise<Response 
  * asked again, the one kept where the network fails. Answers the batch's tally, the chains that failed after every try.
  */
 async function zoneFetch(id: string, chains: string[][], fresh = false) {
+  zonesHeld = Promise.resolve(true);
   const cache = await caches.open(ZONE_CACHE);
   const out = { done: 0, bytes: 0, none: 0, failed: [] as string[][] };
   /** a range of an archive into this zone (its key's record marked this zone's too): its bytes */
@@ -391,6 +421,7 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
 }
 /** A zone dropped: its tiles no other zone holds deleted, its record gone. */
 async function zoneDelete(id: string) {
+  zonesHeld = null;
   const { drop, keep } = zoneRelease(await storeAll<ZoneTile>(ZONE_TILES), id);
   const cache = await caches.open(ZONE_CACHE);
   await Promise.all(drop.map((u) => cache.delete(u)));
@@ -434,6 +465,7 @@ async function stats() {
   };
 }
 async function clearTiles() {
+  tileCacheP = null;
   await caches.delete(TILE_CACHE);
   await indexDelete((await indexAll()).map((e) => e.url));
 }
@@ -481,19 +513,19 @@ async function tile(request: Request): Promise<Response> {
   if (range) return rangeTile(request, range.offset, range.length);
   if (request.url === OVERTURE_LIST) return listing(request);
   // (an offline zone's first: kept whatever the budget)
-  const zoned = await (await caches.open(ZONE_CACHE)).match(request);
+  const zoned = (await anyZoneTiles()) ? await (await zoneCache()).match(request) : undefined;
   // (marked as a zone's: the page — the tests — tells it from the network's)
   const fromZone = zoned && (await serve(zoned, ["x-kerr-zone", "1"]));
   if (fromZone) {
     serving(request.url, "zone");
     return fromZone;
   }
-  const cache = await caches.open(TILE_CACHE);
+  const cache = await tileCache();
   const hit = await cache.match(request);
   const fromCache = hit && (await serve(hit));
   if (hit && fromCache) {
     serving(request.url, "lru");
-    void indexPut({ url: request.url, t: Date.now(), size: Number(hit.headers.get("content-length")) || 0 });
+    indexTouch({ url: request.url, t: Date.now(), size: Number(hit.headers.get("content-length")) || 0 });
     return fromCache;
   }
   serving(request.url, "network");

@@ -50,7 +50,15 @@ passe en deux temps :
 | deux passes, à froid | 24,8 s | **26,3 s** | 83,6 s | 4 427 |
 | deux passes, à chaud | 17,2 s | 18,3 s | 29,7 s | 11 (4 126 du cache) |
 
-Le relief proche à froid presque deux fois plus tôt ; les silhouettes lointaines après (voulu). Reste à T8 : **le service
+Le relief proche à froid presque deux fois plus tôt ; les silhouettes lointaines après (voulu). Sur kerr-mini, dans un même A/B
+(`ab-commit fcfd8088`, job `20261102-064733-loadab2`) :
+
+| Aubrac, kerr-mini, Service Worker | Terrarium z 14 | IGN z 15–17 | IGN z 11–14 | tout |
+|---|---:|---:|---:|---:|
+| A avant, à froid | 103,1 s | 106,1 s | — | 106,1 s |
+| B deux passes, à froid | **55,9 s** | **56,4 s** | 64,9 s | 86,6 s |
+| A avant, à chaud | 24,2 s | 26,2 s | 26,2 s | 26,2 s |
+| B deux passes, à chaud | **5,8 s** | **6,8 s** | **15,8 s** | 25,4 s | Reste à T8 : **le service
 depuis le cache du Service Worker** (~35 tuiles/s : la décompression du relief, l'index IndexedDB — à chaud 17 s pour le z 14
 alors que rien ne vient du réseau), **le volume du halo** (4 427 requêtes), et **la variance de kerr-mini** (le même commit
 68 puis 103 s à froid : son réseau ; plusieurs passages par mesure).
@@ -69,3 +77,11 @@ alors que rien ne vient du réseau), **le volume du halo** (4 427 requêtes), et
 - e2e : `monument-relief` passe (145 s ; ses attentes plafonnées, le géoïde compté), `ellipsoid` réparé (2/2), `ign-relief` vert.
 - Échecs **antérieurs** (identiques sur `fcfd8088`), à une séance de réparation : `landscapes`, `multiexposure`, `camera-travel`,
   `observatory`, `zones` (« realtime »), `ortho` (le crédit IGN).
+
+## T8a — le cache du Service Worker servi plus vite (suite)
+
+Les caches tenus ouverts, la recherche dans le cache des zones sautée quand il n'y en a aucune, les rafraîchissements de l'index
+LRU groupés en une transaction toutes les 500 ms (les entrées des tuiles neuves écrites à l'instant, pour le budget). Aubrac à
+chaud, ce Mac : Terrarium z 14 **8,4 s** (17,2 avant), IGN z 15–17 **8,9 s** (18,3), IGN z 11–14 17,0 s (18,9). e2e `pwa` et
+`offline-map` verts ; `offline-settings` en échec, identique sur `fcfd8088` (la navigation de l'écran des réglages).
+
