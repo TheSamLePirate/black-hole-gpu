@@ -78,6 +78,11 @@ plus osascript (0,14 s). Le service garde un seul macmon en flux continu (~20 ms
 pour bun et macmon ensemble, soit ~1 % d'un cœur, en `ProcessType Background` (cœurs E, priorité basse). Cette charge ne
 gêne pas une mesure GPU.
 
+Le démon root suit la même règle. Sa première version relançait `powermetrics -n 1` toutes les 5 s, et chaque lancement
+coûtait 2 à 4,5 s de CPU (mesuré le 2 novembre sur les deux Mac), soit un tiers d'un cœur en continu. Il garde maintenant
+un seul powermetrics en flux continu (`-n -1 -b 1`). awk découpe ce flux et publie chaque échantillon dès sa dernière
+ligne (`GPU Power:` de la section GPU). Un échantillon coupé par la fin du flux est jeté, et le précédent reste en place.
+
 ## Pour les e2e et les scripts
 
 `scripts/lib/thermal.ts` lit les fichiers de l'agent, sans lancer de processus. Il ne lève jamais d'erreur et rend `null`

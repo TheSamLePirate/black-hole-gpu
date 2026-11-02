@@ -26,12 +26,26 @@ FLAGS=""
 for f in --show-plimits --show-extra-power-info; do
   case $HELP in *"$f"*) FLAGS="$FLAGS $f" ;; esac
 done
-echo "$(date -u +%FT%TZ) feed: samplers $SAMPLERS, every $INTERVAL_MS ms →$FLAGS $OUT" >&2
+echo "$(date -u +%FT%TZ) feed: samplers $SAMPLERS, every $INTERVAL_MS ms, streaming →$FLAGS $OUT" >&2
+# One powermetrics streaming (-n -1, line-buffered), cut into samples: each written whole to .next then renamed
+# over $OUT. Not `-n 1` in a loop — every start costs powermetrics 2–4.5 s of CPU (IOReport's set-up, measured
+# 2026-11-02), a third of a core at 5 s; streaming, only the samples cost. A sample ends at the GPU section's
+# "GPU Power:" (gpu_power is the last sampler printed; what follows, blank lines, is dropped until the next header),
+# else at the next sample's header; one cut by the stream's end is dropped (the last whole one stays).
 while :; do
   # shellcheck disable=SC2086 # (FLAGS: words on purpose)
-  if powermetrics --samplers "$SAMPLERS" -i "$INTERVAL_MS" -n 1 $FLAGS >"$DIR/.next" 2>/dev/null && [ -s "$DIR/.next" ]; then
-    chmod 644 "$DIR/.next" && mv -f "$DIR/.next" "$OUT"
-  else
-    sleep 5
-  fi
+  powermetrics --samplers "$SAMPLERS" -i "$INTERVAL_MS" -n -1 -b 1 $FLAGS 2>/dev/null | awk -v dir="$DIR" '
+    function publish() {
+      if (n) { close(tmp); system("mv -f " tmp " " out) }
+      n = 0
+    }
+    BEGIN { tmp = dir "/.next"; out = dir "/powermetrics.txt"; n = 0; section = "" }
+    /^\*\*\* Sampled system activity/ { publish(); started = 1 }
+    !started { next }
+    /^\*\*\*\* .* \*\*\*\*$/ { section = $0 }
+    { print > tmp; n++ }
+    section ~ /GPU usage/ && /^GPU Power:/ { publish(); section = ""; started = 0 }
+    END { if (n) { close(tmp); system("rm -f " tmp) } }'
+  echo "$(date -u +%FT%TZ) feed: powermetrics stopped — restarting in 5 s" >&2
+  sleep 5
 done
