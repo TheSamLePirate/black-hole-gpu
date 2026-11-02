@@ -11,7 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import type { ServerWebSocket } from "bun";
 import index from "./ui/index.html";
-import { doctor, flightCtl, lab, pollHere, pollMini, pollPc } from "./lab";
+import { doctor, flightCtl, heat, lab, peek, pollHere, pollMini, pollPc } from "./lab";
 import { campaigns, e2eReports, report, reportRootOf, safeDir, scenarios, series } from "./reports";
 import { evalProbe, inputProbe, probeErrors, probeState, sceneProbe, shotProbe, startProbe, stopProbe } from "./probe";
 import {
@@ -176,6 +176,7 @@ const server = Bun.serve<{ frames: boolean }>({
         live: liveRuns(),
         probe: probeState(),
         host: Bun.spawnSync(["hostname", "-s"]).stdout.toString().trim(),
+        cwd: process.cwd(),
         commit: Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"]).stdout.toString().trim(),
         dirty: Bun.spawnSync(["git", "status", "--porcelain"]).stdout.toString().trim() !== "",
       }),
@@ -232,6 +233,25 @@ const server = Bun.serve<{ frames: boolean }>({
         return json(lab);
       },
     },
+    // (the Monitor: a running e2e's page now, a machine's heat over the last minutes)
+    "/api/peek": {
+      POST: (req: Req) =>
+        guard(async () => {
+          const b = await body<{ where: "here" | "mini"; pid: number }>(req);
+          return json(await peek(b.where === "mini" ? "mini" : "here", Number(b.pid)));
+        }),
+    },
+    "/api/heat": (req: Req) =>
+      guard(async () => {
+        const u = new URL(req.url);
+        return json(
+          await heat(
+            u.searchParams.get("where") === "mini" ? "mini" : "here",
+            Number(u.searchParams.get("minutes") ?? 60),
+            Number(u.searchParams.get("to") ?? 0) || undefined,
+          ),
+        );
+      }),
     "/api/lab/doctor": {
       POST: (req: Req) =>
         guard(async () => json(await doctor((await body<{ where?: "mini" | "pc" }>(req)).where === "pc" ? "pc" : "mini"))),

@@ -4,6 +4,7 @@
 //
 //   bun scripts/thermal.ts [status] [--host kerr-mini | --all] [--json]   the latest snapshot, briefly (this Mac by default)
 //   bun scripts/thermal.ts window [--minutes 10] [--json]                  this Mac's last minutes: pressure counts, GPU clock
+//   bun scripts/thermal.ts series [--minutes 60] [--points 240] [--to ms]  this Mac's last minutes (before --to) as a chart's series (JSON)
 //   bun scripts/thermal.ts doctor [--host kerr-mini | --all]               the agent, the root feed, macmon, the files' age
 //   bun scripts/thermal.ts install [--host kerr-mini]                      the user half (LaunchAgent, no sudo) — then once,
 //                                                                          by hand, the root half's sudo command it prints
@@ -17,7 +18,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { HOSTS, labHost } from "./lib/lab-hosts";
-import { brief, thermalLine, thermalNow, thermalWarning, thermalWindow } from "./lib/thermal";
+import { brief, thermalLine, thermalNow, thermalSeries, thermalWarning, thermalWindow } from "./lib/thermal";
 
 const argv = process.argv.slice(2);
 const flag = (k: string) => argv.includes(`--${k}`);
@@ -25,7 +26,8 @@ const opt = (k: string, d: string) => {
   const i = argv.indexOf(`--${k}`);
   return i >= 0 && argv[i + 1] ? argv[i + 1]! : d;
 };
-const cmd = argv.find((a, i) => !a.startsWith("--") && !(i > 0 && ["--host", "--minutes"].includes(argv[i - 1]!))) ?? "status";
+const cmd =
+  argv.find((a, i) => !a.startsWith("--") && !(i > 0 && ["--host", "--minutes", "--points", "--to"].includes(argv[i - 1]!))) ?? "status";
 const JSON_OUT = flag("json");
 const ROOT = resolve(import.meta.dir, "..");
 const SHARE = ".local/share/kerr-thermal";
@@ -135,6 +137,11 @@ if (cmd === "install" || cmd === "uninstall") {
           ", ",
         )} · GPU ${w.gpuMHz ? `${w.gpuMHz.min}–${w.gpuMHz.max} MHz (median ${w.gpuMHz.median}, ${w.gpuOfMaxPct?.median ?? "?"} % of max)` : "?"} · GPU ≤ ${w.gpuTempMaxC ?? "?"} °C · CPU ≤ ${w.cpuTempMaxC ?? "?"} °C${w.feed ? "" : " · (no root feed)"}`,
     );
+} else if (cmd === "series") {
+  // (the dashboard's heat charts: asked here, or over ssh of another Mac's runner base)
+  const minutes = Math.min(24 * 60, Math.max(1, Number(opt("minutes", "60")) || 60));
+  const to = Number(opt("to", "")) || Date.now();
+  console.log(JSON.stringify(thermalSeries(minutes, Math.min(2000, Math.max(10, Number(opt("points", "240")) || 240)), to)));
 } else if (cmd === "status") {
   const all = await Promise.all(targets.map(status));
   if (JSON_OUT) console.log(JSON.stringify(targets.length > 1 ? all : all[0]));
@@ -146,6 +153,6 @@ if (cmd === "install" || cmd === "uninstall") {
       if (w) console.log(`${"".padEnd(10)} ⚠ ${w}`);
     });
 } else {
-  console.error(`unknown command ${cmd} — status | window | doctor | install | uninstall`);
+  console.error(`unknown command ${cmd} — status | window | series | doctor | install | uninstall`);
   process.exit(2);
 }

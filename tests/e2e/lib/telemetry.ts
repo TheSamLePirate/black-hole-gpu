@@ -10,7 +10,11 @@
 // from bun test's output (the dashboard matches them in order). On only through the preload
 // (tests/e2e/lib/preload.ts, which `bun run e2e` passes); E2E_TELEMETRY=0, or App.boot({ telemetry: false }),
 // leaves a page without it.
-import { showBanner } from "./banner";
+//
+// Live too (lib/live.ts): ~/.kerr-lab/live/e2e-<pid>.json every two seconds — the file, the test, the craft, the
+// frame rate — for the lab's monitor and the dashboard; a picture only when one asks (a "peek").
+import { fileInfo, showBanner } from "./banner";
+import { LiveState } from "./live";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
@@ -123,6 +127,8 @@ class Recorder {
   private timer: Timer | null = null;
   private chain: Promise<unknown> = Promise.resolve();
   private said = new Set<string>();
+  private live = new LiveState();
+  private liveTimer: Timer | null = null;
 
   /** The preload's: on for this process. */
   enable() {
@@ -146,6 +152,8 @@ class Recorder {
     // (the banner on a Chrome one sees: the file, the test running, what it proves — lib/banner.ts)
     await showBanner(page, file, this.k);
     this.timer ??= setInterval(() => this.pull(), 1500);
+    // (the live state written on its own clock: a page held by a long call shows as such, not as gone)
+    this.liveTimer ??= setInterval(() => this.live.write(), 2000);
   }
 
   /** The page closed: what it had, kept. */
@@ -157,6 +165,10 @@ class Recorder {
   private open() {
     this.dir = join(reportRoot(), this.file.replace(/\.e2e\.test\.ts$/, ""), String(this.k).padStart(2, "0"));
     mkdirSync(join(this.dir, "shots"), { recursive: true });
+    const I = fileInfo(this.file);
+    this.live.file(this.file, I.suite, I.tests.length, reportRoot());
+    this.live.test(this.k, this.k === 0 ? "setting up" : (I.tests[this.k - 1] ?? `test ${this.k}`), this.dir);
+    this.live.write();
     this.wall0 = Date.now();
     this.sim0 = null;
     this.fps = [];
@@ -181,6 +193,8 @@ class Recorder {
     this.inTest = false;
     if (!this.enabled || !this.dir) return;
     await this.pull();
+    this.live.ended(this.k, fileInfo(this.file).tests[this.k - 1] ?? `test ${this.k}`, Math.round((Date.now() - this.wall0) / 100) / 10);
+    this.live.write();
     const page = this.page;
     if (page) {
       const g = await page.js("window.__e2e?.graphs()").catch(() => null);
@@ -248,6 +262,15 @@ class Recorder {
         "events.jsonl",
         events.map((e) => ({ ...e, wall: Date.now() - this.wall0 })),
       );
+      this.live.drained(d.S, d.F, events);
+      // (a picture asked for by a watcher — small, the page's own pixels, the banner with them)
+      if (this.live.peekWanted()) {
+        const shot = await page.cdp
+          .send<{ data: string }>("Page.captureScreenshot", { format: "jpeg", quality: 60, optimizeForSpeed: true }, 10)
+          .catch(() => null);
+        if (shot) this.live.peeked(Buffer.from(shot.data, "base64"));
+      }
+      this.live.write();
     });
     return this.chain;
   }
@@ -255,8 +278,10 @@ class Recorder {
   /** The process ends: the last record closed (a file whose last test had no afterEach, a crash). */
   async close() {
     if (this.timer) clearInterval(this.timer);
-    this.timer = null;
+    if (this.liveTimer) clearInterval(this.liveTimer);
+    this.timer = this.liveTimer = null;
     if (this.dir && existsSync(this.dir)) this.summary();
+    this.live.remove();
   }
 }
 

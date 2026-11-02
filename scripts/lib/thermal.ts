@@ -5,6 +5,7 @@
 //
 //   thermalNow()           the latest snapshot, briefly (null: none, or older than 30 s)
 //   thermalWindow(t0, t1)  the history between two instants (ms): pressure counts, the GPU's clock and heat
+//   thermalSeries(min)     the last minutes as a chart's series (bucketed means, the worst pressure)
 //   thermalLine(b)         one line for a human; thermalWarning(b): what makes a measure doubtful, or null
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir, hostname } from "node:os";
@@ -15,7 +16,7 @@ export const THERMAL_LATEST = join(THERMAL_DIR, "latest.json");
 export const THERMAL_LOG = join(THERMAL_DIR, "history.jsonl");
 /** the root daemon's powermetrics samples (tools/mac-thermal/service/install-root.sh) */
 export const THERMAL_FEED = "/var/run/kerr-thermal/powermetrics.txt";
-const PRESSURES = ["Nominal", "Moderate", "Heavy", "Trapping", "Sleeping"];
+export const PRESSURES = ["Nominal", "Moderate", "Heavy", "Trapping", "Sleeping"];
 
 export interface ThermalBrief {
   host: string;
@@ -68,6 +69,7 @@ type Snap = {
 const host = () => hostname().replace(/\.local$/, "");
 const v = (s: Snap, id: string) => s.metrics[id]?.value ?? null;
 const r1 = (x: number | null) => (x === null ? null : Math.round(x * 10) / 10);
+const celsius = (x: number | null) => (x === null || x <= 0 ? null : r1(x));
 
 /** A snapshot (the toolkit's schema 2) → the figures that matter for a measure. */
 export function brief(s: Snap, now = Date.now(), name = host()): ThermalBrief {
@@ -85,8 +87,9 @@ export function brief(s: Snap, now = Date.now(), name = host()): ThermalBrief {
     gpuMaxMHz: max,
     gpuOfMaxPct: mhz !== null && max ? Math.round((100 * mhz) / max) : null,
     gpuBusyPct: r1(v(s, "gpu.active_percent") ?? v(s, "gpu.scaled_percent")),
-    gpuTempC: r1(v(s, "gpu.temperature_c")),
-    cpuTempC: r1(v(s, "cpu.temperature_c")),
+    // (≤ 0 °C: no sensor — macmon's 0 on the M1's GPU, in samples written before the toolkit nulled it)
+    gpuTempC: celsius(v(s, "gpu.temperature_c")),
+    cpuTempC: celsius(v(s, "cpu.temperature_c")),
     gpuW: r1(v(s, "gpu.power_w") ?? v(s, "gpu.macmon_power_w")),
     sysW: r1(v(s, "system.power_w")),
     feed: s.sources?.powermetrics?.status === "available",
@@ -169,6 +172,65 @@ function windowOf(S: Snap[], t1: number): ThermalWindow | null {
     gpuW: gw.length ? { median: median(gw), max: Math.max(...gw) } : null,
     feed: B.some((b) => b.feed),
   };
+}
+
+/** A series for a chart: one point per bucket, [ms since the epoch, worst pressure (0 Nominal … 4 Sleeping, -1
+ *  unknown), GPU MHz, % of its max, GPU busy %, GPU °C, CPU °C, GPU W, system W] — the means of the bucket's samples. */
+export type ThermalPoint = [
+  number,
+  number,
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+  number | null,
+];
+export interface ThermalSeries {
+  host: string;
+  gpuMaxMHz: number | null;
+  /** powermetrics' figures in it (the root feed ran) */
+  feed: boolean;
+  points: ThermalPoint[];
+}
+
+/** This machine's last minutes as a series of at most maxPoints buckets (null without samples). */
+export function thermalSeries(minutes = 15, maxPoints = 90, now = Date.now()): ThermalSeries | null {
+  try {
+    const t0 = now - minutes * 60_000;
+    const S = thermalSamples(t0, now);
+    if (!S.length) return null;
+    const span = (minutes * 60_000) / maxPoints;
+    const buckets = new Map<number, ThermalBrief[]>();
+    for (const s of S) {
+      const i = Math.floor((Date.parse(s.timestamp) - t0) / span);
+      let b = buckets.get(i);
+      if (!b) buckets.set(i, (b = []));
+      b.push(brief(s, now));
+    }
+    const mean = (B: ThermalBrief[], f: (b: ThermalBrief) => number | null) => {
+      const v = B.map(f).filter((x): x is number => x !== null);
+      return v.length ? Math.round((10 * v.reduce((a, b) => a + b, 0)) / v.length) / 10 : null;
+    };
+    const points: ThermalPoint[] = [...buckets.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([i, B]) => [
+        Math.round(t0 + (i + 0.5) * span),
+        Math.max(-1, ...B.map((b) => (b.pressure ? PRESSURES.indexOf(b.pressure) : -1))),
+        mean(B, (b) => b.gpuMHz),
+        mean(B, (b) => b.gpuOfMaxPct),
+        mean(B, (b) => b.gpuBusyPct),
+        mean(B, (b) => b.gpuTempC),
+        mean(B, (b) => b.cpuTempC),
+        mean(B, (b) => b.gpuW),
+        mean(B, (b) => b.sysW),
+      ]);
+    const last = brief(S[S.length - 1]!, now);
+    return { host: host(), gpuMaxMHz: last.gpuMaxMHz, feed: last.feed, points };
+  } catch {
+    return null;
+  }
 }
 
 /** One line: "Heavy · GPU 555/1296 MHz (43 %) busy 98 % · GPU 84 °C CPU 83 °C · GPU 10.4 W · sys 42 W". */

@@ -5,7 +5,9 @@
 //   - the flight lab's campaigns (scripts/flightlab.ts registers each in ~/.kerr-lab/runs/): the scenario
 //     flying, its progress, the latest sample — asked of their control servers;
 //   - the remote runner's jobs (scripts/remote-runner.ts: running, queued);
-//   - the test runs (bun test).
+//   - the test runs (bun test), and what each e2e is doing now (tests/e2e/lib/live.ts: its file, its test, the
+//     craft, the frame rate);
+//   - its heat (docs/THERMAL.md): the latest snapshot and the last 15 minutes as a series.
 //
 //   bun scripts/lab-monitor.ts                 every machine, once
 //   bun scripts/lab-monitor.ts --host kerr-pc  this Mac and that one only
@@ -14,12 +16,13 @@
 //   bun scripts/lab-monitor.ts --json          the state as JSON (what the other machines answer over ssh)
 //   bun scripts/lab-monitor.ts --sweep         and the orphan Chromes ended (a dead process's, still rendering)
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { homedir, hostname } from "node:os";
+import { cpus, homedir, hostname } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { holder, LAB_DIR, orphanChromes, waiters } from "./lib/chrome-lock";
 import { HOSTS, type LabHost, labHost, remoteCommand, takeHost } from "./lib/lab-hosts";
 import { alive, orphaned, processes, WINDOWS } from "./lib/procs";
-import { type ThermalBrief, thermalLine, thermalNow, thermalWarning } from "./lib/thermal";
+import { type E2eLive, liveE2e } from "../tests/e2e/lib/live";
+import { type ThermalBrief, type ThermalSeries, thermalLine, thermalNow, thermalSeries, thermalWarning } from "./lib/thermal";
 
 const argv = process.argv.slice(2);
 const only = takeHost(argv);
@@ -54,6 +57,12 @@ interface State {
   orphans: { pid: number; elapsed: string; what: string }[];
   /** its heat (docs/THERMAL.md; null: no thermal service there) */
   thermal?: ThermalBrief | null;
+  /** its heat's last 15 minutes (null: no thermal service) */
+  heat?: ThermalSeries | null;
+  /** what each e2e process is doing now (tests/e2e/lib/live.ts) */
+  e2e?: E2eLive[];
+  /** the machine: its chip, its cores */
+  machine?: { chip: string; cores: number };
 }
 
 /** A process's working directory (whose worktree it runs in) — none on Windows: no lsof there. */
@@ -128,6 +137,9 @@ async function local(): Promise<State> {
     tests,
     orphans,
     thermal: WINDOWS ? null : thermalNow(),
+    heat: WINDOWS ? null : thermalSeries(15, 90),
+    e2e: liveE2e(alive),
+    machine: { chip: cpus()[0]?.model?.trim() ?? "?", cores: cpus().length },
   };
 }
 
@@ -166,6 +178,18 @@ const age = (since: number) => {
       ? `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`
       : `${s}s`;
 };
+/** A unicode sparkline of a series (nulls as gaps). */
+const spark = (v: (number | null)[]) => {
+  const xs = v.filter((x): x is number => x !== null);
+  if (!xs.length) return "";
+  const lo = Math.min(...xs);
+  const hi = Math.max(...xs);
+  return (
+    v.map((x) => (x === null ? " " : "▁▂▃▄▅▆▇█"[Math.min(7, Math.floor(((x - lo) / (hi - lo || 1)) * 8))])).join("") +
+    ` ${Math.round(lo)}–${Math.round(hi)}`
+  );
+};
+const fmtNum = (x: number) => (Math.abs(x) >= 100 ? Math.round(x).toLocaleString("en") : String(Math.round(x * 10) / 10));
 const where = (cwd = "") => {
   if (!cwd) return "";
   const w = cwd.match(/worktrees\/(agent-[0-9a-f]{6})/)?.[1];
@@ -185,6 +209,12 @@ function show(s: State | string, title: string) {
   for (const w of s.waiting) console.log(`    waiting: pid ${w.pid} · ${w.label} · ${where(w.cwd)} · ${age(w.since)}`);
   if (s.thermal !== undefined && !(s.thermal === null && /pc|win/i.test(title))) {
     console.log(`  Heat: ${thermalLine(s.thermal ?? null)}`);
+    // (30 columns: every third bucket's)
+    const P = (s.heat?.points ?? []).filter((_, i, a) => (a.length - 1 - i) % 3 === 0);
+    if (P.length > 2)
+      console.log(
+        `    15 min  GPU MHz ${spark(P.map((p) => p[2]))}  GPU °C ${spark(P.map((p) => p[5]))}  pressure ${P.map((p) => " ▁▄▆█"[p[1] + 1] ?? "?").join("")}`,
+      );
     const w = thermalWarning(s.thermal ?? null);
     if (w) console.log(`    ⚠ ${w}`);
   }
@@ -210,6 +240,19 @@ function show(s: State | string, title: string) {
   }
   for (const j of s.jobs) console.log(`  job ${j.state}: ${j.id} · ${j.cmd.slice(0, 90)}${j.started ? ` · ${age(j.started)}` : ""}`);
   for (const o of s.orphans ?? []) console.log(`  ⚠ orphan pid ${o.pid} ${o.elapsed}: ${o.what}`);
+  for (const e of s.e2e ?? []) {
+    const fileS = (Date.now() - e.fileStart) / 1000;
+    const late = e.estimateS && fileS > e.estimateS * 1.5 ? "  ⚠ over its usual time" : "";
+    const held = Date.now() - e.pageAt > 20_000 ? ` · page busy ${age(e.pageAt)}` : "";
+    console.log(
+      `  e2e ${e.file.replace(/\.e2e\.test\.ts$/, "")} · test ${e.k}/${e.n || "?"} “${e.test.slice(0, 70)}” · ${age(e.testStart)} (file ${age(e.fileStart)}${e.estimateS ? ` / ~${Math.round(e.estimateS)}s` : ""})${held}${late}`,
+    );
+    const c = e.craft;
+    if (c)
+      console.log(
+        `      ${[c.vessel, c.label ?? c.mode, c.body].filter(Boolean).join(" · ")}${c.altKm !== null ? ` · ${fmtNum(c.altKm)} km` : ""}${c.v !== null ? ` · ${fmtNum(c.v)} m/s` : ""}${c.auto ? ` · auto ${c.auto}` : ""}${c.hub ? ` · ${c.hub}${c.phase ? `/${c.phase}` : ""}` : ""}${e.fps !== null ? ` · ${e.fps} fps` : ""}${e.errors ? ` · ${e.errors} page errors` : ""}`,
+      );
+  }
   for (const t of s.tests) console.log(`  test pid ${t.pid} ${t.elapsed}${t.cwd ? ` · ${where(t.cwd)}` : ""}: ${t.cmd}`);
   console.log("");
 }
