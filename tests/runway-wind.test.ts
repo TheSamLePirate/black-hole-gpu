@@ -18,7 +18,7 @@ test("the other end: the far threshold of the strip drawn, landed back down it",
   const d = B.map((v, i) => v - r.origin[i]!);
   const along = d[0]! * r.along[0] + d[1]! * r.along[1] + d[2]! * r.along[2];
   const across = d[0]! * r.across[0] + d[1]! * r.across[1] + d[2]! * r.across[2];
-  expect(Math.abs(along - RUNWAY_LENGTH)).toBeLessThan(0.05);
+  expect(Math.abs(along - (edwards.len ?? RUNWAY_LENGTH))).toBeLessThan(0.05);
   expect(Math.abs(across)).toBeLessThan(0.05);
   // (its heading the opposite, turned by the meridians' convergence over 4.5 km: a few hundredths of a degree)
   const turn = ((((b.rwy! - edwards.rwy! - 180) % 360) + 540) % 360) - 180;

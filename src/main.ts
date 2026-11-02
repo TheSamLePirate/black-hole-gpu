@@ -9067,7 +9067,7 @@ async function main() {
               orbit: status.orbit ? { apKm: status.orbit.apKm, peKm: status.orbit.peKm } : null,
               entry: camera.entryRun?.phase ?? null,
               site: camera.entryRun?.site?.name ?? null,
-              final: rv ? { rwy: rv.rwy, wind: rv.wind ? { from: rv.wind.from, u10: rv.wind.u10 } : null } : null,
+              final: rv ? { rwy: rv.rwy, des: rv.des, wind: rv.wind ? { from: rv.wind.from, u10: rv.wind.u10 } : null } : null,
               plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
               stopped: !!camera.ourLanded && !camera.rolling,
               docked: !!info.links.length,

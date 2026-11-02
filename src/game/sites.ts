@@ -22,27 +22,113 @@ export interface Site {
   /** a runway's level [m above the sea]: the strip and its airfield graded flat there (the median of the real
    * relief under them — Terrarium's tiles, which carry the trees and the roofs: never a runway's own figure) */
   elev?: number;
-  /** a world runway's length [m] (OurAirports' — PLAN-RADAR-AAA RD13; the sites': RUNWAY_LENGTH) */
+  /** the runway's length [m] (OurAirports' — the world's runways, PLAN-RADAR-AAA RD13, and the game's sites'; RUNWAY_LENGTH
+   *  when not given) */
   len?: number;
+  /** the runway's half width [m] (OurAirports' width over 2; RUNWAY_HALF_WIDTH when not given) */
+  hw?: number;
+  /** the published designations [this end's, the other end's] (OurAirports' end names: "23L", "05R"): a runway's number
+   *  is its magnetic heading's — its true heading's tens may differ by one */
+  des?: readonly [string, string];
 }
 
 export const SITES: Site[] = [
+  // (the Earth's: each on a real runway — OurAirports' (assets/runways/v1, public domain): the threshold of the end the game
+  // lands on, its true heading, its length and half width, its level the mean of its ends' [m above the sea]. Until 2 Nov
+  // 2026 they were placed by hand — Le Bourget's "27" 600 m off, 4.5 km long over the Parc Georges-Valbon's trees, Kennedy's
+  // threshold at the field's middle, Edwards 18° off —; the spaceports without a runway of their own take the nearest real
+  // one: Kourou Cayenne–Félix-Éboué's, Tanegashima the island's airport's)
   {
     body: "earth",
     name: "Kennedy Space Center, Shuttle Landing Facility",
-    lat: 28.615,
-    lon: -80.695,
+    lat: 28.6328,
+    lon: -80.7061,
     runway: true,
     rwy: 150,
     icao: "KTTS",
-    elev: 2,
+    elev: 3,
+    len: 4572,
+    hw: 45.5,
+    des: ["15", "33"],
   },
-  { body: "earth", name: "Edwards Air Force Base", lat: 34.905, lon: -117.884, runway: true, rwy: 220, icao: "KEDW", elev: 699 },
-  { body: "earth", name: "Kourou, Guiana Space Centre", lat: 5.24, lon: -52.77, runway: true, rwy: 70, icao: "SOCA", elev: 10 },
-  { body: "earth", name: "Baikonur, Yubileyniy", lat: 46.0, lon: 63.3, runway: true, rwy: 60, icao: "UAOO", elev: 105 },
-  { body: "earth", name: "Paris – Le Bourget", lat: 48.96, lon: 2.44, runway: true, rwy: 270, icao: "LFPB", elev: 43 },
-  { body: "earth", name: "Tanegashima", lat: 30.4, lon: 130.97, runway: true, rwy: 340, icao: "RJFG", elev: 23 },
-  { body: "earth", name: "Woomera", lat: -31.16, lon: 136.8, runway: true, rwy: 0, icao: "YPWR", elev: 158 },
+  {
+    body: "earth",
+    name: "Edwards Air Force Base",
+    lat: 34.91886,
+    lon: -117.85738,
+    runway: true,
+    rwy: 238,
+    icao: "KEDW",
+    elev: 699,
+    len: 5120,
+    hw: 45.5,
+    des: ["23L", "05R"],
+  },
+  {
+    body: "earth",
+    name: "Kourou – Cayenne-Félix-Éboué",
+    lat: 4.81378,
+    lon: -52.3735,
+    runway: true,
+    rwy: 65.3,
+    icao: "SOCA",
+    elev: 6.5,
+    len: 3196,
+    hw: 22.5,
+    des: ["08", "26"],
+  },
+  {
+    body: "earth",
+    name: "Baikonur, Yubileyniy",
+    lat: 46.0423,
+    lon: 63.22393,
+    runway: true,
+    rwy: 60,
+    icao: "UAOO",
+    elev: 100,
+    len: 4500,
+    hw: 42,
+    des: ["06", "24"],
+  },
+  {
+    body: "earth",
+    name: "Paris – Le Bourget",
+    lat: 48.974,
+    lon: 2.45825,
+    runway: true,
+    rwy: 249,
+    icao: "LFPB",
+    elev: 51,
+    len: 3000,
+    hw: 22.5,
+    des: ["25", "07"],
+  },
+  {
+    body: "earth",
+    name: "Tanegashima – New Tanegashima Airport",
+    lat: 30.6001,
+    lon: 131.0,
+    runway: true,
+    rwy: 302.7,
+    icao: "RJFG",
+    elev: 234,
+    len: 1995,
+    hw: 22.5,
+    des: ["31", "13"],
+  },
+  {
+    body: "earth",
+    name: "Woomera",
+    lat: -31.1564,
+    lon: 136.811,
+    runway: true,
+    rwy: 6,
+    icao: "YPWR",
+    elev: 165.5,
+    len: 2372,
+    hw: 22.5,
+    des: ["36", "18"],
+  },
   { body: "mars", name: "Jezero crater", lat: 18.44, lon: 77.45 },
   { body: "mars", name: "Gale crater", lat: -5.4, lon: 137.8 },
   { body: "mars", name: "Utopia Planitia", lat: 47.6, lon: 118.0 },
@@ -110,9 +196,15 @@ export function runwayFrame(s: Site, len = RUNWAY_LENGTH, halfWidth = RUNWAY_HAL
   const across = north.map((n, i) => -n * Math.sin(h) + east[i]! * Math.cos(h)) as [number, number, number];
   return { site: s, p, along, across, origin: geodeticToCart(WGS84_A, WGS84_F, la, lo, 0), elev: s.elev ?? 0, len, halfWidth, flags };
 }
+/** A runway's designation as written on it and spoken: its published one when known, else its heading's tens (2 digits). */
+export function runwayDesignation(s: { rwy?: number; des?: readonly string[] }): string {
+  return s.des?.[0] ?? String(Math.round(((((s.rwy ?? 0) % 360) + 360) % 360) / 10) % 36 || 36).padStart(2, "0");
+}
 /** The game's own runways (the eight sites — their lights, ILS, procedures, buildings): fixed. */
+// (their own length and width; real airfields — 16: no made-up taxiway, apron, terminal or windsock, their scenery's buildings
+// instead, the relief levelled under the strip alone —, lit — 32)
 const SITE_RUNWAYS: RunwayFrame[] = SITES.filter((s) => s.body === "earth" && s.runway).map((s) =>
-  runwayFrame(s, RUNWAY_LENGTH, RUNWAY_HALF_WIDTH, 32),
+  runwayFrame(s, s.len ?? RUNWAY_LENGTH, s.hw ?? RUNWAY_HALF_WIDTH, 16 | 32),
 );
 /** The Earth's runways graded and drawn: the sites', then the world's near the eye (setWorldRunways). */
 export const EARTH_RUNWAYS: RunwayFrame[] = [...SITE_RUNWAYS];
@@ -152,7 +244,9 @@ export function runwayGrade(q: [number, number, number]): Grade {
     // (a world runway whose level is being measured: the relief under it read bare)
     if (r.world?.measuring) continue;
     const d = point.map((v, i) => v - r.origin[i]!) as [number, number, number];
-    if (Math.abs(d[0]) > 8000 || Math.abs(d[1]) > 8000 || Math.abs(d[2]) > 8000 || Math.hypot(...d) > 8000) continue;
+    // (nothing graded beyond 3.3 km past either end nor 620 m aside: the cut from the threshold grows with the strip's length)
+    const cut = r.len + 3400;
+    if (Math.abs(d[0]) > cut || Math.abs(d[1]) > cut || Math.abs(d[2]) > cut || Math.hypot(...d) > cut) continue;
     const a = d[0] * r.along[0] + d[1] * r.along[1] + d[2] * r.along[2];
     const c = Math.abs(d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2]);
     // (the clear zone 3 km before either threshold: a runway lands both ways — W4)
@@ -206,7 +300,14 @@ export function reciprocal(s: Site): Site {
   const back = along.map((x) => -x);
   const hd =
     Math.atan2(back[0]! * eB[0]! + back[1]! * eB[1]! + back[2]! * eB[2]!, back[0]! * nB[0]! + back[1]! * nB[1]! + back[2]! * nB[2]!) / D;
-  return { ...s, lat: g.lat / D, lon: g.lon / D, rwy: ((hd % 360) + 360) % 360, reverse: !s.reverse };
+  return {
+    ...s,
+    lat: g.lat / D,
+    lon: g.lon / D,
+    rwy: ((hd % 360) + 360) % 360,
+    reverse: !s.reverse,
+    des: s.des ? [s.des[1], s.des[0]] : undefined,
+  };
 }
 
 /**

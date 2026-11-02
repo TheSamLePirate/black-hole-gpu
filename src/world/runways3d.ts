@@ -27,9 +27,15 @@ const kept = new Map<string, { frame: RunwayFrame; born: number; measured: numbe
 const keyOf = (f: Airfield, w: Runway) => `${f.ident}:${w.le}/${w.he}`;
 
 /** The game's sites' fields (no world twin drawn over them): their codes, their places. */
+// (a game site's airfield: its weather station's code — not always the field's own: Baikonur's is Kyzylorda's — or within
+// 6 km of the site's threshold: its runways are the site's, not drawn twice)
 const siteNear = (f: Airfield) =>
   SITES.some(
-    (s) => s.body === "earth" && s.runway && (s.icao === f.icao || s.icao === f.ident) && Math.hypot(s.lat - f.lat, s.lon - f.lon) < 0.05,
+    (s) =>
+      s.body === "earth" &&
+      s.runway &&
+      (((s.icao === f.icao || s.icao === f.ident) && Math.hypot(s.lat - f.lat, s.lon - f.lon) < 0.05) ||
+        Math.hypot(s.lat - f.lat, (s.lon - f.lon) * Math.cos((s.lat * Math.PI) / 180)) < 0.055),
   );
 
 /** A world runway's frame: its le threshold, its heading, its length and half width, its surface and lights. */
@@ -41,6 +47,7 @@ function frameOf(f: Airfield, w: Runway): RunwayFrame {
     lon: w.lon1,
     runway: true,
     rwy: w.hdg,
+    des: [w.le, w.he],
     icao: f.icao || f.ident,
     elev: Math.round((w.elev1 + w.elev2) / 2),
   };

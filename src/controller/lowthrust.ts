@@ -1758,7 +1758,7 @@ function glideCard(this: CameraController, rw: RunwayView): HubInfo {
   }
   return {
     mode: "none",
-    title: `RWY ${String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`,
+    title: `RWY ${rw.des ?? String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`,
     phase: t("on the final — hand-flown, its profile the autopilot's"),
     rows,
     next: `→ ${tf("touchdown {0} m past the threshold", LANDING.td)}`,
@@ -2925,6 +2925,7 @@ function runwayBuild(this: CameraController): { v: RunwayView; geo: RunwayGeo } 
     len: L,
     name: site.name.split(",")[0]!,
     rwy: site.rwy ?? 0,
+    des: site.des?.[0],
     along: sAl,
     across: xt,
     agl,

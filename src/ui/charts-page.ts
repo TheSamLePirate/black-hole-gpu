@@ -82,7 +82,7 @@ export class ChartsPage {
     }
     const p = procedureFor(site);
     const runway = p.kind === "runway";
-    const num = runway ? String(Math.round(p.rwy! / 10) % 36 || 36).padStart(2, "0") : "";
+    const num = runway ? (p.des ?? String(Math.round(p.rwy! / 10) % 36 || 36).padStart(2, "0")) : "";
     const head = el("div", "ch-head");
     head.dataset.testid = "charts-head";
     head.append(

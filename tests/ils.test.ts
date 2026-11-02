@@ -18,7 +18,16 @@ afterEach(() => resetFlights());
 
 const D = Math.PI / 180;
 const KEDW = SITES.find((s) => s.icao === "KEDW")!;
-const W: IlsRunway = { name: KEDW.name, icao: "KEDW", lat: KEDW.lat, lon: KEDW.lon, hdg: KEDW.rwy!, elev: KEDW.elev!, len: RUNWAY_LENGTH };
+const W: IlsRunway = {
+  name: KEDW.name,
+  icao: "KEDW",
+  lat: KEDW.lat,
+  lon: KEDW.lon,
+  hdg: KEDW.rwy!,
+  elev: KEDW.elev!,
+  len: KEDW.len ?? RUNWAY_LENGTH,
+  des: KEDW.des?.[0],
+};
 
 test("the needles: centred on the path, a dot off each way; the fixes on the axis", () => {
   // (a height over the threshold's level plane: over the sea, the Earth's curve added)
@@ -32,16 +41,16 @@ test("the needles: centred on the path, a dot off each way; the fixes on the axi
   expect(Math.abs(r0.gs)).toBeLessThan(0.05);
   expect(r0.locIn && r0.gsIn).toBe(true);
   // (right of the course: the needle left; low: the glideslope above — fly up)
-  const toLoc = RUNWAY_LENGTH + ILS.locBeyond + 9300;
+  const toLoc = W.len + ILS.locBeyond + 9300;
   const r1 = ilsReading(W, at(-9300, Math.tan(ILS.locDot * D) * toLoc, onPath(-9300) - Math.tan(ILS.gsDot * D) * 9600));
   expect(r1.loc).toBeCloseTo(-1, 1);
   expect(r1.gs).toBeCloseTo(1, 1);
-  expect(runwayId(W.hdg)).toBe("22");
+  expect(runwayId(W.hdg, W.des)).toBe("23L");
   const [iaf, faf] = arrivalFixes(W);
-  expect(iaf!.name).toBe("IAF22");
+  expect(iaf!.name).toBe("IAF23L");
   expect(onRunway(W, { ...iaf!, alt: iaf!.alt }).along).toBeCloseTo(-ILS.iaf, -1);
   expect(faf!.alt - W.elev).toBeCloseTo(onPath(-ILS.faf), 0);
-  expect(onRunway(W, { ...departureFix(W), alt: 0 }).along).toBeCloseTo(RUNWAY_LENGTH + 6000, -1);
+  expect(onRunway(W, { ...departureFix(W), alt: 0 }).along).toBeCloseTo(W.len + 6000, -1);
 });
 
 /** The desert at Edwards's level (the relief's tiles are the browser's: headless, a flat plain at the runway's). */
@@ -71,7 +80,7 @@ test("flown from 30 km off: the localizer, the glideslope, the gear, minimums, t
   const radio: string[] = [];
   c.onRadio = (s) => radio.push(s);
   c.s.weather = "fair";
-  expect(c.ilsStart("KEDW")).toMatch(/ILS approach: KEDW 22/);
+  expect(c.ilsStart("KEDW")).toMatch(/ILS approach: KEDW 23L/);
   const t = fly(600, () => {
     const R = c.ilsRun;
     if (process.env.TRACE && R && (R.phase === "flare" || R.phase === "final" || R.phase === "rollout")) {
@@ -149,15 +158,15 @@ test("a flight plan to Edwards with its procedures: LNAV to the initial fix, the
     { name: "KEDW", lat: KEDW.lat, lon: KEDW.lon, field: { icao: "KEDW", elev: KEDW.elev!, rwy: KEDW.rwy } },
   ];
   c.routeChanged();
-  expect(c.routeProcedures()).toBe("Procedures: IAF22, FAF22");
-  expect(c.nav.route.wps.map((w) => w.name)).toEqual(["HERE", "IAF22", "FAF22", "KEDW"]);
+  expect(c.routeProcedures()).toBe("Procedures: IAF23L, FAF23L");
+  expect(c.nav.route.wps.map((w) => w.name)).toEqual(["HERE", "IAF23L", "FAF23L", "KEDW"]);
   c.navToggle("both");
   const toIls = fly(600, () => !!c.ilsRun);
   const t = fly(600, () => !c.ilsRun);
   console.log(
     `  the ILS from the plan after ${toIls.toFixed(0)} s, down ${t.toFixed(0)} s later: ${c.ilsLast?.score}/20, ${c.ilsLast?.touch?.along.toFixed(0)} m in`,
   );
-  expect(c.ilsLast?.rwy).toBe("KEDW 22");
+  expect(c.ilsLast?.rwy).toBe("KEDW 23L");
   expect(c.ilsLast!.touch!.along).toBeLessThan(900);
 }, 300_000);
 

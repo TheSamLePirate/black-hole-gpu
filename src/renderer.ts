@@ -62,7 +62,7 @@ import {
 import { MarineFeed, type SeaState, windSea } from "./sea/marine";
 import { forestSource } from "./forest-shader";
 import { lampsOf } from "./cockpit/lights";
-import { EARTH_RUNWAYS, landingEnd, RUNWAY_LENGTH, runwayGrade, runwayPaved } from "./game/sites";
+import { EARTH_RUNWAYS, landingEnd, runwayGrade, runwayPaved } from "./game/sites";
 import {
   bodyAxes,
   daysOf,
@@ -190,8 +190,9 @@ const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
     lat: r.site.lat,
     lon: r.site.lon,
     heading: r.site.rwy ?? 0,
-    length: RUNWAY_LENGTH,
-    halfWidth: 340,
+    // (the strip alone and 40 m — the sites are real airfields now, their own length and width: no made-up apron)
+    length: r.len,
+    halfWidth: r.halfWidth + 40,
   })),
   // (the landscapes' viewpoints: no procedural tree where the photographer stood — the Cuernos del Paine's
   // forest grew on the lookout and hid the massif)
@@ -3832,8 +3833,11 @@ export class Renderer {
       // (the lights' clock — their flashes, wall time — and the visibility there: under 3 km, fully up by day;
       // the published ends' designations, by twos, 37 to a place — A2)
       const des = [0, 1, 2, 3].map((k) => {
-        const r = near[k]?.r.site.rwy;
-        return r === undefined ? 0 : Math.round(r / 10) % 36 || 36;
+        const site = near[k]?.r.site;
+        if (!site || site.rwy === undefined) return 0;
+        // (the published number's digits — its letter, L/C/R, not painted —, else the heading's tens)
+        const n = Number.parseInt(site.des?.[0] ?? "", 10);
+        return Number.isFinite(n) && n > 0 && n <= 36 ? n : Math.round(site.rwy / 10) % 36 || 36;
       });
       out.set(
         [

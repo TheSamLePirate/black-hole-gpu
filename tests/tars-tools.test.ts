@@ -634,7 +634,7 @@ test("place_ship by a place's name: a runway exactly, an address through the Atl
       land: (b: string, la: number, lo: number) => `land ${b} ${la} ${lo}`,
       walk: (b: string, la: number, lo: number) => `walk ${b} ${la} ${lo}`,
       orbitOver: (b: string, la: number, lo: number, o: { altKm?: number }) => `over ${b} ${la} ${lo} ${o.altKm}`,
-      lineUp: (n: string, m: number) => `lineup ${n} ${m}`,
+      lineUp: (n: string | { name: string }, m: number) => `lineup ${typeof n === "string" ? n : n.name} ${m}`,
       flyAt: (la: number, lo: number, agl: number, hdg: number, v: number, b: string) => `fly ${b} ${la} ${lo} ${agl} ${hdg} ${v}`,
     },
     atlas: {
@@ -666,7 +666,7 @@ test("place_ship by a place's name: a runway exactly, an address through the Atl
     "Edwards Air Force Base: placed: lineup Edwards Air Force Base 300",
   );
   expect(String(await run({ mode: "fly", query: "KEDW", aglM: 900, headingDeg: 220, speedMs: 180 }))).toContain(
-    "fly earth 34.905 -117.884 900 220 180",
+    "fly earth 34.91886 -117.85738 900 220 180",
   );
   expect(searched).toEqual(["Tour Eiffel|", "Tour Eiffel|", "Tour Eiffel|"]);
   // (nothing by that name: said, nothing saved nor moved)

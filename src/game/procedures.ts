@@ -24,6 +24,8 @@ export interface Procedure {
   kind: "runway" | "pad";
   /** the runway end's heading [°] (a pad: none) */
   rwy: number | null;
+  /** the runway end's published designation (23L), when known */
+  des?: string;
   /** the runway's length [m] (a world runway's own — PLAN-RADAR-AAA RD13) */
   len?: number;
   fixes: Fix[];
@@ -76,6 +78,7 @@ export function procedureFor(site: Site): Procedure {
     return {
       kind: "runway",
       rwy: site.rwy,
+      des: site.des?.[0],
       len: site.len ?? RUNWAY_LENGTH,
       fixes: [
         { id: "IAF", along: -25000, across: 0, h: Math.round(finalGate(25e3)) },

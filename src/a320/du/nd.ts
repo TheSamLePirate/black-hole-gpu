@@ -487,7 +487,7 @@ export class Nd extends Display {
       ctx.stroke();
     }
     // (the ILS's name, course and DME, at the top right)
-    text(ctx, I ? I.id.replace(/^ILS \d\d\s*/, "ILS ") : "ILS1", 1010, 40, 28, COL.magenta, "right");
+    text(ctx, I ? I.id.replace(/^ILS \d\d[LCR]?\s*/, "ILS ") : "ILS1", 1010, 40, 28, COL.magenta, "right");
     text(ctx, `CRS ${String(((crs % 360) + 360) % 360).padStart(3, "0")}°`, 1010, 76, 28, COL.magenta, "right");
     if (I) text(ctx, `DME ${I.dme.toFixed(1)}`, 1010, 112, 28, COL.magenta, "right");
   }

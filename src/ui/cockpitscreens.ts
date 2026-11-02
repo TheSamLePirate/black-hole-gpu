@@ -940,7 +940,7 @@ export class CockpitScreens {
    * the distance, the offset, the height over the ground.
    */
   private approachScreen(g: OffscreenCanvasRenderingContext2D, rw: RunwayView) {
-    this.frame(g, `APPROACH · RWY ${String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")}`);
+    this.frame(g, `APPROACH · RWY ${rw.des ?? String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")}`);
     // the plan view: the threshold low, the runway up the screen, the craft below it (clipped under the
     // title)
     const cx = SLOT / 2,

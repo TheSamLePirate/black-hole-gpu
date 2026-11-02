@@ -27,7 +27,7 @@ export interface CapcomInput {
   entry: string | null;
   site: string | null;
   /** on a runway's final, its heading [°] and the wind there (from [°], speed [m/s]) */
-  final: { rwy: number; wind: { from: number; u10: number } | null } | null;
+  final: { rwy: number; des?: string; wind: { from: number; u10: number } | null } | null;
   /** the entry's plasma 0…1 (the director's measure: the air's heating) */
   plasma: number;
   /** stopped on the ground (not rolling) */
@@ -132,7 +132,7 @@ export class Capcom {
     // the tower on the final: the runway, the wind, cleared to land
     if (i.final && !this.finalSaid && i.site) {
       this.finalSaid = true;
-      const rwy = String(Math.round(i.final.rwy / 10) % 36 || 36).padStart(2, "0");
+      const rwy = i.final.des ?? String(Math.round(i.final.rwy / 10) % 36 || 36).padStart(2, "0");
       const w = i.final.wind;
       const wind =
         !w || w.u10 < 1.5

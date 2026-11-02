@@ -43,10 +43,13 @@ export interface IlsRunway {
   hdg: number;
   elev: number;
   len: number;
+  /** its published designation (OurAirports' end name: 23L), when known */
+  des?: string;
 }
 
-/** The runway's number (its heading's tens: 087° → 09). */
-export const runwayId = (hdg: number) => String(Math.round((((hdg % 360) + 360) % 360) / 10) || 36).padStart(2, "0");
+/** The runway's number: its published designation when known (23L — the magnetic heading's, not the true one's), else its
+ *  heading's tens (087° → 09). */
+export const runwayId = (hdg: number, des?: string) => des ?? String(Math.round((((hdg % 360) + 360) % 360) / 10) || 36).padStart(2, "0");
 
 /** A place on the runway's frame: along its axis from the threshold [m] (> 0 down the runway), across it (> 0 to its
  *  right), over its threshold [m]. */
@@ -347,14 +350,14 @@ export function ilsStep(
 /** The arrival's fixes before a runway (the initial and final fixes on its axis, their heights on the glideslope) and
  *  the departure's after it (6 km down the runway's heading, 900 m over it) — for a flight plan. */
 export function arrivalFixes(R: IlsRunway): { name: string; lat: number; lon: number; alt: number }[] {
-  const id = runwayId(R.hdg);
+  const id = runwayId(R.hdg, R.des);
   return [
     { name: `IAF${id}`, ...fromRunway(R, -ILS.iaf, 0), alt: R.elev + Math.max(gsHeight(-ILS.iaf), 600) },
     { name: `FAF${id}`, ...fromRunway(R, -ILS.faf, 0), alt: R.elev + gsHeight(-ILS.faf) },
   ];
 }
 export function departureFix(R: IlsRunway): { name: string; lat: number; lon: number; alt: number } {
-  return { name: `DEP${runwayId(R.hdg)}`, ...fromRunway(R, R.len + 6000, 0), alt: R.elev + 900 };
+  return { name: `DEP${runwayId(R.hdg, R.des)}`, ...fromRunway(R, R.len + 6000, 0), alt: R.elev + 900 };
 }
 
 /** A pass graded as an instructor would: the worst deviations below the final fix, the touchdown (in the zone —

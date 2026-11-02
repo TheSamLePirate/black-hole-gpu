@@ -183,11 +183,12 @@ test("runway grading measures physical metres along and across each WGS84 thresh
   for (const r of EARTH_RUNWAYS) {
     const at = (along: number, across: number) =>
       geodeticNormal(A, F, r.origin.map((v, i) => v + along * r.along[i]! + across * r.across[i]!) as Vec3);
+    // (each a real airfield — its own length and width: world grading, PLAN-RADAR-AAA RD13)
     expect(runwayWeight(at(0, 0))).toBe(1);
-    expect(runwayWeight(at(4500, 30))).toBeCloseTo(1, 7);
-    expect(runwayWeight(at(2000, 470))).toBeCloseTo(0.5, 4);
-    expect(runwayWeight(at(2000, 650))).toBe(0);
-    expect(runwayWeight(at(7900, 0))).toBe(0);
+    expect(runwayWeight(at(r.len, r.halfWidth - 1))).toBeCloseTo(1, 7);
+    expect(runwayWeight(at(r.len / 2, r.halfWidth + 200))).toBeCloseTo(0.5, 4);
+    expect(runwayWeight(at(r.len / 2, r.halfWidth + 330))).toBe(0);
+    expect(runwayWeight(at(r.len + 3400, 0))).toBe(0);
   }
 });
 

@@ -6222,10 +6222,11 @@ fn runwayGrade(g: vec3f) -> vec3f {
   var el = 0.0;
   for (var k = 0u; k < rwyCount(); k++) {
     let d = point - earthSurface(P.runways[1u + 4u * k].xyz);
-    if (dot(d, d) > 8000.0 * 8000.0) { continue; }
+    let L = P.runways[1u + 4u * k].w;
+    // (nothing graded beyond 3.3 km past either end nor 620 m aside: sites.ts runwayGrade's cut, the strip's length and 3.4 km)
+    if (dot(d, d) > (L + 3400.0) * (L + 3400.0)) { continue; }
     let a = dot(d, P.runways[2u + 4u * k].xyz);
     let c = abs(dot(d, P.runways[3u + 4u * k].xyz));
-    let L = P.runways[1u + 4u * k].w;
     let hw = P.runways[2u + 4u * k].w;
     // (a world runway — OurAirports', PLAN-RADAR-AAA RD13: runwayFlags 16 —: its own width, no made-up apron)
     let world = (runwayFlags(k) & 16u) != 0u;

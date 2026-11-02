@@ -1560,7 +1560,7 @@ function drawRunway(
   ctx.fillStyle = "rgba(4, 10, 18, 0.55)";
   ctx.fillRect(x - 96 * dpr, y - 28 * dpr, 192 * dpr, boxH * dpr);
   text(
-    `RWY ${String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`,
+    `RWY ${rw.des ?? String(Math.round(rw.rwy / 10) % 36 || 36).padStart(2, "0")} · ${rw.name.toUpperCase()}`,
     x,
     y - 14 * dpr,
     "rgba(255, 220, 160, 0.95)",

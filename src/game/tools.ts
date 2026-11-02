@@ -32,7 +32,7 @@ import { millerTrains, MW_HEIGHT } from "../terrain";
 import { BODY_NAMES } from "../targeting";
 import { bodyAxes, EPOCH_DATE, M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState, spinVector, utcOf } from "../system/solar";
 import { bodyFixedOf, fromBodyFixed, GEAR, gearHeight, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
-import { EARTH_RUNWAYS, RUNWAY_LENGTH, runwayFrame, SITES, type Site } from "./sites";
+import { EARTH_RUNWAYS, RUNWAY_LENGTH, runwayDesignation, runwayFrame, SITES, type Site } from "./sites";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { ourState, soiOf } from "../system/our-side";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
@@ -354,7 +354,7 @@ export class GameTools {
     return this.placeAt({
       ...g,
       fwd: [f[0] / l, f[1] / l, f[2] / l],
-      note: `${site.name}: lined up, runway ${Math.round((site.rwy ?? 0) / 10)}${alongM > alongM0 + 1 ? ` — ${Math.round(alongM)} m down it, clear of a parked craft` : ""}`,
+      note: `${site.name}: lined up, runway ${runwayDesignation(site)}${alongM > alongM0 + 1 ? ` — ${Math.round(alongM)} m down it, clear of a parked craft` : ""}`,
     });
   }
 
@@ -1031,7 +1031,11 @@ export class GameTools {
     c.setOurLanded(save.ship.landed);
     // (the entry's site: the save's, not the nearest pass's — a deorbit to Le Bourget reloaded to Baikonur;
     // none saved, none: the last flight's kept graded a Lander at Kennedy on its distance to Le Bourget)
-    const site = save.ship.entrySite ? SITES.find((q) => q.name === save.ship.entrySite) : undefined;
+    // (a save from before 2 Nov 2026 names Kourou's and Tanegashima's sites by their former names: their place's first word)
+    const named = save.ship.entrySite;
+    const site = named
+      ? (SITES.find((q) => q.name === named) ?? SITES.find((q) => q.name.split(/[ ,–]/)[0] === named.split(/[ ,–]/)[0]))
+      : undefined;
     c.entrySite = site ?? null;
     // (the flight plan: kept, its guidance off — engaged again by the pilot)
     const rt = save.ship.route;

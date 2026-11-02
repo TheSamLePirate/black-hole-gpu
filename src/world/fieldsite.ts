@@ -28,6 +28,7 @@ export function worldSite(f: Airfield, min = 1800): Site | null {
     lon: w.lon1,
     runway: true,
     rwy: w.hdg,
+    des: [w.le, w.he],
     icao: code,
     elev: Math.round((w.elev1 + w.elev2) / 2),
     len: w.len,

@@ -55,6 +55,7 @@ export function runwayOf(c: CameraController, s: Site): IlsRunway {
     hdg: end.rwy ?? 0,
     elev: end.elev ?? 0,
     len: s.len ?? RUNWAY_LENGTH,
+    des: end.des?.[0],
   };
 }
 
@@ -113,13 +114,13 @@ function ilsStart(this: CameraController, name?: string, o: { hold?: number; rwy
   // (a visual circuit's base and final — `base`: from the downwind, round onto the centreline)
   const W = o.rwy ?? runwayOf(this, site!);
   this.ilsRun = newIlsRun(W, o.hold ?? 0, o.base);
-  const id = `${W.icao ?? W.name} ${runwayId(W.hdg)}`;
+  const id = `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`;
   this.onRadio?.(
     o.base
-      ? tf("{0} tower: cleared to land, runway {1}", W.icao ?? W.name, runwayId(W.hdg))
+      ? tf("{0} tower: cleared to land, runway {1}", W.icao ?? W.name, runwayId(W.hdg, W.des))
       : o.hold
-        ? tf("{0} approach: hold at the initial fix, expect the ILS {1}", W.icao ?? W.name, runwayId(W.hdg))
-        : tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg)),
+        ? tf("{0} approach: hold at the initial fix, expect the ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des))
+        : tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des)),
   );
   return tf("ILS approach: {0}, {1} km", id, Math.round(gcDist(g, W) / 1000));
 }
@@ -129,7 +130,7 @@ function ilsClear(this: CameraController): string {
   const R = this.ilsRun;
   if (!R) return t("ILS: no approach flown");
   R.hold = 0;
-  return tf("Cleared ILS {0}", runwayId(R.rwy.hdg));
+  return tf("Cleared ILS {0}", runwayId(R.rwy.hdg, R.rwy.des));
 }
 
 function ilsOff(this: CameraController, why?: string) {
@@ -192,7 +193,7 @@ function ilsFrame(this: CameraController) {
   }
   if (R.phase === "done") {
     const G = ilsGrade(R);
-    this.ilsLast = { rwy: `${R.rwy.icao ?? R.rwy.name} ${runwayId(R.rwy.hdg)}`, score: G.score, notes: G.notes, touch: R.touch };
+    this.ilsLast = { rwy: `${R.rwy.icao ?? R.rwy.name} ${runwayId(R.rwy.hdg, R.rwy.des)}`, score: G.score, notes: G.notes, touch: R.touch };
     const T = R.touch;
     this.onPilotMessage?.(
       tf(
@@ -216,7 +217,7 @@ function ilsInfo(
   if (!R || !g) return null;
   const r = ilsReading(R.rwy, g);
   return {
-    id: `ILS ${runwayId(R.rwy.hdg)} ${R.rwy.icao ?? ""}`.trim(),
+    id: `ILS ${runwayId(R.rwy.hdg, R.rwy.des)} ${R.rwy.icao ?? ""}`.trim(),
     loc: r.locIn ? r.loc : null,
     gs: r.gsIn ? r.gs : null,
     dme: r.dme,
@@ -234,7 +235,7 @@ function routeProcedures(this: CameraController): string {
   const W = this.nav.route.wps;
   if (W.length < 2) return t("Procedures: a plan from an airfield or to one");
   const added: string[] = [];
-  const strip = (name: string) => /^(IAF|FAF|DEP)\d\d$/.test(name);
+  const strip = (name: string) => /^(IAF|FAF|DEP)\d\d[LCR]?$/.test(name);
   this.nav.route.wps = W.filter((w) => !strip(w.name));
   const P = this.nav.route.wps;
   // (the game's own field, else a world airfield's by its code — its tile in: PLAN-RADAR-AAA RD13)
