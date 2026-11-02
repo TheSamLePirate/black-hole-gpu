@@ -213,7 +213,14 @@ function show(s: State | string, title: string) {
     const P = (s.heat?.points ?? []).filter((_, i, a) => (a.length - 1 - i) % 3 === 0);
     if (P.length > 2)
       console.log(
-        `    15 min  GPU MHz ${spark(P.map((p) => p[2]))}  GPU °C ${spark(P.map((p) => p[5]))}  pressure ${P.map((p) => " ▁▄▆█"[p[1] + 1] ?? "?").join("")}`,
+        `    15 min  ${[
+          ["GPU MHz", spark(P.map((p) => p[2]))],
+          ["GPU °C", spark(P.map((p) => p[5]))],
+          ["CPU °C", P.some((p) => p[5] !== null) ? "" : spark(P.map((p) => p[6]))],
+        ]
+          .filter(([, v]) => v)
+          .map(([k, v]) => `${k} ${v}`)
+          .join("  ")}  pressure ${P.map((p) => " ▁▄▆█"[p[1] + 1] ?? "?").join("")}`,
       );
     const w = thermalWarning(s.thermal ?? null);
     if (w) console.log(`    ⚠ ${w}`);
