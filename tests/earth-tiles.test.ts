@@ -3,7 +3,7 @@ import type { Vec3 } from "../src/physics";
 import {
   EarthTiles,
   edge,
-  FINE_Z,
+  markFine,
   orthoLayers,
   sampleLevel,
   TILE,
@@ -156,6 +156,44 @@ test("a level's samples: bilinear and the monotone cubic exact on a ramp, the wi
   expect(edge(25, 512, 1024, 1024)).toBeGreaterThan(0.3);
 });
 
+test("T1: SRTM's whole metres on a gentle slope drawn without stairs, a butte's wall kept a wall, a survey's monotone", () => {
+  // (a 1.5 % slope over 26 m texels — Terrarium's z 12 at 47° —, rounded to the metre as SRTM is: flats of two or three texels)
+  const texel = 26;
+  const ramp = (i: number) => Math.round(0.015 * texel * i);
+  const slopes = (tex: number) => {
+    const d: number[] = [];
+    for (let x = 20; x < 60; x += 0.05) d.push((sampleLevel(ramp, x + 0.05, 5, 3, tex) - sampleLevel(ramp, x, 5, 3, tex)) / 0.05);
+    return d;
+  };
+  // (the monotone cubic alone — before T1 — drew flat treads and risers four times the slope; the pre-filtered B-spline: never
+  // flat, never half as steep again)
+  const hybrid = slopes(texel);
+  const mean = 0.015 * texel;
+  expect(Math.min(...hybrid)).toBeGreaterThan(0.5 * mean);
+  expect(Math.max(...hybrid)).toBeLessThan(1.5 * mean);
+  // (Monument Valley: a 150 m wall over 30 m texels — the monotone cubic: no lip over its top, no dip under its foot, its top
+  // at its height)
+  const butte = (i: number) => (i < 10 ? 1500 : 1650);
+  let lo = Infinity,
+    hi = -Infinity;
+  for (let x = 6; x < 14; x += 0.02) {
+    const h = sampleLevel(butte, x, 5, 3, 30);
+    lo = Math.min(lo, h);
+    hi = Math.max(hi, h);
+  }
+  expect(lo).toBeGreaterThanOrEqual(1500 - 1e-6);
+  expect(hi).toBeLessThanOrEqual(1650 + 1e-6);
+  expect(sampleLevel(butte, 11.5, 5, 3, 30)).toBeCloseTo(1650, 6);
+  expect(sampleLevel(butte, 8.5, 5, 3, 30)).toBeCloseTo(1500, 6);
+  // (a survey's heights — the IGN's mark —: the monotone cubic whatever the slope, its flats its own)
+  const marked = (i: number) => {
+    const a = new Float32Array([ramp(i)]);
+    markFine(a, true);
+    return a[0]!;
+  };
+  for (let x = 20.5; x < 40; x += 1) expect(sampleLevel(marked, x, 5, 3, texel)).toBeCloseTo(marked(Math.floor(x)), 3);
+});
+
 test("tiles that will not load keep the ground: a runway's the same, no terrace anywhere", () => {
   // (a map of 0.5° texels whose heights jump by up to 400 m from one texel to the next)
   const W = 720,
@@ -254,14 +292,15 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   const cam = camAt(45.9, 6.87, 2);
   t.update(cam, 1e-3);
   fill(t);
-  // (Far: the texture made again, 2048 texels a side, every level drawn anew — the fine ones 8 × 8 tiles, the coarser 4 × 4)
+  // (Far: the texture made again, 2048 texels a side, every level drawn anew — 8 × 8 tiles up to z 14: the coarse levels' layers
+  // the texture's whole side anyway, their far relief twice as far — 2 Nov 2026)
   t.setReach(TILE_REACH.far);
   expect(resized).toBe(1);
   // (and the orthophotos' four 1024² quadrants in one more layer — I1)
   expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, Z1 - Z0 + 1 + orthoLayers(2048)]);
   t.update(cam, 1e-3);
   // (the IGN's relief levels over France, z 15 … 17, 4 × 4 tiles whatever the reach)
-  expect(t.wanted().length).toBe(64 * (ZG1 - FINE_Z + 1) + 16 * (FINE_Z - Z0) + 16 * (Z1 - ZG1));
+  expect(t.wanted().length).toBe(64 * (ZG1 - Z0 + 1) + 16 * (Z1 - ZG1));
   expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBe(1);
   fill(t);
   expect(t.pending).toBe(0);

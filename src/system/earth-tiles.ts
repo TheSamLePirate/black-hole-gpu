@@ -33,17 +33,19 @@ import { type NationalSource, type OrthoFit, SWISSTOPO, sourceAt, sourcesBox, ti
 export const TILE = 256;
 /** tiles along a level's window (the normal detail's reach; a farther one, EarthTiles.setReach: 8 on the fine levels) */
 export const SPAN = 4;
-/** the finest levels a farther reach widens (z 11–13: 8 tiles of z 11 span what 4 of z 10 do — the coarser levels' 4
- *  tiles already reach past them; 8 there was four times the tiles loaded for nothing) */
-export const FINE_Z = 11;
 export const CLIP = TILE * SPAN;
 /** By the detail's reach (settings.detailReach): the windows' tiles a side, the tiles kept in memory past them (a
- *  tile 512 KiB: its heights and its imagery), the finest levels whose next ring round the window is loaded ahead. */
+ *  tile 512 KiB: its heights and its imagery), the rings round every level's window loaded ahead into them — the halo,
+ *  never idle while it has room: nearest first in each level's own tiles, led along the motion (EarthTiles.cost) — so the
+ *  coarse levels' far relief comes as early as the fine levels' near detail (2 Nov 2026, T8: "the very far reach is not
+ *  far enough") */
 export const TILE_REACH = {
   normal: { span: 4, cache: 0, ring: 0 },
-  far: { span: 8, cache: 128, ring: 2 },
-  veryFar: { span: 8, cache: 256, ring: 3 },
+  far: { span: 8, cache: 320, ring: 3 },
+  veryFar: { span: 8, cache: 640, ring: 6 },
 } as const;
+/** how much the halo leads along the motion: a tile ahead counted (1 − HALO_LEAD) as far, one behind (1 + HALO_LEAD) */
+export const HALO_LEAD = 0.6;
 export const Z0 = 6;
 /** the finest level (z 15 … 17 over France alone: the IGN's relief — I2; the global data's last is z 14) */
 export const Z1 = 17;
@@ -65,6 +67,10 @@ const R = WGS84_A;
 const TAU = 2 * Math.PI;
 const MAX_INFLIGHT = 8;
 const TIMEOUT_MS = 15000;
+/** the national sources' heights fetched at once (their own queue — EarthTiles.refine —: never the global data's slots) */
+const MAX_NATIONAL = 14;
+/** a national tile's time limit, its turn come [ms]: its two or three grids through the rate's gate */
+const NATIONAL_TIMEOUT_MS = 30000;
 
 export const tileUrl = (z: number, x: number, y: number) => `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
 const GIBS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best";
@@ -363,17 +369,20 @@ async function ignGround(
   signal: AbortSignal,
   hlod: boolean,
 ): Promise<{ h: Float32Array; over: Float32Array | null } | null> {
-  let h = z >= IGN_LIDAR_Z ? await ignGrid(IGN_LIDAR, z, x, y, signal) : null;
-  const holes = (v: Float32Array | null) => !v || v.some((e) => Number.isNaN(e));
-  if (holes(h)) {
-    const r = await ignGrid(IGN_RGEALTI, z, x, y, signal);
-    if (!h) h = r;
-    else if (r) for (let i = 0; i < h.length; i++) if (Number.isNaN(h[i]!)) h[i] = r[i]!;
-  }
-  if (!h) return null;
-  let over: Float32Array | null = null;
-  if (hlod && z <= HLOD_Z1) {
-    const n = hlodSize(z);
+  // (the ground and — far levels, I6 — the surface over it asked together: each its own chain, one after the other a tile
+  // took two to four of the gate's turns in a row)
+  const ground = async () => {
+    let h = z >= IGN_LIDAR_Z ? await ignGrid(IGN_LIDAR, z, x, y, signal) : null;
+    if (!h || h.some((e) => Number.isNaN(e))) {
+      const r = await ignGrid(IGN_RGEALTI, z, x, y, signal);
+      if (!h) h = r;
+      else if (r) for (let i = 0; i < h.length; i++) if (Number.isNaN(h[i]!)) h[i] = r[i]!;
+    }
+    return h;
+  };
+  const n = hlodSize(z);
+  const surface = async () => {
+    if (!hlod || z > HLOD_Z1) return null;
     let s = await ignGrid(IGN_MNS_LIDAR, z, x, y, signal, n);
     let holes = 0;
     if (s) for (const v of s) if (Number.isNaN(v)) holes++;
@@ -382,9 +391,11 @@ async function ignGround(
       if (!s) s = r;
       else if (r) for (let i = 0; i < s.length; i++) if (Number.isNaN(s[i]!)) s[i] = r[i]!;
     }
-    if (s) over = overground(h, s, n);
-  }
-  return { h, over };
+    return s;
+  };
+  const [h, s] = await Promise.all([ground(), surface()]);
+  if (!h) return null;
+  return { h, over: s ? overground(h, s, n) : null };
 }
 
 /** the IGN over France (I1, I2, I6): its box alone its land — it answers nothing beyond (NaN, 404) */
@@ -454,7 +465,7 @@ export interface TileSample {
 
 export class EarthTiles {
   texture: GPUTexture;
-  /** the fine levels' windows' tiles a side (TILE_REACH: 4, 8 — FINE_Z), the texture's side in texels its CLIP */
+  /** the levels' windows' tiles a side up to z 14 (TILE_REACH: 4, 8), the texture's side in texels its CLIP */
   private span = SPAN;
   /** the most the device holds (a farther reach's 256 MiB texture refused: back to SPAN, not asked again) */
   private spanMax = 8;
@@ -462,9 +473,10 @@ export class EarthTiles {
     return TILE * this.span;
   }
   private levelSpan(z: number) {
-    // (the IGN's finest relief, z 15 … 17: windows of 4 tiles whatever the reach — 3.4 km down to 850 m at 46°)
-    if (z > ZG1) return SPAN;
-    return z >= FINE_Z ? this.span : SPAN;
+    // (the IGN's finest relief, z 15 … 17: windows of 4 tiles whatever the reach — 3.4 km down to 850 m at 46°; every
+    // other level the reach's — the coarse ones' layers are the texture's whole side anyway: 8 tiles there take no more GPU
+    // memory and carry the far relief twice as far, z 10's 312 km)
+    return z > ZG1 ? SPAN : this.span;
   }
   /** the tiles kept past the windows — most recently used last — and how many (0: none) */
   private cache = new Map<string, { h: Float32Array; col: Uint32Array | null }>();
@@ -475,6 +487,10 @@ export class EarthTiles {
   onResize: (() => void) | null = null;
   private levels: Level[] = [];
   private inflight = new Map<string, AbortController>();
+  /** the tiles drawn from the global data while their national source's heights come (refine) */
+  private refining = new Map<string, { ctl: AbortController; L: Level; x: number; y: number }>();
+  private nationalActive = 0;
+  private nationalQueue: { p: number; go: () => void }[] = [];
   private failures = new Map<string, { n: number; at: number }>();
   /** bumped at a switch of the sources: a load begun before it is dropped */
   private gen = 0;
@@ -590,21 +606,51 @@ export class EarthTiles {
     return (((y % n) + n) % n) * n + (((x % n) + n) % n);
   }
 
-  /** one of the finest levels wanted, whose ring is loaded ahead and kept */
+  /** a level wanted whose halo is loaded ahead and whose tiles are kept as its window leaves them */
   private ringLevel(L: Level) {
-    if (!this.ring || !L.want) return false;
-    let finest = Z0;
-    for (const M of this.levels) if (M.want) finest = M.z;
-    return L.z > finest - this.ring;
+    return !!this.ring && !!L.want;
   }
 
-  /** a tile kept past the windows (the least recently used dropped past cacheTiles) */
+  /** when the halo is looked over next [ms] (request) */
+  private haloAt = 0;
+  /** the motion's direction on the tiles' plane (unit; null still): the halo led along it (update) */
+  private leadDir: [number, number] | null = null;
+  /**
+   * A tile's distance from the lead point (the camera led along its motion), in its own level's tiles — so every level's
+   * rings come in turn, the coarse levels' far relief as early as the fine ones' near detail —, counted (1 − HALO_LEAD) as far
+   * ahead, (1 + HALO_LEAD) behind.
+   */
+  private cost(L: Level, x: number, y: number, cx: number, cy: number) {
+    let dx = x + 0.5 - cx;
+    dx -= Math.round(dx / L.n) * L.n;
+    const dy = y + 0.5 - cy;
+    const d = Math.hypot(dx, dy);
+    const u = this.leadDir;
+    return u && d > 1e-9 ? d * (1 - (HALO_LEAD * (dx * u[0] + dy * u[1])) / d) : d;
+  }
+
+  /** a tile kept past the windows (past cacheTiles, the farthest behind dropped — cost) */
   private keep(key: string, h: Float32Array, col: Uint32Array | null) {
     if (!this.cacheTiles) return;
     const was = this.cache.get(key);
     this.cache.delete(key);
     this.cache.set(key, { h, col: col ?? was?.col ?? null });
-    while (this.cache.size > this.cacheTiles) this.cache.delete(this.cache.keys().next().value!);
+    if (this.cache.size <= this.cacheTiles) return;
+    const lonT = cx0(this.priorityLon);
+    while (this.cache.size > this.cacheTiles) {
+      let worst = "",
+        most = -1;
+      for (const k of this.cache.keys()) {
+        const [z, x, y] = k.split("/").map(Number) as [number, number, number];
+        const L = this.levels[z - Z0];
+        const c = L ? this.cost(L, x, y, lonT * L.n, mercY(this.prioritySinLat, L.n)) : Infinity;
+        if (c > most) {
+          most = c;
+          worst = k;
+        }
+      }
+      this.cache.delete(worst);
+    }
   }
 
   /** the tiles kept in memory past the windows (the detail's reach: the left ones, the ring loaded ahead) */
@@ -612,9 +658,10 @@ export class EarthTiles {
     return this.cache.size;
   }
 
-  /** the tiles wanted and not yet in */
+  /** the tiles wanted and not yet in — their national source's heights included (refine) */
   get pending() {
     let k = 0;
+    for (const [key, r] of this.refining) if (r.L.key[this.slotOf(r.L, r.x, r.y)] === key) k++;
     for (const L of this.levels) {
       if (!L.want) continue;
       for (let y = L.want.y0; y < L.want.y1; y++)
@@ -660,6 +707,7 @@ export class EarthTiles {
   clear() {
     for (const c of this.inflight.values()) c.abort();
     this.inflight.clear();
+    for (const r of this.refining.values()) r.ctl.abort();
     for (const L of this.levels) {
       L.want = null;
       this.setValid(L, null);
@@ -694,6 +742,7 @@ export class EarthTiles {
       this.gen++;
       for (const c of this.inflight.values()) c.abort();
       this.inflight.clear();
+      for (const r of this.refining.values()) r.ctl.abort();
       this.cache.clear();
       for (const L of this.levels) {
         L.key.fill(null);
@@ -769,19 +818,28 @@ export class EarthTiles {
     const ahead = cartToGeodetic(1, WGS84_F, c.map((v, i) => v + lead[i]!) as Vec3);
     this.priorityLon = ahead.lon;
     this.prioritySinLat = Math.sin(ahead.lat);
+    // (the motion's direction on the tiles' plane — Mercator's: conformal, the same at every level)
+    let ux = (ahead.lon - g.lon) / TAU;
+    ux -= Math.round(ux);
+    const uy = mercY(this.prioritySinLat, 1) - mercY(this.sinLat, 1);
+    const ul = Math.hypot(ux, uy);
+    this.leadDir = ul > 1e-12 ? [ux / ul, uy / ul] : null;
     this.request(cx0(this.priorityLon), this.prioritySinLat);
   }
 
-  /** Starts the loads: the coarse levels first, each from the camera outwards. */
+  /**
+   * Starts the loads: every level's missing tiles together, the nearest first in each level's own tiles (cost: led along the
+   * motion) — before, each coarse level's whole window went before the fine levels' near tiles —; the windows whole, the
+   * halo round them into memory (ringLevel, TILE_REACH ring), while it has room.
+   */
   private request(lonT: number, sinLat: number) {
     const now = performance.now();
-    let pending = 0;
+    const todo: [Level, number, number, number][] = [];
     for (const L of this.levels) {
       // (a window drawn whole: nothing to look for — not its tiles' keys made again each frame —, unless taken again)
       if (!L.want || (same(L.valid, L.want) && !L.stale)) continue;
       const cx = lonT * L.n,
         cy = mercY(sinLat, L.n);
-      const todo: [number, number, number][] = [];
       for (let y = L.want.y0; y < L.want.y1; y++) {
         for (let x = L.want.x0; x < L.want.x1; x++) {
           const key = this.keyOf(L, x, y);
@@ -795,42 +853,88 @@ export class EarthTiles {
           }
           const f = this.failures.get(key);
           if (f && now < f.at) continue;
-          todo.push([x, y, (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2]);
+          todo.push([L, x, y, this.cost(L, x, y, cx, cy)]);
         }
       }
-      pending += todo.length;
-      todo.sort((a, b) => a[2] - b[2]);
-      // (the loads limited, not what memory holds: every level's kept tiles drawn at once)
-      for (const [x, y] of todo) {
-        if (this.inflight.size >= MAX_INFLIGHT) break;
-        void this.load(L, x, y);
-      }
+    }
+    // (the loads limited, not what memory holds: every level's kept tiles drawn at once; ties to the coarser)
+    todo.sort((a, b) => a[3] - b[3] || a[0].z - b[0].z);
+    for (const [L, x, y] of todo) {
+      if (this.inflight.size >= MAX_INFLIGHT) break;
+      void this.load(L, x, y);
     }
     this.requestOrtho(lonT, sinLat);
-    // (the windows whole: the next ring round the finest levels' loaded ahead into memory — nearest the lead (the
-    // motion's, the gaze's) first, in metres —, half the loads at most: the tiles the windows enter as the craft goes
-    // on, drawn at once)
-    if (pending || !this.ring || this.inflight.size >= MAX_INFLIGHT / 2) return;
-    const ahead: [Level, number, number, number][] = [];
+    // (the windows whole: the halo — every level's rings round its window, out to TILE_REACH's ring — loaded ahead into
+    // memory, half the loads at most, while the memory has room: the tiles the windows enter as the craft goes on drawn at
+    // once, and kept by the Service Worker for the next flight)
+    if (todo.length || !this.ring || this.inflight.size >= MAX_INFLIGHT / 2 || this.cache.size >= this.cacheTiles) return;
+    // (nor while the windows' national heights are still coming: the halo's loads took their bandwidth — kerr-mini cold, the
+    // IGN's far levels 118 s against 68 before it)
+    for (const [key, r] of this.refining) if (r.L.key[this.slotOf(r.L, r.x, r.y)] === key) return;
+    // (its thousands of candidates looked over four times a second at most — up to sixteen loads a second, every frame else)
+    if (now < this.haloAt) return;
+    this.haloAt = now + 250;
+    const halo: [Level, number, number, number][] = [];
+    const R = this.ring;
     for (const L of this.levels) {
       const w = L.want;
       if (!w || !this.ringLevel(L)) continue;
       const cx = lonT * L.n,
         cy = mercY(sinLat, L.n);
-      for (let y = Math.max(w.y0 - 1, 0); y <= Math.min(w.y1, L.n - 1); y++)
-        for (let x = w.x0 - 1; x <= w.x1; x++) {
+      for (let y = Math.max(w.y0 - R, 0); y <= Math.min(w.y1 - 1 + R, L.n - 1); y++)
+        for (let x = w.x0 - R; x <= w.x1 - 1 + R; x++) {
           if (inside(w, x, y)) continue;
           const key = this.keyOf(L, x, y);
           if (this.cache.has(key) || this.inflight.has(key)) continue;
           const f = this.failures.get(key);
           if (f && now < f.at) continue;
-          ahead.push([L, x, y, Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / L.n]);
+          halo.push([L, x, y, this.cost(L, x, y, cx, cy)]);
         }
     }
-    ahead.sort((a, b) => a[3] - b[3]);
-    for (const [L, x, y] of ahead) {
-      if (this.inflight.size >= MAX_INFLIGHT / 2) return;
+    halo.sort((a, b) => a[3] - b[3] || a[0].z - b[0].z);
+    for (const [L, x, y] of halo) {
+      if (this.inflight.size >= MAX_INFLIGHT / 2 || this.cache.size + this.inflight.size >= this.cacheTiles) return;
       void this.load(L, x, y, true);
+    }
+  }
+
+  /**
+   * A tile's national heights (the IGN's, swisstopo's) over the global data's drawn — in its window, or kept past it —,
+   * MAX_NATIONAL at once, the nearest and finest first (p: its distance in the level's tiles, plus one, over their count);
+   * none if it is no longer wanted when its turn comes, the global data's kept if they will not come.
+   */
+  private async refine(L: Level, x: number, y: number, key: string, src: NationalSource, img: Promise<Uint32Array | null>, p: number) {
+    const gen = this.gen;
+    const ctl = new AbortController();
+    this.refining.get(key)?.ctl.abort();
+    this.refining.set(key, { ctl, L, x, y });
+    const wanted = () => gen === this.gen && !ctl.signal.aborted && (L.key[this.slotOf(L, x, y)] === key || this.cache.has(key));
+    if (this.nationalActive < MAX_NATIONAL) this.nationalActive++;
+    else await new Promise<void>((go) => this.nationalQueue.push({ p, go }));
+    try {
+      if (!wanted()) return;
+      const timer = setTimeout(() => ctl.abort(), NATIONAL_TIMEOUT_MS);
+      let h: Float32Array;
+      try {
+        h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, this.hlodOn);
+      } finally {
+        clearTimeout(timer);
+      }
+      const col = await img.catch(() => null);
+      if (gen !== this.gen) return;
+      if (L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, h, col);
+      else if (this.cache.has(key)) this.keep(key, h, col);
+    } catch {
+      // (refused, timed out, dropped: the global data's stay)
+    } finally {
+      // (the slot handed to the nearest waiting)
+      const q = this.nationalQueue;
+      if (q.length) {
+        let k = 0;
+        for (let i = 1; i < q.length; i++) if (q[i]!.p < q[k]!.p) k = i;
+        q.splice(k, 1)[0]!.go();
+      } else this.nationalActive--;
+      if (this.refining.get(key)?.ctl === ctl) this.refining.delete(key);
     }
   }
 
@@ -857,16 +961,20 @@ export class EarthTiles {
       clearTimeout(imgTimer);
       ctl.signal.removeEventListener("abort", relay);
     });
+    // (over France the IGN's heights — the global data's where it has none —: Terrarium's drawn first, at once, the IGN's
+    // over them as they come — their own queue, its rate's gate: before, every French tile from z 11 waited for two or three
+    // of its grids in the global data's eight slots, the ground stuck at z 10 for 12 s and whole after 75 s (2 Nov 2026,
+    // PLAN-REFRACTION-HORIZONS T8))
+    const national = this.reliefOn && src && L.z >= src.heightsFrom ? src : null;
+    let refineAfter: NationalSource | null = null;
     try {
-      // (over France the IGN's heights — the global data's where it has none —; elsewhere Terrarium's)
-      const heights =
-        this.reliefOn && src && L.z >= src.heightsFrom
-          ? await nationalHeights(src, L.z, xw, y, ctl.signal, this.hlodOn)
-          : await terrarium(L.z, xw, y, ctl.signal);
+      const heights = await terrarium(L.z, xw, y, ctl.signal);
       // (begun before a switch of the sources: the old source's — the slot waits for the new one's)
       if (gen !== this.gen) return;
       h = heights;
       this.loaded++;
+      // (the national heights asked once the global data's are drawn — or kept —: refine finds the tile wanted)
+      if (national) refineAfter = national;
       if (ahead) {
         // (into memory at once — its heights: drawn from there if its window comes to it —, its imagery when it comes:
         // onto the tile if drawn meanwhile)
@@ -900,6 +1008,11 @@ export class EarthTiles {
       if (this.inflight.get(key) === ctl) this.inflight.delete(key);
     }
     if (h) this.put(L.z, x, y, h);
+    if (refineAfter) {
+      const cx = cx0(this.priorityLon) * L.n,
+        cy = mercY(this.prioritySinLat, L.n);
+      void this.refine(L, x, y, key, refineAfter, img, (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) + 1) / L.n);
+    }
     this.request(cx0(this.priorityLon), this.prioritySinLat);
   }
 
@@ -1252,7 +1365,7 @@ export class EarthTiles {
           k = (gy - ty * TILE) * TILE + (gx - tx * TILE);
         return drawn ? drawnHeight(d, k) : d[k]!;
       };
-      const hz = sampleLevel(at, px, py, zf - L.z);
+      const hz = sampleLevel(at, px, py, zf - L.z, texel);
       h += rem * w * hz;
       // (the data's own resolution: a survey's its texel, the global data's no finer than SRTM's — the nearest texel's mark)
       const fine = isFine(at(Math.floor(px), Math.floor(py)));
@@ -1387,13 +1500,28 @@ const monoCubic = (p0: number, p1: number, p2: number, p3: number, f: number) =>
   return (2 * f3 - 3 * f2 + 1) * p1 + (f3 - 2 * f2 + f) * m1 + (-2 * f3 + 3 * f2) * p2 + (f3 - f2) * m2;
 };
 
+/** The relief's steepness [m/m] from which the tiles' cubic turns from the B-spline to the monotone one (trace.wgsl TILE_STEEP). */
+export const TILE_STEEP = [0.3, 0.8] as const;
+/** T1's pre-filter (trace.wgsl TUNE_TILE_PRE): the B-spline's nodes the texels' 3 × 3 binomial */
+export const TILE_PRE = true;
+const bspline4 = (t: number) => {
+  const u = 1 - t;
+  return [(u * u * u) / 6, (4 - 6 * t * t + 3 * t * t * t) / 6, (1 + 3 * t + 3 * t * t - 3 * t * t * t) / 6, (t * t * t) / 6];
+};
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1);
+  return t * t * (3 - 2 * t);
+};
+
 /**
- * A level's height at (px, py) [its pixels, from its rectangle's corner]: bilinear, or — its texel more
- * than twice the footprint (mag: by how many octaves larger) — a monotone cubic through its texels (a cliff kept a
- * cliff: the B-spline before rounded Monument Valley's buttes into domes), the two blended over an octave (trace.wgsl:
- * tileSample).
+ * A level's height at (px, py) [its pixels, from its rectangle's corner; texel its size, m]: bilinear, or — its texel more
+ * than twice the footprint (mag: by how many octaves larger) — a cubic through its texels, the two blended over an octave
+ * (trace.wgsl tileSample, the same): a B-spline where the relief is gentle — smooth over the global data's whole metres
+ * (Terrarium's z ≤ 13, SRTM's rounding: its flats drawn as 1 m stairs by the monotone cubic alone — PLAN-REFRACTION-HORIZONS
+ * T1) —, the monotone cubic where it is steep or a survey's (a cliff kept a cliff: the B-spline alone rounded Monument
+ * Valley's buttes into domes); the share by the cell's four nodes' slopes and marks, blended across it.
  */
-export function sampleLevel(at: (i: number, j: number) => number, px: number, py: number, mag: number) {
+export function sampleLevel(at: (i: number, j: number) => number, px: number, py: number, mag: number, texel = 1) {
   const x = px - 0.5,
     y = py - 0.5;
   const x0 = Math.floor(x),
@@ -1404,10 +1532,37 @@ export function sampleLevel(at: (i: number, j: number) => number, px: number, py
   let lin = 0;
   if (k < 1) lin = (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) + (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
   if (k <= 0) return lin;
-  const rows = [0, 1, 2, 3].map((j) =>
-    monoCubic(at(x0 - 1, y0 + j - 1), at(x0, y0 + j - 1), at(x0 + 1, y0 + j - 1), at(x0 + 2, y0 + j - 1), fx),
-  );
-  const b = monoCubic(rows[0]!, rows[1]!, rows[2]!, rows[3]!, fy);
+  // (6 × 6 texels from x0 − 2: the pre-filter's ring)
+  const t: number[] = [];
+  for (let j = 0; j < 6; j++)
+    for (let i = 0; i < 6; i++) t.push(TILE_PRE || (i > 0 && i < 5 && j > 0 && j < 5) ? at(x0 + i - 2, y0 + j - 2) : 0);
+  const node = (i: number, j: number) => {
+    const c = 6 * (j + 1) + i + 1;
+    if (!TILE_PRE) return t[c]!;
+    // (a gentle node's alone — the steep and the surveyed keep their own: a butte's top not lowered by its foot)
+    const blur = (4 * t[c]! + 2 * (t[c - 1]! + t[c + 1]! + t[c - 6]! + t[c + 6]!) + t[c - 7]! + t[c - 5]! + t[c + 5]! + t[c + 7]!) / 16;
+    const g = (Math.max(Math.abs(t[c + 1]! - t[c - 1]!), Math.abs(t[c + 6]! - t[c - 6]!)) * 0.5) / Math.max(texel, 1e-3);
+    const m = Math.max(smooth(TILE_STEEP[0], TILE_STEEP[1], g), isFine(t[c]!) ? 1 : 0);
+    return blur + (t[c]! - blur) * m;
+  };
+  const wx = bspline4(fx),
+    wy = bspline4(fy);
+  let bs = 0;
+  const rows: number[] = [];
+  for (let j = 0; j < 4; j++) {
+    bs += wy[j]! * (wx[0]! * node(0, j) + wx[1]! * node(1, j) + wx[2]! * node(2, j) + wx[3]! * node(3, j));
+    const c = 6 * (j + 1) + 1;
+    rows.push(monoCubic(t[c]!, t[c + 1]!, t[c + 2]!, t[c + 3]!, fx));
+  }
+  const mono = monoCubic(rows[0]!, rows[1]!, rows[2]!, rows[3]!, fy);
+  // (the four nodes' steepness — the larger central difference of the texels — and their survey marks)
+  const sn = [0, 1, 2, 3].map((n) => {
+    const k0 = 6 * (2 + (n >> 1)) + 2 + (n & 1);
+    const g = (Math.max(Math.abs(t[k0 + 1]! - t[k0 - 1]!), Math.abs(t[k0 + 6]! - t[k0 - 6]!)) * 0.5) / Math.max(texel, 1e-3);
+    return Math.max(smooth(TILE_STEEP[0], TILE_STEEP[1], g), isFine(t[k0]!) ? 1 : 0);
+  });
+  const s = (sn[0]! * (1 - fx) + sn[1]! * fx) * (1 - fy) + (sn[2]! * (1 - fx) + sn[3]! * fx) * fy;
+  const b = bs + (mono - bs) * s;
   return lin + (b - lin) * k;
 }
 

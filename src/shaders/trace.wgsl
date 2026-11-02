@@ -289,7 +289,9 @@ override TUNE_CHEAP: u32 = 0u;
 // (the relief's tiles magnified: 0 a cubic B-spline over their texels — a butte's wall spread over three of them, its top
 // lowered —, 1 an interpolating one — Catmull–Rom: lips over the cliffs —, 2 a monotone one through them, the default and the
 // CPU's — earth-tiles.ts sampleLevel)
-override TUNE_TILE_CR: u32 = 2u;
+// (T1's pre-filter: the global data's heights through a 3 × 3 binomial before the B-spline — Terrarium's whole metres' flats
+// of three texels and more drawn as slopes; a survey's and the steep never — earth-tiles.ts TILE_PRE)
+override TUNE_TILE_PRE: u32 = 1u;
 // (the camera rays' crowns carved by their leaves within this many metres — forestQuery's detail; 0: the plain shapes, a
 // measure of what the carving's sphere tracing costs)
 override TUNE_FOREST_DETAIL: f32 = 220.0;
@@ -6713,12 +6715,6 @@ fn bspline4(t: f32) -> vec4f {
   let t3 = t2 * t;
   return vec4f(1.0 - 3.0 * t + 3.0 * t2 - t3, 4.0 - 6.0 * t2 + 3.0 * t3, 1.0 + 3.0 * t + 3.0 * t2 - 3.0 * t3, t3) / 6.0;
 }
-// an interpolating cubic's weights (Catmull–Rom): through the texels themselves — a cliff kept a cliff, its top its height
-fn catmullRom4(t: f32) -> vec4f {
-  let t2 = t * t;
-  let t3 = t2 * t;
-  return vec4f(-0.5 * t + t2 - 0.5 * t3, 1.0 - 2.5 * t2 + 1.5 * t3, 0.5 * t + 2.0 * t2 - 1.5 * t3, -0.5 * t2 + 0.5 * t3);
-}
 // a monotone cubic through four samples at f in [0, 1] between the middle two (Fritsch–Butland's slopes: the harmonic mean of
 // the two sides', 0 at an extremum) — through the data, no overshoot: a cliff stays a cliff, no lip above its top
 fn monoCubic(p0: f32, p1: f32, p2: f32, p3: f32, f: f32) -> f32 {
@@ -6762,6 +6758,9 @@ const TILE_LEVELS = 12u; // (z 6 … 17 — the last three over France alone, th
 const TILE_RES_MIN = 25.0;
 // a survey's own resolution [m] (earth-tiles.ts TILE_RES_FINE: the IGN's)
 const TILE_RES_FINE = 1.0;
+// the relief's steepness [m/m] from which the tiles' cubic turns from the B-spline to the monotone one (tileSample;
+// earth-tiles.ts TILE_STEEP)
+const TILE_STEEP = vec2f(0.3, 0.8);
 // a level's texel at i (from its valid rectangle's corner), in its layer (toroidal: modulo its window's side)
 fn tileTexel(l: u32, i: vec2i) -> f32 {
   // (a level's window: 4 or 8 tiles a side — EarthTiles.setReach, its fine levels —, its side a power of two in
@@ -7055,39 +7054,68 @@ fn tileAnchor(rel: vec3f) -> vec2f {
   let ds = r.z / n - G.z * (2.0 * dot(G, r) + dot(r, r)) / ((m + n) * n * m);
   return vec2f(P.envY.w + dl, P.envZ.w + atanh(ds / (1.0 - (sA + ds) * sA)));
 }
-// a level's height at p [its px from the corner]: bilinear, or — its texel more than twice the footprint
-// (mag: by how many octaves larger) — a cubic B-spline over its texels (no facets near), the two blended
-// over an octave
-fn tileSample(l: u32, p: vec2f, mag: f32) -> f32 {
+// a level's height at p [its px from the corner; texM its texel's size, m]: bilinear, or — its texel more than twice the
+// footprint (mag: by how many octaves larger) — a cubic over its texels (no facets near), the two blended over an octave.
+// The cubic (PLAN-REFRACTION-HORIZONS T1): a B-spline where the relief is gentle — smooth over the global
+// data's whole metres (Terrarium's z ≤ 13: SRTM rounded to the metre, its flats of 2–4 texels; the monotone cubic alone drew
+// them as 1 m stairs) —, the monotone cubic where it is steep or a survey's (a butte's wall kept a wall, its top its height);
+// the share by each of the cell's four nodes' slope — its central differences, the same from either side: no seam — and mark,
+// blended across the cell (earth-tiles.ts sampleLevel the same)
+fn tileSample(l: u32, p: vec2f, mag: f32, texM: f32) -> f32 {
+  let k = clamp(mag - 1.0, 0.0, 1.0);
+  var lin = 0.0;
+  if (k < 1.0) { lin = tileBilinear(l, p); }
+  if (k <= 0.0) { return lin; }
   let x = p - 0.5;
   let i0 = vec2i(floor(x));
   let f = x - floor(x);
-  let k = clamp(mag - 1.0, 0.0, 1.0);
-  var lin = 0.0;
-  if (k < 1.0) {
-    lin = mix(mix(tileTexel(l, i0), tileTexel(l, i0 + vec2i(1, 0)), f.x), mix(tileTexel(l, i0 + vec2i(0, 1)), tileTexel(l, i0 + vec2i(1, 1)), f.x), f.y);
+  // (6 × 6 texels from i0 − 2 — the pre-filter's ring —, the 4 × 4 alone without it)
+  var t: array<f32, 36>;
+  let r0 = select(1, 0, TUNE_TILE_PRE != 0u);
+  for (var j = r0; j < 6 - r0; j++) {
+    for (var i = r0; i < 6 - r0; i++) { t[6 * j + i] = tileTexel(l, i0 + vec2i(i - 2, j - 2)); }
   }
-  if (k <= 0.0) { return lin; }
-  // (magnified: a cubic over 4 × 4 texels — the B-spline smooth but approximating: a butte's 150 m wall spread into a slope of
-  // two or three texels, its top lowered; Catmull–Rom, TUNE_TILE_CR, through the data)
-  if (TUNE_TILE_CR == 2u) {
-    var rows: array<f32, 4>;
-    for (var j = 0; j < 4; j++) {
-      rows[j] = monoCubic(tileTexel(l, i0 + vec2i(-1, j - 1)), tileTexel(l, i0 + vec2i(0, j - 1)), tileTexel(l, i0 + vec2i(1, j - 1)),
-        tileTexel(l, i0 + vec2i(2, j - 1)), f.x);
-    }
-    return mix(lin, monoCubic(rows[0], rows[1], rows[2], rows[3], f.y), k);
-  }
-  let cr = TUNE_TILE_CR > 0u;
-  let wx = select(bspline4(f.x), catmullRom4(f.x), cr);
-  let wy = select(bspline4(f.y), catmullRom4(f.y), cr);
-  var b = 0.0;
+  // (the B-spline's nodes: the texels, or — a gentle node's alone, the steep and the surveyed keeping their own: a butte's
+  // top not lowered by its foot — their 3 × 3 binomial)
+  var b: array<f32, 16>;
   for (var j = 0; j < 4; j++) {
-    var row = 0.0;
-    for (var i = 0; i < 4; i++) { row += wx[i] * tileTexel(l, i0 + vec2i(i - 1, j - 1)); }
-    b += wy[j] * row;
+    for (var i = 0; i < 4; i++) {
+      let c = 6 * (j + 1) + i + 1;
+      b[4 * j + i] = t[c];
+      if (TUNE_TILE_PRE != 0u) {
+        let blur = (4.0 * t[c] + 2.0 * (t[c - 1] + t[c + 1] + t[c - 6] + t[c + 6]) + t[c - 7] + t[c - 5] + t[c + 5] + t[c + 7]) / 16.0;
+        let g = max(abs(t[c + 1] - t[c - 1]), abs(t[c + 6] - t[c - 6])) * 0.5 / max(texM, 1e-3);
+        b[4 * j + i] = mix(blur, t[c], max(smoothstep(TILE_STEEP.x, TILE_STEEP.y, g), f32(bitcast<u32>(t[c]) & 1u)));
+      }
+    }
   }
-  return mix(lin, b, k);
+  let wx = bspline4(f.x);
+  let wy = bspline4(f.y);
+  var bs = 0.0;
+  var rows: array<f32, 4>;
+  for (var j = 0; j < 4; j++) {
+    let c = 6 * (j + 1) + 1;
+    bs += wy[j] * dot(wx, vec4f(b[4 * j], b[4 * j + 1], b[4 * j + 2], b[4 * j + 3]));
+    rows[j] = monoCubic(t[c], t[c + 1], t[c + 2], t[c + 3], f.x);
+  }
+  let mono = monoCubic(rows[0], rows[1], rows[2], rows[3], f.y);
+  // (the four nodes' steepness [m/m] — the larger central difference of the texels — and their survey marks, blended across
+  // the cell)
+  var sn: array<f32, 4>;
+  for (var n = 0; n < 4; n++) {
+    let k0 = 6 * (2 + (n >> 1u)) + 2 + (n & 1);
+    let g = max(abs(t[k0 + 1] - t[k0 - 1]), abs(t[k0 + 6] - t[k0 - 6])) * 0.5 / max(texM, 1e-3);
+    sn[n] = max(smoothstep(TILE_STEEP.x, TILE_STEEP.y, g), f32(bitcast<u32>(t[k0]) & 1u));
+  }
+  let s = mix(mix(sn[0], sn[1], f.x), mix(sn[2], sn[3], f.x), f.y);
+  return mix(lin, mix(bs, mono, s), k);
+}
+// a level's height at p, bilinear (tileSample's near the footprint; earthSlopeFine's differences)
+fn tileBilinear(l: u32, p: vec2f) -> f32 {
+  let x = p - 0.5;
+  let i0 = vec2i(floor(x));
+  let f = x - floor(x);
+  return mix(mix(tileTexel(l, i0), tileTexel(l, i0 + vec2i(1, 0)), f.x), mix(tileTexel(l, i0 + vec2i(0, 1)), tileTexel(l, i0 + vec2i(1, 1)), f.x), f.y);
 }
 // ---- the Moon's and Mars's relief tiles (PLAN-PLANETES-AAA P6, P7; src/system/moon-tiles.ts: LOLA's 118 m, the HRSC and MOLA
 // blend's 200 m in equirectangular levels, the same weights on the CPU — heightAt) through the Earth's tiles' binding and
@@ -7251,7 +7279,7 @@ fn earthH(q: vec3f, foot: f32, cheap: bool) -> vec2f {
     let d = min(min(p.x, p.y), min(b.x - p.x, b.y - p.y));
     let w = wz * smoothstep(2.0, 48.0, d);
     if (w <= 0.0) { continue; }
-    h += rem * w * tileSample(l, p, select(zf - z, 0.0, cheap || TUNE_CHEAP > 0u));
+    h += rem * w * tileSample(l, p, select(zf - z, 0.0, cheap || TUNE_CHEAP > 0u), EARTH_RM * cosLat / b.z);
     // (the data's own resolution: a survey's its texel's, the global data's no finer than SRTM's — the nearest texel's mark)
     res += rem * w * max(EARTH_RM * cosLat / b.z, select(TILE_RES_MIN, TILE_RES_FINE, tileFine(l, vec2i(floor(p)))));
     rem *= 1.0 - w;
@@ -7398,8 +7426,8 @@ fn earthSlopeFine(q: vec3f, foot: f32) -> vec3f {
     if (!tileFine(l, vec2i(floor(p)))) { return vec3f(0.0); }
     // (central differences over the footprint — a texel at least —, bilinear: the pixels' own measure of the ground)
     let k = max(foot / texel, 1.0);
-    let he = tileSample(l, p + vec2f(k, 0.0), 0.0) - tileSample(l, p - vec2f(k, 0.0), 0.0);
-    let hs = tileSample(l, p + vec2f(0.0, k), 0.0) - tileSample(l, p - vec2f(0.0, k), 0.0);
+    let he = tileBilinear(l, p + vec2f(k, 0.0)) - tileBilinear(l, p - vec2f(k, 0.0));
+    let hs = tileBilinear(l, p + vec2f(0.0, k)) - tileBilinear(l, p - vec2f(0.0, k));
     // (Mercator's pixels square on the ground: east the same as south — y grows southwards)
     let m = 2.0 * k * texel;
     return vec3f(-he / m, hs / m, smoothstep(4.0, 12.0, edge));
@@ -7552,6 +7580,7 @@ fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterBridge(px: vec2f) -> bool { return false; }
 fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
+fn terrainRasterSeam(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterCloud(px: vec2f) -> bool { return false; }
 // END_TERRAIN_RASTER
 // BEGIN_CLOUD_PASS (system/cloud-pass.ts withCloudPass supplies the cloud pass's texture reads)
@@ -13071,8 +13100,9 @@ fn rasterNormal(px: vec2f, tM: f32, k: u32) -> vec3f {
   if (tx <= 0.0 || ty <= 0.0 || abs(tx - tM) > 0.08 * tM || abs(ty - tM) > 0.08 * tM) { return vec3f(0.0); }
   // (not across a seam between two of the relief's rings — their meshes meet within their tolerance, not smoothly: the normal
   // there tipped, a line of false slope along the seam — the cascades' white water drew it over the sea)
-  let lv = terrainRasterLevelStep(px);
-  if (terrainRasterLevelStep(px + vec2f(sx, 0.0)) != lv || terrainRasterLevelStep(px + vec2f(0.0, sy)) != lv) { return vec3f(0.0); }
+  // (every ring's own mark — T2: by their step alone the four rings finer than the reference patch were one)
+  let lv = terrainRasterSeam(px);
+  if (terrainRasterSeam(px + vec2f(sx, 0.0)) != lv || terrainRasterSeam(px + vec2f(0.0, sy)) != lv) { return vec3f(0.0); }
   let d0 = toBody(rasterRay(px, k).look);
   let p0 = d0 * tM;
   let ex = toBody(rasterRay(px + vec2f(sx, 0.0), k).look) * tx - p0;

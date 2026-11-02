@@ -147,6 +147,8 @@ export interface TerrainRing {
   /** its nodes' spacing over the next finer level's (4, or 2 between the finest two) */
   ratio: number;
   step: number;
+  /** its rank from the patch (1 the first ring): its seams' mark (T2) */
+  rank: number;
 }
 interface RingState {
   key: string;
@@ -566,7 +568,10 @@ export class TerrainRaster {
       });
     }
     d.queue.writeBuffer(r.uniform, 0, ring.frame);
-    d.queue.writeBuffer(r.hole, 0, new Float32Array([ring.hole[0], ring.hole[1], RING_OVERLAP, 0.5 ** ring.step]));
+    // (its mark: ½^step — the tracer's tolerance, the rings' sparser shading — times 1 − rank/64, its rank from the patch: the
+    // rings finer than the reference patch share step 0, their seams seen all the same — rasterNormal, PLAN-REFRACTION-HORIZONS
+    // T2; terrainRasterLevelStep rounds the rank off)
+    d.queue.writeBuffer(r.hole, 0, new Float32Array([ring.hole[0], ring.hole[1], RING_OVERLAP, 0.5 ** ring.step * (1 - ring.rank / 64)]));
     pass.setPipeline(pipe);
     pass.setBindGroup(0, r.bind);
     pass.setBindGroup(1, r.heightBind);

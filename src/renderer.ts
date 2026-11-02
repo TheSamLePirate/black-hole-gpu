@@ -8591,7 +8591,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       let dx = ratio * w.i - finer.i;
       dx -= Math.round(dx / round) * round;
       const step = Math.max(0, lv - Math.max(level, TERRAIN_CACHE_PATCH_REF));
-      out.push({ frame: f, level: lv, window: w, hole: [dx, ratio * w.j - finer.j], ratio, step });
+      out.push({ frame: f, level: lv, window: w, hole: [dx, ratio * w.j - finer.j], ratio, step, rank: lv - level });
       finer = w;
     }
     return out;

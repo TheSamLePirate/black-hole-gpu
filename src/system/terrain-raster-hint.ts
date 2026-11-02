@@ -32,11 +32,15 @@ fn terrainRasterBridge(px: vec2f) -> bool { let a = textureLoad(terrainDist, vec
 // A building's own triangles at this pixel (a: 3 — system/scenery-raster.ts meshFs): shadeLite's material.
 fn terrainRasterMesh(px: vec2f) -> bool { return textureLoad(terrainDist, vec2i(floor(px)), 0).a > 2.5; }
 // How many levels coarser than the near patch the ground here was drawn from (a: 1 the patch — 2 a building's box on it —,
-// ½ its first far ring, ¼ the next: system/terrain-raster.ts ringFs; 0 none).
+// ½ its first far ring, ¼ the next, each times 1 − rank/64 — its rank from the patch, rounded off here: system/terrain-raster.ts
+// ringFs; 0 none).
 fn terrainRasterLevelStep(px: vec2f) -> f32 {
   let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a;
-  return select(0.0, -log2(min(a, 1.0)), a > 0.0);
+  return select(0.0, round(-log2(min(a, 1.0))), a > 0.0);
 }
+// The mesh the ground here was drawn from (the patch and what stands on it 1, each ring its own mark — T2: rasterNormal stops
+// at every seam, the rings finer than the reference patch's too; 0 none).
+fn terrainRasterSeam(px: vec2f) -> f32 { return min(textureLoad(terrainDist, vec2i(floor(px)), 0).a, 1.0); }
 // A frozen cloud's slab at this pixel (a: 1.5 — system/body-raster.ts bodyCloudFs, Mann's: PLAN-PLANETES-AAA P4).
 fn terrainRasterCloud(px: vec2f) -> bool { let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a; return a > 1.4 && a < 1.6; }`,
   );
