@@ -419,6 +419,7 @@ export class EarthScenery {
       coverPixels: d?.coverPixels ?? 0,
       rgbPixels: d?.rgbPixels ?? 0,
       workerMs: d?.workerMs ?? 0,
+      phases: d?.phases ?? null,
       tileNetworkBytes: d?.networkBytes ?? 0,
       /** the scene's responses from an offline zone, and from elsewhere (I8a) */
       zoneResponses: d?.zoneResponses ?? 0,

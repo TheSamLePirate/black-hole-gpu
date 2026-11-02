@@ -345,6 +345,8 @@ export interface SceneryReply {
   zoneResponses?: number;
   otherResponses?: number;
   workerMs?: number;
+  /** each step's end from the start [ms] (cover, osm, bdtopo, overture, forest, …): where the scene's time goes (T8) */
+  phases?: Record<string, number>;
   errors?: string[];
   budgetLimited?: boolean;
   error?: string;

@@ -78,6 +78,9 @@ const ty = (lat: number, z = 14) => ((1 - Math.asinh(Math.tan(lat * D)) / Math.P
 async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const started = performance.now(),
     signal = AbortSignal.timeout(60_000);
+  // (where the time goes — each step's end from the start [ms]: the scene's stats, T8)
+  const phases: Record<string, number> = {};
+  const phase = (name: string) => (phases[name] = Math.round(performance.now() - started));
   // (the detail's reach: the box, its raster — ~10 m a pixel kept —, its budgets this many times the normal ones)
   const k = q.reach ?? 1,
     k2 = k * k,
@@ -199,6 +202,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const landReady = land?.prepare(q.lat, q.lon, surveyReach(radius));
   await raster(false);
   if (q.satellite) await raster(true);
+  phase("cover");
   // Keep each DEM tile at least 1.8 km wide at high latitudes, bounding root-data memory.
   const demZoom = sceneryDemZoom(q.lat);
   const heights = new Map<string, Promise<Uint8ClampedArray>>();
@@ -614,9 +618,27 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   };
   const overture = !bdtopo && q.overture ? overtureTiles() : null;
   const osmChoices: Choice[] = [];
+  phase("before osm");
+  // (the tiles asked six at a time, ahead — one after the other, Paris's took 34 s —; read in their order still: the same scene)
+  const osmRaw = new Map<string, Promise<Uint8Array | ArrayBuffer>>();
+  {
+    let next = 0;
+    const tiles = osm.tiles;
+    const run = async () => {
+      while (next < tiles.length) {
+        const t = tiles[next++]!;
+        const p = fetchCount(osmUrl(t.x, t.y));
+        osmRaw.set(`${t.x}/${t.y}`, p);
+        await p.catch(() => {});
+      }
+    };
+    for (let k = 0; k < 6; k++) void run();
+  }
   for (const { x, y } of osm.tiles) {
     try {
-      const raw = await fetchCount(osmUrl(x, y));
+      // (asked by now — the six runners take the tiles in this order)
+      while (!osmRaw.has(`${x}/${y}`)) await new Promise((done) => setTimeout(done, 5));
+      const raw = await osmRaw.get(`${x}/${y}`)!;
       const layers = new VectorTile(new PbfReader(raw)).layers;
       readNetworks(layers, x, y);
       const layer = layers.building;
@@ -676,8 +698,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   }
   let bdtopoBuildings = 0,
     bdtopoTileCount = 0;
+  phase("osm");
   if (bdtopo) {
     const b = await bdtopo;
+    phase("bdtopo");
     bdtopoTileCount = b.tileCount;
     // (one by one: Paris's tens of thousands would overflow a spread's arguments)
     for (const v of b.out) choices.push(v);
@@ -693,6 +717,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     overtureTileCount = 0;
   if (overture) {
     const o = await overture;
+    phase("overture");
     overtureTileCount = o.tileCount;
     const z14 = (lat: number, lon: number) =>
       `${Math.floor(((lon + 180) / 360) * 2 ** OVERTURE_Z)}/${Math.floor(((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * 2 ** OVERTURE_Z)}`;
@@ -867,6 +892,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const p = localPoint(frame, lat, lon, 0);
     return houses.get(`${Math.floor(p[0] / 32)}:${Math.floor(p[1] / 32)}`)?.some((v) => surfaceContains(p, v, 1.5)) ?? false;
   };
+  phase("before forest");
   const grown = await growForest(ff, {
     cover: (lat, lon) => {
       const k = index(lat, lon);
@@ -959,6 +985,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const roof = top - eave;
     return roof > 0.8 && roof < 12 ? roof : roof <= 0.8 && roof > -2 ? 0 : null;
   };
+  phase("forest");
   let lidarRoofs = 0;
   const planned: Planned[] = [];
   for (const [i, v] of choices.entries()) {
@@ -1162,6 +1189,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     zoneResponses: served.zone,
     otherResponses: served.other,
     workerMs: performance.now() - started,
+    phases,
     errors: errors.slice(0, 12),
     budgetLimited,
   };
