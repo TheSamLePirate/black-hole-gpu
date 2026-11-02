@@ -33,6 +33,9 @@ export interface NationalSource {
     y: number,
     signal: AbortSignal,
     hlod: boolean,
+    /** its ground already in (a first pass's): the surface alone asked over it (T8 — the near ground before the far
+     *  silhouettes) */
+    ground?: Float32Array,
   ): Promise<{ h: Float32Array; over: Float32Array | null } | null>;
   /** every URL `heights` may fetch for a tile, its fallbacks included (the offline zones' — zones.ts) */
   heightUrls(z: number, x: number, y: number, hlod: boolean): string[];

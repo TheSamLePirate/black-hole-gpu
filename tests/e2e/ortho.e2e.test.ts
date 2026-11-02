@@ -155,7 +155,9 @@ describe.skipIf(!E2E)("the IGN's orthophotos", () => {
       await app.waitFor(`__bh.renderer.earthTiles.orthoFinest === 0`, 10_000);
       const off = await fps();
       console.log(`  ${P.name} without them: ${off.toFixed(0)} fps`);
-      await app.waitFor(`document.querySelector('[data-testid="ortho-credit"]').hidden`, 5_000);
+      // (the IGN's credit names its relief too — I2: shown while its finer levels, z 15 … 17, are drawn —; hidden with the
+      // orthophotos off only where none of them is: main.ts nationalDrawn)
+      await app.waitFor(`document.querySelector('[data-testid="ortho-credit"]').hidden === !(__bh.renderer.earthTiles.finest > 14)`, 5_000);
       await app.js(`(() => { __bh.settings.earthOrtho = true; return 1; })()`);
     }, 420_000);
 

@@ -368,10 +368,12 @@ async function ignGround(
   y: number,
   signal: AbortSignal,
   hlod: boolean,
+  known?: Float32Array,
 ): Promise<{ h: Float32Array; over: Float32Array | null } | null> {
   // (the ground and — far levels, I6 — the surface over it asked together: each its own chain, one after the other a tile
-  // took two to four of the gate's turns in a row)
+  // took two to four of the gate's turns in a row; the ground known — a first pass's —: the surface alone)
   const ground = async () => {
+    if (known) return known;
     let h = z >= IGN_LIDAR_Z ? await ignGrid(IGN_LIDAR, z, x, y, signal) : null;
     if (!h || h.some((e) => Number.isNaN(e))) {
       const r = await ignGrid(IGN_RGEALTI, z, x, y, signal);
@@ -420,7 +422,8 @@ export const NATIONAL_BOX = sourcesBox(NATIONAL);
 
 /**
  * A tile's heights from its national source (I2, I7): its ground marked as a survey's (markFine), the global data's
- * (Terrarium) where it has none; its overground, when it has one, after them — one array (drawnHeight).
+ * (Terrarium) where it has none; its overground, when it has one, after them — one array (drawnHeight). `ground`: the
+ * tile's ground already in (refine's first pass) — its surface alone asked.
  */
 async function nationalHeights(
   src: NationalSource,
@@ -429,7 +432,16 @@ async function nationalHeights(
   y: number,
   signal: AbortSignal,
   hlod = false,
+  ground?: Float32Array,
 ): Promise<Float32Array> {
+  if (ground) {
+    const r = await src.heights(z, x, y, signal, hlod, ground.subarray(0, TILE * TILE));
+    if (!r?.over) return ground;
+    const both = new Float32Array(2 * TILE * TILE);
+    both.set(ground.subarray(0, TILE * TILE));
+    both.set(r.over, TILE * TILE);
+    return both;
+  }
   const r = await src.heights(z, x, y, signal, hlod);
   if (!r) return terrarium(z, x, y, signal);
   const { h, over } = r;
@@ -903,20 +915,33 @@ export class EarthTiles {
    * MAX_NATIONAL at once, the nearest and finest first (p: its distance in the level's tiles, plus one, over their count);
    * none if it is no longer wanted when its turn comes, the global data's kept if they will not come.
    */
-  private async refine(L: Level, x: number, y: number, key: string, src: NationalSource, img: Promise<Uint32Array | null>, p: number) {
+  private async refine(
+    L: Level,
+    x: number,
+    y: number,
+    key: string,
+    src: NationalSource,
+    img: Promise<Uint32Array | null>,
+    p: number,
+    ground?: Float32Array,
+  ): Promise<void> {
     const gen = this.gen;
     const ctl = new AbortController();
     this.refining.get(key)?.ctl.abort();
     this.refining.set(key, { ctl, L, x, y });
     const wanted = () => gen === this.gen && !ctl.signal.aborted && (L.key[this.slotOf(L, x, y)] === key || this.cache.has(key));
+    let nextPass: Float32Array | null = null;
     if (this.nationalActive < MAX_NATIONAL) this.nationalActive++;
     else await new Promise<void>((go) => this.nationalQueue.push({ p, go }));
     try {
       if (!wanted()) return;
       const timer = setTimeout(() => ctl.abort(), NATIONAL_TIMEOUT_MS);
+      // (two passes: every tile's ground first, its far silhouettes' surface — I6, z 11 … 13, two or three 512² grids — after
+      // every ground, over it: the near relief no longer queued behind the far one's; kerr-mini cold, 2 Nov 2026)
+      const surface = this.hlodOn && L.z <= HLOD_Z1;
       let h: Float32Array;
       try {
-        h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, this.hlodOn);
+        h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, !!ground, ground);
       } finally {
         clearTimeout(timer);
       }
@@ -924,6 +949,7 @@ export class EarthTiles {
       if (gen !== this.gen) return;
       if (L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, h, col);
       else if (this.cache.has(key)) this.keep(key, h, col);
+      if (!ground && surface && src.id === "ign") nextPass = h;
     } catch {
       // (refused, timed out, dropped: the global data's stay)
     } finally {
@@ -936,6 +962,7 @@ export class EarthTiles {
       } else this.nationalActive--;
       if (this.refining.get(key)?.ctl === ctl) this.refining.delete(key);
     }
+    if (nextPass && gen === this.gen) await this.refine(L, x, y, key, src, img, 1 + p, nextPass);
   }
 
   /** A tile loaded — into its window, or (ahead) into memory past it, drawn if its window has come to it meanwhile. */
