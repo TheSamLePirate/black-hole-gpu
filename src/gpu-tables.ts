@@ -6,7 +6,7 @@
 import { BB_LUT_SIZE, SYNC_LUT_SIZE } from "./physics";
 import { BODY_VEC4, MAX_BODIES } from "./system/scene-bodies";
 import { WARP_LEVELS, WARP_N } from "./system/warp-grid";
-import { TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
+import { TERRAIN_CACHE_LEVELS, TERRAIN_CACHE_NODE_VEC4S, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { GEOID_H, GEOID_W } from "./system/geoid-grid";
 import { ORTHO_PARAM_VEC4S } from "./system/earth-tiles";
 
@@ -67,4 +67,8 @@ export const RINGSUM_VEC4S = Math.ceil((RING_N + 1) / 4);
  *  methane-band profile, its map's luminance, Saturn's, each 181 values from 90 S, four a vec4 */
 export const TABLE_TOPS = TABLE_RINGSUM + RINGSUM_VEC4S;
 export const TOPS_VEC4S = 181;
-export const TABLE_VEC4S = TABLE_TOPS + TOPS_VEC4S;
+/** (T4) each relief cache level's heights as they were drawn before its last bake (terrain-cache.ts): faded out over
+ *  TerrainCache.FADE_MS — its share in the level's header (s.w) —, a bake never a jump; last in the table, no offset moved */
+export const TABLE_TERRAIN_PREV = TABLE_TOPS + TOPS_VEC4S;
+export const TERRAIN_PREV_VEC4S = TERRAIN_CACHE_LEVELS * TERRAIN_CACHE_NODE_VEC4S;
+export const TABLE_VEC4S = TABLE_TERRAIN_PREV + TERRAIN_PREV_VEC4S;

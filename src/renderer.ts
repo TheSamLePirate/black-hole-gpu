@@ -21,6 +21,8 @@ import {
   TERRAIN_CACHE_PATCH_REF,
   TERRAIN_CACHE_RING_LAST,
   TERRAIN_CACHE_ROUNDS,
+  TERRAIN_CACHE_HEADER,
+  TERRAIN_CACHE_NODE_VEC4S,
   TERRAIN_CACHE_VEC4S,
   type TerrainWindow,
 } from "./system/terrain-cache-layout";
@@ -115,6 +117,8 @@ import {
   TABLE_VEC4S,
   TABLE_RING,
   TABLE_RINGSUM,
+  TABLE_TERRAIN,
+  TABLE_TERRAIN_PREV,
   TABLE_TOPS,
   RING_N,
   TABLE_WIND,
@@ -1568,7 +1572,8 @@ export class Renderer {
     // light probe's harmonics, copied there on the GPU — see dispatchEnv —; the colours' LUTs; the path)
     this.bodyBuf = device.createBuffer({
       size: TABLE_VEC4S * 16,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      // (COPY_SRC: read back by the e2e — terrainCacheLevel, T4's fade)
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     });
     // (the mountains' warp's grids in it, after the walking grid: system/warp-grid.ts)
     this.warpOut = new WarpGrid(device, this.bodyBuf, TABLE_WARP, traceWGSL);
@@ -8961,6 +8966,22 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.terrainRaster?.encodeInspector(enc, output, target.sceneDepth, (label, descriptor) => this.prof.pass(label, descriptor));
   }
   /** Experimental height-cache diagnostics, accessible through __bh.renderer. */
+  /** (T4, the e2e's) a relief cache level as the GPU holds it after the last submitted frame: its previous bake's share on
+   *  screen, its nodes' heights (its last bake) and its previous ones [m] */
+  async terrainCacheLevel(k: number): Promise<{ share: number; ready: boolean; current: Float32Array; previous: Float32Array }> {
+    const n = TERRAIN_CACHE_NODE_VEC4S * 16;
+    const buf = this.device.createBuffer({ size: 32 + 2 * n, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.bodyBuf, (TABLE_TERRAIN + 2 * k) * 16, buf, 0, 32);
+    enc.copyBufferToBuffer(this.bodyBuf, (TABLE_TERRAIN + TERRAIN_CACHE_HEADER + k * TERRAIN_CACHE_NODE_VEC4S) * 16, buf, 32, n);
+    enc.copyBufferToBuffer(this.bodyBuf, (TABLE_TERRAIN_PREV + k * TERRAIN_CACHE_NODE_VEC4S) * 16, buf, 32 + n, n);
+    this.device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ);
+    const f = new Float32Array(buf.getMappedRange().slice(0));
+    buf.unmap();
+    buf.destroy();
+    return { share: f[7]!, ready: f[6]! > 0.5, current: f.slice(8, 8 + n / 4), previous: f.slice(8 + n / 4) };
+  }
   get terrainCacheStats() {
     const stats = this.terrainSurfaceCache?.stats() ?? {
       compiled: false,

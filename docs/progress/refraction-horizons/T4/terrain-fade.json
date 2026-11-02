@@ -1,0 +1,89 @@
+{
+ "faded": {
+  "3": {
+   "reads": 76,
+   "bakes": 7,
+   "bakeChange": 13.38,
+   "largestStep": 1.98,
+   "shares": [
+    1,
+    0.88,
+    0.76,
+    0.64,
+    0.52,
+    0.4,
+    0.28,
+    0.16,
+    0.04,
+    0.94,
+    0.82,
+    0.68
+   ]
+  },
+  "4": {
+   "reads": 76,
+   "bakes": 8,
+   "bakeChange": 19.89,
+   "largestStep": 2.81,
+   "shares": [
+    0.98,
+    0.84,
+    0.74,
+    0.62,
+    0.5,
+    0.38,
+    0.26,
+    0.14,
+    0.02,
+    0.9,
+    0.78,
+    0.66
+   ]
+  },
+  "5": {
+   "reads": 76,
+   "bakes": 7,
+   "bakeChange": 20.5,
+   "largestStep": 2.86,
+   "shares": [
+    0.94,
+    0.82,
+    0.7,
+    0.58,
+    0.46,
+    0.34,
+    0.22,
+    0.1,
+    1,
+    0.88,
+    0.76,
+    0.62
+   ]
+  },
+  "readMs": 124
+ },
+ "abrupt": {
+  "3": {
+   "reads": 38,
+   "bakes": 3,
+   "bakeChange": 13.38,
+   "largestStep": 13.38,
+   "shares": []
+  },
+  "4": {
+   "reads": 38,
+   "bakes": 3,
+   "bakeChange": 35.23,
+   "largestStep": 35.23,
+   "shares": []
+  },
+  "5": {
+   "reads": 38,
+   "bakes": 4,
+   "bakeChange": 23.44,
+   "largestStep": 23.44,
+   "shares": []
+  },
+  "readMs": 138
+ }
+}

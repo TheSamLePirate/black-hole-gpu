@@ -1,4 +1,4 @@
-import { TABLE_TERRAIN } from "../gpu-tables";
+import { TABLE_TERRAIN, TABLE_TERRAIN_PREV } from "../gpu-tables";
 import type { TileChange } from "./earth-tiles";
 import { wgslFunction } from "./warp-grid";
 import {
@@ -26,9 +26,13 @@ export function withTerrainCache(trace: string): string {
 const TC_OFF = ${TABLE_TERRAIN}u;
 const TC_N = ${TERRAIN_CACHE_N}u;
 const TC_NODE_VEC4S = ${TERRAIN_CACHE_NODE_VEC4S}u;
+// (T4: a level's node as drawn — its last bake, faded in over the one before: that one's share in the header's s.w)
 fn terrainCacheNode(k: u32, i: vec2u) -> f32 {
   let n = i.y * TC_N + i.x;
-  return bodies[TC_OFF + ${TERRAIN_CACHE_HEADER}u + k * TC_NODE_VEC4S + n / 4u][n % 4u];
+  let h = bodies[TC_OFF + ${TERRAIN_CACHE_HEADER}u + k * TC_NODE_VEC4S + n / 4u][n % 4u];
+  let share = bodies[TC_OFF + 2u * k + 1u].w;
+  if (share <= 0.0) { return h; }
+  return mix(h, bodies[${TABLE_TERRAIN_PREV}u + k * TC_NODE_VEC4S + n / 4u][n % 4u], share);
 }
 fn terrainCachedHeight(q: vec3f, foot: f32) -> f32 {
   // Never used by probes, offline/quality frames or the walking contact patch (the CPU remains exact).
@@ -169,6 +173,18 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 }`;
 }
 
+/** (T4) a level's heights as drawn into its previous ones: prev = mix(current, prev, share) — the state on screen, a fade
+ *  under way included —, before its new bake replaces the current */
+const TERRAIN_FADE_SHADER = /* wgsl */ `
+struct FadeU { current: u32, prev: u32, count: u32, share: f32 };
+@group(0) @binding(0) var<uniform> F: FadeU;
+@group(0) @binding(1) var<storage, read_write> table: array<vec4f>;
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3u) {
+  if (gid.x >= F.count) { return; }
+  table[F.prev + gid.x] = mix(table[F.current + gid.x], table[F.prev + gid.x], F.share);
+}`;
+
 export interface TerrainCacheSources {
   params: GPUBuffer;
   table: GPUBuffer;
@@ -243,6 +259,28 @@ export class TerrainCache {
   private visibleFirst = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
   private visibleLast = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
   static readonly QUIET_MS = 150;
+  /** (T4) a bake on the same window faded in over the heights drawn before it — no jump of the ground's shape —, its start
+   *  (0: none) */
+  static readonly FADE_MS = 250;
+  /** the fade's length now [ms] (0: none — a bake drawn at once, as before T4) */
+  fadeMs = TerrainCache.FADE_MS;
+  private fadeStart = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
+  private fadePipeline: GPUComputePipeline | null = null;
+  private fadeUniforms: GPUBuffer[] = [];
+  private fadeGroups: GPUBindGroup[] = [];
+  private fadeTable: GPUBuffer | null = null;
+  fades = 0;
+  /** a level's previous bake's share on screen now (1 at its new bake, 0 once faded) */
+  private share(k: number, now: number) {
+    const t0 = this.fadeStart[k]!;
+    if (!t0) return 0;
+    const s = this.fadeMs > 0 ? 1 - (now - t0) / this.fadeMs : 0;
+    if (s <= 0) {
+      this.fadeStart[k] = 0;
+      return 0;
+    }
+    return s;
+  }
   /** (T4) the camera's motion on the lattice (longitude, latitude [rad/s], smoothed): the windows placed ahead along it */
   private lastAt: { lon: number; lat: number; t: number } | null = null;
   private motion: [number, number] = [0, 0];
@@ -265,7 +303,11 @@ export class TerrainCache {
     try {
       const module = this.device.createShaderModule({ code: terrainCacheShader(trace), label: "terrain surface cache" });
       const pipeline = await this.device.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "main" } });
-      if (!this.disposed) this.pipeline = pipeline;
+      const fade = await this.device.createComputePipelineAsync({
+        layout: "auto",
+        compute: { module: this.device.createShaderModule({ code: TERRAIN_FADE_SHADER, label: "terrain cache fade" }), entryPoint: "main" },
+      });
+      if (!this.disposed) (this.pipeline = pipeline), (this.fadePipeline = fade);
     } catch (e) {
       if (this.disposed) return;
       this.error = String(e);
@@ -395,7 +437,43 @@ export class TerrainCache {
           { binding: 28, resource: sources.tiles.createView({ dimension: "2d-array" }) },
         ],
       });
+      // (T4: the fade's pass — a level's heights as drawn into its previous ones —, its table bound read-write)
+      const fade = this.fadePipeline;
+      if (fade && this.fadeTable !== sources.table) {
+        this.fadeTable = sources.table;
+        if (!this.fadeUniforms.length)
+          for (let l = 0; l < TERRAIN_CACHE_LEVELS; l++)
+            this.fadeUniforms.push(this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }));
+        this.fadeGroups = this.fadeUniforms.map((u) =>
+          this.device.createBindGroup({
+            layout: fade.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: { buffer: u } },
+              { binding: 1, resource: { buffer: sources.table } },
+            ],
+          }),
+        );
+      }
       for (const k of bake) {
+        // (baked again on the same window: what is drawn now — its last bake, or a fade under way — kept as its previous
+        // heights, the new bake faded in over them; a window moved: no fade, its old heights elsewhere)
+        if (this.ready[k] && fade && this.fadeMs > 0) {
+          const u = new ArrayBuffer(16);
+          new Uint32Array(u, 0, 3).set([
+            TABLE_TERRAIN + TERRAIN_CACHE_HEADER + k * TERRAIN_CACHE_NODE_VEC4S,
+            TABLE_TERRAIN_PREV + k * TERRAIN_CACHE_NODE_VEC4S,
+            TERRAIN_CACHE_NODE_VEC4S,
+          ]);
+          new Float32Array(u, 12, 1)[0] = this.share(k, now);
+          this.device.queue.writeBuffer(this.fadeUniforms[k]!, 0, u);
+          const fp = enc.beginComputePass({ label: "terrain cache fade" });
+          fp.setPipeline(fade);
+          fp.setBindGroup(0, this.fadeGroups[k]!);
+          fp.dispatchWorkgroups(Math.ceil(TERRAIN_CACHE_NODE_VEC4S / 64));
+          fp.end();
+          this.fadeStart[k] = now;
+          this.fades++;
+        } else this.fadeStart[k] = 0;
         this.device.queue.writeBuffer(this.uniforms[k]!, 0, metadata.subarray(8 * k, 8 * k + 8));
         this.device.queue.writeBuffer(this.uniforms[k]!, 32, terrainCacheTiles(this.windows[k]!, TERRAIN_CACHE_ROUNDS[k]!, tilesRef));
         const pass = enc.beginComputePass(timestamp?.());
@@ -422,6 +500,8 @@ export class TerrainCache {
         this.builds++;
       }
     }
+    // (each level's previous bake's share on screen: 1 at its new bake, 0 once faded)
+    for (let k = 0; k < TERRAIN_CACHE_LEVELS; k++) if (this.windows[k]) metadata[8 * k + 7] = this.share(k, now);
     this.device.queue.writeBuffer(sources.table, TABLE_TERRAIN * 16, metadata);
     return bake.length > 0;
   }
@@ -441,6 +521,7 @@ export class TerrainCache {
       bakesMoved: [...this.bakesMoved],
       changesVisible: this.changesVisible,
       changesHidden: this.changesHidden,
+      fades: this.fades,
       bakesDirty: [...this.bakesDirty],
       invalidations: this.invalidations,
       stagingBytes: this.staging?.size ?? 0,
@@ -452,6 +533,8 @@ export class TerrainCache {
     this.disposed = true;
     this.staging?.destroy();
     for (const u of this.uniforms) u.destroy();
+    for (const u of this.fadeUniforms) u.destroy();
+    this.fadeUniforms = [];
     this.staging = null;
     this.uniforms = [];
     this.input = null;

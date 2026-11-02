@@ -1,4 +1,5 @@
-import { TERRAIN_CACHE_N, TERRAIN_CACHE_RING_LAST } from "./terrain-cache-layout";
+import { TABLE_TERRAIN, TABLE_TERRAIN_PREV } from "../gpu-tables";
+import { TERRAIN_CACHE_HEADER, TERRAIN_CACHE_N, TERRAIN_CACHE_NODE_VEC4S, TERRAIN_CACHE_RING_LAST } from "./terrain-cache-layout";
 
 /** The relief's shadow map's side [texels] (system/terrain-raster.ts encodeSunShadow, trace.wgsl sunShadowFar). */
 /** a cascade's side in the relief's shadow atlas [texels] (T6: two cascades side by side — 2N × N) */
@@ -38,7 +39,16 @@ struct U {
 // MORPH_FULL nodes, where that level's mesh overlaps it — RING_OVERLAP and a coarse cell —, none past MORPH_BAND)
 const MORPH_FULL = 8.0;
 const MORPH_BAND = 16.0;
-fn cacheNode(base: u32, i: vec2u) -> f32 { let node = i.y * GRID_N + i.x; return table[base + node / 4u][node % 4u]; }
+// (a level's node as drawn — T4: its last bake faded in over the one before, that one's share in its header's s.w: the level
+// from its heights' place in the table)
+fn cacheNode(base: u32, i: vec2u) -> f32 {
+  let node = i.y * GRID_N + i.x;
+  let h = table[base + node / 4u][node % 4u];
+  let k = (base - ${TABLE_TERRAIN + TERRAIN_CACHE_HEADER}u) / ${TERRAIN_CACHE_NODE_VEC4S}u;
+  let share = table[${TABLE_TERRAIN}u + 2u * k + 1u].w;
+  if (share <= 0.0) { return h; }
+  return mix(h, table[${TABLE_TERRAIN_PREV}u + k * ${TERRAIN_CACHE_NODE_VEC4S}u + node / 4u][node % 4u], share);
+}
 @group(0) @binding(2) var distanceImage: texture_2d<f32>;
 @group(0) @binding(3) var<storage, read> referenceDepth: array<f32>;
 struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) n: vec3f };

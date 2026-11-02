@@ -1273,4 +1273,6 @@ compilation) s'y ajoutent.
 - **2 novembre, nuit** : **T4a** fait — les changements des tuiles triés par l'anneau que chaque niveau du cache dessine
   (visibles : recuits groupés ; cachés sous les niveaux fins : 10 s plus tard), les niveaux dus recuits ensemble, les fenêtres
   posées 24 nœuds en avant du mouvement : **13,3 → 7,3 cuissons par seconde** en vol bas à Chamonix (kerr-mini, A B B A), le
-  temps d'image inchangé ; le fondu (T4b) reste — [progress/refraction-horizons/T4.md](progress/refraction-horizons/T4.md).
+  temps d'image inchangé — [progress/refraction-horizons/T4.md](progress/refraction-horizons/T4.md) ; puis **T4b** (le fondu
+  de 250 ms depuis l'état affiché : les sauts de 13 à 35 m du sol lointain étalés, aucun coût mesuré) et le harnais e2e
+  corrigé (plus de Chrome orphelin : `bun test` n'exécute pas les gestionnaires de sortie).
