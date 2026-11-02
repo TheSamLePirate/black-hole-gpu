@@ -178,3 +178,29 @@ pixel), prises sur ce Mac ; les temps sont mesurés sur kerr-mini (`planets-ab`,
 - **Coût** : nul (kerr-mini : Jupiter en orbite, bas, à 1 000 et 300 km ; Saturne en orbite et à 500 km ; Mars en orbite,
   bas, cinéma — son noyau dessine aussi les géantes et porte ce code : budget des lignes relevé de 83 200 à 83 400).
 - **Ce qui manque** : le relief de ces bancs (leur normale) — la lumière ne voit que leur couleur.
+
+## V7b — les tourbillons nommés dedans, et le film
+
+![Trois films, leur début, leur milieu, leur fin (8 s chacun) : l'anneau de la Grande Tache à 32 km (×300), le jet de 24° N à 48 km (×300), l'œil de Saturne à 25 km sous 1 bar (×600)](geantes-volume/v7b.jpg)
+
+Les films : [la Grande Tache](../video/geantes-vent-jupiter-grs.mp4), [le jet de 24° N](../video/geantes-vent-jupiter-belt.mp4),
+[l'œil de Saturne](../video/geantes-vent-saturn-eye.mp4) — 720p, 30 images/s, image par image, la caméra libre tenue au-dessus
+de la planète, l'horloge accélérée.
+
+- **Dedans, comme sur la surface** (`giantFlow`) : dans la Grande Tache et l'Ovale BA, la matière tourne autour de leur
+  centre — la vitesse de leur anneau au point de la caméra, le vent zonal effacé à l'intérieur ; près du pôle de Saturne, le
+  jet de son cyclone polaire (~150 m/s) s'ajoute au vent zonal, et le mur de l'œil tourne avec ses ponts.
+- **Le rayon tourné, pas chaque échantillon** : ces rotations sont les mêmes tout le long d'un rayon ; tourner son origine,
+  sa direction, le Soleil et l'éclair une fois suffit — la marche se fait dans le repère de la matière, il ne reste par
+  échantillon que le petit terme du cisaillement. Tourner chaque lecture de densité coûtait +10 à +26 % ; le rayon tourné
+  coûte +1 à +4 % dedans, +2 % d'en haut (kerr-mini contre 862b1888 ; dans l'anneau de la Grande Tache +17 % : la rotation y
+  met d'autres nuages devant la caméra, une autre marche).
+- **Le jumeau CPU** (`giantFlowBack`) tourne pareil : les éclairs cherchent les orages là où le tourbillon les a portés.
+- **Les éclairs le jour** (D4, trouvé par le film) : la lueur d'un éclair éclairait les nuages en plein jour — à ×300, chaque
+  image 10 s de jeu, ils clignotaient. Galileo et Juno ne les ont vus que du côté nuit : leur lumière s'éteint maintenant
+  quand le Soleil est au-dessus de l'horizon de l'échantillon. `giant-lightning` (de nuit) inchangé.
+- **Tests** : `giant-clouds.test.ts` (dans l'anneau de la Grande Tache la matière tourne autour du centre à ~180 m/s, à
+  distance constante ; près du pôle de Saturne ~150 m/s ; les constantes celles de `giantFlow`), `kernel-budget` ; sur le
+  mini `giant-lightning`, `giant-descent`.
+- **Approximations** : la rotation d'un tourbillon est celle du point de la caméra, rigide sur les 1 500 km de la marche
+  (la Grande Tache fait 22 000 km) ; l'hexagone de Saturne ne tourne pas dedans.

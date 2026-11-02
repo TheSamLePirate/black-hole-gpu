@@ -11151,18 +11151,20 @@ var<private> GI_IN: bool = false;
 // two readings half a GIANT_CYCLE apart, each faded out before its age starts again (the noise never sheared without end);
 // the fade short — a phase alone 70 % of the cycle, faded 30 % of it —, and the fade drawn by the rays: each takes one phase
 // by its weight (its own random number), the passes' sum — the temporal one's, the still's samples — the mix. Both read in
-// every sample cost 36–45 % more over a fade, a loop over one 9–13 % always (kerr-mini). The turn found once a ray: the wind
-// at the camera's latitude, its shear about it to first order (the march's ±1–2° of latitude: the jets' flanks sliding by
-// each other) — per sample the wind's table and a cosine. GI_R: the ray's phase's turn (cos, sin), its shear's [rad per unit
-// of z off the camera's]; GI_ZC the camera's z. The eye's well and wall keep their own frame (their spin: V7b).
-var<private> GI_R: vec3f = vec3f(1.0, 0.0, 0.0);
+// every sample cost 36–45 % more over a fade, a loop over one 9–13 % always (kerr-mini). The turn found once a ray and the
+// RAY turned (giantInside: its origin, direction, Sun, flash — the march in the matter's frame, no turn a sample): the wind
+// at the camera's latitude, Saturn's polar jet added (V7b), or a named vortex about the camera turning the matter about its
+// centre (V7b: Jupiter's Great Red Spot, its Oval BA, as giantFlow turns them on the deck — the zonal wind faded out within
+// it). Left to a sample: the wind's shear about the camera's latitude to first order (the march's ±1–2° of latitude: the
+// jets' flanks sliding by each other), GI_SH [rad per unit of z off the camera's, GI_ZC]. The eye's well is round the axis
+// the turns keep — Saturn's wall turning with its decks at the camera's rate.
+var<private> GI_SH: f32 = 0.0;
 var<private> GI_ZC: f32 = 0.0;
 fn giantSigma(m: u32, p: vec3f, h: f32, cover: vec3f, rkm: f32, det: f32) -> f32 {
   let q0 = normalize(p);
-  // (the turn, then the shear's small one: x − δ y, y + δ x)
-  let d = GI_R.z * (q0.z - GI_ZC);
-  let qt = vec2f(q0.x * GI_R.x - q0.y * GI_R.y, q0.x * GI_R.y + q0.y * GI_R.x);
-  return giantSigmaAt(m, vec3f(qt.x - d * qt.y, qt.y + d * qt.x, q0.z), q0, h, cover, rkm, det);
+  // (the shear's small turn: x − δ y, y + δ x)
+  let d = GI_SH * (q0.z - GI_ZC);
+  return giantSigmaAt(m, vec3f(q0.x - d * q0.y, q0.y + d * q0.x, q0.z), q0, h, cover, rkm, det);
 }
 // (one phase's: q where the matter was — its noises' place —, q0 where it is — the eye's)
 fn giantSigmaAt(m: u32, q: vec3f, q0: vec3f, h: f32, cover: vec3f, rkm: f32, det: f32) -> f32 {
@@ -11267,8 +11269,8 @@ fn giantSigmaAt(m: u32, q: vec3f, q0: vec3f, h: f32, cover: vec3f, rkm: f32, det
 // a flash's light reaching p (squashed units): a bright core ~5 km round the channel, a halo ~30 km spread by the clouds' many
 // scatterings — climbing the column above more readily than across it (the vertical distance counted a third): Juno's and
 // Galileo's flashes, spots tens to hundreds of km wide seen through the decks over them
-fn giantFlashGlow(p: vec3f, rm: f32) -> f32 {
-  let GF = P.wx[6];
+fn giantFlashGlow(p: vec3f, f: vec3f, rm: f32) -> f32 {
+  let GF = vec4f(f, P.wx[6].w);
   let dp = p - GF.xyz;
   let up = normalize(GF.xyz);
   let v = dot(dp, up);
@@ -11287,6 +11289,11 @@ fn giantHazeCol(h: f32, lt: f32, hr: f32) -> f32 {
     c = exp(-h * k1 - (h - lt) / (0.4 * hr)) / k2;
   }
   return 2.2e-6 * c + 0.16 * (1.0 - smoothstep(-1.5, 1.5, (h - lt - 45e3) / 15e3));
+}
+// a vector turned about the unit axis k by cv (cos, sin), then about the body's axis by cz (V7a, V7b)
+fn giantTurn(v: vec3f, k: vec3f, cv: vec2f, cz: vec2f) -> vec3f {
+  let u = v * cv.x + cross(k, v) * cv.y + k * dot(k, v) * (1.0 - cv.x);
+  return vec3f(u.x * cz.x - u.y * cz.y, u.x * cz.y + u.y * cz.x, u.z);
 }
 fn giantInside(look: vec3f, k: u32) -> EarthNear {
   setAir(k);
@@ -11341,12 +11348,44 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   // (the wind at the camera's latitude [rad/s about the axis], its shear per unit of z — the table's per 2.5°)
   let wc = giantWind(m, latc);
   let rc = rm * max(length(qc.xy), 0.05);
-  let om = wc.x / rc;
-  let dom = wc.y / (0.0436332 * rc * max(length(qc.xy), 0.05));
+  var om = wc.x / rc;
+  var dom = wc.y / (0.0436332 * rc * max(length(qc.xy), 0.05));
   GI_ZC = qc.z;
   // (the ray's phase, by its weight: its own random number — the march's jitter is RNDV.z)
   let ag = select(age.x, age.y, RNDV.w < w1);
-  GI_R = vec3f(cos(-om * ag), sin(-om * ag), -dom * ag);
+  // (V7b: the named vortices — giantFlow's —: Jupiter's two anticyclones by the camera's place in their ellipse, the matter
+  // turned about their centre — kv its axis, cv its turn —; Saturn's polar cyclone's jet, ~150 m/s eastward at 2° from the
+  // pole, added to the zonal wind)
+  var kv = vec3f(0.0, 0.0, 1.0);
+  var cv = vec2f(1.0, 0.0);
+  if (m == 4u) {
+    let lonc = atan2(qc.y, qc.x);
+    for (var vi = 0u; vi < 2u; vi++) {
+      let V = select(vec4f(-1.0071, -0.5603, 0.0733, 0.0698), vec4f(2.2066, -0.384, 0.157, 0.0916), vi == 0u);
+      var dv = vec2f(lonc - V.x, latc - V.y);
+      dv.x -= TAU * round(dv.x / TAU);
+      let r = length(dv / V.zw);
+      if (r < 1.3) {
+        let v = select(135.0, 180.0, vi == 0u) * select(exp(-sq((r - 0.8) / 0.25)), sq(r / 0.8), r < 0.8);
+        let wv = smoothstep(1.3, 1.0, r);
+        let a = -v * ag / (max(r, 1e-4) * rm * max(V.z * cos(V.y), V.w)) * wv;
+        kv = vec3f(cos(V.y) * cos(V.x), cos(V.y) * sin(V.x), sin(V.y));
+        cv = vec2f(cos(a), sin(a));
+        om *= 1.0 - wv;
+        dom *= 1.0 - wv;
+      }
+    }
+  } else {
+    let rho = acos(clamp(qc.z, -1.0, 1.0));
+    om += 150.0 * (rho / 0.0349) * exp(0.5 * (1.0 - sq(rho / 0.0349))) / (rm * max(sin(rho), 1e-4));
+  }
+  GI_SH = -dom * ag;
+  let cz = vec2f(cos(-om * ag), sin(-om * ag));
+  // (the ray turned to where its matter was: the vortex's turn — Rodrigues' —, then the zonal one about the axis)
+  let roT = giantTurn(ro, kv, cv, cz);
+  let rdT = giantTurn(rd, kv, cv, cz);
+  let LsT = giantTurn(Ls, kv, cv, cz);
+  let GFT = giantTurn(P.wx[6].xyz, kv, cv, cz);
   // (the march: ~1 500 km at most; in the clear its steps growing with the distance — 6 % of it, 350 m at least —, in a cloud
   // short — 1.5 % of it, 150 m at least: finer than the billows, or the jitter averages them into a blur —; jittered)
   // (over the top deck — giantInsideW's grazing rays —: to its horizon at least)
@@ -11374,13 +11413,13 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
     // next: streaks)
     let dm = t - ds * RND;
     tPrev = t;
-    let p = ro + rd * (dm * mm / rm);
+    let p = roT + rdT * (dm * mm / rm);
     let h = (length(p) - 1.0) * rm * KL;
     // (out of the decks: up, space beyond; down, the deep)
     if (h > hTop && dot(p, rd) > 0.0) { break; }
     if (h < hBot) { tEnd = dm; break; }
     let q = normalize(p);
-    let mu0 = dot(q, Ls);
+    let mu0 = dot(q, LsT);
     let sig = giantSigma(m, p, h, cover, rkm, 1.0 - smoothstep(15e3, 60e3, dm));
     let alb = GI_ALB;
     let clear = sig <= 0.0;
@@ -11402,7 +11441,7 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
       var dPrev = 0.0;
       for (var j = 0u; j < select(3u, 1u, clear); j++) {
         let dl = 1500.0 * pow(4.0, select(f32(j), 1.5, clear));
-        let pl = p + Ls * (dl / rm);
+        let pl = p + LsT * (dl / rm);
         tl += giantSigma(m, pl, (length(pl) - 1.0) * rm * KL, cover, rkm, 0.0) * (dl - dPrev);
         dPrev = dl;
       }
@@ -11418,11 +11457,11 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
         let j = 2u - jj;
         let L = giantLayer(m, j);
         var mean = L.w * cover[j] * 0.35 * giantColAbove(hEnd, L) * SL / max(mu0 + 0.15, 0.03);
-        if (eyeOn && mean > 1e-3) { mean *= giantEyeX(m, p + Ls * (max(L.x - h, 0.0) / (slant * rm * KL))); }
+        if (eyeOn && mean > 1e-3) { mean *= giantEyeX(m, p + LsT * (max(L.x - h, 0.0) / (slant * rm * KL))); }
         tauM += mean;
         if (!read && L.x - 1.5 * L.y > hEnd && mu0 > 0.0) {
           read = true;
-          let pl = p + Ls * ((L.x - h) / (slant * rm * KL));
+          let pl = p + LsT * ((L.x - h) / (slant * rm * KL));
           // (an eye's wall read half: its streaks' hard shadows scratched the well's floor)
           let ew = giantEye(m, normalize(pl)).y;
           tau += mix(giantSigma(m, pl, (length(pl) - 1.0) * rm * KL, cover, rkm, 0.0) * 1.77 * L.y * SL / slant, mean, 0.5 * ew);
@@ -11438,7 +11477,7 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
     }
     // (the in-scattered light: Wrenninge's octaves — each a half dimmer, its extinction a half less, its phase flatter —,
     // and the sky's light from above, dimmer with the column; the hydrogen's own)
-    let ct = dot(rd, Ls);
+    let ct = dot(rdT, LsT);
     var S = vec3f(0.0);
     var a = 1.0;
     var b = 1.0;
@@ -11462,8 +11501,11 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
       (0.65 + 0.35 * exp(-0.3 * tl)) * exp(-1.6 * hz * vec3f(0.7, 1.0, 1.5));
     var src = E * (alb * sig * (S + amb) + br * (3.0 / (16.0 * PI)) * (1.0 + ct * ct) * sunT +
       bh * vec3f(0.92, 0.72, 0.5) * (hgPhase(0.6, ct) * mix(sunM, sunT, 0.6) + 0.4 * amb));
-    // (a flash's light — D4 —, scattered by the clouds and the haze)
-    if (P.wx[6].w > 0.0) { src += FLASH_TINT * luminance(E) * giantFlashGlow(p, rm) * (alb * sig + vec3f(bh)); }
+    // (a flash's light — D4 —, scattered by the clouds and the haze; drowned in the day's — Galileo's and Juno's seen on the night
+    // side: by day the clouds flashed white, flickering with the time warped)
+    if (P.wx[6].w > 0.0) {
+      src += FLASH_TINT * luminance(E) * giantFlashGlow(p, GFT, rm) * (alb * sig + vec3f(bh)) * (1.0 - smoothstep(-0.15, 0.05, mu0));
+    }
     let ext = sig + luminance(br) + bh;
     let tr = exp(-ext * ds);
     col += T * src * (1.0 - tr) / max(ext, 1e-12);

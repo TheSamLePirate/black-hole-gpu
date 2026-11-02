@@ -230,19 +230,56 @@ function giantWindShear(id: GiantId, latDeg: number): number {
   const f = x - Math.floor(x);
   return 0.5 * (a[2]! - a[0]!) + (0.5 * (a[3]! - a[1]!) - 0.5 * (a[2]! - a[0]!)) * f;
 }
-/** where the matter at q (squashed axes, unit) was age seconds ago — giantSigma's reading place: turned west about the axis by
- *  the zonal wind — the shader's: the wind at the camera's latitude (qc, unit), its shear about it to first order in z —,
- *  rm the body's metres a radius */
+/** Jupiter's named anticyclones (trace.wgsl giantFlow, giantInside — V7b): centre [lon, lat rad], semi-axes [rad], the speed
+ *  of its ring [m/s] — the Great Red Spot, the Oval BA */
+const VORTICES: [number, number, number, number, number][] = [
+  [2.2066, -0.384, 0.157, 0.0916, 180],
+  [-1.0071, -0.5603, 0.0733, 0.0698, 135],
+];
+/** Saturn's polar cyclone's jet at a colatitude [rad] (~150 m/s eastward 2° from the pole) [m/s] */
+const polarJet = (rho: number) => 150 * (rho / 0.0349) * Math.exp(0.5 * (1 - (rho / 0.0349) ** 2));
+/**
+ * Where the matter at q (squashed axes, unit) was age seconds ago — giantSigma's reading place, the shader's turn found once
+ * a ray at the camera qc (unit): a named vortex about it turned about its centre by its spin there (V7b), else (faded) the
+ * zonal wind at the camera's latitude — its shear about it to first order in z —, Saturn's polar jet added; rm the body's
+ * metres a radius.
+ */
 export function giantFlowBack(id: GiantId, q: V3, age: number, rm: number, qc: V3 = q): V3 {
   if (age === 0) return q;
-  const latc = (Math.asin(Math.min(Math.max(qc[2], -1), 1)) * 180) / Math.PI;
+  const latR = Math.asin(Math.min(Math.max(qc[2], -1), 1));
+  const latc = (latR * 180) / Math.PI;
   const cc = Math.max(Math.hypot(qc[0], qc[1]), 0.05);
-  const om = giantWindAt(id, latc) / (rm * cc);
-  const dom = giantWindShear(id, latc) / (0.0436332 * rm * cc * cc);
+  let om = giantWindAt(id, latc) / (rm * cc);
+  let dom = giantWindShear(id, latc) / (0.0436332 * rm * cc * cc);
+  let qv = q;
+  if (id === "jupiter") {
+    const lonc = Math.atan2(qc[1], qc[0]);
+    for (const [lon, lat, ex, ey, vm] of VORTICES) {
+      let dx = lonc - lon;
+      dx -= 2 * Math.PI * Math.round(dx / (2 * Math.PI));
+      const r = Math.hypot(dx / ex, (latR - lat) / ey);
+      if (r >= 1.3) continue;
+      const v = vm * (r < 0.8 ? (r / 0.8) ** 2 : Math.exp(-(((r - 0.8) / 0.25) ** 2)));
+      const t = Math.min(Math.max((1.3 - r) / 0.3, 0), 1);
+      const wv = t * t * (3 - 2 * t);
+      const ang = ((-v * age) / (Math.max(r, 1e-4) * rm * Math.max(ex * Math.cos(lat), ey))) * wv;
+      const k: V3 = [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
+      const c = Math.cos(ang),
+        s = Math.sin(ang),
+        kq = k[0] * q[0] + k[1] * q[1] + k[2] * q[2];
+      const kx: V3 = [k[1] * q[2] - k[2] * q[1], k[2] * q[0] - k[0] * q[2], k[0] * q[1] - k[1] * q[0]];
+      qv = [0, 1, 2].map((i) => q[i]! * c + kx[i]! * s + k[i]! * kq * (1 - c)) as V3;
+      om *= 1 - wv;
+      dom *= 1 - wv;
+    }
+  } else {
+    const rho = Math.acos(Math.min(Math.max(qc[2], -1), 1));
+    om += polarJet(rho) / (rm * Math.max(Math.sin(rho), 1e-4));
+  }
   const a = -(om + dom * (q[2] - qc[2])) * age,
     c = Math.cos(a),
     s = Math.sin(a);
-  return [q[0] * c - q[1] * s, q[0] * s + q[1] * c, q[2]];
+  return [qv[0] * c - qv[1] * s, qv[0] * s + qv[1] * c, qv[2]];
 }
 /** the scene's clock and its rate, as the tracer has them (renderer nearCamera.flow) */
 export interface GiantFlowClock {

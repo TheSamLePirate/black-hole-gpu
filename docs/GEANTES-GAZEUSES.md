@@ -224,7 +224,8 @@ flowchart TD
 - **Le vent** (PLAN-GEANTES-VOLUME V7a) : le volume est emporté par le vent zonal comme la surface — ses bruits lus là où
   était la matière, deux phases à un demi-cycle de 10 h, chaque rayon en lisant une selon son poids (l'accumulation fait
   le fondu) ; le vent de la latitude de la caméra et son cisaillement ; figé au-delà de ×1 000 à ×3 000. L'œil garde son
-  repère. Coût : +4–5 % dedans.
+  repère. Coût : +4–5 % dedans. Les tourbillons nommés aussi (V7b : la Grande Tache, l'Ovale BA, le jet polaire de Saturne
+  et le mur de son œil), le rayon tourné une fois vers le repère de la matière. Les éclairs ne se voient que de nuit.
 - **Les tirages** (V6) : la gigue de la marche et le choix de phase viennent d'un bruit bleu (`blueDraws`, la dernière
   tranche de `noiseTex`), un canal par usage.
 - **La marche** : jusqu'à 1 500 km, en 112 pas au plus — 6 % de la distance dans le clair, 1,5 % dans un nuage, avec une
@@ -333,8 +334,8 @@ corrigé en P10 — [progress/planetes-aaa/P10.md](progress/planetes-aaa/P10.md)
 - **À décider** :
   - ~~la hauteur des ponts près des pôles~~ : ils suivent la pression depuis le 1er novembre (0,753 de la hauteur
     équatoriale au pôle de Saturne, au lieu de 0,902 dans l'espace aplati), l'air compris : PLAN-GEANTES-VOLUME V4 ;
-  - ~~les nuages du volume figés~~ : emportés par le vent zonal depuis le 1er novembre (V7a) ; les tourbillons nommés
-    et la spirale du mur de l'œil restent fixes dedans (V7b) ;
+  - ~~les nuages du volume figés~~ : emportés par le vent zonal et les tourbillons nommés depuis le 1er–2 novembre
+    (V7a, V7b) ;
   - un bouclier ablatif pour un vaisseau ;
   - côté projet d'Alex : un format commun des tourbillons, l'aplatissement d'Uranus et Neptune.
 - **Le plan de reprise** des trouvailles de vr-solar-system (l'éclair au CPU, le puits de l'œil, la ligne d'horizon, les

@@ -34,7 +34,8 @@ test("the eyes and the storms are the shader's (giantEye, giantSigma); the flash
   expect(sg).toContain("cloudNoise(pk * (1.0 / 80.0) + vec3f(3.1, 7.7, 1.3))");
   expect(sg).toContain("let rare = select(0.05, 0.0, m == 4u)");
   expect(wgsl).not.toContain("fn giantFlashes(");
-  expect(fnBody("giantFlashGlow")).toContain("let GF = P.wx[6]");
+  expect(fnBody("giantFlashGlow")).toContain("let GF = vec4f(f, P.wx[6].w);");
+  expect(fnBody("giantInside")).toContain("let GFT = giantTurn(P.wx[6].xyz, kv, cv, cz);");
   const renderer = readFileSync(new URL("../src/renderer.ts", import.meta.url), "utf8");
   expect(renderer).toContain("f.set(giantFlash, (BASE_PARAM_VEC4S - WX_VEC4S + 6) * 4)");
   expect(renderer).toContain("(time * 4.925490947e-6 * s.massSolar) % 4096");
@@ -167,10 +168,12 @@ test("V7: the volume carried by the zonal wind — two phases, each alone 70 % o
   expect(gi).toContain("let fr = smoothstep(1000.0, 3000.0, P.envX.w);");
   expect(gi).toContain("let w1 = smoothstep(0.35, 0.65, abs(2.0 * fph - 1.0)) * (1.0 - fr);");
   expect(gi).toContain("let age = vec2f(mix(fph, 0.5, fr), fract(fph + 0.5)) * GIANT_CYCLE;");
-  expect(gi).toContain("let dom = wc.y / (0.0436332 * rc * max(length(qc.xy), 0.05));");
+  expect(gi).toContain("var dom = wc.y / (0.0436332 * rc * max(length(qc.xy), 0.05));");
   expect(gi).toContain("let ag = select(age.x, age.y, RNDV.w < w1);");
-  expect(gi).toContain("GI_R = vec3f(cos(-om * ag), sin(-om * ag), -dom * ag);");
-  expect(fnBody("giantSigma")).toContain("let d = GI_R.z * (q0.z - GI_ZC);");
+  expect(gi).toContain("GI_SH = -dom * ag;");
+  expect(gi).toContain("let cz = vec2f(cos(-om * ag), sin(-om * ag));");
+  expect(gi).toContain("let p = roT + rdT * (dm * mm / rm);");
+  expect(fnBody("giantSigma")).toContain("let d = GI_SH * (q0.z - GI_ZC);");
   let alone = 0;
   for (let i = 0; i < 1000; i++) {
     const [a0, a1, w0, w1] = giantFlowPhases(((i + 0.5) / 1000) * GIANT_CYCLE + 7 * GIANT_CYCLE, 1);
@@ -200,4 +203,37 @@ test("V7: the volume carried by the zonal wind — two phases, each alone 70 % o
   const run2 = (-Math.atan2(b2[1], b2[0]) * rm * Math.cos(l2)) / 3600;
   const shear = (0.5 * (giantWindAt("jupiter", 22.5) - giantWindAt("jupiter", 17.5)) * 0.5) / 2.5;
   expect(run2).toBeCloseTo(giantWindAt("jupiter", 20) + shear, 0);
+});
+
+test("V7b: inside the Great Red Spot the matter turns about its centre (the zonal wind out); Saturn's polar jet added", async () => {
+  const { giantFlowBack } = await import("../src/system/giant-clouds");
+  const gi = fnBody("giantInside");
+  // (the shader's vortices and jet: giantFlow's constants)
+  expect(gi).toContain("vec4f(2.2066, -0.384, 0.157, 0.0916)");
+  expect(gi).toContain("vec4f(-1.0071, -0.5603, 0.0733, 0.0698)");
+  expect(gi).toContain("select(135.0, 180.0, vi == 0u)");
+  expect(fnBody("giantFlow")).toContain("vec4f(2.2066, -0.384, 0.157, 0.0916)");
+  const rm = 71492e3;
+  const dir = (lat: number, lon: number): [number, number, number] => [
+    Math.cos(lat) * Math.cos(lon),
+    Math.cos(lat) * Math.sin(lon),
+    Math.sin(lat),
+  ];
+  // (at 0.8 of the Spot's radius north of its centre: an hour ago the matter was where its ring's ~180 m/s carried it — about
+  // its centre, its distance from the centre kept)
+  const c = dir(-0.384, 2.2066);
+  const q = dir(-0.384 + 0.8 * 0.0916, 2.2066);
+  const b = giantFlowBack("jupiter", q, 3600, rm, q);
+  const dc = (v: number[]) => Math.acos(Math.min(1, v[0]! * c[0] + v[1]! * c[1] + v[2]! * c[2]));
+  expect(dc(b)).toBeCloseTo(dc(q), 6);
+  const moved = Math.acos(Math.min(1, b[0]! * q[0] + b[1]! * q[1] + b[2]! * q[2])) * rm;
+  expect(moved / 3600).toBeGreaterThan(80);
+  expect(moved / 3600).toBeLessThan(400);
+  // (Saturn 1.5° from its pole: the jet turns the matter about the axis — ~150 m/s)
+  const rs = 60268e3;
+  const qs = dir(Math.PI / 2 - 0.026, 0.3);
+  const bs = giantFlowBack("saturn", qs, 3600, rs, qs);
+  const run = (Math.acos(Math.min(1, bs[0]! * qs[0] + bs[1]! * qs[1] + bs[2]! * qs[2])) * rs) / 3600;
+  expect(run).toBeGreaterThan(100);
+  expect(run).toBeLessThan(200);
 });
