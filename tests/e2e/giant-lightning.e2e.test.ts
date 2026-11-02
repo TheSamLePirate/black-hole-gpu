@@ -1,6 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
-import { giantFlashes } from "../../src/system/giant-clouds";
 import { App, E2E, stopServer } from "./lib/app";
 import { readPng } from "./lib/png";
 
@@ -41,16 +40,19 @@ test.skipIf(!E2E)(
       `  ${nc.id}: the camera ${(((Math.hypot(...nc.c) - 1) * nc.mR) / 1e3).toFixed(1)} km off 1 bar, the clock ${nc.tc.toFixed(3)} s`,
     );
     expect(nc.id).toBe("jupiter");
-    // (the instants: a near flash bright — within 80 km, its light over 0.6 —, or none at all)
-    const lit: number[] = [];
-    const dark: number[] = [];
-    for (let dt = 0; dt < 120 && (lit.length < 5 || dark.length < 5); dt += 1 / 60) {
-      // (the storms where the wind has carried them — PLAN-GEANTES-VOLUME V7 —: the clock moved with the flashes')
-      const f = giantFlashes(4, nc.c, nc.mR, nc.tc + dt, { tS: nc.flow.tS + dt, rate: 0 });
-      const near = f.some((x) => x.light > 0.6 && Math.hypot(x.pos[0] - nc.c[0], x.pos[1] - nc.c[1], x.pos[2] - nc.c[2]) * nc.mR < 80e3);
-      if (near && lit.length < 5 && (!lit.length || dt - lit[lit.length - 1]! > 1)) lit.push(dt);
-      if (!f.length && dark.length < 5 && (!dark.length || dt - dark[dark.length - 1]! > 1)) dark.push(dt);
-    }
+    // (the instants: a near flash bright — within 80 km, its light over 0.6 —, or none at all; the page's twin — its map read,
+    // the storms' bias where it is white: PLAN-GEANTES-VOLUME V8)
+    const { lit, dark } = await app.js<{ lit: number[]; dark: number[] }>(`(async () => {
+      const r = __bh.renderer, t0 = performance.now();
+      while (!r.giantStormMapReady("jupiter") && performance.now() - t0 < 60000) await new Promise((q) => setTimeout(q, 200));
+      const nc = r.nearCamera, lit = [], dark = [];
+      for (let dt = 0; dt < 120 && (lit.length < 5 || dark.length < 5); dt += 1 / 60) {
+        const f = r.giantFlashesAt(nc.tc + dt);
+        const near = f.some((x) => x.light > 0.6 && Math.hypot(x.pos[0] - nc.c[0], x.pos[1] - nc.c[1], x.pos[2] - nc.c[2]) * nc.mR < 80e3);
+        if (near && lit.length < 5 && (!lit.length || dt - lit[lit.length - 1] > 1)) lit.push(dt);
+        if (!f.length && dark.length < 5 && (!dark.length || dt - dark[dark.length - 1] > 1)) dark.push(dt);
+      }
+      return { lit, dark }; })()`);
     expect(lit.length).toBe(5);
     expect(dark.length).toBe(5);
     // (the exposure held at the scene's, frame by frame: the meter would chase each)

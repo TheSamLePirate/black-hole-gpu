@@ -237,3 +237,32 @@ test("V7b: inside the Great Red Spot the matter turns about its centre (the zona
   expect(run).toBeGreaterThan(100);
   expect(run).toBeLessThan(200);
 });
+
+test("V8: the storms' bias where the map is white about its latitude's mean — the shader's ramp, the twin's", async () => {
+  const { giantStormBias, setGiantMapLuminance } = await import("../src/system/giant-clouds");
+  const { GIANT_TOPS } = await import("../src/system/giant-tops");
+  expect(fnBody("giantInside")).toContain("GI_SB = 0.1 * smoothstep(0.0, 0.08, luminance(mcw) - giantTop(m, 1u, lam)) - 0.03;");
+  expect(fnBody("giantSigmaAt")).toContain("let gs = big.g + GI_SB;");
+  // (a map at its zonal means but for one white patch at 13° S, 103° E — the bias +0.07 there, −0.03 elsewhere)
+  const w = 1024,
+    h = 512;
+  const lum = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const lat = 90 - ((y + 0.5) * 180) / h;
+    const x = Math.min(Math.max(lat + 90, 0), 179.999);
+    const z =
+      GIANT_TOPS.jupiterLum[Math.floor(x)]! + (GIANT_TOPS.jupiterLum[Math.floor(x) + 1]! - GIANT_TOPS.jupiterLum[Math.floor(x)]!) * (x % 1);
+    for (let i = 0; i < w; i++) lum[y * w + i] = z;
+  }
+  const px = (lat: number, lon: number) => [Math.round((0.5 + lon / 360) * w - 0.5), Math.round((0.5 - lat / 180) * h - 0.5)];
+  const [cx, cy] = px(-13, 103);
+  for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) lum[(cy! + dy) * w + cx! + dx] += 0.15;
+  setGiantMapLuminance("jupiter", w, h, lum);
+  const q = (lat: number, lon: number): [number, number, number] => {
+    const a = (lat * Math.PI) / 180,
+      o = (lon * Math.PI) / 180;
+    return [Math.cos(a) * Math.cos(o), Math.cos(a) * Math.sin(o), Math.sin(a)];
+  };
+  expect(giantStormBias("jupiter", q(-13, 103))).toBeCloseTo(0.07, 2);
+  expect(giantStormBias("jupiter", q(20, -40))).toBeCloseTo(-0.03, 2);
+});

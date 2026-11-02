@@ -11159,6 +11159,8 @@ var<private> GI_IN: bool = false;
 // jets' flanks sliding by each other), GI_SH [rad per unit of z off the camera's, GI_ZC]. The eye's well is round the axis
 // the turns keep — Saturn's wall turning with its decks at the camera's rate.
 var<private> GI_SH: f32 = 0.0;
+// (V8: the storms' bias, the map's whiteness under the camera — giantInside)
+var<private> GI_SB: f32 = 0.0;
 var<private> GI_ZC: f32 = 0.0;
 fn giantSigma(m: u32, p: vec3f, h: f32, cover: vec3f, rkm: f32, det: f32) -> f32 {
   let q0 = normalize(p);
@@ -11204,12 +11206,15 @@ fn giantSigmaAt(m: u32, q: vec3f, q0: vec3f, h: f32, cover: vec3f, rkm: f32, det
   // ~25 km over the ammonia's level where it spreads into an anvil, flat-topped but for the dome over its core; fresh
   // ammonia ice, white, dense; none in an eye's well nor its wall; Saturn's rarer — its great white spots a few a century)
   let rare = select(0.05, 0.0, m == 4u);
-  if (big.g > 0.64 + rare) {
+  // (V8: where the map is white about its latitude's mean — the plumes and white spots the probes saw —, the storms more
+  // likely, elsewhere a little rarer: GI_SB, the ray's — giantInside)
+  let gs = big.g + GI_SB;
+  if (gs > 0.64 + rare) {
     let base = giantLayer(m, 2u).x;
     let hn = (h - base) / (giantLayer(m, 0u).x + 25e3 - base);
     if (hn > 0.0 && hn < 1.1) {
       let nt = cloudNoise(pk * (1.0 / 18.0) + vec3f(4.4));
-      let f = big.g + 0.22 * (nt.g - 0.5) - rare;
+      let f = gs + 0.22 * (nt.g - 0.5) - rare;
       let anvil = smoothstep(0.68, 0.9, hn);
       let top = 1.0 + 0.09 * smoothstep(0.86, 0.96, f) - 0.05 * (1.0 - nt.b);
       let v = smoothstep(0.0, 0.05, hn) * (1.0 - smoothstep(top - 0.05, top, hn));
@@ -11386,6 +11391,13 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   let rdT = giantTurn(rd, kv, cv, cz);
   let LsT = giantTurn(Ls, kv, cv, cz);
   let GFT = giantTurn(P.wx[6].xyz, kv, cv, cz);
+  // (V8: the map under the camera where its matter is — the surface's own reading, giantFlow —, at its 1 024 × 512 level — a
+  // texel ~440 km on Jupiter, the march's 1 500 km three of them: once a ray, read in every sample it cost ~10 % —: white
+  // about its latitude's mean, the storms more likely, elsewhere a little rarer; the CPU's twin the same — giantStormBias)
+  let qm = normalize(roT);
+  let lam = asin(clamp(qm.z, -1.0, 1.0));
+  let mcw = textureSampleLevel(mapHi, bgSamp, vec2f(0.5 + atan2(qm.y, qm.x) / TAU, 0.5 - lam / PI), i32(m), 1.0).rgb;
+  GI_SB = 0.1 * smoothstep(0.0, 0.08, luminance(mcw) - giantTop(m, 1u, lam)) - 0.03;
   // (the march: ~1 500 km at most; in the clear its steps growing with the distance — 6 % of it, 350 m at least —, in a cloud
   // short — 1.5 % of it, 150 m at least: finer than the billows, or the jitter averages them into a blur —; jittered)
   // (over the top deck — giantInsideW's grazing rays —: to its horizon at least)

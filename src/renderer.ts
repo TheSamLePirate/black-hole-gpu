@@ -84,7 +84,14 @@ import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, seasPixels, type HdMa
 import { bakeNoise3d } from "./noise3d";
 import { bakeGiantTile, readGiantTile } from "./system/giant-tile";
 import { GIANT_WINDS } from "./system/giant-winds";
-import { type GiantFlash, type GiantFlowClock, giantFlashes, giantTop } from "./system/giant-clouds";
+import {
+  type GiantFlash,
+  type GiantFlowClock,
+  giantFlashes,
+  giantMapLuminanceLoaded,
+  giantTop,
+  setGiantMapLuminance,
+} from "./system/giant-clouds";
 import { anchorTileCoord } from "./system/earth-tiles";
 import { AsyncResource, CompileQueue } from "./util/async-resource";
 import { visibleTimeout } from "./util/visible-timeout";
@@ -159,7 +166,7 @@ import {
   TRACED_RADIUS,
   type GpuBody,
 } from "./system/scene-bodies";
-import { loadPlanetMaps, placeholderMaps, type PlanetMaps } from "./system/planet-maps";
+import { loadPlanetMaps, placeholderMaps, planetMapUrl, type PlanetMaps } from "./system/planet-maps";
 import {
   earthPrefetchWanted,
   loadEarthMaps,
@@ -3919,10 +3926,51 @@ export class Renderer {
    * camera too high for the clouds' volume (trace.wgsl giantInsideOn: within GI_FAR of the top deck). Kept for the frame's
    * other passes (the probes).
    */
+  /** a giant's map's luminance for the CPU's twin (PLAN-GEANTES-VOLUME V8: the storms where the map is white — the tracer
+   *  reads its mapHi at level 1, 1 024 × 512), loaded once near it */
+  private giantLumLoading = new Set<string>();
+  private loadGiantMapLuminance(id: "jupiter" | "saturn") {
+    if (this.giantLumLoading.has(id)) return;
+    this.giantLumLoading.add(id);
+    void (async () => {
+      try {
+        const blob = await (await fetch(planetMapUrl(id))).blob();
+        const bmp = await createImageBitmap(blob, {
+          colorSpaceConversion: "none",
+          premultiplyAlpha: "none",
+          resizeWidth: 1024,
+          resizeHeight: 512,
+          resizeQuality: "high",
+        });
+        const cv = new OffscreenCanvas(1024, 512);
+        const ctx = cv.getContext("2d")!;
+        ctx.drawImage(bmp, 0, 0);
+        const px = ctx.getImageData(0, 0, 1024, 512).data;
+        const lin = (c: number) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+        const lum = new Float32Array(1024 * 512);
+        for (let i = 0; i < lum.length; i++)
+          lum[i] = 0.2126 * lin(px[4 * i]!) + 0.7152 * lin(px[4 * i + 1]!) + 0.0722 * lin(px[4 * i + 2]!);
+        setGiantMapLuminance(id, 1024, 512, lum);
+      } catch (e) {
+        console.warn(`giant storms: ${id}'s map not read`, e);
+      }
+    })();
+  }
+  /** the giant's map read for the twin's storms (V8) */
+  giantStormMapReady(id: "jupiter" | "saturn") {
+    return giantMapLuminanceLoaded(id);
+  }
+  /** the flashes the twin finds at the clock tc [s] — the camera's and the clock's of this frame (the e2e's: giant-lightning) */
+  giantFlashesAt(tc: number) {
+    const n = this.nearCamera;
+    if (!n || (n.id !== "jupiter" && n.id !== "saturn")) return [];
+    return giantFlashes(n.id === "jupiter" ? 4 : 5, n.c, n.mR, tc, { tS: n.flow.tS + (tc - n.tc), rate: 0 });
+  }
   private giantFlashKey = "";
   private giantFlashKept: number[] | null = null;
   private giantFlashNow(m: 4 | 5, c: Vec3, rm: number, tc: number, flow: GiantFlowClock): number[] | null {
     if ((Math.hypot(...c) - 1) * rm > giantTop(m === 4 ? "jupiter" : "saturn") + 450e3) return null;
+    this.loadGiantMapLuminance(m === 4 ? "jupiter" : "saturn");
     const key = `${m} ${tc} ${c.join(" ")} ${flow.tS} ${flow.rate}`;
     if (key === this.giantFlashKey) return this.giantFlashKept;
     this.giantFlashKey = key;

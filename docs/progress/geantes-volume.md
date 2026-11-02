@@ -204,3 +204,20 @@ de la planète, l'horloge accélérée.
   mini `giant-lightning`, `giant-descent`.
 - **Approximations** : la rotation d'un tourbillon est celle du point de la caméra, rigide sur les 1 500 km de la marche
   (la Grande Tache fait 22 000 km) ; l'hexagone de Saturne ne tourne pas dedans.
+
+## V8 — les orages là où la carte est blanche
+
+![Jupiter à 30 km au-dessus du pont, sur la région blanche à l'ouest de la Grande Tache (13° S, 103° E) : avant | après](geantes-volume/v8.jpg)
+
+- **La règle** : là où la carte est plus blanche que la moyenne de sa latitude — les panaches et les taches blanches que
+  les sondes ont vus —, les orages sont plus probables (le seuil de leur grand bruit abaissé jusqu'à 0,07) ; ailleurs un
+  peu plus rares (+0,03).
+- **Lu une fois par rayon** : la carte (son niveau 1 024 × 512, un texel ~440 km sur Jupiter) sous la caméra, là où est sa
+  matière (le repère tourné de V7 : la lecture même de la surface, `giantFlow`). La lire à chaque échantillon coûtait ~10 %
+  (jusqu'à cinq lectures par échantillon avec la marche vers le Soleil) ; une fois par rayon, rien (A/B kerr-mini contre
+  d5a4e277 : −4 à +1 %).
+- **Le jumeau CPU** lit la même carte (le renderer la charge à 1 024 × 512 à l'approche d'une géante) : les éclairs restent
+  sur les orages qu'on voit. `giant-lightning` demande désormais les éclairs au jumeau de la page.
+- **Sur cette carte**, peu de taches sont nettement blanches : 7 % des points dépassent leur moyenne de 0,07 ; l'Ovale BA,
+  dans une zone déjà claire, ne la dépasse que de ~0,03 (son biais ~+0,04). Les plus blanches : la région turbulente à
+  l'ouest de la Grande Tache (12–15° S, 87–113° E), une bande à 40° S.

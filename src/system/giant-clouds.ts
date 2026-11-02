@@ -12,6 +12,7 @@
 // ellipsoid (Somigliana) between g_eq = GM/a² (1 + 3/2 J2) − ω² a and g_pole = GM/b² (1 − 3 J2 a²/b²), J2 Juno's and
 // Cassini's. At the poles 0.859 (Jupiter), 0.753 (Saturn). A "level" height is the equator's: the real one over s(φ).
 
+import { GIANT_TOPS } from "./giant-tops";
 import { GIANT_WINDS, giantWindAt } from "./giant-winds";
 
 /** a deck: its middle [m over 1 bar], its half thickness [m], its billows' scale [m], its extinction [1/m] */
@@ -287,6 +288,44 @@ export interface GiantFlowClock {
   rate: number;
 }
 
+// ---- the storms where the map is white (PLAN-GEANTES-VOLUME V8: trace.wgsl giantInside's GI_SB) ----
+
+/** a giant's colour map's linear luminance at 1 024 × 512 (the tracer's mapHi at its level 1), once loaded (the renderer:
+ *  setGiantMapLuminance) */
+const MAP_LUM = new Map<GiantId, { w: number; h: number; lum: Float32Array }>();
+export function setGiantMapLuminance(id: GiantId, w: number, h: number, lum: Float32Array) {
+  MAP_LUM.set(id, { w, h, lum });
+}
+export const giantMapLuminanceLoaded = (id: GiantId) => MAP_LUM.has(id);
+/** the zonal mean of the map's luminance at a latitude [rad] (system/giant-tops.ts — trace.wgsl giantTop(m, 1u, lat)) */
+function zonalLum(id: GiantId, lat: number): number {
+  const t = id === "jupiter" ? GIANT_TOPS.jupiterLum : GIANT_TOPS.saturnLum;
+  const x = Math.min(Math.max((lat * 180) / Math.PI + 90, 0), 179.999);
+  const i = Math.floor(x);
+  return t[i]! + (t[i + 1]! - t[i]!) * (x - i);
+}
+/**
+ * The storms' bias at q — the matter's place under the camera (squashed axes, unit) —: the map white about its latitude's
+ * mean, more likely (up to +0.07 where it is 0.08 brighter — the Oval BA 0.06, a hundredth of the map 0.14), elsewhere a
+ * little rarer (−0.03); 0 until the map is loaded. The tracer's GI_SB: its texel
+ * read bilinearly, wrapped in longitude.
+ */
+export function giantStormBias(id: GiantId, q: V3): number {
+  const M = MAP_LUM.get(id);
+  if (!M) return 0;
+  const lat = Math.asin(Math.min(Math.max(q[2], -1), 1));
+  const u = (0.5 + Math.atan2(q[1], q[0]) / (2 * Math.PI)) * M.w - 0.5,
+    v = (0.5 - lat / Math.PI) * M.h - 0.5;
+  const x0 = Math.floor(u),
+    y0 = Math.floor(v),
+    fx = u - x0,
+    fy = v - y0;
+  const at = (x: number, y: number) => M.lum[Math.min(Math.max(y, 0), M.h - 1) * M.w + (((x % M.w) + M.w) % M.w)]!;
+  const L = (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) + (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
+  const t = Math.min(Math.max((L - zonalLum(id, lat)) / 0.08, 0), 1);
+  return 0.1 * t * t * (3 - 2 * t) - 0.03;
+}
+
 // ---- the lightning (once a frame: the renderer's, for trace.wgsl giantFlashGlow) ----
 /** a flash: its slot (stream j, slot n — each one once), its place (the body's squashed axes [its radii]), its light now,
  *  shallow (in the ammonia's clouds) */
@@ -320,6 +359,8 @@ export function giantFlashes(m: 4 | 5, c: V3, rm: number, tc: number, flow: Gian
   // (the storms where the wind has carried them — V7: the phase most seen)
   const ph = flow ? giantFlowPhases(flow.tS, flow.rate) : null;
   const age = ph ? (ph[3] > ph[2] ? ph[1] : ph[0]) : 0;
+  // (the storms' bias under the camera — V8, the tracer's GI_SB)
+  const sb = giantStormBias(id, giantFlowBack(id, q0, age, rm, q0));
   const out: GiantFlash[] = [];
   for (let j = 0; j < 4; j++) {
     const tj = tc + j * 0.137;
@@ -363,7 +404,7 @@ export function giantFlashes(m: 4 | 5, c: V3, rm: number, tc: number, flow: Gian
     // (out of a storm, or in an eye's well — trace.wgsl giantEye's x over 0.95)
     const rho = Math.acos(Math.min(Math.max(q[2], -1), 1));
     const eyeClear = Math.min(Math.max((rho - 0.6 * re) / (0.4 * re), 0), 1);
-    if (best < 0.7 + rare || eyeClear * eyeClear * (3 - 2 * eyeClear) < 0.95) continue;
+    if (best + sb < 0.7 + rare || eyeClear * eyeClear * (3 - 2 * eyeClear) < 0.95) continue;
     // (its level height on the squashed axes — the shader's giantLevel at the camera, its decks' frame)
     const r = 1 + hf / (kl * rm);
     out.push({ j, n, pos: [q[0] * r, q[1] * r, q[2] * r], light: I * (shallow ? 0.4 : 1), shallow });
