@@ -114,5 +114,5 @@ Noted, not tried. Sam decides what we do with them.
 ## 5. The `mac-version` branch
 
 It is at your `88ee5b2`, with the Mac changes on top. Your 4u session (`2f84bbf` to `a42a822`) is code, so it is not in
-the branch yet. Sam will merge it when he wants to try it on his Mac. As usual, `Main.unity` will be regenerated rather
+the branch yet. It will be merged when Sam wants to try it on the Mac. As usual, `Main.unity` will be regenerated rather
 than merged by hand, followed by the tests, `BuildMac` and a launch of the app.
