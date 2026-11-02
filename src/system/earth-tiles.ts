@@ -33,6 +33,9 @@ import { type NationalSource, type OrthoFit, SWISSTOPO, sourceAt, sourcesBox, ti
 export const TILE = 256;
 /** tiles along a level's window (the normal detail's reach; a farther one, EarthTiles.setReach: 8 on the fine levels) */
 export const SPAN = 4;
+/** the finest levels a farther reach widens (z 11–14: 8 tiles of z 11 span what 4 of z 10 do — the coarser levels' 4
+ *  tiles already reach past them) */
+export const FINE_Z = 11;
 export const CLIP = TILE * SPAN;
 /** By the detail's reach (settings.detailReach): the windows' tiles a side, the tiles kept in memory past them (a
  *  tile 512 KiB: its heights and its imagery), the rings round every level's window loaded ahead into them — the halo,
@@ -485,10 +488,11 @@ export class EarthTiles {
     return TILE * this.span;
   }
   private levelSpan(z: number) {
-    // (the IGN's finest relief, z 15 … 17: windows of 4 tiles whatever the reach — 3.4 km down to 850 m at 46°; every
-    // other level the reach's — the coarse ones' layers are the texture's whole side anyway: 8 tiles there take no more GPU
-    // memory and carry the far relief twice as far, z 10's 312 km)
-    return z > ZG1 ? SPAN : this.span;
+    // (the IGN's finest relief, z 15 … 17: windows of 4 tiles whatever the reach — 3.4 km down to 850 m at 46°; z 11 … 14 the
+    // reach's; the coarser ones 4: z 9's 4 tiles reach as far as z 10's 8 would — 312 km —, a pixel there over 100 m of ground;
+    // 8 at z 6 … 10 were 240 tiles more for nothing seen, every window's completion twice as long (kerr-mini, 2 Nov 2026))
+    if (z > ZG1) return SPAN;
+    return z >= FINE_Z ? this.span : SPAN;
   }
   /** the tiles kept past the windows — most recently used last — and how many (0: none) */
   private cache = new Map<string, { h: Float32Array; col: Uint32Array | null }>();
@@ -500,7 +504,7 @@ export class EarthTiles {
   private levels: Level[] = [];
   private inflight = new Map<string, AbortController>();
   /** the tiles drawn from the global data while their national source's heights come (refine) */
-  private refining = new Map<string, { ctl: AbortController; L: Level; x: number; y: number }>();
+  private refining = new Map<string, { ctl: AbortController; L: Level; x: number; y: number; surface: boolean }>();
   private nationalActive = 0;
   private nationalQueue: { p: number; go: () => void }[] = [];
   private failures = new Map<string, { n: number; at: number }>();
@@ -673,7 +677,9 @@ export class EarthTiles {
   /** the tiles wanted and not yet in — their national source's heights included (refine) */
   get pending() {
     let k = 0;
-    for (const [key, r] of this.refining) if (r.L.key[this.slotOf(r.L, r.x, r.y)] === key) k++;
+    // (the far silhouettes' second pass not counted: the tile's IGN ground is in — the waits for the ground, the e2e's too, not
+    // held for an enrichment that comes last on purpose)
+    for (const [key, r] of this.refining) if (!r.surface && r.L.key[this.slotOf(r.L, r.x, r.y)] === key) k++;
     for (const L of this.levels) {
       if (!L.want) continue;
       for (let y = L.want.y0; y < L.want.y1; y++)
@@ -928,7 +934,7 @@ export class EarthTiles {
     const gen = this.gen;
     const ctl = new AbortController();
     this.refining.get(key)?.ctl.abort();
-    this.refining.set(key, { ctl, L, x, y });
+    this.refining.set(key, { ctl, L, x, y, surface: !!ground });
     const wanted = () => gen === this.gen && !ctl.signal.aborted && (L.key[this.slotOf(L, x, y)] === key || this.cache.has(key));
     let nextPass: Float32Array | null = null;
     if (this.nationalActive < MAX_NATIONAL) this.nationalActive++;

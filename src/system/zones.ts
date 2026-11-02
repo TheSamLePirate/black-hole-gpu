@@ -11,6 +11,7 @@
 import {
   eoxUrl,
   dayUrl,
+  FINE_Z,
   GIBS_Z1,
   IMG_Z1,
   NATIONAL,
@@ -84,7 +85,7 @@ export type ZoneChain = string[];
 
 /**
  * The tiles of a zone of `radius` metres round a place [°], to its profile's levels: at each level, those the game's window
- * holds with the camera anywhere in the disc — its half-side (SPAN; 8 at a far reach up to ZG1 — earth-tiles.ts levelSpan —, the IGN's
+ * holds with the camera anywhere in the disc — its half-side (SPAN; 8 at a far reach from FINE_Z to ZG1, the IGN's
  * finer levels 4 whatever the reach), the lead ahead where the view looks (half a side less three quarters of a tile), the
  * window's recentring (0.8 of a tile off) and the ring of one tile loaded past it on the finest levels: a side and a half
  * round the camera. A flight lower than the profile's finest asks finer tiles: the network's — or, within the
@@ -129,7 +130,7 @@ export function zoneTiles(
       ? { reliefZ1: Math.max(profile.reliefZ1, ZONE_CORE.reliefZ1), orthoZ1: Math.max(profile.orthoZ1, ZONE_CORE.orthoZ1) }
       : profile;
   for (let z = Z0; z <= Math.min(top.reliefZ1, relief ? Z1 : ZG1); z++) {
-    const span = z <= ZG1 ? fineSpan : SPAN;
+    const span = z >= FINE_Z && z <= ZG1 ? fineSpan : SPAN;
     level(z, span + 1.5, reliefs, z > ZG1, z <= profile.reliefZ1 ? radius : coreR);
   }
   for (let z = ORTHO_Z0; z <= top.orthoZ1; z++) level(z, ORTHO_SPAN + 0.5, ortho, true, z <= profile.orthoZ1 ? radius : coreR);

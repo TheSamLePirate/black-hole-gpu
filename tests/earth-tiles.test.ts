@@ -3,6 +3,7 @@ import type { Vec3 } from "../src/physics";
 import {
   EarthTiles,
   edge,
+  FINE_Z,
   markFine,
   orthoLayers,
   sampleLevel,
@@ -292,15 +293,14 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   const cam = camAt(45.9, 6.87, 2);
   t.update(cam, 1e-3);
   fill(t);
-  // (Far: the texture made again, 2048 texels a side, every level drawn anew — 8 × 8 tiles up to z 14: the coarse levels' layers
-  // the texture's whole side anyway, their far relief twice as far — 2 Nov 2026)
+  // (Far: the texture made again, 2048 texels a side, every level drawn anew — the fine ones 8 × 8 tiles, the coarser 4 × 4)
   t.setReach(TILE_REACH.far);
   expect(resized).toBe(1);
   // (and the orthophotos' four 1024² quadrants in one more layer — I1)
   expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, Z1 - Z0 + 1 + orthoLayers(2048)]);
   t.update(cam, 1e-3);
   // (the IGN's relief levels over France, z 15 … 17, 4 × 4 tiles whatever the reach)
-  expect(t.wanted().length).toBe(64 * (ZG1 - Z0 + 1) + 16 * (Z1 - ZG1));
+  expect(t.wanted().length).toBe(64 * (ZG1 - FINE_Z + 1) + 16 * (FINE_Z - Z0) + 16 * (Z1 - ZG1));
   expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBe(1);
   fill(t);
   expect(t.pending).toBe(0);
