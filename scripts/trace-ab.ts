@@ -15,6 +15,7 @@
 import { tmpdir } from "node:os";
 import { chromeLock } from "./lib/chrome-lock";
 import { CHROME, endChrome } from "./lib/procs";
+import { thermalLine, thermalNow, thermalWarning, thermalWindow } from "./lib/thermal";
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -52,6 +53,12 @@ const W = 1469,
   H = 965;
 // (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here, let go at exit)
 await chromeLock();
+// (the machine's heat at the start, over the run in --out — docs/THERMAL.md: the alternation cancels a drift, not a
+// Heavy pressure's ±40 %)
+const T0 = Date.now();
+const heat0 = thermalNow();
+console.log(`machine: ${thermalLine(heat0)}`);
+if (thermalWarning(heat0)) console.log(`  ⚠ ${thermalWarning(heat0)}`);
 const chrome = Bun.spawn(
   [
     CHROME,
@@ -220,8 +227,11 @@ try {
       `${sc.slice(0, 40).padEnd(40)} ${a.toFixed(2).padStart(7)} → ${b.toFixed(2).padStart(7)} ms (${((100 * (b - a)) / a).toFixed(1).padStart(5)} %)  [${R.map((x) => x.trace.toFixed(1))} | ${N.map((x) => x.trace.toFixed(1))}]  ${mean(R.map((x) => x.probes)).toFixed(2)} → ${mean(N.map((x) => x.probes)).toFixed(2)}  ${mean(R.map((x) => x.post)).toFixed(2)} → ${mean(N.map((x) => x.post)).toFixed(2)}`,
     );
   }
+  const heat1 = thermalNow();
+  console.log(`machine at the end: ${thermalLine(heat1)}`);
   const out = arg("out", "");
-  if (out) await Bun.write(out, JSON.stringify(res, null, 1));
+  if (out)
+    await Bun.write(out, JSON.stringify({ ...res, machineThermal: { before: heat0, after: heat1, window: thermalWindow(T0) } }, null, 1));
 } finally {
   kill();
 }

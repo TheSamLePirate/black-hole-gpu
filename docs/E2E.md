@@ -256,7 +256,9 @@ remote-results/e2e-reports/<time>-<host>/<file>/<NN>/     (NN: the test's place 
                     game's log, the page's errors
   fps.jsonl         the frame rate each second and its worst frame
   graphs.json       the assistants' graphs (optimum, corridor, flown) and the craft's points on them
-  summary.json      the file, the test's index, start, end, wall time, samples, frame-rate statistics
+  summary.json      the file, the test's index, start, end, wall time, samples, frame-rate statistics,
+                    thermal: the machine's heat over the test (pressure counts, GPU clock, temperatures —
+                    docs/THERMAL.md; null without the thermal service)
   shots/end.jpg     the page at the test's end
 ```
 

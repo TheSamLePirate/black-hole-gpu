@@ -14,6 +14,7 @@ import { showBanner } from "./banner";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
+import { thermalWindow } from "../../../scripts/lib/thermal";
 import { LAB_PAGE } from "../../flight/lib/sampler";
 
 /** The page side, over the flight lab's: when to sample, the frame rate, the moments, the drain. */
@@ -206,6 +207,8 @@ class Recorder {
         fps: f.length
           ? { min: f[0], p5: pct(5), median: pct(50), max: f[f.length - 1], mean: Math.round(f.reduce((a, b) => a + b, 0) / f.length) }
           : null,
+        // (the machine's heat over the test — docs/THERMAL.md; null without the thermal service)
+        thermal: thermalWindow(this.wall0, Date.now()),
       }),
     );
   }

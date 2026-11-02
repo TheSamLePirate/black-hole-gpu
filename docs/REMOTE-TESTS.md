@@ -313,6 +313,10 @@ Un verrou GPU laissé par un job mort est repris tout seul. Un job ne meurt pas 
 Puis, pour vérifier : `bun scripts/remote.ts run -- E2E=1 bun test tests/e2e/title.e2e.test.ts --timeout
 600000` (~30 s ; la première fois, l'envoi de l'arbre et l'installation des dépendances en plus).
 
+7. **Le service thermique** ([THERMAL.md](THERMAL.md)) : `bun scripts/thermal.ts install --host kerr-mini`, puis, une
+   fois, par Sam : `ssh -t kerr-mini sudo sh ~/.local/share/kerr-thermal/install-root.sh`. Sa chaleur s'affiche
+   ensuite dans `lab-monitor` et dans le `summary.json` de chacun de ses e2e.
+
 ---
 
 ## Ménage

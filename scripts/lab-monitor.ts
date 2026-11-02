@@ -19,6 +19,7 @@ import { basename, join, resolve } from "node:path";
 import { holder, LAB_DIR, orphanChromes, waiters } from "./lib/chrome-lock";
 import { HOSTS, type LabHost, labHost, remoteCommand, takeHost } from "./lib/lab-hosts";
 import { alive, orphaned, processes, WINDOWS } from "./lib/procs";
+import { type ThermalBrief, thermalLine, thermalNow, thermalWarning } from "./lib/thermal";
 
 const argv = process.argv.slice(2);
 const only = takeHost(argv);
@@ -51,6 +52,8 @@ interface State {
   tests: { pid: number; elapsed: string; cmd: string; cwd: string }[];
   /** what dead processes left running: Chromes, the tests' servers */
   orphans: { pid: number; elapsed: string; what: string }[];
+  /** its heat (docs/THERMAL.md; null: no thermal service there) */
+  thermal?: ThermalBrief | null;
 }
 
 /** A process's working directory (whose worktree it runs in) — none on Windows: no lsof there. */
@@ -124,6 +127,7 @@ async function local(): Promise<State> {
     jobs,
     tests,
     orphans,
+    thermal: WINDOWS ? null : thermalNow(),
   };
 }
 
@@ -179,6 +183,11 @@ function show(s: State | string, title: string) {
   const L = s.lock;
   console.log(L ? `  Chrome: held by pid ${L.pid} · ${L.label} · ${where(L.cwd)} · ${age(L.since)}` : "  Chrome: free");
   for (const w of s.waiting) console.log(`    waiting: pid ${w.pid} · ${w.label} · ${where(w.cwd)} · ${age(w.since)}`);
+  if (s.thermal !== undefined && !(s.thermal === null && /pc|win/i.test(title))) {
+    console.log(`  Heat: ${thermalLine(s.thermal ?? null)}`);
+    const w = thermalWarning(s.thermal ?? null);
+    if (w) console.log(`    ⚠ ${w}`);
+  }
   const n = s.chromes.length;
   console.log(
     `  Chrome processes: ${n}${n ? ` — ${s.chromes.map((c) => `pid ${c.pid} ${c.headless ? "headless" : "on screen"} ${c.elapsed}${c.cwd ? ` (${where(c.cwd)})` : ""}`).join(", ")}` : ""}${n > 1 ? "  ⚠ more than one" : ""}`,

@@ -5,7 +5,8 @@
     "@types/bun": "latest",
     "@webgpu/types": "^0.1.74",
     "playwright": "^1.63.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "zod": "4.6.7"
   },
   "private": true,
   "scripts": {

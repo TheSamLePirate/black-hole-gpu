@@ -25,6 +25,7 @@ import { dirname } from "node:path";
 import type { BenchReport, SceneReport } from "../src/bench/report";
 import { chromeLock } from "./lib/chrome-lock";
 import { CHROME, endChrome } from "./lib/procs";
+import { thermalLine, thermalNow, thermalWarning, thermalWindow } from "./lib/thermal";
 
 const arg = (k: string, d: string) => {
   const i = process.argv.indexOf(`--${k}`);
@@ -50,6 +51,13 @@ const W = 1469,
 
 // (one Chrome at a time on this machine: scripts/lib/chrome-lock.ts — waits its turn here, let go at exit)
 await chromeLock();
+// (the machine's heat at the start, and over the run in the report — docs/THERMAL.md: a Mac under Heavy pressure
+// measured ±40 %)
+const T0 = Date.now();
+const heat0 = thermalNow();
+console.log(`machine: ${thermalLine(heat0)}`);
+if (thermalWarning(heat0)) console.log(`  ⚠ ${thermalWarning(heat0)}`);
+const machineThermal = () => ({ before: heat0, after: thermalNow(), window: thermalWindow(T0) });
 const chrome = Bun.spawn(
   [
     CHROME,
@@ -176,7 +184,8 @@ try {
       onProgress: (p) => kerrProgress(JSON.stringify(p)),
       ${SHOTS ? `shot: (name) => new Promise((res) => { (window.__kerrShots ??= new Map()).set(name, res); kerrShot(name); }),` : ""}
     })`);
-    const full = { ...report, bench: { label, sha, viewport: [W, H, DPR], chrome: CHROME, url: URL } };
+    const full = { ...report, bench: { label, sha, viewport: [W, H, DPR], chrome: CHROME, url: URL }, machineThermal: machineThermal() };
+    console.log(`machine at the end: ${thermalLine(full.machineThermal.after)}`);
     await Bun.write(`${out}/report.json`, JSON.stringify(full, null, 1));
     // the summary: each scene's subsampling sweep
     const pad = (x: unknown, n: number) => String(x).padStart(n);
@@ -258,7 +267,9 @@ try {
     compare: COMPARE || null,
     peakVramMiB: peak && Math.round(peak),
     results,
+    machineThermal: machineThermal(),
   };
+  console.log(`machine at the end: ${thermalLine(out.machineThermal.after)}`);
   await Bun.write(`docs/perf/bench-${label}.json`, JSON.stringify(out, null, 1));
   console.log(`peak VRAM ${out.peakVramMiB} MiB → docs/perf/bench-${label}.json`);
 } finally {

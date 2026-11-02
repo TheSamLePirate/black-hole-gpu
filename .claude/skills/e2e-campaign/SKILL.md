@@ -32,6 +32,8 @@ When the user wants to watch, browse results or drive the page themselves, point
 - **Headless here, full screen on the mini** (each Mac's `~/.kerr-lab/config.json`). Don't pass
   `--headless` to the mini unless the user asks.
 - Run anything over a minute in the background and put its estimated duration in the task's title.
+- Before a measure (bench, A/B, frame times), `bun scripts/thermal.ts --all` (docs/THERMAL.md): a pressure other than
+  Nominal makes the figures doubtful — wait, or report it beside them. Each test's `summary.json` carries `thermal`.
 - Real input for UI (`app.click`, `app.press`), `waitFor` rather than sleeps, `freeze(true)` + `step(1/30)`
   inside one `app.js` call for reproducible flights, `app.cdp.errors` asserted, `close()` + `stopServer()`.
 - A failure: rerun that file alone, then on the other Mac. Report regression / flaky / environment,

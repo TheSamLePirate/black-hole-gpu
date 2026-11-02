@@ -75,6 +75,8 @@ bun run e2e --remote --each landing gear
 bun scripts/remote.ts run -- E2E=1 bun test tests/e2e/landing.e2e.test.ts --timeout 600000
 # no browser in it: beside the browser jobs, without waiting for the GPU
 bun scripts/remote.ts run --cpu -- bun test
+# the mini's heat before a measure there (docs/THERMAL.md): pressure, GPU clock / max
+bun scripts/thermal.ts --host kerr-mini
 # several at once: --detach each (they queue there, one browser job at a time), then follow
 bun scripts/remote.ts run --detach -- E2E=1 bun test tests/e2e/smoke.e2e.test.ts --timeout 600000
 bun scripts/remote.ts status
