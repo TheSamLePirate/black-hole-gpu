@@ -333,6 +333,7 @@ export interface Settings {
   earthSurface: "off" | "satellite" | "materials"; // regional Sentinel-2 / WorldCover pilot; independent of physical relief
   earthScenery: "off" | "balanced" | "high";
   earthSceneryShadows: boolean;
+  groundRelight: "auto" | "photo" | "full"; // Q2 (decision 29): the aerial photographs' own light kept where our Sun stands near theirs (auto), always (photo: the photograph's shading alone), or never (full: the relief's n·L whole, as before)
   detailReach: "normal" | "far" | "veryFar"; // the ground's detail drawn farther — the scenery's box, the relief's windows — and led farther where the view looks
   sceneryHitboxes: boolean; // CPU collision wireframes, on foot only (diagnostic)
   earthGrass: "off" | "balanced";
@@ -720,6 +721,7 @@ export function defaultSettings(): Settings {
     earthSurface: "satellite",
     earthScenery: "high",
     earthSceneryShadows: true,
+    groundRelight: "auto",
     detailReach: "veryFar",
     sceneryHitboxes: false,
     earthGrass: "balanced",
@@ -2120,6 +2122,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthRasterScale: "pref",
   earthSurface: "scene",
   earthScenery: "scene",
+  groundRelight: "pref",
   detailReach: "pref",
   earthSceneryShadows: "scene",
   sceneryHitboxes: "pref",

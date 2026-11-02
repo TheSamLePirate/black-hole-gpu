@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
-import { EARTH_SETTINGS } from "./lib/plan-views";
+import { EARTH_SETTINGS, sceneryReady } from "./lib/plan-views";
 import { type Pixels, readPng } from "./lib/png";
 
 // T10 — the tiles' memory (docs/PLAN-REFRACTION-HORIZONS.md): the Earth's tiles' texture at the very far reach (the default)
@@ -70,12 +70,14 @@ test.skipIf(!E2E)(
         );
       const m0 = await app.js<Record<string, number>>(MEM);
       if (!tiles) console.log(`  ${v.name}: tiles not all in after 60 s — ${JSON.stringify(m0)}`);
+      const sc = await sceneryReady(app);
+      if (!sc.ready) console.log(`  ${v.name}: scenery not in after 120 s — ${JSON.stringify(sc)}`);
       await app.js(`(() => { ${place} return 1; })()`);
       await app.settled();
       await frames(90);
       await shot(v.name);
       const m = await app.js<Record<string, number>>(MEM);
-      out[v.name] = { ...m, tiles };
+      out[v.name] = { ...m, tiles, scenery: sc };
       console.log(`  ${v.name}: ${JSON.stringify(m)}`);
     }
     // (the reach switched to normal and back: the texture made twice, the old one alive until the work with it is done)

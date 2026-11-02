@@ -2192,6 +2192,21 @@ export const SCHEMA: ControlDef[] = [
       "forest trees buildings worldwide worldcover openstreetmap osm foret arbres batiments monde scenery roads rivers bridges routes fleuves rivieres ponts rail",
   },
   {
+    key: "groundRelight",
+    type: "choice",
+    section: "sky",
+    group: "The Earth",
+    label: "Ground light",
+    style: "segmented",
+    options: [
+      { value: "auto", label: "Auto" },
+      { value: "photo", label: "Photograph" },
+      { value: "full", label: "Relief" },
+    ],
+    help: "The aerial photographs the ground is drawn with are lit already: their Sun's shading on the slopes, their shadows. Lit again by our Sun, their relief is shaded twice — at sunset a slope dark in the photograph and dark again. Auto keeps the photograph's own light while our Sun stands near the one it was taken under (Sentinel-2's mid-morning, the IGN's summer noon) and takes the relief's own lighting back as ours moves away from it or sets. Photograph: the photograph's light alone, as taken. Relief: our Sun's lighting on the relief whole, over the photograph's (as before).",
+    keywords: "ground light relight photograph orthophoto sentinel shading double shadow sunset relief lumière du sol photo ombrage",
+  },
+  {
     key: "detailReach",
     type: "choice",
     section: "sky",

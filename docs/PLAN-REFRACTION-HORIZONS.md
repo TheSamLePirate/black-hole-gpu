@@ -1172,6 +1172,11 @@ sur cette délégation :
       rejouables (sauvegardes) ; jamais deux e2e lourds sur la même machine ;
     - **ciblés** : seuls les e2e existants que la phase peut casser sont relancés (la liste du §5 par sujet), pas toute
       la campagne.
+37. **La porte de H1 : l'option (d)** (Sam, 3 novembre, après le pilote — [H1.md](progress/refraction-horizons/H1.md)) : les
+    cartes d'horizon gardent par direction **la distance du bloqueur dominant** (2 couches de plus, ~50 Mo pour la Lune avec
+    les calottes), et leurs rayons lisent **les hauteurs moyennes** le long des mips, plus les maxima ; à l'ombrage, l'horizon
+    est revu depuis la hauteur propre du point. Pilote (CPU) : 5,95 % de faux éclairage et 2,35 % de fausse ombre, contre
+    12,7 et 2,65 % depuis le haut du texel. Puis Mars, Mercure et Cérès.
 
 ## 11. Questions ouvertes
 
@@ -1188,7 +1193,7 @@ compilation) s'y ajoutent.
 **Restent les décisions prévues pendant le plan**, au vu des mesures :
 - le pré-filtre SRTM (après T1, s'il le faut) ;
 - le budget en vol fixé à la fin de Q1 ;
-- la porte de décision du pilote de H1 (étendre, corriger ou réduire) ;
+- ~~la porte de décision du pilote de H1~~ : tranchée, l'option (d) (décision 37) ;
 - H3a gardé seulement si sa borne est prouvée ;
 - le réétalonnage de C2 (Q5, contre les photos de M0b) et le rendu du limbe d'orbite ;
 - la LUT du profil Caméra (les vidéos de référence retenues) ;
@@ -1276,3 +1281,8 @@ compilation) s'y ajoutent.
   temps d'image inchangé — [progress/refraction-horizons/T4.md](progress/refraction-horizons/T4.md) ; puis **T4b** (le fondu
   de 250 ms depuis l'état affiché : les sauts de 13 à 35 m du sol lointain étalés, aucun coût mesuré) et le harnais e2e
   corrigé (plus de Chrome orphelin : `bun test` n'exécute pas les gestionnaires de sortie).
+- **3 novembre** : Sam tranche la porte de H1 : **l'option (d)** (décision 37). **Q2a** fait — la photo ré-éclairée par source
+  (`groundRelight`), le ciel par les harmoniques sur une pente (L1), le rebond par l'albédo moyen (L6), et **l'empreinte des
+  pixels sur la pente** (le haut des montagnes lu à un niveau d'imagerie 33 × trop grossier — la remarque de Sam) ; Chamonix à
+  midi : les versants plus ombrés deux fois (+4,8 niveaux) ; coût +0,35 ms à Paris, +0,8 ms en montagne (au-dessus du budget) —
+  [progress/refraction-horizons/Q2.md](progress/refraction-horizons/Q2.md).

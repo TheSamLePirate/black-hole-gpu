@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
-import { EARTH_SETTINGS } from "./lib/plan-views";
+import { EARTH_SETTINGS, sceneryReady } from "./lib/plan-views";
 
 // T4b — the relief cache's fade (docs/PLAN-REFRACTION-HORIZONS.md): Paris from 300 m, the view still, the IGN's silhouettes
 // switched off then on (the far levels' overground — the towers, the woods — leaves z 11 … 13 and comes back: the cache's levels
@@ -33,9 +33,10 @@ test.skipIf(!E2E)(
           () => true,
           () => false,
         );
+        const sc = await sceneryReady(app);
         await app.js(`(() => { ${place} return 1; })()`);
         await app.settled(60_000);
-        step(`${what}: tiles ${ok ? "in" : "NOT in after 60 s"}`);
+        step(`${what}: tiles ${ok ? "in" : "NOT in after 60 s"}, scenery ${sc.ready ? "in" : "NOT in after 120 s"} ${JSON.stringify(sc)}`);
       };
       await settle("Paris");
       await app.shot(`${OUT}/silhouettes-on.png`);

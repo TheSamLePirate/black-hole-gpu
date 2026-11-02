@@ -1,7 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
-import { EARTH_SETTINGS } from "./lib/plan-views";
+import { EARTH_SETTINGS, sceneryReady } from "./lib/plan-views";
 
 // T4 — the relief cache's bakes (docs/PLAN-REFRACTION-HORIZONS.md): a low flight over Chamonix (the F-35 from its cockpit, the
 // autopilot holding 450 m at 120 m/s, the tiles streaming in — the IGN's z 15 … 17 over France), the raster pipeline; the bakes
@@ -39,6 +39,8 @@ test.skipIf(!E2E)(
       step(
         `tiles ${tiles ? "in" : "NOT in after 60 s"}: ${JSON.stringify(await app.js(`(() => { const t = __bh.renderer.earthTiles; return { pending: t.pending, finest: t.finest }; })()`))}`,
       );
+      const sc = await sceneryReady(app);
+      step(`scenery ${sc.ready ? "in" : "NOT in after 120 s"}: ${JSON.stringify(sc)}`);
       await app.js(`(() => { ${place} return 1; })()`);
       await app.settled(60_000);
       step("settled");
@@ -63,8 +65,8 @@ test.skipIf(!E2E)(
       await app.js(`(() => { __bh.freeze(true); return 1; })()`);
       await app.settled(30_000);
       await app.shot(`${OUT}/end.png`);
-      console.log(`  ${TAG}: tiles in ${tiles}; ${JSON.stringify(r)}`);
-      writeFileSync(`${OUT}/terrain-bakes.json`, JSON.stringify({ tiles, ...r }, null, 1));
+      console.log(`  ${TAG}: tiles in ${tiles}, scenery ${sc.ready} (${sc.trees} trees, ${sc.buildings} buildings); ${JSON.stringify(r)}`);
+      writeFileSync(`${OUT}/terrain-bakes.json`, JSON.stringify({ tiles, scenery: sc, ...r }, null, 1));
       expect(r.gpuErrors).toBe(0);
     } finally {
       app.close();

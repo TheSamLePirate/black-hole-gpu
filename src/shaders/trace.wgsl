@@ -134,7 +134,7 @@ struct Params {
   // [1…3] its cloud layers, the lowest first: base, top [m above the sea], cover (0: none), optical
   // thickness; [4] the ground's height there [m], the clouds' drift with the wind [m, the Earth's axes,
   // modulo the noise's period]; [5] the rain (PLAN-PLUIE P4): the ground's wetness (0…1), the rain now (0…1.3),
-  // its clock [s] (held while the time is), unused; [6] a storm's lightning flash (N5, system/lightning.ts): its place from the
+  // its clock [s] (held while the time is), the photographs' relighting (Q2: photoRelightK); [6] a storm's lightning flash (N5, system/lightning.ts): its place from the
   // camera [m, the Earth's axes], its light now (0: none); [7] the ground under it [m], to the ground (1) or in the cloud (0),
   // its seed, its light's reach in the cloud [m]
   wx: array<vec4f, 8>,
@@ -6034,6 +6034,16 @@ fn earthFoot(q: vec3f, rd: vec3f, g: vec3f, fp: f32) -> vec3f {
   let s = select(-0.03, dn, dn < -0.03);
   return (g - rd * (dot(g, q) / s)) * fp;
 }
+// A pixel's footprint axis on the ground's own plane — ns its normal, the slope's —, as the photographs read it: they are vertical
+// views, its horizontal part. A steep face seen square-on is small on the photograph; through earthFoot's flat plane it was a
+// plain grazed, stretched up to 33 times along the view — the mountains' upper slopes read at a coarse level, a smooth blur over
+// the near ones' detail (Sam, 3 Nov 2026). Flat ground (ns = q): earthFoot's
+fn earthFootOn(q: vec3f, rd: vec3f, g: vec3f, fp: f32, ns: vec3f) -> vec3f {
+  let dn = dot(rd, ns);
+  let s = select(-0.03, dn, dn < -0.03);
+  let f = (g - rd * (dot(g, ns) / s)) * fp;
+  return f - q * dot(f, q);
+}
 
 // The equirectangular relief map at q (its footprint's axes fx, fy): the slopes over the footprint
 // (−∂h/∂east, −∂h/∂south, as 0.5 + 0.5·slope: central differences of the heights at its mip level), the
@@ -9413,6 +9423,78 @@ fn runwayPave(hit: vec3f, gq: vec3f, q: vec3f, rd: vec3f, Ls: vec3f, fx: vec3f, 
   return o;
 }
 
+// (Q2, decision 29) The photographs' own light: an aerial photograph is lit already — its Sun's shading on the slopes, its
+// shadows —, our n·L over it shades the relief twice (at sunset a slope dark in the photograph and dark again). Where our Sun
+// stands near the photograph's, its light kept — the flat ground's cos alone —, the relief's n·L taken back as ours moves away
+// from it or sets: ndl = mix(max(μ₀, 0), max(n·L, 0), k). Its Sun by source at the point: Sentinel-2's (EOX's mosaic, the Blue
+// Marble's MODIS alike) 10:30 local, its season's summer — a declination of 12° toward the point's pole —; the IGN's
+// orthophotos (their share o) the summer's noon, 18°. k grows from 10° to 50° between the two Suns, and as ours sinks under
+// 25°. P.wx[5].w the setting groundRelight: 0 auto, 1 the photograph's light alone (k 0), 2 the relief's n·L whole (k 1, as
+// before Q2).
+fn photoSun(gq: vec3f, o: f32) -> vec3f {
+  let lon = atan2(gq.y, gq.x);
+  let dS = 0.2094 * select(-1.0, 1.0, gq.z >= 0.0);
+  let hS = lon + 0.3927;
+  let s2 = vec3f(cos(dS) * cos(hS), cos(dS) * sin(hS), sin(dS));
+  let ign = vec3f(0.9511 * cos(lon), 0.9511 * sin(lon), 0.3090);
+  return normalize(mix(s2, ign, clamp(o, 0.0, 1.0)));
+}
+fn photoRelightK(gq: vec3f, L: vec3f, o: f32) -> f32 {
+  let mode = P.wx[5].w;
+  if (mode > 1.5) { return 1.0; }
+  if (mode > 0.5) { return 0.0; }
+  let apart = acos(clamp(dot(L, photoSun(gq, o)), -1.0, 1.0));
+  let el = asin(clamp(dot(gq, L), -1.0, 1.0));
+  return max(smoothstep(0.1745, 0.8727, apart), smoothstep(0.4363, 0.0873, el));
+}
+fn photoNdl(gq: vec3f, n: vec3f, L: vec3f, k: f32) -> f32 {
+  return mix(max(dot(gq, L), 0.0), max(dot(n, L), 0.0), k);
+}
+// (Q2 L1) The sky's light on a face of normal n: the flat ground's (sky: its veils, its night floor in) carried to the face by
+// the frame's own sky (skyIrradiance's harmonics: the sky's brighter side towards the Sun, the slope's own share of it) —
+// not the flat sky × ½(1 + n·up); without the harmonics, that
+fn skyOnFace(sky: vec3f, h: f32, n: vec3f, up: vec3f) -> vec3f {
+  let c = dot(n, up);
+  // (a face all but flat — most of a city's, a plain's —: the flat sky itself, nothing worked out)
+  if (c > 0.98) { return sky * 0.5 * (1.0 + c); }
+  if ((liteSkip() & 32768u) != 0u) { return sky * 0.5 * (1.0 + c); }
+  let a = skyIrradianceLow(h, n);
+  let b = skyIrradianceLow(h, up);
+  if (a.x < 0.0 || max(b.x, max(b.y, b.z)) <= 1e-12) { return sky * 0.5 * (1.0 + c); }
+  return sky * min(a / max(b, vec3f(1e-12)), vec3f(1.5));
+}
+// skyIrradiance's first two bands alone (its constant and its linear terms — a cosine's irradiance almost whole; the third band's
+// ~4 % refinement left out): four coefficients an altitude, not nine — the faces' ratio (skyOnFace)
+fn skyIrradianceLow(h: f32, n: vec3f) -> vec3f {
+  let f0 = bodies[SKY_OFF];
+  if (f0.w < 0.5) { return vec3f(-1.0); }
+  let e = bodies[SKY_OFF + 1u].xyz;
+  let no = bodies[SKY_OFF + 2u].xyz;
+  let hs = bodies[SKY_OFF + 3u];
+  let d = normalize(vec3f(dot(n, e), dot(n, no), dot(n, f0.xyz)));
+  let y = vec4f(0.282095 * PI, 0.488603 * 2.0943951 * d.y, 0.488603 * 2.0943951 * d.z, 0.488603 * 2.0943951 * d.x);
+  var l0 = 0u;
+  var w = 0.0;
+  if (h >= hs.w) { l0 = 3u; } else if (h > hs.x) {
+    l0 = select(select(0u, 1u, h > hs.y), 2u, h > hs.z);
+    let lo = select(select(hs.x, hs.y, l0 == 1u), hs.z, l0 == 2u);
+    let hi = select(select(hs.y, hs.z, l0 == 1u), hs.w, l0 == 2u);
+    w = (h - lo) / max(hi - lo, 1.0);
+  }
+  let l1 = min(l0 + 1u, 3u);
+  var irr = vec3f(0.0);
+  for (var i = 0u; i < 4u; i++) {
+    irr += y[i] * mix(bodies[SKY_OFF + 4u + l0 * 9u + i].xyz, bodies[SKY_OFF + 4u + l1 * 9u + i].xyz, w);
+  }
+  return max(irr, vec3f(0.0));
+}
+// (Q2 L6) The ground round a point, its albedo averaged over ~2 km — the day map's coarse level —: what it sends back to a slope
+// facing it of the light it gets (empirical: one albedo, the incident light unshadowed); 0.18 as before with liteSkip 32768
+fn groundAlbedoMean(gq: vec3f) -> vec3f {
+  if ((liteSkip() & 32768u) != 0u) { return vec3f(0.18); }
+  let lod = log2(2000.0 / (EARTH_RM * 1.5708 / f32(textureDimensions(earthCube).x)));
+  return textureSampleLevel(earthCube, bgSamp, eCube(gq), max(lod, 0.0)).rgb * P.earth2.z;
+}
 fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, hG: f32) -> vec3f {
   if ((TUNE_SKIP & 8192u) != 0u) { return vec3f(0.05) * max(dot(normalize(q), Ls), 0.0); }
   // (the maps at the geodetic latitude — q the squashed space's —, the geometry at q)
@@ -9601,8 +9683,11 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // sun's and the sky's on it, at an albedo of 0.18: a cliff's shadow 2–3 stops under the sunlit ground,
   // as the eye sees it, not black)
   let up = dot(physicalNormal, gq);
-  let bounce = (E * sunThrough(hG, mu0) * shade * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
-  var col = A / PI * (Eg * max(dot(physicalNormal, physicalLs), 0.0) * relLit + sky * 0.5 * (1.0 + up) + bounce
+  let bounce = (E * sunThrough(hG, mu0) * shade * max(mu0, 0.0) + sky) * groundAlbedoMean(gq) * 0.5 * (1.0 - up);
+  // (Q2: the photograph's light kept by its Sun's — the ground's colour a photograph throughout: the orthophotos, the tiles'
+  // imagery, the Blue Marble under them, the regional materials only tinting it —; OSM's colours no photograph: ours whole)
+  let rk = mix(photoRelightK(gq, physicalLs, img.o), 1.0, osm.cover * (1.0 - img.o));
+  var col = A / PI * (Eg * photoNdl(gq, physicalNormal, physicalLs, rk) * relLit + skyOnFace(sky, hG, physicalNormal, gq) + bounce
     + E * earthMoonlight(q, n, hG, mu0) * shade);
   // (the wet ground's sheen: the sky mirrored by the water on it, by Fresnel — a wet runway seen ahead
   // silvery —, the rings breaking it)
@@ -13510,10 +13595,13 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // and the eclipses from the geometric one)
   let Li = incidentSun(Lp);
   let E = lt.e;
-  // (the pixel's footprint on the ground, its two axes — the imagery's anisotropic read)
+  // (the pixel's footprint on the ground, its two axes — the imagery's anisotropic read —, on the ground's own slope: the smooth
+  // normal of the raster's ground — T5 — where it has one; liteSkip 65536 the flat plane's, as before)
   let fp = pixFoot() * tH;
-  let fx = earthFoot(q, rd, squashed(toBody(P.camRight.xyz), ab), fp);
-  let fy = earthFoot(q, rd, squashed(toBody(P.camUp.xyz), ab), fp);
+  var nFoot = terrainRasterNormal(centre);
+  if (dot(nFoot, nFoot) < 0.5 || (liteSkip() & 65536u) != 0u) { nFoot = q; }
+  let fx = earthFootOn(q, rd, squashed(toBody(P.camRight.xyz), ab), fp, nFoot);
+  let fy = earthFootOn(q, rd, squashed(toBody(P.camUp.xyz), ab), fp, nFoot);
   // (the colour: the day's map, the tiles' imagery over it, the regional surface, the orthophotos over all)
   let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
   var img: TileImage;
@@ -13661,9 +13749,13 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     sky += FLASH_TINT * luminance(E) * 0.05 * f.w * exp(-length(q * (1.0 + hG / EARTH_RM) - f.xyz) * EARTH_RM / 10000.0);
   }
   let up = dot(n, gq);
-  let bounce = (Esun * max(mu0, 0.0) + sky) * 0.18 * 0.5 * (1.0 - up);
+  // (L6: the ground round sends back its own albedo's share — the day map's ~2 km mean)
+  let bounce = (Esun * max(mu0, 0.0) + sky) * groundAlbedoMean(gq) * 0.5 * (1.0 - up);
   // (the moonlight — the tracer's ground's earthMoonlight: a moonlit landscape silvery —, through the decks)
-  var G = A / PI * (Eg * max(dot(n, Li), 0.0) + sky * 0.5 * (1.0 + up) + bounce + E * earthMoonlight(q, n, hG, mu0g) * moonVeil);
+  // (Q2: the photograph's light kept by its Sun's — earthGround's photoRelightK —; a wall's stone, a runway's paving: ours whole)
+  let rk = max(photoRelightK(gq, Li, img.o), max(rwyPaved, select(0.0, 1.0, mesh && dot(n, gq) < 0.35)));
+  // (L1: the sky on the face by the frame's sky — skyOnFace)
+  var G = A / PI * (Eg * photoNdl(gq, n, Li, rk) + skyOnFace(sky, hG, n, gq) + bounce + E * earthMoonlight(q, n, hG, mu0g) * moonVeil);
   // (a tree: lit as windsockShade lights it — the Sun on its face, six tenths of the sky, not the ground's open sky and
   // bounce: they lit the crowns yellow —, its crown's underside in its own shade (the carving's occlusion, left out here),
   // the light through its thin edge against the Sun)

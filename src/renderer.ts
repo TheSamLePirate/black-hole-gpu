@@ -3354,6 +3354,8 @@ export class Renderer {
     f.set(runways, (69 + TILE_PARAM_VEC4S) * 4);
     f.set(this.seaParams(near, bodies, earthK, altKm, time, tSec, s, !!o.probe), (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
     f.set(this.weatherParams(earthSurface, altKm, time, tSec, s, !o.probe), (BASE_PARAM_VEC4S - WX_VEC4S) * 4);
+    // (Q2: the photographs' relighting — trace.wgsl photoRelightK, P.wx[5].w: 0 auto, 1 the photograph's light, 2 the relief's)
+    f[(BASE_PARAM_VEC4S - WX_VEC4S + 5) * 4 + 3] = s.groundRelight === "photo" ? 1 : s.groundRelight === "full" ? 2 : 0;
     if (giantFlash) f.set(giantFlash, (BASE_PARAM_VEC4S - WX_VEC4S + 6) * 4);
     // the shadows our bodies cast on one another (PLAN-CIEL C6): the pairs where one falls now
     // (a receiver under two pixels across left out: Io in Jupiter's shadow seen from the Earth would keep the
@@ -7894,8 +7896,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  relief shadow, 8 surfaces, 16 mesh normal, 32 cloud shadows, 64 trees, 128 imagery, 256 the moons' own ground, 512 the airless
    *  worlds' rocks — trace.wgsl airlessRocks, the body raster's heights and the shading both —, 1024 shadeLite's pass alone, 2048
    *  the giants' convective towers — giantTowers —, 4096 Mars's dust devils — marsDevils —, 8192 the bodies'
-   *  relief shadow map — nearShadow, the march whole): a measure,
-   *  the image then wrong */
+   *  relief shadow map — nearShadow, the march whole), 32768 Q2's sky by the frame's harmonics on a slope and the bounce by the
+   *  ground's mean albedo (the flat sky × ½(1 + n·up), 0.18 instead), 65536 the imagery's footprint on the slope (the flat
+   *  plane's instead): a measure, the image then wrong */
   liteSkip = 0;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
   private rasterEligibleNow = false;

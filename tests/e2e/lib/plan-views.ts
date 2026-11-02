@@ -71,6 +71,27 @@ export const WORLD_VIEWS = SPOTS.filter((s) =>
 /** the game's own settings for the Earth's views, the network's chance left out (no traffic), the F-35 in its cockpit */
 export const EARTH_SETTINGS = `{ traffic: false, weather: "fair", earthPipeline: "raster", f35AutoProtect: false, damage: false, crashSpeed: 1e9 }`;
 
+/**
+ * The Earth's scenery (trees, buildings — OSM, the IGN's BD TOPO, Overture) in round the camera: its worker done and nothing
+ * pending, `timeoutMs` at most — a shot or a frame time without it is of a bare ground (the T4 e2e's first shots, 2 Nov 2026).
+ * Its state either way: what it holds, and when not ready, what is missing.
+ */
+export async function sceneryReady(
+  app: { waitFor(expr: string, ms: number): Promise<unknown>; js<T>(expr: string): Promise<T> },
+  timeoutMs = 120_000,
+): Promise<{ ready: boolean; status: string; trees: number; buildings: number; meshedBuildings: number }> {
+  const ready = await app
+    .waitFor(`(() => { const s = __bh.renderer.earthScenery?.stats?.(); return !!s && s.status === "ready" && !s.pending; })()`, timeoutMs)
+    .then(
+      () => true,
+      () => false,
+    );
+  const s = await app.js<{ status: string; trees: number; buildings: number; meshedBuildings: number }>(
+    `(() => { const s = __bh.renderer.earthScenery?.stats?.() ?? {}; return { status: String(s.status ?? "none"), trees: s.trees ?? 0, buildings: s.buildings ?? 0, meshedBuildings: s.meshedBuildings ?? 0 }; })()`,
+  );
+  return { ready, ...s };
+}
+
 /** a view made from a scene (M0b — the refraction's, the horizons', the Earth's from a tripod or an orbit): `set` run on the
  *  Blue Marble's page (a preset, or one made at runtime from a base, its pose and time replaced), measured as the worlds';
  *  `shadows`: its relief shadows' share measured too (renderer.liteSkip 4 — the shadows —, 8192 — the Sun's map) */

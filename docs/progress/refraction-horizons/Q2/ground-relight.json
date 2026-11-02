@@ -1,0 +1,116 @@
+{
+ "paris": {
+  "noon": {
+   "sun": 63.2,
+   "abs": 0.36,
+   "signed": 0.23,
+   "p95": 1.36,
+   "noise": 0.17,
+   "skyBounce": {
+    "abs": 1.15,
+    "signed": -1.07,
+    "p95": 5.96
+   }
+  },
+  "afternoon": {
+   "sun": 40.3,
+   "abs": 0.16,
+   "signed": -0.02,
+   "p95": 0.5,
+   "noise": 0.2,
+   "skyBounce": {
+    "abs": 0.31,
+    "signed": -0.21,
+    "p95": 1.07
+   }
+  },
+  "sunset": {
+   "sun": 7.5,
+   "abs": 0.21,
+   "signed": 0.03,
+   "p95": 0.67,
+   "noise": 0.24,
+   "skyBounce": {
+    "abs": 0.47,
+    "signed": 0.21,
+    "p95": 1.75
+   }
+  }
+ },
+ "chamonix": {
+  "noon": {
+   "sun": 66.3,
+   "abs": 4.84,
+   "signed": 4.82,
+   "p95": 12.16,
+   "noise": 0.09,
+   "skyBounce": {
+    "abs": 0.24,
+    "signed": -0.23,
+    "p95": 0.51
+   }
+  },
+  "afternoon": {
+   "sun": 37.8,
+   "abs": 6.62,
+   "signed": 5.98,
+   "p95": 19.1,
+   "noise": 11.89,
+   "skyBounce": {
+    "abs": 8.3,
+    "signed": -7.86,
+    "p95": 24.69
+   }
+  },
+  "sunset": {
+   "sun": 3.5,
+   "abs": 0.01,
+   "signed": 0,
+   "p95": 0.03,
+   "noise": 0.02,
+   "skyBounce": {
+    "abs": 0.26,
+    "signed": 0.25,
+    "p95": 0.89
+   }
+  }
+ },
+ "beauce": {
+  "noon": {
+   "sun": 63.7,
+   "abs": 0.09,
+   "signed": 0.01,
+   "p95": 0.31,
+   "noise": 0.09,
+   "skyBounce": {
+    "abs": 0.11,
+    "signed": 0,
+    "p95": 0.39
+   }
+  },
+  "afternoon": {
+   "sun": 40.9,
+   "abs": 0.08,
+   "signed": 0.01,
+   "p95": 0.29,
+   "noise": 0.13,
+   "skyBounce": {
+    "abs": 0.13,
+    "signed": -0.02,
+    "p95": 0.35
+   }
+  },
+  "sunset": {
+   "sun": 7.6,
+   "abs": 0.1,
+   "signed": -0.04,
+   "p95": 0.36,
+   "noise": 0.16,
+   "skyBounce": {
+    "abs": 0.15,
+    "signed": -0.08,
+    "p95": 0.48
+   }
+  }
+ }
+}
