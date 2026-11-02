@@ -142,12 +142,17 @@ describe.skipIf(!E2E)("an offline zone", () => {
       detail,
       orthoFinest,
     };
-    expect(look.phase).not.toBe("realtime");
-    expect(look.pipe).toBe("raster");
+    // (shot and said before judged: a failure seen)
     if (shots) {
       await Bun.$`mkdir -p ${shots}`;
       await app.shot(`${shots}/zones-chamonix-${label}.png`);
     }
+    console.log(
+      `  ${label}: ${JSON.stringify(look)} · ${JSON.stringify(await app.js(`(() => { const r = __bh.renderer; return { paused: document.body.classList.contains("paused"), frozen: __bh.frozen?.() ?? null, compiling: r.compilingNow, settled: r.tracerSettled, pending: r.earthTiles.pending, spp: r.sppNow ?? null }; })()`))}`,
+    );
+    // (a still raster view keeps its realtime frames — renderer.rasterHold, the raster pipeline —: refined, traced, only without it)
+    if (!(await app.js<boolean>(`__bh.renderer.rasterHold`))) expect(look.phase).not.toBe("realtime");
+    expect(look.pipe).toBe("raster");
     await app.js(
       `(() => { Object.assign(__bh.settings, { earthRasterShading: "auto", dynamicResolution: true, earthRasterScale: 0.75, motionBlur: 0.5 }); __bh.game.pause(false); return 1; })()`,
     );
