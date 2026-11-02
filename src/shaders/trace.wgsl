@@ -9646,6 +9646,32 @@ fn otherGround(k: u32, q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fp: f32) -> vec
   // discs; Mars's kernel carries it, its branch never taken. Only where a giant can be the near body — NEAR_KIND 0, 2 —, and
   // not the Earth's material kernels — NEAR_KIND 0 there, the regional surface's code in: a giant is never near with it)
   if (NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && (m == 4u || m == 5u) && P.near5.w > 0.0) { A = giantAlbedo(m, q, P.time.x, bodies[BV * k + 2u].y) * ALB_TINT; } else { A = planetAlbedo(k, q, P.time.x).rgb * ALB_TINT; }
+  // (Jupiter's, Saturn's deck under the map's texel — PLAN-GEANTES-VOLUME V10 —: the volume's own banks and holes, ~80 km,
+  // and its storms' anvils, read on the deck as giantSigma reads them — its large noise at the top deck's level, carried by
+  // the same wind (giantInside's two phases, a pixel's by its weight) —: the holes the lower decks' warmer, darker colour,
+  // the anvils white; faded in as the pixel gets finer than ~40 km, out where a bank seen edge-on is too few pixels. The
+  // volume fading in under 450 km goes on with what was
+  // there. The same conjunction as giantAlbedo's)
+  if (NEAR_DETAIL && !HAS_SURFACE && NEAR_KIND != 1u && NEAR_KIND != 3u && NEAR_KIND != 4u && NEAR_KIND != 5u && NEAR_KIND != 6u && NEAR_KIND != 7u && (m == 4u || m == 5u) && P.near5.w > 0.0) {
+    let rkv = AIR.rm * 1e-3;
+    // (and a bank seen edge-on — towards the horizon, 80 km shrunk by μ — a dozen pixels at least: else salt)
+    let wv = smoothstep(40.0, 10.0, fp * rkv) * smoothstep(4.0, 12.0, 80.0 * max(dot(q, -rd), 0.0) / max(fp * rkv, 1e-6));
+    if (wv > 0.0) {
+      let tS = P.time.x * P.near5.w;
+      let fph = fract(tS / GIANT_CYCLE);
+      let fr = smoothstep(1000.0, 3000.0, P.envX.w);
+      let w1 = smoothstep(0.35, 0.65, abs(2.0 * fph - 1.0)) * (1.0 - fr);
+      let ag = select(mix(fph, 0.5, fr), fract(fph + 0.5), RNDV.w < w1) * GIANT_CYCLE;
+      let ang = -giantWind(m, asin(clamp(q.z, -1.0, 1.0))).x * ag / (AIR.rm * max(length(q.xy), 0.05));
+      let cs = vec2f(cos(ang), sin(ang));
+      let qw = vec3f(q.x * cs.x - q.y * cs.y, q.x * cs.y + q.y * cs.x, q.z);
+      let big = cloudNoise(qw * (rkv + giantLayer(m, 0u).x * 1e-3) * (1.0 / 80.0) + vec3f(3.1, 7.7, 1.3));
+      let bank = smoothstep(0.3, 0.75, big.g);
+      let anvil = smoothstep(0.7, 0.9, big.g - select(0.05, 0.0, m == 4u)) * giantEyeX(m, q);
+      A = mix(A, A * mix(vec3f(0.6, 0.52, 0.45), vec3f(1.04), bank), 0.75 * wv);
+      A = mix(A, vec3f(0.93, 0.93, 0.95), 0.7 * wv * anvil);
+    }
+  }
   if (isEarth(k)) { A = max(A, vec3f(0.015, 0.04, 0.07)); }
   // (Mars's frost: its seasonal CO₂ caps, its winter mornings' water frost — marsFrost; near and from orbit alike)
   // (the constants first: only Mars's kernels — NEAR_KIND 2, the raster's lean main one too: the ground past the raster — and the

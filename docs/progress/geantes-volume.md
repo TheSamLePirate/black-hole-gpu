@@ -161,3 +161,20 @@ pixel), prises sur ce Mac ; les temps sont mesurés sur kerr-mini (`planets-ab`,
   version retenue ne change qu'une constante de la boucle (la hauteur du dernier échantillon existe déjà) ; avec la caméra
   dedans, les pas courts coûtaient 19 à 28 % (l'air clair entre les ponts), d'où la condition.
 - **Effet** : le pont brun de Jupiter vu d'en haut devient lisse ; sur Saturne le grain disparaît presque.
+
+## V10 — le détail de la surface entre 1 000 et 250 km
+
+![Jupiter à 1 000 km, puis de près à 300 km, puis Saturne à 500 km : avant | après](geantes-volume/v10.jpg)
+
+- **Avant** : sous le texel de la carte (55 km sur Jupiter), la surface G9 n'avait que la tuile de turbulence G8 et les
+  tours de G9 ; le volume, en fondu sous 450 km, faisait apparaître des bancs et des trous que la surface ne montrait pas.
+- **Maintenant** : la surface lit le grand bruit du volume — celui de `giantSigma`, au niveau du pont du haut, emporté par
+  le même vent (les deux phases de V7a, chaque pixel tiré selon son poids) — : les trous prennent la couleur plus sombre
+  et plus chaude des ponts du dessous, les enclumes d'orage blanchissent. Le détail entre quand le pixel passe sous ~40 km,
+  et s'efface là où un banc vu par la tranche (vers l'horizon) ferait moins d'une douzaine de pixels — sinon un sel de
+  points blancs.
+- **Effet** : de près, des bancs, des trous et des voiles clairs qui ressemblent à des nuages ; Saturne prend une structure
+  là où elle était uniforme. Le volume, quand il entre, continue ces mêmes bancs.
+- **Coût** : nul (kerr-mini : Jupiter en orbite, bas, à 1 000 et 300 km ; Saturne en orbite et à 500 km ; Mars en orbite,
+  bas, cinéma — son noyau dessine aussi les géantes et porte ce code : budget des lignes relevé de 83 200 à 83 400).
+- **Ce qui manque** : le relief de ces bancs (leur normale) — la lumière ne voit que leur couleur.
