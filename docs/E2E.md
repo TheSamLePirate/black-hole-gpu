@@ -18,8 +18,9 @@ bun run e2e --remote landing gear       # two files on kerr-mini, full screen th
 bun run e2e --remote --detach golden    # queued on the mini, back at once with a job id
 bun run e2e --host kerr-pc smoke        # on the Windows PC (RTX 5070 Ti), full screen there (docs/REMOTE-TESTS.md)
 bun scripts/remote.ts logs <id> -f      # follow it; exits with the job's code; results in remote-results/<id>/
-bun scripts/lab-monitor.ts              # what runs on both Macs: the Chrome lock, its queue, jobs, campaigns
-bun run dashboard                       # the e2e dashboard, http://localhost:4700 — all of the above in a page (§8)
+bun scripts/lab-monitor.ts              # what runs on both Macs: the lock, its queue, each e2e's test, jobs, campaigns, heat
+bun run dashboard                       # the e2e dashboard, http://localhost:4700 — all of the above in a page (§8);
+                                        #   its Monitor (#monitor, #monitor/wall): the lab live, heat and all
 ```
 
 `bun run e2e` with no name runs **all** e2e files (~20 min on the mini, ~70 files). `bun run e2e --list`
@@ -92,7 +93,8 @@ Checking the lab before a campaign:
 
 ```bash
 bun scripts/remote.ts doctor     # mini: reached, internet, screen session, Chrome, bun version, Chrome mode, test Chromes, sleep, queue
-bun scripts/lab-monitor.ts       # both Macs: lock holder + waiters, live Chrome processes (⚠ if > 1), jobs, flight-lab campaigns
+bun scripts/lab-monitor.ts       # both Macs: lock holder + waiters, live Chrome processes (⚠ if > 1), each e2e's file/test/craft,
+                                 # jobs, flight-lab campaigns, the heat and its last 15 min (--watch 5: refreshed)
 ```
 
 ---
@@ -275,7 +277,24 @@ and verdict are matched from bun test's output, in order. `E2E_REPORT_ROOT` choo
 `E2E_TELEMETRY=0` or `App.boot({ telemetry: false })` turns it off. The sampler only observes (it keeps
 the hub's caches, the cheaper way; dropping them on every sample is proven harmless too — `landing`,
 `golden`, `rates` pass either way).
-Plain `E2E=1 bun test …` (no preload) records nothing.
+Plain `E2E=1 bun test …` (no preload) records nothing — but is still **live** (below).
+
+### Every e2e is live
+
+While it runs, every e2e process tells the lab what it is doing (`tests/e2e/lib/live.ts`):
+`~/.kerr-lab/live/e2e-<pid>.json`, written every 2 s and removed at its end (a dead process's file is swept by
+`lab-monitor`). Under `bun run e2e`: the file, the test (its place among the file's, its title — read from the
+file as the banner reads it), the time gone against the file's usual time (`tests/e2e/durations.json`), the
+frame rate, the craft (vessel, status, body, height, height over the ground, speed, Mach, autopilot and hold,
+the hub's card, the entry's phase, warp, GPU frame), the test's last minutes as a series, the tests already
+ended, the latest moments and page errors. Under plain `E2E=1 bun test …` (the remote runner's jobs, the A/B:
+`bunfig.toml` preloads `tests/e2e/lib/live-preload.ts`): **live only** — the file, the test, its time; the page
+is not sampled, so its measures are what they were. `E2E_LIVE=0` turns it off.
+
+A picture of the page is taken **only when someone asks** (a *peek*: `e2e-<pid>.peek` created; the recorder
+answers at its next pull with `e2e-<pid>.jpg`, ~0.5 s) — the dashboard's *Picture now* / *Auto* (every 8 s
+while shown). A page held by one long call (a whole flight stepped at once) cannot be pictured until it
+returns; the Monitor says so (*page held*).
 
 ### Rules that keep tests honest
 
@@ -444,7 +463,7 @@ Flight-lab campaigns follow the same pattern: `bun scripts/flightlab.ts run --sh
 ## 8. The e2e dashboard
 
 ```bash
-bun run dashboard          # → http://localhost:4700 (E2E_DASH_PORT); listens on 127.0.0.1 only
+bun run dashboard          # → http://localhost:4700 (E2E_DASH_PORT); every interface (E2E_DASH_HOST=127.0.0.1: this Mac only)
 ```
 
 A web page of its own (not the game), over this same harness. Everything in it is also reachable from the
@@ -452,18 +471,19 @@ command line. The page is for people, the commands are for agents.
 
 | view | what it does |
 |---|---|
+| **Monitor** (`#monitor`; `#monitor/wall`: full screen, no sidebar, for a screen left on) | every machine live, on one page. **Its heat** (docs/THERMAL.md): the thermal pressure (a red banner from Moderate up: figures measured now are doubtful), the GPU clock against its maximum, the GPU's activity, the temperatures, the power — and their charts over 15 min, 1 h or 6 h, the pressure as bands behind the GPU clock. **What it runs**: each e2e (live, above) — its file and test, a progress bar against the file's usual time (amber past it), the file's tests as steps (ended, running, to come), the craft's figures, its height, speed and frame rate over the test, its latest moments, *page held* / *no news* when it stalls, a picture of its page on demand (*Picture now*, *Auto*), *Report ▸*; each flight-lab campaign — its scenario, its passes and failures as steps, the latest sample, its height and speed as the dashboard saw it fly, pause/resume/skip/picture; the remote jobs (*Follow live*); the other `bun test` processes. **The last hours** (1–24 h): per machine the runs and jobs with their verdicts, every recorded e2e test (a colour per file; its top edge amber or red when it ran under Moderate or Heavy pressure; a click opens its report), the e2e running now, and the heat (pressure bands, the GPU clock) on the same axis |
 | **Overview** | both Macs live: each one's Chrome mode, its lock holder and waiters, live test Chromes (⚠ if more than one), the mini's jobs (**Follow live** attaches to one started elsewhere), flight-lab campaigns, orphans; the last runs, the pass rate, the files failing now and the ones flaky lately; *Doctor (mini)* |
 | **Run tests** | every e2e file by theme (the catalogue's), its last result, its history (passed / runs), its usual time; quick picks (smoke, failed last time, flaky lately, never run); **where** (this Mac headless, kerr-mini full screen), `--each`, `-t`, `UPDATE=1`, `--hold`; the estimated time; Launch |
 | **Live** | a run as it goes: files and tests ticking, pass/fail counters, progress, the coloured log following; Cancel (the process group here, the job on the mini) |
 | **History** | every run on disk: the dashboard's (`remote-results/dash/<id>/`), the remote runner's jobs, the `--each` summaries, the flight-lab campaigns (their `report.html`); filters; a run's page: failures with their error blocks, per-file table, every test, its pictures, the log (search, errors only), **Run again** / **Rerun the failed files** |
-| **Test report** (a test's *Report ▸*, in a run or live) | what it tests (its file's words, the catalogue), how long it took against its estimate (the median of its past runs), its frame rate (median, p5, min, and the chart), samples, moments, errors; **commanded against flown**: the assistants' corridors with the optimum and the flown track (each point in or out), the entry's commanded bank against the flown one, the approach's aimed slope against the flown one, the line against the runway's axis, the guidance's predicted miss, the docking's axis; the approach, rollout and docking charts; the hub's card each time it changed (its figures and their warning colours); the quality measures (q_…: loads, α swings, bank reversals, throttle chatter, time in the corridors, propellant, Δv); every telemetry chart; the events (filtered by kind); the pictures; the raw files. Charts: hover for every series' value, the crosshair follows on every chart of the same time axis, **drag across any chart (or the timeline) to zoom them all**, double-click for the whole flight, each series' min, max and last value in the legend, ⤢ enlarges. Also: **the timeline** (status, autopilot, hold, assisted, the hub's card and step, the entry's phase and profile, docking, warp, sphere of influence as coloured bands), **where it went** (the ground track, the height), **the machine** (frame rates, GPU time, worst loop, render scale, heap), and **every channel**: all ≈ 200 figures recorded, searchable by group, presets (attitude, air, controls, autopilot, entry, approach, orbit, machine, sound), each charted alone or up to six overlaid |
+| **Test report** (a test's *Report ▸*, in a run or live) | **the machine's heat during the test** (its summary's `thermal`: the pressure's samples by level — a warning when it ran under Moderate or worse —, the GPU clock min, median and max and its share of the maximum, the hottest GPU and CPU, the GPU's power) and, while the machine's history still holds it (~6 h), its charts with the test marked; what it tests (its file's words, the catalogue), how long it took against its estimate (the median of its past runs), its frame rate (median, p5, min, and the chart), samples, moments, errors; **commanded against flown**: the assistants' corridors with the optimum and the flown track (each point in or out), the entry's commanded bank against the flown one, the approach's aimed slope against the flown one, the line against the runway's axis, the guidance's predicted miss, the docking's axis; the approach, rollout and docking charts; the hub's card each time it changed (its figures and their warning colours); the quality measures (q_…: loads, α swings, bank reversals, throttle chatter, time in the corridors, propellant, Δv); every telemetry chart; the events (filtered by kind); the pictures; the raw files. Charts: hover for every series' value, the crosshair follows on every chart of the same time axis, **drag across any chart (or the timeline) to zoom them all**, double-click for the whole flight, each series' min, max and last value in the legend, ⤢ enlarges. Also: **the timeline** (status, autopilot, hold, assisted, the hub's card and step, the entry's phase and profile, docking, warp, sphere of influence as coloured bands), **where it went** (the ground track, the height), **the machine** (frame rates, GPU time, worst loop, render scale, heap), and **every channel**: all ≈ 200 figures recorded, searchable by group, presets (attitude, air, controls, autopilot, entry, approach, orbit, machine, sound), each charted alone or up to six overlaid |
 | **Flight lab** | every scenario of `scripts/flightlab.ts` (by family and tags, its estimate, its last verdicts — each a link to its report), flown **here, on the mini, or both** (dealt in two by estimated time: `--shard 1/2` here, `2/2` there), retries, the time limit; the campaigns **in flight now** on either Mac: the scenario, its progress, the latest sample (status, height, speed, autopilot, the hub's card live), its events, and its controls — pause, resume, skip, abort, a note, a picture now, page code evaluated; every campaign on disk (here and brought back from the mini) and each scenario's report |
 | **Captures** | every picture the runs left (`remote-results/`, `flight-results/`, the live page's), by run, in a lightbox (← →, Esc) |
 | **Live page · __bh** | the app booted in this Mac's test Chrome (it takes the lock like any e2e): its picture streamed (DevTools screencast, ~30 fps); clicks, wheel and keys sent to it as real input (click the picture, then type; Esc twice to leave); a scene picker; screenshots kept in `remote-results/dash/shots/`; a REPL on the page (`let`, `await`, the last value back as JSON), `__bh` paths completed (Tab), history (↑↓), snippets; the page's console |
 | **__bh API** | docs/BH-API.md, searchable, entry by entry: *Try the example* / *Inspect* send it to the live page's REPL |
 | **Docs** | this guide, the catalogue, the `__bh` reference, the remote tests, the flight lab, the iPad, rendered with a table of contents |
 
-Keys: `1`–`8` switch views, `/` focuses the search. Light or dark follows the system (◐ to force one).
+Keys: `1`–`9` switch views, `/` focuses the search. Light or dark follows the system (◐ to force one).
 
 Live data never blinks: lists already shown are fetched again behind them and repainted only when they
 changed, by a keyed DOM morph (nothing reloads — a picture, a chart, a field being typed in stay). Working
@@ -472,9 +492,14 @@ production bundle built once.
 
 Its parts: `scripts/dashboard/server.ts` (Bun.serve: the API, the WebSocket, the HTML import),
 `runs.ts` (runs started through `scripts/e2e.ts`, streamed and kept; the history), `probe.ts` (the live
-page), `lab.ts` (both Macs through `lab-monitor.ts --json`), `parse-log.ts` (bun test's output, line by
-line), `markdown.ts` (the docs), `ui/` (the page: no framework, a DOM morph keeps nodes across live updates).
-Tests: `tests/dashboard-parse-log.test.ts`, `tests/dashboard-markdown.test.ts`.
+page), `lab.ts` (every machine through `lab-monitor.ts --json` — its e2e, its heat —, the flight campaigns'
+tracks, the peeks, the heat over a span: `scripts/thermal.ts series` on the mini), `timeline.ts` (the last
+hours: the history, the tests' summaries here and in the jobs' artifacts, the heat), `parse-log.ts` (bun test's
+output, line by line), `markdown.ts` (the docs), `ui/` (the page: no framework, a DOM morph keeps nodes across
+live updates; `ui/spark.ts`: the Monitor's small charts — their hover reads its data from the element).
+Tests: `tests/dashboard-parse-log.test.ts`, `tests/dashboard-markdown.test.ts`, `tests/e2e-live.test.ts`.
+API for agents: `GET /api/state` (the lab: each machine's `e2e`, `thermal`, `heat`), `GET /api/timeline?hours=6`,
+`GET /api/heat?where=here|mini&minutes=60[&to=ms]`, `POST /api/peek {where, pid}` (→ `{url}`).
 
 A run started from the dashboard is an ordinary `bun scripts/e2e.ts …` process: it takes the Chrome lock,
 and on the mini it is an ordinary remote job. Stopping the dashboard stops its live page, not the runs

@@ -17,7 +17,7 @@ bun run e2e --remote landing gear          # on kerr-mini, full screen
 bun run e2e --remote --detach --each a b   # queued there; one process per file and a summary table + JSON
 bun scripts/remote.ts logs <id> -f         # follow a detached job (brings remote-results/<id>/ back)
 bun scripts/remote.ts doctor               # the mini's health before a campaign
-bun scripts/lab-monitor.ts                 # both Macs: the Chrome lock, its queue, jobs
+bun scripts/lab-monitor.ts                 # both Macs: the Chrome lock, its queue, each e2e's test, jobs, heat
 bun scripts/bh-api.ts [--check]            # the live __bh members (and what BH-API.md misses)
 bun run dashboard                          # the e2e dashboard for the user: http://localhost:4700
 ```
@@ -34,6 +34,9 @@ When the user wants to watch, browse results or drive the page themselves, point
 - Run anything over a minute in the background and put its estimated duration in the task's title.
 - Before a measure (bench, A/B, frame times), `bun scripts/thermal.ts --all` (docs/THERMAL.md): a pressure other than
   Nominal makes the figures doubtful — wait, or report it beside them. Each test's `summary.json` carries `thermal`.
+- Watching a run (yours or another session's, here or on the mini): `lab-monitor` names each e2e's file and test
+  (~/.kerr-lab/live, docs/E2E.md "Every e2e is live"); the dashboard's Monitor (#monitor) shows it with a picture on
+  demand. A picture is only taken when asked: never "Auto" on another session's A/B.
 - Real input for UI (`app.click`, `app.press`), `waitFor` rather than sleeps, `freeze(true)` + `step(1/30)`
   inside one `app.js` call for reproducible flights, `app.cdp.errors` asserted, `close()` + `stopServer()`.
 - A failure: rerun that file alone, then on the other Mac. Report regression / flaky / environment,

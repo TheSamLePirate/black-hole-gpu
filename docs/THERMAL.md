@@ -15,7 +15,8 @@ bun scripts/thermal.ts                    # ce Mac : pression, horloge GPU / max
 bun scripts/thermal.ts --all              # ce Mac et kerr-mini
 bun scripts/thermal.ts window --minutes 10
 bun scripts/thermal.ts doctor --all       # l'agent, le démon root, macmon, l'âge des fichiers
-bun scripts/lab-monitor.ts                # une ligne « Heat » par machine
+bun scripts/lab-monitor.ts                # une ligne « Heat » par machine, et ses 15 dernières minutes en caractères
+bun run dashboard                         # le Monitor (#monitor) : la chaleur de chaque Mac en courbes, sur 15 min à 6 h
 ```
 
 ```
@@ -101,7 +102,14 @@ thermalWindow(t0, t1);                  // entre deux instants : nombre d'échan
   Sur kerr-mini, il s'agit de la chaleur de kerr-mini, puisque le test y tourne.
 - **`bench.ts`, `trace-ab.ts`** : une ligne au début et une à la fin ; `machineThermal` dans `report.json`, dans
   `docs/perf/bench-<label>.json` et dans le `--out` de trace-ab.
-- **`lab-monitor.ts`** : une ligne `Heat:` par Mac.
+- **`lab-monitor.ts`** : une ligne `Heat:` par Mac, et les 15 dernières minutes (horloge GPU, température GPU,
+  pression) en caractères ; son `--json` porte `thermal` et `heat` (`thermalSeries` : un point par tranche, les
+  moyennes, la pire pression).
+- **Le tableau de bord** (`bun run dashboard`, docs/E2E.md §8) : le Monitor montre par Mac la pression (un bandeau
+  rouge dès Moderate), l'horloge GPU contre son maximum, l'activité, les températures, la puissance, et leurs courbes
+  sur 15 min, 1 h ou 6 h, la pression en bandes ; sa frise met la chaleur des dernières heures sous les tests qui
+  ont tourné ; le rapport de chaque test montre la chaleur pendant le test. Pour une autre durée ou un autre Mac :
+  `bun scripts/thermal.ts series --minutes 60 [--to ms]` (JSON), `GET /api/heat?where=mini&minutes=60`.
 - Pour un agent qui veut tout le détail : `bun ~/.local/share/kerr-thermal/mac-thermal.js latest
   ~/.local/state/kerr-thermal/latest.json --max-age 15 [--metrics 'gpu.*']` (le JSON complet de l'outil,
   `tools/mac-thermal/LLM-GUIDE.md`).
