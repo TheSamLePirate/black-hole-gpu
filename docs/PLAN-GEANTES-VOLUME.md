@@ -5,7 +5,7 @@ origin/master `88ee5b2`) et de notre code à `f3aa71e5`. V4 et V7 sont décidés
 sections). **Fait le 1er novembre : V1, V2, V3, V4** (compte rendu : [progress/geantes-volume.md](progress/geantes-volume.md)) ;
 V7a (le vent zonal) fait aussi, par un fondu stochastique (chaque rayon tire une phase : (a) lue en entier coûtait
 +36–45 % pendant les fondus) ; V6 fait le 1er novembre aussi (un bruit bleu pour tous les tirages du traceur au-delà du premier) ; V5 le 2 novembre (pas
-d'anneaux ; le grain vu d'en haut réduit) et V10 (les bancs du volume sur la surface), V7b (les tourbillons dedans, les films), V8 (les orages sur le blanc de la carte) ; V9 fait le 2 novembre (aux pôles bleus, la brume amincie et l'hydrosulfure gris). Le plan est fini. V11 (le ciel contre le Soleil, un A/B de la session 4u
+d'anneaux ; le grain vu d'en haut réduit) et V10 (les bancs du volume sur la surface), V7b (les tourbillons dedans, les films), V8 (les orages sur le blanc de la carte) ; V9 fait le 2 novembre (aux pôles bleus, la brume amincie et l’hydrosulfure gris) : V1 à V10 sont finis. V11 (le ciel contre le Soleil, un A/B de la session 4u
 d'Alex) ajouté le 2 novembre : à faire bientôt (Sam).
 
 Le contexte : Alex a porté nos nuages des géantes (P11 D2–D5, le fondu `58942157`) sur Quest 3, à 72 images/s. En
