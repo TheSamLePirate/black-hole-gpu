@@ -289,6 +289,12 @@ Un **volet Q** (« qualité Unreal ») dans [PLAN-REFRACTION-HORIZONS.md](PLAN-R
 - C2 avec R1 (la même USSA-76) et la séance M0 ;
 - le canal libre de la visibilité partagé entre T5, R4b et B1 (P5 le prévoit).
 
+> **Révisé après le challenge** [CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md](CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md)
+> (plan commun, §3.10, décisions 27 à 32) : C2 remplacé par une atmosphère physique unique ; Q6 avant Q4 ; la photo
+> ré-éclairée en partie dès Q2 ; L4 sur des matériaux connus ; les gains de §6 visés, pas acquis ; les ombres du décor
+> aussi coupées sous ~1,7° de Soleil (`treeShadowFrame`) ; GTAO et contact sur la profondeur finale, pas celle du proxy ;
+> [PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) fusionné. Le plan fait foi.
+
 **Décision de Sam (2 novembre)** : « fais au mieux, AAA qualité et perf, tout dans le périmètre ». Le volet Q est intégré
 au plan commun (phases Q1–Q9, décisions 16 à 20 de son §10), dans l'ordre de son §8 ; rien n'est lancé.
 

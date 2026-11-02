@@ -1,7 +1,9 @@
 # Plan commun — la Terre raster AAA, la bonne réfraction, les cartes d'horizon du relief
 
 Date : **2 novembre 2026**, relu sur `main` à `824b3a5c`, puis confronté au challenge
-[CHALLENGE-PLAN-REFRACTION-HORIZONS.md](CHALLENGE-PLAN-REFRACTION-HORIZONS.md) (§3.9). Statut : **décidé, pas lancé.**
+[CHALLENGE-PLAN-REFRACTION-HORIZONS.md](CHALLENGE-PLAN-REFRACTION-HORIZONS.md) (§3.9) et à
+[CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md](CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md) (§3.10) ;
+[PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) y est fusionné (décision 28). Statut : **décidé, pas lancé.**
 
 - **Quand** : on commence **dès que les géantes sont finies** (PLAN-GEANTES-VOLUME : V8 et V9 restent), décision 11 du
   §10.
@@ -14,10 +16,11 @@ Date : **2 novembre 2026**, relu sur `main` à `824b3a5c`, puis confronté au ch
   - **R — la réfraction** (troisième passe du 31 octobre au soir).
   - **Q — la qualité Unreal** : la lumière du sol, les villes, le volume, l'air et les nuages, l'image, les photos
     dé-éclairées, le monde habité, la perf qui paie tout ça. Analyse :
-    [ANALYSE-TERRE-UNREAL-2026-11-02.md](ANALYSE-TERRE-UNREAL-2026-11-02.md).
+    [ANALYSE-TERRE-UNREAL-2026-11-02.md](ANALYSE-TERRE-UNREAL-2026-11-02.md), avec ce que [VIPER 11](PLAN-IMAGE-VIPER11.md) fait de bon
+    pour l'image (la chaîne caméra, le ré-éclairage partiel de la photo, les détails, le couvert bas, les nuages amortis).
 - **Le but** : qualité AAA **et** performance. Aucune phase ne rend une vue plus lente qu'avant sans que le gain d'image
   soit mesuré et accepté. Une partie des phases (Q1, T4, T9, H3a, H3, Q9) doit faire **gagner** du temps : **Q1, la
-  perf, passe avant tout ajout de qualité** et le finance.
+  perf, passe avant tout ajout de qualité** ; ses gains sont visés, comptés seulement une fois mesurés (décision 31).
 - Le nom du fichier est gardé : les notes de `docs/agent/`, l'e2e `refraction-wgs84` et les autres plans y renvoient.
 - Les numéros de ligne cités sont indicatifs (`trace.wgsl` bouge sans cesse) ; les noms de fonctions font foi.
 
@@ -39,6 +42,10 @@ Date : **2 novembre 2026**, relu sur `main` à `824b3a5c`, puis confronté au ch
 
 > « Mes décisions : fais au mieux, AAA qualité et perf, tout dans le périmètre. Mets à jour avec les meilleures décisions.
 > N'exécute pas encore le plan. Enlever les ombres cuites des photos ? Comment on pourrait s'y prendre ? » (2 novembre)
+
+> « Crée un plan md pour inclure ce qui est bon dans viperoneone dans le projet. Ce qui améliore le graphisme. » (31 octobre,
+> [PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md)) — puis, le 2 novembre, après les deux challenges : « Deep analysis et
+> update le plan. »
 
 Origine du volet H et R : l'analyse de `vr-solar-system` (Alesk, portage Quest 3 de ce jeu, cloné dans
 `~/Documents/DEV/vr-solar-system`). Leur rapport `docs/reports/2026-10-31_refraction-models_05.md` compare leur modèle au
@@ -64,13 +71,13 @@ nôtre. Leurs cartes d'horizon sont dans `docs/modules/Terrain.txt` (FAR CAST SH
 | R4 | le sol lointain relevé, l'horizon d'avion, plus de « trou » au limbe vu d'orbite | le téléobjectif, l'orbite | ≈ 0 |
 | R5 | l'auréole de Vénus, l'anneau rouge de la Terre vu de la Lune éclipsée | des vues rares et spectaculaires | 0 hors du limbe |
 | R6 | des mirages (Soleil en « vase étrusque », Fata Morgana, le « lac » d'une route chaude) | le téléobjectif à la côte | 0 au GPU hors de la bande de l'horizon |
-| **Q1** | ~4–8 ms rendues (culling, caches, tampons), la netteté du vol égale à celle de l'arrêt, un gouverneur qui tient la cadence | tout, tout le temps | **gain** |
-| **Q2–Q3** | un sol éclairé comme dans Unreal (ciel directionnel, reflets du Soleil, point chaud de la végétation) ; des villes avec leurs façades, leurs matériaux, leurs fenêtres la nuit, leurs routes | toute vue basse, les villes de jour et de nuit | ≤ +0,8 ms |
-| **Q4** | l'occlusion ambiante, les ombres du décor à toute distance, le vent, des forêts en volume jusqu'à 30 km, les rayons d'ombre des montagnes | le vol bas, la montagne, le couchant | ≤ +2,5 ms (payées par Q1) |
-| **Q5** | une atmosphère physique (tables de Hillaire, l'air à sa vraie épaisseur, les aérosols du jour), les nuages là où sont les vrais | tous les ciels, l'heure bleue, la météo | gain sur les nuages |
-| **Q6** | un upscaler temporel de classe TSR, l'exposition locale, une optique de caméra | le vol, le cockpit | ≈ 0, et l'échelle peut baisser |
-| **Q7** | des photos sans leurs ombres cuites, des matériaux sous la photo, la neige et les saisons, des orthos ailleurs qu'en France | le sol de près, l'hiver, l'Europe | ≈ 0 par image |
-| **Q8** | la nuit des rues, le trafic, les lignes haute tension, les éoliennes, les vignes ; façades PBR, imposteurs d'arbres, neige qui tombe | le monde habité | au budget |
+| **Q1** | des ms rendues (culling, caches, tampons — gains **visés**, mesurés poste par poste), la netteté du vol égale à celle de l'arrêt, des paliers de réglages avec hystérésis | tout, tout le temps | **gain** (à mesurer) |
+| **Q2–Q3** | une photo ré-éclairée avec mesure (plus de double ombre au couchant), un ciel qui éclaire selon la pente, des villes avec leurs façades, matériaux, fenêtres la nuit, leurs routes | toute vue basse, les villes de jour et de nuit | ≤ +0,8 ms |
+| **Q4** | l'occlusion ambiante, les ombres du décor à toute distance et au Soleil rasant, les reflets du Soleil sur les matériaux connus, le vent proche, des forêts en volume jusqu'à 30 km | le vol bas, la montagne, le couchant | ≤ +2,5 ms (mesuré) |
+| **Q5** | une atmosphère physique unique (tables de Hillaire, l'air vrai partout), une météo cohérente et datée, des nuages composés couche par couche, amortis, avec un champ proche et la gloire de l'avion | tous les ciels, l'heure bleue, la météo | gain sur les nuages |
+| **Q6** | un upscaler temporel de classe TSR (avant les effets qui scintillent), l'exposition locale, un **profil Caméra** (étalonnage, grain, vignette, exposition et temps de pose de caméra) et un profil Neutre ; le mode GoPro | le vol, le cockpit, le replay | ≈ 0, et l'échelle peut baisser si les scènes le permettent |
+| **Q7** | les ombres cuites ôtées des photos (recherche, go/no-go), des scans de détail sous la photo, la piste usée, la neige et les saisons, des orthos ailleurs qu'en France | le sol de près, l'hiver, l'Europe | ≈ 0 par image ; +0,5–1,5 ms en vol bas (détail) |
+| **Q8** | le couvert bas (herbe, arbustes, cailloux) près des pistes puis en vol rasant ; la nuit des rues, le trafic, les lignes haute tension, les éoliennes, les vignes ; façades PBR, imposteurs d'arbres, neige qui tombe | le monde habité | au budget, par paliers |
 
 ---
 
@@ -616,7 +623,7 @@ revérifiés à la main) :
 5. **Le lointain** : plus d'ombres du décor au-delà de 750 m, plus d'arbres au-delà de ~2,6 km, la forêt lointaine est
    une couleur ; aucun vent.
 6. **La perf** : anneaux du relief, bâtiments et carte d'ombre du relief dessinés en entier à chaque image, tampons et
-   copies superflus — de quoi financer le reste.
+   copies superflus — des gains à prendre, à mesurer avant de les compter.
 7. **Les photos** : la méthode pour en ôter les ombres cuites (L7) est au §9 de l'analyse : correction topographique de
    Sentinel-2 sur le relief de la même tuile ; ombres des orthos rendues par notre propre décor vu du Soleil de la prise
    de vue, affinées par l'image, relevées par le rapport soleil/ombre mesuré ; sur le GPU, une fois par tuile.
@@ -630,7 +637,7 @@ sur l'essentiel : les points les plus fragiles sont les **contrats entre représ
 | Point du challenge | Vérifié | Ce que le plan fait maintenant |
 |---|---|---|
 | Pas de vrai « avant » (§7.4) | oui : T1, T2, Q1 passaient avant M0b | **M0a** au tout début, **M0b** après T1, T2, Q1 |
-| Contrats absents (§3) | — | **C0** : huit contrats écrits avant de coder (§7) |
+| Contrats absents (§3) | — | **C0** : des contrats écrits avant de coder (huit, puis treize avec §3.10) |
 | T3 vise le bilinéaire (§4.2) | oui : `terrainPoint` interpole en bilinéaire ; rapports de grille 2 et 4 | la géomorphose vise la surface **triangulée** (barycentrique), coins et phases traités |
 | T4 « par paires » (§4.3) | oui | des **générations** publiées ensemble ; le fondu sur le domaine commun |
 | T5 en `rg16snorm` (§4.4, §7.3) | oui : seuls timestamps, BC et ASTC sont demandés (`renderer.ts:1978`) | la normale dans la cible `rgba32uint` actuelle (16 o/px, masques d'écriture par canal respectés) : ni texture ni fonctionnalité en plus |
@@ -654,6 +661,32 @@ sur l'essentiel : les points les plus fragiles sont les **contrats entre représ
 Ce que je ne reprends pas tel quel : plusieurs candidats d'horizon par texel et le transport complet des mirages de
 terrain — d'abord la version la plus simple qui tient son contrat, mesurée ; la complexité seulement si la mesure
 l'exige.
+
+### 3.10 Le challenge « Terre Unreal » et VIPER 11 — ce qui change
+
+[CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md](CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md) (une autre session, sur
+l'analyse Unreal à `c884ef25`) a été relu et ses constats clés revérifiés dans le code. Il signale aussi
+[PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) (31 octobre, rien de lancé), qui couvrait les mêmes sujets : il est
+**fusionné ici** (décision 28) pour n'avoir qu'un devis et qu'une implémentation.
+
+| Point | Vérifié | Ce que le plan fait maintenant |
+|---|---|---|
+| Les ombres du décor coupées au Soleil rasant | oui : `treeShadowFrame` rend une carte inactive si `L[2] < 0.03` (~1,7°, `renderer.ts:8240`) ; `liteSun` laisse alors le décor éclairé | T6 (et S1) les gardent au Soleil rasant, volume utile allongé, casters choisis par le volume de lumière |
+| C2 change le monde avec l'observateur | oui : `AIR_K` touche à la fois la transmission CPU et l'air GPU | **une atmosphère physique unique** (décision 27, remplace 18) |
+| La profondeur `b` est celle du proxy d'arbre | oui (`proxyFs` ; le matériau teste la forme exacte après) | l'occlusion et le contact lisent la profondeur finale du matériau (`moments.y`) : contrat C0-9 |
+| B1 sans identité de bâtiment | oui : `meshFs` écrit `vec4(d, 0, d, 3)` | une table triangle → bâtiment et les coordonnées de façade (C0-10) ; risque relevé à moyen |
+| Le financement n'est pas acquis | oui : 41–47 − 4–8 = 33–43 ms ; `gpuprof` additionne des passes qui se chevauchent | gains **visés**, mesurés sur la durée totale et ses queues ; décision 31 |
+| La reconstruction temporelle trop tard | — | **Q6 avant Q4** ; L4 (reflets) et L5 dans Q4, après Q6 (décision 30) |
+| « Net comme le natif à 0,5–0,6 » | oui : 0,5 = ¼ des pixels, ~160 ms d'historique à 25 i/s | promesse retirée ; netteté au premier instant et après accumulation mesurées séparément |
+| L4 tiré de WorldCover | oui (11 classes d'occupation, pas des matériaux) | matériaux par la sémantique : bâtiment, route, piste, classe naturelle, inconnu mat |
+| L1 compterait deux fois l'orientation | oui (le SH est déjà convolué au cosinus) | plus de ½(1 + up) une fois la normale vraie utilisée |
+| L6, C9, L5, C5, C7/C10, F2, F4, I6, P4, P7, P8 | — | reformulés dans leurs phases (moyenne spatiale du rebond ; C9 défini avec `wxVeil` ; L5 en étude bornée ; « météo cohérente et datée » ; composition multicouche avant le halo ; chaîne terrain → sursol → canopée → arbres ; format de la forêt ; optique optionnelle ; clé de cache complète ; P7 à mesurer ; P8 après une reprojection fiable) |
+| Une politique photo dès maintenant | — | **le ré-éclairage partiel de VIPER** (`groundRelight`) en Q2, avant tout nouvel ombrage ; le dé-éclairage (L7) reste une recherche (décision 29) |
+| Le temps de compilation est de la perf | oui (profils de noyaux, `skyFill`) | une règle au §6 |
+| Le périmètre AAA par situation de vue | — | une table au §5 et une erreur projetée admissible (C0-12) |
+
+Déjà réglé par les mises à jour précédentes : H5 n'est plus optionnel, T9 a été avancé, le budget n'est plus 18 ms
+(décision 26).
 
 ---
 
@@ -697,10 +730,10 @@ l'exige.
 | Le dessin du relief et du décor | `terrain-raster.ts` (blocs cullés), `scenery-raster.ts` (bâtiments cullés, arbres par blocs), la cible de visibilité (rg32 + l'attache de T5), le masque du cockpit en profondeur | Q1 | trace-ab ±1 % ; passe de visibilité mesurée |
 | Le gouverneur et la netteté | `main.ts` (l'échelle en raster), `renderer.ts adaptRasterRate`, `display.wgsl` (RCAS après l'agrandissement), `post.wgsl` (copies → ping-pong) | Q1, Q6 | netteté vol = arrêt (mesure) ; cadence tenue |
 | La lumière du sol | `shadeLite`, `liteSun`, `liteSky`, `skyIrradiance` (avec la normale), un module de matériaux (classe → rugosité, F0), BRDF de végétation | Q2 | captures à 3 Soleils ; ≤ +0,3 ms |
-| Les bâtiments et les routes en raster | `meshFs`/`boxSolidVs` (l'indice), `buildingLook` allégé dans `shadeLite`, `scenerySurface` allégé ou passe de décalques | Q3 | Paris jour/nuit ; ≤ +0,5 ms en ville |
-| L'occlusion, les ombres lointaines, le vent, la canopée | GTAO (post), H5 à 8 directions, `scenery-raster` cascades, `forest.ts` = `forest.wgsl` (vent), couche de canopée cuite avec le relief, la table aérienne (rayons du relief) | Q4 | captures ; ≤ +2,5 ms |
-| L'air et les nuages | `earthAir` (tables de Hillaire dans `bodies`), `earth-air.ts` (`AIR_K`), `setAir` (aérosols), une carte des nuages ±250 km dans `bodies`, `wxCloud`/`cloudVolume`, la carte d'ombre des nuages | Q5 | M0b contre photos réelles ; nuages −1 à −3 ms |
-| L'image | `post.wgsl` (TSR, vecteurs, exposition locale), `display.wgsl` (optique) | Q6 | netteté à 0,6 d'échelle ≈ natif |
+| Les bâtiments et les routes en raster | `packScenery` (table triangle → bâtiment), `meshFs`/`boxSolidVs` (l'identité), `buildingLook` allégé dans `shadeLite`, `scenerySurface` allégé ou passe de décalques | Q3 | Paris jour/nuit ; ≤ +0,5 ms en ville |
+| L'occlusion, les ombres lointaines, les reflets, le vent, la canopée | GTAO (post) sur la profondeur finale, H5 à 8 directions, GGX sur les matériaux connus, `scenery-raster` cascades, `forest.ts` = `forest.wgsl` (vent), couche de canopée cuite avec le relief, la table aérienne (rayons du relief) | Q4 | captures ; ≤ +2,5 ms |
+| L'air et les nuages | `earthAir` (tables de Hillaire dans `bodies`), `earth-air.ts` (`AIR_K` à 1 partout), `setAir` (aérosols), une carte des nuages ±250 km dans `bodies`, `wxCloud`/`cloudVolume`, la carte d'ombre des nuages | Q5 | M0b contre photos réelles ; nuages −1 à −3 ms |
+| L'image | `post.wgsl` (TSR, vecteurs, exposition locale), `display.wgsl` (optique) | Q6 | netteté en déplacement mesurée au premier instant et après accumulation |
 | Les photos et le sol de près | un compute de dé-éclairage à l'arrivée des tuiles (T9), un atlas de matériaux `texture_2d_array`, la neige et les saisons dans `shadeLite`, de nouvelles `NationalSource` | Q7 | §9 de l'analyse (go/no-go chiffré) |
 | Le monde habité | lampadaires et trafic tirés d'OSM (worker du décor), lignes HT, éoliennes, vignes ; atlas de façades ; imposteurs | Q8 | au budget |
 | Les docs | `PLAN-CIEL.md` (C3), `PLAN-PLANETES-AAA.md` (P8, P10), `WEBGPU-MATERIELS.md`, `E2E-CATALOGUE.md`, `PERFORMANCE.md`, `AAA-PROGRESS.md`, `ANALYSE-TERRE-RASTER-*`, `ANALYSE-TERRE-UNREAL-*`, `TERRE-UNREAL.md` (U3, U4, U10 soldés par Q1, Q4, Q6) | à jour à chaque phase, FR + EN | toutes | — |
@@ -749,6 +782,18 @@ l'exige.
   - la nuit est noire sans Lune, argentée sous la pleine Lune, et les rues sont éclairées par leurs lampadaires.
 - **L'image** (Q1, Q6) : la même netteté à l'arrêt et en vol ; aucun fantôme sur ce qui bouge ; une cadence régulière.
 - **Le monde vit** (Q4, Q8) : le vent dans les arbres, le trafic sur les routes, les éoliennes qui tournent.
+- **Le même monde pour tout observateur** : un point physique reçoit le même éclairage quelle que soit l'altitude de la
+  caméra ; aucun anneau de sol autour des proxies, aucune occlusion par une forme invisible.
+- **Le périmètre AAA par situation de vue** (challenge Unreal §15) :
+
+  | Situation | Ce qui fait la crédibilité | Ce qui reste économe |
+  |---|---|---|
+  | À pied, roulage | matériaux métriques, contacts, façades, raccord piste/terrain, couvert bas | atmosphère lointaine, décor sous-pixel |
+  | Vol bas | stabilité des routes et des toits, forêts, parallaxe, chargement, ombres | microdétail et animation hors de portée |
+  | Croisière | masses, nuages, canopée, silhouettes des villes, perspective aérienne | objets devenus trop petits |
+  | Haute altitude, orbite | limbe physique, nuages, terminateur, lumières du globe | matériaux de proximité |
+  | Nuit, couchant, couvert | rapports lumineux justes, émissions, lisibilité | effets de caméra qui masqueraient une erreur |
+
 - **Valider comme il faut** (challenge §8.2–8.3) :
   - par **régions** (silhouette, pénombre, Soleil, côte, coutures, terrain non concerné : déplacement de contour, fuite de
     lumière, faux ombrage, scintillement), pas par un pourcentage global de pixels changés ;
@@ -788,7 +833,12 @@ l'exige.
   3. **Les budgets** : relevés sur mesure, après la compilation mesurée sous Windows (kerr-pc, `d3d12-ab`), pas d'avance.
      **Les mesures D3D12 regroupées** : T1, T5, T7 et R2 touchent les mêmes entrées `earth-*` ; une séance par groupe
      plutôt qu'une par phase quand elles se suivent.
-  4. **Le budget de temps** :
+  4. **La compilation est de la performance** (challenge Unreal §13) : toute nouvelle BRDF, branche, table ou variante
+     est jugée aussi sur la taille de la source composée, le nombre de pipelines, la première image et le temps
+     d'activation ; les paliers du gouverneur réutilisent des pipelines prêts.
+  5. **Le profilage** : `gpuprof` additionne des passes qui peuvent se chevaucher ; les décisions se prennent sur la durée
+     totale d'image, le CPU, l'attente GPU et la présentation, avec leurs queues de distribution.
+  6. **Le budget de temps** :
      - les planètes : jamais plus lentes que la Terre dans la même vue (P10) ;
      - la Terre : **jamais plus lente qu'avant le plan** sur les vues de M0a/M0b, sauf T6 (≤ 0,5 ms pour des ombres qui
        manquaient) et ce que Sam accepte au vu des images.
@@ -845,7 +895,7 @@ Trois volets, une séance de mesure commune. L'ordre est au §8.
 | Phase | Contenu | Fichiers | Fait quand |
 |---|---|---|---|
 | **M0a** | **L'état de départ, avant toute modification** (challenge §7.4) : les vues de M0b prises sur `main` tel qu'il est — temps GPU par passe, intervalles d'image (médiane et queues), résolution effective et taux d'ombrage, mémoire de pic, chargement froid et chaud ; le coût cumulé du plan se mesure contre elle | `docs/progress/refraction-horizons/M0a.md` | Référence enregistrée et rejouable (`ab-commit`) |
-| **C0** | **Les contrats, écrits avant de coder** (challenge §3, §11) : **(1) la surface** — la hauteur d'un niveau = ses triangles réels (barycentrique, diagonale fixée), cible de la géomorphose, la même pour la visibilité et les cascades d'ombre ; les **générations** du cache publiées pour tous les niveaux touchés ; **(2) la cible de visibilité** `rgba32uint`, 16 o/px comme aujourd'hui — r distance du sol, g identifiant (arbre, bâtiment pour B1), b distance la plus proche, a marqueur 8 bits + normale octaédrique 2 × 12 bits —, chaque passe gardant son masque d'écriture ; **(3) la projection optique** de R4 — `projectApparent` et son inverse, distances physique, apparente, optique nommées ; matériau, eau, SSR, ombres, nuages, étoiles, reprojection temporelle et objets mobiles sur le même point physique ; **(4) le stockage des tuiles** (T8–T10) — atlas par niveau, marges recopiées à chaque mip, mips limitées, validité par tuile en paires de `u32`, clés source + génération, réponses tardives ignorées, voisinage 4 × 4 de la cubique valide ; **(5) les deux Soleils** (géométrique, incident local) ; **(6) l'horizon** — `D_cuisson`, portée dérivée des données, estimation visuelle et marge de décision, distance par direction oui ou non ; **(7) les budgets de précision en pixels** par mode (grand angle, télé au champ minimal, photo, prédiction) ; **(8) les budgets absolus** par appareil et la mémoire de pic (décision 26) | `docs/progress/refraction-horizons/C0.md` | Chaque contrat écrit avec ses tests d'acceptation ; relu par Sam |
+| **C0** | **Les contrats, écrits avant de coder** (challenge §3, §11) : **(1) la surface** — la hauteur d'un niveau = ses triangles réels (barycentrique, diagonale fixée), cible de la géomorphose, la même pour la visibilité et les cascades d'ombre ; les **générations** du cache publiées pour tous les niveaux touchés ; **(2) la cible de visibilité** `rgba32uint`, 16 o/px comme aujourd'hui — r distance du sol, g identifiant (arbre, bâtiment pour B1), b distance la plus proche, a marqueur 8 bits + normale octaédrique 2 × 12 bits —, chaque passe gardant son masque d'écriture ; **(3) la projection optique** de R4 — `projectApparent` et son inverse, distances physique, apparente, optique nommées ; matériau, eau, SSR, ombres, nuages, étoiles, reprojection temporelle et objets mobiles sur le même point physique ; **(4) le stockage des tuiles** (T8–T10) — atlas par niveau, marges recopiées à chaque mip, mips limitées, validité par tuile en paires de `u32`, clés source + génération, réponses tardives ignorées, voisinage 4 × 4 de la cubique valide ; **(5) les deux Soleils** (géométrique, incident local) ; **(6) l'horizon** — `D_cuisson`, portée dérivée des données, estimation visuelle et marge de décision, distance par direction oui ou non ; **(7) les budgets de précision en pixels** par mode (grand angle, télé au champ minimal, photo, prédiction) ; **(8) les budgets absolus** par appareil et la mémoire de pic (décision 26) ; **(9) la profondeur de chaque consommateur** — l'image, la reprojection, l'occlusion et le contact lisent la profondeur finale du matériau (`moments.y`), pas celle du proxy d'arbre (`b`) ; **(10) l'identité des bâtiments** dans le maillage (table triangle → bâtiment, coordonnées de façade pour `buildingLook`) ; **(11) la politique photo** — le ré-éclairage partiel par source (`groundRelight`, confiance par source), ce qu'on garde de la lumière de la photo et où ; **(12) l'erreur projetée admissible** par situation de vue (§5) ; **(13) le budget de compilation** (source, pipelines, première image) | `docs/progress/refraction-horizons/C0.md` | Chaque contrat écrit avec ses tests d'acceptation ; relu par Sam |
 | **M0b** | **Les références détaillées** (ex-H0 + R0 + la Terre), après T1, T2 et Q1 : l'entrée `moon shadeLite` ajoutée aux profils et son budget mesuré ; relire `origin/master` d'Alex. **Vues** : Mercure ciné Soleil 15°, Lune au terminateur depuis 500 km, Lune au télescope depuis la Terre au premier quartier, Mars au sol au couchant, Cérès ciné, pôle sud lunaire, Europe ciné ; Biarritz 21/06/2026 (Soleil à 0,5° et 2° au télé, la définition de l'aplatissement fixée) ; coucher depuis l'ISS (équateur et > 70° N) ; Lune éclipsée du 07/09/2025 (Danjon) ; les Andes au couchant ; La Hague ; **la Terre raster** : Chamonix bas Soleil bas (relief, coutures, ombres), une pente douce hors d'Europe (SRTM seul), une côte vue de 2 à 10 km, une suite image par image pendant l'arrivée d'un niveau de tuiles, un vol scripté de 2 min (le journal des tuiles, les cuissons). **Mesures** : chaque vue A/A ±1 % ; la part des ombres après P1-2 dans Mercure, Cérès et Europe ciné (`liteSkip` 4 et 8192) ; le taux de déclenchement possible de H3a ; le coût de la cuisson du cache en vol. **Décisions** : S_max par corps (si une borne est prouvable), `reliefAt`, le rayon et la résolution des calottes (78°, 256 × 256 par défaut) | `docs/progress/refraction-horizons/M0b.md`, `kernel-profiles.ts`, `kernel-budget.json`, `planet-views.ts` | Mesures et décisions écrites |
 
 ### T — La Terre raster
@@ -857,10 +907,10 @@ Trois volets, une séance de mesure commune. L'ordre est au §8.
 | **T3** | **La géomorphose** (contrat C0-1) : sur les 8–16 derniers nœuds avant le bord de sa fenêtre, chaque sommet glisse vers la surface **triangulée** du niveau suivant — interpolation barycentrique dans son vrai triangle, même diagonale ; pas le bilinéaire, qui en diffère de (h00 + h11 − h10 − h01)/4 au centre d'une cellule, justement dans les vallées et sur les crêtes ; rapports de grille 2 et 4 (1 ou 3 sommets intermédiaires par arête), les coins, les phases des fenêtres, un niveau indisponible ; les positions 3D comparées, pas seulement les altitudes ; chevauchement ramené à 1 nœud **après** cette garantie ; la même surface dans les cascades d'ombre | `terrain-raster.ts`, `renderer.ts` | Erreur de couture projetée ≤ 0,25 px dans les vues de livraison, recentrages et arrivées de sources compris ; plus aucun triangle qui perce ; la passe de visibilité au même coût (±2 %) |
 | **T4** | **Les cuissons cohérentes** (contrat C0-1) : une **génération** par état de sources ; les niveaux touchés (empreinte zf ± 1, fenêtre recoupée) préparés en arrière-plan et **publiés ensemble** ; le fondu de 0,2–0,3 s part de l'état affiché, sur le domaine géographique commun (l'ancien échantillon reprojeté après un recentrage), les mises à jour coalescées ; le contact apparent des arbres, des pistes et des bâtiments gardé pendant le fondu ; l'historique temporel rejeté localement là où la surface a bougé ; `earthDetail` hors des niveaux ≥ 3 si M0b montre qu'il coûte | `terrain-cache.ts`, `terrain-raster.ts`, `renderer.ts` | Cuissons par seconde en vol bas divisées (mesuré) ; aucun saut de forme ni pied flottant au chargement ; le coût de la cuisson en baisse |
 | **T5** | **Les normales lisses** : par nœud, de la surface **géomorphosée** (la dérivée du poids de morphose comprise, l'erreur bornée dans la bande), interpolées, écrites dans le canal `a` de la cible `rgba32uint` (C0-2 : octaèdre 2 × 12 bits, ~0,1°) — ni nouvelle texture, ni `rg16snorm` (fonctionnalité WebGPU non demandée) ; `shadeLite` et `shadeWater` les lisent à la place de `rasterNormal` ; le détail des tuiles (`earthSlopeFine` généralisé à toutes les données) sous 2 km, fondu vers la normale du nœud ; la normale géométrique (biais d'ombre) et celle du matériau (éclairage) gardées distinctes. Les silhouettes restent celles du maillage : T5 corrige l'éclairage, pas la géométrie | `terrain-raster.ts`, `scenery-raster.ts` (masques d'écriture), `trace.wgsl`, `terrain-raster-hint.ts` | Plus de facettes (`TUNE_LITE: 16` comme référence) ; trace-ab ±1 % ; 0 o/px de plus |
-| **T6** | **Les ombres solaires en cascades** (avec R3 ; décision 23) : un système **unique** pour le relief (ici) et le décor (S1, en Q4) — cascade 0 ±1,5 km (~1,5 m le texel : la portée de biais tombe à ~30 m au Soleil rasant, contre ~390 m avec une seule carte), cascade 1 ±10 km, chacune en cache (redessinée quand le Soleil tourne ou qu'elle bouge) ; les anneaux du relief dessinés avec leur surface géomorphosée (jamais le relèvement de R4b) ; **les ombres de contact** (8–16 pas en espace écran le long du Soleil) pour les derniers mètres ; une **couverture explicite** (fenêtres carrées, décentrées, partielles) avec un état « inconnu », où la carte d'horizon (H5) répond quand elle existe ; `liteSun` lit la cascade la plus fine qui couvre, fondue avec la suivante ; les pixels tracés reprennent leur marche à la vraie sortie | `terrain-raster.ts`, `renderer.ts` (`encodeSunShadow`, `TABLE_SUN`), `terrain-raster-hint.ts`, `trace.wgsl liteSun` | Scène de test (talus proche, crête dans la carte, chaîne au-delà) : aucun intervalle laissé éclairé ; Chamonix au Soleil bas : les crêtes ombrent la vallée ; ni acné ni liseré ; ≤ 0,5 ms |
+| **T6** | **Les ombres solaires en cascades** (avec R3 ; décision 23) : un système **unique** pour le relief (ici) et le décor (S1, en Q4) — cascade 0 ±1,5 km (~1,5 m le texel : la portée de biais tombe à ~30 m au Soleil rasant, contre ~390 m avec une seule carte), cascade 1 ±10 km, chacune en cache (redessinée quand le Soleil tourne ou qu'elle bouge) ; les anneaux du relief dessinés avec leur surface géomorphosée (jamais le relèvement de R4b) ; **les ombres de contact** (8–16 pas en espace écran le long du Soleil) pour les derniers mètres ; une **couverture explicite** (fenêtres carrées, décentrées, partielles) avec un état « inconnu », où la carte d'horizon (H5) répond quand elle existe ; `liteSun` lit la cascade la plus fine qui couvre, fondue avec la suivante ; les pixels tracés reprennent leur marche à la vraie sortie ; **au Soleil rasant**, les cascades restent actives (aujourd'hui `treeShadowFrame` coupe les ombres du décor sous ~1,7°), leur volume allongé le long du Soleil, les casters choisis par le volume de lumière, pas par le tronc de la caméra ; la clé de cache complète (hauteurs et génération, géomorphose, couverture, Soleil incident, repère stable au rebase) — ex-P4 | `terrain-raster.ts`, `renderer.ts` (`encodeSunShadow`, `TABLE_SUN`, `treeShadowFrame`), `terrain-raster-hint.ts`, `trace.wgsl liteSun` | Scène de test (talus proche, crête dans la carte, chaîne au-delà) : aucun intervalle laissé éclairé ; Chamonix au Soleil bas : les crêtes ombrent la vallée ; ni acné ni liseré ; ≤ 0,5 ms |
 | **T7** | **La mer** : une **hiérarchie des sources d'eau** (OSM > WorldCover classe 80 > relief des tuiles > masque global), chacune avec ses états « absent », « non chargé », « eau », et une couverture sous-pixel — pas de bande semi-transparente ; la mer sur le géoïde, les lacs à leur niveau ; `hG` lu dans les tuiles (`earthH(gq, foot, true)`) ; les vagues filtrées anisotropes en transportant ensemble pente moyenne, moments LEAN, déplacement, Jacobien et écume (dans `shadeWater` et dans `main`, sans le `/√FOOT`), à défaut le LOD sur l'axe long ; la répétition de 1 024 m cassée par un **déphasage** compatible avec le spectre et le vent (une rotation tournerait le vent) ; le SSR fondu de 2 à 6 km vers un reflet de repli de même énergie ; `inlandWater` avec la rugosité non résolue | `trace.wgsl`, `renderer.ts` (sampler) | Côtes nettes contre l'orthophoto, Camargue et polders en terre, aucun saut quand une source arrive ; plus de moiré au couchant ; pas de motif de 2 à 20 km ; le reflet solaire continu en largeur et en énergie ; < 0,1 ms |
 | **T8** | **Le chargement** (avec T9 et T10 : une seule architecture, contrat C0-4) : une priorité qui tient compte de l'aire visible, de l'erreur projetée, du mouvement, du coût et de l'ancienneté, et protège les niveaux grossiers de la famine ; des limites séparées sur les requêtes, les décodages et les octets envoyés au GPU par image ; deux files (l'IGN derrière son portillon sans tenir de créneau ; Terrarium et EOX, leur parallélisme **mesuré**, pas figé) ; la validité par tuile (paires de `u32`) et celle du voisinage 4 × 4 de la cubique ; le repli sur la carte globale marqué comme tel (sa provenance et son erreur), plus compté comme une tuile chargée ; les orthos en cache LRU et en anneau préchargé, `ORTHO_SPAN = 8` pour z15–16 ; le décodage en worker ; plus de réécriture des hauteurs à l'arrivée de l'imagerie | `earth-tiles.ts`, un worker de décodage, `trace.wgsl` (le masque dans `earthH`, `earthImagery`) | Le temps jusqu'à une qualité visible définie, divisé par 2 à 5 sur le vol scripté de M0b (cache froid, chaud, réseau dégradé) ; aucune longue tâche (> 50 ms) du fil principal due aux tuiles ; e2e `zones`, `ortho`, `ign-relief` verts |
-| **T9** | **L'imagerie filtrée** (contrat C0-4) : les hauteurs en r32float, l'imagerie (tuiles et orthos) dans un atlas `rgba8unorm-srgb` par niveau, **des marges recopiées des voisines à chaque mip**, des mips limitées (jusqu'à ~16 px), un niveau de tuile plus grossier au-delà ; lue par `textureSampleGrad` et un sampler `maxAnisotropy: 16` (un plafond, pas une garantie selon l'appareil) ; une tuile ne publie sa validité qu'avec ses mips et ses marges (jamais les couleurs de l'occupant précédent) ; le canal des lumières nocturnes gardé ; le décompte des textures (§6) | `earth-tiles.ts`, `trace.wgsl` (`earthImageryAniso`, `earthImagery`, `tileTexel`, `orthoImage`), `renderer.ts` (layout), `mips.wgsl` | Sol net et stable au loin (captures rasantes à 1–3 km, en séquence) ; continuité aux bords des tuiles, du tore et des quarts ; le matériau plus rapide (mesuré) ; la source composée valide autour du palier réel |
+| **T9** | **L'imagerie filtrée** (contrat C0-4) : les hauteurs en r32float, l'imagerie (tuiles et orthos) dans un atlas `rgba8unorm-srgb` par niveau, **des marges recopiées des voisines à chaque mip**, des mips limitées (jusqu'à ~16 px), un niveau de tuile plus grossier au-delà — **ou**, si le fondu de bord des fenêtres couvre l'empreinte des mips lues, l'option de VIPER (B1) : une couche par fenêtre en adressage `repeat` (l'enroulement du tore gratuit), mips par `mipgen` à l'arrivée, l'absence en alpha 0 filtrée en prémultiplié (la couverture devient le poids de mélange entre niveaux), les orthos sorties de leurs quarts — tranché en C0-4 ; lue par `textureSampleGrad` et un sampler `maxAnisotropy: 16` (un plafond, pas une garantie selon l'appareil) ; une tuile ne publie sa validité qu'avec ses mips et ses marges (jamais les couleurs de l'occupant précédent) ; le canal des lumières nocturnes gardé ; le décompte des textures (§6) | `earth-tiles.ts`, `trace.wgsl` (`earthImageryAniso`, `earthImagery`, `tileTexel`, `orthoImage`), `renderer.ts` (layout), `mips.wgsl` | Sol net et stable au loin (captures rasantes à 1–3 km, en séquence) ; continuité aux bords des tuiles, du tore et des quarts ; le matériau plus rapide (mesuré) ; la source composée valide autour du palier réel |
 | **T10** | **La mémoire des tuiles** (dans l'architecture C0-4) : les niveaux à 4 tuiles (z6–10, z15–17) rangés par quarts de couche ; la texture de `veryFar` de 436 à ~235 Mo ; un budget **de pic** (ancienne et nouvelle texture coexistent le temps du travail soumis) en plus du budget résident | `earth-tiles.ts` (`makeTexture`, `params`, `put`), `trace.wgsl tileTexel` | `stats` : ~200 Mo de moins au repos ; le pic mesuré ; images identiques ; e2e iPad |
 
 ### H — Les cartes d'horizon
@@ -893,19 +943,21 @@ Trois volets, une séance de mesure commune. L'ordre est au §8.
 
 Détail, constats et chiffres : [ANALYSE-TERRE-UNREAL-2026-11-02.md](ANALYSE-TERRE-UNREAL-2026-11-02.md) (les codes P, I, L,
 B, F, S, A, D, C, G y renvoient). Chaque phase : A/B sur kerr-mini contre la précédente, captures en raster, vue cockpit ;
-**jamais plus lent que le budget fixé à la fin de Q1**, sauf ce que Sam accepte au vu des images.
+**jamais plus lent que le budget fixé à la fin de Q1**, sauf ce que Sam accepte au vu des images. Aucun gain n'est compté
+avant d'être mesuré (décision 31). [PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) y est fusionné : ses chantiers sont
+nommés « VIPER A1… » dans les phases (son relevé de VIPER et ses sources restent dans son document).
 
 | Phase | Contenu | Fichiers | Fait quand |
 |---|---|---|---|
-| **Q1** | **La perf d'abord**, sans changer l'image : **P1** les anneaux du relief découpés en blocs de 8 × 8 nœuds cullés (tronc de vue, au CPU ou en compute → `drawIndexedIndirect`), de même pour la carte d'ombre (tronc du Soleil) ; **P2** les bâtiments cullés (tronc + Hi-Z de la profondeur du relief) ; **P3** le cull des arbres par blocs de 8 × 8 (bornes déjà stockées) ; **P4** la carte d'ombre du relief en cache (redessinée quand le Soleil tourne ou que sa fenêtre bouge) ; **P5** la cible de visibilité en `rgba32uint` selon C0-2 (16 o/px comme aujourd'hui, mais chaque canal utile : la normale de T5 et l'identifiant de B1 y entrent ; le relèvement de R4 se défait par le calcul) ; **P6** plus de copies plein écran (ping-pong), l'historique d'albédo coupé quand `rasterDetail` est éteint ; **P7** le cockpit dans la profondeur de la visibilité ; **P12** les petits nettoyages ; **I1** RCAS après l'agrandissement ; **I4** le gouverneur en raster (des niveaux de qualité du matériau au lieu du taux inerte, un plafond à 25 i/s sur 50 Hz quand le budget ne tient pas ; l'échelle libre attend Q6) | `terrain-raster.ts`, `scenery-raster.ts`, `renderer.ts`, `main.ts`, `post.wgsl`, `display.wgsl` | Sur le mini, Paris bas en vol : **−4 à −8 ms** (visé : ≤ 40 ms en vol) ; images identiques (trace-ab ±1 %) sauf la netteté d'I1 ; la netteté en vol mesurée égale à celle de l'arrêt ; résolution effective et taux d'ombrage publiés (le gouverneur ne cache pas une régression) |
-| **Q2** | **La lumière du sol** (après T5) : **L1** le ciel directionnel (`skyIrradiance` avec la normale lisse) ; **L4** un spéculaire GGX par matériau (classe WorldCover des cellules du décor, sinon la couleur comme `earthCover` : asphalte, zinc, ardoise, vitres, serres, sol mouillé avec un lobe solaire ; reflets par `skyMirror(reflect)`) ; **L5** la BRDF de la végétation (Ross-Li ou RPV normalisée au nadir : le point chaud, le contre-jour) ; **L6** le rebond sous les nuages et la météo, à l'albédo local ; **C9** le ciel du sol atténué sous les nuages de la carte ; les niveaux de nuit (sans Lune 50–100 × plus sombre que la pleine Lune ; la radiance des villes fixe, l'exposition fait le reste) ; les lumières des villes hors des couronnes et des murs | `trace.wgsl` (`shadeLite`, `liteSun`, `liteSky`), `renderer.ts` | Captures à 3 Soleils (midi, 10°, couchant) à Paris, Chamonix, en Beauce : le point chaud autour de l'ombre de l'avion, les routes qui brillent au Soleil rasant, les versants éclairés par le ciel ; ≤ +0,3 ms |
-| **Q3** | **Les villes et les routes** : **B1** l'indice du bâtiment dans la visibilité, un `buildingLook` allégé dans `shadeLite` (murs, fenêtres, couleurs et matériaux BD TOPO / Overture, vitres au GGX, fenêtres allumées la nuit ; toits par matériau en gardant la lumière de la photo) ; **B3** les boîtes lointaines orientées sur le bâtiment ; **B4** les routes en raster (un `scenerySurface` allégé ou une passe de décalques : asphalte, marquages, trottoirs, mouillé) ; **A1** les objets des aérodromes du jeu en raster (vérifier d'abord qu'ils manquent) | `scenery-raster.ts`, `trace.wgsl`, `scenery-worker.ts` | Paris de jour et de nuit : façades haussmanniennes, fenêtres allumées, routes marquées ; les aérodromes du jeu complets ; ≤ +0,5 ms en ville |
-| **Q4** | **Le volume** : **L2a** GTAO demi-résolution sur la profondeur du raster (ciel et rebond seulement) ; **L2b** la visibilité du ciel tirée de H5 (les vallées) ; **S1** le décor (arbres, bâtiments) dessiné dans les cascades de T6, étendues pour lui jusqu'à ~5 km (les ombres de contact sont déjà en T6) ; **F1** le vent dans les arbres (`forest.ts` = `forest.wgsl`) ; **F2** la forêt lointaine en canopée de 2,5 à 30 km (hauteur × couverture, surface rugueuse auto-ombrée, BRDF de L5), cuite avec le relief ; **F4** les couronnes à la taille de l'espèce, les hauteurs au-delà de 33,5 m ; **C4** les rayons d'ombre du relief dans la table aérienne (après T6), avec jitter et historique | `post.wgsl` (GTAO), `trace.wgsl`, `scenery-raster.ts`, `forest.ts`, `forest.wgsl`, `terrain-cache.ts` | Les vallées et les pieds de murs assombris ; les forêts en volume jusqu'à 30 km ; les ombres de la ville à 3 km ; le vent ; les rayons au couchant en montagne ; ≤ +2,5 ms (payées par Q1) |
-| **Q5** | **L'atmosphère et les nuages** (avec R1, R2 : le même air USSA-76) : **C1** les tables de Hillaire (transmittance, diffusion multiple 32², vue du ciel) dans `bodies` ; **C2** l'air à sa vraie épaisseur sous ~50 km d'altitude de la caméra, fondu vers ×3 au-dessus, avec le réétalonnage de l'exposition et des couleurs contre les photos réelles de M0b ; **C3** les aérosols du jour (CAMS par l'API qualité de l'air d'Open-Meteo, **à vérifier**) ; **C5** une carte couverture × type des nuages de ±250 km (grille Open-Meteo + mosaïque GIBS du jour) dans `bodies`, à la place du bruit seuillé ; **C6** l'auto-ombrage des nuages par leur carte d'ombre, la marche de lumière de la couche de la carte, la carte d'ombre aux pas proportionnels avec jitter et historique ; **C7** le cirrus lié à la météo, le halo de 22° ; **C10** la fin du plancher de transmittance, le saut de 30 km fondu ; **P8** l'amortissement (carte d'ombre des nuages et table aérienne une image sur 2–4 avec historique, passe des nuages en damier ¼, pas adaptatifs) ; la brume météo corrigée | `trace.wgsl`, `earth-air.ts`, `cloud-pass.ts`, `cloud-shadow.ts`, `weather.ts`, `openmeteo.ts`, `day-clouds.ts`, `gpu-tables.ts` | L'heure bleue et le crépuscule justes ; les cumulus où sont les vrais (contre la photo satellite du jour) ; les couchers contre des photos ; le Soleil caché derrière un cumulus épais ; nuages −1 à −3 ms |
-| **Q6** | **L'image** : **I2** un upscaler temporel de classe TSR par défaut (la visibilité jitterée avec la reconstruction dans le pixel de sortie, le test de profondeur précédente, l'historique pondéré par la vitesse, un canal de confiance, RCAS après) ; **I3** les vecteurs de mouvement (vaisseau, trafic, mer), la reprojection sur le point physique (C0-3) ; **I5** l'exposition locale (grille bilatérale sur les mips du halo) ; **I6** l'optique (vignettage, grain fin, aberration discrète, poussière d'objectif indépendante du flare ; halo par PSF en option ; tout éteint en mode scientifique) ; **I7** la cadence réglée sur la présentation. Puis **I4 complet** : l'échelle libre de 0,5 à 1 en vol | `post.wgsl`, `display.wgsl`, `renderer.ts`, `main.ts`, `terrain-raster.ts` (jitter) | À 0,6 d'échelle en vol, une netteté mesurée ≈ celle du natif figé ; aucun fantôme sur la mer et les avions ; le cockpit et le paysage lisibles ensemble |
-| **Q7** | **Les photos et le sol de près** (après T9 et S1) : **L7** le dé-éclairage des photos (méthode : §9 de l'analyse Unreal) — une **étude de 2 jours** avec go/no-go chiffré, puis **L7a** (correction topographique de Sentinel-2 sur le relief de la même tuile, SCS+C) et **L7b** (ombres des orthos rendues par notre décor vu du Soleil de la prise de vue, affinées par l'image, relevées par le rapport soleil/ombre mesuré ; GPU, une fois par tuile), `ORTHO_FIT`/`EOX_FIT` réajustés ; **L8** les matériaux de détail par classe (l'atlas, tuilage stochastique, triplanaire, de 0 à ~300 m, la classe WorldCover partout où le décor est chargé) ; **L9** la neige et les saisons en raster (la neige et la roche du traceur portées, l'exposition, le jour de l'année ; la neige réelle du jour — MODIS/VIIRS par GIBS, **à vérifier**, sinon NOAA IMS ; l'étalonnage saisonnier par classe ; **G3** le proche infrarouge gardé pour le NDVI) ; **G1** des orthos nationales hors de France (PNOA, PDOK, basemap.at, Länder… licence et CORS une à une) ; **G2** un relief plus fin hors de France (Copernicus GLO-30 à la place de SRTM, AHN, PNOA-LiDAR) | `earth-tiles.ts`, un compute de dé-éclairage, `scenery-raster.ts` (le rendu du masque), `trace.wgsl`, `national.ts`, `scripts/earth-surface-build.py` | Plus de double ombre au couchant ; deux millésimes IGN plus proches après dé-éclairage ; le sol de près net ; les Alpes enneigées selon la date et la donnée du jour |
-| **Q8** | **Le monde habité et la nuit** : **L10** les lampadaires tirés des routes OSM près de la caméra (flaques de lumière), les fenêtres via B1 ; **D1** le trafic routier (densité par classe de route, phares la nuit), les lignes haute tension et leurs pylônes (OSM `power`), les éoliennes qui tournent, les vignes et vergers (`landuse`) ; **B2** les façades et toits PBR (l'atlas de L8) ; **F3** les imposteurs octaédriques par espèce et saison ; **C8** la neige qui tombe, les traînées persistantes | `scenery-worker.ts`, `scenery-raster.ts`, `trace.wgsl`, `forest.ts`, `weather.ts`, `contrails.ts` | Paris la nuit, rues éclairées ; le trafic de l'A1 ; les lignes HT et les éoliennes vues du cockpit ; chaque élément au budget |
-| **Q9** | **La perf, seconde passe** : **P9** le classement par tuiles 8 × 8 et le dispatch indirect des noyaux du matériau ; **P10** shader-f16 pour le post et les couleurs du matériau, avec repli. Gardés seulement si l'A/B gagne | `trace.wgsl`, `renderer.ts`, `post.wgsl` | Mesurés ; gardés ou retirés |
+| **Q1** | **La perf d'abord**, sans changer l'image : **P1** les anneaux du relief en blocs de 8 × 8 nœuds cullés (bornes prudentes : géomorphose, relief renouvelé, relèvement de R4b ; le culling du Soleil distinct, par le volume de lumière) ; **P2** les bâtiments cullés par bloc (le Hi-Z ensuite, s'il paie sa construction, en Z inversé) ; **P3** le cull des arbres par blocs de 8 × 8 (bornes avec l'envergure des couronnes et le vent) ; **P5** la cible de visibilité en `rgba32uint` selon C0-2 ; **P6** plus de copies plein écran (ping-pong respectant les usages lecture/écriture), l'historique d'albédo coupé quand `rasterDetail` est éteint ; **P7** le cockpit dans la profondeur de la visibilité — une hypothèse à mesurer (le matériau saute déjà les pixels masqués) ; **P12** les petits nettoyages ; **I1** l'affûtage intégré à la reconstruction en sortie (pas le delta RCAS du texel source), budgété, sans halo ; **I4** les **paliers de réglages de VIPER** (D1 : paquets, hystérésis, temps minimal par palier, bannissements), la migration des historiques, les seuils des arbres liés à la qualité de sortie et non à l'échelle interne — l'échelle reste tenue jusqu'à Q6. La carte d'ombre du relief en cache (ex-P4) se fait dans T6, sur la carte corrigée | `terrain-raster.ts`, `scenery-raster.ts`, `renderer.ts`, `main.ts`, `quality-policy.ts`, `post.wgsl`, `display.wgsl` | Gains **mesurés** poste par poste sur la durée totale d'image et ses queues (visé −4 à −8 ms) ; images identiques (trace-ab ±1 %) sauf la netteté d'I1 ; la netteté en vol égale à celle de l'arrêt ; résolution effective et taux d'ombrage publiés |
+| **Q2** | **La lumière cohérente** (après T5) : **le ré-éclairage partiel de la photo** (VIPER B2.1, décision 29) — `ndl = mix(max(μ₀, 0), max(n·L, 0), k)`, `k` croissant quand notre Soleil s'éloigne de celui de la prise de vue et quand il baisse, par source (Sentinel ~10 h 30, IGN l'été vers midi), réglage `groundRelight` atteignable par TARS — **avant** tout nouvel ombrage ; **L1** le ciel directionnel (`skyIrradiance` avec la normale lisse, sans le ½(1 + up) en plus ; ciel, sol de l'hémisphère bas et occlusion séparés) ; **L6** le rebond tiré d'une moyenne spatiale grossière de la lumière incidente et de l'albédo du sol (nommé empirique s'il le reste) ; **C9** défini avec `wxVeil` : transmission directe, lumière diffuse des nuages et visibilité du ciel séparées, sans double atténuation ; **la nuit calibrée** (unités de radiance, pré-exposition, réponse de la Lune ; plus de gains selon l'altitude de la caméra) ; les lumières des villes hors des couronnes et des murs | `trace.wgsl` (`shadeLite`, `liteSun`, `liteSky`), `renderer.ts`, `settings.ts`, `ai/game-tools.ts` | Plus de double ombre au couchant (photo + temps réel) ; un même point éclairé pareil quelle que soit l'altitude de la caméra ; captures à 3 Soleils (Paris, Chamonix, Beauce) ; ≤ +0,3 ms |
+| **Q3** | **Les villes et les routes** : **B1** l'identité des bâtiments (C0-10 : table triangle → bâtiment, coordonnées de façade) écrite dans la visibilité, un `buildingLook` allégé dans `shadeLite` (murs, fenêtres, couleurs et matériaux BD TOPO / Overture, fenêtres allumées la nuit ; toits par matériau, la lumière de la photo gardée selon la politique de C0-11) ; **B3** les boîtes lointaines orientées sur le bâtiment ; **B4** les routes là où la sémantique est fiable (un `scenerySurface` allégé ou une passe de décalques) ; **A1** les objets des aérodromes du jeu en raster, après avoir vérifié lesquels manquent | `scenery-data.ts` (`packScenery`), `scenery-raster.ts`, `trace.wgsl`, `scenery-worker.ts` | Paris de jour et de nuit : façades haussmanniennes, fenêtres allumées, routes marquées ; ≤ +0,5 ms en ville ; risque moyen |
+| **Q4** | **Le volume et les reflets** (après Q6) : **L2a** GTAO demi-résolution sur la **profondeur finale** (C0-9), épaisseur et rayon en mètres, bords du cockpit et du terrain traités, filtré selon le contrat temporel de Q6 ; **L2b** la visibilité du ciel tirée de H5, pondérée par le ciel directionnel (pas un scalaire), séparée du GTAO par une distance (pas de double compte) ; **S1** le décor dans les cascades de T6 (casters statiques et animés séparés) ; **L4** le spéculaire GGX sur les matériaux **connus** (C0-11 : bâtiment, route, piste, classe naturelle ; inconnu mat) — conservation de l'énergie, rugosité minimale, filtrage des normales, Soleil de taille finie, conducteurs et diélectriques distincts, le mouillé en revêtement ; reflets du ciel par `skyMirror` (approximation documentée) et le SSR là où il existe ; **L5** la BRDF de la végétation en **étude bornée** (modèle, paramètres, comportement rasant, raccord au diffus de la photo) ; **F1** le vent **proche** (amplitude bornée dans le culling, déformation précédente pour l'historique, effacé avec la taille projetée) ; **F2** la chaîne terrain nu → sursol IGN / couvert statistique → canopée → arbres (qui donne silhouette, couleur, ombre, occlusion, collision à chaque distance ; substitution progressive) ; **F4** une évolution du format de la forêt (hauteur au-delà de 33,5 m, envergure contre les bornes de la traversée, CPU = GPU) ; **C4** les rayons du relief dans la table aérienne par une lecture de visibilité **volumique** (biais et portée propres), avec jitter et historique | `post.wgsl` (GTAO), `trace.wgsl`, `scenery-raster.ts`, `forest.ts`, `forest.wgsl`, `terrain-cache.ts` | En séquences : vallées et pieds de murs assombris sans halo ; aucun anneau autour des proxies ; reflets stables (pas de points qui pétillent) ; forêts en volume jusqu'à 30 km ; ombres de la ville à 3 km ; ≤ +2,5 ms **mesurées** |
+| **Q5** | **L'atmosphère et les nuages** (avec R1, R2) : **C1** les tables de Hillaire migrées par étapes — transmittance, diffusion multiple, ciel, puis raccord avec la table aérienne et `skyAmbient` existantes (remplacer, pas doubler), textures ou buffer `bodies` choisis à la mesure ; **C2** **une atmosphère physique unique** (décision 27 : `AIR_K` à 1 partout ; le rendu d'orbite par des transitions de méthode à sorties raccordées, un réglage artistique du limbe s'il le faut, jamais un air qui change avec l'observateur), réétalonnée contre M0b ; des profils distincts pour Rayleigh, la couche d'ozone, les aérosols ; **C3** les aérosols du jour (source à vérifier) ; **C5** une **météo spatialement cohérente et datée** (grille Open-Meteo multipoint, mosaïque GIBS avec son heure d'acquisition, une confiance) — les nuages individuels restent synthétiques ; **C11** la **composition multicouche** (couches ordonnées ou segments, radiance prémultipliée et transmittance, perspective aérienne par couche) ; **C6** l'auto-ombrage proche et le champ d'ombre large séparés, la carte d'ombre aux pas proportionnels avec jitter ; **C7** le cirrus lié à la météo (le halo de 22°, avec une phase de cristaux, plus tard) ; **C10** la fin du plancher de transmittance et la couverture sous-pixel en demi-résolution ; **VIPER C1** un bruit bleu spatio-temporel pour toutes les gigues ; **VIPER C2** les nuages amortis (un texel sur quatre par image, plus de pas, la vraie marche vers le Soleil) ; **VIPER C3** une passe de champ proche dans les nuages ; **VIPER C4** la gloire et l'ombre de l'avion sur les nuages ; **P8** l'amortissement de l'air et des ombres de nuages après Q6, avec une reprojection volumique et un renouvellement selon l'erreur (réveil sur éclair, météo, mouvement) ; la brume météo corrigée | `trace.wgsl`, `earth-air.ts`, `cloud-pass.ts`, `cloud-shadow.ts`, `weather.ts`, `openmeteo.ts`, `day-clouds.ts`, `gpu-tables.ts`, `post.wgsl` | L'heure bleue et le crépuscule justes ; un même point éclairé pareil quelle que soit l'altitude de l'observateur ; les nuages d'accord avec la météo datée ; les couches lointaines sous leur propre brume ; le Soleil caché derrière un cumulus épais ; nuages −1 à −3 ms |
+| **Q6** | **L'image** (avant Q4 ; décision 30) : **I2** un upscaler temporel de classe TSR — l'articulation du temporel natif et du TAAU (pas de filtrages successifs), la visibilité jitterée reconstruite dans le pixel de sortie, la profondeur précédente, l'historique pondéré par la vitesse, un canal de confiance, des masques réactifs (reflets, émissions, eau) ; **I3** les transformations précédentes des objets mobiles, la déformation précédente du vent, la mer, les nuages dans leur propre historique, la reprojection sur le point physique (C0-3) ; **I5** l'exposition locale bornée (amplitude, temps d'adaptation), l'exposition globale gardée en référence ; **I6** le **profil Caméra** de VIPER (décision 32) — A1 l'étalonnage (split-tone + LUT 33³, cockpit neutre), A2 le grain, la vignette, l'aberration chromatique et les rayures de verrière, A3 l'exposition « caméra » mêlée au posemètre incident, A4 le flou de mouvement à temps de pose fixe — et un **profil Neutre** (le Labo, la science, la photo neutre) ; **I7** la cadence réglée sur la présentation ; **I8** le mode caméra « GoPro » hors cockpit (VIPER A5). Puis **I4 complet** : l'échelle n'est abaissée que si les scènes critiques le permettent | `post.wgsl`, `display.wgsl`, `renderer.ts`, `main.ts`, `terrain-raster.ts` (jitter), `settings.ts` | Netteté en déplacement mesurée au premier instant **et** après accumulation ; aucun fantôme sur la mer, les avions, les reflets ; aucune impulsion de flou aux changements de palier ; le cockpit et le paysage lisibles ensemble |
+| **Q7** | **Les photos et le sol de près** (après T9 et S1) : **L7** le dé-éclairage des photos, une **recherche** (décision 29) — la méthode du §9 de l'analyse Unreal (L7a topographique, L7b ombres des orthos rendues par notre décor) et la dé-lumination par source de VIPER (B2.2, `S_photo`), une confiance par source, une étude de 2 jours avec go/no-go ; **L8** les **scans de détail de VIPER** (B3 : trois échelles, en rapport d'albédo qui conserve la couleur moyenne de la photo, avec normales, mips et apparition selon l'empreinte ; triplanaire et tuilage stochastique budgétés en lectures) ; **VIPER B4** la piste usée (dalles, joints, gomme, éclats) ; **L9** la neige et les saisons cohérentes sol–arbres–toits–pistes (masque et vieillissement, puis les observations avec leur qualité et leurs trous ; le NDVI seulement depuis un rouge et un proche infrarouge calibrés, G3) ; **G1/G2** chaque source déclarant projection, datum vertical, MNT/MNS, résolution, date, masque de validité et repli | `earth-tiles.ts`, un compute de dé-éclairage, `scenery-raster.ts`, `trace.wgsl`, `national.ts`, `scripts/earth-surface-build.py` | Plus de double ombre (go/no-go de L7) ; le sol de près net en roulage ; +0,5–1,5 ms en vol bas pour le détail, ≈ 0 en altitude |
+| **Q8** | **Le monde habité et la nuit** : **VIPER B5** le couvert bas en instances (herbe, arbustes, cailloux) près des aérodromes d'abord, puis en vol rasant partout, par paliers ; **L10** des lampadaires plausibles regroupés le long des routes (pas leur position réelle), avec portée et LOD — jamais une lumière dynamique par fenêtre ; **D1** le trafic routier (phares la nuit), les lignes haute tension et leurs pylônes, les éoliennes qui tournent, les vignes et vergers ; **B2** les façades et toits PBR (l'atlas de L8) ; **F3** les imposteurs seulement si F2 ne couvre pas le besoin ; **C8** la neige qui tombe, les traînées persistantes | `scenery-worker.ts`, `scenery-raster.ts`, `trace.wgsl`, `forest.ts`, `weather.ts`, `contrails.ts`, `grass-layout.ts` | Le roulage et le vol rasant vivants ; Paris la nuit ; le trafic de l'A1 ; les lignes HT et les éoliennes vues du cockpit ; chaque élément au budget, par palier |
+| **Q9** | **La perf, seconde passe** : **P9** le classement par tuiles 8 × 8 et le dispatch indirect (les pixels restent mixtes aux lisières et sur l'eau) ; **P10** shader-f16 (fonctionnalité demandée, variantes, repli) pour le post et les couleurs du matériau ; la revue du coût de compilation. Gardés seulement si l'A/B gagne | `trace.wgsl`, `renderer.ts`, `post.wgsl` | Mesurés ; gardés ou retirés |
 
 ## 8. Ordre et estimations
 
@@ -914,23 +966,23 @@ B, F, S, A, D, C, G y renvoient). Chaque phase : A/B sur kerr-mini contre la pr�
 
 | # | Phases | Pourquoi là |
 |---:|---|---|
-| 1 | **M0a** | le vrai « avant » : le coût cumulé du plan se mesure contre lui |
-| 2 | **C0** | les huit contrats écrits avant de coder (surface, visibilité, projection, tuiles, Soleils, horizon, précision, budgets) |
+| 1 | **M0a** | le vrai « avant » |
+| 2 | **C0** | les treize contrats écrits avant de coder |
 | 3 | **T1, T2** | petites, sans coût ; T1 est une expérience bornée (décision 12) |
-| 4 | **Q1** | la perf d'abord : elle finance les ajouts ; la cible de visibilité au format de C0-2 |
-| 5 | **M0b** | les références détaillées, sur l'état corrigé (P1-2 compris) |
-| 6 | **R3 + T6** | deux Soleils et les cascades d'ombre : le couchant devient jugeable |
-| 7 | **T3**, **T4**, **T5** | la Terre sans triangles, ses générations, ses normales (dans la cible de visibilité) |
-| 8 | **Q2**, **Q3** | le plus gros saut photoréaliste par jour de travail |
-| 9 | **T10**, **T9**, **T8** | une seule architecture des tuiles (C0-4), plus tôt : chaque vol en profite, H1b a sa mémoire, Q7 son imagerie |
-| 10 | **H3a** (si sa borne est prouvée) ; **H1** (pilote : la Lune) → porte de décision ; **H1b** ; **H2** ; **H3** ; **H1c** ; **H5** ; **H4** | les cartes d'horizon (décision 1), validées sur un pilote avant d'être étendues |
-| 11 | **Q4** | le volume ; le décor dans les cascades de T6 ; l'occlusion par H5 |
-| 12 | **T7** | la mer, avant les mirages |
-| 13 | **R1**, **R2**, **Q5** | le même air (USSA-76, hydrostatique) pour la réfraction et l'atmosphère ; la séance D3D12 regroupée |
-| 14 | **Q6** | l'image ; puis l'échelle libre (I4 complet) |
+| 4 | **Q1** | la perf d'abord, mesurée ; les paliers du gouverneur |
+| 5 | **M0b** | les références détaillées, sur l'état corrigé |
+| 6 | **R3 + T6** | deux Soleils et les cascades d'ombre, Soleil rasant compris |
+| 7 | **T3**, **T4**, **T5** | la Terre sans triangles, ses générations, ses normales |
+| 8 | **Q2**, **Q3** | la photo ré-éclairée avec mesure, le ciel selon la pente, les villes |
+| 9 | **T10**, **T9**, **T8** | une seule architecture des tuiles (C0-4), avec l'option de VIPER pour l'imagerie |
+| 10 | **Q6** | la reconstruction temporelle **avant** les effets qui scintillent (décision 30) |
+| 11 | **H3a** (si sa borne est prouvée) ; **H1** (pilote) → porte de décision ; **H1b** ; **H2** ; **H3** ; **H1c** ; **H5** ; **H4** | les cartes d'horizon, validées sur un pilote |
+| 12 | **Q4** | le volume et les reflets, sur une image temporellement stable |
+| 13 | **T7** | la mer, avant les mirages |
+| 14 | **R1**, **R2**, **Q5** | le même air physique pour la réfraction et l'atmosphère |
 | 15 | **R4** (R4a + R4b), **R5**, **R6a-ciel**, **R6a-terrain**, **R6b** | selon le contrat de projection de C0-3 |
 | 16 | **Q9** | la seconde passe de perf |
-| 17 | **Q7** | après T9 (l'imagerie inscriptible) et S1 (nos ombres remplacent celles qu'on ôte) |
+| 17 | **Q7** | après T9 et S1 ; L7 en recherche |
 | 18 | **Q8** | le monde habité, en dernier, au budget |
 
 **Après C0 et Q1, les estimations sont refaites** sur ce qu'on aura mesuré (le challenge a raison : aucun total n'est
@@ -967,18 +1019,18 @@ défendable avant un pilote).
 | T8 | 2,5–3,5 j | moyen (validité par tuile, worker) | **fort** à chaque arrivée | réseau ; fil principal soulagé |
 | T9 | 2,5–3 j | moyen (marges à chaque mip, layout) | **fort** au loin | **gain** du matériau |
 | H5 | 1,5–2 j (8 directions) | moyen | fort en montagne au couchant, et les vallées (Q4) | à mesurer |
-| Q1 | 4–6 j | faible à moyen | moyen (la netteté du vol) | **−4 à −8 ms** |
+| Q1 | 4–6 j | faible à moyen | moyen (la netteté du vol) | **−4 à −8 ms visés** |
 | Q2 | 3–4 j | faible | **fort** | ≤ +0,3 ms |
-| Q3 | 3–4 j | faible à moyen | **fort** en ville | ≤ +0,5 ms |
-| Q4 | 8–12 j | moyen | **fort** | ≤ +2,5 ms |
-| Q5 | 8–11 j | **élevé** (C2 : le réétalonnage) | **fort** | nuages −1 à −3 ms |
-| Q6 | 5–7 j | moyen (fantômes) | **fort** en vol | ≈ 0, l'échelle peut baisser |
-| Q7 | 10–14 j | **élevé** (L7b) | **fort** | ≈ 0 par image |
-| Q8 | 12–18 j | moyen | fort (la vie) | au budget |
+| Q3 | 4–6 j (identité des bâtiments) | moyen | **fort** en ville | ≤ +0,5 ms |
+| Q4 | 10–14 j (avec L4, L5) | moyen | **fort** | ≤ +2,5 ms |
+| Q5 | 12–16 j (avec VIPER C1–C4, C11) | **élevé** (C2 : le réétalonnage ; C2 de VIPER : la reprojection) | **fort** | nuages −1 à −3 ms |
+| Q6 | 8–11 j (avec le profil Caméra et le mode GoPro) | moyen (fantômes) | **fort** en vol | ≈ 0, l'échelle peut baisser |
+| Q7 | 12–16 j (avec la piste usée) | **élevé** (L7) | **fort** | +0,5–1,5 ms en vol bas |
+| Q8 | 14–20 j (avec le couvert bas) | moyen | fort (la vie) | au budget |
 | Q9 | 3–5 j | moyen | — | à mesurer |
 
-Total **estimé** ≈ 100–135 jours de travail (T, H, R ≈ 44–54 j avec C0, M0a, H1c et R6a-terrain ; Q ≈ 56–81 j) — à refaire
-après C0 et Q1.
+Total **estimé** ≈ 115–155 jours de travail (T, H, R ≈ 44–54 j avec C0, M0a, H1c et R6a-terrain ; Q ≈ 71–101 j avec VIPER
+11) — à refaire après C0 et Q1, avec une part de recherche explicite pour L5, L7, I2 et C5.
 
 ## 9. Règles de livraison (habituelles)
 
@@ -997,7 +1049,7 @@ après C0 et Q1.
 
 ## 10. Décisions (Sam)
 
-Les décisions 1 à 10 datent du 31 octobre ; les décisions 11 à 26 du 2 novembre. **Le plan n'est pas lancé.**
+Les décisions 1 à 10 datent du 31 octobre ; les décisions 11 à 32 du 2 novembre. **Le plan n'est pas lancé.**
 
 1. **L'ordre : les cartes d'horizon d'abord** (H), **puis la réfraction** (R). *Amendé par la décision 8* : R3 passe
    avant. *Dans le plan commun* : M0a, C0, T1, T2, Q1 et M0b avant tout, T6 avec R3.
@@ -1039,13 +1091,12 @@ sur cette délégation :
 
 16. **Le volet Q entre en entier** (Q1–Q9), dans l'ordre du §8. **La perf passe d'abord** : Q1 avant tout ajout de
     qualité ; à sa fin, le budget en vol sur le mini est fixé (visé ≤ 40 ms), et aucune phase suivante ne le dépasse sans
-    que Sam l'accepte au vu des images.
+    que Sam l'accepte au vu des images. *Précisé par la décision 31 : les gains sont visés, pas acquis.*
 17. **H5 est dans le plan, étendu à 8 directions** : les ombres du relief au-delà de 10 km pour tout azimut (pas de
     recuisson quand le Soleil tourne) **et** la visibilité du ciel des vallées (Q4, L2b). Un seul calcul pour deux gains.
-18. **C2, l'air à sa vraie épaisseur : oui**, sous ~50 km d'altitude de la caméra, fondu vers ×3 au-dessus ; fait avec R1
-    (le même USSA-76) et réétalonné contre les photos réelles de M0b. Si l'image s'éloigne des photos, on abaisse
-    l'altitude du fondu plutôt que de renoncer.
-19. **L7, le dé-éclairage des photos : oui**, par la méthode du §9 de l'analyse Unreal — L7a (le relief, sûr) partout,
+18. ~~**C2, l'air à sa vraie épaisseur sous ~50 km d'altitude de la caméra, fondu vers ×3 au-dessus.**~~ *Remplacée par
+    la décision 27* : un air qui dépend de l'altitude de la caméra change l'éclairage du monde avec l'observateur.
+19. **L7, le dé-éclairage des photos : oui**, en recherche (décision 29), par la méthode du §9 de l'analyse Unreal — L7a (le relief, sûr) partout,
     L7b (les ombres des orthos) après une étude de 2 jours avec un go/no-go chiffré (halo < 1 m, bruit des zones
     relevées < 1,5 × celui des zones au soleil, plus aucune double ombre au couchant). Pas de réseau de neurones.
 20. **D1, le monde habité : oui** (Q8, en dernier) : trafic, lignes HT, éoliennes, vignes et vergers, lampadaires ; chaque
@@ -1069,6 +1120,30 @@ sur cette délégation :
     effective et taux d'ombrage publiés, avec une mémoire de pic par palier. « Jamais plus lent que la Terre » reste une
     comparaison, pas un budget.
 
+**Le challenge « Terre Unreal » et la fusion de VIPER 11** (§3.10), sur la même délégation :
+
+27. **Une atmosphère physique unique** : `AIR_K` à 1 partout (le même air pour la diffusion, la transmission CPU et la
+    réfraction) ; un point physique est éclairé pareil quelle que soit l'altitude de l'observateur. Le rendu d'orbite passe
+    par des transitions de méthode à sorties raccordées ; un réglage artistique du limbe, s'il le faut, est nommé comme tel.
+28. **[PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) est fusionné ici** : A1–A4 → I6 (profil Caméra), A5 → I8, B1 → T9,
+    B2.1 → Q2 (`groundRelight`), B2.2 → Q7 (L7), B3 → L8, B4 → Q7, B5 → Q8, C1–C4 → Q5, D1 → I4 (Q1), D2 → Q9. Son
+    document reste l'analyse de VIPER (relevé, sources) ; il n'a plus d'ordre ni de devis propres.
+29. **La politique photo** : dès Q2, le ré-éclairage partiel par source (`groundRelight`, avec un réglage pour comparer à la
+    photo brute), **avant** tout nouvel ombrage ou reflet ; le dé-éclairage complet (L7) reste une recherche avec son
+    go/no-go.
+30. **La reconstruction temporelle avant les effets qui scintillent** : Q6 avant Q4 ; L4 (reflets) et L5 dans Q4 ; les
+    matériaux de L4 viennent de la sémantique (bâtiment, route, piste, classe naturelle, inconnu mat), jamais d'une
+    couleur ni de WorldCover seule.
+31. **Aucun gain compté avant d'être mesuré** : sur la durée totale d'image, le CPU, la présentation et leurs queues ; les
+    promesses de « financement » et de « netteté native à 0,5–0,6 » sont retirées.
+32. **Les sept questions de VIPER 11**, tranchées : (1) un **profil Caméra** — une LUT « footage » ajustée sur des vidéos de
+    référence publiques (cockpit en GoPro, vol de ligne), discrète, par défaut dans les vues de vol du jeu ; un **profil
+    Neutre** (physique) par défaut au Labo, en science et en photo neutre ; (2) l'exposition qui respire dans le profil
+    Caméra seulement, le posemètre incident reste la base ; (3) le grain, léger, dans le profil Caméra ; (4) la photo
+    altérée (ré-éclairage, puis dé-éclairage si L7 passe) : oui, avec un réglage pour comparer ; (5) le couvert bas près
+    des aérodromes d'abord, puis en vol rasant par paliers ; (6) le mode GoPro hors cockpit, sans HUD par défaut, un HUD
+    minimal en option ; (7) le coût d'abord : B1 (T9) avant la chaîne caméra.
+
 ## 11. Questions ouvertes
 
 **Pour Sam** : confirmer les budgets absolus de la décision 26 (en C0).
@@ -1078,12 +1153,16 @@ générations ; la disposition de la cible de visibilité ; la projection optiqu
 des tuiles ; les deux Soleils ; la représentation de l'horizon (bandes, marge, distance par direction) ; les budgets de
 précision en pixels par mode ; la fidélité garantie au télé maximal et autour de Shackleton.
 
+Les contrats 9 à 13 de C0 (profondeur par consommateur, identité des bâtiments, politique photo, erreur projetée,
+compilation) s'y ajoutent.
+
 **Restent les décisions prévues pendant le plan**, au vu des mesures :
 - le pré-filtre SRTM (après T1, s'il le faut) ;
 - le budget en vol fixé à la fin de Q1 ;
 - la porte de décision du pilote de H1 (étendre, corriger ou réduire) ;
 - H3a gardé seulement si sa borne est prouvée ;
-- l'altitude du fondu de C2 (Q5, contre les photos de M0b) ;
+- le réétalonnage de C2 (Q5, contre les photos de M0b) et le rendu du limbe d'orbite ;
+- la LUT du profil Caméra (les vidéos de référence retenues) ;
 - le go/no-go de L7b (après son étude) ;
 - R6a-terrain (après R6a-ciel) et le go/no-go de R6b ;
 - P9 et P10 gardés ou retirés (Q9) ;
@@ -1125,3 +1204,9 @@ précision en pixels par mode ; la fidélité garantie au télé maximal et auto
   H3a seulement prouvé ; R3 à deux Soleils ; R1 hydrostatique ; R2 en budgets de pixels ; R4 sur tous les consommateurs ;
   R6a coupé en ciel et terrain ; R6b plausible ; validation par régions et en séquences ; décisions 21 à 26 ; §11 rouvert
   sur les contrats de C0 ; estimation ≈ 100–135 j.
+- **2 novembre, nuit (suite)** : le challenge
+  [CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md](CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md) relu et revérifié dans le
+  code (§3.10 : ombres du décor coupées sous ~1,7° de Soleil, profondeur du proxy, `meshFs` sans identité, C2 qui change le
+  monde avec l'observateur) ; [PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) fusionné ; C0 à treize contrats ; Q1–Q9
+  réécrits (Q6 avant Q4, la photo ré-éclairée dès Q2, L4 sur la sémantique, l'atmosphère unique, la météo datée, la
+  composition multicouche, le profil Caméra, le couvert bas) ; décisions 27 à 32 (18 remplacée) ; estimation ≈ 115–155 j.
