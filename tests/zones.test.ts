@@ -160,7 +160,8 @@ test("a low flight at 400 m over the ground: the z 18 orthophotos it asks within
   expect(zoneLevelsAt([zone], lat0 + 0.05, lon0)).toBeNull();
   expect(zoneLevelsAt([zone], lat0, lon0)).toEqual({ reliefZ1: 17, orthoZ1: 18 });
   expect(zoneLevelsAt([{ ...zone, sources: { ortho: false, relief: false } }], lat0, lon0)).toEqual({ reliefZ1: 14, orthoZ1: 14 });
-}, 20_000);
+  // (128 flights of ~240 places: ~5 s on an M1, 20–22 s on GitHub's runners — the CI failed on its 20 s from 2 Nov 2026)
+}, 60_000);
 
 test("a zone's URLs: every one the loads ask in flight within it is in the zone's list", async () => {
   asked.clear();
