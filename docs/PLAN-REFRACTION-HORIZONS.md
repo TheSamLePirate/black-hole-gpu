@@ -1049,7 +1049,7 @@ Total **estimé** ≈ 115–155 jours de travail (T, H, R ≈ 44–54 j avec C0,
 
 ## 10. Décisions (Sam)
 
-Les décisions 1 à 10 datent du 31 octobre ; les décisions 11 à 35 du 2 novembre. **Le plan n'est pas lancé.**
+Les décisions 1 à 10 datent du 31 octobre ; les décisions 11 à 36 du 2 novembre. **Le plan n'est pas lancé.**
 
 1. **L'ordre : les cartes d'horizon d'abord** (H), **puis la réfraction** (R). *Amendé par la décision 8* : R3 passe
    avant. *Dans le plan commun* : M0a, C0, T1, T2, Q1 et M0b avant tout, T6 avec R3.
@@ -1158,6 +1158,19 @@ sur cette délégation :
 35. **Les machines** : ce Mac et kerr-mini pour les e2e et les A/B, kerr-pc pour les compilations D3D12 — disponibles.
     **`main` est à ce plan** : on y travaille directement (toujours sans `git stash`, en relisant `git log` avant chaque
     phase).
+36. **Les e2e sont chers : on les utilise au mieux** (Sam, 2 novembre) :
+    - **d'abord le moins cher** : tests unitaires, tranches de shader et vérifications CPU = GPU, puis un contrôle rapide
+      dans le panneau local ; l'e2e seulement pour ce qu'eux seuls prouvent (l'image, le temps GPU, le mouvement) ;
+    - **une suite de vues partagée** : les vues de M0a/M0b forment un seul e2e paramétré, réutilisé par toutes les phases
+      (mêmes vues, mêmes tailles, mêmes réglages), au lieu d'un e2e neuf par phase ;
+    - **en arrière-plan** : un e2e ou un A/B tourne sur kerr-mini (ou kerr-pc) pendant que la phase suivante se code ici ;
+      son résultat est relu avant le push de la phase qu'il valide, et un échec rouvre cette phase ;
+    - **groupés** : plusieurs phases voisines qui touchent les mêmes noyaux partagent une même séance A/B et une même
+      compilation D3D12 ; la campagne complète seulement aux jalons (fin de T, de H, de Q2–Q3, de Q4, de Q5–Q6, de R) ;
+    - **bornés** : chaque e2e a sa durée estimée dans son titre et un plafond ; un vol scripté se coupe en morceaux
+      rejouables (sauvegardes) ; jamais deux e2e lourds sur la même machine ;
+    - **ciblés** : seuls les e2e existants que la phase peut casser sont relancés (la liste du §5 par sujet), pas toute
+      la campagne.
 
 ## 11. Questions ouvertes
 
