@@ -25,9 +25,14 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
     await Bun.$`mkdir -p remote-results/mx`;
     const t0 = Date.now();
     for (;;) {
-      if (await app.js<boolean>(`!!document.querySelector("[data-testid=mx-image]")`)) return;
+      if (await app.js<boolean>(`!!document.querySelector("[data-testid=mx-image]")`)) {
+        // (the composite itself kept — looked at before it is judged)
+        const png = await app.js<string>(`document.querySelector("[data-testid=mx-image]").toDataURL("image/png")`);
+        await Bun.write(`remote-results/mx/${name}-composite.png`, Buffer.from(png.split(",")[1]!, "base64"));
+        return;
+      }
       const st =
-        await app.js(`(() => { const r = __bh.renderer; return { pose: (document.querySelector("[data-testid=multi-exposure]")?.innerText?.match(/(Pose|Exposure) [^\n]*/) ?? [null])[0],
+        await app.js(`(() => { const r = __bh.renderer; return { pose: (document.querySelector("[data-testid=multi-exposure]")?.innerText?.match(/(Pose|Exposure) [^\\u000a]*/) ?? [null])[0],
         offline: r.offlineActive, done: r.offlineState?.done ?? null, error: r.offlineState?.error ?? null, compiling: r.compilingNow, paused: document.body.classList.contains("paused"),
         modals: [...document.querySelectorAll(".k-modal")].map((m) => m.getAttribute("data-testid") ?? m.className).slice(0, 4) }; })()`);
       const s = Math.round((Date.now() - t0) / 1000);
@@ -165,9 +170,12 @@ describe.skipIf(!E2E)("the multiple exposure", () => {
       for (let k = 0; k < d.length; k += 4) if (d[k] > 90 && d[k] > 1.6 * d[k + 2]) n++;
       return n;
     })()`);
-    expect(red).toBeGreaterThan(2000);
-    expect(await app.js<string>(`document.querySelector(".mx-status").textContent`)).toMatch(/5 poses fusionnées/);
+    // (closed whatever is judged: the next test opens its own)
+    const status = await app.js<string>(`document.querySelector(".mx-status").textContent`);
     await app.press("Escape");
+    console.log(`  eclipse layout: ${red} red pixels in the centre, "${status}"`);
+    expect(red).toBeGreaterThan(2000);
+    expect(status).toMatch(/5 poses fusionnées/);
   }, 900_000);
 
   test("from this view: the tripod framed by hand, the dialog from the top bar takes its place, aim and field; a subject outside said first", async () => {

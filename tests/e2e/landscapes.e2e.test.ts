@@ -20,7 +20,7 @@ const readiness = `(() => {
   const grassIn = !g.pending && g.reason !== 'loading';
   const ready = r.variantReady && !!r.variants.get(r.featureKey)?.env && r.calibrationReady && !r.hdLoading &&
     r.earthMaps.tier === 'high' && r.earthTiles.pending === 0 && r.earthTiles.failed === 0 &&
-    !r.earthSurface.pending && s.status === 'ready' && !s.pending && grassIn && r.gpuErrors === 0;
+    !r.earthSurface.pending && (s.status === 'ready' || s.status === 'degraded') && !s.pending && grassIn && r.gpuErrors === 0;
   return { ready, frames: r.completedFrames, tier: r.earthMaps.tier, tiles: { pending: r.earthTiles.pending, failed: r.earthTiles.failed, stamp: r.earthTiles.stamp, imagery: r.earthTiles.imagery },
     scenery: s, grass: { reason: g.reason, pending: g.pending, roots: g.roots }, ground: r.groundStamp,
     signature: [r.featureKey, r.earthMaps.tier, r.earthTiles.stamp, r.earthTiles.imagery, r.earthScenery.stamp, r.groundStamp, g.reason].join(':') };
@@ -30,6 +30,7 @@ test.skipIf(!E2E)(
   "the landscapes beside their photographs",
   async () => {
     const rows: string[] = [];
+    const notReady: string[] = [];
     for (const l of chosen) {
       const slug = sceneSlug(l.scene);
       const [width, height] = l.photo.portrait ? [960, 1440] : [1440, 960];
@@ -40,9 +41,23 @@ test.skipIf(!E2E)(
           `(()=>{Object.assign(__bh.settings,{earthScenery:'high',dynamicResolution:false,pixelRatio:1});__bh.freeze(true);__bh.step(0);__bh.touch();return true;})()`,
         );
         // (two minutes at most — everything in within ~20–60 s on the lab's Macs —, what is missing said)
-        await app.waitFor(`(${readiness}).ready`, 120_000).catch(async (e) => {
-          throw new Error(`${l.scene} not ready after 120 s: ${JSON.stringify(await app.js(readiness))} — ${e}`);
-        });
+        // (a scenery source failed — "degraded" — counts as in when nothing is pending, its error said; a landscape never ready
+        // is shot and listed, the others still taken — the run failed at the end)
+        const inTime = await app.waitFor(`(${readiness}).ready`, 120_000).then(
+          () => true,
+          () => false,
+        );
+        if (!inTime) {
+          const st = await app.js<{ tiles: unknown; scenery: { status: string; pending: boolean } }>(readiness);
+          console.log(
+            `  ${l.scene}: not ready after 120 s — tiles ${JSON.stringify(st.tiles)}, scenery ${st.scenery.status}${st.scenery.pending ? " (pending)" : ""}`,
+          );
+          await app.shot(`${OUT}/${slug}-NOT-READY.png`);
+          notReady.push(l.scene);
+          continue;
+        }
+        const err = await app.js<string | null>(`__bh.renderer.earthScenery.lastError ?? null`);
+        if (err) console.log(`  ${l.scene}: scenery degraded — ${err.slice(0, 160)}`);
         await app.js(`globalThis.__landscape = ${readiness}`);
         // two settled windows: anything arriving restarts the convergence
         await app.waitFor(
@@ -91,6 +106,7 @@ test.skipIf(!E2E)(
 figure{margin:0}img{width:100%;max-height:80vh;object-fit:contain;background:#222}a{color:#9cf}</style>
 <h1>Landscapes vs photographs</h1>${rows.join("\n")}`,
     );
+    expect(notReady).toEqual([]);
   },
   Math.max(1, chosen.length) * 600_000,
 );
