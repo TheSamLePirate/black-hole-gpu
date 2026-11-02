@@ -256,7 +256,11 @@ test("V8: the storms' bias where the map is white about its latitude's mean — 
   }
   const px = (lat: number, lon: number) => [Math.round((0.5 + lon / 360) * w - 0.5), Math.round((0.5 - lat / 180) * h - 0.5)];
   const [cx, cy] = px(-13, 103);
-  for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) lum[(cy! + dy) * w + cx! + dx] += 0.15;
+  for (let dy = -6; dy <= 6; dy++)
+    for (let dx = -6; dx <= 6; dx++) {
+      const i = (cy! + dy) * w + cx! + dx;
+      lum[i] = lum[i]! + 0.15;
+    }
   setGiantMapLuminance("jupiter", w, h, lum);
   const q = (lat: number, lon: number): [number, number, number] => {
     const a = (lat * Math.PI) / 180,
