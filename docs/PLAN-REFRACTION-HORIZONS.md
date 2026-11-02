@@ -3,7 +3,8 @@
 Date : **2 novembre 2026**, relu sur `main` à `824b3a5c`, puis confronté au challenge
 [CHALLENGE-PLAN-REFRACTION-HORIZONS.md](CHALLENGE-PLAN-REFRACTION-HORIZONS.md) (§3.9) et à
 [CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md](CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md) (§3.10) ;
-[PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) y est fusionné (décision 28). Statut : **décidé, pas lancé.**
+[PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) y est fusionné (décision 28). Statut : **lancé le 2 novembre** — M0a fait ([M0a.md](progress/refraction-horizons/M0a.md)), C0 écrit
+([C0.md](progress/refraction-horizons/C0.md)) **et en relecture par Sam** (décision 33).
 
 - **Quand** : on commence **dès que les géantes sont finies** (PLAN-GEANTES-VOLUME : V8 et V9 restent), décision 11 du
   §10.
