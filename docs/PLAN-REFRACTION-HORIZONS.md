@@ -1239,3 +1239,11 @@ compilation) s'y ajoutent.
   monde avec l'observateur) ; [PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) fusionné ; C0 à treize contrats ; Q1–Q9
   réécrits (Q6 avant Q4, la photo ré-éclairée dès Q2, L4 sur la sémantique, l'atmosphère unique, la météo datée, la
   composition multicouche, le profil Caméra, le couvert bas) ; décisions 27 à 32 (18 remplacée) ; estimation ≈ 115–155 j.
+- **2 novembre, matin — en cours d'exécution** : M0a et C0 faits ; les sites sur leurs vraies pistes ; **T1** (la cubique
+  hybride sur pré-filtre), **T2** (les coutures marquées), **T8a** (une tranche du chargement avancée à la demande de Sam :
+  Terrarium d'abord et l'IGN par-dessus en deux passes, fenêtres de 8 tuiles jusqu'au z 14, un halo dans le sens du vol, le
+  cache du Service Worker plus rapide, le décor OSM en parallèle) ; deux régressions des planètes en raster corrigées
+  (Monument Valley, le z 14 de la Terre) ; **Q1** commencé : les boîtes du décor triées sur le GPU (P2), les ponts en vrais
+  maillages (décision de Sam) ; mesuré que P1 ne paie pas et que le matériau du sol ne baisse pas par parties —
+  [progress/refraction-horizons/T1-T2-T8a.md](progress/refraction-horizons/T1-T2-T8a.md),
+  [progress/refraction-horizons/Q1.md](progress/refraction-horizons/Q1.md).
