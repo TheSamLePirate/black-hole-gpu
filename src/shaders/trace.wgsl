@@ -11048,8 +11048,12 @@ fn giantLayer(m: u32, i: u32) -> vec4f {
   return select(select(vec4f(-189e3, 14e3, 10e3, 1e-3), vec4f(-89e3, 9e3, 6e3, 6e-4), i == 1u), vec4f(-18e3, 9e3, 6e3, 4e-4), i == 0u);
 }
 // their colours (single-scattering albedo, linear): ammonia ice white-cream, the hydrosulfide's brown-orange, water's grey
+// (the hydrosulfide's greyed by a pole's clear air — V9: its colour Jupiter's chromophores', unknown at Saturn's blue pole —,
+// GI_POL the ray's: giantInside)
+var<private> GI_POL: f32 = 0.0;
 fn giantLayerAlbedo(i: u32, top: vec3f) -> vec3f {
-  return select(select(vec3f(0.80, 0.82, 0.86), vec3f(0.86, 0.47, 0.20), i == 1u), top, i == 0u);
+  let nh4 = mix(vec3f(0.86, 0.47, 0.20), vec3f(0.74, 0.73, 0.71), GI_POL);
+  return select(select(vec3f(0.80, 0.82, 0.86), nh4, i == 1u), top, i == 0u);
 }
 // the camera inside: under the storms' anvils over the top layer, a giant, the kernels that draw one large (G9's conjunction)
 // (the volume's share of a ray, over G9's surface — both drawn and mixed —: as near clouds come out of the deck seen from
@@ -11343,6 +11347,12 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
   let lz = luminance(mapc) - giantTop(m, 1u, latc);
   let cover = vec3f(clamp(0.55 + 2.5 * lz, 0.2, 0.9), 0.6, 0.45);
   GI_TOP = clamp(pow(mapc / max(luminance(mapc), 0.05), vec3f(1.3)) * 0.85, vec3f(0.3), vec3f(0.97));
+  // (a pole's clear air — PLAN-GEANTES-VOLUME V9: Saturn's north pole blue-grey in Cassini's images, its photochemical haze
+  // thinned in the polar night, the air's Rayleigh seen —: poleward of 55°, where the map is blue — its blue against its red,
+  // the planet's beige 0.4, the pole's grey 1 —, the hazes thinned to a third, their reddening with them, the hydrosulfide's
+  // colour greyed: under the ammonia the pole no longer turns brown-orange)
+  GI_POL = smoothstep(0.96, 1.22, abs(latc)) * smoothstep(0.55, 0.9, mapc.b / max(mapc.r, 1e-3));
+  let hazeK = 1.0 - 0.65 * GI_POL;
   // (the wind's two phases — V7 —: the scene's clock, the surface's (giantAlbedo); time faster than ~1 000 ×: held, one phase
   // mid-window — the turbulence's rule, giantTurb —, the clouds would tangle)
   let tS = P.time.x * P.near5.w;
@@ -11442,8 +11452,8 @@ fn giantInside(look: vec3f, k: u32) -> EarthNear {
     let br = AIR.br * dens;
     // (thinning fast over the ammonia — its scale height there 0.4 of the air's: the cloud tops sharp from above —; and the
     // stratospheric haze ~45 km over them — the photochemical smog's, an optical depth of ~0.15 —: the sky's tan glow from below)
-    let bh = 2.2e-6 * exp(-h / (2.0 * AIR.hr) - max(h - Lt.x, 0.0) / (0.4 * AIR.hr)) + 6e-6 * exp(-sq((h - Lt.x - 45e3) / 15e3));
-    let hz = giantHazeCol(h, Lt.x, AIR.hr) * SL;
+    let bh = (2.2e-6 * exp(-h / (2.0 * AIR.hr) - max(h - Lt.x, 0.0) / (0.4 * AIR.hr)) + 6e-6 * exp(-sq((h - Lt.x - 45e3) / 15e3))) * hazeK;
+    let hz = giantHazeCol(h, Lt.x, AIR.hr) * SL * hazeK;
     var sunT = vec3f(0.0);
     var sunM = vec3f(0.0);
     var tl = 0.0;

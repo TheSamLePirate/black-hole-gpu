@@ -259,3 +259,16 @@ la lumière devrait rester moins rousse, et le ciel plus bleu.
 2. **Le pont d'hydrosulfure moins coloré** là où la carte est grise : sa couleur tirée vers le gris par le même facteur
    (sa couleur réelle est inconnue ; celle de Jupiter n'a pas de raison de valoir au pôle de Saturne).
 3. **Rien de la surface G9** : d'en haut, la couleur suit déjà la carte.
+
+### V9 — les deux corrections, faites (2 novembre, décision de Sam)
+
+![Saturne vers 80° N à 120 km au-dessus de 1 bar, puis 20 km dessous ; l'œil à 60 km dessous — avant | après](geantes-volume/v9-fait.jpg)
+
+- **L'air clair d'un pôle** : au-delà de 55° de latitude, là où la carte sous la caméra est bleue (son bleu contre son rouge :
+  0,4 pour le beige de la planète, 1 pour le gris du pôle), un facteur `GI_POL` par rayon ; les brumes (leur lumière, leur
+  roussissement) amincies jusqu'au tiers.
+- **Le pont d'hydrosulfure** tiré vers le gris par le même facteur.
+- **Effet** : 20 km sous 1 bar à 80° N, le pont passe du brun-orange (101, 61, 37) au gris (111, 105, 103) ; l'œil prend une
+  teinte froide. De 120 km, les trous restent un peu bruns (le pont du dessous vu à travers la brume du dessus). Jupiter
+  et les latitudes moyennes inchangés (le facteur nul sous 55°).
+- **Coût** : 0 à +2 % (kerr-mini contre 7a2a093c, dont une vue sous les nuages à 80° N).

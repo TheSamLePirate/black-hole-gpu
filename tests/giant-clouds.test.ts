@@ -266,3 +266,13 @@ test("V8: the storms' bias where the map is white about its latitude's mean — 
   expect(giantStormBias("jupiter", q(-13, 103))).toBeCloseTo(0.07, 2);
   expect(giantStormBias("jupiter", q(20, -40))).toBeCloseTo(-0.03, 2);
 });
+
+test("V9: a pole's clear air — poleward of 55° where the map is blue, the hazes thinned, the hydrosulfide greyed", () => {
+  const gi = fnBody("giantInside");
+  expect(gi).toContain("GI_POL = smoothstep(0.96, 1.22, abs(latc)) * smoothstep(0.55, 0.9, mapc.b / max(mapc.r, 1e-3));");
+  expect(gi).toContain("let hazeK = 1.0 - 0.65 * GI_POL;");
+  expect(gi).toContain("let hz = giantHazeCol(h, Lt.x, AIR.hr) * SL * hazeK;");
+  expect(fnBody("giantLayerAlbedo")).toContain("mix(vec3f(0.86, 0.47, 0.20), vec3f(0.74, 0.73, 0.71), GI_POL)");
+  // (55° in radians: none at Jupiter's GRS or the planets' mid-latitudes)
+  expect(Math.abs(0.96 - (55 * Math.PI) / 180)).toBeLessThan(0.01);
+});
