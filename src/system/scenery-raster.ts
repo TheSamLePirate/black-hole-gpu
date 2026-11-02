@@ -11,6 +11,7 @@
 
 import { TERRAIN_RASTER_FORMAT } from "./terrain-raster";
 import { TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
+import { RASTER_CODE, RASTER_CODE_SCALE } from "./terrain-raster-hint";
 
 /** The proxies' detail: trees nearer than `nearM` [m] get the near ones (with their trunk), the rest the far ones — a
  *  round crown's icosahedron of 80 or 20 faces, or an octahedron of 8. Measured (Tarifa, the scenery high and very far,
@@ -433,7 +434,7 @@ fn boxClip(vi: u32, ii: u32) -> vec4f {
   let v = view(mix(lo.xyz - vec3f(0.5), hi.xyz + vec3f(0.5), k));
   return vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
 }
-@fragment fn boxFs() -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, 2.0); }
+@fragment fn boxFs() -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, ${RASTER_CODE.box * RASTER_CODE_SCALE}.0); }
 // (with the buildings' solid boxes and triangles — the material's —: the rest's boxes — a bridge's — marking their pixels alone,
 // the kernel shade's exact test deciding what of the box the deck is, the water round it the water's)
 // A bridge's deck, parapet or pier — a strip, four corners: its polygon's edges' starts, in its ring's order —: the corner of its
@@ -446,8 +447,8 @@ fn stripCorner(hi: vec4f, k: vec3f) -> vec4f {
   let ci = select(select(0u, 1u, k.x > 0.5), select(3u, 2u, k.x > 0.5), k.y > 0.5);
   return vec4f(scenery[g + 3u + ci].xy, mix(pr.x, pr.y, k.z), 1.0);
 }
-// (a bridge's mark: 2.25 — a building's box 2 —: shadeLite takes its pixels, the deck tested along the ray, the water about it its)
-@fragment fn bridgeMarkFs() -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, 2.25); }
+// (a bridge's mark — RASTER_CODE bridgeMark; a building's box, box —: shadeLite takes its pixels, the deck tested along the ray, the water about it its)
+@fragment fn bridgeMarkFs() -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, ${RASTER_CODE.bridgeMark * RASTER_CODE_SCALE}.0); }
 @vertex fn boxMarkVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) mi: u32) -> @builtin(position) vec4f {
   let ii = listsIn[${LISTS + 3}u * CAP + mi];
   let hi = scenery[5u + ii * 2u];
@@ -489,7 +490,7 @@ fn meshVertex(vi: u32) -> vec3f {
 // The same triangles in the camera's view (docs/progress/raster-aaa/TERRE-UNREAL.md U2): the buildings' exact solid, depth
 // written — after their boxes, before nothing —, the pixel's distance in r and b as the ground's, a 3: trace.wgsl shadeLite
 // draws them with its material, not the kernel shade's rays
-// (bridge: a bridge's part's triangle — past the buildings' in the mesh —, marked 3.25 — terrainRasterBridgeMesh)
+// (bridge: a bridge's part's triangle — past the buildings' in the mesh —, coded bridgeMesh — terrainRasterBridgeMesh)
 struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) @interpolate(flat) bridge: f32 };
 @vertex fn meshVs(@builtin(vertex_index) vi: u32) -> MV {
   var o: MV;
@@ -499,7 +500,7 @@ struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) 
   o.p = v;
   return o;
 }
-@fragment fn meshFs(v: MV) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, 3.0 + 0.25 * v.bridge); }
+@fragment fn meshFs(v: MV) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, (${RASTER_CODE.mesh}.0 + v.bridge) * ${RASTER_CODE_SCALE}.0); }
 // The buildings without triangles — the far ones, past BUILDING_MESH_M — as their boxes, solid (no margin, the top flat):
 // the material's buildings too, none left to the kernel shade's rays (their marking boxes, wider than they are and up to their
 // roofs' tops, had sent the pixels over a pitched roof and along their margins there too)

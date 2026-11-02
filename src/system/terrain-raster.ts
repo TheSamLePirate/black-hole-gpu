@@ -7,6 +7,7 @@ export const TERRAIN_SUN_N = 2048;
 export const TERRAIN_RASTER_FORMAT: GPUTextureFormat = "rgba32float";
 import { geoidLibrary, terrainHeightLibrary, type TerrainCacheSources } from "./terrain-cache";
 import { TERRAIN_RASTER_MAX_PIXELS, TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
+import { rasterGroundCode } from "./terrain-raster-hint";
 import { RASTER_MESH_INDEX_BYTES, RASTER_MESH_VERTEX_BYTES, runwayMeshKey, terrainRasterMesh } from "./terrain-raster-mesh";
 import type { TerrainWindow } from "./terrain-cache-layout";
 
@@ -21,15 +22,106 @@ struct U {
   origin: vec4f, reference: vec4f, figure: vec4f,
   right: vec4f, up: vec4f, forward: vec4f,
   image: vec4f, output: vec4f,
+  // the next coarser level drawn about this one (T3, its geomorphose): xy this grid's nodes' offset on it (× w), z its heights'
+  // place in the table, w the two grids' ratio (2 or 4; 0: none — the last ring, the rings off)
+  morph: vec4f,
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var<storage, read> table: array<vec4f>;
+// (T3: the band along a level's edge where its vertices slide onto the next coarser level's triangles — whole over the first
+// MORPH_FULL nodes, where that level's mesh overlaps it — RING_OVERLAP and a coarse cell —, none past MORPH_BAND)
+const MORPH_FULL = 8.0;
+const MORPH_BAND = 16.0;
+fn cacheNode(base: u32, i: vec2u) -> f32 { let node = i.y * GRID_N + i.x; return table[base + node / 4u][node % 4u]; }
 @group(0) @binding(2) var distanceImage: texture_2d<f32>;
 @group(0) @binding(3) var<storage, read> referenceDepth: array<f32>;
-struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f };
+struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) n: vec3f };
+// (T5: a level's mark and its smooth normal in the target's a — an integer below 2²⁴, exact in its float: the mark's code
+// × 2¹⁸ — terrain-raster-hint.ts RASTER_CODE —, the normal's octahedron 2 × 9 bits, each 1…511 — 0: none)
+fn rasterCode(code: f32, n: vec3f) -> f32 {
+  if (dot(n, n) < 0.25) { return code * 262144.0; }
+  let m = normalize(n);
+  var o = m.xy / (abs(m.x) + abs(m.y) + abs(m.z));
+  if (m.z < 0.0) { o = (1.0 - abs(o.yx)) * select(vec2f(-1.0), vec2f(1.0), o >= vec2f(0.0)); }
+  let q = clamp(round((o * 0.5 + 0.5) * 510.0) + 1.0, vec2f(1.0), vec2f(511.0));
+  return code * 262144.0 + q.x * 512.0 + q.y;
+}
 
+// A level's ground at a place of its grid [m over the sea]: its nodes' bilinear (its mesh's vertices are its nodes), and near
+// its window's edge the geomorphose onto the next coarser level's triangles (T3)
+fn levelHeight(ij: vec2f) -> f32 {
+  let b0 = u32(u.origin.w);
+  var h: f32;
+  // (a node — the mesh's vertices, but where a runway's outline cut a cell —: its own height, one read)
+  if (all(ij == floor(ij))) {
+    h = cacheNode(b0, vec2u(ij));
+  } else {
+    let cell = min(vec2u(floor(ij)), vec2u(GRID_N - 2u));
+    let blend = ij - vec2f(cell);
+    h = mix(mix(cacheNode(b0, cell), cacheNode(b0, cell + vec2u(1u, 0u)), blend.x),
+            mix(cacheNode(b0, cell + vec2u(0u, 1u)), cacheNode(b0, cell + vec2u(1u, 1u)), blend.x), blend.y);
+  }
+  if (u.morph.w > 0.5) {
+    // (T3, the geomorphose: near its window's edge, the vertex onto the coarser level's surface as it is drawn — its very
+    // triangle, the mesh's diagonal (1,0)–(0,1), barycentric: not the bilinear, (h00 + h11 − h10 − h01)/4 off at a cell's
+    // centre, in the valleys and on the crests —; at the edge the two levels one surface, no triangle piercing the other)
+    let e = min(min(ij.x, ij.y), min(f32(GRID_N - 1u) - ij.x, f32(GRID_N - 1u) - ij.y));
+    let w = clamp((MORPH_BAND - e) / (MORPH_BAND - MORPH_FULL), 0.0, 1.0);
+    if (w > 0.0) {
+      let c = (ij + u.morph.xy) / u.morph.w;
+      let cc = vec2u(clamp(floor(c), vec2f(0.0), vec2f(f32(GRID_N - 2u))));
+      let f = clamp(c - vec2f(cc), vec2f(0.0), vec2f(1.0));
+      let b = u32(u.morph.z);
+      let h10 = cacheNode(b, cc + vec2u(1u, 0u));
+      let h01 = cacheNode(b, cc + vec2u(0u, 1u));
+      var hc: f32;
+      if (f.x + f.y <= 1.0) {
+        let h00 = cacheNode(b, cc);
+        hc = h00 + f.x * (h10 - h00) + f.y * (h01 - h00);
+      } else {
+        let h11 = cacheNode(b, cc + vec2u(1u, 1u));
+        hc = h11 + (1.0 - f.x) * (h01 - h11) + (1.0 - f.y) * (h10 - h11);
+      }
+      h = mix(h, hc, w);
+    }
+  }
+  return h;
+}
+// (T5) A grid vertex's smooth normal on the Earth's axes: its level's slopes there (central differences of levelHeight —
+// the geomorphose's included —, one-sided at the window's edge) on its geodetic east, north and up; none on a runway's graded
+// ground (its triangles flat: the target's normal then the mesh's — trace.wgsl rasterNormal)
+fn terrainNormal(vertex: vec3f, graded: bool) -> vec3f {
+  if (graded) { return vec3f(0.0); }
+  let ij = vertex.xy;
+  let d = (ij - vec2f(f32(GRID_N - 1u) * 0.5)) / u.figure.w;
+  let sa = u.reference.z * cos(d.y) + u.reference.w * sin(d.y);
+  let ca = u.reference.w * cos(d.y) - u.reference.z * sin(d.y);
+  let cl = u.reference.x * cos(d.x) - u.reference.y * sin(d.x);
+  let sl = u.reference.y * cos(d.x) + u.reference.x * sin(d.x);
+  let up = vec3f(ca * cl, ca * sl, sa);
+  let last = f32(GRID_N - 1u);
+  let x0 = max(ij.x - 1.0, 0.0); let x1 = min(ij.x + 1.0, last);
+  let y0 = max(ij.y - 1.0, 0.0); let y1 = min(ij.y + 1.0, last);
+  // (a node's step [m]: the figure's radius of curvature over the nodes a radian — the meridian's within 0.7 %, a slope's)
+  let step = u.figure.x / u.figure.w;
+  let gx = (levelHeight(vec2f(x1, ij.y)) - levelHeight(vec2f(x0, ij.y))) / ((x1 - x0) * step * max(ca, 1e-3));
+  let gy = (levelHeight(vec2f(ij.x, y1)) - levelHeight(vec2f(ij.x, y0))) / ((y1 - y0) * step);
+  let east = vec3f(-sl, cl, 0.0);
+  let north = vec3f(-sa * cl, -sa * sl, ca);
+  return normalize(up - gx * east - gy * north);
+}
 // A grid vertex's point, camera-relative on the Earth's axes [m]
-fn terrainPoint(vertex: vec3f) -> vec3f {
+// Whether a grid vertex stands on a runway's graded ground (its geodetic up — the window's reference turned —: runwayGrade's)
+fn vertexGraded(ij: vec2f) -> bool {
+  let d = (ij - vec2f(f32(GRID_N - 1u) * 0.5)) / u.figure.w;
+  let sa = u.reference.z * cos(d.y) + u.reference.w * sin(d.y);
+  let ca = u.reference.w * cos(d.y) - u.reference.z * sin(d.y);
+  let cl = u.reference.x * cos(d.x) - u.reference.y * sin(d.x);
+  let sl = u.reference.y * cos(d.x) + u.reference.x * sin(d.x);
+  return runwayGrade(vec3f(ca * cl, ca * sl, sa)).x > 0.0;
+}
+// (graded: on a runway's graded ground — runwayGrade, read once a vertex: vertexGraded)
+fn terrainPoint(vertex: vec3f, graded: bool) -> vec3f {
   let ij = vertex.xy;
   let d = (ij - vec2f(f32(GRID_N - 1u) * 0.5)) / u.figure.w;
   // Exact trigonometric sums, with cos(d)-1 evaluated without cancellation.
@@ -47,27 +139,20 @@ fn terrainPoint(vertex: vec3f) -> vec3f {
   let z = (1.0 - u.figure.y) * (dn * sa + u.figure.x * ds);
   let cl = u.reference.x * cos(d.x) - u.reference.y * sin(d.x);
   let sl = u.reference.y * cos(d.x) + u.reference.x * sin(d.x);
-  let cell = min(vec2u(floor(ij)), vec2u(GRID_N - 2u));
-  let blend = ij - vec2f(cell);
-  var heights: array<f32,4>;
-  for (var j=0u; j<4u; j++) {
-    let node = (cell.y + j / 2u) * GRID_N + cell.x + j % 2u;
-    heights[j] = table[u32(u.origin.w) + node / 4u][node % 4u];
-  }
-  var h = mix(mix(heights[0], heights[1], blend.x), mix(heights[2], heights[3], blend.x), blend.y);
   let normal = vec3f(ca * cl, ca * sl, sa);
+  var h: f32;
   // The exact grading and detail suppression, not a second approximation of runway flattening.
-  if (runwayGrade(normal).x > 0.0) {
-    h = earthHeightExactG(normal, vertex.z);
-  }
+  if (graded) { h = earthHeightExactG(normal, vertex.z); } else { h = levelHeight(ij); }
   // (above the sea, the cache's and the exact heights: over the ellipsoid by the geoid — trace.wgsl earthHeightG)
   h += geoidN(normal);
   let delta = vec3f(x * u.reference.x - y * u.reference.y, x * u.reference.y + y * u.reference.x, z);
   return u.origin.xyz + delta + vec3f(ca * cl, ca * sl, sa) * h;
 }
 @vertex fn terrainVs(@location(0) vertex: vec3f) -> Vertex {
-  let p = terrainPoint(vertex);
+  let graded = vertexGraded(vertex.xy);
+  let p = terrainPoint(vertex, graded);
   var v: Vertex;
+  v.n = terrainNormal(vertex, graded);
   v.p = vec3f(dot(p, u.right.xyz), dot(p, u.up.xyz), dot(p, u.forward.xyz));
   // Infinite reversed-Z, near plane in metres, WebGPU clip depth [0,1].
   // (the frame's sub-pixel jitter in NDC — output.zw, renderer.rasterJitter — the rays' own)
@@ -79,21 +164,21 @@ fn terrainPoint(vertex: vec3f) -> vec3f {
 struct Sun { right: vec4f, up: vec4f, toward: vec4f };
 @group(0) @binding(5) var<uniform> sun: Sun;
 @vertex fn terrainSunVs(@location(0) vertex: vec3f) -> @builtin(position) vec4f {
-  let p = terrainPoint(vertex);
+  let p = terrainPoint(vertex, vertexGraded(vertex.xy));
   let z = clamp(0.5 - dot(p, sun.toward.xyz) / (2.0 * sun.toward.w), 0.0, 1.0);
   return vec4f(dot(p, sun.right.xyz) / sun.right.w, dot(p, sun.up.xyz) / sun.up.w, z, 1.0);
 }
 // (r: the ground's distance [m]; g: the scenery's instance drawn there — none here, the scenery's draw writes it alone, and
-// its proxy's distance over b)
-@fragment fn terrainFs(v: Vertex) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, 1.0); }
+// its proxy's distance over b; a: the patch's code, 1, and its smooth normal — T5)
+@fragment fn terrainFs(v: Vertex) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, rasterCode(1.0, v.n)); }
 // A far ring: a coarser level's grid (its cells four times the next finer one's), its triangles under that finer one left out
 // of its mesh (system/terrain-raster.ts drawRing) — xy its nodes' place on the finer one's grid (×4 and this offset), z the
-// overlap kept along the finer one's edge [its nodes] —; w its mark in a (½ a level coarser than the patch, ¼ two: the
-// tracer's tolerance — trace.wgsl RHINT_TOL)
+// overlap kept along the finer one's edge [its nodes] —; w its mark's code in a (1 + its rank from the patch + 8 × its step,
+// how many levels coarser than the reference patch: the tracer's tolerance — trace.wgsl RHINT_TOL —; terrain-raster-hint.ts)
 @group(0) @binding(6) var<uniform> ring: vec4f;
 @fragment fn ringFs(v: Vertex) -> @location(0) vec4f {
   let d = length(v.p);
-  return vec4f(d, 0.0, d, ring.w);
+  return vec4f(d, 0.0, d, rasterCode(ring.w, v.n));
 }
 
 @vertex fn screenVs(@builtin(vertex_index) k: u32) -> @builtin(position) vec4f {
@@ -568,10 +653,9 @@ export class TerrainRaster {
       });
     }
     d.queue.writeBuffer(r.uniform, 0, ring.frame);
-    // (its mark: ½^step — the tracer's tolerance, the rings' sparser shading — times 1 − rank/64, its rank from the patch: the
-    // rings finer than the reference patch share step 0, their seams seen all the same — rasterNormal, PLAN-REFRACTION-HORIZONS
-    // T2; terrainRasterLevelStep rounds the rank off)
-    d.queue.writeBuffer(r.hole, 0, new Float32Array([ring.hole[0], ring.hole[1], RING_OVERLAP, 0.5 ** ring.step * (1 - ring.rank / 64)]));
+    // (its mark: its rank from the patch — its seams, rasterNormal, PLAN-REFRACTION-HORIZONS T2 — and its step — the tracer's
+    // tolerance, the rings' sparser shading: the rings finer than the reference patch share step 0 —, terrain-raster-hint.ts)
+    d.queue.writeBuffer(r.hole, 0, new Float32Array([ring.hole[0], ring.hole[1], RING_OVERLAP, rasterGroundCode(ring.rank, ring.step)]));
     pass.setPipeline(pipe);
     pass.setBindGroup(0, r.bind);
     pass.setBindGroup(1, r.heightBind);

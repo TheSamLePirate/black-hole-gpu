@@ -12,7 +12,8 @@ import {
 } from "./terrain-cache-layout";
 
 export type TerrainRasterView = "off" | "depth" | "normals" | "difference";
-export const TERRAIN_RASTER_UNIFORM_BYTES = 8 * 16;
+/** (a ninth vec4: the next coarser level's, its geomorphose — T3 —, set by the renderer's rings; 0: none) */
+export const TERRAIN_RASTER_UNIFORM_BYTES = 9 * 16;
 /** At most 32 MiB of attachments, plus one retired pair during resize. No allocation when off. */
 export const TERRAIN_RASTER_MAX_PIXELS = 4_194_304;
 

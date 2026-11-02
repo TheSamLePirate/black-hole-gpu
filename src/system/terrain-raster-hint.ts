@@ -7,6 +7,17 @@
 
 import { TABLE_SUN } from "../gpu-tables";
 
+/** (T5) What drew a raster pixel, in its target's a: its code × RASTER_CODE_SCALE, plus the ground's smooth normal (an octahedron
+ *  2 × 9 bits) — the whole an integer below 2²⁴, exact in the float. The ground's codes 1…RASTER_GROUND_LAST (rasterGroundCode),
+ *  then the others. */
+export const RASTER_CODE_SCALE = 262144;
+export const RASTER_GROUND_LAST = 56;
+export const RASTER_CODE = { cloud: 59, box: 60, bridgeMark: 61, mesh: 62, bridgeMesh: 63 } as const;
+/** a level's code: 1 + its rank from the patch (0 the patch) + 8 × its step (levels coarser than the reference patch) */
+export function rasterGroundCode(rank: number, step: number): number {
+  return 1 + Math.min(Math.max(rank, 0), 7) + 8 * Math.min(Math.max(step, 0), 6);
+}
+
 /** Sampled textures per stage with the hint's: the aerial perspective's 21 and one. */
 export const RASTER_HINT_TEXTURE_LIMIT = 22;
 export const RASTER_HINT_BINDING = 35;
@@ -25,26 +36,41 @@ fn terrainRasterHint(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(f
 fn terrainRasterId(px: vec2f) -> u32 { return u32(textureLoad(terrainDist, vec2i(floor(px)), 0).g); }
 // The nearest surface's distance [m] at this pixel (b: the ground's, or an instance's proxy before it; 0 none).
 fn terrainRasterDepth(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).b; }
-// A building's box before the ground and the trees at this pixel (a: 2 — system/scenery-raster.ts boxFs).
-fn terrainRasterBuilding(px: vec2f) -> bool { return textureLoad(terrainDist, vec2i(floor(px)), 0).a > 1.5; }
-// A bridge's box before the ground at this pixel (a: 2.25 — system/scenery-raster.ts bridgeMarkFs): shadeLite's, its deck tested.
-fn terrainRasterBridge(px: vec2f) -> bool { let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a; return a > 2.1 && a < 2.4; }
-// A building's own triangles at this pixel (a: 3 — system/scenery-raster.ts meshFs): shadeLite's material.
-fn terrainRasterMesh(px: vec2f) -> bool { return textureLoad(terrainDist, vec2i(floor(px)), 0).a > 2.5; }
-// A bridge's part's own triangles at this pixel (a: 3.25 — system/scenery-raster.ts meshFs): the material's, no windows.
-fn terrainRasterBridgeMesh(px: vec2f) -> bool { let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a; return a > 3.1 && a < 3.4; }
-// How many levels coarser than the near patch the ground here was drawn from (a: 1 the patch — 2 a building's box on it —,
-// ½ its first far ring, ¼ the next, each times 1 − rank/64 — its rank from the patch, rounded off here: system/terrain-raster.ts
-// ringFs; 0 none).
+// (a: an integer below 2²⁴, exact in its float — what drew the pixel, its code × 2¹⁸ (RASTER_CODE: the ground's 1 + its rank from
+// the patch + 8 × its step; the scenery's, a cloud's), and the ground's smooth normal, its octahedron 2 × 9 bits, each 1…511, 0 none
+// — system/terrain-raster.ts rasterCode, T5)
+fn terrainRasterCode(px: vec2f) -> f32 { return floor(textureLoad(terrainDist, vec2i(floor(px)), 0).a / ${RASTER_CODE_SCALE}.0); }
+// A building's box before the ground and the trees at this pixel (system/scenery-raster.ts boxFs), a bridge's, their triangles.
+fn terrainRasterBuilding(px: vec2f) -> bool { return terrainRasterCode(px) >= ${RASTER_CODE.box}.0; }
+// A bridge's box before the ground at this pixel (system/scenery-raster.ts bridgeMarkFs): shadeLite's, its deck tested.
+fn terrainRasterBridge(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.bridgeMark}.0; }
+// A building's own triangles at this pixel (system/scenery-raster.ts meshFs): shadeLite's material.
+fn terrainRasterMesh(px: vec2f) -> bool { return terrainRasterCode(px) >= ${RASTER_CODE.mesh}.0; }
+// A bridge's part's own triangles at this pixel (system/scenery-raster.ts meshFs): the material's, no windows.
+fn terrainRasterBridgeMesh(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.bridgeMesh}.0; }
+// How many levels coarser than the reference patch the ground here was drawn from (0 the patch — and what stands on it —, 1 its
+// first coarser ring, …: system/terrain-raster.ts ringFs; 0 none).
 fn terrainRasterLevelStep(px: vec2f) -> f32 {
-  let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a;
-  return select(0.0, round(-log2(min(a, 1.0))), a > 0.0);
+  let c = terrainRasterCode(px);
+  return select(0.0, floor((c - 1.0) / 8.0), c >= 1.0 && c <= ${RASTER_GROUND_LAST}.0);
 }
-// The mesh the ground here was drawn from (the patch and what stands on it 1, each ring its own mark — T2: rasterNormal stops
-// at every seam, the rings finer than the reference patch's too; 0 none).
-fn terrainRasterSeam(px: vec2f) -> f32 { return min(textureLoad(terrainDist, vec2i(floor(px)), 0).a, 1.0); }
-// A frozen cloud's slab at this pixel (a: 1.5 — system/body-raster.ts bodyCloudFs, Mann's: PLAN-PLANETES-AAA P4).
-fn terrainRasterCloud(px: vec2f) -> bool { let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a; return a > 1.4 && a < 1.6; }`,
+// The mesh the ground here was drawn from (the patch and what stands on it 1, each ring its own code — T2: rasterNormal stops at
+// every seam; 0 none).
+fn terrainRasterSeam(px: vec2f) -> f32 { let c = terrainRasterCode(px); return select(c, 1.0, c > ${RASTER_GROUND_LAST}.0); }
+// A frozen cloud's slab at this pixel (system/body-raster.ts bodyCloudFs, Mann's: PLAN-PLANETES-AAA P4).
+fn terrainRasterCloud(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.cloud}.0; }
+// The ground's smooth normal here, on the body's axes (T5: its level's slopes at its nodes, interpolated — system/terrain-raster.ts
+// terrainNormal); 0: none (a runway's graded ground, the scenery's pixels, another world's) — the mesh's then (rasterNormal)
+fn terrainRasterNormal(px: vec2f) -> vec3f {
+  let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a;
+  let r = a - floor(a / ${RASTER_CODE_SCALE}.0) * ${RASTER_CODE_SCALE}.0;
+  if (r < 1.0 || a / ${RASTER_CODE_SCALE}.0 >= ${RASTER_GROUND_LAST + 1}.0) { return vec3f(0.0); }
+  let qx = floor(r / 512.0);
+  let o = (vec2f(qx, r - qx * 512.0) - 1.0) / 510.0 * 2.0 - 1.0;
+  var n = vec3f(o, 1.0 - abs(o.x) - abs(o.y));
+  if (n.z < 0.0) { n = vec3f((1.0 - abs(n.yx)) * select(vec2f(-1.0), vec2f(1.0), n.xy >= vec2f(0.0)), n.z); }
+  return normalize(n);
+}`,
   );
 }
 

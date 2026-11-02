@@ -8566,6 +8566,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  tracer's reconstruction; its history longer where it barely moves on the image — switches for comparisons */
   horizonKeep = true;
   horizonFarAlpha = true;
+  /** the levels' geomorphose at their windows' edges (T3 — terrain-raster.ts terrainPoint): a switch for comparisons */
+  rasterMorphOn = true;
   /** the coarsest cache level drawn as a far ring (a lever — docs/progress/HORIZON-FLICKER.md: TERRAIN_CACHE_RING_LAST) */
   rasterRingLast = TERRAIN_CACHE_RING_LAST;
   /** The far rings to draw this frame: the cache's next coarser levels that are ready, each with its hole over the finer. */
@@ -8592,6 +8594,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       dx -= Math.round(dx / round) * round;
       const step = Math.max(0, lv - Math.max(level, TERRAIN_CACHE_PATCH_REF));
       out.push({ frame: f, level: lv, window: w, hole: [dx, ratio * w.j - finer.j], ratio, step, rank: lv - level });
+      // (the finer level's geomorphose onto this one — T3, terrain-raster.ts terrainPoint —: its nodes' offset on this grid, this
+      // level's heights in the table, the ratio)
+      if (this.rasterMorphOn) (out.length > 1 ? out[out.length - 2]!.frame : frame).set([-dx, finer.j - ratio * w.j, f[3]!, ratio], 32);
+      // (and its depth a hair behind the finer one's — 1e-5 a rank: 1 cm at a kilometre —: where both are drawn, over the
+      // overlap, the two now one surface, the finer kept, no fight between their marks)
+      f[23] = f[23]! * (1 - 1e-5 * (lv - level));
       finer = w;
     }
     return out;

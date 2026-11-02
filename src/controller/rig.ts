@@ -224,8 +224,13 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     // (a scene's tripod — a cut — on the ground place it was given, body-fixed: from the camera's place it stood where the
     // camera had drifted to by its first frame here — the boot's ~9 s of geodesic fall and the world's turn: Monument Valley's
     // Mittens 2.5 km off, behind the view, 2 Nov 2026)
+    // (the pin kept until the player moves — a slow boot re-keys the rig after its steps: a recompiled kernel, 29 s —; taken
+    // only within 5 km of the camera — the boot's drift, 2.5 km at most —: a jump elsewhere not sent back to the scene)
+    const here = mode === "tripod" ? this.rigFix(ref.id, w.ours, w.X, tNow) : null;
+    const near = !!(here && R.pin && Math.hypot(...sub3(here, R.pin.q)) * mR < 5000);
+    if (R.pin && !near) R.pin = null;
     const given = mode === "tripod" && w.ours && R.pin?.body === ref.id ? R.pin.q : null;
-    R.fixed = mode === "tripod" ? (given ? ([...given] as Vec3) : this.rigFix(ref.id, w.ours, w.X, tNow)) : null;
+    R.fixed = mode === "tripod" ? (given ? ([...given] as Vec3) : here) : null;
     R.look = null;
     // (the view turned to its new aim from where it looked)
     // (a scene, a multiple exposure's frame: a cut — no turn from the aim before)
@@ -233,9 +238,14 @@ function rigStep(this: CameraController, dt: number, move: number[], fast: boole
     R.cut = false;
   }
   // (a scene's ground place, held over its first steps — the behaviour unchanged, a tripod already: taken all the same —;
-  // the player's first move lets it go)
-  if (R.pin && (move.some((x) => x !== 0) || --R.pin.steps < 0)) R.pin = null;
-  if (mode === "tripod" && w.ours && R.pin?.body === ref.id) R.fixed = [...R.pin.q] as Vec3;
+  // the player's first move lets it go. Its steps counted only where it holds the tripod: counted from the scene's start, they
+  // ran out during the boot — the Earth not yet ours —, its next change of key fixed the tripod where the camera had drifted
+  // to: the Grand Canyon 500 m south of Hopi Point, in the forest, one run in two. Past its steps, kept for the key's changes)
+  if (R.pin && move.some((x) => x !== 0)) R.pin = null;
+  if (mode === "tripod" && w.ours && R.pin?.body === ref.id && R.pin.steps > 0) {
+    R.fixed = [...R.pin.q] as Vec3;
+    R.pin.steps--;
+  }
   // the keys' speed: 0.8 × the height above the surface per second (a metre at least), Shift × 3
   // (fixed on the world: from where it is fixed — the camera's last place is a frame behind the world)
   // (a spectator: no faster than its distance to the ship either — two metres a second at least by it)

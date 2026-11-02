@@ -160,15 +160,29 @@ export function geodeticDir(q: Vec3, f: number): Vec3 {
 }
 
 /**
+ * The geodetic direction of a point `hA` (units of a) over the figure on the squashed radius q (trace.wgsl geoQ, GEO_H): the
+ * radius's own geodetic direction meets the normal on the figure only — h up, it is h·e'²·sinφ·cosφ / N nearer the pole
+ * (6.8 m at the Grand Canyon's rim, 12 m on Fuji, 25 m on Everest) —, taken back along the meridian (N for a: 2 cm there).
+ */
+export function geodeticDirAt(q: Vec3, f: number, hA: number): Vec3 {
+  const g = geodeticDir(q, f);
+  if (f === 0 || hA === 0) return g;
+  const ab = 1 / (1 - f);
+  const k = hA * (ab * ab - 1) * g[2];
+  return [g[0] + k * g[2] * g[0], g[1] + k * g[2] * g[1], g[2] - k * (g[0] * g[0] + g[1] * g[1])];
+}
+
+/**
  * A body-fixed point's height over the ellipsoid as the tracer draws the ground (the units of a): its
  * squashed radius less one, times the scale there — and the unit direction there (q) and its geodetic
- * direction (g: where the relief is read).
+ * direction (g: where the relief is read — the point's own, WGS84's: geodeticDirAt).
  */
 export function squashedHeight(p: Vec3, a: number, f: number): { h: number; q: Vec3; g: Vec3 } {
   const s = squash(p, a, f);
   const r = Math.hypot(s[0], s[1], s[2]) || 1;
   const q: Vec3 = [s[0] / r, s[1] / r, s[2] / r];
-  return { h: (r - 1) * a * squashedScale(q, f), q, g: geodeticDir(q, f) };
+  const h = (r - 1) * a * squashedScale(q, f);
+  return { h, q, g: geodeticDirAt(q, f, h / a) };
 }
 
 /** Whether a point at r² from the centre, z along the pole, is within the figure (a, f). */

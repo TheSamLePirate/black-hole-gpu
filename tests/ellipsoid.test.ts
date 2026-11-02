@@ -49,3 +49,16 @@ test("the squashed height: the geodetic height to 6 cm within 10 km of the groun
   // (a sphere: all of it the sphere's)
   expect(geodeticDir([0.6, 0, 0.8], 0)).toEqual([0.6, 0, 0.8]);
 });
+
+// (the relief read where WGS84 puts the point, not on its squashed radius: 2 Nov 2026 — the tracer's ground at the Grand
+// Canyon's rim 6.8 m north of the raster's exact mesh, the tripod's eye 1.5 m under it)
+test("a point's geodetic direction off the figure: its WGS84 foot, to 15 cm up to 9 km (25 m before)", () => {
+  for (const lat of [-60, -33, 0, 20, 36.07, 45.98, 60, 80])
+    for (const h of [0, 35, 2120, 3776, 8848]) {
+      const p = geodeticToCart(1, F, lat * D, -1.9, h / A);
+      const s = squashedHeight(p, 1, F);
+      const g = Math.atan2(s.g[2], Math.hypot(s.g[0], s.g[1]));
+      expect(Math.abs(g - lat * D) * A).toBeLessThan(0.15);
+      expect(Math.abs(s.h * A - h)).toBeLessThan(0.05);
+    }
+});

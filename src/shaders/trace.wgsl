@@ -5412,8 +5412,22 @@ fn squashOf(k: u32) -> f32 {
   return select(select(select(1.0, SATURN_AB, s == 9u), JUPITER_AB, s == 8u), EARTH_AB, s == EARTH_SURF);
 }
 fn squashed(v: vec3f, ab: f32) -> vec3f { return vec3f(v.x, v.y, v.z * ab); }
-// the geodetic direction (the ellipsoid's normal: the maps' latitude) at a unit direction of the squashed space
-fn geoQ(q: vec3f) -> vec3f { return normalize(vec3f(q.x, q.y, q.z * EARTH_AB)); }
+// The height [m over the ellipsoid] of the point whose geodetic direction geoQ gives: the relief's last read (earthHeight,
+// earthHeightStep — at the ground's crossing the point's own height), or the point's where it is known (the raster's kernels:
+// geoH). 0: none yet (the ellipsoid's own point — the sky's fill, a first step far over the ground)
+var<private> GEO_H: f32 = 0.0;
+// the geodetic direction (the ellipsoid's normal: the maps' latitude) at a unit direction of the squashed space, for a point
+// GEO_H over the ellipsoid: the squashed radius meets the normal only on the figure — a point h up along its normal lies on a
+// squashed radius whose own geodetic direction is h·e'²·sinφ·cosφ / N nearer the pole (6.8 m at the Grand Canyon's rim, 2 120 m,
+// 12 m on Fuji, 25 m on Everest: the relief drawn there off the WGS84 place its data have, the raster's exact mesh — terrain-
+// raster.ts terrainPoint — and the scenery's not over it). Taken back along the meridian (e'² = (a/b)² − 1; N for a: 2 cm)
+fn geoQ(q: vec3f) -> vec3f {
+  let g = normalize(vec3f(q.x, q.y, q.z * EARTH_AB));
+  let k = GEO_H * (EARTH_AB * EARTH_AB - 1.0) / EARTH_RM * g.z;
+  return g - k * vec3f(-g.z * g.x, -g.z * g.y, dot(g.xy, g.xy));
+}
+// a squashed-space point's height over the ellipsoid [m] (its radius less one, by the scale there — ellipsoid.ts squashedHeight)
+fn geoH(p: vec3f) -> f32 { let r = length(p); return (r - 1.0) * EARTH_RM * earthSq(p / max(r, 1e-20)); }
 // the metres along the ground's normal a radial step of the squashed space is, per metre of a
 fn earthSq(q: vec3f) -> f32 { return sqrt(1.0 - (1.0 - 1.0 / (EARTH_AB * EARTH_AB)) * q.z * q.z); }
 // Finite source above an ellipsoid's limb, in physical body axes and equatorial radii.
@@ -7382,10 +7396,11 @@ fn earthHeightG(q: vec3f, foot: f32) -> f32 {
 // The ground's height at a unit direction q of the squashed space, as a radial height there [m of a]: the
 // relief read at its geodetic direction (src/terrain.ts: earthHeightSampler, the same), over the scale
 // (src/system/our-surface.ts: the gear's ground)
-fn earthHeight(q: vec3f, foot: f32) -> f32 { return earthHeightG(geoQ(q), foot) / earthSq(q); }
+// (its result the next read's height — geoQ: GEO_H)
+fn earthHeight(q: vec3f, foot: f32) -> f32 { let h = earthHeightG(geoQ(q), foot); GEO_H = h; return h / earthSq(q); }
 // the same, cheaply, for the march's steps: the map filtered by the hardware, the detail coarser (a
 // dispatch that takes seconds loses the GPU) — the crossing then refined on earthHeight
-fn earthHeightStep(q: vec3f, foot: f32) -> f32 { let g = geoQ(q); return (earthHeightStepG(g, foot) + geoidN(g)) / earthSq(q); }
+fn earthHeightStep(q: vec3f, foot: f32) -> f32 { let g = geoQ(q); let h = earthHeightStepG(g, foot) + geoidN(g); GEO_H = h; return h / earthSq(q); }
 // (above the sea: earthHeightStep raises it by the geoid)
 fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
   var g = vec3f(0.0);
@@ -7583,6 +7598,7 @@ fn terrainRasterBridge(px: vec2f) -> bool { return false; }
 fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterSeam(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterCloud(px: vec2f) -> bool { return false; }
+fn terrainRasterNormal(px: vec2f) -> vec3f { return vec3f(0.0); }
 // END_TERRAIN_RASTER
 // BEGIN_CLOUD_PASS (system/cloud-pass.ts withCloudPass supplies the cloud pass's texture reads)
 fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds { return EarthClouds(-1.0, vec3f(0.0), -1.0); }
@@ -12840,7 +12856,9 @@ fn rasterAlbedo(px: vec2f, k: u32) -> f32 {
   let rd = rs / length(rs);
   let kM = length(vec3f(rd.xy, rd.z / ab)) * EARTH_RM;
   let fine = P.nearCam1.w > 0.5;
-  let q = normalize(select(nearCam(), P.nearCam0.xyz, fine) + select(vec3f(0.0), P.nearCam1.xyz, fine) + rd * (tM / kM));
+  let pq = select(nearCam(), P.nearCam0.xyz, fine) + select(vec3f(0.0), P.nearCam1.xyz, fine) + rd * (tM / kM);
+  let q = normalize(pq);
+  GEO_H = geoH(pq);
   let gq = geoQ(q);
   if (dot(gq, normalize(squashed(toBody(P.near4.xyz), ab))) < 0.03) { return 0.0; }
   // (the pixel's footprint there: a pixel across, 1 / sin of the grazing angle along the ray's way over the ground — read
@@ -13439,6 +13457,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let tH = tM / ray.kM;
   let ph = rasterPoint(ray, tM);
   let q = normalize(ph);
+  GEO_H = geoH(ph);
   let gq = geoQ(q);
   // (its place on the tiles from the camera's anchor — tileCoord —, near: its imagery's and slopes' reads below)
   let anchored = tM < TILE_ANCHOR_M && P.nearCam1.w > 0.5 && P.tiles.w > 0.5;
@@ -13468,12 +13487,20 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   A = mix(A, surface.c * P.earth2.z, surface.w);
   A = mix(A, img.c.rgb * P.earth2.z, img.o);
   if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, max(length(fx), length(fy)) * EARTH_RM), surface.w * (1.0 - img.o)); }
-  // (the normal: the mesh's, else the ellipsoid's; a tree's its own, its colour its look)
+  // (the normal: the ground's smooth one — its level's slopes at its nodes, interpolated: T5, no facets —, else the mesh's (a
+  // building's, a runway's graded ground), else the ellipsoid's; a tree's its own, its colour its look. The mesh's kept for the
+  // scenery's shadows — ng: the point lifted off its own triangles —, the smooth one lights)
   var n = gq;
-  if ((liteSkip() & 16u) == 0u) { n = rasterNormal(centre, terrainRasterHint(centre), k); }
-  if (dot(n, n) < 0.5) { n = gq; }
+  var ng = gq;
+  if ((liteSkip() & 16u) == 0u) {
+    ng = rasterNormal(centre, terrainRasterHint(centre), k);
+    if (dot(ng, ng) < 0.5) { ng = gq; }
+    n = terrainRasterNormal(centre);
+    if (dot(n, n) < 0.5) { n = ng; }
+  }
   if (isTree) {
     n = WS.xyz;
+    ng = n;
     A = WS_A;
   }
   let mu0 = dot(gq, Lp);
@@ -13512,7 +13539,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let plainLight = (liteSkip() & 4096u) != 0u;
   let Esun = E * sunThrough(hG, mu0);
   var Eg = E;
-  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Lp, Esun, fx, fy, dirW, tM, n, mesh); }
+  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Lp, Esun, fx, fy, dirW, tM, ng, mesh); }
   // (a building's own triangles — U2 —: its roof the orthophoto's — the photograph is the roof seen from above —, its walls
   // stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —, the glass dark,
   // the sky mirrored in it below)
@@ -13751,6 +13778,7 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   let tH = tM / ray.kM;
   let ph = rasterPoint(ray, tM);
   let q = normalize(ph);
+  GEO_H = geoH(ph);
   let gq = geoQ(q);
   let hG = max(airHeight(ph) - geoidN(gq), 0.0);
   let lt = nearLight(k);

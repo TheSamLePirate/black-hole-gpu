@@ -17,6 +17,7 @@ import type { CameraFrame } from "../camera";
 import { dot, type Vec3 } from "../math/vec3";
 import type { LocalPatch } from "./local-patch";
 import { wgslFunction } from "./warp-grid";
+import { RASTER_CODE, RASTER_CODE_SCALE } from "./terrain-raster-hint";
 
 /** a level's grid: nodes per side (128 cells) */
 export const BODY_GRID_N = 129;
@@ -185,10 +186,10 @@ struct CloudVertex { @builtin(position) clip: vec4f, @location(0) p: vec3f, @loc
 @fragment fn bodyCloudFs(v: CloudVertex) -> @location(0) vec4f {
   if (v.mask < 0.02) { discard; }
   let d = length(v.p);
-  return vec4f(d, 0.0, d, 1.5);
+  return vec4f(d, 0.0, d, ${RASTER_CODE.cloud * RASTER_CODE_SCALE}.0);
 }
 // (r: the ground's distance [m]; b the same — the nearest surface —; a 1: drawn by the raster's patch)
-@fragment fn bodyFs(v: Vertex) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, 1.0); }
+@fragment fn bodyFs(v: Vertex) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, ${RASTER_CODE_SCALE}.0); }
 `;
 }
 

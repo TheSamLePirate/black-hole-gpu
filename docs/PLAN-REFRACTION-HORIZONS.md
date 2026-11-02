@@ -1247,3 +1247,9 @@ compilation) s'y ajoutent.
   maillages (décision de Sam) ; mesuré que P1 ne paie pas et que le matériau du sol ne baisse pas par parties —
   [progress/refraction-horizons/T1-T2-T8a.md](progress/refraction-horizons/T1-T2-T8a.md),
   [progress/refraction-horizons/Q1.md](progress/refraction-horizons/Q1.md).
+- **2 novembre, après-midi** : à Hopi Point, les « triangles géants » du raster étaient l'œil sous le relief. Le traceur lisait
+  le relief au rayon écrasé d'un point, et non à son pied WGS84 : 6,8 m de glissement au Grand Canyon, 25 m à l'Everest.
+  Corrigé dans `geoQ` et au CPU, et le trépied d'une scène tenu à son point. Ensuite **T3** (la géomorphose, l'écart des
+  coutures nul par construction, 96 px avant au 95ᵉ centile) et **T5** (les normales lisses dans le canal `a`, 2 × 9 bits ;
+  plus de facettes ; visibilité au même coût à Yosemite) —
+  [progress/refraction-horizons/T3-T5.md](progress/refraction-horizons/T3-T5.md).

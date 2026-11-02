@@ -27,7 +27,7 @@
 // their windows' 6–20 km), EOX's where it has none.
 
 import type { Vec3 } from "../physics";
-import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
+import { cartToGeodetic, geodeticDirAt, squashedScale, WGS84_A, WGS84_F } from "./ellipsoid";
 import { type NationalSource, type OrthoFit, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
 
 export const TILE = 256;
@@ -1606,10 +1606,12 @@ export function sampleLevel(at: (i: number, j: number) => number, px: number, py
  * from there plus its small offset (trace.wgsl tileAnchor) — a unit-sphere point in float32 is good to ~0.4 m only.
  */
 export function anchorTileCoord(A: readonly number[], cosRef: number, sinRef: number, sinLatRef: number): [number, number] {
-  // (geodetic: the squashed z stretched again — trace.wgsl geoQ, EARTH_AB as float32)
+  // (geodetic: the squashed z stretched again — trace.wgsl geoQ, EARTH_AB as float32 —, at the anchor's height over the figure:
+  // its radius's own geodetic direction taken back to the point's — ellipsoid.ts geodeticDirAt; the camera 2 km up, 7 m)
   const ab = Math.fround(1.0033640898209764);
-  const gz = A[2]! * ab;
-  const s = gz / Math.hypot(A[0]!, A[1]!, gz);
+  const r = Math.hypot(A[0]!, A[1]!, A[2]!);
+  const q: [number, number, number] = [A[0]! / r, A[1]! / r, A[2]! / r];
+  const s = geodeticDirAt(q, 1 - 1 / ab, (r - 1) * squashedScale(q, 1 - 1 / ab))[2];
   let dl = Math.atan2(A[1]!, A[0]!) - Math.atan2(sinRef, cosRef);
   dl -= TAU * Math.round(dl / TAU);
   return [dl, Math.atanh(s) - Math.atanh(sinLatRef)];
