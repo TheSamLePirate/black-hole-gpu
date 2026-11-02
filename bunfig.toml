@@ -1,0 +1,6 @@
+# bun's settings for this repository.
+
+[test]
+# Every e2e run tells the lab what it is doing — even `E2E=1 bun test …` without `bun run e2e`'s own preload
+# (the remote jobs, the A/B): its file, its test, its time (tests/e2e/lib/live-preload.ts; nothing outside the e2e).
+preload = ["./tests/e2e/lib/live-preload.ts"]

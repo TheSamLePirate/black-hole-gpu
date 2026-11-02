@@ -474,3 +474,25 @@ body.wall .main { padding: 18px 22px; }
 body.wall .act-test { font-size: 18px; }
 body.wall .heat .m .v { font-size: 24px; }
 @media (max-width: 1200px) { .heat { grid-template-columns: repeat(3, minmax(0, 1fr)); } .act-body, .heat-charts { grid-template-columns: 1fr; } }
+
+/* the Monitor's timeline: the lab's last hours */
+.lab-tl { display: flex; flex-direction: column; gap: 8px; }
+.tl-axis, .tl-lane { display: grid; grid-template-columns: 70px minmax(0, 1fr); align-items: center; gap: 10px; }
+.tl-k { font-size: 11px; color: var(--muted); text-align: right; }
+.tl-track { position: relative; height: 18px; border-radius: 4px; background: var(--bg2); }
+.tl-axis .tl-track { background: none; height: 16px; }
+.tl-tick { position: absolute; top: 0; transform: translateX(-50%); font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tl-tick.now { transform: translateX(-100%); color: var(--accent); }
+.tl-machine { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
+.tl-name { font-size: 12.5px; font-weight: 650; margin-left: 80px; }
+.tl-bar { position: absolute; top: 2px; bottom: 2px; min-width: 2px; border-radius: 3px; background: var(--line2); cursor: pointer; }
+.tl-bar:hover { outline: 2px solid var(--text); z-index: 2; }
+.tl-bar.run.ok { background: color-mix(in srgb, var(--ok) 70%, transparent); }
+.tl-bar.run.bad { background: color-mix(in srgb, var(--bad) 75%, transparent); }
+.tl-bar.test { background: hsl(var(--h) 55% 55% / .85); }
+.tl-bar.test.warm { box-shadow: inset 0 3px 0 var(--warn); }
+.tl-bar.test.hot { box-shadow: inset 0 3px 0 var(--bad); }
+.tl-bar.now { background: var(--accent); animation: pulse 1.2s infinite; }
+.tl-bar.test.now { background: hsl(var(--h) 65% 60%); }
+.tl-lane.heat .tl-track { height: 30px; overflow: hidden; }
+.tl-heat svg { display: block; }

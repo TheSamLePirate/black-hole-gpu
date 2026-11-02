@@ -12,7 +12,9 @@
 // leaves a page without it.
 //
 // Live too (lib/live.ts): ~/.kerr-lab/live/e2e-<pid>.json every two seconds — the file, the test, the craft, the
-// frame rate — for the lab's monitor and the dashboard; a picture only when one asks (a "peek").
+// frame rate — for the lab's monitor and the dashboard; a picture only when one asks (a "peek"). An e2e run
+// without the preload (`E2E=1 bun test …`: the remote jobs, the A/B) is live too, lightly (lib/live-preload.ts,
+// bunfig.toml): its file, its test, its time, a picture on demand — its page otherwise untouched.
 import { fileInfo, showBanner } from "./banner";
 import { LiveState } from "./live";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -114,6 +116,8 @@ export function reportRoot(): string {
 /** This process's recorder: the page being watched, the test being recorded, its folder. */
 class Recorder {
   enabled = false;
+  /** live only (no preload): the file and the test told, the page left alone but for a picture asked */
+  light = false;
   private page: Recordable | null = null;
   private file = "";
   private k = 0;
@@ -137,9 +141,25 @@ class Recorder {
     console.error(`e2e reports: ${reportRoot()}`);
   }
 
+  /** Live only (live-preload.ts): no record, no sampler — the file, the test, a picture asked for. */
+  lightOn() {
+    if (!this.enabled) this.light = true;
+  }
+
   /** A page loaded (App.load): its sampler installed, watched from now. `file`: the test file it serves. */
   async attach(page: Recordable, file: string) {
-    if (!this.enabled) return;
+    if (!this.enabled) {
+      if (!this.light) return;
+      this.page = page;
+      if (file !== this.file) {
+        this.file = file;
+        this.k = this.inTest ? 1 : 0;
+        this.openLight();
+      }
+      this.timer ??= setInterval(() => this.pullLight(), 1500);
+      this.liveTimer ??= setInterval(() => this.live.write(), 2000);
+      return;
+    }
     await page.js(LAB_PAGE);
     await page.js(E2E_PAGE);
     this.page = page;
@@ -176,8 +196,40 @@ class Recorder {
     this.said.clear();
   }
 
-  /** A test begins (preload's beforeEach): the setup's (or the previous test's) record closed, a new one opened. */
-  async begin() {
+  /** Live only: the file's and the test's names told, nothing recorded. */
+  private openLight() {
+    const I = fileInfo(this.file);
+    this.live.file(this.file, I.suite, I.tests.length, "", true);
+    this.live.test(this.k, this.k === 0 ? "setting up" : (I.tests[this.k - 1] ?? `test ${this.k}`), "");
+    this.live.write();
+    this.wall0 = Date.now();
+  }
+
+  /** Live only: a picture if one was asked for, the state written. */
+  private pullLight(): Promise<unknown> {
+    this.chain = this.chain.then(async () => {
+      const page = this.page;
+      if (page && this.live.peekWanted()) {
+        const shot = await page.cdp
+          .send<{ data: string }>("Page.captureScreenshot", { format: "jpeg", quality: 60, optimizeForSpeed: true }, 10)
+          .catch(() => null);
+        if (shot) this.live.peeked(Buffer.from(shot.data, "base64"));
+      }
+      this.live.write();
+    });
+    return this.chain;
+  }
+
+  /** A test begins (preload's beforeEach): the setup's (or the previous test's) record closed, a new one opened.
+   *  `from`: whose hook — the full preload's or the live one's (live-preload.ts) — the other's ignored. */
+  async begin(from: "full" | "live" = "full") {
+    if (from === "live") {
+      if (this.enabled || !this.light) return;
+      this.inTest = true;
+      this.k++;
+      if (this.file) this.openLight();
+      return;
+    }
     if (!this.enabled) return;
     await this.pull();
     if (this.k === 0 && this.dir) this.summary();
@@ -189,7 +241,16 @@ class Recorder {
   }
 
   /** A test ends (preload's afterEach): its last samples, its graphs, a picture, its summary. */
-  async end() {
+  async end(from: "full" | "live" = "full") {
+    if (from === "live") {
+      if (this.enabled || !this.light) return;
+      this.inTest = false;
+      if (this.file && this.k > 0) {
+        this.live.ended(this.k, fileInfo(this.file).tests[this.k - 1] ?? `test ${this.k}`, Math.round((Date.now() - this.wall0) / 100) / 10);
+        this.live.write();
+      }
+      return;
+    }
     this.inTest = false;
     if (!this.enabled || !this.dir) return;
     await this.pull();
@@ -276,11 +337,12 @@ class Recorder {
   }
 
   /** The process ends: the last record closed (a file whose last test had no afterEach, a crash). */
-  async close() {
+  async close(from: "full" | "live" = "full") {
+    if (from === "live" && (this.enabled || !this.light)) return;
     if (this.timer) clearInterval(this.timer);
     if (this.liveTimer) clearInterval(this.liveTimer);
     this.timer = this.liveTimer = null;
-    if (this.dir && existsSync(this.dir)) this.summary();
+    if (this.enabled && this.dir && existsSync(this.dir)) this.summary();
     this.live.remove();
   }
 }

@@ -154,7 +154,12 @@ function h(tag: string, attrs: Record<string, unknown> = {}, ...kids: Child[]): 
     if (k.startsWith("on") && typeof v === "function") (el as unknown as Record<string, unknown>)[k] = v;
     else if (k === "class") el.className = String(v);
     else if (k === "html") el.innerHTML = String(v);
-    else if (k === "style" && typeof v === "object") Object.assign(el.style, v);
+    else if (k === "style" && typeof v === "object")
+      // (a custom property — "--h" — only through setProperty)
+      for (const [p, x] of Object.entries(v as Record<string, string>)) {
+        if (p.startsWith("--")) el.style.setProperty(p, x);
+        else (el.style as unknown as Record<string, string>)[p] = x;
+      }
     // (booleans as attributes — disabled, open — so a morph carries them; a field's state as properties)
     else if (typeof v === "boolean" && k !== "checked" && k !== "selected") el.setAttribute(k, "");
     else if (k in el && typeof v !== "string") (el as unknown as Record<string, unknown>)[k] = v;
@@ -3977,15 +3982,16 @@ async function doPeek(where: "here" | "mini", pid: number) {
 }
 
 /** A running e2e: its test, its progress, the craft, its last minutes, its moments, its page on demand. */
-function e2eCard(where: "here" | "mini", e: E2eLive) {
+function e2eCard(where: "here" | "mini", e: E2eLive, polledAt: number) {
   const now = Date.now();
   const fileS = (now - e.fileStart) / 1000;
   const testS = (now - e.testStart) / 1000;
   const est = e.estimateS;
   const share = est ? Math.min(1, fileS / est) : null;
   const over = est ? fileS > est * 1.25 : false;
-  const held = now - e.pageAt > 20_000;
-  const stale = now - e.at > 15_000;
+  // (judged at the machine's own poll, on its own clock: the poll's delay is not the e2e's)
+  const held = !e.light && polledAt - e.pageAt > 20_000;
+  const stale = polledAt - e.at > 15_000;
   const c = e.craft;
   const key = `${where}:${e.pid}`;
   // (a picture another viewer asked for is everyone's: the server keeps the last one of each e2e)
@@ -4011,15 +4017,26 @@ function e2eCard(where: "here" | "mini", e: E2eLive) {
       h("span", { class: `dot ${stale ? "warn" : "run"}` }),
       h("span", { class: "fname" }, name),
       h("span", { class: "badge acc" }, e.k === 0 ? "setting up" : `test ${e.k}/${e.n || "?"}`),
+      e.light
+        ? h(
+            "span",
+            {
+              class: "badge",
+              title:
+                "run without bun run e2e's preload (E2E=1 bun test …: a remote job, an A/B) — its page is not sampled: no craft, no frame rate, no report; a picture on demand still",
+            },
+            "live only",
+          )
+        : null,
       e.errors ? h("span", { class: "badge bad" }, `${e.errors} page error${e.errors > 1 ? "s" : ""}`) : null,
       held
         ? h(
             "span",
             { class: "badge warn", title: "a long page call holds it — a whole flight stepped at once, a stuck wait" },
-            `page held ${dur((now - e.pageAt) / 1000)}`,
+            `page held ${dur((polledAt - e.pageAt) / 1000)}`,
           )
         : null,
-      stale ? h("span", { class: "badge warn" }, `no news for ${dur((now - e.at) / 1000)}`) : null,
+      stale ? h("span", { class: "badge warn" }, `no news for ${dur((polledAt - e.at) / 1000)}`) : null,
       h("span", { class: "grow" }),
       h("span", { class: "faint mono", style: { fontSize: "11.5px" } }, `pid ${e.pid}`),
       rel ? h("a", { class: "btn sm", href: reportHref(rel, { file: e.file.replace(/^.*\//, ""), name: e.test }) }, "Report ▸") : null,
@@ -4059,63 +4076,80 @@ function e2eCard(where: "here" | "mini", e: E2eLive) {
     h(
       "div",
       { class: "act-body" },
-      h(
-        "div",
-        { class: "col", style: { gap: "10px" } },
-        h(
-          "div",
-          { class: "readouts" },
-          ro("fps", e.fps === null ? "—" : String(e.fps), e.worstMs !== null ? `worst frame ${e.worstMs} ms` : ""),
-          // (0: not measured — no GPU timestamps, headless)
-          c?.gpuMs ? ro("GPU frame", `${nfmt(c.gpuMs, 1)} ms`) : null,
-          c?.vessel ? ro("craft", c.vessel) : null,
-          c?.label || c?.mode ? ro("status", (c.label ?? c.mode)!) : null,
-          c?.body ? ro("body", c.body) : null,
-          c?.altKm !== null && c?.altKm !== undefined
-            ? ro("height", c.altKm < 10 ? `${nfmt(c.altKm * 1000)} m` : `${nfmt(c.altKm, 1)} km`)
-            : null,
-          c?.aglM !== null && c?.aglM !== undefined ? ro("over ground", `${nfmt(c.aglM)} m`) : null,
-          c?.v !== null && c?.v !== undefined ? ro("speed", `${nfmt(c.v, c.v < 100 ? 1 : 0)} m/s`) : null,
-          c?.mach !== null && c?.mach !== undefined ? ro("Mach", nfmt(c.mach, 2)) : null,
-          c?.auto ? ro("autopilot", `${c.auto}${c.hold ? ` · ${c.hold}` : ""}`) : null,
-          c?.hub ? ro("card", `${c.hub}${c.phase ? ` · ${c.phase}` : ""}`) : null,
-          c?.entry ? ro("entry", c.entry) : null,
-          c?.warp !== null && c?.warp !== undefined && c.warp !== 1 ? ro("warp", `×${nfmt(c.warp, 1)}`) : null,
-          c?.landed ? ro("on ground", "landed") : null,
-          c?.docked ? ro("docked", "yes") : null,
-        ),
-        flying
-          ? h(
+      e.light
+        ? h(
+            "div",
+            { class: "col", style: { gap: "8px" } },
+            e.done.length
+              ? h(
+                  "div",
+                  { class: "evlist", style: { maxHeight: "200px" } },
+                  e.done.map((d) => h("div", {}, h("span", { class: "k" }, `${d.k}.`), `${d.test} — ${dur(d.wallS)}`)),
+                )
+              : h("div", { class: "faint", style: { fontSize: "12px" } }, "no test ended yet"),
+            h(
               "div",
-              { class: "grid g2", style: { gap: "10px" } },
-              lineChart({
-                key: `${key}:alt:${e.k}`,
-                title: "Height",
-                x,
-                xKind: "seconds",
-                height: 70,
-                series: [{ name: "height", slot: 1, values: e.series.map((p) => p[1]), unit: "km", digits: 2, area: true }],
-              }),
-              lineChart({
-                key: `${key}:v:${e.k}`,
-                title: "Speed",
-                x,
-                xKind: "seconds",
-                height: 70,
-                series: [{ name: "speed", slot: 3, values: e.series.map((p) => p[2]), unit: "m/s", digits: 0 }],
-              }),
-            )
-          : null,
-        lineChart({
-          key: `${key}:fps:${e.k}`,
-          title: "Frame rate",
-          x,
-          xKind: "seconds",
-          height: 56,
-          yMin: 0,
-          series: [{ name: "fps", slot: 6, values: e.series.map((p) => p[3]), digits: 0, area: true }],
-        }),
-      ),
+              { class: "faint", style: { fontSize: "12px" } },
+              "Live only: run without bun run e2e's preload, so its page is not sampled — no craft or frame rate here, no report. A picture on demand still.",
+            ),
+          )
+        : h(
+            "div",
+            { class: "col", style: { gap: "10px" } },
+            h(
+              "div",
+              { class: "readouts" },
+              ro("fps", e.fps === null ? "—" : String(e.fps), e.worstMs !== null ? `worst frame ${e.worstMs} ms` : ""),
+              // (0: not measured — no GPU timestamps, headless)
+              c?.gpuMs ? ro("GPU frame", `${nfmt(c.gpuMs, 1)} ms`) : null,
+              c?.vessel ? ro("craft", c.vessel) : null,
+              c?.label || c?.mode ? ro("status", (c.label ?? c.mode)!) : null,
+              c?.body ? ro("body", c.body) : null,
+              c?.altKm !== null && c?.altKm !== undefined
+                ? ro("height", c.altKm < 10 ? `${nfmt(c.altKm * 1000)} m` : `${nfmt(c.altKm, 1)} km`)
+                : null,
+              c?.aglM !== null && c?.aglM !== undefined ? ro("over ground", `${nfmt(c.aglM)} m`) : null,
+              c?.v !== null && c?.v !== undefined ? ro("speed", `${nfmt(c.v, c.v < 100 ? 1 : 0)} m/s`) : null,
+              c?.mach !== null && c?.mach !== undefined ? ro("Mach", nfmt(c.mach, 2)) : null,
+              c?.auto ? ro("autopilot", `${c.auto}${c.hold ? ` · ${c.hold}` : ""}`) : null,
+              c?.hub ? ro("card", `${c.hub}${c.phase ? ` · ${c.phase}` : ""}`) : null,
+              c?.entry ? ro("entry", c.entry) : null,
+              c?.warp !== null && c?.warp !== undefined && c.warp !== 1 ? ro("warp", `×${nfmt(c.warp, 1)}`) : null,
+              c?.landed ? ro("on ground", "landed") : null,
+              c?.docked ? ro("docked", "yes") : null,
+            ),
+            flying
+              ? h(
+                  "div",
+                  { class: "grid g2", style: { gap: "10px" } },
+                  lineChart({
+                    key: `${key}:alt:${e.k}`,
+                    title: "Height",
+                    x,
+                    xKind: "seconds",
+                    height: 70,
+                    series: [{ name: "height", slot: 1, values: e.series.map((p) => p[1]), unit: "km", digits: 2, area: true }],
+                  }),
+                  lineChart({
+                    key: `${key}:v:${e.k}`,
+                    title: "Speed",
+                    x,
+                    xKind: "seconds",
+                    height: 70,
+                    series: [{ name: "speed", slot: 3, values: e.series.map((p) => p[2]), unit: "m/s", digits: 0 }],
+                  }),
+                )
+              : null,
+            lineChart({
+              key: `${key}:fps:${e.k}`,
+              title: "Frame rate",
+              x,
+              xKind: "seconds",
+              height: 56,
+              yMin: 0,
+              series: [{ name: "fps", slot: 6, values: e.series.map((p) => p[3]), digits: 0, area: true }],
+            }),
+          ),
       h(
         "div",
         { class: "col", style: { gap: "8px" } },
@@ -4322,7 +4356,7 @@ function bay(where: "here" | "mini" | "pc", name: string, m: Mac | null) {
   if (!m) return h("div", { class: "card bay" }, head, h("div", { class: "muted" }, h("span", { class: "spinner" }), " reaching it…"));
   if (!m.ok) return h("div", { class: "card bay" }, head, h("div", { class: "alert bad" }, m.error ?? "unreachable"));
   const acts: Node[] = [];
-  for (const e of m.e2e ?? []) if (where !== "pc") acts.push(e2eCard(where, e));
+  for (const e of m.e2e ?? []) if (where !== "pc") acts.push(e2eCard(where, e, m.at));
   for (const c of m.campaigns) if (where !== "pc") acts.push(flightCard(where, c as Parameters<typeof flightCard>[1]));
   const liveCmds = new Set((m.e2e ?? []).map((e) => e.pid));
   const others = m.tests.filter((t) => !liveCmds.has(t.pid));
@@ -4430,6 +4464,7 @@ function monitorPage() {
       bay("here", "This Mac", L.here),
       bay("mini", "kerr-mini", L.mini),
       L.pc?.ok ? bay("pc", "kerr-pc", L.pc) : null,
+      timelineCard(),
     ),
   );
 }
@@ -4443,6 +4478,197 @@ setInterval(() => {
     else void doPeek(where as "here" | "mini", Number(pid));
   }
 }, 8000);
+
+// ------------------------------------------------------------------------------------------- monitor: the timeline
+
+// The lab's last hours on one axis (scripts/dashboard/timeline.ts): per machine, the runs and remote jobs with
+// their verdicts, every e2e test recorded (a colour per file; its worst thermal pressure on its top edge), the
+// e2e running now, and the heat — the pressure as bands, the GPU's clock as a line. A bar opens its report or
+// its run; hovering says what it was.
+
+interface TLRun {
+  id: string;
+  title: string;
+  source: string;
+  from: number;
+  to: number | null;
+  state: string;
+  ok: boolean | null;
+  pass: number;
+  fail: number;
+}
+interface TLTest {
+  file: string;
+  k: number;
+  from: number;
+  to: number;
+  fps: number | null;
+  worst: string | null;
+  gpuPct: number | null;
+  dir: string;
+}
+interface TLData {
+  from: number;
+  to: number;
+  lanes: Record<"here" | "mini" | "pc", { runs: TLRun[]; tests: TLTest[]; heat: ThermalSeries | null }>;
+}
+const TL = { hours: 6, data: null as TLData | null, at: 0, busy: false, key: 0 };
+
+function loadTimeline(force = false) {
+  if (TL.busy || (!force && TL.data && TL.key === TL.hours && Date.now() - TL.at < 30_000)) return;
+  TL.busy = true;
+  const hours = TL.hours;
+  api<TLData>(`/api/timeline?hours=${hours}`)
+    .then((d) => {
+      TL.data = d;
+      TL.key = hours;
+      TL.at = Date.now();
+    })
+    .catch(() => {})
+    .finally(() => {
+      TL.busy = false;
+      schedule();
+    });
+}
+
+const fileHue = (v: string) => {
+  let x = 7;
+  for (const ch of v) x = (x * 31 + ch.charCodeAt(0)) % 360;
+  return x;
+};
+const hhmm = (t: number) => new Date(t).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+function timelineCard() {
+  loadTimeline();
+  const d = TL.data && TL.key === TL.hours ? TL.data : null;
+  const now = Date.now();
+  const t0 = d ? d.from : now - TL.hours * 3600_000;
+  const t1 = now;
+  const pct = (t: number) => `${(Math.max(0, Math.min(1, (t - t0) / (t1 - t0))) * 100).toFixed(3)}%`;
+  const wid = (a: number, b: number) => `${(Math.max(0.0015, (Math.min(b, t1) - Math.max(a, t0)) / (t1 - t0)) * 100).toFixed(3)}%`;
+  // (hour ticks: every 1, 2 or 3 h by the span)
+  const step = TL.hours <= 2 ? 15 * 60_000 : TL.hours <= 6 ? 3600_000 : TL.hours <= 12 ? 2 * 3600_000 : 3 * 3600_000;
+  const ticks: number[] = [];
+  for (let t = Math.ceil(t0 / step) * step; t < t1; t += step) ticks.push(t);
+  const lane = (label: string, kids: Node[], cls = "") =>
+    h("div", { class: `tl-lane ${cls}` }, h("div", { class: "tl-k" }, label), h("div", { class: "tl-track" }, kids));
+  const machine = (key: "here" | "mini" | "pc", name: string) => {
+    const L = d?.lanes[key];
+    const live = (key === "here" ? S.lab.here : key === "mini" ? S.lab.mini : S.lab.pc)?.e2e ?? [];
+    if (key === "pc" && !L?.runs.length && !L?.tests.length) return null;
+    const runs = (L?.runs ?? []).map((r) =>
+      h("a", {
+        class: `tl-bar run ${r.state === "running" || r.state === "queued" ? "now" : r.ok === true ? "ok" : r.ok === false ? "bad" : ""}`,
+        href: `#history/${encodeURIComponent(r.id)}`,
+        style: { left: pct(r.from), width: wid(r.from, r.to ?? now) },
+        title: `${r.title}\n${hhmm(r.from)} → ${r.to ? hhmm(r.to) : "now"} · ${dur(((r.to ?? now) - r.from) / 1000)}\n${r.pass} ✓ ${r.fail} ✗ · ${r.source} · ${r.state}`,
+      }),
+    );
+    const tests = (L?.tests ?? []).map((t) => {
+      const w = pressureRank(t.worst);
+      return h("a", {
+        class: `tl-bar test${w >= 2 ? " hot" : w === 1 ? " warm" : ""}`,
+        href: reportHref(t.dir, { file: `${t.file}.e2e.test.ts` }),
+        style: { left: pct(t.from), width: wid(t.from, t.to), "--h": String(fileHue(t.file)) },
+        title: `${t.file} · ${t.k === 0 ? "setup" : `test ${t.k}`}\n${hhmm(t.from)} · ${dur((t.to - t.from) / 1000)}${t.fps !== null ? ` · ${t.fps} fps` : ""}${t.worst ? `\npressure ${t.worst}${t.gpuPct !== null ? ` · GPU ${t.gpuPct} % of max` : ""}` : ""}`,
+      });
+    });
+    for (const e of live)
+      tests.push(
+        h("span", {
+          class: "tl-bar test now",
+          style: {
+            left: pct(e.testStart),
+            width: wid(e.testStart, now),
+            "--h": String(fileHue(e.file.replace(/^.*\//, "").replace(/\.e2e\.test\.ts$/, ""))),
+          },
+          title: `${e.file} · test ${e.k}/${e.n} — running\n${e.test}`,
+        }),
+      );
+    const P = L?.heat?.points ?? [];
+    let svg = "";
+    const X = (t: number) => ((t - t0) / (t1 - t0)) * 1000;
+    const half = P.length > 1 ? (P[1]![0] - P[0]![0]) / 2 : 0;
+    for (const p of P)
+      if (p[1] >= 1)
+        svg += `<rect x="${X(p[0] - half).toFixed(1)}" y="0" width="${Math.max(0.5, X(p[0] + half) - X(p[0] - half)).toFixed(1)}" height="30" fill="${PRESSURE_COLOR[p[1]]}" opacity=".35"/>`;
+    let path = "";
+    let pen = false;
+    for (const p of P) {
+      if (p[3] === null) {
+        pen = false;
+        continue;
+      }
+      path += `${pen ? "L" : "M"}${X(p[0]).toFixed(1)},${(29 - (p[3] / 100) * 27).toFixed(1)}`;
+      pen = true;
+    }
+    if (path) svg += `<path d="${path}" fill="none" stroke="var(--chart-1)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>`;
+    const heatLane = h("div", {
+      class: "tl-heat",
+      title: P.length
+        ? "the pressure as bands (amber Moderate, red Heavy and worse), the GPU's clock as a % of its max"
+        : "no heat recorded over this span",
+      html: `<svg viewBox="0 0 1000 30" preserveAspectRatio="none" width="100%" height="30">${svg}</svg>`,
+    });
+    return h(
+      "div",
+      { class: "tl-machine" },
+      h("div", { class: "tl-name" }, name),
+      lane("runs", runs),
+      lane("tests", tests),
+      lane("heat", [heatLane], "heat"),
+    );
+  };
+  return h(
+    "div",
+    { class: "card lab-tl" },
+    h(
+      "div",
+      { class: "bay-head" },
+      h("h2", {}, `The last ${TL.hours} hours`),
+      h(
+        "span",
+        { class: "chip" },
+        "runs and jobs with their verdicts · each e2e test (a colour per file, its top edge its worst pressure) · the heat",
+      ),
+      h("span", { class: "grow" }),
+      TL.busy ? h("span", { class: "spinner" }) : null,
+      h(
+        "span",
+        { class: "seg-btns" },
+        [1, 3, 6, 12, 24].map((n) =>
+          h(
+            "button",
+            {
+              class: TL.hours === n ? "on" : "",
+              onclick: () => {
+                TL.hours = n;
+                loadTimeline(true);
+                schedule();
+              },
+            },
+            `${n} h`,
+          ),
+        ),
+      ),
+    ),
+    h(
+      "div",
+      { class: "tl-axis" },
+      h("div", { class: "tl-k" }),
+      h(
+        "div",
+        { class: "tl-track" },
+        ticks.map((t) => h("span", { class: "tl-tick", style: { left: pct(t) } }, hhmm(t))),
+        h("span", { class: "tl-tick now", style: { left: "100%" } }, "now"),
+      ),
+    ),
+    machine("here", "This Mac"),
+    machine("mini", "kerr-mini"),
+    machine("pc", "kerr-pc"),
+    !d ? h("div", { class: "faint", style: { fontSize: "12px" } }, h("span", { class: "spinner" }), " reading the lab's history…") : null,
+  );
+}
 
 // ------------------------------------------------------------------------------------------- modal
 

@@ -51,7 +51,9 @@ export interface E2eLive {
   pid: number;
   host: string;
   cwd: string;
-  /** the e2e's report root (absolute) and the running test's folder in it */
+  /** live only (no preload: `E2E=1 bun test …`): no craft, no frame rate, no record — the file, the test, its time */
+  light: boolean;
+  /** the e2e's report root (absolute) and the running test's folder in it ("" when live only) */
   root: string;
   dir: string;
   file: string;
@@ -150,6 +152,7 @@ export class LiveState {
       pid: process.pid,
       host: hostname().replace(/\.local$/, ""),
       cwd: process.cwd(),
+      light: false,
       root: "",
       dir: "",
       file: "",
@@ -174,13 +177,14 @@ export class LiveState {
   }
 
   /** A file begins (its page attached). */
-  file(file: string, suite: string, n: number, root: string) {
+  file(file: string, suite: string, n: number, root: string, light = false) {
     if (this.s.file === file) return;
     Object.assign(this.s, {
       file,
       suite,
       n,
-      root: resolve(root),
+      light,
+      root: root ? resolve(root) : "",
       fileStart: Date.now(),
       estimateS: estimateOf(file),
       done: [],
@@ -190,7 +194,7 @@ export class LiveState {
 
   /** A test begins (k 0: the file's setup). */
   test(k: number, title: string, dir: string) {
-    Object.assign(this.s, { k, test: title, dir: resolve(dir), testStart: Date.now(), series: [], craft: null });
+    Object.assign(this.s, { k, test: title, dir: dir ? resolve(dir) : "", testStart: Date.now(), series: [], craft: null });
     this.lastSeriesWall = -1;
   }
 
@@ -262,6 +266,8 @@ export class LiveState {
     try {
       mkdirSync(LIVE_DIR, { recursive: true });
       this.s.at = Date.now();
+      // (live only: the page never asked, never late)
+      if (this.s.light) this.s.pageAt = this.s.at;
       writeFileSync(`${this.path}.tmp`, JSON.stringify(this.s));
       renameSync(`${this.path}.tmp`, this.path);
     } catch {

@@ -13,6 +13,7 @@ import type { ServerWebSocket } from "bun";
 import index from "./ui/index.html";
 import { doctor, flightCtl, heat, lab, peek, pollHere, pollMini, pollPc } from "./lab";
 import { campaigns, e2eReports, report, reportRootOf, safeDir, scenarios, series } from "./reports";
+import { type Timeline, timeline } from "./timeline";
 import { evalProbe, inputProbe, probeErrors, probeState, sceneProbe, shotProbe, startProbe, stopProbe } from "./probe";
 import {
   attachRun,
@@ -43,6 +44,7 @@ const HOSTNAME = process.env.E2E_DASH_HOST || "0.0.0.0";
 // ------------------------------------------------------------------------------------------- clients
 
 const clients = new Set<ServerWebSocket<{ frames: boolean }>>();
+const timelineCache = new Map<number, { at: number; v: Timeline }>();
 const emit = (msg: Record<string, unknown>) => {
   const s = JSON.stringify(msg);
   for (const c of clients) if (msg.t !== "frame" || c.data.frames) c.send(s);
@@ -251,6 +253,16 @@ const server = Bun.serve<{ frames: boolean }>({
             Number(u.searchParams.get("to") ?? 0) || undefined,
           ),
         );
+      }),
+    // (the lab's last hours: what ran when, and how hot — kept 15 s)
+    "/api/timeline": (req: Req) =>
+      guard(async () => {
+        const hours = Math.min(24, Math.max(0.5, Number(new URL(req.url).searchParams.get("hours") ?? 6) || 6));
+        const hit = timelineCache.get(hours);
+        if (hit && Date.now() - hit.at < 15_000) return json(hit.v);
+        const v = await timeline(hours);
+        timelineCache.set(hours, { at: Date.now(), v });
+        return json(v);
       }),
     "/api/lab/doctor": {
       POST: (req: Req) =>
