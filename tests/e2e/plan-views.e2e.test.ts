@@ -86,7 +86,8 @@ test.skipIf(!E2E)(
         await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
         await app.js(`(() => { __bh.game.setDate(${JSON.stringify(v.date)}); return 1; })()`);
         await Bun.sleep(1000);
-        const place = `__bh.game.flyAt(${v.at.join(", ")}); __bh.settings.shipMount = "cockpit";`;
+        // (the cockpit, then the look reset: the scene's own look would stay — docs/BH-API.md shipMount)
+        const place = `__bh.game.flyAt(${v.at.join(", ")}); __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();`;
         const t0 = Date.now();
         await app.js(`(() => { ${place} __bh.freeze(true); return 1; })()`);
         const relief = await tiles("t.finest >= 14 && t.pending === 0", 180_000);

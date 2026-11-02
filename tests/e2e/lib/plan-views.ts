@@ -24,11 +24,11 @@ export const EARTH_VIEWS: EarthView[] = [
     ortho: true,
   },
   {
-    // (the low Sun over the Alps — ~6° up, west-north-west behind the craft: the relief's shadows, its stairs and facets,
+    // (the low Sun over the Alps — ~11° up, west-north-west behind the craft: the relief's shadows, its stairs and facets,
     // the rings' seams; as tests/e2e/lowflight-governor.e2e.test.ts's place)
     name: "chamonix-low-sun",
-    what: "Chamonix valley, 450 m, the Sun ~6° up",
-    date: "2026-07-10T18:40:00Z",
+    what: "Chamonix valley, 450 m, the Sun ~11° up",
+    date: "2026-07-10T17:50:00Z",
     at: [
       45.92 - (1.1 * Math.cos(Math.PI / 4)) / 111.2,
       6.87 - (1.1 * Math.sin(Math.PI / 4)) / (111.2 * Math.cos((45.92 * Math.PI) / 180)),
