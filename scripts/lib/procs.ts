@@ -2,6 +2,10 @@
 // the tests, the servers. macOS/Linux: ps. Windows (the lab's PC): Win32_Process through PowerShell — no ps,
 // no pkill, no process groups there; a process tree is ended by taskkill /T.
 
+import { readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 export interface Proc {
   pid: number;
   ppid: number;
@@ -44,13 +48,25 @@ export function processes(pattern?: RegExp): Proc[] {
       /* (PowerShell said something else: none) */
     }
     all = rows.map((r) => ({ pid: r.p, ppid: r.q, elapsed: etime(r.s || 0), command: r.c ?? "" }));
-  } else
-    all = Bun.spawnSync(["ps", "-axo", "pid=,ppid=,etime=,command="], { stdout: "pipe" })
-      .stdout.toString()
+  } else {
+    // (ps's output through a file: under bun test — 1.3.14, a test file under tests/ run from the repository's root — every
+    // spawnSync child's output comes back empty, ps's with it: no process listed, the orphan sweeps blind during the e2e — the
+    // three Chromes left on the GPU, 2 Nov 2026)
+    const file = join(tmpdir(), `kerr-ps-${process.pid}-${Math.random().toString(36).slice(2, 8)}.txt`);
+    Bun.spawnSync(["sh", "-c", `ps -axo pid=,ppid=,etime=,command= > '${file}'`]);
+    let text = "";
+    try {
+      text = readFileSync(file, "utf8");
+      rmSync(file, { force: true });
+    } catch {
+      /* (none written: none listed) */
+    }
+    all = text
       .split("\n")
       .map((l) => l.trim().match(/^(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/))
       .filter((m): m is RegExpMatchArray => !!m)
       .map((m) => ({ pid: Number(m[1]), ppid: Number(m[2]), elapsed: m[3]!, command: m[4]! }));
+  }
   return pattern ? all.filter((p) => pattern.test(p.command)) : all;
 }
 
@@ -94,6 +110,12 @@ export function endChrome(proc: { pid: number; kill(): void }, port: number) {
   if (WINDOWS) killTree(proc.pid);
   else {
     proc.kill();
-    Bun.spawnSync(["pkill", "-f", `remote-debugging-port=${port}`]);
+    // (its own flag and the space after it: port 9222's pattern no other port's)
+    const me = `remote-debugging-port=${port} `;
+    Bun.spawnSync(["pkill", "-f", me]);
+    // (a Chrome hung on the GPU — a heavy page, a hot machine — ignores the SIGTERM: three were left headless on the GPU for
+    // a quarter of an hour, 2 Nov 2026, their tests long ended. 1.5 s for it to go, then SIGKILL — synchronous, so a process's
+    // "exit" handler ends it too)
+    Bun.spawnSync(["sh", "-c", `for i in $(seq 1 15); do pgrep -f '${me}' >/dev/null || exit 0; sleep 0.1; done; pkill -9 -f '${me}'`]);
   }
 }

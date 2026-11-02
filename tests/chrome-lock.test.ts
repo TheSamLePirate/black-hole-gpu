@@ -48,14 +48,19 @@ test.skipIf(process.platform !== "darwin")(
   async () => {
     const { orphanChromes } = await import("../scripts/lib/chrome-lock");
     // (an orphan: a process named like a test Chrome — a DevTools port — whose parent exited, adopted by launchd;
-    // its output let go — holding spawnSync's pipe, it kept the test waiting its whole minute of sleep)
+    // its output let go — holding spawnSync's pipe, it kept the test waiting its whole minute of sleep —, in a session of its
+    // own: under bun test, spawnSync ends the whole group it started, the background process with it — the test found none)
     Bun.spawnSync([
       "bash",
       "-c",
-      `(exec -a "Google Chrome" perl -e 'sleep 60' -- --remote-debugging-port=9999 --user-data-dir=/tmp/kerr-e2e-test >/dev/null 2>&1 &)`,
+      `(exec -a "Google Chrome" perl -MPOSIX -e 'POSIX::setsid(); sleep 60' -- --remote-debugging-port=9999 --user-data-dir=/tmp/kerr-e2e-test >/dev/null 2>&1 &)`,
     ]);
     // (the user's Chrome: no DevTools port — left alone)
-    Bun.spawnSync(["bash", "-c", `(exec -a "Google Chrome" perl -e 'sleep 60' -- --user-data-dir=/tmp/kerr-user-test >/dev/null 2>&1 &)`]);
+    Bun.spawnSync([
+      "bash",
+      "-c",
+      `(exec -a "Google Chrome" perl -MPOSIX -e 'POSIX::setsid(); sleep 60' -- --user-data-dir=/tmp/kerr-user-test >/dev/null 2>&1 &)`,
+    ]);
     await Bun.sleep(300);
     const found = orphanChromes().filter((o) => o.profile === "/tmp/kerr-e2e-test");
     expect(found.length).toBe(1);

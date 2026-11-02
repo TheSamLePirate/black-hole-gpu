@@ -48,8 +48,16 @@ galleries, the WGSL check) first takes that Mac's lock, `~/.kerr-lab/chrome.lock
 ([scripts/lib/chrome-lock.ts](../scripts/lib/chrome-lock.ts)). Others wait their turn in arrival order
 (`chrome-lock: waiting — Chrome held by pid …` every 30 s). Two renderers on one GPU slow each other down
 and skew every measurement. A lock whose process died is cleared. A test Chrome left orphaned (its parent
-killed) is ended the next time anyone takes the lock (`lab-monitor --sweep` ends it now). On the mini, the
-remote runner also queues GPU jobs one at a time (`remote.ts status`: `queued` / `running`).
+killed) is ended the next time anyone takes the lock or lets it go (`lab-monitor --sweep` ends it now). On the mini,
+the remote runner also queues GPU jobs one at a time (`remote.ts status`: `queued` / `running`).
+
+**Each Chrome a test opens is closed at its file's end, whatever happens** (2 Nov 2026: three were left headless on this
+Mac's GPU for a quarter of an hour, the machine under heavy thermal pressure, its measures off):
+- `bun test` (1.3.14) never runs `process.on("exit")` handlers: `cdp.ts` also registers an `afterAll` that ends the Chromes
+  its file opened — a failed `expect`, a timeout included. Still close your own in a `finally`.
+- A Chrome hung on the GPU ignores SIGTERM: `endChrome` waits 1.5 s, then SIGKILL.
+- Under `bun test`, run from the repository's root on a file under `tests/`, `Bun.spawnSync` gives its children's output back
+  empty (their exit code still right): `procs.ts processes()` reads `ps` through a file — the sweeps were blind before.
 
 So you **never** start two browser runs on the same Mac expecting them to run side by side. Use both
 Macs: one batch here, one there.

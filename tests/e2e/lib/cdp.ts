@@ -41,6 +41,16 @@ const killRunning = () => {
   running.clear();
 };
 process.on("exit", killRunning);
+// (bun test — 1.3.14 — never runs the "exit" handlers: a test that failed or timed out with its Chrome open left it running,
+// adopted by launchd, on the GPU for good — three found a quarter of an hour on, 2 Nov 2026. Under bun test, each file's end
+// kills them too; outside it — the scripts —, bun:test is not there)
+if (process.env.NODE_ENV === "test" || Bun.argv.includes("test"))
+  try {
+    const { afterAll } = await import("bun:test");
+    afterAll(killRunning);
+  } catch {
+    /* (not inside a test run) */
+  }
 for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const)
   process.on(sig, () => {
     killRunning();

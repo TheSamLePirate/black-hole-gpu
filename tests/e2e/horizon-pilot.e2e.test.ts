@@ -47,43 +47,53 @@ test.skipIf(!E2E)(
   async () => {
     mkdirSync(OUT, { recursive: true });
     const app = await App.boot({ width: 1280, height: 800, hash: `scene=${encodeURIComponent("Moon: an afternoon on the plains")}` });
-    await app.js(
-      `(() => { const r = __bh.renderer; r.prof.enabled = true; r.prof.every = 1; Object.assign(__bh.settings, { animate: false }); return 1; })()`,
-    );
-    const hd = await app.waitFor(`__bh.renderer.hdMap?.name === "moon"`, 60_000).then(
-      () => true,
-      () => false,
-    );
-    if (!hd)
-      throw new Error(`the Moon's finer maps not in within 60 s (hdMap: ${await app.js(`(() => __bh.renderer.hdMap?.name ?? "none")()`)})`);
-    const st = await app.js<Record<string, unknown>>(`(async () => { const h = __bh.renderer.horizonMaps, t0 = performance.now();
-      while (h.state !== "done" && performance.now() - t0 < 90000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
-      const p = __bh.renderer.prof.table().find((x) => x.label === "horizon bake");
-      return { ...h.stats(), band: p ? { ms: +p.ms.toFixed(3), last: +p.last.toFixed(3), n: p.n } : null, gpuErrors: __bh.renderer.gpuErrors }; })()`);
-    console.log(`  bake: ${JSON.stringify(st)}`);
-    await app.shot(`${OUT}/moon-scene.png`);
-    if (st.state !== "done") throw new Error(`the bake not done within 90 s: ${st.left} rows left (${st.bands} bands of ${st.rows} rows)`);
-    if (st.gpuErrors) console.log(`  page errors: ${JSON.stringify(app.cdp.errors.slice(0, 5))}`);
-    expect(st.gpuErrors).toBe(0);
-    // (the maps read back, brought here in pieces)
-    const dims = await app.js<number[]>(
-      `(async () => { const r = await __bh.renderer.horizonMaps.read(); window.__hz = r; return [r.map.w, r.map.h, r.map.layers.length, r.pole.w, r.pole.layers.length]; })()`,
-    );
-    const fetchLayer = async (which: "map" | "pole", l: number, size: number) => {
-      const out = new Uint8Array(size);
-      for (let o = 0; o < size; o += 3 << 20) {
-        const n = Math.min(3 << 20, size - o);
-        const b64 = await app.js<string>(
-          `(() => { const a = window.__hz.${which}.layers[${l}].subarray(${o}, ${o + n}); let s = ""; for (let i = 0; i < a.length; i += 32768) s += String.fromCharCode(...a.subarray(i, i + 32768)); return btoa(s); })()`,
+    // (the page's part — Chrome closed whatever happens, a failed expect, a timeout: none left on the GPU)
+    const { st, mw, mh, gpuMap, gpuPole } = await (async () => {
+      try {
+        await app.js(
+          `(() => { const r = __bh.renderer; r.prof.enabled = true; r.prof.every = 1; Object.assign(__bh.settings, { animate: false }); return 1; })()`,
         );
-        out.set(Buffer.from(b64, "base64"), o);
+        const hd = await app.waitFor(`__bh.renderer.hdMap?.name === "moon"`, 60_000).then(
+          () => true,
+          () => false,
+        );
+        if (!hd)
+          throw new Error(
+            `the Moon's finer maps not in within 60 s (hdMap: ${await app.js(`(() => __bh.renderer.hdMap?.name ?? "none")()`)})`,
+          );
+        const st = await app.js<Record<string, unknown>>(`(async () => { const h = __bh.renderer.horizonMaps, t0 = performance.now();
+        while (h.state !== "done" && performance.now() - t0 < 90000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
+        const p = __bh.renderer.prof.table().find((x) => x.label === "horizon bake");
+        return { ...h.stats(), band: p ? { ms: +p.ms.toFixed(3), last: +p.last.toFixed(3), n: p.n } : null, gpuErrors: __bh.renderer.gpuErrors }; })()`);
+        console.log(`  bake: ${JSON.stringify(st)}`);
+        await app.shot(`${OUT}/moon-scene.png`);
+        if (st.state !== "done")
+          throw new Error(`the bake not done within 90 s: ${st.left} rows left (${st.bands} bands of ${st.rows} rows)`);
+        if (st.gpuErrors) console.log(`  page errors: ${JSON.stringify(app.cdp.errors.slice(0, 5))}`);
+        expect(st.gpuErrors).toBe(0);
+        // (the maps read back, brought here in pieces)
+        const dims = await app.js<number[]>(
+          `(async () => { const r = await __bh.renderer.horizonMaps.read(); window.__hz = r; return [r.map.w, r.map.h, r.map.layers.length, r.pole.w, r.pole.layers.length]; })()`,
+        );
+        const fetchLayer = async (which: "map" | "pole", l: number, size: number) => {
+          const out = new Uint8Array(size);
+          for (let o = 0; o < size; o += 3 << 20) {
+            const n = Math.min(3 << 20, size - o);
+            const b64 = await app.js<string>(
+              `(() => { const a = window.__hz.${which}.layers[${l}].subarray(${o}, ${o + n}); let s = ""; for (let i = 0; i < a.length; i += 32768) s += String.fromCharCode(...a.subarray(i, i + 32768)); return btoa(s); })()`,
+            );
+            out.set(Buffer.from(b64, "base64"), o);
+          }
+          return out;
+        };
+        const [mw, mh, ml, pw, pl] = dims as [number, number, number, number, number];
+        const gpuMap = await Promise.all([...Array(ml).keys()].map((l) => fetchLayer("map", l, mw * mh * 4)));
+        const gpuPole = await Promise.all([...Array(pl).keys()].map((l) => fetchLayer("pole", l, pw * pw * 4)));
+        return { st, mw, mh, gpuMap, gpuPole };
+      } finally {
+        app.close();
       }
-      return out;
-    };
-    const [mw, mh, ml, pw, pl] = dims as [number, number, number, number, number];
-    const gpuMap = await Promise.all([...Array(ml).keys()].map((l) => fetchLayer("map", l, mw * mh * 4)));
-    const gpuPole = await Promise.all([...Array(pl).keys()].map((l) => fetchLayer("pole", l, pw * pw * 4)));
-    app.close();
+    })();
 
     // (the same DEM here, as the GPU holds it)
     const dem = await loadHeights("assets/planets-hd/moon-dem.bin", async (u) => new Response(Bun.file(u)));

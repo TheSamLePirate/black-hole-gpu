@@ -116,6 +116,8 @@ const letGo = () => {
   holds = 0;
   const h = read(join(LOCK, "owner.json"));
   if (h?.pid === process.pid) rmSync(LOCK, { recursive: true, force: true });
+  // (and the test Chromes some dead process left: ended now too, not only at the next taking — till then they held the GPU)
+  for (const o of orphanChromes(true)) console.error(`chrome-lock: ended an orphan Chrome (pid ${o.pid}, ${o.elapsed}, ${o.profile})`);
 };
 function hook() {
   if (hooked) return;
