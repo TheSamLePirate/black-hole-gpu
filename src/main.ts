@@ -384,7 +384,8 @@ const slowBootS = (() => {
   history.replaceState(null, "", location.pathname + location.search + (rest.length > 1 ? rest : ""));
   return Math.min(Number(m[2]), 600);
 })();
-if (benchPage) installVramHook();
+// (#vram: the GPU memory counted too, without the bench — the plan's measures, tests/e2e/plan-views.e2e.test.ts)
+if (benchPage || /[#&]vram\b/.test(location.hash)) installVramHook();
 
 function fail(msg: string) {
   document.getElementById("loading")?.remove();
