@@ -5,7 +5,8 @@ origin/master `88ee5b2`) et de notre code à `f3aa71e5`. V4 et V7 sont décidés
 sections). **Fait le 1er novembre : V1, V2, V3, V4** (compte rendu : [progress/geantes-volume.md](progress/geantes-volume.md)) ;
 V7a (le vent zonal) fait aussi, par un fondu stochastique (chaque rayon tire une phase : (a) lue en entier coûtait
 +36–45 % pendant les fondus) ; V6 fait le 1er novembre aussi (un bruit bleu pour tous les tirages du traceur au-delà du premier) ; V5 le 2 novembre (pas
-d'anneaux ; le grain vu d'en haut réduit) et V10 (les bancs du volume sur la surface), V7b (les tourbillons dedans, les films) ; V8, V9 à suivre.
+d'anneaux ; le grain vu d'en haut réduit) et V10 (les bancs du volume sur la surface), V7b (les tourbillons dedans, les films) ; V8, V9 à suivre. V11 (le ciel contre le Soleil, un A/B de la session 4u
+d'Alex) ajouté le 2 novembre : à faire bientôt (Sam).
 
 Le contexte : Alex a porté nos nuages des géantes (P11 D2–D5, le fondu `58942157`) sur Quest 3, à 72 images/s. En
 chemin, son Claude a trouvé des défauts qu'on partage, et des astuces dont certaines valent chez nous. On ne garde ici
@@ -26,6 +27,7 @@ Notre état est décrit dans [GEANTES-GAZEUSES.md](GEANTES-GAZEUSES.md) (§ 8, 9
 | **V8** | Les orages sur le blanc de la carte | les enclumes sortent d'une carte qui n'a pas de tache dessous | 1 lecture de carte par échantillon d'orage | moyen |
 | **V9** | La couleur des pôles de Saturne, du dessus au dedans | bleu-gris vu de haut, beige dedans : le fondu montre le passage | à voir | à étudier |
 | **V10** ✅ (couleur seule) | Les bruits du volume lus par la surface sous le texel de la carte | la carte est floue entre 1 000 et 250 km | quelques lectures | moyen |
+| **V11** | Le ciel contre le Soleil dans la marche (A/B) | le ciel donne ~2/3 de la lumière d'un sommet au soleil : ponts plats | ~0 (deux constantes) | faible — **à faire bientôt** |
 
 ### V1. L'éclair cherché une fois par image
 
@@ -160,6 +162,26 @@ Notre état est décrit dans [GEANTES-GAZEUSES.md](GEANTES-GAZEUSES.md) (§ 8, 9
   qu'une partie. Alex lit, sous le texel de la carte, les bruits du volume au sommet du pont (bancs de 80 km, enclumes,
   bourgeons de 4 km), qui modulent la couleur et penchent la normale. Avantage : quand le volume entre en fondu sous
   450 km, il continue des structures déjà visibles. À essayer après V7 (sinon la surface coule et son détail reste figé).
+
+### V11. Le ciel contre le Soleil : un A/B (session 4u d'Alex, 2 novembre)
+
+- **Le constat de son Claude** : dans la marche, le terme du ciel (`amb = 0.32 (mu0 + 0.1) …` dans `giantInside`, notre
+  D3, qu'il a porté tel quel) vaut ~0,2 de l'éclairement du Soleil, alors que la diffusion simple du Soleil (pondérée par
+  la phase) sur un nuage vu de côté n'en rend que ~0,03 par octave. Sur un sommet au soleil, le ciel donne donc ~2/3 de la
+  lumière : les côtés éclairés à peine plus clairs que les côtés à l'ombre, des ponts plats. Les références d'Alex (cumulus
+  et orages terrestres) montrent un rapport éclairé / ombre de **3 à 10**.
+- **Ce qu'il a fait** (ses puffs) : le ciel × 0,55, le Soleil × 3.
+- **L'A/B chez nous** :
+  - les mêmes vues rendues deux fois, les poids actuels contre ciel réduit / Soleil renforcé (deux ou trois couples, dont
+    celui d'Alex) : dedans Jupiter (entre les ponts, au bord de la Grande Tache), Saturne (l'œil), d'en haut à 150 km,
+    sous un Soleil haut et rasant ;
+  - mesurer le rapport éclairé / ombre sur quelques sommets, comparer aux photos de référence (et à JunoCam pour les
+    sommets vus d'en haut) ;
+  - vérifier que le dessous des ponts et le puits de l'œil (V2), éclairés surtout par le ciel, ne deviennent pas noirs ;
+  - garder le même équilibre dans la brume (`0.4 * amb` dans le terme `bh`) et regarder le fondu avec la surface G9 (la
+    couleur des ponts vus de loin ne doit pas sauter).
+- **Coût** : nul, on ne change que des constantes (A/B de perf quand même sur le mini). Images avant / après dans le
+  compte rendu, décision de Sam sur le couple retenu.
 
 ## Ce qu'on ne reprend pas (pour l'instant)
 
