@@ -289,6 +289,10 @@ Déjà en bon état :
 
 ## 7. Plan proposé et vérifications sur kerr-mini
 
+> **Repris dans le plan commun** [PLAN-REFRACTION-HORIZONS.md](PLAN-REFRACTION-HORIZONS.md) (2 novembre) : l'étape n
+> y est la phase **Tn** (T1–T9), plus **T10** (la mémoire des tuiles, §6). Ce qui suit est l'état de l'analyse ; le
+> plan fait foi pour l'ordre, les critères et les coûts.
+
 Chaque étape : A/B en raster (e2e de vol bas, captures journalisées) et `perf-suite` avant/après, sur kerr-mini
 (`--host kerr-mini`), une e2e IGN à la fois.
 
@@ -309,16 +313,13 @@ triangles et donnent le relief AAA. 8 et 9 sont des chantiers plus longs.
 
 ## 8. Avec le plan réfraction + horizons
 
-Ce plan croise [PLAN-REFRACTION-HORIZONS.md](PLAN-REFRACTION-HORIZONS.md) en plusieurs endroits ; le détail est à son §12.
-En bref :
+Les deux plans n'en font plus qu'un : [PLAN-REFRACTION-HORIZONS.md](PLAN-REFRACTION-HORIZONS.md), volets T (la Terre
+raster), H (les cartes d'horizon) et R (la réfraction), une séance de mesure commune (M0), à commencer dès que les
+géantes sont finies. Ce que la Terre raster y impose est à son §3.7 :
 
-- **Étape 6 avec R3** : R3 ajoute 2–3 min de lumière rasante, au moment où les ombres longues du relief comptent le plus.
-  Or le raster n'en a pas. En montagne, la vallée resterait éclairée derrière la crête.
-- **Étapes 1 et 2 avant les captures « avant »** de R0, R3 et H0 : la lumière rasante montre les marches et les facettes,
-  et brouillerait leurs critères.
-- **Étapes 3 et 5, et R4b** se font au même endroit (`terrainVs`, la cible de visibilité) : à concevoir ensemble.
-- **R4a sans R4b** fait une marche au bord du dernier anneau (~250 m de relèvement à 156 km).
-- **Étape 7 (mer) avant R6a** : les mirages se montrent sur l'horizon marin.
-- **Mémoire** : le rangement des tuiles (§6) paie la place de H1b et des cartes d'horizon.
-- **Pour plus tard (« H5 Terre »)** : les ombres au-delà de 10 km par un horizon dans l'azimut du Soleil, cuit sur les
-  niveaux 4–6 du cache avec le code de H1.
+- T1 et T2 avant les captures « avant » ;
+- T6 avec R3 ;
+- T10 avant H1b ;
+- l'API de cuisson générique dès H1 (pour H5, les ombres de la Terre au-delà de 10 km) ;
+- T3 et T5 avant R4, R4a et R4b ensemble ;
+- T7 avant R6a.

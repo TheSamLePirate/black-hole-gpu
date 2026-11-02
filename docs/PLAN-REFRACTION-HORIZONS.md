@@ -1,48 +1,108 @@
-# Plan — la bonne réfraction, et les cartes d'horizon du relief
+# Plan commun — la Terre raster AAA, la bonne réfraction, les cartes d'horizon du relief
 
-Date : **31 octobre 2026**, sur `main` à `06ed0498`. Statut : **plan décidé (§4, le 31 octobre), pas lancé** ; seul le repère de R2 est fait. Volet réfraction **revu le 31 octobre** après les changements
-d'Alex (vr-solar-system 4h, 4i, `b2f5e51` : le limbe vu d'orbite, le sol relevé, Mars/Vénus/Titan) — §1.5 et le
-tableau R réécrit. **R2, le repère : fait le 31 octobre** (`airBend` dans le repère aplati, le regard aplati comme `earthNear` : le défaut de 5,8′ à 45° vers le nord et le sud corrigé — e2e `refraction-wgs84` au coucher de La Hague, au 1,5° : 0,58′ d'écart au modèle du CPU avant, 0,06′ après ; le correctif est entré dans `efe4369a`, la session de Saturne, et l'e2e dans `346a48a8`). **Les réponses du Claude d'Alex (31 octobre, 05:10 UTC) intégrées** : leurs tables dans l'air sur la verticale géodésique (comme notre R2), leurs profils de mirage illustratifs (R6), le 1/22° de leur mip = un pixel du Quest (§2.2), leur conseil pour la météo dans R1, leur Lune éclipsée passée à la table du limbe (§1.1), leur lentille pour l'auréole de Vénus et l'anneau de la Terre vu de la Lune (R5). **Deuxième passe le 31 octobre** (code relu des deux côtés, réponse du Claude d'Alex) : §1.1, §1.5, §2.1–§2.5, H1b ajouté, R0–R2 et R6 corrigés.
+Date : **2 novembre 2026**, relu sur `main` à `b896c0b2`. Statut : **décidé, pas lancé.**
 
-## 0. La demande
+- **Quand** : on commence **dès que les géantes sont finies** (PLAN-GEANTES-VOLUME : V8 et V9 restent), décision 11 du
+  §10.
+- **Ce qui est fait** : seul le repère de R2 (`efe4369a`, e2e `346a48a8`).
+- **D'où vient ce plan** : il réunit trois chantiers qui touchent les mêmes fonctions, les mêmes vues et les mêmes mesures.
+  - **T — la Terre raster** : les escaliers, les triangles, les ombres du relief, la mer, le chargement. Analyse
+    détaillée : [ANALYSE-TERRE-RASTER-2026-11-02.md](ANALYSE-TERRE-RASTER-2026-11-02.md), suite de
+    [celle du 28/10](ANALYSE-TERRE-RASTER-2026-10-28.md).
+  - **H — les cartes d'horizon** des planètes rocheuses (troisième passe du 31 octobre au soir).
+  - **R — la réfraction** (troisième passe du 31 octobre au soir).
+- **Le but** : qualité AAA **et** performance. Aucune phase ne rend une vue plus lente qu'avant sans que le gain d'image
+  soit mesuré et accepté. Une partie des phases (T4, T9, H3a, H3) doit faire **gagner** du temps.
+- Le nom du fichier est gardé : les notes de `docs/agent/`, l'e2e `refraction-wgs84` et les autres plans y renvoient.
+- Les numéros de ligne cités sont indicatifs (`trace.wgsl` bouge sans cesse) ; les noms de fonctions font foi.
+
+## 0. Les demandes
 
 > « Prépare un plan pour implémenter la bonne réfraction et les cartes d'horizon pour les ombres du relief vues de loin,
-> sur les planètes rocheuses en raster. Avant ça, analyse la faisabilité et le gain en qualité et en perf. »
+> sur les planètes rocheuses en raster. Avant ça, analyse la faisabilité et le gain en qualité et en perf. » (31 octobre)
 
-Origine : l'analyse de `vr-solar-system` (Alesk, portage Quest 3 de ce jeu, cloné dans `~/Documents/DEV/vr-solar-system`).
-Leur rapport `docs/reports/2026-10-31_refraction-models_05.md` compare leur modèle au nôtre ; leurs cartes d'horizon sont
-dans `docs/modules/Terrain.txt` (FAR CAST SHADOWS, LIGHT EXTRAS) et `Runtime/Terrain/ReliefHorizonJob.cs`.
+> « Assure-toi que la vue raster de la Terre soit parfaite AAA, qualité et performance. Qu'elle charge le mieux possible
+> les données relief, images, qualité. Vérifie la petite régression : les tuiles de relief créent des escaliers visibles,
+> et des triangles visibles pendant le chargement. Analyse aussi l'eau, la mer surtout. » (2 novembre)
+
+> « Mets à jour ces plans pour en faire un plan commun. On le commence dès que les planètes géantes sont finies. AAA
+> quality et performances. » (2 novembre)
+
+Origine du volet H et R : l'analyse de `vr-solar-system` (Alesk, portage Quest 3 de ce jeu, cloné dans
+`~/Documents/DEV/vr-solar-system`). Leur rapport `docs/reports/2026-10-31_refraction-models_05.md` compare leur modèle au
+nôtre. Leurs cartes d'horizon sont dans `docs/modules/Terrain.txt` (FAR CAST SHADOWS, LIGHT EXTRAS) et
+`Runtime/Terrain/ReliefHorizonJob.cs`. Leur réponse : `docs/agent/reponse-premier-contact-refraction_2026-10-31-03-45-08.md`.
+**À relire sur `origin/master` avant de lancer** (CLAUDE.md : leurs dernières notes `docs/agent/`).
+
+## 0.1 Ce que le plan apporte
+
+| Volet | Gain | Où ça se voit | Coût visé |
+|---|---|---|---|
+| **T1–T2** | plus d'escaliers dans le relief ; plus de lignes de fausse pente aux coutures | toute la Terre en vol bas et au sol, surtout au Soleil bas | 0 |
+| **T3–T5** | plus de triangles visibles (facettes, triangles qui percent aux coutures, sauts au chargement) | toute la Terre raster, en vol | ≈ 0, et moins de recuissons |
+| **T6** | les ombres portées du relief en raster (aujourd'hui presque aucune) | toutes les vues au Soleil bas, la montagne au couchant | < 0,3 ms |
+| **T7** | une mer sans moiré ni motif répété, des côtes nettes, plus de terres basses changées en mer | les côtes, l'orbite basse, les couchers sur la mer | < 0,1 ms |
+| **T8, T10** | le détail fin 2 à 5 × plus tôt, sans à-coups ; ~200 Mo de GPU rendus | chaque arrivée sur un lieu, le vol bas | réseau ; mémoire en moins |
+| **T9** | un sol net et stable au loin en vue rasante (filtrage matériel, mips, aniso 16) | le vol, le téléobjectif | **gain** GPU |
+| H (disques lointains, avec H1b) | les ombres longues du terminateur (Copernic, les Apennins, les remparts des cirques), et le relief HD de la Lune, absent aujourd'hui | la Lune au télescope, au trépied, en photo depuis la Terre | 0 hors des pixels du corps HD |
+| H (le corps proche) | une portée d'ombre de 2,5–10 km (la carte du Soleil) à ~170–340 km ; les plaines mises dans l'ombre par une chaîne lointaine ; le pôle sud | la Lune, Mercure, Mars et Cérès en orbite, en approche, au sol au Soleil bas | **négatif** : des marches sautées (§2.4) |
+| H5 (option, la Terre) | les ombres des Alpes au couchant au-delà de 10 km | la montagne au Soleil bas | à mesurer |
+| R1–R2 | la hauteur et la forme du Soleil et de la Lune près de l'horizon (0,74 → 0,82), le coucher vu de l'ISS, les prédictions du CPU d'accord avec une table publiée, la Lune éclipsée | le téléobjectif, le planificateur photo, TARS, l'orbite | ≈ 0 |
+| R3 | le sol éclairé jusqu'à la disparition du disque (2–3 min de lumière rasante) | **toutes** les vues au couchant, même au grand angle | 0 |
+| R4 | le sol lointain relevé, l'horizon d'avion, plus de « trou » au limbe vu d'orbite | le téléobjectif, l'orbite | ≈ 0 |
+| R5 | l'auréole de Vénus, l'anneau rouge de la Terre vu de la Lune éclipsée | des vues rares et spectaculaires | 0 hors du limbe |
+| R6 | des mirages (Soleil en « vase étrusque », Fata Morgana, le « lac » d'une route chaude) | le téléobjectif à la côte | 0 au GPU hors de la bande de l'horizon |
 
 ---
 
 ## 1. Analyse — la réfraction
 
-### 1.1 L'existant
+### 1.1 L'existant (vérifié dans le code le 31 octobre au soir)
 
-- **Un seul modèle**, une formule fermée (`src/system/refraction.ts` et son jumeau `trace.wgsl airBend`) : air
-  exponentiel (H = 8,4 km), courbure = (N₀/H) × sin ψ × colonne de Chapman (forme de Schüler), plafond 0,03 rad.
-  N₀ = 2,93·10⁻⁴ × 288,15 / (273,15 + T) : **la température seule** (`renderer.ts refractivity`, la météo réelle
-  ou 15 °C), qui met à l'échelle toute la colonne. **La pression n'est pas utilisée**, bien que PLAN-CIEL C1 la
-  décode « pour la réfraction ». Le CPU n'envoie les constantes (`P.sky`) que lorsque la Terre est le corps proche.
-- **Utilisateurs GPU** : `airBend` (le ciel au-delà de l'air, `REFR_DELTA` pour le rayon vert, C4), `shadeStars`
-  (l'inverse, 3 points fixes), `earthRingLight` (la Lune éclipsée). Ce dernier a son propre modèle,
-  α(h) = 0,0205 · e^(−h / 8,4 km) (70,5′ au ras du sol, « C3 doublé »), résolu en h par 3 pas de Newton. Comparé
-  aux couches : 38,9′ contre 46,3′ à 5 km (−16 %), 21,3′ contre 26,4′ à 10 km (−19 %). Avec plus de courbure, un
-  rayon donné passe plus haut, dans un air plus clair : l'ombre serait **plus claire et moins rouge au cœur**. Effet à
-  vérifier contre l'échelle de Danjon. Alex l'a fait chez lui le 31 octobre (`EarthUmbra` lit la courbure de chaque couleur dans sa
-  table du limbe : ombre ~1e-4 sur l'axe, plus claire et plus orangée vers le bord) ; ni lui ni nous ne l'avons encore comparée
-  à l'échelle de Danjon : l'éclipse du 07/09/2025 de R0 servira de référence aux deux.
-- **Utilisateurs CPU** : `skychart.ts`, `photo/plans.ts` (heures de coucher, cadrages ; **toujours à h = 0**),
-  `sky-now.ts` (TARS), `targeting.ts` et `controller/rig.ts` (`refractDirection` : viser ce qu'on voit). Ils
-  demandent des hauteurs différentes de celle de la caméra : le CPU a besoin de tables à toute hauteur, pas seulement
-  à celle de l'œil.
-- **Laissés de côté par C3** (PLAN-CIEL) : le sol éclairé par le Soleil géométrique (2–3 min de lumière rasante en
-  moins au couchant), la réfraction terrestre (le sol lointain non relevé).
+- **Un seul modèle**, une formule fermée (`src/system/refraction.ts` et son jumeau `trace.wgsl airBend`). L'air y est
+  exponentiel (H = 8,4 km). La courbure vaut (N₀/H) × sin ψ × la colonne de Chapman (forme de Schüler), plafonnée à
+  0,03 rad. Vers le bas, la corde entière par son point le plus bas, moins la partie derrière l'œil.
+- **N₀ ne dépend que de la température** : N₀ = 2,93·10⁻⁴ × 288,15 / (273,15 + T) (`renderer.ts refractivity`, la météo
+  réelle ou 15 °C).
+  - La pression **est déjà récupérée** (`openmeteo.ts` : `surface_pressure` → `ModelHour.p`), mais elle n'est pas
+    utilisée.
+  - **Piège** : c'est la pression au point du modèle, à son altitude (`parseOpenMeteo` renvoie `elevation`), pas au niveau
+    de la mer. Prise telle quelle pour P₀, elle compterait l'altitude deux fois (à Chamonix, ~10 % de trop peu).
+  - Le CPU n'envoie `P.sky` que lorsque la Terre est le corps proche.
+- **Le repère (R2, fait)** :
+  - `airBend` travaille dans le repère où l'ellipsoïde WGS84 est la sphère unité. `nearCam()` y est déjà ; le regard y est
+    aplati (`squashed(toBody(look), EARTH_AB)`) ; le rayon courbé est ramené (`bent.z / EARTH_AB`).
+  - L'étirement garde la tangence : l'horizontale de l'œil y est celle de l'ellipsoïde, la verticale est géodésique.
+    **Pas de `geoQ`**.
+  - Mesuré par l'e2e `refraction-wgs84` au coucher de La Hague (champ de 1,5°) : 0,58′ d'écart avant, 0,06′ après.
+- **Les atmosphères existent déjà** dans `aero.ts` : l'USSA-1976 en couches (`LAYERS`, `us76`), Vénus VIRA (Seiff 1985),
+  Titan (Yelle + HASI). Ce sont les densités du vol (traînée, échauffement). La réfraction doit lire les mêmes, sans
+  doublon.
+- **Utilisateurs GPU** :
+  - `airBend` : les noyaux de la Terre, et `REFR_DELTA` pour le rayon vert (C4) ;
+  - `shadeStars` : l'inverse, 3 points fixes sur `airBend` ;
+  - `earthRingLight` : la Lune éclipsée.
+- **Le modèle propre de `earthRingLight`** :
+  - α(h) = 0,0205 · e^(−h / 8,4 km) (70,5′ au ras du sol, « C3 doublé »), résolu en h par 3 pas de Newton.
+  - Ses épaisseurs optiques (Rayleigh × 70,7, poussières, ozone) ont été **réglées avec cette courbure**.
+  - Comparé aux couches : 38,9′ contre 46,3′ à 5 km (−16 %), 21,3′ contre 26,4′ à 10 km (−19 %).
+- **Utilisateurs CPU** :
+  - `skychart.ts` (à la hauteur de la caméra) et `sky-now.ts` (TARS) ;
+  - `photo/plans.ts` : **toujours h = 0 et N₀ standard**, `seaRefractivity()`. C'est normal pour prévoir une date future,
+    mais aujourd'hui la vignette, qui suit la météo, et la prédiction ne prennent pas le même air ;
+  - `targeting.ts` et `controller/rig.ts` (`refractDirection` avec `drawnRefractivity`).
+  - Ils demandent d'autres hauteurs que celle de la caméra.
+- **Deux mesures de l'aplatissement, à ne pas confondre** :
+  - PLAN-CIEL C3 a mesuré **0,79 dans l'image** à Biarritz (centre du Soleil à −0,25°) ;
+  - le §1.2 calcule **0,742** sur la dernière demi-largeur du disque.
+  - R0 fixe une seule définition, mesurée de la même façon avant et après.
+- **Laissés de côté par C3** : le sol éclairé par le Soleil géométrique, la réfraction terrestre (le sol lointain non
+  relevé).
 
 ### 1.2 L'erreur, mesurée
 
-Recalculé ici (script hors projet : USSA-1976 en 7 couches, invariant de Bouguer, Simpson ; nos chiffres par notre
-propre `bending()`). En minutes d'arc :
+Recalculé avec un script hors projet (USSA-1976 en 7 couches, invariant de Bouguer, Simpson). Nos chiffres sortent de notre
+propre `bending()`. En minutes d'arc :
 
 | Élévation apparente (depuis la mer) | Bennett (15 °C) | Couches USSA76 | Nous | Notre écart |
 |---|---|---|---|---|
@@ -55,331 +115,763 @@ propre `bending()`). En minutes d'arc :
 | 10° | 5,31 | 5,24 | 5,02 | −5 % |
 | 45° | 0,98 | 0,96 | 1,00 | ok |
 
-- **Le Soleil couchant aplati** (sa dernière demi-largeur) : Bennett 0,814, couches 0,823, **nous 0,742** — trop
-  écrasé de 9 %.
-- **Vu d'orbite (400 km), rayon rasant à la hauteur tangente** : 2 km → couches 64,4′, nous 54,8′ (−15 %) ; 5 km →
-  46,3′ / 38,4′ (−17 %) ; 10 km → 26,4′ / 21,2′ (−20 %). Le coucher vu de l'ISS est donc trop peu écrasé.
-- **Depuis une montagne (3 km)**, à +1° : 17,8′ contre 15,4′ (−14 %).
-- **La cause** : une seule hauteur d'échelle, et l'angle à la verticale pris à l'œil pour tout le trajet. Près de
-  l'horizon, la courbure vient des premiers kilomètres, où l'air réel (gradient −6,5 K/km) n'est pas isotherme. Le
-  N₀ de 2,93·10⁻⁴ à 15 °C est en fait la valeur à 0 °C (Edlén à 15 °C, 550 nm : 2,778·10⁻⁴) : il compense
-  à l'horizon, d'où le bon 35′ là et l'erreur au-dessus.
-- Le commentaire de `refraction.ts` (« Bennett à une fraction de minute au-dessus de 2° ») est faux : ~2′ à 2°.
+- **Le Soleil couchant aplati** (sa dernière demi-largeur) : Bennett 0,814, couches 0,823, **nous 0,742**. Trop écrasé
+  de 9 %.
+- **Vu d'orbite (400 km), rayon rasant, selon sa hauteur tangente** (couches / nous) :
+  - 2 km : 64,4′ / 54,8′ (−15 %) ;
+  - 5 km : 46,3′ / 38,4′ (−17 %) ;
+  - 10 km : 26,4′ / 21,2′ (−20 %).
+  - Le coucher vu de l'ISS est donc trop peu écrasé.
+- **Depuis une montagne (3 km)**, à +1° : 17,8′ contre 15,35′ (−14 %).
+- **La cause** :
+  - une seule hauteur d'échelle, et l'angle à la verticale pris à l'œil pour tout le trajet ;
+  - près de l'horizon, la courbure vient des premiers kilomètres, où l'air réel n'est pas isotherme (gradient
+    −6,5 K/km) ;
+  - le N₀ de 2,93·10⁻⁴ « à 15 °C » est en fait la valeur à 0 °C (Edlén à 15 °C et 550 nm : 2,778·10⁻⁴). Il compense à
+    l'horizon, d'où le bon 35′ là et l'erreur au-dessus.
+- **Le commentaire de `refraction.ts` est faux** : « Bennett à une fraction de minute au-dessus de 2° », alors que l'écart
+  est d'environ 2′ à 2°.
 
 ### 1.3 Ce que ça change à l'image
 
-- **Au grand angle** (60° de champ, 1080 px de haut → 1 px ≈ 3,3′) : l'erreur maximale de ~2′ est **sous le
-  pixel**. Invisible en vol normal.
-- **Au téléobjectif** (la vignette télé, le trépied et son télescope Y, les photos multi-poses de PLAN-CIEL) : à 2° de
-  champ, 1 px ≈ 0,1′ → **15 à 20 px d'écart** sur la hauteur du Soleil ou de la Lune près de l'horizon, et **une
-  forme du disque fausse** (0,74 au lieu de 0,82 : se voit au premier coup d'œil sur un coucher au 600 mm).
-- **Les prédictions CPU** (heures de coucher du planificateur photo, TARS, carte du ciel) : ~2′ à 1–3° de hauteur, soit
-  **8–12 s d'heure** de coucher ou lever à nos latitudes ; la vignette et la prédiction seraient enfin d'accord avec
-  une table publiée.
-- **La Lune éclipsée** (`earthRingLight`) : la courbure rasante y est « C3 doublé » ; les couches donnent ~15–20 % de
-  plus aux hauteurs tangentes qui comptent (2–10 km) → l'ombre plus éclairée au cœur, la couleur de Danjon déplacée.
-  À valider sur l'éclipse du 07/09/2025 (C6).
-- **Le Soleil d'éclairage** (§1.1) : aujourd'hui le sol s'éteint quand le centre géométrique passe sous l'horizon,
-  alors que le disque est encore vu ~35′ au-dessus : **2–3 min de lumière rasante en moins** au couchant, et un
-  Soleil visible au-dessus d'un paysage déjà dans l'ombre. Visible au grand angle.
-- **La réfraction terrestre** (le sol lointain relevé, k ≈ 0,13–0,17) : un sommet à 100 km relevé de 3,5′, à 300 km de
-  ~10′ (3 px au grand angle, énorme au télé) ; la dépression de l'horizon vu d'avion ~8 % plus petite ; le Soleil qui
-  se couche derrière une montagne lointaine au bon moment.
+- **Au grand angle** (60° de champ, 1080 px de haut, 1 px ≈ 3,3′) : l'erreur maximale de ~2′ est sous le pixel.
+- **Au téléobjectif** (vignette télé, télescope Y du trépied, photos multi-poses ; le télescope descend à 0,02° de
+  champ, `TELE_MIN`) : à 2° de champ, 1 px ≈ 0,1′.
+  - Cela donne **15 à 20 px d'écart** sur la hauteur du Soleil ou de la Lune près de l'horizon.
+  - Et une **forme du disque fausse**, qui se voit au premier coup d'œil au 600 mm.
+- **Les prédictions du CPU** : ~2′ à 1–3° de hauteur, soit 8–12 s d'heure de coucher ou de lever à nos latitudes.
+- **Ce que la précision ne doit pas viser** : à 0° pile, la réfraction réelle varie de plusieurs minutes d'arc d'un jour à
+  l'autre (inversions, gradient au sol). Le gain vérifiable est **entre 0,5° et 10°**, sur la **forme du disque** et **vu
+  d'orbite**. À 0°, on vise la cohérence (vignette = prédiction = table publiée dans l'air standard).
+- **La Lune éclipsée** : la courbure rasante y est « C3 doublé ». Les couches donnent 15–20 % de plus aux hauteurs
+  tangentes qui comptent (2–10 km). L'ombre serait plus claire au cœur et la couleur de Danjon déplacée. Les épaisseurs
+  optiques sont donc à **re-régler ensemble** (R2).
+- **Le Soleil d'éclairage** : le sol s'éteint quand le centre géométrique passe sous l'horizon, alors que le disque est
+  encore vu ~35′ au-dessus. Au couchant, cela fait **2–3 min de lumière rasante en moins** et un Soleil visible au-dessus
+  d'un paysage déjà dans l'ombre. Visible au grand angle.
+- **La réfraction terrestre** (k ≈ 0,13–0,17) :
+  - un sommet à 100 km est relevé de 3,5′, à 300 km de ~10′ ;
+  - la dépression de l'horizon vu d'avion est ~8 % plus petite ;
+  - vu d'orbite, le globe dessiné s'arrête 2,4–2,7′ sous le Soleil réfracté.
 
-### 1.4 Faisabilité et coût
+### 1.4 Faisabilité et coût — le modèle retenu
 
-- **Le modèle en couches** : facile, pur CPU. 128 rayons × 200 pas de Simpson par hauteur de caméra : bien sous la
-  milliseconde. Une table 2D (≈48 hauteurs de 0 à 1 000 km × 128 directions) construite une fois (worker ou au
-  chargement), interpolée à chaque image.
-- **Au GPU** : `airBend` lit 128 valeurs pour la hauteur courante (`P` grandit de 32 vec4 — uniforme, sans binding
-  nouveau) au lieu de `sqrt`/division/`exp`. **Coût attendu : nul** (C3 avait déjà mesuré +0,3 % pour la formule ;
-  une lecture d'uniforme indexée + un lerp coûte autant). À vérifier en trace-ab, le noyau étant limité par ses
-  registres.
-- **Le Soleil d'éclairage réfracté** : une direction par image, calculée au CPU. Coût nul. Risque : rester cohérent
-  avec la carte d'ombre du Soleil (`terrain-raster encodeSunShadow`), les ombres des nuages, des arbres et des
-  bâtiments — tous prennent la même direction.
-- **La réfraction terrestre** : faisable mais **la plus risquée**. Il faut relever le sol dessiné de k·d²/2R dans
-  **tous** les rasters de la Terre (sol, scènes, forêts, pistes 3D, bâtiments), décaler d'autant le test de hauteur de
-  `earthMarch`, et défaire ce relèvement quand l'ombrage reconstruit le point depuis la distance du raster. Le CPU
-  (collisions, WGS84, hauteurs) ne bouge pas : c'est du dessin seulement. Six chemins doivent rester d'accord, sinon
-  arbres flottants ou coutures.
-- **Les mirages et conduits** (le point fort de vr-solar-system : tables tracées par profil d'air, RK4, images
-  multiples) : **R6** (ajouté le 31 octobre). Le coût n'est pas au GPU (le shader lit les mêmes tables, tracées dans un
-  autre profil) mais au CPU (RK4 à travers les points de retournement, dans un worker) et dans le profil à déduire de
-  la météo réelle. Notre traceur y est mieux placé qu'un raster : un rayon par pixel, les images multiples viennent
+- **L'invariant de Bouguer** (n·r·cos e constant le long du rayon) ramène tout à deux fonctions par air :
+  - **B_haut(h, e)** : la courbure d'un rayon qui monte depuis la hauteur h sous l'élévation apparente e ≥ 0, jusqu'au
+    vide ;
+  - **B_limbe(k)** : celle d'un rayon qui part de son périgée de paramètre d'impact k vers le vide.
+  - Un rayon qui descend de l'œil sans toucher le sol vaut **2·B_limbe(k) − B_haut(h, |e|)**. C'est déjà la structure de
+    `airBend` aujourd'hui (la corde moins la partie derrière l'œil).
+  - Au-dessus de l'air, B_limbe(k) seule suffit, **k par pixel** : le traceur connaît le rayon de l'œil.
+- **Les tables, par air** :
+  - **B_haut** : 64 hauteurs en log (5 m → 86 km) × 256 élévations, resserrées en u² vers l'horizon. 16 384 valeurs,
+    lisses dans les deux sens.
+  - **B_limbe** : 512 périgées **resserrés vers le haut de chaque couche** (les coudes de 11, 20, 32, 47, 51 et 71 km :
+    < 3″, leur méthode), rééchantillonnés en **2 048 valeurs à k régulier** pour le GPU.
+  - **« Où atterrissent les rayons »** : 128 élévations, pour R4.
+  - **Le relèvement par distance** : 64 hauteurs × 64 distances, pour R4.
+  - Au total ≈ 23 000 nombres, ~92 Ko par air.
+- **Une seule table, pas leur cache de bandes de 2 %.** Leur schéma (une table par bande de hauteur visitée, faite à la
+  demande dans un worker, la plus proche servant en attendant) répond aux limites d'Unity sur Quest. Chez nous, une table
+  2D :
+  - est **déterministe** : pas de saut quand une bande arrive pendant une montée, donc des e2e et des A/B reproductibles ;
+  - est écrite **une fois par changement d'air** (météo, corps) ;
+  - sert le CPU **à toute hauteur** gratuitement.
+  - Construction : 16 384 rayons × Simpson 200 ≈ 3,3 M évaluations, ~30–80 ms dans un worker, jamais dans l'image.
+- **La dispersion** :
+  - une table à 550 nm, multipliée par le facteur d'Edlén (n_λ − 1)/(n_550 − 1) par couleur ;
+  - l'écart au calcul exact est du second ordre (B² ≈ 10⁻⁴ en relatif) : à vérifier en R1 contre trois tables ;
+  - trois tables seulement là où la correspondance devient non linéaire (R6).
+- **L'air de la Terre réelle** :
+  - la **pression** ramenée au niveau de la mer (P_mer = p × (P/P₀ de `us76` à l'altitude du modèle)⁻¹) met à l'échelle
+    toute la colonne ;
+  - l'**écart de température** est celui de la couche limite, à décroître sur ~1 km (le conseil de leur Claude). Le
+    reporter sur toute la troposphère en changerait l'échelle de hauteur ;
+  - au-dessus, les gradients USSA-1976.
+- **La place au GPU** : **une table `TABLE_REFR` dans `src/gpu-tables.ts`**, donc dans le buffer `bodies` (liaison 15,
+  lecture seule, lié à tous les noyaux).
+  - C'est le chemin de toutes les tables du traceur : anneaux, vents, sommets des géantes, géoïde, orthophotos, carte
+    d'ombre du Soleil, cache du relief. `tests/gpu-tables.test.ts` vérifie les décalages contre `trace.wgsl`.
+  - **Pas le buffer `catalogue`** : il est remplacé dans `loadSky` par un buffer à la taille exacte du catalogue.
+- **Le coût GPU** :
+  - `airBend` passe d'une formule fermée à 2 lectures et un lerp. **Test de zone d'abord** au-dessus de l'air (un produit
+    scalaire : hors de la bande du limbe, rien) ; leur leçon : +0,38 → +0,08 ms en orbite.
+  - Les budgets des noyaux sont au §6.
+- **Le Soleil d'éclairage (R3)** :
+  - **une seule source** : `near.light` (`local-patch.ts`), écrit dans `P.near4` et lu par le CPU pour la carte d'ombre
+    du relief (`terrain-raster encodeSunShadow`), celle des nuages (`cloud-shadow.ts`), celle des arbres et des bâtiments
+    (`tree-shadow.ts`, `scenery-raster.ts`) ;
+  - le corriger là, une fois, et tout suit : pas d'ombre décalée possible ;
+  - la courbure est prise **au sol sous la caméra** (ce qui est éclairé), pas à l'œil ;
+  - le disque dessiné reste celui d'`airBend`.
+  - **Mais la carte d'ombre du relief de la Terre est presque vide** (§3.4) : R3 se fait avec T6.
+- **La réfraction terrestre (R4)** : un relèvement k·d²/2R du sol vu.
+  - **R4a**, le globe tracé : un décalage du test de hauteur à l'intersection (`earthMarch`, l'intersection d'orbite).
+  - **R4b**, les rasters : relever le sol dans tous les rasters de la Terre (sol, scènes, forêts, pistes 3D, bâtiments),
+    et le défaire quand l'ombrage reconstruit le point.
+  - **Les deux ensemble** sur la Terre raster (§3.7) : seul, R4a fait une marche au bord du dernier anneau.
+- **Les mirages (R6)** : le coût est au CPU (RK4 à travers les points de retournement, dans un worker) et dans le profil
+  d'air à déduire. Notre traceur y est mieux placé qu'un raster : un rayon par pixel, les images multiples viennent
   seules.
 
-### 1.5 Ce que vr-solar-system a poussé depuis (4h, 4i, `b2f5e51`) et ce qu'on en reprend
+### 1.5 vr-solar-system : ce qu'on reprend, ce qu'on laisse
 
-Lu dans `~/Documents/DEV/vr-solar-system` : `Sim/RefractiveAir.cs`, `Sim/AtmosphericRefraction.cs` (`LimbBending`,
-`Landing`, `BuildAbove`, `TerrestrialK`, `Table`), `Runtime/RefractionTables.cs`, `Shaders/VRSolarCommon.hlsl`
-(`GroundLift`), rapports `_06` et `_07`. Mesuré par eux sur Quest 3 : orbite +0,08 ms, sol 0, 72 fps.
+Lu chez eux : `Sim/RefractiveAir.cs`, `Sim/AtmosphericRefraction.cs` (`LimbBending`, `Landing`, `BuildAbove`,
+`TerrestrialK`, `Table`), `Runtime/RefractionTables.cs`, `Shaders/VRSolarCommon.hlsl` (`GroundLift`), leurs rapports
+`_06` et `_07`. Mesuré par eux sur Quest 3 : orbite +0,08 ms, sol 0, 72 fps.
 
-- **Des tables séparées au lieu d'une 2D** (remplace notre R2 initial : une table hauteur × direction de 128
-  échantillons). *Corrigé le 31 octobre d'après la réponse de leur Claude*
-  (`vr-solar-system/docs/agent/reponse-premier-contact-refraction_2026-10-31-03-45-08.md`) :
-  - **La table du limbe** : un rayon venu d'au-dessus de l'air ne se courbe que selon son paramètre d'impact
-    k = n·r·cos e. **Une table par air et par couleur** (512 hauteurs de périgée, 2 × Simpson 200 chacune), faite une
-    fois (26 ms sur Quest, dans un worker). Pour la Terre, leur k est décalé de (6 378,137 − 6 371) km : table faite au
-    rayon moyen, sphère dessinée au rayon équatorial.
-  - **Eux, au GPU, lisent une bande par élévation**, pas k par pixel. Au-dessus de l'air, une table pour la hauteur
-    de l'œil (128 lignes + bande de 1 024 rayons ajustée à la zone qui réfracte, 0,15′ par rayon à 400 km) est
-    **remplie au CPU par lectures de `LimbBending(k)`**. Elle est refaite quand le limbe bouge d'un quart de pas
-    (~26 m à 400 km, ~200 m à 50 000 km), sans allocation. Ils en gardent deux : le casque et une vue d'observation.
-  - **Dans l'air** (œil sous 86 km) : une table par **bande de 2 % de hauteur** (log, échelle de 5 m : ~490 bandes de
-    0 à 86 km), faite seulement pour les hauteurs visitées et gardée dans un dictionnaire. Un worker en fait une à la
-    fois (~40 ms par couleur sur Quest, 80–150 ms pour trois) ; la plus proche sert en attendant. Chaque table :
-    128 lignes par élévation apparente et vraie (u²), bande d'horizon de 1 024 rayons, relèvement du sol par distance
-    (256).
-  - **Notre option, propre à un traceur : k par pixel au-dessus de l'air.** Le traceur connaît le rayon de l'œil :
-    plus aucune table par hauteur en orbite. Mais leurs nœuds sont inégalement espacés (resserrés par couche) : il
-    faut soit une recherche dichotomique (9 pas sur 512), soit **la table rééchantillonnée en k régulier** (leur Claude
-    propose 2 048 valeurs par couleur, coude de la tropopause à quelques secondes d'arc près — à vérifier en R1).
-    Dans l'air, k ne suffit pas (le rayon dépend de la hauteur de l'œil) : on garde leur schéma, une table par bande
-    de hauteur.
-  - **Les coudes des couches** : chaque frontière (11, 20, 32, 47, 51, 71 km) coude la courbure en fonction de la
-    hauteur de périgée ; à pas réguliers (168 m) la tropopause était fausse de 20″. Points **resserrés vers le haut de
-    chaque couche** (autant par couche) : < 3″ partout. À reprendre tel quel.
-- **L'ellipsoïde** : leur réfraction se fait dans WGS84 étiré en sphère le long du pôle (le repère où leurs shaders
-  d'air travaillent déjà). Une sphère décalait la zone réfractée jusqu'à 10′ du limbe dessiné près des pôles.
-  **Chez nous, c'est à moitié fait** (vérifié dans le code le 31 octobre) : `EARTH_RM` vaut `WGS84_A` (le rayon
-  équatorial, pas le moyen), `nearCam()` est déjà dans le repère aplati, donc la verticale de `airBend`
-  (`normalize(nearCam())`) est celle de la sphère étirée. Mais :
-  - **au sol**, cette verticale est la direction « paramétrique », pas la normale géodésique (`geoQ`) : jusqu'à
-    **~5,8′ d'écart à 45° de latitude**, dans le plan nord-sud. Près de l'horizon, ça fausse la courbure d'environ
-    1′ selon l'azimut, autant que l'erreur du modèle qu'on corrige ;
-  - **la direction du rayon** (`toBody(look)`) n'est pas aplatie (`squashed`), contrairement à `earthNear` : en
-    orbite, la zone du limbe n'est pas tout à fait dans le repère du globe dessiné.
-
-  À corriger en R2 : `geoQ` comme verticale au sol, le rayon aplati au-dessus de l'air.
-- **Le sol relevé vu d'orbite** (le « trou » au limbe) : un rayon venu d'en haut, courbé, va plus loin autour de la
-  planète ; le rayon rasant atterrit 56 km au-delà du limbe géométrique (0,5°), le sol y est vu 3,0′ plus haut ; à
-  400 km le globe dessiné s'arrêtait 2,4–2,7′ sous le Soleil réfracté. Leur table « où atterrissent les rayons »
-  (128 élévations, une fois par air) devient, par hauteur d'œil, un relèvement par distance. **Notre R4 s'étend donc
-  à l'orbite** ; dans le traceur, ce n'est qu'un décalage du test de hauteur à l'intersection du globe (pas de rayon
-  courbe à marcher).
-- **Le k terrestre** (`TerrestrialK`) : choisi pour que la dépression de l'horizon dessiné (rayons droits sur une Terre
-  aplatie de 1 − k) égale celle de l'horizon réfracté — l'horizon dessiné tombe là où finit la réfraction du ciel
-  (~0,17 au niveau de la mer, 0,16 à 1,2 km) ; près de la mer, le gradient de l'air. À reprendre pour R4.
-- **Le coût tenu** : un test de zone par pixel (un produit scalaire) saute tout ce qui est hors de la bande du limbe
-  (+0,38 → +0,08 ms en orbite) ; le relèvement laissé de côté là où il fait < 0,1′ (`LiftFrom` : tout le disque sauf
-  un anneau au limbe).
-- **Une atmosphère par corps** (`RefractiveAir` : couches hydrostatiques à gradient constant, n − 1 du gaz en
-  laboratoire mis à l'échelle de la densité) : la Terre (USSA76, mêmes chiffres), **Vénus** au-dessus du pont nuageux
-  (VIRA dès 70 km, 5,6′ rasant : vu de quatre rayons, le Soleil caché derrière la planète reste un arc sur son limbe —
-  l'auréole des transits), **Titan** (Huygens, 1,47 bar : 2° rasant, caché par la brume là où il compte), **Mars**
-  (0,5′ : invisible). Chez nous, l'auréole de Vénus au transit (notre calculateur les prévoit, `eclipse/search.ts`
-  `transit`) serait un vrai plus. **Fait chez eux le 31 octobre**, avec l'anneau rouge de la Terre vu de la Lune pendant une éclipse,
-  comme **une seule lentille** pour tout corps à air vu au-delà de leur réfraction par pixel : un rayon qui rase le limbe à
-  la hauteur h est dévié de B(h), donc pointe derrière le corps f·B(h) plus près du centre (f = distance corps–Soleil /
-  distance œil–Soleil) ; là où il tombe sur le disque du Soleil assombri au bord, le pixel montre le Soleil, atténué par la
-  transmission du trajet rasant ; **intégré sur l'étendue des hauteurs tangentes du pixel** (fwidth au travers du limbe),
-  ce qui marche d'un arc plus fin que le pixel (Vénus au transit : ~28 km de hauteur tangente par pixel) à un arc résolu ;
-  le décalage du Soleil en double précision (Vénus fait 29″ de rayon). Leurs deux limites : leur halo fixe du Soleil masque
-  la partie faible de l'arc au télé, et leur air dessiné trois fois trop épais déborde l'anneau. Pour notre R5.
-- **Ce qu'on a et pas eux** : la météo réelle — N₀ à l'échelle de la température **et** de la pression du lieu. Leurs
-  profils de mirage et conduits (3n–3o) : repris et tirés de la météo en R6.
-- **Leurs limites, à garder en tête** : rien au-delà de 50 000 km (zone < 5′, précision GPU près du nadir) ; pas de
-  scintillation au limbe ; Mars/Vénus/Titan d'orbite seulement (pas depuis leur sol : l'horizon de Titan relevé de ~1°).
+- **Repris** :
+  - les couches hydrostatiques à gradient constant, avec n − 1 du gaz mis à l'échelle de la densité ;
+  - les périgées resserrés en haut de chaque couche ;
+  - la table du limbe en k, et la table de l'atterrissage (le sol vu 3,0′ plus haut, 56 km au-delà du limbe géométrique
+    à 400 km) ;
+  - `TerrestrialK` : l'horizon dessiné tombe là où finit la réfraction du ciel (~0,17 au niveau de la mer) ;
+  - le test de zone, et le relèvement laissé de côté sous 0,1′ ;
+  - **leur lentille (R5)** : un rayon qui rase le limbe à la hauteur h est dévié de B(h) et pointe derrière le corps
+    f·B(h) plus près du centre. Il est intégré sur l'étendue des hauteurs tangentes du pixel (fwidth au travers du
+    limbe), avec le décalage du Soleil en double précision. Il sert à l'auréole de Vénus et à l'anneau rouge de la Terre
+    vu de la Lune ;
+  - leurs profils de mirage et de conduit (3n–3o), **illustratifs** (réglés pour chaque phénomène, ajustés sur aucune
+    mesure) ;
+  - leur verticale géodésique dans l'air (nous : le repère aplati, équivalent).
+- **Laissé** :
+  - le cache de bandes de 2 % (§1.4) ;
+  - les tables par hauteur d'œil au-dessus de l'air (k par pixel chez nous) ;
+  - trois tables par couleur hors R6 (le facteur d'Edlén) ;
+  - leurs horizons par sommet (leur relief est un maillage CPU en Burst ; le nôtre est évalué dans le vertex shader du
+    clipmap).
+- **Ce qu'on a et pas eux** : la météo réelle, la température **et** la pression du lieu.
+- **Leurs limites, à garder en tête** :
+  - rien au-delà de 50 000 km ;
+  - pas de scintillation au limbe ;
+  - Mars, Vénus et Titan d'orbite seulement ;
+  - leur halo fixe du Soleil masque la partie faible de l'arc au télé ;
+  - leur air dessiné trois fois trop épais déborde l'anneau.
 
 ---
 
 ## 2. Analyse — les cartes d'horizon (planètes rocheuses)
 
-### 2.1 L'existant
+### 2.1 L'existant (relu le 2 novembre)
 
-- **Vue de loin** (`trace.wgsl planetShade` pour les mondes sans air, `otherGround` pour Mars) : la carte HD incline
-  la normale (`hdNormal` → `demNormal`), **aucune ombre portée**. Au terminateur, la Lune vue de la Terre ou de
-  l'orbite a des cratères éclairés par leur normale seule : plats, sans les longues ombres qui font le terminateur.
-- **Mais les cartes HD ne se chargent que pour le corps proche** (vérifié dans `renderer.ts` ~l.3140). La condition
-  est `nearMap && dN < hdAt`, où `dN` est la distance au corps proche en ses rayons et
-  `hdAt = 1 + 1,3·(2π/4096)/pixelAngle`. Une exception (`pin`) garde les cartes du corps où est posé le vaisseau.
-  **Depuis la Terre, le corps proche est la Terre** : la Lune n'a jamais ses cartes HD, même au télescope. Elle est
-  alors ombrée par sa carte grossière seule, sans `hdNormal`. **La vue phare annoncée (la Lune au télescope depuis la
-  Terre) ne profiterait donc pas de H2 tel quel.** Il faut d'abord H1b (§3).
-- **Vue proche** (le raster des corps, `bodyLite` / `bodyLiteAir` → `nearShadow`) : une marche de 56 pas au plus,
-  de 0,5 m (8 m sur Mars) jusqu'à **20 km** sur les mondes sans air, 60 km sur Mars (P8 l'a raccourcie de 60 à 20 km
-  pour la perf).
-- **Son coût** (P8, mini, Mercure en vue ciné, Soleil à 15°) : **les ombres faisaient 43 des 77 ms** ; ramenées à
-  ~17 ms (la vue entière à 43 ms contre 40 pour la Terre : Mercure **au-dessus du budget de la Terre**, Cérès +11 %).
-  P8 notait : « la voie suivante pour leurs ombres : une carte d'ombre du Soleil, comme celle de la Terre ».
-- **Les données** : `hdRelief` (rg16float, R moyenne, G maximum le long des mips), un seul corps à la fois
-  (`P.hd`) : Lune 4096 × 2048 (LOLA, ~2,7 km/texel), Mars 4096 (MOLA, ~5,2 km), Mercure 2048 (~7,5 km), Cérès 2048
-  (~1,4 km), Vénus 4096 (sous les nuages : exclue). Le relief plus fin vient des tuiles (`moon-tiles.ts`) et du
-  procédural (cratères).
+Trois chemins dessinent un corps rocheux, et **H ne les touche pas de la même façon** :
+
+1. **Les disques lointains** (`ourSegment` → `planetShade`) : tout corps qui n'est pas le corps proche. Exemples : la Lune
+   vue de la Terre, Mercure vue d'ailleurs.
+   - La carte HD incline la normale (`hdNormal` → `demNormal`) si le corps est HD.
+   - **Aucune ombre portée.** `planetShade` multiplie sa lumière directe par `rs0 × bodyShadow`.
+   - Seul appel des disques : dans `ourSegment`. Les autres (`shadePlanet`, `env`, `shadeNear`) sont d'autres chemins.
+   - Un disque lointain **avec air** (Mars vue de la Terre) passe par `earthLookFar` → `otherGround`, pas par
+     `planetShade`.
+2. **Le corps proche** : dans `LOCAL_RANGE` = 300 rayons, même en orbite haute. Le chemin est `shadeNear` → `nearShadow`
+   × `planetShade`, dans le traceur (`main`) et dans le raster des corps (`bodyLite` dans `shadeLite`, `NEAR_KIND` 3
+   et 7).
+   - **La Lune au terminateur vue d'orbite passe donc par `nearShadow`, pas par `planetShade` seul.** C'est H3 qui
+     l'améliore, pas H2.
+   - **Depuis le 1er novembre** (« P1, seconde partie », `f3aa71e5`), `nearShadow` a trois parties :
+     1. la marche jusqu'à 32 m (mondes sans air) ;
+     2. **la carte d'ombre du Soleil des corps** (`sunShadowFar`) : le maillage du raster des corps vu du Soleil
+        (`body-raster drawSun`, `encodeBodySunShadow`), demi-largeur 2,5 à 10 km selon la hauteur de la caméra, portée
+        réglée sur la pente du sol (`SUN_N`) ;
+     3. **la marche reprise à la sortie de la carte**, jusqu'à la coquille.
+   - Mesuré par `f3aa71e5` : la Lune bas −9 %, ciné −19 % ; Mars bas −14 % ; Mercure bas −20 %, ciné −11 % ; Europe ciné
+     73 → 63 ms ; images identiques à la marche (≤ 0,4 %).
+   - La marche (au plus 56 pas) sort dès que le rayon quitte la coquille `hmax = reliefMax + demTop(q, portée)`. La
+     portée agit donc surtout par la hauteur de cette coquille (le plus haut sommet à portée), pas par le nombre de pas.
+     Portées : mondes sans air 20 km ; Mars 60 km.
+3. **Mars dans son air** (`earthNear`) :
+   - près de la caméra, `REL_SH` = `nearShadow`, fondu de 15 à 25 km ;
+   - plus loin, `otherGround` avec `hdNormal` seul. Elle est appelée deux fois : par `earthLook` (Mars proche) et par
+     `earthLookFar` (Mars disque lointain) ;
+   - la lumière du vaisseau a sa propre marche (`keyRelief`).
+
+- **`hdRelief` a deux formats** :
+  - un DEM (rg16float ; R la moyenne, G le maximum le long des mips) pour la Lune, Mars, Mercure, Cérès et Vénus ;
+  - une carte de normales pour les autres.
+  - Les cartes d'horizon ne concernent que les corps à DEM, **Vénus exclue** (sous ses nuages).
+- **Les DEM** : Lune 4096 × 2048 (LOLA, ~2,7 km), Mars 4096 (MOLA, ~5,2 km), Mercure 2048 (~7,5 km), Cérès 2048
+  (~1,4 km).
+  - Mercure et Cérès sont à 2048 parce que **le CI de Pages refuse tout nouveau binaire de plus de 8 Mo** (P8,
+    `build-dem.py`).
+  - Conséquence : **une carte d'horizon précalculée hors ligne de plus de 8 Mo est exclue.** La cuisson se fait au GPU.
+- **Les cartes HD ne se chargent que pour le corps proche** (`renderer.ts`, la règle `nearMap && dN < hdAt`) :
+  - `hdAt = 1 + 1,3·(2π/4096)/pixelAngle` ;
+  - une exception, `pin`, garde le corps où est posé le vaisseau ;
+  - **depuis la Terre, la Lune n'a jamais ses cartes HD**, même au télescope ;
+  - et **`planetMapAt` lit `hdColor` dès que `m == P.hd.x`** : un mode « relief seul » doit le savoir (H1b).
+- **Le coût avant P1-2 (P8.md, kerr-mini, A3)** — à remesurer en M0 (P1-2 l'a changé) :
+
+  | Vue | ms | La Terre | Lecture |
+  |---|---|---|---|
+  | Mercure ciné (au sol, Soleil à 15°) | 43,2 | 39,6–40,4 | +7 %, dont ~17 ms d'ombres (avant P1-2) |
+  | Lune ciné (le lever de Terre) | 34,3 | 39,9–40,4 | sous le budget |
+  | Cérès ciné | 44,6 | 39,6–40,4 | +11 %, part des ombres non mesurée |
+  | Europe ciné | 73,3 → **63** (P1-2) | 39,4 | ×1,6, **sans DEM : hors de portée de H** (H3a seul) |
+
+- **Le raster des corps sans air n'a pas de budget de noyau** : le profil `moon` (`NEAR_KIND` 3) n'a pas d'entrée
+  `shadeLite` dans `kernel-profiles.ts` (vérifié le 2 novembre), alors que `moons`, `mars`, `titan` et `venus` en ont une.
+- **Les rochers des mondes sans air sont commités** (`b37bdbf6` : `airlessRocks`, `rockLight` dans `shadeNear`, leurs
+  propres ombres hors de `nearShadow`). `moon main` est à 71 600.
 
 ### 2.2 Ce que font les cartes d'horizon (vr-solar-system)
 
-- Par texel, **l'élévation de l'horizon dans 8 directions** (N, NE … NO), en sinus quantifiés sur un octet
-  (−0,2…0,8), avec des mips. Le balayage suit le grand cercle de 1 à 8 texels puis ×1,3 jusqu'à 30 texels
-  (~320 km sur la Lune), courbure comprise.
-- **À l'ombrage : deux lectures de texture**, la direction du Soleil interpolée entre les deux azimuts voisins,
-  smoothstep de ±0,006 sur son élévation (un demi-degré, le disque solaire).
-- Eux : 24 cellules cube de 128², ~4,2 Mo par corps, cuites au CPU (Burst, 62 ms la cellule). Ils ont aussi des
-  horizons par sommet (8 directions) sur leurs patchs fins, pour le proche.
-- **Leur raccord** (précisé par leur Claude) : un patch fin (espacement ≤ max(2 km, texel de la carte)) a ses propres
-  horizons par sommet en trois portées (proche ≤ 8 espacements, moyenne 8–64, lointaine 64 espacements → 60 km) ;
-  un patch grossier lit la carte, qui part d'un texel. Les deux ne se rencontrent jamais sur un même sommet : pas de
-  double ombre, mais **pas de fondu non plus**. Un patch fin à côté d'un grossier peut montrer une marche au bord
-  d'une ombre (non testé, sur leur liste). Lue par pixel jusqu'à leur session 4a (0,5 ms au point Lune de leur
-  propriétaire), la carte est lue par sommet depuis. **Mip choisie selon l'empreinte** : distance × 1/22° / rayon, plus
-  aux vues rasantes — 1/22°, c'est un pixel du Quest 3 (~22 pixels par degré à leur taille d'image). Chez nous, l'angle d'un
-  pixel de l'image (champ / hauteur en pixels, `pixFoot`) à sa place : la règle est la même, le télé y descend seul.
+- **Le contenu** : par texel, l'élévation de l'horizon dans 8 directions (N, NE … NO), en sinus quantifiés sur un octet
+  (−0,2…0,8), avec des mips.
+- **Le balayage** : le grand cercle de 1 à 8 texels, puis ×1,3 jusqu'à 30 texels (~320 km sur la Lune), courbure comprise.
+- **À l'ombrage** : deux lectures, l'azimut du Soleil interpolé entre les deux voisins, un smoothstep de ±0,006 sur
+  l'élévation.
+- **Le stockage** : 24 cellules cube de 128², ~4,2 Mo par corps, cuites au CPU (Burst, 62 ms la cellule).
+- **Le raccord proche / lointain** :
+  - les patchs fins ont leurs horizons par sommet en trois portées (≤ 8 espacements, 8–64, 64 espacements → 60 km) ;
+  - les patchs grossiers lisent la carte ;
+  - les deux ne se rencontrent jamais sur un même sommet : pas de double ombre, **pas de fondu non plus** (une marche
+    possible au bord d'une ombre, non testée).
+- **La mip** : choisie selon l'empreinte (distance × 1/22°, 1/22° étant un pixel du Quest). Chez nous, l'angle d'un pixel
+  (`pixFoot`) fait le même travail.
 
 ### 2.3 Gain en qualité
 
-- **De loin (le plus gros gain)** : les ombres du relief au terminateur de la Lune, de Mercure, de Mars et de Cérès,
-  en orbite ou en approche du corps. **Vues de la Terre** (télescope, trépied, photo) : seulement avec H1b, puisque la
-  Lune n'y a pas ses cartes HD. H1b y apporte en même temps son relief (`hdNormal`), absent aujourd'hui. Copernic, les Apennins, les remparts des
-  grands cirques : leurs ombres longues aujourd'hui absentes. Résolution : les reliefs de plus de ~2–3 texels (Lune
-  ≥ ~6 km, Mars ≥ ~12 km). C'est **la** vue des astrophotographes, celle que le jeu met en avant (PLAN-CIEL,
-  observatoire).
-- **De près** : une portée qui passe de **20 km à ~170–300 km**. Au Soleil rasant, un sommet de 5 km porte son
-  ombre à 140 km (Soleil à 2°) : aujourd'hui coupée à 20 km. Au sol près du terminateur, des plaines restent
-  éclairées alors qu'une chaîne lointaine les met dans l'ombre. La marche garde le détail fin (cratères, rochers)
-  dans ses premiers kilomètres.
-- **Cohérence loin/près** : la même carte de part et d'autre de la passation, moins de « pop » d'ombre quand le raster
-  des corps prend la main.
+- **Le corps proche (H3)** : en orbite, en approche, au sol au Soleil bas, la portée passe de la marche reprise (20 km) à
+  la carte entière.
+  - Au Soleil à 2°, un sommet de 5 km porte son ombre à 140 km. Aujourd'hui elle s'arrête à 20 km.
+  - Près du terminateur, des plaines restent éclairées alors qu'une chaîne lointaine devrait les mettre dans l'ombre.
+  - La marche (0–32 m) et la carte du Soleil (jusqu'à 2,5–10 km) gardent le détail fin (cratères, tuiles de 118 m,
+    rochers).
+- **Les disques lointains (H2, avec H1b)** : la Lune au télescope, au trépied, en photo depuis la Terre. H1b apporte en même
+  temps son relief HD (`hdNormal`), absent aujourd'hui. Résolution : les reliefs de plus de ~2 texels de la carte (Lune
+  ≥ ~11 km à 2048 de large). C'est **la** vue des astrophotographes (PLAN-CIEL, l'observatoire).
+- **Le pôle sud lunaire** (Shackleton, Artemis), **vue prioritaire (décision 10)** : le Soleil y est toujours rasant et
+  tourne sur 360°, le cas le plus exigeant pour la carte. Il a sa calotte à 16 directions (§2.5), comme le pôle nord et
+  les pôles de Mercure (les cratères à l'ombre permanente), de Mars et de Cérès.
+- **La cohérence** : la même carte de part et d'autre de la passation entre disque et corps proche, donc moins de « pop »
+  d'ombre.
 
 ### 2.4 Gain en perf (estimé, à mesurer)
 
-- **De loin** : +2 lectures de texture et ~20 opérations par pixel du corps HD seulement. Négligeable (< 0,1 ms),
-  derrière un bit de variante pour que les autres noyaux ne paient rien (leçon C6 : la boucle des paires coûtait
-  6–12 % même sans tourner).
-- **De près**, trois économies dans `nearShadow` :
-  1. **Ombre lointaine certaine** (l'horizon de la carte au-dessus du Soleil + marge) → 0 sans marcher. Au Soleil
-     bas — le cas cher — de grandes zones sautent la marche entière.
-  2. **La marche raccourcie** à la portée où la carte prend le relais (~2–3 texels : Lune ~8 km, Mars/Mercure ~16 km).
-     Mondes sans air, au-delà de 32 m (×1,6) : ~5 pas sur ~30 en moins (~17 %). Mars (×1,4 depuis 8 m) : ~9 pas sur
-     ~26 (~33 %).
-  3. **Soleil haut** : au-dessus de l'horizon de la carte et de la pente maximale du relief procédural (~35–40° pour
-     des parois de cratères frais), le point est éclairé sans marche. Midi lunaire : la marche disparaît.
-- **Estimation** : Mercure ciné (Soleil 15°) ombres 17 → ~11–14 ms, soit **−3 à −6 ms sur 43** — sous le budget de
-  la Terre (40). Au Soleil haut : ombres → ~0. Au Soleil rasant : de grandes zones gratuites. Ces chiffres sont des
-  estimations à confirmer en trace-ab.
-- **Mémoire** : 8 directions × 1 octet × (2048 × 1024) + mips ≈ **22 Mo** pour la Lune ou Mars (à demi-résolution du
-  DEM), ~5,5 Mo pour Mercure et Cérès. Un seul corps à la fois, comme `hdRelief`.
-- **Cuisson** : au GPU, ~2 M texels × 8 directions × ~24 pas ≈ 400 M lectures → ~30–80 ms au total sur un GPU de Mac.
-  **Étalée sur ~16–32 images** (tranches de lignes) à l'arrivée du corps HD : ~2–4 ms par image pendant ~0,5 s. Une
-  passe à part (`shaders/horizon.wgsl`), **hors du noyau du traceur** : rien n'y alourdit les registres.
+- **Les disques lointains** : +2 lectures et ~20 opérations par pixel du corps HD seulement. Négligeable.
+- **Le corps proche** : `nearShadow` gagne trois sorties anticipées :
+  1. **Ombre lointaine certaine** : l'horizon de la carte dépasse le Soleil plus une marge, donc 0 sans rien lire
+     d'autre, ni marche, ni carte du Soleil. Au Soleil bas, le cas cher, de grandes zones sautent tout.
+  2. **Soleil plus haut que toute pente possible** : l'élévation d'un point du relief vu d'un autre ne dépasse jamais la
+     plus forte pente sur le trajet (le théorème des accroissements finis, la courbure ne fait que l'abaisser). Si le
+     Soleil dépasse S_max, la pente maximale du corps (DEM, cratères, houle, sol propre, tuiles, rochers ; mesurée par
+     corps), le point est éclairé sans marche.
+     - **Cette règle ne demande aucune carte** : elle sert aussi à Europe et aux lunes à sol propre (**H3a**).
+     - La carte du Soleil de P1-2 ne la remplace pas : la marche ≤ 32 m et la marche reprise après la sortie tournent
+       toujours.
+  3. **La marche reprise remplacée par la carte d'horizon** : au-delà de la sortie de la carte du Soleil, plus de marche
+     jusqu'à la coquille.
+- **L'estimation** (révisée le 2 novembre) :
+  - P1-2 a déjà pris une part du gain que la troisième passe attribuait à H3 (Mercure ciné −11 %). L'estimation d'alors
+    (−2 à −6 ms sur Mercure ciné) est **à revoir à la baisse** : M0 mesure la part des ombres qui reste (`liteSkip`
+    8192 coupe la carte, 4 les ombres), et H3 vise cette part.
+  - Au Soleil haut : ombres → ~0 avec (2).
+- **La mémoire** : carte de 2048 × 1024, 8 directions × 1 octet, avec mips, ≈ **22 Mo par corps**.
+  - C'est la moitié du DEM pour la Lune et Mars, sa pleine résolution pour Mercure et Cérès.
+  - À 4096 × 2048 : ~88 Mo.
+  - **Les deux calottes polaires** (§2.5) : 2 × 256 × 256 texels × 16 directions, ~2 Mo, ~2,7 Mo avec les mips.
+  - Un seul corps à la fois, comme `hdRelief`.
+  - **T10 rend ~200 Mo** sur la texture des tuiles de la Terre (§3.6) : plus que H1b et les cartes réunis.
+- **La cuisson** : ~2 M texels × 8 directions × 3 rayons par secteur × ~16 pas ≈ 800 M lectures, ~30–100 ms de GPU au
+  total. Étalée en tranches de lignes sur ~16–32 images (2–4 ms par image pendant ~0,5 s), dans **une passe à part**
+  (`shaders/horizon.wgsl`) : rien n'alourdit le noyau du traceur.
 
-### 2.5 Faisabilité et risques
+### 2.5 Faisabilité, risques, choix techniques
 
-- **Faisable** : la donnée (`hdRelief`, avec ses maxima en G) et le point d'ombrage (`planetShade`, `otherGround`,
-  `nearShadow`) existent. Le code neuf tient dans une passe de cuisson séparée et ~40 lignes dans `trace.wgsl`.
-- **Les bindings** : le noyau monte une échelle de textures conditionnées dans `renderer.ts` (voir le point suivant). Plutôt que d'en ajouter une, **réutiliser une liaison propre à la Terre**, jamais lue sur un monde
-  rocheux (ex. `surfaceColour` : `texture_2d_array<f32>`, du même type) : sur un monde rocheux, les cartes d'horizon
-  à sa place. À trancher en H0. Vérifié : la mise en page du noyau est explicite (`renderer.ts traceLayout`) ;
-  la liaison 29 (`surfaceColour`) n'y figure que si `maxSampledTexturesPerShaderStage ≥ 18` (`SURFACE_TEXTURE_LIMIT`).
-  En dessous, pas de cartes d'horizon : on garde les marches. Le groupe de liaisons est à refaire quand le corps HD
-  change. **Avec H1b**, la Lune est HD alors que la Terre est le corps proche : la liaison 29 sert alors à la
-  surface régionale de la Terre et ne peut pas porter les horizons de la Lune. Il faut une autre place (une couche de
-  plus dans `mapHi`, ou une liaison libérée), à trancher en H0.
-- **Le noyau, point fait le 31 octobre** (sur `main` à `4010ed75`, avec D2 de P11 non commité) — cinq limites, deux
-  serrées :
-  1. **La taille inlinée** (`tests/kernel-budget.test.ts`, qui garde le temps de compilation sur D3D12 ; chaque budget =
-     la mesure à sa création + 10 %) : 86 à 100 % partout. À 100 % : le noyau général (`main` 140 452 / 141 000 lignes,
-     `lut` 136 132 / 136 200), **la Lune `main`** (71 191 / 71 200), Kerr + jet `env`. À 98–99 % : **Mars `main`**,
-     Titan `shadeLite`, Terre raster `env`, Terre seule `env`, éclipse `env`. Pas une limite matérielle : un budget se
-     relève (`KB_WRITE=1`) en mesurant la compilation sous Windows (kerr-pc, `d3d12-ab`). **H2 grossit justement la Lune et
-     Mars** : un appel unique, fermé par les conjonctions des noyaux qui en ont besoin (comme `giantAlbedo`), puis leurs
-     budgets relevés sur mesure.
-  2. **Les buffers de stockage : pleins.** 8 (le minimum WebGPU, tous les appareils) + le 9ᵉ du décor si l'appareil
-     l'accepte (`SCENERY_STORAGE_LIMIT`). **R0/R2 rangent leurs tables dans un buffer existant** (celui du catalogue
-     d'étoiles), jamais dans un nouveau.
-  3. **Les textures échantillonnées : de la marge sur ordinateur.** Une échelle de repli de 18 (surface régionale) à 27
-     (ombre des arbres) ; on demande min(27, l'appareil) ; les Mac, le M1 Max, NVIDIA en offrent 48, l'iPad Pro 44, les
-     appareils minimaux 16. Une liaison neuve pour les horizons serait le 28ᵉ palier : possible sur ordinateur, absente
-     ailleurs (repli sur la marche). C'est l'autre réponse à H1b, à comparer en H0 avec une couche de `mapHi`.
-  4. **La clé des variantes : un seul bit libre** (le 31, le signe en JavaScript). Bits 0–13 les fonctions, 14 les
-     aurores, 15 le cache du relief, 16–19 la vue des coûts, 20–25 les réglages, 26–28 `NEAR_KIND` (8 valeurs, toutes
-     prises), 29–30 le raster. Les cartes d'horizon n'y ajoutent rien (un paramètre dit si elles sont là, comme la
-     météo). À noter pour P11 : Jupiter et Saturne partagent `NEAR_KIND` 2 avec Mars depuis D1b, et leur noyau
-     « dedans » prévu demanderait le bit 31 ou un `NEAR_KIND` élargi.
-  5. **Les paramètres uniformes** : quelques centaines de vec4, loin des 64 Ko.
-
-  Non chiffrable d'ici : la pression sur les registres sur Apple (la leçon de `HAS_SHADE`) — elle ne se voit qu'au
-  temps de rendu, par A/B (trace-ab, deux tours) à chaque étape de H.
-- **Équirectangulaire** : les 8 azimuts sont repérés par l'est et le nord locaux (comme `hdNormal`). Pôles
-  sur-échantillonnés (sans gravité), axe singulier au pôle exact : un repli. Le pôle sud lunaire (Shackleton, Soleil
-  toujours rasant) est **le meilleur cas d'usage** : à soigner.
-- **Le raccord marche/carte** : la carte cuite **à partir de la portée de la marche** (pas depuis 1 texel), sinon le
-  relief proche est compté deux fois — fin par la marche et grossier par la carte. Ombre = min(marche jusqu'à D,
-  carte au-delà de D). Vue de loin, les reliefs plus petits que D (~2–3 texels) n'ombrent pas : ils sont sous le pixel
-  depuis la Terre et l'orbite haute ; en orbite basse, le raster des corps et sa marche ont déjà pris la main.
-- **Les tuiles fines** (`moon-tiles`) n'entrent pas dans la carte (globale, au texel du DEM) : la marche garde ce
-  détail dans ses premiers kilomètres. Cohérent.
-- **Exclus** : la Terre (sa carte d'ombre du Soleil ±10 km et `earthTerrainShadow` ; les cartes d'horizon pourraient
-  plus tard porter ses ombres au-delà de 10 km — les Alpes au couchant), Vénus (nuages), les géantes, les petites
-  lunes sans DEM (cartes de normales seules).
-- **Rejeté** : les horizons par sommet de vr-solar-system (leur relief est un maillage CPU en Burst ; le nôtre est
-  évalué dans le vertex shader du clipmap, une marche par sommet y coûterait trop).
+- **Les liaisons** : deux textures neuves, sur le modèle des ombres des arbres : **liaison 42**,
+  `hdHorizon: texture_2d_array<f32>` (la carte), et **liaison 43**, `hdHorizonPole: texture_2d_array<f32>` (les
+  calottes) :
+  - `HORIZON_TEXTURE_LIMIT = 29` (les deux ensemble, un seul palier) et `withHorizonMaps(trace, supported)` dans
+    `src/system/horizon-maps.ts` ;
+  - un bloc `// BEGIN_HORIZON … // END_HORIZON` dans `trace.wgsl`, composé dans `tracer-source.ts composeTracer` comme
+    `withTreeShadow` ;
+  - la limite ajoutée au `Math.max(…)` de la demande au GPU (renderer) ;
+  - **sous 29, le bloc reste un talon** qui dit « pas de carte » : les marches d'aujourd'hui, rien de cassé ;
+  - les Mac, le M1 Max et NVIDIA en offrent 48, l'iPad Pro 44 ; les appareils à 16 perdent déjà tout au-delà de 18.
+  - Des textures 1 × 1 de repli restent liées quand il n'y a pas de carte (comme le repli de `hdColor`).
+  - **À compter avec T9** (une texture d'imagerie de plus pour la Terre, §6) : un seul décompte, un seul palier si
+    possible.
+  - **Écartés** :
+    - réutiliser la liaison 29 (`surfaceColour`), parce que dans le cas même de H1b elle sert à la surface régionale de
+      la Terre, et qu'il faudrait refaire le groupe de liaisons à chaque corps ;
+    - une couche de `mapLo` : taille fixe 1024, format peut-être compressé (KTX), pas de place pour 8 octets par texel
+      sans perte.
+- **L'encodage** : 2 couches rgba8unorm, une direction par canal, **en racine signée** (s = signe·√|sinus / 0,75|).
+  - Un octet linéaire fait des marches de 0,22°. C'est moins que le rayon du Soleil vu de la Lune (0,27°) ou de Mercure
+    (0,57–0,87°), **mais plus que vu de Mars (0,16–0,19°) et de Cérès (~0,1°)** : des bandes dans la pénombre.
+  - En racine, le pas vaut ~0,07° vers 0,5° d'élévation, là où tout se joue.
+  - Le filtrage bilinéaire reste possible (l'encodage est monotone).
+- **La hauteur de référence** : l'élévation est mesurée **depuis le point le plus haut du texel et de ses voisins** (G à la
+  mip 1).
+  - Un point fin (tuiles, cratères) plus haut que la moyenne du texel voit un horizon plus bas. Mesuré depuis la moyenne,
+    la carte mettrait à tort les crêtes dans l'ombre au couchant ; l'erreur vaudrait Δh/d, soit ~1,4° pour 200 m à
+    8 km, ~3 h de lumière lunaire.
+  - Mesuré depuis le haut, la carte ne peut que sous-ombrer, et la carte du Soleil et la marche rattrapent le proche.
+  - Option si H4 montre des ombres manquantes : une distance par direction (2 couches de plus, ×2 mémoire), qui permet la
+    correction exacte.
+- **Les directions** : 8 directions, chacune **le maximum de son secteur** (3 rayons à −15°, 0 et +15°). C'est prudent :
+  sans cela, à 100 km, deux rayons espacés de 45° laissent un trou de ~78 km où un pic étroit n'est vu par personne.
+- **Les calottes polaires** (décision 10 : le pôle sud lunaire est prioritaire) :
+  - au-delà de 78° de latitude, de chaque côté et pour chaque corps à DEM, une grille **azimutale** (stéréographique
+    polaire) de 256 × 256 : Lune ~2,8 km par texel (le DEM), Mars ~5,5 km, Mercure ~4 km, Cérès ~0,8 km ;
+  - **16 directions**, repérées par les axes de la grille et non par l'est et le nord : aucun axe singulier au pôle ;
+  - chacune le maximum de son secteur (3 rayons à −7,5°, 0 et +7,5°), même balayage, même encodage, 4 couches
+    rgba8unorm par calotte ;
+  - un fondu de 78° à 80° avec la carte équirectangulaire, qui reste partout ;
+  - à la lecture : une branche de plus (|latitude| > 78°), deux lectures (les deux directions voisines, au plus deux
+    couches).
+- **Le balayage** :
+  - de D à ~0,1 R (Lune 174 km, Mars 340 km, Mercure 244 km, Cérès 47 km), au pas ×1,25, courbure exacte ;
+  - les hauteurs lues en G à la mip dont le texel vaut la moitié du pas ;
+  - **validé contre une cuisson de référence** au pas d'un texel et sans mip sur des patchs tests (unitaires de H1,
+    ≤ 0,1° d'écart visé).
+- **D, le départ de la carte** (révisé le 2 novembre) : D = max(la sortie de la carte du Soleil, 2 texels de la carte
+  d'horizon).
+  - Lune : 2 texels = 5,4 km, sous les 2,5–10 km de la carte du Soleil.
+  - Cérès : 2,8 km.
+  - Mars : 10,4 km, au-delà des 10 km de la carte du Soleil : la marche comble l'écart.
+- **L'API de cuisson générique** (décidé dans le plan commun) : `horizon.wgsl` prend une grille de hauteurs quelconque,
+  décrite par son treillis (lat/lon ou stéréographique), son pas, son rayon, sa courbure ; pas seulement
+  l'équirectangulaire de `hdRelief`. Elle sert alors aussi à la Terre (**H5**, §3.4) sans réécriture.
+- **La mip des horizons** : la moyenne des élévations encodées (de loin, une pénombre adoucie). Choisie selon l'empreinte
+  du pixel (`pixFoot`), comme leurs 1/22°.
+- **Le raccord** : ombre = min(marche ≤ 32 m, carte du Soleil jusqu'à sa sortie, carte d'horizon au-delà de D).
+  - Le min, pas le produit : un même relief vu par deux parties n'ombre pas deux fois.
+  - La carte d'horizon part de D, sinon son relief grossier ombre là où la carte du Soleil éclaire.
+  - Vue de loin, les reliefs plus petits que D n'ombrent pas : ils sont sous le pixel.
+- **Équirectangulaire** :
+  - les azimuts sont repérés par l'est et le nord locaux (comme `hdNormal`) ;
+  - les pôles sont sur-échantillonnés en longitude ;
+  - au pôle exact, l'axe est singulier : c'est la calotte qui y répond.
+- **Les tuiles fines** (`moon-tiles`) n'entrent pas dans la carte (globale, au texel du DEM) : la carte du Soleil et la
+  marche gardent ce détail.
+- **Exclus** : Vénus, les géantes, les petites lunes sans DEM (cartes de normales seules).
+- **La Terre n'est plus exclue** : voir §3.4 (T6, puis H5 en option).
+- **Noté, hors plan** : la lumière cendrée de la Lune (absente du traceur aujourd'hui) pourrait lire la même carte dans la
+  direction de la Terre.
 
 ---
 
-## 3. Le plan
+## 3. Analyse — la Terre raster (2 novembre)
 
-Deux chantiers indépendants (fichiers disjoints sauf `trace.wgsl`, à des fonctions différentes). **Ordre décidé
-(§4) : H d'abord** (gain visible au premier coup d'œil, et Mercure repasse sous le budget), puis R0–R3, puis R4 et R5 ; R6 (les mirages) après R2, indépendant de R3–R5. H0 et R0 tranchent ensemble la liaison des tables (une seule si possible).
+Résumé de [ANALYSE-TERRE-RASTER-2026-11-02.md](ANALYSE-TERRE-RASTER-2026-11-02.md) (lecture du code, rien lancé ; les
+mécanismes, les chiffres et les leviers de confirmation y sont détaillés).
+
+### 3.1 Comment la Terre raster est faite
+
+- **Le cache du relief** (`terrain-cache.ts`) : 8 grilles 129² au pas de 1,2 / 2,4 / 9,5 / 38 / 153 / 611 / 2 446 m
+  (`TERRAIN_CACHE_ROUNDS`), cuites au GPU sur `earthHeightExactG` (les tuiles + le détail procédural). Chaque niveau lit
+  les tuiles avec une empreinte d'un demi-pas.
+- **Le maillage** (`terrain-raster.ts`) : le patch (niveau 0, ±76 m), puis les anneaux 1 à 6 (jusqu'à ±156 km), chacun
+  une grille 129² dont le trou sous le niveau plus fin est retiré, avec une **bande de chevauchement de 4 nœuds**
+  (`RING_OVERLAP`). Pas de géomorphose ni de jupes. Le maillage n'écrit que des distances (et un marqueur de niveau dans
+  `a`).
+- **L'ombrage** (`shadeLite`) reconstruit le point par rayon × distance, puis la normale par les distances des pixels
+  voisins (`rasterNormal`), l'imagerie des tuiles et des orthos lue à la main (anisotropie ≤ 4), le Soleil (`liteSun`),
+  le ciel, l'air (`liteFinish`). L'eau va à `shadeWater`.
+
+### 3.2 Les escaliers — régression du 22–23 octobre
+
+- **Cause** : `TUNE_TILE_CR = 2` (`831e2f61`, 22/10) agrandit les tuiles par une **cubique monotone de Fritsch–Butland**
+  (`monoCubic`, `tileSample`, et `sampleLevel` au CPU). Elle force la pente à 0 dès qu'une sécante est nulle ou change de
+  signe.
+  - Sur les données arrondies au mètre (SRTM, source de Terrarium sur la plupart du monde), les paliers restent plats et
+    chaque marche devient un S : **un escalier de 1 m**.
+  - Sur le bruit des données, chaque extremum local devient un petit plat : des **plis alignés sur la grille Mercator**.
+- **Pourquoi visible depuis I3** (`0b8b8a7f`, 23/10) : les niveaux 0 et 1 du cache (1,2 et 2,4 m) lisent z14 (6,5 m à
+  47°) avec un agrandissement de 2,4 à 3,4 octaves, donc en cubique pleine, et dessinent chaque marche avec 5 nœuds par
+  texel. Avant I3, le patch était à 153 m de pas.
+- **Où** : hors France et Suisse en permanence ; en France pendant le chargement et à chaque recentrage des fenêtres IGN
+  z15–17 (tous les ~170 m en vol bas).
+- `moonSample` (la Lune, Mars) utilise la même `monoCubic` pour garder les rebords des cratères : **ne pas la changer**
+  pour la Terre (§6).
+
+### 3.3 Les triangles visibles
+
+1. **La normale est celle du maillage** (`rasterNormal`) : chaque triangle est éclairé à plat, des facettes de 1,2 m au sol
+   à 153 m au loin. Seul `earthSlopeFine` (relevés IGN/swisstopo, empreinte < 10 m) y échappe.
+2. **Les coutures percent** : les niveaux voisins sont cuits avec des empreintes différentes (4 ×), sur des tuiles plus
+   grossières, en bilinéaire là où le fin est en cubique. Dans la bande de 4 nœuds, les grands triangles du niveau
+   grossier passent devant le fin (vallées) : un anneau de triangles à 76 m, 153 m, 611 m, 2,4 km et 9,8 km.
+3. **Régression d'I3, le garde-fou des coutures** : `rasterNormal` s'arrête aux coutures quand le marqueur de niveau
+   change, mais `step = max(0, lv − max(level, PATCH_REF = 4))` vaut 0 pour les anneaux 1 à 4. **4 coutures sur 6 ne sont
+   plus vues** : lignes de fausse pente.
+4. **Au chargement** : la révision du cache est `earthTiles.stamp`, qui change à chaque fenêtre de tuiles recentrée ou
+   complétée (environ chaque seconde en vol bas). Les 8 niveaux sont alors recuits **un par image**, depuis des états de
+   tuiles différents, sans fondu : les coutures s'écartent, la forme saute. C'est aussi un coût permanent.
+
+### 3.4 Les ombres du relief : presque aucune
+
+- `encodeSunShadow` ne dessine que le **patch** (±76 m) dans une carte de ±10 km ; la table annonce une sortie à 9,8 km
+  (le patch d'avant I3).
+- `liteSun` (le matériau raster) lit la carte, **ne marche jamais**, et ignore les bloqueurs à moins de 300 m
+  (`SUN_NEAR_M`).
+- Les pixels tracés marchent jusqu'à 300 m, lisent la carte vide, ne reprennent qu'à 9,8 km.
+- **Résultat : en raster, le relief ne porte pratiquement aucune ombre.** C'est la plus grosse perte AAA des vues basses
+  au Soleil bas, et **R3 en dépend** : il rallonge la lumière rasante de 2–3 min, et en montagne la vallée resterait
+  éclairée derrière la crête.
+- **Correctif (T6)** :
+  - les anneaux 1 à 4 dans la carte, avec leurs maillages, trous et hauteurs (géomorphosées après T3) ;
+  - la sortie annoncée = ce qui est dessiné ;
+  - dans `liteSun`, la portée réglée sur la pente (comme `SUN_N` pour les corps) au lieu des 300 m.
+- **Au-delà de 10 km (H5, option)** : Soleil à 1–2°, les Alpes portent leurs ombres à 50–150 km. Un **horizon dans
+  l'azimut du Soleil** sur les niveaux 4 à 6 du cache (3 × 129² nœuds, ±156 km), cuit par `horizon.wgsl` (l'API générique
+  de H1) quand un niveau est recuit ou que le Soleil tourne de plus de ~0,5° ; lu par `liteSun` et `earthTerrainShadow`
+  au-delà de la carte.
+
+### 3.5 La mer
+
+- **La côte est l'isoligne 0,5–2 m du maillage** : le masque de mer prend `hG`, la hauteur au point du maillage
+  (`rasterPoint`), pas celle des données. Au-delà du patch, c'est la coupe linéaire de triangles de 9,5 à 611 m : une
+  côte en dents de scie qui bouge à chaque recuisson. Au-delà de la portée OSM (7 km), seul reste le masque ETOPO
+  (4,9 km).
+- **Terres basses lues comme mer** : sous un texel ETOPO « mer », toute terre sous 0,5 m devient de l'eau (Camargue,
+  polders).
+- **Niveau des vagues isotrope** : `footSea = √(|fx|·|fy|)` dans `shadeWater`, `footSea / √FOOT` dans `main` au loin.
+  En vue rasante, c'est plusieurs octaves trop fin : moiré, reflet qui pétille, LEAN lu trop fin. Le sampler de la mer
+  n'a pas d'anisotropie.
+- **La cascade de 1 024 m se répète** ; le SSR n'a pas de fondu en distance ; les rivières lointaines sont un miroir dur
+  (analyse du 28/10).
+
+### 3.6 Le chargement et la mémoire
+
+- **Ordre** : niveau par niveau, du grossier au fin, 8 requêtes en tout (`MAX_INFLIGHT`). En `veryFar`, jusqu'à 256 tuiles
+  de z11–14 passent avant z15.
+- **Quota IGN** attendu dans le créneau de chargement : Terrarium et EOX bloqués derrière. Une tuile z11–13 avec
+  silhouettes coûte jusqu'à 4 requêtes WMS-R.
+- **Validité** : un niveau n'est dessiné que complet ; la bande neuve d'un recentrage (devant, avec `gaze`) reste aux
+  niveaux grossiers jusqu'à sa dernière tuile.
+- **Orthos** sans cache ni préchargement ; z18 sur ±210 m seulement.
+- **Décodage** sur le fil principal ; la tuile réécrite entière quand son imagerie arrive.
+- **Imagerie lue texel par texel** dans `rg32uint`, sans mips, ≤ 4 prises le long de l'axe long : scintillement au loin,
+  et le poste le plus cher du matériau.
+- **Mémoire** : en `veryFar` (le défaut), la texture des tuiles fait 2048² × 13 couches × 8 o = **436 Mo**. Les 8 niveaux
+  à 4 tuiles (z6–10, z15–17) n'occupent qu'un quart de leur couche : **~200 Mo inutilisés**.
+
+### 3.7 Ce que la Terre raster impose à H et R
+
+| Phase | Contrainte | Conséquence dans le plan |
+|---|---|---|
+| R3 | sans ombres du relief, ses critères ne se jugent pas en montagne | **R3 avec T6** (et T1, T2 avant ses captures) |
+| R0, R3, H0 | la lumière rasante montre marches, facettes, coutures, moiré de la mer | **T1 et T2 avant la séance « avant » (M0)** |
+| R4a | relevé seul, il fait une marche au bord du dernier anneau (k = 0,13 : 1 m à 10 km, 16 m à 39 km, **250 m (5,5′) à 156 km**) | **R4a et R4b ensemble** sur la Terre raster |
+| R4b | dans `terrainVs` et la cible de visibilité, là où vont T3 et T5 | après T3 et T5 ; une seule attache conçue pour les deux |
+| R6a | les mirages sur l'horizon marin, où la mer est lue trop fin | **T7 avant R6a** |
+| H1b, décision 5 | ~70 Mo + 22 à 88 Mo de cartes | **T10 avant H1b** (~200 Mo rendus) |
+| H1 | la Terre aura besoin de la même cuisson (H5) | **API de cuisson générique dès H1** |
+| H2, T9 | des textures en plus dans les noyaux de la Terre | **un seul décompte** face au palier 29 |
+
+---
+
+## 4. Cohérence avec les systèmes existants — ce que chaque phase modifie
+
+| Système existant | Où | Ce qui change | Phase | Garde-fou |
+|---|---|---|---|---|
+| L'agrandissement des tuiles | `trace.wgsl tileSample`, `earth-tiles.ts sampleLevel` | une fonction hybride pour la Terre seule (monotone aux falaises et sur relevés, B-spline ailleurs), CPU = GPU ; `monoCubic` et `moonSample` intouchés ; option : pré-filtre au décodage des tuiles Terrarium z13–14 non marquées | T1 | `tests/earth-tiles` (CPU = GPU), contact du train ; e2e `monument-relief` (les falaises gardées) |
+| Le marqueur de niveau des anneaux | `terrain-raster.ts ringFs`, `terrain-raster-hint.ts terrainRasterLevelStep`, `rasterHintTol` | le vrai niveau, séparé de la tolérance du traceur | T2 | captures aux coutures ; la tolérance `RHINT_TOL` inchangée |
+| Le maillage des anneaux | `terrain-raster.ts terrainVs`, `drawRing`, `RING_OVERLAP` | géomorphose CDLOD sur les 8–16 derniers nœuds, chevauchement 1 nœud ; la même dans `terrainSunVs` | T3 | `TUNE_RASTER_PATHS: 2` ; images au chargement |
+| Les cuissons du cache | `terrain-cache.ts encode`, `renderer.ts` (révision) | révision par niveau (empreinte et fenêtre), voisins cuits ensemble, fondu de 0,2–0,3 s | T4 | compteur `builds` en vol ; `rasterRingsInfo` |
+| La normale du raster | `rasterNormal`, `earthSlopeFine`, la cible de visibilité (`TERRAIN_RASTER_FORMAT`) | normales lisses par nœud, interpolées, écrites dans une attache `rg16snorm` ; le détail des tuiles sous 2 km pour toutes les données ; l'attache prévue aussi pour R4b | T5 | `tune {TUNE_LITE: 16}` ; trace-ab |
+| La carte d'ombre du relief de la Terre | `terrain-raster.ts encodeSunShadow`, `renderer.ts` (`SUN_HALF_M`, la table `TABLE_SUN`), `liteSun` | les anneaux 1–4 dessinés, la sortie vraie, la portée sur la pente dans `liteSun` | T6 | `TUNE_LITE: 4` (avant/après) ; e2e au couchant en montagne |
+| L'eau du raster | `shadeLite` (masque), `shadeWater`, `seaWavesFft`, le sampler de la mer | `hG` des tuiles, WorldCover (classe 80) et OSM entre leurs portées, LOD sur l'axe long (ou `textureSampleGrad` + aniso 16), répétition cassée, SSR fondu | T7 | `TUNE_LITE: 512` ; e2e côtes |
+| Le chargement des tuiles | `earth-tiles.ts` (`request`, `load`, `complete`, `pixels`, `requestOrtho`) | priorité par importance, deux files, validité par tuile (masque de bits dans `P.tileL`), orthos en cache, décodage en worker | T8 | `pending`, `finest`, `orthoFinest` en vol scripté ; e2e `zones`, `ortho`, `ign-relief` |
+| L'imagerie des tuiles | `earth-tiles.ts` (texture), `earthImageryAniso`, `orthoImage` | une `texture_2d_array<rgba8unorm-srgb>` avec mips par tuile, lue par `textureSampleGrad` + aniso 16 ; les hauteurs en r32float à part | T9 | captures rasantes ; trace-ab ; le palier des textures |
+| La mémoire des tuiles | `earth-tiles.ts makeTexture`, `params`, `tileTexel` | les niveaux à 4 tuiles rangés par quarts de couche (comme les orthos) | T10 | `stats` mémoire ; e2e iPad |
+| La table du traceur | `src/gpu-tables.ts`, buffer `bodies` | + `TABLE_REFR` (~23 000 valeurs) | R1–R2 | `tests/gpu-tables.test.ts` |
+| Le modèle de réfraction | `src/system/refraction.ts` | les tables à la place de la formule fermée ; **API inchangée** (`bending`, `apparentAltitude`, `refractDirection`, `refractionParams`), N₀ remplacé par un état d'air passé de la même façon | R1 | `tests/refraction.test.ts` étendu |
+| Les atmosphères | `src/aero.ts` | lues par la réfraction (`us76`, VIRA, Titan) ; une fonction de densité exportée si besoin | R1, R5 | les tests d'`aero` inchangés |
+| L'air de la météo | `renderer.ts refractivity`, `openmeteo.ts` | T **et** p, avec p ramenée au niveau de la mer par l'`elevation` du modèle | R1 | e2e météo réelle : N₀ ±3 % selon p |
+| `airBend`, `shadeStars`, `REFR_DELTA` | `trace.wgsl` | lisent les tables ; le repère aplati gardé | R2 | e2e `refraction-wgs84` |
+| `earthRingLight` | `trace.wgsl` | B_limbe à la place de l'exponentielle, ses épaisseurs optiques **re-réglées** | R2 | e2e `eclipses`, `eclipse-atmosphere`, `eclipse-raster` ; Danjon |
+| La lumière du Soleil proche | `local-patch.ts` (`near.light`) → `P.near4`, cartes d'ombre du relief, des nuages, des arbres et des bâtiments | élevée de la courbure au sol sous la caméra | R3 | un seul point de correction ; e2e au couchant |
+| Le globe tracé | `trace.wgsl earthMarch`, intersection d'orbite | le test de hauteur décalé du relèvement | R4a | captures au limbe d'orbite ; la couture au dernier anneau |
+| Les rasters de la Terre | `terrain-raster*.ts`, `scenery-raster.ts`, `forest-shader.ts`, `runways3d.ts`, `roof-mesh.ts` | `refrLift(d)` partagée, à la projection seule (`terrainVs`, jamais `terrainSunVs` ni la cuisson), défaite par `shadeLite` grâce à l'attache de T5 | R4b | e2e dédiés (coutures, arbres flottants) ; WGS84 : positions, hauteurs et contacts intouchés |
+| La réfraction des autres corps | `airBend` (Terre seule, `isEarth`) | Vénus, Titan | R5 | profils `venus`, `titan` |
+| Les cartes HD | `hd-maps.ts`, renderer (`requestHd`/`releaseHd`) | un mode **« relief seul »** (DEM + horizons, couleur de repli 1 × 1) ; le corps **regardé** en plus du corps proche | H1b | `__bh` : `hdMap.mode` ; e2e `moon-telescope` |
+| Le relief HD dans le noyau | `planetMapAt`, `isHd`, `hasDem` | `planetMapAt` ne lit `hdColor` qu'en mode complet (drapeau dans `P.hd2.z`) | H1b | captures : la couleur grossière gardée |
+| La composition du traceur | `tracer-source.ts composeTracer`, limites demandées, `traceLayout` | `withHorizonMaps`, liaisons 42 et 43, `HORIZON_TEXTURE_LIMIT` 29 | H1–H2 | `scripts/check-wgsl.ts`, la source à 16, 28 et 48 textures |
+| `nearShadow`, `shadeNear`, `bodyLite`, Mars `REL_SH` | `trace.wgsl` | les sorties (1)(2)(3) (§2.4), la carte d'horizon après la carte du Soleil ; `keyRelief` sans carte | H3a, H3 | A/B `planets-ab` ; images ≤ 1–2 % de pixels changés hors ombres nouvelles |
+| Les disques lointains | `ourSegment` | l'ombre de la carte passée par l'argument `rs0` de `planetShade` (**sa signature ne change pas**) | H2 | trace-ab : vues sans corps HD ±1 % |
+| Mars au loin | `otherGround` (2 appels) | la carte dans sa lumière directe | H2 | profil `mars` (qui porte aussi les géantes) |
+| L'horizon solaire de la Terre | `horizon.wgsl` (API générique), `liteSun`, `earthTerrainShadow` | sur les niveaux 4–6 du cache, dans l'azimut du Soleil | H5 (option) | e2e Alpes au couchant |
+| Les budgets des noyaux | `scripts/lib/kernel-profiles.ts`, `tests/kernel-budget.json` | + l'entrée `moon shadeLite` ; les budgets relevés sur mesure, jamais d'avance | M0, chaque phase | `KB_WRITE=1` après la compilation mesurée sous D3D12 (kerr-pc, `d3d12-ab`) |
+| Les qualités par appareil | `tier.ts` | la résolution des cartes d'horizon selon `tier.level` (≤ 1 : 1024 ; 2 : 2048 ; 3 : 4096 si M0/H4 le permettent) | H1 | e2e iPad (`docs/IPAD-TESTS.md`) |
+| Les réglages | `settings.ts` | `horizonMaps` (pref, allumé), à côté de `refraction` ; plus tard le profil de mirage forcé (R6a) | H2, R6a | `set_settings` |
+| TARS | `ai/game-tools.ts`, `sky-now.ts` | « sky » : la pression, le modèle, le Soleil d'éclairage ; l'état des cartes d'horizon | H4, R1, R3 | `tests/tars-tools` |
+| L'API d'automatisation | `automation.ts`, `docs/BH-API.md` | `hdMap.mode`, `horizon` (`body`, `ready`, `bytes`, `bakeMs`), l'état d'air ; pour la Terre : les cuissons par niveau, la validité des tuiles | H1, H1b, R1, T4, T8 | `bun scripts/bh-api.ts` |
+| Les vues de mesure | `tests/e2e/lib/planet-views.ts`, e2e de vol bas | les vues de M0 (§7) | M0 | `scripts/ab-commit.ts` (A B B A) |
+| Les docs | `PLAN-CIEL.md` (C3), `PLAN-PLANETES-AAA.md` (P8, P10), `WEBGPU-MATERIELS.md`, `E2E-CATALOGUE.md`, `PERFORMANCE.md`, `AAA-PROGRESS.md`, `ANALYSE-TERRE-RASTER-*` | à jour à chaque phase, FR + EN | toutes | — |
+
+---
+
+## 5. Exigences AAA (qualité)
+
+- **Aucun « pop »** :
+  - la Terre : les recuissons glissent (fondu, T4), les coutures ne se voient pas (T3), le fin arrive tuile par tuile
+    (T8) ;
+  - la carte d'horizon arrive en fondu (~0,5 s) une fois prête ;
+  - la passation disque → corps proche lit la même carte ;
+  - le mode « relief seul » → complet ne recharge que la couleur ;
+  - aucune couture au bord des calottes polaires (le fondu de 78° à 80° vérifié en capture, Soleil rasant) ;
+  - R3 : la lumière d'éclairage rejoint la direction vraie en fondu (~10°), sans saut d'ombre.
+- **Aucune trace du maillage ni des données** :
+  - ni escalier (T1), ni facette (T5), ni ligne aux coutures (T2, T3), au Soleil rasant comme au zénith ;
+  - les côtes à la résolution des données (OSM, WorldCover), pas des triangles (T7) ;
+  - pas de moiré ni de motif répété sur la mer (T7), pas de scintillement de l'imagerie au loin (T9).
+- **Stabilité temporelle** :
+  - la pénombre vient du disque du Soleil, pas du bruit ;
+  - la marche garde son départ jittered (`RND`), mais les cartes n'ont pas de jitter ;
+  - les tables de réfraction ne changent qu'avec l'air (pas de bande « la plus proche »).
+- **La pénombre** : un smoothstep sur le **rayon angulaire du Soleil vu du corps** (comme `bodyShadow`), pas une constante ;
+  sur la Terre, le filtrage 3 × 3 de `sunShadowFar` et la portée sur la pente.
+- **Seule la lumière directe s'éteint** :
+  - la carte multiplie la lumière directe (`rs` dans `planetShade`, `sh` dans `shadeNear`, `Eg` dans `liteSun`) ;
+  - jamais le remplissage, le ciel, ni la lumière des anneaux.
+- **La réfraction est la même partout** :
+  - le disque dessiné, les étiquettes, la visée et TARS lisent les mêmes tables ;
+  - l'éclairage (R3) en suit la direction, et les ombres avec lui (T6) ;
+  - le relèvement (R4) est le même dans le traceur et les rasters ;
+  - l'éclipse est re-réglée avec la nouvelle courbure.
+- **Contre la réalité, pas contre nous-mêmes** :
+  - Bennett et l'intégrale en couches pour la réfraction ;
+  - Danjon pour l'éclipse du 07/09/2025 (la valeur L publiée, relevée en R0) ;
+  - **une photo réelle du terminateur** (amateur ou LROC WAC) à la même colongitude solaire pour H2 ;
+  - **le pôle sud lunaire** contre les cartes d'éclairement publiées tirées de LOLA (Mazarico et al. 2011) ;
+  - **la Terre** contre l'orthophoto (la côte, les ombres d'une vallée au couchant à une date connue) et contre les
+    données elles-mêmes (le relief IGN à 0,5 m, sans marche).
+- **Pas de régression ailleurs** :
+  - la Terre, les géantes et les vues sans corps HD restent à ±1 % en trace-ab, sauf les gains voulus ;
+  - les e2e existants restent verts (`refraction-wgs84`, `moon-telescope`, `airless-ground`, `moons-ground`,
+    `moon-tiles`, `eclipses`, `planet-detail`, `monument-relief`, `ign-relief`, `raster-fine-relief`, `hlod-cost`,
+    `lowflight-governor`, `ortho`, `zones`, `miller-sea`).
+
+## 6. Noyaux et performance
+
+- **L'état** (31 octobre au soir, à relire en M0) :
+  - **la taille inlinée** (`tests/kernel-budget.test.ts`, chaque budget = la mesure à sa création + 10 %) : 86 à 100 %
+    partout, `moon main` et `general main/lut` à 100 % ;
+  - **les buffers de stockage pleins** (8, + le 9ᵉ du décor) : R, H et T n'en ajoutent pas ;
+  - **les textures** : de la marge sur ordinateur (48) ; le palier 29 pour H ; **T9 en ajoute une aux noyaux de la Terre**
+    (qui compilent aussi H2 : `discs`, `main`) — décompte commun ;
+  - **la clé** : un seul bit libre, le 31. **Aucune phase T n'en demande** : il reste à H.
+- **Les règles** :
+  1. **Un appel unique par noyau** : chaque site d'appel est une copie inlinée.
+     - La carte d'horizon se lit dans `ourSegment` (les disques) et dans `nearShadow` ; **pas dans `planetShade`**,
+       appelée à 4 endroits.
+     - Dans `nearShadow`, appelée à 3 endroits, la lecture est fermée par une constante pour `keyRelief`.
+     - Dans `otherGround` (Mars), 2 copies : à mesurer ; si elles coûtent, la lecture passe à l'appelant de
+       `earthLookFar` seul.
+     - **T1** : la fonction hybride remplace `monoCubic` dans `tileSample` seul, qui est dans chaque `earthH` de chaque
+       noyau de la Terre : une seule définition, aucune copie de plus.
+  2. **Pas de bit qui va et vient en vol** (la leçon du profil raster de la Terre : chaque bit changé était une
+     recompilation de plusieurs minutes sur D3D12) :
+     - le code de la carte est compilé dans les noyaux qui peuvent en avoir besoin ; un paramètre dit s'il y a une carte ;
+     - si l'A/B montre un coût sans carte > 1 % (la leçon de `HAS_SHADE`), le bit 31 lui est réservé, **jamais dans le
+       profil raster de la Terre**.
+  3. **Les budgets** : relevés sur mesure, après la compilation mesurée sous Windows (kerr-pc, `d3d12-ab`), pas d'avance.
+     **Les mesures D3D12 regroupées** : T1, T5, T7 et R2 touchent les mêmes entrées `earth-*` ; une séance par groupe
+     plutôt qu'une par phase quand elles se suivent.
+  4. **Le budget de temps** :
+     - les planètes : jamais plus lentes que la Terre dans la même vue (P10) ;
+     - la Terre : **jamais plus lente qu'avant le plan** sur les vues de M0, sauf T6 (≤ 0,3 ms pour des ombres qui
+       manquaient) et ce que Sam accepte au vu des images.
+- **Les noyaux et passes touchés, par phase** :
+
+  | Phase | Fonctions | Entrées du budget à remesurer |
+  |---|---|---|
+  | T1 | `tileSample` (et `sampleLevel` au CPU) | tous les `earth-*` (`main`, `discs`, `shade`, `shadeLite`, `shadeWater`, `env`), `general` |
+  | T2 | `ringFs`, `terrainRasterLevelStep` | `earth-raster shade`, `shadeLite`, `shadeWater` (presque rien) |
+  | T3, T4 | `terrainVs`, `terrainSunVs` (pipeline à part), `terrain-cache.ts` (CPU, passe de cuisson) | aucune entrée du traceur ; la passe « terrain raster visibility », la cuisson |
+  | T5 | `rasterNormal`, `earthSlopeFine`, la cible de visibilité | `earth-raster shadeLite`, `shadeWater` |
+  | T6 | `liteSun`, `sunShadowFar`, `encodeSunShadow` | `earth-raster shadeLite`, `shadeWater`, `shade` |
+  | T7 | `shadeLite` (masque), `shadeWater`, `seaWavesFft`, `main` (la mer au loin) | `earth-raster shadeLite`, `shadeWater`, `main` |
+  | T9 | `earthImageryAniso`, `earthImagery` | tous les `earth-*` (gain attendu en taille comme en temps) |
+  | H2 | `ourSegment`, `otherGround` | `game-space main`, `earth-raster main/discs`, `earth-raster-wx main/discs`, `earth-trace main`, `earth-photo main`, `earth-only main`, `eclipse main`, `mars main`, `general main/lut` |
+  | H3a, H3 | `nearShadow` | `moon main`, **`moon shadeLite` (neuf)**, `moons main/shadeLite`, `mars main/shadeLite` (géantes comprises), `general main/lut` |
+  | H5 | `liteSun`, `earthTerrainShadow` | `earth-raster shadeLite`, `shade`, `main` |
+  | R2 | `airBend`, `shadeStars`, `earthRingLight` | tous les `earth-*`, `eclipse main/env`, `general` |
+  | R4a | `earthMarch`, l'intersection d'orbite | `earth-trace main`, `earth-raster main`, `earth-only main` |
+  | R5 | `airBend` pour Vénus et Titan | `venus main`, `titan main` |
+  | R6 | `airBend`, le pixel du raster rendu au traceur | `earth-raster main/shadeLite` (le « lac » n'est **pas** ombré dans `shadeLite`, le pixel est rendu à `main`) |
+
+- **Le protocole de mesure** :
+  - `scripts/ab-commit.ts <rev>` avec `planets-ab` (A B B A, deux tours) pour les planètes ; `scripts/trace-ab.ts` et les
+    e2e de vol bas (`lowflight-governor`, `AB_CMD`) pour la Terre ;
+  - sur des vues figées, machine froide (l'outil thermique d'abord), onglets du panneau fermés, A/A ±1 % ;
+  - en raster, vue cockpit, captures journalisées (pas d'images tracées hors ligne) ;
+  - les e2e partagés entre ce Mac et kerr-mini ; une e2e IGN à la fois ; le mini ne se compare qu'à lui-même.
+
+---
+
+## 7. Le plan
+
+Trois volets, une séance de mesure commune. L'ordre est au §8.
+
+### M0 — la séance « avant » (commune)
+
+| Phase | Contenu | Fichiers | Fait quand |
+|---|---|---|---|
+| **M0** | **Préalables** (ex-H0 + R0 + l'« avant » de la Terre), **après T1 et T2** (sinon leurs marches et coutures brouillent tout) : l'entrée `moon shadeLite` ajoutée aux profils et son budget mesuré ; relire `origin/master` d'Alex. **Vues** : Mercure ciné Soleil 15°, Lune au terminateur depuis 500 km, Lune au télescope depuis la Terre au premier quartier, Mars au sol au couchant, Cérès ciné, pôle sud lunaire, Europe ciné ; Biarritz 21/06/2026 (Soleil à 0,5° et 2° au télé, la définition de l'aplatissement fixée) ; coucher depuis l'ISS (équateur et > 70° N) ; Lune éclipsée du 07/09/2025 (Danjon) ; les Andes au couchant ; La Hague ; **la Terre raster** : Chamonix bas Soleil bas (relief, coutures, ombres), une pente douce hors d'Europe (SRTM seul), une côte vue de 2 à 10 km, une suite image par image pendant l'arrivée d'un niveau de tuiles, un vol scripté de 2 min (le journal des tuiles : `pending`, `finest`, `orthoFinest`, les cuissons). **Mesures** : chaque vue A/A ±1 % ; **la part des ombres** après P1-2 dans Mercure, Cérès et Europe ciné (`liteSkip` 4 et 8192) ; le coût de la cuisson du cache en vol. **Décisions** : D par corps (§2.5), S_max par corps, `reliefAt` (~8 × plus tôt que `hdAt`), le rayon et la résolution des calottes polaires (78°, 256 × 256 par défaut) | `docs/progress/refraction-horizons/M0.md`, `kernel-profiles.ts`, `kernel-budget.json`, `planet-views.ts` | Mesures et décisions écrites ; la part des ombres connue par vue |
+
+### T — La Terre raster
+
+| Phase | Contenu | Fichiers | Fait quand |
+|---|---|---|---|
+| **T1** | **Les escaliers** : une fonction d'agrandissement hybride pour la Terre seule — la pente au nœud `mix(m_CatmullRom ou B-spline, m_FritschButland, s)`, `s` montant avec la raideur du texel (\|d\|/texel > ~0,5) ou la marque de relevé (`tileFine`) ; CPU = GPU (`sampleLevel`). Option si M0 montre encore des marches : un pré-filtre au décodage des tuiles Terrarium z13–14 non marquées (3 × 3, ou tramage ±0,5 m puis flou). `monoCubic` et `moonSample` intouchés | `trace.wgsl tileSample`, `earth-tiles.ts`, `tests/earth-tiles.test.ts` | Pente douce SRTM au Soleil rasant sans marche ; Monument Valley garde ses falaises (`monument-relief`) ; le contact CPU = GPU ; budgets `earth-*` dans leur marge (sinon relevés en séance D3D12) |
+| **T2** | **Le marqueur des coutures** : le vrai niveau du maillage dans la cible, séparé de la tolérance du traceur (`rasterHintTol` inchangée) ; `rasterNormal` voit les 6 coutures | `terrain-raster.ts`, `terrain-raster-hint.ts`, `renderer.terrainRings` | Plus de ligne de fausse pente aux coutures de 76 m, 153 m, 611 m, 2,4 km ; trace-ab 0 |
+| **T3** | **La géomorphose** : sur les 8–16 derniers nœuds avant le bord de sa fenêtre, chaque sommet glisse vers la hauteur du niveau suivant interpolée au même point (la table a les deux niveaux) ; les sommets impairs sur le milieu des arêtes grossières ; chevauchement ramené à 1 nœud ; la même dans `terrainSunVs` | `terrain-raster.ts`, `renderer.ts` (le niveau suivant passé à chaque anneau) | Plus aucun triangle qui perce, en vol et pendant un chargement (captures image par image) ; la passe de visibilité au même coût (±2 %) |
+| **T4** | **Les cuissons cohérentes** : la révision par niveau (les niveaux dont l'empreinte, zf ± 1, lit un niveau de tuiles changé et dont la fenêtre le recoupe) ; les niveaux voisins publiés ensemble ; un fondu de 0,2–0,3 s entre l'ancienne cuisson et la nouvelle (le tampon précédent gardé, l'interpolation dans `terrainVs`) ; `earthDetail` hors des niveaux ≥ 3 (sous-pixel là-bas) si M0 montre qu'il coûte | `terrain-cache.ts`, `terrain-raster.ts`, `renderer.ts` | Cuissons par seconde en vol bas divisées (mesuré) ; aucun saut de forme au chargement ; le coût de la cuisson en baisse |
+| **T5** | **Les normales lisses** : par nœud (différences centrées sur la grille du cache, dans `terrainVs` ou cuites), interpolées, écrites dans une attache `rg16snorm` en octaèdre — **conçue aussi pour R4b** (la place du relèvement ou de la distance vraie) ; `shadeLite` et `shadeWater` les lisent à la place de `rasterNormal` ; le détail des tuiles (`earthSlopeFine` généralisé à toutes les données) sous 2 km, lecture ancrée, fondu vers la normale du nœud | `terrain-raster.ts`, `trace.wgsl` (`shadeLite`, `shadeWater`, `rasterNormal`), `terrain-raster-hint.ts` | Plus de facettes (`TUNE_LITE: 16` comme référence) ; trace-ab ±1 % ; +4 o/px |
+| **T6** | **Les ombres du relief de la Terre** (avec R3) : les anneaux 1–4 dans la carte d'ombre du Soleil (leurs maillages, trous, hauteurs géomorphosées ; jamais le relèvement de R4b) ; la sortie annoncée = ce qui est dessiné ; dans `liteSun`, la portée sur la pente (`SUN_N`) au lieu des 300 m ; les pixels tracés reprennent la marche à la vraie sortie | `terrain-raster.ts`, `renderer.ts` (`encodeSunShadow`, `TABLE_SUN`), `terrain-raster-hint.ts`, `trace.wgsl liteSun` | Chamonix au Soleil bas : les crêtes ombrent la vallée ; aucune acné ni liseré ; ≤ 0,3 ms ; `TUNE_LITE: 4` montre la différence à toute distance jusqu'à 10 km |
+| **T7** | **La mer** : `hG` lu dans les tuiles à l'empreinte du pixel (`earthH(gq, foot, true)`) pour le masque ; WorldCover (classe 80) et OSM entre leurs portées, à la place d'ETOPO pour la côte ; le LOD des vagues sur l'axe long (ou `textureSampleGrad` + sampler aniso 16), dans `shadeWater` et dans `main` (sans le `/√FOOT`) ; la cascade de 1 024 m tournée ou décalée par cellule de 4 km ; le SSR fondu de 2 à 6 km ; `inlandWater` avec la rugosité non résolue | `trace.wgsl`, `renderer.ts` (sampler) | Côtes nettes à toute distance (contre l'orthophoto), Camargue en terre ; plus de moiré au couchant ; pas de motif répété de 2 à 20 km ; < 0,1 ms |
+| **T8** | **Le chargement** : priorité par importance à l'écran, tous niveaux confondus (distance au point regardé / taille du texel ; les 2 × 2 tuiles centrales des niveaux fins avant la couronne des grossiers ; les surfaces MNS après le sol nu) ; deux files (l'IGN derrière son portillon sans tenir de créneau ; Terrarium et EOX à 12–16) ; la validité par tuile (masque de bits par niveau, fondu de bord comme une fenêtre) ; les orthos en cache LRU et en anneau préchargé, `ORTHO_SPAN = 8` pour z15–16 ; le décodage en worker ; plus de réécriture des hauteurs à l'arrivée de l'imagerie | `earth-tiles.ts`, un worker de décodage, `trace.wgsl` (le masque dans `earthH`, `earthImagery`) | Le niveau le plus fin sous la caméra 2 à 5 × plus tôt sur le vol scripté de M0 ; aucune longue tâche (> 50 ms) du fil principal due aux tuiles ; e2e `zones`, `ortho`, `ign-relief` verts |
+| **T9** | **L'imagerie filtrée** : les hauteurs en r32float, l'imagerie (tuiles et orthos) dans une `texture_2d_array<rgba8unorm-srgb>` avec mips par tuile (`mips.wgsl`), lue par `textureSampleGrad` et un sampler aniso 16 ; le tore des fenêtres gardé (mips dans chaque tuile, fondu de bord) ; le décompte des textures avec H (§6) | `earth-tiles.ts`, `trace.wgsl` (`earthImageryAniso`, `earthImagery`, `tileTexel`, `orthoImage`), `renderer.ts` (layout) | Sol net et stable au loin (captures rasantes à 1–3 km) ; le matériau plus rapide (mesuré) ; la source composée valide à 16, 28 et 48 textures |
+| **T10** | **La mémoire des tuiles** : les niveaux à 4 tuiles (z6–10, z15–17) rangés par quarts de couche, comme les orthos ; la texture de `veryFar` de 436 à ~240 Mo | `earth-tiles.ts` (`makeTexture`, `params`, `put`), `trace.wgsl tileTexel` | `stats` : ~200 Mo de moins ; images identiques ; e2e iPad |
 
 ### H — Les cartes d'horizon
 
 | Phase | Contenu | Fichiers | Fait quand |
 |---|---|---|---|
-| **H0** | Décisions : la liaison réutilisée (§2.5), la résolution par corps, la portée D de la marche, l'encodage (rgba8 sinus −0,25…0,75 ou rgba16float). Vues de référence figées pour trace-ab : Mercure ciné Soleil 15°, Lune au terminateur depuis l'orbite (500 km), Lune au télescope depuis la Terre (premier quartier : la vue « avant » montre l'absence de relief HD, voir H1b), Mars au sol au couchant, Cérès ciné, pôle sud lunaire. Mesures « avant » sur le mini (A/A ±1 %, machine froide) | `docs/progress/refraction-horizons/H0.md` | Mesures et décisions écrites |
-| **H1** | La cuisson GPU : `src/system/horizon-maps.ts` + `src/shaders/horizon.wgsl`. Entrée `hdRelief` ; par texel × 8 azimuts, le grand cercle de D à ~0,1 R (×1,25, la mip de `hdRelief` selon la distance, courbure exacte), l'élévation maximale. Sortie : `texture_2d_array` 2 couches, mips moyennées. Étalée en tranches sur ~16–32 images à chaque changement de corps HD ; « prête » signalée au renderer. Unitaires : sphère nue → horizon plat, un bloc de 8 km vu à la bonne élévation (comme leur `FarHorizonMapSeesABlockAndNotTheSphere`), un pôle | `horizon-maps.ts`, `horizon.wgsl`, `hd-maps.ts` (le déclencheur), `tests/horizon-maps.test.ts` | Cartes cuites pour Lune, Mars, Mercure, Cérès ; tests verts |
-| **H1b** | **Le corps HD selon ce qu'on regarde**, plus seulement le corps proche. Quand le corps proche n'a pas de jeu HD (la Terre) et qu'un corps en a un (Lune, Mars, Mercure, Cérès) et dépasse le seuil `hdAt` à l'écran (télescope, trépied, photo, téléobjectif), charger **son relief seul** (DEM + cartes d'horizon, sans la carte couleur 8K : environ 32 + 22 Mo pour la Lune), puis le libérer comme aujourd'hui. Trouver une place de liaison pour ses horizons qui ne soit pas la 29, prise par la surface régionale de la Terre (§2.5). À vérifier : `planetAlbedo` lit-il `hdColor` dès que `isHd` ? Si oui, il faut un drapeau « relief seul » qui garde la carte grossière pour la couleur | `renderer.ts` (`requestHd`/`releaseHd`, la règle ~l.3140), `hd-maps.ts` (chargement du relief seul) | La Lune au télescope depuis Paris : relief HD et ombres du terminateur ; mémoire et à-coups mesurés au chargement |
-| **H2** | Vue de loin : `horizonSeen(k, q, Ls)` (2 lectures, azimut interpolé, smoothstep sur le rayon angulaire du Soleil vu du corps) multiplié dans `planetShade` (rs) et `otherGround` (Mars). Bit de variante `HAS_HORIZON` (sa place à trouver en H0 : les bits 0–15 sont pris, 16 et au-delà servent à la vue de coût, au tune, à `NEAR_KIND` et au raster ; ou le lier à `NEAR_KIND` des mondes sans air et de Mars), allumé seulement si le corps HD est à l'écran et que sa carte est prête | `trace.wgsl`, `tracer-kernels.ts`, `renderer.ts` | Captures avant/après du terminateur ; trace-ab : Terre et vues sans corps HD inchangées (±1 %) |
-| **H3** | Vue proche : `nearShadow` hybride — (1) carte au-dessus du Soleil + marge → 0 sans marche ; (2) Soleil au-dessus de la carte et de la pente procédurale maximale → 1 sans marche ; (3) sinon marche jusqu'à D puis min avec la carte. La portée effective passe de 20 km à la carte entière | `trace.wgsl nearShadow`, `bodyLite*` | Mercure ciné < 40 ms (budget Terre) ; images avant/après identiques hors ombres lointaines nouvelles et pénombres (≤ 1–2 % des pixels) |
-| **H4** | Mesures et doc : trace-ab sur les vues H0 (gain/coût par vue), e2e en raster (vue cockpit, captures loggées), planche avant/après, docs FR + EN, TARS si utile (`set_settings`) | `docs/progress/refraction-horizons/H4.md`, AAA-PROGRESS | Tableau des coûts, planche, poussé |
+| **H3a** | **La sortie par la pente** (§2.4, règle 2), sans carte : S_max par corps passé au noyau ; le Soleil au-dessus de S_max → `nearShadow` rend 1 sans marche ni carte du Soleil. Pour tous les mondes sans air, Europe et les lunes à sol propre compris | `trace.wgsl nearShadow`, `renderer.ts` (S_max dans `P`), `hd-maps.ts` (S_max du DEM au chargement) | A/B : Europe, Mercure, la Lune, Cérès ciné et bas au Soleil haut plus rapides ; images identiques hors bruit (la règle est exacte) |
+| **H1** | **La cuisson GPU, API générique** : `src/system/horizon-maps.ts` + `src/shaders/horizon.wgsl`. Entrée : une grille de hauteurs quelconque (son treillis, son pas, son rayon, sa courbure) — `hdRelief` (G) pour les corps, plus tard le cache de la Terre (H5). Par texel, 8 secteurs × 3 rayons, de D à ~0,1 R au pas ×1,25, courbure exacte, depuis le haut du texel (§2.5) ; sortie : `texture_2d_array` rgba8unorm de 2 couches en racine signée, mips moyennées ; résolution selon `tier.level`. **Les deux calottes polaires** : au-delà de 78°, grille stéréographique 256 × 256, 16 secteurs × 3 rayons, 4 couches par calotte, cuites dans la même passe. Étalée sur ~16–32 images à chaque changement de corps HD ; « prête » signalée au renderer, avec le fondu. `withHorizonMaps`, les liaisons 42 et 43, le palier 29 ; `__bh.renderer.horizon`. **Unitaires** : sphère nue → horizon plat ; un bloc de 8 km vu à la bonne élévation ; le secteur voit un pic hors des rayons centraux ; la cuisson contre la référence au pas d'un texel (≤ 0,1°) ; l'encodage aller-retour ; la calotte : un bloc vu pareil par la calotte et par la carte à 79°, un pic vu dans les 16 directions au pôle exact, aucun NaN au pôle ; **une grille lat/lon locale** (celle du cache de la Terre) cuite par la même API | `horizon-maps.ts`, `horizon.wgsl`, `hd-maps.ts`, `tracer-source.ts`, `renderer.ts`, `tests/horizon-maps.test.ts` | Cartes et calottes cuites pour la Lune, Mars, Mercure et Cérès ; tests verts ; la source composée valide à 16, 28 et 48 textures |
+| **H1b** | **Le corps HD selon ce qu'on regarde** (après T10). Priorité : `pin` > le corps proche (`dN < hdAt`, inchangé) > **le corps regardé**, celui des corps à DEM dans le champ qui est le plus grand à l'écran, au-delà de **`reliefAt`**. Pour lui, le **relief seul** : DEM (~43 Mo avec ses mips, 16 Mo de plus le temps du chargement) + horizons et calottes (~25 Mo), la couleur de repli 1 × 1, le drapeau dans `P.hd2.z` lu par `planetMapAt`. Libéré à 2 × le seuil. En approche, le passage en mode complet ne charge que la couleur | `renderer.ts` (`requestHd`/`releaseHd`), `hd-maps.ts`, `trace.wgsl planetMapAt` | e2e `moon-telescope` étendu (depuis la Beauce, au plus serré et à ~2° de champ : relief HD et ombres du terminateur ; mémoire et à-coups au chargement mesurés ; aucune erreur GPU) |
+| **H2** | **Les disques lointains** : `horizonSeen(q, Ls, sunR, foot)` (2 lectures, azimut interpolé, smoothstep sur le rayon du Soleil, mip selon l'empreinte) dans `ourSegment`, passé par `rs0` ; pour Mars, dans `otherGround`. Pas de bit. Réglage `horizonMaps` | `trace.wgsl`, `renderer.ts`, `settings.ts` | Captures du terminateur contre une photo réelle à la même colongitude ; le pôle sud lunaire vu d'orbite ; trace-ab : la Terre et les vues sans corps HD inchangées (±1 %) ; budgets remesurés |
+| **H3** | **Le corps proche** (réécrit le 2 novembre, après P1-2) : `nearShadow` = (1) carte d'horizon au-dessus du Soleil + marge → 0 sans rien d'autre ; (2) H3a ; (3) sinon la marche ≤ 32 m et la carte du Soleil jusqu'à sa sortie, puis **la carte d'horizon au-delà de D**, à la place de la marche reprise ; le min des parties. Mars : la carte au-delà de D, et au-delà des 25 km de `REL_SH` dans `otherGround` (H2). `keyRelief` sans carte | `trace.wgsl nearShadow`, `shadeNear`, `bodyLite*` | Mercure ciné ≤ la Terre ; Cérès ciné mesuré ; **le pôle sud lunaire** près de Shackleton sur un jour lunaire accéléré (le rebord éclairé, le fond jamais, contre LOLA) ; images identiques hors ombres lointaines nouvelles et pénombres (≤ 1–2 % des pixels) |
+| **H4** | **Mesures et doc** : A/B sur les vues de M0 ; e2e en raster, vue cockpit, captures ; la planche avant/après (et contre la photo réelle) ; la décision sur la pleine résolution et sur la distance par direction ; TARS ; docs FR + EN | `docs/progress/refraction-horizons/H4.md`, AAA-PROGRESS, `E2E-CATALOGUE.md`, `WEBGPU-MATERIELS.md`, `BH-API.md` | Tableau des coûts, planche, poussé |
+| **H5** *(option, décision de Sam au vu de T6)* | **L'horizon solaire de la Terre** : sur les niveaux 4 à 6 du cache (3 × 129² nœuds, ±156 km), l'élévation de l'horizon dans l'azimut du Soleil (et ses deux voisins pour l'interpolation), cuite par l'API de H1 quand un niveau est recuit ou que le Soleil tourne de plus de ~0,5° ; lue par `liteSun` et `earthTerrainShadow` au-delà de la carte de T6, en min avec elle | `horizon-maps.ts`, `terrain-cache.ts`, `trace.wgsl` | Les Alpes au couchant : les ombres portées à 50–150 km, sans pop au passage de la carte ; coût mesuré (visé < 0,2 ms et une cuisson de < 1 ms par recuisson) |
 
 ### R — La réfraction
 
 | Phase | Contenu | Fichiers | Fait quand |
 |---|---|---|---|
-| **R0** | Vues de référence figées : Biarritz 21/06/2026 Soleil à 0,5°/2° au télé, coucher depuis l'ISS (400 km, à l'équateur **et** au-dessus de 70° N : l'ellipsoïde), Lune éclipsée 07/09/2025, Andes au couchant (le bench C3). Captures et trace-ab « avant ». **Décider la place des tables au GPU** : ~1 150 valeurs dans l'air + 3 × 512 au-dessus — trop pour `P`, qui serait réécrit à chaque image. Piste vérifiée : **les ajouter à la fin du buffer `catalogue`**. Il est en lecture seule, déjà lié à tous les noyaux, et `shadeStars` le lit. Aucune liaison de plus ; on écrit seulement la partie qui change (`writeBuffer`) quand la bande de hauteur ou la météo change | `docs/progress/refraction-horizons/R0.md` | Références prises, liaison choisie |
-| **R1** | Le modèle CPU : `src/system/refraction-air.ts` — **une atmosphère par corps** (couches hydrostatiques à gradient constant ; Terre USSA76, Vénus VIRA au-dessus du pont, Titan Huygens ; Mars inutile), N₀ d'Edlén (2,778·10⁻⁴ à 15 °C, 550 nm) et sur la Terre **mis à l'échelle par la température et la pression de la météo réelle** (la pression n'est pas utilisée aujourd'hui : `renderer.ts refractivity` ne prend que T). Le conseil de leur Claude (31/10, 05:10 UTC), à peser : la **pression** au sol met à l'échelle toute la colonne (sa masse), mais l'**écart de température** est celui de la couche limite — le reporter sur toute la troposphère en change l'échelle de hauteur ; le premier ou les deux premiers km tirés des niveaux 1 000/975/950/925 hPa et de la température à 2 m, les gradients USSA-1976 au-dessus, un fondu entre les deux (R6 y prend son profil de mirage) ; avec les seules valeurs au sol, l'écart décroissant sur ~1 km. Leurs tables dans l'air utilisent la verticale géodésique (WGS84), comme notre R2. `refraction-layered.ts` : Bouguer + Simpson (s = √(r − r_bas)) ; **la table du limbe** par paramètre d'impact (512 périgées **resserrés vers le haut de chaque couche**, × 3 couleurs, une fois par air, dans un worker) ; **la table « où atterrissent les rayons »** (128 élévations en u², une fois par air) ; **les tables dans l'air par bande de 2 % de hauteur** (leur schéma : 128 lignes en u², bande d'horizon de 1 024 rayons, relèvement par distance 256 ; faites à la demande dans un worker, gardées en cache, la plus proche servant en attendant). Le cache sert aussi **les utilisateurs CPU à d'autres hauteurs** que la caméra (`photo/plans.ts` à h = 0) ; **au-dessus de l'air, la table du limbe rééchantillonnée en k régulier** (2 048 valeurs par couleur, à vérifier contre l'intégrale aux coudes) ; `TerrestrialK` (l'horizon dessiné = la fin de la réfraction du ciel). `refraction.ts bending/apparentAltitude/refractDirection` lisent ces tables : **les 5 utilisateurs CPU suivent sans changement d'API**. Le commentaire faux corrigé. Unitaires : Bennett ±3 % de 0 à 45°, aplatissement 0,81–0,83, limbe d'orbite contre l'intégrale (≤ 3″ aux coudes), atterrissage (rasant 0,5° au-delà du limbe à 400 km), monotonie, dispersion d'Edlén, Vénus 5,6′ rasant | `refraction-air.ts`, `refraction-layered.ts`, `refraction.ts`, `tests/refraction.test.ts` | Tests verts ; TARS « sky » donne les nouvelles valeurs ; nos chiffres d'accord avec les leurs (66′ rasant, 5,57′ à 20 km depuis 400 km) |
-| **R2** | Le GPU, la Terre : `airBend` : **au sol, la verticale géodésique `geoQ`** (au lieu de la verticale paramétrique de `normalize(nearCam())`, jusqu'à 5,8′ d'écart) ; **au-dessus de l'air, le rayon aplati** (`squashed`, comme `earthNear`) et **k par pixel** dans la table du limbe rééchantillonnée (aucune table par hauteur en orbite, contrairement à eux) ; dans l'air, la table de la bande de hauteur de l'œil (lignes + bande) ; **test de zone** d'abord (hors de la bande du limbe : rien). `REFR_DELTA` (rayon vert) lu dans les tables par couleur ; l'inverse des étoiles inchangé dans son principe. `earthRingLight` (la Lune éclipsée) prend la table du limbe par hauteur de périgée, avec sa dérivée pour le Newton, au lieu de son exponentielle (−16 à −19 % entre 5 et 10 km). Vérifier l'ombre contre Danjon sur l'éclipse du 07/09/2025 : elle sera plus claire au cœur | `trace.wgsl airBend`, `shadeStars`, `earthRingLight`, `renderer.ts` (`refractionParams`, l'envoi des tables) | trace-ab neutre (±1 %) au sol et en orbite ; Soleil couchant 0,82 au télé ; coucher de l'ISS écrasé ~1/5 en bas, posé sur le limbe à 70° N comme à l'équateur ; vignette et prédiction CPU d'accord |
-| **R3** | Le Soleil d'éclairage réfracté : la direction de la lumière du sol (`P.near4`, la carte d'ombre du Soleil, nuages, arbres, bâtiments) élevée de la courbure à la hauteur de l'œil, sous un seuil d'élévation. Coût nul | `renderer.ts`, `terrain-raster.ts` (encodeSunShadow) | Au couchant de Biarritz, le sol éclairé jusqu'à la disparition du disque ; aucune ombre décalée |
-| **R4** *(optionnel)* | Le sol relevé par la réfraction, **près du sol et vu d'orbite** : une fonction WGSL partagée `refrLift(d)` lisant le relèvement par distance de la table de l'œil (k terrestre dans l'air ; l'atterrissage des rayons au-dessus), **laissée de côté sous 0,1′** ; appliquée au dessin dans tous les rasters de la Terre, au test de hauteur du globe tracé (`earthMarch`, l'intersection d'orbite) et aux nuages ; l'ombrage reconstruit le point vrai ; CPU, collisions et WGS84 intouchés ; réglage à part | `terrain-raster*.ts`, `scenery-raster.ts`, `forest-shader.ts`, `runways3d.ts`, `roof-mesh.ts`, `trace.wgsl` | Les Alpes depuis 300 km relevées de ~10′ ; d'orbite, plus de trou entre le Soleil réfracté et le globe ; aucune couture ni arbre flottant (e2e dédiés) |
-| **R5** *(optionnel)* | Vénus et Titan d'orbite : `airBend` pour le corps proche qui a une table (la Terre seule aujourd'hui, `isEarth`) ; l'auréole de Vénus vérifiée au transit du 11/12/2117 (ou vue de quatre rayons, le Soleil derrière) ; Titan sous sa brume. **Leur lentille** (§1.5 : la courbure du limbe B(h) intégrée sur les hauteurs tangentes du pixel, le décalage du Soleil en double) pour l'auréole et pour l'anneau rouge de la Terre vu de la Lune éclipsée — le même calcul, et notre traceur le fait sans leur limite de 50 000 km | `trace.wgsl`, `renderer.ts`, `refraction-air.ts` | L'arc du Soleil sur le limbe de Vénus ; coût nul hors de la bande du limbe |
-| **R6** *(après R2)* | **Les mirages tirés de la météo réelle.** (a) Le profil d'air près du sol déduit d'Open-Meteo au lieu et à l'heure du jeu : température à 2 m, du sol, de la mer (API marine), niveaux 1 000/975/950/925 hPa — mer plus chaude que l'air → couche chaude (mirage inférieur) ; air chaud sur mer froide ou inversion aux bas niveaux → couche froide (élévation, mirage supérieur, Fata Morgana) ; inversion forte et mince → conduit ; route ou sable au soleil → couche chaude de quelques mètres ; sinon l'atmosphère standard. **Les profils d'Alex sont illustratifs** (31 octobre : réglés pour reproduire chaque phénomène, ajustés sur aucune mesure — mer chaude +4 K au sol décroissant sur 2,5 m, inversion −8 K sur 150 m, conduit −20 K sur 50 m avec une ondulation de ±1 K tous les 12 m) : des ordres de grandeur, pas des données ; nos plages viendront de sondages réels (radiosondages, mesures de mirages publiées). Un tirage plausible hors de portée (comme la météo), un forçage dans les réglages et pour TARS. (b) Les tables de l'œil tracées dans ce profil en RK4 (r, θ, e) à travers les points de retournement (leur `Trace`, 3n), dans un worker ; refaites quand la hauteur ou le profil bougent assez, **seulement sous ~2 km** (au-dessus, R1–R2 seuls). (c) Au GPU, rien de neuf pour le ciel : chaque pixel lit sa vraie direction dans la table, les images multiples (Soleil inversé, « vase étrusque », tranches d'un conduit) viennent seules. Les rayons retournés vers le haut sous l'horizon montrent le ciel (le « lac » sur la mer ou l'asphalte) : dans `shadeLite`, ces pixels du raster remplacés par le ciel de leur direction vraie. (d) Option : le sol lointain inversé ou soulevé (ce qu'Alex n'a pas) — dans la mince bande de l'horizon, la marche du sol le long du rayon courbé à la place du raster. (e) La scintillation par masse d'air et par profil (leur 3o–3q). (f) **L'inverse des étoiles** (`shadeStars` : 3 points fixes sur `airBend`) ne marche plus quand la correspondance n'est pas monotone : utiliser la table par élévation vraie (leur `FromTrue`, l'image droite), les images secondaires d'étoiles ignorées | `refraction-weather.ts`, `refraction-layered.ts` (le traceur RK4), `openmeteo.ts`, `trace.wgsl` (`airBend`, `shadeLite`), réglages, TARS | Côte et date réelles où un mirage est connu (ex. un jour de mer froide et d'air chaud) : le Soleil en « vase étrusque » au télé ; une route chaude à midi ; coût GPU nul hors de la bande de l'horizon, tables dans le worker sans à-coup d'image |
+| **R3** *(en premier des R, avec T6)* | **Le Soleil d'éclairage réfracté** : `near.light` élevé de la courbure au sol sous la caméra, sous un seuil d'élévation (fondu jusqu'à ~10°). Tout suit d'un coup : `P.near4`, les cartes d'ombre du relief (T6), des nuages, des arbres et des bâtiments. Le disque dessiné reste celui d'`airBend`. Avec la courbure actuelle (`bending` à la hauteur du sol) ; R2 la passe aux tables sans autre changement | `local-patch.ts` ou `renderer.ts` (là où `near.light` est fait), `sky-now.ts` | e2e au couchant à Biarritz **et à Chamonix** (raster, vue cockpit, captures toutes les 30 s autour du coucher) : le sol éclairé jusqu'à la disparition du disque, ou derrière la crête ; aucune ombre décalée (relief, nuages, arbres, bâtiments) ; aucun saut au fondu ; trace-ab 0 ; TARS « sky » donne la hauteur d'éclairage |
+| **R1** | **Le modèle CPU** : `src/system/refraction-layered.ts`. Bouguer + Simpson (s = √(r − r_bas)) sur les couches d'`aero.ts` ; n − 1 d'Edlén mis à l'échelle de la densité ; l'air réel (T, p ramenée à la mer, l'écart de T décroissant sur ~1 km) ; les tables B_haut, B_limbe (512 périgées resserrés → 2 048 en k régulier), l'atterrissage, le relèvement par distance, `TerrestrialK` ; faites dans un worker, une fois par air. `refraction.ts` les lit : **les 5 utilisateurs CPU suivent sans changement d'API**. Le commentaire faux corrigé. `photo/plans.ts` garde l'air standard pour les dates futures, et prend l'air réel pour « maintenant ». **Unitaires** : Bennett ±3 % de 0,5° à 45° ; l'aplatissement 0,81–0,83 ; le limbe contre l'intégrale (≤ 3″ aux coudes) ; l'atterrissage (rasant : 0,5° au-delà du limbe à 400 km) ; la monotonie ; la dispersion ; la pression ramenée à la mer ; leurs chiffres (66′ rasant, 5,57′ à 20 km depuis 400 km) | `refraction-layered.ts`, `refraction.ts`, `renderer.ts refractivity`, `aero.ts` (export), `tests/refraction.test.ts` | Tests verts ; TARS « sky » donne les nouvelles valeurs, la pression et le modèle |
+| **R2** | **Le GPU, la Terre** : `TABLE_REFR` dans `gpu-tables.ts`, écrite à chaque changement d'air. `airBend` : test de zone d'abord ; au-dessus de l'air, k par pixel dans B_limbe ; dans l'air, B_haut et 2·B_limbe − B_haut vers le bas ; le repère aplati gardé. `REFR_DELTA` par le facteur d'Edlén. `shadeStars` : même principe. `earthRingLight` : B_limbe et sa dérivée pour le Newton, ses épaisseurs optiques **re-réglées** contre Danjon. **R3 passé aux tables** | `trace.wgsl` (`airBend`, `shadeStars`, `earthRingLight`), `renderer.ts`, `gpu-tables.ts`, `tests/gpu-tables.test.ts` | trace-ab neutre (±1 %) au sol et en orbite ; Soleil couchant 0,82 au télé ; coucher de l'ISS écrasé ~1/5 en bas, posé sur le limbe à 70° N comme à l'équateur ; `refraction-wgs84` vert ; l'éclipse dans la fourchette de Danjon ; e2e des éclipses verts |
+| **R4** | **Le sol relevé, traceur et rasters ensemble** (après T3 et T5) : le relèvement par distance (k terrestre dans l'air, l'atterrissage au-dessus), laissé de côté sous 0,1′. **R4a** : dans le test de hauteur de `earthMarch` et de l'intersection d'orbite ; l'ombrage reconstruit le point vrai. **R4b** : `refrLift(d)` partagée, à la projection seule (`terrainVs`, jamais `terrainSunVs` ni la cuisson), dans les six chemins ; `shadeLite` défait le relèvement par l'attache de T5 ; CPU, collisions et WGS84 intouchés. Si R4b devait attendre : R4a seulement là où le raster ne dessine pas (orbite, au-delà du dernier anneau, avec un fondu) | `trace.wgsl`, `terrain-raster*.ts`, `scenery-raster.ts`, `forest-shader.ts`, `runways3d.ts`, `roof-mesh.ts` | D'orbite, plus de trou entre le Soleil réfracté et le globe ; les Alpes à 300 km relevées de ~10′ ; **aucune marche au bord du dernier anneau** ; aucune couture ni arbre flottant ; le relèvement identique au traceur à 0,1′ près |
+| **R5** | **Vénus et Titan d'orbite** : `airBend` pour le corps proche qui a une table ; **leur lentille** (§1.5) pour l'auréole de Vénus au transit du 11/12/2117 (ou de quatre rayons, le Soleil derrière) et pour l'anneau rouge de la Terre vu de la Lune éclipsée ; Titan sous sa brume | `trace.wgsl`, `renderer.ts`, `refraction-layered.ts` | L'arc du Soleil sur le limbe de Vénus ; coût nul hors de la bande du limbe |
+| **R6a** *(après T7)* | **Les mirages, profils forcés** : les profils d'air près du sol (mer chaude, inversion, conduit, route chaude), illustratifs, choisis dans les réglages et par TARS ; les tables de l'œil tracées en RK4 (r, θ, e) à travers les points de retournement, dans un worker, **sous ~2 km seulement**, trois couleurs ; au GPU, chaque pixel lit sa vraie direction ; les rayons retournés vers le haut sous l'horizon rendus au traceur ; l'inverse des étoiles par la table de l'élévation vraie, les images secondaires ignorées ; `apparentAltitude` et la visée sur la branche de l'image droite | `refraction-layered.ts` (RK4), `trace.wgsl`, `settings.ts`, `ai/game-tools.ts` | Le Soleil en « vase étrusque » au télé sur un profil forcé, sur une mer sans moiré ; une route chaude à midi ; coût GPU nul hors de la bande de l'horizon ; tables sans à-coup |
+| **R6b** | **Les mirages tirés de la météo** : le profil déduit d'Open-Meteo (T à 2 m, du sol, de la mer par l'API marine, niveaux 1 000/975/950/925 hPa, à ajouter aux requêtes) ; un tirage plausible hors de portée. **Une recherche d'abord** (radiosondages, mirages publiés), puis un go/no-go sur des dates réelles. Option : le sol lointain inversé ; la scintillation | `refraction-weather.ts`, `openmeteo.ts` | Une côte et une date réelles où un mirage est documenté : le phénomène au bon jour, aucun les jours ordinaires |
 
-### Estimations
+## 8. Ordre et estimations
+
+**Départ : dès que les géantes sont finies** (PLAN-GEANTES-VOLUME, V8 et V9 ; décision 11). Avant de lancer : relire
+`git log`, les notes d'Alex sur `origin/master`, et l'état de `trace.wgsl` (les numéros de ligne de ce plan bougent).
+
+| # | Phases | Pourquoi là |
+|---:|---|---|
+| 1 | **T1, T2** | petites, sans coût ; sans elles, les captures « avant » mesurent les marches et les coutures |
+| 2 | **M0** | une seule séance « avant », sur l'état réel (P1-2 compris) |
+| 3 | **R3 + T6** | le premier des R (décision 8), avec les ombres du relief qui le rendent jugeable |
+| 4 | **H3a** | petit, sans carte, sert aussi à Europe |
+| 5 | **T10**, puis **H1** (API générique), **H1b**, **H2**, **H3**, **H4** | les cartes d'horizon (décision 1), la mémoire d'abord libérée |
+| 6 | **T3**, **T4**, **T5** | la Terre sans triangles ; l'attache de T5 prête pour R4b |
+| 7 | **T7** | la mer, avant les mirages |
+| 8 | **R1**, **R2** | la réfraction en couches (la séance D3D12 regroupée avec T5 et T7 si elles se suivent) |
+| 9 | **R4** (R4a + R4b), **R5**, **R6a**, **R6b** | dans l'ordre décidé |
+| 10 | **T8**, **T9** | indépendants (`earth-tiles.ts`) : peuvent glisser plus tôt si un créneau se libère ; T9 compté avec H pour les textures |
+| — | **H5** | option, au vu de T6 |
 
 | Phase | Effort | Risque | Gain qualité | Effet perf |
 |---|---|---|---|---|
-| H1 | 1 j | moyen (cuisson, pôles) | — | ~2–4 ms/image pendant ~0,5 s à l'arrivée d'un corps |
-| H1b | ½–1 j | moyen (mémoire, liaison, règle de chargement) | **fort** depuis la Terre (relief et ombres de la Lune au télescope) | chargement unique ; aucun coût par image hors du corps |
-| H2 | ½ j | faible | **fort** (terminateur de loin) | ≈ 0 (bit de variante) |
-| H3 | 1 j | moyen (raccord marche/carte) | moyen (portée 20 → ~200 km) | **−3 à −6 ms** Mercure ciné ; ~0 ms d'ombres au Soleil haut |
+| T1 | ½ j | faible (garder les falaises ; CPU = GPU) | **fort** (fin des escaliers) | 0 |
+| T2 | ¼ j | faible | moyen | 0 |
+| M0 | 1 j | — | — | — |
+| T6 | ½–1 j | faible (acné, portée sur la pente) | **fort** (les ombres du relief) | ≤ +0,3 ms |
+| R3 | ¼ j | faible | **moyen partout** au couchant | 0 |
+| H3a | ¼–½ j | faible (S_max à ne pas sous-estimer) | — | ombres → ~0 au Soleil haut |
+| T10 | ½–1 j | faible | — | ~200 Mo de GPU rendus |
+| H1 | 2 j (API générique comprise) | moyen (cuisson, calottes, référence) | — | ~2–4 ms par image pendant ~0,5 s à l'arrivée d'un corps |
+| H1b | 1 j | moyen (mémoire, règle de chargement) | **fort** depuis la Terre | chargement unique |
+| H2 | ½ j | faible | **fort** (le terminateur de loin) | ≈ 0 |
+| H3 | 1 j | moyen (raccord avec la carte du Soleil) | **fort** (portée ~10 → ~200 km, le pôle sud lunaire) | gain, à mesurer (révisé à la baisse) |
 | H4 | ½ j | — | — | — |
-| R1 | 1 j | faible (leur méthode, leurs chiffres pour vérifier) | moyen (prédictions CPU, TARS) | 0 ; tables du limbe une fois dans un worker |
-| R2 | 1 j | moyen (repère aplati, liaison) | moyen au télé (forme et hauteur du disque, Lune éclipsée) ; fort vu d'orbite (le coucher de l'ISS) | ≈ 0 avec le test de zone (eux : +0,08 ms en orbite) |
-| R3 | ¼ j | faible | moyen au grand angle (2–3 min de lumière rasante) | 0 |
-| R4 | 2 j | **élevé** (6 chemins de dessin + le globe tracé) | moyen (sol lointain, horizon d'avion, limbe d'orbite) | ≈ 0 (relèvement sauté sous 0,1′) |
-| R5 | ½ j | faible | moyen, rare (l'auréole de Vénus) | 0 hors du limbe |
-| R6 | 2–3 j (+1 j pour le sol inversé) | moyen (le profil déduit de la météo est la vraie difficulté ; le rendu est le prolongement de R2) | **fort et unique** : des mirages réels au bon lieu et au bon jour | GPU ≈ 0 hors de la bande de l'horizon (eux : 69–72 fps avec chaque profil) ; CPU : 1 024 rayons RK4 par table, dans un worker, sous 2 km |
+| T3 | 1–1,5 j | moyen (T, impairs, carte d'ombre) | **fort** (fin des triangles aux coutures) | ≈ 0 |
+| T4 | 1 j | moyen (le fondu, la révision par niveau) | **fort** au chargement | **gain** (moins de cuissons) |
+| T5 | 1–1,5 j | moyen (attache, coutures) | **fort** (fin des facettes) | ≈ 0, +4 o/px |
+| T7 | 1,5 j | faible à moyen (masques, LOD) | **fort** sur les côtes | < 0,1 ms |
+| R1 | 1–1,5 j | faible | moyen (prédictions, TARS) | 0 (worker) |
+| R2 | 1–1,5 j | moyen (le re-réglage de l'éclipse) | moyen au télé, fort vu d'orbite | ≈ 0 avec le test de zone |
+| R4 (a + b) | 2–2,5 j | **élevé** (six chemins) | moyen (le limbe d'orbite, le sol lointain au télé) | ≈ 0 |
+| R5 | ½–1 j | faible | moyen, rare | 0 hors du limbe |
+| R6a | 2 j | moyen | **fort et unique** | GPU ≈ 0 |
+| R6b | 2–4 j (recherche comprise) | **élevé** | fort si ça marche | 0 |
+| T8 | 2–3 j | moyen (validité par tuile, worker) | **fort** à chaque arrivée | réseau ; fil principal soulagé |
+| T9 | 2 j | moyen (mips dans le tore, layout) | **fort** au loin | **gain** du matériau |
+| H5 | 1–1,5 j | moyen | fort en montagne au couchant | à mesurer |
 
-### Règles de livraison (habituelles)
+Total ≈ 30–36 jours de travail, H5 et R6b compris.
 
-- Seul sur `main`, **un commit + push + capture par phase**, réponses en français, docs FR + EN.
-- `bunx biome ci .` avant chaque push.
-- Mesures en trace-ab sur vues figées (A/A ±1 %), machine froide (outil thermique d'abord), onglets du panneau fermés.
-- e2e et A/B en raster, vue cockpit, partagés entre ce Mac et le mini.
-- WGS84 : R3 et R4 touchent au dessin seulement, jamais aux positions, hauteurs ou contacts.
+## 9. Règles de livraison (habituelles)
 
-## 4. Décisions (31 octobre)
+- Seul sur `main` (ou dans un arbre à part si une autre session y travaille), **un commit + push + capture par phase**,
+  réponses en français, docs FR + EN.
+- **Coordination** : relire `git log` avant chaque phase ; d'autres sessions travaillent dans le même dépôt (ne jamais
+  `git stash`, ne commiter que ses propres morceaux, `git log origin/main..` avant de pousser).
+- `bunx biome ci .` avant chaque push ; `bun run check && bun test` (les unitaires, sortie entière dans un fichier) ; e2e et
+  A/B selon `docs/E2E.md` (une Chrome de test à la fois sur chaque Mac), partagés entre ce Mac et kerr-mini.
+- Mesures : §6. Les titres des tâches de vérification portent leur durée estimée.
+- **WGS84** (CLAUDE.md) : T et R touchent au dessin seulement. Positions, hauteurs et contacts restent géodésiques ; la
+  mer sur le géoïde ; T1 change la forme du relief **des deux côtés** (CPU = GPU), jamais d'un seul.
+- TARS atteint chaque nouveauté (réglage ou télémétrie) ; `__bh` et `BH-API.md` suivent.
+- Le canal avec vr-solar-system : une note dans `docs/agent/` à la fin de T, de H et de R (ce qu'on a repris, nos mesures,
+  nos écarts à leurs choix et pourquoi).
 
-Toutes les questions sont tranchées par Sam. **Le plan n'est pas lancé** : on attend son feu vert pour commencer.
+## 10. Décisions (Sam)
 
-1. **L'ordre : les cartes d'horizon d'abord** (H0–H4, H1b), **puis la réfraction** (R0–R6).
-2. **R4** (le sol relevé, près du sol et d'orbite) **et R5** (Vénus et Titan, l'auréole de Vénus) **restent dans ce plan**.
-3. **Les mirages : R6**, dans ce plan, après R2.
-4. **H1b : oui**, pour le télescope (et les vues qui grossissent : trépied, photo, téléobjectif). Le relief seul de
-   l'astre regardé, environ 55 Mo GPU pour la Lune, chargé quand il dépasse le seuil `hdAt` à l'écran, puis libéré.
-5. **Résolution des cartes : la plus élevée qu'on peut se permettre.**
-   - Par défaut, la moitié du relief : environ 22 Mo pour la Lune ou Mars.
-   - La pleine résolution du relief (environ 88 Mo) si H0 et H4 montrent que la mémoire et le temps de cuisson le
-     permettent.
-   - Le quart seulement en repli, sur les appareils qui manquent de mémoire.
+Les décisions 1 à 10 datent du 31 octobre ; la 11 du 2 novembre. **Le plan n'est pas lancé.**
+
+1. **L'ordre : les cartes d'horizon d'abord** (H), **puis la réfraction** (R). *Amendé par la décision 8* : R3 passe
+   avant. *Dans le plan commun* : T1, T2 et M0 avant tout, T6 avec R3.
+2. **R4** (le sol relevé) **et R5** (Vénus et Titan) **restent dans ce plan**. *Dans le plan commun* : R4a et R4b ensemble
+   sur la Terre raster (§3.7).
+3. **Les mirages : R6**, dans ce plan, après R2 : R6a (profils forcés) puis R6b (la météo, après une recherche).
+4. **H1b : oui**, pour le télescope et les vues qui grossissent : le relief seul de l'astre regardé, ~70 Mo GPU pour la
+   Lune ; le seuil `reliefAt` (décision 7).
+5. **Résolution des cartes : la plus élevée qu'on peut se permettre.** 2048 × 1024 par défaut (~22 Mo) ; 4096 × 2048
+   (~88 Mo) pour la Lune et Mars si M0 et H4 le permettent (`tier.level` 3), T10 aidant ; 1024 en repli
+   (`tier.level` ≤ 1) ; les calottes polaires à 256 × 256 partout (~2,7 Mo).
+6. ~~La carte d'ombre du Soleil des corps de P10 reste à faire à côté de H3.~~ **Faite** le 1er novembre (P1-2,
+   `f3aa71e5`). H3 garde la marche ≤ 32 m et la carte du Soleil, et remplace la marche reprise au-delà par la carte
+   d'horizon (§7).
+7. **Le seuil de H1b : `reliefAt`**, propre au relief seul, ~8 × plus tôt que `hdAt` (~3° de champ pour la Lune vue de
+   la Terre), sa valeur mesurée en M0.
+8. **R3 en premier** des R, avec la courbure actuelle ; R2 le passe aux tables.
+9. **R6 en deux temps** : R6a, puis R6b (une recherche avec un go/no-go).
+10. **Le pôle sud lunaire est une vue prioritaire** (Shackleton, Artemis) : deux calottes polaires à 16 directions
+    au-delà de 78° pour chaque corps à DEM, validées contre les cartes d'éclairement de LOLA.
+11. **(2 novembre) Un plan commun** : la Terre raster AAA (T), les cartes d'horizon (H) et la réfraction (R) ensemble,
+    **qualité AAA et performance**. **On le commence dès que les géantes sont finies.**
+
+## 11. Questions ouvertes
+
+Elles se tranchent avant ou pendant M0. Pour chacune, ce que je recommande :
+
+1. **T1, la forme du correctif** : la fonction hybride seule (recommandé d'abord : pas de nouvelle donnée, CPU = GPU), ou
+   aussi le pré-filtre des tuiles SRTM au décodage (si M0 montre encore des marches hors d'Europe).
+2. **H5 (les ombres de la Terre au-delà de 10 km)** : dans le plan après H4, ou en option jugée au vu de T6 (recommandé :
+   option, T6 couvre déjà les vallées jusqu'à 10 km).
+3. **T8 et T9** : dans ce plan en fin d'ordre (recommandé : les gains de chargement et de netteté au loin font partie de
+   « parfaite AAA »), ou dans un plan à part.
+4. **R4, si R4b prend du retard** : attendre R4b pour livrer R4a (recommandé), ou livrer R4a limité à l'orbite et au-delà
+   du dernier anneau.
+
+## 12. Historique
+
+- **31 octobre (première passe)** : le plan, sur `main` à `06ed0498`, après l'analyse de vr-solar-system.
+- **31 octobre** : le volet R revu après leurs changements 4h, 4i et `b2f5e51` ; les réponses de leur Claude (05:10 UTC)
+  intégrées ; R6 ajouté.
+- **31 octobre (deuxième passe)** : code relu des deux côtés ; H1b ajouté ; les décisions 1 à 5 ; le repère de R2 fait
+  (`efe4369a`, e2e `346a48a8`) ; le point du noyau (`4146b9a8`).
+- **31 octobre au soir (troisième passe, sur `0eed0272`)** : chaque affirmation relue dans le code ; les trois chemins des
+  corps rocheux, le repère de R2, la pression, les atmosphères d'`aero.ts`, `hdColor`, le bit 31, `moon shadeLite`,
+  l'estimation de H3, la mémoire de H1b corrigés ; les tables de réfraction, leur place, la liaison des horizons,
+  l'encodage, la hauteur de référence, les secteurs, H3a, R4a/R4b, R6a/R6b changés ; §3–§5 ajoutés ; les décisions 6 à
+  10.
+- **2 novembre** : l'analyse de la Terre raster
+  ([ANALYSE-TERRE-RASTER-2026-11-02.md](ANALYSE-TERRE-RASTER-2026-11-02.md)) et sa lecture croisée avec ce plan.
+  - **Corrigé** : la carte d'ombre du Soleil des corps est faite (P1-2) — décision 6 caduque, H3 réécrit, l'estimation de
+    H3 revue à la baisse, D redéfini ; les rochers commités ; « la Terre exclue » remplacé (elle n'a presque pas d'ombres
+    du relief en raster).
+  - **Ajouté** : le volet T (T1–T10), la séance commune M0 (ex-H0 + R0 + la Terre), H5 en option, l'API de cuisson
+    générique dans H1, R4a et R4b réunis, l'ordre commun, la décision 11, quatre questions.
+  - Le nom du fichier est gardé.
