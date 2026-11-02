@@ -189,8 +189,9 @@ reste, sur des facettes (§2a). C'est la plus grande perte « AAA » des vues ba
 **Correctif** :
 - Dessiner aussi les anneaux 1 à 4 dans la carte, avec leurs maillages et trous déjà calculés : ~130 k triangles de
   profondeur seule, < 0,2 ms.
-- Dans `liteSun`, une portée réglée sur la pente (comme `SUN_N` pour les corps) au lieu des 300 m : la carte contient
-  alors les bloqueurs proches (texels de 9,8 m).
+- ~~Dans `liteSun`, une portée réglée sur la pente au lieu des 300 m~~ — **insuffisant** (challenge du 2 novembre §4.5 :
+  ~390 m au Soleil rasant avec des texels de 9,8 m) : des cascades (la fine à ~1,5 m le texel) et des ombres de contact,
+  voir T6 dans le plan commun.
 - Une seconde cascade (±80 km, anneaux 5–6) pour les grandes ombres de fin de journée.
 - Remettre la portée annoncée à celle qui est vraiment dessinée.
 
