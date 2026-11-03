@@ -8851,6 +8851,9 @@ fn waterMirror(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, sky: vec3f, footM: f32)
 }
 
 struct SurfaceImage { c: vec3f, w: f32, cover: u32 }
+// a building drawn by the raster, its material (shadeLite, rasterBuilding): its albedo, its normal (the Earth's axes), its
+// glass's mirror share, its windows' light at night, its ambient occlusion
+struct RasterBuilding { albedo: vec3f, normal: vec3f, s: f32, e: vec3f, ao: f32 };
 // BEGIN_WORLD_SCENERY
 var<private> SC_POINT:vec3f=vec3f(0.0);
 var<private> SC_DISTANCE:f32=1e9;
@@ -9094,6 +9097,33 @@ fn roofLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,vec3f>
 // frame): its roof — the plane lowest over the point, its flat top —, or its wall — the footprint's nearest edge, its normal
 // toward the camera, the coordinate along it —, as sceneryQuery's hit has them: buildingLook's input, the traced look on the
 // raster's buildings (their own triangles and their oriented boxes alike)
+// (shadeLite's cities' lights near — Q2 —: what OpenStreetMap's roads make of them at the point drawn — tM along dirW, the
+// Earth's axes; fpM its footprint [m] —: ×3 on a road, ×0.15 off it; past the scenery's reach the far wash)
+fn sceneryRoadLight(dirW:vec3f,tM:f32,fpM:f32)->f32 {
+  SC_POINT = P.scenery[3].xyz + sceneryLocal(dirW) * tM;
+  SC_DISTANCE = tM;
+  let road = scenerySurface(max(fpM, 0.5));
+  if (P.scenery[0].w > 0.5 && SC_DISTANCE <= P.scenery[1].w) { return mix(0.15, 3.0, select(0.0, road.cover, road.kind == 1.0)); }
+  return CITY_WASH_FAR;
+}
+// (Q3 — shadeLite's raster building: its leaf's face found at the point drawn — tM along dirW, the Earth's axes —, the traced
+// pipeline's look on it; `photo` the orthophoto's colour there: a roof keeps its light and shade over its material's colour —
+// its skylights, chimneys, terraces' real patches: the material alone a uniform grey —, within 0.6–1.5 of the material's own
+// brightness. Inside the world scenery's block: the devices without it never draw a building's leaf)
+fn rasterBuilding(leaf:u32,dirW:vec3f,tM:f32,photo:vec3f)->RasterBuilding {
+  let g = u32(scenery[0].y) + leaf - 1u;
+  let dL = sceneryLocal(dirW);
+  let pL = P.scenery[3].xyz + dL * tM;
+  let hit = buildingFaceAt(g, pL, dL, tM);
+  var alb = hit.albedo * (0.85 + 0.15 * gnoise(pL * 0.65));
+  var nL = hit.normal;
+  WS_S = 0.0;
+  WS_AO = 1.0;
+  WS_E = vec3f(0.0);
+  buildingLook(hit, pL, &alb, &nL);
+  if (hit.aux.y < 0.0) { alb *= clamp(luminance(photo) / max(luminance(alb), 0.02), 0.6, 1.5); }
+  return RasterBuilding(alb, normalize(sceneryGlobal(nL)), WS_S, WS_E, WS_AO);
+}
 fn buildingFaceAt(g:u32,p:vec3f,d:vec3f,t:f32)->SceneryHit {
   let head=scenery[g];let count=u32(head.z);
   let np=(u32(scenery[g+2u].w)>>14u)&15u;
@@ -13749,24 +13779,12 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   var bldE = vec3f(0.0);
   var bldAO = 1.0;
   if (leaf > 0u && P.scenery[0].w > 0.5) {
-    let g = u32(scenery[0].y) + leaf - 1u;
-    let dL = sceneryLocal(dirW);
-    let pL = P.scenery[3].xyz + dL * tM;
-    let hit = buildingFaceAt(g, pL, dL, tM);
-    var alb = hit.albedo * (0.85 + 0.15 * gnoise(pL * 0.65));
-    var nL = hit.normal;
-    WS_S = 0.0;
-    WS_AO = 1.0;
-    WS_E = vec3f(0.0);
-    buildingLook(hit, pL, &alb, &nL);
-    // (a roof: its material's colour, the photograph's light and shade over it — its skylights, its chimneys, its terraces'
-    // real patches: the material alone a uniform grey — within 0.6–1.5 of the material's own brightness)
-    if (hit.aux.y < 0.0) { alb *= clamp(luminance(A) / max(luminance(alb), 0.02), 0.6, 1.5); }
-    A = alb;
-    n = normalize(sceneryGlobal(nL));
-    bldS = WS_S;
-    bldE = WS_E;
-    bldAO = WS_AO;
+    let rb = rasterBuilding(leaf, dirW, tM, A);
+    A = rb.albedo;
+    n = rb.normal;
+    bldS = rb.s;
+    bldE = rb.e;
+    bldAO = rb.ao;
   }
   // (a building's own triangles without its leaf — U2 —: its roof the orthophoto's — the photograph is the roof seen from
   // above —, its walls stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —,
@@ -13893,12 +13911,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // ×3 on a road, ×0.15 off it, a quarter of a town's ground road: the quarter's light about the same, drawn along its
   // streets, not the map's 500 m wash — the night only, a lit town only)
   if (HAS_SCENERY && lit > 0.0 && lamp > 0.02 && (liteSkip() & 131072u) == 0u) {
-    SC_POINT = P.scenery[3].xyz + sceneryLocal(dirW) * tM;
-    SC_DISTANCE = tM;
-    let road = scenerySurface(max(fpM, 0.5));
-    if (P.scenery[0].w > 0.5 && SC_DISTANCE <= P.scenery[1].w) {
-      lit *= mix(0.15, 3.0, select(0.0, road.cover, road.kind == 1.0));
-    } else { lit *= CITY_WASH_FAR; }
+    lit *= sceneryRoadLight(dirW, tM, fpM);
   } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
   G += mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp) * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
   G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark);
