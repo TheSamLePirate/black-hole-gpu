@@ -305,6 +305,46 @@ export function mouthCentre(s: Pick<Settings, MouthKeys>, t = sceneTime) {
  * the mouth translates without turning (the axes are those it has at t = 0).
  */
 export function mouth(s: Pick<Settings, MouthKeys>, t = sceneTime): Mouth {
+  // (the last answer kept — asked hundreds of times a frame for the same settings and instant; frozen: shared)
+  const k = mouthKey;
+  if (
+    k.t === t &&
+    k.whRho === s.whRho &&
+    k.whLength === s.whLength &&
+    k.whLensing === s.whLensing &&
+    k.whDist === s.whDist &&
+    k.whIncl === s.whIncl &&
+    k.whAzimuth === s.whAzimuth &&
+    k.whOrbit === s.whOrbit &&
+    k.whPhase === s.whPhase &&
+    k.spin === s.spin &&
+    k.disk === s.disk &&
+    k.diskOuter === s.diskOuter &&
+    mouthLast
+  )
+    return mouthLast;
+  const m = mouthAt(s, t);
+  for (const v of [m.w, m.C, m.ex, m.ey, m.ez, m.V]) Object.freeze(v);
+  mouthLast = Object.freeze(m);
+  Object.assign(k, {
+    t,
+    whRho: s.whRho,
+    whLength: s.whLength,
+    whLensing: s.whLensing,
+    whDist: s.whDist,
+    whIncl: s.whIncl,
+    whAzimuth: s.whAzimuth,
+    whOrbit: s.whOrbit,
+    whPhase: s.whPhase,
+    spin: s.spin,
+    disk: s.disk,
+    diskOuter: s.diskOuter,
+  });
+  return m;
+}
+const mouthKey: Partial<Pick<Settings, MouthKeys>> & { t: number } = { t: NaN };
+let mouthLast: Mouth | null = null;
+function mouthAt(s: Pick<Settings, MouthKeys>, t: number): Mouth {
   const w = dneg(s);
   const { th, ph0, D, omega, C, V } = mouthCentre(s, t);
   const C0: Vec3 = [D * Math.sin(th) * Math.cos(ph0), D * Math.sin(th) * Math.sin(ph0), D * Math.cos(th)];

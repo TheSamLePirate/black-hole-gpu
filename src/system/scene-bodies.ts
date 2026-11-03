@@ -64,8 +64,9 @@ export const TRACED_RADIUS = 600;
 /**
  * The bodies the tracer draws at t. `obs`: where the camera is in our universe's home frame (our mouth
  * seen from Gargantua's side: its origin) — our bodies then where the light shows them (seenFrom).
+ * `ours` false: Gargantua's side only (the same first entries — ours come after them).
  */
-export function sceneBodies(s: Settings, t: number, obs: Vec3 | null = null): GpuBody[] {
+export function sceneBodies(s: Settings, t: number, obs: Vec3 | null = null, ours = true): GpuBody[] {
   const out: GpuBody[] = [];
   if (s.sun) {
     out.push({
@@ -122,7 +123,7 @@ export function sceneBodies(s: Settings, t: number, obs: Vec3 | null = null): Gp
   }
   // our side: the solar system in the home frame of our mouth (the renderer makes the places relative
   // to the camera); where 4: within the Dneg region (the rays meet them there), 2: beyond
-  if (s.wormhole) {
+  if (s.wormhole && ours) {
     const rFar = 100 * s.whRho;
     let sun = -1;
     for (const b of sys.bodies.filter((q) => traced(q) && q.universe === "ours")) {

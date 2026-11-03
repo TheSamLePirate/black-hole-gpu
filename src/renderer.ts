@@ -3828,8 +3828,8 @@ export class Renderer {
     if (s.jet) r = Math.max(r, s.jetLength * 1.05);
     if (s.hotFlow) r = Math.max(r, 1.5 * s.diskOuter);
     if (s.sun) r = Math.max(r, s.sunOrbit + s.sunRadius + 5); // rays must meet the star inside
-    // a system's traced bodies, and an orbiting mouth, likewise
-    for (const b of sceneBodies(s, 0))
+    // a system's traced bodies, and an orbiting mouth, likewise (ours are never where 0: Gargantua's side only)
+    for (const b of sceneBodies(s, 0, null, false))
       if (b.parent < 0 && b.where === 0) r = Math.max(r, Math.min(Math.hypot(...b.pos), TRACED_RADIUS) + b.radius + 5);
     if (s.wormhole && s.whOrbit) r = Math.max(r, s.whDist + mouth(s).rGlue + 5);
     return r;

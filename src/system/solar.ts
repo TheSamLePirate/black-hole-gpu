@@ -850,6 +850,18 @@ export function sunShare(obs: Vec3, t: number): number {
  * the ship and the bodies drifted apart by ~6·10⁻⁶ m/s² (≈ 100 km over a lunar transfer).
  */
 export function mouthAccel(t: number): Vec3 {
+  // (the last instant's kept: every pull at a point asks it — a dozen times a frame at the same instant)
+  if (t !== accelT || accelV !== ephemerisVersion) {
+    accelT = t;
+    accelV = ephemerisVersion;
+    accelLast = mouthAccelAt(t);
+  }
+  return [accelLast[0], accelLast[1], accelLast[2]];
+}
+let accelT = NaN,
+  accelV = -1,
+  accelLast: Vec3 = [0, 0, 0];
+function mouthAccelAt(t: number): Vec3 {
   const d = daysOf(t);
   const sat = helio(solarBody("saturn")!, d).pos;
   const aSat: Vec3 = [0, 0, 0],

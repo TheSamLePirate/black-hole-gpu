@@ -51,8 +51,28 @@ export function repToHomeVec(w: Dneg, l: number, n: Vec3, v: Vec3): Vec3 {
   return [u[0] + k * nh[0], u[1] + k * nh[1], u[2] + k * nh[2]];
 }
 
+type HomePull = { acc: Vec3; inside: string | null; tDyn: number; tDot: number };
+// (the last answers without V: the craft's frame asks it a dozen times a frame at the same point and instant —
+// sfFrame's readers, the station-keeping's two points; the same numbers, ephemerides unchanged)
+const PULL_MEMO = 4;
+const pullMemo: { x: number; y: number; z: number; t: number; v: number; g: HomePull }[] = [];
+let pullNext = 0;
+
 /** The pull at a home-frame point at time t (the frame's own acceleration taken off); with V, the rate its fall time changes at. */
-export function gravityHome(X: Vec3, t: number, V?: Vec3): { acc: Vec3; inside: string | null; tDyn: number; tDot: number } {
+export function gravityHome(X: Vec3, t: number, V?: Vec3): HomePull {
+  if (V) return pullAt(X, t, V);
+  for (const m of pullMemo)
+    if (m.x === X[0] && m.y === X[1] && m.z === X[2] && m.t === t && m.v === ephemerisVersion)
+      return { acc: [m.g.acc[0], m.g.acc[1], m.g.acc[2]], inside: m.g.inside, tDyn: m.g.tDyn, tDot: 0 };
+  const g = pullAt(X, t);
+  const e = { x: X[0], y: X[1], z: X[2], t, v: ephemerisVersion, g: { ...g, acc: [g.acc[0], g.acc[1], g.acc[2]] as Vec3 } };
+  if (pullMemo.length < PULL_MEMO) pullMemo.push(e);
+  else pullMemo[pullNext] = e;
+  pullNext = (pullNext + 1) % PULL_MEMO;
+  return g;
+}
+
+function pullAt(X: Vec3, t: number, V?: Vec3): HomePull {
   const f = mouthAccel(t);
   let a: Vec3 = [-f[0], -f[1], -f[2]];
   let inside: string | null = null;

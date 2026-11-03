@@ -9073,7 +9073,7 @@ async function main() {
         taxiGuide.frame(
           camera,
           fleet.active === "a320" && settings.ship ? (p) => renderer.ship.cabinProject(p) : null,
-          canvas.getBoundingClientRect(),
+          () => canvas.getBoundingClientRect(),
           settings.units,
         );
         // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the

@@ -25,13 +25,16 @@ export class TaxiGuide {
   }
 
   /** A frame: shown on the ground with a route to roll (none: hidden). */
-  frame(c: CameraController, project: ((p: V3) => [number, number] | null) | null, view: DOMRect, units: UnitSys | undefined) {
+  frame(c: CameraController, project: ((p: V3) => [number, number] | null) | null, viewOf: () => DOMRect, units: UnitSys | undefined) {
     const T = c.a320Taxi;
-    const g = c.geoNow();
-    // (once cleared: the way out after the tower's word, the way in at once)
-    const on = !!(T?.route && T.cleared && T.cue && !T.cue.done && g && (c.rolling || c.ourLanded) && project);
-    this.cv.style.display = this.panel.style.display = on ? "block" : "none";
+    // (once cleared: the way out after the tower's word, the way in at once — the place and the view's box read
+    // only then: a box read every frame forced a layout after the HUD's writes)
+    const g = T?.route && T.cleared && T.cue && !T.cue.done && (c.rolling || c.ourLanded) && project ? c.geoNow() : null;
+    const on = !!g;
+    const show = on ? "block" : "none";
+    if (this.cv.style.display !== show) this.cv.style.display = this.panel.style.display = show;
     if (!on) return;
+    const view = viewOf();
     const cue = T!.cue!;
     const U = unitsFor({ units });
     // ---- the panel

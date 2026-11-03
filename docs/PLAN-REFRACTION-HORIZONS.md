@@ -1322,7 +1322,11 @@ compilation) s'y ajoutent.
   variantes du traceur dans un worker (jusqu'à 174 ms une variante, sur le fil de la page avant) : le temps de longues tâches −37 %.
   **T8c** — le temps CPU de la boucle en distribution (`game.perf().loopCpu`) ; trois recalculs par image retirés (le nivellement
   des pistes limité aux pistes proches, `ellOfR` et les sphères d'influence gardés par instant), une mise en page forcée retirée :
-  la pire itération 24–30 → 12–15 ms, le 95ᵉ centile ≈ 7 ms (cible 4) — mesuré sur ce Mac sous pression thermique.
+  la pire itération 24–30 → 12–15 ms, le 95ᵉ centile ≈ 7 ms (cible 4) — mesuré sur ce Mac sous pression thermique. **T8d** — le repère
+  de l'appareil et ses voisins plus recalculés par chacun de leurs lecteurs (`gravityHome` sans vitesse, `mouthAccel`, `mouth()` figé,
+  gardés par point/instant/réglages ; `escapeRadius` sans notre côté ; la boîte du canvas du guidage au roulage lue seulement quand il
+  s'affiche) : profil `sfFrame` 856 → 396 ms, mises en page forcées 304 → 23 ms sur 25 s ; A/B (thermique Nominal) p95 4,5 contre
+  4,7–5,1 ms, à tuiles inégales — non démontré.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du
