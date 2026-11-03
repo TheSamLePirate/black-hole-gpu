@@ -8025,6 +8025,17 @@ async function main() {
     forest: "forest",
     pack: "assembling",
   };
+  // (the top bar's and the compile meter's bottoms, read when their boxes change — a ResizeObserver's callback, the layout
+  // done there — and not in the loop: read there, after the frame's meters were written, they forced the page's layout,
+  // ~6 ms each half second in a flight — T8c)
+  const meterAnchor = { bar: 15, compile: 0, watched: false };
+  const anchorObs = new ResizeObserver(() => {
+    const bar = document.getElementById("topbar");
+    // (fixed: its offsetParent always null — shown is its having boxes)
+    meterAnchor.bar = bar && bar.getClientRects().length > 0 ? bar.getBoundingClientRect().bottom + 6 : 15;
+    meterAnchor.compile = compileMeter.hidden ? 0 : compileMeter.getBoundingClientRect().bottom + 4;
+  });
+  anchorObs.observe(compileMeter);
   const updateDataMeter = (now: number) => {
     const segs: { text: string; kind: string }[] = [];
     const et = renderer.earthTiles,
@@ -8064,11 +8075,15 @@ async function main() {
     const on = settings.showLoading && segs.length > 0;
     dataMeter.hidden = !on;
     dataMeter.dataset.state = segs.some((s) => s.kind !== "failed") ? "loading" : segs.length ? "failed" : "idle";
-    // (under the top bar — over it, among its buttons, it was hard to read —, and under the compiles when they show)
+    // (under the top bar — over it, among its buttons, it was hard to read —, and under the compiles when they show: their
+    // bottoms read when their boxes change, meterAnchors)
     const bar = document.getElementById("topbar");
-    // (fixed: its offsetParent always null — shown is its having boxes)
-    const below = bar && bar.getClientRects().length > 0 ? bar.getBoundingClientRect().bottom + 6 : 15;
-    dataMeter.style.top = `${Math.max(below, compileMeter.hidden ? 0 : compileMeter.getBoundingClientRect().bottom + 4)}px`;
+    if (bar && !meterAnchor.watched) {
+      meterAnchor.watched = true;
+      anchorObs.observe(bar);
+    }
+    const top = `${Math.max(meterAnchor.bar, meterAnchor.compile)}px`;
+    if (dataMeter.style.top !== top) dataMeter.style.top = top;
     if (!on) return;
     dataMeter.replaceChildren(
       ...segs.map((s) => {

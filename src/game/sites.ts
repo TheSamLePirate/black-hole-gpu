@@ -212,6 +212,35 @@ export const EARTH_RUNWAYS: RunwayFrame[] = [...SITE_RUNWAYS];
 export function setWorldRunways(frames: RunwayFrame[]) {
   EARTH_RUNWAYS.length = SITE_RUNWAYS.length;
   EARTH_RUNWAYS.push(...frames);
+  runwaysRev++;
+}
+/** EARTH_RUNWAYS' revision (setWorldRunways): the near lists rebuilt after it */
+let runwaysRev = 0;
+// (the runways a graded point can be near — those within their cut and NEAR_CELL of a cell's centre —, the list rebuilt when a
+// point is asked more than NEAR_CELL / 2 from it on any axis or the runways change: the relief's samples ask runwayGrade
+// hundreds of times a frame about one place, ~60 % of the relief's time spent on the far runways' tests — T8c)
+const NEAR_CELL = 8000;
+let nearAt: [number, number, number] = [Number.NaN, 0, 0];
+let nearRev = -1;
+let nearList: RunwayFrame[] = [];
+function runwaysNear(p: [number, number, number]): RunwayFrame[] {
+  if (
+    nearRev !== runwaysRev ||
+    !(
+      Math.abs(p[0] - nearAt[0]) <= NEAR_CELL / 2 &&
+      Math.abs(p[1] - nearAt[1]) <= NEAR_CELL / 2 &&
+      Math.abs(p[2] - nearAt[2]) <= NEAR_CELL / 2
+    )
+  ) {
+    nearAt = [p[0], p[1], p[2]];
+    nearRev = runwaysRev;
+    // (a point within NEAR_CELL / 2 of the centre on each axis is within 0.87 NEAR_CELL of it: a runway in its cut of
+    // the point is within its cut and NEAR_CELL of the centre)
+    nearList = EARTH_RUNWAYS.filter(
+      (r) => Math.hypot(p[0] - r.origin[0], p[1] - r.origin[1], p[2] - r.origin[2]) <= r.len + 3400 + NEAR_CELL,
+    );
+  }
+  return nearList;
 }
 /**
  * A ground point [m, body-fixed] on a runway's pavement or its shoulders (45 m either side of its axis, 60 m past
@@ -237,18 +266,21 @@ export interface Grade {
   elev: number;
 }
 export function runwayGrade(q: [number, number, number]): Grade {
-  const point = geodeticToCart(WGS84_A, WGS84_F, Math.atan2(q[2], Math.hypot(q[0], q[1])), Math.atan2(q[1], q[0]), 0);
   const g: Grade = { flat: 0, level: 0, elev: 0 };
+  const point = geodeticToCart(WGS84_A, WGS84_F, Math.atan2(q[2], Math.hypot(q[0], q[1])), Math.atan2(q[1], q[0]), 0);
+  const near = runwaysNear(point);
   const G = RUNWAY_GRADE;
-  for (const r of EARTH_RUNWAYS) {
+  for (const r of near) {
     // (a world runway whose level is being measured: the relief under it read bare)
     if (r.world?.measuring) continue;
-    const d = point.map((v, i) => v - r.origin[i]!) as [number, number, number];
+    const d0 = point[0] - r.origin[0],
+      d1 = point[1] - r.origin[1],
+      d2 = point[2] - r.origin[2];
     // (nothing graded beyond 3.3 km past either end nor 620 m aside: the cut from the threshold grows with the strip's length)
     const cut = r.len + 3400;
-    if (Math.abs(d[0]) > cut || Math.abs(d[1]) > cut || Math.abs(d[2]) > cut || Math.hypot(...d) > cut) continue;
-    const a = d[0] * r.along[0] + d[1] * r.along[1] + d[2] * r.along[2];
-    const c = Math.abs(d[0] * r.across[0] + d[1] * r.across[1] + d[2] * r.across[2]);
+    if (Math.abs(d0) > cut || Math.abs(d1) > cut || Math.abs(d2) > cut || d0 * d0 + d1 * d1 + d2 * d2 > cut * cut) continue;
+    const a = d0 * r.along[0] + d1 * r.along[1] + d2 * r.along[2];
+    const c = Math.abs(d0 * r.across[0] + d1 * r.across[1] + d2 * r.across[2]);
     // (the clear zone 3 km before either threshold: a runway lands both ways — W4)
     const wa = a < -3000 ? Math.max(0, 1 + (a + 3000) / 300) : a > r.len + 3000 ? Math.max(0, 1 - (a - r.len - 3000) / 300) : 1;
     // (the strip, the taxiway beside it, the apron and the buildings — PLAN-AEROPORTS A2, A3 —: 280 m out of

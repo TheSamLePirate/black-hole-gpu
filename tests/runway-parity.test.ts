@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { geodeticNormal, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
+import { geodeticNormal, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 import { EARTH_RUNWAYS, runwayFrame, runwayGrade, runwayWeight, setWorldRunways } from "../src/game/sites";
 
 // CPU boundary cases in physical WGS84 metres. GPU numerical parity runs in ellipsoid.e2e.test.ts.
@@ -95,4 +95,67 @@ test("a world runway (OurAirports' — PLAN-RADAR-AAA RD13): levelled as the sit
   } finally {
     setWorldRunways([]);
   }
+});
+
+test("runwayGrade: the near runways' list (T8c) gives the full scan's answers, after a jump and after the runways change", () => {
+  // (the full scan as it was before the near lists: every runway tested)
+  const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+  const reference = (q: [number, number, number]) => {
+    const point = geodeticToCart(WGS84_A, WGS84_F, Math.atan2(q[2], Math.hypot(q[0], q[1])), Math.atan2(q[1], q[0]), 0);
+    const g = { flat: 0, level: 0, elev: 0 };
+    for (const r of EARTH_RUNWAYS) {
+      if (r.world?.measuring) continue;
+      const d = point.map((v, i) => v - r.origin[i]!);
+      const cut = r.len + 3400;
+      if (Math.abs(d[0]!) > cut || Math.abs(d[1]!) > cut || Math.abs(d[2]!) > cut || Math.hypot(...d) > cut) continue;
+      const a = d[0]! * r.along[0] + d[1]! * r.along[1] + d[2]! * r.along[2];
+      const c = Math.abs(d[0]! * r.across[0] + d[1]! * r.across[1] + d[2]! * r.across[2]);
+      const wa = a < -3000 ? Math.max(0, 1 + (a + 3000) / 300) : a > r.len + 3000 ? Math.max(0, 1 - (a - r.len - 3000) / 300) : 1;
+      const world = (r.flags & 16) !== 0;
+      const side = world ? r.halfWidth + 80 : 280;
+      const wc = c < side ? 1 : Math.max(0, 1 - (c - side) / 60);
+      const out = Math.max(-300 - a, a - r.len - 300, 0);
+      const la = 1 - ease(out / 600);
+      const lc = 1 - ease((c - (world ? r.halfWidth + 100 : 320)) / (world ? 200 : 300));
+      const level = la * lc;
+      if (level > g.level) {
+        g.level = level;
+        g.elev = r.elev;
+      }
+      g.flat = Math.max(g.flat, wa * wc, level);
+    }
+    return g;
+  };
+  // (points within 12 km of each runway — half within 1.5 km of its axis —, in a shuffled order — the list rebuilt as they jump from one airfield to another)
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  const check = () => {
+    let graded = 0;
+    for (let k = 0; k < 4000; k++) {
+      const r = EARTH_RUNWAYS[Math.floor(rnd() * EARTH_RUNWAYS.length)]!;
+      const a = (rnd() * 2 - 0.5) * (r.len + 12000),
+        c = (rnd() * 2 - 1) * (rnd() < 0.5 ? 1500 : 12000);
+      const q = geodeticNormal(
+        WGS84_A,
+        WGS84_F,
+        r.origin.map((v, i) => v + a * r.along[i]! + c * r.across[i]!) as [number, number, number],
+      );
+      const got = runwayGrade(q),
+        want = reference(q);
+      expect(got).toEqual(want);
+      if (want.flat > 0) graded++;
+    }
+    return graded;
+  };
+  expect(check()).toBeGreaterThan(100);
+  // (the runways changed: a world runway put by Paris — its list rebuilt, it graded)
+  const saved = EARTH_RUNWAYS.filter((r) => r.world);
+  const orly = runwayFrame({ body: "earth", name: "LFPO 06", lat: 48.7233, lon: 2.3794, runway: true, rwy: 62, elev: 89 }, 3650, 30, 16);
+  const q = geodeticNormal(WGS84_A, WGS84_F, orly.origin.map((v, i) => v + 1000 * orly.along[i]!) as [number, number, number]);
+  runwayGrade(q);
+  setWorldRunways([orly]);
+  expect(runwayGrade(q)).toEqual(reference(q));
+  expect(runwayGrade(q).level).toBeCloseTo(1, 6);
+  expect(check()).toBeGreaterThan(100);
+  setWorldRunways(saved);
 });

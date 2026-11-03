@@ -1320,6 +1320,9 @@ compilation) s'y ajoutent.
   worker (`tile-decode.ts`) : 0 ms sur le fil de la page au lieu de ~1,25 s en 25 s de vol bas, +6 % d'images ; les longues tâches
   restantes ne viennent pas des tuiles ([T8.md](progress/refraction-horizons/T8.md)). **T8b** — la spécialisation WGSL des
   variantes du traceur dans un worker (jusqu'à 174 ms une variante, sur le fil de la page avant) : le temps de longues tâches −37 %.
+  **T8c** — le temps CPU de la boucle en distribution (`game.perf().loopCpu`) ; trois recalculs par image retirés (le nivellement
+  des pistes limité aux pistes proches, `ellOfR` et les sphères d'influence gardés par instant), une mise en page forcée retirée :
+  la pire itération 24–30 → 12–15 ms, le 95ᵉ centile ≈ 7 ms (cible 4) — mesuré sur ce Mac sous pression thermique.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

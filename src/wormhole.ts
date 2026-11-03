@@ -67,9 +67,20 @@ export function radius(w: Dneg, l: number): [number, number] {
   return [w.rho + w.M * (x * Math.atan(x) - 0.5 * Math.log1p(x * x)), Math.sign(l) * (2 / Math.PI) * Math.atan(x)];
 }
 
+// (the last answers kept: mouth() asks for the same two gluing radii at every call — dozens a frame from the flight's
+// figures —, each a bisection of 80 steps: ~8 % of the page's thread in a low flight, T8c. The same numbers given back.)
+const ELL_MEMO = 4;
+const ellMemo: { rho: number; a: number; M: number; r: number; l: number }[] = [];
 /** ℓ ≥ a at which r(ℓ) = r (r ≥ ρ). */
 export function ellOfR(w: Dneg, r: number): number {
   if (r <= w.rho) return w.a;
+  for (const m of ellMemo) if (m.r === r && m.rho === w.rho && m.a === w.a && m.M === w.M) return m.l;
+  const l = ellBisect(w, r);
+  if (ellMemo.length >= ELL_MEMO) ellMemo.shift();
+  ellMemo.push({ rho: w.rho, a: w.a, M: w.M, r, l });
+  return l;
+}
+function ellBisect(w: Dneg, r: number): number {
   let lo = w.a + (r - w.rho); // r' ≤ 1 → r(ℓ) ≤ ρ + ℓ − a
   let hi = lo * 2 + w.M * 4;
   while (radius(w, hi)[0] < r) hi *= 2;

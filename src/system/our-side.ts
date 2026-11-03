@@ -12,6 +12,7 @@ import { dot } from "../math/vec3";
 import { ellOfR, radius, repToSide, sidePosition, sideToRep, type Dneg } from "../wormhole";
 import { GARGANTUA_SYSTEM } from "./bodies";
 import { bodyState } from "./ephemeris";
+import { ephemerisVersion } from "./de440";
 import { poleOfDate, zonalAccel } from "./geopotential";
 import { withinBody } from "./ellipsoid";
 import { mouthAccel, SOLAR_BODIES, solarState, spinVector } from "./solar";
@@ -128,17 +129,33 @@ export function saturnDeparture(t = 0): { X: Vec3; fwd: Vec3; up: Vec3; vel: Vec
 export function referenceBody(X: Vec3, t: number): string {
   let best = "sun",
     bestR = Infinity;
-  for (const b of SOLAR_BODIES) {
-    if (!b.parent) continue;
-    const p = SOLAR_BODIES.find((q) => q.id === b.parent)!;
-    const P = solarState(b.id, t).pos;
-    const Q = solarState(p.id, t).pos;
-    const a = Math.hypot(P[0] - Q[0], P[1] - Q[1], P[2] - Q[2]);
-    const soi = a * (b.mass / p.mass) ** 0.4;
+  for (const { id, P, soi } of spheresAt(t)) {
     const d = Math.hypot(X[0] - P[0], X[1] - P[1], X[2] - P[2]);
-    if (d < soi && soi < bestR) (best = b.id), (bestR = soi);
+    if (d < soi && soi < bestR) (best = id), (bestR = soi);
   }
   return best;
+}
+// (the spheres of influence at an instant — each body's place and radius, the same for every point asked then: the flight's
+// figures ask referenceBody dozens of times a frame, its scan of the bodies ~4 % of the page's thread in a low flight, T8c —,
+// kept for the last instant and ephemeris; the same numbers, in the same order)
+let soiPairs: { b: (typeof SOLAR_BODIES)[number]; p: (typeof SOLAR_BODIES)[number]; k: number }[] | null = null;
+let soiT = Number.NaN;
+let soiVersion = -1;
+let soiList: { id: string; P: Vec3; soi: number }[] = [];
+function spheresAt(t: number) {
+  if (t === soiT && soiVersion === ephemerisVersion) return soiList;
+  soiPairs ??= SOLAR_BODIES.filter((b) => b.parent).map((b) => {
+    const p = SOLAR_BODIES.find((q) => q.id === b.parent)!;
+    return { b, p, k: (b.mass / p.mass) ** 0.4 };
+  });
+  soiList = soiPairs.map(({ b, p, k }) => {
+    const P = solarState(b.id, t).pos;
+    const Q = solarState(p.id, t).pos;
+    return { id: b.id, P, soi: Math.hypot(P[0] - Q[0], P[1] - Q[1], P[2] - Q[2]) * k };
+  });
+  soiT = t;
+  soiVersion = ephemerisVersion;
+  return soiList;
 }
 
 /** A body's sphere of influence around its primary: a (m / M)^0.4 (the Sun: everything). */
