@@ -1185,6 +1185,7 @@ Where the frame's time goes. `o.gpu !== false` (the default) switches on the GPU
 | `terrainCache` | `renderer.terrainCacheStats`: eligibility, compilation, prepared levels, builds/invalidations and bounded buffer bytes for the experimental height cache |
 | `terrainRaster` | `renderer.terrainRasterStats`: raster inspector's eligibility, compilation, encoded draws, selected patch and current/retired memory; no completed-frame or image-accuracy claim |
 | `cpu` | `[{ section, ms, worst }]` main-thread sections |
+| `loopCpu` | `{ n, p50, p95, p99, max }` the main loop's CPU time per iteration over the last 600 (~10 s) [ms]: the frame's CPU budget as a distribution (strategy analysis §8.3) |
 | `gpu` | `[{ pass, ms, last, frames }]` GPU passes |
 
 ```js

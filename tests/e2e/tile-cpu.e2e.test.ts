@@ -59,7 +59,8 @@ test.skipIf(!E2E)(
         return { s: +((performance.now() - t0) / 1000).toFixed(1), frames: r.completedFrames - f0, tilesLoaded: r.earthTiles.loaded - loaded0,
           pending: r.earthTiles.pending, orthoPending: r.earthTiles.orthoPending, cpu: round(T),
           longTasks: { n: long.length, totalMs: Math.round(long.reduce((a, b) => a + b, 0)), worst: long.slice(0, 5).map((x) => Math.round(x)) },
-          specialise: r.specialiseCpu ?? null, windows: window.__longs }; })()`);
+          specialise: r.specialiseCpu ?? null, loopCpu: __bh.game.perf().loopCpu ?? null,
+          cpuSections: (__bh.game.perf().cpu ?? []).slice(0, 8), windows: window.__longs }; })()`);
       console.log(`  ${TAG} flight: ${JSON.stringify(out.flight)}`);
       if (profile) {
         const { profile: pr } = await app.cdp.send<{
@@ -70,19 +71,39 @@ test.skipIf(!E2E)(
             timeDeltas: number[];
           };
         }>("Profiler.stop", {}, 60);
+        // (the raw profile kept: Chrome's DevTools opens it, scripts read its call tree)
+        writeFileSync(`${OUT}/profile-${TAG}.cpuprofile`, JSON.stringify(pr));
         const longs = ((out.flight as { windows?: [number, number][] }).windows ?? []).slice();
-        const name = new Map(pr.nodes.map((n) => [n.id, `${n.callFrame.functionName || "(anonymous)"} ${n.callFrame.url.split("/").pop()}:${n.callFrame.lineNumber + 1}`]));
+        const name = new Map(
+          pr.nodes.map((n) => [
+            n.id,
+            `${n.callFrame.functionName || "(anonymous)"} ${n.callFrame.url.split("/").pop()}:${n.callFrame.lineNumber + 1}`,
+          ]),
+        );
         // (each sample's time on the page's clock: the profile's start taken as p0 — a few ms off at most)
         // (each node's parent: a sample's whole stack — the inclusive time of every function on it)
         const parent = new Map<number, number>();
         for (const n of pr.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
         const inclusive = new Map<string, number>();
+        const overall = new Map<string, number>();
         const inLong = new Map<string, number>();
         const perTask = longs.map(() => new Map<string, number>());
+        const perTaskIncl = longs.map(() => new Map<string, number>());
         let t = pr.startTime;
         for (let i = 0; i < pr.samples.length; i++) {
           t += pr.timeDeltas[i]!;
           const at = p0 + (t - pr.startTime) / 1000;
+          // (the whole flight's inclusive time: every sample's stack)
+          {
+            const dt0 = (pr.timeDeltas[i + 1] ?? 500) / 1000;
+            const seen0 = new Set<string>();
+            for (let id: number | undefined = pr.samples[i]!; id !== undefined; id = parent.get(id)) {
+              const g = name.get(id)!;
+              if (seen0.has(g)) continue;
+              seen0.add(g);
+              overall.set(g, (overall.get(g) ?? 0) + dt0);
+            }
+          }
           const k = longs.findIndex(([s0, d]) => at >= s0 && at <= s0 + d);
           if (k < 0) continue;
           const f = name.get(pr.samples[i]!)!;
@@ -94,15 +115,25 @@ test.skipIf(!E2E)(
             if (seen.has(g)) continue;
             seen.add(g);
             inclusive.set(g, (inclusive.get(g) ?? 0) + dt);
+            perTaskIncl[k]!.set(g, (perTaskIncl[k]!.get(g) ?? 0) + dt);
           }
           perTask[k]!.set(f, (perTask[k]!.get(f) ?? 0) + dt);
         }
         const top = (m: Map<string, number>, n: number) =>
-          [...m].sort((a, b) => b[1] - a[1]).slice(0, n).map(([f, ms]) => `${ms.toFixed(1)} ms ${f}`);
+          [...m]
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, n)
+            .map(([f, ms]) => `${ms.toFixed(1)} ms ${f}`);
         out.profile = {
           inLongTasks: top(inLong, 15),
           inclusive: top(inclusive, 25),
-          tasks: longs.map(([s0, d], k) => ({ at: Math.round(s0 - p0), ms: Math.round(d), top: top(perTask[k]!, 6) })),
+          overall: top(overall, 60),
+          tasks: longs.map(([s0, d], k) => ({
+            at: Math.round(s0 - p0),
+            ms: Math.round(d),
+            top: top(perTask[k]!, 6),
+            inclusive: top(perTaskIncl[k]!, 30),
+          })),
         };
         console.log(`  ${TAG} profile: ${JSON.stringify(out.profile, null, 1)}`);
       }
