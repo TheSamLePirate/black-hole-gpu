@@ -387,6 +387,41 @@ const METER_EVERY = 4;
 /** how often the raster's sea is probed (renderer.seaProbeFor) [frames]; how long unseen before its FFT stops */
 const SEA_PROBE_FRAMES = 15;
 const SEA_UNSEEN_FRAMES = 120;
+/** the calibrated night (Q2), over the full sunlight's irradiance (100 000 lux): the night sky's floor (trace.wgsl EARTH_NIGHT,
+ *  ~0.01 lux), the full Moon at the zenith (EARTH_MOON, 0.25 lux), the eye's adaptation limit (~1 lux: below it the scene
+ *  shows darker as it is darker), the cities' lights' radiance over a sunlit white's */
+const NIGHT_ILLUMINANCE = 1e-7;
+const MOON_ILLUMINANCE = 2.5e-6;
+const EYE_ADAPTATION = 1e-5;
+const CITY_LIGHTS = 2e-5;
+/** the twilight sky's light on a horizontal ground over the full sunlight's, by the Sun's height [°] (tabulated horizontal
+ *  illuminance: 400 lux at sunset, 3.4 at the civil twilight's end, 0.008 at the nautical's, 0.0007 at the astronomical's) */
+const TWILIGHT: [number, number][] = [
+  [0, 400],
+  [-1, 250],
+  [-2, 150],
+  [-3, 80],
+  [-4, 35],
+  [-5, 12],
+  [-6, 3.4],
+  [-8, 0.4],
+  [-10, 0.04],
+  [-12, 0.008],
+  [-15, 0.002],
+  [-18, 0.0007],
+];
+export function twilightIlluminance(elDeg: number): number {
+  if (elDeg >= 0) return 400 / 1e5;
+  for (let i = 1; i < TWILIGHT.length; i++) {
+    const [e1, l1] = TWILIGHT[i]!;
+    if (elDeg >= e1) {
+      const [e0, l0] = TWILIGHT[i - 1]!;
+      const f = (elDeg - e0) / (e1 - e0);
+      return 10 ** (Math.log10(l0) + f * (Math.log10(l1) - Math.log10(l0))) / 1e5;
+    }
+  }
+  return 0;
+}
 /** the exposure under which the stars are splatted (encodeStars): a day's sky (EV 14.6) hides them */
 const STARS_MIN_EV = 15.5;
 /** realtime pass under the temporal reprojection: rays prefiltered over their pixel, not their block */
@@ -3173,23 +3208,20 @@ export class Renderer {
     }
     const tSec = time * 4.925490947e-6 * s.massSolar;
     const drift = ((tSec / (20 * 86400)) % 1) * 2 * Math.PI;
-    // (the cities' lights: drawn bright from orbit — they show on the night side; near the ground, a
-    // twentieth: seen from below, lit areas would glare like a sunlit field)
+    // (the cities' lights: their radiance over a sunlit white's — the calibrated night, Q2: a city's heart ~3·10⁻⁵ of the
+    // sunlit ground's, VIIRS's — the same from every height; the eye's adaptation, not a gain with the camera's height
+    // (×20 from 5 to 300 km before), shows them from orbit and from below)
     const altKm = earthSurface ? (earthSurface.h * EARTH_RM) / 1e3 : 1e4;
     if (!o.probe && t === this.live) this.liveAltKm = altKm;
-    const lights = 0.6 * 20 ** Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 300) / Math.log10(300 / 5), -1), 0);
+    const lights = CITY_LIGHTS;
     // (the real weather: the clouds of the day, held still — each region as the satellite saw it)
     const dayOn = this.dayCloudsWanted(s, time);
     set(58, this.earthMaps.tier ? (dayOn ? 2 : 1) : 0, dayOn ? 0 : drift, lights, 4);
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
     // side dark round its cities)
-    set(
-      61,
-      4 ** -Math.min(Math.max(Math.log10(Math.max(altKm, 1) / 5) / Math.log10(300 / 5), 0), 1),
-      0,
-      0,
-      s.volumetricClouds && altKm < 30 ? 1 : 0,
-    ); // (w: the clouds a volume — the camera low: 30 km)
+    // (x: the night sky's light on the ground over its value — 1 at every height since the calibrated night, Q2: from orbit a
+    // quarter before)
+    set(61, 1, 0, 0, s.volumetricClouds && altKm < 30 ? 1 : 0); // (w: the clouds a volume — the camera low: 30 km)
     // a world's finer maps, the camera near it (within 40 of its radii): its map's index, its brightness
     // kept (the coarse map's mean over the finer's), its relief's strength (0: none), the map's width
     const nearMap = near ? (solarBody(bodies[near.index]!.id)?.map as MapName | undefined) : undefined;
@@ -3292,6 +3324,10 @@ export class Renderer {
       const shade = moonLightShare(E, M, S, solarBody("earth")!.radius * DANJON_SCALE, solarBody("moon")!.radius, solarBody("sun")!.radius);
       this.moonLight = shade;
       moon = [q[0]!, q[1]!, q[2]!, ((1 + cosPhase) / 2) * shade];
+      if (!o.probe && t === this.live) {
+        this.moonDirEarth = [q[0]!, q[1]!, q[2]!];
+        this.moonLitShare = moon[3]!;
+      }
       // the eclipses: the Moon and the Sun where the light shows them from the camera (the Moon 1.3 s
       // ago — the shadow's place, to a kilometre), on the Earth's axes [its radii]; the Sun's angular radius
       const obs = homePosition(s) ?? E;
@@ -3741,7 +3777,11 @@ export class Renderer {
     this.device.queue.writeBuffer(this.displayBuf, 0, d);
     // (the eye: the night's Purkinje shift — display.wgsl eye.x —, by how dark the scene the exposure
     // adapts to is: daylight EV ~14.4, night ~16.3 — the shadows of a sunlit day stay in colour)
-    const scotopic = Math.min(Math.max((this.ev(s) - 15) / 1.2, 0), 1);
+    // (near the Earth, by how far the eye opened over a day's — the calibrated night, Q2: none 11 stops over, ~a lit city's
+    // street; whole 14 over, a full Moon's field and darker —; elsewhere by the exposure, as before)
+    const scotopic = this.earthIsNear
+      ? Math.min(Math.max((this.ev(s) - s.exposure - 14.4 - 11) / 3, 0), 1)
+      : Math.min(Math.max((this.ev(s) - 15) / 1.2, 0), 1);
     // (the telescope's spot — a sensor's frame, not the eye's —: no Purkinje shift; its black point, the sky behind
     // the target as the frame exposes it, a little under it)
     const spot = target === this.live && this.meterSpot && this.spotSky > 0;
@@ -7474,14 +7514,33 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       const h = (near.distance / near.radius - 1) * 6051.8e3;
       return h >= 70e3 ? 1 : 0.035 ** Math.min((70e3 - h) / 23e3, 1);
     }
-    if (!near || bodies[near.index]?.id !== "earth") return 1;
+    if (!near || bodies[near.index]?.id !== "earth") {
+      this.eyeIncident = 1;
+      return 1;
+    }
     const place = surface ?? patchGeodetic(near, WGS84_F);
     const mu = place.up.reduce((v, n, i) => v + n * near.light[i]!, 0);
     // (and an eclipse: the Sun's disk the Moon leaves — the totality's twilight, ten stops down)
     const home = this.meterHome;
     const ecl = home ? sunShare(home, this.meterTime) : 1;
-    return Math.max(sunThroughY(Math.max(place.h * EARTH_RM, 0), mu), 0.25) * Math.max(ecl, 0.002) * this.wxLight;
+    // (the calibrated night — Q2: the light falling here over the full sunlight's — the Sun through the air, the twilight's
+    // sky, the Moon by its phase and height, the night sky's floor —, and the eye's adaptation to it: I/(I + I_eye), its
+    // exposure 1/(I + I_eye) — a day's as before; a full Moon's ground ~4 stops under a day's grey, silvery; a moonless night's
+    // ~8, black, the cities bright over it; the same at every height: from orbit's night side as from below)
+    const sun = sunThroughY(Math.max(place.h * EARTH_RM, 0), mu) * Math.max(ecl, 0.002);
+    const sky = twilightIlluminance((Math.asin(Math.max(-1, Math.min(1, mu))) * 180) / Math.PI) * Math.max(ecl, 0.002);
+    const md = this.moonDirEarth;
+    const mz = md ? md[0] * place.normal[0] + md[1] * place.normal[1] + md[2] * place.normal[2] : -1;
+    const moonI = MOON_ILLUMINANCE * this.moonLitShare ** 1.5 * Math.max(mz, 0);
+    const I = (Math.max(sun, sky) + moonI + NIGHT_ILLUMINANCE) * this.wxLight;
+    this.eyeIncident = I;
+    return I + EYE_ADAPTATION;
   }
+  /** the light falling at the camera over the full sunlight's (earthSunlight; 1 away from the Earth): the eye's Purkinje shift */
+  private eyeIncident = 1;
+  /** the Moon on the Earth's axes and its lit share (the shader's earth3), for the meter's night */
+  private moonDirEarth: [number, number, number] | null = null;
+  private moonLitShare = 0;
   /** the share of the daylight the weather's decks and fog let down to the camera (weatherParams; 1: none) */
   private wxLight = 1;
   /** where the meter reads the light (home frame) and when */
@@ -7561,6 +7620,34 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (in the Earth's air, its sky is the scene, not a backdrop: a camera's meter besides — no more than a
     // fiftieth of the image over white once the tone map's own gain is in (a sunset's glow round the sun;
     // the disk itself is fewer pixels). Only ever less exposure: night and space as the light sets them)
+    // (the calibrated night — Q2 —: the eye adapts to what it sees too — a lit city under the craft, a quarter of the image or
+    // less (the sky, the cockpit the rest, black: its median no guide) —: at night the image's brightest 5 % — the lit streets — kept bright, under white (their colour seen: the cones')
+    // at most; a dark countryside, space, the night side from orbit — black there too, the cities a few per cent — leave the
+    // exposure to the light falling here)
+    // (the night only — under ~3 lux, the civil twilight's end —: at dusk the sky's glow is the image's brightest, and the
+    // ground under it was put to black)
+    // (at night, the image's rules — these and the 2 % one below — at most 3 stops under the light's own exposure: a city's
+    // wash took ~2; a dusk sky's glow, the image's brightest after the Sun has set, had put the lit town under it to black)
+    const nightFloor = this.meterInAir && !this.meterSpotUsed && this.eyeIncident < 3e-5 ? m / 8 : 0;
+    if (this.meterInAir && !this.meterSpotUsed && this.eyeIncident < 3e-5) {
+      // (and its brightest 15 % — a lit town's wide glow, its 500 m map seen from high or before its streets are in — a dim
+      // grey: the eye adapted to a sea of light sees it dim)
+      for (const [share, level] of [
+        [0.05, 0.6],
+        [0.15, 0.15],
+      ] as const) {
+        let a = 0;
+        for (let b = 127; b >= 1; b--) {
+          const before = a;
+          a += h[b]!;
+          if (a >= share * total) {
+            const lit = within(b, before, share * total);
+            if (lit > 0) m = Math.min(m, level / (this.meterGain * lit));
+            break;
+          }
+        }
+      }
+    }
     if (this.meterInAir && !this.meterSpotUsed) {
       let acc2 = 0;
       for (let b = 127; b >= 1; b--) {
@@ -7572,6 +7659,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         }
       }
     }
+    if (nightFloor > 0) m = Math.max(m, nightFloor);
     const target = Math.min(Math.max(Math.log2(m), -6), 32);
     this.meterTarget = target;
     const now = performance.now();

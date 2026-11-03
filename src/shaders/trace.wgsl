@@ -5290,9 +5290,10 @@ fn shipShadow(pw: vec3f) -> f32 {
 @group(0) @binding(25) var noiseSamp: sampler;
 
 const EARTH_SURF = 4u;        // its surface kind: the first map (solar.ts: MAPS_HI)
-// the night sky's light on the ground (the stars, the airglow — a moonless night, drawn brighter than
-// it is: the ground shows, faintly, cool), over the sunlight's irradiance
-const EARTH_NIGHT = vec3f(0.06, 0.075, 0.11);
+// the night sky's light on the ground (the stars, the airglow — a moonless night), over the sunlight's irradiance: the
+// calibrated night (Q2) — ~0.01 lux of 100 000, five times the real starlight's and airglow's 0.002 for the ground to be
+// guessed at; the eye's adaptation (renderer.earthSunlight: I/(I + I_eye)) keeps it near black, the cities bright over it
+const EARTH_NIGHT = vec3f(0.8e-7, 1.0e-7, 1.3e-7);
 // The night's light on the ground as the eye sees it (EARTH_NIGHT) — none in the Moon's shadow by day:
 // there the sky's own light, the sky seen (sk: skySeen), a ten-thousandth of the day's at the umbra's
 // heart (the floor, 6 % of the sunlight, lit the totality's ground above the partial phase's)
@@ -5366,12 +5367,23 @@ fn skyFlatFactor(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
   return skyFlat(q, h, E, mu0, sk) / max(E, vec3f(1e-30));
 }
 fn nightFloor(sk: f32, mu0: f32) -> vec3f {
-  return EARTH_NIGHT * P.earth4.x * (1.0 - smoothstep(-0.05, 0.1, mu0) * (1.0 - sk));
+  return max(EARTH_NIGHT, twilightGround(mu0)) * P.earth4.x * (1.0 - smoothstep(-0.05, 0.1, mu0) * (1.0 - sk));
 }
-// the full Moon's light at night, over the sunlight's irradiance (drawn far brighter than it is — a
-// moonlit landscape shows, silvery), and the moonlight at q: its direction's cosine on the normal n,
-// through the air, faded in as the night falls
-const EARTH_MOON = vec3f(0.07, 0.085, 0.11);
+// The twilight sky's light on a horizontal ground over the full sunlight's, by the Sun's sine of height (tabulated horizontal
+// illuminance — renderer.ts TWILIGHT, the meter's —: 400 lux at sunset, 80 at −3°, 3.4 at the civil twilight's end, 0.008 at
+// the nautical's; bluish): the calibrated night's (Q2) dusk — the air's harmonics alone left the ground black under a glowing
+// sky (the old night floor, 6–11 % of the day, had lit it)
+fn twilightGround(mu0: f32) -> vec3f {
+  // (the table's log10 lux by the Sun's height [°], a quartic through it — within 0.06 of it, 0 to −18°)
+  let r = degrees(asin(clamp(mu0, -1.0, 1.0)));
+  let el = clamp(r, -18.0, 0.0);
+  let lg = (((-0.000131025 * el - 0.0063495) * el - 0.0896197) * el - 0.00463328) * el + 2.53945;
+  return vec3f(0.85, 0.95, 1.2) * (exp2(lg * 3.3219281) * 1e-5) * step(-17.99, r);
+}
+// the full Moon's light at night at the zenith, over the sunlight's irradiance (0.25 lux of 100 000 — the calibrated night,
+// Q2: the sunlight off its albedo, a touch redder; the silver the eye's Purkinje shift's, display.wgsl), and the moonlight at
+// q: its direction's cosine on the normal n, through the air, faded in as the night falls
+const EARTH_MOON = vec3f(2.6e-6, 2.5e-6, 2.35e-6);
 // A cloud's diffuse transmission through the optical depth τ between a point and its top (or its base): two-stream for a
 // thick, forward-scattering water cloud — what reaches a deep cumulus's base of the light falling on its top, ~a tenth (the
 // grey, dark undersides; it was 0.3 + 0.7 e^(−τ/4): the bases lit at a third whatever the depth — the user's report, U7)
@@ -5394,11 +5406,11 @@ fn cityGlowUp(q: vec3f, E: vec3f, mu0: f32) -> vec3f {
 // dark sky behind them — white clouds on a black sky, the user's report; a moonless night's clouds dark masses, the Moon's
 // silvery, a city's orange underneath — U7)
 const CLOUD_NIGHT_FLOOR = 0.15;
-// (the cities' light on the clouds' bases: the lit ground's as it is drawn near it — a twentieth of the orbit's — whatever the
-// camera's height (P.earth.z follows it: from orbit the bases would glow twenty times brighter); a base sends back ~its
+// (the cities' light on the clouds' bases: 0.4 of the lit ground's radiance (P.earth.z, the same at every camera height since
+// the calibrated night — Q2); a base sends back ~its
 // albedo of what the city under it gives — a city's overcast dim orange, the countryside's black; 0.12 lit a night's deck as a
 // day's, at 0.03 a dense city's bases outshone everything else at night)
-const CITY_GLOW_CLOUDS = 0.012;
+const CITY_GLOW_CLOUDS = 4e-6;
 fn earthMoonlight(q: vec3f, n: vec3f, h: f32, mu0: f32) -> vec3f {
   let Lm = P.earth3.xyz;
   let mz = dot(airPhysicalNormal(q), Lm);
@@ -9735,7 +9747,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (the runways' lamps: a sunlit sky's worth by day — barely seen —, far over the night's ground)
   // (by day in a poor visibility — fog, rain: P.runways[17].y — at their brightest, as the tower sets them;
   // at night thousands of times the night's own light: each lamp a point that glows — the bloom's — from km out)
-  if (HAS_RWY) { col += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), 3000.0, dark); }
+  if (HAS_RWY) { col += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark); }
   return col;
 }
 
@@ -12626,9 +12638,16 @@ var<private> DISC_OFF: vec2u = vec2u(0u);
 var<private> DISC_ST: u32 = 1u;
 // (a body's light's gain this ray — ourSegment's planetShade: the Moon's disc at night, main's disc layers)
 var<private> BODY_GAIN: f32 = 1.0;
-// the Moon's disc's gain at night (main's disc layers): the night's compression — EARTH_MOON's 8 % of the sunlight for the
-// moonlit ground against its real 1/400 000 —, a fraction of it: the disc ~10³ the moonlit ground, past white into the bloom
-const MOON_NIGHT_GAIN = 150.0;
+// the Moon's disc's gain at night (main's disc layers): the eye's local adaptation to a bright small disc — the moonlit ground
+// at its real 1/400 000 of the day (EARTH_MOON, the calibrated night), the disc ~3·10⁵ times it as it is: a gain that leaves it
+// ~10³ the moonlit ground, past white into the bloom, its maria still shown
+const MOON_NIGHT_GAIN = 0.0025;
+// the runway's lamps at night [their share of a sunlit white's radiance — luminance(E)/π]: the calibrated night (Q2) — the eye
+// opened ~33 000 × a day's; the lamps at their night step, a fraction of the day's 8 (3 000 before: the night drawn at 8 % of the day)
+const RWY_LAMPS_NIGHT = 0.4;
+// a lit town's ground beyond the streets drawn (the scenery's box): the night map's 500 m mean seen grazing — the streets hidden
+// by what stands along them, the trees and the roofs dark —, a share of it; whole it made a bright band at the horizon
+const CITY_WASH_FAR = 0.4;
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u,
         @builtin(local_invocation_index) li: u32, @builtin(workgroup_id) wid: vec3u) {
@@ -13790,12 +13809,25 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     G = G * (1.0 - F) + F * sky * 1.1 / PI * (1.0 + 2.5 * ripple);
     G += ripple * 0.35 * sky / PI;
   }
-  // (the cities' lights at night)
+  // (the cities' lights at night: on the ground — the streets', the squares' —, not on a tree's crown nor on a building's walls
+  // and roofs, which their windows will light — Q3: the map's 500 m glow painted the crowns and the facades orange)
   let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
   let lamp = max(lights - 0.07, 0.0) / 0.93;
   let dark = 1.0 - smoothstep(-0.12, 0.06, mu0g);
-  G += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
-  G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), 3000.0, dark);
+  var lit = select(dark, 0.0, isTree || mesh);
+  // (near — the scenery's box —: the streets carry the light, their lamps along them — OpenStreetMap's roads at the point:
+  // ×3 on a road, ×0.15 off it, a quarter of a town's ground road: the quarter's light about the same, drawn along its
+  // streets, not the map's 500 m wash — the night only, a lit town only)
+  if (HAS_SCENERY && lit > 0.0 && lamp > 0.02 && (liteSkip() & 131072u) == 0u) {
+    SC_POINT = P.scenery[3].xyz + sceneryLocal(dirW) * tM;
+    SC_DISTANCE = tM;
+    let road = scenerySurface(max(fpM, 0.5));
+    if (P.scenery[0].w > 0.5 && SC_DISTANCE <= P.scenery[1].w) {
+      lit *= mix(0.15, 3.0, select(0.0, road.cover, road.kind == 1.0));
+    } else { lit *= CITY_WASH_FAR; }
+  } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
+  G += mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp) * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
+  G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark);
   // (the water — the sea, the lakes and rivers —: found here — its cover sharp, the polygon's edge alone softened; the sea's
   // mask the relief map's over the sea's level, OSM's by the coasts —, drawn by shadeWater: this pixel's surface under it left
   // to it in accum, its kind and cover in moments.x)

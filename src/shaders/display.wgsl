@@ -770,7 +770,9 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     if (D.eye.x > 0.0) {
       let Lp = dot(c, LUMA);
       let Ls = dot(c, vec3f(0.02, 0.42, 0.56));
-      let k = D.eye.x * (1.0 - smoothstep(0.08, 0.8, Lp));
+      // (the cones from ~0.3 of white on — the calibrated night's lamps, its lit streets, in their colours —; a moonlit field
+      // ~0.01, the rods')
+      let k = D.eye.x * (1.0 - smoothstep(0.03, 0.3, Lp));
       c = mix(c, Ls * vec3f(0.62, 0.82, 1.08), 0.75 * k);
     }
     if (D.img.w > 0.5) {
