@@ -1,6 +1,7 @@
 import { TABLE_TERRAIN, TABLE_TERRAIN_PREV } from "../gpu-tables";
 import type { TileChange } from "./earth-tiles";
 import { wgslFunction } from "./warp-grid";
+import { earthHorizonReader } from "./earth-horizons";
 import {
   TERRAIN_CACHE_HEADER,
   TERRAIN_CACHE_LEVELS,
@@ -67,7 +68,8 @@ fn terrainCachedHeight(q: vec3f, foot: f32) -> f32 {
   }
   if (rem >= 1.0) { return -1.0; }
   return sum + rem * earthHeightExactG(q, foot);
-}`,
+}
+${earthHorizonReader()}`,
   );
 }
 
@@ -298,6 +300,8 @@ export class TerrainCache {
   /** (T4) the bakes by level and by cause: the window moved (or never baked), or newer tiles (dirty) */
   private bakesMoved = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
   private bakesDirty = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
+  /** (H5) each level's bakes, counted: its horizons baked again when it changes (system/earth-horizons.ts) */
+  private generations = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
   private constructor(private device: GPUDevice) {}
 
   static create(device: GPUDevice, trace: string): TerrainCache {
@@ -518,6 +522,7 @@ export class TerrainCache {
         if (this.ready[k]) this.bakesDirty[k]!++;
         else this.bakesMoved[k]!++;
         this.ready[k] = true;
+        this.generations[k]!++;
         this.dirty[k] = false;
         this.hiddenSince[k] = 0;
         this.visibleFirst[k] = 0;
@@ -536,6 +541,11 @@ export class TerrainCache {
   upcomingWindow(level: number): TerrainWindow | null {
     const w = this.upcoming[level];
     return w ? { ...w } : null;
+  }
+
+  /** (H5) the level's bakes so far: its heights changed when this does */
+  levelGeneration(level: number): number {
+    return this.generations[level]!;
   }
 
   levelWindow(level: number): TerrainWindow | null {

@@ -24,6 +24,8 @@ import {
   TABLE_TERRAIN_PREV,
   TABLE_HORIZON,
   HORIZON_VEC4S,
+  TABLE_EARTH_HORIZON,
+  EARTH_HORIZON_VEC4S,
   TABLE_TOPS,
   TERRAIN_PREV_VEC4S,
   TOPS_VEC4S,
@@ -76,7 +78,8 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
       RINGSUM_VEC4S +
       TOPS_VEC4S +
       TERRAIN_PREV_VEC4S +
-      HORIZON_VEC4S,
+      HORIZON_VEC4S +
+      EARTH_HORIZON_VEC4S,
   );
   expect(constU("GEOID_OFF")).toBe(TABLE_GEOID);
   expect(constU("ORTHO_OFF")).toBe(TABLE_ORTHO);
@@ -87,7 +90,8 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(TABLE_TOPS).toBe(TABLE_RINGSUM + RINGSUM_VEC4S);
   expect(TABLE_TERRAIN_PREV).toBe(TABLE_TOPS + TOPS_VEC4S);
   expect(TABLE_HORIZON).toBe(TABLE_TERRAIN_PREV + TERRAIN_PREV_VEC4S);
-  expect(TABLE_VEC4S).toBe(TABLE_HORIZON + HORIZON_VEC4S);
+  expect(TABLE_EARTH_HORIZON).toBe(TABLE_HORIZON + HORIZON_VEC4S);
+  expect(TABLE_VEC4S).toBe(TABLE_EARTH_HORIZON + EARTH_HORIZON_VEC4S);
   expect(constU("TOPS_OFF")).toBe(TABLE_TOPS);
   expect(GIANT_TOPS_TABLE.length).toBe(TOPS_VEC4S * 4);
   expect(constU("RINGSUM_OFF")).toBe(TABLE_RINGSUM);

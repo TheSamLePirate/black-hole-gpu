@@ -15,6 +15,7 @@ import { aerialShader } from "../src/system/aerial";
 import { sceneryShader } from "../src/system/scenery";
 import { warpShader } from "../src/system/warp-grid";
 import { terrainCacheShader, withTerrainCache } from "../src/system/terrain-cache";
+import { earthHorizonShader } from "../src/system/earth-horizons";
 import { terrainRasterShader } from "../src/system/terrain-raster";
 import { forestModuleOf, sceneryRasterShader } from "../src/system/scenery-raster";
 import { withSunShadow, withTerrainRaster } from "../src/system/terrain-raster-hint";
@@ -34,6 +35,7 @@ for (const host of ["trace.wgsl", "character.wgsl"]) shaders[`${host} + forest.w
 const traced = withTerrainCache(shaders["trace.wgsl + forest.wgsl"]!);
 shaders["trace.wgsl + forest + terrain cache"] = traced;
 shaders["terrain height cache bake (system/terrain-cache.ts)"] = terrainCacheShader(traced);
+shaders["earth horizons bake (system/earth-horizons.ts)"] = earthHorizonShader();
 shaders["terrain raster pilot (system/terrain-raster.ts)"] = terrainRasterShader(traced);
 shaders["scenery raster instances (system/scenery-raster.ts)"] = sceneryRasterShader(forestModuleOf(traced));
 // (the tracer as the full device builds it: the raster patch's distances read by the ground march)

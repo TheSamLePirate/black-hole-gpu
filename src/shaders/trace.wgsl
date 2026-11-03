@@ -7465,6 +7465,8 @@ fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
 }
 // BEGIN_TERRAIN_CACHE (system/terrain-cache.ts supplies the existing table lookup)
 fn terrainCachedHeight(q: vec3f, foot: f32) -> f32 { return -1.0; }
+// (H5: the Earth's horizon's sine towards L at a ground point gq, h [m] — and its blockers' distance [m]; x −2: none known)
+fn earthHorizonSin(gq: vec3f, h: f32, L: vec3f) -> vec2f { return vec2f(-2.0, 0.0); }
 // END_TERRAIN_CACHE
 // (the heights above the sea — the cache's, the exact ones — over the ellipsoid: raised by the geoid)
 fn earthHeightG(q: vec3f, foot: f32) -> f32 {
@@ -7560,6 +7562,21 @@ fn earthNormalAt(q: vec3f, foot: f32) -> vec3f {
   }
   let relief = normalize(q - ((hs[1] - hs[0]) * t1 + (hs[2] - hs[0]) * t2) / (e * EARTH_RM));
   return select(relief, normalize(mix(relief, walk.xyz, walk.w)), walk.w > 0.0);
+}
+
+// H5 — the share of the Sun's disc above the Earth's horizon at a ground point (gq its geodetic normal, h its height above the sea
+// [m], L towards the Sun — physical, unit —, foot the pixel's footprint [m]): the relief cache's horizons in 8 directions
+// (system/earth-horizons.ts — blockers from 2 nodes out to 150 km, seen again from the point's own height), the penumbra the
+// Sun's disc and what the horizon sweeps under the pixel. 1 where none is known, the Sun over 30° or under the horizon;
+// liteSkip 1048576: not read (a measure)
+fn earthHorizonLight(gq: vec3f, h: f32, L: vec3f, foot: f32) -> f32 {
+  let sS = dot(gq, L);
+  // (not HAS_TERRAIN_CACHE: that is the tracer reading the cache's heights — the raster bakes the cache for its mesh without)
+  if ((liteSkip() & 1048576u) != 0u || sS > 0.5 || sS < -0.1) { return 1.0; }
+  let e = earthHorizonSin(gq, h, L);
+  if (e.x < -1.5) { return 1.0; }
+  let w = 0.00465 + 0.5 * foot / max(e.y, 1.0);
+  return smoothstep(-w, w, asin(sS) - asin(clamp(e.x, -1.0, 1.0)));
 }
 
 // The relief's shadow at a ground point p (its axes, radii) towards the sun Ls: marched up to ~50 km,
@@ -9779,6 +9796,8 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   if (footS < 2.0 * EARTH_RM * TAU / f32(textureDimensions(earthElev).x) && mu0 > -0.05 && ocean < 1.0 && (TUNE_GSKIP & 2u) == 0u) {
     Eg *= mix(1.0, earthTerrainShadow(q * (1.0 + hG / EARTH_RM), Ls, footS), 1.0 - ocean);
   }
+  // (H5: the far ranges' shadows — the relief cache's horizons, out to 150 km —, the march's 50 km and its near reach passed)
+  if (NEAR_DETAIL && mu0 > -0.05 && ocean < 1.0) { Eg *= mix(1.0, earthHorizonLight(gq, hG, physicalLs, footS), 1.0 - ocean); }
   // (near: the land's colour and relief finer than the maps — the noise's slopes facing the sun lit)
   var relLit = 1.0;
   let og = earthOct(fx, fy);
@@ -13431,6 +13450,8 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
     let far = sunShadowFarAt(dirW * tM, 0.0);
     SUN_N = sn;
     if (far.x >= 0.0) { Eg *= far.x; }
+    // (H5: past the cascades — and the blockers beyond their box —, the relief cache's horizons; their min)
+    if (far.x != 0.0) { Eg *= earthHorizonLight(gq, hG, Lp, pixFoot() * tM); }
     // (the last metres under the cascades' reach: the contact shadows, in the image — lit and facing the Sun only, near)
     // (a Sun under 25°: higher, the last metres' shadows are short — under the pixel at a few hundred metres)
     if (far.x != 0.0 && dot(n, Lp) > 0.0 && dot(gq, Lp) < 0.42 && tM < 1500.0 && (liteSkip() & 16384u) == 0u) {

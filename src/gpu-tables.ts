@@ -6,7 +6,7 @@
 import { BB_LUT_SIZE, SYNC_LUT_SIZE } from "./physics";
 import { BODY_VEC4, MAX_BODIES } from "./system/scene-bodies";
 import { WARP_LEVELS, WARP_N } from "./system/warp-grid";
-import { TERRAIN_CACHE_LEVELS, TERRAIN_CACHE_NODE_VEC4S, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
+import { EARTH_HORIZON_VEC4S, TERRAIN_CACHE_LEVELS, TERRAIN_CACHE_NODE_VEC4S, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { GEOID_H, GEOID_W } from "./system/geoid-grid";
 import { ORTHO_PARAM_VEC4S } from "./system/earth-tiles";
 
@@ -75,4 +75,8 @@ export const TERRAIN_PREV_VEC4S = TERRAIN_CACHE_LEVELS * TERRAIN_CACHE_NODE_VEC4
  *  D_bake, the caps' D_bake [m], the caps' rmax; [1] the receiver's level of the map's bake and of the caps' (the DEM's mips) */
 export const TABLE_HORIZON = TABLE_TERRAIN_PREV + TERRAIN_PREV_VEC4S;
 export const HORIZON_VEC4S = 2;
-export const TABLE_VEC4S = TABLE_HORIZON + HORIZON_VEC4S;
+/** (H5) the Earth's horizons in 8 directions on the relief cache's levels 4–6 (system/earth-horizons.ts; trace.wgsl
+ *  earthHorizonSin): each level's header (its window, nodes a radian, D_bake, weight), then its nodes' records */
+export const TABLE_EARTH_HORIZON = TABLE_HORIZON + HORIZON_VEC4S;
+export { EARTH_HORIZON_VEC4S };
+export const TABLE_VEC4S = TABLE_EARTH_HORIZON + EARTH_HORIZON_VEC4S;

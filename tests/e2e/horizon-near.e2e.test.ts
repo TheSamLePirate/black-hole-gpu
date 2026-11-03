@@ -132,10 +132,12 @@ test.skipIf(!E2E)(
         const ready = +((Date.now() - t0) / 1000).toFixed(1);
         const raster = await app.js<boolean>(`__bh.renderer.bodyRasterNow`);
         // (the exposure held at the meter's reading, the map on: else the meter lifts a darker image — the lit pixels then
-        // "brightened" by a map that only darkens)
+        // "brightened" by a map that only darkens. Held as the auto exposure's own value, frame by frame — not the manual
+        // exposure: with the auto exposure off, the sky is drawn at its physical scale, not the image's — its stars out by day)
         await app.waitFor(`__bh.renderer.meterAt > ${meterBefore} && __bh.renderer.meterSettled`, 15_000);
-        const ev = await app.js<number>(`(() => { const r = __bh.renderer;
-          const e = r.ev(__bh.settings); Object.assign(__bh.settings, { autoExposure: false, exposure: e }); __bh.touch(); return +e.toFixed(2); })()`);
+        const ev = await app.js<number>(
+          `(() => { const r = __bh.renderer; const ev = r.autoExposureEV; window.__evHold = ev; const f = () => { if (window.__evHold == null) return; r.autoExposureEV = window.__evHold; requestAnimationFrame(f); }; requestAnimationFrame(f); return +r.ev(__bh.settings).toFixed(2); })()`,
+        );
         // (each state: its realtime image after 60 frames — what a flight sees: the stipple's measure —, and the traced views'
         // converged one — the comparison's: a realtime image's noise follows its random draws, which the map's early exit
         // shifts; the raster's are the same image)
@@ -154,7 +156,7 @@ test.skipIf(!E2E)(
         const offTime = await timed();
         // (the same again: the noise from a capture to the next — the floor the comparison is judged against)
         await shots("off2");
-        await app.js(`(() => { __bh.renderer.liteSkip = 0; __bh.touch(); return 1; })()`);
+        await app.js(`(() => { __bh.renderer.liteSkip = 0; window.__evHold = null; __bh.touch(); return 1; })()`);
         out[v.name] = { ready, bake, raster, ev, onMs: onTime.median, offMs: offTime.median, onP95: onTime.p95, offP95: offTime.p95 };
         console.log(`  ${v.name}: ${JSON.stringify(out[v.name])}`);
       }

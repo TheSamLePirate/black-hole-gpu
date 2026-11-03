@@ -17,6 +17,23 @@ export const TERRAIN_CACHE_NODE_VEC4S = Math.ceil((TERRAIN_CACHE_N * TERRAIN_CAC
 export const TERRAIN_CACHE_VEC4S = TERRAIN_CACHE_HEADER + TERRAIN_CACHE_LEVELS * TERRAIN_CACHE_NODE_VEC4S;
 export const TERRAIN_CACHE_MAX_LAT = (70 * Math.PI) / 180;
 
+// (H5 — system/earth-horizons.ts: the Earth's horizons on levels 4 to 6, in the tracer's table after the near body's maps)
+/** the cache's levels that carry horizons (their nodes 153 m, 611 m, 2.4 km apart) */
+export const EARTH_HORIZON_LEVELS = [4, 5, 6] as const;
+export const EH_SECTORS = 8;
+/** the steps along a ray: from 2 nodes out, each ×1.25 the last */
+export const EH_STEP = 1.25;
+/** the farthest blocker read [m] (plan §3.4: the Alps' shadows at a 1–2° Sun, 50–150 km) */
+export const EH_REACH = 150_000;
+/** the largest sine stored (the signed root over it — H1's encoding): a horizon 48.6° up and higher saturates */
+export const EH_SIN_MAX = 0.75;
+/** a node's record: its 8 sines (two bytes a float), its 8 blockers' steps (three per float) and its height [m] */
+export const EH_NODE_VEC4S = 2 * TERRAIN_CACHE_N * TERRAIN_CACHE_N;
+/** a level's header: its window's reference (cos, sin of its longitude, sin, cos of its latitude); its nodes a radian, D_bake [m],
+ *  its weight (0 none, faded in to 1), its index in TERRAIN_CACHE_ROUNDS */
+export const EH_HEADER_VEC4S = 2 * EARTH_HORIZON_LEVELS.length;
+export const EARTH_HORIZON_VEC4S = EH_HEADER_VEC4S + EARTH_HORIZON_LEVELS.length * EH_NODE_VEC4S;
+
 export interface TerrainWindow {
   /** Indices of the first node, on this level's global angular lattice. Longitude is unwrapped. */
   i: number;

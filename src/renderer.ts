@@ -2,6 +2,8 @@ import { holeFleet } from "./holefleet";
 import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import { TerrainCache } from "./system/terrain-cache";
+import { EarthHorizons } from "./system/earth-horizons";
+import { EH_HEADER_VEC4S, EH_NODE_VEC4S } from "./system/terrain-cache-layout";
 import { composeTracer } from "./system/tracer-source";
 import {
   FEATURES_ALL,
@@ -120,6 +122,7 @@ import {
   TABLE_TERRAIN,
   TABLE_TERRAIN_PREV,
   TABLE_HORIZON,
+  TABLE_EARTH_HORIZON,
   TABLE_TOPS,
   RING_N,
   TABLE_WIND,
@@ -922,6 +925,8 @@ export class Renderer {
   readonly earthTiles: EarthTiles;
   /** the near body's horizon maps, baked a band a frame from its finer maps' heights (H1: the Moon) */
   readonly horizonMaps: HorizonMaps;
+  /** (H5) the Earth's horizons in 8 directions on the relief cache's levels 4–6 (system/earth-horizons.ts): made with the cache */
+  earthHorizons: EarthHorizons | null = null;
   /** the Moon's relief tiles round the camera (P6): drawn through the Earth's tiles' binding while the Moon is near */
   readonly moonTiles: MoonTiles;
   readonly earthSurface: EarthSurface;
@@ -1894,6 +1899,7 @@ export class Renderer {
     this.earthScenery.dispose();
     this.earthSurface.dispose();
     this.horizonMaps.cancel();
+    this.earthHorizons?.dispose();
     this.terrainSurfaceCache?.dispose();
     this.terrainRaster?.dispose();
     this.sceneryRaster?.dispose();
@@ -5375,6 +5381,19 @@ export class Renderer {
         this.paramsF[69 * 4 + 3]! > 0.5 ? [this.paramsF[69 * 4]!, this.paramsF[69 * 4 + 1]!, this.paramsF[69 * 4 + 2]!] : null,
         this.earthTiles.changes,
       );
+      // (H5: the Earth's horizons on the cache's levels 4–6 — a band of their bake, a level published whole after its heights;
+      // the setting horizonMaps off: none)
+      this.earthHorizons ??= new EarthHorizons(this.device);
+      const cache = this.terrainSurfaceCache;
+      this.earthHorizons.encode(
+        enc,
+        this.bodyBuf,
+        s?.horizonMaps !== false,
+        (lv) => cache.levelWindow(lv),
+        (lv) => cache.levelGeneration(lv),
+        () => this.prof.pass("earth horizons", { label: "earth horizons" }),
+        this.prof.table().find((p) => p.label === "earth horizons")?.last,
+      );
       // (realtime: nothing rejected — a bake is the same ground, its window moved or its heights refined by new tiles, and
       // the temporal pass's clamp takes the change; rejecting the history there threw it away for the eight frames of the
       // levels' bakes at every tile landing — on an M1 at one pixel shaded in 64, a blur every second in low flight)
@@ -8062,7 +8081,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  the giants' convective towers — giantTowers —, 4096 Mars's dust devils — marsDevils —, 8192 the bodies'
    *  relief shadow map — nearShadow, the march whole), 32768 Q2's sky by the frame's harmonics on a slope and the bounce by the
    *  ground's mean albedo (the flat sky × ½(1 + n·up), 0.18 instead), 65536 the imagery's footprint on the slope (the flat
-   *  plane's instead), 524288 the near body's horizon map in its shadows (H3 — nearShadow: the march alone, as before): a
+   *  plane's instead), 524288 the near body's horizon map in its shadows (H3 — nearShadow: the march alone, as before), 1048576 the Earth's
+   *  horizons (H5 — liteSun, earthGround: the cascades alone, as before): a
    *  measure, the image then wrong */
   liteSkip = 0;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
@@ -9167,6 +9187,23 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     buf.unmap();
     buf.destroy();
     return { share: f[7]!, ready: f[6]! > 0.5, current: f.slice(8, 8 + n / 4), previous: f.slice(8 + n / 4) };
+  }
+  /** (H5) the Earth's horizons as the tracer reads them (TABLE_EARTH_HORIZON): the levels' headers (each 8 floats: the window's
+   *  reference, its nodes a radian, D_bake, weight, cache level) and one level's node records (`slot` 0–2: levels 4–6; 8 floats a
+   *  node — two sines a float, three steps a float, the node's height) — a diagnostic */
+  async earthHorizonTable(slot: number): Promise<{ headers: Float32Array; nodes: Float32Array; terrainCache: boolean }> {
+    const h = EH_HEADER_VEC4S * 16,
+      n = EH_NODE_VEC4S * 16;
+    const buf = this.device.createBuffer({ size: h + n, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.bodyBuf, TABLE_EARTH_HORIZON * 16, buf, 0, h);
+    enc.copyBufferToBuffer(this.bodyBuf, (TABLE_EARTH_HORIZON + EH_HEADER_VEC4S + slot * EH_NODE_VEC4S) * 16, buf, h, n);
+    this.device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ);
+    const f = new Float32Array(buf.getMappedRange().slice(0));
+    buf.unmap();
+    buf.destroy();
+    return { headers: f.slice(0, h / 4), nodes: f.slice(h / 4), terrainCache: (this.featureKey & FEATURE_TERRAIN_CACHE) !== 0 };
   }
   /** The clear sky's harmonics as the tracer reads them (TABLE_SKY — sky ambient: the sky's radiance over the hemisphere at 0, 2,
    *  5 and 10 km over the camera's place): the twilight's measure (the sky's light on a level ground by the Sun's height). */
