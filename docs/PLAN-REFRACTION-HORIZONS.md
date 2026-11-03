@@ -1330,7 +1330,8 @@ compilation) s'y ajoutent.
   et au p95 (4,9/5,0 → 4,6/4,7 ms). **T8e** — les orthophotos z 15–16 en fenêtres de 8 tuiles aux portées lointaines (les
   dernières couches de la texture 2048², +45 Mo GPU) : aucun coût GPU mesurable, **aucun gain visible dans la vue de Paris à
   450 m** (le pied du pixel au-delà de 1,6 km y est plus grossier que z 15 ; un premier « +6 % de netteté » était un artefact de la
-  normalisation d'exposition, corrigé en T8f) — à mesurer plus haut, regard plongeant.
+  normalisation d'exposition, corrigé en T8f) — mesuré aussi à 2 000 m, regard plongeant : pas de changement non plus. **T8g** : désactivées (`ORTHO_BIG_LEVELS = 0`,
+  le mécanisme gardé ; −45 Mo GPU), **décision à confirmer par Sam** (le plan les demandait).
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

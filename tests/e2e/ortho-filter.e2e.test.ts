@@ -15,6 +15,8 @@ import { EARTH_SETTINGS, EARTH_VIEWS, sceneryReady } from "./lib/plan-views";
 // Output: remote-results/ortho-filter/<side><run>-<view>.png, ortho-filter-<side><run>.json.
 // OF_CHROME_PROFILE=<folder>: one Chrome profile kept across runs — its HTTP cache serving the same tiles once warmed (an A/B
 // independent of the Géoplateforme's answers that day).
+// OF_AT="lat,lon,alt,heading,speed", OF_PITCHES="-20,-40": another place, other looks;
+// OF_ORTHO_Z the finest orthophotos' level waited for there (17; higher up the finest wanted is coarser).
 // Before each shot the exposure is brought to the meter's reading (app.exposureSettled: frozen, it held the loading's).
 // Done when: the orthophotos in within 90 s, the scenery whole within 60 s (else said), both views measured, no GPU error.
 // Duration: ~2.5 min a run (Paris's tiles, orthophotos and buildings, two views × 3 s timed).
@@ -26,7 +28,9 @@ test.skipIf(!E2E)(
   "T9a: the orthophotos filtered by the hardware — Paris low, ahead and down, the material's time",
   async () => {
     mkdirSync(OUT, { recursive: true });
-    const v = EARTH_VIEWS.find((x) => x.name === "paris-low")!;
+    const v0 = EARTH_VIEWS.find((x) => x.name === "paris-low")!;
+    // (OF_AT="lat,lon,alt,heading,speed" another place — T8e: higher, the gaze plunging, where z 15–16 tell)
+    const v = process.env.OF_AT ? { ...v0, at: process.env.OF_AT.split(",").map(Number) } : v0;
     const app = await App.boot({
       width: 1280,
       height: 800,
@@ -45,7 +49,7 @@ test.skipIf(!E2E)(
       const t0 = Date.now();
       const ok = await app
         .waitFor(
-          `(() => { const t = __bh.renderer.earthTiles; return t.orthoFinest >= 17 && t.orthoPending === 0 && t.pending === 0; })()`,
+          `(() => { const t = __bh.renderer.earthTiles; return t.orthoFinest >= ${Number(process.env.OF_ORTHO_Z ?? 17)} && t.orthoPending === 0 && t.pending === 0; })()`,
           90_000,
         )
         .then(
@@ -71,10 +75,14 @@ test.skipIf(!E2E)(
         app.js(
           `new Promise((r) => { let k = 0; const f = () => { __bh.touch(); if (++k < 60) requestAnimationFrame(f); else r(1); }; f(); })`,
         );
-      for (const [name, pitch] of [
-        ["ahead", 0],
-        ["down", -35],
-      ] as const) {
+      // (OF_PITCHES="-20,-40" other looks, named by their pitch)
+      const looks: (readonly [string, number])[] = process.env.OF_PITCHES
+        ? process.env.OF_PITCHES.split(",").map((p) => [`p${p}`, Number(p)] as const)
+        : [
+            ["ahead", 0],
+            ["down", -35],
+          ];
+      for (const [name, pitch] of looks) {
         await app.js(`(() => { __bh.camera.setLook(0, ${pitch}); __bh.touch(); return 1; })()`);
         await settle();
         // (the exposure at the meter's reading: frozen, it held the one of the loading's frames — T8e)

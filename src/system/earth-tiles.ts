@@ -98,9 +98,12 @@ export const ORTHO_LEVELS = ORTHO_Z1 - ORTHO_Z0 + 1;
 /** their windows' tiles a side (4: 3.4 km at z 15 down to 425 m at z 18, at 48°) and its texels */
 export const ORTHO_SPAN = 4;
 export const ORTHO_CLIP = TILE * ORTHO_SPAN;
-/** T8e (plan T8, contract C0-4): the coarsest orthophotos' levels (z 15, z 16) whose window is 8 tiles a side at a far reach
- *  (the 2048² imagery texture made — setReach): 6.5 km at z 15, 3.3 km at z 16 at 48° —, in that texture's last layers */
-export const ORTHO_BIG_LEVELS = 2;
+/** T8e (plan T8, contract C0-4): the coarsest orthophotos' levels whose window is 8 tiles a side at a far reach (the 2048²
+ *  imagery texture made — setReach) — 2: z 15 and z 16, 6.5 km and 3.3 km at 48° —, in that texture's last layers. **0: off.**
+ *  Measured with them (3 Nov 2026, ortho-filter, warm cache, the exposure settled): no visible change at Paris 450 m ahead nor
+ *  2 000 m plunging — beyond 1.6 km a pixel's footprint is coarser than z 15's texel there, the IGN's z ≤ 14 imagery drawing it
+ *  —, for 45 MB of GPU memory and 128 more requests a window: off until a view shows their worth (Sam's call) */
+export const ORTHO_BIG_LEVELS = 0;
 export const ORTHO_SPAN_BIG = 8;
 /** the tracer's table for them (gpu-tables.ts TABLE_ORTHO): three vec4s a level, then the IGN's box [rad] and on */
 export const ORTHO_PARAM_VEC4S = 3 * ORTHO_LEVELS + 2;
@@ -217,7 +220,7 @@ export const ORTHO_2K_LAYER0 = IMG_Z1 - FINE_Z + 1;
 export const IMG_2K_LAYERS = ORTHO_2K_LAYER0 + ORTHO_BIG_LEVELS;
 const mipBytes = (side: number, layers: number) =>
   Array.from({ length: ORTHO_MIPS }, (_, m) => (side >> m) ** 2 * layers * 4).reduce((a, b) => a + b, 0);
-/** their bytes, their mips in: the 1024² (89 MB) and the 2048² (134 MB with the orthophotos' z 15–16 — T8e: 89 before —, at the farther reaches only) */
+/** their bytes, their mips in: the 1024² (89 MB) and the 2048² (89 MB; 134 MB with the orthophotos' z 15–16 — T8e, ORTHO_BIG_LEVELS 2 —; at the farther reaches only) */
 export const ORTHO_BYTES = mipBytes(ORTHO_CLIP, IMG_1K_LAYERS);
 export const IMG_2K_BYTES = mipBytes(2 * ORTHO_CLIP, IMG_2K_LAYERS);
 /** sampled textures per stage with the imagery's two (the horizon maps' 29 and two); the 1024² texture's, the sampler's, the
