@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { withGpuStubs } from "./lib/gpu-stubs";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 import { EarthTiles, ignHeightUrl, IGN_RGEALTI, isFine, markFine, TILE, TILE_RES_FINE, TILE_RES_MIN, ZG1 } from "../src/system/earth-tiles";
 import type { Vec3 } from "../src/physics";
@@ -50,7 +51,7 @@ test("one WMS-R request a tile: its Web Mercator box exactly, 256² float32 heig
 
 test("the data's own resolution from the source: a survey's its texel's, the global data's no finer than SRTM's", () => {
   const res = (fine: boolean) => {
-    const t = new EarthTiles(fakeDevice());
+    const t = new EarthTiles(withGpuStubs(fakeDevice()));
     t.reliefOn = false;
     const c = geodeticToCart(1, WGS84_F, 45.9 * deg, 6.87 * deg, 2000 / WGS84_A) as Vec3;
     t.update(c, 1e-3);

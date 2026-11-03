@@ -27,6 +27,10 @@ test("the orthophotos out of the relief's texture (T9a: their own filtered textu
   expect(on).toContain(`@binding(${ORTHO_BINDINGS[0]}) var orthoTex: texture_2d_array<f32>;`);
   expect(on).toContain(`@binding(${ORTHO_BINDINGS[1]}) var orthoSamp: sampler;`);
   expect(on).toContain("textureSampleGrad(orthoTex, orthoSamp, uv, k, gx, gy)");
+  // (T9b: the relief levels' imagery — the 2048² texture's binding, both readers)
+  expect(on).toContain(`@binding(${ORTHO_BINDINGS[2]}) var imgTex2k: texture_2d_array<f32>;`);
+  expect(on).toContain("fn tileImgAt(l: u32, p: vec2f, lod: f32) -> vec4f {");
+  expect(on).toContain("fn tileImgGrad(l: u32, p: vec2f, gx: vec2f, gy: vec2f) -> vec4f {");
   expect(() => withOrthoImagery("nothing", true)).toThrow();
   expect(orthoUrl(17, 66391, 45092)).toContain(
     "LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX=17&TILEROW=45092&TILECOL=66391",

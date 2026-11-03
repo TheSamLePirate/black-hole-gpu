@@ -1343,6 +1343,11 @@ export class Renderer {
                 texture: { sampleType: "float", viewDimension: "2d-array" } as GPUTextureBindingLayout,
               },
               { binding: ORTHO_BINDINGS[1], visibility: C, sampler: { type: "filtering" } as GPUSamplerBindingLayout },
+              {
+                binding: ORTHO_BINDINGS[2],
+                visibility: C,
+                texture: { sampleType: "float", viewDimension: "2d-array" } as GPUTextureBindingLayout,
+              },
             ]
           : []),
         // (the near body's horizon maps — H2 —: its map and its caps)
@@ -2583,6 +2588,11 @@ export class Renderer {
               resource: this.earthTiles.orthoTexture.createView({ dimension: "2d-array", format: "rgba8unorm-srgb" }),
             },
             { binding: ORTHO_BINDINGS[1], resource: this.orthoSampler! },
+            // (T9b: the fine levels' 2048² windows' imagery — a stand-in at the normal reach)
+            {
+              binding: ORTHO_BINDINGS[2],
+              resource: this.earthTiles.imagery2k.createView({ dimension: "2d-array", format: "rgba8unorm-srgb" }),
+            },
           ]
         : []),
       ...(this.horizonRead

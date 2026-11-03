@@ -6889,7 +6889,34 @@ struct TileImage { c: vec4f, w: f32, o: f32 };
 // the coverage in a; none here: the coarser levels' imagery)
 fn orthoAt(k: u32, uv: vec2f, lod: f32) -> vec4f { return vec4f(0.0); }
 fn orthoGrad(k: u32, uv: vec2f, gx: vec2f, gy: vec2f) -> vec4f { return vec4f(0.0); }
+// (a relief level's imagery at p — its texels from its valid rectangle's corner —: by hand here, one bilinear tap)
+fn tileImgAt(l: u32, p: vec2f, lod: f32) -> vec4f { return tileImgHand(l, p); }
+fn tileImgGrad(l: u32, p: vec2f, gx: vec2f, gy: vec2f) -> vec4f { return tileImgHand(l, p); }
 // END_ORTHO_IMAGERY
+// A relief level's imagery at p by hand from the relief's texture (its packed rgba8 — the stub's reader, before T9b the only
+// one): bilinear, the sRGB decoded after; none where a texel has none. Its alpha's the night's lights: tileLights
+fn tileImgHand(l: u32, p: vec2f) -> vec4f {
+  let x = p - 0.5;
+  let i0 = vec2i(floor(x));
+  let f = x - floor(x);
+  let t00 = tileImage(l, i0);
+  let t10 = tileImage(l, i0 + vec2i(1, 0));
+  let t01 = tileImage(l, i0 + vec2i(0, 1));
+  let t11 = tileImage(l, i0 + vec2i(1, 1));
+  if (min(min(t00, t10), min(t01, t11)) == 0u) { return vec4f(0.0); }
+  let c = mix(mix(unpack4x8unorm(t00), unpack4x8unorm(t10), f.x), mix(unpack4x8unorm(t01), unpack4x8unorm(t11), f.x), f.y);
+  return vec4f(select(pow((c.rgb + 0.055) / 1.055, vec3f(2.4)), c.rgb / 12.92, c.rgb <= vec3f(0.04045)), 1.0);
+}
+// the night's lights at p on a relief level (its imagery's alpha in the relief's texture: GIBS's VIIRS, z ≤ 8 — the finer
+// levels' their parent's enlarged), bilinear
+fn tileLights(l: u32, p: vec2f) -> f32 {
+  let x = p - 0.5;
+  let i0 = vec2i(floor(x));
+  let f = x - floor(x);
+  let a = vec4f(f32(tileImage(l, i0) >> 24u), f32(tileImage(l, i0 + vec2i(1, 0)) >> 24u), f32(tileImage(l, i0 + vec2i(0, 1)) >> 24u),
+    f32(tileImage(l, i0 + vec2i(1, 1)) >> 24u)) / 255.0;
+  return mix(mix(a.x, a.y, f.x), mix(a.z, a.w, f.x), f.y);
+}
 // (an orthophotos' window's side in texels: earth-tiles.ts ORTHO_CLIP — the layer it fills)
 const ORTHO_CLIP_F = 1024.0;
 // (the coarser levels' night lights — their alpha — wanted: the raster's material says when its ground is in the day, the
@@ -6951,19 +6978,15 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
     let d = min(min(p.x, p.y), min(b.x - p.x, b.y - p.y));
     var w = wz * smoothstep(2.0, 48.0, d);
     if (w <= 0.0) { continue; }
-    // (bilinear over its texels, the day's colour in linear light; a texel without imagery: none here)
-    let x = p - 0.5;
-    let i0 = vec2i(floor(x));
-    let f = x - floor(x);
-    let t00 = tileImage(l, i0);
-    let t10 = tileImage(l, i0 + vec2i(1, 0));
-    let t01 = tileImage(l, i0 + vec2i(0, 1));
-    let t11 = tileImage(l, i0 + vec2i(1, 1));
-    if (min(min(t00, t10), min(t01, t11)) == 0u) { continue; }
-    let c = mix(mix(unpack4x8unorm(t00), unpack4x8unorm(t10), f.x), mix(unpack4x8unorm(t01), unpack4x8unorm(t11), f.x), f.y);
-    // (the sRGB curve, as the maps' -srgb views decode them: the two meet without a seam)
-    let lin = select(pow((c.rgb + 0.055) / 1.055, vec3f(2.4)), c.rgb / 12.92, c.rgb <= vec3f(0.04045));
-    o.c += rem * w * vec4f(lin, c.a);
+    // (T9b: the day's colour filtered by the hardware in linear light, at the footprint's mip — the maps' -srgb views decode
+    // the same way: the two meet without a seam —, its coverage the weight; the night's lights by hand from the relief's
+    // texture, wanted)
+    let sm = tileImgAt(l, p, f32(TILE_Z0 + l) - zf);
+    if (sm.a < 0.004) { continue; }
+    w *= sm.a;
+    var lights = 0.0;
+    if (IMG_LIGHTS) { lights = tileLights(l, p); }
+    o.c += rem * w * vec4f(sm.rgb / sm.a, lights);
     o.w += rem * w;
     rem *= 1.0 - w;
     if (rem < 1e-4) { break; }
@@ -7061,26 +7084,18 @@ fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
     let d = min(min(p0.x, p0.y), min(b.x - p0.x, b.y - p0.y));
     let w = wz * smoothstep(2.0, 48.0, d);
     if (w <= 0.0) { continue; }
-    let dp = duv * b.z;
-    var sum = vec4f(0.0);
-    var whole = true;
-    for (var i = 0u; i < n; i++) {
-      let x = p0 + dp * ((f32(i) + 0.5) / nf - 0.5) - 0.5;
-      let i0 = vec2i(floor(x));
-      let f = x - floor(x);
-      let t00 = tileImage(l, i0);
-      let t10 = tileImage(l, i0 + vec2i(1, 0));
-      let t01 = tileImage(l, i0 + vec2i(0, 1));
-      let t11 = tileImage(l, i0 + vec2i(1, 1));
-      if (min(min(t00, t10), min(t01, t11)) == 0u) { whole = false; break; }
-      sum += mix(mix(unpack4x8unorm(t00), unpack4x8unorm(t10), f.x), mix(unpack4x8unorm(t01), unpack4x8unorm(t11), f.x), f.y);
-    }
-    if (!whole) { continue; }
-    let c = sum / nf;
-    let lin = select(pow((c.rgb + 0.055) / 1.055, vec3f(2.4)), c.rgb / 12.92, c.rgb <= vec3f(0.04045));
-    o.c += rem * w * vec4f(lin, c.a);
-    o.w += rem * w;
-    rem *= 1.0 - w;
+    // (T9b: the hardware's anisotropic filter along the pixel's footprint — its axes in the level's texels by the derivatives
+    // of the longitude and of the Mercator latitude —, its mips in linear light; its coverage the weight)
+    let gx = vec2f((q.x * fx.y - q.y * fx.x) / max(dot(q.xy, q.xy), 1e-12), -fx.z / max(1.0 - q.z * q.z, 1e-12)) * b.z;
+    let gy = vec2f((q.x * fy.y - q.y * fy.x) / max(dot(q.xy, q.xy), 1e-12), -fy.z / max(1.0 - q.z * q.z, 1e-12)) * b.z;
+    let sm = tileImgGrad(l, p0, gx, gy);
+    if (sm.a < 0.004) { continue; }
+    let wc = w * sm.a;
+    var lights = 0.0;
+    if (IMG_LIGHTS) { lights = tileLights(l, p0); }
+    o.c += rem * wc * vec4f(sm.rgb / sm.a, lights);
+    o.w += rem * wc;
+    rem *= 1.0 - wc;
     if (rem < 1e-4) { break; }
   }
   if (o.w > 0.0) { o.c /= o.w; }

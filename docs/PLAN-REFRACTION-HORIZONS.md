@@ -1310,7 +1310,8 @@ compilation) s'y ajoutent.
 - **3 novembre, fin de matinée** : **H3** et **H5** (premières parties, [H3.md](progress/refraction-horizons/H3.md),
   [H5.md](progress/refraction-horizons/H5.md)) ; **T9a** — les orthophotos dans leur propre texture filtrée (mips par tuile,
   sRGB, anisotropie 16), sorties de la texture des hauteurs : A/B sur le mini −2 % au matériau raster, images équivalentes,
-  −10 Mo — [progress/refraction-horizons/T9.md](progress/refraction-horizons/T9.md).
+  −10 Mo — [progress/refraction-horizons/T9.md](progress/refraction-horizons/T9.md). **T9b** — l'imagerie des niveaux z6–14 dans
+  les mêmes textures (1024² et 2048²) : −1,1 ms (−4 à −6 %) au matériau raster ; mémoire en transition jusqu'à T9c.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

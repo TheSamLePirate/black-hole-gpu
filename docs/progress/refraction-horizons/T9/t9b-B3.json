@@ -1,0 +1,27 @@
+{
+  "tag": "B3",
+  "view": "Paris, 450 m, a July morning",
+  "tiles": {
+    "pending": 0,
+    "orthoPending": 0,
+    "orthoFinest": 18
+  },
+  "tilesS": 53.5,
+  "scenery": {
+    "ready": true,
+    "status": "ready",
+    "trees": 1346934,
+    "buildings": 32000,
+    "meshedBuildings": 17929
+  },
+  "sceneryS": 14.1,
+  "ahead": {
+    "frame": 35.3,
+    "lite": 17.54
+  },
+  "down": {
+    "frame": 53.2,
+    "lite": 24.89
+  },
+  "gpuErrors": 0
+}

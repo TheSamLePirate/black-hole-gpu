@@ -192,23 +192,35 @@ export function tileLayout(clip: number, sides: readonly number[]): { levels: Ti
   return { levels, layers: layer + Math.ceil(q / per) };
 }
 
-/** T9a (contract C0-4): the orthophotos' own texture — rgba8 (an sRGB view: the hardware decodes, then filters in linear
- *  light), a layer a level, its window the whole layer (the addressing's repeat wraps the torus), per-tile mips down to
- *  16² (a tile's mips never read its neighbour), alpha the coverage (0: no image there — the filtering premultiplied) */
+/** T9a–T9b (contract C0-4): the imagery's own textures — rgba8 (an sRGB view: the hardware decodes, then filters in linear
+ *  light), a window a layer (the addressing's repeat wraps the torus), per-tile mips down to 16² (a tile's mips never read its
+ *  neighbour), alpha the coverage (0: no image there — the filtering premultiplied). The 1024² one: the orthophotos' four
+ *  levels (layers 0–3), then the relief's levels z 6 … 14 whose window is 1024² (layer IMG_LAYER0 + their index); the 2048²
+ *  one: z 11 … 14 when their window is 2048² (the farther reaches; layer z − FINE_Z). The night's lights stay in the relief's
+ *  texture's imagery alpha (rg32uint; GIBS's, z ≤ 8), read as before */
 export const ORTHO_MIPS = 5;
-/** its bytes, its mips in (22 MB) */
-export const ORTHO_BYTES = Array.from({ length: ORTHO_MIPS }, (_, m) => (ORTHO_CLIP >> m) ** 2 * ORTHO_LEVELS * 4).reduce(
-  (a, b) => a + b,
-  0,
-);
-/** sampled textures per stage with the orthophotos' (the horizon maps' 29 and one), its texture's and its sampler's bindings */
-export const ORTHO_TEXTURE_LIMIT = 30;
-export const ORTHO_BINDINGS = [44, 45] as const;
+/** the imagery levels' first layer in the 1024² texture (after the orthophotos') */
+export const IMG_LAYER0 = ORTHO_LEVELS;
+/** the 1024² texture's layers: the orthophotos' and every imagery level's (z 6 … 14) */
+export const IMG_1K_LAYERS = ORTHO_LEVELS + (IMG_Z1 - Z0 + 1);
+/** the 2048² texture's layers: z FINE_Z … 14 */
+export const IMG_2K_LAYERS = IMG_Z1 - FINE_Z + 1;
+const mipBytes = (side: number, layers: number) =>
+  Array.from({ length: ORTHO_MIPS }, (_, m) => (side >> m) ** 2 * layers * 4).reduce((a, b) => a + b, 0);
+/** their bytes, their mips in: the 1024² (73 MB) and the 2048² (89 MB, at the farther reaches only) */
+export const ORTHO_BYTES = mipBytes(ORTHO_CLIP, IMG_1K_LAYERS);
+export const IMG_2K_BYTES = mipBytes(2 * ORTHO_CLIP, IMG_2K_LAYERS);
+/** sampled textures per stage with the imagery's two (the horizon maps' 29 and two); the 1024² texture's, the sampler's, the
+ *  2048² texture's bindings */
+export const ORTHO_TEXTURE_LIMIT = 31;
+export const ORTHO_BINDINGS = [44, 45, 46] as const;
 /**
- * The tracer's reader of the orthophotos' texture (T9a): `orthoAt(k, uv, lod)` and `orthoGrad(k, uv, gx, gy)` — a level's
- * window at uv (its texels over its side, wrapped), at a mip or by the pixel's gradients (anisotropic, 16 at most): the linear
- * colour premultiplied by the coverage, the coverage in a. Where the device takes the one more texture; the stub (no
- * orthophotos: the coarser levels' imagery) otherwise.
+ * The tracer's reader of the imagery's textures (T9a, T9b): `orthoAt(k, uv, lod)`, `orthoGrad(k, uv, gx, gy)` — an
+ * orthophotos' level's window at uv (its texels over its side, wrapped) —, and `tileImgAt(l, p, lod)`, `tileImgGrad(l, p, gx,
+ * gy)` — a relief level's imagery at p (its texels from its valid rectangle's corner; the gradients in those texels): at a mip
+ * or by the pixel's gradients (anisotropic, 16 at most), the linear colour premultiplied by the coverage, the coverage in a.
+ * Where the device takes the two more textures; the stub otherwise (no orthophotos; the relief levels' imagery by hand, one
+ * bilinear tap, as before T9b).
  */
 export function withOrthoImagery(trace: string, supported: boolean): string {
   const marker = /\/\/ BEGIN_ORTHO_IMAGERY[\s\S]*?\/\/ END_ORTHO_IMAGERY/;
@@ -219,8 +231,26 @@ export function withOrthoImagery(trace: string, supported: boolean): string {
     `
 @group(0) @binding(${ORTHO_BINDINGS[0]}) var orthoTex: texture_2d_array<f32>;
 @group(0) @binding(${ORTHO_BINDINGS[1]}) var orthoSamp: sampler;
+@group(0) @binding(${ORTHO_BINDINGS[2]}) var imgTex2k: texture_2d_array<f32>;
 fn orthoAt(k: u32, uv: vec2f, lod: f32) -> vec4f { return textureSampleLevel(orthoTex, orthoSamp, uv, k, min(lod, ${ORTHO_MIPS - 1}.0)); }
 fn orthoGrad(k: u32, uv: vec2f, gx: vec2f, gy: vec2f) -> vec4f { return textureSampleGrad(orthoTex, orthoSamp, uv, k, gx, gy); }
+// (a relief level's window: its side — P.tileL[2l + 1].w's low bits —, its corner within it — P.tileL[2l].zw under the mask)
+fn tileImgUv(l: u32, p: vec2f) -> vec3f {
+  let w = f32(u32(P.tileL[2u * l + 1u].w) & 0xffffu);
+  let c = vec2f(vec2u(P.tileL[2u * l].zw) & vec2u(u32(w) - 1u));
+  return vec3f((c + p) / w, w);
+}
+fn tileImgAt(l: u32, p: vec2f, lod: f32) -> vec4f {
+  let u = tileImgUv(l, p);
+  let m = min(lod, ${ORTHO_MIPS - 1}.0);
+  if (u.z > ${ORTHO_CLIP}.5) { return textureSampleLevel(imgTex2k, orthoSamp, u.xy, l - ${FINE_Z - Z0}u, m); }
+  return textureSampleLevel(orthoTex, orthoSamp, u.xy, ${IMG_LAYER0}u + l, m);
+}
+fn tileImgGrad(l: u32, p: vec2f, gx: vec2f, gy: vec2f) -> vec4f {
+  let u = tileImgUv(l, p);
+  if (u.z > ${ORTHO_CLIP}.5) { return textureSampleGrad(imgTex2k, orthoSamp, u.xy, l - ${FINE_Z - Z0}u, gx / u.z, gy / u.z); }
+  return textureSampleGrad(orthoTex, orthoSamp, u.xy, ${IMG_LAYER0}u + l, gx / u.z, gy / u.z);
+}
 `,
   );
 }
@@ -589,9 +619,11 @@ export interface TileSample {
 
 export class EarthTiles {
   texture: GPUTexture;
-  /** T9a: the orthophotos' filtered texture (ORTHO_CLIP² × ORTHO_LEVELS, ORTHO_MIPS mips) and its mips' pass */
+  /** T9a–T9b: the imagery's filtered textures — the 1024² one (the orthophotos, the relief levels' 1024² windows), the 2048²
+   *  one (their 2048² windows; a 1 × 1 stand-in at the normal reach) — and their mips' pass */
   readonly orthoTexture: GPUTexture;
-  private orthoMip: { pipeline: GPURenderPipeline; uniform: GPUBuffer; groups: GPUBindGroup[] } | null = null;
+  imagery2k: GPUTexture;
+  private orthoMip: { pipeline: GPURenderPipeline; uniform: GPUBuffer } | null = null;
   /** the levels' windows' tiles a side up to z 14 (TILE_REACH: 4, 8), the texture's side in texels its CLIP */
   private span = SPAN;
   /** the most the device holds (a farther reach's 256 MiB texture refused: back to SPAN, not asked again) */
@@ -698,8 +730,9 @@ export class EarthTiles {
 
   constructor(private device: GPUDevice) {
     this.texture = this.makeTexture();
+    this.imagery2k = this.makeImagery2k(1);
     this.orthoTexture = device.createTexture({
-      size: [ORTHO_CLIP, ORTHO_CLIP, ORTHO_LEVELS],
+      size: [ORTHO_CLIP, ORTHO_CLIP, IMG_1K_LAYERS],
       format: "rgba8unorm",
       viewFormats: ["rgba8unorm-srgb"],
       mipLevelCount: ORTHO_MIPS,
@@ -726,6 +759,18 @@ export class EarthTiles {
         stale: false,
       });
     }
+  }
+
+  /** the 2048² imagery texture (its layers z FINE_Z … 14), or a 1 × 1 stand-in (side 1: the normal reach's) */
+  private makeImagery2k(side: number) {
+    return this.device.createTexture({
+      size: [side, side, IMG_2K_LAYERS],
+      format: "rgba8unorm",
+      viewFormats: ["rgba8unorm-srgb"],
+      mipLevelCount: side > 1 ? ORTHO_MIPS : 1,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      label: "imagery 2048",
+    });
   }
 
   private makeTexture() {
@@ -761,18 +806,27 @@ export class EarthTiles {
     this.clear();
     this.span = span;
     const old = this.texture;
+    const old2k = this.imagery2k;
+    // (the old texture's own bytes — not the orthophotos' texture's, alive throughout)
+    const oldBytes = this.textureBytes;
     this.device.pushErrorScope?.("out-of-memory");
     this.texture = this.makeTexture();
+    // (the 2048² imagery for the fine levels' 8-tile windows — T9b —, a stand-in at the normal reach)
+    this.imagery2k = this.makeImagery2k(span > SPAN ? 2 * ORTHO_CLIP : 1);
+    const imgBytes = span > SPAN ? IMG_2K_BYTES : 0;
+    this.liveBytes += imgBytes;
+    this.peakBytes = Math.max(this.peakBytes, this.liveBytes);
     void this.device.popErrorScope?.().then((e) => {
       if (!e || this.span === SPAN) return;
       console.warn(`Terrain tiles: the ${this.clip}² texture refused (${e.message}) — the detail's reach kept at ${SPAN} tiles`);
       this.spanMax = SPAN;
       this.setReach({ span: SPAN, cache: this.cacheTiles, ring: this.ring });
     });
-    const oldBytes = this.liveBytes - this.textureBytes;
+    const old2kBytes = old2k.width > 1 ? IMG_2K_BYTES : 0;
     void this.device.queue.onSubmittedWorkDone().then(() => {
       old.destroy();
-      this.liveBytes -= oldBytes;
+      old2k.destroy();
+      this.liveBytes -= oldBytes + old2kBytes;
     });
     for (const O of this.ortho) {
       O.key.fill(null);
@@ -1273,6 +1327,7 @@ export class EarthTiles {
       } else texels[2 * i] = hb[i]!;
       texels[2 * i + 1] = col ? col[i]! : 0;
     }
+    this.putImagery(L, s, col);
     const slot = this.layout.levels[L.z - Z0]!;
     this.device.queue.writeTexture(
       {
@@ -1504,64 +1559,71 @@ export class EarthTiles {
   }
 
   /** A tile's mips in the orthophotos' texture (its region at each level, from the level above: never its neighbour's). */
-  private orthoMips(ox: number, oy: number, layer: number) {
+  /** A tile's mips in an imagery texture (its region at each level, from the level above: never its neighbour's). */
+  private orthoMips(ox: number, oy: number, layer: number, tex: GPUTexture = this.orthoTexture) {
     const d = this.device;
     if (!this.orthoMip) {
-      const module = d.createShaderModule({ code: ORTHO_MIP_WGSL, label: "orthophotos' mips" });
+      const module = d.createShaderModule({ code: ORTHO_MIP_WGSL, label: "imagery mips" });
       const pipeline = d.createRenderPipeline({
         layout: "auto",
         vertex: { module, entryPoint: "vs" },
         fragment: { module, entryPoint: "fs", targets: [{ format: "rgba8unorm" }] },
         primitive: { topology: "triangle-list" },
-        label: "orthophotos' mips",
+        label: "imagery mips",
       });
-      const uniform = d.createBuffer({ size: 256 * ORTHO_LEVELS, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-      const u = new Uint32Array(64 * ORTHO_LEVELS);
-      for (let k = 0; k < ORTHO_LEVELS; k++) u[64 * k] = k;
+      // (a 256-byte slot a layer: its index — the source's layer)
+      const n = Math.max(IMG_1K_LAYERS, IMG_2K_LAYERS);
+      const uniform = d.createBuffer({ size: 256 * n, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      const u = new Uint32Array(64 * n);
+      for (let k = 0; k < n; k++) u[64 * k] = k;
       d.queue.writeBuffer(uniform, 0, u);
-      // (a group a mip and a layer: the mip above as the source, the layer in the uniform)
-      const groups: GPUBindGroup[] = [];
-      for (let i = 1; i < ORTHO_MIPS; i++)
-        for (let k = 0; k < ORTHO_LEVELS; k++)
-          groups.push(
-            d.createBindGroup({
-              layout: pipeline.getBindGroupLayout(0),
-              entries: [
-                { binding: 0, resource: { buffer: uniform, offset: 256 * k, size: 16 } },
-                { binding: 1, resource: this.orthoTexture.createView({ dimension: "2d-array", baseMipLevel: i - 1, mipLevelCount: 1 }) },
-              ],
-            }),
-          );
-      this.orthoMip = { pipeline, uniform, groups };
+      this.orthoMip = { pipeline, uniform };
     }
     const m = this.orthoMip;
-    const enc = d.createCommandEncoder({ label: "orthophotos' mips" });
+    const enc = d.createCommandEncoder({ label: "imagery mips" });
     for (let i = 1; i < ORTHO_MIPS; i++) {
       const n = TILE >> i;
+      const group = d.createBindGroup({
+        layout: m.pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: m.uniform, offset: 256 * layer, size: 16 } },
+          { binding: 1, resource: tex.createView({ dimension: "2d-array", baseMipLevel: i - 1, mipLevelCount: 1 }) },
+        ],
+      });
       const pass = enc.beginRenderPass({
         colorAttachments: [
           {
-            view: this.orthoTexture.createView({
-              dimension: "2d",
-              baseMipLevel: i,
-              mipLevelCount: 1,
-              baseArrayLayer: layer,
-              arrayLayerCount: 1,
-            }),
+            view: tex.createView({ dimension: "2d", baseMipLevel: i, mipLevelCount: 1, baseArrayLayer: layer, arrayLayerCount: 1 }),
             loadOp: "load",
             storeOp: "store",
           },
         ],
-        label: "orthophotos' mips",
+        label: "imagery mips",
       });
       pass.setPipeline(m.pipeline);
-      pass.setBindGroup(0, m.groups[(i - 1) * ORTHO_LEVELS + layer]!);
+      pass.setBindGroup(0, group);
       pass.setViewport(ox >> i, oy >> i, n, n, 0, 1);
       pass.setScissorRect(ox >> i, oy >> i, n, n);
       pass.draw(3);
       pass.end();
     }
     d.queue.submit([enc.finish()]);
+  }
+
+  /** A relief level's tile's imagery into its filtered texture (T9b): its window's layer — the 1024² texture's or the 2048²
+   *  one's —, alpha its coverage (the night's lights stay in the relief texture's alpha), its mips; none: cleared */
+  private putImagery(L: Level, s: number, col: Uint32Array | null) {
+    if (L.z > IMG_Z1) return;
+    const big = L.span * TILE > ORTHO_CLIP;
+    const tex = big ? this.imagery2k : this.orthoTexture;
+    if (big && tex.width <= 1) return;
+    const layer = big ? L.z - FINE_Z : IMG_LAYER0 + (L.z - Z0);
+    const ox = (s % L.span) * TILE,
+      oy = Math.floor(s / L.span) * TILE;
+    const px = new Uint32Array(TILE * TILE);
+    if (col) for (let i = 0; i < px.length; i++) px[i] = col[i] ? (col[i]! | 0xff000000) >>> 0 : 0;
+    this.device.queue.writeTexture({ texture: tex, origin: [ox, oy, layer] }, px, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
+    this.orthoMips(ox, oy, layer, tex);
   }
 
   private orthoComplete(O: OrthoLevel) {
