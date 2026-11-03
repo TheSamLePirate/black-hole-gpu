@@ -52,6 +52,15 @@ export function stripPolygon(a: Vec3, b: Vec3, width: number, offset = 0): Vec3[
   return [p(a, -1), p(b, -1), p(b, 1), p(a, 1), p(a, -1)];
 }
 export function surfaceContains(p: Vec3, primitive: Primitive, margin = 0) {
+  // (outside its box with the margin: no — a large water or paved polygon, up to 4 096 points, listed in every 64 m cell it
+  // touches, was walked edge by edge for each of the forest's ~2 M cells round it; a segment's box holds its width)
+  if (
+    p[0] < primitive.min[0] - margin ||
+    p[1] < primitive.min[1] - margin ||
+    p[0] > primitive.max[0] + margin ||
+    p[1] > primitive.max[1] + margin
+  )
+    return false;
   const v = primitive.data;
   if (v[5]! < 4 && v.length === 12) {
     const x = v[2]! - v[0]!,

@@ -1,6 +1,7 @@
 // Worldwide data preparation is isolated from the render loop. No complete COG download.
 import { VectorTile, classifyRings } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
+import type { Vec3 } from "../physics";
 import { earthDetail, toHalf } from "../terrain";
 import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
@@ -229,31 +230,19 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (the sea's surface over the ellipsoid — the geoid's plane round the centre —: the ground as the tracer has it)
   const [n0, nLat, nLon] = q.geoid ?? [0, 0, 0];
   const sea = (lat: number, lon: number) => n0 + nLat * (lat - q.lat) + nLon * wrapLon(lon - q.lon);
-  const height = async (lat: number, lon: number) => {
-    // (the IGN's ground where it has one: the tracer's over France since I2 — its normal heights over the sea's surface)
-    if (land) {
-      await landReady;
-      const h = land.ground(lat, lon);
-      if (Number.isFinite(h)) return Math.max(0, h) + sea(lat, lon);
-    }
+  // (the heights at hand without waiting — the IGN's ground once its survey is in, a Terrarium tile once decoded —: the forest's
+  // ~700 000 nodes and the 32 000 buildings' feet read at once, not each through a promise)
+  let landDone = !land;
+  void landReady?.then(
+    () => void (landDone = true),
+    () => void (landDone = true),
+  );
+  const resolved = new Map<string, Uint8ClampedArray>();
+  const terrariumAt = (px: Uint8ClampedArray, lat: number, lon: number) => {
     const xx = tx(wrapLon(lon), demZoom),
       yy = ty(lat, demZoom),
-      { x, y } = demTile(lat, lon, demZoom),
-      key = `${x}/${y}`;
-    let p = heights.get(key);
-    if (!p) {
-      p = fetchCount(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${demZoom}/${key}.png`).then(async (b) => {
-        const im = await createImageBitmap(new Blob([b]), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
-        const c = new OffscreenCanvas(256, 256),
-          ctx = c.getContext("2d", { willReadFrequently: true })!;
-        ctx.drawImage(im, 0, 0);
-        im.close();
-        return ctx.getImageData(0, 0, 256, 256).data;
-      });
-      heights.set(key, p);
-    }
-    const px = await p,
-      fx = (xx - x) * 256 - 0.5,
+      { x, y } = demTile(lat, lon, demZoom);
+    const fx = (xx - x) * 256 - 0.5,
       fy = (yy - y) * 256 - 0.5;
     const weights = (t: number) => [
       (1 - t) ** 3 / 6,
@@ -276,6 +265,43 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       b = lon * D,
       res = Math.max(25, (40075016 * Math.cos(a)) / (2 ** demZoom * 256));
     return Math.max(0, h0 + earthDetail([Math.cos(a) * Math.cos(b), Math.cos(a) * Math.sin(b), Math.sin(a)], h0, 0.5, res)) + sea(lat, lon);
+  };
+  const heightNow = (lat: number, lon: number): number | undefined => {
+    if (land) {
+      if (!landDone) return undefined;
+      const h = land.ground(lat, lon);
+      if (Number.isFinite(h)) return Math.max(0, h) + sea(lat, lon);
+    }
+    const { x, y } = demTile(lat, lon, demZoom);
+    const px = resolved.get(`${x}/${y}`);
+    return px ? terrariumAt(px, lat, lon) : undefined;
+  };
+  const height = async (lat: number, lon: number) => {
+    const now = heightNow(lat, lon);
+    if (now !== undefined) return now;
+    // (the IGN's ground where it has one: the tracer's over France since I2 — its normal heights over the sea's surface)
+    if (land) {
+      await landReady;
+      const h = land.ground(lat, lon);
+      if (Number.isFinite(h)) return Math.max(0, h) + sea(lat, lon);
+    }
+    const { x, y } = demTile(lat, lon, demZoom),
+      key = `${x}/${y}`;
+    let p = heights.get(key);
+    if (!p) {
+      p = fetchCount(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${demZoom}/${key}.png`).then(async (b) => {
+        const im = await createImageBitmap(new Blob([b]), { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+        const c = new OffscreenCanvas(256, 256),
+          ctx = c.getContext("2d", { willReadFrequently: true })!;
+        ctx.drawImage(im, 0, 0);
+        im.close();
+        const px = ctx.getImageData(0, 0, 256, 256).data;
+        resolved.set(key, px);
+        return px;
+      });
+      heights.set(key, p);
+    }
+    return terrariumAt(await p, lat, lon);
   };
   const excluded = (lat: number, lon: number) => sceneryExcluded(lat, lon, q.exclusions);
   const prims: Primitive[] = [];
@@ -863,24 +889,24 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     keptSurfaces.push(v);
     storedBytes += bytes;
   }
-  const surfaceCells = new Map<string, Primitive[]>();
+  // (the cells' keys numbers, not strings — the forest asks them ~2 M times)
+  const cellKey = (x: number, y: number) => (x + 32768) * 65536 + (y + 32768);
+  const surfaceCells = new Map<number, Primitive[]>();
   for (const v of [...keptSurfaces, ...prims.filter((p) => p.data[3] === 2 || p.data[3] === 4)]) {
     for (let y = Math.floor((v.min[1] - 7) / 64); y <= Math.floor((v.max[1] + 7) / 64); y++)
       for (let x = Math.floor((v.min[0] - 7) / 64); x <= Math.floor((v.max[0] + 7) / 64); x++) {
-        const key = `${x}:${y}`,
+        const key = cellKey(x, y),
           cell = surfaceCells.get(key) ?? [];
         cell.push(v);
         surfaceCells.set(key, cell);
       }
   }
-  const networkExcluded = (lat: number, lon: number) => {
-    const p = localPoint(frame, lat, lon, 0);
-    return surfaceCells.get(`${Math.floor(p[0] / 64)}:${Math.floor(p[1] / 64)}`)?.some((v) => surfaceContains(p, v, 7)) ?? false;
-  };
+  const networkExcludedAt = (p: Vec3) =>
+    surfaceCells.get(cellKey(Math.floor(p[0] / 64), Math.floor(p[1] / 64)))?.some((v) => surfaceContains(p, v, 7)) ?? false;
   // ---- the forests: at most one tree a cell of the world-fixed grid (forest.ts), decided here once —
   // the same tree at the same place whichever scenery holds it (the class, the roads, the ground at its foot)
   // (the survey's canopy holds the buildings too — its surface less its ground —: none of its trees in an OSM footprint)
-  const houses = new Map<string, Primitive[]>();
+  const houses = new Map<number, Primitive[]>();
   if (land) {
     await landReady;
     for (const v of choices) {
@@ -894,27 +920,31 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (!p) continue;
       for (let y = Math.floor((p.min[1] - 2) / 32); y <= Math.floor((p.max[1] + 2) / 32); y++)
         for (let x = Math.floor((p.min[0] - 2) / 32); x <= Math.floor((p.max[0] + 2) / 32); x++) {
-          const key = `${x}:${y}`;
+          const key = cellKey(x, y);
           const cell = houses.get(key) ?? [];
           cell.push(p);
           houses.set(key, cell);
         }
     }
   }
-  const housed = (lat: number, lon: number) => {
-    if (!houses.size) return false;
-    const p = localPoint(frame, lat, lon, 0);
-    return houses.get(`${Math.floor(p[0] / 32)}:${Math.floor(p[1] / 32)}`)?.some((v) => surfaceContains(p, v, 1.5)) ?? false;
-  };
+  const housedAt = (p: Vec3) =>
+    houses.size > 0 &&
+    (houses.get(cellKey(Math.floor(p[0] / 32), Math.floor(p[1] / 32)))?.some((v) => surfaceContains(p, v, 1.5)) ?? false);
   phase("before forest");
   const grown = await growForest(ff, {
     cover: (lat, lon) => {
       const k = index(lat, lon);
       return k < 0 ? 0 : classes[k]!;
     },
-    excluded: (lat, lon) => excluded(lat, lon) || networkExcluded(lat, lon) || housed(lat, lon),
+    // (the point in the scene's metres made once for both indexes — it was made twice a cell)
+    excluded: (lat, lon) => {
+      if (excluded(lat, lon)) return true;
+      const p = localPoint(frame, lat, lon, 0);
+      return networkExcludedAt(p) || housedAt(p);
+    },
     canopy: land instanceof IgnLand ? (lat, lon, r) => land.canopyNear(lat, lon, r) : undefined,
     ground: height,
+    groundNow: heightNow,
     sea,
     local: (lat, lon, h) => localPoint(frame, lat, lon, h),
     error: (e) => void (errors.length < 12 && errors.push(String(e).slice(0, 220))),
@@ -1007,7 +1037,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const { lat, lon, h, low, a } = v;
       const rings = local[i]!.filter((r) => r.length >= 3);
       if (!rings.length) continue;
-      const base = localPoint(frame, lat, lon, await height(lat, lon))[2];
+      const base = localPoint(frame, lat, lon, heightNow(lat, lon) ?? (await height(lat, lon)))[2];
       const s = seed(Math.round(lat * 1e5), Math.round(lon * 1e5));
       // (its ridge measured by the LiDAR where the BD TOPO has none — the near ones)
       let roofH = a.roof;

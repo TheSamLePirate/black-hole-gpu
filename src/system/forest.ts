@@ -603,6 +603,8 @@ export interface ForestSources {
   excluded(lat: number, lon: number): boolean;
   /** the ground's height at a place [m] (the tracer's relief) */
   ground(lat: number, lon: number): Promise<number>;
+  /** the ground at once when it is at hand (undefined: ask `ground`) — ~700 000 nodes, a promise each had cost seconds */
+  groundNow?(lat: number, lon: number): number | undefined;
   /** the sea's surface there over the ellipsoid [m] (the geoid): the kinds' altitudes above it (0 without) */
   sea?(lat: number, lon: number): number;
   /** a place's frame metres at a height */
@@ -661,7 +663,9 @@ export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ c
   for (let k = 0; k < wanted.length; k++)
     if (wanted[k]) {
       const [lat, lon] = forestPlaceOf(f.i0 + 2 * (k % nodesW), f.j0 + 2 * Math.floor(k / nodesW), f.columns);
-      asked.push(io.ground(lat, lon).then((h) => void (nodes[k] = h), io.error ?? (() => {})));
+      const now = io.groundNow?.(lat, lon);
+      if (now !== undefined) nodes[k] = now;
+      else asked.push(io.ground(lat, lon).then((h) => void (nodes[k] = h), io.error ?? (() => {})));
     }
   await Promise.all(asked);
   let trees = 0,

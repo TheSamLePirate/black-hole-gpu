@@ -83,6 +83,10 @@ export const surveyChains = (lat: number, lon: number, reach: number): string[][
   blocksWithin(lat, lon, reach).flatMap((b) => blockChains(b.x, b.y, blockSides(b.d)));
 
 /** a place's block and its fractional pixel there (n a side; row 0 the north) */
+// (canopyNear's eight neighbours: east, west, north, south, then the diagonals)
+const NEAR_EX = [1, -1, 0, 0, 1, 1, -1, -1];
+const NEAR_NY = [0, 0, 1, -1, 1, -1, 1, -1];
+
 export function blockOf(lat: number, lon: number, n: number): { x: number; y: number; u: number; v: number } {
   const t = 2 ** CANOPY_Z;
   const fx = ((lon + 180) / 360) * t,
@@ -154,6 +158,7 @@ export class IgnLand {
       gn = sides.ground;
     const [mnh, lidar] = await Promise.all([this.grid(IGN_MNH, x, y, cn), this.grid(IGN_LIDAR, x, y, gn)]);
     this.canopyBlocks.set(key, mnh && { n: cn, v: codeCanopy(mnh) });
+    this.lastX = Number.NaN;
     // (the ground: the LiDAR's terrain, RGE ALTI in its holes — earth-tiles' rule, its no-data and coastal junk dropped)
     const clean = (v: Float32Array | null) => {
       if (!v) return null;
@@ -194,12 +199,28 @@ export class IgnLand {
 
   /** the canopy's height at a place [m] (its texel; NaN where the survey has none) */
   canopy(lat: number, lon: number): number {
-    const b = blockOf(lat, lon, 1);
-    const c = this.canopyBlocks.get(`${b.x}/${b.y}`);
+    const t = 2 ** CANOPY_Z;
+    return this.canopyAt(((lon + 180) / 360) * t, ((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * t);
+  }
+  // (the last block read, kept: the forest's ~2 M cells and their eight neighbours ask the same block over and over — its
+  // string key's Map lookup and the Mercator's asinh each time had been most of the forest's canopy time)
+  private lastX = Number.NaN;
+  private lastY = Number.NaN;
+  private lastBlock: { n: number; v: Uint8Array } | null | undefined;
+  /** the canopy at a CANOPY_Z tile coordinate (x, y fractional) */
+  private canopyAt(fx: number, fy: number): number {
+    const x = Math.floor(fx),
+      y = Math.floor(fy);
+    if (x !== this.lastX || y !== this.lastY) {
+      this.lastX = x;
+      this.lastY = y;
+      this.lastBlock = this.canopyBlocks.get(`${x}/${y}`);
+    }
+    const c = this.lastBlock;
     if (!c) return Number.NaN;
     const n = c.n,
-      i = Math.max(0, Math.min(n - 1, Math.floor((b.u + 0.5) * n))),
-      j = Math.max(0, Math.min(n - 1, Math.floor((b.v + 0.5) * n)));
+      i = Math.max(0, Math.min(n - 1, Math.floor((fx - x) * n))),
+      j = Math.max(0, Math.min(n - 1, Math.floor((fy - y) * n)));
     const code = c.v[j * n + i]!;
     return code === NODATA ? Number.NaN : code * STEP;
   }
@@ -207,17 +228,22 @@ export class IgnLand {
   /** the canopy's top within `r` metres of a place — the place and eight round it: a crown reaching over a hedge from its
    *  cell's foot —, NaN where the survey has none at the place itself; 0 over a crop (CANOPY_SURE, CANOPY_ROUGH) */
   canopyNear(lat: number, lon: number, r: number): number {
-    const h0 = this.canopy(lat, lon);
+    const t = 2 ** CANOPY_Z;
+    const fx0 = ((lon + 180) / 360) * t,
+      fy0 = ((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * t;
+    const h0 = this.canopyAt(fx0, fy0);
     if (!Number.isFinite(h0)) return h0;
-    const dLat = r / (R * D),
-      dLon = r / (R * D * Math.cos(lat * D));
+    // (the eight neighbours r metres round, offset on the tile grid itself — linear over a few metres: Mercator's y grows as
+    // sec(lat) —, not each through the Mercator again)
+    const sx = (r / (R * Math.cos(lat * D))) * (t / (2 * Math.PI)),
+      sy = (r / (R * Math.cos(lat * D))) * (t / (2 * Math.PI));
     let top = h0,
       low = h0;
     for (let a = 0; a < 8; a++) {
       const s = a < 4 ? 1 : Math.SQRT1_2;
-      const ex = [1, -1, 0, 0, 1, 1, -1, -1][a]! * s,
-        ny = [0, 0, 1, -1, 1, -1, 1, -1][a]! * s;
-      const h = this.canopy(lat + ny * dLat, lon + ex * dLon);
+      const ex = NEAR_EX[a]! * s,
+        ny = NEAR_NY[a]! * s;
+      const h = this.canopyAt(fx0 + ex * sx, fy0 - ny * sy);
       if (h > top) top = h;
       if (h < low) low = h;
     }
