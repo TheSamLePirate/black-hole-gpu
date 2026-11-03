@@ -1196,7 +1196,9 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
     if (k > 2.0) { nPrev *= 0.25; }
     // (and pulled a little towards the native result each frame — TU.s.x —: where few samples land, the history cannot drift
     // from it however long the turn)
-    let hcl = mix(tmInv(ycocgToRgb(hc)), lowAt(uvO, vec2f(rs)), TU.s.x);
+    // (one bilinear read for that pull of a few hundredths, the Catmull–Rom kept where there is no history — Q6c: the pass
+    // 1.65 → 1.48 ms at 1600 × 1000, the image the same within the measure's noise, tests/e2e/motion-quality.e2e.test.ts)
+    let hcl = mix(tmInv(ycocgToRgb(hc)), textureSampleLevel(lowTex, samp, uvO, 0.0).rgb, TU.s.x);
     if (wsum > 1e-4) {
       let a = wsum / (nPrev + wsum);
       outc = mix(hcl, sum / wsum, a);

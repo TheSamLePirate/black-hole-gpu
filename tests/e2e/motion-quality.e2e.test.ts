@@ -1,19 +1,23 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, readFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
+import { sceneryReady } from "./lib/plan-views";
 import { readPng } from "./lib/png";
 
 // Q6 — the image in motion, measured the same for every mode (docs/PLAN-REFRACTION-HORIZONS.md Q6: "the sharpness in motion
 // measured at the first instant and after accumulation"). raster-motion flew in real time: a slower mode went farther a frame
 // (its turn 14 to 37 px a frame from one run to the next), its PSNR not comparable. Here the simulation is frozen and stepped
 // 1/30 s before each frame drawn: every mode sees the same motion a frame.
-// The F-35 from its cockpit, the scenery high, the tiles in (none pending for 3 s), the clock stopped; per mode: a turn of TURN°
-// asked, FRAMES frames flown at 1/30 s each — their GPU time —; the last held (no step, the history as it was) and captured:
-// the **first instant**; then STILL frames drawn with the camera still and captured: **after accumulation**; then the reference,
-// converged at the canvas's full scale, once a place (every mode starts from the place's saved state: the same flight). Each against the reference, in the view through the canopy (BOX): PSNR and the sharpness ratio (the
+// The F-35 from its cockpit, the scenery high; before each flight everything in — the kernels compiled (nothing compiling), the
+// tiles (none pending for 3 s), the scenery whole —, the aircraft steady (autopilot holding height and heading, autothrottle its
+// speed, gear down; STEADY frames flown first); the clock stopped; per mode: FRAMES frames flown at 1/30 s each (a turn of TURN°
+// if asked) — their GPU time —; the last held (no step, the history as it was) and captured:
+// the **first instant**; then STILL frames drawn with the camera still and captured: **after accumulation**; then its reference,
+// refined at the canvas's full scale (every mode starts from the place's saved state: the same flight). Each against its
+// reference, in the view through the canopy (BOX): PSNR and the sharpness ratio (the
 // Laplacian's energy over the reference's — 1: as sharp; under: softer; over: noisier or aliased).
 // The HUD off; each mode's own reference, made at once after its still shot (the view exactly the same).
-// PLACES=tarifa-low,alps (strait: the sea); MODES (below) — e.g. spatial75q,taau75q,native100q; FRAMES (90), TURN (40), STILL (30).
+// PLACES=tarifa-low,alps (strait: the sea); MODES (below) — e.g. spatial75q,taau75q,native100q; FRAMES (90), TURN (0: straight), STEADY (60 frames before), SPEED (140 m/s), STILL (30).
 // Output: remote-results/motion-quality/<place>-<mode>[-still|-ref].png, motion-quality.json (MQ_OUT).
 // Done when: every place × mode measured (the tiles 120 s at most, the reference 90 s, what is missing said), no GPU error.
 // Duration: ~3 min a place × mode (its reference 90 s; the first one waits for the tiles).
@@ -48,7 +52,10 @@ const LOOK = Number(process.env.LOOK ?? 0);
 const places = (process.env.PLACES ?? "tarifa-low,alps").split(",");
 const modes = (process.env.MODES ?? "spatial75q,taau75q,native100q").split(",");
 const FRAMES = Number(process.env.FRAMES ?? 90);
-const TURN = Number(process.env.TURN ?? 40);
+const TURN = Number(process.env.TURN ?? 0);
+const STEADY = Number(process.env.STEADY ?? 60);
+// (the autothrottle's speed [m/s], gear down)
+const SPEED = Number(process.env.SPEED ?? 140);
 const STILL = Number(process.env.STILL ?? 30);
 
 type Png = ReturnType<typeof readPng>;
@@ -119,22 +126,51 @@ describe.skipIf(!E2E)("Q6: the image in motion, the same motion for every mode",
         // (the same start for every mode: the place's state saved once — the craft, its autopilot — and loaded again for each,
         // the clock stopped — the simulation moves only by step —, the tiles in)
         if (!saves.has(pl)) {
+          // (placed, frozen while the place's tiles come, placed again: its height over the ground — flyAt's is over the ground
+          // known when called — reckoned on the relief in, the same at every launch — 4 581 against 2 439 m before; then saved)
+          await app.js(`(() => { __bh.freeze(false); __bh.game.quality("realtime");
+            Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64 });
+            ${PLACES[pl]} __bh.settings.shipMount = "cockpit"; ${DETAIL} __bh.freeze(true); return 1; })()`);
+          // (the windows set and filled: 3 s with nothing pending, frames drawn, a z 12 level at least — pending is 0 at once after
+          // flyAt, before its windows are)
+          const placed = await app.js<{ ok: boolean; finest: number }>(`(async () => {
+            const t = __bh.renderer.earthTiles, frame = () => new Promise((q) => requestAnimationFrame(q));
+            const t0 = performance.now(); let calm = 0;
+            while (performance.now() - t0 < 120000) {
+              const ok = t.pending === 0 && t.finest >= 12; calm = ok ? calm || performance.now() : 0;
+              if (calm && performance.now() - calm > 3000) break; __bh.touch(); await frame(); }
+            return { ok: calm > 0, finest: t.finest }; })()`);
+          if (!placed.ok) console.log(`  ${pl}: the place's relief not in after 120 s (finest z ${placed.finest}) — placed anyway`);
           saves.set(
             pl,
-            await app.js<string>(`(() => { __bh.freeze(false); __bh.game.quality("realtime");
-              Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64 });
-              ${PLACES[pl]} __bh.settings.shipMount = "cockpit"; ${DETAIL}
-              const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
+            await app.js<string>(`(() => { __bh.freeze(false); ${PLACES[pl]} __bh.freeze(true);
               return JSON.stringify(__bh.game.snapshot("motion-quality ${pl}")); })()`),
           );
         }
         await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(saves.get(pl))}, false);
           __bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64 });
-          __bh.settings.shipMount = "cockpit"; ${DETAIL} ${MODES[md]}
-          const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
-          const g = c.geoNow(); c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; c.jetModes.hdg = g?.track ?? c.jetModes.hdg;
-          ${CLEAN} __bh.freeze(true); __bh.refresh(); __bh.camera.viewReset(); __bh.camera.setLook(0, ${LOOK}); return 1; })()`);
+          __bh.settings.shipMount = "cockpit"; ${DETAIL} ${MODES[md]} ${CLEAN} return 1; })()`);
+        // (the aircraft steady: the save applied over a few frames, then the gear down, the autopilot holding its height and
+        // heading, the autothrottle SPEED — engaged again until they hold: jetToggle refuses until the craft flies as a plane)
+        const ap = await app.js<{ ap: boolean; athr: boolean; note: string }>(`(async () => {
+          const c = __bh.camera, frame = () => new Promise((q) => requestAnimationFrame(q));
+          let note = "";
+          for (let i = 0; i < 60; i++) {
+            await frame();
+            __bh.settings.autoGear = false; c.gearDown = true; c.gearExt = 1; c.gearInit = true;
+            if (c.jetModes.alt === null) note = c.jetToggle("ap");
+            if (c.jetModes.spd === null) note = c.jetToggle("athr");
+            if (c.jetModes.alt !== null && c.jetModes.spd !== null && i >= 10) break;
+          }
+          const g = c.geoNow(); if (g) { c.jetModes.alt = g.alt; c.jetModes.hdg = g.track; }
+          c.jetModes.spd = ${SPEED};
+          __bh.freeze(true); __bh.refresh(); c.viewReset(); c.setLook(0, ${LOOK});
+          return { ap: c.jetModes.alt !== null, athr: c.jetModes.spd !== null, note }; })()`);
+        if (!ap.ap || !ap.athr) console.log(`  ${pl} ${md}: the autopilot ${ap.ap} / autothrottle ${ap.athr} — ${ap.note}`);
+        // (everything in before the flight: the kernels compiled — the scene's variant, nothing compiling —, the tiles in for 3 s, the
+        // scenery whole; said when not)
         await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+        await app.settled(120_000);
         const calm = await app.js<{
           ok: boolean;
           pending: number;
@@ -145,11 +181,28 @@ describe.skipIf(!E2E)("Q6: the image in motion, the same motion for every mode",
             if (calm && performance.now() - calm > 3000) break; __bh.touch(); await frame(); }
           return { ok: calm > 0, pending: r.earthTiles.pending }; })()`);
         if (!calm.ok) console.log(`  ${pl} ${md}: the tiles still ${calm.pending} pending after 120 s — measured anyway`);
-        // (flown: a turn asked, FRAMES frames each after a step of 1/30 s — the same motion a frame whatever the mode's speed)
-        const fl = await app.js<{ gpuMs: number; turnPx: number; groundPx: number }>(`(async () => {
+        const sc = await sceneryReady(app, 60_000);
+        if (!sc.ready) console.log(`  ${pl} ${md}: the scenery not whole after 60 s (${sc.status}) — measured anyway`);
+        await app.settled(60_000);
+        // (the aircraft steadied: STEADY frames flown straight at 1/30 s before the measured ones — the autopilot's holds settled)
+        await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
+          for (let i = 0; i < ${STEADY}; i++) { __bh.step(1 / 30); __bh.touch(); const last = r.lastDoneAt; let k = 0;
+            while (r.lastDoneAt === last && k++ < 120) await frame(); } return 1; })()`);
+        // (flown: FRAMES frames each after a step of 1/30 s — the same motion a frame whatever the mode's speed —, straight unless
+        // TURN° asked)
+        const fl = await app.js<{
+          gpuMs: number;
+          turnPx: number;
+          groundPx: number;
+          passes: { temporal: number; taau: number };
+          state: Record<string, number | boolean>;
+        }>(`(async () => {
           const r = __bh.renderer, c = __bh.camera, frame = () => new Promise((q) => requestAnimationFrame(q));
-          c.jetModes.hdg = (c.geoNow()?.track ?? 0) + ${TURN} * Math.PI / 180;
-          r.prof.enabled = true; r.prof.every = 1;
+          if (${TURN} !== 0) c.jetModes.hdg = (c.geoNow()?.track ?? 0) + ${TURN} * Math.PI / 180;
+          // (the aircraft's state as the measure starts: the runs comparable only if it is the same)
+          const g0 = c.geoNow();
+          const state = { alt: Math.round(g0?.alt ?? 0), gs: +(g0?.gs ?? 0).toFixed(1), vs: +(g0?.vs ?? 0).toFixed(2), track: +((g0?.track ?? 0) * 180 / Math.PI).toFixed(2), gear: !!c.gearDown, ap: c.jetModes.alt !== null, holdAlt: Math.round(c.jetModes.alt ?? 0) };
+          r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
           let gpu = 0, turn = 0, ground = 0;
           for (let i = 0; i < ${FRAMES}; i++) {
             __bh.step(1 / 30); __bh.touch();
@@ -157,8 +210,12 @@ describe.skipIf(!E2E)("Q6: the image in motion, the same motion for every mode",
             while (r.lastDoneAt === last && k++ < 120) await frame();
             gpu += r.lastGpuMs; turn += r.imageTurnPx ?? 0; ground += r.imageGroundPx ?? 0;
           }
+          // (the temporal passes' own GPU time over the flight — the native history, the upsampling —, the profiler reset as it starts;
+          // the eight costliest passes)
+          const T = r.prof.table(), pass = (l) => +(T.find((x) => x.label === l)?.ms ?? 0).toFixed(2);
+          const passes = { temporal: pass("temporal"), taau: pass("taau"), top: T.slice(0, 8).map((x) => [x.label, +x.ms.toFixed(2)]) };
           r.prof.enabled = false;
-          return { gpuMs: +(gpu / ${FRAMES}).toFixed(1), turnPx: +(turn / ${FRAMES}).toFixed(1), groundPx: +(ground / ${FRAMES}).toFixed(1) }; })()`);
+          return { gpuMs: +(gpu / ${FRAMES}).toFixed(1), turnPx: +(turn / ${FRAMES}).toFixed(1), groundPx: +(ground / ${FRAMES}).toFixed(1), passes, state }; })()`);
         // (the first instant: the last frame flown, held — no step, no refinement —, the page's panels and the HUD's canvas hidden:
         // the view alone — the HUD's lines, alike in every image, drowned the Laplacian's measure of the ground)
         await app.js(

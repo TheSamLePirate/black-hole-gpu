@@ -1343,7 +1343,9 @@ compilation) s'y ajoutent.
   image pour chaque mode, sa référence propre, PSNR et netteté dans la verrière) : à Tarifa, le TAAU existant, éteint depuis
   octobre, bat le chemin par défaut en mouvement (39,6 → 44,4 dB, netteté 0,74 → 0,95) pour ≈ +1,8 ms ([Q6.md](progress/refraction-horizons/Q6.md)). **Q6b** — le TAAU en mouvement par défaut : netteté en mouvement ~0,7 → ~0,94 de la
   référence sur le relief (Tarifa, Alpes), aucun fantôme sur la mer mais ses vagues rasantes 10 % plus granuleuses que la
-  référence ; +0,6 à +4,3 ms (Heavy).
+  référence ; +0,6 à +4,3 ms (Heavy). **Q6c** — `motion-quality` reproductible d'un lancement à l'autre (tout chargé et compilé,
+  pilote automatique, auto-manette, train sorti, 60 images de stabilisation ; bruit ±0,5 dB) ; la passe TAAU −10 % (1,65 → 1,48 ms),
+  l'image inchangée.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du
