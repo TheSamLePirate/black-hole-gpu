@@ -7673,7 +7673,11 @@ async function main() {
   };
   realWeather.onUpdate = metarTick;
   // (the sky in figures for TARS's telemetry: system/sky-now.ts)
-  (camera as unknown as { skyInfo: () => unknown }).skyInfo = () => skyNow(settings, sim.time, renderer.refractivity(settings));
+  // (and the horizons' state — H4: the world's maps, the Earth's levels)
+  (camera as unknown as { skyInfo: () => unknown }).skyInfo = () => {
+    const sky = skyNow(settings, sim.time, renderer.refractivity(settings));
+    return sky ? { ...sky, horizons: renderer.horizonStatus(settings) } : null;
+  };
   // (the map's weather layer: the real weather's own — the day's clouds, each station's)
   flightHud.mapWeather = {
     real: () => camera.weatherReal,

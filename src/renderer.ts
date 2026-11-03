@@ -9237,6 +9237,20 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     buf.destroy();
     return { share: f[7]!, ready: f[6]! > 0.5, current: f.slice(8, 8 + n / 4), previous: f.slice(8 + n / 4) };
   }
+  /** The horizons' state in figures (H4 — TARS's "sky" telemetry, BH-API): the setting; a world's horizon maps — the world, its
+   *  finer maps' mode (full: near; relief: looked at — H1b), baked or baking, the bake's time, their bytes, their weight in the
+   *  tracer —; the Earth's — each relief level's horizons published and faded in (H5) */
+  horizonStatus(s: Settings) {
+    const h = this.horizonMaps.stats();
+    const e = this.earthHorizons?.stats();
+    return {
+      on: s.horizonMaps !== false,
+      world: h.body
+        ? { body: h.body, mode: this.hdMap.mode, state: h.state, bakeMs: h.doneMs, bytes: h.bytes, weight: +this.horizonRow[0]!.toFixed(2) }
+        : null,
+      earth: e ? e.levels.map((l) => ({ level: l.level, published: !!l.published, weight: +l.weight.toFixed(2) })) : null,
+    };
+  }
   /** (H5) the Earth's horizons as the tracer reads them (TABLE_EARTH_HORIZON): the levels' headers (each 8 floats: the window's
    *  reference, its nodes a radian, D_bake, weight, cache level) and one level's node records (`slot` 0–2: levels 4–6; 8 floats a
    *  node — two sines a float, three steps a float, the node's height) — a diagnostic */

@@ -1312,7 +1312,9 @@ compilation) s'y ajoutent.
   sRGB, anisotropie 16), sorties de la texture des hauteurs : A/B sur le mini −2 % au matériau raster, images équivalentes,
   −10 Mo — [progress/refraction-horizons/T9.md](progress/refraction-horizons/T9.md). **T9b** — l'imagerie des niveaux z6–14 dans
   les mêmes textures (1024² et 2048²) : −1,1 ms (−4 à −6 %) au matériau raster ; mémoire en transition jusqu'à T9c. **T9c** — la texture du relief à ses hauteurs
-  (`r32uint`), les lumières nocturnes dans des couches filtrées : 354 → 274 Mo à la portée « très loin », temps et nuit inchangés.
+  (`r32uint`), les lumières nocturnes dans des couches filtrées : 354 → 274 Mo à la portée « très loin », temps et nuit inchangés. **H4** — le bilan des horizons
+  ([H4.md](progress/refraction-horizons/H4.md), [HORIZONS.md](HORIZONS.md)) : leur état dans la télémétrie « sky » de TARS ;
+  H1c attend la décision d'hébergement des DEM du pôle sud ; H5 en texture filtrée différé (précision du `rgba16float`).
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du
