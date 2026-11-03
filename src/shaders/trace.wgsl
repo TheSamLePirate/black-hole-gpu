@@ -13449,9 +13449,11 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
     SUN_N = n;
     let far = sunShadowFarAt(dirW * tM, 0.0);
     SUN_N = sn;
-    if (far.x >= 0.0) { Eg *= far.x; }
-    // (H5: past the cascades — and the blockers beyond their box —, the relief cache's horizons; their min)
-    if (far.x != 0.0) { Eg *= earthHorizonLight(gq, hG, Lp, pixFoot() * tM); }
+    // (H5: past the cascades — and the blockers beyond their box —, the relief cache's horizons; their min: a penumbra both
+    // see — the same crest in both — darkened once, not twice)
+    var sunVis = select(1.0, far.x, far.x >= 0.0);
+    if (far.x != 0.0) { sunVis = min(sunVis, earthHorizonLight(gq, hG, Lp, pixFoot() * tM)); }
+    Eg *= sunVis;
     // (the last metres under the cascades' reach: the contact shadows, in the image — lit and facing the Sun only, near)
     // (a Sun under 25°: higher, the last metres' shadows are short — under the pixel at a few hundred metres)
     if (far.x != 0.0 && dot(n, Lp) > 0.0 && dot(gq, Lp) < 0.42 && tM < 1500.0 && (liteSkip() & 16384u) == 0u) {

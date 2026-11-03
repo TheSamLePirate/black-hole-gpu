@@ -168,16 +168,17 @@ export function earthHorizonReader(): string {
   return /* wgsl */ `
 const EH_OFF = ${TABLE_EARTH_HORIZON}u;
 const EH_NODES = ${EH_NODE_VEC4S}u;
-// one node's horizon towards the sector position a (0…8) seen from h: its sine, its blockers' distance [m]; z 0: no data
-fn earthHorizonNode(l: u32, i: vec2u, a: f32, h: f32, D0: f32) -> vec3f {
+// one node's two sectors round the sector position a (0…8), as the linear quantities the bilinear blend may mix: their baked
+// tangents, the inverses of their blockers' distances [1/m], the node's height over them (h0/d); w 0: no data
+struct EhNode { t: vec2f, inv: vec2f, hd: vec2f, ok: f32 };
+fn earthHorizonNode(l: u32, i: vec2u, a: f32, D0: f32) -> EhNode {
   let n = i.y * ${TERRAIN_CACHE_N}u + i.x;
   let base = EH_OFF + ${EH_HEADER_VEC4S}u + l * EH_NODES + 2u * n;
   let S = bodies[base];
   let T = bodies[base + 1u];
-  if (T.w < -1e8) { return vec3f(-2.0, 0.0, 0.0); }
+  var o: EhNode;
+  if (T.w < -1e8) { return o; }
   let k0 = u32(floor(a)) % 8u;
-  var e = vec2f(0.0);
-  var dd = vec2f(0.0);
   for (var j = 0u; j < 2u; j++) {
     let k = (k0 + j) % 8u;
     // (the sine's byte: two in a float — 256, 1)
@@ -191,12 +192,17 @@ fn earthHorizonNode(l: u32, i: vec2u, a: f32, h: f32, D0: f32) -> vec3f {
     let p = select(k % 3u, k - 5u, k >= 6u);
     let d64 = floor(w / 64.0);
     let st = select(select(w - 64.0 * d64, d64 - 64.0 * floor(w / 4096.0), p == 1u), floor(w / 4096.0), p == 0u);
-    dd[j] = D0 * pow(${EH_STEP}, st);
-    let tn = sn / sqrt(max(1.0 - sn * sn, 1e-6)) + (T.w - h) / dd[j];
-    e[j] = tn / sqrt(1.0 + tn * tn);
+    o.t[j] = sn * inverseSqrt(max(1.0 - sn * sn, 1e-6));
+    o.inv[j] = exp2(-st * ${Math.log2(1.25).toFixed(9)}) / D0;
+    o.hd[j] = T.w * o.inv[j];
   }
-  return vec3f(mix(e.x, e.y, fract(a)), mix(dd.x, dd.y, fract(a)), 1.0);
+  o.ok = 1.0;
+  return o;
 }
+// The horizon towards the Sun at a ground point (gq its geodetic normal, h its height above the sea [m], L towards the Sun):
+// x its sine, y its blockers' distance [m] (x −2: none known). The four nodes round the point blended in what is linear —
+// tan e, 1/d, h0/d —, then seen again from h once a sector (option (d): tan e' = tan e + (h0 − h)/d — the blend of the
+// nodes' own re-seeings, one square root a sector, not four)
 fn earthHorizonSin(gq: vec3f, h: f32, L: vec3f) -> vec2f {
   var east = vec3f(-gq.y, gq.x, 0.0);
   east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-12);
@@ -220,15 +226,23 @@ fn earthHorizonSin(gq: vec3f, h: f32, L: vec3f) -> vec2f {
     let i = vec2u(floor(uv));
     let f = fract(uv);
     // (the four nodes round it, bilinear — one copy of the read: each call is inlined)
-    var v = vec2f(0.0);
+    var t = vec2f(0.0);
+    var inv = vec2f(0.0);
+    var hd = vec2f(0.0);
     var known = true;
     for (var c = 0u; c < 4u; c++) {
       let o = vec2u(c & 1u, c >> 1u);
-      let r4 = earthHorizonNode(l, i + o, a, h, s.y);
-      known = known && r4.z > 0.0;
-      v += r4.xy * select(1.0 - f.x, f.x, o.x == 1u) * select(1.0 - f.y, f.y, o.y == 1u);
+      let nd = earthHorizonNode(l, i + o, a, s.y);
+      known = known && nd.ok > 0.0;
+      let bw = select(1.0 - f.x, f.x, o.x == 1u) * select(1.0 - f.y, f.y, o.y == 1u);
+      t += bw * nd.t;
+      inv += bw * nd.inv;
+      hd += bw * nd.hd;
     }
     if (!known) { continue; }
+    let tn = t + hd - h * inv;
+    let e2 = tn * inverseSqrt(1.0 + tn * tn);
+    let v = vec2f(mix(e2.x, e2.y, fract(a)), 1.0 / max(mix(inv.x, inv.y, fract(a)), 1e-9));
     sum += rem * w * v;
     rem *= 1.0 - w;
     if (rem < 1e-3) { break; }
