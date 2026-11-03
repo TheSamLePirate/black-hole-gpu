@@ -12,6 +12,7 @@ import {
   sceneryFrame,
   wrapLon,
   type SceneryMode,
+  type SceneryProgress,
   type SceneryReply,
   type SceneryRequest,
 } from "./scenery-data";
@@ -60,6 +61,8 @@ export class EarthScenery {
   private started = 0;
   private attempted = -Infinity;
   private busy = false;
+  /** the worker's step under way (the loading status: the interface's data meter), null when none is preparing */
+  progress: SceneryProgress | null = null;
   private reason = "off";
   private lastError: string | null = null;
   private disposed = false;
@@ -202,8 +205,15 @@ export class EarthScenery {
     const id = ++this.id;
     try {
       this.worker ??= this.makeWorker();
+      this.progress = { step: "start" };
       this.worker.onmessage = (e: MessageEvent<SceneryReply>) => {
         if (this.disposed || e.data.id !== this.id) return;
+        // (the worker's progress — the step under way, the buildings' tiles —: kept for the loading status, the scene not yet)
+        if (e.data.progress) {
+          this.progress = e.data.progress;
+          return;
+        }
+        this.progress = null;
         this.busy = false;
         // (drawn, or failed and waiting to be tried again: no longer waited for)
         this.wanted = false;
@@ -376,6 +386,7 @@ export class EarthScenery {
             ? "degraded"
             : this.reason,
       pending: this.pending,
+      progress: this.progress,
       budgetLimited: d?.budgetLimited ?? false,
       lat: d?.lat ?? null,
       lon: d?.lon ?? null,

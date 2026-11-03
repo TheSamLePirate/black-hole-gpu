@@ -1613,6 +1613,9 @@ export default {
   "The air's own motion: a mean wind growing with the height (a jet near 11 km, nothing above 30 km), its direction turning with the place and the day; the Dryden model's turbulence; now and then a gust. The same flight, the same weather.":
     "Le mouvement propre de l'air : un vent moyen qui forcit avec l'altitude (un courant-jet vers 11 km, rien au-dessus de 30 km), sa direction tournant avec le lieu et le jour ; la turbulence du modèle de Dryden ; de temps en temps une rafale. Le même vol, la même météo.",
   "Show the frame rate": "Afficher les FPS",
+  "Show the data's loading": "Afficher le chargement des données",
+  "While the world's data comes in, a small line at the top of the screen says what is still loading: the relief's and the photographs' tiles (how many), the scenery's step (the land cover, the roads and water, the buildings — their tiles in and wanted —, the forest), a world's finer maps, the horizons' bake, and what failed. Hidden when nothing loads.":
+    "Pendant que les données du monde arrivent, une petite ligne en haut de l'écran dit ce qui charge encore : les tuiles du relief et des photographies (combien), l'étape du décor (l'occupation du sol, les routes et l'eau, les bâtiments — leurs tuiles reçues sur demandées —, la forêt), les cartes fines d'un monde, le calcul des horizons, et ce qui a échoué. Cachée quand rien ne charge.",
   "A small counter in the top corner: the frames per second and the frame's time, refreshed twice a second.":
     "Un petit compteur dans le coin en haut : les images par seconde et le temps d'une image, mis à jour deux fois par seconde.",
   "Planetary atlas": "Atlas planétaire",

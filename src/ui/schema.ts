@@ -2441,6 +2441,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "fps frame rate counter performance show display",
   },
   {
+    key: "showLoading",
+    type: "toggle",
+    section: "render",
+    group: "Realtime",
+    label: "Show the data's loading",
+    effect: "none",
+    help: "While the world's data comes in, a small line at the top of the screen says what is still loading: the relief's and the photographs' tiles (how many), the scenery's step (the land cover, the roads and water, the buildings — their tiles in and wanted —, the forest), a world's finer maps, the horizons' bake, and what failed. Hidden when nothing loads.",
+    keywords: "loading download tiles scenery buildings progress status data chargement téléchargement tuiles décor",
+  },
+  {
     key: "realtimeBudget",
     type: "number",
     section: "render",

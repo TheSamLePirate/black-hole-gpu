@@ -926,6 +926,10 @@ export class Renderer {
   /** the finer maps of the body near the camera (one at a time), and the one being loaded */
   private hdMap!: HdMap;
   private hdLoading: MapName | null = null;
+  /** the world whose finer maps are coming (the loading status), null none */
+  get hdLoadingName(): MapName | null {
+    return this.hdLoading;
+  }
   // auto exposure: the light meter (a histogram of the image, read back), its state
   private meterPipeline!: GPUComputePipeline;
   // the cockpit's mask (mask.wgsl): its pipeline, its parameters, whether the live view's moments hold one

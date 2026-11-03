@@ -296,8 +296,17 @@ export interface SceneryRequest {
   /** Overture Maps' buildings near the centre outside the BD TOPO's France (settings.earthOverture — B7, pmtiles.ts) */
   overture?: boolean;
 }
+/** the worker's progress through a scene, posted as it goes (the loading status's: ui — data meter): the last step ended,
+ *  and in the buildings' step the BD TOPO's or Overture's tiles in and wanted */
+export interface SceneryProgress {
+  step: "start" | "cover" | "osm" | "buildings" | "forest" | "pack";
+  done?: number;
+  of?: number;
+}
 export interface SceneryReply {
   id: number;
+  /** a progress message (not the scene): the step now */
+  progress?: SceneryProgress;
   buffer?: ArrayBuffer;
   lat: number;
   lon: number;

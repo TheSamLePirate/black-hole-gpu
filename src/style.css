@@ -605,6 +605,7 @@ body.hide-ui #sky-card,
 body.hide-ui .gt-root,
 body.hide-ui #topbar,
 body.hide-ui .compile-meter,
+body.hide-ui .data-meter,
 body.hide-ui .tb-handle {
   display: none;
 }
@@ -2517,6 +2518,21 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
   font: 600 10px/14px var(--mono); color: #bfe9ff; letter-spacing: 0.02em; white-space: nowrap;
 }
 .compile-meter[hidden] { display: none; }
+/* the world's data loading (Settings › Render › Show the data's loading): its sources still coming, under the compiles */
+.data-meter {
+  position: fixed; top: 15px; left: 50%; transform: translateX(-50%); z-index: var(--z-toast); pointer-events: none;
+  display: flex; align-items: center; gap: 0; padding: 1px 8px; border-radius: 4px;
+  background: rgba(4, 8, 14, 0.78); border: 1px solid rgba(160, 210, 255, 0.18);
+  font: 600 10px/14px var(--mono); color: #cfe3f2; letter-spacing: 0.02em; white-space: nowrap;
+}
+.data-meter[hidden] { display: none; }
+.data-meter > span + span::before { content: "·"; margin: 0 6px; color: rgba(207, 227, 242, 0.45); }
+.data-meter > span::after { content: ""; display: inline-block; width: 5px; height: 5px; margin-left: 5px; border-radius: 50%;
+  vertical-align: 1px; background: #7cd6ff; animation: data-pulse 1.2s ease-in-out infinite; }
+.data-meter > .dm-failed { color: #ffc76b; }
+.data-meter > .dm-failed::after { display: none; }
+@keyframes data-pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .data-meter > span::after { animation: none; } }
 .scenery-credit {
   position: fixed; right: 6px; bottom: max(3px, env(safe-area-inset-bottom)); z-index: 6;
   max-width: calc(100vw - 12px); padding: 3px 6px; border-radius: 3px;

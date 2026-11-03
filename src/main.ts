@@ -7968,6 +7968,78 @@ async function main() {
   const compileText = document.createElement("span");
   compileMeter.append(TarsOrb.mark("solving", TINT.blue, 14), compileText);
   document.body.append(compileMeter);
+  // (the world's data coming in — Settings › Render › Show the data's loading —: under the compiles, one segment per source still
+  // loading — the relief's tiles, the photographs', another world's, the scenery's step, a world's finer maps, the horizons'
+  // bake —, what failed lately in amber; gone once all is in. data-state and data-* for the tests)
+  const dataMeter = Object.assign(document.createElement("div"), { className: "data-meter", hidden: true });
+  dataMeter.dataset.testid = "data-meter";
+  dataMeter.dataset.state = "idle";
+  document.body.append(dataMeter);
+  let failSeen = { earth: 0, moon: 0, scenery: "" as string | null },
+    failUntil = 0,
+    failText = "",
+    horizonMax = 0;
+  const SCENERY_STEP: Record<string, string> = {
+    start: "starting",
+    cover: "land cover",
+    osm: "roads and water",
+    buildings: "buildings",
+    forest: "forest",
+    pack: "assembling",
+  };
+  const updateDataMeter = (now: number) => {
+    const segs: { text: string; kind: string }[] = [];
+    const et = renderer.earthTiles,
+      mt = renderer.moonTiles;
+    const relief = et.pending,
+      photos = et.orthoPending,
+      moon = mt.active ? mt.pending : 0;
+    if (relief) segs.push({ text: `${t("Relief")} · ${relief} ${t("tiles")}`, kind: "relief" });
+    if (photos) segs.push({ text: `${t("Photos")} · ${photos} ${t("tiles")}`, kind: "photos" });
+    if (moon) segs.push({ text: `${t("Terrain")} · ${moon} ${t("tiles")}`, kind: "tiles" });
+    const sc = renderer.earthScenery.stats();
+    if (sc.status === "loading" || sc.status === "refreshing") {
+      const p = sc.progress;
+      const step = p ? t(SCENERY_STEP[p.step] ?? p.step) : t("starting");
+      const n = p?.of ? ` ${p.done ?? 0}/${p.of}` : "";
+      segs.push({ text: `${t("Scenery")} · ${step}${n}`, kind: "scenery" });
+    }
+    const hd = renderer.hdLoadingName;
+    if (hd) segs.push({ text: `${t("Maps")} · ${t(hd[0]!.toUpperCase() + hd.slice(1))}`, kind: "maps" });
+    const hz = renderer.horizonMaps.stats();
+    if (hz.state === "baking" && hz.left > 0) {
+      horizonMax = Math.max(horizonMax, hz.left);
+      segs.push({ text: `${t("Horizons")} ${Math.round(100 * (1 - hz.left / horizonMax))} %`, kind: "horizons" });
+    } else horizonMax = 0;
+    // (the failures since the last look: shown 12 s — the tiles' (their heights then from the coarser map), the scenery's)
+    const err = sc.status === "degraded" ? (sc.lastError ?? "degraded") : null;
+    const fails: string[] = [];
+    if (et.failed > failSeen.earth) fails.push(`${t("Relief")} ${et.failed - failSeen.earth} ${t("failed")}`);
+    if (mt.failed > failSeen.moon) fails.push(`${t("Terrain")} ${mt.failed - failSeen.moon} ${t("failed")}`);
+    if (err && err !== failSeen.scenery) fails.push(`${t("Scenery")} ${t("degraded")}`);
+    failSeen = { earth: et.failed, moon: mt.failed, scenery: err };
+    if (fails.length) {
+      failText = fails.join(" · ");
+      failUntil = now + 12_000;
+    }
+    if (now < failUntil) segs.push({ text: `⚠ ${failText}`, kind: "failed" });
+    const on = settings.showLoading && segs.length > 0;
+    dataMeter.hidden = !on;
+    dataMeter.dataset.state = segs.some((s) => s.kind !== "failed") ? "loading" : segs.length ? "failed" : "idle";
+    // (under the top bar — over it, among its buttons, it was hard to read —, and under the compiles when they show)
+    const bar = document.getElementById("topbar");
+    // (fixed: its offsetParent always null — shown is its having boxes)
+    const below = bar && bar.getClientRects().length > 0 ? bar.getBoundingClientRect().bottom + 6 : 15;
+    dataMeter.style.top = `${Math.max(below, compileMeter.hidden ? 0 : compileMeter.getBoundingClientRect().bottom + 4)}px`;
+    if (!on) return;
+    dataMeter.replaceChildren(
+      ...segs.map((s) => {
+        const e = Object.assign(document.createElement("span"), { textContent: s.text, className: `dm-${s.kind}` });
+        e.dataset.kind = s.kind;
+        return e;
+      }),
+    );
+  };
   const sceneryCredit = Object.assign(document.createElement("div"), { className: "scenery-credit", hidden: true });
   const creditLink = (label: string, href: string) =>
     Object.assign(document.createElement("a"), { textContent: label, href, target: "_blank", rel: "noopener" });
@@ -8086,6 +8158,7 @@ async function main() {
           ? `${t("Compiling shaders")} · ${now[0]}${compiling > 1 ? ` · +${compiling - 1}` : ""}${left}`
           : `${t("Compiling shaders")} · ${compiling}${left}`;
       }
+      updateDataMeter(now);
     }
     // (frozen: an automation steps the simulation itself, frame by frame — see __bh.step)
     // (frozen: an automation steps the simulation itself — __bh.step; an offline render or a video: the

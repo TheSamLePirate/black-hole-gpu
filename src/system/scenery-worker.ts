@@ -46,6 +46,7 @@ import {
   wallMaterial,
 } from "./roofs";
 import {
+  type SceneryProgress,
   BUILDING_MESH_M,
   BUILDING_PARTS_M,
   buildingPacked,
@@ -80,7 +81,21 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     signal = AbortSignal.timeout(60_000);
   // (where the time goes — each step's end from the start [ms]: the scene's stats, T8)
   const phases: Record<string, number> = {};
-  const phase = (name: string) => (phases[name] = Math.round(performance.now() - started));
+  // (and the step under way told as it goes — the loading status in the interface: what the scenery waits for)
+  const tell = (p: SceneryProgress) => g.postMessage({ id: q.id, lat: q.lat, lon: q.lon, progress: p });
+  const next: Record<string, SceneryProgress["step"]> = {
+    cover: "osm",
+    osm: "buildings",
+    bdtopo: "forest",
+    overture: "forest",
+    forest: "pack",
+  };
+  const phase = (name: string) => {
+    phases[name] = Math.round(performance.now() - started);
+    const n = next[name];
+    if (n) tell({ step: n });
+  };
+  tell({ step: "cover" });
   // (the detail's reach: the box, its raster — ~10 m a pixel kept —, its budgets this many times the normal ones)
   const k = q.reach ?? 1,
     k2 = k * k,
@@ -489,6 +504,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         }
       }
     };
+    // (their count said at once: the indicator's "buildings 0/N" before the first batch is in)
+    tell({ step: "buildings", done: 0, of: want.length });
     for (let k0 = 0; k0 < want.length; k0 += 4) {
       // (enough: the nearest `limit` closer than every tile left)
       if (out.length >= limit) {
@@ -496,6 +513,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         if (out[limit - 1]!.d < want[k0]!.d) break;
       }
       await Promise.all(want.slice(k0, k0 + 4).map((w) => one(w.x, w.y)));
+      tell({ step: "buildings", done: Math.min(k0 + 4, want.length), of: want.length });
     }
     return { out, covered, tileCount };
   };
@@ -604,7 +622,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       add(layers.building, false);
       add(part, true);
     };
-    for (let k0 = 0; k0 < want.length; k0 += 4)
+    tell({ step: "buildings", done: 0, of: want.length });
+    for (let k0 = 0; k0 < want.length; k0 += 4) {
       await Promise.all(
         want.slice(k0, k0 + 4).map((w) =>
           one(w.x, w.y).catch((e) => {
@@ -614,6 +633,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           }),
         ),
       );
+      tell({ step: "buildings", done: Math.min(k0 + 4, want.length), of: want.length });
+    }
     return { out, covered, tileCount };
   };
   const overture = !bdtopo && q.overture ? overtureTiles() : null;
