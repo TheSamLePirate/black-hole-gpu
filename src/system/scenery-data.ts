@@ -7,6 +7,10 @@ export const SCENERY_BYTES = 16 * 1024 * 1024;
 /** The detail's reach (settings.detailReach): the scenery's box, its land cover's raster and its rays this many times the
  *  normal ones, its budgets as its area — its buffer 16, 36 or 64 MiB, its raster 512, 768 or 1024 px (~10 m a pixel
  *  kept). */
+/** the IGN's gates — the page's relief grids (earth-tiles.ts), the worker's survey (ign-canopy.ts) — opened to this many a second
+ *  when the Service Worker controls the page: its own Géoplateforme budget holds the network's requests (sw.ts), the cache's
+ *  answers never held (the 20 and 12 a second held those too: a warm start paid 15–35 s) */
+export const IGN_GATE_SW = 200;
 export const DETAIL_REACH = { normal: 1, far: 1.5, veryFar: 2 } as const;
 export type DetailReach = keyof typeof DETAIL_REACH;
 export const sceneryBudget = (reach: number) => Math.ceil((SCENERY_BYTES * reach * reach) / (1024 * 1024)) * 1024 * 1024;
@@ -343,6 +347,11 @@ export interface SceneryRequest {
    *  buildings' triangles and parts made round the camera too, nearest first (not only round the centre: the ones under
    *  the craft were left boxes) */
   eye?: [number, number];
+  /** a first, nearer scene — its box this share of the reach's (QUICK_SHARE) — while none drawn covers the camera: the full one
+   *  asked right after it (scenery.ts) */
+  quick?: number;
+  /** the Service Worker controls the page: the Géoplateforme's budget its (sw.ts) — the survey's own gate opened */
+  swGate?: boolean;
 }
 /** the worker's progress through a scene, posted as it goes (the loading status's: ui — data meter): the last step ended,
  *  and in the buildings' step the BD TOPO's or Overture's tiles in and wanted */

@@ -49,6 +49,7 @@ import {
 import {
   type SceneryProgress,
   BUILDING_MESH_M,
+  IGN_GATE_SW,
   BUILDING_PARTS_M,
   buildingPacked,
   orientedBox,
@@ -103,7 +104,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   };
   tell({ step: "cover" });
   // (the detail's reach: the box, its raster — ~10 m a pixel kept —, its budgets this many times the normal ones)
-  const k = q.reach ?? 1,
+  // (a quick first scene: its box a share of the reach's — the buffer's budget the full one's)
+  const k = (q.reach ?? 1) * (q.quick ?? 1),
     k2 = k * k,
     N = sceneryGrid(k),
     budget = q.budget ?? SCENERY_BYTES,
@@ -219,7 +221,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (over Switzerland, swisstopo's ground under the trees and the buildings — I7 —, its canopy none: the land cover's)
   const survey = surveyOf(q);
   const land: IgnLand | SwissGround | null =
-    survey === "ign" ? new IgnLand(fetchSurvey) : survey === "swisstopo" ? new SwissGround(fetchSurvey) : null;
+    survey === "ign"
+      ? new IgnLand(fetchSurvey, q.swGate ? IGN_GATE_SW : undefined)
+      : survey === "swisstopo"
+        ? new SwissGround(fetchSurvey)
+        : null;
   const landReady = land?.prepare(q.lat, q.lon, surveyReach(radius));
   await raster(false);
   if (q.satellite) await raster(true);

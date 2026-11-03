@@ -505,6 +505,44 @@ async function networkFirst(request: Request, name: string): Promise<Response> {
   }
 }
 
+// ---- the Géoplateforme's one budget (data.geopf.fr: the relief's grids, the survey's, the BD TOPO, the orthophotos, the
+// zones'): every network request of the page and of its workers through it — GEOPF_PER_S a second, GEOPF_INFLIGHT at once —, a
+// 429 pausing them all (its Retry-After, else 1.5 s doubling) and the request asked again (twice at most); the cache's answers
+// never held. Four gates that knew nothing of each other had drawn 429s, the survey timed out, the scenes degraded.
+const GEOPF = "https://data.geopf.fr/";
+const GEOPF_PER_S = 25;
+const GEOPF_INFLIGHT = 10;
+let geopfNext = 0,
+  geopfInflight = 0,
+  geopfPausedTo = 0;
+async function geopfSlot() {
+  for (;;) {
+    const now = Date.now();
+    const at = Math.max(now, geopfNext, geopfPausedTo);
+    if (at <= now && geopfInflight < GEOPF_INFLIGHT) {
+      geopfNext = now + 1000 / GEOPF_PER_S;
+      geopfInflight++;
+      return;
+    }
+    await new Promise((done) => setTimeout(done, Math.max(at - now, 15)));
+  }
+}
+async function networkFetch(request: Request): Promise<Response> {
+  if (!request.url.startsWith(GEOPF)) return fetch(request);
+  for (let k = 0; ; k++) {
+    await geopfSlot();
+    let res: Response;
+    try {
+      res = await fetch(request);
+    } finally {
+      geopfInflight--;
+    }
+    if (res.status !== 429 || k >= 2) return res;
+    const after = Number(res.headers.get("retry-after"));
+    geopfPausedTo = Math.max(geopfPausedTo, Date.now() + (Number.isFinite(after) && after > 0 ? after * 1000 : 1500 * 2 ** k));
+  }
+}
+
 /** A tile: from the cache (its last use refreshed), else fetched and kept — the budget enforced after. */
 let evicting: Promise<void> | null = null;
 async function tile(request: Request): Promise<Response> {
@@ -529,7 +567,7 @@ async function tile(request: Request): Promise<Response> {
     return fromCache;
   }
   serving(request.url, "network");
-  const res = await fetch(request);
+  const res = await networkFetch(request);
   if (res.ok && res.type !== "opaque") {
     const copy = res.clone();
     void (async () => {

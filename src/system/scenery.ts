@@ -1,6 +1,8 @@
 import type { Vec3 } from "../physics";
 import { forestKindTable, forestSeason } from "./forest";
 import { SceneryContact } from "./scenery-contact";
+import { swControls } from "./earth-tiles";
+import { sceneryBox } from "./scenery-sources";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
 import { geoidN } from "./geoid-grid";
 import {
@@ -30,6 +32,12 @@ export function sceneryShader(code: string, supported: boolean) {
  *  far reach (scenery-sources.ts sceneryBox): led 3 km, the view still in it; the buildings' detail made round the camera
  *  too (SceneryRequest.eye) */
 const CENTRE_HOLD_M = 1500;
+/** the quick first scene's box, a share of the reach's (~2 km round its centre at the very far reach), asked while no drawn
+ *  scene covers the camera — the camera past QUICK_COVER of the drawn box's radius, or none drawn: a first arrival, a jump —:
+ *  the near buildings, roads and trees in a fraction of the full scene's time, the full one right after; not when a flight
+ *  re-centres a scene that still covers it (each re-centring's work twice) */
+const QUICK_SHARE = 0.35;
+const QUICK_COVER = 0.8;
 
 export class EarthScenery {
   contact: SceneryContact | null = null;
@@ -200,7 +208,12 @@ export class EarthScenery {
       // (the camera moved on: its new scene asked at once, not after the throttle)
       this.attempted = -Infinity;
     }
-    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}`;
+    // (no drawn scene round the camera — the first arrival, a jump —: a quick near one first)
+    const eyeToDrawn = this.data
+      ? Math.hypot((this.data.lat - geo.lat / D) * 111320, wrapLon(this.data.lon - geo.lon / D) * 111320 * Math.cos(geo.lat))
+      : Infinity;
+    const quick = eyeToDrawn > QUICK_COVER * sceneryBox(0, 0, mode, reach).radius && !this.applied.endsWith(":q");
+    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}${quick ? ":q" : ""}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
     if (
@@ -311,6 +324,8 @@ export class EarthScenery {
         ign: this.ign,
         overture: this.overture,
         eye: [geo.lat / D, geo.lon / D],
+        ...(quick ? { quick: QUICK_SHARE } : {}),
+        swGate: swControls(),
       } satisfies SceneryRequest);
     } catch (e) {
       this.lastError = String(e);

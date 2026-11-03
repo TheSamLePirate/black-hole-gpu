@@ -28,6 +28,7 @@
 
 import type { Vec3 } from "../physics";
 import { cartToGeodetic, geodeticDirAt, squashedScale, WGS84_A, WGS84_F } from "./ellipsoid";
+import { IGN_GATE_SW } from "./scenery-data";
 import { type NationalSource, type OrthoFit, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
 
 export const TILE = 256;
@@ -123,6 +124,10 @@ export const IGN_RGEALTI = "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES";
 export class RateGate {
   private next = 0;
   constructor(private perSecond: number) {}
+  /** its rate changed (a second's requests) */
+  rate(perSecond: number) {
+    this.perSecond = perSecond;
+  }
   /** resolves when the next request may go */
   take(): Promise<void> {
     const now = performance.now(),
@@ -132,6 +137,16 @@ export class RateGate {
   }
 }
 const ignGate = new RateGate(20);
+/** the page's own gate on the IGN's grids opened once the Service Worker controls it (IGN_GATE_SW, scenery-data.ts) */
+let swGateOpen = false;
+export function swControls(): boolean {
+  return typeof navigator !== "undefined" && !!navigator.serviceWorker?.controller;
+}
+function swGateCheck() {
+  if (swGateOpen || !swControls()) return;
+  swGateOpen = true;
+  ignGate.rate(IGN_GATE_SW);
+}
 export const IGN_LIDAR = "IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
 /** A height's source, in its float's last bit (the tracer's tiles the same: trace.wgsl tileFine): 1 a survey's (the IGN's —
  *  its resolution its texel's), 0 the global data's (Terrarium: SRTM's 25–30 m under its texel — whose k/256 values never
@@ -841,6 +856,7 @@ export class EarthTiles {
   private priorityLon = 0;
   private prioritySinLat = 0;
   update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0], gaze: Vec3 = [0, 0, 0], agl?: number) {
+    swGateCheck();
     // (the orthophotos switched: the relief's tiles' imagery taken again — over France the IGN's or EOX's —, the tiles
     // kept past the windows dropped. The tiles drawn stay drawn until each is in again: dropped at once, the ground fell
     // back to the global map's — at Chamonix the valley filled, a jet flying 450 m over its floor hundreds of metres in
