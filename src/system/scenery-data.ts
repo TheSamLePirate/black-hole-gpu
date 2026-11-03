@@ -134,7 +134,18 @@ export function orientedBox(edges: ArrayLike<number>): [number, number, number, 
   return [cx, cy, angle, hu > 4095 || hv > 4095 || !Number.isFinite(hu + hv) ? -1 : hu * 4096 + hv];
 }
 
-export function buildingPacked(roof: number, wall: number, storeys: number, planes: number, shape: string, mesh: boolean, parapet = false) {
+export function buildingPacked(
+  roof: number,
+  wall: number,
+  storeys: number,
+  planes: number,
+  shape: string,
+  mesh: boolean,
+  parapet = false,
+  work = false,
+) {
+  // (bit 23 — the last a float holds exactly —: a workplace's — BD TOPO's usage not a home's: its windows dark at night but its
+  // shop floor's, Q3)
   return (
     (roof & 15) |
     ((wall & 15) << 4) |
@@ -142,9 +153,21 @@ export function buildingPacked(roof: number, wall: number, storeys: number, plan
     ((planes & 15) << 14) |
     (Math.max(0, SHAPES.indexOf(shape)) << 18) |
     (mesh ? 1 << 21 : 0) |
-    (parapet ? 1 << 22 : 0)
+    (parapet ? 1 << 22 : 0) |
+    (work ? 1 << 23 : 0)
   );
 }
+/** a coordinate as a float32 whose last bit says a flag (Q3: a building's edge's x — a blind side, a party wall): 0.2 mm at most
+ *  off at the scenes' few kilometres */
+const MARK_F = new Float32Array(1),
+  MARK_U = new Uint32Array(MARK_F.buffer);
+export function markedCoord(x: number, flag: boolean): number {
+  MARK_F[0] = x;
+  MARK_U[0] = (MARK_U[0]! & ~1) | (flag ? 1 : 0);
+  return MARK_F[0]!;
+}
+/** a building's workplace bit's usages: BD TOPO's usage_1 not a home's (offices, shops, industry, farms, schools, churches…) */
+export const isWorkUsage = (usage?: string) => !!usage && usage !== "Résidentiel" && usage !== "Indifférencié";
 /** a scenery's forest (forest.ts): its grid's frame, a word a cell, the trees in it */
 export interface ForestSection {
   frame: ForestFrame;

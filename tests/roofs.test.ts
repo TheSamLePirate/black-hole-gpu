@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { earcut } from "../src/system/earcut";
 import { buildingMesh } from "../src/system/roof-mesh";
+import { isWorkUsage, markedCoord } from "../src/system/scenery-data";
 import {
   apexDistance,
   convexParts,
@@ -258,4 +259,27 @@ describe("chimneys", () => {
     const f = planRoof(house({ rings: [r], roofMat: RoofMaterial.Concrete }));
     expect(stacksOf({ ...f, rings: [r] }, 0.1, false)).toEqual([]);
   });
+});
+
+test("Q3: a building's blind sides — its party walls — carried to its plans, marked in its edges' x's last bit", () => {
+  // (a terraced house: its west and east sides against its neighbours)
+  const ring: [number, number][] = [
+    [0, 0],
+    [8, 0],
+    [8, 10],
+    [0, 10],
+  ];
+  const parts = planBuilding({ rings: [ring], party: [false, true, false, true], height: 9, region: "temperate", seed: 0.3 } as RoofInput);
+  expect(parts.length).toBe(1);
+  expect(parts[0]!.blind).toEqual([false, true, false, true]);
+  // (the mark: the coordinate kept to a fraction of a millimetre, its last bit the flag either way)
+  const bits = (x: number) => new Uint32Array(new Float32Array([x]).buffer)[0]! & 1;
+  for (const x of [1234.567, -876.5, 0.25, 3001.1]) {
+    expect(Math.abs(markedCoord(x, true) - x)).toBeLessThan(1e-3);
+    expect(bits(markedCoord(x, true))).toBe(1);
+    expect(bits(markedCoord(x, false))).toBe(0);
+  }
+  expect(isWorkUsage("Commercial et services")).toBe(true);
+  expect(isWorkUsage("Résidentiel")).toBe(false);
+  expect(isWorkUsage(undefined)).toBe(false);
 });

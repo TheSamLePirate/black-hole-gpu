@@ -9018,6 +9018,8 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
     if(hi.w<0.0){i++;continue;}
     let base=u32(scenery[0].y+hi.w);let p=scenery[base];var alb=scenery[base+2u].xyz;
     var h=vec4f(-1.0);var aux=vec2f(-1.0);
+    // (Q3: a blind wall's hit — a party wall, a cut inside the building: its edge's x's last bit — its kind 1.25, a building's still)
+    var blind=false;
     {
       let count=u32(p.z);var best=out.t;
       // (a building's roof — kind 1, docs/PLAN-BATIMENTS-AAA.md B2 —: z = the least of its planes over its footprint, the
@@ -9063,11 +9065,11 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
           var roof=1e30;
           for(var k=0u;k<np;k++){let pl=scenery[R+k];roof=min(roof,pl.x*(o.x+d.x*t)+pl.y*(o.y+d.y*t)+pl.z);}
           let top=min(p.y,roof+lip);
-          if(z<=top){let norm=normalize(vec3f(v.y,-v.x,0.0));best=t;h=vec4f(t,select(norm,-norm,dot(norm,d)>0.0));alb=scenery[base+2u].xyz;aux=vec2f(u,1.0)*length(v);}
+          if(z<=top){let norm=normalize(vec3f(v.y,-v.x,0.0));best=t;h=vec4f(t,select(norm,-norm,dot(norm,d)>0.0));alb=scenery[base+2u].xyz;aux=vec2f(u,1.0)*length(v);blind=(bitcast<u32>(line.x)&1u)==1u;}
         }
       }
     }
-    if(h.x>0.0 && h.x<out.t){out=SceneryHit(h.x,h.yzw,alb,p.w,select(p.z,p.x,p.w>.5),base,aux);if(shadow){return out;}}
+    if(h.x>0.0 && h.x<out.t){out=SceneryHit(h.x,h.yzw,alb,select(p.w,1.25,blind && aux.y>0.0 && p.w>0.5 && p.w<1.5),select(p.z,p.x,p.w>.5),base,aux);if(shadow){return out;}}
     i++;
   }
   return out;
@@ -9076,12 +9078,16 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
 // buildingPacked). Walls: storeys at the data's height (the eave over the storeys), bays of ~3.2 m along the wall itself,
 // windows recessed and mirroring the sky, shop fronts at a tall block's foot, a quarter of a home's windows lit at
 // night; the stone's courses, the brick's tone. Roofs: tiles' and slates' courses down the slope, zinc's standing seams
-// and its sheen, a terrace's gravel; weathering. The detail fades with the distance (no shimmer past ~200 m).
+// and its sheen, a terrace's gravel; weathering. The detail fades with the pixel's footprint (12–26 cm: ~120–260 m at the usual
+// field — the telephoto keeps it farther; no shimmer), the lit windows kept beyond it as their mean glow. Q3: a blind wall — a
+// party wall, a cut inside the building (its kind 1.25) — has no window; a workplace's windows (bit 23) dark at night but its
+// shop floor's.
 fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,vec3f>) {
   let g=hit.geo;let head=scenery[g];let w=u32(scenery[g+2u].w);
   let roofMat=w&15u;let wallMat=(w>>4u)&15u;let storeys=max(1u,(w>>8u)&63u);
   let base=head.x+1.0;let eave=scenery[g+3u+u32(head.z)].w;
-  let near=1.0-smoothstep(120.0,260.0,hit.t);
+  let near=1.0-smoothstep(0.12,0.26,hit.t*pixFoot());
+  let work=((w>>23u)&1u)==1u;let blindWall=hit.kind>1.1;
   let id=g;
   // (a wall's hit has its coordinate along it — a mansard's steep brisis is roof)
   let wall=hit.aux.y>0.0;
@@ -9100,7 +9106,10 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
       *alb=select(*alb,vec3f(0.16,0.17,0.18),mull);
       WS_S=select(0.1,0.0,mull);
       let hsh=hash3u(vec3u(id,u32(floorI),u32(floor(along/1.5)+512.0)));
-      if(!mull && u2f(hsh)<0.35){WS_E=vec3f(0.95,0.92,0.85)*(0.04+0.06*u2f(pcg(hsh)))*near;}
+      let lit=select(0.35,0.15,work);
+      if(!mull && u2f(hsh)<lit){WS_E=vec3f(0.95,0.92,0.85)*(0.04+0.06*u2f(pcg(hsh)))*near;}
+      // (beyond the detail: the panes' mean glow)
+      WS_E+=vec3f(0.95,0.92,0.85)*(0.07*0.9*lit)*(1.0-near);
       return;
     }
     // (the material's own grain: dressed stone's courses, brick's tone, render's stains)
@@ -9109,8 +9118,16 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
     else{*alb*=0.9+0.2*gnoise(p*vec3f(0.15,0.15,0.4));}
     // (above the eave a gable, a party wall's rise: blank)
     // (a chimney stack — shape 5 —: no window)
-    if(p.z<eave-0.3 && len>2.4 && near>0.0 && ((w>>18u)&7u)!=5u){
+    // (windows — not on a blind wall, a chimney stack —: beyond the detail their mean — their dark glass a fifth of the wall,
+    // the lit ones' glow —, near each its own)
+    if(p.z<eave-0.3 && len>2.4 && ((w>>18u)&7u)!=5u && !blindWall){
       let shop=floorI<0.5 && storeys>=4u;
+      let share=select(select(0.28,0.08,work),0.55,shop);
+      if(p.z>base+0.5){
+        *alb*=1.0-0.22*(1.0-near);
+        WS_E+=vec3f(1.0,0.8,0.52)*(0.0257*share)*(1.0-near);
+      }
+      if(near<=0.0){return;}
       let wu=select(0.26,0.12,shop);let wv0=select(0.28,0.08,shop);let wv1=select(0.86,0.82,shop);
       let inWin=u>wu && u<1.0-wu && v>wv0 && v<wv1 && p.z>base+0.5;
       if(inWin){
@@ -9119,7 +9136,7 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
           *alb=mix(*alb,vec3f(0.035,0.045,0.055),near);WS_S=0.04*near;
           // (lit at night: a third of a home's, more of a shop's — each its own warmth)
           let hsh=hash3u(vec3u(id,u32(floorI),u32(bay+512.0)));
-          if(u2f(hsh)<select(0.28,0.55,shop)){WS_E=vec3f(1.0,0.8,0.52)*(0.05+0.09*u2f(pcg(hsh)))*near;}
+          if(u2f(hsh)<share){WS_E+=vec3f(1.0,0.8,0.52)*(0.05+0.09*u2f(pcg(hsh)))*near;}
         }else{*alb*=0.75;}
       }
       // (a storey's line: the floor's slab, a cornice's shadow)
@@ -9216,7 +9233,7 @@ fn buildingFaceAt(g:u32,p:vec3f,d:vec3f,t:f32)->SceneryHit {
   if(p.z>roof-0.35 && (best>0.09 || p.z>roof-0.1)){return SceneryHit(t,normalize(nr),scenery[R-1u].xyz,1.0,0.0,g,vec2f(-1.0));}
   let line=scenery[g+3u+e0];let v=line.zw-line.xy;
   var nn=normalize(vec3f(v.y,-v.x,0.0));nn=select(nn,-nn,dot(nn,d)>0.0);
-  return SceneryHit(t,nn,scenery[g+2u].xyz,1.0,0.0,g,vec2f(along,1.0)*len);
+  return SceneryHit(t,nn,scenery[g+2u].xyz,select(1.0,1.25,(bitcast<u32>(line.x)&1u)==1u),0.0,g,vec2f(along,1.0)*len);
 }
 fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
   SC_DISTANCE=1e9;WS_T=vec3f(0.0);

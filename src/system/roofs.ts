@@ -845,6 +845,9 @@ export function convexParts(rings: Pt[][], party?: boolean[][]): { ring: Pt[]; f
 /** a building's roof part: its footprint (a convex part, or the whole) and its plan */
 export interface RoofPart extends RoofPlan {
   rings: Pt[][];
+  /** its outer ring's blind sides, in its edges' order (Q3): a party wall — a neighbour against it — or a cut inside the building
+   *  (convexParts): no window on them */
+  blind?: boolean[];
 }
 /**
  * A building's roofs: a simple footprint its one roof (planRoof); a complex one — an L, a U, a courtyard block — cut into
@@ -863,13 +866,25 @@ export function planBuilding(b: RoofInput, maxParts = 24): RoofPart[] {
     rings.length === 1 &&
     Math.abs(ringArea(outer)) / Math.max(Math.abs(ringArea(convexHull(outer))), 1e-9) >= 0.88 &&
     sidesOf(outer, b.party).length <= 12;
-  if (simple) return [{ ...one, rings }];
+  if (simple) return [{ ...one, rings, blind: b.party }];
   // (flat whole: measured so, a terrace, a hall — planRoof's rules, its complexity's apart)
   const byData = flatByData(b, Math.abs(ringArea(outer)) - rings.slice(1).reduce((t, r) => t + Math.abs(ringArea(r)), 0));
   if (byData !== null)
-    return [{ ...one, wall: b.height, top: b.height, planes: [[0, 0, b.height]], shape: "flat", pitch: 0, roofMat: byData, rings }];
+    return [
+      {
+        ...one,
+        wall: b.height,
+        top: b.height,
+        planes: [[0, 0, b.height]],
+        shape: "flat",
+        pitch: 0,
+        roofMat: byData,
+        rings,
+        blind: b.party,
+      },
+    ];
   const parts = convexParts(rings, [b.party ?? [], ...rings.slice(1).map(() => [])]);
-  if (!parts.length || parts.length > maxParts) return [{ ...one, rings }];
+  if (!parts.length || parts.length > maxParts) return [{ ...one, rings, blind: b.party }];
   // (the building's shape: a mansard where its block's would be, else two slopes — four by the seed where the region hips)
   const mat = one.roofMat;
   const hinted = b.hint?.shape;
@@ -887,7 +902,11 @@ export function planBuilding(b: RoofInput, maxParts = 24): RoofPart[] {
   const k = main.shape === "flat" || main.shape === "mansard" ? undefined : Math.tan(main.pitch * DEG);
   // (a part with no free side: flat at the main part's top)
   const top = main.top - main.wall;
-  const planned = parts.map((p) => ({ ...planRoof({ ...b, rings: [p.ring], party: p.flags, force: { shape, k, top } }), rings: [p.ring] }));
+  const planned = parts.map((p) => ({
+    ...planRoof({ ...b, rings: [p.ring], party: p.flags, force: { shape, k, top } }),
+    rings: [p.ring],
+    blind: p.flags,
+  }));
   // (the walls the same for all: OSM's height to the top shares out the roof per part — the lowest wall kept)
   if (b.top) {
     const wall = Math.min(...planned.map((p) => p.wall));

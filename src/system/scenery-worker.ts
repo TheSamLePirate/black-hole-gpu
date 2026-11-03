@@ -52,6 +52,8 @@ import {
   IGN_GATE_SW,
   BUILDING_PARTS_M,
   buildingPacked,
+  isWorkUsage,
+  markedCoord,
   orientedBox,
   PARAPET_M,
   D,
@@ -1128,11 +1130,12 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         minY = Infinity,
         maxX = -Infinity,
         maxY = -Infinity;
-      for (const ring of plan.rings)
+      for (const [r, ring] of plan.rings.entries())
         for (let j = 0; j < ring.length; j++) {
           const p = ring[j]!,
             n = ring[(j + 1) % ring.length]!;
-          edges.push(p[0], p[1], n[0], n[1]);
+          // (its x's last bit: a blind side — a party wall, a cut inside the building —, no window drawn on it: Q3)
+          edges.push(markedCoord(p[0], r === 0 && !!plan.blind?.[j]), p[1], n[0], n[1]);
           minX = Math.min(minX, p[0]);
           maxX = Math.max(maxX, p[0]);
           minY = Math.min(minY, p[1]);
@@ -1151,7 +1154,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           // (its footprint's oriented box — the raster's solid box for it without triangles: orientedBox)
           ...orientedBox(edges),
           ...wall,
-          buildingPacked(plan.roofMat, a.wallMat, plan.storeys, plan.planes.length, plan.shape, !!mesh, lip > 0),
+          buildingPacked(plan.roofMat, a.wallMat, plan.storeys, plan.planes.length, plan.shape, !!mesh, lip > 0, isWorkUsage(a.usage)),
           ...edges,
           ...roof,
           floor + plan.wall,
@@ -1166,7 +1169,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (v.d < STACKS_M && storedBytes + 400 < room4)
         for (const st of stacksOf(plan, (b.seed * 13.7 + k * 0.31) % 1, plan.shape === "mansard")) {
           const se: number[] = [];
-          for (let j = 0; j < 4; j++) se.push(st.ring[j]![0], st.ring[j]![1], st.ring[(j + 1) % 4]![0], st.ring[(j + 1) % 4]![1]);
+          for (let j = 0; j < 4; j++)
+            se.push(markedCoord(st.ring[j]![0], false), st.ring[j]![1], st.ring[(j + 1) % 4]![0], st.ring[(j + 1) % 4]![1]);
           const xs = st.ring.map((p) => p[0]),
             ys = st.ring.map((p) => p[1]);
           const sb = floor + plan.top - 1.5;
