@@ -1558,7 +1558,8 @@ export class Renderer {
     this.station.onLoaded = () => this.invalidate();
     this.ship.onLoaded = () => this.invalidate();
     this.endurance.onLoaded = () => this.invalidate();
-    this.earthTiles = new EarthTiles(device);
+    // (the imagery filtered where the device takes its textures — T9: the relief's texture its heights alone then)
+    this.earthTiles = new EarthTiles(device, device.limits.maxSampledTexturesPerShaderStage >= ORTHO_TEXTURE_LIMIT);
     this.horizonMaps = new HorizonMaps(device);
     // (its maps made or dropped: the bind groups holding them rebuilt — the tracer reads them, H2)
     this.horizonMaps.onChange = () => {

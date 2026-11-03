@@ -6892,6 +6892,19 @@ fn orthoGrad(k: u32, uv: vec2f, gx: vec2f, gy: vec2f) -> vec4f { return vec4f(0.
 // (a relief level's imagery at p — its texels from its valid rectangle's corner —: by hand here, one bilinear tap)
 fn tileImgAt(l: u32, p: vec2f, lod: f32) -> vec4f { return tileImgHand(l, p); }
 fn tileImgGrad(l: u32, p: vec2f, gx: vec2f, gy: vec2f) -> vec4f { return tileImgHand(l, p); }
+// (the night's lights at uv — earthImagery's (dlon, −dM) —: the finest of z 6 … 8 there, by hand from the relief's texture)
+fn tileLightsAt(uv: vec2f) -> f32 {
+  for (var k = 0u; k < 3u; k++) {
+    let l = 2u - k;
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    let p = a.xy + uv * b.z;
+    if (min(min(p.x, p.y), min(b.x - p.x, b.y - p.y)) <= 2.0) { continue; }
+    return tileLights(l, p);
+  }
+  return 0.0;
+}
 // END_ORTHO_IMAGERY
 // A relief level's imagery at p by hand from the relief's texture (its packed rgba8 — the stub's reader, before T9b the only
 // one): bilinear, the sRGB decoded after; none where a texel has none. Its alpha's the night's lights: tileLights
@@ -6984,14 +6997,14 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
     let sm = tileImgAt(l, p, f32(TILE_Z0 + l) - zf);
     if (sm.a < 0.004) { continue; }
     w *= sm.a;
-    var lights = 0.0;
-    if (IMG_LIGHTS) { lights = tileLights(l, p); }
-    o.c += rem * w * vec4f(sm.rgb / sm.a, lights);
+    o.c += rem * w * vec4f(sm.rgb / sm.a, 0.0);
     o.w += rem * w;
     rem *= 1.0 - w;
     if (rem < 1e-4) { break; }
   }
   if (o.w > 0.0) { o.c /= o.w; }
+  // (the night's lights, wanted: their own read — T9c —, the same at every level)
+  if (IMG_LIGHTS && o.w > 0.0) { o.c.a = tileLightsAt(vec2f(dlon, -dM)); }
   // (over France, the orthophotos on: the relief's levels' imagery is the IGN's — a photograph as the finer ones, drawn
   // over the regional pilot's 10 m as they are)
   let box = bodies[ORTHO_OFF + 3u * ORTHO_LEVELS];
@@ -7091,14 +7104,14 @@ fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
     let sm = tileImgGrad(l, p0, gx, gy);
     if (sm.a < 0.004) { continue; }
     let wc = w * sm.a;
-    var lights = 0.0;
-    if (IMG_LIGHTS) { lights = tileLights(l, p0); }
-    o.c += rem * wc * vec4f(sm.rgb / sm.a, lights);
+    o.c += rem * wc * vec4f(sm.rgb / sm.a, 0.0);
     o.w += rem * wc;
     rem *= 1.0 - wc;
     if (rem < 1e-4) { break; }
   }
   if (o.w > 0.0) { o.c /= o.w; }
+  // (the night's lights, wanted: their own read — T9c —, the same at every level)
+  if (IMG_LIGHTS && o.w > 0.0) { o.c.a = tileLightsAt(uv0); }
   let box = bodies[ORTHO_OFF + 3u * ORTHO_LEVELS];
   if (bodies[ORTHO_OFF + 3u * ORTHO_LEVELS + 1u].x > 0.5 && o.w > 0.0) {
     let lat = asin(clamp(q.z, -1.0, 1.0));

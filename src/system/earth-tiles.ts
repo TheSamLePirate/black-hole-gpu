@@ -201,8 +201,11 @@ export function tileLayout(clip: number, sides: readonly number[]): { levels: Ti
 export const ORTHO_MIPS = 5;
 /** the imagery levels' first layer in the 1024² texture (after the orthophotos') */
 export const IMG_LAYER0 = ORTHO_LEVELS;
-/** the 1024² texture's layers: the orthophotos' and every imagery level's (z 6 … 14) */
-export const IMG_1K_LAYERS = ORTHO_LEVELS + (IMG_Z1 - Z0 + 1);
+/** the night's lights' first layer in the 1024² texture (T9c: GIBS's, z 6 … 8 — the finer levels' their parent's): alpha the
+ *  lights, rgb the coverage (white where a tile came) */
+export const IMG_LIGHT0 = IMG_LAYER0 + (IMG_Z1 - Z0 + 1);
+/** the 1024² texture's layers: the orthophotos', every imagery level's (z 6 … 14), the lights' (z 6 … 8) */
+export const IMG_1K_LAYERS = IMG_LIGHT0 + (GIBS_Z1 - Z0 + 1);
 /** the 2048² texture's layers: z FINE_Z … 14 */
 export const IMG_2K_LAYERS = IMG_Z1 - FINE_Z + 1;
 const mipBytes = (side: number, layers: number) =>
@@ -245,6 +248,21 @@ fn tileImgAt(l: u32, p: vec2f, lod: f32) -> vec4f {
   let m = min(lod, ${ORTHO_MIPS - 1}.0);
   if (u.z > ${ORTHO_CLIP}.5) { return textureSampleLevel(imgTex2k, orthoSamp, u.xy, l - ${FINE_Z - Z0}u, m); }
   return textureSampleLevel(orthoTex, orthoSamp, u.xy, ${IMG_LAYER0}u + l, m);
+}
+// (T9c: the night's lights at uv — the tiles' place from their anchor, earthImagery's (dlon, −dM) —: the finest of z 6 … 8 there,
+// filtered from their layers)
+fn tileLightsAt(uv: vec2f) -> f32 {
+  for (var k = 0u; k < ${GIBS_Z1 - Z0 + 1}u; k++) {
+    let l = ${GIBS_Z1 - Z0}u - k;
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    let p = a.xy + uv * b.z;
+    if (min(min(p.x, p.y), min(b.x - p.x, b.y - p.y)) <= 2.0) { continue; }
+    let s = textureSampleLevel(orthoTex, orthoSamp, tileImgUv(l, p).xy, ${IMG_LIGHT0}u + l, 0.0);
+    if (s.r > 0.5) { return s.a; }
+  }
+  return 0.0;
 }
 fn tileImgGrad(l: u32, p: vec2f, gx: vec2f, gy: vec2f) -> vec4f {
   let u = tileImgUv(l, p);
@@ -728,19 +746,27 @@ export class EarthTiles {
   private liveBytes = 0;
   peakBytes = 0;
 
-  constructor(private device: GPUDevice) {
+  /**
+   * filtered: the tracer reads the imagery's filtered textures (the device takes them — ORTHO_TEXTURE_LIMIT): the relief's
+   * texture then its heights alone (r32uint — T9c: half the bytes), the night's lights in the 1024² texture; else as before T9
+   * (rg32uint, heights and packed imagery), the filtered textures 1 × 1 stand-ins
+   */
+  constructor(
+    private device: GPUDevice,
+    readonly filtered = false,
+  ) {
     this.texture = this.makeTexture();
     this.imagery2k = this.makeImagery2k(1);
     this.orthoTexture = device.createTexture({
-      size: [ORTHO_CLIP, ORTHO_CLIP, IMG_1K_LAYERS],
+      size: filtered ? [ORTHO_CLIP, ORTHO_CLIP, IMG_1K_LAYERS] : [1, 1, IMG_1K_LAYERS],
       format: "rgba8unorm",
       viewFormats: ["rgba8unorm-srgb"],
-      mipLevelCount: ORTHO_MIPS,
+      mipLevelCount: filtered ? ORTHO_MIPS : 1,
       // (no storage usage: it would forbid the sRGB view the tracer filters through — the mips drawn by a render pass)
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
       label: "orthophotos",
     });
-    this.liveBytes += ORTHO_BYTES;
+    if (filtered) this.liveBytes += ORTHO_BYTES;
     this.peakBytes = Math.max(this.peakBytes, this.liveBytes);
     for (let k = 0; k < ORTHO_LEVELS; k++)
       this.ortho.push({ z: ORTHO_Z0 + k, n: 2 ** (ORTHO_Z0 + k), want: null, valid: null, key: new Array(ORTHO_SPAN ** 2).fill(null) });
@@ -781,11 +807,11 @@ export class EarthTiles {
     );
     const t = this.device.createTexture({
       size: [this.clip, this.clip, this.layout.layers],
-      format: "rg32uint",
+      format: this.filtered ? "r32uint" : "rg32uint",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
       label: "earth tiles",
     });
-    this.textureBytes = this.clip * this.clip * this.layout.layers * 8;
+    this.textureBytes = this.clip * this.clip * this.layout.layers * (this.filtered ? 4 : 8);
     this.liveBytes += this.textureBytes;
     this.peakBytes = Math.max(this.peakBytes, this.liveBytes);
     return t;
@@ -812,8 +838,9 @@ export class EarthTiles {
     this.device.pushErrorScope?.("out-of-memory");
     this.texture = this.makeTexture();
     // (the 2048² imagery for the fine levels' 8-tile windows — T9b —, a stand-in at the normal reach)
-    this.imagery2k = this.makeImagery2k(span > SPAN ? 2 * ORTHO_CLIP : 1);
-    const imgBytes = span > SPAN ? IMG_2K_BYTES : 0;
+    const big = span > SPAN && this.filtered;
+    this.imagery2k = this.makeImagery2k(big ? 2 * ORTHO_CLIP : 1);
+    const imgBytes = big ? IMG_2K_BYTES : 0;
     this.liveBytes += imgBytes;
     this.peakBytes = Math.max(this.peakBytes, this.liveBytes);
     void this.device.popErrorScope?.().then((e) => {
@@ -1317,15 +1344,17 @@ export class EarthTiles {
     L.key[s] = this.keyOf(L, x, y);
     L.data[s] = h;
     const hb = new Uint32Array(h.buffer, h.byteOffset, TILE * TILE);
-    const texels = new Uint32Array(2 * TILE * TILE);
+    // (the heights alone where the imagery is filtered — T9c, r32uint —, with the packed imagery else)
+    const per = this.filtered ? 1 : 2;
+    const texels = new Uint32Array(per * TILE * TILE);
     // (an overground drawn on its ground — I6 —, the ground's source mark kept in the sum's last bit)
     const over = h.length > TILE * TILE ? h.subarray(TILE * TILE) : null;
     for (let i = 0; i < hb.length; i++) {
       if (over && over[i]! > 0) {
         BITS[0] = h[i]! + over[i]!;
-        texels[2 * i] = (BITS_U[0]! & ~1) | (hb[i]! & 1);
-      } else texels[2 * i] = hb[i]!;
-      texels[2 * i + 1] = col ? col[i]! : 0;
+        texels[per * i] = (BITS_U[0]! & ~1) | (hb[i]! & 1);
+      } else texels[per * i] = hb[i]!;
+      if (per === 2) texels[2 * i + 1] = col ? col[i]! : 0;
     }
     this.putImagery(L, s, col);
     const slot = this.layout.levels[L.z - Z0]!;
@@ -1335,7 +1364,7 @@ export class EarthTiles {
         origin: [slot.x + (s % L.span) * TILE, slot.y + Math.floor(s / L.span) * TILE, slot.layer],
       },
       texels,
-      { bytesPerRow: TILE * 8 },
+      { bytesPerRow: TILE * 4 * per },
       [TILE, TILE, 1],
     );
     this.complete(L);
@@ -1547,13 +1576,14 @@ export class EarthTiles {
     O.key[s] = this.orthoKey(O, x, y);
     const ox = (s % ORTHO_SPAN) * TILE,
       oy = Math.floor(s / ORTHO_SPAN) * TILE;
-    this.device.queue.writeTexture(
-      { texture: this.orthoTexture, origin: [ox, oy, k] },
-      (col ?? new Uint32Array(TILE * TILE)) as Uint32Array<ArrayBuffer>,
-      { bytesPerRow: TILE * 4 },
-      [TILE, TILE, 1],
-    );
-    this.orthoMips(ox, oy, k);
+    if (this.filtered)
+      this.device.queue.writeTexture(
+        { texture: this.orthoTexture, origin: [ox, oy, k] },
+        (col ?? new Uint32Array(TILE * TILE)) as Uint32Array<ArrayBuffer>,
+        { bytesPerRow: TILE * 4 },
+        [TILE, TILE, 1],
+      );
+    if (this.filtered) this.orthoMips(ox, oy, k);
     if (col) this.imagery++;
     this.orthoComplete(O);
   }
@@ -1613,7 +1643,7 @@ export class EarthTiles {
   /** A relief level's tile's imagery into its filtered texture (T9b): its window's layer — the 1024² texture's or the 2048²
    *  one's —, alpha its coverage (the night's lights stay in the relief texture's alpha), its mips; none: cleared */
   private putImagery(L: Level, s: number, col: Uint32Array | null) {
-    if (L.z > IMG_Z1) return;
+    if (L.z > IMG_Z1 || !this.filtered) return;
     const big = L.span * TILE > ORTHO_CLIP;
     const tex = big ? this.imagery2k : this.orthoTexture;
     if (big && tex.width <= 1) return;
@@ -1624,6 +1654,15 @@ export class EarthTiles {
     if (col) for (let i = 0; i < px.length; i++) px[i] = col[i] ? (col[i]! | 0xff000000) >>> 0 : 0;
     this.device.queue.writeTexture({ texture: tex, origin: [ox, oy, layer] }, px, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
     this.orthoMips(ox, oy, layer, tex);
+    // (T9c: the night's lights — GIBS's, z ≤ 8: their imagery's alpha — in their own layer, rgb the coverage; the relief's texture
+    // holds the heights alone)
+    if (L.z <= GIBS_Z1 && !big) {
+      const lights = new Uint32Array(TILE * TILE);
+      if (col) for (let i = 0; i < lights.length; i++) lights[i] = col[i] ? ((col[i]! & 0xff000000) | 0xffffff) >>> 0 : 0;
+      const ll = IMG_LIGHT0 + (L.z - Z0);
+      this.device.queue.writeTexture({ texture: tex, origin: [ox, oy, ll] }, lights, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
+      this.orthoMips(ox, oy, ll, tex);
+    }
   }
 
   private orthoComplete(O: OrthoLevel) {

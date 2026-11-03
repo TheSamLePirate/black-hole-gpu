@@ -6,11 +6,11 @@ import { EARTH_SETTINGS, sceneryReady } from "./lib/plan-views";
 // The night (Q2, the calibrated night — docs/PLAN-REFRACTION-HORIZONS.md): Paris from the F-35's cockpit at 300 m, from 12 km,
 // from 400 km, on a moonless night (9 Nov 2026, the new Moon) and under the full Moon (24 Nov 2026) — six shots without the
 // interface, the exposure the meter chose for each, the screen's brightness over the city and over the dark country round it.
-// Figures and shots in remote-results/night-views/<tag> (NV_TAG, else "solo").
+// Figures and shots in remote-results/night-views/<tag> (NV_TAG, else the A/B side and run — scripts/ab-e2e.ts —, else "solo").
 // Done when: the six views are shot (tiles waited 30 s at most each, the scenery — the streets — 60 s for the low one), no GPU
 // error. NV_ONLY=300m (a view's name) for one height.
 // Duration: ~2.5 min (kerr-mini).
-const TAG = process.env.NV_TAG ?? "solo";
+const TAG = process.env.NV_TAG ?? (process.env.AB_SIDE ? `${process.env.AB_SIDE}${process.env.AB_RUN ?? ""}` : "solo");
 const OUT = `remote-results/night-views/${TAG}`;
 afterAll(stopServer);
 const NIGHTS = [

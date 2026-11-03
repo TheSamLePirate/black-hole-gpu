@@ -6,7 +6,6 @@ import {
   edge,
   FINE_Z,
   ORTHO_BYTES,
-  IMG_2K_BYTES,
   markFine,
   sampleLevel,
   TILE,
@@ -473,7 +472,8 @@ test("T10: the 4-tile levels packed by quadrants — 6 layers of 2048² where th
   }
   expect(t.textureBytes).toBe(2048 * 2048 * 6 * 8);
   // (the very far texture made while the normal one lived: the peak their sum, with the orthophotos' own — T9a)
-  expect(t.peakBytes).toBe(1024 * 1024 * 12 * 8 + 2048 * 2048 * 6 * 8 + ORTHO_BYTES + IMG_2K_BYTES);
+  // (the imagery unfiltered here — no filtered textures: their stand-ins, 1 × 1 — T9c)
+  expect(t.peakBytes).toBe(1024 * 1024 * 12 * 8 + 2048 * 2048 * 6 * 8);
   expect(tex.length).toBe(5); // (the two relief textures, the 1024² imagery, the 2048² one's stand-in and itself — T9b)
 });
 
@@ -492,4 +492,21 @@ test("a drawn tile's heights put again — the IGN's over the Terrarium's — lo
   expect(c.z).toBe(z);
   expect(c.lon0).toBeCloseTo((x / n) * 2 * Math.PI - Math.PI, 9);
   expect(c.lon1).toBeCloseTo(((x + 1) / n) * 2 * Math.PI - Math.PI, 9);
+});
+
+test("T9c: the imagery filtered, the relief's texture holds its heights alone (r32uint, half the bytes), the imagery's own", () => {
+  const formats: string[] = [];
+  const dev = withGpuStubs({
+    createTexture: (d: { size: number[]; format: string }) => (formats.push(d.format), { size: d.size, destroy() {} }),
+    queue: { writeTexture() {}, onSubmittedWorkDone: () => Promise.resolve() },
+  } as unknown as GPUDevice);
+  const t = new EarthTiles(dev, true);
+  expect(formats[0]).toBe("r32uint");
+  expect(t.textureBytes).toBe(1024 * 1024 * 12 * 4);
+  expect(t.peakBytes).toBe(1024 * 1024 * 12 * 4 + ORTHO_BYTES);
+  t.setReach(TILE_REACH.veryFar);
+  expect(t.textureBytes).toBe(2048 * 2048 * 6 * 4);
+  expect(t.imagery2k.width).toBe(2048);
+  const plain = new EarthTiles(withGpuStubs(fakeDevice()));
+  expect(plain.textureBytes).toBe(1024 * 1024 * 12 * 8);
 });
