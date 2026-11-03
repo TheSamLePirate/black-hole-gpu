@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { LEVELS, orthoColour, orthoUrl, ORTHO_LEVELS, tileLayout } from "../src/system/earth-tiles";
+import { LEVELS, ORTHO_BINDINGS, orthoColour, orthoUrl, tileLayout, withOrthoImagery } from "../src/system/earth-tiles";
 
 test("the orthophotos' colours: the survey's brightness brought to the Earth's, a white kept white, a dark field greened", () => {
   const [r, g, b] = orthoColour(255, 255, 255);
@@ -16,18 +16,18 @@ test("the orthophotos' colours: the survey's brightness brought to the Earth's, 
   expect(orthoColour(0, 0, 0)).toEqual([0, 0, 0]);
 });
 
-test("the orthophotos' levels in the texture: a 1024² quadrant each, after the relief's layers", () => {
-  // (the normal reach — 1024² layers —: one level a layer; the far one — 2048² —: the four in one layer)
-  const quads = (clip: number) => tileLayout(clip, Array(LEVELS).fill(clip)).ortho;
-  expect(tileLayout(1024, Array(LEVELS).fill(1024)).layers).toBe(LEVELS + ORTHO_LEVELS);
-  expect(tileLayout(2048, Array(LEVELS).fill(2048)).layers).toBe(LEVELS + 1);
-  expect(quads(1024)).toEqual([0, 1, 2, 3].map((k) => ({ layer: LEVELS + k, x: 0, y: 0 })));
-  expect(quads(2048)).toEqual([
-    { layer: LEVELS, x: 0, y: 0 },
-    { layer: LEVELS, x: 1024, y: 0 },
-    { layer: LEVELS, x: 0, y: 1024 },
-    { layer: LEVELS, x: 1024, y: 1024 },
-  ]);
+test("the orthophotos out of the relief's texture (T9a: their own filtered texture), its stub and reader", () => {
+  // (the relief's layers alone: one a level at the normal reach, the 2048² layers whole)
+  expect(tileLayout(1024, Array(LEVELS).fill(1024)).layers).toBe(LEVELS);
+  expect(tileLayout(2048, Array(LEVELS).fill(2048)).layers).toBe(LEVELS);
+  const stub =
+    "a\n// BEGIN_ORTHO_IMAGERY x\nfn orthoAt(k: u32, uv: vec2f, lod: f32) -> vec4f { return vec4f(0.0); }\n// END_ORTHO_IMAGERY\nb";
+  expect(withOrthoImagery(stub, false)).toBe(stub);
+  const on = withOrthoImagery(stub, true);
+  expect(on).toContain(`@binding(${ORTHO_BINDINGS[0]}) var orthoTex: texture_2d_array<f32>;`);
+  expect(on).toContain(`@binding(${ORTHO_BINDINGS[1]}) var orthoSamp: sampler;`);
+  expect(on).toContain("textureSampleGrad(orthoTex, orthoSamp, uv, k, gx, gy)");
+  expect(() => withOrthoImagery("nothing", true)).toThrow();
   expect(orthoUrl(17, 66391, 45092)).toContain(
     "LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX=17&TILEROW=45092&TILECOL=66391",
   );

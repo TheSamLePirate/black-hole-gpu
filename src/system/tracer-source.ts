@@ -16,6 +16,7 @@ import { withTerrainCache } from "./terrain-cache";
 import { RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_TEXTURE_LIMIT, withSunShadow, withTerrainRaster } from "./terrain-raster-hint";
 import { TREE_SHADOW_TEXTURE_LIMIT, withTreeShadow } from "./tree-shadow";
 import { HORIZON_TEXTURE_LIMIT, withHorizonMaps } from "./horizon-maps";
+import { ORTHO_TEXTURE_LIMIT, withOrthoImagery } from "./earth-tiles";
 
 /** what of the device decides the tracer's optional parts */
 export interface TracerLimits {
@@ -33,21 +34,24 @@ export function composeTracer(trace: string, forest: string, limits: TracerLimit
     seaShader(
       sceneryShader(
         surfaceShader(
-          withHorizonMaps(
-            withTreeShadow(
-              withCloudShadow(
-                withCloudPass(
-                  withSunShadow(
-                    withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
-                    tex >= SUN_SHADOW_TEXTURE_LIMIT,
+          withOrthoImagery(
+            withHorizonMaps(
+              withTreeShadow(
+                withCloudShadow(
+                  withCloudPass(
+                    withSunShadow(
+                      withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
+                      tex >= SUN_SHADOW_TEXTURE_LIMIT,
+                    ),
+                    tex >= CLOUD_PASS_TEXTURE_LIMIT,
                   ),
-                  tex >= CLOUD_PASS_TEXTURE_LIMIT,
+                  tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
                 ),
-                tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
+                tex >= TREE_SHADOW_TEXTURE_LIMIT,
               ),
-              tex >= TREE_SHADOW_TEXTURE_LIMIT,
+              tex >= HORIZON_TEXTURE_LIMIT,
             ),
-            tex >= HORIZON_TEXTURE_LIMIT,
+            tex >= ORTHO_TEXTURE_LIMIT,
           ),
           tex >= SURFACE_TEXTURE_LIMIT,
         ),

@@ -4,8 +4,8 @@ import {
   EarthTiles,
   edge,
   FINE_Z,
+  ORTHO_BYTES,
   markFine,
-  ORTHO_LEVELS,
   sampleLevel,
   TILE,
   TILE_PARAM_VEC4S,
@@ -297,8 +297,8 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   // (Far: the texture made again, 2048 texels a side, every level drawn anew — the fine ones 8 × 8 tiles, the coarser 4 × 4)
   t.setReach(TILE_REACH.far);
   expect(resized).toBe(1);
-  // (the four fine levels a layer each, the eight 4-tile ones and the orthophotos' four by 1024² quadrants — I1, T10)
-  expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, ZG1 - FINE_Z + 1 + 3]);
+  // (the four fine levels a layer each, the eight 4-tile ones by 1024² quadrants — T10; the orthophotos in their own texture, T9a)
+  expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, ZG1 - FINE_Z + 1 + 2]);
   t.update(cam, 1e-3);
   // (the IGN's relief levels over France, z 15 … 17, 4 × 4 tiles whatever the reach)
   expect(t.wanted().length).toBe(64 * (ZG1 - FINE_Z + 1) + 16 * (FINE_Z - Z0) + 16 * (Z1 - ZG1));
@@ -348,7 +348,8 @@ test("the detail's reach on a device that cannot hold its texture: back to 4 til
   // setReach(far) not trying it again)
   let made = 0;
   const dev = {
-    createTexture: (d: { size: number[] }) => (made++, { size: d.size, destroy() {} }),
+    // (the orthophotos' texture — T9a, made once — not counted: the relief's alone is the one refused)
+    createTexture: (d: { size: number[]; label?: string }) => (d.label === "orthophotos" ? 0 : made++, { size: d.size, destroy() {} }),
     pushErrorScope() {},
     popErrorScope: () => Promise.resolve(made > 1 && made % 2 === 0 ? { message: "out of memory" } : null),
     queue: { writeTexture() {}, onSubmittedWorkDone: () => Promise.resolve() },
@@ -414,23 +415,23 @@ function tileAt(t: EarthTiles, l: number, i: [number, number]): number {
   return tx.data[((layer * H + y) * W + x) * 2]!;
 }
 
-test("T10: the 4-tile levels packed by quadrants — 7 layers of 2048² where there were 13, every level read back whole", async () => {
+test("T10: the 4-tile levels packed by quadrants — 6 layers of 2048² where there were 13, every level read back whole", async () => {
   // (the layout: the normal reach one layer a level as before; the very far one the fine levels a layer each, the rest by
-  // quadrants, the orthophotos after)
+  // quadrants — the orthophotos in their own texture since T9a)
   const n = tileLayout(1024, Array(Z1 - Z0 + 1).fill(1024));
-  expect(n.layers).toBe(Z1 - Z0 + 1 + ORTHO_LEVELS);
+  expect(n.layers).toBe(Z1 - Z0 + 1);
   expect(n.levels.map((s) => s.layer)).toEqual([...Array(Z1 - Z0 + 1).keys()]);
   const sides = Array.from({ length: Z1 - Z0 + 1 }, (_, l) => (Z0 + l >= FINE_Z && Z0 + l <= ZG1 ? 2048 : 1024));
   const v = tileLayout(2048, sides);
-  expect(v.layers).toBe(7);
-  const seen = new Set([...v.levels, ...v.ortho].map((s) => `${s.layer},${s.x},${s.y}`));
-  expect(seen.size).toBe(Z1 - Z0 + 1 + ORTHO_LEVELS);
+  expect(v.layers).toBe(6);
+  const seen = new Set(v.levels.map((s) => `${s.layer},${s.x},${s.y}`));
+  expect(seen.size).toBe(Z1 - Z0 + 1);
   // (the tiles put in, read back through the tracer's params from the texture the writes made — every level's, each its
   // own, at both reaches; the memory and its peak while the two textures live)
   const { device, tex } = gpuDevice();
   const t = new EarthTiles(device);
   const cam = camAt(45.9, 6.87, 2);
-  expect(t.textureBytes).toBe(1024 * 1024 * 16 * 8);
+  expect(t.textureBytes).toBe(1024 * 1024 * 12 * 8);
   for (const reach of [TILE_REACH.normal, TILE_REACH.veryFar]) {
     t.setReach(reach);
     t.update(cam, 1e-3);
@@ -464,10 +465,10 @@ test("T10: the 4-tile levels packed by quadrants — 7 layers of 2048² where th
     }
     expect(checked).toBe(40 * (Z1 - Z0 + 1));
   }
-  expect(t.textureBytes).toBe(2048 * 2048 * 7 * 8);
-  // (the very far texture made while the normal one lived: the peak their sum)
-  expect(t.peakBytes).toBe(1024 * 1024 * 16 * 8 + 2048 * 2048 * 7 * 8);
-  expect(tex.length).toBe(2);
+  expect(t.textureBytes).toBe(2048 * 2048 * 6 * 8);
+  // (the very far texture made while the normal one lived: the peak their sum, with the orthophotos' own — T9a)
+  expect(t.peakBytes).toBe(1024 * 1024 * 12 * 8 + 2048 * 2048 * 6 * 8 + ORTHO_BYTES);
+  expect(tex.length).toBe(3); // (the two relief textures and the orthophotos' own)
 });
 
 test("a drawn tile's heights put again — the IGN's over the Terrarium's — logged as a change of that tile alone", () => {

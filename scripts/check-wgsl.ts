@@ -23,6 +23,7 @@ import { withCloudPass } from "../src/system/cloud-pass";
 import { withCloudShadow } from "../src/system/cloud-shadow";
 import { withTreeShadow } from "../src/system/tree-shadow";
 import { withHorizonMaps } from "../src/system/horizon-maps";
+import { ORTHO_MIP_WGSL, withOrthoImagery } from "../src/system/earth-tiles";
 import { CHROME, withGpuPage } from "./lib/headless-gpu";
 import { PROFILES, profileConstants, tracerSource } from "./lib/kernel-profiles";
 import { specialiseWgsl } from "./lib/wgsl-inline";
@@ -41,9 +42,12 @@ shaders["scenery raster instances (system/scenery-raster.ts)"] = sceneryRasterSh
 // (the tracer as the full device builds it: the raster patch's distances read by the ground march)
 shaders["trace.wgsl with the raster hint"] = withTerrainRaster(traced, true);
 shaders[
-  "trace.wgsl with the raster hint, the relief's shadow map, the cloud pass, the clouds' and the trees' shadow maps, the horizon maps"
-] = withHorizonMaps(
-  withTreeShadow(withCloudShadow(withCloudPass(withSunShadow(withTerrainRaster(traced, true), true), true), true), true),
+  "trace.wgsl with the raster hint, the relief's shadow map, the cloud pass, the clouds' and the trees' shadow maps, the horizon maps, the orthophotos"
+] = withOrthoImagery(
+  withHorizonMaps(
+    withTreeShadow(withCloudShadow(withCloudPass(withSunShadow(withTerrainRaster(traced, true), true), true), true), true),
+    true,
+  ),
   true,
 );
 shaders["trace.wgsl without scenery"] = sceneryShader(surfaceShader(traced, true), false);
@@ -53,6 +57,7 @@ shaders["trace.wgsl without the aerial table, surface textures, scenery"] = aeri
   sceneryShader(surfaceShader(traced, false), false),
   false,
 );
+shaders["the orthophotos' mips (system/earth-tiles.ts)"] = ORTHO_MIP_WGSL;
 // (the mountains' warp's grid pass: the tracer's noise taken from its source)
 shaders["the warp grid's pass (system/warp-grid.ts)"] = warpShader(shaders["trace.wgsl"]!);
 // (each reference scene's pipelines as the renderer makes their modules: specialised as source, their dead branches and the

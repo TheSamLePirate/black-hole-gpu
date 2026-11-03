@@ -187,6 +187,7 @@ import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/g
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
 import { HORIZON_BINDINGS, HORIZON_TEXTURE_LIMIT, HorizonMaps } from "./system/horizon-maps";
+import { ORTHO_BINDINGS, ORTHO_TEXTURE_LIMIT } from "./system/earth-tiles";
 import { capEdges, devilSeason, marsLs } from "./system/mars-season";
 import { MoonTiles, WORLDS } from "./system/moon-tiles";
 import { WarpGrid } from "./system/warp-grid";
@@ -1243,6 +1244,19 @@ export class Renderer {
         format: "depth32float",
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
+    // (the orthophotos' filtered texture — T9a —: wrapped both ways — its window the whole layer, a torus —, trilinear,
+    // anisotropic to 16)
+    this.orthoRead = device.limits.maxSampledTexturesPerShaderStage >= ORTHO_TEXTURE_LIMIT;
+    if (this.orthoRead)
+      this.orthoSampler = device.createSampler({
+        magFilter: "linear",
+        minFilter: "linear",
+        mipmapFilter: "linear",
+        maxAnisotropy: 16,
+        addressModeU: "repeat",
+        addressModeV: "repeat",
+        label: "orthophotos",
+      });
     // (the near body's horizon maps — H2 —: a stand-in until a body's are made)
     this.horizonRead = device.limits.maxSampledTexturesPerShaderStage >= HORIZON_TEXTURE_LIMIT;
     if (this.horizonRead)
@@ -1318,6 +1332,17 @@ export class Renderer {
                 visibility: C,
                 texture: { sampleType: "depth", viewDimension: "2d-array" } as GPUTextureBindingLayout,
               },
+            ]
+          : []),
+        // (the orthophotos' filtered texture and its sampler — T9a)
+        ...(device.limits.maxSampledTexturesPerShaderStage >= ORTHO_TEXTURE_LIMIT
+          ? [
+              {
+                binding: ORTHO_BINDINGS[0],
+                visibility: C,
+                texture: { sampleType: "float", viewDimension: "2d-array" } as GPUTextureBindingLayout,
+              },
+              { binding: ORTHO_BINDINGS[1], visibility: C, sampler: { type: "filtering" } as GPUSamplerBindingLayout },
             ]
           : []),
         // (the near body's horizon maps — H2 —: its map and its caps)
@@ -2077,6 +2102,7 @@ export class Renderer {
             CLOUD_SHADOW_TEXTURE_LIMIT,
             TREE_SHADOW_TEXTURE_LIMIT,
             HORIZON_TEXTURE_LIMIT,
+            ORTHO_TEXTURE_LIMIT,
           ),
           adapter.limits.maxSampledTexturesPerShaderStage,
         ),
@@ -2550,6 +2576,15 @@ export class Renderer {
       // (the clouds' shadow map: the stand-in for its own kernel, which writes it)
       ...(this.cloudShadow ? [{ binding: CLOUD_SHADOW_BINDING, resource: ((csm && this.csmTex) || this.csmDummy!).createView() }] : []),
       ...(this.treeShadow ? [{ binding: TREE_SHADOW_BINDING, resource: this.tsmTex!.createView({ dimension: "2d-array" }) }] : []),
+      ...(this.orthoRead
+        ? [
+            {
+              binding: ORTHO_BINDINGS[0],
+              resource: this.earthTiles.orthoTexture.createView({ dimension: "2d-array", format: "rgba8unorm-srgb" }),
+            },
+            { binding: ORTHO_BINDINGS[1], resource: this.orthoSampler! },
+          ]
+        : []),
       ...(this.horizonRead
         ? HORIZON_BINDINGS.map((binding, i) => ({
             binding,
@@ -8266,6 +8301,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the relief's shadow map (terrain-raster.ts encodeSunShadow, trace.wgsl sunShadowFar): the device binds it; a switch */
   private sunShadow = false;
   private sunDummy: GPUTexture | null = null;
+  /** the tracer reads the orthophotos' filtered texture (T9a: the device takes it), its sampler */
+  private orthoRead = false;
+  private orthoSampler: GPUSampler | null = null;
   /** the tracer reads the horizon maps (the device takes their two textures), their stand-in, their table row as written */
   private horizonRead = false;
   private horizonDummy: GPUTexture | null = null;

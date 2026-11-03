@@ -95,7 +95,7 @@ export const ORTHO_Z1 = 18;
 export const ORTHO_LEVELS = ORTHO_Z1 - ORTHO_Z0 + 1;
 /** their windows' tiles a side (always 4: 3.4 km at z 15 down to 425 m at z 18, at 48°) and its texels */
 export const ORTHO_SPAN = 4;
-const ORTHO_CLIP = TILE * ORTHO_SPAN;
+export const ORTHO_CLIP = TILE * ORTHO_SPAN;
 /** the tracer's table for them (gpu-tables.ts TABLE_ORTHO): three vec4s a level, then the IGN's box [rad] and on */
 export const ORTHO_PARAM_VEC4S = 3 * ORTHO_LEVELS + 2;
 /** their loads at once (the Géoplateforme answers in 0.35–0.8 s), beside the relief's */
@@ -162,14 +162,14 @@ export const isFine = (h: number) => ((BITS[0] = h), (BITS_U[0]! & 1) === 1);
 /** a place in the tiles' texture: its layer, its corner [px] */
 export type TileSlot = { layer: number; x: number; y: number };
 /**
- * Where each level's window and each orthophotos' level lives in a texture of a side (T10, the plan's §3.6): a window as
- * wide as the texture its own layer (z 11 … 14 at the farther reaches), the 4-tile ones (1024², z 6 … 10 and z 15 … 17
- * whatever the reach — 8 of the 12 levels) by quadrants of the layers after, the orthophotos' after them, the same. At the
- * very far reach 7 layers of 2048² (235 MB) where each level took one (13: 436 MB, the 4-tile ones a quarter of theirs);
- * at the normal one (1024²) one a level, as before. The tracer reads them through tileAt (trace.wgsl): the quadrant's
- * corner in the bits of P.tileL[2l].zw above its window's mask, its layer in P.tileL[2l + 1].w's high bits.
+ * Where each level's window lives in a texture of a side (T10, the plan's §3.6): a window as wide as the texture its own layer
+ * (z 11 … 14 at the farther reaches), the 4-tile ones (1024², z 6 … 10 and z 15 … 17 whatever the reach — 8 of the 12 levels)
+ * by quadrants of the layers after. At the very far reach 6 layers of 2048² where each level took one (13: 436 MB, the
+ * 4-tile ones a quarter of theirs); at the normal one (1024²) one a level. The tracer reads them through tileAt
+ * (trace.wgsl): the quadrant's corner in the bits of P.tileL[2l].zw above its window's mask, its layer in P.tileL[2l + 1].w's
+ * high bits. (The orthophotos have their own filtered texture since T9a: EarthTiles.orthoTexture.)
  */
-export function tileLayout(clip: number, sides: readonly number[]): { levels: TileSlot[]; ortho: TileSlot[]; layers: number } {
+export function tileLayout(clip: number, sides: readonly number[]): { levels: TileSlot[]; layers: number } {
   const side = clip / ORTHO_CLIP,
     per = side * side;
   let layer = 0,
@@ -189,9 +189,62 @@ export function tileLayout(clip: number, sides: readonly number[]): { levels: Ti
     if (C !== ORTHO_CLIP) throw new Error(`tileLayout: a ${C}² window in a ${clip}² texture`);
     levels[l] = quad();
   });
-  const ortho = Array.from({ length: ORTHO_LEVELS }, quad);
-  return { levels, ortho, layers: layer + Math.ceil(q / per) };
+  return { levels, layers: layer + Math.ceil(q / per) };
 }
+
+/** T9a (contract C0-4): the orthophotos' own texture — rgba8 (an sRGB view: the hardware decodes, then filters in linear
+ *  light), a layer a level, its window the whole layer (the addressing's repeat wraps the torus), per-tile mips down to
+ *  16² (a tile's mips never read its neighbour), alpha the coverage (0: no image there — the filtering premultiplied) */
+export const ORTHO_MIPS = 5;
+/** its bytes, its mips in (22 MB) */
+export const ORTHO_BYTES = Array.from({ length: ORTHO_MIPS }, (_, m) => (ORTHO_CLIP >> m) ** 2 * ORTHO_LEVELS * 4).reduce(
+  (a, b) => a + b,
+  0,
+);
+/** sampled textures per stage with the orthophotos' (the horizon maps' 29 and one), its texture's and its sampler's bindings */
+export const ORTHO_TEXTURE_LIMIT = 30;
+export const ORTHO_BINDINGS = [44, 45] as const;
+/**
+ * The tracer's reader of the orthophotos' texture (T9a): `orthoAt(k, uv, lod)` and `orthoGrad(k, uv, gx, gy)` — a level's
+ * window at uv (its texels over its side, wrapped), at a mip or by the pixel's gradients (anisotropic, 16 at most): the linear
+ * colour premultiplied by the coverage, the coverage in a. Where the device takes the one more texture; the stub (no
+ * orthophotos: the coarser levels' imagery) otherwise.
+ */
+export function withOrthoImagery(trace: string, supported: boolean): string {
+  const marker = /\/\/ BEGIN_ORTHO_IMAGERY[\s\S]*?\/\/ END_ORTHO_IMAGERY/;
+  if (!marker.test(trace)) throw new Error("earth-tiles: missing orthophotos stub");
+  if (!supported) return trace;
+  return trace.replace(
+    marker,
+    `
+@group(0) @binding(${ORTHO_BINDINGS[0]}) var orthoTex: texture_2d_array<f32>;
+@group(0) @binding(${ORTHO_BINDINGS[1]}) var orthoSamp: sampler;
+fn orthoAt(k: u32, uv: vec2f, lod: f32) -> vec4f { return textureSampleLevel(orthoTex, orthoSamp, uv, k, min(lod, ${ORTHO_MIPS - 1}.0)); }
+fn orthoGrad(k: u32, uv: vec2f, gx: vec2f, gy: vec2f) -> vec4f { return textureSampleGrad(orthoTex, orthoSamp, uv, k, gx, gy); }
+`,
+  );
+}
+/** the mips' pass: a tile's region of a mip drawn from the one above — the sRGB decoded, the coverage-premultiplied colour and
+ *  the coverage averaged in linear light, encoded again. A render pass, not a compute one: a texture with storage usage
+ *  takes no sRGB view (WebGPU), the view the tracer filters through */
+export const ORTHO_MIP_WGSL = /* wgsl */ `
+@group(0) @binding(0) var<uniform> layer: vec4u;
+@group(0) @binding(1) var src: texture_2d_array<f32>;
+@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  return vec4f(f32(i & 1u) * 4.0 - 1.0, f32(i >> 1u) * 4.0 - 1.0, 0.0, 1.0);
+}
+fn lin(c: vec3f) -> vec3f { return select(pow((c + 0.055) / 1.055, vec3f(2.4)), c / 12.92, c <= vec3f(0.04045)); }
+fn srgb(c: vec3f) -> vec3f { return select(1.055 * pow(c, vec3f(1.0 / 2.4)) - 0.055, c * 12.92, c <= vec3f(0.0031308)); }
+@fragment fn fs(@builtin(position) p: vec4f) -> @location(0) vec4f {
+  let d = vec2u(p.xy);
+  var c = vec4f(0.0);
+  for (var j = 0u; j < 4u; j++) {
+    let t = textureLoad(src, vec2i(2u * d + vec2u(j & 1u, j >> 1u)), i32(layer.x), 0);
+    c += vec4f(lin(t.rgb), t.a);
+  }
+  c *= 0.25;
+  return vec4f(srgb(c.rgb), c.a);
+}`;
 
 /**
  * The orthophotos' colours (an aerial survey's, graded bright: 2.7 times the ground's on average) into the Blue
@@ -536,6 +589,9 @@ export interface TileSample {
 
 export class EarthTiles {
   texture: GPUTexture;
+  /** T9a: the orthophotos' filtered texture (ORTHO_CLIP² × ORTHO_LEVELS, ORTHO_MIPS mips) and its mips' pass */
+  readonly orthoTexture: GPUTexture;
+  private orthoMip: { pipeline: GPURenderPipeline; uniform: GPUBuffer; groups: GPUBindGroup[] } | null = null;
   /** the levels' windows' tiles a side up to z 14 (TILE_REACH: 4, 8), the texture's side in texels its CLIP */
   private span = SPAN;
   /** the most the device holds (a farther reach's 256 MiB texture refused: back to SPAN, not asked again) */
@@ -633,7 +689,7 @@ export class EarthTiles {
   orthoLoaded = 0;
 
   /** where each level and orthophotos' level lives in the texture (tileLayout) */
-  private layout: ReturnType<typeof tileLayout> = { levels: [], ortho: [], layers: 0 };
+  private layout: ReturnType<typeof tileLayout> = { levels: [], layers: 0 };
   /** the texture's bytes; those of the textures alive (an old one kept until the work submitted with it is done — setReach);
    *  the most they reached (T10: the peak budget beside the resident one) */
   textureBytes = 0;
@@ -642,6 +698,17 @@ export class EarthTiles {
 
   constructor(private device: GPUDevice) {
     this.texture = this.makeTexture();
+    this.orthoTexture = device.createTexture({
+      size: [ORTHO_CLIP, ORTHO_CLIP, ORTHO_LEVELS],
+      format: "rgba8unorm",
+      viewFormats: ["rgba8unorm-srgb"],
+      mipLevelCount: ORTHO_MIPS,
+      // (no storage usage: it would forbid the sRGB view the tracer filters through — the mips drawn by a render pass)
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      label: "orthophotos",
+    });
+    this.liveBytes += ORTHO_BYTES;
+    this.peakBytes = Math.max(this.peakBytes, this.liveBytes);
     for (let k = 0; k < ORTHO_LEVELS; k++)
       this.ortho.push({ z: ORTHO_Z0 + k, n: 2 ** (ORTHO_Z0 + k), want: null, valid: null, key: new Array(ORTHO_SPAN ** 2).fill(null) });
     for (let l = 0; l < LEVELS; l++) {
@@ -662,7 +729,7 @@ export class EarthTiles {
   }
 
   private makeTexture() {
-    // (the relief's levels, then the orthophotos' quadrants — tileLayout)
+    // (the relief's levels — tileLayout)
     this.layout = tileLayout(
       this.clip,
       Array.from({ length: LEVELS }, (_, l) => TILE * this.levelSpan(Z0 + l)),
@@ -1415,24 +1482,86 @@ export class EarthTiles {
     this.requestOrtho(cx0(this.priorityLon), this.prioritySinLat);
   }
 
-  /** An orthophoto's tile into its window's slot (its imagery; null: none there — the coarser levels'). */
+  /** An orthophoto's tile into its window's slot (its imagery; null: none there — the coarser levels'): its level's layer of
+   *  the orthophotos' texture, its mips made from it alone (T9a) */
   private putOrtho(z: number, x: number, y: number, col: Uint32Array | null) {
     const k = z - ORTHO_Z0;
     const O = this.ortho[k];
     if (!O || !inside(O.want, x, y)) return;
     const s = orthoSlot(x, y);
     O.key[s] = this.orthoKey(O, x, y);
-    const texels = new Uint32Array(2 * TILE * TILE);
-    if (col) for (let i = 0; i < col.length; i++) texels[2 * i + 1] = col[i]!;
-    const q = this.layout.ortho[k]!;
+    const ox = (s % ORTHO_SPAN) * TILE,
+      oy = Math.floor(s / ORTHO_SPAN) * TILE;
     this.device.queue.writeTexture(
-      { texture: this.texture, origin: [q.x + (s % ORTHO_SPAN) * TILE, q.y + Math.floor(s / ORTHO_SPAN) * TILE, q.layer] },
-      texels,
-      { bytesPerRow: TILE * 8 },
+      { texture: this.orthoTexture, origin: [ox, oy, k] },
+      (col ?? new Uint32Array(TILE * TILE)) as Uint32Array<ArrayBuffer>,
+      { bytesPerRow: TILE * 4 },
       [TILE, TILE, 1],
     );
+    this.orthoMips(ox, oy, k);
     if (col) this.imagery++;
     this.orthoComplete(O);
+  }
+
+  /** A tile's mips in the orthophotos' texture (its region at each level, from the level above: never its neighbour's). */
+  private orthoMips(ox: number, oy: number, layer: number) {
+    const d = this.device;
+    if (!this.orthoMip) {
+      const module = d.createShaderModule({ code: ORTHO_MIP_WGSL, label: "orthophotos' mips" });
+      const pipeline = d.createRenderPipeline({
+        layout: "auto",
+        vertex: { module, entryPoint: "vs" },
+        fragment: { module, entryPoint: "fs", targets: [{ format: "rgba8unorm" }] },
+        primitive: { topology: "triangle-list" },
+        label: "orthophotos' mips",
+      });
+      const uniform = d.createBuffer({ size: 256 * ORTHO_LEVELS, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      const u = new Uint32Array(64 * ORTHO_LEVELS);
+      for (let k = 0; k < ORTHO_LEVELS; k++) u[64 * k] = k;
+      d.queue.writeBuffer(uniform, 0, u);
+      // (a group a mip and a layer: the mip above as the source, the layer in the uniform)
+      const groups: GPUBindGroup[] = [];
+      for (let i = 1; i < ORTHO_MIPS; i++)
+        for (let k = 0; k < ORTHO_LEVELS; k++)
+          groups.push(
+            d.createBindGroup({
+              layout: pipeline.getBindGroupLayout(0),
+              entries: [
+                { binding: 0, resource: { buffer: uniform, offset: 256 * k, size: 16 } },
+                { binding: 1, resource: this.orthoTexture.createView({ dimension: "2d-array", baseMipLevel: i - 1, mipLevelCount: 1 }) },
+              ],
+            }),
+          );
+      this.orthoMip = { pipeline, uniform, groups };
+    }
+    const m = this.orthoMip;
+    const enc = d.createCommandEncoder({ label: "orthophotos' mips" });
+    for (let i = 1; i < ORTHO_MIPS; i++) {
+      const n = TILE >> i;
+      const pass = enc.beginRenderPass({
+        colorAttachments: [
+          {
+            view: this.orthoTexture.createView({
+              dimension: "2d",
+              baseMipLevel: i,
+              mipLevelCount: 1,
+              baseArrayLayer: layer,
+              arrayLayerCount: 1,
+            }),
+            loadOp: "load",
+            storeOp: "store",
+          },
+        ],
+        label: "orthophotos' mips",
+      });
+      pass.setPipeline(m.pipeline);
+      pass.setBindGroup(0, m.groups[(i - 1) * ORTHO_LEVELS + layer]!);
+      pass.setViewport(ox >> i, oy >> i, n, n, 0, 1);
+      pass.setScissorRect(ox >> i, oy >> i, n, n);
+      pass.draw(3);
+      pass.end();
+    }
+    d.queue.submit([enc.finish()]);
   }
 
   private orthoComplete(O: OrthoLevel) {
@@ -1455,8 +1584,7 @@ export class EarthTiles {
     for (let k = 0; k < ORTHO_LEVELS; k++) {
       const O = this.ortho[k]!;
       const v = O.valid;
-      const q = this.layout.ortho[k]!;
-      f.set([q.layer, q.x, q.y, O.z], 12 * k + 8);
+      f.set([k, 0, 0, O.z], 12 * k + 8);
       if (!v) continue;
       const S = O.n * TILE;
       let ax = (this.lon / TAU + 0.5) * S - v.x0 * TILE;
