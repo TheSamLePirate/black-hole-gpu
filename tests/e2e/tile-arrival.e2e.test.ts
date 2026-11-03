@@ -11,7 +11,8 @@ import { tileReplay } from "./lib/tile-replay";
 // worker's tile cache). The F-35 at 120 m over the plateau, frozen; every half second each level's window: its tiles in, and
 // whether the tracer draws it — a level is drawn only once its whole window is in (earth-tiles.ts complete → valid) —, the
 // IGN's relief's share on z 15–17 (its heights' mark). Said: when each level is drawn, their mean (the visible quality's
-// pace: a level not drawn is the coarser one's ground), Terrarium's z 14, the IGN's z 15–17 whole.
+// pace: a level not drawn is the coarser one's ground), Terrarium's z 14, the IGN's z 15–17 whole; and when each began to
+// be drawn (firstAt: T8i draws a window's tiles in round the camera's before the whole).
 // TA_REPLAY=<dir>: one pass, the Service Worker off, the tiles' hosts answered from <dir> after TA_DELAY_MS (300) —
 // TA_RECORD=1 fills <dir> first, at once (lib/tile-replay.ts: the missing ones fetched by Bun and kept): the loads' order A/B'd on the same answers, the network out.
 // Output: remote-results/tile-arrival/tile-arrival-<side><run>.json (AB_SIDE, AB_RUN: an A/B through scripts/ab-e2e.ts).
@@ -26,7 +27,7 @@ const RECORD = process.env.TA_RECORD === "1";
 const DELAY_MS = Number(process.env.TA_DELAY_MS ?? 300);
 afterAll(stopServer);
 
-type Row = { s: number; pending: number; levels: Record<string, [number, number, number, number]> };
+type Row = { s: number; pending: number; levels: Record<string, [number, number, number, number, number]> };
 
 test.skipIf(!E2E)(
   "T8: the relief's levels drawn over Aubrac, cold then warm — when each comes, their mean",
@@ -56,7 +57,8 @@ test.skipIf(!E2E)(
                 for (let y = L.want.y0; y < L.want.y1; y++) for (let x = L.want.x0; x < L.want.x1; x++) { w++;
                   const s = t.slotOf(L, x, y), d = L.data[s]; if (!d || L.key[s] !== t.keyOf(L, x, y)) continue; n++;
                   let fine = 0; for (let i = 0; i < 65536; i += 4099) { B[0] = d[i]; if (U[0] & 1) fine++; } if (fine > 0) f++; }
-                levels['z' + L.z] = [n, f, w, same(L.valid, L.want) ? 1 : 0]; }
+                const area = (q) => (q ? (q.x1 - q.x0) * (q.y1 - q.y0) : 0);
+                levels['z' + L.z] = [n, f, w, same(L.valid, L.want) ? 1 : 0, +(area(L.valid) / Math.max(area(L.want), 1)).toFixed(3)]; }
               return { pending: t.pending, levels }; })()`);
             const s = (Date.now() - t0) / 1000;
             rows.push({ s, ...r });
@@ -77,6 +79,20 @@ test.skipIf(!E2E)(
             }
             drawnAt[z] = at === null ? null : +at.toFixed(1);
           }
+          // (when each level began to be drawn — any part of its window: T8i draws the tiles in round the camera's —, and stayed)
+          const firstAt: Record<string, number | null> = {};
+          for (const z of Object.keys(last.levels)) {
+            let at: number | null = null;
+            for (const row of rows) {
+              if ((row.levels[z]?.[4] ?? 0) > 0) at ??= row.s;
+              else at = null;
+            }
+            firstAt[z] = at === null ? null : +at.toFixed(1);
+          }
+          const firsts = Object.entries(firstAt).filter(([z]) => Number(z.slice(1)) <= 14);
+          const meanFirst = firsts.some(([, t]) => t === null)
+            ? null
+            : +(firsts.reduce((a, [, t]) => a + t!, 0) / firsts.length).toFixed(1);
           const global = Object.entries(drawnAt).filter(([z]) => Number(z.slice(1)) <= 14);
           const missing = global.filter(([, t]) => t === null).map(([z]) => z);
           const mean = missing.length ? null : +(global.reduce((a, [, t]) => a + t!, 0) / global.length).toFixed(1);
@@ -88,6 +104,8 @@ test.skipIf(!E2E)(
           const summary = {
             drawnAt,
             meanZ6to14: mean,
+            firstAt,
+            meanFirstZ6to14: meanFirst,
             z14: drawnAt.z14 ?? null,
             ignWhole: ignAt === undefined ? null : +ignAt.toFixed(1),
             whole: +last.s.toFixed(1),

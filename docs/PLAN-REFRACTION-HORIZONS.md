@@ -1334,7 +1334,9 @@ compilation) s'y ajoutent.
   le mécanisme gardé ; −45 Mo GPU), **décision à confirmer par Sam** (le plan les demandait). **T8h** — la priorité des tuiles : le niveau le plus près d'avoir sa fenêtre
   entière d'abord (un niveau n'est dessiné qu'entier), à égalité le plus fin ; mesuré en rejeu des tuiles à latence fixe
   (`tile-arrival`, `lib/tile-replay.ts`) : à 1 000 ms, le z 14 dessiné 49 → 26 s, le relief IGN entier 51 → 8,7 s, la moyenne
-  des niveaux 42,8 → 24,6 s ; à 300 ms, z 14 18 → 9 s, IGN 19 → 3,7 s.
+  des niveaux 42,8 → 24,6 s ; à 300 ms, z 14 18 → 9 s, IGN 19 → 3,7 s. **T8i** — une fenêtre dessinée avant d'être entière (le plus grand rectangle de ses
+  tuiles arrivées autour de la caméra) : à 1 000 ms, le z 14 commence d'être dessiné à 17,7 s au lieu de 26, la moyenne des
+  niveaux commencés 24,6 → 19,9 s.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

@@ -1461,7 +1461,24 @@ export class EarthTiles {
   private complete(L: Level) {
     const w = L.want;
     if (!w) return;
-    for (let y = w.y0; y < w.y1; y++) for (let x = w.x0; x < w.x1; x++) if (L.key[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) return;
+    let whole = true;
+    for (let y = w.y0; y < w.y1 && whole; y++)
+      for (let x = w.x0; x < w.x1; x++)
+        if (L.key[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) {
+          whole = false;
+          break;
+        }
+    if (!whole) {
+      // (T8i: the window not whole yet — drawn already over the largest rectangle of its tiles in round the camera's, when it
+      // covers more than what is drawn: the levels come out from the eye as their tiles come, not all at once at the end; the
+      // tracer reads a rectangle smaller than its window as after a move — its edges faded —, the CPU the same)
+      if (!L.stale) {
+        const r = this.loadedRect(L, w);
+        const area = (q: Rect | null) => (q ? (q.x1 - q.x0) * (q.y1 - q.y0) : 0);
+        if (r && area(r) > area(L.valid)) this.setValid(L, r);
+      }
+      return;
+    }
     // (taken again whole after a switch: its rectangle the same, its heights not — the ground built from them redone)
     if (L.stale && same(L.valid, w)) {
       L.stale = false;
@@ -1472,6 +1489,37 @@ export class EarthTiles {
     }
     L.stale = false;
     this.setValid(L, w);
+  }
+
+  /** The largest rectangle of a window's tiles all in that holds the camera's tile (null: that tile not in). */
+  private loadedRect(L: Level, w: Rect): Rect | null {
+    const nx = w.x1 - w.x0,
+      ny = w.y1 - w.y0;
+    const fx = Math.min(Math.max(Math.floor((this.lon / TAU + 0.5) * L.n) - w.x0, 0), nx - 1);
+    const fy = Math.min(Math.max(Math.floor(mercY(this.sinLat, L.n)) - w.y0, 0), ny - 1);
+    const ok = (i: number, j: number) => L.key[this.slotOf(L, w.x0 + i, w.y0 + j)] === this.keyOf(L, w.x0 + i, w.y0 + j);
+    if (!ok(fx, fy)) return null;
+    // (every rectangle round the camera's tile — 8 × 8 tiles at most: a few thousand looks, at a tile's arrival)
+    let best: Rect | null = null,
+      most = 0;
+    for (let j0 = fy; j0 >= 0 && ok(fx, j0); j0--)
+      for (let j1 = fy; j1 < ny && ok(fx, j1); j1++)
+        for (let i0 = fx; i0 >= 0; i0--) {
+          let colOk = true;
+          for (let j = j0; j <= j1 && colOk; j++) colOk = ok(i0, j);
+          if (!colOk) break;
+          for (let i1 = fx; i1 < nx; i1++) {
+            let c = true;
+            for (let j = j0; j <= j1 && c; j++) c = ok(i1, j);
+            if (!c) break;
+            const a = (i1 - i0 + 1) * (j1 - j0 + 1);
+            if (a > most) {
+              most = a;
+              best = { x0: w.x0 + i0, y0: w.y0 + j0, x1: w.x0 + i1 + 1, y1: w.y0 + j1 + 1 };
+            }
+          }
+        }
+    return best;
   }
 
   private fromFallback(L: Level, x: number, y: number) {
