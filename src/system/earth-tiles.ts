@@ -1859,13 +1859,19 @@ export class EarthTiles {
       const w = wz * edge(px, py, (v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE);
       if (w <= 0) continue;
       const texel = (TAU * R * cosLat) / S;
+      // (the cubic's texels held within the valid rectangle: a window drawn before it is whole — T8i — has empty slots beside it,
+      // a texel or two past its edge — read there, a TypeError on null (reported by Sam, 4 Nov 2026: terrainAhead → gearHeight →
+      // heightAt). The edge's weight there is under a thousandth: the tracer reads what its texture holds, the same to that)
+      const wTex = (v.x1 - v.x0) * TILE,
+        hTex = (v.y1 - v.y0) * TILE;
       const at = (i: number, j: number) => {
-        const gx = v.x0 * TILE + i,
-          gy = v.y0 * TILE + j;
+        const gx = v.x0 * TILE + Math.min(Math.max(i, 0), wTex - 1),
+          gy = v.y0 * TILE + Math.min(Math.max(j, 0), hTex - 1);
         const tx = Math.floor(gx / TILE),
           ty = Math.floor(gy / TILE);
-        const d = L.data[this.slotOf(L, tx, ty)]!,
+        const d = L.data[this.slotOf(L, tx, ty)],
           k = (gy - ty * TILE) * TILE + (gx - tx * TILE);
+        if (!d) return 0;
         return drawn ? drawnHeight(d, k) : d[k]!;
       };
       const hz = sampleLevel(at, px, py, zf - L.z, texel);

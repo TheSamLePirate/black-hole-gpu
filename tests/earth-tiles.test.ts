@@ -510,3 +510,52 @@ test("T9c: the imagery filtered, the relief's texture holds its heights alone (r
   const plain = new EarthTiles(withGpuStubs(fakeDevice()));
   expect(plain.textureBytes).toBe(1024 * 1024 * 12 * 8);
 });
+
+test("a window drawn before it is whole (T8i): the heights read near its edge, never a missing tile's slot", () => {
+  // (reported by Sam, 4 Nov 2026: terrainAhead → gearHeight → heightAt → sampleLevel read a texel of the empty slot beside a
+  // partial rectangle — a TypeError on null. Only the 3 × 3 tiles round the camera put in, every level)
+  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  t.update(camAt(45.9, 6.87, 2), 1e-3);
+  const cx = (z: number) => Math.floor(((6.87 + 180) / 360) * 2 ** z);
+  const cy = (z: number) => Math.floor((0.5 - Math.atanh(Math.sin(45.9 * deg)) / (2 * Math.PI)) * 2 ** z);
+  for (const [z, x, y] of t.wanted()) {
+    if (Math.abs(x - cx(z)) > 1 || Math.abs(y - cy(z)) > 1) continue;
+    const n = 2 ** z,
+      h = new Float32Array(TILE * TILE);
+    for (let j = 0; j < TILE; j++) {
+      const lat = Math.atan(Math.sinh((0.5 - (y + (j + 0.5) / TILE) / n) * 2 * Math.PI)) / deg;
+      for (let i = 0; i < TILE; i++) h[j * TILE + i] = field(lat, ((x + (i + 0.5) / TILE) / n) * 360 - 180);
+    }
+    t.put(z, x, y, h);
+  }
+  expect(t.pending).toBeGreaterThan(0);
+  // (the ground under the camera drawn already)
+  expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBeLessThan(1);
+  // (each partial level's rectangle read near its right and bottom edges — 1.5 to 4 texels in, where the edge's weight starts and
+  // the cubic's 6 × 6 reach passes the edge by a texel — at a gear's footprint, 0.5 m: the cubic's path, finer than every level —
+  // the band and the path the error came from (before the fix: 222 of these 1 224 reads threw))
+  type Lv = { z: number; n: number; valid: { x0: number; y0: number; x1: number; y1: number } | null };
+  const lonOf = (x: number, n: number) => (x / n) * 360 - 180;
+  const latOf = (y: number, n: number) => Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) / deg;
+  let partial = 0,
+    reads = 0;
+  for (const L of (t as unknown as { levels: Lv[] }).levels) {
+    const v = L.valid;
+    if (!v) continue;
+    partial++;
+    for (let d = 1.5; d <= 4; d += 0.05) {
+      const xm = (v.x0 + v.x1) / 2,
+        ym = (v.y0 + v.y1) / 2;
+      for (const [x, y] of [
+        [v.x1 - d / TILE, ym],
+        [xm, v.y1 - d / TILE],
+      ] as const) {
+        const s = t.heightAt(dir(latOf(y, L.n), lonOf(x, L.n)), 0.5);
+        expect(Number.isFinite(s.h)).toBe(true);
+        reads++;
+      }
+    }
+  }
+  expect(partial).toBeGreaterThan(5);
+  expect(reads).toBeGreaterThan(1000);
+});
