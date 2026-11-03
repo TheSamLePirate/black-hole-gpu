@@ -253,7 +253,7 @@ export function packScenery(
   grid = SCENERY_GRID,
   budget = SCENERY_BYTES,
 ) {
-  const { nodes, geometries } = sceneryBVH(prims);
+  const { nodes, geometries, offsets } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
   // (the water's tree: the surfaces' own records, a large polygon's bands — waterBands — appended after them)
   const placed = new Map(surface.offsets);
@@ -291,7 +291,9 @@ export function packScenery(
   }
   const meshOffset = forestOffset + (forest ? forestVec4s(forest.frame) : 0),
     triangleOffset = meshOffset + Math.ceil((vertexCount * 3) / 4);
-  const bytes = (triangleOffset + Math.ceil((triangleCount * 3) / 4)) * 16;
+  // (after the triangles, a building triangle's leaf — its record's offset from geomOffset [vec4] —: the raster writes it in its
+  // visibility, shadeLite finds the building there, its walls' and roof's material — Q3, C0-10)
+  const bytes = (triangleOffset + Math.ceil((triangleCount * 3 + buildingTriangles) / 4)) * 16;
   if (bytes > budget) throw new Error("scenery budget exceeded");
   const buffer = new ArrayBuffer(bytes),
     f = new Float32Array(buffer),
@@ -316,11 +318,13 @@ export function packScenery(
     f[11] = triangleCount;
     let v = 0,
       t = triangleOffset * 4;
+    let tag = triangleOffset * 4 + triangleCount * 3;
     for (const p of meshed) {
       if (!p.mesh) continue;
       f.set(p.mesh.positions, meshOffset * 4 + v * 3);
       for (const k of p.mesh.triangles) u[t++] = v + k;
       v += p.mesh.positions.length / 3;
+      if (p.data[3] === 1) u.fill(offsets.get(p) ?? 0, tag, (tag += p.mesh.triangles.length / 3));
     }
   }
   return buffer;

@@ -32,8 +32,18 @@ export function withTerrainRaster(trace: string, supported: boolean): string {
 @group(0) @binding(${RASTER_HINT_BINDING}) var terrainDist: texture_2d<f32>;
 // The patch's distance [m] at this ray's pixel (rgba32float r, 0 where no triangle covers it; out of range reads 0).
 fn terrainRasterHint(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).r; }
-// The scenery's instance drawn nearest at this pixel (g: a tree's cell + 1, exact in a float below 2²⁴; 0 none).
-fn terrainRasterId(px: vec2f) -> u32 { return u32(textureLoad(terrainDist, vec2i(floor(px)), 0).g); }
+// The scenery's instance drawn nearest at this pixel (g: a tree's cell + 1, exact in a float below 2²⁴; 0 none — a building's
+// pixel's g its leaf: terrainRasterLeaf).
+fn terrainRasterId(px: vec2f) -> u32 {
+  let t = textureLoad(terrainDist, vec2i(floor(px)), 0);
+  return select(u32(t.g), 0u, t.a >= ${RASTER_CODE.mesh * RASTER_CODE_SCALE}.0);
+}
+// A building's leaf at this pixel — its own triangles' or its solid box's (g: the record's offset from the scenery's geomOffset
+// + 1, Q3) —; 0 none (a bridge's part, the ground, a tree).
+fn terrainRasterLeaf(px: vec2f) -> u32 {
+  let t = textureLoad(terrainDist, vec2i(floor(px)), 0);
+  return select(0u, u32(t.g), floor(t.a / ${RASTER_CODE_SCALE}.0) == ${RASTER_CODE.mesh}.0);
+}
 // The nearest surface's distance [m] at this pixel (b: the ground's, or an instance's proxy before it; 0 none).
 fn terrainRasterDepth(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).b; }
 // (a: an integer below 2²⁴, exact in its float — what drew the pixel, its code × 2¹⁸ (RASTER_CODE: the ground's 1 + its rank from

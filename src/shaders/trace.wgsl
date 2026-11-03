@@ -6621,8 +6621,11 @@ fn windsockShade(q: vec3f, Ls: vec3f, E: vec3f, h: f32, view: vec3f) -> vec3f {
     let r = reflect(view, WS.xyz);
     mirror = F * (sky / PI * 1.3 * WS_AO + sun * pow(max(dot(r, Lp), 0.0), 600.0) * 40.0);
   }
-  return WS_A / PI * lit + through + mirror + WS_E * (luminance(E) / PI) * 30.0 * (1.0 - smoothstep(-0.12, 0.06, mu0));
+  return WS_A / PI * lit + through + mirror + WS_E * (luminance(E) / PI) * WINDOW_GLOW * (1.0 - smoothstep(-0.12, 0.06, mu0));
 }
+// a lit window's radiance per unit of WS_E [a sunlit white's] — the calibrated night (Q2): WS_E 0.05–0.14 a window, ~2–7·10⁻⁵ of
+// a sunlit white, a few times a lit street's (CITY_LIGHTS: 0.002 drew them white squares); 30 before, for a night at 8 % of the day
+const WINDOW_GLOW = 0.0005;
 
 // ---- The airport's buildings and its parked craft (PLAN-AEROPORTS A3), the published frame of each runway
 // near (a along from its threshold, c across to the right, h up from its ground) [m], on its left beyond
@@ -7616,6 +7619,7 @@ fn earthTop() -> f32 { return select(9600.0, P.radio2.w, P.radio2.w > 0.0); }
 // BEGIN_TERRAIN_RASTER (system/terrain-raster-hint.ts supplies the lookup where the device takes its texture)
 fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
+fn terrainRasterLeaf(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
@@ -9074,6 +9078,28 @@ fn roofLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,vec3f>
       }
     }
   }
+}
+// Q3 — a building's face at a point the raster drew on it (its leaf, terrainRasterLeaf; the point and the ray in the scenery's
+// frame): its roof — the plane lowest over the point, its flat top —, or its wall — the footprint's nearest edge, its normal
+// toward the camera, the coordinate along it —, as sceneryQuery's hit has them: buildingLook's input, the traced look on the
+// raster's buildings (their own triangles and their oriented boxes alike)
+fn buildingFaceAt(g:u32,p:vec3f,d:vec3f,t:f32)->SceneryHit {
+  let head=scenery[g];let count=u32(head.z);
+  let np=(u32(scenery[g+2u].w)>>14u)&15u;
+  let R=g+4u+count;
+  var roof=head.y;var nr=vec3f(0.0,0.0,1.0);
+  for(var k=0u;k<np;k++){let pl=scenery[R+k];let z=pl.x*p.x+pl.y*p.y+pl.z;if(z<roof){roof=z;nr=vec3f(-pl.x,-pl.y,1.0);}}
+  var best=1e30;var e0=0u;var along=0.0;var len=1.0;
+  for(var e=0u;e<count;e++){
+    let line=scenery[g+3u+e];let v=line.zw-line.xy;let l2=max(dot(v,v),1e-6);
+    let u=clamp(dot(p.xy-line.xy,v)/l2,0.0,1.0);let q=line.xy+v*u-p.xy;let dd=dot(q,q);
+    if(dd<best){best=dd;e0=e;along=u;len=sqrt(l2);}
+  }
+  // (on the roof: within 0.35 m of its height there, and off the wall's line — or right at the top: a parapet's crown, an eave)
+  if(p.z>roof-0.35 && (best>0.09 || p.z>roof-0.1)){return SceneryHit(t,normalize(nr),scenery[R-1u].xyz,1.0,0.0,g,vec2f(-1.0));}
+  let line=scenery[g+3u+e0];let v=line.zw-line.xy;
+  var nn=normalize(vec3f(v.y,-v.x,0.0));nn=select(nn,-nn,dot(nn,d)>0.0);
+  return SceneryHit(t,nn,scenery[g+2u].xyz,1.0,0.0,g,vec2f(along,1.0)*len);
 }
 fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
   SC_DISTANCE=1e9;WS_T=vec3f(0.0);
@@ -13703,19 +13729,47 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let Esun = E * sunThrough(hG, mu0);
   var Eg = E;
   if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Li, Esun, fx, fy, dirW, tM, ng, mesh); }
-  // (a building's own triangles — U2 —: its roof the orthophoto's — the photograph is the roof seen from above —, its walls
-  // stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —, the glass dark,
-  // the sky mirrored in it below)
+  // (Q3 — a building's own material: its leaf in the visibility — terrainRasterLeaf: its own triangles', its oriented box's —,
+  // its face found there — buildingFaceAt —, the traced pipeline's look on it — buildingLook, roofLook: its walls' material,
+  // storeys and bays, shops, balconies; its roof's tiles, slates, zinc, dormers; its windows lit at night —, its face's exact
+  // normal; liteSkip 262144 the old material)
+  let leaf = select(0u, terrainRasterLeaf(centre), HAS_SCENERY && (liteSkip() & 262144u) == 0u);
+  var bldS = 0.0;
+  var bldE = vec3f(0.0);
+  var bldAO = 1.0;
+  if (leaf > 0u && P.scenery[0].w > 0.5) {
+    let g = u32(scenery[0].y) + leaf - 1u;
+    let dL = sceneryLocal(dirW);
+    let pL = P.scenery[3].xyz + dL * tM;
+    let hit = buildingFaceAt(g, pL, dL, tM);
+    var alb = hit.albedo * (0.85 + 0.15 * gnoise(pL * 0.65));
+    var nL = hit.normal;
+    WS_S = 0.0;
+    WS_AO = 1.0;
+    WS_E = vec3f(0.0);
+    buildingLook(hit, pL, &alb, &nL);
+    // (a roof: its material's colour, the photograph's light and shade over it — its skylights, its chimneys, its terraces'
+    // real patches: the material alone a uniform grey — within 0.6–1.5 of the material's own brightness)
+    if (hit.aux.y < 0.0) { alb *= clamp(luminance(A) / max(luminance(alb), 0.02), 0.6, 1.5); }
+    A = alb;
+    n = normalize(sceneryGlobal(nL));
+    bldS = WS_S;
+    bldE = WS_E;
+    bldAO = WS_AO;
+  }
+  // (a building's own triangles without its leaf — U2 —: its roof the orthophoto's — the photograph is the roof seen from
+  // above —, its walls stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —,
+  // the glass dark, the sky mirrored in it below)
   var glass = 0.0;
   // (a roof: the photograph's light and shade kept, its colour mostly let go — the orthophoto leans, a roof's place on it
   // the street's or a tree's beside it: zinc and slate grey, a fifth of the photograph's hue)
-  if (mesh && dot(n, gq) >= 0.35) {
+  if (mesh && leaf == 0u && dot(n, gq) >= 0.35) {
     let l = luminance(A);
     A = mix(vec3f(l), A, 0.2) * vec3f(0.97, 0.99, 1.04);
     // (a bridge's deck: its stone and its roadway — the photograph under it is the river's: a speckled dark slab)
     if (terrainRasterBridgeMesh(centre)) { A = vec3f(0.36, 0.34, 0.31) * P.earth2.z; }
   }
-  if (mesh && dot(n, gq) < 0.35 && HAS_SCENERY && P.scenery[0].w > 0.5) {
+  if (mesh && leaf == 0u && dot(n, gq) < 0.35 && HAS_SCENERY && P.scenery[0].w > 0.5) {
     let toB = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
     let spL = P.scenery[3].xyz + (dirW * tM) * toB;
     let nL = n * toB;
@@ -13785,9 +13839,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let bounce = (Esun * max(mu0, 0.0) + sky) * groundAlbedoMean(gq) * 0.5 * (1.0 - up);
   // (the moonlight — the tracer's ground's earthMoonlight: a moonlit landscape silvery —, through the decks)
   // (Q2: the photograph's light kept by its Sun's — earthGround's photoRelightK —; a wall's stone, a runway's paving: ours whole)
-  let rk = max(photoRelightK(gq, Li, img.o), max(rwyPaved, select(0.0, 1.0, mesh && dot(n, gq) < 0.35)));
-  // (L1: the sky on the face by the frame's sky — skyOnFace)
-  var G = A / PI * (Eg * photoNdl(gq, n, Li, rk) + skyOnFace(sky, hG, n, gq) + bounce + E * earthMoonlight(q, n, hG, mu0g) * moonVeil);
+  let rk = max(photoRelightK(gq, Li, img.o), max(rwyPaved, select(0.0, 1.0, mesh && (dot(n, gq) < 0.35 || leaf > 0u))));
+  // (L1: the sky on the face by the frame's sky — skyOnFace —; a building's face its own share of it, bldAO)
+  var G = A / PI * (Eg * photoNdl(gq, n, Li, rk) + skyOnFace(sky, hG, n, gq) * bldAO + bounce + E * earthMoonlight(q, n, hG, mu0g) * moonVeil);
   // (a tree: lit as windsockShade lights it — the Sun on its face, six tenths of the sky, not the ground's open sky and
   // bounce: they lit the crowns yellow —, its crown's underside in its own shade (the carving's occlusion, left out here),
   // the light through its thin edge against the Sun)
@@ -13801,6 +13855,15 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     let F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(n, dirW)), 0.0, 1.0), 5.0);
     G += glass * F * sky * 1.5 / PI;
   }
+  // (a building's glass, its zinc: the sky mirrored at a grazing look and the Sun's glint — windsockShade's —; its windows lit
+  // at night)
+  if (bldS > 0.0) {
+    let c = clamp(-dot(dirW, n), 0.0, 1.0);
+    let F = bldS + (1.0 - bldS) * pow(1.0 - c, 5.0);
+    let r = reflect(dirW, n);
+    G += F * (sky / PI * 1.3 * bldAO + Eg * pow(max(dot(r, Li), 0.0), 600.0) * 40.0);
+  }
+  if (leaf > 0u) { G += bldE * (luminance(E) / PI) * WINDOW_GLOW * (1.0 - smoothstep(-0.12, 0.06, mu0g)); }
   // (the wet ground's sheen: the sky mirrored by the water on it, by Fresnel — a wet runway seen ahead silvery —, the rings
   // breaking it)
   if (wetS > 0.0) {

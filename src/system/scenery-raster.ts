@@ -505,16 +505,24 @@ fn meshVertex(vi: u32) -> vec3f {
 // written — after their boxes, before nothing —, the pixel's distance in r and b as the ground's, a 3: trace.wgsl shadeLite
 // draws them with its material, not the kernel shade's rays
 // (bridge: a bridge's part's triangle — past the buildings' in the mesh —, coded bridgeMesh — terrainRasterBridgeMesh)
-struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) @interpolate(flat) bridge: f32 };
+struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) @interpolate(flat) bridge: f32, @location(2) @interpolate(flat) leaf: f32 };
+// a building triangle's leaf (packScenery: after the triangles, its record's offset from geomOffset) + 1; 0 a bridge's
+fn meshLeaf(tri: u32) -> f32 {
+  if (tri >= u32(scenery[3].w)) { return 0.0; }
+  let t = u32(scenery[3].z) * 4u + u32(scenery[2].w) * 3u + tri;
+  return f32(bitcast<u32>(scenery[t / 4u][t % 4u]) + 1u);
+}
 @vertex fn meshVs(@builtin(vertex_index) vi: u32) -> MV {
   var o: MV;
   o.bridge = select(0.0, 1.0, vi / 3u >= u32(scenery[3].w));
+  o.leaf = meshLeaf(vi / 3u);
   let v = view(meshVertex(vi));
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
   return o;
 }
-@fragment fn meshFs(v: MV) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, (${RASTER_CODE.mesh}.0 + v.bridge) * ${RASTER_CODE_SCALE}.0); }
+// (g: the building's leaf + 1 — shadeLite's material finds its walls and roof there —; 0 a bridge's part)
+@fragment fn meshFs(v: MV) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, v.leaf, d, (${RASTER_CODE.mesh}.0 + v.bridge) * ${RASTER_CODE_SCALE}.0); }
 // The buildings without triangles — the far ones, past BUILDING_MESH_M — as their boxes, solid (no margin, the top flat), turned
 // as their footprints are (buildingCorner):
 // the material's buildings too, none left to the kernel shade's rays (their marking boxes, wider than they are and up to their
@@ -532,6 +540,7 @@ struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) 
   let c = BOX[vi];
   let k = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
   let v = view(buildingCorner(lo, hi, k));
+  o.leaf = hi.w + 1.0;
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
   return o;
