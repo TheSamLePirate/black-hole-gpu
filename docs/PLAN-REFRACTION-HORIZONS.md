@@ -504,11 +504,11 @@ mécanismes, les chiffres et les leviers de confirmation y sont détaillés).
 
 ### 3.1 Comment la Terre raster est faite
 
-- **Le cache du relief** (`terrain-cache.ts`) : 8 grilles 129² au pas de 1,2 / 2,4 / 9,5 / 38 / 153 / 611 / 2 446 m
+- **Le cache du relief** (`terrain-cache.ts`) : 8 grilles 257² (129² jusqu'au 3 novembre) au pas de 1,2 / 2,4 / 9,5 / 38 / 153 / 611 / 2 446 m
   (`TERRAIN_CACHE_ROUNDS`), cuites au GPU sur `earthHeightExactG` (les tuiles + le détail procédural). Chaque niveau lit
   les tuiles avec une empreinte d'un demi-pas.
-- **Le maillage** (`terrain-raster.ts`) : le patch (niveau 0, ±76 m), puis les anneaux 1 à 6 (jusqu'à ±156 km), chacun
-  une grille 129² dont le trou sous le niveau plus fin est retiré, avec une **bande de chevauchement de 4 nœuds**
+- **Le maillage** (`terrain-raster.ts`) : le patch (niveau 0, ±153 m), puis les anneaux 1 à 6 (jusqu'à ±312 km), chacun
+  une grille 257² dont le trou sous le niveau plus fin est retiré, avec une **bande de chevauchement de 4 nœuds**
   (`RING_OVERLAP`). Pas de géomorphose ni de jupes. Le maillage n'écrit que des distances (et un marqueur de niveau dans
   `a`).
 - **L'ombrage** (`shadeLite`) reconstruit le point par rayon × distance, puis la normale par les distances des pixels
@@ -925,7 +925,7 @@ Trois volets, une séance de mesure commune. L'ordre est au §8.
 | **H2** | **Les disques lointains** : `horizonSeen(q, Ls, sunR, foot)` (2 lectures, azimut interpolé, smoothstep sur le rayon du Soleil, mip selon l'empreinte) dans `ourSegment`, passé par `rs0` ; pour Mars, dans `otherGround`. Pas de bit. Réglage `horizonMaps` | `trace.wgsl`, `renderer.ts`, `settings.ts` | Captures du terminateur contre une photo réelle à la même colongitude ; le pôle sud lunaire vu d'orbite ; trace-ab : la Terre et les vues sans corps HD inchangées (±1 %) ; budgets remesurés |
 | **H3** | **Le corps proche** (après P1-2 et le challenge) : `nearShadow` = (1) carte d'horizon au-dessus du Soleil **plus la marge** (§2.4) → 0 ; (2) H3a si sa borne est prouvée ; (3) sinon la marche ≤ 32 m, la carte du Soleil jusqu'à sa sortie, une marche courte jusqu'à `D_cuisson` si la sortie tombe avant, puis la carte d'horizon au-delà — **la marche reprise n'est retirée que là où son remplacement est démontré** ; le min des parties. Mars : la carte au-delà de `D_cuisson`, et au-delà des 25 km de `REL_SH` dans `otherGround` (H2). `keyRelief` sans carte | `trace.wgsl nearShadow`, `shadeNear`, `bodyLite*` | Mercure ciné ≤ la Terre ; Cérès ciné mesuré ; le pôle sud (avec H1c) ; aucune erreur dans les domaines déclarés sûrs ; ailleurs, l'écart mesuré par régions (pénombre, silhouette) |
 | **H4** | **Mesures et doc** : A/B sur les vues de M0b ; e2e en raster, vue cockpit, captures ; la planche avant/après (et contre la photo réelle) ; la décision sur la pleine résolution et sur la distance par direction ; TARS ; docs FR + EN | `docs/progress/refraction-horizons/H4.md`, AAA-PROGRESS, `E2E-CATALOGUE.md`, `WEBGPU-MATERIELS.md`, `BH-API.md` | Tableau des coûts, planche, poussé |
-| **H5** *(dans le plan — décision 17)* | **L'horizon de la Terre, 8 directions** : sur les niveaux 3 à 6 du cache (4 × 129² nœuds, jusqu'à ±156 km), l'élévation de l'horizon dans 8 secteurs (chacun le maximum de son secteur, encodage en racine signée comme H1), cuite par l'API de H1 quand un niveau est recuit — **pas quand le Soleil tourne** ; lue par `liteSun` et `earthTerrainShadow` au-delà de la carte de T6, en min avec elle (ombres pour tout azimut), **et par Q4 (L2b) comme visibilité du ciel** (l'occlusion des vallées) | `horizon-maps.ts`, `terrain-cache.ts`, `trace.wgsl` | Les Alpes au couchant : les ombres portées à 50–150 km, sans pop au passage de la carte ; les vallées assombries sous le ciel (avec Q4) ; coût mesuré (visé < 0,2 ms et une cuisson de < 1 ms par recuisson) |
+| **H5** *(dans le plan — décision 17)* | **L'horizon de la Terre, 8 directions** : sur les niveaux 3 à 6 du cache (4 × 257² nœuds, jusqu'à ±312 km), l'élévation de l'horizon dans 8 secteurs (chacun le maximum de son secteur, encodage en racine signée comme H1), cuite par l'API de H1 quand un niveau est recuit — **pas quand le Soleil tourne** ; lue par `liteSun` et `earthTerrainShadow` au-delà de la carte de T6, en min avec elle (ombres pour tout azimut), **et par Q4 (L2b) comme visibilité du ciel** (l'occlusion des vallées) | `horizon-maps.ts`, `terrain-cache.ts`, `trace.wgsl` | Les Alpes au couchant : les ombres portées à 50–150 km, sans pop au passage de la carte ; les vallées assombries sous le ciel (avec Q4) ; coût mesuré (visé < 0,2 ms et une cuisson de < 1 ms par recuisson) |
 
 ### R — La réfraction
 
@@ -1285,4 +1285,13 @@ compilation) s'y ajoutent.
   (`groundRelight`), le ciel par les harmoniques sur une pente (L1), le rebond par l'albédo moyen (L6), et **l'empreinte des
   pixels sur la pente** (le haut des montagnes lu à un niveau d'imagerie 33 × trop grossier — la remarque de Sam) ; Chamonix à
   midi : les versants plus ombrés deux fois (+4,8 niveaux) ; coût +0,35 ms à Paris, +0,8 ms en montagne (au-dessus du budget) —
-  [progress/refraction-horizons/Q2.md](progress/refraction-horizons/Q2.md).
+  [progress/refraction-horizons/Q2.md](progress/refraction-horizons/Q2.md). **L'indicateur de chargement des données** (demande
+  de Sam) : sous la barre du haut, les tuiles du relief et des photos, l'étape du décor, les cartes, les horizons, les échecs
+  (`settings.showLoading`, e2e `data-meter`). **Les sommets lointains** (la remarque de Sam : « grands triangles d'environ
+  100 m ») : les fenêtres du cache passent de **129² à 257² nœuds** — chaque distance dessinée par un niveau deux fois plus
+  fin, les facettes divisées par deux, les crêtes lointaines dessinées (A B B A sur le mini) ; coût du rendu dans le bruit
+  (Paris +0,25 ms, Chamonix bimodal 49/58 ms des deux côtés) ; le maillage des pistes accéléré (22 → 9 ms au niveau 0 : les
+  cellules que croise un bord seulement, plus de tableau par sommet ; les grilles des anneaux faites une fois par niveau) et
+  **préparé à l'avance dans un worker** pour la fenêtre suivante, décidée par le cache avant le bord : en vol stabilisé sur
+  piste, plus aucun maillage fait dans l'image, l'image de reconstruction ~27 → ~12 ms (8 ms d'ordinaire) — e2e
+  `runway-mesh`, [progress/refraction-horizons/T257.md](progress/refraction-horizons/T257.md).

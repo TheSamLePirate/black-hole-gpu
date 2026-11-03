@@ -101,12 +101,13 @@ describe("conforming raster terrain mesh", () => {
       expect(mesh.cutTriangles).toBeLessThanOrEqual(RASTER_MESH_EXTRA_TRIANGLES);
       for (const quad of runwayOutlines(window, level, runways))
         for (let i = 0; i < 4; i++) expect(straddles(mesh, quad[i]!, quad[(i + 1) % 4]!)).toBe(0);
-    });
+      // (the check, triangle by triangle, of a 257-node patch: up to ~7 s)
+    }, 30_000);
   }
 
   test("every runway, several levels: watertight", () => {
     for (const frame of EARTH_RUNWAYS) for (const level of [0, 2, 4]) check([frame], level);
-  });
+  }, 60_000);
 
   test("several runways in one patch (neighbours, crossing outlines) stay watertight", () => {
     const first = oblique[0]!;

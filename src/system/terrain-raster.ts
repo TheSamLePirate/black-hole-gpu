@@ -15,7 +15,14 @@ export const TERRAIN_RASTER_FORMAT: GPUTextureFormat = "rgba32float";
 import { geoidLibrary, terrainHeightLibrary, type TerrainCacheSources } from "./terrain-cache";
 import { TERRAIN_RASTER_MAX_PIXELS, TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 import { rasterGroundCode } from "./terrain-raster-hint";
-import { RASTER_MESH_INDEX_BYTES, RASTER_MESH_VERTEX_BYTES, runwayMeshKey, terrainRasterMesh } from "./terrain-raster-mesh";
+import {
+  RASTER_MESH_INDEX_BYTES,
+  RASTER_MESH_VERTEX_BYTES,
+  type RasterMesh,
+  runwayMeshKey,
+  terrainRasterMesh,
+} from "./terrain-raster-mesh";
+import type { MeshReply, MeshRequest } from "./terrain-mesh-worker";
 import type { TerrainWindow } from "./terrain-cache-layout";
 
 /** The pilot's geometry and inspector, deliberately separate from radiance and the reference tracer. */
@@ -290,6 +297,14 @@ export class TerrainRaster {
   private columns = 0;
   private rows = 0;
   private meshBuilds = 0;
+  /** the meshes made ahead in the worker (the next window's), by key; the one asked and not back yet */
+  private meshWorker: Worker | null | undefined;
+  private meshReady = new Map<string, RasterMesh>();
+  private meshAsked = "";
+  /** the patch's meshes taken ready from the worker, made in the frame (none ready), the worker's last time [ms] */
+  private meshAhead = 0;
+  private meshInFrame = 0;
+  private meshWorkerMs = 0;
   private conforming = false;
   private cutVertices = 0;
   private cutTriangles = 0;
@@ -511,6 +526,38 @@ export class TerrainRaster {
   }
 
   /**
+   * The patch's mesh for the window the cache moves to next (TerrainCache.upcomingWindow), made in a worker ahead of the move;
+   * taken by encodeVisibility when that window comes. Without a worker (one failed to start): nothing, the mesh made in the frame.
+   */
+  prepare(level: number, window: TerrainWindow | null, runways: Float32Array) {
+    if (!window || this.disposed) return;
+    const key = `${level}:${window.i}:${window.j}:${runwayMeshKey(runways)}`;
+    if (key === this.meshKey || key === this.meshAsked || this.meshReady.has(key)) return;
+    if (this.meshWorker === undefined) {
+      try {
+        this.meshWorker = new Worker(new URL("terrain-mesh-worker.js", location.href), { type: "module" });
+        this.meshWorker.onmessage = (e: MessageEvent<MeshReply>) => {
+          if (e.data.key === this.meshAsked) this.meshAsked = "";
+          this.meshWorkerMs = e.data.ms;
+          // (two kept at most: the next window's, and one the motion turned from)
+          this.meshReady.set(e.data.key, e.data.mesh);
+          while (this.meshReady.size > 2) this.meshReady.delete(this.meshReady.keys().next().value!);
+        };
+        this.meshWorker.onerror = () => {
+          this.meshWorker?.terminate();
+          this.meshWorker = null;
+        };
+      } catch {
+        this.meshWorker = null;
+      }
+    }
+    if (!this.meshWorker) return;
+    this.meshAsked = key;
+    const q: MeshRequest = { key, level, window, runways: runways.slice() };
+    this.meshWorker.postMessage(q);
+  }
+
+  /**
    * The patch's visibility pass: its metric distances in a texture the tracer's ground march can start from, and
    * the inspector's. False: nothing was drawn (compiling, no room, a target retiring), the texture not to be read.
    */
@@ -539,7 +586,12 @@ export class TerrainRaster {
     }
     const key = `${level}:${window.i}:${window.j}:${runwayMeshKey(runways)}`;
     if (key !== this.meshKey) {
-      const mesh = terrainRasterMesh(window, level, runways);
+      // (made ahead in the worker for this window — none: made here, in the frame)
+      const ready = this.meshReady.get(key);
+      const mesh = ready ?? terrainRasterMesh(window, level, runways);
+      if (ready) this.meshAhead++;
+      else this.meshInFrame++;
+      this.meshReady.delete(key);
       this.device.queue.writeBuffer(this.vertex!, 0, mesh.vertices);
       this.device.queue.writeBuffer(this.index!, 0, mesh.indices);
       this.indexCount = mesh.indices.length;
@@ -880,6 +932,9 @@ export class TerrainRaster {
       columns: this.columns,
       rows: this.rows,
       meshBuilds: this.meshBuilds,
+      meshAhead: this.meshAhead,
+      meshInFrame: this.meshInFrame,
+      meshWorkerMs: +this.meshWorkerMs.toFixed(1),
       conforming: this.conforming,
       cutVertices: this.cutVertices,
       cutTriangles: this.cutTriangles,
@@ -895,6 +950,9 @@ export class TerrainRaster {
 
   dispose() {
     this.disposed = true;
+    this.meshWorker?.terminate();
+    this.meshWorker = null;
+    this.meshReady.clear();
     this.idle("disposed");
     this.uniform?.destroy();
     this.sunDepth.destroy();

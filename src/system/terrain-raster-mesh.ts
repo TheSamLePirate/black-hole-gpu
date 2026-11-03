@@ -181,7 +181,19 @@ export function runwayOutlines(window: TerrainWindow, level: number, runways: Fl
  * heading. A cut point on a shared side is computed from the outline and that side alone, so both
  * neighbours get the very same vertex: no T junction, no crack.
  */
+/** the plain grids (no runway: the same for every window of a level — the rings' meshes), made once a level; shared, not to be written */
+const plainGrids = new Map<number, RasterMesh>();
+
 export function terrainRasterMesh(window: TerrainWindow, level: number, runways: Float32Array): RasterMesh {
+  if (runwayCount(runways) === 0) {
+    let m = plainGrids.get(level);
+    if (!m) {
+      const { grid: _grid, ...mesh } = rectilinearMesh(level, [], 1e-4);
+      m = mesh;
+      plainGrids.set(level, m);
+    }
+    return m;
+  }
   const quads = runwayOutlines(window, level, runways);
   if (quads.length) {
     // Only the outline corners need vertices: the cuts supply everything else.
@@ -224,18 +236,43 @@ function conformMesh(base: Rectilinear, quads: Pt[][]): RasterMesh | null {
     }
   // The side hits and the chords, per cell.
   const cell = new Map<number, { hits: Pt[]; chords: [Pt, Pt][] }>();
+  // (the cells' span over [lo, hi], a cell of margin each side — by bisection: the knots sorted)
   const range = (values: number[], lo: number, hi: number): [number, number] => {
-    let a = 0;
-    while (a + 2 < values.length && values[a + 1]! <= lo) a++;
-    let b = a;
-    while (b + 1 < values.length - 1 && values[b + 1]! < hi) b++;
+    const below = (v: number, strict: boolean) => {
+      // (the last cell index c in 0 … n − 2 with values[c + 1] (<, ≤) v — the cells passed)
+      let l = 0,
+        h = values.length - 2;
+      while (l < h) {
+        const m = (l + h + 1) >> 1;
+        if (strict ? values[m]! < v : values[m]! <= v) l = m;
+        else h = m - 1;
+      }
+      return l;
+    };
+    const a = Math.min(below(lo, false), values.length - 2),
+      b = Math.max(a, below(hi, true));
     return [Math.max(0, a - 1), Math.min(values.length - 2, b + 1)];
   };
   for (const edge of edges) {
     const [ia, ib] = range(xs, Math.min(edge.p[0], edge.q[0]), Math.max(edge.p[0], edge.q[0]));
     const [ja, jb] = range(ys, Math.min(edge.p[1], edge.q[1]), Math.max(edge.p[1], edge.q[1]));
-    for (let j = ja; j <= jb; j++)
-      for (let i = ia; i <= ib; i++) {
+    const [px, py] = edge.p,
+      [qx, qy] = edge.q;
+    for (let j = ja; j <= jb; j++) {
+      // (only the cells the side crosses in this row — its x over the row's band, a cell of margin —: a diagonal side's
+      // bounding box was the whole 257-node patch, every cell of it tested)
+      let x0 = Math.min(px, qx),
+        x1 = Math.max(px, qx);
+      if (qy !== py) {
+        const t0 = Math.max(0, Math.min(1, (ys[j]! - py) / (qy - py))),
+          t1 = Math.max(0, Math.min(1, (ys[j + 1]! - py) / (qy - py)));
+        const xa = px + t0 * (qx - px),
+          xb = px + t1 * (qx - px);
+        x0 = Math.min(xa, xb);
+        x1 = Math.max(xa, xb);
+      }
+      const [ra, rb] = range(xs, x0, x1);
+      for (let i = Math.max(ia, ra); i <= Math.min(ib, rb); i++) {
         const { hits, chord } = cellHits(edge, xs[i]!, xs[i + 1]!, ys[j]!, ys[j + 1]!);
         if (!hits.length) continue;
         const key = j * (columns - 1) + i;
@@ -244,6 +281,7 @@ function conformMesh(base: Rectilinear, quads: Pt[][]): RasterMesh | null {
         entry.hits.push(...hits);
         if (chord) entry.chords.push(chord);
       }
+    }
   }
   if (!cell.size) return null;
 
@@ -371,7 +409,12 @@ function conformMesh(base: Rectilinear, quads: Pt[][]): RasterMesh | null {
     for (let i = 0; i < columns - 1; i++) {
       if (cell.has(j * (columns - 1) + i)) continue;
       const a = j * columns + i;
-      indices.set([a, a + 1, a + columns, a + 1, a + columns + 1, a + columns], n);
+      indices[n] = a;
+      indices[n + 1] = a + 1;
+      indices[n + 2] = a + columns;
+      indices[n + 3] = a + 1;
+      indices[n + 4] = a + columns + 1;
+      indices[n + 5] = a + columns;
       n += 6;
     }
   indices.set(triangles, n);
@@ -414,17 +457,28 @@ function rectilinearMesh(level: number, points: Pt[], merge: number): Rectilinea
   const vertices = new Float32Array(x.length * y.length * 3);
   const step = (values: number[], i: number) =>
     Math.max(i ? values[i]! - values[i - 1]! : 0, i + 1 < values.length ? values[i + 1]! - values[i]! : 0);
-  for (let j = 0; j < y.length; j++)
-    for (let i = 0; i < x.length; i++) {
-      vertices.set([x[i]!, y[j]!, Math.max(0.05, (WGS84_A / per / 2) * Math.max(step(x, i), step(y, j)))], 3 * (j * x.length + i));
+  // (written in place — an array a vertex made the 257-node patch's mesh 4 × slower)
+  const sx = x.map((_, i) => step(x, i)),
+    half = WGS84_A / per / 2;
+  for (let j = 0, o = 0; j < y.length; j++) {
+    const sy = step(y, j);
+    for (let i = 0; i < x.length; i++, o += 3) {
+      vertices[o] = x[i]!;
+      vertices[o + 1] = y[j]!;
+      vertices[o + 2] = Math.max(0.05, half * Math.max(sx[i]!, sy));
     }
+  }
   const indices = new Uint32Array((x.length - 1) * (y.length - 1) * 6);
   let n = 0;
   for (let j = 0; j < y.length - 1; j++)
-    for (let i = 0; i < x.length - 1; i++) {
+    for (let i = 0; i < x.length - 1; i++, n += 6) {
       const a = j * x.length + i;
-      indices.set([a, a + 1, a + x.length, a + 1, a + x.length + 1, a + x.length], n);
-      n += 6;
+      indices[n] = a;
+      indices[n + 1] = a + 1;
+      indices[n + 2] = a + x.length;
+      indices[n + 3] = a + 1;
+      indices[n + 4] = a + x.length + 1;
+      indices[n + 5] = a + x.length;
     }
   return {
     vertices,

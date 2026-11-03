@@ -7,6 +7,7 @@ import { EARTH_SETTINGS, sceneryReady } from "./lib/plan-views";
 // autopilot holding 450 m at 120 m/s, the tiles streaming in — the IGN's z 15 … 17 over France), the raster pipeline; the bakes
 // counted by level and by cause (terrain-cache.ts stats: a window moved, or newer tiles), their GPU time, the frame time. Shots
 // at the start and the end. Figures in remote-results/terrain-bakes/<tag>/ (TB_TAG, or the A/B's side and run).
+// Done when: the 20 s flight is flown (TB_FLIGHT_S) and its end shot taken — the tiles waited 60 s at most, the scenery 120 s.
 // Duration: ~2 min (this Mac).
 const SIDE = process.env.AB_SIDE ?? "",
   RUN = process.env.AB_RUN ?? "";

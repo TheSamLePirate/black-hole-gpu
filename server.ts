@@ -117,6 +117,11 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
+    "/terrain-mesh-worker.js": async () => {
+      const r = await Bun.build({ entrypoints: ["./src/system/terrain-mesh-worker.ts"], target: "browser", minify: !dev });
+      if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
+      return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
+    },
     "/scenery-worker.js": async () => {
       const r = await Bun.build({ entrypoints: ["./src/system/scenery-worker.ts"], target: "browser", minify: !dev });
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });

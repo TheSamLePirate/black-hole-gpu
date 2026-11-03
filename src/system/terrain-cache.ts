@@ -9,6 +9,8 @@ import {
   TERRAIN_CACHE_ROUNDS,
   type TerrainWindow,
   terrainWindow,
+  terrainWindowHolds,
+  terrainWindowNext,
   terrainWindowParams,
 } from "./terrain-cache-layout";
 
@@ -241,6 +243,11 @@ export class TerrainCache {
   private uniforms: GPUBuffer[] = [];
   private outputs: GPUBindGroup[] = [];
   private windows: (TerrainWindow | null)[] = Array(TERRAIN_CACHE_LEVELS).fill(null);
+  /** each level's next window, decided ahead (terrainWindowNext) and taken when the window moves if it holds the camera */
+  private upcoming: (TerrainWindow | null)[] = Array(TERRAIN_CACHE_LEVELS).fill(null);
+  /** windows moved to the one decided ahead, and to another (the motion turned) */
+  upcomingTaken = 0;
+  upcomingMissed = 0;
   private ready = Array<boolean>(TERRAIN_CACHE_LEVELS).fill(false);
   /** a level baked from tiles since replaced (a finer one streamed in): still drawn, baked again in turn — not dropped, or
    *  the far rings went back to the camera's marches for frames at every tile (a cost spike, a pop) */
@@ -362,7 +369,25 @@ export class TerrainCache {
     const dir: [number, number] | null = speed > 1e-7 ? [this.motion[0] / speed, this.motion[1] / speed] : null;
     for (let k = 0; k < TERRAIN_CACHE_LEVELS; k++) {
       const previous = this.windows[k]!;
-      const w = at ? terrainWindow(previous, at.lon, at.lat, TERRAIN_CACHE_ROUNDS[k]!, dir) : null;
+      const round = TERRAIN_CACHE_ROUNDS[k]!;
+      let w = at ? terrainWindow(previous, at.lon, at.lat, round, dir) : null;
+      // (moved: to the window decided ahead if it holds the camera — its mesh made for it meanwhile —, else where it is)
+      const up = this.upcoming[k];
+      if (w && w !== previous && previous && at) {
+        if (up && terrainWindowHolds(up, at.lon, at.lat, round)) {
+          w = up;
+          this.upcomingTaken++;
+        } else if (up) this.upcomingMissed++;
+        this.upcoming[k] = null;
+      }
+      // (the next one decided near the edge and kept — its mesh made once —; dropped when the edge is far again or at rest,
+      // replaced when the motion turned toward another place: 8 nodes off)
+      if (w && at) {
+        const next = terrainWindowNext(w, at.lon, at.lat, round, dir),
+          kept = this.upcoming[k];
+        if (!next) this.upcoming[k] = null;
+        else if (!kept || Math.abs(kept.i - next.i) > 8 || Math.abs(kept.j - next.j) > 8) this.upcoming[k] = next;
+      }
       // (a window moved: its bake elsewhere — not drawn until baked again)
       if (w !== previous) this.ready[k] = false;
       this.windows[k] = w;
@@ -507,6 +532,12 @@ export class TerrainCache {
   }
 
   /** Ready in the current submission, including any bake/copy encoded before the pilot's draw. */
+  /** the level's next window, decided ahead (null: none yet) — the patch's mesh made for it before the window moves */
+  upcomingWindow(level: number): TerrainWindow | null {
+    const w = this.upcoming[level];
+    return w ? { ...w } : null;
+  }
+
   levelWindow(level: number): TerrainWindow | null {
     const window = this.windows[level];
     return this.ready[level] && window ? { ...window } : null;

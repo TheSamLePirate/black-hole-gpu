@@ -412,28 +412,28 @@ const PATH_OFF = 1786u; // LUT_OFF + LUT_N + SYNC_N
 const WARP_OFF = 3115u;
 // the incident Sun (R3, contract C0-5: gpu-tables.ts TABLE_SUN + 5, renderer.ts incidentSun): the geometric one lifted by the
 // refraction at the ground under the camera, faded out by 10° up — xyz on the body's axes, w 1 when set
-const SUNI_OFF = 822856u;
+const SUNI_OFF = 921672u;
 // the clear sky's light, physical (gpu-tables.ts TABLE_SKY; kernel skyAmbient writes it, skyIrradiance reads it)
-const SKY_OFF = 822859u;
+const SKY_OFF = 921675u;
 // the geoid's map (gpu-tables.ts TABLE_GEOID, system/geoid-grid.ts): N [m], GEOID_W × GEOID_H nodes, four a vec4
-const GEOID_OFF = 822971u;
+const GEOID_OFF = 921787u;
 // Saturn's rings' optical depth every kilometre (gpu-tables.ts TABLE_RING, system/ring-profile.ts — Cassini's): RING_N values
 // from RING_R0_KM, four a vec4, −1 where none
-const RING_OFF = 1082185u;
+const RING_OFF = 1181001u;
 const RING_N = 71100u;
 const RING_R0_KM = 69800.0;
 // (its first kilometre measured: the C ring's inner edge before it none; then the sums of its opacity — gpu-tables.ts
 // TABLE_RINGSUM —, RING_N + 1 values)
 const RING_FIRST_KM = 72761.0;
-const RINGSUM_OFF = 1099997u;
+const RINGSUM_OFF = 1198813u;
 // (the giants' cloud tops by latitude — gpu-tables.ts TABLE_TOPS, system/giant-tops.ts —: four profiles of 181 values)
-const TOPS_OFF = 1117773u;
+const TOPS_OFF = 1216589u;
 // the giants' zonal winds (gpu-tables.ts TABLE_WIND, system/giant-winds.ts): 146 values, four a vec4
-const WIND_OFF = 1099960u;
+const WIND_OFF = 1198776u;
 const GEOID_W = 1440u;
 const GEOID_H = 720u;
 // the orthophotos' levels (gpu-tables.ts TABLE_ORTHO, system/earth-tiles.ts orthoParams): three vec4s each
-const ORTHO_OFF = 1082171u;
+const ORTHO_OFF = 1180987u;
 const ORTHO_LEVELS = 4u;
 const WARP_LEVELS = 3u;
 const WARP_N = 512u;

@@ -4,7 +4,7 @@ import { WGS84_A } from "./ellipsoid";
 // Eight bounded, world-fixed grids. Two vec4s of metadata and one scalar height per node. Their nodes 1.2, 2.4, 9.5, 38,
 // 153, 611 m … apart (a whole turn of the equator in so many): each four times the next finer's — the last two, 1.2 and
 // 2.4 m, twice (I3: the IGN's relief near the raster's camera, docs/ANALYSE-IGN-LIDAR.md).
-export const TERRAIN_CACHE_N = 129;
+export const TERRAIN_CACHE_N = 257;
 export const TERRAIN_CACHE_ROUNDS = [2 ** 25, 2 ** 24, 2 ** 22, 2 ** 20, 2 ** 18, 2 ** 16, 2 ** 14, 2 ** 12] as const;
 /** the level the raster's patch was before I3 (153 m nodes, ~20 km): its tolerances and shading rate the reference — finer
  *  levels are drawn as it was, coarser ones as its far rings were (trace.wgsl RHINT_TOL, TUNE_RING_RATE) */
@@ -50,6 +50,42 @@ export function terrainWindow(
   const lx = dir ? dir[0] * TERRAIN_CACHE_LEAD : 0,
     ly = dir ? dir[1] * TERRAIN_CACHE_LEAD : 0;
   return { i: Math.floor(x + lx) - centre, j: Math.floor(y + ly) - centre };
+}
+
+/**
+ * The window a level will move to next — the camera still in its window, within half the hold distance (64 nodes with
+ * 257) of the edge it moves toward: where it will cross, and the window terrainWindow places there, led along the motion.
+ * Null: at rest, or the edge still far. The cache commits to it (TerrainCache.upcomingWindow): the patch's mesh — cut
+ * along the runways on the CPU — made for it ahead, in a worker, ready when the window moves.
+ */
+export function terrainWindowNext(
+  previous: TerrainWindow,
+  lon: number,
+  lat: number,
+  round: number,
+  dir: readonly [number, number] | null,
+): TerrainWindow | null {
+  if (!dir || !Number.isFinite(lon + lat)) return null;
+  const per = round / (2 * Math.PI);
+  const centre = (TERRAIN_CACHE_N - 1) / 2,
+    hold = centre / 2;
+  let x = lon * per;
+  const y = lat * per;
+  x += Math.round((previous.i + centre - x) / round) * round;
+  // (the nodes along the motion to the hold box's edge, each axis)
+  const toEdge = (p: number, c: number, d: number) => (d > 1e-9 ? (c + hold - p) / d : d < -1e-9 ? (c - hold - p) / d : Infinity);
+  const t = Math.min(toEdge(x, previous.i + centre, dir[0]), toEdge(y, previous.j + centre, dir[1]));
+  if (!Number.isFinite(t) || t < 0 || t > hold) return null;
+  // (a node past the edge: there, the window terrainWindow would place)
+  const cx = x + dir[0] * (t + 1),
+    cy = y + dir[1] * (t + 1);
+  const next = { i: Math.floor(cx + dir[0] * TERRAIN_CACHE_LEAD) - centre, j: Math.floor(cy + dir[1] * TERRAIN_CACHE_LEAD) - centre };
+  return Math.abs(next.j + centre) <= TERRAIN_CACHE_MAX_LAT * per + centre ? next : null;
+}
+
+/** Whether a window still holds the camera (terrainWindow would keep it). */
+export function terrainWindowHolds(window: TerrainWindow, lon: number, lat: number, round: number): boolean {
+  return terrainWindow(window, lon, lat, round) === window;
 }
 
 /** Reference and scale in the tracer's table; ready is published only with the matching GPU copy. */

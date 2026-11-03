@@ -1,7 +1,16 @@
 import { expect, test } from "bun:test";
 import type { TileChange } from "../src/system/earth-tiles";
 import { changeInRing } from "../src/system/terrain-cache";
-import { TERRAIN_CACHE_LEVELS, TERRAIN_CACHE_ROUNDS, type TerrainWindow, terrainWindow } from "../src/system/terrain-cache-layout";
+import {
+  TERRAIN_CACHE_LEAD,
+  TERRAIN_CACHE_LEVELS,
+  TERRAIN_CACHE_N,
+  TERRAIN_CACHE_ROUNDS,
+  terrainWindowHolds,
+  terrainWindowNext,
+  type TerrainWindow,
+  terrainWindow,
+} from "../src/system/terrain-cache-layout";
 
 // T4 — where a change of the tiles falls for each level of the relief cache (terrain-cache.ts changeInRing): in the ring the
 // level draws (baked again at once), hidden under the finer levels (coalesced), or outside its window.
@@ -27,13 +36,13 @@ test("a tile's change at the camera: visible in the finest levels, hidden under 
   for (let k = 3; k < TERRAIN_CACHE_LEVELS; k++) expect(w[k]).toBe("hidden");
 });
 
-test("a change 25 km out: outside the fine windows, visible in the ring that holds it", () => {
-  // (25 km east: past the 153 m level's window, inside the 611 m level's — ±27 km east–west at 46°: the lattice's longitudes
-  // shrink with cos(lat) —, in its ring; the 2.4 km level's ring too — its inner band, the 611 m window less 17 nodes, ±20 km
-  // —; hidden under them for the 9.8 km level)
-  const c = change(lat, lon + 25_000 / (6.371e6 * Math.cos(lat)), 1000, 11);
+test("a change 50 km out: outside the fine windows, visible in the ring that holds it", () => {
+  // (50 km east, with windows of 257 nodes: past the 153 m level's window, inside the 611 m level's — ±54 km east–west at 46°:
+  // the lattice's longitudes shrink with cos(lat) —, in its ring; the 2.4 km level's ring too — its inner band, the 611 m
+  // window less 17 nodes, ±47 km —; hidden under them for the 9.8 km level)
+  const c = change(lat, lon + 50_000 / (6.371e6 * Math.cos(lat)), 1000, 11);
   const w = windows.map((_, k) => changeInRing(k, c, windows, ready));
-  console.log(`  25 km east: ${w.join(", ")}`);
+  console.log(`  50 km east: ${w.join(", ")}`);
   for (let k = 0; k <= 4; k++) expect(w[k]).toBe("none");
   expect(w[5]).toBe("visible");
   expect(w[6]).toBe("visible");
@@ -43,7 +52,7 @@ test("a change 25 km out: outside the fine windows, visible in the ring that hol
 test("a change across the inner window's edge, a finer level not ready, every level (z −1), the antimeridian: visible", () => {
   // (a box straddling the 38 m level's window edge: visible in the 153 m level's ring)
   const per = TERRAIN_CACHE_ROUNDS[3] / (2 * Math.PI);
-  const edgeLon = (windows[3]!.i + 128) / per;
+  const edgeLon = (windows[3]!.i + TERRAIN_CACHE_N - 1) / per;
   expect(changeInRing(4, change(lat, edgeLon, 500, 13), windows, ready)).toBe("visible");
   const notReady = [...ready];
   notReady[3] = false;
@@ -58,7 +67,7 @@ test("a change across the inner window's edge, a finer level not ready, every le
   expect(changeInRing(6, c, w2, ready)).toBe("hidden");
 });
 
-test("a window placed ahead along the motion: the camera crosses 56 nodes before it moves again, not 32", () => {
+test("a window placed ahead along the motion: the camera crosses a quarter of the window and the lead before it moves again", () => {
   const round = TERRAIN_CACHE_ROUNDS[0];
   const node = (2 * Math.PI) / round;
   const travel = (dir: [number, number] | null) => {
@@ -82,6 +91,39 @@ test("a window placed ahead along the motion: the camera crosses 56 nodes before
   const centred = travel(null),
     ahead = travel([1, 0]);
   console.log(`  nodes crossed between two moves: centred ${centred}, ahead ${ahead}`);
-  expect(centred).toBeCloseTo(32, 0);
-  expect(ahead).toBeCloseTo(56, 0);
+  // (a quarter of the window — 64 nodes with 257 —, and the lead on top ahead: 88)
+  expect(centred).toBeCloseTo((TERRAIN_CACHE_N - 1) / 4, 0);
+  expect(ahead).toBeCloseTo((TERRAIN_CACHE_N - 1) / 4 + TERRAIN_CACHE_LEAD, 0);
+});
+
+test("the next window decided ahead is the one taken: straight flights in eight directions, every move foreseen", () => {
+  // (the camera flown straight at 1/7 node a step; near each edge the next window decided — terrainWindowNext —, then at the
+  // move kept if it holds the camera — as the cache does —: every move along a straight line foreseen and taken)
+  const round = TERRAIN_CACHE_ROUNDS[0]!,
+    node = (2 * Math.PI) / round;
+  for (let a = 0; a < 8; a++) {
+    const dir: [number, number] = [Math.cos((a * Math.PI) / 4 + 0.3), Math.sin((a * Math.PI) / 4 + 0.3)];
+    let x = lon,
+      y = lat,
+      w = terrainWindow(null, x, y, round, dir)!,
+      up: TerrainWindow | null = null,
+      moves = 0,
+      taken = 0;
+    for (let n = 0; n < 4000; n++) {
+      x += (dir[0] * node) / 7;
+      y += (dir[1] * node) / 7;
+      const w2 = terrainWindow(w, x, y, round, dir)!;
+      if (w2 !== w) {
+        moves++;
+        if (up && terrainWindowHolds(up, x, y, round)) {
+          taken++;
+          w = up;
+        } else w = w2;
+        up = null;
+      }
+      up ??= terrainWindowNext(w, x, y, round, dir);
+    }
+    expect(moves).toBeGreaterThan(2);
+    expect(taken).toBe(moves);
+  }
 });

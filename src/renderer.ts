@@ -8926,6 +8926,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         sc.nodeCount,
       );
     }
+    // (the patch's mesh for the window the cache moves to next, made ahead in a worker: no cut made in the frame)
+    const runwayVec = this.paramsF.subarray((69 + TILE_PARAM_VEC4S) * 4, (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4);
+    this.terrainRaster.prepare(level, this.terrainSurfaceCache?.upcomingWindow(level) ?? null, runwayVec);
     const drawn = this.terrainRaster.encodeVisibility(
       enc,
       {
@@ -8938,7 +8941,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       frame,
       level,
       window,
-      this.paramsF.subarray((69 + TILE_PARAM_VEC4S) * 4, (69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S) * 4),
+      runwayVec,
       (label, descriptor) => this.prof.pass(label, descriptor),
       trees ? (pass) => this.sceneryRaster!.draw(pass) : undefined,
       (this.lastRings = this.terrainRings(frame, level, window, target, s)),
