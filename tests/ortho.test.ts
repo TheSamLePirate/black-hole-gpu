@@ -1,5 +1,15 @@
 import { expect, test } from "bun:test";
-import { LEVELS, ORTHO_BINDINGS, orthoColour, orthoUrl, tileLayout, withOrthoImagery } from "../src/system/earth-tiles";
+import {
+  eoxColour,
+  LEVELS,
+  ORTHO_BINDINGS,
+  ORTHO_FIT,
+  orthoColour,
+  orthoUrl,
+  tileLayout,
+  withOrthoImagery,
+} from "../src/system/earth-tiles";
+import { imageryWords, orthoWords } from "../src/system/tile-decode";
 
 test("the orthophotos' colours: the survey's brightness brought to the Earth's, a white kept white, a dark field greened", () => {
   const [r, g, b] = orthoColour(255, 255, 255);
@@ -35,4 +45,33 @@ test("the orthophotos out of the relief's texture (T9a: their own filtered textu
   expect(orthoUrl(17, 66391, 45092)).toContain(
     "LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX=17&TILEROW=45092&TILECOL=66391",
   );
+});
+
+test("T8a: a tile's words as the decode worker makes them — the colours' fits per pixel, the lights in alpha, no image never 0", () => {
+  const n = 256 * 256;
+  const day = new Uint8ClampedArray(4 * n),
+    night = new Uint8ClampedArray(4 * n);
+  for (let i = 0; i < n; i++) {
+    day.set([(i * 7) % 256, (i * 13) % 256, (i * 29) % 256, 255], 4 * i);
+    night.set([(i * 3) % 256, 0, 0, i % 2 ? 255 : 0], 4 * i);
+  }
+  const eox = imageryWords(day, night, null, true),
+    gibs = imageryWords(day, night, null, false),
+    photo = imageryWords(day, night, ORTHO_FIT, true),
+    ortho = orthoWords(day, ORTHO_FIT);
+  for (const i of [0, 1, 777, 4242, 65535]) {
+    const [r, g, b] = [day[4 * i]!, day[4 * i + 1]!, day[4 * i + 2]!];
+    const [er, eg, eb] = eoxColour(r, g, b);
+    expect(eox[i]! & 0xffffff).toBe((Math.max(er, 1) | (eg << 8) | (eb << 16)) >>> 0);
+    expect(gibs[i]! & 0xffffff).toBe((Math.max(r, 1) | (g << 8) | (b << 16)) >>> 0);
+    const [or, og, ob] = orthoColour(r, g, b, ORTHO_FIT);
+    expect(photo[i]! & 0xffffff).toBe((Math.max(or, 1) | (og << 8) | (ob << 16)) >>> 0);
+    expect(ortho[i]! >>> 24).toBe(255);
+    // (the lights: none where the night's alpha is 0)
+    if (i % 2 === 0) expect(eox[i]! >>> 24).toBe(0);
+  }
+  // (the tone curve tabulated: a white kept neutral, the survey's brightness brought down as before — 233)
+  const [wr, wg, wb] = orthoColour(255, 255, 255);
+  expect(Math.max(wr, wg, wb) - Math.min(wr, wg, wb)).toBeLessThanOrEqual(1);
+  expect(wg).toBe(233);
 });

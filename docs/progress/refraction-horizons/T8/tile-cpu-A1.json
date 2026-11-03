@@ -1,0 +1,19 @@
+{
+  "tag": "A1",
+  "flight": {
+    "s": 25.1,
+    "frames": 783,
+    "tilesLoaded": 288,
+    "pending": 255,
+    "orthoPending": 38,
+    "cpu": {},
+    "longTasks": {
+      "n": 1,
+      "totalMs": 75,
+      "worst": [
+        75
+      ]
+    }
+  },
+  "gpuErrors": 0
+}

@@ -1,0 +1,40 @@
+{
+  "tag": "B3",
+  "flight": {
+    "s": 25.1,
+    "frames": 867,
+    "tilesLoaded": 296,
+    "pending": 274,
+    "orthoPending": 31,
+    "cpu": {
+      "decode": {
+        "ms": 0,
+        "max": 0,
+        "n": 0
+      },
+      "colour": {
+        "ms": 0,
+        "max": 0,
+        "n": 0
+      },
+      "put": {
+        "ms": 280.7,
+        "max": 2.4,
+        "n": 584
+      },
+      "worker": {
+        "ms": 2167.7,
+        "max": 22,
+        "n": 584
+      }
+    },
+    "longTasks": {
+      "n": 1,
+      "totalMs": 103,
+      "worst": [
+        103
+      ]
+    }
+  },
+  "gpuErrors": 0
+}

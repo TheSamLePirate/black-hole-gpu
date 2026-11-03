@@ -29,7 +29,9 @@
 import type { Vec3 } from "../physics";
 import { cartToGeodetic, geodeticDirAt, squashedScale, WGS84_A, WGS84_F } from "./ellipsoid";
 import { IGN_GATE_SW } from "./scenery-data";
-import { type NationalSource, type OrthoFit, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
+import { type NationalSource, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
+import { type DecodeReply, type DecodeRequest, decodeTile, ORTHO_FIT, pixels as decodePixels } from "./tile-decode";
+export { EOX_FIT, eoxColour, ORTHO_FIT, orthoColour } from "./tile-decode";
 
 export const TILE = 256;
 /** tiles along a level's window (the normal detail's reach; a farther one, EarthTiles.setReach: 8 on the fine levels) */
@@ -294,49 +296,6 @@ fn srgb(c: vec3f) -> vec3f { return select(1.055 * pow(c, vec3f(1.0 / 2.4)) - 0.
   return vec4f(srgb(c.rgb), c.a);
 }`;
 
-/**
- * The orthophotos' colours (an aerial survey's, graded bright: 2.7 times the ground's on average) into the Blue
- * Marble's, which the tracer's ground and the coarser levels have — a tone curve on the luminance L′ = a·L^b and the
- * colours' gains, fitted on twelve places' z 14 tiles against EOX's own brought there (fields, forests, vineyards,
- * marshes, towns, the Alps; their distributions matched — the surveys' dates and seasons differ, no pixel's twin):
- * means within 4 %, a white kept white. The gains fade out over the bright ground (snow, roofs, roads), as EOX's
- * fit; sRGB 8-bit in and out.
- */
-export const ORTHO_FIT = { tone: [0.8112, 1.4753], chroma: [0.8232, 1.0999, 0.3872] } as const;
-export function orthoColour(r: number, g: number, b: number, fit: OrthoFit = ORTHO_FIT): [number, number, number] {
-  const e = [LIN[r]!, LIN[g]!, LIN[b]!];
-  const L = 0.2126 * e[0]! + 0.7152 * e[1]! + 0.0722 * e[2]!;
-  if (L <= 0) return [0, 0, 0];
-  const Lo = fit.tone[0] * L ** fit.tone[1];
-  const x = Math.min(1, Math.max(0, (Lo - 0.06) / 0.29)),
-    t = x * x * (3 - 2 * x);
-  const out = (c: number) => TO_SRGB[Math.round(4095 * Math.min(1, ((e[c]! * Lo) / L) * (fit.chroma[c]! * (1 - t) + t)))]!;
-  return [out(0), out(1), out(2)];
-}
-
-/**
- * EOX's colours (a mosaic graded for the eye: hazier, bluer) into the Blue Marble's, whose colours the
- * tracer's ground and the coarser levels have — per channel in linear light, b = g · e^k, fitted on nine
- * places' z 8 tiles (forests, farmland, desert, tundra, cities: R² 0.96, 0.94, 0.86), where it was measured:
- * the darker ground. Bright ground (snow, sand, rock, towns) is left as it is — the fit's extrapolation would
- * tint it cyan —, the two blended by the pixel's luminance (no hue moved by a channel's own weight).
- * sRGB 8-bit in, out.
- */
-export const EOX_FIT = { gain: [0.894, 1.548, 3.877], power: [0.959, 1.205, 1.487] } as const;
-const srgbToLinear = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
-const linearToSrgb = (v: number) => (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055);
-const LIN = Float32Array.from({ length: 256 }, (_, i) => srgbToLinear(i / 255));
-const FIT = [0, 1, 2].map((c) => Float32Array.from(LIN, (v) => Math.min(1, EOX_FIT.gain[c]! * v ** EOX_FIT.power[c]!)));
-const TO_SRGB = Uint8Array.from({ length: 4096 }, (_, i) => Math.round(255 * linearToSrgb(i / 4095)));
-export function eoxColour(r: number, g: number, b: number): [number, number, number] {
-  const e = [LIN[r]!, LIN[g]!, LIN[b]!];
-  const lum = 0.2126 * e[0]! + 0.7152 * e[1]! + 0.0722 * e[2]!;
-  const x = Math.min(1, Math.max(0, (lum - 0.06) / 0.29)),
-    t = x * x * (3 - 2 * x);
-  const out = (c: number, v: number) => TO_SRGB[Math.round(4095 * Math.min(1, FIT[c]![v]! * (1 - t) + e[c]! * t))]!;
-  return [out(0, r), out(1, g), out(2, b)];
-}
-
 /** Mercator's y [tiles, 0 at the north edge] of a latitude's sine, at a level of n tiles. */
 const mercY = (sinLat: number, n: number) => (0.5 - Math.atanh(Math.min(Math.max(sinLat, -0.999999), 0.999999)) / TAU) * n;
 
@@ -391,22 +350,84 @@ interface OrthoLevel {
   key: (string | null)[];
 }
 
-/** A tile's pixels (rgba, row by row), as they are in its file — or a square of it (x, y, side [px]) enlarged. */
+/**
+ * The tiles' work on the page's thread (T8 — the plan's "no long task of the main thread due to the tiles"): each kind's
+ * total and its longest piece [ms], the pieces counted — the decoding (a bitmap drawn and read back, Terrarium's heights),
+ * the colours (EOX's and the orthophotos' fits, the lights), the writes (put: the texels packed and sent). EarthTiles.cpu.
+ */
+export const TILE_CPU = {
+  decode: { ms: 0, max: 0, n: 0 },
+  colour: { ms: 0, max: 0, n: 0 },
+  put: { ms: 0, max: 0, n: 0 },
+  worker: { ms: 0, max: 0, n: 0 },
+};
+/** (the decode worker's own time: off the page's thread — TILE_CPU.worker) */
+function cpuOf(kind: keyof typeof TILE_CPU, t0: number) {
+  const ms = performance.now() - t0,
+    c = TILE_CPU[kind];
+  c.ms += ms;
+  c.n++;
+  if (ms > c.max) c.max = ms;
+}
+
+/**
+ * The decode worker (T8a, tile-decode-worker.js): the tiles' bitmaps read back, Terrarium's heights, the imagery's colours — off
+ * the page's thread (they took 1.6 s of it in 25 s of a low flight over Paris, a tile's colours up to 9 ms). One for the page,
+ * its replies by id; none (the tests, a worker refused or failed): the same work in the page.
+ */
+let decoder: Worker | null | undefined;
+const decodeWaiting = new Map<number, { ok: (r: DecodeReply) => void; no: (e: Error) => void }>();
+let decodeId = 1;
+function decodeWorker(): Worker | null {
+  if (decoder !== undefined) return decoder;
+  decoder = null;
+  if (typeof Worker === "undefined" || typeof location === "undefined") return null;
+  try {
+    const w = new Worker(new URL("tile-decode-worker.js", location.href), { type: "module" });
+    w.onmessage = (e: MessageEvent<DecodeReply>) => decodeWaiting.get(e.data.id)?.ok(e.data);
+    w.onerror = (e) => {
+      // (failed: the waiting ones refused — their tiles asked again —, the work in the page from now)
+      console.warn("Tile decode worker failed — decoding in the page:", e.message);
+      decoder = null;
+      for (const [, q] of decodeWaiting) q.no(new Error("decode worker failed"));
+      decodeWaiting.clear();
+    };
+    decoder = w;
+  } catch {
+    decoder = null;
+  }
+  return decoder;
+}
+type DecodeAsk = DecodeRequest extends infer Q ? (Q extends { id: number } ? Omit<Q, "id"> : never) : never;
+async function decodeOff(q: DecodeAsk): Promise<{ heights?: Float32Array; words?: Uint32Array }> {
+  const w = decodeWorker();
+  if (!w) {
+    const t0 = performance.now();
+    const r = await decodeTile({ ...q, id: 0 } as DecodeRequest);
+    cpuOf(q.op === "terrarium" ? "decode" : "colour", t0);
+    return r;
+  }
+  const id = decodeId++;
+  const r = await new Promise<DecodeReply>((ok, no) => {
+    decodeWaiting.set(id, { ok, no });
+    w.postMessage({ ...q, id });
+  });
+  decodeWaiting.delete(id);
+  const c = TILE_CPU.worker;
+  c.ms += r.ms;
+  c.n++;
+  if (r.ms > c.max) c.max = r.ms;
+  if (r.error) throw new Error(r.error);
+  return r;
+}
+
+/** A tile's pixels (rgba, row by row), as they are in its file — or a square of it (x, y, side [px]) enlarged (tile-decode.ts;
+ *  timed: the page's thread draws the bitmap and reads it back) */
 export async function pixels(blob: Blob, crop?: [number, number, number]): Promise<Uint8ClampedArray> {
-  const o = { colorSpaceConversion: "none", premultiplyAlpha: "none" } as const;
-  const img = crop
-    ? await createImageBitmap(blob, crop[0], crop[1], crop[2], crop[2], {
-        ...o,
-        resizeWidth: TILE,
-        resizeHeight: TILE,
-        resizeQuality: "medium",
-      })
-    : await createImageBitmap(blob, o);
-  const cv = new OffscreenCanvas(TILE, TILE);
-  const ctx = cv.getContext("2d", { willReadFrequently: true })!;
-  ctx.drawImage(img, 0, 0);
-  img.close();
-  return ctx.getImageData(0, 0, TILE, TILE).data;
+  const t0 = performance.now();
+  const px = await decodePixels(blob, crop);
+  cpuOf("decode", t0);
+  return px;
 }
 
 /** Terrarium's heights for a tile — beyond its z 15, its z 15 parent's square enlarged (bilinear) —, unmarked. */
@@ -620,10 +641,7 @@ async function nationalHeights(
 
 /** The heights of a tile from its PNG (Terrarium's encoding). */
 async function decode(blob: Blob): Promise<Float32Array> {
-  const px = await pixels(blob);
-  const h = new Float32Array(TILE * TILE);
-  for (let i = 0; i < h.length; i++) h[i] = px[4 * i]! * 256 + px[4 * i + 1]! + px[4 * i + 2]! / 256 - 32768;
-  return h;
+  return (await decodeOff({ op: "terrarium", blob })).heights!;
 }
 
 export interface TileSample {
@@ -637,6 +655,10 @@ export interface TileSample {
 
 export class EarthTiles {
   texture: GPUTexture;
+  /** the tiles' work on the page's thread (TILE_CPU): each kind's total and longest piece [ms], their count */
+  get cpu() {
+    return TILE_CPU;
+  }
   /** T9a–T9b: the imagery's filtered textures — the 1024² one (the orthophotos, the relief levels' 1024² windows), the 2048²
    *  one (their 2048² windows; a 1 × 1 stand-in at the normal reach) — and their mips' pass */
   readonly orthoTexture: GPUTexture;
@@ -1329,6 +1351,14 @@ export class EarthTiles {
   put(z: number, x: number, y: number, h: Float32Array, col: Uint32Array | null = null) {
     const L = this.levels[z - Z0];
     if (!L || !inside(L.want, x, y)) return;
+    const t0 = performance.now();
+    try {
+      this.putTile(L, z, x, y, h, col);
+    } finally {
+      cpuOf("put", t0);
+    }
+  }
+  private putTile(L: Level, z: number, x: number, y: number, h: Float32Array, col: Uint32Array | null) {
     const s = this.slotOf(L, x, y);
     // (the ring's levels: the tile the window leaves kept past it — walked back to, drawn from memory —, this one's
     // imagery held for when it leaves in turn)
@@ -1544,12 +1574,8 @@ export class EarthTiles {
       } else if (res.status === 404) none = true;
       else if (!res.ok) throw new Error(`HTTP ${res.status}`);
       else {
-        const px = await pixels(await res.blob());
-        col = new Uint32Array(TILE * TILE);
-        for (let i = 0; i < col.length; i++) {
-          const [r, g, b] = orthoColour(px[4 * i]!, px[4 * i + 1]!, px[4 * i + 2]!, src!.fit);
-          col[i] = (Math.max(r, 1) | (g << 8) | (b << 16) | (255 << 24)) >>> 0;
-        }
+        // (decoded and brought into the Blue Marble's colours off the page's thread — tile-decode.ts orthoWords)
+        col = (await decodeOff({ op: "ortho", blob: await res.blob(), fit: src!.fit })).words ?? null;
       }
     } catch {
       // (refused, timed out — offline —: none there this time, asked again once the window comes back to it)
@@ -1788,7 +1814,9 @@ async function imagery(
   ortho: NationalSource | null = null,
 ): Promise<Uint32Array | null> {
   try {
-    const get = async (url: string, crop?: [number, number, number]) => {
+    // (a file's bytes — the decoding the worker's —, a square of it to enlarge)
+    type Got = { blob: Blob; crop: [number, number, number] | null };
+    const get = async (url: string, crop?: [number, number, number]): Promise<Got> => {
       // (the shared parent raced against this tile's own abort: a stalled request never holds the tile — nor its
       // slot, nor the heights waiting on it)
       if (crop) {
@@ -1800,20 +1828,20 @@ async function imagery(
         });
         // (its listener removed when the race is over, the parent's blob in or the tile given up)
         try {
-          return pixels(await Promise.race([parentBlob(url), aborted]), crop);
+          return { blob: await Promise.race([parentBlob(url), aborted]), crop };
         } finally {
           signal.removeEventListener("abort", stop);
         }
       }
       const res = await fetch(url, { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return pixels(await res.blob());
+      return { blob: await res.blob(), crop: null };
     };
     // (finer than GIBS: EOX's day — over a national source's land its orthophotos instead (the IGN's, swisstopo's), the same
     // grid, EOX's where it has none; the lights' z 8 parent, the tile's square of it enlarged)
     const fine = z > GIBS_Z1;
     const night = nightOf(z, x, y);
-    const day = async (): Promise<[Uint8ClampedArray, NationalSource | null]> => {
+    const day = async (): Promise<[Got, NationalSource | null]> => {
       if (fine && ortho)
         try {
           return [await get(ortho.orthoUrl(z, x, y)), ortho];
@@ -1823,18 +1851,17 @@ async function imagery(
       return [await get(fine ? eoxUrl(z, x, y) : dayUrl(z, x, y)), null];
     };
     const [[d, photo], n] = await Promise.all([day(), get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined)]);
-    const out = new Uint32Array(TILE * TILE);
-    for (let i = 0; i < out.length; i++) {
-      const v = (n[4 * i]! * n[4 * i + 3]!) / (255 * 255);
-      const lights = v > 0 ? Math.round(255 * (0.07 + 0.93 * Math.min(1.06 * Math.sqrt(v), 1))) : 0;
-      const [r, g, b] = photo
-        ? orthoColour(d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!, photo.fit)
-        : fine
-          ? eoxColour(d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!)
-          : [d[4 * i]!, d[4 * i + 1]!, d[4 * i + 2]!];
-      out[i] = (Math.max(r, 1) | (g << 8) | (b << 16) | (lights << 24)) >>> 0;
-    }
-    return out;
+    // (decoded and brought into the Blue Marble's colours off the page's thread — tile-decode.ts imageryWords)
+    const r = await decodeOff({
+      op: "imagery",
+      day: d.blob,
+      dayCrop: d.crop,
+      night: n.blob,
+      nightCrop: n.crop,
+      fit: photo?.fit ?? null,
+      fine,
+    });
+    return r.words ?? null;
   } catch {
     return null;
   }

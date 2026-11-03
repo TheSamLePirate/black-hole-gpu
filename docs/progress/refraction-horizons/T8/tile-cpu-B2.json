@@ -1,0 +1,41 @@
+{
+  "tag": "B2",
+  "flight": {
+    "s": 25.1,
+    "frames": 812,
+    "tilesLoaded": 270,
+    "pending": 267,
+    "orthoPending": 39,
+    "cpu": {
+      "decode": {
+        "ms": 0,
+        "max": 0,
+        "n": 0
+      },
+      "colour": {
+        "ms": 0,
+        "max": 0,
+        "n": 0
+      },
+      "put": {
+        "ms": 274.4,
+        "max": 2.3,
+        "n": 520
+      },
+      "worker": {
+        "ms": 1751.1,
+        "max": 20.8,
+        "n": 527
+      }
+    },
+    "longTasks": {
+      "n": 2,
+      "totalMs": 129,
+      "worst": [
+        78,
+        51
+      ]
+    }
+  },
+  "gpuErrors": 0
+}
