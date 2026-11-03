@@ -23,6 +23,7 @@ await $`bun build ./src/system/ktx-worker.ts --outfile _site/ktx-worker.js --min
 await $`bun build ./src/system/earth-surface-worker.ts --outfile _site/earth-surface-worker.js --minify --target browser`;
 await $`bun build ./src/system/terrain-mesh-worker.ts --outfile _site/terrain-mesh-worker.js --minify --target browser`;
 await $`bun build ./src/system/tile-decode-worker.ts --outfile _site/tile-decode-worker.js --minify --target browser`;
+await $`bun build ./src/system/wgsl-specialise-worker.ts --outfile _site/wgsl-specialise-worker.js --minify --target browser`;
 await $`bun scripts/build-scenery-worker.ts _site/scenery-worker.js`;
 await $`mkdir -p _site/earth-surface && cp -R assets/earth-surface/v1 _site/earth-surface/`;
 // (the world's airfields and runways — scripts/build-runways.ts, PLAN-RADAR-AAA RD10 —: the game's and the crew's)

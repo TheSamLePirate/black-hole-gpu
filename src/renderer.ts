@@ -5144,31 +5144,37 @@ export class Renderer {
       this.pipelineMemo.set(memoKey, hit);
       return hit;
     }
-    const made = this.device.createComputePipelineAsync({
-      layout:
-        entryPoint === "clouds"
-          ? this.cloudsLayout!
-          : entryPoint === "main" ||
-              entryPoint === "shade" ||
-              entryPoint === "shadeMark" ||
-              entryPoint === "shadeLite" ||
-              entryPoint === "shadeWater" ||
-              entryPoint === "shadeStars" ||
-              entryPoint === "skyFill" ||
-              entryPoint === "discs"
-            ? this.mainLayout
-            : entryPoint === "lut"
-              ? this.lutLayout
-              : entryPoint === "aerial"
-                ? this.aerialLayout
-                : this.tracePipeLayout,
-      compute: {
-        module: specialised ? this.specialisedModule(constants, ep, `${key}:${entryPoint}:${quality ? 1 : 0}`) : this.traceModule,
-        // (the sky's discs: main's own, its sky's layer and its ground compiled out — DISC_ONLY)
-        entryPoint: ep,
-        constants,
-      },
-    });
+    // (the specialised source made off the page's thread — T8b —, then the pipeline compiled)
+    const made = (async () => {
+      const module = specialised
+        ? await this.specialisedModule(constants, ep, `${key}:${entryPoint}:${quality ? 1 : 0}`)
+        : this.traceModule;
+      return this.device.createComputePipelineAsync({
+        layout:
+          entryPoint === "clouds"
+            ? this.cloudsLayout!
+            : entryPoint === "main" ||
+                entryPoint === "shade" ||
+                entryPoint === "shadeMark" ||
+                entryPoint === "shadeLite" ||
+                entryPoint === "shadeWater" ||
+                entryPoint === "shadeStars" ||
+                entryPoint === "skyFill" ||
+                entryPoint === "discs"
+              ? this.mainLayout
+              : entryPoint === "lut"
+                ? this.lutLayout
+                : entryPoint === "aerial"
+                  ? this.aerialLayout
+                  : this.tracePipeLayout,
+        compute: {
+          module,
+          // (the sky's discs: main's own, its sky's layer and its ground compiled out — DISC_ONLY)
+          entryPoint: ep,
+          constants,
+        },
+      });
+    })();
     this.pipelineMemo.set(memoKey, made);
     if (this.pipelineMemo.size > 64) this.pipelineMemo.delete(this.pipelineMemo.keys().next().value!);
     made.catch(() => this.pipelineMemo.delete(memoKey));
@@ -5252,9 +5258,59 @@ export class Renderer {
   /** the specialised modules by their source (the same text, the same module: two keys whose constants prune alike share
    *  it — and the browser's shader cache keys on it, across sessions) */
   private specialisedModules = new Map<string, GPUShaderModule>();
-  private specialisedModule(constants: Record<string, number>, entryPoint: string, id?: string): GPUShaderModule {
-    this.specialiser ??= new WgslSpecialiser(this.traceSource);
-    const code = this.specialiser.specialise(constants, entryPoint);
+  /** T8b: the specialiser's worker (wgsl-specialise-worker.js — the composed source sent once), its replies by id; none (the
+   *  scripts' and tests' pages, a worker refused or failed): the specialiser in the page */
+  private specialiseWorker: Worker | null | undefined;
+  private specialiseWaiting = new Map<number, { ok: (code: string) => void; no: (e: Error) => void }>();
+  private specialiseId = 1;
+  /** the specialisations' time in the worker [ms] (their total, the longest, their count) — off the page's thread */
+  readonly specialiseCpu = { ms: 0, max: 0, n: 0 };
+  private specialiseCode(constants: Record<string, number>, entryPoint: string): Promise<string> {
+    if (this.specialiseWorker === undefined) {
+      this.specialiseWorker = null;
+      if (typeof Worker !== "undefined" && typeof location !== "undefined")
+        try {
+          const w = new Worker(new URL("wgsl-specialise-worker.js", location.href), { type: "module" });
+          w.onmessage = (e: MessageEvent<{ id: number; code?: string; ms: number; error?: string }>) => {
+            const q = this.specialiseWaiting.get(e.data.id);
+            if (!q) return;
+            this.specialiseWaiting.delete(e.data.id);
+            const c = this.specialiseCpu;
+            c.ms += e.data.ms;
+            c.n++;
+            if (e.data.ms > c.max) c.max = e.data.ms;
+            if (e.data.code !== undefined) q.ok(e.data.code);
+            else q.no(new Error(e.data.error ?? "specialisation failed"));
+          };
+          w.onerror = (e) => {
+            // (failed: the waiting ones done in the page, the page's specialiser from now)
+            console.warn("Specialiser worker failed — specialising in the page:", e.message);
+            this.specialiseWorker = null;
+            for (const [, q] of this.specialiseWaiting) q.no(new Error("specialiser worker failed"));
+            this.specialiseWaiting.clear();
+          };
+          w.postMessage({ op: "source", code: this.traceSource });
+          this.specialiseWorker = w;
+        } catch {
+          this.specialiseWorker = null;
+        }
+    }
+    const w = this.specialiseWorker;
+    if (!w) {
+      this.specialiser ??= new WgslSpecialiser(this.traceSource);
+      return Promise.resolve(this.specialiser.specialise(constants, entryPoint));
+    }
+    const id = this.specialiseId++;
+    return new Promise<string>((ok, no) => {
+      this.specialiseWaiting.set(id, { ok, no });
+      w.postMessage({ op: "specialise", id, constants, entry: entryPoint });
+    }).catch(() => {
+      this.specialiser ??= new WgslSpecialiser(this.traceSource);
+      return this.specialiser.specialise(constants, entryPoint);
+    });
+  }
+  private async specialisedModule(constants: Record<string, number>, entryPoint: string, id?: string): Promise<GPUShaderModule> {
+    const code = await this.specialiseCode(constants, entryPoint);
     if (id) this.codeKB.set(id, code.length / 1024);
     let m = this.specialisedModules.get(code);
     if (m) {

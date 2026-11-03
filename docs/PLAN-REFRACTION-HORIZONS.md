@@ -1318,7 +1318,8 @@ compilation) s'y ajoutent.
   le dernier bit des arêtes), les fenêtres selon l'usage BD TOPO, le détail effacé par l'empreinte du pixel et la lueur moyenne des
   fenêtres au loin : la ville lointaine éclairée la nuit ; +2 à 3 % au matériau raster ([Q3.md](progress/refraction-horizons/Q3.md)). **T8a** — le décodage et les couleurs des tuiles dans un
   worker (`tile-decode.ts`) : 0 ms sur le fil de la page au lieu de ~1,25 s en 25 s de vol bas, +6 % d'images ; les longues tâches
-  restantes ne viennent pas des tuiles ([T8.md](progress/refraction-horizons/T8.md)).
+  restantes ne viennent pas des tuiles ([T8.md](progress/refraction-horizons/T8.md)). **T8b** — la spécialisation WGSL des
+  variantes du traceur dans un worker (jusqu'à 174 ms une variante, sur le fil de la page avant) : le temps de longues tâches −37 %.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

@@ -63,7 +63,8 @@ async function serve() {
   }
   if (!port) throw new Error("e2e: no free port for the app's server (3200–3700 all taken?)");
   const proc = Bun.spawn(["bun", "server.ts"], {
-    env: { ...process.env, PORT: String(port), NODE_ENV: "production", KERR_PARENT_PID: String(process.pid) },
+    // (E2E_NODE_ENV=development: the bundle unminified — a CPU profile's names readable)
+    env: { ...process.env, PORT: String(port), NODE_ENV: process.env.E2E_NODE_ENV ?? "production", KERR_PARENT_PID: String(process.pid) },
     stdout: "ignore",
     stderr: "inherit",
   });
