@@ -50,6 +50,7 @@ import {
   BUILDING_MESH_M,
   BUILDING_PARTS_M,
   buildingPacked,
+  orientedBox,
   PARAPET_M,
   D,
   localPoint,
@@ -76,9 +77,13 @@ const g = globalThis as unknown as { onmessage: unknown; postMessage(v: SceneryR
 const tx = (lon: number, z = 14) => ((lon + 180) / 360) * 2 ** z;
 const ty = (lat: number, z = 14) => ((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * 2 ** z;
 
+/** a scene's network request's time [ms] — each its own */
+const FETCH_MS = 25_000;
+
 async function prepare(q: SceneryRequest): Promise<SceneryReply> {
-  const started = performance.now(),
-    signal = AbortSignal.timeout(60_000);
+  // (each request its own time — FETCH_MS —, not one deadline from the scene's start: the ground's Terrarium tiles asked
+  // late, under a survey's block that failed, failed at once past it, "signal timed out", the scene degraded and built again)
+  const started = performance.now();
   // (where the time goes — each step's end from the start [ms]: the scene's stats, T8)
   const phases: Record<string, number> = {};
   // (and the step under way told as it goes — the loading status in the interface: what the scenery waits for)
@@ -115,7 +120,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     else served.other++;
   };
   const errors: string[] = [];
-  const fetchCount = async (url: string, within = signal) => {
+  const fetchCount = async (url: string, within: AbortSignal = AbortSignal.timeout(FETCH_MS)) => {
     const r = await fetch(url, { signal: within });
     count(r);
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
@@ -451,7 +456,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       let raw: ArrayBuffer | null = null;
       for (let attempt = 0; attempt < 3 && !raw; attempt++)
         try {
-          raw = await fetchCount(bdtopoUrl(x, y), surveyed);
+          raw = await fetchCount(bdtopoUrl(x, y));
         } catch (e) {
           // (a tile failed: OSM's buildings there — the scene not degraded for it)
           if (attempt === 2) {
@@ -522,7 +527,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // and Google's, their roofs' shapes, heights, colours and materials where mapped — a z 14 tile 0.5–1.6 MB, so within
   // OVERTURE_REACH_M alone; OSM's own buildings kept beyond, and where an Overture tile failed
   const fetchRanged = async (url: string, init: RequestInit) => {
-    const r = await fetch(url, { ...init, signal });
+    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_MS) });
     count(r);
     networkBytes += Number(r.headers.get("content-length")) || 0;
     return r;
@@ -533,7 +538,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     let tileCount = 0;
     let pm: PmTiles | null = null;
     try {
-      const list = await fetch(OVERTURE_LIST, { signal });
+      const list = await fetch(OVERTURE_LIST, { signal: AbortSignal.timeout(FETCH_MS) });
       count(list);
       if (!list.ok) throw new Error(`HTTP ${list.status}: ${OVERTURE_LIST}`);
       // (the latest release whose archive answers: the bucket keeps three, the one a zone holds among them)
@@ -1038,16 +1043,26 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (!errors.length) errors.push(String(e).slice(0, 220));
     }
   }
+  // (the detail — parts, triangles — by the nearer of the centre and the camera: the centre led along the view, up to a few
+  // km ahead of the craft, the buildings under it had stayed boxes — at the Étoile looking ahead, the nearest 1.5 km)
+  const eyeD = (lat: number, lon: number) =>
+    q.eye ? Math.hypot((lat - q.eye[0]) * 111320, wrapLon(lon - q.eye[1]) * 111320 * Math.cos(q.lat * D)) : Infinity;
+  const nearOf = new Map<Planned, number>();
   for (const b of planned) {
     const v = choices[b.i]!;
-    if (v.d >= BUILDING_MESH_M && v.d >= BUILDING_PARTS_M) break;
+    nearOf.set(b, Math.min(v.d, eyeD(v.lat, v.lon)));
+  }
+  for (const b of [...planned].sort((x, y) => nearOf.get(x)! - nearOf.get(y)!)) {
+    const v = choices[b.i]!;
+    const near = nearOf.get(b)!;
+    if (near >= BUILDING_MESH_M && near >= BUILDING_PARTS_M) break;
     try {
       const floor = b.base + v.low,
         bottom = b.base + v.low - 1;
-      const plans = v.d < BUILDING_PARTS_M ? planBuilding(b.input, 24) : b.plans;
+      const plans = near < BUILDING_PARTS_M ? planBuilding(b.input, 24) : b.plans;
       const bytes = leafBytes(plans);
       const mesh =
-        v.d < BUILDING_MESH_M && meshBytes < meshBudget
+        near < BUILDING_MESH_M && meshBytes < meshBudget
           ? plans.map((p) => buildingMesh(p.rings, bottom, floor, p.planes, parapetOf(v, plans) ? PARAPET_M : 0))
           : [];
       const mb = mesh.reduce((t, m) => t + m.positions.length * 4 + (m.triangles.length / 3) * 12, 0);
@@ -1097,10 +1112,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           floor + plan.top + lip,
           edges.length / 4,
           1,
-          minX,
-          minY,
-          maxX,
-          maxY,
+          // (its footprint's oriented box — the raster's solid box for it without triangles: orientedBox)
+          ...orientedBox(edges),
           ...wall,
           buildingPacked(plan.roofMat, a.wallMat, plan.storeys, plan.planes.length, plan.shape, !!mesh, lip > 0),
           ...edges,
@@ -1129,10 +1142,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
               floor + st.top,
               4,
               1,
-              Math.min(...xs),
-              Math.min(...ys),
-              Math.max(...xs),
-              Math.max(...ys),
+              ...orientedBox(se),
               ...stackColour,
               buildingPacked(RoofMaterial.Concrete, WallMaterial.Brick, 1, 1, "stack", false),
               ...se,

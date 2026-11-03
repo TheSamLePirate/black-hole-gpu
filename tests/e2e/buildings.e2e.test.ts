@@ -7,7 +7,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // view from the chase camera above the roofs and a lower one, and the kernel shade's GPU time on the held view
 // (the clock stopped, the view marked changed every frame: the same rays each frame — raster-shade-ablation's way).
 //   BLD_SITES=paris,stlo,munich (default all), BLD_MEASURE=0 to skip the timing, BLD_NIGHT=1 the low view at night too.
-// E2E_SHOTS=<dir>: buildings-<site>-high.png / -low.png; remote-results/buildings-<label>.json (BLD_LABEL, default "run" —
+// E2E_SHOTS=<dir>: buildings-<site>-high.png / -low.png, and during the loading load-<site>-<view>-<s>s.png every 10 s (the
+// loading line shown); remote-results/buildings-<label>.json (BLD_LABEL, default "run" —
 // under scripts/ab-e2e.ts the side and the run, A1, B2…).
 // Duration: ~3 min a site on kerr-mini.
 // Done when: each town's scene ready with its buildings, both views drawn in the raster pipeline, no error.
@@ -25,7 +26,8 @@ const LABEL = process.env.BLD_LABEL ?? (process.env.AB_SIDE ? `${process.env.AB_
 
 describe.skipIf(!E2E)("the buildings", () => {
   let app: App;
-  const shots = process.env.E2E_SHOTS;
+  // (under an A/B, each side's run its own folder: A1, B2…)
+  const shots = process.env.E2E_SHOTS && process.env.AB_SIDE ? `${process.env.E2E_SHOTS}/${LABEL}` : process.env.E2E_SHOTS;
   const rows: Record<string, unknown>[] = [];
   beforeAll(async () => {
     app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis", tiles: true });
@@ -52,7 +54,7 @@ describe.skipIf(!E2E)("the buildings", () => {
       `(() => { const t = __bh.renderer.earthTiles, s = __bh.renderer.earthScenery.stats(); return JSON.stringify({ tiles: t.pending, ortho: t.orthoPending, scenery: s.status, pending: s.pending, buildings: s.buildings, error: s.lastError }); })()`,
     );
   // (the craft placed `back` metres short of the site, `alt` over the ground, frozen there: the tiles and the scene stream in)
-  const arrive = async (site: (typeof SITES)[string], back: number, alt: number) => {
+  const arrive = async (site: (typeof SITES)[string], back: number, alt: number, tag = "") => {
     const h = (site.heading * Math.PI) / 180;
     const lat = site.lat - (Math.cos(h) * back) / 111320,
       lon = site.lon - (Math.sin(h) * back) / (111320 * Math.cos((site.lat * Math.PI) / 180));
@@ -61,7 +63,28 @@ describe.skipIf(!E2E)("the buildings", () => {
     );
     await Bun.sleep(1500);
     await app.js(`(__bh.freeze(true), 1)`);
-    await app.waitFor(loaded, 180_000).catch(async () => console.log(`  (still loading after 180 s — ${await state()})`));
+    // (the loading followed: its state every 10 s, and with E2E_SHOTS a shot each time — the interface and its loading line
+    // shown: the scene's progress seen —, 180 s at most)
+    const t0 = performance.now();
+    for (let k = 0; ; k++) {
+      if (await app.js<boolean>(loaded)) break;
+      const s = Math.round((performance.now() - t0) / 1000);
+      if (s >= 180) {
+        console.log(`  (still loading after 180 s — ${await state()})`);
+        break;
+      }
+      if (k % 10 === 0) {
+        console.log(
+          `  [${tag} +${s} s] ${await state()} — ${await app.js<string>(`(() => document.querySelector('[data-testid="data-meter"]')?.textContent || "")()`)}`,
+        );
+        if (shots && tag) {
+          await Bun.$`mkdir -p ${shots}`;
+          await app.shot(`${shots}/load-${tag}-${String(s).padStart(3, "0")}s.png`);
+        }
+      }
+      await Bun.sleep(1000);
+    }
+    if (shots && tag) await app.shot(`${shots}/load-${tag}-ready.png`);
   };
   // (the held view, every pixel shaded at the full scale — the raster armed again: a small GPU's governor may give it up)
   const hold = async () => {
@@ -91,7 +114,7 @@ describe.skipIf(!E2E)("the buildings", () => {
   for (const key of CHOSEN) {
     test(`${SITES[key]!.name}: the scene's buildings, seen from above the roofs and lower`, async () => {
       const site = SITES[key]!;
-      await arrive(site, 700, 260);
+      await arrive(site, 700, 260, `${key}-high`);
       const stats = await app.js<Record<string, unknown>>(`(() => { const s = __bh.renderer.earthScenery.stats();
           return { buildings: s.buildings, bdtopo: s.bdtopoBuildings, overture: s.overtureBuildings, overtureTiles: s.overtureTiles, surveyError: s.surveyError, vertices: s.vertices, gpuBytes: s.gpuBytes, workerMs: s.workerMs, roofs: s.roofShapes, meshed: s.meshedBuildings, lidarRoofs: s.lidarRoofs, stacks: s.stacks, meshBytes: s.meshBytes, bytes: s.bytes, limited: s.budgetLimited, error: s.lastError ?? null }; })()`);
       console.log(`  ${site.name}: ${JSON.stringify(stats)}`);
@@ -105,7 +128,7 @@ describe.skipIf(!E2E)("the buildings", () => {
       }
       const high = process.env.BLD_MEASURE === "0" ? null : await shadeMs();
       // (lower and nearer: the walls, the eaves, the gables)
-      await arrive(site, 320, 90);
+      await arrive(site, 320, 90, `${key}-low`);
       await app.js(`(__bh.camera.setLook(0, -12), 1)`);
       await hold();
       if (shots) await app.shot(`${shots}/buildings-${key}-low.png`);

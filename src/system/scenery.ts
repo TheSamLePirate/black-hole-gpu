@@ -26,6 +26,11 @@ export function sceneryShader(code: string, supported: boolean) {
       );
 }
 
+/** the scenery's centre held while the point wanted stays this near it [m, × the detail's reach] — a box 13 km wide at the very
+ *  far reach (scenery-sources.ts sceneryBox): led 3 km, the view still in it; the buildings' detail made round the camera
+ *  too (SceneryRequest.eye) */
+const CENTRE_HOLD_M = 1500;
+
 export class EarthScenery {
   contact: SceneryContact | null = null;
   buffer: GPUBuffer;
@@ -68,7 +73,7 @@ export class EarthScenery {
   private disposed = false;
   private uploaded = 0;
   private retiredBytes = 0;
-  private requestedCentre: { lat: number; lon: number } | null = null;
+  private requestedCentre: ReturnType<typeof sceneryCentre> | null = null;
   private failures = 0;
   private retryAt = 0;
   /** the scene wanted here is neither drawn nor given up on for now (pending: the settled frame waits for it) */
@@ -170,7 +175,15 @@ export class EarthScenery {
     }
     if (!geo) return;
     const wanted = priority ? cartToGeodetic(1, WGS84_F, priority) : geo;
-    const c = sceneryCentre(wanted.lat / D, wanted.lon / D);
+    let c = sceneryCentre(wanted.lat / D, wanted.lon / D);
+    // (the centre asked kept while the point wanted stays within CENTRE_HOLD_M × reach of it: led along the view, that point
+    // crossed a 556 m cell at each turn of the head — the camera looked down, a new scene of 35–180 s asked, the old one with
+    // its boxes under the craft kept meanwhile: a scene rebuilt over and over, never the one in view)
+    const held = this.requestedCentre;
+    if (held && this.requested.endsWith(`:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}`)) {
+      const off = Math.hypot((held.lat - wanted.lat / D) * 111320, wrapLon(held.lon - wanted.lon / D) * 111320 * Math.cos(held.lat * D));
+      if (off < CENTRE_HOLD_M * reach) c = held;
+    }
     const distance = (v: { lat: number; lon: number }) =>
       Math.hypot((c.lat - v.lat) * 111320, wrapLon(c.lon - v.lon) * 111320 * Math.cos(c.lat * D));
     const dist = this.data ? distance(this.data) : Infinity;
@@ -228,10 +241,11 @@ export class EarthScenery {
           this.onContent?.();
           return;
         }
-        // (a scene rebuilt with a source missing — the land cover's raster, a tile — while one is drawn here: the
+        // (a scene rebuilt with a source missing — the land cover's raster, a tile — while the same one is drawn here: the
         // drawn one kept, its trees and its contacts, the rebuild tried again later — before the buffer is made again
-        // for a new reach: the drawn scene stays in the buffer the shader reads)
-        if (r.errors?.length && this.data) {
+        // for a new reach: the drawn scene stays in the buffer the shader reads. Another place's scene is taken, an error in
+        // it or not — the drawn one is elsewhere, the view's not in it; tried again later the same)
+        if (r.errors?.length && this.data && this.applied === key) {
           this.lastError = r.errors[0]!;
           this.failures++;
           this.retryAt = performance.now() + this.backoff();
@@ -296,6 +310,7 @@ export class EarthScenery {
         geoid: geoidPlane(c.lat, c.lon),
         ign: this.ign,
         overture: this.overture,
+        eye: [geo.lat / D, geo.lon / D],
       } satisfies SceneryRequest);
     } catch (e) {
       this.lastError = String(e);

@@ -86,6 +86,50 @@ export const PARAPET_M = 0.8;
 /** A building leaf's packed word (its geometry's vec4 2's w, an integer exact in a float): roof material (4 bits), wall
  *  material (4), storeys (6), roof planes (4), shape (3), has a mesh (1), has a parapet (1) — trace.wgsl reads it,
  *  scenery-raster.ts too. */
+/**
+ * A building leaf's footprint as an oriented box — along its longest edge —: [centre x, centre y, its angle (rad), its
+ * half-sides packed (ceil 10 × half along the angle) × 4096 + (ceil 10 × half across); −1 a side past 409.5 m]. In the leaf's
+ * second vec4 (its frame bounds there before: read by nobody): the raster's solid box for a building without triangles
+ * (scenery-raster.ts boxSolidVs) turned as the building is — not along the frame's east and north, a block of Paris at 30° a
+ * box far wider than it, its lid the ground's photograph.
+ */
+export function orientedBox(edges: ArrayLike<number>): [number, number, number, number] {
+  let best = -1,
+    angle = 0;
+  for (let i = 0; i + 3 < edges.length; i += 4) {
+    const dx = edges[i + 2]! - edges[i]!,
+      dy = edges[i + 3]! - edges[i + 1]!;
+    const l = dx * dx + dy * dy;
+    if (l > best) {
+      best = l;
+      angle = Math.atan2(dy, dx);
+    }
+  }
+  const c = Math.cos(angle),
+    s = Math.sin(angle);
+  let u0 = Infinity,
+    u1 = -Infinity,
+    v0 = Infinity,
+    v1 = -Infinity;
+  for (let i = 0; i + 1 < edges.length; i += 2) {
+    const x = edges[i]!,
+      y = edges[i + 1]!;
+    const u = x * c + y * s,
+      v = -x * s + y * c;
+    u0 = Math.min(u0, u);
+    u1 = Math.max(u1, u);
+    v0 = Math.min(v0, v);
+    v1 = Math.max(v1, v);
+  }
+  const cu = (u0 + u1) / 2,
+    cv = (v0 + v1) / 2;
+  const hu = Math.ceil(((u1 - u0) / 2) * 10),
+    hv = Math.ceil(((v1 - v0) / 2) * 10);
+  const cx = cu * c - cv * s,
+    cy = cu * s + cv * c;
+  return [cx, cy, angle, hu > 4095 || hv > 4095 || !Number.isFinite(hu + hv) ? -1 : hu * 4096 + hv];
+}
+
 export function buildingPacked(roof: number, wall: number, storeys: number, planes: number, shape: string, mesh: boolean, parapet = false) {
   return (
     (roof & 15) |
@@ -295,6 +339,10 @@ export interface SceneryRequest {
   ign?: boolean;
   /** Overture Maps' buildings near the centre outside the BD TOPO's France (settings.earthOverture — B7, pmtiles.ts) */
   overture?: boolean;
+  /** the camera's place when asked [°: latitude, longitude] — the centre is led along the view, up to a few km ahead: the
+   *  buildings' triangles and parts made round the camera too, nearest first (not only round the centre: the ones under
+   *  the craft were left boxes) */
+  eye?: [number, number];
 }
 /** the worker's progress through a scene, posted as it goes (the loading status's: ui — data meter): the last step ended,
  *  and in the buildings' step the BD TOPO's or Overture's tiles in and wanted */

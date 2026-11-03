@@ -469,3 +469,20 @@ test("T10: the 4-tile levels packed by quadrants — 7 layers of 2048² where th
   expect(t.peakBytes).toBe(1024 * 1024 * 16 * 8 + 2048 * 2048 * 7 * 8);
   expect(tex.length).toBe(2);
 });
+
+test("a drawn tile's heights put again — the IGN's over the Terrarium's — logged as a change of that tile alone", () => {
+  // (the relief cache bakes again only where a change is logged: a refinement in place had logged nothing, the cache kept
+  // the first heights — a city's SRTM — until a window moved)
+  const t = new EarthTiles(fakeDevice());
+  t.update(camAt(48.87, 2.3, 300), 1e-3);
+  fill(t);
+  const before = t.changes.length;
+  const [z, x, y] = t.wanted()[0]!;
+  t.put(z, x, y, new Float32Array(TILE * TILE).fill(35));
+  expect(t.changes.length).toBe(before + 1);
+  const c = t.changes[t.changes.length - 1]!;
+  const n = 2 ** z;
+  expect(c.z).toBe(z);
+  expect(c.lon0).toBeCloseTo((x / n) * 2 * Math.PI - Math.PI, 9);
+  expect(c.lon1).toBeCloseTo(((x + 1) / n) * 2 * Math.PI - Math.PI, 9);
+});

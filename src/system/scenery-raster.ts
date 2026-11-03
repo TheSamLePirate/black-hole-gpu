@@ -440,6 +440,20 @@ fn boxClip(vi: u32, ii: u32) -> vec4f {
 // A bridge's deck, parapet or pier — a strip, four corners: its polygon's edges' starts, in its ring's order —: the corner of its
 // own prism at a box's vertex k (0/1 a side), not of its box along the axes (far wider than a strip across at an angle); w 0: not a
 // strip (another shape)
+// a building leaf's box corner k (0/1 each axis) — turned as the building is: its footprint's oriented box in the leaf's
+// second vec4 (scenery-data.ts orientedBox: centre, angle, half-sides packed), its height the node's; the frame's box where it
+// has none (a side past 409.5 m)
+fn buildingCorner(lo: vec4f, hi: vec4f, k: vec3f) -> vec3f {
+  let g = u32(scenery[0].y + hi.w);
+  let ob = scenery[g + 1u];
+  if (ob.w < 0.0) { return mix(lo.xyz, hi.xyz, k); }
+  let e = u32(ob.w);
+  let a = (k.x * 2.0 - 1.0) * f32(e >> 12u) * 0.1;
+  let b = (k.y * 2.0 - 1.0) * f32(e & 4095u) * 0.1;
+  let c = cos(ob.z);
+  let s = sin(ob.z);
+  return vec3f(ob.xy + vec2f(c, s) * a + vec2f(-s, c) * b, mix(lo.z, hi.z, k.z));
+}
 fn stripCorner(hi: vec4f, k: vec3f) -> vec4f {
   let g = u32(scenery[0].y + hi.w);
   let pr = scenery[g];
@@ -474,7 +488,7 @@ fn stripCorner(hi: vec4f, k: vec3f) -> vec4f {
     if (s.w < 0.5) { return vec4f(2.0, 2.0, 0.5, 1.0); }
     return sunClip(s.xyz);
   }
-  return sunClip(mix(lo.xyz, hi.xyz, k));
+  return sunClip(buildingCorner(lo, hi, k));
 }
 // The near buildings' triangles (roof-mesh.ts: their walls up to their roofs, their roofs' faces): the exact solid the
 // tracer's kernel tests, drawn from the Sun into the shadow map — their shadows their own shapes, gables and slopes, not
@@ -501,7 +515,8 @@ struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) 
   return o;
 }
 @fragment fn meshFs(v: MV) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, (${RASTER_CODE.mesh}.0 + v.bridge) * ${RASTER_CODE_SCALE}.0); }
-// The buildings without triangles — the far ones, past BUILDING_MESH_M — as their boxes, solid (no margin, the top flat):
+// The buildings without triangles — the far ones, past BUILDING_MESH_M — as their boxes, solid (no margin, the top flat), turned
+// as their footprints are (buildingCorner):
 // the material's buildings too, none left to the kernel shade's rays (their marking boxes, wider than they are and up to their
 // roofs' tops, had sent the pixels over a pitched roof and along their margins there too)
 @vertex fn boxSolidVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
@@ -516,7 +531,7 @@ struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) 
   }
   let c = BOX[vi];
   let k = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
-  let v = view(mix(lo.xyz, hi.xyz, k));
+  let v = view(buildingCorner(lo, hi, k));
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
   return o;

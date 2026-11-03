@@ -1173,6 +1173,10 @@ export class EarthTiles {
     if (ringLevel && old && old !== this.keyOf(L, x, y) && L.data[s]) this.keep(old, L.data[s]!, L.col[s] ?? null);
     L.col[s] = ringLevel ? (col ?? (old === this.keyOf(L, x, y) ? (L.col[s] ?? null) : null)) : null;
     if (col && inside(L.valid, x, y) && L.key[s] === this.keyOf(L, x, y)) this.imagery++;
+    // (the same tile's heights again, drawn already — the IGN's over the Terrarium's, the far silhouettes' overground on its
+    // ground —: logged, the relief cache's rings over it baked again; only the rectangle's changes were, the cache kept the
+    // first heights — a city's SRTM, its blocks' tops — until a window moved)
+    if (old === this.keyOf(L, x, y) && inside(L.valid, x, y)) this.logChange(L.z, { x0: x, x1: x + 1, y0: y, y1: y + 1 }, null);
     L.key[s] = this.keyOf(L, x, y);
     L.data[s] = h;
     const hb = new Uint32Array(h.buffer, h.byteOffset, TILE * TILE);

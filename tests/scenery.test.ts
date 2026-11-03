@@ -243,7 +243,7 @@ test("OSM analytic networks preserve narrow roads, lake islands and bridge width
   expect(pack.byteLength).toBeLessThan(SCENERY_BYTES);
 });
 
-test("world scenery: pending until the wanted scene is drawn, a partial rebuild keeps the drawn one, a teleport asks at once", async () => {
+test("world scenery: pending until the wanted scene is drawn, its centre held near, another place's scene taken, a partial rebuild of the same keeps the drawn one, a teleport asks at once", async () => {
   (globalThis as { GPUBufferUsage?: unknown }).GPUBufferUsage ??= { STORAGE: 128, COPY_DST: 8 };
   const jobs: { request: SceneryRequest; worker: Worker }[] = [];
   let writes = 0;
@@ -293,34 +293,49 @@ test("world scenery: pending until the wanted scene is drawn, a partial rebuild 
     scenery.update(place(48.86, 2.35), "balanced", true, true);
     expect(scenery.pending).toBe(false);
     const drawn = scenery.contact;
-    // (a kilometre on: a new centre, rebuilt — its land cover's raster missing: the drawn scene kept)
+    // (a kilometre on: within the held centre's reach — CENTRE_HOLD_M —, no new scene: the drawn one covers the view)
     offset += 3100;
     scenery.update(place(48.869, 2.35), "balanced", true, true);
+    expect(jobs).toHaveLength(1);
+    // (2.2 km on: a new centre — its land cover's raster missing: taken all the same, the drawn one elsewhere, and its
+    // error kept to try again)
+    scenery.update(place(48.88, 2.35), "balanced", true, true);
     expect(jobs).toHaveLength(2);
     expect(scenery.pending).toBe(true);
     reply(1, ["WorldCover raster: offline"]);
-    expect(scenery.contact).toBe(drawn);
-    expect(writes).toBe(1);
-    expect(scenery.stats().lastError).toContain("offline");
-    expect(scenery.pending).toBe(false);
-    // (tried again after its wait, not given up)
-    offset += 31000;
-    scenery.update(place(48.869, 2.35), "balanced", true, true);
-    expect(jobs).toHaveLength(3);
-    reply(2);
     expect(scenery.contact).not.toBe(drawn);
     expect(writes).toBe(2);
+    expect(scenery.stats().lastError).toContain("offline");
+    // (its fade over, no longer waited for: its error waits its retry)
+    offset += 700;
+    scenery.update(place(48.88, 2.35), "balanced", true, true);
+    expect(scenery.pending).toBe(false);
+    const second = scenery.contact;
+    // (tried again after its wait, not given up — the same place rebuilt with an error again: the drawn one kept)
+    offset += 31000;
+    scenery.update(place(48.88, 2.35), "balanced", true, true);
+    expect(jobs).toHaveLength(3);
+    reply(2, ["WorldCover raster: offline"]);
+    expect(scenery.contact).toBe(second);
+    expect(writes).toBe(2);
+    // (and whole the next time: taken)
+    offset += 61000;
+    scenery.update(place(48.88, 2.35), "balanced", true, true);
+    expect(jobs).toHaveLength(4);
+    reply(3);
+    expect(scenery.contact).not.toBe(second);
+    expect(writes).toBe(3);
     // (a teleport while a rebuild runs: the old one dropped, the new one asked at once — and waited for)
     offset += 3100;
-    scenery.update(place(48.875, 2.35), "balanced", true, true);
-    expect(jobs).toHaveLength(4);
+    scenery.update(place(48.9, 2.35), "balanced", true, true);
+    expect(jobs).toHaveLength(5);
     scenery.update(place(43.6, 1.44), "balanced", true, true);
     // (the drawn scene's buffer retiring behind the GPU's work: waited for — the frame is not settled meanwhile)
     expect(scenery.pending).toBe(true);
     releases.forEach((r) => r());
     for (let i = 0; i < 5; i++) await Promise.resolve();
     scenery.update(place(43.6, 1.44), "balanced", true, true);
-    expect(jobs).toHaveLength(5);
+    expect(jobs).toHaveLength(6);
     expect(scenery.pending).toBe(true);
     scenery.dispose();
   } finally {
