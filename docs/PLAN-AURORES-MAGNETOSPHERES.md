@@ -2,7 +2,7 @@
 
 Écrit le 3 novembre 2026, à la demande de Sam (« les aurores et magnétosphères, c'est une bonne idée à intégrer »).
 L'idée vient du prochain chantier d'Alex (`vr-solar-system/docs/agent/puffs-bilan-qualite-aurores_2026-11-03-18-27-52.md`).
-**Rien n'est commencé** : c'est un plan, avec les décisions à prendre par Sam en fin de document. Les sources
+**Rien n'est commencé.** Les cinq décisions sont prises (Sam, 3 novembre : § 6). Les sources
 des chiffres sont listées à la fin. Les chiffres marqués « ~ » sont des ordres de grandeur tirés des revues, à
 vérifier sur la source au moment de coder.
 
@@ -102,19 +102,18 @@ Pour chaque phase : tests unitaires des modèles, un e2e court par corps, en hea
 avant/après et les coûts sont montrés dans T3, puis une entrée dans `progress-to-destination.md` si la phase
 touche un contrat de la destination (l'air partagé, la passe de lignes avec profondeur).
 
-## 6. Décisions pour Sam
+## 6. Décisions de Sam (3 novembre 2026)
 
-1. **Le réalisme visible ou les fausses couleurs ?** Les aurores des géantes sont surtout en UV et en infrarouge ; en
-   visible, elles sont très faibles et visibles seulement côté nuit. *Conseil* : le visible par défaut, physique, avec un
-   mode « instrument » (AM8) qui montre ce que voient Hubble, Juno et JWST.
-2. **La météo spatiale réelle pour la Terre** (Kp de NOAA SWPC quand la date est « maintenant ») ? *Conseil* : oui,
-   avec repli sur le réglage manuel hors ligne.
-3. **L'ordre** : *conseil* AM0 → AM1 → AM2 → AM3 (Jupiter, le plus spectaculaire) → AM7 (le schéma) → AM4 → AM5 →
-   AM6 → AM8.
-4. **Le schéma** : tout montrer (lignes, magnétopause, tore, ceintures, particules) avec un réglage par élément, ou
-   seulement les lignes de champ d'abord ?
-5. **Partager avec Alex** : il commence le même chantier en Unity. On lui envoie nos sources et nos tables d'AM0, et
-   on reprend les siennes s'il en fait de meilleures.
+1. **Le visible physique par défaut, et une vue « instrument » en fausses couleurs** (AM8 : UV de Hubble et Juno,
+   infrarouge de JWST, rayons X de Mercure) : **oui**. Les aurores des géantes sont surtout en UV et en infrarouge ; en
+   visible, elles sont faibles et ne se voient que côté nuit : c'est ce que montre le rendu par défaut.
+2. **La météo spatiale réelle pour la Terre** (Kp de NOAA SWPC quand la date est « maintenant », repli sur le réglage
+   manuel hors ligne) : **oui**.
+3. **L'ordre** : **AM0 → AM1 → AM2 → AM3 (Jupiter) → AM7 (le schéma) → AM4 → AM5 → AM6 → AM8**.
+4. **Le schéma : tout** — lignes de champ, magnétopause et onde de choc, tore d'Io, ceintures de radiation, particules —,
+   avec un réglage par élément.
+5. **Le partage avec Alex, dans les deux sens** : on lui envoie nos sources et nos tables d'AM0 (champs, ovales,
+   empreintes) ; on lit les siennes, et on reprend ce qu'il fait de mieux (après la décision de Sam, comme toujours).
 
 ## 7. Sources
 

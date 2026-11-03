@@ -149,3 +149,16 @@ If you build your field tables first, we would gladly compare them with ours, fo
   [Greathouse et al. 2022, Ganymede by Juno](https://orbi.uliege.be/bitstream/2268/297297/1/Greathouse%20et%20al.%20-%202022%20-%20UVS%20Observations%20of%20Ganymede%27s%20Aurora%20During%20Juno%20.pdf).
 - Clouds: [Nubis, Cubed (Schneider, SIGGRAPH 2023)](https://advances.realtimerendering.com/s2023/);
   [Nubis Evolved (2022)](https://advances.realtimerendering.com/s2022/SIGGRAPH2022-Advances-NubisEvolved-NoVideos.pdf).
+
+## Added ~20:10 UTC: Sam's decisions on our aurora plan
+
+- **Visible light by default, physically**: the giants' aurorae are dim night-side glows, as they really are. An
+  optional "instrument" view shows them in false colour: UV as Hubble and Juno see it, infrared as JWST does, X-rays
+  for Mercury.
+- **Real space weather for the Earth**: NOAA SWPC's Kp when the scene's date is "now", and the manual setting offline.
+- **The order** as listed above: the field module, the Earth, a generic aurora, Jupiter, the schematic, then the rest.
+- **The whole schematic**: field lines, magnetopause and bow shock, Io's torus, radiation belts, and particles. Each
+  element has its own toggle.
+- **Sharing both ways**: Sam wants us to send you our field tables (models, ovals, moon footprints) as soon as the
+  field module exists, and to read yours too. If you build yours first, a note with their format and their sources
+  would let us compare them footprint by footprint.
