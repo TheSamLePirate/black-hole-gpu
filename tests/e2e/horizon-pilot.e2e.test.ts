@@ -118,7 +118,8 @@ test.skipIf(!E2E)(
     const gpuByte = (lat: Lattice, i: number, j: number, k: number, cap = 0) => {
       const w = lat.kind === "latlon" ? lat.W : lat.N;
       const layers = lat.kind === "latlon" ? gpuMap : gpuPole;
-      return layers[4 * cap + (k >> 2)]![(j * w + i) * 4 + (k & 3)]!;
+      // (option (d): a cap's 4 layers of sines then its 4 of the blockers' steps — the south cap from layer 8)
+      return layers[8 * cap + (k >> 2)]![(j * w + i) * 4 + (k & 3)]!;
     };
 
     // 1. the GPU against the CPU
@@ -282,6 +283,7 @@ test.skipIf(!E2E)(
           ((i % m.W) + m.W) % m.W,
           j,
           meanAt(dem.map, dem.W, dem.H, latticePoint(m, ((i % m.W) + m.W) % m.W, j).p),
+          "top",
         );
         const seen = Array.from(b.sin, (_, k) => horizonFrom(R, hr, b.dist[k]!, b.height[k]!));
         const bm = bakeTexelBlockers(m, src, rMap, ((i % m.W) + m.W) % m.W, j, undefined, "mean");

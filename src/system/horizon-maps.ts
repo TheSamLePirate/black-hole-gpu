@@ -265,13 +265,36 @@ const along = (p: Vec3, t: Vec3, th: number): Vec3 => {
 };
 
 /** One texel's horizons as the GPU bakes them (horizon.wgsl bake): the sectors' highest sines. `h0` overrides the receiver's
- *  height (the tests' "receiver higher or lower"). */
-export function bakeTexel(l: Lattice, src: HeightPyramid, r: BakeRange, i: number, j: number, h0?: number): Float64Array {
+ *  height (the tests' "receiver higher or lower"); `reads` the rays' heights — the ground's mean a level over the step's
+ *  (option (d), decision 37, the default) or its top. */
+export function bakeTexel(
+  l: Lattice,
+  src: HeightPyramid,
+  r: BakeRange,
+  i: number,
+  j: number,
+  h0?: number,
+  reads: "top" | "mean" = "mean",
+): Float64Array {
+  return bakeTexelSteps(l, src, r, i, j, h0, reads).sin;
+}
+/** bakeTexel with each sector's dominant blocker's step n — its distance D_bake × 1.25ⁿ — as the GPU stores it (its layers
+ *  after the sines'), and the receiver's height it was seen from */
+export function bakeTexelSteps(
+  l: Lattice,
+  src: HeightPyramid,
+  r: BakeRange,
+  i: number,
+  j: number,
+  h0?: number,
+  reads: "top" | "mean" = "mean",
+) {
   const { p, lat, lon } = latticePoint(l, i, j);
   const obs = h0 ?? topAround(src, p, r.obsLevel);
   const S = latticeSectors(l),
     spread = sectorSpread(l);
-  const out = new Float64Array(S);
+  const sin = new Float64Array(S),
+    step = new Uint8Array(S);
   for (let k = 0; k < S; k++) {
     let best = -1;
     for (const o of [-spread, 0, spread]) {
@@ -279,14 +302,22 @@ export function bakeTexel(l: Lattice, src: HeightPyramid, r: BakeRange, i: numbe
       let d = r.D0;
       for (let n = 0; n < r.steps; n++, d *= HORIZON_STEP) {
         const th = d / r.R;
-        const h = topAt(src, along(p, t, th), stepLevel(r, d));
+        const q = along(p, t, th);
+        const h = reads === "top" ? topAt(src, q, stepLevel(r, d)) : meanLevelAt(src, q, stepLevel(r, d) + 1);
         const e = elevationSin(r.R, obs, h, th);
-        if (e > best) best = e;
+        if (e > best) (best = e), (step[k] = n);
       }
     }
-    out[k] = best;
+    sin[k] = best;
   }
-  return out;
+  return { sin, step, obs };
+}
+/** option (d)'s horizon seen again from a receiver at h — the bake's from h0, its blocker d away: tan e' = tan e + (h0 − h)/d
+ *  (decision 37; the shading's, H2/H3) — as a sine */
+export function horizonSeenFrom(sinBaked: number, h0: number, h: number, d: number): number {
+  const c = Math.sqrt(Math.max(1 - sinBaked * sinBaked, 1e-12));
+  const t = sinBaked / c + (h0 - h) / d;
+  return t / Math.sqrt(1 + t * t);
 }
 
 /** The same texel baked as the reference does (the plan's "cuisson de référence au pas d'un texel"): the same three rays a
@@ -428,6 +459,8 @@ export class HorizonMaps {
   /** the rows a dispatch (the map's; a cap's band scaled to its width), the time a frame's band aims at [ms] */
   rows = 16;
   budgetMs = 2;
+  /** the rays' reads: the ground's mean a level over the step's (option (d), decision 37) or its top (the pilot's (a)) */
+  reads: "mean" | "top" = "mean";
   startedAt = 0;
   doneMs = 0;
   frames = 0;
@@ -530,9 +563,10 @@ export class HorizonMaps {
     const W = horizonMapWidth(dem.W);
     const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC;
     const levels = (n: number) => Math.floor(Math.log2(n)) + 1;
-    this.map = d.createTexture({ size: [W, W / 2, 2], format: "rgba8unorm", mipLevelCount: levels(W), usage, label: "horizon map" });
+    // (option (d): the sines' layers, then as many for the blockers' steps — the map 2 + 2, a cap 4 + 4)
+    this.map = d.createTexture({ size: [W, W / 2, 4], format: "rgba8unorm", mipLevelCount: levels(W), usage, label: "horizon map" });
     this.pole = d.createTexture({
-      size: [POLE_N, POLE_N, 8],
+      size: [POLE_N, POLE_N, 16],
       format: "rgba8unorm",
       mipLevelCount: levels(POLE_N),
       usage,
@@ -551,7 +585,7 @@ export class HorizonMaps {
       else F.set([lattice.pole, lattice.rmax, 0, 0], 4);
       F.set([range.R, range.D0, range.Dmax, range.texelSrc], 8);
       U.set([range.steps, range.obsLevel, latticeSectors(lattice), top], 12);
-      F.set([sectorSpread(lattice), layer0, 0, 0], 16);
+      F.set([sectorSpread(lattice), layer0, this.reads === "mean" ? 1 : 0, 0], 16);
       const uniform = d.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: "horizon bake" });
       d.queue.writeBuffer(uniform, 0, u);
       const group = d.createBindGroup({
@@ -567,7 +601,7 @@ export class HorizonMaps {
     };
     const map = add(globalLattice(W, W / 2), this.map, 0);
     const pole = add(capLattice(1), this.pole, 0);
-    add(capLattice(-1), this.pole, 4);
+    add(capLattice(-1), this.pole, 8);
     this.ranges = { map, pole };
   }
 

@@ -1295,3 +1295,8 @@ compilation) s'y ajoutent.
   **préparé à l'avance dans un worker** pour la fenêtre suivante, décidée par le cache avant le bord : en vol stabilisé sur
   piste, plus aucun maillage fait dans l'image, l'image de reconstruction ~27 → ~12 ms (8 ms d'ordinaire) — e2e
   `runway-mesh`, [progress/refraction-horizons/T257.md](progress/refraction-horizons/T257.md).
+- **3 novembre, plus tard** : l'analyse « au-dessus de Paris » ([ANALYSE-PARIS-PIPELINE-2026-11-03.md](ANALYSE-PARIS-PIPELINE-2026-11-03.md)) ;
+  les bâtiments maillés autour de l'avion et en boîtes orientées, le centre du décor tenu, le décor en deux temps, un budget
+  Géoplateforme commun, le worker plus léger ; **la nuit calibrée** (Q2) ; **Q3** première étape — le matériau du tracé sur
+  les bâtiments raster ([Q3.md](progress/refraction-horizons/Q3.md)) ; **H1 (d)** sur le GPU — les moyennes le long des rayons,
+  le pas du bloqueur dominant ([H1.md](progress/refraction-horizons/H1.md)).

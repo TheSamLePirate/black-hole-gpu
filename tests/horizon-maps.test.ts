@@ -2,7 +2,9 @@ import { expect, test } from "bun:test";
 import type { Vec3 } from "../src/physics";
 import {
   bakeRange,
-  bakeTexel,
+  bakeTexel as bakeTexelAny,
+  bakeTexelSteps,
+  horizonSeenFrom,
   bakeTexelReference,
   capLattice,
   decodeHorizon,
@@ -20,6 +22,18 @@ import {
   referenceHorizon,
   toHalf,
 } from "../src/system/horizon-maps";
+// (the bake's geometry — its rays, steps, sectors, caps — tested on the ground's tops: every blocker caught, the reads'
+// conservative bound; option (d)'s mean reads — the default since decision 37 — tested below)
+const bakeTexel = (
+  ...a: [
+    Parameters<typeof bakeTexelAny>[0],
+    Parameters<typeof bakeTexelAny>[1],
+    Parameters<typeof bakeTexelAny>[2],
+    number,
+    number,
+    number?,
+  ]
+) => bakeTexelAny(a[0], a[1], a[2], a[3], a[4], a[5], "top");
 
 // H1 — the horizon maps' bake (src/system/horizon-maps.ts, its CPU reference of shaders/horizon.wgsl), on synthetic bodies
 // of the Moon's radius: a DEM of 2048 × 1024 (5.3 km a texel), the map at half of it (1024 × 512).
@@ -301,4 +315,49 @@ test("a local lat/lon grid (the Earth's cache, H5): the same horizons as the glo
   const b = bakeTexel(local, src, bakeRange(local, src, R, 2500), 10, 20);
   for (let k = 0; k < 8; k++) expect(b[k]!).toBeCloseTo(a[k]!, 9);
   expect(sinDeg(a[3]!)).toBeGreaterThan(0.3);
+});
+
+test("option (d): the dominant blocker's step kept — a block 4 km high 50 km north at its own distance, the bare sphere's first step elsewhere", () => {
+  const m = flat();
+  const i = 300,
+    j = 256;
+  const { lat, lon } = latticePoint(map, i, j);
+  const c = destination(lat, lon, 0, 50_000);
+  bump(m, c.lat, c.lon, 12_000, 4000);
+  const src = heightPyramid(m, W, H);
+  const r = bakeRange(map, src, R, 4000);
+  const v = bakeTexelSteps(map, src, r, i, j);
+  const d = r.D0 * 1.25 ** v.step[0]!;
+  console.log(`  north: blocker at step ${v.step[0]} — ${(d / 1000).toFixed(1)} km (the block's near edge 38 km, its centre 50 km)`);
+  // (its distance among the block's: its near edge to its far one, a step either side)
+  expect(d).toBeGreaterThan(38_000 / 1.25);
+  expect(d).toBeLessThan(62_000 * 1.25);
+  // (no blocker south: the bare sphere's first step)
+  expect(v.step[4]).toBe(0);
+  // (the mean's reads never see higher than the tops')
+  const top = bakeTexelAny(map, src, r, i, j, undefined, "top");
+  for (let k = 0; k < 8; k++) expect(v.sin[k]!).toBeLessThanOrEqual(top[k]! + 1e-9);
+});
+
+test("option (d): the horizon seen again from the receiver's own height — the blocker kept — as baked from that height, within 0.05°", () => {
+  const m = flat();
+  const i = 300,
+    j = 256;
+  const { lat, lon } = latticePoint(map, i, j);
+  const ridge = destination(lat, lon, 90 * deg, 60_000);
+  bump(m, ridge.lat, ridge.lon, 10_000, 3000);
+  const src = heightPyramid(m, W, H);
+  const r = bakeRange(map, src, R, 3000);
+  // (baked from 1 500 m — a texel's top —; the receiver on its floor at 0 m)
+  const fromTop = bakeTexelSteps(map, src, r, i, j, 1500);
+  const fromFloor = bakeTexelSteps(map, src, r, i, j, 0);
+  const d = r.D0 * 1.25 ** fromTop.step[2]!;
+  const seen = horizonSeenFrom(fromTop.sin[2]!, 1500, 0, d);
+  console.log(
+    `  east: from the top ${sinDeg(fromTop.sin[2]!).toFixed(3)}°, seen again from the floor ${sinDeg(seen).toFixed(3)}°, baked from the floor ${sinDeg(fromFloor.sin[2]!).toFixed(3)}°`,
+  );
+  expect(fromTop.step[2]).toBe(fromFloor.step[2]);
+  expect(Math.abs(sinDeg(seen) - sinDeg(fromFloor.sin[2]!))).toBeLessThan(0.05);
+  // (and higher than the top's: the floor's receiver more shadowed — the faux éclairage the pilot measured, corrected)
+  expect(seen).toBeGreaterThan(fromTop.sin[2]!);
 });
