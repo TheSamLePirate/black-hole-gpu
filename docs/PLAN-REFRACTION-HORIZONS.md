@@ -1341,7 +1341,9 @@ compilation) s'y ajoutent.
   chargements, le plus fin d'abord ; à 1 000 ms la vue à 90 % en 8,1 s au lieu de 26, à 99 % en 11,2 s au lieu de 34, le relief IGN
   entier toujours à 8 s. **Décision de Sam (3 novembre)** : les fenêtres d'ortho de 8 tuiles (T8e) restent désactivées. **T8 clos** (synthèse en tête de [T8.md](progress/refraction-horizons/T8.md)) ; suite : Q6. **Q6a** — la mesure de l'image en mouvement (`motion-quality` : le même mouvement par
   image pour chaque mode, sa référence propre, PSNR et netteté dans la verrière) : à Tarifa, le TAAU existant, éteint depuis
-  octobre, bat le chemin par défaut en mouvement (39,6 → 44,4 dB, netteté 0,74 → 0,95) pour ≈ +1,8 ms ([Q6.md](progress/refraction-horizons/Q6.md)).
+  octobre, bat le chemin par défaut en mouvement (39,6 → 44,4 dB, netteté 0,74 → 0,95) pour ≈ +1,8 ms ([Q6.md](progress/refraction-horizons/Q6.md)). **Q6b** — le TAAU en mouvement par défaut : netteté en mouvement ~0,7 → ~0,94 de la
+  référence sur le relief (Tarifa, Alpes), aucun fantôme sur la mer mais ses vagues rasantes 10 % plus granuleuses que la
+  référence ; +0,6 à +4,3 ms (Heavy).
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

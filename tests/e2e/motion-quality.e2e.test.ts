@@ -13,7 +13,7 @@ import { readPng } from "./lib/png";
 // converged at the canvas's full scale, once a place (every mode starts from the place's saved state: the same flight). Each against the reference, in the view through the canopy (BOX): PSNR and the sharpness ratio (the
 // Laplacian's energy over the reference's — 1: as sharp; under: softer; over: noisier or aliased).
 // The HUD off; each mode's own reference, made at once after its still shot (the view exactly the same).
-// PLACES=tarifa-low,alps; MODES (below) — e.g. spatial75q,taau75q,native100q; FRAMES (90), TURN (40), STILL (30).
+// PLACES=tarifa-low,alps (strait: the sea); MODES (below) — e.g. spatial75q,taau75q,native100q; FRAMES (90), TURN (40), STILL (30).
 // Output: remote-results/motion-quality/<place>-<mode>[-still|-ref].png, motion-quality.json (MQ_OUT).
 // Done when: every place × mode measured (the tiles 120 s at most, the reference 90 s, what is missing said), no GPU error.
 // Duration: ~3 min a place × mode (its reference 90 s; the first one waits for the tiles).
@@ -22,6 +22,9 @@ const OUT = process.env.MQ_OUT ?? "remote-results/motion-quality";
 const PLACES: Record<string, string> = {
   "tarifa-low": `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.1);
     __bh.game.flyAt(36.08, -5.6, 700, 20, 240);`,
+  // (the sea's waves moving under the turn — the history's ghosts: the strait of Gibraltar, 300 m up, heading west)
+  strait: `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
+    __bh.game.flyAt(35.96, -5.45, 300, 250, 200);`,
   alps: `__bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(45.85, 6.75, 2500, 110, 200);`,
 };
@@ -90,7 +93,15 @@ describe.skipIf(!E2E)("Q6: the image in motion, the same motion for every mode",
   const saves = new Map<string, string>();
   beforeAll(async () => {
     mkdirSync(OUT, { recursive: true });
-    app = await App.boot({ width: 1600, height: 1000, lang: "fr", hash: "scene=game:artemis", tiles: true });
+    // (MQ_CHROME_PROFILE: one Chrome profile kept across runs — its HTTP cache serving the tiles once warmed: none still loading)
+    app = await App.boot({
+      width: 1600,
+      height: 1000,
+      lang: "fr",
+      hash: "scene=game:artemis",
+      tiles: true,
+      profile: process.env.MQ_CHROME_PROFILE || undefined,
+    });
     await app.js(
       `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, showFps: false, autosave: false, f35AutoProtect: true, f35Invulnerable: true }); return 1; })()`,
     );

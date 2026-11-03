@@ -1,0 +1,80 @@
+[
+  {
+    "place": "tarifa-low",
+    "mode": "spatial75q",
+    "gpuMs": 81.4,
+    "turnPx": 9.7,
+    "groundPx": 4.7,
+    "psnrMoving": 38.22,
+    "psnrStill": 46.28,
+    "sharpMoving": 0.735,
+    "sharpStill": 0.921,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "tarifa-low",
+    "mode": "taau75q",
+    "gpuMs": 22.2,
+    "turnPx": 35.7,
+    "groundPx": 14,
+    "psnrMoving": 44.17,
+    "psnrStill": 45.23,
+    "sharpMoving": 0.955,
+    "sharpStill": 1.087,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "alps",
+    "mode": "spatial75q",
+    "gpuMs": 19.1,
+    "turnPx": 32.5,
+    "groundPx": 3,
+    "psnrMoving": 36.3,
+    "psnrStill": 37.18,
+    "sharpMoving": 0.678,
+    "sharpStill": 0.997,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "alps",
+    "mode": "taau75q",
+    "gpuMs": 19.7,
+    "turnPx": 25.6,
+    "groundPx": 2.3,
+    "psnrMoving": 41.04,
+    "psnrStill": 42.15,
+    "sharpMoving": 0.92,
+    "sharpStill": 1.033,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "strait",
+    "mode": "spatial75q",
+    "gpuMs": 26.7,
+    "turnPx": 12.3,
+    "groundPx": 19.4,
+    "psnrMoving": 45.29,
+    "psnrStill": 46.12,
+    "sharpMoving": 0.927,
+    "sharpStill": 1.019,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "strait",
+    "mode": "taau75q",
+    "gpuMs": 31,
+    "turnPx": 11.3,
+    "groundPx": 17.1,
+    "psnrMoving": 42.98,
+    "psnrStill": 43.06,
+    "sharpMoving": 1.249,
+    "sharpStill": 1.332,
+    "converged": false,
+    "gpuErrors": 0
+  }
+]

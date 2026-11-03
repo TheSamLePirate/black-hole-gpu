@@ -3748,9 +3748,10 @@ export class Renderer {
     // (the cloud pass's bit — CLOUD_PASS_FLAG — set once it is drawn this frame: dispatchTrace, when the frame's key is whole)
     this.cloudPassDrawn = false;
     // (16 written 15: the rate's four bits — trace.wgsl rasterRate)
-    // (64: the ground's albedo read at every pixel — RASTER_DETAIL, trace.wgsl rasterAlbedo —, not with the temporal upsampling,
-    // whose history has no albedo beside it)
-    const detail = rasterPrimary && this.rasterDetail && !this.taauOn;
+    // (64: the ground's albedo read at every pixel — RASTER_DETAIL, trace.wgsl rasterAlbedo —, not under the temporal upsampling,
+    // whose history has no albedo beside it: only where it runs — the live image under the canvas —, the held view's refinement
+    // at the full scale keeping it)
+    const detail = rasterPrimary && this.rasterDetail && !this.taauWanted(t);
     // (no frame jitter under another world's raster with a walker on it: the ground's depth moving a sub-pixel each frame, the
     // astronaut composited against it shook at its feet — kerr-mini, PLAN-PLANETES-AAA P5)
     const halton = this.rasterJitter === "halton" && !(this.bodyRasterNow && this.character?.active);
@@ -6347,10 +6348,11 @@ export class Renderer {
     return true;
   }
 
-  /** the temporal upsampling (post.wgsl taau): on where the live image is rendered under the canvas, moving — off by
-   *  default: in a turn at ⅛ or ¼ shading its samples are too few to beat the display's Catmull–Rom, for 2–3 ms more
-   *  (docs/progress/raster-aaa/PERF-2026-10-21.md) */
-  taauOn = false;
+  /** the temporal upsampling (post.wgsl taau): on where the live image is rendered under the canvas, moving. On by default
+   *  since Q6b (4 Nov 2026): measured the same motion a frame for every mode (tests/e2e/motion-quality.e2e.test.ts), it beats
+   *  the display's Catmull–Rom in a turn — Tarifa 39.6 → 44.4 dB, sharpness 0.74 → 0.95 of the reference, ≈ +1.8 ms. (Off
+   *  from 21 Oct: a flight in real time, its motion a frame unlike from one mode to another — PERF-2026-10-21.md.) */
+  taauOn = true;
   /** its samples' kernel σ [output px] (×scale: render px) */
   taauSigma = 0.5;
   /** the native result's weight in its history each frame (post.wgsl taau: no drift where few samples land) */
@@ -6369,13 +6371,25 @@ export class Renderer {
    * The temporal upsampling's pass, after the native temporal one (ta.idx its result): at the canvas's size where the live
    * image is rendered under it — else off, the display upscaling the render as before.
    */
+  /** whether the temporal upsampling runs for this target: on, the live image rendered under the canvas (moving) */
+  private taauWanted(t: Target) {
+    const cv = this.context.canvas as HTMLCanvasElement;
+    return (
+      this.taauOn &&
+      !!this.postTaau &&
+      t === this.live &&
+      !!t.temporal &&
+      cv.width > t.width * 1.01 &&
+      cv.height > t.height * 1.01 &&
+      !this.costViewMode
+    );
+  }
+
   private encodeTaau(enc: GPUCommandEncoder, t: Target, stars: boolean) {
     const cv = this.context.canvas as HTMLCanvasElement;
     const W = cv.width,
       H = cv.height;
-    const want =
-      this.taauOn && !!this.postTaau && t === this.live && !!t.temporal && W > t.width * 1.01 && H > t.height * 1.01 && !this.costViewMode;
-    if (!want) {
+    if (!this.taauWanted(t)) {
       if (t.taau) t.taau.on = false;
       return;
     }
