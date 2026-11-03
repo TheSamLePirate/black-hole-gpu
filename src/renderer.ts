@@ -6355,6 +6355,9 @@ export class Renderer {
   taauOn = true;
   /** its samples' kernel σ [output px] (×scale: render px) */
   taauSigma = 0.5;
+  /** its kernel σ on water [output px] (the raster's mark tells it — trace.wgsl rasterMark): the sea's glints far off filtered as
+   *  the reference does (Q6d: at 0.5 the far sea 1.33 of the reference's sharpness, at 0.7 1.05; the land at 0.7 lost 0.15) */
+  taauSigmaWater = 0.7;
   /** the native result's weight in its history each frame (post.wgsl taau: no drift where few samples land) */
   taauNative = 0.02;
 
@@ -6441,7 +6444,7 @@ export class Renderer {
     }
     const scale = t.width / W;
     const f = new Float32Array(8);
-    f.set([this.taauNative, 0, Math.max(this.taauSigma * scale, 0.3), u.valid ? 1 : 0]);
+    f.set([this.taauNative, Math.max(this.taauSigmaWater * scale, 0.3), Math.max(this.taauSigma * scale, 0.3), u.valid ? 1 : 0]);
     new Uint32Array(f.buffer).set([this.frameStamp, this.rasterHaltonNow ? 1 : 0, stars ? 1 : 0, 0], 4);
     d.queue.writeBuffer(u.buf, 0, f);
     const pass = enc.beginComputePass(this.prof.pass("taau"));

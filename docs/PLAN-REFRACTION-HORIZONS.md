@@ -1345,7 +1345,8 @@ compilation) s'y ajoutent.
   référence sur le relief (Tarifa, Alpes), aucun fantôme sur la mer mais ses vagues rasantes 10 % plus granuleuses que la
   référence ; +0,6 à +4,3 ms (Heavy). **Q6c** — `motion-quality` reproductible d'un lancement à l'autre (tout chargé et compilé,
   pilote automatique, auto-manette, train sorti, 60 images de stabilisation ; bruit ±0,5 dB) ; la passe TAAU −10 % (1,65 → 1,48 ms),
-  l'image inchangée.
+  l'image inchangée. **Q6d** — le noyau du TAAU élargi sur l'eau seule (la marque raster porte l'eau ; σ 0,7 sur
+  l'eau, 0,5 ailleurs) : le grain de la mer lointaine −8 % (netteté 1,25 → 1,15 de la référence), la terre inchangée.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

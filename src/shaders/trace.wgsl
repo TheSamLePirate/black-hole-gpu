@@ -914,6 +914,9 @@ var<private> SEA_D: vec3f;
 // (the sea's depth under the pixel [m] and how sure — earthGround: seaDepthAt, the near tiles' bathymetry; 0: deep assumed)
 var<private> SEA_DEPTH: f32 = 1e4;
 var<private> SEA_DEPTH_W: f32 = 0.0;
+// (the water's share of the ground last shaded — earthGround's ocean: the sea, a lake, a river —: the raster's mark carries it to the
+// temporal upsampling, whose kernel widens over the water's glints — post.wgsl taau, Q6d)
+var<private> LAST_OCEAN: f32 = 0.0;
 var<private> SPLAT: bool = false;
 var<private> SPLAT_POS: vec2f;
 var<private> SPLAT_CELL: vec2f;
@@ -9698,6 +9701,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let overSea = max(smoothstep(0.5, 2.0, hG), osmLand);
   let sea0 = smoothstep(0.35, 0.65, rel.b) * (1.0 - overSea);
   let ocean = max(sea0,osmWater) * (1.0 - lvl);
+  LAST_OCEAN = ocean;
   // (near, the tiles' imagery over the maps: four to eight times finer)
   var img = earthImageryAniso(gq, fx, fy);
   if ((TUNE_GSKIP & 32u) != 0u) { img.w = 0.0; }
@@ -13163,7 +13167,8 @@ fn rasterAlbedo(px: vec2f, k: u32) -> f32 {
 }
 // moments.x of a raster pixel with its albedo a (0: none): shaded this frame — RASTER_MARK and over —, left — RASTER_STALE and
 // under (post.wgsl rasterAlb reads it back; their tests are ranges: > 1e29, (−3.5, −2.5))
-fn rasterMark(a: f32) -> f32 { return RASTER_MARK * (1.0 + a); }
+// (on water — over half its ground —: RASTER_MARK × (4 + a), the same albedo read, the upsampling's kernel told — Q6d)
+fn rasterMark(a: f32, water: f32) -> f32 { return RASTER_MARK * (select(1.0, 4.0, water > 0.5) + a); }
 fn rasterStale(a: f32) -> f32 { return RASTER_STALE - 0.45 * a; }
 fn halton(i: u32, b: u32) -> f32 {
   var f = 1.0;
@@ -13274,6 +13279,7 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   RHINT_TOL = rasterHintTol(select(pos, centre, rasterHalton()));
   RND = RNDV.z;
   REFR_DELTA = 0.0;
+  LAST_OCEAN = 0.0;
   let e = earthNear(look, rnd, k);
   RHINT = 0.0;
   RASTER_ID = 0u;
@@ -13302,7 +13308,7 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   let old = accum[idx];
   if (temporal && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
   accum[idx] = vec4f(col, 1.0);
-  moments[idx] = vec2f(rasterMark(alb), dM);
+  moments[idx] = vec2f(rasterMark(alb, LAST_OCEAN), dM);
   stamps[idx] = frameStamp;
 }
 
@@ -13528,7 +13534,7 @@ fn liteSky(q: vec3f, hG: f32, E: vec3f, Ls: vec3f, mu0: f32) -> vec3f {
 }
 // A raster pixel's surface radiance G seen through the clouds before it (the cloud pass's) and the air (the aerial table's —
 // else marched, as earthLook), blended with its last colour (P.ext.w, temporal: not after shadeLite's own write), written
-fn liteFinish(idx: u32, centre: vec2f, pos: vec2f, G: vec3f, rd: vec3f, tH: f32, tM: f32, Ls: vec3f, E: vec3f, k: u32, blend: bool) {
+fn liteFinish(idx: u32, centre: vec2f, pos: vec2f, G: vec3f, rd: vec3f, tH: f32, tM: f32, Ls: vec3f, E: vec3f, k: u32, blend: bool, water: bool) {
   let flags = P.frame.z;
   let frameStamp = P.frame.x;
   // (liteSkip 2048: no air nor clouds over the surface — a measure)
@@ -13567,7 +13573,8 @@ fn liteFinish(idx: u32, centre: vec2f, pos: vec2f, G: vec3f, rd: vec3f, tH: f32,
   let old = accum[idx];
   if (blend && (flags & FLAG_TEMPORAL) != 0u && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
   accum[idx] = vec4f(col, 1.0);
-  moments[idx] = vec2f(RASTER_MARK, tM / EARTH_RM * bodyRadius(k));
+  // (on water — shadeWater's, over half its pixel —: the mark's water range, the upsampling's kernel told — rasterMark, Q6d)
+  moments[idx] = vec2f(rasterMark(0.0, select(0.0, 1.0, water)), tM / EARTH_RM * bodyRadius(k));
   stamps[idx] = frameStamp;
 }
 // The water split from shadeLite (renderer.rasterWater, mouthList[1].y + 256): shadeLite leaves its water's pixels to
@@ -14058,7 +14065,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     }
   }
   if ((liteSkip() & 8192u) != 0u) { G = liteShadowDebug(E); }
-  liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true);
+  liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true, false);
 }
 
 // The image while the scene's tracer compiles (renderer.skyFillOn — its main: two minutes on a Windows PC, the driver's
@@ -14229,7 +14236,7 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
       G = mix(G, white, steep * clamp(0.45 + 0.75 * streak, 0.0, 1.0));
     }
   }
-  liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, false);
+  liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, false, water > 0.5);
 }
 
 // The cloud pass (docs/PLAN-NUAGES-AAA.md N1): the clouds along each camera ray marched once a texel of half the image's

@@ -37,7 +37,12 @@ const MODES: Record<string, string> = {
   // (the default path in motion: 75 % of the canvas, one pixel in four shaded, the history at that scale, the display's upscale)
   spatial75q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = false; __bh.forceScale(0.75);`,
   // (the same, the temporal upsampling after the native history — post.wgsl taau)
-  taau75q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.forceScale(0.75);`,
+  taau75q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(0.75);`,
+  // (the water's kernel as the land's — before Q6d)
+  taau75qw5: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.5; __bh.forceScale(0.75);`,
+  // (the upsampling's samples' kernel σ [output px] — renderer.taauSigma, 0.5 by default: wider filters the sea's glints more)
+  taau75qs6: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.6; __bh.forceScale(0.75);`,
+  taau75qs7: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.7; __bh.forceScale(0.75);`,
   // (every pixel at the canvas's scale, one in four shaded: what a reconstruction from 75 % aims at)
   native100q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = false; __bh.forceScale(1);`,
   spatial75e: `${RASTER} __bh.settings.earthRasterShading = "eighth"; __bh.renderer.taauOn = false; __bh.forceScale(0.75);`,
@@ -260,7 +265,7 @@ describe.skipIf(!E2E)("Q6: the image in motion, the same motion for every mode",
         rows.push(row);
         console.log(JSON.stringify(row));
         await app.js(
-          `(() => { __bh.renderer.taauOn = false; __bh.forceScale(null); __bh.freeze(false); document.body.classList.remove("hide-ui"); document.getElementById("overlay").style.visibility = ""; return 1; })()`,
+          `(() => { __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(null); __bh.freeze(false); document.body.classList.remove("hide-ui"); document.getElementById("overlay").style.visibility = ""; return 1; })()`,
         );
         expect(row.gpuErrors).toBe(0);
       }, 600_000);

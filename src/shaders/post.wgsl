@@ -128,6 +128,8 @@ fn beamV(@builtin(global_invocation_id) gid: vec3u) { beamBlur(gid.xy, vec2i(0, 
 fn luminance(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
 // The ground's albedo a raster pixel carries in moments.x (trace.wgsl rasterMark, rasterStale — RASTER_DETAIL; 0: none)
 fn rasterAlb(mx: f32) -> f32 {
+  // (a raster pixel on water — Q6d —: its mark 4 + a, the same albedo)
+  if (mx > 3.5e30) { return clamp(mx * 1e-30 - 4.0, 0.0, 1.0); }
   if (mx > 1e29) { return clamp(mx * 1e-30 - 1.0, 0.0, 1.0); }
   if (mx < -2.5 && mx > -3.5) { return clamp((-3.0 - mx) / 0.45, 0.0, 1.0); }
   return 0.0;
@@ -1069,7 +1071,7 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
 // result upscaled where there is no history (a jump, a disocclusion, the cockpit's mask). dst: the history (no stars);
 // upOut: the image the display shows (the stars splatted over it).
 struct Taau {
-  s: vec4f, // x: the native result's weight a frame, y: unused, z: the samples' kernel σ [render px], w: the history valid (1)
+  s: vec4f, // x: the native result's weight a frame, y: the samples' kernel σ on water [render px], z: elsewhere, w: the history valid (1)
   u: vec4u, // x: this frame's stamp, y: the raster's jitter Halton's (1), z: the stars splatted this frame (1), w: unused
 };
 @group(0) @binding(25) var lowTex: texture_2d<f32>;
@@ -1144,7 +1146,11 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
   var wsum = 0.0;
   var m1 = vec3f(0.0);
   var m2 = vec3f(0.0);
-  let inv2s2 = 0.5 / (TU.s.z * TU.s.z);
+  // (the kernel wider on water — the raster's mark 4 + a, trace.wgsl rasterMark —: the sea's glints, rasant far off, under-filtered
+  // at σ 0.5 — grainier than the reference, 1.33 of its sharpness; 0.7 there, 1.05 — the land's kept sharp — Q6d)
+  let water = moments[u32(base.y) * W + u32(base.x)].x > 3.5e30;
+  let sg = select(TU.s.z, TU.s.y, water);
+  let inv2s2 = 0.5 / (sg * sg);
   var dn = 3e38;
   for (var j = -1; j <= 1; j++) {
     for (var i = -1; i <= 1; i++) {
