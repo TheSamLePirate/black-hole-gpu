@@ -1151,22 +1151,29 @@ export class EarthTiles {
   }
 
   /**
-   * Starts the loads: every level's missing tiles together, the nearest first in each level's own tiles (cost: led along the
-   * motion) — before, each coarse level's whole window went before the fine levels' near tiles —; the windows whole, the
+   * Starts the loads: the level with the fewest tiles still missing from its window first (T8h: a level is drawn only whole —
+   * the levels then drawn one after the other), ties to the finer, the nearest of its tiles first (cost: led along the
+   * motion); the windows whole, the
    * halo round them into memory (ringLevel, TILE_REACH ring), while it has room.
    */
   private request(lonT: number, sinLat: number) {
     const now = performance.now();
     const todo: [Level, number, number, number][] = [];
+    // (T8h: each level's tiles still missing from its window — in flight included: a level is drawn only once its whole window
+    // is in (complete), so the one nearest to it goes first — the levels drawn one after the other, not all at the end)
+    const missing = new Map<Level, number>();
     for (const L of this.levels) {
       // (a window drawn whole: nothing to look for — not its tiles' keys made again each frame —, unless taken again)
       if (!L.want || (same(L.valid, L.want) && !L.stale)) continue;
       const cx = lonT * L.n,
         cy = mercY(sinLat, L.n);
+      let m = 0;
       for (let y = L.want.y0; y < L.want.y1; y++) {
         for (let x = L.want.x0; x < L.want.x1; x++) {
           const key = this.keyOf(L, x, y);
-          if (L.key[this.slotOf(L, x, y)] === key || this.inflight.has(key)) continue;
+          if (L.key[this.slotOf(L, x, y)] === key) continue;
+          m++;
+          if (this.inflight.has(key)) continue;
           // (kept past the window — walked back to, or loaded ahead —: drawn at once)
           const kept = this.cache.get(key);
           if (kept) {
@@ -1179,9 +1186,12 @@ export class EarthTiles {
           todo.push([L, x, y, this.cost(L, x, y, cx, cy)]);
         }
       }
+      missing.set(L, m);
     }
-    // (the loads limited, not what memory holds: every level's kept tiles drawn at once; ties to the coarser)
-    todo.sort((a, b) => a[3] - b[3] || a[0].z - b[0].z);
+    // (the loads limited, not what memory holds: every level's kept tiles drawn at once; the level nearest to whole first —
+    // ties to the finer: the ground near the eye fills most of the view, the coarsest levels a strip at the horizon —, the
+    // nearest of its tiles first)
+    todo.sort((a, b) => missing.get(a[0])! - missing.get(b[0])! || b[0].z - a[0].z || a[3] - b[3]);
     for (const [L, x, y] of todo) {
       if (this.inflight.size >= MAX_INFLIGHT) break;
       void this.load(L, x, y);

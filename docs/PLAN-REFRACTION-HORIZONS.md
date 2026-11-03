@@ -1331,7 +1331,10 @@ compilation) s'y ajoutent.
   dernières couches de la texture 2048², +45 Mo GPU) : aucun coût GPU mesurable, **aucun gain visible dans la vue de Paris à
   450 m** (le pied du pixel au-delà de 1,6 km y est plus grossier que z 15 ; un premier « +6 % de netteté » était un artefact de la
   normalisation d'exposition, corrigé en T8f) — mesuré aussi à 2 000 m, regard plongeant : pas de changement non plus. **T8g** : désactivées (`ORTHO_BIG_LEVELS = 0`,
-  le mécanisme gardé ; −45 Mo GPU), **décision à confirmer par Sam** (le plan les demandait).
+  le mécanisme gardé ; −45 Mo GPU), **décision à confirmer par Sam** (le plan les demandait). **T8h** — la priorité des tuiles : le niveau le plus près d'avoir sa fenêtre
+  entière d'abord (un niveau n'est dessiné qu'entier), à égalité le plus fin ; mesuré en rejeu des tuiles à latence fixe
+  (`tile-arrival`, `lib/tile-replay.ts`) : à 1 000 ms, le z 14 dessiné 49 → 26 s, le relief IGN entier 51 → 8,7 s, la moyenne
+  des niveaux 42,8 → 24,6 s ; à 300 ms, z 14 18 → 9 s, IGN 19 → 3,7 s.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du
