@@ -1326,7 +1326,10 @@ compilation) s'y ajoutent.
   de l'appareil et ses voisins plus recalculés par chacun de leurs lecteurs (`gravityHome` sans vitesse, `mouthAccel`, `mouth()` figé,
   gardés par point/instant/réglages ; `escapeRadius` sans notre côté ; la boîte du canvas du guidage au roulage lue seulement quand il
   s'affiche) : profil `sfFrame` 856 → 396 ms, mises en page forcées 304 → 23 ms sur 25 s ; A/B (thermique Nominal) p95 4,5 contre
-  4,7–5,1 ms, à tuiles inégales — non démontré.
+  4,7–5,1 ms, à tuiles inégales — non démontré. Puis à cache chaud et tuiles égales (pression Nominal) : −0,3 ms à la médiane
+  et au p95 (4,9/5,0 → 4,6/4,7 ms). **T8e** — les orthophotos z 15–16 en fenêtres de 8 tuiles aux portées lointaines (les
+  dernières couches de la texture 2048², +45 Mo GPU) : aucun coût GPU mesurable, la netteté du sol lointain +6 % dans la vue de
+  Paris (ses bâtiments en cachent l'essentiel).
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

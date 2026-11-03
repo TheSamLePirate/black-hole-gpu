@@ -95,9 +95,13 @@ export const eoxUrl = (z: number, x: number, y: number) =>
 export const ORTHO_Z0 = 15;
 export const ORTHO_Z1 = 18;
 export const ORTHO_LEVELS = ORTHO_Z1 - ORTHO_Z0 + 1;
-/** their windows' tiles a side (always 4: 3.4 km at z 15 down to 425 m at z 18, at 48°) and its texels */
+/** their windows' tiles a side (4: 3.4 km at z 15 down to 425 m at z 18, at 48°) and its texels */
 export const ORTHO_SPAN = 4;
 export const ORTHO_CLIP = TILE * ORTHO_SPAN;
+/** T8e (plan T8, contract C0-4): the coarsest orthophotos' levels (z 15, z 16) whose window is 8 tiles a side at a far reach
+ *  (the 2048² imagery texture made — setReach): 6.5 km at z 15, 3.3 km at z 16 at 48° —, in that texture's last layers */
+export const ORTHO_BIG_LEVELS = 2;
+export const ORTHO_SPAN_BIG = 8;
 /** the tracer's table for them (gpu-tables.ts TABLE_ORTHO): three vec4s a level, then the IGN's box [rad] and on */
 export const ORTHO_PARAM_VEC4S = 3 * ORTHO_LEVELS + 2;
 /** their loads at once (the Géoplateforme answers in 0.35–0.8 s), beside the relief's */
@@ -208,11 +212,12 @@ export const IMG_LAYER0 = ORTHO_LEVELS;
 export const IMG_LIGHT0 = IMG_LAYER0 + (IMG_Z1 - Z0 + 1);
 /** the 1024² texture's layers: the orthophotos', every imagery level's (z 6 … 14), the lights' (z 6 … 8) */
 export const IMG_1K_LAYERS = IMG_LIGHT0 + (GIBS_Z1 - Z0 + 1);
-/** the 2048² texture's layers: z FINE_Z … 14 */
-export const IMG_2K_LAYERS = IMG_Z1 - FINE_Z + 1;
+/** the 2048² texture's layers: z FINE_Z … 14, then the orthophotos' z 15 and z 16 at a far reach (T8e: from ORTHO_2K_LAYER0) */
+export const ORTHO_2K_LAYER0 = IMG_Z1 - FINE_Z + 1;
+export const IMG_2K_LAYERS = ORTHO_2K_LAYER0 + ORTHO_BIG_LEVELS;
 const mipBytes = (side: number, layers: number) =>
   Array.from({ length: ORTHO_MIPS }, (_, m) => (side >> m) ** 2 * layers * 4).reduce((a, b) => a + b, 0);
-/** their bytes, their mips in: the 1024² (73 MB) and the 2048² (89 MB, at the farther reaches only) */
+/** their bytes, their mips in: the 1024² (89 MB) and the 2048² (134 MB with the orthophotos' z 15–16 — T8e: 89 before —, at the farther reaches only) */
 export const ORTHO_BYTES = mipBytes(ORTHO_CLIP, IMG_1K_LAYERS);
 export const IMG_2K_BYTES = mipBytes(2 * ORTHO_CLIP, IMG_2K_LAYERS);
 /** sampled textures per stage with the imagery's two (the horizon maps' 29 and two); the 1024² texture's, the sampler's, the
@@ -237,8 +242,15 @@ export function withOrthoImagery(trace: string, supported: boolean): string {
 @group(0) @binding(${ORTHO_BINDINGS[0]}) var orthoTex: texture_2d_array<f32>;
 @group(0) @binding(${ORTHO_BINDINGS[1]}) var orthoSamp: sampler;
 @group(0) @binding(${ORTHO_BINDINGS[2]}) var imgTex2k: texture_2d_array<f32>;
-fn orthoAt(k: u32, uv: vec2f, lod: f32) -> vec4f { return textureSampleLevel(orthoTex, orthoSamp, uv, k, min(lod, ${ORTHO_MIPS - 1}.0)); }
-fn orthoGrad(k: u32, uv: vec2f, gx: vec2f, gy: vec2f) -> vec4f { return textureSampleGrad(orthoTex, orthoSamp, uv, k, gx, gy); }
+fn orthoAt(k: u32, side: f32, uv: vec2f, lod: f32) -> vec4f {
+  // (an 8-tile window — T8e, z 15–16 at a far reach —: the 2048² texture's last layers)
+  if (side > ${ORTHO_CLIP}.5) { return textureSampleLevel(imgTex2k, orthoSamp, uv, ${ORTHO_2K_LAYER0}u + k, min(lod, ${ORTHO_MIPS - 1}.0)); }
+  return textureSampleLevel(orthoTex, orthoSamp, uv, k, min(lod, ${ORTHO_MIPS - 1}.0));
+}
+fn orthoGrad(k: u32, side: f32, uv: vec2f, gx: vec2f, gy: vec2f) -> vec4f {
+  if (side > ${ORTHO_CLIP}.5) { return textureSampleGrad(imgTex2k, orthoSamp, uv, ${ORTHO_2K_LAYER0}u + k, gx, gy); }
+  return textureSampleGrad(orthoTex, orthoSamp, uv, k, gx, gy);
+}
 // (a relief level's window: its side — P.tileL[2l + 1].w's low bits —, its corner within it — P.tileL[2l].zw under the mask)
 fn tileImgUv(l: u32, p: vec2f) -> vec3f {
   let w = f32(u32(P.tileL[2u * l + 1u].w) & 0xffffu);
@@ -345,6 +357,8 @@ interface Level {
 interface OrthoLevel {
   z: number;
   n: number;
+  /** its window's tiles a side: ORTHO_SPAN, or ORTHO_SPAN_BIG (z 15–16 at a far reach — T8e) */
+  span: number;
   want: Rect | null;
   valid: Rect | null;
   key: (string | null)[];
@@ -791,7 +805,14 @@ export class EarthTiles {
     if (filtered) this.liveBytes += ORTHO_BYTES;
     this.peakBytes = Math.max(this.peakBytes, this.liveBytes);
     for (let k = 0; k < ORTHO_LEVELS; k++)
-      this.ortho.push({ z: ORTHO_Z0 + k, n: 2 ** (ORTHO_Z0 + k), want: null, valid: null, key: new Array(ORTHO_SPAN ** 2).fill(null) });
+      this.ortho.push({
+        z: ORTHO_Z0 + k,
+        n: 2 ** (ORTHO_Z0 + k),
+        span: ORTHO_SPAN,
+        want: null,
+        valid: null,
+        key: new Array(ORTHO_SPAN ** 2).fill(null),
+      });
     for (let l = 0; l < LEVELS; l++) {
       const z = Z0 + l;
       const n = this.levelSpan(z);
@@ -877,9 +898,12 @@ export class EarthTiles {
       old2k.destroy();
       this.liveBytes -= oldBytes + old2kBytes;
     });
-    for (const O of this.ortho) {
-      O.key.fill(null);
+    // (the orthophotos' z 15–16 in 8-tile windows of the 2048² texture at a far reach — T8e —, 4-tile ones of the 1024² else)
+    for (const [k, O] of this.ortho.entries()) {
+      O.span = big && k < ORTHO_BIG_LEVELS ? ORTHO_SPAN_BIG : ORTHO_SPAN;
+      O.key = new Array(O.span ** 2).fill(null);
       O.valid = null;
+      O.want = null;
     }
     for (const L of this.levels) {
       L.span = this.levelSpan(L.z);
@@ -969,7 +993,7 @@ export class EarthTiles {
     for (const O of this.ortho) {
       if (!O.want) continue;
       for (let y = O.want.y0; y < O.want.y1; y++)
-        for (let x = O.want.x0; x < O.want.x1; x++) if (O.key[orthoSlot(x, y)] !== this.orthoKey(O, x, y)) k++;
+        for (let x = O.want.x0; x < O.want.x1; x++) if (O.key[orthoSlot(O.span, x, y)] !== this.orthoKey(O, x, y)) k++;
     }
     return k;
   }
@@ -1509,16 +1533,17 @@ export class EarthTiles {
       const gx = gLonT * O.n - cx0,
         gy = mercY(gSinLat, O.n) - cy0;
       const gl = Math.hypot(gx, gy);
-      const most = ORTHO_SPAN / 2 - 0.75;
+      const span = O.span;
+      const most = span / 2 - 0.75;
       const k = gl > most ? most / gl : 1;
       const cx = cx0 + gx * k,
         cy = cy0 + gy * k;
-      const mid = ORTHO_SPAN / 2;
+      const mid = span / 2;
       let want = O.want;
       if (!want || Math.abs(cx - (want.x0 + mid)) > 0.8 || Math.abs(cy - (want.y0 + mid)) > 0.8) {
         const x0 = Math.round(cx) - mid,
-          y0 = Math.min(Math.max(Math.round(cy) - mid, 0), O.n - ORTHO_SPAN);
-        want = { x0, y0, x1: x0 + ORTHO_SPAN, y1: y0 + ORTHO_SPAN };
+          y0 = Math.min(Math.max(Math.round(cy) - mid, 0), O.n - span);
+        want = { x0, y0, x1: x0 + span, y1: y0 + span };
       }
       if (!same(want, O.want)) {
         O.want = want;
@@ -1542,7 +1567,7 @@ export class EarthTiles {
       for (let y = O.want.y0; y < O.want.y1; y++)
         for (let x = O.want.x0; x < O.want.x1; x++) {
           const key = this.orthoKey(O, x, y);
-          if (O.key[orthoSlot(x, y)] === key || this.orthoInflight.has(key)) continue;
+          if (O.key[orthoSlot(O.span, x, y)] === key || this.orthoInflight.has(key)) continue;
           // (one its source has not, or no national source's: none there at once — the coarser levels' imagery)
           if (this.orthoNone.has(key) || !tileSource(NATIONAL, O.n, x, y)) {
             this.putOrtho(O.z, x, y, null);
@@ -1598,18 +1623,23 @@ export class EarthTiles {
     const k = z - ORTHO_Z0;
     const O = this.ortho[k];
     if (!O || !inside(O.want, x, y)) return;
-    const s = orthoSlot(x, y);
+    const s = orthoSlot(O.span, x, y);
     O.key[s] = this.orthoKey(O, x, y);
-    const ox = (s % ORTHO_SPAN) * TILE,
-      oy = Math.floor(s / ORTHO_SPAN) * TILE;
-    if (this.filtered)
+    const ox = (s % O.span) * TILE,
+      oy = Math.floor(s / O.span) * TILE;
+    // (an 8-tile window — T8e —: the 2048² texture's layer, after the relief levels')
+    const big = O.span > ORTHO_SPAN;
+    const tex = big ? this.imagery2k : this.orthoTexture;
+    const layer = big ? ORTHO_2K_LAYER0 + k : k;
+    if (this.filtered && tex.width > 1) {
       this.device.queue.writeTexture(
-        { texture: this.orthoTexture, origin: [ox, oy, k] },
+        { texture: tex, origin: [ox, oy, layer] },
         (col ?? new Uint32Array(TILE * TILE)) as Uint32Array<ArrayBuffer>,
         { bytesPerRow: TILE * 4 },
         [TILE, TILE, 1],
       );
-    if (this.filtered) this.orthoMips(ox, oy, k);
+      this.orthoMips(ox, oy, layer, tex);
+    }
     if (col) this.imagery++;
     this.orthoComplete(O);
   }
@@ -1694,7 +1724,8 @@ export class EarthTiles {
   private orthoComplete(O: OrthoLevel) {
     const w = O.want;
     if (!w) return;
-    for (let y = w.y0; y < w.y1; y++) for (let x = w.x0; x < w.x1; x++) if (O.key[orthoSlot(x, y)] !== this.orthoKey(O, x, y)) return;
+    for (let y = w.y0; y < w.y1; y++)
+      for (let x = w.x0; x < w.x1; x++) if (O.key[orthoSlot(O.span, x, y)] !== this.orthoKey(O, x, y)) return;
     if (!same(O.valid, w)) {
       O.valid = w;
       this.imagery++;
@@ -1711,14 +1742,16 @@ export class EarthTiles {
     for (let k = 0; k < ORTHO_LEVELS; k++) {
       const O = this.ortho[k]!;
       const v = O.valid;
-      f.set([k, 0, 0, O.z], 12 * k + 8);
+      // (its window's side [texels] — 1024 or, T8e, 2048: the tracer's texture and its coordinates' scale)
+      const side = O.span * TILE;
+      f.set([k, side, 0, O.z], 12 * k + 8);
       if (!v) continue;
       const S = O.n * TILE;
       let ax = (this.lon / TAU + 0.5) * S - v.x0 * TILE;
       if (ax > S / 2) ax -= S;
       else if (ax < -S / 2) ax += S;
       const ay = mercY(this.sinLat, O.n) * TILE - v.y0 * TILE;
-      f.set([ax, ay, (((v.x0 * TILE) % ORTHO_CLIP) + ORTHO_CLIP) % ORTHO_CLIP, (v.y0 * TILE) % ORTHO_CLIP], 12 * k);
+      f.set([ax, ay, (((v.x0 * TILE) % side) + side) % side, (v.y0 * TILE) % side], 12 * k);
       f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, 1], 12 * k + 4);
     }
     // (the box the relief's levels take the IGN's imagery in — z 9 … 14: theirs a photograph there too —, and whether)
@@ -1879,9 +1912,8 @@ export function nightOf(z: number, x: number, y: number): { z: number; x: number
 /** the reference's longitude in turns from −½ (Mercator's x over the level's width) */
 const cx0 = (lon: number) => lon / TAU + 0.5;
 
-/** an orthophotos' tile's slot in its 4 × 4 window */
-const orthoSlot = (x: number, y: number) =>
-  (((y % ORTHO_SPAN) + ORTHO_SPAN) % ORTHO_SPAN) * ORTHO_SPAN + (((x % ORTHO_SPAN) + ORTHO_SPAN) % ORTHO_SPAN);
+/** an orthophotos' tile's slot in its window (span × span: 4, or 8 — T8e) */
+export const orthoSlot = (span: number, x: number, y: number) => (((y % span) + span) % span) * span + (((x % span) + span) % span);
 /** A level's weight towards its window's edges [px]: none within 2 px of it, full 48 px in. */
 export function edge(px: number, py: number, w: number, h: number) {
   const d = Math.min(px, py, w - px, h - py);

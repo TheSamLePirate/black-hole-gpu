@@ -13,6 +13,8 @@ import { EARTH_SETTINGS, EARTH_VIEWS, sceneryReady } from "./lib/plan-views";
 //   2. the ground 35° down — the orthophotos' near detail.
 // Each: a screenshot, the raster material's and the frame's GPU time over 3 s (the profiler on, each frame drawn anew).
 // Output: remote-results/ortho-filter/<side><run>-<view>.png, ortho-filter-<side><run>.json.
+// OF_CHROME_PROFILE=<folder>: one Chrome profile kept across runs — its HTTP cache serving the same tiles once warmed (an A/B
+// independent of the Géoplateforme's answers that day).
 // Done when: the orthophotos in within 90 s, the scenery whole within 60 s (else said), both views measured, no GPU error.
 // Duration: ~2.5 min a run (Paris's tiles, orthophotos and buildings, two views × 3 s timed).
 const OUT = process.env.OF_OUT ?? "remote-results/ortho-filter";
@@ -24,7 +26,13 @@ test.skipIf(!E2E)(
   async () => {
     mkdirSync(OUT, { recursive: true });
     const v = EARTH_VIEWS.find((x) => x.name === "paris-low")!;
-    const app = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", tiles: true });
+    const app = await App.boot({
+      width: 1280,
+      height: 800,
+      hash: "scene=game:artemis",
+      tiles: true,
+      profile: process.env.OF_CHROME_PROFILE || undefined,
+    });
     const out: Record<string, unknown> = { tag: TAG, view: v.what };
     try {
       await app.js(

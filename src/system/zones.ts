@@ -18,6 +18,8 @@ import {
   nightOf,
   nightUrl,
   ORTHO_SPAN,
+  ORTHO_BIG_LEVELS,
+  ORTHO_SPAN_BIG,
   ORTHO_Z0,
   ORTHO_Z1,
   SPAN,
@@ -133,7 +135,11 @@ export function zoneTiles(
     const span = z >= FINE_Z && z <= ZG1 ? fineSpan : SPAN;
     level(z, span + 1.5, reliefs, z > ZG1, z <= profile.reliefZ1 ? radius : coreR);
   }
-  for (let z = ORTHO_Z0; z <= top.orthoZ1; z++) level(z, ORTHO_SPAN + 0.5, ortho, true, z <= profile.orthoZ1 ? radius : coreR);
+  // (the orthophotos' z 15–16 in 8-tile windows at a far reach — earth-tiles.ts ORTHO_BIG_LEVELS, T8e —, 4-tile ones else)
+  for (let z = ORTHO_Z0; z <= top.orthoZ1; z++) {
+    const span = z - ORTHO_Z0 < ORTHO_BIG_LEVELS && fineSpan > SPAN ? ORTHO_SPAN_BIG : ORTHO_SPAN;
+    level(z, span + 0.5, ortho, true, z <= profile.orthoZ1 ? radius : coreR);
+  }
   return { relief: reliefs, ortho };
 }
 

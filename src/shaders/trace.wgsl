@@ -6887,8 +6887,8 @@ struct TileImage { c: vec4f, w: f32, o: f32 };
 // BEGIN_ORTHO_IMAGERY (system/earth-tiles.ts withOrthoImagery supplies the orthophotos' filtered texture — T9a)
 // (a level's window at uv — wrapped —, at a mip or by the pixel's gradients: its linear colour premultiplied by its coverage,
 // the coverage in a; none here: the coarser levels' imagery)
-fn orthoAt(k: u32, uv: vec2f, lod: f32) -> vec4f { return vec4f(0.0); }
-fn orthoGrad(k: u32, uv: vec2f, gx: vec2f, gy: vec2f) -> vec4f { return vec4f(0.0); }
+fn orthoAt(k: u32, side: f32, uv: vec2f, lod: f32) -> vec4f { return vec4f(0.0); }
+fn orthoGrad(k: u32, side: f32, uv: vec2f, gx: vec2f, gy: vec2f) -> vec4f { return vec4f(0.0); }
 // (a relief level's imagery at p — its texels from its valid rectangle's corner —: by hand here, one bilinear tap)
 fn tileImgAt(l: u32, p: vec2f, lod: f32) -> vec4f { return tileImgHand(l, p); }
 fn tileImgGrad(l: u32, p: vec2f, gx: vec2f, gy: vec2f) -> vec4f { return tileImgHand(l, p); }
@@ -6930,8 +6930,6 @@ fn tileLights(l: u32, p: vec2f) -> f32 {
     f32(tileImage(l, i0 + vec2i(1, 1)) >> 24u)) / 255.0;
   return mix(mix(a.x, a.y, f.x), mix(a.z, a.w, f.x), f.y);
 }
-// (an orthophotos' window's side in texels: earth-tiles.ts ORTHO_CLIP — the layer it fills)
-const ORTHO_CLIP_F = 1024.0;
 // (the coarser levels' night lights — their alpha — wanted: the raster's material says when its ground is in the day, the
 // orthophotos covering it then all it reads — TERRE-UNREAL U6)
 var<private> IMG_LIGHTS: bool = true;
@@ -6963,7 +6961,9 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
     if (w <= 0.0) { continue; }
     // (T9a: its window filtered by the hardware in linear light, at the footprint's mip; its coverage the weight — a tile the
     // IGN has not, alpha 0)
-    let sm = orthoAt(k, (a.zw + p) / ORTHO_CLIP_F, bodies[ORTHO_OFF + 3u * k + 2u].w - zf);
+    // (its window's side [texels]: 1024, or 2048 — T8e — the 2048² texture's; earth-tiles.ts orthoParams)
+    let side = bodies[ORTHO_OFF + 3u * k + 2u].y;
+    let sm = orthoAt(k, side, (a.zw + p) / side, bodies[ORTHO_OFF + 3u * k + 2u].w - zf);
     if (sm.a < 0.004) { continue; }
     w *= sm.a;
     let lin = sm.rgb / sm.a;
@@ -7068,10 +7068,10 @@ fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
     // (T9a: the hardware's anisotropic filter along the pixel's footprint — its axes on the window by the derivatives of the
     // longitude and of the Mercator latitude, d atan2(y, x) and d atanh(z) —, its mips in linear light; its coverage the
     // weight)
-    let gs = b.z / ORTHO_CLIP_F;
+    let gs = b.z / cc.y;
     let gx = vec2f((q.x * fx.y - q.y * fx.x) / max(dot(q.xy, q.xy), 1e-12), -fx.z / max(1.0 - q.z * q.z, 1e-12)) * gs;
     let gy = vec2f((q.x * fy.y - q.y * fy.x) / max(dot(q.xy, q.xy), 1e-12), -fy.z / max(1.0 - q.z * q.z, 1e-12)) * gs;
-    let sm = orthoGrad(k, (a.zw + p0) / ORTHO_CLIP_F, gx, gy);
+    let sm = orthoGrad(k, cc.y, (a.zw + p0) / cc.y, gx, gy);
     if (sm.a < 0.004) { continue; }
     let lin = sm.rgb / sm.a;
     let wc = w * sm.a;
