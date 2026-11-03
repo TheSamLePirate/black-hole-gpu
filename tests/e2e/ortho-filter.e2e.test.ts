@@ -15,6 +15,7 @@ import { EARTH_SETTINGS, EARTH_VIEWS, sceneryReady } from "./lib/plan-views";
 // Output: remote-results/ortho-filter/<side><run>-<view>.png, ortho-filter-<side><run>.json.
 // OF_CHROME_PROFILE=<folder>: one Chrome profile kept across runs — its HTTP cache serving the same tiles once warmed (an A/B
 // independent of the Géoplateforme's answers that day).
+// Before each shot the exposure is brought to the meter's reading (app.exposureSettled: frozen, it held the loading's).
 // Done when: the orthophotos in within 90 s, the scenery whole within 60 s (else said), both views measured, no GPU error.
 // Duration: ~2.5 min a run (Paris's tiles, orthophotos and buildings, two views × 3 s timed).
 const OUT = process.env.OF_OUT ?? "remote-results/ortho-filter";
@@ -76,6 +77,9 @@ test.skipIf(!E2E)(
       ] as const) {
         await app.js(`(() => { __bh.camera.setLook(0, ${pitch}); __bh.touch(); return 1; })()`);
         await settle();
+        // (the exposure at the meter's reading: frozen, it held the one of the loading's frames — T8e)
+        const gap = await app.exposureSettled();
+        if (Math.abs(gap) >= 0.02) console.log(`  ${TAG} ${name}: the exposure ${gap.toFixed(3)} EV off its reading after 5 s`);
         await app.shot(`${OUT}/${TAG}-${name}.png`);
         out[name] =
           await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(() => q(null)));

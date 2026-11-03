@@ -7600,6 +7600,27 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return Number.isFinite(this.meterTarget) && Math.abs(this.meterTarget - this.autoEVDrawn) < 0.1;
   }
 
+  /**
+   * The auto exposure brought to the meter's last reading at once (false: no reading yet) — a still scene holds its exposure
+   * within a stop of the reading (meter: a new image only for a real change), so one still loading kept the exposure of its
+   * first frames: the tests' captures of a frozen view wait on this (tests/e2e/lib/app.ts exposureSettled; T8e: a side 6 %
+   * darker for it alone).
+   */
+  settleExposure(): boolean {
+    if (!Number.isFinite(this.meterTarget)) return false;
+    if (Math.abs(this.meterTarget - this.autoEVDrawn) > 0.005) {
+      this.autoEV = this.autoEVDrawn = this.meterTarget;
+      this.autoEVSet = true;
+      this.evRedraw = true;
+      this.onAssets?.();
+    }
+    return true;
+  }
+  /** the meter's last reading less the exposure drawn [EV] (NaN: no reading yet) */
+  get exposureGap() {
+    return this.meterTarget - this.autoEVDrawn;
+  }
+
   /** The auto exposure's value in use [EV] — a take keeps it, a video sets it back frame by frame. */
   get autoExposureEV() {
     return this.autoEVDrawn;

@@ -486,6 +486,22 @@ export class App {
     );
   }
 
+  /**
+   * The auto exposure at the meter's reading (renderer.settleExposure): a frozen view holds its exposure within a stop of it —
+   * a scene that finished loading still frozen kept its first frames' (T8e: one side of an A/B 6 % darker for it). Brought
+   * there, the frames drawn and read again until it holds within a fiftieth of a stop — `timeoutMs` at most; the gap left.
+   */
+  async exposureSettled(timeoutMs = 5000): Promise<number> {
+    const t0 = Date.now();
+    let gap = Number.NaN;
+    for (;;) {
+      gap = await this.js<number>(`(async () => { const r = __bh.renderer; r.settleExposure?.(); __bh.touch();
+        for (let k = 0; k < 8; k++) await new Promise((q) => requestAnimationFrame(q));
+        return r.exposureGap ?? 0; })()`);
+      if (Math.abs(gap) < 0.02 || Date.now() - t0 > timeoutMs) return gap;
+    }
+  }
+
   /** A screenshot — once the scene's ray tracer is compiled (settled): never the stale image the pill covers. */
   async shot(file: string) {
     if (!this.entry) await this.settled();
