@@ -8360,6 +8360,8 @@ async function main() {
     // tiles, surface, scenery, their shadows — follows the camera whenever it is there; the streaming's lead, the
     // camera's own motion: renderer.ts)
     renderer.shipFocus = camera.piloting && !camera.character.active ? shipFocus() : null;
+    // (the game's flight view — a craft flown, not on foot, not the photo mode —: the image's Camera profile when auto, Q6 I6)
+    renderer.flightView = camera.piloting && !camera.character.active && gameMode() === "ship";
     const ridden = renderer.shipFocus?.body === "earth" && !camera.spectating ? camera.activePoseNow() : null;
     if (ridden) {
       const ground = groundVelocity("earth", ridden.X, sim.time);

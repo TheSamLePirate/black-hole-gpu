@@ -365,6 +365,7 @@ export interface Settings {
   dofFocus: number; // focus distance [M]; 0: autofocus (the depth at the image's centre)
   lensFlare: number; // strength of the lens's ghosts and halo (0: none)
   tonemap: Tonemap;
+  lookProfile: "auto" | "camera" | "neutral"; // the image's profile (Q6 I6, decision 32): Camera — a discreet footage grade, a light grain, a vignette — in the game's flight views, Neutral (physical) elsewhere — the Lab, science, photos (auto); or forced
   hdr: "auto" | "on" | "off"; // extended-range (EDR/HDR) canvas output
   hdrPeak: number; // brightest displayable value, in units of SDR white
   pixelRatio: number;
@@ -755,6 +756,7 @@ export function defaultSettings(): Settings {
     dofFocus: 0,
     lensFlare: 0,
     tonemap: "AgX punchy",
+    lookProfile: "auto",
     hdr: "auto",
     hdrPeak: 4,
     pixelRatio: Math.min(globalThis.devicePixelRatio ?? 1, 1.5),
@@ -2159,6 +2161,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   dofFocus: "carried",
   lensFlare: "carried",
   tonemap: "carried",
+  lookProfile: "pref",
   hdr: "pref",
   hdrPeak: "pref",
   pixelRatio: "pref",

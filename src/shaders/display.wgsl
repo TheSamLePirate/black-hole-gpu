@@ -22,6 +22,7 @@ struct Display {
   hazeR: vec4f, // its radii there [uv of the height], its strength (0: none), a clock [s]
   haze2: vec4f, // a second engine's (the A320's right CFM56 — A13): the same
   hazeR2: vec4f,
+  look: vec4f,  // the image's profile (Q6 I6): Camera on (1), its grain's strength, its vignette's, a clock [s]
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -678,6 +679,31 @@ fn polTick(uv: vec2f, c: vec3f) -> vec3f {
   return mix(c, viridis(frac / D.img.z), a);
 }
 
+// The Camera profile (Q6 I6, decision 32 — VIPER A1–A2): the image as a camera films a flight, discreetly. In display space
+// (the tone map's output, its gamma taken off): the blacks lifted a little (a sensor's floor, footage's flat black), a gentle S,
+// the saturation a touch lower, the shadows towards blue and the highlights towards warm (split toning, a few thousandths);
+// a vignette, the corners a little darker; a grain, its own each frame, strongest in the mid-tones — over an HDR display's
+// extended range the same (its part over white left as it is). Not yet fitted on reference footage (the plan's LUT): a
+// parametric stand-in, every term small.
+fn cameraLook(c0: vec3f, uvOut: vec2f, px: vec2f) -> vec3f {
+  let over = max(c0 - vec3f(1.0), vec3f(0.0));
+  var p = pow(clamp(c0, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2));
+  p = vec3f(0.014) + p * 0.986;
+  p = mix(p, p * p * (3.0 - 2.0 * p), 0.12);
+  let l = dot(p, LUMA);
+  p = mix(vec3f(l), p, 0.94);
+  p += vec3f(-0.004, 0.0, 0.008) * (1.0 - smoothstep(0.0, 0.35, l)) + vec3f(0.008, 0.003, -0.008) * smoothstep(0.55, 1.0, l);
+  // (the vignette: by the distance from the centre, the width's aspect kept — the corners ~12 % darker)
+  let d = (uvOut - 0.5) * vec2f(D.size.x / max(D.size.y, 1.0), 1.0);
+  p *= 1.0 - D.look.z * smoothstep(0.35, 1.05, length(d) * 1.2);
+  // (the grain: two interleaved-gradient draws, triangular, new each frame; mid-tones the most)
+  let t = fract(D.look.w * 0.6180339) * 97.0;
+  let g = fract(52.9829189 * fract(dot(px + t, vec2f(0.06711056, 0.00583715))))
+    + fract(52.9829189 * fract(dot(px + vec2f(31.0, 57.0) + t * 1.7, vec2f(0.06711056, 0.00583715)))) - 1.0;
+  p += vec3f(g * D.look.y * (0.35 + 2.6 * l * (1.0 - l)));
+  return pow(max(p, vec3f(0.0)), vec3f(2.2)) + over;
+}
+
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4f {
   let uvOut = in.pos.xy / D.size.xy;
@@ -783,6 +809,8 @@ fn fs(in: VSOut) -> @location(0) vec4f {
       if (tm == 3u) { c = min(c, vec3f(D.hdr.y)); } else if (tm == 4u) { c = filmHdr(c, D.hdr.y); } else { c = hdrMap(c, D.hdr.y, tm == 1u); }
     } else if (tm == 0u) { c = agx(c, false, 0.0); } else if (tm == 1u) { c = agx(c, true, D.hdr.w); } else if (tm == 2u) { c = aces(c); } else if (tm == 4u) { c = film(c); }
   }
+  // (the Camera profile — the game's flight views: a footage grade, grain, vignette — after the tone map, in display space)
+  if (D.look.x > 0.5 && D.flags.x < 0.5 && D.img.w < 0.5) { c = cameraLook(c, uvOut, in.pos.xy); }
   // extended sRGB: values above 1 are brighter than SDR white on an HDR canvas
   c = clamp(c, vec3f(0.0), vec3f(select(1.0, D.hdr.y, D.hdr.x > 0.5)));
   if (D.pol.x > 0.5) { c = polTick(uv, c); }

@@ -1692,7 +1692,8 @@ export class Renderer {
     this.paramBuf = device.createBuffer({ size: this.params.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.probeBuf = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     this.probeStage = device.createBuffer({ size: PROBE_W * PROBE_H * 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-    this.displayBuf = device.createBuffer({ size: 256, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    // (17 vec4s: the image's profile — look — after the heat haze's)
+    this.displayBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.chart = new ChartOverlay(device, src.overlay);
     // (trace.wgsl: the colours' LUTs at LUT_OFF — the synchrotron's from LUT_N = BB_LUT_SIZE)
     const lut = buildBlackbodyLUT();
@@ -3944,7 +3945,18 @@ export class Renderer {
       const hz = target === this.live && s.ship && s.heatHaze ? this.ship.hazeView(k) : null;
       this.device.queue.writeBuffer(this.displayBuf, 192 + 32 * k, new Float32Array(hz ? [...hz, clock] : [0, 0, 0, 0, 0, 0, 0, 0]));
     }
+    // (the image's profile — Q6 I6, decision 32; display.wgsl cameraLook —: Camera in the game's flight views (auto) — the live
+    // view, the craft flown —, Neutral elsewhere; its grain, its vignette, a clock for the grain)
+    const camera =
+      target === this.live &&
+      s.renderMode === "physical" &&
+      !this.costViewMode &&
+      s.band !== "230GHz" &&
+      (s.lookProfile === "camera" || (s.lookProfile === "auto" && this.flightView));
+    this.device.queue.writeBuffer(this.displayBuf, 256, new Float32Array([camera ? 1 : 0, 0.022, 0.12, clock]));
   }
+  /** the game's flight view now — a craft flown, the live view (main.ts): the image's profile Camera when lookProfile is auto */
+  flightView = false;
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
    *  velocity on the camera's axes [m/s]; null: none */

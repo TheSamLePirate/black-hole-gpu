@@ -740,6 +740,10 @@ export default {
   "A light meter sets the exposure, as the eye adapts: for the light falling where the camera is (the Sun, a star, the disk), held back when something in view would burn out. Exposure then adds a bias. The sky keeps its look on screen.":
     "Une cellule mesure la lumière et règle l'exposition, comme l'œil s'adapte : pour la lumière qui tombe là où est la caméra (le Soleil, une étoile, le disque), retenue quand un élément visible serait brûlé. L'exposition ajoute ensuite un biais. Le ciel garde son aspect à l'écran.",
   "Tone map": "Mappage tonal",
+  "Image profile": "Profil d'image",
+  Neutral: "Neutre",
+  "Camera: the image as a camera films a flight — a discreet footage grade (lifted blacks, a gentle curve, a touch less saturation, warm highlights and cool shadows), a light grain, a slight vignette. Neutral: the physical image, untouched. Auto: Camera while flying a craft, Neutral elsewhere (the Lab, science, photos).":
+    "Caméra : l'image comme une caméra filme un vol — un étalonnage « footage » discret (noirs relevés, courbe douce, saturation un peu moindre, hautes lumières chaudes et ombres froides), un grain léger, une légère vignette. Neutre : l'image physique, intacte. Auto : Caméra en pilotant un appareil, Neutre ailleurs (le Labo, la science, les photos).",
   "How the scene's radiance becomes the screen's. Film: the look of Interstellar's Gargantua — overexposed by 2 EV over the exposure (the disk's heart burnt out to cream), each channel rolling off on its own (orange turns yellow, then white), saturated orange mid-tones, cool shadows, and the bloom as a strong additive haze over a sharp image.":
     "Comment la radiance de la scène devient celle de l'écran. Film : l'aspect de Gargantua dans Interstellar — surexposé de 2 EV au-delà de l'exposition (le cœur du disque brûlé jusqu'au crème), chaque canal saturant à sa façon (l'orange vire au jaune, puis au blanc), demi-teintes orange saturées, ombres froides, et le halo lumineux comme un voile additif marqué sur une image nette.",
   AgX: "AgX",

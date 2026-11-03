@@ -1349,7 +1349,9 @@ compilation) s'y ajoutent.
   l'eau, 0,5 ailleurs) : le grain de la mer lointaine −8 % (netteté 1,25 → 1,15 de la référence), la terre inchangée. **Q6e** — l'exposition locale (I5) mesurée avant d'être faite : pas de besoin établi
   (cockpit de jour et contre-jour lisibles). **Q6f** — la cadence (I7) : le plafond d'images compté en rafraîchissements entiers
   (`cadence`, nouvel e2e en fenêtre) ; neutre sur kerr-mini (GPU limité, 50 Hz), plus régulier à 120 Hz en mesures isolées ; le
-  calage automatique sur l'écran écarté sur mesure (WebGPU présente dès l'image finie).
+  calage automatique sur l'écran écarté sur mesure (WebGPU présente dès l'image finie). **Q6g** — le profil Caméra (étalonnage « footage » paramétrique discret, grain, vignette) dans les
+  vues de vol, le profil Neutre ailleurs (`lookProfile` auto) ; la LUT ajustée sur des vidéos de référence, l'exposition qui
+  respire, l'aberration, le flou de pose et le mode GoPro restent.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

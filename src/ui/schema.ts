@@ -1802,6 +1802,22 @@ export const SCHEMA: ControlDef[] = [
     keywords: "tone mapping agx aces film interstellar grade look overexposed",
   },
   {
+    key: "lookProfile",
+    type: "choice",
+    section: "render",
+    group: "Image",
+    label: "Image profile",
+    style: "segmented",
+    effect: "display",
+    options: [
+      { value: "auto", label: "Auto" },
+      { value: "camera", label: "Camera" },
+      { value: "neutral", label: "Neutral" },
+    ],
+    help: "Camera: the image as a camera films a flight — a discreet footage grade (lifted blacks, a gentle curve, a touch less saturation, warm highlights and cool shadows), a light grain, a slight vignette. Neutral: the physical image, untouched. Auto: Camera while flying a craft, Neutral elsewhere (the Lab, science, photos).",
+    keywords: "look profile camera neutral grade grain vignette footage film",
+  },
+  {
     key: "hdr",
     type: "choice",
     section: "render",

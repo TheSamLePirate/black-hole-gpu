@@ -108,7 +108,19 @@ export const PLAYER_MENU: PlayerGroup[] = [
   {
     tab: "graphics",
     title: { fr: "Image", en: "Picture" },
-    keys: ["autoExposure", "tonemap", "hdr", "hdrPeak", "bloom", "lensFlare", "sharpen", "motionBlur", "denoise", "targetSpp"],
+    keys: [
+      "autoExposure",
+      "tonemap",
+      "lookProfile",
+      "hdr",
+      "hdrPeak",
+      "bloom",
+      "lensFlare",
+      "sharpen",
+      "motionBlur",
+      "denoise",
+      "targetSpp",
+    ],
   },
   {
     tab: "graphics",
