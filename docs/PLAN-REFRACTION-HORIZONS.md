@@ -1346,7 +1346,10 @@ compilation) s'y ajoutent.
   référence ; +0,6 à +4,3 ms (Heavy). **Q6c** — `motion-quality` reproductible d'un lancement à l'autre (tout chargé et compilé,
   pilote automatique, auto-manette, train sorti, 60 images de stabilisation ; bruit ±0,5 dB) ; la passe TAAU −10 % (1,65 → 1,48 ms),
   l'image inchangée. **Q6d** — le noyau du TAAU élargi sur l'eau seule (la marque raster porte l'eau ; σ 0,7 sur
-  l'eau, 0,5 ailleurs) : le grain de la mer lointaine −8 % (netteté 1,25 → 1,15 de la référence), la terre inchangée.
+  l'eau, 0,5 ailleurs) : le grain de la mer lointaine −8 % (netteté 1,25 → 1,15 de la référence), la terre inchangée. **Q6e** — l'exposition locale (I5) mesurée avant d'être faite : pas de besoin établi
+  (cockpit de jour et contre-jour lisibles). **Q6f** — la cadence (I7) : le plafond d'images compté en rafraîchissements entiers
+  (`cadence`, nouvel e2e en fenêtre) ; neutre sur kerr-mini (GPU limité, 50 Hz), plus régulier à 120 Hz en mesures isolées ; le
+  calage automatique sur l'écran écarté sur mesure (WebGPU présente dès l'image finie).
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

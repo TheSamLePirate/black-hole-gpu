@@ -8343,9 +8343,16 @@ async function main() {
         transport?.update(true);
       }
     }
-    // (the frame rate cap: no new image before its interval — less a refresh's fraction for the jitter)
+    // (the frame rate cap: no new image before its interval. Counted in whole display refreshes once the refresh is known — the
+    // loop runs at each one: an image every n of them, n the cap's interval in refreshes; in milliseconds less a quarter refresh
+    // the images fell 2 then 3 refreshes apart at 60 on a 120 Hz screen, 3 to 5 at 30 — a judder at every other image (Q6 I7,
+    // tests/e2e/cadence.e2e.test.ts); before the refresh is measured, the interval less a fraction of one)
+    const rfMs = renderer.refreshMs;
+    const capN = rfMs > 4 && settings.fpsCap > 0 ? Math.max(1, Math.round(1000 / settings.fpsCap / rfMs)) : 0;
     const capped =
-      settings.fpsCap > 0 && !renderer.offlineActive && now - renderedAt < 1000 / settings.fpsCap - 0.25 * (renderer.refreshMs || 4);
+      settings.fpsCap > 0 &&
+      !renderer.offlineActive &&
+      (capN > 0 ? (now - renderedAt) / rfMs < capN - 0.5 : now - renderedAt < 1000 / settings.fpsCap - 0.25 * (rfMs || 4));
     if (!capped) cpuProf.time("sky chart", () => updateChart());
     skyPanel.refresh();
     // (the flown ship's ground, kept for its gear — a spectator's too, the view gone thousands of km: the Moon's
