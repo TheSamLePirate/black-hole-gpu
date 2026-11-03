@@ -1,0 +1,69 @@
+{
+  "mercury-terminator": {
+    "ready": 26.2,
+    "bake": {
+      "state": "done",
+      "doneMs": 23920
+    },
+    "raster": true,
+    "ev": 11.88,
+    "onMs": 18.1,
+    "offMs": 18.1,
+    "onP95": 20.7,
+    "offP95": 20.5,
+    "lit": 937235,
+    "darker": 800,
+    "brighter": 5,
+    "darkerShare": 0.00085,
+    "brighterShare": 0.00001,
+    "noiseDarkerShare": 0.00009,
+    "noiseBrighterShare": 0,
+    "hfOn": 0.44,
+    "hfOff": 0.44
+  },
+  "ceres-terminator": {
+    "ready": 24,
+    "bake": {
+      "state": "done",
+      "doneMs": 22256
+    },
+    "raster": true,
+    "ev": 17.42,
+    "onMs": 20.6,
+    "offMs": 21.5,
+    "onP95": 21.6,
+    "offP95": 23.2,
+    "lit": 737344,
+    "darker": 3454,
+    "brighter": 44,
+    "darkerShare": 0.00468,
+    "brighterShare": 0.00006,
+    "noiseDarkerShare": 0.00105,
+    "noiseBrighterShare": 0.00008,
+    "hfOn": 0.57,
+    "hfOff": 0.57
+  },
+  "mars-terminator": {
+    "ready": 23.6,
+    "bake": {
+      "state": "done",
+      "doneMs": 21240
+    },
+    "raster": true,
+    "ev": 15.63,
+    "onMs": 25.8,
+    "offMs": 25.5,
+    "onP95": 26.6,
+    "offP95": 27.1,
+    "lit": 905269,
+    "darker": 246,
+    "brighter": 16,
+    "darkerShare": 0.00027,
+    "brighterShare": 0.00002,
+    "noiseDarkerShare": 0.00042,
+    "noiseBrighterShare": 0.00006,
+    "hfOn": 0.53,
+    "hfOff": 0.51
+  },
+  "gpuErrors": 0
+}

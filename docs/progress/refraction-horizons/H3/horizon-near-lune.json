@@ -1,0 +1,69 @@
+{
+  "terminator-500km": {
+    "ready": 0.3,
+    "bake": {
+      "state": "done",
+      "doneMs": 14918
+    },
+    "raster": true,
+    "ev": 15.74,
+    "onMs": 19.5,
+    "offMs": 20.1,
+    "onP95": 21.7,
+    "offP95": 21.3,
+    "lit": 968983,
+    "darker": 17079,
+    "brighter": 1499,
+    "darkerShare": 0.01763,
+    "brighterShare": 0.00155,
+    "noiseDarkerShare": 0.0084,
+    "noiseBrighterShare": 0.00115,
+    "hfOn": 1.35,
+    "hfOff": 1.37
+  },
+  "terminator-4000km-8deg": {
+    "ready": 0.1,
+    "bake": {
+      "state": "done",
+      "doneMs": 14918
+    },
+    "raster": false,
+    "ev": 15.24,
+    "onMs": 27.1,
+    "offMs": 27.8,
+    "onP95": 28,
+    "offP95": 28.8,
+    "lit": 991090,
+    "darker": 6274,
+    "brighter": 0,
+    "darkerShare": 0.00633,
+    "brighterShare": 0,
+    "noiseDarkerShare": 0,
+    "noiseBrighterShare": 0,
+    "hfOn": 3.24,
+    "hfOff": 2.94
+  },
+  "south-pole": {
+    "ready": 0.1,
+    "bake": {
+      "state": "done",
+      "doneMs": 14918
+    },
+    "raster": true,
+    "ev": 15.73,
+    "onMs": 22.8,
+    "offMs": 22.9,
+    "onP95": 23.9,
+    "offP95": 23.6,
+    "lit": 368701,
+    "darker": 1909,
+    "brighter": 57,
+    "darkerShare": 0.00518,
+    "brighterShare": 0.00015,
+    "noiseDarkerShare": 0.00308,
+    "noiseBrighterShare": 0.00011,
+    "hfOn": 0.77,
+    "hfOff": 0.8
+  },
+  "gpuErrors": 0
+}

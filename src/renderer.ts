@@ -8062,7 +8062,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  the giants' convective towers — giantTowers —, 4096 Mars's dust devils — marsDevils —, 8192 the bodies'
    *  relief shadow map — nearShadow, the march whole), 32768 Q2's sky by the frame's harmonics on a slope and the bounce by the
    *  ground's mean albedo (the flat sky × ½(1 + n·up), 0.18 instead), 65536 the imagery's footprint on the slope (the flat
-   *  plane's instead): a measure, the image then wrong */
+   *  plane's instead), 524288 the near body's horizon map in its shadows (H3 — nearShadow: the march alone, as before): a
+   *  measure, the image then wrong */
   liteSkip = 0;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
   private rasterEligibleNow = false;
@@ -8249,6 +8250,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private horizonRead = false;
   private horizonDummy: GPUTexture | null = null;
   private horizonRow = new Float32Array(8);
+  /** when the maps' row turned on (performance.now; 0: off) — its fade-in's start */
+  private horizonOnAt = 0;
   sunShadowOn = true;
   private sunTableOn = false;
   private sunOut = new Float32Array(12);
@@ -9341,8 +9344,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         () => this.prof.pass("horizon bake", { label: "horizon bake" }),
         this.prof.table().find((p) => p.label === "horizon bake")?.last,
       );
-      // (their table row — read once the whole bake is in, for the HD body it was made for —: written when it changes)
+      // (their table row — read once the whole bake is in, for the HD body it was made for —: written when it changes; its
+      // weight faded in over 1.5 s from the bake's end — H3: the long shadows never pop in)
       const row = this.horizonMaps.tableRows(hzOn && this.hdMap.dem ? this.hdMap.name : null);
+      if (row[0]! > 0) {
+        if (!this.horizonOnAt) this.horizonOnAt = performance.now();
+        row[0] = Math.min(1, (performance.now() - this.horizonOnAt) / 1500);
+      } else this.horizonOnAt = 0;
       if (row.some((v, i) => v !== this.horizonRow[i])) {
         this.horizonRow = row;
         this.device.queue.writeBuffer(this.bodyBuf, TABLE_HORIZON * 16, row);

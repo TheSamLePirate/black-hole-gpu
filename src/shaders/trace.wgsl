@@ -1924,7 +1924,9 @@ fn listedBody(i: u32, list: u32) -> u32 {
 }
 
 // BEGIN_HORIZON_MAPS (system/horizon-maps.ts withHorizonMaps supplies the near body's horizon maps' reader — H2)
-// (the share of the Sun's disc a point of the HD body sees above its relief's horizon: none known here, all of it)
+// (the horizon's sine towards the Sun at a point of the HD body, and the share of the Sun's disc above it: none known here)
+fn horizonSin(q: vec3f, Lb: vec3f, foot: f32, hOwn: f32) -> vec2f { return vec2f(-2.0, 0.0); }
+fn horizonFade() -> f32 { return 0.0; }
 fn horizonLight(q: vec3f, Lb: vec3f, sunR: f32, foot: f32) -> f32 { return 1.0; }
 // END_HORIZON_MAPS
 
@@ -2270,6 +2272,8 @@ var<private> HD_N: vec3f = vec3f(0.0, 0.0, 1.0);
 var<private> HD_N_ON: bool = false;
 // (near Mars, its relief marched — earthNear —: the relief's own shadow there, for otherGround)
 var<private> REL_SH: f32 = 1.0;
+// (nearShadow without the horizon map: its caller — earthNear — reads it itself, after the march's fade — H3)
+var<private> HZ_SKIP: bool = false;
 var<private> EDM_H: f32 = -1e9; // (near Edmunds: the ground's height [m] — its strata's colours, planetAlbedo)
 var<private> BODYW: mat3x3f = mat3x3f(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0);
 
@@ -4783,7 +4787,32 @@ fn nearAir(look: vec3f, tEnd: f32, k: u32) -> Air {
 // march to its near reach (32 m: its cheap steps), the relief's shadow map past it — the raster's mesh seen from the Sun
 // (body-raster.ts drawSun, terrain-raster-hint.ts sunShadowFar) —, the march resumed where the Sun's ray leaves the map's
 // patch (PLAN-PLANETES-AAA P1, its second part: the far steps were most of the shadows' cost)
+fn nearHorizon(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32) -> f32 {
+  // (H3 — the near body's horizon map: its blockers from D_bake (~11 km on the Moon) out to the relief's reach — the long
+  // shadows of a low Sun, past the march's 20 km —, the share of the Sun's disc over them; the Sun wholly under it: in the
+  // shadow, nothing else read — the march, the Sun's map: the min of the parts is 0 whatever they say. Not in the probes)
+  // (seen from the point's own height — its relief's, the craters' and the swell's in —: a peak past the terminator keeps its
+  // light. The penumbra the Sun's disc and what the horizon sweeps under the pixel — tan e' moves by its height's change over
+  // the blocker's distance, the slope × the footprint over d —: no stipple where a near blocker's horizon crosses the pixel)
+  var hz = 1.0;
+  if (NEAR_DETAIL && hasDem(surf) && (liteSkip() & 524288u) == 0u) {
+    let eH = horizonSin(q, L, foot, h);
+    if (eH.x > -1.5) {
+      let kn = u32(P.near1.w);
+      let ls = u32(max(i32(bodies[BV * kn + 3u].x), 0));
+      let c = select(1.0, clamp(dot(SUN_N, q), 0.2, 1.0), dot(SUN_N, SUN_N) > 0.5);
+      let w = bodyRadius(ls) / max(length(bodies[BV * ls].xyz - bodies[BV * kn].xyz), 1e-30)
+        + 0.5 * sqrt(1.0 - c * c) / c * foot / max(eH.y, 1.0);
+      hz = mix(1.0, smoothstep(-w, w, asin(clamp(dot(q, L), -1.0, 1.0)) - asin(clamp(eH.x, -1.0, 1.0))), horizonFade());
+    }
+  }
+  return hz;
+}
 fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f32 {
+  // (the horizon map first — H3: the Sun under it, nothing else read —; earthNear's caller reads it itself, after its fade)
+  var hz = 1.0;
+  if (!HZ_SKIP) { hz = nearHorizon(surf, q, h, L, foot); }
+  if (hz <= 0.0) { return 0.0; }
   var smap = vec4f(-1.0, 0.0, 0.0, 3e38);
   if (SHADOW_REL_ON && (liteSkip() & 8192u) == 0u) { smap = sunShadowFar(SHADOW_REL); }
   if (smap.x == 0.0) { return 0.0; }
@@ -4857,7 +4886,7 @@ fn nearShadow(surf: u32, q: vec3f, h: f32, L: vec3f, foot: f32, tSec: f32) -> f3
     // (the light probe's texels wide: its shadows coarser)
     d *= select(select(select(select(1.23, 1.3, airless(surf)), 1.6, far), 1.4, marsLike()), 1.6, probeBeam > 0.0);
   }
-  return select(s, min(s, smap.x), smap.x >= 0.0);
+  return min(hz, select(s, min(s, smap.x), smap.x >= 0.0));
 }
 
 // Gradient noise on an integer lattice (base) plus a small offset f: exact far from the body's centre
@@ -11104,12 +11133,21 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
       // (the relief's shadows within 25 km — fading from 15: farther, the dust blurs them, and their march was a fifth of the
       // frame at sunset)
       let dKm = nh.t * mR * 1e-3;
-      if ((liteSkip() & 4u) == 0u && dKm < 25.0 && !titan) {
+      if ((liteSkip() & 4u) == 0u && !titan) {
         // (the raster's pixels: the relief's shadow map past the near reach — nearShadow)
         SHADOW_REL = toBody(look) * (nh.t * mR);
         SHADOW_REL_ON = NEAR_T > 0.0;
-        SUN_N = nh.qb;
-        REL_SH = mix(nearShadow(surf, nh.qb, nh.h, toBody(lt.dir), foot, P.time.x * P.near5.w), 1.0, smoothstep(15.0, 25.0, dKm));
+        // (the ground's normal — the Moon's shadeNear's n0 —: the horizon's penumbra and the shadow map's reach by the slope; Venus
+        // has none here, its sphere's)
+        SUN_N = select(nh.qb, HD_N, NEAR_KIND != 5u);
+        // (the horizon map's long shadows kept past the march's fade — H3: from orbit too —, read once: nearShadow skips it)
+        let hz = nearHorizon(surf, nh.qb, nh.h, toBody(lt.dir), foot);
+        REL_SH = hz;
+        if (dKm < 25.0 && hz > 0.0) {
+          HZ_SKIP = true;
+          REL_SH = min(hz, mix(nearShadow(surf, nh.qb, nh.h, toBody(lt.dir), foot, P.time.x * P.near5.w), 1.0, smoothstep(15.0, 25.0, dKm)));
+          HZ_SKIP = false;
+        }
         SHADOW_REL_ON = false;
         SUN_N = vec3f(0.0);
       }
