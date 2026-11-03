@@ -9432,20 +9432,22 @@ fn runwayPave(hit: vec3f, gq: vec3f, q: vec3f, rd: vec3f, Ls: vec3f, fx: vec3f, 
 // 25°. P.wx[5].w the setting groundRelight: 0 auto, 1 the photograph's light alone (k 0), 2 the relief's n·L whole (k 1, as
 // before Q2).
 fn photoSun(gq: vec3f, o: f32) -> vec3f {
-  let lon = atan2(gq.y, gq.x);
-  let dS = 0.2094 * select(-1.0, 1.0, gq.z >= 0.0);
-  let hS = lon + 0.3927;
-  let s2 = vec3f(cos(dS) * cos(hS), cos(dS) * sin(hS), sin(dS));
-  let ign = vec3f(0.9511 * cos(lon), 0.9511 * sin(lon), 0.3090);
+  // (the longitude's cosine and sine from the point itself — no trigonometry: cos(lon + 22.5°), sin(…) by the sum's rule;
+  // the declination ±12° its constants)
+  let cl = gq.xy * inverseSqrt(max(dot(gq.xy, gq.xy), 1e-12));
+  let h = vec2f(cl.x * 0.92388 - cl.y * 0.38268, cl.y * 0.92388 + cl.x * 0.38268);
+  let s2 = vec3f(0.97815 * h, select(-0.20791, 0.20791, gq.z >= 0.0));
+  let ign = vec3f(0.9511 * cl, 0.3090);
   return normalize(mix(s2, ign, clamp(o, 0.0, 1.0)));
 }
 fn photoRelightK(gq: vec3f, L: vec3f, o: f32) -> f32 {
   let mode = P.wx[5].w;
   if (mode > 1.5) { return 1.0; }
   if (mode > 0.5) { return 0.0; }
-  let apart = acos(clamp(dot(L, photoSun(gq, o)), -1.0, 1.0));
-  let el = asin(clamp(dot(gq, L), -1.0, 1.0));
-  return max(smoothstep(0.1745, 0.8727, apart), smoothstep(0.4363, 0.0873, el));
+  // (the ramps on the cosines, not the angles — no acos, asin: the two Suns 10° → 50° apart, ours 25° → 5° high)
+  let apart = dot(L, photoSun(gq, o));
+  let el = dot(gq, L);
+  return max(smoothstep(0.98481, 0.64279, apart), smoothstep(0.42262, 0.08716, el));
 }
 fn photoNdl(gq: vec3f, n: vec3f, L: vec3f, k: f32) -> f32 {
   return mix(max(dot(gq, L), 0.0), max(dot(n, L), 0.0), k);
@@ -9458,21 +9460,26 @@ fn skyOnFace(sky: vec3f, h: f32, n: vec3f, up: vec3f) -> vec3f {
   // (a face all but flat — most of a city's, a plain's —: the flat sky itself, nothing worked out)
   if (c > 0.98) { return sky * 0.5 * (1.0 + c); }
   if ((liteSkip() & 32768u) != 0u) { return sky * 0.5 * (1.0 + c); }
-  let a = skyIrradianceLow(h, n);
-  let b = skyIrradianceLow(h, up);
+  let ab = skyIrradianceLowPair(h, n, up);
+  let a = ab[0];
+  let b = ab[1];
   if (a.x < 0.0 || max(b.x, max(b.y, b.z)) <= 1e-12) { return sky * 0.5 * (1.0 + c); }
   return sky * min(a / max(b, vec3f(1e-12)), vec3f(1.5));
 }
 // skyIrradiance's first two bands alone (its constant and its linear terms — a cosine's irradiance almost whole; the third band's
-// ~4 % refinement left out): four coefficients an altitude, not nine — the faces' ratio (skyOnFace)
-fn skyIrradianceLow(h: f32, n: vec3f) -> vec3f {
+// ~4 % refinement left out): four coefficients an altitude, not nine — for two normals at once, the face's and the flat
+// ground's (skyOnFace's ratio): the harmonics read and blended once
+fn skyIrradianceLowPair(h: f32, n: vec3f, up: vec3f) -> array<vec3f, 2> {
   let f0 = bodies[SKY_OFF];
-  if (f0.w < 0.5) { return vec3f(-1.0); }
+  if (f0.w < 0.5) { return array<vec3f, 2>(vec3f(-1.0), vec3f(0.0)); }
   let e = bodies[SKY_OFF + 1u].xyz;
   let no = bodies[SKY_OFF + 2u].xyz;
   let hs = bodies[SKY_OFF + 3u];
-  let d = normalize(vec3f(dot(n, e), dot(n, no), dot(n, f0.xyz)));
-  let y = vec4f(0.282095 * PI, 0.488603 * 2.0943951 * d.y, 0.488603 * 2.0943951 * d.z, 0.488603 * 2.0943951 * d.x);
+  let k = 0.488603 * 2.0943951;
+  let da = normalize(vec3f(dot(n, e), dot(n, no), dot(n, f0.xyz)));
+  let db = normalize(vec3f(dot(up, e), dot(up, no), dot(up, f0.xyz)));
+  let ya = vec4f(0.282095 * PI, k * da.y, k * da.z, k * da.x);
+  let yb = vec4f(0.282095 * PI, k * db.y, k * db.z, k * db.x);
   var l0 = 0u;
   var w = 0.0;
   if (h >= hs.w) { l0 = 3u; } else if (h > hs.x) {
@@ -9482,11 +9489,14 @@ fn skyIrradianceLow(h: f32, n: vec3f) -> vec3f {
     w = (h - lo) / max(hi - lo, 1.0);
   }
   let l1 = min(l0 + 1u, 3u);
-  var irr = vec3f(0.0);
+  var ia = vec3f(0.0);
+  var ib = vec3f(0.0);
   for (var i = 0u; i < 4u; i++) {
-    irr += y[i] * mix(bodies[SKY_OFF + 4u + l0 * 9u + i].xyz, bodies[SKY_OFF + 4u + l1 * 9u + i].xyz, w);
+    let c = mix(bodies[SKY_OFF + 4u + l0 * 9u + i].xyz, bodies[SKY_OFF + 4u + l1 * 9u + i].xyz, w);
+    ia += ya[i] * c;
+    ib += yb[i] * c;
   }
-  return max(irr, vec3f(0.0));
+  return array<vec3f, 2>(max(ia, vec3f(0.0)), max(ib, vec3f(0.0)));
 }
 // (Q2 L6) The ground round a point, its albedo averaged over ~2 km — the day map's coarse level —: what it sends back to a slope
 // facing it of the light it gets (empirical: one albedo, the incident light unshadowed); 0.18 as before with liteSkip 32768
@@ -13598,7 +13608,10 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (the pixel's footprint on the ground, its two axes — the imagery's anisotropic read —, on the ground's own slope: the smooth
   // normal of the raster's ground — T5 — where it has one; liteSkip 65536 the flat plane's, as before)
   let fp = pixFoot() * tH;
-  var nFoot = terrainRasterNormal(centre);
+  // (the smooth normal read once: the footprint's slope here, the lighting's below — two reads of it cost ~0.2 ms in the mountains)
+  var tn = vec3f(0.0);
+  if ((liteSkip() & 16u) == 0u || (liteSkip() & 65536u) == 0u) { tn = terrainRasterNormal(centre); }
+  var nFoot = tn;
   if (dot(nFoot, nFoot) < 0.5 || (liteSkip() & 65536u) != 0u) { nFoot = q; }
   let fx = earthFootOn(q, rd, squashed(toBody(P.camRight.xyz), ab), fp, nFoot);
   let fy = earthFootOn(q, rd, squashed(toBody(P.camUp.xyz), ab), fp, nFoot);
@@ -13625,7 +13638,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if ((liteSkip() & 16u) == 0u) {
     ng = rasterNormal(centre, terrainRasterHint(centre), k);
     if (dot(ng, ng) < 0.5) { ng = gq; }
-    n = terrainRasterNormal(centre);
+    n = tn;
     if (dot(n, n) < 0.5) { n = ng; }
   }
   if (isTree) {
