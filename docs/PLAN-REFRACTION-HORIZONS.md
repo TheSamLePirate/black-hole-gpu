@@ -1336,7 +1336,10 @@ compilation) s'y ajoutent.
   (`tile-arrival`, `lib/tile-replay.ts`) : à 1 000 ms, le z 14 dessiné 49 → 26 s, le relief IGN entier 51 → 8,7 s, la moyenne
   des niveaux 42,8 → 24,6 s ; à 300 ms, z 14 18 → 9 s, IGN 19 → 3,7 s. **T8i** — une fenêtre dessinée avant d'être entière (le plus grand rectangle de ses
   tuiles arrivées autour de la caméra) : à 1 000 ms, le z 14 commence d'être dessiné à 17,7 s au lieu de 26, la moyenne des
-  niveaux commencés 24,6 → 19,9 s.
+  niveaux commencés 24,6 → 19,9 s. **T8j** — l'ordre des tuiles jugé sur la qualité de la vue (`tile-arrival` : 384 rayons
+  du cockpit, le niveau voulu contre le dessiné) : les niveaux nationaux entiers d'abord, puis tous par anneau autour du centre des
+  chargements, le plus fin d'abord ; à 1 000 ms la vue à 90 % en 8,1 s au lieu de 26, à 99 % en 11,2 s au lieu de 34, le relief IGN
+  entier toujours à 8 s. **Décision de Sam (3 novembre)** : les fenêtres d'ortho de 8 tuiles (T8e) restent désactivées.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

@@ -12,7 +12,9 @@ import { tileReplay } from "./lib/tile-replay";
 // whether the tracer draws it — a level is drawn only once its whole window is in (earth-tiles.ts complete → valid) —, the
 // IGN's relief's share on z 15–17 (its heights' mark). Said: when each level is drawn, their mean (the visible quality's
 // pace: a level not drawn is the coarser one's ground), Terrarium's z 14, the IGN's z 15–17 whole; and when each began to
-// be drawn (firstAt: T8i draws a window's tiles in round the camera's before the whole).
+// be drawn (firstAt: T8i draws a window's tiles in round the camera's before the whole); and the view's quality — a fan of
+// 384 rays over the ground the cockpit sees, each the level its footprint wants against the finest drawn there, 2^(drawn −
+// wanted) averaged —: when it reaches 90 % and 99 %, its mean over the first 30 s.
 // TA_REPLAY=<dir>: one pass, the Service Worker off, the tiles' hosts answered from <dir> after TA_DELAY_MS (300) —
 // TA_RECORD=1 fills <dir> first, at once (lib/tile-replay.ts: the missing ones fetched by Bun and kept): the loads' order A/B'd on the same answers, the network out.
 // Output: remote-results/tile-arrival/tile-arrival-<side><run>.json (AB_SIDE, AB_RUN: an A/B through scripts/ab-e2e.ts).
@@ -27,7 +29,7 @@ const RECORD = process.env.TA_RECORD === "1";
 const DELAY_MS = Number(process.env.TA_DELAY_MS ?? 300);
 afterAll(stopServer);
 
-type Row = { s: number; pending: number; levels: Record<string, [number, number, number, number, number]> };
+type Row = { s: number; pending: number; quality: number; levels: Record<string, [number, number, number, number, number]> };
 
 test.skipIf(!E2E)(
   "T8: the relief's levels drawn over Aubrac, cold then warm — when each comes, their mean",
@@ -59,7 +61,33 @@ test.skipIf(!E2E)(
                   let fine = 0; for (let i = 0; i < 65536; i += 4099) { B[0] = d[i]; if (U[0] & 1) fine++; } if (fine > 0) f++; }
                 const area = (q) => (q ? (q.x1 - q.x0) * (q.y1 - q.y0) : 0);
                 levels['z' + L.z] = [n, f, w, same(L.valid, L.want) ? 1 : 0, +(area(L.valid) / Math.max(area(L.want), 1)).toFixed(3)]; }
-              return { pending: t.pending, levels }; })()`);
+              // (the view's quality: a fan of rays over the ground the cockpit sees — 24 bearings across the view, 16 rows from the
+              // horizon down, the eye 120 m up, heading 150° —, each the level its footprint wants (the finest window over it within
+              // a level of its footprint, the tracer's blend) against the finest drawn there: 2^(drawn − wanted); their mean)
+              const R = 6378137, TAU = 2 * Math.PI, H = 120, head = (150 * Math.PI) / 180;
+              const vf = ((__bh.settings.fov ?? 60) * Math.PI) / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * 1280 / 800);
+              const pix = (2 * Math.tan(vf / 2)) / 800;
+              const lat0 = Math.asin(t.sinLat), lon0 = t.lon;
+              const merc = (sl, n) => (0.5 - Math.atanh(Math.min(Math.max(sl, -0.999999), 0.999999)) / TAU) * n;
+              const inR = (r, x, y) => !!r && x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1;
+              let qs = 0, qn = 0;
+              for (let i = 0; i < 24; i++) for (let j = 1; j <= 16; j++) {
+                const az = head + ((i + 0.5) / 24 - 0.5) * hf;
+                const dep = Math.atan((j / 16) * Math.tan(vf / 2));
+                const d = Math.min(H / Math.tan(dep), 60000);
+                const foot = (d * pix) / Math.sin(dep);
+                const lat = lat0 + (d * Math.cos(az)) / R, lon = lon0 + (d * Math.sin(az)) / (R * Math.cos(lat0));
+                const zf = Math.log2((TAU * R * Math.cos(lat)) / (256 * foot));
+                let want = 5, have = 5;
+                for (const L of t.levels) {
+                  if (L.z > zf + 1) continue;
+                  const x = (lon / TAU + 0.5) * L.n, y = merc(Math.sin(lat), L.n);
+                  if (L.want && inR(L.want, x, y)) want = Math.max(want, L.z);
+                  if (L.valid && inR(L.valid, x, y)) have = Math.max(have, L.z);
+                }
+                qs += Math.min(1, 2 ** (have - want)); qn++;
+              }
+              return { pending: t.pending, quality: +(qs / qn).toFixed(4), levels }; })()`);
             const s = (Date.now() - t0) / 1000;
             rows.push({ s, ...r });
             // (every level drawn and nothing pending — the IGN's share as it came: some of its tiles keep Terrarium's)
@@ -93,6 +121,17 @@ test.skipIf(!E2E)(
           const meanFirst = firsts.some(([, t]) => t === null)
             ? null
             : +(firsts.reduce((a, [, t]) => a + t!, 0) / firsts.length).toFixed(1);
+          // (the view's quality: when it first reaches 90 % and 99 % and stays, and its mean over the first 30 s)
+          const reach = (q: number) => {
+            let at: number | null = null;
+            for (const row of rows) {
+              if (row.quality >= q) at ??= row.s;
+              else at = null;
+            }
+            return at === null ? null : +at.toFixed(1);
+          };
+          const early = rows.filter((row) => row.s <= 30);
+          const qualityMean30 = +(early.reduce((a, row) => a + row.quality, 0) / Math.max(early.length, 1)).toFixed(3);
           const global = Object.entries(drawnAt).filter(([z]) => Number(z.slice(1)) <= 14);
           const missing = global.filter(([, t]) => t === null).map(([z]) => z);
           const mean = missing.length ? null : +(global.reduce((a, [, t]) => a + t!, 0) / global.length).toFixed(1);
@@ -106,6 +145,9 @@ test.skipIf(!E2E)(
             meanZ6to14: mean,
             firstAt,
             meanFirstZ6to14: meanFirst,
+            quality90At: reach(0.9),
+            quality99At: reach(0.99),
+            qualityMean30,
             z14: drawnAt.z14 ?? null,
             ignWhole: ignAt === undefined ? null : +ignAt.toFixed(1),
             whole: +last.s.toFixed(1),

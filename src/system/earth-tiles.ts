@@ -1151,29 +1151,23 @@ export class EarthTiles {
   }
 
   /**
-   * Starts the loads: the level with the fewest tiles still missing from its window first (T8h: a level is drawn only whole —
-   * the levels then drawn one after the other), ties to the finer, the nearest of its tiles first (cost: led along the
-   * motion); the windows whole, the
-   * halo round them into memory (ringLevel, TILE_REACH ring), while it has room.
+   * Starts the loads (T8j): the national levels' windows whole first (z 15 … 17: their heights' first step, before the IGN's),
+   * then every level's tiles by their ring round the loads' centre — the camera led along its motion —, the finer first in a
+   * ring, the nearest (cost) first: each level drawn from the centre out as its tiles come (T8i), the view filled at every
+   * level at once; the windows whole, the halo round them into memory (ringLevel, TILE_REACH ring), while it has room.
    */
   private request(lonT: number, sinLat: number) {
     const now = performance.now();
-    const todo: [Level, number, number, number][] = [];
-    // (T8h: each level's tiles still missing from its window — in flight included: a level is drawn only once its whole window
-    // is in (complete), so the one nearest to it goes first — the levels drawn one after the other, not all at the end)
-    const missing = new Map<Level, number>();
+    const todo: [Level, number, number, number, number][] = [];
     for (const L of this.levels) {
       // (a window drawn whole: nothing to look for — not its tiles' keys made again each frame —, unless taken again)
       if (!L.want || (same(L.valid, L.want) && !L.stale)) continue;
       const cx = lonT * L.n,
         cy = mercY(sinLat, L.n);
-      let m = 0;
       for (let y = L.want.y0; y < L.want.y1; y++) {
         for (let x = L.want.x0; x < L.want.x1; x++) {
           const key = this.keyOf(L, x, y);
-          if (L.key[this.slotOf(L, x, y)] === key) continue;
-          m++;
-          if (this.inflight.has(key)) continue;
+          if (L.key[this.slotOf(L, x, y)] === key || this.inflight.has(key)) continue;
           // (kept past the window — walked back to, or loaded ahead —: drawn at once)
           const kept = this.cache.get(key);
           if (kept) {
@@ -1183,15 +1177,20 @@ export class EarthTiles {
           }
           const f = this.failures.get(key);
           if (f && now < f.at) continue;
-          todo.push([L, x, y, this.cost(L, x, y, cx, cy)]);
+          // (its ring round the loads' centre's tile, in the level's tiles)
+          let rx = x - Math.floor(cx);
+          rx -= Math.round(rx / L.n) * L.n;
+          // (the national levels — z 15 … 17, small windows, the national heights' first step — whole in the first ring)
+          const ring = L.z > ZG1 ? 0 : Math.max(Math.abs(rx), Math.abs(y - Math.floor(cy)));
+          todo.push([L, x, y, this.cost(L, x, y, cx, cy), ring]);
         }
       }
-      missing.set(L, m);
     }
-    // (the loads limited, not what memory holds: every level's kept tiles drawn at once; the level nearest to whole first —
-    // ties to the finer: the ground near the eye fills most of the view, the coarsest levels a strip at the horizon —, the
-    // nearest of its tiles first)
-    todo.sort((a, b) => missing.get(a[0])! - missing.get(b[0])! || b[0].z - a[0].z || a[3] - b[3]);
+    // (the loads limited, not what memory holds: every level's kept tiles drawn at once; by ring — the finer first in one: the
+    // ground near the eye fills most of the view, the coarsest levels a strip at the horizon —, the nearest first. Measured
+    // (3 Nov 2026, tile-arrival in replay at 1 s): the view at 90 % of the detail it wants in 8 s — 26–32 s one level after the
+    // other (T8h), 15 s by ring alone (the IGN's relief then whole at 31 s, 8 here))
+    todo.sort((a, b) => a[4] - b[4] || b[0].z - a[0].z || a[3] - b[3]);
     for (const [L, x, y] of todo) {
       if (this.inflight.size >= MAX_INFLIGHT) break;
       void this.load(L, x, y);
@@ -1491,12 +1490,15 @@ export class EarthTiles {
     this.setValid(L, w);
   }
 
-  /** The largest rectangle of a window's tiles all in that holds the camera's tile (null: that tile not in). */
+  /** The largest rectangle of a window's tiles all in that holds the loads' centre's tile — the camera led along its motion
+   *  (priorityLon: the tiles come out from there), held within the window — (null: that tile not in). */
   private loadedRect(L: Level, w: Rect): Rect | null {
     const nx = w.x1 - w.x0,
       ny = w.y1 - w.y0;
-    const fx = Math.min(Math.max(Math.floor((this.lon / TAU + 0.5) * L.n) - w.x0, 0), nx - 1);
-    const fy = Math.min(Math.max(Math.floor(mercY(this.sinLat, L.n)) - w.y0, 0), ny - 1);
+    let px = Math.floor(cx0(this.priorityLon) * L.n) - w.x0;
+    px -= Math.round((px - nx / 2) / L.n) * L.n;
+    const fx = Math.min(Math.max(px, 0), nx - 1);
+    const fy = Math.min(Math.max(Math.floor(mercY(this.prioritySinLat, L.n)) - w.y0, 0), ny - 1);
     const ok = (i: number, j: number) => L.key[this.slotOf(L, w.x0 + i, w.y0 + j)] === this.keyOf(L, w.x0 + i, w.y0 + j);
     if (!ok(fx, fy)) return null;
     // (every rectangle round the camera's tile — 8 × 8 tiles at most: a few thousand looks, at a tile's arrival)
