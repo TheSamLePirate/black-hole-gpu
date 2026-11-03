@@ -288,7 +288,8 @@ import { type ContrailSnap, type ContrailStep, Contrails, MAX_SEGMENTS, SEG_FLOA
 import { ReplayPlayer } from "./ui/replay";
 import { BODY_COLOURS, CameraPanel, fmtHeight, VIEW_HELP, VIEW_LABEL, VIEWS, type View } from "./ui/camerapanel";
 import { defaultAltKm, ourMouthPose, ourOrbitPose } from "./game/place";
-import { bodyAxes, EPOCH_DATE, solarBody, solarState, M_METRES, utcOf } from "./system/solar";
+import { bodyAxes, EPOCH_DATE, SOLAR_BODIES, solarBody, solarState, M_METRES, utcOf, type MapName } from "./system/solar";
+import { reliefOnly } from "./system/hd-maps";
 import { plan } from "./system/plan-client";
 import { C_MPS, M_SECONDS } from "./units";
 import { mouth, setSceneTime } from "./wormhole";
@@ -1917,6 +1918,39 @@ async function main() {
         moon: id === "moon",
       });
     }
+    return out;
+  }
+
+  /**
+   * The worlds with measured heights the view looks at (renderer.looked — PLAN-REFRACTION-HORIZONS H1b: the relief alone of the
+   * one looked at from afar, the Moon at the telescope): each its maps' name, its distance in its radii, its disc in the image,
+   * or within half a field of it. From the view's own pose (bodyDisc: the light's time, the refraction), 4 times a second.
+   */
+  let lookedAt = 0;
+  let lookedList: { map: MapName; dN: number; inView: boolean; nearView: boolean }[] = [];
+  function lookedBodiesNow() {
+    const now = performance.now();
+    if (now - lookedAt < 250) return lookedList;
+    lookedAt = now;
+    const view = camera.viewSettings();
+    const cam = cameraFrame(view);
+    const tanH = Math.tan((view.fov * Math.PI) / 360);
+    const aspect = canvas.width / Math.max(canvas.height, 1);
+    const half = Math.atan(tanH * Math.hypot(1, aspect));
+    const out: typeof lookedList = [];
+    for (const b of SOLAR_BODIES) {
+      if (!b.map || !reliefOnly(b.map as MapName)) continue;
+      const d = bodyDisc(view, cam, b.id as Body, sim.time);
+      if (!d) continue;
+      const off = Math.acos(Math.max(-1, Math.min(1, d.look[0] * cam.fwd[0] + d.look[1] * cam.fwd[1] + d.look[2] * cam.fwd[2])));
+      out.push({
+        map: b.map as MapName,
+        dN: 1 / Math.max(Math.sin(d.radius), 1e-12),
+        inView: off < half + d.radius,
+        nearView: off < 1.5 * half + d.radius,
+      });
+    }
+    lookedList = out;
     return out;
   }
 
@@ -8385,6 +8419,7 @@ async function main() {
     // (a still view refines, traced, in the photo mode alone: paused or held, the raster draws on)
     renderer.rasterHold = !photoMode?.isOpen;
     renderer.skyDiscs = skyDiscsNow();
+    renderer.looked = lookedBodiesNow();
     // (the telescope locked on its target — stabilised, controller/piloting.ts aimShipViews —: its disc still in the view)
     renderer.discsStill = settings.telescope && settings.lookAt ? settings.target : null;
     renderer.starMatrix = starMatrixNow();

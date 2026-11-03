@@ -1300,3 +1300,10 @@ compilation) s'y ajoutent.
   Géoplateforme commun, le worker plus léger ; **la nuit calibrée** (Q2) ; **Q3** première étape — le matériau du tracé sur
   les bâtiments raster ([Q3.md](progress/refraction-horizons/Q3.md)) ; **H1 (d)** sur le GPU — les moyennes le long des rayons,
   le pas du bloqueur dominant ([H1.md](progress/refraction-horizons/H1.md)).
+- **3 novembre, matin** : **H1b + H2** — la Lune au télescope depuis la Terre reçoit son relief seul (le DEM, la couleur
+  grossière gardée, le sol du CPU intouché ; priorité épinglé > proche > regardé, `reliefAt` = 8 × `hdAt`) et ses cartes
+  d'horizon sont lues sur son disque (`horizonLight`, liaisons 42 et 43, `TABLE_HORIZON`, réglage `horizonMaps`) : le relief
+  LOLA visible, le terminateur dentelé, les pentes que le relief éclairait jusqu'à ~270 km dans la nuit éteintes ; aucun coût
+  mesurable (kerr-mini, ±3 ms). Le premier essai a montré que `ourSegment` ne dessinait jamais le corps HD (toujours le corps
+  proche) : H1b devait précéder H2 — [progress/refraction-horizons/H2.md](progress/refraction-horizons/H2.md). Au passage, le
+  traceur sans décor mondial recompile (b7780d14).

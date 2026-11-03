@@ -71,4 +71,8 @@ export const TOPS_VEC4S = 181;
  *  TerrainCache.FADE_MS — its share in the level's header (s.w) —, a bake never a jump; last in the table, no offset moved */
 export const TABLE_TERRAIN_PREV = TABLE_TOPS + TOPS_VEC4S;
 export const TERRAIN_PREV_VEC4S = TERRAIN_CACHE_LEVELS * TERRAIN_CACHE_NODE_VEC4S;
-export const TABLE_VEC4S = TABLE_TERRAIN_PREV + TERRAIN_PREV_VEC4S;
+/** (H2) the near body's horizon maps (system/horizon-maps.ts withHorizonMaps; trace.wgsl horizonLight): [0] on, the map's
+ *  D_bake, the caps' D_bake [m], the caps' rmax; [1] the receiver's level of the map's bake and of the caps' (the DEM's mips) */
+export const TABLE_HORIZON = TABLE_TERRAIN_PREV + TERRAIN_PREV_VEC4S;
+export const HORIZON_VEC4S = 2;
+export const TABLE_VEC4S = TABLE_HORIZON + HORIZON_VEC4S;

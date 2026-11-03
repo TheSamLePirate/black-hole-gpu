@@ -110,7 +110,14 @@ export interface HdMap {
   dem: (HeightMap & { lo: number; hi: number }) | null;
   /** the colour map's mean linear luminance (area-weighted) */
   mean: number;
+  /** "full": its colour and relief, its heights the CPU's ground (the near body, the pinned one); "relief": its heights alone
+   *  — the colour a 1 × 1 stand-in, the coarse map drawn —, for the body looked at from afar (PLAN-REFRACTION-HORIZONS H1b: the
+   *  Moon at the telescope), the CPU's ground untouched */
+  mode: HdMode;
 }
+export type HdMode = "full" | "relief";
+/** the worlds whose heights can be drawn alone (their measured DEM) */
+export const reliefOnly = (name: MapName) => !!HD_SETS[name]?.dem;
 
 const PACK = /* wgsl */ `
 @group(0) @binding(0) var a: texture_2d<f32>;
@@ -183,7 +190,15 @@ export function placeholderHd(device: GPUDevice): HdMap {
     device.queue.writeTexture({ texture: t }, new Uint8Array(px), {}, [1, 1]);
     return t;
   };
-  return { name: null, color: mk([128, 128, 128, 255]), relief: mk([128, 128, 255, 255]), hasRelief: false, dem: null, mean: 0.25 };
+  return {
+    name: null,
+    color: mk([128, 128, 128, 255]),
+    relief: mk([128, 128, 255, 255]),
+    hasRelief: false,
+    dem: null,
+    mean: 0.25,
+    mode: "full",
+  };
 }
 
 async function bitmap(url: string) {
@@ -258,7 +273,7 @@ async function jupiterCompressed(device: GPUDevice): Promise<HdMap | null> {
     const errors = await Promise.all([validation, allocation]);
     const error = errors.find((e) => e !== null);
     if (error) throw new Error(`Jupiter compressed upload: ${error.message}`);
-    return { name: "jupiter", color, relief, hasRelief: false, dem: null, mean: jupiterMetadata.mean };
+    return { name: "jupiter", color, relief, hasRelief: false, dem: null, mean: jupiterMetadata.mean, mode: "full" };
   } catch (error) {
     color?.destroy();
     relief?.destroy();
@@ -269,10 +284,10 @@ async function jupiterCompressed(device: GPUDevice): Promise<HdMap | null> {
   }
 }
 
-export async function loadHdMap(device: GPUDevice, name: MapName, tier: Pick<Tier, "level">): Promise<HdMap | null> {
+export async function loadHdMap(device: GPUDevice, name: MapName, tier: Pick<Tier, "level">, mode: HdMode = "full"): Promise<HdMap | null> {
   const set = HD_SETS[name];
-  if (!set) return null;
-  if (name === "jupiter" && wantsJupiterKtx(device, tier)) {
+  if (!set || (mode === "relief" && !set.dem)) return null;
+  if (mode === "full" && name === "jupiter" && wantsJupiterKtx(device, tier)) {
     const compressed = await jupiterCompressed(device);
     if (compressed) return compressed;
   }
@@ -328,6 +343,35 @@ export async function loadHdMap(device: GPUDevice, name: MapName, tier: Pick<Tie
     return t;
   };
 
+  // (measured heights: rg16float — the mean, and down the mips their highest —, the range kept)
+  const fromDem = async (url: string) => {
+    const h = await loadHeights(url);
+    let lo = 0,
+      hi = 0;
+    for (let i = 0; i < h.map.length; i++) {
+      const v = h.map[i]!;
+      if (v < lo) lo = v;
+      else if (v > hi) hi = v;
+    }
+    const t = device.createTexture({ size: [h.W, h.H], format: "rg16float", mipLevelCount: levels(h.W, h.H), usage });
+    const whole = device.createTexture({
+      size: [h.W, h.H],
+      format: "r16sint",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    });
+    device.queue.writeTexture({ texture: whole }, h.map, { bytesPerRow: h.W * 2 }, [h.W, h.H]);
+    draw("fromDem", t, 0, whole.createView());
+    mips(t, false, "downDem");
+    await device.queue.onSubmittedWorkDone();
+    whole.destroy();
+    return { relief: t, dem: { ...h, lo, hi } };
+  };
+  // the relief alone: its heights, the colour a 1 × 1 stand-in (the coarse map drawn)
+  if (mode === "relief") {
+    const r = await fromDem(set.dem!);
+    kBuf.destroy();
+    return { name, color: placeholderHd(device).color, relief: r.relief, hasRelief: true, dem: r.dem, mean: 0.25, mode };
+  }
   // the colour, and its mean (a small copy of it, area-weighted)
   const cImg = await bitmap(set.color);
   const color = device.createTexture({
@@ -364,26 +408,9 @@ export async function loadHdMap(device: GPUDevice, name: MapName, tier: Pick<Tie
   let dem: HdMap["dem"] = null;
   const rUrl = set.normal ?? set.height;
   if (set.dem) {
-    const h = await loadHeights(set.dem);
-    let lo = 0,
-      hi = 0;
-    for (let i = 0; i < h.map.length; i++) {
-      const v = h.map[i]!;
-      if (v < lo) lo = v;
-      else if (v > hi) hi = v;
-    }
-    dem = { ...h, lo, hi };
-    relief = device.createTexture({ size: [h.W, h.H], format: "rg16float", mipLevelCount: levels(h.W, h.H), usage });
-    const whole = device.createTexture({
-      size: [h.W, h.H],
-      format: "r16sint",
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
-    });
-    device.queue.writeTexture({ texture: whole }, h.map, { bytesPerRow: h.W * 2 }, [h.W, h.H]);
-    draw("fromDem", relief, 0, whole.createView());
-    mips(relief, false, "downDem");
-    await device.queue.onSubmittedWorkDone();
-    whole.destroy();
+    const r = await fromDem(set.dem);
+    relief = r.relief;
+    dem = r.dem;
     hasRelief = true;
   } else if (rUrl) {
     const rImg = await bitmap(rUrl);
@@ -438,7 +465,7 @@ export async function loadHdMap(device: GPUDevice, name: MapName, tier: Pick<Tie
     if (c !== color) color.destroy();
     if (r !== relief) relief.destroy();
   }
-  return { name, color: c, relief: r, hasRelief, dem, mean: Math.max(sum / wsum, 1e-3) };
+  return { name, color: c, relief: r, hasRelief, dem, mean: Math.max(sum / wsum, 1e-3), mode };
 }
 
 /** The colour map's sRGB view's format (RGBA8, BC7 or native ASTC). */

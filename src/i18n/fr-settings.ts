@@ -807,6 +807,10 @@ export default {
     "Pendant que la caméra bouge, l'image des trames précédentes est reportée — retrouvée par la rotation de la caméra, exacte pour le ciel et les images lentillées — et affinée par les rayons de chaque nouvelle trame : une image nette en mouvement avec peu de rayons. Ce qui a bougé dans la scène est pris dans la nouvelle trame seulement.",
   "Cloud cover": "Couverture nuageuse",
   "Atmospheric refraction": "Réfraction atmosphérique",
+  "Worlds' relief": "Le relief des mondes",
+  "Long shadows of the relief": "Ombres longues du relief",
+  "Near the Moon, its measured relief's horizon is baked in every direction (about 50 MB on the GPU, a few seconds): the long shadows of its ranges and craters' rims at the terminator, the Sun's disc setting behind them, seen from afar. Off: the Sun lights each point down to its own slope.":
+    "Près de la Lune, l'horizon de son relief mesuré est cuit dans toutes les directions (environ 50 Mo sur le GPU, quelques secondes) : les ombres longues de ses chaînes et des remparts de ses cratères au terminateur, le disque du Soleil qui se couche derrière, vues de loin. Éteint : le Soleil éclaire chaque point selon sa seule pente.",
   "The Earth's air bends the light from beyond it: the Sun, the Moon, the planets and the stars seen half a degree higher at the horizon (the setting Sun flattened, still seen when it is already below; an eclipsed Moon and the Sun seen together — a selenelion), more in cold, dense air. Off: each where it is.":
     "L'air de la Terre courbe la lumière venue d'au-delà : le Soleil, la Lune, les planètes et les étoiles vus un demi-degré plus haut à l'horizon (le Soleil couchant aplati, encore vu alors qu'il est déjà dessous ; une Lune éclipsée et le Soleil vus ensemble — un sélénélion), davantage dans l'air froid et dense. Éteinte : chacun à sa place.",
   "How much of the Earth's cloud map is drawn: 1, its clouds (NASA's Blue Marble); 0, a clear sky everywhere — an eclipse, a landscape, a view from orbit without them.":

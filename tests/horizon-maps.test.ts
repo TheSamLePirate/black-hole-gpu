@@ -21,7 +21,15 @@ import {
   POLE_SECTORS,
   referenceHorizon,
   toHalf,
+  sunAngle,
+  capUV,
+  sectorSeen,
+  sunAbove,
+  withHorizonMaps,
+  HORIZON_BINDINGS,
+  HORIZON_STEP,
 } from "../src/system/horizon-maps";
+import { TABLE_HORIZON } from "../src/gpu-tables";
 // (the bake's geometry — its rays, steps, sectors, caps — tested on the ground's tops: every blocker caught, the reads'
 // conservative bound; option (d)'s mean reads — the default since decision 37 — tested below)
 const bakeTexel = (
@@ -360,4 +368,87 @@ test("option (d): the horizon seen again from the receiver's own height — the 
   expect(Math.abs(sinDeg(seen) - sinDeg(fromFloor.sin[2]!))).toBeLessThan(0.05);
   // (and higher than the top's: the floor's receiver more shadowed — the faux éclairage the pilot measured, corrected)
   expect(seen).toBeGreaterThan(fromTop.sin[2]!);
+});
+
+// H2 — the tracer's reader (trace.wgsl horizonLight, its CPU mirror here): the Sun's angle on each lattice, the caps' texture
+// coordinates, a sector decoded and seen again from the point's height, the Sun's disc's share above the horizon.
+test("H2: the Sun's angle on a lattice is latticeTangent's inverse — the map's azimuth, both caps' grid angles", () => {
+  const cases: [Lattice, number, number][] = [
+    [globalLattice(1024, 512), 0.3, -2.1],
+    [globalLattice(1024, 512), -1.2, 0.7],
+    [capLattice(1), (82 * Math.PI) / 180, 1.9],
+    [capLattice(-1), (-85 * Math.PI) / 180, -0.4],
+    [capLattice(-1), (-79 * Math.PI) / 180, 3.0],
+  ];
+  for (const [l, lat, lon] of cases)
+    for (let k = 0; k < 24; k++) {
+      const ang = (k * 2 * Math.PI) / 24 + 0.05;
+      const t = latticeTangent(l, lat, lon, ang);
+      const sl = Math.sin(lat),
+        cl = Math.cos(lat),
+        so = Math.sin(lon),
+        co = Math.cos(lon);
+      const north = -sl * co * t[0] - sl * so * t[1] + cl * t[2];
+      const east = -so * t[0] + co * t[1];
+      const back = sunAngle(l, lon, north, east);
+      const diff = Math.atan2(Math.sin(back - ang), Math.cos(back - ang));
+      expect(Math.abs(diff)).toBeLessThan(1e-9);
+    }
+});
+
+test("H2: a cap's texture coordinates are its texels' centres (latticePoint's inverse), both poles", () => {
+  for (const pole of [1, -1] as const) {
+    const l = capLattice(pole);
+    for (const [i, j] of [
+      [3, 7],
+      [128, 128],
+      [200, 31],
+      [255, 0],
+    ] as [number, number][]) {
+      const { lat, lon } = latticePoint(l, i, j);
+      const [u, v] = capUV(l, lat, lon);
+      expect(u * l.N - 0.5).toBeCloseTo(i, 6);
+      expect(v * l.N - 0.5).toBeCloseTo(j, 6);
+    }
+  }
+});
+
+test("H2: a sector decoded and seen again — the bake's own height gives its byte back; lower, a higher horizon by dh/d", () => {
+  const D0 = 10_660;
+  for (const sin of [-0.02, 0.0, 0.01, 0.05, 0.2]) {
+    const u = encodeHorizonByte(sin) / 255;
+    const n = 12;
+    const stepU = n / 255;
+    const d = D0 * HORIZON_STEP ** n;
+    // (seen from the bake's own height: the byte's decoded sine)
+    expect(sectorSeen(u, stepU, D0, 0)).toBeCloseTo(decodeHorizon(u), 9);
+    // (500 m lower than the bake's receiver: tan e' = tan e + 500/d)
+    const e = decodeHorizon(u);
+    const t = e / Math.sqrt(1 - e * e) + 500 / d;
+    expect(sectorSeen(u, stepU, D0, 500)).toBeCloseTo(t / Math.sqrt(1 + t * t), 9);
+    expect(sectorSeen(u, stepU, D0, 500)).toBeGreaterThan(decodeHorizon(u));
+  }
+});
+
+test("H2: the Sun's disc's share above the horizon — half at its centre on it, all a radius above, none a radius below", () => {
+  const r = 0.00465;
+  const h = Math.sin(0.01);
+  expect(sunAbove(h, h, r)).toBeCloseTo(0.5, 9);
+  expect(sunAbove(Math.sin(0.01 + r), h, r)).toBeCloseTo(1, 9);
+  expect(sunAbove(Math.sin(0.01 - r), h, r)).toBeCloseTo(0, 9);
+  expect(sunAbove(Math.sin(0.01 + 0.5 * r), h, r)).toBeGreaterThan(0.8);
+});
+
+test("H2: the tracer's reader — the two maps bound at 42 and 43, the table's offset, the stub without them", () => {
+  const stub =
+    "a\n// BEGIN_HORIZON_MAPS x\nfn horizonLight(q: vec3f, Lb: vec3f, sunR: f32, foot: f32) -> f32 { return 1.0; }\n// END_HORIZON_MAPS\nb";
+  expect(withHorizonMaps(stub, false)).toBe(stub);
+  const on = withHorizonMaps(stub, true);
+  expect(HORIZON_BINDINGS).toEqual([42, 43]);
+  expect(on).toContain(`@binding(42) var horizonMap: texture_2d_array<f32>;`);
+  expect(on).toContain(`@binding(43) var horizonCaps: texture_2d_array<f32>;`);
+  expect(on).toContain(`const HZ_OFF = ${TABLE_HORIZON}u;`);
+  expect(on).toContain("fn horizonLight(q: vec3f, Lb: vec3f, sunR: f32, foot: f32) -> f32 {");
+  expect(on).not.toContain("BEGIN_HORIZON_MAPS");
+  expect(() => withHorizonMaps("nothing", true)).toThrow();
 });

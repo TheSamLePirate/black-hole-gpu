@@ -2389,6 +2389,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "refraction atmosphere horizon sun flattened selenelion bending air",
   },
   {
+    key: "horizonMaps",
+    type: "toggle",
+    section: "sky",
+    group: "Worlds' relief",
+    label: "Long shadows of the relief",
+    effect: "scene",
+    help: "Near the Moon, its measured relief's horizon is baked in every direction (about 50 MB on the GPU, a few seconds): the long shadows of its ranges and craters' rims at the terminator, the Sun's disc setting behind them, seen from afar. Off: the Sun lights each point down to its own slope.",
+    keywords: "horizon shadows relief terminator moon craters long shadow ombres relief horizon lune terminateur",
+  },
+  {
     key: "volumetricClouds",
     type: "toggle",
     section: "render",

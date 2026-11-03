@@ -1,5 +1,6 @@
 // The tracer's WGSL as the renderer builds it: trace.wgsl with the forests set in, then each optional part (the
-// terrain cache, the raster's hint and the relief's shadow map, the cloud pass and shadow maps, the trees' shadows,
+// terrain cache, the raster's hint and the relief's shadow map, the cloud pass and shadow maps, the trees' shadows, the
+// near body's horizon maps,
 // the regional surface, the world scenery, the sea's FFT, the aerial table) in or out by what the device takes.
 // One function for the renderer (Renderer.create) and the tools that measure the kernels (scripts/wgsl-inline-size.ts,
 // scripts/d3d12-compile-proxy.ts): what they measure is what the page compiles.
@@ -14,6 +15,7 @@ import { SCENERY_STORAGE_LIMIT } from "./scenery-data";
 import { withTerrainCache } from "./terrain-cache";
 import { RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_TEXTURE_LIMIT, withSunShadow, withTerrainRaster } from "./terrain-raster-hint";
 import { TREE_SHADOW_TEXTURE_LIMIT, withTreeShadow } from "./tree-shadow";
+import { HORIZON_TEXTURE_LIMIT, withHorizonMaps } from "./horizon-maps";
 
 /** what of the device decides the tracer's optional parts */
 export interface TracerLimits {
@@ -31,18 +33,21 @@ export function composeTracer(trace: string, forest: string, limits: TracerLimit
     seaShader(
       sceneryShader(
         surfaceShader(
-          withTreeShadow(
-            withCloudShadow(
-              withCloudPass(
-                withSunShadow(
-                  withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
-                  tex >= SUN_SHADOW_TEXTURE_LIMIT,
+          withHorizonMaps(
+            withTreeShadow(
+              withCloudShadow(
+                withCloudPass(
+                  withSunShadow(
+                    withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
+                    tex >= SUN_SHADOW_TEXTURE_LIMIT,
+                  ),
+                  tex >= CLOUD_PASS_TEXTURE_LIMIT,
                 ),
-                tex >= CLOUD_PASS_TEXTURE_LIMIT,
+                tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
               ),
-              tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
+              tex >= TREE_SHADOW_TEXTURE_LIMIT,
             ),
-            tex >= TREE_SHADOW_TEXTURE_LIMIT,
+            tex >= HORIZON_TEXTURE_LIMIT,
           ),
           tex >= SURFACE_TEXTURE_LIMIT,
         ),

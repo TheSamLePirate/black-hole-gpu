@@ -82,7 +82,7 @@ import { buildDayClouds, dayCloudsFor, dayCloudsUrl } from "./system/day-clouds"
 import { incidentAltitude, refractionParams, seaRefractivity } from "./system/refraction";
 import { moonLightShare, SHADE_VEC4S, shadowParams } from "./eclipse/shadows-gpu";
 import { lookOf } from "./skychart";
-import { HD_SETS, hdColorFormat, loadHdMap, placeholderHd, seasPixels, type HdMap } from "./system/hd-maps";
+import { HD_SETS, type HdMap, type HdMode, hdColorFormat, loadHdMap, placeholderHd, reliefOnly, seasPixels } from "./system/hd-maps";
 import { bakeNoise3d } from "./noise3d";
 import { bakeGiantTile, readGiantTile } from "./system/giant-tile";
 import { GIANT_WINDS } from "./system/giant-winds";
@@ -119,6 +119,7 @@ import {
   TABLE_RINGSUM,
   TABLE_TERRAIN,
   TABLE_TERRAIN_PREV,
+  TABLE_HORIZON,
   TABLE_TOPS,
   RING_N,
   TABLE_WIND,
@@ -182,7 +183,7 @@ import {
 import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/geoid";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
-import { HorizonMaps } from "./system/horizon-maps";
+import { HORIZON_BINDINGS, HORIZON_TEXTURE_LIMIT, HorizonMaps } from "./system/horizon-maps";
 import { capEdges, devilSeason, marsLs } from "./system/mars-season";
 import { MoonTiles, WORLDS } from "./system/moon-tiles";
 import { WarpGrid } from "./system/warp-grid";
@@ -960,10 +961,12 @@ export class Renderer {
   private earthSeenAt = 0;
   /** the finer maps of the body near the camera (one at a time), and the one being loaded */
   private hdMap!: HdMap;
-  private hdLoading: MapName | null = null;
+  /** the finer maps loading ("name:mode"), and the generation published (each new set of them: H1b, BH-API hdGeneration) */
+  private hdLoading: string | null = null;
+  hdGeneration = 0;
   /** the world whose finer maps are coming (the loading status), null none */
   get hdLoadingName(): MapName | null {
-    return this.hdLoading;
+    return (this.hdLoading?.split(":")[0] as MapName | undefined) ?? null;
   }
   // auto exposure: the light meter (a histogram of the image, read back), its state
   private meterPipeline!: GPUComputePipeline;
@@ -1235,6 +1238,15 @@ export class Renderer {
         format: "depth32float",
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
+    // (the near body's horizon maps — H2 —: a stand-in until a body's are made)
+    this.horizonRead = device.limits.maxSampledTexturesPerShaderStage >= HORIZON_TEXTURE_LIMIT;
+    if (this.horizonRead)
+      this.horizonDummy = device.createTexture({
+        label: "horizon maps: none",
+        size: [1, 1, 1],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING,
+      });
     if (this.sunShadow)
       this.sunDummy = device.createTexture({
         label: "relief shadow map: none",
@@ -1302,6 +1314,14 @@ export class Renderer {
                 texture: { sampleType: "depth", viewDimension: "2d-array" } as GPUTextureBindingLayout,
               },
             ]
+          : []),
+        // (the near body's horizon maps — H2 —: its map and its caps)
+        ...(device.limits.maxSampledTexturesPerShaderStage >= HORIZON_TEXTURE_LIMIT
+          ? HORIZON_BINDINGS.map((binding) => ({
+              binding,
+              visibility: C,
+              texture: { sampleType: "float", viewDimension: "2d-array" } as GPUTextureBindingLayout,
+            }))
           : []),
         ...(device.limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT
           ? [{ binding: 32, visibility: C, buffer: { type: "read-only-storage" } as GPUBufferBindingLayout }]
@@ -1505,6 +1525,12 @@ export class Renderer {
     this.endurance.onLoaded = () => this.invalidate();
     this.earthTiles = new EarthTiles(device);
     this.horizonMaps = new HorizonMaps(device);
+    // (its maps made or dropped: the bind groups holding them rebuilt — the tracer reads them, H2)
+    this.horizonMaps.onChange = () => {
+      if (!this.horizonRead) return;
+      if (this.live) this.bindTarget(this.live);
+      if (this.offline) this.bindTarget(this.offline.target);
+    };
     this.earthTiles.onChange = () => {
       if (!this.offline) this.invalidate();
     };
@@ -1877,7 +1903,7 @@ export class Renderer {
   /** Frees the finer maps (the camera left their world): the placeholder back. */
   private releaseHd() {
     const old = this.hdMap;
-    this.groundHeights(old, null);
+    if (old.mode === "full") this.groundHeights(old, null);
     this.hdMap = placeholderHd(this.device);
     this.hdLoading = null;
     if (this.live) this.bindTarget(this.live);
@@ -1927,22 +1953,26 @@ export class Renderer {
     setGroundHeights(id, g);
   }
 
-  /** Streams in a world's finer maps (the previous ones freed once loaded). */
-  private requestHd(name: MapName) {
-    if (this.hdMap.name === name || this.hdLoading === name) return;
-    this.hdLoading = name;
-    loadHdMap(this.device, name, this.tier)
+  /** Streams in a world's finer maps (the previous ones freed once loaded): all of them ("full": the near or pinned world — its
+   *  heights the CPU's ground), or its relief alone ("relief": a world looked at from afar, H1b — the CPU's ground untouched). */
+  private requestHd(name: MapName, mode: HdMode) {
+    const key = `${name}:${mode}`;
+    if ((this.hdMap.name === name && this.hdMap.mode === mode) || this.hdLoading === key) return;
+    this.hdLoading = key;
+    loadHdMap(this.device, name, this.tier, mode)
       .then((m) => {
         // (superseded while it loaded: both its textures freed — the relief leaked before)
-        if (!m || this.hdLoading !== name) {
+        if (!m || this.hdLoading !== key) {
           if (m) m.color.destroy(), m.relief.destroy();
           return;
         }
+        // (published at once: the world, its mode, its relief — the horizon maps restart on it, read once baked)
         const old = this.hdMap;
-        this.groundHeights(old, null);
+        if (old.mode === "full") this.groundHeights(old, null);
         this.hdMap = m;
+        this.hdGeneration++;
         this.hdLoading = null;
-        this.groundHeights(m, m);
+        if (m.mode === "full") this.groundHeights(m, m);
         if (this.live) this.bindTarget(this.live);
         if (this.offline) this.bindTarget(this.offline.target);
         void this.device.queue.onSubmittedWorkDone().then(() => (old.color.destroy(), old.relief.destroy()));
@@ -1950,7 +1980,7 @@ export class Renderer {
         this.onAssets?.();
       })
       .catch((e) => {
-        this.hdLoading = null;
+        if (this.hdLoading === key) this.hdLoading = null;
         console.warn("Finer maps unavailable:", e);
       });
   }
@@ -2040,6 +2070,7 @@ export class Renderer {
             CLOUD_PASS_TEXTURE_LIMIT,
             CLOUD_SHADOW_TEXTURE_LIMIT,
             TREE_SHADOW_TEXTURE_LIMIT,
+            HORIZON_TEXTURE_LIMIT,
           ),
           adapter.limits.maxSampledTexturesPerShaderStage,
         ),
@@ -2513,6 +2544,14 @@ export class Renderer {
       // (the clouds' shadow map: the stand-in for its own kernel, which writes it)
       ...(this.cloudShadow ? [{ binding: CLOUD_SHADOW_BINDING, resource: ((csm && this.csmTex) || this.csmDummy!).createView() }] : []),
       ...(this.treeShadow ? [{ binding: TREE_SHADOW_BINDING, resource: this.tsmTex!.createView({ dimension: "2d-array" }) }] : []),
+      ...(this.horizonRead
+        ? HORIZON_BINDINGS.map((binding, i) => ({
+            binding,
+            resource: ((i === 0 ? this.horizonMaps.map : this.horizonMaps.pole) ?? this.horizonDummy!).createView({
+              dimension: "2d-array",
+            }),
+          }))
+        : []),
     ];
   }
 
@@ -3241,9 +3280,26 @@ export class Renderer {
       const F = this.shipFocus;
       const fb = F ? solarBody(F.body) : undefined;
       const pin = fb && HD_SETS[fb.map as MapName] && (F!.altKm * 1e3) / (fb.radius * M_METRES) < 2 ? (fb.map as MapName) : undefined;
-      if (pin) this.requestHd(pin);
-      else if (nearMap && HD_SETS[nearMap] && dN < hdAt) this.requestHd(nearMap);
-      else if (this.hdMap.name && !(nearMap === this.hdMap.name && dN < 2 * hdAt)) this.releaseHd();
+      // (H1b: past them, the world looked at — the largest disc in the image whose coarse map's texel outgrows ~1/8 of a pixel:
+      // reliefAt, 8 × hdAt's reach — ~3° of field for the Moon from the Earth —: its heights alone, the CPU's ground untouched;
+      // kept while its disc stays within half a field of the image and nearer than twice the reach, freed 3 s after)
+      const reliefAt = 1 + (8 * 1.3 * ((2 * Math.PI) / 4096)) / pixelAngle;
+      const now = performance.now();
+      const cur = this.hdMap;
+      const keepRelief =
+        cur.mode === "relief" && !!cur.name && this.looked.some((l) => l.map === cur.name && l.nearView && l.dN < 2 * reliefAt);
+      const looked = this.looked
+        .filter((l) => l.inView && l.dN < reliefAt && l.map !== nearMap && reliefOnly(l.map))
+        .sort((a, b) => a.dN - b.dN)[0];
+      if (keepRelief || looked) this.reliefWantedAt = now;
+      if (pin) this.requestHd(pin, "full");
+      else if (nearMap && HD_SETS[nearMap] && dN < hdAt) this.requestHd(nearMap, "full");
+      else if (cur.mode === "full" && cur.name && nearMap === cur.name && dN < 2 * hdAt) {
+        // (the near world's maps kept)
+      } else if (keepRelief) {
+        // (the relief looked at kept)
+      } else if (looked) this.requestHd(looked.map, "relief");
+      else if (cur.name && (cur.mode === "full" || now - this.reliefWantedAt > 3000)) this.releaseHd();
       // (the giants' turbulence: its tile baked the first time one is that near — trace.wgsl giantFlow)
       if ((nearMap === "jupiter" || nearMap === "saturn") && dN < 2 * hdAt && this.giantTile.state === "none") void this.bakeGiantTile();
     }
@@ -3251,13 +3307,18 @@ export class Renderer {
     const hdOn = !!hd.name && bodies.some((b) => solarBody(b.id)?.map === hd.name);
     const hdRelief = !hd.hasRelief ? 0 : hd.dem || HD_SETS[hd.name!]?.height ? 1 : 1.2;
     // (its brightness the coarse map's — but Venus's coarse map is its clouds: its ground a weathered basalt's, 0.12)
-    const hdGain = ((this.planetMaps.mean.get(hd.name!) ?? hd.mean) / hd.mean) * (hd.name === "venus" ? VENUS_GROUND / 0.689 : 1);
-    set(62, hdOn ? mapIndex(hd.name!) : -1, hdGain, hdRelief, hd.color.width);
+    // (the relief alone — H1b —: the coarse map's colour drawn, as it is — no gain —, at its own width)
+    const hdGain =
+      hd.mode === "relief"
+        ? 1
+        : ((this.planetMaps.mean.get(hd.name!) ?? hd.mean) / hd.mean) * (hd.name === "venus" ? VENUS_GROUND / 0.689 : 1);
+    set(62, hdOn ? mapIndex(hd.name!) : -1, hdGain, hdRelief, hd.mode === "relief" ? this.planetMaps.hi.width : hd.color.width);
     // (its measured heights: on, their highest and lowest [m] — the relief's shell —, the body's radius [m])
     const hdBody = hd.name ? SOLAR_BODIES.find((b) => b.map === hd.name) : undefined;
     set(
       69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S,
-      hdOn && hd.dem ? 1 : 0,
+      // (2: the relief alone — trace.wgsl planetMapAt keeps the coarse map)
+      hdOn && hd.dem ? (hd.mode === "relief" ? 2 : 1) : 0,
       hd.dem?.hi ?? 0,
       hd.dem?.lo ?? 0,
       hdBody ? hdBody.radius * M_METRES : 1,
@@ -7969,6 +8030,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the sky's bodies' discs this frame (main.ts: the Moon's, the Sun's — bodyDisc): their centre in the image [ndc] and their
    *  radius [ndc of the height]; drawn at one ray a pixel over the raster's sky (trace.wgsl main, z ≥ 1) */
   skyDiscs: { x: number; y: number; r: number; moon: boolean }[] = [];
+  /** the worlds looked at this frame (main.ts lookedBodiesNow — the view's pose): each its finer maps' name, its distance in
+   *  its radii, its disc in the image or within half a field of it — H1b: the relief alone of the one looked at */
+  looked: { map: MapName; dN: number; inView: boolean; nearView: boolean }[] = [];
+  /** H1b: when the relief looked at was last wanted (performance.now) — freed 3 s after (the temporal hysteresis) */
+  private reliefWantedAt = 0;
   /** the catalogue's ICRS directions to the camera's axes (main.ts starMatrixNow: three columns of four), or none — the
    *  stars over the raster's sky drawn one a thread at their own pixel (trace.wgsl shadeStars) */
   starMatrix: Float32Array<ArrayBuffer> | null = null;
@@ -8179,6 +8245,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the relief's shadow map (terrain-raster.ts encodeSunShadow, trace.wgsl sunShadowFar): the device binds it; a switch */
   private sunShadow = false;
   private sunDummy: GPUTexture | null = null;
+  /** the tracer reads the horizon maps (the device takes their two textures), their stand-in, their table row as written */
+  private horizonRead = false;
+  private horizonDummy: GPUTexture | null = null;
+  private horizonRow = new Float32Array(8);
   sunShadowOn = true;
   private sunTableOn = false;
   private sunOut = new Float32Array(12);
@@ -9262,13 +9332,22 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the near body's horizon maps: a band of their bake — H1 —, sized on the profiler's measure of the last one)
     {
       const hdBody = this.hdMap.name ? SOLAR_BODIES.find((b) => b.map === this.hdMap.name) : undefined;
+      // (the setting off: no bake, the maps dropped)
+      const hzOn = s.horizonMaps !== false;
       this.horizonMaps.encode(
         enc,
-        this.hdMap,
+        hzOn ? this.hdMap : { name: null, relief: this.hdMap.relief, dem: null },
         hdBody ? hdBody.radius * M_METRES : 1,
         () => this.prof.pass("horizon bake", { label: "horizon bake" }),
         this.prof.table().find((p) => p.label === "horizon bake")?.last,
       );
+      // (their table row — read once the whole bake is in, for the HD body it was made for —: written when it changes)
+      const row = this.horizonMaps.tableRows(hzOn && this.hdMap.dem ? this.hdMap.name : null);
+      if (row.some((v, i) => v !== this.horizonRow[i])) {
+        this.horizonRow = row;
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_HORIZON * 16, row);
+        this.invalidate();
+      }
     }
     let phase: FrameStats["phase"];
     let rows = 0;

@@ -318,6 +318,7 @@ export interface Settings {
   earthClouds: number; // the Earth's cloud cover drawn (0: a clear sky everywhere, 1: its map's)
   aurora: number; // the auroras' activity (S2: a Kp index, 0 none … 9 a great storm): their oval's curtains in the night sky
   refraction: boolean; // the Earth's air bends the light from beyond it (PLAN-CIEL C3): the Sun, the Moon, the stars raised at the horizon
+  horizonMaps: boolean; // the near body's horizon maps (PLAN-REFRACTION-HORIZONS H1/H2): its relief's long shadows at the terminator, from afar
   autoWarp: boolean; // hub/manoeuvre sets warp; off: user's choice below its ceiling
   earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)
   earthTerrainCache: boolean; // experimental filtered surface cache, realtime Earth only; exact fallback otherwise
@@ -707,6 +708,7 @@ export function defaultSettings(): Settings {
     earthClouds: 1,
     aurora: 0,
     refraction: true,
+    horizonMaps: true,
     autoWarp: true,
     earthTerrain: true,
     earthTerrainCache: false,
@@ -2110,6 +2112,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthClouds: "scene",
   aurora: "scene",
   refraction: "pref",
+  horizonMaps: "pref",
   autoWarp: "scene",
   earthTerrain: "scene",
   earthTerrainCache: "pref",

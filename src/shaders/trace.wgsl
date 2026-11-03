@@ -1202,7 +1202,8 @@ fn bodyFixed(k: u32, n: vec3f, tEm: f32) -> vec3f {
 // A planet's surface colour at a unit direction on its own axes (albedo rgb; w: surface kind)
 // A world's map at uv: its finer one when the camera is near (its level from the footprint), else its coarse one
 fn planetMapAt(m: u32, uv: vec2f) -> vec3f {
-  if (i32(m) == i32(P.hd.x)) { return textureSampleLevel(hdColor, bgSamp, uv, hdMapLod(P.hd.w)).rgb; }
+  // (its finer colour when they are all in — P.hd2.x 2: its relief alone, the world looked at from afar, H1b)
+  if (i32(m) == i32(P.hd.x) && P.hd2.x < 1.5) { return textureSampleLevel(hdColor, bgSamp, uv, hdMapLod(P.hd.w)).rgb; }
   if (m < MAPS_HI) { return textureSampleLevel(mapHi, bgSamp, uv, i32(m), mapLod()).rgb; }
   return textureSampleLevel(mapLo, bgSamp, uv, i32(m - MAPS_HI), max(mapLod() - 1.0, 0.0)).rgb;
 }
@@ -1922,6 +1923,11 @@ fn listedBody(i: u32, list: u32) -> u32 {
   return (u32(v) >> (6u * (i & 3u))) & 63u;
 }
 
+// BEGIN_HORIZON_MAPS (system/horizon-maps.ts withHorizonMaps supplies the near body's horizon maps' reader — H2)
+// (the share of the Sun's disc a point of the HD body sees above its relief's horizon: none known here, all of it)
+fn horizonLight(q: vec3f, Lb: vec3f, sunR: f32, foot: f32) -> f32 { return 1.0; }
+// END_HORIZON_MAPS
+
 // Our universe's bodies on a straight piece of a ray (P.ourCam-relative home coordinates): from o
 // along the unit direction d, over [0, tMax); travel: the ray's length before o (the pixel's
 // footprint). The nearest body stops the ray (a star shines, a planet reflects its star's light);
@@ -2116,8 +2122,16 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let fp = beam() * (travel + tBest) / bodyRadius(k);
     setMapLod(fp, fp, k);
     let N = bodies[BV * k + 5u].xyz;
-    BODYW = transpose(spunAxes(k));
-    col = planetShade(k, nrm, spunAxes(k) * nrm, L, V, P.time.x, gObs, ringShadow(k, pR, N, L)) * BODY_GAIN;
+    let Ab = spunAxes(k);
+    BODYW = transpose(Ab);
+    // (H2: the near body's horizon maps — the Sun's disc's share above its relief's horizon: the terminator's long shadows,
+    // the ranges' and the craters' rims', seen from afar; the HD body with its heights only — the Earth-raster profile's lean kernels too: the Moon at the telescope, H1b)
+    var hz = 1.0;
+    if (isHd(k) && P.hd2.x > 0.5) {
+      let ls = u32(max(li, 0));
+      hz = horizonLight(Ab * nrm, Ab * L, bodyRadius(ls) / length(bodies[BV * ls].xyz - o - X), fp * P.hd2.w);
+    }
+    col = planetShade(k, nrm, Ab * nrm, L, V, P.time.x, gObs, ringShadow(k, pR, N, L) * hz) * BODY_GAIN;
   }
   (*out).glow += (*out).tint * col;
   (*out).tint = vec3f(0.0);

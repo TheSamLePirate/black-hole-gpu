@@ -1,0 +1,38 @@
+{
+  "aHd": null,
+  "aConverged": true,
+  "aMs": 24.1,
+  "reliefS": 0.2,
+  "loadMaxGapMs": 58.7,
+  "bakeS": 24.6,
+  "bake": {
+    "state": "done",
+    "doneMs": 24580,
+    "bands": 708,
+    "bytes": 50331648
+  },
+  "cpuGround": {
+    "active": false,
+    "fallback": false
+  },
+  "hdGeneration": 1,
+  "bConverged": true,
+  "bMs": 24.5,
+  "cConverged": true,
+  "cMs": 27.3,
+  "gpuErrors": 0,
+  "horizons": {
+    "lit": 2032694,
+    "darker": 2683,
+    "brighter": 237,
+    "darkerShare": 0.00132,
+    "brighterShare": 0.00012
+  },
+  "h1bAgainstCoarse": {
+    "lit": 2069287,
+    "darker": 46039,
+    "brighter": 3332,
+    "darkerShare": 0.02225,
+    "brighterShare": 0.00161
+  }
+}

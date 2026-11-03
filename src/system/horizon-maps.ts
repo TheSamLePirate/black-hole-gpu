@@ -15,6 +15,7 @@
 // the local north); on a cap, 16 directions by the grid's own axes (+x, then 22.5° a step towards +y), 4 layers a cap —
 // no singular axis at the pole.
 
+import { TABLE_HORIZON } from "../gpu-tables";
 import type { Vec3 } from "../physics";
 import horizonWGSL from "../shaders/horizon.wgsl" with { type: "text" };
 import type { MapName } from "./solar";
@@ -320,6 +321,29 @@ export function horizonSeenFrom(sinBaked: number, h0: number, h: number, d: numb
   return t / Math.sqrt(1 + t * t);
 }
 
+/** The Sun's direction at a point as the shading reads it (trace.wgsl horizonLight): its angle on a lattice — on the map
+ *  its azimuth (clockwise from north), on a cap the grid's angle (from +x towards +y) — from its components along the local
+ *  north and east; latticeTangent's inverse */
+export function sunAngle(l: Lattice, lon: number, north: number, east: number): number {
+  if (l.kind === "latlon") return Math.atan2(east, north);
+  return lon + Math.atan2(east, -l.pole * north);
+}
+/** a point's texture coordinates on a cap's grid (trace.wgsl horizonLight; latticePoint's inverse) */
+export function capUV(l: CapLattice, lat: number, lon: number): [number, number] {
+  const r = 2 * Math.tan(0.5 * (Math.PI / 2 - l.pole * lat));
+  return [0.5 * ((r * Math.cos(lon)) / l.rmax + 1), 0.5 * ((r * Math.sin(lon)) / l.rmax + 1)];
+}
+/** a sector's sine decoded and seen again from the point's height (trace.wgsl horizonLattice: the byte's unorm value, its
+ *  blocker's step's, D_bake, h0 − h) */
+export function sectorSeen(u: number, stepU: number, D0: number, dh: number): number {
+  return horizonSeenFrom(decodeHorizon(u), dh, 0, D0 * HORIZON_STEP ** (255 * stepU));
+}
+/** the Sun's disc's share above a horizon (both elevations' sines, its angular radius): trace.wgsl horizonLight's smoothstep */
+export function sunAbove(sinSun: number, sinHorizon: number, sunR: number): number {
+  const x = Math.max(0, Math.min(1, (Math.asin(sinSun) - Math.asin(sinHorizon) + sunR) / (2 * sunR)));
+  return x * x * (3 - 2 * x);
+}
+
 /** The same texel baked as the reference does (the plan's "cuisson de référence au pas d'un texel"): the same three rays a
  *  sector, but a step of one source texel from D_bake to the reach and the heights at their level 0 (no mips). */
 export function bakeTexelReference(l: Lattice, src: HeightPyramid, r: BakeRange, i: number, j: number, h0?: number): Float64Array {
@@ -437,6 +461,101 @@ export function referenceHorizon(
   return best;
 }
 
+/** Sampled textures per stage with the maps' two (the trees' shadow map's 27 and two — plan §5: the step at 29) */
+export const HORIZON_TEXTURE_LIMIT = 29;
+/** the map's and the caps' bindings in the tracer */
+export const HORIZON_BINDINGS = [42, 43] as const;
+
+/**
+ * The tracer's reader of the near body's horizon maps (H2 — docs/PLAN-REFRACTION-HORIZONS.md): `horizonLight`, the share of
+ * the Sun's disc a point of the HD body sees above its relief's horizon — the far discs' terminator, the long shadows of its
+ * ranges and craters' rims. Where the device takes the two more textures; the stub (no shadow: 1) otherwise.
+ */
+export function withHorizonMaps(trace: string, supported: boolean): string {
+  const marker = /\/\/ BEGIN_HORIZON_MAPS[\s\S]*?\/\/ END_HORIZON_MAPS/;
+  if (!marker.test(trace)) throw new Error("horizon-maps: missing tracer stub");
+  if (!supported) return trace;
+  return trace.replace(
+    marker,
+    `
+@group(0) @binding(${HORIZON_BINDINGS[0]}) var horizonMap: texture_2d_array<f32>;
+@group(0) @binding(${HORIZON_BINDINGS[1]}) var horizonCaps: texture_2d_array<f32>;
+const HZ_OFF = ${TABLE_HORIZON}u;
+// One lattice's horizon towards the Sun — \`a\` its direction in sectors (0…S) —: the two sectors round it, each its baked
+// sine (the signed root over ${HORIZON_SIN_MAX}) seen again from the point's height instead of the bake's receiver's (dh = h0 − h):
+// tan e' = tan e + dh/d, d its dominant blocker's distance D_bake × ${HORIZON_STEP}ⁿ (option (d), horizon-maps.ts sectorSeen),
+// interpolated. The sines from layer l0, the blockers' steps S/4 layers after; the mip by the footprint (their means: a
+// softened penumbra from afar).
+fn horizonLattice(caps: bool, uv: vec2f, lod: f32, a: f32, S: u32, l0: i32, D0: f32, dh: f32) -> f32 {
+  let k0 = u32(floor(a)) % S;
+  var e = vec2f(0.0);
+  for (var i = 0u; i < 2u; i++) {
+    let k = (k0 + i) % S;
+    let ls = l0 + i32(k / 4u);
+    let lt = ls + i32(S / 4u);
+    var s: vec4f;
+    var t: vec4f;
+    if (caps) {
+      s = textureSampleLevel(horizonCaps, bgSamp, uv, ls, lod);
+      t = textureSampleLevel(horizonCaps, bgSamp, uv, lt, lod);
+    } else {
+      s = textureSampleLevel(horizonMap, bgSamp, uv, ls, lod);
+      t = textureSampleLevel(horizonMap, bgSamp, uv, lt, lod);
+    }
+    let u = 2.0 * s[k % 4u] - 1.0;
+    let sn = sign(u) * u * u * ${HORIZON_SIN_MAX};
+    let tn = sn / sqrt(max(1.0 - sn * sn, 1e-6)) + dh / (D0 * pow(${HORIZON_STEP}, 255.0 * t[k % 4u]));
+    e[i] = tn / sqrt(1.0 + tn * tn);
+  }
+  return mix(e.x, e.y, fract(a));
+}
+// The share of the Sun's disc a point of the near body's finer relief sees above its horizon (q the point, Lb towards the Sun,
+// both unit on the body's axes; sunR the Sun's angular radius; foot the pixel's footprint [m]): the map's sectors towards the
+// Sun — a polar cap's past ${POLE_FADE[0]}°, faded in to ${POLE_FADE[1]}° —, seen from the point's own height (the DEM's mean at the
+// footprint; the bake's receiver the top round its texel: the DEM's G at its level), a smoothstep over the disc's radius.
+// 1 where nothing is baked for it (the caller: the HD body only), the Sun higher than any horizon reaches (30°); 0 deep in
+// the night (the HD normal's slopes lit there otherwise, past any peak's dip).
+fn horizonLight(q: vec3f, Lb: vec3f, sunR: f32, foot: f32) -> f32 {
+  let r0 = bodies[HZ_OFF];
+  let sS = dot(q, Lb);
+  if (r0.x < 0.5 || sS > 0.5) { return 1.0; }
+  if (sS < -0.15) { return 0.0; }
+  let r1 = bodies[HZ_OFF + 1u];
+  var east = vec3f(-q.y, q.x, 0.0);
+  east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-12);
+  let north = cross(q, east);
+  let ln = dot(Lb, north);
+  let le = dot(Lb, east);
+  let uvM = earthUV(q);
+  let texDem = P.hd2.w * PI / f32(textureDimensions(hdRelief).y);
+  let h = textureSampleLevel(hdRelief, bgSamp, uvM, log2(max(foot, texDem) / texDem)).r;
+  let lat = asin(clamp(q.z, -1.0, 1.0));
+  let lon = atan2(q.y, q.x);
+  let wc = smoothstep(${((POLE_FADE[0] * Math.PI) / 180).toFixed(6)}, ${((POLE_FADE[1] * Math.PI) / 180).toFixed(6)}, abs(lat));
+  let pole = select(-1.0, 1.0, q.z > 0.0);
+  // (the map, then the cap — one copy of the reads: each call inlined)
+  var eH = 0.0;
+  for (var j = 0u; j < 2u; j++) {
+    let caps = j == 1u;
+    let w = select(1.0 - wc, wc, caps);
+    if (w <= 0.0) { continue; }
+    var uv = uvM;
+    var a = fract(atan2(le, ln) / TAU) * ${HORIZON_SECTORS}.0;
+    let D0 = select(r0.y, r0.z, caps);
+    if (caps) {
+      uv = 0.5 * (vec2f(cos(lon), sin(lon)) * (2.0 * tan(0.5 * (0.5 * PI - abs(lat))) / r0.w) + 1.0);
+      a = fract((lon + atan2(le, -pole * ln)) / TAU) * ${POLE_SECTORS}.0;
+    }
+    let dh = textureSampleLevel(hdRelief, bgSamp, uvM, select(r1.x, r1.y, caps)).g - h;
+    eH += w * horizonLattice(caps, uv, log2(max(foot, 0.5 * D0) / (0.5 * D0)), a, select(${HORIZON_SECTORS}u, ${POLE_SECTORS}u, caps),
+      select(0, select(${(2 * POLE_SECTORS) / 4}, 0, pole > 0.0), caps), D0, dh);
+  }
+  return smoothstep(-sunR, sunR, asin(clamp(sS, -1.0, 1.0)) - asin(clamp(eH, -1.0, 1.0)));
+}
+`,
+  );
+}
+
 /** the worlds baked (H1: the Moon, the pilot — Mars, Mercury and Ceres after its decision gate) */
 export const HORIZON_BODIES: readonly MapName[] = ["moon"];
 /** the map's width: half the DEM's, 2048 at most (plan §2.4: 2048 × 1024, ~22 MB with its mips) */
@@ -474,7 +593,18 @@ export class HorizonMaps {
   private retired: GPUBuffer[] = [];
   private pipeline: GPUComputePipeline | null = null;
   private mipPipeline: GPUComputePipeline | null = null;
+  /** the maps made or dropped: the bind groups holding them to be rebuilt (the renderer's) */
+  onChange: (() => void) | null = null;
   constructor(private device: GPUDevice) {}
+
+  /** the tracer's table rows (gpu-tables.ts TABLE_HORIZON; trace.wgsl horizonLight): read only once the whole bake is in, for
+   *  the body it was baked for (`body`: the HD body now) */
+  tableRows(body: MapName | null): Float32Array<ArrayBuffer> {
+    const r = this.ranges;
+    const on = this.state === "done" && !!r && body === this.body;
+    if (!on || !r) return new Float32Array(8);
+    return new Float32Array([1, r.map.D0, r.pole.D0, capLattice(1).rmax, r.map.obsLevel, r.pole.obsLevel, 0, 0]);
+  }
 
   private pipelines() {
     if (this.pipeline) return;
@@ -486,6 +616,7 @@ export class HorizonMaps {
   /** Drops the bake and its maps (the body's finer maps gone). */
   cancel() {
     const old = [this.map, this.pole];
+    const had = !!(this.map || this.pole);
     this.map = this.pole = null;
     this.body = null;
     this.source = null;
@@ -493,6 +624,7 @@ export class HorizonMaps {
     this.ranges = null;
     for (const j of this.jobs) j.uniform.destroy();
     this.jobs = [];
+    if (had) this.onChange?.();
     void this.device.queue.onSubmittedWorkDone().then(() => old.forEach((t) => t?.destroy()));
   }
 
@@ -603,6 +735,7 @@ export class HorizonMaps {
     const pole = add(capLattice(1), this.pole, 0);
     add(capLattice(-1), this.pole, 8);
     this.ranges = { map, pole };
+    this.onChange?.();
   }
 
   private encodeMips(enc: GPUCommandEncoder) {
