@@ -1,0 +1,80 @@
+[
+  {
+    "place": "tarifa-low",
+    "mode": "spatial75q",
+    "gpuMs": 16.7,
+    "turnPx": 48,
+    "groundPx": 18.9,
+    "psnrMoving": 39.55,
+    "psnrStill": 39.93,
+    "sharpMoving": 0.744,
+    "sharpStill": 0.976,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "tarifa-low",
+    "mode": "taau75q",
+    "gpuMs": 18.5,
+    "turnPx": 43.2,
+    "groundPx": 16.7,
+    "psnrMoving": 44.44,
+    "psnrStill": 45.19,
+    "sharpMoving": 0.947,
+    "sharpStill": 1.085,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "tarifa-low",
+    "mode": "native100q",
+    "gpuMs": 28.9,
+    "turnPx": 41.1,
+    "groundPx": 14.2,
+    "psnrMoving": 40.87,
+    "psnrStill": 39.52,
+    "sharpMoving": 1.628,
+    "sharpStill": 2.588,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "alps",
+    "mode": "spatial75q",
+    "gpuMs": 13.8,
+    "turnPx": 36.5,
+    "groundPx": 3.2,
+    "psnrMoving": 30.55,
+    "psnrStill": 41.49,
+    "sharpMoving": 1.755,
+    "sharpStill": 0.999,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "alps",
+    "mode": "taau75q",
+    "gpuMs": 16.5,
+    "turnPx": 31.9,
+    "groundPx": 2.8,
+    "psnrMoving": 39.37,
+    "psnrStill": 41.44,
+    "sharpMoving": 0.935,
+    "sharpStill": 1.057,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "alps",
+    "mode": "native100q",
+    "gpuMs": 21.6,
+    "turnPx": 33.4,
+    "groundPx": 2.8,
+    "psnrMoving": 28.71,
+    "psnrStill": 28.49,
+    "sharpMoving": 1.568,
+    "sharpStill": 2.477,
+    "converged": false,
+    "gpuErrors": 0
+  }
+]

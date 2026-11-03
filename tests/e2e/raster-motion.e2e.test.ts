@@ -49,6 +49,8 @@ const MODES: Record<string, string> = {
   // (at 75 % shaded one pixel in four: as many shaded samples as the native one in eight, the visibility on fewer pixels)
   taau75q: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.forceScale(0.75);`,
   spatial75q: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = false; __bh.forceScale(0.75);`,
+  // (Q6's reference: every pixel at the canvas's scale, one in four shaded a frame — what a reconstruction at 75 % aims at)
+  native100q: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = false; __bh.forceScale(1);`,
   spatial75: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.earthRasterShading = "eighth"; __bh.renderer.taauOn = false; __bh.forceScale(0.75);`,
   rasterpass: `${RASTER} __bh.renderer.rasterJitter = "gauss"; __bh.settings.sharpen = 0.3; __bh.renderer.taParams = [1 / 16, 0.05, 2]; __bh.renderer.cloudPassOn = true;`,
 };
@@ -85,7 +87,7 @@ describe.skipIf(!E2E || process.env.RASTER_BENCH !== "1")("the raster's image in
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
   }, 300_000);
   afterAll(async () => {
-    await Bun.write("remote-results/raster-motion.json", JSON.stringify(rows, null, 2));
+    await Bun.write(process.env.RM_OUT ?? "remote-results/raster-motion.json", JSON.stringify(rows, null, 2));
     app?.close();
     stopServer();
   });
