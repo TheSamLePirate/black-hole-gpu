@@ -11,6 +11,8 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // Output: remote-results/tile-cpu/tile-cpu-<side><run>.json (AB_SIDE, AB_RUN: an A/B through scripts/ab-e2e.ts), a shot at
 // the end.
 // TC_PROFILE=1: Chrome's CPU profile over the flight, the long tasks' time given to the functions it was spent in (out.profile).
+// TC_CHROME_PROFILE=<folder>: one Chrome profile kept across runs — its HTTP cache serves the same tiles to every run once
+// warmed (a first run), the network and IGN's answers out of an A/B of the loop (the decoding and the writes still measured).
 // Done when: the flight flown 25 s, the counters and the long tasks read, no GPU error.
 // Duration: ~1.5 min (the airfield's start, 25 s of flight).
 const OUT = process.env.TC_OUT ?? "remote-results/tile-cpu";
@@ -21,7 +23,13 @@ test.skipIf(!E2E)(
   "T8: the tiles' work on the page's thread in a low flight over Paris — its total, its longest piece, the long tasks",
   async () => {
     mkdirSync(OUT, { recursive: true });
-    const app = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", tiles: true });
+    const app = await App.boot({
+      width: 1280,
+      height: 800,
+      hash: "scene=game:artemis",
+      tiles: true,
+      profile: process.env.TC_CHROME_PROFILE || undefined,
+    });
     const out: Record<string, unknown> = { tag: TAG };
     try {
       await app.js(
