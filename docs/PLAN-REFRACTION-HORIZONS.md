@@ -1339,7 +1339,7 @@ compilation) s'y ajoutent.
   niveaux commencés 24,6 → 19,9 s. **T8j** — l'ordre des tuiles jugé sur la qualité de la vue (`tile-arrival` : 384 rayons
   du cockpit, le niveau voulu contre le dessiné) : les niveaux nationaux entiers d'abord, puis tous par anneau autour du centre des
   chargements, le plus fin d'abord ; à 1 000 ms la vue à 90 % en 8,1 s au lieu de 26, à 99 % en 11,2 s au lieu de 34, le relief IGN
-  entier toujours à 8 s. **Décision de Sam (3 novembre)** : les fenêtres d'ortho de 8 tuiles (T8e) restent désactivées.
+  entier toujours à 8 s. **Décision de Sam (3 novembre)** : les fenêtres d'ortho de 8 tuiles (T8e) restent désactivées. **T8 clos** (synthèse en tête de [T8.md](progress/refraction-horizons/T8.md)) ; suite : Q6.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du
