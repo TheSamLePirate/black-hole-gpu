@@ -85,7 +85,8 @@ struct Params {
   earth2: vec4f,   // the clouds' height [its radii], their opacity, the ground's albedo over its map, the air's
                    // thickness drawn (its scale heights × k)
   earth3: vec4f,   // the Moon: its direction on the Earth's axes; w: the sunlit share of its disk seen
-  earth4: vec4f,   // the night sky's light (EARTH_NIGHT) over its value on the ground; y: the Sun's angular radius
+  earth4: vec4f,   // the twilight sky's calibration (the air's scattered sunlight × this, the camera in the Earth's air — renderer
+                   // twilightK); y: the Sun's angular radius
                    // seen from the Earth [rad] (the eclipses); z: Mars's dust; w: the clouds a volume (the camera low)
   hd: vec4f,       // the finer maps (src/system/hd-maps.ts): the body's map index (−1: none), its brightness
                    // kept (the coarse map's mean over the finer's), its relief's strength (0: none), width
@@ -5367,7 +5368,7 @@ fn skyFlatFactor(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
   return skyFlat(q, h, E, mu0, sk) / max(E, vec3f(1e-30));
 }
 fn nightFloor(sk: f32, mu0: f32) -> vec3f {
-  return max(EARTH_NIGHT, twilightGround(mu0)) * P.earth4.x * (1.0 - smoothstep(-0.05, 0.1, mu0) * (1.0 - sk));
+  return max(EARTH_NIGHT, twilightGround(mu0)) * (1.0 - smoothstep(-0.05, 0.1, mu0) * (1.0 - sk));
 }
 // The twilight sky's light on a horizontal ground over the full sunlight's, by the Sun's sine of height (tabulated horizontal
 // illuminance — renderer.ts TWILIGHT, the meter's —: 400 lux at sunset, 80 at −3°, 3.4 at the civil twilight's end, 0.008 at
@@ -5663,7 +5664,15 @@ fn sunThrough(h: f32, mu: f32) -> vec3f {
   var tau = ((AIR.br + AIR.bo) * airColumn(h, mu, airHR()) + vec3f(AIR.bme * airColumn(h, mu, airHM()))) / airK();
   // (Venus's cloud deck — its column above, slant)
   if (venusKernel() && AIR_SLAB.z > 0.0) { tau += vec3f(AIR_SLAB.z * slabCol(h) / max(mu, 0.03)); }
-  return exp(-tau);
+  return exp(-tau) * groundShade(h, mu);
+}
+// The solid ground's shadow: the Sun under a point's geometric horizon (its dip, acos R/(R + h)) is set for it — airColumn's
+// Chapman column below the horizon carried the air on under the ground to its tangent point, the light through the planet
+// dimmed only as a grazing ray's: the low air in the Earth's shadow lit red, the twilight sky ~80 × too bright at −12° (the
+// table's fall — renderer.ts TWILIGHT —; Sam: the dusk "surexposé et orange"). Soft over the Sun's disc and the refraction's
+// ~0.6° at the horizon.
+fn groundShade(h: f32, mu: f32) -> f32 {
+  let dip = acos(clamp(AIR.rm / (AIR.rm + max(h, 0.0)), 0.0, 1.0)); return select(smoothstep(-dip - 0.0151, -dip + 0.0047, asin(clamp(mu, -1.0, 1.0))), 1.0, mu >= 0.0);
 }
 
 // Directions transform by the inverse scale; normals by its transpose. Optical lengths are physical.
@@ -5850,6 +5859,8 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   let moonE = 0.3 * EARTH_MOON * pow(max(P.earth3.w, 0.0), 1.5);
   // (from inside the air, samples crowded near the camera: the densest air is there)
   let inside = dot(ro, ro) < airTop() * airTop();
+  // (the twilight's calibration — the Earth's air, the camera in it: P.earth4.x, renderer twilightK —; 1 elsewhere)
+  let twi = select(1.0, P.earth4.x, AIR.moon > 0.5 && inside);
   let N = select(TUNE_AIR_N, AP_N, AP_N > 0u);
   var tau = vec3f(0.0);
   var tPrev = ta;
@@ -5928,7 +5939,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
       let x = ext * ds;
       Tv = exp(-tau) * select(ds * (1.0 - 0.5 * x), (1.0 - exp(-x)) / max(ext, vec3f(1e-30)), x > vec3f(1e-3));
     }
-    o.L += sc * Ts * Tv;
+    o.L += sc * Ts * Tv * twi;
     // (a thick air — a dust storm's, Titan's haze: τ ~ 4 —: the light scattered many times, its diffuse field through the
     // haze above far less dimmed than the sun's beam — two-stream, e^(−0.22 τ), redder deeper —: the sky an opaque orange
     // glow, not the black the beam's light alone left. In the weather's kernels and the air worlds' — NEAR_KIND 2 —, and those

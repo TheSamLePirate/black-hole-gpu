@@ -3219,9 +3219,15 @@ export class Renderer {
     set(58, this.earthMaps.tier ? (dayOn ? 2 : 1) : 0, dayOn ? 0 : drift, lights, 4);
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
     // side dark round its cities)
-    // (x: the night sky's light on the ground over its value — 1 at every height since the calibrated night, Q2: from orbit a
-    // quarter before)
-    set(61, 1, 0, 0, s.volumetricClouds && altKm < 30 ? 1 : 0); // (w: the clouds a volume — the camera low: 30 km)
+    // (x: the twilight sky's calibration — the air's scattered sunlight × this, the camera in the air: 1 down to the Sun at
+    // −1.5° (geometric), then ×10^(−2.2 (−1.5 − el)/10) to 0.0063 from −11.5° — the simple air's twilight measured against the
+    // tabulated one (zz-twilight-sky; TWILIGHT) 1.8 × too bright at −3°, 17 × at −6.6°, 60 × at −8.9°, 140–160 × at −11…−14°: its
+    // glow burnt over the night's lit towns, orange. Interim: the plan's Q5 — Hillaire's tables — makes the twilight itself)
+    const muCam = earthSurface && near ? earthSurface.up.reduce((v, n, i) => v + n * near.light[i]!, 0) : 1;
+    const elCam = (Math.asin(Math.max(-1, Math.min(1, muCam))) * 180) / Math.PI;
+    const twilightK = altKm < 100 && this.twilightOn ? 10 ** (-2.2 * Math.min(Math.max((-1.5 - elCam) / 10, 0), 1)) : 1;
+    if (!o.probe && t === this.live) this.twilightK = twilightK;
+    set(61, twilightK, 0, 0, s.volumetricClouds && altKm < 30 ? 1 : 0); // (w: the clouds a volume — the camera low: 30 km)
     // a world's finer maps, the camera near it (within 40 of its radii): its map's index, its brightness
     // kept (the coarse map's mean over the finer's), its relief's strength (0: none), the map's width
     const nearMap = near ? (solarBody(bodies[near.index]!.id)?.map as MapName | undefined) : undefined;
@@ -8082,6 +8088,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private skyOut: GPUTexture | null = null;
   private skyBind: GPUBindGroup | null = null;
   private skyTableOn = false;
+  /** the twilight sky's calibration last sent (earth4.x — writeParams' twilightK), and its switch (a measure's: off, the simple
+   *  air's own twilight) */
+  twilightK = 1;
+  twilightOn = true;
+  /** the sky ambient's air samples a ray (0: the kernels' default, 32) — a measure's: set it, then skyPipe null and skyWanted
+   *  false to compile it again */
+  skyAirN = 0;
   private encodeSkyAmbient(enc: GPUCommandEncoder, t: Target) {
     const d = this.device;
     if (!this.skyAmbientOn || !this.lastNear || !this.nearEarthNow) {
@@ -8121,6 +8134,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
                 // weather or in space would keep them out for good; the decks themselves are left out by the kernel)
                 HAS_WX: 1,
                 QUALITY_PIPELINE: 0,
+                // (a measure's: the air's samples along each ray — 32 by default)
+                ...(this.skyAirN > 0 ? { TUNE_AIR_N: this.skyAirN } : {}),
               },
             },
           })
@@ -9079,6 +9094,20 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     buf.unmap();
     buf.destroy();
     return { share: f[7]!, ready: f[6]! > 0.5, current: f.slice(8, 8 + n / 4), previous: f.slice(8 + n / 4) };
+  }
+  /** The clear sky's harmonics as the tracer reads them (TABLE_SKY — sky ambient: the sky's radiance over the hemisphere at 0, 2,
+   *  5 and 10 km over the camera's place): the twilight's measure (the sky's light on a level ground by the Sun's height). */
+  async skyTable(): Promise<Float32Array> {
+    const n = SKY_AMBIENT_VEC4S * 16;
+    const buf = this.device.createBuffer({ size: n, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.bodyBuf, TABLE_SKY * 16, buf, 0, n);
+    this.device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ);
+    const f = new Float32Array(buf.getMappedRange().slice(0));
+    buf.unmap();
+    buf.destroy();
+    return f;
   }
   get terrainCacheStats() {
     const stats = this.terrainSurfaceCache?.stats() ?? {
