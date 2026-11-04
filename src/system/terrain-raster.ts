@@ -772,9 +772,10 @@ export class TerrainRaster {
   ): boolean {
     if (!this.active || !this.sunPipe || !this.uniform || !this.table || this.disposed) return false;
     // (the cascades kept while nothing they are drawn from changed: the Sun's view and the cascades' centres, the meshes' windows,
-    // the heights' bakes — the caller's revision)
-    // (the meshes' windows left out: a window recentred draws the same relief, its fine edge alone moved — the renderer's revision
-    // says when the heights changed, at most twice a second)
+    // the heights' bakes — the caller's revision, renderer.sunRevision)
+    // (the meshes' windows in it since Q6 I3: a window recentred does not draw the same relief — its geomorphose follows the
+    // window's edge, a place passes from a ring to a finer level —; kept, the map stood metres above the image's ground in the
+    // hollows, shadows in combs where nothing stands)
     const key = revision;
     this.sunDrewNow = false;
     if (key === this.sunKey) {

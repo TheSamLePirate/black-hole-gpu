@@ -12,7 +12,9 @@ import { readPng, writePng } from "./lib/png";
 // refined at the canvas's full scale, the history off. Their difference: the box's PSNR, and the ghost — the moving image darker
 // than the reference by more than 12 levels outside the reference's own shadow (a trail behind the craft's shadow) — counted
 // in pixels; a map of the differences beside the shots. And after 30 frames with the world still (the history converged): the
-// still shot, against the same reference. The trees' shadow map logged frame by frame (drawn again, read, the scenery's revision).
+// still shot, against the same reference. The trees' shadow map logged frame by frame (drawn again, read, the scenery's revision),
+// and the relief's shadow cascades (drawn again, dzOff, their pass's GPU time a redraw): the cascades kept while the meshes' windows
+// moved shaded the hollows in combs where nothing stands (Q6m — renderer.sunWindowsInKey false: the key before it).
 // PLACES=mancha,strait; MODES=spatial75q,taau75q,native100q,trace (a mode@n: renderer.liteSkip = n — a part of the raster's
 // material cut, e.g. 2097152 the craft's shadow); FRAMES (60); GROUND (40 m); SPEED (140 m/s); GH_FORCE=1: the trees' shadow map
 // drawn again 10 frames with the world still, shot (-forced, -forced-after).
@@ -197,10 +199,13 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
           const r = __bh.renderer, c = __bh.camera, frame = () => new Promise((q) => requestAnimationFrame(q));
           let gpu = 0, ground = 0;
           // (the trees' shadow map frame by frame — drawn again, read, its scenery's revision: renderer.encodeTerrainRasterVisibility)
-          const tsm = { redraws: 0, read: 0, revisions: new Set(), frames: 0, last: [] };
+          // (and the relief's shadow cascades — renderer.encodeSunShadow: drawn again, the camera's step towards the Sun since, dzOff)
+          const tsm = { redraws: 0, read: 0, revisions: new Set(), frames: 0, last: [], sunRedraws: 0, dz: [] };
           const note = () => { tsm.frames++; if (r.tsmRedraw) tsm.redraws++; if (r.tsmDrawn) tsm.read++; tsm.revisions.add(r.earthScenery.revision);
+            if (r.terrainRaster?.sunDrewNow) tsm.sunRedraws++; tsm.dz.push(+(r.sunCascadeRows?.[3] ?? 0).toFixed(1));
             tsm.last.push([r.tsmRedraw ? 1 : 0, r.tsmDrawn ? 1 : 0, r.earthScenery.revision, ...Array.from(r.tsmFrame.slice(12, 15)).map((x) => Math.round(x))]);
             if (tsm.last.length > 4) tsm.last.shift(); };
+          r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
           for (let i = 0; i < ${FRAMES}; i++) {
             __bh.step(1 / 30); __bh.touch();
             const last = r.lastDoneAt; let k = 0;
@@ -208,9 +213,12 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
             note();
             gpu += r.lastGpuMs; ground += r.imageGroundPx ?? 0;
           }
+          // (the relief's cascades' pass — drawn again or not — its GPU time a frame [ms], the profiler's mean)
+          const T = r.prof.table(); tsm.sunPassMs = +(T.find((x) => x.label === "terrain from the Sun")?.ms ?? 0).toFixed(3);
+          r.prof.enabled = false;
           const g = c.geoNow();
           return { gpuMs: +(gpu / ${FRAMES}).toFixed(1), groundPx: +(ground / ${FRAMES}).toFixed(1),
-            tsm: { ...tsm, revisions: [...tsm.revisions] },
+            tsm: { ...tsm, revisions: [...tsm.revisions], dz: tsm.dz.join(" ") },
             state: { agl: Math.round(c.heightOverGround?.() ?? g?.agl ?? 0), alt: Math.round(g?.alt ?? 0), gs: +(g?.gs ?? 0).toFixed(1) } }; })()`);
         await app.js(
           `(() => { __bh.settings.targetSpp = 0; document.body.classList.add("hide-ui"); document.getElementById("overlay").style.visibility = "hidden"; return 1; })()`,
@@ -218,10 +226,11 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
         const fMove = `${OUT}/${pl}-${md}.png`;
         await app.shot(fMove);
         // (after accumulation: 30 realtime frames with the camera still — the history converged at the mode's scale)
-        const stillTsm = await app.js<{ redraws: number; revisions: number[] }>(
-          `(async () => { const r = __bh.renderer; let redraws = 0; const revs = new Set();
-            for (let i = 0; i < 30; i++) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); if (r.tsmRedraw) redraws++; revs.add(r.earthScenery.revision); }
-            return { redraws, revisions: [...revs] }; })()`,
+        const stillTsm = await app.js<{ redraws: number; sunRedraws: number; dz: string; revisions: number[] }>(
+          `(async () => { const r = __bh.renderer; let redraws = 0, sun = 0; const revs = new Set(), dz = [];
+            for (let i = 0; i < 30; i++) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); if (r.tsmRedraw) redraws++;
+              if (r.terrainRaster?.sunDrewNow) sun++; dz.push(+(r.sunCascadeRows?.[3] ?? 0).toFixed(1)); revs.add(r.earthScenery.revision); }
+            return { redraws, sunRedraws: sun, dz: dz.join(" "), revisions: [...revs] }; })()`,
         );
         const fStill = `${OUT}/${pl}-${md}-still.png`;
         await app.shot(fStill);

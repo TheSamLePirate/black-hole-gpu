@@ -8758,17 +8758,26 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   static readonly SUN_CASCADES_M = [1_500, 10_000];
   private sunOuts = Renderer.SUN_CASCADES_M.map(() => new Float32Array(16));
   private sunCascadeRows = new Float32Array(8);
-  /** (T6) the cascades' key: the Sun's kept direction and their grid-snapped centres, and the heights' bakes — those taken at
-   *  most every half second (in low flight 16 bakes a second: each would draw the cascades again) */
+  /** (T6) the cascades' key: the Sun's kept direction and their grid-snapped centres, the meshes' windows (Q6 I3 — the patch's
+   *  and each ring's level and window: a window moved changes the ground drawn — its geomorphose by the window's edge, which level
+   *  covers a place —; kept, the map's relief stood up to metres above the image's in the hollows: shadows in combs where nothing
+   *  stands, in flight), and the heights' bakes — those taken at most every half second (in low flight 16 bakes a second: each
+   *  would draw the cascades again; `sunBakesEvery` 0: each) */
   private sunRevision(L: number[], centres: number[][]): string {
     const builds = this.terrainSurfaceCache?.stats().builds ?? 0;
     const now = performance.now();
-    if (builds !== this.sunBuilds && now - this.sunBuildsAt >= 500) {
+    if (builds !== this.sunBuilds && now - this.sunBuildsAt >= this.sunBakesEvery) {
       this.sunBuilds = builds;
       this.sunBuildsAt = now;
     }
-    return `${this.sunBuilds}|${L.join(",")}|${centres.flat().join(",")}`;
+    return `${this.sunBuilds}|${this.sunMeshKey}|${L.join(",")}|${centres.flat().join(",")}`;
   }
+  /** the meshes' windows the cascades are drawn from this frame (encodeTerrainRasterVisibility); "": none kept (a measure — the
+   *  windows left out of the key, as before Q6 I3: `sunWindowsInKey` false) */
+  private sunMeshKey = "";
+  sunWindowsInKey = true;
+  /** the least time between two of the cascades' redraws for the heights' bakes [ms] */
+  sunBakesEvery = 500;
   private sunBuilds = -1;
   private sunBuildsAt = 0;
   /** the Sun's direction the cascades were last drawn along (T6), and the camera's place then (the body's axes [m]) */
@@ -9329,6 +9338,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       trees ? (pass) => this.sceneryRaster!.draw(pass) : undefined,
       (this.lastRings = this.terrainRings(frame, level, window, target, s)),
     );
+    this.sunMeshKey = this.sunWindowsInKey
+      ? `${level}:${window.i}:${window.j};${(this.lastRings ?? []).map((g) => `${g.level}:${g.window.i}:${g.window.j}:${g.hole.join(":")}`).join(";")}`
+      : "";
     this.encodeSunShadow(enc, drawn);
     // (the trees' and buildings' shadow map, from the Sun — its frame into the table where drawn; else off: the rays)
     if (drawn && trees && this.treeShadow && this.treeShadowOn && this.tsmRedraw) {
