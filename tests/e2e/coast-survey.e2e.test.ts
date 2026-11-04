@@ -95,6 +95,8 @@ test.skipIf(!E2E)(
             placed,
             world,
             pipeline: await app.js<string>(`__bh.renderer.earthPipelineNow(__bh.settings)`),
+            // (the sea's water map in — T7, system/water-kd.ts —: the water's Kd490 by region; false, the clear water everywhere)
+            waterIn: await app.js<boolean>(`__bh.renderer.waterIn`),
             sunDeg: await app.js<number>(
               `(() => { const g = __bh.camera.geoNow(); const s = __bh.sys.sunElevation?.("earth", g); return s == null ? null : +(s * 180 / Math.PI).toFixed(1); })()`,
             ),

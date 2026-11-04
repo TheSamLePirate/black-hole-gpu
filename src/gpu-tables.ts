@@ -9,6 +9,7 @@ import { WARP_LEVELS, WARP_N } from "./system/warp-grid";
 import { EARTH_HORIZON_VEC4S, TERRAIN_CACHE_LEVELS, TERRAIN_CACHE_NODE_VEC4S, TERRAIN_CACHE_VEC4S } from "./system/terrain-cache-layout";
 import { GEOID_H, GEOID_W } from "./system/geoid-grid";
 import { ORTHO_PARAM_VEC4S } from "./system/earth-tiles";
+import { WATER_VEC4S } from "./system/water-kd-grid";
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -79,4 +80,7 @@ export const HORIZON_VEC4S = 2;
  *  earthHorizonSin): each level's header (its window, nodes a radian, D_bake, weight), then its nodes' records */
 export const TABLE_EARTH_HORIZON = TABLE_HORIZON + HORIZON_VEC4S;
 export { EARTH_HORIZON_VEC4S };
-export const TABLE_VEC4S = TABLE_EARTH_HORIZON + EARTH_HORIZON_VEC4S;
+/** (T7) the sea's water by region: Kd490, its header then its cells three a float (system/water-kd.ts; trace.wgsl seaKd490) */
+export const TABLE_WATER = TABLE_EARTH_HORIZON + EARTH_HORIZON_VEC4S;
+export { WATER_VEC4S };
+export const TABLE_VEC4S = TABLE_WATER + WATER_VEC4S;

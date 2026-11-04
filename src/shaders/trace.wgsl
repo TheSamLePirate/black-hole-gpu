@@ -429,6 +429,11 @@ const RING_FIRST_KM = 72761.0;
 const RINGSUM_OFF = 1198813u;
 // (the giants' cloud tops by latitude — gpu-tables.ts TABLE_TOPS, system/giant-tops.ts —: four profiles of 181 values)
 const TOPS_OFF = 1216589u;
+// the sea's water by region (gpu-tables.ts TABLE_WATER, system/water-kd.ts): Kd490's log on a byte, WATER_W × WATER_H cells
+// from −180° and 90° N, three a float, after a header (x 1 once in)
+const WATER_OFF = 1745176u;
+const WATER_W = 4320u;
+const WATER_H = 2160u;
 // the giants' zonal winds (gpu-tables.ts TABLE_WIND, system/giant-winds.ts): 146 values, four a vec4
 const WIND_OFF = 1198776u;
 const GEOID_W = 1440u;
@@ -914,6 +919,8 @@ var<private> SEA_D: vec3f;
 // (the sea's depth under the pixel [m] and how sure — earthGround: seaDepthAt, the near tiles' bathymetry; 0: deep assumed)
 var<private> SEA_DEPTH: f32 = 1e4;
 var<private> SEA_DEPTH_W: f32 = 0.0;
+// (the water's Kd490 there [1/m] — seaKd490 —; 0: none known, the clear water)
+var<private> SEA_KD: f32 = 0.0;
 // (the water's share of the ground last shaded — earthGround's ocean: the sea, a lake, a river —: the raster's mark carries it to the
 // temporal upsampling, whose kernel widens over the water's glints — post.wgsl taau, Q6d)
 var<private> LAST_OCEAN: f32 = 0.0;
@@ -7459,6 +7466,27 @@ fn geoidNode(x: u32, y: u32) -> f32 {
   let n = y * GEOID_W + x;
   return bodies[GEOID_OFF + n / 4u][n % 4u];
 }
+// The sea's Kd490 at a geodetic direction [1/m] (system/water-kd.ts — ESA's Ocean Colour CCI, 2020–2021 at 1/12°): its log
+// read bilinearly from the four cells about it; 0 until the map is in.
+fn waterCell(x: u32, y: u32) -> f32 {
+  let n = y * WATER_W + x;
+  let v = u32(bodies[WATER_OFF + 1u + n / 12u][(n / 3u) % 4u] + 0.5);
+  return f32((v >> (8u * (n % 3u))) & 255u);
+}
+fn seaKd490(g: vec3f) -> f32 {
+  if (bodies[WATER_OFF].x < 0.5) { return 0.0; }
+  let lat = asin(clamp(g.z, -1.0, 1.0));
+  var x = (atan2(g.y, g.x) / TAU + 0.5) * f32(WATER_W) - 0.5;
+  x -= floor(x / f32(WATER_W)) * f32(WATER_W);
+  let y = clamp((0.5 - lat / PI) * f32(WATER_H) - 0.5, 0.0, f32(WATER_H - 1u));
+  let x0 = min(u32(floor(x)), WATER_W - 1u);
+  let y0 = min(u32(floor(y)), WATER_H - 2u);
+  let x1 = select(x0 + 1u, 0u, x0 + 1u == WATER_W);
+  let f = vec2f(x - floor(x), y - f32(y0));
+  let b = mix(mix(waterCell(x0, y0), waterCell(x1, y0), f.x), mix(waterCell(x0, y0 + 1u), waterCell(x1, y0 + 1u), f.x), f.y);
+  // (KD_MIN 0.016, KD_MAX 6: the log's span)
+  return exp(log(0.016) + b / 255.0 * (log(6.0) - log(0.016)));
+}
 fn geoidN(g: vec3f) -> f32 {
   let lat = asin(clamp(g.z, -1.0, 1.0));
   var x = (atan2(g.y, g.x) / TAU + 0.5) * f32(GEOID_W) - 0.5;
@@ -8473,6 +8501,19 @@ fn seaSurfaceHit(look: vec3f, t: f32, m: f32) -> f32 {
 
 // calm: inland water (0 the open sea, 1 a sheltered lake: its fetch short — the wind's waves small, no swell,
 // no whitecaps); mirror: the world it reflects (waterMirror: rgb radiance, w its weight — the sky the rest)
+// The sea's water from its Kd490 k [1/m] (0: none known — the clear ocean): [0] its diffuse attenuation by colour [1/m] — Austin
+// & Petzold's Kd(λ) = Kw(λ) + M(λ)(Kd490 − 0.016), at 620, 540 and 470 nm —, [1] its reflectance seen from above, the
+// backscatter over the absorption: the water's own and the particles' — bbp(555) 0.05 (Kd490 − 0.016), spectral as (555/λ)^0.5:
+// a coast's sediment, from Kd490 0.03 to 0.15 (under it the open sea's — its Kd the plankton's, absorbing: bluer, greener, not
+// paler — the Calanques' grey otherwise) — scaled to the clear ocean's (0.004, 0.017, 0.040) at Kd490 0.02. The Channel's 0.2:
+// green-grey; a plume's 1: brown.
+fn seaWaterOf(k: f32) -> mat2x3f {
+  let K0 = vec3f(0.40, 0.065, 0.045);
+  if (k <= 0.0 || (TUNE_GSKIP & 1024u) != 0u) { return mat2x3f(K0, vec3f(0.004, 0.017, 0.040)); }
+  let Kd = K0 + vec3f(0.45, 0.7, 1.1) * (max(k, 0.016) - 0.02);
+  let bb = vec3f(0.0006, 0.0009, 0.0017) + 0.05 * max(k - 0.016, 0.0) * smoothstep(0.03, 0.15, k) * vec3f(0.946, 1.014, 1.087);
+  return mat2x3f(Kd, min(vec3f(0.004, 0.017, 0.040) * bb / vec3f(0.000789, 0.001103, 0.001917) * K0 / Kd, vec3f(0.25)));
+}
 fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32, calm: f32, mirror: vec4f) -> vec3f {
   let normal = geoQ(q);
   let V = airPhysicalDirection(view);
@@ -8615,7 +8656,10 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     // absorption — clear coastal water's, the red gone in a few metres, the blue and green in tens —: sand turquoise,
     // rock and weed darker, the deep blue as the bed sinks)
     let Ein = Eg * max(dot(normal, Ls), 0.0) + sky;
-    let deep = Ein * vec3f(0.004, 0.017, 0.040) / PI;
+    // (the water's own attenuation and colour by region — SEA_KD, the satellites' Kd490 —: the clear ocean's dark blue, the
+    // Channel's green-grey, a river's plume brown; seaWaterOf)
+    let wq = seaWaterOf(SEA_KD);
+    let deep = Ein * wq[1] / PI;
     water = mix(under, deep, b);
     if (SEA_DEPTH_W > 0.0 && SEA_DEPTH < 60.0 && (TUNE_GSKIP & 1024u) == 0u) {
       let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
@@ -8626,7 +8670,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
       // (the paths in the water: refracted — Snell, n 1.33 —, down from the Sun and the sky, up to the eye)
       let cv = sqrt(max(1.0 - (1.0 - nv * nv) / 1.77, 0.05));
       let cs = sqrt(max(1.0 - (1.0 - nl * nl) / 1.77, 0.3));
-      let Kd = vec3f(0.40, 0.065, 0.045);
+      let Kd = wq[0];
       let T = exp(-Kd * SEA_DEPTH * (1.0 / cv + 1.0 / cs));
       let Tv = exp(-Kd * SEA_DEPTH * 2.0 / cv);
       let shallow = deep * (1.0 - Tv) + bed / PI * Ein * T;
@@ -14079,7 +14123,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       osm = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
       // (water lies flat, and the sea at its level: a polygon's outline is a line on the map — over a cliff, a steep bank, the
       // ground the relief raises over the sea within it, land; the T7 survey, Sam: the Calanques' faces striped with the sea)
-      let flat = smoothstep(0.82, 0.94, dot(n, gq));
+      // (under the sea's level — the mesh the bed's, a drowned ridge's slopes steep —: water whatever its slope; over it, flat
+      // ground alone — the T7 survey: Étretat's banks shown as white sand out of the sea)
+      let flat = max(smoothstep(0.82, 0.94, dot(n, gq)), 1.0 - smoothstep(0.3, 1.5, hG));
       osm.x = smoothstep(0.35, 0.65, osm.x) * flat * select(1.0, 1.0 - smoothstep(3.0, 8.0, hG), osm.y < 0.3);
     }
     // (an airfield levelled: land, even where the maps had water)
@@ -14220,6 +14266,7 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   let dw = select(seaDepthAt(gq, footSea), vec2f(1e4, 0.0), calm > 0.0);
   SEA_DEPTH = dw.x;
   SEA_DEPTH_W = dw.y;
+  SEA_KD = select(seaKd490(gq), 0.0, calm > 0.0);
   RNDV = blueDraws(vec2u(centre), P.frame.x);
   RND = RNDV.z;
   RASTER_SHADE = true;

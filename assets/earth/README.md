@@ -37,3 +37,11 @@ Terrarium on AWS Open Data) and, on their levels up to z 8 (611 m), NASA's image
 Blue Marble Next Generation by day, VIIRS's night lights (2016) by night —: "We acknowledge the use of
 imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth
 Science Data and Information System (ESDIS)."
+
+`water-kd490.png` (4 320 × 2 160, 8-bit grey, `scripts/build-water-kd.ts`; `src/system/water-kd.ts`): the sea's diffuse
+attenuation at 490 nm, Kd490 — its log over [0.016, 6] m⁻¹ —, the geometric mean of 2020–2021's monthly composites at 1/12°,
+the cells without a value given their nearest sea's over three rings. It sets the water's clarity and colour by region (T7):
+the open ocean's clear blue, the Channel's green-grey, a river's plume brown. Source: the **ESA Ocean Colour CCI** v6.0
+Kd490 product (Sathyendranath, S. et al., 2019, "An ocean-colour time series for use in climate studies: the experience of the
+Ocean-Colour Climate Change Initiative (OC-CCI)", Sensors 19, 4285, doi:10.3390/s19194285), served by NOAA PIFSC's ERDDAP
+(`esa-cci-kd-monthly-v6-0`) — CC BY 4.0.

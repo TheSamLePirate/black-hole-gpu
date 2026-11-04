@@ -35,6 +35,8 @@ import {
   GEOID_VEC4S,
   TABLE_ORTHO,
   ORTHO_VEC4S,
+  TABLE_WATER,
+  WATER_VEC4S,
 } from "../src/gpu-tables";
 import { GEOID_H, GEOID_W } from "../src/system/geoid-grid";
 import { GIANT_WINDS } from "../src/system/giant-winds";
@@ -51,6 +53,10 @@ const wgsl = await Bun.file(`${import.meta.dir}/../src/shaders/trace.wgsl`).text
 const constU = (name: string) => Number(new RegExp(`const ${name} = (\\d+)u;`).exec(wgsl)![1]);
 
 test("the tables' offsets: the renderer's and the shader's the same", () => {
+  // (T7: the sea's water, last)
+  expect(constU("WATER_OFF")).toBe(TABLE_WATER);
+  expect(TABLE_WATER).toBe(TABLE_EARTH_HORIZON + EARTH_HORIZON_VEC4S);
+  expect(TABLE_VEC4S).toBe(TABLE_WATER + WATER_VEC4S);
   expect(constU("SH_BASE")).toBe(TABLE_SH);
   expect(constU("LUT_OFF")).toBe(TABLE_LUT);
   expect(constU("PATH_OFF")).toBe(TABLE_PATH);
@@ -79,7 +85,8 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
       TOPS_VEC4S +
       TERRAIN_PREV_VEC4S +
       HORIZON_VEC4S +
-      EARTH_HORIZON_VEC4S,
+      EARTH_HORIZON_VEC4S +
+      WATER_VEC4S,
   );
   expect(constU("GEOID_OFF")).toBe(TABLE_GEOID);
   expect(constU("ORTHO_OFF")).toBe(TABLE_ORTHO);
@@ -91,7 +98,6 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(TABLE_TERRAIN_PREV).toBe(TABLE_TOPS + TOPS_VEC4S);
   expect(TABLE_HORIZON).toBe(TABLE_TERRAIN_PREV + TERRAIN_PREV_VEC4S);
   expect(TABLE_EARTH_HORIZON).toBe(TABLE_HORIZON + HORIZON_VEC4S);
-  expect(TABLE_VEC4S).toBe(TABLE_EARTH_HORIZON + EARTH_HORIZON_VEC4S);
   expect(constU("TOPS_OFF")).toBe(TABLE_TOPS);
   expect(GIANT_TOPS_TABLE.length).toBe(TOPS_VEC4S * 4);
   expect(constU("RINGSUM_OFF")).toBe(TABLE_RINGSUM);

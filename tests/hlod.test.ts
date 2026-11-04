@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { addOverground, HLOD_MIN, HLOD_Z1, hlodSize } from "../src/system/earth-tiles";
+import { addOverground, HLOD_MIN, HLOD_Z1, hlodSize, markFine, overground, surveyOnly } from "../src/system/earth-tiles";
 
 const T = 256;
 
@@ -52,6 +52,29 @@ test("over the sea, the overground from the water's surface: the bed's depth no 
   addOverground(ground, surface, n);
   expect(ground[5 * T + 5]).toBe(-30);
   expect(ground[50 * T + 50]).toBeCloseTo(-30 + 12, 3);
+});
+
+test("a tile's second pass: the overground over the survey's own ground alone, never over the sea it filled from Terrarium", () => {
+  // (the stored ground: the IGN's land on the left half — marked —, the sea on the right filled from Terrarium at 0 — unmarked —;
+  // the surface model over the sea a grid of streaks 40 m up, as the IGN's off Bonifacio; a building 30 m on the land)
+  const n = 512;
+  const ground = new Float32Array(T * T);
+  for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) ground[j * T + i] = i < T / 2 ? 20 : 0;
+  for (let j = 0; j < T; j++) {
+    const row = ground.subarray(j * T, j * T + T / 2);
+    markFine(row, true);
+  }
+  const surface = new Float32Array(n * n).fill(-15);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) if (i % 64 < 3 && i >= n / 2) surface[j * n + i] = 40;
+  for (let j = 0; j < n; j++) for (let i = 0; i < n / 2; i++) surface[j * n + i] = 20;
+  surface[100 * n + 101] = 50;
+  const over = overground(surveyOnly(ground), surface, n);
+  expect(over[50 * T + 50]).toBeCloseTo(30, 3);
+  let sea = 0;
+  for (let j = 0; j < T; j++) for (let i = T / 2 + 1; i < T; i++) sea = Math.max(sea, over[j * T + i]!);
+  expect(sea).toBe(0);
+  // (without the survey's mark — the ground as stored —: the streaks became mounds)
+  expect(Math.max(...overground(ground, surface, n))).toBeGreaterThan(30);
 });
 
 test("no surface there, or no ground: the ground its own", () => {

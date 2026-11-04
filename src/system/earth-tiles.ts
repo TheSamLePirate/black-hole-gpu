@@ -167,6 +167,8 @@ export function markFine(h: Float32Array, fine: boolean) {
   for (let i = 0; i < u.length; i++) u[i] = fine ? u[i]! | 1 : u[i]! & ~1;
 }
 export const isFine = (h: number) => ((BITS[0] = h), (BITS_U[0]! & 1) === 1);
+/** a tile's heights the survey's alone — the others' (the global data's, filling its holes) NaN: what an overground stands on */
+export const surveyOnly = (h: Float32Array) => h.map((v) => (isFine(v) ? v : Number.NaN));
 
 /** a place in the tiles' texture: its layer, its corner [px] */
 export type TileSlot = { layer: number; x: number; y: number };
@@ -600,7 +602,11 @@ async function ignGround(
   };
   const [h, s] = await Promise.all([ground(), surface()]);
   if (!h) return null;
-  return { h, over: s ? overground(h, s, n) : null };
+  // (the surface's overground over the IGN's own ground alone: a first pass's ground — known — is the stored one, its holes —
+  // the sea — filled from Terrarium since, unmarked; the surface model over the sea is noise — tens of metres under it, a grid
+  // of streaks up to 110 m over it off Bonifacio —: those streaks were mounds out of the sea — T7, Sam, 4 Nov 2026)
+  const base = known ? surveyOnly(h) : h;
+  return { h, over: s ? overground(base, s, n) : null };
 }
 
 /** the IGN over France (I1, I2, I6): its box alone its land — it answers nothing beyond (NaN, 404) */

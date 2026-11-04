@@ -113,6 +113,7 @@ import {
   TABLE_CSM,
   TABLE_TSM,
   TABLE_GEOID,
+  TABLE_WATER,
   TABLE_ORTHO,
   TABLE_LUT,
   TABLE_PATH,
@@ -186,6 +187,7 @@ import {
   type EarthTier,
 } from "./system/earth-maps";
 import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/geoid";
+import { loadWaterKd } from "./system/water-kd";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
 import { HORIZON_BINDINGS, HORIZON_TEXTURE_LIMIT, HorizonMaps } from "./system/horizon-maps";
@@ -965,6 +967,8 @@ export class Renderer {
   private earthJob = 0;
   /** the geoid's map in the tracer's table (gpu-tables.ts TABLE_GEOID), once */
   private geoidIn = false;
+  /** the sea's water map in the tracer's table (gpu-tables.ts TABLE_WATER), once */
+  waterIn = false;
   /** the orthophotos' levels last written to the tracer's table (gpu-tables.ts TABLE_ORTHO) */
   private orthoSent: Float32Array | null = null;
   /** when its disk was last over 12 pixels [ms] */
@@ -1826,6 +1830,15 @@ export class Renderer {
     // (the geoid with them: the ground and the sea over the ellipsoid — system/geoid.ts — before the ground is stood on)
     // (none — its file refused —: N stays 0 on both sides, the sea on the ellipsoid as before)
     const geoidJob = loadGeoid(fetcher).catch((e) => (console.warn("Geoid unavailable:", e), null));
+    // (the sea's water by region — T7, system/water-kd.ts —, beside them; none: the clear water everywhere, as before)
+    if (!this.waterIn)
+      void loadWaterKd(fetcher)
+        .then((t) => {
+          if (this.waterIn) return;
+          this.device.queue.writeBuffer(this.bodyBuf, TABLE_WATER * 16, t);
+          this.waterIn = true;
+        })
+        .catch((e) => console.warn("The sea's water map unavailable:", e));
     const job = Promise.all([loadEarthMaps(this.device, tier, fetcher), geoidJob]).then(([maps, geoid]) => {
       if (geoid && !this.geoidIn) {
         this.device.queue.writeBuffer(this.bodyBuf, TABLE_GEOID * 16, geoidTable(geoid));
