@@ -3977,8 +3977,8 @@ export class Renderer {
   lens = false;
   /** the live image's profile is Camera (writeDisplay): the meter breathes (readMeter) */
   private lookCamera = false;
-  /** the canopy's scratches' strength in the Camera profile's cockpit view (display.wgsl canopyScratches; 0: none) */
-  canopyScratches = 1;
+  /** the canopy's scratches' strength in the Camera profile's cockpit view (display.wgsl canopyScratches; 0: none — off by default, decision 40: not shown until a photoreal version passes Sam's gate) */
+  canopyScratches = 0;
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
    *  velocity on the camera's axes [m/s]; null: none */
