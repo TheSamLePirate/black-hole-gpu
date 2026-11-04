@@ -1980,7 +1980,7 @@ export class Renderer {
         this.device.queue.writeBuffer(
           this.bodyBuf,
           (TABLE_TLUT + MSLUT_OFF) * 16,
-          this.msLutOn ? f.subarray(4 * MSLUT_OFF, 4 * MSLUT_OFF + 4) : new Float32Array(4),
+          (this.msLutOn ? f.slice(4 * MSLUT_OFF, 4 * MSLUT_OFF + 4) : new Float32Array(4)) as Float32Array<ArrayBuffer>,
         );
         this.msPublished = this.msLutOn;
       }
