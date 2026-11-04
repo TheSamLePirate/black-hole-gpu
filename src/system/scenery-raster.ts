@@ -948,11 +948,47 @@ export class SceneryRaster {
     return true;
   }
 
+  /** Q4 S1 — the buildings in the relief's shadow cascades (terrain-raster.ts encodeSunShadow): drawn into cascade k of its
+   *  pass — its viewport set — from the Sun's view of that cascade in the scenery's frame (`sun`: right, up, towards the Sun,
+   *  each with its half-extent, the centre, drawn): their boxes and their triangles, as their own shadow map draws them —
+   *  the city's shadows past the scenery's map's ±900 m, out to the cascades' reach. */
+  private cascadeSunU: GPUBuffer[] = [];
+  private cascadeBinds: { of: GPUBindGroup; bind: GPUBindGroup }[] = [];
+  encodeCascade(pass: GPURenderPassEncoder, k: number, sun: Float32Array): boolean {
+    if (!this.active || !this.drawBind || !this.boxShadowPipe || !this.meshShadowPipe || !this.sceneryBuf) return false;
+    this.cascadeSunU[k] ??= this.device.createBuffer({
+      size: 64,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      label: `scenery in the relief's cascade ${k}`,
+    });
+    this.device.queue.writeBuffer(this.cascadeSunU[k]!, 0, sun as Float32Array<ArrayBuffer>);
+    if (this.cascadeBinds[k]?.of !== this.drawBind)
+      this.cascadeBinds[k] = {
+        of: this.drawBind,
+        bind: this.device.createBindGroup({
+          layout: this.drawLayout,
+          entries: [
+            { binding: 0, resource: { buffer: this.frameU } },
+            { binding: 1, resource: { buffer: this.sceneryU } },
+            { binding: 2, resource: { buffer: this.sceneryBuf } },
+            { binding: 5, resource: { buffer: this.lists } },
+            { binding: 6, resource: { buffer: this.cascadeSunU[k]! } },
+          ],
+        }),
+      };
+    pass.setPipeline(this.boxShadowPipe);
+    pass.setBindGroup(0, this.cascadeBinds[k]!.bind);
+    pass.drawIndirect(this.draws, LISTS * 16);
+    pass.setPipeline(this.meshShadowPipe);
+    pass.drawIndirect(this.draws, (LISTS + 4) * 16);
+    return true;
+  }
+
   stats() {
     return { ready: this.ready, error: this.error, active: this.active, encodedFrames: this.encodedFrames, cells: this.cells };
   }
 
   dispose() {
-    for (const b of [this.frameU, this.sceneryU, this.draws, this.lists, this.sunU, ...this.meshes]) b.destroy();
+    for (const b of [this.frameU, this.sceneryU, this.draws, this.lists, this.sunU, ...this.meshes, ...this.cascadeSunU]) b.destroy();
   }
 }

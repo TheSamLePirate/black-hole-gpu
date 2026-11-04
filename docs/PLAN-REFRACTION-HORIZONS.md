@@ -1546,7 +1546,9 @@ compilation) s'y ajoutent.
   (8 secteurs, pondérés par le ciel clair, au-dessus du plan de la face) : dans le bruit de l'image pour ~0,5–1 ms, un damier aux
   versants (échelle des nœuds) — **désactivée par défaut** (`renderer.skyOpen`) ; l'occlusion proche attend L2a. **Q4 L2a** — le GTAO avant l'ombrage
   (décision 41) : fait, invisible dans l'image même sous ciel couvert, des halos aux silhouettes, 0,6–1,3 ms — **désactivé par défaut**
-  (`renderer.gtaoOn`) ; `lib/place.ts placeLow` (l'avion placé à plat sur le relief chargé, vérifié).
+  (`renderer.gtaoOn`) ; `lib/place.ts placeLow` (l'avion placé à plat sur le relief chargé, vérifié). **Q4 S1** — les bâtiments dans les cascades
+  d'ombre du relief : les ombres de la ville au-delà de 900 m (Paris à 400 m : 1,6 % des pixels de la ville assombris, le bruit
+  0,5 %) ; +1,2–1,9 ms au redessin des cascades ; actif.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

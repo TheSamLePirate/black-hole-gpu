@@ -769,6 +769,8 @@ export class TerrainRaster {
     suns: Float32Array[],
     profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
     revision = "",
+    /** (Q4 S1) what else casts into cascade k — the scenery's buildings —, drawn after the relief in its square */
+    scenery?: (pass: GPURenderPassEncoder, k: number) => void,
   ): boolean {
     if (!this.active || !this.sunPipe || !this.uniform || !this.table || this.disposed) return false;
     // (the cascades kept while nothing they are drawn from changed: the Sun's view and the cascades' centres, the meshes' windows,
@@ -826,6 +828,11 @@ export class TerrainRaster {
     // image's: the ground's shadows cast by the same relief the camera sees, near and out to the cascade's edge)
     const n = Math.min(suns.length, TERRAIN_SUN_CASCADES);
     for (let k = 0; k < n; k++) {
+      // (the relief's pipeline and heights set again for each cascade: the scenery's draws — Q4 S1 — leave theirs)
+      if (k > 0 && scenery) {
+        pass.setPipeline(pipe);
+        pass.setBindGroup(1, this.sunHeightBind!);
+      }
       d.queue.writeBuffer(this.sunUniforms[k]!, 0, suns[k]! as Float32Array<ArrayBuffer>);
       pass.setViewport(k * TERRAIN_SUN_N, 0, TERRAIN_SUN_N, TERRAIN_SUN_N, 0, 1);
       pass.setScissorRect(k * TERRAIN_SUN_N, 0, TERRAIN_SUN_N, TERRAIN_SUN_N);
@@ -848,6 +855,7 @@ export class TerrainRaster {
         pass.setVertexBuffer(0, r.vertex);
         pass.drawIndexed(r.indexCount);
       }
+      scenery?.(pass, k);
     }
     pass.end();
     this.sunFrames++;

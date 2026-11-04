@@ -8818,6 +8818,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  stands, in flight), and the heights' bakes — each one (Q6 I3: taken at most every half second before, the map half a second
    *  late on a bake in flight shaded the same combs, 2 series in 5; ~3 bakes a second at 140 m/s, 40 m up, over a loaded world:
    *  no more redraws than the windows' — a redraw at most a frame; `sunBakesEvery` [ms] the least time between two) */
+  /** Q4 S1 — the scenery's buildings in the relief's cascades (encodeSunShadow; scenery-raster.ts encodeCascade): the switch, the
+   *  scenery's params of this frame (set where its raster ran), the cascade's Sun's view in the scenery's frame */
+  sceneryInCascades = true;
+  private sunScp: Float32Array | null = null;
+  private sunSceneryFrame = new Float32Array(16);
   private sunRevision(L: number[], centres: number[][]): string {
     const builds = this.terrainSurfaceCache?.stats().builds ?? 0;
     const now = performance.now();
@@ -8825,7 +8830,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       this.sunBuilds = builds;
       this.sunBuildsAt = now;
     }
-    return `${this.sunBuilds}|${this.sunMeshKey}|${L.join(",")}|${centres.flat().join(",")}`;
+    return `${this.sunBuilds}|${this.sunMeshKey}|${this.sceneryInCascades && this.sunScp ? this.earthScenery.revision : -1}|${L.join(",")}|${centres.flat().join(",")}`;
   }
   /** the meshes' windows the cascades are drawn from this frame (encodeTerrainRasterVisibility); "": none kept (a measure — the
    *  windows left out of the key, as before Q6 I3: `sunWindowsInKey` false) */
@@ -8894,6 +8899,26 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         (label, descriptor) => this.prof.pass(label, descriptor),
         // (the heights' bakes: a level baked again — new tiles —, the cascades drawn again)
         this.sunRevision(L, centres),
+        // (Q4 S1: the buildings cast into the cascades — the city's shadows past the scenery's own map's ±900 m)
+        this.sceneryInCascades && this.sunScp && this.sceneryRaster
+          ? (pass, k) => {
+              const sc = this.sunScp!,
+                o = this.sunOuts[k]!;
+              // (a vector of the Earth's axes on the scenery's: east, north, up)
+              const toSc = (x: number, y: number, z: number) => [
+                x * sc[0]! + y * sc[1]! + z * sc[2]!,
+                x * sc[4]! + y * sc[5]! + z * sc[6]!,
+                x * sc[8]! + y * sc[9]! + z * sc[10]!,
+              ];
+              const rs = toSc(o[0]!, o[1]!, o[2]!),
+                us = toSc(o[4]!, o[5]!, o[6]!),
+                ls = toSc(o[8]!, o[9]!, o[10]!);
+              // (the cascade's centre: the camera moved along right and up — its depth's origin the camera, as the relief's)
+              const c = [0, 1, 2].map((i) => sc[12 + i]! + rs[i]! * o[12]! + us[i]! * o[13]!);
+              this.sunSceneryFrame.set([...rs, o[3]!, ...us, o[7]!, ...ls, o[11]!, ...c, 1]);
+              this.sceneryRaster!.encodeCascade(pass, k, this.sunSceneryFrame);
+            }
+          : undefined,
       );
       if (on && tr.sunDrewNow) this.sunCamDraw = cam;
       // (read where they were drawn: each centre from the camera now, and the camera's step towards the Sun since — the maps'
@@ -9393,6 +9418,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       trees ? (pass) => this.sceneryRaster!.draw(pass) : undefined,
       (this.lastRings = this.terrainRings(frame, level, window, target, s)),
     );
+    // (the scenery's params when its raster ran this frame: its buildings cast into the cascades — Q4 S1)
+    this.sunScp = trees ? this.earthScenery.params() : null;
     this.sunMeshKey = this.sunWindowsInKey
       ? `${level}:${window.i}:${window.j};${(this.lastRings ?? []).map((g) => `${g.level}:${g.window.i}:${g.window.j}:${g.hole.join(":")}`).join(";")}`
       : "";
