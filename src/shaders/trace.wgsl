@@ -13879,10 +13879,28 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
   var img: TileImage;
   IMG_LIGHTS = dot(gq, Lp) < 0.1;
+  // (T7 — a cliff's face: the photograph seen from above stretches its top's grass and its foot's shingle down a near-vertical
+  // wall — Étretat's chalk green, Bonifacio's limestone smeared, the reference photographs' —; the face's own colour shows in it
+  // only along its edge, seen obliquely: the imagery read again 2.5–7.5 m down the slope — the same call, a loop: one copy of it —,
+  // the sample most like rock — bright, least green — the wall's; a slope green all along kept; liteSkip 268435456: off)
+  let upF = select(1.0, dot(tn, gq), dot(tn, tn) > 0.5);
+  let faceW = select(0.0, smoothstep(0.62, 0.35, upF) * smoothstep(30.0, 10.0, fp * EARTH_RM), !isTree && (liteSkip() & 268435456u) == 0u);
+  let faceDir = (tn - gq * upF) / max(length(tn - gq * upF), 1e-6);
+  var faceC = vec3f(0.0);
+  var faceK = 0.0;
   if ((liteSkip() & 128u) == 0u) {
-    TILE_AT_ON = anchored;
-    img = earthImageryAniso(gq, fx, fy);
-    TILE_AT_ON = false;
+    // (the samples down the face read through a small round footprint — a metre: one tap a level —, not the pixel's stretched
+    // one: a wall filling the view at 4 anisotropic reads a pixel cost 60 ms)
+    let fs = 1.0 / EARTH_RM;
+    for (var i = 0; i <= select(0, 3, faceW > 0.0); i++) {
+      TILE_AT_ON = anchored && i == 0;
+      let t = earthImageryAniso(normalize(gq + faceDir * (2.5 * f32(i) * fs)), select(normalize(fx + vec3f(1e-12)) * fs, fx, i == 0), select(normalize(fy + vec3f(1e-12)) * fs, fy, i == 0));
+      TILE_AT_ON = false;
+      if (i == 0) { img = t; continue; }
+      let c = t.c.rgb * P.earth2.z;
+      let rock = luminance(c) * (1.0 - clamp(4.0 * (c.g - 0.5 * (c.r + c.b)) / max(luminance(c), 1e-3), 0.0, 1.0)) * select(0.0, 1.0, max(t.w, t.o) > 0.5);
+      if (rock > faceK) { faceK = rock; faceC = c; }
+    }
   }
   var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
   var surface = SurfaceImage(vec3f(0.0), 0.0, 0u);
@@ -13933,6 +13951,14 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       let nf = normalize(gq + sf.x * east + sf.y * cross(gq, east));
       n = normalize(mix(n, nf, sf.z * smoothstep(10.0, 4.0, fpM)));
     }
+  }
+  // (T7 — the cliff's face, its colour found below with the imagery: its strata over it)
+  if (faceW > 0.0) {
+    // (beds of ~1.7 m, each its own shade — a hash of its index —, blended over a third of a bed)
+    let hb = airHeight(ph) * 0.6;
+    let hh = fract(sin(vec2f(floor(hb), floor(hb) + 1.0) * 12.9898) * 43758.5453);
+    let bed = 0.82 + 0.3 * mix(hh.x, hh.y, smoothstep(0.65, 1.0, fract(hb)));
+    A = mix(A, faceC * bed, faceW * smoothstep(0.0, 0.04, faceK - 0.6 * luminance(A)));
   }
   // (a runway — its paving, markings and lamps, as the tracer's ground draws them: the material's, compiled in whether a
   // runway is near or not — no other key, nothing compiled in flight —; the ground levelled under it the mesh's)

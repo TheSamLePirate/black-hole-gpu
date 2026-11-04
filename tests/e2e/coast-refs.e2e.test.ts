@@ -14,7 +14,8 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // weather its sky shows (the world's cloud map off: a day's clouds, not the photograph's — over Belle-Île an overcast that hid
 // its setting Sun); the world in (60 s at most, what is missing said), frozen, the exposure settled; the shot beside the
 // photograph. The views are tuned by hand against them (dHdg, dPitch, dAlt: the corrections found by looking).
-//   CR_IDS: the references' ids (comma-separated; all when unset).
+//   CR_IDS: the references' ids (comma-separated; all when unset); CR_AB=<liteSkip bit>: the "earth lite" pass's GPU time with
+//   that part off, on, off (3 s each) after each shot.
 // Output: remote-results/coast-refs/<id>.png and <id>-pair.jpg (the photograph left, ours right), refs.json (CR_OUT).
 // Done when: every reference asked shot and paired (or why not said), no GPU error. Duration: ~1 min a reference.
 const OUT = process.env.CR_OUT ?? "remote-results/coast-refs";
@@ -354,6 +355,18 @@ test.skipIf(!E2E)(
         );
         const shot = `${OUT}/${r.id}.png`;
         await app.shot(shot);
+        // (CR_AB=bit: the shading pass's GPU time over 3 s with a part of it off — renderer.liteSkip — and on, alternated)
+        let ab: unknown = null;
+        if (process.env.CR_AB) {
+          const time = (skip: number) =>
+            app.js<number>(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
+            r.liteSkip = ${skip}; for (let i = 0; i < 20; i++) { __bh.touch(); await frame(); }
+            r.prof.enabled = true; r.prof.reset(); const t0 = performance.now();
+            while (performance.now() - t0 < 3000) { __bh.touch(); await frame(); }
+            const p = r.prof.table().find((x) => /earth lite/.test(x.label)); r.prof.enabled = false; r.liteSkip = 0; return p ? +p.ms.toFixed(3) : -1; })()`);
+          const bit = Number(process.env.CR_AB);
+          ab = { off: await time(bit), on: await time(0), off2: await time(bit) };
+        }
         // (the pair: the photograph cropped to our 16:10 by ImageMagick itself — under bun test a spawned command's output reads
         // empty —, both 900 px wide, side by side)
         const pair = [
@@ -382,6 +395,7 @@ test.skipIf(!E2E)(
         out[r.id] = {
           file: r.file,
           ...placed,
+          ab,
           hdg,
           pitchDeg: +pitch.toFixed(2),
           vfovDeg: +vfovOurs.toFixed(2),
