@@ -185,6 +185,9 @@ test.skipIf(!E2E)(
             // (the lens eased to its field before the freeze — frozen, it would stay where it was)
             for (let i = 0; i < 600 && Math.abs(__bh.camera.viewController().s.fov - ${FOV}) > 0.002; i++) await f();
             for (let i = 0; i < 20; i++) await f(); __bh.game.setDate("${iso}"); __bh.freeze(true);
+            // (placed again once the clock is held: placed before, the free camera drifted while the clock ran on and was set
+            // back — 417 km instead of 420 over the equator, the limb 0.07° higher, the rays lower: more air)
+            __bh.viewAt(${lat}, ${lon}, { altM: ${H}, heading: ${s.az.toFixed(4)}, pitch: ${aimEl.toFixed(5)} });
             for (let i = 0; i < 60; i++) { __bh.touch(); await f(); } return why; })()`);
           if (why) throw new Error(`viewAt: ${why}`);
           await app.settled(60_000);
