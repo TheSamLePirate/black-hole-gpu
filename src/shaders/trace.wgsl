@@ -7735,6 +7735,9 @@ fn sunShadowFarAt(rel: vec3f, base: f32) -> vec4f { return vec4f(-1.0, 0.0, 0.0,
 // (the sunlight's share the clouds let through to a point p of the squashed space: −1 where the map has nothing)
 fn cloudShadowAt(p: vec3f) -> f32 { return -1.0; }
 // END_CLOUD_SHADOW
+// BEGIN_GTAO (system/gtao.ts withGtao supplies the ground's ambient occlusion — Q4 L2a)
+fn rasterAO(px: vec2f) -> f32 { return 1.0; }
+// END_GTAO
 // BEGIN_TREE_SHADOW (system/tree-shadow.ts withTreeShadow supplies the trees' and buildings' shadow map's lookup)
 // (the share of the Sun a scenery-frame point sees past them: −1 where the map has nothing — the rays then, as before)
 fn treeShadowAt(p: vec3f) -> f32 { return -1.0; }
@@ -13993,7 +13996,10 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (Q2: the photograph's light kept by its Sun's — earthGround's photoRelightK —; a wall's stone, a runway's paving: ours whole)
   let rk = max(photoRelightK(gq, Li, img.o), max(rwyPaved, select(0.0, 1.0, mesh && (dot(n, gq) < 0.35 || leaf > 0u))));
   // (L1: the sky on the face by the frame's sky — skyOnFace —; a building's face its own share of it, bldAO)
-  var G = A / PI * (Eg * photoNdl(gq, n, Li, rk) + skyOnFace(sky, hG, n, gq) * bldAO + bounce + E * earthMoonlight(q, n, hG, mu0g) * moonVeil);
+  // (Q4 L2a: the ground's ambient occlusion on the sky's and the bounce's light — never the Sun's —, worked out before this pass
+  // from the visibility's distances; liteSkip 16777216: not read, a measure)
+  let gao = select(rasterAO(centre), 1.0, (liteSkip() & 16777216u) != 0u);
+  var G = A / PI * (Eg * photoNdl(gq, n, Li, rk) + (skyOnFace(sky, hG, n, gq) * bldAO + bounce) * gao + E * earthMoonlight(q, n, hG, mu0g) * moonVeil);
   // (a tree: lit as windsockShade lights it — the Sun on its face, six tenths of the sky, not the ground's open sky and
   // bounce: they lit the crowns yellow —, its crown's underside in its own shade (the carving's occlusion, left out here),
   // the light through its thin edge against the Sun)
@@ -14074,6 +14080,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   }
   if ((liteSkip() & 8192u) != 0u) { G = liteShadowDebug(E); }
   // (liteSkip 8388608 — a measure —: the valleys' sky lost drawn instead of the surface, × 5: white a fifth lost or more, black none)
+  // (liteSkip 33554432 — a measure —: the occlusion drawn instead of the surface, × 5: white a fifth of the sky hidden or more)
+  if ((liteSkip() & 33554432u) != 0u) { G = vec3f(clamp((1.0 - rasterAO(centre)) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
   if ((liteSkip() & 8388608u) != 0u) { G = vec3f(clamp((1.0 - earthSkyOpen(gq, hG, ng)) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
   liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true, false);
 }

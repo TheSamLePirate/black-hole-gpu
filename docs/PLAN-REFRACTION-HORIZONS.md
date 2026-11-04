@@ -1350,6 +1350,10 @@ sur cette délégation :
     code sans utilisateur. Désactivé par défaut tant que cette qualité n'est pas établie. La présente mise à jour
     est documentaire ; elle ne prétend pas que le runtime a déjà été modifié.
 
+41. **Le GTAO avant l'ombrage** (Sam, 4 novembre) : la voie (B) — calculé sur la distance de la visibilité raster (r : le sol, les
+    bâtiments ; jamais b, les proxies d'arbres), avant les noyaux d'ombrage qui le lisent ; **C0-9 amendé** : « GTAO : r de la
+    visibilité, avant l'ombrage » (`moments.y` n'existe qu'après lui).
+
 ## 11. Questions ouvertes
 
 **Pour Sam** : relire les contrats à la fin de C0 (décision 33). Les budgets de la décision 26 sont confirmés.
@@ -1540,7 +1544,9 @@ compilation) s'y ajoutent.
   perdent trop (Alpes −5 dB à 62,5 %), l'échelle en mouvement tenue à 75 % ; `motion-quality` et `ghost` au profil Neutre (le grain du
   profil Caméra brouillait les mesures). **Q4 L2b** — la part du ciel des vallées tirée des horizons de H5
   (8 secteurs, pondérés par le ciel clair, au-dessus du plan de la face) : dans le bruit de l'image pour ~0,5–1 ms, un damier aux
-  versants (échelle des nœuds) — **désactivée par défaut** (`renderer.skyOpen`) ; l'occlusion proche attend L2a.
+  versants (échelle des nœuds) — **désactivée par défaut** (`renderer.skyOpen`) ; l'occlusion proche attend L2a. **Q4 L2a** — le GTAO avant l'ombrage
+  (décision 41) : fait, invisible dans l'image même sous ciel couvert, des halos aux silhouettes, 0,6–1,3 ms — **désactivé par défaut**
+  (`renderer.gtaoOn`) ; `lib/place.ts placeLow` (l'avion placé à plat sur le relief chargé, vérifié).
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

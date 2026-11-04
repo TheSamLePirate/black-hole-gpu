@@ -40,6 +40,7 @@ import {
 import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT } from "./system/cloud-pass";
 import { Lightning } from "./system/lightning";
 import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT } from "./system/tree-shadow";
+import { GTAO_BINDING, GTAO_TEXTURE_LIMIT, Gtao } from "./system/gtao";
 import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N } from "./system/cloud-shadow";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import { BodyRaster, reliefMax } from "./system/body-raster";
@@ -589,6 +590,8 @@ interface ColFrame {
 interface Target {
   width: number;
   height: number;
+  /** the ground's ambient occlusion at half its size (Q4 L2a — system/gtao.ts; bound where the device takes it) */
+  ao: GPUTexture | null;
   accum: GPUBuffer;
   moments: GPUBuffer;
   /**
@@ -1237,6 +1240,18 @@ export class Renderer {
     }
     // (the trees' and buildings' shadow map — drawn by the scenery raster, bound to the tracer from the start: a stand-in
     // until the scenery raster first runs — its 16 MiB not taken on a device that never flies over the Earth's forests)
+    // (the ground's occlusion — Q4 L2a —: bound where the device takes one more sampled texture; a target's own, a 1 × 1 stand-in
+    // at 1 elsewhere — the offline target)
+    this.gtaoBound = device.limits.maxSampledTexturesPerShaderStage >= GTAO_TEXTURE_LIMIT;
+    if (this.gtaoBound) {
+      this.gtao = new Gtao(device);
+      this.gtaoDummy = device.createTexture({
+        label: "ground occlusion: none",
+        size: [1, 1],
+        format: "r32float",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+      });
+    }
     this.treeShadow = device.limits.maxSampledTexturesPerShaderStage >= TREE_SHADOW_TEXTURE_LIMIT;
     if (this.treeShadow)
       this.tsmTex = device.createTexture({
@@ -1334,6 +1349,10 @@ export class Renderer {
                 texture: { sampleType: "depth", viewDimension: "2d-array" } as GPUTextureBindingLayout,
               },
             ]
+          : []),
+        // (the ground's occlusion — Q4 L2a)
+        ...(device.limits.maxSampledTexturesPerShaderStage >= GTAO_TEXTURE_LIMIT
+          ? [{ binding: GTAO_BINDING, visibility: C, texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout }]
           : []),
         // (the orthophotos' filtered texture and its sampler — T9a)
         ...(device.limits.maxSampledTexturesPerShaderStage >= ORTHO_TEXTURE_LIMIT
@@ -2111,6 +2130,7 @@ export class Renderer {
             TREE_SHADOW_TEXTURE_LIMIT,
             HORIZON_TEXTURE_LIMIT,
             ORTHO_TEXTURE_LIMIT,
+            GTAO_TEXTURE_LIMIT,
           ),
           adapter.limits.maxSampledTexturesPerShaderStage,
         ),
@@ -2446,7 +2466,16 @@ export class Renderer {
     });
     const resolveBuf = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const shipRect = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const ao = this.gtaoBound
+      ? d.createTexture({
+          label: "ground occlusion",
+          size: [Math.max(1, Math.ceil(width / 2)), Math.max(1, Math.ceil(height / 2))],
+          format: "r32float",
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+        })
+      : null;
     const t: Target = {
+      ao,
       width,
       height,
       accum,
@@ -2584,6 +2613,7 @@ export class Renderer {
       // (the clouds' shadow map: the stand-in for its own kernel, which writes it)
       ...(this.cloudShadow ? [{ binding: CLOUD_SHADOW_BINDING, resource: ((csm && this.csmTex) || this.csmDummy!).createView() }] : []),
       ...(this.treeShadow ? [{ binding: TREE_SHADOW_BINDING, resource: this.tsmTex!.createView({ dimension: "2d-array" }) }] : []),
+      ...(this.gtaoBound ? [{ binding: GTAO_BINDING, resource: (t.ao ?? this.gtaoDummy!).createView() }] : []),
       ...(this.orthoRead
         ? [
             {
@@ -8634,6 +8664,15 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  for comparisons (off: the rays towards the Sun, as before) */
   private treeShadow = false;
   treeShadowOn = true;
+  /** Q4 L2a — the ground's ambient occlusion (system/gtao.ts): bound on this device, its pass, its stand-in; gtaoOn the switch */
+  private gtaoBound = false;
+  gtao: Gtao | null = null;
+  private gtaoDummy: GPUTexture | null = null;
+  /** off by default (measured, docs/progress/refraction-horizons/Q4.md L2a: invisible in the image, halos at the silhouettes,
+   *  0.6–1.3 ms) */
+  gtaoOn = false;
+  private gtaoWasOn = false;
+  gtaoStrength = 1;
   /** the least projected radius [px] of a tree the raster draws (system/scenery-raster.ts: smaller ones left to the ground's
    *  imagery — micro-triangles); 0 every one */
   get treeMinPx() {
@@ -9358,6 +9397,14 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       ? `${level}:${window.i}:${window.j};${(this.lastRings ?? []).map((g) => `${g.level}:${g.window.i}:${g.window.j}:${g.hole.join(":")}`).join(";")}`
       : "";
     this.encodeSunShadow(enc, drawn);
+    // (Q4 L2a: the ground's occlusion from this frame's distances, before the shading reads it — off: 1 written, nothing stale)
+    // (off: one pass writing 1 as it is turned off — nothing stale read —, none after)
+    const distTex = drawn ? this.terrainRaster.distanceTexture() : null;
+    if (distTex && target.ao && this.gtao && (this.gtaoOn || this.gtaoWasOn)) {
+      this.gtao.strength = this.gtaoOn ? this.gtaoStrength : 0;
+      if (this.gtao.encode(enc, distTex, target.ao, Math.tan((s.fov * Math.PI) / 360), this.prof.pass("ground occlusion")))
+        this.gtaoWasOn = this.gtaoOn;
+    }
     // (the trees' and buildings' shadow map, from the Sun — its frame into the table where drawn; else off: the rays)
     if (drawn && trees && this.treeShadow && this.treeShadowOn && this.tsmRedraw) {
       if (this.sceneryRaster!.encodeShadow(enc, this.prof.pass("trees' shadow map").timestampWrites)) {
