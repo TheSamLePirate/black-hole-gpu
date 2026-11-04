@@ -1,0 +1,35 @@
+{
+ "valais-sunset": {
+  "pixels": 675008,
+  "evR": 15.69,
+  "evT": 15.83,
+  "tracedConverged": {
+   "tall": false,
+   "tnone": true
+  },
+  "iouWithH5": 0.0866,
+  "iouWithoutH5": 0.0815,
+  "h5Pixels": 11282,
+  "h5Precision": 0.1173,
+  "tracedShadow": 21879,
+  "tracedMissed": 0.6859,
+  "pipeline": "raster"
+ },
+ "annecy-sunset": {
+  "pixels": 735691,
+  "evR": 16.05,
+  "evT": 16.06,
+  "tracedConverged": {
+   "tall": true,
+   "tnone": true
+  },
+  "iouWithH5": 0.0005,
+  "iouWithoutH5": 0.0008,
+  "h5Pixels": 3943,
+  "h5Precision": 0.0005,
+  "tracedShadow": 251,
+  "tracedMissed": 0.988,
+  "pipeline": "raster"
+ },
+ "gpuErrors": 0
+}
