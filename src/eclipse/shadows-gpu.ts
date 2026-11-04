@@ -8,6 +8,8 @@
 // occluder has air that bends the Sun's light into its shadow (the Earth).
 // The Moon's shadow on the Earth is the tracer's own (P.eclipse): not here.
 
+import { drawnRefractionTable } from "../system/refraction";
+import { gpuLimbSlope } from "../system/refraction-gpu";
 import { solarBody } from "../system/solar";
 import type { GpuBody } from "../system/scene-bodies";
 import type { Vec3 } from "../physics";
@@ -112,6 +114,7 @@ function earthRingY(d: number, rs: number, ro: number): number {
   const tauR = [0.065, 0.099, 0.197],
     tauO = [0.042, 0.027, 0.005],
     Y = [0.2126, 0.7152, 0.0722];
+  const tab = drawnRefractionTable();
   let L = 0;
   for (const [a, b] of [
     [0, 0],
@@ -125,13 +128,22 @@ function earthRingY(d: number, rs: number, ro: number): number {
       const need0 = ro - sg * dj;
       if (need0 >= A0 || need0 <= 0) continue;
       let h = H * Math.log(A0 / need0);
-      for (let i = 0; i < 3; i++) {
-        const f = ro * (1 + h / R) - sg * dj - A0 * Math.exp(-h / H);
-        const df = ro / R + (A0 / H) * Math.exp(-h / H);
-        h = Math.min(Math.max(h - f / df, 0), 80);
+      // (R2: the layered air's B_limbe and its segment's slope when its tables are drawn, as the tracer — else C3's exponential)
+      let alpha = 0,
+        dAlpha = 0;
+      for (let i = 0; i < 4; i++) {
+        if (tab) {
+          const [b, s] = gpuLimbSlope(tab, h * 1000);
+          alpha = b;
+          dAlpha = s * 1000;
+        } else {
+          alpha = A0 * Math.exp(-h / H);
+          dAlpha = -alpha / H;
+        }
+        if (i === 3) break;
+        h = Math.min(Math.max(h - (ro * (1 + h / R) - sg * dj - alpha) / (ro / R - dAlpha), 0), 80);
       }
-      const alpha = A0 * Math.exp(-h / H);
-      const phi = (0.5 * (ro / Math.max(dj, rs))) / (1 + (alpha * (R / H)) / ro);
+      const phi = (0.5 * (ro / Math.max(dj, rs))) / (1 - (dAlpha * R) / ro);
       const x = Math.min(Math.max((h - 22) / 18, 0), 1);
       const oz = 1 - x * x * (3 - 2 * x);
       for (let c = 0; c < 3; c++)

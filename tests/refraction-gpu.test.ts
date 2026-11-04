@@ -100,3 +100,43 @@ test("refraction.ts on the drawn air's tables: the CPU's bending the GPU's numbe
     R.setRefractionTable(null);
   }
 });
+
+test("the eclipse's ring of light on B_limbe: its slope the segment's, the eclipsed Moon's share from the tables", async () => {
+  const { gpuLimb, gpuLimbSlope } = await import("../src/system/refraction-gpu");
+  // (the slope over ±1 km: B_limbe falling everywhere — the tropopause's kink included —, the defocusing's denominator
+  // 1 − α′R/ρ never under 1 for the Moon's distance: no caustic drawn — a segment's own slope reached −1 270 at 11 km)
+  let worst = 1e9;
+  for (let h = 0; h < 80000; h += 10) worst = Math.min(worst, 1 - (gpuLimbSlope(f, h)[1] * 6371e3) / 0.0167);
+  expect(worst).toBeGreaterThanOrEqual(1);
+  for (const ht of [1500, 6000, 12000, 25000]) {
+    const [, s] = gpuLimbSlope(f, ht);
+    expect((gpuLimb(f, ht + 1000) - gpuLimb(f, ht - 1000)) / 2000 / s).toBeCloseTo(1, 6);
+  }
+  const R = await import("../src/system/refraction");
+  const { moonLightShare } = await import("../src/eclipse/shadows-gpu");
+  // (the Sun behind the Earth, the Moon at 363 000 km across the umbra: its centre, mid-way, near the edge — km)
+  const share = (q: number) =>
+    moonLightShare([0, 0, 0], [363000, q * 4600, 0], [-1.496e8, 0, 0], 6371 * 0.99834 * (1 + 1 / 85), 1737.4, 696000);
+  const before = [0, 0.5, 0.9].map(share);
+  R.setRefractionTable(f);
+  let after: number[];
+  try {
+    after = [0, 0.5, 0.9].map(share);
+  } finally {
+    R.setRefractionTable(null);
+  }
+  // (the layered air bends the rays of 2–10 km more than C3's exponential: the heart a little clearer — the plan's 15–20 % —,
+  // the same order of light: a ten-thousandth, darkest at the centre)
+  for (let i = 0; i < 3; i++) {
+    expect(after[i]!).toBeGreaterThan(0);
+    expect(after[i]! / before[i]!).toBeGreaterThan(0.5);
+    expect(after[i]! / before[i]!).toBeLessThan(2);
+  }
+  expect(after[0]!).toBeLessThan(after[1]!);
+  console.log(
+    "  the eclipsed Moon's share (centre, mid, edge): exponential",
+    before.map((x) => x.toExponential(2)),
+    "tables",
+    after.map((x) => x.toExponential(2)),
+  );
+});

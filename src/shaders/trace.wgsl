@@ -2331,15 +2331,21 @@ fn earthRingLight(d: f32, rs: f32, ro: f32) -> vec3f {
       let need0 = ro - sg * dj;
       if (need0 >= A0 || need0 <= 0.0) { continue; }
       var h = H * log(A0 / need0);
-      for (var i = 0; i < 3; i++) {
-        let f = ro * (1.0 + h / R) - sg * dj - A0 * exp(-h / H);
-        let df = ro / R + (A0 / H) * exp(-h / H);
-        h = clamp(h - f / df, 0.0, 80.0);
+      // (R2: the layered air's B_limbe when its tables are in — its slope its segment's —, else C3's exponential;
+      // read at one site, the Newton's last turn keeping it: each call inlined in every kernel)
+      let tab = refrF(0u) > 0.5;
+      var alpha = 0.0;
+      var dAlpha = 0.0;
+      for (var i = 0; i < 4; i++) {
+        let ls = refrLimbSlope(h * 1000.0) * vec2f(1.0, 1000.0);
+        alpha = select(A0 * exp(-h / H), ls.x, tab);
+        dAlpha = select(-alpha / H, ls.y, tab);
+        if (i == 3) { break; }
+        h = clamp(h - (ro * (1.0 + h / R) - sg * dj - alpha) / (ro / R - dAlpha), 0.0, 80.0);
       }
-      let alpha = A0 * exp(-h / H);
       let tau = tauR * 70.7 * exp(-h / H) + vec3f(0.03 * 183.0 * exp(-h / 1.2)) + tauO * 25.0 * (1.0 - smoothstep(22.0, 40.0, h));
       // (half the ring each side; its convergence on the axis, held at the Sun's size; the refraction's spread)
-      let phi = 0.5 * (ro / max(dj, rs)) / (1.0 + alpha * (R / H) / ro);
+      let phi = 0.5 * (ro / max(dj, rs)) / (1.0 - dAlpha * R / ro);
       L += phi * exp(-tau);
     }
   }
@@ -11170,6 +11176,15 @@ fn refrLimb(ht: f32) -> f32 {
   let x = sqrt(clamp(ht, 0.0, 120000.0) / 120000.0) * 4095.0;
   let k = min(u32(x), 4094u);
   return mix(refrF(REFR_LIMB + k), refrF(REFR_LIMB + k + 1u), x - f32(k));
+}
+// (and its slope [rad/m] over ±1 km — the eclipse's Newton and defocusing: a segment's own slope, 18 m wide at the tropopause,
+// turned up on its kink and drew caustics, thin bright arcs across the eclipsed Moon; the Sun's disc spreads them over km)
+fn refrLimbSlope(ht: f32) -> vec2f {
+  let lo = max(ht - 1000.0, 0.0);
+  // (the three reads at one site: each inlined)
+  var v = vec3f(0.0);
+  for (var i = 0; i < 3; i++) { v[i] = refrLimb(select(select(lo, ht + 1000.0, i == 1), ht, i == 0)); }
+  return vec2f(v.x, (v.y - v.z) / (ht + 1000.0 - lo));
 }
 // A ray's bending [rad] from a camera h [m] at a sine of elevation mu (the tables in: up, B_haut in the air — none above 80 km —;
 // under the horizon its tangent by Bouguer, six steps, the chord B_limbe less B_haut behind the camera)

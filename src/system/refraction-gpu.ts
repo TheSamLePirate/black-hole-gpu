@@ -60,6 +60,12 @@ export function gpuLimb(f: Float32Array, ht: number): number {
   const k = Math.min(Math.floor(x), GL - 2);
   return f[REFR_OFF_LIMB + k]! * (1 - (x - k)) + f[REFR_OFF_LIMB + k + 1]! * (x - k);
 }
+/** B_limbe and its slope [rad/m] over ±1 km read as the shader does (trace.wgsl refrLimbSlope): the eclipse's Newton and
+ *  defocusing — a segment's own slope turned up on the tropopause's kink (its denominator 1 − α′R/ρ to −1 270: caustics) */
+export function gpuLimbSlope(f: Float32Array, ht: number): [number, number] {
+  const lo = Math.max(ht - 1000, 0);
+  return [gpuLimb(f, ht), (gpuLimb(f, ht + 1000) - gpuLimb(f, lo)) / (ht + 1000 - lo)];
+}
 /** N read as the shader does: the refractivity at a height [m] */
 export function gpuN(f: Float32Array, h: number): number {
   const x = Math.min(Math.max(h, 0), LAYER_TOP) / NSTEP;

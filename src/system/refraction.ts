@@ -12,6 +12,8 @@ let drawnTable: Float32Array | null = null;
 export function setRefractionTable(f: Float32Array | null) {
   drawnTable = f;
 }
+/** the tables drawn now (null: the exponential air) — the eclipse's ring of light (eclipse/shadows-gpu.ts) reads them too */
+export const drawnRefractionTable = () => drawnTable;
 /** the density's scale height [m] */
 export const REFR_H = 8400;
 
