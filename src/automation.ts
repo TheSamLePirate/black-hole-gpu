@@ -152,6 +152,8 @@ export interface BhContext {
   touring: () => { stop: Target | null; i: number; of: number } | null;
   /** the spectator out (a free camera, the ship flying on) or back; whether it is out */
   spectate(on: boolean): boolean;
+  /** a photograph's view on the Earth: the tripod there, or the free camera at altM over the ellipsoid; why not, or null */
+  viewAt(lat: number, lon: number, o?: { altM?: number; heading?: number; pitch?: number; fov?: number; tripod?: boolean }): string | null;
   /** the PWA (src/pwa.ts): the worker's state, the caches' figures */
   pwa: Pwa;
   /** the game's mode (game/modes.ts, PLAN-MODES-AAA M1) */
@@ -677,6 +679,8 @@ export function installBh(c: BhContext) {
       tour: c.tour,
       touring: c.touring,
       spectate: (on: boolean) => c.spectate(on),
+      viewAt: (lat: number, lon: number, o?: { altM?: number; heading?: number; pitch?: number; fov?: number; tripod?: boolean }) =>
+        c.viewAt(lat, lon, o),
       /** the offline cache: ready(), stats(), clearTiles(), update(), waiting */
       pwa: c.pwa,
       /** the calendar's "now" for the scenes of the real time (the station, the fleet): fixed by tests */

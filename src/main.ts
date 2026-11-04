@@ -6154,7 +6154,7 @@ async function main() {
     body: string,
     lat: number,
     lon: number,
-    o: { altKm?: number; ground?: boolean; heading?: number; pitch?: number } = {},
+    o: { altKm?: number; ground?: boolean; here?: boolean; heading?: number; pitch?: number } = {},
   ): string | null {
     atlasReady();
     if (camera.character.active) leaveWalk("free");
@@ -6167,10 +6167,13 @@ async function main() {
     const time = vc.viewTime();
     const alt = o.ground ? 0.03 : (o.altKm ?? (body === "earth" ? 3 : 8));
     const R = (solarBody(body)!.radius * M_METRES) / 1e3;
-    const back = o.ground ? 0 : (alt / Math.tan((30 * Math.PI) / 180) / R) * (180 / Math.PI);
+    // (here: the free camera at the place itself, altKm over the ellipsoid, facing heading — a photograph's view; else over it,
+    // stood back to look at it)
+    const at = o.ground || o.here;
+    const back = at ? 0 : (alt / Math.tan((30 * Math.PI) / 180) / R) * (180 / Math.PI);
     const v = bodyView(
       time,
-      o.ground
+      at
         ? { body, at: [lat, lon], altKm: alt, heading: o.heading ?? 0 }
         : { body, at: [Math.max(-89.9, lat - back), lon], altKm: alt, aim: [lat, lon] },
     );
@@ -6184,7 +6187,9 @@ async function main() {
     if (o.ground) {
       const why = vc.standOn(body as Body);
       if (why) return why;
-      // (the look raised off the horizon: the tripod then holds it, fixed on the ground)
+    }
+    if (at) {
+      // (the look raised off the horizon: the tripod then holds it, fixed on the ground; the free camera, where it is)
       const w = o.pitch ? vc.rigWorld() : null;
       if (w) {
         const a = (o.pitch! * Math.PI) / 180;
@@ -7984,6 +7989,19 @@ async function main() {
     spectate: (on: boolean) => {
       setSpectator(on);
       return camera.spectating;
+    },
+    // (a photograph's view on the Earth: the tripod on the ground there, or the free camera at altM over the ellipsoid — facing
+    // heading [°], pitched [°], through a vertical field [°]; the craft flown left to fly on. Why not, or null)
+    viewAt: (lat: number, lon: number, o: { altM?: number; heading?: number; pitch?: number; fov?: number; tripod?: boolean } = {}) => {
+      const why = cameraAt("earth", lat, lon, {
+        ground: !!o.tripod,
+        here: !o.tripod,
+        altKm: o.altM !== undefined ? o.altM / 1e3 : undefined,
+        heading: o.heading,
+        pitch: o.pitch,
+      });
+      if (!why && o.fov) camera.setFov(o.fov);
+      return why;
     },
     mode: {
       get: () => gameMode(),
