@@ -8,6 +8,7 @@ import { altAzOf, horizonAt } from "../skychart";
 import { cameraHome } from "../targeting";
 import { cartToGeodetic, flatteningOf } from "./ellipsoid";
 import { apparentAltitude, bending, incidentAltitude } from "./refraction";
+import { layeredReport } from "./refraction-layered";
 import { bodyAxes, M_METRES, seenFrom, solarBody, utcOf } from "./solar";
 import { eclipseNow } from "../eclipse/earth-moon";
 
@@ -34,7 +35,12 @@ export interface SkyNow {
   lonDeg: number;
   heightM: number;
   /** the Earth's refraction there (null: off, another world, above 120 km) */
-  refraction: { refractivity: number; horizonArcmin: number } | null;
+  refraction: {
+    refractivity: number;
+    horizonArcmin: number;
+    /** R1: the layered model's own (refraction-layered.ts), not yet the drawn one */
+    layered?: ReturnType<typeof layeredReport> & { sunApparentAltDeg: number | null };
+  } | null;
   sun: SkyBody;
   moon?: SkyBody;
   /** the eclipse under way here (PLAN-CIEL C11): its phase, the Sun's share hidden, the Moon's share in the umbra [%] */
@@ -86,7 +92,17 @@ export function skyNow(s: Settings, t: number, n0: number): SkyNow | null {
     latDeg: r3((g.lat * 180) / Math.PI),
     lonDeg: r3((g.lon * 180) / Math.PI),
     heightM: Math.round(h),
-    refraction: air ? { refractivity: Number(n0.toPrecision(4)), horizonArcmin: r1(bending(0, h, n0) / (D / 60)) } : null,
+    // (R1: the layered model's figures beside the drawn one's — the rendering still the exponential air's until R2)
+    refraction: air
+      ? {
+          refractivity: Number(n0.toPrecision(4)),
+          horizonArcmin: r1(bending(0, h, n0) / (D / 60)),
+          layered: (() => {
+            const L = layeredReport(n0, h, sun.altDeg);
+            return { ...L, sunApparentAltDeg: L.apparentAltDeg };
+          })(),
+        }
+      : null,
     sun,
     ...(moon ? { moon } : {}),
     ...(ecl && (ecl.phase || ecl.sunHidden > 0 || ecl.moonInUmbra > 0)

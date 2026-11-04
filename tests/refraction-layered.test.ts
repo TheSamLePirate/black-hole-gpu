@@ -74,3 +74,20 @@ test("under the horizon from a height: down to its tangent and up — more than 
   expect(dip! * AM).toBeGreaterThan(30);
   expect(refraction(P, -0.5 * D, 0)).toBeNull();
 });
+
+test("TARS's figures (layeredReport): the horizon's refraction, a low Sun's apparent altitude, in a fraction of a second", async () => {
+  const { layeredReport } = await import("../src/system/refraction-layered");
+  const { seaRefractivity } = await import("../src/system/refraction");
+  const t0 = performance.now();
+  const r = layeredReport(seaRefractivity(10), 0, 0.5);
+  const ms = performance.now() - t0;
+  expect(r.horizonArcmin).toBeGreaterThan(33);
+  expect(r.horizonArcmin).toBeLessThan(37);
+  // (the Sun's centre 0.5° up: raised by ~28′)
+  expect(r.apparentAltDeg! - 0.5).toBeGreaterThan(0.4);
+  expect(r.apparentAltDeg! - 0.5).toBeLessThan(0.55);
+  expect(r.groundTempC).toBeCloseTo(10, 0);
+  expect(ms).toBeLessThan(1500);
+  // (from 10 km: the level ray through thinner air — less than from the sea)
+  expect(layeredReport(seaRefractivity(10), 10000, -2).horizonArcmin).toBeLessThan(r.horizonArcmin);
+});

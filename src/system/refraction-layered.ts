@@ -193,3 +193,40 @@ export function apparentElevation(P: AirProfile, trueAlt: number, h0 = 0): numbe
   }
   return Number.isFinite(f(hi)) ? hi : null;
 }
+
+// ---- the model's report (TARS's « sky »: system/sky-now.ts) — on demand, the profile cached by its air
+
+const profiles = new Map<string, AirProfile>();
+/** an air's profile, kept for the last few airs (a profile: ~5 ms) */
+export function profileFor(state: AirState): AirProfile {
+  const key = `${state.pMsl.toFixed(0)}|${state.tGround.toFixed(1)}|${state.rh.toFixed(2)}|${state.lambdaUm ?? 0.55}`;
+  let p = profiles.get(key);
+  if (!p) {
+    p = airProfile(state);
+    profiles.set(key, p);
+    if (profiles.size > 8) profiles.delete(profiles.keys().next().value!);
+  }
+  return p;
+}
+/** the ground's temperature [°C] the drawn sea-level refractivity stands for (refraction.ts seaRefractivity's inverse) */
+export const tempOfRefractivity = (n0: number) => (2.93e-4 * 288.15) / n0 - 273.15;
+
+/**
+ * The layered model's figures for a place: its air — the ground's temperature from the drawn refractivity, the standard pressure
+ * unless given —, the refraction at the horizon [′] from the height h [m] (the dip's ray when above the sea: its tangent), and a
+ * body's apparent altitude [°] from its true one. Seconds of work at most: on demand, not a frame's.
+ */
+export function layeredReport(n0: number, h: number, trueAltDeg: number, pMsl = 101325) {
+  const state: AirState = { pMsl, tGround: tempOfRefractivity(n0), rh: 0.5 };
+  const P = profileFor(state);
+  const D = Math.PI / 180;
+  const app = apparentElevation(P, trueAltDeg * D, h);
+  return {
+    model: "layered (Ciddor, hydrostatic, Bouguer)",
+    pressureHpa: Math.round(pMsl / 10) / 10,
+    groundTempC: Math.round(state.tGround * 10) / 10,
+    humidityPct: 50,
+    horizonArcmin: Math.round(((refraction(P, 0, h) ?? 0) / D) * 600) / 10,
+    apparentAltDeg: app === null ? null : Math.round((app / D) * 1000) / 1000,
+  };
+}
