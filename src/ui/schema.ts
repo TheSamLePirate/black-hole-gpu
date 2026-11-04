@@ -1982,7 +1982,7 @@ export const SCHEMA: ControlDef[] = [
     max: 1,
     step: 0.05,
     effect: "none",
-    help: "The camera's motion blur while it turns or flies: each point smeared along the way it moved on the image, over this share of a frame (a film camera's 180° shutter: 0.5). The ship stays sharp — it moves with the camera. 0: none.",
+    help: "The camera's motion blur while it turns or flies, as a camera films it: each point smeared along the way it moved on the image during a fixed exposure — this share of a 30-image-a-second frame (0.5: 1/60 s, a film camera's 180° shutter), the same at any frame rate. For replays and videos. The ship stays sharp — it moves with the camera. 0: none (the default).",
     keywords: "motion blur shutter smear speed camera",
   },
   {

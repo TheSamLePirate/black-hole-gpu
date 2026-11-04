@@ -312,7 +312,7 @@ export interface Settings {
   sharpen: number; // the image's sharpening after the temporal pass (AMD's RCAS: 0 none … 1 strongest)
   motionDetail: "off" | "turns" | "low"; // realtime: denser rays while the camera turns fast ("turns"), and while low and fast over the ground ("low")
   purkinje: number; // the night's Purkinje shift (the eye's rods: dark scenes bluer, greyer; 0 none … 1)
-  motionBlur: number; // the camera's motion blur in the realtime view: the shutter's share of a frame (0 none … 1)
+  motionBlur: number; // the camera's motion blur in the realtime view (Q6 I6 A4): its exposure, as a share of a 30-image-a-second frame — 0.5: 1/60 s, a film camera's 180° shutter, at any frame rate; 0 none (the default: decision 38 (3)) … 1
   farFieldLut: boolean; // rays that stay far from the hole read a traced LUT between clean samples
   volumetricClouds: boolean; // the Earth's clouds near: a marched volume (else a textured shell)
   earthClouds: number; // the Earth's cloud cover drawn (0: a clear sky everywhere, 1: its map's)
@@ -704,7 +704,7 @@ export function defaultSettings(): Settings {
     sharpen: 0.3,
     motionDetail: "off",
     purkinje: 0.6,
-    motionBlur: 0.5,
+    motionBlur: 0,
     farFieldLut: true,
     volumetricClouds: true,
     earthClouds: 1,

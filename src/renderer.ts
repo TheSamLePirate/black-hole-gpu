@@ -6074,19 +6074,17 @@ export class Renderer {
   /** The temporal reprojection's pass; true when it ran (its camera motion written: the motion blur may follow). */
   /** this frame's share of the usual frame (its time since the last one against their median, 1 at most): the motion blur's
    *  shutter is a frame's, not a late frame's */
-  private shutterShare() {
+  /** The motion blur's smear over this frame's motion on the image (post.wgsl motionBlur, TA.mb.x): a fixed exposure (Q6 I6 A4 —
+   *  settings.motionBlur × 1/30 s) over the time this frame's motion took — v·dt × T/dt: v·T at any frame rate, a hitch's long
+   *  step smeared no longer —; at most 2 (a frame twice faster than the exposure). */
+  private shutterShare(motionBlur: number) {
     const now = performance.now();
     const dt = now - this.shutterAt;
     this.shutterAt = now;
-    if (!(dt > 0 && dt < 1000)) return 1;
-    const d = this.shutterDts;
-    d.push(dt);
-    if (d.length > 15) d.shift();
-    const med = [...d].sort((a, b) => a - b)[d.length >> 1]!;
-    return Math.min(1, (1.15 * med) / dt);
+    if (!(dt > 0 && dt < 1000)) return motionBlur;
+    return Math.min(2, (motionBlur * (1000 / 30)) / dt);
   }
   private shutterAt = 0;
-  private shutterDts: number[] = [];
 
   private encodeTemporal(enc: GPUCommandEncoder, t: Target, s: Settings): boolean {
     const d = this.device;
@@ -6353,7 +6351,7 @@ export class Renderer {
         ...turnRows.flatMap((r) => [...r, 0]),
         // (the motion blur's shutter — over a frame of the usual length: a late frame's move, two or three times longer, smeared
         // the ground for that frame, a blur every second or so; w: the history's albedo beside it — RASTER_DETAIL)
-        s.motionBlur * this.shutterShare(),
+        this.shutterShare(s.motionBlur),
         0,
         0,
         this.rasterDetailNow && ta.albOk ? 1 : 0,

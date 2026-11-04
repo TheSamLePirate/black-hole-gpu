@@ -1481,7 +1481,10 @@ compilation) s'y ajoutent.
   La Mancha, dans tous les modes — cause non trouvée, enquête à part. **Q6m** — trouvée : pas les arbres mais le relief
   s'ombrant lui-même, ses cascades vues du Soleil (T6) gardées pendant que les fenêtres des maillages bougeaient (géomorphisme,
   niveaux) ; leur clé porte maintenant les fenêtres du patch et des anneaux : taches 0 série sur 6 contre 2 sur 3 (contre-épreuve),
-  ~+0,05 ms par image estimé.
+  ~+0,05 ms par image estimé. **Q6n** — les cascades suivent chaque recuit des hauteurs (taches 0/5 contre 2/5). **Q6o** — les
+  nuages dans leur propre historique mesurés (bords à 1–3 px, en ligne droite et en virage) : rien à corriger. La route du sol
+  tracé absente du raster : Q3 B4. **Q6p** — le flou de pose à temps de pose fixe (×1/30 s), désactivé par défaut (décision 38 (3)) ;
+  `motion-blur` (nouvel e2e).
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

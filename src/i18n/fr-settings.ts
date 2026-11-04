@@ -790,8 +790,8 @@ export default {
   "Temporal reprojection": "Reprojection temporelle",
   Sharpening: "Netteté",
   "Motion blur": "Flou de mouvement",
-  "The camera's motion blur while it turns or flies: each point smeared along the way it moved on the image, over this share of a frame (a film camera's 180° shutter: 0.5). The ship stays sharp — it moves with the camera. 0: none.":
-    "Le flou de mouvement de la caméra quand elle tourne ou vole : chaque point étalé le long du chemin qu'il a parcouru sur l'image, sur cette part d'une image (l'obturateur à 180° d'une caméra de cinéma : 0,5). Le vaisseau reste net — il bouge avec la caméra. 0 : aucun.",
+  "The camera's motion blur while it turns or flies, as a camera films it: each point smeared along the way it moved on the image during a fixed exposure — this share of a 30-image-a-second frame (0.5: 1/60 s, a film camera's 180° shutter), the same at any frame rate. For replays and videos. The ship stays sharp — it moves with the camera. 0: none (the default).":
+    "Le flou de mouvement de la caméra quand elle tourne ou vole, comme une caméra le filme : chaque point étalé le long du chemin qu'il a parcouru sur l'image pendant une pose fixe — cette part d'une image à 30 images par seconde (0,5 : 1/60 s, l'obturateur à 180° d'une caméra de cinéma), la même à toute cadence. Pour les replays et les vidéos. Le vaisseau reste net — il bouge avec la caméra. 0 : aucun (par défaut).",
   "Night vision (Purkinje)": "Vision nocturne (Purkinje)",
   "The eye at night: under a twentieth of white the rods take over, blind to red and keen on blue-green — dark scenes bluer and greyer, a moonlit field as one sees it. 0: none.":
     "L'œil la nuit : sous un vingtième du blanc, les bâtonnets prennent le relais, aveugles au rouge et sensibles au bleu-vert — les scènes sombres plus bleues et plus grises, un champ au clair de lune tel qu'on le voit. 0 : aucun.",
