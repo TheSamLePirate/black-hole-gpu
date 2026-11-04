@@ -13516,6 +13516,9 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
     // went in a block at each of its jumps, every second at 160 m/s)
     Eg *= mix(sh, 1.0, smoothstep(550.0, 750.0, tM));
   }
+  // (Q6 I3: the flown craft's shadow — and the nearest carrier's on the sea — on the raster's ground and water, as on the traced
+  // ground: its shadow map — ship.wgsl —, the point back in the world's axes; nothing beyond its sphere's reach)
+  if ((liteSkip() & 2097152u) == 0u && dot(n, Lp) > 0.0) { Eg *= shipShadow(fromBody(dirW * tM)); }
   return Eg;
 }
 // (TUNE_LITE 8192 — a measure —: the trees' and buildings' shadow map as liteSun read it at the surface: x trees', y buildings'

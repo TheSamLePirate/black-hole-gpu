@@ -8266,7 +8266,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  relief shadow map — nearShadow, the march whole), 32768 Q2's sky by the frame's harmonics on a slope and the bounce by the
    *  ground's mean albedo (the flat sky × ½(1 + n·up), 0.18 instead), 65536 the imagery's footprint on the slope (the flat
    *  plane's instead), 524288 the near body's horizon map in its shadows (H3 — nearShadow: the march alone, as before), 1048576 the Earth's
-   *  horizons (H5 — liteSun, earthGround: the cascades alone, as before): a
+   *  horizons (H5 — liteSun, earthGround: the cascades alone, as before), 2097152 the craft's shadow on the raster's ground (Q6 I3): a
    *  measure, the image then wrong */
   liteSkip = 0;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */

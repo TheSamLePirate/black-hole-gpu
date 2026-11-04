@@ -1475,7 +1475,10 @@ compilation) s'y ajoutent.
   le posemètre incident, ±0,5 EV) : sol contre ciel −0,38 EV en Caméra, 0 en Neutre. **Q6i** — l'aberration chromatique latérale du profil Caméra. **Q6j** — le mode GoPro hors du
   cockpit (`cameraLens`, `src/lens.ts` : rectiligne dans 28°, 100° de champ, bandeau 2,39:1, rendu 104,6° × 1,2, HUD masqué) :
   coût mesuré ~1,0–1,15 × la vue rectiligne. **Q6k** — l'étalonnage Caméra ajusté à mi-chemin sur deux vidéos de référence retenues par Sam
-  (Typhoon RAF, F-35A USAF) : ombres plus grises, ciel moins saturé et plus pâle, hautes lumières un peu froides.
+  (Typhoon RAF, F-35A USAF) : ombres plus grises, ciel moins saturé et plus pâle, hautes lumières un peu froides. **Q6l** — I3 : les appareils sont dessinés après les passes temporelles (aucune traînée possible) ; l'ombre de
+  l'appareil manquait au sol et à l'eau raster (`liteSun` lit maintenant sa carte) ; `ghost` (nouvel e2e, décor complet) : aucune
+  traînée derrière l'ombre ni sur la mer (TAAU au détroit 40,5 dB, 296 pixels) ; trouvé : des ombres d'arbres sans arbre en vol sur
+  La Mancha, dans tous les modes — cause non trouvée, enquête à part.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du
