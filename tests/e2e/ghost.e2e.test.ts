@@ -51,7 +51,7 @@ const MODES: Record<string, string> = {
   trace: `__bh.settings.earthPipeline = "trace"; __bh.renderer.taauOn = false; __bh.forceScale(1);`,
 };
 // (the scenery high and its shadows — the world as the game shows it)
-const DETAIL = `Object.assign(__bh.settings, { earthScenery: "high", detailReach: "veryFar", earthSceneryShadows: true, earthSurface: "satellite" });`;
+const DETAIL = `Object.assign(__bh.settings, { earthScenery: "high", detailReach: "veryFar", earthSceneryShadows: true, earthSurface: "satellite", lookProfile: "neutral" });`;
 /** everything under the view in — the maps high, the relief and imagery tiles, the surface, the scenery whole — for 3 s running,
  *  frames drawn (the clock stopped); at most `ms`: then what was still missing */
 const WORLD_IN = (ms: number) => `(async () => {

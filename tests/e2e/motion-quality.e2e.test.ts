@@ -38,6 +38,9 @@ const MODES: Record<string, string> = {
   spatial75q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = false; __bh.forceScale(0.75);`,
   // (the same, the temporal upsampling after the native history — post.wgsl taau)
   taau75q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(0.75);`,
+  // (I4: the same at a lower scale — what the TAAU keeps of the image when the governor would go below 75 %)
+  taau625q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(0.625);`,
+  taau50q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(0.5);`,
   // (the water's kernel as the land's — before Q6d)
   taau75qw5: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.5; __bh.forceScale(0.75);`,
   // (the upsampling's samples' kernel σ [output px] — renderer.taauSigma, 0.5 by default: wider filters the sea's glints more)
@@ -48,7 +51,9 @@ const MODES: Record<string, string> = {
   spatial75e: `${RASTER} __bh.settings.earthRasterShading = "eighth"; __bh.renderer.taauOn = false; __bh.forceScale(0.75);`,
   taau75e: `${RASTER} __bh.settings.earthRasterShading = "eighth"; __bh.renderer.taauOn = true; __bh.forceScale(0.75);`,
 };
-const DETAIL = `Object.assign(__bh.settings, { earthScenery: "high", detailReach: "veryFar", earthSceneryShadows: true, earthSurface: "satellite" });`;
+// (the image's own: the Neutral profile — Q6g's Camera profile, auto in flight, laid a new grain each frame over the measure — and no
+// motion blur)
+const DETAIL = `Object.assign(__bh.settings, { earthScenery: "high", detailReach: "veryFar", earthSceneryShadows: true, earthSurface: "satellite", lookProfile: "neutral", motionBlur: 0 });`;
 // (the HUD off — the helmet's symbology is drawn into the image in the cockpit: its lines, alike in every image, drowned the
 // ground's measure; LOOK: the look's pitch — it eases there: a look asked moved the view between the shots, 0 by default)
 const CLEAN = `Object.assign(__bh.settings, { hudJet: "off", hudHorizon: false, hudHeading: false, hudBank: false, hudMarkers: false,
@@ -238,17 +243,15 @@ describe.skipIf(!E2E)("Q6: the image in motion, the same motion for every mode",
         // made once a place drifted from the later modes' views, a look easing, 50 px)
         const fRef = `${OUT}/${pl}-${md}-ref.png`;
         let converged = false;
-        {
-          await app.js(
-            `(() => { __bh.forceScale(null); __bh.renderer.taauOn = false; __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`,
-          );
-          for (let i = 0; i < 180 && !converged; i++) {
-            await Bun.sleep(500);
-            converged = await app.js<boolean>(`__bh.renderer.lastPhase === "converged"`);
-          }
-          if (!converged) console.log(`  ${pl} ${md}: the reference not converged after 90 s — compared anyway`);
-          await app.shot(fRef);
+        await app.js(
+          `(() => { __bh.forceScale(null); __bh.renderer.taauOn = false; __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`,
+        );
+        for (let i = 0; i < 180 && !converged; i++) {
+          await Bun.sleep(500);
+          converged = await app.js<boolean>(`__bh.renderer.lastPhase === "converged"`);
         }
+        if (!converged) console.log(`  ${pl} ${md}: the reference not converged after 90 s — compared anyway`);
+        await app.shot(fRef);
         const [m, s, r] = [png(fMove), png(fStill), png(fRef)];
         const sr = sharpness(r);
         const row = {

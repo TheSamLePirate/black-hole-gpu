@@ -1,0 +1,542 @@
+[
+  {
+    "place": "tarifa-low",
+    "mode": "taau75q",
+    "gpuMs": 50.5,
+    "turnPx": 2.8,
+    "groundPx": 5.7,
+    "passes": {
+      "temporal": 1.45,
+      "taau": 3.77,
+      "top": [
+        [
+          "display",
+          39.94
+        ],
+        [
+          "ship: shading (MSAA)",
+          38.49
+        ],
+        [
+          "ship: thrusters and plasma",
+          32.58
+        ],
+        [
+          "ship: own mask",
+          30.02
+        ],
+        [
+          "ship: shadow map",
+          26.28
+        ],
+        [
+          "earth lite (raster)",
+          14
+        ],
+        [
+          "trace",
+          6.22
+        ],
+        [
+          "clouds (half)",
+          4.55
+        ]
+      ]
+    },
+    "state": {
+      "alt": 928,
+      "gs": 234,
+      "vs": -1.4,
+      "track": 19.95,
+      "gear": true,
+      "ap": true,
+      "holdAlt": 932
+    },
+    "psnrMoving": 43.8,
+    "psnrStill": 44.58,
+    "sharpMoving": 0.918,
+    "sharpStill": 1.012,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "tarifa-low",
+    "mode": "taau625q",
+    "gpuMs": 38.6,
+    "turnPx": 3,
+    "groundPx": 6.2,
+    "passes": {
+      "temporal": 1,
+      "taau": 3.68,
+      "top": [
+        [
+          "display",
+          27.38
+        ],
+        [
+          "ship: shading (MSAA)",
+          26.45
+        ],
+        [
+          "ship: thrusters and plasma",
+          25.78
+        ],
+        [
+          "ship: own mask",
+          17.41
+        ],
+        [
+          "ship: shadow map",
+          16.88
+        ],
+        [
+          "earth lite (raster)",
+          9.87
+        ],
+        [
+          "trace",
+          4.77
+        ],
+        [
+          "taau",
+          3.68
+        ]
+      ]
+    },
+    "state": {
+      "alt": 928,
+      "gs": 234,
+      "vs": -1.4,
+      "track": 19.95,
+      "gear": true,
+      "ap": true,
+      "holdAlt": 932
+    },
+    "psnrMoving": 41.88,
+    "psnrStill": 41.62,
+    "sharpMoving": 0.865,
+    "sharpStill": 0.976,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "tarifa-low",
+    "mode": "taau50q",
+    "gpuMs": 29.7,
+    "turnPx": 3.1,
+    "groundPx": 7.2,
+    "passes": {
+      "temporal": 0.65,
+      "taau": 3.4,
+      "top": [
+        [
+          "display",
+          21.73
+        ],
+        [
+          "ship: shading (MSAA)",
+          20.57
+        ],
+        [
+          "ship: thrusters and plasma",
+          19.97
+        ],
+        [
+          "ship: own mask",
+          17.89
+        ],
+        [
+          "ship: shadow map",
+          12.12
+        ],
+        [
+          "earth lite (raster)",
+          6.45
+        ],
+        [
+          "trace",
+          3.44
+        ],
+        [
+          "taau",
+          3.4
+        ]
+      ]
+    },
+    "state": {
+      "alt": 928,
+      "gs": 234.1,
+      "vs": -1.43,
+      "track": 19.95,
+      "gear": true,
+      "ap": true,
+      "holdAlt": 932
+    },
+    "psnrMoving": 39.4,
+    "psnrStill": 39.28,
+    "sharpMoving": 0.71,
+    "sharpStill": 0.754,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "alps",
+    "mode": "taau75q",
+    "gpuMs": 39.6,
+    "turnPx": 9,
+    "groundPx": 1.1,
+    "passes": {
+      "temporal": 1.44,
+      "taau": 3.71,
+      "top": [
+        [
+          "display",
+          32.2
+        ],
+        [
+          "ship: shading (MSAA)",
+          30.37
+        ],
+        [
+          "ship: own mask",
+          20.14
+        ],
+        [
+          "ship: shadow map",
+          20
+        ],
+        [
+          "ship: thrusters and plasma",
+          18.87
+        ],
+        [
+          "earth lite (raster)",
+          11.74
+        ],
+        [
+          "trace",
+          5.5
+        ],
+        [
+          "taau",
+          3.71
+        ]
+      ]
+    },
+    "state": {
+      "alt": 4206,
+      "gs": 196.8,
+      "vs": -3.82,
+      "track": 110.1,
+      "gear": true,
+      "ap": true,
+      "holdAlt": 4215
+    },
+    "psnrMoving": 43.93,
+    "psnrStill": 44.5,
+    "sharpMoving": 0.97,
+    "sharpStill": 1.033,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "alps",
+    "mode": "taau625q",
+    "gpuMs": 31.5,
+    "turnPx": 9.5,
+    "groundPx": 1.3,
+    "passes": {
+      "temporal": 1.04,
+      "taau": 3.67,
+      "top": [
+        [
+          "display",
+          25.47
+        ],
+        [
+          "ship: shading (MSAA)",
+          23.72
+        ],
+        [
+          "ship: thrusters and plasma",
+          23.28
+        ],
+        [
+          "ship: own mask",
+          21.97
+        ],
+        [
+          "ship: shadow map",
+          15.47
+        ],
+        [
+          "earth lite (raster)",
+          8.39
+        ],
+        [
+          "trace",
+          4.27
+        ],
+        [
+          "taau",
+          3.67
+        ]
+      ]
+    },
+    "state": {
+      "alt": 4206,
+      "gs": 196.8,
+      "vs": -3.86,
+      "track": 110.1,
+      "gear": true,
+      "ap": true,
+      "holdAlt": 4215
+    },
+    "psnrMoving": 38.85,
+    "psnrStill": 39.22,
+    "sharpMoving": 0.909,
+    "sharpStill": 0.97,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "alps",
+    "mode": "taau50q",
+    "gpuMs": 25,
+    "turnPx": 9.5,
+    "groundPx": 1.2,
+    "passes": {
+      "temporal": 0.66,
+      "taau": 3.33,
+      "top": [
+        [
+          "display",
+          18.78
+        ],
+        [
+          "ship: shading (MSAA)",
+          17.41
+        ],
+        [
+          "ship: thrusters and plasma",
+          16.56
+        ],
+        [
+          "ship: own mask",
+          16.55
+        ],
+        [
+          "ship: shadow map",
+          10.67
+        ],
+        [
+          "earth lite (raster)",
+          5.51
+        ],
+        [
+          "taau",
+          3.33
+        ],
+        [
+          "trace",
+          3.23
+        ]
+      ]
+    },
+    "state": {
+      "alt": 4206,
+      "gs": 196.8,
+      "vs": -3.81,
+      "track": 110.09,
+      "gear": true,
+      "ap": true,
+      "holdAlt": 4215
+    },
+    "psnrMoving": 33.44,
+    "psnrStill": 33.51,
+    "sharpMoving": 0.849,
+    "sharpStill": 0.885,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "strait",
+    "mode": "taau75q",
+    "gpuMs": 57.3,
+    "turnPx": 1.6,
+    "groundPx": 9,
+    "passes": {
+      "temporal": 1.43,
+      "taau": 3.72,
+      "top": [
+        [
+          "display",
+          42.09
+        ],
+        [
+          "ship: shading (MSAA)",
+          40.96
+        ],
+        [
+          "ship: own mask",
+          32.24
+        ],
+        [
+          "ship: shadow map",
+          29.04
+        ],
+        [
+          "earth water (raster)",
+          16.11
+        ],
+        [
+          "earth lite (raster)",
+          12.91
+        ],
+        [
+          "trace",
+          6.44
+        ],
+        [
+          "taau",
+          3.72
+        ]
+      ]
+    },
+    "state": {
+      "alt": 293,
+      "gs": 195,
+      "vs": -1.73,
+      "track": 250.33,
+      "gear": true,
+      "ap": true,
+      "holdAlt": 299
+    },
+    "psnrMoving": 48.49,
+    "psnrStill": 48.88,
+    "sharpMoving": 1.064,
+    "sharpStill": 1.067,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "strait",
+    "mode": "taau625q",
+    "gpuMs": 44,
+    "turnPx": 1.9,
+    "groundPx": 9.7,
+    "passes": {
+      "temporal": 1,
+      "taau": 3.66,
+      "top": [
+        [
+          "display",
+          33.21
+        ],
+        [
+          "ship: shading (MSAA)",
+          32.18
+        ],
+        [
+          "ship: own mask",
+          23.91
+        ],
+        [
+          "ship: shadow map",
+          23.05
+        ],
+        [
+          "earth water (raster)",
+          11.28
+        ],
+        [
+          "earth lite (raster)",
+          9.15
+        ],
+        [
+          "trace",
+          4.81
+        ],
+        [
+          "taau",
+          3.66
+        ]
+      ]
+    },
+    "state": {
+      "alt": 294,
+      "gs": 195.3,
+      "vs": -1.86,
+      "track": 250.31,
+      "gear": true,
+      "ap": true,
+      "holdAlt": 300
+    },
+    "psnrMoving": 47.33,
+    "psnrStill": 47.51,
+    "sharpMoving": 1.047,
+    "sharpStill": 1.05,
+    "converged": false,
+    "gpuErrors": 0
+  },
+  {
+    "place": "strait",
+    "mode": "taau50q",
+    "gpuMs": 33,
+    "turnPx": 2.1,
+    "groundPx": 11.3,
+    "passes": {
+      "temporal": 0.66,
+      "taau": 3.37,
+      "top": [
+        [
+          "display",
+          23.39
+        ],
+        [
+          "ship: shading (MSAA)",
+          22.45
+        ],
+        [
+          "ship: own mask",
+          20.71
+        ],
+        [
+          "ship: shadow map",
+          15.47
+        ],
+        [
+          "earth water (raster)",
+          7.48
+        ],
+        [
+          "earth lite (raster)",
+          6.05
+        ],
+        [
+          "trace",
+          3.65
+        ],
+        [
+          "taau",
+          3.37
+        ]
+      ]
+    },
+    "state": {
+      "alt": 294,
+      "gs": 195.3,
+      "vs": -1.86,
+      "track": 250.31,
+      "gear": true,
+      "ap": true,
+      "holdAlt": 300
+    },
+    "psnrMoving": 46.53,
+    "psnrStill": 46.31,
+    "sharpMoving": 1.021,
+    "sharpStill": 1.038,
+    "converged": false,
+    "gpuErrors": 0
+  }
+]

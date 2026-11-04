@@ -10,7 +10,8 @@ import { readPng } from "./lib/png";
 // azimuth, the look raised towards it, frozen, the exposure settled: shot with the scratches off then on — the 8 × 8 blocks they
 // brighten (by more than a level: the grain averaged out) counted, and how much brighter the image is round the Sun (its brightest tenth) than over the
 // rest; the Neutral profile shot with them asked and not: none there.
-// Output: remote-results/canopy-scratches/{off,on,neutral,neutral0}.png (CS_OUT).
+// CS_TURN=1: the head turned 0–3° (yaw), shot at each degree — the scratches carried by the glass, not the screen.
+// Output: remote-results/canopy-scratches/{off,on,neutral,neutral0,turn0…3}.png (CS_OUT).
 // Done when: the four shots taken, timed (the GPU's frame over 3 s each) and compared, no GPU error.
 // Duration: ~1.5 min (the tiles, four shots).
 const OUT = process.env.CS_OUT ?? "remote-results/canopy-scratches";
@@ -58,6 +59,18 @@ test.skipIf(!E2E)(
           __bh.game.perf(); r.prof.enabled = true; const t0 = performance.now();
           while (performance.now() - t0 < 3000) { __bh.touch(); await frame(); }
           const p = __bh.game.perf(); r.prof.enabled = false; return +p.gpuFrameMs.toFixed(2); })()`);
+      }
+      // (the head turning — the scratches on the glass, not on the screen: shots at 0, 1, 2, 3° of look yaw, Camera profile, on)
+      if (process.env.CS_TURN) {
+        await app.js(
+          `(() => { __bh.settings.lookProfile = "camera"; __bh.renderer.canopyScratches = 1; __bh.freeze(false); return 1; })()`,
+        );
+        for (const yaw of [0, 1, 2, 3]) {
+          await app.js(`(() => { __bh.camera.setLook(${yaw}, 38); return 1; })()`);
+          await Bun.sleep(1200);
+          await app.shot(`${OUT}/turn${yaw}.png`);
+        }
+        await app.js(`(() => { __bh.camera.setLook(0, 38); __bh.freeze(true); return 1; })()`);
       }
       const off = png(`${OUT}/off.png`),
         on = png(`${OUT}/on.png`);
