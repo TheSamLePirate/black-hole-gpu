@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { GOPRO, GOPRO_F, GOPRO_SRC_TAN, goproRenderFov, lensAngle, lensSource } from "../src/lens";
+import { GOPRO, GOPRO_F, GOPRO_SRC_TAN, goproRenderFov, goproRowShare, lensAngle, lensSource } from "../src/lens";
 
 // The GoPro mode's lens (Q6 I8, decision 38): 100° across the output, rectilinear within 28°, the corners of the 2.39:1 band
 // read within the render, the centre ~0.84 of a source pixel per output pixel.
@@ -37,4 +37,18 @@ test("the band's corners read within the render; outside the band, nothing", () 
   expect(goproRenderFov(aspect)).toBeGreaterThan(60);
   // (the centre's sampling: a source pixel per output pixel × renderScale / (f · srcTan) — about 0.84)
   expect(GOPRO.renderScale / (GOPRO_F * GOPRO_SRC_TAN)).toBeCloseTo(0.84, 1);
+});
+
+test("the rows the band reads: aspect / band of the height (0.744 at 16:9), its corners within them", () => {
+  for (const aspect of [16 / 9, 16 / 10, 4 / 3, 21 / 9]) {
+    const share = goproRowShare(aspect);
+    let hi = 0;
+    for (let u = -1; u <= 1.0001; u += 0.01)
+      for (const w of [-1 / GOPRO.band, 1 / GOPRO.band]) hi = Math.max(hi, Math.abs(lensSource(u, w, aspect)![1] - 0.5) * 2);
+    // (the rows read within the share, by at most 2 % less)
+    expect(hi).toBeLessThanOrEqual(share + 1e-9);
+    expect(hi).toBeGreaterThan(share / 1.0201 - 1e-6);
+  }
+  expect(goproRowShare(16 / 9)).toBeCloseTo((16 / 9 / 2.39) * 1.02, 6);
+  expect(goproRowShare(3)).toBe(1);
 });

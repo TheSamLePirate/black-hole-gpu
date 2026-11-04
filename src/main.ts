@@ -232,7 +232,7 @@ import { demotionEligible, dynamicResolutionOn, earthDetailFor, promotionEligibl
 import { adapterId, cappedRatio, demoted, promoted, rememberLevel, windowsIntegratedGpu } from "./tier";
 import { gpuTipText } from "./ui/gpu-tip";
 import { cpuProf } from "./perf";
-import { GOPRO, goproRenderFov } from "./lens";
+import { GOPRO, goproRenderFov, goproRowShare } from "./lens";
 import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
@@ -5467,7 +5467,9 @@ async function main() {
     overlay.height = Math.round(canvas.clientHeight * odpr);
     // (the GoPro lens — Q6 I8 —: the image rendered larger, its centre nearly sharp once bent — src/lens.ts)
     const lensK = lensNow ? GOPRO.renderScale : 1;
-    renderer.resize(w * renderScale * lensK, h * renderScale * lensK);
+    // (and only the rows the band reads — goproRowShare: 74 % at 16:9 —, its field cut to them)
+    const lensRows = lensNow ? goproRowShare(w / Math.max(h, 1)) : 1;
+    renderer.resize(w * renderScale * lensK, h * renderScale * lensK * lensRows);
     touch();
   }
   new ResizeObserver(resize).observe(canvas);
@@ -8516,7 +8518,12 @@ async function main() {
       : cpuProf.time("render (encode, submit)", () =>
           renderer.frame(
             // (the GoPro lens: the scene rendered rectilinear over a wider field, bent by the display — src/lens.ts)
-            lensNow ? { ...camera.viewSettings(), fov: goproRenderFov(canvas.width / Math.max(canvas.height, 1)) } : camera.viewSettings(),
+            lensNow
+              ? {
+                  ...camera.viewSettings(),
+                  fov: goproRenderFov(canvas.width / Math.max(canvas.height * goproRowShare(canvas.width / Math.max(canvas.height, 1)), 1)),
+                }
+              : camera.viewSettings(),
             sim.time,
             changed,
             sim.timeDirty,

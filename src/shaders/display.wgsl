@@ -25,7 +25,7 @@ struct Display {
   look: vec4f,  // the image's profile (Q6 I6): Camera on (1), its grain's strength, its vignette's, a clock [s]
   lens: vec4f,  // the GoPro lens (Q6 I8, src/lens.ts): its focal (0: none), its rectilinear part [rad], its compression, the
                 // render's half-width tangent
-  lensB: vec4f, // its band's aspect (width over height), unused ×3
+  lensB: vec4f, // its band's aspect (width over height), the render's (only the rows the band reads: main.ts goproRowShare), unused ×2
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -731,7 +731,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     let r0 = f * tt;
     let th = select(D.lens.y + (r - r0) / (f * (1.0 + tt * tt) * D.lens.z), atan(r / f), r <= r0);
     let k = select(1.0 / (f * D.lens.w), tan(th) / (max(r, 1e-9) * D.lens.w), r > 1e-9);
-    uv = vec2f(0.5 + 0.5 * q.x * k, 0.5 + 0.5 * q.y * k * (D.size.x / D.size.y));
+    uv = vec2f(0.5 + 0.5 * q.x * k, 0.5 + 0.5 * q.y * k * D.lensB.y);
   }
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return vec4f(0.0, 0.0, 0.0, 1.0); }
   // (the image upscaled here when rendered under the canvas — its render scale: a Catmull–Rom, sharper

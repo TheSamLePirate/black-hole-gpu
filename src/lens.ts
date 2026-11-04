@@ -37,6 +37,11 @@ export const GOPRO_SRC_TAN = (() => {
   return Math.tan(th) / rc;
 })();
 
+/** the share of the canvas's height the render needs (Q6 I8): the band's corners at the render's edge by construction
+ *  (GOPRO_SRC_TAN — their source radius one), its rows within ±(aspect / band) of the middle — 0.744 at 16:9 —, 2 % more for the
+ *  display's filter; the rows above and below never read, not rendered */
+export const goproRowShare = (aspect: number) => Math.min(1, (aspect / GOPRO.band) * 1.02);
+
 /** the render's vertical field [degrees] for a canvas of this aspect (width over height): its half-width tangent GOPRO_SRC_TAN */
 export const goproRenderFov = (aspect: number) => (2 * Math.atan(GOPRO_SRC_TAN / Math.max(aspect, 1e-3)) * 180) / Math.PI;
 

@@ -3962,7 +3962,11 @@ export class Renderer {
     this.device.queue.writeBuffer(
       this.displayBuf,
       272,
-      new Float32Array(lens ? [GOPRO_F, GOPRO.theta0, GOPRO.compress, GOPRO_SRC_TAN, GOPRO.band, 0, 0, 0] : [0, 0, 0, 0, 0, 0, 0, 0]),
+      new Float32Array(
+        lens
+          ? [GOPRO_F, GOPRO.theta0, GOPRO.compress, GOPRO_SRC_TAN, GOPRO.band, target.width / target.height, 0, 0]
+          : [0, 0, 0, 0, 0, 0, 0, 0],
+      ),
     );
   }
   /** the game's flight view now — a craft flown, the live view (main.ts): the image's profile Camera when lookProfile is auto */
