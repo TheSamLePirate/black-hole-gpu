@@ -77,6 +77,7 @@ nôtre. Leurs cartes d'horizon sont dans `docs/modules/Terrain.txt` (FAR CAST SH
 | **Q4** | l'occlusion ambiante, les ombres du décor à toute distance et au Soleil rasant, les reflets du Soleil sur les matériaux connus, le vent proche, des forêts en volume jusqu'à 30 km | le vol bas, la montagne, le couchant | ≤ +2,5 ms (mesuré) |
 | **Q5** | une atmosphère physique unique (tables de Hillaire, l'air vrai partout), une météo cohérente et datée, des nuages composés couche par couche, amortis, avec un champ proche et la gloire de l'avion | tous les ciels, l'heure bleue, la météo | gain sur les nuages |
 | **Q6** | un upscaler temporel de classe TSR (avant les effets qui scintillent), l'exposition locale, un **profil Caméra** (étalonnage, grain, vignette, exposition et temps de pose de caméra) et un profil Neutre ; le mode GoPro | le vol, le cockpit, le replay | ≈ 0, et l'échelle peut baisser si les scènes le permettent |
+| **Q6-ISS** | les caméras embarquées de l'ISS conformes aux vues NASA et Sen / SpaceTV-1 : supports, positions, orientations, objectifs et réponse d'image calibrés par caméra sur des vidéos YouTube identifiées | le nadir, le limbe terrestre, la structure et le port d'amarrage vus depuis l'ISS | une vue rendue à la fois ; coût à mesurer |
 | **Q7** | les ombres cuites ôtées des photos (recherche, go/no-go), des scans de détail sous la photo, la piste usée, la neige et les saisons, des orthos ailleurs qu'en France | le sol de près, l'hiver, l'Europe | ≈ 0 par image ; +0,5–1,5 ms en vol bas (détail) |
 | **Q8** | le couvert bas (herbe, arbustes, cailloux) près des pistes puis en vol rasant ; la nuit des rues, le trafic, les lignes haute tension, les éoliennes, les vignes ; façades PBR, imposteurs d'arbres, neige qui tombe | le monde habité | au budget, par paliers |
 
@@ -960,6 +961,115 @@ nommés « VIPER A1… » dans les phases (son relevé de VIPER et ses sources r
 | **Q8** | **Le monde habité et la nuit** : **VIPER B5** le couvert bas en instances (herbe, arbustes, cailloux) près des aérodromes d'abord, puis en vol rasant partout, par paliers ; **L10** des lampadaires plausibles regroupés le long des routes (pas leur position réelle), avec portée et LOD — jamais une lumière dynamique par fenêtre ; **D1** le trafic routier (phares la nuit), les lignes haute tension et leurs pylônes, les éoliennes qui tournent, les vignes et vergers ; **B2** les façades et toits PBR (l'atlas de L8) ; **F3** les imposteurs seulement si F2 ne couvre pas le besoin ; **C8** la neige qui tombe, les traînées persistantes | `scenery-worker.ts`, `scenery-raster.ts`, `trace.wgsl`, `forest.ts`, `weather.ts`, `contrails.ts`, `grass-layout.ts` | Le roulage et le vol rasant vivants ; Paris la nuit ; le trafic de l'A1 ; les lignes HT et les éoliennes vues du cockpit ; chaque élément au budget, par palier |
 | **Q9** | **La perf, seconde passe** : **P9** le classement par tuiles 8 × 8 et le dispatch indirect (les pixels restent mixtes aux lisières et sur l'eau) ; **P10** shader-f16 (fonctionnalité demandée, variantes, repli) pour le post et les couleurs du matériau ; la revue du coût de compilation. Gardés seulement si l'A/B gagne | `trace.wgsl`, `renderer.ts`, `post.wgsl` | Mesurés ; gardés ou retirés |
 
+### Q6-ISS — Les vraies caméras de l'ISS, calibrées sur les vidéos NASA et Sen
+
+**Ajout demandé par Sam le 4 novembre 2026 ; « zen » confirmé comme Sen / SpaceTV-1. Statut : planifié,
+non implémenté, aucune calibration effectuée.** Ce volet appartient au plan actif, avec Q6 (image/optique), I3
+(mouvement), R2/R4 (limbe/projection) et Q5 (air). Il produit des **vues simulées depuis les vrais supports de caméra**,
+calibrées sur les vidéos, et des profils de réponse propres à ces caméras.
+
+**Ce que cela apporte :** retrouver le même POV, le même cadrage du limbe, les mêmes éléments de station au premier
+plan et une réponse d'exposition/couleur comparable aux vidéos de référence, plutôt qu'une vue générique autour de
+l'ISS. Les données de calibration restent utilisables après la migration du renderer (§20 de l'analyse stratégique).
+
+#### Périmètre des caméras et sources
+
+| Famille / préréglage à créer | Vue à reproduire | Ce qui est établi / ce qui reste à déterminer |
+|---|---|---|
+| **NASA — externe Harmony** | vue oblique vers l'avant avec IDA-2 visible, selon la description du flux officiel référencé | Famille et vue décrites par NASA ; support exact sur le modèle, translation, rotation, champ, recadrage et période de validité à établir sur les documents et séquences retenus. Ne pas attribuer ce même POV à tous les flux NASA. |
+| **Sen — SpaceTV-1 Nadir** | Terre sous la station | Sen décrit une caméra dirigée vers le nadir ; point d'attache précis, axe optique, roulis, champ et distorsion à calibrer. |
+| **Sen — SpaceTV-1 Horizon** | limbe, océans et nuages en vue oblique | Sen décrit une caméra tournée vers le limbe ; ne pas supposer un champ ou un angle identique à la caméra nadir. |
+| **Sen — SpaceTV-1 Docking** | structure et port d'amarrage avant, avec le véhicule présent à la date choisie | Support SpaceTV-1 externe sur Bartolomeo, et non derrière un hublot, selon Sen ; pose exacte et géométrie du premier plan à établir. Ce n'est pas la caméra axiale d'aide à l'amarrage du jeu. |
+| **NASA — autres vues identifiées** | autres EHDC effectivement présentes dans les séquences officielles retenues | Un préréglage par caméra/support/configuration identifiable ; pas de caméra inventée pour un changement de réalisation du flux. Inventaire borné au corpus, complété à mesure des sources. |
+| **NASA — HDEV historique** | avant, nadir, arrière 1 et arrière 2, si le corpus contient ces archives | Famille distincte : HDEV a fonctionné de 2014 à 2019. Le rapport documente quatre caméras fixes ; ne pas les étiqueter comme matériel actuel ni mélanger leurs objectifs avec ceux des EHDC. |
+
+**Sources primaires repérées le 4 novembre ; à revérifier au début de la réalisation :**
+
+- [Sen — SpaceTV-1, implantation et trois vues](https://www.sen.com/mission/stv-1) ;
+  [chaîne YouTube officielle Sen](https://www.youtube.com/@Sen),
+  [flux YouTube repéré](https://www.youtube.com/watch?v=fO9e9jnhYK8).
+- [NASA — description du flux externe Harmony](https://www.youtube.com/watch?v=aB1yRz0HhdY) ;
+  [NASA/JSC — page du flux externe et historique HDEV](https://eol.jsc.nasa.gov/esrs/hdev/), qui renvoie aussi
+  vers son lecteur YouTube. Les identifiants de live peuvent changer : conserver aussi la page/chaîne d'origine.
+- [NASA/JSC — rapport final HDEV](https://eol.jsc.nasa.gov/ESRS/HDEV/files/HDEV-Final-Report_20200715.pdf)
+  pour distinguer matériel, objectifs et configurations historiques.
+
+Ces pages et descriptions établissent le périmètre documentaire, **pas des mesures de pose ou de focale**. Les vidéos
+n'ont pas été dépouillées image par image pendant cet ajout au plan. Un flux peut alterner caméras, archives et perte
+de signal ; une séquence « Previously Recorded », un montage ou un timelapse ne fournit pas l'UTC de prise de vue
+par la seule heure YouTube.
+
+#### Réutilisation et contrat de pose
+
+- Réutiliser `src/system/iss.ts` (`issOrbit`, `issTrack`, `issAxes`, géométrie `station`, transformations des pièces)
+  et `src/camera/subjectcam.ts` pour la pose du sujet ; `src/ui/camerapanel.ts` pour l'accès. Le repère actuel est
+  **x avant, y tribord, z nadir**, en mètres pour la géométrie locale. Une attache de caméra est définie dans ce repère
+  ou celui de sa pièce parente, puis transformée à l'instant de la vue ; son orientation ne suit pas une cible mobile
+  sauf si cette caméra dispose réellement d'un pointage documenté.
+- **Distinguer orbite et attitude.** `issAxes` suppose actuellement LVLH +XVV ; des éléments orbitaux ne prouvent
+  pas l'attitude réelle de la station. Pour une vidéo où elle diffère, retrouver l'attitude documentée ou estimer un
+  écart cohérent pour toute la séquence, avec son incertitude. Ne pas déplacer la Terre ou l'ISS pour compenser une
+  mauvaise attache, et ne pas redresser artificiellement un horizon qui est incliné dans la vidéo.
+- La vue `aboard` actuelle de l'ISS emploie un œil générique proportionnel à sa longueur. `stationCam`
+  (`src/controller/docking.ts`) place une aide sur l'axe du port, 40 cm devant l'anneau. Ces vues restent leurs
+  comportements propres ; les préréglages NASA/Sen exigent leurs attaches physiques et leur optique distinctes.
+- Prévoir un registre versionné, par exemple `src/camera/iss-cameras.ts` (**nouveau module proposé**) : identifiant
+  stable, opérateur et caméra, support/pièce parente, période de validité, translation [m], rotation et convention,
+  projection/champs horizontal et vertical [°], ratio/crop, distorsion, profil d'image, sources et incertitudes.
+  Chaque paramètre porte son origine : **documenté / estimé sur vidéo / inconnu**. Ne pas annoncer une pose au
+  centimètre ou une focale exacte si les données ne la contraignent pas.
+
+#### Lots et méthode de calibration
+
+| Lot | Travail et bénéfice | Sortie attendue |
+|---|---|---|
+| **ISS0 — corpus reproductible** | Choisir plusieurs extraits YouTube officiels **par caméra** : jour, limbe au lever/coucher, nuit exploitable, structure et véhicule amarré lorsque visibles ; identifier les coupes de caméra. | Manifeste : URL/chaîne, identifiant vidéo, timecodes, UTC de capture connue ou estimée avec marge, résolution/ratio, cadence, vitesse de lecture, crop, caméra et configuration de station. Identifier les séquences réservées à la validation. Noter crédits, droits et taille avant toute acquisition ; pas de redistribution automatique d'images Sen. |
+| **ISS1 — supports et POV** | Retrouver les points de montage et axes sur la structure ; dessiner depuis le bon côté des modules/panneaux avec les bonnes occultations. | Registre des attaches et correspondance au modèle ISS, schémas sourcés ; pas de confusion entre nadir, horizon et amarrage. Si une pièce manque au modèle, correction d'asset ciblée, documentée. |
+| **ISS2 — calibration géométrique** | Ajuster pose, champ, ratio, point principal/crop et distorsion à partir du limbe, de repères terrestres et de points fixes de station ; retrouver le roulis et le mouvement relatif. | Résidus en pixels et incertitudes sur plusieurs images, puis validation sur d'autres extraits sans réajuster image par image. La géométrie est figée avant l'étalonnage couleur. |
+| **ISS3 — réponse de chaque caméra** | Calibrer exposition/adaptation, balance des blancs, courbe de tons, saturation, netteté et vignette sur les extraits retenus ; ne reprendre grain, aberration ou flou de pose que s'ils sont étayés. | Profil NASA/Sen par caméra ou configuration documentée, réutilisant les mécanismes Q6. Comparaison Neutre / profil calibré ; pas de LUT GoPro de cockpit appliquée d'office à une caméra ISS. |
+| **ISS4 — accès produit et TARS** | Choisir la caméra, retrouver son cadrage natif et revenir à la vue précédente ; montrer source et qualité de calibration. | Même action métier pour panneau Caméra, TARS et `__bh`, avec identifiant stable ; sélection sauvegardable et rejouable. Drag/zoom éventuels explicitement en exploration, puis retour au POV calibré. Horloge et état simulé de l'appareil inchangés par la sélection. |
+| **ISS5 — acceptation** | Comparer chaque vue aux séquences de contrôle, en mouvement, au jour et aux transitions d'éclairage ; conserver la qualité et la cadence du profil. | Fiche `docs/progress/refraction-horizons/Q6-ISS.md` à créer lors de la réalisation : images vidéo/simulation annotées, superpositions, erreurs géométriques, réponse d'image, limites, coût complet et sources. |
+
+**Précautions de calibration :**
+
+1. Retrouver le **temps de capture**, l'orbite et la configuration : retard de transmission, attitude, véhicules
+   présents et mouvement des panneaux. Employer des éléments orbitaux proches de l'époque ; si l'état historique
+   manque, annoncer la comparaison comme approchée. Un fichier météo actuel ne reproduit pas les nuages d'une archive.
+2. Le limbe et les côtes contraignent surtout orientation et champ ; ils ne suffisent pas à déterminer une attache
+   métrique sur la station. Ajouter plans et repères de structure pour lever les ambiguïtés entre translation,
+   attitude et focale. En leur absence, garder la position comme estimation et borner le domaine de conformité.
+3. Séparer optique de la caméra, crop/rotation/stabilisation éventuels du diffuseur et changement de caméra.
+   Ne pas ajuster un fisheye uniquement pour masquer un mauvais rapport d'image. Définir le sens de chaque FOV
+   et conserver la projection cohérente pour rendu, sélection au pointeur, superpositions et capture.
+4. Après la géométrie, comparer des régions pertinentes : limbe, océan/sol, nuages, ombres, structure, villes.
+   Masquer bandeaux/logo/compression et phénomènes non synchronisables ; ne pas utiliser un PSNR global de nuages
+   différents comme verdict. Les images YouTube sont traitées et compressées : elles donnent une cible de rendu
+   vidéo, pas directement une radiance mesurée. Préserver l'air, la réfraction et les unités physiques communs.
+5. Préparer les calibrations hors de la frame ; ne rendre que la caméra sélectionnée. Ni lecture réseau YouTube
+   ni inférence par image n'est nécessaire au fonctionnement de ces vues simulées. Toute mosaïque simultanée serait
+   un budget distinct à décider.
+
+**Acceptation prévue, non réalisée :** chaque caméra du périmètre est identifiable et séparément sélectionnable ;
+la structure, le port et le véhicule occupent les bons endroits dans l'image, sans miroir ni roulis erroné ; le limbe
+et le défilement du sol restent cohérents sur des extraits de contrôle. À ISS0, fixer les tolérances selon la
+résolution et l'incertitude des références ; publier erreur médiane/p95 en pixels, erreur angulaire et bornes sur les
+paramètres, sans réduire toutes les mesures à un score esthétique. Vérifier la stabilité en pause/accéléré, aux
+changements de caméra et au retour en vol ; les historiques sont invalidés lors d'une coupe voulue.
+
+L'étalonnage est jugé par caméra et sur plusieurs conditions ; il ne sert pas à corriger le modèle atmosphérique
+global pour un seul plan. Si R2/R4 ou Q5 manque encore au limbe ou au crépuscule, le noter comme limite de rendu et
+reprendre la comparaison après leur livraison. Le coût GPU/CPU, la mémoire et la régularité se mesurent sur scène
+complète, avec un seul rendu de vue ; aucun budget ni gain n'est déclaré atteint par cet ajout documentaire.
+
+**Ordre :** ISS0 → ISS1 → ISS2 → ISS3 → ISS4 → ISS5 ; l'accès peut se développer après le registre sans attendre
+l'étalonnage final. Commencer sources et géométrie avec Q6 ; raccorder I3 et la projection commune, puis affiner air
+et réfraction avec Q5/R. Ce volet ne bloque pas le socle temporel de Q6 avant Q4 et n'impose pas une deuxième chaîne
+de rendu. Consigner les extraits retenus et leurs limites dans la fiche ; respecter la décision 38 pour les ajustements
+de LUT relevant de son périmètre.
+
+**Périmètre de cette session :** ajout au plan uniquement ; aucun code, téléchargement vidéo, calibration,
+lancement du jeu, test, e2e ou benchmark pour cet ajout.
+
 ## 8. Ordre et estimations
 
 **Départ : dès que les géantes sont finies** (PLAN-GEANTES-VOLUME, V8 et V9 ; décision 11). Avant de lancer : relire
@@ -976,7 +1086,7 @@ nommés « VIPER A1… » dans les phases (son relevé de VIPER et ses sources r
 | 7 | **T3**, **T4**, **T5** | la Terre sans triangles, ses générations, ses normales |
 | 8 | **Q2**, **Q3** | la photo ré-éclairée avec mesure, le ciel selon la pente, les villes |
 | 9 | **T10**, **T9**, **T8** | une seule architecture des tuiles (C0-4), avec l'option de VIPER pour l'imagerie |
-| 10 | **Q6** | la reconstruction temporelle **avant** les effets qui scintillent (décision 30) |
+| 10 | **Q6** ; **Q6-ISS** (lots dédiés ci-dessus) | la reconstruction temporelle **avant** les effets qui scintillent (décision 30) ; sources et géométrie des caméras ISS avec Q6, étalonnage affiné avec Q5/R sans bloquer ce socle |
 | 11 | **H3a** (si sa borne est prouvée) ; **H1** (pilote) → porte de décision ; **H1b** ; **H2** ; **H3** ; **H1c** ; **H5** ; **H4** | les cartes d'horizon, validées sur un pilote |
 | 12 | **Q4** | le volume et les reflets, sur une image temporellement stable |
 | 13 | **T7** | la mer, avant les mirages |
@@ -1183,6 +1293,11 @@ sur cette délégation :
     replay, la vidéo) ; (4) la **LUT « footage »** : Claude cherche 3–4 vidéos publiques de référence (cockpit en GoPro, vol de
     ligne), **Sam valide** avant l'ajustement.
 
+39. **Les caméras de l'ISS** (Sam, 4 novembre) : ajouter au plan actif les différentes caméras NASA et
+    **Sen / SpaceTV-1** (« zen » confirmé par Sam), avec leurs **positions et POV corrects** et une **calibration
+    fondée sur les vidéos YouTube**. Volet **Q6-ISS** ci-dessus : sources identifiées, attaches/optique et réponse
+    d'image par caméra, accès par les actions communes et TARS ; réalisation et mesures encore à faire.
+
 ## 11. Questions ouvertes
 
 **Pour Sam** : relire les contrats à la fin de C0 (décision 33). Les budgets de la décision 26 sont confirmés.
@@ -1359,7 +1474,8 @@ compilation) s'y ajoutent.
   respire, l'aberration, le flou de pose et le mode GoPro restent. **Q6h** — l'exposition qui respire en profil Caméra seul (un tiers d'un posemètre de caméra sur
   le posemètre incident, ±0,5 EV) : sol contre ciel −0,38 EV en Caméra, 0 en Neutre. **Q6i** — l'aberration chromatique latérale du profil Caméra. **Q6j** — le mode GoPro hors du
   cockpit (`cameraLens`, `src/lens.ts` : rectiligne dans 28°, 100° de champ, bandeau 2,39:1, rendu 104,6° × 1,2, HUD masqué) :
-  coût mesuré ~1,0–1,15 × la vue rectiligne.
+  coût mesuré ~1,0–1,15 × la vue rectiligne. **Q6k** — l'étalonnage Caméra ajusté à mi-chemin sur deux vidéos de référence retenues par Sam
+  (Typhoon RAF, F-35A USAF) : ombres plus grises, ciel moins saturé et plus pâle, hautes lumières un peu froides.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

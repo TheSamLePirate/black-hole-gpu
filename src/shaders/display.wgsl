@@ -686,16 +686,25 @@ fn polTick(uv: vec2f, c: vec3f) -> vec3f {
 // (the tone map's output, its gamma taken off): the blacks lifted a little (a sensor's floor, footage's flat black), a gentle S,
 // the saturation a touch lower, the shadows towards blue and the highlights towards warm (split toning, a few thousandths);
 // a vignette, the corners a little darker; a grain, its own each frame, strongest in the mid-tones — over an HDR display's
-// extended range the same (its part over white left as it is). Not yet fitted on reference footage (the plan's LUT): a
-// parametric stand-in, every term small.
+// extended range the same (its part over white left as it is). Fitted half the way (discreet) to the statistics of two public
+// reference films chosen by Sam (decision 38: the RAF's Typhoon, OGL v3; the USAF's F-35A at Ocean City, public domain —
+// docs/progress/refraction-horizons/Q6-references-LUT.md): the shadows' and the sky's saturation, the highlights' level and cast.
 fn cameraLook(c0: vec3f, uvOut: vec2f, px: vec2f) -> vec3f {
   let over = max(c0 - vec3f(1.0), vec3f(0.0));
   var p = pow(clamp(c0, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2));
   p = vec3f(0.014) + p * 0.986;
-  p = mix(p, p * p * (3.0 - 2.0 * p), 0.12);
+  p = mix(p, p * p * (3.0 - 2.0 * p), 0.18);
+  let l0 = dot(p, LUMA);
+  // (the highlights lifted towards white, paler — the reference footage's sky: its 99th percentile 0.86–0.96 against our 0.74)
+  p += (vec3f(1.0) - p) * (0.15 * smoothstep(0.55, 1.0, l0));
   let l = dot(p, LUMA);
-  p = mix(vec3f(l), p, 0.94);
-  p += vec3f(-0.004, 0.0, 0.008) * (1.0 - smoothstep(0.0, 0.35, l)) + vec3f(0.008, 0.003, -0.008) * smoothstep(0.55, 1.0, l);
+  // (the saturation by luminance — the references' shadows nearly grey (chroma 0.02 against our 0.09), their mid-tones and sky
+  // less saturated (0.12, 0.10–0.13 against 0.19, 0.29): half the way there, discreet)
+  let sat = mix(mix(0.62, 0.85, smoothstep(0.08, 0.4, l)), 0.8, smoothstep(0.6, 0.95, l));
+  p = mix(vec3f(l), p, sat);
+  // (split toning: the shadows a touch blue, the highlights a touch cool too — the references' highlights blue +0.01–0.02, red
+  // −0.025–0.05 over their luminance; a warm cast there, the first guess, was the other way)
+  p += vec3f(-0.004, 0.0, 0.008) * (1.0 - smoothstep(0.0, 0.35, l)) + vec3f(-0.006, 0.0, 0.006) * smoothstep(0.55, 1.0, l);
   // (the vignette: by the distance from the centre, the width's aspect kept — the corners ~12 % darker)
   let d = (uvOut - 0.5) * vec2f(D.size.x / max(D.size.y, 1.0), 1.0);
   p *= 1.0 - D.look.z * smoothstep(0.35, 1.05, length(d) * 1.2);
