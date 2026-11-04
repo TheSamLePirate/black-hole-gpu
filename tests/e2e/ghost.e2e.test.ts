@@ -153,8 +153,10 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
   });
 
   for (const pl of places)
-    for (const md of modes)
+    for (const [mi, md] of modes.entries())
       test(`${pl}: ${md} — the moving frame against its reference`, async () => {
+        // (a mode asked again: its files apart — "-2", "-3" —, not over the first's)
+        const tag = `${pl}-${md}${modes.indexOf(md) === mi ? "" : `-${modes.slice(0, mi + 1).filter((m) => m === md).length}`}`;
         if (!saves.has(pl)) {
           // (placed, the tiles in — 3 s with none pending, a z 12 level at least —, placed again on the relief in, saved)
           await app.js(`(() => { __bh.freeze(false); __bh.game.quality("realtime");
@@ -200,7 +202,7 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
           let gpu = 0, ground = 0;
           // (the trees' shadow map frame by frame — drawn again, read, its scenery's revision: renderer.encodeTerrainRasterVisibility)
           // (and the relief's shadow cascades — renderer.encodeSunShadow: drawn again, the camera's step towards the Sun since, dzOff)
-          const tsm = { redraws: 0, read: 0, revisions: new Set(), frames: 0, last: [], sunRedraws: 0, dz: [] };
+          const tsm = { redraws: 0, read: 0, revisions: new Set(), frames: 0, last: [], sunRedraws: 0, dz: [], bakes0: r.terrainSurfaceCache?.stats().builds ?? 0, bakes: 0 };
           const note = () => { tsm.frames++; if (r.tsmRedraw) tsm.redraws++; if (r.tsmDrawn) tsm.read++; tsm.revisions.add(r.earthScenery.revision);
             if (r.terrainRaster?.sunDrewNow) tsm.sunRedraws++; tsm.dz.push(+(r.sunCascadeRows?.[3] ?? 0).toFixed(1));
             tsm.last.push([r.tsmRedraw ? 1 : 0, r.tsmDrawn ? 1 : 0, r.earthScenery.revision, ...Array.from(r.tsmFrame.slice(12, 15)).map((x) => Math.round(x))]);
@@ -214,6 +216,7 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
             gpu += r.lastGpuMs; ground += r.imageGroundPx ?? 0;
           }
           // (the relief's cascades' pass — drawn again or not — its GPU time a frame [ms], the profiler's mean)
+          tsm.bakes = (r.terrainSurfaceCache?.stats().builds ?? 0) - tsm.bakes0;
           const T = r.prof.table(); tsm.sunPassMs = +(T.find((x) => x.label === "terrain from the Sun")?.ms ?? 0).toFixed(3);
           r.prof.enabled = false;
           const g = c.geoNow();
@@ -223,7 +226,7 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
         await app.js(
           `(() => { __bh.settings.targetSpp = 0; document.body.classList.add("hide-ui"); document.getElementById("overlay").style.visibility = "hidden"; return 1; })()`,
         );
-        const fMove = `${OUT}/${pl}-${md}.png`;
+        const fMove = `${OUT}/${tag}.png`;
         await app.shot(fMove);
         // (after accumulation: 30 realtime frames with the camera still — the history converged at the mode's scale)
         const stillTsm = await app.js<{ redraws: number; sunRedraws: number; dz: string; revisions: number[] }>(
@@ -232,20 +235,20 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
               if (r.terrainRaster?.sunDrewNow) sun++; dz.push(+(r.sunCascadeRows?.[3] ?? 0).toFixed(1)); revs.add(r.earthScenery.revision); }
             return { redraws, sunRedraws: sun, dz: dz.join(" "), revisions: [...revs] }; })()`,
         );
-        const fStill = `${OUT}/${pl}-${md}-still.png`;
+        const fStill = `${OUT}/${tag}-still.png`;
         await app.shot(fStill);
         if (process.env.GH_FORCE) {
           // (a probe: the trees' shadow map drawn again at every frame with the world still — its redraw alone)
           await app.js(`(async () => { const r = __bh.renderer; for (let i = 0; i < 10; i++) { r.tsmValid = false; __bh.touch();
             await new Promise((q) => requestAnimationFrame(q)); } return 1; })()`);
-          await app.shot(`${OUT}/${pl}-${md}-forced.png`);
+          await app.shot(`${OUT}/${tag}-forced.png`);
           await app.js(
             `(async () => { for (let i = 0; i < 30; i++) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 1; })()`,
           );
-          await app.shot(`${OUT}/${pl}-${md}-forced-after.png`);
+          await app.shot(`${OUT}/${tag}-forced-after.png`);
         }
         // (the reference: the same frame refined at the canvas's full scale, the upsampling off)
-        const fRef = `${OUT}/${pl}-${md}-ref.png`;
+        const fRef = `${OUT}/${tag}-ref.png`;
         await app.js(
           `(() => { __bh.forceScale(null); __bh.renderer.taauOn = false; __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`,
         );
@@ -264,8 +267,8 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
           place: pl,
           mode: md,
           ...fl,
-          ...compare(png(fMove), png(fRef), `${OUT}/${pl}-${md}-diff.png`),
-          still: compare(png(fStill), png(fRef), `${OUT}/${pl}-${md}-still-diff.png`),
+          ...compare(png(fMove), png(fRef), `${OUT}/${tag}-diff.png`),
+          still: compare(png(fStill), png(fRef), `${OUT}/${tag}-still-diff.png`),
           mount: ap.mount,
           world: {
             before: world.missing || "all in",

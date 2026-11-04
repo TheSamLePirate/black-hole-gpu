@@ -8761,8 +8761,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** (T6) the cascades' key: the Sun's kept direction and their grid-snapped centres, the meshes' windows (Q6 I3 — the patch's
    *  and each ring's level and window: a window moved changes the ground drawn — its geomorphose by the window's edge, which level
    *  covers a place —; kept, the map's relief stood up to metres above the image's in the hollows: shadows in combs where nothing
-   *  stands, in flight), and the heights' bakes — those taken at most every half second (in low flight 16 bakes a second: each
-   *  would draw the cascades again; `sunBakesEvery` 0: each) */
+   *  stands, in flight), and the heights' bakes — each one (Q6 I3: taken at most every half second before, the map half a second
+   *  late on a bake in flight shaded the same combs, 2 series in 5; ~3 bakes a second at 140 m/s, 40 m up, over a loaded world:
+   *  no more redraws than the windows' — a redraw at most a frame; `sunBakesEvery` [ms] the least time between two) */
   private sunRevision(L: number[], centres: number[][]): string {
     const builds = this.terrainSurfaceCache?.stats().builds ?? 0;
     const now = performance.now();
@@ -8776,8 +8777,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  windows left out of the key, as before Q6 I3: `sunWindowsInKey` false) */
   private sunMeshKey = "";
   sunWindowsInKey = true;
-  /** the least time between two of the cascades' redraws for the heights' bakes [ms] */
-  sunBakesEvery = 500;
+  /** the least time between two of the cascades' redraws for the heights' bakes [ms] (0: each bake; 500 before Q6 I3) */
+  sunBakesEvery = 0;
   private sunBuilds = -1;
   private sunBuildsAt = 0;
   /** the Sun's direction the cascades were last drawn along (T6), and the camera's place then (the body's axes [m]) */
