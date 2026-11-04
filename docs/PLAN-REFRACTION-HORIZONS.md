@@ -1003,7 +1003,9 @@ aucune suppression ou amélioration de shader effectuée et aucun nouveau test, 
 gardé, **désactivé par défaut** (`renderer.canopyScratches = 0`). L'analyse — une carte de rayures sur l'UV de la verrière à
 l'échelle du verre, allumée par la condition physique t · (v + l) ≈ 0 (les arcs autour du Soleil), filtrée par ses mips de
 directions, dans `fsJetGlass` ; des références où les rayures se voient, à valider par Sam — est dans
-[Q6.md, « Q6t (suite) »](progress/refraction-horizons/Q6.md). Non commencé.
+[Q6.md, « Q6t (suite) »](progress/refraction-horizons/Q6.md). **Prototype fait le même jour** (`ship.wgsl canopyScratchLight`, désactivé
+par défaut) : des tourbillons sur le verre allumés par t · (v + l) ≈ 0, un voile ; références, mouvement et coût encore à établir ;
+la porte reste à Sam.
 
 ### Q6-ISS — Les vraies caméras de l'ISS, calibrées sur les vidéos NASA et Sen
 

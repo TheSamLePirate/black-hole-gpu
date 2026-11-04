@@ -260,6 +260,8 @@ export interface ShipView {
   rough: number;
   light: number;
   coat: number;
+  /** the canopy's scratches' strength (ship.wgsl canopyScratchLight — Q6 I6 A2, decision 40): 0 none */
+  scratches?: number;
   /** pre-exposure of the HDR target (renderer.ts: preExposure) */
   pre?: number;
   /** re-entry glow: the air's flow direction (camera frame), level 0…1 */
@@ -2154,7 +2156,7 @@ export class ShipRenderer {
     if (!sc) (sc = list[0]!.t), (sr = this.meshes[list[0]!.id]!.bound.r);
     m.set([sc[0], sc[1], sc[2], sr * 1.02], 24);
     this.onScreen = { c: sc, r: sr * 1.02, tx: tanH * v.aspect, ty: tanH, corners };
-    m.set([v.light * (v.pre ?? 1), v.coat, v.pre ?? 1, 0], 28);
+    m.set([v.light * (v.pre ?? 1), v.coat, v.pre ?? 1, v.scratches ?? 0], 28);
     m.set(v.plasma ?? [0, 0, 1, 0], 32);
     const ax = v.probeAxes ?? [
       [1, 0, 0],

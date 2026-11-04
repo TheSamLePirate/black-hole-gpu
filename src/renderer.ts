@@ -3960,7 +3960,7 @@ export class Renderer {
     // the band's aspect)
     const lens = target === this.live && this.lens;
     // (the canopy's scratches — Q6 I6 A2 —: the Camera profile in the cockpit, glinting where bright light comes through)
-    const scratches = camera && !lens && s.ship && s.shipMount === "cockpit" ? this.canopyScratches : 0;
+    const scratches = camera && !lens && s.ship && s.shipMount === "cockpit" ? this.canopyScratchesScreen : 0;
     this.device.queue.writeBuffer(
       this.displayBuf,
       272,
@@ -3977,8 +3977,11 @@ export class Renderer {
   lens = false;
   /** the live image's profile is Camera (writeDisplay): the meter breathes (readMeter) */
   private lookCamera = false;
-  /** the canopy's scratches' strength in the Camera profile's cockpit view (display.wgsl canopyScratches; 0: none — off by default, decision 40: not shown until a photoreal version passes Sam's gate) */
+  /** the canopy's scratches' strength (decision 40: off by default until a photoreal version passes Sam's gate): on the glass itself
+   *  — ship.wgsl canopyScratchLight, the Camera profile's cockpit view —; and the first, screen-fixed try (display.wgsl
+   *  canopyScratches, Q6t), kept for comparison */
   canopyScratches = 0;
+  canopyScratchesScreen = 0;
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
    *  velocity on the camera's axes [m/s]; null: none */
@@ -6804,6 +6807,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
             rough: s.shipRough,
             light: s.shipLight,
             coat: s.shipCoat,
+            scratches: this.lookCamera && !this.lens && s.ship && s.shipMount === "cockpit" && t === this.live ? this.canopyScratches : 0,
             pre: preExposure(this.ev(s)),
             plasma: this.shipPlasma,
             reentry: this.shipReentry,

@@ -2256,6 +2256,103 @@ fn a320Glass(in: VOut, front: bool, part: u32, fan: vec4f) -> vec4f {
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), a);
 }
 
+// The canopy's scratches (Q6 I6 A2, decision 40 — on the glass itself, not on the screen): the acrylic's fine hairlines, straight,
+// every orientation, a few centimetres long, laid on the canopy at its scale — three projections of the ship's frame [m] (over
+// it, its sides, the windscreen ahead), the glass's normal choosing. Each a line scatterer: the light through it (or off it)
+// leaves on a cone round its tangent t — seen lit where t · (v + l) ≈ 0 (v to the eye, l to the Sun): near the Sun every one
+// (v + l → 0, a glow), farther those across the way to it — the arcs round the Sun real canopies show —, the forward-scattered
+// strongest. Its width (25 µm) far under a pixel: its light the pixel's share of it, over the pixel's footprint on the glass f.
+fn glassHash(c: vec2f) -> vec4f {
+  var p = fract(vec4f(c.xyxy) * vec4f(0.1031, 0.1030, 0.0973, 0.1099));
+  p += dot(p, p.wzxy + 33.33);
+  return fract((p.xxyz + p.yzzw) * p.zywx);
+}
+// (a direction of the glass in q's frame → the camera's: through the screen's derivatives of q and p — the part's own transform
+// whatever it is —: u = α dq/dx + β dq/dy, the same α, β on dp/dx, dp/dy)
+struct GlassD { qx: vec3f, qy: vec3f, px: vec3f, py: vec3f };
+fn glassToCam(u: vec3f, g: GlassD) -> vec3f {
+  let a = dot(g.qx, g.qx);
+  let b = dot(g.qx, g.qy);
+  let c = dot(g.qy, g.qy);
+  let r = vec2f(dot(g.qx, u), dot(g.qy, u));
+  let det = a * c - b * b;
+  if (abs(det) < 1e-30) { return vec3f(0.0); }
+  let ab = vec2f(c * r.x - b * r.y, a * r.y - b * r.x) / det;
+  return ab.x * g.px + ab.y * g.py;
+}
+// One projection's scratches: the cleaning cloth's swirls — arcs of circles 2–10 cm across, each a part of its turn — and a few
+// straight ones, in cells of 12 cm (3 × 3 walked); each lit where its tangent there is across v + l (its lobe: the scratch's
+// profile, σ), its light faint — many of them make the rings.
+fn scratchSet(c: vec2f, a1: vec3f, a2: vec3f, qn: vec3f, g: GlassD, n: vec3f, w: vec3f, f: f32, seed: f32) -> f32 {
+  let cell = 0.06;
+  let i0 = floor(c / cell);
+  var s = 0.0;
+  for (var j = -1; j <= 1; j++) {
+    for (var i = -1; i <= 1; i++) {
+      let k = i0 + vec2f(f32(i), f32(j));
+      for (var m = 0; m < 9; m++) {
+        let h = glassHash(k + vec2f(f32(m) * 57.31 + seed, f32(m) * 13.17 - seed));
+        let o = (k + h.xy) * cell;
+        let q = c - o;
+        var d: vec2f;
+        var e: f32;
+        var along: f32;
+        if (m < 8) {
+          // (a swirl: its radius, its arc — a start and a span of its turn)
+          let R = 0.01 + 0.04 * h.z;
+          let r = length(q);
+          let ang = atan2(q.y, q.x);
+          let a0 = h.w * 6.2831853;
+          let span = 0.6 + 2.2 * fract(h.x * 7.31);
+          let u = fract((ang - a0) / 6.2831853) * 6.2831853;
+          if (u > span) { continue; }
+          e = abs(r - R);
+          d = vec2f(-q.y, q.x) / max(r, 1e-6);
+          along = abs(u / span * 2.0 - 1.0);
+        } else {
+          // (a straight one, 2–8 cm)
+          let a = h.z * 3.14159265;
+          d = vec2f(cos(a), sin(a));
+          let L = 0.01 + 0.03 * h.w;
+          let t = clamp(dot(q, d), -L, L);
+          e = length(q - d * t);
+          along = abs(t) / L;
+        }
+        let cov = max(0.0, 1.0 - e / f);
+        if (cov <= 0.0) { continue; }
+        var us = a1 * d.x + a2 * d.y;
+        us -= qn * dot(qn, us);
+        let ts = glassToCam(us, g);
+        if (dot(ts, ts) < 1e-30) { continue; }
+        let tt = normalize(ts - n * dot(n, ts));
+        let ct = dot(tt, w);
+        s += cov * exp(-ct * ct / (2.0 * 0.015 * 0.015)) * (0.25 + 0.75 * fract(h.y * 13.7)) * (1.0 - smoothstep(0.7, 1.0, along));
+      }
+    }
+  }
+  return s;
+}
+fn canopyScratchLight(q: vec3f, qn: vec3f, g: GlassD, n: vec3f, v: vec3f, l: vec3f, f: f32) -> f32 {
+  let w = v + l;
+  // (the projections by the glass's normal in the ship's frame — y up, x across, z ahead —, each its own pattern)
+  let an = abs(qn);
+  let wy = pow(an.y, 4.0);
+  let wx = pow(an.x, 4.0);
+  let wz = pow(an.z, 4.0);
+  let sum = max(wx + wy + wz, 1e-4);
+  var s = 0.0;
+  if (wy / sum > 0.02) { s += wy / sum * scratchSet(q.zx, vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), qn, g, n, w, f, 0.0); }
+  if (wx / sum > 0.02) { s += wx / sum * scratchSet(q.zy, vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), qn, g, n, w, f, 3.7); }
+  if (wz / sum > 0.02) { s += wz / sum * scratchSet(q.xy, vec3f(1.0, 0.0, 0.0), vec3f(0.0, 1.0, 0.0), qn, g, n, w, f, 7.9); }
+  // (forward-scattered the most: the way to the eye against the Sun's light's)
+  let fwd = pow(clamp(0.5 - 0.5 * dot(v, l), 0.0, 1.0), 10.0);
+  // (the scratches too fine to see one by one: their sum over every orientation — the share of them lit, ~ σ / |v + l| —, a soft
+  // veil round the Sun, falling as 1 / its angle: the milky haze a canopy shows against the Sun)
+  let veil = 0.02 / max(length(w), 0.02) * 0.004;
+  // (a seen scratch: its width over the footprint; the light spread over the lobe's cone ~ 1 / (2π σ))
+  return (s * (20e-6 / max(f, 1e-5)) * 10.0 + veil) * fwd;
+}
+
 // The canopy and the helmet's visor (materials 32, 34), over what the opaque draws left: premultiplied, both
 // faces, their depth not written. The canopy's gold film (its map's colour) tints what is seen through it and
 // covers it by its map's alpha; its faces reflect the sky — the traced image where it holds the direction,
@@ -2268,6 +2365,9 @@ override GLASS_A320: bool = false;
 @fragment
 fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let base = textureSample(jetAlbedo, mapSamp, in.uv, 1);
+  // (the pixel's footprint on the glass [m] — the canopy's scratches —, taken here: derivatives before any branch)
+  let gd = GlassD(dpdx(in.q), dpdy(in.q), dpdx(in.p), dpdy(in.p));
+  let qf = max(length(gd.qx), length(gd.qy));
   // (the A320's deck: the control under the pointer lit over — a soft cyan added, its edges brighter)
   if (GLASS_MODE == 3u) {
     let gv = normalize(-in.p);
@@ -2304,6 +2404,11 @@ fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4
   let cover = clamp(select(base.a * mix(0.9, 0.1, within), 0.75, part == 34u) + 0.6 * F * mix(1.0, 0.3, within), 0.0, 0.97);
   // (the film's own scattered light, as much as it covers — premultiplied)
   let tint = select(base.rgb, vec3f(0.01), part == 34u) * irradiance(gn) / PI * 0.35 * cover;
-  let o = (refl * F * mix(1.0, 0.5, within) + tint * (1.0 - F)) * S.light.x;
+  var o = (refl * F * mix(1.0, 0.5, within) + tint * (1.0 - F)) * S.light.x;
+  // (the canopy's scratches from within — S.light.w their strength, 0 none —: the key light's, the Sun's)
+  if (part == 32u && S.light.w > 0.0 && sh[11].w > 0.5 && within > 0.0) {
+    let l = fromProbe(sh[9].xyz);
+    o += sh[11].rgb * (S.light.w * within * canopyScratchLight(in.q, normalize(in.qn), gd, gn, gv, l, qf)) * S.light.x;
+  }
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), cover);
 }
