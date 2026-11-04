@@ -8502,17 +8502,18 @@ fn seaSurfaceHit(look: vec3f, t: f32, m: f32) -> f32 {
 // calm: inland water (0 the open sea, 1 a sheltered lake: its fetch short — the wind's waves small, no swell,
 // no whitecaps); mirror: the world it reflects (waterMirror: rgb radiance, w its weight — the sky the rest)
 // The sea's water from its Kd490 k [1/m] (0: none known — the clear ocean): [0] its diffuse attenuation by colour [1/m] — Austin
-// & Petzold's Kd(λ) = Kw(λ) + M(λ)(Kd490 − 0.016), at 620, 540 and 470 nm —, [1] its reflectance seen from above, the
-// backscatter over the absorption: the water's own and the particles' — bbp(555) 0.05 (Kd490 − 0.016), spectral as (555/λ)^0.5:
-// a coast's sediment, from Kd490 0.03 to 0.15 (under it the open sea's — its Kd the plankton's, absorbing: bluer, greener, not
-// paler — the Calanques' grey otherwise) — scaled to the clear ocean's (0.004, 0.017, 0.040) at Kd490 0.02. The Channel's 0.2:
-// green-grey; a plume's 1: brown.
+// & Petzold's Kd(λ) = Kw(λ) + M(λ)(Kd490 − 0.016), at 620, 540 and 470 nm: the red little more absorbed by sediment, the blue
+// more by a coast's dissolved matter —, [1] its reflectance seen from above: the water's own (the clear ocean's (0.004, 0.017,
+// 0.040) at Kd490 0.02, dimmed as its attenuation grows) and its particles' backscatter over the attenuation — bbp(555)
+// 0.05 (Kd490 − 0.016), as (555/λ)^0.5, a coast's sediment from Kd490 0.03 to 0.15 (under it the open sea's Kd the plankton's,
+// absorbing: bluer-green, not paler). The Channel's 0.2: green-grey; Dover's 0.55: khaki; a plume's 1.2: brown.
 fn seaWaterOf(k: f32) -> mat2x3f {
   let K0 = vec3f(0.40, 0.065, 0.045);
   if (k <= 0.0 || (TUNE_GSKIP & 1024u) != 0u) { return mat2x3f(K0, vec3f(0.004, 0.017, 0.040)); }
-  let Kd = K0 + vec3f(0.45, 0.7, 1.1) * (max(k, 0.016) - 0.02);
-  let bb = vec3f(0.0006, 0.0009, 0.0017) + 0.05 * max(k - 0.016, 0.0) * smoothstep(0.03, 0.15, k) * vec3f(0.946, 1.014, 1.087);
-  return mat2x3f(Kd, min(vec3f(0.004, 0.017, 0.040) * bb / vec3f(0.000789, 0.001103, 0.001917) * K0 / Kd, vec3f(0.25)));
+  let sed = smoothstep(0.03, 0.15, k);
+  let Kd = K0 + vec3f(0.15, 0.7, 1.1 + 0.4 * sed) * (max(k, 0.016) - 0.02);
+  let bbp = 0.05 * max(k - 0.016, 0.0) * sed * vec3f(0.946, 1.014, 1.087);
+  return mat2x3f(Kd, min((vec3f(0.004, 0.017, 0.040) * K0 + bbp) / Kd, vec3f(0.25)));
 }
 fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32, calm: f32, mirror: vec4f) -> vec3f {
   let normal = geoQ(q);
@@ -8675,8 +8676,10 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
       let Tv = exp(-Kd * SEA_DEPTH * 2.0 / cv);
       let shallow = deep * (1.0 - Tv) + bed / PI * Ein * T;
       // (with confidence alone: along the bathymetry's rim its few valid texels averaged to a metre or so — the bed's sand
-      // through a few centimetres of water, a white line round the data's edge)
-      water = mix(water, shallow, b * smoothstep(0.6, 1.0, SEA_DEPTH_W));
+      // through a few centimetres of water, a white line round the data's edge; and where the photograph sees a bed — its
+      // albedo under the water over ~0.05–0.12: a reef's, a lagoon's sand —: the coarse bathymetry's shoals — a harbour filled
+      // at 1–5 m, a coast's 400 m ramp — drew turquoise banks in Sydney's dark harbour, the T7 survey)
+      water = mix(water, shallow, b * smoothstep(0.6, 1.0, SEA_DEPTH_W) * smoothstep(0.05, 0.12, luminance(under) * PI / max(luminance(Ein), 1e-6)));
     }
     // (the aerated water of a wake: the bubbles under the surface scatter the light back — pale turquoise)
     water = mix(water, Ein * vec3f(0.02, 0.075, 0.085) / PI, clamp(wk.bub * b, 0.0, 1.0) * 0.8);
@@ -14113,9 +14116,14 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // (the sea the relief map's coarse mask misses — its texels of kilometres call the sea by a coast land: the water there shaded
     // as ground, black, a staircase across a gulf —: a surface at the sea's level over a bottom the fine bathymetry finds deeper
     // than ~10 m — seaDepthAt, the windows z 10…8 —; a polder, a marsh at the sea's level, a few metres under it: land)
+    // (seaBed: a bed the bathymetry finds under a surface at the sea's level at all — the OSM's harbours, its bays drawn as lakes
+    // — Sydney's Port Jackson, the T7 survey —: the sea, not a lake's calm)
+    var seaBed = 0.0;
     if (sea0 < 0.99 && hG < 0.3) {
       let dz = seaDepthAt(gq, max(length(fx), length(fy)) * EARTH_RM);
-      sea0 = max(sea0, smoothstep(6.0, 12.0, dz.x) * smoothstep(0.0, 0.25, dz.y) * (1.0 - smoothstep(0.1, 0.3, hG)));
+      seaBed = smoothstep(0.0, 0.25, dz.y) * (1.0 - smoothstep(0.1, 0.3, hG));
+      sea0 = max(sea0, smoothstep(6.0, 12.0, dz.x) * seaBed);
+      seaBed *= smoothstep(1.0, 3.0, dz.x);
     }
     var osm = vec2f(0.0);
     if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
@@ -14130,7 +14138,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     }
     // (an airfield levelled: land, even where the maps had water)
     let water = max(sea0, osm.x) * (1.0 - lvl);
-    let calm = osm.x * (1.0 - sea0) * osm.y;
+    let calm = osm.x * (1.0 - max(sea0, seaBed)) * osm.y;
     let kind = select(0.0, select(1.0, 2.0, osm.y > 0.8), calm > 0.0);
     // (TUNE_LITE 512: the water's cover drawn by its kind — red the sea, green a river, blue a lake: a measure)
     if ((liteSkip() & 512u) != 0u) {
