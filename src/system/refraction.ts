@@ -4,7 +4,14 @@
 // ∫ (N/H) sin ψ ds ≈ (N₀/H) sin ψ × its air column (Chapman's grazing function): 35′ at the horizon from the
 // sea, 1′ at 45°, none at the zenith — Bennett's table within a fraction of a minute above 2°.
 
+import { gpuBending } from "./refraction-gpu";
+
 const R_EARTH = 6371e3;
+/** (R2) the layered air's tables the frame draws with (renderer: published with the GPU's), null before: the exponential air */
+let drawnTable: Float32Array | null = null;
+export function setRefractionTable(f: Float32Array | null) {
+  drawnTable = f;
+}
 /** the density's scale height [m] */
 export const REFR_H = 8400;
 
@@ -30,6 +37,11 @@ export function airColumn(h: number, mu: number, H = REFR_H): number {
 
 /** The bending [rad] of a ray seen at an apparent altitude [rad] from a height h [m] above the sea (N₀: sea-level refractivity). */
 export function bending(apparentAlt: number, h = 0, N0 = seaRefractivity()): number {
+  // (the drawn air asked — its refractivity the frame's —, its tables in: what the GPU reads, the same numbers — C0-7's CPU = GPU)
+  if (drawnTable && N0 > 0 && Math.abs(N0 - drawnN0()) < 1e-9) {
+    const b = gpuBending(drawnTable, Math.max(h, 0), apparentAlt);
+    if (b !== null) return Math.min(b, 0.03);
+  }
   const mu = Math.sin(apparentAlt);
   const sinPsi = mu < 0 ? 1 : Math.cos(apparentAlt);
   return Math.min((N0 / REFR_H) * sinPsi * airColumn(Math.max(h, 0), mu, REFR_H), 0.03);

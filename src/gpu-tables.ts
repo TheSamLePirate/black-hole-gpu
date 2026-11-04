@@ -11,6 +11,7 @@ import { GEOID_H, GEOID_W } from "./system/geoid-grid";
 import { ORTHO_PARAM_VEC4S } from "./system/earth-tiles";
 import { WATER_VEC4S } from "./system/water-kd-grid";
 import { SHORE_VEC4S } from "./system/earth-shore-layout";
+import { REFR_VEC4S } from "./system/refraction-gpu";
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -87,4 +88,7 @@ export { WATER_VEC4S };
 /** (T7) the shore's distances on the relief cache's levels 3 and 4 (system/earth-shore.ts; trace.wgsl seaShoreDist) */
 export const TABLE_SHORE = TABLE_WATER + WATER_VEC4S;
 export { SHORE_VEC4S };
-export const TABLE_VEC4S = TABLE_SHORE + SHORE_VEC4S;
+/** (R2) the layered air's refraction tables (system/refraction-gpu.ts: B_haut's log, B_limbe, N; trace.wgsl airBend) */
+export const TABLE_REFR = TABLE_SHORE + SHORE_VEC4S;
+export { REFR_VEC4S };
+export const TABLE_VEC4S = TABLE_REFR + REFR_VEC4S;

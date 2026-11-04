@@ -83,7 +83,7 @@ import {
   utcOf,
 } from "./system/solar";
 import { buildDayClouds, dayCloudsFor, dayCloudsUrl } from "./system/day-clouds";
-import { incidentAltitude, refractionParams, seaRefractivity } from "./system/refraction";
+import { incidentAltitude, refractionParams, seaRefractivity, setRefractionTable } from "./system/refraction";
 import { moonLightShare, SHADE_VEC4S, shadowParams } from "./eclipse/shadows-gpu";
 import { lookOf } from "./skychart";
 import { HD_SETS, type HdMap, type HdMode, hdColorFormat, loadHdMap, placeholderHd, reliefOnly, seasPixels } from "./system/hd-maps";
@@ -115,6 +115,7 @@ import {
   TABLE_TSM,
   TABLE_GEOID,
   TABLE_WATER,
+  TABLE_REFR,
   TABLE_ORTHO,
   TABLE_LUT,
   TABLE_PATH,
@@ -189,6 +190,8 @@ import {
 } from "./system/earth-maps";
 import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/geoid";
 import { loadWaterKd } from "./system/water-kd";
+import { RefrTableBuilder } from "./system/refraction-gpu";
+import { type AirState, airOfModel } from "./system/refraction-layered";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
 import { HORIZON_BINDINGS, HORIZON_TEXTURE_LIMIT, HorizonMaps } from "./system/horizon-maps";
@@ -970,6 +973,11 @@ export class Renderer {
   private earthJob = 0;
   /** the geoid's map in the tracer's table (gpu-tables.ts TABLE_GEOID), once */
   private geoidIn = false;
+  /** (R2) the layered air's tables: the air they are for, their builder while in progress */
+  private refrKey = "";
+  private refrBuilder: RefrTableBuilder | null = null;
+  /** the air the tables in the tracer's table are for ("" none yet) */
+  refrPublished = "";
   /** the sea's water map in the tracer's table (gpu-tables.ts TABLE_WATER), once */
   waterIn = false;
   /** the orthophotos' levels last written to the tracer's table (gpu-tables.ts TABLE_ORTHO) */
@@ -1910,6 +1918,29 @@ export class Renderer {
 
   /** The air's refractivity at sea level (n − 1): 2.93·10⁻⁴ at 15 °C and 1013.25 hPa, as the density —
    *  the real weather's temperature at the ground when it is in (refraction.ts). */
+  /** (R2) the air in force: the real weather's (its model's, its METAR's), else the drawn refractivity's temperature, standard */
+  airState(s: Settings): AirState {
+    const w = s.weather === "real" ? this.weatherReal : undefined;
+    if (w?.model) return airOfModel(w.model);
+    if (w?.air) return airOfModel({ T: w.air.T, Td: w.air.Td, p: w.air.qnh, pMsl: w.air.qnh });
+    return { pMsl: 101325, tGround: 15, rh: 0.5 };
+  }
+  /** the tables for the air in force: a new builder when the air changed (to 0.1 °C, 10 Pa, 1 %), a slice of ~2 ms a frame,
+   *  published whole — the tracer's table and refraction.ts's at once */
+  private stepRefrTable(s: Settings) {
+    const a = this.airState(s);
+    const key = `${Math.round(a.pMsl / 10)}|${a.tGround.toFixed(1)}|${a.rh.toFixed(2)}`;
+    if (key !== this.refrKey) {
+      this.refrKey = key;
+      this.refrBuilder = new RefrTableBuilder(a);
+    }
+    const f = this.refrBuilder?.step(2);
+    if (!f) return;
+    this.device.queue.writeBuffer(this.bodyBuf, TABLE_REFR * 16, f as Float32Array<ArrayBuffer>);
+    setRefractionTable(f);
+    this.refrPublished = key;
+    this.refrBuilder = null;
+  }
   refractivity(s: Settings): number {
     const m = s.weather === "real" ? this.weatherReal?.model : undefined;
     return seaRefractivity(m ? m.T : 15);
@@ -3579,6 +3610,8 @@ export class Renderer {
     // (a shadow falling: 2048 — none, its code out of the kernel: the kernel is register-bound, a pair's loop
     // cost 6–12 % over the Earth where no shadow ever fell)
     if (shade[8]! > 0) this.featureKey |= 2048;
+    // (R2: the layered air's tables for the air in force, built a slice a frame and published to the GPU and the CPU at once)
+    if (s.refraction) this.stepRefrTable(s);
     // the sky through the Earth's air (PLAN-CIEL C3): its refractivity at sea level, from the real weather's
     // air when it is in (cold air bends more), else the standard atmosphere's
     f.set(

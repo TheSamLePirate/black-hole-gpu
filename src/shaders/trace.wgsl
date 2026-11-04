@@ -439,6 +439,12 @@ const WATER_H = 2160u;
 const SHORE_OFF = 2522777u;
 const SHORE_HEADER_VEC4S = 4u;
 const SHORE_NODE_VEC4S = 16513u;
+// the layered air's refraction tables (gpu-tables.ts TABLE_REFR, system/refraction-gpu.ts): a header (1 when in), then floats —
+// B_haut's log (128 heights × 128 elevations, both on √ grids), B_limbe (4 096 tangent heights on a √ grid), N every 500 m
+const REFR_OFF = 2555807u;
+const REFR_HAUT = 4u;
+const REFR_LIMB = 16388u;
+const REFR_NN = 20484u;
 // the giants' zonal winds (gpu-tables.ts TABLE_WIND, system/giant-winds.ts): 146 values, four a vec4
 const WIND_OFF = 1198776u;
 const GEOID_W = 1440u;
@@ -11143,6 +11149,40 @@ fn earthLookNoGround(k: u32, ro: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, gx: vec3
 // vertical had the sky's elevations 5.8′ off at 45° of latitude, to the north and south: ~1′ of bending near the horizon)
 // (the bending of the ray traced now — green light's —, for the Sun's disc in each colour: PLAN-CIEL C4)
 var<private> REFR_DELTA: f32 = 0.0;
+// (R2: the tables read as system/refraction-gpu.ts gpuBending reads them — the CPU's figures the image's)
+fn refrF(i: u32) -> f32 { return bodies[REFR_OFF + i / 4u][i % 4u]; }
+fn refrN(h: f32) -> f32 {
+  let x = clamp(h, 0.0, 120000.0) / 500.0;
+  let k = min(u32(x), 239u);
+  return mix(refrF(REFR_NN + k), refrF(REFR_NN + k + 1u), x - f32(k));
+}
+fn refrHaut(h: f32, e: f32) -> f32 {
+  let x = sqrt(clamp(h, 0.0, 80000.0) / 80000.0) * 127.0;
+  let y = sqrt(clamp(e, 0.0, 1.5707963) / 1.5707963) * 127.0;
+  let i = min(u32(x), 126u);
+  let j = min(u32(y), 126u);
+  let fy = y - f32(j);
+  let a = mix(refrF(REFR_HAUT + i * 128u + j), refrF(REFR_HAUT + i * 128u + j + 1u), fy);
+  let b = mix(refrF(REFR_HAUT + (i + 1u) * 128u + j), refrF(REFR_HAUT + (i + 1u) * 128u + j + 1u), fy);
+  return exp(mix(a, b, x - f32(i)));
+}
+fn refrLimb(ht: f32) -> f32 {
+  let x = sqrt(clamp(ht, 0.0, 120000.0) / 120000.0) * 4095.0;
+  let k = min(u32(x), 4094u);
+  return mix(refrF(REFR_LIMB + k), refrF(REFR_LIMB + k + 1u), x - f32(k));
+}
+// A ray's bending [rad] from a camera h [m] at a sine of elevation mu (the tables in: up, B_haut in the air — none above 80 km —;
+// under the horizon its tangent by Bouguer, six steps, the chord B_limbe less B_haut behind the camera)
+fn refrBend(h: f32, mu: f32) -> f32 {
+  let e = asin(clamp(mu, -1.0, 1.0));
+  if (e >= 0.0) { return select(0.0, refrHaut(h, e), h < 80000.0); }
+  let c = (1.0 + refrN(h)) * (6371000.0 + h) * cos(e);
+  var rt = c;
+  for (var k = 0; k < 6; k++) { rt = c / (1.0 + refrN(rt - 6371000.0)); }
+  let ht = max(rt - 6371000.0, 0.0);
+  if (ht >= 120000.0) { return 0.0; }
+  return refrLimb(ht) - select(0.0, refrHaut(h, -e), h < 80000.0);
+}
 fn airBend(look: vec3f) -> vec3f {
   let up = normalize(nearCam());
   let rd = normalize(squashed(toBody(look), EARTH_AB));
@@ -11157,6 +11197,9 @@ fn airBend(look: vec3f) -> vec3f {
     let x0 = P.sky.w * wl;
     delta = 2.0 * P.sky.x * sqrt(1.5707963 * x0) * exp(min(P.sky.z - x0, 0.0)) - P.sky.y * c / ((c - 1.0) * -mu + 1.0);
   }
+  // (R2: the layered air's tables when in — the camera's height from P.sky: (R + h)/H less R/H, H 8.4 km —; the exponential
+  // air's estimate before)
+  if (refrF(0u) > 0.5) { delta = refrBend((P.sky.w - P.sky.z) * 8400.0, mu); }
   delta = clamp(delta, 0.0, 0.03);
   REFR_DELTA = delta;
   let bent = rd * cos(delta) - w * (sin(delta) / max(wl, 1e-6));

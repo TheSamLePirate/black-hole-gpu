@@ -498,6 +498,8 @@ test.skipIf(!E2E)(
           weather: r.weather,
           world,
           mode: await app.js<string>(`__bh.mode.get()`),
+          // (R2: the layered air's tables published — the air they are for —, "" before: the exponential air drawn)
+          refrTables: await app.js<string>(`__bh.renderer.refrPublished`),
           // (the view as framed: its azimuth, altitude and field — checked against the asked)
           framed: await app.js<unknown>(
             `(() => { const v = __bh.mx.framedView?.(); return v && { az: +v.az.toFixed(1), alt: +v.alt.toFixed(1), fov: +v.fov.toFixed(1) }; })()`,

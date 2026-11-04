@@ -85,3 +85,41 @@ export function gpuBending(f: Float32Array, h: number, e: number): number | null
   if (ht >= LAYER_TOP) return 0;
   return inAir ? gpuLimb(f, ht) - gpuHaut(f, h, -e) : gpuLimb(f, ht);
 }
+
+/**
+ * The packed table built a slice at a time (~0.7 s of rays in all): step(budget) works for at most budget ms — a frame's share,
+ * no frame held — and returns the table once whole. A worker is the plan's; the slices keep the frame free without a bundle more.
+ */
+export class RefrTableBuilder {
+  private f = new Float32Array(REFR_VEC4S * 4);
+  private P: AirProfile | null = null;
+  private row = 0;
+  private limb = 0;
+  done: Float32Array | null = null;
+  constructor(readonly state: AirState) {}
+  step(budgetMs = 2): Float32Array | null {
+    if (this.done) return this.done;
+    const t0 = performance.now();
+    const D = Math.PI / 180;
+    if (!this.P) {
+      this.P = airProfile(this.state);
+      this.f.set([0, GH, GE, GL], 0);
+      for (let k = 0; k < NN; k++) this.f[REFR_OFF_N + k] = this.P.N[Math.min(Math.round((k * NSTEP) / 10), this.P.N.length - 1)]!;
+      if (performance.now() - t0 > budgetMs) return null;
+    }
+    while (this.row < GH && performance.now() - t0 < budgetMs) {
+      const h = H_TOP * (this.row / (GH - 1)) ** 2;
+      for (let j = 0; j < GE; j++)
+        this.f[REFR_OFF_HAUT + this.row * GE + j] = Math.log(Math.max(bendingUp(this.P, h, 90 * D * (j / (GE - 1)) ** 2, 1500), 1e-12));
+      this.row++;
+    }
+    while (this.row >= GH && this.limb < GL && performance.now() - t0 < budgetMs) {
+      this.f[REFR_OFF_LIMB + this.limb] = limbBending(this.P, LAYER_TOP * (this.limb / (GL - 1)) ** 2);
+      this.limb++;
+    }
+    if (this.row < GH || this.limb < GL) return null;
+    this.f[0] = 1;
+    this.done = this.f;
+    return this.done;
+  }
+}

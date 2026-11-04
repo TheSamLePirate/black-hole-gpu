@@ -62,3 +62,41 @@ test("from orbit (400 km): a tangent ray's whole bending, within 3″; looking u
   expect(worst).toBeLessThan(3);
   expect(gpuBending(f, h, 10 * D)).toBe(0);
 }, 60_000);
+
+test("the shader's constants: the packed table's offsets and grids as trace.wgsl reads them", async () => {
+  const wgsl = await Bun.file(`${import.meta.dir}/../src/shaders/trace.wgsl`).text();
+  const constU = (name: string) => Number(new RegExp(`const ${name} = (\\d+)u;`).exec(wgsl)![1]);
+  const { REFR_OFF_HAUT, REFR_OFF_LIMB, REFR_OFF_N, GH, GE, GL, NN } = await import("../src/system/refraction-gpu");
+  expect(constU("REFR_HAUT")).toBe(REFR_OFF_HAUT);
+  expect(constU("REFR_LIMB")).toBe(REFR_OFF_LIMB);
+  expect(constU("REFR_NN")).toBe(REFR_OFF_N);
+  expect(wgsl).toContain(`* ${GE}u + j`);
+  expect(wgsl).toContain(`min(u32(x), ${GH - 2}u)`);
+  expect(wgsl).toContain(`* ${GL - 1}.0`);
+  expect(wgsl).toContain(`min(u32(x), ${NN - 2}u)`);
+});
+
+test("the sliced builder: the same table as at once, a slice at a time", async () => {
+  const { RefrTableBuilder } = await import("../src/system/refraction-gpu");
+  const b = new RefrTableBuilder(BENNETT_AIR);
+  let out: Float32Array | null = null,
+    slices = 0;
+  while (!(out = b.step(20))) slices++;
+  expect(slices).toBeGreaterThan(5);
+  let diff = 0;
+  for (let i = 0; i < f.length; i++) diff = Math.max(diff, Math.abs(out[i]! - f[i]!));
+  expect(diff).toBe(0);
+}, 60_000);
+
+test("refraction.ts on the drawn air's tables: the CPU's bending the GPU's numbers; another air's its own model", async () => {
+  const R = await import("../src/system/refraction");
+  const n0 = R.drawnRefractivity();
+  R.setRefractionTable(f);
+  try {
+    expect(R.bending(1 * D, 0, n0)).toBeCloseTo(gpuBending(f, 0, 1 * D)!, 12);
+    // (another air asked — a future date's standard one —: not the drawn tables)
+    expect(R.bending(1 * D, 0, n0 * 1.05)).not.toBeCloseTo(gpuBending(f, 0, 1 * D)!, 8);
+  } finally {
+    R.setRefractionTable(null);
+  }
+});
