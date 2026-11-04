@@ -8,7 +8,7 @@
 //
 // Needs yt-dlp and ffmpeg on the PATH. The streams' ids change when NASA or Sen restart them: STREAMS below, checked against
 // their channels (yt-dlp --flat-playlist https://www.youtube.com/@NASA/streams, @Sen).
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { $ } from "bun";
@@ -32,16 +32,12 @@ const streams = arg("streams", "nasa,sen").split(",");
 mkdirSync(out, { recursive: true });
 const manifest = join(out, "manifest.tsv");
 
-const urls = new Map<string, { url: string; at: number }>();
+// (the stream's media URL asked afresh at each grab: an HLS live URL kept a few minutes made ffmpeg wait on its old edge until
+// killed, nothing written)
 async function streamUrl(name: string) {
-  const u = urls.get(name);
-  // (the stream's media URL expires: asked again every 20 minutes)
-  if (u && Date.now() - u.at < 20 * 60_000) return u.url;
-  const url = (await $`yt-dlp -g -f ${"best[height<=2160]"} ${`https://www.youtube.com/watch?v=${STREAMS[name]!.id}`}`.quiet().text())
+  return (await $`yt-dlp -g -f ${"best[height<=2160]"} ${`https://www.youtube.com/watch?v=${STREAMS[name]!.id}`}`.quiet().text())
     .trim()
     .split("\n")[0]!;
-  urls.set(name, { url, at: Date.now() });
-  return url;
 }
 
 const end = Date.now() + minutes * 60_000;
@@ -58,7 +54,23 @@ while (Date.now() < end) {
     try {
       // (a live stream can stall: the grab killed after 30 s, its URL asked again next time)
       const p = Bun.spawn(
-        ["ffmpeg", "-loglevel", "error", "-y", "-rw_timeout", "15000000", "-i", await streamUrl(name), "-frames:v", "1", "-q:v", "3", file],
+        [
+          "ffmpeg",
+          "-loglevel",
+          "error",
+          "-y",
+          "-rw_timeout",
+          "15000000",
+          "-i",
+          await streamUrl(name),
+          "-frames:v",
+          "1",
+          "-update",
+          "1",
+          "-q:v",
+          "3",
+          file,
+        ],
         {
           stdout: "ignore",
           stderr: "ignore",
@@ -67,11 +79,11 @@ while (Date.now() < end) {
       const kill = setTimeout(() => p.kill(), 30_000);
       const code = await p.exited;
       clearTimeout(kill);
-      if (code !== 0) throw new Error(`ffmpeg ${code}`);
+      // (a frame counted only when written: a killed ffmpeg may exit 0 with nothing)
+      if (code !== 0 || !existsSync(file) || statSync(file).size < 1000) throw new Error(`ffmpeg ${code}, no frame`);
       appendFileSync(manifest, `${name}\t${STREAMS[name]!.id}\t${utc}\t${file}\n`);
       n++;
     } catch (e) {
-      urls.delete(name);
       console.log(`iss-capture: ${name} at ${utc}: ${String(e).slice(0, 120)}`);
     }
   }
