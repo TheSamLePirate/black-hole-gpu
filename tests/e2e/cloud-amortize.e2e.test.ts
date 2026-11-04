@@ -66,7 +66,7 @@ test.skipIf(!E2E)(
         await app.shot(`${OUT}/turn-${k}.png`);
         await app.js(`(() => { __bh.freeze(true); return 1; })()`);
       }
-      await app.js(`(() => { __bh.renderer.cloudAmortize = true; __bh.renderer.cloudSamples = 16; return 1; })()`);
+      await app.js(`(() => { __bh.renderer.cloudAmortize = false; __bh.renderer.cloudSamples = 16; return 1; })()`);
       out.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
       console.log(`  GPU errors ${out.gpuErrors}`);
     } finally {

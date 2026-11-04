@@ -9214,8 +9214,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the next frame's march may be amortised: this one's history and the image's both held)
     this.cloudHistOk = ta.valid;
   }
-  /** (Q5 VIPER C2) the clouds' march amortised — a texel in four a frame, the history rebuilding the others — and its switch */
-  cloudAmortize = true;
+  /** (Q5 VIPER C2) the clouds' march amortised — a texel in four a frame, the history rebuilding the others — and its switch:
+   *  off by default — −0.8 ms still, but turning (ghost, clouds, 40°) the image's PSNR 36.5–36.7 dB against 38.0–38.2 and twice
+   *  the bright trails behind the clouds: a frame rate not to be bought with a blurred image (the next: amortised only when the
+   *  view is near still, or a better rebuild of the texels the motion uncovers) */
+  cloudAmortize = false;
   cloudAmortizedNow = false;
   /** (Q5 VIPER C2) a weather layer's samples along the ray while amortised — the budget freed could be taken back here: 32 cost
    *  +0.22 ms over 16 with no difference seen at rest (cloud-amortize); 16 until a measure in motion says otherwise */
