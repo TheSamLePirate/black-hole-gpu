@@ -14121,7 +14121,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // still, for the streets' lights)
     if (mu0g < 0.06 || (fpM < 0.3 && tM < 4000.0 && img.o < 0.99)) { sv = sceneryGround(dirW, tM, fpM); }
     else if (fpM < 12.0 && tM < 4000.0 && img.o < 0.99) {
-      let dc = sceneryDecal((P.scenery[3].xyz + sceneryLocal(dirW) * tM).xy, fpM, tM);
+      // (the scenery's local frame written out — sceneryLocal goes with the scenery's code, a kernel without it would not compile)
+      let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
+      let dc = sceneryDecal((P.scenery[3].xyz + dL * tM).xy, fpM, tM);
       sv = ScenerySurface(dc.rgb, dc.w, 0.0);
     }
   }
