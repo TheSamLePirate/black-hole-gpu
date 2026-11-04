@@ -211,21 +211,36 @@ export function profileFor(state: AirState): AirProfile {
 /** the ground's temperature [°C] the drawn sea-level refractivity stands for (refraction.ts seaRefractivity's inverse) */
 export const tempOfRefractivity = (n0: number) => (2.93e-4 * 288.15) / n0 - 273.15;
 
+/** The real weather's air (openmeteo.ts ModelHour): the sea-level pressure (else the ground's raised to it by the barometric
+ *  formula), the temperature at 2 m, the relative humidity from the dew point (Magnus) */
+export function airOfModel(m: { T: number; Td: number; p: number; pMsl?: number }, groundM = 0): AirState & { source: string } {
+  const pMsl = m.pMsl !== undefined ? m.pMsl * 100 : m.p * 100 * Math.exp((G0 * M_AIR * groundM) / (R_GAS * (m.T + 273.15)));
+  const mag = (t: number) => Math.exp((17.625 * t) / (243.04 + t));
+  const rh = Math.min(1, Math.max(0, mag(m.Td) / mag(m.T)));
+  return {
+    pMsl,
+    tGround: m.T,
+    rh,
+    source: m.pMsl !== undefined ? "Open-Meteo (pressure_msl, 2 m, dew point)" : "Open-Meteo (surface pressure reduced)",
+  };
+}
+
 /**
- * The layered model's figures for a place: its air — the ground's temperature from the drawn refractivity, the standard pressure
- * unless given —, the refraction at the horizon [′] from the height h [m] (the dip's ray when above the sea: its tangent), and a
+ * The layered model's figures for a place: its air — the real weather's when given, else the ground's temperature from the drawn
+ * refractivity, the standard pressure, 50 % humidity —, the refraction at the horizon [′] from the height h [m] (the dip's ray when above the sea: its tangent), and a
  * body's apparent altitude [°] from its true one. Seconds of work at most: on demand, not a frame's.
  */
-export function layeredReport(n0: number, h: number, trueAltDeg: number, pMsl = 101325) {
-  const state: AirState = { pMsl, tGround: tempOfRefractivity(n0), rh: 0.5 };
+export function layeredReport(n0: number, h: number, trueAltDeg: number, air?: AirState & { source: string }) {
+  const state: AirState = air ?? { pMsl: 101325, tGround: tempOfRefractivity(n0), rh: 0.5 };
   const P = profileFor(state);
   const D = Math.PI / 180;
   const app = apparentElevation(P, trueAltDeg * D, h);
   return {
     model: "layered (Ciddor, hydrostatic, Bouguer)",
-    pressureHpa: Math.round(pMsl / 10) / 10,
+    air: air?.source ?? "standard pressure, the drawn air's temperature, 50 % humidity",
+    pressureHpa: Math.round(state.pMsl / 10) / 10,
     groundTempC: Math.round(state.tGround * 10) / 10,
-    humidityPct: 50,
+    humidityPct: Math.round(state.rh * 100),
     horizonArcmin: Math.round(((refraction(P, 0, h) ?? 0) / D) * 600) / 10,
     apparentAltDeg: app === null ? null : Math.round((app / D) * 1000) / 1000,
   };

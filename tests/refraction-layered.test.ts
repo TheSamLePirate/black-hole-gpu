@@ -91,3 +91,15 @@ test("TARS's figures (layeredReport): the horizon's refraction, a low Sun's appa
   // (from 10 km: the level ray through thinner air — less than from the sea)
   expect(layeredReport(seaRefractivity(10), 10000, -2).horizonArcmin).toBeLessThan(r.horizonArcmin);
 });
+
+test("the real weather's air (airOfModel): the sea-level pressure given or reduced from the ground's, the humidity from the dew point", async () => {
+  const { airOfModel } = await import("../src/system/refraction-layered");
+  const given = airOfModel({ T: 20, Td: 10, p: 950, pMsl: 1015 });
+  expect(given.pMsl).toBe(101500);
+  expect(given.rh).toBeCloseTo(0.53, 1);
+  // (a station 540 m up at 950 hPa: ~1 012 hPa at the sea)
+  const reduced = airOfModel({ T: 15, Td: 15, p: 950 }, 540);
+  expect(reduced.pMsl / 100).toBeGreaterThan(1005);
+  expect(reduced.pMsl / 100).toBeLessThan(1020);
+  expect(reduced.rh).toBeCloseTo(1, 3);
+});

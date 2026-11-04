@@ -30,6 +30,7 @@ const HOURLY = [
   "temperature_2m",
   "dew_point_2m",
   "surface_pressure",
+  "pressure_msl",
   "cape",
 ] as const;
 
@@ -56,6 +57,8 @@ export interface ModelHour {
   Td: number;
   p: number;
   cape: number;
+  /** the pressure reduced to the sea's level [hPa] (R1's layered air builds its profile from it; absent from older saves) */
+  pMsl?: number;
 }
 
 /** A place's cell (the models' 0.25° grid): its centre [°]. */
@@ -113,6 +116,7 @@ export function parseOpenMeteo(json: unknown): { hours: ModelHour[]; elevation: 
       Td: n("dew_point_2m", i) ?? T - 8,
       p: n("surface_pressure", i) ?? 1013.25,
       cape: n("cape", i) ?? 0,
+      pMsl: n("pressure_msl", i) ?? undefined,
     });
   }
   return hours.length ? { hours, elevation: typeof j.elevation === "number" ? j.elevation : 0 } : null;
@@ -147,6 +151,7 @@ export function hourAt(hours: ModelHour[], ms: number): ModelHour | null {
     Td: m(a.Td, b.Td),
     p: m(a.p, b.p),
     cape: m(a.cape, b.cape),
+    ...(a.pMsl !== undefined && b.pMsl !== undefined ? { pMsl: m(a.pMsl, b.pMsl) } : {}),
   };
 }
 
@@ -161,6 +166,8 @@ export interface ModelFacts {
   T: number;
   Td: number;
   p: number;
+  /** the sea-level pressure [hPa] (R1's layered air), when the model gave it */
+  pMsl?: number;
   high: number;
   code: number;
   precip: number;
@@ -223,6 +230,7 @@ export function modelWeather(
     T: h.T,
     Td: h.Td,
     p: h.p,
+    ...(h.pMsl !== undefined ? { pMsl: h.pMsl } : {}),
     high: h.high,
     code: h.code,
     precip: h.precip,

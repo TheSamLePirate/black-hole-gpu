@@ -8,7 +8,7 @@ import { altAzOf, horizonAt } from "../skychart";
 import { cameraHome } from "../targeting";
 import { cartToGeodetic, flatteningOf } from "./ellipsoid";
 import { apparentAltitude, bending, incidentAltitude } from "./refraction";
-import { layeredReport } from "./refraction-layered";
+import { type AirState, layeredReport } from "./refraction-layered";
 import { bodyAxes, M_METRES, seenFrom, solarBody, utcOf } from "./solar";
 import { eclipseNow } from "../eclipse/earth-moon";
 
@@ -48,7 +48,7 @@ export interface SkyNow {
 }
 
 /** The sky now at the camera (null: not over a world of ours). n0: the air's sea-level refractivity drawn. */
-export function skyNow(s: Settings, t: number, n0: number): SkyNow | null {
+export function skyNow(s: Settings, t: number, n0: number, realAir?: AirState & { source: string }): SkyNow | null {
   const cam = cameraFrame(s, t);
   const hz = horizonAt(s, cam, t);
   if (!hz) return null;
@@ -98,7 +98,7 @@ export function skyNow(s: Settings, t: number, n0: number): SkyNow | null {
           refractivity: Number(n0.toPrecision(4)),
           horizonArcmin: r1(bending(0, h, n0) / (D / 60)),
           layered: (() => {
-            const L = layeredReport(n0, h, sun.altDeg);
+            const L = layeredReport(n0, h, sun.altDeg, realAir);
             return { ...L, sunApparentAltDeg: L.apparentAltDeg };
           })(),
         }

@@ -149,6 +149,7 @@ import { nextSeen, type Observable, seenWindows, spotOf } from "./system/observi
 import { bestPlace } from "./eclipse/details";
 import type { EclipseEvent } from "./eclipse/search";
 import { skyNow } from "./system/sky-now";
+import { airOfModel } from "./system/refraction-layered";
 import { MISSIONS } from "./game/missions";
 import { KeyHints } from "./ui/keyhints";
 import { TaxiGuide } from "./ui/taxiguide";
@@ -7734,7 +7735,9 @@ async function main() {
   // (the sky in figures for TARS's telemetry: system/sky-now.ts)
   // (and the horizons' state — H4: the world's maps, the Earth's levels)
   (camera as unknown as { skyInfo: () => unknown }).skyInfo = () => {
-    const sky = skyNow(settings, sim.time, renderer.refractivity(settings));
+    // (R1: the real weather's air for the layered model's figures, when the weather is the real one)
+    const m = settings.weather === "real" ? renderer.weatherReal?.model : undefined;
+    const sky = skyNow(settings, sim.time, renderer.refractivity(settings), m ? airOfModel(m) : undefined);
     return sky ? { ...sky, horizons: renderer.horizonStatus(settings) } : null;
   };
   // (the map's weather layer: the real weather's own — the day's clouds, each station's)
