@@ -14650,9 +14650,14 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
 @group(1) @binding(11) var cloudOutA: texture_storage_2d<rgba32float, write>;
 @group(1) @binding(12) var cloudOutB: texture_storage_2d<rgba32float, write>;
 @compute @workgroup_size(8, 8)
-fn clouds(@builtin(global_invocation_id) gid: vec3u) {
+fn clouds(@builtin(global_invocation_id) gid0: vec3u) {
   let W = u32(P.res.x);
   let H = u32(P.res.y);
+  // (Q5, VIPER C2: amortised — a texel in four marched a frame, a 2 × 2 checker turning with the frames, the dispatch a quarter's:
+  // each thread its texel of this frame's checker, none idle beside a marching one; the others kept, rebuilt from the history by
+  // post.wgsl cloudTemporal. liteSkip 1073741824: every texel — no history, the renderer's A/B)
+  let ph = P.frame.x & 3u;
+  let gid = select(gid0.xy, gid0.xy * 2u + vec2u(ph & 1u, ph >> 1u), (liteSkip() & 1073741824u) == 0u);
   if (gid.x >= (W + 1u) / 2u || gid.y >= (H + 1u) / 2u) { return; }
   var cs = EarthClouds(0.0, vec3f(0.0), -1.0);
   var bound = -1.0;
@@ -14660,7 +14665,7 @@ fn clouds(@builtin(global_invocation_id) gid: vec3u) {
   if (HAS_BODIES && P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     if (isEarth(k) && hasAir(k) && earthOn()) {
-      let p0 = vec2f(gid.xy * 2u);
+      let p0 = vec2f(gid * 2u);
       var dmin = 3e38;
       for (var j = 0u; j < 4u; j++) {
         let d = terrainRasterDepth(p0 + vec2f(f32(j & 1u), f32(j >> 1u)) + 0.5);
@@ -14671,7 +14676,7 @@ fn clouds(@builtin(global_invocation_id) gid: vec3u) {
       FOOT_FAR = 2.0;
       FOOT = 2.0;
       let frameStamp = P.frame.x;
-      let pos = p0 + 1.0 + gaussJitter(hash4(vec3u(gid.xy, frameStamp)).xy);
+      let pos = p0 + 1.0 + gaussJitter(hash4(vec3u(gid, frameStamp)).xy);
       let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
       let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
       setAir(k);
@@ -14688,7 +14693,7 @@ fn clouds(@builtin(global_invocation_id) gid: vec3u) {
       let lt = nearLight(k);
       WX_W = select(0.0, P.wx[0].x, HAS_WX && earthOn());
       WX_Q = normalize(ro);
-      RNDV = blueDraws(gid.xy, frameStamp);
+      RNDV = blueDraws(gid, frameStamp);
       RND = RNDV.z;
       CLOUD_LIGHT_MARCH = TUNE_CLOUD_LIGHT > 0u;
       cs = earthClouds(k, ro, rd, tHit, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab),
@@ -14701,8 +14706,8 @@ fn clouds(@builtin(global_invocation_id) gid: vec3u) {
   }
   // (no light where there is no cover, nor a non-finite one: the history premultiplies it — post.wgsl cloudTemporal)
   let clOk = cs.alpha > 0.0 && !isNan(cs.cl.r + cs.cl.g + cs.cl.b) && all(abs(cs.cl) < vec3f(1e30));
-  textureStore(cloudOutA, gid.xy, vec4f(select(vec3f(0.0), cs.cl, clOk), select(0.0, cs.alpha, cs.alpha > 0.0)));
-  textureStore(cloudOutB, gid.xy, vec4f(cs.tc, bound, depthM, 0.0));
+  textureStore(cloudOutA, gid, vec4f(select(vec3f(0.0), cs.cl, clOk), select(0.0, cs.alpha, cs.alpha > 0.0)));
+  textureStore(cloudOutB, gid, vec4f(cs.tc, bound, depthM, 0.0));
 }
 
 // The clear sky's light (docs/PLAN-NUAGES-AAA.md N2b, read by skyIrradiance: the ground, the scenery, the clouds): at four

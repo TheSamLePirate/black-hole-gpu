@@ -3130,7 +3130,12 @@ export class Renderer {
       s.jetLength,
       s.jetCutoff,
       s.jetKnots,
-      this.liteSkip | (this.skyOpen ? 0 : 4194304) | (this.groundSpecular ? 0 : 67108864) | (this.shoreWash ? 0 : 536870912),
+      this.liteSkip |
+        (this.skyOpen ? 0 : 4194304) |
+        (this.groundSpecular ? 0 : 67108864) |
+        (this.shoreWash ? 0 : 536870912) |
+        // (Q5 VIPER C2: the clouds' march amortised — a texel in four a frame — while their history holds; else every texel)
+        ((this.cloudAmortizedNow = this.cloudAmortize && this.cloudHistoryOn && this.cloudHistOk) ? 0 : 1073741824),
     );
     u.set([this.frameStamp, t === this.live ? this.validFrom : 0, o.flags, o.minSpp ?? 0], 17 * 4);
     set(18, o.tol ?? 1e-5, o.noise ?? 0, o.shutter ?? 0, s.temporalBlend);
@@ -5869,7 +5874,9 @@ export class Renderer {
         c.setPipeline(cp);
         c.setBindGroup(0, t.cloudBind.bind);
         c.setBindGroup(1, t.cloudWrite);
-        c.dispatchWorkgroups(Math.ceil(t.width / 16), Math.ceil(t.height / 16));
+        // (amortised — VIPER C2 —: a quarter of the half image's texels, this frame's checker)
+        const q = this.cloudAmortizedNow ? 32 : 16;
+        c.dispatchWorkgroups(Math.ceil(t.width / q), Math.ceil(t.height / q));
         c.end();
         this.encodeCloudHistory(enc, t);
         // (drawn: the kernels read it — the parameters' bit written for this submission)
@@ -9162,6 +9169,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       enc.copyTextureToTexture({ texture: t.cloudCurA! }, { texture: t.cloudA! }, size);
       enc.copyTextureToTexture({ texture: t.cloudCurB! }, { texture: t.cloudB! }, size);
       t.cloudHistValid = false;
+      this.cloudHistOk = false;
       return;
     }
     this.cloudCT ??= this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -9182,7 +9190,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
           ],
         }),
       };
-    this.device.queue.writeBuffer(this.cloudCT, 0, new Float32Array([t.cloudHistValid && ta.valid ? 1 : 0, 0, 0, 0]));
+    this.device.queue.writeBuffer(
+      this.cloudCT,
+      0,
+      new Float32Array([t.cloudHistValid && ta.valid ? 1 : 0, this.cloudAmortizedNow ? 1 : 0, this.frameStamp & 3, 0]),
+    );
     const p = enc.beginComputePass(this.prof.pass("clouds' history"));
     p.setPipeline(this.postCloudTemporal);
     p.setBindGroup(0, t.cloudTemporalBind.bind);
@@ -9191,7 +9203,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     enc.copyTextureToTexture({ texture: t.cloudA! }, { texture: t.cloudHistA! }, size);
     enc.copyTextureToTexture({ texture: t.cloudB! }, { texture: t.cloudHistB! }, size);
     t.cloudHistValid = true;
+    // (the next frame's march may be amortised: this one's history and the image's both held)
+    this.cloudHistOk = ta.valid;
   }
+  /** (Q5 VIPER C2) the clouds' march amortised — a texel in four a frame, the history rebuilding the others — and its switch */
+  cloudAmortize = true;
+  cloudAmortizedNow = false;
+  private cloudHistOk = false;
 
   /** the far raster rings about the patch (the relief's cache two levels coarser, each about the next finer): their ground
    *  drawn too, its hint the tracer's instead of a march from the camera (off: those pixels marched as before) */

@@ -988,11 +988,36 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
   let size = textureDimensions(cloudCurA);
   if (gid.x >= size.x || gid.y >= size.y) { return; }
   let p = vec2i(gid.xy);
-  let cur = cloudPremul(p);
-  let b = textureLoad(cloudCurB, p, 0);
+  // (Q5, VIPER C2 — CT.y the march amortised, CT.z this frame's checker: a texel in four marched; a texel not marched this
+  // frame keeps its last march in the buffer, stale: it is rebuilt from the history, bounded by its marched neighbours)
+  let amort = CT.y > 0.5;
+  let skip = amort && (p.x & 1) + 2 * (p.y & 1) != i32(CT.z + 0.5);
+  let cur = select(cloudPremul(p), vec4f(0.0), skip);
+  var b = select(textureLoad(cloudCurB, p, 0), vec4f(-1.0), skip);
   var bOut = b;
   var out = cur;
-  var cMax = cloudLoad(cloudCurA, p).rgb;
+  var cMax = select(cloudLoad(cloudCurA, p).rgb, vec3f(0.0), skip);
+  // (no history to rebuild from — a texel not marched: its marched neighbours' mean, their distances)
+  var nMean = vec4f(0.0);
+  var nB = vec4f(-1.0);
+  var nCount = 0.0;
+  if (amort) {
+    for (var j = -1; j <= 1; j++) {
+      for (var i = -1; i <= 1; i++) {
+        let q = clamp(p + vec2i(i, j), vec2i(0), vec2i(textureDimensions(cloudCurA)) - 1);
+        if ((q.x & 1) + 2 * (q.y & 1) != i32(CT.z + 0.5)) { continue; }
+        nMean += cloudPremul(q);
+        nCount += 1.0;
+        if (nB.x < 0.0) { nB = textureLoad(cloudCurB, q, 0); }
+      }
+    }
+    nMean /= max(nCount, 1.0);
+    if (skip) {
+      out = nMean;
+      b = nB;
+      bOut = nB;
+    }
+  }
   if (CT.x > 0.5 && TA.k.y > 0.5) {
     // (the cloud's distance [M], else far: the sky's turn alone)
     let depth = select(1e9, b.z, b.z > 0.0 && cur.a > 0.0);
@@ -1023,24 +1048,39 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
       var up = cur;
       var m1 = vec4f(0.0);
       var m2 = vec4f(0.0);
-      for (var j = -1; j <= 1; j++) {
-        for (var i = -1; i <= 1; i++) {
-          let a = cloudLoad(cloudCurA, clamp(p + vec2i(i, j), vec2i(0), hi));
+      // (amortised: the box of the texels marched this frame alone — the others' buffer is stale)
+      var nb = 0.0;
+      if (skip) {
+        lo = vec4f(1e30);
+        up = vec4f(-1e30);
+      }
+      // (a texel not marched: its box from the 5 × 5 — four to nine marched texels; the 3 × 3 holds one to four, a single noisy
+      // sample at worst, the history pinned to it: the high veils stippled)
+      let rr = select(1, 2, skip);
+      for (var j = -rr; j <= rr; j++) {
+        for (var i = -rr; i <= rr; i++) {
+          let qq = clamp(p + vec2i(i, j), vec2i(0), hi);
+          if (amort && (qq.x & 1) + 2 * (qq.y & 1) != i32(CT.z + 0.5)) { continue; }
+          let a = cloudLoad(cloudCurA, qq);
           let q = vec4f(a.rgb * a.a, a.a);
           lo = min(lo, q);
           up = max(up, q);
           m1 += q;
           m2 += q * q;
+          nb += 1.0;
           if (a.a > 0.25) { cMax = max(cMax, a.rgb); }
         }
       }
       // (the bounds the 3 × 3's spread — its mean ± 1.25 σ — inside its extremes: a far storm's march is sparse spikes, a
       // tower's core met by one jittered sample in a few frames; min–max let the history hold every spike and grow it in
       // blocks — white squares —, as the image's own history rejects them)
-      let mu = m1 / 9.0;
-      let sg = sqrt(max(m2 / 9.0 - mu * mu, vec4f(0.0)));
-      let hc = clamp(hist, max(lo, mu - 1.25 * sg), min(up, mu + 1.25 * sg));
-      out = mix(hc, cur, 0.15);
+      let mu = m1 / max(nb, 1.0);
+      let sg = sqrt(max(m2 / max(nb, 1.0) - mu * mu, vec4f(0.0)));
+      // (amortised, the box of the fewer marched texels widened a little — two σ —: a texel's history not cut to one neighbour)
+      let ks = select(1.25, 2.0, amort);
+      let hc = clamp(hist, max(lo, mu - ks * sg), min(up, mu + ks * sg));
+      // (a marched texel's new march weighed a little more when a texel is marched one frame in four — 0.35 left the veils noisy)
+      out = select(mix(hc, cur, select(0.15, 0.2, amort)), hc, skip);
       // (the cloud's distance and depth averaged as its light is — each frame's texel meets the near base of a storm or, through a
       // gap, a far tower's sunlit side: their light averaged with the near one's distance, the far light composited as if near,
       // through little air — white squares; the reference's average is of the two seen through their own air)
@@ -1048,7 +1088,7 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
       let wC = 0.15 * dot(cur.rgb, vec3f(0.2126, 0.7152, 0.0722));
       if (hw > 0.0 && wH > 0.0) {
         let hzm = hz / hw;
-        let curOk = b.x > 0.0 && b.z > 0.0 && wC > 0.0;
+        let curOk = !skip && b.x > 0.0 && b.z > 0.0 && wC > 0.0;
         let zc = select(hzm, b.xz, curOk);
         let z = (wH * hzm + select(0.0, wC, curOk) * zc) / (wH + select(0.0, wC, curOk));
         bOut = vec4f(z.x, b.y, z.y, b.w);
