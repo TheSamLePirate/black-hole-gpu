@@ -66,7 +66,7 @@ function lutRMu(xm: number, xr: number): [number, number] {
 }
 /** The optical depth [rgb] from r along mu to the top, integrated: the ray cut at its lowest point (where the air is densest —
  *  a grazing ray's middle), each part's steps crowded towards it (u² spacing), LUT_STEPS in all */
-export function opticalDepthExact(r: number, mu: number, steps = LUT_STEPS): [number, number, number] {
+export function opticalDepthExact(r: number, mu: number, steps = LUT_STEPS, aerosols = 1): [number, number, number] {
   const d = -r * mu + Math.sqrt(Math.max(r * r * (mu * mu - 1) + R_T * R_T, 0));
   const tLow = Math.min(Math.max(-r * mu, 0), d);
   let cR = 0,
@@ -85,11 +85,13 @@ export function opticalDepthExact(r: number, mu: number, steps = LUT_STEPS): [nu
   const n1 = tLow > 0 ? Math.max(Math.round((steps * tLow) / d), 8) : 0;
   if (n1) part(tLow, 0, n1);
   part(tLow, d, steps - n1);
-  return [0, 1, 2].map((i) => ((BR[i]! + BO[i]!) * cR + BME * cM) / AIR_K) as [number, number, number];
+  return [0, 1, 2].map((i) => ((BR[i]! + BO[i]!) * cR + BME * aerosols * cM) / AIR_K) as [number, number, number];
 }
 
 /** The table built a row at a time (~0.2 s in all): step(budget) works for at most budget ms and returns the table once whole */
 export class TransmittanceLutBuilder {
+  /** aerosols: the day's aerosols over an ordinary day's (C3: the optical depth at 550 nm over aerosols.ts AOD_DEFAULT) */
+  constructor(readonly aerosols = 1) {}
   private f = new Float32Array(TLUT_VEC4S * 4);
   private row = 0;
   done: Float32Array | null = null;
@@ -99,7 +101,7 @@ export class TransmittanceLutBuilder {
     while (this.row < TLUT_H && performance.now() - t0 < budgetMs) {
       for (let i = 0; i < TLUT_W; i++) {
         const [r, mu] = lutRMu(i / (TLUT_W - 1), this.row / (TLUT_H - 1));
-        this.f.set(opticalDepthExact(r, mu), 4 * (1 + this.row * TLUT_W + i));
+        this.f.set(opticalDepthExact(r, mu, LUT_STEPS, this.aerosols), 4 * (1 + this.row * TLUT_W + i));
       }
       this.row++;
     }
@@ -138,7 +140,7 @@ const FIB = Array.from({ length: MS_DIRS }, (_, k) => {
   return [s * Math.cos(a), s * Math.sin(a), z] as const;
 });
 /** Ψ_ms [rgb, per unit of the Sun's irradiance] at a height h [m] under the air's top, the Sun at a zenith cosine mu */
-export function multipleScattering(tlut: Float32Array, h: number, mu: number): [number, number, number] {
+export function multipleScattering(tlut: Float32Array, h: number, mu: number, aerosols = 1): [number, number, number] {
   const r = R_G + h;
   const sun = [Math.sqrt(Math.max(1 - mu * mu, 0)), 0, mu];
   const L2 = [0, 0, 0],
@@ -163,9 +165,9 @@ export function multipleScattering(tlut: Float32Array, h: number, mu: number): [
       const muP = (px * sun[0]! + pz * sun[2]!) / pr;
       const Ts = lutThrough(tlut, hp, muP);
       for (let c = 0; c < 3; c++) {
-        const ext = (BR[c]! + BO[c]!) * dR + BME * dM;
+        const ext = (BR[c]! + BO[c]!) * dR + BME * aerosols * dM;
         const T = Math.exp(-(tau[c]! + 0.5 * ext * dt));
-        const ss = BR[c]! * dR + BMS * dM;
+        const ss = BR[c]! * dR + BMS * aerosols * dM;
         L2[c]! += (T * ss * Ts[c]! * dt) / (4 * Math.PI);
         fms[c]! += T * ss * dt;
         tau[c]! += ext * dt;
@@ -198,8 +200,8 @@ export function msThrough(f: Float32Array, h: number, mu: number): [number, numb
   ) as [number, number, number];
 }
 /** The whole table at once (the tests') */
-export function transmittanceLut(): Float32Array {
-  const b = new TransmittanceLutBuilder();
+export function transmittanceLut(aerosols = 1): Float32Array {
+  const b = new TransmittanceLutBuilder(aerosols);
   let f: Float32Array | null = null;
   while (!(f = b.step(1e9)));
   return f;

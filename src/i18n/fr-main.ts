@@ -2,6 +2,7 @@
 export default {
   "© swisstopo — aerial photographs, relief (SWISSIMAGE, swissALTI3D) · ":
     "© swisstopo — photographies aériennes, relief (SWISSIMAGE, swissALTI3D) · ",
+  "Aerosols: Copernicus Atmosphere Monitoring Service (CAMS) · ": "Aérosols : Copernicus Atmosphere Monitoring Service (CAMS) · ",
   "free geodata": "géodonnées libres",
   "© IGN — aerial photographs, relief, buildings (BD ORTHO, RGE ALTI, LiDAR HD, BD TOPO) · ":
     "© IGN — photographies aériennes, relief, bâtiments (BD ORTHO, RGE ALTI, LiDAR HD, BD TOPO) · ",

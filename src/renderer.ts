@@ -246,6 +246,7 @@ import {
   WGS84_F,
 } from "./system/ellipsoid";
 import { AIR_K, MSLUT_OFF, setTransmittanceLut, sunThroughY, TransmittanceLutBuilder } from "./system/earth-air";
+import { AerosolFeed, AOD_DEFAULT } from "./system/aerosols";
 import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
 import { bodyPlace, localPatch, patchGeodetic } from "./system/local-patch";
@@ -984,6 +985,15 @@ export class Renderer {
   /** (Q5 C1) the Earth's air's transmittance table: its builder while in progress, whether it is in the tracer's table */
   private tlutBuilder: TransmittanceLutBuilder | null = new TransmittanceLutBuilder();
   tlutPublished = false;
+  /** (Q5 C3) the day's aerosols the tables in the tracer's table are for (over an ordinary day's), those wanted, and their
+   *  source: "cams" (the real weather's, CAMS through Open-Meteo) or "ordinary" */
+  tlutAerosols = 1;
+  /** the aerosols wanted (over an ordinary day's): the tables being built for them when they differ from tlutAerosols */
+  tlutWanted = 1;
+  aerosolSource: "cams" | "ordinary" = "ordinary";
+  /** the day's aerosols forced (a measure's: an optical depth at 550 nm; null: the weather's) */
+  aerosolOverride: number | null = null;
+  private aerosolFeed = new AerosolFeed();
   /** the table used (false: Chapman's column — a measure's A/B) */
   tlutOn = true;
   /** (C1, second lot) its multiple scattering used (false: the single scattering's isotropic stand-in — a measure's A/B) */
@@ -1964,12 +1974,30 @@ export class Renderer {
   }
   /** (Q5 C1) the transmittance table built a slice a frame (~2 ms), published whole — the tracer's table and earth-air.ts's at
    *  once; off: its header put to 0 (Chapman's column, drawn and computed) */
-  private stepTransmittanceLut() {
+  private stepTransmittanceLut(aerosolPlace: { lat: number; lon: number; ms: number } | null) {
     if (!this.tlutOn) {
       if (this.tlutPublished) {
         this.device.queue.writeBuffer(this.bodyBuf, TABLE_TLUT * 16, new Float32Array(4));
         setTransmittanceLut(null);
         this.tlutPublished = false;
+      }
+      return;
+    }
+    // (C3: the day's aerosols — the real weather's place and hour, CAMS's —: the tables built again when they change by 5 %)
+    const aod = this.aerosolOverride ?? (aerosolPlace ? this.aerosolFeed.peek(aerosolPlace.lat, aerosolPlace.lon, aerosolPlace.ms) : null);
+    this.aerosolSource = this.aerosolOverride === null && aod !== null ? "cams" : "ordinary";
+    const want = +((aod ?? AOD_DEFAULT) / AOD_DEFAULT).toFixed(2);
+    if (Math.abs(want - this.tlutWanted) > 0.05 * Math.max(this.tlutWanted, 0.2)) {
+      this.tlutWanted = want;
+      this.tlutBuilder = new TransmittanceLutBuilder(want);
+    }
+    if (this.tlutPublished && this.tlutBuilder?.aerosols !== this.tlutAerosols && this.tlutBuilder) {
+      const f = this.tlutBuilder.step(2);
+      if (f) {
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_TLUT * 16, f as Float32Array<ArrayBuffer>);
+        setTransmittanceLut(f);
+        this.tlutAerosols = this.tlutBuilder.aerosols;
+        this.msPublished = true;
       }
       return;
     }
@@ -1991,6 +2019,7 @@ export class Renderer {
     this.device.queue.writeBuffer(this.bodyBuf, TABLE_TLUT * 16, f as Float32Array<ArrayBuffer>);
     setTransmittanceLut(f);
     this.tlutPublished = true;
+    this.tlutAerosols = this.tlutBuilder!.aerosols;
     this.msPublished = true;
   }
   refractivity(s: Settings): number {
@@ -3448,8 +3477,8 @@ export class Renderer {
     set(58, this.earthMaps.tier ? (dayOn ? 2 : 1) : 0, dayOn ? 0 : drift, lights, 4);
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
     // side dark round its cities)
-    // (x: free — the twilight sky's calibration until Q5 C2, which made the air as it is follow the measured twilight)
-    set(61, 1, 0, 0, s.volumetricClouds && altKm < 30 ? 1 : 0); // (w: the clouds a volume — the camera low: 30 km)
+    // (x: the day's aerosols over an ordinary day's — Q5 C3 —, the ones the air's tables in the tracer's table were built for)
+    set(61, this.tlutAerosols, 0, 0, s.volumetricClouds && altKm < 30 ? 1 : 0); // (w: the clouds a volume — the camera low: 30 km)
     // a world's finer maps, the camera near it (within 40 of its radii): its map's index, its brightness
     // kept (the coarse map's mean over the finer's), its relief's strength (0: none), the map's width
     const nearMap = near ? (solarBody(bodies[near.index]!.id)?.map as MapName | undefined) : undefined;
@@ -3657,8 +3686,12 @@ export class Renderer {
     if (shade[8]! > 0) this.featureKey |= 2048;
     // (R2: the layered air's tables for the air in force, built a slice a frame and published to the GPU and the CPU at once)
     if (s.refraction) this.stepRefrTable(s);
-    // (Q5 C1: the air's transmittance table, built once)
-    this.stepTransmittanceLut();
+    // (Q5 C1: the air's tables, built once — C3: again for the day's aerosols at the camera's place and hour, the real weather's)
+    this.stepTransmittanceLut(
+      earthSurface && s.weather === "real"
+        ? { lat: (earthSurface.lat * 180) / Math.PI, lon: (earthSurface.lon * 180) / Math.PI, ms: utcOf(time) }
+        : null,
+    );
     // the sky through the Earth's air (PLAN-CIEL C3): its refractivity at sea level, from the real weather's
     // air when it is in (cold air bends more), else the standard atmosphere's
     f.set(

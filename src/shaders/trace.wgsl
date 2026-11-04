@@ -85,7 +85,7 @@ struct Params {
   earth2: vec4f,   // the clouds' height [its radii], their opacity, the ground's albedo over its map, the air's
                    // thickness drawn (its scale heights × k)
   earth3: vec4f,   // the Moon: its direction on the Earth's axes; w: the sunlit share of its disk seen
-  earth4: vec4f,   // x: free (the twilight's calibration until Q5 C2); y: the Sun's angular radius
+  earth4: vec4f,   // x: the day's aerosols over an ordinary day's (Q5 C3, the air's tables' — 1 by default); y: the Sun's angular radius
                    // seen from the Earth [rad] (the eclipses); z: Mars's dust; w: the clouds a volume (the camera low)
   hd: vec4f,       // the finer maps (src/system/hd-maps.ts): the body's map index (−1: none), its brightness
                    // kept (the coarse map's mean over the finer's), its relief's strength (0: none), width
@@ -5630,6 +5630,12 @@ fn setAir(k: u32) {
     vec3f(2.1e-5), 2.33e-5, vec3f(0.8), // bms, bme, g
     max(P.earth2.w, 1.0), vec3f(0.035, 0.06, 0.12), 1.0); // k, sky, moon
   if (m != 0u) { a.moon = 0.0; }
+  // (Q5 C3: the Earth's aerosols the day's — their optical depth over an ordinary day's, published with the air's tables:
+  // P.earth4.x, 1 by default)
+  if (m == 0u) {
+    a.bms *= max(P.earth4.x, 0.0);
+    a.bme *= max(P.earth4.x, 0.0);
+  }
   if (m == 2u) {
     // Mars: 0.6 % of the Earth's air (CO₂), its dust (τ ≈ 0.4, well mixed): the butterscotch sky, the
     // blue sunset round the sun

@@ -8215,6 +8215,14 @@ async function main() {
     creditLink(t("free geodata"), "https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices"),
   );
   document.body.append(swissCredit);
+  // (the day's aerosols — Q5 C3 —: CAMS's through Open-Meteo, credited while the air is drawn with them)
+  const aerosolCredit = Object.assign(document.createElement("div"), { className: "scenery-credit aerosol-credit", hidden: true });
+  aerosolCredit.dataset.testid = "aerosol-credit";
+  aerosolCredit.append(
+    t("Aerosols: Copernicus Atmosphere Monitoring Service (CAMS) · "),
+    creditLink("Open-Meteo", "https://open-meteo.com/en/docs/air-quality-api"),
+  );
+  document.body.append(aerosolCredit);
   // (the real traffic — traffic/feed.ts, T1 —: asked of the relay about the flown craft, its sources credited)
   const trafficFeed = new TrafficFeed();
   camera.traffic = trafficFeed;
@@ -8893,6 +8901,8 @@ async function main() {
     if (orthoCredit.hidden !== hideOrthoCredit) orthoCredit.hidden = hideOrthoCredit;
     const hideSwissCredit = !nationalDrawn || renderer.earthTiles.nationalAt !== "swisstopo";
     if (swissCredit.hidden !== hideSwissCredit) swissCredit.hidden = hideSwissCredit;
+    const hideAerosolCredit = renderer.aerosolSource !== "cams";
+    if (aerosolCredit.hidden !== hideAerosolCredit) aerosolCredit.hidden = hideAerosolCredit;
     applyTuning(settings);
     cpuProf.time("game tools window", () => toolsWin.tick());
     saveTimer += dt;
