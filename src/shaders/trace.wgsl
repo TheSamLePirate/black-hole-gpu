@@ -501,9 +501,8 @@ fn hash4(p: vec3u) -> vec4f {
   let h4 = pcg(h3);
   return vec4f(u2f(h), u2f(h2), u2f(h3), u2f(h4));
 }
-// Interleaved gradient noise (Jimenez 2014): blue-ish in space, cheap — a pixel's value differs from its
-// neighbours', so per-pixel randomness reads as fine grain, not clumps
-fn ign(p: vec2f) -> f32 { return fract(52.9829189 * fract(dot(p, vec2f(0.06711056, 0.00583715)))); }
+// (the interleaved gradient noise — Jimenez 2014 — gone with Q5's VIPER C1: every jitter a channel of the blue noise,
+// blueDraws)
 fn hash31(p: vec3f) -> f32 {
   return u2f(hash3u(bitcast<vec3u>(vec3i(floor(p)))));
 }
@@ -13225,12 +13224,13 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
       if (temporal) { jit = gaussJitter(hr.xy); }
       // (the rays' first-step offset — the volumes' sampling —: blue noise in space, a golden-ratio walk
       // in time, not white noise)
-      rnd = fract(ign(vec2f(f32(px), f32(py))) + f32(frameStamp % 1024u) * 0.6180339887);
       RNDV = blueDraws(vec2u(px, py), frameStamp);
+      // (Q5, VIPER C1: the blue noise's own z — the golden-ratio walk —, not the IGN's diagonal gradients)
+      rnd = RNDV.z;
     } else {
       // (R2 / Kronecker sequences per pixel, rotated by a hash — the first-step offset by blue noise)
       var rot = hash4(vec3u(px, py, 7u));
-      rot.z = ign(vec2f(f32(px), f32(py)));
+      rot.z = blueDraws(vec2u(px, py), 0u).z;
       let seq = fract(rot + si * vec4f(0.7548776662, 0.5698402910, 0.6180339887, 0.4142135624));
       if (si > 0.0 || accumulate) { jit = gaussJitter(seq.xy); }
       rnd = seq.z;
@@ -13553,8 +13553,8 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   FOOT = foot;
   var jit = vec2f(0.0);
   if (temporal) { jit = select(gaussJitter(hash4(vec3u(px, frameStamp)).xy), rasterJitter(frameStamp), rasterHalton()); }
-  let rnd = fract(ign(vec2f(px)) + f32(frameStamp % 1024u) * 0.6180339887);
   RNDV = blueDraws(vec2u(px), frameStamp);
+  let rnd = RNDV.z;
   let pos = vec2f(px) + 0.5 + jit;
   let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
   let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
@@ -13853,7 +13853,8 @@ fn liteFinish(idx: u32, centre: vec2f, pos: vec2f, G: vec3f, rd: vec3f, tH: f32,
       air.Lc = c.L;
     }
   } else {
-    air = earthAir(ro, rd, tH, Ls, E, fract(ign(centre) + f32(frameStamp % 1024u) * 0.618), select(3e38, cs.tc, alpha > 0.0));
+    // (the air's jitter: the blue noise's w — not the clouds' y nor the first step's z)
+    air = earthAir(ro, rd, tH, Ls, E, blueDraws(vec2u(centre), frameStamp).w, select(3e38, cs.tc, alpha > 0.0));
   }
   AP_UV = vec2f(-1.0);
   var col = (1.0 - alpha) * (air.L + air.T * G) + alpha * (air.Lc + air.Tc * cs.cl);
@@ -14004,8 +14005,8 @@ fn bodyLiteAir(gid: vec2u, k: u32) {
   let ndc = vec2f(2.0 * pos.x / P.res.x - 1.0, 1.0 - 2.0 * pos.y / P.res.y);
   let look = normalize(P.camFwd.xyz + ndc.x * P.cam.w * P.camRight.w * P.camRight.xyz + ndc.y * P.cam.w * P.camUp.xyz);
   let tR = tM / P.near4.w;
-  let rnd = fract(ign(centre) + f32(P.frame.x % 1024u) * 0.6180339887);
   RNDV = blueDraws(vec2u(centre), P.frame.x);
+  let rnd = RNDV.z;
   RND = RNDV.z;
   NEAR_T = tR;
   let e = earthNear(look, rnd, k);
@@ -14490,7 +14491,8 @@ fn skyFill(@builtin(global_invocation_id) gid: vec3u) {
   // (the clouds of the cloud pass — compiled before main with the material —, over the air as liteFinish lays them)
   let cs = cloudsBuffered(centre, terrainRasterDepth(centre));
   let alpha = max(cs.alpha, 0.0);
-  let air = earthAir(ro, rd, tEnd, Ls, lt.e, ign(centre), select(3e38, cs.tc, alpha > 0.0));
+  // (its jitter walked in time — it was the same each frame: VIPER C1 —, the blue noise's w)
+  let air = earthAir(ro, rd, tEnd, Ls, lt.e, blueDraws(vec2u(centre), P.frame.x).w, select(3e38, cs.tc, alpha > 0.0));
   // (the Sun's disc through the clouds' direct transmittance — earthLookCompose's —, the ground's through their cover)
   let tG = select(cloudsDirectT(alpha), 1.0 - alpha, tEnd < 1e37);
   var col = (1.0 - alpha) * air.L + tG * air.T * G + alpha * (air.Lc + air.Tc * cs.cl);
