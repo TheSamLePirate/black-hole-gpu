@@ -1177,6 +1177,11 @@ sur cette délégation :
     les calottes), et leurs rayons lisent **les hauteurs moyennes** le long des mips, plus les maxima ; à l'ombrage, l'horizon
     est revu depuis la hauteur propre du point. Pilote (CPU) : 5,95 % de faux éclairage et 2,35 % de fausse ombre, contre
     12,7 et 2,65 % depuis le haut du texel. Puis Mars, Mercure et Cérès.
+38. **Le reste de Q6** (Sam, 4 novembre) : (1) les fenêtres d'ortho de 8 tuiles (T8e) **restent désactivées** ; (2) le **mode
+    GoPro** (I8) au **compromis 90–100°** — un champ un peu moins large qu'une GoPro, le centre presque net, ~1,5 × le coût du
+    rendu en vue extérieure (bandeau 2,39:1 compris) ; (3) le **flou de pose** (A4) **désactivé par défaut**, en option (le
+    replay, la vidéo) ; (4) la **LUT « footage »** : Claude cherche 3–4 vidéos publiques de référence (cockpit en GoPro, vol de
+    ligne), **Sam valide** avant l'ajustement.
 
 ## 11. Questions ouvertes
 
