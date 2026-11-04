@@ -9,7 +9,7 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // same, sceneryGround, liteSkip 134217728 off): La Mancha at noon, the F-35 placed level at 40 m heading east (as ghost's mancha),
 // the scenery in; shots with the roads off, on, off (the drift both sides), and the GPU's passes over 3 s in each (the shading
 // passes' cost: the surfaces' walk now on every ground pixel, not the night's alone).
-// Output: remote-results/raster-roads/{off,on,off2}.png, roads.json (RR_OUT).
+// RR_AT=lat,lon,height,heading: another place. Output: remote-results/raster-roads/{off,on,off2}.png, roads.json (RR_OUT).
 // Done when: the three shots and their passes' times taken, no GPU error (their texts said). Duration: ~3 min.
 const OUT = process.env.RR_OUT ?? "remote-results/raster-roads";
 afterAll(stopServer);
@@ -28,7 +28,9 @@ test.skipIf(!E2E)(
       await app.js(
         `(() => { __bh.game.setDate("2026-07-10T11:30:00Z"); __bh.game.set("weather", "fair"); document.body.classList.add("hide-ui"); return 1; })()`,
       );
-      out.placed = await placeLow(app, [39.42, -3.05, 40, 90, 140], -8);
+      // (RR_AT: another place — lat,lon,height,heading —, e.g. Paris under the IGN's photograph)
+      const at = (process.env.RR_AT ?? "39.42,-3.05,40,90").split(",").map(Number) as [number, number, number, number];
+      out.placed = await placeLow(app, [at[0], at[1], at[2], at[3], 140], -8);
       out.world = await app
         .waitFor(
           `(() => { const r = __bh.renderer, sc = r.earthScenery.stats(); return r.earthTiles.pending === 0 && r.earthTiles.orthoPending === 0 && sc.status === "ready" && !sc.pending; })()`,
@@ -62,6 +64,9 @@ test.skipIf(!E2E)(
       }
       await app.js(`(() => { window.__ev = null; __bh.renderer.liteSkip = 0; return 1; })()`);
       out.pipeline = await app.js<string>(`__bh.renderer.earthPipelineNow(__bh.settings)`);
+      out.scenery = await app.js<unknown>(
+        `(() => { const s = __bh.renderer.earthScenery.stats(); return { status: s.status, pending: s.pending, error: s.error ?? s.errors?.[0] ?? null, bytes: s.bytes }; })()`,
+      );
       out.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
       out.gpuMessages = app.cdp.errors.filter((e) => /WebGPU/i.test(e)).slice(0, 3);
     } finally {

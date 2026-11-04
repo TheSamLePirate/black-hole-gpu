@@ -25,7 +25,7 @@ import {
   surveyOf,
   surveyReach,
 } from "./scenery-sources";
-import { roadWidth, surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains } from "./scenery-geometry";
+import { makeDecals, roadWidth, surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains } from "./scenery-geometry";
 import { buildingMesh } from "./roof-mesh";
 import {
   osmColour,
@@ -1202,7 +1202,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     }
     buildings++;
   }
-  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget);
+  // (Q3 B4: the map's surfaces drawn once for the raster's ground — a texel read a pixel, not the surfaces' tree walked)
+  const decals = makeDecals(keptSurfaces);
+  phase("decals");
+  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget, decals);
   return {
     id: q.id,
     lat: q.lat,

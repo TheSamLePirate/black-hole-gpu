@@ -1,7 +1,7 @@
 {
  "earth-raster shade": 26000,
  "earth-raster shadeMark": 1000,
- "earth-raster shadeLite": 7100,
+ "earth-raster shadeLite": 7130,
  "earth-raster shadeWater": 14000,
  "earth-raster shadeStars": 1000,
  "earth-raster discs": 28000,
@@ -12,7 +12,7 @@
  "earth-raster aerial": 1000,
  "earth-raster-wx shade": 30000,
  "earth-raster-wx shadeMark": 1000,
- "earth-raster-wx shadeLite": 7100,
+ "earth-raster-wx shadeLite": 7130,
  "earth-raster-wx shadeWater": 14000,
  "earth-raster-wx shadeStars": 1000,
  "earth-raster-wx discs": 28000,

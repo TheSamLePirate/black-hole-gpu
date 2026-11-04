@@ -9279,6 +9279,36 @@ fn sceneryRoadLight(road:ScenerySurface,tM:f32)->f32 {
   if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) { return mix(0.15, 3.0, select(0.0, road.cover, road.kind == 1.0)); }
   return CITY_WASH_FAR;
 }
+// Q3 B4 — the map's surfaces drawn once (scenery-geometry.ts rasterDecals; scenery-data.ts: right after the land cover's raster)
+// at a frame point xy [m], for a pixel's footprint fpM: the near grid (2 m) where it holds the point and the pixel is under ~6 m,
+// else the far one (8 m); nearest texel — the exact walk takes the near pixels (shadeLite) —; rgb and cover (0: none)
+fn sceneryDecal(xy: vec2f, fpM: f32, dist: f32) -> vec4f {
+  let at = u32(scenery[0].z) + u32(scenery[0].w) * u32(scenery[0].w) / 4u;
+  let h = scenery[at];
+  if (!HAS_SCENERY || P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5 || dist > P.scenery[1].w || h.x < 0.5) { return vec4f(0.0); }
+  // (the near grid under a 6 m footprint where it holds the point, else the far one; its four texels round the point, bilinear:
+  // the index weighing most, its share the cover — the edges smooth, not a texel's stairs)
+  let g = fpM > 6.0 || any(abs(xy) > vec2f(0.5 * h.x * h.y - h.y));
+  let N = u32(select(h.x, h.z, g));
+  let uv = xy / select(h.y, h.w, g) + 0.5 * f32(N) - 0.5;
+  let base = at + 257u + select(0u, (u32(h.x) * u32(h.x) + 15u) / 16u, g);
+  var ids = vec4u(0u);
+  var ws = vec4f(0.0);
+  for (var c = 0u; c < 4u; c++) {
+    let ij = clamp(vec2i(floor(uv)) + vec2i(i32(c & 1u), i32(c >> 1u)), vec2i(0), vec2i(i32(N) - 1));
+    let n = u32(ij.y) * N + u32(ij.x);
+    ids[c] = (bitcast<u32>(scenery[base + n / 16u][(n / 4u) % 4u]) >> (8u * (n % 4u))) & 255u;
+    let f = select(1.0 - fract(uv), fract(uv), vec2<bool>((c & 1u) == 1u, (c >> 1u) == 1u));
+    ws[c] = f.x * f.y;
+  }
+  var best = 0u;
+  var cover = 0.0;
+  for (var c = 0u; c < 4u; c++) {
+    let w = dot(ws, select(vec4f(0.0), vec4f(1.0), ids == vec4u(ids[c])));
+    if (ids[c] != 0u && w > cover) { cover = w; best = ids[c]; }
+  }
+  return vec4f(scenery[at + 1u + best].xyz, cover * P.scenery[3].w * smoothstep(P.scenery[1].w, P.scenery[1].w - 300.0, dist));
+}
 // (shadeLite's ground — Q3 B4 —: the map's surface at the point drawn — tM along dirW, the Earth's axes; fpM its footprint [m]: a
 // road, a rail, a field's polygon, the water, as earthGround paints them)
 fn sceneryGround(dirW:vec3f,tM:f32,fpM:f32)->ScenerySurface {
@@ -13965,8 +13995,16 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (the same walk the streets' night lights read — once; by day only where a road is a pixel or more: a footprint under 12 m,
   // 4 km at most — measured, the walk on every ground pixel +1.1 ms in La Mancha —; liteSkip's bit: neither, its cost measured)
   var sv = ScenerySurface(vec3f(0.0), 0.0, 0.0);
-  if (HAS_SCENERY && !mesh && !isTree && (liteSkip() & 134217728u) == 0u && ((fpM < 12.0 && tM < 4000.0) || mu0g < 0.06)) {
-    sv = sceneryGround(dirW, tM, fpM);
+  if (HAS_SCENERY && !mesh && !isTree && (liteSkip() & 134217728u) == 0u) {
+    // (the exact walk near — its stripes, sleepers, edges' antialiasing — and at night — its kinds for the streets' lights —;
+    // the decals' one read beyond: the walk on every pixel under 12 m cost 0.66 ms in La Mancha)
+    // (under a national photograph the map's colour is not drawn — the walk was for nothing there: France whole —; at night
+    // still, for the streets' lights)
+    if (mu0g < 0.06 || (fpM < 0.3 && tM < 4000.0 && img.o < 0.99)) { sv = sceneryGround(dirW, tM, fpM); }
+    else if (fpM < 12.0 && tM < 4000.0 && img.o < 0.99) {
+      let dc = sceneryDecal((P.scenery[3].xyz + sceneryLocal(dirW) * tM).xy, fpM, tM);
+      sv = ScenerySurface(dc.rgb, dc.w, 0.0);
+    }
   }
   A = mix(A, sv.color, select(sv.cover, 0.0, sv.kind == 3.0 || sv.kind == 4.0) * (1.0 - img.o));
   if (!mesh && !isTree && fpM < 10.0 && (liteSkip() & 16u) == 0u) {

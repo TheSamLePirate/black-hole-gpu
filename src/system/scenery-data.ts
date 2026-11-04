@@ -3,6 +3,7 @@ import { geodeticToCart, WGS84_A, WGS84_F } from "./ellipsoid";
 import { type ForestFrame, forestVec4s, writeForest } from "./forest";
 import type { Vec3 } from "../physics";
 
+import { DECAL_FAR, DECAL_NEAR, type Decals } from "./scenery-geometry";
 export const SCENERY_BYTES = 16 * 1024 * 1024;
 /** The detail's reach (settings.detailReach): the scenery's box, its land cover's raster and its rays this many times the
  *  normal ones, its budgets as its area — its buffer 16, 36 or 64 MiB, its raster 512, 768 or 1024 px (~10 m a pixel
@@ -275,6 +276,7 @@ export function packScenery(
   forest?: ForestSection,
   grid = SCENERY_GRID,
   budget = SCENERY_BYTES,
+  decals?: Decals,
 ) {
   const { nodes, geometries, offsets } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
@@ -301,7 +303,11 @@ export function packScenery(
     surfaceGeom = surfaceOffset + surface.nodes.length / 4,
     waterOffset = surfaceGeom + (surface.geometries.length + bands.length) / 4,
     pixelOffset = waterOffset + water.nodes.length / 4,
-    forestOffset = pixelOffset + Math.ceil(pixels.length / 4);
+    // (Q3 B4: the decals right after the land cover's raster — its offset its end's: no header slot moved —: a vec4 of their
+    // grids' sides and texels, the palette's 256, the near grid's bytes, the far's)
+    decalOffset = pixelOffset + Math.ceil(pixels.length / 4),
+    decalVec4s = decals ? 1 + 256 + Math.ceil(decals.near.length / 16) + Math.ceil(decals.far.length / 16) : 1,
+    forestOffset = decalOffset + decalVec4s;
   // (the buildings' triangles first — the view draws them alone —, the rest's — a bridge's deck — after: the shadow map's too)
   const meshed = [...prims.filter((p) => p.mesh && p.data[3] === 1), ...prims.filter((p) => p.mesh && p.data[3] !== 1)];
   let vertexCount = 0,
@@ -336,6 +342,15 @@ export function packScenery(
   f.set(bands, surfaceGeom * 4 + surface.geometries.length);
   f.set(water.nodes, waterOffset * 4);
   u.set(pixels, pixelOffset * 4);
+  if (decals) {
+    const nN = Math.round(Math.sqrt(decals.near.length)),
+      fN = Math.round(Math.sqrt(decals.far.length));
+    f.set([nN, (2 * DECAL_NEAR.half) / nN, fN, (2 * DECAL_FAR.half) / fN], decalOffset * 4);
+    f.set(decals.palette, (decalOffset + 1) * 4);
+    const b = new Uint8Array(buffer);
+    b.set(decals.near, (decalOffset + 257) * 16);
+    b.set(decals.far, (decalOffset + 257 + Math.ceil(decals.near.length / 16)) * 16);
+  }
   if (triangleCount) {
     f.set([meshOffset, vertexCount, triangleOffset, buildingTriangles], 12);
     f[11] = triangleCount;
