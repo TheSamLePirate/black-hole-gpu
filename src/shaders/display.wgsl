@@ -725,6 +725,13 @@ fn fs(in: VSOut) -> @location(0) vec4f {
       c = max(c + rcasDelta(vec2i(uv * vec2f(textureDimensions(hdr, 0))), D.lod.w, D.size.z), vec3f(0.0));
     }
   }
+  // (the Camera profile's lens — Q6 I6 A2 —: a lateral chromatic aberration, discreet — the red and the blue read along the
+  // radius a little out and in, ~0.7 px at a 1600 px image's corners, nothing at the centre)
+  if (D.look.x > 0.5 && D.flags.x < 0.5 && D.img.w < 0.5 && D.lod.x == 0.0) {
+    let rd = uv - 0.5;
+    let o = rd * (0.0018 * dot(rd, rd));
+    c = vec3f(textureSampleLevel(hdr, samp, uv + o, 0.0).r, c.g, textureSampleLevel(hdr, samp, uv - o, 0.0).b);
+  }
   if (D.hazeR.z > 0.0 || D.hazeR2.z > 0.0) {
     // the heat haze behind a jet's nozzle: the hot exhaust's turbulent gradients of index bend the light —
     // what is behind it, seen through it, shimmers; its eddies carried downstream (the hull is drawn over
