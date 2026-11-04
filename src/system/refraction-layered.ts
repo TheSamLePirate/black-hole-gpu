@@ -245,3 +245,122 @@ export function layeredReport(n0: number, h: number, trueAltDeg: number, air?: A
     apparentAltDeg: app === null ? null : Math.round((app / D) * 1000) / 1000,
   };
 }
+
+// ---- the tables (R1): built once an air (~0.25 s — off the frame: R2 builds them in a worker when the GPU reads them), read by
+// interpolation — R2.s GPU the same
+
+/** B_haut's observer heights [m] (finer near the ground, and round the tropopause's kinks at 11 019 and 20 063 m geometric) */
+export const TABLE_HEIGHTS: number[] = (() => {
+  const base = [
+    0, 25, 50, 100, 200, 350, 500, 750, 1000, 1500, 2000, 3000, 4000, 5000, 6500, 8000, 9000, 13000, 15000, 17500, 23000, 26000, 30000,
+    40000, 50000, 65000, 80000,
+  ];
+  // (approaching the kinks of 11 and 20 km — geometric 11 019 and 20 063 m — closer and closer from under: a ray's bending there
+  // goes as √(kink − h) too)
+  const hs = new Set(base);
+  for (const g of [11019, 20063]) {
+    for (let j = 0; j <= 10; j++) hs.add(Math.round(g - 2000 * (j / 10) ** 2));
+    for (const d of [60, 200, 600]) hs.add(g + d);
+  }
+  return [...hs].sort((x, y) => x - y);
+})();
+/** B_haut's elevations: u = √(e / 90°) on a regular grid of this many — the horizon's fast fall resolved */
+export const TABLE_ELEVATIONS = 96;
+/** B_limbe's tangent heights: 120 km (k / (K − 1))² — the low air's steep part resolved —, and closer and closer from 1.5 km under each
+ *  of the profile's kinks (to a few decimetres), every 50 m to 300 m over it (the adaptive part: across a kink a tangent ray's bending goes as √(kink − h), its
+ *  slope infinite — 4″ off on a 71 m grid at the tropopause) */
+export const TABLE_TANGENTS = 512;
+const KINKS = [11000, 20000, 32000, 47000, 51000, 71000];
+export function tangentHeights(): Float64Array {
+  const hs = new Set<number>();
+  for (let k = 0; k < TABLE_TANGENTS; k++) hs.add(Math.round(LAYER_TOP * (k / (TABLE_TANGENTS - 1)) ** 2));
+  // (the kinks as geometric heights: the profile's are geopotential)
+  for (const K of KINKS) {
+    const g = (K * R_E) / (R_E - K);
+    // (closer and closer as it nears the kink from under — the √'s steepness —; every 50 m over it)
+    for (let j = 0; j <= 40; j++) hs.add(Math.round((g - 1500 * (j / 40) ** 2) * 10) / 10);
+    for (let d = 50; d <= 300; d += 50) hs.add(Math.round(g + d));
+  }
+  return Float64Array.from([...hs].filter((h) => h >= 0 && h <= LAYER_TOP).sort((a, b) => a - b));
+}
+
+export interface RefractionTables {
+  /** B_haut[i * TABLE_ELEVATIONS + j]: the bending [rad] up from TABLE_HEIGHTS[i] at elevation 90° (j / (J − 1))² */
+  haut: Float32Array;
+  /** B_limbe[k]: a tangent ray's whole bending [rad] at the tangent height limbH[k] [m] */
+  limbe: Float32Array;
+  limbH: Float64Array;
+  state: AirState;
+}
+
+/** The tables of an air (~1 600 rays: about a second — a worker's) */
+export function buildTables(state: AirState): RefractionTables {
+  const P = airProfile(state);
+  const D = Math.PI / 180;
+  const haut = new Float32Array(TABLE_HEIGHTS.length * TABLE_ELEVATIONS);
+  TABLE_HEIGHTS.forEach((h, i) => {
+    for (let j = 0; j < TABLE_ELEVATIONS; j++) {
+      const u = j / (TABLE_ELEVATIONS - 1);
+      haut[i * TABLE_ELEVATIONS + j] = bendingUp(P, h, 90 * D * u * u, 2000);
+    }
+  });
+  const limbH = tangentHeights();
+  const limbe = new Float32Array(limbH.length);
+  for (let k = 0; k < limbH.length; k++) limbe[k] = limbBending(P, limbH[k]!);
+  return { haut, limbe, limbH, state };
+}
+
+/** B_haut read: the bending [rad] up from h [m] at an elevation e [rad] (≥ 0) — its log linear in the height (the air's
+ *  exponential), cubic (Catmull-Rom) in u */
+export function tableBendingUp(T: RefractionTables, h: number, e: number): number {
+  const H = TABLE_HEIGHTS;
+  const hh = Math.min(Math.max(h, 0), H[H.length - 1]!);
+  let i = 0;
+  while (i + 2 < H.length && hh > H[i + 1]!) i++;
+  const fh = (hh - H[i]!) / (H[i + 1]! - H[i]!);
+  const u = Math.sqrt(Math.min(Math.max(e, 0), Math.PI / 2) / (Math.PI / 2)) * (TABLE_ELEVATIONS - 1);
+  const row = (r: number) => cubicAt(T.haut, r * TABLE_ELEVATIONS, TABLE_ELEVATIONS, u);
+  const a = row(i),
+    b = row(i + 1);
+  return a > 0 && b > 0 ? Math.exp(Math.log(a) * (1 - fh) + Math.log(b) * fh) : a * (1 - fh) + b * fh;
+}
+/** B_limbe read: a tangent ray's bending [rad] at a tangent height [m] */
+export function tableLimb(T: RefractionTables, ht: number): number {
+  const H = T.limbH;
+  const h = Math.min(Math.max(ht, H[0]!), H[H.length - 1]!);
+  let lo = 0,
+    hi = H.length - 1;
+  while (hi - lo > 1) {
+    const m = (lo + hi) >> 1;
+    if (H[m]! <= h) lo = m;
+    else hi = m;
+  }
+  return monotoneAt(T.limbe, H, lo, h);
+}
+/** a monotone cubic (Fritsch–Carlson) through a monotone table on nonuniform abscissae: no overshoot at the air's kinks */
+function monotoneAt(a: Float32Array, H: Float64Array, i: number, x: number): number {
+  const n = a.length;
+  const sec = (k: number) => (a[k + 1]! - a[k]!) / (H[k + 1]! - H[k]!);
+  const slope = (k: number) => {
+    if (k <= 0) return sec(0);
+    if (k >= n - 1) return sec(n - 2);
+    const l = sec(k - 1),
+      r = sec(k);
+    return l * r <= 0 ? 0 : (2 * l * r) / (l + r);
+  };
+  const w = H[i + 1]! - H[i]!;
+  const t = (x - H[i]!) / w;
+  const t2 = t * t,
+    t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * a[i]! + (t3 - 2 * t2 + t) * w * slope(i) + (-2 * t3 + 3 * t2) * a[i + 1]! + (t3 - t2) * w * slope(i + 1);
+}
+function cubicAt(a: Float32Array, off: number, n: number, x: number): number {
+  const i = Math.min(Math.floor(x), n - 2);
+  const t = x - i;
+  const p = (k: number) => a[off + Math.min(Math.max(k, 0), n - 1)]!;
+  const p0 = p(i - 1),
+    p1 = p(i),
+    p2 = p(i + 1),
+    p3 = p(i + 2);
+  return p1 + 0.5 * t * (p2 - p0 + t * (2 * p0 - 5 * p1 + 4 * p2 - p3 + t * (3 * (p1 - p2) + p3 - p0)));
+}

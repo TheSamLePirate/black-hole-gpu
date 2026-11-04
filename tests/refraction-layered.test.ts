@@ -103,3 +103,27 @@ test("the real weather's air (airOfModel): the sea-level pressure given or reduc
   expect(reduced.pMsl / 100).toBeLessThan(1020);
   expect(reduced.rh).toBeCloseTo(1, 3);
 });
+
+test("the tables (B_haut, B_limbe) against the integral: within 3″ everywhere sampled, built in well under a few seconds", async () => {
+  const { buildTables, tableBendingUp, tableLimb } = await import("../src/system/refraction-layered");
+  const t0 = performance.now();
+  const T = buildTables(BENNETT_AIR);
+  expect(performance.now() - t0).toBeLessThan(5000);
+  const AS = (180 * 3600) / Math.PI;
+  // (a fixed sequence of points: heights to 30 km, elevations to 90°, dense near the ground and the horizon)
+  let seed = 12345;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  let worstHaut = 0;
+  for (let k = 0; k < 300; k++) {
+    const h = rnd() ** 3 * 30000,
+      e = rnd() ** 2 * 90 * D;
+    worstHaut = Math.max(worstHaut, Math.abs(tableBendingUp(T, h, e) - bendingUp(P, h, e)) * AS);
+  }
+  let worstLimb = 0;
+  for (let k = 0; k < 150; k++) {
+    const ht = rnd() ** 2 * 60000;
+    worstLimb = Math.max(worstLimb, Math.abs(tableLimb(T, ht) - limbBending(P, ht)) * AS);
+  }
+  expect(worstHaut).toBeLessThan(3);
+  expect(worstLimb).toBeLessThan(3);
+}, 30_000);
