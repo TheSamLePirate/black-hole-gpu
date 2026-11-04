@@ -3135,7 +3135,10 @@ export class Renderer {
     );
     // (Q5 VIPER C2: the clouds' march amortised — a texel in four a frame — while their history holds: a frame flag, not a
     // liteSkip bit — that word reaches the kernel through a float, its low bits lost under a bit 30)
-    this.cloudAmortizedNow = this.cloudAmortize && this.cloudHistoryOn && this.cloudHistOk;
+    this.cloudAmortizedNow =
+      (this.cloudAmortize === true || (this.cloudAmortize === "still" && this.frameMotionPx < 0.5)) &&
+      this.cloudHistoryOn &&
+      this.cloudHistOk;
     u.set(
       [
         this.frameStamp,
@@ -6441,6 +6444,12 @@ export class Renderer {
           : 0;
       const px = t.height / (2 * tanH);
       this.imageTurnPx = turnRad * px;
+      // (Q5 VIPER C2: the image's motion this frame [px] — the turn since the last frame and the nearest ground's parallax —, not a
+      // second's: a stepped flight's frames come slowly in wall time, a turn per second told nothing of a frame's)
+      const pf = past.length > 1 ? past[past.length - 2]!.f : cam.fwd;
+      const turnFrame = Math.hypot(cam.fwd[0] - pf[0], cam.fwd[1] - pf[1], cam.fwd[2] - pf[2]) * px;
+      const groundFrame = ln && shift > 0 ? (shift / Math.max(this.nearestSurfaceM(ln, mPerM), 1)) * px : 0;
+      this.frameMotionPx = turnFrame + groundFrame;
       // (the seen ground's slide [px a second]: fifteen of the view's directions, those below the horizon each to the
       // ground — its height over it, flat, no farther than 40 km —, the camera's move over the body across each over its
       // distance; their mean, the sky's nothing — as fast as the ground slides, as much of it as the view shows. Not the
@@ -6476,6 +6485,7 @@ export class Renderer {
     } else {
       this.fwdPast.length = 0;
       this.imageTurnPx = this.imageGroundPx = 0;
+      this.frameMotionPx = Number.POSITIVE_INFINITY;
     }
     // (a jump: the other region, or the distance to the hole changed by more than 5 % in a frame, or a translation)
     const jumped = !prev || prev.region !== cam.region || Math.abs(cam.r - prev.r) > 0.05 * Math.max(cam.r, 1e-9) || moved;
@@ -9215,10 +9225,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.cloudHistOk = ta.valid;
   }
   /** (Q5 VIPER C2) the clouds' march amortised — a texel in four a frame, the history rebuilding the others — and its switch:
-   *  off by default — −0.8 ms still, but turning (ghost, clouds, 40°) the image's PSNR 36.5–36.7 dB against 38.0–38.2 and twice
-   *  the bright trails behind the clouds: a frame rate not to be bought with a blurred image (the next: amortised only when the
-   *  view is near still, or a better rebuild of the texels the motion uncovers) */
-  cloudAmortize = false;
+   *  off by default; "still": amortised only while the image barely moves (under half a pixel a frame, frameMotionPx) — not yet
+   *  clean in the ghost turn either (35.7 dB against 37.4 under a heavy thermal pressure, to be found);
+   *  −0.8 ms still, but turning (ghost, clouds, 40°) amortised the image's PSNR fell to 36.5–36.7 dB from 38.0–38.2 and the bright
+   *  trails behind the clouds doubled — a frame rate not bought with a blurred image; true: always (a measure's), false: never */
+  cloudAmortize: boolean | "still" = false;
+  /** (Q5 VIPER C2) the image's motion last frame [px]: the turn since the frame before and the nearest ground's parallax */
+  frameMotionPx = Number.POSITIVE_INFINITY;
   cloudAmortizedNow = false;
   /** (Q5 VIPER C2) a weather layer's samples along the ray while amortised — the budget freed could be taken back here: 32 cost
    *  +0.22 ms over 16 with no difference seen at rest (cloud-amortize); 16 until a measure in motion says otherwise */
