@@ -50,7 +50,8 @@ test("H5: the record's packing — two sines a float, three steps a float — re
 
 test("H5: in the tracer's table after the near body's maps; the bake and the reader written for the cache's lattice", () => {
   expect(TABLE_EARTH_HORIZON).toBeGreaterThan(TABLE_HORIZON);
-  expect(TABLE_VEC4S).toBe(TABLE_EARTH_HORIZON + EARTH_HORIZON_VEC4S);
+  // (no longer last since T7: the sea's water and the shore's distances after it)
+  expect(TABLE_VEC4S).toBeGreaterThanOrEqual(TABLE_EARTH_HORIZON + EARTH_HORIZON_VEC4S);
   // (3 levels of 257² nodes, two vec4s each: 6.3 MB — under the storage binding's 128 MB with the rest)
   expect(EARTH_HORIZON_VEC4S * 16).toBeLessThan(8 * 2 ** 20);
   expect(TABLE_VEC4S * 16).toBeLessThan(128 * 2 ** 20);

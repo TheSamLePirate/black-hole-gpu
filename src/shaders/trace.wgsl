@@ -434,6 +434,11 @@ const TOPS_OFF = 1216589u;
 const WATER_OFF = 1745176u;
 const WATER_W = 4320u;
 const WATER_H = 2160u;
+// the shore's distances on the relief cache's levels 3 and 4 (gpu-tables.ts TABLE_SHORE, system/earth-shore.ts): each level's
+// header (its window's reference; nodes a radian, spacing, published, level), then its nodes four a vec4
+const SHORE_OFF = 2522777u;
+const SHORE_HEADER_VEC4S = 4u;
+const SHORE_NODE_VEC4S = 16513u;
 // the giants' zonal winds (gpu-tables.ts TABLE_WIND, system/giant-winds.ts): 146 values, four a vec4
 const WIND_OFF = 1198776u;
 const GEOID_W = 1440u;
@@ -7464,6 +7469,27 @@ fn seaDepthAt(q: vec3f, foot: f32) -> vec2f {
 }
 // The geoid's height N over the ellipsoid [m] at a geodetic direction g (system/geoid.ts geoidN: the same map, read
 // the same way): the mean sea's surface, and what the heights above the sea are raised by. 0 until the map is in.
+// The distance to the shore at a geodetic normal g [m] (system/earth-shore.ts: the nearest land node — over 0.6 m above the sea —
+// within 4 nodes of the relief cache's levels 3 and 4, 6.1 and 24 m apart), bilinear; 1e4 where no level holds g
+fn shoreNode(s: u32, i: vec2u) -> f32 {
+  let n = i.y * 257u + i.x;
+  return bodies[SHORE_OFF + SHORE_HEADER_VEC4S + s * SHORE_NODE_VEC4S + n / 4u][n % 4u];
+}
+fn seaShoreDist(g: vec3f) -> f32 {
+  for (var s = 0u; s < 2u; s++) {
+    let r = bodies[SHORE_OFF + 2u * s];
+    let p = bodies[SHORE_OFF + 2u * s + 1u];
+    if (p.z < 0.5) { continue; }
+    let dl = atan2(-g.x * r.y + g.y * r.x, g.x * r.x + g.y * r.y);
+    let sz = clamp(g.z, -1.0, 1.0);
+    let uv = vec2f(dl, asin(clamp(sz * r.w - sqrt(max(1.0 - sz * sz, 0.0)) * r.z, -1.0, 1.0))) * p.x;
+    if (min(uv.x, uv.y) < 1.0 || max(uv.x, uv.y) >= 255.0) { continue; }
+    let i = vec2u(floor(uv));
+    let f = fract(uv);
+    return mix(mix(shoreNode(s, i), shoreNode(s, i + vec2u(1u, 0u)), f.x), mix(shoreNode(s, i + vec2u(0u, 1u)), shoreNode(s, i + vec2u(1u, 1u)), f.x), f.y);
+  }
+  return 1e4;
+}
 fn geoidNode(x: u32, y: u32) -> f32 {
   let n = y * GEOID_W + x;
   return bodies[GEOID_OFF + n / 4u][n % 4u];
@@ -14321,31 +14347,25 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   SEA_DEPTH = dw.x;
   SEA_DEPTH_W = dw.y;
   SEA_KD = select(seaKd490(gq), 0.0, calm > 0.0);
-  // (the relief round the point, read at one call site for all its uses — four copies of it were 71 % of this kernel —: a
-  // river's slope for its falls, four reads ±ds east and north; the sea's shore, one read a frame — a direction and a distance
-  // 1.5–3 footprints (8–20 m at least) drawn by the pixel's blue noise, the history summing them: eight a pixel cost 5–11 ms on
-  // kerr-mini —, land there (over 0.6 m) the waves washing on it; liteSkip 536870912: the shore's off)
+  // (the relief round the point, read at one call site — four copies of it were 71 % of this kernel —: a river's slope for its
+  // falls, four reads ±ds east and north)
   var east = vec3f(-gq.y, gq.x, 0.0);
   east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-12);
   let north = cross(gq, east);
   let fallOn = calm > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5;
-  // (the footprint's geometric mean: a grazing look's — 1 m across, 20 m along at a kilometre from 60 m up — some 4–5 m)
-  // (only over a bed the bathymetry finds under ~40 m, or where it is unsure — its data's rim runs along the coast itself, the
-  // cliffs' feet —: the open sea's pixels skip the read — one a pixel cost 1.3–4.3 ms on kerr-mini over a view of sea)
-  let shoreOn = calm <= 0.0 && footSea < 25.0 && tM < 3000.0 && (dw.x < 40.0 || dw.y < 0.6) && (liteSkip() & 536870912u) == 0u;
   let ds = max(25.0, 2.0 * footSea);
-  let bn = blueDraws(vec2u(centre), P.frame.x + 7u);
   var hs = array<f32, 4>(0.0, 0.0, 0.0, 0.0);
-  for (var i = 0u; i < select(select(0u, 1u, shoreOn), 4u, fallOn); i++) {
-    let a = select(bn.x * TAU, f32(i) * 1.5707963, fallOn);
-    let r = select(mix(max(8.0, 1.5 * footSea), max(20.0, 3.0 * footSea), bn.y), ds, fallOn);
-    // (the shore's: the relief cache's height — a table's read, the heights as drawn; −1 off its windows: no shore —; the falls'
-    // the exact relief as before — the tiles' walk a pixel cost 2–4 ms on kerr-mini over a view of sea)
-    let pq = normalize(gq + (east * cos(a) + north * sin(a)) * (r / EARTH_RM));
-    hs[i] = select(terrainCachedHeight(pq, max(footSea, 1.0)), earthHeightStepG(pq, ds), fallOn);
+  for (var i = 0u; i < select(0u, 4u, fallOn); i++) {
+    let a = f32(i) * 1.5707963;
+    hs[i] = earthHeightStepG(normalize(gq + (east * cos(a) + north * sin(a)) * (ds / EARTH_RM)), ds);
   }
-  // (the nearer the land, the more of the wash: a hit at 1.5 footprints counts whole, at 3 half)
-  SEA_SHORE = select(0.0, 1.0 - 0.5 * bn.y, shoreOn && hs[0] > 0.6);
+  // (the sea's shore: the distance to the nearest land baked on the relief cache's levels — system/earth-shore.ts, one read —;
+  // the wash within ~12 m of it, wider as the pixel grows; the sea near alone. liteSkip 536870912: off — the relief's own walk
+  // round each pixel cost 1.7–3.2 ms on kerr-mini)
+  SEA_SHORE = 0.0;
+  if (calm <= 0.0 && tM < 3500.0 && (liteSkip() & 536870912u) == 0u) {
+    SEA_SHORE = smoothstep(max(12.0, 1.5 * footSea), 0.0, seaShoreDist(gq));
+  }
   RNDV = blueDraws(vec2u(centre), P.frame.x);
   RND = RNDV.z;
   RASTER_SHADE = true;

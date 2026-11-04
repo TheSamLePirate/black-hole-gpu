@@ -3,6 +3,7 @@ import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import { TerrainCache } from "./system/terrain-cache";
 import { EarthHorizons } from "./system/earth-horizons";
+import { EarthShore } from "./system/earth-shore";
 import { EH_HEADER_VEC4S, EH_NODE_VEC4S } from "./system/terrain-cache-layout";
 import { composeTracer } from "./system/tracer-source";
 import {
@@ -934,6 +935,8 @@ export class Renderer {
   readonly horizonMaps: HorizonMaps;
   /** (H5) the Earth's horizons in 8 directions on the relief cache's levels 4–6 (system/earth-horizons.ts): made with the cache */
   earthHorizons: EarthHorizons | null = null;
+  /** T7: the shore's distances (system/earth-shore.ts), with the wash */
+  earthShore: EarthShore | null = null;
   /** the Moon's relief tiles round the camera (P6): drawn through the Earth's tiles' binding while the Moon is near */
   readonly moonTiles: MoonTiles;
   readonly earthSurface: EarthSurface;
@@ -1965,6 +1968,7 @@ export class Renderer {
     this.earthSurface.dispose();
     this.horizonMaps.cancel();
     this.earthHorizons?.dispose();
+    this.earthShore?.dispose();
     this.terrainSurfaceCache?.dispose();
     this.terrainRaster?.dispose();
     this.sceneryRaster?.dispose();
@@ -5583,6 +5587,17 @@ export class Renderer {
         () => this.prof.pass("earth horizons", { label: "earth horizons" }),
         this.prof.table().find((p) => p.label === "earth horizons")?.last,
       );
+      // (T7: the shore's distances on the cache's levels 3 and 4 — a level baked whole when the cache bakes it again —, for the
+      // waves' wash; with it)
+      this.earthShore ??= new EarthShore(this.device);
+      this.earthShore.encode(
+        enc,
+        this.bodyBuf,
+        this.shoreWash,
+        (lv) => cache.levelWindow(lv),
+        (lv) => cache.levelGeneration(lv),
+        () => this.prof.pass("earth shore", { label: "earth shore" }),
+      );
       // (realtime: nothing rejected — a bake is the same ground, its window moved or its heights refined by new tiles, and
       // the temporal pass's clamp takes the change; rejecting the history there threw it away for the eight frames of the
       // levels' bakes at every tile landing — on an M1 at one pixel shaded in 64, a blur every second in low flight)
@@ -8345,9 +8360,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** Q4 L4 — the known materials' specular (shadeLite: GGX, a runway's paving, the regional surface's classes): off by default
    *  until judged — facing a low Sun it brightened Roissy 63 %, a wet-looking sheen on dry paving (Q4.md L4) */
   groundSpecular = false;
-  /** T7 — the shore's wash (shadeWater: the relief probed round each near sea pixel, one read a frame; the waves' white where land
-   *  is within 8–20 m): off by default — measured on kerr-mini, +1.7–3.2 ms of the water's pass over coastal views (T7.md) */
-  shoreWash = false;
+  /** T7 — the shore's wash (shadeWater: the distance to the nearest land baked on the relief cache's levels 3 and 4 —
+   *  system/earth-shore.ts —, one read a near sea pixel; the waves' white within ~12 m of it): on — measured on kerr-mini,
+   *  +0.2–0.8 ms of the water's pass over coastal views (T7.md); false: neither the bake nor the wash */
+  shoreWash = true;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
   private rasterEligibleNow = false;
   /** the clouds' transmittance map seen from the Sun (trace.wgsl cloudShadow — docs/PLAN-NUAGES-AAA.md N3; read by

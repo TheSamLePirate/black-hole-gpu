@@ -37,8 +37,11 @@ import {
   ORTHO_VEC4S,
   TABLE_WATER,
   WATER_VEC4S,
+  TABLE_SHORE,
+  SHORE_VEC4S,
 } from "../src/gpu-tables";
 import { GEOID_H, GEOID_W } from "../src/system/geoid-grid";
+import { SHORE_HEADER_VEC4S, SHORE_NODE_VEC4S } from "../src/system/earth-shore-layout";
 import { GIANT_WINDS } from "../src/system/giant-winds";
 import { GIANT_TOPS_TABLE } from "../src/system/giant-tops";
 import { TERRAIN_CACHE_VEC4S } from "../src/system/terrain-cache-layout";
@@ -56,7 +59,11 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   // (T7: the sea's water, last)
   expect(constU("WATER_OFF")).toBe(TABLE_WATER);
   expect(TABLE_WATER).toBe(TABLE_EARTH_HORIZON + EARTH_HORIZON_VEC4S);
-  expect(TABLE_VEC4S).toBe(TABLE_WATER + WATER_VEC4S);
+  expect(constU("SHORE_OFF")).toBe(TABLE_SHORE);
+  expect(TABLE_SHORE).toBe(TABLE_WATER + WATER_VEC4S);
+  expect(constU("SHORE_HEADER_VEC4S")).toBe(SHORE_HEADER_VEC4S);
+  expect(constU("SHORE_NODE_VEC4S")).toBe(SHORE_NODE_VEC4S);
+  expect(TABLE_VEC4S).toBe(TABLE_SHORE + SHORE_VEC4S);
   expect(constU("SH_BASE")).toBe(TABLE_SH);
   expect(constU("LUT_OFF")).toBe(TABLE_LUT);
   expect(constU("PATH_OFF")).toBe(TABLE_PATH);
@@ -86,7 +93,8 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
       TERRAIN_PREV_VEC4S +
       HORIZON_VEC4S +
       EARTH_HORIZON_VEC4S +
-      WATER_VEC4S,
+      WATER_VEC4S +
+      SHORE_VEC4S,
   );
   expect(constU("GEOID_OFF")).toBe(TABLE_GEOID);
   expect(constU("ORTHO_OFF")).toBe(TABLE_ORTHO);
