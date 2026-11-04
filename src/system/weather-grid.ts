@@ -54,7 +54,7 @@ export function gridUrl(lat: number, lon: number, ms: number, now: number): { ur
 
 export interface GridHour {
   t: number;
-  /** per point: low, middle, high cover (0…1), visibility [m] (NaN: not given — the archive) */
+  /** per point: low, middle, high cover (0…1), visibility [m] (−1: not given — the archive) */
   v: Float32Array;
 }
 
@@ -77,7 +77,7 @@ export function parseGrid(json: unknown): GridHour[] | null {
         mi = n("cloud_cover_mid"),
         hi = n("cloud_cover_high");
       if (lo === null || mi === null || hi === null) ok = false;
-      v.set([(lo ?? 0) / 100, (mi ?? 0) / 100, (hi ?? 0) / 100, n("visibility") ?? Number.NaN], 4 * i);
+      v.set([(lo ?? 0) / 100, (mi ?? 0) / 100, (hi ?? 0) / 100, n("visibility") ?? -1], 4 * i);
     });
     if (ok) out.push({ t: Date.parse(`${times[k]}:00Z`), v });
   }
@@ -95,7 +95,8 @@ export function gridAt(hours: GridHour[], ms: number): Float32Array | null {
   if (a && b) {
     if (a.t === b.t) return a.v;
     const f = (ms - a.t) / (b.t - a.t);
-    return a.v.map((x, i) => x + (b!.v[i]! - x) * f);
+    // (a visibility missing at either hour — −1 —: missing)
+    return a.v.map((x, i) => (i % 4 === 3 && (x < 0 || b!.v[i]! < 0) ? -1 : x + (b!.v[i]! - x) * f));
   }
   const one = a ?? b;
   return one && Math.abs(one.t - ms) < 3 * 3600e3 ? one.v : null;

@@ -6,7 +6,8 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // Q5 C5 — the real weather's model on a grid about the camera (system/weather-grid.ts; renderer.weatherGridOn,
 // weatherGridEnabled; trace.wgsl wxGridCover): the real weather now over Brittany (48.2° N, 3.5° W) from 3 000 m, the F-35's
 // cockpit then the view round it (north, east, south, west), frozen — the grid on, then off (the camera's cover carried round
-// it): shots, the sky's upper third. The 25 points' covers printed (their spread: the weather's variety within 250 km).
+// it): shots, the sky's upper third. The 25 points' covers and visibilities printed (their spread: the weather's variety within
+// 250 km — the haze read on the grid too, wxHazeExt).
 // WG_AT=lat,lon: another place. WG_OUT: where the shots go (remote-results/weather-grid).
 // Done when: the grid in (or said missing after 30 s), the four headings shot both ways, no GPU error. Duration: ~3 min.
 const OUT = process.env.WG_OUT ?? "remote-results/weather-grid";
@@ -32,7 +33,7 @@ test.skipIf(!E2E)(
         () => "the grid not in after 30 s",
       );
       out.covers = await app.js(
-        `(() => { const r = __bh.renderer; const g = r.weatherGrid.peek(${lat}, ${lon}, Date.parse("${iso}")); return g ? { centre: g.centre, low: Array.from({ length: 25 }, (_, k) => +g.v[4 * k].toFixed(2)), mid: Array.from({ length: 25 }, (_, k) => +g.v[4 * k + 1].toFixed(2)), high: Array.from({ length: 25 }, (_, k) => +g.v[4 * k + 2].toFixed(2)) } : null; })()`,
+        `(() => { const r = __bh.renderer; const g = r.weatherGrid.peek(${lat}, ${lon}, Date.parse("${iso}")); return g ? { centre: g.centre, low: Array.from({ length: 25 }, (_, k) => +g.v[4 * k].toFixed(2)), mid: Array.from({ length: 25 }, (_, k) => +g.v[4 * k + 1].toFixed(2)), high: Array.from({ length: 25 }, (_, k) => +g.v[4 * k + 2].toFixed(2)), vis: Array.from({ length: 25 }, (_, k) => Math.round(g.v[4 * k + 3])) } : null; })()`,
       );
       console.log(`  grid ${out.grid}: ${JSON.stringify(out.covers)}`);
       await app.js(`new Promise((q) => setTimeout(() => { __bh.game.setDate("${iso}"); __bh.freeze(true); q(1); }, 500))`);

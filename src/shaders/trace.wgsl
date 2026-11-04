@@ -6053,9 +6053,11 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
       // path too. Fog is thick: each step's light integrated exactly over it (τ ≫ 1 in one step)
       let w = wxNear(p / r);
       let vl = wxVeil(h, w, 3u);
-      let ew = wxHaze(h, w) + WX_W * P.wx[0].z * fogIn;
+      // (Q5 C5: the haze's extinction where this step is — the weather grid's visibility there —, else the camera's)
+      let hx = wxHazeExt(p / r);
+      let ew = wxHaze(h, w, hx) + WX_W * P.wx[0].z * fogIn;
       let mu0 = dot(normal, physicalLs);
-      Ts *= exp(-w * P.wx[0].y * 1500.0 * exp(-max(h - P.wx[4].x, 0.0) / 1500.0) / max(mu0, 0.05));
+      Ts *= exp(-w * hx * 1500.0 * exp(-max(h - P.wx[4].x, 0.0) / 1500.0) / max(mu0, 0.05));
       let pW = 0.5 * hgPhase(0.75, mu) + 0.5 / (4.0 * PI);
       // (the diffuse share carries the blue sky's light that fell on the decks: a grey, not the sun's tint)
       if (csT >= 0.0) {
@@ -6183,7 +6185,27 @@ fn wxVeil(h: f32, w: f32, skip: u32) -> vec2f {
   return vec2f(d, a);
 }
 // the haze's extinction at a height h [m], the weather's weight w there: thinning over 1.5 km above the ground
-fn wxHaze(h: f32, w: f32) -> f32 { return w * P.wx[0].y * exp(-max(h - P.wx[4].x, 0.0) / 1500.0); }
+fn wxHaze(h: f32, w: f32, ext: f32) -> f32 { return w * ext * exp(-max(h - P.wx[4].x, 0.0) / 1500.0); }
+// (Q5 C5) the haze's extinction at the ground [1/m] at q: the weather grid's visibility there (weather.ts's 3.912 / V − 3.5e-5),
+// bilinear; a corner without one (the ERA5 archive: none) or no grid, the camera's (P.wx[0].y)
+fn wxHazeExt(q: vec3f) -> f32 {
+  let hd = bodies[WXGRID_OFF + 1u];
+  if (hd.x < 0.5) { return P.wx[0].y; }
+  let c = bodies[WXGRID_OFF];
+  let e = normalize(cross(vec3f(0.0, 0.0, 1.0), c.xyz));
+  let xy = clamp(vec2f(dot(q, e), dot(q, cross(c.xyz, e))) / c.w + 2.0, vec2f(0.0), vec2f(4.0));
+  let ij = min(vec2u(xy), vec2u(3u));
+  let fr = xy - vec2f(ij);
+  var v = 0.0;
+  for (var m = 0u; m < 4u; m++) {
+    let o = vec2u(m & 1u, m >> 1u);
+    let vis = bodies[WXGRID_OFF + 2u + (ij.y + o.y) * 5u + ij.x + o.x].w;
+    if (vis <= 0.0) { return P.wx[0].y; }
+    let w = mix(1.0 - fr, fr, vec2f(o));
+    v += clamp(vis, 50.0, 50000.0) * (w.x * w.y);
+  }
+  return max(3.912 / v - 3.5e-5, 0.0);
+}
 // The fog lying on the ground (P.wx[0].z > 0) along ro + t rd: the stretch of the ray under its top
 // [t0, t1] (radii), its top heaving by a fifth of its depth where it is met from above — the sheet's
 // swell seen from over it. Its thickness is far under a march's step: its depth along each step is

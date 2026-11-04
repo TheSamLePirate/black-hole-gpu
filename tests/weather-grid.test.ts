@@ -47,6 +47,9 @@ test("the answer read point by point, the hour interpolated", () => {
   expect(v[4 * 3 + 1]!).toBeCloseTo(0.03, 6);
   expect(v[4 * 3 + 3]!).toBeCloseTo(25000, 3);
   expect(parseGrid(json.slice(1))).toBeNull();
+  // (the archive: no visibility — −1, the camera's haze in the shader there)
+  const arch = parseGrid(json.map((p) => ({ hourly: { ...p.hourly, visibility: undefined } })))!;
+  expect(gridAt(arch, Date.parse("2026-07-10T12:30:00Z"))![3]).toBe(-1);
 });
 
 test("the feed: asked once a centre and a day, the grid then at any hour of it", async () => {
@@ -93,5 +96,7 @@ test("the shader reads the grid where it is: its offset and its 5 × 5", async (
   const wgsl = await Bun.file(new URL("../src/shaders/trace.wgsl", import.meta.url)).text();
   expect(wgsl).toContain(`const WXGRID_OFF = ${TABLE_WXGRID}u;`);
   expect(wgsl).toContain(`(ij.y + o.y) * ${WXGRID_N}u + ij.x + o.x`);
+  // (the haze read on the grid too, by the same frame)
+  expect(wgsl).toContain("fn wxHazeExt(q: vec3f) -> f32");
   expect(wgsl).toContain(`/ c.w + ${(WXGRID_N - 1) / 2}.0, vec2f(0.0), vec2f(${WXGRID_N - 1}.0)`);
 });

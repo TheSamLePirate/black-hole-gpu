@@ -2,5 +2,5 @@
 // tables' layout imports no renderer code.
 export const WXGRID_N = 5;
 /** its centre (the squashed Earth's unit direction, the points' step [rad]), its header (1 when in, the weather's layers'
- *  classes — 0 low, 1 middle, 2 high, −1 none), then a vec4 a point (low, middle, high cover, visibility [m]) */
+ *  classes — 0 low, 1 middle, 2 high, −1 none), then a vec4 a point (low, middle, high cover, visibility [m] — −1 none) */
 export const WXGRID_VEC4S = 2 + WXGRID_N * WXGRID_N;
