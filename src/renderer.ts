@@ -245,7 +245,7 @@ import {
   WGS84_A,
   WGS84_F,
 } from "./system/ellipsoid";
-import { AIR_K, setTransmittanceLut, sunThroughY, TransmittanceLutBuilder } from "./system/earth-air";
+import { AIR_K, MSLUT_OFF, setTransmittanceLut, sunThroughY, TransmittanceLutBuilder } from "./system/earth-air";
 import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
 import { bodyPlace, localPatch, patchGeodetic } from "./system/local-patch";
@@ -986,6 +986,9 @@ export class Renderer {
   tlutPublished = false;
   /** the table used (false: Chapman's column — a measure's A/B) */
   tlutOn = true;
+  /** (C1, second lot) its multiple scattering used (false: the single scattering's isotropic stand-in — a measure's A/B) */
+  msLutOn = true;
+  private msPublished = true;
   /** the sea's water map in the tracer's table (gpu-tables.ts TABLE_WATER), once */
   waterIn = false;
   /** the orthophotos' levels last written to the tracer's table (gpu-tables.ts TABLE_ORTHO) */
@@ -1970,12 +1973,25 @@ export class Renderer {
       }
       return;
     }
-    if (this.tlutPublished) return;
+    if (this.tlutPublished) {
+      // (the multiple scattering's header alone put to 0 or back: its A/B)
+      if (this.msLutOn !== this.msPublished && this.tlutBuilder?.done) {
+        const f = this.tlutBuilder.done;
+        this.device.queue.writeBuffer(
+          this.bodyBuf,
+          (TABLE_TLUT + MSLUT_OFF) * 16,
+          this.msLutOn ? f.subarray(4 * MSLUT_OFF, 4 * MSLUT_OFF + 4) : new Float32Array(4),
+        );
+        this.msPublished = this.msLutOn;
+      }
+      return;
+    }
     const f = (this.tlutBuilder ??= new TransmittanceLutBuilder()).step(2);
     if (!f) return;
     this.device.queue.writeBuffer(this.bodyBuf, TABLE_TLUT * 16, f as Float32Array<ArrayBuffer>);
     setTransmittanceLut(f);
     this.tlutPublished = true;
+    this.msPublished = true;
   }
   refractivity(s: Settings): number {
     const m = s.weather === "real" ? this.weatherReal?.model : undefined;

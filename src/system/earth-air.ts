@@ -3,9 +3,9 @@
 // the light meter: the light falling on a camera near the Earth.
 
 import { EARTH_RM } from "../terrain";
-import { TLUT_H, TLUT_VEC4S, TLUT_W } from "./earth-air-layout";
+import { MSLUT_N, MSLUT_OFF, TLUT_H, TLUT_VEC4S, TLUT_W } from "./earth-air-layout";
 
-export { TLUT_H, TLUT_VEC4S, TLUT_W } from "./earth-air-layout";
+export { MSLUT_N, MSLUT_OFF, TLUT_H, TLUT_VEC4S, TLUT_W } from "./earth-air-layout";
 
 /** The air drawn thicker than it is (the tracer's airK: scale heights × k, densities / k). */
 export const AIR_K = 3;
@@ -14,6 +14,8 @@ const HR = 8000 * AIR_K,
 const BR = [5.802e-6, 13.558e-6, 33.1e-6];
 const BO = [1.22e-6, 3.53e-6, 0.16e-6];
 const BME = 2.33e-5;
+/** the aerosols' scattering [1/m] (their albedo × their extinction: the tracer's AIR.bms) */
+const BMS = 2.1e-5;
 
 const chUp = (x: number, mu: number) => {
   const c = Math.sqrt(1.5707963 * x);
@@ -100,9 +102,97 @@ export class TransmittanceLutBuilder {
     }
     if (this.row < TLUT_H) return null;
     this.f.set([1, TLUT_W, TLUT_H, R_T / R_G], 0);
+    // (then the multiple scattering's rows, on the transmittance just built)
+    while (this.msRow < MSLUT_N && performance.now() - t0 < budgetMs) {
+      for (let i = 0; i < MSLUT_N; i++)
+        this.f.set(
+          multipleScattering(this.f, ((this.msRow + 0.5) / MSLUT_N) * (R_T - R_G), (2 * (i + 0.5)) / MSLUT_N - 1),
+          4 * (MSLUT_OFF + 1 + this.msRow * MSLUT_N + i),
+        );
+      this.msRow++;
+    }
+    if (this.msRow < MSLUT_N) return null;
+    this.f.set([1, MSLUT_N, MSLUT_N, R_T - R_G], 4 * MSLUT_OFF);
     this.done = this.f;
     return this.done;
   }
+  private msRow = 0;
+}
+
+// ---- Q5 C1, second lot: the multiple scattering (Hillaire 2020, §5.5): at a height h, the Sun at a zenith cosine mu, the light
+// scattered twice and more towards a point, every order summed as a geometric series — Ψ_ms = L₂ / (1 − f_ms): L₂ the
+// second order (the sunlit air and the ground seen all round, scattered isotropically), f_ms the share an isotropic scattering
+// returns. 64 directions (a Fibonacci sphere), 24 steps each, the Sun's light at each step read in the transmittance table;
+// the ground's albedo 0.3. The tracer adds σ_s Ψ_ms at each step of its air (trace.wgsl earthAir): the sky's light past the
+// terminator — the twilight's — where the single scattering's isotropic stand-in (0.8 and 0.3 of it) died with the Sun's ray.
+const MS_DIRS = 64;
+const MS_STEPS = 24;
+const GROUND_ALBEDO = 0.3;
+const FIB = Array.from({ length: MS_DIRS }, (_, k) => {
+  const z = 1 - (2 * (k + 0.5)) / MS_DIRS;
+  const a = k * Math.PI * (3 - Math.sqrt(5));
+  const s = Math.sqrt(1 - z * z);
+  return [s * Math.cos(a), s * Math.sin(a), z] as const;
+});
+/** Ψ_ms [rgb, per unit of the Sun's irradiance] at a height h [m] under the air's top, the Sun at a zenith cosine mu */
+export function multipleScattering(tlut: Float32Array, h: number, mu: number): [number, number, number] {
+  const r = R_G + h;
+  const sun = [Math.sqrt(Math.max(1 - mu * mu, 0)), 0, mu];
+  const L2 = [0, 0, 0],
+    fms = [0, 0, 0];
+  for (const w of FIB) {
+    // (the ray from (0, 0, r) along w: to the ground if it meets it, else to the top)
+    const b = r * w[2];
+    const disc = b * b - r * r + R_G * R_G;
+    const hitsGround = b < 0 && disc >= 0;
+    const len = hitsGround ? -b - Math.sqrt(disc) : -b + Math.sqrt(Math.max(b * b - r * r + R_T * R_T, 0));
+    const dt = len / MS_STEPS;
+    const tau = [0, 0, 0];
+    for (let k = 0; k < MS_STEPS; k++) {
+      const t = (k + 0.5) * dt;
+      const px = w[0] * t,
+        py = w[1] * t,
+        pz = r + w[2] * t;
+      const pr = Math.hypot(px, py, pz);
+      const hp = pr - R_G;
+      const dR = Math.exp(-hp / HR) / AIR_K,
+        dM = Math.exp(-hp / HM) / AIR_K;
+      const muP = (px * sun[0]! + pz * sun[2]!) / pr;
+      const Ts = lutThrough(tlut, hp, muP);
+      for (let c = 0; c < 3; c++) {
+        const ext = (BR[c]! + BO[c]!) * dR + BME * dM;
+        const T = Math.exp(-(tau[c]! + 0.5 * ext * dt));
+        const ss = BR[c]! * dR + BMS * dM;
+        L2[c]! += (T * ss * Ts[c]! * dt) / (4 * Math.PI);
+        fms[c]! += T * ss * dt;
+        tau[c]! += ext * dt;
+      }
+    }
+    if (hitsGround) {
+      // (the ground lit by the Sun, Lambertian, seen through the air before it)
+      const gx = w[0] * len,
+        gy = w[1] * len,
+        gz = r + w[2] * len;
+      const gr = Math.hypot(gx, gy, gz);
+      const muG = (gx * sun[0]! + gz * sun[2]!) / gr;
+      const Tg = lutThrough(tlut, 0, muG);
+      for (let c = 0; c < 3; c++) L2[c]! += (Math.exp(-tau[c]!) * Tg[c]! * Math.max(muG, 0) * GROUND_ALBEDO) / Math.PI;
+    }
+  }
+  return [0, 1, 2].map((c) => L2[c]! / MS_DIRS / (1 - fms[c]! / MS_DIRS)) as [number, number, number];
+}
+/** Ψ_ms read as the shader reads it (bilinear on the texels' centres) */
+export function msThrough(f: Float32Array, h: number, mu: number): [number, number, number] {
+  const x = Math.min(Math.max(((mu + 1) / 2) * MSLUT_N - 0.5, 0), MSLUT_N - 1);
+  const y = Math.min(Math.max((h / (R_T - R_G)) * MSLUT_N - 0.5, 0), MSLUT_N - 1);
+  const i = Math.min(Math.floor(x), MSLUT_N - 2),
+    j = Math.min(Math.floor(y), MSLUT_N - 2);
+  const fx = x - i,
+    fy = y - j;
+  const at = (a: number, b: number, c: number) => f[4 * (MSLUT_OFF + 1 + b * MSLUT_N + a) + c]!;
+  return [0, 1, 2].map(
+    (c) => (at(i, j, c) * (1 - fx) + at(i + 1, j, c) * fx) * (1 - fy) + (at(i, j + 1, c) * (1 - fx) + at(i + 1, j + 1, c) * fx) * fy,
+  ) as [number, number, number];
 }
 /** The whole table at once (the tests') */
 export function transmittanceLut(): Float32Array {

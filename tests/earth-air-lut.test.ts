@@ -61,3 +61,22 @@ test("the shader reads the same table: its offset and its grid's sizes", async (
   expect(wgsl).toContain(`vec2u(${TLUT_W - 2}u, ${TLUT_H - 2}u)`);
   expect(wgsl).toContain(`(ij.y + o.y) * ${TLUT_W}u + ij.x + o.x`);
 });
+
+test("the multiple scattering's table: lit past the terminator, falling with the Sun, read where the shader reads it", async () => {
+  const { msThrough, multipleScattering, MSLUT_OFF, MSLUT_N } = await import("../src/system/earth-air");
+  const D = Math.PI / 180;
+  const at = (el: number, h = 0) => msThrough(f, h, Math.sin(el * D))[1]!;
+  // (falling with the Sun, still lit past the terminator — the twilight's sky —, not at night)
+  expect(at(90)).toBeGreaterThan(at(20));
+  expect(at(20)).toBeGreaterThan(at(0));
+  expect(at(0)).toBeGreaterThan(at(-6));
+  expect(at(-6)).toBeGreaterThan(0);
+  expect(at(-30)).toBeLessThan(at(-6) * 1e-2);
+  // (the table's texel against the function itself, at its centre)
+  const h = (0.5 / MSLUT_N) * 300e3;
+  expect(msThrough(f, h, 2 * (16.5 / MSLUT_N) - 1)[1]!).toBeCloseTo(multipleScattering(f, h, 2 * (16.5 / MSLUT_N) - 1)[1]!, 8);
+  const wgsl = await Bun.file(new URL("../src/shaders/trace.wgsl", import.meta.url)).text();
+  expect(wgsl).toContain(`const MSLUT_OFF = ${MSLUT_OFF}u;`);
+  expect(wgsl).toContain(`* ${MSLUT_N}.0 - 0.5, vec2f(0.0), vec2f(${MSLUT_N - 1}.0))`);
+  expect(wgsl).toContain(`(ij.y + q.y) * ${MSLUT_N}u + ij.x + q.x`);
+});

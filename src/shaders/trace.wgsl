@@ -5766,6 +5766,22 @@ fn tlutTau(h: f32, mu: f32) -> vec3f {
   }
   return t;
 }
+// (C1, second lot) the multiple scattering's Ψ_ms [rgb, per unit of the Sun's irradiance] at a height h [m], the Sun at a
+// zenith cosine mu (system/earth-air.ts msThrough its twin: 32 × 32 after the transmittance, its header's w the top's height)
+const MSLUT_OFF = 16385u;
+fn msLut(h: f32, mu: f32) -> vec3f {
+  let o = TLUT_OFF + MSLUT_OFF;
+  let xy = clamp(vec2f((mu + 1.0) * 0.5, h / bodies[o].w) * 32.0 - 0.5, vec2f(0.0), vec2f(31.0));
+  let ij = min(vec2u(xy), vec2u(30u));
+  let fr = xy - vec2f(ij);
+  var m = vec3f(0.0);
+  for (var c = 0u; c < 4u; c++) {
+    let q = vec2u(c & 1u, c >> 1u);
+    let w = mix(1.0 - fr, fr, vec2f(q));
+    m += bodies[o + 1u + (ij.y + q.y) * 32u + ij.x + q.x].xyz * (w.x * w.y);
+  }
+  return m;
+}
 // The solid ground's shadow: the Sun under a point's geometric horizon (its dip, acos R/(R + h)) is set for it — airColumn's
 // Chapman column below the horizon carried the air on under the ground to its tangent point, the light through the planet
 // dimmed only as a grazing ray's: the low air in the Earth's shadow lit red, the twilight sky ~80 × too bright at −12° (the
@@ -6012,7 +6028,11 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
     // reaches through them, the many-times scattered light left to the decks' veil)
     let csT = select(-1.0, cloudShadowAt(p), (TUNE_GSKIP & 8192u) == 0u && !AIR_NO_CSM);
     let s1c = s1 * select(1.0, csT, csT >= 0.0);
-    var sc = AIR.br * dR * (pR * s1c + 0.8 / (4.0 * PI) * sM) + AIR.bms * dM * (pM * s1c + 0.3 / (4.0 * PI) * sM);
+    // (Q5 C1: the Earth's air's multiple scattering from its table when it is in — σ_s Ψ_ms, lit past the terminator —, else
+    // the single scattering's isotropic stand-in, 0.8 and 0.3 of it under the Sun's own ray)
+    let msOn = AIR.moon > 0.5 && bodies[TLUT_OFF + MSLUT_OFF].x > 0.5;
+    var sc = AIR.br * dR * (pR * s1c + select(0.8 / (4.0 * PI) * sM, 0.0, msOn)) + AIR.bms * dM * (pM * s1c + select(0.3 / (4.0 * PI) * sM, 0.0, msOn));
+    var msAdd = select(vec3f(0.0), (AIR.br * dR + AIR.bms * dM) * msLut(h, dot(normal, physicalLs)) * sM, msOn);
     // (its droplets' albedo per colour: the unknown absorber's blue and ultraviolet taken — the pale cream of its disc)
     if (venusKernel() && dS > 0.0) { sc += dS * dW * hgPhase(0.7, mu) * s1c; }
     var Tv = exp(-(tau + 0.5 * ext * ds)) * ds;
@@ -6030,16 +6050,18 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
       // (the diffuse share carries the blue sky's light that fell on the decks: a grey, not the sun's tint)
       if (csT >= 0.0) {
         // (the map's shadow already in the single scattering: the decks' veil on the diffuse share alone)
-        sc = AIR.br * dR * (pR * s1c + 0.8 / (4.0 * PI) * sM * vl.y) + AIR.bms * dM * (pM * s1c + 0.3 / (4.0 * PI) * sM * vl.y)
+        sc = AIR.br * dR * (pR * s1c + select(0.8 / (4.0 * PI) * sM * vl.y, 0.0, msOn)) + AIR.bms * dM * (pM * s1c + select(0.3 / (4.0 * PI) * sM * vl.y, 0.0, msOn))
           + 0.95 * ew * (vec3f(pW * s1c) + vec3f(0.88, 0.97, 1.12) * ((vl.y - vl.x + 0.3 * sM * vl.y) / (4.0 * PI)));
       } else {
         sc = sc * vl.y + 0.95 * ew * (vec3f(pW * s1 * vl.x) + vec3f(0.88, 0.97, 1.12) * ((vl.y - vl.x + 0.3 * sM * vl.y) / (4.0 * PI)));
       }
+      // (the multiple scattering under the decks' veil, as the stand-in's diffuse share was)
+      msAdd *= vl.y;
       ext += vec3f(ew);
       let x = ext * ds;
       Tv = exp(-tau) * select(ds * (1.0 - 0.5 * x), (1.0 - exp(-x)) / max(ext, vec3f(1e-30)), x > vec3f(1e-3));
     }
-    o.L += sc * Ts * Tv * twi;
+    o.L += (sc * Ts + msAdd) * Tv * twi;
     // (a thick air — a dust storm's, Titan's haze: τ ~ 4 —: the light scattered many times, its diffuse field through the
     // haze above far less dimmed than the sun's beam — two-stream, e^(−0.22 τ), redder deeper —: the sky an opaque orange
     // glow, not the black the beam's light alone left. In the weather's kernels and the air worlds' — NEAR_KIND 2 —, and those
