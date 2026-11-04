@@ -5,7 +5,8 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 
 // Q5, VIPER C2 — the clouds' march amortised (renderer.cloudAmortize: a texel in four marched a frame, a 2 × 2 checker turning,
 // the others rebuilt from the history — post.wgsl cloudTemporal): the Alps from Chamonix at 2 500 m, cloudy, the Sun ~10° up,
-// the F-35's cockpit looking west. Frozen: the passes over 3 s, amortised and not, alternated (A B A B), a shot of each. Then
+// the F-35's cockpit looking west. Frozen: the passes over 3 s, amortised with 32 samples a layer (renderer.cloudSamples), not
+// amortised (16, as before), amortised with 16 — alternated, twice —, a shot of each. Then
 // turning — the view swung 30° a second for 2 s —: a shot mid-turn each way (the history rejected where the view is new: what
 // the amortised march leaves there). CA_OUT: the shots (remote-results/cloud-amortize).
 // Done when: four timings and the shots taken, no GPU error. Duration: ~3 min.
@@ -30,15 +31,17 @@ test.skipIf(!E2E)(
         `new Promise((q) => setTimeout(() => { __bh.camera.setLook(0, 6); __bh.game.setDate("${iso}"); __bh.freeze(true); q(1); }, 500))`,
       );
       await app.settled(120_000);
-      for (const [k, on] of [
-        ["amortised", true],
-        ["every", false],
-        ["amortised2", true],
-        ["every2", false],
+      for (const [k, on, n] of [
+        ["amortised", true, 32],
+        ["every", false, 32],
+        ["amortised16", true, 16],
+        ["amortised2", true, 32],
+        ["every2", false, 32],
+        ["amortised16b", true, 16],
       ] as const) {
         const m = await app.js<{ clouds: number; hist: number; total: number; cl: [string, number][] }>(`(async () => {
           const r = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q));
-          r.cloudAmortize = ${on}; for (let i = 0; i < 90; i++) { __bh.touch(); await f(); }
+          r.cloudAmortize = ${on}; r.cloudSamples = ${n}; for (let i = 0; i < 90; i++) { __bh.touch(); await f(); }
           r.prof.enabled = true; r.prof.reset(); const t0 = performance.now();
           while (performance.now() - t0 < 3000) { __bh.touch(); await f(); }
           const rows = r.prof.table(); const g = (re) => +rows.filter((p) => re.test(p.label)).reduce((s, p) => s + p.ms, 0).toFixed(3);
@@ -46,7 +49,7 @@ test.skipIf(!E2E)(
           const cl = rows.filter((p) => /cloud/i.test(p.label)).map((p) => [p.label, +p.ms.toFixed(3)]);
           return { clouds: g(/^clouds (half)/), hist: g(/clouds' history/), total, cl }; })()`);
         out[k] = m;
-        if (k === "amortised" || k === "every") await app.shot(`${OUT}/still-${k}.png`);
+        if (k === "amortised" || k === "every" || k === "amortised16") await app.shot(`${OUT}/still-${k}.png`);
         console.log(`  ${k}: clouds ${m.clouds} ms, history ${m.hist} ms, GPU ${m.total} ms — ${JSON.stringify(m.cl)}`);
       }
       // (turning: the view swung while the world runs — the history rejected at the image's new edge)
@@ -63,7 +66,7 @@ test.skipIf(!E2E)(
         await app.shot(`${OUT}/turn-${k}.png`);
         await app.js(`(() => { __bh.freeze(true); return 1; })()`);
       }
-      await app.js(`(() => { __bh.renderer.cloudAmortize = true; return 1; })()`);
+      await app.js(`(() => { __bh.renderer.cloudAmortize = true; __bh.renderer.cloudSamples = 16; return 1; })()`);
       out.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
       console.log(`  GPU errors ${out.gpuErrors}`);
     } finally {

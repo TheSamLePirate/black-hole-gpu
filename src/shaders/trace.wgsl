@@ -365,6 +365,7 @@ const FLAG_ADAPTIVE_SPP = 2u;   // skip converged pixels (progressive / offline)
 const FLAG_TEMPORAL = 4u;       // temporal accumulation of realtime samples
 const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating offset
 const FLAG_AERIAL = 64u;        // the aerial perspective's table is there: the camera's rays near a world with air read it (earthLook)
+const FLAG_CLOUD_AMORTISED = 128u; // the clouds' march a texel in four this frame (Q5 VIPER C2: clouds, post.wgsl cloudTemporal)
 const FLAG_LUT = 32u;           // the far field's LUT is there: rays between clean samples read it (main: farLut)
 const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the frames' rays accumulate —
                                 // each prefiltered over its pixel (the history supplies the coverage)
@@ -10652,6 +10653,9 @@ fn wxShape(q: vec3f, i: u32, hn: f32, w: f32, cheap: bool) -> vec3f {
 }
 // (the cloud pass — trace.wgsl clouds —: the sunlight marched through the clouds themselves rather than a column of their cover)
 var<private> CLOUD_LIGHT_MARCH: bool = false;
+// (Q5 VIPER C2: a weather layer's samples along the ray — 16; the cloud pass amortised, its texel marched a frame in four: the
+// budget freed taken back in samples, renderer.cloudSamples)
+var<private> CLOUD_N: u32 = 16u;
 // The optical depth towards the Sun from p through layer i's own density: 6 samples, each step twice the last (60 m … 1.9 km,
 // ~3.8 km in all — a deck's depth at a low Sun), the cheap density (docs/PLAN-NUAGES-AAA.md N2)
 fn wxLightTau(p: vec3f, i: u32, Ls: vec3f, rnd: f32) -> f32 {
@@ -10688,7 +10692,7 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
   if (tHit > 0.0) { t1 = min(t1, tHit); }
   t1 = min(t1, 480000.0 / EARTH_RM);
   if (t1 <= t0) { return o; }
-  let N = 16u;
+  let N = CLOUD_N;
   let physicalLs = airPhysicalDirection(Ls);
   let stepM = EARTH_RM * airRayScale(rd);
   let ct = dot(airPhysicalDirection(rd), physicalLs);
@@ -14655,9 +14659,9 @@ fn clouds(@builtin(global_invocation_id) gid0: vec3u) {
   let H = u32(P.res.y);
   // (Q5, VIPER C2: amortised — a texel in four marched a frame, a 2 × 2 checker turning with the frames, the dispatch a quarter's:
   // each thread its texel of this frame's checker, none idle beside a marching one; the others kept, rebuilt from the history by
-  // post.wgsl cloudTemporal. liteSkip 1073741824: every texel — no history, the renderer's A/B)
+  // post.wgsl cloudTemporal. Without FLAG_CLOUD_AMORTISED: every texel — no history, the renderer's A/B)
   let ph = P.frame.x & 3u;
-  let gid = select(gid0.xy, gid0.xy * 2u + vec2u(ph & 1u, ph >> 1u), (liteSkip() & 1073741824u) == 0u);
+  let gid = select(gid0.xy, gid0.xy * 2u + vec2u(ph & 1u, ph >> 1u), (P.frame.z & FLAG_CLOUD_AMORTISED) != 0u);
   if (gid.x >= (W + 1u) / 2u || gid.y >= (H + 1u) / 2u) { return; }
   var cs = EarthClouds(0.0, vec3f(0.0), -1.0);
   var bound = -1.0;
@@ -14696,9 +14700,12 @@ fn clouds(@builtin(global_invocation_id) gid0: vec3u) {
       RNDV = blueDraws(gid, frameStamp);
       RND = RNDV.z;
       CLOUD_LIGHT_MARCH = TUNE_CLOUD_LIGHT > 0u;
+      // (the samples a layer, the renderer's — the frame's flags' high half —, while amortised)
+      CLOUD_N = select(16u, clamp(P.frame.z >> 16u, 8u, 64u), (P.frame.z & FLAG_CLOUD_AMORTISED) != 0u && (P.frame.z >> 16u) > 0u);
       cs = earthClouds(k, ro, rd, tHit, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab),
         squashed(toBody(P.camUp.xyz), ab), 0.0, pixFoot(), RNDV.y, P.earth4.w > 0.5);
       CLOUD_LIGHT_MARCH = false;
+      CLOUD_N = 16u;
       WX_W = 0.0;
       // (the cloud's distance as the image's depths have it [M] — the history's reprojection, post.wgsl cloudTemporal)
       if (cs.tc > 0.0) { depthM = cs.tc / m * bodyRadius(k); }

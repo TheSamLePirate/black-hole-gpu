@@ -446,6 +446,7 @@ const FLAG_REPROJECT = 16;
 /** the far field's LUT is there (trace.wgsl: farLut) */
 const FLAG_LUT = 32;
 const FLAG_AERIAL = 64; // (trace.wgsl FLAG_AERIAL: the aerial perspective's table written this frame)
+const FLAG_CLOUD_AMORTISED = 128; // (trace.wgsl: the clouds' march a texel in four this frame — Q5 VIPER C2)
 /** the features under which the far field's LUT is not used: radio, polarization, jet, hot spot, hot flow,
  *  the wormhole, bodies — what a ray between two clean samples could meet unseen */
 const LUT_BLOCKERS = 1 | 2 | 4 | 8 | 16 | 32 | 128;
@@ -3130,14 +3131,21 @@ export class Renderer {
       s.jetLength,
       s.jetCutoff,
       s.jetKnots,
-      this.liteSkip |
-        (this.skyOpen ? 0 : 4194304) |
-        (this.groundSpecular ? 0 : 67108864) |
-        (this.shoreWash ? 0 : 536870912) |
-        // (Q5 VIPER C2: the clouds' march amortised — a texel in four a frame — while their history holds; else every texel)
-        ((this.cloudAmortizedNow = this.cloudAmortize && this.cloudHistoryOn && this.cloudHistOk) ? 0 : 1073741824),
+      this.liteSkip | (this.skyOpen ? 0 : 4194304) | (this.groundSpecular ? 0 : 67108864) | (this.shoreWash ? 0 : 536870912),
     );
-    u.set([this.frameStamp, t === this.live ? this.validFrom : 0, o.flags, o.minSpp ?? 0], 17 * 4);
+    // (Q5 VIPER C2: the clouds' march amortised — a texel in four a frame — while their history holds: a frame flag, not a
+    // liteSkip bit — that word reaches the kernel through a float, its low bits lost under a bit 30)
+    this.cloudAmortizedNow = this.cloudAmortize && this.cloudHistoryOn && this.cloudHistOk;
+    u.set(
+      [
+        this.frameStamp,
+        t === this.live ? this.validFrom : 0,
+        // (and the clouds' samples a layer while amortised, the high half: trace.wgsl CLOUD_N)
+        o.flags | (this.cloudAmortizedNow ? FLAG_CLOUD_AMORTISED | (this.cloudSamples << 16) : 0),
+        o.minSpp ?? 0,
+      ],
+      17 * 4,
+    );
     set(18, o.tol ?? 1e-5, o.noise ?? 0, o.shutter ?? 0, s.temporalBlend);
     set(19, o.offset?.[0] ?? 0, o.offset?.[1] ?? 0, s.diskThickness, 1); // w: opaque 1.0 (compensated sums)
     set(20, dc.volColor[0]!, dc.volColor[1]!, dc.volColor[2]!, 0);
@@ -9209,6 +9217,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** (Q5 VIPER C2) the clouds' march amortised — a texel in four a frame, the history rebuilding the others — and its switch */
   cloudAmortize = true;
   cloudAmortizedNow = false;
+  /** (Q5 VIPER C2) a weather layer's samples along the ray while amortised — the budget freed could be taken back here: 32 cost
+   *  +0.22 ms over 16 with no difference seen at rest (cloud-amortize); 16 until a measure in motion says otherwise */
+  cloudSamples = 16;
   private cloudHistOk = false;
 
   /** the far raster rings about the patch (the relief's cache two levels coarser, each about the next finer): their ground
