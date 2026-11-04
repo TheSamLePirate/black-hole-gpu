@@ -232,6 +232,7 @@ import { demotionEligible, dynamicResolutionOn, earthDetailFor, promotionEligibl
 import { adapterId, cappedRatio, demoted, promoted, rememberLevel, windowsIntegratedGpu } from "./tier";
 import { gpuTipText } from "./ui/gpu-tip";
 import { cpuProf } from "./perf";
+import { GOPRO, goproRenderFov } from "./lens";
 import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
@@ -5464,10 +5465,21 @@ async function main() {
     const odpr = devicePixelRatio;
     overlay.width = Math.round(canvas.clientWidth * odpr);
     overlay.height = Math.round(canvas.clientHeight * odpr);
-    renderer.resize(w * renderScale, h * renderScale);
+    // (the GoPro lens — Q6 I8 —: the image rendered larger, its centre nearly sharp once bent — src/lens.ts)
+    const lensK = lensNow ? GOPRO.renderScale : 1;
+    renderer.resize(w * renderScale * lensK, h * renderScale * lensK);
     touch();
   }
   new ResizeObserver(resize).observe(canvas);
+  /** the GoPro lens in use (Q6 I8, decision 38): asked, an outside view of the craft, not an offline render nor a bench */
+  let lensNow = false;
+  const lensWanted = () =>
+    settings.cameraLens === "gopro" &&
+    !!settings.ship &&
+    settings.shipMount !== "cockpit" &&
+    settings.shipMount !== "cabin" &&
+    !renderer.offlineActive &&
+    !bench.running;
   resize();
 
   // -------------------------------------------------------------------- the game's tools (F2, __bh.game)
@@ -8450,11 +8462,25 @@ async function main() {
     renderer.looked = lookedBodiesNow();
     // (the telescope locked on its target — stabilised, controller/piloting.ts aimShipViews —: its disc still in the view)
     renderer.discsStill = settings.telescope && settings.lookAt ? settings.target : null;
+    // (the GoPro lens taken or left: the image's size again, the HUD hidden under it — its marks would not meet the bent world)
+    if (lensWanted() !== lensNow) {
+      lensNow = !lensNow;
+      renderer.lens = lensNow;
+      overlay.style.visibility = lensNow ? "hidden" : "";
+      resize();
+    }
     renderer.starMatrix = starMatrixNow();
     const st = capped
       ? null
       : cpuProf.time("render (encode, submit)", () =>
-          renderer.frame(camera.viewSettings(), sim.time, changed, sim.timeDirty, displayChanged),
+          renderer.frame(
+            // (the GoPro lens: the scene rendered rectilinear over a wider field, bent by the display — src/lens.ts)
+            lensNow ? { ...camera.viewSettings(), fov: goproRenderFov(canvas.width / Math.max(canvas.height, 1)) } : camera.viewSettings(),
+            sim.time,
+            changed,
+            sim.timeDirty,
+            displayChanged,
+          ),
         );
     if (!firstFrame && renderer.firstFrameDoneAt > 0) {
       firstFrame = true;

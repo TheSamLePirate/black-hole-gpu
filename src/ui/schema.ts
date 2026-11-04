@@ -1818,6 +1818,21 @@ export const SCHEMA: ControlDef[] = [
     keywords: "look profile camera neutral grade grain vignette footage film",
   },
   {
+    key: "cameraLens",
+    type: "choice",
+    section: "render",
+    group: "Image",
+    label: "Outside lens",
+    style: "segmented",
+    effect: "display",
+    options: [
+      { value: "standard", label: "Rectilinear" },
+      { value: "gopro", label: "GoPro" },
+    ],
+    help: "The lens of the views outside the cockpit. GoPro: an action camera's — straight lines in the middle, the edges compressed, 100° across, a cinema band (2.39:1), the HUD hidden. The image is rendered wider and larger, then bent: about 1.5 times the cost of the outside view.",
+    keywords: "lens gopro action camera wide fisheye band cinema outside view",
+  },
+  {
     key: "hdr",
     type: "choice",
     section: "render",

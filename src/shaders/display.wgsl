@@ -23,6 +23,9 @@ struct Display {
   haze2: vec4f, // a second engine's (the A320's right CFM56 — A13): the same
   hazeR2: vec4f,
   look: vec4f,  // the image's profile (Q6 I6): Camera on (1), its grain's strength, its vignette's, a clock [s]
+  lens: vec4f,  // the GoPro lens (Q6 I8, src/lens.ts): its focal (0: none), its rectilinear part [rad], its compression, the
+                // render's half-width tangent
+  lensB: vec4f, // its band's aspect (width over height), unused ×3
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -707,7 +710,20 @@ fn cameraLook(c0: vec3f, uvOut: vec2f, px: vec2f) -> vec3f {
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4f {
   let uvOut = in.pos.xy / D.size.xy;
-  let uv = (uvOut - D.view.zw) / D.view.xy;
+  var uv = (uvOut - D.view.zw) / D.view.xy;
+  // (the GoPro lens — Q6 I8 —: the output's point read where the rectilinear render holds its direction — rectilinear within
+  // its first angle, the angles compressed past it (src/lens.ts lensSource, the same) —; outside its band, black)
+  if (D.lens.x > 0.0) {
+    let q = (in.pos.xy - 0.5 * D.size.xy) / (0.5 * D.size.x);
+    if (abs(q.y) > 1.0 / D.lensB.x) { return vec4f(0.0, 0.0, 0.0, 1.0); }
+    let r = length(q);
+    let f = D.lens.x;
+    let tt = tan(D.lens.y);
+    let r0 = f * tt;
+    let th = select(D.lens.y + (r - r0) / (f * (1.0 + tt * tt) * D.lens.z), atan(r / f), r <= r0);
+    let k = select(1.0 / (f * D.lens.w), tan(th) / (max(r, 1e-9) * D.lens.w), r > 1e-9);
+    uv = vec2f(0.5 + 0.5 * q.x * k, 0.5 + 0.5 * q.y * k * (D.size.x / D.size.y));
+  }
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return vec4f(0.0, 0.0, 0.0, 1.0); }
   // (the image upscaled here when rendered under the canvas — its render scale: a Catmull–Rom, sharper
   // than the browser's bilinear; at the canvas's size, RCAS's sharpening instead — per image texel, it

@@ -1357,7 +1357,9 @@ compilation) s'y ajoutent.
   calage automatique sur l'écran écarté sur mesure (WebGPU présente dès l'image finie). **Q6g** — le profil Caméra (étalonnage « footage » paramétrique discret, grain, vignette) dans les
   vues de vol, le profil Neutre ailleurs (`lookProfile` auto) ; la LUT ajustée sur des vidéos de référence, l'exposition qui
   respire, l'aberration, le flou de pose et le mode GoPro restent. **Q6h** — l'exposition qui respire en profil Caméra seul (un tiers d'un posemètre de caméra sur
-  le posemètre incident, ±0,5 EV) : sol contre ciel −0,38 EV en Caméra, 0 en Neutre.
+  le posemètre incident, ±0,5 EV) : sol contre ciel −0,38 EV en Caméra, 0 en Neutre. **Q6i** — l'aberration chromatique latérale du profil Caméra. **Q6j** — le mode GoPro hors du
+  cockpit (`cameraLens`, `src/lens.ts` : rectiligne dans 28°, 100° de champ, bandeau 2,39:1, rendu 104,6° × 1,2, HUD masqué) :
+  coût mesuré ~1,0–1,15 × la vue rectiligne.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

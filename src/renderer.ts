@@ -101,6 +101,7 @@ import { AsyncResource, CompileQueue } from "./util/async-resource";
 import { visibleTimeout } from "./util/visible-timeout";
 import { automaticQuality, earthDetailFor, effectiveQuality, earthMapQuality } from "./quality-policy";
 import { adapterId, guessTier, rememberedLevel, tierAt, type Tier } from "./tier";
+import { GOPRO, GOPRO_F, GOPRO_SRC_TAN } from "./lens";
 import displayWGSL from "./shaders/display.wgsl" with { type: "text" };
 import {
   PATH_CHUNK,
@@ -3955,9 +3956,19 @@ export class Renderer {
       (s.lookProfile === "camera" || (s.lookProfile === "auto" && this.flightView));
     this.device.queue.writeBuffer(this.displayBuf, 256, new Float32Array([camera ? 1 : 0, 0.022, 0.12, clock]));
     if (target === this.live) this.lookCamera = camera;
+    // (the GoPro lens — Q6 I8, src/lens.ts —: its focal, its rectilinear part, its compression, the render's half-width tangent;
+    // the band's aspect)
+    const lens = target === this.live && this.lens;
+    this.device.queue.writeBuffer(
+      this.displayBuf,
+      272,
+      new Float32Array(lens ? [GOPRO_F, GOPRO.theta0, GOPRO.compress, GOPRO_SRC_TAN, GOPRO.band, 0, 0, 0] : [0, 0, 0, 0, 0, 0, 0, 0]),
+    );
   }
   /** the game's flight view now — a craft flown, the live view (main.ts): the image's profile Camera when lookProfile is auto */
   flightView = false;
+  /** the GoPro lens in use (main.ts): the display bends the live image (display.wgsl lensUv) */
+  lens = false;
   /** the live image's profile is Camera (writeDisplay): the meter breathes (readMeter) */
   private lookCamera = false;
 

@@ -112,6 +112,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "autoExposure",
       "tonemap",
       "lookProfile",
+      "cameraLens",
       "hdr",
       "hdrPeak",
       "bloom",

@@ -741,6 +741,11 @@ export default {
     "Une cellule mesure la lumière et règle l'exposition, comme l'œil s'adapte : pour la lumière qui tombe là où est la caméra (le Soleil, une étoile, le disque), retenue quand un élément visible serait brûlé. L'exposition ajoute ensuite un biais. Le ciel garde son aspect à l'écran.",
   "Tone map": "Mappage tonal",
   "Image profile": "Profil d'image",
+  "Outside lens": "Objectif extérieur",
+  Rectilinear: "Rectiligne",
+  GoPro: "GoPro",
+  "The lens of the views outside the cockpit. GoPro: an action camera's — straight lines in the middle, the edges compressed, 100° across, a cinema band (2.39:1), the HUD hidden. The image is rendered wider and larger, then bent: about 1.5 times the cost of the outside view.":
+    "L'objectif des vues hors du cockpit. GoPro : celui d'une caméra embarquée — les lignes droites au centre, les bords comprimés, 100° de champ, un bandeau de cinéma (2,39:1), le HUD masqué. L'image est rendue plus large et plus grande, puis courbée : environ 1,5 fois le coût de la vue extérieure.",
   Neutral: "Neutre",
   "Camera: the image as a camera films a flight — a discreet footage grade (lifted blacks, a gentle curve, a touch less saturation, warm highlights and cool shadows), a light grain, a slight vignette. Neutral: the physical image, untouched. Auto: Camera while flying a craft, Neutral elsewhere (the Lab, science, photos).":
     "Caméra : l'image comme une caméra filme un vol — un étalonnage « footage » discret (noirs relevés, courbe douce, saturation un peu moindre, hautes lumières chaudes et ombres froides), un grain léger, une légère vignette. Neutre : l'image physique, intacte. Auto : Caméra en pilotant un appareil, Neutre ailleurs (le Labo, la science, les photos).",
