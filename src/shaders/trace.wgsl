@@ -85,8 +85,7 @@ struct Params {
   earth2: vec4f,   // the clouds' height [its radii], their opacity, the ground's albedo over its map, the air's
                    // thickness drawn (its scale heights × k)
   earth3: vec4f,   // the Moon: its direction on the Earth's axes; w: the sunlit share of its disk seen
-  earth4: vec4f,   // the twilight sky's calibration (the air's scattered sunlight × this, the camera in the Earth's air — renderer
-                   // twilightK); y: the Sun's angular radius
+  earth4: vec4f,   // x: free (the twilight's calibration until Q5 C2); y: the Sun's angular radius
                    // seen from the Earth [rad] (the eclipses); z: Mars's dust; w: the clouds a volume (the camera low)
   hd: vec4f,       // the finer maps (src/system/hd-maps.ts): the body's map index (−1: none), its brightness
                    // kept (the coarse map's mean over the finer's), its relief's strength (0: none), width
@@ -5982,8 +5981,6 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
   let moonE = 0.3 * EARTH_MOON * pow(max(P.earth3.w, 0.0), 1.5);
   // (from inside the air, samples crowded near the camera: the densest air is there)
   let inside = dot(ro, ro) < airTop() * airTop();
-  // (the twilight's calibration — the Earth's air, the camera in it: P.earth4.x, renderer twilightK —; 1 elsewhere)
-  let twi = select(1.0, P.earth4.x, AIR.moon > 0.5 && inside);
   let N = select(TUNE_AIR_N, AP_N, AP_N > 0u);
   var tau = vec3f(0.0);
   var tPrev = ta;
@@ -6068,7 +6065,7 @@ fn earthAir(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f, jit: f32, tSpl
       let x = ext * ds;
       Tv = exp(-tau) * select(ds * (1.0 - 0.5 * x), (1.0 - exp(-x)) / max(ext, vec3f(1e-30)), x > vec3f(1e-3));
     }
-    o.L += (sc * Ts + msAdd) * Tv * twi;
+    o.L += (sc * Ts + msAdd) * Tv;
     // (a thick air — a dust storm's, Titan's haze: τ ~ 4 —: the light scattered many times, its diffuse field through the
     // haze above far less dimmed than the sun's beam — two-stream, e^(−0.22 τ), redder deeper —: the sky an opaque orange
     // glow, not the black the beam's light alone left. In the weather's kernels and the air worlds' — NEAR_KIND 2 —, and those

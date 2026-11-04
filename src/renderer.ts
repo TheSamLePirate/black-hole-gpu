@@ -3448,15 +3448,8 @@ export class Renderer {
     set(58, this.earthMaps.tier ? (dayOn ? 2 : 1) : 0, dayOn ? 0 : drift, lights, 4);
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
     // side dark round its cities)
-    // (x: the twilight sky's calibration — the air's scattered sunlight × this, the camera in the air: 1 down to the Sun at
-    // −1.5° (geometric), then ×10^(−2.2 (−1.5 − el)/10) to 0.0063 from −11.5° — the simple air's twilight measured against the
-    // tabulated one (zz-twilight-sky; TWILIGHT) 1.8 × too bright at −3°, 17 × at −6.6°, 60 × at −8.9°, 140–160 × at −11…−14°: its
-    // glow burnt over the night's lit towns, orange. Interim: the plan's Q5 — Hillaire's tables — makes the twilight itself)
-    const muCam = earthSurface && near ? earthSurface.up.reduce((v, n, i) => v + n * near.light[i]!, 0) : 1;
-    const elCam = (Math.asin(Math.max(-1, Math.min(1, muCam))) * 180) / Math.PI;
-    const twilightK = altKm < 100 && this.twilightOn ? 10 ** (-2.2 * Math.min(Math.max((-1.5 - elCam) / 10, 0), 1)) : 1;
-    if (!o.probe && t === this.live) this.twilightK = twilightK;
-    set(61, twilightK, 0, 0, s.volumetricClouds && altKm < 30 ? 1 : 0); // (w: the clouds a volume — the camera low: 30 km)
+    // (x: free — the twilight sky's calibration until Q5 C2, which made the air as it is follow the measured twilight)
+    set(61, 1, 0, 0, s.volumetricClouds && altKm < 30 ? 1 : 0); // (w: the clouds a volume — the camera low: 30 km)
     // a world's finer maps, the camera near it (within 40 of its radii): its map's index, its brightness
     // kept (the coarse map's mean over the finer's), its relief's strength (0: none), the map's width
     const nearMap = near ? (solarBody(bodies[near.index]!.id)?.map as MapName | undefined) : undefined;
@@ -8541,11 +8534,6 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private skyOut: GPUTexture | null = null;
   private skyBind: GPUBindGroup | null = null;
   private skyTableOn = false;
-  /** the twilight sky's calibration last sent (earth4.x — writeParams' twilightK), and its switch — off since Q5 C2: the air
-   *  as it is (AIR_K 1) and its multiple scattering's table give the measured twilight; the switch kept for the A/B of this lot,
-   *  to go with it once measured (an air that changed with the camera's place: decision 27) */
-  twilightK = 1;
-  twilightOn = false;
   /** the sky ambient's air samples a ray (0: the kernels' default, 32) — a measure's: set it, then skyPipe null and skyWanted
    *  false to compile it again */
   skyAirN = 0;
