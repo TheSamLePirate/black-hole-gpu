@@ -247,7 +247,7 @@ export function layeredReport(n0: number, h: number, trueAltDeg: number, air?: A
 }
 
 // ---- the tables (R1): built once an air (~0.25 s — off the frame: R2 builds them in a worker when the GPU reads them), read by
-// interpolation — R2.s GPU the same
+// interpolation — R2's GPU the same
 
 /** B_haut's observer heights [m] (finer near the ground, and round the tropopause's kinks at 11 019 and 20 063 m geometric) */
 export const TABLE_HEIGHTS: number[] = (() => {
