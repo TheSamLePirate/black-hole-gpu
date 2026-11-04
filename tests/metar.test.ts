@@ -93,3 +93,12 @@ test("the feed: a report kept half an hour, a failure five minutes, one request 
   await feed.weather("KEDW");
   expect(calls).toBe(2);
 });
+
+test("R1: a report's air — its temperature and dew point (M for minus), its QNH in hPa or inches", () => {
+  const eu = parseMetar("LFPB 080600Z 24005KT 9999 FEW030 12/M03 Q1018 NOSIG")!;
+  expect(eu.air).toEqual({ T: 12, Td: -3, qnh: 1018 });
+  const us = parseMetar("KJFK 080551Z 31012KT 10SM SCT250 M02/M08 A3012")!;
+  expect(us.air!.T).toBe(-2);
+  expect(us.air!.qnh).toBeCloseTo(1019.98, 1);
+  expect(parseMetar("LFPB 080600Z 24005KT 9999 FEW030")!.air).toBeUndefined();
+});

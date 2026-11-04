@@ -30,6 +30,10 @@ export function parseMetar(raw: string): WeatherState | null {
     storm = false,
     fog = false,
     windSeen = false;
+  // (R1: the air the report gives — its temperature and dew point [°C], its QNH [hPa] — for the layered refraction)
+  let tC: number | null = null,
+    tdC: number | null = null,
+    qnh: number | null = null;
   const layers: CloudLayer[] = [];
   for (let i = 1; i < body.length; i++) {
     const t = body[i]!;
@@ -41,6 +45,20 @@ export function parseMetar(raw: string): WeatherState | null {
       from = m[1] === "VRB" || u10 === 0 ? null : Number(m[1]);
       gust = m[3] ? Math.max(Number(m[3]) * k - u10, 0) : 0;
       windSeen = true;
+      continue;
+    }
+    if ((m = t.match(/^(M?\d{2})\/(M?\d{2})?$/))) {
+      const v = (x: string) => (x.startsWith("M") ? -Number(x.slice(1)) : Number(x));
+      tC = v(m[1]!);
+      tdC = m[2] ? v(m[2]) : null;
+      continue;
+    }
+    if ((m = t.match(/^Q(\d{4})$/))) {
+      qnh = Number(m[1]);
+      continue;
+    }
+    if ((m = t.match(/^A(\d{4})$/))) {
+      qnh = (Number(m[1]) / 100) * 33.8639;
       continue;
     }
     if (t === "CAVOK") {
@@ -117,6 +135,7 @@ export function parseMetar(raw: string): WeatherState | null {
     rain: storm ? Math.max(rain, 0.8) : rain,
     dust,
     report: text,
+    ...(tC !== null && qnh !== null ? { air: { T: tC, Td: tdC ?? tC - 8, qnh } } : {}),
   };
 }
 

@@ -7736,8 +7736,16 @@ async function main() {
   // (and the horizons' state — H4: the world's maps, the Earth's levels)
   (camera as unknown as { skyInfo: () => unknown }).skyInfo = () => {
     // (R1: the real weather's air for the layered model's figures, when the weather is the real one)
-    const m = settings.weather === "real" ? renderer.weatherReal?.model : undefined;
-    const sky = skyNow(settings, sim.time, renderer.refractivity(settings), m ? airOfModel(m) : undefined);
+    const w = settings.weather === "real" ? renderer.weatherReal : undefined;
+    const real = w?.model
+      ? airOfModel(w.model)
+      : w?.air
+        ? {
+            ...airOfModel({ T: w.air.T, Td: w.air.Td, p: w.air.qnh, pMsl: w.air.qnh }),
+            source: `METAR (QNH, T, dew point): ${w.report?.split(" ")[0] ?? ""}`,
+          }
+        : undefined;
+    const sky = skyNow(settings, sim.time, renderer.refractivity(settings), real);
     return sky ? { ...sky, horizons: renderer.horizonStatus(settings) } : null;
   };
   // (the map's weather layer: the real weather's own — the day's clouds, each station's)

@@ -57,6 +57,8 @@ export interface WeatherState {
   report?: string;
   /** the model's own facts (Open-Meteo: openmeteo.ts), when it came from there */
   model?: ModelFacts;
+  /** an airfield report's air (METAR: its temperature and dew point [°C], its QNH [hPa]) — R1's layered refraction */
+  air?: { T: number; Td: number; qnh: number };
 }
 
 /** The fair weather's wind: the player's own setting, as before. */
