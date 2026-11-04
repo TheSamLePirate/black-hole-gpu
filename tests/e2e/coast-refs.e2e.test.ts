@@ -279,6 +279,9 @@ test.skipIf(!E2E)(
       await app.js(
         `(() => { Object.assign(__bh.settings, ${EARTH_SETTINGS}, { ship: false, earthClouds: 0, lookProfile: "neutral", motionBlur: 0, dof: false }); __bh.renderer.debugSkipShip = true; return 1; })()`,
       );
+      // (the scene's preset can put a craft back as it settles: the camera alone checked before each view — no ship, the free
+      // camera's mode)
+      await app.settled(120_000);
       for (const r of refs) {
         // (the Sun seen in the photograph: its height there sets the instant — a camera's clock off by minutes, the Sun at the
         // horizon instead of 3° over it —, else the camera's time)
@@ -302,6 +305,7 @@ test.skipIf(!E2E)(
         await app.js(
           `(() => { __bh.freeze(true); __bh.game.setDate(${JSON.stringify(utc)}); __bh.game.set("weather", ${JSON.stringify(r.weather)}); document.body.classList.add("hide-ui"); return 1; })()`,
         );
+        await app.js(`(() => { __bh.settings.ship = false; __bh.renderer.debugSkipShip = true; return 1; })()`);
         // (placed twice: the ground read before the fine relief is in is the coarse one's)
         const place = async () => {
           const g = await app.js<{
