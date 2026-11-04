@@ -41,6 +41,19 @@ test("a slope's surface the ground itself: nothing added (the surface's top over
   expect(most).toBe(0);
 });
 
+test("over the sea, the overground from the water's surface: the bed's depth no mound, a ship's hull over it kept", () => {
+  // (a coast's tile: the ground the bathymetry — 30 m under the sea —, the surface model the water a few decimetres about 0 m;
+  // one sample a ship's superstructure 12 m over the water)
+  const n = 512;
+  const ground = new Float32Array(T * T).fill(-30);
+  const surface = new Float32Array(n * n);
+  for (let i = 0; i < surface.length; i++) surface[i] = 0.4 * Math.sin(i);
+  surface[100 * n + 101] = 12;
+  addOverground(ground, surface, n);
+  expect(ground[5 * T + 5]).toBe(-30);
+  expect(ground[50 * T + 50]).toBeCloseTo(-30 + 12, 3);
+});
+
 test("no surface there, or no ground: the ground its own", () => {
   const ground = new Float32Array(T * T).fill(12);
   ground[7] = Number.NaN;

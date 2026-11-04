@@ -516,8 +516,9 @@ export const HLOD_MIN = 2;
 export const hlodSize = (z: number) => (z < HLOD_Z1 ? 2 * TILE : TILE);
 /**
  * The overground over a tile's ground (TILE², 0 where none): the surface's samples (n² over the tile, n = k TILE) less the
- * ground there (`ground`'s TILE² bilinear at each sample — never the surface's own top over a slope), the top of each k × k
- * block, kept where it passes HLOD_MIN. A ground or a surface NaN there: none.
+ * ground there (`ground`'s TILE² bilinear at each sample — never the surface's own top over a slope) or less the sea's level where
+ * the ground is under it (the water's surface, not its bed), the top of each k × k block, kept where it passes HLOD_MIN. A ground
+ * or a surface NaN there: none.
  */
 export function overground(ground: Float32Array, surface: Float32Array, n: number): Float32Array {
   const k = n / TILE,
@@ -539,8 +540,12 @@ export function overground(ground: Float32Array, surface: Float32Array, n: numbe
         g11 = ground[(y0 + 1) * TILE + x0 + 1]!;
       const g = (g00 * (1 - tx) + g10 * tx) * (1 - ty) + (g01 * (1 - tx) + g11 * tx) * ty;
       if (Number.isNaN(g)) continue;
+      // (over the sea, from its surface: the surface model reads the water at ~0 m where the ground is the bed — the
+      // bathymetry the tile was filled with along a coast —, its depth made a mound out of the sea, up to 58 m off Bonifacio
+      // — T7, Sam, 4 Nov 2026)
+      const base = Math.max(g, 0);
       const o = Math.floor(j / k) * TILE + Math.floor(i / k);
-      if (s - g > top[o]!) top[o] = s - g;
+      if (s - base > top[o]!) top[o] = s - base;
     }
   const over = new Float32Array(TILE * TILE);
   for (let i = 0; i < over.length; i++) if (top[i]! > HLOD_MIN && !Number.isNaN(ground[i]!)) over[i] = top[i]!;

@@ -14077,7 +14077,10 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
       let toW = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
       osm = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
-      osm.x = smoothstep(0.35, 0.65, osm.x);
+      // (water lies flat, and the sea at its level: a polygon's outline is a line on the map — over a cliff, a steep bank, the
+      // ground the relief raises over the sea within it, land; the T7 survey, Sam: the Calanques' faces striped with the sea)
+      let flat = smoothstep(0.82, 0.94, dot(n, gq));
+      osm.x = smoothstep(0.35, 0.65, osm.x) * flat * select(1.0, 1.0 - smoothstep(3.0, 8.0, hG), osm.y < 0.3);
     }
     // (an airfield levelled: land, even where the maps had water)
     let water = max(sea0, osm.x) * (1.0 - lvl);
