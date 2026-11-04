@@ -14,6 +14,22 @@ revérifiées le 4 novembre 2026 ; aucune calibration encore.
 | **Sen — SpaceTV-1** (flux 24/7 `fO9e9jnhYK8`, 1080p30 sur YouTube) | trois caméras 4K **à l'extérieur, sur la plateforme Bartolomeo** (fixée au module Columbus — Space.com dit « sur Columbus » : la même chose), « not behind a window » : **Nadir** (droit vers la Terre), **Horizon** (vers le limbe), **Docking** (le long de la structure, le port d'amarrage avant) ; non orientables ; rien sur le champ, la focale ni la cadence | [sen.com/mission/stv-1](https://www.sen.com/mission/stv-1) ; CRS-30, mars 2024 (Space.com) |
 | NASA — HDEV (historique) | sur la plateforme externe de Columbus ; actif du 30 avril 2014 au 18 juillet 2019, fin de vie le 22 août 2019 ; la page ne liste pas ses quatre caméras (le rapport final à lire) | [eol.jsc.nasa.gov/esrs/hdev](https://eol.jsc.nasa.gov/esrs/hdev/) |
 
+### HDEV (2014–2019) : ses quatre caméras, selon le rapport final (annexe A)
+
+[Rapport final HDEV, juin 2020](https://eol.jsc.nasa.gov/ESRS/HDEV/files/HDEV-Final-Report_20200715.pdf) : quatre caméras fixes
+(ni pan, ni zoom, ni iris), derrière des hublots de quartz fondu, sur la plateforme externe de Columbus (CEPF) ; toutes en 720p
+à ~60 images/s ; une caractérisation de la distorsion de chacune faite au sol (Bouguet CCT — ses valeurs ne sont pas publiées
+dans le rapport).
+
+| Visée | Caméra | Capteur | Objectif (documenté) | Champ horizontal 16:9 (**dérivé** : capteur 1/3″ nominal, 4,8 mm de large) |
+|---|---|---|---|---:|
+| **avant** (le vecteur vitesse) | Hitachi HV-HD30 | 1/3″ CMOS × 3 | Fujinon TF4DA-8, 4 mm F/2,2, mise au point à l'infini | ~62° |
+| **nadir** | Toshiba IK-HR1S | 1/3″ CMOS | Fujinon TF4DA-8, 4 mm | ~62° |
+| **arrière 1** | Panasonic AG-HMC150 | 1/3″ CCD × 3 | Leica Dicomar à 3,9 mm (le plus court du zoom) | ~63° |
+| **arrière 2** | Sony FCB-EH4300 | 1/3″ CMOS | intégré, réglé à 4,7 mm | ~54° |
+
+Une famille distincte (plan) : ni les EHDC actuelles, ni SpaceTV-1 ; leurs archives seulement si le corpus en contient.
+
 ### Les archives repérées (Sen, mono-caméra d'abord)
 
 Métadonnées lues par `yt-dlp -j` (aucun téléchargement) ; les compilations hebdomadaires de 15 min (« This Week in Orbit »,
