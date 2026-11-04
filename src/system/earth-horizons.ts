@@ -158,6 +158,114 @@ fn bake(@builtin(global_invocation_id) gid: vec3u) {
 }`;
 }
 
+/** Q4 L2b — the valleys' sky (earthSkyOpen): compiled out by default — its ~90 inlined lines put shadeLite over the kernels'
+ *  budgets (tests/kernel-budget.test.ts) for an effect measured in the noise (docs/progress/refraction-horizons/Q4.md); true: the
+ *  reader below, read where renderer.skyOpen */
+export const EARTH_SKY_OPEN = false;
+const SKY_OPEN_STUB = "fn earthSkyOpen(gq: vec3f, h: f32, n: vec3f) -> f32 { return 1.0; }";
+function earthSkyOpenSource(): string {
+  const levels = EARTH_HORIZON_LEVELS.length;
+  return /* wgsl */ `
+// Q4 L2b — the share of the sky's light a ground point (gq, h) still receives over the relief round it: in each of the 8 sectors
+// the light under its horizon lost — on a flat ground, from the elevations 0…e of a sector of π/4, a share sin² e of its light —,
+// each sector weighed by the clear sky's radiance low in its direction (skyMirror: the bright side towards the Sun, the horizon's
+// band) over their mean; only what rises above the face's own plane (n its normal) — its tilt is skyOnFace's. The same horizons as
+// the Sun's (H5), the 4 nodes blended in tan e, 1/d, h0/d, then seen from h. 1 where no level holds the point.
+struct EhNode8 { t: array<f32, 8>, inv: array<f32, 8>, h0: f32, ok: f32 };
+fn earthHorizonNode8(l: u32, i: vec2u, D0: f32) -> EhNode8 {
+  let n = i.y * ${TERRAIN_CACHE_N}u + i.x;
+  let base = EH_OFF + ${EH_HEADER_VEC4S}u + l * EH_NODES + 2u * n;
+  let S = bodies[base];
+  let T = bodies[base + 1u];
+  var o: EhNode8;
+  if (T.w < -1e8) { return o; }
+  for (var k = 0u; k < 8u; k++) {
+    let pair = S[k / 2u];
+    let hi = floor(pair / 256.0);
+    let b = select(hi, pair - 256.0 * hi, (k & 1u) == 1u);
+    let u = 2.0 * b / 255.0 - 1.0;
+    let sn = sign(u) * u * u * ${EH_SIN_MAX};
+    let w = T[min(k / 3u, 2u)];
+    let p = select(k % 3u, k - 5u, k >= 6u);
+    let d64 = floor(w / 64.0);
+    let st = select(select(w - 64.0 * d64, d64 - 64.0 * floor(w / 4096.0), p == 1u), floor(w / 4096.0), p == 0u);
+    o.t[k] = sn * inverseSqrt(max(1.0 - sn * sn, 1e-6));
+    o.inv[k] = exp2(-st * ${Math.log2(1.25).toFixed(9)}) / D0;
+  }
+  o.h0 = T.w;
+  o.ok = 1.0;
+  return o;
+}
+fn earthSkyOpen(gq: vec3f, h: f32, n: vec3f) -> f32 {
+  var east = vec3f(-gq.y, gq.x, 0.0);
+  east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-12);
+  let north = cross(gq, east);
+  var s2 = array<f32, 8>();
+  var rem = 1.0;
+  for (var l = 0u; l < ${levels}u; l++) {
+    let r = bodies[EH_OFF + 2u * l];
+    let s = bodies[EH_OFF + 2u * l + 1u];
+    if (s.z <= 0.0) { continue; }
+    let dl = atan2(-gq.x * r.y + gq.y * r.x, gq.x * r.x + gq.y * r.y);
+    let sz = clamp(gq.z, -1.0, 1.0);
+    let da = asin(clamp(sz * r.w - sqrt(max(1.0 - sz * sz, 0.0)) * r.z, -1.0, 1.0));
+    let uv = vec2f(dl, da) * s.x;
+    let edge = min(min(uv.x, uv.y), min(${TERRAIN_CACHE_N - 1}.0 - uv.x, ${TERRAIN_CACHE_N - 1}.0 - uv.y));
+    if (edge <= 1.0) { continue; }
+    let w = smoothstep(1.0, 12.0, edge) * s.z;
+    let i = vec2u(floor(uv));
+    let f = fract(uv);
+    var t = array<f32, 8>();
+    var inv = array<f32, 8>();
+    var hd = array<f32, 8>();
+    var known = true;
+    for (var c = 0u; c < 4u; c++) {
+      let o = vec2u(c & 1u, c >> 1u);
+      let nd = earthHorizonNode8(l, i + o, s.y);
+      known = known && nd.ok > 0.0;
+      let bw = select(1.0 - f.x, f.x, o.x == 1u) * select(1.0 - f.y, f.y, o.y == 1u);
+      for (var k = 0u; k < 8u; k++) {
+        t[k] += bw * nd.t[k];
+        inv[k] += bw * nd.inv[k];
+        hd[k] += bw * nd.h0 * nd.inv[k];
+      }
+    }
+    if (!known) { continue; }
+    for (var k = 0u; k < 8u; k++) {
+      let tn = max(t[k] + hd[k] - h * inv[k], 0.0);
+      s2[k] += rem * w * (tn * tn / (1.0 + tn * tn));
+    }
+    rem *= 1.0 - w;
+    if (rem < 1e-3) { break; }
+  }
+  if (rem >= 1.0) { return 1.0; }
+  // (each sector's weight: the clear sky low in its direction — 10° up —, over the mean; even when the sky's table is off)
+  var lk = array<f32, 8>();
+  var mean = 0.0;
+  for (var k = 0u; k < 8u; k++) {
+    let a = f32(k) * 0.785398163;
+    let d = normalize(0.98481 * (sin(a) * east + cos(a) * north) + 0.17365 * gq);
+    let m = skyMirror(d);
+    lk[k] = select(1.0, dot(m, vec3f(0.2126, 0.7152, 0.0722)), m.x >= 0.0);
+    mean += lk[k];
+  }
+  mean = max(mean / 8.0, 1e-30);
+  // (only the relief above the face's own plane: a slope's own rise is its tilt — the sky's light on a tilted face, skyOnFace —,
+  // not a horizon; counted twice, every slope lost a fifth of its sky)
+  var lost = 0.0;
+  let nz = max(dot(n, gq), 0.05);
+  for (var k = 0u; k < 8u; k++) {
+    let a = f32(k) * 0.785398163;
+    let u = sin(a) * east + cos(a) * north;
+    let tp = max(-dot(n, u) / nz, 0.0);
+    let sp = tp * tp / (1.0 + tp * tp);
+    lost += lk[k] / mean * max(s2[k] / (1.0 - rem) - sp, 0.0);
+  }
+  return clamp(1.0 - lost / 8.0, 0.0, 1.0);
+}
+`;
+}
+
 /**
  * The tracer's reader (injected in place of trace.wgsl's stub — withTerrainCache): earthHorizonSin(gq, h, L, foot) — the
  * horizon's sine towards L (physical, unit) at a ground point of geodetic normal gq and height h [m above the sea], seen
@@ -250,7 +358,8 @@ fn earthHorizonSin(gq: vec3f, h: f32, L: vec3f) -> vec2f {
   if (rem >= 1.0) { return vec2f(-2.0, 0.0); }
   // (a coarser level missing under a finer one's fade: the finer one alone)
   return sum / (1.0 - rem);
-}`;
+}
+${EARTH_SKY_OPEN ? earthSkyOpenSource() : SKY_OPEN_STUB}`;
 }
 
 type Job = { slot: number; window: TerrainWindow; gen: number; row: number };

@@ -7486,6 +7486,8 @@ fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
 fn terrainCachedHeight(q: vec3f, foot: f32) -> f32 { return -1.0; }
 // (H5: the Earth's horizon's sine towards L at a ground point gq, h [m] — and its blockers' distance [m]; x −2: none known)
 fn earthHorizonSin(gq: vec3f, h: f32, L: vec3f) -> vec2f { return vec2f(-2.0, 0.0); }
+// (Q4 L2b: the share of the sky's light a ground point still receives over its relief — 1: all, or none known)
+fn earthSkyOpen(gq: vec3f, h: f32, n: vec3f) -> f32 { return 1.0; }
 // END_TERRAIN_CACHE
 // (the heights above the sea — the cache's, the exact ones — over the ellipsoid: raised by the geoid)
 fn earthHeightG(q: vec3f, foot: f32) -> f32 {
@@ -13965,6 +13967,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   }
   var sky = E * 0.15;
   if (!plainLight) { sky = liteSky(q, hG, E, Ls, mu0g); }
+  // (Q4 L2b: the valleys' sky hidden by the relief round them — H5's horizons in 8 directions, weighed by the clear sky's
+  // radiance in each; liteSkip 4194304: not read, a measure)
+  if (!plainLight && (liteSkip() & 4194304u) == 0u) { sky *= earthSkyOpen(gq, hG, ng); }
   // (under the weather's decks: the blue sky hidden by their cover, their own grey light instead — what comes through them,
   // and for a broken sky what their sunlit sides and bases send down —, as the tracer's ground)
   let wg = wxNear(q);
@@ -14068,6 +14073,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     }
   }
   if ((liteSkip() & 8192u) != 0u) { G = liteShadowDebug(E); }
+  // (liteSkip 8388608 — a measure —: the valleys' sky lost drawn instead of the surface, × 5: white a fifth lost or more, black none)
+  if ((liteSkip() & 8388608u) != 0u) { G = vec3f(clamp((1.0 - earthSkyOpen(gq, hG, ng)) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
   liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true, false);
 }
 
@@ -14177,7 +14184,8 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   if (dot(n, n) < 0.5) { n = gq; }
   let dirW = toBody(ray.look);
   let Eg = liteSun(q, gq, hG, Ls, Lp, E * sunThrough(hG, dot(gq, Lp)), fx, fy, dirW, tM, n, false);
-  let sky = liteSky(q, hG, E, Ls, dot(gq, Lp));
+  var sky = liteSky(q, hG, E, Ls, dot(gq, Lp));
+  if ((liteSkip() & 4194304u) == 0u) { sky *= earthSkyOpen(gq, hG, n); }
   var G = accum[idx].rgb;
   let footSea = sqrt(length(fx) * length(fy)) * EARTH_RM;
   SEA_ON = P.sea[1].w > 0.0;

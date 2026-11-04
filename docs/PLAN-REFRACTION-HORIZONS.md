@@ -1538,7 +1538,9 @@ compilation) s'y ajoutent.
   tracé absente du raster : Q3 B4. **Q6p** — le flou de pose à temps de pose fixe (×1/30 s), désactivé par défaut (décision 38 (3)) ;
   `motion-blur` (nouvel e2e). **Q6q** — le HUD minimal du GoPro en option (vitesse, altitude, cap dans la marge basse du bandeau). **Q6r** — le GoPro ne rend que les rangées du bandeau (−24 % de pixels à 16:9, image identique). **Q6s** — la sélection au pointeur à travers l'objectif GoPro : le mode GoPro complet. **Q6t** — les rayures de la verrière du profil Caméra (visibles sous l'éblouissement seulement). **Q6u** — I4 complet, mesuré : sous 75 % les scènes critiques
   perdent trop (Alpes −5 dB à 62,5 %), l'échelle en mouvement tenue à 75 % ; `motion-quality` et `ghost` au profil Neutre (le grain du
-  profil Caméra brouillait les mesures).
+  profil Caméra brouillait les mesures). **Q4 L2b** — la part du ciel des vallées tirée des horizons de H5
+  (8 secteurs, pondérés par le ciel clair, au-dessus du plan de la face) : dans le bruit de l'image pour ~0,5–1 ms, un damier aux
+  versants (échelle des nœuds) — **désactivée par défaut** (`renderer.skyOpen`) ; l'occlusion proche attend L2a.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du
