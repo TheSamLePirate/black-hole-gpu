@@ -13,6 +13,7 @@ import { WATER_VEC4S } from "./system/water-kd-grid";
 import { SHORE_VEC4S } from "./system/earth-shore-layout";
 import { REFR_VEC4S } from "./system/refraction-gpu";
 import { TLUT_VEC4S } from "./system/earth-air-layout";
+import { WXGRID_VEC4S } from "./system/weather-grid-layout";
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -95,4 +96,7 @@ export { REFR_VEC4S };
 /** (Q5 C1) the Earth's air's transmittance table (system/earth-air.ts: a header, 256 × 64 optical depths; trace.wgsl sunThrough) */
 export const TABLE_TLUT = TABLE_REFR + REFR_VEC4S;
 export { TLUT_VEC4S };
-export const TABLE_VEC4S = TABLE_TLUT + TLUT_VEC4S;
+/** (Q5 C5) the real weather's model on a grid about the camera (system/weather-grid.ts; trace.wgsl wxGridCover) */
+export const TABLE_WXGRID = TABLE_TLUT + TLUT_VEC4S;
+export { WXGRID_VEC4S };
+export const TABLE_VEC4S = TABLE_WXGRID + WXGRID_VEC4S;

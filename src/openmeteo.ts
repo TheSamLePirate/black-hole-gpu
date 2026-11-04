@@ -195,10 +195,10 @@ export function modelWeather(
   const layers: CloudLayer[] = [];
   if (h.low >= 0.08) {
     const depth = storm ? Math.max(9000 - lcl, 6000) : h.cape > 800 ? 3000 : h.cape > 200 ? 1600 : 700 + 600 * h.low;
-    layers.push({ base: Math.round(lcl), top: Math.round(lcl + depth), cover: Math.min(h.low, 1) });
+    layers.push({ base: Math.round(lcl), top: Math.round(lcl + depth), cover: Math.min(h.low, 1), cls: 0 });
   }
-  if (h.mid >= 0.08) layers.push({ base: 3000, top: 4500, cover: Math.min(h.mid, 1) });
-  if (h.high >= 0.25 && layers.length < 2) layers.push({ base: 8000, top: 8800, cover: Math.min(h.high, 1) * 0.6 });
+  if (h.mid >= 0.08) layers.push({ base: 3000, top: 4500, cover: Math.min(h.mid, 1), cls: 1 });
+  if (h.high >= 0.25 && layers.length < 2) layers.push({ base: 8000, top: 8800, cover: Math.min(h.high, 1) * 0.6, cls: 2 });
   // (the archive has no visibility: 30 km in dry air, a tenth as it saturates, shorter in rain)
   const rh = Math.exp((17.62 * h.Td) / (243.12 + h.Td) - (17.62 * h.T) / (243.12 + h.T));
   let vis = h.vis ?? 30e3 * (1 - 0.9 * Math.max((rh - 0.7) / 0.3, 0) ** 2);

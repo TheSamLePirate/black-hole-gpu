@@ -107,7 +107,7 @@ test("the ceiling and the flight category as the charts have them; the wind's di
 
 describe("the weather as the tracer reads it (W3)", () => {
   test("fair weather, or the camera above 30 km: nothing — the image as before", () => {
-    expect(weatherGpu(presetWeather("fair", 1), 0, 0.01)).toEqual({ params: new Array(16).fill(0), light: 1 });
+    expect(weatherGpu(presetWeather("fair", 1), 0, 0.01)).toEqual({ params: new Array(16).fill(0), light: 1, classes: [-1, -1, -1] });
     expect(weatherGpu(presetWeather("overcast", 1), 0, 31).params.every((x) => x === 0)).toBe(true);
   });
   test("overcast at an airfield 100 m high: its layers above the sea, lowest first; the haze its visibility's", () => {

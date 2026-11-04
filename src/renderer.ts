@@ -117,6 +117,7 @@ import {
   TABLE_WATER,
   TABLE_REFR,
   TABLE_TLUT,
+  TABLE_WXGRID,
   TABLE_ORTHO,
   TABLE_LUT,
   TABLE_PATH,
@@ -247,6 +248,7 @@ import {
 } from "./system/ellipsoid";
 import { AIR_K, MSLUT_OFF, setTransmittanceLut, sunThroughY, TransmittanceLutBuilder } from "./system/earth-air";
 import { AerosolFeed, AOD_DEFAULT } from "./system/aerosols";
+import { WeatherGridFeed, WXGRID_STEP, WXGRID_VEC4S } from "./system/weather-grid";
 import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
 import { bodyPlace, localPatch, patchGeodetic } from "./system/local-patch";
@@ -4366,6 +4368,33 @@ export class Renderer {
     return (this.giantFlashKept = best ? [...best.pos, best.light] : null);
   }
 
+  /** (Q5 C5) the weather grid in the tracer's table: its centre and step, its header (on, the layers' classes), its points —
+   *  written when they change; null place: the header off (the layers' own cover everywhere) */
+  private writeWeatherGrid(place: { lat: number; lon: number; ms: number } | null, classes: number[]) {
+    const g = place && this.weatherGridEnabled ? this.weatherGrid.peek(place.lat, place.lon, place.ms) : null;
+    const f = new Float32Array(WXGRID_VEC4S * 4);
+    if (g) {
+      const q = bodyFixedOf("earth", g.centre.lat, g.centre.lon, 0);
+      const sq = [q[0], q[1], q[2] / (1 - WGS84_F)];
+      const l = Math.hypot(sq[0]!, sq[1]!, sq[2]!);
+      f.set([sq[0]! / l, sq[1]! / l, sq[2]! / l, WXGRID_STEP / EARTH_RM], 0);
+      f.set([1, ...classes], 4);
+      f.set(g.v, 8);
+    }
+    const key = g
+      ? `${g.centre.lat},${g.centre.lon},${classes.join()},${Array.from(g.v.subarray(0, 12), (x) => x.toFixed(3)).join()}`
+      : "off";
+    if (key === this.weatherGridKey) return;
+    this.weatherGridKey = key;
+    this.weatherGridOn = !!g;
+    this.device.queue.writeBuffer(this.bodyBuf, TABLE_WXGRID * 16, f);
+  }
+  private weatherGrid = new WeatherGridFeed();
+  private weatherGridKey = "";
+  /** (Q5 C5) the weather grid in use (the real weather's model about the camera), and its switch (a measure's A/B) */
+  weatherGridOn = false;
+  weatherGridEnabled = true;
+
   private weatherParams(
     surface: ReturnType<typeof patchGeodetic> | null,
     altKm: number,
@@ -4402,6 +4431,8 @@ export class Renderer {
       this.fogFloor = { lat, lon, h };
     }
     const g = weatherGpu(w, ground, altKm, w.fogTop > 0 && this.fogFloor ? this.fogFloor.h : ground);
+    // (Q5 C5: the real weather's model on a grid about the camera — the layers' cover where each point is)
+    if (live) this.writeWeatherGrid(s.weather === "real" && w.source === "model" ? { lat, lon, ms: utcOf(time) } : null, g.classes);
     if (live) this.wxLight = g.light;
     out.set(g.params, 0);
     // the drift: the wind at the clouds' height, blowing from `from` — on the place's east and north

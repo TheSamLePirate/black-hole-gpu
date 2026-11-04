@@ -41,7 +41,9 @@ import {
   SHORE_VEC4S,
   TABLE_REFR,
   TABLE_TLUT,
+  TABLE_WXGRID,
   TLUT_VEC4S,
+  WXGRID_VEC4S,
   REFR_VEC4S,
 } from "../src/gpu-tables";
 import { GEOID_H, GEOID_W } from "../src/system/geoid-grid";
@@ -71,7 +73,9 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(TABLE_REFR).toBe(TABLE_SHORE + SHORE_VEC4S);
   expect(TABLE_TLUT).toBe(TABLE_REFR + REFR_VEC4S);
   expect(constU("TLUT_OFF")).toBe(TABLE_TLUT);
-  expect(TABLE_VEC4S).toBe(TABLE_TLUT + TLUT_VEC4S);
+  expect(TABLE_WXGRID).toBe(TABLE_TLUT + TLUT_VEC4S);
+  expect(constU("WXGRID_OFF")).toBe(TABLE_WXGRID);
+  expect(TABLE_VEC4S).toBe(TABLE_WXGRID + WXGRID_VEC4S);
   expect(constU("SH_BASE")).toBe(TABLE_SH);
   expect(constU("LUT_OFF")).toBe(TABLE_LUT);
   expect(constU("PATH_OFF")).toBe(TABLE_PATH);
@@ -104,7 +108,8 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
       WATER_VEC4S +
       SHORE_VEC4S +
       REFR_VEC4S +
-      TLUT_VEC4S,
+      TLUT_VEC4S +
+      WXGRID_VEC4S,
   );
   expect(constU("GEOID_OFF")).toBe(TABLE_GEOID);
   expect(constU("ORTHO_OFF")).toBe(TABLE_ORTHO);

@@ -6134,8 +6134,32 @@ fn wxNear(q: vec3f) -> f32 {
 fn wxAt(q: vec3f, cell: f32) -> vec3f { return (q * EARTH_RM - P.wx[4].yzw) * (1.0 / cell); }
 // layer i's cover at q (0…1): patchy for a scattered sky, whole for an overcast one — a noise of 3.2 km
 // cells and two finer octaves (clouds 0.5–3 km across), thresholded at its cover
+// (Q5 C5) the real weather's model on a grid about the camera (system/weather-grid.ts; gpu-tables.ts TABLE_WXGRID): layer i's
+// cover at q — the class it comes from read there, bilinear; −1: no grid, the layer's own cover everywhere
+const WXGRID_OFF = 2578399u;
+fn wxGridCover(q: vec3f, i: u32) -> f32 {
+  let hd = bodies[WXGRID_OFF + 1u];
+  let cls = hd[1u + i];
+  if (hd.x < 0.5 || cls < 0.0) { return -1.0; }
+  let c = bodies[WXGRID_OFF];
+  let e = normalize(cross(vec3f(0.0, 0.0, 1.0), c.xyz));
+  let n = cross(c.xyz, e);
+  let xy = clamp(vec2f(dot(q, e), dot(q, n)) / c.w + 2.0, vec2f(0.0), vec2f(4.0));
+  let ij = min(vec2u(xy), vec2u(3u));
+  let fr = xy - vec2f(ij);
+  let k = u32(cls);
+  var v = 0.0;
+  for (var m = 0u; m < 4u; m++) {
+    let o = vec2u(m & 1u, m >> 1u);
+    let w = mix(1.0 - fr, fr, vec2f(o));
+    v += bodies[WXGRID_OFF + 2u + (ij.y + o.y) * 5u + ij.x + o.x][k] * (w.x * w.y);
+  }
+  // (as weather.ts makes a layer of the model's covers: the high clouds 0.6 of theirs; under 8 % none)
+  return select(v, 0.6 * v, k == 2u) * smoothstep(0.05, 0.1, v);
+}
 fn wxLayerA(q: vec3f, i: u32) -> f32 {
-  let c = P.wx[1u + i].z;
+  let g = wxGridCover(q, i);
+  let c = select(P.wx[1u + i].z, g, g >= 0.0);
   let s = wxAt(q, 3200.0) + vec3f(f32(i) * 7.31, f32(i) * 3.17, 0.0);
   let n = 0.5 + 0.5 * (0.6 * dnoise(s) + 0.28 * dnoise(s * 2.0 + vec3f(1.7, 4.1, 2.3)) + 0.12 * dnoise(s * 4.0 + vec3f(3.3, 0.7, 5.9)));
   // (a scattered or broken sky's clouds in clumps and clear stretches tens of km across — not one even scatter to the

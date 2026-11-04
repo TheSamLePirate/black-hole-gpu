@@ -22,6 +22,8 @@ export interface CloudLayer {
   top: number;
   /** how much of the sky it covers (0…1: FEW ≈ 0.2, SCT 0.4, BKN 0.75, OVC 1) */
   cover: number;
+  /** (Q5 C5) the model's class it comes from — 0 low, 1 middle, 2 high —: its cover read on the weather grid about the camera */
+  cls?: number;
 }
 
 export interface WindSpec {
@@ -279,9 +281,15 @@ export function layerTau(l: CloudLayer): number {
  * transmission of each, 1 / (1 + 0.75 τ (1 − g)), g 0.85), in the fog half again — the light meter opens to
  * it; a storm's gloom ~4 stops, no darker than 1/20.
  */
-export function weatherGpu(w: WeatherState, ground: number, altKm: number, fogGround = ground): { params: number[]; light: number } {
+export function weatherGpu(
+  w: WeatherState,
+  ground: number,
+  altKm: number,
+  fogGround = ground,
+): { params: number[]; light: number; classes: number[] } {
   const params = new Array<number>(16).fill(0);
-  if (!(altKm < 30) || (w.layers.length === 0 && w.fogTop <= 0 && w.visibility >= 30e3)) return { params, light: 1 };
+  const classes = [-1, -1, -1];
+  if (!(altKm < 30) || (w.layers.length === 0 && w.fogTop <= 0 && w.visibility >= 30e3)) return { params, light: 1, classes };
   const weight = Math.min(Math.max((30 - altKm) / 15, 0), 1);
   const ext = (v: number) => Math.max(3.912 / v - 3.5e-5, 0);
   const fog = w.fogTop > 0;
@@ -290,6 +298,8 @@ export function weatherGpu(w: WeatherState, ground: number, altKm: number, fogGr
   params.splice(0, 4, weight, ext(fog ? 8000 : w.visibility), fog ? 3.912 / w.visibility : 0, fog ? fogGround + w.fogTop : 0);
   const layers = [...w.layers].sort((a, b) => a.base - b.base).slice(0, 3);
   layers.forEach((l, i) => params.splice(4 * (1 + i), 4, ground + l.base, ground + l.top, l.cover, layerTau(l)));
+  // (Q5 C5: the layers' classes, in the order drawn — the grid's cover for each)
+  classes.splice(0, 3, ...[0, 1, 2].map((i) => layers[i]?.cls ?? -1));
   const hCam = altKm * 1e3 - ground;
   let v = 1;
   for (const l of layers) {
@@ -297,5 +307,5 @@ export function weatherGpu(w: WeatherState, ground: number, altKm: number, fogGr
     v *= 1 - c * (1 - 1 / (1 + 0.1125 * layerTau(l)));
   }
   if (fog && hCam < w.fogTop) v *= 1 - 0.5 * weight;
-  return { params, light: Math.max(v, 0.05) };
+  return { params, light: Math.max(v, 0.05), classes };
 }
