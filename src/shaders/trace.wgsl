@@ -4110,7 +4110,11 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
       T = (1.0 - ring.w) * e.T;
       veil = e.veil;
       // (what lies beyond the air, seen through it: lower than it looks)
-      if (isEarth(k) && P.sky.x > 0.0) { lookSky = airBend(look); }
+      if (isEarth(k) && P.sky.x > 0.0) {
+        REFR_SEA = false;
+        lookSky = airBend(look);
+        if (REFR_SEA) { T = vec3f(0.0); }
+      }
     }
     if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && NEAR_KIND != 6u && !air) {
       // (on Gargantua's worlds the camera white-balances to the light there — the disk's orange, K2's —
@@ -11155,6 +11159,8 @@ fn earthLookNoGround(k: u32, ro: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, gx: vec3
 // vertical had the sky's elevations 5.8′ off at 45° of latitude, to the north and south: ~1′ of bending near the horizon)
 // (the bending of the ray traced now — green light's —, for the Sun's disc in each colour: PLAN-CIEL C4)
 var<private> REFR_DELTA: f32 = 0.0;
+// (refrBend: the ray seen curved into the sea by the air — what lies beyond the air hidden)
+var<private> REFR_SEA: bool = false;
 // (R2: the tables read as system/refraction-gpu.ts gpuBending reads them — the CPU's figures the image's)
 fn refrF(i: u32) -> f32 { return bodies[REFR_OFF + i / 4u][i % 4u]; }
 fn refrN(h: f32) -> f32 {
@@ -11191,10 +11197,15 @@ fn refrLimbSlope(ht: f32) -> vec2f {
 fn refrBend(h: f32, mu: f32) -> f32 {
   let e = asin(clamp(mu, -1.0, 1.0));
   if (e >= 0.0) { return select(0.0, refrHaut(h, e), h < 80000.0); }
-  let c = (1.0 + refrN(h)) * (6371000.0 + h) * cos(e);
+  // (the tangent point on the figure drawn: the squashed space's sphere of radius a, the camera at its distance there — on the
+  // tables' 6 371 km and the geodetic height, the rays' tangent heights came ~0.4 km low over the equator, ~0.7 km high over
+  // 70° N from 420 km: the setting Sun held 0.2° too high there, iss-sunset)
+  let c = (1.0 + refrN(h)) * length(nearCam()) * EARTH_RM * cos(e);
   var rt = c;
-  for (var k = 0; k < 6; k++) { rt = c / (1.0 + refrN(rt - 6371000.0)); }
-  let ht = max(rt - 6371000.0, 0.0);
+  for (var k = 0; k < 6; k++) { rt = c / (1.0 + refrN(rt - EARTH_RM)); }
+  // (under the apparent limb — a ray the air curves into the sea, ~2.6′ over the drawn one from orbit —: nothing beyond seen)
+  REFR_SEA = rt < EARTH_RM;
+  let ht = max(rt - EARTH_RM, 0.0);
   if (ht >= 120000.0) { return 0.0; }
   return refrLimb(ht) - select(0.0, refrHaut(h, -e), h < 80000.0);
 }

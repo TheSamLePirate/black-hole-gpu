@@ -6184,7 +6184,12 @@ async function main() {
     vc.s.lookAt = false;
     vc.s.telescope = false;
     vc.setRotation("free");
+    // (a photograph's view: a cut, placed as given — and the rig keyed afresh from it (viewBack's): else a free camera already
+    // placed stayed where it was, its offset kept — a second view, 420 km over 70° N, drawn from over the equator with the
+    // north's look, the horizon rolled 80°)
+    vc.rig.cut = true;
     vc.rigPlace(true, v.X, v.fwd, v.up, groundVelocity(body, v.X, time));
+    vc.rig.key = "";
     if (o.ground) {
       const why = vc.standOn(body as Body);
       if (why) return why;
@@ -8011,7 +8016,8 @@ async function main() {
         heading: o.heading,
         pitch: o.pitch,
       });
-      if (!why && o.fov) camera.setFov(o.fov);
+      // (the field of the view placed: the spectator's own lens when a craft is flown — its settings its own)
+      if (!why && o.fov) camera.viewController().setFov(o.fov);
       return why;
     },
     mode: {

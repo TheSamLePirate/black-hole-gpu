@@ -336,7 +336,9 @@ export function bodyView(t: number, v: BodyView) {
   } else {
     X = fromBodyFixed(id, bodyFixedOf(id, lat, lon, v.altKm * 1e3), t);
     const r: Vec3 = [X[0] - B.pos[0], X[1] - B.pos[1], X[2] - B.pos[2]];
-    up = unit(r);
+    // (the Earth's vertical WGS84's — the geodetic normal, its heading and pitch the photograph's —, not the radius: 0.19° apart
+    // at 45°)
+    up = id === "earth" ? figureUp(id, X, t) : unit(r);
     east = unit(cross(pole, up));
     const vc = Math.sqrt(body.mass / Math.hypot(...r));
     vel = [B.vel[0] + vc * east[0], B.vel[1] + vc * east[1], B.vel[2] + vc * east[2]];

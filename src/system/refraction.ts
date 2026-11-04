@@ -4,6 +4,7 @@
 // ∫ (N/H) sin ψ ds ≈ (N₀/H) sin ψ × its air column (Chapman's grazing function): 35′ at the horizon from the
 // sea, 1′ at 45°, none at the zenith — Bennett's table within a fraction of a minute above 2°.
 
+import { WGS84_A } from "./ellipsoid";
 import { gpuBending } from "./refraction-gpu";
 
 const R_EARTH = 6371e3;
@@ -41,7 +42,8 @@ export function airColumn(h: number, mu: number, H = REFR_H): number {
 export function bending(apparentAlt: number, h = 0, N0 = seaRefractivity()): number {
   // (the drawn air asked — its refractivity the frame's —, its tables in: what the GPU reads, the same numbers — C0-7's CPU = GPU)
   if (drawnTable && N0 > 0 && Math.abs(N0 - drawnN0()) < 1e-9) {
-    const b = gpuBending(drawnTable, Math.max(h, 0), apparentAlt);
+    // (under the horizon, the tangent point on the shader's sphere: WGS84's a)
+    const b = gpuBending(drawnTable, Math.max(h, 0), apparentAlt, WGS84_A);
     if (b !== null) return Math.min(b, 0.03);
   }
   const mu = Math.sin(apparentAlt);

@@ -77,16 +77,17 @@ export function gpuN(f: Float32Array, h: number): number {
  * A ray's bending [rad] from a camera h [m] up at an apparent elevation e [rad], as the shader reads it: above the horizon
  * B_haut (in the air) — from orbit none —; under it, its tangent height by Bouguer (n r = n₀ r₀ cos e, six steps), the whole
  * chord B_limbe (both halves) less the part behind the camera B_haut(h, |e|) — from orbit the whole B_limbe. null: the ray meets the sea.
+ * R: the sphere the tangent point is taken on, r0 the camera's distance from its centre — the shader's: the squashed space's
+ * (radius WGS84's a, the camera at its distance there); the integral's tests: the tables' own 6 371 km.
  */
-export function gpuBending(f: Float32Array, h: number, e: number): number | null {
+export function gpuBending(f: Float32Array, h: number, e: number, R = R_E, r0 = R + h): number | null {
   const inAir = h < H_TOP;
   if (e >= 0) return inAir ? gpuHaut(f, h, e) : 0;
-  const r0 = R_E + h;
   const c = (1 + gpuN(f, h)) * r0 * Math.cos(e);
   let rt = c;
   // (a fixed point contracting by N′R ≈ 0.22 a step: six to the decimetre — two left 60 m)
-  for (let k = 0; k < 6; k++) rt = c / (1 + gpuN(f, rt - R_E));
-  const ht = rt - R_E;
+  for (let k = 0; k < 6; k++) rt = c / (1 + gpuN(f, rt - R));
+  const ht = rt - R;
   if (ht < 0) return null;
   if (ht >= LAYER_TOP) return 0;
   return inAir ? gpuLimb(f, ht) - gpuHaut(f, h, -e) : gpuLimb(f, ht);

@@ -355,8 +355,10 @@ Puts the camera out of the ship as a free spectator (`on: true`; the ship goes o
 
 A photograph's view on the Earth (`cameraAt` in `src/main.ts`): with `tripod`, the tripod set on the ground at the geodetic
 latitude, longitude [°]; else the free camera at the place itself, `altM` [m] over the WGS84 ellipsoid. Either faces `heading`
-[° from the north], pitched `pitch` [°], through a vertical field `fov` [°]. A craft flown flies on (the spectator). Returns why
-not, or null. *Used in:* `tests/e2e/coast-refs.e2e.test.ts` (the T7 reference photographs reproduced).
+[° from the north], pitched `pitch` [°] (over the geodetic horizontal), through a vertical field `fov` [°] — the view's own lens:
+the spectator's when a craft is flown (`camera.viewController().s.fov`, not `settings.fov`). A craft flown flies on (the
+spectator). Each call is a cut: the view placed anew, even over one already placed. Returns why not, or null. *Used in:*
+`tests/e2e/coast-refs.e2e.test.ts` (the T7 reference photographs reproduced), `tests/e2e/iss-sunset.e2e.test.ts`.
 
 ### `__bh.mode` → object
 
