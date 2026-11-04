@@ -14126,16 +14126,20 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // to it in accum, its kind and cover in moments.x)
   if (!mesh && !isTree && (liteSkip() & 1u) == 0u) {
     let rel0 = earthRelief(gq, fx, fy);
-    var sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hG));
+    // (the point's height known to half a footprint: the ray jittered within its pixel, the distance read at its centre — at
+    // 10 km some 4–5 m —: the sea's tests at its level given that slack, or far off the sea mixed with the ground in grains, a
+    // darker speckled band beyond ~7 km facing a low Sun, the T7 sunset series)
+    let hW = max(hG - 0.5 * fpM, 0.0);
+    var sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hW));
     // (the sea the relief map's coarse mask misses — its texels of kilometres call the sea by a coast land: the water there shaded
     // as ground, black, a staircase across a gulf —: a surface at the sea's level over a bottom the fine bathymetry finds deeper
     // than ~10 m — seaDepthAt, the windows z 10…8 —; a polder, a marsh at the sea's level, a few metres under it: land)
     // (seaBed: a bed the bathymetry finds under a surface at the sea's level at all — the OSM's harbours, its bays drawn as lakes
     // — Sydney's Port Jackson, the T7 survey —: the sea, not a lake's calm)
     var seaBed = 0.0;
-    if (sea0 < 0.99 && hG < 0.3) {
+    if (sea0 < 0.99 && hW < 0.3) {
       let dz = seaDepthAt(gq, max(length(fx), length(fy)) * EARTH_RM);
-      seaBed = smoothstep(0.0, 0.25, dz.y) * (1.0 - smoothstep(0.1, 0.3, hG));
+      seaBed = smoothstep(0.0, 0.25, dz.y) * (1.0 - smoothstep(0.1, 0.3, hW));
       sea0 = max(sea0, smoothstep(6.0, 12.0, dz.x) * seaBed);
       seaBed *= smoothstep(1.0, 3.0, dz.x);
     }
@@ -14147,8 +14151,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       // ground the relief raises over the sea within it, land; the T7 survey, Sam: the Calanques' faces striped with the sea)
       // (under the sea's level — the mesh the bed's, a drowned ridge's slopes steep —: water whatever its slope; over it, flat
       // ground alone — the T7 survey: Étretat's banks shown as white sand out of the sea)
-      let flat = max(smoothstep(0.82, 0.94, dot(n, gq)), 1.0 - smoothstep(0.3, 1.5, hG));
-      osm.x = smoothstep(0.35, 0.65, osm.x) * flat * select(1.0, 1.0 - smoothstep(3.0, 8.0, hG), osm.y < 0.3);
+      let flat = max(smoothstep(0.82, 0.94, dot(n, gq)), 1.0 - smoothstep(0.3, 1.5, hW));
+      osm.x = smoothstep(0.35, 0.65, osm.x) * flat * select(1.0, 1.0 - smoothstep(3.0, 8.0, hW), osm.y < 0.3);
     }
     // (an airfield levelled: land, even where the maps had water)
     let water = max(sea0, osm.x) * (1.0 - lvl);
