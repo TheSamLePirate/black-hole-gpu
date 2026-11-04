@@ -7897,7 +7897,7 @@ fn terrainRasterCloud(px: vec2f) -> bool { return false; }
 fn terrainRasterNormal(px: vec2f) -> vec3f { return vec3f(0.0); }
 // END_TERRAIN_RASTER
 // BEGIN_CLOUD_PASS (system/cloud-pass.ts withCloudPass supplies the cloud pass's texture reads)
-fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds { return EarthClouds(-1.0, vec3f(0.0), -1.0); }
+fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds { return EarthClouds(-1.0, vec3f(0.0), -1.0, -1.0); }
 fn cloudsAtPixel(px: vec2f) -> vec4f { return vec4f(-1.0); }
 fn cloudDepthAtPixel(px: vec2f) -> f32 { return -1.0; }
 // END_CLOUD_PASS
@@ -10350,7 +10350,9 @@ struct EarthLook { col: vec3f, T: vec3f, Lm: vec3f };
 // over 12 samples where the ray crosses it — Beer–Lambert, the sunlight through the cloud above
 // (its column from the cover) with the powder term, a forward lobe (Henyey–Greenstein) and multiple
 // scattering's brightening, the sky's light; x: opacity, rgb in cl: its mean radiance, t: where it starts
-struct CloudVol { alpha: f32, cl: vec3f, t: f32 };
+// (ta — Q5 C11 —: the distance its light comes from, its samples' mean weighted by their light — what the air before it is read
+// at: a broken layer's far puffs, a far deck seen through a near one's gaps, under their own haze, not the nearest's)
+struct CloudVol { alpha: f32, cl: vec3f, t: f32, ta: f32 };
 // the clouds' phase function: Henyey–Greenstein forward (0.8) and back (−0.2) lobes, 65/35, their
 // eccentricities scaled by c (the multiple-scattering octaves: rounder)
 fn hgPhase(g: f32, ct: f32) -> f32 { return (1.0 - g * g) / (4.0 * PI * pow(max(1.0 + g * g - 2.0 * g * ct, 1e-4), 1.5)); }
@@ -10457,6 +10459,8 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
   let ms3 = cloudPhase(ct, 0.125) * 4.0 * PI;
   var Tv = 1.0;
   var col = vec3f(0.0);
+  var taW = 0.0;
+  var taN = 0.0;
   var tPrev = t0;
   for (var i = 0u; i < N; i++) {
     cost(3u);
@@ -10518,10 +10522,14 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
       + 0.85 / PI * (over * (E * amb + E * earthMoonlight(q, q, airHeight(p), mu0)) + under * cityGlowUp(q, E, mu0));
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
+    let wl = Tv * (1.0 - dT) * (luminance(Lin) + 1e-9);
+    taW += wl * t;
+    taN += wl;
     if (o.t < 0.0) { o.t = t; }
     Tv *= dT;
     if (Tv < 0.01) { break; }
   }
+  o.ta = select(o.t, taW / taN, taN > 0.0);
   o.alpha = (1.0 - Tv) * P.earth2.y;
   o.cl = col / max(1.0 - Tv, 1e-4);
   return o;
@@ -10712,6 +10720,8 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
   let nightE = nightFloor(skE, mu0E);
   var Tv = 1.0;
   var col = vec3f(0.0);
+  var taW = 0.0;
+  var taN = 0.0;
   var tPrev = t0;
   for (var j = 0u; j < N; j++) {
     cost(3u);
@@ -10771,10 +10781,14 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
         + below * cityGlowUp(q, E, mu0));
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
+    let wl = Tv * (1.0 - dT) * (luminance(Lin) + 1e-9);
+    taW += wl * t;
+    taN += wl;
     if (o.t < 0.0) { o.t = t; }
     Tv *= dT;
     if (Tv < 0.01) { break; }
   }
+  o.ta = select(o.t, taW / taN, taN > 0.0);
   o.alpha = 1.0 - Tv;
   o.cl = col / max(1.0 - Tv, 1e-4);
   return o;
@@ -10890,6 +10904,8 @@ fn wxRainShafts(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f32) 
   let N = 10u;
   var Tv = 1.0;
   var col = vec3f(0.0);
+  var taW = 0.0;
+  var taN = 0.0;
   var tPrev = t0;
   for (var j = 0u; j < N; j++) {
     cost(3u);
@@ -10929,10 +10945,14 @@ fn wxRainShafts(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f32) 
     let Lin = E * (Ts * ph * 0.9 + 0.75 / PI * amb) + FLASH_TINT * luminance(E) * 0.15 * flashGlow(p);
     let dT = exp(-sigma * dm);
     col += Tv * Lin * (1.0 - dT);
+    let wl = Tv * (1.0 - dT) * (luminance(Lin) + 1e-9);
+    taW += wl * t;
+    taN += wl;
     if (o.t < 0.0) { o.t = t; }
     Tv *= dT;
     if (Tv < 0.01) { break; }
   }
+  o.ta = select(o.t, taW / taN, taN > 0.0);
   o.alpha = 1.0 - Tv;
   o.cl = col / max(1.0 - Tv, 1e-4);
   return o;
@@ -11054,9 +11074,28 @@ fn aerial(@builtin(global_invocation_id) gid: vec3u) {
 // The clouds along a camera ray before tHit (the volume's — the map's —, the weather's layers, the cirrus): their cover, their
 // light (premultiplied by nothing: their own radiance) and the distance of the nearest; earthLook's, or the cloud pass's
 // (the kernel clouds: once a texel of half the image's size, read back by the pixels — docs/PLAN-NUAGES-AAA.md N1)
-struct EarthClouds { alpha: f32, cl: vec3f, tc: f32 };
+// (ta: the distance their light comes from — CloudVol's —, the air before them read there; tc stays the nearest's: the history's
+// reprojection, the pass's texel beyond a ridge)
+struct EarthClouds { alpha: f32, cl: vec3f, tc: f32, ta: f32 };
+// Q5 C11 — a cloud layer c added to those found s, in their order along the ray (the nearer first: s empty, or c's nearest
+// before theirs): premultiplied light over transmittance, the nearest's distance, the air's distance each one's weighted by
+// the light it gives
+fn cloudsAdd(s: EarthClouds, c: EarthClouds) -> EarthClouds {
+  if (c.alpha <= 0.0) { return s; }
+  if (s.alpha <= 0.0) { return c; }
+  var f = s;
+  var b = c;
+  if (c.tc < s.tc) {
+    f = c;
+    b = s;
+  }
+  let a = f.alpha + (1.0 - f.alpha) * b.alpha;
+  let wf = f.alpha * (luminance(f.cl) + 1e-9);
+  let wb = (1.0 - f.alpha) * b.alpha * (luminance(b.cl) + 1e-9);
+  return EarthClouds(a, (f.alpha * f.cl + (1.0 - f.alpha) * b.alpha * b.cl) / max(a, 1e-5), f.tc, (wf * f.ta + wb * b.ta) / (wf + wb));
+}
 // (the clouds of this pixel already found by the cloud pass — alpha ≥ 0 —: earthLook takes them instead of marching)
-var<private> CLOUDS_BUFFERED: EarthClouds = EarthClouds(-1.0, vec3f(0.0), -1.0);
+var<private> CLOUDS_BUFFERED: EarthClouds = EarthClouds(-1.0, vec3f(0.0), -1.0, -1.0);
 fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthClouds {
   let earth = isEarth(k) && earthOn();
   // the cloud layer: met from above (on the way to the ground), or from below (in the sky)
@@ -11067,11 +11106,13 @@ fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx:
   var alpha = 0.0;
   var cl = vec3f(0.0);
   var tc = -1.0;
+  var ta = -1.0;
   if (volume && earth && P.earth2.y > 0.0) {
     let cv = cloudVolume(ro, rd, tHit, Ls, E, gx, gy, fp0, fpK, jit);
     alpha = cv.alpha;
     cl = cv.cl;
     tc = cv.t;
+    ta = cv.ta;
   } else if (earth && hc2 > 0.0 && P.earth2.y > 0.0) {
     let below = dot(ro, ro) < rc * rc;
     tc = select(-b - sqrt(hc2), -b + sqrt(hc2), below);
@@ -11081,36 +11122,26 @@ fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx:
       let cv = earthCloud(qc, earthFoot(qc, rd, gx, fp), earthFoot(qc, rd, gy, fp), Ls);
       alpha = cv.x;
       cl = earthCloudLight(qc, rd, Ls, E, below, cv.y);
+      ta = tc;
     }
   }
+  var cs = EarthClouds(alpha, cl, tc, ta);
   // the weather's layers round the camera (their order along the ray: one way or the other, the lowest
   // first — up from below them, down from above)
   if (HAS_WX && volume && earth && WX_W > 0.0) {
     for (var i = 0u; i < 3u; i++) {
       let lv = wxCloud(ro, rd, tHit, i, Ls, E, jit);
       if (lv.alpha <= 0.0) { continue; }
-      if (alpha <= 0.0 || lv.t < tc) {
-        cl = (lv.alpha * lv.cl + (1.0 - lv.alpha) * alpha * cl) / max(lv.alpha + (1.0 - lv.alpha) * alpha, 1e-5);
-        alpha = lv.alpha + (1.0 - lv.alpha) * alpha;
-        tc = lv.t;
-      } else {
-        cl = (alpha * cl + (1.0 - alpha) * lv.alpha * lv.cl) / max(alpha + (1.0 - alpha) * lv.alpha, 1e-5);
-        alpha = alpha + (1.0 - alpha) * lv.alpha;
-      }
+      let c = EarthClouds(lv.alpha, lv.cl, lv.t, lv.ta);
+      cs = cloudsAdd(cs, c);
     }
   }
   // (N5: the rain falling from the lowest deck — its shafts, merged as one more layer)
   if (HAS_WX && volume && earth && WX_W > 0.0 && P.wx[5].y > 0.02 && (TUNE_GSKIP & 65536u) == 0u) {
     let lv = wxRainShafts(ro, rd, tHit, Ls, E, jit);
     if (lv.alpha > 0.0) {
-      if (alpha <= 0.0 || lv.t < tc) {
-        cl = (lv.alpha * lv.cl + (1.0 - lv.alpha) * alpha * cl) / max(lv.alpha + (1.0 - lv.alpha) * alpha, 1e-5);
-        alpha = lv.alpha + (1.0 - lv.alpha) * alpha;
-        tc = lv.t;
-      } else {
-        cl = (alpha * cl + (1.0 - alpha) * lv.alpha * lv.cl) / max(alpha + (1.0 - alpha) * lv.alpha, 1e-5);
-        alpha = alpha + (1.0 - alpha) * lv.alpha;
-      }
+      let c = EarthClouds(lv.alpha, lv.cl, lv.t, lv.ta);
+      cs = cloudsAdd(cs, c);
     }
   }
   // the cirrus at 9 km (from far above, a third: the cloud map's own already holds them), before the
@@ -11127,19 +11158,13 @@ fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx:
         let ai = cirrusCover(geoQ(qi), (fp0 + fpK * ti) * EARTH_RM) * mix(1.0, 0.35, smoothstep(20000.0, 100000.0, alt));
         if (ai > 0.0) {
           let ci = cirrusLight(qi, rd, Ls, E);
-          if (alpha <= 0.0 || ti < tc) {
-            cl = (ai * ci + (1.0 - ai) * alpha * cl) / max(ai + (1.0 - ai) * alpha, 1e-5);
-            alpha = ai + (1.0 - ai) * alpha;
-            tc = ti;
-          } else {
-            cl = (alpha * cl + (1.0 - alpha) * ai * ci) / max(alpha + (1.0 - alpha) * ai, 1e-5);
-            alpha = alpha + (1.0 - alpha) * ai;
-          }
+          let c = EarthClouds(ai, ci, ti, ti);
+          cs = cloudsAdd(cs, c);
         }
       }
     }
   }
-  return EarthClouds(alpha, cl, tc);
+  return cs;
 }
 
 // earthLook's sky — the clouds before the ground and the air to it —, its ground, and the two composed: split so that a
@@ -11156,6 +11181,9 @@ fn earthLookSky(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx
   let alpha = cs.alpha;
   let cl = cs.cl;
   let tc = cs.tc;
+  // (Q5 C11: the air before the clouds read where their light comes from — ta —, not at the nearest's distance: a far layer
+  // under its own haze; TUNE_GSKIP 524288: at the nearest's, as before)
+  let ta = select(tc, cs.ta, cs.ta > 0.0 && (TUNE_GSKIP & 524288u) == 0u);
   // the air: to the ground (or out), and to the cloud — seen through the air before it only
   // (the camera's ray, the aerial perspective's table there: read at the ground's distance and the cloud's)
   var air: EarthAir;
@@ -11163,19 +11191,19 @@ fn earthLookSky(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx
   var tFar = 0.0;
   if (useAp) {
     tFar = apFar(ro);
-    useAp = apCovers(select(3e38, tHit, tHit > 0.0), tFar) && (alpha <= 0.0 || apCovers(tc, tFar));
+    useAp = apCovers(select(3e38, tHit, tHit > 0.0), tFar) && (alpha <= 0.0 || apCovers(ta, tFar));
   }
   if (useAp) {
     air = apRead(select(3e38, tHit, tHit > 0.0), tFar);
     air.Tc = vec3f(1.0);
     air.Lc = vec3f(0.0);
     if (alpha > 0.0) {
-      let c = apRead(tc, tFar);
+      let c = apRead(ta, tFar);
       air.Tc = c.T;
       air.Lc = c.L;
     }
   } else {
-    air = earthAir(ro, rd, select(3e38, tHit, tHit > 0.0), Ls, E, jit, select(3e38, tc, alpha > 0.0));
+    air = earthAir(ro, rd, select(3e38, tHit, tHit > 0.0), Ls, E, jit, select(3e38, ta, alpha > 0.0));
   }
   return EarthLookSky(air, alpha, cl, tc, earth);
 }
@@ -14663,7 +14691,7 @@ fn clouds(@builtin(global_invocation_id) gid0: vec3u) {
   let ph = P.frame.x & 3u;
   let gid = select(gid0.xy, gid0.xy * 2u + vec2u(ph & 1u, ph >> 1u), (P.frame.z & FLAG_CLOUD_AMORTISED) != 0u);
   if (gid.x >= (W + 1u) / 2u || gid.y >= (H + 1u) / 2u) { return; }
-  var cs = EarthClouds(0.0, vec3f(0.0), -1.0);
+  var cs = EarthClouds(0.0, vec3f(0.0), -1.0, -1.0);
   var bound = -1.0;
   var depthM = -1.0;
   if (HAS_BODIES && P.near0.w > 0.5) {
@@ -14714,7 +14742,8 @@ fn clouds(@builtin(global_invocation_id) gid0: vec3u) {
   // (no light where there is no cover, nor a non-finite one: the history premultiplies it — post.wgsl cloudTemporal)
   let clOk = cs.alpha > 0.0 && !isNan(cs.cl.r + cs.cl.g + cs.cl.b) && all(abs(cs.cl) < vec3f(1e30));
   textureStore(cloudOutA, gid, vec4f(select(vec3f(0.0), cs.cl, clOk), select(0.0, cs.alpha, cs.alpha > 0.0)));
-  textureStore(cloudOutB, gid, vec4f(cs.tc, bound, depthM, 0.0));
+  // (w: where their light comes from along the ray — Q5 C11, the air before them read there)
+  textureStore(cloudOutB, gid, vec4f(cs.tc, bound, depthM, select(cs.tc, cs.ta, cs.ta > 0.0)));
 }
 
 // The clear sky's light (docs/PLAN-NUAGES-AAA.md N2b, read by skyIrradiance: the ground, the scenery, the clouds): at four
@@ -15002,9 +15031,9 @@ fn keyLight() {
     // (N3: the clouds between the craft and the Sun from their map — every layer, the weather's too —, the air's own
     // dimming from the look along the ray with no cloud — CLOUDS_BUFFERED: none —; the map's shell beyond it)
     let csT = select(-1.0, cloudShadowAt(nearCam()), isEarth(kn) && (TUNE_GSKIP & 8192u) == 0u);
-    if (csT >= 0.0) { CLOUDS_BUFFERED = EarthClouds(0.0, vec3f(0.0), -1.0); }
+    if (csT >= 0.0) { CLOUDS_BUFFERED = EarthClouds(0.0, vec3f(0.0), -1.0, -1.0); }
     let e = earthLookNoGround(kn, nearCam(), rd, rd, lt.e, g1, cross(rd, g1), 0.0, rs, 0.5, false);
-    CLOUDS_BUFFERED = EarthClouds(-1.0, vec3f(0.0), -1.0);
+    CLOUDS_BUFFERED = EarthClouds(-1.0, vec3f(0.0), -1.0, -1.0);
     E *= e.T * select(1.0, csT, csT >= 0.0);
     // (the Moon's shadow — a solar eclipse —: the Sun's share it leaves where the craft is; in totality none —
     // the hull lit by the dark sky's light alone)

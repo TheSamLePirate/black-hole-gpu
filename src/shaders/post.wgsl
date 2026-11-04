@@ -1029,7 +1029,7 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
       let hi = vec2i(size) - 1;
       var hist = vec4f(0.0);
       // (the history's distances — the cloud's along the ray, its depth —, weighted by its light: what its colour is the light of)
-      var hz = vec2f(0.0);
+      var hz = vec3f(0.0);
       var hw = 0.0;
       for (var j = 0; j < 4; j++) {
         let o = vec2i(j & 1, j >> 1);
@@ -1040,7 +1040,8 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
         let hb = textureLoad(cloudHistB, q, 0);
         let wl = wb * a.a * dot(a.rgb, vec3f(0.2126, 0.7152, 0.0722));
         if (hb.x > 0.0 && hb.z > 0.0 && wl > 0.0) {
-          hz += wl * hb.xz;
+          // (z: where its light comes from — Q5 C11 —, the distance the air before it is read at)
+          hz += wl * vec3f(hb.xz, select(hb.x, hb.w, hb.w > 0.0));
           hw += wl;
         }
       }
@@ -1089,9 +1090,9 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
       if (hw > 0.0 && wH > 0.0) {
         let hzm = hz / hw;
         let curOk = !skip && b.x > 0.0 && b.z > 0.0 && wC > 0.0;
-        let zc = select(hzm, b.xz, curOk);
+        let zc = select(hzm, vec3f(b.xz, select(b.x, b.w, b.w > 0.0)), curOk);
         let z = (wH * hzm + select(0.0, wC, curOk) * zc) / (wH + select(0.0, wC, curOk));
-        bOut = vec4f(z.x, b.y, z.y, b.w);
+        bOut = vec4f(z.x, b.y, z.y, z.z);
       }
     }
   }

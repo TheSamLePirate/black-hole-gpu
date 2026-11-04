@@ -22,7 +22,7 @@ export function withCloudPass(trace: string, supported: boolean): string {
 // four texels round it, bilinear, each weighted by its bound's likeness to the pixel's — both the sky, or within 10 % —,
 // a floor under it so a pixel alone of its kind still takes its neighbours'. Alpha −1: the pass not drawn this frame.
 fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds {
-  if ((u32(P.mouthList[1].y + 0.5) & ${CLOUD_PASS_FLAG}u) == 0u) { return EarthClouds(-1.0, vec3f(0.0), -1.0); }
+  if ((u32(P.mouthList[1].y + 0.5) & ${CLOUD_PASS_FLAG}u) == 0u) { return EarthClouds(-1.0, vec3f(0.0), -1.0, -1.0); }
   let n = vec2i(textureDimensions(cloudInA));
   let h = px * 0.5 - 0.5;
   let i0 = vec2i(floor(h));
@@ -31,6 +31,7 @@ fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds {
   var a = 0.0;
   var c = vec3f(0.0);
   var t = 0.0;
+  var ta = 0.0;
   var wt = 0.0;
   for (var j = 0u; j < 4u; j++) {
     let o = vec2i(i32(j & 1u), i32(j >> 1u));
@@ -46,10 +47,12 @@ fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds {
     c += w * A.a * A.rgb;
     if (A.a > 0.0) {
       t += w * A.a * B.x;
+      // (where their light comes from — Q5 C11 —: weighted by it, as the history does)
+      ta += w * A.a * select(B.x, B.w, B.w > 0.0);
       wt += w * A.a;
     }
   }
-  return EarthClouds(a / wa, select(vec3f(0.0), c / a, a > 0.0), select(-1.0, t / wt, wt > 0.0));
+  return EarthClouds(a / wa, select(vec3f(0.0), c / a, a > 0.0), select(-1.0, t / wt, wt > 0.0), select(-1.0, ta / wt, wt > 0.0));
 }
 // The cloud pass's texel at an image's pixel px: its clouds' light and cover (alpha −1: the pass not drawn), and how far
 // along the camera's ray they are [m] — the sea's mirror of the far clouds (trace.wgsl seaShade).
