@@ -10664,13 +10664,17 @@ var<private> CLOUD_LIGHT_MARCH: bool = false;
 // (Q5 VIPER C2: a weather layer's samples along the ray — 16; the cloud pass amortised, its texel marched a frame in four: the
 // budget freed taken back in samples, renderer.cloudSamples)
 var<private> CLOUD_N: u32 = 16u;
-// The optical depth towards the Sun from p through layer i's own density: 6 samples, each step twice the last (60 m … 1.9 km,
-// ~3.8 km in all — a deck's depth at a low Sun), the cheap density (docs/PLAN-NUAGES-AAA.md N2)
-fn wxLightTau(p: vec3f, i: u32, Ls: vec3f, rnd: f32) -> f32 {
+// The optical depth towards the Sun from p through layer i's own density: n samples, each step twice the last (60 m … 1.9 km,
+// ~3.8 km in all for six — a deck's depth at a low Sun —, 900 m for four), the cheap density (docs/PLAN-NUAGES-AAA.md N2)
+// (Q5 C6: n steps, the clouds' shadow map taking the far field over at their reach, 60 (2ⁿ − 1) m — CLOUD_NEAR_N 6, 3.8 km: against
+// the reference — every cloud on the sunbeam marched to 120 km — a storm's light biased −1 level, +14 with 4 steps (900 m: the
+// map's coarse mean density short of a tower's own), +10 before C6; an overcast's error 2.75 levels rms, 6.6 before)
+override CLOUD_NEAR_N: u32 = 6u;
+fn wxLightTau(p: vec3f, i: u32, Ls: vec3f, rnd: f32, n: u32) -> f32 {
   var tau = 0.0;
   var d = 0.0;
   var st = 60.0;
-  for (var k = 0u; k < 6u; k++) {
+  for (var k = 0u; k < n; k++) {
     let x = p + Ls * ((d + st * (0.35 + 0.3 * rnd)) / EARTH_RM);
     tau += wxDensity(x, i, true).x * st;
     d += st;
@@ -10746,13 +10750,37 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     let mu0 = dot(geoQ(q), physicalLs);
     let hM = (r - 1.0) * EARTH_RM;
     let veil = wxVeil(hM, w, i).y;
-    let Ts = sunThrough(airHeight(p), mu0) * sunSeen(p, Ls) * veil;
+    var Ts = sunThrough(airHeight(p), mu0) * sunSeen(p, Ls);
     let tauUp = a * L.w * max(top - hn, 0.0) / max(top, 0.3);
     // (the cloud pass: the sunlight's optical depth marched through the layer's own density — cores dark, the gaps between
     // cumulus lit, a tower's shadow on its neighbour; else the column of its cover over the point)
     var tauSun = 0.4 * tauUp / max(mu0, 0.12);
     // (and the converging kernel, the reference the realtime image is held to)
-    if (CLOUD_LIGHT_MARCH || (QUALITY_PIPELINE && TUNE_CLOUD_LIGHT > 0u)) { tauSun = wxLightTau(p, i, Ls, fract(RNDV.x + f32(j) * 0.6180339887)); }
+    // (Q5 C6: the near and the far apart — the march its own layer's first 3.8 km towards the Sun, the clouds' shadow map from
+    // there on, every layer's, on the same sunbeam: a tower's shadow on its neighbour, an upper deck's gaps on the cumulus under
+    // it, not counted twice; off the map — or TUNE_GSKIP 1048576 —, the other layers' mean veil, as before)
+    var far = false;
+    if (CLOUD_LIGHT_MARCH || (QUALITY_PIPELINE && TUNE_CLOUD_LIGHT > 0u)) {
+      var cf = -1.0;
+      if ((TUNE_GSKIP & 1048576u) == 0u) { cf = cloudShadowAt(p + Ls * (60.0 * f32((1u << CLOUD_NEAR_N) - 1u) / EARTH_RM)); }
+      far = cf >= 0.0;
+      let rl = fract(RNDV.x + f32(j) * 0.6180339887);
+      tauSun = wxLightTau(p, i, Ls, rl, select(6u, CLOUD_NEAR_N, far)) + select(0.0, -log(max(cf, 1e-6)), far);
+      // (the measure's reference — TUNE_GSKIP 4194304 —: every cloud on the sunbeam marched, 11 steps doubling out to 120 km,
+      // no map, no veil)
+      if ((TUNE_GSKIP & 4194304u) != 0u) {
+        tauSun = 0.0;
+        var d = 0.0;
+        var st = 60.0;
+        for (var k = 0u; k < 11u; k++) {
+          tauSun += cloudSigmaAt(p + Ls * ((d + st * (0.35 + 0.3 * rl)) / EARTH_RM), 0.0) * st;
+          d += st;
+          st *= 2.0;
+        }
+        far = true;
+      }
+    }
+    Ts *= select(veil, 1.0, far);
     let beer = select(exp(-tauSun), 0.0, mu0 < -0.1);
     let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
     let over = cloudDiffuseT(tauUp);
@@ -14902,8 +14930,31 @@ fn cloudShadow(@builtin(global_invocation_id) gid: vec3u) {
         let O = C + right * x + upP * y;
         // (the line O + toward s through the shell: from the top's sphere on the Sun's side down to the ground's or the
         // top's far side)
-        let rTop = 1.0 + 13000.0 / EARTH_RM;
-        let rBot = 1.0 + 300.0 / EARTH_RM;
+        // (Q5 C6: the shell the clouds are in this frame — the weather's layers' bases and tops, the map's volume's 1.5–4.5 km
+        // where the weather does not cover the map —, not 300 m – 13 km whole: the 40 steps where the clouds are, a cumulus layer
+        // ~10 of them, not 4; TUNE_GSKIP 2097152: the whole shell, as before)
+        var hLo = 300.0;
+        var hHi = 13000.0;
+        if ((TUNE_GSKIP & 2097152u) == 0u) {
+          hLo = 1e9;
+          hHi = -1e9;
+          if (P.earth2.y > 0.0 && !(HAS_WX && WX_W >= 1.0)) {
+            hLo = 1500.0;
+            hHi = 4500.0;
+          }
+          if (HAS_WX && WX_W > 0.0) {
+            for (var i = 0u; i < 3u; i++) {
+              let L = P.wx[1u + i];
+              if (L.z > 0.0) {
+                hLo = min(hLo, L.x);
+                hHi = max(hHi, L.y);
+              }
+            }
+          }
+          hLo = max(hLo, 0.0);
+        }
+        let rTop = 1.0 + hHi / EARTH_RM;
+        let rBot = 1.0 + hLo / EARTH_RM;
         let b = dot(O, toward);
         let c2 = dot(O, O);
         let dT = b * b - (c2 - rTop * rTop);
@@ -14912,7 +14963,7 @@ fn cloudShadow(@builtin(global_invocation_id) gid: vec3u) {
           var s0 = -b - sqrt(dT);
           let dB = b * b - (c2 - rBot * rBot);
           if (dB > 0.0) { s0 = max(s0, -b + sqrt(dB)); }
-          if (s1 > s0) {
+          if (hHi > hLo && s1 > s0) {
             let lod = max(log2(texel * EARTH_RM / (EARTH_RM * 1.5707963 / f32(textureDimensions(earthCube).x))), 0.0);
             let N = 40u;
             let ds = (s1 - s0) / f32(N);
@@ -14920,8 +14971,13 @@ fn cloudShadow(@builtin(global_invocation_id) gid: vec3u) {
             var od = 0.0;
             var zF = -1e9;
             var zB = 0.0;
+            // (each texel's steps offset by its own fixed draw — the texel counted from the world's, not the map's moving centre:
+            // still as the map follows the camera —: the steps' bands on the clouds' and the ground's shadows broken into a fine
+            // grain the lookup's bilinear smooths; TUNE_GSKIP 2097152: the steps' middles, as before)
+            let wi = vec2i(i32(round(cx / texel)) + i32(gid.x), i32(round(cy / texel)) - i32(gid.y));
+            let jt = select(fract(52.9829189 * fract(0.06711056 * f32(wi.x) + 0.00583715 * f32(wi.y))), 0.5, (TUNE_GSKIP & 2097152u) != 0u);
             for (var i = 0u; i < N; i++) {
-              let sm = s1 - (f32(i) + 0.5) * ds;
+              let sm = s1 - (f32(i) + jt) * ds;
               let sg = cloudSigmaAt(O + toward * sm, lod);
               if (sg > 1e-6) {
                 if (zF < -1e8) { zF = (sm + 0.5 * ds) * EARTH_RM; }
