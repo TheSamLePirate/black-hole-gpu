@@ -6,7 +6,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // (geometric), the clear sky's light on a level ground read from the tracer's own harmonics (renderer.skyTable — sky ambient),
 // its fall from the sunset against the tabulated twilight (renderer.ts TWILIGHT: 400 lux at sunset, 3.4 at −6°, 0.008 at −12°).
 // The simple air's own twilight fell far too slowly — 17 × too bright at −6.6°, 140–160 × at −11…−14° —: the dusk's glow burnt
-// over the night's lit towns, orange (Sam). TW_OFF=1: the raw air (no calibration) for a measure.
+// over the night's lit towns, orange (Sam). Since Q5 C2 the air as it is (AIR_K 1) and its multiple scattering's table, no
+// calibration (twilightOn false); TW_ON=1: the old calibration on, for the A/B.
 // Done when: the samples from 19:00 to 23:30 UTC are read and the fall stays within 2.5 × the table's at −6.6, −10.9 and −12.8°.
 // Duration: ~1 min (this Mac).
 const OUT = "remote-results/twilight-sky";
@@ -21,7 +22,7 @@ test.skipIf(!E2E)(
       await app.js(`(() => { __bh.settings.vessel = "f35"; __bh.settings.earthClouds = 0; return 1; })()`);
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       await app.js(
-        `(() => { __bh.game.flyAt(48.85, 2.3, 300, 300, 120); __bh.freeze(true); __bh.renderer.twilightOn = ${process.env.TW_OFF ? "false" : "true"}; return 1; })()`,
+        `(() => { __bh.game.flyAt(48.85, 2.3, 300, 300, 120); __bh.freeze(true); __bh.renderer.twilightOn = ${process.env.TW_ON ? "true" : "false"}; return 1; })()`,
       );
       const rows: { utc: string; el: number; irr: number }[] = [];
       for (let m = 19 * 60; m <= 23 * 60 + 30; m += 10) {

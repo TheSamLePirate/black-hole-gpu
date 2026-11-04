@@ -5748,9 +5748,16 @@ fn sunThrough(h: f32, mu: f32) -> vec3f {
 // The table's optical depth [rgb] from a height h [m] towards mu (Bruneton's (x_mu, x_r), bilinear; under the horizon the
 // horizon's ray): system/earth-air.ts lutThrough its twin, its header's w the top's radius over the ground's
 const TLUT_OFF = 2560989u;
-fn tlutTau(h: f32, mu: f32) -> vec3f {
+fn tlutTau(h: f32, mu0: f32) -> vec3f {
   let rt = bodies[TLUT_OFF].w;
-  let r = clamp(1.0 + h / AIR.rm, 1.0, rt);
+  // (over the air's top: the ray taken where it enters the air — none met, nothing lost)
+  let r0 = max(1.0 + h / AIR.rm, 1.0);
+  let b = r0 * mu0;
+  let disc = b * b - r0 * r0 + rt * rt;
+  if (r0 > rt && (mu0 >= 0.0 || disc < 0.0)) { return vec3f(0.0); }
+  // (at the entry, r0 μ0 + t = −√disc: its zenith cosine −√disc / rt)
+  let mu = select(mu0, -sqrt(max(disc, 0.0)) / rt, r0 > rt);
+  let r = clamp(r0, 1.0, rt);
   let H = sqrt(rt * rt - 1.0);
   let rho = sqrt(max(r * r - 1.0, 0.0));
   let d = -r * mu + sqrt(max(r * r * (mu * mu - 1.0) + rt * rt, 0.0));

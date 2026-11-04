@@ -7,8 +7,11 @@ import { MSLUT_N, MSLUT_OFF, TLUT_H, TLUT_VEC4S, TLUT_W } from "./earth-air-layo
 
 export { MSLUT_N, MSLUT_OFF, TLUT_H, TLUT_VEC4S, TLUT_W } from "./earth-air-layout";
 
-/** The air drawn thicker than it is (the tracer's airK: scale heights × k, densities / k). */
-export const AIR_K = 3;
+/** The air drawn thicker than it is (the tracer's airK: scale heights × k, densities / k) — 1 since Q5 C2 (decision 27: one
+ *  physical air): drawn 3 × thicker, its twilight fell ~20 × too slowly (−6.3 mag at −15° against Patat et al. 2006's −9.5 at
+ *  Paranal), the renderer's twilightK made up for it from the camera's place; the air as it is, with the multiple scattering's
+ *  table, follows the measured fall within 0.1–0.8 mag (−6° … −15°). */
+export const AIR_K = 1;
 const HR = 8000 * AIR_K,
   HM = 1200 * AIR_K;
 const BR = [5.802e-6, 13.558e-6, 33.1e-6];
@@ -205,7 +208,17 @@ export function transmittanceLut(): Float32Array {
 /** The table read as the shader reads it: the transmission [rgb] from a height h [m] towards mu — under the horizon the
  *  horizon's ray, the ground's shade (groundShade) taking the Sun down */
 export function lutThrough(f: Float32Array, h: number, mu: number): [number, number, number] {
-  const r = Math.min(Math.max(R_G + h, R_G), R_T);
+  // (over the air's top: the ray taken where it enters the air, its zenith cosine there — none met, nothing lost)
+  let r0 = Math.max(R_G + h, R_G);
+  if (r0 > R_T) {
+    const b = r0 * mu;
+    const disc = b * b - r0 * r0 + R_T * R_T;
+    if (mu >= 0 || disc < 0) return [1, 1, 1].map((x) => x * groundShadeOf(h, mu)) as [number, number, number];
+    // (at the entry, r0 μ + t = −√disc)
+    mu = -Math.sqrt(disc) / R_T;
+    r0 = R_T;
+  }
+  const r = Math.min(r0, R_T);
   const rho = Math.sqrt(Math.max(r * r - R_G * R_G, 0));
   const d = -r * mu + Math.sqrt(Math.max(r * r * (mu * mu - 1) + R_T * R_T, 0));
   const dMin = R_T - r,

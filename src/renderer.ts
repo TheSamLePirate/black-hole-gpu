@@ -8541,10 +8541,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private skyOut: GPUTexture | null = null;
   private skyBind: GPUBindGroup | null = null;
   private skyTableOn = false;
-  /** the twilight sky's calibration last sent (earth4.x — writeParams' twilightK), and its switch (a measure's: off, the simple
-   *  air's own twilight) */
+  /** the twilight sky's calibration last sent (earth4.x — writeParams' twilightK), and its switch — off since Q5 C2: the air
+   *  as it is (AIR_K 1) and its multiple scattering's table give the measured twilight; the switch kept for the A/B of this lot,
+   *  to go with it once measured (an air that changed with the camera's place: decision 27) */
   twilightK = 1;
-  twilightOn = true;
+  twilightOn = false;
   /** the sky ambient's air samples a ray (0: the kernels' default, 32) — a measure's: set it, then skyPipe null and skyWanted
    *  false to compile it again */
   skyAirN = 0;

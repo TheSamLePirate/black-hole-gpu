@@ -13,7 +13,7 @@ test("the table within 1 % of the integral where T > 1 % (under 40 km), 15 % on 
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
   for (let k = 0; k < 3000; k++) {
-    const h = rnd() ** 2 * (k < 2000 ? 40e3 : 250e3);
+    const h = rnd() ** 2 * (k < 2000 ? 40e3 : 99e3);
     const r = EARTH_RM + h;
     const muH = -Math.sqrt(Math.max(1 - (EARTH_RM / r) ** 2, 0));
     const mu = muH + 1e-4 + rnd() * (1 - muH - 1e-4);
@@ -28,12 +28,10 @@ test("the table within 1 % of the integral where T > 1 % (under 40 km), 15 % on 
   expect(dark).toBeLessThan(0.15);
 });
 
-test("Chapman's column replaced: the low Sun's light no longer 10–35 % too bright", () => {
+test("the low Sun's light within 1 % of the integral at the sea (Chapman's column, the drawn thicker air's, was 10–35 % off)", () => {
   const D = Math.PI / 180;
   for (const el of [1, 2, 5, 10]) {
-    const chapman = sunThrough(0, Math.sin(el * D))[1]!;
     const e = exact(0, Math.sin(el * D))[1]!;
-    expect(chapman / e - 1).toBeGreaterThan(0.08);
     expect(Math.abs(lutThrough(f, 0, Math.sin(el * D))[1]! / e - 1)).toBeLessThan(0.01);
   }
   // (the drawn table: earth-air.ts's sunThrough — the light meter's — its numbers)
@@ -43,6 +41,24 @@ test("Chapman's column replaced: the low Sun's light no longer 10–35 % too bri
   } finally {
     setTransmittanceLut(null);
   }
+});
+
+test("over the air's top (a station at 420 km): the Sun's ray through the air from where it enters it", () => {
+  const D = Math.PI / 180;
+  const r = EARTH_RM + 420e3;
+  // (the station's Sun 19.5° under its horizontal: the ray grazes the air some tens of km up — reddened, not lost, not whole)
+  const mu = Math.sin(-19.5 * D);
+  const b = r * mu;
+  const tMin = -b; // (the ray's lowest point)
+  const hMin = Math.sqrt(r * r - b * b) - EARTH_RM;
+  expect(hMin).toBeGreaterThan(0);
+  const T = lutThrough(f, 420e3, mu);
+  // (against the integral along the whole chord through the air: twice the depth from its lowest point up — the lowest point's
+  // zenith cosine 0)
+  const tau = opticalDepthExact(EARTH_RM + hMin, 0, 4000)[1]! * 2;
+  expect(tMin).toBeGreaterThan(0);
+  expect(Math.abs(T[1]! / Math.exp(-tau) - 1)).toBeLessThan(0.05);
+  expect(lutThrough(f, 420e3, 0.2)[1]!).toBe(1);
 });
 
 test("under the geometric horizon the ground's shade takes the Sun down; over the air's top nothing is lost", () => {

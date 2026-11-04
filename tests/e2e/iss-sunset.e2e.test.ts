@@ -210,9 +210,19 @@ test.skipIf(!E2E)(
               // (the frame less its labels: the meter's line on top, the ship's mark at the foot)
               const [x0, x1, y0, y1] = [0, b.width, 0.04 * b.height, 0.88 * b.height].map(Math.round);
               const L = (x, y) => { const i = 4 * (y * b.width + x); return d[i] * 0.2126 + d[i + 1] * 0.7152 + d[i + 2] * 0.0722; };
-              let max = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) max = Math.max(max, L(x, y));
+              // (the Sun's warm pixels only — red over blue —: the white labels of the marks left out)
+              const warm = (x, y) => { const i = 4 * (y * b.width + x); return d[i] > 1.3 * d[i + 2] + 2; };
+              // (its brightest over an extended source: a pixel whose neighbours 3 px round are as bright — a star's point left out)
+              const wide = (x, y) => { const l = L(x, y); return [[3, 0], [-3, 0], [0, 3], [0, -3]].every(([a, c]) => x + a >= 0 && x + a < b.width && y + c >= 0 && y + c < b.height && L(x + a, y + c) > 0.5 * l); };
+              let max = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (warm(x, y) && L(x, y) > max && wide(x, y)) max = L(x, y);
+              // (the disc's centre: the warm bright pixels' weighted centroid — a banner's edge, a star a few pixels' weight —; its
+              // box within 0.6° across and 0.4° up and down of it)
+              let sw = 0, sx = 0, sy = 0;
+              for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (max > 0 && warm(x, y) && L(x, y) >= ${THRESHOLD} * max) {
+                const l = L(x, y); sw += l; sx += l * x; sy += l * y; }
+              const cx = sx / Math.max(sw, 1e-9), cy = sy / Math.max(sw, 1e-9), px = b.height / __bh.camera.viewController().s.fov;
               let n = 0, top = 1e9, bottom = -1, left = 1e9, right = -1;
-              for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (max > 0 && L(x, y) >= ${THRESHOLD} * max) {
+              for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (max > 0 && warm(x, y) && L(x, y) >= ${THRESHOLD} * max && Math.abs(x - cx) < 0.6 * px && Math.abs(y - cy) < 0.4 * px) {
                 n++; top = Math.min(top, y); bottom = Math.max(bottom, y); left = Math.min(left, x); right = Math.max(right, x); }
               // (a disc the frame's edge cuts: said, its height not read)
               const cut = top <= y0 || bottom >= y1 - 1 || left <= x0 || right >= x1 - 1;
