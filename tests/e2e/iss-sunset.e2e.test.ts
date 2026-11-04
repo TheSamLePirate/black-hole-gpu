@@ -11,7 +11,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // a quarter of the brightest, the exposure held where the Sun is not clipped, no bloom nor flare), against the CPU's same tables (refraction-gpu.ts gpuBending: the disc's points' apparent elevations,
 // the rays under the limb cut off — on the WGS84 limb's dip in the Sun's azimuth). Then the refraction off, the geometric disc
 // cut by the drawn limb against the ellipsoid's: where the image puts the Sun and the limb. Writes $AB_OUT/iss-sunset/<place>-<step>.png and sunset.json.
-// ISS_PLACES="name,lat,lon,day;…" other places, ISS_STEPS=geo the geometric steps alone, ISS_WEATHER a weather preset.
+// ISS_PLACES="name,lat,lon,day;…" other places, ISS_STEPS=geo the geometric steps alone, ISS_WEATHER a weather preset, ISS_PIPELINE trace.
 // Duration: ~4 min on this Mac.
 // Done when: both places shot at every step, the image's flattening against the CPU's printed, no GPU error.
 const OUT = `${process.env.AB_OUT ?? "remote-results"}/iss-sunset`;
@@ -125,7 +125,7 @@ test.skipIf(!E2E)(
     const app = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", tiles: true });
     try {
       await app.js(`(() => { Object.assign(__bh.settings, { traffic: false, weather: "${process.env.ISS_WEATHER ?? "fair"}", earthClouds: 0, dof: false, motionBlur: 0,
-        earthPipeline: "raster", dynamicResolution: false, refraction: true, lookProfile: "neutral",
+        earthPipeline: "${process.env.ISS_PIPELINE ?? "raster"}", dynamicResolution: false, refraction: true, lookProfile: "neutral",
         autoExposure: false, exposure: 0, bloom: 0, lensFlare: 0 });
         document.body.classList.add("hide-ui"); return 1; })()`);
       await app.waitFor(`__bh.renderer.refrPublished !== ""`, 30_000).catch(() => console.warn("  tables not published after 30 s"));
