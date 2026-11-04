@@ -3959,13 +3959,15 @@ export class Renderer {
     // (the GoPro lens — Q6 I8, src/lens.ts —: its focal, its rectilinear part, its compression, the render's half-width tangent;
     // the band's aspect)
     const lens = target === this.live && this.lens;
+    // (the canopy's scratches — Q6 I6 A2 —: the Camera profile in the cockpit, glinting where bright light comes through)
+    const scratches = camera && !lens && s.ship && s.shipMount === "cockpit" ? this.canopyScratches : 0;
     this.device.queue.writeBuffer(
       this.displayBuf,
       272,
       new Float32Array(
         lens
-          ? [GOPRO_F, GOPRO.theta0, GOPRO.compress, GOPRO_SRC_TAN, GOPRO.band, target.width / target.height, 0, 0]
-          : [0, 0, 0, 0, 0, 0, 0, 0],
+          ? [GOPRO_F, GOPRO.theta0, GOPRO.compress, GOPRO_SRC_TAN, GOPRO.band, target.width / target.height, scratches, 0]
+          : [0, 0, 0, 0, 0, 0, scratches, 0],
       ),
     );
   }
@@ -3975,6 +3977,8 @@ export class Renderer {
   lens = false;
   /** the live image's profile is Camera (writeDisplay): the meter breathes (readMeter) */
   private lookCamera = false;
+  /** the canopy's scratches' strength in the Camera profile's cockpit view (display.wgsl canopyScratches; 0: none) */
+  canopyScratches = 1;
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
    *  velocity on the camera's axes [m/s]; null: none */

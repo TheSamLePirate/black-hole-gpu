@@ -25,7 +25,8 @@ struct Display {
   look: vec4f,  // the image's profile (Q6 I6): Camera on (1), its grain's strength, its vignette's, a clock [s]
   lens: vec4f,  // the GoPro lens (Q6 I8, src/lens.ts): its focal (0: none), its rectilinear part [rad], its compression, the
                 // render's half-width tangent
-  lensB: vec4f, // its band's aspect (width over height), the render's (only the rows the band reads: main.ts goproRowShare), unused ×2
+  lensB: vec4f, // its band's aspect (width over height), the render's (only the rows the band reads: main.ts goproRowShare); the
+                // canopy's scratches' strength (Q6 I6 A2: the Camera profile in the cockpit, 0 none), unused
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -156,6 +157,44 @@ fn lensDirtGlow(uvOut: vec2f, uv: vec2f) -> vec3f {
   let all = textureSampleLevel(bloomMips, samp, vec2f(0.5), n - 1.0).rgb;
   let glow = max(dot(near * D.size.z, LUMA) - 0.12, 0.0) + 0.3 * max(dot(all * D.size.z, LUMA) - 0.12, 0.0);
   return dirt * glow * vec3f(1.0, 0.95, 0.88) * 2.5;
+}
+// The canopy's scratches (Q6 I6 A2, the Camera profile in the cockpit): the acrylic's hairlines, seen only where bright light
+// comes through behind them — the Sun's glare, a sunlit cloud —, as a camera behind a canopy films them: a few fine strokes in
+// cells of ~26 px of the output, each its angle, length and strength, lit by the glare there (the bloom's wide levels).
+fn scratchHash(c: vec2f) -> vec4f {
+  var p = fract(vec4f(c.xyxy) * vec4f(0.1031, 0.1030, 0.0973, 0.1099));
+  p += dot(p, p.wzxy + 33.33);
+  return fract((p.xxyz + p.yzzw) * p.zywx);
+}
+fn canopyScratches(px: vec2f, uv: vec2f) -> vec3f {
+  // (the glare here first: no stroke walked where none lights them — most of the image)
+  let n = f32(textureNumLevels(bloomMips));
+  let l = max(n - 3.0, 0.0);
+  let near = textureSampleLevel(bloomMips, samp, clamp(uv, vec2f(0.0), vec2f(1.0)), l).rgb / max(D.flags.z - l, 1.0);
+  let glow = max(dot(near * D.size.z, LUMA) - 0.15, 0.0);
+  if (glow <= 0.0) { return vec3f(0.0); }
+  let cell = 26.0;
+  let g = px / cell;
+  let i0 = floor(g);
+  var s = 0.0;
+  for (var j = -1; j <= 1; j++) {
+    for (var i = -1; i <= 1; i++) {
+      let c = i0 + vec2f(f32(i), f32(j));
+      let h = scratchHash(c);
+      if (h.w < 0.45) { continue; }
+      // (a stroke through a point of its cell, its angle, half-length 0.6–2 cells; a pixel's distance to it)
+      let o = (c + h.xy) * cell;
+      let a = h.z * 6.2831853;
+      let d = vec2f(cos(a), sin(a));
+      let L = (0.6 + 1.4 * fract(h.x * 7.13)) * cell;
+      let q = px - o;
+      let t = clamp(dot(q, d), -L, L);
+      let e = length(q - d * t);
+      // (a hairline, softer and fainter towards its ends)
+      s += (1.0 - smoothstep(0.25, 1.1, e)) * (1.0 - smoothstep(0.55, 1.0, abs(t) / L)) * (0.35 + 0.65 * fract(h.y * 5.71));
+    }
+  }
+  return vec3f(min(s, 1.0) * glow * 0.9);
 }
 fn lensFlare(uv: vec2f) -> vec3f {
   let aspect = D.img.x / max(D.img.y, 1.0);
@@ -819,6 +858,15 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     // rather than the eye's energy-conserving spread)
     if (tm == 4u) { c = c * (1.0 - 0.3 * D.flags.y) + b * (2.5 * D.flags.y); } else { c = mix(c, b, D.flags.y); }
     if (D.hdr.z > 0.0) { c += D.hdr.z * (lensFlare(uv) + lensDirtGlow(uvOut, uv)) / max(D.size.z, 1e-30); }
+    // (the canopy's scratches — where the cockpit's own image does not hide the outside: its glass)
+    if (D.lensB.z > 0.0) {
+      var see = 1.0;
+      if (D.lod.y > 0.5) {
+        let q = uv * D.img.xy - D.ship.xy;
+        if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { see = 1.0 - clamp(textureSampleLevel(ship, samp, uv, 0.0).a, 0.0, 1.0); }
+      }
+      if (see > 0.0) { c += D.lensB.z * see * canopyScratches(in.pos.xy, uv) / max(D.size.z, 1e-30); }
+    }
     c *= D.size.z;
     // (the telescope's spot meter: the sky behind its target taken as black — a faint object stretched bright on it)
     if (D.eye.y > 0.0) { c = max(c - vec3f(D.eye.y), vec3f(0.0)) / (1.0 - min(D.eye.y, 0.5)); }
