@@ -9247,12 +9247,16 @@ fn roofLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,vec3f>
 // raster's buildings (their own triangles and their oriented boxes alike)
 // (shadeLite's cities' lights near — Q2 —: what OpenStreetMap's roads make of them at the point drawn — tM along dirW, the
 // Earth's axes; fpM its footprint [m] —: ×3 on a road, ×0.15 off it; past the scenery's reach the far wash)
-fn sceneryRoadLight(dirW:vec3f,tM:f32,fpM:f32)->f32 {
+fn sceneryRoadLight(road:ScenerySurface,tM:f32)->f32 {
+  if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) { return mix(0.15, 3.0, select(0.0, road.cover, road.kind == 1.0)); }
+  return CITY_WASH_FAR;
+}
+// (shadeLite's ground — Q3 B4 —: the map's surface at the point drawn — tM along dirW, the Earth's axes; fpM its footprint [m]: a
+// road, a rail, a field's polygon, the water, as earthGround paints them)
+fn sceneryGround(dirW:vec3f,tM:f32,fpM:f32)->ScenerySurface {
   SC_POINT = P.scenery[3].xyz + sceneryLocal(dirW) * tM;
   SC_DISTANCE = tM;
-  let road = scenerySurface(max(fpM, 0.5));
-  if (P.scenery[0].w > 0.5 && SC_DISTANCE <= P.scenery[1].w) { return mix(0.15, 3.0, select(0.0, road.cover, road.kind == 1.0)); }
-  return CITY_WASH_FAR;
+  return scenerySurface(max(fpM, 0.5));
 }
 // (Q3 — shadeLite's raster building: its leaf's face found at the point drawn — tM along dirW, the Earth's axes —, the traced
 // pipeline's look on it; `photo` the orthophoto's colour there: a roof keeps its light and shade over its material's colour —
@@ -13909,6 +13913,16 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (near, over a survey's relief — the IGN's —: its own slopes, read in its grid at the point's anchored place; the mesh's
   // triangles are flat, their facets a metre each from a person's height, in bands)
   let fpM = fp * EARTH_RM;
+  // (Q3 B4 — the map's roads, rails and grounds on the raster's ground as the traced ground paints them (earthGround), where no
+  // national photograph is — the Q6l survey: a road the traced ground showed in La Mancha, the raster's blurred photograph not;
+  // the water's left to its pass; liteSkip 134217728: off)
+  // (the same walk the streets' night lights read — once; by day only where a road is a pixel or more: a footprint under 12 m,
+  // 4 km at most — measured, the walk on every ground pixel +1.1 ms in La Mancha —; liteSkip's bit: neither, its cost measured)
+  var sv = ScenerySurface(vec3f(0.0), 0.0, 0.0);
+  if (HAS_SCENERY && !mesh && !isTree && (liteSkip() & 134217728u) == 0u && ((fpM < 12.0 && tM < 4000.0) || mu0g < 0.06)) {
+    sv = sceneryGround(dirW, tM, fpM);
+  }
+  A = mix(A, sv.color, select(sv.cover, 0.0, sv.kind == 3.0 || sv.kind == 4.0) * (1.0 - img.o));
   if (!mesh && !isTree && fpM < 10.0 && (liteSkip() & 16u) == 0u) {
     TILE_AT_ON = anchored;
     let sf = earthSlopeFine(gq, fpM);
@@ -14103,7 +14117,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // ×3 on a road, ×0.15 off it, a quarter of a town's ground road: the quarter's light about the same, drawn along its
   // streets, not the map's 500 m wash — the night only, a lit town only)
   if (HAS_SCENERY && lit > 0.0 && lamp > 0.02 && (liteSkip() & 131072u) == 0u) {
-    lit *= sceneryRoadLight(dirW, tM, fpM);
+    lit *= sceneryRoadLight(sv, tM);
   } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
   G += mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp) * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
   G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark);
