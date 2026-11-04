@@ -5481,6 +5481,46 @@ async function main() {
     !renderer.offlineActive &&
     !bench.running;
   resize();
+  /** the GoPro lens's minimal HUD (decision 32 (6), settings.goproHud): speed, altitude over the sea, heading — in the band's
+   *  lower margin, never over the picture; its figures written five times a second */
+  let goproEl: HTMLDivElement | null = null;
+  let goproAt = 0;
+  const goproStrip = () => {
+    const on = lensNow && settings.goproHud === "minimal";
+    if (!on) {
+      if (goproEl) goproEl.style.display = "none";
+      return;
+    }
+    const now = performance.now();
+    if (goproEl && goproEl.style.display !== "none" && now - goproAt < 200) return;
+    goproAt = now;
+    if (!goproEl) {
+      goproEl = document.createElement("div");
+      goproEl.id = "gopro-hud";
+      Object.assign(goproEl.style, {
+        position: "fixed",
+        transform: "translate(-50%, -50%)",
+        font: "500 13px/1 ui-monospace, Menlo, monospace",
+        letterSpacing: "0.08em",
+        color: "rgba(255, 255, 255, 0.78)",
+        pointerEvents: "none",
+        whiteSpace: "nowrap",
+        zIndex: "2",
+      });
+      document.body.appendChild(goproEl);
+    }
+    // (the lower margin's middle: the band 2.39:1 centred in the canvas)
+    const r = canvas.getBoundingClientRect();
+    const band = r.width / GOPRO.band;
+    goproEl.style.left = `${r.left + r.width / 2}px`;
+    goproEl.style.top = `${r.top + (r.height + band) / 2 + (r.height - band) / 4}px`;
+    goproEl.style.display = band < r.height - 24 ? "" : "none";
+    const g = camera.geoNow();
+    const u = unitsFor(settings);
+    goproEl.textContent = g
+      ? `${u.fSpd(g.gs).toUpperCase()}   ${u.fAlt(g.alt).toUpperCase()}   ${String(Math.round(((g.track * 180) / Math.PI + 360) % 360)).padStart(3, "0")}°`
+      : "";
+  };
 
   // -------------------------------------------------------------------- the game's tools (F2, __bh.game)
   const tools = new GameTools({
@@ -8469,6 +8509,7 @@ async function main() {
       overlay.style.visibility = lensNow ? "hidden" : "";
       resize();
     }
+    goproStrip();
     renderer.starMatrix = starMatrixNow();
     const st = capped
       ? null

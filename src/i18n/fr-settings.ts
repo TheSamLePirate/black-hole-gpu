@@ -744,6 +744,10 @@ export default {
   "Outside lens": "Objectif extérieur",
   Rectilinear: "Rectiligne",
   GoPro: "GoPro",
+  "GoPro HUD": "HUD GoPro",
+  Minimal: "Minimal",
+  "With the GoPro lens, the flight's figures: none, or a minimal line — speed, altitude over the sea, heading — in the band's lower margin, as an action camera's data strip, never over the picture.":
+    "Avec l'objectif GoPro, les chiffres du vol : aucun, ou une ligne minimale — vitesse, altitude au-dessus de la mer, cap — dans la marge basse du bandeau, comme la bande de données d'une caméra embarquée, jamais sur l'image.",
   "The lens of the views outside the cockpit. GoPro: an action camera's — straight lines in the middle, the edges compressed, 100° across, a cinema band (2.39:1), the HUD hidden. The image is rendered wider and larger, then bent: about 1.5 times the cost of the outside view.":
     "L'objectif des vues hors du cockpit. GoPro : celui d'une caméra embarquée — les lignes droites au centre, les bords comprimés, 100° de champ, un bandeau de cinéma (2,39:1), le HUD masqué. L'image est rendue plus large et plus grande, puis courbée : environ 1,5 fois le coût de la vue extérieure.",
   Neutral: "Neutre",

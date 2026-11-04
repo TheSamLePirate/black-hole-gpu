@@ -1833,6 +1833,22 @@ export const SCHEMA: ControlDef[] = [
     keywords: "lens gopro action camera wide fisheye band cinema outside view",
   },
   {
+    key: "goproHud",
+    type: "choice",
+    section: "render",
+    group: "Image",
+    label: "GoPro HUD",
+    style: "segmented",
+    effect: "none",
+    options: [
+      { value: "off", label: "Off" },
+      { value: "minimal", label: "Minimal" },
+    ],
+    visible: (s) => s.cameraLens === "gopro",
+    help: "With the GoPro lens, the flight's figures: none, or a minimal line — speed, altitude over the sea, heading — in the band's lower margin, as an action camera's data strip, never over the picture.",
+    keywords: "gopro hud telemetry data speed altitude heading minimal",
+  },
+  {
     key: "hdr",
     type: "choice",
     section: "render",

@@ -113,6 +113,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "tonemap",
       "lookProfile",
       "cameraLens",
+      "goproHud",
       "hdr",
       "hdrPeak",
       "bloom",
