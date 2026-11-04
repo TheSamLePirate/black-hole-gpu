@@ -215,6 +215,7 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
             tsm.last.push([r.tsmRedraw ? 1 : 0, r.tsmDrawn ? 1 : 0, r.earthScenery.revision, ...Array.from(r.tsmFrame.slice(12, 15)).map((x) => Math.round(x))]);
             if (tsm.last.length > 4) tsm.last.shift(); };
           r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
+          const gate = [];
           // (TURN°: the autopilot's heading turned that much as the flight starts — the image sweeping across, the history's test)
           if (${TURN} !== 0) c.jetModes.hdg = (c.geoNow()?.track ?? 0) + ${TURN} * Math.PI / 180;
           for (let i = 0; i < ${FRAMES}; i++) {
@@ -223,6 +224,8 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
             while (r.lastDoneAt === last && k++ < 120) await frame();
             note();
             gpu += r.lastGpuMs; ground += r.imageGroundPx ?? 0;
+            // (Q5 VIPER C2: the clouds' amortisation's gate a frame — the image's motion [px], amortised or not)
+            gate.push([+(r.frameMotionPx ?? -1).toFixed(2), r.cloudAmortizedNow ? 1 : 0]);
           }
           // (the relief's cascades' pass — drawn again or not — its GPU time a frame [ms], the profiler's mean)
           tsm.bakes = (r.terrainSurfaceCache?.stats().builds ?? 0) - tsm.bakes0;
@@ -230,7 +233,7 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
           r.prof.enabled = false;
           const g = c.geoNow();
           return { gpuMs: +(gpu / ${FRAMES}).toFixed(1), groundPx: +(ground / ${FRAMES}).toFixed(1),
-            tsm: { ...tsm, revisions: [...tsm.revisions], dz: tsm.dz.join(" ") },
+            tsm: { ...tsm, revisions: [...tsm.revisions], dz: tsm.dz.join(" ") }, gate,
             state: { agl: Math.round(c.heightOverGround?.() ?? g?.agl ?? 0), alt: Math.round(g?.alt ?? 0), gs: +(g?.gs ?? 0).toFixed(1) } }; })()`);
         await app.js(
           `(() => { __bh.settings.targetSpp = 0; document.body.classList.add("hide-ui"); document.getElementById("overlay").style.visibility = "hidden"; return 1; })()`,
@@ -259,7 +262,8 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
         // (the reference: the same frame refined at the canvas's full scale, the upsampling off)
         const fRef = `${OUT}/${tag}-ref.png`;
         await app.js(
-          `(() => { __bh.forceScale(null); __bh.renderer.taauOn = false; __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`,
+          // (the clouds marched at every texel for the reference — Q5 VIPER C2: amortised, a still reference was amortised too)
+          `(() => { __bh.forceScale(null); __bh.renderer.taauOn = false; window.__amortize = __bh.renderer.cloudAmortize; __bh.renderer.cloudAmortize = false; __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`,
         );
         let converged = false;
         for (let i = 0; i < 60 && !converged; i++) {
@@ -270,6 +274,7 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
         // (the raster's realtime phase is its refinement — 30 s of frames at full scale, the history off; the traced one converges)
         if (!converged && md === "trace") console.log(`  ${pl} ${md}: the reference not converged after 30 s (${phase}) — compared anyway`);
         await app.shot(fRef);
+        await app.js(`(() => { __bh.renderer.cloudAmortize = window.__amortize ?? false; return 1; })()`);
         // (the world still whole at the reference: nothing arrived between the shots)
         const after = await app.js<WorldIn>(WORLD_IN(1));
         const row = {

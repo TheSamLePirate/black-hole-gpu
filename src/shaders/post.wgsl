@@ -1080,7 +1080,7 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
       let ks = select(1.25, 2.0, amort);
       let hc = clamp(hist, max(lo, mu - ks * sg), min(up, mu + ks * sg));
       // (a marched texel's new march weighed a little more when a texel is marched one frame in four — 0.35 left the veils noisy)
-      out = select(mix(hc, cur, select(0.15, 0.2, amort)), hc, skip);
+      out = select(mix(hc, cur, select(0.15, CT.w, amort)), hc, skip);
       // (the cloud's distance and depth averaged as its light is — each frame's texel meets the near base of a storm or, through a
       // gap, a far tower's sunlit side: their light averaged with the near one's distance, the far light composited as if near,
       // through little air — white squares; the reference's average is of the two seen through their own air)

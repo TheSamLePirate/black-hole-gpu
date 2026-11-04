@@ -9211,7 +9211,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.device.queue.writeBuffer(
       this.cloudCT,
       0,
-      new Float32Array([t.cloudHistValid && ta.valid ? 1 : 0, this.cloudAmortizedNow ? 1 : 0, this.frameStamp & 3, 0]),
+      new Float32Array([
+        t.cloudHistValid && ta.valid ? 1 : 0,
+        this.cloudAmortizedNow ? 1 : 0,
+        this.frameStamp & 3,
+        this.cloudAmortizeWeight,
+      ]),
     );
     const p = enc.beginComputePass(this.prof.pass("clouds' history"));
     p.setPipeline(this.postCloudTemporal);
@@ -9225,11 +9230,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.cloudHistOk = ta.valid;
   }
   /** (Q5 VIPER C2) the clouds' march amortised — a texel in four a frame, the history rebuilding the others — and its switch:
-   *  off by default; "still": amortised only while the image barely moves (under half a pixel a frame, frameMotionPx) — not yet
-   *  clean in the ghost turn either (35.7 dB against 37.4 under a heavy thermal pressure, to be found);
-   *  −0.8 ms still, but turning (ghost, clouds, 40°) amortised the image's PSNR fell to 36.5–36.7 dB from 38.0–38.2 and the bright
-   *  trails behind the clouds doubled — a frame rate not bought with a blurred image; true: always (a measure's), false: never */
+   *  off by default; "still": amortised only while the image barely moves (under half a pixel a frame, frameMotionPx).
+   *  −0.8 ms; against a reference not amortised (ghost, clouds, 40° turn) the turning image loses ≤ 0.2 dB, but the still
+   *  image converges slower — 2–4 dB under its reference (a texel marched a frame in four: a quarter of the draws) — a frame
+   *  rate not bought with a blurred image; true: always (a measure's), false: never */
   cloudAmortize: boolean | "still" = false;
+  /** (Q5 VIPER C2) an amortised march's weight in the clouds' history (post.wgsl cloudTemporal: the march not amortised 0.15) */
+  cloudAmortizeWeight = 0.2;
   /** (Q5 VIPER C2) the image's motion last frame [px]: the turn since the frame before and the nearest ground's parallax */
   frameMotionPx = Number.POSITIVE_INFINITY;
   cloudAmortizedNow = false;
