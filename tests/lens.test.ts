@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { GOPRO, GOPRO_F, GOPRO_SRC_TAN, goproRenderFov, goproRowShare, lensAngle, lensSource } from "../src/lens";
+import { GOPRO, GOPRO_F, GOPRO_SRC_TAN, goproRenderFov, goproLook, goproRowShare, lensAngle, lensSource } from "../src/lens";
 
 // The GoPro mode's lens (Q6 I8, decision 38): 100° across the output, rectilinear within 28°, the corners of the 2.39:1 band
 // read within the render, the centre ~0.84 of a source pixel per output pixel.
@@ -51,4 +51,21 @@ test("the rows the band reads: aspect / band of the height (0.744 at 16:9), its 
   }
   expect(goproRowShare(16 / 9)).toBeCloseTo((16 / 9 / 2.39) * 1.02, 6);
   expect(goproRowShare(3)).toBe(1);
+});
+
+test("the pointer through the lens: the centre the render's, the band's corners at its edge, nothing outside the band", () => {
+  const aspect = 16 / 9;
+  const c = goproLook(0, 0, aspect)!;
+  expect(Math.abs(c.ndcX) + Math.abs(c.ndcY)).toBeLessThan(1e-9);
+  expect(c.aspect).toBeCloseTo(aspect / goproRowShare(aspect), 9);
+  expect(c.fov).toBeCloseTo(goproRenderFov(c.aspect), 9);
+  // (the band's top right corner: ndc y = (1 / band) × aspect on the canvas — the render's right edge, its rows' top within 2 %)
+  const k = goproLook(1, aspect / GOPRO.band, aspect)!;
+  expect(k.ndcX).toBeCloseTo(1, 6);
+  expect(k.ndcY).toBeGreaterThan(0.97);
+  expect(k.ndcY).toBeLessThanOrEqual(1);
+  expect(goproLook(0, (aspect / GOPRO.band) * 1.05, aspect)).toBeNull();
+  // (rectilinear near the axis: a small offset scaled by the lens's focal over the render's tangent)
+  const n = goproLook(0.01, 0, aspect)!;
+  expect(n.ndcX).toBeCloseTo(0.01 / (GOPRO_F * GOPRO_SRC_TAN), 4);
 });

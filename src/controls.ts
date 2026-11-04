@@ -292,6 +292,8 @@ export class CameraController {
   /** the player's hands off (enabled false) but the view still placed by the game each frame — a multiple
    *  exposure's frames: their tripods set, carried, aimed by the rig as the series applies them */
   placedByGame = false;
+  /** the GoPro lens bends the view (Q6 I8, main.ts): the pointer's picks read through it (controller/rotation.ts canvasLook) */
+  lensOn = false;
   vAz = 0; // °/s
   vInc = 0;
   vYaw = 0;

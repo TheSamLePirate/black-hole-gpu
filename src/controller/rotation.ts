@@ -33,6 +33,7 @@ import {
 import type { Lens } from "../geodesic";
 import { lensesOf } from "../lenses";
 import { shipToCamera } from "../mounts";
+import { goproLook } from "../lens";
 import { fleet } from "../fleet";
 import type { VesselId } from "../vessels";
 import { ellOfR, mouth, sceneClock, sphericalFrame, toMouth } from "../wormhole";
@@ -53,6 +54,7 @@ declare module "../controls" {
     selectTarget: typeof selectTarget;
     cycleTarget: typeof cycleTarget;
     pickAt: typeof pickAt;
+    canvasLook: typeof canvasLook;
     targetInfo: typeof targetInfo;
     issSeen: typeof issSeen;
     issSurfaceDistance: typeof issSurfaceDistance;
@@ -154,13 +156,24 @@ function cycleTarget(this: CameraController, dir: 1 | -1 = 1) {
   this.selectTarget(list[(i + dir + list.length) % list.length]!);
 }
 
+/** The view's direction through a point of the canvas (CSS pixels): rectilinear, or through the GoPro lens when it bends the
+ *  view (Q6 I8 — lensOn, main.ts; src/lens.ts goproLook); null outside its band. */
+function canvasLook(this: CameraController, cam: ReturnType<typeof cameraFrame>, x: number, y: number): Vec3 | null {
+  const w = this.canvas.clientWidth;
+  const h = this.canvas.clientHeight;
+  const nx = (2 * x) / w - 1,
+    ny = 1 - (2 * y) / h;
+  if (!this.lensOn) return pixelLook(cam, nx, ny, this.s.fov, w / h);
+  const g = goproLook(nx, ny, w / h);
+  return g ? pixelLook(cam, g.ndcX, g.ndcY, g.fov, g.aspect) : null;
+}
+
 /** The body seen at a point of the canvas (CSS pixels), if any and selectable. */
 function pickAt(this: CameraController, x: number, y: number): Body | null {
   const s = this.s;
-  const w = this.canvas.clientWidth;
-  const h = this.canvas.clientHeight;
   const cam = cameraFrame(s);
-  const look = pixelLook(cam, (2 * x) / w - 1, 1 - (2 * y) / h, s.fov, w / h);
+  const look = this.canvasLook(cam, x, y);
+  if (!look) return null;
   const body = pick(s, cam, look, this.nowTime());
   return body && availableBodies(s, cam).includes(body) ? body : null;
 }
@@ -245,9 +258,9 @@ function pickIss(this: CameraController, x: number, y: number) {
   const v = this.issSeen();
   if (!v) return false;
   const s = this.s;
-  const w = this.canvas.clientWidth,
-    h = this.canvas.clientHeight;
-  const look = pixelLook(v.cam, (2 * x) / w - 1, 1 - (2 * y) / h, s.fov, w / h);
+  const h = this.canvas.clientHeight;
+  const look = this.canvasLook(v.cam, x, y);
+  if (!look) return false;
   const ang = Math.acos(Math.max(-1, Math.min(1, dot3(look, v.dir))));
   const px = (2 * Math.tan((s.fov * Math.PI) / 360)) / h; // (radians a pixel, near the middle)
   return ang < Math.max(Math.atan(60 / v.dist), 14 * px);
@@ -985,6 +998,7 @@ export function installRotation(C: { prototype: CameraController }) {
     selectTarget,
     cycleTarget,
     pickAt,
+    canvasLook,
     targetInfo,
     issSeen,
     issSurfaceDistance,

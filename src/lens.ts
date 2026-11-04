@@ -55,3 +55,15 @@ export function lensSource(u: number, v: number, aspect: number): [number, numbe
   const k = r > 1e-9 ? Math.tan(lensAngle(r)) / (r * GOPRO_SRC_TAN) : 1 / (GOPRO_F * GOPRO_SRC_TAN);
   return [0.5 + 0.5 * u * k, 0.5 + 0.5 * v * k * aspect];
 }
+
+/**
+ * Where a point of the canvas looks through the GoPro lens (Q6 I8: the pointer's picks in the bent view): its ndc on the canvas
+ * (x right, y up, −1…1) → the rectilinear render's ndc there, with the render's vertical field [°] and aspect — the display's
+ * own mapping (lensSource, the render's rows goproRowShare); null outside the band.
+ */
+export function goproLook(ndcX: number, ndcY: number, aspect: number): { ndcX: number; ndcY: number; fov: number; aspect: number } | null {
+  const ra = aspect / goproRowShare(aspect);
+  const s = lensSource(ndcX, -ndcY / Math.max(aspect, 1e-3), ra);
+  if (!s) return null;
+  return { ndcX: 2 * s[0] - 1, ndcY: 1 - 2 * s[1], fov: goproRenderFov(ra), aspect: ra };
+}

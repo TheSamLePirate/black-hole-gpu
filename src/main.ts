@@ -8508,6 +8508,7 @@ async function main() {
     if (lensWanted() !== lensNow) {
       lensNow = !lensNow;
       renderer.lens = lensNow;
+      camera.lensOn = lensNow;
       overlay.style.visibility = lensNow ? "hidden" : "";
       resize();
     }
