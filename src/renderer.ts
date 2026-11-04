@@ -5976,6 +5976,8 @@ export class Renderer {
 
   /** the live frame's phase, for the post chain (the temporal reprojection runs on realtime frames) */
   private taPhase: FrameStats["phase"] = "realtime";
+  /** the raster's history's least α when the view is held — still, its clock stopped (C0-12: the frozen image's flicker) */
+  rasterHeldAlpha = 1 / 48;
   /** the previous live frame's camera (axes, tan of the half field, aspect), pre-exposure, place */
   private taPrev: {
     right: Vec3;
@@ -6332,6 +6334,7 @@ export class Renderer {
     // blocks each frame, its ridges — met by a ray march whose steps grow with the distance — came and
     // went: the ground shook)
     let still = false;
+    let held = false;
     if (near && p.near && p.near.index === near.index) {
       const onAxes = (v: Vec3, A: Vec3[]) => A.map((a) => v[0] * a[0]! + v[1] * a[1]! + v[2] * a[2]!);
       const dist = (a: number[], b: number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!);
@@ -6345,6 +6348,8 @@ export class Renderer {
       const step = Math.abs(this.lastTime - p.time) * (1476.625 / C_MPS) * (s.massSolar || 1);
       still = this.carryGround && mMetres < 0.01 && turn < (0.25 * 2 * tanH) / t.height && step < 5; // (the centre's round-off: tenths of a millimetre)
       this.taStill = { still, mMetres, turn };
+      // (held: still and the scene's clock not moved — a pause, the world frozen —: the raster's history may average many frames)
+      held = still && step === 0;
     }
     // (rigid: the camera moving over the near body — its ground reprojected by the body's motion, R4)
     const rigid = !!(near && p.near && p.near.index === near.index && !still && this.reprojectGround);
@@ -6380,7 +6385,10 @@ export class Renderer {
         1,
         // (the raster's ground fresh at every pixel each frame: a third of it — the history antialiases, it does not carry the
         // image, its resampling under the motion's magnification smearing the ground at 1/16)
-        this.rasterLiteNow ? Math.max(this.taParams[0], RASTER_LITE_ALPHA) : this.taParams[0],
+        // (held — the camera still, the clock stopped —: its least α down to rasterHeldAlpha, the history averaging ~1/α frames —
+        // the jittered quarter-shading's noise floor, ~2 % a pixel frame to frame, converging instead: C0-12's ≤ 1 % frozen; any
+        // move or tick gives the third back at once)
+        this.rasterLiteNow ? (held ? this.rasterHeldAlpha : Math.max(this.taParams[0], RASTER_LITE_ALPHA)) : this.taParams[0],
         this.taParams[1],
         // (w: the ground's reach — negative: carried with it, the same pixel)
         ...move,

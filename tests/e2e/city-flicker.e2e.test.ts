@@ -7,7 +7,8 @@ import { readPng } from "./lib/png";
 
 // The image frame by frame (Sam, 4 Nov 2026: the flicker analysed on consecutive captures) — Paris from the west at 400 m, the Sun
 // ~20°, the buildings in the relief's cascades on (Q4 S1) and off. Two regimes, each mode:
-//   still: the world frozen, 30 consecutive frames captured — each pixel's standard deviation over them, the flicker alone
+//   still: the world frozen, 30 consecutive frames captured (each marked changed; CF_TOUCH=0: not — a paused game's) — each
+//     pixel's standard deviation over them, the flicker alone
 //     (C0-12: ≤ 1 % on 30 frozen frames), in the city's band (rows 0.3–0.5 of the height);
 //   flight: 24 frames each after a step of 1/30 s, captured one by one, and for each whether the cascades were drawn again
 //     (renderer.terrainRaster.sunDrewNow) — the shadows' pops beside their redraws.
@@ -47,10 +48,12 @@ test.skipIf(!E2E)(
         const { data } = await app.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "png" });
         await Bun.write(f, Buffer.from(data, "base64"));
       };
-      for (const [mode, on] of [
-        ["on", true],
-        ["off", false],
-      ] as const) {
+      for (const [mode, on] of (
+        [
+          ["on", true],
+          ["off", false],
+        ] as const
+      ).filter(([m]) => !process.env.CF_MODES || process.env.CF_MODES.split(",").includes(m))) {
         // (the same start for each mode: the saved state, frozen, the exposure held)
         await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.settings.shipMount = "cockpit";
           __bh.freeze(true); __bh.renderer.sceneryInCascades = ${on}; document.body.classList.add("hide-ui"); return 1; })()`);
@@ -61,9 +64,15 @@ test.skipIf(!E2E)(
         await app.js(
           `(() => { const r = __bh.renderer; window.__ev = r.autoExposureEV; const f = () => { if (window.__ev == null) return; r.autoExposureEV = window.__ev; requestAnimationFrame(f); }; requestAnimationFrame(f); return 1; })()`,
         );
-        // still: 30 consecutive frames, one capture each
+        // still: 30 consecutive frames, one capture each — and the renderer's phase at each (realtime: redrawn as changed;
+        // converging, converged: refined)
+        const phases: Record<string, number> = {};
         for (let i = 0; i < 30; i++) {
-          await app.js(`new Promise((q) => { __bh.touch(); requestAnimationFrame(() => q(1)); })`);
+          const ph = await app.js<string>(`__bh.renderer.lastPhase`);
+          phases[ph] = (phases[ph] ?? 0) + 1;
+          // (CF_TOUCH=0: the frames as a paused game draws them — nothing marked changed, the image left to converge; else each frame
+          // marked changed — a camera that does not move while the world runs)
+          await app.js(`new Promise((q) => { ${process.env.CF_TOUCH === "0" ? "" : "__bh.touch();"} requestAnimationFrame(() => q(1)); })`);
           await grab(`${OUT}/${mode}-still-${String(i).padStart(2, "0")}.png`);
         }
         // flight: 24 frames stepped 1/30 s, each awaited to its end, then captured; the cascades' redraws noted
@@ -104,6 +113,7 @@ test.skipIf(!E2E)(
           stillMeanRelStd: +(rel / Math.max(n, 1)).toFixed(4),
           stillPixelsOver1pc: +(over1 / Math.max(n, 1)).toFixed(4),
           flightRedrawFrames: redraws,
+          stillPhases: phases,
         };
         console.log(`  ${mode}: ${JSON.stringify(out[mode])}`);
       }
