@@ -5737,10 +5737,34 @@ fn airColumn(h: f32, mu: f32, H: f32) -> f32 {
 }
 // the sunlight's transmission down to a height h [m], the sun at mu from the zenith
 fn sunThrough(h: f32, mu: f32) -> vec3f {
+  // (Q5 C1: the Earth's air — AIR.moon its mark — through the transmittance table when it is in: the integral, where
+  // Chapman's column — Schüler's — let 10–35 % too much through with the Sun 1–10° up)
+  if (AIR.moon > 0.5 && bodies[TLUT_OFF].x > 0.5) { return exp(-tlutTau(h, mu)) * groundShade(h, mu); }
   var tau = ((AIR.br + AIR.bo) * airColumn(h, mu, airHR()) + vec3f(AIR.bme * airColumn(h, mu, airHM()))) / airK();
   // (Venus's cloud deck — its column above, slant)
   if (venusKernel() && AIR_SLAB.z > 0.0) { tau += vec3f(AIR_SLAB.z * slabCol(h) / max(mu, 0.03)); }
   return exp(-tau) * groundShade(h, mu);
+}
+// The table's optical depth [rgb] from a height h [m] towards mu (Bruneton's (x_mu, x_r), bilinear; under the horizon the
+// horizon's ray): system/earth-air.ts lutThrough its twin, its header's w the top's radius over the ground's
+const TLUT_OFF = 2560989u;
+fn tlutTau(h: f32, mu: f32) -> vec3f {
+  let rt = bodies[TLUT_OFF].w;
+  let r = clamp(1.0 + h / AIR.rm, 1.0, rt);
+  let H = sqrt(rt * rt - 1.0);
+  let rho = sqrt(max(r * r - 1.0, 0.0));
+  let d = -r * mu + sqrt(max(r * r * (mu * mu - 1.0) + rt * rt, 0.0));
+  let xy = clamp(vec2f((d - rt + r) / max(rho + H - rt + r, 1e-9), rho / H), vec2f(0.0), vec2f(1.0)) * vec2f(255.0, 63.0);
+  let ij = min(vec2u(xy), vec2u(254u, 62u));
+  let fr = xy - vec2f(ij);
+  // (the four corners at one site: each call inlined)
+  var t = vec3f(0.0);
+  for (var c = 0u; c < 4u; c++) {
+    let o = vec2u(c & 1u, c >> 1u);
+    let w = mix(1.0 - fr, fr, vec2f(o));
+    t += bodies[TLUT_OFF + 1u + (ij.y + o.y) * 256u + ij.x + o.x].xyz * (w.x * w.y);
+  }
+  return t;
 }
 // The solid ground's shadow: the Sun under a point's geometric horizon (its dip, acos R/(R + h)) is set for it — airColumn's
 // Chapman column below the horizon carried the air on under the ground to its tangent point, the light through the planet

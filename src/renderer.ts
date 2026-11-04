@@ -116,6 +116,7 @@ import {
   TABLE_GEOID,
   TABLE_WATER,
   TABLE_REFR,
+  TABLE_TLUT,
   TABLE_ORTHO,
   TABLE_LUT,
   TABLE_PATH,
@@ -244,7 +245,7 @@ import {
   WGS84_A,
   WGS84_F,
 } from "./system/ellipsoid";
-import { AIR_K, sunThroughY } from "./system/earth-air";
+import { AIR_K, setTransmittanceLut, sunThroughY, TransmittanceLutBuilder } from "./system/earth-air";
 import { homeOf, homeToRep } from "./system/our-side";
 import type { Vec3 } from "./physics";
 import { bodyPlace, localPatch, patchGeodetic } from "./system/local-patch";
@@ -980,6 +981,11 @@ export class Renderer {
   refrPublished = "";
   /** the tables used (false: the exponential air's estimate — a measure's A/B) */
   refrTablesOn = true;
+  /** (Q5 C1) the Earth's air's transmittance table: its builder while in progress, whether it is in the tracer's table */
+  private tlutBuilder: TransmittanceLutBuilder | null = new TransmittanceLutBuilder();
+  tlutPublished = false;
+  /** the table used (false: Chapman's column — a measure's A/B) */
+  tlutOn = true;
   /** the sea's water map in the tracer's table (gpu-tables.ts TABLE_WATER), once */
   waterIn = false;
   /** the orthophotos' levels last written to the tracer's table (gpu-tables.ts TABLE_ORTHO) */
@@ -1952,6 +1958,24 @@ export class Renderer {
     setRefractionTable(f);
     this.refrPublished = key;
     this.refrBuilder = null;
+  }
+  /** (Q5 C1) the transmittance table built a slice a frame (~2 ms), published whole — the tracer's table and earth-air.ts's at
+   *  once; off: its header put to 0 (Chapman's column, drawn and computed) */
+  private stepTransmittanceLut() {
+    if (!this.tlutOn) {
+      if (this.tlutPublished) {
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_TLUT * 16, new Float32Array(4));
+        setTransmittanceLut(null);
+        this.tlutPublished = false;
+      }
+      return;
+    }
+    if (this.tlutPublished) return;
+    const f = (this.tlutBuilder ??= new TransmittanceLutBuilder()).step(2);
+    if (!f) return;
+    this.device.queue.writeBuffer(this.bodyBuf, TABLE_TLUT * 16, f as Float32Array<ArrayBuffer>);
+    setTransmittanceLut(f);
+    this.tlutPublished = true;
   }
   refractivity(s: Settings): number {
     const m = s.weather === "real" ? this.weatherReal?.model : undefined;
@@ -3624,6 +3648,8 @@ export class Renderer {
     if (shade[8]! > 0) this.featureKey |= 2048;
     // (R2: the layered air's tables for the air in force, built a slice a frame and published to the GPU and the CPU at once)
     if (s.refraction) this.stepRefrTable(s);
+    // (Q5 C1: the air's transmittance table, built once)
+    this.stepTransmittanceLut();
     // the sky through the Earth's air (PLAN-CIEL C3): its refractivity at sea level, from the real weather's
     // air when it is in (cold air bends more), else the standard atmosphere's
     f.set(

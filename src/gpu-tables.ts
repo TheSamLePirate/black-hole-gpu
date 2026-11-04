@@ -12,6 +12,7 @@ import { ORTHO_PARAM_VEC4S } from "./system/earth-tiles";
 import { WATER_VEC4S } from "./system/water-kd-grid";
 import { SHORE_VEC4S } from "./system/earth-shore-layout";
 import { REFR_VEC4S } from "./system/refraction-gpu";
+import { TLUT_VEC4S } from "./system/earth-air-layout";
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -91,4 +92,7 @@ export { SHORE_VEC4S };
 /** (R2) the layered air's refraction tables (system/refraction-gpu.ts: B_haut's log, B_limbe, N; trace.wgsl airBend) */
 export const TABLE_REFR = TABLE_SHORE + SHORE_VEC4S;
 export { REFR_VEC4S };
-export const TABLE_VEC4S = TABLE_REFR + REFR_VEC4S;
+/** (Q5 C1) the Earth's air's transmittance table (system/earth-air.ts: a header, 256 × 64 optical depths; trace.wgsl sunThrough) */
+export const TABLE_TLUT = TABLE_REFR + REFR_VEC4S;
+export { TLUT_VEC4S };
+export const TABLE_VEC4S = TABLE_TLUT + TLUT_VEC4S;
