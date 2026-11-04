@@ -42,6 +42,9 @@ interface Ref {
   /** the bearing set by a landmark in the photograph: its place, or the Sun ("sun"), and where it stands across it (0 left, 1
    *  right) — a phone's compass is off by 10–20° */
   aim?: { lat: number; lon: number; x: number } | { sun: true; x: number; el?: number };
+  /** the bearing found in the relief: the one that sees the most sea along a narrow corridor (a calanque's inlet straight ahead
+   *  in the photograph), within ±span° of hdg */
+  seaAim?: number;
   /** the corrections found by looking: bearing [°], pitch [°], height [m], the place moved along the view [m] (a GPS fix off) */
   dFwd?: number;
   dHdg?: number;
@@ -211,6 +214,62 @@ const REFS: Ref[] = [
     utc: "2018-05-12T15:43:00Z",
     weather: "storm",
   },
+  // (the framing's trials: candidate bearings and places where neither the GPS direction nor a landmark settles it)
+  {
+    id: "025w",
+    file: "025_calanques-sugiton.jpg",
+    lat: 43.21317,
+    lon: 5.45108,
+    hdg: 273,
+    yh: 0.3,
+    f35: 66,
+    aspect: 4 / 3,
+    utc: "2015-08-23T09:30:00Z",
+    weather: "fair",
+    dAlt: 30,
+  },
+  {
+    id: "025s",
+    seaAim: 100,
+    file: "025_calanques-sugiton.jpg",
+    lat: 43.21317,
+    lon: 5.45108,
+    hdg: 190,
+    yh: 0.3,
+    f35: 66,
+    aspect: 4 / 3,
+    utc: "2015-08-23T09:30:00Z",
+    weather: "fair",
+    dAlt: 30,
+  },
+  {
+    id: "034f",
+    file: "034_calanques-sugiton.jpg",
+    lat: 43.20398,
+    lon: 5.49442,
+    hdg: 136,
+    yh: 0.25,
+    f35: 52,
+    aspect: 16 / 9,
+    utc: "2021-07-30T09:57:00Z",
+    weather: "fair",
+    dFwd: 40,
+    dAlt: 10,
+  },
+  {
+    id: "034t",
+    seaAim: 100,
+    file: "034_calanques-sugiton.jpg",
+    lat: 43.20398,
+    lon: 5.49442,
+    hdg: 160,
+    yh: 0.25,
+    f35: 52,
+    aspect: 16 / 9,
+    utc: "2021-07-30T09:57:00Z",
+    weather: "fair",
+    dAlt: 15,
+  },
 ];
 
 const D = Math.PI / 180;
@@ -271,7 +330,7 @@ test.skipIf(!E2E)(
   async () => {
     mkdirSync(OUT, { recursive: true });
     const want = process.env.CR_IDS?.split(",");
-    const refs = REFS.filter((r) => !want || want.includes(r.id));
+    const refs = REFS.filter((r) => (want ? want.includes(r.id) : /^\d+$/.test(r.id)));
     const app = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", tiles: true });
     const out: Record<string, unknown> = {};
     try {
@@ -299,6 +358,23 @@ test.skipIf(!E2E)(
         const fwd = r.dFwd ?? 0;
         const lat = r.lat + (fwd * Math.cos(hdg * D)) / 111320;
         const lon = r.lon + (fwd * Math.sin(hdg * D)) / (111320 * Math.cos(r.lat * D));
+        // (the inlet's bearing searched in the relief, the world first in: the most sea 150–1 500 m out along a ±2° corridor)
+        let seaHdg: number | null = null;
+        if (r.seaAim !== undefined) {
+          await app.js(`__bh.viewAt(${lat}, ${lon}, { altM: 400, heading: ${hdg.toFixed(1)}, pitch: -20 })`);
+          await app.waitFor(`__bh.renderer.earthTiles.pending === 0`, 60_000).catch(() => {});
+          seaHdg = await app.js<number>(`(() => { const D = Math.PI / 180, S = __bh.sys, lat = ${lat}, lon = ${lon};
+            const at = (h, d) => { const la = lat + d * Math.cos(h * D) / 111320, lo = lon + d * Math.sin(h * D) / (111320 * Math.cos(lat * D));
+              return S.groundAt(la, lo) - S.geoid(la, lo); };
+            const eye = at(0, 0) + 10; let best = ${hdg.toFixed(1)}, bestS = -1;
+            for (let h = ${hdg.toFixed(1)} - ${r.seaAim}; h <= ${hdg.toFixed(1)} + ${r.seaAim}; h += 2.5) {
+              let blocked = false; for (let d = 20; d <= 150; d += 10) if (at(h, d) > eye) blocked = true;
+              if (blocked) continue;
+              let sea = 0; for (let d = 150; d <= 1500; d += 50) for (const o of [-2, 0, 2]) if (at(h + o, d) < 2) sea++;
+              if (sea > bestS) { bestS = sea; best = h; } }
+            return best; })()`);
+        }
+        const hdgUsed = seaHdg ?? hdg;
         const vfovPhoto = 2 * Math.atan(Math.tan(hfov / 2) / r.aspect);
         const vfovOurs = r.aspect > OUR_ASPECT ? vfovPhoto / D : (2 * Math.atan(Math.tan(hfov / 2) / OUR_ASPECT)) / D;
         const pitch = (-Math.atan((0.5 - r.yh) * 2 * Math.tan(vfovPhoto / 2)) * 180) / Math.PI + (r.dPitch ?? 0);
@@ -312,7 +388,7 @@ test.skipIf(!E2E)(
             ground: number;
             ahead: number;
             N: number;
-          }>(`(() => { const D = Math.PI / 180, h = ${hdg.toFixed(2)} * D, S = __bh.sys;
+          }>(`(() => { const D = Math.PI / 180, h = ${hdgUsed.toFixed(2)} * D, S = __bh.sys;
             const g = (la, lo) => Math.max(S.groundAt(la, lo), S.geoid(la, lo));
             let ahead = -1e9;
             for (let d = 5; d <= 40; d += 5) ahead = Math.max(ahead, g(${lat} + d * Math.cos(h) / 111320, ${lon} + d * Math.sin(h) / (111320 * Math.cos(${lat} * D))));
@@ -321,7 +397,7 @@ test.skipIf(!E2E)(
           const tripod = r.agl === undefined && !r.dAlt && g.ahead < g.ground + 1.5;
           const altM = (r.agl !== undefined ? g.ground + r.agl : Math.max(g.ground + 1.7, g.ahead + 4)) + (r.dAlt ?? 0);
           const why = await app.js<string | null>(
-            `__bh.viewAt(${lat}, ${lon}, { tripod: ${tripod}, altM: ${altM.toFixed(1)}, heading: ${hdg.toFixed(2)}, pitch: ${pitch.toFixed(2)}, fov: ${vfovOurs.toFixed(2)} })`,
+            `__bh.viewAt(${lat}, ${lon}, { tripod: ${tripod}, altM: ${altM.toFixed(1)}, heading: ${hdgUsed.toFixed(2)}, pitch: ${pitch.toFixed(2)}, fov: ${vfovOurs.toFixed(2)} })`,
           );
           await app.js(`(() => { __bh.settings.fov = ${vfovOurs.toFixed(2)}; __bh.touch(); return 1; })()`);
           await app.js(
