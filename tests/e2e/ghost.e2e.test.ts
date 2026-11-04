@@ -15,8 +15,8 @@ import { readPng, writePng } from "./lib/png";
 // still shot, against the same reference. The trees' shadow map logged frame by frame (drawn again, read, the scenery's revision),
 // and the relief's shadow cascades (drawn again, dzOff, their pass's GPU time a redraw): the cascades kept while the meshes' windows
 // moved shaded the hollows in combs where nothing stands (Q6m — renderer.sunWindowsInKey false: the key before it).
-// PLACES=mancha,strait; MODES=spatial75q,taau75q,native100q,trace (a mode@n: renderer.liteSkip = n — a part of the raster's
-// material cut, e.g. 2097152 the craft's shadow); FRAMES (60); GROUND (40 m); SPEED (140 m/s); GH_FORCE=1: the trees' shadow map
+// PLACES=mancha,strait,clouds (cloudy, 900 m, the view nearly level); MODES=spatial75q,taau75q,native100q,trace (a mode@n: renderer.liteSkip = n — a part of the raster's
+// material cut, e.g. 2097152 the craft's shadow); FRAMES (60); TURN (0°: straight; a heading change asked as the flight starts); GROUND (40 m); SPEED (140 m/s); GH_FORCE=1: the trees' shadow map
 // drawn again 10 frames with the world still, shot (-forced, -forced-after).
 // Output: remote-results/ghost/<place>-<mode>[-still|-ref|-diff|-still-diff].png, ghost.json (GH_OUT).
 // Done when: every place × mode shot and compared (the world in — maps, relief, imagery, surface, scenery — 3 s running, 120 s at
@@ -27,6 +27,7 @@ const OUT = process.env.GH_OUT ?? "remote-results/ghost";
 const GROUND = Number(process.env.GROUND ?? 40);
 const SPEED = Number(process.env.SPEED ?? 140);
 const FRAMES = Number(process.env.FRAMES ?? 60);
+const TURN = Number(process.env.TURN ?? 0);
 const PLACES: Record<string, string> = {
   // (La Mancha's plain at noon: the shadow sharp and near the craft; heading east)
   mancha: `__bh.game.setDate("2026-07-10T11:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
@@ -34,7 +35,13 @@ const PLACES: Record<string, string> = {
   // (the strait of Gibraltar: the shadow on the sea, the waves moving under it; heading west)
   strait: `__bh.game.setDate("2026-07-10T11:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(35.96, -5.45, ${GROUND}, 250, ${SPEED});`,
+  // (the clouds in their own history — I3 —: La Mancha cloudy, 900 m up, heading east, the view nearly level — the clouds
+  // passing across it, the ground below them)
+  clouds: `__bh.game.setDate("2026-07-10T13:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(39.42, -3.05, 900, 90, ${SPEED});`,
 };
+/** each place's view about the craft (the "around" mount: yaw, pitch [°], distance [m]) */
+const VIEWS: Record<string, string> = { clouds: "{ yaw: 0, pitch: 6, dist: 40 }" };
 const RASTER = `__bh.settings.earthPipeline = "raster"; __bh.game.set("realtimeSubsampling", 4); __bh.renderer.rasterJitter = "gauss";`;
 const MODES: Record<string, string> = {
   spatial75q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = false; __bh.forceScale(0.75);`,
@@ -182,7 +189,7 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
             await frame();
             if (c.jetModes.alt === null) c.jetToggle("ap");
             if (c.jetModes.spd === null) c.jetToggle("athr");
-            Object.assign(c.outside, { yaw: 0, pitch: 55, dist: 70 });
+            Object.assign(c.outside, ${VIEWS[pl] ?? "{ yaw: 0, pitch: 55, dist: 70 }"});
             if (c.jetModes.alt !== null && c.jetModes.spd !== null && i >= 30) break;
           }
           const g = c.geoNow(); if (g) { c.jetModes.alt = g.alt; c.jetModes.hdg = g.track; }
@@ -208,6 +215,8 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
             tsm.last.push([r.tsmRedraw ? 1 : 0, r.tsmDrawn ? 1 : 0, r.earthScenery.revision, ...Array.from(r.tsmFrame.slice(12, 15)).map((x) => Math.round(x))]);
             if (tsm.last.length > 4) tsm.last.shift(); };
           r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
+          // (TURN°: the autopilot's heading turned that much as the flight starts — the image sweeping across, the history's test)
+          if (${TURN} !== 0) c.jetModes.hdg = (c.geoNow()?.track ?? 0) + ${TURN} * Math.PI / 180;
           for (let i = 0; i < ${FRAMES}; i++) {
             __bh.step(1 / 30); __bh.touch();
             const last = r.lastDoneAt; let k = 0;
