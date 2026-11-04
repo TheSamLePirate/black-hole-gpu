@@ -27,3 +27,21 @@ test("the whole globe in one image (GIBS's WMS)", () => {
   expect(u).toContain("WIDTH=4096&HEIGHT=2048");
   expect(u).toContain("TIME=2026-08-12");
 });
+
+test("(Q5 C5) the two days the game's time falls between, each region seen near 13:30 local solar time", async () => {
+  const { dayCloudsPair, dayMixAt } = await import("../src/system/day-clouds");
+  const now = Date.parse("2026-11-04T12:00:00Z");
+  // (the evening of 1 November: that day's mosaic and the next's, the time 19 h after the first's 0 h)
+  const p = dayCloudsPair(Date.parse("2026-11-01T19:00:00Z"), now)!;
+  expect(p.a.date).toBe("2026-11-01");
+  expect(p.b!.date).toBe("2026-11-02");
+  expect(p.hours).toBeCloseTo(19, 9);
+  // (at Greenwich the pass at 13:30 UTC: 5.5 h later, 23 % of the way to the next one; at 90° E — passed at 7:30 UTC — 48 %)
+  expect(dayMixAt(19, 0)).toBeCloseTo(5.5 / 24, 9);
+  expect(dayMixAt(19, 90)).toBeCloseTo(11.5 / 24, 9);
+  // (before the pass, the first day's alone; a day after it, the next's)
+  expect(dayMixAt(10, 0)).toBe(0);
+  expect(dayMixAt(40, 0)).toBe(1);
+  // (yesterday's: the next — today's — not out yet)
+  expect(dayCloudsPair(Date.parse("2026-11-03T19:00:00Z"), now)!.b).toBeNull();
+});

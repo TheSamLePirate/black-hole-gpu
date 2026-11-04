@@ -82,7 +82,7 @@ import {
   type MapName,
   utcOf,
 } from "./system/solar";
-import { buildDayClouds, dayCloudsFor, dayCloudsUrl } from "./system/day-clouds";
+import { buildDayClouds, dayCloudsPair, dayCloudsUrl } from "./system/day-clouds";
 import { incidentAltitude, refractionParams, seaRefractivity, setRefractionTable } from "./system/refraction";
 import { moonLightShare, SHADE_VEC4S, shadowParams } from "./eclipse/shadows-gpu";
 import { lookOf } from "./skychart";
@@ -926,14 +926,17 @@ export class Renderer {
   private earthMaps: EarthMaps;
   /** the clouds of the day over the Earth (PLAN-CIEL C2, system/day-clouds.ts): the real weather's, in
    *  the night cube's green — the day they are of (its date, its satellite layer), null: none in */
-  dayCloudsOf: { date: string; layer: string } | null = null;
-  /** the day's mosaic kept (new maps of the Earth: made again without fetching it again) */
-  private dayCloudsImage: { date: string; layer: string; img: ImageBitmap } | null = null;
+  dayCloudsOf: { date: string; layer: string; next: string | null; key: string } | null = null;
+  /** the days' mosaics kept (new maps of the Earth, another half hour of the game: mixed again without fetching them again) —
+   *  the two of the pair in force at most and the one before */
+  private dayCloudsImages = new Map<string, { layer: string; img: ImageBitmap }>();
   /** the day being fetched, and a failure's (retried five minutes on) */
   private dayCloudsJob: string | null = null;
   private dayCloudsFail: { date: string; at: number } | null = null;
   /** off: the fixed map of clouds even with the real weather (a script's switch, an A/B) */
   dayCloudsOn = true;
+  /** (Q5 C5) the next day's mosaic mixed in by the time after each region's pass (off: the game's day's alone — an A/B) */
+  dayCloudsMixOn = true;
   /** the Moon's sunlight left by the Earth's shadow, over its disc (1: no lunar eclipse — PLAN-CIEL C6) */
   moonLight = 1;
   /** the Earth's real ground near the camera, streamed (src/system/earth-tiles.ts) */
@@ -1931,12 +1934,37 @@ export class Renderer {
    */
   private dayCloudsWanted(s: Settings, time: number): boolean {
     if (s.weather !== "real" || !this.dayCloudsOn || !this.earthMaps.tier) return false;
-    const w = dayCloudsFor(utcOf(time), Date.now());
-    if (!w) return false;
-    if (this.dayCloudsOf?.date === w.date) return true;
-    const failed = this.dayCloudsFail?.date === w.date && Date.now() - this.dayCloudsFail.at < 5 * 60e3;
-    if (this.dayCloudsJob !== w.date && !failed) this.loadDayClouds(w);
-    return false;
+    // (Q5 C5: the two days the game's time falls between, region by region — each seen near 13:30 local solar time —,
+    // mixed again every half hour of the game)
+    const p0 = dayCloudsPair(utcOf(time), Date.now());
+    if (!p0) return false;
+    // (the mix off — a measure's A/B —: the first day's alone)
+    const pair = this.dayCloudsMixOn ? p0 : { ...p0, b: null };
+    const key = `${pair.a.date}|${pair.b?.date ?? ""}|${Math.round(pair.hours * 2) / 2}`;
+    if (this.dayCloudsOf?.key === key) return true;
+    const need = [pair.a, ...(pair.b ? [pair.b] : [])].filter((d) => !this.dayCloudsImages.has(d.date));
+    const failed = (d: { date: string }) => this.dayCloudsFail?.date === d.date && Date.now() - this.dayCloudsFail.at < 5 * 60e3;
+    // (the next day's failing: the first alone)
+    const ready = need.length === 0 || (need.length === 1 && need[0] === pair.b && failed(pair.b!));
+    if (ready) {
+      const a = this.dayCloudsImages.get(pair.a.date)!;
+      const b = pair.b ? (this.dayCloudsImages.get(pair.b.date) ?? null) : null;
+      buildDayClouds(this.device, a.img, this.earthMaps.cube, this.earthMaps.night, b?.img ?? null, pair.hours);
+      this.dayCloudsOf = { date: pair.a.date, layer: pair.a.layer, next: b ? pair.b!.date : null, key };
+      // (the others let go: the first day's, the next's and the day before's kept)
+      const keep = [-1, 0, 1].map((k) => new Date(pair.a.day + k * 86400e3).toISOString().slice(0, 10));
+      for (const [d, v] of this.dayCloudsImages)
+        if (!keep.includes(d)) {
+          v.img.close();
+          this.dayCloudsImages.delete(d);
+        }
+      this.invalidate();
+      return true;
+    }
+    const next = need.find((d) => !failed(d));
+    if (next && this.dayCloudsJob === null) this.loadDayClouds(next);
+    // (meanwhile the mix in the night cube, if it is of the same first day)
+    return this.dayCloudsOf?.date === pair.a.date;
   }
 
   /** The air's refractivity at sea level (n − 1): 2.93·10⁻⁴ at 15 °C and 1013.25 hPa, as the density —
@@ -2031,34 +2059,26 @@ export class Renderer {
 
   /** The satellites' mosaic of the day in force (the map's weather layer), or null. */
   dayCloudsMosaic(): { img: ImageBitmap; date: string; layer: string } | null {
-    return this.dayCloudsOf && this.dayCloudsImage?.date === this.dayCloudsOf.date ? this.dayCloudsImage : null;
+    const d = this.dayCloudsOf ? this.dayCloudsImages.get(this.dayCloudsOf.date) : undefined;
+    return d && this.dayCloudsOf ? { img: d.img, date: this.dayCloudsOf.date, layer: d.layer } : null;
   }
 
   private loadDayClouds(w: { date: string; layer: string }) {
     this.dayCloudsJob = w.date;
-    const kept = this.dayCloudsImage?.date === w.date ? Promise.resolve(this.dayCloudsImage.img) : null;
-    (
-      kept ??
-      fetch(dayCloudsUrl(w.layer, w.date))
-        .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`${r.status}`))))
-        .then((b) => createImageBitmap(b, { colorSpaceConversion: "none", premultiplyAlpha: "none" }))
-    )
+    fetch(dayCloudsUrl(w.layer, w.date))
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error(`${r.status}`))))
+      .then((b) => createImageBitmap(b, { colorSpaceConversion: "none", premultiplyAlpha: "none" }))
       .then((img) => {
-        if (img !== this.dayCloudsImage?.img) {
-          this.dayCloudsImage?.img.close();
-          this.dayCloudsImage = { ...w, img };
-        }
-        // (another day asked meanwhile, or the maps gone: not used)
-        if (this.dayCloudsJob !== w.date || !this.earthMaps.tier) return;
-        buildDayClouds(this.device, img, this.earthMaps.cube, this.earthMaps.night);
-        this.dayCloudsOf = { date: w.date, layer: w.layer };
+        this.dayCloudsImages.get(w.date)?.img.close();
+        this.dayCloudsImages.set(w.date, { layer: w.layer, img });
         this.dayCloudsJob = null;
+        // (mixed on the next frame: dayCloudsWanted)
         this.invalidate();
       })
       .catch((e) => {
         console.warn(`The clouds of ${w.date} unavailable:`, e);
         this.dayCloudsFail = { date: w.date, at: Date.now() };
-        if (this.dayCloudsJob === w.date) this.dayCloudsJob = null;
+        this.dayCloudsJob = null;
       });
   }
 
