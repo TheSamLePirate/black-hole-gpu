@@ -2987,7 +2987,13 @@ export class Renderer {
     set(13, o.y0, o.y1, o.accumulate ? 1 : 0, Math.random());
     set(14, s.limbDarkening ? 1 : 0, s.diskEmission === "bolometric" ? 1 : 0, s.diskBrightness, s.diskTau);
     set(15, s.jet ? 1 : 0, Math.sqrt(1 - 1 / (s.jetLorentz * s.jetLorentz)), s.jetWidth, s.jetIntensity);
-    set(16, s.jetLength, s.jetCutoff, s.jetKnots, this.liteSkip | (this.skyOpen ? 0 : 4194304) | (this.groundSpecular ? 0 : 67108864));
+    set(
+      16,
+      s.jetLength,
+      s.jetCutoff,
+      s.jetKnots,
+      this.liteSkip | (this.skyOpen ? 0 : 4194304) | (this.groundSpecular ? 0 : 67108864) | (this.shoreWash ? 0 : 536870912),
+    );
     u.set([this.frameStamp, t === this.live ? this.validFrom : 0, o.flags, o.minSpp ?? 0], 17 * 4);
     set(18, o.tol ?? 1e-5, o.noise ?? 0, o.shutter ?? 0, s.temporalBlend);
     set(19, o.offset?.[0] ?? 0, o.offset?.[1] ?? 0, s.diskThickness, 1); // w: opaque 1.0 (compensated sums)
@@ -8339,6 +8345,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** Q4 L4 — the known materials' specular (shadeLite: GGX, a runway's paving, the regional surface's classes): off by default
    *  until judged — facing a low Sun it brightened Roissy 63 %, a wet-looking sheen on dry paving (Q4.md L4) */
   groundSpecular = false;
+  /** T7 — the shore's wash (shadeWater: the relief probed round each near sea pixel, one read a frame; the waves' white where land
+   *  is within 8–20 m): off by default — measured on kerr-mini, +1.7–3.2 ms of the water's pass over coastal views (T7.md) */
+  shoreWash = false;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
   private rasterEligibleNow = false;
   /** the clouds' transmittance map seen from the Sun (trace.wgsl cloudShadow — docs/PLAN-NUAGES-AAA.md N3; read by

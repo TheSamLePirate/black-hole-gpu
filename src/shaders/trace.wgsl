@@ -921,6 +921,8 @@ var<private> SEA_DEPTH: f32 = 1e4;
 var<private> SEA_DEPTH_W: f32 = 0.0;
 // (the water's Kd490 there [1/m] — seaKd490 —; 0: none known, the clear water)
 var<private> SEA_KD: f32 = 0.0;
+// (the shore's nearness to the sea's point — 1 land within ~8 m, 0.5 within ~20 m, 0 none: shadeWater's probe; the wash's foam)
+var<private> SEA_SHORE: f32 = 0.0;
 // (the water's share of the ground last shaded — earthGround's ocean: the sea, a lake, a river —: the raster's mark carries it to the
 // temporal upsampling, whose kernel widens over the water's glints — post.wgsl taau, Q6d)
 var<private> LAST_OCEAN: f32 = 0.0;
@@ -14319,6 +14321,31 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   SEA_DEPTH = dw.x;
   SEA_DEPTH_W = dw.y;
   SEA_KD = select(seaKd490(gq), 0.0, calm > 0.0);
+  // (the relief round the point, read at one call site for all its uses — four copies of it were 71 % of this kernel —: a
+  // river's slope for its falls, four reads ±ds east and north; the sea's shore, one read a frame — a direction and a distance
+  // 1.5–3 footprints (8–20 m at least) drawn by the pixel's blue noise, the history summing them: eight a pixel cost 5–11 ms on
+  // kerr-mini —, land there (over 0.6 m) the waves washing on it; liteSkip 536870912: the shore's off)
+  var east = vec3f(-gq.y, gq.x, 0.0);
+  east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-12);
+  let north = cross(gq, east);
+  let fallOn = calm > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5;
+  // (the footprint's geometric mean: a grazing look's — 1 m across, 20 m along at a kilometre from 60 m up — some 4–5 m)
+  // (only over a bed the bathymetry finds under ~40 m, or where it is unsure — its data's rim runs along the coast itself, the
+  // cliffs' feet —: the open sea's pixels skip the read — one a pixel cost 1.3–4.3 ms on kerr-mini over a view of sea)
+  let shoreOn = calm <= 0.0 && footSea < 25.0 && tM < 3000.0 && (dw.x < 40.0 || dw.y < 0.6) && (liteSkip() & 536870912u) == 0u;
+  let ds = max(25.0, 2.0 * footSea);
+  let bn = blueDraws(vec2u(centre), P.frame.x + 7u);
+  var hs = array<f32, 4>(0.0, 0.0, 0.0, 0.0);
+  for (var i = 0u; i < select(select(0u, 1u, shoreOn), 4u, fallOn); i++) {
+    let a = select(bn.x * TAU, f32(i) * 1.5707963, fallOn);
+    let r = select(mix(max(8.0, 1.5 * footSea), max(20.0, 3.0 * footSea), bn.y), ds, fallOn);
+    // (the shore's: the relief cache's height — a table's read, the heights as drawn; −1 off its windows: no shore —; the falls'
+    // the exact relief as before — the tiles' walk a pixel cost 2–4 ms on kerr-mini over a view of sea)
+    let pq = normalize(gq + (east * cos(a) + north * sin(a)) * (r / EARTH_RM));
+    hs[i] = select(terrainCachedHeight(pq, max(footSea, 1.0)), earthHeightStepG(pq, ds), fallOn);
+  }
+  // (the nearer the land, the more of the wash: a hit at 1.5 footprints counts whole, at 3 half)
+  SEA_SHORE = select(0.0, 1.0 - 0.5 * bn.y, shoreOn && hs[0] > 0.6);
   RNDV = blueDraws(vec2u(centre), P.frame.x);
   RND = RNDV.z;
   RASTER_SHADE = true;
@@ -14327,6 +14354,16 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   if (calm > 0.0) { wcol = inlandWater(q, -rd, Ls, Eg, sky, footSea, kind > 1.5); }
   else {
     wcol = seaShade(q, -rd, Ls, Eg, sky, G, footSea, 0.0, vec4f(0.0));
+    // (the shore's wash: where the probe found land within metres — a cliff's foot, a beach's edge —, the waves' white breaking
+    // on it, in patches drifting with the clock, as much as the waves are high; here, not in seaShade — every kernel's copy)
+    if (SEA_SHORE > 0.0) {
+      let Hw = select(0.021 * P.sea[0].w * P.sea[0].w, 4.0 * P.seafft[0].z, P.seafft[0].x > 0.5);
+      let wu = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
+      let wc = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
+      let wash = noise01(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 23), vec3f(wu / 4.0, wc / 4.0, P.time.x * P.near5.w * 0.15));
+      let wW = SEA_SHORE * clamp(Hw / 0.6, 0.15, 1.0) * smoothstep(0.35, 0.75, wash) * P.sea[1].w;
+      wcol = mix(wcol, 0.6 / PI * (Eg * max(dot(gq, Ls), 0.0) + sky), wW);
+    }
     // (the sea drawn this frame: its stamp in the stamps' last word — renderer seaSeenStamp: the FFT's waves only while
     // some sea is in view, TERRE-UNREAL U6)
     stamps[arrayLength(&stamps) - 1u] = P.frame.x;
@@ -14335,18 +14372,15 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   if ((liteSkip() & 8192u) != 0u) { G = liteShadowDebug(E); }
   RASTER_SHADE = false;
   SEA_ON = false;
+  SEA_SHORE = 0.0;
   // (falling water — a cascade, a rapid — on the inland water alone (the sea does not fall): where its ground falls steeply —
   // the relief's own heights over ±25 m or two footprints, smooth: the mesh's facets' normals drew white triangles over a gorge
   // and its banks, and over ±8 m the relief's noise under a river — SRTM's, its voids — streaked a river white —, white water, aerated, in streaks drawn down the slope and running down it with the clock, lit as foam;
   // the flat water's look gone with the steepness)
-  if (calm > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5) {
-    var east = vec3f(-q.y, q.x, 0.0);
-    east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-12);
-    let north = cross(q, east);
-    let ds = max(25.0, 2.0 * footSea);
-    let e = ds / EARTH_RM;
-    let gE = (earthHeightStep(normalize(q + east * e), ds) - earthHeightStep(normalize(q - east * e), ds)) / (2.0 * ds);
-    let gN = (earthHeightStep(normalize(q + north * e), ds) - earthHeightStep(normalize(q - north * e), ds)) / (2.0 * ds);
+  if (fallOn) {
+    // (the slope from the reads above: east, north, west, south)
+    let gE = (hs[0] - hs[2]) / (2.0 * ds);
+    let gN = (hs[1] - hs[3]) / (2.0 * ds);
     let slope = length(vec2f(gE, gN));
     // (from ~17° to ~39° over the ±25 m: the relief's 30 m grid softens a fall's cliff — Niagara's 51 m to a slope of ~0.6)
     var steep = smoothstep(0.3, 0.8, slope) * water;

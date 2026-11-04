@@ -15,7 +15,7 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // its setting Sun); the world in (60 s at most, what is missing said), frozen, the exposure settled; the shot beside the
 // photograph. The views are tuned by hand against them (dHdg, dPitch, dAlt: the corrections found by looking).
 //   CR_IDS: the references' ids (comma-separated; all when unset); CR_AB=<liteSkip bit>: the "earth lite" pass's GPU time with
-//   that part off, on, off (3 s each) after each shot.
+//   that part off, on, off (3 s each) after each shot (CR_AB_PASS: another pass's label, e.g. "earth water").
 // Output: remote-results/coast-refs/<id>.png and <id>-pair.jpg (the photograph left, ours right), refs.json (CR_OUT).
 // Done when: every reference asked shot and paired (or why not said), no GPU error. Duration: ~1 min a reference.
 const OUT = process.env.CR_OUT ?? "remote-results/coast-refs";
@@ -270,6 +270,22 @@ const REFS: Ref[] = [
     weather: "fair",
     dAlt: 15,
   },
+  // (a check, no photograph — its pair the Étretat one's, beside it —: the falls' white water on the inland water, its slope read by
+  // shadeWater's single relief read — Niagara's Horseshoe Falls from the air)
+  {
+    id: "nia",
+    file: "001_etretat.jpg",
+    lat: 43.0835,
+    lon: -79.0705,
+    agl: 180,
+    aim: { lat: 43.0773, lon: -79.0757, x: 0.5 },
+    hdg: 0,
+    yh: 0.15,
+    f35: 35,
+    aspect: 16 / 10,
+    utc: "2025-07-10T17:00:00Z",
+    weather: "fair",
+  },
 ];
 
 const D = Math.PI / 180;
@@ -440,10 +456,10 @@ test.skipIf(!E2E)(
         if (process.env.CR_AB) {
           const time = (skip: number) =>
             app.js<number>(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
-            r.liteSkip = ${skip}; for (let i = 0; i < 20; i++) { __bh.touch(); await frame(); }
+            r.liteSkip = ${skip}; r.shoreWash = ${process.env.CR_AB === "536870912"}; for (let i = 0; i < 20; i++) { __bh.touch(); await frame(); }
             r.prof.enabled = true; r.prof.reset(); const t0 = performance.now();
             while (performance.now() - t0 < 3000) { __bh.touch(); await frame(); }
-            const p = r.prof.table().find((x) => /earth lite/.test(x.label)); r.prof.enabled = false; r.liteSkip = 0; return p ? +p.ms.toFixed(3) : -1; })()`);
+            const p = r.prof.table().find((x) => x.label.includes(${JSON.stringify(process.env.CR_AB_PASS ?? "earth lite")})); r.prof.enabled = false; r.liteSkip = 0; return p ? +p.ms.toFixed(3) : -1; })()`);
           const bit = Number(process.env.CR_AB);
           ab = { off: await time(bit), on: await time(0), off2: await time(bit) };
         }
