@@ -1,0 +1,5345 @@
+[
+ {
+  "side": "A",
+  "round": 0,
+  "view": "paris-low-arrival",
+  "what": "Paris, 450 m, a July morning: the first 20 s, a shot a second",
+  "arrival": [
+   {
+    "s": 1,
+    "pending": 392,
+    "finest": 17,
+    "orthoPending": 42,
+    "orthoFinest": 15,
+    "builds": 0
+   },
+   {
+    "s": 2,
+    "pending": 371,
+    "finest": 17,
+    "orthoPending": 24,
+    "orthoFinest": 16,
+    "builds": 0
+   },
+   {
+    "s": 3,
+    "pending": 361,
+    "finest": 17,
+    "orthoPending": 11,
+    "orthoFinest": 17,
+    "builds": 15
+   },
+   {
+    "s": 4,
+    "pending": 351,
+    "finest": 17,
+    "orthoPending": 3,
+    "orthoFinest": 17,
+    "builds": 34
+   },
+   {
+    "s": 5,
+    "pending": 338,
+    "finest": 17,
+    "orthoPending": 1,
+    "orthoFinest": 17,
+    "builds": 47
+   },
+   {
+    "s": 6,
+    "pending": 313,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 63
+   },
+   {
+    "s": 7,
+    "pending": 294,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 80
+   },
+   {
+    "s": 8,
+    "pending": 280,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 103
+   },
+   {
+    "s": 9,
+    "pending": 261,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 128
+   },
+   {
+    "s": 10,
+    "pending": 255,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 144
+   },
+   {
+    "s": 11,
+    "pending": 245,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 162
+   },
+   {
+    "s": 12,
+    "pending": 237,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 176
+   },
+   {
+    "s": 13,
+    "pending": 235,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 188
+   },
+   {
+    "s": 14,
+    "pending": 226,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 202
+   },
+   {
+    "s": 15,
+    "pending": 211,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 217
+   },
+   {
+    "s": 16,
+    "pending": 192,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 236
+   },
+   {
+    "s": 17,
+    "pending": 180,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 262
+   },
+   {
+    "s": 18,
+    "pending": 169,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 273
+   },
+   {
+    "s": 19,
+    "pending": 166,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 288
+   },
+   {
+    "s": 20,
+    "pending": 160,
+    "finest": 17,
+    "orthoPending": 0,
+    "orthoFinest": 18,
+    "builds": 301
+   }
+  ]
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "paris-low",
+  "what": "Paris, 450 m, a July morning",
+  "reliefReady": true,
+  "reliefS": 53.146,
+  "orthoS": 53.148,
+  "tiles": {
+   "finest": 17,
+   "orthoFinest": 18,
+   "loaded": 852,
+   "failed": 0,
+   "kept": 456
+  },
+  "frames": 120,
+  "median": 50.2,
+  "p95": 56.8,
+  "p99": 63.6,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 55.3,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 38.05
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 36.01
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 26.77
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 20.41
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 18.85
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 5.37
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 4.57
+   },
+   {
+    "pass": "taau",
+    "ms": 3.52
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.62
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.4
+   },
+   {
+    "pass": "trace",
+    "ms": 1.36
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.86
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 0.78
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 0.74
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.62
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.59
+   }
+  ],
+  "vramMiB": 1511,
+  "peakMiB": 1529
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "chamonix-low-sun",
+  "what": "Chamonix valley, 450 m, the Sun ~11° up",
+  "reliefReady": true,
+  "reliefS": 41.325,
+  "orthoS": 46.618,
+  "tiles": {
+   "finest": 17,
+   "orthoFinest": 18,
+   "loaded": 493,
+   "failed": 0,
+   "kept": 101
+  },
+  "frames": 120,
+  "median": 67.2,
+  "p95": 73.2,
+  "p99": 78.4,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 67.5,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 53.54
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 51.55
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 45.34
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 41.66
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 23.3
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 16.36
+   },
+   {
+    "pass": "terrain from the Sun",
+    "ms": 5.86
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 4.78
+   },
+   {
+    "pass": "taau",
+    "ms": 3.53
+   },
+   {
+    "pass": "trace",
+    "ms": 1.65
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.59
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.35
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 1.16
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 1.13
+   },
+   {
+    "pass": "terrain surface cache",
+    "ms": 1.06
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 0.9
+   }
+  ],
+  "vramMiB": 1512,
+  "peakMiB": 1531
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "srtm-steppe",
+  "what": "Mongolian steppe (SRTM only), 300 m, the Sun ~20° up",
+  "reliefReady": true,
+  "reliefS": 16.057,
+  "orthoS": null,
+  "tiles": {
+   "finest": 14,
+   "orthoFinest": 0,
+   "loaded": 571,
+   "failed": 0,
+   "kept": 227
+  },
+  "frames": 120,
+  "median": 46.1,
+  "p95": 53,
+  "p99": 57.8,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 43.9,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 40.84
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 38.65
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 29.61
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 27.05
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 19.1
+   },
+   {
+    "pass": "taau",
+    "ms": 3.45
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 3.32
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 2.71
+   },
+   {
+    "pass": "trace",
+    "ms": 2.38
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.38
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.13
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.9
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 0.77
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.76
+   },
+   {
+    "pass": "scenery raster cull",
+    "ms": 0.74
+   },
+   {
+    "pass": "gather",
+    "ms": 0.68
+   }
+  ],
+  "vramMiB": 1512,
+  "peakMiB": 1531
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "biarritz-sunset",
+  "what": "Biarritz coast, 1 500 m, sunset (Sun ~2°)",
+  "reliefReady": true,
+  "reliefS": 48.932,
+  "orthoS": null,
+  "tiles": {
+   "finest": 16,
+   "orthoFinest": 16,
+   "loaded": 1016,
+   "failed": 0,
+   "kept": 640
+  },
+  "frames": 120,
+  "median": 67.9,
+  "p95": 74.1,
+  "p99": 82,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 69.7,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 57.42
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 55.66
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 45.08
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 23.81
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 13.59
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 10.05
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 5.23
+   },
+   {
+    "pass": "taau",
+    "ms": 3.65
+   },
+   {
+    "pass": "trace",
+    "ms": 2.28
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 1.86
+   },
+   {
+    "pass": "sea fft",
+    "ms": 1.49
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.32
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 1.18
+   },
+   {
+    "pass": "scenery raster cull",
+    "ms": 0.86
+   },
+   {
+    "pass": "trace (discs)",
+    "ms": 0.83
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.82
+   }
+  ],
+  "vramMiB": 1512,
+  "peakMiB": 1531
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "coast-6km",
+  "what": "the Basque coast from 6 km offshore, 800 m, midday",
+  "reliefReady": true,
+  "reliefS": 35.554,
+  "orthoS": 35.557,
+  "tiles": {
+   "finest": 17,
+   "orthoFinest": 17,
+   "loaded": 539,
+   "failed": 0,
+   "kept": 147
+  },
+  "frames": 120,
+  "median": 69.8,
+  "p95": 81.9,
+  "p99": 85.3,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 68.7,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 51.1
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 48.14
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 19.78
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 18.2
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 5.64
+   },
+   {
+    "pass": "taau",
+    "ms": 3.69
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 2.51
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 2.44
+   },
+   {
+    "pass": "sea fft",
+    "ms": 1.69
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.69
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.66
+   },
+   {
+    "pass": "trace",
+    "ms": 1.41
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 1.32
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.15
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.81
+   },
+   {
+    "pass": "clouds' history",
+    "ms": 0.59
+   }
+  ],
+  "vramMiB": 1512,
+  "peakMiB": 1531
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "mercury-cine-sun15",
+  "what": "Mercury, the cratered plains, the Sun 15° up",
+  "settled": true,
+  "sky": {
+   "over": "mercury",
+   "lat": 10,
+   "lon": 115.25,
+   "heightM": 2,
+   "sun": {
+    "alt": 14.9,
+    "apparent": 14.9,
+    "az": 267.3
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 33.2,
+  "p95": 101.7,
+  "p99": 154.6,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 40.1,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 39.04
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 36.09
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 21.56
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 20.87
+   },
+   {
+    "pass": "taau",
+    "ms": 4.34
+   },
+   {
+    "pass": "temporal",
+    "ms": 2.09
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.77
+   },
+   {
+    "pass": "stars",
+    "ms": 0.93
+   },
+   {
+    "pass": "gather",
+    "ms": 0.86
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 0.65
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 0.54
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.53
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.52
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.45
+   },
+   {
+    "pass": "bloom up 1",
+    "ms": 0.13
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.11
+   }
+  ],
+  "vramMiB": 998,
+  "peakMiB": 1408,
+  "skip4": {
+   "median": 42.6,
+   "p95": 46.1,
+   "gpuFrameMs": 42,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 38.42
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 35.61
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 21.54
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 21.21
+    },
+    {
+     "pass": "taau",
+     "ms": 4.11
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.63
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.57
+    },
+    {
+     "pass": "stars",
+     "ms": 1.1
+    },
+    {
+     "pass": "gather",
+     "ms": 0.8
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.64
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.5
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.49
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.44
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.31
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.13
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.11
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 46.7,
+   "p95": 54,
+   "gpuFrameMs": 52.7,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 45.62
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 42.73
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 29.04
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 27.66
+    },
+    {
+     "pass": "taau",
+     "ms": 4.33
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.68
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.64
+    },
+    {
+     "pass": "stars",
+     "ms": 0.97
+    },
+    {
+     "pass": "gather",
+     "ms": 0.81
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.7
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.55
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.54
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.43
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.4
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.12
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.11
+    }
+   ]
+  }
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "ceres-cine",
+  "what": "Ceres, M0a's ciné view",
+  "settled": true,
+  "sky": null,
+  "frames": 120,
+  "median": 24.7,
+  "p95": 30,
+  "p99": 46.5,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": false,
+  "rings": null,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 23.8,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 18.73
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 16.79
+   },
+   {
+    "pass": "trace",
+    "ms": 3.8
+   },
+   {
+    "pass": "taau",
+    "ms": 2.93
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 2.33
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.12
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.99
+   },
+   {
+    "pass": "gather",
+    "ms": 0.9
+   },
+   {
+    "pass": "stars",
+    "ms": 0.75
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.53
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.38
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.12
+   },
+   {
+    "pass": "bloom up 1",
+    "ms": 0.1
+   }
+  ],
+  "vramMiB": 764,
+  "peakMiB": 1328,
+  "skip4": {
+   "median": 18.2,
+   "p95": 24,
+   "gpuFrameMs": 16.6,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 15.12
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 13.22
+    },
+    {
+     "pass": "trace",
+     "ms": 3.04
+    },
+    {
+     "pass": "taau",
+     "ms": 2.97
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 2.26
+    },
+    {
+     "pass": "temporal",
+     "ms": 0.76
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.64
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.61
+    },
+    {
+     "pass": "stars",
+     "ms": 0.43
+    },
+    {
+     "pass": "gather",
+     "ms": 0.43
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.24
+    },
+    {
+     "pass": "ship probe: SH",
+     "ms": 0.24
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.22
+    },
+    {
+     "pass": "ship probe: GGX",
+     "ms": 0.17
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.06
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.06
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 18.1,
+   "p95": 23.6,
+   "gpuFrameMs": 15.9,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 15.17
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 13.04
+    },
+    {
+     "pass": "trace",
+     "ms": 3.09
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 3.02
+    },
+    {
+     "pass": "taau",
+     "ms": 2.93
+    },
+    {
+     "pass": "temporal",
+     "ms": 0.75
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.6
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.59
+    },
+    {
+     "pass": "stars",
+     "ms": 0.48
+    },
+    {
+     "pass": "gather",
+     "ms": 0.44
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.26
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.26
+    },
+    {
+     "pass": "ship probe: SH",
+     "ms": 0.23
+    },
+    {
+     "pass": "ship probe: GGX",
+     "ms": 0.17
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.07
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.06
+    }
+   ]
+  }
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "europa-cine",
+  "what": "Europa, Jupiter over the ice",
+  "settled": true,
+  "sky": {
+   "over": "europa",
+   "lat": 10,
+   "lon": -136,
+   "heightM": 19,
+   "sun": {
+    "alt": 51.31,
+    "apparent": 51.31,
+    "az": 106.7
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 32,
+  "p95": 44.1,
+  "p99": 49.7,
+  "scale": 0.5,
+  "block": 8,
+  "rate": 4,
+  "primary": false,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 21.3,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 20.91
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 18.66
+   },
+   {
+    "pass": "taau",
+    "ms": 2.64
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 2.31
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 1.2
+   },
+   {
+    "pass": "temporal",
+    "ms": 0.84
+   },
+   {
+    "pass": "gather",
+    "ms": 0.67
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.62
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 0.57
+   },
+   {
+    "pass": "stars",
+    "ms": 0.45
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.35
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.28
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.25
+   },
+   {
+    "pass": "body raster heights",
+    "ms": 0.09
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.06
+   },
+   {
+    "pass": "bloom up 1",
+    "ms": 0.06
+   }
+  ],
+  "vramMiB": 773,
+  "peakMiB": 1408,
+  "skip4": {
+   "median": 66.8,
+   "p95": 75.4,
+   "gpuFrameMs": 70.5,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 65.24
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 61.98
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 23.32
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 22.46
+    },
+    {
+     "pass": "taau",
+     "ms": 4.78
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.82
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.63
+    },
+    {
+     "pass": "stars",
+     "ms": 0.96
+    },
+    {
+     "pass": "gather",
+     "ms": 0.88
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.59
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.58
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.52
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.47
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.43
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.13
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.12
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 82.5,
+   "p95": 87.2,
+   "gpuFrameMs": 85.3,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 79.4
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 76.26
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 37.78
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 36.22
+    },
+    {
+     "pass": "taau",
+     "ms": 4.94
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.8
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.67
+    },
+    {
+     "pass": "stars",
+     "ms": 0.91
+    },
+    {
+     "pass": "gather",
+     "ms": 0.75
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.63
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.6
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.6
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.5
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.38
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.13
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.11
+    }
+   ]
+  }
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "moon-terminator-500km",
+  "what": "the Moon's terminator from 500 km",
+  "settled": true,
+  "sky": {
+   "over": "moon",
+   "lat": 0.023,
+   "lon": -87.601,
+   "heightM": 500000,
+   "sun": {
+    "alt": 2,
+    "apparent": 2,
+    "az": 270.7
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 26.2,
+  "p95": 29.6,
+  "p99": 30.5,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 30.4,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 20.92
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 17.97
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 10.18
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 5.46
+   },
+   {
+    "pass": "taau",
+    "ms": 4.93
+   },
+   {
+    "pass": "body raster heights",
+    "ms": 3
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.73
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.67
+   },
+   {
+    "pass": "light meter",
+    "ms": 1.55
+   },
+   {
+    "pass": "gather",
+    "ms": 1.29
+   },
+   {
+    "pass": "stars",
+    "ms": 0.91
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.52
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 0.46
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.43
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 0.42
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.36
+   }
+  ],
+  "vramMiB": 1190,
+  "peakMiB": 1454,
+  "skip4": {
+   "median": 26.4,
+   "p95": 30.2,
+   "gpuFrameMs": 25.2,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 21.08
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 18.07
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 10.3
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 5.55
+    },
+    {
+     "pass": "taau",
+     "ms": 4.63
+    },
+    {
+     "pass": "body raster heights",
+     "ms": 3
+    },
+    {
+     "pass": "light meter",
+     "ms": 1.92
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.76
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.62
+    },
+    {
+     "pass": "gather",
+     "ms": 1.28
+    },
+    {
+     "pass": "stars",
+     "ms": 0.98
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.55
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.45
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.44
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.37
+    },
+    {
+     "pass": "trace",
+     "ms": 0.26
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 26.1,
+   "p95": 29.9,
+   "gpuFrameMs": 26.7,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 24.16
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 21.38
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 10.29
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 5.9
+    },
+    {
+     "pass": "taau",
+     "ms": 4.81
+    },
+    {
+     "pass": "body raster heights",
+     "ms": 3
+    },
+    {
+     "pass": "light meter",
+     "ms": 1.97
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.73
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.62
+    },
+    {
+     "pass": "gather",
+     "ms": 1.27
+    },
+    {
+     "pass": "stars",
+     "ms": 1.05
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.5
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.46
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.42
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.42
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.26
+    }
+   ]
+  }
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "moon-south-pole",
+  "what": "the Moon's south pole on the ground, the Sun grazing",
+  "settled": true,
+  "sky": {
+   "over": "moon",
+   "lat": -88.5,
+   "lon": -175.5,
+   "heightM": 8,
+   "sun": {
+    "alt": 0.83,
+    "apparent": 0.83,
+    "az": 359.9
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 39.7,
+  "p95": 80.5,
+  "p99": 164.9,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 33.6,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 34.41
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 31.47
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 12.19
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 10.57
+   },
+   {
+    "pass": "taau",
+    "ms": 4.31
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.65
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.62
+   },
+   {
+    "pass": "gather",
+    "ms": 1.18
+   },
+   {
+    "pass": "trace",
+    "ms": 0.96
+   },
+   {
+    "pass": "stars",
+    "ms": 0.87
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 0.58
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 0.52
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.51
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.44
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.33
+   },
+   {
+    "pass": "bloom up 1",
+    "ms": 0.13
+   }
+  ],
+  "vramMiB": 1190,
+  "peakMiB": 1454,
+  "skip4": {
+   "median": 38.9,
+   "p95": 42.4,
+   "gpuFrameMs": 37.3,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 34.74
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 31.84
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 12.39
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 10.64
+    },
+    {
+     "pass": "taau",
+     "ms": 4.3
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.63
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.58
+    },
+    {
+     "pass": "gather",
+     "ms": 1.22
+    },
+    {
+     "pass": "trace",
+     "ms": 1.08
+    },
+    {
+     "pass": "stars",
+     "ms": 0.89
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.6
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.52
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.51
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.48
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.34
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.34
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 38.4,
+   "p95": 42,
+   "gpuFrameMs": 38.7,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 34.68
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 31.6
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 13.51
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 10.57
+    },
+    {
+     "pass": "taau",
+     "ms": 4.19
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.64
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.63
+    },
+    {
+     "pass": "gather",
+     "ms": 1.16
+    },
+    {
+     "pass": "trace",
+     "ms": 0.98
+    },
+    {
+     "pass": "stars",
+     "ms": 0.87
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.57
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.51
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.49
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.49
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.45
+    },
+    {
+     "pass": "ship probe: SH",
+     "ms": 0.24
+    }
+   ]
+  }
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "mars-ground-sunset",
+  "what": "Mars on the ground at sunset",
+  "settled": true,
+  "sky": {
+   "over": "mars",
+   "lat": -4.6,
+   "lon": -91.5,
+   "heightM": -45,
+   "sun": {
+    "alt": 1.97,
+    "apparent": 1.97,
+    "az": 290.5
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 21.3,
+  "p95": 128.8,
+  "p99": 146.4,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 0.1,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 19.71
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 17.07
+   },
+   {
+    "pass": "taau",
+    "ms": 3.22
+   },
+   {
+    "pass": "temporal",
+    "ms": 2.07
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.37
+   },
+   {
+    "pass": "stars",
+    "ms": 1.11
+   },
+   {
+    "pass": "gather",
+    "ms": 0.84
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 0.55
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.51
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.44
+   },
+   {
+    "pass": "bloom down 3",
+    "ms": 0.36
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.3
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.28
+   },
+   {
+    "pass": "bloom up 1",
+    "ms": 0.12
+   },
+   {
+    "pass": "body raster heights",
+    "ms": 0.09
+   }
+  ],
+  "vramMiB": 1082,
+  "peakMiB": 1408,
+  "skip4": {
+   "median": 19.8,
+   "p95": 131.9,
+   "gpuFrameMs": 20.1,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 16.29
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 13.8
+    },
+    {
+     "pass": "taau",
+     "ms": 2.87
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.52
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.28
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 1.14
+    },
+    {
+     "pass": "stars",
+     "ms": 0.92
+    },
+    {
+     "pass": "gather",
+     "ms": 0.89
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.64
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.47
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.42
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.11
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.1
+    },
+    {
+     "pass": "body raster heights",
+     "ms": 0.09
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 19.3,
+   "p95": 25.2,
+   "gpuFrameMs": 19.6,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 15.78
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 13.59
+    },
+    {
+     "pass": "taau",
+     "ms": 2.81
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.49
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 1.36
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.14
+    },
+    {
+     "pass": "stars",
+     "ms": 0.94
+    },
+    {
+     "pass": "gather",
+     "ms": 0.82
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.44
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.41
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.4
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.11
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.1
+    },
+    {
+     "pass": "body raster heights",
+     "ms": 0.09
+    }
+   ]
+  }
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "moon-telescope-first-quarter",
+  "what": "the first-quarter Moon through a telescope from the Andes (1°)",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": -32.65,
+   "lon": -70.01,
+   "heightM": 6673,
+   "sun": {
+    "alt": -5,
+    "apparent": -3.29,
+    "az": 243.3
+   },
+   "moon": {
+    "alt": 34.67,
+    "az": 354.4
+   },
+   "eclipse": null,
+   "refraction": {
+    "refractivity": 0.000293,
+    "horizonArcmin": 17.4,
+    "layered": {
+     "model": "layered (Ciddor, hydrostatic, Bouguer)",
+     "air": "standard pressure, the drawn air's temperature, 50 % humidity",
+     "pressureHpa": 1013.3,
+     "groundTempC": 15,
+     "humidityPct": 50,
+     "horizonArcmin": 17.4,
+     "apparentAltDeg": -2.442,
+     "sunApparentAltDeg": -2.442
+    }
+   }
+  },
+  "frames": 120,
+  "median": 26.7,
+  "p95": 29.1,
+  "p99": 30,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 26.1,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 20.7
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 18.05
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 10.17
+   },
+   {
+    "pass": "trace (discs)",
+    "ms": 4.91
+   },
+   {
+    "pass": "taau",
+    "ms": 3.12
+   },
+   {
+    "pass": "trace",
+    "ms": 2.88
+   },
+   {
+    "pass": "light meter",
+    "ms": 2.11
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 1.83
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.54
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.5
+   },
+   {
+    "pass": "horizon bake",
+    "ms": 1.38
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.92
+   },
+   {
+    "pass": "gather",
+    "ms": 0.72
+   },
+   {
+    "pass": "stars",
+    "ms": 0.69
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.63
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.6
+   }
+  ],
+  "vramMiB": 1500,
+  "peakMiB": 1670
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "biarritz-sun05-tele",
+  "what": "Biarritz, 21 June 2026, the Sun ~0.5° up, telephoto 4°",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": 43.483,
+   "lon": -1.559,
+   "heightM": 68,
+   "sun": {
+    "alt": 0.65,
+    "apparent": 1.01,
+    "az": 302.5
+   },
+   "moon": {
+    "alt": 38.55,
+    "az": 213.4
+   },
+   "eclipse": null,
+   "refraction": {
+    "refractivity": 0.000293,
+    "horizonArcmin": 34.5,
+    "layered": {
+     "model": "layered (Ciddor, hydrostatic, Bouguer)",
+     "air": "standard pressure, the drawn air's temperature, 50 % humidity",
+     "pressureHpa": 1013.3,
+     "groundTempC": 15,
+     "humidityPct": 50,
+     "horizonArcmin": 32.7,
+     "apparentAltDeg": 1.031,
+     "sunApparentAltDeg": 1.031
+    }
+   }
+  },
+  "frames": 120,
+  "median": 39.1,
+  "p95": 71.9,
+  "p99": 93.3,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 39.4,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 29.15
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 26.77
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 20.27
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 10.57
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 7.81
+   },
+   {
+    "pass": "taau",
+    "ms": 3.01
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 2.96
+   },
+   {
+    "pass": "trace",
+    "ms": 2.9
+   },
+   {
+    "pass": "light meter",
+    "ms": 2.21
+   },
+   {
+    "pass": "terrain from the Sun",
+    "ms": 1.71
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.69
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.41
+   },
+   {
+    "pass": "sea fft",
+    "ms": 1.38
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.81
+   },
+   {
+    "pass": "terrain surface cache",
+    "ms": 0.74
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.72
+   }
+  ],
+  "vramMiB": 1281,
+  "peakMiB": 1670
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "biarritz-sun2-tele",
+  "what": "Biarritz, 21 June 2026, the Sun ~2° up, telephoto 4°",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": 43.483,
+   "lon": -1.559,
+   "heightM": 68,
+   "sun": {
+    "alt": 2.19,
+    "apparent": 2.43,
+    "az": 300.8
+   },
+   "moon": {
+    "alt": 39.53,
+    "az": 210.5
+   },
+   "eclipse": null,
+   "refraction": {
+    "refractivity": 0.000293,
+    "horizonArcmin": 34.5,
+    "layered": {
+     "model": "layered (Ciddor, hydrostatic, Bouguer)",
+     "air": "standard pressure, the drawn air's temperature, 50 % humidity",
+     "pressureHpa": 1013.3,
+     "groundTempC": 15,
+     "humidityPct": 50,
+     "horizonArcmin": 32.7,
+     "apparentAltDeg": 2.452,
+     "sunApparentAltDeg": 2.452
+    }
+   }
+  },
+  "frames": 120,
+  "median": 21.4,
+  "p95": 52.8,
+  "p99": 62.5,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 20.2,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 14.4
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 11.88
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 5.54
+   },
+   {
+    "pass": "trace",
+    "ms": 2.8
+   },
+   {
+    "pass": "taau",
+    "ms": 2.54
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 2.33
+   },
+   {
+    "pass": "light meter",
+    "ms": 1.69
+   },
+   {
+    "pass": "terrain from the Sun",
+    "ms": 1.66
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.56
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.28
+   },
+   {
+    "pass": "terrain surface cache",
+    "ms": 1.13
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.85
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.82
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.69
+   },
+   {
+    "pass": "trace (discs)",
+    "ms": 0.58
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.57
+   }
+  ],
+  "vramMiB": 1281,
+  "peakMiB": 1580
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "iss-sunset-equator",
+  "what": "a sunset from the ISS's height over the equator (420 km)",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": 7.591,
+   "lon": 64.307,
+   "heightM": 420000,
+   "sun": {
+    "alt": -19.8,
+    "apparent": -19.8,
+    "az": 248.3
+   },
+   "moon": {
+    "alt": 8.13,
+    "az": 71.2
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 15,
+  "p95": 15.9,
+  "p99": 16.1,
+  "scale": 0.625,
+  "block": 8,
+  "rate": 4,
+  "primary": false,
+  "rings": null,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 15.5,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 11.71
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 9.74
+   },
+   {
+    "pass": "taau",
+    "ms": 2.87
+   },
+   {
+    "pass": "trace",
+    "ms": 1.76
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.01
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.83
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 0.8
+   },
+   {
+    "pass": "gather",
+    "ms": 0.54
+   },
+   {
+    "pass": "stars",
+    "ms": 0.47
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.3
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.27
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.21
+   },
+   {
+    "pass": "ship probe: SH",
+    "ms": 0.18
+   },
+   {
+    "pass": "ship probe: GGX",
+    "ms": 0.17
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.07
+   },
+   {
+    "pass": "sky ambient",
+    "ms": 0.06
+   }
+  ],
+  "vramMiB": 1097,
+  "peakMiB": 1509
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "iss-sunset-north",
+  "what": "a sunset from the ISS's height above 70° N (420 km)",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": 72,
+   "lon": 39,
+   "heightM": 420000,
+   "sun": {
+    "alt": -19.66,
+    "apparent": -19.66,
+    "az": 256.1
+   },
+   "moon": {
+    "alt": 12.23,
+    "az": 66.7
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 22.5,
+  "p95": 33.3,
+  "p99": 66.4,
+  "scale": 0.875,
+  "block": 8,
+  "rate": 4,
+  "primary": false,
+  "rings": null,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 19,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 15.77
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 14.38
+   },
+   {
+    "pass": "taau",
+    "ms": 3.12
+   },
+   {
+    "pass": "trace",
+    "ms": 2.38
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 2
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.65
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.14
+   },
+   {
+    "pass": "gather",
+    "ms": 0.94
+   },
+   {
+    "pass": "stars",
+    "ms": 0.73
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.44
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.34
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.33
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.33
+   },
+   {
+    "pass": "ship probe: SH",
+    "ms": 0.21
+   },
+   {
+    "pass": "ship probe: GGX",
+    "ms": 0.17
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.09
+   }
+  ],
+  "vramMiB": 1152,
+  "peakMiB": 1509
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "eclipsed-moon-2025-09-07",
+  "what": "the eclipsed Moon of 7 Sept 2025 at greatest (18:12 UTC) from New Delhi, 2°",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": 28.61,
+   "lon": 77.21,
+   "heightM": 164,
+   "sun": {
+    "alt": -54.49,
+    "apparent": -52.77,
+    "az": 344
+   },
+   "moon": {
+    "alt": 53.64,
+    "az": 163.9
+   },
+   "eclipse": {
+    "phase": "lunar_total",
+    "sunHiddenPct": 0,
+    "moonInUmbraPct": 100
+   },
+   "refraction": {
+    "refractivity": 0.000293,
+    "horizonArcmin": 34.1,
+    "layered": {
+     "model": "layered (Ciddor, hydrostatic, Bouguer)",
+     "air": "standard pressure, the drawn air's temperature, 50 % humidity",
+     "pressureHpa": 1013.3,
+     "groundTempC": 15,
+     "humidityPct": 50,
+     "horizonArcmin": 32.4,
+     "apparentAltDeg": -0.375,
+     "sunApparentAltDeg": -0.375
+    }
+   }
+  },
+  "frames": 120,
+  "median": 20.9,
+  "p95": 34.1,
+  "p99": 50.8,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 17.9,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 14.5
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 11.94
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 5.45
+   },
+   {
+    "pass": "terrain surface cache",
+    "ms": 4.1
+   },
+   {
+    "pass": "taau",
+    "ms": 2.62
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 2.3
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.82
+   },
+   {
+    "pass": "terrain from the Sun",
+    "ms": 1.79
+   },
+   {
+    "pass": "trace (discs)",
+    "ms": 1.66
+   },
+   {
+    "pass": "light meter",
+    "ms": 1.59
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.48
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.8
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 0.68
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.64
+   },
+   {
+    "pass": "trace",
+    "ms": 0.64
+   },
+   {
+    "pass": "stars",
+    "ms": 0.62
+   }
+  ],
+  "vramMiB": 1372,
+  "peakMiB": 1670
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "andes-sunset",
+  "what": "the Andes at sunset (Mendoza)",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": -32.96,
+   "lon": -69.2,
+   "heightM": 2171,
+   "sun": {
+    "alt": 9.73,
+    "apparent": 9.8,
+    "az": 248.9
+   },
+   "moon": {
+    "alt": -20.51,
+    "az": 80.1
+   },
+   "eclipse": null,
+   "refraction": {
+    "refractivity": 0.000293,
+    "horizonArcmin": 26.9,
+    "layered": {
+     "model": "layered (Ciddor, hydrostatic, Bouguer)",
+     "air": "standard pressure, the drawn air's temperature, 50 % humidity",
+     "pressureHpa": 1013.3,
+     "groundTempC": 15,
+     "humidityPct": 50,
+     "horizonArcmin": 27,
+     "apparentAltDeg": 9.805,
+     "sunApparentAltDeg": 9.805
+    }
+   }
+  },
+  "frames": 120,
+  "median": 35,
+  "p95": 63.4,
+  "p99": 87.9,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 36.5,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 30.07
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 27.72
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 19.46
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 13.27
+   },
+   {
+    "pass": "taau",
+    "ms": 3.23
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 2.75
+   },
+   {
+    "pass": "trace",
+    "ms": 2.26
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.39
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.31
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.82
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.73
+   },
+   {
+    "pass": "earth shade (raster)",
+    "ms": 0.72
+   },
+   {
+    "pass": "trace (discs)",
+    "ms": 0.62
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.62
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.56
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 0.52
+   }
+  ],
+  "vramMiB": 1409,
+  "peakMiB": 1580
+ },
+ {
+  "side": "A",
+  "round": 0,
+  "view": "la-hague",
+  "what": "La Hague, the Nez de Jobourg looking west over the Channel, a June evening",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": 49.676,
+   "lon": -1.94,
+   "heightM": 64,
+   "sun": {
+    "alt": -0.32,
+    "apparent": 0.2,
+    "az": 308.4
+   },
+   "moon": {
+    "alt": 30.16,
+    "az": 219.6
+   },
+   "eclipse": null,
+   "refraction": {
+    "refractivity": 0.000293,
+    "horizonArcmin": 34.5,
+    "layered": {
+     "model": "layered (Ciddor, hydrostatic, Bouguer)",
+     "air": "standard pressure, the drawn air's temperature, 50 % humidity",
+     "pressureHpa": 1013.3,
+     "groundTempC": 15,
+     "humidityPct": 50,
+     "horizonArcmin": 32.7,
+     "apparentAltDeg": 0.191,
+     "sunApparentAltDeg": 0.191
+    }
+   }
+  },
+  "frames": 120,
+  "median": 50.8,
+  "p95": 57.3,
+  "p99": 115.6,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 4,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 48.1,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 44.53
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 32.66
+   },
+   {
+    "pass": "taau",
+    "ms": 4.11
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 3.19
+   },
+   {
+    "pass": "terrain surface cache",
+    "ms": 3.06
+   },
+   {
+    "pass": "terrain from the Sun",
+    "ms": 1.63
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.53
+   },
+   {
+    "pass": "light meter",
+    "ms": 1.52
+   },
+   {
+    "pass": "sea fft",
+    "ms": 1.34
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.26
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.75
+   },
+   {
+    "pass": "stars",
+    "ms": 0.61
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.6
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.5
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 0.43
+   },
+   {
+    "pass": "clouds' history",
+    "ms": 0.38
+   }
+  ],
+  "vramMiB": 1219,
+  "peakMiB": 1517
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "paris-low",
+  "what": "Paris, 450 m, a July morning",
+  "reliefReady": true,
+  "reliefS": 35.675,
+  "orthoS": 35.68,
+  "tiles": {
+   "finest": 17,
+   "orthoFinest": 18,
+   "loaded": 552,
+   "failed": 0,
+   "kept": 160
+  },
+  "frames": 120,
+  "median": 48.7,
+  "p95": 56.1,
+  "p99": 68.4,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 46.5,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 39.86
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 37.67
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 28.5
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 18.4
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 5.95
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 5.18
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 4.19
+   },
+   {
+    "pass": "taau",
+    "ms": 3.17
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.52
+   },
+   {
+    "pass": "trace",
+    "ms": 1.43
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.22
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 1.14
+   },
+   {
+    "pass": "scenery raster cull",
+    "ms": 1.12
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.9
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 0.79
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.56
+   }
+  ],
+  "vramMiB": 1512,
+  "peakMiB": 1531
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "chamonix-low-sun",
+  "what": "Chamonix valley, 450 m, the Sun ~11° up",
+  "reliefReady": true,
+  "reliefS": 23.077,
+  "orthoS": 27.898,
+  "tiles": {
+   "finest": 17,
+   "orthoFinest": 18,
+   "loaded": 529,
+   "failed": 0,
+   "kept": 137
+  },
+  "frames": 120,
+  "median": 65.2,
+  "p95": 70.6,
+  "p99": 77,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 61.5,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 55.96
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 53.93
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 44.18
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 23.25
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 15.13
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 4.91
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 4.63
+   },
+   {
+    "pass": "taau",
+    "ms": 3.61
+   },
+   {
+    "pass": "trace",
+    "ms": 1.71
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.4
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.32
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 1.14
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.82
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 0.77
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.69
+   },
+   {
+    "pass": "gather",
+    "ms": 0.62
+   }
+  ],
+  "vramMiB": 1513,
+  "peakMiB": 1531
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "srtm-steppe",
+  "what": "Mongolian steppe (SRTM only), 300 m, the Sun ~20° up",
+  "reliefReady": true,
+  "reliefS": 8.056,
+  "orthoS": null,
+  "tiles": {
+   "finest": 14,
+   "orthoFinest": 0,
+   "loaded": 659,
+   "failed": 0,
+   "kept": 315
+  },
+  "frames": 120,
+  "median": 44.6,
+  "p95": 49.4,
+  "p99": 51.5,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 43.9,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 37.03
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 34.88
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 25.91
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 24.5
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 18.01
+   },
+   {
+    "pass": "taau",
+    "ms": 3.49
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 3.15
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 2.65
+   },
+   {
+    "pass": "trace",
+    "ms": 2.32
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.33
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.91
+   },
+   {
+    "pass": "scenery raster cull",
+    "ms": 0.79
+   },
+   {
+    "pass": "gather",
+    "ms": 0.65
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 0.64
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 0.62
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.62
+   }
+  ],
+  "vramMiB": 1513,
+  "peakMiB": 1531
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "biarritz-sunset",
+  "what": "Biarritz coast, 1 500 m, sunset (Sun ~2°)",
+  "reliefReady": true,
+  "reliefS": 32.987,
+  "orthoS": null,
+  "tiles": {
+   "finest": 16,
+   "orthoFinest": 16,
+   "loaded": 1016,
+   "failed": 0,
+   "kept": 640
+  },
+  "frames": 120,
+  "median": 66.6,
+  "p95": 73.6,
+  "p99": 75.1,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 69,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 57.03
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 54.79
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 23.84
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 12.6
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 5.15
+   },
+   {
+    "pass": "taau",
+    "ms": 3.62
+   },
+   {
+    "pass": "trace",
+    "ms": 2.36
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 1.75
+   },
+   {
+    "pass": "sea fft",
+    "ms": 1.4
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.32
+   },
+   {
+    "pass": "clouds' shadow map",
+    "ms": 1.26
+   },
+   {
+    "pass": "trace (discs)",
+    "ms": 1.03
+   },
+   {
+    "pass": "scenery raster cull",
+    "ms": 0.83
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.81
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.8
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 0.61
+   }
+  ],
+  "vramMiB": 1513,
+  "peakMiB": 1531
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "coast-6km",
+  "what": "the Basque coast from 6 km offshore, 800 m, midday",
+  "reliefReady": true,
+  "reliefS": 28.485,
+  "orthoS": 28.486,
+  "tiles": {
+   "finest": 17,
+   "orthoFinest": 17,
+   "loaded": 556,
+   "failed": 0,
+   "kept": 164
+  },
+  "frames": 120,
+  "median": 57.2,
+  "p95": 65.3,
+  "p99": 72.5,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 55.2,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 25.22
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 23.68
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 16.37
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 15.69
+   },
+   {
+    "pass": "ship: own mask",
+    "ms": 12.94
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 10.89
+   },
+   {
+    "pass": "taau",
+    "ms": 3.22
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 3.05
+   },
+   {
+    "pass": "terrain from the Sun",
+    "ms": 2.65
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 2.54
+   },
+   {
+    "pass": "sea fft",
+    "ms": 1.57
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.41
+   },
+   {
+    "pass": "clouds (half)",
+    "ms": 1.21
+   },
+   {
+    "pass": "trace",
+    "ms": 1.14
+   },
+   {
+    "pass": "terrain surface cache",
+    "ms": 0.88
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.84
+   }
+  ],
+  "vramMiB": 1513,
+  "peakMiB": 1531
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "mercury-cine-sun15",
+  "what": "Mercury, the cratered plains, the Sun 15° up",
+  "settled": true,
+  "sky": {
+   "over": "mercury",
+   "lat": 10,
+   "lon": 115.25,
+   "heightM": 2,
+   "sun": {
+    "alt": 14.9,
+    "apparent": 14.9,
+    "az": 267.3
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 37.9,
+  "p95": 115.5,
+  "p99": 204.7,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 36.4,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 36.3
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 33.64
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 22.63
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 20.9
+   },
+   {
+    "pass": "taau",
+    "ms": 3.8
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.3
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.17
+   },
+   {
+    "pass": "stars",
+    "ms": 0.7
+   },
+   {
+    "pass": "gather",
+    "ms": 0.63
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.55
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 0.54
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 0.46
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.39
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.37
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.09
+   },
+   {
+    "pass": "bloom up 1",
+    "ms": 0.09
+   }
+  ],
+  "vramMiB": 999,
+  "peakMiB": 1408,
+  "skip4": {
+   "median": 39.1,
+   "p95": 41.2,
+   "gpuFrameMs": 38.5,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 35.6
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 32.97
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 21.19
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 20.97
+    },
+    {
+     "pass": "taau",
+     "ms": 3.66
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.28
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.1
+    },
+    {
+     "pass": "gather",
+     "ms": 0.61
+    },
+    {
+     "pass": "stars",
+     "ms": 0.58
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.55
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.46
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.34
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.34
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.34
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.09
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.07
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 45,
+   "p95": 49.6,
+   "gpuFrameMs": 44.5,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 45.06
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 42.54
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 29.59
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 27.96
+    },
+    {
+     "pass": "taau",
+     "ms": 3.84
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.74
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.37
+    },
+    {
+     "pass": "gather",
+     "ms": 0.98
+    },
+    {
+     "pass": "trace",
+     "ms": 0.97
+    },
+    {
+     "pass": "stars",
+     "ms": 0.63
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.54
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.45
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.36
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.33
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.28
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.08
+    }
+   ]
+  }
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "ceres-cine",
+  "what": "Ceres, M0a's ciné view",
+  "settled": true,
+  "sky": null,
+  "frames": 120,
+  "median": 19.8,
+  "p95": 23.5,
+  "p99": 24.1,
+  "scale": 0.625,
+  "block": 8,
+  "rate": 4,
+  "primary": false,
+  "rings": null,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 15.8,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 16.2
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 14.73
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 3.51
+   },
+   {
+    "pass": "trace",
+    "ms": 3.41
+   },
+   {
+    "pass": "taau",
+    "ms": 2.87
+   },
+   {
+    "pass": "temporal",
+    "ms": 0.93
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.64
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.6
+   },
+   {
+    "pass": "gather",
+    "ms": 0.5
+   },
+   {
+    "pass": "stars",
+    "ms": 0.4
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.22
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.22
+   },
+   {
+    "pass": "ship probe: GGX",
+    "ms": 0.17
+   },
+   {
+    "pass": "ship probe: SH",
+    "ms": 0.16
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.07
+   }
+  ],
+  "vramMiB": 764,
+  "peakMiB": 1454,
+  "skip4": {
+   "median": 18.9,
+   "p95": 23.4,
+   "gpuFrameMs": 24.2,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 16.03
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 14.74
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 3.45
+    },
+    {
+     "pass": "trace",
+     "ms": 3.38
+    },
+    {
+     "pass": "taau",
+     "ms": 2.92
+    },
+    {
+     "pass": "temporal",
+     "ms": 0.92
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.66
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.64
+    },
+    {
+     "pass": "gather",
+     "ms": 0.5
+    },
+    {
+     "pass": "stars",
+     "ms": 0.41
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.23
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.22
+    },
+    {
+     "pass": "ship probe: GGX",
+     "ms": 0.17
+    },
+    {
+     "pass": "ship probe: SH",
+     "ms": 0.16
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.06
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 18.9,
+   "p95": 23.8,
+   "gpuFrameMs": 18.7,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 15.99
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 14.47
+    },
+    {
+     "pass": "trace",
+     "ms": 3.44
+    },
+    {
+     "pass": "taau",
+     "ms": 2.85
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 2.65
+    },
+    {
+     "pass": "temporal",
+     "ms": 0.92
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.64
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.62
+    },
+    {
+     "pass": "gather",
+     "ms": 0.51
+    },
+    {
+     "pass": "stars",
+     "ms": 0.48
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.23
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.22
+    },
+    {
+     "pass": "ship probe: GGX",
+     "ms": 0.17
+    },
+    {
+     "pass": "ship probe: SH",
+     "ms": 0.17
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.06
+    }
+   ]
+  }
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "europa-cine",
+  "what": "Europa, Jupiter over the ice",
+  "settled": true,
+  "sky": {
+   "over": "europa",
+   "lat": 10,
+   "lon": -136,
+   "heightM": 19,
+   "sun": {
+    "alt": 51.31,
+    "apparent": 51.31,
+    "az": 106.7
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 29.7,
+  "p95": 39.7,
+  "p99": 40.2,
+  "scale": 0.625,
+  "block": 8,
+  "rate": 4,
+  "primary": false,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 63.1,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 29.11
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 26.85
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 22.93
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 4.94
+   },
+   {
+    "pass": "taau",
+    "ms": 2.67
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 1.35
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.28
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 1.09
+   },
+   {
+    "pass": "temporal",
+    "ms": 0.94
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.71
+   },
+   {
+    "pass": "gather",
+    "ms": 0.53
+   },
+   {
+    "pass": "stars",
+    "ms": 0.43
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.31
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.28
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.27
+   },
+   {
+    "pass": "body raster heights",
+    "ms": 0.26
+   }
+  ],
+  "vramMiB": 911,
+  "peakMiB": 1408,
+  "skip4": {
+   "median": 63.9,
+   "p95": 68,
+   "gpuFrameMs": 61.2,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 60.91
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 58.35
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 23.47
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 23.33
+    },
+    {
+     "pass": "taau",
+     "ms": 4.12
+    },
+    {
+     "pass": "body raster heights",
+     "ms": 1.67
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.28
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.12
+    },
+    {
+     "pass": "stars",
+     "ms": 0.6
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.57
+    },
+    {
+     "pass": "gather",
+     "ms": 0.57
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.39
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.36
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.35
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.34
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.09
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 75.6,
+   "p95": 79.1,
+   "gpuFrameMs": 77.9,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 70.23
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 67.7
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 35.67
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 33.74
+    },
+    {
+     "pass": "taau",
+     "ms": 4.62
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.74
+    },
+    {
+     "pass": "body raster heights",
+     "ms": 1.67
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.27
+    },
+    {
+     "pass": "gather",
+     "ms": 1
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.55
+    },
+    {
+     "pass": "stars",
+     "ms": 0.54
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.43
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.39
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.35
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.35
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.34
+    }
+   ]
+  }
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "moon-terminator-500km",
+  "what": "the Moon's terminator from 500 km",
+  "settled": true,
+  "sky": {
+   "over": "moon",
+   "lat": 0.023,
+   "lon": -87.601,
+   "heightM": 500000,
+   "sun": {
+    "alt": 2,
+    "apparent": 2,
+    "az": 270.7
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 26.7,
+  "p95": 28.6,
+  "p99": 29.7,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 24.6,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 20.57
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 18.12
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 10.9
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 6.52
+   },
+   {
+    "pass": "taau",
+    "ms": 4.1
+   },
+   {
+    "pass": "horizon bake",
+    "ms": 2.54
+   },
+   {
+    "pass": "light meter",
+    "ms": 1.98
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 1.9
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.73
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.34
+   },
+   {
+    "pass": "gather",
+    "ms": 1.03
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 0.92
+   },
+   {
+    "pass": "stars",
+    "ms": 0.55
+   },
+   {
+    "pass": "body raster heights",
+    "ms": 0.34
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.32
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.32
+   }
+  ],
+  "vramMiB": 1189,
+  "peakMiB": 1430,
+  "skip4": {
+   "median": 24.5,
+   "p95": 27.4,
+   "gpuFrameMs": 22.9,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 21.31
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 18.81
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 10.39
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 5.26
+    },
+    {
+     "pass": "taau",
+     "ms": 4.26
+    },
+    {
+     "pass": "light meter",
+     "ms": 1.91
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.69
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.31
+    },
+    {
+     "pass": "horizon bake",
+     "ms": 0.97
+    },
+    {
+     "pass": "gather",
+     "ms": 0.97
+    },
+    {
+     "pass": "body raster heights",
+     "ms": 0.82
+    },
+    {
+     "pass": "stars",
+     "ms": 0.68
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.35
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.35
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.33
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.33
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 23.2,
+   "p95": 25.1,
+   "gpuFrameMs": 23.3,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 21.51
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 18.97
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 9.81
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 9.57
+    },
+    {
+     "pass": "taau",
+     "ms": 4.09
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.7
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.38
+    },
+    {
+     "pass": "light meter",
+     "ms": 1.13
+    },
+    {
+     "pass": "gather",
+     "ms": 0.97
+    },
+    {
+     "pass": "body raster heights",
+     "ms": 0.95
+    },
+    {
+     "pass": "stars",
+     "ms": 0.65
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.37
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.34
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.32
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.31
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.21
+    }
+   ]
+  }
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "moon-south-pole",
+  "what": "the Moon's south pole on the ground, the Sun grazing",
+  "settled": true,
+  "sky": {
+   "over": "moon",
+   "lat": -88.5,
+   "lon": -175.5,
+   "heightM": 8,
+   "sun": {
+    "alt": 0.83,
+    "apparent": 0.83,
+    "az": 359.9
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 36.2,
+  "p95": 44.2,
+  "p99": 145.9,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 35.2,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 31.92
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 29.51
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 13.04
+   },
+   {
+    "pass": "body lite (raster)",
+    "ms": 10.7
+   },
+   {
+    "pass": "taau",
+    "ms": 3.73
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.65
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.39
+   },
+   {
+    "pass": "gather",
+    "ms": 0.88
+   },
+   {
+    "pass": "trace",
+    "ms": 0.83
+   },
+   {
+    "pass": "stars",
+    "ms": 0.58
+   },
+   {
+    "pass": "body from the Sun",
+    "ms": 0.48
+   },
+   {
+    "pass": "body raster visibility",
+    "ms": 0.42
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.36
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.35
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.33
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.32
+   }
+  ],
+  "vramMiB": 1189,
+  "peakMiB": 1430,
+  "skip4": {
+   "median": 34.2,
+   "p95": 36.5,
+   "gpuFrameMs": 33.1,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 31.64
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 29.13
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 11.98
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 10.24
+    },
+    {
+     "pass": "taau",
+     "ms": 3.81
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.49
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.38
+    },
+    {
+     "pass": "gather",
+     "ms": 0.89
+    },
+    {
+     "pass": "trace",
+     "ms": 0.83
+    },
+    {
+     "pass": "stars",
+     "ms": 0.6
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.49
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.45
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.33
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.33
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.29
+    },
+    {
+     "pass": "ship probe: GGX",
+     "ms": 0.17
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 34.1,
+   "p95": 37.1,
+   "gpuFrameMs": 32.5,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 31.4
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 28.83
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 11.65
+    },
+    {
+     "pass": "body lite (raster)",
+     "ms": 10.27
+    },
+    {
+     "pass": "taau",
+     "ms": 3.75
+    },
+    {
+     "pass": "resolve",
+     "ms": 1.51
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.35
+    },
+    {
+     "pass": "gather",
+     "ms": 0.97
+    },
+    {
+     "pass": "trace",
+     "ms": 0.71
+    },
+    {
+     "pass": "stars",
+     "ms": 0.6
+    },
+    {
+     "pass": "body from the Sun",
+     "ms": 0.49
+    },
+    {
+     "pass": "body raster visibility",
+     "ms": 0.4
+    },
+    {
+     "pass": "ship probe: trace",
+     "ms": 0.36
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.34
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.33
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.32
+    }
+   ]
+  }
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "mars-ground-sunset",
+  "what": "Mars on the ground at sunset",
+  "settled": true,
+  "sky": {
+   "over": "mars",
+   "lat": -4.6,
+   "lon": -91.5,
+   "heightM": -45,
+   "sun": {
+    "alt": 1.97,
+    "apparent": 1.97,
+    "az": 290.5
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 19.8,
+  "p95": 185.7,
+  "p99": 209.9,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 4,
+  "primary": true,
+  "rings": 0,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 16.5,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 14.79
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 12.83
+   },
+   {
+    "pass": "taau",
+    "ms": 2.54
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.37
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 1.07
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.98
+   },
+   {
+    "pass": "stars",
+    "ms": 0.77
+   },
+   {
+    "pass": "gather",
+    "ms": 0.76
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.39
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.37
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.29
+   },
+   {
+    "pass": "bloom down 2",
+    "ms": 0.08
+   },
+   {
+    "pass": "body raster heights",
+    "ms": 0.08
+   },
+   {
+    "pass": "bloom up 1",
+    "ms": 0.07
+   }
+  ],
+  "vramMiB": 1085,
+  "peakMiB": 1430,
+  "skip4": {
+   "median": 17,
+   "p95": 18.3,
+   "gpuFrameMs": 16.5,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 14.72
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 12.59
+    },
+    {
+     "pass": "taau",
+     "ms": 2.46
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.39
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 1.03
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.97
+    },
+    {
+     "pass": "gather",
+     "ms": 0.74
+    },
+    {
+     "pass": "stars",
+     "ms": 0.69
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.42
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.39
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.37
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.09
+    },
+    {
+     "pass": "body raster heights",
+     "ms": 0.08
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.07
+    }
+   ]
+  },
+  "skip8192": {
+   "median": 17.2,
+   "p95": 22.4,
+   "gpuFrameMs": 17.9,
+   "passes": [
+    {
+     "pass": "display",
+     "ms": 14.66
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 12.57
+    },
+    {
+     "pass": "taau",
+     "ms": 2.46
+    },
+    {
+     "pass": "temporal",
+     "ms": 1.33
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 1.27
+    },
+    {
+     "pass": "resolve",
+     "ms": 0.96
+    },
+    {
+     "pass": "gather",
+     "ms": 0.73
+    },
+    {
+     "pass": "stars",
+     "ms": 0.71
+    },
+    {
+     "pass": "light meter",
+     "ms": 0.41
+    },
+    {
+     "pass": "occlusion depth",
+     "ms": 0.37
+    },
+    {
+     "pass": "bloom down 1",
+     "ms": 0.33
+    },
+    {
+     "pass": "bloom down 2",
+     "ms": 0.08
+    },
+    {
+     "pass": "body raster heights",
+     "ms": 0.08
+    },
+    {
+     "pass": "bloom up 1",
+     "ms": 0.07
+    }
+   ]
+  }
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "moon-telescope-first-quarter",
+  "what": "the first-quarter Moon through a telescope from the Andes (1°)",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": -32.65,
+   "lon": -70.01,
+   "heightM": 5554,
+   "sun": {
+    "alt": -5,
+    "apparent": -3.29,
+    "az": 243.3
+   },
+   "moon": {
+    "alt": 34.67,
+    "az": 354.4
+   },
+   "eclipse": null,
+   "refraction": {
+    "refractivity": 0.000293,
+    "horizonArcmin": 18,
+    "layered": {
+     "model": "layered (Ciddor, hydrostatic, Bouguer)",
+     "air": "standard pressure, the drawn air's temperature, 50 % humidity",
+     "pressureHpa": 1013.3,
+     "groundTempC": 15,
+     "humidityPct": 50,
+     "horizonArcmin": 19.5,
+     "apparentAltDeg": -2.22,
+     "sunApparentAltDeg": -2.22
+    }
+   }
+  },
+  "frames": 120,
+  "median": 27.4,
+  "p95": 76.9,
+  "p99": 101.6,
+  "scale": 0.75,
+  "block": 8,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 25,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 19.54
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 17
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 8.98
+   },
+   {
+    "pass": "trace (discs)",
+    "ms": 5.09
+   },
+   {
+    "pass": "taau",
+    "ms": 3.1
+   },
+   {
+    "pass": "trace",
+    "ms": 2.79
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 1.91
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.64
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.55
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.91
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.86
+   },
+   {
+    "pass": "stars",
+    "ms": 0.73
+   },
+   {
+    "pass": "gather",
+    "ms": 0.71
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 0.59
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.58
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.52
+   }
+  ],
+  "vramMiB": 1500,
+  "peakMiB": 1671
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "biarritz-sun05-tele",
+  "what": "Biarritz, 21 June 2026, the Sun ~0.5° up, telephoto 4°",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": 43.483,
+   "lon": -1.559,
+   "heightM": 68,
+   "sun": {
+    "alt": 0.65,
+    "apparent": 1.01,
+    "az": 302.5
+   },
+   "moon": {
+    "alt": 38.55,
+    "az": 213.4
+   },
+   "eclipse": null,
+   "refraction": {
+    "refractivity": 0.000293,
+    "horizonArcmin": 34.5,
+    "layered": {
+     "model": "layered (Ciddor, hydrostatic, Bouguer)",
+     "air": "standard pressure, the drawn air's temperature, 50 % humidity",
+     "pressureHpa": 1013.3,
+     "groundTempC": 15,
+     "humidityPct": 50,
+     "horizonArcmin": 32.7,
+     "apparentAltDeg": 1.031,
+     "sunApparentAltDeg": 1.031
+    }
+   }
+  },
+  "frames": 120,
+  "median": 39.1,
+  "p95": 76.8,
+  "p99": 121.8,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 39.4,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 29.31
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 26.81
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 19.91
+   },
+   {
+    "pass": "earth water (raster)",
+    "ms": 10.08
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 7.74
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 3.24
+   },
+   {
+    "pass": "taau",
+    "ms": 2.85
+   },
+   {
+    "pass": "trace",
+    "ms": 2.67
+   },
+   {
+    "pass": "light meter",
+    "ms": 2.04
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.77
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.4
+   },
+   {
+    "pass": "sea fft",
+    "ms": 1.35
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.82
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.73
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.69
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.61
+   }
+  ],
+  "vramMiB": 1281,
+  "peakMiB": 1671
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "biarritz-sun2-tele",
+  "what": "Biarritz, 21 June 2026, the Sun ~2° up, telephoto 4°",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": 43.483,
+   "lon": -1.559,
+   "heightM": 68,
+   "sun": {
+    "alt": 2.19,
+    "apparent": 2.43,
+    "az": 300.8
+   },
+   "moon": {
+    "alt": 39.53,
+    "az": 210.5
+   },
+   "eclipse": null,
+   "refraction": {
+    "refractivity": 0.000293,
+    "horizonArcmin": 34.5,
+    "layered": {
+     "model": "layered (Ciddor, hydrostatic, Bouguer)",
+     "air": "standard pressure, the drawn air's temperature, 50 % humidity",
+     "pressureHpa": 1013.3,
+     "groundTempC": 15,
+     "humidityPct": 50,
+     "horizonArcmin": 32.7,
+     "apparentAltDeg": 2.452,
+     "sunApparentAltDeg": 2.452
+    }
+   }
+  },
+  "frames": 120,
+  "median": 21,
+  "p95": 42,
+  "p99": 102.8,
+  "scale": 0.75,
+  "block": 16,
+  "rate": 16,
+  "primary": true,
+  "rings": 6,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 18.1,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 14.87
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 12.39
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 6.41
+   },
+   {
+    "pass": "trace",
+    "ms": 2.73
+   },
+   {
+    "pass": "taau",
+    "ms": 2.53
+   },
+   {
+    "pass": "terrain raster visibility",
+    "ms": 2.33
+   },
+   {
+    "pass": "terrain from the Sun",
+    "ms": 1.68
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.45
+   },
+   {
+    "pass": "earth horizons",
+    "ms": 1.34
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.91
+   },
+   {
+    "pass": "resolve",
+    "ms": 0.77
+   },
+   {
+    "pass": "aerial perspective",
+    "ms": 0.77
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.72
+   },
+   {
+    "pass": "terrain surface cache",
+    "ms": 0.62
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.56
+   },
+   {
+    "pass": "earth lite (raster)",
+    "ms": 0.55
+   }
+  ],
+  "vramMiB": 1281,
+  "peakMiB": 1628
+ },
+ {
+  "side": "B",
+  "round": 0,
+  "view": "iss-sunset-equator",
+  "what": "a sunset from the ISS's height over the equator (420 km)",
+  "settled": true,
+  "sky": {
+   "over": "earth",
+   "lat": 7.591,
+   "lon": 64.307,
+   "heightM": 420000,
+   "sun": {
+    "alt": -19.8,
+    "apparent": -19.8,
+    "az": 248.3
+   },
+   "moon": {
+    "alt": 8.13,
+    "az": 71.2
+   },
+   "eclipse": null,
+   "refraction": null
+  },
+  "frames": 120,
+  "median": 22.1,
+  "p95": 30.9,
+  "p99": 65.2,
+  "scale": 0.875,
+  "block": 8,
+  "rate": 4,
+  "primary": false,
+  "rings": null,
+  "image": "1920×1080",
+  "budgetMs": 16,
+  "quality": "game",
+  "gpuFrameMs": 22.8,
+  "passes": [
+   {
+    "pass": "display",
+    "ms": 20.78
+   },
+   {
+    "pass": "ship: shading (MSAA)",
+    "ms": 18.09
+   },
+   {
+    "pass": "ship: shadow map",
+    "ms": 4.06
+   },
+   {
+    "pass": "trace",
+    "ms": 3.45
+   },
+   {
+    "pass": "taau",
+    "ms": 3.24
+   },
+   {
+    "pass": "temporal",
+    "ms": 1.9
+   },
+   {
+    "pass": "resolve",
+    "ms": 1.27
+   },
+   {
+    "pass": "gather",
+    "ms": 0.98
+   },
+   {
+    "pass": "stars",
+    "ms": 0.96
+   },
+   {
+    "pass": "occlusion depth",
+    "ms": 0.52
+   },
+   {
+    "pass": "bloom down 1",
+    "ms": 0.38
+   },
+   {
+    "pass": "ship probe: trace",
+    "ms": 0.32
+   },
+   {
+    "pass": "light meter",
+    "ms": 0.25
+   },
+   {
+    "pass": "ship probe: GGX",
+    "ms": 0.17
+   },
+   {
+    "pass": "ship probe: SH",
+    "ms": 0.15
+   },
+   {
+    "pass": "sky ambient",
+    "ms": 0.12
+   }
+  ],
+  "vramMiB": 1210,
+  "peakMiB": 1673
+ }
+]
