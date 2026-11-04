@@ -1550,7 +1550,9 @@ compilation) s'y ajoutent.
   d'ombre du relief : les ombres de la ville au-delà de 900 m (Paris à 400 m : 1,6 % des pixels de la ville assombris, le bruit
   0,5 %) ; +1,2–1,9 ms au redessin des cascades ; actif. Le scintillement mesuré image par image (`city-flicker`) : à l'arrêt
   2 % par pixel, le même avec ou sans S1 ; **ramené à 0,48 %** (C0-12 ≤ 1 %) — l'historique du raster tenu (caméra immobile, horloge
-  arrêtée) moyenne ~48 images au lieu de 3 ; en vol inchangé.
+  arrêtée) moyenne ~48 images au lieu de 3 ; en vol inchangé. **Q4 L4** — le spéculaire GGX des matériaux connus (piste, classes
+  WorldCover ; l'inconnu mat) : face au Soleil bas l'image × 1,3–1,8, un lustre de sol mouillé sur l'aéroport sec — **désactivé** par
+  défaut (`renderer.groundSpecular`), à juger, les rugosités à régler sur des références.
 - **3 novembre, matin (suite)** : **H3, première partie** — les ombres du corps proche lisent ses cartes d'horizon
   (`nearHorizon` : la carte vers le Soleil revue depuis la hauteur propre du point, la pénombre du disque plus ce que
   l'horizon balaie sous le pixel ; Soleil sous l'horizon : 0, rien d'autre lu ; sinon le min avec la marche et la carte du

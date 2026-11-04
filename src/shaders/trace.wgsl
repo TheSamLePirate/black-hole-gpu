@@ -14013,6 +14013,22 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     let F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(n, dirW)), 0.0, 1.0), 5.0);
     G += glass * F * sky * 1.5 / PI;
   }
+  // (Q4 L4: the known materials' specular — C0-11: a runway's paving, the regional surface's classes; an unknown ground stays
+  // matt —: GGX on a dielectric (F0 0.04), the roughness the material's, the Sun's own disc its floor; the diffuse lessened by the
+  // light the face mirrors — liteSkip 67108864: not, a measure)
+  if (!isTree && !mesh && (liteSkip() & 67108864u) == 0u) {
+    // (built-up 0.65, bare 0.8, snow and ice 0.35, grass and crops 0.9 — their sheen towards a low Sun, which a photograph cannot hold)
+    let cv = select(0u, surface.cover, surface.w > 0.5);
+    let rough = select(select(select(select(select(0.0, 0.9, cv == 30u || cv == 40u), 0.35, cv == 70u), 0.8, cv == 60u), 0.65, cv == 50u), 0.55, rwyPaved > 0.5);
+    if (rough > 0.0) {
+      // (Smith's visibility, height-correlated — Heitz —, Schlick's Fresnel on the half vector; Fv the face's mirror at the view)
+      let v = -dirW; let hv = normalize(Li + v); let nl = max(dot(n, Li), 0.0); let nv = max(dot(n, v), 1e-3); let nh = max(dot(n, hv), 0.0);
+      let a2 = pow(max(rough * rough, 0.0047), 2.0); let dd = nh * nh * (a2 - 1.0) + 1.0;
+      let vis = 0.5 / max(nl * sqrt(nv * nv * (1.0 - a2) + a2) + nv * sqrt(nl * nl * (1.0 - a2) + a2), 1e-5);
+      let Fv = 0.04 + 0.96 * pow(1.0 - nv, 5.0) * (1.0 - rough);
+      G = G * (1.0 - Fv) + Eg * (a2 / (PI * dd * dd) * vis * (0.04 + 0.96 * pow(1.0 - max(dot(v, hv), 0.0), 5.0)) * nl) + Fv * sky / PI;
+    }
+  }
   // (a building's glass, its zinc: the sky mirrored at a grazing look and the Sun's glint — windsockShade's —; its windows lit
   // at night)
   if (bldS > 0.0) {

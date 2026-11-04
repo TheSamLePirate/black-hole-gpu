@@ -2974,7 +2974,7 @@ export class Renderer {
     set(13, o.y0, o.y1, o.accumulate ? 1 : 0, Math.random());
     set(14, s.limbDarkening ? 1 : 0, s.diskEmission === "bolometric" ? 1 : 0, s.diskBrightness, s.diskTau);
     set(15, s.jet ? 1 : 0, Math.sqrt(1 - 1 / (s.jetLorentz * s.jetLorentz)), s.jetWidth, s.jetIntensity);
-    set(16, s.jetLength, s.jetCutoff, s.jetKnots, this.liteSkip | (this.skyOpen ? 0 : 4194304));
+    set(16, s.jetLength, s.jetCutoff, s.jetKnots, this.liteSkip | (this.skyOpen ? 0 : 4194304) | (this.groundSpecular ? 0 : 67108864));
     u.set([this.frameStamp, t === this.live ? this.validFrom : 0, o.flags, o.minSpp ?? 0], 17 * 4);
     set(18, o.tol ?? 1e-5, o.noise ?? 0, o.shutter ?? 0, s.temporalBlend);
     set(19, o.offset?.[0] ?? 0, o.offset?.[1] ?? 0, s.diskThickness, 1); // w: opaque 1.0 (compensated sums)
@@ -8314,7 +8314,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  relief shadow map — nearShadow, the march whole), 32768 Q2's sky by the frame's harmonics on a slope and the bounce by the
    *  ground's mean albedo (the flat sky × ½(1 + n·up), 0.18 instead), 65536 the imagery's footprint on the slope (the flat
    *  plane's instead), 524288 the near body's horizon map in its shadows (H3 — nearShadow: the march alone, as before), 1048576 the Earth's
-   *  horizons (H5 — liteSun, earthGround: the cascades alone, as before), 2097152 the craft's shadow on the raster's ground (Q6 I3), 4194304 the valleys' sky (Q4 L2b — earthSkyOpen): a
+   *  horizons (H5 — liteSun, earthGround: the cascades alone, as before), 2097152 the craft's shadow on the raster's ground (Q6 I3), 4194304 the valleys' sky (Q4 L2b — earthSkyOpen), 16777216 the ground's occlusion (Q4 L2a), 67108864 the known materials'
+   *  specular (Q4 L4): a
    *  measure, the image then wrong */
   liteSkip = 0;
   /** Q4 L2b — the valleys' sky hidden by the relief (trace.wgsl earthSkyOpen, H5's horizons — compiled in only with
@@ -8322,6 +8323,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  image's light in the Valais for +0.15–0.6 ms of the raster's material (the horizons' nodes see the great valleys only; the
    *  near occlusion is L2a's); liteSkip 8388608 draws its share */
   skyOpen = false;
+  /** Q4 L4 — the known materials' specular (shadeLite: GGX, a runway's paving, the regional surface's classes): off by default
+   *  until judged — facing a low Sun it brightened Roissy 63 %, a wet-looking sheen on dry paving (Q4.md L4) */
+  groundSpecular = false;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
   private rasterEligibleNow = false;
   /** the clouds' transmittance map seen from the Sun (trace.wgsl cloudShadow — docs/PLAN-NUAGES-AAA.md N3; read by
