@@ -8,7 +8,7 @@ import { readPng } from "./lib/png";
 // views, Neutral (the physical image) elsewhere; settings.lookProfile auto, camera, neutral (display.wgsl cameraLook). The
 // F-35's cockpit over Tarifa, frozen, the exposure settled: the same view shot Neutral then Camera — the Camera discreet (the
 // mean luminance within 5 %, the corners darker than the centre by a little, the image's detail kept) —; auto resolved to
-// Camera while the craft is flown.
+// Camera while the craft is flown; the exposure breathing in Camera only (the meter's target, ground against sky).
 // Output: remote-results/look-profile/{neutral,camera}.png (LP_OUT).
 // Done when: both shots taken and compared, auto checked, no GPU error.
 // Duration: ~1.5 min (the tiles, two shots).
@@ -77,6 +77,25 @@ test.skipIf(!E2E)(
       expect(Math.abs(whole[1]! / whole[0]! - 1)).toBeLessThan(0.05);
       expect(row.cornerRatio).toBeLessThan(row.centreRatio);
       expect(row.gpuErrors).toBe(0);
+      // (the exposure breathing — decision 32 (2): Camera only —: the meter's target looking 25° down at the ground and 25° up at
+      // the sky — Neutral's from the incident light, nearly the same; Camera's a third of a camera's meter mixed in, ±0.5 EV)
+      const ev: Record<string, number[]> = {};
+      for (const p of ["neutral", "camera"]) {
+        ev[p] = [];
+        for (const pitch of [-25, 25]) {
+          await app.js(`(() => { __bh.settings.lookProfile = "${p}"; __bh.camera.setLook(0, ${pitch}); __bh.touch(); return 1; })()`);
+          await app.js(
+            `new Promise((r) => { let n = 0; const f = () => (++n >= 40 ? r(1) : requestAnimationFrame(f)); requestAnimationFrame(f); })`,
+          );
+          await app.exposureSettled();
+          ev[p].push(await app.js<number>(`__bh.renderer.autoExposureEV`));
+        }
+      }
+      const dN = ev.neutral![1]! - ev.neutral![0]!,
+        dC = ev.camera![1]! - ev.camera![0]!;
+      console.log(`  exposure sky − ground [EV]: neutral ${dN.toFixed(3)}, camera ${dC.toFixed(3)} (${JSON.stringify(ev)})`);
+      expect(Math.abs(dC)).toBeGreaterThan(Math.abs(dN));
+      expect(Math.abs(dC - dN)).toBeLessThan(0.6);
       await app.js(
         `(() => { __bh.settings.lookProfile = "auto"; __bh.freeze(false); document.body.classList.remove("hide-ui"); return 1; })()`,
       );

@@ -3954,9 +3954,12 @@ export class Renderer {
       s.band !== "230GHz" &&
       (s.lookProfile === "camera" || (s.lookProfile === "auto" && this.flightView));
     this.device.queue.writeBuffer(this.displayBuf, 256, new Float32Array([camera ? 1 : 0, 0.022, 0.12, clock]));
+    if (target === this.live) this.lookCamera = camera;
   }
   /** the game's flight view now — a craft flown, the live view (main.ts): the image's profile Camera when lookProfile is auto */
   flightView = false;
+  /** the live image's profile is Camera (writeDisplay): the meter breathes (readMeter) */
+  private lookCamera = false;
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
    *  velocity on the camera's axes [m/s]; null: none */
@@ -7815,6 +7818,24 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       }
     }
     let m = this.meterIncident > 0 ? 0.4 / this.meterIncident : 2 ** this.autoEV;
+    // (the Camera profile — Q6 I6, decision 32 (2): the exposure breathing, the incident meter still its base —: a camera's
+    // own meter mixed in by a third — the image's median to a mid grey —, at most 1.5 EV away: ±0.5 EV, the view towards the
+    // bright sky a little darker, towards the ground a little brighter; by day in the Earth's air only, never the spot's)
+    if (this.lookCamera && this.meterInAir && !this.meterSpotUsed && this.meterIncident > 0 && this.eyeIncident > 3e-5) {
+      let a = 0;
+      for (let b = 127; b >= 1; b--) {
+        const before = a;
+        a += h[b]!;
+        if (a >= 0.5 * total) {
+          const med = within(b, before, 0.5 * total);
+          if (med > 0) {
+            const k = Math.min(Math.max(Math.log2(0.18 / (this.meterGain * med) / m), -1.5), 1.5);
+            m *= 2 ** (k / 3);
+          }
+          break;
+        }
+      }
+    }
     if (Lhi > 0) m = Math.min(m, 6 / Lhi);
     // (the telescope's spot: the target's disc alone — its brightest part put just under white, the sky behind it
     // kept dark: a faint galaxy, the wormhole's mouth and the other universe in it drawn bright, the Moon not burnt.
