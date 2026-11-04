@@ -56,7 +56,18 @@ while (Date.now() < end) {
       .replace(/\.\d+Z$/, "Z");
     const file = join(out, `${name}-${utc}.jpg`);
     try {
-      await $`ffmpeg -loglevel error -y -i ${await streamUrl(name)} -frames:v 1 -q:v 3 ${file}`.quiet();
+      // (a live stream can stall: the grab killed after 30 s, its URL asked again next time)
+      const p = Bun.spawn(
+        ["ffmpeg", "-loglevel", "error", "-y", "-rw_timeout", "15000000", "-i", await streamUrl(name), "-frames:v", "1", "-q:v", "3", file],
+        {
+          stdout: "ignore",
+          stderr: "ignore",
+        },
+      );
+      const kill = setTimeout(() => p.kill(), 30_000);
+      const code = await p.exited;
+      clearTimeout(kill);
+      if (code !== 0) throw new Error(`ffmpeg ${code}`);
       appendFileSync(manifest, `${name}\t${STREAMS[name]!.id}\t${utc}\t${file}\n`);
       n++;
     } catch (e) {
