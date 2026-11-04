@@ -978,6 +978,8 @@ export class Renderer {
   private refrBuilder: RefrTableBuilder | null = null;
   /** the air the tables in the tracer's table are for ("" none yet) */
   refrPublished = "";
+  /** the tables used (false: the exponential air's estimate — a measure's A/B) */
+  refrTablesOn = true;
   /** the sea's water map in the tracer's table (gpu-tables.ts TABLE_WATER), once */
   waterIn = false;
   /** the orthophotos' levels last written to the tracer's table (gpu-tables.ts TABLE_ORTHO) */
@@ -1928,6 +1930,16 @@ export class Renderer {
   /** the tables for the air in force: a new builder when the air changed (to 0.1 °C, 10 Pa, 1 %), a slice of ~2 ms a frame,
    *  published whole — the tracer's table and refraction.ts's at once */
   private stepRefrTable(s: Settings) {
+    // (off — a measure's A/B —: the header put to 0, the exponential air drawn and computed; on again: published anew)
+    if (!this.refrTablesOn) {
+      if (this.refrPublished) {
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_REFR * 16, new Float32Array(4));
+        setRefractionTable(null);
+        this.refrPublished = "";
+        this.refrKey = "";
+      }
+      return;
+    }
     const a = this.airState(s);
     const key = `${Math.round(a.pMsl / 10)}|${a.tGround.toFixed(1)}|${a.rh.toFixed(2)}`;
     if (key !== this.refrKey) {
