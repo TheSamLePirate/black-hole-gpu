@@ -567,3 +567,24 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   - la vue nadir de Sen et la caméra d'amarrage, une fois capturées ;
   - le coût de la vue ISS ;
   - l'attitude réelle de la station (tangage de quelques degrés) n'est pas modélisée, le jeu suppose la LVLH exacte.
+
+## ISS5, troisième palier : la nuit et le coût de la vue (le 5 novembre)
+
+- **La nuit, 11:20 UTC** (kerr-mini, éléments du jour, profil de caméra ; le Soleil à 18° sous le limbe vu de la station) :
+
+  | | jeu : moyenne · 99ᵉ centile | direct : moyenne · 99ᵉ centile |
+  |---|---|---|
+  | Sen, horizon | 2,5 · 123 (des taches claires : les villes de Luçon ou des nuages éclairés) | 1,7 · 1,0 (noir ; incrustation « Night ») |
+  | NASA, nadir | 0,1 · 1,0 (noir) | 11 · 42 (le bruit du capteur, violacé : son gain poussé) |
+
+  - **Sen** garde son exposition de jour : la nuit est noire, et les lumières au sol ne s'y voient pas. Le jeu, lui, adapte son
+    exposition et fait sortir les lumières ;
+  - **la NASA** pousse son gain : un voile de bruit coloré de niveau 11 apparaît. Le jeu reste noir ;
+  - **à faire** dans la réponse par caméra :
+    - pour Sen, une exposition fixe, celle du jour, au lieu de l'exposition automatique ;
+    - pour la NASA, un plancher de bruit coloré qui monte quand la scène s'assombrit.
+- **Le coût** (kerr-mini, 1080p, images GPU terminées sur 3 s) : la vue autour de l'ISS à 35,1 ms, **la vue Sen à 46,9 ms, la vue
+  NASA à 45,5 ms** (+10 à +12 ms). Le grand champ sur la Terre vue d'orbite et la station toute proche coûtent ; les passes ne
+  sont pas encore séparées.
+
+![ISS5 : la vue d'horizon de Sen dans le jeu à 11:20 UTC, de nuit — le direct est noir (kerr-mini)](Q6/iss5-nuit-sen-jeu.jpg)

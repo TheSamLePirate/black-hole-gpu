@@ -9,6 +9,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // takes the same action (issCamera); "Back to the view before" gives the view held before back, the ISS camera off. The scene's
 // clock is not moved by any of it.
 // ISS_OMM: a file of the station's elements (CelesTrak's GP JSON object) for ISS_AT; else fetched from CelesTrak.
+// ISS_COST=1: each view's frame time (the GPU's completed frames over 3 s), and the view about the ISS before.
 // ISS_FLOW=1: each camera shot again ISS_FLOW_S (10) s later — the ground's flow in the view (ISS5).
 // ISS_JS: a statement run once the scene is set (an A/B's switch: __bh.renderer.msLutOn = false, aerosolOverride = 0.001).
 // ISS_TUNE: the tracer's tuning (JSON, __bh.renderer.tune) for an A/B of the image's parts.
@@ -38,6 +39,13 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
       const asp = innerWidth / innerHeight, v = vc.s.fov * Math.PI / 180;
       return { eyeM: Math.hypot(...eye), lookDeg: ang(w.fwd, on(fr.look)), upDeg: ang(w.up, on(fr.up)), fovAcross: (2 * Math.atan(Math.tan(v / 2) * asp) * 180) / Math.PI, issView: vc.s.issView };
     })()`);
+  // (ISS_COST=1: the view's frame — the GPU's completed frames over 3 s —)
+  const frameMs = () =>
+    app.js<number>(`(async () => {
+      const r = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q));
+      await f(); const c0 = r.completedFrames, t0 = performance.now();
+      while (performance.now() - t0 < 3000) { __bh.touch(); await f(); }
+      return +((performance.now() - t0) / Math.max(1, r.completedFrames - c0)).toFixed(1); })()`);
   const pick = async (testid: string) => {
     if (!(await app.js<boolean>(`!document.getElementById("cam-pop").hidden`))) await app.click("#btn-camera");
     await app.click(`[data-testid=${testid}]`);
@@ -93,6 +101,7 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
 
   test("Sen's horizon, NASA's view, TARS's same action, the view given back — each framed as the registry says", async () => {
     const t0 = await app.js<number>(`__bh.time()`);
+    if (process.env.ISS_COST) console.log(`  about the ISS (before): ${await frameMs()} ms a frame`);
     const before = await app.js<{ X: number[]; target: string }>(
       `(() => { const vc = __bh.camera.viewController(); return { X: [...vc.rigWorld().X], target: vc.s.target }; })()`,
     );
@@ -102,6 +111,7 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
     console.log(
       `  Sen horizon: eye ${hz.eyeM.toFixed(2)} m off its mount, look ${hz.lookDeg.toFixed(2)}° off, up ${hz.upDeg.toFixed(2)}° off, ${hz.fovAcross.toFixed(1)}° across (${hz.issView})`,
     );
+    if (process.env.ISS_COST) console.log(`  sen-horizon: ${await frameMs()} ms a frame`);
     await app.shot(`${OUT}/sen-horizon.png`);
     // (ISS5: the Sun over the station's limb in the game at the shot — the station on the Earth's centre, the Sun's direction —
     // and the game's date: against SGP4 and the Sun reckoned outside)
@@ -144,6 +154,7 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
     console.log(
       `  NASA: eye ${ns.eyeM.toFixed(2)} m off its mount, look ${ns.lookDeg.toFixed(2)}° off, up ${ns.upDeg.toFixed(2)}° off, ${ns.fovAcross.toFixed(1)}° across (${ns.issView})`,
     );
+    if (process.env.ISS_COST) console.log(`  nasa: ${await frameMs()} ms a frame`);
     await app.shot(`${OUT}/nasa.png`);
     // (ISS_FLOW=1 — ISS5's motion: a second shot ISS_FLOW_S s later (the scene at real time), the ground's flow between them —
     // scripts/iss-response.py's companion, the dense capture's 10 s frames —; the clock read on both)
