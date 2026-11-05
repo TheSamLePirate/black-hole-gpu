@@ -17,7 +17,8 @@ import { readPng, writePng } from "./lib/png";
 // moved shaded the hollows in combs where nothing stands (Q6m — renderer.sunWindowsInKey false: the key before it).
 // PLACES=mancha,strait,manchaclouds (mancha cloudy: its decks' shadows on the ground),clouds (cloudy, 900 m, the view nearly level); MODES=spatial75q,taau75q,native100q,trace (a mode@n: renderer.liteSkip = n — a part of the raster's
 // material cut, e.g. 2097152 the craft's shadow); FRAMES (60); TURN (0°: straight; a heading change asked as the flight starts); GROUND (40 m); SPEED (140 m/s); GH_FORCE=1: the trees' shadow map
-// drawn again 10 frames with the world still, shot (-forced, -forced-after).
+// drawn again 10 frames with the world still, shot (-forced, -forced-after). GH_COMBS=1: first a flight of FRAMES frames in the
+// shadows' debug view, the relief-shadowed ground counted every COMB_EVERY (5) frames (Q6m's combs over the whole flight).
 // Output: remote-results/ghost/<place>-<mode>[-still|-ref|-diff|-still-diff].png, ghost.json (GH_OUT).
 // Done when: every place × mode shot and compared (the world in — maps, relief, imagery, surface, scenery — 3 s running, 120 s at
 // most; the reference 30 s; what is missing said), no GPU error.
@@ -207,6 +208,42 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
         const world = await app.js<WorldIn>(WORLD_IN(120_000));
         if (!world.ok) console.log(`  ${pl} ${md}: the world not in after 120 s (${world.missing}) — measured anyway`);
         await app.settled(60_000);
+        // (GH_COMBS=1 — Q6m's combs counted over the whole flight, not on its last frame alone: FRAMES frames flown in the shadows'
+        // debug view (liteSkip 8192: green the relief's sun visibility, red the scenery's, blue constant), every COMB_EVERY-th
+        // shot and its relief-shadowed ground counted — green under half the blue where the blue is lit enough, the scenery's not
+        // dark —; green under 0.8 of the blue: the view overexposed, its magenta pale —; on La Mancha's plain at noon nothing should be: those pixels the combs. Then the measured flight as before)
+        let combs: number[] | null = null;
+        if (process.env.GH_COMBS) {
+          const every = Number(process.env.COMB_EVERY ?? 5);
+          combs = [];
+          const ls = await app.js<number>(
+            `(() => { const r = __bh.renderer, v = r.liteSkip; r.liteSkip = v | 8192; __bh.touch(); return v; })()`,
+          );
+          await app.settled(90_000);
+          for (let i = 0; i < FRAMES; i++) {
+            await app.js(`(async () => { const r = __bh.renderer; __bh.step(1 / 30); __bh.touch(); const last = r.lastDoneAt; let k = 0;
+              while (r.lastDoneAt === last && k++ < 120) await new Promise((q) => requestAnimationFrame(q)); return 1; })()`);
+            if (i % every !== every - 1) continue;
+            const f = `${OUT}/${tag}-combs-${String(i + 1).padStart(2, "0")}.png`;
+            await app.shot(f);
+            const im = png(f);
+            let n = 0;
+            for (let y = Math.floor(im.height * 0.3); y < im.height; y++)
+              for (let x = 0; x < im.width; x++) {
+                const o = im.channels * (y * im.width + x);
+                const R = im.data[o]!,
+                  G = im.data[o + 1]!,
+                  B = im.data[o + 2]!;
+                if (B > 25 && G < 0.8 * B && R > 0.75 * B) n++;
+              }
+            combs.push(n);
+          }
+          await app.js(`(() => { __bh.renderer.liteSkip = ${ls}; __bh.touch(); return 1; })()`);
+          console.log(
+            `  ${pl} ${md}: relief-shadowed pixels every ${every} frames: ${combs.join(" ")} (frames with more than 2 000: ${combs.filter((n) => n > 2000).length} of ${combs.length})`,
+          );
+          await app.settled(90_000);
+        }
         // (flown: FRAMES frames each after a step of 1/30 s)
         const fl = await app.js<{ gpuMs: number; groundPx: number; tsm: unknown; state: Record<string, number> }>(`(async () => {
           const r = __bh.renderer, c = __bh.camera, frame = () => new Promise((q) => requestAnimationFrame(q));
@@ -298,6 +335,7 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
           },
           phase,
           stillTsm,
+          combs,
           pipeline: await app.js<string>(`__bh.renderer.earthPipelineNow(__bh.settings)`),
           converged,
           gpuErrors: await app.js<number>(`__bh.renderer.gpuErrors`),

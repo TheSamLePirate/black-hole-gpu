@@ -14517,6 +14517,7 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
     var sunVis = select(1.0, far.x, far.x >= 0.0);
     if (far.x != 0.0) { sunVis = min(sunVis, earthHorizonLight(gq, hG, Lp, pixFoot() * tM)); }
     Eg *= sunVis;
+    LITE_RELIEF_DBG = sunVis;
     // (the last metres under the cascades' reach: the contact shadows, in the image — lit and facing the Sun only, near)
     // (a Sun under 25°: higher, the last metres' shadows are short — under the pixel at a few hundred metres)
     if (far.x != 0.0 && dot(n, Lp) > 0.0 && dot(gq, Lp) < 0.42 && tM < 1500.0 && (liteSkip() & 16384u) == 0u) {
@@ -14548,12 +14549,15 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
 // (TUNE_LITE 8192 — a measure —: the trees' and buildings' shadow map as liteSun read it at the surface: x trees', y buildings'
 // (−1 off the map), drawn instead of the surface: red shadowed, white lit, blue off the map, black not read)
 var<private> LITE_SH_DBG: vec2f = vec2f(-2.0);
+// (the relief's own sun visibility — its cascades and horizons — for the same view, 1 where not read)
+var<private> LITE_RELIEF_DBG: f32 = 1.0;
+// (liteSkip 8192's view: red the scenery's map's sun visibility — its trees and buildings; 1 where it has nothing or is not
+// read —, green the relief's — its cascades and horizons —, blue a constant: grey lit, magenta in the relief's shadow, cyan in
+// the scenery's; Q6m's combs counted on it frame by frame, e2e ghost GH_COMBS)
 fn liteShadowDebug(E: vec3f) -> vec3f {
   let v = LITE_SH_DBG;
-  if (v.x < -1.5) { return vec3f(0.0); }
-  if (min(v.x, v.y) < -0.5) { return vec3f(0.0, 0.0, 0.3) * luminance(E); }
-  let s = min(v.x, v.y);
-  return vec3f(0.3, 0.3 * s, 0.3 * s) * luminance(E);
+  let s = select(1.0, clamp(min(v.x, v.y), 0.0, 1.0), v.x > -1.5 && min(v.x, v.y) > -0.5);
+  return vec3f(0.3 * s, 0.3 * LITE_RELIEF_DBG, 0.3) * luminance(E);
 }
 // The sky's light at a raster pixel's surface (as earthGround's)
 fn liteSky(q: vec3f, hG: f32, E: vec3f, Ls: vec3f, mu0: f32) -> vec3f {
