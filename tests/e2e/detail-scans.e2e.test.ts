@@ -9,6 +9,8 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // July, frozen, the exposure locked: with the scans, without, with again — shots, their PSNR (the change against two shots
 // alike), the near ground's local contrast (the luminance's standard deviation in 8-px cells, the image's lower half), the GPU's
 // completed frames' interval.
+// DS_FLICKER=1 (DS_FLICKER_N frames, 12): each state's shimmer too — the raster's sub-pixel jitter on, the world still, each
+// pixel's luminance's standard deviation over the frames, its mean over the lower half.
 // DS_OUT: the shots (remote-results/detail-scans); DS_ISO: the date (an ISO instant — a winter's over a snowy meadow: the scans
 // hidden under the season's snow).
 // Duration: ~4 min on this Mac.
@@ -68,6 +70,44 @@ test.skipIf(!E2E)(
           while (performance.now() - t0 < 3000) { __bh.touch(); await f(); }
           return +((performance.now() - t0) / Math.max(1, r.completedFrames - c0)).toFixed(1); })()`);
         await app.shot(`${OUT}/${k}.png`);
+        // (DS_FLICKER=1: the shimmer — the raster's sub-pixel jitter on (gauss), the world still: DS_FLICKER_N frames shot one after
+        // another, each pixel's luminance's standard deviation over them, the mean over the image's lower half — the ground's
+        // aliasing what moves there)
+        if (process.env.DS_FLICKER) {
+          const n = Number(process.env.DS_FLICKER_N ?? 12);
+          await app.js(`(() => { __bh.renderer.rasterJitter = "gauss"; __bh.touch(); return 1; })()`); // (its default)
+          await frames(60);
+          const lum: Float32Array[] = [];
+          let w = 0,
+            h = 0,
+            ch = 3;
+          for (let i = 0; i < n; i++) {
+            await frames(1);
+            const f = `${OUT}/${k}-flicker-${i}.png`;
+            await app.shot(f);
+            const q = readPng(new Uint8Array(await Bun.file(f).arrayBuffer()));
+            w = q.width;
+            h = q.height;
+            ch = q.channels;
+            const L = new Float32Array(w * h);
+            for (let p = 0; p < w * h; p++) L[p] = 0.2126 * q.data[ch * p]! + 0.7152 * q.data[ch * p + 1]! + 0.0722 * q.data[ch * p + 2]!;
+            lum.push(L);
+          }
+          let sum = 0,
+            cnt = 0;
+          for (let y = Math.floor(h / 2); y < h - 60; y++)
+            for (let x = 0; x < w; x++) {
+              const p = y * w + x;
+              let m = 0;
+              for (const L of lum) m += L[p]!;
+              m /= n;
+              let v = 0;
+              for (const L of lum) v += (L[p]! - m) ** 2;
+              sum += Math.sqrt(v / n);
+              cnt++;
+            }
+          (out as Record<string, unknown>)[`${k}Flicker`] = +(sum / cnt).toFixed(3);
+        }
         const p = readPng(new Uint8Array(await Bun.file(`${OUT}/${k}.png`).arrayBuffer()));
         shots[k] = p.data;
         W = p.width;
@@ -103,7 +143,7 @@ test.skipIf(!E2E)(
       out.psnr = { detailVsPlain: psnr(shots.detail!, shots.plain!), detailVsDetail2: psnr(shots.detail!, shots.detail2!) };
       out.contrast = Object.fromEntries(Object.entries(shots).map(([k, d]) => [k, contrast(d)]));
       console.log(
-        `  ${JSON.stringify({ frames: ["detail", "plain", "detail2"].map((k) => (out[k] as { frameMs: number }).frameMs), psnr: out.psnr, contrast: out.contrast, pipe: (out.detail as { pipe: string }).pipe })}`,
+        `  ${JSON.stringify({ frames: ["detail", "plain", "detail2"].map((k) => (out[k] as { frameMs: number }).frameMs), psnr: out.psnr, contrast: out.contrast, flicker: ["detail", "plain", "detail2"].map((k) => out[`${k}Flicker`] ?? null), pipe: (out.detail as { pipe: string }).pipe })}`,
       );
       await app.js(
         `(() => { __bh.settings.earthDetail = true; __bh.settings.autoExposure = true; __bh.settings.exposure = 0; return 1; })()`,
