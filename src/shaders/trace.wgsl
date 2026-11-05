@@ -15315,7 +15315,15 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // (the point's height known to half a footprint: the ray jittered within its pixel, the distance read at its centre — at
     // 10 km some 4–5 m —: the sea's tests at its level given that slack, or far off the sea mixed with the ground in grains, a
     // darker speckled band beyond ~7 km facing a low Sun, the T7 sunset series)
-    let hW = max(hG - 0.5 * fpM, 0.0);
+    var hW = max(hG - 0.5 * fpM, 0.0);
+    // (the mesh behind its data: a level baked before its tiles came — a change under the finer levels rebaked 10 s later (T4a),
+    // a coarse level's island smeared over kilometres — stands metres over a sea the data already have at its level: shown as
+    // land, plates out of the sea while the world loads (Toulon-Hyères, Porquerolles, the coast-loading e2e). The sea's tests
+    // read the lower of the mesh's height and the data's at the point — read only where the mesh is over the sea's level on a
+    // low coast of the global map: the land inland and the mountains pay nothing)
+    if (hW > 0.3 && rel0.w < 50.0) {
+      hW = min(hW, max(earthH(gq, max(fpM, 1.0), true).x - 0.5 * fpM, 0.0));
+    }
     var sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hW));
     // (the sea the relief map's coarse mask misses — its texels of kilometres call the sea by a coast land: the water there shaded
     // as ground, black, a staircase across a gulf —: a surface at the sea's level over a bottom the fine bathymetry finds deeper
@@ -15500,6 +15508,9 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   SEA_SHORE = 0.0;
   if (calm <= 0.0 && tM < 3500.0 && (liteSkip() & 536870912u) == 0u) {
     SEA_SHORE = smoothstep(max(12.0, 1.5 * footSea), 0.0, seaShoreDist(gq));
+    // (the water shadeLite found on a mesh still standing over the sea — its level baked before its tiles came: the shore's
+    // distances, baked from the same nodes, call it land — no wash there: a white band along the plate the mesh had)
+    SEA_SHORE *= 1.0 - smoothstep(0.3, 0.6, hG);
   }
   RNDV = blueDraws(vec2u(centre), P.frame.x);
   RND = RNDV.z;
