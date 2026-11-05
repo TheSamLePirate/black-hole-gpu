@@ -15184,7 +15184,7 @@ fn cloudSigmaAt(p: vec3f, lod: f32) -> f32 {
 @group(1) @binding(14) var csmOut: texture_storage_2d<rgba32float, write>;
 @group(1) @binding(15) var csmHead: texture_storage_2d<rgba32float, write>;
 override CSM_HALF_M: f32 = 40000.0;
-// (Q5 P8 — the map's rows refreshed one in CSM_EVERY a frame, in turn — the clouds drift a few millimetres a frame —, all of
+// (Q5 P8 — the map's bands of 8 rows refreshed one in CSM_EVERY a frame, in turn — the clouds drift a few millimetres a frame —, all of
 // them whenever its frame moved: its centre by a tenth of a texel, the Sun by 0.02°, or none the frame before (its table's
 // head, the frame before's, read back); 1: every row every frame, as before)
 override CSM_EVERY: u32 = 4u;
@@ -15229,7 +15229,9 @@ fn cloudShadow(@builtin(global_invocation_id) gid: vec3u) {
         let prevC = bodies[TABLE_CSM_OFF];
         let prevT = bodies[TABLE_CSM_OFF + 3u];
         let still = prevT.w > 0.5 && length(prevC.xyz - C) < 0.1 * texel && length(prevT.xyz - toward) < 3.5e-4;
-        if (CSM_EVERY > 1u && still && gid.y % CSM_EVERY != P.frame.x % CSM_EVERY && !(gid.x == 0u && gid.y == 0u)) { return; }
+        // (by bands of 8 rows — a workgroup's —, not rows: a row in four left every SIMD group a lane marching, the others idle beside
+        // it — on an M1 no gain at all)
+        if (CSM_EVERY > 1u && still && (gid.y / 8u) % CSM_EVERY != P.frame.x % CSM_EVERY && !(gid.x == 0u && gid.y == 0u)) { return; }
         let O = C + right * x + upP * y;
         // (the line O + toward s through the shell: from the top's sphere on the Sun's side down to the ground's or the
         // top's far side)
