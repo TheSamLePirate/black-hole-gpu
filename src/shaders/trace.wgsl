@@ -9530,7 +9530,9 @@ fn buildingFaceAt(g:u32,p:vec3f,d:vec3f,t:f32)->SceneryHit {
 fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
   SC_DISTANCE=1e9;WS_T=vec3f(0.0);
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5){return tMax;}
-  let d=sceneryLocal(dW);let o=P.scenery[3].xyz;
+  // (R4b: the scenery seen lifted by the air as its raster draws it — the ray's origin lowered by Λ at the ground's distance,
+  // the same polynomial: sceneryLiftM)
+  let d=sceneryLocal(dW);let o=P.scenery[3].xyz-vec3f(0.0,0.0,sceneryLiftM(min(tMax,P.scenery[1].w)));
   SC_SAMPLE=rnd;SC_POINT=o+d*tMax;SC_DISTANCE=tMax;
   // (the raster's buildings — their boxes: a pixel none covers has no building before its ground —; else the BVH walked)
   let bld=!RASTER_SCENERY || RASTER_BLD || (TUNE_SC_SKIP&8u)!=0u;
@@ -9697,7 +9699,8 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32) -> f32 {
   let F = u32(forestData(2u).x);
   if (F == 0u) { return -1.0; }
   let d = sceneryLocal(dW);
-  let o = P.scenery[3].xyz;
+  // (R4b: as worldScenery — the tree its raster drew lifted, tested lifted)
+  let o = P.scenery[3].xyz - vec3f(0.0, 0.0, sceneryLiftM(min(tMax, P.scenery[1].w)));
   let hd = forestHead(F);
   let k = i32(id - 1u);
   let ci = k % max(hd.w, 1);
@@ -11716,7 +11719,14 @@ fn mirageTrue(e: f32, c: u32) -> f32 {
 const LIFT_OFF = 2606269u;
 const LIFT_ND = 128u;
 const LIFT_NH = 8u;
-fn liftF(n: u32) -> f32 { return bodies[LIFT_OFF + 1u + n / 4u][n % 4u]; }
+fn liftF(n: u32) -> f32 { return bodies[LIFT_OFF + 2u + n / 4u][n % 4u]; }
+// (the scenery's lift — the same polynomial its raster draws with (renderer sceneryLift) —: Λ [m] at a distance d [m])
+fn sceneryLiftM(d: f32) -> f32 {
+  let c = bodies[LIFT_OFF + 1u];
+  if (c.w < 0.5) { return 0.0; }
+  let L = (c.x + c.y * d) * d * d;
+  return L * smoothstep(0.5 * c.z, c.z, L / max(d, 1.0));
+}
 fn refrLiftM(d: f32, hP: f32) -> f32 {
   if (bodies[LIFT_OFF].x < 0.5) { return 0.0; }
   let x = sqrt(clamp(d / 3.2e6, 0.0, 1.0)) * f32(LIFT_ND - 1u);
@@ -14150,7 +14160,12 @@ fn rasterContactShadow(p0: vec3f, L: vec3f, reach: f32) -> f32 {
 // the point tM metres along it, in the squashed space from the body's centre [radii] (the camera split fine, as the hint's)
 fn rasterPoint(r: RasterRay, tM: f32) -> vec3f {
   let fine = P.nearCam1.w > 0.5;
-  return select(nearCam(), P.nearCam0.xyz, fine) + select(vec3f(0.0), P.nearCam1.xyz, fine) + r.rd * (tM / r.kM);
+  let a = select(nearCam(), P.nearCam0.xyz, fine) + select(vec3f(0.0), P.nearCam1.xyz, fine) + r.rd * (tM / r.kM);
+  // (R4b, contract C0-3 (2): tM the apparent distance the rasters drew — their points lifted by the air —; the physical point
+  // the material is shaded at: the lift undone, Λ by that distance and the point's height, along its up)
+  if (bodies[LIFT_OFF].x < 0.5) { return a; }
+  let la = length(a);
+  return a - (a / la) * (refrLiftM(tM, (la - 1.0) * EARTH_RM) / EARTH_RM);
 }
 // the pixel's ground is shadeLite's: the patch's (not a tree's, a building's), not the sea's (its glint, waves, mirror are
 // shade's) — the same test in shade, shadeMark and shadeLite

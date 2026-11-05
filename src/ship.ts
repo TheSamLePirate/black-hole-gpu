@@ -224,6 +224,8 @@ export interface ShipView {
   /** the sea about the camera, the craft mirrored in it: its plane (camera axes: n·p = d, n up — the ellipsoid's
    *  h = 0 —), its significant height [m], a clock [s], the flown craft (and the aircraft near it) over the sea */
   sea?: { n: V3; d: number; hs: number; t: number; flown: boolean } | null;
+  /** (R4b) the air's lift of what is seen afar: (x + y d) d² [m], z the fade's angle, w 1 on — along sea.n; none without a sea */
+  lift?: Float32Array | null;
   /** the craft flown (its mesh, its thrusters) */
   vessel?: VesselId;
   /** the other craft in view */
@@ -342,7 +344,9 @@ const SEA_AT = LAMPS_AT + 16 + (MAX_LAMPS + MAX_GLARES) * 3 * 16;
 const PCD_AT = SEA_AT + 3 * 16;
 /** then the A320's windshield (S.wg0, S.wg1 — src/a320/glass.ts) */
 const GLASS_AT = PCD_AT + 3 * 16;
-const SHIP_UNIFORM_BYTES = GLASS_AT + 2 * 16;
+/** then the air's lift of the craft afar (S.lift — R4b) */
+const LIFT_AT = GLASS_AT + 2 * 16;
+const SHIP_UNIFORM_BYTES = LIFT_AT + 16;
 const INST_FLOATS = 20;
 /** the posed aircraft's parts at most (the F-35's 119 — src/f35/model.ts —, the A320's 172 — src/a320/rig.ts), and how
  *  many aircraft drawn with their parts posed */
@@ -2201,6 +2205,7 @@ export class ShipRenderer {
       GLASS_AT,
       new Float32Array(G ? [G.rain, G.clock, G.airspeed, G.frost, ...G.wipers, ...G.rates] : [0, 0, 0, 0, 0, 0, 0, 0]),
     );
+    this.device.queue.writeBuffer(this.uniform, LIFT_AT, new Float32Array(sea && v.lift ? v.lift : [0, 0, 0, 0]));
     this.writeReentry(v.reentry, mesh);
     const tr = this.flown ? v.contrails : null;
     this.trailCount = tr ? Math.min(tr.n, MAX_SEGMENTS) : 0;

@@ -1,4 +1,5 @@
-import { TABLE_TERRAIN, TABLE_TERRAIN_PREV } from "../gpu-tables";
+import { TABLE_LIFT, TABLE_TERRAIN, TABLE_TERRAIN_PREV } from "../gpu-tables";
+import { LIFT_DMAX, LIFT_HMAX, LIFT_ND, LIFT_NH } from "./refraction-lift-layout";
 import { TERRAIN_CACHE_HEADER, TERRAIN_CACHE_N, TERRAIN_CACHE_NODE_VEC4S, TERRAIN_CACHE_RING_LAST } from "./terrain-cache-layout";
 
 /** The relief's shadow map's side [texels] (system/terrain-raster.ts encodeSunShadow, trace.wgsl sunShadowFar). */
@@ -56,6 +57,24 @@ fn cacheNode(base: u32, i: vec2u) -> f32 {
   if (share <= 0.0) { return h; }
   return mix(h, table[${TABLE_TERRAIN_PREV}u + k * ${TERRAIN_CACHE_NODE_VEC4S}u + node / 4u][node % 4u], share);
 }
+// (R4b, contract C0-3: the lift the air gives the ground at a slant distance d [m] and a height hP [m over the sea] — the
+// tracer's own table and reading, trace.wgsl refrLiftM; 0 without it — renderer.liftOn)
+fn liftF(n: u32) -> f32 { return table[${TABLE_LIFT}u + 2u + n / 4u][n % 4u]; }
+fn refrLiftM(d: f32, hP: f32) -> f32 {
+  if (table[${TABLE_LIFT}u].x < 0.5) { return 0.0; }
+  let x = sqrt(clamp(d / ${LIFT_DMAX.toFixed(1)}, 0.0, 1.0)) * ${(LIFT_ND - 1).toFixed(1)};
+  let y = sqrt(clamp(hP / ${LIFT_HMAX.toFixed(1)}, 0.0, 1.0)) * ${(LIFT_NH - 1).toFixed(1)};
+  let i = min(u32(x), ${LIFT_ND - 2}u);
+  let j = min(u32(y), ${LIFT_NH - 2}u);
+  let fx = x - f32(i);
+  let fy = y - f32(j);
+  let a = mix(liftF(j * ${LIFT_ND}u + i), liftF(j * ${LIFT_ND}u + i + 1u), fx);
+  let b = mix(liftF((j + 1u) * ${LIFT_ND}u + i), liftF((j + 1u) * ${LIFT_ND}u + i + 1u), fx);
+  return mix(a, b, fy);
+}
+// (terrainPoint's up and height over the sea at the last vertex — the projection's lift reads them)
+var<private> TP_UP: vec3f;
+var<private> TP_H: f32;
 @group(0) @binding(2) var distanceImage: texture_2d<f32>;
 @group(0) @binding(3) var<storage, read> referenceDepth: array<f32>;
 struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) n: vec3f };
@@ -166,6 +185,8 @@ fn terrainPoint(vertex: vec3f, graded: bool) -> vec3f {
   var h: f32;
   // The exact grading and detail suppression, not a second approximation of runway flattening.
   if (graded) { h = earthHeightExactG(normal, vertex.z); } else { h = levelHeight(ij); }
+  TP_UP = normal;
+  TP_H = h;
   // (above the sea, the cache's and the exact heights: over the ellipsoid by the geoid — trace.wgsl earthHeightG)
   h += geoidN(normal);
   let delta = vec3f(x * u.reference.x - y * u.reference.y, x * u.reference.y + y * u.reference.x, z);
@@ -173,7 +194,10 @@ fn terrainPoint(vertex: vec3f, graded: bool) -> vec3f {
 }
 @vertex fn terrainVs(@location(0) vertex: vec3f) -> Vertex {
   let graded = vertexGraded(vertex.xy);
-  let p = terrainPoint(vertex, graded);
+  // (R4b: the point seen where the air shows it — lifted along its up by Λ(d, h); the projection's alone — terrainSunVs, the
+  // bake, the CPU never)
+  let p0 = terrainPoint(vertex, graded);
+  let p = p0 + TP_UP * refrLiftM(length(p0), TP_H);
   var v: Vertex;
   v.n = terrainNormal(vertex, graded);
   v.p = vec3f(dot(p, u.right.xyz), dot(p, u.up.xyz), dot(p, u.forward.xyz));

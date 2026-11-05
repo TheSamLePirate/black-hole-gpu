@@ -74,7 +74,7 @@ export function liftTable(f: Float32Array, hE: number): Float32Array {
   for (let j = 0; j < LIFT_NH; j++)
     for (let i = 0; i < LIFT_ND; i++) {
       const d = liftDistance(i);
-      out[4 + j * LIFT_ND + i] = liftFade(liftOf(N, hE, liftHeight(j), d), d);
+      out[8 + j * LIFT_ND + i] = liftFade(liftOf(N, hE, liftHeight(j), d), d);
     }
   return out;
 }
@@ -88,7 +88,7 @@ export function liftAt(t: Float32Array, d: number, hP: number): number {
     j = Math.min(Math.floor(y), LIFT_NH - 2);
   const fx = x - i,
     fy = y - j;
-  const at = (a: number, b: number) => t[4 + b * LIFT_ND + a]!;
+  const at = (a: number, b: number) => t[8 + b * LIFT_ND + a]!;
   return (at(i, j) * (1 - fx) + at(i + 1, j) * fx) * (1 - fy) + (at(i, j + 1) * (1 - fx) + at(i + 1, j + 1) * fx) * fy;
 }
 

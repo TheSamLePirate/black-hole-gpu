@@ -202,7 +202,9 @@ struct U {
 };
 @group(0) @binding(0) var<uniform> u: U;
 // the scenery's frame (P.scenery): its east, north, up axes on the Earth's, the camera in it [m] (w: the near proxies' reach [m])
-struct S { east: vec4f, north: vec4f, up: vec4f, cam: vec4f };
+// (lift — R4b, contract C0-3 —: the air's lift of a point at a distance d [m] from the camera, (x + y d) d² fitted to the tracer's
+// table over 4–60 km — renderer.ts sceneryLift —, z the fade's angle [rad], w 1 on)
+struct S { east: vec4f, north: vec4f, up: vec4f, cam: vec4f, lift: vec4f };
 @group(0) @binding(1) var<uniform> sc: S;
 // the Sun's view for the trees' and buildings' shadow map (encodeShadow): right, up, towards the Sun in the scenery's frame —
 // each w its half-extent [m] —, the map's centre (w: 1 drawn)
@@ -256,7 +258,15 @@ fn treeOf(k: u32, hd: ForestHead) -> Tree {
 }
 // a scenery-frame point, camera-relative on the raster's axes (right, up, forward)
 fn view(p: vec3f) -> vec3f {
-  let rel = p - sc.cam.xyz;
+  var rel = p - sc.cam.xyz;
+  // (R4b: seen where the air shows it — lifted along the frame's up by Λ(d), faded in under 0.1′; the projection's alone —
+  // sunClip, the shadow maps, never)
+  if (sc.lift.w > 0.5) {
+    let d = length(rel);
+    let L = (sc.lift.x + sc.lift.y * d) * d * d;
+    let a = L / max(d, 1.0);
+    rel.z += L * smoothstep(0.5 * sc.lift.z, sc.lift.z, a);
+  }
   let e = sc.east.xyz * rel.x + sc.north.xyz * rel.y + sc.up.xyz * rel.z;
   return vec3f(dot(e, u.right.xyz), dot(e, u.up.xyz), dot(e, u.forward.xyz));
 }
@@ -603,7 +613,7 @@ export class SceneryRaster {
     this.module = device.createShaderModule({ label: "scenery raster", code: sceneryRasterShader(forestModuleOf(traceSource)) });
     const S = GPUBufferUsage.STORAGE;
     this.frameU = device.createBuffer({ size: TERRAIN_RASTER_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.sceneryU = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.sceneryU = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws = device.createBuffer({
       size: (LISTS + 7) * 16,
       usage: S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
@@ -754,7 +764,9 @@ export class SceneryRaster {
   }
 
   private lod: SceneryRasterLod = SCENERY_RASTER_LOD;
-  private sceneryOut = new Float32Array(16);
+  private sceneryOut = new Float32Array(20);
+  /** (R4b) the air's lift for the scenery's projection: (x + y d) d² [m], z the fade's angle, w 1 on — renderer.ts sceneryLift */
+  lift = new Float32Array(4);
   /** the proxies' detail (a switch for comparisons — renderer.sceneryRasterLod) */
   setLod(lod: SceneryRasterLod) {
     for (const b of this.meshes) b.destroy();
@@ -848,6 +860,7 @@ export class SceneryRaster {
     this.sceneryOut[15] = this.lod.nearM;
     // (east.w: the least projected radius drawn [px] — the raster's own copy of P.scenery, that w unread here)
     this.sceneryOut[3] = this.minPx;
+    this.sceneryOut.set(this.lift, 16);
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)

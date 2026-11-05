@@ -198,6 +198,7 @@ import {
 import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/geoid";
 import { loadWaterKd } from "./system/water-kd";
 import { RefrTableBuilder } from "./system/refraction-gpu";
+import { LIFT_FADE, liftAt } from "./system/refraction-lift";
 import { type AirState, airOfModel } from "./system/refraction-layered";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
@@ -4453,6 +4454,36 @@ export class Renderer {
   /** the lift table in the tracer's table: the eye's height it was made for [m over the sea], "" none */
   liftNow = "";
   private refrData: Float32Array | null = null;
+  private liftData: Float32Array | null = null;
+  private sceneryLiftNow: Float32Array | null = null;
+  /** (R4b) the scenery's lift (its trees, buildings, bridges within tens of km): (c2 + c3 d) d² least-squares fitted to the
+   *  table over 4–60 km at the ground's height under the eye — the same numbers to centimetres (the projection's budget a pixel) */
+  private sceneryLift(hE: number) {
+    const t = this.liftData;
+    if (!t) return;
+    const hP = Math.max(hE - Math.max(this.liveEyeHM, 0), 0);
+    // (Λ / d² = c2 + c3 d: a line in d, least squares)
+    let n = 0,
+      sx = 0,
+      sy = 0,
+      sxx = 0,
+      sxy = 0;
+    for (let d = 4000; d <= 60000; d += 2000) {
+      const y = liftAt(t, d, hP) / (d * d);
+      n++;
+      sx += d;
+      sy += y;
+      sxx += d * d;
+      sxy += d * y;
+    }
+    const c3 = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+    const c2 = (sy - c3 * sx) / n;
+    const c = new Float32Array([c2, c3, LIFT_FADE, 1]);
+    this.sceneryLiftNow = c;
+    this.sceneryRaster?.lift.set(c);
+    // (and the tracer's scenery — its trees and buildings tested along the ray — the same numbers: the table's second vec4)
+    this.device.queue.writeBuffer(this.bodyBuf, (TABLE_LIFT + 1) * 16, c);
+  }
   private liftWorker: Worker | null = null;
   private liftAsked: { hE: number; key: string; id: number } | null = null;
   private liftBusy = false;
@@ -4464,6 +4495,8 @@ export class Renderer {
       if (this.liftNow) {
         this.device.queue.writeBuffer(this.bodyBuf, TABLE_LIFT * 16, new Float32Array(4));
         this.liftNow = "";
+        this.liftData = null;
+        if (this.sceneryRaster) this.sceneryRaster.lift.fill(0);
       }
       this.liftAsked = null;
       return;
@@ -4481,6 +4514,8 @@ export class Renderer {
       if (e.data.id !== this.liftAsked?.id || !this.liftOn) return;
       this.device.queue.writeBuffer(this.bodyBuf, TABLE_LIFT * 16, e.data.f as Float32Array<ArrayBuffer>);
       this.liftNow = `${this.liftAsked.hE.toFixed(1)}`;
+      this.liftData = e.data.f;
+      this.sceneryLift(this.liftAsked.hE);
       this.onAssets?.();
     };
     this.liftWorker.postMessage({ id, lift: this.refrData!.slice(), hE: h });
@@ -7155,6 +7190,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
             place: !s.ship && this.shipInView ? this.shipPlace! : undefined,
             others: this.shipOthers(s),
             sea: this.shipSea(s),
+            lift: this.liftNow ? this.sceneryLiftNow : null,
             mPerM: 1476.625 * (s.massSolar || 1),
             forceShadow: !!this.character?.active,
             inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),

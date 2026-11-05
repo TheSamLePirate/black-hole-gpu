@@ -98,6 +98,9 @@ struct Ship {
   // [travel / s, out > 0]
   wg0: vec4f,
   wg1: vec4f,
+  // (R4b, contract C0-3) the air's lift of what is seen afar — the scenery's polynomial (renderer.ts sceneryLift): (x + y d) d²
+  // [m] at a distance d [m], z the fade's angle [rad], w 1 on —, along the sea's up (sea.xyz)
+  lift: vec4f,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance, 3 F-35), in the shadow
@@ -317,7 +320,14 @@ override HULL_JET: bool = false;
 // the near plane [m] (reversed depth: 1 there, 0 at infinity)
 const NEAR = 0.01;
 
-fn project(p: vec3f) -> vec4f {
+fn project(p0: vec3f) -> vec4f {
+  // (R4b: a craft afar seen where the air shows it, lifted as the ground and the scenery about it — the projection's alone)
+  var p = p0;
+  if (S.lift.w > 0.5 && S.sea.w > -1e8) {
+    let d = length(p0);
+    let L = (S.lift.x + S.lift.y * d) * d * d;
+    p += S.sea.xyz * (L * smoothstep(0.5 * S.lift.z, S.lift.z, L / max(d, 1.0)));
+  }
   // same pinhole as the tracer: ndc = (x / (z tan·aspect), y / (z tan)); depth = near / z
   // (then the box's own ndc: ndc' = (ndc − centre) × scale, in clip space)
   let xy = (vec2f(p.x / S.proj.x, p.y / S.proj.y) - S.view.xy * p.z) * S.view.zw;
