@@ -9399,8 +9399,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       this.sunBuilds = builds;
       this.sunBuildsAt = now;
     }
-    return `${this.sunBuilds}|${this.sunMeshKey}|${this.sceneryInCascades && this.sunScp ? this.earthScenery.revision : -1}|${L.join(",")}|${centres.flat().join(",")}`;
+    return `${this.sunBuilds}|${this.sunMeshKey}|${this.sceneryInCascades && this.sunScp ? this.earthScenery.revision : -1}|${L.join(",")}|${centres.flat().join(",")}${this.sunEveryFrame ? `|${++this.sunEveryTick}` : ""}`;
   }
+  /** (Q6m, a measure) the relief's cascades drawn again every frame — their key holding the frame's number */
+  sunEveryFrame = false;
+  private sunEveryTick = 0;
   /** the meshes' windows the cascades are drawn from this frame (encodeTerrainRasterVisibility); "": none kept (a measure — the
    *  windows left out of the key, as before Q6 I3: `sunWindowsInKey` false) */
   private sunMeshKey = "";
@@ -9411,6 +9414,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private sunBuildsAt = 0;
   /** the Sun's direction the cascades were last drawn along (T6), and the camera's place then (the body's axes [m]) */
   private sunLKept: Vec3 | null = null;
+  /** the cascades' axes (right, up in the Sun's plane) made with that kept direction: kept with it */
+  private sunAxesKept: { r: number[]; u: number[] } | null = null;
   private sunCamDraw: number[] | null = null;
   static readonly SUN_DEPTH_M = 20_000;
   static readonly SUN_NEAR_M = 300;
@@ -9434,9 +9439,17 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // cascades drawn again then, not every frame — drawn and read with the same one)
       const K = this.sunLKept;
       if (K && K[0] * L[0] + K[1] * L[1] + K[2] * L[2] > Math.cos(5e-5)) L = K;
-      else this.sunLKept = L;
+      else {
+        this.sunLKept = L;
+        this.sunAxesKept = null;
+      }
       const up = patchGeodetic(near, WGS84_F).normal;
-      const { r, u } = sunAxes(L, up);
+      // (Q6m: the cascades' axes kept with the Sun's kept direction — made from the vertical at the camera, they turned with it as
+      // the craft flew, 7e-7 rad a frame at 140 m/s: the camera's place along them — 6.4e6 m from the Earth's centre — moved some
+      // metres a frame where it had not, the maps read metres off where they were drawn: the relief's own shadows in combs, three
+      // frames after each redraw — the e2e ghost GH_COMBS's count, frame by frame)
+      this.sunAxesKept ??= sunAxes(L, up);
+      const { r, u } = this.sunAxesKept;
       const D = Renderer.SUN_DEPTH_M;
       // (T6: the cascades — ±1.5 km (1.5 m a texel), ±10 km —, each centred on the camera snapped to its texels' grid in the
       // Sun's plane: the camera's place on the body's axes in float64, the shadows' edges still while it moves)

@@ -213,16 +213,22 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
         // shot and its relief-shadowed ground counted — green under half the blue where the blue is lit enough, the scenery's not
         // dark —; green under 0.8 of the blue: the view overexposed, its magenta pale —; on La Mancha's plain at noon nothing should be: those pixels the combs. Then the measured flight as before)
         let combs: number[] | null = null;
+        let combLog: string[] = [];
         if (process.env.GH_COMBS) {
           const every = Number(process.env.COMB_EVERY ?? 5);
           combs = [];
+          // (each frame: the cascades drawn again (R), a bake of the heights (B), the camera's step towards the Sun since (dzOff))
+          combLog = [];
           const ls = await app.js<number>(
             `(() => { const r = __bh.renderer, v = r.liteSkip; r.liteSkip = v | 8192; __bh.touch(); return v; })()`,
           );
           await app.settled(90_000);
           for (let i = 0; i < FRAMES; i++) {
-            await app.js(`(async () => { const r = __bh.renderer; __bh.step(1 / 30); __bh.touch(); const last = r.lastDoneAt; let k = 0;
-              while (r.lastDoneAt === last && k++ < 120) await new Promise((q) => requestAnimationFrame(q)); return 1; })()`);
+            const st = await app.js<string>(`(async () => { const r = __bh.renderer; const b0 = r.terrainSurfaceCache?.stats().builds ?? 0;
+              __bh.step(1 / 30); __bh.touch(); const last = r.lastDoneAt; let k = 0;
+              while (r.lastDoneAt === last && k++ < 120) await new Promise((q) => requestAnimationFrame(q));
+              return [r.terrainRaster?.sunDrewNow ? "R" : "-", (r.terrainSurfaceCache?.stats().builds ?? 0) > b0 ? "B" : "-", (r.sunCascadeRows?.[3] ?? 0).toFixed(1)].join(""); })()`);
+            combLog.push(st);
             if (i % every !== every - 1) continue;
             const f = `${OUT}/${tag}-combs-${String(i + 1).padStart(2, "0")}.png`;
             await app.shot(f);
@@ -336,6 +342,7 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
           phase,
           stillTsm,
           combs,
+          combLog,
           pipeline: await app.js<string>(`__bh.renderer.earthPipelineNow(__bh.settings)`),
           converged,
           gpuErrors: await app.js<number>(`__bh.renderer.gpuErrors`),
