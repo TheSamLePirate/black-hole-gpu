@@ -10,6 +10,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // clock is not moved by any of it.
 // ISS_OMM: a file of the station's elements (CelesTrak's GP JSON object) for ISS_AT; else fetched from CelesTrak.
 // ISS_COST=1: each view's frame time (the GPU's completed frames over 3 s), and the view about the ISS before.
+// ISS_EXTRA=<id>[@ISO]: one more camera shot, the scene set to that instant (a stream's frame to match); ISS_TILES=1: the
+// imagery's tiles on (fine coasts).
 // ISS_FLOW=1: each camera shot again ISS_FLOW_S (10) s later — the ground's flow in the view (ISS5).
 // ISS_JS: a statement run once the scene is set (an A/B's switch: __bh.renderer.msLutOn = false, aerosolOverride = 0.001).
 // ISS_TUNE: the tracer's tuning (JSON, __bh.renderer.tune) for an A/B of the image's parts.
@@ -56,7 +58,7 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
 
   beforeAll(async () => {
     mkdirSync(OUT, { recursive: true });
-    app = await App.boot({ width: 1280, height: 720, hash: "scene=Earth: the Blue Marble", tiles: false });
+    app = await App.boot({ width: 1280, height: 720, hash: "scene=Earth: the Blue Marble", tiles: !!process.env.ISS_TILES });
     await app.waitFor("__bh.renderer.completedFrames > 30", 120_000);
     if (AT) {
       // (the scene at that instant — the station where SGP4 puts it then —, the image's profile neutral: a measure's)
@@ -179,6 +181,23 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
     await Bun.sleep(2500);
     console.log(`  TARS camera tool: ${JSON.stringify(tars)}`);
     expect((await check("sen-horizon")).issView).toBe("sen-horizon");
+    // (ISS_EXTRA=<id>[@ISO]: one more camera, the scene set to that instant once it is chosen — a frame of the live stream to
+    // match, its overlaid time; the tiles waited for, 60 s at most)
+    if (process.env.ISS_EXTRA) {
+      const [id, at] = process.env.ISS_EXTRA.split("@") as [string, string?];
+      await pick(`cp-iss-${id}`);
+      if (at) await app.js(`__bh.game.setDate("${at}")`);
+      await app
+        .waitFor(
+          `(() => { __bh.touch(); const r = __bh.renderer; return r.earthTiles.pending === 0 && r.earthTiles.orthoPending === 0; })()`,
+          60_000,
+        )
+        .catch(() => console.warn("  the tiles not all in after 60 s"));
+      await app.settled();
+      await Bun.sleep(1500);
+      console.log(`  ${id}: shot at ${await app.js<string>(`__bh.game.date()`)}`);
+      await app.shot(`${OUT}/${id}.png`);
+    }
     // (back: the view before, the ISS camera off)
     await pick("cp-iss-back");
     const after = await app.js<{ X: number[]; issView: string; target: string }>(

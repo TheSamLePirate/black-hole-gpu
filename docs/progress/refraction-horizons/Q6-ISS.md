@@ -634,3 +634,21 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
 - **Reste d'ISS** :
   - la caméra nadir de Sen : il faut une capture pendant que Sen la diffuse (vers 05:00 et 06:35 UTC la veille) ;
   - la caméra d'amarrage : aucune image d'elle dans la capture dense.
+
+## ISS2 — la caméra nadir de Sen, premier essai sur la capture du 4 novembre (le 5 novembre)
+
+- **Les images** : la capture du 4 novembre contient la vue nadir (04:59–05:09 et 06:35–06:43 UTC), mais à une image par
+  minute. Le sol avance de 420 km entre deux images, pour une emprise d'environ 240 km : rien ne se recouvre, et la méthode du
+  défilement ne s'applique pas.
+- **La côte comme repère** :
+  - à 05:06:53 (heure incrustée), le direct montre la côte ouest de Madagascar près de Morondava (−20,28° ; 44,28°), deltas et
+    littoral bien visibles ;
+  - le jeu au même instant, vue nadir de Sen (e2e `iss-cameras` avec `ISS_EXTRA=sen-nadir@<instant>` et `ISS_TILES=1`,
+    éléments du 4 novembre par `ISS_OMM=tests/fixtures/iss-gp-2026-11-04.json` : les téléchargements répétés chez CelesTrak sont
+    refusés), montre l'intérieur de l'île, sans la côte ;
+  - le point sous l'ISS, calculé par SGP4 sur ces éléments, est à (−21,12° ; 44,69°) à 05:06:53. L'orbite descend vers le
+    sud-est, et Morondava est environ 100 km derrière la station. À 05:06:43, le point sous l'ISS n'est qu'à 40 km de Morondava.
+- **Lecture** : deux explications restent possibles avec une seule image. Soit la caméra « nadir » vise environ 13° vers
+  l'arrière, soit l'heure incrustée devance l'image d'une dizaine de secondes. La capture dense programmée pour le 6 novembre
+  (toutes les 10 s, 04:45–06:45 UTC) départagera par le défilement (champ, orientation) et par la suite des côtes (visée,
+  heure).
