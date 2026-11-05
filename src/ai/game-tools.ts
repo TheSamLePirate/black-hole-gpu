@@ -153,6 +153,8 @@ export interface GameHost {
   seeEclipse?(kind: "solar" | "lunar" | "transit", t: number, place: { lat: number; lon: number } | null): Promise<string | null>;
   /** the clouds of the day drawn over the Earth (the real weather's satellite mosaic: its date, its layer), or null */
   dayClouds?(): { date: string; layer: string } | null;
+  /** (R6b) the mirage the real weather makes plausible here (the setting "weather"): its profile, strength, confidence, why */
+  mirageGuess?(): { kind: string; strength: number; confidence: string; why: string } | null;
   /** the game's mode (game/modes.ts): now, into another (why not, or null), the top bar shown or hidden */
   mode?: { get(): GameMode; set(m: GameMode): string | null; hideBar(on: boolean): void };
   /** the ship placed as the Place panel and the Atlas place it (main.ts placeShip: a mission ended, the game's
@@ -695,7 +697,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "get_weather",
       description:
-        "The weather where the ship is (wind, visibility, clouds, rain) and the weather setting; with 'real': the real weather and where it comes from (realSource.why: metar — a runway's report, the game's date now —, model — Open-Meteo at the game's date —, out-of-range — a plausible draw —, pending, other-world, high), and the clouds of that day drawn over the whole Earth (dayClouds: the satellites' mosaic's date and layer; null: the fixed map — before 2000, a future date, not in yet).",
+        "The weather where the ship is (wind, visibility, clouds, rain) and the weather setting; with 'real': the real weather and where it comes from (realSource.why: metar — a runway's report, the game's date now —, model — Open-Meteo at the game's date —, out-of-range — a plausible draw —, pending, other-world, high), and the clouds of that day drawn over the whole Earth (dayClouds: the satellites' mosaic's date and layer; null: the fixed map — before 2000, a future date, not in yet). mirage: with the Mirages setting on 'weather', the mirage the real weather makes plausible here (kind warmSea/inversion/standard, strength 0–1, confidence none/low/medium, why) — a plausible profile from the sea's and the air's temperatures and the wind, never an observation: say its confidence when you speak of it.",
       run: () => ({
         setting: settings.weather,
         wind: settings.wind,
@@ -703,6 +705,7 @@ export function gameTools(h: GameHost): Tool[] {
         real: camera.weatherReal ?? null,
         realSource: camera.weatherRealInfo ?? null,
         dayClouds: h.dayClouds?.() ?? null,
+        mirage: h.mirageGuess?.() ?? null,
       }),
     },
     {

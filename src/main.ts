@@ -7405,6 +7405,7 @@ async function main() {
     memory: tarsMemory,
     now: () => performance.now(),
     dayClouds: () => renderer.dayCloudsOf,
+    mirageGuess: () => renderer.mirageGuess,
     mode: { get: () => gameMode(), set: (m) => setGameMode(m), hideBar: (on) => topBar.hide(on) },
     video: {
       start: (o) => {
