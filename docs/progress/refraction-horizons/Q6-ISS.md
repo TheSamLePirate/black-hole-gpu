@@ -680,3 +680,37 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   - la capsule amarrée manque dans le jeu, car les occupants des ports ne sont pas encore modélisés.
 
 ![ISS2 : la vue d'amarrage de Sen dans le jeu, 4 nov. 03:21:14 UTC — le limbe, le Soleil derrière un Dragon absent du modèle (kerr-mini)](Q6/iss2-amarrage-jeu.jpg)
+
+## ISS2 — le Dragon amarré et la caméra d'amarrage recalée (le 5 novembre)
+
+- **Le Dragon** (`src/system/dragon.ts`, décision de Sam : « continue ») : une Crew Dragon procédurale à IDA-2, port avant
+  d'Harmony, comme dans les directs.
+  - **Forme** : adaptateur, capsule tronconique de 1,8 à 3,7 m de diamètre avec une bande de hublots, rebord du bouclier
+    thermique, tronc de 3,7 m de diamètre (une moitié en cellules solaires), 6,55 m en tout. Elle utilise le format de sommets de
+    la station (pièce 0), dans ses propres tampons, et elle est dessinée dans la passe d'ombre et dans la passe principale de
+    `StationRenderer`.
+  - **Port libre pour le joueur** : le Dragon s'efface quand le vaisseau piloté passe à moins de 30 km de la station. Le jeu
+    fait toujours approcher le joueur par IDA-2, et à cette distance une capsule de 8 m fait moins d'un pixel. Le test
+    `issTrack.near` ne convenait pas : il porte sur la caméra, vraie dans toutes les vues ISS.
+  - Test `tests/dragon.test.ts`.
+- **L'écart de 16° résolu** : il venait de l'attache, pas de l'attitude de la station.
+  - Avec l'attache de la caméra d'horizon (bas et arrière de Bartolomeo), le Dragon était 8° au-dessus de l'horizontale,
+    hors du cadre ;
+  - au-dessus de l'extrémité extérieure de Bartolomeo, 0,5 m au-dessus de sa face côté zénith, en [14,0 ; 8,5 ; 4,1], il est à
+    10 m, 8,5° sous l'horizontale, là où le direct le montre ;
+  - essais écartés : [12,5 ; 7,5 ; 4,1] tombe dans Columbus (94 % des rayons arrêtés à moins de 5 m) ; le coin avant de
+    Bartolomeo, à 6 m du Dragon, est trop près, la capsule remplit l'image.
+- **Vérifié** (e2e `iss-cameras`, 4 novembre à 03:21:13, éléments du 4 novembre) :
+  - le Dragon est dessiné (compteur `dragonDraws`) ;
+  - la page projette son milieu à 6,5° au-dessus de l'axe et 0,6° à gauche, contre 6,3° au-dessus et au centre sur le direct ;
+  - à l'image : silhouette sombre à contre-jour au centre, structure en haut à gauche, limbe dessous, comme sur le direct. Au
+    premier plan en bas, une structure de Bartolomeo que le direct ne montre pas : l'attache est peut-être un peu haute ou
+    trop en arrière.
+
+![ISS2 : la vue d'amarrage de Sen dans le jeu, le Dragon à contre-jour (éclairci ×8 à droite ; ce Mac)](Q6/iss2-amarrage-dragon-eclairci.jpg)
+
+- **Limites** :
+  - la capsule est une forme simplifiée, sans ailerons ni détails ;
+  - l'occupant du port est fixe (pas de suivi des visites réelles) ;
+  - le zoom des plans serrés n'est pas modélisé ;
+  - la caméra d'amarrage reste au statut « estimate ».

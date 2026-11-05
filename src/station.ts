@@ -8,6 +8,7 @@ import lod1Url from "../assets/iss/iss-lod1.bin";
 
 import type { Vec3 } from "./physics";
 import { m34mul, partTransforms, setStationGeometry, PORT_NAMES, type M34, type StationJoint, type StationPort } from "./system/iss";
+import { dragonMesh } from "./system/dragon";
 import { stationHulls, TriBVH } from "./system/collide";
 
 const STRIDE = 24;
@@ -51,6 +52,9 @@ export interface StationView {
   pre: number;
   /** metres per M (the traced depth's unit) */
   mPerM: number;
+  /** (Q6-ISS) the visiting Crew Dragon at Harmony's forward port drawn — system/dragon.ts; off while a craft flown is near the
+   *  station (issTrack.near): that port the player's */
+  dragon?: boolean;
 }
 
 export class StationRenderer {
@@ -60,6 +64,10 @@ export class StationRenderer {
   joints: StationJoint[] = [];
   ports: StationPort[] = [];
   private meshes: (Mesh | null)[] = [null, null];
+  /** (Q6-ISS) the docked Crew Dragon's own buffers — system/dragon.ts, at the first port —, drawn after the station's */
+  private dragon: Mesh | null = null;
+  /** the frames it was drawn in (a test's count) */
+  dragonDraws = 0;
   private fetching: (Promise<void> | null)[] = [null, null];
   private get: (url: string) => Promise<Response> = fetch;
   private uniform: GPUBuffer;
@@ -173,6 +181,14 @@ export class StationRenderer {
         name: PORT_NAMES[k] ?? `port ${k + 1}`,
       }));
       setStationGeometry(this.joints, this.ports);
+      if (!this.dragon && this.ports[0]) {
+        const dm = dragonMesh(this.ports[0].centre, this.ports[0].axis);
+        const dvb = this.device.createBuffer({ size: dm.vertices.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+        this.device.queue.writeBuffer(dvb, 0, dm.vertices);
+        const dib = this.device.createBuffer({ size: dm.indices.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+        this.device.queue.writeBuffer(dib, 0, dm.indices);
+        this.dragon = { vbuf: dvb, ibuf: dib, count: dm.count };
+      }
       const off = 24 + nj * 48 + np * 32;
       const d = this.device;
       const vbuf = d.createBuffer({ size: nv * STRIDE, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
@@ -265,6 +281,11 @@ export class StationRenderer {
     sp.setVertexBuffer(0, mesh.vbuf);
     sp.setIndexBuffer(mesh.ibuf, "uint32");
     sp.drawIndexed(mesh.count);
+    if (v.dragon && this.dragon) {
+      sp.setVertexBuffer(0, this.dragon.vbuf);
+      sp.setIndexBuffer(this.dragon.ibuf, "uint32");
+      sp.drawIndexed(this.dragon.count);
+    }
     sp.end();
     if (this.bind?.sceneDepth !== sceneDepth) {
       this.bind = {
@@ -305,6 +326,12 @@ export class StationRenderer {
     rp.setVertexBuffer(0, mesh.vbuf);
     rp.setIndexBuffer(mesh.ibuf, "uint32");
     rp.drawIndexed(mesh.count);
+    if (v.dragon && this.dragon) {
+      this.dragonDraws++;
+      rp.setVertexBuffer(0, this.dragon.vbuf);
+      rp.setIndexBuffer(this.dragon.ibuf, "uint32");
+      rp.drawIndexed(this.dragon.count);
+    }
     rp.end();
     const cp = enc.beginRenderPass({
       label: "station composite",

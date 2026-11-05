@@ -8064,6 +8064,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       aspect: t.width / t.height,
       pre: preExposure(this.ev(s)),
       mPerM: mR,
+      // (Q6-ISS: the visiting Dragon at Harmony's forward port — as the live streams show it —, gone while the craft flown is within
+      // 30 km of the station: that port the player's — a capsule of 8 m sub-pixel there, no pop seen. The tracker's own `near` is
+      // the camera's, true in every view from the station)
+      dragon: (() => {
+        const P = fleet.activePose?.();
+        return !P || Math.hypot(P.X[0] - st.X[0], P.X[1] - st.X[1], P.X[2] - st.X[2]) * M_METRES > 30e3;
+      })(),
     };
     this.station.encode(enc, t.hdr, t.sceneDepth, view);
   }

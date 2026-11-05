@@ -10,6 +10,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // clock is not moved by any of it.
 // ISS_OMM: a file of the station's elements (CelesTrak's GP JSON object) for ISS_AT; else fetched from CelesTrak.
 // ISS_COST=1: each view's frame time (the GPU's completed frames over 3 s), and the view about the ISS before.
+// ISS_EXTRA_LOOK=yaw,pitch: that camera's head turned [°] (an exploration of its surroundings).
 // ISS_EXTRA=<id>[@ISO]: one more camera shot, the scene set to that instant (a stream's frame to match); ISS_TILES=1: the
 // imagery's tiles on (fine coasts).
 // ISS_FLOW=1: each camera shot again ISS_FLOW_S (10) s later — the ground's flow in the view (ISS5).
@@ -187,6 +188,11 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
       const [id, at] = process.env.ISS_EXTRA.split("@") as [string, string?];
       await pick(`cp-iss-${id}`);
       if (at) await app.js(`__bh.game.setDate("${at}")`);
+      // (ISS_EXTRA_LOOK=yaw,pitch [°]: the head turned from the native framing — the view's drag, an exploration)
+      if (process.env.ISS_EXTRA_LOOK) {
+        const [yaw, pitch] = process.env.ISS_EXTRA_LOOK.split(",").map(Number);
+        await app.js(`(() => { const L = __bh.camera.viewController().subject; L.yaw = ${yaw}; L.pitch = ${pitch}; return 1; })()`);
+      }
       await app
         .waitFor(
           `(() => { __bh.touch(); const r = __bh.renderer; return r.earthTiles.pending === 0 && r.earthTiles.orthoPending === 0; })()`,
@@ -196,6 +202,22 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
       await app.settled();
       await Bun.sleep(1500);
       console.log(`  ${id}: shot at ${await app.js<string>(`__bh.game.date()`)}`);
+      console.log(`  the docked Dragon drawn in ${await app.js<number>(`__bh.renderer.station?.dragonDraws ?? -1`)} frames`);
+      // (the docked Dragon's middle — 3.3 m out along the first port's axis — in the picture: its angle off the look, its place)
+      console.log(
+        `  the Dragon in the picture: ${await app.js<string>(`(() => {
+        const vc = __bh.camera.viewController(), w = vc.rigWorld(), t = Number.isFinite(vc.frameEnd) ? vc.frameEnd : vc.nowTime();
+        const st = __bh.iss.track.peek(t), [x, y, z] = __bh.iss.axes(st.X, st.V, t), p = __bh.iss.station.ports[0];
+        const c = [0, 1, 2].map((k) => p.centre[k] + p.axis[k] * 3.3);
+        const on = (v) => [0, 1, 2].map((k) => x[k] * v[0] + y[k] * v[1] + z[k] * v[2]);
+        const D = on(c).map((v, k) => st.X[k] + v / 1.476625e11);
+        const d = [0, 1, 2].map((k) => (D[k] - w.X[k]) * 1.476625e11), l = Math.hypot(...d);
+        const r = [w.fwd[1] * w.up[2] - w.fwd[2] * w.up[1], w.fwd[2] * w.up[0] - w.fwd[0] * w.up[2], w.fwd[0] * w.up[1] - w.fwd[1] * w.up[0]];
+        const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        const f = dot(d, w.fwd) / l, ri = dot(d, r) / l, u = dot(d, w.up) / l;
+        return l.toFixed(1) + " m, " + (Math.acos(f) * 180 / Math.PI).toFixed(1) + "° off the look, right " + (Math.atan2(ri, f) * 180 / Math.PI).toFixed(1) + "°, up " + (Math.atan2(u, f) * 180 / Math.PI).toFixed(1) + "°";
+      })()`)}`,
+      );
       await app.shot(`${OUT}/${id}.png`);
     }
     // (back: the view before, the ISS camera off)

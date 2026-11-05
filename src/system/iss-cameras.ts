@@ -102,16 +102,19 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     id: "sen-docking",
     stream: "sen",
     description: "Sen SpaceTV-1, docking: along the station at the vehicle docked to Harmony's forward port (IDA-2)",
-    mount: [12.5, 7.5, 7.0],
-    mountFrom: "as the horizon camera's (Sen: the three on Bartolomeo)",
+    // (over Bartolomeo's outboard end — its box x 13.25–15.61, y 2.59–8.68, z 4.54 its zenith side —, half a metre above it: from
+    // there the Dragon's centre — the capsule's 6.55 m along IDA-2's axis, its middle ~18.9 m forward — is 9.9 m off and 8.5°
+    // below the horizontal, where the stream shows it (15° − 6.3°), its size as there. Tried: the horizon camera's lower, aft mount
+    // put it 8° above, out of the picture (the 16° gap of the first fit); z 4.1 at x 12.5, inside Columbus; Bartolomeo's forward
+    // corner, 6 m from it, too near — it filled the picture)
+    mount: [14.0, 8.5, 4.1],
+    mountFrom: "over Bartolomeo's outboard end, fitted on the docked Dragon's place and size in the stream's wide framing: ±1 m",
     // (ISS2, its wide framing of 4 Nov 2026 03:21 UTC — "Harmony forward port: Crew Dragon Grace" —: the limb fitted, its axis
     // 15° below the horizontal, roll −7°, horizontal field 74° (residual 1.1 px; scripts/iss-limb-fit.py); the docked Dragon at the
-    // picture's middle across, ~6° above the axis: its azimuth −45° (forward and to port, the capsule ~20 m ahead of the mount).
-    // The model's geometry puts the Dragon ~7° above the horizontal, the limb ~9° below: ~16° apart — the station's real pitch,
-    // or the mount's height. Its close framings — 04:20, 05:05, 05:26 — zoomed (the limb too short behind the capsule to fit);
+    // picture's middle across, ~6° above the axis: its azimuth -60.0° (forward and to port), the mount's height from it (below). Its close framings — 04:20, 05:05, 05:26 — zoomed (the limb too short behind the capsule to fit);
     // the picture direct, as the horizon's)
-    look: unit([0.683, -0.683, 0.2588]),
-    right: unit([0.6795, 0.7241, 0.1177]),
+    look: unit([0.4824, -0.8368, 0.2588]),
+    right: unit([0.8441, 0.523, 0.1177]),
     fovDeg: 74,
     status: "estimate",
   },

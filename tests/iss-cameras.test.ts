@@ -10,7 +10,7 @@ test("ISS1: the cameras' mounts and lines of sight", () => {
   // (the docking camera: from Bartolomeo forward and to port — at the Dragon on IDA-2 —, 15° down, its wide framing 74° across)
   const dock = issCamera("sen-docking");
   expect(dock.mount[1]).toBeGreaterThan(2);
-  expect(dock.look[0]).toBeGreaterThan(0.5);
+  expect(dock.look[0]).toBeGreaterThan(0.4);
   expect(dock.look[1]).toBeLessThan(-0.5);
   expect((Math.asin(dock.look[2]) * 180) / Math.PI).toBeCloseTo(15, 0);
   expect(dock.fovDeg).toBe(74);
