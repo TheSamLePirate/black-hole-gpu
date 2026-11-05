@@ -168,6 +168,8 @@ export interface A320App {
   side: 1 | -1;
   /** the intercept's altitude [ft over the sea]: 2 000 ft over the threshold, or 1 000 ft over the relief under the legs */
   altFt: number;
+  /** the final's safe heights [m over the sea], every 500 m from the threshold out (`safeProfile`) */
+  safe: number[];
   touch: { along: number; across: number; vs: number } | null;
 }
 
@@ -186,6 +188,28 @@ function legsGround(W: IlsRunway): number {
   return top;
 }
 
+/** The final's safe heights [m over the sea], every 500 m out to 30 km: the highest ground within 2 km round each point of
+ *  the axis — behind it, beside it, ahead of it towards the runway —, 150 m over it (some 500 ft). */
+function safeProfile(W: IlsRunway): number[] {
+  const ground = (d: number) => {
+    let top = 0;
+    for (let a = d - 2000; a <= d + 2000; a += 500)
+      for (let x = -2000; x <= 2000; x += 1000) {
+        const p = fromRunway(W, -Math.max(a, 0), x);
+        top = Math.max(top, groundRelief("earth", bodyFixedOf("earth", p.lat, p.lon, 0)) - geoidDeg(p.lat, p.lon));
+      }
+    return top;
+  };
+  const out: number[] = [];
+  for (let d = 0; d <= 30_000; d += 500) out.push(ground(d) + 150);
+  return out;
+}
+const safeAt = (A: A320App, d: number) => {
+  const k = Math.min(Math.max(d / 500, 0), A.safe.length - 1);
+  const i = Math.floor(k);
+  return Math.max(A.safe[i]!, A.safe[Math.min(i + 1, A.safe.length - 1)]!);
+};
+
 function a320Approach(this: CameraController, W: IlsRunway): string {
   const g = this.geoNow();
   if (!g) return t("ILS: in the air");
@@ -194,7 +218,7 @@ function a320Approach(this: CameraController, W: IlsRunway): string {
   this.ilsRun = null;
   const o = onRunway(W, g);
   const altFt = Math.ceil(Math.max(W.elev * FT + 2000, legsGround(W) * FT + 1000) / 100) * 100;
-  this.a320App = { rwy: W, leg: "entry", side: o.across >= 0 ? 1 : -1, altFt, touch: null };
+  this.a320App = { rwy: W, leg: "entry", side: o.across >= 0 ? 1 : -1, altFt, safe: safeProfile(W), touch: null };
   return tf("ILS approach: {0}, {1} km", `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`, Math.round(gcDist(g, W) / 1000));
 }
 
@@ -242,6 +266,13 @@ function a320AppStep(c: CameraController, F: Fmgc, i: FmgcIn, onWheels: boolean)
     return;
   }
   if (/^(LOC|LAND|FLARE|ROLL)/.test(F.lat)) A.leg = "final";
+  const onSlope = /^(G\/S|LAND|FLARE|ROLL)/.test(F.vert);
+  // (on the localizer without the glideslope near the runway — high over it, never under the beam —: round again)
+  if (A.leg === "final" && !onSlope && o.along > -4000) {
+    A.leg = "entry";
+    A.side = o.across >= 0 ? 1 : -1;
+    if (F.apprArm) F.apprToggle();
+  }
   if (!F.athr) F.athrToggle();
   if (!F.ap) F.ap1Toggle(i);
   if (A.leg !== "final") {
@@ -267,8 +298,21 @@ function a320AppStep(c: CameraController, F: Fmgc, i: FmgcIn, onWheels: boolean)
     if (F.lat !== "HDG") F.hdgPull(i);
     F.hdg = Math.round(wrap360(hdg)) || 360;
     if (!F.apprArm) F.apprToggle();
-    F.alt = A.altFt;
-    if (!/^(OP|EXP|G\/S|LAND|FLARE|ALT\*|CLB|DES)/.test(F.vert) && Math.abs(i.alt - A.altFt) > 250) F.altPull(i);
+  }
+  // (the altitude: the entry's, high enough over the whole box; from the intercept on, stepped down under the glideslope —
+  // 60 m below the beam where the craft is, its capture from below as the FMGC flies it —, never under the segment's safe
+  // height (the relief 2 km round and ahead, 150 m over it). The entry's alone left the A320 280 m over the beam at the
+  // localizer over Toulon-Hyères' hills: no glideslope, the runway overflown — the flight lab, 5 Nov 2026)
+  if (!onSlope) {
+    let ft = A.altFt;
+    if (A.leg !== "entry") {
+      const d = Math.max(-o.along, 0);
+      const below = W.elev + (d + ILS.gpi) * Math.tan((ILS.glide * Math.PI) / 180) - 60;
+      ft = Math.min(A.altFt, Math.max(below, safeAt(A, d)) * FT);
+    }
+    ft = Math.ceil(ft / 100) * 100;
+    F.alt = ft;
+    if (!/^(OP|EXP|G\/S|LAND|FLARE|ALT\*|CLB|DES)/.test(F.vert) && Math.abs(i.alt - ft) > 250) F.altPull(i);
   }
   // (the configuration, a step at a time as the speed allows: CONF 1 within 35 km, 2 on the intercept, the gear on the
   // glideslope or within 12 km, 3 with the gear, FULL inside the final fix)

@@ -15,7 +15,7 @@ afterEach(resetFlights);
 
 const D = Math.PI / 180;
 
-function approachFrom(off: number) {
+function approachFrom(off: number, entryFt?: number) {
   const R: IlsRunway = { name: "TEST", icao: "TEST", lat: 40, lon: -35, hdg: 90, elev: 0, len: 3000 };
   const back = (R.hdg + 180 + off + 360) % 360;
   const p = fromRunway(R, 0, 0);
@@ -36,6 +36,8 @@ function approachFrom(off: number) {
   c.pilot.throttle = 0.62;
   fly(6);
   const said = c.a320Approach(R);
+  // (an entry made high by the relief round the field — Toulon-Hyères' hills: 3 300 ft —: stepped down under the beam after it)
+  if (entryFt !== undefined) c.a320App!.altFt = entryFt;
   const seen: string[] = [];
   let k = 0;
   fly(1500, () => {
@@ -55,6 +57,14 @@ function approachFrom(off: number) {
 }
 
 describe("A320 ILS approach (a320Approach)", () => {
+  test("an entry at 3 300 ft (the relief's): stepped down under the glideslope, captured from below, landed", () => {
+    const { c, seen } = approachFrom(50, 3300);
+    console.log(`  modes: ${seen.join(" → ")}`);
+    console.log(`  ${JSON.stringify(c.ilsLast)}`);
+    expect(seen.some((m) => m.endsWith("/G/S"))).toBeTrue();
+    expect(c.ilsLast?.rwy).toBe("TEST 09");
+    expect(Math.abs(c.ilsLast!.touch!.across)).toBeLessThan(10);
+  }, 600_000);
   for (const off of [50, -50]) {
     test(`from 28 km, ${off}° off the axis: vectored, captured, landed on that runway`, () => {
       const { c, said, seen } = approachFrom(off);

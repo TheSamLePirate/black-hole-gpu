@@ -2802,7 +2802,9 @@ function runwayBuild(this: CameraController): { v: RunwayView; geo: RunwayGeo } 
   let site: Site | null = R?.site?.runway ? R.site : null;
   const agl = this.aglNow(cam, Math.hypot(...x) - fr.env.R);
   // (the F-35's ILS flown: its runway — a world one's too, PLAN-RADAR-AAA RD13 —, its end landed, its length)
-  const I = this.ilsRun?.rwy;
+  // (the A320's own approach the same — controller/a320ap.ts: its report on 05 after a landing on 13, the runways crossing at
+  // Toulon-Hyères, graded D on the other's axis; the flight lab, 5 Nov 2026)
+  const I = this.ilsRun?.rwy ?? this.a320App?.rwy;
   if (!site && I && fr.body === "earth")
     site = { body: "earth", name: I.name, lat: I.lat, lon: I.lon, runway: true, rwy: I.hdg, icao: I.icao, elev: I.elev, len: I.len };
   if (!site) {
@@ -2817,11 +2819,19 @@ function runwayBuild(this: CameraController): { v: RunwayView; geo: RunwayGeo } 
             .map((r) => ({ ...r.site, len: r.len }))
         : []),
     ];
+    // (a craft moving along a runway: the runways across its track left aside — crossing runways' thresholds are near each
+    // other, the nearest one was often the other runway's: graded on its axis)
+    const gNow = this.geoNow();
+    const trk = gNow && gNow.gs > 20 ? (gNow.track * 180) / Math.PI : null;
     for (const st of cands) {
       if (st.body !== fr.body || !st.runway) continue;
       const T = fr.place(st);
       const ang = Math.acos(clamp(dot3(unitV(T), unitV(x)), -1, 1));
-      const d = ang * Math.hypot(...T);
+      let d = ang * Math.hypot(...T);
+      if (trk !== null && st.rwy !== undefined) {
+        const a = Math.abs((((trk - st.rwy) % 180) + 180) % 180);
+        if (Math.min(a, 180 - a) > 30) d += 50e3;
+      }
       if (d < best) (best = d), (site = st);
     }
     // (landed into the wind: its far end when the wind blows down it — W4)
