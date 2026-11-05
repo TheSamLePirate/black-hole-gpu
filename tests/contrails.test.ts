@@ -1,5 +1,17 @@
 import { test, expect } from "bun:test";
-import { Contrails, contrailThreshold, engineTrail, MAX_SEGMENTS, SEG_FLOATS, tipTrail, trailLook, type V3 } from "../src/contrails";
+import {
+  Contrails,
+  contrailPersistence as persistOf,
+  contrailThreshold,
+  engineTrail,
+  MAX_SEGMENTS,
+  PERSISTENT_LIFE,
+  SEG_FLOATS,
+  tipTrail,
+  trailLife,
+  trailLook,
+  type V3,
+} from "../src/contrails";
 import { airAt } from "../src/aero";
 import { solarBody } from "../src/system/solar";
 
@@ -115,4 +127,22 @@ test("the replay's trails: played again from a state kept on the way, the same a
   third.restore(snap!);
   for (const t of steps) third.step(t, "earth", carry, srcAt(t));
   expect(view(third)).toEqual(view(live));
+});
+
+// Q8 C8: the engines' trails persist where the high cirrus says the air is supersaturated over ice
+
+test("persistent trails: none in a clear sky, whole under the model's high cirrus, the life and the spread with it", () => {
+  expect(persistOf({ layers: [] })).toBe(0);
+  expect(persistOf({ layers: [{ base: 1200, cover: 0.8 }] })).toBe(0);
+  expect(persistOf({ layers: [{ base: 8000, cover: 0.7 }] })).toBe(1);
+  expect(persistOf({ model: { high: 0.05 } })).toBe(0);
+  expect(persistOf({ model: { high: 0.9 } })).toBe(1);
+  expect(trailLife(0, 0)).toBe(150);
+  expect(trailLife(0, 1)).toBe(PERSISTENT_LIFE);
+  expect(trailLife(1, 1)).toBe(3.5);
+  // (at 10 min: gone in dry air, still there and wider when persistent)
+  expect(trailLook(0, 600, 1, 0).tau).toBe(0);
+  const p = trailLook(0, 600, 1, 1);
+  expect(p.tau).toBeGreaterThan(0);
+  expect(p.w).toBeGreaterThan(250);
 });

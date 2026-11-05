@@ -12,7 +12,7 @@ import { MISSED_HOLD, MISSED_SIDE, MISSED_TOP_H, MISSED_TURN_H, RUNWAY_DH, unsta
 import type { SiteTrack } from "../fc/land-ops";
 import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 } from "../fc/kepler";
 import type { Burn, FcContext, OpResult } from "../fc/ops";
-import { engineTrail, sheetTrail, tipTrail, type ContrailSource } from "../contrails";
+import { contrailPersistence, engineTrail, sheetTrail, tipTrail, type ContrailSource } from "../contrails";
 import { A320Fx, humidityOf } from "../a320/effects";
 import { MISSILES } from "../game/combat";
 import {
@@ -1548,6 +1548,7 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
         src.push({ key: `x${c.key}${c.t.toFixed(1)}`, p: at([c.p[0], c.p[1], c.p[2] + Math.min(age * 7, 260)]), kind: 4, str: 1 });
     }
   }
+  this.contrails.persist = fr.body === "earth" ? contrailPersistence(this.weatherNow) : 0;
   this.contrails.step(fr.now, fr.body, fr.env.carry, src);
   // (the step's inputs kept for the replay's tape — it plays the trails again from them)
   this.contrailStep = { now: fr.now, body: fr.body, carry: fr.env.carry, src, x: [...x] as Vec3, ax };

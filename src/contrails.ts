@@ -83,9 +83,30 @@ export const MAX_SEGMENTS = 4096;
  *  the trail (mod 10 km); the kind. */
 export const SEG_FLOATS = 16;
 
-/** A trail point's width [m] and optical depth across its middle, at an age [s]. */
-export function trailLook(kind: TrailKind, age: number, str: number): { w: number; tau: number } {
-  const K = KIND[kind];
+/** (Q8 C8) An engine trail's life [s]: 150 s in dry air; in air supersaturated over ice — the high cirrus a sign of it — the
+ *  trail persists and spreads into cirrus, here up to half an hour (in the sky, hours) */
+export const PERSISTENT_LIFE = 1800;
+export function trailLife(kind: TrailKind, persist = 0): number {
+  return kind === 0 ? KIND[0].life + (PERSISTENT_LIFE - KIND[0].life) * Math.min(Math.max(persist, 0), 1) : KIND[kind].life;
+}
+/** (Q8 C8) How persistent the engines' trails are, 0…1, from the weather there: the model's high clouds' cover, else the cover
+ *  of the layers based over 6 000 m (the cirrus) — the ice-supersaturated air the models do not give, judged by the cirrus it
+ *  breeds: plausible, never measured */
+export function contrailPersistence(
+  w: { layers?: { base: number; cover: number }[]; model?: { high?: number } } | null | undefined,
+): number {
+  const s = (x: number) => {
+    const t = Math.min(Math.max((x - 0.1) / 0.5, 0), 1);
+    return t * t * (3 - 2 * t);
+  };
+  if (w?.model && typeof w.model.high === "number") return s(w.model.high);
+  const high = Math.max(0, ...(w?.layers ?? []).filter((l) => l.base >= 6000).map((l) => l.cover));
+  return s(high);
+}
+
+/** A trail point's width [m] and optical depth across its middle, at an age [s]; persist: an engine trail's persistence */
+export function trailLook(kind: TrailKind, age: number, str: number, persist = 0): { w: number; tau: number } {
+  const K = { ...KIND[kind], life: trailLife(kind, persist) };
   const w = K.w0 + K.spread * Math.max(age, 0) ** 0.7;
   const form = Math.min(Math.max(age / K.form, 0), 1);
   const fade = 1 - smooth(0.55 * K.life, K.life, age);
@@ -150,6 +171,8 @@ export interface ContrailStep {
 const copyTrails = (T: Trail[]): Trail[] => T.map((tr) => ({ ...tr, pts: tr.pts.map((q) => ({ ...q, p: [...q.p] as V3 })) }));
 
 export class Contrails {
+  /** (Q8 C8) the engines' trails' persistence, 0…1 (contrailPersistence): set each step from the weather there */
+  persist = 0;
   trails: Trail[] = [];
   private tLast = NaN;
   private body = "";
@@ -232,7 +255,7 @@ export class Contrails {
     }
     for (const tr of this.trails) {
       if (tr.open && !live.has(tr.key)) tr.open = false;
-      const life = KIND[tr.kind].life;
+      const life = trailLife(tr.kind, this.persist);
       let k = 0;
       while (k < tr.pts.length && now - tr.pts[k]!.t > life) k++;
       if (k) tr.pts.splice(0, k);
@@ -257,11 +280,11 @@ export class Contrails {
     for (const tr of this.trails) {
       const P = tr.pts;
       let a = toShip(P[P.length - 1]!.p);
-      let la = trailLook(tr.kind, now - P[P.length - 1]!.t, P[P.length - 1]!.str);
+      let la = trailLook(tr.kind, now - P[P.length - 1]!.t, P[P.length - 1]!.str, this.persist);
       // (from the head back: the youngest, nearest part kept when there are too many)
       for (let i = P.length - 2; i >= 0 && n < MAX_SEGMENTS; i--) {
         const b = toShip(P[i]!.p);
-        const lb = trailLook(tr.kind, now - P[i]!.t, P[i]!.str);
+        const lb = trailLook(tr.kind, now - P[i]!.t, P[i]!.str, this.persist);
         if (la.tau > 1e-3 || lb.tau > 1e-3) {
           out.set(
             [
