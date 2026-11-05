@@ -7968,6 +7968,7 @@ fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterTurbine(px: vec2f) -> bool { return false; }
+fn terrainRasterLamp(px: vec2f) -> bool { return false; }
 fn terrainRasterPylon(px: vec2f) -> bool { return false; }
 fn terrainRasterBridge(px: vec2f) -> bool { return false; }
 fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
@@ -15083,6 +15084,12 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
   G += mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp) * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
   G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark);
+  // (Q8 D1: a wind turbine's obstruction light — red, 40 flashes a minute, every farm in step — at night)
+  if (terrainRasterLamp(centre)) {
+    let on = select(0.0, 1.0, fract(P.runways[17].x / 1.5) < 0.35);
+    // (a 2 kcd-class light, its block widened to a pixel and a half: its glow ~1 % of a runway lamp's per pixel: red, not burnt white)
+    G += vec3f(1.0, 0.06, 0.03) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark * on;
+  }
   // (the water — the sea, the lakes and rivers —: found here — its cover sharp, the polygon's edge alone softened; the sea's
   // mask the relief map's over the sea's level, OSM's by the coasts —, drawn by shadeWater: this pixel's surface under it left
   // to it in accum, its kind and cover in moments.x)

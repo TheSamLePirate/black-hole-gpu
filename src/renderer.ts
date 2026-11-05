@@ -4297,6 +4297,8 @@ export class Renderer {
         17 * 4,
       );
     }
+    // (the flashing lights' clock, runways near or not: the wind turbines' and pylons' obstruction lights too — Q8 D1)
+    if (!near.length) out[17 * 4] = (performance.now() / 1000) % 600;
     return out;
   }
 

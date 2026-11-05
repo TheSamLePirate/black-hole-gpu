@@ -10,6 +10,7 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // another a second later (the blades turned).
 // WT_HDG, WT_ALT, WT_PITCH: the heading [°], the height over the ground [m], the look's pitch [°] (90, 150, −3) — the pylons' view: WT_SITE=48.2790,1.7200
 // WT_HDG=315 WT_ALT=60, a 225 kV line ~580 m ahead.
+// WT_ISO: the time (the obstruction lights: "2026-07-10T22:00:00Z", red flashes 40 a minute on the nacelles).
 // WT_OUT: the shots (remote-results/wind-turbines).
 // Duration: ~3 min on this Mac.
 // Done when: the turbines counted (some), both shots taken, no GPU error.
@@ -30,7 +31,7 @@ test.skipIf(!E2E)(
         `(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${EARTH_SETTINGS}, { lookProfile: "neutral", f35Invulnerable: true, motionBlur: 0, dof: false, earthPipeline: "raster", weather: "fair" }); __bh.game.set("earthClouds", 0); return 1; })()`,
       );
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
-      const iso = "2026-07-10T13:00:00Z";
+      const iso = process.env.WT_ISO ?? "2026-07-10T13:00:00Z";
       await app.js(
         `(() => { __bh.game.setDate("${iso}"); __bh.game.flyAt(${LAT}, ${LON}, ${ALT}, ${HDG}, 0); __bh.settings.shipMount = "cockpit"; document.body.classList.add("hide-ui"); return 1; })()`,
       );

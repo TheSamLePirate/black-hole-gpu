@@ -60,6 +60,8 @@ fn terrainRasterMesh(px: vec2f) -> bool { let c = terrainRasterCode(px); return 
 fn terrainRasterPylon(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.pylon}.0; }
 // A wind turbine's triangles at this pixel (Q8 D1 — system/turbines.ts): white, matte, no windows.
 fn terrainRasterTurbine(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.turbine}.0; }
+// A wind turbine's obstruction light at this pixel (Q8 D1 — its g 3, scenery-raster.ts meshVs): red at night, flashing.
+fn terrainRasterLamp(px: vec2f) -> bool { let t = textureLoad(terrainDist, vec2i(floor(px)), 0); return floor(t.a / ${RASTER_CODE_SCALE}.0) == ${RASTER_CODE.turbine}.0 && t.g > 2.5; }
 // A bridge's part's own triangles at this pixel (system/scenery-raster.ts meshFs): the material's, no windows.
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.bridgeMesh}.0; }
 // How many levels coarser than the reference patch the ground here was drawn from (0 the patch — and what stands on it —, 1 its

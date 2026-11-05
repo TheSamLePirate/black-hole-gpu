@@ -515,7 +515,7 @@ fn meshVertex(vi: u32) -> vec3f {
   if (tri >= u32(scenery[3].w)) {
     let tg = bitcast<u32>(scenery[(t - vi + u32(scenery[2].w) * 3u + tri) / 4u][(t - vi + u32(scenery[2].w) * 3u + tri) % 4u]);
     let hi = tg & 0xffff0000u;
-    if (hi == 0xfffe0000u || hi == 0xfffd0000u) {
+    if (hi == 0xfffe0000u || hi == 0xfffd0000u || hi == 0xfffa0000u) {
       let r = u32(scenery[3].z) + u32(scenery[2].w) + 1u + 3u * (tg & 0xffffu);
       if (hi == 0xfffe0000u) {
         let h = scenery[r];
@@ -556,7 +556,7 @@ fn meshLeaf(tri: u32) -> f32 {
   // (bridge: 0 a building's triangle, 1 a bridge's, 2 a wind turbine's — Q8 D1, packScenery's TURBINE_TAG)
   let past = vi / 3u >= u32(scenery[3].w);
   let tg = select(0u, meshTag(vi / 3u), past);
-  o.bridge = select(0.0, select(1.0, 2.0, tg == 0xffffffffu || (tg & 0xffff0000u) == 0xfffe0000u || (tg & 0xffff0000u) == 0xfffd0000u), past);
+  o.bridge = select(0.0, select(1.0, 2.0, tg == 0xffffffffu || (tg & 0xffff0000u) == 0xfffe0000u || (tg & 0xffff0000u) == 0xfffd0000u || (tg & 0xffff0000u) == 0xfffa0000u), past);
   o.leaf = meshLeaf(vi / 3u);
   let wp = meshVertex(vi);
   // (Q8 D1: a pylon — 3 —, its point in its own axes for meshFs's lattice: along its line, across, up from its foot; w its
@@ -571,6 +571,15 @@ fn meshLeaf(tri: u32) -> f32 {
     o.pyl = vec4f(d.x * cos(a) + d.y * sin(a), -d.x * sin(a) + d.y * cos(a), wp.z - f.z, f.w);
   }
   var v = view(wp);
+  // (Q8 D1: a turbine's obstruction light — its leaf 3, shadeLite's lamp —: widened about its centre to 1.5 pixels at least)
+  if ((tg & 0xffff0000u) == 0xfffa0000u) {
+    o.leaf = 3.0;
+    let r = u32(scenery[3].z) + u32(scenery[2].w) + 1u + 3u * (tg & 0xffffu);
+    let c = vec3f(scenery[r + 2u].xy, scenery[r + 2u].z);
+    let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
+    let k = max(1.0, 1.5 * px / 0.6);
+    v = view(c + (wp - c) * k);
+  }
   // (Q8 D1: a conductor — 4 —: its pair of vertices opened along the frame's up to a pixel at least — the even one down —, the
   // share of that its wire covers in pyl.x: meshFs keeps that share of its pixels, a fresh draw each frame — its seed the frame's
   // number (sc.misc.x — pyl.y), new each frame even frozen: the history's mean the wire's true faintness)

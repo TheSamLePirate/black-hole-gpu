@@ -99,11 +99,16 @@ export function turbineMesh(x: number, y: number, z0: number, t: Turbine, facing
   const b0 = ring(r0, -1),
     b1 = ring(r1, top);
   for (let i = 0; i < n; i++) quad(b0[i]!, b0[(i + 1) % n]!, b1[(i + 1) % n]!, b1[i]!);
-  // (the head — nacelle, hub, blades — from here: it turns about the tower's axis to face the wind, scenery-raster.ts meshVertex)
-  const headFrom = triangles.length / 3;
   // nacelle: ~11 % of the rotor's diameter long, mostly behind the tower's axis; 2 m either side of the hub
   const L = Math.max(6, 0.11 * t.rotor),
     w = Math.max(1.6, 0.017 * t.rotor);
+  // (the obstruction light on the nacelle's roof, over the tower's axis: a 60 cm block — scenery-raster.ts meshVs widens it to a
+  // few pixels, shadeLite lights it red at night, flashing)
+  const lampFrom = triangles.length / 3,
+    lampZ = H + w + 0.3;
+  box((i) => [i & 1 ? 0.3 : -0.3, i & 2 ? 0.3 : -0.3, lampZ + (i & 4 ? 0.3 : -0.3)]);
+  // (the head — nacelle, hub, blades — from here: it turns about the tower's axis to face the wind, scenery-raster.ts meshVertex)
+  const headFrom = triangles.length / 3;
   const n0 = -0.7 * L,
     n1 = 0.3 * L;
   box((i) => [i & 1 ? n1 : n0, i & 2 ? w : -w, H + (i & 4 ? w : -w)]);
@@ -139,6 +144,9 @@ export function turbineMesh(x: number, y: number, z0: number, t: Turbine, facing
     blades: triangles.length / 3 - bladesFrom,
     /** the head's triangles (nacelle and hub), before the blades */
     head: bladesFrom - headFrom,
+    /** the obstruction light's triangles (before the head) and its centre's height over the foot [m] */
+    lamp: headFrom - lampFrom,
+    lampZ: z0 + lampZ,
     /** the tower's axis on the ground (x, y) */
     tower: [x, y] as [number, number],
     hub,

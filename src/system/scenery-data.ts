@@ -275,6 +275,8 @@ export const TURBINE_TAG = 0xffffffff;
 export const TURBINE_BLADE = 0xfffe0000;
 /** (Q8 D1) a turbine head's triangle (nacelle, hub): this | its index — turned to the wind about the tower's axis */
 export const TURBINE_HEAD = 0xfffd0000;
+/** (Q8 D1) a turbine's obstruction light's triangle: this | its index — turned with the head, widened to a few pixels, lit at night */
+export const TURBINE_LAMP = 0xfffa0000;
 /** (Q8 D1) a pylon's triangle: this | its index (its entry in the pylons' table) — scenery-raster.ts meshFs: RASTER_CODE.pylon */
 export const PYLON_TAG = 0xfffc0000;
 /** (Q8 D1) a conductor's ribbon triangle — scenery-raster.ts meshVs widens it to a pixel, meshFs keeps its coverage's share */
@@ -289,12 +291,15 @@ export function packScenery(
   decals?: Decals,
   /** (Q8 D1) the wind turbines' triangles (system/turbines.ts), after the bridges', tagged TURBINE_TAG — their blades (the last
    *  `blades` triangles) TURBINE_BLADE | its index —, then, after a header vec4, a table of three vec4 a turbine after the tags: (hub, turn rate
-   *  [rad/s]), (axis, phase [rad]), (the tower's axis x, y) */
+   *  [rad/s]), (axis, phase [rad]), (the tower's axis x, y, its light's
+   *  height z) */
   turbines: {
     positions: number[];
     triangles: number[];
     blades?: number;
     head?: number;
+    lamp?: number;
+    lampZ?: number;
     tower?: [number, number];
     hub?: [number, number, number];
     axis?: [number, number, number];
@@ -412,12 +417,14 @@ export function packScenery(
       v += m.positions.length / 3;
       const n = m.triangles.length / 3,
         b = Math.min(m.blades ?? 0, n),
-        h = Math.min(m.head ?? 0, n - b);
-      u.fill(TURBINE_TAG, tag, (tag += n - b - h));
+        h = Math.min(m.head ?? 0, n - b),
+        l = Math.min(m.lamp ?? 0, n - b - h);
+      u.fill(TURBINE_TAG, tag, (tag += n - b - h - l));
+      u.fill((TURBINE_LAMP | i) >>> 0, tag, (tag += l));
       u.fill((TURBINE_HEAD | i) >>> 0, tag, (tag += h));
       u.fill((TURBINE_BLADE | i) >>> 0, tag, (tag += b));
       const at = (triangleOffset + triangleCount + 1 + 3 * i) * 4;
-      f.set([...(m.hub ?? [0, 0, 0]), m.omega ?? 0, ...(m.axis ?? [1, 0, 0]), m.phase ?? 0, ...(m.tower ?? [0, 0]), 0, 0], at);
+      f.set([...(m.hub ?? [0, 0, 0]), m.omega ?? 0, ...(m.axis ?? [1, 0, 0]), m.phase ?? 0, ...(m.tower ?? [0, 0]), m.lampZ ?? 0, 0], at);
     });
     pylons.forEach((m, i) => {
       f.set(m.positions, meshOffset * 4 + v * 3);
