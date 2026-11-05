@@ -70,6 +70,11 @@ dil = np.asarray(Image.fromarray((hard * 255).astype(np.uint8)).filter(ImageFilt
 ero = ~np.asarray(Image.fromarray(((~hard) * 255).astype(np.uint8)).filter(ImageFilter.MaxFilter(5)), dtype=bool)
 ring_sun = dil & ~hard & (a < 0.1) & GROUND; ring_sh = hard & ~ero & (a > 0.9) & GROUND
 k = np.clip(np.array([np.median(lin[..., c][ring_sun]) / max(np.median(lin[..., c][ring_sh]), 1e-4) for c in range(3)]), 2, 10)
+# (held out: k from the left half's pairs, tried on the right half's — the relit shadow ring over the sunlit ring, per colour)
+LEFT = np.zeros((H, W), bool); LEFT[:, : W // 2] = True
+kL = np.clip(np.array([np.median(lin[..., c][ring_sun & LEFT]) / max(np.median(lin[..., c][ring_sh & LEFT]), 1e-4) for c in range(3)]), 2, 10)
+held = [float(np.median(lin[..., c][ring_sh & ~LEFT]) * kL[c] / np.median(lin[..., c][ring_sun & ~LEFT])) for c in range(3)]
+heldPre = [float(np.median(lin[..., c][ring_sh & ~LEFT]) / np.median(lin[..., c][ring_sun & ~LEFT])) for c in range(3)]
 relit = lin * (1 + (k - 1) * alpha[..., None])
 Lr = 0.2126 * relit[..., 0] + 0.7152 * relit[..., 1] + 0.0722 * relit[..., 2]
 hp = Lr - box(Lr, 2)
@@ -81,7 +86,7 @@ dev = band & (np.abs(Lr - Lsun) > 0.25 * Lsun) & (np.abs(Lr - Lsh) > 0.25 * Lsh)
 roofs_touched = float((alpha[FP] > 0.1).mean()) if FP.any() else 0.0
 r = dict(sun=dict(az=az, el=el, iou=round(float(iou), 3)), shadow_share=round(float(hard.mean()), 3), k=[round(float(x), 2) for x in k],
          before=round(float(np.median(L[alpha > 0.9]) / np.median(L[(alpha < 0.05) & GROUND])), 3), after=round(float(Lsh / Lsun), 3),
-         noise_ratio=round(noise, 2), halo_m=round(float(dev.sum() / max(edges, 1)) * mpp, 2), roofs_touched=round(roofs_touched, 3), crowns_touched=round(float((alpha[MNH > 2] > 0.1).mean()), 3))
+         noise_ratio=round(noise, 2), halo_m=round(float(dev.sum() / max(edges, 1)) * mpp, 2), roofs_touched=round(roofs_touched, 3), crowns_touched=round(float((alpha[MNH > 2] > 0.1).mean()), 3), k_left=[round(float(x), 2) for x in kL], held_out_before=[round(x, 3) for x in heldPre], held_out_after=[round(x, 3) for x in held], pairs=[int((ring_sun & ~LEFT).sum()), int((ring_sh & ~LEFT).sum())])
 print(json.dumps(r))
 res = np.clip(relit, 0, 1) ** (1 / 2.2)
 Image.fromarray((res * 255).astype(np.uint8)).save(f"{out}/relit3.png")
