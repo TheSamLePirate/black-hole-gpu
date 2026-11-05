@@ -620,3 +620,17 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
     la teinte de la mer en oblique reste plus rouge que celle du direct, ce qui relève du rendu de la mer, pas de la caméra.
 
 ![ISS3 : NASA à la vraie position, jeu profilé (nuages du jeu coupés) et direct, 5 nov. 11:03 UTC (domaine public ; kerr-mini)](Q6/iss3-nasa-vraie-position.jpg)
+- **Le coût, tranché (même jour)** : deux séries identiques sur kerr-mini (11:02 UTC, météo normale, chaleur nominale, GPU à
+  1 276 MHz sur 1 278) :
+
+  | | série 1 | série 2 |
+  |---|---:|---:|
+  | autour de l'ISS | 21,0 ms | 23,0 ms |
+  | vue Sen | 21,3 ms | 21,6 ms |
+  | vue NASA | 21,4 ms | 22,4 ms |
+
+  **Les vues ISS ne coûtent rien de plus** que la vue autour de la station. Le +11 ms de la mesure de nuit tenait à la scène ou
+  au bruit.
+- **Reste d'ISS** :
+  - la caméra nadir de Sen : il faut une capture pendant que Sen la diffuse (vers 05:00 et 06:35 UTC la veille) ;
+  - la caméra d'amarrage : aucune image d'elle dans la capture dense.
