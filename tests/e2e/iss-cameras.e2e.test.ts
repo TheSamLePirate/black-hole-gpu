@@ -8,6 +8,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // camera's mount on the station's LVLH axes, looking along its line of sight, its field across as the registry's; TARS's tool
 // takes the same action (issCamera); "Back to the view before" gives the view held before back, the ISS camera off. The scene's
 // clock is not moved by any of it.
+// ISS_OMM: a file of the station's elements (CelesTrak's GP JSON object) for ISS_AT; else fetched from CelesTrak.
+// ISS_FLOW=1: each camera shot again ISS_FLOW_S (10) s later — the ground's flow in the view (ISS5).
 // ISS_JS: a statement run once the scene is set (an A/B's switch: __bh.renderer.msLutOn = false, aerosolOverride = 0.001).
 // ISS_TUNE: the tracer's tuning (JSON, __bh.renderer.tune) for an A/B of the image's parts.
 // ISS_AT: an instant (ISO, e.g. "2026-11-05T11:02:00Z" — the dense capture's) the scene is set at, the image's profile neutral:
@@ -56,6 +58,17 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
       await app.waitFor("__bh.renderer.completedFrames > 60", 120_000);
       // (the game's own clock at that instant: the Sun's light as it was — __bh.setDate fixes the real-time scenes' "now" alone)
       console.log(`  game clock: ${await app.js<string>(`__bh.game.setDate("${AT}")`)}`);
+      // (the station's elements of the day — CelesTrak's GP, fetched here: the page's network is closed, its bundled ones of
+      // 1 October minutes along the orbit off; ISS_OMM a file of them instead)
+      try {
+        const omm = process.env.ISS_OMM
+          ? JSON.parse(await Bun.file(process.env.ISS_OMM).text())
+          : (await (await fetch("https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=JSON")).json())[0];
+        await app.js(`__bh.iss.setElements(${JSON.stringify(omm)})`);
+      } catch (e) {
+        console.warn(`  the ISS's elements not fetched (${String(e).slice(0, 80)}): the bundled ones`);
+      }
+      console.log(`  ISS elements: epoch ${await app.js<string>(`new Date(__bh.iss.elements().epochMs).toISOString()`)}`);
       // (ISS_TUNE: the tracer's tuning for an A/B of the image's parts — e.g. {"TUNE_GSKIP":512} —, respecialised)
       // (ISS_JS: a statement run then — an A/B's switch, e.g. "__bh.renderer.msLutOn = false")
       if (process.env.ISS_JS) {
@@ -90,6 +103,36 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
       `  Sen horizon: eye ${hz.eyeM.toFixed(2)} m off its mount, look ${hz.lookDeg.toFixed(2)}° off, up ${hz.upDeg.toFixed(2)}° off, ${hz.fovAcross.toFixed(1)}° across (${hz.issView})`,
     );
     await app.shot(`${OUT}/sen-horizon.png`);
+    // (ISS5: the Sun over the station's limb in the game at the shot — the station on the Earth's centre, the Sun's direction —
+    // and the game's date: against SGP4 and the Sun reckoned outside)
+    console.log(
+      `  the Sun over the limb at the station: ${await app.js<string>(`(() => {
+      const vc = __bh.camera.viewController(), t = Number.isFinite(vc.frameEnd) ? vc.frameEnd : vc.nowTime();
+      const st = __bh.iss.track.peek(t), E = __bh.ourState("earth", t).pos, S = __bh.ourState("sun", t).pos;
+      const r = [0, 1, 2].map((k) => st.X[k] - E[k]), s = [0, 1, 2].map((k) => S[k] - E[k]);
+      const rl = Math.hypot(...r), sl = Math.hypot(...s);
+      const el = Math.asin((r[0] * s[0] + r[1] * s[1] + r[2] * s[2]) / (rl * sl)) * 180 / Math.PI;
+      const dip = Math.acos(6371e3 / (rl * 1.476625e11)) * 180 / Math.PI;
+      // (setting or rising: the Sun's way against the station's motion — v·s < 0 heading away from it, into the night)
+      const v = [0, 1, 2].map((k) => st.V[k] - __bh.ourState("earth", t).vel[k]);
+      const vs = (v[0] * s[0] + v[1] * s[1] + v[2] * s[2]) / (Math.hypot(...v) * sl);
+      // (and the station's axes: x ahead against its velocity, the Sen horizon camera's line of sight against the Sun)
+      const [ax] = __bh.iss.axes(st.X, st.V, t);
+      const xv = (ax[0] * v[0] + ax[1] * v[1] + ax[2] * v[2]) / Math.hypot(...v);
+      const fr = __bh.iss.cameraFrame("sen-horizon"), [x, y, z] = __bh.iss.axes(st.X, st.V, t);
+      const lk = [0, 1, 2].map((k) => x[k] * fr.look[0] + y[k] * fr.look[1] + z[k] * fr.look[2]);
+      const ls = (lk[0] * s[0] + lk[1] * s[1] + lk[2] * s[2]) / sl;
+      return (el + dip).toFixed(2) + "° — v·sun " + vs.toFixed(3) + " — x·v " + xv.toFixed(3) + " — look·sun " + ls.toFixed(3) + " — the station " + ((rl * 1.476625e11 - 6371e3) / 1e3).toFixed(1) + " km up — " + __bh.game.date();
+    })()`)}`,
+    );
+    // (ISS_FLOW=1 — ISS5's motion: a second shot ISS_FLOW_S s later (the scene at real time), the ground's flow between them —
+    // scripts/iss-response.py's companion, the dense capture's 10 s frames —; the clock read on both)
+    if (process.env.ISS_FLOW) {
+      const w0 = performance.now();
+      await Bun.sleep(Number(process.env.ISS_FLOW_S ?? 10) * 1000);
+      await app.shot(`${OUT}/sen-horizon-later.png`);
+      console.log(`  sen-horizon: the second shot ${((performance.now() - w0) / 1000).toFixed(1)} s later (the scene at real time)`);
+    }
     expect(hz.issView).toBe("sen-horizon");
     expect(hz.eyeM).toBeLessThan(1);
     expect(hz.lookDeg).toBeLessThan(1);
@@ -102,6 +145,14 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
       `  NASA: eye ${ns.eyeM.toFixed(2)} m off its mount, look ${ns.lookDeg.toFixed(2)}° off, up ${ns.upDeg.toFixed(2)}° off, ${ns.fovAcross.toFixed(1)}° across (${ns.issView})`,
     );
     await app.shot(`${OUT}/nasa.png`);
+    // (ISS_FLOW=1 — ISS5's motion: a second shot ISS_FLOW_S s later (the scene at real time), the ground's flow between them —
+    // scripts/iss-response.py's companion, the dense capture's 10 s frames —; the clock read on both)
+    if (process.env.ISS_FLOW) {
+      const w0 = performance.now();
+      await Bun.sleep(Number(process.env.ISS_FLOW_S ?? 10) * 1000);
+      await app.shot(`${OUT}/nasa-later.png`);
+      console.log(`  nasa: the second shot ${((performance.now() - w0) / 1000).toFixed(1)} s later (the scene at real time)`);
+    }
     expect(ns.issView).toBe("nasa-harmony");
     expect(ns.eyeM).toBeLessThan(1);
     expect(ns.lookDeg).toBeLessThan(1);

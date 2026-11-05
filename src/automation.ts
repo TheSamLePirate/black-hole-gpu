@@ -42,7 +42,7 @@ import type { TarsMemory } from "./ai/memory";
 import type { Tool } from "./ai/agent";
 import { VideoWriter } from "./video";
 import { CONSTELLATIONS, NAMED_STARS, type ChartFrame } from "./skychart";
-import { issAxes, issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
+import { issAxes, issElements, issOrbit, issStart, issTrack, setIssElements, station } from "./system/iss";
 import { rangerHull, stationHulls } from "./system/collide";
 import { fleet } from "./fleet";
 import { ourState, referenceBody } from "./system/our-side";
@@ -383,6 +383,8 @@ export function installBh(c: BhContext) {
         axes: issAxes,
         /** (Q6-ISS ISS4) a live-stream camera's native framing on those axes (mount [m], look, up, right, fovDeg) */
         cameraFrame: issCameraFrame,
+        /** (Q6-ISS ISS5) elements given (CelesTrak's GP JSON object) — newer than those in use —: their epoch in use [ms] */
+        setElements: setIssElements,
       },
       /** the free camera to a target (the camera panel's Go to) */
       goTo,

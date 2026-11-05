@@ -1874,6 +1874,13 @@ The station's LVLH axes at a state (home frame: `X`, `V` from `track.peek(t)`) a
 nadir —, unit vectors (`issAxes` in `src/system/iss.ts`): the frame of its parts and of its live-stream cameras. *Used in:*
 `tests/e2e/iss-cameras.e2e.test.ts`.
 
+### `__bh.iss.setElements(omm)` → number
+
+Q6-ISS ISS5: the station's elements given — CelesTrak's GP JSON object (`EPOCH`, `MEAN_MOTION`, …) — used if newer than those in
+use (`setIssElements` in `src/system/iss.ts`); returns the epoch in use [ms]. The game fetches the latest itself
+(`refreshIssElements`); a test with its network closed gets the bundled elements of 1 October 2026 — weeks off, minutes along the
+orbit —, and gives the day's this way. *Used in:* `tests/e2e/iss-cameras.e2e.test.ts` (`ISS_AT`).
+
 ### `__bh.iss.cameraFrame(id)` → `{ mount, look, up, right, fovDeg }`
 
 A live-stream camera's native framing on those axes (`issCameraFrame` in `src/system/iss-cameras.ts`): its mount [m], its line

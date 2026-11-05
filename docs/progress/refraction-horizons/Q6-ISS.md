@@ -495,3 +495,42 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   - pas de vignette, de grain ni de compression mesurés ;
   - la saturation est un réglage global.
 - **Suite** : ISS5, la comparaison en mouvement et aux transitions d'éclairage, avec les séquences de contrôle.
+
+## ISS5 — premier palier : le mouvement et le terminateur contre les directs (le 5 novembre)
+
+- **Outils** :
+  - e2e `iss-cameras` : `ISS_FLOW=1` reprend chaque vue 10 s plus tard ;
+  - `ISS_OMM` ou un téléchargement chez CelesTrak, puis `__bh.iss.setElements`, donnent les éléments orbitaux du jour. La page
+    de test n'a pas de réseau et gardait sinon les éléments embarqués du 1er octobre, vieux de 35 jours ;
+  - le journal note la hauteur du Soleil au-dessus du limbe vue de la station du jeu, son sens (coucher ou lever) et l'angle
+    entre la visée de la caméra et le Soleil.
+- **Le mouvement (kerr-mini, 11:02 UTC, profil de caméra)** : défilement du sol, appariement SIFT entre deux images à 10 s,
+  ramené à la largeur et à l'intervalle du direct.
+
+  | | jeu | direct |
+  |---|---:|---:|
+  | NASA, vers la droite [px/s sur 1 280 px] | **31,7** | **31,3** |
+  | Sen, haut de l'image (20–40 % de la hauteur), vers le haut [px/s sur 1 920 px] | 3,0 | 3,5 |
+  | Sen, milieu (40–60 %) | 6,7 | 5,5 |
+  | Sen, bas (60–85 %) | 8,6 | 9,0 |
+
+  Le défilement concorde (NASA à 1 %, Sen à 10–20 % par bande). C'est la vérification indépendante du lacet, du champ et de
+  l'attache calés en ISS2.
+- **Le terminateur (11:12 UTC)** :
+  - **éléments orbitaux** : avec ceux du 1er octobre, le jeu montrait encore le plein jour à l'instant où le direct montre le
+    coucher sur le limbe. Avec ceux du jour, la nuit au sol concorde : la vue NASA est noire des deux côtés ;
+  - **géométrie** : à 11:12:05, le Soleil est à **7,64° au-dessus du limbe** vu de la station du jeu. Un calcul indépendant
+    (SGP4 sur les éléments du jour et Soleil de la NOAA) donne environ 7,9°, et l'entrée dans l'ombre à **11:14:35**, que le
+    compte à rebours de Sen annonce à 11:14:31. Dans le jeu, la station s'éloigne du Soleil (coucher : v·soleil = −0,79), son
+    axe x est sa vitesse (x·v = 1,000), et la caméra d'horizon regarde à 46° du Soleil ;
+  - **cadrage** : le Soleil est à environ 35° au-dessus de l'axe de la caméra. Le direct le montre tout en haut, à moitié coupé ;
+    le jeu le laisse juste hors du cadre, puisque son demi-champ vertical, en sténopé, est de 31,5°. Il manque quelques degrés au
+    bord de l'image, **sans doute la distorsion en barillet du grand angle réel**, que le calage sténopé d'ISS2 ignore.
+
+![ISS5 : la vue d'horizon de Sen dans le jeu à 11:12:05 UTC — le limbe au couchant, le Soleil juste au-dessus du cadre (kerr-mini)](Q6/iss5-terminateur-jeu.jpg)
+
+- **Reste d'ISS5** :
+  - la distorsion de la caméra d'horizon (un modèle de grand angle ajusté sur le limbe en entier, bords compris) ;
+  - la nuit (villes, aurores) ;
+  - la vue nadir de Sen et la caméra d'amarrage, une fois capturées et calées ;
+  - le coût de la vue ISS sur kerr-mini.

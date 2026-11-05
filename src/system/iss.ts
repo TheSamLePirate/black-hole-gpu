@@ -58,6 +58,13 @@ function use(e: Elements) {
   propKept = sgp4({ ...e, bstar: 0 });
 }
 
+/** Elements given (CelesTrak's GP JSON, one object): used if newer than those in use — a test's or a replay's of a past
+ *  instant (Q6-ISS ISS5: the live streams compared at their own time); their epoch in use returned [ms] */
+export function setIssElements(omm: Record<string, unknown>): number {
+  use(parseOmm(omm as Parameters<typeof parseOmm>[0]));
+  return el.epochMs;
+}
+
 /** Fetches the latest elements once (cached 6 h in this browser): the station where it really is now. */
 export function refreshIssElements(): Promise<void> {
   if (fetching) return fetching;
