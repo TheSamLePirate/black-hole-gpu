@@ -437,3 +437,28 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
     rien n'est changé ici sans mesure sur ces vues-là ni décision de Sam ;
   - **à faire** : séparer le transport de l'air du sol vu de l'orbite en coupant tour à tour aérosols et diffusion multiple, puis
     comparer aux mêmes mesures sur les vues du sol (T7, références photo).
+- **Troisième essai (même jour) : la cause trouvée, et c'était la mesure.**
+  - **Ni l'air ni la mer** : sans aérosols (`aerosolOverride = 0,001`), l'océan baisse à peine (×2,00 contre ×2,10 sur Sen),
+    avec un R/G toujours à 0,75 ; sans diffusion multiple (`msLutOn = false`), il est même un peu plus clair. L'hypothèse de la
+    lumière de l'air sur le trajet est **réfutée** ;
+  - **la chaîne d'affichage de ce Mac** : son écran est HDR, et l'image y passe par `hdrMap` (`display.wgsl`). AgX, AgX punchy
+    et ACES y donnent exactement les mêmes chiffres, et seul Film a sa propre courbe HDR. Les captures PNG de ce Mac montrent
+    donc une autre réponse que celle d'un écran SDR ;
+  - **mesuré sur kerr-mini** (écran SDR, courbe AgX normale), même instant, profil Neutre :
+
+    | | NASA, direct | NASA, jeu | Sen, direct | Sen, jeu |
+    |---|---|---|---|---|
+    | océan, sRGB | (35, 64, 102) | (15, 37, 80) | (21, 53, 75) | (22, 43, 86) |
+    | océan, luminance (jeu/direct) | | ×0,40 | | ×0,79 |
+    | océan, R/G · B/G | 0,54 · 1,58 | 0,42 · 2,19 | 0,39 · 1,41 | 0,52 · 2,01 |
+    | nuages, sRGB | (180, 183, 186) | — | (236, 236, 219) | (147, 134, 133) |
+    | contraste nuage / océan | 9,4 | (presque aucun nuage) | 25,7 | 9,8 |
+
+  - **lecture corrigée** : sur un écran SDR, l'océan du jeu n'est **ni trop rouge ni gris**. Il est **un peu trop bleu**
+    (B/G 2,0–2,2 contre 1,4–1,6), l'image est **plus sombre** (océan ×0,4–0,8, nuages de Sen ×0,3) et **moins contrastée**
+    (9,8 contre 25,7). Ces écarts relèvent bien de la **réponse de la caméra** : exposition, balance des blancs, courbe. Le
+    profil par caméra d'ISS3 est donc justifié, et **aucune correction de l'air n'est à faire** ;
+  - **leçon** : les mesures de couleur se font sur un écran SDR (kerr-mini), pas sur les captures HDR de ce Mac.
+- **Suite d'ISS3** :
+  - le profil de la vue ISS : exposition, gain par canal, contraste, ajustés sur ces chiffres par caméra ;
+  - puis ISS5 : la comparaison en mouvement, aux transitions d'éclairage.

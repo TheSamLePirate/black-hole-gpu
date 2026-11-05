@@ -8,6 +8,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // camera's mount on the station's LVLH axes, looking along its line of sight, its field across as the registry's; TARS's tool
 // takes the same action (issCamera); "Back to the view before" gives the view held before back, the ISS camera off. The scene's
 // clock is not moved by any of it.
+// ISS_JS: a statement run once the scene is set (an A/B's switch: __bh.renderer.msLutOn = false, aerosolOverride = 0.001).
 // ISS_TUNE: the tracer's tuning (JSON, __bh.renderer.tune) for an A/B of the image's parts.
 // ISS_AT: an instant (ISO, e.g. "2026-11-05T11:02:00Z" — the dense capture's) the scene is set at, the image's profile neutral:
 // the shots to compare with the live streams' frames of that instant (ISS3, scripts/iss-response.py); ISS_OUT: the shots' folder.
@@ -56,6 +57,11 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
       // (the game's own clock at that instant: the Sun's light as it was — __bh.setDate fixes the real-time scenes' "now" alone)
       console.log(`  game clock: ${await app.js<string>(`__bh.game.setDate("${AT}")`)}`);
       // (ISS_TUNE: the tracer's tuning for an A/B of the image's parts — e.g. {"TUNE_GSKIP":512} —, respecialised)
+      // (ISS_JS: a statement run then — an A/B's switch, e.g. "__bh.renderer.msLutOn = false")
+      if (process.env.ISS_JS) {
+        await app.js(`(() => { ${process.env.ISS_JS}; __bh.touch(); return 1; })()`);
+        await app.settled(120_000);
+      }
       if (process.env.ISS_TUNE) {
         await app.js(`(() => { __bh.renderer.tune = ${process.env.ISS_TUNE}; __bh.touch(); return 1; })()`);
         await app.settled(120_000);
