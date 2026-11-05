@@ -2094,12 +2094,17 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     // blue — at the horizon its top rim green and blue, the blue scattered away by the air: the green flash)
     // (only near its rim, where the colours part: a turn of the direction by ε along the vertical moves the
     // disc's offset by b ε)
-    if (REFR_DELTA > 0.0 && abs(R - pd) < px + b * REFR_DELTA * 0.008 && P.near0.w > 0.5) {
+    // (R6a-ciel: the colours' departures read where the ray was bent — REFR_DR/DB, the mirage's tables in its band: a colour
+    // whose ray ends in the sea takes no share)
+    let lostR = REFR_DR > 5.0;
+    let lostB = REFR_DB > 5.0;
+    let spread = max(select(abs(REFR_DR), 0.0, lostR), select(abs(REFR_DB), 0.0, lostB));
+    if (REFR_DELTA > 0.0 && (lostR || lostB || abs(R - pd) < px + b * spread * 1.03) && P.near0.w > 0.5) {
       let up = -normalize(bodies[BV * u32(P.near1.w)].xyz - o);
       let w = up - d * dot(up, d);
-      let sh = w * (b * REFR_DELTA / max(length(w), 1e-12));
-      cov3.x = clamp((R - length(perp - sh * 0.00361)) / px + 0.5, 0.0, 1.0);
-      cov3.z = clamp((R - length(perp + sh * 0.0078)) / px + 0.5, 0.0, 1.0);
+      let sh = w * (b / max(length(w), 1e-12));
+      cov3.x = select(clamp((R - length(perp - sh * REFR_DR)) / px + 0.5, 0.0, 1.0), 0.0, lostR);
+      cov3.z = select(clamp((R - length(perp + sh * REFR_DB)) / px + 0.5, 0.0, 1.0), 0.0, lostB);
     }
     let cov = max(cov3.x, max(cov3.y, cov3.z));
     if (cov <= 0.0) { continue; }
@@ -4040,6 +4045,8 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   var veil = 1.0; // (the sky's glow hiding the stars behind it)
   var lookSky = look; // (the direction beyond the near body's air: bent by it — airBend)
   REFR_DELTA = 0.0;
+  REFR_DR = 0.0;
+  REFR_DB = 0.0;
   if (NEAR_KIND != 4u && HAS_BODIES && P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     let air = hasAir(k);
@@ -7990,8 +7997,13 @@ fn marchClear(A: vec3f, o: vec3f, e: f32, rd: vec3f, t: f32, fpK: f32) -> f32 {
   let v = o + rd * t;
   let p = A + v;
   let r = length(p);
-  return (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0) - earthHeight(p / r, max(t * fpK * EARTH_RM, 0.05)) / EARTH_RM;
+  let h = earthHeight(p / r, max(t * fpK * EARTH_RM, 0.05));
+  return (e + 2.0 * dot(A, v) + dot(v, v)) / (r + 1.0) - (h + liftAlong(t, h)) / EARTH_RM;
 }
+// (R4a, contract C0-3: the ground the camera's ray meets is the one the air lifts — the point at a distance t (the squashed
+// space's units: ×EARTH_RM ≈ metres) and h over the sea seen Λ higher: the ray's clearance taken over h + Λ. The camera's rays
+// only — earthNear's marches —, never the shadows' nor the bake's; 0 without the table — renderer.liftOn —)
+fn liftAlong(t: f32, h: f32) -> f32 { return refrLiftM(t * EARTH_RM, h); }
 // The ground's crossing from the raster patch's distance tM [m] (kM: metres per unit of t): the full relief is read at
 // two points either side of it, a few metres apart (a vertical tolerance over the ray's grazing — wider at a low angle),
 // and the crossing refined as the march's own. -3: the hint did not bracket the ground (the relief there above the
@@ -8065,7 +8077,8 @@ fn earthMarch(ro: vec3f, rd: vec3f, fpK: f32) -> f32 { return earthMarchFrom(ro,
 // the same from tStart along the ray (earthMarchHinted's grazing window: what lies before it known clear)
 fn earthMarchFrom(ro: vec3f, rd: vec3f, fpK: f32, tStart: f32) -> f32 {
   WALK_AT=vec3f(0);
-  let Rs = 1.0 + earthTop() / EARTH_RM;
+  // (R4a: the shell raised by the lift the farthest ground in it may take — 2 km, the horizon's from the stratosphere)
+  let Rs = 1.0 + (earthTop() + select(0.0, 2000.0, bodies[LIFT_OFF].x > 0.5)) / EARTH_RM;
   let b = dot(ro, rd);
   let off = ro - rd * b;
   let d2 = dot(off, off);
@@ -8107,7 +8120,8 @@ fn earthMarchFrom(ro: vec3f, rd: vec3f, fpK: f32, tStart: f32) -> f32 {
     let walk=walkDistance(rd,t);
     if(walk.y>=.999){f=walk.x;band=true;}
     else if (!band) {
-      f = rad - (earthHeightStep(p / r, foot) + 9.0 * foot + 3.0) / EARTH_RM;
+      let hS = earthHeightStep(p / r, foot) + 9.0 * foot + 3.0;
+      f = rad - (hS + liftAlong(t, hS)) / EARTH_RM;
       // (an over-relaxed step whose two ends' safe reaches do not meet — or that went under: a ridge may stand in
       // the gap; back to the safe step from the last point, not relaxed)
       if (relaxedPrev && TUNE_MARCH_K * (fPrev + f) < t - tPrev) {
@@ -8119,7 +8133,8 @@ fn earthMarchFrom(ro: vec3f, rd: vec3f, fpK: f32, tStart: f32) -> f32 {
       band = f <= 0.0;
     }
     if (band && walk.y<.999) {
-      f = mix(rad - earthHeight(p / r, foot) / EARTH_RM,walk.x,walk.y);
+      let hF = earthHeight(p / r, foot);
+      f = mix(rad - (hF + liftAlong(t, hF)) / EARTH_RM,walk.x,walk.y);
       // (an over-relaxed step's ends whose safe reaches leave a gap — or under the ground: back to the safe step)
       if (relaxedPrev && TUNE_MARCH_K * (fPrev + f) < t - tPrev) {
         t = tPrev + safePrev;
@@ -8141,7 +8156,7 @@ fn earthMarchFrom(ro: vec3f, rd: vec3f, fpK: f32, tStart: f32) -> f32 {
         let rm = length(pm);
         let walkM=walkDistance(rd,m);
         var fm=walkM.x;
-        if(walkM.y<.999){fm=mix((e + 2.0 * dot(A, vm) + dot(vm, vm)) / (rm + 1.0) - earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)) / EARTH_RM,walkM.x,walkM.y);}
+        if(walkM.y<.999){let hM = earthHeight(pm / rm, max(m * fpK * EARTH_RM, 0.05)); fm=mix((e + 2.0 * dot(A, vm) + dot(vm, vm)) / (rm + 1.0) - (hM + liftAlong(m, hM)) / EARTH_RM,walkM.x,walkM.y);}
         if (fm < 0.0) { hi = m; fhi = fm; } else { lo = m; flo = fm; }
       }
       // (the root between the last two: the side above may have closed in on it, the one below not)
@@ -10545,6 +10560,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
   var taW = 0.0;
   var taN = 0.0;
   var tPrev = t0;
+  var ext = false;
   for (var i = 0u; i < N; i++) {
     cost(3u);
     // (samples crowding near the camera: the near clouds' shapes resolved, the far ones' mean)
@@ -10581,6 +10597,11 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     let rho = hp * clamp(1.6 * (a * (0.4 + sh) - 0.2), 0.0, 1.0); // (thin cover eroded to puffs and gaps)
     if (rho <= 0.0) { continue; }
     let sigma = rho * 25.0 / ((ht - hb) * EARTH_RM * max(top, 0.2)); // (per metre: τ ~ 25 through a thick one)
+    if (ext) {
+      Tv *= exp(-sigma * dm);
+      if (Tv < 1e-5) { break; }
+      continue;
+    }
     let mu0 = dot(geoQ(q), physicalLs);
     // the sunlight: through the air to this height, then the cloud above it towards the sun
     let Ts = sunThrough(airHeight(p), mu0) * sunSeen(p, Ls);
@@ -10610,7 +10631,15 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
     taN += wl;
     if (o.t < 0.0) { o.t = t; }
     Tv *= dT;
-    if (Tv < 0.01) { break; }
+    // (Q5 C10: no floor near the Sun — past a hundredth the light left out, a hundredth of it at most, the march going on for
+    // the extinction alone within 1.4° of it: its disc behind the cloud dimmed by the whole depth, not by 0.01. Everywhere it
+    // cost 0.8–1.3 ms on an M1 — overcast, storm — for no change seen: the sky behind a hundredth is nothing, the discs'
+    // share already (1 − α)³. TUNE_GSKIP 1073741824: the floor everywhere, as before — the A/B)
+    if (Tv < 0.01) {
+      if ((TUNE_GSKIP & 1073741824u) != 0u || ct < 0.9997) { break; }
+      ext = true;
+    }
+    if (Tv < 1e-5) { break; }
   }
   o.ta = select(o.t, taW / taN, taN > 0.0);
   o.alpha = (1.0 - Tv) * P.earth2.y;
@@ -10900,6 +10929,7 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
   let tA = max(t0, select(0.0, (sC + sR) / stepM, sR > 0.0 && sC < sR));
   let tS = select(t0, max(min(t1, t0 + 900.0 / stepM), tA), nearOn);
   tPrev = select(t0, tA, nearOn);
+  var ext = false;
   for (var j = 0u; j < N + nN; j++) {
     cost(3u);
     var tn: f32;
@@ -10928,6 +10958,11 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     let rho = shp.x;
     if (rho <= 0.0) { continue; }
     let sigma = rho * L.w / ((ht - hb) * EARTH_RM * max(top, 0.3));
+    if (ext) {
+      Tv *= exp(-sigma * dm);
+      if (Tv < 1e-5) { break; }
+      continue;
+    }
     let mu0 = dot(geoQ(q), physicalLs);
     let hM = (r - 1.0) * EARTH_RM;
     let veil = wxVeil(hM, w, i).y;
@@ -11010,7 +11045,15 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     taN += wl;
     if (o.t < 0.0) { o.t = t; }
     Tv *= dT;
-    if (Tv < 0.01) { break; }
+    // (Q5 C10: no floor near the Sun — past a hundredth the light left out, a hundredth of it at most, the march going on for
+    // the extinction alone within 1.4° of it: its disc behind the cloud dimmed by the whole depth, not by 0.01. Everywhere it
+    // cost 0.8–1.3 ms on an M1 — overcast, storm — for no change seen: the sky behind a hundredth is nothing, the discs'
+    // share already (1 − α)³. TUNE_GSKIP 1073741824: the floor everywhere, as before — the A/B)
+    if (Tv < 0.01) {
+      if ((TUNE_GSKIP & 1073741824u) != 0u || ct < 0.9997) { break; }
+      ext = true;
+    }
+    if (Tv < 1e-5) { break; }
   }
   o.ta = select(o.t, taW / taN, taN > 0.0);
   o.alpha = 1.0 - Tv;
@@ -11589,6 +11632,11 @@ fn earthLookNoGround(k: u32, ro: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, gx: vec3
 // vertical had the sky's elevations 5.8′ off at 45° of latitude, to the north and south: ~1′ of bending near the horizon)
 // (the bending of the ray traced now — green light's —, for the Sun's disc in each colour: PLAN-CIEL C4)
 var<private> REFR_DELTA: f32 = 0.0;
+// (R6a-ciel: the colours' own departures from it — red's ray turned up from the green's by REFR_DR [rad], blue's down by
+// REFR_DB: Edlén's ratios in the plain air, the mirage's own tables in its band, where the fold parts them by arc minutes; a
+// colour whose ray ends in the sea there: REFR_DR/DB = 10, its share of the disc none)
+var<private> REFR_DR: f32 = 0.0;
+var<private> REFR_DB: f32 = 0.0;
 // (refrBend: the ray seen curved into the sea by the air — what lies beyond the air hidden)
 var<private> REFR_SEA: bool = false;
 // (R2: the tables read as system/refraction-gpu.ts gpuBending reads them — the CPU's figures the image's)
@@ -11646,6 +11694,7 @@ fn refrBend(h: f32, mu: f32) -> f32 {
 const MIR_OFF = 2606076u;
 const MIR_N = 256u;
 fn mirAt(n: u32) -> f32 { return bodies[MIR_OFF + 1u + n / 4u][n % 4u]; }
+// (its head: 1 on, 2 on with the green's direction only for the colours — renderer.mirageOneColour, an A/B's —, 0 off)
 // the true elevation [rad] of the ray leaving the eye at e [rad], colour c (0 red, 1 green, 2 blue); −10: into the sea; −20: no
 // table, or e outside its band
 fn mirageTrue(e: f32, c: u32) -> f32 {
@@ -11659,6 +11708,26 @@ fn mirageTrue(e: f32, c: u32) -> f32 {
   // (the sea's edge: the nearer sample's)
   if (a < -9.0 || b < -9.0) { return select(a, b, f > 0.5); }
   return mix(a, b, f);
+}
+// R4 (contract C0-3) — the ground seen lifted by the air (system/refraction-lift.ts; renderer liftNow — gpu-tables.ts TABLE_LIFT):
+// for the eye, Λ [m] by the slant distance (quadratic to 3 200 km, 128) and the point's height over the sea (quadratic to 9 km,
+// 8), faded in under 0.1′; a point P seen at P + Λ up. The same numbers for the tracer's march (R4a) and the rasters'
+// projection (R4b); never the shadow maps, the cache's bake, the CPU.
+const LIFT_OFF = 2606269u;
+const LIFT_ND = 128u;
+const LIFT_NH = 8u;
+fn liftF(n: u32) -> f32 { return bodies[LIFT_OFF + 1u + n / 4u][n % 4u]; }
+fn refrLiftM(d: f32, hP: f32) -> f32 {
+  if (bodies[LIFT_OFF].x < 0.5) { return 0.0; }
+  let x = sqrt(clamp(d / 3.2e6, 0.0, 1.0)) * f32(LIFT_ND - 1u);
+  let y = sqrt(clamp(hP / 9000.0, 0.0, 1.0)) * f32(LIFT_NH - 1u);
+  let i = min(u32(x), LIFT_ND - 2u);
+  let j = min(u32(y), LIFT_NH - 2u);
+  let fx = x - f32(i);
+  let fy = y - f32(j);
+  let a = mix(liftF(j * LIFT_ND + i), liftF(j * LIFT_ND + i + 1u), fx);
+  let b = mix(liftF((j + 1u) * LIFT_ND + i), liftF((j + 1u) * LIFT_ND + i + 1u), fx);
+  return mix(a, b, fy);
 }
 // a camera look's ray escapes where the plain air sends it into the sea (a warm sea's inverted image): the raster's sea leaves
 // its pixel to the tracer's sky
@@ -11686,15 +11755,27 @@ fn airBend(look: vec3f) -> vec3f {
   // air's estimate before)
   if (refrF(0u) > 0.5) { delta = refrBend((P.sky.w - P.sky.z) * 8400.0, mu); }
   // (R6a-ciel: in the mirage's band, the forced air's own: its true elevation — the sea where it ends there)
-  let em = mirageTrue(asin(clamp(mu, -1.0, 1.0)), 1u);
+  let ea = asin(clamp(mu, -1.0, 1.0));
+  let em = mirageTrue(ea, 1u);
+  var mir = false;
   if (em > -9.5) {
-    delta = asin(clamp(mu, -1.0, 1.0)) - em;
+    delta = ea - em;
     REFR_SEA = false;
+    mir = true;
   } else if (em > -15.0) {
     REFR_SEA = true;
   }
   delta = clamp(delta, 0.0, 0.03);
   REFR_DELTA = delta;
+  REFR_DR = delta * 0.00361;
+  REFR_DB = delta * 0.0078;
+  if (mir && bodies[MIR_OFF].x < 1.5) {
+    // (each colour's true elevation from its own table: red's ray above the green's by er − em, blue's below by em − eb)
+    let er = mirageTrue(ea, 0u);
+    let eb = mirageTrue(ea, 2u);
+    REFR_DR = select(10.0, er - em, er > -9.5);
+    REFR_DB = select(10.0, em - eb, eb > -9.5);
+  }
   let bent = rd * cos(delta) - w * (sin(delta) / max(wl, 1e-6));
   return fromBody(normalize(vec3f(bent.xy, bent.z / EARTH_AB)));
 }
@@ -13939,6 +14020,8 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   RHINT_TOL = rasterHintTol(select(pos, centre, rasterHalton()));
   RND = RNDV.z;
   REFR_DELTA = 0.0;
+  REFR_DR = 0.0;
+  REFR_DB = 0.0;
   LAST_OCEAN = 0.0;
   let e = earthNear(look, rnd, k);
   RHINT = 0.0;

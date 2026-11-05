@@ -115,6 +115,7 @@ import {
   CSM_VEC4S,
   TABLE_CLV,
   TABLE_MIR,
+  TABLE_LIFT,
   TABLE_CSM,
   TABLE_TSM,
   TABLE_GEOID,
@@ -2005,6 +2006,7 @@ export class Renderer {
     this.device.queue.writeBuffer(this.bodyBuf, TABLE_REFR * 16, f as Float32Array<ArrayBuffer>);
     setRefractionTable(f);
     this.refrPublished = key;
+    this.refrData = f;
     this.refrBuilder = null;
   }
   /** (Q5 C1) the transmittance table built a slice a frame (~2 ms), published whole — the tracer's table and earth-air.ts's at
@@ -4445,11 +4447,54 @@ export class Renderer {
     this.weatherGridOn = !!g;
     this.device.queue.writeBuffer(this.bodyBuf, TABLE_WXGRID * 16, f);
   }
+  /** (R4, contract C0-3) the ground's lift by the air drawn — off until every consumer lifts with it (decision 15: R4a and R4b
+   *  together): the tracer's march, the rasters' projection, the points read back */
+  liftOn = false;
+  /** the lift table in the tracer's table: the eye's height it was made for [m over the sea], "" none */
+  liftNow = "";
+  private refrData: Float32Array | null = null;
+  private liftWorker: Worker | null = null;
+  private liftAsked: { hE: number; key: string; id: number } | null = null;
+  private liftBusy = false;
+  /** the lift table for the eye at hE [m over the sea] (system/refraction-lift.ts, in the tables' worker): asked again when the
+   *  eye moves by 2 m or 3 % of its height, or the air's tables change; one at a time */
+  private updateLift(hE: number | null) {
+    const on = this.liftOn && hE !== null && !!this.refrData && !!this.refrPublished;
+    if (!on) {
+      if (this.liftNow) {
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_LIFT * 16, new Float32Array(4));
+        this.liftNow = "";
+      }
+      this.liftAsked = null;
+      return;
+    }
+    const h = Math.max(hE, 0);
+    const a = this.liftAsked;
+    if (a && a.key === this.refrPublished && Math.abs(a.hE - h) < Math.max(2, 0.03 * h)) return;
+    if (this.liftBusy) return;
+    this.liftWorker ??= new Worker(new URL("mirage-worker.js", location.href), { type: "module" });
+    const id = (a?.id ?? 0) + 1;
+    this.liftAsked = { hE: h, key: this.refrPublished, id };
+    this.liftBusy = true;
+    this.liftWorker.onmessage = (e: MessageEvent<{ id: number; f: Float32Array }>) => {
+      this.liftBusy = false;
+      if (e.data.id !== this.liftAsked?.id || !this.liftOn) return;
+      this.device.queue.writeBuffer(this.bodyBuf, TABLE_LIFT * 16, e.data.f as Float32Array<ArrayBuffer>);
+      this.liftNow = `${this.liftAsked.hE.toFixed(1)}`;
+      this.onAssets?.();
+    };
+    this.liftWorker.postMessage({ id, lift: this.refrData!.slice(), hE: h });
+  }
   /** (R6a-ciel) the forced profile of the air near the sea the mirages come from — illustrative, never an observation —
    *  (system/mirage.ts; "off": none, the layered model's refraction alone) */
   mirageProfile: MirageKind | "off" = "off";
   /** the mirages' tables in the tracer's table: their profile and eye's height [m], "" none */
   mirageNow = "";
+  /** (an A/B's) the mirage's band read in one colour, green's, as the plain air's dispersion is (Edlén's ratios) — not each
+   *  colour's own table */
+  mirageOneColour = false;
+  private mirageHead: Float32Array<ArrayBuffer> | null = null;
+  private mirageHeadOne = false;
   private mirageWorker: Worker | null = null;
   private mirageAsked: { kind: string; h0: number; id: number } | null = null;
   private updateMirage(s: Settings, h0: number) {
@@ -4459,8 +4504,15 @@ export class Renderer {
       if (this.mirageNow) {
         this.device.queue.writeBuffer(this.bodyBuf, TABLE_MIR * 16, new Float32Array(4));
         this.mirageNow = "";
+        this.mirageHead = null;
       }
       return;
+    }
+    // (the A/B's switch: the table's head, 1 each colour, 2 one colour)
+    if (this.mirageHead && this.mirageHeadOne !== this.mirageOneColour) {
+      this.mirageHeadOne = this.mirageOneColour;
+      this.mirageHead[0] = this.mirageOneColour ? 2 : 1;
+      this.device.queue.writeBuffer(this.bodyBuf, TABLE_MIR * 16, this.mirageHead);
     }
     const h = Math.max(h0, 1);
     const a = this.mirageAsked;
@@ -4474,7 +4526,11 @@ export class Renderer {
     this.mirageWorker.onmessage = (e: MessageEvent<{ id: number; f: Float32Array }>) => {
       this.mirageBusy = false;
       if (e.data.id !== this.mirageAsked?.id || this.mirageAsked.kind === "off") return;
-      this.device.queue.writeBuffer(this.bodyBuf, TABLE_MIR * 16, e.data.f as Float32Array<ArrayBuffer>);
+      const f = e.data.f as Float32Array<ArrayBuffer>;
+      f[0] = this.mirageOneColour ? 2 : 1;
+      this.mirageHead = f.slice(0, 4);
+      this.mirageHeadOne = this.mirageOneColour;
+      this.device.queue.writeBuffer(this.bodyBuf, TABLE_MIR * 16, f);
       this.mirageNow = `${this.mirageAsked.kind}@${this.mirageAsked.h0.toFixed(1)}`;
       this.onAssets?.();
     };
@@ -4497,6 +4553,8 @@ export class Renderer {
   ): Float32Array {
     const out = new Float32Array(WX_VEC4S * 4);
     if (live) this.wxLight = 1;
+    // (R4: the eye's height over the sea, its lift table — from orbit too)
+    if (live) this.updateLift(surface ? altKm * 1000 - geoidN(surface.lat, surface.lon) : null);
     if (!surface || !(altKm < 30) || !this.earthMaps.tier) return out;
     const lat = (surface.lat * 180) / Math.PI,
       lon = (surface.lon * 180) / Math.PI;

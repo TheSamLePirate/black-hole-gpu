@@ -12,7 +12,8 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // their neighbours. At each, a shot and the clouds' passes' cost (2 s): C6 (3.8 km + map), C6 with 900 m of march
 // (CLOUD_NEAR_N 4), before (the far field off — TUNE_GSKIP 1048576: 3.8 km and the veil), the reference (4194304: every
 // cloud on the sunbeam marched out to 120 km, no map), C6 again (the measure's own noise). CS_OUT: the shots and figures
-// (remote-results/cloud-shadow-c6).
+// (remote-results/cloud-shadow-c6). CS_AB=<bit>: the modes now and with that TUNE_GSKIP bit instead, twice each (e.g. 1073741824:
+// the clouds' transmittance floor as before Q5 C10).
 // Duration: ~6 min on this Mac.
 // Done when: the ten shots taken and each mode's pass costs logged, no GPU error.
 const OUT = process.env.CS_OUT ?? "remote-results/cloud-shadow-c6";
@@ -39,13 +40,23 @@ test.skipIf(!E2E)(
           `new Promise((q) => setTimeout(() => { __bh.camera.setLook(0, ${pitch}); __bh.game.setDate("${iso}"); __bh.freeze(true); q(1); }, 800))`,
         );
         let locked = false;
-        for (const [k, tune] of [
-          ["on", "{}"],
-          ["near4", "{ CLOUD_NEAR_N: 4 }"],
-          ["nofar", "{ TUNE_GSKIP: 1048576 }"],
-          ["ref", "{ TUNE_GSKIP: 4194304 }"],
-          ["on2", "{}"],
-        ] as const) {
+        // (CS_AB=<bit>: another A/B instead — the modes now, that TUNE_GSKIP bit, twice each, alternated)
+        const AB = process.env.CS_AB;
+        const modes: (readonly [string, string])[] = AB
+          ? [
+              ["on", "{}"],
+              ["ab", `{ TUNE_GSKIP: ${AB} }`],
+              ["on2", "{}"],
+              ["ab2", `{ TUNE_GSKIP: ${AB} }`],
+            ]
+          : [
+              ["on", "{}"],
+              ["near4", "{ CLOUD_NEAR_N: 4 }"],
+              ["nofar", "{ TUNE_GSKIP: 1048576 }"],
+              ["ref", "{ TUNE_GSKIP: 4194304 }"],
+              ["on2", "{}"],
+            ];
+        for (const [k, tune] of modes) {
           await app.js(`(() => { __bh.renderer.tune = ${tune}; return 1; })()`);
           await app.settled(120_000);
           // (frozen: the raster's shading round every pixel, the clouds' history converged)
