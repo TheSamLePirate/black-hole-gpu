@@ -159,6 +159,8 @@ export interface CameraPanelDeps {
   /** (Q6-ISS ISS4) the view through a live stream's camera on the station, or back from it — main.ts issCameraView, TARS's and
    *  __bh's too; why not, or null */
   issCameraView?(id: IssCameraId | "back"): string | null;
+  /** (Q6-ISS) the ISS's camera view left by another view chosen: its response off */
+  issCameraOff?(): void;
   /** the voyage to a target as the settings would make it, on straight lines (null: none there) */
   voyagePreview?(b: Target): { T: number; Tau: number; betaPeak: number; g: number } | null;
   toast(t: string): void;
@@ -614,7 +616,11 @@ export class CameraPanel {
       b.dataset.testid = `cp-subject-${k}`;
       b.onclick = () => {
         s.subjectView = vs.subjectView = k;
-        if (vs.issView !== "off") s.issView = vs.issView = "off";
+        if (vs.issView !== "off") {
+          s.issView = vs.issView = "off";
+          // (the view's response off with it — renderer.issViewNow, main.ts issCameraView's)
+          this.d.issCameraOff?.();
+        }
         // (another view: a cut, on purpose — the camera's sensor told; a free camera following the ship let go: the view
         // is the craft's now)
         c.onCut?.();

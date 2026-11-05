@@ -462,3 +462,36 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
 - **Suite d'ISS3** :
   - le profil de la vue ISS : exposition, gain par canal, contraste, ajustés sur ces chiffres par caméra ;
   - puis ISS5 : la comparaison en mouvement, aux transitions d'éclairage.
+
+## ISS3 — premier profil par caméra (le 5 novembre)
+
+- **Fait** :
+  - le registre (`src/system/iss-cameras.ts`) porte une réponse par caméra (`response`) : une exposition (× avant la courbe), des
+    gains par canal (espace d'affichage linéaire), un contraste (courbe en S en gamma d'affichage) et une saturation ;
+  - `display.wgsl` (`Display.iss`, `issB`) l'applique quand la vue passe par une caméra ISS (`renderer.issViewNow`, posé par
+    l'action commune `issCameraView`), sauf en profil Neutre (mesures) ;
+  - le profil Caméra des vols (grade d'images de chasseurs) n'est pas appliqué à une caméra ISS, comme le plan le demande ;
+  - les ajustements ont été faits sur kerr-mini (écran SDR), au même instant que le direct (11:02 UTC le 5 novembre), en trois
+    passes. Un premier écrit à 320 au lieu de 304 dans le tampon n'avait aucun effet.
+- **Mesuré (kerr-mini, jeu profilé contre direct)** :
+
+  | | NASA, direct | NASA, jeu neutre | **NASA, jeu profilé** | Sen, direct | Sen, jeu neutre | **Sen, jeu profilé** |
+  |---|---|---|---|---|---|---|
+  | océan, sRGB | (35, 64, 102) | (15, 37, 80) | **(37, 66, 102)** | (21, 53, 75) | (22, 43, 86) | **(36, 55, 97)** |
+  | océan, luminance (jeu/direct) | | ×0,40 | **×1,04** | | ×0,79 | **×1,23** |
+  | océan, R/G · B/G | 0,54 · 1,58 | 0,42 · 2,19 | **0,56 · 1,55** | 0,39 · 1,41 | 0,52 · 2,01 | 0,65 · 1,78 |
+  | nuages, sRGB | | | | (236, 236, 219) | (147, 134, 133) | (198, 195, 194) |
+  | contraste nuage / océan | | | | 25,7 | 9,8 | 13,9 |
+
+  - **NASA** : l'océan est calé à quelques niveaux près (exposition 1,9, gains 0,93 · 1,04 · 0,78) ;
+  - **Sen** : océan et nuages se rapprochent (exposition 2,1, balance sur les nuages blancs, contraste 1, saturation 0,6). Mais
+    les nuages restent plus sombres (×0,66) et le contraste moindre (×0,54). Une partie de cet écart tient au contenu : les
+    nuages de la météo du jeu ne sont pas ceux du jour, plus minces.
+
+![ISS3 : NASA — le jeu neutre, le jeu avec le profil de la caméra, le direct (5 nov. 11:03 UTC, domaine public ; kerr-mini)](Q6/iss3-nasa-profil.jpg)
+
+- **Limites** :
+  - un seul instant (jour, océan) ; pas encore de nuit ni de terminateur ;
+  - pas de vignette, de grain ni de compression mesurés ;
+  - la saturation est un réglage global.
+- **Suite** : ISS5, la comparaison en mouvement et aux transitions d'éclairage, avec les séquences de contrôle.

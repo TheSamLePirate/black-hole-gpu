@@ -1,4 +1,5 @@
 import { holeFleet } from "./holefleet";
+import { issCamera, type IssCameraId } from "./system/iss-cameras";
 import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
 import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
 import { TerrainCache } from "./system/terrain-cache";
@@ -4205,8 +4206,19 @@ export class Renderer {
       s.renderMode === "physical" &&
       !this.costViewMode &&
       s.band !== "230GHz" &&
-      (s.lookProfile === "camera" || (s.lookProfile === "auto" && this.flightView));
+      (s.lookProfile === "camera" || (s.lookProfile === "auto" && this.flightView)) &&
+      // (Q6-ISS: not the flight footage's grade on a live stream's camera — its own response below)
+      !this.issViewNow;
     this.device.queue.writeBuffer(this.displayBuf, 256, new Float32Array([camera ? 1 : 0, 0.022, 0.12, clock]));
+    // (Q6-ISS ISS3: the view through a live stream's camera — its response, the registry's: exposure, balance, contrast — unless
+    // the image's profile is forced Neutral, a measure's)
+    const isr = target === this.live && this.issViewNow && s.lookProfile !== "neutral" ? issCamera(this.issViewNow).response : undefined;
+    // (display.wgsl Display.iss, issB: after lensB — 19 vec4 before them, 304 bytes)
+    this.device.queue.writeBuffer(
+      this.displayBuf,
+      304,
+      new Float32Array(isr ? [...isr.gain, 1, isr.exposure, isr.contrast, isr.saturation ?? 1, 0] : [1, 1, 1, 0, 1, 0, 1, 0]),
+    );
     if (target === this.live) this.lookCamera = camera;
     // (the GoPro lens — Q6 I8, src/lens.ts —: its focal, its rectilinear part, its compression, the render's half-width tangent;
     // the band's aspect)
@@ -4225,6 +4237,8 @@ export class Renderer {
   }
   /** the game's flight view now — a craft flown, the live view (main.ts): the image's profile Camera when lookProfile is auto */
   flightView = false;
+  /** (Q6-ISS ISS3) the live stream's camera the view looks through (main.ts issCameraView; null: none): its response drawn */
+  issViewNow: IssCameraId | null = null;
   /** the GoPro lens in use (main.ts): the display bends the live image (display.wgsl lensUv) */
   lens = false;
   /** the live image's profile is Camera (writeDisplay): the meter breathes (readMeter) */

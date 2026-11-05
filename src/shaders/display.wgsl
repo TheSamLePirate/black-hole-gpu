@@ -28,6 +28,9 @@ struct Display {
                 // render's half-width tangent
   lensB: vec4f, // its band's aspect (width over height), the render's (only the rows the band reads: main.ts goproRowShare); the
                 // canopy's scratches' strength (Q6 I6 A2: the Camera profile in the cockpit, 0 none), unused
+  iss: vec4f,   // (Q6-ISS ISS3) a live stream's camera's response — the view through it: its gains by channel (display-linear), on (1)
+  issB: vec4f,  // its exposure [×, before the tone map], its contrast (0 none … 1: a smoothstep S in display gamma), its saturation
+                // (1 as drawn), unused
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -892,8 +895,21 @@ fn fs(in: VSOut) -> @location(0) vec4f {
       let t = clamp(c.g, 0.0, 1.0);
       c = srgbToLinear(clamp(vec3f(2.0 * t, 2.0 * t - 0.5, 2.0 * t - 1.0), vec3f(0.0), vec3f(1.0)));
     } else if (D.hdr.x > 0.5) {
+      if (D.iss.w > 0.5) { c *= D.issB.x; }
       if (tm == 3u) { c = min(c, vec3f(D.hdr.y)); } else if (tm == 4u) { c = filmHdr(c, D.hdr.y); } else { c = hdrMap(c, D.hdr.y, tm == 1u); }
-    } else if (tm == 0u) { c = agx(c, false, 0.0); } else if (tm == 1u) { c = agx(c, true, D.hdr.w); } else if (tm == 2u) { c = aces(c); } else if (tm == 4u) { c = film(c); }
+    } else if (tm == 0u || tm == 1u || tm == 2u || tm == 4u) {
+      // (Q6-ISS ISS3: the camera's exposure, before the curve)
+      if (D.iss.w > 0.5) { c *= D.issB.x; }
+      if (tm == 0u) { c = agx(c, false, 0.0); } else if (tm == 1u) { c = agx(c, true, D.hdr.w); } else if (tm == 2u) { c = aces(c); } else if (tm == 4u) { c = film(c); }
+    } else if (D.iss.w > 0.5) { c *= D.issB.x; }
+  }
+  // (Q6-ISS ISS3: the stream's camera's response — its balance by channel, its contrast — after the curve, in display space)
+  if (D.iss.w > 0.5 && D.flags.x < 0.5 && D.img.w < 0.5) {
+    c *= D.iss.rgb;
+    var p = pow(clamp(c, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2));
+    p = mix(p, p * p * (3.0 - 2.0 * p), D.issB.y);
+    p = mix(vec3f(dot(p, LUMA)), p, D.issB.z);
+    c = pow(max(p, vec3f(0.0)), vec3f(2.2)) + max(c - vec3f(1.0), vec3f(0.0));
   }
   // (the Camera profile — the game's flight views: a footage grade, grain, vignette — after the tone map, in display space)
   if (D.look.x > 0.5 && D.flags.x < 0.5 && D.img.w < 0.5) { c = cameraLook(c, uvOut, in.pos.xy); }

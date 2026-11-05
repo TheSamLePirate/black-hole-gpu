@@ -2697,6 +2697,9 @@ async function main() {
     setView: (v) => setView(v),
     setMount: (m) => setMount(m),
     issCameraView: (id) => issCameraView(id),
+    issCameraOff: () => {
+      renderer.issViewNow = null;
+    },
     cinematic,
     goTo,
     standOn,
@@ -6754,6 +6757,7 @@ async function main() {
     if (id === "back") {
       if (C.s.issView === "off") return t("No ISS camera to come back from");
       C.s.issView = settings.issView = "off";
+      renderer.issViewNow = null;
       const prev = issViewPrev;
       issViewPrev = null;
       if (prev?.hold) viewBack(prev.hold);
@@ -6774,6 +6778,7 @@ async function main() {
     if (C.s.issView === "off") issViewPrev = { hold: C.s.target === "iss" ? null : viewHold(), target: C.s.target };
     if (C.s.target !== "iss" && !C.selectTarget("iss", { focus: true })) return t("The ISS is not in this universe");
     C.s.issView = settings.issView = id;
+    renderer.issViewNow = id;
     // (its native framing: the head straight, the lens its field — subjectcam sets it, gives the one before back)
     C.subject.yaw = C.subject.pitch = 0;
     C.onCut?.();

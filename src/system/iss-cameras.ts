@@ -22,6 +22,10 @@ export interface IssCamera {
   right?: Vec3;
   fovDeg: number | null;
   status: "estimate" | "calibrated";
+  /** (ISS3) its picture's response against the game's neutral image: an exposure [×, before the tone map], gains by channel
+   *  (display-linear, the luminance's kept), a contrast (0 … 1); fitted on the live stream against the game at the same instant,
+   *  on an SDR screen (kerr-mini: the HDR one's captures go through another curve) */
+  response?: { exposure: number; gain: [number, number, number]; contrast: number; saturation?: number };
 }
 
 const unit = (v: Vec3): Vec3 => {
@@ -67,6 +71,12 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     right: [0, 1, 0],
     fovDeg: 95,
     status: "calibrated",
+    // (ISS3, 5 Nov 2026, kerr-mini: the ocean ×0.79, the clouds ×0.30 — the stream a stop brighter and far more contrasted
+    // (cloud/ocean 25.7 against 9.8) —, B/G 2.01 against 1.41; a first fit)
+    // (second fit: the balance on the clouds — white in the stream, (147, 134, 133) in the game —, not the ocean's blue, which is
+    // its content's; the first, blue ×0.73, yellowed them; contrast to its most)
+    // (third: the S's saturation taken back — the ocean's chroma 93 against 54 —, a little more exposure for the clouds ×0.56)
+    response: { exposure: 2.1, gain: [0.92, 1.02, 1.01], contrast: 1, saturation: 0.6 },
   },
   {
     id: "sen-docking",
@@ -94,6 +104,10 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     right: [-1, 0, 0],
     fovDeg: 36,
     status: "calibrated",
+    // (ISS3, 5 Nov 2026, kerr-mini: the ocean ×0.40 in luminance, R/G 0.42 against 0.54, B/G 2.19 against 1.58 — the stream
+    // brighter by ~1.3 stops, warmer, less blue; a first fit)
+    // (second fit: the first, 2.4 and (1.16, 0.98, 0.67), overshot — the ocean ×1.34, R/G 0.70 — through the tone curve)
+    response: { exposure: 1.9, gain: [0.93, 1.04, 0.78], contrast: 0 },
   },
 ];
 
