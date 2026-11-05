@@ -10811,10 +10811,34 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
   var taW = 0.0;
   var taN = 0.0;
   var tPrev = t0;
-  for (var j = 0u; j < N; j++) {
+  // (Q5 VIPER C3 — the near field: the camera in the layer or within 300 m of it, the ray in it before 900 m: its first 900 m
+  // marched finely first — 12 steps to 300 m, 4 to 900 —, lit by a shorter sunward march (4 steps, the map past them; the
+  // column over them greyed the gaps between cumulus), then the layer's samples from there: inside a cloud its matter going by, not one sample in the
+  // first ~2 km; the cloud pass's only. Off by default — TUNE_GSKIP 536870912 turns it on —: +4.7 ms in a cumulus layer on
+  // this Mac (the column's light instead, +1.3 ms, greyed the gaps), no gain seen on a still image; its own — the matter going
+  // by in motion — not measured)
+  let hCam = (length(ro) - 1.0) * EARTH_RM;
+  let nearOn = CLOUD_LIGHT_MARCH && (TUNE_GSKIP & 536870912u) != 0u && hCam > L.x - 300.0 && hCam < L.y + 300.0 && t0 * stepM < 900.0;
+  let nN = select(0u, 16u, nearOn);
+  // (from where the flown craft's bounding sphere ends when the camera is in it — its cockpit —: no cloud inside the hull, in
+  // front of its panel)
+  let sR = P.shipShadow.w;
+  let sC = length(P.shipShadow.xyz);
+  let tA = max(t0, select(0.0, (sC + sR) / stepM, sR > 0.0 && sC < sR));
+  let tS = select(t0, max(min(t1, t0 + 900.0 / stepM), tA), nearOn);
+  tPrev = select(t0, tA, nearOn);
+  for (var j = 0u; j < N + nN; j++) {
     cost(3u);
-    let u1 = (f32(j) + 1.0) / f32(N);
-    let tn = t0 + (t1 - t0) * u1 * u1;
+    var tn: f32;
+    if (j < nN) {
+      // (12 steps of 25 m to 300 m, 4 of 150 m to 900 m)
+      let mN = select(300.0 + f32(j - 11u) * 150.0, f32(j + 1u) * 25.0, j < 12u);
+      tn = min(tA + mN / stepM, tS);
+    } else {
+      let u1 = (f32(j - nN) + 1.0) / f32(N);
+      tn = tS + (t1 - tS) * u1 * u1;
+    }
+    if (tn <= tPrev) { continue; }
     let t = mix(tPrev, tn, jit);
     let dm = (tn - tPrev) * stepM;
     tPrev = tn;
@@ -10847,11 +10871,13 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     // it, not counted twice; off the map — or TUNE_GSKIP 1048576 —, the other layers' mean veil, as before)
     var far = false;
     if (CLOUD_LIGHT_MARCH || (QUALITY_PIPELINE && TUNE_CLOUD_LIGHT > 0u)) {
+      // (VIPER C3's near samples a shorter sunward march — 4 steps, 900 m —, the map from there: their cost)
+      let nL = select(CLOUD_NEAR_N, 4u, j < nN);
       var cf = -1.0;
-      if ((TUNE_GSKIP & 1048576u) == 0u) { cf = cloudShadowAt(p + Ls * (60.0 * f32((1u << CLOUD_NEAR_N) - 1u) / EARTH_RM)); }
+      if ((TUNE_GSKIP & 1048576u) == 0u) { cf = cloudShadowAt(p + Ls * (60.0 * f32((1u << nL) - 1u) / EARTH_RM)); }
       far = cf >= 0.0;
       let rl = fract(RNDV.x + f32(j) * 0.6180339887);
-      tauSun = wxLightTau(p, i, Ls, rl, select(6u, CLOUD_NEAR_N, far)) + select(0.0, -log(max(cf, 1e-6)), far);
+      tauSun = wxLightTau(p, i, Ls, rl, select(6u, nL, far)) + select(0.0, -log(max(cf, 1e-6)), far);
       // (the measure's reference — TUNE_GSKIP 4194304 —: every cloud on the sunbeam marched, 11 steps doubling out to 120 km,
       // no map, no veil)
       if ((TUNE_GSKIP & 4194304u) != 0u) {
