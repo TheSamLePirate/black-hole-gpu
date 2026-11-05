@@ -11185,10 +11185,17 @@ fn wxRainShafts(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f32) 
 // Q5 — the clouds' light volume's kernel (clvFrame, clvTau): a thread a texel, its slices side by side in the texture
 // (renderer.ts copies it into TABLE_CLV): the sunlight's optical depth from CLV_START_M on — every weather layer's cheap density,
 // six steps doubling from 120 m (to ~7.7 km) —, the clouds' shadow map past them.
+// (Q5 P8 — its bands of 8 rows refreshed one in CLV_EVERY a frame, in turn, all of them when its frame moved: its centre, the
+// Sun by 0.02°, its heights by 30 m — the row after its data holds the frame it was made in, read back the next frame)
+override CLV_EVERY: u32 = 4u;
+fn clvPrev(j: u32) -> f32 {
+  let n = CLV_N * CLV_NZ * CLV_N + j;
+  return bodies[CLV_OFF + 1u + n / 4u][n % 4u];
+}
 @group(1) @binding(16) var clvOut: texture_storage_2d<r32float, write>;
 @compute @workgroup_size(8, 8)
 fn cloudLightVolume(@builtin(global_invocation_id) gid: vec3u) {
-  if (gid.x >= CLV_N * CLV_NZ || gid.y >= CLV_N) { return; }
+  if (gid.x >= CLV_N * CLV_NZ || gid.y > CLV_N) { return; }
   var tau = 0.0;
   if (HAS_BODIES && P.near0.w > 0.5) {
     let k = u32(P.near1.w);
@@ -11197,10 +11204,24 @@ fn cloudLightVolume(@builtin(global_invocation_id) gid: vec3u) {
       WX_W = select(0.0, P.wx[0].x, HAS_WX);
       WX_Q = normalize(nearCam());
       let f = clvFrame();
+      let lt = nearLight(k);
+      let Ls = normalize(squashed(toBody(lt.dir), squashOf(k)));
+      // (the frame's row: written whole by its first nine threads, every frame)
+      if (gid.y == CLV_N) {
+        let head = array<f32, 9>(f.up.x, f.up.y, f.up.z, Ls.x, Ls.y, Ls.z, f.hLo, f.hHi, select(0.0, 1.0, f.on));
+        if (gid.x < 9u) { textureStore(clvOut, vec2i(gid.xy), vec4f(head[gid.x], 0.0, 0.0, 0.0)); }
+        WX_W = 0.0;
+        return;
+      }
+      let still = clvPrev(8u) > 0.5 && length(vec3f(clvPrev(0u), clvPrev(1u), clvPrev(2u)) - f.up) < 1e-7 &&
+        length(vec3f(clvPrev(3u), clvPrev(4u), clvPrev(5u)) - Ls) < 3.5e-4 && abs(clvPrev(6u) - f.hLo) < 30.0 &&
+        abs(clvPrev(7u) - f.hHi) < 30.0 && bodies[CLV_OFF].x > 0.5;
+      if (CLV_EVERY > 1u && still && (gid.y / 8u) % CLV_EVERY != P.frame.x % CLV_EVERY) {
+        WX_W = 0.0;
+        return;
+      }
       if (f.on) {
         let p = clvPoint(f, gid.x % CLV_N, gid.y, gid.x / CLV_N);
-        let lt = nearLight(k);
-        let Ls = normalize(squashed(toBody(lt.dir), squashOf(k)));
         var d = CLV_START_M;
         var st = 120.0;
         for (var s = 0u; s < 6u; s++) {

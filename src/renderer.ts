@@ -8683,8 +8683,16 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private clvWrite: GPUBindGroup | null = null;
   private clvTableOn = false;
   private clvBind0?: { t: Target; bind: GPUBindGroup };
+  /** (Q5 P8) the light volume's bands of 8 rows refreshed one in clvEvery a frame, in turn — all of them when its frame moves
+   *  (trace.wgsl CLV_EVERY) —; 1: every row every frame (an A/B: the pipeline made again) */
+  clvEvery = 4;
+  private clvPipeEvery = 0;
   private encodeCloudLightVolume(enc: GPUCommandEncoder, t: Target) {
     const d = this.device;
+    if (this.clvPipe && this.clvPipeEvery !== this.clvEvery) {
+      this.clvPipe = null;
+      this.clvWanted = false;
+    }
     // (the weather's layers near the camera — the volume spans them —, the cloud pass drawing them)
     const want = this.cloudLightVolumeOn && this.cloudShadow && this.cloudPass && this.cloudPassOn && !!this.lastNear && this.nearEarthNow;
     if (!want || !this.clvPipe) {
@@ -8692,7 +8700,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       this.clvTableOn = false;
       if (want && !this.clvWanted) {
         this.clvWanted = true;
-        this.clvTex = d.createTexture({
+        this.clvTex ??= d.createTexture({
           label: "clouds' light volume",
           size: [CLV_TEX_W, CLV_TEX_H],
           format: "r32float",
@@ -8711,12 +8719,19 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
             compute: {
               module: this.traceModule,
               entryPoint: "cloudLightVolume",
-              constants: { ...Object.fromEntries(off.map((f) => [`HAS_${f}`, 0])), HAS_BODIES: 1, HAS_WX: 1, QUALITY_PIPELINE: 0 },
+              constants: {
+                ...Object.fromEntries(off.map((f) => [`HAS_${f}`, 0])),
+                HAS_BODIES: 1,
+                HAS_WX: 1,
+                QUALITY_PIPELINE: 0,
+                CLV_EVERY: this.clvEvery,
+              },
             },
           })
           .then(
             (p) => {
               this.clvPipe = p;
+              this.clvPipeEvery = this.clvEvery;
               gpuDiagnostics.record("pipeline-compiled", `clouds' light volume: ${((performance.now() - t0) / 1000).toFixed(1)} s`);
             },
             (e) => console.warn("Clouds' light volume unavailable:", e),

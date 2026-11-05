@@ -9,10 +9,11 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // marching six densities and the shadow map each. The F-35's cockpit, frozen, the exposure locked at the first shot's:
 // La Mancha "overcast" from 7 000 m 4° down at 13:00 UTC, a "storm" from 3 000 m at 17:30 UTC. At each: the volume, the march
 // (cloudLightVolumeOn false: as before), the reference (TUNE_GSKIP 4194304: every cloud on the sunbeam marched out to 120 km),
-// the volume again (the measure's noise); a shot and the passes' cost (2 s) each, the error to the reference (rms, 8-bit
+// the volume again (the measure's noise), the volume's every row
+// each frame (renderer.clvEvery 1 — P8: a band in four by default); a shot and the passes' cost (2 s) each, the error to the reference (rms, 8-bit
 // levels, the upper three quarters). CV_OUT: the shots (remote-results/cloud-light-volume).
 // Duration: ~5 min on this Mac.
-// Done when: the eight shots taken, each mode's pass costs and error logged, no GPU error.
+// Done when: the ten shots taken, each mode's pass costs and error logged, no GPU error.
 const OUT = process.env.CV_OUT ?? "remote-results/cloud-light-volume";
 afterAll(stopServer);
 test.skipIf(!E2E)(
@@ -43,6 +44,7 @@ test.skipIf(!E2E)(
           ["march", "__bh.renderer.tune = {}; __bh.renderer.cloudLightVolumeOn = false;"],
           ["ref", "__bh.renderer.tune = { TUNE_GSKIP: 4194304 }; __bh.renderer.cloudLightVolumeOn = true;"],
           ["vol2", "__bh.renderer.tune = {}; __bh.renderer.cloudLightVolumeOn = true;"],
+          ["volEvery1", "__bh.renderer.tune = {}; __bh.renderer.cloudLightVolumeOn = true; __bh.renderer.clvEvery = 1;"],
         ] as const) {
           await app.js(`(() => { ${js} return 1; })()`);
           await app.settled(120_000);
@@ -95,10 +97,11 @@ test.skipIf(!E2E)(
             }
           return Math.sqrt(se / n);
         };
-        const errs = { vol: rms("vol", "ref"), march: rms("march", "ref"), noise: rms("vol", "vol2") };
+        const errs = { vol: rms("vol", "ref"), march: rms("march", "ref"), noise: rms("vol", "vol2"), every1: rms("vol", "volEvery1") };
+        await app.js(`(() => { __bh.renderer.clvEvery = 4; return 1; })()`);
         out[`${place}-rms`] = errs;
         console.log(
-          `  ${place}: rms to the reference — volume ${errs.vol.toFixed(2)}, march ${errs.march.toFixed(2)}; volume vs volume ${errs.noise.toFixed(2)}`,
+          `  ${place}: rms to the reference — volume ${errs.vol.toFixed(2)}, march ${errs.march.toFixed(2)}; volume vs volume ${errs.noise.toFixed(2)}; amortised vs every row ${errs.every1.toFixed(2)}`,
         );
       }
       await app.js(
