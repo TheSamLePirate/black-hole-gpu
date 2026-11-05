@@ -1354,6 +1354,17 @@ sur cette délégation :
     bâtiments ; jamais b, les proxies d'arbres), avant les noyaux d'ombrage qui le lisent ; **C0-9 amendé** : « GTAO : r de la
     visibilité, avant l'ombrage » (`moments.y` n'existe qu'après lui).
 
+42. **Les décisions du 5 novembre** (Sam, sur les questions posées en fin de journée) :
+    - **la vue cockpit sur M1** (4–6 images/s dans l'orage) : **la carte d'ombre de l'avion en cache**, redessinée seulement
+      quand la lumière tourne par rapport à lui ; puis comprendre pourquoi l'orage la multiplie par 10 ;
+    - **R4 allumé par défaut** (`liftOn`), malgré environ +1 ms mesuré sur M1 (le plan l'estimait à 0) ;
+    - **R6b validé tel quel** : le choix « D'après la météo » du réglage Mirages, un profil plausible jamais présenté comme
+      observé, sa confiance dite par TARS ;
+    - **R6a-terrain : plus tard** (estimé à 3–4 jours, R6.md) ;
+    - **L7b : le prototype dans le jeu**, puis plusieurs zones et la prise au couchant pour le go/no-go final ;
+    - **l'ordre de Q7/Q8** : le couvert bas près des pistes (VIPER B5), puis le trafic, les lignes HT et les éoliennes (D1),
+      puis les scans de détail (L8), puis les lampadaires (L10).
+
 ## 11. Questions ouvertes
 
 **Pour Sam** : relire les contrats à la fin de C0 (décision 33). Les budgets de la décision 26 sont confirmés.

@@ -14937,6 +14937,14 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     glass = select(0.0, 1.0, fw > 0.28 && fw < 0.72 && fz > 0.3 && fz < 0.82 && !terrainRasterBridgeMesh(centre));
     A = mix(A, vec3f(0.03) * P.earth2.z, glass);
   }
+  // (Q7 L9: the season's snow on what stands — the roofs facing up, the tops of the trees' crowns — as on the ground about
+  // them: the same line, the same season (seasonSnow, taken flat — the roof's own tilt the cover's); a crown holds less)
+  if ((mesh || leaf > 0u || isTree) && (TUNE_SC_SKIP & 1024u) == 0u) {
+    let up = dot(n, gq);
+    let sn = seasonSnow(gq, gq, max(airHeight(ph) - geoidN(gq), 0.0), Ls, vec3f(0.5));
+    let kU = select(smoothstep(0.5, 0.9, up), 0.6 * smoothstep(0.2, 0.8, up), isTree);
+    A = mix(A, vec3f(0.82, 0.84, 0.88) * select(P.earth2.z, 1.0, isTree), sn * kU);
+  }
   // (the sky's light — on a slope, a share of it, and the ground's bounce round it — as earthGround's)
   // (the rain — PLAN-PLUIE P4, as the tracer's ground —: the ground wet, darker, a sheen of the sky on it (below); on a
   // runway's paving water lying in its hollows and the drops' rings spreading on it, near)
