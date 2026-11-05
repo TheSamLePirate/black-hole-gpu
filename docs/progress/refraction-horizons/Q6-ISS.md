@@ -118,3 +118,47 @@ géométrie d'une image à l'autre, ce qui est un bon point pour la calibration.
 - **Usage :** pour la géométrie à la seconde (ISS2), chaque image Sen prend l'instant de son incrustation. Le jeu propage
   l'ISS par SGP4 sur les éléments CelesTrak du jour.
 - **Reste d'ISS0 :** une capture plus dense (toutes les 5 à 10 s) sur les extraits retenus ; les tolérances.
+
+## ISS1 — les caméras sur la station : le registre (le 5 novembre)
+
+- **Sources :**
+  - **Sen** : les trois caméras 4K de SpaceTV-1 sont fixes, à l'extérieur, sur la plateforme Bartolomeo d'Airbus, posée par
+    Canadarm-2 (vol CRS-30, mars 2024) ([sen.com](https://www.sen.com/mission/stv-1),
+    [space.com](https://www.space.com/astronomy/earth/live-4k-video-from-space-see-earth-from-the-iss-with-sharp-eyed-sen-cameras)) :
+    - la nadir regarde droit vers le bas (environ 240 × 180 km au sol) ;
+    - la caméra d'horizon, grand angle, montre parfois la structure ;
+    - la caméra d'amarrage regarde le long de la station, vers le véhicule amarré au port avant d'Harmony.
+  - **Bartolomeo** : sur la face avant de Columbus, fixée au tourillon avant tribord
+    ([eoPortal](https://eoportal.org/satellite-missions/iss-bartolomeo),
+    [ESA](https://www.esa.int/ESA_Multimedia/Images/2020/04/Bartolomeo_connected_to_Columbus)).
+  - **NASA** : le descriptif du direct parle d'une caméra extérieure sur Harmony, qui regarde vers l'avant en biais, avec
+    IDA-2 dans le champ (en-tête de `scripts/iss-capture.ts`).
+- **Mesuré dans le modèle de la NASA** (`assets/iss/ISS2.glb`, hors dépôt). Boîtes englobantes des pièces nommées, lues par
+  Blender et ramenées au repère de la station comme dans `build-iss.py` (mètres ; x vers l'avant, y à tribord, z vers le
+  nadir) :
+
+  | pièce | x | y | z |
+  |---|---|---|---|
+  | `Columbus_BARTOLOMEO` | 13,25–15,61 | 2,59–8,68 | 4,54–6,45 |
+  | `Columbus` | 8,47–13,24 | 1,97–8,68 | 2,61–7,10 |
+  | `IDA2` (port avant d'Harmony) | 15,46–16,09 | −0,86–1,06 | 4,73–6,46 |
+  | `Node2_Details_EHDC_5` (caméra HD externe 5 d'Harmony) | 12,75–14,14 | 1,70–2,42 | 4,70–5,07 |
+  | `Node2_Details_CameraPole` | 12,69–14,20 | 1,16–1,82 | 2,88–3,95 |
+
+- **Lecture :**
+  - les caméras Sen sont sur Bartolomeo, à 3 à 9 m à tribord d'IDA-2 et à sa hauteur. La caméra d'amarrage regarde donc
+    vers bâbord, à quelques mètres d'un Dragon amarré, ce qui explique la capsule plein cadre dans le corpus ;
+  - la caméra du direct NASA est très probablement **EHDC-5** sur Harmony, à 2,5 m d'IDA-2. **Ce n'est pas confirmé** : le
+    classement d'ISS0 y voyait surtout une charge sous housse et un radiateur, à rapprocher de ce poste.
+- **Fait** (`src/system/iss-cameras.ts`, test `tests/iss-cameras.test.ts`) : un registre des quatre caméras (identifiant,
+  flux, descriptif, attache dans le repère de la station et sa source, axe de visée, état « estimation »). Pour la caméra
+  d'amarrage, la visée va de Bartolomeo vers IDA-2 ; le test vérifie qu'elle tombe à moins d'un mètre du port que la table
+  de la station (`iss.ts`) place à cet endroit.
+- **Non établi :**
+  - la place exacte de chaque caméra sur Bartolomeo ;
+  - les champs de vue ;
+  - l'axe de la caméra d'horizon (estimé à 35° sous l'avant, puisque le limbe est en haut de l'image) ;
+  - la caméra NASA.
+- **Suite, ISS2 :** ajuster attache, axe et champ sur les images horodatées d'ISS0. Le limbe donne le tangage et le roulis,
+  les côtes la géométrie au sol (nadir), le véhicule amarré la caméra d'amarrage. L'heure lue dans l'incrustation situe
+  l'ISS par SGP4.
