@@ -6679,8 +6679,33 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: vec2f, el: f32, rev: bool,
   let paved = bandCover(a, -60.0, L + 60.0, fA) * bandCover(ac, -1.0, hw + 7.5, fC);
   o.cover = paved;
   var alb = mix(vec3f(0.17, 0.165, 0.155), vec3f(0.075, 0.075, 0.08), bandCover(ac, -1.0, hw, fC));
-  // (the touchdown zone's rubber: darker in the middle)
-  alb *= 1.0 - 0.35 * bandCover(am, 250.0, 1100.0, fA) * bandCover(ac, -1.0, 12.0, fC);
+  // (Q7 VIPER B4 — the runway worn: the main gears' rubber in streaks along their tracks, the nose's down the middle, over the
+  // touchdown zones; repair patches; the slabs' joints; the surface aged unevenly — each faded out as the pixel's footprint
+  // grows past it, the mean kept. TUNE_SC_SKIP 512: the touchdown zone's plain darkening, as before — the A/B)
+  if ((TUNE_SC_SKIP & 512u) == 0u) {
+    let tz = bandCover(am, 150.0, 1300.0, fA);
+    let tracks = max(bandCover(ac, 2.5, 7.0, fC), 0.6 * bandCover(ac, -0.8, 0.8, fC));
+    // (streaks 40 m along, 0.6 m across; their contrast gone where a pixel covers several)
+    let det = 1.0 - smoothstep(0.6, 3.0, max(0.05 * fA, fC));
+    let streak = clamp(0.5 + 0.6 * gnoise(vec3f(a * 0.025, c * 1.7, 3.1)), 0.0, 1.0);
+    alb *= 1.0 - 0.5 * tz * tracks * mix(0.6, streak, det);
+    alb *= 1.0 - 0.12 * tz * bandCover(ac, -1.0, 12.0, fC);
+    // (repair patches: in cells 40 m along, 15 m across, one in four a rectangle of fresher or older asphalt)
+    let cell = vec2f(floor(a / 40.0), floor(c / 15.0));
+    let hsh = fract(sin(dot(cell, vec2f(12.9898, 78.233))) * 43758.5453);
+    let pa = a - cell.x * 40.0;
+    let pc = c - cell.y * 15.0;
+    let repair = bandCover(pa, 6.0 + 16.0 * hsh, 20.0 + 60.0 * hsh, fA) * bandCover(pc, 2.0, 8.0 + 20.0 * hsh, fC) * step(hsh, 0.25);
+    alb *= 1.0 + select(-0.14, 0.12, hsh < 0.12) * repair * bandCover(ac, -1.0, hw, fC);
+    // (the slabs' joints, 5 m each way: 10 cm dark lines — stripeCover fades them to their mean past the footprint)
+    let joints = max(stripeCover(c + 0.05, 5.0, 0.1, fC), stripeCover(a, 5.0, 0.1, fA));
+    alb *= 1.0 - 0.12 * joints * bandCover(ac, -1.0, hw, fC);
+    // (aged unevenly: ±8 % over tens of metres)
+    alb *= 1.0 + 0.08 * gnoise(vec3f(a * 0.01, c * 0.05, 7.7)) * (1.0 - smoothstep(5.0, 30.0, fA));
+  } else {
+    // (the touchdown zone's rubber: darker in the middle)
+    alb *= 1.0 - 0.35 * bandCover(am, 250.0, 1100.0, fA) * bandCover(ac, -1.0, 12.0, fC);
+  }
   var m = 0.0;
   // threshold bars: 30 m long, 1.8 m wide, 1.8 m apart, either side of a 3.6 m gap (and at the far end)
   let bars = stripeCover(ac - 1.8, 3.6, 1.8, fC) * bandCover(ac, 1.8, hw - 3.0, fC);
