@@ -13,7 +13,8 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // (CLOUD_NEAR_N 4), before (the far field off — TUNE_GSKIP 1048576: 3.8 km and the veil), the reference (4194304: every
 // cloud on the sunbeam marched out to 120 km, no map), C6 again (the measure's own noise). CS_OUT: the shots and figures
 // (remote-results/cloud-shadow-c6). CS_AB=<bit>: the modes now and with that TUNE_GSKIP bit instead, twice each (e.g. 1073741824:
-// the clouds' transmittance floor as before Q5 C10).
+// the clouds' transmittance floor as before Q5 C10); CS_AB_KEY another tune's key for it (e.g. TUNE_SC_SKIP 256: every weather
+// layer marched, as before Q5 P8's ordered march).
 // Duration: ~6 min on this Mac.
 // Done when: the ten shots taken and each mode's pass costs logged, no GPU error.
 const OUT = process.env.CS_OUT ?? "remote-results/cloud-shadow-c6";
@@ -45,9 +46,9 @@ test.skipIf(!E2E)(
         const modes: (readonly [string, string])[] = AB
           ? [
               ["on", "{}"],
-              ["ab", `{ TUNE_GSKIP: ${AB} }`],
+              ["ab", `{ ${process.env.CS_AB_KEY ?? "TUNE_GSKIP"}: ${AB} }`],
               ["on2", "{}"],
-              ["ab2", `{ TUNE_GSKIP: ${AB} }`],
+              ["ab2", `{ ${process.env.CS_AB_KEY ?? "TUNE_GSKIP"}: ${AB} }`],
             ]
           : [
               ["on", "{}"],

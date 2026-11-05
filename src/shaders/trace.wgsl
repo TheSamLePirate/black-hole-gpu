@@ -11478,16 +11478,35 @@ fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx:
   var cs = EarthClouds(alpha, cl, tc, ta);
   // the weather's layers round the camera (their order along the ray: one way or the other, the lowest
   // first — up from below them, down from above)
+  // (Q5 P8: from below every layer's base or above every top, the layers in the order the ray meets them — concentric shells
+  // apart —, and none marched behind an opaque one: wxA, what the layers met so far hide, over 0.999 — the composition by
+  // depth, the image the same. Inside a layer, or TUNE_SC_SKIP 256: every layer, as before — the A/B)
+  var wxA = 0.0;
+  var fromAbove = false;
   if (HAS_WX && volume && earth && WX_W > 0.0) {
+    let hCam = (length(ro) - 1.0) * EARTH_RM;
+    var lo = 3e38;
+    var hi = -3e38;
     for (var i = 0u; i < 3u; i++) {
+      if (P.wx[1u + i].z > 0.0) {
+        lo = min(lo, P.wx[1u + i].x);
+        hi = max(hi, P.wx[1u + i].y);
+      }
+    }
+    let ordered = (TUNE_SC_SKIP & 256u) == 0u && (hCam < lo || hCam > hi);
+    fromAbove = ordered && hCam > hi;
+    for (var n = 0u; n < 3u; n++) {
+      let i = select(n, 2u - n, fromAbove);
+      if (ordered && wxA > 0.999) { break; }
       let lv = wxCloud(ro, rd, tHit, i, Ls, E, jit);
       if (lv.alpha <= 0.0) { continue; }
+      wxA = 1.0 - (1.0 - wxA) * (1.0 - lv.alpha);
       let c = EarthClouds(lv.alpha, lv.cl, lv.t, lv.ta);
       cs = cloudsAdd(cs, c);
     }
   }
-  // (N5: the rain falling from the lowest deck — its shafts, merged as one more layer)
-  if (HAS_WX && volume && earth && WX_W > 0.0 && P.wx[5].y > 0.02 && (TUNE_GSKIP & 65536u) == 0u) {
+  // (N5: the rain falling from the lowest deck — its shafts, merged as one more layer; from above, under an opaque deck unseen)
+  if (HAS_WX && volume && earth && WX_W > 0.0 && P.wx[5].y > 0.02 && (TUNE_GSKIP & 65536u) == 0u && !(fromAbove && wxA > 0.999)) {
     let lv = wxRainShafts(ro, rd, tHit, Ls, E, jit);
     if (lv.alpha > 0.0) {
       let c = EarthClouds(lv.alpha, lv.cl, lv.t, lv.ta);
