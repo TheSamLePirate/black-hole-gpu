@@ -42,7 +42,9 @@ const QUALITY = `(() => {
   const pix = (2 * Math.tan(vf / 2)) / innerHeight;
   const merc = (sl, n) => (0.5 - Math.atanh(Math.min(Math.max(sl, -0.999999), 0.999999)) / TAU) * n;
   const inR = (r, x, y) => !!r && x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1;
-  let qs = 0, qn = 0, worst = 1;
+  let qs = 0, qn = 0, worst = 1, is = 0, near = 0, nn = 0;
+  // (the ideal: the level the footprint asks there whatever the windows — up to z 17 over the IGN's France, z 14 elsewhere)
+  const zMax = t.nationalAt === "ign" ? 17 : 14;
   for (let i = 0; i < 24; i++) for (let j = 1; j <= 16; j++) {
     const az = head + ((i + 0.5) / 24 - 0.5) * hf;
     const dep = Math.atan((j / 16) * Math.tan(vf / 2)) + (6 * Math.PI) / 180;
@@ -59,8 +61,11 @@ const QUALITY = `(() => {
     }
     const q = Math.min(1, 2 ** (have - want));
     qs += q; qn++; worst = Math.min(worst, q);
+    const qi = Math.min(1, 2 ** (have - Math.min(Math.floor(zf + 0.5), zMax)));
+    is += qi;
+    if (d < 1500) { near += qi; nn++; }
   }
-  return { q: +(qs / qn).toFixed(3), worst: +worst.toFixed(3), pending: t.pending, photos: t.orthoPending, finest: t.finest, agl: Math.round(H), lat: +g.lat.toFixed(4), lon: +g.lon.toFixed(4) };
+  return { q: +(qs / qn).toFixed(3), worst: +worst.toFixed(3), ideal: +(is / qn).toFixed(3), near: nn ? +(near / nn).toFixed(3) : null, pending: t.pending, photos: t.orthoPending, finest: t.finest, agl: Math.round(H), lat: +g.lat.toFixed(4), lon: +g.lon.toFixed(4) };
 })()`;
 
 // (CF_PROBE=1: the tiles' raw heights over a fan ahead and to the left — 300 m to 2.5 km, the heading −80° … +20° —, each
