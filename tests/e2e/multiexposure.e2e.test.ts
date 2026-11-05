@@ -6,6 +6,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // dots, the base's landscape under them), the game put back as it was; the eclipse calculator's sheet of the
 // 12 August 2026 eclipse → "Multiple exposure": the dialog filled for it (Paris: partial there), 3 phases
 // before and after, the sky alone, the discs laid at their places, the caption.
+// Duration: ~15 min on kerr-mini.
+// Done when: the eclipse's composite shown with its caption, the game put back as it was.
 
 describe.skipIf(!E2E)("the multiple exposure", () => {
   let app: App;

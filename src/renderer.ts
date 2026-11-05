@@ -7967,9 +7967,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return c > Math.cos(half) ? Math.max(this.moonLight, 2e-4) : 1;
   }
 
-  /** The sky's brightness factor: auto exposure keeps the (artistic) sky as it looks on screen. */
+  /** The sky's brightness factor: the (artistic) sky kept as it looks on screen at the exposure — the meter's, or the one set by
+   *  hand (an exposure the same image whichever set it: a daylight exposure set by hand, 15–17 EV, drew the stars 2¹⁵–2¹⁷ times
+   *  too bright — white sparkles through a storm's clouds, their (1 − α)³ ≈ 10⁻⁶ not enough; the scenes set by hand at 0 EV,
+   *  unchanged) */
   private skyScale(s: Settings) {
-    return s.autoExposure ? 2 ** -this.autoEVDrawn : 1;
+    return 2 ** -(s.autoExposure ? this.autoEVDrawn : s.exposure);
   }
 
   /**
