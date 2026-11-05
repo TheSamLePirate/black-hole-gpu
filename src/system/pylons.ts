@@ -80,3 +80,47 @@ export function pylonMesh(p: Pylon, z0: number) {
   arm(0.9 * H, 0.18 * H);
   return { positions, triangles };
 }
+
+/** the conductors drawn within this of the centre [m] (past it, under a pixel's coverage and the haze), at most this many spans */
+export const CABLE_REACH_M = 2500;
+export const CABLE_SPANS_MAX = 200;
+/** a conductor's width [m] (a 225–400 kV bundle's wires, seen together) and its sag over its span (the middle's drop) */
+export const CABLE_WIDTH_M = 0.04;
+export const CABLE_SAG = 0.025;
+
+/**
+ * The conductors between two consecutive pylons (their feet z0, z1): six — each arm's two ends — as catenaries (a parabola of
+ * CABLE_SAG of the span at the middle), each point a pair of vertices at the same place (scenery-raster.ts meshVs widens the pair
+ * to a pixel at least, along the frame's up; the even one down, the odd one up), 8 segments a conductor.
+ */
+export function cableMesh(a: Pylon, z0: number, b: Pylon, z1: number) {
+  const positions: number[] = [],
+    triangles: number[] = [];
+  const L = Math.hypot(b.x - a.x, b.y - a.y);
+  const tip = (p: Pylon, z: number, level: number, side: number): [number, number, number] => {
+    const [hz, half] = level === 0 ? [0.62, 0.3] : level === 1 ? [0.76, 0.24] : [0.9, 0.18];
+    const c = side * (half * p.h - 0.3);
+    return [p.x - Math.sin(p.along) * c, p.y + Math.cos(p.along) * c, z + hz * p.h];
+  };
+  const N = 8;
+  for (let level = 0; level < 3; level++)
+    for (const side of [-1, 1]) {
+      const A = tip(a, z0, level, side),
+        // (the far pylon's same side: its across turned as the line turns, not flipped)
+        sameSide = Math.cos(b.along - a.along) >= 0 ? side : -side,
+        B = tip(b, z1, level, sameSide);
+      const first = positions.length / 3;
+      for (let i = 0; i <= N; i++) {
+        const s = i / N;
+        const x = A[0] + (B[0] - A[0]) * s,
+          y = A[1] + (B[1] - A[1]) * s,
+          z = A[2] + (B[2] - A[2]) * s - CABLE_SAG * L * 4 * s * (1 - s);
+        positions.push(x, y, z, x, y, z);
+      }
+      for (let i = 0; i < N; i++) {
+        const k = first + 2 * i;
+        triangles.push(k, k + 1, k + 2, k + 1, k + 3, k + 2);
+      }
+    }
+  return { positions, triangles };
+}

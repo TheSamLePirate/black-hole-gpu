@@ -443,6 +443,8 @@ export class EarthScenery {
       turbines: d?.turbines ?? 0,
       /** (Q8 D1) the high-voltage pylons drawn */
       pylons: d?.pylons ?? 0,
+      /** (Q8 D1) the spans of conductors drawn */
+      cables: d?.cables ?? 0,
       /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */
       forestCells: d?.forestCells ?? 0,
       forestCellM: d?.forestCellM ?? 0,

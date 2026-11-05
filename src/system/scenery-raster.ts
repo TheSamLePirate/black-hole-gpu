@@ -9,6 +9,7 @@
 // costs a missed exact test, never a lost tree) — in the terrain raster's pass, against its depth, their id in the
 // visibility target's g (the cell + 1, exact in a float below 2²⁴), the proxy's distance in its b.
 
+import { CABLE_WIDTH_M } from "./pylons";
 import { TURBINE_FACING } from "./turbines";
 import { TERRAIN_RASTER_FORMAT } from "./terrain-raster";
 import { TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
@@ -205,7 +206,7 @@ struct U {
 // the scenery's frame (P.scenery): its east, north, up axes on the Earth's, the camera in it [m] (w: the near proxies' reach [m])
 // (lift — R4b, contract C0-3 —: the air's lift of a point at a distance d [m] from the camera, (x + y d) d² fitted to the tracer's
 // table over 4–60 km — renderer.ts sceneryLift —, z the fade's angle [rad], w 1 on)
-struct S { east: vec4f, north: vec4f, up: vec4f, cam: vec4f, lift: vec4f };
+struct S { east: vec4f, north: vec4f, up: vec4f, cam: vec4f, lift: vec4f, misc: vec4f };
 @group(0) @binding(1) var<uniform> sc: S;
 // the Sun's view for the trees' and buildings' shadow map (encodeShadow): right, up, towards the Sun in the scenery's frame —
 // each w its half-extent [m] —, the map's centre (w: 1 drawn)
@@ -569,7 +570,19 @@ fn meshLeaf(tri: u32) -> f32 {
     let d = wp.xy - f.xy;
     o.pyl = vec4f(d.x * cos(a) + d.y * sin(a), -d.x * sin(a) + d.y * cos(a), wp.z - f.z, f.w);
   }
-  let v = view(wp);
+  var v = view(wp);
+  // (Q8 D1: a conductor — 4 —: its pair of vertices opened along the frame's up to a pixel at least — the even one down —, the
+  // share of that its wire covers in pyl.x: meshFs keeps that share of its pixels, a fresh draw each frame — its seed the frame's
+  // number (sc.misc.x — pyl.y), new each frame even frozen: the history's mean the wire's true faintness)
+  if (tg == 0xfffb0000u) {
+    o.bridge = 4.0;
+    let t = u32(scenery[3].z) * 4u + vi;
+    let id = bitcast<u32>(scenery[t / 4u][t % 4u]);
+    let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
+    let half = max(${CABLE_WIDTH_M / 2}, 0.5 * px);
+    o.pyl = vec4f(${CABLE_WIDTH_M} / (2.0 * half), sc.misc.x, 0.0, 0.0);
+    v = view(wp + vec3f(0.0, 0.0, select(-half, half, (id & 1u) == 1u)));
+  }
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
   return o;
@@ -580,7 +593,11 @@ fn meshLeaf(tri: u32) -> f32 {
   // (Q8 D1: a pylon's lattice — its legs at its faces' edges, a girt every 4 m, an X in each bay, members ~0.3 m — its gaps open
   // while a member spans a pixel or more; past that its silhouette whole, no shimmer)
   let fw = max(length(dpdx(v.pyl.xyz)), length(dpdy(v.pyl.xyz)));
-  if (v.bridge > 2.5 && fw < 0.3) {
+  if (v.bridge > 3.5) {
+    let h = fract(sin(dot(floor(v.clip.xy) + vec2f(v.pyl.y * 7.31, 0.0), vec2f(12.9898, 78.233))) * 43758.547);
+    if (h > v.pyl.x) { discard; }
+  }
+  if (v.bridge > 2.5 && v.bridge < 3.5 && fw < 0.3) {
     let H = v.pyl.w;
     let z = v.pyl.z;
     let half = mix(H / 12.0, max(0.8, H / 45.0), clamp(z / H, 0.0, 1.0));
@@ -660,6 +677,8 @@ export class SceneryRaster {
   private sceneryU: GPUBuffer;
   /** (Q8 D1) the game's clock [s] the turbines' blades turn by (renderer.ts: its rain clock — frozen with the world) */
   clock = 0;
+  /** (Q8 D1) the renderer's frame count (the conductors' coverage draw) */
+  frame = 0;
   /** (Q8 D1) where the surface wind blows from at the scenery [° from north] — the turbines face it */
   windFrom = TURBINE_FACING;
   private draws: GPUBuffer;
@@ -685,7 +704,7 @@ export class SceneryRaster {
     this.module = device.createShaderModule({ label: "scenery raster", code: sceneryRasterShader(forestModuleOf(traceSource)) });
     const S = GPUBufferUsage.STORAGE;
     this.frameU = device.createBuffer({ size: TERRAIN_RASTER_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.sceneryU = device.createBuffer({ size: 80, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.sceneryU = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws = device.createBuffer({
       size: (LISTS + 7) * 16,
       usage: S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
@@ -836,7 +855,7 @@ export class SceneryRaster {
   }
 
   private lod: SceneryRasterLod = SCENERY_RASTER_LOD;
-  private sceneryOut = new Float32Array(20);
+  private sceneryOut = new Float32Array(24);
   /** (R4b) the air's lift for the scenery's projection: (x + y d) d² [m], z the fade's angle, w 1 on — renderer.ts sceneryLift */
   lift = new Float32Array(4);
   /** the proxies' detail (a switch for comparisons — renderer.sceneryRasterLod) */
@@ -935,6 +954,8 @@ export class SceneryRaster {
     this.sceneryOut.set(this.lift, 16);
     // (north.w — unread here as P.scenery's —: the game's clock for the turbines' blades — Q8 D1)
     this.sceneryOut[7] = this.clock;
+    // (misc.x: the frame's number — the conductors' coverage draw, a fresh one each frame — Q8 D1)
+    this.sceneryOut[20] = this.frame % 4096;
     // (up.w — unread here too —: the turbines' heads' turn from their built facing to the weather's wind, anticlockwise [rad])
     this.sceneryOut[11] = (-(this.windFrom - TURBINE_FACING) * Math.PI) / 180;
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);

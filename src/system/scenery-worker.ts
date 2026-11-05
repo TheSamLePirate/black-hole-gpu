@@ -6,7 +6,19 @@ import { earthDetail, toHalf } from "../terrain";
 import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
 import { CANOPY_NEAR, IgnLand, tilesWithin } from "./ign-canopy";
-import { lineVolts, PYLON_MAX, PYLON_MIN_VOLTS, PYLON_REACH_M, type Pylon, pylonHeight, pylonMesh, pylonSpan } from "./pylons";
+import {
+  lineVolts,
+  PYLON_MAX,
+  PYLON_MIN_VOLTS,
+  PYLON_REACH_M,
+  type Pylon,
+  pylonHeight,
+  pylonMesh,
+  pylonSpan,
+  cableMesh,
+  CABLE_REACH_M,
+  CABLE_SPANS_MAX,
+} from "./pylons";
 import { fetchRange, OVERTURE_BUCKET, OVERTURE_LIST, OVERTURE_Z, overtureReleases, overtureUrl, PmTiles } from "./pmtiles";
 import {
   overtureBaseUrl,
@@ -1225,6 +1237,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const turbines: TurbineMesh[] = [];
   const pylons: { positions: number[]; triangles: number[]; foot: [number, number, number]; h: number; along: number }[] = [];
   const pylonAt = new Map<string, Pylon & { lat: number; lon: number; d: number }>();
+  // (each line's pylons in order — their keys —, its span: the conductors between consecutive ones)
+  const cableChains: { keys: string[]; span: number }[] = [];
+  const cables: { positions: number[]; triangles: number[] }[] = [];
   try {
     const list = await fetch(OVERTURE_LIST, { signal: AbortSignal.timeout(FETCH_MS) });
     count(list);
@@ -1284,10 +1299,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
               });
               const h = pylonHeight(volts),
                 span = pylonSpan(volts);
+              const chain: string[] = [];
+              cableChains.push({ keys: chain, span });
               const put = (x: number, y: number, lat: number, lon: number, along: number) => {
                 const d = Math.hypot(x, y);
                 if (d > PYLON_REACH_M) return;
                 const key = `${Math.round(x / 3)},${Math.round(y / 3)}`;
+                chain.push(key);
                 const had = pylonAt.get(key);
                 if (!had || had.h < h) pylonAt.set(key, { x, y, h, along, lat, lon, d });
               };
@@ -1339,6 +1357,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         turbines.push(m);
       }
     }
+    const placedPylon = new Map<string, { p: Pylon & { d: number }; z0: number }>();
     for (const py of [...pylonAt.values()].sort((a, b) => a.d - b.d).slice(0, PYLON_MAX)) {
       const z0 = localPoint(frame, py.lat, py.lon, heightNow(py.lat, py.lon) ?? (await height(py.lat, py.lon)))[2];
       const m = pylonMesh(py, z0);
@@ -1346,12 +1365,29 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (storedBytes + bytes > budget - 2 * 1024 * 1024) break;
       storedBytes += bytes;
       pylons.push({ ...m, foot: [py.x, py.y, z0], h: py.h, along: py.along });
+      placedPylon.set(`${Math.round(py.x / 3)},${Math.round(py.y / 3)}`, { p: py, z0 });
     }
+    // (the conductors: between consecutive pylons of a line, both drawn, a span's length apart or so, within CABLE_REACH_M)
+    let spans = 0;
+    for (const c of cableChains)
+      for (let k = 0; k + 1 < c.keys.length && spans < CABLE_SPANS_MAX; k++) {
+        const A = placedPylon.get(c.keys[k]!),
+          B = placedPylon.get(c.keys[k + 1]!);
+        if (!A || !B || A === B) continue;
+        const L = Math.hypot(B.p.x - A.p.x, B.p.y - A.p.y);
+        if (L < 0.25 * c.span || L > 1.8 * c.span || Math.min(A.p.d, B.p.d) > CABLE_REACH_M) continue;
+        const m = cableMesh(A.p, A.z0, B.p, B.z0);
+        const bytes = m.positions.length * 4 + (m.triangles.length / 3) * 16;
+        if (storedBytes + bytes > budget - 2 * 1024 * 1024) break;
+        storedBytes += bytes;
+        cables.push(m);
+        spans++;
+      }
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`turbines: ${String(e).slice(0, 200)}`);
   }
   phase("turbines");
-  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget, decals, turbines, pylons);
+  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget, decals, turbines, pylons, cables);
   return {
     id: q.id,
     lat: q.lat,
@@ -1366,6 +1402,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     overtureTiles: overtureTileCount,
     turbines: turbines.length,
     pylons: pylons.length,
+    cables: cables.length,
     surveyRequests: land?.requests ?? 0,
     // (a block failed: its trees the land cover's — the scene not degraded for it)
     surveyError: land?.errors[0] ?? surveyErrors[0],

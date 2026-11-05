@@ -277,6 +277,8 @@ export const TURBINE_BLADE = 0xfffe0000;
 export const TURBINE_HEAD = 0xfffd0000;
 /** (Q8 D1) a pylon's triangle: this | its index (its entry in the pylons' table) — scenery-raster.ts meshFs: RASTER_CODE.pylon */
 export const PYLON_TAG = 0xfffc0000;
+/** (Q8 D1) a conductor's ribbon triangle — scenery-raster.ts meshVs widens it to a pixel, meshFs keeps its coverage's share */
+export const CABLE_TAG = 0xfffb0000;
 export function packScenery(
   prims: Primitive[],
   pixels: Uint32Array,
@@ -302,6 +304,9 @@ export function packScenery(
   /** (Q8 D1) the pylons' triangles (system/pylons.ts), after the turbines', tagged PYLON | its index — its entry in its table: (foot
    *  x, y, z, height), (the line's bearing, 0, 0, 0) */
   pylons: { positions: number[]; triangles: number[]; foot: [number, number, number]; h: number; along: number }[] = [],
+  /** (Q8 D1) the conductors' ribbons (system/pylons.ts cableMesh: pairs of vertices), tagged CABLE_TAG, each pair from an even
+   *  vertex (one vertex of padding before them when needed) */
+  cables: { positions: number[]; triangles: number[] }[] = [],
 ) {
   const { nodes, geometries, offsets } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
@@ -344,6 +349,12 @@ export function packScenery(
     if (p.data[3] === 1) buildingTriangles += p.mesh!.triangles.length / 3;
   }
   for (const m of [...turbines, ...pylons]) {
+    vertexCount += m.positions.length / 3;
+    triangleCount += m.triangles.length / 3;
+  }
+  const cablePad = cables.length ? vertexCount % 2 : 0;
+  vertexCount += cablePad;
+  for (const m of cables) {
     vertexCount += m.positions.length / 3;
     triangleCount += m.triangles.length / 3;
   }
@@ -415,6 +426,13 @@ export function packScenery(
       u.fill((PYLON_TAG | i) >>> 0, tag, (tag += m.triangles.length / 3));
       f.set([...m.foot, m.h, m.along, 0, 0, 0], (triangleOffset + triangleCount + 1 + 3 * turbines.length + 2 * i) * 4);
     });
+    v += cablePad;
+    for (const m of cables) {
+      f.set(m.positions, meshOffset * 4 + v * 3);
+      for (const k of m.triangles) u[t++] = v + k;
+      v += m.positions.length / 3;
+      u.fill(CABLE_TAG, tag, (tag += m.triangles.length / 3));
+    }
     f.set([turbines.length, pylons.length, 0, 0], (triangleOffset + triangleCount) * 4);
   }
   return buffer;
@@ -478,6 +496,8 @@ export interface SceneryReply {
   turbines?: number;
   /** (Q8 D1) the high-voltage pylons drawn */
   pylons?: number;
+  /** (Q8 D1) the spans of conductors drawn */
+  cables?: number;
   forestCells?: number;
   forestCellM?: number;
   buildings?: number;
