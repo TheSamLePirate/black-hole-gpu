@@ -1,3 +1,4 @@
+import type { IssCameraId } from "./system/iss-cameras";
 import { LANDSCAPES, landscapeFov, photoUtc, viewHeading } from "./system/landscapes";
 import type { BodyView } from "./system/our-side";
 import type { WeatherPreset } from "./weather";
@@ -438,6 +439,7 @@ export interface Settings {
   voyageWho: "observer" | "ship";
   voyageCine: "sequence" | "montage"; // the cinematic voyage (⇧G): one continuous shot, or cuts
   subjectView: "around" | "chase" | "aboard" | "tower"; // the view about a craft targeted (camera/subjectcam.ts)
+  issView: "off" | IssCameraId; // Q6-ISS ISS4: the view through a live stream's camera on the station (system/iss-cameras.ts), the ISS targeted and no craft flown — over subjectView; saved with the scene
   camSpeedFov: number; // the softened views' lens widened with the speed and the afterburner (its gain; 0: none)
   cineShot: "auto" | "chase" | "orbit" | "pass" | "tracking" | "planet" | "system"; // the director's view (cine/brain.ts): its shot, or the director choosing
   cineShake: number; // its noise: the air's buffeting, the engine's rumble, the hand (0 … 1)
@@ -829,6 +831,7 @@ export function defaultSettings(): Settings {
     voyageWho: "observer",
     voyageCine: "sequence",
     subjectView: "around",
+    issView: "off",
     camSpeedFov: 1,
     cineShot: "auto",
     cineShake: 0.5,
@@ -2241,6 +2244,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   voyageWho: "pref",
   voyageCine: "pref",
   subjectView: "pref",
+  issView: "scene",
   camSpeedFov: "pref",
   cineShot: "pref",
   cineShake: "pref",

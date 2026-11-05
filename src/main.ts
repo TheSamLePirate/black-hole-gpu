@@ -142,6 +142,8 @@ import {
 } from "./photo/plans";
 import { type MoonPathOptions, moonPathPlan, type TrailsOptions, trailsPlan } from "./photo/sky-series";
 import { drawIssTrail, issPasses, issPhotoPlan, issSight } from "./photo/iss-pass";
+import { ISS_CAMERA_IDS, type IssCameraId } from "./system/iss-cameras";
+import { issCameraLabel, issCameraStatus } from "./camera/iss-view";
 import { transits } from "./eclipse/moons";
 import { type MxKind, MultiExposureDialog } from "./ui/multiexposure";
 import { findObservable, ObservePage } from "./ui/observe";
@@ -2694,6 +2696,7 @@ async function main() {
     view,
     setView: (v) => setView(v),
     setMount: (m) => setMount(m),
+    issCameraView: (id) => issCameraView(id),
     cinematic,
     goTo,
     standOn,
@@ -6739,6 +6742,47 @@ async function main() {
     vc.rig.key = "";
     vc.rig.standH = h.standH;
   }
+  /**
+   * Q6-ISS ISS4 — the view through a live stream's camera on the station (system/iss-cameras.ts, camera/subjectcam.ts): the one
+   * action the Camera panel, TARS (its camera tool's issCamera) and __bh.issCamera take. A camera: the ISS targeted, its mount,
+   * line of sight, picture's up and field — its native framing, chosen again after a drag —, the view before it held; "back":
+   * that view given back. The scene's clock and the craft's state untouched. Why not, or null.
+   */
+  let issViewPrev: { hold: ReturnType<typeof viewHold>; target: Settings["target"] } | null = null;
+  function issCameraView(id: IssCameraId | "back"): string | null {
+    const C = viewCamera();
+    if (id === "back") {
+      if (C.s.issView === "off") return t("No ISS camera to come back from");
+      C.s.issView = settings.issView = "off";
+      const prev = issViewPrev;
+      issViewPrev = null;
+      if (prev?.hold) viewBack(prev.hold);
+      else if (prev && prev.target !== "iss") C.selectTarget(prev.target);
+      C.onCut?.();
+      onSettingsChange(["issView", "target"]);
+      refreshGui();
+      scheduleUrlSave();
+      panel.toast(t("Camera: back to the view before the ISS's cameras"));
+      return null;
+    }
+    if (!ISS_CAMERA_IDS.includes(id)) return tf("No ISS camera {0}", id);
+    // (the view's camera — the spectator's when a craft is flown —: piloting, the craft's own views)
+    if (C.piloting)
+      return t("The ISS's cameras are views from the station: leave the ship's view first (F3: the spectator), then choose one");
+    // (the view before held where it was on the Earth — a view about the ISS already: none, the station's own view resumed;
+    // held, it was left 290 km behind the station flown on)
+    if (C.s.issView === "off") issViewPrev = { hold: C.s.target === "iss" ? null : viewHold(), target: C.s.target };
+    if (C.s.target !== "iss" && !C.selectTarget("iss", { focus: true })) return t("The ISS is not in this universe");
+    C.s.issView = settings.issView = id;
+    // (its native framing: the head straight, the lens its field — subjectcam sets it, gives the one before back)
+    C.subject.yaw = C.subject.pitch = 0;
+    C.onCut?.();
+    onSettingsChange(["issView", "target"]);
+    refreshGui();
+    scheduleUrlSave();
+    panel.toast(tf("Camera: {0} — {1}", issCameraLabel(id), issCameraStatus(id)));
+    return null;
+  }
   const mxSnapshot = () => ({
     save: tools.snapshot("before the multiple exposure"),
     settings: { ...settings },
@@ -7336,6 +7380,7 @@ async function main() {
     realTimeSpeed: () => realTimeSpeed(settings),
     playPause,
     setMount,
+    issCameraView,
     setSpectator,
     setView: (v) => setView(v),
     cinematic: (c) => (c === null ? camera.setCinematic(null) : camera.cinematic !== c && cinematic(c)),
@@ -8021,6 +8066,7 @@ async function main() {
       if (!why && o.fov) camera.viewController().setFov(o.fov);
       return why;
     },
+    issCamera: (id: IssCameraId | "back") => issCameraView(id),
     mode: {
       get: () => gameMode(),
       set: (m: GameMode) => setGameMode(m, true),

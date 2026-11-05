@@ -93,3 +93,23 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
 
 /** a camera by its id */
 export const issCamera = (id: IssCameraId) => ISS_CAMERAS.find((c) => c.id === id)!;
+/** the cameras' ids, in the registry's order */
+export const ISS_CAMERA_IDS = ["sen-nadir", "sen-horizon", "sen-docking", "nasa-harmony"] as const satisfies readonly IssCameraId[];
+
+/** the field across the picture [°] a camera without one is drawn with */
+export const ISS_DEFAULT_FOV = 60;
+
+/** A camera's native framing on the station's axes (x ahead, y starboard, z nadir): its mount [m], its line of sight, the
+ *  picture's up (from its right where fitted — up = right × look —, else the zenith's side of the view: the right
+ *  look × zenith, the forward where it looks along the vertical) and its field across [°]. */
+export function issCameraFrame(id: IssCameraId): { mount: Vec3; look: Vec3; up: Vec3; right: Vec3; fovDeg: number } {
+  const c = issCamera(id) ?? ISS_CAMERAS[0]!;
+  const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const f = c.look;
+  let right = c.right;
+  if (!right) {
+    const zen: Vec3 = Math.abs(f[2]) > 0.98 ? [1, 0, 0] : [0, 0, -1];
+    right = unit(cross(f, zen));
+  }
+  return { mount: c.mount, look: f, up: unit(cross(right, f)), right, fovDeg: c.fovDeg ?? ISS_DEFAULT_FOV };
+}

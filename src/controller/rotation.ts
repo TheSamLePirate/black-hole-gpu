@@ -896,7 +896,7 @@ function dragBy(this: CameraController, dx: number, dy: number, dtEv: number, lo
     this.vPitch = smooth(this.vPitch, (dy * kLook) / dtEv);
   };
   // (about a craft, chased or aboard: the drag turns the head, swings the chase round — camera/subjectcam.ts)
-  if (!this.piloting && this.subjectActive() && s.subjectView !== "tower") {
+  if (!this.piloting && this.subjectActive() && (s.subjectView !== "tower" || (s.issView !== "off" && s.target === "iss"))) {
     this.subjectLook(-dx * kLook * (s.subjectView === "chase" ? 2 : 1), dy * kLook);
     return;
   }

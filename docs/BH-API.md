@@ -360,6 +360,21 @@ the spectator's when a craft is flown (`camera.viewController().s.fov`, not `set
 spectator). Each call is a cut: the view placed anew, even over one already placed. Returns why not, or null. *Used in:*
 `tests/e2e/coast-refs.e2e.test.ts` (the T7 reference photographs reproduced), `tests/e2e/iss-sunset.e2e.test.ts`.
 
+### `__bh.issCamera(id: "sen-nadir" | "sen-horizon" | "sen-docking" | "nasa-harmony" | "back")` → string \| null
+
+Q6-ISS ISS4: looks through one of the ISS's live-stream cameras (`issCameraView` in `src/main.ts`, the same action as the
+Camera panel's "The ISS's live cameras" and TARS's `camera` tool `issCamera`). It targets the ISS, puts the eye at the camera's
+mount on the station's LVLH axes, along its line of sight with the picture's up and field across from the registry
+(`src/system/iss-cameras.ts` `issCameraFrame`; drawn by `camera/subjectcam.ts`), and sets `settings.issView` (a scene setting:
+saved and replayed). `"back"` gives the view held before back (`viewHold`/`viewBack`). A drag turns the head; choosing the
+camera again restores its native framing. The scene's clock and the craft's state are left as they are; a craft flown flies
+on — the view is the spectator's (F3). Refused (the reason is returned) from the ship's own view. *Used in:* `tests/e2e/iss-cameras.e2e.test.ts`.
+
+### `__bh.issCameras()` → `{ id, label, status, calibrated, fovDeg }[]`
+
+The registry's cameras in order, with their name and status (calibrated on the live stream, or estimated) in the interface's
+language, and their horizontal field [°] (`null`: none known; the view then uses 60°).
+
 ### `__bh.mode` → object
 
 The game's four modes (`src/game/modes.ts`, the top bar `src/ui/topbar.ts`; PLAN-MODES-AAA M1):
@@ -1852,6 +1867,18 @@ const p = __bh.iss.start(__bh.game.now(), 150, [0, 0, 0]);  // tests/flight/scen
 
 The station's geometry (src/station.ts): its joints (the moving parts, their axes) and its ports (`name`, `centre`, `axis`, in the
 station frame, m). The ports: "IDA-2 · Harmony forward", "IDA-3 · Harmony zenith".
+
+### `__bh.iss.axes(X, V, t)` → `[x, y, z]`
+
+The station's LVLH axes at a state (home frame: `X`, `V` from `track.peek(t)`) and time — `x` ahead (+XVV), `y` starboard, `z`
+nadir —, unit vectors (`issAxes` in `src/system/iss.ts`): the frame of its parts and of its live-stream cameras. *Used in:*
+`tests/e2e/iss-cameras.e2e.test.ts`.
+
+### `__bh.iss.cameraFrame(id)` → `{ mount, look, up, right, fovDeg }`
+
+A live-stream camera's native framing on those axes (`issCameraFrame` in `src/system/iss-cameras.ts`): its mount [m], its line
+of sight, the picture's up and right, its field across [°] — what `__bh.issCamera(id)` draws. *Used in:*
+`tests/e2e/iss-cameras.e2e.test.ts`.
 
 ### `__bh.iss.hulls` → `{ranger, station}`
 

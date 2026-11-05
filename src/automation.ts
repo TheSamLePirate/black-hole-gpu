@@ -3,6 +3,8 @@
 // simulation frozen and stepped, offline renders and videos posted to the dev server, the bench.
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
+import { issCameraList } from "./camera/iss-view";
+import { issCameraFrame, type IssCameraId } from "./system/iss-cameras";
 import { hudHits, scopeRange } from "./ui/hud/symbology";
 import type { BootReport } from "./boot-timeline";
 import { bodyFixedOf, GEAR, gearHeight, groundRelief, toBodyFixed } from "./system/our-surface";
@@ -40,7 +42,7 @@ import type { TarsMemory } from "./ai/memory";
 import type { Tool } from "./ai/agent";
 import { VideoWriter } from "./video";
 import { CONSTELLATIONS, NAMED_STARS, type ChartFrame } from "./skychart";
-import { issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
+import { issAxes, issElements, issOrbit, issStart, issTrack, station } from "./system/iss";
 import { rangerHull, stationHulls } from "./system/collide";
 import { fleet } from "./fleet";
 import { ourState, referenceBody } from "./system/our-side";
@@ -156,6 +158,8 @@ export interface BhContext {
   viewAt(lat: number, lon: number, o?: { altM?: number; heading?: number; pitch?: number; fov?: number; tripod?: boolean }): string | null;
   /** the PWA (src/pwa.ts): the worker's state, the caches' figures */
   pwa: Pwa;
+  /** (Q6-ISS ISS4) the view through a live stream's camera on the station, or back to the view before; why not, or null */
+  issCamera(id: IssCameraId | "back"): string | null;
   /** the game's mode (game/modes.ts, PLAN-MODES-AAA M1) */
   mode: {
     get(): GameMode;
@@ -375,6 +379,10 @@ export function installBh(c: BhContext) {
         station,
         start: issStart,
         hulls: { ranger: rangerHull, station: stationHulls },
+        /** its LVLH axes at a state (X, V) and time: [x ahead, y starboard, z nadir] (home frame, unit) */
+        axes: issAxes,
+        /** (Q6-ISS ISS4) a live-stream camera's native framing on those axes (mount [m], look, up, right, fovDeg) */
+        cameraFrame: issCameraFrame,
       },
       /** the free camera to a target (the camera panel's Go to) */
       goTo,
@@ -681,6 +689,11 @@ export function installBh(c: BhContext) {
       spectate: (on: boolean) => c.spectate(on),
       viewAt: (lat: number, lon: number, o?: { altM?: number; heading?: number; pitch?: number; fov?: number; tripod?: boolean }) =>
         c.viewAt(lat, lon, o),
+      /** (Q6-ISS ISS4) the ISS's live-stream cameras: issCamera(id) looks through one (its native framing; no craft flown),
+       *  issCamera("back") gives the view before back — why not, or null —; issCameras() lists them (id, label, status,
+       *  calibrated, fovDeg) — the Camera panel's and TARS's action */
+      issCamera: (id: IssCameraId | "back") => c.issCamera(id),
+      issCameras: () => issCameraList(),
       /** the offline cache: ready(), stats(), clearTiles(), update(), waiting */
       pwa: c.pwa,
       /** the calendar's "now" for the scenes of the real time (the station, the fleet): fixed by tests */

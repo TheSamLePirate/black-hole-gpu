@@ -330,3 +330,35 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   - la caméra d'amarrage, par le Dragon ;
   - le sens direct ou miroir de l'horizon, par une côte reconnue ;
   - l'intervalle exact des images NASA, pour resserrer le champ.
+
+## ISS4 — premier palier : les caméras des directs dans le jeu (le 5 novembre)
+
+- **Fait :**
+  - **une seule action**, `issCameraView` dans `src/main.ts`, partagée par trois accès :
+    - le panneau Caméra, section « Les caméras du direct de l'ISS » quand l'ISS est la cible ;
+    - TARS, par le paramètre `issCamera` de l'outil `camera` ;
+    - l'API, par `__bh.issCamera(id | "back")` et `__bh.issCameras()` ;
+  - **la vue** (`camera/subjectcam.ts`, `issCameraFrame`) :
+    - l'œil est placé sur l'attache de la caméra, dans les axes LVLH de la station ;
+    - il regarde selon la ligne de visée du registre, avec le haut de l'image tiré du bord droit calé en ISS2 ;
+    - le champ horizontal du registre est conservé, et le champ vertical suit la forme de la fenêtre ;
+    - un glisser tourne la tête, en mode exploration ; rechoisir la caméra rend son cadrage natif ;
+  - **le réglage de scène `issView`** est sauvegardé avec la scène, donc rejouable ;
+  - **« Revenir à la vue d'avant »** : autour de l'ISS si la vue d'avant la visait déjà, sinon à la vue tenue (`viewHold`) ;
+  - l'horloge de la scène n'est pas modifiée par l'action. Un appareil piloté continue de voler : la vue est celle du
+    spectateur (F3).
+- **Vérifié** (e2e `iss-cameras`, ce Mac, clics réels dans le panneau) :
+  - l'œil est sur l'attache (0,00 m), la visée à 0,00° et le haut de l'image à moins de 0,01° de ceux du registre ;
+  - le champ horizontal est de 95,0° pour l'horizon de Sen et de 36,0° pour la NASA ;
+  - l'outil de TARS mène au même état ; après le retour, `issView` vaut « off » et la vue est à 105 m de l'ISS ;
+  - aucune erreur de page. Unitaires et i18n FR/EN : passent.
+
+![ISS4 : les vues Sen horizon et NASA dans le jeu (ce Mac)](Q6/iss4-cameras.jpg)
+
+- **Constat :** l'œil de l'horizon de Sen est au centre de la boîte de Bartolomeo. Les modules de la station y couvrent le
+  quart haut de l'image, là où le direct montre le limbe et seulement un coin de structure en haut à gauche. **L'attache de
+  Sen est à caler** sur la structure visible dans ses images (reste d'ISS2) ; aucune correction n'a été devinée.
+- **Reste d'ISS4 :**
+  - afficher la source et la qualité du calage dans la vue elle-même (aujourd'hui dans le panneau et le message) ;
+  - rendre la vue accessible depuis la vue du vaisseau sans passer par F3 ;
+  - la caméra d'amarrage (champ inconnu : 60° par défaut).

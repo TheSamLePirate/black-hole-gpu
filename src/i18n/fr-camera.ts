@@ -63,4 +63,21 @@ export default {
     "Posée en avant de sa route — au sol, ou dans l'espace —, pivotant pour le suivre",
   "The throat: no way through from here": "La gorge : aucun passage d'ici",
   "No stop": "Aucune étape",
+  // (Q6-ISS ISS4: the ISS's live-stream cameras)
+  "No ISS camera to come back from": "Aucune caméra de l'ISS d'où revenir",
+  "Camera: back to the view before the ISS's cameras": "Caméra : retour à la vue d'avant les caméras de l'ISS",
+  "No ISS camera {0}": "Pas de caméra ISS {0}",
+  "The ISS's cameras are views from the station: leave the ship's view first (F3: the spectator), then choose one":
+    "Les caméras de l'ISS sont des vues depuis la station : quittez d'abord la vue du vaisseau (F3 : le spectateur), puis choisissez-en une",
+  "The ISS is not in this universe": "L'ISS n'est pas dans cet univers",
+  "Sen — nadir": "Sen — nadir",
+  "Sen — horizon, looking aft": "Sen — horizon, vers l'arrière",
+  "Sen — docking port": "Sen — port d'amarrage",
+  "NASA — live view, nadir": "NASA — direct, nadir",
+  "calibrated on the live stream": "calée sur le direct",
+  "estimated from its description": "estimée d'après sa description",
+  "The ISS's live cameras": "Les caméras du direct de l'ISS",
+  "Sen and NASA's streams, framed as on the station": "Les flux de Sen et de la NASA, cadrés comme sur la station",
+  "{0} · field {1}°": "{0} · champ {1}°",
+  "Back to the view before": "Revenir à la vue d'avant",
 } satisfies Record<string, string>;

@@ -18,6 +18,8 @@ import { SOLAR_BODIES } from "../system/solar";
 import { fmtAngle, focalLength } from "./telescope";
 import { el as h } from "./kit";
 import { t, tf } from "../i18n";
+import { issCameraList } from "../camera/iss-view";
+import type { IssCameraId } from "../system/iss-cameras";
 import { VESSEL_IDS } from "../vessels";
 
 /** The camera's placements without the ship: the rig's four, and falling freely (gravity). */
@@ -154,6 +156,9 @@ export interface CameraPanelDeps {
   standOn(b?: Target): string | null;
   /** settings the panel changed (routed like the settings panel's) */
   changed(keys: (keyof Settings)[]): void;
+  /** (Q6-ISS ISS4) the view through a live stream's camera on the station, or back from it — main.ts issCameraView, TARS's and
+   *  __bh's too; why not, or null */
+  issCameraView?(id: IssCameraId | "back"): string | null;
   /** the voyage to a target as the settings would make it, on straight lines (null: none there) */
   voyagePreview?(b: Target): { T: number; Tau: number; betaPeak: number; g: number } | null;
   toast(t: string): void;
@@ -609,6 +614,7 @@ export class CameraPanel {
       b.dataset.testid = `cp-subject-${k}`;
       b.onclick = () => {
         s.subjectView = vs.subjectView = k;
+        if (vs.issView !== "off") s.issView = vs.issView = "off";
         // (another view: a cut, on purpose — the camera's sensor told; a free camera following the ship let go: the view
         // is the craft's now)
         c.onCut?.();
@@ -617,12 +623,40 @@ export class CameraPanel {
         c.subject.tower = null;
         // (around: the rig's orbit about it)
         if (k === "around" && this.d.view() !== "orbit") this.d.setView("orbit");
-        this.d.changed(["subjectView"]);
+        this.d.changed(["subjectView", "issView"]);
         this.refresh(true);
       };
       seg.append(b);
     }
     sec.append(seg);
+    // (Q6-ISS ISS4: the live streams' cameras on the station — their native framings; another view above leaves them)
+    if (vs.target === "iss" && this.d.issCameraView) {
+      const isec = this.section(t("The ISS's live cameras"), t("Sen and NASA's streams, framed as on the station"));
+      const list = h("div", "cp-seg cp-seg-2");
+      for (const c of issCameraList()) {
+        const b = h("button", "", c.label);
+        b.classList.toggle("on", vs.issView === c.id);
+        b.dataset.tip = c.fovDeg ? tf("{0} · field {1}°", c.status, Math.round(c.fovDeg)) : c.status;
+        b.dataset.testid = `cp-iss-${c.id}`;
+        b.onclick = () => {
+          const why = this.d.issCameraView!(c.id);
+          if (why) this.d.toast(why);
+          this.refresh(true);
+        };
+        list.append(b);
+      }
+      isec.append(list);
+      if (vs.issView !== "off") {
+        const back = h("button", "cp-chip", t("Back to the view before"));
+        back.dataset.testid = "cp-iss-back";
+        back.onclick = () => {
+          const why = this.d.issCameraView!("back");
+          if (why) this.d.toast(why);
+          this.refresh(true);
+        };
+        isec.append(back);
+      }
+    }
   }
 
   /** The voyage (camera/voyager.ts, PLAN-CAMERA-AAA CAM6): who goes, at what pace, played in how long — and go. */

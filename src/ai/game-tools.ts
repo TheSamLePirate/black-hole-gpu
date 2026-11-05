@@ -12,6 +12,7 @@
 // a load, a deletion, a teleport, the date, a scene — the game is saved as "Before TARS"; undo goes back.
 // Every result is short, and carries what the game said (its toasts) since the call.
 
+import { ISS_CAMERA_IDS, type IssCameraId } from "../system/iss-cameras";
 import { type Airfield, fieldByCode } from "../world/runways";
 import { runwaySitesNear, siteByName, worldSite } from "../world/fieldsite";
 import { KNOWLEDGE_PAGES, type KnowledgeLang, type KnowledgePage, readKnowledge, searchKnowledge } from "./knowledge";
@@ -98,6 +99,8 @@ export interface GameHost {
   realTimeSpeed(): number;
   playPause(on: boolean): void;
   setMount(m: Mount): void;
+  /** (Q6-ISS ISS4) the view through a live stream's camera on the station, or back — main.ts issCameraView; why not, or null */
+  issCameraView?(id: IssCameraId | "back"): string | null;
   setSpectator(on: boolean): void;
   setView(v: "orbit" | "follow" | "free" | "tripod" | "fall"): void;
   cinematic(c: "orbit" | "dive" | "journey" | null): void;
@@ -1433,6 +1436,12 @@ export function gameTools(h: GameHost): Tool[] {
         standOn: { type: "string" },
         replay: { type: "string", enum: ["open", "trailer", "video", "close"] },
         replayShot: { type: "string", enum: ["auto", "chase", "orbit", "flyby", "cockpit", "target"] },
+        issCamera: {
+          type: "string",
+          enum: [...ISS_CAMERA_IDS, "back"],
+          description:
+            "look through a live stream's camera on the ISS (its native framing; no craft flown): sen-horizon (aft over the limb), sen-nadir, sen-docking, nasa-harmony (NASA's live view, down); back: the view before",
+        },
         shipView: {
           type: "boolean",
           description: "back to the ship's view: the ship on, the spectator and cinematics off, the map closed",
@@ -1466,6 +1475,10 @@ export function gameTools(h: GameHost): Tool[] {
           const why = h.standOn(body(a.standOn));
           if (why) notes.push(why);
         }
+        if (a.issCamera !== undefined) {
+          const why = h.issCameraView ? h.issCameraView(a.issCamera as IssCameraId | "back") : "no ISS cameras here";
+          if (why) notes.push(why);
+        }
         if (a.replay !== undefined || a.replayShot !== undefined) {
           const why = h.replay?.((a.replay as "open") ?? "open", a.replayShot as string | undefined);
           if (why) notes.push(why);
@@ -1477,6 +1490,7 @@ export function gameTools(h: GameHost): Tool[] {
           lookAt: settings.lookAt,
           telescope: settings.telescope,
           spot: settings.telescopeSpot,
+          issCamera: settings.issView,
           notes,
         };
       }),

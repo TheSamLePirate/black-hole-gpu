@@ -16,6 +16,7 @@ import { fleet } from "../fleet";
 import type { Vec3 } from "../physics";
 import type { Settings } from "../settings";
 import { issAxes } from "../system/iss";
+import { issCameraFrame } from "../system/iss-cameras";
 import { solarBody } from "../system/solar";
 import { fromBodyFixed, groundAboveSphere, toBodyFixed } from "../system/our-surface";
 import { craftRadius, craftSubjects, isCraft, isCraftLike, isSubject, ourTarget, type Body } from "../targeting";
@@ -78,7 +79,10 @@ export function subjectPose(s: Settings, b: Body, t: number): SubjectPose | null
 /** A view about a craft is under way (chase, aboard, tower: this module's; around: the rig's). */
 function subjectActive(this: CameraController): boolean {
   const s = this.s;
-  return (s.subjectView === "chase" || s.subjectView === "aboard" || s.subjectView === "tower") && isCraftLike(s.target);
+  return (
+    ((s.subjectView === "chase" || s.subjectView === "aboard" || s.subjectView === "tower") && isCraftLike(s.target)) ||
+    (s.issView !== "off" && s.target === "iss")
+  );
 }
 
 /** The drag's turn of the head (aboard) or of the chase about the craft [deg]. */
@@ -90,7 +94,7 @@ function subjectLook(this: CameraController, dyaw: number, dpitch: number) {
 
 /** A frame of the view about a craft; false: none (the rig, the flight… place the view). */
 function subjectStep(this: CameraController, dt: number): boolean {
-  if (!this.subjectActive() || this.s.subjectView !== "tower") {
+  if (!this.subjectActive() || (this.s.subjectView !== "tower" && !(this.s.issView !== "off" && this.s.target === "iss"))) {
     // (the lens given back when the tower is left)
     if (this.subject.fov0 !== null) {
       this.fovTarget = this.subject.fov0;
@@ -120,7 +124,23 @@ function subjectStep(this: CameraController, dt: number): boolean {
     return { f: unit(f2), u: u2 };
   };
   let X: Vec3, fwd: Vec3, upV: Vec3;
-  if (s.subjectView === "aboard") {
+  if (s.issView !== "off" && s.target === "iss") {
+    // (Q6-ISS ISS4: a live stream's camera on the station — system/iss-cameras.ts —: its mount, its line of sight and the
+    // picture's up on the station's axes (LVLH: x ahead, y starboard, z nadir), its field across; a drag turns the head — an
+    // exploration —, the camera chosen again its native framing)
+    const [x, y, z] = issAxes(P.X, P.V, t);
+    const fr = issCameraFrame(s.issView);
+    X = comb(P.X, [x, y, z], fr.mount);
+    const onAxes = (v: Vec3): Vec3 => [0, 1, 2].map((k) => x[k]! * v[0] + y[k]! * v[1] + z[k]! * v[2]) as Vec3;
+    const h = turn(onAxes(fr.look), onAxes(fr.up), L.yaw, L.pitch);
+    fwd = h.f;
+    upV = h.u;
+    // (its field across the picture kept: the vertical one by the window's shape)
+    if (L.fov0 === null) L.fov0 = s.fov;
+    const aspect = typeof innerWidth === "number" && innerHeight > 0 ? innerWidth / innerHeight : 16 / 9;
+    this.fovTarget = (2 * Math.atan(Math.tan((fr.fovDeg * Math.PI) / 360) / aspect) * 180) / Math.PI;
+    L.q = null;
+  } else if (s.subjectView === "aboard") {
     // the eye: an aircraft's cockpit (ahead, a little up), a ship's bridge (aft of the middle, high), a spacecraft's nose
     const eye: [number, number, number] =
       P.kind === "sea"
