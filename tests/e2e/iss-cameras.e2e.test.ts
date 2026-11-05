@@ -8,10 +8,13 @@ import { App, E2E, stopServer } from "./lib/app";
 // camera's mount on the station's LVLH axes, looking along its line of sight, its field across as the registry's; TARS's tool
 // takes the same action (issCamera); "Back to the view before" gives the view held before back, the ISS camera off. The scene's
 // clock is not moved by any of it.
+// ISS_AT: an instant (ISO, e.g. "2026-11-05T11:02:00Z" — the dense capture's) the scene is set at, the image's profile neutral:
+// the shots to compare with the live streams' frames of that instant (ISS3, scripts/iss-response.py); ISS_OUT: the shots' folder.
 // Duration: ~2 min on this Mac.
 // Done when: both cameras shot and checked under remote-results/iss-cameras/, the view back, no page error.
 
-const OUT = "remote-results/iss-cameras";
+const OUT = process.env.ISS_OUT ?? "remote-results/iss-cameras";
+const AT = process.env.ISS_AT;
 
 describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
   let app: App;
@@ -43,6 +46,13 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
     mkdirSync(OUT, { recursive: true });
     app = await App.boot({ width: 1280, height: 720, hash: "scene=Earth: the Blue Marble", tiles: false });
     await app.waitFor("__bh.renderer.completedFrames > 30", 120_000);
+    if (AT) {
+      // (the scene at that instant — the station where SGP4 puts it then —, the image's profile neutral: a measure's)
+      await app.js(`(__bh.setDate(${Date.parse(AT)}), __bh.preset("Earth: the Blue Marble"), __bh.settings.lookProfile = "neutral", __bh.touch(), 1)`);
+      await app.waitFor("__bh.renderer.completedFrames > 60", 120_000);
+      // (the game's own clock at that instant: the Sun's light as it was — __bh.setDate fixes the real-time scenes' "now" alone)
+      console.log(`  game clock: ${await app.js<string>(`__bh.game.setDate("${AT}")`)}`);
+    }
     await app.press("F3", "F3");
     await app.waitFor(`__bh.camera.spectating`, 10_000);
     await app.js(`__bh.goTo("iss")`);

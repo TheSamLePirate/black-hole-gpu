@@ -389,3 +389,38 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
 - **Vu dans le jeu :** le limbe et l'espace en haut, la structure à droite. C'est le reflet du coin haut-gauche du direct.
 
 ![ISS2 : la vue d'horizon de Sen dans le jeu, l'attache ajustée (ce Mac)](Q6/iss2-sen-horizon-mount.jpg)
+
+## ISS3 — premier palier : la réponse mesurée, jeu contre direct au même instant (le 5 novembre)
+
+- **Méthode :**
+  - l'e2e `iss-cameras` avec `ISS_AT=2026-11-05T11:02:00Z` met la scène à cet instant : horloge du jeu et « maintenant » de
+    l'ISS (SGP4), profil d'image Neutre. Il prend les vues Sen horizon et NASA ;
+  - `scripts/iss-response.py` les compare aux images du direct de 11:01 à 11:04 UTC. Les nuages du jeu ne sont pas ceux du
+    jour, donc chaque image est réduite à deux populations dans une zone de Terre : l'océan (la moitié la plus sombre) et les
+    nuages (les 3 % les plus clairs). On compare leur couleur sRGB moyenne, leur luminance linéaire et la chroma de l'océan.
+- **Mesuré (profil Neutre) :**
+
+  | | Sen horizon : direct | Sen horizon : jeu | NASA nadir : direct | NASA nadir : jeu |
+  |---|---|---|---|---|
+  | océan, sRGB | (18, 51, 72) | (58, 74, 106) | (35, 64, 102) | (52, 69, 101) |
+  | océan, luminance | 0,030 | 0,068 (×2,27) | 0,050 | 0,059 (×1,17) |
+  | océan, R/G · B/G | 0,35 · 1,40 | 0,78 · 1,44 | 0,54 · 1,58 | 0,76 · 1,46 |
+  | océan, chroma | 54 | 48 | 67 | 49 (×0,72) |
+  | nuages, sRGB | (217, 218, 204) | (225, 202, 191) | (180, 183, 186) | — (presque aucun nuage dans le jeu) |
+  | contraste nuage / océan | 23,1 | 9,1 (×0,40) | 9,4 | non comparable |
+
+- **Lecture :**
+  - **l'océan du jeu, vu de l'orbite, est trop rouge et trop gris** dans les deux vues (R/G de 0,76–0,78 contre 0,35–0,54).
+    En vue oblique, il est aussi **deux fois trop clair**, ce qui réduit le contraste avec les nuages à 40 % du direct ;
+  - les nuages sont au même niveau mais **plus chauds** (rouge +8, bleu −13 sur l'horizon) ;
+  - ces écarts ressemblent davantage à un défaut de rendu, dans la couleur de l'eau vue de haut ou dans la lumière diffusée
+    par l'air sur le trajet, qu'à la réponse d'une caméra. **Aucun profil de caméra n'est appliqué** : il masquerait l'écart
+    sans le corriger.
+
+![ISS3 : les vues Sen horizon et NASA du jeu, le 5 novembre à 11:02 UTC, profil Neutre (ce Mac)](Q6/iss3-sen-horizon-11h02.jpg)
+
+- **Suite d'ISS3 :**
+  - chercher la cause de l'océan trop clair et trop rouge vu de l'orbite : albédo de l'eau, réflexion du ciel, lumière de
+    l'air sur le trajet. Comparer à la même mesure faite sur le sol tracé ;
+  - ensuite seulement, un profil par caméra pour ce qui reste (exposition, balance des blancs) ;
+  - mesurer les nuages là où le jeu en a, ou avec la météo réelle du jour.
