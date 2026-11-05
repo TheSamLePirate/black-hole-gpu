@@ -48,7 +48,9 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
     await app.waitFor("__bh.renderer.completedFrames > 30", 120_000);
     if (AT) {
       // (the scene at that instant — the station where SGP4 puts it then —, the image's profile neutral: a measure's)
-      await app.js(`(__bh.setDate(${Date.parse(AT)}), __bh.preset("Earth: the Blue Marble"), __bh.settings.lookProfile = "neutral", __bh.touch(), 1)`);
+      await app.js(
+        `(__bh.setDate(${Date.parse(AT)}), __bh.preset("Earth: the Blue Marble"), __bh.settings.lookProfile = "neutral", __bh.touch(), 1)`,
+      );
       await app.waitFor("__bh.renderer.completedFrames > 60", 120_000);
       // (the game's own clock at that instant: the Sun's light as it was — __bh.setDate fixes the real-time scenes' "now" alone)
       console.log(`  game clock: ${await app.js<string>(`__bh.game.setDate("${AT}")`)}`);
