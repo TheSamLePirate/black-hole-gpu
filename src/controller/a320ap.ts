@@ -9,10 +9,13 @@ import { detentOf } from "../a320/fadec";
 import { vs1g } from "../a320/du/data";
 import { Fmgc, type FmgcIn, type FmgcOut } from "../a320/fmgc/fmgc";
 import { fleet } from "../fleet";
-import { t } from "../i18n";
-import { ilsReading, type IlsRunway } from "../game/ils";
+import { t, tf } from "../i18n";
+import { fromRunway, ILS, ilsReading, type IlsRunway, onRunway, runwayId } from "../game/ils";
+import { gcCourse, gcDist } from "../game/flightplan";
+import { geoidDeg } from "../system/geoid";
+import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import type { PilotInput } from "../pilot";
-import { findRunway, runwayOf } from "./ils";
+import { findRunway, runwayOf, syncRunwayLevel } from "./ils";
 import type { CameraController } from "../controls";
 
 declare module "../controls" {
@@ -23,6 +26,9 @@ declare module "../controls" {
     a320FmgcOut: FmgcOut | null;
     a320Ils: IlsRunway | null;
     a320ApKey(what: "ap" | "athr" | "nav"): string;
+    a320App: A320App | null;
+    a320Approach(W: IlsRunway): string;
+    a320ApproachOff(): void;
   }
 }
 
@@ -116,6 +122,7 @@ function a320FmgcStep(this: CameraController, inp: PilotInput, dt: number, onWhe
     elev: agl !== null ? g.alt * FT - agl : (R?.elev ?? 0) * FT,
   };
   this.a320FmgcIn = i;
+  a320AppStep(this, F, i, onWheels);
   const out = F.step(i);
   // (RETARD: the levers back to idle, as the pilot would)
   if (out.retard) this.pilot.throttle = 0;
@@ -144,6 +151,134 @@ function a320ApKey(this: CameraController, what: "ap" | "athr" | "nav"): string 
 }
 
 export function installA320Ap(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { a320FmgcStep, a320ApKey });
+  Object.assign(C.prototype, { a320FmgcStep, a320ApKey, a320Approach, a320ApproachOff });
 }
 void CONF;
+
+// ------------------------------------------------------------------------------------------------ the ILS approach
+
+/** The A320's ILS approach as the controller vectors it (Sam, 5 Nov 2026: the approaches of Toulon-Hyères flown by the
+ *  flight lab; the F-35's own procedure is game/ils.ts): the runway's end chosen tuned; `entry` — to a point 22 km out on
+ *  the axis, 6 km to the side the craft is on —, `intercept` — aimed at the axis 13 km out (~34°), APPR armed —, `final` — the FMGC's
+ *  LOC, G/S, LAND, FLARE, ROLL OUT. The configuration set as a crew sets it, each step once the speed allows; the
+ *  touchdown measured on that runway. */
+export interface A320App {
+  rwy: IlsRunway;
+  leg: "entry" | "intercept" | "final";
+  side: 1 | -1;
+  /** the intercept's altitude [ft over the sea]: 2 000 ft over the threshold, or 1 000 ft over the relief under the legs */
+  altFt: number;
+  touch: { along: number; across: number; vs: number } | null;
+}
+
+const ENTRY_ALONG = 22_000;
+const ENTRY_OFF = 6_000;
+const INTERCEPT_ALONG = 13_000;
+
+/** The highest ground under the approach's legs [m over the sea]: the axis from 4 to 26 km out, 7 km either side. */
+function legsGround(W: IlsRunway): number {
+  let top = 0;
+  for (let d = 4000; d <= 26_000; d += 1000)
+    for (let x = -7000; x <= 7000; x += 1000) {
+      const p = fromRunway(W, -d, x);
+      top = Math.max(top, groundRelief("earth", bodyFixedOf("earth", p.lat, p.lon, 0)) - geoidDeg(p.lat, p.lon));
+    }
+  return top;
+}
+
+function a320Approach(this: CameraController, W: IlsRunway): string {
+  const g = this.geoNow();
+  if (!g) return t("ILS: in the air");
+  this.a320Fmgc ??= new Fmgc();
+  this.a320Ils = W;
+  this.ilsRun = null;
+  const o = onRunway(W, g);
+  const altFt = Math.ceil(Math.max(W.elev * FT + 2000, legsGround(W) * FT + 1000) / 100) * 100;
+  this.a320App = { rwy: W, leg: "entry", side: o.across >= 0 ? 1 : -1, altFt, touch: null };
+  return tf("ILS approach: {0}, {1} km", `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`, Math.round(gcDist(g, W) / 1000));
+}
+
+function a320ApproachOff(this: CameraController) {
+  const F = this.a320Fmgc;
+  if (F?.apprArm) F.apprToggle();
+  this.a320App = null;
+}
+
+const wrap360 = (a: number) => ((a % 360) + 360) % 360;
+
+function a320AppStep(c: CameraController, F: Fmgc, i: FmgcIn, onWheels: boolean) {
+  const A = c.a320App;
+  const g = A ? c.geoNow() : null;
+  if (!A || !g) return;
+  const W = A.rwy;
+  syncRunwayLevel(W);
+  c.a320Ils = W;
+  const o = onRunway(W, g);
+  // (on the wheels: the touchdown measured once; stopped, the approach over — its grade where the F-35's is kept)
+  if (onWheels) {
+    if (!A.touch) A.touch = { along: o.along, across: o.across, vs: g.vs };
+    if (g.gs < 15) {
+      const T = A.touch;
+      const notes: string[] = [];
+      let score = 20;
+      if (T.vs < -3) (score -= 6), notes.push("hard");
+      else if (T.vs < -1.8) (score -= 2), notes.push("firm");
+      if (Math.abs(T.across) > 10) (score -= 6), notes.push("off the centreline");
+      else if (Math.abs(T.across) > 5) (score -= 2), notes.push("a little off the centreline");
+      if (T.along < 150 || T.along > 900) (score -= 4), notes.push("out of the touchdown zone");
+      const rwy = `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`;
+      c.ilsLast = { rwy, score: Math.max(score, 0), notes, touch: T as never };
+      c.onPilotMessage?.(
+        tf(
+          "ILS {0}: {1}/20 — touchdown {2} m in, {3} m off the centreline",
+          rwy,
+          Math.max(score, 0),
+          Math.round(T.along),
+          T.across.toFixed(1),
+        ),
+      );
+      c.a320App = null;
+    }
+    return;
+  }
+  if (/^(LOC|LAND|FLARE|ROLL)/.test(F.lat)) A.leg = "final";
+  if (!F.athr) F.athrToggle();
+  if (!F.ap) F.ap1Toggle(i);
+  if (A.leg !== "final") {
+    let hdg = W.hdg;
+    if (A.leg === "entry") {
+      const E = fromRunway(W, -ENTRY_ALONG, A.side * ENTRY_OFF);
+      const placed = o.along < -14_000 && o.along > -45_000 && Math.sign(o.across) === A.side && Math.abs(o.across) < 9000;
+      if (gcDist(g, E) < 1500 || placed) A.leg = "intercept";
+      else hdg = gcCourse(g, E) * D;
+    }
+    if (A.leg === "intercept") {
+      // (aimed at the axis 13 km out — closed on the place, not a fixed heading the drift would bend —, within 45° of the
+      // course: some 34° from the entry point)
+      const P = fromRunway(W, -INTERCEPT_ALONG, 0);
+      const off = ((gcCourse(g, P) * D - W.hdg + 540) % 360) - 180;
+      hdg = W.hdg + Math.max(-45, Math.min(45, off));
+      // (through the axis without the capture, or past the final fix: round again from the side it is on)
+      if ((Math.sign(o.across) === -A.side && Math.abs(o.across) > 2000) || o.along > -ILS.faf + 2000) {
+        A.leg = "entry";
+        A.side = o.across >= 0 ? 1 : -1;
+      }
+    }
+    if (F.lat !== "HDG") F.hdgPull(i);
+    F.hdg = Math.round(wrap360(hdg)) || 360;
+    if (!F.apprArm) F.apprToggle();
+    F.alt = A.altFt;
+    if (!/^(OP|EXP|G\/S|LAND|FLARE|ALT\*|CLB|DES)/.test(F.vert) && Math.abs(i.alt - A.altFt) > 250) F.altPull(i);
+  }
+  // (the configuration, a step at a time as the speed allows: CONF 1 within 35 km, 2 on the intercept, the gear on the
+  // glideslope or within 12 km, 3 with the gear, FULL inside the final fix)
+  const lever = Math.round((c.airFlight.cfg.flaps ?? 0) * 4);
+  const out = -o.along;
+  let want = lever;
+  if (lever < 1 && out < 35_000 && i.ias < 225) want = 1;
+  else if (lever === 1 && A.leg !== "entry" && out < 26_000 && i.ias < 210) want = 2;
+  else if (lever === 2 && c.gearDown && out < 14_000 && i.ias < 195) want = 3;
+  else if (lever === 3 && out < ILS.faf && i.ias < 181) want = 4;
+  if (want !== lever) c.airFlight.cfg.flaps = want / 4;
+  if (!c.gearDown && (F.vert.startsWith("G/S") || out < 12_000) && i.ias < 230) c.gearDown = true;
+}

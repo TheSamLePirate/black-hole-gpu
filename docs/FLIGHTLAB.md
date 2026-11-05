@@ -87,6 +87,40 @@ La famille `weather` pose le Ranger depuis la remise nominale (80 km, 25 km, 750
 
 La famille `airport` vole les procédures d'approche (A5) : Edwards de nuit (01:00 locale, `game.setDate` — le balisage OACI de A1), une finale tardive décalée de 300 m à 5 km du seuil (instable aux minima : la remise de gaz automatique, puis une nouvelle approche), plein gaz à 3 km (TOGA : la remise de gaz commandée), Le Bourget de nuit dans un brouillard CAT III (150 m, sommet 60 m). Jugés comme tout atterrissage, puis sur la procédure — le nombre de remises de gaz attendu, la dernière décision aux minima stabilisée (télémétrie `entry.ga`, `entry.dh`) ; les remises de gaz sont dispensées du couloir de finale et des inversions d'inclinaison, que leurs virages manquent par construction. `--only airport` : 4 scénarios.
 
+## Les approches ILS (`approaches.ts`, 5 novembre 2026)
+
+La famille `approach` vole les quatre seuils de Toulon-Hyères (LFTH : 05/23, 2 120 m ; 13/31, 1 902 m), avec le F-35 et
+avec l'A320, soit 8 scénarios (`--only '^approach-lfth'`, ~6–7 min chacun).
+
+- **Le départ :** 28 km du seuil, à 50° de l'axe de finale, à 1 800 m au-dessus du sol, de jour, par calme. L'appareil est
+  gelé tant que les données du lieu arrivent (`lab.ready`).
+- **La piste :** elle est demandée par son numéro, par la même action que la roue et TARS
+  (`camera.ilsStart("LFTH", { runway })`).
+  - Le F-35 vole sa procédure (`game/ils.ts`).
+  - L'A320 vole son FMGC (`controller/a320ap.ts`, `a320Approach`) : vecteurs vers un point d'entrée, visée de l'axe à
+    13 km, APPR armé, puis LOC, G/S, LAND, FLARE et ROLL OUT. La configuration est sortie pas à pas, quand la vitesse le
+    permet.
+- **Le relief :** une pente de 3° qui perce le relief est refusée par l'action (`glideClearance`). Une marge mince est dite
+  à la clairance.
+- **Le jugement :** le toucher sur la piste demandée — la note de l'approche (`camera.ilsLast`), le taux de chute, l'écart à
+  l'axe, la distance au seuil —, plus les mesures `q_…`.
+- **La télémétrie** porte en plus `ils` (piste, aiguilles en points, distance, phase), `fmgc` (modes de l'A320), `cfg`
+  (volets, train) et `ilsLast`.
+
+## L'attente sur la progression de la page (5 novembre 2026)
+
+Sur un GPU partagé (ce Mac, d'autres programmes sur le GPU), la page tombait à 3 images/s : son démarrage dépassait les
+60 s et 180 s fixes, et toute la campagne échouait avant de voler. Les attentes du démarrage, des compilations et des
+données ne sont plus des délais fixes. Elles suivent la progression de la page (`App.waitProgress`, `tests/e2e/lib/app.ts`) :
+l'écran de chargement, la première image, les compilations (`compilingNow`, `compilesPending`, le traceur), les tuiles du
+relief et des photos, le décor, les cartes, les horizons.
+
+- **Le journal :** toutes les 10 s, ce qui manque encore (`… the lab's page: 40 s — compiling …`).
+- **L'échec :** il ne vient que si plus rien ne bouge — 90 s pour les données, 300 s pendant une compilation, 15 min en
+  tout. L'erreur dit ce qui manquait.
+- **Les appels :** `Lab.open` et `lab.rearm` attendent ainsi la page ; `lab.ready(label)` attend les données d'un lieu
+  (`App.dataSettled`). Les e2e en profitent aussi : `App.load` et `App.settled`.
+
 ## Écrire un scénario
 
 Les scénarios sont dans `tests/flight/scenarios/<famille>.ts`, réunis par `index.ts`. Un scénario :

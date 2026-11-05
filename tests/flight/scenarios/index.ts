@@ -1,5 +1,6 @@
 // Every scenario of the flight lab, by family (one file each: scripts/flightlab.ts list shows them all).
 import { AIRPORTS } from "./airports";
+import { APPROACHES } from "./approaches";
 import { DOCK } from "./dock";
 import { GARGANTUA } from "./gargantua";
 import type { Scenario } from "./helpers";
@@ -16,6 +17,7 @@ export const SCENARIOS: Scenario[] = [
   ...LANDING,
   ...WEATHER,
   ...AIRPORTS,
+  ...APPROACHES,
   ...VERTICAL,
   ...ORBIT,
   ...MISSIONS_FC,

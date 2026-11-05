@@ -91,6 +91,39 @@ export function ilsReading(R: IlsRunway, p: { lat: number; lon: number; alt: num
   };
 }
 
+/**
+ * The glideslope's clearance over the relief (Sam, 5 Nov 2026 — the approaches of Toulon-Hyères flown by the lab: the hills
+ * round the bay): along the final's axis from 1 km to the initial fix, every 250 m, three points across (the axis and
+ * ±300 m), the 3° slope's height over the threshold's level (`onRunway`'s, the Earth's curve in it) less the ground's
+ * height over the sea there (`groundMsl` [m]). Its least [m] and where [m before the threshold]; negative: the slope runs
+ * into the ground — the approach is refused.
+ */
+export function glideClearance(
+  R: IlsRunway,
+  groundMsl: (lat: number, lon: number) => number,
+): { minM: number; atM: number; thin: boolean } {
+  const tan = Math.tan(ILS.glide * D);
+  let minM = Number.POSITIVE_INFINITY,
+    atM = 0,
+    thin = false;
+  for (let d = 1000; d <= ILS.iaf; d += 250) {
+    const over = (d + ILS.gpi) * tan - (d * d) / (2 * R_EARTH);
+    const h = R.elev + over;
+    for (const x of [-300, 0, 300]) {
+      const p = fromRunway(R, -d, x);
+      const c = h - groundMsl(p.lat, p.lon);
+      if (c < minM) (minM = c), (atM = d);
+      // (thin: under the clearance asked there — some 300 ft, or half the slope's own height near the threshold, where
+      // the slope itself is lower than that)
+      if (c < Math.min(GLIDE_CLEAR_WARN, 0.5 * over)) thin = true;
+    }
+  }
+  return { minM, atM, thin };
+}
+/** The clearance under which the approach is flown with a warning [m]: some 300 ft — an obstacle clearance's order — or
+ *  half the slope's height where it is lower. */
+export const GLIDE_CLEAR_WARN = 90;
+
 export type IlsPhase = "base" | "toIaf" | "hold" | "intercept" | "final" | "flare" | "rollout" | "missed" | "done";
 
 export interface IlsRun {

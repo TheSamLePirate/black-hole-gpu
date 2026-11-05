@@ -157,6 +157,61 @@ const DAYLIGHT = `(() => {
   return 1;
 })()`;
 
+/** What the page says of its readiness (`App.waitProgress`): read at once, whatever is there yet. */
+export interface ReadyProbe {
+  origin: number;
+  bh: boolean;
+  first: boolean;
+  splash: string | null;
+  settled: boolean;
+  compiling: string[];
+  cp: number;
+  relief: number;
+  photos: number;
+  failed: number;
+  scenery: string | null;
+  maps: string | null;
+  horizons: number;
+  fps: string | null;
+  err: string | null;
+}
+const READY_PROBE = `(() => {
+  const b = typeof __bh !== "undefined" ? __bh : null, r = b?.renderer ?? null, t = r?.earthTiles ?? null, L = document.querySelector("#loading");
+  let sc = null, hz = null;
+  try { sc = r?.earthScenery?.stats?.() ?? null; } catch {}
+  try { hz = r?.horizonMaps?.stats?.() ?? null; } catch {}
+  const E = document.querySelector("#error");
+  return {
+    origin: performance.timeOrigin, bh: !!b, first: !!(r && r.firstFrameDoneAt > 0),
+    splash: L && !L.classList.contains("done") ? (L.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 90) : null,
+    settled: !!r?.tracerSettled, compiling: (r?.compilingNow ?? []).slice(0, 4).map(String), cp: r?.compilesPending ?? 0,
+    relief: t?.pending ?? 0, photos: t?.orthoPending ?? 0, failed: t?.failed ?? 0,
+    scenery: sc && (sc.status === "loading" || sc.status === "refreshing") ? String(sc.progress?.step ?? "start") + (sc.progress?.of ? " " + (sc.progress.done ?? 0) + "/" + sc.progress.of : "") : null,
+    maps: r?.hdLoadingName ?? null, horizons: hz && hz.state === "baking" ? hz.left ?? 0 : 0,
+    fps: document.querySelector(".fps, #fps")?.textContent?.trim()?.slice(0, 24) ?? null,
+    err: E && E.hidden === false ? (E.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 200) : null,
+  };
+})()`;
+
+/** What is still missing, in a line. */
+export function describeReady(p: ReadyProbe | null): string {
+  if (!p) return "the page not answering (loading, or busy)";
+  if (!p.bh) return `the page loading${p.splash ? ` (« ${p.splash} »)` : ""}`;
+  const parts: string[] = [];
+  if (p.splash) parts.push(`splash « ${p.splash} »`);
+  if (!p.first) parts.push("no first image yet");
+  if (p.compiling.length || p.cp) parts.push(`compiling ${p.compiling.join(", ") || "…"}${p.cp ? ` (${p.cp} pending)` : ""}`);
+  else if (!p.settled) parts.push("the tracer settling");
+  if (p.relief) parts.push(`relief ${p.relief} tiles`);
+  if (p.photos) parts.push(`photos ${p.photos} tiles`);
+  if (p.scenery) parts.push(`scenery ${p.scenery}`);
+  if (p.maps) parts.push(`maps ${p.maps}`);
+  if (p.horizons) parts.push(`horizons ${p.horizons} left`);
+  if (p.failed) parts.push(`${p.failed} tiles failed`);
+  if (p.fps) parts.push(p.fps);
+  return parts.join(" · ") || "ready";
+}
+
 export class App {
   private constructor(
     readonly cdp: Cdp,
@@ -248,10 +303,14 @@ export class App {
       this.lastLoadMs = performance.now() - t0;
       return;
     }
-    await this.waitFor(
-      `performance.timeOrigin !== ${previousOrigin} && ${startupFailure ? 'document.querySelector("#error")?.hidden === false' : 'typeof __bh !== "undefined" && __bh.renderer.firstFrameDoneAt > 0 && !document.querySelector("#loading:not(.done)")'}`,
-      180_000,
-    );
+    if (startupFailure)
+      await this.waitFor(`performance.timeOrigin !== ${previousOrigin} && document.querySelector("#error")?.hidden === false`, 180_000);
+    // (on its progress: a shared GPU's slow start goes on as long as it moves — the flight lab's boots, 5 Nov 2026)
+    else
+      await this.waitProgress(
+        `performance.timeOrigin !== ${previousOrigin} && typeof __bh !== "undefined" && __bh.renderer.firstFrameDoneAt > 0 && !document.querySelector("#loading:not(.done)")`,
+        "the page's start",
+      );
     this.lastLoadMs = performance.now() - t0;
     // (the frame rate shown in its corner, the game's own meter — on every run, the screenshots too: who watches
     // sees how the test runs; a player's preference, kept across scenes. Not when the page failed to start)
@@ -292,6 +351,69 @@ export class App {
     );
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
     return r.result?.value as T;
+  }
+
+  /**
+   * A wait on the page's progress rather than on a fixed time (Sam, 5 Nov 2026: the flight lab failed its boots on a
+   * shared GPU — the page at 3 images a second, its start past the 60 and 180 s allowed): `cond` true, or a failure
+   * once nothing moved for a while — the start (its splash), the first image, the shaders compiling (`compilingNow`,
+   * `compilesPending`, the tracer settling), the data (the relief's and the photographs' tiles, the scenery's step, a
+   * world's maps). What is still missing is said every 10 s, and in the error. `stallMs` the data's stall allowed (90 s),
+   * `compileStallMs` a compile's (300 s: the Earth's image took 134 s cold on kerr-mini, more on a shared GPU), `maxMs`
+   * the whole (15 min).
+   */
+  async waitProgress(
+    cond: string,
+    label: string,
+    o: { stallMs?: number; compileStallMs?: number; maxMs?: number; quiet?: boolean } = {},
+  ): Promise<ReadyProbe | null> {
+    const t0 = Date.now();
+    let lastKey = "",
+      lastChange = t0,
+      lastLog = t0,
+      p: ReadyProbe | null = null;
+    for (;;) {
+      let ok = false;
+      try {
+        const r = await this.js<{ ok: boolean; p: ReadyProbe }>(
+          `(() => { let ok = false; try { ok = !!(${cond}); } catch {} return { ok, p: ${READY_PROBE} }; })()`,
+        );
+        ok = r.ok;
+        p = r.p;
+      } catch {
+        p = null;
+      }
+      if (ok) return p;
+      if (p?.err) throw new Error(`${label}: the page failed — ${p.err}`);
+      const now = Date.now();
+      const key = JSON.stringify(
+        p && [p.origin, p.bh, p.first, p.splash, p.settled, p.compiling, p.cp, p.relief, p.photos, p.scenery, p.maps, p.horizons],
+      );
+      if (key !== lastKey) {
+        lastKey = key;
+        lastChange = now;
+      }
+      const compiling = !p || !p.first || !p.settled || p.compiling.length > 0 || p.cp > 0;
+      const stall = compiling ? (o.compileStallMs ?? 300_000) : (o.stallMs ?? 90_000);
+      if (!o.quiet && now - lastLog >= 10_000) {
+        lastLog = now;
+        console.log(`  … ${label}: ${Math.round((now - t0) / 1000)} s — ${describeReady(p)}`);
+      }
+      if (now - lastChange > stall)
+        throw new Error(`${label}: nothing moved for ${Math.round((now - lastChange) / 1000)} s — ${describeReady(p)}`);
+      if (now - t0 > (o.maxMs ?? 15 * 60_000)) throw new Error(`${label}: ${Math.round((now - t0) / 1000)} s, still ${describeReady(p)}`);
+      await Bun.sleep(500);
+    }
+  }
+
+  /** The place's data in — the relief's and the photographs' tiles, the scenery, a world's maps, the horizons' bake — and
+   *  the shaders compiled, waited on their progress (`waitProgress`); what never came is said. */
+  async dataSettled(label = "the place's data", o: { stallMs?: number; maxMs?: number } = {}) {
+    return this.waitProgress(
+      `(() => { const r = __bh.renderer, t = r.earthTiles, sc = r.earthScenery?.stats?.(); return r.tracerSettled && !r.compilesPending && !(r.compilingNow ?? []).length && !t.pending && !t.orthoPending && !(sc && (sc.status === "loading" || sc.status === "refreshing")) && !r.hdLoadingName; })()`,
+      label,
+      o,
+    );
   }
 
   async waitFor(expr: string, timeout = 10_000) {
@@ -463,23 +585,22 @@ export class App {
   /** Waits for the scene's own ray tracer — renderer.tracerSettled: compiled, none compiling ahead, the
    *  "Compiling the ray tracer" pill down —, then three frames drawn with it, so its image is the one on screen. */
   async settled(timeoutMs = 180_000) {
-    const ok = await this.waitFor("__bh.renderer.tracerSettled", timeoutMs).then(
+    // (on its progress: the compiles going on as long as they move; `timeoutMs` the stall allowed — 60 s at least)
+    const ok = await this.waitProgress("__bh.renderer.tracerSettled", "the scene's shaders", {
+      compileStallMs: Math.max(timeoutMs, 60_000),
+    }).then(
       () => true,
-      () => false,
+      (e) => (console.error(`e2e: ${e instanceof Error ? e.message : e} — looked at anyway`), false),
     );
-    if (!ok) console.error("e2e: the scene's ray tracer still compiling — looked at anyway");
     // (and the kernels compiling beside it — renderer.compilingNow, the pill "Compiling the shaders · …": the ground's rays with
     // the scenery, the clouds… — tracerSettled is the scene's kernel alone: a shot then had the pill and a part of the image
-    // missing (the observatory's wormhole black, 2 Nov 2026); 60 s at most, what still compiles said)
+    // missing (the observatory's wormhole black, 2 Nov 2026); on their progress, what still compiles said)
     if (ok) {
-      const quiet = await this.waitFor(
+      await this.waitProgress(
         "(() => { const r = __bh.renderer; return !r.compilesPending && !(r.compilingNow ?? []).length; })()",
-        60_000,
-      ).then(
-        () => true,
-        () => false,
-      );
-      if (!quiet) console.error(`e2e: still compiling after 60 s: ${await this.js("JSON.stringify(__bh.renderer.compilingNow)")}`);
+        "the kernels beside it",
+        { compileStallMs: Math.max(timeoutMs, 60_000) },
+      ).catch((e) => console.error(`e2e: ${e instanceof Error ? e.message : e} — looked at anyway`));
     }
     await this.js(
       "new Promise((r) => { let n = 0; const f = () => (++n >= 3 ? r(1) : requestAnimationFrame(f)); requestAnimationFrame(f); })",

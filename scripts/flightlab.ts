@@ -243,7 +243,7 @@ async function run() {
             if (Date.now() - lastLine > 10_000) {
               lastLine = Date.now();
               say(
-                `  ${sc.id} t=${Math.round(T.t)}s ${T.label ?? ""} alt=${T.alt ?? "-"}km v=${T.v ?? "-"}m/s auto=${T.auto}${T.hub ? ` hub=${T.hub.title}/${T.hub.phase}` : ""}${T.entry ? ` entry=${T.entry.ph}${T.entry.prof ? `/${T.entry.prof}` : ""}` : ""}${T.dockInfo ? ` dock=${T.dockInfo.range}m` : ""} warp=${T.warp}`,
+                `  ${sc.id} t=${Math.round(T.t)}s ${T.label ?? ""} alt=${T.alt ?? "-"}km v=${T.v ?? "-"}m/s auto=${T.auto}${T.hub ? ` hub=${T.hub.title}/${T.hub.phase}` : ""}${T.entry ? ` entry=${T.entry.ph}${T.entry.prof ? `/${T.entry.prof}` : ""}` : ""}${T.dockInfo ? ` dock=${T.dockInfo.range}m` : ""}${T.ils ? ` ${T.ils.id} ${T.ils.phase} loc=${T.ils.loc ?? "-"} gs=${T.ils.gs ?? "-"} ${T.ils.dme}km conf=${T.cfg?.flaps ?? "-"}${T.cfg?.gear ? "+gear" : ""}` : ""} warp=${T.warp}${T.perf ? ` ${T.perf.renderFps ?? "-"} fps${T.perf.gpuFrameMs ? ` ${T.perf.gpuFrameMs} ms` : ""}` : ""}`,
               );
             }
           },

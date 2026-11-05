@@ -374,7 +374,18 @@ Every paved runway of 900 m or more is listed (its runway tile in), the longest 
 asked: the longest runway, into the wind.
 
 `ilsStart(field, { runway })` engages the approach on that end: « 13 », « RWY 05 », « 23L », or both ends « 05/23 » for that
-runway's end in use. It returns why not when the field has no such runway. The wheel's « Navigation › Approche ILS » and TARS's
+runway's end in use. It returns why not when the field has no such runway, or when the 3° slope runs into the relief
+(`glideClearance`, `game/ils.ts`). When the margin over the relief is thin, it says so. Each end of `ilsRunways` also
+carries `clearM`, the slope's least clearance [m].
+
+On the A320 the same call flies its FMGC (`camera.a320Approach`, `controller/a320ap.ts`), state in `camera.a320App`:
+- the ILS is tuned on that end;
+- vectors lead to an entry point 22 km out, then the axis is aimed at 13 km out, APPR armed;
+- LOC, G/S, LAND, FLARE and ROLL OUT follow;
+- the flaps and the gear go out a step at a time;
+- the touchdown is graded in `camera.ilsLast`.
+
+`ilsOff()` disarms it. The wheel's « Navigation › Approche ILS » and TARS's
 `approach` tool (`runway`, and `action: "runways"`) use the same calls. *Used in:* `tests/e2e/ils-runway.e2e.test.ts`.
 
 ### `__bh.issCamera(id: "sen-nadir" | "sen-horizon" | "sen-docking" | "nasa-harmony" | "back")` → string \| null

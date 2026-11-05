@@ -60,6 +60,12 @@ export const LAB_PAGE = `(() => {
         miss: R.guid?.lastMiss ? { along: r(R.guid.lastMiss.along / 1000, 10), across: r(R.guid.lastMiss.across / 1000, 10) } : null,
         app: R.app ? { along: r(R.app.along), across: r(R.app.across, 10), agl: r(R.app.agl), speed: r(R.app.speed, 10), gRef: r(((R.app.gRef ?? NaN) * 180) / Math.PI, 100), gam: r(((R.app.gam ?? NaN) * 180) / Math.PI, 100), brake: r(c.airBrake, 100), spiral: R.spiral ? { r: r(R.spiral.r), side: R.spiral.side } : null } : null } : null,
       runway: safe(() => { const w = c.runwayView?.(); return w ? { along: r(w.along), across: r(w.across, 10) } : null; }),
+      // (an ILS approach — the F-35's procedure, the A320's FMGC —: its runway, the needles [dots], the distance, its phase;
+      // the A320's modes, its configuration; the last approach's grade)
+      ils: safe(() => { const x = c.ilsInfo(); return x ? { id: x.id, loc: r(x.loc, 100), gs: r(x.gs, 100), dme: r(x.dme, 100), phase: x.phase, auto: x.auto } : null; }),
+      fmgc: safe(() => { const F = c.a320Fmgc; return F ? { lat: F.lat, vert: F.vert, latArmed: F.latArmed, vertArmed: (F.vertArmed ?? []).join(" "), ap: F.ap, athr: F.athr, phase: F.phase, hdg: F.hdg, alt: F.alt } : null; }),
+      cfg: { flaps: r((c.airFlight?.cfg?.flaps ?? 0) * 4, 10), gear: !!c.gearDown },
+      ilsLast: safe(() => c.ilsLast ? { rwy: c.ilsLast.rwy, score: c.ilsLast.score, notes: c.ilsLast.notes, touch: c.ilsLast.touch ? { along: r(c.ilsLast.touch.along), across: r(c.ilsLast.touch.across, 10), vs: r(c.ilsLast.touch.vs, 100) } : null } : null),
       air: A ? { g: r(A.g, 100), gPeak: r(A.gPeak, 100), fail: A.failure ?? null, body: A.body || null,
         mach: r(A.last?.out?.mach, 100), q: r((A.last?.out?.q ?? 0) / 1000, 100), alpha: r(((A.last?.out?.alpha ?? 0) * 180) / Math.PI, 100),
         beta: r(((A.last?.out?.beta ?? 0) * 180) / Math.PI, 100), heat: r((A.last?.out?.heat ?? 0) / 1000, 10), stalled: !!A.last?.out?.stalled,

@@ -8,7 +8,20 @@ import { fieldCached, fieldsNear } from "../world/runways";
 import { worldRunwaySites, worldSite } from "../world/fieldsite";
 import { worldRunwaysNow } from "../world/runways3d";
 import { approachSpeed } from "../game/trap";
-import { arrivalFixes, departureFix, ilsGrade, ilsReading, type IlsRun, type IlsRunway, ilsStep, newIlsRun, runwayId } from "../game/ils";
+import {
+  arrivalFixes,
+  departureFix,
+  glideClearance,
+  ilsGrade,
+  ilsReading,
+  type IlsRun,
+  type IlsRunway,
+  ilsStep,
+  newIlsRun,
+  runwayId,
+} from "../game/ils";
+import { geoidDeg } from "../system/geoid";
+import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { gcDist } from "../game/flightplan";
 import { landingEnd, RUNWAY_LENGTH, reciprocal, type Site, SITES } from "../game/sites";
 import { fleet } from "../fleet";
@@ -69,6 +82,8 @@ export interface IlsChoice {
   id: string;
   rwy: IlsRunway;
   len: number;
+  /** the 3° slope's least clearance over the relief [m] (negative: refused) */
+  clearM: number;
   wind: boolean;
 }
 
@@ -91,6 +106,7 @@ function ilsRunways(this: CameraController, name?: string): { field: string; aut
       id: runwayId(rwy.hdg, rwy.des),
       rwy,
       len: rwy.len,
+      clearM: Math.round(glideClearanceOf(rwy).minM),
       wind: near(wind, end) && Math.abs((((wind.rwy ?? 0) - (end.rwy ?? 0) + 540) % 360) - 180) < 30,
     };
   };
@@ -107,6 +123,7 @@ function ilsRunways(this: CameraController, name?: string): { field: string; aut
     id: runwayId(autoRwy.hdg, autoRwy.des),
     rwy: autoRwy,
     len: autoRwy.len,
+    clearM: Math.round(glideClearanceOf(autoRwy).minM),
     wind: true,
   };
   return { field: site.icao ?? site.name, auto, ends };
@@ -194,8 +211,21 @@ function ilsStart(
     if (!pick) return tf("ILS: no runway {0} at {1}", o.runway, site!.icao ?? site!.name);
     W = pick.rwy;
   }
-  this.ilsRun = newIlsRun(W, o.hold ?? 0, o.base);
+  // (the slope over the relief: one that runs into the ground refused; a thin margin flown, said)
+  const clear = o.base ? null : glideClearanceOf(W);
   const id = `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`;
+  if (clear && clear.minM < 0)
+    return tf("ILS {0}: the 3° slope runs into the relief {1} km out — refused", id, (clear.atM / 1000).toFixed(1));
+  const warn = clear?.thin
+    ? ` — ${tf("the relief {0} m under the slope {1} km out", Math.round(clear.minM), (clear.atM / 1000).toFixed(1))}`
+    : "";
+  // (the A320 flies its own: its FMGC tuned on that runway, vectored to the localizer, APPR armed — controller/a320ap.ts)
+  if (fleet.active === "a320") {
+    const said = this.a320Approach(W);
+    this.onRadio?.(tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des)));
+    return said + warn;
+  }
+  this.ilsRun = newIlsRun(W, o.hold ?? 0, o.base);
   this.onRadio?.(
     o.base
       ? tf("{0} tower: cleared to land, runway {1}", W.icao ?? W.name, runwayId(W.hdg, W.des))
@@ -203,7 +233,30 @@ function ilsStart(
         ? tf("{0} approach: hold at the initial fix, expect the ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des))
         : tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des)),
   );
-  return tf("ILS approach: {0}, {1} km", id, Math.round(gcDist(g, W) / 1000));
+  return tf("ILS approach: {0}, {1} km", id, Math.round(gcDist(g, W) / 1000)) + warn;
+}
+
+/** A world runway's level as measured (src/world/runways3d.ts: the median of the bare relief under it, as the relief
+ *  came) followed by the ILS's own — the same runway: its airfield, its axis within 10° either way, a threshold within
+ *  its length. (Any runway of the airfield was taken before: at Toulon-Hyères the ILS 13 read 05/23's level, which
+ *  crosses it — its slope aimed at another runway's level, 17 m off on the coarse relief: the F-35 bounced 200 m high
+ *  and its gear broke off the runway — the flight lab, 5 Nov 2026.) */
+export function syncRunwayLevel(rwy: IlsRunway) {
+  if (!rwy.icao) return;
+  const same = (h: number) => {
+    const d = Math.abs((((h - rwy.hdg) % 180) + 180) % 180);
+    return Math.min(d, 180 - d) < 10;
+  };
+  const W = worldRunwaysNow().find(
+    (r) => r.world?.field === rwy.icao && same(r.site.rwy ?? Number.NaN) && gcDist(r.site, rwy) < r.len + 200,
+  );
+  if (W && Math.abs(W.elev - rwy.elev) > 0.05) rwy.elev = W.elev;
+}
+
+/** The glideslope's clearance over the Earth's relief as the physics knows it (its heights over the ellipsoid less the
+ *  geoid: over the sea) — game/ils.ts glideClearance. */
+export function glideClearanceOf(W: IlsRunway) {
+  return glideClearance(W, (lat, lon) => Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon), 0));
 }
 
 /** Cleared out of the hold: the approach begun. */
@@ -215,6 +268,7 @@ function ilsClear(this: CameraController): string {
 }
 
 function ilsOff(this: CameraController, why?: string) {
+  if (this.a320App) this.a320ApproachOff();
   if (!this.ilsRun) return;
   this.ilsRun = null;
   if (why) this.onPilotMessage?.(why);
@@ -264,10 +318,7 @@ function ilsFrame(this: CameraController) {
   if (!isAircraft(fleet.active)) return this.ilsOff();
   // (a world runway's level measured as the relief came — src/world/runways3d.ts —: the ILS's own followed, its
   // heights read over the ground the gear meets)
-  if (R.rwy.icao) {
-    const W = worldRunwaysNow().find((r) => r.world?.field === R.rwy.icao && gcDist(r.site, R.rwy) < r.len + 200);
-    if (W && Math.abs(W.elev - R.rwy.elev) > 0.05) R.rwy.elev = W.elev;
-  }
+  syncRunwayLevel(R.rwy);
   const out = R.manual ? (guide(this, R), null) : guide(this, R);
   if (out?.idle || R.phase === "rollout" || R.phase === "done") {
     if (!R.manual) this.pilot.throttle = 0;
@@ -293,6 +344,22 @@ function ilsFrame(this: CameraController) {
 function ilsInfo(
   this: CameraController,
 ): { id: string; loc: number | null; gs: number | null; dme: number; phase: string; auto: boolean } | null {
+  // (the A320's: its own approach, the FMGC's modes as its phase)
+  const A = this.a320App;
+  if (A) {
+    const g = this.geoNow();
+    if (!g) return null;
+    const r = ilsReading(A.rwy, g);
+    const F = this.a320Fmgc;
+    return {
+      id: `ILS ${runwayId(A.rwy.hdg, A.rwy.des)} ${A.rwy.icao ?? ""}`.trim(),
+      loc: r.locIn ? r.loc : null,
+      gs: r.gsIn ? r.gs : null,
+      dme: r.dme,
+      phase: A.leg === "final" ? `${F?.lat ?? ""}/${F?.vert ?? ""}` : A.leg,
+      auto: !!F?.ap,
+    };
+  }
   const R = this.ilsRun;
   const g = R ? this.geoNow() : null;
   if (!R || !g) return null;

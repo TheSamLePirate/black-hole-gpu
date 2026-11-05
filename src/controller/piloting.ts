@@ -227,7 +227,7 @@ function newFlight(this: CameraController) {
   this.a320Gravity = false;
   this.a320Reverse = 0;
   this.a320Park = false;
-  this.a320Fmgc = this.a320FmgcIn = this.a320FmgcOut = this.a320Ils = null;
+  this.a320Fmgc = this.a320FmgcIn = this.a320FmgcOut = this.a320Ils = this.a320App = null;
   this.hubCache = this.runwayCache = this.futureCache = this.kerrInfoCache = this.aimCache = null;
   this.contrails.clear();
   this.a320Fx?.reset();

@@ -13,6 +13,8 @@ export default {
   "ILS: no runway called {0}": "ILS : aucune piste nommée {0}",
   "ILS: no runway within 150 km": "ILS : aucune piste à moins de 150 km",
   "ILS: no runway {0} at {1}": "ILS : pas de piste {0} à {1}",
+  "ILS {0}: the 3° slope runs into the relief {1} km out — refused": "ILS {0} : la pente de 3° rencontre le relief à {1} km — refusée",
+  "the relief {0} m under the slope {1} km out": "le relief à {0} m sous la pente à {1} km",
   "{0} approach: hold at the initial fix, expect the ILS {1}": "{0} approche : attendez au point initial, prévoyez l'ILS {1}",
   "{0} approach: cleared ILS {1}": "{0} approche : autorisé ILS {1}",
   "{0} tower: cleared to land, runway {1}": "{0} tour : autorisé atterrissage, piste {1}",

@@ -4823,7 +4823,7 @@ async function main() {
   // (the ILS's runway — Sam, 5 Nov 2026: an airfield of two runways or more, the one chosen: « Automatique » the longest into the
   // wind as before, then each end with its length, the one in use marked; none flown yet — a flown approach's item turns it off)
   const ilsItems = (): WheelItem[] | undefined => {
-    if (camera.ilsRun) return undefined;
+    if (camera.ilsRun || camera.a320App) return undefined;
     const ch = camera.ilsRunways();
     if (!ch || ch.ends.length <= 2) return undefined;
     const u = unitsFor(settings);
@@ -4931,9 +4931,9 @@ async function main() {
           {
             label: { fr: "Approche ILS", en: "ILS approach" },
             hint: { fr: "La piste la plus proche, face au vent", en: "The nearest runway, into the wind" },
-            on: !!camera.ilsRun,
+            on: !!camera.ilsRun || !!camera.a320App,
             sub: ilsItems(),
-            run: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
+            run: () => panel.toast(camera.ilsRun || camera.a320App ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
           },
           { label: { fr: "Modes du pilote automatique", en: "Autopilot modes" }, sub: modeItems() },
           { label: { fr: "Carte", en: "Map" }, key: "M", on: flightHud.mapView, run: () => flightHud.toggleMapView() },
@@ -5025,7 +5025,12 @@ async function main() {
           { label: { fr: "Coupé", en: "Off" }, run: () => say(camera.modesOff()) },
         ],
       },
-      { label: { fr: "Approche ILS", en: "ILS approach" }, on: !!camera.ilsRun, sub: ilsItems(), run: () => say(camera.ilsStart()) },
+      {
+        label: { fr: "Approche ILS", en: "ILS approach" },
+        on: !!camera.ilsRun || !!camera.a320App,
+        sub: ilsItems(),
+        run: () => say(camera.ilsStart()),
+      },
       { label: { fr: "Voler vers… (carte)", en: "Fly to… (map)" }, run: () => missionMap.open() },
       { label: { fr: "Voltige (démonstration)", en: "Aerobatics (demonstration)" }, run: () => challengePanel.open() },
       { label: { fr: "Modes coupés", en: "Modes off" }, run: () => say(camera.modesOff()) },
@@ -5205,7 +5210,7 @@ async function main() {
         replay: (trailer) => replayOpen(trailer),
         route: () => routePanel.open(),
         missionMap: () => missionMap.open(),
-        ilsToggle: () => panel.toast(camera.ilsRun ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
+        ilsToggle: () => panel.toast(camera.ilsRun || camera.a320App ? (camera.ilsOff(), t("ILS approach off")) : camera.ilsStart()),
         hub: () => flightHub.open(),
       },
     );

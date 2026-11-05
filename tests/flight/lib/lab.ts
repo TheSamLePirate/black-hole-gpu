@@ -80,9 +80,18 @@ export class Lab {
     const lab = new Lab(o);
     mkdirSync(`${o.dir}/shots`, { recursive: true });
     lab.app = await App.boot({ hash: o.hash ?? "scene=game:artemis", tiles: o.tiles });
-    await lab.app.waitFor("typeof __bh !== 'undefined' && __bh.camera", 60_000);
+    // (on the page's progress — a slow start on a shared GPU, a scene that reloads —: App.waitProgress)
+    await lab.app.waitProgress("typeof __bh !== 'undefined' && !!__bh.camera && __bh.renderer.firstFrameDoneAt > 0", "the lab's page");
     await lab.app.js(PAGE);
     return lab;
+  }
+
+  /** The place's data in and the shaders compiled, on their progress (App.dataSettled: the relief's and the photographs'
+   *  tiles, the scenery, a world's maps) — a scenario's start once its craft is placed; what never came is said. */
+  async ready(label = "the place's data") {
+    const p = await this.app.dataSettled(label);
+    this.note("ready", label);
+    return p;
   }
 
   close() {
@@ -97,6 +106,8 @@ export class Lab {
 
   /** The sampler installed again (after a reload, a new page). */
   async rearm() {
+    // (a scene loaded may have reloaded the page: its start waited on its progress first)
+    await this.app.waitProgress("typeof __bh !== 'undefined' && !!__bh.camera && __bh.renderer.firstFrameDoneAt > 0", "the scene's page");
     await this.app.js(PAGE);
   }
 
