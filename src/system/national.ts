@@ -18,6 +18,8 @@ export interface OrthoFit {
 }
 export interface NationalSource {
   id: "ign" | "swisstopo";
+  /** (Q7 G1/G2) its declarations in system/sources.ts — imagery, heights, surface… */
+  declares: readonly string[];
   box: { west: number; east: number; south: number; north: number };
   /** whether a place [°] is its land */
   holds(lat: number, lon: number): boolean;
@@ -129,6 +131,7 @@ function swissMesh(g: number, x: number, y: number, signal: AbortSignal): Promis
 
 export const SWISSTOPO: NationalSource = {
   id: "swisstopo",
+  declares: ["swissimage", "swissalti3d"],
   box: { west: 5.95, east: 10.5, south: 45.81, north: 47.82 },
   holds: (lat, lon) => insideOutline(lat, lon, SWITZERLAND) || insideOutline(lat, lon, LIECHTENSTEIN),
   orthoUrl: swissimageUrl,

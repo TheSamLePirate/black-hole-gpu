@@ -612,6 +612,7 @@ async function ignGround(
 /** the IGN over France (I1, I2, I6): its box alone its land — it answers nothing beyond (NaN, 404) */
 export const IGN: NationalSource = {
   id: "ign",
+  declares: ["ign-ortho", "ign-heights", "ign-surface", "ign-canopy", "bdtopo"],
   box: ORTHO_BOX,
   holds: () => true,
   orthoUrl,
