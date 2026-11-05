@@ -506,7 +506,23 @@ fn stripCorner(hi: vec4f, k: vec3f) -> vec4f {
 fn meshVertex(vi: u32) -> vec3f {
   let t = u32(scenery[3].z) * 4u + vi;
   let f = u32(scenery[3].x) * 4u + bitcast<u32>(scenery[t / 4u][t % 4u]) * 3u;
-  return vec3f(scenery[f / 4u][f % 4u], scenery[(f + 1u) / 4u][(f + 1u) % 4u], scenery[(f + 2u) / 4u][(f + 2u) % 4u]);
+  var p = vec3f(scenery[f / 4u][f % 4u], scenery[(f + 1u) / 4u][(f + 1u) % 4u], scenery[(f + 2u) / 4u][(f + 2u) % 4u]);
+  // (Q8 D1: a wind turbine's blade turned about its rotor's axis — the table after the tags: (hub, rate), (axis, phase) —, by
+  // the game's clock in sc.north.w: frozen with it; its shadow in the map turned the same)
+  let tri = vi / 3u;
+  if (tri >= u32(scenery[3].w)) {
+    let tg = bitcast<u32>(scenery[(t - vi + u32(scenery[2].w) * 3u + tri) / 4u][(t - vi + u32(scenery[2].w) * 3u + tri) % 4u]);
+    if ((tg & 0xffff0000u) == 0xfffe0000u) {
+      let r = u32(scenery[3].z) + u32(scenery[2].w) + 2u * (tg & 0xffffu);
+      let h = scenery[r];
+      let ax = scenery[r + 1u];
+      let a = sc.north.w * h.w + ax.w;
+      let q = p - h.xyz;
+      let k = ax.xyz;
+      p = h.xyz + q * cos(a) + cross(k, q) * sin(a) + k * dot(k, q) * (1.0 - cos(a));
+    }
+  }
+  return p;
 }
 @vertex fn meshShadowVs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
   return sunClip(meshVertex(vi));
@@ -599,6 +615,8 @@ export class SceneryRaster {
   private meshCounts: number[] = [];
   private frameU: GPUBuffer;
   private sceneryU: GPUBuffer;
+  /** (Q8 D1) the game's clock [s] the turbines' blades turn by (renderer.ts: its rain clock — frozen with the world) */
+  clock = 0;
   private draws: GPUBuffer;
   private lists: GPUBuffer;
   private reset = new Uint32Array((LISTS + 7) * 4);
@@ -870,6 +888,8 @@ export class SceneryRaster {
     // (east.w: the least projected radius drawn [px] — the raster's own copy of P.scenery, that w unread here)
     this.sceneryOut[3] = this.minPx;
     this.sceneryOut.set(this.lift, 16);
+    // (north.w — unread here as P.scenery's —: the game's clock for the turbines' blades — Q8 D1)
+    this.sceneryOut[7] = this.clock;
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)

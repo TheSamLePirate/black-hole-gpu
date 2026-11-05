@@ -271,6 +271,8 @@ export function waterBands(p: Primitive): Primitive[] {
 //   vertex indices a triangle, u32, packed)
 /** (Q8 D1) a wind turbine triangle's tag (packScenery: after the triangles) — scenery-raster.ts meshFs codes it RASTER_CODE.turbine */
 export const TURBINE_TAG = 0xffffffff;
+/** (Q8 D1) a turbine blade triangle's tag: this | the turbine's index (its rotor in the table after the tags) */
+export const TURBINE_BLADE = 0xfffe0000;
 export function packScenery(
   prims: Primitive[],
   pixels: Uint32Array,
@@ -279,8 +281,18 @@ export function packScenery(
   grid = SCENERY_GRID,
   budget = SCENERY_BYTES,
   decals?: Decals,
-  /** (Q8 D1) the wind turbines' triangles (system/turbines.ts), after the bridges', tagged TURBINE_TAG */
-  turbines: { positions: number[]; triangles: number[] }[] = [],
+  /** (Q8 D1) the wind turbines' triangles (system/turbines.ts), after the bridges', tagged TURBINE_TAG — their blades (the last
+   *  `blades` triangles) TURBINE_BLADE | its index —, then a table of two vec4 a turbine after the tags: (hub, turn rate
+   *  [rad/s]), (axis, phase [rad]) */
+  turbines: {
+    positions: number[];
+    triangles: number[];
+    blades?: number;
+    hub?: [number, number, number];
+    axis?: [number, number, number];
+    omega?: number;
+    phase?: number;
+  }[] = [],
 ) {
   const { nodes, geometries, offsets } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
@@ -331,7 +343,7 @@ export function packScenery(
   // (after the triangles, a tag a triangle: a building triangle's leaf — its record's offset from geomOffset [vec4] —: the raster
   // writes it in its visibility, shadeLite finds the building there, its walls' and roof's material — Q3, C0-10 —; a bridge's 0;
   // a wind turbine's TURBINE_TAG — Q8 D1)
-  const bytes = (triangleOffset + Math.ceil((triangleCount * 3 + triangleCount) / 4)) * 16;
+  const bytes = (triangleOffset + triangleCount + 2 * turbines.length) * 16;
   if (bytes > budget) throw new Error("scenery budget exceeded");
   const buffer = new ArrayBuffer(bytes),
     f = new Float32Array(buffer),
@@ -373,12 +385,17 @@ export function packScenery(
       v += p.mesh.positions.length / 3;
       u.fill(p.data[3] === 1 ? (offsets.get(p) ?? 0) : 0, tag, (tag += p.mesh.triangles.length / 3));
     }
-    for (const m of turbines) {
+    turbines.forEach((m, i) => {
       f.set(m.positions, meshOffset * 4 + v * 3);
       for (const k of m.triangles) u[t++] = v + k;
       v += m.positions.length / 3;
-      u.fill(TURBINE_TAG, tag, (tag += m.triangles.length / 3));
-    }
+      const n = m.triangles.length / 3,
+        b = Math.min(m.blades ?? 0, n);
+      u.fill(TURBINE_TAG, tag, (tag += n - b));
+      u.fill((TURBINE_BLADE | i) >>> 0, tag, (tag += b));
+      const at = (triangleOffset + triangleCount + 2 * i) * 4;
+      f.set([...(m.hub ?? [0, 0, 0]), m.omega ?? 0, ...(m.axis ?? [1, 0, 0]), m.phase ?? 0], at);
+    });
   }
   return buffer;
 }

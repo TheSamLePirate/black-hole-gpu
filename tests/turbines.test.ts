@@ -36,3 +36,13 @@ test("D1: a turbine's triangles — the tower to the hub, the rotor's reach, clo
   expect(low).toBeCloseTo(99, 5);
   for (const k of m.triangles) expect(k).toBeLessThan(m.positions.length / 3);
 });
+
+test("D1: the rotor — its blades the mesh's last 36 triangles, its hub at the hub's height, a plausible turn rate", () => {
+  const m = turbineMesh(0, 0, 50, { lat: 0, lon: 0, hub: 91, rotor: 117 });
+  expect(m.blades).toBe(36);
+  expect(m.hub[2]).toBeCloseTo(141, 5);
+  expect(Math.hypot(...m.axis)).toBeCloseTo(1, 6);
+  // (~60 m/s at the tips: about 10 turns a minute for a 117 m rotor)
+  expect((m.omega * 60) / (2 * Math.PI)).toBeGreaterThan(8);
+  expect((m.omega * 60) / (2 * Math.PI)).toBeLessThan(12);
+});

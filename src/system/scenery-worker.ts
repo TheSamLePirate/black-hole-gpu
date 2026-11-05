@@ -7,7 +7,7 @@ import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
 import { CANOPY_NEAR, IgnLand, tilesWithin } from "./ign-canopy";
 import { fetchRange, OVERTURE_BUCKET, OVERTURE_LIST, OVERTURE_Z, overtureReleases, overtureUrl, PmTiles } from "./pmtiles";
-import { overtureBaseUrl, TURBINE_MAX, TURBINE_REACH_M, TURBINE_Z, type Turbine, turbineMesh, turbineOf } from "./turbines";
+import { overtureBaseUrl, TURBINE_MAX, TURBINE_REACH_M, TURBINE_Z, type Turbine, type TurbineMesh, turbineMesh, turbineOf } from "./turbines";
 import { SwissGround } from "./national";
 import {
   bdtopoTiles as bdtopoWanted,
@@ -1212,7 +1212,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   phase("decals");
   // (Q8 D1: the wind turbines round the centre — Overture's base theme, its latest release that answers —, their triangles after
   // the bridges'; none on any failure, the scene whole)
-  const turbines: { positions: number[]; triangles: number[] }[] = [];
+  const turbines: TurbineMesh[] = [];
   try {
     const list = await fetch(OVERTURE_LIST, { signal: AbortSignal.timeout(FETCH_MS) });
     count(list);

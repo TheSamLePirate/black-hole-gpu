@@ -9961,6 +9961,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         this.tsmNext.set(fr);
         this.tsmRevisionNext = sc.revision;
       }
+      this.sceneryRaster.clock = this.rainClock % 3600;
       trees = this.sceneryRaster.encodeCull(
         enc,
         this.prof.pass("scenery raster cull"),

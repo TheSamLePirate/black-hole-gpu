@@ -111,6 +111,7 @@ export function turbineMesh(x: number, y: number, z0: number, t: Turbine, facing
   // blades: in the plane across the facing, at the hub's front, one upward and the others at 120°; each tapered from its root's
   // chord (~3.5 % of the diameter) to its tip's (~1 %), 40 cm thick
   const s = h0 + 0.5 * (h1 - h0);
+  const bladesFrom = triangles.length / 3;
   for (let k = 0; k < 3; k++) {
     const th = Math.PI / 2 + (2 * Math.PI * k) / 3;
     const ux = Math.cos(th),
@@ -126,5 +127,18 @@ export function turbineMesh(x: number, y: number, z0: number, t: Turbine, facing
       return at(r, c, i & 4 ? th2 : -th2);
     });
   }
-  return { positions, triangles };
+  // (the rotor: its hub, its axis — the facing, level —, its turn rate: a tip speed of ~60 m/s, the fleet's at a fresh breeze —,
+  // its phase from its place; the blades its last triangles — scenery-raster.ts meshVertex turns them about the axis)
+  const hub: [number, number, number] = [x + fx * s, y + fy * s, z0 + H];
+  return {
+    positions,
+    triangles,
+    blades: triangles.length / 3 - bladesFrom,
+    hub,
+    axis: [fx, fy, 0] as [number, number, number],
+    omega: Math.min(2.5, 60 / R),
+    phase: ((Math.abs(Math.sin(x * 12.9898 + y * 78.233)) * 43758.5453) % 1) * 2 * Math.PI,
+  };
 }
+/** a turbine's mesh as packScenery takes it */
+export type TurbineMesh = ReturnType<typeof turbineMesh>;

@@ -7,7 +7,7 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // nacelle and blades in the scenery's meshes, the raster's RASTER_CODE.turbine, shaded by shadeLite white and matte, their shadows
 // in the buildings' map): over the Beauce between two wind farms (WT_SITE "lat,lon"), the F-35 150 m over the ground facing
 // east, the cockpit looking 3° down, 13:00 UTC in July, frozen, the exposure locked; the scenery's turbines counted, a shot, and
-// a shot from the chase camera.
+// another a second later (the blades turned).
 // WT_OUT: the shots (remote-results/wind-turbines).
 // Duration: ~3 min on this Mac.
 // Done when: the turbines counted (some), both shots taken, no GPU error.
@@ -49,6 +49,10 @@ test.skipIf(!E2E)(
       );
       console.log(`  ${JSON.stringify(out.stats)}`);
       await app.shot(`${OUT}/cockpit.png`);
+      // (the blades turning: the world run a second and frozen again — the same view, the rotors a sixth of a turn on)
+      await app.js(`new Promise((q) => { __bh.freeze(false); setTimeout(() => { __bh.freeze(true); q(1); }, 1000); })`);
+      await app.settled(60_000);
+      await app.shot(`${OUT}/cockpit-1s.png`);
       out.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
     } finally {
       await Bun.write(`${OUT}/turbines.json`, JSON.stringify(out, null, 1));
