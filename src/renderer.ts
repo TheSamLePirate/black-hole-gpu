@@ -7223,6 +7223,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
             others: this.shipOthers(s),
             sea: this.shipSea(s),
             lift: this.liftNow ? this.sceneryLiftNow : null,
+            keyDir: this.shipKeyDir(),
             mPerM: 1476.625 * (s.massSolar || 1),
             forceShadow: !!this.character?.active,
             inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
@@ -7791,6 +7792,17 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the flown craft's image under 500 m — higher, the waves have scattered it)
     const flown = h < 500 && groundRelief("earth", Xb) - sea < 0.5;
     return { n, d: dot3(n, eye) - h, hs: this.seaHs, t: (performance.now() / 1000) % 3600, flown };
+  }
+
+  /** (decision 42) the near world's star's direction in the camera's axes (right, up, forward) — the craft's shadow map's light,
+   *  for its cache —; null: none near */
+  shipKeyOff = false;
+  private shipKeyDir(): Vec3 | null {
+    const n = this.lastNear,
+      cam = this.lastCam;
+    if (this.shipKeyOff || !n || !cam || !n.light) return null;
+    const L = n.light as Vec3;
+    return [dot3(L, cam.right), dot3(L, cam.up), dot3(L, cam.fwd)];
   }
 
   /** The fight's flares as the lamps' glares: their place from the eye (as the fight's aircraft's). */

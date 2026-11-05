@@ -98,6 +98,10 @@ struct Ship {
   // [travel / s, out > 0]
   wg0: vec4f,
   wg1: vec4f,
+  // (decision 42 — the craft's shadow map kept) two axes of the flown craft in C (its x and y): the map's frame about the
+  // light tied to the craft, not to the camera — the same map while the head turns; (0,1,0) and (1,0,0) without a flown craft
+  shRefA: vec4f,
+  shRefB: vec4f,
   // (R4b, contract C0-3) the air's lift of what is seen afar — the scenery's polynomial (renderer.ts sceneryLift): (x + y d) d²
   // [m] at a distance d [m], z the fade's angle [rad], w 1 on —, along the sea's up (sea.xyz)
   lift: vec4f,
@@ -538,7 +542,7 @@ fn fromProbe(d: vec3f) -> vec3f { return vec3f(dot(d, S.probeX.xyz), dot(d, S.pr
 // (S.bound), the right about the nearest carrier (S.bound2) — its 300 m there, a texel 15 cm.
 fn lightClipB(p: vec3f, b: vec4f) -> vec3f {
   let l = fromProbe(sh[9].xyz);
-  let e1 = normalize(cross(l, select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(l.y) > 0.9)));
+  let e1 = normalize(cross(l, select(S.shRefA.xyz, S.shRefB.xyz, abs(dot(l, S.shRefA.xyz)) > 0.9)));
   let e2 = cross(l, e1);
   let q = p - b.xyz;
   let R = b.w;

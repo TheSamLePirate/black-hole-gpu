@@ -224,6 +224,9 @@ export interface ShipView {
   /** the sea about the camera, the craft mirrored in it: its plane (camera axes: n·p = d, n up — the ellipsoid's
    *  h = 0 —), its significant height [m], a clock [s], the flown craft (and the aircraft near it) over the sea */
   sea?: { n: V3; d: number; hs: number; t: number; flown: boolean } | null;
+  /** (decision 42) the key light's direction in the camera's axes (the near world's star), null none: the craft's shadow map kept
+   *  while it turns by under 0.3° against the craft */
+  keyDir?: V3 | null;
   /** (R4b) the air's lift of what is seen afar: (x + y d) d² [m], z the fade's angle, w 1 on — along sea.n; none without a sea */
   lift?: Float32Array | null;
   /** the craft flown (its mesh, its thrusters) */
@@ -344,8 +347,10 @@ const SEA_AT = LAMPS_AT + 16 + (MAX_LAMPS + MAX_GLARES) * 3 * 16;
 const PCD_AT = SEA_AT + 3 * 16;
 /** then the A320's windshield (S.wg0, S.wg1 — src/a320/glass.ts) */
 const GLASS_AT = PCD_AT + 3 * 16;
-/** then the air's lift of the craft afar (S.lift — R4b) */
-const LIFT_AT = GLASS_AT + 2 * 16;
+/** then the flown craft's two axes for the shadow map's frame (S.shRefA, S.shRefB — decision 42), then the air's lift of the
+ *  craft afar (S.lift — R4b) */
+const SHREF_AT = GLASS_AT + 2 * 16;
+const LIFT_AT = SHREF_AT + 2 * 16;
 const SHIP_UNIFORM_BYTES = LIFT_AT + 16;
 const INST_FLOATS = 20;
 /** the posed aircraft's parts at most (the F-35's 119 — src/f35/model.ts —, the A320's 172 — src/a320/rig.ts), and how
@@ -691,6 +696,13 @@ export class ShipRenderer {
   }
 
   private shadowTick = 0;
+  /** (decision 42) the shadow map's key this frame and the one it was drawn with (null: none — drawn every other frame) */
+  private shadowKey: string | null = null;
+  private shadowKeyDrawn: string | null = null;
+  /** (an A/B's) the shadow maps drawn so far */
+  shadowDraws = 0;
+  /** (an A/B's) the map drawn every other frame whatever its key, as before decision 42 */
+  tuneShadowEvery = false;
   /** the renderer's GPU profiler (timestamps per pass) */
   prof: GpuProfiler | null = null;
   private occDummy: GPUTexture | null = null;
@@ -2206,6 +2218,23 @@ export class ShipRenderer {
       new Float32Array(G ? [G.rain, G.clock, G.airspeed, G.frost, ...G.wipers, ...G.rates] : [0, 0, 0, 0, 0, 0, 0, 0]),
     );
     this.device.queue.writeBuffer(this.uniform, LIFT_AT, new Float32Array(sea && v.lift ? v.lift : [0, 0, 0, 0]));
+    // (the shadow map's frame: the flown craft's x and y axes in C — the columns of R —, else the camera's)
+    this.device.queue.writeBuffer(
+      this.uniform,
+      SHREF_AT,
+      new Float32Array(this.flown ? [R[0]![0]!, R[1]![0]!, R[2]![0]!, 0, R[0]![1]!, R[1]![1]!, R[2]![1]!, 0] : [0, 1, 0, 0, 1, 0, 0, 0]),
+    );
+    // (decision 42: the key that keeps the map — the light in the craft's frame to ~0.3°, its pose, the casters, the sphere —;
+    // null: drawn every other frame as before)
+    const casters = list.filter((it) => it.shadow).length;
+    const lC = v.keyDir;
+    if (this.flown && lC && casters === 1 && !this.tuneShadowEvery) {
+      const lS = [0, 1, 2].map((c) => R[0]![c]! * lC[0] + R[1]![c]! * lC[1] + R[2]![c]! * lC[2]);
+      const q = (x: number) => Math.round(x * 200) / 200;
+      this.shadowKey = JSON.stringify([lS.map(q), v.jet ?? null, v.gear ?? null, v.a320?.props ?? null, inCabin], (_k, x) =>
+        typeof x === "number" ? Math.round(x * 100) / 100 : x,
+      );
+    } else this.shadowKey = null;
     this.writeReentry(v.reentry, mesh);
     const tr = this.flown ? v.contrails : null;
     this.trailCount = tr ? Math.min(tr.n, MAX_SEGMENTS) : 0;
@@ -2524,7 +2553,15 @@ export class ShipRenderer {
     res.rect = [x0, y0, bw, bh];
     // (the self-shadowing, every other frame: the light turns slowly against the ship)
     // (a carrier in the map: each frame — it moves across the view, its shadow with it)
-    if (!this.debugSkip.has("shadow") && (v.forceShadow || this.bound2 || this.shadowTick++ % 2 === 0)) {
+    // (decision 42: kept while its key holds — the light turned under ~0.3° against the craft, its pose the same —; else every
+    // other frame, as before; a carrier or the walker's forcing: each frame)
+    const keep = this.shadowKey !== null && this.shadowKey === this.shadowKeyDrawn;
+    const draw = v.forceShadow || this.bound2 || (!keep && this.shadowTick++ % 2 === 0);
+    if (draw) {
+      this.shadowKeyDrawn = this.shadowKey;
+      this.shadowDraws++;
+    }
+    if (!this.debugSkip.has("shadow") && draw) {
       const sp = enc.beginRenderPass(
         this.pass("ship: shadow map", {
           colorAttachments: [],
