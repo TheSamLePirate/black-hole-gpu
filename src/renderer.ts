@@ -3136,7 +3136,9 @@ export class Renderer {
     // (Q5 VIPER C2: the clouds' march amortised — a texel in four a frame — while their history holds: a frame flag, not a
     // liteSkip bit — that word reaches the kernel through a float, its low bits lost under a bit 30)
     this.cloudAmortizedNow =
-      (this.cloudAmortize === true || (this.cloudAmortize === "still" && this.frameMotionPx < 0.5)) &&
+      (this.cloudAmortize === true ||
+        (this.cloudAmortize === "still" && this.frameMotionPx < 0.5) ||
+        (this.cloudAmortize === "moving" && this.frameMotionPx >= 0.5)) &&
       this.cloudHistoryOn &&
       this.cloudHistOk;
     u.set(
@@ -9252,8 +9254,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  off by default; "still": amortised only while the image barely moves (under half a pixel a frame, frameMotionPx).
    *  −0.8 ms; against a reference not amortised (ghost, clouds, 40° turn) the turning image loses ≤ 0.2 dB, but the still
    *  image converges slower — 2–4 dB under its reference (a texel marched a frame in four: a quarter of the draws) — a frame
-   *  rate not bought with a blurred image; true: always (a measure's), false: never */
-  cloudAmortize: boolean | "still" = false;
+   *  rate not bought with a blurred image; "moving": amortised only while the image moves (the still image whole) — on
+   *  kerr-mini −4.1 ms (52 → 47.9) but the turning image 0.97 dB worse, its ghost pixels +44 %: not adopted either;
+   *  true: always (a measure's), false: never */
+  cloudAmortize: boolean | "still" | "moving" = false;
   /** (Q5 C10) the clouds' volume faded into the flat layer between 25 and 35 km up (false: the old step at 30 km — an A/B) */
   cloudVolumeFade = true;
   /** (Q5 VIPER C2) an amortised march's weight in the clouds' history (post.wgsl cloudTemporal: the march not amortised 0.15) */
