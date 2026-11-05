@@ -12,15 +12,14 @@ import { worldRunwaysNow } from "./runways3d";
 export const jetRunway = (f: Airfield, min = 1800) =>
   f.runways.filter((x) => x.surface === "paved" && x.len >= min).sort((a, b) => b.len - a.len)[0];
 
-/** A world airfield's longest paved runway as a site (null: none of `min` metres). */
-export function worldSite(f: Airfield, min = 1800): Site | null {
-  const w = jetRunway(f, min);
-  if (!w) return null;
+/** A world airfield's runway as a site: its le threshold, its heading, its level — the one graded near the eye if it is, measured
+ *  (src/world/runways3d.ts) —, its length. */
+export function runwaySite(f: Airfield, w: Airfield["runways"][number]): Site {
   const code = f.icao || f.ident;
   const graded = worldRunwaysNow().find(
     (r) => r.world?.field === code && Math.abs(r.site.lat - w.lat1) < 1e-4 && Math.abs(r.site.lon - w.lon1) < 1e-4,
   );
-  if (graded) return { ...graded.site, name: `${f.name} (${code})`, len: graded.len };
+  if (graded) return { ...graded.site, name: `${f.name} (${code})`, len: graded.len, des: graded.site.des ?? [w.le, w.he] };
   return {
     body: "earth",
     name: `${f.name} (${code})`,
@@ -33,6 +32,20 @@ export function worldSite(f: Airfield, min = 1800): Site | null {
     elev: Math.round((w.elev1 + w.elev2) / 2),
     len: w.len,
   };
+}
+
+/** A world airfield's longest paved runway as a site (null: none of `min` metres). */
+export function worldSite(f: Airfield, min = 1800): Site | null {
+  const w = jetRunway(f, min);
+  return w ? runwaySite(f, w) : null;
+}
+
+/** Every paved runway of a world airfield of `min` metres or more as a site, the longest first (the ILS's choice of runway). */
+export function worldRunwaySites(f: Airfield, min = 900): Site[] {
+  return f.runways
+    .filter((x) => x.surface === "paved" && x.len >= min)
+    .sort((a, b) => b.len - a.len)
+    .map((w) => runwaySite(f, w));
 }
 
 /** A site by its name or code: the game's own first, else a world airfield already in (its tile loaded). */

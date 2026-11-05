@@ -360,6 +360,23 @@ the spectator's when a craft is flown (`camera.viewController().s.fov`, not `set
 spectator). Each call is a cut: the view placed anew, even over one already placed. Returns why not, or null. *Used in:*
 `tests/e2e/coast-refs.e2e.test.ts` (the T7 reference photographs reproduced), `tests/e2e/iss-sunset.e2e.test.ts`.
 
+### `__bh.camera.ilsRunways(field?)` / `__bh.camera.ilsStart(field?, { runway?, hold? })`
+
+The ILS's runway chosen (`src/controller/ils.ts`, Sam, 5 Nov 2026). `ilsRunways` lists the runways an approach can take at the
+airfield named (ICAO or name), or at the nearest one within 150 km: `{ field, auto, ends }`, or null when there is none. Each
+end is `{ id, rwy, len, wind }`:
+- `id` is its number (05, 23L);
+- `rwy` is the ILS's runway (threshold, heading, level over the sea);
+- `len` is its length [m];
+- `wind` marks the end in use (into the wind, or the published one in fair weather).
+
+Every paved runway of 900 m or more is listed (its runway tile in), the longest first. `auto` is the end taken when none is
+asked: the longest runway, into the wind.
+
+`ilsStart(field, { runway })` engages the approach on that end: « 13 », « RWY 05 », « 23L », or both ends « 05/23 » for that
+runway's end in use. It returns why not when the field has no such runway. The wheel's « Navigation › Approche ILS » and TARS's
+`approach` tool (`runway`, and `action: "runways"`) use the same calls. *Used in:* `tests/e2e/ils-runway.e2e.test.ts`.
+
 ### `__bh.issCamera(id: "sen-nadir" | "sen-horizon" | "sen-docking" | "nasa-harmony" | "back")` → string \| null
 
 Q6-ISS ISS4: looks through one of the ISS's live-stream cameras (`issCameraView` in `src/main.ts`, the same action as the

@@ -12,6 +12,7 @@ export default {
   "ILS: in the air": "ILS : en vol",
   "ILS: no runway called {0}": "ILS : aucune piste nommée {0}",
   "ILS: no runway within 150 km": "ILS : aucune piste à moins de 150 km",
+  "ILS: no runway {0} at {1}": "ILS : pas de piste {0} à {1}",
   "{0} approach: hold at the initial fix, expect the ILS {1}": "{0} approche : attendez au point initial, prévoyez l'ILS {1}",
   "{0} approach: cleared ILS {1}": "{0} approche : autorisé ILS {1}",
   "{0} tower: cleared to land, runway {1}": "{0} tour : autorisé atterrissage, piste {1}",

@@ -5,12 +5,12 @@
 // flight plan, and its end: the approach engaged as the plan reaches its runway.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { fieldCached, fieldsNear } from "../world/runways";
-import { worldSite } from "../world/fieldsite";
+import { worldRunwaySites, worldSite } from "../world/fieldsite";
 import { worldRunwaysNow } from "../world/runways3d";
 import { approachSpeed } from "../game/trap";
 import { arrivalFixes, departureFix, ilsGrade, ilsReading, type IlsRun, type IlsRunway, ilsStep, newIlsRun, runwayId } from "../game/ils";
 import { gcDist } from "../game/flightplan";
-import { landingEnd, RUNWAY_LENGTH, type Site, SITES } from "../game/sites";
+import { landingEnd, RUNWAY_LENGTH, reciprocal, type Site, SITES } from "../game/sites";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
 import type { PilotInput } from "../pilot";
@@ -23,6 +23,7 @@ declare module "../controls" {
     ilsRun?: (IlsRun & { manual?: boolean }) | null;
     ilsLast?: { rwy: string; score: number; notes: string[]; touch?: IlsRun["touch"] } | null;
     ilsStart: typeof ilsStart;
+    ilsRunways: typeof ilsRunways;
     ilsOff: typeof ilsOff;
     ilsJet: typeof ilsJet;
     ilsFrame: typeof ilsFrame;
@@ -46,7 +47,11 @@ const SAY: Record<string, () => string> = {
 
 /** A site's runway as the ILS's (its end landed now: into the wind). */
 export function runwayOf(c: CameraController, s: Site): IlsRunway {
-  const end = landingEnd(s, c.s, daysOf(c.nowTime()), c.weatherReal);
+  return ilsEnd(landingEnd(s, c.s, daysOf(c.nowTime()), c.weatherReal), s.len);
+}
+
+/** A runway's end (a site as given: that threshold, that heading) as the ILS's. */
+function ilsEnd(end: Site, len?: number): IlsRunway {
   return {
     name: end.name,
     icao: end.icao,
@@ -54,9 +59,74 @@ export function runwayOf(c: CameraController, s: Site): IlsRunway {
     lon: end.lon,
     hdg: end.rwy ?? 0,
     elev: end.elev ?? 0,
-    len: s.len ?? RUNWAY_LENGTH,
+    len: len ?? end.len ?? RUNWAY_LENGTH,
     des: end.des?.[0],
   };
+}
+
+/** A landing end the approach can take: its number (05, 23L), the ILS's runway, its length [m], whether the wind picks it now. */
+export interface IlsChoice {
+  id: string;
+  rwy: IlsRunway;
+  len: number;
+  wind: boolean;
+}
+
+/** The airfield's runways for the ILS (Sam, 5 Nov 2026: « quand il y a deux pistes, permettre de choisir celle de l'ILS »):
+ *  the airfield named (ICAO or name) else the nearest within 150 km; each paved runway of 900 m or more (its tile in: its
+ *  world airfield), both its ends — the one the wind picks now marked —, the longest runway first; `auto` the end the
+ *  approach takes when none is chosen (the longest runway, into the wind). Null: no airfield. */
+function ilsRunways(this: CameraController, name?: string): { field: string; auto: IlsChoice; ends: IlsChoice[] } | null {
+  const site = findRunway(this, name);
+  if (!site) return null;
+  const f = site.icao ? fieldCached(site.icao) : null;
+  const sites = f ? worldRunwaySites(f) : [];
+  // (the game's own field: its runway first, unless the world's list has it already — the same threshold)
+  const near = (a: Site, b: Site) => Math.abs(a.lat - b.lat) < 2e-3 && Math.abs(a.lon - b.lon) < 2e-3;
+  if (!sites.some((x) => near(x, site) || near(reciprocal(x), site))) sites.unshift(site);
+  const days = daysOf(this.nowTime());
+  const choice = (end: Site, len: number | undefined, wind: Site): IlsChoice => {
+    const rwy = ilsEnd(end, len);
+    return {
+      id: runwayId(rwy.hdg, rwy.des),
+      rwy,
+      len: rwy.len,
+      wind: near(wind, end) && Math.abs((((wind.rwy ?? 0) - (end.rwy ?? 0) + 540) % 360) - 180) < 30,
+    };
+  };
+  const ends: IlsChoice[] = [];
+  for (const x of sites) {
+    const w = landingEnd(x, this.s, days, this.weatherReal);
+    ends.push(choice(x, x.len, w), choice(reciprocal(x), x.len, w));
+  }
+  const autoRwy = runwayOf(this, site);
+  const auto = ends.find(
+    (e) =>
+      Math.abs(e.rwy.lat - autoRwy.lat) < 2e-3 && Math.abs(e.rwy.lon - autoRwy.lon) < 2e-3 && e.id === runwayId(autoRwy.hdg, autoRwy.des),
+  ) ?? {
+    id: runwayId(autoRwy.hdg, autoRwy.des),
+    rwy: autoRwy,
+    len: autoRwy.len,
+    wind: true,
+  };
+  return { field: site.icao ?? site.name, auto, ends };
+}
+
+/** A runway asked by its number — « 13 », « RWY 05 », « piste 31 », « 23L » — among the choices: that end; a runway by both
+ *  numbers (« 13/31 ») or one end of it, the end the wind picks. Null: none such. */
+export function pickRunway(ends: IlsChoice[], asked: string): IlsChoice | null {
+  const norm = (x: string) => x.replace(/^0+(?=\d)/, "").toUpperCase();
+  const parts = asked
+    .toUpperCase()
+    .replace(/RWY|PISTE|RUNWAY/g, "")
+    .split(/[/\-\s]+/)
+    .filter(Boolean)
+    .map(norm);
+  if (!parts.length) return null;
+  if (parts.length === 1) return ends.find((e) => norm(e.id) === parts[0]) ?? null;
+  // (both ends named: that runway, its end into the wind)
+  const of = ends.filter((e) => parts.includes(norm(e.id)));
+  return of.find((e) => e.wind) ?? of[0] ?? null;
 }
 
 /** The runway named (ICAO or name), else the nearest within 150 km. */
@@ -95,7 +165,11 @@ export function findRunway(c: CameraController, name?: string): Site | null {
  * The ILS approach engaged: on the runway named (ICAO or name — else the nearest within 150 km), its end into the
  * wind; `hold`: laps in the hold at the initial fix first (Infinity: until cleared). What to say.
  */
-function ilsStart(this: CameraController, name?: string, o: { hold?: number; rwy?: IlsRunway; base?: boolean } = {}): string {
+function ilsStart(
+  this: CameraController,
+  name?: string,
+  o: { hold?: number; rwy?: IlsRunway; base?: boolean; runway?: string } = {},
+): string {
   if (!isAircraft(fleet.active)) return t("ILS: the F-35, the A320");
   const g = this.geoNow();
   if (!g || this.rolling || this.ourLanded) return t("ILS: in the air");
@@ -112,7 +186,14 @@ function ilsStart(this: CameraController, name?: string, o: { hold?: number; rwy
   this.pilot.auto = "none";
   this.nav.on = { l: false, v: false };
   // (a visual circuit's base and final — `base`: from the downwind, round onto the centreline)
-  const W = o.rwy ?? runwayOf(this, site!);
+  let W = o.rwy ?? runwayOf(this, site!);
+  // (a runway chosen — its number: the airfield's other runway, or the other end —, among the airfield's)
+  if (!o.rwy && o.runway) {
+    const ch = this.ilsRunways(name ?? site!.icao ?? site!.name);
+    const pick = ch ? pickRunway(ch.ends, o.runway) : null;
+    if (!pick) return tf("ILS: no runway {0} at {1}", o.runway, site!.icao ?? site!.name);
+    W = pick.rwy;
+  }
   this.ilsRun = newIlsRun(W, o.hold ?? 0, o.base);
   const id = `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`;
   this.onRadio?.(
@@ -265,5 +346,5 @@ function routeProcedures(this: CameraController): string {
 }
 
 export function installIls(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { ilsStart, ilsOff, ilsJet, ilsFrame, ilsInfo, ilsClear, routeProcedures });
+  Object.assign(C.prototype, { ilsStart, ilsRunways, ilsOff, ilsJet, ilsFrame, ilsInfo, ilsClear, routeProcedures });
 }

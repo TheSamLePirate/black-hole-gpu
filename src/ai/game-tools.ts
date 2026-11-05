@@ -2018,10 +2018,11 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "approach",
       description:
-        "The F-35's instrument approaches and procedures. ils: an ILS approach flown by the autopilot to a runway (field: ICAO or name, else the nearest within 150 km; its end into the wind) — to the initial fix 18.5 km out, the localizer and the 3° glideslope captured, the gear and flaps at the final fix, minimums at 60 m (not stable: the missed approach, round again), the flare, braked to a stop, graded out of 20; hold: laps of the racetrack at the initial fix first (0: none; 99: until cleared). clear: out of the hold, the approach begun. off: the approach given up (the needles gone). status: the approach flown (its phase, the needles in dots, the distance) and the last one's grade. procedures: the flight plan given its departure's fix (after an airfield it starts from) and its arrival's (the initial and final fixes before the airfield it ends at) — LNAV then hands over to the ILS at the initial fix.",
+        "The F-35's instrument approaches and procedures. ils: an ILS approach flown by the autopilot to a runway (field: ICAO or name, else the nearest within 150 km; runway: its number — « 13 », « 23L », or both ends « 05/23 » for that runway into the wind — else the longest runway, its end into the wind) — to the initial fix 18.5 km out, the localizer and the 3° glideslope captured, the gear and flaps at the final fix, minimums at 60 m (not stable: the missed approach, round again), the flare, braked to a stop, graded out of 20; hold: laps of the racetrack at the initial fix first (0: none; 99: until cleared). clear: out of the hold, the approach begun. off: the approach given up (the needles gone). status: the approach flown (its phase, the needles in dots, the distance) and the last one's grade. runways: the airfield's runways an ILS can take (each end, its length, the one in use), the default one. procedures: the flight plan given its departure's fix (after an airfield it starts from) and its arrival's (the initial and final fixes before the airfield it ends at) — LNAV then hands over to the ILS at the initial fix.",
       params: {
-        action: { type: "string", enum: ["ils", "clear", "off", "status", "procedures"] },
+        action: { type: "string", enum: ["ils", "clear", "off", "status", "runways", "procedures"] },
         field: { type: "string" },
+        runway: { type: "string" },
         hold: { type: "number", minimum: 0, maximum: 99 },
       },
       required: ["action"],
@@ -2029,7 +2030,19 @@ export function gameTools(h: GameHost): Tool[] {
         const c = camera;
         switch (a.action) {
           case "ils":
-            return c.ilsStart(a.field ? String(a.field) : undefined, { hold: a.hold === 99 ? Infinity : Number(a.hold ?? 0) });
+            return c.ilsStart(a.field ? String(a.field) : undefined, {
+              hold: a.hold === 99 ? Infinity : Number(a.hold ?? 0),
+              runway: a.runway ? String(a.runway) : undefined,
+            });
+          case "runways": {
+            const ch = c.ilsRunways(a.field ? String(a.field) : undefined);
+            if (!ch) return a.field ? `No airfield called ${a.field}` : "No runway within 150 km";
+            return {
+              field: ch.field,
+              default: ch.auto.id,
+              ends: ch.ends.map((e) => ({ runway: e.id, lengthM: Math.round(e.len), inUse: e.wind })),
+            };
+          }
           case "clear":
             return c.ilsClear();
           case "off":
