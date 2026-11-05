@@ -9,6 +9,7 @@ then a local refinement, the median residual [px] reported. No lens distortion m
 residual's shape across the width).
 
   python3 scripts/iss-limb-fit.py <frames.jpg> … [--alt 420] [--top 0.08] [--bottom 0.80] [--distort 1]
+                                  [--tiltmin 30 --tiltmax 60] [--fmin 60 --fmax 150] [--rollmax 5]  (the grid's ranges [°])
 
 --distort 1: a wide angle's barrel too — the projection between the pinhole (r = f tan θ) and the equidistant fisheye (r = f θ):
 r = f ((1 − k) tan θ + k θ), k fitted in [0, 1] with the rest (Q6-ISS ISS5: the Sun seen at the top of Sen's frame where the
@@ -102,9 +103,9 @@ KS = [0.0, 0.25, 0.5, 0.75, 1.0] if opt.get("distort") else [0.0]
 def fit(W, H, cols, rows):
     best = None
     for k in KS:
-        for F in np.radians(np.arange(60, 151, 5)):
-            for tilt in np.radians(np.arange(30, 61, 2.5)):
-                for roll in np.radians(np.arange(-5, 5.1, 2.5)):
+        for F in np.radians(np.arange(opt.get("fmin", 60.0), opt.get("fmax", 150.0) + 1, 5)):
+            for tilt in np.radians(np.arange(opt.get("tiltmin", 30.0), opt.get("tiltmax", 60.0) + 1, 2.5)):
+                for roll in np.radians(np.arange(-opt.get("rollmax", 5.0), opt.get("rollmax", 5.0) + 0.1, 2.5)):
                     m = model_rows(W, H, cols, F, tilt, roll, k)
                     r = np.nanmedian(np.abs(m - rows)) if np.isfinite(m).sum() > len(cols) * 0.8 else 1e9
                     if best is None or r < best[0]:

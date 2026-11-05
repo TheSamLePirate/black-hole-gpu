@@ -652,3 +652,31 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   l'arrière, soit l'heure incrustée devance l'image d'une dizaine de secondes. La capture dense programmée pour le 6 novembre
   (toutes les 10 s, 04:45–06:45 UTC) départagera par le défilement (champ, orientation) et par la suite des côtes (visée,
   heure).
+
+## ISS2 — la caméra d'amarrage de Sen, premier calage (le 5 novembre)
+
+- **Les images** : quatre plans dans la capture du 4 novembre.
+  - 03:21 UTC : un plan large, incrusté « Harmony forward port: Crew Dragon Grace · Crew-13 », avec la structure en haut à
+    gauche, le Dragon à contre-jour au centre et un limbe dégagé ;
+  - 04:20, 05:05 et 05:26 : des plans serrés sur la capsule, la caméra ayant zoomé. Ceux de 05:05 et 05:26 sont des reprises
+    pendant une perte de signal.
+- **Calage du plan large** (`scripts/iss-limb-fit.py`, grilles élargies `--tiltmin/--tiltmax/--fmin/--fmax/--rollmax`) :
+  - **champ horizontal 74°, axe à 15° sous l'horizontale, roulis −7°**, avec un résidu de 1,1 px sur 202 colonnes ;
+  - les plans serrés ne se calent pas (environ 40 px) : leur limbe est trop court derrière la capsule ;
+  - **le lacet** vient du Dragon, au milieu de l'image en largeur et environ 6° au-dessus de l'axe : un azimut de −45°, vers
+    l'avant et vers bâbord, la capsule étant environ 20 m devant l'attache ;
+  - attache : celle de la caméra d'horizon, Sen plaçant ses trois caméras sur Bartolomeo. Image directe.
+- **Reporté au registre** : `sen-docking` avec un champ de 74° et ces axes, toujours au statut `estimate` (le lacet est une
+  estimation). Tests mis à jour.
+- **Vu dans le jeu** (kerr-mini, le 4 novembre à 03:21:14 UTC, éléments du 4 novembre) :
+  - le limbe, recalé sur l'image du jeu, donne une inclinaison de 17,5° et un roulis de −6,5° : le sens du roulis est confirmé ;
+  - le Soleil apparaît près du centre, ce qui concorde avec le Dragon à contre-jour du direct ;
+  - **ni le Dragon ni la structure n'apparaissent** : le modèle de station du jeu n'a pas de vaisseau amarré à IDA-2, et
+    l'attache ne voit pas Harmony dans cette direction.
+- **Écarts restants** :
+  - le modèle situe le Dragon environ 7° au-dessus de l'horizontale, et le limbe environ 9° en dessous, soit environ 16°
+    d'écart : le tangage réel de la station ou la hauteur de l'attache ;
+  - le zoom des plans serrés n'est pas modélisé ;
+  - la capsule amarrée manque dans le jeu, car les occupants des ports ne sont pas encore modélisés.
+
+![ISS2 : la vue d'amarrage de Sen dans le jeu, 4 nov. 03:21:14 UTC — le limbe, le Soleil derrière un Dragon absent du modèle (kerr-mini)](Q6/iss2-amarrage-jeu.jpg)

@@ -43,8 +43,9 @@ const unit = (v: Vec3): Vec3 => {
 };
 /** Bartolomeo's box (Columbus's forward face): x 13.25–15.61, y 2.59–8.68, z 4.54–6.45 — its centre */
 const BARTOLOMEO: Vec3 = [14.43, 5.64, 5.5];
-/** IDA-2's ring (Harmony forward, on PMA-2): x 15.46–16.09, y −0.86–1.06, z 4.73–6.46 — its centre */
-const IDA2: Vec3 = [15.78, 0.1, 5.6];
+/** IDA-2's ring (Harmony forward, on PMA-2): x 15.46–16.09, y −0.86–1.06, z 4.73–6.46 — its centre (the docking camera's
+ *  target; its line of sight now the Dragon's, fitted — kept for reference) */
+export const IDA2: Vec3 = [15.78, 0.1, 5.6];
 /** Harmony's external HD camera 5 (Node2_Details_EHDC_5): x 12.75–14.14, y 1.70–2.42, z 4.70–5.07 — its centre */
 const EHDC5: Vec3 = [13.45, 2.06, 4.89];
 
@@ -101,10 +102,17 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     id: "sen-docking",
     stream: "sen",
     description: "Sen SpaceTV-1, docking: along the station at the vehicle docked to Harmony's forward port (IDA-2)",
-    mount: BARTOLOMEO,
-    mountFrom: "as the nadir camera's; aimed at IDA-2 a few metres to port",
-    look: unit([IDA2[0] - BARTOLOMEO[0], IDA2[1] - BARTOLOMEO[1], IDA2[2] - BARTOLOMEO[2]]),
-    fovDeg: null,
+    mount: [12.5, 7.5, 7.0],
+    mountFrom: "as the horizon camera's (Sen: the three on Bartolomeo)",
+    // (ISS2, its wide framing of 4 Nov 2026 03:21 UTC — "Harmony forward port: Crew Dragon Grace" —: the limb fitted, its axis
+    // 15° below the horizontal, roll −7°, horizontal field 74° (residual 1.1 px; scripts/iss-limb-fit.py); the docked Dragon at the
+    // picture's middle across, ~6° above the axis: its azimuth −45° (forward and to port, the capsule ~20 m ahead of the mount).
+    // The model's geometry puts the Dragon ~7° above the horizontal, the limb ~9° below: ~16° apart — the station's real pitch,
+    // or the mount's height. Its close framings — 04:20, 05:05, 05:26 — zoomed (the limb too short behind the capsule to fit);
+    // the picture direct, as the horizon's)
+    look: unit([0.683, -0.683, 0.2588]),
+    right: unit([0.6795, 0.7241, 0.1177]),
+    fovDeg: 74,
     status: "estimate",
   },
   {
