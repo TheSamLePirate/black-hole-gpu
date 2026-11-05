@@ -392,6 +392,10 @@ export class EarthScenery {
   get overtureBuildings() {
     return this.data?.overtureBuildings ?? 0;
   }
+  /** (Q8 D1) the wind turbines drawn — Overture's too (its credit shown) */
+  get turbines() {
+    return this.data?.turbines ?? 0;
+  }
   get active() {
     return !!this.data && this.mode !== "off";
   }

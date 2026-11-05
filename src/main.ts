@@ -8894,7 +8894,8 @@ async function main() {
     cpuProf.time("overlay (guide, marker)", () => viewOverlay.draw(chart && !renderer.offlineActive ? chart : null, chartKey));
     const hideSceneryCredit = !renderer.earthScenery.active;
     if (sceneryCredit.hidden !== hideSceneryCredit) sceneryCredit.hidden = hideSceneryCredit;
-    const hideOverture = renderer.earthScenery.overtureBuildings === 0;
+    // (its buildings outside France, the wind turbines everywhere — Q8 D1)
+    const hideOverture = renderer.earthScenery.overtureBuildings === 0 && renderer.earthScenery.turbines === 0;
     if (overtureCredit.hidden !== hideOverture) overtureCredit.hidden = hideOverture;
     // (a national source's tiles drawn — orthophotos, its relief's finer levels —: the one under the camera credited)
     const nationalDrawn = renderer.earthTiles.orthoFinest > 0 || renderer.earthTiles.finest > ZG1;
