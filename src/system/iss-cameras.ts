@@ -51,14 +51,20 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     id: "sen-horizon",
     stream: "sen",
     description: "Sen SpaceTV-1, horizon: a wide angle over the limb, looking aft, the station's structure in view now and then",
-    mount: BARTOLOMEO,
-    mountFrom: "as the nadir camera's",
+    // (ISS2 — scripts/iss-mount-fit.ts: the structure lit over the limb in 50 frames of 5 Nov 2026 against the game's station mesh
+    // seen from a grid of mounts: the best 13.5, 12.0, 5.5 — starboard, past Bartolomeo's platform box (y 2.6–8.7) —, the
+    // picture mirrored, its intersection over union 0.78; the ten best within 0.72–0.78 all starboard, y 8.5–14.5 m: a loose fit,
+    // a thin band of sky to fit on. The box's centre had the eye inside a part, the station over the picture's top)
+    mount: [13.5, 12.0, 5.5],
+    mountFrom: "fitted on the structure over the limb (scripts/iss-mount-fit.ts): starboard of Bartolomeo's box, ±2–3 m",
     // (ISS2, fitted on the limb — scripts/iss-limb-fit.py, 14 of 20 frames of 4 Nov 2026 within a few tenths: its axis 47.5° below
     // the horizontal, roll ~0°, horizontal field 95° (a pinhole, no distortion; residual 1–2 px) —; its yaw from the ground's flow —
     // scripts/iss-flow-yaw.py, 9 pairs of the dense capture of 5 Nov 2026: 180.7° (177.3–182.7), the predicted directions within
     // 1.1° of the observed —: aft, the ground streaming away towards the limb; a mirrored picture not told apart at this yaw)
     look: unit([-Math.cos((47.5 * Math.PI) / 180), 0, Math.sin((47.5 * Math.PI) / 180)]),
-    // (its right: to starboard of the aft view, or to port if the picture is mirrored — not told apart)
+    // (the picture mirrored — the structure's fit prefers it, nine of its ten best —: its right to starboard; direct it would be to
+    // port, the ground's flow not telling the two apart)
+    right: [0, 1, 0],
     fovDeg: 95,
     status: "calibrated",
   },
@@ -100,16 +106,19 @@ export const ISS_CAMERA_IDS = ["sen-nadir", "sen-horizon", "sen-docking", "nasa-
 export const ISS_DEFAULT_FOV = 60;
 
 /** A camera's native framing on the station's axes (x ahead, y starboard, z nadir): its mount [m], its line of sight, the
- *  picture's up (from its right where fitted — up = right × look —, else the zenith's side of the view: the right
- *  look × zenith, the forward where it looks along the vertical) and its field across [°]. */
-export function issCameraFrame(id: IssCameraId): { mount: Vec3; look: Vec3; up: Vec3; right: Vec3; fovDeg: number } {
+ *  picture's up and right and its field across [°]. The up from its right where fitted — right × look —, turned to the zenith's
+ *  side when that points down: a mirrored picture (`mirrored`: the stream's right is the game's left — the game draws it unmirrored);
+ *  else the zenith's side of the view (the right look × zenith; the forward where it looks along the vertical). */
+export function issCameraFrame(id: IssCameraId): { mount: Vec3; look: Vec3; up: Vec3; right: Vec3; fovDeg: number; mirrored: boolean } {
   const c = issCamera(id) ?? ISS_CAMERAS[0]!;
   const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   const f = c.look;
+  const vertical = Math.abs(f[2]) > 0.98;
   let right = c.right;
-  if (!right) {
-    const zen: Vec3 = Math.abs(f[2]) > 0.98 ? [1, 0, 0] : [0, 0, -1];
-    right = unit(cross(f, zen));
-  }
-  return { mount: c.mount, look: f, up: unit(cross(right, f)), right, fovDeg: c.fovDeg ?? ISS_DEFAULT_FOV };
+  if (!right) right = unit(cross(f, vertical ? [1, 0, 0] : [0, 0, -1]));
+  let up = unit(cross(right, f));
+  // (z nadir: an up with z > 0 points down)
+  const mirrored = !vertical && up[2] > 0;
+  if (mirrored) up = [-up[0], -up[1], -up[2]];
+  return { mount: c.mount, look: f, up, right, fovDeg: c.fovDeg ?? ISS_DEFAULT_FOV, mirrored };
 }

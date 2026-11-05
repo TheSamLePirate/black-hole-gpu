@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { ISS_CAMERAS, issCamera } from "../src/system/iss-cameras";
+import { ISS_CAMERAS, issCamera, issCameraFrame } from "../src/system/iss-cameras";
 import { station } from "../src/system/iss";
 
 // Q6-ISS ISS1 — the live streams' cameras on the station (src/system/iss-cameras.ts): every line of sight a unit vector; the Sen
@@ -24,4 +24,9 @@ test("ISS1: the cameras' mounts and lines of sight", () => {
   expect(nasa.look).toEqual([0, 0, 1]);
   expect(nasa.right![0]).toBe(-1);
   expect(nasa.fovDeg).toBe(36);
+  // (the horizon's picture mirrored: its up still the zenith's side)
+  const hf = issCameraFrame("sen-horizon");
+  expect(hf.mirrored).toBe(true);
+  expect(hf.up[2]).toBeLessThan(0);
+  expect(issCameraFrame("nasa-harmony").mirrored).toBe(false);
 });

@@ -362,3 +362,30 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   - afficher la source et la qualité du calage dans la vue elle-même (aujourd'hui dans le panneau et le message) ;
   - rendre la vue accessible depuis la vue du vaisseau sans passer par F3 ;
   - la caméra d'amarrage (champ inconnu : 60° par défaut).
+
+## ISS2 — troisième calage : l'attache de la caméra d'horizon de Sen par la structure visible (le 5 novembre)
+
+- **Constat d'ISS4 :** avec l'œil au centre de la boîte de Bartolomeo, il se trouvait dans une pièce de la station. Les
+  modules couvraient le haut de l'image, là où le direct montre le limbe.
+- **Méthode** (`scripts/iss-mount-fit.ts`) :
+  - au-dessus du limbe, l'espace est noir : une cellule claire est de la structure ;
+  - les cellules de ciel, c'est-à-dire les rayons de la caméra qui passent au-dessus du limbe (inclinaison 20,4° à 422 km),
+    sont comparées sur une grille de 96 × 54. D'un côté, les cellules claires dans au moins 60 % de 50 images de jour
+    (10:59–11:08 UTC le 5 novembre, logo et badge exclus). De l'autre, celles que le maillage de la station du jeu (pièces au
+    repos) couvre à moins de 80 m, vu depuis chaque attache candidate ;
+  - on garde le meilleur IoU (intersection sur union), image directe ou en miroir. Une attache noyée dans une pièce est
+    écartée.
+- **Résultat :**
+  - 404 cellules de ciel, dont 93 claires, toutes dans le coin haut-gauche ;
+  - l'ancienne attache, au centre de Bartolomeo, obtient un IoU de 0 (noyée dans une pièce) ;
+  - **le meilleur ajustement est [13,5 ; 12,0 ; 5,5] m, image en miroir, avec un IoU de 0,78**. Les dix meilleurs vont de
+    0,72 à 0,78, tous à tribord au-delà de la boîte de Bartolomeo (y entre 8,5 et 14,5 m), et neuf sur dix sont en miroir ;
+  - **l'ajustement est lâche, à 2–3 m près** : seule une bande de ciel étroite le contraint.
+- **Reporté :**
+  - `sen-horizon` reçoit cette attache et un bord droit vers tribord, c'est-à-dire une image en miroir ;
+  - `issCameraFrame` garde le haut de l'image du côté du zénith pour une image en miroir, et le signale par `mirrored`. Le
+    jeu dessine la vue sans miroir.
+  - Tests unitaires ; e2e `iss-cameras` repassé : l'œil sur l'attache, et la visée comme le haut à moins de 0,01°.
+- **Vu dans le jeu :** le limbe et l'espace en haut, la structure à droite. C'est le reflet du coin haut-gauche du direct.
+
+![ISS2 : la vue d'horizon de Sen dans le jeu, l'attache ajustée (ce Mac)](Q6/iss2-sen-horizon-mount.jpg)
