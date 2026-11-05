@@ -5,8 +5,9 @@ import type { Vec3 } from "../physics";
 import { earthDetail, toHalf } from "../terrain";
 import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
-import { CANOPY_NEAR, IgnLand } from "./ign-canopy";
-import { fetchRange, OVERTURE_LIST, OVERTURE_Z, overtureReleases, overtureUrl, PmTiles } from "./pmtiles";
+import { CANOPY_NEAR, IgnLand, tilesWithin } from "./ign-canopy";
+import { fetchRange, OVERTURE_BUCKET, OVERTURE_LIST, OVERTURE_Z, overtureReleases, overtureUrl, PmTiles } from "./pmtiles";
+import { overtureBaseUrl, TURBINE_MAX, TURBINE_REACH_M, TURBINE_Z, type Turbine, turbineMesh, turbineOf } from "./turbines";
 import { SwissGround } from "./national";
 import {
   bdtopoTiles as bdtopoWanted,
@@ -1209,7 +1210,61 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (Q3 B4: the map's surfaces drawn once for the raster's ground — a texel read a pixel, not the surfaces' tree walked)
   const decals = makeDecals(keptSurfaces);
   phase("decals");
-  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget, decals);
+  // (Q8 D1: the wind turbines round the centre — Overture's base theme, its latest release that answers —, their triangles after
+  // the bridges'; none on any failure, the scene whole)
+  const turbines: { positions: number[]; triangles: number[] }[] = [];
+  try {
+    const list = await fetch(OVERTURE_LIST, { signal: AbortSignal.timeout(FETCH_MS) });
+    count(list);
+    let pm: PmTiles | null = null;
+    if (list.ok)
+      for (const r of overtureReleases(await list.text())) {
+        const p = new PmTiles(overtureBaseUrl(OVERTURE_BUCKET, r), fetchRange(fetchRanged));
+        try {
+          await p.header();
+          pm = p;
+          break;
+        } catch {
+          // (that release's archive refused: the next)
+        }
+      }
+    if (pm) {
+      const n13 = 2 ** TURBINE_Z;
+      const found: (Turbine & { d: number })[] = [];
+      for (const t of tilesWithin(TURBINE_Z, q.lat, q.lon, TURBINE_REACH_M)) {
+        const raw = await pm.tile(TURBINE_Z, ((t.x % n13) + n13) % n13, t.y);
+        if (!raw) continue;
+        const layer = new VectorTile(new PbfReader(raw)).layers.infrastructure;
+        if (!layer) continue;
+        for (let i = 0; i < layer.length; i++) {
+          const f = layer.feature(i);
+          if (f.type !== 1 || f.properties.class !== "generator") continue;
+          const g0 = f.loadGeometry()[0]?.[0];
+          if (!g0) continue;
+          const lon = ((t.x + g0.x / f.extent) / n13) * 360 - 180,
+            lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (t.y + g0.y / f.extent)) / n13))) * 180) / Math.PI;
+          const tb = turbineOf(f.properties as Record<string, unknown>, lat, lon);
+          if (!tb) continue;
+          const p = localPoint(frame, lat, lon, 0);
+          const d = Math.hypot(p[0], p[1]);
+          if (d <= TURBINE_REACH_M) found.push({ ...tb, d });
+        }
+      }
+      found.sort((a, b) => a.d - b.d);
+      for (const tb of found.slice(0, TURBINE_MAX)) {
+        const p = localPoint(frame, tb.lat, tb.lon, heightNow(tb.lat, tb.lon) ?? (await height(tb.lat, tb.lon)));
+        const m = turbineMesh(p[0], p[1], p[2], tb);
+        const bytes = m.positions.length * 4 + m.triangles.length * 4 + (m.triangles.length / 3) * 4;
+        if (storedBytes + bytes > budget - 2 * 1024 * 1024) break;
+        storedBytes += bytes;
+        turbines.push(m);
+      }
+    }
+  } catch (e) {
+    if (surveyErrors.length < 4) surveyErrors.push(`turbines: ${String(e).slice(0, 200)}`);
+  }
+  phase("turbines");
+  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget, decals, turbines);
   return {
     id: q.id,
     lat: q.lat,
@@ -1222,6 +1277,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     bdtopoTiles: bdtopoTileCount,
     overtureBuildings,
     overtureTiles: overtureTileCount,
+    turbines: turbines.length,
     surveyRequests: land?.requests ?? 0,
     // (a block failed: its trees the land cover's — the scene not degraded for it)
     surveyError: land?.errors[0] ?? surveyErrors[0],

@@ -517,14 +517,19 @@ fn meshVertex(vi: u32) -> vec3f {
 // (bridge: a bridge's part's triangle — past the buildings' in the mesh —, coded bridgeMesh — terrainRasterBridgeMesh)
 struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) @interpolate(flat) bridge: f32, @location(2) @interpolate(flat) leaf: f32 };
 // a building triangle's leaf (packScenery: after the triangles, its record's offset from geomOffset) + 1; 0 a bridge's
+fn meshTag(tri: u32) -> u32 {
+  let t = u32(scenery[3].z) * 4u + u32(scenery[2].w) * 3u + tri;
+  return bitcast<u32>(scenery[t / 4u][t % 4u]);
+}
 fn meshLeaf(tri: u32) -> f32 {
   if (tri >= u32(scenery[3].w)) { return 0.0; }
-  let t = u32(scenery[3].z) * 4u + u32(scenery[2].w) * 3u + tri;
-  return f32(bitcast<u32>(scenery[t / 4u][t % 4u]) + 1u);
+  return f32(meshTag(tri) + 1u);
 }
 @vertex fn meshVs(@builtin(vertex_index) vi: u32) -> MV {
   var o: MV;
-  o.bridge = select(0.0, 1.0, vi / 3u >= u32(scenery[3].w));
+  // (bridge: 0 a building's triangle, 1 a bridge's, 2 a wind turbine's — Q8 D1, packScenery's TURBINE_TAG)
+  let past = vi / 3u >= u32(scenery[3].w);
+  o.bridge = select(0.0, select(1.0, 2.0, meshTag(vi / 3u) == 0xffffffffu), past);
   o.leaf = meshLeaf(vi / 3u);
   let v = view(meshVertex(vi));
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
@@ -532,7 +537,11 @@ fn meshLeaf(tri: u32) -> f32 {
   return o;
 }
 // (g: the building's leaf + 1 — shadeLite's material finds its walls and roof there —; 0 a bridge's part)
-@fragment fn meshFs(v: MV) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, v.leaf, d, (${RASTER_CODE.mesh}.0 + v.bridge) * ${RASTER_CODE_SCALE}.0); }
+@fragment fn meshFs(v: MV) -> @location(0) vec4f {
+  let d = length(v.p);
+  let code = select(${RASTER_CODE.mesh}.0 + v.bridge, ${RASTER_CODE.turbine}.0, v.bridge > 1.5);
+  return vec4f(d, v.leaf, d, code * ${RASTER_CODE_SCALE}.0);
+}
 // The buildings without triangles — the far ones, past BUILDING_MESH_M — as their boxes, solid (no margin, the top flat), turned
 // as their footprints are (buildingCorner):
 // the material's buildings too, none left to the kernel shade's rays (their marking boxes, wider than they are and up to their

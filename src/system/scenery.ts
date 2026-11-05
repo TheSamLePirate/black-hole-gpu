@@ -431,6 +431,8 @@ export class EarthScenery {
       /** of the buildings, Overture Maps' (B7), and its tiles */
       overtureBuildings: d?.overtureBuildings ?? 0,
       overtureTiles: d?.overtureTiles ?? 0,
+      /** (Q8 D1) the wind turbines drawn */
+      turbines: d?.turbines ?? 0,
       /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */
       forestCells: d?.forestCells ?? 0,
       forestCellM: d?.forestCellM ?? 0,

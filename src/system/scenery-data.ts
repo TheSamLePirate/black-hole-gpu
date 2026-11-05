@@ -269,6 +269,8 @@ export function waterBands(p: Primitive): Primitive[] {
 //   surfaces' whole tree walked for the water alone was a third of its cost over a city — TERRE-UNREAL U6)
 //   then the nodes, geometries, surfaces, raster, forest, the mesh's vertices (x, y, z floats packed), its triangles (three
 //   vertex indices a triangle, u32, packed)
+/** (Q8 D1) a wind turbine triangle's tag (packScenery: after the triangles) — scenery-raster.ts meshFs codes it RASTER_CODE.turbine */
+export const TURBINE_TAG = 0xffffffff;
 export function packScenery(
   prims: Primitive[],
   pixels: Uint32Array,
@@ -277,6 +279,8 @@ export function packScenery(
   grid = SCENERY_GRID,
   budget = SCENERY_BYTES,
   decals?: Decals,
+  /** (Q8 D1) the wind turbines' triangles (system/turbines.ts), after the bridges', tagged TURBINE_TAG */
+  turbines: { positions: number[]; triangles: number[] }[] = [],
 ) {
   const { nodes, geometries, offsets } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
@@ -318,11 +322,16 @@ export function packScenery(
     triangleCount += p.mesh!.triangles.length / 3;
     if (p.data[3] === 1) buildingTriangles += p.mesh!.triangles.length / 3;
   }
+  for (const m of turbines) {
+    vertexCount += m.positions.length / 3;
+    triangleCount += m.triangles.length / 3;
+  }
   const meshOffset = forestOffset + (forest ? forestVec4s(forest.frame) : 0),
     triangleOffset = meshOffset + Math.ceil((vertexCount * 3) / 4);
-  // (after the triangles, a building triangle's leaf — its record's offset from geomOffset [vec4] —: the raster writes it in its
-  // visibility, shadeLite finds the building there, its walls' and roof's material — Q3, C0-10)
-  const bytes = (triangleOffset + Math.ceil((triangleCount * 3 + buildingTriangles) / 4)) * 16;
+  // (after the triangles, a tag a triangle: a building triangle's leaf — its record's offset from geomOffset [vec4] —: the raster
+  // writes it in its visibility, shadeLite finds the building there, its walls' and roof's material — Q3, C0-10 —; a bridge's 0;
+  // a wind turbine's TURBINE_TAG — Q8 D1)
+  const bytes = (triangleOffset + Math.ceil((triangleCount * 3 + triangleCount) / 4)) * 16;
   if (bytes > budget) throw new Error("scenery budget exceeded");
   const buffer = new ArrayBuffer(bytes),
     f = new Float32Array(buffer),
@@ -362,7 +371,13 @@ export function packScenery(
       f.set(p.mesh.positions, meshOffset * 4 + v * 3);
       for (const k of p.mesh.triangles) u[t++] = v + k;
       v += p.mesh.positions.length / 3;
-      if (p.data[3] === 1) u.fill(offsets.get(p) ?? 0, tag, (tag += p.mesh.triangles.length / 3));
+      u.fill(p.data[3] === 1 ? (offsets.get(p) ?? 0) : 0, tag, (tag += p.mesh.triangles.length / 3));
+    }
+    for (const m of turbines) {
+      f.set(m.positions, meshOffset * 4 + v * 3);
+      for (const k of m.triangles) u[t++] = v + k;
+      v += m.positions.length / 3;
+      u.fill(TURBINE_TAG, tag, (tag += m.triangles.length / 3));
     }
   }
   return buffer;
@@ -422,6 +437,8 @@ export interface SceneryReply {
   /** of the buildings, Overture Maps' (B7); its z 14 tiles read */
   overtureBuildings?: number;
   overtureTiles?: number;
+  /** (Q8 D1) the wind turbines drawn */
+  turbines?: number;
   forestCells?: number;
   forestCellM?: number;
   buildings?: number;

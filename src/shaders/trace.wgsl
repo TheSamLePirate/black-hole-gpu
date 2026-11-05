@@ -7967,6 +7967,7 @@ fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return false; }
+fn terrainRasterTurbine(px: vec2f) -> bool { return false; }
 fn terrainRasterBridge(px: vec2f) -> bool { return false; }
 fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterSeam(px: vec2f) -> f32 { return 0.0; }
@@ -14936,6 +14937,11 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // (a bridge's part — its deck's sides, its parapets, its piers —: stone, no windows)
     glass = select(0.0, 1.0, fw > 0.28 && fw < 0.72 && fz > 0.3 && fz < 0.82 && !terrainRasterBridgeMesh(centre));
     A = mix(A, vec3f(0.03) * P.earth2.z, glass);
+  }
+  // (Q8 D1: a wind turbine — its tower, nacelle and blades: a white matte paint, no windows)
+  if (terrainRasterTurbine(centre)) {
+    A = vec3f(0.7, 0.71, 0.72) * P.earth2.z;
+    glass = 0.0;
   }
   // (Q7 L9: the season's snow on what stands — the roofs facing up, the tops of the trees' crowns — as on the ground about
   // them: the same line, the same season (seasonSnow, taken flat — the roof's own tilt the cover's); a crown holds less)

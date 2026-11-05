@@ -12,7 +12,7 @@ import { TABLE_SUN } from "../gpu-tables";
  *  then the others. */
 export const RASTER_CODE_SCALE = 262144;
 export const RASTER_GROUND_LAST = 56;
-export const RASTER_CODE = { cloud: 59, box: 60, bridgeMark: 61, mesh: 62, bridgeMesh: 63 } as const;
+export const RASTER_CODE = { turbine: 57, cloud: 59, box: 60, bridgeMark: 61, mesh: 62, bridgeMesh: 63 } as const;
 /** a level's code: 1 + its rank from the patch (0 the patch) + 8 × its step (levels coarser than the reference patch) */
 export function rasterGroundCode(rank: number, step: number): number {
   return 1 + Math.min(Math.max(rank, 0), 7) + 8 * Math.min(Math.max(step, 0), 6);
@@ -54,8 +54,10 @@ fn terrainRasterCode(px: vec2f) -> f32 { return floor(textureLoad(terrainDist, v
 fn terrainRasterBuilding(px: vec2f) -> bool { return terrainRasterCode(px) >= ${RASTER_CODE.box}.0; }
 // A bridge's box before the ground at this pixel (system/scenery-raster.ts bridgeMarkFs): shadeLite's, its deck tested.
 fn terrainRasterBridge(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.bridgeMark}.0; }
-// A building's own triangles at this pixel (system/scenery-raster.ts meshFs): shadeLite's material.
-fn terrainRasterMesh(px: vec2f) -> bool { return terrainRasterCode(px) >= ${RASTER_CODE.mesh}.0; }
+// A building's own triangles at this pixel (system/scenery-raster.ts meshFs): shadeLite's material — a wind turbine's too (Q8 D1).
+fn terrainRasterMesh(px: vec2f) -> bool { let c = terrainRasterCode(px); return c >= ${RASTER_CODE.mesh}.0 || c == ${RASTER_CODE.turbine}.0; }
+// A wind turbine's triangles at this pixel (Q8 D1 — system/turbines.ts): white, matte, no windows.
+fn terrainRasterTurbine(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.turbine}.0; }
 // A bridge's part's own triangles at this pixel (system/scenery-raster.ts meshFs): the material's, no windows.
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.bridgeMesh}.0; }
 // How many levels coarser than the reference patch the ground here was drawn from (0 the patch — and what stands on it —, 1 its
