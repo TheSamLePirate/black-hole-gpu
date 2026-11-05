@@ -2313,6 +2313,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "ground detail texture scans grass soil gravel rock asphalt close low flight taxi viper",
   },
   {
+    key: "earthStreetLamps",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Street lamps",
+    effect: "scene",
+    help: "In towns, lamps along the streets — the main roads' on alternate sides, every 28 to 36 m by the road's kind, where buildings stand about them: plausible places, not the real ones —, out to 1.5 km. At night in a lit town their heads glow and their light lies in pools on the streets and pavements under them, in place of an even wash along the streets; farther, the even wash as before.",
+    keywords: "street lamps lampadaires lights night town city pools poles",
+  },
+  {
     key: "earthLowCover",
     type: "toggle",
     section: "sky",

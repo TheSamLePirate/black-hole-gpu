@@ -345,6 +345,7 @@ export interface Settings {
   detailReach: "normal" | "far" | "veryFar"; // the ground's detail drawn farther — the scenery's box, the relief's windows — and led farther where the view looks
   sceneryHitboxes: boolean; // CPU collision wireframes, on foot only (diagnostic)
   earthGrass: "off" | "balanced";
+  earthStreetLamps: boolean; // Q8 L10: the streets' lamps along the town streets (plausible places, not the real ones) and their pools of light at night in place of the streets' even wash
   earthDetail: boolean; // Q7 L8 / VIPER B3: the ground's detail scans near (grass, soil, gravel, rock, asphalt; CC0 ambientCG) over the photographs, their hue kept
   earthLowCover: boolean; // VIPER B5's first step: tufts, bushes and reed clumps round a camera under 300 m over the Earth, out to 240 m (character-renderer.ts COVER) — off by default: measured +1–2 ms for little seen (Q8.md)
   earthGrassDensity: number; // the share of the grass blades drawn (0.25 … 1; 1 the authored density)
@@ -744,6 +745,7 @@ export function defaultSettings(): Settings {
     earthGrass: "balanced",
     earthLowCover: false,
     earthDetail: true,
+    earthStreetLamps: true,
     earthGrassDensity: 1,
     earthGrassReach: 28,
     earthGrassWind: 1,
@@ -2155,6 +2157,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthGrass: "pref",
   earthLowCover: "pref",
   earthDetail: "pref",
+  earthStreetLamps: "pref",
   earthGrassDensity: "pref",
   earthGrassReach: "pref",
   earthGrassWind: "pref",

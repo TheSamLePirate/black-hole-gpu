@@ -51,6 +51,7 @@ import {
 } from "./scenery-sources";
 import { makeDecals, roadWidth, surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains } from "./scenery-geometry";
 import { buildingMesh } from "./roof-mesh";
+import { builtUp, LAMP_CLASSES, LAMP_MAX, LAMP_REACH_M, lampLight, lampMesh, lampsAlong, type StreetLamp } from "./streetlamps";
 import {
   osmColour,
   partyEdges,
@@ -342,6 +343,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const ff = forestFrame(q.lat, q.lon, reach, (lat, lon) => localPoint(frame, lat, lon, 0));
   // (Q8 D1: the main roads' segments for the traffic, and the cars on them)
   const roadLines: { segs: { a: { lat: number; lon: number }; b: { lat: number; lon: number } }[]; cls: string; oneway: number }[] = [];
+  // (Q8 L10: the town streets' runs near, the lamps set along them at the end)
+  const lampLines: { xy: [number, number][]; geo: { lat: number; lon: number }[]; cls: string; width: number }[] = [];
+  let lamps: StreetLamp[] = [];
+  let lampGrid: Uint8Array | undefined;
   const cars: CarPlace[] = [];
   let pieceCount = 0;
   let storedBytes = 64 + pixels.byteLength + forestVec4s(ff) * 16,
@@ -461,6 +466,31 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                 segs.push({ a: geo(line[j]!), b: geo(line[j + 1]!) });
               }
               if (segs.length) roadLines.push({ segs, cls, oneway: Number(props.oneway) || 0 });
+            }
+            // (Q8 L10: a town street's runs — its consecutive segments with their middles in the tile, near — for the lamps)
+            if (!water && !rail && LAMP_CLASSES[cls] && !props.brunnel) {
+              let run: (typeof lampLines)[number] | null = null;
+              for (let j = 0; j < line.length - 1; j++) {
+                const mx = (line[j]!.x + line[j + 1]!.x) / 2,
+                  my = (line[j]!.y + line[j + 1]!.y) / 2;
+                const inside =
+                  mx >= 0 &&
+                  mx < e &&
+                  my >= 0 &&
+                  my < e &&
+                  Math.min(Math.hypot(locals[j]![0], locals[j]![1]), Math.hypot(locals[j + 1]![0], locals[j + 1]![1])) <=
+                    LAMP_REACH_M + 100;
+                if (!inside) {
+                  run = null;
+                  continue;
+                }
+                if (!run) {
+                  run = { xy: [[locals[j]![0], locals[j]![1]]], geo: [geo(line[j]!)], cls, width };
+                  lampLines.push(run);
+                }
+                run.xy.push([locals[j + 1]![0], locals[j + 1]![1]]);
+                run.geo.push(geo(line[j + 1]!));
+              }
             }
             if (props.brunnel === "bridge") {
               // Buffered whole lines are owned by their midpoint's tile; omit duplicate volumes.
@@ -1456,8 +1486,48 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`traffic: ${String(e).slice(0, 200)}`);
   }
+  // (Q8 L10: the streets' lamps — along the town streets' runs where buildings stand about, the nearest first, their feet on the
+  // ground already in (none without it) — and their light's grid; none on any failure)
+  try {
+    const town = builtUp(
+      prims.filter((p) => p.data[3] === 1).map((p) => [(p.min[0] + p.max[0]) / 2, (p.min[1] + p.max[1]) / 2] as [number, number]),
+    );
+    const all: (StreetLamp & { d: number })[] = [];
+    for (const r of q.lamps === false ? [] : lampLines)
+      for (const l of lampsAlong(r.xy, r.cls, r.width)) {
+        const d = Math.hypot(l.foot[0], l.foot[1]);
+        if (d > LAMP_REACH_M || !town(l.foot[0], l.foot[1])) continue;
+        const a = r.geo[l.seg]!,
+          b = r.geo[l.seg + 1]!;
+        const h = heightNow(a.lat + (b.lat - a.lat) * l.frac, a.lon + (b.lon - a.lon) * l.frac);
+        if (h === undefined) continue;
+        // (the ground's height over the frame's plane there: the frame's local z of the foot at that height)
+        const z = localPoint(frame, a.lat + (b.lat - a.lat) * l.frac, a.lon + (b.lon - a.lon) * l.frac, h)[2];
+        all.push({ ...l, foot: [l.foot[0], l.foot[1], z], d });
+      }
+    all.sort((x, y) => x.d - y.d);
+    lamps = all.slice(0, LAMP_MAX);
+    if (lamps.length) lampGrid = lampLight(lamps);
+    storedBytes += lamps.length * (8 * 12 + 4 * 16) + (lampGrid?.length ?? 0);
+  } catch (e) {
+    if (surveyErrors.length < 4) surveyErrors.push(`lamps: ${String(e).slice(0, 200)}`);
+  }
   phase("turbines");
-  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget, decals, turbines, pylons, cables, cars);
+  const buffer = packScenery(
+    prims,
+    pixels,
+    keptSurfaces,
+    { frame: ff, cells, trees },
+    N,
+    budget,
+    decals,
+    turbines,
+    pylons,
+    cables,
+    cars,
+    lamps.map(lampMesh),
+    lampGrid,
+  );
   return {
     id: q.id,
     lat: q.lat,
@@ -1475,6 +1545,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     cables: cables.length,
     cars: cars.length,
     trafficRoads: roadLines.length,
+    lamps: lamps.length,
     roadPieces: pieceCount,
     surveyRequests: land?.requests ?? 0,
     // (a block failed: its trees the land cover's — the scene not degraded for it)

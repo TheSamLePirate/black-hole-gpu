@@ -5,6 +5,7 @@ import { type ForestFrame, forestVec4s, writeForest } from "./forest";
 import type { Vec3 } from "../physics";
 
 import { DECAL_FAR, DECAL_NEAR, type Decals } from "./scenery-geometry";
+import { LAMP_GRID } from "./streetlamps";
 export const SCENERY_BYTES = 16 * 1024 * 1024;
 /** The detail's reach (settings.detailReach): the scenery's box, its land cover's raster and its rays this many times the
  *  normal ones, its budgets as its area — its buffer 16, 36 or 64 MiB, its raster 512, 768 or 1024 px (~10 m a pixel
@@ -286,6 +287,10 @@ export const CABLE_TAG = 0xfffb0000;
 export const CAR_BODY = 0xfff90000;
 export const CAR_HEAD = 0xfff80000;
 export const CAR_TAIL = 0xfff70000;
+/** (Q8 L10) a street lamp's pole (a pair of vertices at its foot, a pair at its top: widened across the view, dithered) and its
+ *  head (four vertices at its centre: opened to a quad) | its index */
+export const LAMP_POLE = 0xfff60000;
+export const LAMP_HEAD = 0xfff50000;
 export function packScenery(
   prims: Primitive[],
   pixels: Uint32Array,
@@ -321,6 +326,11 @@ export function packScenery(
    *  CAR_BODY / CAR_HEAD / CAR_TAIL | its index, from a vertex index ≡ 0 mod 4 (padding before them); its entry (start, speed),
    *  (end, phase) after the pylons' */
   cars: { start: [number, number, number]; end: [number, number, number]; speed: number; phase: number }[] = [],
+  /** (Q8 L10) the streets' lamps (system/streetlamps.ts lampMesh: eight vertices, from a vertex index ≡ 0 mod 4), their pole's
+   *  triangles tagged LAMP_POLE, their head's LAMP_HEAD; and their light's grid (LAMP_GRID's bytes) after the decals' far grid,
+   *  its side and texel in the palette's unused entry 0 (0: none) */
+  lamps: { positions: number[]; triangles: number[] }[] = [],
+  lampGrid?: Uint8Array,
 ) {
   const car = cars.length ? carMesh() : { positions: [], triangles: [] };
   const { nodes, geometries, offsets } = sceneryBVH(prims);
@@ -351,7 +361,9 @@ export function packScenery(
     // (Q3 B4: the decals right after the land cover's raster — its offset its end's: no header slot moved —: a vec4 of their
     // grids' sides and texels, the palette's 256, the near grid's bytes, the far's)
     decalOffset = pixelOffset + Math.ceil(pixels.length / 4),
-    decalVec4s = decals ? 1 + 256 + Math.ceil(decals.near.length / 16) + Math.ceil(decals.far.length / 16) : 1,
+    decalVec4s = decals
+      ? 1 + 256 + Math.ceil(decals.near.length / 16) + Math.ceil(decals.far.length / 16) + (lampGrid ? Math.ceil(lampGrid.length / 16) : 0)
+      : 1,
     forestOffset = decalOffset + decalVec4s;
   // (the buildings' triangles first — the view draws them alone —, the rest's — a bridge's deck — after: the shadow map's too)
   const meshed = [...prims.filter((p) => p.mesh && p.data[3] === 1), ...prims.filter((p) => p.mesh && p.data[3] !== 1)];
@@ -376,6 +388,9 @@ export function packScenery(
   const carPad = cars.length ? (4 - (vertexCount % 4)) % 4 : 0;
   vertexCount += carPad + cars.length * (car.positions.length / 3);
   triangleCount += cars.length * (car.triangles.length / 3);
+  const lampPad = lamps.length ? (4 - (vertexCount % 4)) % 4 : 0;
+  vertexCount += lampPad + lamps.length * 8;
+  triangleCount += lamps.length * 4;
   const meshOffset = forestOffset + (forest ? forestVec4s(forest.frame) : 0),
     triangleOffset = meshOffset + Math.ceil((vertexCount * 3) / 4);
   // (after the triangles, a tag a triangle: a building triangle's leaf — its record's offset from geomOffset [vec4] —: the raster
@@ -410,6 +425,11 @@ export function packScenery(
     const b = new Uint8Array(buffer);
     b.set(decals.near, (decalOffset + 257) * 16);
     b.set(decals.far, (decalOffset + 257 + Math.ceil(decals.near.length / 16)) * 16);
+    if (lampGrid) {
+      const lN = Math.round(Math.sqrt(lampGrid.length));
+      f.set([lN, (2 * LAMP_GRID.half) / lN, 0, 0], (decalOffset + 1) * 4);
+      b.set(lampGrid, (decalOffset + 257 + Math.ceil(decals.near.length / 16) + Math.ceil(decals.far.length / 16)) * 16);
+    }
   }
   if (triangleCount) {
     f.set([meshOffset, vertexCount, triangleOffset, buildingTriangles], 12);
@@ -467,7 +487,15 @@ export function packScenery(
         (triangleOffset + triangleCount + 1 + 3 * turbines.length + 2 * pylons.length + 2 * i) * 4,
       );
     });
-    f.set([turbines.length, pylons.length, cars.length, 0], (triangleOffset + triangleCount) * 4);
+    v += lampPad;
+    lamps.forEach((m, i) => {
+      f.set(m.positions, meshOffset * 4 + v * 3);
+      for (const k of m.triangles) u[t++] = v + k;
+      v += 8;
+      u.fill((LAMP_POLE | i) >>> 0, tag, (tag += 2));
+      u.fill((LAMP_HEAD | i) >>> 0, tag, (tag += 2));
+    });
+    f.set([turbines.length, pylons.length, cars.length, lamps.length], (triangleOffset + triangleCount) * 4);
   }
   return buffer;
 }
@@ -489,6 +517,8 @@ export interface SceneryRequest {
   ign?: boolean;
   /** Overture Maps' buildings near the centre outside the BD TOPO's France (settings.earthOverture — B7, pmtiles.ts) */
   overture?: boolean;
+  /** (Q8 L10) the streets' lamps and their light's grid (settings.earthStreetLamps; absent: on) */
+  lamps?: boolean;
   /** the camera's place when asked [°: latitude, longitude] — the centre is led along the view, up to a few km ahead: the
    *  buildings' triangles and parts made round the camera too, nearest first (not only round the centre: the ones under
    *  the craft were left boxes) */
@@ -536,6 +566,8 @@ export interface SceneryReply {
   cars?: number;
   /** (Q8 D1) the main roads' lines the traffic read, their pieces */
   trafficRoads?: number;
+  /** (Q8 L10) the streets' lamps */
+  lamps?: number;
   roadPieces?: number;
   forestCells?: number;
   forestCellM?: number;

@@ -8459,8 +8459,9 @@ fn snowWinterAt(lat: f32) -> f32 {
 // line slid from the summer's (snowLineAt) towards the winter's by the season — the Sun's declination, from its direction Ls on
 // the body's axes (z the pole): winter where it stands on the other hemisphere's side —, ragged, off the steep faces; less the
 // permanent snow the photographs already hold (the summer line's): the season's alone, 0…1. The roads and the runways drawn
-// after it — cleared. TUNE_SC_SKIP 1024: none, as before — the A/B. (No lag: the snowpack's spring is not modelled)
-fn seasonSnow(gq: vec3f, n: vec3f, hM: f32, Ls: vec3f, A: vec3f) -> f32 {
+// after it — cleared. TUNE_SC_SKIP 1024: none, as before — the A/B. (No lag: the snowpack's spring is not modelled.) cover: the
+// land cover's class where known (landCover: ESA WorldCover; 0 unknown): a forest by it, else by the photograph's colour
+fn seasonSnow(gq: vec3f, n: vec3f, hM: f32, Ls: vec3f, A: vec3f, landCover: u32) -> f32 {
   if ((TUNE_SC_SKIP & 1024u) != 0u) { return 0.0; }
   let lat = abs(asin(clamp(gq.z, -1.0, 1.0))) * 57.29578;
   let sd = clamp(Ls.z / max(length(Ls), 1e-6) / 0.3978, -1.0, 1.0);
@@ -8472,7 +8473,10 @@ fn seasonSnow(gq: vec3f, n: vec3f, hM: f32, Ls: vec3f, A: vec3f) -> f32 {
   let cover = smoothstep(line - 150.0, line + 150.0, hM) * flat;
   let perm = smoothstep(summer - 250.0, summer + 250.0, hM) * flat;
   // (a forest under it — dark and green in the photograph: its crowns hold little, the snow on its floor half hidden — a third)
-  let forest = smoothstep(0.12, 0.05, luminance(A)) * smoothstep(0.0, 0.02, A.g - 0.5 * (A.r + A.b));
+  // (a dark meadow — a summer's photograph's deep green — not a forest where the cover says it is not: Les Saisies' pastures in
+  // January a third under snow, grey — the L8 series)
+  var forest = smoothstep(0.12, 0.05, luminance(A)) * smoothstep(0.0, 0.02, A.g - 0.5 * (A.r + A.b));
+  if (landCover > 0u) { forest = select(0.0, 1.0, landCover == 10u); }
   return max(cover - perm, 0.0) * mix(1.0, 0.33, forest);
 }
 
@@ -9579,9 +9583,42 @@ fn roofLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,vec3f>
 // raster's buildings (their own triangles and their oriented boxes alike)
 // (shadeLite's cities' lights near — Q2 —: what OpenStreetMap's roads make of them at the point drawn — tM along dirW, the
 // Earth's axes; fpM its footprint [m] —: ×3 on a road, ×0.15 off it; past the scenery's reach the far wash)
-fn sceneryRoadLight(road:ScenerySurface,tM:f32)->f32 {
-  if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) { return mix(0.15, 3.0, select(0.0, road.cover, road.kind == 1.0)); }
+// (Q8 L10: within the streets' lamps' grid — streetlamps.ts lampLight, the pools under their heads at a frame point xy [m] —
+// their pools instead: ×0.15 + STREET_POOL_GAIN × the light there, faded into the streets' even wash over the grid's last 150 m;
+// liteSkip 131072 neither)
+fn sceneryRoadLight(road:ScenerySurface,tM:f32,xy:vec2f)->f32 {
+  if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) {
+    let even = mix(0.15, 3.0, select(0.0, road.cover, road.kind == 1.0));
+    let pl = sceneryLampLight(xy);
+    return mix(even, 0.15 + STREET_POOL_GAIN * pl.x, pl.y);
+  }
   return CITY_WASH_FAR;
+}
+const STREET_POOL_GAIN = 4.0;
+// (the lamps' light at xy [m, the frame's], bilinear in their grid — x the light (1 under a lamp alone), y the grid's weight: 1
+// inside, 0 past it or with none)
+fn sceneryLampLight(xy: vec2f) -> vec2f {
+  let at = u32(scenery[0].z) + u32(scenery[0].w) * u32(scenery[0].w) / 4u;
+  let h = scenery[at];
+  let g = scenery[at + 1u];
+  if (P.scenery[2].w < 0.5 || h.x < 0.5 || g.x < 0.5) { return vec2f(0.0); }
+  let N = u32(g.x);
+  let half = 0.5 * g.x * g.y;
+  let w = 1.0 - smoothstep(half - 150.0, half - 10.0, max(abs(xy.x), abs(xy.y)));
+  if (w <= 0.0) { return vec2f(0.0); }
+  let base = at + 257u + (u32(h.x) * u32(h.x) + 15u) / 16u + (u32(h.z) * u32(h.z) + 15u) / 16u;
+  let uv = xy / g.y + 0.5 * f32(N) - 0.5;
+  let i0 = vec2u(clamp(floor(uv), vec2f(0.0), vec2f(f32(N - 2u))));
+  let f = clamp(uv - vec2f(i0), vec2f(0.0), vec2f(1.0));
+  var c = vec4f(0.0);
+  for (var k = 0u; k < 4u; k++) {
+    let n = (i0.y + k / 2u) * N + i0.x + k % 2u;
+    let word = bitcast<u32>(scenery[base + n / 16u][(n / 4u) % 4u]);
+    c[k] = f32((word >> (8u * (n % 4u))) & 255u) / 255.0;
+  }
+  // (× LAMP_LIGHT_RANGE — streetlamps.ts; tests/streetlamps.test.ts holds the two together)
+  let v = mix(mix(c.x, c.y, f.x), mix(c.z, c.w, f.x), f.y) * 2.0;
+  return vec2f(v, w);
 }
 // Q3 B4 — the map's surfaces drawn once (scenery-geometry.ts rasterDecals; scenery-data.ts: right after the land cover's raster)
 // at a frame point xy [m], for a pixel's footprint fpM: the near grid (2 m) where it holds the point and the pixel is under ~6 m,
@@ -10166,7 +10203,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (Q7 L9: the season's snow over the near ground — the photographs' too: theirs is a summer's —, before the roads and runways)
   if (footM < texelM && ocean < 1.0) {
     let kS = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean);
-    A = mix(A, vec3f(0.82, 0.84, 0.88), seasonSnow(gq, n, hG, Ls, A) * kS);
+    A = mix(A, vec3f(0.82, 0.84, 0.88), seasonSnow(gq, n, hG, Ls, A, select(0u, surface.cover, surface.w > 0.0 || surface.cover > 0u)) * kS);
   }
   if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, footM), surface.w * (1.0 - img.o)); }
   A=mix(A,osm.color,osm.cover*(1.0-img.o));
@@ -14904,7 +14941,13 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (the same walk the streets' night lights read — once; by day only where a road is a pixel or more: a footprint under 12 m,
   // 4 km at most — measured, the walk on every ground pixel +1.1 ms in La Mancha —; liteSkip's bit: neither, its cost measured)
   // (Q7 L9: the season's snow, as the traced ground's — before the map's roads and the runways, cleared)
-  if (!mesh && !isTree) { A = mix(A, vec3f(0.82, 0.84, 0.88) * P.earth2.z, seasonSnow(gq, n, max(airHeight(ph) - geoidN(gq), 0.0), Ls, A / max(P.earth2.z, 1e-6))); }
+  // (its share kept for the detail scans below: none under the snow, their material read from the ground beneath it)
+  let aBare = A;
+  var snowS = 0.0;
+  if (!mesh && !isTree) {
+    snowS = seasonSnow(gq, n, max(airHeight(ph) - geoidN(gq), 0.0), Ls, A / max(P.earth2.z, 1e-6), select(0u, surface.cover, surface.w > 0.0 || surface.cover > 0u));
+    A = mix(A, vec3f(0.82, 0.84, 0.88) * P.earth2.z, snowS);
+  }
   var sv = ScenerySurface(vec3f(0.0), 0.0, 0.0);
   if (HAS_SCENERY && !mesh && !isTree && (liteSkip() & 134217728u) == 0u) {
     // (the exact walk near — its stripes, sleepers, edges' antialiasing — and at night — its kinds for the streets' lights —;
@@ -14936,10 +14979,14 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (DETAIL_BOUND && !mesh && !isTree && fpM < 300.0 && HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[6].z > 0.5 && (liteSkip() & 2147483648u) == 0u) {
     let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
     let xy = (P.scenery[3].xyz + dL * tM).xy + P.scenery[6].xy;
-    let dd = groundDetail(xy, fpM, detailMaterial(A, sv.kind == 1.0, select(0u, surface.cover, surface.w > 0.0 || surface.cover > 0u)));
+    // (Q7 L8: the season's snow — seasonSnow — hides it: the material read from the bare ground's albedo, its contrast and tilt
+    // faded by the snow's share; a road's own, cleared)
+    let mat = detailMaterial(aBare, sv.kind == 1.0, select(0u, surface.cover, surface.w > 0.0 || surface.cover > 0u));
+    let bare = select(1.0 - snowS, 1.0, sv.kind == 1.0);
+    let dd = groundDetail(xy, fpM, vec2f(mat.x, mat.y * bare));
     A *= dd.x;
     // (a light tilt: a random one lowers the mean lighting — 0.6 darkened a meadow by 8 % with the ratio's clipping)
-    n = normalize(n + (P.scenery[0].xyz * dd.y + P.scenery[1].xyz * dd.z) * 0.3);
+    n = normalize(n + (P.scenery[0].xyz * dd.y + P.scenery[1].xyz * dd.z) * (0.3 * bare));
   }
   // (T7 — the cliff's face, its colour found below with the imagery: its strata over it)
   if (faceW > 0.0) {
@@ -15034,7 +15081,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // them: the same line, the same season (seasonSnow, taken flat — the roof's own tilt the cover's); a crown holds less)
   if ((mesh || leaf > 0u || isTree) && (TUNE_SC_SKIP & 1024u) == 0u) {
     let up = dot(n, gq);
-    let sn = seasonSnow(gq, gq, max(airHeight(ph) - geoidN(gq), 0.0), Ls, vec3f(0.5));
+    let sn = seasonSnow(gq, gq, max(airHeight(ph) - geoidN(gq), 0.0), Ls, vec3f(0.5), 0u);
     let kU = select(smoothstep(0.5, 0.9, up), 0.6 * smoothstep(0.2, 0.8, up), isTree);
     A = mix(A, vec3f(0.82, 0.84, 0.88) * select(P.earth2.z, 1.0, isTree), sn * kU);
   }
@@ -15159,17 +15206,28 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (near — the scenery's box —: the streets carry the light, their lamps along them — OpenStreetMap's roads at the point:
   // ×3 on a road, ×0.15 off it, a quarter of a town's ground road: the quarter's light about the same, drawn along its
   // streets, not the map's 500 m wash — the night only, a lit town only)
+  // (Q8 L10: near, the streets' light falls on the ground — the photograph's, the roads', the pavements' colours under it, its
+  // albedo against a town's mean 0.15 —, not a glow over it: an even cream where the lamps' pools lay, the ground unseen — Sam,
+  // 5 Nov; far, the map's glow as before)
+  var litAlb = vec3f(1.0);
   if (HAS_SCENERY && lit > 0.0 && lamp > 0.02 && (liteSkip() & 131072u) == 0u) {
-    lit *= sceneryRoadLight(sv, tM);
+    let dLr = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
+    lit *= sceneryRoadLight(sv, tM, (P.scenery[3].xyz + dLr * tM).xy);
+    if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) { litAlb = clamp(A / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(4.0)); }
   } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
-  G += mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp) * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
+  G += litAlb * mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp) * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
   G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark);
   // (Q8 D1: a car's lamps at night — its headlights warm white, its tail lights red)
   {
     let cg = terrainRasterTag(centre);
-    if (cg > 4.99) {
+    if (cg > 4.99 && cg < 6.5) {
       let lampC = select(vec3f(1.0, 0.08, 0.04) * 0.4, vec3f(1.0, 0.92, 0.75), cg < 5.5);
       G += lampC * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
+    }
+    // (Q8 L10: a street lamp's head — lit in a lit town (the night lights' map at it), warm white, as bright as a car's
+    // headlights' block)
+    if (cg > 6.5 && cg < 7.5 && lamp > 0.02) {
+      G += vec3f(1.0, 0.8, 0.55) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
     }
   }
   // (Q8 D1: a wind turbine's obstruction light — red at night, white by day, 40 flashes a minute, every farm in step)

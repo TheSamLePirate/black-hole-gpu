@@ -10,6 +10,7 @@
 // visibility target's g (the cell + 1, exact in a float below 2²⁴), the proxy's distance in its b.
 
 import { CABLE_WIDTH_M } from "./pylons";
+import { LAMP_POLE_M } from "./streetlamps";
 import { TURBINE_FACING } from "./turbines";
 import { TERRAIN_RASTER_FORMAT } from "./terrain-raster";
 import { TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
@@ -571,7 +572,7 @@ fn meshLeaf(tri: u32) -> f32 {
   let past = vi / 3u >= u32(scenery[3].w);
   let tg = select(0u, meshTag(vi / 3u), past);
   let fam = tg & 0xffff0000u;
-  o.bridge = select(0.0, select(1.0, 2.0, tg == 0xffffffffu || fam == 0xfffe0000u || fam == 0xfffd0000u || fam == 0xfffa0000u || fam == 0xfff90000u || fam == 0xfff80000u || fam == 0xfff70000u), past);
+  o.bridge = select(0.0, select(1.0, 2.0, tg == 0xffffffffu || fam == 0xfffe0000u || fam == 0xfffd0000u || fam == 0xfffa0000u || fam == 0xfff90000u || fam == 0xfff80000u || fam == 0xfff70000u || fam == 0xfff50000u), past);
   o.leaf = meshLeaf(vi / 3u);
   let wp = meshVertex(vi);
   // (Q8 D1: a pylon — 3 —, its point in its own axes for meshFs's lattice: along its line, across, up from its foot; w its
@@ -618,6 +619,25 @@ fn meshLeaf(tri: u32) -> f32 {
     let half = max(${CABLE_WIDTH_M / 2}, 0.5 * px);
     o.pyl = vec4f(${CABLE_WIDTH_M} / (2.0 * half), sc.misc.x, 0.0, 0.0);
     v = view(wp + vec3f(0.0, 0.0, select(-half, half, (id & 1u) == 1u)));
+  }
+  // (Q8 L10: a street lamp's head — its leaf 7, shadeLite's —: its four vertices at its centre opened towards the camera to a
+  // pixel and a half at least, as a car's lamps; its pole — 4, as a conductor —: each pair opened across the view to a pixel at
+  // least, the even one to the left, its coverage's share kept by meshFs)
+  if (fam == 0xfff50000u || fam == 0xfff60000u) {
+    let t = u32(scenery[3].z) * 4u + vi;
+    let id = bitcast<u32>(scenery[t / 4u][t % 4u]) & 3u;
+    let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
+    if (fam == 0xfff50000u) {
+      o.leaf = 7.0;
+      let half = max(0.3, 0.75 * px);
+      let corner = vec2f(select(-1.0, 1.0, id == 1u || id == 2u), select(-1.0, 1.0, id >= 2u));
+      v = v + vec3f(corner * half, 0.0);
+    } else {
+      o.bridge = 4.0;
+      let half = max(${LAMP_POLE_M / 2}, 0.5 * px);
+      o.pyl = vec4f(${LAMP_POLE_M} / (2.0 * half), sc.misc.x, 0.0, 0.0);
+      v = v + vec3f(select(-half, half, (id & 1u) == 1u), 0.0, 0.0);
+    }
   }
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;

@@ -25,7 +25,7 @@ export function sceneryShader(code: string, supported: boolean) {
     ? code
     : code.replace(
         /\/\/ BEGIN_WORLD_SCENERY[\s\S]*?\/\/ END_WORLD_SCENERY/,
-        "fn sceneryImage(q:vec3f)->SurfaceImage{return SurfaceImage(vec3f(0.0),0.0,0u);}\nfn worldScenery(d:vec3f,t:f32,r:f32)->f32{return t;}\nfn sceneryShadow(l:vec3f,n:vec3f)->f32{return 1.0;}\nfn sceneryMirror(r:vec3f,l:vec3f,e:vec3f,s:vec3f)->vec4f{return vec4f(0.0,0.0,0.0,-1.0);}\nstruct ScenerySurface {color:vec3f,cover:f32,kind:f32};\nfn scenerySurface(f:f32)->ScenerySurface{return ScenerySurface(vec3f(0.0),0.0,0.0);}\nfn sceneryWaterAt(p:vec3f,f:f32,d:f32)->vec2f{return vec2f(0.0);}\nfn sceneryTreeLite(d:vec3f,i:u32,t:f32)->f32{return -1.0;}\nfn sceneryDeckBefore(d:vec3f,t:f32)->bool{return false;}\nfn rasterBuilding(l:u32,d:vec3f,t:f32,a:vec3f)->RasterBuilding{return RasterBuilding(a,vec3f(0.0,0.0,1.0),0.0,vec3f(0.0),1.0);}\nfn sceneryRoadLight(r:ScenerySurface,t:f32)->f32{return CITY_WASH_FAR;}\nfn sceneryGround(d:vec3f,t:f32,f:f32)->ScenerySurface{return ScenerySurface(vec3f(0.0),0.0,0.0);}\nfn sceneryDecal(x:vec2f,f:f32,d:f32)->vec4f{return vec4f(0.0);}",
+        "fn sceneryImage(q:vec3f)->SurfaceImage{return SurfaceImage(vec3f(0.0),0.0,0u);}\nfn worldScenery(d:vec3f,t:f32,r:f32)->f32{return t;}\nfn sceneryShadow(l:vec3f,n:vec3f)->f32{return 1.0;}\nfn sceneryMirror(r:vec3f,l:vec3f,e:vec3f,s:vec3f)->vec4f{return vec4f(0.0,0.0,0.0,-1.0);}\nstruct ScenerySurface {color:vec3f,cover:f32,kind:f32};\nfn scenerySurface(f:f32)->ScenerySurface{return ScenerySurface(vec3f(0.0),0.0,0.0);}\nfn sceneryWaterAt(p:vec3f,f:f32,d:f32)->vec2f{return vec2f(0.0);}\nfn sceneryTreeLite(d:vec3f,i:u32,t:f32)->f32{return -1.0;}\nfn sceneryDeckBefore(d:vec3f,t:f32)->bool{return false;}\nfn rasterBuilding(l:u32,d:vec3f,t:f32,a:vec3f)->RasterBuilding{return RasterBuilding(a,vec3f(0.0,0.0,1.0),0.0,vec3f(0.0),1.0);}\nfn sceneryRoadLight(r:ScenerySurface,t:f32,x:vec2f)->f32{return CITY_WASH_FAR;}\nfn sceneryGround(d:vec3f,t:f32,f:f32)->ScenerySurface{return ScenerySurface(vec3f(0.0),0.0,0.0);}\nfn sceneryDecal(x:vec2f,f:f32,d:f32)->vec4f{return vec4f(0.0);}",
       );
 }
 
@@ -72,6 +72,8 @@ export class EarthScenery {
   ign = false;
   /** Overture Maps' buildings near the centre, outside France (settings.earthOverture — B7) */
   overture = true;
+  /** (Q8 L10) the streets' lamps and their light's pools (settings.earthStreetLamps) */
+  lamps = true;
   private started = 0;
   private attempted = -Infinity;
   private busy = false;
@@ -189,7 +191,7 @@ export class EarthScenery {
     // crossed a 556 m cell at each turn of the head — the camera looked down, a new scene of 35–180 s asked, the old one with
     // its boxes under the craft kept meanwhile: a scene rebuilt over and over, never the one in view)
     const held = this.requestedCentre;
-    if (held && this.requested.endsWith(`:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}`)) {
+    if (held && this.requested.endsWith(`:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}`)) {
       const off = Math.hypot((held.lat - wanted.lat / D) * 111320, wrapLon(held.lon - wanted.lon / D) * 111320 * Math.cos(held.lat * D));
       if (off < CENTRE_HOLD_M * reach) c = held;
     }
@@ -214,7 +216,7 @@ export class EarthScenery {
       ? Math.hypot((this.data.lat - geo.lat / D) * 111320, wrapLon(this.data.lon - geo.lon / D) * 111320 * Math.cos(geo.lat))
       : Infinity;
     const quick = eyeToDrawn > QUICK_COVER * sceneryBox(0, 0, mode, reach).radius && !this.applied.endsWith(":q");
-    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}${quick ? ":q" : ""}`;
+    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}${quick ? ":q" : ""}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
     if (
@@ -324,6 +326,7 @@ export class EarthScenery {
         geoid: geoidPlane(c.lat, c.lon),
         ign: this.ign,
         overture: this.overture,
+        lamps: this.lamps,
         eye: [geo.lat / D, geo.lon / D],
         ...(quick ? { quick: QUICK_SHARE } : {}),
         swGate: swControls(),
@@ -459,6 +462,8 @@ export class EarthScenery {
       /** (Q8 D1) the main roads' lines the traffic read, their pieces */
       trafficRoads: d?.trafficRoads ?? 0,
       roadPieces: d?.roadPieces ?? 0,
+      /** (Q8 L10) the streets' lamps drawn */
+      lamps: d?.lamps ?? 0,
       /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */
       forestCells: d?.forestCells ?? 0,
       forestCellM: d?.forestCellM ?? 0,

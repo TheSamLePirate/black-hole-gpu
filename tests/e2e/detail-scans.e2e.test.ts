@@ -9,7 +9,8 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // July, frozen, the exposure locked: with the scans, without, with again — shots, their PSNR (the change against two shots
 // alike), the near ground's local contrast (the luminance's standard deviation in 8-px cells, the image's lower half), the GPU's
 // completed frames' interval.
-// DS_OUT: the shots (remote-results/detail-scans).
+// DS_OUT: the shots (remote-results/detail-scans); DS_ISO: the date (an ISO instant — a winter's over a snowy meadow: the scans
+// hidden under the season's snow).
 // Duration: ~4 min on this Mac.
 // Done when: the three shots taken, the scans in, no GPU error.
 const OUT = process.env.DS_OUT ?? "remote-results/detail-scans";
@@ -26,7 +27,7 @@ test.skipIf(!E2E)(
         `(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${EARTH_SETTINGS}, { lookProfile: "neutral", f35Invulnerable: true, motionBlur: 0, dof: false, earthPipeline: "raster", weather: "fair", earthDetail: true }); __bh.game.set("earthClouds", 0); return 1; })()`,
       );
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
-      const iso = "2026-07-10T13:00:00Z";
+      const iso = process.env.DS_ISO ?? "2026-07-10T13:00:00Z";
       await app.js(
         `(() => { __bh.game.setDate("${iso}"); __bh.game.flyAt(${LAT}, ${LON}, 30, 90, 0); __bh.settings.shipMount = "cockpit"; document.body.classList.add("hide-ui"); return 1; })()`,
       );
@@ -52,7 +53,8 @@ test.skipIf(!E2E)(
       await app.js(`(() => { __bh.settings.autoExposure = false; __bh.settings.exposure = __bh.renderer.autoEV; return 1; })()`);
       const shots: Record<string, Uint8Array> = {};
       let W = 0,
-        H = 0;
+        H = 0,
+        C = 3;
       for (const [k, on] of [
         ["detail", true],
         ["plain", false],
@@ -70,6 +72,7 @@ test.skipIf(!E2E)(
         shots[k] = p.data;
         W = p.width;
         H = p.height;
+        C = p.channels;
         out[k] = {
           frameMs: fr,
           pipe: await app.js<string>(`__bh.renderer.earthPipelineNow(__bh.settings) + " " + __bh.settings.shipMount`),
@@ -88,7 +91,7 @@ test.skipIf(!E2E)(
             const v: number[] = [];
             for (let y = y0; y < y0 + 8; y++)
               for (let x = x0; x < x0 + 8; x++) {
-                const i = 4 * (y * W + x);
+                const i = C * (y * W + x);
                 v.push(0.2126 * d[i]! + 0.7152 * d[i + 1]! + 0.0722 * d[i + 2]!);
               }
             const m = v.reduce((a, b) => a + b, 0) / v.length;

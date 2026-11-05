@@ -3834,6 +3834,7 @@ export class Renderer {
       // (its trees and their ground over France by the IGN's survey — I4)
       this.earthScenery.ign = s.earthIgnRelief;
       this.earthScenery.overture = s.earthOverture;
+      this.earthScenery.lamps = s.earthStreetLamps;
       this.earthScenery.update(
         eye,
         detail.scenery,
