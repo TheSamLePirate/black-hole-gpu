@@ -15,7 +15,7 @@ import { readPng, writePng } from "./lib/png";
 // still shot, against the same reference. The trees' shadow map logged frame by frame (drawn again, read, the scenery's revision),
 // and the relief's shadow cascades (drawn again, dzOff, their pass's GPU time a redraw): the cascades kept while the meshes' windows
 // moved shaded the hollows in combs where nothing stands (Q6m — renderer.sunWindowsInKey false: the key before it).
-// PLACES=mancha,strait,clouds (cloudy, 900 m, the view nearly level); MODES=spatial75q,taau75q,native100q,trace (a mode@n: renderer.liteSkip = n — a part of the raster's
+// PLACES=mancha,strait,manchaclouds (mancha cloudy: its decks' shadows on the ground),clouds (cloudy, 900 m, the view nearly level); MODES=spatial75q,taau75q,native100q,trace (a mode@n: renderer.liteSkip = n — a part of the raster's
 // material cut, e.g. 2097152 the craft's shadow); FRAMES (60); TURN (0°: straight; a heading change asked as the flight starts); GROUND (40 m); SPEED (140 m/s); GH_FORCE=1: the trees' shadow map
 // drawn again 10 frames with the world still, shot (-forced, -forced-after).
 // Output: remote-results/ghost/<place>-<mode>[-still|-ref|-diff|-still-diff].png, ghost.json (GH_OUT).
@@ -35,6 +35,10 @@ const PLACES: Record<string, string> = {
   // (the strait of Gibraltar: the shadow on the sea, the waves moving under it; heading west)
   strait: `__bh.game.setDate("2026-07-10T11:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
     __bh.game.flyAt(35.96, -5.45, ${GROUND}, 250, ${SPEED});`,
+  // (La Mancha as mancha but cloudy — the weather's decks, their shadows on the ground: the relief's re-bakes and the cascades
+  // measured with the clouds on, Q6n's series having had them off)
+  manchaclouds: `__bh.game.setDate("2026-07-10T11:30:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 1);
+    __bh.game.flyAt(39.42, -3.05, ${GROUND}, 90, ${SPEED});`,
   // (the clouds in their own history — I3 —: La Mancha cloudy, 900 m up, heading east, the view nearly level — the clouds
   // passing across it, the ground below them)
   clouds: `__bh.game.setDate("2026-07-10T13:00:00Z"); __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 1);

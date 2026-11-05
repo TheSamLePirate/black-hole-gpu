@@ -2218,7 +2218,8 @@ export class ShipRenderer {
       new Float32Array(G ? [G.rain, G.clock, G.airspeed, G.frost, ...G.wipers, ...G.rates] : [0, 0, 0, 0, 0, 0, 0, 0]),
     );
     this.device.queue.writeBuffer(this.uniform, LIFT_AT, new Float32Array(sea && v.lift ? v.lift : [0, 0, 0, 0]));
-    // (the shadow map's frame: the flown craft's x and y axes in C — the columns of R —, else the camera's)
+    // (the flown craft's x and y axes in C — the columns of R —, else the camera's: S.shRefA/B, read by no shader since the map's
+    // frame went back to the camera's, 5 Nov — its slots kept for the layout; to retire with the uniform's next reshuffle)
     this.device.queue.writeBuffer(
       this.uniform,
       SHREF_AT,
@@ -2231,7 +2232,10 @@ export class ShipRenderer {
     if (this.flown && lC && casters === 1 && !this.tuneShadowEvery) {
       const lS = [0, 1, 2].map((c) => R[0]![c]! * lC[0] + R[1]![c]! * lC[1] + R[2]![c]! * lC[2]);
       const q = (x: number) => Math.round(x * 200) / 200;
-      this.shadowKey = JSON.stringify([lS.map(q), v.jet ?? null, v.gear ?? null, v.a320?.props ?? null, inCabin], (_k, x) =>
+      // (the craft's pose in the camera too — the map's frame the camera's, as its readers': kept while neither the light against
+      // the craft nor the camera against it turns — the cockpit's —, drawn again as a view turns about it)
+      const pose = [R[0]![0]!, R[1]![0]!, R[2]![0]!, R[0]![1]!, R[1]![1]!, R[2]![1]!].map(q);
+      this.shadowKey = JSON.stringify([lS.map(q), pose, v.jet ?? null, v.gear ?? null, v.a320?.props ?? null, inCabin], (_k, x) =>
         typeof x === "number" ? Math.round(x * 100) / 100 : x,
       );
     } else this.shadowKey = null;

@@ -542,7 +542,10 @@ fn fromProbe(d: vec3f) -> vec3f { return vec3f(dot(d, S.probeX.xyz), dot(d, S.pr
 // (S.bound), the right about the nearest carrier (S.bound2) — its 300 m there, a texel 15 cm.
 fn lightClipB(p: vec3f, b: vec4f) -> vec3f {
   let l = fromProbe(sh[9].xyz);
-  let e1 = normalize(cross(l, select(S.shRefA.xyz, S.shRefB.xyz, abs(dot(l, S.shRefA.xyz)) > 0.9)));
+  // (the map's frame the camera's — as its readers build it: trace.wgsl shipShadow, station.wgsl, the walker's —; attached to the
+  // craft's axes — S.shRefA/B, decision 42's first try — it turned the craft's shadow on the ground against theirs, 5 Nov:
+  // the key holds the craft's pose in the camera instead — ship.ts)
+  let e1 = normalize(cross(l, select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(l.y) > 0.9)));
   let e2 = cross(l, e1);
   let q = p - b.xyz;
   let R = b.w;
