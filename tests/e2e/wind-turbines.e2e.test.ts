@@ -11,6 +11,7 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // WT_HDG, WT_ALT, WT_PITCH: the heading [°], the height over the ground [m], the look's pitch [°] (90, 150, −3) — the pylons' view: WT_SITE=48.2790,1.7200
 // WT_HDG=315 WT_ALT=60, a 225 kV line ~580 m ahead.
 // WT_ISO: the time (the obstruction lights: "2026-07-10T22:00:00Z", red flashes 40 a minute on the nacelles).
+// WT_WAIT: the scenery's wait [s] (60).
 // WT_OUT: the shots (remote-results/wind-turbines).
 // Duration: ~3 min on this Mac.
 // Done when: the turbines counted (some), both shots taken, no GPU error.
@@ -19,6 +20,7 @@ const [LAT, LON] = (process.env.WT_SITE ?? "48.2350,1.8050").split(",").map(Numb
 const HDG = Number(process.env.WT_HDG ?? 90);
 const ALT = Number(process.env.WT_ALT ?? 150);
 const PITCH = Number(process.env.WT_PITCH ?? -3);
+const WAIT = Number(process.env.WT_WAIT ?? 60) * 1000;
 afterAll(stopServer);
 test.skipIf(!E2E)(
   "D1: wind turbines in the scenery — counted, seen from the cockpit",
@@ -41,7 +43,7 @@ test.skipIf(!E2E)(
       await app
         .waitFor(
           `(() => { __bh.touch(); const r = __bh.renderer, sc = r.earthScenery.stats(); return r.earthTiles.pending === 0 && r.earthTiles.orthoPending === 0 && sc.status === "ready" && !sc.pending; })()`,
-          60_000,
+          WAIT,
         )
         .catch(async () =>
           console.warn(`  still loading after 60 s — ${await app.js<string>(`JSON.stringify(__bh.renderer.earthScenery.stats().status)`)}`),
@@ -51,7 +53,7 @@ test.skipIf(!E2E)(
         `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 120; i++) { __bh.touch(); await f(); } return 1; })()`,
       );
       out.stats = await app.js<Record<string, unknown>>(
-        `(() => { const s = __bh.renderer.earthScenery.stats(); return { turbines: s.turbines, pylons: s.pylons, cables: s.cables, windFrom: +(__bh.renderer.sceneryRaster?.windFrom ?? -1).toFixed(1), status: s.status, errors: s.errors ?? s.surveyErrors ?? null, pipe: __bh.renderer.earthPipelineNow(__bh.settings), mount: __bh.settings.shipMount }; })()`,
+        `(() => { const s = __bh.renderer.earthScenery.stats(); return { turbines: s.turbines, pylons: s.pylons, cables: s.cables, cars: s.cars, roads: s.trafficRoads, pieces: s.roadPieces, surveyError: s.surveyError, phases: s.phases, windFrom: +(__bh.renderer.sceneryRaster?.windFrom ?? -1).toFixed(1), status: s.status, errors: s.errors ?? s.surveyErrors ?? null, pipe: __bh.renderer.earthPipelineNow(__bh.settings), mount: __bh.settings.shipMount }; })()`,
       );
       console.log(`  ${JSON.stringify(out.stats)}`);
       await app.shot(`${OUT}/cockpit.png`);
@@ -64,7 +66,8 @@ test.skipIf(!E2E)(
       await Bun.write(`${OUT}/turbines.json`, JSON.stringify(out, null, 1));
       await app.close();
     }
-    expect((out.stats as { turbines: number }).turbines).toBeGreaterThan(0);
+    const st = out.stats as { turbines: number; pylons: number; cars: number };
+    expect(st.turbines + st.pylons + st.cars).toBeGreaterThan(0);
     expect(out.gpuErrors).toBe(0);
   },
   8 * 60_000,

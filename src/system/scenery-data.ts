@@ -1,4 +1,5 @@
 // Shared worker/GPU contract: local WGS84 metres, stackless BVH, exact polygon extrusions.
+import { carMesh } from "./traffic";
 import { geodeticToCart, WGS84_A, WGS84_F } from "./ellipsoid";
 import { type ForestFrame, forestVec4s, writeForest } from "./forest";
 import type { Vec3 } from "../physics";
@@ -281,6 +282,10 @@ export const TURBINE_LAMP = 0xfffa0000;
 export const PYLON_TAG = 0xfffc0000;
 /** (Q8 D1) a conductor's ribbon triangle — scenery-raster.ts meshVs widens it to a pixel, meshFs keeps its coverage's share */
 export const CABLE_TAG = 0xfffb0000;
+/** (Q8 D1) a car's triangles: its body, its headlights, its tail lights | its index */
+export const CAR_BODY = 0xfff90000;
+export const CAR_HEAD = 0xfff80000;
+export const CAR_TAIL = 0xfff70000;
 export function packScenery(
   prims: Primitive[],
   pixels: Uint32Array,
@@ -312,7 +317,12 @@ export function packScenery(
   /** (Q8 D1) the conductors' ribbons (system/pylons.ts cableMesh: pairs of vertices), tagged CABLE_TAG, each pair from an even
    *  vertex (one vertex of padding before them when needed) */
   cables: { positions: number[]; triangles: number[] }[] = [],
+  /** (Q8 D1) the cars (system/traffic.ts): each the shared car mesh, its body's, headlights' and tail lights' triangles tagged
+   *  CAR_BODY / CAR_HEAD / CAR_TAIL | its index, from a vertex index ≡ 0 mod 4 (padding before them); its entry (start, speed),
+   *  (end, phase) after the pylons' */
+  cars: { start: [number, number, number]; end: [number, number, number]; speed: number; phase: number }[] = [],
 ) {
+  const car = cars.length ? carMesh() : { positions: [], triangles: [] };
   const { nodes, geometries, offsets } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
   // (the water's tree: the surfaces' own records, a large polygon's bands — waterBands — appended after them)
@@ -363,13 +373,16 @@ export function packScenery(
     vertexCount += m.positions.length / 3;
     triangleCount += m.triangles.length / 3;
   }
+  const carPad = cars.length ? (4 - (vertexCount % 4)) % 4 : 0;
+  vertexCount += carPad + cars.length * (car.positions.length / 3);
+  triangleCount += cars.length * (car.triangles.length / 3);
   const meshOffset = forestOffset + (forest ? forestVec4s(forest.frame) : 0),
     triangleOffset = meshOffset + Math.ceil((vertexCount * 3) / 4);
   // (after the triangles, a tag a triangle: a building triangle's leaf — its record's offset from geomOffset [vec4] —: the raster
   // writes it in its visibility, shadeLite finds the building there, its walls' and roof's material — Q3, C0-10 —; a bridge's 0;
   // a wind turbine's TURBINE_TAG — Q8 D1)
   // (then a header (turbines, pylons, 0, 0), three vec4 a turbine, two a pylon — Q8 D1)
-  const bytes = (triangleOffset + triangleCount + 1 + 3 * turbines.length + 2 * pylons.length) * 16;
+  const bytes = (triangleOffset + triangleCount + 1 + 3 * turbines.length + 2 * pylons.length + 2 * cars.length) * 16;
   if (bytes > budget) throw new Error("scenery budget exceeded");
   const buffer = new ArrayBuffer(bytes),
     f = new Float32Array(buffer),
@@ -440,7 +453,21 @@ export function packScenery(
       v += m.positions.length / 3;
       u.fill(CABLE_TAG, tag, (tag += m.triangles.length / 3));
     }
-    f.set([turbines.length, pylons.length, 0, 0], (triangleOffset + triangleCount) * 4);
+    v += carPad;
+    const carTris = car.triangles.length / 3;
+    cars.forEach((c, i) => {
+      f.set(car.positions, meshOffset * 4 + v * 3);
+      for (const k of car.triangles) u[t++] = v + k;
+      v += car.positions.length / 3;
+      u.fill((CAR_BODY | i) >>> 0, tag, (tag += 12));
+      u.fill((CAR_HEAD | i) >>> 0, tag, (tag += 4));
+      u.fill((CAR_TAIL | i) >>> 0, tag, (tag += carTris - 16));
+      f.set(
+        [...c.start, c.speed, ...c.end, c.phase],
+        (triangleOffset + triangleCount + 1 + 3 * turbines.length + 2 * pylons.length + 2 * i) * 4,
+      );
+    });
+    f.set([turbines.length, pylons.length, cars.length, 0], (triangleOffset + triangleCount) * 4);
   }
   return buffer;
 }
@@ -505,6 +532,11 @@ export interface SceneryReply {
   pylons?: number;
   /** (Q8 D1) the spans of conductors drawn */
   cables?: number;
+  /** (Q8 D1) the cars on the main roads */
+  cars?: number;
+  /** (Q8 D1) the main roads' lines the traffic read, their pieces */
+  trafficRoads?: number;
+  roadPieces?: number;
   forestCells?: number;
   forestCellM?: number;
   buildings?: number;

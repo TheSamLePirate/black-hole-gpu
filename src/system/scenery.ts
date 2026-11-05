@@ -445,6 +445,11 @@ export class EarthScenery {
       pylons: d?.pylons ?? 0,
       /** (Q8 D1) the spans of conductors drawn */
       cables: d?.cables ?? 0,
+      /** (Q8 D1) the cars on the main roads */
+      cars: d?.cars ?? 0,
+      /** (Q8 D1) the main roads' lines the traffic read, their pieces */
+      trafficRoads: d?.trafficRoads ?? 0,
+      roadPieces: d?.roadPieces ?? 0,
       /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */
       forestCells: d?.forestCells ?? 0,
       forestCellM: d?.forestCellM ?? 0,

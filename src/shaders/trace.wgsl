@@ -7969,6 +7969,7 @@ fn terrainRasterMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterTurbine(px: vec2f) -> bool { return false; }
 fn terrainRasterLamp(px: vec2f) -> bool { return false; }
+fn terrainRasterTag(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterPylon(px: vec2f) -> bool { return false; }
 fn terrainRasterBridge(px: vec2f) -> bool { return false; }
 fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
@@ -14944,6 +14945,16 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (terrainRasterTurbine(centre)) {
     A = vec3f(0.7, 0.71, 0.72) * P.earth2.z;
     glass = 0.0;
+    // (Q8 D1: a car — system/traffic.ts —: its paint one of eight by its index — white, silver, grey, black, red, blue, dark
+    // green, beige —, its lamps' glass dark by day)
+    let cg = terrainRasterTag(centre);
+    if (cg > 3.5 && cg < 4.99) {
+      let i = u32(fract(cg) * 8.0 + 0.5) % 8u;
+      var paint = array<vec3f, 8>(vec3f(0.75), vec3f(0.45), vec3f(0.2), vec3f(0.03), vec3f(0.45, 0.04, 0.03), vec3f(0.05, 0.1, 0.3), vec3f(0.05, 0.12, 0.07), vec3f(0.5, 0.45, 0.35));
+      A = paint[i] * P.earth2.z;
+    } else if (cg > 4.99) {
+      A = vec3f(0.08) * P.earth2.z;
+    }
   }
   // (a pylon: galvanised steel, weathered)
   if (terrainRasterPylon(centre)) {
@@ -15084,6 +15095,14 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
   G += mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp) * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
   G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark);
+  // (Q8 D1: a car's lamps at night — its headlights warm white, its tail lights red)
+  {
+    let cg = terrainRasterTag(centre);
+    if (cg > 4.99) {
+      let lampC = select(vec3f(1.0, 0.08, 0.04) * 0.4, vec3f(1.0, 0.92, 0.75), cg < 5.5);
+      G += lampC * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
+    }
+  }
   // (Q8 D1: a wind turbine's obstruction light — red at night, white by day, 40 flashes a minute, every farm in step)
   if (terrainRasterLamp(centre)) {
     let on = select(0.0, 1.0, fract(P.runways[17].x / 1.5) < 0.35);

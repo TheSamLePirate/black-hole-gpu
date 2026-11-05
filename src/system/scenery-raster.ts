@@ -515,6 +515,20 @@ fn meshVertex(vi: u32) -> vec3f {
   if (tri >= u32(scenery[3].w)) {
     let tg = bitcast<u32>(scenery[(t - vi + u32(scenery[2].w) * 3u + tri) / 4u][(t - vi + u32(scenery[2].w) * 3u + tri) % 4u]);
     let hi = tg & 0xffff0000u;
+    // (Q8 D1: a car — body, headlights, tail lights —: built in its own frame (x ahead, y left, z up), driven along its piece of
+    // road — its entry after the pylons': (start, speed), (end, phase) — by the game's clock, starting again at its end)
+    if (hi == 0xfff90000u || hi == 0xfff80000u || hi == 0xfff70000u) {
+      let b0 = u32(scenery[3].z) + u32(scenery[2].w);
+      let hd = scenery[b0];
+      let r = b0 + 1u + 3u * u32(hd.x) + 2u * u32(hd.y) + 2u * (tg & 0xffffu);
+      let st = scenery[r];
+      let en = scenery[r + 1u];
+      let D = en.xyz - st.xyz;
+      let L = max(length(D.xy), 1.0);
+      let s = fract(en.w + sc.north.w * st.w / L);
+      let d = normalize(vec3f(D.xy, 0.0) + vec3f(1e-6, 0.0, 0.0));
+      p = st.xyz + D * s + d * p.x + vec3f(-d.y, d.x, 0.0) * p.y + vec3f(0.0, 0.0, p.z);
+    }
     if (hi == 0xfffe0000u || hi == 0xfffd0000u || hi == 0xfffa0000u) {
       let r = u32(scenery[3].z) + u32(scenery[2].w) + 1u + 3u * (tg & 0xffffu);
       if (hi == 0xfffe0000u) {
@@ -556,7 +570,8 @@ fn meshLeaf(tri: u32) -> f32 {
   // (bridge: 0 a building's triangle, 1 a bridge's, 2 a wind turbine's — Q8 D1, packScenery's TURBINE_TAG)
   let past = vi / 3u >= u32(scenery[3].w);
   let tg = select(0u, meshTag(vi / 3u), past);
-  o.bridge = select(0.0, select(1.0, 2.0, tg == 0xffffffffu || (tg & 0xffff0000u) == 0xfffe0000u || (tg & 0xffff0000u) == 0xfffd0000u || (tg & 0xffff0000u) == 0xfffa0000u), past);
+  let fam = tg & 0xffff0000u;
+  o.bridge = select(0.0, select(1.0, 2.0, tg == 0xffffffffu || fam == 0xfffe0000u || fam == 0xfffd0000u || fam == 0xfffa0000u || fam == 0xfff90000u || fam == 0xfff80000u || fam == 0xfff70000u), past);
   o.leaf = meshLeaf(vi / 3u);
   let wp = meshVertex(vi);
   // (Q8 D1: a pylon — 3 —, its point in its own axes for meshFs's lattice: along its line, across, up from its foot; w its
@@ -571,6 +586,18 @@ fn meshLeaf(tri: u32) -> f32 {
     o.pyl = vec4f(d.x * cos(a) + d.y * sin(a), -d.x * sin(a) + d.y * cos(a), wp.z - f.z, f.w);
   }
   var v = view(wp);
+  // (Q8 D1: a car — its g 4 + its paint's index / 8, 5 a headlight, 6 a tail light: shadeLite's —; a lamp's quad, its four
+  // vertices at its centre, opened towards the camera to a pixel and a half at least — the corner by the vertex's index mod 4)
+  if (fam == 0xfff90000u) { o.leaf = 4.0 + f32((tg & 0xffffu) % 8u) / 8.0; }
+  if (fam == 0xfff80000u || fam == 0xfff70000u) {
+    o.leaf = select(6.0, 5.0, fam == 0xfff80000u);
+    let t = u32(scenery[3].z) * 4u + vi;
+    let id = bitcast<u32>(scenery[t / 4u][t % 4u]) & 3u;
+    let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
+    let half = max(0.12, 0.75 * px);
+    let corner = vec2f(select(-1.0, 1.0, id == 1u || id == 2u), select(-1.0, 1.0, id >= 2u));
+    v = v + vec3f(corner * half, 0.0);
+  }
   // (Q8 D1: a turbine's obstruction light — its leaf 3, shadeLite's lamp —: widened about its centre to 1.5 pixels at least)
   if ((tg & 0xffff0000u) == 0xfffa0000u) {
     o.leaf = 3.0;

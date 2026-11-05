@@ -1,4 +1,5 @@
 // Worldwide data preparation is isolated from the render loop. No complete COG download.
+import { type CarPlace, carsOn, PIECE_M, ROAD_TRAFFIC, TRAFFIC_MAX, TRAFFIC_REACH_M } from "./traffic";
 import { VectorTile, classifyRings } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import type { Vec3 } from "../physics";
@@ -339,6 +340,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (the forest's grid: its bytes held from the start — the networks' and buildings' budgets after it)
   const reach = radius + 250;
   const ff = forestFrame(q.lat, q.lon, reach, (lat, lon) => localPoint(frame, lat, lon, 0));
+  // (Q8 D1: the main roads' segments for the traffic, and the cars on them)
+  const roadLines: { segs: { a: { lat: number; lon: number }; b: { lat: number; lon: number } }[]; cls: string; oneway: number }[] = [];
+  const cars: CarPlace[] = [];
+  let pieceCount = 0;
   let storedBytes = 64 + pixels.byteLength + forestVec4s(ff) * 16,
     budgetLimited = false;
   let trees = 0,
@@ -444,6 +449,19 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                 : [0.095, 0.098, 0.1];
           for (const line of f.loadGeometry()) {
             const locals = line.map(point);
+            // (Q8 D1: a main road's segments — their middles in the tile — for the traffic, not on a bridge nor in a tunnel)
+            if (!water && !rail && ROAD_TRAFFIC[cls] && !props.brunnel) {
+              const segs: { a: { lat: number; lon: number }; b: { lat: number; lon: number } }[] = [];
+              for (let j = 0; j < line.length - 1; j++) {
+                const mx = (line[j]!.x + line[j + 1]!.x) / 2,
+                  my = (line[j]!.y + line[j + 1]!.y) / 2;
+                if (mx < 0 || mx >= e || my < 0 || my >= e) continue;
+                if (Math.min(Math.hypot(locals[j]![0], locals[j]![1]), Math.hypot(locals[j + 1]![0], locals[j + 1]![1])) > TRAFFIC_REACH_M)
+                  continue;
+                segs.push({ a: geo(line[j]!), b: geo(line[j + 1]!) });
+              }
+              if (segs.length) roadLines.push({ segs, cls, oneway: Number(props.oneway) || 0 });
+            }
             if (props.brunnel === "bridge") {
               // Buffered whole lines are owned by their midpoint's tile; omit duplicate volumes.
               const mid = line[Math.floor(line.length / 2)];
@@ -704,6 +722,43 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     return { out, covered, tileCount };
   };
   const overture = !bdtopo && q.overture ? overtureTiles() : null;
+  // (Q8 D1: the base theme's infrastructure tiles round the centre — turbines, power lines — asked now, beside the other sources,
+  // read at the end: the scene not held for them — 21.6 s at Allaines from 60 m when they were asked last, 5 Nov 2026)
+  const infraTiles = (async () => {
+    try {
+      const list = await fetch(OVERTURE_LIST, { signal: AbortSignal.timeout(FETCH_MS) });
+      count(list);
+      if (!list.ok) return null;
+      let pm: PmTiles | null = null;
+      for (const r of overtureReleases(await list.text())) {
+        const p = new PmTiles(overtureBaseUrl(OVERTURE_BUCKET, r), fetchRange(fetchRanged));
+        try {
+          await p.header();
+          pm = p;
+          break;
+        } catch {
+          // (that release's archive refused: the next)
+        }
+      }
+      if (!pm) return null;
+      const n13 = 2 ** TURBINE_Z;
+      // (the tiles six at a time, the nearest first)
+      const tiles = tilesWithin(TURBINE_Z, q.lat, q.lon, TURBINE_REACH_M);
+      const raws: { t: (typeof tiles)[number]; raw: Uint8Array | null }[] = [];
+      for (let i = 0; i < tiles.length; i += 6)
+        raws.push(
+          ...(await Promise.all(
+            tiles
+              .slice(i, i + 6)
+              .map(async (t) => ({ t, raw: await pm!.tile(TURBINE_Z, ((t.x % n13) + n13) % n13, t.y).catch(() => null) })),
+          )),
+        );
+      return raws;
+    } catch (e) {
+      if (surveyErrors.length < 4) surveyErrors.push(`infrastructure: ${String(e).slice(0, 200)}`);
+      return null;
+    }
+  })();
   const osmChoices: Choice[] = [];
   phase("before osm");
   // (the tiles asked six at a time, ahead — one after the other, Paris's took 34 s —; read in their order still: the same scene)
@@ -1241,35 +1296,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const cableChains: { keys: string[]; span: number }[] = [];
   const cables: { positions: number[]; triangles: number[] }[] = [];
   try {
-    const list = await fetch(OVERTURE_LIST, { signal: AbortSignal.timeout(FETCH_MS) });
-    count(list);
-    let pm: PmTiles | null = null;
-    if (list.ok)
-      for (const r of overtureReleases(await list.text())) {
-        const p = new PmTiles(overtureBaseUrl(OVERTURE_BUCKET, r), fetchRange(fetchRanged));
-        try {
-          await p.header();
-          pm = p;
-          break;
-        } catch {
-          // (that release's archive refused: the next)
-        }
-      }
-    if (pm) {
+    const infra = await infraTiles;
+    if (infra) {
       const n13 = 2 ** TURBINE_Z;
       const found: (Turbine & { d: number })[] = [];
-      // (the tiles six at a time, the nearest first)
-      const tiles = tilesWithin(TURBINE_Z, q.lat, q.lon, TURBINE_REACH_M);
-      const raws: { t: (typeof tiles)[number]; raw: Uint8Array | null }[] = [];
-      for (let i = 0; i < tiles.length; i += 6)
-        raws.push(
-          ...(await Promise.all(
-            tiles
-              .slice(i, i + 6)
-              .map(async (t) => ({ t, raw: await pm!.tile(TURBINE_Z, ((t.x % n13) + n13) % n13, t.y).catch(() => null) })),
-          )),
-        );
-      for (const { t, raw } of raws) {
+      for (const { t, raw } of infra) {
         if (!raw) continue;
         const layer = new VectorTile(new PbfReader(raw)).layers.infrastructure;
         if (!layer) continue;
@@ -1386,8 +1417,47 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`turbines: ${String(e).slice(0, 200)}`);
   }
+  // (Q8 D1: the cars — each segment cut into pieces of PIECE_M at most on the ground, a car every so often each way, the nearest
+  // pieces first; none on any failure)
+  try {
+    const pieces: { a: [number, number, number]; b: [number, number, number]; cls: string; oneway: number; d: number }[] = [];
+    // (the ground's height already in only — the scene not held for the traffic: a piece without it, none)
+    const at = (q: { lat: number; lon: number }) => {
+      const h = heightNow(q.lat, q.lon);
+      return h === undefined ? null : (localPoint(frame, q.lat, q.lon, h) as [number, number, number]);
+    };
+    for (const r of roadLines)
+      for (const sg of r.segs) {
+        const A = localPoint(frame, sg.a.lat, sg.a.lon, 0),
+          B = localPoint(frame, sg.b.lat, sg.b.lon, 0);
+        const n = Math.max(1, Math.ceil(Math.hypot(B[0] - A[0], B[1] - A[1]) / PIECE_M));
+        for (let k = 0; k < n; k++) {
+          const f0 = k / n,
+            f1 = (k + 1) / n;
+          const q0 = { lat: sg.a.lat + (sg.b.lat - sg.a.lat) * f0, lon: sg.a.lon + (sg.b.lon - sg.a.lon) * f0 },
+            q1 = { lat: sg.a.lat + (sg.b.lat - sg.a.lat) * f1, lon: sg.a.lon + (sg.b.lon - sg.a.lon) * f1 };
+          const mid = localPoint(frame, (q0.lat + q1.lat) / 2, (q0.lon + q1.lon) / 2, 0);
+          const d = Math.hypot(mid[0], mid[1]);
+          if (d > TRAFFIC_REACH_M) continue;
+          const pa = at(q0),
+            pb = at(q1);
+          if (pa && pb) pieces.push({ a: pa, b: pb, cls: r.cls, oneway: r.oneway, d });
+        }
+      }
+    pieces.sort((x, y) => x.d - y.d);
+    pieceCount = pieces.length;
+    for (const [i, pc] of pieces.entries()) {
+      if (cars.length >= TRAFFIC_MAX) break;
+      if (pc.oneway >= 0) cars.push(...carsOn(pc.a, pc.b, pc.cls, i * 2 + 1));
+      if (pc.oneway <= 0) cars.push(...carsOn(pc.b, pc.a, pc.cls, i * 2 + 2));
+    }
+    cars.length = Math.min(cars.length, TRAFFIC_MAX);
+    storedBytes += cars.length * (24 * 12 + 20 * 16 + 32);
+  } catch (e) {
+    if (surveyErrors.length < 4) surveyErrors.push(`traffic: ${String(e).slice(0, 200)}`);
+  }
   phase("turbines");
-  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget, decals, turbines, pylons, cables);
+  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget, decals, turbines, pylons, cables, cars);
   return {
     id: q.id,
     lat: q.lat,
@@ -1403,6 +1473,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     turbines: turbines.length,
     pylons: pylons.length,
     cables: cables.length,
+    cars: cars.length,
+    trafficRoads: roadLines.length,
+    roadPieces: pieceCount,
     surveyRequests: land?.requests ?? 0,
     // (a block failed: its trees the land cover's — the scene not degraded for it)
     surveyError: land?.errors[0] ?? surveyErrors[0],
