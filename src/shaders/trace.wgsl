@@ -14551,6 +14551,14 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
 var<private> LITE_SH_DBG: vec2f = vec2f(-2.0);
 // (the relief's own sun visibility — its cascades and horizons — for the same view, 1 where not read)
 var<private> LITE_RELIEF_DBG: f32 = 1.0;
+// (Q8 L10) The streets' lamps' light colour at a scenery-frame point xy [m]: by quarter — cells of ~300 m in the world's
+// coordinates (P.scenery[6]'s origin added: still as the frame moves) —, two in five the old sodium's orange (~2 000 K), the rest
+// the LEDs' warm white (~3 000–4 000 K): France's towns half way through their change
+fn streetLampTint(xy: vec2f) -> vec3f {
+  let c = floor((xy + P.scenery[6].xy) / 300.0);
+  let h = fract(sin(dot(c, vec2f(127.1, 311.7))) * 43758.5453);
+  return select(vec3f(1.0, 0.82, 0.62), vec3f(1.0, 0.5, 0.17), h < 0.4);
+}
 // (liteSkip 8192's view: red the scenery's map's sun visibility — its trees and buildings; 1 where it has nothing or is not
 // read —, green the relief's — its cascades and horizons —, blue a constant: grey lit, magenta in the relief's shadow, cyan in
 // the scenery's; Q6m's combs counted on it frame by frame, e2e ghost GH_COMBS)
@@ -15214,12 +15222,29 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // albedo against a town's mean 0.15 —, not a glow over it: an even cream where the lamps' pools lay, the ground unseen — Sam,
   // 5 Nov; far, the map's glow as before)
   var litAlb = vec3f(1.0);
+  var litC = mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp);
+  // (the point drawn in the scenery's frame — the streets' lamps' grid, their tint by quarter —)
+  let dLr = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
+  let xyL = (P.scenery[3].xyz + dLr * tM).xy;
+  let nearL = HAS_SCENERY && P.scenery[0].w > 0.5 && tM <= P.scenery[1].w && (liteSkip() & 131072u) == 0u;
   if (HAS_SCENERY && lit > 0.0 && lamp > 0.02 && (liteSkip() & 131072u) == 0u) {
-    let dLr = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
-    lit *= sceneryRoadLight(sv, tM, (P.scenery[3].xyz + dLr * tM).xy);
-    if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) { litAlb = clamp(A / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(4.0)); }
+    lit *= sceneryRoadLight(sv, tM, xyL);
+    if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) {
+      litAlb = clamp(A / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(4.0));
+      litC = streetLampTint(xyL);
+    }
   } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
-  G += litAlb * mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp) * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
+  G += litAlb * litC * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
+  // (Q8 L10: the streets' lamps on the buildings' walls by them — their pools' light where the wall stands, three tenths of the ground's (half lit the walls brighter than the street, +65 % to the night's mean):
+  // a wall faces the lamp across the street, not under it; a lit town, at night, near)
+  if (mesh && nearL && dark > 0.0 && lamp > 0.02) {
+    let pl = sceneryLampLight(xyL);
+    let wall = 1.0 - smoothstep(0.6, 0.9, abs(dot(n, gq)));
+    if (pl.y > 0.0 && wall > 0.0) {
+      let fa = clamp(A / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(4.0));
+      G += fa * streetLampTint(xyL) * (pow(lamp, 1.4) * P.earth.z * dark * 0.3 * STREET_POOL_GAIN * pl.x * pl.y * wall * luminance(E) / PI);
+    }
+  }
   G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark);
   // (Q8 D1: a car's lamps at night — its headlights warm white, its tail lights red)
   {
@@ -15231,7 +15256,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // (Q8 L10: a street lamp's head — lit in a lit town (the night lights' map at it), warm white, as bright as a car's
     // headlights' block)
     if (cg > 6.5 && cg < 7.5 && lamp > 0.02) {
-      G += vec3f(1.0, 0.8, 0.55) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
+      G += select(vec3f(1.0, 0.8, 0.55), streetLampTint(xyL) * 1.2, nearL) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
     }
   }
   // (Q8 D1: a wind turbine's obstruction light — red at night, white by day, 40 flashes a minute, every farm in step)
