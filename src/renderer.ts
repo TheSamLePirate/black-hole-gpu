@@ -7564,7 +7564,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       frame = c?.frame() ?? null;
     this.characterRenderer.remoteWalkers = this.netWalkersOnCamera(s);
     // (the astronaut where he walks; the living ground round the camera on the Earth, with him or without)
-    const view = s.earthGrass !== "off" ? this.grassView() : null;
+    // (VIPER B5: and the low cover round a camera low over it)
+    this.characterRenderer.coverEnabled = s.earthLowCover;
+    const view = s.earthGrass !== "off" || s.earthLowCover ? this.grassView() : null;
     const cam = this.lastCam;
     if ((!frame && !view) || !cam) {
       if (this.characterRenderer.drawing) this.characterRenderer.reset();

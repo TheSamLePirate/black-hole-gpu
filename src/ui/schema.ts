@@ -2303,6 +2303,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "grass herbe marche third person personnage",
   },
   {
+    key: "earthLowCover",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Low cover from the air (prototype)",
+    effect: "scene",
+    help: "Low over the Earth (under 300 m: taxiing, taking off, on final, flying low), grass tufts, bushes and reed clumps standing on the ground out to 240 m where WorldCover says something grows — many tufts and a bush now and then on a meadow or an airfield's grass, bushes on heath and scrub, reeds in wetlands —, coloured from the satellite's image, none on roads, runways, water or buildings: the ground's speed felt past the grass's 30 m. Needs the terrain and the world scenery.",
+    keywords: "low cover bushes shrubs tufts reeds vegetation ground speed taxi runway viper",
+  },
+  {
     key: "earthGrassDensity",
     type: "number",
     section: "sky",

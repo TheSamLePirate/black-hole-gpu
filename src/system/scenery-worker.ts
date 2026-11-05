@@ -356,6 +356,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         const cls = String(props.class ?? ""),
           subclass = String(props.subclass ?? "");
         const water = name === "water" || name === "waterway";
+        // (OpenMapTiles' aeroway polygons: the pavements — runway, taxiway, apron, helipad, gate —, and the aerodrome's or
+        // heliport's whole outline, which is not one: painted paved, it took every blade of grass, every bush and the grass's
+        // own material off an airfield's grass between its runways — VIPER B5, 5 Nov 2026)
+        if (name === "aeroway" && (cls === "aerodrome" || cls === "heliport")) continue;
         if (f.type === 3 && (name === "water" || name === "aeroway" || name === "transportation")) {
           for (const rings of classifyRings(f.loadGeometry())) {
             const total = rings.reduce((sum, r) => sum + r.length, 0);

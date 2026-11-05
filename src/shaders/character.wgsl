@@ -596,3 +596,103 @@ struct SV { @builtin(position) clip:vec4f, @location(0) p:vec3f, @location(1) up
  let ambient=albedo/PI*ambientIrradiance(n)*mix(.5,1.0,smoothstep(-.35,.3,v.up));
  var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);return o;
 }
+// ======================================================================== the low cover (VIPER B5)
+// Round the camera low over the Earth (under COVER_CAMERA_MAX), out to its reach (~240 m) past the grass's 30 m: a
+// coarser ground grid of its own (4 m cells — character-renderer.ts coverGround) and on it a world-fixed lattice, each point
+// a grass tuft, a bush or a reed clump by what grows there (its kind's densities: none on roads, runways, water, buildings),
+// none under a pixel and a half. Each a lump of the stones' icosphere, rounder and leafier, sitting on the ground; its colour
+// the leaves' mixed with the satellite's ground; lit as the stones (the probe, the shadows), wrapped as foliage. Not yet: the
+// trees' shade on them past the grass's grid, the air between (240 m: a few per cent), the wind.
+struct C {
+  // its frame's origin and axes in the camera's [m]; the reach [m]
+  origin:vec4f, cright:vec4f, cup:vec4f, cforward:vec4f,
+  // the grid: its corner cell's centre (x, z) [m in the frame], cells a side, a cell's side [m]
+  grid:vec4f,
+  // the lattice: its first point (i, j: whole), points a side, spacing [m]
+  lat:vec4f,
+  // the camera in the frame [m] (x, y, z), a pixel's angle [rad]
+  eye:vec4f,
+  // the instances at most, on (1), the camera's height over the ground [m], a diagnostic's bits (1: no pixel cull, 2: no
+  // frustum cull, 4: every point a tuft of the kind meadow's, 8: six times their size)
+  misc:vec4f,
+  // per vegetation kind two vec4: its bushes (density, radius [m], squash, the ground's share of their colour), its tufts
+  // (density, radius [m], squash, 0) (character-renderer.ts COVER)
+  kinds:array<vec4f,16>,
+};
+@group(0) @binding(23) var<uniform> cv:C;
+@group(0) @binding(24) var<storage,read> coverCells:array<u32>;
+@group(0) @binding(25) var<storage,read> coverHeights:array<f32>;
+@group(0) @binding(26) var<storage,read_write> coverOut:array<Stone>;
+@group(0) @binding(27) var<storage,read> coverIn:array<Stone>;
+fn coverCellAt(x:f32,z:f32)->u32{
+ let n=i32(cv.grid.z);let c=vec2i(floor((vec2f(x,z)-cv.grid.xy)/cv.grid.w+.5));
+ if(any(c<vec2i(0))||any(c>=vec2i(n))){return 0u;}
+ return coverCells[c.y*n+c.x];
+}
+fn coverHeight(x:f32,z:f32)->f32{
+ let n=i32(cv.grid.z);let q=(vec2f(x,z)-cv.grid.xy)/cv.grid.w;let i=clamp(vec2i(floor(q)),vec2i(0),vec2i(n-2));let f=clamp(q-vec2f(i),vec2f(0),vec2f(1));
+ let k=i.y*n+i.x;
+ return mix(mix(coverHeights[k],coverHeights[k+1],f.x),mix(coverHeights[k+n],coverHeights[k+n+1],f.x),f.y);
+}
+fn coverToCamera(x:f32,y:f32,z:f32)->vec3f{return cv.origin.xyz+cv.cright.xyz*x+cv.cup.xyz*y+cv.cforward.xyz*z;}
+@compute @workgroup_size(8,8) fn coverGrow(@builtin(global_invocation_id) id:vec3u){
+ let n=u32(cv.lat.z);if(id.x>=n||id.y>=n||cv.misc.y<.5){return;}
+ let gi=i32(cv.lat.x)+i32(id.x);let gj=i32(cv.lat.y)+i32(id.y);let sp=cv.lat.w;
+ let x=(f32(gi)+hash2(gi,gj,41u))*sp;let z=(f32(gj)+hash2(gi,gj,42u))*sp;
+ if(length(vec2f(x,z)-cv.eye.xz)>cv.origin.w){return;}
+ let dbg=u32(cv.misc.w);
+ let cell=coverCellAt(x,z);var k=cell>>24u;if((dbg&4u)!=0u){k=1u;}if(k==0u||k>7u){return;}
+ let B=cv.kinds[k*2u];let T=cv.kinds[k*2u+1u];
+ // (a bush, else a tuft, else nothing — by the point's own draw)
+ let pick=hash2(gi,gj,43u);
+ let bush=pick<B.x;
+ if(!bush&&pick>=B.x+T.x){return;}
+ let K=select(T,B,bush);
+ let r=K.y*mix(.45,1.0,hash2(gi,gj,44u))*select(1.0,6.0,(dbg&8u)!=0u);
+ let root=coverToCamera(x,coverHeight(x,z)-r*.12,z);
+ // (under a pixel and a half across: none — the photograph's own texture is the ground there)
+ let dist=length(root);if((dbg&1u)==0u&&2*r<dist*cv.eye.w*1.5){return;}
+ if((dbg&2u)==0u&&(root.z<-r*3||abs(root.x)>root.z*u.view.x+r*3+.2||abs(root.y)>root.z*u.view.y+r*3+.2)){return;}
+ let ground=srgbLinear(vec3f(f32(cell&255u),f32((cell>>8u)&255u),f32((cell>>16u)&255u))/255);
+ // (the leaves' own green, a shrub's darker than a tuft's, mixed with the ground's hue there — the meadow's, the heath's)
+ let leaf=select(vec3f(.07,.095,.035),vec3f(.045,.065,.028),bush)*mix(.7,1.35,hash2(gi,gj,45u));
+ let colour=mix(leaf,ground*select(.85,.6,bush),select(.5,B.w,bush));
+ let at=atomicAdd(&commands[4].instances,1u);if(at>=u32(cv.misc.x)){return;}
+ coverOut[at]=Stone(vec4f(root,r),vec4f(hash2(gi,gj,46u)*6.28318,K.z*mix(.8,1.2,hash2(gi,gj,47u)),hash2(gi,gj,48u),select(0.0,1.0,bush)),
+  vec4f(colour,1));
+}
+@compute @workgroup_size(1) fn coverClamp(){
+ atomicMin(&commands[4].instances,u32(cv.misc.x));
+}
+struct CoverV { @builtin(position) clip:vec4f, @location(0) p:vec3f, @location(1) n:vec3f, @location(2) up:f32, @location(3) @interpolate(flat) i:u32 };
+@vertex fn coverVs(@location(0) unit:vec3f,@builtin(instance_index) i:u32)->CoverV{
+ let s=coverIn[i];
+ // a clump: the sphere bumped by its seed — leafier than a stone —, squashed, sat on the ground (its bottom at the root)
+ let seed=s.b.z*97.0;
+ let bump=1+.2*sin(unit.x*4.1+seed)*sin(unit.y*3.7+seed*1.3)*sin(unit.z*4.3+seed*2.1)+.12*sin(unit.x*9.0+unit.z*7.0+seed*2.7);
+ let q=unit*bump*vec3f(1,s.b.y,1)+vec3f(0,s.b.y*.8,0);
+ let c=cos(s.b.x);let sn=sin(s.b.x);
+ let l=vec3f(q.x*c-q.z*sn,q.y,q.x*sn+q.z*c)*s.a.w;
+ let m=vec3f(unit.x*c-unit.z*sn,unit.y/max(s.b.y,.2),unit.x*sn+unit.z*c);
+ var o:CoverV;o.p=s.a.xyz+cv.cright.xyz*l.x+cv.cup.xyz*l.y+cv.cforward.xyz*l.z;o.clip=project(o.p);
+ o.n=cv.cright.xyz*m.x+cv.cup.xyz*m.y+cv.cforward.xyz*m.z;o.up=unit.y;o.i=i;
+ return o;
+}
+@fragment fn coverFs(v:CoverV)->Out{
+ let pixel=vec2u(v.clip.xy);let at=min(pixel.y,u32(u.image.y)-1u)*u32(u.image.x)+min(pixel.x,u32(u.image.x)-1u);
+ let s=coverIn[v.i];
+ if(sceneDepth[at]*u.image.z<length(v.p)-.05){discard;}
+ // (the clump's round normal, roughened by its facets: leaves, not a polished ball)
+ let eye=normalize(-v.p);
+ var f=normalize(cross(dpdx(v.p),dpdy(v.p)));if(dot(f,eye)<0){f=-f;}
+ var n=normalize(normalize(v.n)*.7+f*.3);if(dot(n,eye)<0){n=normalize(n+eye*(.05-dot(n,eye)));}
+ // (darker within and at the foot: the leaves shading their own)
+ let inner=mix(.4,1.0,smoothstep(-.7,.6,v.up));
+ let albedo=s.c.rgb*inner;
+ let L=normalize(u.sun.xyz);let vis=shadowAt(v.p,n)*shipShadowAt(v.p);
+ // (wrapped: light through and round the leaves)
+ let wrap=max((dot(n,L)+.4)/1.4,0);
+ let direct=albedo/PI*wrap*keyIrradiance()*vis;
+ let ambient=albedo/PI*ambientIrradiance(n)*inner;
+ var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);return o;
+}

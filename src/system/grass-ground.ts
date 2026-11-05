@@ -9,7 +9,6 @@ import { GRASS_GRID, GRASS_GRID_SNAP, vegetationOf } from "../grass-layout";
 
 /** the frame's reach: past it from its origin [m], a new frame (the lattice's floats stay fine, the axes level) */
 export const GRASS_FRAME_REACH = 1500;
-const HALF = (GRASS_GRID - 1) / 2;
 
 export interface GrassFrame {
   /** its origin [m, body-fixed] and its axes there (right, up, forward: unit) */
@@ -32,8 +31,23 @@ export class GrassGround {
   frame: GrassFrame | null = null;
   /** the published grid: its centre [m, whole, in the frame], its heights [m along up] and cells (kind << 24 | sRGB) */
   centre: [number, number] = [0, 0];
-  heights = new Float32Array(GRASS_GRID * GRASS_GRID);
-  cells = new Uint32Array(GRASS_GRID * GRASS_GRID);
+  heights: Float32Array<ArrayBuffer>;
+  cells: Uint32Array<ArrayBuffer>;
+  /** its middle cell's offset from its corner [cells] */
+  private readonly half: number;
+  /**
+   * n: its cells a side (odd); cell: a cell's side [m]; snap: its centre's step [m, a whole number of cells] — the grass's
+   * 81 of 1 m by 8 m, the low cover's (VIPER B5, character-renderer.ts) coarser and wider
+   */
+  constructor(
+    readonly n = GRASS_GRID,
+    readonly cell = 1,
+    readonly snap = GRASS_GRID_SNAP,
+  ) {
+    this.half = (n - 1) / 2;
+    this.heights = new Float32Array(n * n);
+    this.cells = new Uint32Array(n * n);
+  }
   ready = false;
   stamp = 0;
   /** the frame's own count: a new frame (the lattice moved) */
@@ -58,21 +72,23 @@ export class GrassGround {
 
   /** The cell nearest a frame point (kind << 24 | sRGB; 0 outside the grid) — character.wgsl cellAt's. */
   cellAt(x: number, z: number): number {
-    const i = Math.floor(x + 0.5) - (this.centre[0] - HALF),
-      j = Math.floor(z + 0.5) - (this.centre[1] - HALF);
-    return i < 0 || j < 0 || i >= GRASS_GRID || j >= GRASS_GRID ? 0 : this.cells[j * GRASS_GRID + i]!;
+    const n = this.n,
+      i = Math.floor((x - this.centre[0]) / this.cell + 0.5) + this.half,
+      j = Math.floor((z - this.centre[1]) / this.cell + 0.5) + this.half;
+    return i < 0 || j < 0 || i >= n || j >= n ? 0 : this.cells[j * n + i]!;
   }
   /** The ground's height at a frame point [m along up], bilinear — character.wgsl groundHeight's. */
   heightAt(x: number, z: number): number {
-    const qx = x - (this.centre[0] - HALF),
-      qz = z - (this.centre[1] - HALF);
-    const i = Math.min(Math.max(Math.floor(qx), 0), GRASS_GRID - 2),
-      j = Math.min(Math.max(Math.floor(qz), 0), GRASS_GRID - 2);
+    const n = this.n,
+      qx = (x - this.centre[0]) / this.cell + this.half,
+      qz = (z - this.centre[1]) / this.cell + this.half;
+    const i = Math.min(Math.max(Math.floor(qx), 0), n - 2),
+      j = Math.min(Math.max(Math.floor(qz), 0), n - 2);
     const fx = Math.min(Math.max(qx - i, 0), 1),
       fz = Math.min(Math.max(qz - j, 0), 1);
     const h = this.heights,
-      k = j * GRASS_GRID + i;
-    return (h[k]! * (1 - fx) + h[k + 1]! * fx) * (1 - fz) + (h[k + GRASS_GRID]! * (1 - fx) + h[k + GRASS_GRID + 1]! * fx) * fz;
+      k = j * n + i;
+    return (h[k]! * (1 - fx) + h[k + 1]! * fx) * (1 - fz) + (h[k + n]! * (1 - fx) + h[k + n + 1]! * fx) * fz;
   }
   /**
    * One slice of the work round q — the ground under the camera — (up: the body's there): a new frame far from
@@ -90,10 +106,7 @@ export class GrassGround {
       this.revision = -1;
     }
     const l = this.local(q);
-    const centre: [number, number] = [
-      Math.round(l[0] / GRASS_GRID_SNAP) * GRASS_GRID_SNAP,
-      Math.round(l[2] / GRASS_GRID_SNAP) * GRASS_GRID_SNAP,
-    ];
+    const centre: [number, number] = [Math.round(l[0] / this.snap) * this.snap, Math.round(l[2] / this.snap) * this.snap];
     const same = (c: [number, number]) => c[0] === centre[0] && c[1] === centre[1];
     if (this.ready && same(this.centre) && revision === this.revision && !this.pending) {
       this.cpuMs = performance.now() - begin;
@@ -106,8 +119,8 @@ export class GrassGround {
     const f = this.frame!;
     while (p.cursor < p.todo.length && performance.now() - begin < budgetMs) {
       const i = p.todo[p.cursor++]!;
-      const x = p.centre[0] + (i % GRASS_GRID) - HALF,
-        z = p.centre[1] + Math.floor(i / GRASS_GRID) - HALF;
+      const x = p.centre[0] + ((i % this.n) - this.half) * this.cell,
+        z = p.centre[1] + (Math.floor(i / this.n) - this.half) * this.cell;
       const at = this.point(x, z);
       const h = -raw(at);
       p.heights[i] = h;
@@ -128,29 +141,26 @@ export class GrassGround {
   }
   /** A new grid for centre: the cells the published one already holds copied (same ground data), the rest to do. */
   private start(centre: [number, number], revision: number) {
-    const heights = new Float32Array(GRASS_GRID * GRASS_GRID),
-      cells = new Uint32Array(GRASS_GRID * GRASS_GRID),
+    const n = this.n,
+      H = this.half,
+      heights = new Float32Array(n * n),
+      cells = new Uint32Array(n * n),
       todo: number[] = [];
     const reuse = this.ready && revision === this.revision;
-    const dx = centre[0] - this.centre[0],
-      dz = centre[1] - this.centre[1];
-    for (let j = 0; j < GRASS_GRID; j++)
-      for (let i = 0; i < GRASS_GRID; i++) {
-        const k = j * GRASS_GRID + i,
+    const dx = Math.round((centre[0] - this.centre[0]) / this.cell),
+      dz = Math.round((centre[1] - this.centre[1]) / this.cell);
+    for (let j = 0; j < n; j++)
+      for (let i = 0; i < n; i++) {
+        const k = j * n + i,
           oi = i + dx,
           oj = j + dz;
-        if (reuse && oi >= 0 && oj >= 0 && oi < GRASS_GRID && oj < GRASS_GRID) {
-          heights[k] = this.heights[oj * GRASS_GRID + oi]!;
-          cells[k] = this.cells[oj * GRASS_GRID + oi]!;
+        if (reuse && oi >= 0 && oj >= 0 && oi < n && oj < n) {
+          heights[k] = this.heights[oj * n + oi]!;
+          cells[k] = this.cells[oj * n + oi]!;
         } else todo.push(k);
       }
     // (nearest the middle first: the ground under the camera comes in before the grid's rim)
-    todo.sort(
-      (a, b) =>
-        ((a % GRASS_GRID) - HALF) ** 2 +
-        (Math.floor(a / GRASS_GRID) - HALF) ** 2 -
-        (((b % GRASS_GRID) - HALF) ** 2 + (Math.floor(b / GRASS_GRID) - HALF) ** 2),
-    );
+    todo.sort((a, b) => ((a % n) - H) ** 2 + (Math.floor(a / n) - H) ** 2 - (((b % n) - H) ** 2 + (Math.floor(b / n) - H) ** 2));
     this.pending = { centre, revision, heights, cells, todo, cursor: 0 };
   }
   /** The work still to do before the next grid is published (0: none). */

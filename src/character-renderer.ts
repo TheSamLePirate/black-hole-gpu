@@ -125,6 +125,45 @@ export interface GrassView {
 }
 /** the camera higher over the ground than this [m]: no living ground (its blades under a pixel, the grid's work for nothing) */
 export const GRASS_CAMERA_MAX = 25;
+/**
+ * (VIPER B5) The low cover round the camera low over the Earth, past the grass's reach: the camera under COVER_CAMERA_MAX
+ * over the ground [m]; its own ground grid (COVER_GRID cells a side of COVER_CELL metres, recentred by COVER_SNAP); its
+ * lattice (a point every COVER_SPACING metres out to COVER_REACH, a tuft, a bush or a reed clump at each by what grows
+ * there); the clumps drawn at most.
+ */
+export const COVER_CAMERA_MAX = 300;
+const COVER_GRID = 129;
+const COVER_CELL = 4;
+const COVER_SNAP = 32;
+export const COVER_SPACING = 4;
+export const COVER_REACH = 240;
+const COVER_LATTICE = Math.ceil((2 * COVER_REACH) / COVER_SPACING) + 2;
+export const COVER_CAPACITY = 16384;
+/** character.wgsl C: eight vec4 then two a vegetation kind */
+const COVER_VEC4S = 8 + 16;
+/**
+ * By vegetation kind (grass-layout.ts VEGETATION, by name): its bushes — the share of lattice points holding one, radius [m],
+ * height over width, the ground's share of their colour — and its tufts (share, radius [m], height over width). A meadow's
+ * tufts many and a bush now and then (an airfield's grass); a heath's bushes; reeds tall; a crop none (its rows are the
+ * photograph's).
+ */
+export const COVER: Record<string, { bush: [number, number, number, number]; tuft: [number, number, number] }> = {
+  meadow: { bush: [0.02, 1.0, 0.7, 0.35], tuft: [0.4, 0.35, 0.4] },
+  scrub: { bush: [0.35, 1.3, 0.75, 0.3], tuft: [0.3, 0.4, 0.45] },
+  "forest floor": { bush: [0.15, 1.0, 0.8, 0.2], tuft: [0.2, 0.35, 0.45] },
+  reeds: { bush: [0.4, 0.6, 1.8, 0.55], tuft: [0, 0, 0] },
+  sparse: { bush: [0.05, 0.7, 0.6, 0.5], tuft: [0.15, 0.3, 0.4] },
+  moss: { bush: [0.04, 0.5, 0.5, 0.4], tuft: [0.25, 0.3, 0.35] },
+};
+/** the table as the shader reads it (character.wgsl C.kinds): per vegetation kind its bushes' vec4 and tufts' */
+export function packCover(): Float32Array {
+  const out = new Float32Array(16 * 4);
+  VEGETATION.forEach((v, k) => {
+    const c = COVER[v.name];
+    if (c && k < 8) out.set([...c.bush, ...c.tuft, 0], k * 8);
+  });
+  return out;
+}
 /** the walker's place when none walks: far below the ground (no blade pushed aside, no footprint pressed) */
 const NO_WALKER_Y = -1e4;
 
@@ -157,6 +196,25 @@ export class CharacterRenderer {
   private stones: GPUBuffer;
   private stoneMesh: GPUBuffer;
   private stoneCount = 0;
+  // the low cover (VIPER B5): its ground grid, grown each frame on its lattice, drawn after the stones
+  /** (settings.earthLowCover) */
+  coverEnabled = true;
+  /** (a diagnostic's) character.wgsl C.misc.w: 1 no pixel cull, 2 no frustum cull, 4 every point the meadow's */
+  coverDebug = 0;
+  readonly coverGround = new GrassGround(COVER_GRID, COVER_CELL, COVER_SNAP);
+  private coverGrow: GPUComputePipeline;
+  private coverClamp: GPUComputePipeline;
+  private coverDraw: GPURenderPipeline;
+  private coverUniform: GPUBuffer;
+  private coverCells: GPUBuffer;
+  private coverHeights: GPUBuffer;
+  private coverInst: GPUBuffer;
+  private cData = new Float32Array(COVER_VEC4S * 4);
+  private coverReset = new Uint32Array([STONE_VERTICES, 0, 0, 0]);
+  private coverOn = false;
+  private coverStamp = -1;
+  private coverCount = 0;
+  private coverMs = 0;
   private grassUniform: GPUBuffer;
   private grassCells: GPUBuffer;
   private grassHeights: GPUBuffer;
@@ -220,8 +278,16 @@ export class CharacterRenderer {
     this.blades = buffer(BLADE_CAPACITY * GRASS_INSTANCE_BYTES, S, "grass blades");
     this.shade = buffer(GRASS_LIGHT_GRID * GRASS_LIGHT_GRID * 4, S, "grass shade");
     this.trample = buffer(TRAMPLE_GRID * TRAMPLE_GRID * 16, S | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, "grass footprints");
-    this.commands = buffer(64, S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, "grass and stones draws");
-    this.countsStage = buffer(64, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+    this.commands = buffer(
+      80,
+      S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      "grass, stones and cover draws",
+    );
+    this.countsStage = buffer(80, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+    this.coverUniform = buffer(COVER_VEC4S * 16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, "low cover figures");
+    this.coverCells = buffer(COVER_GRID * COVER_GRID * 4, S | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, "low cover ground: cells");
+    this.coverHeights = buffer(COVER_GRID * COVER_GRID * 4, S | GPUBufferUsage.COPY_DST, "low cover ground: heights");
+    this.coverInst = buffer(COVER_CAPACITY * STONE_BYTES, S, "low cover clumps");
     this.stones = buffer(STONE_CAPACITY * STONE_BYTES, S, "stones");
     const mesh = stoneMesh();
     this.stoneMesh = buffer(mesh.byteLength, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, "stone mesh");
@@ -287,6 +353,13 @@ export class CharacterRenderer {
       primitive: { topology: "triangle-list", cullMode: "none" },
       depthStencil,
     });
+    this.coverDraw = d.createRenderPipeline({
+      layout: "auto",
+      vertex: { module: this.module, entryPoint: "coverVs", buffers: [vertex] },
+      fragment: { module: this.module, entryPoint: "coverFs", targets: targets() },
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      depthStencil,
+    });
     const skinVertex: GPUVertexBufferLayout = {
       arrayStride: 84,
       attributes: [
@@ -342,6 +415,9 @@ export class CharacterRenderer {
     this.grassClamp = compute("grassClamp");
     this.stonesGrow = compute("stonesGrow");
     this.stonesClamp = compute("stonesClamp");
+    this.coverGrow = compute("coverGrow");
+    this.coverClamp = compute("coverClamp");
+    this.cData.set(packCover(), 8 * 4);
     this.shadow = d.createTexture({
       size: [512, 512],
       format: "depth32float",
@@ -372,6 +448,8 @@ export class CharacterRenderer {
       blades: [...this.bladeCounts],
       roots: this.bladeCounts.reduce((a, b) => a + b, 0),
       stones: this.stoneCount,
+      /** (VIPER B5) the low cover's clumps drawn, on, its grid's CPU time this frame [ms] and work left */
+      cover: { on: this.coverOn, clumps: this.coverCount, ms: +this.coverMs.toFixed(2), pending: this.coverGround.remaining },
       maxRoots: BLADE_CAPACITY,
       lodCapacity: GRASS_LODS.map((l) => l.capacity),
       lattice: this.lattice,
@@ -412,6 +490,71 @@ export class CharacterRenderer {
    * upload once published, the grass's figures (the frame, the lattice round the camera, the astronaut, the wind,
    * the vessel).
    */
+  /** (VIPER B5) The low cover's ground grid built round the ground under the camera, its figures for this frame. */
+  private prepareCover(
+    view: GrassView | null,
+    walker: { c: PlanetCharacter; frame: CharacterFrame } | null,
+    contact: SceneryContact | null,
+    revision: number,
+    world: GrassWorld,
+    light: CharacterLight,
+    height: number,
+  ) {
+    const c = this.coverGround;
+    const above = view ? view.raw(view.q) : Infinity;
+    const off =
+      !this.coverEnabled || !view || !contact || (walker && (walker.c.body !== "earth" || !walker.c.ours)) || !(above <= COVER_CAMERA_MAX);
+    if (off) {
+      if (c.frame) c.clear();
+      this.coverOn = false;
+      this.coverStamp = -1;
+      this.coverMs = 0;
+      return;
+    }
+    const v = view!;
+    const vegetation: VegetationAt = (q) => {
+      const veg = contact!.vegetation(q);
+      return world.paved(q) ? { cover: 0, rgb: veg.rgb } : veg;
+    };
+    const t0 = performance.now();
+    c.build(add(v.q, v.up, -above), v.up, v.raw, vegetation, revision, 1.5);
+    this.coverMs = performance.now() - t0;
+    if (!c.ready) {
+      this.coverOn = false;
+      return;
+    }
+    if (this.coverStamp !== c.stamp) {
+      this.d.queue.writeBuffer(this.coverHeights, 0, c.heights);
+      this.d.queue.writeBuffer(this.coverCells, 0, c.cells);
+      this.coverStamp = c.stamp;
+    }
+    this.coverOn = c.vegetated > 0;
+    if (!this.coverOn) return;
+    const f = c.frame!;
+    const R = v.toCamera(f.right),
+      U = v.toCamera(f.up),
+      F = v.toCamera(f.forward),
+      O = v.toCamera(sub(f.origin, v.q));
+    const eye = c.local(v.q);
+    const pixel = (2 * Math.tan((light.fov * Math.PI) / 360)) / height;
+    const H = (COVER_GRID - 1) / 2;
+    const u = this.cData;
+    const set = (i: number, val: number[]) => u.set(val, i * 4);
+    set(0, [...O, COVER_REACH]);
+    set(1, [...R, 0]);
+    set(2, [...U, 0]);
+    set(3, [...F, 0]);
+    set(4, [c.centre[0] - H * COVER_CELL, c.centre[1] - H * COVER_CELL, COVER_GRID, COVER_CELL]);
+    set(5, [
+      Math.round(eye[0] / COVER_SPACING) - COVER_LATTICE / 2,
+      Math.round(eye[2] / COVER_SPACING) - COVER_LATTICE / 2,
+      COVER_LATTICE,
+      COVER_SPACING,
+    ]);
+    set(6, [...eye, pixel]);
+    set(7, [COVER_CAPACITY, 1, Math.max(0, above), this.coverDebug]);
+    this.d.queue.writeBuffer(this.coverUniform, 0, u);
+  }
   private prepareGrass(
     view: GrassView | null,
     walker: { c: PlanetCharacter; frame: CharacterFrame } | null,
@@ -660,8 +803,9 @@ export class CharacterRenderer {
         this.d.queue.writeBuffer(R.uniform, 0, R.data);
       }
     this.prepareGrass(view, walker, contact, revision, grass, world, light, height);
+    this.prepareCover(view, walker, contact, revision, world, light, height);
     // (none walking and nothing growing round the camera: nothing drawn — the vessel finds no occluder)
-    if (!walker && !this.grassOn && !(others.length && this.model.ready)) {
+    if (!walker && !this.grassOn && !this.coverOn && !(others.length && this.model.ready)) {
       this.active = false;
       this.cpuMs = performance.now() - began;
       return;
@@ -720,6 +864,15 @@ export class CharacterRenderer {
         case 21:
         case 22:
           return { buffer: this.stones };
+        case 23:
+          return { buffer: this.coverUniform };
+        case 24:
+          return { buffer: this.coverCells };
+        case 25:
+          return { buffer: this.coverHeights };
+        case 26:
+        case 27:
+          return { buffer: this.coverInst };
         case 19:
           return { buffer: this.trample };
         default:
@@ -825,14 +978,26 @@ export class CharacterRenderer {
       pass.setBindGroup(0, group(this.stonesClamp, "stones-clamp", [4, 13]));
       pass.dispatchWorkgroups(1);
       pass.end();
-      // (the blades drawn, read back a few times a second — never waited for)
-      if (!this.countsBusy && performance.now() - this.countsAt > 250) {
-        enc.copyBufferToBuffer(this.commands, 0, this.countsStage, 0, 64);
-        readCounts = true;
-      }
+    }
+    if (this.coverOn) {
+      // (VIPER B5) the low cover's clumps grown on its lattice (its draw's count reset first)
+      this.d.queue.writeBuffer(this.commands, 64, this.coverReset);
+      const pass = enc.beginComputePass({ ...prof.pass("low cover: clumps") });
+      pass.setPipeline(this.coverGrow);
+      pass.setBindGroup(0, group(this.coverGrow, "cover-grow", [0, 4, 23, 24, 25, 26]));
+      pass.dispatchWorkgroups(Math.ceil(COVER_LATTICE / 8), Math.ceil(COVER_LATTICE / 8));
+      pass.setPipeline(this.coverClamp);
+      pass.setBindGroup(0, group(this.coverClamp, "cover-clamp", [4, 23]));
+      pass.dispatchWorkgroups(1);
+      pass.end();
+    }
+    // (the blades, stones and clumps drawn, read back a few times a second — never waited for — once all are grown)
+    if ((this.grassOn || this.coverOn) && !this.countsBusy && performance.now() - this.countsAt > 250) {
+      enc.copyBufferToBuffer(this.commands, 0, this.countsStage, 0, 80);
+      readCounts = true;
     }
     const pass = enc.beginRenderPass({
-      ...prof.pass(this.grassOn ? "character and grass HDR" : "character HDR"),
+      ...prof.pass(this.grassOn || this.coverOn ? "character and grass HDR" : "character HDR"),
       colorAttachments: [
         { view: target.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "load", storeOp: "store" },
         { view: this.occluderTex!.createView(), clearValue: [0, 0, 0, 0], loadOp: "clear", storeOp: "store" },
@@ -861,6 +1026,13 @@ export class CharacterRenderer {
       pass.setVertexBuffer(0, this.stoneMesh);
       pass.drawIndirect(this.commands, 48);
     }
+    if (this.coverOn) {
+      // (VIPER B5) the low cover, opaque, its depth written
+      pass.setPipeline(this.coverDraw);
+      pass.setBindGroup(0, group(this.coverDraw, "cover-draw", [0, 1, 5, 6, 9, 12, 23, 27]));
+      pass.setVertexBuffer(0, this.stoneMesh);
+      pass.drawIndirect(this.commands, 64);
+    }
     if (this.grassOn) {
       // (far to near: the near blades' soft edges blend over the far ones; only the nearest level writes depth —
       // the far levels' blades are thin and many, their order unknown: tested against the astronaut alone)
@@ -888,6 +1060,7 @@ export class CharacterRenderer {
           this.countsStage.unmap();
           this.bladeCounts = [n[1]!, n[5]!, n[9]!];
           this.stoneCount = Math.min(n[13]!, STONE_CAPACITY);
+          this.coverCount = Math.min(n[17]!, COVER_CAPACITY);
           done();
         }, done),
       done,
