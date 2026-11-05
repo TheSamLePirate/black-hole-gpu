@@ -15188,6 +15188,14 @@ override CSM_HALF_M: f32 = 40000.0;
 // them whenever its frame moved: its centre by a tenth of a texel, the Sun by 0.02°, or none the frame before (its table's
 // head, the frame before's, read back); 1: every row every frame, as before)
 override CSM_EVERY: u32 = 4u;
+// (the clouds' signature the map was made with — the weather's layers, the map's clouds' opacity —: a change, the map whole)
+// (quantised — the cover by 5 %, the optical depth by 1, the weather's weight by 0.1; not the bases, the ground under the
+// camera in them —: the real weather's hours, eased in, and the flight over the relief do not wake it every frame)
+fn csmWeatherKey() -> f32 {
+  var k = round(P.earth2.y * 20.0) * 7.0 + round(P.wx[0].x * 10.0) * 3.0;
+  for (var i = 1u; i < 4u; i++) { k += (round(P.wx[i].z * 20.0) * 11.0 + round(P.wx[i].w) * 0.17) * f32(i); }
+  return fract(k * 0.618034) * 1000.0;
+}
 // (the map's table — gpu-tables.ts TABLE_CSM —: its head the frame before, the kernel's own reference)
 const TABLE_CSM_OFF = 921779u;
 @compute @workgroup_size(8, 8)
@@ -15230,7 +15238,9 @@ fn cloudShadow(@builtin(global_invocation_id) gid: vec3u) {
         let prevT = bodies[TABLE_CSM_OFF + 3u];
         // (the centre compared in the map's plane — its snapped texel —, not in space: it slides along the light as the camera flies)
         let dc = vec2f(dot(prevC.xyz - C, right), dot(prevC.xyz - C, upP)) / texel;
-        let still = prevT.w > 0.5 && all(abs(dc) < vec2f(0.1)) && length(prevT.xyz - toward) < 3.5e-4;
+        // (and the clouds the same — the weather's layers, the map's opacity —: a change of weather all of it at once)
+        let still = prevT.w > 0.5 && all(abs(dc) < vec2f(0.1)) && length(prevT.xyz - toward) < 3.5e-4 &&
+          abs(bodies[TABLE_CSM_OFF + 1u].w - csmWeatherKey()) < 1e-3;
         // (by bands of 8 rows — a workgroup's —, not rows: a row in four left every SIMD group a lane marching, the others idle beside
         // it — on an M1 no gain at all)
         if (CSM_EVERY > 1u && still && (gid.y / 8u) % CSM_EVERY != P.frame.x % CSM_EVERY && !(gid.x == 0u && gid.y == 0u)) { return; }
@@ -15302,7 +15312,7 @@ fn cloudShadow(@builtin(global_invocation_id) gid: vec3u) {
   textureStore(csmOut, vec2i(gid.xy), outv);
   if (gid.x == 0u && gid.y == 0u) {
     textureStore(csmHead, vec2i(0, 0), vec4f(C, half));
-    textureStore(csmHead, vec2i(1, 0), vec4f(right, 0.0));
+    textureStore(csmHead, vec2i(1, 0), vec4f(right, csmWeatherKey()));
     textureStore(csmHead, vec2i(2, 0), vec4f(upP, 0.0));
     textureStore(csmHead, vec2i(3, 0), vec4f(toward, select(0.0, 1.0, on)));
   }
