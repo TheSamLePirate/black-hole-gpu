@@ -15,6 +15,7 @@ import { readPng } from "./lib/png";
 // (its true height raised 0.2°), a 1.5° field, frozen, no bloom nor flare; at each, the Moon's height over its width (its
 // pixels redder than blue over 45 % of the reddest) and where it is widest. Then: does the model reach 0.55, and with the photo's
 // shape (widest low)? MO_OUT: the shots (remote-results/iss-moonset).
+// MO_STEPS="0,…" some steps alone; MO_JS a statement run first (an A/B's switch).
 // Duration: ~4 min on this Mac.
 // Done when: every step shot and measured, the flattest the model draws logged against the photo's, no GPU error.
 const OUT = process.env.MO_OUT ?? "remote-results/iss-moonset";
@@ -65,7 +66,15 @@ test.skipIf(!E2E)(
       console.log(
         `  the Moon at ${ISO}: azimuth ${az0.toFixed(2)}° from the nadir given; on the limb (${dip.toFixed(2)}°) ${km0} km towards it`,
       );
-      for (let step = -6; step <= 6; step++) {
+      const steps = process.env.MO_STEPS ? process.env.MO_STEPS.split(",").map(Number) : [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6];
+      if (process.env.MO_JS) await app.js(`(() => { ${process.env.MO_JS} return 1; })()`);
+      // (the layered air's tables published before any shot — before them the exponential air's: the Moon barely flattened)
+      await app.js(`(() => { __bh.viewAt(${LAT}, ${LON}, { altM: ${ALT}, heading: 0, pitch: 0, fov: ${FOV} }); return 1; })()`);
+      await app.waitFor(`__bh.renderer.refrPublished !== ""`, 60_000);
+      // (a first placement not measured: the first shot after the boot showed the Moon unflattened — the layered air's bending
+      // in from the next one)
+      for (const [n, step] of [steps[0]!, ...steps].entries()) {
+        const warm = n === 0;
         // (10 km steps about the limb's point along the Moon's azimuth — towards it the Moon higher)
         const p = along(km0 + step * 10);
         // (aimed at its true height raised 0.2° — the limb's bending ≤ 0.6°, the field 1.5°: the Moon in it whatever its lift)
@@ -130,6 +139,10 @@ test.skipIf(!E2E)(
           widest: maxY >= 0 ? +((wy - minY) / H).toFixed(2) : 0,
           px: W,
         };
+        if (warm) {
+          await app.js(`(() => { __bh.freeze(false); return 1; })()`);
+          continue;
+        }
         rows.push(row);
         console.log(
           `  step ${step} (${km0 + step * 10} km): the Moon at ${row.alt}° true, H/W ${row.hw}, widest at ${row.widest} from its top, ${W} px wide`,
