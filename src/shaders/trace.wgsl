@@ -10371,6 +10371,31 @@ struct CloudVol { alpha: f32, cl: vec3f, t: f32, ta: f32 };
 // eccentricities scaled by c (the multiple-scattering octaves: rounder)
 fn hgPhase(g: f32, ct: f32) -> f32 { return (1.0 - g * g) / (4.0 * PI * pow(max(1.0 + g * g - 2.0 * g * ct, 1e-4), 1.5)); }
 fn cloudPhase(ct: f32, c: f32) -> f32 { return 0.65 * hgPhase(0.8 * c, ct) + 0.35 * hgPhase(-0.2 * c, ct); }
+// Q5 VIPER C4 — the glory: the droplets' backscatter round the antisolar point, coloured rings — Laven's (2005) J₀² + J₂² of the
+// size parameter x θ (θ from the antisolar point; droplets of 10 µm: x 97, 114, 140 at 650, 550, 450 nm — the first red ring
+// ~1.5°), their rings washed out past ~4° by the sizes' spread; its centre ~8 times the droplets' smooth back lobe [1/sr].
+// TUNE_GSKIP 67108864: none, as before.
+fn besselJ01(z: f32) -> vec2f {
+  if (z < 3.0) {
+    let z2 = z * z;
+    return vec2f(1.0 - z2 / 4.0 + z2 * z2 / 64.0 - z2 * z2 * z2 / 2304.0, z * (0.5 - z2 / 16.0 + z2 * z2 / 384.0));
+  }
+  let a = sqrt(2.0 / (PI * z));
+  return a * vec2f(cos(z - 0.25 * PI), cos(z - 0.75 * PI));
+}
+fn gloryPhase(ct: f32) -> vec3f {
+  if ((TUNE_GSKIP & 67108864u) != 0u || ct > -0.99) { return vec3f(0.0); }
+  let th = acos(clamp(-ct, -1.0, 1.0));
+  var g = vec3f(0.0);
+  let x = vec3f(96.7, 114.2, 139.6);
+  for (var c = 0u; c < 3u; c++) {
+    let z = x[c] * th;
+    let j = besselJ01(z);
+    let j2 = select(0.0, 2.0 * j.y / z - j.x, z > 1e-3);
+    g[c] = j.x * j.x + j2 * j2;
+  }
+  return 0.12 * g * exp(-th * th / (0.07 * 0.07));
+}
 
 // Cirrus: a shell of ice at 9 km, in streaks along the jet streams (between ~25° and 65° of latitude)
 // and the anvils over the tropics' convergence, drifting with the weather; x: its opacity at q (its
@@ -10483,7 +10508,7 @@ fn cloudVolume(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, 
   let ct = dot(airPhysicalDirection(rd), physicalLs);
   // (the droplets' phase function two-lobed — the silver lining round the sun, a glow away from it —, and
   // the light scattered many times as octaves of it, each fainter, rounder, less dimmed: Wrenninge 2015)
-  let hg = cloudPhase(ct, 1.0);
+  let hg = cloudPhase(ct, 1.0) + gloryPhase(ct);
   let ms1 = cloudPhase(ct, 0.5) * 4.0 * PI;
   let ms2 = cloudPhase(ct, 0.25) * 4.0 * PI;
   let ms3 = cloudPhase(ct, 0.125) * 4.0 * PI;
@@ -10741,7 +10766,7 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
   let physicalLs = airPhysicalDirection(Ls);
   let stepM = EARTH_RM * airRayScale(rd);
   let ct = dot(airPhysicalDirection(rd), physicalLs);
-  let hg = cloudPhase(ct, 1.0);
+  let hg = cloudPhase(ct, 1.0) + gloryPhase(ct);
   let ms1 = cloudPhase(ct, 0.5) * 4.0 * PI;
   let ms2 = cloudPhase(ct, 0.25) * 4.0 * PI;
   let ms3 = cloudPhase(ct, 0.125) * 4.0 * PI;
