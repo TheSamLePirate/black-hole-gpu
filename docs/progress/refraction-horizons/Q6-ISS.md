@@ -719,3 +719,12 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   zénith de l'extrémité extérieure de Bartolomeo. Les rayons du bas de l'image ne rencontrent presque plus de structure
   (1 %), et le haut gauche reste plein de structure, comme sur le direct. Vu dans le jeu : la Terre dégagée en bas à droite,
   la structure à gauche, le Dragon au centre à 9,6 m, 8,0° au-dessus de l'axe (direct : 6,3°). Planches mises à jour.
+- **Les plans serrés de l'amarrage examinés (même jour)** : comparaison du plan large de 03:21 et du plan serré de 04:20 sur les
+  mêmes objets, mesurés en pixels sur des grilles.
+  - Le drapeau de la capsule grandit d'environ ×1,15, le corps de la capsule de ×1,45, et le cône du nez rétrécit (×0,8). Le
+    Dragon passe aussi du centre au bas gauche de l'image.
+  - Le plan serré n'est donc pas un simple zoom de la même visée. C'est surtout une autre orientation, peut-être un autre
+    point de vue, avec un grossissement modeste d'environ ×1,2.
+  - Un facteur de zoom unique ne le décrirait pas, et son calage demanderait plusieurs plans serrés et leur limbe : celui de
+    04:20 est trop court derrière la capsule (résidu d'environ 40 px). Ce plan n'est donc **pas modélisé** ; le registre ne
+    garde que le plan large.
