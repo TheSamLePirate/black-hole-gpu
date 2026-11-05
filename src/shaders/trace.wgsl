@@ -8385,6 +8385,34 @@ fn snowLineAt(lat: f32) -> f32 {
   return mix(1500.0, 500.0, clamp((lat - 60.0) / 12.0, 0.0, 1.0));
 }
 
+// (Q7 L9) The winter's snow line [m]: the summer's in the tropics, ~900 m at 46°, the sea's level by 60°
+fn snowWinterAt(lat: f32) -> f32 {
+  if (lat < 25.0) { return snowLineAt(lat); }
+  if (lat < 46.0) { return mix(4500.0, 900.0, (lat - 25.0) / 21.0); }
+  if (lat < 60.0) { return mix(900.0, 0.0, (lat - 46.0) / 14.0); }
+  return -200.0;
+}
+// (Q7 L9) The season's snow on the near ground — the traced ground's (earthGround) and the raster's (shadeLite) alike: the snow
+// line slid from the summer's (snowLineAt) towards the winter's by the season — the Sun's declination, from its direction Ls on
+// the body's axes (z the pole): winter where it stands on the other hemisphere's side —, ragged, off the steep faces; less the
+// permanent snow the photographs already hold (the summer line's): the season's alone, 0…1. The roads and the runways drawn
+// after it — cleared. TUNE_SC_SKIP 1024: none, as before — the A/B. (No lag: the snowpack's spring is not modelled)
+fn seasonSnow(gq: vec3f, n: vec3f, hM: f32, Ls: vec3f, A: vec3f) -> f32 {
+  if ((TUNE_SC_SKIP & 1024u) != 0u) { return 0.0; }
+  let lat = abs(asin(clamp(gq.z, -1.0, 1.0))) * 57.29578;
+  let sd = clamp(Ls.z / max(length(Ls), 1e-6) / 0.3978, -1.0, 1.0);
+  let winter = smoothstep(0.2, 0.9, clamp(0.5 - 0.5 * sd * select(-1.0, 1.0, gq.z >= 0.0), 0.0, 1.0));
+  let rag = 200.0 * gnoise(gq * 3000.0);
+  let summer = snowLineAt(lat) + rag;
+  let line = mix(summer, snowWinterAt(lat) + rag, winter);
+  let flat = 1.0 - smoothstep(0.25, 0.5, 1.0 - clamp(dot(n, gq), 0.0, 1.0));
+  let cover = smoothstep(line - 150.0, line + 150.0, hM) * flat;
+  let perm = smoothstep(summer - 250.0, summer + 250.0, hM) * flat;
+  // (a forest under it — dark and green in the photograph: its crowns hold little, the snow on its floor half hidden — a third)
+  let forest = smoothstep(0.12, 0.05, luminance(A)) * smoothstep(0.0, 0.02, A.g - 0.5 * (A.r + A.b));
+  return max(cover - perm, 0.0) * mix(1.0, 0.33, forest);
+}
+
 // The sea's wind at 10 m [m/s] and the way it blows (a unit tangent at q, the Earth's axes): the
 // climatology's zonal belts over the oceans — the doldrums' 5 m/s, the trades' 7 from the east, the
 // horse latitudes' lull, the westerlies' 9–11 (the Southern Ocean's roaring forties the strongest), the
@@ -10071,6 +10099,11 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
     A *= mix(vec3f(1.0), earthCover(q, A, n, hG, footM), k);
     A = mix(A, vec3f(0.16, 0.145, 0.13) * (0.8 + 0.4 * gnoise(q * 40000.0)), rock * k);
     A = mix(A, vec3f(0.82, 0.84, 0.88), snow * k);
+  }
+  // (Q7 L9: the season's snow over the near ground — the photographs' too: theirs is a summer's —, before the roads and runways)
+  if (footM < texelM && ocean < 1.0) {
+    let kS = smoothstep(texelM, 0.3 * texelM, footM) * (1.0 - ocean);
+    A = mix(A, vec3f(0.82, 0.84, 0.88), seasonSnow(gq, n, hG, Ls, A) * kS);
   }
   if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, footM), surface.w * (1.0 - img.o)); }
   A=mix(A,osm.color,osm.cover*(1.0-img.o));
@@ -14807,6 +14840,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // the water's left to its pass; liteSkip 134217728: off)
   // (the same walk the streets' night lights read — once; by day only where a road is a pixel or more: a footprint under 12 m,
   // 4 km at most — measured, the walk on every ground pixel +1.1 ms in La Mancha —; liteSkip's bit: neither, its cost measured)
+  // (Q7 L9: the season's snow, as the traced ground's — before the map's roads and the runways, cleared)
+  if (!mesh && !isTree) { A = mix(A, vec3f(0.82, 0.84, 0.88) * P.earth2.z, seasonSnow(gq, n, max(airHeight(ph) - geoidN(gq), 0.0), Ls, A / max(P.earth2.z, 1e-6))); }
   var sv = ScenerySurface(vec3f(0.0), 0.0, 0.0);
   if (HAS_SCENERY && !mesh && !isTree && (liteSkip() & 134217728u) == 0u) {
     // (the exact walk near — its stripes, sleepers, edges' antialiasing — and at night — its kinds for the streets' lights —;
