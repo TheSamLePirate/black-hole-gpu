@@ -8595,8 +8595,16 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private csmWrite: GPUBindGroup | null = null;
   private csmTableOn = false;
   private csmBind0?: { t: Target; bind: GPUBindGroup };
+  /** (Q5 P8) the clouds' shadow map's rows refreshed one in csmEvery a frame, in turn — all of them when its frame moves
+   *  (trace.wgsl CSM_EVERY) —; 1: every row every frame, as before (an A/B: the pipeline made again) */
+  csmEvery = 4;
+  private csmPipeEvery = 0;
   private encodeCloudShadow(enc: GPUCommandEncoder, t: Target) {
     const d = this.device;
+    if (this.csmPipe && this.csmPipeEvery !== this.csmEvery) {
+      this.csmPipe = null;
+      this.csmWanted = false;
+    }
     if (!this.cloudShadow || !this.cloudShadowOn || !this.lastNear || !this.nearEarthNow) {
       if (this.csmTableOn) d.queue.writeBuffer(this.bodyBuf, TABLE_CSM * 16, new Float32Array(CSM_VEC4S * 4));
       this.csmTableOn = false;
@@ -8635,12 +8643,14 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
                 HAS_WX: 1,
                 QUALITY_PIPELINE: 0,
                 CSM_HALF_M,
+                CSM_EVERY: this.csmEvery,
               },
             },
           })
           .then(
             (p) => {
               this.csmPipe = p;
+              this.csmPipeEvery = this.csmEvery;
               gpuDiagnostics.record("pipeline-compiled", `clouds' shadow map: ${((performance.now() - t0) / 1000).toFixed(1)} s`);
             },
             (e) => console.warn("Clouds' shadow map unavailable:", e),

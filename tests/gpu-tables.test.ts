@@ -42,6 +42,7 @@ import {
   TABLE_REFR,
   TABLE_TLUT,
   TABLE_CLV,
+  TABLE_CSM,
   TABLE_WXGRID,
   TLUT_VEC4S,
   WXGRID_VEC4S,
@@ -79,6 +80,7 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(constU("WXGRID_OFF")).toBe(TABLE_WXGRID);
   expect(TABLE_CLV).toBe(TABLE_WXGRID + WXGRID_VEC4S);
   expect(constU("CLV_OFF")).toBe(TABLE_CLV);
+  expect(constU("TABLE_CSM_OFF")).toBe(TABLE_CSM);
   expect(TABLE_VEC4S).toBe(TABLE_CLV + CLV_VEC4S);
   expect(constU("SH_BASE")).toBe(TABLE_SH);
   expect(constU("LUT_OFF")).toBe(TABLE_LUT);
