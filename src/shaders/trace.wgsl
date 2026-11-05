@@ -15084,11 +15084,13 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
   G += mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp) * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
   G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark);
-  // (Q8 D1: a wind turbine's obstruction light — red, 40 flashes a minute, every farm in step — at night)
+  // (Q8 D1: a wind turbine's obstruction light — red at night, white by day, 40 flashes a minute, every farm in step)
   if (terrainRasterLamp(centre)) {
     let on = select(0.0, 1.0, fract(P.runways[17].x / 1.5) < 0.35);
     // (a 2 kcd-class light, its block widened to a pixel and a half: its glow ~1 % of a runway lamp's per pixel: red, not burnt white)
     G += vec3f(1.0, 0.06, 0.03) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark * on;
+    // (by day the same light white — a medium-intensity flash, the same rhythm: against the daylight, a spark on the nacelle)
+    G += vec3f(1.0) * (luminance(E) / PI) * 6.0 * (1.0 - dark) * on;
   }
   // (the water — the sea, the lakes and rivers —: found here — its cover sharp, the polygon's edge alone softened; the sea's
   // mask the relief map's over the sea's level, OSM's by the coasts —, drawn by shadeWater: this pixel's surface under it left
