@@ -6,6 +6,7 @@ import { earthDetail, toHalf } from "../terrain";
 import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
 import { CANOPY_NEAR, IgnLand, tilesWithin } from "./ign-canopy";
+import { lineVolts, PYLON_MAX, PYLON_MIN_VOLTS, PYLON_REACH_M, type Pylon, pylonHeight, pylonMesh, pylonSpan } from "./pylons";
 import { fetchRange, OVERTURE_BUCKET, OVERTURE_LIST, OVERTURE_Z, overtureReleases, overtureUrl, PmTiles } from "./pmtiles";
 import {
   overtureBaseUrl,
@@ -1222,6 +1223,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (Q8 D1: the wind turbines round the centre — Overture's base theme, its latest release that answers —, their triangles after
   // the bridges'; none on any failure, the scene whole)
   const turbines: TurbineMesh[] = [];
+  const pylons: { positions: number[]; triangles: number[]; foot: [number, number, number]; h: number; along: number }[] = [];
+  const pylonAt = new Map<string, Pylon & { lat: number; lon: number; d: number }>();
   try {
     const list = await fetch(OVERTURE_LIST, { signal: AbortSignal.timeout(FETCH_MS) });
     count(list);
@@ -1255,8 +1258,65 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         if (!raw) continue;
         const layer = new VectorTile(new PbfReader(raw)).layers.infrastructure;
         if (!layer) continue;
+        const geoOf = (gx: number, gy: number, e: number) => ({
+          lon: ((t.x + gx / e) / n13) * 360 - 180,
+          lat: (Math.atan(Math.sinh(Math.PI * (1 - (2 * (t.y + gy / e)) / n13))) * 180) / Math.PI,
+        });
         for (let i = 0; i < layer.length; i++) {
           const f = layer.feature(i);
+          // (a high-voltage line: a pylon at each of its vertices inside the tile — its nodes are its towers —, its arms across
+          // the line's bearing there; a tower shared by two circuits once, the taller)
+          if (f.type === 2 && f.properties.class === "power_line" && t.d <= PYLON_REACH_M) {
+            let tags: Record<string, unknown> = {};
+            try {
+              tags = JSON.parse(String(f.properties.source_tags ?? "{}"));
+            } catch {
+              tags = {};
+            }
+            const volts = lineVolts(tags);
+            if (volts < PYLON_MIN_VOLTS) continue;
+            const e = f.extent;
+            for (const line of f.loadGeometry()) {
+              const pts = line.map((g) => {
+                const q = geoOf(g.x, g.y, e);
+                const lp = localPoint(frame, q.lat, q.lon, 0);
+                return { ...q, x: lp[0], y: lp[1], inside: g.x > 0 && g.y > 0 && g.x < e && g.y < e };
+              });
+              const h = pylonHeight(volts),
+                span = pylonSpan(volts);
+              const put = (x: number, y: number, lat: number, lon: number, along: number) => {
+                const d = Math.hypot(x, y);
+                if (d > PYLON_REACH_M) return;
+                const key = `${Math.round(x / 3)},${Math.round(y / 3)}`;
+                const had = pylonAt.get(key);
+                if (!had || had.h < h) pylonAt.set(key, { x, y, h, along, lat, lon, d });
+              };
+              pts.forEach((p, k) => {
+                const a = pts[Math.max(0, k - 1)]!,
+                  b = pts[Math.min(pts.length - 1, k + 1)]!;
+                if (p.inside) put(p.x, p.y, p.lat, p.lon, Math.atan2(b.y - a.y, b.x - a.x));
+                // (along the segment to the next vertex at the span, its part inside the tile only)
+                if (k + 1 >= pts.length) return;
+                const nx = pts[k + 1]!,
+                  L = Math.hypot(nx.x - p.x, nx.y - p.y),
+                  n = Math.floor(L / span);
+                for (let j = 1; j <= n && L - j * span > 0.4 * span; j++) {
+                  const f = (j * span) / L;
+                  const gx = line[k]!.x + (line[k + 1]!.x - line[k]!.x) * f,
+                    gy = line[k]!.y + (line[k + 1]!.y - line[k]!.y) * f;
+                  if (!(gx > 0 && gy > 0 && gx < e && gy < e)) continue;
+                  put(
+                    p.x + (nx.x - p.x) * f,
+                    p.y + (nx.y - p.y) * f,
+                    p.lat + (nx.lat - p.lat) * f,
+                    p.lon + (nx.lon - p.lon) * f,
+                    Math.atan2(nx.y - p.y, nx.x - p.x),
+                  );
+                }
+              });
+            }
+            continue;
+          }
           if (f.type !== 1 || f.properties.class !== "generator") continue;
           const g0 = f.loadGeometry()[0]?.[0];
           if (!g0) continue;
@@ -1279,11 +1339,19 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         turbines.push(m);
       }
     }
+    for (const py of [...pylonAt.values()].sort((a, b) => a.d - b.d).slice(0, PYLON_MAX)) {
+      const z0 = localPoint(frame, py.lat, py.lon, heightNow(py.lat, py.lon) ?? (await height(py.lat, py.lon)))[2];
+      const m = pylonMesh(py, z0);
+      const bytes = m.positions.length * 4 + m.triangles.length * 4 + (m.triangles.length / 3) * 4 + 32;
+      if (storedBytes + bytes > budget - 2 * 1024 * 1024) break;
+      storedBytes += bytes;
+      pylons.push({ ...m, foot: [py.x, py.y, z0], h: py.h, along: py.along });
+    }
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`turbines: ${String(e).slice(0, 200)}`);
   }
   phase("turbines");
-  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget, decals, turbines);
+  const buffer = packScenery(prims, pixels, keptSurfaces, { frame: ff, cells, trees }, N, budget, decals, turbines, pylons);
   return {
     id: q.id,
     lat: q.lat,
@@ -1297,6 +1365,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     overtureBuildings,
     overtureTiles: overtureTileCount,
     turbines: turbines.length,
+    pylons: pylons.length,
     surveyRequests: land?.requests ?? 0,
     // (a block failed: its trees the land cover's — the scene not degraded for it)
     surveyError: land?.errors[0] ?? surveyErrors[0],

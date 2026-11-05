@@ -7968,6 +7968,7 @@ fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterTurbine(px: vec2f) -> bool { return false; }
+fn terrainRasterPylon(px: vec2f) -> bool { return false; }
 fn terrainRasterBridge(px: vec2f) -> bool { return false; }
 fn terrainRasterLevelStep(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterSeam(px: vec2f) -> f32 { return 0.0; }
@@ -14941,6 +14942,11 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (Q8 D1: a wind turbine — its tower, nacelle and blades: a white matte paint, no windows)
   if (terrainRasterTurbine(centre)) {
     A = vec3f(0.7, 0.71, 0.72) * P.earth2.z;
+    glass = 0.0;
+  }
+  // (a pylon: galvanised steel, weathered)
+  if (terrainRasterPylon(centre)) {
+    A = vec3f(0.33, 0.34, 0.35) * P.earth2.z;
     glass = 0.0;
   }
   // (Q7 L9: the season's snow on what stands — the roofs facing up, the tops of the trees' crowns — as on the ground about

@@ -398,7 +398,7 @@ export class EarthScenery {
   }
   /** (Q8 D1) the wind turbines drawn — Overture's too (its credit shown) */
   get turbines() {
-    return this.data?.turbines ?? 0;
+    return (this.data?.turbines ?? 0) + (this.data?.pylons ?? 0);
   }
   get active() {
     return !!this.data && this.mode !== "off";
@@ -441,6 +441,8 @@ export class EarthScenery {
       overtureTiles: d?.overtureTiles ?? 0,
       /** (Q8 D1) the wind turbines drawn */
       turbines: d?.turbines ?? 0,
+      /** (Q8 D1) the high-voltage pylons drawn */
+      pylons: d?.pylons ?? 0,
       /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */
       forestCells: d?.forestCells ?? 0,
       forestCellM: d?.forestCellM ?? 0,

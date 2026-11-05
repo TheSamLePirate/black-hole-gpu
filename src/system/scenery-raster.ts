@@ -515,7 +515,7 @@ fn meshVertex(vi: u32) -> vec3f {
     let tg = bitcast<u32>(scenery[(t - vi + u32(scenery[2].w) * 3u + tri) / 4u][(t - vi + u32(scenery[2].w) * 3u + tri) % 4u]);
     let hi = tg & 0xffff0000u;
     if (hi == 0xfffe0000u || hi == 0xfffd0000u) {
-      let r = u32(scenery[3].z) + u32(scenery[2].w) + 3u * (tg & 0xffffu);
+      let r = u32(scenery[3].z) + u32(scenery[2].w) + 1u + 3u * (tg & 0xffffu);
       if (hi == 0xfffe0000u) {
         let h = scenery[r];
         let ax = scenery[r + 1u];
@@ -540,7 +540,7 @@ fn meshVertex(vi: u32) -> vec3f {
 // written — after their boxes, before nothing —, the pixel's distance in r and b as the ground's, a 3: trace.wgsl shadeLite
 // draws them with its material, not the kernel shade's rays
 // (bridge: a bridge's part's triangle — past the buildings' in the mesh —, coded bridgeMesh — terrainRasterBridgeMesh)
-struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) @interpolate(flat) bridge: f32, @location(2) @interpolate(flat) leaf: f32 };
+struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) @interpolate(flat) bridge: f32, @location(2) @interpolate(flat) leaf: f32, @location(3) pyl: vec4f };
 // a building triangle's leaf (packScenery: after the triangles, its record's offset from geomOffset) + 1; 0 a bridge's
 fn meshTag(tri: u32) -> u32 {
   let t = u32(scenery[3].z) * 4u + u32(scenery[2].w) * 3u + tri;
@@ -554,9 +554,22 @@ fn meshLeaf(tri: u32) -> f32 {
   var o: MV;
   // (bridge: 0 a building's triangle, 1 a bridge's, 2 a wind turbine's — Q8 D1, packScenery's TURBINE_TAG)
   let past = vi / 3u >= u32(scenery[3].w);
-  o.bridge = select(0.0, select(1.0, 2.0, meshTag(vi / 3u) == 0xffffffffu), past);
+  let tg = select(0u, meshTag(vi / 3u), past);
+  o.bridge = select(0.0, select(1.0, 2.0, tg == 0xffffffffu || (tg & 0xffff0000u) == 0xfffe0000u || (tg & 0xffff0000u) == 0xfffd0000u), past);
   o.leaf = meshLeaf(vi / 3u);
-  let v = view(meshVertex(vi));
+  let wp = meshVertex(vi);
+  // (Q8 D1: a pylon — 3 —, its point in its own axes for meshFs's lattice: along its line, across, up from its foot; w its
+  // height)
+  o.pyl = vec4f(0.0);
+  if ((tg & 0xffff0000u) == 0xfffc0000u) {
+    o.bridge = 3.0;
+    let r = u32(scenery[3].z) + u32(scenery[2].w) + 1u + 3u * u32(scenery[u32(scenery[3].z) + u32(scenery[2].w)].x) + 2u * (tg & 0xffffu);
+    let f = scenery[r];
+    let a = scenery[r + 1u].x;
+    let d = wp.xy - f.xy;
+    o.pyl = vec4f(d.x * cos(a) + d.y * sin(a), -d.x * sin(a) + d.y * cos(a), wp.z - f.z, f.w);
+  }
+  let v = view(wp);
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
   return o;
@@ -564,7 +577,28 @@ fn meshLeaf(tri: u32) -> f32 {
 // (g: the building's leaf + 1 — shadeLite's material finds its walls and roof there —; 0 a bridge's part)
 @fragment fn meshFs(v: MV) -> @location(0) vec4f {
   let d = length(v.p);
-  let code = select(${RASTER_CODE.mesh}.0 + v.bridge, ${RASTER_CODE.turbine}.0, v.bridge > 1.5);
+  // (Q8 D1: a pylon's lattice — its legs at its faces' edges, a girt every 4 m, an X in each bay, members ~0.3 m — its gaps open
+  // while a member spans a pixel or more; past that its silhouette whole, no shimmer)
+  let fw = max(length(dpdx(v.pyl.xyz)), length(dpdy(v.pyl.xyz)));
+  if (v.bridge > 2.5 && fw < 0.3) {
+    let H = v.pyl.w;
+    let z = v.pyl.z;
+    let half = mix(H / 12.0, max(0.8, H / 45.0), clamp(z / H, 0.0, 1.0));
+    let aa = abs(v.pyl.x);
+    let cc = abs(v.pyl.y);
+    // (on the body, not an arm nor the top)
+    if (max(aa, cc) < half + 0.3 && z < H - 0.2) {
+      let s = select(v.pyl.y, v.pyl.x, cc > aa);
+      let m = 0.15 + fw;
+      let leg = half - abs(s) < 2.0 * m;
+      let girt = fract(z / 4.0) * 4.0 < 2.0 * m;
+      let f = fract(z / 4.0);
+      let x1 = abs(s / half - (2.0 * f - 1.0)) * half < m * 1.4;
+      let x2 = abs(s / half - (1.0 - 2.0 * f)) * half < m * 1.4;
+      if (!(leg || girt || x1 || x2)) { discard; }
+    }
+  }
+  let code = select(select(${RASTER_CODE.mesh}.0 + v.bridge, ${RASTER_CODE.turbine}.0, v.bridge > 1.5), ${RASTER_CODE.pylon}.0, v.bridge > 2.5);
   return vec4f(d, v.leaf, d, code * ${RASTER_CODE_SCALE}.0);
 }
 // The buildings without triangles — the far ones, past BUILDING_MESH_M — as their boxes, solid (no margin, the top flat), turned
