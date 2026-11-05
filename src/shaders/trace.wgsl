@@ -15228,7 +15228,9 @@ fn cloudShadow(@builtin(global_invocation_id) gid: vec3u) {
         // (P8: this row's turn, or the frame moved since the last — the head the frame before wrote)
         let prevC = bodies[TABLE_CSM_OFF];
         let prevT = bodies[TABLE_CSM_OFF + 3u];
-        let still = prevT.w > 0.5 && length(prevC.xyz - C) < 0.1 * texel && length(prevT.xyz - toward) < 3.5e-4;
+        // (the centre compared in the map's plane — its snapped texel —, not in space: it slides along the light as the camera flies)
+        let dc = vec2f(dot(prevC.xyz - C, right), dot(prevC.xyz - C, upP)) / texel;
+        let still = prevT.w > 0.5 && all(abs(dc) < vec2f(0.1)) && length(prevT.xyz - toward) < 3.5e-4;
         // (by bands of 8 rows — a workgroup's —, not rows: a row in four left every SIMD group a lane marching, the others idle beside
         // it — on an M1 no gain at all)
         if (CSM_EVERY > 1u && still && (gid.y / 8u) % CSM_EVERY != P.frame.x % CSM_EVERY && !(gid.x == 0u && gid.y == 0u)) { return; }
