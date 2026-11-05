@@ -15,7 +15,8 @@ import { readPng } from "./lib/png";
 // (its true height raised 0.2°), a 1.5° field, frozen, no bloom nor flare; at each, the Moon's height over its width (its
 // pixels redder than blue over 45 % of the reddest) and where it is widest. Then: does the model reach 0.55, and with the photo's
 // shape (widest low)? MO_OUT: the shots (remote-results/iss-moonset).
-// MO_STEPS="0,…" some steps alone; MO_JS a statement run first (an A/B's switch).
+// MO_STEPS="0,…" some steps alone; MO_JS a statement run first (an A/B's switch); MO_LOCK the
+// exposure held after the warm-up (the Moon's brightness compared between steps).
 // Duration: ~4 min on this Mac.
 // Done when: every step shot and measured, the flattest the model draws logged against the photo's, no GPU error.
 const OUT = process.env.MO_OUT ?? "remote-results/iss-moonset";
@@ -140,6 +141,9 @@ test.skipIf(!E2E)(
           px: W,
         };
         if (warm) {
+          // (MO_LOCK: the exposure held from here — the Moon's brightness compared between steps: the limb's transmission)
+          if (process.env.MO_LOCK)
+            await app.js(`(() => { __bh.settings.autoExposure = false; __bh.settings.exposure = __bh.renderer.autoEV; return 1; })()`);
           await app.js(`(() => { __bh.freeze(false); return 1; })()`);
           continue;
         }
