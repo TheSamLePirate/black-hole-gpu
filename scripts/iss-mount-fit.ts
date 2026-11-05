@@ -120,7 +120,8 @@ const results: { m: Vec3; mirror: boolean; iou: number }[] = [];
 for (let x = box[0]!; x <= box[1]! + 1e-9; x += step)
   for (let y = box[2]!; y <= box[3]! + 1e-9; y += step)
     for (let z = box[4]!; z <= box[5]! + 1e-9; z += step)
-      for (const mirror of process.env.MOUNT_DIRECT ? [false] : [false, true]) results.push({ m: [x, y, z], mirror, iou: score([x, y, z], mirror) });
+      for (const mirror of process.env.MOUNT_DIRECT ? [false] : [false, true])
+        results.push({ m: [x, y, z], mirror, iou: score([x, y, z], mirror) });
 results.sort((a, b) => b.iou - a.iou);
 console.log(
   `registry mount [${fr.mount.join(", ")}]: IoU direct ${score(fr.mount, false).toFixed(3)}, mirrored ${score(fr.mount, true).toFixed(3)}`,
