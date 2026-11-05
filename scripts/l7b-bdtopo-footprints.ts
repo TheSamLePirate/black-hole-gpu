@@ -3,8 +3,10 @@ import { VectorTile } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import { bdtopoHeight, bdtopoStands, bdtopoUrl } from "./src/system/bdtopo";
 const [X18, Y18, out] = [Number(process.argv[2]), Number(process.argv[3]), process.argv[4]!];
-const z = 15, n15 = 2 ** z;
-const x15 = Math.floor(X18 / 8), y15 = Math.floor(Y18 / 8);
+const z = 15,
+  n15 = 2 ** z;
+const x15 = Math.floor(X18 / 8),
+  y15 = Math.floor(Y18 / 8);
 const raw = new Uint8Array(await (await fetch(bdtopoUrl(x15, y15))).arrayBuffer());
 const layer = new VectorTile(new PbfReader(raw)).layers.batiment!;
 const feats: { h: number; rings: number[][][] }[] = [];

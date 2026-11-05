@@ -233,7 +233,10 @@ export const CREDITS: CreditSection[] = [
         url: "https://www.openstreetmap.org/copyright",
       },
       {
-        what: { fr: "Les bâtiments hors de France, leurs toits ; les éoliennes", en: "The buildings outside France, their roofs; the wind turbines" },
+        what: {
+          fr: "Les bâtiments hors de France, leurs toits ; les éoliennes",
+          en: "The buildings outside France, their roofs; the wind turbines",
+        },
         who: "© Overture Maps Foundation (ODbL, with OpenStreetMap's; Microsoft and Google footprints)",
         url: "https://docs.overturemaps.org/attribution/",
       },

@@ -725,6 +725,7 @@ test("TARS reaches the rest of the game: the flight plan, the F-35's flights, th
   } as unknown as GameHost;
   const tools = gameTools(host),
     signal = new AbortController().signal;
+  // biome-ignore lint/suspicious/noExplicitAny: what a tool returns, read loosely in the expectations below
   const run = (name: string, a: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(a, signal) as Promise<any>;
   // (the plan: a field by its code, a place by its name, coordinates; the cruise; direct to; LNAV on)
   await run("flight_plan", { action: "add", query: "KEDW" });

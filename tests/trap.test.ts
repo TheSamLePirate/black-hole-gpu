@@ -115,7 +115,7 @@ describe("the recovery on the wires", () => {
       step(0.25);
       t += 0.25;
       if (c.trapWire && !at) at = toDeck(c.carrierNow()[0]!.P, c.netOwn()!.p);
-      if (c.trapLast && c.trapLast.wire && !c.trapRun && !c.trapWire) break;
+      if (c.trapLast?.wire && !c.trapRun && !c.trapWire) break;
     }
     const end = toDeck(c.carrierNow()[0]!.P, c.netOwn()!.p);
     return { t, ran: at ? Math.hypot(end[0] - at[0], end[2] - at[2]) : Number.NaN };
