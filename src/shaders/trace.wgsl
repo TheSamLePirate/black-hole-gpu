@@ -10700,6 +10700,9 @@ var<private> CLOUD_N: u32 = 16u;
 // the reference — every cloud on the sunbeam marched to 120 km — a storm's light biased −1 level, +14 with 4 steps (900 m: the
 // map's coarse mean density short of a tower's own), +10 before C6; an overcast's error 2.75 levels rms, 6.6 before)
 override CLOUD_NEAR_N: u32 = 6u;
+// (Q5 C10: the weather's clouds marched without the sunward march — a reflection's, a probe's, the pass off —: the sunlight's
+// optical depth the column of the layer over the point, shortened by this — the light coming in by the clouds' sides)
+override CLOUD_COLUMN_K: f32 = 0.4;
 fn wxLightTau(p: vec3f, i: u32, Ls: vec3f, rnd: f32, n: u32) -> f32 {
   var tau = 0.0;
   var d = 0.0;
@@ -10784,7 +10787,9 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     let tauUp = a * L.w * max(top - hn, 0.0) / max(top, 0.3);
     // (the cloud pass: the sunlight's optical depth marched through the layer's own density — cores dark, the gaps between
     // cumulus lit, a tower's shadow on its neighbour; else the column of its cover over the point)
-    var tauSun = 0.4 * tauUp / max(mu0, 0.12);
+    // (Q5 C10: shortened by CLOUD_COLUMN_K for a broken layer — the light coming in by the clouds' sides —, whole for an overcast
+    // — no sides: its base 1.40 times the pass's at 0.4, 0.99 whole —; a cumulus layer's base, 0.75 of the pass's, kept)
+    var tauSun = mix(CLOUD_COLUMN_K, 1.0, smoothstep(0.6, 0.95, L.z)) * tauUp / max(mu0, 0.12);
     // (and the converging kernel, the reference the realtime image is held to)
     // (Q5 C6: the near and the far apart — the march its own layer's first 3.8 km towards the Sun, the clouds' shadow map from
     // there on, every layer's, on the same sunbeam: a tower's shadow on its neighbour, an upper deck's gaps on the cumulus under
