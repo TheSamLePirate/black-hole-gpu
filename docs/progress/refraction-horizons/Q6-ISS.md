@@ -714,3 +714,8 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   - l'occupant du port est fixe (pas de suivi des visites réelles) ;
   - le zoom des plans serrés n'est pas modélisé ;
   - la caméra d'amarrage reste au statut « estimate ».
+- **Le premier plan corrigé (même jour)** : recherche sur 900 attaches (le Dragon au centre, à ±2,5° de sa hauteur dans le
+  direct ; rayons de la caméra contre le maillage de la station). La meilleure est **[14,6 ; 8,5 ; 4,4]**, sur la face côté
+  zénith de l'extrémité extérieure de Bartolomeo. Les rayons du bas de l'image ne rencontrent presque plus de structure
+  (1 %), et le haut gauche reste plein de structure, comme sur le direct. Vu dans le jeu : la Terre dégagée en bas à droite,
+  la structure à gauche, le Dragon au centre à 9,6 m, 8,0° au-dessus de l'axe (direct : 6,3°). Planches mises à jour.
