@@ -3,6 +3,7 @@
 // packed with the day — pure functions, the same in the decode worker (tile-decode-worker.ts) and, where there is none (the
 // tests), in the page. No allocation a pixel: the colours' loops write their tile's words straight.
 import type { OrthoFit } from "./national";
+import { type DelightIn, type DelightStats, delightTile } from "./ortho-delight";
 
 /** a tile's side [px] (earth-tiles.ts TILE) */
 const TILE = 256;
@@ -147,13 +148,25 @@ export type DecodeRequest =
       fit: OrthoFit | null;
       fine: boolean;
     }
-  | { id: number; op: "ortho"; blob: Blob; fit: OrthoFit };
-export type DecodeReply = { id: number; ms: number; heights?: Float32Array; words?: Uint32Array; error?: string };
+  /** (L7b's prototype — ortho-delight.ts) `delight`: the canopy under it, its cast shadows lifted before its colours */
+  | { id: number; op: "ortho"; blob: Blob; fit: OrthoFit; delight?: DelightIn };
+export type DecodeReply = {
+  id: number;
+  ms: number;
+  heights?: Float32Array;
+  words?: Uint32Array;
+  delight?: DelightStats;
+  error?: string;
+};
 
 /** The request's work, wherever it runs: the arrays it gives (to be handed over, not copied) */
-export async function decodeTile(q: DecodeRequest): Promise<{ heights?: Float32Array; words?: Uint32Array }> {
+export async function decodeTile(q: DecodeRequest): Promise<{ heights?: Float32Array; words?: Uint32Array; delight?: DelightStats }> {
   if (q.op === "terrarium") return { heights: terrariumHeights(await pixels(q.blob)) };
-  if (q.op === "ortho") return { words: orthoWords(await pixels(q.blob), q.fit) };
+  if (q.op === "ortho") {
+    const px = await pixels(q.blob);
+    const delight = q.delight ? delightTile(px, q.delight) : undefined;
+    return { words: orthoWords(px, q.fit), ...(delight ? { delight } : {}) };
+  }
   const [d, n] = await Promise.all([pixels(q.day, q.dayCrop), pixels(q.night, q.nightCrop)]);
   return { words: imageryWords(d, n, q.fit, q.fine) };
 }

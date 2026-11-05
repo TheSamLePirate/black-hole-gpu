@@ -2073,6 +2073,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "ign orthophoto aerial photographs france imagery bd ortho geoplateforme ground swisstopo swissimage switzerland",
   },
   {
+    key: "orthoDelight",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Shadows lifted from the photographs (prototype)",
+    effect: "scene",
+    help: "A prototype: over France, the IGN's finest aerial photographs (0.4–0.8 m a pixel) cleared of the shadows the trees and buildings cast when they were taken, so that only the game's own Sun casts them. Each photograph's Sun is found from the shadows the LiDAR's canopy (trees and buildings measured) would cast; the shaded ground is brightened to its sunlit neighbour's level, roofs and treetops untouched. Each photograph shows as it comes, then relit a moment later; one more request to the Géoplateforme each. Where the LiDAR has not flown, or the photograph's Sun is not found, the photograph as it is. Requires the aerial photographs.",
+    keywords: "ign orthophoto shadows delighting de-lighting relight lidar canopy prototype double shadow",
+  },
+  {
     key: "earthIgnRelief",
     type: "toggle",
     section: "sky",

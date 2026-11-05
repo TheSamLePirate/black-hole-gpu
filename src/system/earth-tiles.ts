@@ -30,6 +30,8 @@ import type { Vec3 } from "../physics";
 import { cartToGeodetic, geodeticDirAt, squashedScale, WGS84_A, WGS84_F } from "./ellipsoid";
 import { IGN_GATE_SW } from "./scenery-data";
 import { type NationalSource, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
+import { IGN_MNH } from "./ign-canopy";
+import type { DelightStats } from "./ortho-delight";
 import { type DecodeReply, type DecodeRequest, decodeTile, ORTHO_FIT, pixels as decodePixels } from "./tile-decode";
 export { EOX_FIT, eoxColour, ORTHO_FIT, orthoColour } from "./tile-decode";
 
@@ -109,6 +111,13 @@ export const ORTHO_SPAN_BIG = 8;
 export const ORTHO_PARAM_VEC4S = 3 * ORTHO_LEVELS + 2;
 /** their loads at once (the Géoplateforme answers in 0.35–0.8 s), beside the relief's */
 const ORTHO_INFLIGHT = 8;
+/** (L7b's prototype — ortho-delight.ts, settings.orthoDelight) the levels de-lit (z 17: 0.8 m, z 18: 0.4 m a pixel at 48°: a
+ *  shadow's edge resolved), the canopy's margin round a tile [px] (a 40 m tree's shadow at 45° from z 18's 96 px — 38 m —
+ *  away), its requests a second (the Géoplateforme's WMS-R: the relief's 20 and the survey's 12 beside), its tiles at once */
+export const DELIGHT_Z = 17;
+const DELIGHT_MARGIN = 96;
+const DELIGHT_RATE = 6;
+const DELIGHT_INFLIGHT = 2;
 /** where the IGN has them [°]: metropolitan France and Corsica (outside, a tile answers 404) */
 export const ORTHO_BOX = { west: -5.6, east: 9.8, south: 41.2, north: 51.2 } as const;
 export const orthoUrl = (z: number, x: number, y: number) =>
@@ -123,6 +132,13 @@ export const ignHeightUrl = (layer: string, z: number, x: number, y: number, siz
     s = (2 * C) / 2 ** z;
   const box = [x * s - C, C - (y + 1) * s, (x + 1) * s - C, C - y * s].join(",");
   return `https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLES=&CRS=EPSG:3857&BBOX=${box}&WIDTH=${size}&HEIGHT=${size}&FORMAT=image/x-bil;bits=32`;
+};
+/** a WMS-R grid over a box of level `z`'s tiles (fractional tile coordinates, row 0 the north), w × h float32 */
+export const ignBoxUrl = (layer: string, z: number, x0: number, y0: number, x1: number, y1: number, w: number, h: number) => {
+  const C = Math.PI * R,
+    s = (2 * C) / 2 ** z;
+  const box = [x0 * s - C, C - y1 * s, x1 * s - C, C - y0 * s].join(",");
+  return `https://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=${layer}&STYLES=&CRS=EPSG:3857&BBOX=${box}&WIDTH=${w}&HEIGHT=${h}&FORMAT=image/x-bil;bits=32`;
 };
 export const IGN_RGEALTI = "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES";
 /**
@@ -394,12 +410,15 @@ function cpuOf(kind: keyof typeof TILE_CPU, t0: number) {
  * the page's thread (they took 1.6 s of it in 25 s of a low flight over Paris, a tile's colours up to 9 ms). One for the page,
  * its replies by id; none (the tests, a worker refused or failed): the same work in the page.
  */
-let decoder: Worker | null | undefined;
+// (L7b's prototype: the orthophotos' de-lighting — ~0.1 s a tile — in a worker of its own, the decoding's not held behind it)
+type DecoderKind = "decode" | "delight";
+const decoders: Partial<Record<DecoderKind, Worker | null>> = {};
 const decodeWaiting = new Map<number, { ok: (r: DecodeReply) => void; no: (e: Error) => void }>();
 let decodeId = 1;
-function decodeWorker(): Worker | null {
-  if (decoder !== undefined) return decoder;
-  decoder = null;
+function decodeWorker(kind: DecoderKind = "decode"): Worker | null {
+  const had = decoders[kind];
+  if (had !== undefined) return had;
+  decoders[kind] = null;
   if (typeof Worker === "undefined" || typeof location === "undefined") return null;
   try {
     const w = new Worker(new URL("tile-decode-worker.js", location.href), { type: "module" });
@@ -407,19 +426,22 @@ function decodeWorker(): Worker | null {
     w.onerror = (e) => {
       // (failed: the waiting ones refused — their tiles asked again —, the work in the page from now)
       console.warn("Tile decode worker failed — decoding in the page:", e.message);
-      decoder = null;
+      decoders[kind] = null;
       for (const [, q] of decodeWaiting) q.no(new Error("decode worker failed"));
       decodeWaiting.clear();
     };
-    decoder = w;
+    decoders[kind] = w;
   } catch {
-    decoder = null;
+    decoders[kind] = null;
   }
-  return decoder;
+  return decoders[kind] ?? null;
 }
 type DecodeAsk = DecodeRequest extends infer Q ? (Q extends { id: number } ? Omit<Q, "id"> : never) : never;
-async function decodeOff(q: DecodeAsk): Promise<{ heights?: Float32Array; words?: Uint32Array }> {
-  const w = decodeWorker();
+async function decodeOff(
+  q: DecodeAsk,
+  kind: DecoderKind = "decode",
+): Promise<{ heights?: Float32Array; words?: Uint32Array; delight?: DelightStats }> {
+  const w = decodeWorker(kind);
   if (!w) {
     const t0 = performance.now();
     const r = await decodeTile({ ...q, id: 0 } as DecodeRequest);
@@ -788,6 +810,18 @@ export class EarthTiles {
   private orthoInflight = new Map<string, AbortController>();
   private orthoNone = new Set<string>();
   orthoLoaded = 0;
+  /** (L7b's prototype, settings.orthoDelight) the orthophotos' cast shadows lifted on the levels from DELIGHT_Z; its tiles
+   *  relit, left (by why), its worker's time, the last one's stats */
+  delightOn = false;
+  private delightWas = false;
+  readonly delightStats = { done: 0, left: {} as Record<string, number>, ms: 0, last: null as DelightStats | null };
+  private delightGate = new RateGate(DELIGHT_RATE);
+  private delightQueue: (() => Promise<void>)[] = [];
+  private delightRunning = 0;
+  /** its tiles queued or under way */
+  get delightPending(): number {
+    return this.delightQueue.length + this.delightRunning;
+  }
 
   /** where each level and orthophotos' level lives in the texture (tileLayout) */
   private layout: ReturnType<typeof tileLayout> = { levels: [], layers: 0 };
@@ -1083,6 +1117,13 @@ export class EarthTiles {
         L.key.fill(null);
         L.stale = !!L.valid;
       }
+      this.clearOrtho();
+    }
+    // (L7b's prototype switched: the orthophotos alone taken again — relit, or as they come)
+    if (this.delightOn !== this.delightWas) {
+      this.delightWas = this.delightOn;
+      this.delightQueue.length = 0;
+      for (const O of this.ortho) if (O.z >= DELIGHT_Z) O.key.fill(null);
       this.clearOrtho();
     }
     if (!c) return this.clear();
@@ -1666,6 +1707,7 @@ export class EarthTiles {
     const xw = ((x % O.n) + O.n) % O.n;
     const src = tileSource(NATIONAL, O.n, xw, y);
     let col: Uint32Array | null = null;
+    let blob: Blob | null = null;
     let none = !src;
     try {
       const res = src ? await fetch(src.orthoUrl(O.z, xw, y), { signal: ctl.signal }) : null;
@@ -1675,7 +1717,8 @@ export class EarthTiles {
       else if (!res.ok) throw new Error(`HTTP ${res.status}`);
       else {
         // (decoded and brought into the Blue Marble's colours off the page's thread — tile-decode.ts orthoWords)
-        col = (await decodeOff({ op: "ortho", blob: await res.blob(), fit: src!.fit })).words ?? null;
+        blob = await res.blob();
+        col = (await decodeOff({ op: "ortho", blob, fit: src!.fit })).words ?? null;
       }
     } catch {
       // (refused, timed out — offline —: none there this time, asked again once the window comes back to it)
@@ -1689,7 +1732,69 @@ export class EarthTiles {
     if (none) this.orthoNone.add(key);
     if (this.orthoNone.size > 4096) this.orthoNone.clear();
     this.putOrtho(O.z, x, y, col);
+    // (L7b's prototype: shown as it came, then relit once the canopy under it is in — the same tile replaced)
+    if (col && blob && this.delightOn && O.z >= DELIGHT_Z && src?.id === "ign") this.delightLater(O, x, y, blob, src.fit);
     this.requestOrtho(cx0(this.priorityLon), this.prioritySinLat);
+  }
+
+  /** (L7b's prototype) a tile's de-lighting queued, DELIGHT_INFLIGHT at a time, the newest first (the camera's) */
+  private delightLater(O: OrthoLevel, x: number, y: number, blob: Blob, fit: NationalSource["fit"]) {
+    const key = this.orthoKey(O, x, y);
+    this.delightQueue.push(async () => {
+      // (gone from its window meanwhile: nothing)
+      if (!O.key.includes(key) || !this.delightOn) return;
+      const xw = ((x % O.n) + O.n) % O.n,
+        f = DELIGHT_MARGIN / TILE,
+        n = TILE + 2 * DELIGHT_MARGIN;
+      let mnh: Float32Array | null = null;
+      for (let attempt = 0; attempt < 3 && !mnh; attempt++)
+        try {
+          await this.delightGate.take();
+          const r = await fetch(ignBoxUrl(IGN_MNH, O.z, xw - f, y - f, xw + 1 + f, y + 1 + f, n, n));
+          const b = r.ok ? await r.arrayBuffer() : null;
+          if (b && b.byteLength === n * n * 4) mnh = new Float32Array(b);
+        } catch {
+          // (refused now and then over the rate: asked again)
+        }
+      const left = (why: string) => (this.delightStats.left[why] = (this.delightStats.left[why] ?? 0) + 1);
+      if (!mnh) return void left("fetch");
+      // (the survey's no-data and the junk resampled into it: none)
+      for (let i = 0; i < mnh.length; i++) {
+        const h = mnh[i]!;
+        if (!Number.isFinite(h) || h < -100 || h > 200) mnh[i] = Number.NaN;
+      }
+      const lat = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / O.n)));
+      const mpp = (TAU * R * Math.cos(lat)) / O.n / TILE;
+      // (the Sun and k remembered by the z 13 tile around it)
+      const area = `${Math.floor((xw * 2 ** 13) / O.n)}/${Math.floor((y * 2 ** 13) / O.n)}`;
+      try {
+        const r = await decodeOff({ op: "ortho", blob, fit, delight: { mnh, n, m: DELIGHT_MARGIN, mpp, area } }, "delight");
+        const st = r.delight;
+        if (st) {
+          this.delightStats.ms += st.ms;
+          this.delightStats.last = st;
+        }
+        if (!st?.done || !r.words) return void left(st?.why ?? "none");
+        if (!O.key.includes(key) || !this.delightOn) return;
+        this.delightStats.done++;
+        this.putOrtho(O.z, x, y, r.words);
+      } catch {
+        left("decode");
+      }
+    });
+    this.delightPump();
+  }
+  private delightPump() {
+    while (this.delightRunning < DELIGHT_INFLIGHT && this.delightQueue.length) {
+      const job = this.delightQueue.pop()!;
+      this.delightRunning++;
+      void job().finally(() => {
+        this.delightRunning--;
+        this.delightPump();
+      });
+    }
+    // (a long flight's backlog: the oldest dropped)
+    if (this.delightQueue.length > 64) this.delightQueue.splice(0, this.delightQueue.length - 64);
   }
 
   /** An orthophoto's tile into its window's slot (its imagery; null: none there — the coarser levels'): its level's layer of

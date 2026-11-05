@@ -327,6 +327,7 @@ export interface Settings {
   autoWarp: boolean; // hub/manoeuvre sets warp; off: user's choice below its ceiling
   earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)
   earthTerrainCache: boolean; // experimental filtered surface cache, realtime Earth only; exact fallback otherwise
+  orthoDelight: boolean; // L7b's prototype (decision 42): the IGN's orthophotos' cast shadows lifted from the LiDAR's canopy (z 17–18; system/ortho-delight.ts), off by default
   earthOrtho: boolean; // over France, the IGN's orthophotos (0.2–0.8 m) finer than the terrain tiles' imagery (I1)
   earthOverture: boolean; // outside France, the scenery's near buildings from Overture Maps (roof shapes, heights, colours, materials, parts) instead of OSM's (docs/PLAN-BATIMENTS-AAA.md B7)
   earthIgnSilhouettes: boolean; // with the IGN's survey, its far levels' overground (MNS − MNT, z 11–13: Paris's towers, the forests' tops on the horizon — I6)
@@ -722,6 +723,7 @@ export function defaultSettings(): Settings {
     earthTerrain: true,
     earthTerrainCache: false,
     earthOrtho: true,
+    orthoDelight: false,
     earthIgnRelief: true,
     earthIgnSilhouettes: true,
     earthOverture: true,
@@ -2130,6 +2132,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthTerrain: "scene",
   earthTerrainCache: "pref",
   earthOrtho: "pref",
+  orthoDelight: "pref",
   earthIgnRelief: "pref",
   earthIgnSilhouettes: "pref",
   earthOverture: "pref",

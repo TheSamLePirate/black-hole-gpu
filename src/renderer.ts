@@ -3796,6 +3796,8 @@ export class Renderer {
       this.earthTiles.setReach(TILE_REACH[detail.reach] ?? TILE_REACH.normal);
       // (over France, the IGN's orthophotos finer than the relief's imagery — I1)
       this.earthTiles.orthoOn = s.earthOrtho;
+      // (L7b's prototype: their cast shadows lifted — decision 42)
+      this.earthTiles.delightOn = s.orthoDelight;
       // (and its relief — I2)
       this.earthTiles.reliefOn = s.earthIgnRelief;
       // (its far levels' overground — I6)
