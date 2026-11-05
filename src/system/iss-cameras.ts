@@ -41,7 +41,8 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     mount: BARTOLOMEO,
     mountFrom: "Sen: SpaceTV-1 on Airbus's Bartolomeo, on Columbus; the model's Columbus_BARTOLOMEO box (the camera's place on it unknown)",
     look: [0, 0, 1],
-    fovDeg: null,
+    // (Sen's footprint, ~240 × 180 km from ~420 km: 2 atan(120 / 420) ≈ 32° across — to be fitted on the coasts, ISS2)
+    fovDeg: 32,
     status: "estimate",
   },
   {
