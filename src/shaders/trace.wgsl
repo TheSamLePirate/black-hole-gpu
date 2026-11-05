@@ -7999,9 +7999,15 @@ fn detailRead(uv: vec2f, layer: i32, lod: f32) -> vec4f { return vec4f(0.5, 0.5,
 // END_DETAIL
 // (Q7 L8 / VIPER B3: the ground's detail scan's material for an albedo — the photograph's: green a grass, brown a soil, a bright
 // beige a gravel, a light grey a rock, a dark grey an asphalt; a road's paving its asphalt — and how much of its contrast)
-fn detailMaterial(A: vec3f, road: bool) -> vec2f {
+fn detailMaterial(A: vec3f, road: bool, cover: u32) -> vec2f {
   if (road) { return vec2f(4.0, 0.5); }
   let l = luminance(A);
+  // (the land cover where known — ESA WorldCover —: grassland, wetland, moss a grass; built-up an asphalt; bare ground a gravel or
+  // a rock by its brightness; snow and water none; trees, shrubs, crops and the unknown by the photograph's colour)
+  if (cover == 30u || cover == 90u || cover == 100u) { return vec2f(0.0, 0.55); }
+  if (cover == 50u) { return vec2f(4.0, 0.5); }
+  if (cover == 60u) { return select(vec2f(3.0, 0.35), vec2f(2.0, 0.6), l > 0.18); }
+  if (cover == 70u || cover == 80u) { return vec2f(0.0, 0.0); }
   if (A.g > A.r * 1.05 && A.g > A.b * 1.15) { return vec2f(0.0, 0.55); }
   if (A.r > A.b * 1.25) { return select(vec2f(1.0, 0.8), vec2f(2.0, 0.6), l > 0.25); }
   return select(vec2f(4.0, 0.5), vec2f(3.0, 0.35), l > 0.12);
@@ -8021,7 +8027,25 @@ fn groundDetail(xy: vec2f, fpM: f32, mat: vec2f) -> vec3f {
     let c = cos(ang[i]);
     let sn = sin(ang[i]);
     let uv = vec2f(c * xy.x - sn * xy.y, sn * xy.x + c * xy.y) / S[i];
-    let d = detailRead(uv, i32(mat.x), lod);
+    var d: vec4f;
+    // (the finest scale's repetition broken — Íñigo Quílez's "texture repetition", technique 3 —: a smooth value noise over ~20 m
+    // picks two of eight offsets and blends them; one more read)
+    if (i == 0) {
+      let p = xy / 20.0;
+      let ip = floor(p);
+      let fp = fract(p);
+      let u = fp * fp * (3.0 - 2.0 * fp);
+      let h = mix(mix(hash31(vec3f(ip, 7.0)), hash31(vec3f(ip + vec2f(1.0, 0.0), 7.0)), u.x), mix(hash31(vec3f(ip + vec2f(0.0, 1.0), 7.0)), hash31(vec3f(ip + vec2f(1.0, 1.0), 7.0)), u.x), u.y);
+      let k = h * 8.0;
+      let ia = floor(k);
+      let fa = fract(k);
+      let oa = vec2f(hash31(vec3f(ia, 1.0, 3.0)), hash31(vec3f(ia, 2.0, 3.0)));
+      let ob = vec2f(hash31(vec3f(ia + 1.0, 1.0, 3.0)), hash31(vec3f(ia + 1.0, 2.0, 3.0)));
+      let db = detailRead(uv + ob, i32(mat.x), lod);
+      d = mix(detailRead(uv + oa, i32(mat.x), lod), db, smoothstep(0.2, 0.8, fa));
+    } else {
+      d = detailRead(uv, i32(mat.x), lod);
+    }
     r *= 1.0 + w * mat.y * (d.r * 2.0 - 1.0);
     t += w * (d.gb * 2.0 - 1.0) * 0.5;
   }
@@ -14912,7 +14936,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (DETAIL_BOUND && !mesh && !isTree && fpM < 300.0 && HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[6].z > 0.5 && (liteSkip() & 2147483648u) == 0u) {
     let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
     let xy = (P.scenery[3].xyz + dL * tM).xy + P.scenery[6].xy;
-    let dd = groundDetail(xy, fpM, detailMaterial(A, sv.kind == 1.0));
+    let dd = groundDetail(xy, fpM, detailMaterial(A, sv.kind == 1.0, select(0u, surface.cover, surface.w > 0.0 || surface.cover > 0u)));
     A *= dd.x;
     // (a light tilt: a random one lowers the mean lighting — 0.6 darkened a meadow by 8 % with the ratio's clipping)
     n = normalize(n + (P.scenery[0].xyz * dd.y + P.scenery[1].xyz * dd.z) * 0.3);
