@@ -2087,7 +2087,7 @@ fn ourSegment(o: vec3f, d: vec3f, tMax: f32, out: ptr<function, WhOut>, gObs: f3
     let R = bodyRadius(k);
     let perp = c - b * d;
     let pd = length(perp);
-    let px = max(beam() * (travel + b), 1e-30);
+    let px = max(beam() * (travel + b), 1e-30) * REFR_STRETCH;
     var cov3 = vec3f(clamp((R - pd) / px + 0.5, 0.0, 1.0));
     // (PLAN-CIEL C4 — through the Earth's air each colour bent its own amount (Edlén's dispersion: red
     // 0.36 % less than the green traced, blue 0.78 % more): the disc seen a little lower in red, higher in
@@ -4047,6 +4047,7 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
   REFR_DELTA = 0.0;
   REFR_DR = 0.0;
   REFR_DB = 0.0;
+  REFR_STRETCH = 1.0;
   if (NEAR_KIND != 4u && HAS_BODIES && P.near0.w > 0.5) {
     let k = u32(P.near1.w);
     let air = hasAir(k);
@@ -11652,6 +11653,9 @@ var<private> REFR_DELTA: f32 = 0.0;
 // colour whose ray ends in the sea there: REFR_DR/DB = 10, its share of the disc none)
 var<private> REFR_DR: f32 = 0.0;
 var<private> REFR_DB: f32 = 0.0;
+// (R5: the pixel's footprint beyond a lens stretched by its bending's slope — the discs' coverage taken over it, not a
+// jittered sample landing whole in the Sun: a firefly on Venus's aureole)
+var<private> REFR_STRETCH: f32 = 1.0;
 // (refrBend: the ray seen curved into the sea by the air — what lies beyond the air hidden)
 var<private> REFR_SEA: bool = false;
 // (R2: the tables read as system/refraction-gpu.ts gpuBending reads them — the CPU's figures the image's)
@@ -11787,6 +11791,11 @@ fn planetBend(look: vec3f, k: u32) -> vec3f {
   let d2 = bodies[PREFR_OFF + 1u];
   // (d2.w > 0: the bending multiplied — a test's probe that the path runs)
   let delta = clamp(exp(mix(prefrF(i), prefrF(i + 1u), x - f32(i))) * select(1.0, d2.w, d2.w > 0.0), 0.0, 0.5);
+  // (its slope [rad/m] from the neighbouring entries, the tangent point that far from the camera [m]: the footprint across the
+  // limb stretched by 1 + L |dB/dht|)
+  let i0 = select(i - 1u, i, i == 0u);
+  let dB = (exp(prefrF(i0 + 1u)) - exp(prefrF(i0))) / max(h.z * ((f32(i0 + 1u) / f32(PREFR_GL - 1u)) * (f32(i0 + 1u) / f32(PREFR_GL - 1u)) - (f32(i0) / f32(PREFR_GL - 1u)) * (f32(i0) / f32(PREFR_GL - 1u))), 1.0);
+  REFR_STRETCH = 1.0 + max(-b, 0.0) * h.y * abs(dB);
   REFR_DELTA = delta;
   REFR_DR = -delta * d2.x;
   REFR_DB = delta * d2.y;
@@ -14085,6 +14094,7 @@ fn shade(@builtin(global_invocation_id) gid: vec3u) {
   REFR_DELTA = 0.0;
   REFR_DR = 0.0;
   REFR_DB = 0.0;
+  REFR_STRETCH = 1.0;
   LAST_OCEAN = 0.0;
   let e = earthNear(look, rnd, k);
   RHINT = 0.0;
