@@ -55,21 +55,23 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     id: "sen-horizon",
     stream: "sen",
     description: "Sen SpaceTV-1, horizon: a wide angle over the limb, looking aft, the station's structure in view now and then",
-    // (ISS2 — scripts/iss-mount-fit.ts: the structure lit over the limb in 50 frames of 5 Nov 2026 against the game's station mesh
-    // seen from a grid of mounts: the best 13.5, 12.0, 5.5 — starboard, past Bartolomeo's platform box (y 2.6–8.7) —, the
-    // picture mirrored, its intersection over union 0.78; the ten best within 0.72–0.78 all starboard, y 8.5–14.5 m: a loose fit,
-    // a thin band of sky to fit on. The box's centre had the eye inside a part, the station over the picture's top)
-    mount: [13.5, 12.0, 5.5],
-    mountFrom: "fitted on the structure over the limb (scripts/iss-mount-fit.ts): starboard of Bartolomeo's box, ±2–3 m",
+    // (ISS2/ISS5 — scripts/iss-mount-fit.ts: the structure lit over the limb in 50 frames of 5 Nov 2026 against the game's station
+    // mesh, the picture direct (the Sun's fit): near Bartolomeo — where Sen puts the camera — the best 12.5, 7.5, 7.0, its aft and
+    // outboard edge, the overlap 0.49; a mount far to port, 9.5, −2, 8.5, overlaps more (0.78) but is not where Sen says. A loose
+    // fit: the mesh's arrays at rest, a thin band of sky. The mirrored fit of before — 13.5, 12, 5.5 — went with the mirror)
+    mount: [12.5, 7.5, 7.0],
+    mountFrom: "on Bartolomeo's aft, outboard edge, fitted on the structure over the limb (scripts/iss-mount-fit.ts), the picture direct: ±2–3 m",
     // (ISS2, fitted on the limb — scripts/iss-limb-fit.py, 14 of 20 frames of 4 Nov 2026 within a few tenths: its axis 47.5° below
     // the horizontal, roll ~0°, horizontal field 95° (a pinhole, no distortion; residual 1–2 px) —; its yaw from the ground's flow —
     // scripts/iss-flow-yaw.py, 9 pairs of the dense capture of 5 Nov 2026: 180.7° (177.3–182.7), the predicted directions within
     // 1.1° of the observed —: aft, the ground streaming away towards the limb; a mirrored picture not told apart at this yaw)
-    look: unit([-Math.cos((47.5 * Math.PI) / 180), 0, Math.sin((47.5 * Math.PI) / 180)]),
-    // (the picture mirrored — the structure's fit prefers it, nine of its ten best —: its right to starboard; direct it would be to
-    // port, the ground's flow not telling the two apart)
-    right: [0, 1, 0],
-    fovDeg: 95,
+    // (ISS5, 5 Nov 2026 — the Sun through the sunset, 11:11–11:14 UTC: 23 frames, its place in the picture against its direction
+    // in the station's frame at Sen's overlaid time (SGP4 on the day's elements, NOAA's Sun) — with the limb of 10 frames before
+    // it, jointly: axis 45.5° below the horizontal, yaw 179°, roll 0°, horizontal field 91° — the limb within 2.9 px, the Sun
+    // 19.6 px —; the picture direct, its right to port: the Sun to port seen at the picture's right — mirrored, 1 470 px off)
+    look: unit([-Math.cos((45.5 * Math.PI) / 180), Math.sin((1 * Math.PI) / 180) * Math.cos((45.5 * Math.PI) / 180), Math.sin((45.5 * Math.PI) / 180)]),
+    right: [0, -1, 0],
+    fovDeg: 91,
     status: "calibrated",
     // (ISS3, 5 Nov 2026, kerr-mini: the ocean ×0.79, the clouds ×0.30 — the stream a stop brighter and far more contrasted
     // (cloud/ocean 25.7 against 9.8) —, B/G 2.01 against 1.41; a first fit)

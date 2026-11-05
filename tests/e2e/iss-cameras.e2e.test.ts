@@ -4,7 +4,7 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // Q6-ISS ISS4 — the ISS's live-stream cameras in the game (src/system/iss-cameras.ts the registry, camera/subjectcam.ts the view,
 // main.ts issCameraView the one action), by real clicks: the free camera out of the Ranger (F3) and taken to the ISS, then the
-// Camera panel's "The ISS's live cameras" — Sen's horizon (aft, 47.5° down, 95° across) and NASA's (down, 36°) —: the eye at the
+// Camera panel's "The ISS's live cameras" — Sen's horizon (aft, 45.5° down, 91° across) and NASA's (down, 36°) —: the eye at the
 // camera's mount on the station's LVLH axes, looking along its line of sight, its field across as the registry's; TARS's tool
 // takes the same action (issCamera); "Back to the view before" gives the view held before back, the ISS camera off. The scene's
 // clock is not moved by any of it.
@@ -137,7 +137,7 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
     expect(hz.eyeM).toBeLessThan(1);
     expect(hz.lookDeg).toBeLessThan(1);
     expect(hz.upDeg).toBeLessThan(1);
-    expect(Math.abs(hz.fovAcross - 95)).toBeLessThan(1.5);
+    expect(Math.abs(hz.fovAcross - (await app.js<number>(`__bh.iss.cameraFrame("sen-horizon").fovDeg`)))).toBeLessThan(1.5);
     await pick("cp-iss-nasa-harmony");
     await app.settled();
     const ns = await check("nasa-harmony");

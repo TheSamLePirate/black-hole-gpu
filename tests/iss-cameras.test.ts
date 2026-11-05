@@ -18,15 +18,15 @@ test("ISS1: the cameras' mounts and lines of sight", () => {
   // (ISS2: the horizon camera looks aft, 47.5° down — the ground's flow, scripts/iss-flow-yaw.py)
   const hz = issCamera("sen-horizon");
   expect(hz.look[0]).toBeLessThan(-0.6);
-  expect((Math.asin(hz.look[2]) * 180) / Math.PI).toBeCloseTo(47.5, 1);
+  expect((Math.asin(hz.look[2]) * 180) / Math.PI).toBeCloseTo(45.5, 1);
   // (the NASA stream's camera: down, its picture's right aft, a 36° field)
   const nasa = issCamera("nasa-harmony");
   expect(nasa.look).toEqual([0, 0, 1]);
   expect(nasa.right![0]).toBe(-1);
   expect(nasa.fovDeg).toBe(36);
-  // (the horizon's picture mirrored: its up still the zenith's side)
+  // (the horizon's picture direct — ISS5, the Sun's fit —: its up the zenith's side)
   const hf = issCameraFrame("sen-horizon");
-  expect(hf.mirrored).toBe(true);
+  expect(hf.mirrored).toBe(false);
   expect(hf.up[2]).toBeLessThan(0);
   expect(issCameraFrame("nasa-harmony").mirrored).toBe(false);
 });

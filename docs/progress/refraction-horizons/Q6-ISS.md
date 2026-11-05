@@ -534,3 +534,36 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   - la nuit (villes, aurores) ;
   - la vue nadir de Sen et la caméra d'amarrage, une fois capturées et calées ;
   - le coût de la vue ISS sur kerr-mini.
+
+## ISS5, deuxième palier : la caméra d'horizon recalée par le Soleil (le 5 novembre)
+
+- **La distorsion n'était pas la cause** (`scripts/iss-limb-fit.py --distort 1`, projection entre sténopé et fisheye
+  équidistant). À champ horizontal fixé, un barillet réduit le demi-champ vertical (31,5° → 26,7°) au lieu de l'élargir, et il
+  dégrade l'ajustement du limbe (2,1 px en sténopé contre 4,9 à 7,5 px avec barillet). Le limbe seul laisse en outre champ et
+  inclinaison se compenser : 95° et 47,5° le 4 novembre, 103 à 105° et 49 à 50° vers 11:07 le 5.
+- **Le Soleil comme mire** :
+  - pendant le coucher (11:10:48 à 11:14:13, heures incrustées par Sen), il est visible sur 23 images, en haut à droite.
+    L'e2e en relève le cœur saturé, hors du logo de Sen ;
+  - sa direction dans le repère de la station à chaque instant vient de SGP4 sur les éléments du jour et du Soleil de la
+    NOAA : à bâbord et vers l'arrière, 8 à 9° sous l'horizontale ;
+  - **le Soleil seul** donne un champ de 92°, une inclinaison de 41,5°, un lacet de 176°, un roulis de −7°, **image directe**
+    (résidu médian 10,8 px). Le registre en miroir le plaçait à 1 470 px ; en image directe, à 65 px ;
+  - **le Soleil et le limbe ensemble** (10 images de 11:05 à 11:10) donnent un **champ de 91°, une inclinaison de 45,5°, un lacet
+    de 179° et un roulis de 0°** : limbe à 2,9 px, Soleil à 19,6 px.
+- **Le miroir était une erreur** : à l'arrière, bâbord est à droite de l'image, et c'est là que le Soleil apparaît. Le choix du
+  miroir venait de l'ajustement de l'attache sur la structure, mal contraint. Il est refait en image directe : près de
+  Bartolomeo, le meilleur point est [12,5 ; 7,5 ; 7,0] (bord arrière et extérieur, recouvrement 0,49). Un point à bâbord,
+  [9,5 ; −2 ; 8,5], recouvre davantage (0,78), mais Sen place sa caméra sur Bartolomeo ; ce choix reste lâche.
+- **Reporté au registre** : `sen-horizon` avec un champ de 91°, une visée à 45,5° sous l'horizontale, un lacet de 179°, une
+  image directe (bord droit à bâbord) et cette attache. Tests mis à jour ; l'e2e lit maintenant le champ dans le registre.
+- **Vu dans le jeu (kerr-mini, 11:12:05, éléments du jour)** : la structure en haut à gauche, éclairée, au même endroit que sur
+  le direct ; le limbe au couchant en travers du haut de l'image. Le Soleil se projette en (1 749 ; 1), au bord haut, sous la
+  barre d'interface du jeu ; dans le direct, son cœur est en (1 722 ; 67).
+
+![ISS5 : la vue d'horizon de Sen dans le jeu à 11:12:05 UTC après le recalage (kerr-mini)](Q6/iss5-soleil-direct.jpg)
+
+- **Reste** :
+  - la nuit ;
+  - la vue nadir de Sen et la caméra d'amarrage, une fois capturées ;
+  - le coût de la vue ISS ;
+  - l'attitude réelle de la station (tangage de quelques degrés) n'est pas modélisée, le jeu suppose la LVLH exacte.
