@@ -25,7 +25,16 @@ export interface IssCamera {
   /** (ISS3) its picture's response against the game's neutral image: an exposure [×, before the tone map], gains by channel
    *  (display-linear, the luminance's kept), a contrast (0 … 1); fitted on the live stream against the game at the same instant,
    *  on an SDR screen (kerr-mini: the HDR one's captures go through another curve) */
-  response?: { exposure: number; gain: [number, number, number]; contrast: number; saturation?: number };
+  response?: {
+    exposure: number;
+    gain: [number, number, number];
+    contrast: number;
+    saturation?: number;
+    /** (ISS5) the exposure held [EV, the auto exposure's scale] — the camera's own, not adapting: Sen's night black */
+    fixedEV?: number;
+    /** (ISS5) the sensor's noise floor in the dark (display gamma, 0 none): the NASA camera's gain pushed at night */
+    noise?: number;
+  };
 }
 
 const unit = (v: Vec3): Vec3 => {
@@ -83,7 +92,9 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     // (second fit: the balance on the clouds — white in the stream, (147, 134, 133) in the game —, not the ocean's blue, which is
     // its content's; the first, blue ×0.73, yellowed them; contrast to its most)
     // (third: the S's saturation taken back — the ocean's chroma 93 against 54 —, a little more exposure for the clouds ×0.56)
-    response: { exposure: 2.1, gain: [0.92, 1.02, 1.01], contrast: 1, saturation: 0.6 },
+    // (ISS5, night: the stream black — its exposure the day's —, the game's adapting showed the towns: held at the day's 14.26 EV,
+    // the auto exposure's reading at 11:02 UTC in this view, the response's fit's)
+    response: { exposure: 2.1, gain: [0.92, 1.02, 1.01], contrast: 1, saturation: 0.6, fixedEV: 14.26 },
   },
   {
     id: "sen-docking",
@@ -114,7 +125,9 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     // (ISS3, 5 Nov 2026, kerr-mini: the ocean ×0.40 in luminance, R/G 0.42 against 0.54, B/G 2.19 against 1.58 — the stream
     // brighter by ~1.3 stops, warmer, less blue; a first fit)
     // (second fit: the first, 2.4 and (1.16, 0.98, 0.67), overshot — the ocean ×1.34, R/G 0.70 — through the tone curve)
-    response: { exposure: 1.9, gain: [0.93, 1.04, 0.78], contrast: 0 },
+    // (ISS5, night: the stream a magenta noise, its mean sRGB (20, 1, 14) — its gain pushed —, the game black: a noise floor in the
+    // dark; 0.045 gave a mean of 1.8, 0.27 (51, 0, 34))
+    response: { exposure: 1.9, gain: [0.93, 1.04, 0.78], contrast: 0, noise: 0.105 },
   },
 ];
 

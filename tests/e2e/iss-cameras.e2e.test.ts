@@ -111,7 +111,10 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
     console.log(
       `  Sen horizon: eye ${hz.eyeM.toFixed(2)} m off its mount, look ${hz.lookDeg.toFixed(2)}° off, up ${hz.upDeg.toFixed(2)}° off, ${hz.fovAcross.toFixed(1)}° across (${hz.issView})`,
     );
-    if (process.env.ISS_COST) console.log(`  sen-horizon: ${await frameMs()} ms a frame`);
+    if (process.env.ISS_COST)
+      console.log(
+        `  sen-horizon: ${await frameMs()} ms a frame, auto exposure ${await app.js<number>(`+__bh.renderer.autoEV.toFixed(2)`)} EV`,
+      );
     await app.shot(`${OUT}/sen-horizon.png`);
     // (ISS5: the Sun over the station's limb in the game at the shot — the station on the Earth's centre, the Sun's direction —
     // and the game's date: against SGP4 and the Sun reckoned outside)
@@ -154,7 +157,8 @@ describe.skipIf(!E2E)("the ISS's live-stream cameras", () => {
     console.log(
       `  NASA: eye ${ns.eyeM.toFixed(2)} m off its mount, look ${ns.lookDeg.toFixed(2)}° off, up ${ns.upDeg.toFixed(2)}° off, ${ns.fovAcross.toFixed(1)}° across (${ns.issView})`,
     );
-    if (process.env.ISS_COST) console.log(`  nasa: ${await frameMs()} ms a frame`);
+    if (process.env.ISS_COST)
+      console.log(`  nasa: ${await frameMs()} ms a frame, auto exposure ${await app.js<number>(`+__bh.renderer.autoEV.toFixed(2)`)} EV`);
     await app.shot(`${OUT}/nasa.png`);
     // (ISS_FLOW=1 — ISS5's motion: a second shot ISS_FLOW_S s later (the scene at real time), the ground's flow between them —
     // scripts/iss-response.py's companion, the dense capture's 10 s frames —; the clock read on both)

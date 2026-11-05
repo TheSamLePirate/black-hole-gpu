@@ -4217,7 +4217,7 @@ export class Renderer {
     this.device.queue.writeBuffer(
       this.displayBuf,
       304,
-      new Float32Array(isr ? [...isr.gain, 1, isr.exposure, isr.contrast, isr.saturation ?? 1, 0] : [1, 1, 1, 0, 1, 0, 1, 0]),
+      new Float32Array(isr ? [...isr.gain, 1, isr.exposure, isr.contrast, isr.saturation ?? 1, isr.noise ?? 0] : [1, 1, 1, 0, 1, 0, 1, 0]),
     );
     if (target === this.live) this.lookCamera = camera;
     // (the GoPro lens — Q6 I8, src/lens.ts —: its focal, its rectilinear part, its compression, the render's half-width tangent;
@@ -8148,6 +8148,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
 
   /** Exposure in use [EV]: the setting, plus the meter's with auto exposure. */
   ev(s: Settings) {
+    // (Q6-ISS ISS5: a live stream's camera holding its own exposure — Sen's: the day's, its night black —, unless measured Neutral)
+    const fixed = this.issViewNow && s.lookProfile !== "neutral" ? issCamera(this.issViewNow).response?.fixedEV : undefined;
+    if (fixed !== undefined) return s.exposure + fixed;
     return s.exposure + (s.autoExposure ? this.autoEVDrawn : 0);
   }
 

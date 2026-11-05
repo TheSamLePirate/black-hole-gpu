@@ -588,3 +588,19 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   sont pas encore séparées.
 
 ![ISS5 : la vue d'horizon de Sen dans le jeu à 11:20 UTC, de nuit — le direct est noir (kerr-mini)](Q6/iss5-nuit-sen-jeu.jpg)
+- **La réponse de nuit, faite (même jour)** :
+  - **Sen** tient son exposition (`response.fixedEV` : 14,26 EV, lue par l'exposition automatique à 11:02 UTC dans sa vue, celle
+    de l'ajustement de jour) au lieu de suivre l'exposition automatique (`renderer.ev`) ;
+  - **la NASA** a un plancher de bruit dans le noir (`response.noise`, `display.wgsl` : un bruit magenta, nouveau à chaque image,
+    qui ne monte que dans les zones sombres) ;
+  - **mesuré (kerr-mini, 11:20 UTC)** :
+    - Sen : jeu 0,0, direct 1,7 (noir) ;
+    - NASA : jeu (13,7 ; 0,1 ; 7,5) en sRGB moyen, direct (19,6 ; 1,2 ; 14,4). Les essais à 0,045 et 0,27 donnaient 1,8 et
+      (51 ; 0 ; 34) ;
+  - **de jour**, l'exposition fixe de Sen redonne la valeur ajustée. Mais avec les éléments du jour, l'ISS de 11:02 est à sa vraie
+    place, au-dessus d'une zone que la météo du jeu couvre de nuages : les statistiques d'océan de l'ajustement, faites à
+    l'ancienne position sur de l'océan dégagé, ne se comparent plus. **À refaire** : l'ajustement à la vraie position, avec une
+    météo du jeu sans nuages ou celle du jour.
+- **Le coût, deux autres mesures** (kerr-mini) : de jour 24,3 ms pour Sen et 23,6 ms pour la NASA, contre 24,8 ms autour de
+  l'ISS ; dans une autre série de jour, 53,7 et 60,2 ms contre 61,6. Le coût des vues ISS suit celui de la scène (nuages, Terre),
+  pas la vue elle-même : le +11 ms de la mesure de nuit ne se retrouve pas. **Non conclu** sur une seule série par cas.

@@ -30,7 +30,7 @@ struct Display {
                 // canopy's scratches' strength (Q6 I6 A2: the Camera profile in the cockpit, 0 none), unused
   iss: vec4f,   // (Q6-ISS ISS3) a live stream's camera's response — the view through it: its gains by channel (display-linear), on (1)
   issB: vec4f,  // its exposure [×, before the tone map], its contrast (0 none … 1: a smoothstep S in display gamma), its saturation
-                // (1 as drawn), unused
+                // (1 as drawn), its sensor's noise floor in the dark (display gamma; 0 none)
 };
 
 @group(0) @binding(0) var hdr: texture_2d<f32>;
@@ -909,6 +909,15 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     var p = pow(clamp(c, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2));
     p = mix(p, p * p * (3.0 - 2.0 * p), D.issB.y);
     p = mix(vec3f(dot(p, LUMA)), p, D.issB.z);
+    // (ISS5: a sensor's gain pushed in the dark — the NASA camera at night: a purple noise, new each frame, over the black)
+    if (D.issB.w > 0.0) {
+      let dark = 1.0 - smoothstep(0.03, 0.2, dot(p, LUMA));
+      let t = fract(D.look.w * 0.6180339) * 97.0;
+      let q = in.pos.xy;
+      let g = fract(52.9829189 * fract(dot(q + t, vec2f(0.06711056, 0.00583715))));
+      let h = fract(52.9829189 * fract(dot(q + vec2f(17.0, 41.0) + t * 1.3, vec2f(0.06711056, 0.00583715))));
+      p += vec3f(1.0, 0.06, 0.72) * D.issB.w * dark * (0.5 + 1.2 * g * h);
+    }
     c = pow(max(p, vec3f(0.0)), vec3f(2.2)) + max(c - vec3f(1.0), vec3f(0.0));
   }
   // (the Camera profile — the game's flight views: a footage grade, grain, vignette — after the tone map, in display space)
