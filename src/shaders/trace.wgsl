@@ -8003,7 +8003,15 @@ fn marchClear(A: vec3f, o: vec3f, e: f32, rd: vec3f, t: f32, fpK: f32) -> f32 {
 // (R4a, contract C0-3: the ground the camera's ray meets is the one the air lifts — the point at a distance t (the squashed
 // space's units: ×EARTH_RM ≈ metres) and h over the sea seen Λ higher: the ray's clearance taken over h + Λ. The camera's rays
 // only — earthNear's marches —, never the shadows' nor the bake's; 0 without the table — renderer.liftOn —)
-fn liftAlong(t: f32, h: f32) -> f32 { return refrLiftM(t * EARTH_RM, h); }
+fn liftAlong(t: f32, h: f32) -> f32 { return liftNearM(t * EARTH_RM, h); }
+// (the lift as the projection reads it: under 50 km the scenery's polynomial — one vec4, not four reads of the table at every
+// step of the march and every pixel: +1.2 ms on an M1 —, the table past 60 km, faded between — the rasters the same function)
+fn liftNearM(d: f32, h: f32) -> f32 {
+  if (bodies[LIFT_OFF].x < 0.5) { return 0.0; }
+  let near = sceneryLiftM(d);
+  if (d < 50000.0) { return near; }
+  return mix(near, refrLiftM(d, h), smoothstep(50000.0, 60000.0, d));
+}
 // The ground's crossing from the raster patch's distance tM [m] (kM: metres per unit of t): the full relief is read at
 // two points either side of it, a few metres apart (a vertical tolerance over the ray's grazing — wider at a low angle),
 // and the crossing refined as the march's own. -3: the hint did not bracket the ground (the relief there above the
@@ -14165,7 +14173,7 @@ fn rasterPoint(r: RasterRay, tM: f32) -> vec3f {
   // the material is shaded at: the lift undone, Λ by that distance and the point's height, along its up)
   if (bodies[LIFT_OFF].x < 0.5) { return a; }
   let la = length(a);
-  return a - (a / la) * (refrLiftM(tM, (la - 1.0) * EARTH_RM) / EARTH_RM);
+  return a - (a / la) * (liftNearM(tM, (la - 1.0) * EARTH_RM) / EARTH_RM);
 }
 // the pixel's ground is shadeLite's: the patch's (not a tree's, a building's), not the sea's (its glint, waves, mirror are
 // shade's) — the same test in shade, shadeMark and shadeLite

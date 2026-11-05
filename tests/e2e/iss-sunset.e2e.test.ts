@@ -11,7 +11,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // a quarter of the brightest, the exposure held where the Sun is not clipped, no bloom nor flare), against the CPU's same tables (refraction-gpu.ts gpuBending: the disc's points' apparent elevations,
 // the rays under the limb cut off — on the WGS84 limb's dip in the Sun's azimuth). Then the refraction off, the geometric disc
 // cut by the drawn limb against the ellipsoid's: where the image puts the Sun and the limb. Writes $AB_OUT/iss-sunset/<place>-<step>.png and sunset.json.
-// ISS_PLACES="name,lat,lon,day;…" other places, ISS_STEPS=geo the geometric steps alone, ISS_WEATHER a weather preset, ISS_PIPELINE trace.
+// ISS_PLACES="name,lat,lon,day;…" other places, ISS_STEPS=geo the geometric steps alone, ISS_WEATHER a weather preset, ISS_PIPELINE trace,
+// ISS_JS a statement run once the tables are in (an A/B's switch).
 // Duration: ~4 min on this Mac.
 // Done when: both places shot at every step, the image's flattening against the CPU's printed, no GPU error.
 const OUT = `${process.env.AB_OUT ?? "remote-results"}/iss-sunset`;
@@ -129,6 +130,8 @@ test.skipIf(!E2E)(
         autoExposure: false, exposure: 0, bloom: 0, lensFlare: 0 });
         document.body.classList.add("hide-ui"); return 1; })()`);
       await app.waitFor(`__bh.renderer.refrPublished !== ""`, 30_000).catch(() => console.warn("  tables not published after 30 s"));
+      // (ISS_JS: a statement run once the tables are in — an A/B's switch, e.g. R4's lift: __bh.renderer.liftOn = true)
+      if (process.env.ISS_JS) await app.js(`(() => { ${process.env.ISS_JS} return 1; })()`);
       // (70° N in late October: the Sun 10° south, its path through the limb slanting — in March it never sinks that far there)
       // (ISS_PLACES="name,lat,lon,day;…": other places — the search for the moment starts at their day; ISS_STEPS=geo: the
       // geometric steps alone)

@@ -198,7 +198,7 @@ import {
 import { GEOID_MAX, geoidN, geoidTable, geoidUnder, loadGeoid } from "./system/geoid";
 import { loadWaterKd } from "./system/water-kd";
 import { RefrTableBuilder } from "./system/refraction-gpu";
-import { LIFT_FADE, liftAt } from "./system/refraction-lift";
+import { LIFT_FADE, liftPolynomial } from "./system/refraction-lift";
 import { type AirState, airOfModel } from "./system/refraction-layered";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import { EarthTiles, TILE_PARAM_VEC4S, TILE_REACH } from "./system/earth-tiles";
@@ -4462,22 +4462,7 @@ export class Renderer {
     const t = this.liftData;
     if (!t) return;
     const hP = Math.max(hE - Math.max(this.liveEyeHM, 0), 0);
-    // (Λ / d² = c2 + c3 d: a line in d, least squares)
-    let n = 0,
-      sx = 0,
-      sy = 0,
-      sxx = 0,
-      sxy = 0;
-    for (let d = 4000; d <= 60000; d += 2000) {
-      const y = liftAt(t, d, hP) / (d * d);
-      n++;
-      sx += d;
-      sy += y;
-      sxx += d * d;
-      sxy += d * y;
-    }
-    const c3 = (n * sxy - sx * sy) / (n * sxx - sx * sx);
-    const c2 = (sy - c3 * sx) / n;
+    const [c2, c3] = liftPolynomial(t, hP);
     const c = new Float32Array([c2, c3, LIFT_FADE, 1]);
     this.sceneryLiftNow = c;
     this.sceneryRaster?.lift.set(c);
@@ -4589,7 +4574,8 @@ export class Renderer {
     const out = new Float32Array(WX_VEC4S * 4);
     if (live) this.wxLight = 1;
     // (R4: the eye's height over the sea, its lift table — from orbit too)
-    if (live) this.updateLift(surface ? altKm * 1000 - geoidN(surface.lat, surface.lon) : null);
+    // (none with the refraction off: the ground drawn where it is, as the sky)
+    if (live) this.updateLift(surface && s.refraction ? altKm * 1000 - geoidN(surface.lat, surface.lon) : null);
     if (!surface || !(altKm < 30) || !this.earthMaps.tier) return out;
     const lat = (surface.lat * 180) / Math.PI,
       lon = (surface.lon * 180) / Math.PI;

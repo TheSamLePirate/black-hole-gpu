@@ -6,6 +6,7 @@ import {
   liftAt,
   liftFade,
   liftOf,
+  liftPolynomial,
   liftTable,
   projectApparent,
   unprojectApparent,
@@ -56,6 +57,36 @@ test("the eye's table from the layered air: k near the ground ~0.13–0.2, read 
   const k = (2 * R * liftAt(t, 20e3, 0)) / (20e3 * 20e3);
   expect(k).toBeGreaterThan(0.1);
   expect(k).toBeLessThan(0.25);
+});
+
+test("the scenery's polynomial follows the table: within 0.1 m and 3 % from 4 to 60 km", () => {
+  for (const hE of [10, 1500]) {
+    const t = liftTable(gpuTableData(BENNETT_AIR), hE);
+    const [c2, c3] = liftPolynomial(t, 0);
+    for (let d = 4000; d <= 60000; d += 4000) {
+      const L = liftAt(t, d, 0);
+      const P = (c2 + c3 * d) * d * d;
+      expect(Math.abs(P - L)).toBeLessThan(Math.max(0.1, 0.03 * L));
+    }
+  }
+});
+
+test("from orbit, the ground at the limb lifted as Bouguer's invariant says (n r cos e = const)", () => {
+  // (from 420 km the ray grazing the ground: cos e = n₀ R / r — its apparent dip over the geometric tangent's)
+  const f = gpuTableData(BENNETT_AIR);
+  const N = (h: number) => {
+    const x = Math.min(Math.max(h, 0), (NN - 1) * NSTEP) / NSTEP;
+    const i = Math.min(Math.floor(x), NN - 2);
+    return f[REFR_OFF_N + i]! * (1 - (x - i)) + f[REFR_OFF_N + i + 1]! * (x - i);
+  };
+  const hE = 420e3;
+  const rE = R + hE;
+  const d = Math.sqrt(rE * rE - R * R);
+  const geo = Math.acos(R / rE);
+  const app = Math.acos(Math.min(((1 + N(0)) * R) / rE, 1));
+  const bouguer = geo - app;
+  const lifted = liftOf(N, hE, 0, d) / d;
+  expect(Math.abs(lifted / bouguer - 1)).toBeLessThan(0.15);
 });
 
 test("the projection and its inverse: ≤ 1 mm at 10 km, ≤ 0.1 m at 300 km", () => {

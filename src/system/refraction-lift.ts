@@ -37,23 +37,33 @@ function slope(N: (h: number) => number, h: number): number {
   return (N(a + 500) - N(a)) / 500;
 }
 
-/** Λ [m] — the lift of a point at a slant distance d [m] and height hP [m] seen from hE [m] —, the refractivity N(h); unfaded */
+/** Λ [m] — the lift of a point at a slant distance d [m] and height hP [m] seen from hE [m] —, the refractivity N(h); unfaded.
+ *  The chord between them exact on the sphere (the eye high — from orbit the limb 2 300 km away —, its heights not a flat
+ *  approximation's): Λ = ∫ σ κ dσ, σ the distance from the point, κ = −N′(h) cos ψ the ray's curvature across the chord (ψ its
+ *  elevation there) — the angle at the eye Λ/d, the first order in the bending (the chord's own heights) */
 export function liftOf(N: (h: number) => number, hE: number, hP: number, d: number): number {
   if (d <= 0) return 0;
-  // (the chord's horizontal length: its slant less its rise)
-  const dh = hP - hE;
-  const x = Math.sqrt(Math.max(d * d - dh * dh, 0));
-  // (the air ends at 120 km: the chord's pieces above it bend nothing — integrate in pieces of at most 20 km so the low air's
-  // layers are sampled finely enough)
-  const pieces = Math.max(1, Math.ceil(x / 20000));
+  const rE = R_E + hE,
+    rP = R_E + hP;
+  const c = Math.min(Math.max((rE * rE + rP * rP - d * d) / (2 * rE * rP), -1), 1);
+  const sn = Math.sqrt(1 - c * c);
+  // (the eye at (0, rE), the point at (rP sin φ, rP cos φ); the chord's direction)
+  const tx = (rP * sn) / d,
+    ty = (rP * c - rE) / d;
+  const pieces = Math.max(1, Math.ceil(d / 20000));
   let L = 0;
   for (let p = 0; p < pieces; p++) {
     for (let k = 0; k < GL_X.length; k++) {
       const u = (p + GL_X[k]!) / pieces;
-      const s = u * x;
-      const h = hE * (1 - u) + hP * u - (s * (x - s)) / (2 * R_E);
+      const px = u * d * tx,
+        py = rE + u * d * ty;
+      const r = Math.hypot(px, py);
+      const h = r - R_E;
       if (h > 120000) continue;
-      L += (GL_W[k]! / pieces) * x * (x - s) * -slope(N, h);
+      // (the ray's elevation there: the chord's direction against the radius)
+      const sinPsi = (px * tx + py * ty) / r;
+      const cosPsi = Math.sqrt(Math.max(1 - sinPsi * sinPsi, 0));
+      L += (GL_W[k]! / pieces) * d * ((1 - u) * d) * -slope(N, Math.max(h, 0)) * cosPsi;
     }
   }
   return L;
@@ -90,6 +100,26 @@ export function liftAt(t: Float32Array, d: number, hP: number): number {
     fy = y - j;
   const at = (a: number, b: number) => t[8 + b * LIFT_ND + a]!;
   return (at(i, j) * (1 - fx) + at(i + 1, j) * fx) * (1 - fy) + (at(i, j + 1) * (1 - fx) + at(i + 1, j + 1) * fx) * fy;
+}
+
+/** (R4b) the scenery's lift near the ground: Λ ≈ (c2 + c3 d) d², least squares on Λ/d² over 4–60 km from the table at a point
+ *  height hP — the scenery's raster, the tracer's scenery and the other craft read it (a uniform, not the table) */
+export function liftPolynomial(t: Float32Array, hP: number): [number, number] {
+  let n = 0,
+    sx = 0,
+    sy = 0,
+    sxx = 0,
+    sxy = 0;
+  for (let d = 4000; d <= 60000; d += 2000) {
+    const y = liftAt(t, d, hP) / (d * d);
+    n++;
+    sx += d;
+    sy += y;
+    sxx += d * d;
+    sxy += d * y;
+  }
+  const c3 = (n * sxy - sx * sy) / (n * sxx - sx * sx);
+  return [(sy - c3 * sx) / n, c3];
 }
 
 type V3 = [number, number, number];

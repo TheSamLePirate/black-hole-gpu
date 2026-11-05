@@ -72,6 +72,18 @@ fn refrLiftM(d: f32, hP: f32) -> f32 {
   let b = mix(liftF((j + 1u) * ${LIFT_ND}u + i), liftF((j + 1u) * ${LIFT_ND}u + i + 1u), fx);
   return mix(a, b, fy);
 }
+// (as the tracer's liftNearM: the scenery's polynomial under 50 km — the table's second vec4 —, the table past 60 km)
+fn liftNearM(d: f32, hP: f32) -> f32 {
+  if (table[${TABLE_LIFT}u].x < 0.5) { return 0.0; }
+  let c = table[${TABLE_LIFT}u + 1u];
+  var near = 0.0;
+  if (c.w > 0.5) {
+    let L = (c.x + c.y * d) * d * d;
+    near = L * smoothstep(0.5 * c.z, c.z, L / max(d, 1.0));
+  }
+  if (d < 50000.0) { return near; }
+  return mix(near, refrLiftM(d, hP), smoothstep(50000.0, 60000.0, d));
+}
 // (terrainPoint's up and height over the sea at the last vertex — the projection's lift reads them)
 var<private> TP_UP: vec3f;
 var<private> TP_H: f32;
@@ -197,7 +209,7 @@ fn terrainPoint(vertex: vec3f, graded: bool) -> vec3f {
   // (R4b: the point seen where the air shows it — lifted along its up by Λ(d, h); the projection's alone — terrainSunVs, the
   // bake, the CPU never)
   let p0 = terrainPoint(vertex, graded);
-  let p = p0 + TP_UP * refrLiftM(length(p0), TP_H);
+  let p = p0 + TP_UP * liftNearM(length(p0), TP_H);
   var v: Vertex;
   v.n = terrainNormal(vertex, graded);
   v.p = vec3f(dot(p, u.right.xyz), dot(p, u.up.xyz), dot(p, u.forward.xyz));
