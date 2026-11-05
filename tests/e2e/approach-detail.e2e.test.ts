@@ -7,7 +7,7 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // T8 — the finest relief near the ground on an approach (Sam, 5 Nov 2026: « quand on s'approche du sol, en approche ou près
 // d'une colline, le relief de qualité max se charge trop tard »): the F-35 put on the final of an ILS from AD_KM out (cold
 // tiles), the approach flown live to the runway; every AD_EVERY ms a shot and, at points on the ground ahead along the track
-// (200 m, 500 m, 1 km, 2 km), the level the pixel's footprint there asks (up to z 17 over the IGN's France, 14 elsewhere)
+// (200 m, 500 m, 1 km, 2 km) and aside (45°, 90° either way at 500 m and 1 km: `side`, their mean), the level the pixel's footprint there asks (up to z 17 over the IGN's France, 14 elsewhere)
 // against the finest drawn there: the levels missing — 0 the relief at its best, 1 a level short (twice too coarse)…
 //   AD_RWY: "LFTH:13" (field:runway) · AD_KM (12) · AD_EVERY (2000) · AD_OUT
 // Output: remote-results/approach-detail/NN.jpg, series.json. Done when: the touchdown or 150 s, no GPU error.
@@ -28,8 +28,12 @@ const AHEAD = `(() => {
   const merc = (sl, n) => (0.5 - Math.atanh(Math.min(Math.max(sl, -0.999999), 0.999999)) / TAU) * n;
   const inR = (r, x, y) => !!r && x >= r.x0 && x < r.x1 && y >= r.y0 && y < r.y1;
   const out = {};
-  for (const d of [200, 500, 1000, 2000]) {
-    const lat = g.lat * D + (d * Math.cos(g.track)) / R, lon = g.lon * D + (d * Math.sin(g.track)) / (R * Math.cos(g.lat * D));
+  // (ahead along the track, then aside — 45° and 90° either way at 500 m and 1 km: a hill passed beside the final)
+  const pts = [[0, 200], [0, 500], [0, 1000], [0, 2000], [-45, 500], [-45, 1000], [-90, 500], [-90, 1000], [45, 500], [45, 1000], [90, 500], [90, 1000]];
+  let side = 0, sideN = 0;
+  for (const [b, d] of pts) {
+    const az = g.track + b * D;
+    const lat = g.lat * D + (d * Math.cos(az)) / R, lon = g.lon * D + (d * Math.sin(az)) / (R * Math.cos(g.lat * D));
     const dep = Math.atan(agl / d), foot = (Math.hypot(d, agl) * pix) / Math.sin(Math.max(dep, 0.01));
     const want = Math.min(Math.floor(Math.log2((TAU * R * Math.cos(lat)) / (256 * foot)) + 0.5), zMax);
     let have = 5;
@@ -37,9 +41,15 @@ const AHEAD = `(() => {
       const x = (lon / TAU + 0.5) * L.n, y = merc(Math.sin(lat), L.n);
       if (L.valid && inR(L.valid, x, y)) have = Math.max(have, L.z);
     }
-    out["m" + d] = Math.max(0, want - have);
-    out["z" + d] = have + "/" + want;
+    if (b === 0) {
+      out["m" + d] = Math.max(0, want - have);
+      out["z" + d] = have + "/" + want;
+    } else {
+      side += Math.max(0, want - have);
+      sideN++;
+    }
   }
+  out.side = +(side / Math.max(sideN, 1)).toFixed(2);
   return { agl: Math.round(agl), pending: t.pending, ...out, phase: __bh.camera.ilsInfo()?.phase ?? null };
 })()`;
 

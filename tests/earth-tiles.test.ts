@@ -298,11 +298,12 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   // (Far: the texture made again, 2048 texels a side, every level drawn anew — the fine ones 8 × 8 tiles, the coarser 4 × 4)
   t.setReach(TILE_REACH.far);
   expect(resized).toBe(1);
-  // (the four fine levels a layer each, the eight 4-tile ones by 1024² quadrants — T10; the orthophotos in their own texture, T9a)
-  expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, ZG1 - FINE_Z + 1 + 2]);
+  // (the fine levels a layer each — z 11 … 14 and, since 5 Nov 2026, the IGN's z 15 … 17 —, the five 4-tile ones by 1024²
+  // quadrants — T10; the orthophotos in their own texture, T9a)
+  expect((t.texture as unknown as { size: number[] }).size).toEqual([2048, 2048, Z1 - FINE_Z + 1 + 2]);
   t.update(cam, 1e-3);
-  // (the IGN's relief levels over France, z 15 … 17, 4 × 4 tiles whatever the reach)
-  expect(t.wanted().length).toBe(64 * (ZG1 - FINE_Z + 1) + 16 * (FINE_Z - Z0) + 16 * (Z1 - ZG1));
+  // (the IGN's relief levels over France, z 15 … 17, the reach's 8 × 8 tiles too — a hill beside a final in their windows)
+  expect(t.wanted().length).toBe(64 * (Z1 - FINE_Z + 1) + 16 * (FINE_Z - Z0));
   expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBe(1);
   fill(t);
   expect(t.pending).toBe(0);
@@ -470,10 +471,10 @@ test("T10: the 4-tile levels packed by quadrants — 6 layers of 2048² where th
     }
     expect(checked).toBe(40 * (Z1 - Z0 + 1));
   }
-  expect(t.textureBytes).toBe(2048 * 2048 * 6 * 8);
+  expect(t.textureBytes).toBe(2048 * 2048 * 9 * 8);
   // (the very far texture made while the normal one lived: the peak their sum, with the orthophotos' own — T9a)
   // (the imagery unfiltered here — no filtered textures: their stand-ins, 1 × 1 — T9c)
-  expect(t.peakBytes).toBe(1024 * 1024 * 12 * 8 + 2048 * 2048 * 6 * 8);
+  expect(t.peakBytes).toBe(1024 * 1024 * 12 * 8 + 2048 * 2048 * 9 * 8);
   expect(tex.length).toBe(5); // (the two relief textures, the 1024² imagery, the 2048² one's stand-in and itself — T9b)
 });
 
@@ -505,7 +506,7 @@ test("T9c: the imagery filtered, the relief's texture holds its heights alone (r
   expect(t.textureBytes).toBe(1024 * 1024 * 12 * 4);
   expect(t.peakBytes).toBe(1024 * 1024 * 12 * 4 + ORTHO_BYTES);
   t.setReach(TILE_REACH.veryFar);
-  expect(t.textureBytes).toBe(2048 * 2048 * 6 * 4);
+  expect(t.textureBytes).toBe(2048 * 2048 * 9 * 4);
   expect(t.imagery2k.width).toBe(2048);
   const plain = new EarthTiles(withGpuStubs(fakeDevice()));
   expect(plain.textureBytes).toBe(1024 * 1024 * 12 * 8);

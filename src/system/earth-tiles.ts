@@ -756,10 +756,11 @@ export class EarthTiles {
     return TILE * this.span;
   }
   private levelSpan(z: number) {
-    // (the IGN's finest relief, z 15 … 17: windows of 4 tiles whatever the reach — 3.4 km down to 850 m at 46°; z 11 … 14 the
-    // reach's; the coarser ones 4: z 9's 4 tiles reach as far as z 10's 8 would — 312 km —, a pixel there over 100 m of ground;
-    // 8 at z 6 … 10 were 240 tiles more for nothing seen, every window's completion twice as long (kerr-mini, 2 Nov 2026))
-    if (z > ZG1) return SPAN;
+    // (z 11 … 17 the reach's — the IGN's finest relief too since 5 Nov 2026: at 4 tiles, ±440 m of z 17 and ±880 m of z 16 round
+    // the camera, a hill passed 500 m to 1 km beside a final — LFTH 13 — took its finest relief as the window reached it, its
+    // loading seen (Sam); at 8, ±880 m and ±1.8 km, +36 MiB of the relief's texture —; the coarser ones 4: z 9's 4 tiles reach
+    // as far as z 10's 8 would — 312 km —, a pixel there over 100 m of ground; 8 at z 6 … 10 were 240 tiles more for nothing
+    // seen, every window's completion twice as long (kerr-mini, 2 Nov 2026))
     return z >= FINE_Z ? this.span : SPAN;
   }
   /** the tiles kept past the windows — most recently used last — and how many (0: none) */
@@ -1306,10 +1307,16 @@ export class EarthTiles {
           if (this.cache.has(key) || this.inflight.has(key)) continue;
           const f = this.failures.get(key);
           if (f && now < f.at) continue;
-          halo.push([L, x, y, this.cost(L, x, y, cx, cy)]);
+          // (its distance past its own window's edge — half its span off the lead point —: every level's first ring at once,
+          // whatever its window's width; measured from the lead point, the fine levels' 8-tile windows put their rings behind
+          // the coarse levels' and their next tiles came last — 5 Nov 2026)
+          halo.push([L, x, y, this.cost(L, x, y, cx, cy) - L.span / 2]);
         }
     }
-    halo.sort((a, b) => a[3] - b[3] || a[0].z - b[0].z);
+    // (by ring past the windows' edges, the finer first in one — as the windows' own loads: the ground near the eye fills most
+    // of the view —, then the nearest)
+    const ringOf = (c: number) => Math.floor(Math.max(c, 0));
+    halo.sort((a, b) => ringOf(a[3]) - ringOf(b[3]) || b[0].z - a[0].z || a[3] - b[3]);
     for (const [L, x, y] of halo) {
       if (this.inflight.size >= MAX_INFLIGHT / 2 || this.cache.size + this.inflight.size >= this.cacheTiles) return;
       void this.load(L, x, y, true);
