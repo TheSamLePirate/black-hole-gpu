@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { imagesOf, mirageProfile, mirageRay, mirageTable } from "../src/system/mirage";
+import { imagesOf, MIRAGE_N, MIRAGE_VEC4S, mirageProfile, mirageRay, mirageTable, mirageTables } from "../src/system/mirage";
 import { airProfile, refraction } from "../src/system/refraction-layered";
 
 // R6a-ciel, first lot — the mirages' rays from the eye (system/mirage.ts): RK4 through the turning points, under forced profiles.
@@ -43,4 +43,18 @@ test("an inversion aloft: a duct — the low rays trapped down to the sea, the h
   const I = mirageTable(mirageProfile("inversion", air), 10, -0.2 * D, 0.3 * D, 51);
   const firstClear = (T: typeof S) => T.lo + ((T.hi - T.lo) * T.trueAlt.findIndex((v) => !Number.isNaN(v))) / (T.trueAlt.length - 1);
   expect(firstClear(I)).toBeGreaterThan(firstClear(S) + 0.1 * D);
+});
+
+test("the GPU's tables: a header, three colours, the sea marked; the colours' elevations a little apart (dispersion)", () => {
+  const f = mirageTables("warmSea", air, 10);
+  expect(f.length).toBe(MIRAGE_VEC4S * 4);
+  expect(f[0]).toBe(1);
+  expect(f[1]).toBe(10);
+  const col = (c: number) => f.subarray(4 + c * MIRAGE_N, 4 + (c + 1) * MIRAGE_N);
+  // (the band's lowest rays into the sea, its highest out)
+  expect(col(1)[0]).toBe(-10);
+  expect(col(1)[MIRAGE_N - 1]!).toBeGreaterThan(-0.01);
+  // (blue bent more than red near the horizon: its true elevation a little lower for the same apparent one)
+  const i = MIRAGE_N - 1;
+  expect(col(2)[i]!).toBeLessThan(col(0)[i]!);
 });

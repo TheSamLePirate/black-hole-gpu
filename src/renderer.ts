@@ -43,6 +43,7 @@ import { Lightning } from "./system/lightning";
 import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT } from "./system/tree-shadow";
 import { GTAO_BINDING, GTAO_TEXTURE_LIMIT, Gtao } from "./system/gtao";
 import { CLV_TEX_H, CLV_TEX_W } from "./system/cloud-light-layout";
+import type { MirageKind } from "./system/mirage";
 import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N } from "./system/cloud-shadow";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import { BodyRaster, reliefMax } from "./system/body-raster";
@@ -113,6 +114,7 @@ import {
   SKY_AMBIENT_VEC4S,
   CSM_VEC4S,
   TABLE_CLV,
+  TABLE_MIR,
   TABLE_CSM,
   TABLE_TSM,
   TABLE_GEOID,
@@ -4443,6 +4445,41 @@ export class Renderer {
     this.weatherGridOn = !!g;
     this.device.queue.writeBuffer(this.bodyBuf, TABLE_WXGRID * 16, f);
   }
+  /** (R6a-ciel) the forced profile of the air near the sea the mirages come from — illustrative, never an observation —
+   *  (system/mirage.ts; "off": none, the layered model's refraction alone) */
+  mirageProfile: MirageKind | "off" = "off";
+  /** the mirages' tables in the tracer's table: their profile and eye's height [m], "" none */
+  mirageNow = "";
+  private mirageWorker: Worker | null = null;
+  private mirageAsked: { kind: string; h0: number; id: number } | null = null;
+  private updateMirage(s: Settings, h0: number) {
+    const kind = this.mirageProfile;
+    if (kind === "off") {
+      if (this.mirageNow) {
+        this.device.queue.writeBuffer(this.bodyBuf, TABLE_MIR * 16, new Float32Array(4));
+        this.mirageNow = "";
+      }
+      return;
+    }
+    const h = Math.max(h0, 1);
+    const a = this.mirageAsked;
+    // (asked again when the profile changes or the eye moves by 2 m or a tenth of its height; one at a time)
+    if (a && a.kind === kind && Math.abs(a.h0 - h) < Math.max(2, 0.1 * h)) return;
+    if (a && this.mirageBusy) return;
+    this.mirageWorker ??= new Worker(new URL("mirage-worker.js", location.href), { type: "module" });
+    const id = (a?.id ?? 0) + 1;
+    this.mirageAsked = { kind, h0: h, id };
+    this.mirageBusy = true;
+    this.mirageWorker.onmessage = (e: MessageEvent<{ id: number; f: Float32Array }>) => {
+      this.mirageBusy = false;
+      if (e.data.id !== this.mirageAsked?.id || this.mirageProfile === "off") return;
+      this.device.queue.writeBuffer(this.bodyBuf, TABLE_MIR * 16, e.data.f as Float32Array<ArrayBuffer>);
+      this.mirageNow = `${this.mirageAsked.kind}@${this.mirageAsked.h0.toFixed(1)}`;
+      this.onAssets?.();
+    };
+    this.mirageWorker.postMessage({ id, kind, state: this.airState(s), h0: h });
+  }
+  private mirageBusy = false;
   private weatherGrid = new WeatherGridFeed();
   private weatherGridKey = "";
   /** (Q5 C5) the weather grid in use (the real weather's model about the camera), and its switch (a measure's A/B) */
@@ -4462,6 +4499,8 @@ export class Renderer {
     if (!surface || !(altKm < 30) || !this.earthMaps.tier) return out;
     const lat = (surface.lat * 180) / Math.PI,
       lon = (surface.lon * 180) / Math.PI;
+    // (R6a-ciel: the eye's height over the sea — the geoid's —, its mirages' tables)
+    if (live) this.updateMirage(s, altKm * 1000 - geoidN(surface.lat, surface.lon));
     const w = weatherAt(s, { body: "earth", lat, lon }, daysOf(time), this.weatherReal);
     if (w.layers.length === 0 && w.fogTop <= 0 && w.visibility >= 30e3) return out;
     // (the sea's surface at the geoid: the ground never under it)

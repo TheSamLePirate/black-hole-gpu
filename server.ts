@@ -78,6 +78,12 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
+    // The mirages' tables' worker (src/system/mirage-worker.ts — R6a-ciel)
+    "/mirage-worker.js": async () => {
+      const r = await Bun.build({ entrypoints: ["./src/system/mirage-worker.ts"], target: "browser", minify: !dev });
+      if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
+      return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
+    },
     // The intro's Worker (src/intro/worker.ts: its background and its loading orb, PLAN-TITRE-AAA E1)
     "/intro-worker.js": async () => {
       const r = await Bun.build({ entrypoints: ["./src/intro/worker.ts"], target: "browser", minify: !dev });

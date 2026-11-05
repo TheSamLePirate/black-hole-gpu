@@ -15,6 +15,7 @@ import { REFR_VEC4S } from "./system/refraction-gpu";
 import { TLUT_VEC4S } from "./system/earth-air-layout";
 import { WXGRID_VEC4S } from "./system/weather-grid-layout";
 import { CLV_VEC4S } from "./system/cloud-light-layout";
+import { MIRAGE_VEC4S } from "./system/mirage-layout";
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -104,4 +105,7 @@ export { WXGRID_VEC4S };
  *  (system/cloud-light-layout.ts; trace.wgsl cloudLightVolume, clvTau) */
 export const TABLE_CLV = TABLE_WXGRID + WXGRID_VEC4S;
 export { CLV_VEC4S };
-export const TABLE_VEC4S = TABLE_CLV + CLV_VEC4S;
+/** (R6a-ciel) the mirages' tables for the eye: three colours' true elevations across the horizon's band (system/mirage.ts) */
+export const TABLE_MIR = TABLE_CLV + CLV_VEC4S;
+export { MIRAGE_VEC4S };
+export const TABLE_VEC4S = TABLE_MIR + MIRAGE_VEC4S;

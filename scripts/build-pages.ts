@@ -12,6 +12,8 @@ await $`bun build ./index.html --outdir _site --minify --define __KERR_SUBPATH__
 await $`bun build ./crew/index.html --outdir _site/crew --minify --define __KERR_SUBPATH__=${JSON.stringify(subpath)}`;
 // (the flight planner's worker, loaded by URL next to the page)
 await $`bun build ./src/system/plan-worker.ts --outfile _site/plan-worker.js --minify --target browser`;
+// (the mirages' tables' worker — R6a-ciel, src/system/mirage-worker.ts)
+await $`bun build ./src/system/mirage-worker.ts --outfile _site/mirage-worker.js --minify --target browser`;
 // (the network, loaded when the player asks for it — src/net/load.ts)
 await $`bun build ./src/net/index.ts --outfile _site/net.js --minify --target browser`;
 // (the rocket engine's AudioWorklet — PLAN-AUDIO S2)

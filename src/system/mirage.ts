@@ -6,6 +6,7 @@
 // by the layered model's bending, refraction-layered.ts) or the sea. Several apparent elevations for one true one: the images
 // a mirage makes (the Sun's "Etruscan vase" over a warm sea; a duct's Fata Morgana). The GPU's reading — each sky pixel its
 // true direction — is the next lot.
+import { MIRAGE_BAND, MIRAGE_N, MIRAGE_VEC4S } from "./mirage-layout";
 import { type AirProfile, type AirState, airProfile, bendingUp, ciddorRefractivity, us76Temperature } from "./refraction-layered";
 
 const R_E = 6371e3;
@@ -79,7 +80,7 @@ export function mirageRay(P: MirageProfile, h0: number, e: number, ds = 2): numb
     if (h <= 0) return null;
     if (h >= MIRAGE_TOP) break;
     // (fine near the sea and where the ray runs level — its turning points —, coarser up in the even air)
-    const s = ds * Math.min(Math.max(h / 20 + Math.abs(Math.sin(psi)) * 50, 0.05), 25);
+    const s = ds * Math.min(Math.max(h / 20 + Math.abs(Math.sin(psi)) * 50, 0.25), 25);
     const k1 = d(r, psi);
     const k2 = d(r + 0.5 * s * k1[0], psi + 0.5 * s * k1[2]);
     const k3 = d(r + 0.5 * s * k2[0], psi + 0.5 * s * k2[2]);
@@ -124,5 +125,27 @@ export function imagesOf(T: MirageTable, trueAlt: number): number[] {
       out.push(T.lo + ((T.hi - T.lo) * (i + f)) / (n - 1));
     }
   }
+  return out;
+}
+
+// ---- the eye's tables for the GPU (gpu-tables.ts TABLE_MIR; trace.wgsl reads them — the next lot)
+
+export { MIRAGE_BAND, MIRAGE_N, MIRAGE_VEC4S };
+
+/** the three colours' wavelengths [µm]: red, green, blue */
+export const MIRAGE_LAMBDAS = [0.65, 0.55, 0.45] as const;
+const SEA = -10;
+
+/** The three colours' tables for an eye at h0 [m] under a forced profile, packed as the GPU reads them */
+export function mirageTables(kind: MirageKind, state: AirState, h0: number): Float32Array {
+  const out = new Float32Array(MIRAGE_VEC4S * 4);
+  out.set([1, h0, -MIRAGE_BAND, MIRAGE_BAND], 0);
+  MIRAGE_LAMBDAS.forEach((lambdaUm, c) => {
+    const T = mirageTable(mirageProfile(kind, { ...state, lambdaUm }), h0, -MIRAGE_BAND, MIRAGE_BAND, MIRAGE_N);
+    for (let i = 0; i < MIRAGE_N; i++) {
+      const v = T.trueAlt[i]!;
+      out[4 + c * MIRAGE_N + i] = Number.isNaN(v) ? SEA : v;
+    }
+  });
   return out;
 }
