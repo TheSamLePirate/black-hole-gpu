@@ -122,7 +122,7 @@ test.skipIf(!E2E)(
         }
       }
       await app.js(
-        `(() => { __bh.renderer.liftOn = false; __bh.settings.earthPipeline = "raster"; __bh.settings.autoExposure = true; __bh.settings.exposure = 0; return 1; })()`,
+        `(() => { __bh.renderer.liftOn = true; __bh.settings.earthPipeline = "raster"; __bh.settings.autoExposure = true; __bh.settings.exposure = 0; return 1; })()`,
       );
       out.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
     } finally {
