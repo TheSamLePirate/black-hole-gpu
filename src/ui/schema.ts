@@ -2436,6 +2436,30 @@ export const SCHEMA: ControlDef[] = [
     keywords: "refraction atmosphere horizon sun flattened selenelion bending air",
   },
   {
+    key: "mirage",
+    type: "choice",
+    section: "sky",
+    group: "The Earth",
+    label: "Mirages",
+    style: "segmented",
+    effect: "none",
+    options: [
+      { value: "off", label: "Off", hint: "The layered model's air alone: the Sun flattened at the horizon, no mirage" },
+      {
+        value: "warmSea",
+        label: "Warm sea",
+        hint: "The sea several degrees warmer than the air: rays turn back up over it — the setting Sun stretched, an inverted image under it",
+      },
+      {
+        value: "inversion",
+        label: "Inversion",
+        hint: "A warm layer over cool air near the sea: a duct — the horizon raised, the low rays trapped, the setting Sun lost in it",
+      },
+    ],
+    help: "The air near the sea forced into a mirage's profile — illustrative, not the day's air: each ray from the eye traced through its turning points (a worker, about a second; seven for a duct), the sky near the horizon seen where its ray truly goes. Over the sea, at a low height, towards the setting or rising Sun.",
+    keywords: "mirage mirages fata morgana etruscan vase inferior superior duct inversion sea horizon sun",
+  },
+  {
     key: "horizonMaps",
     type: "toggle",
     section: "sky",

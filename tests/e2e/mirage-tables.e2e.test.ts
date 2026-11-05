@@ -4,10 +4,12 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 
 // R6a-ciel — the mirages' tables in the page (renderer.mirageProfile, renderer.updateMirage → mirage-worker.js → the tracer's
 // table TABLE_MIR): over the Atlantic off Biarritz, the F-35 at 10 m over the sea, a warm sea forced: the worker's answer
-// published (renderer.mirageNow) within 20 s, for the eye's height; then "off": the tables cleared. Nothing drawn yet — the
+// published (renderer.mirageNow) within 20 s, for the eye's height; then "off": the tables cleared; then by the setting (settings.mirage —
+// the player's, TARS's): a duct's, published within 30 s, then cleared. Nothing drawn yet — the
 // GPU's reading is the next lot.
 // Duration: ~1 min on this Mac.
-// Done when: the tables published for a warm sea at ~10 m, then cleared, no GPU error.
+// Done when: the tables published for a warm sea at ~10 m, then cleared, then an inversion's by the setting, cleared, no GPU
+// error.
 afterAll(stopServer);
 test.skipIf(!E2E)(
   "R6a-ciel: the mirages' tables traced off the frame and published",
@@ -28,6 +30,12 @@ test.skipIf(!E2E)(
       expect(h).toBeGreaterThan(1);
       expect(h).toBeLessThan(60);
       await app.js(`(() => { __bh.renderer.mirageProfile = "off"; __bh.touch(); return 1; })()`);
+      await app.waitFor(`__bh.renderer.mirageNow === ""`, 5_000);
+      // (by the setting — the player's, TARS's set_settings —: a duct)
+      await app.js(`(() => { __bh.settings.mirage = "inversion"; __bh.touch(); return 1; })()`);
+      await app.waitFor(`__bh.renderer.mirageNow.startsWith("inversion@")`, 30_000);
+      console.log(`  by the setting: ${await app.js<string>(`__bh.renderer.mirageNow`)}`);
+      await app.js(`(() => { __bh.settings.mirage = "off"; __bh.touch(); return 1; })()`);
       await app.waitFor(`__bh.renderer.mirageNow === ""`, 5_000);
       const errs = await app.js<number>(`__bh.renderer.gpuErrors`);
       console.log(`  cleared; GPU errors ${errs}`);

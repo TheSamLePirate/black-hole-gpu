@@ -4453,7 +4453,8 @@ export class Renderer {
   private mirageWorker: Worker | null = null;
   private mirageAsked: { kind: string; h0: number; id: number } | null = null;
   private updateMirage(s: Settings, h0: number) {
-    const kind = this.mirageProfile;
+    // (the setting — the player's, TARS's —; mirageProfile, a test's, over it)
+    const kind = this.mirageProfile !== "off" ? this.mirageProfile : (s.mirage ?? "off");
     if (kind === "off") {
       if (this.mirageNow) {
         this.device.queue.writeBuffer(this.bodyBuf, TABLE_MIR * 16, new Float32Array(4));
@@ -4472,7 +4473,7 @@ export class Renderer {
     this.mirageBusy = true;
     this.mirageWorker.onmessage = (e: MessageEvent<{ id: number; f: Float32Array }>) => {
       this.mirageBusy = false;
-      if (e.data.id !== this.mirageAsked?.id || this.mirageProfile === "off") return;
+      if (e.data.id !== this.mirageAsked?.id || this.mirageAsked.kind === "off") return;
       this.device.queue.writeBuffer(this.bodyBuf, TABLE_MIR * 16, e.data.f as Float32Array<ArrayBuffer>);
       this.mirageNow = `${this.mirageAsked.kind}@${this.mirageAsked.h0.toFixed(1)}`;
       this.onAssets?.();

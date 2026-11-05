@@ -820,6 +820,17 @@ export default {
     "Pendant que la caméra bouge, l'image des trames précédentes est reportée — retrouvée par la rotation de la caméra, exacte pour le ciel et les images lentillées — et affinée par les rayons de chaque nouvelle trame : une image nette en mouvement avec peu de rayons. Ce qui a bougé dans la scène est pris dans la nouvelle trame seulement.",
   "Cloud cover": "Couverture nuageuse",
   "Atmospheric refraction": "Réfraction atmosphérique",
+  Mirages: "Mirages",
+  "Warm sea": "Mer chaude",
+  Inversion: "Inversion",
+  "The layered model's air alone: the Sun flattened at the horizon, no mirage":
+    "L'air du modèle stratifié seul : le Soleil aplati à l'horizon, pas de mirage",
+  "The sea several degrees warmer than the air: rays turn back up over it — the setting Sun stretched, an inverted image under it":
+    "La mer plus chaude que l'air de plusieurs degrés : les rayons y remontent — le Soleil couchant étiré, une image renversée dessous",
+  "A warm layer over cool air near the sea: a duct — the horizon raised, the low rays trapped, the setting Sun lost in it":
+    "Une couche chaude sur de l'air frais près de la mer : un conduit — l'horizon relevé, les rayons rasants piégés, le Soleil couchant s'y perd",
+  "The air near the sea forced into a mirage's profile — illustrative, not the day's air: each ray from the eye traced through its turning points (a worker, about a second; seven for a duct), the sky near the horizon seen where its ray truly goes. Over the sea, at a low height, towards the setting or rising Sun.":
+    "L'air près de la mer forcé dans un profil de mirage — illustratif, pas l'air du jour : chaque rayon de l'œil tracé à travers ses points de retournement (dans un worker, environ une seconde ; sept pour un conduit), le ciel près de l'horizon vu là où va vraiment son rayon. Sur la mer, à basse hauteur, vers le Soleil couchant ou levant.",
   "Worlds' relief": "Le relief des mondes",
   "Long shadows of the relief": "Ombres longues du relief",
   "Near the Moon, its measured relief's horizon is baked in every direction (about 50 MB on the GPU, a few seconds): the long shadows of its ranges and craters' rims at the terminator, the Sun's disc setting behind them, seen from afar. Off: the Sun lights each point down to its own slope.":

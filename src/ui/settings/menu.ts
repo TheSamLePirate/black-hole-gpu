@@ -143,6 +143,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "earthGrassDensity",
       "seaFft",
       "refraction",
+      "mirage",
     ],
   },
   {
