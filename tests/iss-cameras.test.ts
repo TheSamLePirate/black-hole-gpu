@@ -15,4 +15,13 @@ test("ISS1: the cameras' mounts and lines of sight", () => {
   const target = dock.mount.map((m, i) => m + dock.look[i]! * d);
   expect(Math.hypot(target[0]! - ida2[0], target[1]! - ida2[1], target[2]! - ida2[2])).toBeLessThan(1);
   expect(issCamera("sen-nadir").look).toEqual([0, 0, 1]);
+  // (ISS2: the horizon camera looks aft, 47.5° down — the ground's flow, scripts/iss-flow-yaw.py)
+  const hz = issCamera("sen-horizon");
+  expect(hz.look[0]).toBeLessThan(-0.6);
+  expect((Math.asin(hz.look[2]) * 180) / Math.PI).toBeCloseTo(47.5, 1);
+  // (the NASA stream's camera: down, its picture's right aft, a 36° field)
+  const nasa = issCamera("nasa-harmony");
+  expect(nasa.look).toEqual([0, 0, 1]);
+  expect(nasa.right![0]).toBe(-1);
+  expect(nasa.fovDeg).toBe(36);
 });

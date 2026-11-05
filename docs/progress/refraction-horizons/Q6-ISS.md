@@ -287,3 +287,46 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
   - la caméra nadir (champ et orientation par les côtes) ;
   - la caméra d'amarrage (par le Dragon) ;
   - la caméra NASA.
+
+## ISS2 — deuxième calage : le lacet de l'horizon et la caméra NASA par le défilement du sol (le 5 novembre)
+
+- **Méthode** (`scripts/iss-flow-yaw.py`) :
+  - la station tient son attitude sur la verticale locale (LVLH) ; une caméra fixe voit donc le sol défiler selon sa
+    direction par rapport au sens de vol ;
+  - entre deux images de la capture dense, environ 10 s d'écart, des centaines de points sont appariés (SIFT, test du
+    rapport). On ne garde que ceux sous le limbe, hors incrustations, et on écarte la structure de la station, qui reste
+    immobile dans l'image ;
+  - pour chaque lacet et chaque sens de l'image (directe ou en miroir), chaque point est ramené à son point au sol (sphère,
+    altitude 422 km). La station avance ensuite de ω dt le long de son orbite, en tournant son repère avec elle, et le point
+    est reprojeté ;
+  - on garde le lacet dont les déplacements prédits suivent le mieux, en direction, les déplacements observés (angle
+    médian) ;
+  - **option champ** : le champ horizontal qui égale les longueurs prédites et observées (rapport médian de 1) ;
+  - la rotation propre de la Terre n'est pas modélisée : au plus 0,46 km/s contre 7,66 km/s, soit quelques degrés de
+    direction.
+- **Caméra horizon de Sen**, sur 9 paires de jour de 10:59 à 11:08 UTC (inclinaison 47,5° et champ 95° repris du limbe) :
+  - **lacet 180,7°** (177,3–182,7°) : la caméra **regarde vers l'arrière** ;
+  - les directions prédites suivent les observées à **1,1° près** (médiane, de 0,8 à 1,4° selon la paire) ;
+  - les longueurs se rapportent à 0,91 (0,59–1,11). C'est cohérent compte tenu de l'intervalle des saisies, lu dans les
+    noms de fichiers à ±1–2 s près ;
+  - cela confirme la lecture d'ISS0 : le sol s'éloigne vers le limbe. À 180°, une image en miroir donne le même
+    défilement ; les deux sens ne se distinguent pas.
+- **Caméra NASA**, sur 9 paires de 10:59 à 11:08 UTC (`--tilt 90`, la vue supposée au nadir) :
+  - le sol défile vers le **bord droit de l'image, et ce bord droit pointe vers l'arrière** (89,0° ; un appariement en miroir
+    à 270,7°, équivalent). Les directions concordent à **0,2° près** ;
+  - **champ horizontal 36°** (écart-type 3,6°, de 34,8 à 39,4° sur 8 paires ; la paire de 20 s donne 46,8°). La principale
+    incertitude vient de l'intervalle entre images : une seconde d'erreur sur 10 s fait 10 % sur le champ ;
+  - le nadir est supposé, parce que le défilement est égal du haut au bas de l'image. Une légère inclinaison le long de la
+    trace n'est pas exclue ;
+  - **ce n'est pas la vue vers l'avant sur IDA-2** que décrit le direct. L'attache EHDC-5 reste une place provisoire, le
+    vrai support est inconnu.
+- **Reporté** dans le registre (`src/system/iss-cameras.ts`) :
+  - `sen-horizon` regarde vers l'arrière, à 47,5° vers le bas ;
+  - `nasa-harmony` regarde le nadir, avec le bord droit de l'image vers l'arrière, un champ de 36° et l'état
+    « calibrated ».
+  - Tests : `tests/iss-cameras.test.ts`.
+- **Reste d'ISS2 :**
+  - la caméra nadir de Sen (absente de la capture dense ; Sen la diffuse vers 05:00 et 06:35 UTC) ;
+  - la caméra d'amarrage, par le Dragon ;
+  - le sens direct ou miroir de l'horizon, par une côte reconnue ;
+  - l'intervalle exact des images NASA, pour resserrer le champ.

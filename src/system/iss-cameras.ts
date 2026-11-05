@@ -18,6 +18,8 @@ export interface IssCamera {
   mountFrom: string;
   /** its line of sight (unit, station frame) — an estimate until ISS2 — and its horizontal field [°] when known */
   look: Vec3;
+  /** the picture's right (unit, station frame) where the ground's flow fixed it (ISS2, scripts/iss-flow-yaw.py) */
+  right?: Vec3;
   fovDeg: number | null;
   status: "estimate" | "calibrated";
 }
@@ -48,13 +50,15 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
   {
     id: "sen-horizon",
     stream: "sen",
-    description: "Sen SpaceTV-1, horizon: a wide angle over the limb, the station's structure in view now and then",
+    description: "Sen SpaceTV-1, horizon: a wide angle over the limb, looking aft, the station's structure in view now and then",
     mount: BARTOLOMEO,
     mountFrom: "as the nadir camera's",
     // (ISS2, fitted on the limb — scripts/iss-limb-fit.py, 14 of 20 frames of 4 Nov 2026 within a few tenths: its axis 47.5° below
-    // the horizontal, roll ~0°, horizontal field 95° (a pinhole, no distortion; residual 1–2 px) —; its yaw not from the limb,
-    // forward assumed)
-    look: unit([Math.cos((47.5 * Math.PI) / 180), 0, Math.sin((47.5 * Math.PI) / 180)]),
+    // the horizontal, roll ~0°, horizontal field 95° (a pinhole, no distortion; residual 1–2 px) —; its yaw from the ground's flow —
+    // scripts/iss-flow-yaw.py, 9 pairs of the dense capture of 5 Nov 2026: 180.7° (177.3–182.7), the predicted directions within
+    // 1.1° of the observed —: aft, the ground streaming away towards the limb; a mirrored picture not told apart at this yaw)
+    look: unit([-Math.cos((47.5 * Math.PI) / 180), 0, Math.sin((47.5 * Math.PI) / 180)]),
+    // (its right: to starboard of the aft view, or to port if the picture is mirrored — not told apart)
     fovDeg: 95,
     status: "calibrated",
   },
@@ -71,12 +75,19 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
   {
     id: "nasa-harmony",
     stream: "nasa",
-    description: "NASA's ISS live view: a camera on Harmony looking forward at an angle, IDA-2 in view (the stream's description)",
+    description:
+      "NASA's ISS live view: a fixed camera looking down at the Earth, a cover's edge in view — not the forward view at IDA-2 the stream describes (ISS0: IDA-2 never seen, 4 and 5 Nov 2026)",
     mount: EHDC5,
-    mountFrom: "the model's Node2_Details_EHDC_5 (Harmony's external HD camera 5) — the likeliest match, not confirmed",
-    look: unit([IDA2[0] - EHDC5[0], IDA2[1] - EHDC5[1], IDA2[2] - EHDC5[2]]),
-    fovDeg: null,
-    status: "estimate",
+    mountFrom:
+      "unknown — the model's Node2_Details_EHDC_5 (Harmony's external HD camera 5) kept as a place-holder: that camera looks forward at IDA-2, this one down",
+    // (ISS2, the ground's flow — scripts/iss-flow-yaw.py --tilt 90, 9 pairs of the dense capture of 5 Nov 2026: the ground streams
+    // to the picture's right, the right aft (89.0° from the direction of flight; directions within 0.2°); its horizontal field
+    // 36° (σ 3.6°) from the flow's length — the frames' interval read from their capture times, ±1–2 s; the nadir assumed: the
+    // flow even from the picture's top to its bottom, a small tilt along the track not excluded)
+    look: [0, 0, 1],
+    right: [-1, 0, 0],
+    fovDeg: 36,
+    status: "calibrated",
   },
 ];
 
