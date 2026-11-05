@@ -140,3 +140,48 @@ def cellerr(kk):
                 e.append(abs(math.log(r)))
     return round(float(np.median(e)), 3), round(float(np.percentile(e, 90)), 3), len(e)
 print(json.dumps({"cell_err_global (median, p90, cells)": cellerr(np.clip(glob, 2, 10)), "cell_err_local": cellerr(Kf)}))
+# ---- material-matched pairs: across each shadow edge along its normal, 3 px in and out; kept when both are ground and their
+# chroma agree once the shadow's blue tint is taken out (the inside times the global k)
+gy, gx = np.gradient(a)
+gn = np.hypot(gx, gy) + 1e-9
+nb = hard & ~(np.roll(hard, 1, 0) & np.roll(hard, -1, 0) & np.roll(hard, 1, 1) & np.roll(hard, -1, 1))
+ey, ex = np.nonzero(nb & GROUND & (gn > 0.05))
+ux, uy = gx[ey, ex] / gn[ey, ex], gy[ey, ex] / gn[ey, ex]  # (into the shadow)
+def at(px, py):
+    px = np.clip(np.round(px).astype(int), 0, W - 1); py = np.clip(np.round(py).astype(int), 0, H - 1)
+    return px, py
+ix, iy = at(ex + 3 * ux, ey + 3 * uy); ox, oy = at(ex - 3 * ux, ey - 3 * uy)
+ok = GROUND[iy, ix] & GROUND[oy, ox] & (alpha[iy, ix] > 0.8) & (alpha[oy, ox] < 0.1)
+cin = lin[iy, ix] * np.clip(glob[0, 0], 2, 10); cout = lin[oy, ox]
+chroma = lambda c: c / (c.sum(1, keepdims=True) + 1e-6)
+same = np.abs(chroma(cin) - chroma(cout)).max(1) < 0.04
+kp = cout / np.maximum(lin[iy, ix], 1e-5)
+plaus = np.all((kp > 1.5) & (kp < 15), 1)
+keep = ok & same & plaus
+print(json.dumps({"edge_pairs": int(ok.sum()), "matched": int(keep.sum())}))
+# (held out by the same 8-px checker, at the edge pixel; per cell, matched k against the plain global)
+chk = ((ex // 8 + ey // 8) % 2) == 0
+kM = np.median(kp[keep & chk], 0)
+def cell_err_pairs(kfun):
+    e = []
+    ci, cj = ey // cell, ex // cell
+    for i in range(nc[0]):
+        for j in range(nc[1]):
+            s = keep & ~chk & (ci == i) & (cj == j)
+            if s.sum() >= 10:
+                kk = kfun(i, j)
+                r = np.median(lin[iy[s], ix[s], 1] * kk[1]) / np.median(lin[oy[s], ox[s], 1])
+                e.append(abs(math.log(r)))
+    return round(float(np.median(e)), 3), round(float(np.percentile(e, 90)), 3), len(e)
+# (local matched k per cell from the fitting half, the matched global where a cell has under 10)
+def kcell(i, j):
+    ci, cj = ey // cell, ex // cell
+    s = keep & chk & (ci == i) & (cj == j)
+    return np.median(kp[s], 0) if s.sum() >= 10 else kM
+print(json.dumps({"matched_k": [round(float(x), 2) for x in kM], "cell_err_matched_global": cell_err_pairs(lambda i, j: kM),
+                  "cell_err_matched_local": cell_err_pairs(kcell), "cell_err_plain_global_on_same_pairs": cell_err_pairs(lambda i, j: glob[0, 0])}))
+relitM = lin * (1 + (kM - 1) * alpha[..., None])
+Image.fromarray((np.clip(relitM, 0, 1) ** (1 / 2.2) * 255).astype(np.uint8)).save(f"{out}/relit3-matched.png")
+LrM = 0.2126 * relitM[..., 0] + 0.7152 * relitM[..., 1] + 0.0722 * relitM[..., 2]
+hpM = LrM - box(LrM, 2)
+print(json.dumps({"noise_ratio_matched": round(float(np.std(hpM[alpha > 0.9]) / np.std(hpM[(alpha < 0.05) & GROUND])), 2)}))
