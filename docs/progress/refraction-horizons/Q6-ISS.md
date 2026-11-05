@@ -162,3 +162,98 @@ géométrie d'une image à l'autre, ce qui est un bon point pour la calibration.
 - **Suite, ISS2 :** ajuster attache, axe et champ sur les images horodatées d'ISS0. Le limbe donne le tangage et le roulis,
   les côtes la géométrie au sol (nadir), le véhicule amarré la caméra d'amarrage. L'heure lue dans l'incrustation situe
   l'ISS par SGP4.
+
+## ISS0 — la capture dense (le 5 novembre)
+
+La capture a été faite avec `bun scripts/iss-capture.ts --every 10 --for 30`, de 10 h 59 à 11 h 30 UTC, dans
+`~/.kerr-lab/iss-corpus/dense-20261105-1059` (hors du dépôt, avec le manifeste et `sen-overlay.tsv`). Elle est allée à son
+terme du premier coup. Les heures citées ici sont celles de la saisie (UTC).
+
+### Ce qui a été capturé
+
+- **NASA : 159 images** (1280 × 720), de 10:59:52 à 11:29:45. **Sen : 157 images** (1920 × 1080), de 10:59:54 à 11:29:47.
+  On en attendait environ 180 par source.
+- **Le pas médian est de 10 s** pour les deux sources, mais il vaut en moyenne 11,4 s (NASA) et 11,5 s (Sen). Pour la NASA,
+  129 pas sur 158 font exactement 10 s ; pour Sen, 120 pas sur 156 font de 9 à 11 s. Le script redemande l'URL du flux à
+  chaque saisie, et ses saisies lentes allongent le pas : c'est ce qui coûte la vingtaine d'images manquantes.
+- **Trous de plus de 30 s**, tous entre 11:18 et 11:21 :
+  - NASA : 11:18:24 → 11:18:59 (35 s), 11:19:26 → 11:20:05 (39 s), 11:20:05 → 11:21:08 (63 s), sans erreur dans le journal ;
+  - Sen : 11:18:17 → 11:19:05 (48 s), 11:19:05 → 11:20:56 (111 s), avec deux saisies ratées dans le journal (ffmpeg 183,
+    à 11:18:27 et 11:19:33).
+- **Images noires** (luminance moyenne sous 10 sur 255) : 59 côté NASA et 57 côté Sen. Ce sont des images de nuit, et non des
+  défauts de capture.
+- **Intercalaires**, repérés par la reconnaissance du texte de toute l'image :
+  - NASA : 9 écrans « temporarily suspended due to a routine loss-of-signal period », de 11:24:56 à 11:25:41 et de 11:28:55 à
+    11:29:25 ;
+  - Sen : 9 images « Replay during loss of signal », de 11:25:03 à 11:25:46 et de 11:29:08 à 11:29:38, plus 3 « Switching
+    camera » de 11:15:50 à 11:16:10 et un plan de studio à 11:22:26 (un entretien) ;
+  - aucun « Previously recorded » dans le flux NASA.
+- **Les deux flux perdent le signal ensemble.** Les deux pertes tombent aux mêmes minutes sur les deux flux, ce qui
+  correspond à la même liaison descendante de la station. Les bascules de Sen arrivent de 3 à 13 s après celles de la NASA
+  (borne tirée des saisies encadrantes, à 10 s près). Le direct NASA aurait donc quelques secondes de retard de moins que
+  celui de Sen ; c'est une estimation, pas une mesure.
+
+### L'heure incrustée de Sen
+
+- `swift scripts/iss-overlay-ocr.swift` lit l'heure sur **156 images sur 157**. La seule image sans heure est le plan de studio.
+- **Le direct retarde de 18 s en médiane** sur l'heure de saisie (de 12 à 21 s ; 80 % des images entre 16 et 20 s). Le
+  4 novembre, on avait mesuré 17 s (de 10 à 21 s) avec une saisie par minute.
+- **L'altitude est lue sur 52 images**. Elle décroît régulièrement, de 426,2 km à 10:59:48 (heure incrustée) à 418,5 km vers
+  11:27, ce qui reste dans la plage de la veille (419–433 km).
+- **Attention aux reprises :** pendant un « Replay during loss of signal », l'horloge de l'incrustation continue au rythme
+  du direct (retard de 15 à 20 s), alors que l'image est une reprise. Il faut exclure ces images de la géométrie à la
+  seconde.
+
+### Le classement par plages (heures de saisie)
+
+| Source | Plage | Vue | Remarques |
+|---|---|---|---|
+| Sen | 10:59:54 – 11:09 | **Horizon**, jour | océan Indien puis mer de Java ; reflet du Soleil sur la mer ; un élément blanc de la structure dans le coin haut gauche |
+| Sen | 11:09 – 11:15:40 | **Horizon**, terminateur et coucher | le Soleil descend sur le limbe à droite (reflets, éblouissement de 11:12 à 11:14), puis seul le fin trait du limbe |
+| Sen | 11:15:50 – 11:16:10 | « Switching camera » | 3 images |
+| Sen | 11:16:20 – 11:24:47, 11:25:54 – 11:28:58 | **Nuit** | presque noire ; des lumières de villes à 11:16:34–11:16:43 et 11:23:05–11:24:15 ; la caméra n'est pas identifiable dans le noir |
+| Sen | 11:22:26 | studio | un entretien |
+| Sen | 11:25:03 – 11:25:46, 11:29:08 – 11:29:38 | **Reprise** pendant la perte de signal | des vues de jour : ce ne sont pas des images du direct. L'image de 11:29:47 (de jour, sans étiquette de reprise lue) en est probablement la fin |
+| NASA | 10:59:52 – 11:08:51 | **caméra fixe**, jour | le sol et les nuages défilent sous la housse |
+| NASA | 11:09:11 – 11:14:46 | crépuscule | la housse au soleil, la Terre déjà noire |
+| NASA | 11:14:56 – 11:24:43, 11:25:51 – 11:28:45, 11:29:35 – 11:29:45 | nuit | bruit ; des villes de 11:23:03 à 11:24:23 |
+| NASA | 11:24:56 – 11:25:41, 11:28:55 – 11:29:25 | perte de signal | |
+
+Les deux captures ne contiennent ni vue nadir de Sen ni vue de Dragon : la vue nadir n'a pas été diffusée pendant ces 30 min,
+et Dragon n'apparaît que dans le texte de l'habillage, de 11:00 à 11:02.
+
+**La caméra NASA n'est pas celle du descriptif.** Le flux annonce une caméra sur Harmony, regardant vers l'avant, avec
+l'adaptateur IDA-2 visible. Or aucune image ne montre IDA-2. On voit la même charge sous housse blanche à sangles noires que le
+4 novembre, avec le même cadrage (la housse et l'échelle de sangles aux mêmes pixels, à l'œil). Le sol se déplace sans
+perspective, et la vue est proche du nadir. La position de cette caméra reste à trouver en ISS1.
+
+![NASA, la caméra fixe : six images à 10 s d'écart (en haut), puis jour, terminateur, crépuscule, nuit, perte de signal (domaine public)](Q6/iss0-dense-nasa.jpg)
+
+### Ce que la densité apporte : le mouvement à 10 s
+
+Le mouvement a été mesuré sur les paires d'images consécutives (au plus 12 s d'écart), en appariant des points SIFT et en
+estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable, hors du dépôt.
+- **NASA, de jour (49 paires) :** le sol défile **vers la droite de l'image, à 33 px/s en médiane** (de 26 à 51 px/s), soit
+  environ **330 px en 10 s, un quart de la largeur**. La vitesse est la même du haut au bas de l'image (31 à 34 px/s par
+  bande), ce qui confirme une vue proche du nadir. La station avance donc vers la gauche de l'image.
+- **NASA, la caméra ne bouge pas :** sur la housse, la corrélation de phase donne un décalage nul sur les 35 paires de 11:08 à
+  11:14. Il n'y a ni panoramique ni zoom.
+- **Sen horizon, de jour (49 paires) :** le sol **remonte vers le limbe**, de 3,3 px/s en médiane, avec un gradient de
+  perspective : environ 1,4 px/s près du limbe, 3,7 px/s entre 20 et 40 % de la hauteur, 5,7 px/s entre 40 et 60 % et 8 px/s
+  entre 60 et 80 %. Le sol s'éloigne vers l'horizon, ce qui indique une vue tournée vers l'arrière de la trajectoire ou une
+  image retournée. Il faudra le vérifier en ISS1 sur le modèle.
+- **Le limbe de Sen dérive lentement :** au milieu de l'image, il monte de 105 à 90 px (sur 1080) entre 11:00 et 11:12. Cette
+  dérive est continue, sans saut, ce qui est cohérent avec une caméra fixe. Elle est trop grande pour venir de la seule baisse
+  d'altitude ; l'attitude de la station ou la forme de la Terre sont à examiner avec la géométrie (ISS2).
+- **Usage :** ces vitesses apparentes, avec l'instant incrusté et l'orbite SGP4 du jour, contraignent l'orientation et le champ
+  de chaque caméra (ISS1–ISS2). Elles fourniront aussi la référence du défilement à reproduire dans les vues ISS du jeu.
+
+### Reste d'ISS0
+
+- Une capture dense de la vue **nadir** de Sen et de la vue **Dragon**, absentes de ces 30 min. Il faut viser une plage où le
+  flux les diffuse : la veille, le nadir passait vers 05:00 et vers 06:35 UTC.
+- La saisie est plus lente que prévu (11,4 s en moyenne au lieu de 10). Pour un pas de 10 s tenu, il faudrait saisir les deux
+  flux en parallèle dans le script.
+- Les « Previously recorded » de la NASA, absents des deux captures.
+- Les tolérances de calibration ; exclure les reprises de Sen de la géométrie.
+- **Puis ISS1 :** situer la caméra NASA (la housse, la direction du défilement) et les vues Sen sur le modèle de la station.
