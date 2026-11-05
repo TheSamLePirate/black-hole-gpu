@@ -11,11 +11,15 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // (the photographs alone judged), 17:00 UTC in July (the game's Sun in the west, the photo's near noon: the double
 // shadows), frozen, the exposure locked: shots as they come, relit, as they come again (the PSNRs: relit against as they
 // come, beside the two as they come); the tiles relit or left (why), the Suns and k found, the worker's time.
+// OD_ISO: the time (the sunset's double shadows: "2026-07-10T18:45:00Z"); OD_SCENERY: the world's scenery ("off" — the
+// photographs alone —, "high": the game's own trees and buildings and their shadows beside the photo's).
 // OD_OUT: the shots (remote-results/ortho-delight).
 // Duration: ~3 min on this Mac.
 // Done when: the three shots taken, some tiles relit, no GPU error.
 const OUT = process.env.OD_OUT ?? "remote-results/ortho-delight";
 const [LAT, LON] = (process.env.OD_SITE ?? "48.8053,2.1300").split(",").map(Number) as [number, number];
+const ISO = process.env.OD_ISO ?? "2026-07-10T17:00:00Z";
+const SCENERY = process.env.OD_SCENERY ?? "off";
 afterAll(stopServer);
 test.skipIf(!E2E)(
   "L7b prototype: the orthophotos' shadows lifted in the game — tiles relit, shots before and after",
@@ -25,10 +29,10 @@ test.skipIf(!E2E)(
     const out: Record<string, unknown> = {};
     try {
       await app.js(
-        `(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${EARTH_SETTINGS}, { lookProfile: "neutral", f35Invulnerable: true, motionBlur: 0, dof: false, earthPipeline: "raster", weather: "fair", orthoDelight: false, earthScenery: "off" }); __bh.game.set("earthClouds", 0); return 1; })()`,
+        `(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${EARTH_SETTINGS}, { lookProfile: "neutral", f35Invulnerable: true, motionBlur: 0, dof: false, earthPipeline: "raster", weather: "fair", orthoDelight: false, earthScenery: "${SCENERY}" }); __bh.game.set("earthClouds", 0); return 1; })()`,
       );
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
-      const iso = "2026-07-10T17:00:00Z";
+      const iso = ISO;
       await app.js(
         `(() => { __bh.game.setDate("${iso}"); __bh.game.flyAt(${LAT}, ${LON}, 200, 0, 0); __bh.settings.shipMount = "cockpit"; document.body.classList.add("hide-ui"); return 1; })()`,
       );
@@ -44,7 +48,7 @@ test.skipIf(!E2E)(
       const loaded = async (k: string) => {
         await app
           .waitFor(
-            `(() => { __bh.touch(); const t = __bh.renderer.earthTiles; return t.orthoPending === 0 && t.delightPending === 0 && t.orthoLoaded > 0; })()`,
+            `(() => { __bh.touch(); const t = __bh.renderer.earthTiles; const sc = __bh.renderer.earthScenery.stats(); return t.orthoPending === 0 && t.delightPending === 0 && t.orthoLoaded > 0 && (__bh.settings.earthScenery === "off" || (sc.status === "ready" && !sc.pending)); })()`,
             60_000,
           )
           .catch(async () =>
