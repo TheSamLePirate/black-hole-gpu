@@ -13363,7 +13363,12 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
     var sum = vec3f(0.0);
     var wsum = 0.0;
     DISC_HIT = false;
+    // (the cloud pass's clouds for each of the pixel's rays: earthNear lets them go after a ray — a reflection's march its own —,
+    // so the three others marched their own, lit otherwise — the cloud pass's sunward march, theirs the cover's column: a pale
+    // square over the Sun behind a deck, the disc's rectangle — Q5 C10)
+    let cb = CLOUDS_BUFFERED;
     for (var s = 0u; s < rays; s++) {
+      CLOUDS_BUFFERED = cb;
       var nd = ndc;
       if (disc) {
         let o = fract((vec2f(f32(s & 1u), f32(s >> 1u)) + 0.5) * 0.5 + turn) - 0.5;
