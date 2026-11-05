@@ -13,6 +13,7 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // come, beside the two as they come); the tiles relit or left (why), the Suns and k found, the worker's time.
 // OD_ISO: the time (the sunset's double shadows: "2026-07-10T18:45:00Z"); OD_SCENERY: the world's scenery ("off" — the
 // photographs alone —, "high": the game's own trees and buildings and their shadows beside the photo's).
+// OD_ALT, OD_PITCH, OD_HDG: the height over the ground [m], the look's pitch and the heading [°] (200, −50, 0).
 // OD_OUT: the shots (remote-results/ortho-delight).
 // Duration: ~3 min on this Mac.
 // Done when: the three shots taken, some tiles relit, no GPU error.
@@ -20,6 +21,9 @@ const OUT = process.env.OD_OUT ?? "remote-results/ortho-delight";
 const [LAT, LON] = (process.env.OD_SITE ?? "48.8053,2.1300").split(",").map(Number) as [number, number];
 const ISO = process.env.OD_ISO ?? "2026-07-10T17:00:00Z";
 const SCENERY = process.env.OD_SCENERY ?? "off";
+const ALT = Number(process.env.OD_ALT ?? 200);
+const PITCH = Number(process.env.OD_PITCH ?? -50);
+const HDG = Number(process.env.OD_HDG ?? 0);
 afterAll(stopServer);
 test.skipIf(!E2E)(
   "L7b prototype: the orthophotos' shadows lifted in the game — tiles relit, shots before and after",
@@ -34,11 +38,11 @@ test.skipIf(!E2E)(
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       const iso = ISO;
       await app.js(
-        `(() => { __bh.game.setDate("${iso}"); __bh.game.flyAt(${LAT}, ${LON}, 200, 0, 0); __bh.settings.shipMount = "cockpit"; document.body.classList.add("hide-ui"); return 1; })()`,
+        `(() => { __bh.game.setDate("${iso}"); __bh.game.flyAt(${LAT}, ${LON}, ${ALT}, ${HDG}, 0); __bh.settings.shipMount = "cockpit"; document.body.classList.add("hide-ui"); return 1; })()`,
       );
-      await app.js(`new Promise((q) => setTimeout(() => { __bh.camera.setLook(0, -50); q(1); }, 800))`);
+      await app.js(`new Promise((q) => setTimeout(() => { __bh.camera.setLook(0, ${PITCH}); q(1); }, 800))`);
       await app.js(
-        `(() => { __bh.camera.setLook(0, -50); __bh.settings.ship = false; __bh.game.setDate("${iso}"); __bh.freeze(true); return 1; })()`,
+        `(() => { __bh.camera.setLook(0, ${PITCH}); __bh.settings.ship = false; __bh.game.setDate("${iso}"); __bh.freeze(true); return 1; })()`,
       );
       const frames = (n: number) =>
         app.js(

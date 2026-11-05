@@ -50,6 +50,9 @@ const TALLEST = 40;
 const GROUND_H = 1.5;
 /** a Sun accepted from this overlap */
 const IOU_MIN = 0.2;
+/** the photo's Sun's plausible heights [°]: the IGN flies from spring to late summer, near noon (a Sun found lower — 17° at
+ *  Sceaux, IoU 0.46 — was a row of trees' outline matched by chance) */
+const SUN_EL = [28, 70] as const;
 /** pairs a tile's own k needs */
 const PAIRS_MIN = 30;
 const sunMemo = new Map<string, [number, number]>();
@@ -271,13 +274,13 @@ export function delightTile(px: Uint8ClampedArray | Uint8Array, q: DelightIn): D
   for (let y = 0; y < W / 2; y++) for (let x = 0; x < W / 2; x++) dark2[y * (W / 2) + x] = dark[2 * y * W + 2 * x]!;
   let best: [number, number, number] = [0, 0, -1];
   const tryAt = (az: number, el: number, f: number) => {
-    if (el < 10 || el > 75) return;
+    if (el < SUN_EL[0] || el > SUN_EL[1]) return;
     const v = iou(predictShadow(q, ground, az, el, f, f === 2 ? 1 : 2), f === 2 ? dark2 : dark);
     if (v > best[2]) best = [az, el, v];
   };
   const near = sunMemo.get(q.area) ?? lastSun;
   if (near) for (let a = -20; a <= 20; a += 10) for (let e = -10; e <= 10; e += 5) tryAt(near[0] + a, near[1] + e, 2);
-  if (best[2] < IOU_MIN * 1.5) for (let az = 90; az <= 270; az += 15) for (let el = 20; el <= 65; el += 7.5) tryAt(az, el, 2);
+  if (best[2] < IOU_MIN * 1.5) for (let az = 90; az <= 270; az += 15) for (let el = 30; el <= 65; el += 7.5) tryAt(az, el, 2);
   const [a0, e0] = best;
   best = [0, 0, -1];
   for (const a of [-4, 0, 4]) for (const e of [-2, 0, 2]) tryAt(a0 + a, e0 + e, 1);
