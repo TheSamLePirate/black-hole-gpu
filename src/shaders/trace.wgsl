@@ -10884,6 +10884,28 @@ fn clvTau(p: vec3f) -> f32 {
   let c11 = mix(clvAt(i0.x, i0.y + 1u, i0.z + 1u), clvAt(i0.x + 1u, i0.y + 1u, i0.z + 1u), w.x);
   return mix(mix(c00, c10, w.y), mix(c01, c11, w.y), w.z);
 }
+// (Q5 P8) where the ray enters the weather's layer i — wxCloud's own interval —; 3e38: it misses it, or the layer is off
+fn wxLayerEntry(ro: vec3f, rd: vec3f, tHit: f32, i: u32) -> f32 {
+  let L = P.wx[1u + i];
+  if (L.z <= 0.0) { return 3e38; }
+  let hb = L.x / EARTH_RM;
+  let ht = L.y / EARTH_RM;
+  let b = dot(ro, rd);
+  let off2 = dot(ro, ro) - b * b;
+  let hT = (1.0 + ht) * (1.0 + ht) - off2;
+  if (hT <= 0.0) { return 3e38; }
+  var t0 = max(-b - sqrt(hT), 0.0);
+  var t1 = -b + sqrt(hT);
+  let hB = (1.0 + hb) * (1.0 + hb) - off2;
+  if (hB > 0.0) {
+    let b0 = -b - sqrt(hB);
+    let b1 = -b + sqrt(hB);
+    if (b0 > t0) { t1 = min(t1, b0); } else if (b1 > t0) { t0 = b1; }
+  }
+  if (tHit > 0.0) { t1 = min(t1, tHit); }
+  t1 = min(t1, 480000.0 / EARTH_RM);
+  return select(3e38, t0, t1 > t0);
+}
 fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f32) -> CloudVol {
   var o: CloudVol;
   o.t = -1.0;
@@ -11478,26 +11500,30 @@ fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx:
   var cs = EarthClouds(alpha, cl, tc, ta);
   // the weather's layers round the camera (their order along the ray: one way or the other, the lowest
   // first — up from below them, down from above)
-  // (Q5 P8: from below every layer's base or above every top, the layers in the order the ray meets them — concentric shells
-  // apart —, and none marched behind an opaque one: wxA, what the layers met so far hide, over 0.999 — the composition by
-  // depth, the image the same. Inside a layer, or TUNE_SC_SKIP 256: every layer, as before — the A/B)
+  // (Q5 P8: the layers in the order the ray meets them — concentric shells apart, each marched over one interval of the ray
+  // (wxCloud), the intervals never overlapping: sorted by where the ray enters them —, and none marched behind an opaque one:
+  // wxA, what the layers met so far hide, over 0.999 — the composition by depth, the image the same. TUNE_SC_SKIP 256: every
+  // layer in its index's order, as before — the A/B)
   var wxA = 0.0;
   var fromAbove = false;
   if (HAS_WX && volume && earth && WX_W > 0.0) {
+    let ordered = (TUNE_SC_SKIP & 256u) == 0u;
+    var te = vec3f(3e38);
+    if (ordered) { for (var i = 0u; i < 3u; i++) { te[i] = wxLayerEntry(ro, rd, tHit, i); } }
+    // (the three sorted: the order's indices)
+    var o0 = 0u;
+    var o1 = 1u;
+    var o2 = 2u;
+    if (te[o1] < te[o0]) { let x = o0; o0 = o1; o1 = x; }
+    if (te[o2] < te[o1]) { let x = o1; o1 = o2; o2 = x; }
+    if (te[o1] < te[o0]) { let x = o0; o0 = o1; o1 = x; }
     let hCam = (length(ro) - 1.0) * EARTH_RM;
-    var lo = 3e38;
     var hi = -3e38;
-    for (var i = 0u; i < 3u; i++) {
-      if (P.wx[1u + i].z > 0.0) {
-        lo = min(lo, P.wx[1u + i].x);
-        hi = max(hi, P.wx[1u + i].y);
-      }
-    }
-    let ordered = (TUNE_SC_SKIP & 256u) == 0u && (hCam < lo || hCam > hi);
+    for (var i = 0u; i < 3u; i++) { if (P.wx[1u + i].z > 0.0) { hi = max(hi, P.wx[1u + i].y); } }
     fromAbove = ordered && hCam > hi;
     for (var n = 0u; n < 3u; n++) {
-      let i = select(n, 2u - n, fromAbove);
-      if (ordered && wxA > 0.999) { break; }
+      let i = select(select(o2, o1, n == 1u), o0, n == 0u);
+      if (ordered && (wxA > 0.999 || te[i] > 1e38)) { break; }
       let lv = wxCloud(ro, rd, tHit, i, Ls, E, jit);
       if (lv.alpha <= 0.0) { continue; }
       wxA = 1.0 - (1.0 - wxA) * (1.0 - lv.alpha);
