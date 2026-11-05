@@ -14,6 +14,7 @@ import { SHORE_VEC4S } from "./system/earth-shore-layout";
 import { REFR_VEC4S } from "./system/refraction-gpu";
 import { TLUT_VEC4S } from "./system/earth-air-layout";
 import { WXGRID_VEC4S } from "./system/weather-grid-layout";
+import { CLV_VEC4S } from "./system/cloud-light-layout";
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -99,4 +100,8 @@ export { TLUT_VEC4S };
 /** (Q5 C5) the real weather's model on a grid about the camera (system/weather-grid.ts; trace.wgsl wxGridCover) */
 export const TABLE_WXGRID = TABLE_TLUT + TLUT_VEC4S;
 export { WXGRID_VEC4S };
-export const TABLE_VEC4S = TABLE_WXGRID + WXGRID_VEC4S;
+/** (Q5) the clouds' light volume about the camera: the sunlight's optical depth past each sample's own first steps
+ *  (system/cloud-light-layout.ts; trace.wgsl cloudLightVolume, clvTau) */
+export const TABLE_CLV = TABLE_WXGRID + WXGRID_VEC4S;
+export { CLV_VEC4S };
+export const TABLE_VEC4S = TABLE_CLV + CLV_VEC4S;

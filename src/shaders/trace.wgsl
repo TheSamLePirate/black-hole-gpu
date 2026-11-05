@@ -10766,6 +10766,77 @@ fn wxLightTau(p: vec3f, i: u32, Ls: vec3f, rnd: f32, n: u32) -> f32 {
   }
   return tau;
 }
+// Q5 — the clouds' light volume (system/cloud-light-layout.ts; renderer.ts encodeCloudLightVolume; gpu-tables.ts TABLE_CLV): about
+// the camera, 64 × 64 texels of 1.5 km east and north (±48 km: the clouds a view meets are mostly tens of km off — ±12 km,
+// 375 m, left most samples out, its gain none), 24 between the weather's lowest base and highest top, each the sunlight's
+// optical depth from CLV_START_M (180 m) on towards the Sun — every layer, the clouds' shadow map past 7.7 km —, computed once a
+// frame (cloudLightVolume): the cloud pass's samples march their own first 180 m (the edges' silver lining) and read the rest
+// here, one trilinear read for six densities. Its frame the same in both: the point under the camera snapped to its texels.
+const CLV_OFF = 2578427u;
+const CLV_N = 64u;
+const CLV_NZ = 24u;
+const CLV_HALF_M = 48000.0;
+const CLV_START_M = 180.0;
+struct ClvFrame { up: vec3f, east: vec3f, north: vec3f, hLo: f32, hHi: f32, on: bool };
+fn clvFrame() -> ClvFrame {
+  var f: ClvFrame;
+  var hLo = 1e9;
+  var hHi = -1e9;
+  for (var i = 0u; i < 3u; i++) {
+    let L = P.wx[1u + i];
+    if (L.z > 0.0) {
+      hLo = min(hLo, L.x);
+      hHi = max(hHi, L.y);
+    }
+  }
+  f.hLo = max(hLo, 0.0);
+  f.hHi = hHi;
+  f.on = HAS_WX && P.wx[0].x > 0.0 && hHi > f.hLo;
+  let c = normalize(nearCam());
+  let st = 2.0 * CLV_HALF_M / f32(CLV_N) / EARTH_RM;
+  let lat = round(asin(clamp(c.z, -1.0, 1.0)) / st) * st;
+  let lonSt = st / max(cos(lat), 0.05);
+  let lon = round(atan2(c.y, c.x) / lonSt) * lonSt;
+  f.up = vec3f(cos(lat) * cos(lon), cos(lat) * sin(lon), sin(lat));
+  f.east = vec3f(-sin(lon), cos(lon), 0.0);
+  f.north = cross(f.up, f.east);
+  return f;
+}
+// the texel (ix, iy, iz)'s point (the squashed space)
+fn clvPoint(f: ClvFrame, ix: u32, iy: u32, iz: u32) -> vec3f {
+  let x = ((f32(ix) + 0.5) / f32(CLV_N) * 2.0 - 1.0) * CLV_HALF_M;
+  let y = ((f32(iy) + 0.5) / f32(CLV_N) * 2.0 - 1.0) * CLV_HALF_M;
+  let h = mix(f.hLo, f.hHi, f32(iz) / f32(CLV_NZ - 1u));
+  return normalize(f.up + (f.east * x + f.north * y) / EARTH_RM) * (1.0 + h / EARTH_RM);
+}
+fn clvAt(ix: u32, iy: u32, iz: u32) -> f32 {
+  let n = (iy * CLV_NZ + iz) * CLV_N + ix;
+  return bodies[CLV_OFF + 1u + n / 4u][n % 4u];
+}
+// The sunlight's optical depth past CLV_START_M from p (squashed space), the volume's, trilinear; −1: not written this frame,
+// or p outside it
+fn clvTau(p: vec3f) -> f32 {
+  if (bodies[CLV_OFF].x < 0.5) { return -1.0; }
+  let f = clvFrame();
+  if (!f.on) { return -1.0; }
+  let r = length(p);
+  let q = p / r;
+  let cu = dot(q, f.up);
+  if (cu <= 0.0) { return -1.0; }
+  let v = q / cu - f.up;
+  let fx = (dot(v, f.east) * EARTH_RM / CLV_HALF_M * 0.5 + 0.5) * f32(CLV_N) - 0.5;
+  let fy = (dot(v, f.north) * EARTH_RM / CLV_HALF_M * 0.5 + 0.5) * f32(CLV_N) - 0.5;
+  let fz = ((r - 1.0) * EARTH_RM - f.hLo) / max(f.hHi - f.hLo, 1.0) * f32(CLV_NZ - 1u);
+  let mx = f32(CLV_N) - 1.0;
+  if (fx < 0.0 || fy < 0.0 || fx > mx || fy > mx || fz < 0.0 || fz > f32(CLV_NZ - 1u)) { return -1.0; }
+  let i0 = vec3u(min(vec3f(fx, fy, fz), vec3f(mx - 1.0, mx - 1.0, f32(CLV_NZ) - 2.0)));
+  let w = vec3f(fx, fy, fz) - vec3f(i0);
+  let c00 = mix(clvAt(i0.x, i0.y, i0.z), clvAt(i0.x + 1u, i0.y, i0.z), w.x);
+  let c10 = mix(clvAt(i0.x, i0.y + 1u, i0.z), clvAt(i0.x + 1u, i0.y + 1u, i0.z), w.x);
+  let c01 = mix(clvAt(i0.x, i0.y, i0.z + 1u), clvAt(i0.x + 1u, i0.y, i0.z + 1u), w.x);
+  let c11 = mix(clvAt(i0.x, i0.y + 1u, i0.z + 1u), clvAt(i0.x + 1u, i0.y + 1u, i0.z + 1u), w.x);
+  return mix(mix(c00, c10, w.y), mix(c01, c11, w.y), w.z);
+}
 fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f32) -> CloudVol {
   var o: CloudVol;
   o.t = -1.0;
@@ -10871,13 +10942,22 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
     // it, not counted twice; off the map — or TUNE_GSKIP 1048576 —, the other layers' mean veil, as before)
     var far = false;
     if (CLOUD_LIGHT_MARCH || (QUALITY_PIPELINE && TUNE_CLOUD_LIGHT > 0u)) {
-      // (VIPER C3's near samples a shorter sunward march — 4 steps, 900 m —, the map from there: their cost)
-      let nL = select(CLOUD_NEAR_N, 4u, j < nN);
-      var cf = -1.0;
-      if ((TUNE_GSKIP & 1048576u) == 0u) { cf = cloudShadowAt(p + Ls * (60.0 * f32((1u << nL) - 1u) / EARTH_RM)); }
-      far = cf >= 0.0;
       let rl = fract(RNDV.x + f32(j) * 0.6180339887);
-      tauSun = wxLightTau(p, i, Ls, rl, select(6u, nL, far)) + select(0.0, -log(max(cf, 1e-6)), far);
+      // (the light volume where it covers the sample: its own first 180 m, the volume's past them — every layer, the map's far
+      // field in it —, one read for six densities; renderer.cloudLightVolumeOn false, or off the volume: the march below)
+      var tv = -1.0;
+      if (j >= nN && (TUNE_GSKIP & 4194304u) == 0u) { tv = clvTau(p); }
+      if (tv >= 0.0) {
+        tauSun = wxLightTau(p, i, Ls, rl, 2u) + tv;
+        far = true;
+      } else {
+        // (VIPER C3's near samples a shorter sunward march — 4 steps, 900 m —, the map from there: their cost)
+        let nL = select(CLOUD_NEAR_N, 4u, j < nN);
+        var cf = -1.0;
+        if ((TUNE_GSKIP & 1048576u) == 0u) { cf = cloudShadowAt(p + Ls * (60.0 * f32((1u << nL) - 1u) / EARTH_RM)); }
+        far = cf >= 0.0;
+        tauSun = wxLightTau(p, i, Ls, rl, select(6u, nL, far)) + select(0.0, -log(max(cf, 1e-6)), far);
+      }
       // (the measure's reference — TUNE_GSKIP 4194304 —: every cloud on the sunbeam marched, 11 steps doubling out to 120 km,
       // no map, no veil)
       if ((TUNE_GSKIP & 4194304u) != 0u) {
@@ -11098,6 +11178,44 @@ fn wxRainShafts(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f32) 
   o.alpha = 1.0 - Tv;
   o.cl = col / max(1.0 - Tv, 1e-4);
   return o;
+}
+
+// Q5 — the clouds' light volume's kernel (clvFrame, clvTau): a thread a texel, its slices side by side in the texture
+// (renderer.ts copies it into TABLE_CLV): the sunlight's optical depth from CLV_START_M on — every weather layer's cheap density,
+// six steps doubling from 120 m (to ~7.7 km) —, the clouds' shadow map past them.
+@group(1) @binding(16) var clvOut: texture_storage_2d<r32float, write>;
+@compute @workgroup_size(8, 8)
+fn cloudLightVolume(@builtin(global_invocation_id) gid: vec3u) {
+  if (gid.x >= CLV_N * CLV_NZ || gid.y >= CLV_N) { return; }
+  var tau = 0.0;
+  if (HAS_BODIES && P.near0.w > 0.5) {
+    let k = u32(P.near1.w);
+    if (isEarth(k) && earthOn()) {
+      setAir(k);
+      WX_W = select(0.0, P.wx[0].x, HAS_WX);
+      WX_Q = normalize(nearCam());
+      let f = clvFrame();
+      if (f.on) {
+        let p = clvPoint(f, gid.x % CLV_N, gid.y, gid.x / CLV_N);
+        let lt = nearLight(k);
+        let Ls = normalize(squashed(toBody(lt.dir), squashOf(k)));
+        var d = CLV_START_M;
+        var st = 120.0;
+        for (var s = 0u; s < 6u; s++) {
+          let x = p + Ls * ((d + 0.5 * st) / EARTH_RM);
+          for (var i = 0u; i < 3u; i++) {
+            if (P.wx[1u + i].z > 0.0) { tau += wxDensity(x, i, true).x * st; }
+          }
+          d += st;
+          st *= 2.0;
+        }
+        let cf = cloudShadowAt(p + Ls * (d / EARTH_RM));
+        if (cf >= 0.0) { tau += -log(max(cf, 1e-6)); }
+      }
+      WX_W = 0.0;
+    }
+  }
+  textureStore(clvOut, vec2i(gid.xy), vec4f(tau, 0.0, 0.0, 0.0));
 }
 
 // ---------------------------------------------------------------------------------------------

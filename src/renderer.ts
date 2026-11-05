@@ -42,6 +42,7 @@ import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT } from "
 import { Lightning } from "./system/lightning";
 import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT } from "./system/tree-shadow";
 import { GTAO_BINDING, GTAO_TEXTURE_LIMIT, Gtao } from "./system/gtao";
+import { CLV_TEX_H, CLV_TEX_W } from "./system/cloud-light-layout";
 import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N } from "./system/cloud-shadow";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import { BodyRaster, reliefMax } from "./system/body-raster";
@@ -111,6 +112,7 @@ import {
   SH_VEC4S,
   SKY_AMBIENT_VEC4S,
   CSM_VEC4S,
+  TABLE_CLV,
   TABLE_CSM,
   TABLE_TSM,
   TABLE_GEOID,
@@ -2806,6 +2808,7 @@ export class Renderer {
     t.hintBind = undefined;
     t.cloudBind = undefined;
     this.csmBind0 = undefined;
+    this.clvBind0 = undefined;
     // (the cloud pass's textures: the live view's only — the pass runs there alone —, made again when its size changes —
     // not at every rebinding, an asset streamed in: their history kept)
     const cw = Math.ceil(t.width / 2);
@@ -5832,6 +5835,8 @@ export class Renderer {
     const hint = !quality && this.rasterHint ? (this.terrainRaster?.distanceTexture() ?? null) : null;
     // (the clouds' shadow map — trace.wgsl cloudShadow — before every kernel that reads it)
     if (!quality) this.encodeCloudShadow(enc, t);
+    // (the clouds' light volume — trace.wgsl cloudLightVolume —: after their shadow map, which it reads, before the cloud pass)
+    if (!quality) this.encodeCloudLightVolume(enc, t);
     // (the clear sky's light — trace.wgsl skyAmbient — before every kernel that reads it: the ground's, the clouds')
     this.encodeSkyAmbient(enc, t);
     // (the aerial perspective's table before the rays that read it)
@@ -8655,6 +8660,76 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     p.end();
     enc.copyTextureToBuffer({ texture: this.csmHead! }, { buffer: this.bodyBuf, offset: TABLE_CSM * 16 }, [CSM_VEC4S, 1]);
     this.csmTableOn = true;
+  }
+  /** (Q5) the clouds' light volume about the camera (trace.wgsl cloudLightVolume, clvTau — system/cloud-light-layout.ts): the
+   *  cloud pass's samples read the sunlight's optical depth past their first 180 m from it rather than marching it; false: the
+   *  march, as before (an A/B) */
+  cloudLightVolumeOn = true;
+  private clvTex: GPUTexture | null = null;
+  private clvPipe: GPUComputePipeline | null = null;
+  private clvWanted = false;
+  private clvWrite: GPUBindGroup | null = null;
+  private clvTableOn = false;
+  private clvBind0?: { t: Target; bind: GPUBindGroup };
+  private encodeCloudLightVolume(enc: GPUCommandEncoder, t: Target) {
+    const d = this.device;
+    // (the weather's layers near the camera — the volume spans them —, the cloud pass drawing them)
+    const want = this.cloudLightVolumeOn && this.cloudShadow && this.cloudPass && this.cloudPassOn && !!this.lastNear && this.nearEarthNow;
+    if (!want || !this.clvPipe) {
+      if (this.clvTableOn) d.queue.writeBuffer(this.bodyBuf, TABLE_CLV * 16, new Float32Array(4));
+      this.clvTableOn = false;
+      if (want && !this.clvWanted) {
+        this.clvWanted = true;
+        this.clvTex = d.createTexture({
+          label: "clouds' light volume",
+          size: [CLV_TEX_W, CLV_TEX_H],
+          format: "r32float",
+          usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+        });
+        const layout = d.createBindGroupLayout({
+          label: "clouds' light volume write",
+          entries: [{ binding: 16, visibility: GPUShaderStage.COMPUTE, storageTexture: { access: "write-only", format: "r32float" } }],
+        });
+        this.clvWrite = d.createBindGroup({ layout, entries: [{ binding: 16, resource: this.clvTex.createView() }] });
+        const off = ["RADIO", "POL", "JET", "SPOT", "VOL", "WH", "THICK", "RWY", "KERR", "SHADE", "SURFACE", "SCENERY", "AURORA"];
+        const t0 = performance.now();
+        void d
+          .createComputePipelineAsync({
+            layout: d.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, layout] }),
+            compute: {
+              module: this.traceModule,
+              entryPoint: "cloudLightVolume",
+              constants: { ...Object.fromEntries(off.map((f) => [`HAS_${f}`, 0])), HAS_BODIES: 1, HAS_WX: 1, QUALITY_PIPELINE: 0 },
+            },
+          })
+          .then(
+            (p) => {
+              this.clvPipe = p;
+              gpuDiagnostics.record("pipeline-compiled", `clouds' light volume: ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+            },
+            (e) => console.warn("Clouds' light volume unavailable:", e),
+          );
+      }
+      return;
+    }
+    // (its group 0 with the clouds' shadow map — it reads the far field there)
+    if (this.clvBind0?.t !== t)
+      this.clvBind0 = {
+        t,
+        bind: d.createBindGroup({ layout: this.traceLayout, entries: this.traceEntries(t, this.ship.envBuf, undefined, false, true) }),
+      };
+    const p = enc.beginComputePass(this.prof.pass("clouds' light volume"));
+    p.setPipeline(this.clvPipe);
+    p.setBindGroup(0, this.clvBind0.bind);
+    p.setBindGroup(1, this.clvWrite!);
+    p.dispatchWorkgroups(CLV_TEX_W / 8, CLV_TEX_H / 8);
+    p.end();
+    enc.copyTextureToBuffer({ texture: this.clvTex! }, { buffer: this.bodyBuf, offset: (TABLE_CLV + 1) * 16, bytesPerRow: CLV_TEX_W * 4 }, [
+      CLV_TEX_W,
+      CLV_TEX_H,
+    ]);
+    if (!this.clvTableOn) d.queue.writeBuffer(this.bodyBuf, TABLE_CLV * 16, new Float32Array([1, 0, 0, 0]));
+    this.clvTableOn = true;
   }
   /** the clear sky's light, physical and shared (trace.wgsl skyAmbient → skyIrradiance — docs/PLAN-NUAGES-AAA.md N2b): a
    *  switch for comparisons (off: the old constant bluish tenth of the sun's) */
