@@ -9962,6 +9962,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         this.tsmRevisionNext = sc.revision;
       }
       this.sceneryRaster.clock = this.rainClock % 3600;
+      // (the turbines face the weather's surface wind at the scene — Q8 D1)
+      const pl = this.earthScenery.place;
+      if (pl) this.sceneryRaster.windFrom = windFromAt(weatherAt(s, { body: "earth", ...pl }, daysOf(this.lastTime), this.weatherReal), pl, daysOf(this.lastTime));
       trees = this.sceneryRaster.encodeCull(
         enc,
         this.prof.pass("scenery raster cull"),

@@ -45,7 +45,7 @@ test.skipIf(!E2E)(
         `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 120; i++) { __bh.touch(); await f(); } return 1; })()`,
       );
       out.stats = await app.js<Record<string, unknown>>(
-        `(() => { const s = __bh.renderer.earthScenery.stats(); return { turbines: s.turbines, status: s.status, errors: s.errors ?? s.surveyErrors ?? null, pipe: __bh.renderer.earthPipelineNow(__bh.settings), mount: __bh.settings.shipMount }; })()`,
+        `(() => { const s = __bh.renderer.earthScenery.stats(); return { turbines: s.turbines, windFrom: +__bh.renderer.sceneryRaster.windFrom.toFixed(1), status: s.status, errors: s.errors ?? s.surveyErrors ?? null, pipe: __bh.renderer.earthPipelineNow(__bh.settings), mount: __bh.settings.shipMount }; })()`,
       );
       console.log(`  ${JSON.stringify(out.stats)}`);
       await app.shot(`${OUT}/cockpit.png`);

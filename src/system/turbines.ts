@@ -3,8 +3,8 @@
 // turbine its tower, nacelle and three blades as triangles in the scenery's frame — packScenery's turbines, after the bridges',
 // drawn by the raster as the buildings' meshes (scenery-raster.ts meshFs: RASTER_CODE.turbine), shaded by shadeLite (white,
 // matte: the shared air, Sun and shadows), cast into the buildings' shadow map and the relief's cascades.
-// First step: the rotor fixed, facing the prevailing south-westerly; the turning rotor, the far reach and the night's red
-// obstruction lights are the next ones.
+// Built facing TURBINE_FACING; the raster turns each head to the weather's wind and its blades by the game's clock. The far
+// reach and the night's red obstruction lights are the next steps.
 
 /** the base theme's archive in a release (the buildings' bucket — pmtiles.ts OVERTURE_BUCKET) */
 export const overtureBaseUrl = (bucket: string, release: string) => `${bucket}tiles/${release}/base.pmtiles`;
@@ -98,6 +98,8 @@ export function turbineMesh(x: number, y: number, z0: number, t: Turbine, facing
   const b0 = ring(r0, -1),
     b1 = ring(r1, top);
   for (let i = 0; i < n; i++) quad(b0[i]!, b0[(i + 1) % n]!, b1[(i + 1) % n]!, b1[i]!);
+  // (the head — nacelle, hub, blades — from here: it turns about the tower's axis to face the wind, scenery-raster.ts meshVertex)
+  const headFrom = triangles.length / 3;
   // nacelle: ~11 % of the rotor's diameter long, mostly behind the tower's axis; 2 m either side of the hub
   const L = Math.max(6, 0.11 * t.rotor),
     w = Math.max(1.6, 0.017 * t.rotor);
@@ -134,6 +136,10 @@ export function turbineMesh(x: number, y: number, z0: number, t: Turbine, facing
     positions,
     triangles,
     blades: triangles.length / 3 - bladesFrom,
+    /** the head's triangles (nacelle and hub), before the blades */
+    head: bladesFrom - headFrom,
+    /** the tower's axis on the ground (x, y) */
+    tower: [x, y] as [number, number],
     hub,
     axis: [fx, fy, 0] as [number, number, number],
     omega: Math.min(2.5, 60 / R),

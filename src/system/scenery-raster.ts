@@ -9,6 +9,7 @@
 // costs a missed exact test, never a lost tree) — in the terrain raster's pass, against its depth, their id in the
 // visibility target's g (the cell + 1, exact in a float below 2²⁴), the proxy's distance in its b.
 
+import { TURBINE_FACING } from "./turbines";
 import { TERRAIN_RASTER_FORMAT } from "./terrain-raster";
 import { TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 import { RASTER_CODE, RASTER_CODE_SCALE } from "./terrain-raster-hint";
@@ -512,14 +513,22 @@ fn meshVertex(vi: u32) -> vec3f {
   let tri = vi / 3u;
   if (tri >= u32(scenery[3].w)) {
     let tg = bitcast<u32>(scenery[(t - vi + u32(scenery[2].w) * 3u + tri) / 4u][(t - vi + u32(scenery[2].w) * 3u + tri) % 4u]);
-    if ((tg & 0xffff0000u) == 0xfffe0000u) {
-      let r = u32(scenery[3].z) + u32(scenery[2].w) + 2u * (tg & 0xffffu);
-      let h = scenery[r];
-      let ax = scenery[r + 1u];
-      let a = sc.north.w * h.w + ax.w;
-      let q = p - h.xyz;
-      let k = ax.xyz;
-      p = h.xyz + q * cos(a) + cross(k, q) * sin(a) + k * dot(k, q) * (1.0 - cos(a));
+    let hi = tg & 0xffff0000u;
+    if (hi == 0xfffe0000u || hi == 0xfffd0000u) {
+      let r = u32(scenery[3].z) + u32(scenery[2].w) + 3u * (tg & 0xffffu);
+      if (hi == 0xfffe0000u) {
+        let h = scenery[r];
+        let ax = scenery[r + 1u];
+        let a = sc.north.w * h.w + ax.w;
+        let q = p - h.xyz;
+        let k = ax.xyz;
+        p = h.xyz + q * cos(a) + cross(k, q) * sin(a) + k * dot(k, q) * (1.0 - cos(a));
+      }
+      // (the head and its blades turned about the tower's axis — the frame's up — to face the weather's wind: sc.up.w [rad])
+      let tw = scenery[r + 2u].xy;
+      let y = sc.up.w;
+      let d = p.xy - tw;
+      p = vec3f(tw + vec2f(d.x * cos(y) - d.y * sin(y), d.x * sin(y) + d.y * cos(y)), p.z);
     }
   }
   return p;
@@ -617,6 +626,8 @@ export class SceneryRaster {
   private sceneryU: GPUBuffer;
   /** (Q8 D1) the game's clock [s] the turbines' blades turn by (renderer.ts: its rain clock — frozen with the world) */
   clock = 0;
+  /** (Q8 D1) where the surface wind blows from at the scenery [° from north] — the turbines face it */
+  windFrom = TURBINE_FACING;
   private draws: GPUBuffer;
   private lists: GPUBuffer;
   private reset = new Uint32Array((LISTS + 7) * 4);
@@ -890,6 +901,8 @@ export class SceneryRaster {
     this.sceneryOut.set(this.lift, 16);
     // (north.w — unread here as P.scenery's —: the game's clock for the turbines' blades — Q8 D1)
     this.sceneryOut[7] = this.clock;
+    // (up.w — unread here too —: the turbines' heads' turn from their built facing to the weather's wind, anticlockwise [rad])
+    this.sceneryOut[11] = (-(this.windFrom - TURBINE_FACING) * Math.PI) / 180;
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)

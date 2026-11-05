@@ -392,6 +392,10 @@ export class EarthScenery {
   get overtureBuildings() {
     return this.data?.overtureBuildings ?? 0;
   }
+  /** the scene's centre [°] (null: none yet) */
+  get place(): { lat: number; lon: number } | null {
+    return this.data ? { lat: this.data.lat, lon: this.data.lon } : null;
+  }
   /** (Q8 D1) the wind turbines drawn — Overture's too (its credit shown) */
   get turbines() {
     return this.data?.turbines ?? 0;
