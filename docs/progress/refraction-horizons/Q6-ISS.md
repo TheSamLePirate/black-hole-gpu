@@ -102,3 +102,19 @@ géométrie d'une image à l'autre, ce qui est un bon point pour la calibration.
   - les tolérances de calibration.
 - **Puis ISS1 :** situer sur le modèle de la station la caméra fixe de la NASA, à partir de la housse et du radiateur, et les
   vues Sen : horizon, nadir et Dragon.
+
+### ISS0 : l'instant de chaque image Sen, lu dans son incrustation (le 5 novembre)
+
+- **Outil :** `scripts/iss-overlay-ocr.swift` lit les champs « TIME UTC » et « ALTITUDE km » de l'incrustation du direct Sen
+  avec la reconnaissance de texte de macOS (Vision), dans le bloc en bas à droite de l'image (1920 × 1080). Chaque valeur
+  est rattachée à son étiquette par sa ligne, car la troisième ligne n'affiche pas toujours l'altitude.
+- **Résultat sur la capture du 4 novembre** (`~/.kerr-lab/iss-corpus/sen-overlay.tsv`, hors du dépôt) :
+  - l'heure est lue sur **141 images sur 142** ;
+  - **le direct retarde de 17 s en médiane** sur l'heure de saisie (de 10 à 21 s ; une saisie par minute, sans
+    synchronisation à la seconde) ;
+  - l'altitude est lue sur 18 images, là où elle est affichée : de 419 à 433 km ;
+  - un premier essai qui prenait le nombre de la troisième ligne sans son étiquette donnait 550 à 600 km : c'était un
+    autre champ.
+- **Usage :** pour la géométrie à la seconde (ISS2), chaque image Sen prend l'instant de son incrustation. Le jeu propage
+  l'ISS par SGP4 sur les éléments CelesTrak du jour.
+- **Reste d'ISS0 :** une capture plus dense (toutes les 5 à 10 s) sur les extraits retenus ; les tolérances.
