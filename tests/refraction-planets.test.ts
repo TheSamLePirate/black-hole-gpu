@@ -51,3 +51,15 @@ test("the gases disperse: blue bent more than red", () => {
   const blue = planetLimbBending(planetProfile("venus", 0.45), 80e3);
   expect(blue).toBeGreaterThan(red);
 });
+
+test("the GPU's table: read back within 3 % of the integral, trapped under the critical height", async () => {
+  const { planetRefractionTable, prefrAt, criticalHeight } = await import("../src/system/refraction-planets");
+  const t0 = performance.now();
+  const t = planetRefractionTable("venus", 2);
+  const ms = performance.now() - t0;
+  const P = planetProfile("venus", 0.55, 100);
+  for (const ht of [55e3, 70e3, 85e3]) expect(Math.abs(prefrAt(t, ht) / planetLimbBending(P, ht) - 1)).toBeLessThan(0.03);
+  expect(prefrAt(t, criticalHeight(P) - 1000)).toBe(-1);
+  expect(t[0]).toBe(3);
+  console.log(`  Venus's table in ${ms.toFixed(0)} ms; critical height ${(criticalHeight(P) / 1e3).toFixed(1)} km`);
+});

@@ -4120,6 +4120,10 @@ fn trace(ndc: vec2f, rnd: f32, tNow: f32) -> TraceOut {
         REFR_SEA = false;
         lookSky = airBend(look);
         if (REFR_SEA) { T = vec3f(0.0); }
+      } else if (bodies[PREFR_OFF].x > 0.5) {
+        // (R5: Venus's, Titan's air bending their limb seen from orbit; a ray under the critical height trapped)
+        lookSky = planetBend(look, k);
+        if (PREFR_TRAPPED) { T = vec3f(0.0); }
       }
     }
     if (NEAR_KIND != 1u && NEAR_KIND != 2u && NEAR_KIND != 5u && NEAR_KIND != 6u && !air) {
@@ -11746,6 +11750,47 @@ fn refrLiftM(d: f32, hP: f32) -> f32 {
   let a = mix(liftF(j * LIFT_ND + i), liftF(j * LIFT_ND + i + 1u), fx);
   let b = mix(liftF((j + 1u) * LIFT_ND + i), liftF((j + 1u) * LIFT_ND + i + 1u), fx);
   return mix(a, b, fy);
+}
+// R5 — the near body's own air bending the limb seen from orbit (system/refraction-planets.ts; renderer prefrNow — gpu-tables.ts
+// TABLE_PREFR): Venus's CO₂, Titan's N₂ — not the Earth's air —, the whole grazing path's bending by its tangent height (Abel's
+// integral, ln B tabled quadratically to the profile's top); under the critical height the ray trapped (Venus ~31 km). A look
+// from above the profile's top whose straight ray grazes the limb ahead: the direction beyond turned towards the body by B — the
+// Sun behind it seen as an arc on its limb (the aureole of a transit); its colours by the gases' dispersion (REFR_DR/DB)
+const PREFR_OFF = 2606527u;
+const PREFR_GL = 512u;
+var<private> PREFR_TRAPPED: bool = false;
+fn prefrF(i: u32) -> f32 { return bodies[PREFR_OFF + 2u + i / 4u][i % 4u]; }
+fn planetBend(look: vec3f, k: u32) -> vec3f {
+  PREFR_TRAPPED = false;
+  let h = bodies[PREFR_OFF];
+  // (probes: the table's second vec4's w −2 — the look turned back whatever the body —, −1 — when it is this body's)
+  let probe = bodies[PREFR_OFF + 1u].w;
+  if (probe < -1.5) { return -look; }
+  if (u32(h.x + 0.5) != k + 1u) { return look; }
+  if (probe < -0.5) { return -look; }
+  let c = nearCam();
+  let rd = normalize(toBody(look));
+  // (from orbit: the camera over the profile's top — inside the air the whole path's bending is not this one's)
+  if ((length(c) - 1.0) * h.y < h.z) { return look; }
+  let b = dot(c, rd);
+  if (b >= 0.0) { return look; }
+  let perp = c - rd * b;
+  let p = length(perp);
+  let ht = (p - 1.0) * h.y;
+  if (ht >= h.z) { return look; }
+  if (ht < h.w) {
+    PREFR_TRAPPED = true;
+    return look;
+  }
+  let x = sqrt(max(ht, 0.0) / h.z) * f32(PREFR_GL - 1u);
+  let i = min(u32(x), PREFR_GL - 2u);
+  let d2 = bodies[PREFR_OFF + 1u];
+  // (d2.w > 0: the bending multiplied — a test's probe that the path runs)
+  let delta = clamp(exp(mix(prefrF(i), prefrF(i + 1u), x - f32(i))) * select(1.0, d2.w, d2.w > 0.0), 0.0, 0.5);
+  REFR_DELTA = delta;
+  REFR_DR = -delta * d2.x;
+  REFR_DB = delta * d2.y;
+  return fromBody(normalize(rd * cos(delta) - (perp / p) * sin(delta)));
 }
 // a camera look's ray escapes where the plain air sends it into the sea (a warm sea's inverted image): the raster's sea leaves
 // its pixel to the tracer's sky

@@ -17,6 +17,7 @@ import { WXGRID_VEC4S } from "./system/weather-grid-layout";
 import { CLV_VEC4S } from "./system/cloud-light-layout";
 import { MIRAGE_VEC4S } from "./system/mirage-layout";
 import { LIFT_VEC4S } from "./system/refraction-lift-layout";
+import { PREFR_VEC4S } from "./system/refraction-planets-layout";
 
 /** the probe's harmonics: 9 × rgb, then the dominant direction */
 export const SH_VEC4S = 10;
@@ -113,4 +114,7 @@ export { MIRAGE_VEC4S };
  *  refrLiftM, the rasters' projection) */
 export const TABLE_LIFT = TABLE_MIR + MIRAGE_VEC4S;
 export { LIFT_VEC4S };
-export const TABLE_VEC4S = TABLE_LIFT + LIFT_VEC4S;
+/** (R5) the near body's limb-bending table — Venus's, Titan's air (system/refraction-planets.ts; trace.wgsl planetBend) */
+export const TABLE_PREFR = TABLE_LIFT + LIFT_VEC4S;
+export { PREFR_VEC4S };
+export const TABLE_VEC4S = TABLE_PREFR + PREFR_VEC4S;

@@ -116,6 +116,7 @@ import {
   TABLE_CLV,
   TABLE_MIR,
   TABLE_LIFT,
+  TABLE_PREFR,
   TABLE_CSM,
   TABLE_TSM,
   TABLE_GEOID,
@@ -3701,6 +3702,8 @@ export class Renderer {
           flow: { tS: tGpu * 4.925490947e-6 * s.massSolar, rate: giantRate },
         };
       const nearId = bodies[near.index]!.id;
+      // (R5: Venus's, Titan's air bending their limb — their table asked once a visit)
+      if (!o.probe) this.updatePlanetRefraction(nearId, near.index, !!s.refraction);
       if (nearId === "jupiter" || nearId === "saturn")
         giantFlash = this.giantFlashNow(
           nearId === "jupiter" ? 4 : 5,
@@ -3725,6 +3728,7 @@ export class Renderer {
     } else {
       this.nearAnchor = null;
       if (!o.probe) this.nearCamera = null;
+      if (!o.probe) this.updatePlanetRefraction(null, 0, false);
       set(67, 0, 0, 0, 0);
       set(68, 0, 0, 0, 0);
     }
@@ -4504,6 +4508,30 @@ export class Renderer {
       this.onAssets?.();
     };
     this.liftWorker.postMessage({ id, lift: this.refrData!.slice(), hE: h });
+  }
+  /** (R5) the near body's own air bending its limb from orbit — Venus's, Titan's (system/refraction-planets.ts): on with the
+   *  refraction; the table in the tracer's (TABLE_PREFR) — its body, "" none */
+  prefrOn = true;
+  prefrNow = "";
+  private prefrWorker: Worker | null = null;
+  private prefrAsked = "";
+  private updatePlanetRefraction(id: string | null, index: number, refraction: boolean) {
+    const want = this.prefrOn && refraction && (id === "venus" || id === "titan") ? `${id}#${index}` : "";
+    if (want === this.prefrAsked) return;
+    this.prefrAsked = want;
+    if (!want) {
+      if (this.prefrNow) this.device.queue.writeBuffer(this.bodyBuf, TABLE_PREFR * 16, new Float32Array(4));
+      this.prefrNow = "";
+      return;
+    }
+    this.prefrWorker ??= new Worker(new URL("mirage-worker.js", location.href), { type: "module" });
+    this.prefrWorker.onmessage = (e: MessageEvent<{ id: number; f: Float32Array }>) => {
+      if (this.prefrAsked !== want) return;
+      this.device.queue.writeBuffer(this.bodyBuf, TABLE_PREFR * 16, e.data.f as Float32Array<ArrayBuffer>);
+      this.prefrNow = id!;
+      this.onAssets?.();
+    };
+    this.prefrWorker.postMessage({ id: 1, planet: id, index });
   }
   /** (R6a-ciel) the forced profile of the air near the sea the mirages come from — illustrative, never an observation —
    *  (system/mirage.ts; "off": none, the layered model's refraction alone) */
@@ -8412,7 +8440,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       if (out.length >= SKY_DISCS_MAX) break;
       // (R6a-ciel: the Sun under a mirage — its images where the forced air sends them, above and below the plain air's
       // place —: left to the sky's rays, not cut to the plain air's rectangle)
-      if (this.mirageNow && !d.moon) continue;
+      if ((this.mirageNow || this.prefrNow) && !d.moon) continue;
       const cx = (0.5 + 0.5 * d.x) * t.width,
         cy = (0.5 - 0.5 * d.y) * t.height,
         r = 0.5 * d.r * t.height + 3;

@@ -45,6 +45,8 @@ import {
   TABLE_MIR,
   TABLE_LIFT,
   LIFT_VEC4S,
+  TABLE_PREFR,
+  PREFR_VEC4S,
   TABLE_CSM,
   TABLE_WXGRID,
   TLUT_VEC4S,
@@ -88,7 +90,9 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(TABLE_MIR).toBe(TABLE_CLV + CLV_VEC4S);
   expect(TABLE_LIFT).toBe(TABLE_MIR + MIRAGE_VEC4S);
   expect(constU("LIFT_OFF")).toBe(TABLE_LIFT);
-  expect(TABLE_VEC4S).toBe(TABLE_LIFT + LIFT_VEC4S);
+  expect(TABLE_PREFR).toBe(TABLE_LIFT + LIFT_VEC4S);
+  expect(constU("PREFR_OFF")).toBe(TABLE_PREFR);
+  expect(TABLE_VEC4S).toBe(TABLE_PREFR + PREFR_VEC4S);
   expect(constU("SH_BASE")).toBe(TABLE_SH);
   expect(constU("LUT_OFF")).toBe(TABLE_LUT);
   expect(constU("PATH_OFF")).toBe(TABLE_PATH);
@@ -125,7 +129,8 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
       WXGRID_VEC4S +
       CLV_VEC4S +
       MIRAGE_VEC4S +
-      LIFT_VEC4S,
+      LIFT_VEC4S +
+      PREFR_VEC4S,
   );
   expect(constU("GEOID_OFF")).toBe(TABLE_GEOID);
   expect(constU("ORTHO_OFF")).toBe(TABLE_ORTHO);

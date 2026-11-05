@@ -16,6 +16,9 @@
 //     by a two-term Cauchy form N(λ) = N₀ (1 + B/λ²)/(1 + B/0.55²) (B: CO₂ 7.3·10⁻³ µm², N₂ 6.0·10⁻³, CH₄ 9.0·10⁻³) — within
 //     ~1 % of the measured dispersions over the visible.
 
+import { PREFR_FLOATS, PREFR_GL, PREFR_VEC4S } from "./refraction-planets-layout";
+
+export { PREFR_FLOATS, PREFR_GL, PREFR_VEC4S };
 export type PlanetAir = "venus" | "titan";
 
 interface AirSpec {
@@ -172,4 +175,43 @@ export function planetLimbBending(P: PlanetProfile, ht: number): number {
     s += ((dN / nn) * 2 * x) / Math.sqrt(q);
   }
   return -2 * a * s * (xMax / n);
+}
+
+/** The critical height [m]: the lowest where r dN/dr > −1 (under it a grazing ray circles the body — trapped); 0 if none */
+export function criticalHeight(P: PlanetProfile): number {
+  for (let i = 1; i < P.N.length - 1; i++) {
+    const r = P.R + i * P.step;
+    if ((r * (P.N[i + 1]! - P.N[i - 1]!)) / (2 * P.step) > -1) return i === 1 ? 0 : i * P.step;
+  }
+  return 0;
+}
+
+/** the table's tangent height of index i [m] */
+export const prefrHeight = (top: number, i: number) => top * (i / (PREFR_GL - 1)) ** 2;
+
+/** The near body's table for the GPU (gpu-tables.ts TABLE_PREFR; trace.wgsl planetBend): its header and ln B by tangent height,
+ *  green's; red's and blue's as ratios (the gases' dispersion: B ∝ N at a height) */
+export function planetRefractionTable(body: PlanetAir, index: number): Float32Array {
+  const out = new Float32Array(PREFR_VEC4S * 4);
+  const P = planetProfile(body, 0.55, 100);
+  const crit = criticalHeight(P);
+  const g = stpRefractivity(body, 0.55);
+  out.set([index + 1, P.R, P.top, crit, stpRefractivity(body, 0.65) / g - 1, stpRefractivity(body, 0.45) / g - 1, PREFR_GL, 0], 0);
+  for (let i = 0; i < PREFR_GL; i++) {
+    const ht = Math.max(prefrHeight(P.top, i), crit);
+    out[8 + i] = Math.log(Math.max(planetLimbBending(P, ht), 1e-12));
+  }
+  return out;
+}
+
+/** The table read as the shader reads it: the bending [rad] at a tangent height [m]; −1 under the critical height */
+export function prefrAt(t: Float32Array, ht: number): number {
+  if (t[0]! < 0.5) return 0;
+  const top = t[2]!;
+  if (ht >= top) return 0;
+  if (ht < t[3]!) return -1;
+  const x = Math.sqrt(Math.max(ht, 0) / top) * (PREFR_GL - 1);
+  const i = Math.min(Math.floor(x), PREFR_GL - 2);
+  const f = x - i;
+  return Math.exp(t[8 + i]! * (1 - f) + t[8 + i + 1]! * f);
 }
