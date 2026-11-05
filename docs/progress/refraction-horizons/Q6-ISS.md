@@ -58,3 +58,47 @@ le direct.
 - **Reste d'ISS0** : identifier la caméra de chaque image Sen (l'habillage ne la nomme pas : nadir / horizon / docking au contenu),
   les coupes et les « Previously Recorded » de la NASA ; choisir les extraits de calibration et ceux réservés à la validation ;
   le rapport final HDEV (ses quatre caméras) ; les droits et crédits notés avant toute image versée au dépôt.
+
+## ISS0 — la première capture classée par caméra (le 5 novembre)
+
+La capture du 4 novembre (`scripts/iss-capture.ts`, une image par minute, 03 h 04 – 06 h 43 UTC, 142 images par source,
+`~/.kerr-lab/iss-corpus`, hors du dépôt) a été classée à l'œil sur des planches-contacts. Les heures sont celles de la saisie
+(UTC) ; l'incrustation Sen retarde d'environ 19 s.
+
+### Sen (direct `fO9e9jnhYK8`) : au moins quatre vues distinctes
+
+| Vue (identifiée au contenu) | Plages de jour | Plages de nuit / crépuscule | Remarques |
+|---|---|---|---|
+| **Horizon** : limbe en haut, courbure forte, grand angle | 03:59–04:06, 04:53–04:57, 05:10–05:39, 06:34 | 04:07–04:16, 05:40–05:48 | la vue la plus longue ; terminateur à 04:06 et 05:38 |
+| **Nadir** : sol à plat, sans limbe | 04:59–05:04, 05:06–05:09, 06:35–06:43 | — | côtes et nuages nets (Madagascar, l'Afrique à 05:07) |
+| **Dragon amarré** : la capsule à gauche, le limbe en bas | 03:21, 04:20, 05:05, 05:26 | idem | plans courts, souvent avec l'étiquette « loss of signal » |
+| **Structure et Soleil** : modules en avant-plan, le Soleil qui se lève sur le limbe | 06:22–06:31 | — | reflets, éblouissement, structure en contre-jour |
+| Intercalaires | « Switching camera » à 04:15, 04:58, 05:49, 06:20, 06:33 ; studio (entretien) à 05:58 | | |
+| Nuit noire | | 03:04, 04:16–04:25, 05:50–06:19 | à peine quelques lumières : peu exploitable |
+
+### NASA (direct `ROboUHfPUrU`) : une seule caméra fixe
+
+Une caméra extérieure fixe regarde vers le bas, le long d'une charge sous housse blanche à sangles noires, avec un radiateur
+ou un panneau en bas à gauche. Sa position sur la station n'est pas encore identifiée (ISS1). Elle donne la même
+géométrie d'une image à l'autre, ce qui est un bon point pour la calibration.
+- **Jour :** 03:21–04:08, 04:53–05:41, 06:26–06:42.
+- **Crépuscule** (la structure au soleil, la Terre déjà noire) : 04:09–04:14, 05:42–05:46, 06:21–06:25.
+- **Nuit** (bruit, quelques villes) : 04:15–04:26, 05:47–06:20.
+- **Pertes de signal** (écran « temporarily suspended ») : 04:19, 04:54, 05:24–05:25, 05:57.
+
+![NASA, la caméra fixe : jour, crépuscule, nuit, perte de signal (domaine public)](Q6/iss0-nasa-classes.jpg)
+
+### Choix provisoire des extraits
+
+| Usage | Sen | NASA |
+|---|---|---|
+| **Calibration** (ISS2 géométrie, ISS3 réponse) | horizon 05:10–05:30 (limbe net, nuages variés) ; nadir 04:59–05:04 | jour 05:10–05:40 (géométrie fixe, océan et nuages) |
+| **Validation** (gardée à part) | horizon 03:59–04:06 (jusqu'au terminateur) ; nadir 06:35–06:43 ; structure et Soleil 06:22–06:31 | jour 06:26–06:42 ; crépuscule 05:42–05:46 |
+
+- **Reste d'ISS0 :**
+  - attacher à chaque image Sen l'instant de son incrustation (lecture du texte), pour la géométrie à la seconde ;
+  - une capture plus dense (toutes les 5 à 10 s) sur les extraits retenus, pour le mouvement ;
+  - les « Previously recorded » de la NASA ;
+  - les tolérances de calibration.
+- **Puis ISS1 :** situer sur le modèle de la station la caméra fixe de la NASA, à partir de la housse et du radiateur, et les
+  vues Sen : horizon, nadir et Dragon.
