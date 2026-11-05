@@ -5361,6 +5361,32 @@ fn shipShadow(pw: vec3f) -> f32 {
   return out;
 }
 
+// Q5 VIPER C4 — the flown craft's shadow on the clouds (the cloud pass's samples: CLOUD_SHIP_K — metres from the camera a unit of
+// t along its ray, CLOUD_SHIP_LOOK its direction —; 0: none): its map's silhouette, sharp near — its umbra reaching ~108 times
+// its size behind it, the Sun's half a degree —, fading into the penumbra past it; the glory's centre when it is above a deck.
+// TUNE_GSKIP 134217728: none, as before.
+var<private> CLOUD_SHIP_K: f32 = 0.0;
+var<private> CLOUD_SHIP_LOOK: vec3f = vec3f(0.0);
+fn shipCloudShadow(t: f32) -> f32 {
+  if (CLOUD_SHIP_K <= 0.0 || P.shipShadow.w <= 0.0 || (TUNE_GSKIP & 134217728u) != 0u) { return 1.0; }
+  let dl = shEnv(9u).xyz;
+  if (dot(dl, dl) < 1e-12) { return 1.0; }
+  let pw = CLOUD_SHIP_LOOK * (t * CLOUD_SHIP_K);
+  let lw = normalize(dl.x * P.envX.xyz + dl.y * P.envY.xyz + dl.z * P.envZ.xyz);
+  let l = vec3f(dot(lw, P.camRight.xyz), dot(lw, P.camUp.xyz), dot(lw, P.camFwd.xyz));
+  let p = vec3f(dot(pw, P.camRight.xyz), dot(pw, P.camUp.xyz), dot(pw, P.camFwd.xyz));
+  let R = P.shipShadow.w;
+  let behind = -dot(p - P.shipShadow.xyz, l) - R;
+  let reach = 108.0 * 2.0 * R;
+  if (behind <= 0.0 || behind >= reach) { return 1.0; }
+  // (TUNE_GSKIP 268435456 — a test's locator —: the whole column of three radii round the craft's sunbeam dark, not its silhouette)
+  if ((TUNE_GSKIP & 268435456u) != 0u) {
+    let q = p - P.shipShadow.xyz;
+    return select(1.0, 0.0, length(q - l * dot(q, l)) < 3.0 * R);
+  }
+  return mix(1.0, shipShadow(pw), 1.0 - smoothstep(0.3 * reach, reach, behind));
+}
+
 // the disk's turbulence: gradient noise baked into a tiling texture (noise3d.ts: period 32, 4 texels a unit)
 @group(0) @binding(24) var noiseTex: texture_3d<f32>;
 @group(0) @binding(25) var noiseSamp: sampler;
@@ -10841,6 +10867,8 @@ fn wxCloud(ro: vec3f, rd: vec3f, tHit: f32, i: u32, Ls: vec3f, E: vec3f, jit: f3
       }
     }
     Ts *= select(veil, 1.0, far);
+    // (the craft's own shadow on the deck under it — VIPER C4)
+    if (CLOUD_LIGHT_MARCH) { Ts *= shipCloudShadow(t); }
     let beer = select(exp(-tauSun), 0.0, mu0 < -0.1);
     let powder = 1.0 - exp(-2.0 * sigma * 400.0 - 0.15);
     let over = cloudDiffuseT(tauUp);
@@ -14835,11 +14863,15 @@ fn clouds(@builtin(global_invocation_id) gid0: vec3u) {
       RNDV = blueDraws(gid, frameStamp);
       RND = RNDV.z;
       CLOUD_LIGHT_MARCH = TUNE_CLOUD_LIGHT > 0u;
+      // (the craft's shadow on the clouds — VIPER C4 —: a sample's place from the camera [m] by its t on this ray)
+      CLOUD_SHIP_LOOK = look;
+      CLOUD_SHIP_K = P.near4.w / m;
       // (the samples a layer, the renderer's — the frame's flags' high half —, while amortised)
       CLOUD_N = select(16u, clamp(P.frame.z >> 16u, 8u, 64u), (P.frame.z & FLAG_CLOUD_AMORTISED) != 0u && (P.frame.z >> 16u) > 0u);
       cs = earthClouds(k, ro, rd, tHit, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab),
         squashed(toBody(P.camUp.xyz), ab), 0.0, pixFoot(), RNDV.y, P.earth4.w > 0.0);
       CLOUD_LIGHT_MARCH = false;
+      CLOUD_SHIP_K = 0.0;
       CLOUD_N = 16u;
       WX_W = 0.0;
       // (the cloud's distance as the image's depths have it [M] — the history's reprojection, post.wgsl cloudTemporal)

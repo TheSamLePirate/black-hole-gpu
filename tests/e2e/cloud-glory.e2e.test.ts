@@ -5,14 +5,16 @@ import { readPng } from "./lib/png";
 import { EARTH_SETTINGS } from "./lib/plan-views";
 
 // Q5 VIPER C4 — the glory on the clouds (trace.wgsl gloryPhase: coloured rings round the antisolar point in the droplets'
-// single scattering). La Mancha, 18:50 UTC (the Sun ~8° up), one deck of the weather (a model's hour injected — the grid off —:
-// 1 000–2 000 m, cover 1), the F-35 at 2 300 m flying away from the Sun; the camera outside behind it, 10° aside and 100 m off (the "around" mount: the
-// antisolar point, 8° under the horizon ahead, in view and clear of the craft — the cockpit's floor hides it from inside). Frozen, the exposure
-// locked; a shot with the glory and without it (TUNE_GSKIP 67108864), then with it again: where the two first differ (the
-// glory's rings), against where the two with it do (the measure's noise). GL_OUT: the shots and the difference
-// (remote-results/cloud-glory).
-// Duration: ~2 min on this Mac.
-// Done when: the three shots taken, the glory's strongest difference over three times the noise in its cell, no GPU error.
+// single scattering) and the craft's shadow on them at its centre (shipCloudShadow: its shadow map's silhouette on the cloud
+// pass's samples, faded past its umbra's reach). La Mancha, 17:00 UTC (the Sun ~29° up), one deck of the weather (a model's hour
+// injected — the grid off —: 1 000–2 000 m, cover 1), the F-35 at 2 100 m flying away from the Sun; the camera outside it,
+// 10° aside, 30° above, 100 m off (the "around" mount: the antisolar point in view — the cockpit's floor hides it from inside).
+// Frozen, the exposure locked; shots with both, without the glory (TUNE_GSKIP 67108864), with both again (the measure's noise),
+// without the shadow (134217728), and with its whole column dark (268435456: where the shadow is, to measure it there).
+// GL_OUT: the shots (remote-results/cloud-glory).
+// Duration: ~3 min on this Mac.
+// Done when: the five shots taken, the glory's strongest difference and the shadow's at its column each over three times the
+// noise there, no GPU error.
 const OUT = process.env.GL_OUT ?? "remote-results/cloud-glory";
 afterAll(stopServer);
 test.skipIf(!E2E)(
@@ -26,24 +28,29 @@ test.skipIf(!E2E)(
         `(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${EARTH_SETTINGS}, { lookProfile: "neutral", f35Invulnerable: true, motionBlur: 0, dof: false, earthPipeline: "raster", bloom: 0, lensFlare: 0 }); return 1; })()`,
       );
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
-      const iso = "2026-07-10T18:50:00Z";
+      const iso = "2026-07-10T17:00:00Z";
       await app.js(
         `(() => { __bh.game.setDate("${iso}"); __bh.game.set("earthClouds", 1); __bh.renderer.weatherGridEnabled = false;
           __bh.camera.weatherReal = __bh.renderer.weatherReal = { source: "model", kind: "overcast", wind: { u10: 3, from: null, gust: 0, turb: 0, shear: 0 }, visibility: 30000, fogTop: 0,
             layers: [{ base: 1000, top: 2000, cover: 1, cls: 0 }], rain: 0, dust: 0,
             model: { provider: "open-meteo", kind: "forecast", lat: 39.42, lon: -3.05, t: Date.parse("${iso}"), T: 20, Td: 12, p: 950, high: 0, code: 3, precip: 0 } };
-          __bh.settings.weather = "real"; __bh.game.flyAt(39.42, -3.05, 2300, 0, 140); return 1; })()`,
+          __bh.settings.weather = "real"; __bh.game.flyAt(39.42, -3.05, 2100, 0, 140); return 1; })()`,
       );
       await Bun.sleep(500);
       const sun = await app.js<{ azDeg: number; altDeg: number }>(`__bh.camera.skyInfo().sun`);
       await app.js(
-        `(() => { __bh.game.flyAt(39.42, -3.05, 2300, ${(sun.azDeg + 180) % 360}, 140); __bh.settings.shipMount = "around"; document.body.classList.add("hide-ui"); return 1; })()`,
+        `(() => { __bh.game.flyAt(39.42, -3.05, 2100, ${(sun.azDeg + 180) % 360}, 140); __bh.settings.shipMount = "around"; document.body.classList.add("hide-ui"); return 1; })()`,
       );
       // (the mount set first — it resets the view about the craft —, then the view)
       await Bun.sleep(300);
-      await app.js(`(() => { Object.assign(__bh.camera.outside, { yaw: 10, pitch: 5, dist: 100 }); return 1; })()`);
+      await app.js(`(() => { Object.assign(__bh.camera.outside, { yaw: 10, pitch: 30, dist: 100 }); return 1; })()`);
       await Bun.sleep(700);
       await app.js(`new Promise((q) => setTimeout(() => { __bh.game.setDate("${iso}"); __bh.freeze(true); q(1); }, 1500))`);
+      // (the craft's shadow's inputs: drawn — its sphere in the camera's axes —, the setting)
+      const sb = await app.js(
+        `(() => { const r = __bh.renderer; return { ship: __bh.settings.ship, inView: r.shipInView, bound: r.ship?.shadowBound ?? null }; })()`,
+      );
+      console.log(`  the craft's shadow: ${JSON.stringify(sb)}`);
       let locked = false;
       const shots: Record<string, Uint8Array> = {};
       let W = 0;
@@ -53,6 +60,8 @@ test.skipIf(!E2E)(
         ["glory", "{}"],
         ["none", "{ TUNE_GSKIP: 67108864 }"],
         ["glory2", "{}"],
+        ["noshadow", "{ TUNE_GSKIP: 134217728 }"],
+        ["column", "{ TUNE_GSKIP: 268435456 }"],
       ] as const) {
         await app.js(`(() => { __bh.renderer.tune = ${tune}; __bh.touch(); return 1; })()`);
         await app.settled(120_000);
@@ -93,6 +102,35 @@ test.skipIf(!E2E)(
           if (e > glory.e) glory = { e, x: cx, y: cy };
         }
       const noise = { e: cell(shots.glory!, shots.glory2!, glory.x, glory.y), x: glory.x, y: glory.y };
+      // (the craft's shadow on the deck — VIPER C4's other half —: located by the column test's dark disc — the strongest cell of
+      // with it and without —, then with and without the shadow there, against the noise there)
+      let at = { e: 0, x: 0, y: 0 };
+      for (let cy = Math.ceil((0.05 * H) / 32) * 32; cy + 32 <= 0.85 * H; cy += 32)
+        for (let cx = 0; cx + 32 <= W; cx += 32) {
+          const e = cell(shots.glory!, shots.column!, cx, cy);
+          if (e > at.e) at = { e, x: cx, y: cy };
+        }
+      // (the silhouette a few tens of pixels: its darkest 8 × 8 window within 64 px of the column's cell)
+      const win = (a: Uint8Array, b: Uint8Array, x0: number, y0: number) => {
+        let e = 0;
+        for (let y = y0; y < y0 + 8; y++)
+          for (let x = x0; x < x0 + 8; x++) {
+            const o = (y * W + x) * C;
+            for (let c = 0; c < 3; c++) e += Math.abs(a[o + c]! - b[o + c]!);
+          }
+        return e / (8 * 8 * 3);
+      };
+      let shadow = { e: 0, x: 0, y: 0 };
+      for (let y = Math.max(at.y + 16 - 64, 0); y + 8 <= Math.min(at.y + 16 + 64, H); y += 4)
+        for (let x = Math.max(at.x + 16 - 64, 0); x + 8 <= Math.min(at.x + 16 + 64, W); x += 4) {
+          const e = win(shots.glory!, shots.noshadow!, x, y);
+          if (e > shadow.e) shadow = { e, x, y };
+        }
+      const shadowNoise = win(shots.glory!, shots.glory2!, shadow.x, shadow.y);
+      out.shadow = { ...shadow, noise: shadowNoise };
+      console.log(
+        `  the craft's shadow (near its column's cell ${at.x + 16}, ${at.y + 16}): |Δ| ${shadow.e.toFixed(2)} at ${shadow.x + 4}, ${shadow.y + 4}; the noise there ${shadowNoise.toFixed(2)}`,
+      );
       out.glory = glory;
       out.noise = noise;
       console.log(
@@ -108,6 +146,8 @@ test.skipIf(!E2E)(
     }
     const r = out as { glory: { e: number }; noise: { e: number }; gpuErrors: number };
     expect(r.glory.e).toBeGreaterThan(3 * r.noise.e);
+    const sh = (out as { shadow: { e: number; noise: number } }).shadow;
+    expect(sh.e).toBeGreaterThan(3 * sh.noise);
     expect(r.gpuErrors).toBe(0);
   },
   6 * 60_000,
