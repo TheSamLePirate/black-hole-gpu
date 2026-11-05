@@ -10,9 +10,10 @@
 export const overtureBaseUrl = (bucket: string, release: string) => `${bucket}tiles/${release}/base.pmtiles`;
 /** its finest level */
 export const TURBINE_Z = 13;
-/** the turbines kept round the scenery's centre [m] (its shading's reach, scenery.ts o[7]) and at most */
-export const TURBINE_REACH_M = 3500;
-export const TURBINE_MAX = 64;
+/** the turbines kept round the scenery's centre [m] — far past the scenery's own reach: a turbine is seen from 20–30 km, its
+ *  triangles drawn at any distance, shaded white without the scenery's data — and at most (the nearest) */
+export const TURBINE_REACH_M = 15000;
+export const TURBINE_MAX = 160;
 /** where the rotor faces [° from north]: the prevailing wind's in western Europe (south-west), until it follows the weather's */
 export const TURBINE_FACING = 240;
 

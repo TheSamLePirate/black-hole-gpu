@@ -7,7 +7,16 @@ import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
 import { CANOPY_NEAR, IgnLand, tilesWithin } from "./ign-canopy";
 import { fetchRange, OVERTURE_BUCKET, OVERTURE_LIST, OVERTURE_Z, overtureReleases, overtureUrl, PmTiles } from "./pmtiles";
-import { overtureBaseUrl, TURBINE_MAX, TURBINE_REACH_M, TURBINE_Z, type Turbine, type TurbineMesh, turbineMesh, turbineOf } from "./turbines";
+import {
+  overtureBaseUrl,
+  TURBINE_MAX,
+  TURBINE_REACH_M,
+  TURBINE_Z,
+  type Turbine,
+  type TurbineMesh,
+  turbineMesh,
+  turbineOf,
+} from "./turbines";
 import { SwissGround } from "./national";
 import {
   bdtopoTiles as bdtopoWanted,
@@ -1231,8 +1240,18 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     if (pm) {
       const n13 = 2 ** TURBINE_Z;
       const found: (Turbine & { d: number })[] = [];
-      for (const t of tilesWithin(TURBINE_Z, q.lat, q.lon, TURBINE_REACH_M)) {
-        const raw = await pm.tile(TURBINE_Z, ((t.x % n13) + n13) % n13, t.y);
+      // (the tiles six at a time, the nearest first)
+      const tiles = tilesWithin(TURBINE_Z, q.lat, q.lon, TURBINE_REACH_M);
+      const raws: { t: (typeof tiles)[number]; raw: Uint8Array | null }[] = [];
+      for (let i = 0; i < tiles.length; i += 6)
+        raws.push(
+          ...(await Promise.all(
+            tiles
+              .slice(i, i + 6)
+              .map(async (t) => ({ t, raw: await pm!.tile(TURBINE_Z, ((t.x % n13) + n13) % n13, t.y).catch(() => null) })),
+          )),
+        );
+      for (const { t, raw } of raws) {
         if (!raw) continue;
         const layer = new VectorTile(new PbfReader(raw)).layers.infrastructure;
         if (!layer) continue;
