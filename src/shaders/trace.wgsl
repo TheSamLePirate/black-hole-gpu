@@ -7940,6 +7940,8 @@ fn terrainRasterNormal(px: vec2f) -> vec3f { return vec3f(0.0); }
 fn cloudsBuffered(px: vec2f, boundM: f32) -> EarthClouds { return EarthClouds(-1.0, vec3f(0.0), -1.0, -1.0); }
 fn cloudsAtPixel(px: vec2f) -> vec4f { return vec4f(-1.0); }
 fn cloudDepthAtPixel(px: vec2f) -> f32 { return -1.0; }
+// (no cloud pass on this device: the raster's ground under the weather's layers flat — cloudsFallback; with the pass, none)
+fn cloudsLiteFallback(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f) -> EarthClouds { return cloudsFallback(ro, rd, tEnd, Ls, E); }
 // END_CLOUD_PASS
 // BEGIN_SUN_SHADOW (system/terrain-raster-hint.ts withSunShadow supplies the relief's shadow map's lookup)
 fn sunShadowFar(rel: vec3f) -> vec4f { return vec4f(-1.0, 0.0, 0.0, 3e38); }
@@ -14133,6 +14135,39 @@ fn liteSky(q: vec3f, hG: f32, E: vec3f, Ls: vec3f, mu0: f32) -> vec3f {
 }
 // A raster pixel's surface radiance G seen through the clouds before it (the cloud pass's) and the air (the aerial table's —
 // else marched, as earthLook), blended with its last colour (P.ext.w, temporal: not after shadeLite's own write), written
+// Q5 — the clouds before the raster's ground where the device has no cloud pass (cloudsLiteFallback — the pass's own build
+// none: its clouds there): the
+// weather's layers flat, each at its middle height, their cover there (wxLayerA) and a flat layer's light — the cumulus over
+// the ground were not drawn at all, the cloud pass alone bringing them (cloud-light-column: 0.79 of the pass's light, the
+// ground in their place). Not the volume's shapes: a stand-in. TUNE_GSKIP 2147483648: none, as before.
+fn cloudsFallback(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f) -> EarthClouds {
+  var cs = EarthClouds(0.0, vec3f(0.0), -1.0, -1.0);
+  if (!(HAS_WX && WX_W > 0.0) || (TUNE_GSKIP & 2147483648u) != 0u) { return cs; }
+  let b = dot(ro, rd);
+  let off2 = dot(ro, ro) - b * b;
+  for (var i = 0u; i < 3u; i++) {
+    let L = P.wx[1u + i];
+    if (L.z <= 0.0) { continue; }
+    let hm = 0.5 * (L.x + L.y);
+    let rc = 1.0 + hm / EARTH_RM;
+    let hc2 = rc * rc - off2;
+    if (hc2 <= 0.0) { continue; }
+    let below = dot(ro, ro) < rc * rc;
+    let t = select(-b - sqrt(hc2), -b + sqrt(hc2), below);
+    if (t <= 0.0 || (tEnd > 0.0 && tEnd < 1e37 && t > tEnd)) { continue; }
+    let q = normalize(ro + rd * t);
+    let a = wxLayerA(q, i) * wxNear(q) * (1.0 - exp(-0.5 * L.w));
+    if (a <= 0.005) { continue; }
+    let mu0 = dot(geoQ(q), airPhysicalDirection(Ls));
+    let Ts = sunThrough(hm, mu0) * sunSeen(q * rc, Ls);
+    let wrap = clamp((mu0 + 0.08) / 1.08, 0.0, 1.0);
+    let sk = skySeen(q, Ls);
+    let amb = max(0.7 * skyFlatFactor(q, hm, E, mu0, sk), nightFloor(sk, mu0) * CLOUD_NIGHT_FLOOR);
+    let top = 0.85 / PI * (E * Ts * wrap + E * amb);
+    cs = cloudsAdd(cs, EarthClouds(a, select(top, top * 0.35, below), t, t));
+  }
+  return cs;
+}
 fn liteFinish(idx: u32, centre: vec2f, pos: vec2f, G: vec3f, rd: vec3f, tH: f32, tM: f32, Ls: vec3f, E: vec3f, k: u32, blend: bool, water: bool) {
   let flags = P.frame.z;
   let frameStamp = P.frame.x;
@@ -14144,7 +14179,9 @@ fn liteFinish(idx: u32, centre: vec2f, pos: vec2f, G: vec3f, rd: vec3f, tH: f32,
     return;
   }
   let ro = nearCam();
-  let cs = cloudsBuffered(centre, terrainRasterDepth(centre));
+  var cs = cloudsBuffered(centre, terrainRasterDepth(centre));
+  // (no cloud pass this frame: the weather's layers flat, a stand-in)
+  if (cs.alpha < 0.0) { cs = cloudsLiteFallback(ro, rd, tH, Ls, E); }
   let alpha = max(cs.alpha, 0.0);
   if ((flags & FLAG_AERIAL) != 0u) { AP_UV = pos / P.res.xy; }
   var air: EarthAir;

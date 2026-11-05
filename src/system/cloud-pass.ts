@@ -61,6 +61,8 @@ fn cloudsAtPixel(px: vec2f) -> vec4f {
   let n = vec2i(textureDimensions(cloudInA));
   return textureLoad(cloudInA, clamp(vec2i(px * 0.5), vec2i(0), n - 1), 0);
 }
+// (the device's own clouds before the raster's ground: the pass's — no stand-in)
+fn cloudsLiteFallback(ro: vec3f, rd: vec3f, tEnd: f32, Ls: vec3f, E: vec3f) -> EarthClouds { return EarthClouds(-1.0, vec3f(0.0), -1.0, -1.0); }
 fn cloudDepthAtPixel(px: vec2f) -> f32 {
   let n = vec2i(textureDimensions(cloudInB));
   return textureLoad(cloudInB, clamp(vec2i(px * 0.5), vec2i(0), n - 1), 0).z;

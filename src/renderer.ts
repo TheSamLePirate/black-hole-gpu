@@ -2287,6 +2287,8 @@ export class Renderer {
             GTAO_TEXTURE_LIMIT,
           ),
           adapter.limits.maxSampledTexturesPerShaderStage,
+          // (a test's cap — the page's hash gpuTextures=N —: a device with fewer, its features' stand-ins drawn)
+          Number(new URLSearchParams(location.hash.slice(1)).get("gpuTextures")) || Number.POSITIVE_INFINITY,
         ),
         maxStorageBuffersPerShaderStage: Math.min(SCENERY_STORAGE_LIMIT, adapter.limits.maxStorageBuffersPerShaderStage),
       },
