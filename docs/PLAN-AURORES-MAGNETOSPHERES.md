@@ -18,6 +18,37 @@ Sur la demande de Sam (« prends tout ce qu'il y a de bon »), son code, ses don
 **Le § 7 recense ce qu'on reprend, phase par phase, avec ses fichiers et ses lignes.** Il recense aussi les défauts
 qu'on ne reprend pas. Le § 5 renvoie au § 7.
 
+**Relecture du 5 novembre (toujours d'actualité, rien de commencé chez nous) :**
+- **Vérifié dans le code** : ni `magnetic-fields.ts`, ni lecture du Kp NOAA ; `auroraLight` et la constante `AUR_MAG`
+  sont inchangés (`trace.wgsl`, appelés seulement par le traceur, réglage `aurora` lu dans `renderer.ts`). Le § 1
+  reste exact.
+- **Chez Alex** (`origin/master` relu, dernier commit le 4 novembre à 06:45 UTC) : un seul changement d'aurore depuis
+  `dd54164`, `964bfec` (session 6c). Le grain des aurores y est réduit en fondant le cache par direction dans le temps.
+  Le trou pendant une descente disparaît : la profondeur du côté lointain est plafonnée. Les surimpressions du schéma
+  sont cachées derrière les corps (`VRSolarOcclusion.hlsl`). Ces trois points sont à lire avant AM2 et AM7. Son coût
+  annoncé, mesuré sur Quest : 18,8 ms au sol à Kp 7, 14,7 ms à 400 km. Ce sont ses chiffres, non transposables ici.
+- **Ce que la [recherche de données du 3 novembre](RECHERCHE-DONNEES-SCIENTIFIQUES-AAA-2026-11-03.md) demandait, et
+  qui est intégré** : les aurores optiques de Ganymède et de Callisto, JRM33 utile jusqu'aux degrés 13–18 et les
+  formats NOAA de 2026 (§ 3, § 7.4).
+- **Ce qui manquait, ajouté ici** :
+  1. **L'époque de la scène au-delà de 2030.** La partie prédictive d'IGRF-14 et de WMM2025 s'arrête en 2030. Une
+     scène en 2067 (l'horloge du jeu peut y aller) prend un **scénario déclaré** : le champ de 2030 figé, ou une dérive
+     séculaire extrapolée nommée comme telle. Ce n'est jamais une précision. TARS dit lequel est utilisé (AM0, AM1).
+  2. **Deux familles de données séparées** : la géométrie (champ, ovale, empreintes) et l'émission (flux de
+     précipitation, espèces, raies, brillance). Un ovale juste ne fixe pas la brillance (recherche, § 2.2 et § 4.4).
+     Les tables d'AM0 et d'AM1 les portent séparément.
+- **Le raccord à la destination** a bougé depuis le 3 novembre :
+  - Q5 a livré les tables d'air partagées (transmittance et diffusion multiple de Hillaire, C1 ; une atmosphère
+    unique, C2). L'émission aurorale d'AM2 s'ajoute à ce modèle d'air commun, pour le traceur comme pour le raster,
+    au lieu d'un second encodage propre à `trace.wgsl` (§ 4) ;
+  - la passe de lignes d'AM7 se teste contre la profondeur finale (C0-9). Avant la bascule de l'opaque terrestre
+    (§ 20.5 de l'analyse stratégique), elle lit la profondeur de la visibilité raster par un adaptateur nommé, à
+    retirer à la bascule.
+- **Conséquence pour l'ordre** : AM0, avec la partie données d'AM1 (Kp, OVATION, leur âge, le scénario d'époque), est
+  un lot CPU, en worker et testé, sans dépendance au renderer. Il peut se faire à tout moment sans contredire la
+  destination. AM2 et les suivants touchent le rendu : ils se placent après les interfaces de l'air et de la
+  profondeur, ou les lisent par des adaptateurs bornés.
+
 ## 1. Ce qu'on a aujourd'hui
 
 - **Une seule aurore, celle de la Terre**, `auroraLight` (`src/shaders/trace.wgsl`, S2 du plan aviation) :

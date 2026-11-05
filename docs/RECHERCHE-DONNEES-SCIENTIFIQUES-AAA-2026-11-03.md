@@ -6,6 +6,28 @@
 
 Référence locale relevée : `29a88b9e69a5474a50ae0ce92d33253c3362ce69`, avec des modifications préexistantes dans le répertoire de travail. Certains documents lus contiennent déjà des entrées datées du 4 novembre : leur statut est rapporté comme documentaire, sans en déduire une nouvelle mesure. Les faits externes ci-dessous sont rattachés à leurs sources officielles ou aux publications originales.
 
+**Relecture du 5 novembre (toujours d'actualité comme catalogue et ordre des données ; l'état a un peu bougé) :**
+
+| Lot du § 14.1 | État au 5 novembre | Où |
+|---|---|---|
+| **A — Provenance et datums** | **Commencé.** `src/system/sources.ts` déclare les 14 sources du sol de la Terre : projection, datum vertical et son nom, MNT/MNS/MNH, résolution, date, masque de validité, repli et licence. Les sources nationales y renvoient ; tests `sources.test.ts`. **Aucun lecteur ne consulte encore ce registre** : c'est un contrat testé, pas un aiguillage. Les dates par pièce de la BD ORTHO ne sont pas lues | Q7 G1/G2, [Q7.md](progress/refraction-horizons/Q7.md) |
+| B — AM0 Terre/Jupiter | Non commencé | [PLAN-AURORES-MAGNETOSPHERES](PLAN-AURORES-MAGNETOSPHERES.md), relu le 5 novembre |
+| C — AM1 météo spatiale | Non commencé ; formats NOAA de 2026, âge de la carte et scénario d'époque inscrits au plan | idem |
+| D à J | Non commencés | — |
+
+Points du § 2.2 et du § 9 :
+- **Repris** dans le plan aurores : les aurores optiques de Ganymède et de Callisto, JRM33 utile jusqu'aux degrés
+  13–18, les formats NOAA, le scénario déclaré au-delà de 2030 (époque 2067) et la séparation entre géométrie et
+  brillance. Ces deux derniers ont été ajoutés le 5 novembre.
+- **Encore ouvert** : la conversion `max(H, 0) + N` reste la seule frontière de `overEllipsoid` (`sources.ts`). Les terres
+  émergées sous le niveau de la mer (mer Morte, Caspienne, vallée de la Mort, polders) sont donc relevées à 0. C'est
+  à trancher avant le socle mondial (lot E) ; T7 traite seulement la classification de l'eau sur les côtes.
+- **Encore ouvert** : swissALTI3D est déclaré en LHN95 pour le service de maillage. La fiche du raster annonce LN02
+  (§ 9.2). La vérification sur la documentation de ce service n'est pas faite.
+- **Raccord à la destination** : les lots A et E nourrissent la publication versionnée et les pages filtrables (C0-4,
+  jalon J2 de l'analyse stratégique). Le registre de A doit devenir la provenance que lisent ces pages, sans créer un
+  second catalogue. Les lots B, C et J sont des données CPU préparées hors image, compatibles avec tout ordre du rendu.
+
 **Guide de lecture :** §§1–3 pour les choix et l'audit ; §§4–5 pour AM0–AM8 ; §6 pour les USA ; §§7–9 pour la Terre entière et la géodésie ; §§10–12 pour les autres mondes et la physique ; §§13–15 pour les formats, les priorités et les limites ; §16 pour retrouver les portails.
 
 ## 1. Recommandation générale

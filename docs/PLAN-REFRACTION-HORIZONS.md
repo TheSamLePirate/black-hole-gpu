@@ -3,12 +3,16 @@
 Date : **2 novembre 2026**, relu sur `main` à `824b3a5c`, puis confronté au challenge
 [CHALLENGE-PLAN-REFRACTION-HORIZONS.md](CHALLENGE-PLAN-REFRACTION-HORIZONS.md) (§3.9) et à
 [CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md](CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md) (§3.10) ;
-[PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) y est fusionné (décision 28). Statut : **lancé le 2 novembre** — M0a fait ([M0a.md](progress/refraction-horizons/M0a.md)), C0 écrit
-([C0.md](progress/refraction-horizons/C0.md)) **et en relecture par Sam** (décision 33).
+[PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) y est fusionné (décision 28). Statut : **lancé le 2 novembre, exécuté en
+continu (décision 33) ; relu le 5 novembre à `e98ff1b0`**. L'état phase par phase est au **§0.2**, le reste réordonné au
+**§8.0** ; il rejoint la destination WebGPU AAA ([analyse stratégique](ANALYSE-STRATEGIE-RENDU-2026-11-03.md), §20 et §21).
 
-- **Quand** : on commence **dès que les géantes sont finies** (PLAN-GEANTES-VOLUME : V8 et V9 restent), décision 11 du
-  §10.
-- **Ce qui est fait** : seul le repère de R2 (`efe4369a`, e2e `346a48a8`).
+- **Où en est le plan (5 novembre)** : T et R presque entiers ; H fait sauf H1c (bloqué : où héberger les DEM) ; Q
+  largement entamé (Q2, Q3, Q5, Q6, Q8 avancés ; Q1 et Q4 incomplets ; Q9 examiné). **Contrats C0 jamais relus par
+  Sam**, et plusieurs écarts d'implémentation à entériner (§11). **Budget en vol de Q1 jamais fixé** ; aucune vue de vol
+  chargée ne tient 40 ms sur kerr-mini (§0.2).
+- *Historique : le plan devait commencer dès la fin des géantes (décision 11) ; au 2 novembre seul le repère de R2
+  existait (`efe4369a`, e2e `346a48a8`).*
 - **D'où vient ce plan** : il réunit quatre chantiers qui touchent les mêmes fonctions, les mêmes vues et les mêmes mesures.
   - **T — la Terre raster** : les escaliers, les triangles, les ombres du relief, la mer, le chargement. Analyse
     détaillée : [ANALYSE-TERRE-RASTER-2026-11-02.md](ANALYSE-TERRE-RASTER-2026-11-02.md), suite de
@@ -80,6 +84,50 @@ nôtre. Leurs cartes d'horizon sont dans `docs/modules/Terrain.txt` (FAR CAST SH
 | **Q6-ISS** | les caméras embarquées de l'ISS conformes aux vues NASA et Sen / SpaceTV-1 : supports, positions, orientations, objectifs et réponse d'image calibrés par caméra sur des vidéos YouTube identifiées | le nadir, le limbe terrestre, la structure et le port d'amarrage vus depuis l'ISS | une vue rendue à la fois ; coût à mesurer |
 | **Q7** | les ombres cuites ôtées des photos (recherche, go/no-go), des scans de détail sous la photo, la piste usée, la neige et les saisons, des orthos ailleurs qu'en France | le sol de près, l'hiver, l'Europe | ≈ 0 par image ; +0,5–1,5 ms en vol bas (détail) |
 | **Q8** | le couvert bas (herbe, arbustes, cailloux) près des pistes puis en vol rasant ; la nuit des rues, le trafic, les lignes haute tension, les éoliennes, les vignes ; façades PBR, imposteurs d'arbres, neige qui tombe | le monde habité | au budget, par paliers |
+
+## 0.2 État au 5 novembre 2026 (relecture sur `e98ff1b0`)
+
+Source : les fiches `docs/progress/refraction-horizons/*.md` lues jusqu'à leur fin, `git log`, et le
+[journal de la destination](../progress-to-destination.md). Les coûts viennent de kerr-mini (M1), sauf mention contraire.
+« Coupé » signifie : implémenté, désactivé par défaut.
+
+| Phase | État | Ce qui reste ouvert |
+|---|---|---|
+| M0a, C0, M0b | faits | **C0 jamais relu par Sam** (décision 33). Écarts à entériner : T5 en `rgba32float` et 2 × 9 bits, au lieu de `rgba32uint` et 2 × 12 bits ; T9 en `r32uint` ; validité de T8 réduite à un rectangle ; `ORTHO_SPAN` 8 coupé (décision 38) ; tables de R2 en tranches plutôt qu'en worker |
+| T1, T2, T3, T10 | faits | T1 : le pré-filtre SRTM 3 × 3 est actif sans confirmation de Sam (décision 12). T10 : un vrai iPad |
+| T4 | en partie | Le rejet local de l'historique temporel ; le contact des arbres, des pistes et des bâtiments pendant le fondu |
+| T5, T257 | faits | T257 : des facettes lointaines encore visibles de près ; un CDLOD (« T11 ») est suggéré |
+| T6 | fait (+0,2 à 0,8 ms) | Les deux régimes de Chamonix (48 ou 59 ms) à expliquer |
+| T7 | en partie (7 lots) | Le turquoise des hauts-fonds : il faut une bathymétrie côtière (HOMONIM, Litto3D), deux essais rejetés. Les marées. La répétition des vagues de 1 024 m. LEAN, le déphasage et le fondu du SSR du plan. L'écume, allumée, coûte 0,2 à 0,8 ms contre < 0,1 visé |
+| T8 | **clos** (3 novembre) | Validité par tuile, `put` sur le fil principal, boucle CPU au p95 ≈ 4,6 ms (cible 4) |
+| T9 | fait (a, b, c ; matériau −1,2 ms) | Le reste de C0-4 ; le scintillement en vol non mesuré ; H5 en texture filtrée |
+| H1, H1b, H4 | faits | H1b : le décodage du DEM dans un worker (à-coup de 59 à 79 ms) |
+| H1c | **bloqué** | Où héberger les DEM LOLA (dépôt à 565 Mo sur 600) |
+| H2, H3 | en partie | Une photo à même colongitude ; Mars dans `otherGround` ; aucun gain de coût (la marche lointaine reste) |
+| H3a | **abandonné** (M0b) | — |
+| H5 | en partie | Justesse non établie (IoU 0,087 contre 0,082) ; lecture +0,2 à 0,7 ms contre < 0,2 visé ; cuisson ~1,5 ms par image contre < 1 ms visé |
+| R1, R2, R3 | faits | R1 : `refractDirection` étendu, `photo/plans.ts` et Edlén ne sont pas documentés comme faits. R2 : Danjon 1,4 mag trop clair, laissé par choix |
+| R4 | fait, **allumé** (décision 42) | Environ +1 ms à réduire ; le décor de près au téléobjectif à vérifier |
+| R5 | en partie | Des pâtés intermittents sur l'arc de Vénus ; l'anneau rouge de la Terre vu de la Lune ; Titan sous sa brume ; le coût |
+| R6a-ciel, R6b | faits (R6b validé, décision 42) | Le rayon vert ; R6b sans e2e d'image |
+| R6a-terrain | non commencé | « Plus tard » (décision 42) ; estimé à 3–4 jours |
+| Q1 | en partie | P2 et les ponts faits (image 53–58 → 44–45 ms) ; P1 écarté. **P3, P5, P6, P7, P12, I1 et I4 (paliers) non faits ; budget en vol jamais fixé** (décision 16) |
+| Q2 | fait (−0,35 ms à Chamonix) | C9 (`wxVeil`) ; les captures à trois Soleils |
+| Q3 | B1, B4 faits (+0,3 à 1 ms) | B3, A1 |
+| Q4 | S1 fait (actif) ; scintillement figé < 1 % | L2a GTAO et L2b coupés (invisibles, halos, damier) ; **L4 coupé, à juger** ; L5, F1, F2, F4, C4 non faits |
+| Q5 | C1, C2, C3, C5, C6, C7, C10, C11 (premier lot), VIPER C1 et C4, P8 faits | VIPER C2 et C3 coupés après mesure ; la confiance de C5 ; **orage : passe des nuages ~25 ms sur M1** |
+| Q6 | I2 (TAAU en mouvement), I3, I4 (échelle 75 %), I6 A1–A3, I7, I8 faits | I5 sans besoin établi ; A4 en option ; **Q6t : porte de la décision 40** |
+| Q6-ISS | ISS0, ISS1, ISS3 faits ; ISS2, ISS4, ISS5 en partie | La capture dense nadir et amarrage (6 novembre) ; l'attitude réelle de la station ; les plans serrés |
+| Q7 | L8 (+1,7 ms sur M1), B4, L9, G1/G2 faits | **L7b coupé, go/no-go final** ; L7a ; L9 sans observations ; G1/G2 non lus par les lecteurs |
+| Q8 | L10, D1 (9 paliers), C8 faits | **B5 coupé** (+1–2 ms, presque invisible) ; B2, F3 ; le coût de D1 non mesuré |
+| Q9 | P9 et P10 examinés, non construits | P9 borné à ~1 ms de gain |
+
+**Cadence mesurée (kerr-mini, M1)** : cockpit dans l'orage en vol 58,9–60,2 ms (images terminées, décision 42) ; nuit à
+Châteaudun 53,6 ms ; Beauce à 30 m 65–67 ms ; virage dans les nuages 52 ms ; Tarifa, Alpes et détroit à l'échelle de
+75 % 50,5, 39,6 et 57,3 ms ; vues de l'ISS 21–23 ms. **Le palier de la décision 26 (≤ 40 ms en vol sur le mini) n'est
+tenu par aucune vue de vol chargée**, à part les Alpes de Q6u. Sur M1 Max (le palier de 40 images/s, la cible finale de
+60 au §8 de l'analyse stratégique), aucune mesure récente n'existe. Seules la décision 42, Q6f et Q6-ISS disent compter
+les images terminées.
 
 ---
 
@@ -1009,8 +1057,9 @@ la porte reste à Sam.
 
 ### Q6-ISS — Les vraies caméras de l'ISS, calibrées sur les vidéos NASA et Sen
 
-**Ajout demandé par Sam le 4 novembre 2026 ; « zen » confirmé comme Sen / SpaceTV-1. Statut : ISS0 commencé
-(sources et corpus, commits 3a7b9bcc et df7a6133), aucune calibration encore.** Ce volet appartient au plan actif, avec Q6 (image/optique), I3
+**Ajout demandé par Sam le 4 novembre 2026 ; « zen » confirmé comme Sen / SpaceTV-1. Statut au 5 novembre : ISS0,
+ISS1 et ISS3 faits ; ISS2, ISS4 et ISS5 en partie** ([Q6-ISS.md](progress/refraction-horizons/Q6-ISS.md), §0.2). *Au 4 novembre :
+ISS0 commencé (sources et corpus, commits 3a7b9bcc et df7a6133), aucune calibration.* Ce volet appartient au plan actif, avec Q6 (image/optique), I3
 (mouvement), R2/R4 (limbe/projection) et Q5 (air). Il produit des **vues simulées depuis les vrais supports de caméra**,
 calibrées sur les vidéos, et des profils de réponse propres à ces caméras.
 
@@ -1117,6 +1166,26 @@ de LUT relevant de son périmètre.
 lancement du jeu, test, e2e ou benchmark pour cet ajout.
 
 ## 8. Ordre et estimations
+
+### 8.0 Le reste, réordonné vers la destination (5 novembre)
+
+Le tableau d'ordre ci-dessous (§8.1) est celui du 2 novembre : il a été parcouru presque entièrement en trois jours,
+mais **surtout par des lots de qualité** (§20.4 de l'analyse stratégique), sur le chemin actuel (`shadeLite` dans
+`trace.wgsl`). Les lots de fondation de la §20.5 (contrat d'acceptation, interfaces des données, bascule de l'opaque)
+n'ont pas commencé. Le reste se range donc en cinq groupes, dans cet ordre :
+
+| # | Groupe | Contenu | Pourquoi là |
+|---:|---|---|---|
+| 1 | **Fermer les contrats** (jalon J0) | Relecture de C0 par Sam, avec les écarts du §0.2 entérinés ou corrigés ; le palier de cadence nommé (décision 26 contre §8 de l'analyse) ; **le budget de Q1 fixé** ; une scène de vol de référence et sa fiche de mesure (images terminées, p95, mémoire, état thermique) | Chaque phase suivante en dépend ; travail court, surtout documentaire et de mesure |
+| 2 | **Attribuer le coût de la frame** | La frame de la scène de référence répartie passe par passe sur les images terminées (`debugSkip`) : sol (~28 ms plein écran sur M1), nuages dans l'orage (~25 ms), cockpit (~13 ms), affichage. Ensuite seulement : Q1 P3/P5/P6/I1, I4 (paliers), Q9 P9 s'il paie | On ne sait pas encore où partent les 50–60 ms ; aucune optimisation ne se choisit sans cela (décision 31) |
+| 3 | **Fondations** (§20.5, étapes 2–3) | Exposer la surface et ses générations (fin de T4 : historique, contact pendant le fondu) ; les pages d'imagerie et leur validité (reste de C0-4 et de T9) ; G1/G2 lus par les lecteurs (provenance) ; les matériaux de Q3 préparés hors du noyau | Le chemin actuel les consomme d'abord ; le forward les lira ensuite sans tout refaire |
+| 4 | **Trancher et retirer** (§20.7) | Les jugements en attente (L4, Q6t, L7b, B5) ; les chemins coupés sans gain mesuré (L2a, L2b, VIPER C2/C3) gardés seulement avec une raison et une condition de retrait, sinon supprimés | Les options sans utilisateur ont un coût de compilation et de maintenance |
+| 5 | **Richesse restante, au budget** | T7 (bathymétrie côtière, vagues), H5 (justesse, coût de lecture), H1c (après l'hébergement), R5, Q4 L5/F1/F2/F4/C4, Q8 B2/F3, Q6-ISS (captures du 6 novembre), R6a-terrain (plus tard) | Chaque ajout lit les interfaces du groupe 3 quand elles existent ; sinon son lecteur est marqué provisoire |
+
+Les correctifs urgents continuent entre ces groupes. Le choix du prochain jalon se fait sur cette base
+([analyse stratégique](ANALYSE-STRATEGIE-RENDU-2026-11-03.md), §21).
+
+### 8.1 L'ordre initial (2 novembre)
 
 **Départ : dès que les géantes sont finies** (PLAN-GEANTES-VOLUME, V8 et V9 ; décision 11). Avant de lancer : relire
 `git log`, les notes d'Alex sur `origin/master`, et l'état de `trace.wgsl` (les numéros de ligne de ce plan bougent).
@@ -1367,7 +1436,26 @@ sur cette délégation :
 
 ## 11. Questions ouvertes
 
-**Pour Sam** : relire les contrats à la fin de C0 (décision 33). Les budgets de la décision 26 sont confirmés.
+**Relu le 5 novembre.** Depuis le 2 novembre, plusieurs questions ci-dessous sont tranchées :
+- la porte de H1 : décision 37 ;
+- H3a : abandonné (M0b) ;
+- la pleine résolution des cartes : 2048 × 1024 (H4) ;
+- R6a-terrain : plus tard ; R6b : validé (décision 42) ;
+- T8e : coupé (décision 38).
+
+**Ce qui attend Sam aujourd'hui :**
+1. **Relire C0** (décision 33 ; le travail a continué sans cette relecture) et entériner les écarts du §0.2.
+2. **Fixer le budget en vol de Q1** et nommer le palier de cadence : la décision 26 (≤ 40 ms sur le mini, ≥ 40 i/s sur
+   M1 Max) devient un palier intermédiaire de la cible de 60 i/s (analyse stratégique, §8 ; C0-8).
+3. **Confirmer ou retirer le pré-filtre SRTM** de T1, actif sans confirmation (décision 12).
+4. **Trancher les effets coupés** : L4 (le spéculaire), Q6t (les rayures, décision 40), L7b (go/no-go final), B5 (la
+   suite du couvert bas).
+5. **H1c** : où héberger les DEM LOLA du pôle sud.
+6. **T7** : lancer ou non la bathymétrie côtière (HOMONIM, Litto3D) pour les hauts-fonds.
+7. G1/G2 : Copernicus GLO-30 et les orthos nationales retenues ; P9 et P10 (Q9) ; le réglage artistique du limbe
+   (décision 27), s'il le faut.
+
+*Texte du 2 novembre :* **Pour Sam** : relire les contrats à la fin de C0 (décision 33). Les budgets de la décision 26 sont confirmés.
 
 **Les contrats de C0** tranchent les questions techniques que le challenge a rouvertes : la surface de raccord et les
 générations ; la disposition de la cible de visibilité ; la projection optique et ses consommateurs ; l'architecture
@@ -1582,3 +1670,13 @@ compilation) s'y ajoutent.
   niveau. Au passage, les e2e de H3 et H5 tiennent l'exposition automatique au lieu de la couper (le ciel à son échelle
   physique : des étoiles en plein jour) — [progress/refraction-horizons/H5.md](progress/refraction-horizons/H5.md). H1c
   (Shackleton) attend une décision de stockage : le dépôt est à 564 Mo de binaires pour 600.
+- **4 et 5 novembre** (résumé ; le détail est dans chaque fiche) : **T7** en sept lots, avec la tournée de 16 côtes,
+  l'eau par région, les parois et l'écume. **R1, R2, R3** faits ; **R4** fait et allumé (décision 42). **R5** et
+  **R6a-ciel** faits, **R6b** validé, **R6a-terrain** estimé puis reporté. **Q4** : S1 actif, le scintillement figé ramené
+  sous 1 % ; L2a, L2b et L4 coupés. **Q5** : les tables d'air, une atmosphère unique, la météo datée, les couches et P8.
+  **Q6** de Q6a à Q6u. **Q6-ISS** de ISS0 à ISS5, en partie. **Q7** : L7b (étude puis prototype coupé), G1/G2, B4, L9 et
+  L8. **Q8** : C8, B5 (coupé), D1 en neuf paliers et L10. **Q9** examiné. Les décisions 38 à 42 sont prises.
+- **5 novembre, soir — relecture du plan** (sur `e98ff1b0`) : l'état réel phase par phase (§0.2), le reste réordonné
+  vers la destination WebGPU AAA (§8.0), les questions ouvertes remises à jour (§11). Constats : C0 n'a pas été relu,
+  le budget de Q1 n'a pas été fixé et aucune vue de vol chargée ne tient le palier de 40 ms sur le mini ; l'avancée de
+  trois jours tient surtout à des lots de qualité sur le chemin actuel, sans lot de fondation (§20.5 de l'analyse).
