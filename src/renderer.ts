@@ -4453,9 +4453,9 @@ export class Renderer {
     this.weatherGridOn = !!g;
     this.device.queue.writeBuffer(this.bodyBuf, TABLE_WXGRID * 16, f);
   }
-  /** (R4, contract C0-3) the ground's lift by the air drawn — off until every consumer lifts with it (decision 15: R4a and R4b
-   *  together): the tracer's march, the rasters' projection, the points read back */
-  liftOn = false;
+  /** (R4, contract C0-3) the ground's lift by the air drawn — the tracer's march, the rasters' projection, the points read back
+   *  (decision 15: R4a and R4b together) —; on since Sam's decision 42 (5 Nov 2026), its ~+1 ms on an M1 accepted */
+  liftOn = true;
   /** the lift table in the tracer's table: the eye's height it was made for [m over the sea], "" none */
   liftNow = "";
   private refrData: Float32Array | null = null;
