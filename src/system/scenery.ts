@@ -1,3 +1,4 @@
+import { detailOrigin } from "./detail-scans";
 import type { Vec3 } from "../physics";
 import { forestKindTable, forestSeason } from "./forest";
 import { SceneryContact } from "./scenery-contact";
@@ -386,8 +387,16 @@ export class EarthScenery {
     o[21] = this.satellite ? 1 : 0;
     o[22] = r.rgbPixels ? 1 : 0;
     o[23] = this.shadows ? 1 : 0;
+    // (Q7 L8: the detail scans' world origin — the frame's centre's, modulo their period — and on)
+    const dO = detailOrigin(r.lat, r.lon);
+    o[24] = dO[0];
+    o[25] = dO[1];
+    o[26] = this.detailOn ? 1 : 0;
+    o[27] = 0;
     return o;
   }
+  /** (Q7 L8) the ground's detail scans drawn (settings.earthDetail, their texture in) */
+  detailOn = false;
   /** the scene's buildings Overture Maps' (B7: credited while drawn) */
   get overtureBuildings() {
     return this.data?.overtureBuildings ?? 0;

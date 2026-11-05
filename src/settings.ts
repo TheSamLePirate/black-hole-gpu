@@ -345,6 +345,7 @@ export interface Settings {
   detailReach: "normal" | "far" | "veryFar"; // the ground's detail drawn farther — the scenery's box, the relief's windows — and led farther where the view looks
   sceneryHitboxes: boolean; // CPU collision wireframes, on foot only (diagnostic)
   earthGrass: "off" | "balanced";
+  earthDetail: boolean; // Q7 L8 / VIPER B3: the ground's detail scans near (grass, soil, gravel, rock, asphalt; CC0 ambientCG) over the photographs, their hue kept
   earthLowCover: boolean; // VIPER B5's first step: tufts, bushes and reed clumps round a camera under 300 m over the Earth, out to 240 m (character-renderer.ts COVER) — off by default: measured +1–2 ms for little seen (Q8.md)
   earthGrassDensity: number; // the share of the grass blades drawn (0.25 … 1; 1 the authored density)
   earthGrassReach: number; // the vegetation drawn out to this distance from the astronaut [m] (8 … 30)
@@ -742,6 +743,7 @@ export function defaultSettings(): Settings {
     sceneryHitboxes: false,
     earthGrass: "balanced",
     earthLowCover: false,
+    earthDetail: true,
     earthGrassDensity: 1,
     earthGrassReach: 28,
     earthGrassWind: 1,
@@ -2152,6 +2154,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   sceneryHitboxes: "pref",
   earthGrass: "pref",
   earthLowCover: "pref",
+  earthDetail: "pref",
   earthGrassDensity: "pref",
   earthGrassReach: "pref",
   earthGrassWind: "pref",

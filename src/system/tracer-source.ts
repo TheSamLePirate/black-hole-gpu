@@ -18,6 +18,7 @@ import { TREE_SHADOW_TEXTURE_LIMIT, withTreeShadow } from "./tree-shadow";
 import { HORIZON_TEXTURE_LIMIT, withHorizonMaps } from "./horizon-maps";
 import { ORTHO_TEXTURE_LIMIT, withOrthoImagery } from "./earth-tiles";
 import { GTAO_TEXTURE_LIMIT, withGtao } from "./gtao";
+import { DETAIL_TEXTURE_LIMIT, withDetailScans } from "./detail-scans";
 
 /** what of the device decides the tracer's optional parts */
 export interface TracerLimits {
@@ -36,24 +37,27 @@ export function composeTracer(trace: string, forest: string, limits: TracerLimit
       sceneryShader(
         surfaceShader(
           withOrthoImagery(
-            withGtao(
-              withHorizonMaps(
-                withTreeShadow(
-                  withCloudShadow(
-                    withCloudPass(
-                      withSunShadow(
-                        withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
-                        tex >= SUN_SHADOW_TEXTURE_LIMIT,
+            withDetailScans(
+              withGtao(
+                withHorizonMaps(
+                  withTreeShadow(
+                    withCloudShadow(
+                      withCloudPass(
+                        withSunShadow(
+                          withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
+                          tex >= SUN_SHADOW_TEXTURE_LIMIT,
+                        ),
+                        tex >= CLOUD_PASS_TEXTURE_LIMIT,
                       ),
-                      tex >= CLOUD_PASS_TEXTURE_LIMIT,
+                      tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
                     ),
-                    tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
+                    tex >= TREE_SHADOW_TEXTURE_LIMIT,
                   ),
-                  tex >= TREE_SHADOW_TEXTURE_LIMIT,
+                  tex >= HORIZON_TEXTURE_LIMIT,
                 ),
-                tex >= HORIZON_TEXTURE_LIMIT,
+                tex >= GTAO_TEXTURE_LIMIT,
               ),
-              tex >= GTAO_TEXTURE_LIMIT,
+              tex >= DETAIL_TEXTURE_LIMIT,
             ),
             tex >= ORTHO_TEXTURE_LIMIT,
           ),

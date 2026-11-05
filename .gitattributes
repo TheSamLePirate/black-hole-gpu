@@ -19,3 +19,4 @@ docs/img/**/*.jpg filter=lfs diff=lfs merge=lfs -text
 docs/img/**/*.webp filter=lfs diff=lfs merge=lfs -text
 docs/video/*.mp4 filter=lfs diff=lfs merge=lfs -text
 gallery/img/paysages/*.jpg filter=lfs diff=lfs merge=lfs -text
+assets/detail/*.ktx2 filter=lfs diff=lfs merge=lfs -text

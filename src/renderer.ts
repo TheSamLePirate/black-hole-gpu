@@ -42,6 +42,7 @@ import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT } from "
 import { Lightning } from "./system/lightning";
 import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT } from "./system/tree-shadow";
 import { GTAO_BINDING, GTAO_TEXTURE_LIMIT, Gtao } from "./system/gtao";
+import { DETAIL_BINDING, DETAIL_TEXTURE_LIMIT, DetailScans } from "./system/detail-scans";
 import { CLV_TEX_H, CLV_TEX_W } from "./system/cloud-light-layout";
 import type { MirageKind } from "./system/mirage";
 import { type MirageGuess, mirageFromWeather } from "./system/refraction-weather";
@@ -1292,6 +1293,12 @@ export class Renderer {
     // until the scenery raster first runs — its 16 MiB not taken on a device that never flies over the Earth's forests)
     // (the ground's occlusion — Q4 L2a —: bound where the device takes one more sampled texture; a target's own, a 1 × 1 stand-in
     // at 1 elsewhere — the offline target)
+    // (the ground's detail scans — Q7 L8 —: bound where the device takes one more sampled texture, their files loaded now)
+    this.detailBound = device.limits.maxSampledTexturesPerShaderStage >= DETAIL_TEXTURE_LIMIT;
+    if (this.detailBound) {
+      this.detail = new DetailScans(device);
+      this.detail.load();
+    }
     this.gtaoBound = device.limits.maxSampledTexturesPerShaderStage >= GTAO_TEXTURE_LIMIT;
     if (this.gtaoBound) {
       this.gtao = new Gtao(device);
@@ -1401,6 +1408,15 @@ export class Renderer {
             ]
           : []),
         // (the ground's occlusion — Q4 L2a)
+        ...(device.limits.maxSampledTexturesPerShaderStage >= DETAIL_TEXTURE_LIMIT
+          ? [
+              {
+                binding: DETAIL_BINDING,
+                visibility: C,
+                texture: { sampleType: "float", viewDimension: "2d-array" } as GPUTextureBindingLayout,
+              },
+            ]
+          : []),
         ...(device.limits.maxSampledTexturesPerShaderStage >= GTAO_TEXTURE_LIMIT
           ? [{ binding: GTAO_BINDING, visibility: C, texture: { sampleType: "unfilterable-float" } as GPUTextureBindingLayout }]
           : []),
@@ -2292,6 +2308,7 @@ export class Renderer {
             HORIZON_TEXTURE_LIMIT,
             ORTHO_TEXTURE_LIMIT,
             GTAO_TEXTURE_LIMIT,
+            DETAIL_TEXTURE_LIMIT,
           ),
           adapter.limits.maxSampledTexturesPerShaderStage,
           // (a test's cap — the page's hash gpuTextures=N —: a device with fewer, its features' stand-ins drawn)
@@ -2777,6 +2794,7 @@ export class Renderer {
       ...(this.cloudShadow ? [{ binding: CLOUD_SHADOW_BINDING, resource: ((csm && this.csmTex) || this.csmDummy!).createView() }] : []),
       ...(this.treeShadow ? [{ binding: TREE_SHADOW_BINDING, resource: this.tsmTex!.createView({ dimension: "2d-array" }) }] : []),
       ...(this.gtaoBound ? [{ binding: GTAO_BINDING, resource: (t.ao ?? this.gtaoDummy!).createView() }] : []),
+      ...(this.detailBound ? [{ binding: DETAIL_BINDING, resource: this.detail!.texture.createView({ dimension: "2d-array" }) }] : []),
       ...(this.orthoRead
         ? [
             {
@@ -3861,6 +3879,8 @@ export class Renderer {
       this.orthoSent = ortho;
     }
     f.set(this.earthSurface.params(), BASE_PARAM_VEC4S * 4);
+    // (Q7 L8: the detail scans drawn when asked and in)
+    this.earthScenery.detailOn = s.earthDetail && !!this.detail?.ready;
     f.set(this.earthScenery.params(), (BASE_PARAM_VEC4S + SURFACE_VEC4S) * 4);
     if (!o.probe && this.character?.active && this.character.body === "earth")
       this.character.groundPatch.build(this.character.q, this.character.up(), (q) => this.character!.rawHeight(q), this.earthTiles.stamp);
@@ -9211,6 +9231,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   treeShadowOn = true;
   /** Q4 L2a — the ground's ambient occlusion (system/gtao.ts): bound on this device, its pass, its stand-in; gtaoOn the switch */
   private gtaoBound = false;
+  /** (Q7 L8) the ground's detail scans: bound, their texture */
+  private detailBound = false;
+  detail: DetailScans | null = null;
   gtao: Gtao | null = null;
   private gtaoDummy: GPUTexture | null = null;
   /** off by default (measured, docs/progress/refraction-horizons/Q4.md L2a: invisible in the image, halos at the silhouettes,

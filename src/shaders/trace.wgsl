@@ -140,7 +140,8 @@ struct Params {
   wx: array<vec4f, 8>,
   // regional Sentinel-2 / WorldCover: bounds and residency, page grid and gutter, materials and metre scale
   surface: array<vec4f, 7>,
-  scenery: array<vec4f, 6>,
+  // (Q7 L8: [6] the detail scans' world origin modulo 4 096 m (x east, y north), on (z), unused)
+  scenery: array<vec4f, 7>,
   walk: array<vec4f,5>, // camera-relative shared walking heightfield, in the existing table buffer
   // the ships' wakes near the camera (renderer: wakeParams; seaWake): [0] their count; then two each — the ship
   // from the camera on the Earth's axes [m] and its length [m]; its bow's way (its length its beam [m]) and its
@@ -7992,6 +7993,40 @@ fn sunShadowFarAt(rel: vec3f, base: f32) -> vec4f { return vec4f(-1.0, 0.0, 0.0,
 // (the sunlight's share the clouds let through to a point p of the squashed space: −1 where the map has nothing)
 fn cloudShadowAt(p: vec3f) -> f32 { return -1.0; }
 // END_CLOUD_SHADOW
+// BEGIN_DETAIL (system/detail-scans.ts withDetailScans supplies the ground's detail scans — Q7 L8)
+const DETAIL_BOUND = false;
+fn detailRead(uv: vec2f, layer: i32, lod: f32) -> vec4f { return vec4f(0.5, 0.5, 0.5, 1.0); }
+// END_DETAIL
+// (Q7 L8 / VIPER B3: the ground's detail scan's material for an albedo — the photograph's: green a grass, brown a soil, a bright
+// beige a gravel, a light grey a rock, a dark grey an asphalt; a road's paving its asphalt — and how much of its contrast)
+fn detailMaterial(A: vec3f, road: bool) -> vec2f {
+  if (road) { return vec2f(4.0, 0.5); }
+  let l = luminance(A);
+  if (A.g > A.r * 1.05 && A.g > A.b * 1.15) { return vec2f(0.0, 0.55); }
+  if (A.r > A.b * 1.25) { return select(vec2f(1.0, 0.8), vec2f(2.0, 0.6), l > 0.25); }
+  return select(vec2f(4.0, 0.5), vec2f(3.0, 0.35), l > 0.12);
+}
+// (its ratio at a world point xy [m] — the scenery frame's, P.scenery[6]'s origin added: continuous as the frame moves — for a
+// footprint fpM [m]: three scales — 4 m, 32 m turned 37°, 512 m turned 71° —, each faded out as its texels pass under the
+// footprint; x the albedo's factor, yz the normal's tilt along east and north)
+fn groundDetail(xy: vec2f, fpM: f32, mat: vec2f) -> vec3f {
+  var r = 1.0;
+  var t = vec2f(0.0);
+  let S = vec3f(4.0, 32.0, 512.0);
+  let ang = vec3f(0.0, 0.6458, 1.2392);
+  for (var i = 0; i < 3; i++) {
+    let lod = log2(max(fpM * 512 / S[i], 1.0));
+    let w = 1.0 - smoothstep(6.0, 8.5, lod);
+    if (w <= 0.0) { continue; }
+    let c = cos(ang[i]);
+    let sn = sin(ang[i]);
+    let uv = vec2f(c * xy.x - sn * xy.y, sn * xy.x + c * xy.y) / S[i];
+    let d = detailRead(uv, i32(mat.x), lod);
+    r *= 1.0 + w * mat.y * (d.r * 2.0 - 1.0);
+    t += w * (d.gb * 2.0 - 1.0) * 0.5;
+  }
+  return vec3f(max(r, 0.05), t);
+}
 // BEGIN_GTAO (system/gtao.ts withGtao supplies the ground's ambient occlusion — Q4 L2a)
 fn rasterAO(px: vec2f) -> f32 { return 1.0; }
 // END_GTAO
@@ -14871,6 +14906,16 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       let nf = normalize(gq + sf.x * east + sf.y * cross(gq, east));
       n = normalize(mix(n, nf, sf.z * smoothstep(10.0, 4.0, fpM)));
     }
+  }
+  // (Q7 L8 / VIPER B3: the detail scans on the ground near — the photograph's albedo times the scan's ratio, its normal tilted —,
+  // where the scenery's frame is known and its scans are in; liteSkip 2147483648 none — an A/B)
+  if (DETAIL_BOUND && !mesh && !isTree && fpM < 300.0 && HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[6].z > 0.5 && (liteSkip() & 2147483648u) == 0u) {
+    let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
+    let xy = (P.scenery[3].xyz + dL * tM).xy + P.scenery[6].xy;
+    let dd = groundDetail(xy, fpM, detailMaterial(A, sv.kind == 1.0));
+    A *= dd.x;
+    // (a light tilt: a random one lowers the mean lighting — 0.6 darkened a meadow by 8 % with the ratio's clipping)
+    n = normalize(n + (P.scenery[0].xyz * dd.y + P.scenery[1].xyz * dd.z) * 0.3);
   }
   // (T7 — the cliff's face, its colour found below with the imagery: its strata over it)
   if (faceW > 0.0) {

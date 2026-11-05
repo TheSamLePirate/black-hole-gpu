@@ -17,7 +17,7 @@ export const DETAIL_REACH = { normal: 1, far: 1.5, veryFar: 2 } as const;
 export type DetailReach = keyof typeof DETAIL_REACH;
 export const sceneryBudget = (reach: number) => Math.ceil((SCENERY_BYTES * reach * reach) / (1024 * 1024)) * 1024 * 1024;
 export const sceneryGrid = (reach: number) => Math.round((SCENERY_GRID * reach) / 64) * 64;
-export const SCENERY_VEC4S = 6;
+export const SCENERY_VEC4S = 7;
 export const SCENERY_STORAGE_LIMIT = 9;
 export const SCENERY_GRID = 512;
 export type SceneryMode = "off" | "balanced" | "high";

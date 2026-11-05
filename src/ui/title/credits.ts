@@ -234,6 +234,14 @@ export const CREDITS: CreditSection[] = [
       },
       {
         what: {
+          fr: "Les scans de détail du sol (herbe, terre, gravier, roche, asphalte)",
+          en: "The ground's detail scans (grass, soil, gravel, rock, asphalt)",
+        },
+        who: "ambientCG (CC0) — Grass004, Ground054, Gravel022, Rock035, Asphalt012",
+        url: "https://ambientcg.com",
+      },
+      {
+        what: {
           fr: "Les bâtiments hors de France, leurs toits ; les éoliennes",
           en: "The buildings outside France, their roofs; the wind turbines",
         },

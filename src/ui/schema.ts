@@ -2303,6 +2303,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "grass herbe marche third person personnage",
   },
   {
+    key: "earthDetail",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Ground detail",
+    effect: "scene",
+    help: "Near the ground, the photographs' texture carried below their own pixel: five scanned materials (grass, soil, gravel, rock, asphalt; ambientCG, CC0) at three scales — 4 m, 32 m, 512 m —, chosen by the photograph's colour, their light and shade only — the photograph's own hue and mean kept —, their relief in the lighting; faded out as they pass under a pixel.",
+    keywords: "ground detail texture scans grass soil gravel rock asphalt close low flight taxi viper",
+  },
+  {
     key: "earthLowCover",
     type: "toggle",
     section: "sky",
