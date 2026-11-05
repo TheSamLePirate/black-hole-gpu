@@ -92,3 +92,51 @@ res = np.clip(relit, 0, 1) ** (1 / 2.2)
 Image.fromarray((res * 255).astype(np.uint8)).save(f"{out}/relit3.png")
 Image.fromarray((alpha * 255).astype(np.uint8)).save(f"{out}/mask3.png")
 Image.fromarray((S * 255).astype(np.uint8)).save(f"{out}/predicted3.png")
+# ---- the local k: a field on 64-px cells (25 m) from the pairs in each, smoothed; fitted on a checker of 8-px blocks, tried on
+# the other
+yy, xx = np.mgrid[0:H, 0:W]
+CH = ((xx // 8 + yy // 8) % 2) == 0
+cell = 64; nc = (H // cell, W // cell)
+def kfield(sel):
+    K = np.zeros(nc + (3,)); Wt = np.zeros(nc)
+    for i in range(nc[0]):
+        for j in range(nc[1]):
+            win = (slice(i * cell, (i + 1) * cell), slice(j * cell, (j + 1) * cell))
+            su = (ring_sun & sel)[win]; sh = (ring_sh & sel)[win]
+            if su.sum() >= 20 and sh.sum() >= 20:
+                K[i, j] = [np.median(lin[..., c][win][su]) / max(np.median(lin[..., c][win][sh]), 1e-4) for c in range(3)]
+                Wt[i, j] = 1
+    g = np.array([np.median(lin[..., c][ring_sun & sel]) / max(np.median(lin[..., c][ring_sh & sel]), 1e-4) for c in range(3)])
+    # (smoothed over the neighbouring cells, the global k where none)
+    Ks = np.zeros_like(K)
+    for i in range(nc[0]):
+        for j in range(nc[1]):
+            i0, i1, j0, j1 = max(i - 1, 0), min(i + 2, nc[0]), max(j - 1, 0), min(j + 2, nc[1])
+            w = Wt[i0:i1, j0:j1].sum()
+            Ks[i, j] = (K[i0:i1, j0:j1] * Wt[i0:i1, j0:j1, None]).sum((0, 1)) / w if w > 0 else g
+    Ks = np.clip(Ks, 2, 10)
+    up = np.repeat(np.repeat(Ks, cell, 0), cell, 1)
+    return up
+Kf = kfield(CH)
+test = ~CH
+ratio = lambda kk: [float(np.median((lin[..., c] * kk[..., c])[ring_sh & test]) / np.median(lin[..., c][ring_sun & test])) for c in range(3)]
+glob = np.broadcast_to(np.array([np.median(lin[..., c][ring_sun & CH]) / max(np.median(lin[..., c][ring_sh & CH]), 1e-4) for c in range(3)]), (H, W, 3))
+print(json.dumps({"held_checker_global_k": [round(x, 3) for x in ratio(np.clip(glob, 2, 10))], "held_checker_local_k": [round(x, 3) for x in ratio(Kf)],
+                  "before": [round(float(np.median(lin[..., c][ring_sh & test]) / np.median(lin[..., c][ring_sun & test])), 3) for c in range(3)]}))
+relitL = lin * (1 + (Kf - 1) * alpha[..., None])
+Image.fromarray((np.clip(relitL, 0, 1) ** (1 / 2.2) * 255).astype(np.uint8)).save(f"{out}/relit3-local.png")
+LrL = 0.2126 * relitL[..., 0] + 0.7152 * relitL[..., 1] + 0.0722 * relitL[..., 2]
+hpL = LrL - box(LrL, 2)
+print(json.dumps({"noise_ratio_local": round(float(np.std(hpL[alpha > 0.9]) / np.std(hpL[(alpha < 0.05) & GROUND])), 2)}))
+# (the error cell by cell: on each 64-px cell's held-out pairs, |log| of the relit shadow over the sunlit, green; its median)
+def cellerr(kk):
+    e = []
+    for i in range(nc[0]):
+        for j in range(nc[1]):
+            win = (slice(i * cell, (i + 1) * cell), slice(j * cell, (j + 1) * cell))
+            su = (ring_sun & test)[win]; sh = (ring_sh & test)[win]
+            if su.sum() >= 20 and sh.sum() >= 20:
+                r = np.median((lin[..., 1] * kk[..., 1])[win][sh]) / np.median(lin[..., 1][win][su])
+                e.append(abs(math.log(r)))
+    return round(float(np.median(e)), 3), round(float(np.percentile(e, 90)), 3), len(e)
+print(json.dumps({"cell_err_global (median, p90, cells)": cellerr(np.clip(glob, 2, 10)), "cell_err_local": cellerr(Kf)}))
