@@ -27,28 +27,29 @@ export interface MirageProfile {
 
 /** the air's temperature [°C] at h [m] under a forced profile, over a ground temperature t0 [°C]: the layered model's own air
  *  (US76, its ground offset fading over a kilometre — refraction-layered.ts airProfile) with the forced layer added */
-export function forcedTemperature(kind: MirageKind, t0: number, h: number): number {
+export function forcedTemperature(kind: MirageKind, t0: number, h: number, strength = 1): number {
   const base = us76Temperature((R_E * h) / (R_E + h)) - 273.15 + (t0 + 273.15 - us76Temperature(0)) * Math.exp(-h / 1000);
-  if (kind === "warmSea") return base + 6 * Math.exp(-h / 4);
+  // (R6b: the forced layer's ΔT scaled by the weather's strength, 0…1 — 1 the illustrative profile)
+  if (kind === "warmSea") return base + 6 * strength * Math.exp(-h / 4);
   if (kind === "inversion") {
     // (cool air under 20 m, then 8 K warmer over the next 30 m)
     const x = Math.min(Math.max((h - 20) / 30, 0), 1);
-    return base - 4 + 8 * x * x * (3 - 2 * x);
+    return base + strength * (-4 + 8 * x * x * (3 - 2 * x));
   }
   return base;
 }
 
 /** The low air's refractivity under a forced profile, the pressure hydrostatic from the sea's level */
-export function mirageProfile(kind: MirageKind, state: AirState): MirageProfile {
+export function mirageProfile(kind: MirageKind, state: AirState, strength = 1): MirageProfile {
   const n = Math.round(MIRAGE_TOP / MIRAGE_STEP) + 1;
   const N = new Float64Array(n);
   let p = state.pMsl;
   for (let i = 0; i < n; i++) {
     const h = i * MIRAGE_STEP;
-    const t = forcedTemperature(kind, state.tGround, h);
+    const t = forcedTemperature(kind, state.tGround, h, strength);
     N[i] = ciddorRefractivity(p, t, state.rh * Math.exp(-h / 2000), state.lambdaUm ?? 0.55);
     p *= Math.exp(
-      (-0.0289644 * 9.80665 * MIRAGE_STEP) / (8.314462 * (forcedTemperature(kind, state.tGround, h + MIRAGE_STEP / 2) + 273.15)),
+      (-0.0289644 * 9.80665 * MIRAGE_STEP) / (8.314462 * (forcedTemperature(kind, state.tGround, h + MIRAGE_STEP / 2, strength) + 273.15)),
     );
   }
   return { N, above: airProfile(state) };
@@ -137,11 +138,11 @@ export const MIRAGE_LAMBDAS = [0.65, 0.55, 0.45] as const;
 const SEA = -10;
 
 /** The three colours' tables for an eye at h0 [m] under a forced profile, packed as the GPU reads them */
-export function mirageTables(kind: MirageKind, state: AirState, h0: number): Float32Array {
+export function mirageTables(kind: MirageKind, state: AirState, h0: number, strength = 1): Float32Array {
   const out = new Float32Array(MIRAGE_VEC4S * 4);
   out.set([1, h0, -MIRAGE_BAND, MIRAGE_BAND], 0);
   MIRAGE_LAMBDAS.forEach((lambdaUm, c) => {
-    const T = mirageTable(mirageProfile(kind, { ...state, lambdaUm }), h0, -MIRAGE_BAND, MIRAGE_BAND, MIRAGE_N);
+    const T = mirageTable(mirageProfile(kind, { ...state, lambdaUm }, strength), h0, -MIRAGE_BAND, MIRAGE_BAND, MIRAGE_N);
     for (let i = 0; i < MIRAGE_N; i++) {
       const v = T.trueAlt[i]!;
       out[4 + c * MIRAGE_N + i] = Number.isNaN(v) ? SEA : v;

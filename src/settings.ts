@@ -320,8 +320,9 @@ export interface Settings {
   refraction: boolean; // the Earth's air bends the light from beyond it (PLAN-CIEL C3): the Sun, the Moon, the stars raised at the horizon
   /** R6a-ciel — the air near the sea forced into a mirage's profile (illustrative, never an observation): "warmSea" a sea warmer
    *  than the air (the setting Sun stretched, an inverted image), "inversion" a warm layer aloft (a duct: the horizon raised, the
-   *  Sun lost in it); "off" the layered model's air alone */
-  mirage: "off" | "warmSea" | "inversion";
+   *  Sun lost in it); "off" the layered model's air alone; "weather" (R6b) the one the real weather makes plausible — the sea's
+   *  temperature against the air's, an inversion aloft, the wind (system/refraction-weather.ts): plausible, never observed */
+  mirage: "off" | "warmSea" | "inversion" | "weather";
   horizonMaps: boolean; // the near body's horizon maps (PLAN-REFRACTION-HORIZONS H1/H2): its relief's long shadows at the terminator, from afar
   autoWarp: boolean; // hub/manoeuvre sets warp; off: user's choice below its ceiling
   earthTerrain: boolean; // the Earth's real ground near the camera: elevation tiles streamed in (else the global map)

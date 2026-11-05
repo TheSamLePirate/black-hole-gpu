@@ -823,6 +823,9 @@ export default {
   Mirages: "Mirages",
   "Warm sea": "Mer chaude",
   Inversion: "Inversion",
+  "From the weather": "D'après la météo",
+  "The mirage the real weather makes plausible — the sea warmer than the air, an inversion aloft, a calm wind — scaled by it: plausible, never observed (the models resolve no layer of a few tens of metres)":
+    "Le mirage que la météo réelle rend plausible — la mer plus chaude que l'air, une inversion en altitude, un vent calme — dosé par elle : plausible, jamais observé (les modèles ne résolvent aucune couche de quelques dizaines de mètres)",
   "The layered model's air alone: the Sun flattened at the horizon, no mirage":
     "L'air du modèle stratifié seul : le Soleil aplati à l'horizon, pas de mirage",
   "The sea several degrees warmer than the air: rays turn back up over it — the setting Sun stretched, an inverted image under it":

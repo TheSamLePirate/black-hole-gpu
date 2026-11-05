@@ -44,6 +44,7 @@ import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT } from "./system/tree-sh
 import { GTAO_BINDING, GTAO_TEXTURE_LIMIT, Gtao } from "./system/gtao";
 import { CLV_TEX_H, CLV_TEX_W } from "./system/cloud-light-layout";
 import type { MirageKind } from "./system/mirage";
+import { type MirageGuess, mirageFromWeather } from "./system/refraction-weather";
 import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N } from "./system/cloud-shadow";
 import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
 import { BodyRaster, reliefMax } from "./system/body-raster";
@@ -4544,10 +4545,27 @@ export class Renderer {
   private mirageHead: Float32Array<ArrayBuffer> | null = null;
   private mirageHeadOne = false;
   private mirageWorker: Worker | null = null;
-  private mirageAsked: { kind: string; h0: number; id: number } | null = null;
-  private updateMirage(s: Settings, h0: number) {
-    // (the setting — the player's, TARS's —; mirageProfile, a test's, over it)
-    const kind = this.mirageProfile !== "off" ? this.mirageProfile : (s.mirage ?? "off");
+  private mirageAsked: { kind: string; h0: number; id: number; strength: number } | null = null;
+  /** (R6b) the mirage the real weather makes plausible here (system/refraction-weather.ts): its guess, "" none */
+  mirageGuess: MirageGuess | null = null;
+  private updateMirage(s: Settings, h0: number, place?: { lat: number; lon: number; ms: number }) {
+    // (the setting — the player's, TARS's —; mirageProfile, a test's, over it; "weather": the real weather's plausible one)
+    let kind: MirageKind | "off" = this.mirageProfile !== "off" ? this.mirageProfile : s.mirage === "weather" ? "off" : (s.mirage ?? "off");
+    let strength = 1;
+    this.mirageGuess = null;
+    if (this.mirageProfile === "off" && s.mirage === "weather") {
+      const m = s.weather === "real" ? this.weatherReal?.model : undefined;
+      if (m && place) {
+        const sst = this.marine.peek(place.lat, place.lon, place.ms)?.sst;
+        const g = mirageFromWeather({ t2m: m.T, sst: sst ?? null, t950: m.t950 ?? null, wind: m.u10 ?? 0 });
+        this.mirageGuess = g;
+        // (its strength to a tenth: the tables not asked again for its every flicker)
+        if (g.kind !== "standard") {
+          kind = g.kind;
+          strength = Math.round(g.strength * 10) / 10;
+        }
+      }
+    }
     if (kind === "off") {
       if (this.mirageNow) {
         this.device.queue.writeBuffer(this.bodyBuf, TABLE_MIR * 16, new Float32Array(4));
@@ -4565,11 +4583,11 @@ export class Renderer {
     const h = Math.max(h0, 1);
     const a = this.mirageAsked;
     // (asked again when the profile changes or the eye moves by 2 m or a tenth of its height; one at a time)
-    if (a && a.kind === kind && Math.abs(a.h0 - h) < Math.max(2, 0.1 * h)) return;
+    if (a && a.kind === kind && a.strength === strength && Math.abs(a.h0 - h) < Math.max(2, 0.1 * h)) return;
     if (a && this.mirageBusy) return;
     this.mirageWorker ??= new Worker(new URL("mirage-worker.js", location.href), { type: "module" });
     const id = (a?.id ?? 0) + 1;
-    this.mirageAsked = { kind, h0: h, id };
+    this.mirageAsked = { kind, h0: h, id, strength };
     this.mirageBusy = true;
     this.mirageWorker.onmessage = (e: MessageEvent<{ id: number; f: Float32Array }>) => {
       this.mirageBusy = false;
@@ -4582,7 +4600,7 @@ export class Renderer {
       this.mirageNow = `${this.mirageAsked.kind}@${this.mirageAsked.h0.toFixed(1)}`;
       this.onAssets?.();
     };
-    this.mirageWorker.postMessage({ id, kind, state: this.airState(s), h0: h });
+    this.mirageWorker.postMessage({ id, kind, state: this.airState(s), h0: h, strength });
   }
   private mirageBusy = false;
   private weatherGrid = new WeatherGridFeed();
@@ -4608,7 +4626,7 @@ export class Renderer {
     const lat = (surface.lat * 180) / Math.PI,
       lon = (surface.lon * 180) / Math.PI;
     // (R6a-ciel: the eye's height over the sea — the geoid's —, its mirages' tables)
-    if (live) this.updateMirage(s, altKm * 1000 - geoidN(surface.lat, surface.lon));
+    if (live) this.updateMirage(s, altKm * 1000 - geoidN(surface.lat, surface.lon), { lat, lon, ms: utcOf(time) });
     const w = weatherAt(s, { body: "earth", lat, lon }, daysOf(time), this.weatherReal);
     if (w.layers.length === 0 && w.fogTop <= 0 && w.visibility >= 30e3) return out;
     // (the sea's surface at the geoid: the ground never under it)

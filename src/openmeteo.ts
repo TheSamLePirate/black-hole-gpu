@@ -59,6 +59,8 @@ export interface ModelHour {
   cape: number;
   /** the pressure reduced to the sea's level [hPa] (R1's layered air builds its profile from it; absent from older saves) */
   pMsl?: number;
+  /** (R6b) the air at the 950 hPa level [°C] — the forecast's only (the archive has no pressure levels) */
+  t950?: number;
 }
 
 /** A place's cell (the models' 0.25° grid): its centre [°]. */
@@ -81,7 +83,9 @@ export function openMeteoUrl(lat: number, lon: number, ms: number, now: number):
   const forecast = day >= today - FORECAST_BACK * DAY;
   const host = forecast ? "https://api.open-meteo.com/v1/forecast" : "https://archive-api.open-meteo.com/v1/archive";
   const d = isoDay(day);
-  const q = `latitude=${lat.toFixed(2)}&longitude=${lon.toFixed(2)}&start_date=${d}&end_date=${d}&hourly=${HOURLY.join(",")}&wind_speed_unit=ms&timezone=GMT`;
+  // (R6b: the air at 950 hPa — an inversion aloft — from the forecast only: the archive has no pressure levels)
+  const vars = forecast ? [...HOURLY, "temperature_950hPa"] : HOURLY;
+  const q = `latitude=${lat.toFixed(2)}&longitude=${lon.toFixed(2)}&start_date=${d}&end_date=${d}&hourly=${vars.join(",")}&wind_speed_unit=ms&timezone=GMT`;
   return { url: `${host}?${q}`, kind: forecast ? "forecast" : "archive" };
 }
 
@@ -117,6 +121,7 @@ export function parseOpenMeteo(json: unknown): { hours: ModelHour[]; elevation: 
       p: n("surface_pressure", i) ?? 1013.25,
       cape: n("cape", i) ?? 0,
       pMsl: n("pressure_msl", i) ?? undefined,
+      t950: n("temperature_950hPa", i) ?? undefined,
     });
   }
   return hours.length ? { hours, elevation: typeof j.elevation === "number" ? j.elevation : 0 } : null;
@@ -152,6 +157,7 @@ export function hourAt(hours: ModelHour[], ms: number): ModelHour | null {
     p: m(a.p, b.p),
     cape: m(a.cape, b.cape),
     ...(a.pMsl !== undefined && b.pMsl !== undefined ? { pMsl: m(a.pMsl, b.pMsl) } : {}),
+    ...(a.t950 !== undefined && b.t950 !== undefined ? { t950: m(a.t950, b.t950) } : {}),
   };
 }
 
@@ -168,6 +174,9 @@ export interface ModelFacts {
   p: number;
   /** the sea-level pressure [hPa] (R1's layered air), when the model gave it */
   pMsl?: number;
+  /** (R6b) the wind at 10 m [m/s], the air at 950 hPa [°C] when the forecast gave it */
+  u10?: number;
+  t950?: number;
   high: number;
   code: number;
   precip: number;
@@ -231,6 +240,8 @@ export function modelWeather(
     Td: h.Td,
     p: h.p,
     ...(h.pMsl !== undefined ? { pMsl: h.pMsl } : {}),
+    u10: h.u10,
+    ...(h.t950 !== undefined ? { t950: h.t950 } : {}),
     high: h.high,
     code: h.code,
     precip: h.precip,

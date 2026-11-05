@@ -16,6 +16,8 @@ const HOURLY = [
   "swell_wave_direction",
   "swell_wave_peak_period",
   "wave_height",
+  // (R6b: the sea's surface temperature — a warm sea's mirage, a cold sea's duct)
+  "sea_surface_temperature",
 ];
 /** the marine model's reach: two days back, a week ahead (its archive from 2022 on) */
 const BACK = 92,
@@ -29,6 +31,8 @@ export interface SeaState {
   swell: { hs: number; tp: number; to: number };
   /** where it comes from: the marine model, or the wind alone */
   source: "marine" | "wind";
+  /** (R6b) the sea's surface temperature [°C] — the marine model's (6-hourly, MeteoFrance) —, none from the wind alone */
+  sst?: number;
 }
 
 interface MarineHour {
@@ -39,6 +43,7 @@ interface MarineHour {
   sh: number;
   sd: number;
   sp: number;
+  sst: number | null;
 }
 
 /** The sea the wind raises: `u10` [m/s] blowing towards `to` [rad], fully developed, no swell. */
@@ -82,6 +87,7 @@ export function parseMarine(json: unknown): MarineHour[] | null {
       sh: n("swell_wave_height", i) ?? 0,
       sd: n("swell_wave_direction", i) ?? n("wind_wave_direction", i) ?? 0,
       sp: n("swell_wave_peak_period", i) ?? 10,
+      sst: n("sea_surface_temperature", i),
     });
   }
   return out.length ? out : null;
@@ -103,6 +109,7 @@ export function marineAt(hours: MarineHour[], ms: number): SeaState | null {
     wind: { hs: m(a.wh, b.wh), tp: Math.max(1.2, m(a.wp, b.wp)), to: to(ang(a.wd, b.wd)) },
     swell: { hs: m(a.sh, b.sh), tp: Math.max(4, m(a.sp, b.sp)), to: to(ang(a.sd, b.sd)) },
     source: "marine",
+    ...(a.sst !== null && b.sst !== null ? { sst: m(a.sst, b.sst) } : a.sst !== null ? { sst: a.sst } : {}),
   };
 }
 

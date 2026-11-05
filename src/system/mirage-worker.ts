@@ -9,12 +9,16 @@ import { liftTable } from "./refraction-lift";
 import { type PlanetAir, planetRefractionTable } from "./refraction-planets";
 
 type Ask =
-  | { id: number; kind: MirageKind; state: AirState; h0: number; lift?: undefined }
+  | { id: number; kind: MirageKind; state: AirState; h0: number; strength?: number; lift?: undefined }
   | { id: number; lift: Float32Array; hE: number; kind?: undefined }
   | { id: number; planet: PlanetAir; index: number; lift?: undefined; kind?: undefined };
 self.onmessage = (e: MessageEvent<Ask>) => {
   const a = e.data;
   const f =
-    "planet" in a ? planetRefractionTable(a.planet, a.index) : a.lift ? liftTable(a.lift, a.hE) : mirageTables(a.kind!, a.state, a.h0);
+    "planet" in a
+      ? planetRefractionTable(a.planet, a.index)
+      : a.lift
+        ? liftTable(a.lift, a.hE)
+        : mirageTables(a.kind!, a.state, a.h0, a.strength ?? 1);
   (self as unknown as Worker).postMessage({ id: a.id, f }, [f.buffer]);
 };
