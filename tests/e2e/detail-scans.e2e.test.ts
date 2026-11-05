@@ -116,6 +116,9 @@ test.skipIf(!E2E)(
         out[k] = {
           frameMs: fr,
           pipe: await app.js<string>(`__bh.renderer.earthPipelineNow(__bh.settings) + " " + __bh.settings.shipMount`),
+          scenery: await app.js<string>(
+            `JSON.stringify((({ status, rowCrops, lamps, buildings }) => ({ status, rowCrops, lamps, buildings }))(__bh.renderer.earthScenery.stats()))`,
+          ),
         };
       }
       const psnr = (a: Uint8Array, b: Uint8Array) => {
@@ -143,7 +146,7 @@ test.skipIf(!E2E)(
       out.psnr = { detailVsPlain: psnr(shots.detail!, shots.plain!), detailVsDetail2: psnr(shots.detail!, shots.detail2!) };
       out.contrast = Object.fromEntries(Object.entries(shots).map(([k, d]) => [k, contrast(d)]));
       console.log(
-        `  ${JSON.stringify({ frames: ["detail", "plain", "detail2"].map((k) => (out[k] as { frameMs: number }).frameMs), psnr: out.psnr, contrast: out.contrast, flicker: ["detail", "plain", "detail2"].map((k) => out[`${k}Flicker`] ?? null), pipe: (out.detail as { pipe: string }).pipe })}`,
+        `  ${JSON.stringify({ frames: ["detail", "plain", "detail2"].map((k) => (out[k] as { frameMs: number }).frameMs), psnr: out.psnr, contrast: out.contrast, flicker: ["detail", "plain", "detail2"].map((k) => out[`${k}Flicker`] ?? null), pipe: (out.detail as { pipe: string }).pipe, scenery: (out.detail as { scenery: string }).scenery })}`,
       );
       await app.js(
         `(() => { __bh.settings.earthDetail = true; __bh.settings.autoExposure = true; __bh.settings.exposure = 0; return 1; })()`,

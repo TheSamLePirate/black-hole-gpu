@@ -568,6 +568,8 @@ export interface SceneryReply {
   trafficRoads?: number;
   /** (Q8 L10) the streets' lamps */
   lamps?: number;
+  /** (Q8 D1) the vineyards' and orchards' polygons drawn as rows */
+  rowCrops?: number;
   roadPieces?: number;
   forestCells?: number;
   forestCellM?: number;

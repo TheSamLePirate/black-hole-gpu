@@ -84,3 +84,24 @@ test("packed after the land cover's raster: the header, the palette, the near gr
   expect(k).toBe(d.near[n]!);
   expect(f[(at + 1 + k) * 4]).toBeCloseTo(0.3, 2);
 });
+
+test("Q8 D1: a vineyard's polygon in the decals as a row entry — its palette's w 1, its bearing in blue —, an orchard's w 2", async () => {
+  const { makeDecals, polygonPrimitive, ROW_VINE, ROW_ORCHARD } = await import("../src/system/scenery-geometry");
+  const sq = (x0: number, y0: number, s: number) => [
+    [
+      [x0, y0, 0],
+      [x0 + s, y0, 0],
+      [x0 + s, y0 + s, 0],
+      [x0, y0 + s, 0],
+      [x0, y0, 0],
+    ] as [number, number, number][],
+  ];
+  const vine = polygonPrimitive(sq(0, 0, 40), 0, 0, ROW_VINE, [0.5, 0.5, 0.25])!;
+  const orch = polygonPrimitive(sq(100, 0, 40), 0, 0, ROW_ORCHARD, [0.5, 0.5, 0.25])!;
+  const d = makeDecals([vine, orch]);
+  const ws = [1, 2].map((k) => d.palette[4 * k + 3]);
+  expect(ws.sort()).toEqual([1, 2]);
+  // (the same colour, two entries: the kind told apart)
+  expect(d.palette[4 * 1 + 2]).toBeCloseTo(64 / 255, 6);
+  expect(d.near.some((v) => v !== 0)).toBe(true);
+});

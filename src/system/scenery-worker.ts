@@ -49,7 +49,16 @@ import {
   surveyOf,
   surveyReach,
 } from "./scenery-sources";
-import { makeDecals, roadWidth, surfaceSegment, polygonPrimitive, stripPolygon, surfaceContains } from "./scenery-geometry";
+import {
+  makeDecals,
+  roadWidth,
+  ROW_ORCHARD,
+  ROW_VINE,
+  surfaceSegment,
+  polygonPrimitive,
+  stripPolygon,
+  surfaceContains,
+} from "./scenery-geometry";
 import { buildingMesh } from "./roof-mesh";
 import { builtUp, LAMP_CLASSES, LAMP_MAX, LAMP_REACH_M, lampLight, lampMesh, lampsAlong, type StreetLamp } from "./streetlamps";
 import {
@@ -343,6 +352,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const ff = forestFrame(q.lat, q.lon, reach, (lat, lon) => localPoint(frame, lat, lon, 0));
   // (Q8 D1: the main roads' segments for the traffic, and the cars on them)
   const roadLines: { segs: { a: { lat: number; lon: number }; b: { lat: number; lon: number } }[]; cls: string; oneway: number }[] = [];
+  // (Q8 D1: the vineyards' and orchards' polygons, for the decals alone)
+  const rowCrops: Primitive[] = [];
   // (Q8 L10: the town streets' runs near, the lamps set along them at the end)
   const lampLines: { xy: [number, number][]; geo: { lat: number; lon: number }[]; cls: string; width: number }[] = [];
   let lamps: StreetLamp[] = [];
@@ -370,6 +381,38 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       for (let i = 0; i < l.length; i++) for (const field of Object.keys(l.feature(i).properties)) fields.add(field);
       entry.fields = [...fields].sort();
     }
+    // (Q8 D1: the vineyards and orchards — OpenMapTiles' landcover, subclass vineyard / orchard —: their polygons for the decals
+    // alone, drawn as rows along their longest edge — trace.wgsl rowCrop —, not painted, not in the surfaces' tree)
+    const lc = layers.landcover;
+    if (lc)
+      for (let i = 0; i < lc.length; i++) {
+        const f = lc.feature(i);
+        const sub = String(f.properties.subclass ?? "");
+        if (f.type !== 3 || (sub !== "vineyard" && sub !== "orchard")) continue;
+        const e = f.extent;
+        const point = (v: { x: number; y: number }) => {
+          const lon = ((x + v.x / e) / 2 ** 14) * 360 - 180,
+            lat = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + v.y / e)) / 2 ** 14))) / D;
+          return localPoint(frame, lat, lon, 0);
+        };
+        for (const rings of classifyRings(f.loadGeometry())) {
+          if (rings.reduce((sum, r) => sum + r.length, 0) > 4096) continue;
+          const locals = rings.map((r) => r.map(point));
+          // (the rows along the outer ring's longest edge — a plot's are along its length)
+          let best = 0,
+            bear = 0;
+          const outer = locals[0]!;
+          for (let j = 0; j + 1 < outer.length; j++) {
+            const dx = outer[j + 1]![0] - outer[j]![0],
+              dy = outer[j + 1]![1] - outer[j]![1];
+            const l = Math.hypot(dx, dy);
+            if (l > best) [best, bear] = [l, Math.atan2(dy, dx)];
+          }
+          bear = (((bear % Math.PI) + Math.PI) % Math.PI) / Math.PI;
+          const p = polygonPrimitive(locals, 0, 0, sub === "vineyard" ? ROW_VINE : ROW_ORCHARD, [0.5, 0.5, bear]);
+          if (p && surfaceDistance(p) <= radius + 500) rowCrops.push(p);
+        }
+      }
     for (const name of ["water", "waterway", "transportation", "aeroway"]) {
       const l = layers[name];
       if (!l) continue;
@@ -1315,7 +1358,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     buildings++;
   }
   // (Q3 B4: the map's surfaces drawn once for the raster's ground — a texel read a pixel, not the surfaces' tree walked)
-  const decals = makeDecals(keptSurfaces);
+  const decals = makeDecals([...keptSurfaces, ...rowCrops]);
   phase("decals");
   // (Q8 D1: the wind turbines round the centre — Overture's base theme, its latest release that answers —, their triangles after
   // the bridges'; none on any failure, the scene whole)
@@ -1546,6 +1589,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     cars: cars.length,
     trafficRoads: roadLines.length,
     lamps: lamps.length,
+    rowCrops: rowCrops.length,
     roadPieces: pieceCount,
     surveyRequests: land?.requests ?? 0,
     // (a block failed: its trees the land cover's — the scene not degraded for it)

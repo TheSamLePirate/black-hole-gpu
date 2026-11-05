@@ -464,6 +464,8 @@ export class EarthScenery {
       roadPieces: d?.roadPieces ?? 0,
       /** (Q8 L10) the streets' lamps drawn */
       lamps: d?.lamps ?? 0,
+      /** (Q8 D1) the vineyards' and orchards' polygons drawn as rows */
+      rowCrops: d?.rowCrops ?? 0,
       /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */
       forestCells: d?.forestCells ?? 0,
       forestCellM: d?.forestCellM ?? 0,

@@ -84,6 +84,9 @@ export function surfaceContains(p: Vec3, primitive: Primitive, margin = 0) {
 
 /** Q3 B4 — the decals' grids (scenery-data.ts packScenery: after the land cover's raster): the near one 2 m a texel over ±800 m
  *  round the scene's centre, the far one 8 m over ±3.2 km */
+/** (Q8 D1) the primitives' kinds of a vineyard's and an orchard's polygon: in the decals alone, drawn as rows */
+export const ROW_VINE = 6;
+export const ROW_ORCHARD = 7;
 export const DECAL_NEAR = { half: 800, texel: 2 } as const;
 export const DECAL_FAR = { half: 3200, texel: 8 } as const;
 export interface Decals {
@@ -100,7 +103,12 @@ export interface Decals {
  * rows (each row's edge crossings), segments by their box; a line narrower than half a texel drawn half a texel wide (a path
  * not lost between texels). The palette shared by the grids: `colour` returns an entry's index.
  */
-export function rasterDecals(surfaces: Primitive[], half: number, texel: number, colour: (c: number[]) => number): Uint8Array {
+export function rasterDecals(
+  surfaces: Primitive[],
+  half: number,
+  texel: number,
+  colour: (c: number[], kind: number) => number,
+): Uint8Array {
   const N = Math.round((2 * half) / texel);
   const idx = new Uint8Array(N * N);
   const rank = new Uint8Array(N * N);
@@ -118,7 +126,7 @@ export function rasterDecals(surfaces: Primitive[], half: number, texel: number,
     const kind = line ? v[5]! : v[3]!;
     if (kind === 3 || kind === 4) continue;
     if (p.max[0] < -half || p.max[1] < -half || p.min[0] > half || p.min[1] > half) continue;
-    const c = colour([v[8]!, v[9]!, v[10]!]);
+    const c = colour([v[8]!, v[9]!, v[10]!], kind);
     if (!c) continue;
     const j0 = Math.max(0, Math.ceil(cell(p.min[1]))),
       j1 = Math.min(N - 1, Math.floor(cell(p.max[1])));
@@ -162,18 +170,22 @@ export function makeDecals(surfaces: Primitive[]): Decals {
   const palette = new Float32Array(256 * 4);
   const seen = new Map<number, number>();
   let count = 0;
-  const colour = (c: number[]) => {
+  // (Q8 D1: a vineyard's or an orchard's polygon — ROW_VINE, ROW_ORCHARD —: its entry's w 1 or 2, its rows' bearing / π in its
+  // blue: drawn as rows, not painted — trace.wgsl sceneryDecal, rowCrop)
+  const colour = (c: number[], kind = 0) => {
+    const row = kind === ROW_VINE ? 1 : kind === ROW_ORCHARD ? 2 : 0;
     const q = c.map((x) => Math.round(Math.min(Math.max(x, 0), 1) * 255));
-    const key = (q[0]! << 16) | (q[1]! << 8) | q[2]!;
+    const key = row * 2 ** 24 + ((q[0]! << 16) | (q[1]! << 8) | q[2]!);
     let k = seen.get(key);
     if (k !== undefined) return k;
     if (count < 255) {
       k = ++count;
-      palette.set([q[0]! / 255, q[1]! / 255, q[2]! / 255, 0], 4 * k);
+      palette.set([q[0]! / 255, q[1]! / 255, q[2]! / 255, row], 4 * k);
     } else {
       let best = Number.POSITIVE_INFINITY;
       k = 1;
       for (let e = 1; e <= 255; e++) {
+        if (palette[4 * e + 3] !== row) continue;
         const d =
           (palette[4 * e]! * 255 - q[0]!) ** 2 + (palette[4 * e + 1]! * 255 - q[1]!) ** 2 + (palette[4 * e + 2]! * 255 - q[2]!) ** 2;
         if (d < best) [best, k] = [d, e];

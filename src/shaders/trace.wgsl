@@ -9648,7 +9648,14 @@ fn sceneryDecal(xy: vec2f, fpM: f32, dist: f32) -> vec4f {
     let w = dot(ws, select(vec4f(0.0), vec4f(1.0), ids == vec4u(ids[c])));
     if (ids[c] != 0u && w > cover) { cover = w; best = ids[c]; }
   }
-  return vec4f(scenery[at + 1u + best].xyz, cover * P.scenery[3].w * smoothstep(P.scenery[1].w, P.scenery[1].w - 300.0, dist));
+  // (Q8 D1: a vineyard's or an orchard's polygon — its palette entry's w 1 or 2, its rows' bearing / π in z —: no colour painted,
+  // its rows drawn over the photograph — shadeLite rowCrop)
+  let pal = scenery[at + 1u + best];
+  if (best != 0u && pal.w > 0.5) {
+    DECAL_ROW = vec3f(pal.w, pal.z, cover);
+    return vec4f(0.0);
+  }
+  return vec4f(pal.xyz, cover * P.scenery[3].w * smoothstep(P.scenery[1].w, P.scenery[1].w - 300.0, dist));
 }
 // (shadeLite's ground — Q3 B4 —: the map's surface at the point drawn — tM along dirW, the Earth's axes; fpM its footprint [m]: a
 // road, a rail, a field's polygon, the water, as earthGround paints them)
@@ -14549,6 +14556,33 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
 // (TUNE_LITE 8192 — a measure —: the trees' and buildings' shadow map as liteSun read it at the surface: x trees', y buildings'
 // (−1 off the map), drawn instead of the surface: red shadowed, white lit, blue off the map, black not read)
 var<private> LITE_SH_DBG: vec2f = vec2f(-2.0);
+// (Q8 D1: the decals' row crop under the point — x 1 a vineyard, 2 an orchard, 0 none; y its rows' bearing / π; z its cover —,
+// sceneryDecal's)
+var<private> DECAL_ROW: vec3f = vec3f(0.0);
+// (Q8 D1) A vineyard's or an orchard's rows over the photograph — the map's polygons where no national photograph shows them
+// (France's do): the albedo's factor at a world point xy [m] (P.scenery[6]'s origin added), the rows along `bear` × π —
+// the polygon's longest edge's —: a vineyard's canopies 0.9 m wide every 2.2 m, darker than the soil between; an orchard's crowns
+// 1.8 m round every 6 × 5 m; their mean 1 — the photograph's own level kept —; faded out as the rows pass under the pixel (fpM)
+fn rowCrop(xy: vec2f, kind: f32, bear: f32, fpM: f32) -> f32 {
+  let d = vec2f(cos(bear * PI), sin(bear * PI));
+  let across = dot(xy, vec2f(-d.y, d.x));
+  let along = dot(xy, d);
+  let orchard = kind > 1.5;
+  let sp = select(2.2, 6.0, orchard);
+  let amp = 1.0 - smoothstep(0.25, 0.6, fpM / sp);
+  if (amp <= 0.0) { return 1.0; }
+  var f: f32;
+  if (orchard) {
+    let c = vec2f(fract(across / 6.0) - 0.5, fract(along / 5.0) - 0.5) * vec2f(6.0, 5.0);
+    let crown = 1.0 - smoothstep(1.5, 2.1, length(c));
+    f = mix(1.12, 0.6, crown);
+  } else {
+    let t = abs(fract(across / 2.2) - 0.5) * 2.2;
+    let canopy = 1.0 - smoothstep(0.35, 0.55, t);
+    f = mix(1.21, 0.7, canopy);
+  }
+  return mix(1.0, f, amp);
+}
 // (the relief's own sun visibility — its cascades and horizons — for the same view, 1 where not read)
 var<private> LITE_RELIEF_DBG: f32 = 1.0;
 // (Q8 L10) The streets' lamps' light colour at a scenery-frame point xy [m]: by quarter — cells of ~300 m in the world's
@@ -14973,6 +15007,12 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       let dc = sceneryDecal((P.scenery[3].xyz + dL * tM).xy, fpM, tM);
       sv = ScenerySurface(dc.rgb, dc.w, 0.0);
     }
+    // (Q8 D1: a vineyard's or an orchard's rows — in the decals alone, not the surfaces' tree the exact walk reads: their grid read
+    // for them near, where the rows are wider than the pixel, whatever path drew the ground's surface)
+    let dLc = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
+    let xyc = (P.scenery[3].xyz + dLc * tM).xy;
+    if (DECAL_ROW.x < 0.5 && fpM < 3.6 && tM < 2500.0 && img.o < 0.99) { _ = sceneryDecal(xyc, fpM, tM); }
+    if (DECAL_ROW.x > 0.5) { A *= mix(1.0, rowCrop(xyc + P.scenery[6].xy, DECAL_ROW.x, DECAL_ROW.y, fpM), DECAL_ROW.z); }
   }
   A = mix(A, sv.color, select(sv.cover, 0.0, sv.kind == 3.0 || sv.kind == 4.0) * (1.0 - img.o));
   if (!mesh && !isTree && fpM < 10.0 && (liteSkip() & 16u) == 0u) {
