@@ -13,7 +13,8 @@ struct Display {
   eye: vec4f,   // the Purkinje shift's strength (0 none … 1 the eye's), the telescope spot's black point (exposed;
                 // 0: none), unused ×2
   rain: vec4f,  // the rain (PLAN-METEO W5): its strength (0 none … 1.3), a clock [s], in the cabin (1: the
-                // canopy's drops) + 2 for Mars's dust (W6: grains, not drops), the vertical field's half tangent
+                // canopy's drops) + 2 for Mars's dust (W6: grains, not drops) + 4 for snow (Q8 C8: flakes), the vertical
+                // field's half tangent
   rainV: vec4f, // the drops' velocity relative to the camera [m/s, its axes: right, up, forward], their speed
   rainX: vec4f, // the rain's more (PLAN-PLUIE): the flown craft's distance from the camera [m] (0: none — the
                 // drops beyond it hidden by it), the gusts (0…1: the curtains), the camera's lens wet (0/1), the A320's
@@ -300,7 +301,9 @@ fn rainStreaks(uv: vec2f, shipA: f32) -> vec2f {
   let t = D.rain.y;
   let T = 1.0 / 60.0;
   let k = clamp(D.rain.x, 0.0, 1.3);
-  let dust = D.rain.z > 1.5;
+  let dust = (u32(D.rain.z + 0.5) & 2u) != 0u;
+  // (Q8 C8: snow — flakes ~5 mm, falling slowly, round, swaying)
+  let snow = (u32(D.rain.z + 0.5) & 4u) != 0u;
   // (moving fast: gone)
   let fast = 1.0 - smoothstep(20.0, 60.0, D.rainV.w);
   if (fast <= 0.0) { return vec2f(0.0); }
@@ -318,7 +321,7 @@ fn rainStreaks(uv: vec2f, shipA: f32) -> vec2f {
     let seed = f32(i) * 17.31;
     // (a drop ~1.5 mm across — the near ones out of focus: a blur ~4 mm more —, its spacing 0.1 m in a
     // steady rain; dust: grains, a third as wide)
-    let wM = (0.0015 + 0.004 * exp(-0.6 * z)) / z * select(1.0, 0.35, dust);
+    let wM = (0.0015 + 0.004 * exp(-0.6 * z)) / z * select(select(1.0, 3.3, snow), 0.35, dust);
     // (out of focus, near: as much light spread wider — fainter)
     let blur = 1.0 / (1.0 + 2.2 * exp(-0.9 * z));
     let fade = (1.0 - 0.09 * f32(i)) * blur;
@@ -329,7 +332,8 @@ fn rainStreaks(uv: vec2f, shipA: f32) -> vec2f {
     let dens0 = 0.55 * mix(1.0, 0.35 + 1.3 * rvn(vec2f(xm * 0.18, t * 0.25 + f32(i))), curt);
     let cellA = 0.1 / (z * sqrt(max(k, 0.05)));
     let speed = mxy / z;
-    let L = speed * T;
+    // (a flake: its streak as long as its fall in the exposure and its own width — at ~1 m/s, a round flake)
+    let L = select(speed * T, speed * T + wM, snow);
     let cellB = max(3.0 * cellA, 1.6 * L);
     let a = dot(n, perp) / cellA;
     let b = dot(n, dirP) / cellB - t * speed / cellB;
@@ -826,7 +830,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     // (in the cabin: the drops on its glass — where the Ranger's image lets the outside through —, the rain
     // beyond it fainter)
     var glass = 1.0;
-    let inCab = D.rain.z > 0.5 && D.rain.z < 1.5;
+    let inCab = (u32(D.rain.z + 0.5) & 1u) != 0u;
     if (inCab && D.lod.y > 0.5) {
       let q = uv * D.img.xy - D.ship.xy;
       if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { glass = 1.0 - clamp(textureSampleLevel(ship, samp, uv, 0.0).a, 0.0, 1.0); }
@@ -836,7 +840,8 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     let lit = max(rainLight(uv), textureSampleLevel(hdr, samp, vec2f(uv.x, max(uv.y - 0.3, 0.02)), 0.0).rgb);
     let glow = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);
     // (dust: the grains the storm's own ochre, dimmer than drops — they scatter, they do not shine)
-    let dust = D.rain.z > 1.5;
+    let dust = (u32(D.rain.z + 0.5) & 2u) != 0u;
+    let snow = (u32(D.rain.z + 0.5) & 4u) != 0u;
     // (the flown craft over the image here: the drops beyond it hidden)
     var shipA = 0.0;
     if (D.rainX.x > 0.0 && D.lod.y > 0.5) {
@@ -844,12 +849,13 @@ fn fs(in: VSOut) -> @location(0) vec4f {
       if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { shipA = clamp(textureSampleLevel(ship, samp, uv, 0.0).a, 0.0, 1.0); }
     }
     let rs = rainStreaks(uv, shipA);
-    let col = select((lit * 1.25 + glow * 3.0) * rs.y, rainLight(uv) * vec3f(1.25, 0.95, 0.68), dust);
+    // (snow: white flakes lit by the sky and the scene round them — they scatter, no sheen)
+    let col = select(select((lit * 1.25 + glow * 3.0) * rs.y, (lit * 1.6 + glow * 1.5) * vec3f(0.95, 0.97, 1.0), snow), rainLight(uv) * vec3f(1.25, 0.95, 0.68), dust);
     c = mix(c, col, rs.x * glass * select(1.0, 0.5, inCab));
     // (the A320's windows draw their own drops, their wipers' — ship.wgsl a320Wet: rainX.w)
-    if (!dust && inCab && glass > 0.0 && D.rainX.w < 0.5) { c = wetGlass(uv, c, glass, false); }
+    if (!dust && !snow && inCab && glass > 0.0 && D.rainX.w < 0.5) { c = wetGlass(uv, c, glass, false); }
     // (outside: the camera's lens wet — a few soft drops — PLAN-PLUIE, the owner's choice)
-    if (!dust && !inCab && D.rainX.z > 0.5) { c = wetGlass(uv, c, 1.0, true); }
+    if (!dust && !snow && !inCab && D.rainX.z > 0.5) { c = wetGlass(uv, c, 1.0, true); }
   }
   if (D.flags.x < 0.5) {
     let b = textureSampleLevel(bloom, samp, uv, 0.0).rgb / max(D.flags.z, 1.0);

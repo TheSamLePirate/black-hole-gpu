@@ -2,7 +2,7 @@ import { RING } from "./ring";
 import { tunnelEntrySide } from "../system/wormhole-map";
 import { ASSIST } from "./assistlevel";
 import { timeRate } from "../clock";
-import { weatherAt, windFromAt } from "../weather";
+import { climateT2m, weatherAt, windFromAt } from "../weather";
 import { recorder } from "../game/recorder";
 import { tunnelState } from "../wormhole";
 // The CameraController — piloting: the controls, the holds, the autopilots, the entry and the landing.
@@ -37,6 +37,7 @@ import { gravityHome, ourState, repToHomeVec } from "../system/our-side";
 import { plan as runPlanner } from "../system/plan-client";
 import {
   altitudeOver,
+  seaAltitudeOver,
   bodyFixedOf,
   figureUp,
   fromBodyFixed,
@@ -2095,7 +2096,7 @@ function entryStep(
  * turning, less the camera's motion. The image draws them (display.wgsl: the streaks, the canopy's drops).
  * Null: none.
  */
-function rainView(this: CameraController): { rain: number; v: Vec3; dust: boolean; gust: number } | null {
+function rainView(this: CameraController): { rain: number; v: Vec3; dust: boolean; gust: number; snow: boolean } | null {
   const s = this.s;
   if (s.weather === "fair") return null;
   const cam = cameraFrame(s);
@@ -2120,12 +2121,21 @@ function rainView(this: CameraController): { rain: number; v: Vec3; dust: boolea
   // (the wind blowing towards the opposite of where it comes from, at its 10 m speed)
   const to = ((windFromAt(w, place, days) + 180) * Math.PI) / 180;
   const wind = lin(east, (w.wind.u10 * Math.sin(to)) / C_MPS, north, (w.wind.u10 * Math.cos(to)) / C_MPS);
-  const fall = (dust ? 0.3 : 6 + 2 * w.rain) / C_MPS;
+  // (Q8 C8 — snow, not rain, where the air at the camera is under 1 °C: the report's or the model's air at 2 m cooled 6.5 °C
+  // a km over the ground to the camera; else the climatology's at the sea's level, cooled over the camera's height above the sea
+  // — WGS84: over the geoid —; flakes falling ~1 m/s)
+  const measured = w.air?.T ?? w.model?.T;
+  const tCam =
+    measured !== undefined
+      ? measured - 0.0065 * Math.max(h, 0)
+      : climateT2m(place.lat, days) - 0.0065 * Math.max(seaAltitudeOver(nav.ref, nav.X, nav.t), 0);
+  const snow = !dust && tCam < 1;
+  const fall = (dust ? 0.3 : snow ? 1 : 6 + 2 * w.rain) / C_MPS;
   const drop = lin(lin(groundVelocity(nav.ref, nav.X, nav.t), 1, wind, 1), 1, up, -fall);
   const rel = sub3(drop, nav.V);
   // (the gusts, 0…1: how much the rain's curtains swing)
   const gust = Math.min(Math.max(w.wind.gust / 12, w.wind.turb / 3), 1);
-  return { rain: (dust ? w.dust * 0.7 : w.rain) * k, v: axes.map((a) => dot3(rel, a) * C_MPS) as Vec3, dust, gust };
+  return { rain: (dust ? w.dust * 0.7 : w.rain) * k, v: axes.map((a) => dot3(rel, a) * C_MPS) as Vec3, dust, gust, snow };
 }
 
 /** A runway as it is landed now: into the weather's wind there (sites.ts landingEnd — fair weather: the

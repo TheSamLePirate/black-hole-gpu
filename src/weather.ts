@@ -309,3 +309,15 @@ export function weatherGpu(
   if (fog && hCam < w.fogTop) v *= 1 - 0.5 * weight;
   return { params, light: Math.max(v, 0.05), classes };
 }
+
+/** (Q8 C8) The air's temperature at 2 m at the sea's level [°C] a climatology gives when no report nor model does: ~28 °C at the
+ *  equator, cooler poleward (Paris ~12 °C a year, Helsinki ~6), the season's swing growing with the latitude (±9 °C, ±11) (winter's coldest about 20 January in the north, July in the south) —
+ *  a plausible air for the falling snow's choice, never shown as an observation */
+export function climateT2m(lat: number, days: number): number {
+  const a = Math.abs(lat);
+  const annual = 28 - 0.4 * Math.max(a - 10, 0) - 0.008 * Math.max(a - 45, 0) ** 2;
+  const swing = Math.min(0.18 * a, 14);
+  const doy = (((days + 1.5) % 365.2422) + 365.2422) % 365.2422;
+  const winter = Math.cos((2 * Math.PI * (doy - 20)) / 365.2422);
+  return annual - swing * winter * (lat >= 0 ? 1 : -1);
+}

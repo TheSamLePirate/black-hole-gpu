@@ -4152,8 +4152,8 @@ export class Renderer {
       new Float32Array([
         r ? Math.min(r.rain, 1.3) : 0,
         this.rainClock % 3600,
-        // (z: in the cabin 1; Mars's dust, not rain, 2)
-        (inside ? 1 : 0) + (r?.dust ? 2 : 0),
+        // (z: in the cabin 1; Mars's dust, not rain, 2; snow, not rain, 4 — Q8 C8)
+        (inside ? 1 : 0) + (r?.dust ? 2 : 0) + (r?.snow ? 4 : 0),
         Math.tan((s.fov * Math.PI) / 360),
         ...v,
         Math.hypot(...v),
@@ -4214,7 +4214,7 @@ export class Renderer {
 
   /** the rain round the camera (main.ts, from the controller's rainView): its strength and the drops'
    *  velocity on the camera's axes [m/s]; null: none */
-  rain: { rain: number; v: [number, number, number]; dust?: boolean; gust?: number } | null = null;
+  rain: { rain: number; v: [number, number, number]; dust?: boolean; gust?: number; snow?: boolean } | null = null;
   /** the rain's clock [s] (main.ts): the frames' time while the time runs — paused, held: the drops stand
    *  still in the air and on the glass */
   rainClock = 0;
