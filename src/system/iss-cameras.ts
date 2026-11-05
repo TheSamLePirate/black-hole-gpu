@@ -94,7 +94,8 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     // (third: the S's saturation taken back — the ocean's chroma 93 against 54 —, a little more exposure for the clouds ×0.56)
     // (ISS5, night: the stream black — its exposure the day's —, the game's adapting showed the towns: held at the day's 14.26 EV,
     // the auto exposure's reading at 11:02 UTC in this view, the response's fit's)
-    response: { exposure: 2.1, gain: [0.92, 1.02, 1.01], contrast: 1, saturation: 0.6, fixedEV: 14.26 },
+    // (refit at the station's true place: the ocean ×0.34 and the clouds' contrast 68 against 25.7 — the S too strong there)
+    response: { exposure: 2.3, gain: [0.92, 1.02, 1.01], contrast: 0.4, saturation: 0.6, fixedEV: 14.26 },
   },
   {
     id: "sen-docking",
@@ -127,7 +128,8 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     // (second fit: the first, 2.4 and (1.16, 0.98, 0.67), overshot — the ocean ×1.34, R/G 0.70 — through the tone curve)
     // (ISS5, night: the stream a magenta noise, its mean sRGB (20, 1, 14) — its gain pushed —, the game black: a noise floor in the
     // dark; 0.045 gave a mean of 1.8, 0.27 (51, 0, 34))
-    response: { exposure: 1.9, gain: [0.93, 1.04, 0.78], contrast: 0, noise: 0.105 },
+    // (refit at the station's true place — the day's elements; the game's clouds off, the ocean alone —: it was ×0.46, B/G 1.89)
+    response: { exposure: 3.1, gain: [1.07, 1.0, 0.74], contrast: 0, noise: 0.105 },
   },
 ];
 

@@ -604,3 +604,19 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
 - **Le coût, deux autres mesures** (kerr-mini) : de jour 24,3 ms pour Sen et 23,6 ms pour la NASA, contre 24,8 ms autour de
   l'ISS ; dans une autre série de jour, 53,7 et 60,2 ms contre 61,6. Le coût des vues ISS suit celui de la scène (nuages, Terre),
   pas la vue elle-même : le +11 ms de la mesure de nuit ne se retrouve pas. **Non conclu** sur une seule série par cas.
+- **L'ajustement de jour refait à la vraie position (même jour)** : éléments du jour, nuages du jeu coupés, l'océan seul pour
+  l'exposition et la balance, et pour Sen les nuages du direct contre le limbe et la structure du jeu pour le contraste. Trois
+  passes sur kerr-mini à 11:02 UTC :
+
+  | | NASA : jeu | NASA : direct | Sen : jeu | Sen : direct |
+  |---|---|---|---|---|
+  | océan, sRGB | **(33, 62, 98)** | (35, 64, 102) | (28, 44, 76) | (21, 53, 75) |
+  | océan, luminance (jeu/direct) | **×0,92** | | ×0,81 | |
+  | océan, R/G · B/G | **0,54 · 1,59** | 0,54 · 1,58 | 0,63 · 1,72 | 0,39 · 1,41 |
+  | contraste clair / océan | | | **25,7** | 25,7 |
+
+  - **NASA** : exposition 3,1, gains 1,07 · 1,00 · 0,74, sans contraste. L'océan est calé à quelques niveaux près ;
+  - **Sen** : exposition 2,3, contraste 0,4, saturation 0,6, balance sur ses nuages et non sur l'océan. Le contraste est calé ;
+    la teinte de la mer en oblique reste plus rouge que celle du direct, ce qui relève du rendu de la mer, pas de la caméra.
+
+![ISS3 : NASA à la vraie position, jeu profilé (nuages du jeu coupés) et direct, 5 nov. 11:03 UTC (domaine public ; kerr-mini)](Q6/iss3-nasa-vraie-position.jpg)
