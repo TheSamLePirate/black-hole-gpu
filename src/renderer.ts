@@ -4406,9 +4406,12 @@ export class Renderer {
 
   /** (Q5 C5) the weather grid in the tracer's table: its centre and step, its header (on, the layers' classes), its points —
    *  written when they change; null place: the header off (the layers' own cover everywhere) */
-  private writeWeatherGrid(place: { lat: number; lon: number; ms: number } | null, classes: number[]) {
+  private writeWeatherGrid(place: { lat: number; lon: number; ms: number } | null, classes: number[], high = -1) {
     const g = place && this.weatherGridEnabled ? this.weatherGrid.peek(place.lat, place.lon, place.ms) : null;
     const f = new Float32Array(WXGRID_VEC4S * 4);
+    // (Q5 C7: the cirrus's — the model's high cover at the camera, and whether a layer draws the high clouds already)
+    const hasHigh = classes.includes(2) ? 1 : 0;
+    f.set([high, hasHigh, 0, 0], (WXGRID_VEC4S - 1) * 4);
     if (g) {
       const q = bodyFixedOf("earth", g.centre.lat, g.centre.lon, 0);
       const sq = [q[0], q[1], q[2] / (1 - WGS84_F)];
@@ -4417,9 +4420,9 @@ export class Renderer {
       f.set([1, ...classes], 4);
       f.set(g.v, 8);
     }
-    const key = g
-      ? `${g.centre.lat},${g.centre.lon},${classes.join()},${Array.from(g.v.subarray(0, 12), (x) => x.toFixed(3)).join()}`
-      : "off";
+    const key =
+      (g ? `${g.centre.lat},${g.centre.lon},${classes.join()},${Array.from(g.v.subarray(0, 12), (x) => x.toFixed(3)).join()}` : "off") +
+      `|${high.toFixed(3)},${hasHigh}`;
     if (key === this.weatherGridKey) return;
     this.weatherGridKey = key;
     this.weatherGridOn = !!g;
@@ -4468,7 +4471,12 @@ export class Renderer {
     }
     const g = weatherGpu(w, ground, altKm, w.fogTop > 0 && this.fogFloor ? this.fogFloor.h : ground);
     // (Q5 C5: the real weather's model on a grid about the camera — the layers' cover where each point is)
-    if (live) this.writeWeatherGrid(s.weather === "real" && w.source === "model" ? { lat, lon, ms: utcOf(time) } : null, g.classes);
+    if (live)
+      this.writeWeatherGrid(
+        s.weather === "real" && w.source === "model" ? { lat, lon, ms: utcOf(time) } : null,
+        g.classes,
+        s.weather === "real" && w.source === "model" && w.model ? w.model.high : -1,
+      );
     if (live) this.wxLight = g.light;
     out.set(g.params, 0);
     // the drift: the wind at the clouds' height, blowing from `from` — on the place's east and north

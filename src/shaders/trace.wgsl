@@ -6143,21 +6143,35 @@ fn wxGridCover(q: vec3f, i: u32) -> f32 {
   let hd = bodies[WXGRID_OFF + 1u];
   let cls = hd[1u + i];
   if (hd.x < 0.5 || cls < 0.0) { return -1.0; }
+  let k = u32(cls);
+  let v = wxGridAt(q, k);
+  // (as weather.ts makes a layer of the model's covers: the high clouds 0.6 of theirs; under 8 % none)
+  return select(v, 0.6 * v, k == 2u) * smoothstep(0.05, 0.1, v);
+}
+// the grid's column k (0 low, 1 middle, 2 high cover) at q, bilinear (the grid in: wxGridCover's header)
+fn wxGridAt(q: vec3f, k: u32) -> f32 {
   let c = bodies[WXGRID_OFF];
   let e = normalize(cross(vec3f(0.0, 0.0, 1.0), c.xyz));
   let n = cross(c.xyz, e);
   let xy = clamp(vec2f(dot(q, e), dot(q, n)) / c.w + 2.0, vec2f(0.0), vec2f(4.0));
   let ij = min(vec2u(xy), vec2u(3u));
   let fr = xy - vec2f(ij);
-  let k = u32(cls);
   var v = 0.0;
   for (var m = 0u; m < 4u; m++) {
     let o = vec2u(m & 1u, m >> 1u);
     let w = mix(1.0 - fr, fr, vec2f(o));
     v += bodies[WXGRID_OFF + 2u + (ij.y + o.y) * 5u + ij.x + o.x][k] * (w.x * w.y);
   }
-  // (as weather.ts makes a layer of the model's covers: the high clouds 0.6 of theirs; under 8 % none)
-  return select(v, 0.6 * v, k == 2u) * smoothstep(0.05, 0.1, v);
+  return v;
+}
+// (Q5 C7) the weather's high cover at q for the cirrus's shell (unit, squashed): the grid's high column there, else the model's
+// at the camera; 0 where a layer of the weather draws the high clouds already (not twice); −1: none known — a preset's
+// weather, an airfield's report —, the climatology's cirrus
+fn wxCirrusCover(q: vec3f) -> f32 {
+  let hc = bodies[WXGRID_OFF + 27u];
+  if (hc.x < 0.0) { return -1.0; }
+  if (hc.y > 0.5) { return 0.0; }
+  return select(hc.x, wxGridAt(q, 2u), bodies[WXGRID_OFF + 1u].x > 0.5);
 }
 fn wxLayerA(q: vec3f, i: u32) -> f32 {
   let g = wxGridCover(q, i);
@@ -10367,19 +10381,35 @@ fn cirrusCover(q: vec3f, fpM: f32) -> f32 {
   let band = smoothstep(0.42, 0.62, abs(lat)) * (1.0 - smoothstep(1.0, 1.2, abs(lat))) + 0.6 * exp(-lat * lat / 0.015);
   if (band <= 0.01) { return 0.0; }
   // (fibres a few km wide, tens long: stretched along the east — the noise's northward component seven
-  // times finer —, the field of them over ~100 km)
+  // times finer: cirrusFibres —, the field of them over ~100 km)
+  // (the gradient noise baked in its texture, not hashed: the cirrus are drawn on every ray of the sky)
+  let field = smoothstep(-0.1, 0.4, dnoise(qd * (EARTH_RM / 100000.0)));
+  if (field <= 0.0) { return 0.0; }
+  let n = cirrusStreaks(qd, fpM);
+  return 0.3 * band * field * mix(smoothstep(0.15, 0.6, n), 0.12, smoothstep(1500.0, 12000.0, fpM));
+}
+// the cirrus's streaks a few km wide, tens long, at qd (cirrusCover's drifting axes): their noise (signed, ±0.3 or so)
+fn cirrusStreaks(qd: vec3f, fpM: f32) -> f32 {
   let e = normalize(vec3f(-qd.y, qd.x, 1e-6));
   let nn = cross(qd, e);
   let s = qd * (EARTH_RM / 12000.0);
   let p = s + nn * dot(s, nn) * 6.0;
-  // (the gradient noise baked in its texture, not hashed: the cirrus are drawn on every ray of the sky)
-  let field = smoothstep(-0.1, 0.4, dnoise(qd * (EARTH_RM / 100000.0)));
-  if (field <= 0.0) { return 0.0; }
   let detail = smoothstep(1500.0, 12000.0, fpM);
   var n = 0.55 * dnoise(p) + 0.3 * dnoise(p * 2.7 + vec3f(3.1, 7.7, 1.3));
   n += (1.0 - detail) * 0.15 * dnoise(p * 7.9 + vec3f(5.5, 1.1, 9.4));
-  let a = mix(smoothstep(0.15, 0.6, n), 0.12, detail);
-  return 0.3 * band * field * a;
+  return n;
+}
+// (Q5 C7) the cirrus where the weather knows the high cover c (wxCirrusCover): their field ~100 km across thresholded at c —
+// none under a clear high sky, the whole sky at 1 —, a veil there streaked by the same noise (its streaks thicker, not its
+// only cloud: the climatology's threshold left a view's 20 km of sky bare under a full cover), not the jet streams' bands
+fn cirrusWeather(q: vec3f, fpM: f32, c: f32) -> f32 {
+  if (c <= 0.0) { return 0.0; }
+  let qd = rotZ(q, P.earth.y * 1.3 + 0.7);
+  let f = 0.5 + 0.5 * dnoise(qd * (EARTH_RM / 100000.0));
+  let field = smoothstep(1.0 - c - 0.1, 1.0 - c + 0.12, f);
+  if (field <= 0.0) { return 0.0; }
+  let a = mix(mix(0.35, 1.0, smoothstep(-0.2, 0.4, cirrusStreaks(qd, fpM))), 0.6, smoothstep(1500.0, 12000.0, fpM));
+  return 0.3 * field * a;
 }
 // their light at q: thin ice lit through the air at their height — a strong forward lobe (a halo's worth
 // round the sun, capped), the sky's light from above
@@ -11183,7 +11213,13 @@ fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx:
       if (ti > 0.0 && (tHit <= 0.0 || ti < tHit)) {
         let qi = normalize(ro + rd * ti);
         let alt = airHeight(ro);
-        let ai = cirrusCover(geoQ(qi), (fp0 + fpK * ti) * EARTH_RM) * mix(1.0, 0.35, smoothstep(20000.0, 100000.0, alt));
+        var ai = cirrusCover(geoQ(qi), (fp0 + fpK * ti) * EARTH_RM);
+        // (Q5 C7: where the weather reaches and knows the high cover, the cirrus its — TUNE_GSKIP 33554432: the climatology's)
+        if (HAS_WX && WX_W > 0.0 && (TUNE_GSKIP & 33554432u) == 0u) {
+          let cw = wxCirrusCover(qi);
+          if (cw >= 0.0) { ai = mix(ai, cirrusWeather(geoQ(qi), (fp0 + fpK * ti) * EARTH_RM, cw), wxNear(qi)); }
+        }
+        ai *= mix(1.0, 0.35, smoothstep(20000.0, 100000.0, alt));
         if (ai > 0.0) {
           let ci = cirrusLight(qi, rd, Ls, E);
           let c = EarthClouds(ai, ci, ti, ti);

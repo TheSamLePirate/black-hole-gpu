@@ -1,3 +1,4 @@
+import { WXGRID_VEC4S } from "../src/system/weather-grid-layout";
 import { expect, test } from "bun:test";
 import { TABLE_WXGRID } from "../src/gpu-tables";
 import { gridAt, gridCentre, gridPoints, gridUrl, parseGrid, WeatherGridFeed, WXGRID_N, WXGRID_STEP } from "../src/system/weather-grid";
@@ -96,6 +97,8 @@ test("the shader reads the grid where it is: its offset and its 5 × 5", async (
   const wgsl = await Bun.file(new URL("../src/shaders/trace.wgsl", import.meta.url)).text();
   expect(wgsl).toContain(`const WXGRID_OFF = ${TABLE_WXGRID}u;`);
   expect(wgsl).toContain(`(ij.y + o.y) * ${WXGRID_N}u + ij.x + o.x`);
+  // (Q5 C7: the cirrus's vec4 the table's last)
+  expect(wgsl).toContain(`bodies[WXGRID_OFF + ${WXGRID_VEC4S - 1}u]`);
   // (the haze read on the grid too, by the same frame)
   expect(wgsl).toContain("fn wxHazeExt(q: vec3f) -> f32");
   expect(wgsl).toContain(`/ c.w + ${(WXGRID_N - 1) / 2}.0, vec2f(0.0), vec2f(${WXGRID_N - 1}.0)`);
