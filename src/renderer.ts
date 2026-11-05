@@ -8329,6 +8329,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const out: [number, number, number, number][] = [];
     for (const d of this.skyDiscs) {
       if (out.length >= SKY_DISCS_MAX) break;
+      // (R6a-ciel: the Sun under a mirage — its images where the forced air sends them, above and below the plain air's
+      // place —: left to the sky's rays, not cut to the plain air's rectangle)
+      if (this.mirageNow && !d.moon) continue;
       const cx = (0.5 + 0.5 * d.x) * t.width,
         cy = (0.5 - 0.5 * d.y) * t.height,
         r = 0.5 * d.r * t.height + 3;

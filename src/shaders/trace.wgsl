@@ -11639,6 +11639,35 @@ fn refrBend(h: f32, mu: f32) -> f32 {
   if (ht >= 120000.0) { return 0.0; }
   return refrLimb(ht) - select(0.0, refrHaut(h, -e), h < 80000.0);
 }
+// R6a-ciel — the mirages (system/mirage.ts; renderer.mirageProfile — gpu-tables.ts TABLE_MIR): the eye's table, for each apparent
+// elevation in the horizon's band the true one its ray leaves at — traced through its turning points on the CPU, three colours
+// (the green read: one direction a ray) —, −10 where it ends in the sea. A sky pixel looks where its ray truly goes: a body seen
+// twice (the Sun's Etruscan vase over a warm sea), the sea's line lowered or raised.
+const MIR_OFF = 2606076u;
+const MIR_N = 256u;
+fn mirAt(n: u32) -> f32 { return bodies[MIR_OFF + 1u + n / 4u][n % 4u]; }
+// the true elevation [rad] of the ray leaving the eye at e [rad], colour c (0 red, 1 green, 2 blue); −10: into the sea; −20: no
+// table, or e outside its band
+fn mirageTrue(e: f32, c: u32) -> f32 {
+  let h = bodies[MIR_OFF];
+  if (h.x < 0.5 || e <= h.z || e >= h.w) { return -20.0; }
+  let x = (e - h.z) / (h.w - h.z) * f32(MIR_N - 1u);
+  let i = min(u32(x), MIR_N - 2u);
+  let f = x - f32(i);
+  let a = mirAt(c * MIR_N + i);
+  let b = mirAt(c * MIR_N + i + 1u);
+  // (the sea's edge: the nearer sample's)
+  if (a < -9.0 || b < -9.0) { return select(a, b, f > 0.5); }
+  return mix(a, b, f);
+}
+// a camera look's ray escapes where the plain air sends it into the sea (a warm sea's inverted image): the raster's sea leaves
+// its pixel to the tracer's sky
+fn mirageEscapes(look: vec3f) -> bool {
+  if (bodies[MIR_OFF].x < 0.5) { return false; }
+  let up = normalize(nearCam());
+  let mu = dot(normalize(squashed(toBody(look), EARTH_AB)), up);
+  return mu < 0.0 && mirageTrue(asin(clamp(mu, -1.0, 1.0)), 1u) > -9.5;
+}
 fn airBend(look: vec3f) -> vec3f {
   let up = normalize(nearCam());
   let rd = normalize(squashed(toBody(look), EARTH_AB));
@@ -11656,6 +11685,14 @@ fn airBend(look: vec3f) -> vec3f {
   // (R2: the layered air's tables when in — the camera's height from P.sky: (R + h)/H less R/H, H 8.4 km —; the exponential
   // air's estimate before)
   if (refrF(0u) > 0.5) { delta = refrBend((P.sky.w - P.sky.z) * 8400.0, mu); }
+  // (R6a-ciel: in the mirage's band, the forced air's own: its true elevation — the sea where it ends there)
+  let em = mirageTrue(asin(clamp(mu, -1.0, 1.0)), 1u);
+  if (em > -9.5) {
+    delta = asin(clamp(mu, -1.0, 1.0)) - em;
+    REFR_SEA = false;
+  } else if (em > -15.0) {
+    REFR_SEA = true;
+  }
   delta = clamp(delta, 0.0, 0.03);
   REFR_DELTA = delta;
   let bent = rd * cos(delta) - w * (sin(delta) / max(wl, 1e-6));
@@ -11676,8 +11713,11 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   let m = length(rs);
   let rd = rs / m;
   var t = unitHit(ro, rd);
+  // (R6a-ciel: a ray the mirage's air turns back up before the sea — its sky)
+  let mirUp = nearEarth(k) && mirageEscapes(look);
+  if (mirUp) { t = -1.0; }
   // (the discs' kernel: no ground marched — DISC_ONLY)
-  if (!DISC_ONLY && nearEarth(k) && earthOn() && length(ro) < 1.5) {
+  if (!DISC_ONLY && nearEarth(k) && earthOn() && length(ro) < 1.5 && !mirUp) {
     t = -3.0;
     // (the raster patch's distance, the ground there found by two reads and a refinement instead of a march)
     if (HAS_TERRAIN_RASTER && RHINT > 0.0 && P.walk[0].w < 0.5) {
@@ -13524,6 +13564,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   let rasterAt = vec2f(f32(px), f32(py)) + 0.5;
   // (shade not compiled yet — RASTER_SHADE_LATE_FLAG —: only the material's pixels left, the others traced here)
   let rasterSkip = interleaved && inRange && (rasterPrimary() || DISC_ONLY) && (terrainRasterHint(rasterAt) > 0.0 || terrainRasterId(rasterAt) > 0u) &&
+    !mirageEscapes(rasterRay(rasterAt, u32(P.near1.w)).look) &&
     (DISC_ONLY || !rasterShadeLate() || rasterLiteTakes(rasterAt, u32(P.near1.w)));
 
   // Adaptive sampling, per 8×8 tile: the tile keeps sampling while any of its pixels has a relative
@@ -14900,6 +14941,8 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   var tM = terrainRasterHint(pos);
   if (tM <= 0.0) { tM = terrainRasterHint(centre); }
   let ray = rasterRay(pos, k);
+  // (R6a-ciel: a ray the mirage's air turns back up before this sea — the tracer's sky there, main's)
+  if (mirageEscapes(ray.look)) { return; }
   let ab = squashOf(k);
   let rd = ray.rd;
   let tH = tM / ray.kM;
