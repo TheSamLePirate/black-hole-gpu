@@ -3516,7 +3516,15 @@ export class Renderer {
     // (the night sky's light on the ground: as drawn from the ground; from orbit a quarter — the night
     // side dark round its cities)
     // (x: the day's aerosols over an ordinary day's — Q5 C3 —, the ones the air's tables in the tracer's table were built for)
-    set(61, this.tlutAerosols, 0, 0, s.volumetricClouds && altKm < 30 ? 1 : 0); // (w: the clouds a volume — the camera low: 30 km)
+    // (w: the clouds a volume — the camera low —, faded into the flat layer from 25 to 35 km: no jump at 30 — Q5 C10 —; the
+    // A/B's switch cloudVolumeFade false: the old step at 30 km)
+    set(
+      61,
+      this.tlutAerosols,
+      0,
+      0,
+      !s.volumetricClouds ? 0 : this.cloudVolumeFade ? Math.min(Math.max((35 - altKm) / 10, 0), 1) : altKm < 30 ? 1 : 0,
+    );
     // a world's finer maps, the camera near it (within 40 of its radii): its map's index, its brightness
     // kept (the coarse map's mean over the finer's), its relief's strength (0: none), the map's width
     const nearMap = near ? (solarBody(bodies[near.index]!.id)?.map as MapName | undefined) : undefined;
@@ -9246,6 +9254,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  image converges slower — 2–4 dB under its reference (a texel marched a frame in four: a quarter of the draws) — a frame
    *  rate not bought with a blurred image; true: always (a measure's), false: never */
   cloudAmortize: boolean | "still" = false;
+  /** (Q5 C10) the clouds' volume faded into the flat layer between 25 and 35 km up (false: the old step at 30 km — an A/B) */
+  cloudVolumeFade = true;
   /** (Q5 VIPER C2) an amortised march's weight in the clouds' history (post.wgsl cloudTemporal: the march not amortised 0.15) */
   cloudAmortizeWeight = 0.2;
   /** (Q5 VIPER C2) the image's motion last frame [px]: the turn since the frame before and the nearest ground's parallax */

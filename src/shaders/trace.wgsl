@@ -11170,22 +11170,30 @@ fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx:
   var cl = vec3f(0.0);
   var tc = -1.0;
   var ta = -1.0;
-  if (volume && earth && P.earth2.y > 0.0) {
+  // (Q5 C10: the volume's weight — the camera from 25 to 35 km up, P.earth4.w: 1 to 0 —, the flat layer the rest: no jump as
+  // the camera climbs through 30 km; both marched only in that band)
+  let vw = select(0.0, clamp(P.earth4.w, 0.0, 1.0), volume);
+  if (vw > 0.0 && earth && P.earth2.y > 0.0) {
     let cv = cloudVolume(ro, rd, tHit, Ls, E, gx, gy, fp0, fpK, jit);
     alpha = cv.alpha;
     cl = cv.cl;
     tc = cv.t;
     ta = cv.ta;
-  } else if (earth && hc2 > 0.0 && P.earth2.y > 0.0) {
+  }
+  if (vw < 1.0 && earth && hc2 > 0.0 && P.earth2.y > 0.0) {
     let below = dot(ro, ro) < rc * rc;
-    tc = select(-b - sqrt(hc2), -b + sqrt(hc2), below);
-    if (tc > 0.0 && (tHit <= 0.0 || tc < tHit) && !(below && tHit > 0.0)) {
-      let qc = normalize(ro + rd * tc);
-      let fp = fp0 + fpK * tc;
+    let tf = select(-b - sqrt(hc2), -b + sqrt(hc2), below);
+    if (tf > 0.0 && (tHit <= 0.0 || tf < tHit) && !(below && tHit > 0.0)) {
+      let qc = normalize(ro + rd * tf);
+      let fp = fp0 + fpK * tf;
       let cv = earthCloud(qc, earthFoot(qc, rd, gx, fp), earthFoot(qc, rd, gy, fp), Ls);
-      alpha = cv.x;
-      cl = earthCloudLight(qc, rd, Ls, E, below, cv.y);
-      ta = tc;
+      let fl = earthCloudLight(qc, rd, Ls, E, below, cv.y);
+      // (with the volume in the fade's band: the two mixed by its weight — light premultiplied, the nearest's distance)
+      let a = mix(cv.x, alpha, vw);
+      cl = (mix(cv.x * fl, alpha * cl, vw)) / max(a, 1e-5);
+      tc = select(tf, min(tf, tc), alpha > 0.0 && tc > 0.0);
+      ta = select(tf, mix(tf, ta, vw), alpha > 0.0 && ta > 0.0);
+      alpha = a;
     }
   }
   var cs = EarthClouds(alpha, cl, tc, ta);
@@ -11608,7 +11616,7 @@ fn earthNear(look: vec3f, rnd: f32, k: u32) -> EarthNear {
   SHADOW_REL = toBody(look) * (max(t, 0.0) / m * P.near4.w);
   SHADOW_REL_ON = RASTER_SHADE && t > 0.0;
   let e = earthLook(k, ro, rd, t, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab), squashed(toBody(P.camUp.xyz), ab),
-    0.0, pixFoot(), RNDV.y, P.earth4.w > 0.5);
+    0.0, pixFoot(), RNDV.y, P.earth4.w > 0.0);
   EARTH_SHADOW_ON = false;
   SHADOW_REL_ON = false;
   HD_N_ON = false;
@@ -14805,7 +14813,7 @@ fn clouds(@builtin(global_invocation_id) gid0: vec3u) {
       // (the samples a layer, the renderer's — the frame's flags' high half —, while amortised)
       CLOUD_N = select(16u, clamp(P.frame.z >> 16u, 8u, 64u), (P.frame.z & FLAG_CLOUD_AMORTISED) != 0u && (P.frame.z >> 16u) > 0u);
       cs = earthClouds(k, ro, rd, tHit, normalize(squashed(toBody(lt.dir), ab)), lt.e, squashed(toBody(P.camRight.xyz), ab),
-        squashed(toBody(P.camUp.xyz), ab), 0.0, pixFoot(), RNDV.y, P.earth4.w > 0.5);
+        squashed(toBody(P.camUp.xyz), ab), 0.0, pixFoot(), RNDV.y, P.earth4.w > 0.0);
       CLOUD_LIGHT_MARCH = false;
       CLOUD_N = 16u;
       WX_W = 0.0;
