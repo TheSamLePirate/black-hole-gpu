@@ -424,3 +424,16 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
     l'air sur le trajet. Comparer à la même mesure faite sur le sol tracé ;
   - ensuite seulement, un profil par caméra pour ce qui reste (exposition, balance des blancs) ;
   - mesurer les nuages là où le jeu en a, ou avec la météo réelle du jour.
+- **Deuxième essai (même jour) : d'où vient l'océan trop clair et trop rouge ?**
+  - **Pas de la carte** : l'océan de la carte de jour (`assets/earth/day-med`) est d'un bleu très sombre, (1, 3, 11) en sRGB,
+    avec un R/G de 0,35 comme le direct ;
+  - **pas du reflet du ciel sur la mer** : avec `ISS_TUNE={"TUNE_GSKIP":18944}` (512 + 2048 + 16384 : le reflet du ciel
+    clair, le Fresnel des pentes fines et les nuages reflétés coupés), l'océan ne bouge pas : (53, 69, 99) au nadir contre
+    (52, 69, 101), R/G 0,78 ;
+  - **l'excès croît avec l'épaisseur d'air traversée** : luminance ×1,17 au nadir, ×2,05–2,27 en vue oblique. Et il est trop
+    rouge pour une diffusion par les molécules, qui serait bleue : R/G 0,78 contre 0,39–0,54 ;
+  - **hypothèse** : la lumière de l'air sur le trajet, vue de l'orbite, est trop forte et trop grise (part des aérosols ou de la
+    diffusion multiple). Elle se corrige dans le modèle d'air commun, qui sert aussi les ciels vus du sol (PLAN-CIEL, Q5) :
+    rien n'est changé ici sans mesure sur ces vues-là ni décision de Sam ;
+  - **à faire** : séparer le transport de l'air du sol vu de l'orbite en coupant tour à tour aérosols et diffusion multiple, puis
+    comparer aux mêmes mesures sur les vues du sol (T7, références photo).
