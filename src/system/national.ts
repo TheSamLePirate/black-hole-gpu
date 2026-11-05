@@ -38,6 +38,9 @@ export interface NationalSource {
     /** its ground already in (a first pass's): the surface alone asked over it (T8 — the near ground before the far
      *  silhouettes) */
     ground?: Float32Array,
+    /** the coarser levels' heights over the tile on a 16 × 16 grid of its cells' centres (row 0 the north; NaN unknown): a
+     *  survey's interpolated stretches checked against them (earth-tiles.ts lidarSuspect) */
+    coarse?: Float32Array,
   ): Promise<{ h: Float32Array; over: Float32Array | null } | null>;
   /** every URL `heights` may fetch for a tile, its fallbacks included (the offline zones' — zones.ts) */
   heightUrls(z: number, x: number, y: number, hlod: boolean): string[];

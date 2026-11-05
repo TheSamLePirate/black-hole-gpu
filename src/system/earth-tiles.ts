@@ -567,6 +567,9 @@ export function overground(ground: Float32Array, surface: Float32Array, n: numbe
       // (over the sea, from its surface: the surface model reads the water at ~0 m where the ground is the bed — the
       // bathymetry the tile was filled with along a coast —, its depth made a mound out of the sea, up to 58 m off Bonifacio
       // — T7, Sam, 4 Nov 2026)
+      // (and none over the sea itself — the ground at its level or under it —: the LiDAR HD's surface interpolated over the
+      // water stands ramps of tens to hundreds of metres there — the Calanques, the coast-flight e2e, 5 Nov 2026)
+      if (g <= 0.05) continue;
       const base = Math.max(g, 0);
       const o = Math.floor(j / k) * TILE + Math.floor(i / k);
       if (s - base > top[o]!) top[o] = s - base;
@@ -584,6 +587,24 @@ export function addOverground(ground: Float32Array, surface: Float32Array, n: nu
  *  contacts, the Auto-GCAS's terrain, the heights over the ground read the first alone: the bare ground) */
 export const drawnHeight = (h: Float32Array, i: number) => (h.length > TILE * TILE ? h[i]! + h[TILE * TILE + i]! : h[i]!);
 
+/** how far the LiDAR HD's terrain may part from RGE ALTI's before RGE ALTI is taken [m] (both 1 m or finer over the land:
+ *  apart by more only where the LiDAR's was interpolated — water, its coverage's edge — or at a cliff's very edge) */
+export const LIDAR_TRUST_M = 15;
+/** A LiDAR tile (TILE²) that stands more than 40 m off the coarser levels at one of the 16 × 16 cells' centres (`coarse`, NaN
+ *  unknown; the sea at 0): its interpolated stretches likely — RGE ALTI asked to check it (ignGround). */
+export function lidarSuspect(h: Float32Array, coarse: Float32Array): boolean {
+  const n = Math.round(Math.sqrt(coarse.length)),
+    k = TILE / n;
+  for (let j = 0; j < n; j++)
+    for (let i = 0; i < n; i++) {
+      const c = coarse[j * n + i]!,
+        v = h[(j * k + k / 2) * TILE + i * k + k / 2]!;
+      if (Number.isNaN(c) || Number.isNaN(v)) continue;
+      if (Math.abs(v - Math.max(c, 0)) > 40) return true;
+    }
+  return false;
+}
+
 /**
  * A tile's ground over France (I2): the LiDAR HD's terrain from IGN_LIDAR_Z on, RGE ALTI under it and where the LiDAR has
  * none (NaN where the IGN has none at all — the sea, the countries round); up to HLOD_Z1 with `hlod`, its overground (I6:
@@ -596,16 +617,27 @@ async function ignGround(
   signal: AbortSignal,
   hlod: boolean,
   known?: Float32Array,
+  coarse?: Float32Array,
 ): Promise<{ h: Float32Array; over: Float32Array | null } | null> {
   // (the ground and — far levels, I6 — the surface over it asked together: each its own chain, one after the other a tile
   // took two to four of the gate's turns in a row; the ground known — a first pass's —: the surface alone)
   const ground = async () => {
     if (known) return known;
     let h = z >= IGN_LIDAR_Z ? await ignGrid(IGN_LIDAR, z, x, y, signal) : null;
-    if (!h || h.some((e) => Number.isNaN(e))) {
+    // (the LiDAR HD's terrain interpolated where it has no returns — the sea off the Calanques: a ramp of 76 to 274 m across a
+    // z 16 tile where RGE ALTI has the sea at 0, drawn as a black box hundreds of metres high over the water while the finest
+    // levels came, the coast-flight e2e, Sam, 5 Nov 2026 —: a tile whose LiDAR stands 40 m off the coarser levels anywhere,
+    // or has holes, is checked against RGE ALTI, which is taken wherever the two part by more than LIDAR_TRUST_M)
+    const suspect = !!h && !!coarse && lidarSuspect(h, coarse);
+    if (!h || suspect || h.some((e) => Number.isNaN(e))) {
       const r = await ignGrid(IGN_RGEALTI, z, x, y, signal);
       if (!h) h = r;
-      else if (r) for (let i = 0; i < h.length; i++) if (Number.isNaN(h[i]!)) h[i] = r[i]!;
+      else if (r)
+        for (let i = 0; i < h.length; i++) {
+          const v = h[i]!,
+            w = r[i]!;
+          if (Number.isNaN(v) || (!Number.isNaN(w) && Math.abs(v - w) > LIDAR_TRUST_M)) h[i] = w;
+        }
     }
     return h;
   };
@@ -665,6 +697,7 @@ async function nationalHeights(
   signal: AbortSignal,
   hlod = false,
   ground?: Float32Array,
+  coarse?: Float32Array,
 ): Promise<Float32Array> {
   if (ground) {
     const r = await src.heights(z, x, y, signal, hlod, ground.subarray(0, TILE * TILE));
@@ -674,7 +707,7 @@ async function nationalHeights(
     both.set(r.over, TILE * TILE);
     return both;
   }
-  const r = await src.heights(z, x, y, signal, hlod);
+  const r = await src.heights(z, x, y, signal, hlod, undefined, coarse);
   if (!r) return terrarium(z, x, y, signal);
   const { h, over } = r;
   markFine(h, true);
@@ -1288,6 +1321,22 @@ export class EarthTiles {
    * MAX_NATIONAL at once, the nearest and finest first (p: its distance in the level's tiles, plus one, over their count);
    * none if it is no longer wanted when its turn comes, the global data's kept if they will not come.
    */
+  /** The coarser levels' heights over a tile of level z (16 × 16 cells' centres, row 0 the north) — what the drawn levels
+   *  give there at a 40 m footprint (the global data's z 12 or so, the sea at 0 or under): a survey's tile checked against it
+   *  (lidarSuspect). NaN where nothing is in. */
+  private coarseGrid(z: number, x: number, y: number): Float32Array {
+    const n = 2 ** z,
+      out = new Float32Array(256);
+    for (let j = 0; j < 16; j++)
+      for (let i = 0; i < 16; i++) {
+        const lon = ((x + (i + 0.5) / 16) / n) * TAU - Math.PI;
+        const lat = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + (j + 0.5) / 16)) / n)));
+        const s = this.heightAt([Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)], 40);
+        out[j * 16 + i] = s.rem > 0.5 ? Number.NaN : s.h;
+      }
+    return out;
+  }
+
   private async refine(
     L: Level,
     x: number,
@@ -1314,7 +1363,8 @@ export class EarthTiles {
       const surface = this.hlodOn && L.z <= HLOD_Z1;
       let h: Float32Array;
       try {
-        h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, !!ground, ground);
+        const coarse = !ground && L.z >= IGN_LIDAR_Z ? this.coarseGrid(L.z, x, y) : undefined;
+        h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, !!ground, ground, coarse);
       } finally {
         clearTimeout(timer);
       }

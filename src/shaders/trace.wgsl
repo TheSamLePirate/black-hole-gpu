@@ -15320,8 +15320,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // a coarse level's island smeared over kilometres — stands metres over a sea the data already have at its level: shown as
     // land, plates out of the sea while the world loads (Toulon-Hyères, Porquerolles, the coast-loading e2e). The sea's tests
     // read the lower of the mesh's height and the data's at the point — read only where the mesh is over the sea's level on a
-    // low coast of the global map: the land inland and the mountains pay nothing)
-    if (hW > 0.3 && rel0.w < 50.0) {
+    // low coast of the global map, or where its mask has some sea within its kilometre: the cliffs — the Calanques' far rings,
+    // their 150–600 m nodes tying a 300 m cliff to the sea, stood plates out over it (the coast-flight e2e) —; inland nothing)
+    if (hW > 0.3 && (rel0.w < 50.0 || rel0.b > 0.02)) {
       hW = min(hW, max(earthH(gq, max(fpM, 1.0), true).x - 0.5 * fpM, 0.0));
     }
     var sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hW));
