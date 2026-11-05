@@ -50,10 +50,12 @@ export const ISS_CAMERAS: readonly IssCamera[] = [
     description: "Sen SpaceTV-1, horizon: a wide angle over the limb, the station's structure in view now and then",
     mount: BARTOLOMEO,
     mountFrom: "as the nadir camera's",
-    // (forward and down: the limb at the top of its frame in the corpus — the horizon's dip at 420 km is 20.3°; the axis ~35° down)
-    look: unit([Math.cos((35 * Math.PI) / 180), 0, Math.sin((35 * Math.PI) / 180)]),
-    fovDeg: null,
-    status: "estimate",
+    // (ISS2, fitted on the limb — scripts/iss-limb-fit.py, 14 of 20 frames of 4 Nov 2026 within a few tenths: its axis 47.5° below
+    // the horizontal, roll ~0°, horizontal field 95° (a pinhole, no distortion; residual 1–2 px) —; its yaw not from the limb,
+    // forward assumed)
+    look: unit([Math.cos((47.5 * Math.PI) / 180), 0, Math.sin((47.5 * Math.PI) / 180)]),
+    fovDeg: 95,
+    status: "calibrated",
   },
   {
     id: "sen-docking",

@@ -257,3 +257,33 @@ estimant le déplacement par RANSAC. Le calcul a été fait par un outil jetable
 - Les « Previously recorded » de la NASA, absents des deux captures.
 - Les tolérances de calibration ; exclure les reprises de Sen de la géométrie.
 - **Puis ISS1 :** situer la caméra NASA (la housse, la direction du défilement) et les vues Sen sur le modèle de la station.
+
+## ISS2 — premier calage : la caméra d'horizon de Sen par le limbe (le 5 novembre)
+
+- **Méthode** (`scripts/iss-limb-fit.py`) :
+  - vu de l'altitude h, le limbe est le cône des directions qui plongent de δ = acos(R / (R + h)) sous l'horizontale
+    (20,4° à 425 km) ;
+  - pour un sténopé de champ horizontal F, incliné de θ sous l'horizontale et tourné de φ autour de son axe, la ligne du
+    limbe se calcule colonne par colonne ;
+  - les trois nombres sont ajustés sur le limbe trouvé dans l'image : pour chaque colonne, le premier passage du noir de
+    l'espace à la clarté de la Terre ou de l'air, sous les incrustations ;
+  - recherche sur une grille puis affinage ; on garde le résidu médian en pixels ;
+  - aucune distorsion n'est modélisée.
+- **Résultat** sur les 20 images de jour de la plage « horizon » du 4 novembre (05:10–05:29 UTC), altitude 425 km, celle de
+  l'incrustation :
+  - **14 images s'accordent** : champ horizontal **95°** (94,5–95,8°), inclinaison **47,5°** sous l'horizontale
+    (47,3–47,5°), roulis **≈ 0°** (−1,8 à 0°), résidu **1 à 2 px** ;
+  - 5 images convergent vers 75° et 40° avec un résidu de 4,2 à 4,6 px. C'est sans doute un minimum local, où champ et
+    inclinaison se compensent quand le limbe couvre moins de largeur. Une image échoue (18 px, 100 colonnes seulement).
+- **Lecture :** la caméra d'horizon regarde **à 47,5° sous l'avant**, et non 35° comme estimé en ISS1, avec un **grand
+  angle de 95°**. Le limbe passe donc près du haut de l'image, comme dans le corpus. Le résidu de 1 à 2 px laisse peu de
+  place à une forte distorsion, mais ne l'exclut pas sur les bords.
+- **Reporté** dans le registre (`src/system/iss-cameras.ts`, `sen-horizon` : visée à 47,5°, champ 95°, état « calibrated »).
+  Le lacet (l'azimut par rapport à l'avant) ne se déduit pas du limbe : il reste supposé vers l'avant.
+- **Limites :** le limbe détecté est celui de l'air clair, quelques dizaines de kilomètres au-dessus du sol, ce qui donne
+  un léger biais ; une seule séquence ; pas de distorsion.
+- **Suite d'ISS2 :**
+  - le lacet, par les côtes reconnues dans l'image et la trace SGP4 à l'instant incrusté ;
+  - la caméra nadir (champ et orientation par les côtes) ;
+  - la caméra d'amarrage (par le Dragon) ;
+  - la caméra NASA.
