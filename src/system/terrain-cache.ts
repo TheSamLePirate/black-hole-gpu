@@ -269,8 +269,9 @@ export class TerrainCache {
   private visibleLast = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
   static readonly QUIET_MS = 150;
   /** (T4) a bake on the same window faded in over the heights drawn before it — no jump of the ground's shape —, its start
-   *  (0: none) */
-  static readonly FADE_MS = 250;
+   *  (0: none). 800 ms since 5 Nov 2026 — at 250 the finest relief's arrival on a hill beside a final was seen as a jump (Sam:
+   *  « on voit le chargement »): the new detail grows into the ground over most of a second, as a mip fades in */
+  static readonly FADE_MS = 800;
   /** the fade's length now [ms] (0: none — a bake drawn at once, as before T4) */
   fadeMs = TerrainCache.FADE_MS;
   private fadeStart = Array<number>(TERRAIN_CACHE_LEVELS).fill(0);
