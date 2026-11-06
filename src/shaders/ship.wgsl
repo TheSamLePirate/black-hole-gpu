@@ -431,9 +431,30 @@ fn jetPos(v: VIn, ii: u32) -> vec3f {
   if (a320Bent(v)) { return a320Flex(p, a320Tip(ii)); }
   return p;
 }
-/** A vertex where it is drawn, in its craft's frame (the F-35's parts posed; the Ranger's gear and sticks). */
+// The missiles' control fins (scripts/build-missiles.ts, src/game/missile-models.ts: materials 93–96, fin k): each turned about
+// its hinge — its radial line at roll roll0 + k·90° about z, at the station hingeZ — by its deflection. Their record (ship.ts,
+// the instance's flags.w): model[0] the four deflections [rad], model[1].x the hinge's z, .y roll0.
+fn isFin(m: f32) -> bool { return m > 92.5 && m < 96.5; }
+fn rotAbout(q: vec3f, a: vec3f, t: f32) -> vec3f {
+  let c = cos(t);
+  let s = sin(t);
+  return q * c + cross(a, q) * s + a * dot(a, q) * (1.0 - c);
+}
+fn finAxis(v: VIn, ii: u32) -> vec4f {
+  let R = inst[u32(inst[ii].flags.w + 0.5)].model;
+  let k = u32(v.mat - 92.5);
+  let phi = R[1].y + f32(k) * 1.5707963;
+  return vec4f(cos(phi), sin(phi), 0.0, R[0][k]);
+}
+fn finPos(v: VIn, ii: u32) -> vec3f {
+  let a = finAxis(v, ii);
+  let h = vec3f(0.0, 0.0, inst[u32(inst[ii].flags.w + 0.5)].model[1].x);
+  return h + rotAbout(v.pos - h, a.xyz, a.w);
+}
+/** A vertex where it is drawn, in its craft's frame (the F-35's parts posed; the Ranger's gear and sticks; a missile's fins). */
 fn shipPos(v: VIn, ii: u32) -> vec3f {
   if (isJet(v.mat)) { return jetPos(v, ii); }
+  if (isFin(v.mat) && inst[ii].flags.w > 0.5) { return finPos(v, ii); }
   return stickPos(v);
 }
 fn jetAo(v: VIn) -> f32 { return select(v.ao, fract(v.ao), isJet(v.mat)); }
@@ -506,6 +527,10 @@ fn shipVertex(v: VIn, ii: u32) -> VOut {
   var nrm = v.nrm;
   if (abs(v.mat - 72.0) < 0.5) { nrm = stickRot(S.ctl.xyz) * v.nrm; }
   if (isJet(v.mat)) { nrm = (jetMap(v, ii) * vec4f(v.nrm, 0.0)).xyz; }
+  if (isFin(v.mat) && inst[ii].flags.w > 0.5) {
+    let a = finAxis(v, ii);
+    nrm = rotAbout(v.nrm, a.xyz, a.w);
+  }
   if (a320Bent(v)) { nrm = a320FlexN(pos, nrm, a320Tip(ii)); }
   let p = (M * vec4f(pos, 1.0)).xyz;
   o.p = p;
@@ -1093,6 +1118,18 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       coat = 0.0;
       emit = c * 3.0;
     }
+    // the missiles (scripts/build-missiles.ts): their paint (flat, its colour in its UV as 90's) — a gloss coat, a little metal
+    // under it —, the control fins the same; the seeker's dome a dark glass; the nozzle a heat-darkened steel
+    case 92u, 93u, 94u, 95u, 96u: {
+      let rg = in.uv.x;
+      let g = floor(rg / 256.0 + 1e-3);
+      albedo = pow(clamp(vec3f((rg - 256.0 * g) / 255.0, g / 255.0, in.uv.y), vec3f(0.0), vec3f(1.0)), vec3f(2.2));
+      metal = 0.08;
+      rough = 0.32 + 0.1 * grime;
+      coat = 0.35 * coat;
+    }
+    case 97u: { albedo = vec3f(0.015, 0.018, 0.022); metal = 0.0; rough = 0.04; coat = 1.0; }
+    case 98u: { albedo = vec3f(0.09, 0.085, 0.08); metal = 0.85; rough = 0.55; coat = 0.0; }
     case 42u: { albedo = vec3f(0.03); metal = 0.0; rough = 0.08; coat = 0.0; }
     // the F-35's panoramic display: its picture's light through an LCD panel under an anti-reflective glass (an
     // avionics display's: F0 0.6 %, 0.4 % diffuse — the cockpit's black kept, the sky seen in it only grazing; the sun
@@ -1298,6 +1335,8 @@ const CUBE = array<u32, 36>(0u, 2u, 1u, 1u, 2u, 3u, 4u, 5u, 6u, 5u, 7u, 6u, 0u, 
 
 /** The plume's half-extents (along the exit's width and height axes) at a distance s from the exit. */
 fn plumeRadius(J: Jet, s: f32) -> vec2f {
+  // (a solid motor's: out of a small nozzle, its flame widening fast — the exhaust under-expanded)
+  if (J.d.w > 2.5) { return J.a.xy * (1.0 + 0.3 * max(s, 0.0)); }
   // (a jet engine's: a narrow column, its mixing layer widening slowly)
   if (J.d.w > 1.5) { return J.a.xy * (1.0 + 0.05 * max(s, 0.0)); }
   if (J.d.w < 0.5) {
@@ -1383,7 +1422,19 @@ fn plumeFs(in: POut) -> @location(0) vec4f {
     let fl = 0.8 + 0.2 * sin(ph + 2.1 * x.x) * sin(0.61 * ph + 1.7 * x.y + 1.3);
     var dens: f32;
     var col: vec3f;
-    if (J.d.w > 1.5) {
+    if (J.d.w > 2.5) {
+      // a missile's solid motor (src/game/missile-models.ts, ship.ts appendMotors): a white-hot core out of the nozzle, a
+      // yellow-orange flame torn by its turbulence, weak shock diamonds, fading into its smoke (the trails' — contrails.ts)
+      let Dn = 2.0 * J.a.y;
+      let core = exp(-3.2 * q2);
+      let fall = exp(-s / (0.38 * L)) * smoothstep(0.0, 0.08, s) * (1.0 - smoothstep(0.7 * L, 0.95 * L, s));
+      let hot = 0.35 + 4.5 * exp(-s / (0.18 * L + Dn));
+      let dia = 1.0 + 0.35 * (0.5 + 0.5 * cos(6.2832 * s / (1.4 * Dn + 0.2))) * exp(-s / (0.25 * L));
+      let rag = 0.75 + 0.25 * sin(ph * 1.7 + 3.0 * x.y) * sin(0.83 * ph + 2.3 * x.x);
+      // (bright enough to read by day: a motor's flame outshines the sky behind it)
+      dens = 1.8 * (core * hot * dia * fl * rag + 0.06 * exp(-1.1 * q2)) * fall;
+      col = mix(vec3f(1.0, 0.5, 0.16), vec3f(1.0, 0.93, 0.78), clamp(core * hot * 0.28, 0.0, 1.0));
+    } else if (J.d.w > 1.5) {
       // an afterburning turbofan (the F-35's F135): dry, only the nozzle's hot throat glows dull; lit, a
       // translucent blue-violet cone at the exit, then the shock diamonds — Mach disks a nozzle diameter
       // and a half apart, yellow-white, fading orange down the column (u.w: the afterburner's share)

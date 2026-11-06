@@ -6,12 +6,15 @@ export default {
   "Fly-by pass": "Passage",
   Cockpit: "Cockpit",
   "On the target": "Sur la cible",
+  Missile: "Missile",
   "In a fight: the head locked on the target (padlock) — it follows the lock, the missile's target, what was shot down falling, its crash, zoomed on it; again: the head free":
     "En combat : la tête verrouillée sur la cible (padlock) — elle suit le verrouillage, la cible du missile, l'appareil abattu dans sa chute, son crash, zoomée dessus ; à nouveau : la tête libre",
   "Head locked on the target — it follows the shot, the fall, the crash":
     "Tête verrouillée sur la cible — elle suit le tir, la chute, le crash",
   "Head free": "Tête libre",
   "On the target: the lens on the shot, the fall, the crash": "Sur la cible : le téléobjectif sur le tir, la chute, le crash",
+  "On the missile: behind our last missile, its fins and its plume, the target ahead":
+    "Sur le missile : derrière notre dernier missile, ses gouvernes et sa flamme, la cible devant",
   "Low pass": "Rase-mottes",
   "Hard pull": "Virage serré",
   "Through Mach 1": "Passage du mur du son",

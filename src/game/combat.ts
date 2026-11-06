@@ -280,6 +280,12 @@ export interface Missile {
   diedAt?: number;
   /** its own time when it lost its target [s] (its self-destruct 6 s on) */
   lostAt?: number;
+  /** its guidance's lateral command at its last step [m/s²] (east, north, up — after its turn's limit): the drawn missile's
+   *  nose and fins (src/game/missile-models.ts) */
+  lat?: V3;
+  /** (drawn) its fins' deflections as the servos have them [rad], the world's time they were at */
+  fin?: number[];
+  finAt?: number;
 }
 
 export interface Bomb {
@@ -1025,6 +1031,7 @@ export class CombatWorld {
       const amax = M.gMax * G;
       const al = len(a);
       if (al > amax) a = mul(a, amax / al);
+      m.lat = a;
       const u = unit(m.v);
       const thrust = m.t < M.burn ? M.accel : 0;
       const sp = len(m.v);

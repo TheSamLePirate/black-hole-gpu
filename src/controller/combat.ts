@@ -24,6 +24,7 @@ import {
   type V3,
 } from "../game/combat";
 import { enu } from "../game/challenges";
+import { airDensity, finCommand, MISSILE_MESH, MISSILE_SHAPES, missileAxes } from "../game/missile-models";
 import { proxyGone, proxyStep, worldIdOf } from "./fightproxy";
 import { type GunState, gunFunnel, gunSolution, SIGHT, trackAccel } from "../game/gunsight";
 import type { MatchRules } from "../game/match";
@@ -49,6 +50,7 @@ declare module "../controls" {
     combatPlayer: typeof combatPlayer;
     combatFocus: typeof combatFocus;
     focusShip: typeof focusShip;
+    missileShip: typeof missileShip;
     combatShips: typeof combatShips;
     combatGlares: typeof combatGlares;
     combatHud: typeof combatHud;
@@ -391,14 +393,30 @@ function camMap(c: CameraController) {
 /** The fight's aircraft for the renderer: each an F-35 (the aggressors', the drones' — the only fighter mesh
  *  there is), its place from the flown craft and its axes on the camera's, gear up, its surfaces at rest;
  *  within 30 km, alive or falling. */
-function combatShips(this: CameraController): { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet: F35Pose; hidden: boolean }[] {
+function combatShips(this: CameraController): {
+  id: ShipMeshId;
+  rel: Vec3;
+  axes: [Vec3, Vec3, Vec3];
+  jet?: F35Pose;
+  hidden: boolean;
+  fins?: number[];
+  motor?: { level: number; air: number };
+}[] {
   const C = this.combat;
   const P = C?.last;
   if (!C || !P) return [];
   const M = enuToCam(this, camMap(this));
   if (!M) return [];
   const pose: F35Pose = { ...restPose(), gear: 0, canopy: 0 };
-  const out: { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; jet: F35Pose; hidden: boolean }[] = [];
+  const out: {
+    id: ShipMeshId;
+    rel: Vec3;
+    axes: [Vec3, Vec3, Vec3];
+    jet?: F35Pose;
+    hidden: boolean;
+    fins?: number[];
+    motor?: { level: number; air: number };
+  }[] = [];
   for (const q of C.world.targets) {
     // (an outside craft taken in: its own drawing while alive — its wreck the fight's)
     if (!q.ai || (q.proxy && q.alive)) continue;
@@ -422,7 +440,45 @@ function combatShips(this: CameraController): { id: ShipMeshId; rel: Vec3; axes:
     // (a tanker refuelling us: its hoses, its pods' lights, our probe — controller/aar.ts)
     if (this.aar?.tanker === q.id && q.alive && !hidden) out.unshift(...this.aarShips(P, M));
   }
-  return out.slice(0, 12);
+  // (the missiles in flight within 30 km, the nearest first — ours, the aggressors', the SAMs', another's in a room: their
+  // bodies, their fins as the servos follow the guidance's command, their motors while they burn — game/missile-models.ts)
+  const msl: typeof out = [];
+  const W = C.world;
+  const near = W.missiles
+    .filter((m) => m.alive)
+    .map((m) => ({ m, r: [m.p[0] - P.p[0], m.p[1] - P.p[1], m.p[2] - P.p[2]] as V3 }))
+    .filter((e) => Math.hypot(...e.r) < 30_000)
+    .sort((a, b) => Math.hypot(...a.r) - Math.hypot(...b.r))
+    .slice(0, 12);
+  for (const { m, r } of near) {
+    const id = MISSILE_MESH[m.kind];
+    const shape = MISSILE_SHAPES[id];
+    const axes = missileAxes(m.v, m.lat);
+    const speed = Math.hypot(...m.v);
+    const rho = airDensity(m.p[2]);
+    // (the servos: a first-order lag of 40 ms on the command)
+    const cmd = finCommand(shape, axes, m.lat, speed, rho, m.t);
+    const dt = m.finAt === undefined ? 1 : Math.max(W.t - m.finAt, 0);
+    const k = Math.min(1, dt / 0.04);
+    m.fin = (m.fin ?? cmd).map((f, i) => f + (cmd[i]! - f) * k);
+    m.finAt = W.t;
+    let hidden = false;
+    for (let s = 1; s < 16 && !hidden; s++) {
+      const f = s / 16;
+      hidden = P.p[2] + r[2] * f < W.groundZ(P.p[0] + r[0] * f, P.p[1] + r[1] * f);
+    }
+    const burn = MISSILES[m.kind].burn;
+    const level = m.t < burn ? Math.min(1, m.t / 0.15) : 0;
+    msl.push({
+      id,
+      rel: M(r),
+      axes: [M(axes[0]), M(axes[1]), M(axes[2])],
+      hidden,
+      fins: m.fin,
+      motor: level > 0 ? { level, air: rho / 1.225 } : undefined,
+    });
+  }
+  return [...out.slice(0, 16), ...msl];
 }
 
 /**
@@ -633,6 +689,32 @@ function focusShip(this: CameraController): { q: Vec3; up: Vec3; size: number } 
   return { q: [d(r, ax[0]!), d(r, ax[1]!), d(r, ax[2]!)], up: [ax[0]![2], ax[1]![2], ax[2]![2]], size };
 }
 
+/**
+ * (the missile's view — mounts.ts "missile") Our last missile in flight on the flown craft's axes (x left, y top, z nose) [m]:
+ * its place, its nose, the world's up there; just after it ends — its splash, its miss — held 2.5 s where it did, its nose
+ * as it was. Null: none fired, or ended long ago.
+ */
+function missileShip(this: CameraController): { q: Vec3; fwd: Vec3; up: Vec3; alive: boolean } | null {
+  const C = this.combat;
+  const P = C?.last;
+  if (!C || !P) return null;
+  const W = C.world;
+  const m = W.missiles
+    .filter((x) => x.owner === "blue" && !x.remote && (x.alive || (x.diedAt !== undefined && W.t - x.diedAt < 2.5)))
+    .sort((a, b) => Number(b.alive) - Number(a.alive) || b.id - a.id)[0];
+  const cam = cameraFrame(this.s);
+  const fr = this.sfFrame(cam);
+  if (!m || !fr) return null;
+  const d = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+  const ax = this.shipAxesLocal(cam)
+    .map((a) => fr.fromLocal(a))
+    .map((a) => [d(a, fr.east), d(a, fr.north), d(a, fr.up)] as Vec3);
+  const on = (v: ArrayLike<number>): Vec3 => [d(v, ax[0]!), d(v, ax[1]!), d(v, ax[2]!)];
+  const r: Vec3 = [m.p[0] - P.p[0], m.p[1] - P.p[1], m.p[2] - P.p[2]];
+  const nose = missileAxes(m.v, m.lat)[2];
+  return { q: on(r), fwd: on(nose), up: [ax[0]![2], ax[1]![2], ax[2]![2]], alive: m.alive };
+}
+
 export function installCombat(Ctl: { prototype: CameraController }) {
   Object.assign(Ctl.prototype, {
     combatStart,
@@ -645,5 +727,6 @@ export function installCombat(Ctl: { prototype: CameraController }) {
     combatHud,
     combatFocus,
     focusShip,
+    missileShip,
   });
 }

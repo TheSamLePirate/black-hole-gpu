@@ -2231,8 +2231,13 @@ function drawAero(
 }
 
 /** A missile's motor on the screen at `p`, `depth` metres ahead: a glow, white-hot, a little orange, larger near. */
+/** the distance a missile's motor is drawn as a glow from [m] (nearer: its mesh and its plume) */
+export const MOTOR_GLOW_FROM = 2500;
 export function paintMotor(ctx: CanvasRenderingContext2D, p: [number, number], depth: number, fpx: number, dpr: number) {
-  const r = Math.max(Math.min((6 * fpx) / Math.max(depth, 1), 40 * dpr), 2.5 * dpr);
+  // (near, the missile itself and its plume drawn in 3D — src/game/missile-models.ts, ship.wgsl —: the glow only where they
+  // are a few pixels, a glint beyond 2.5 km — its 40 px sun had covered the view riding the missile)
+  if (depth < MOTOR_GLOW_FROM) return;
+  const r = Math.max(Math.min((6 * fpx) / Math.max(depth, 1), 6 * dpr), 1.5 * dpr);
   const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
   g.addColorStop(0, "rgba(255, 255, 240, 1)");
   g.addColorStop(0.35, "rgba(255, 190, 90, 0.8)");

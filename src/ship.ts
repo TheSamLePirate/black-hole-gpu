@@ -103,6 +103,11 @@ import gsDeiceUrl from "../assets/traffic/gs-deice.bin";
 import gsBeltUrl from "../assets/traffic/gs-belt.bin";
 import lampAmberUrl from "../assets/traffic/lamp-amber.bin";
 import lampGreenUrl from "../assets/traffic/lamp-green.bin";
+import mslAim120Url from "../assets/traffic/msl-aim120.bin";
+import mslAim9xUrl from "../assets/traffic/msl-aim9x.bin";
+import mslSamUrl from "../assets/traffic/msl-sam.bin";
+import mslJsmUrl from "../assets/traffic/msl-jsm.bin";
+import { MISSILE_SHAPES, type MissileMeshId } from "./game/missile-models";
 import cargoHullUrl from "../assets/traffic/cargo-hull.jpg";
 import cargoBridgeUrl from "../assets/traffic/cargo-bridge.jpg";
 import cargoBoxesUrl from "../assets/traffic/cargo-boxes.jpg";
@@ -141,7 +146,7 @@ export type GroundMeshId =
   | "gs-chock-right"
   | "gs-deice"
   | "gs-belt";
-export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId | AarMeshId | GroundMeshId;
+export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId | AarMeshId | GroundMeshId | MissileMeshId;
 /** A mesh the craft's pass draws: a craft's, an airliner's, a ship's. */
 export type ShipMeshId = VesselId | TrafficMeshId;
 const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
@@ -173,6 +178,10 @@ const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
   "gs-chock-right": gsChockRightUrl,
   "gs-deice": gsDeiceUrl,
   "gs-belt": gsBeltUrl,
+  "msl-aim120": mslAim120Url,
+  "msl-aim9x": mslAim9xUrl,
+  "msl-sam": mslSamUrl,
+  "msl-jsm": mslJsmUrl,
 };
 /** The traffic's colour maps, a layer each (ship.wgsl: the materials 40, 41, 44–46); the carriers' after them
  *  (80–86), added with the first carrier drawn. */
@@ -216,6 +225,10 @@ export interface ShipInstance {
   /** another's engines (docs/PLAN-RESEAU.md R1): its main jets drawn as the flown craft's are — throttle 0–1,
    *  the afterburner's factor (1: dry), the air about it 0–1 */
   thrust?: { throttle: number; boost: number; air: number };
+  /** a missile (src/game/missile-models.ts): its four control fins' deflections [rad] — ship.wgsl finPos —, and its motor
+   *  burning: the plume's level 0–1 and the air about it 0–1 (thinner, longer high up) */
+  fins?: number[];
+  motor?: { level: number; air: number };
 }
 
 export interface ShipView {
@@ -337,7 +350,7 @@ export interface PcdLook {
 
 const MAX_JETS = 40;
 /** the craft drawn at once, at most */
-const MAX_INST = 24;
+const MAX_INST = 40;
 /** ship.wgsl's Ship: up to the gear's hinges 512 bytes, then the cabin's light (S.cab, S.scr: 1 + 8 × 3 vec4s) */
 /** where the lamps start in it (S.lampN) */
 const LAMPS_AT = 512 + 16 + 8 * 3 * 16;
@@ -361,6 +374,8 @@ const MAX_PARTS = 192;
 const DECK_PARTS = 1280;
 const JET_SLOTS = 8;
 const JET_FLOATS = 16;
+/** the missiles' records (their fins' deflections, their hinge — ship.wgsl finAxis): one an instance, after the decks' */
+const MSL_AT = MAX_INST + JET_SLOTS * MAX_PARTS + DECK_PARTS;
 
 const norm = (a: V3): V3 => {
   const l = Math.hypot(...a) || 1;
@@ -493,7 +508,7 @@ export class ShipRenderer {
   private trafficMapsLayers = 0;
   /** the instances' transforms and flags (the flown craft first) */
   private instBuf: GPUBuffer;
-  private instData = new Float32Array((MAX_INST + JET_SLOTS * MAX_PARTS + DECK_PARTS) * INST_FLOATS);
+  private instData = new Float32Array((MAX_INST + JET_SLOTS * MAX_PARTS + DECK_PARTS + MAX_INST) * INST_FLOATS);
   /** the F-35's mesh as built (its parts, their tracks), its maps (two layers each; 1 × 1 until loaded) */
   private jetMesh: F35Mesh | null = null;
   private jetMaps: { albedo: GPUTexture; normal: GPUTexture; mr: GPUTexture } | null = null;
@@ -1858,6 +1873,38 @@ export class ShipRenderer {
    * from its craft's frame into the flown craft's (the jets' pass draws them there) — an F-35's from its
    * nozzle's exit as its pose has it, its afterburner's flame with its boost.
    */
+  /**
+   * The missiles' motors (src/game/missile-models.ts): each a rocket's plume out of its nozzle — the jets' record (ship.wgsl
+   * plumeFs, kind 3: a solid motor), full while it burns, its length the shape's at sea level, half again in the thin air
+   * high up — after the others' jets.
+   */
+  private appendMotors(
+    list: { R: M3; t: V3; shape: (typeof MISSILE_SHAPES)[MissileMeshId]; level: number; air: number }[],
+    R0: M3,
+    t0: V3,
+  ) {
+    const out = this.jetData;
+    let n = this.jetCount;
+    const first = n;
+    const back = (w: V3): V3 => [0, 1, 2].map((j) => R0[0]![j]! * w[0] + R0[1]![j]! * w[1] + R0[2]![j]! * w[2]) as V3;
+    for (const r of list) {
+      if (n >= MAX_JETS) break;
+      const toCam = (q: V3): V3 => [dot(r.R[0]!, q), dot(r.R[1]!, q), dot(r.R[2]!, q)];
+      const pc = toCam([0, 0, r.shape.nozzleZ]);
+      const p = back([pc[0] + r.t[0] - t0[0], pc[1] + r.t[1] - t0[1], pc[2] + r.t[2] - t0[2]]);
+      const d = back(toCam([0, 0, -1]));
+      const u = back(toCam([1, 0, 0]));
+      const air = Math.min(Math.max(r.air, 0), 1);
+      const len = r.shape.plume * r.level * (1 + 0.5 * (1 - air));
+      // (kind 3: a solid motor — ship.wgsl plumeFs —; u.w its light on the craft near, orange — the launch's flash on the jet)
+      out.set([...p, r.level, ...d, 3, r.shape.nozzleR, r.shape.nozzleR, len, (n * 0.37) % 1, ...u, 0.6 * r.level], n * JET_FLOATS);
+      this.jetInside[n] = false;
+      n++;
+    }
+    if (n > first) this.device.queue.writeBuffer(this.jetBuf, first * JET_FLOATS * 4, out, first * JET_FLOATS, (n - first) * JET_FLOATS);
+    this.jetCount = n;
+  }
+
   private appendJets(
     lit: { id: VesselId; R: M3; t: V3; thrust: NonNullable<ShipInstance["thrust"]>; exit: { p: V3; d: V3 } | null }[],
     R0: M3,
@@ -1981,7 +2028,14 @@ export class ShipRenderer {
     const reach = this.bound.r * 1.2 + 400;
     // (the others in view — an aggressor kilometres off —: the far plane out to them)
     const farOthers = Math.max(0, ...(v.others ?? []).map((o) => Math.hypot(...o.t) + 60));
-    m.set([tanH * v.aspect, tanH, Math.max(0.05, Math.min(dist - reach, 0.5 * dist)), Math.max(80, dist + reach, farOthers)], 16);
+    // (and the near plane in to the nearest of them — the eye riding a missile kilometres from the flown craft: its near plane
+    // had been hundreds of metres out, the missile cut away)
+    const nearOthers = Math.min(Infinity, ...(v.others ?? []).map((o) => Math.hypot(...o.t) - (this.meshes[o.id]?.bound.r ?? 50) - 1));
+    const near = Math.max(
+      0.05,
+      Math.min(dist - reach, 0.5 * dist, Number.isFinite(nearOthers) ? Math.max(nearOthers * 0.5, 0.05) : Infinity),
+    );
+    m.set([tanH * v.aspect, tanH, near, Math.max(80, dist + reach, farOthers)], 16);
     m.set([v.albedo, v.metal, v.rough, SPEC_MIPS], 20);
     // the instances: the flown craft, then the others in view whose mesh is there — their transforms,
     // their kind, whether they are in the shadow map and hidden by what the traced image holds nearer
@@ -2019,8 +2073,15 @@ export class ShipRenderer {
       "gs-chock-right": 22,
       "gs-deice": 22,
       "gs-belt": 22,
+      "msl-aim120": 23,
+      "msl-aim9x": 23,
+      "msl-sam": 23,
+      "msl-jsm": 23,
     } as const;
     let jetSlot = 0;
+    // (the missiles' records written — up to the last one's instance —, their motors burning)
+    let mslRecs = 0;
+    const motors: { R: M3; t: V3; shape: (typeof MISSILE_SHAPES)[MissileMeshId]; level: number; air: number }[] = [];
     // (inside the Ranger: its cabin instead of its hull — the Lander's and the Endurance's the same cabin placed at their
     // cockpit's: PLAN-VAISSEAUX X6b–c)
     const hasCabin = this.vessel === "ranger" || !!VESSELS[this.vessel as VesselId]?.cabin;
@@ -2040,6 +2101,8 @@ export class ShipRenderer {
       thrust?: ShipInstance["thrust"];
       big?: boolean;
       mirror: boolean;
+      fins?: number[];
+      motor?: ShipInstance["motor"];
     }[] = this.flown ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place, mirror: !!sea?.flown }] : [];
     for (const o of v.others ?? [])
       if (list.length < MAX_INST && this.meshes[o.id])
@@ -2054,6 +2117,8 @@ export class ShipRenderer {
           thrust: o.thrust,
           big: o.big,
           mirror: !!sea && (o.mirror ?? sea.flown),
+          fins: o.fins,
+          motor: o.motor,
         });
     // (the nearest carrier within 20 km: the map's second half)
     let big = -1;
@@ -2095,6 +2160,15 @@ export class ShipRenderer {
         if (i === 0 && this.flown) this.a320Now = { mats, props: R?.props ?? A320_REST.props };
         if (i > 0 && it.thrust) lit.push({ id: "a320", R: it.R, t: it.t, thrust: it.thrust, exit: null });
       } else if (i > 0 && it.thrust && !isTraffic(it.id)) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: null });
+      // (a missile: its fins' record — their deflections, the hinge's station and roll —, its motor's plume)
+      const shape = MISSILE_SHAPES[it.id as MissileMeshId];
+      if (shape) {
+        parts = MSL_AT + i;
+        const f = it.fins ?? [0, 0, 0, 0];
+        this.instData.set([f[0] ?? 0, f[1] ?? 0, f[2] ?? 0, f[3] ?? 0, shape.hingeZ, shape.roll0, 0, 0], parts * INST_FLOATS);
+        mslRecs = Math.max(mslRecs, i + 1);
+        if (it.motor && it.motor.level > 0) motors.push({ R: it.R, t: it.t, shape, ...it.motor });
+      }
       // (in the shadow maps: the first half's — 1 —, the second's — 2 —; hidden behind the traced image — bit 0 —,
       // mirrored in the sea — bit 1)
       const second = i === big;
@@ -2168,6 +2242,8 @@ export class ShipRenderer {
         MAX_INST * INST_FLOATS,
         jetSlot * MAX_PARTS * INST_FLOATS,
       );
+    if (mslRecs)
+      this.device.queue.writeBuffer(this.instBuf, MSL_AT * INST_FLOATS * 4, this.instData, MSL_AT * INST_FLOATS, mslRecs * INST_FLOATS);
     // (none in the shadow map: its sphere about the first, unused)
     if (!sc) (sc = list[0]!.t), (sr = this.meshes[list[0]!.id]!.bound.r);
     m.set([sc[0], sc[1], sc[2], sr * 1.02], 24);
@@ -2182,6 +2258,7 @@ export class ShipRenderer {
     ax.forEach((a, i) => m.set([...a, 0], 36 + 4 * i));
     m.set([0, 0, 1, 1], 48); // (the whole image: encodeShip narrows it to the ship's box)
     if (lit.length && this.flown) this.appendJets(lit, R, t, v.thrust?.time ?? 0);
+    if (motors.length && this.flown) this.appendMotors(motors, R, t);
     m.set([this.jetCount, v.glow ?? 1, v.thrust?.time ?? 0, v.thrust?.air ?? 0], 52);
     this.device.queue.writeBuffer(this.uniform, 0, m);
     const b2 = this.bound2 as { c: V3; r: number } | null;

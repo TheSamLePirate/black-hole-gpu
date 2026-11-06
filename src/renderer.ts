@@ -7711,6 +7711,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     far?: boolean;
     big?: boolean;
     mirror?: boolean;
+    /** a missile's fins' deflections [rad] and its motor (src/game/missile-models.ts) */
+    fins?: number[];
+    motor?: { level: number; air: number };
   }[] = [];
   /** the scenery's exclusions: the sites' runways, the landscapes' viewpoints, the world's runways near (RD13) */
   private sceneryExclusions: SceneryExclusion[] = SCENERY_EXCLUSIONS;
@@ -7873,20 +7876,25 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private combatShips(s: Settings): ShipInstance[] {
     if (!this.combatOthers.length || !s.ship || !this.shipPose) return [];
     const eye = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
-    return this.combatOthers
-      .filter((o) => !o.hidden)
-      .map((o) => ({
-        id: o.id,
-        S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
-        t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
-        shadow: false,
-        jet: o.jet,
-        // (a fight's aircraft always over the image; the traffic's hidden behind what it holds nearer — a cloud, a
-        // mountain)
-        far: o.far ?? false,
-        big: o.big,
-        mirror: o.mirror,
-      }));
+    return (
+      this.combatOthers
+        // (its mesh asked for — a missile's the first time one flies —: drawn once in)
+        .filter((o) => !o.hidden && this.ship.has(o.id))
+        .map((o) => ({
+          id: o.id,
+          S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
+          t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
+          shadow: false,
+          jet: o.jet,
+          // (a fight's aircraft always over the image; the traffic's hidden behind what it holds nearer — a cloud, a
+          // mountain)
+          far: o.far ?? false,
+          big: o.big,
+          mirror: o.mirror,
+          fins: o.fins,
+          motor: o.motor,
+        }))
+    );
   }
 
   /** The fleet's Endurance on Gargantua's side, near the camera: at its true size (holefleet.ts). */

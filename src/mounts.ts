@@ -61,6 +61,16 @@ export const MOUNTS = {
     aim: [0, 1.5, 40],
     outside: "target",
   },
+  // (the missile's view: behind our last missile in flight, a few metres off its tail, looking along its nose — its fins
+  // working, its plume, the target growing ahead —; held where it ended a moment; none fired: on the target, as above —
+  // controller/piloting.ts, controller/combat.ts missileShip)
+  missile: {
+    label: t("On the missile: behind our last missile, its fins and its plume, the target ahead"),
+    short: t("Missile"),
+    eye: [0, 6, -22],
+    aim: [0, 1.5, 40],
+    outside: "missile",
+  },
   station: {
     label: t("Docking camera, on the target's port (the ISS, a craft)"),
     short: t("Port cam"),
@@ -70,7 +80,7 @@ export const MOUNTS = {
   },
 } satisfies Record<string, { label: string; short: string; eye: V3; aim: V3; outside?: OutsideView; only?: VesselId[] }>;
 /** The views from outside the ship: around it, free, a fly-by. */
-export type OutsideView = "around" | "free" | "flyby" | "station" | "director" | "target";
+export type OutsideView = "around" | "free" | "flyby" | "station" | "director" | "target" | "missile";
 export type Mount = keyof typeof MOUNTS;
 export const MOUNT_KEYS = Object.keys(MOUNTS) as Mount[];
 

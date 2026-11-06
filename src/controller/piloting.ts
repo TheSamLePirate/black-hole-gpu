@@ -616,7 +616,29 @@ function mountTarget(this: CameraController): MountPose {
     return { eye: o.eye, aim: lin(o.eye, 1, f, 10) };
   }
   if (v === "flyby") return { eye: this.flyby.eye, aim: V.centre };
-  if (v === "target") {
+  if (v === "missile") {
+    // (behind the missile, a little above its tail, the world's up kept; the drag turns about it — lookOff —; none: as "target")
+    const Mq = this.missileShip();
+    if (Mq) {
+      const f = Mq.fwd,
+        u = Mq.up;
+      // (a three-quarter view a little above it — straight behind, the missile foreshortened to its tail and fins —, 6 m off
+      // its middle; the drag and the wheel move it)
+      const back = 6 + o.dist * 0.01;
+      const yaw = ((this.lookOff[0] + 18) * Math.PI) / 180,
+        pitch = ((this.lookOff[1] + 9) * Math.PI) / 180;
+      // (the offset turned about the world's up by the drag's yaw, raised by its pitch)
+      const side = [f[1] * u[2] - f[2] * u[1], f[2] * u[0] - f[0] * u[2], f[0] * u[1] - f[1] * u[0]];
+      const dir = [0, 1, 2].map(
+        (k) => -f[k]! * Math.cos(yaw) * Math.cos(pitch) + side[k]! * Math.sin(yaw) * Math.cos(pitch) + u[k]! * Math.sin(pitch),
+      );
+      const eye: Vec3 = [0, 1, 2].map((k) => Mq.q[k]! + dir[k]! * back) as Vec3;
+      // (its aim a little ahead of it: the missile in the lower middle, the way ahead above it)
+      const aim: Vec3 = [0, 1, 2].map((k) => Mq.q[k]! + f[k]! * 14 + u[k]! * 0.6) as Vec3;
+      return { eye, aim, up: u };
+    }
+  }
+  if (v === "target" || v === "missile") {
     // (the lens on the fight's focus from behind the craft, the horizon level; nothing to look at: behind the craft)
     const F = this.focusShip();
     const eye: Vec3 = [0, 0.15 * V.viewDist + 2, -0.55 * V.viewDist];
