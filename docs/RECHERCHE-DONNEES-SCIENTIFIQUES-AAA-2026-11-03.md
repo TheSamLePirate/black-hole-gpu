@@ -124,6 +124,11 @@ https://services.swpc.noaa.gov/json/rtsw/rtsw_ephemerides_1h.json
 
 Ils portent notamment `source` et `active` ; les paramètres plasma deviennent `proton_density`, `proton_speed`, `proton_temperature`. L'avis modifie aussi certains JSON d'indices en objets à valeurs numériques. Prévoir validation de schéma et sélection de la source active, plutôt qu'un parseur de tableaux hérité. **Ces URL sont documentées, pas interrogées comme flux pendant cette étude.** [Avis NWS, 2 mars 2026](https://www.weather.gov/media/notification/pdf_2026/scn26-21_Data_Format_Changes_Impacting_SWPC_Products.pdf).
 
+**Intégré le 6 novembre 2026** (AM7) : le produit propagé à 1 h (`products/geospace/propagated-solar-wind-1-hour.json`, 6–7 ko
+contre 1,7 et 3 Mo pour `rtsw_*_1m`, déjà ramené au nez de l'onde de choc) dans `src/system/solar-wind.ts`, ses deux formats
+lus et testés sur une copie réelle ; il place la magnétopause terrestre (Shue 1998) avec ses trois états. Le Kp au format
+2026 l'était déjà (`space-weather.ts`, AM1). Restent : GFZ/OMNI pour le passé, OVATION.
+
 Ne pas utiliser les valeurs « maintenant » pour une scène datée de 2067. Trois états produit sont nécessaires : réel actuel, historique archivé, scénario synthétique. Une interruption du flux doit devenir une donnée périmée ou un scénario de repli lisible, jamais une observation inventée.
 
 ### 4.3 Champ externe : la pièce qui manque aux seules harmoniques internes

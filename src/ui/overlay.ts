@@ -58,7 +58,7 @@ export class ViewOverlay {
     const key =
       guide || this.camera.flyMode || marker || lock || hover || ship || tele || sky || tags.length || traffic.length || mag.length
         ? [
-            mag.map((m) => `${m.x.toFixed(3)},${m.y.toFixed(3)},${m.text}`).join(";"),
+            mag.map((m) => `${m.x.toFixed(3)},${m.y.toFixed(3)},${m.text}${m.note ?? ""}`).join(";"),
             traffic.map((m) => `${m.x.toFixed(0)},${m.y.toFixed(0)},${m.lights.length}`).join(";"),
             tags.map((g) => `${g.slot}:${g.x.toFixed(0)},${g.y.toFixed(0)},${g.label}`).join(";"),
             lock
@@ -322,7 +322,9 @@ export class ViewOverlay {
       ctx.moveTo(x, y - 4 * k);
       ctx.lineTo(x + 10 * k, y - 18 * k);
       ctx.stroke();
-      ctx.fillText(t(l.text), x + 13 * k, y - 18 * k);
+      // (a note's figures after the name; its source word translated)
+      const note = l.note ? l.note.replace(/typical$|NOAA \(old\)$/, (m) => t(m)) : "";
+      ctx.fillText(t(l.text) + note, x + 13 * k, y - 18 * k);
     }
     ctx.restore();
   }

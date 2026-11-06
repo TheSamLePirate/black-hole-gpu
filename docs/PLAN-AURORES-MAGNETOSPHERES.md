@@ -157,6 +157,11 @@ verts) :
   de lignes avec profondeur du § 4, sans nouveau pipeline d'opaque. Réglage « Schéma de la magnétosphère » (Ciel › Carte du
   ciel), corps proche seulement.
 - **Observé** (e2e `magnetosphere-diagram`) : la Terre depuis 60 000 km, Jupiter depuis 1,5 million de km.
+- **Le vent solaire réel** (RECHERCHE-DONNEES § 4.2, lot C) : `src/system/solar-wind.ts` lit le produit propagé à 1 h de
+  la NOAA (6–7 ko, déjà ramené au nez de l'onde de choc ; son tableau historique et les objets du format 2026), en tire la
+  pression dynamique et Bz, et place la magnétopause terrestre par Shue et al. 1998 (onde de choc à 1,3 r0, valeur de
+  schéma) ; trois états — réel, ancien, typique — dits sur l'étiquette « Vent solaire » avec ses valeurs. Observé (e2e) : le
+  6 novembre 2026 à 05:40 UTC, 309 km/s, 2,3 cm⁻³, Bz −0,8 nT, Pd 0,4 nPa → nez à 13,2 R_E (au lieu de ~10).
 - **Restant** : la déformation des lignes par le vent solaire (compression côté jour, queue), les lignes ouvertes, les
   particules (giration, rebond, dérive), les actions TARS ; les corps lointains (au-delà de la portée du corps proche) ; le
   traçage en worker ; la mesure du coût.

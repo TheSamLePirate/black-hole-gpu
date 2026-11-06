@@ -287,6 +287,7 @@ import { encodeEXR, encodePNG16 } from "./exporters";
 import { ioFeet } from "./system/aurora-bodies";
 import { MAGNETOSPHERES } from "./system/magnetic-fields";
 import { fieldLines, SHELLS, VOLUMES } from "./system/magneto-lines";
+import { solarWindFor } from "./system/solar-wind";
 import { AU_M, C_MPS } from "./units";
 import { windFrom } from "./wind";
 import { weatherAt, weatherGpu, windFromAt, type WeatherState } from "./weather";
@@ -2511,7 +2512,9 @@ export class Renderer {
   private magneto: ChartOverlay;
   /** the diagram's labels this frame (ui/overlay.ts draws them): their anchor in the image's NDC, their name (English: the overlay
    *  translates), their colour */
-  magnetoLabels: { x: number; y: number; text: string; colour: string }[] = [];
+  magnetoLabels: { x: number; y: number; text: string; colour: string; note?: string }[] = [];
+  /** the solar wind the Earth's diagram drew from (solar-wind.ts; null: none drawn) */
+  magnetoWind: ReturnType<typeof solarWindFor> | null = null;
   private updateMagneto(
     s: Settings,
     cam: CameraFrame,
@@ -2519,6 +2522,7 @@ export class Renderer {
     bodies: GpuBody[],
     aspect: number,
     tanH: number,
+    sceneMs: number,
   ) {
     const id = near ? bodies[near.index]?.id : undefined;
     if (!s.magnetosphere || !near || !id || !(id in SHELLS)) {
@@ -2625,18 +2629,30 @@ export class Renderer {
         3.5,
       );
     });
+    // (the Earth's boundaries from the real solar wind — NOAA's, propagated to the bow shock: Shue et al. 1998 —, the typical
+    // wind's without data; the other bodies' their typical standoffs)
+    const wind = body === "earth" ? solarWindFor(sceneMs) : null;
+    this.magnetoWind = wind;
+    const standoff = wind ? wind.r0 : M.standoff,
+      flaring = wind ? wind.alpha : M.flaring,
+      shock = wind ? wind.shock : M.shock;
     // (the boundaries and the belts: glowing layers — overlay.wgsl fsMagVol)
     const V = VOLUMES[body];
     const dip = dirCam(zD as Vec3);
     const L = near.light;
     // (their labels: at the noses towards the Sun, upstream, down the tail, the belts on either side across the view)
-    const labels: { at: Vec3; text: string; colour: string }[] = [];
+    const labels: { at: Vec3; text: string; colour: string; note?: string }[] = [];
     const along = (d: Vec3, k: number): Vec3 => [C[0] + d[0] * k, C[1] + d[1] * k, C[2] + d[2] * k];
     const Ls = [L[0]!, L[1]!, L[2]!] as Vec3;
-    labels.push({ at: along(Ls, M.standoff), text: "Magnetopause", colour: "rgba(140, 210, 255, 0.95)" });
-    labels.push({ at: along(Ls, M.shock), text: "Bow shock", colour: "rgba(220, 228, 240, 0.9)" });
-    labels.push({ at: along(Ls, M.shock * 1.6), text: "Solar wind", colour: "rgba(255, 214, 140, 0.9)" });
-    labels.push({ at: along(Ls, -M.standoff * 2.2), text: "Magnetotail", colour: "rgba(140, 210, 255, 0.8)" });
+    labels.push({ at: along(Ls, standoff), text: "Magnetopause", colour: "rgba(140, 210, 255, 0.95)" });
+    labels.push({ at: along(Ls, shock), text: "Bow shock", colour: "rgba(220, 228, 240, 0.9)" });
+    // (the wind's figures beside its label: NOAA's now, an old reading, or the typical one — said so)
+    const fmt = (x: number, d = 0) => x.toFixed(d);
+    const windNote = wind
+      ? ` · ${fmt(wind.v)} km/s · ${fmt(wind.n, 1)} cm⁻³ · Bz ${wind.bz >= 0 ? "+" : ""}${fmt(wind.bz, 1)} nT · ${fmt(wind.pd, 1)} nPa · ${wind.source === "typical" ? "typical" : wind.source === "live" ? "NOAA" : "NOAA (old)"}`
+      : "";
+    labels.push({ at: along(Ls, shock * 1.6), text: "Solar wind", colour: "rgba(255, 214, 140, 0.9)", note: windNote });
+    labels.push({ at: along(Ls, -standoff * 2.2), text: "Magnetotail", colour: "rgba(140, 210, 255, 0.8)" });
     const ex = [dip[1] * view[2] - dip[2] * view[1], dip[2] * view[0] - dip[0] * view[2], dip[0] * view[1] - dip[1] * view[0]];
     const el = Math.hypot(ex[0]!, ex[1]!, ex[2]!);
     if (V && el > 1e-3) {
@@ -2664,7 +2680,7 @@ export class Renderer {
       if (hidden(l.at)) continue;
       const q = proj(l.at);
       if (q && Math.abs(q[0]!) < 0.95 && Math.abs(q[1]!) < 0.92)
-        this.magnetoLabels.push({ x: q[0]!, y: q[1]!, text: l.text, colour: l.colour });
+        this.magnetoLabels.push({ x: q[0]!, y: q[1]!, text: l.text, colour: l.colour, note: l.note });
     }
     this.magneto.setVolume(
       new Float32Array([
@@ -2681,9 +2697,9 @@ export class Renderer {
         L[0]!,
         L[1]!,
         L[2]!,
-        M.standoff,
-        M.flaring,
-        M.shock,
+        standoff,
+        flaring,
+        shock,
         V?.torus ?? 0,
         V?.st ?? 0,
         V?.inner ?? 0,
@@ -4219,7 +4235,7 @@ export class Renderer {
           : (((tSec % 900) + 900) % 900) + 1024 * Math.round(2 * eyeGain);
     if (kp > 0) this.featureKey |= 16384;
     // (the magnetospheres' diagram — AM7 —: the camera's frame, the near body)
-    if (!o.probe) this.updateMagneto(s, cam, near, bodies, t.width / t.height, tanH);
+    if (!o.probe) this.updateMagneto(s, cam, near, bodies, t.width / t.height, tanH, J2000_MS + daysOf(time) * 86400e3);
     // Keep reference rendering for optical/scientific kernels and contact with the walking patch.
     // (the raster inspector draws its own patch and reads the cache itself; it does not need the tracer to be free of the
     // wormhole's metric, which the Earth scenes always carry: only the tracer's *use* of the cache does)
