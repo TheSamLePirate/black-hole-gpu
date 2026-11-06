@@ -1,3 +1,122 @@
+## Direction permanente : convergence WebGPU AAA
+
+**Décision de Sam, 3 novembre 2026 : la destination est une expérience de jeu/simulation AAA en WebGPU,
+construite progressivement pendant les travaux actuels. Toutes les prochaines sessions doivent connaître cette
+destination et appliquer les bonnes pratiques qui y conduisent. Cette destination ne doit jamais être ignorée par
+une session du projet.** Conserver la simulation, la géodésie, les modèles
+physiques et les fonctions produit ; faire évoluer leurs contrats et leurs lecteurs. Unity et Unreal sont des références
+de pratiques, pas des chantiers de portage actifs.
+
+La référence stratégique est [ANALYSE-STRATEGIE-RENDU-2026-11-03.md](docs/ANALYSE-STRATEGIE-RENDU-2026-11-03.md) :
+
+- **Au début de chaque session**, lire les dernières entrées de [progress-to-destination.md](progress-to-destination.md),
+  prendre connaissance de la décision stratégique (§1) et de la migration progressive (§20), puis
+  lire les sections utiles au travail demandé : architecture §7, performance §8, jalons §15, bibliothèques §18,
+  expérience complète §19. Lire aussi l'état récent du dépôt avant d'appliquer un ancien diagnostic : une correction
+  déjà intégrée ne doit pas redevenir une tâche à refaire.
+- Le [plan T/Q/H/R](docs/PLAN-REFRACTION-HORIZONS.md) et [C0](docs/progress/refraction-horizons/C0.md) portent les travaux
+  et contrats existants. Les faire converger vers cette destination. Distinguer leurs formats/paliers transitoires des
+  garanties finales ; signaler et résoudre les contradictions dans le périmètre du travail, sans modifier les objectifs
+  de Sam silencieusement.
+- Respecter le périmètre de la session. Cette direction n'autorise pas une réécriture générale, des installations ou
+  des campagnes hors de la tâche demandée. Les restrictions explicites de Sam sur modifications, tests, e2e et benchmarks
+  priment. Une session de documentation reste une session de documentation.
+
+### Journal obligatoire : progress-to-destination.md
+
+**Chaque fois qu'une session fait avancer le projet vers la destination, elle consigne cette avancée dans
+[progress-to-destination.md](progress-to-destination.md), à la racine du dépôt.** Le faire après chaque lot achevé,
+au plus tard avant de conclure la session ou de transmettre le travail. Cela inclut les progrès de code, de contenu,
+de contrats, de documentation et les dépendances retirées ; ne pas attendre d'avoir atteint les 60 images/s.
+
+Ajouter une entrée datée en UTC avec : contribution à la destination et section/jalon concerné ; changements réels
+et fichiers/commits utiles ; état de preuve (documenté, implémenté, vérifié statiquement, observé ou mesuré) et sources ;
+limites, transitions restantes et prochaine étape. Indiquer explicitement les vérifications non effectuées ; ne pas
+attribuer un gain de qualité/performance à une modification non mesurée, ni présenter une proposition comme réalisée.
+Conserver l'historique, ne pas écraser les entrées des autres sessions et ne pas reconstituer des résultats non établis.
+
+Même si son sujet n'est pas directement le rendu, **chaque session tient compte de la destination** et préserve les
+contrats concernés. Si elle ne produit aucune avancée vers celle-ci, ne pas inventer une entrée de progrès : préciser
+simplement l'absence d'impact ou la limite pertinente dans son compte rendu. La destination ne justifie pas de sortir
+du périmètre demandé par Sam.
+
+### Pipeline graphique : document de référence à maintenir
+
+**[docs/GRAPHICS-PIPELINE.md](docs/GRAPHICS-PIPELINE.md) répertorie le pipeline graphique : chaque passe (libellé du
+profileur, programme, condition, lectures → écritures, consommateur, famille de budget), les cibles et tables, les
+profils de rendu, la compilation (pipelines, noyaux du traceur, cascade, caches, tailles et temps mesurés), le parcours
+joueur (chargements, compilations, ce qui bloque l'image) et la façon de mesurer chaque élément.**
+
+- **Chaque session qui touche au pipeline le met à jour dans le même lot** : passe ajoutée, retirée, déplacée ou rendue
+  conditionnelle ; pipeline ou module créé ; cible, format, taille, table de `bodyBuf` ou bind group changés ; cascade,
+  file, profil de clé ou budget de noyau changés ; étape de chargement modifiée (ordre, attente, cache, worker) ; coût de
+  passe, de compilation ou de parcours mesuré. Méthode : §10 du document.
+- Avant de conclure : `bun scripts/pipeline-inventory.ts --check` doit passer (statique, < 1 s), puis
+  `bun scripts/pipeline-inventory.ts --write` régénère l'annexe (`--write --sizes` si un noyau du traceur a changé).
+- Une mesure entre avec sa machine, sa date, son commit et sa source ; celle qu'elle remplace est marquée « périmée »,
+  pas effacée. Rien d'estimé ou de non mesuré n'y est présenté comme mesuré.
+- Lire ce document avant de travailler sur le rendu, le chargement ou la compilation : il dit ce qui existe déjà, qui
+  consomme une sortie et comment mesurer le changement.
+
+### Les 60 images/s sont une destination progressive
+
+**Viser 60 images réelles/s pour le profil principal décrit au §8, en conservant qualité, contenu, lisibilité et stabilité
+en mouvement. Il est acceptable de s'en rapprocher par paliers.** Chaque modification n'a pas à atteindre 60 images/s
+ni à améliorer toutes les dimensions à la fois. Les seuils historiques, dont 40 images/s sur M1 Max, peuvent servir de
+paliers intermédiaires explicitement nommés ; ils ne déclarent pas la cible finale atteinte.
+
+Suivre qualité effective, sortie/résolution interne, coût complet, régularité, mémoire et âge des informations critiques.
+Ne pas gagner un compteur de cadence en supprimant silencieusement du contenu, en brouillant l'image ou en empilant les
+frames en vol. Distinguer rAF, soumissions, complétions GPU et présentation. Aucune promesse de gain sans preuve adaptée ;
+un changement non mesuré reste indiqué comme tel. Les budgets proposés dans l'analyse sont des objectifs, pas des résultats.
+
+### Pratiques à appliquer à chaque évolution concernée
+
+- **Une responsabilité commune avant plusieurs lecteurs.** Le monde possède les supports et révisions du sol ; la
+  simulation possède l'état et le temps acceptés ; la vue possède sa pose finale ; le renderer possède ses ressources
+  GPU et historiques. La qualité graphique ou le déplacement de la caméra ne doivent pas décider implicitement du sol
+  de contact de l'appareil. Garder les unités, repères, datums et générations explicites.
+- **Socle raster forward, matériaux explicites, auxiliaires minimaux.** Produire une surface finale exploitable
+  (profondeur, identité/génération, mouvement utile, couleur linéaire) ; préserver les transports spécialisés Kerr/Dneg
+  dans leur domaine. Partager les modèles de lumière, d'air et de matériaux. Un proxy de visibilité n'est pas
+  automatiquement une surface finale pour les autres effets.
+- **Préparer les données avant la frame.** Assets/LOD, faces et coordonnées, mips et filtrage corrects, résidence et
+  publication versionnées ; travail CPU lourd en préparation/workers quand pertinent. Borner réseau, décodage,
+  uploads et mémoire ; conserver la couverture utile jusqu'à son remplacement cohérent. Anticiper les compilations.
+- **Préserver toute l'expérience.** Fraîcheur et lisibilité des instruments, réponse des commandes, confort caméra,
+  transitions, météo, audio, reprise GPU, sauvegardes et captures font partie de la qualité. Les fonctions produit
+  restent accessibles à TARS via les mêmes actions métier, états et validations que les autres entrées.
+- **Migrer par lots utiles dans le jeu existant.** Réutiliser géométrie, caches, matériaux et modèles déjà corrigés.
+  Un nouveau module remplace une responsabilité nommée. Limiter les adaptateurs temporaires et définir leur retrait ;
+  supprimer ensuite options, buffers et compilations sans utilisateur. Éviter deux opaques complets permanents pour
+  le même domaine. Les correctifs urgents continuent ; noter leurs éventuels raccords encore provisoires.
+
+### Bibliothèques : adoption ciblée, intégrée aux travaux
+
+**Examiner et intégrer les bibliothèques adaptées lorsque le chantier correspondant en bénéficie, plutôt que
+réimplémenter systématiquement les outils génériques.** La sélection et ses limites sont en §18. Ce ne sont ni des
+dépendances déjà installées ni des gains validés. Avant adoption, lire la documentation officielle de la version retenue,
+examiner licence, compatibilité Bun/WebGPU, bundle et coût d'intégration ; garder une responsabilité claire par outil.
+
+| Besoin | Direction privilégiée |
+|---|---|
+| Préparation des maillages, LOD, localité/compression | **meshoptimizer**, dans la chaîne d'assets ; workers si utile, hors boucle de frame |
+| Contrats et layouts CPU/WGSL | **webgpu-utils** comme premier choix minimal depuis le WGSL ; **TypeGPU** comme alternative si son avantage est établi et documenté, une seule autorité pour les mêmes layouts |
+| Coordination du streaming asynchrone | **Effect**, sur un périmètre borné de demandes/ressources lorsqu'il simplifie réellement annulation, erreurs et backpressure ; conserver le budget fournisseur commun, aucune fiber par objet/draw |
+| Assets glTF/GLB | **glTF Transform** en amont lorsque les sources s'y prêtent et que l'outillage retenu fonctionne avec les règles Bun |
+| Triangulation pratique des polygones | **Mapbox Earcut** comme candidat face au code local ; nettoyage, trous et validité contrôlés, aucune garantie universelle supposée |
+| Réflexion et diagnostic | **wgsl_reflect** seulement si le besoin n'est pas déjà couvert ; **WebGPU Inspector** en développement, hors bundle produit |
+| Textures compressées | Consolider **Basis/KTX2 déjà présent**, ses mips et sa couverture des canaux ; ne pas installer un doublon |
+
+Ne pas empiler ces paquets par principe, ni bloquer le premier opaque sur une migration générale vers Effect/TypeGPU.
+Une bibliothèque doit supprimer une fragilité ou un travail précis et s'intégrer au contrat commun. Les choix restent
+révisables sur preuve ; l'ajout d'une dépendance n'est pas en soi un progrès de rendu.
+
+Pour chaque lot significatif, expliquer le bénéfice courant, la contribution à la destination, ce qui sera réutilisé,
+la dépendance retirée ou la transition restante, et ce qui a réellement été vérifié. Éviter les pourcentages « AAA »
+inventés : suivre les responsabilités livrées et les parcours complets du §19.13.
+
+## Runtime : Bun
 
 Default to using Bun instead of Node.js.
 
