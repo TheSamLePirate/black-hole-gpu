@@ -1658,6 +1658,9 @@ export default {
   "Show the frame rate": "Afficher les FPS",
   "Show the data's loading": "Afficher le chargement des données",
   "Auroras from the real space weather": "Aurores de la vraie météo de l'espace",
+  "Magnetosphere diagram": "Schéma de la magnétosphère",
+  "The magnetosphere of the planet you are near, drawn as a diagram: field lines on L-shells traced in its real field (IGRF-14 for the Earth, JRM33 and the current disc for Jupiter, Cassini's for Saturn…), the magnetopause and the bow shock about the Sun's direction. A diagram, not a view: the shells are chosen to show the field.":
+    "La magnétosphère de la planète proche, en schéma : les lignes de champ sur des coquilles L tracées dans son vrai champ (IGRF-14 pour la Terre, JRM33 et le disque de courant pour Jupiter, celui de Cassini pour Saturne…), la magnétopause et l'onde de choc autour de la direction du Soleil. Un schéma, pas une vue : les coquilles sont choisies pour montrer le champ.",
   "While the scene's time is within three hours of now, the auroras follow the real space weather: NOAA's planetary K index, refreshed every 15 minutes. Offline, in the past or the future, or with this off: the Auroras setting's.":
     "Tant que l'heure de la scène est à moins de trois heures de maintenant, les aurores suivent la vraie météo de l'espace : l'indice Kp planétaire de la NOAA, relu toutes les 15 minutes. Hors ligne, dans le passé ou le futur, ou ceci coupé : le réglage Aurores.",
   "Life at sea": "La vie en mer",

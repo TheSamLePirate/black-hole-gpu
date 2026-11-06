@@ -121,6 +121,23 @@ verts) :
   réglage commun pour l'instant) ; le grain et la saturation au limbe ; la vue sud parfois noire (problème connu, pas
   l'aurore) ; le coût non mesuré.
 
+**AM7, premier lot (6 novembre 2026)** — le schéma :
+- **Les lignes** : les coquilles L d'Alex (Terre 1,5–9, Jupiter 1,8–40, Saturne, Uranus, Neptune, Mercure, Ganymède), 8
+  longitudes, tracées dans le vrai champ d'AM0 jusqu'à la figure, rééchantillonnées en 160 points (Catmull–Rom) avec
+  log |B| en chaque point, en cache par corps (`src/system/magneto-lines.ts` : ~40 ms pour la Terre, ~160 ms pour Jupiter).
+  La magnétopause de Shue et l'onde de choc conique (e = 0,81) dessinées par leur silhouette (le profil dans le plan du
+  Soleil, en travers de la visée). Première version en grillage et couleurs par coquille : « c'est moche » (Sam) — d'où la
+  couleur le long des lignes par log |B| (or près de la planète, orange, magenta, violet au loin), un halo doux sous un
+  trait fin, les boucles vues par la tranche effacées, l'arrière plus pâle.
+- **Le dessin** : le calque de lignes de la carte du ciel (`chartoverlay.ts`, `overlay.wgsl`) dans un mode « profondeur » :
+  chaque bout porte sa distance, le fragment est caché là où le rayon tracé a rencontré plus près (`moments.y`) — la passe
+  de lignes avec profondeur du § 4, sans nouveau pipeline d'opaque. Réglage « Schéma de la magnétosphère » (Ciel › Carte du
+  ciel), corps proche seulement.
+- **Observé** (e2e `magnetosphere-diagram`) : la Terre depuis 60 000 km, Jupiter depuis 1,5 million de km.
+- **Restant** : la déformation par le vent solaire (compression côté jour, queue), les lignes ouvertes, le tore d'Io, les
+  ceintures, les particules, les actions TARS, la couleur par |B| ; les corps lointains (au-delà de la portée du corps
+  proche) ; le traçage en worker.
+
 ## 1. Ce qu'on a aujourd'hui
 
 - **Une seule aurore, celle de la Terre**, `auroraLight` (`src/shaders/trace.wgsl`, S2 du plan aviation) :

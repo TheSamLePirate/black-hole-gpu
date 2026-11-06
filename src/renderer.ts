@@ -285,6 +285,7 @@ import type { Settings } from "./settings";
 import { secondsPerM, timeRate } from "./clock";
 import { encodeEXR, encodePNG16 } from "./exporters";
 import { ioFeet } from "./system/aurora-bodies";
+import { boundaries, fieldLines, SHELLS } from "./system/magneto-lines";
 import { AU_M, C_MPS } from "./units";
 import { windFrom } from "./wind";
 import { weatherAt, weatherGpu, windFromAt, type WeatherState } from "./weather";
@@ -1787,6 +1788,7 @@ export class Renderer {
     // (17 vec4s: the image's profile — look — after the heat haze's)
     this.displayBuf = device.createBuffer({ size: 512, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.chart = new ChartOverlay(device, src.overlay);
+    this.magneto = new ChartOverlay(device, src.overlay, true);
     // (trace.wgsl: the colours' LUTs at LUT_OFF — the synchrotron's from LUT_N = BB_LUT_SIZE)
     const lut = buildBlackbodyLUT();
     const sync = buildSynchrotronLUT();
@@ -2503,6 +2505,106 @@ export class Renderer {
     this.chart.set(segs, count);
     this.chartDirty = true;
   }
+  /** the magnetospheres' diagram (AM7): the near body's field lines, magnetopause and bow shock, lines in space behind what
+   *  hides them (chartoverlay.ts in its depth mode) */
+  private magneto: ChartOverlay;
+  private updateMagneto(
+    s: Settings,
+    cam: CameraFrame,
+    near: ReturnType<typeof localPatch>,
+    bodies: GpuBody[],
+    aspect: number,
+    tanH: number,
+  ) {
+    const id = near ? bodies[near.index]?.id : undefined;
+    if (!s.magnetosphere || !near || !id || !(id in SHELLS)) {
+      if (this.magneto.active) this.magneto.set(null, 0);
+      return;
+    }
+    const body = id as keyof typeof SHELLS;
+    const C = near.centre,
+      A = near.axes;
+    const R = near.radius;
+    const out: number[] = [];
+    const proj = (p: Vec3) => {
+      const z = p[0] * cam.fwd[0] + p[1] * cam.fwd[1] + p[2] * cam.fwd[2];
+      // (not within half a radius of the camera: a shell passing by it drew long straight strokes across the image)
+      if (z <= 0.5) return null;
+      return [
+        (p[0] * cam.right[0] + p[1] * cam.right[1] + p[2] * cam.right[2]) / (z * tanH * aspect),
+        (p[0] * cam.up[0] + p[1] * cam.up[1] + p[2] * cam.up[2]) / (z * tanH),
+        Math.hypot(p[0], p[1], p[2]) * R,
+      ];
+    };
+    // (a stroke: a soft halo under a fine core — the overlay keeps the stronger of the two —, its colour and alpha per segment;
+    // farther than the planet's centre, dimmer: the depth read at a glance)
+    const back = Math.hypot(C[0], C[1], C[2]) * R;
+    const line = (pts: Vec3[], col: (i: number) => number[], width: number, glow: number) => {
+      let a = proj(pts[0]!);
+      for (let i = 1; i < pts.length; i++) {
+        const b = proj(pts[i]!);
+        if (a && b && Math.max(Math.abs(a[0]!), Math.abs(a[1]!), Math.abs(b[0]!), Math.abs(b[1]!)) < 4) {
+          const c = col(i);
+          const k = c[3]! * (a[2]! > back ? 0.55 : 1);
+          out.push(a[0]!, a[1]!, b[0]!, b[1]!, c[0]!, c[1]!, c[2]!, k * 0.16, glow, 0, a[2]!, b[2]!);
+          out.push(a[0]!, a[1]!, b[0]!, b[1]!, c[0]!, c[1]!, c[2]!, k, width, 0, a[2]!, b[2]!);
+        }
+        a = b;
+      }
+    };
+    // (the body's axes → the camera's: the centre plus each coordinate along its axis there, in its radii)
+    const toCam = (q: Vec3): Vec3 => [
+      C[0] + q[0] * A[0][0] + q[1] * A[1][0] + q[2] * A[2][0],
+      C[1] + q[0] * A[0][1] + q[1] * A[1][1] + q[2] * A[2][1],
+      C[2] + q[0] * A[0][2] + q[1] * A[1][2] + q[2] * A[2][2],
+    ];
+    const dirCam = (q: Vec3): Vec3 => [
+      q[0] * A[0][0] + q[1] * A[1][0] + q[2] * A[2][0],
+      q[0] * A[0][1] + q[1] * A[1][1] + q[2] * A[2][1],
+      q[0] * A[0][2] + q[1] * A[1][2] + q[2] * A[2][2],
+    ];
+    const lines = fieldLines(body);
+    let lo = Infinity,
+      hi = -Infinity;
+    for (const f of lines) for (const v of f.logB) (lo = Math.min(lo, v)), (hi = Math.max(hi, v));
+    const cl = Math.hypot(C[0], C[1], C[2]) || 1;
+    const view: Vec3 = [C[0] / cl, C[1] / cl, C[2] / cl];
+    // (the field's strength along each line, log |B|: pale gold at the planet, orange, magenta, violet far out)
+    const ramp = (t: number) => {
+      const P = [
+        [0.52, 0.38, 1.0],
+        [0.92, 0.32, 0.72],
+        [1.0, 0.62, 0.3],
+        [1.0, 0.9, 0.62],
+      ];
+      const x = Math.min(Math.max(t, 0), 1) * 3,
+        i = Math.min(Math.floor(x), 2),
+        f = x - i;
+      return P[i]!.map((c, k) => c + (P[i + 1]![k]! - c) * f);
+    };
+    for (const f of lines) {
+      // (a loop seen edge-on, a straight stroke through the planet: faded out)
+      const n = dirCam(f.normal);
+      const edge = Math.abs(n[0] * view[0] + n[1] * view[1] + n[2] * view[2]);
+      const fade = Math.min(Math.max((edge - 0.12) / 0.3, 0), 1);
+      if (fade <= 0) continue;
+      line(
+        f.points.map(toCam),
+        (i) => {
+          const t = ((f.logB[i - 1]! + f.logB[i]!) / 2 - lo) / Math.max(hi - lo, 1e-6);
+          return [...ramp(t), (0.3 + 0.5 * t) * fade];
+        },
+        1.3,
+        5,
+      );
+    }
+    const B = boundaries(body, near.light as Vec3, view);
+    const shift = (q: Vec3): Vec3 => [C[0] + q[0], C[1] + q[1], C[2] + q[2]];
+    line(B.magnetopause.map(shift), () => [0.45, 0.82, 1, 0.65], 1.6, 8);
+    line(B.shock.map(shift), () => [0.82, 0.86, 0.95, 0.32], 1.2, 6);
+    this.magneto.set(new Float32Array(out), out.length / 12);
+    this.chartDirty = true;
+  }
   /** where the image lies in an output of outW × outH (uv_out = uv · (sx, sy) + (ox, oy)): writeDisplay's */
   private displayView(target: Target, outW: number, outH: number, letterbox: boolean): [number, number, number, number] {
     if (!letterbox) return [1, 1, 0, 0];
@@ -2524,7 +2626,7 @@ export class Renderer {
     letterbox: boolean,
     toCanvas = true,
   ) {
-    if (!this.chart.active) return;
+    if (!this.chart.active && !this.magneto.active) return;
     const cv = this.context.canvas as HTMLCanvasElement;
     const css = Math.max(cv.clientWidth || cv.width, 1);
     const shown = toCanvas ? css : this.offline ? this.displayView(t, cv.width, cv.height, true)[0] * css : css;
@@ -2544,6 +2646,18 @@ export class Renderer {
       t.height,
       outW / shown,
       ship,
+    );
+    this.magneto.encode(
+      enc,
+      view,
+      format,
+      outW,
+      outH,
+      this.displayView(t, outW, outH, letterbox),
+      t.moments,
+      t.width,
+      t.height,
+      outW / shown,
     );
   }
 
@@ -4000,6 +4114,8 @@ export class Renderer {
           ? 1024 * Math.round(2 * Math.max(eyeGain, jupD2))
           : (((tSec % 900) + 900) % 900) + 1024 * Math.round(2 * eyeGain);
     if (kp > 0) this.featureKey |= 16384;
+    // (the magnetospheres' diagram — AM7 —: the camera's frame, the near body)
+    if (!o.probe) this.updateMagneto(s, cam, near, bodies, t.width / t.height, tanH);
     // Keep reference rendering for optical/scientific kernels and contact with the walking patch.
     // (the raster inspector draws its own patch and reads the cache itself; it does not need the tracer to be free of the
     // wormhole's metric, which the Earth scenes always carry: only the tracer's *use* of the cache does)

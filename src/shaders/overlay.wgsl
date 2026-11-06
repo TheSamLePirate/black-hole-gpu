@@ -33,7 +33,8 @@ fn toPixels(ndc: vec2f) -> vec2f {
 }
 
 @vertex
-fn vsLine(@builtin(vertex_index) vi: u32, s: SegIn) -> SegOut {
+fn vsLine(@builtin(vertex_index) vi: u32, s: SegIn) -> SegOut { return segVertex(vi, s); }
+fn segVertex(vi: u32, s: SegIn) -> SegOut {
   let p0 = toPixels(s.ends.xy);
   let p1 = toPixels(s.ends.zw);
   let d = p1 - p0;
@@ -56,7 +57,8 @@ fn vsLine(@builtin(vertex_index) vi: u32, s: SegIn) -> SegOut {
 }
 
 @fragment
-fn fsLine(i: SegOut) -> @location(0) vec4f {
+fn fsLine(i: SegOut) -> @location(0) vec4f { return segCover(i); }
+fn segCover(i: SegOut) -> vec4f {
   // distance to the segment [px]: across it, or from its nearer end
   let a = clamp(i.local.x, 0.0, i.len.x);
   let dist = length(vec2f(i.local.x - a, i.local.y));
@@ -64,6 +66,39 @@ fn fsLine(i: SegOut) -> @location(0) vec4f {
   let w = max(i.len.y, 0.5);
   let cover = clamp(w + 0.5 - dist, 0.0, 1.0) * min(i.len.y / 0.5, 1.0);
   return vec4f(i.col.rgb, i.col.a * cover);
+}
+
+// ------------------------------------------------------------------------------ lines in space, behind what they pass behind
+// (AM7, the magnetospheres' diagram): each end's distance from the camera [M]; the fragment hidden where the traced ray met
+// something nearer (moments.y, the samples' nearest) — a planet, a moon —, the depth linear along the segment on screen
+struct SegInD {
+  @location(0) ends: vec4f,
+  @location(1) col: vec4f,
+  @location(2) width: vec2f,
+  @location(3) depth: vec2f,
+};
+struct SegOutD {
+  @builtin(position) pos: vec4f,
+  @location(0) col: vec4f,
+  @location(1) local: vec2f,
+  @location(2) len: vec2f,
+  @location(3) depth: vec2f,
+};
+@vertex
+fn vsLineD(@builtin(vertex_index) vi: u32, s: SegInD) -> SegOutD {
+  let o = segVertex(vi, SegIn(s.ends, s.col, s.width));
+  return SegOutD(o.pos, o.col, o.local, o.len, s.depth);
+}
+@fragment
+fn fsLineD(i: SegOutD) -> @location(0) vec4f {
+  let uv = (i.pos.xy / U.out.xy - U.view.zw) / U.view.xy;
+  if (any(uv < vec2f(0.0)) || any(uv >= vec2f(1.0))) { discard; }
+  let W = u32(U.img.x);
+  let p = vec2u(uv * U.img.xy);
+  let a = clamp(i.local.x, 0.0, i.len.x) / max(i.len.x, 1e-4);
+  let d = mix(i.depth.x, i.depth.y, a);
+  if (moments[p.y * W + p.x].y < d * 0.998) { discard; }
+  return segCover(SegOut(i.pos, i.col, i.local, i.len));
 }
 
 // ------------------------------------------------------------------------------ the composite

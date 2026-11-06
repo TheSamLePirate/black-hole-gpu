@@ -2039,6 +2039,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "aurora kp noaa swpc space weather live real aurores météo de l'espace",
   },
   {
+    key: "magnetosphere",
+    type: "toggle",
+    section: "sky",
+    group: "Sky chart",
+    label: "Magnetosphere diagram",
+    effect: "none",
+    help: "The magnetosphere of the planet you are near, drawn as a diagram: field lines on L-shells traced in its real field (IGRF-14 for the Earth, JRM33 and the current disc for Jupiter, Cassini's for Saturn…), the magnetopause and the bow shock about the Sun's direction. A diagram, not a view: the shells are chosen to show the field.",
+    keywords: "magnetosphere field lines magnetic L-shell magnetopause bow shock van allen diagram",
+  },
+  {
     key: "aurora",
     type: "number",
     section: "sky",

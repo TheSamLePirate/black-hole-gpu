@@ -319,6 +319,7 @@ export interface Settings {
   volumetricClouds: boolean; // the Earth's clouds near: a marched volume (else a textured shell)
   earthClouds: number; // the Earth's cloud cover drawn (0: a clear sky everywhere, 1: its map's)
   auroraLive: boolean; // the real space weather's Kp (NOAA SWPC) while the scene is within 3 h of now — the setting's otherwise (AM1)
+  magnetosphere: boolean; // the near body's magnetosphere as a diagram (AM7): its field lines, magnetopause and bow shock
   aurora: number; // the auroras' activity (S2: a Kp index, 0 none … 9 a great storm): their oval's curtains in the night sky
   refraction: boolean; // the Earth's air bends the light from beyond it (PLAN-CIEL C3): the Sun, the Moon, the stars raised at the horizon
   /** R6a-ciel — the air near the sea forced into a mirage's profile (illustrative, never an observation): "warmSea" a sea warmer
@@ -726,6 +727,7 @@ export function defaultSettings(): Settings {
     earthClouds: 1,
     aurora: 0,
     auroraLive: true,
+    magnetosphere: false,
     refraction: true,
     mirage: "off",
     horizonMaps: true,
@@ -2142,6 +2144,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   earthClouds: "scene",
   aurora: "scene",
   auroraLive: "pref",
+  magnetosphere: "pref",
   refraction: "pref",
   mirage: "pref",
   horizonMaps: "pref",

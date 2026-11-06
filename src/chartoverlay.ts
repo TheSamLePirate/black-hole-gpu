@@ -2,6 +2,8 @@
 // texture of the output's size, then laid over the displayed image where the traced rays met the sky.
 
 const SEG_FLOATS = 10;
+/** (with depths — AM7's lines in space: each end's distance [M]) */
+const SEG_FLOATS_D = 12;
 
 export class ChartOverlay {
   /** the overlay's module (read back at start-up for its compilation messages) */
@@ -15,34 +17,38 @@ export class ChartOverlay {
   private tex: GPUTexture | null = null;
   private noShip: GPUTexture;
 
-  /** (code: overlay.wgsl's source) */
+  private segFloats: number;
+  /** (code: overlay.wgsl's source; depth: lines in space, hidden behind what the traced rays met nearer — AM7) */
   constructor(
     private device: GPUDevice,
     code: string,
+    private depth = false,
   ) {
-    this.module = device.createShaderModule({ code, label: "sky chart" });
+    this.segFloats = depth ? SEG_FLOATS_D : SEG_FLOATS;
+    this.module = device.createShaderModule({ code, label: depth ? "lines in space" : "sky chart" });
     this.ubuf = device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.noShip = device.createTexture({ size: [1, 1], format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING });
     this.linePipe = device.createRenderPipeline({
       layout: "auto",
       vertex: {
         module: this.module,
-        entryPoint: "vsLine",
+        entryPoint: depth ? "vsLineD" : "vsLine",
         buffers: [
           {
-            arrayStride: SEG_FLOATS * 4,
+            arrayStride: this.segFloats * 4,
             stepMode: "instance",
             attributes: [
               { shaderLocation: 0, offset: 0, format: "float32x4" },
               { shaderLocation: 1, offset: 16, format: "float32x4" },
               { shaderLocation: 2, offset: 32, format: "float32x2" },
+              ...(depth ? [{ shaderLocation: 3, offset: 40, format: "float32x2" as GPUVertexFormat }] : []),
             ],
           },
         ],
       },
       fragment: {
         module: this.module,
-        entryPoint: "fsLine",
+        entryPoint: depth ? "fsLineD" : "fsLine",
         // (a polyline's joints overlap: the strongest of them, not their sum)
         targets: [
           {
@@ -65,9 +71,9 @@ export class ChartOverlay {
     if (count > this.cap) {
       this.vbuf?.destroy();
       this.cap = Math.max(1024, Math.ceil(count * 1.5));
-      this.vbuf = this.device.createBuffer({ size: this.cap * SEG_FLOATS * 4, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+      this.vbuf = this.device.createBuffer({ size: this.cap * this.segFloats * 4, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     }
-    this.device.queue.writeBuffer(this.vbuf!, 0, segs.buffer, segs.byteOffset, count * SEG_FLOATS * 4);
+    this.device.queue.writeBuffer(this.vbuf!, 0, segs.buffer, segs.byteOffset, count * this.segFloats * 4);
   }
   get active() {
     return this.count > 0;
@@ -130,7 +136,8 @@ export class ChartOverlay {
     d.queue.writeBuffer(
       this.ubuf,
       0,
-      new Float32Array([outW, outH, 1, widthScale, ...view, imgW, imgH, 0, 0, ...(ship?.rect ?? [0, 0, 0, 0])]),
+      // (out.z: the sky only — the chart —; lines in space are tested against the depth instead)
+      new Float32Array([outW, outH, this.depth ? 0 : 1, widthScale, ...view, imgW, imgH, 0, 0, ...(ship?.rect ?? [0, 0, 0, 0])]),
     );
     const lines = enc.beginRenderPass({
       colorAttachments: [{ view: this.tex.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
@@ -138,7 +145,10 @@ export class ChartOverlay {
     lines.setPipeline(this.linePipe);
     lines.setBindGroup(
       0,
-      d.createBindGroup({ layout: this.linePipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.ubuf } }] }),
+      d.createBindGroup({
+        layout: this.linePipe.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: this.ubuf } }, ...(this.depth ? [{ binding: 1, resource: { buffer: moments } }] : [])],
+      }),
     );
     lines.setVertexBuffer(0, this.vbuf);
     lines.draw(6, this.count);
