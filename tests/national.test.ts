@@ -160,3 +160,16 @@ test("SWISSIMAGE: its WMTS in Web Mercator; its colours fitted as the IGN's, nea
     for (let c = 0; c < 3; c++) expect(Math.abs(a[c]! - b[c]!)).toBeLessThan(12);
   }
 });
+
+test("the USGS imagery's colours: its table per channel brings its typical ground to EOX's (usa-colour.ts)", async () => {
+  const { USA_FIT } = await import("../src/system/earth-tiles");
+  expect(USA_FIT.lut?.length).toBe(768);
+  // (monotone per channel, a white still bright)
+  for (let c = 0; c < 3; c++)
+    for (let v = 1; v < 256; v++) expect(USA_FIT.lut![c * 256 + v]!).toBeGreaterThanOrEqual(USA_FIT.lut![c * 256 + v - 1]!);
+  // (a USGS field's mid green — ~ (106, 112, 98) — darker and greener, as EOX's: ~ (69, 68, 39) on average)
+  const [r, g, b] = orthoColour(106, 112, 98, USA_FIT);
+  expect(r).toBeLessThan(95);
+  expect(b).toBeLessThan(r);
+  expect(orthoColour(250, 250, 250, USA_FIT)[1]).toBeGreaterThan(180);
+});

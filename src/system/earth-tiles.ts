@@ -29,7 +29,8 @@
 import type { Vec3 } from "../physics";
 import { cartToGeodetic, geodeticDirAt, squashedScale, WGS84_A, WGS84_F } from "./ellipsoid";
 import { IGN_GATE_SW } from "./scenery-data";
-import { insideOutline, type NationalSource, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
+import { insideOutline, type NationalSource, type OrthoFit, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
+import { USA_LUT } from "./usa-colour";
 import { MAPTERHORN_Z1, mapterhornUrl, USA_OUTLINE, usgsImageryUrl } from "./usa-ground";
 import { IGN_MNH } from "./ign-canopy";
 import type { DelightStats } from "./ortho-delight";
@@ -751,14 +752,16 @@ function mapterhornFile(z: number, x: number, y: number, signal: AbortSignal): P
   if (signal.aborted) return Promise.reject(new DOMException("aborted", "AbortError"));
   return p;
 }
+/** the USGS imagery's fit: ORTHO_FIT's model unused, its table per channel (usa-colour.ts) */
+export const USA_FIT: OrthoFit = { ...ORTHO_FIT, lut: USA_LUT };
 export const USA: NationalSource = {
   id: "usa",
   declares: ["usgs-imagery", "mapterhorn-3dep"],
   box: { west: -125, east: -66.5, south: 24.2, north: 49.5 },
   holds: (lat, lon) => insideOutline(lat, lon, USA_OUTLINE),
   orthoUrl: usgsImageryUrl,
-  // (the IGN's fit for a start: its colours not yet fitted to EOX's — to do on a dozen places, as SWISS_FIT was)
-  fit: ORTHO_FIT,
+  // (its colours brought to EOX's by a table per channel — usa-colour.ts, scripts/fit-usgs-colour.py)
+  fit: USA_FIT,
   heightsFrom: 12,
   heightUrls: (z, x, y) => (z >= 1 && z - 1 <= MAPTERHORN_Z1 ? [mapterhornUrl(z - 1, x >> 1, y >> 1)] : []),
   heights: mapterhornHeights,

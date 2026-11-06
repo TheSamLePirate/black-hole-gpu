@@ -51,6 +51,9 @@ export function orthoColour(r: number, g: number, b: number, fit: OrthoFit = ORT
 }
 /** an orthophoto's pixel's colour, packed (r | g << 8 | b << 16), r at least 1 (0: no image) */
 function orthoWord(r: number, g: number, b: number, fit: OrthoFit, tone: Float32Array): number {
+  // (a table per channel — the USGS's: its histogram matched to EOX's — in place of the tone curve)
+  const lut = fit.lut;
+  if (lut) return Math.max(lut[r]!, 1) | (lut[256 + g]! << 8) | (lut[512 + b]! << 16);
   const er = LIN[r]!,
     eg = LIN[g]!,
     eb = LIN[b]!;

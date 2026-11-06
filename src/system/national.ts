@@ -15,6 +15,8 @@ const D = Math.PI / 180;
 export interface OrthoFit {
   tone: readonly [number, number];
   chroma: readonly [number, number, number];
+  /** (a source whose colours a tone curve cannot fit — the USGS's, usa-colour.ts —) per channel, 256 entries each: sRGB in, out */
+  lut?: Uint8Array;
 }
 export interface NationalSource {
   id: "ign" | "swisstopo" | "usa" | "mapterhorn";

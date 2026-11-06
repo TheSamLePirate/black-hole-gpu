@@ -602,8 +602,9 @@ Le joueur n'a pas besoin d'un panneau de détails techniques pour voler. En reva
   l'interface des sources nationales (`earth-tiles.ts` USA). Observé (e2e `usa`, Yosemite) : pente 83° contre 77°, 1,9 m
   contre 25 m, niveaux z 17 contre 14, Half Dome 2 693 m (2 694). NAIP 0,6 m par son serveur d'images : 9–50 s l'image —
   pour les zones hors ligne seulement. Le décor (arbres, bâtiments) posé sur ce même relief (`usa-ground.ts`
-  MapterhornGround, z 14, comme SwissGround ; zones hors ligne comprises). Restent : l'ajustement des couleurs à EOX (le
-  modèle à 4 paramètres ne suffit pas), l'Alaska et Hawaï, la NAIP 0,6 m dans les zones, le LiDAR classifié.
+  MapterhornGround, z 14, comme SwissGround ; zones hors ligne comprises). Les couleurs de l'imagerie USGS ramenées à celles d'EOX par une table par
+  canal (`usa-colour.ts`, `scripts/fit-usgs-colour.py`, 24 sites) ; observé (e2e `usa-landscapes`) : moyennes du sol à 2–12
+  niveaux d'EOX sur l'Hudson, Napa et Big Sur. Restent : l'Alaska et Hawaï, la NAIP 0,6 m dans les zones, le LiDAR classifié.
 - **E — premier lot (relief)** : Mapterhorn (151 relevés nationaux, 1 m ou mieux sur l'Allemagne, l'Autriche, la
   Belgique, le Danemark, l'Espagne, l'Estonie, la Finlande, les Pays-Bas, la Norvège, la Suède, la Pologne, le Portugal, la
   Roumanie, la Slovénie, la Slovaquie, le Royaume-Uni, le Luxembourg, des régions d'Italie, le Japon, la Nouvelle-Zélande)
