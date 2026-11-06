@@ -107,10 +107,15 @@ import mslAim120Url from "../assets/traffic/msl-aim120.bin";
 import mslAim9xUrl from "../assets/traffic/msl-aim9x.bin";
 import mslSamUrl from "../assets/traffic/msl-sam.bin";
 import mslJsmUrl from "../assets/traffic/msl-jsm.bin";
+import mslGbu32Url from "../assets/traffic/msl-gbu32.bin";
 import guTelUrl from "../assets/traffic/gu-tel.bin";
 import guTankUrl from "../assets/traffic/gu-tank.bin";
 import guTruckUrl from "../assets/traffic/gu-truck.bin";
 import guBunkerUrl from "../assets/traffic/gu-bunker.bin";
+import guHasUrl from "../assets/traffic/gu-has.bin";
+import guTowerUrl from "../assets/traffic/gu-tower.bin";
+import guFuelUrl from "../assets/traffic/gu-fuel.bin";
+import guCraterUrl from "../assets/traffic/gu-crater.bin";
 import { GROUND_UNITS, type GroundUnitId } from "./game/ground-units";
 import { MISSILE_SHAPES, type MissileMeshId } from "./game/missile-models";
 import cargoHullUrl from "../assets/traffic/cargo-hull.jpg";
@@ -187,10 +192,15 @@ const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
   "msl-aim9x": mslAim9xUrl,
   "msl-sam": mslSamUrl,
   "msl-jsm": mslJsmUrl,
+  "msl-gbu32": mslGbu32Url,
   "gu-tel": guTelUrl,
   "gu-tank": guTankUrl,
   "gu-truck": guTruckUrl,
   "gu-bunker": guBunkerUrl,
+  "gu-has": guHasUrl,
+  "gu-tower": guTowerUrl,
+  "gu-fuel": guFuelUrl,
+  "gu-crater": guCraterUrl,
 };
 /** The traffic's colour maps, a layer each (ship.wgsl: the materials 40, 41, 44–46); the carriers' after them
  *  (80–86), added with the first carrier drawn. */
@@ -2088,10 +2098,15 @@ export class ShipRenderer {
       "msl-aim9x": 23,
       "msl-sam": 23,
       "msl-jsm": 23,
+      "msl-gbu32": 23,
       "gu-tel": 24,
       "gu-tank": 24,
       "gu-truck": 24,
       "gu-bunker": 24,
+      "gu-has": 24,
+      "gu-tower": 24,
+      "gu-fuel": 24,
+      "gu-crater": 24,
     } as const;
     let jetSlot = 0;
     // (the missiles' records written — up to the last one's instance —, their motors burning)

@@ -23,7 +23,9 @@ import {
   ogive,
   plate,
   quad,
+  solid,
   transform,
+  type V3,
   wheel,
   write,
 } from "./lib/trfc";
@@ -413,5 +415,319 @@ function railMissile(m: Mesh, k: number, x: number, y: number, z0: number) {
   frustum(m, [-6, 0, -5], [6, 3.6, 5], 1.4, CONCRETE, flat(150, 148, 140));
   frustum(m, [-4.2, 3.6, -3.4], [4.2, 4.2, 3.4], 0.9, PAINT, flat(104, 92, 70));
   box(m, [-1.4, 0, 4.95], [1.4, 2.3, 5.02], PAINT, flat(24, 24, 24));
+  await write(id, m);
+}
+
+// ---- the airfield's targets (the war mode's « Guerre : base aérienne »): a hardened aircraft shelter — its concrete arch and its
+// ribs, its two-leaf blast door in its frame, its exhaust vent aft, its earth banks along its sides —; a control tower — its
+// two-storey base with its windows, its striped shaft, its octagonal glass cab between its mullions, its catwalk and railing,
+// its roof's antennas and radome —; a fuel tank — its coned roof, its rings, its stair, its pipe — in its bund; and a bomb's
+// crater (scorched ground, its rim of thrown earth)
+const CONC = flat(158, 154, 144);
+const CONC_DARK = flat(118, 114, 106);
+const STEEL_DOOR = flat(78, 82, 74);
+const DARK_GLASS = flat(18, 24, 30);
+const EARTH = flat(150, 128, 98);
+{
+  const id: GroundUnitId = "gu-has";
+  const m = mesh();
+  // (the arch: its half above the ground — 9 m of radius, its foot 2.2 m under the ground's level —, 30 m long; a rib every 6 m)
+  const arch = (z: number, r = 9): V3[] =>
+    Array.from({ length: 25 }, (_, k) => {
+      const a = Math.asin(2.2 / r) + ((Math.PI - 2 * Math.asin(2.2 / r)) * k) / 24;
+      return [r * Math.cos(a), r * Math.sin(a) - 2.2, z] as V3;
+    });
+  solid(m, arch(-15), arch(15), CONCRETE, CONC);
+  for (let k = 0; k <= 5; k++) solid(m, arch(-15 + 6 * k - 0.25, 9.18), arch(-15 + 6 * k + 0.25, 9.18), CONCRETE, CONC_DARK);
+  // (the front: its headwall round the door; the door's two leaves, their frames, the gap between them)
+  extrudeX(
+    m,
+    [
+      [0, 15.0],
+      [0, 16.2],
+      [7.4, 16.2],
+      [7.4, 15.0],
+    ],
+    -9.4,
+    -6.2,
+    CONCRETE,
+    CONC_DARK,
+  );
+  extrudeX(
+    m,
+    [
+      [0, 15.0],
+      [0, 16.2],
+      [7.4, 16.2],
+      [7.4, 15.0],
+    ],
+    6.2,
+    9.4,
+    CONCRETE,
+    CONC_DARK,
+  );
+  box(m, [-6.2, 6.4, 15.0], [6.2, 7.4, 16.2], CONCRETE, CONC_DARK);
+  for (const sx of [-1, 1]) {
+    box(m, [sx > 0 ? 0.05 : -6.15, 0, 15.6], [sx > 0 ? 6.15 : -0.05, 6.4, 15.9], PAINT, STEEL_DOOR);
+    for (let k = 1; k < 4; k++)
+      box(m, [sx > 0 ? 0.2 : -6.0, k * 1.6 - 0.06, 15.88], [sx > 0 ? 6.0 : -0.2, k * 1.6 + 0.06, 15.95], PAINT, flat(60, 64, 58));
+  }
+  // (aft: the exhaust vent's box)
+  box(m, [-2.2, 0, -16.4], [2.2, 4.2, -15.0], CONCRETE, CONC_DARK);
+  box(m, [-1.6, 1.2, -16.45], [1.6, 3.6, -16.38], PAINT, flat(30, 30, 30));
+  // (the earth banked along its sides, to half its height)
+  for (const sx of [-1, 1])
+    extrudeX(
+      m,
+      [
+        [0, -15],
+        [0, 15],
+        [3.8, 14.0],
+        [3.8, -14.0],
+      ],
+      sx * 6.2,
+      sx * 11.5,
+      PAINT,
+      EARTH,
+    );
+  await write(id, m);
+}
+{
+  const id: GroundUnitId = "gu-tower";
+  const m = mesh();
+  // (the base: two storeys, its windows in bands round it, its door)
+  box(m, [-7, 0, -5], [7, 7, 5], CONCRETE, flat(204, 198, 186));
+  for (const y of [1.2, 4.6])
+    for (const [a, b, n] of [
+      [
+        [-6.4, 5.02],
+        [6.4, 5.02],
+        [0, 0, 1],
+      ],
+      [
+        [-6.4, -5.02],
+        [6.4, -5.02],
+        [0, 0, -1],
+      ],
+    ] as const)
+      quad(
+        m,
+        [
+          [a[0], y, a[1]],
+          [b[0], y, b[1]],
+          [b[0], y + 1.5, b[1]],
+          [a[0], y + 1.5, a[1]],
+        ],
+        [n[0], n[1], n[2]],
+        GLASS,
+        DARK_GLASS,
+      );
+  box(m, [-1, 0, 5.02], [1, 2.4, 5.1], PAINT, flat(60, 62, 66));
+  frustum(m, [-7.2, 7, -5.2], [7.2, 7.4, 5.2], 0.1, PAINT, flat(150, 148, 142));
+  // (the shaft: 14 m, its red and white bands)
+  for (let k = 0; k < 7; k++) box(m, [-2, 7.4 + 2 * k, -2], [2, 9.4 + 2 * k, 2], CONCRETE, k % 2 ? flat(190, 40, 34) : flat(226, 224, 216));
+  // (the cab: an octagon of glass leaning out, its mullions; its floor's slab, its catwalk's railing)
+  const R0 = 4.2,
+    R1 = 4.8,
+    y0 = 22.2,
+    y1 = 25.4;
+  const oct = (r: number, y: number): V3[] =>
+    Array.from(
+      { length: 8 },
+      (_, k) => [r * Math.cos((k * Math.PI) / 4 + Math.PI / 8), y, r * Math.sin((k * Math.PI) / 4 + Math.PI / 8)] as V3,
+    );
+  solid(m, oct(5.6, 21.4), oct(5.6, 22.2), CONCRETE, flat(170, 168, 160));
+  solid(
+    m,
+    oct(2.6, 21.4),
+    oct(4.6, 21.4).map((p) => [p[0], 21.4, p[2]] as V3),
+    CONCRETE,
+    flat(170, 168, 160),
+  );
+  const lo = oct(R0, y0),
+    hi = oct(R1, y1);
+  for (let k = 0; k < 8; k++) {
+    const j = (k + 1) % 8;
+    const mid = [(lo[k]![0] + lo[j]![0]) / 2, 0, (lo[k]![2] + lo[j]![2]) / 2];
+    const l = Math.hypot(mid[0]!, mid[2]!);
+    quad(m, [lo[k]!, lo[j]!, hi[j]!, hi[k]!], [mid[0]! / l, 0.2, mid[2]! / l], GLASS, DARK_GLASS);
+    const ml = mark(m);
+    box(m, [-0.08, y0, -0.08], [0.08, y1, 0.08], PAINT, flat(60, 62, 66));
+    transform(
+      m,
+      ml,
+      (p) => [
+        p[0] + lo[k]![0] + (hi[k]![0] - lo[k]![0]) * ((p[1] - y0) / (y1 - y0)),
+        p[1],
+        p[2] + lo[k]![2] + (hi[k]![2] - lo[k]![2]) * ((p[1] - y0) / (y1 - y0)),
+      ],
+      (n) => n,
+    );
+  }
+  for (let k = 0; k < 8; k++) {
+    const a = oct(5.5, 22.2)[k]!,
+      b = oct(5.5, 22.2)[(k + 1) % 8]!;
+    const rl = mark(m);
+    box(m, [-0.04, 0, -0.04], [0.04, 1.0, 0.04], PAINT, flat(200, 200, 196));
+    transform(
+      m,
+      rl,
+      (p) => [p[0] + a[0], p[1] + 22.2, p[2] + a[2]],
+      (n) => n,
+    );
+    quad(
+      m,
+      [
+        [a[0], 23.1, a[2]],
+        [b[0], 23.1, b[2]],
+        [b[0], 23.2, b[2]],
+        [a[0], 23.2, a[2]],
+      ],
+      [a[0], 0, a[2]],
+      PAINT,
+      flat(200, 200, 196),
+    );
+  }
+  solid(m, oct(5.2, 25.4), oct(4.2, 26.0), PAINT, flat(120, 120, 116));
+  // (on the roof: two masts, a radome)
+  for (const x of [-2.5, 2.5]) box(m, [x - 0.06, 26, -0.06], [x + 0.06, 30, 0.06], PAINT, flat(200, 200, 196));
+  const rd = mark(m);
+  lathe(
+    m,
+    0,
+    1.6,
+    Array.from({ length: 7 }, (_, k) => [k / 6, 1.0 * Math.cos((k / 6) * Math.PI * 0.5)] as [number, number]),
+    16,
+    PAINT,
+    flat(230, 230, 226),
+  );
+  standUp(m, rd, 26, -1.5);
+  await write(id, m);
+}
+{
+  const id: GroundUnitId = "gu-fuel";
+  const m = mesh();
+  // (the tank: its shell, its stiffening rings, its coned roof, its spiral stair's flights, its pipe out to the bund's edge)
+  const t0 = mark(m);
+  lathe(
+    m,
+    0,
+    8,
+    [
+      [0, 6],
+      [1, 6],
+    ],
+    32,
+    PAINT,
+    flat(214, 214, 206),
+  );
+  standUp(m, t0, 0, 0);
+  for (const y of [2.6, 5.3]) {
+    const r0 = mark(m);
+    lathe(
+      m,
+      0,
+      0.18,
+      [
+        [0, 6.08],
+        [1, 6.08],
+      ],
+      32,
+      PAINT,
+      flat(190, 190, 184),
+    );
+    standUp(m, r0, y, 0);
+  }
+  const c0 = mark(m);
+  lathe(
+    m,
+    0,
+    1.1,
+    [
+      [0, 6.05],
+      [1, 0.4],
+    ],
+    32,
+    PAINT,
+    flat(196, 196, 190),
+  );
+  standUp(m, c0, 8, 0);
+  for (let k = 0; k < 6; k++) {
+    const a = -0.4 + k * 0.32;
+    const st = mark(m);
+    box(m, [-0.45, -0.05, 0], [0.45, 0.05, 1.5], PAINT, flat(150, 150, 146));
+    transform(
+      m,
+      st,
+      (p) => {
+        const ca = Math.cos(a),
+          sa = Math.sin(a);
+        const x = 6.5 * ca - (p[2] - 0.75) * sa + p[0] * ca * 0,
+          z = 6.5 * sa + (p[2] - 0.75) * ca;
+        return [x + p[0] * ca, p[1] + 0.5 + k * 1.3 + (p[2] / 1.5) * 1.3, z + p[0] * sa];
+      },
+      (n) => n,
+    );
+  }
+  const p0 = mark(m);
+  lathe(
+    m,
+    0,
+    4,
+    [
+      [0, 0.25],
+      [1, 0.25],
+    ],
+    10,
+    PAINT,
+    flat(120, 120, 116),
+  );
+  transform(
+    m,
+    p0,
+    (p) => [p[0] + 6, p[1] + 0.5, p[2] - 2],
+    (n) => n,
+  );
+  for (const [x0, z0, x1, z1] of [
+    [-9, -9, 9, -8.6],
+    [-9, 8.6, 9, 9],
+    [-9, -9, -8.6, 9],
+    [8.6, -9, 9, 9],
+  ])
+    box(m, [x0!, 0, z0!], [x1!, 1.4, z1!], CONCRETE, CONC_DARK);
+  await write(id, m);
+}
+{
+  const id: GroundUnitId = "gu-crater";
+  const m = mesh();
+  const c0 = mark(m);
+  lathe(
+    m,
+    0,
+    0.12,
+    [
+      [0, 5.2],
+      [1, 5.0],
+    ],
+    24,
+    PAINT,
+    flat(34, 28, 22),
+  );
+  standUp(m, c0, 0, 0);
+  const r0 = mark(m);
+  lathe(
+    m,
+    0,
+    0.7,
+    [
+      [0, 7.4],
+      [0.5, 6.4],
+      [1, 5.3],
+    ],
+    24,
+    PAINT,
+    flat(96, 82, 64),
+  );
+  standUp(m, r0, 0, 0);
   await write(id, m);
 }

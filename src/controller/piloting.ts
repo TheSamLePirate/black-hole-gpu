@@ -637,8 +637,18 @@ function mountTarget(this: CameraController): MountPose {
       const aim: Vec3 = [0, 1, 2].map((k) => Mq.q[k]! + f[k]! * 14 + u[k]! * 0.6) as Vec3;
       return { eye, aim, up: u };
     }
+    // (it has hit: the view round where it did — 70 m out, 25 m up, a turn in some 10 s, the explosion and its smoke in it —,
+    // then back behind the craft)
+    const I = this.impactShip();
+    if (I) {
+      const a = I.age * 0.6 + 2.2;
+      const eye: Vec3 = [0, 1, 2].map((k) => I.q[k]! + 70 * (Math.cos(a) * I.e[k]! + Math.sin(a) * I.n[k]!) + 25 * I.up[k]!) as Vec3;
+      const aim: Vec3 = [0, 1, 2].map((k) => I.q[k]! + 6 * I.up[k]!) as Vec3;
+      return { eye, aim, up: I.up };
+    }
+    return { eye: MOUNTS.chase.eye as Vec3, aim: MOUNTS.chase.aim as Vec3 };
   }
-  if (v === "target" || v === "missile") {
+  if (v === "target") {
     // (the lens on the fight's focus from behind the craft, the horizon level; nothing to look at: behind the craft)
     const F = this.focusShip();
     // (the eye behind the craft, moved out to its side towards the target — under its belly for one below, off a wing for one

@@ -7,7 +7,7 @@
 
 import type { TargetKind } from "./combat";
 
-export type GroundUnitId = "gu-tel" | "gu-tank" | "gu-truck" | "gu-bunker";
+export type GroundUnitId = "gu-tel" | "gu-tank" | "gu-truck" | "gu-bunker" | "gu-has" | "gu-tower" | "gu-fuel" | "gu-crater";
 
 export interface GroundUnitShape {
   turretZ: number;
@@ -17,14 +17,25 @@ export interface GroundUnitShape {
   rest: number;
   raised: number;
   rails: number;
+  /** where a guided bomb aims on it: its middle's height over the ground [m] (a tower's shaft, not its foot) */
+  aimH?: number;
 }
 
 export const GROUND_UNITS: Record<GroundUnitId, GroundUnitShape> = {
-  "gu-tel": { turretZ: -0.5, armY: 2.45, armZ: -2.6, rest: 0, raised: 0.5, rails: 4 },
-  "gu-tank": { turretZ: -0.3, armY: 1.9, armZ: 1.6, rest: 0, raised: 0.12, rails: 0 },
-  "gu-truck": { turretZ: 0, armY: 0, armZ: 0, rest: 0, raised: 0, rails: 0 },
-  "gu-bunker": { turretZ: 0, armY: 0, armZ: 0, rest: 0, raised: 0, rails: 0 },
+  "gu-tel": { turretZ: -0.5, armY: 2.45, armZ: -2.6, rest: 0, raised: 0.5, rails: 4, aimH: 2 },
+  "gu-tank": { turretZ: -0.3, armY: 1.9, armZ: 1.6, rest: 0, raised: 0.12, rails: 0, aimH: 1.3 },
+  "gu-truck": { turretZ: 0, armY: 0, armZ: 0, rest: 0, raised: 0, rails: 0, aimH: 1.6 },
+  "gu-bunker": { turretZ: 0, armY: 0, armZ: 0, rest: 0, raised: 0, rails: 0, aimH: 2.2 },
+  "gu-has": { turretZ: 0, armY: 0, armZ: 0, rest: 0, raised: 0, rails: 0, aimH: 3.5 },
+  "gu-tower": { turretZ: 0, armY: 0, armZ: 0, rest: 0, raised: 0, rails: 0, aimH: 12 },
+  "gu-fuel": { turretZ: 0, armY: 0, armZ: 0, rest: 0, raised: 0, rails: 0, aimH: 4 },
+  "gu-crater": { turretZ: 0, armY: 0, armZ: 0, rest: 0, raised: 0, rails: 0 },
 };
+
+/** a target's mesh: its own (a mission's, a scenario's — a bunker drawn as a shelter, a tower, a fuel tank) when it is a ground
+ *  unit's, else its kind's */
+export const groundMeshOf = (q: { kind: TargetKind; mesh?: string }): GroundUnitId | undefined =>
+  q.mesh && q.mesh in GROUND_UNITS ? (q.mesh as GroundUnitId) : GROUND_MESH[q.kind];
 
 /** each ground kind's mesh (none: not a ground unit) */
 export const GROUND_MESH: Partial<Record<TargetKind, GroundUnitId>> = {

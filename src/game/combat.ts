@@ -8,6 +8,7 @@
 
 export type V3 = [number, number, number];
 
+import { GROUND_UNITS, groundMeshOf } from "./ground-units";
 import { roundStep } from "./gunsight";
 
 const add = (a: V3, b: V3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -296,6 +297,10 @@ export interface Bomb {
   v: V3;
   aim: V3;
   alive: boolean;
+  /** its guidance's command at its last step [m/s²] (drawn: its nose, its tail fins — src/game/missile-models.ts) */
+  lat?: V3;
+  fin?: number[];
+  finAt?: number;
 }
 
 export interface Round {
@@ -383,6 +388,9 @@ export class CombatWorld {
   targets: Target[] = [];
   missiles: Missile[] = [];
   bombs: Bomb[] = [];
+  /** the bombs' craters on the ground (the war mode's: a runway cut, a field pocked) — east, north, up [m], the world's time;
+   *  the last 40 kept */
+  craters: { p: V3; t: number }[] = [];
   rounds: Round[] = [];
   decoys: Decoy[] = [];
   /** the player's damage [0 … 100], its stores left, its gun firing */
@@ -1072,19 +1080,35 @@ export class CombatWorld {
       const vc = -dot(r, vr) / Math.sqrt(R2);
       const u = unit(b.v);
       const gp = sub([0, 0, G] as V3, mul(u, u[2] * G));
-      let a: V3 = add(mul(cross(omega, u), 3 * Math.max(vc, 30)), gp);
+      // (its last 600 m flown harder — the gain 4, its fins to near twice their pull —: at 3 the bomb passed its aim 10 m off,
+      // seen to miss the building it destroyed — Sam)
+      const near = Math.sqrt(R2) < 600;
+      let a: V3 = add(mul(cross(omega, u), 4 * Math.max(vc, 30)), gp);
       const sp = len(b.v);
       const al = len(a);
-      if (al > JDAM.gMax * G) a = mul(a, (JDAM.gMax * G) / al);
+      const gm = JDAM.gMax * (near ? 1.8 : 1) * G;
+      if (al > gm) a = mul(a, gm / al);
+      b.lat = a;
+      const was: V3 = [...b.p];
       b.v = add(b.v, mul(add(add(a, [0, 0, -G]), mul(b.v, -JDAM.cd * sp)), dt));
       b.p = add(b.p, mul(b.v, dt));
       const gz = this.groundZ(b.p[0], b.p[1]);
-      if (b.p[2] <= gz) {
+      // (its fuze: the ground, or its aim point passed within 4 m along the step — a building's middle: it bursts there, in it; a
+      // crater only on the ground)
+      const atAim = b.aim[2] > this.groundZ(b.aim[0], b.aim[1]) + 0.5 && segDist(was, b.p, b.aim) < 4;
+      if (atAim) b.p = [...b.aim];
+      if (b.p[2] <= gz || atAim) {
         b.alive = false;
-        b.p[2] = gz;
+        if (!atAim) b.p[2] = gz;
         ev.push({ kind: "explode", p: [...b.p], size: 3 });
+        if (!atAim) {
+          this.craters.push({ p: [...b.p], t: this.t });
+          if (this.craters.length > 40) this.craters.shift();
+        }
         for (const q of this.targets) {
-          const d = len(sub(q.p, b.p));
+          // (from its middle — a tower's 12 m up its shaft: a burst in it had counted from its foot)
+          const gm = groundMeshOf(q);
+          const d = len(sub([q.p[0], q.p[1], q.p[2] + (gm ? (GROUND_UNITS[gm].aimH ?? 0) : 0)], b.p));
           if (q.alive && d < JDAM.blast) this.damageTarget(q, JDAM.damage * (1 - d / JDAM.blast) + 20, "jdam", ev);
         }
       }

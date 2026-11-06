@@ -121,4 +121,33 @@ export const SCENARIOS: Scenario[] = [
     ],
     limit: 900,
   },
+  {
+    // (the war mode's airfield — Sam, 6 Nov 2026: « des bâtiments à détruire, des aéroports » —: Bicycle Lake Army Airfield in
+    // the Fort Irwin range, its hardened shelters in a row, its tower, its fuel farm, an SA-11 battery covering it — the
+    // bombs' craters left on the ground)
+    id: "war-airbase",
+    title: { fr: "Guerre : base aérienne", en: "War: airbase" },
+    brief: {
+      fr: "La base de Bicycle Lake, ses abris durcis, sa tour, ses réserves de carburant, défendue par une batterie SA-11. Neutralisez le lanceur, puis détruisez abris, tour et carburant aux JDAM.",
+      en: "Bicycle Lake airbase, its hardened shelters, its tower, its fuel farm, defended by an SA-11 battery. Take out the launcher, then destroy the shelters, the tower and the fuel with the JDAMs.",
+    },
+    anchor: { lat: 35.2803, lon: -116.6291 },
+    start: { e: 3000, n: -32_000, agl: 500, hdg: 355, speed: 230 },
+    loadout: "ag",
+    targets: [
+      { kind: "sam", at: [1800, 2200, 0], hdg: 200, name: "SA-11" },
+      ...[0, 1, 2].map((k) => ({
+        kind: "bunker" as const,
+        at: [-700 + 45 * k, 420, 0] as [number, number, number],
+        hdg: 180,
+        name: `SHELTER ${k + 1}`,
+        mesh: "gu-has",
+      })),
+      { kind: "bunker", at: [250, 260, 0], hdg: 180, name: "TOWER", mesh: "gu-tower" },
+      { kind: "bunker", at: [-1000, -350, 0], hdg: 0, name: "FUEL 1", mesh: "gu-fuel" },
+      { kind: "bunker", at: [-975, -385, 0], hdg: 0, name: "FUEL 2", mesh: "gu-fuel" },
+      { kind: "truck", at: [-860, -300, 0], hdg: 90, name: "TANKER TRUCK" },
+    ],
+    limit: 900,
+  },
 ];

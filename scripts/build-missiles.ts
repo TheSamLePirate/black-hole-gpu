@@ -237,3 +237,33 @@ function fins(
   lug(m, -Math.PI / 2, S.radius * 0.9, -0.3, 0.16, 0.07, 0.5, BODY, flat(60, 64, 66));
   await write(id, m);
 }
+
+// ---- GBU-32 JDAM (3.84 m, Ø 357 mm): a Mk 83's olive body — its blunt ogive, its yellow band —, the kit's strakes along it, the
+// tail kit's cone and its four control fins in an X
+{
+  const id: MissileMeshId = "msl-gbu32";
+  const S = MISSILE_SHAPES[id];
+  const m = mesh();
+  const OLIVE = flat(92, 98, 70);
+  const zt = -S.len / 2;
+  lathe(
+    m,
+    zt,
+    zt + 0.9,
+    [
+      [0, 0.09],
+      [0.6, 0.16],
+      [1, S.radius],
+    ],
+    SEG,
+    BODY,
+    flat(70, 74, 60),
+  );
+  body(m, S.radius, zt + 0.9, S.len / 2 - 0.85, [[0.55, YELLOW]], OLIVE, 0.0);
+  lathe(m, S.len / 2 - 0.85, S.len / 2, ogive(S.radius, 0.05, 10), SEG, BODY, OLIVE);
+  for (let k = 0; k < 4; k++)
+    plate(m, S.roll0 + (k * Math.PI) / 2, S.radius * 0.97, 0.05, 0.35, -0.9, 0.3, -0.85, 0.01, BODY, flat(70, 74, 60));
+  fins(m, id, 0.3, -1.35, -1.85, -1.6, -1.88, 0.01, flat(70, 74, 60));
+  lug(m, Math.PI / 2, S.radius, 0.35, 0.04, 0.05, 0.1, BODY, flat(160, 160, 156));
+  await write(id, m);
+}

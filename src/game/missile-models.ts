@@ -9,7 +9,7 @@
 
 import type { MissileKind } from "./combat";
 
-export type MissileMeshId = "msl-aim120" | "msl-aim9x" | "msl-sam" | "msl-jsm";
+export type MissileMeshId = "msl-aim120" | "msl-aim9x" | "msl-sam" | "msl-jsm" | "msl-gbu32";
 
 export interface MissileShape {
   /** length, body radius [m] */
@@ -35,6 +35,8 @@ export const MISSILE_SHAPES: Record<MissileMeshId, MissileShape> = {
   "msl-sam": { len: 5.55, radius: 0.2, hingeZ: -2.4, roll0: 0, finMax: 0.3, nozzleZ: -2.775, nozzleR: 0.14, plume: 16 },
   // JSM: 4 m, a faceted body (lathed in 6 sides), folded-out wings, tail fins in an X
   "msl-jsm": { len: 4.0, radius: 0.24, hingeZ: -1.75, roll0: Math.PI / 4, finMax: 0.3, nozzleZ: -2.0, nozzleR: 0.1, plume: 4 },
+  // GBU-32 JDAM: a 1 000 lb Mk 83's body, 3.8 m, 357 mm; the guidance kit's tail and its four moving fins in an X, its strakes
+  "msl-gbu32": { len: 3.84, radius: 0.18, hingeZ: -1.62, roll0: Math.PI / 4, finMax: 0.35, nozzleZ: -1.92, nozzleR: 0, plume: 0 },
 };
 
 /** each kind's mesh (the R-73 drawn as an AIM-9X: the same size, a small IR missile) */

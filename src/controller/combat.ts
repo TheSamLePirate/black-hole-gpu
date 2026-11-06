@@ -28,7 +28,7 @@ import { M_METRES } from "../units";
 import { earthView } from "./netcraft";
 import { enuAt } from "./traffic";
 import { airDensity, finCommand, MISSILE_MESH, MISSILE_SHAPES, missileAxes } from "../game/missile-models";
-import { GROUND_MESH, GROUND_UNITS, groundPose } from "../game/ground-units";
+import { GROUND_MESH, GROUND_UNITS, groundMeshOf, groundPose } from "../game/ground-units";
 import { proxyGone, proxyStep, worldIdOf } from "./fightproxy";
 import { type GunState, gunFunnel, gunSolution, SIGHT, trackAccel } from "../game/gunsight";
 import type { MatchRules } from "../game/match";
@@ -55,6 +55,7 @@ declare module "../controls" {
     combatFocus: typeof combatFocus;
     focusShip: typeof focusShip;
     missileShip: typeof missileShip;
+    impactShip: typeof impactShip;
     combatShips: typeof combatShips;
     combatGlares: typeof combatGlares;
     combatHud: typeof combatHud;
@@ -258,7 +259,10 @@ function combatTrigger(this: CameraController, what: "fire" | "lock" | "weapon" 
   // fire
   if (C.weapon === "jdam") {
     const q = W.target(W.lock);
-    const aim = q ? ([...q.p] as V3) : fallPoint(P, (e, n) => W.groundZ(e, n));
+    // (on a ground unit, its middle — a tower's shaft, not its foot: the bomb went through the building to the ground beside it,
+    // its burst seen past it — Sam)
+    const gm = q ? groundMeshOf(q) : undefined;
+    const aim = q ? ([q.p[0], q.p[1], q.p[2] + (gm ? (GROUND_UNITS[gm].aimH ?? 0) : 0)] as V3) : fallPoint(P, (e, n) => W.groundZ(e, n));
     const b = W.drop(P, aim);
     return b ? tf("JDAM away — {0}", q?.name ?? t("on the fall point")) : t("No JDAM left");
   }
@@ -456,6 +460,7 @@ function combatShips(this: CameraController): {
   fins?: number[];
   motor?: { level: number; air: number };
   ground?: { yaw: number; pitch: number; left: number; burnt: number };
+  far?: boolean;
 }[] {
   const C = this.combat;
   const P = C?.last;
@@ -474,6 +479,7 @@ function combatShips(this: CameraController): {
     fins?: number[];
     motor?: { level: number; air: number };
     ground?: { yaw: number; pitch: number; left: number; burnt: number };
+    far?: boolean;
   }[] = [];
   for (const q of C.world.targets) {
     // (an outside craft taken in: its own drawing while alive — its wreck the fight's)
@@ -542,6 +548,24 @@ function combatShips(this: CameraController): {
       motor: level > 0 ? { level, air: rho / 1.225 } : undefined,
     });
   }
+  // (the bombs falling within 25 km: the GBU-32's body, its tail kit's fins steering it as its guidance asks)
+  for (const b of W.bombs.filter((x) => x.alive).slice(-6)) {
+    const r: V3 = [b.p[0] - P.p[0], b.p[1] - P.p[1], b.p[2] - P.p[2]];
+    if (Math.hypot(...r) > 25_000) continue;
+    const shape = MISSILE_SHAPES["msl-gbu32"];
+    const axes = missileAxes(b.v, b.lat);
+    const cmd = finCommand(shape, axes, b.lat, Math.hypot(...b.v), airDensity(b.p[2]), W.t);
+    const k = Math.min(1, (b.finAt === undefined ? 1 : Math.max(W.t - b.finAt, 0)) / 0.05);
+    b.fin = (b.fin ?? cmd).map((f, i) => f + (cmd[i]! - f) * k);
+    b.finAt = W.t;
+    msl.push({
+      id: "msl-gbu32",
+      rel: G ? G.pos(b.p) : M(r),
+      axes: G ? [G.dir(b.p, axes[0]), G.dir(b.p, axes[1]), G.dir(b.p, axes[2])] : [M(axes[0]), M(axes[1]), M(axes[2])],
+      hidden: false,
+      fins: b.fin,
+    });
+  }
   // (the ground units within 25 km — the war mode's SAM launchers, tanks, trucks, bunkers —, the nearest sixteen: on the ground,
   // their turret turned onto us while they engage, the launcher's arm raised, the missiles it has left on its rails, a wreck
   // burnt out — game/ground-units.ts)
@@ -553,7 +577,7 @@ function combatShips(this: CameraController): {
     .sort((a, b) => Math.hypot(...a.r) - Math.hypot(...b.r))
     .slice(0, 16);
   for (const { q, r } of units) {
-    const id = GROUND_MESH[q.kind]!;
+    const id = groundMeshOf(q)!;
     const shape = GROUND_UNITS[id];
     const f: V3 = [q.fwd[0], q.fwd[1], 0];
     const fl = Math.hypot(f[0], f[1]) || 1;
@@ -582,10 +606,29 @@ function combatShips(this: CameraController): {
     // (on the ground drawn — the relief's own height under it, on the globe)
     gnd.push({
       id,
+      // (hidden where the image holds something nearer — a ridge, a hill: the relief hides what stands behind it)
+      far: true,
       rel: G ? G.pos(q.p, true) : M(r),
       axes: G ? [G.dir(q.p, left), G.dir(q.p, [0, 0, 1]), G.dir(q.p, fwd)] : [M(left), M([0, 0, 1]), M(fwd)],
       hidden,
       ground: g,
+    });
+  }
+  // (the bombs' craters within 15 km, the nearest twelve: scorched ground and its rim, on the relief drawn)
+  const cr = W.craters
+    .map((k) => ({ k, d: Math.hypot(k.p[0] - P.p[0], k.p[1] - P.p[1]) }))
+    .filter((e) => e.d < 15_000)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 12);
+  for (const { k } of cr) {
+    const r: V3 = [k.p[0] - P.p[0], k.p[1] - P.p[1], k.p[2] - P.p[2]];
+    gnd.push({
+      id: "gu-crater",
+      far: true,
+      rel: G ? G.pos(k.p, true) : M(r),
+      axes: G ? [G.dir(k.p, [1, 0, 0]), G.dir(k.p, [0, 0, 1]), G.dir(k.p, [0, 1, 0])] : [M([1, 0, 0]), M([0, 0, 1]), M([0, 1, 0])],
+      hidden: false,
+      ground: { yaw: 0, pitch: 0, left: 0, burnt: 0 },
     });
   }
   return [...out.slice(0, 16), ...msl, ...gnd];
@@ -881,9 +924,15 @@ function missileShipOf(self: CameraController): { q: Vec3; fwd: Vec3; up: Vec3; 
   const P = C?.last;
   if (!C || !P) return null;
   const W = C.world;
-  const m = W.missiles
+  // (our last weapon: a missile — held 2.5 s where it ended —, or a bomb falling — once it has hit, none: the view on the target, its
+  // explosion in it)
+  const mis = W.missiles
     .filter((x) => x.owner === "blue" && !x.remote && (x.alive || (x.diedAt !== undefined && W.t - x.diedAt < 2.5)))
     .sort((a, b) => Number(b.alive) - Number(a.alive) || b.id - a.id)[0];
+  const bomb = W.bombs.filter((b) => b.alive).sort((a, b) => b.id - a.id)[0];
+  const m = bomb && (!mis || !mis.alive || bomb.id > mis.id) ? { p: bomb.p, v: bomb.v, lat: bomb.lat, alive: true } : mis;
+  // (where it was last seen in flight: the view's orbit about it once it has hit — impactShip)
+  if (m?.alive) lastWeapon = { p: [...m.p] as V3, t: W.t, ground: !!bomb && m.p === bomb.p };
   const cam = cameraFrame(self.s);
   const fr = self.sfFrame(cam);
   if (!m || !fr) return null;
@@ -905,6 +954,42 @@ function missileShipOf(self: CameraController): { q: Vec3; fwd: Vec3; up: Vec3; 
   return { q: on(r), fwd: on(nose), up: [ax[0]![2], ax[1]![2], ax[2]![2]], alive: m.alive };
 }
 
+/** our last weapon in flight, its place and the world's time then (the weapon's view's orbit after its impact) */
+let lastWeapon: { p: V3; t: number; ground: boolean } | null = null;
+/** the orbit's length about the impact [s] (then the view back behind the craft) */
+export const IMPACT_ORBIT_S = 7;
+
+/**
+ * (the weapon's view after its impact — Sam: « quand le missile touche, la vue passe autour de la cible, puis revient au F-35 »)
+ * Where our last weapon ended, on the craft's axes (x left, y top, z nose) [m] with the world's east, north and up there, and
+ * how long ago [s]; null: none in the last IMPACT_ORBIT_S, or one still in flight.
+ */
+function impactShip(this: CameraController): { q: Vec3; e: Vec3; n: Vec3; up: Vec3; age: number } | null {
+  const C = this.combat;
+  const L = lastWeapon;
+  if (!C || !L || focusDepth) return null;
+  const W = C.world;
+  const age = W.t - L.t;
+  if (!(age >= 0 && age < IMPACT_ORBIT_S)) return null;
+  if (W.bombs.some((b) => b.alive) || W.missiles.some((x) => x.owner === "blue" && x.alive)) return null;
+  const G = globeMap(this);
+  if (!G) return null;
+  focusDepth++;
+  try {
+    const S = this.drawnMatrix();
+    const toShip = (c: Vec3): Vec3 => [0, 1, 2].map((i) => c[0] * S[0]![i]! + c[1] * S[1]![i]! + c[2] * S[2]![i]!) as Vec3;
+    return {
+      q: toShip(G.pos(L.p, L.ground)),
+      e: toShip(G.dir(L.p, [1, 0, 0])),
+      n: toShip(G.dir(L.p, [0, 1, 0])),
+      up: toShip(G.dir(L.p, [0, 0, 1])),
+      age,
+    };
+  } finally {
+    focusDepth--;
+  }
+}
+
 export function installCombat(Ctl: { prototype: CameraController }) {
   Object.assign(Ctl.prototype, {
     combatStart,
@@ -918,5 +1003,6 @@ export function installCombat(Ctl: { prototype: CameraController }) {
     combatFocus,
     focusShip,
     missileShip,
+    impactShip,
   });
 }
