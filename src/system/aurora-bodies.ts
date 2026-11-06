@@ -166,14 +166,17 @@ export function giantOvals(body: (typeof GIANTS)[number][0]): { north: PolarOval
 
 /** the WGSL constants (trace.wgsl <PREFIX>_OVAL: GiantOval), for the source and its test */
 export function giantsWgsl(): string {
-  const v = (a: number[]) => `vec3f(${a.map((x) => x.toFixed(5)).join(", ")})`;
-  const v4 = (a: number[]) => `vec4f(${a.map((x) => x.toFixed(4)).join(", ")})`;
+  // (a zero without its sign: Saturn's axisymmetric terms are rounding noise whose sign follows the platform's libm —
+  // "-0.0000" on one machine, "0.0000" on another)
+  const f = (x: number, d: number) => x.toFixed(d).replace(/^-(0\.0+)$/, "$1");
+  const v = (a: number[]) => `vec3f(${a.map((x) => f(x, 5)).join(", ")})`;
+  const v4 = (a: number[]) => `vec4f(${a.map((x) => f(x, 4)).join(", ")})`;
   return GIANTS.map(([body, pre]) => {
     const o = giantOvals(body);
     const n = ovalFourier(o.north),
       s = ovalFourier(o.south);
-    const half = (f: typeof n) =>
-      `${f.a0.toFixed(4)}, ${v4(f.a.slice(0, 4))}, ${v4(f.a.slice(4, 8))}, ${v4(f.b.slice(0, 4))}, ${v4(f.b.slice(4, 8))}`;
+    const half = (q: typeof n) =>
+      `${f(q.a0, 4)}, ${v4(q.a.slice(0, 4))}, ${v4(q.a.slice(4, 8))}, ${v4(q.b.slice(0, 4))}, ${v4(q.b.slice(4, 8))}`;
     return `const ${pre}_OVAL = GiantOval(${v(o.north.centre)}, ${v(o.south.centre)}, ${half(n)}, ${half(s)});`;
   }).join("\n");
 }

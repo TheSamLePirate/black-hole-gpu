@@ -87,6 +87,8 @@ test("a zone's tiles: every one the game's windows want with the camera anywhere
         }
         for (const w of t.orthoWanted()) expect(ortho.has(key(w))).toBe(true);
       }
+  // (let go: its loads' retries, due seconds later, would ask their URLs during the tests after it — the recorder's set shared)
+  t.clear();
   expect(wanted).toBeGreaterThan(1000);
   // (the finer levels and the orthophotos to the profile's)
   expect(Math.max(...z.relief.map((v) => v[0]))).toBe(profile.reliefZ1);
@@ -137,6 +139,7 @@ test("a low flight at 400 m over the ground: the z 18 orthophotos it asks within
       }
       for (const w of t.wanted()) if (!relief.has(key(w))) (d <= core ? got.inCore : got.outside).push(`r${key(w)}`);
     }
+    t.clear();
     return got;
   };
   let core18 = 0;
@@ -180,6 +183,7 @@ test("a zone's URLs: every one the loads ask in flight within it is in the zone'
   }
   const tiles = [...asked].filter((u) => !u.includes("3d.geo.admin.ch"));
   expect(tiles.length).toBeGreaterThan(50);
+  t.clear();
   const missing = tiles.filter((u) => !urls.has(u));
   expect(missing).toEqual([]);
 });
