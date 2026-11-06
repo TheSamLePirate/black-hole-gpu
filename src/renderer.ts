@@ -285,7 +285,8 @@ import type { Settings } from "./settings";
 import { secondsPerM, timeRate } from "./clock";
 import { encodeEXR, encodePNG16 } from "./exporters";
 import { ioFeet } from "./system/aurora-bodies";
-import { boundaries, fieldLines, SHELLS } from "./system/magneto-lines";
+import { MAGNETOSPHERES } from "./system/magnetic-fields";
+import { fieldLines, SHELLS, VOLUMES } from "./system/magneto-lines";
 import { AU_M, C_MPS } from "./units";
 import { windFrom } from "./wind";
 import { weatherAt, weatherGpu, windFromAt, type WeatherState } from "./weather";
@@ -2508,6 +2509,9 @@ export class Renderer {
   /** the magnetospheres' diagram (AM7): the near body's field lines, magnetopause and bow shock, lines in space behind what
    *  hides them (chartoverlay.ts in its depth mode) */
   private magneto: ChartOverlay;
+  /** the diagram's labels this frame (ui/overlay.ts draws them): their anchor in the image's NDC, their name (English: the overlay
+   *  translates), their colour */
+  magnetoLabels: { x: number; y: number; text: string; colour: string }[] = [];
   private updateMagneto(
     s: Settings,
     cam: CameraFrame,
@@ -2518,7 +2522,11 @@ export class Renderer {
   ) {
     const id = near ? bodies[near.index]?.id : undefined;
     if (!s.magnetosphere || !near || !id || !(id in SHELLS)) {
-      if (this.magneto.active) this.magneto.set(null, 0);
+      if (this.magneto.active) {
+        this.magneto.set(null, 0);
+        this.magneto.setVolume(null);
+      }
+      this.magnetoLabels = [];
       return;
     }
     const body = id as keyof typeof SHELLS;
@@ -2582,26 +2590,99 @@ export class Renderer {
         f = x - i;
       return P[i]!.map((c, k) => c + (P[i + 1]![k]! - c) * f);
     };
-    for (const f of lines) {
+    // (the field's direction along the lines — its pulses run with it: out of the southern hemisphere into the northern at the
+    // Earth, the other way at Jupiter, its north polarity reversed —; a pulse every 3 radii, 0.6 radius a second: a diagram's
+    // clock)
+    const M = MAGNETOSPHERES[body];
+    const zD = M.model.dipoleNorth;
+    const now = performance.now() / 1000;
+    lines.forEach((f, idx) => {
+      // (one longitude in two: the layers carry the shape, the lines the field's direction)
+      if (idx % 2) return;
       // (a loop seen edge-on, a straight stroke through the planet: faded out)
       const n = dirCam(f.normal);
       const edge = Math.abs(n[0] * view[0] + n[1] * view[1] + n[2] * view[2]);
       const fade = Math.min(Math.max((edge - 0.12) / 0.3, 0), 1);
-      if (fade <= 0) continue;
+      if (fade <= 0) return;
+      const p0 = f.points[0]!;
+      const south = p0[0] * zD[0] + p0[1] * zD[1] + p0[2] * zD[2] < 0;
+      const dir = (south ? 1 : -1) * -M.model.northPolarity;
+      const arc = [0];
+      for (let i = 1; i < f.points.length; i++) {
+        const a = f.points[i - 1]!,
+          b = f.points[i]!;
+        arc.push(arc[i - 1]! + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]));
+      }
       line(
         f.points.map(toCam),
         (i) => {
           const t = ((f.logB[i - 1]! + f.logB[i]!) / 2 - lo) / Math.max(hi - lo, 1e-6);
-          return [...ramp(t), (0.3 + 0.5 * t) * fade];
+          const ph = ((((arc[i]! - dir * 0.6 * now * Math.max(1, f.L / 3)) / 3) % 1) + 1) % 1;
+          const pulse = 0.45 + 1.1 * Math.exp(-(((ph - 0.5) / 0.06) ** 2));
+          return [...ramp(t), Math.min((0.16 + 0.34 * t) * fade * pulse, 1)];
         },
-        1.3,
-        5,
+        1.1,
+        3.5,
       );
+    });
+    // (the boundaries and the belts: glowing layers — overlay.wgsl fsMagVol)
+    const V = VOLUMES[body];
+    const dip = dirCam(zD as Vec3);
+    const L = near.light;
+    // (their labels: at the noses towards the Sun, upstream, down the tail, the belts on either side across the view)
+    const labels: { at: Vec3; text: string; colour: string }[] = [];
+    const along = (d: Vec3, k: number): Vec3 => [C[0] + d[0] * k, C[1] + d[1] * k, C[2] + d[2] * k];
+    const Ls = [L[0]!, L[1]!, L[2]!] as Vec3;
+    labels.push({ at: along(Ls, M.standoff), text: "Magnetopause", colour: "rgba(140, 210, 255, 0.95)" });
+    labels.push({ at: along(Ls, M.shock), text: "Bow shock", colour: "rgba(220, 228, 240, 0.9)" });
+    labels.push({ at: along(Ls, M.shock * 1.6), text: "Solar wind", colour: "rgba(255, 214, 140, 0.9)" });
+    labels.push({ at: along(Ls, -M.standoff * 2.2), text: "Magnetotail", colour: "rgba(140, 210, 255, 0.8)" });
+    const ex = [dip[1] * view[2] - dip[2] * view[1], dip[2] * view[0] - dip[0] * view[2], dip[0] * view[1] - dip[1] * view[0]];
+    const el = Math.hypot(ex[0]!, ex[1]!, ex[2]!);
+    if (V && el > 1e-3) {
+      const e = ex.map((x) => x / el) as Vec3;
+      if (V.so > 0) labels.push({ at: along(e, V.outer), text: "Outer radiation belt · electrons", colour: "rgba(120, 200, 255, 0.95)" });
+      if (V.si > 0)
+        labels.push({ at: along(e, -V.inner * 1.15), text: "Inner radiation belt · protons", colour: "rgba(255, 180, 120, 0.95)" });
+      if (V.torus > 0)
+        labels.push({
+          at: along(e, -V.torus),
+          text: body === "jupiter" ? "Io plasma torus" : "Plasma torus",
+          colour: "rgba(255, 130, 130, 0.95)",
+        });
     }
-    const B = boundaries(body, near.light as Vec3, view);
-    const shift = (q: Vec3): Vec3 => [C[0] + q[0], C[1] + q[1], C[2] + q[2]];
-    line(B.magnetopause.map(shift), () => [0.45, 0.82, 1, 0.65], 1.6, 8);
-    line(B.shock.map(shift), () => [0.82, 0.86, 0.95, 0.32], 1.2, 6);
+    this.magnetoLabels = [];
+    for (const l of labels) {
+      const q = proj(l.at);
+      if (q && Math.abs(q[0]!) < 0.95 && Math.abs(q[1]!) < 0.92)
+        this.magnetoLabels.push({ x: q[0]!, y: q[1]!, text: l.text, colour: l.colour });
+    }
+    this.magneto.setVolume(
+      new Float32Array([
+        ...cam.right,
+        tanH,
+        ...cam.up,
+        aspect,
+        ...cam.fwd,
+        now,
+        ...C,
+        R,
+        ...dip,
+        V ? 1 : 0,
+        L[0]!,
+        L[1]!,
+        L[2]!,
+        M.standoff,
+        M.flaring,
+        M.shock,
+        V?.torus ?? 0,
+        V?.st ?? 0,
+        V?.inner ?? 0,
+        V?.outer ?? 0,
+        V?.si ?? 0,
+        V?.so ?? 0,
+      ]),
+    );
     this.magneto.set(new Float32Array(out), out.length / 12);
     this.chartDirty = true;
   }

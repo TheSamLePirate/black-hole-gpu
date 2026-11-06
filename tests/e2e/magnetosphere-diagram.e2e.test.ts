@@ -4,8 +4,8 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // The magnetospheres' diagram (PLAN-AURORES-MAGNETOSPHERES AM7): the near body's field lines on L-shells traced in its real
 // field (AM0), its magnetopause and bow shock about the Sun, drawn as lines in space behind what hides them (chartoverlay.ts's
-// depth mode against the traced depth). The Earth from 60 000 km over its dusk side (the setting off, then on), Jupiter from
-// 1.5 million km. MD_OUT.
+// depth mode against the traced depth) and its boundaries and belts as glowing layers (overlay.wgsl fsMagVol). The Earth from
+// 60 000 km over its dusk side (the setting off, then on) and from 400 000 km, Jupiter from 1.5 and 18 million km. MD_OUT.
 // Output: remote-results/magnetosphere-diagram/*.png, stats.json. Done when: each view shot, the lines' pixels differ from the
 // view without them, no GPU error. Duration: ~2 min warm (Jupiter's near kernel: ~200 s cold — docs/PROBLEMES-A-REGLER.md).
 const OUT = process.env.MD_OUT ?? "remote-results/magnetosphere-diagram";
@@ -42,7 +42,11 @@ test.skipIf(!E2E)(
       // (over the dusk side — the Sun 90° to the west —: the dayside's compressed shells on one side, the night's on the other)
       await view("earth-off", false, "earth", 20, 90, 60_000_000);
       await view("earth-on", true, "earth", 20, 90, 60_000_000);
+      // (from 400 000 km — 63 radii — over the dusk side: the magnetopause's nose towards the Sun, the shock ahead, the tail)
+      await view("earth-far", true, "earth", 20, 90, 400_000_000);
       await view("jupiter-on", true, "jupiter", 15, 90, 1_500_000_000);
+      // (from 18 million km — 250 R_J, outside its bow shock —: Jupiter's magnetopause at 63 R_J, Io's torus)
+      await view("jupiter-far", true, "jupiter", 15, 90, 18_000_000_000);
       gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
     } finally {
       await Bun.write(`${OUT}/stats.json`, JSON.stringify(stats, null, 1));

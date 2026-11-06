@@ -18,6 +18,13 @@ export class ChartOverlay {
   private noShip: GPUTexture;
 
   private segFloats: number;
+  // (the magnetosphere's glowing layers — AM7 —: their parameters, their half-size target, the passes)
+  private magU: GPUBuffer | null = null;
+  private magData: Float32Array | null = null;
+  private magTex: GPUTexture | null = null;
+  private magPipe: GPURenderPipeline | null = null;
+  private magComps = new Map<GPUTextureFormat, GPURenderPipeline>();
+  private magSamp: GPUSampler | null = null;
   /** (code: overlay.wgsl's source; depth: lines in space, hidden behind what the traced rays met nearer — AM7) */
   constructor(
     private device: GPUDevice,
@@ -76,7 +83,102 @@ export class ChartOverlay {
     this.device.queue.writeBuffer(this.vbuf!, 0, segs.buffer, segs.byteOffset, count * this.segFloats * 4);
   }
   get active() {
-    return this.count > 0;
+    return this.count > 0 || !!this.magData;
+  }
+  /** the magnetosphere's layers (overlay.wgsl MagU, 44 floats; the depth mode's), none: null */
+  setVolume(data: Float32Array | null) {
+    this.magData = data;
+  }
+  private encodeVolume(
+    enc: GPUCommandEncoder,
+    out: GPUTextureView,
+    format: GPUTextureFormat,
+    outW: number,
+    outH: number,
+    view: number[],
+    moments: GPUBuffer,
+    imgW: number,
+    imgH: number,
+  ) {
+    const d = this.device;
+    // (at the traced image's size: its depth read pixel for pixel)
+    const hw = Math.max(1, imgW),
+      hh = Math.max(1, imgH);
+    if (!this.magTex || this.magTex.width !== hw || this.magTex.height !== hh) {
+      this.magTex?.destroy();
+      this.magTex = d.createTexture({
+        size: [hw, hh],
+        format: "rgba16float",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      });
+    }
+    this.magU ??= d.createBuffer({ size: 48 * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.magSamp ??= d.createSampler({ magFilter: "linear", minFilter: "linear" });
+    const u = new Float32Array(48);
+    u.set(this.magData!.subarray(0, 32));
+    u.set(view, 32);
+    u.set([imgW, imgH, hw, hh, outW, outH, 0, 0], 36);
+    d.queue.writeBuffer(this.magU, 0, u);
+    this.magPipe ??= d.createRenderPipeline({
+      layout: "auto",
+      vertex: { module: this.module, entryPoint: "vsFull" },
+      fragment: { module: this.module, entryPoint: "fsMagVol", targets: [{ format: "rgba16float" }] },
+      primitive: { topology: "triangle-list" },
+    });
+    const p1 = enc.beginRenderPass({
+      colorAttachments: [{ view: this.magTex.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+    });
+    p1.setPipeline(this.magPipe);
+    p1.setBindGroup(
+      0,
+      d.createBindGroup({
+        layout: this.magPipe.getBindGroupLayout(0),
+        entries: [
+          { binding: 1, resource: { buffer: moments } },
+          { binding: 5, resource: { buffer: this.magU } },
+        ],
+      }),
+    );
+    p1.draw(3);
+    p1.end();
+    let comp = this.magComps.get(format);
+    if (!comp) {
+      comp = d.createRenderPipeline({
+        layout: "auto",
+        vertex: { module: this.module, entryPoint: "vsFull" },
+        fragment: {
+          module: this.module,
+          entryPoint: "fsMagComp",
+          // (a glow: added over the image, what it covers dimmed by its alpha — premultiplied)
+          targets: [
+            {
+              format,
+              blend: {
+                color: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
+                alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" },
+              },
+            },
+          ],
+        },
+        primitive: { topology: "triangle-list" },
+      });
+      this.magComps.set(format, comp);
+    }
+    const p2 = enc.beginRenderPass({ colorAttachments: [{ view: out, loadOp: "load", storeOp: "store" }] });
+    p2.setPipeline(comp);
+    p2.setBindGroup(
+      0,
+      d.createBindGroup({
+        layout: comp.getBindGroupLayout(0),
+        entries: [
+          { binding: 5, resource: { buffer: this.magU } },
+          { binding: 6, resource: this.magTex.createView() },
+          { binding: 7, resource: this.magSamp },
+        ],
+      }),
+    );
+    p2.draw(3);
+    p2.end();
   }
 
   private composite(format: GPUTextureFormat) {
@@ -123,6 +225,7 @@ export class ChartOverlay {
     widthScale = 1,
     ship: { view: GPUTextureView; rect: number[] } | null = null,
   ) {
+    if (this.magData) this.encodeVolume(enc, out, format, outW, outH, view, moments, imgW, imgH);
     if (!this.count || !this.vbuf) return;
     const d = this.device;
     if (!this.tex || this.tex.width !== outW || this.tex.height !== outH) {

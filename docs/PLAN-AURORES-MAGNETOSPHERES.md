@@ -129,14 +129,23 @@ verts) :
   Soleil, en travers de la visée). Première version en grillage et couleurs par coquille : « c'est moche » (Sam) — d'où la
   couleur le long des lignes par log |B| (or près de la planète, orange, magenta, violet au loin), un halo doux sous un
   trait fin, les boucles vues par la tranche effacées, l'arrière plus pâle.
+- **Troisième version** (« toujours moche et peu informatif », Sam) : la magnétosphère en couches de lumière, façon NASA
+  SVS — passe `fsMagVol` (`overlay.wgsl`) à la taille de l'image tracée, composée sur la sortie : la magnétopause et l'onde
+  de choc en coques minces émissives, intégrées exactement sur chaque pas (profil gaussien, distance signée linéaire : un
+  erf) — leurs bords s'éclairent en rasance, leurs faces restent pâles, sans crénelage ; les ceintures de radiation en
+  volume dans le L du dipôle (interne · protons, chaude ; externe · électrons, bleue), le tore d'Io en rouge ; tout arrêté à
+  la profondeur tracée (bloc 2 × 2 : le damier des images tracées un pixel sur deux). Les lignes de champ allégées (une
+  longitude sur deux) portent des impulsions qui courent dans le sens du champ. Des étiquettes (FR/EN), désencombrées :
+  magnétopause, onde de choc, vent solaire, queue, ceintures, tore. Paramètres des volumes : `VOLUMES` (choix de schéma).
+  Coût non mesuré (temps GPU des e2e bruités).
 - **Le dessin** : le calque de lignes de la carte du ciel (`chartoverlay.ts`, `overlay.wgsl`) dans un mode « profondeur » :
   chaque bout porte sa distance, le fragment est caché là où le rayon tracé a rencontré plus près (`moments.y`) — la passe
   de lignes avec profondeur du § 4, sans nouveau pipeline d'opaque. Réglage « Schéma de la magnétosphère » (Ciel › Carte du
   ciel), corps proche seulement.
 - **Observé** (e2e `magnetosphere-diagram`) : la Terre depuis 60 000 km, Jupiter depuis 1,5 million de km.
-- **Restant** : la déformation par le vent solaire (compression côté jour, queue), les lignes ouvertes, le tore d'Io, les
-  ceintures, les particules, les actions TARS, la couleur par |B| ; les corps lointains (au-delà de la portée du corps
-  proche) ; le traçage en worker.
+- **Restant** : la déformation des lignes par le vent solaire (compression côté jour, queue), les lignes ouvertes, les
+  particules (giration, rebond, dérive), les actions TARS ; les corps lointains (au-delà de la portée du corps proche) ; le
+  traçage en worker ; la mesure du coût.
 
 ## 1. Ce qu'on a aujourd'hui
 

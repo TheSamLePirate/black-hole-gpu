@@ -21,6 +21,20 @@ export const SHELLS: Partial<Record<MagBody, number[]>> = {
   ganymede: [1.2, 1.5, 1.8],
 };
 
+/** the glowing layers' volumes per body (overlay.wgsl fsMagVol): the radiation belts' L — inner (protons), outer (electrons)
+ *  — and strengths [per radius of path], a plasma torus's radius and strength (Io's, at Jupiter). A diagram's choices from the
+ *  belts' known places (the Earth's Van Allen belts at L ~1.5 and ~4.5; Jupiter's synchrotron belt inside 2 R_J, Io's torus at
+ *  5.9), not measured intensities */
+export const VOLUMES: Partial<Record<MagBody, { inner: number; outer: number; si: number; so: number; torus: number; st: number }>> = {
+  earth: { inner: 1.6, outer: 4.5, si: 0.35, so: 0.16, torus: 0, st: 0 },
+  jupiter: { inner: 1.6, outer: 0, si: 0.3, so: 0, torus: 5.9, st: 0.55 },
+  saturn: { inner: 2.6, outer: 6, si: 0.25, so: 0.15, torus: 4.0, st: 0.25 },
+  uranus: { inner: 2.2, outer: 5, si: 0.3, so: 0.2, torus: 0, st: 0 },
+  neptune: { inner: 2.2, outer: 5, si: 0.3, so: 0.2, torus: 0, st: 0 },
+  mercury: { inner: 0, outer: 0, si: 0, so: 0, torus: 0, st: 0 },
+  ganymede: { inner: 0, outer: 0, si: 0, so: 0, torus: 0, st: 0 },
+};
+
 export interface FieldLine {
   L: number;
   points: V3[];

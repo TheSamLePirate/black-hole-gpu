@@ -16,6 +16,7 @@ import { drawTelescope, type TelescopeView } from "./telescope";
 import { BODY_COLOURS } from "./camerapanel";
 import { drawLock, lockKey } from "./targethud";
 import { FONT, MONO } from "./hudkit";
+import { t } from "../i18n";
 import { safeFrame } from "./hud/safe";
 import type { NetTag } from "./netsession";
 import type { TrafficMark } from "../controller/traffic";
@@ -53,9 +54,11 @@ export class ViewOverlay {
     const tele = this.telescopeView(cam);
     const tags = this.netTagsDrawn();
     const traffic = this.trafficDrawn();
+    const mag = this.renderer.offlineActive || document.body.classList.contains("hide-ui") ? [] : this.renderer.magnetoLabels;
     const key =
-      guide || this.camera.flyMode || marker || lock || hover || ship || tele || sky || tags.length || traffic.length
+      guide || this.camera.flyMode || marker || lock || hover || ship || tele || sky || tags.length || traffic.length || mag.length
         ? [
+            mag.map((m) => `${m.x.toFixed(3)},${m.y.toFixed(3)},${m.text}`).join(";"),
             traffic.map((m) => `${m.x.toFixed(0)},${m.y.toFixed(0)},${m.lights.length}`).join(";"),
             tags.map((g) => `${g.slot}:${g.x.toFixed(0)},${g.y.toFixed(0)},${g.label}`).join(";"),
             lock
@@ -109,6 +112,7 @@ export class ViewOverlay {
     if (hover && hover.body !== marker?.body && !(lock && hover.body === this.settings.target)) this.drawHover(ctx, hover);
     if (ship) this.drawShipMarker(ctx, ship);
     if (traffic.length && !tele) this.drawTraffic(ctx, traffic);
+    if (mag.length && !tele) this.drawMagneto(ctx, mag);
     if (tags.length && !tele) this.drawNetTags(ctx, tags);
     if (!guide) return;
     const tanH = Math.tan((this.settings.fov * Math.PI) / 360);
@@ -287,6 +291,40 @@ export class ViewOverlay {
       out.push({ x: c[0], y: c[1] - lift, label: m.dist < 40_000 ? m.label : null, lights });
     }
     return out;
+  }
+
+  /** the magnetosphere diagram's labels (AM7 — renderer.magnetoLabels): a dot at each anchor, a hairline up, the name */
+  private drawMagneto(ctx: CanvasRenderingContext2D, labels: Renderer["magnetoLabels"]) {
+    const W = this.overlay.width,
+      H = this.overlay.height,
+      k = devicePixelRatio;
+    ctx.save();
+    ctx.font = `500 ${11 * k}px ${FONT}`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = ctx.shadowOffsetY = 1 * k;
+    // (decluttered: a label within 110 px of one drawn before it — the renderer's order, the boundaries first — left out)
+    const placed: [number, number][] = [];
+    for (const l of labels) {
+      const x = ((l.x + 1) / 2) * W,
+        y = ((1 - l.y) / 2) * H;
+      if (placed.some(([px, py]) => Math.hypot(px - x, py - y) < 110 * k)) continue;
+      placed.push([x, y]);
+      ctx.fillStyle = l.colour;
+      ctx.strokeStyle = l.colour;
+      ctx.lineWidth = 1 * k;
+      ctx.beginPath();
+      ctx.arc(x, y, 2.2 * k, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x, y - 4 * k);
+      ctx.lineTo(x + 10 * k, y - 18 * k);
+      ctx.stroke();
+      ctx.fillText(t(l.text), x + 13 * k, y - 18 * k);
+    }
+    ctx.restore();
   }
 
   private drawTraffic(ctx: CanvasRenderingContext2D, marks: ReturnType<ViewOverlay["trafficDrawn"]>) {
