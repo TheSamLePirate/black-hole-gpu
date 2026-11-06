@@ -180,7 +180,8 @@ export const reliefUrls = (z: number, x: number, y: number, o: ZoneSources): str
 /** an orthophotos' tile's URL (its national source's) */
 export function orthoUrls(z: number, x: number, y: number): string[] {
   const src = tileSource(NATIONAL, 2 ** z, x, y);
-  return src?.orthoUrl ? [src.orthoUrl(z, x, y)] : [];
+  // (none past its finest level — the USGS's z 16 —: the game asks none there)
+  return src?.orthoUrl && z <= (src.orthoZ1 ?? 99) ? [src.orthoUrl(z, x, y)] : [];
 }
 
 /** how far a scene's centre lies from the camera [m]: led where the view looks (renderer.ts: 0.6 of the scene's radius) or

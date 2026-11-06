@@ -27,6 +27,10 @@ export interface NationalSource {
   holds(lat: number, lon: number): boolean;
   /** its orthophotos' tile (null: a relief-only source — Mapterhorn's world, lot E —: the imagery stays the world's) */
   orthoUrl: ((z: number, x: number, y: number) => string) | null;
+  /** its orthophotos' finest level (none: every level the game asks — the IGN's, swisstopo's go to z 18 and finer); beyond it the
+   *  coarser levels' imagery, not asked: the USGS's cache ends at z 16, its z 17–18 answered 404 by the hundred — the network's
+   *  light red all the way down an approach to JFK (Sam, 6 Nov 2026) */
+  orthoZ1?: number;
   fit: OrthoFit;
   /** the first level its heights take (coarser: the global data's) */
   heightsFrom: number;

@@ -786,6 +786,8 @@ export const USA: NationalSource = {
   box: { west: -125, east: -66.5, south: 24.2, north: 49.5 },
   holds: (lat, lon) => insideOutline(lat, lon, USA_OUTLINE),
   orthoUrl: usgsImageryUrl,
+  // (its cache's finest level: z 17 and 18 not there — a 404 each)
+  orthoZ1: 16,
   // (its colours brought to EOX's by a table per channel — usa-colour.ts, scripts/fit-usgs-colour.py)
   fit: USA_FIT,
   heightsFrom: 12,
@@ -2116,7 +2118,8 @@ export class EarthTiles {
             if (!r || r.at > now) continue;
           }
           // (one its source has not, or no national source's: none there at once — the coarser levels' imagery)
-          if (this.orthoNone.has(key) || !tileSource(NATIONAL, O.n, x, y)) {
+          const ts = tileSource(NATIONAL, O.n, x, y);
+          if (this.orthoNone.has(key) || !ts || O.z > (ts.orthoZ1 ?? 99)) {
             this.putOrtho(O.z, x, y, null);
             continue;
           }

@@ -71,7 +71,11 @@ test.skipIf(!E2E)(
             const x = Math.round(de * Math.cos(h) - dn * Math.sin(h));
             if (xte === null || Math.abs(x) < Math.abs(xte)) xte = x; }
           return { phase: I?.phase ?? null, alt: g ? Math.round(g.alt) : null, gs: g ? Math.round(g.gs) : null, xte, city: +(__bh.renderer.cityLight * 1e5).toFixed(2),
-            pending: __bh.renderer.earthTiles.pending, fps: Math.round(__bh.renderer.fps ?? 0) }; })()`);
+            pending: __bh.renderer.earthTiles.pending, fps: Math.round(__bh.renderer.fps ?? 0),
+            // (the scenery's state — LBN_SCENERY=1: its scenes, their worker's time by phase, their bytes, its budget —)
+            sc: ${process.env.LBN_SCENERY === "1"} ? (() => { const x = __bh.renderer.earthScenery.stats(); return { st: x.status, step: x.progress?.step ?? null,
+              ms: Math.round(x.workerMs), ph: x.phases, mb: +(x.tileNetworkBytes / 1e6).toFixed(1), b: x.buildings, lim: x.budgetLimited, gpu: +(x.gpuBytes / 1e6).toFixed(0),
+              up: Math.round(x.uploadCpuMs ?? 0), reach: x.reach, lat: x.lat }; })() : undefined }; })()`);
         const t = +((Date.now() - t0) / 1000).toFixed(1);
         series.push({ i, t, ...m });
         console.log(`  ${t}s: ${JSON.stringify(m)}`);
@@ -80,6 +84,14 @@ test.skipIf(!E2E)(
         if (m.phase === "rollout" || m.phase === "done" || (m.gs as number) < 5) break;
         await Bun.sleep(3000);
       }
+      // (the network's failures by source and answer — what turned its light red —, the most first)
+      const fails = await app.js<[string, number][]>(
+        `Object.entries(__bh.netLight.stats().failBy ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 12)`,
+      );
+      const net = await app.js<Record<string, number>>(
+        `(() => { const s = __bh.netLight.stats(); return { started: s.started, done: s.done, failed: s.failed, limited: s.limited, cached: s.cached, mb: Math.round(s.bytes / 1e6) }; })()`,
+      );
+      console.log(`  network: ${JSON.stringify(net)} — failures ${JSON.stringify(fails)}`);
       const last = await app.js<unknown>(`__bh.camera.ilsLast ?? null`);
       console.log(`  touchdown: ${JSON.stringify(last)}`);
       await Bun.write(`${OUT}/approach.json`, JSON.stringify({ rwy, said, series, last }, null, 1));

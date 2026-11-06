@@ -32,6 +32,8 @@ export type NetCounts = {
   /** by source — the IGN's by its layer, the others by their host —: [requests ended, bytes read, of those a URL (its range)
    *  asked before in this scope — a download made again unless a cache answered it] */
   bySource: Record<string, [number, number, number]>;
+  /** the failures by source and answer — « host 404 », « host 429 », « host network » —: what lights the light red */
+  failBy: Record<string, number>;
 };
 
 /** a request's source, for the audit: the IGN's layer (its LAYER(S) parameter, shortened), else its host */
@@ -105,6 +107,7 @@ const zero = (): NetCounts => ({
   failAt: 0,
   limitAt: 0,
   bySource: {},
+  failBy: {},
 });
 
 /** this scope's counts */
@@ -178,6 +181,10 @@ export function installNetActivity(scope: string) {
     const source = netSource(url);
     let ended = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const failNote = (why: string) => {
+      const k = `${source} ${why}`;
+      mine.failBy[k] = (mine.failBy[k] ?? 0) + 1;
+    };
     const end = (how: "done" | "failed" | "aborted", bytes = 0) => {
       if (ended) return;
       ended = true;
@@ -207,7 +214,9 @@ export function installNetActivity(scope: string) {
     try {
       res = await raw(input, init);
     } catch (e) {
-      end((e as Error)?.name === "AbortError" ? "aborted" : "failed");
+      const aborted = (e as Error)?.name === "AbortError";
+      if (!aborted) failNote("network");
+      end(aborted ? "aborted" : "failed");
       throw e;
     }
     if (res.headers.get("x-kerr-cache") || res.headers.get("x-kerr-zone")) mine.cached++;
@@ -216,6 +225,7 @@ export function installNetActivity(scope: string) {
       mine.limitAt = Date.now();
     }
     if (!res.ok && res.status !== 304) {
+      failNote(String(res.status));
       end("failed");
       return res;
     }
@@ -259,6 +269,7 @@ export function netSnapshot(): NetCounts & { scopes: number } {
   s.failAt = mine.failAt;
   s.limitAt = mine.limitAt;
   s.bySource = Object.fromEntries(Object.entries(mine.bySource).map(([k, v]) => [k, [...v] as [number, number, number]]));
+  s.failBy = { ...mine.failBy };
   const now = Date.now();
   for (const [id, { c, at }] of theirs) {
     if (c.inflight && now - at > 2 * NET_STALE_MS) {
@@ -272,6 +283,7 @@ export function netSnapshot(): NetCounts & { scopes: number } {
       const b = (s.bySource[k] ??= [0, 0, 0]);
       for (let i = 0; i < 3; i++) b[i]! += v[i]!;
     }
+    for (const [k, v] of Object.entries(c.failBy ?? {})) s.failBy[k] = (s.failBy[k] ?? 0) + v;
     s.failAt = Math.max(s.failAt, c.failAt);
     s.limitAt = Math.max(s.limitAt, c.limitAt);
   }
