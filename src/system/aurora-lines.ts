@@ -28,6 +28,10 @@ export const AURORA_LINES = {
   red: { name: "O 630.0", nm: 630.0, peak: 240, sigma: 50, H: 90, floor: 150 },
   blue: { name: "N2+ 427.8", nm: 427.8, peak: 104, sigma: 6, H: 18, floor: 80 },
   pink: { name: "N2 1P", nm: 670, peak: 96, sigma: 3, H: 7, floor: 80 },
+  // the giants' (AM3, Jupiter: Alex's § 7.3 starting values over the 1 bar level — not measurements): H-α, and H₂'s visible
+  // violet taken at 455 nm (his tint (0.55, 0.30, 1))
+  halpha: { name: "H-alpha 656.3", nm: 656.3, peak: 245, sigma: 30, H: 120, floor: 120 },
+  h2: { name: "H2 violet", nm: 455, peak: 245, sigma: 30, H: 150, floor: 120 },
 } satisfies Record<string, AuroraLine>;
 
 const g = (x: number, mu: number, s1: number, s2: number) => {

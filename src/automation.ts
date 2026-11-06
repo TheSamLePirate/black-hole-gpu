@@ -12,7 +12,7 @@ import { geoidDeg } from "./system/geoid-grid";
 import { EARTH_RUNWAYS } from "./game/sites";
 import { GEARS } from "./gear";
 import { cartToGeodetic, flatteningOf } from "./system/ellipsoid";
-import { M_METRES, M_SECONDS, solarBody } from "./system/solar";
+import { M_METRES, M_SECONDS, solarBody, solarState } from "./system/solar";
 import { gpuDiagnostics } from "./gpu-diagnostics";
 import type { CameraController } from "./controls";
 import type { FrameStats, OfflineOptions, Renderer } from "./renderer";
@@ -595,6 +595,13 @@ export function installBh(c: BhContext) {
           vel?: [number, number, number],
         ) => setHomePose(settings, X, fwd, up, vel),
         homePosition: () => homePosition(settings),
+        /** the subsolar point of one of our bodies now (the view's time): [latitude, east longitude] on its own axes [°] */
+        subsolar: (id: string) => {
+          const t = camera.viewController().viewTime();
+          const q = toBodyFixed(id, solarState("sun", t).pos, t);
+          const r = Math.hypot(...q);
+          return [(Math.asin(q[2] / r) * 180) / Math.PI, (Math.atan2(q[1], q[0]) * 180) / Math.PI] as [number, number];
+        },
         /** the flown craft's navigation state, our side (controller ourNav: home frame [M, c], its reference
          *  body's place and velocity, the time [M]) — what the autopilots fly from; null elsewhere */
         nav: () => camera.ourNav(cameraFrame(settings)),

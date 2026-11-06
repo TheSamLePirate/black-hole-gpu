@@ -105,6 +105,22 @@ verts) :
   rendu « photo » ; le grain au limbe ; l'aurore générique par corps (AM0 → table, Jupiter en AM3) ; le cache par direction
   et la mesure du coût (non mesuré : temps GPU des e2e seulement, bruités).
 
+**AM3, premier lot (6 novembre 2026)** — Jupiter :
+- **L'ovale principal** tracé dans JRM33 + CON2020 depuis 25 R_J (AM0), tabulé autour de son propre centre (le nord, ~71° N
+  vers λ 180°, va jusqu'au pôle de rotation ; le sud ~82° S), mis en série de Fourier à 8 harmoniques (écart < 0,03°) :
+  `src/system/aurora-bodies.ts`, copie `JUP_*` dans `trace.wgsl` tenue égale par un test. Un tableau constant indexé dans
+  la boucle a été essayé d'abord ; sa compilation semblait ne pas finir — c'était en fait le noyau de Jupiter proche, ~200 s
+  à froid avec ou sans aurore (`docs/PROBLEMES-A-REGLER.md`).
+- **Les émissions** : l'ovale en lame de 1,2°, les émissions polaires en volume, le pied d'Io (calculé au CPU à sa
+  longitude System III du moment, `ioFeet`) et sa traîne ; raies H-α et H₂ visible (455 nm) à 245 km au-dessus de 1 bar ;
+  les kR d'Alex comme valeurs de départ, pas des mesures.
+- **L'œil** : la caméra dans l'ombre de Jupiter adapte l'exposition (`earthSunlight` pour Jupiter) ; au soleil, la
+  radiance physique (la distance² en UA). `__bh.viewAt(…, { body })` et `__bh.sys.subsolar(id)` pour placer la vue.
+- **Observé** (e2e `aurora-jupiter`) : l'ovale nord, l'émission polaire et le pied d'Io depuis 7 000 km dans l'ombre ;
+  l'ovale sud au limbe. **Restant** : Europe, Ganymède, Callisto ; les « dawn storms » ; l'activité propre à Jupiter (le
+  réglage commun pour l'instant) ; le grain et la saturation au limbe ; la vue sud parfois noire (problème connu, pas
+  l'aurore) ; le coût non mesuré.
+
 ## 1. Ce qu'on a aujourd'hui
 
 - **Une seule aurore, celle de la Terre**, `auroraLight` (`src/shaders/trace.wgsl`, S2 du plan aviation) :

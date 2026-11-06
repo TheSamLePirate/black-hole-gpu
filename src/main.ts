@@ -8103,8 +8103,13 @@ async function main() {
     },
     // (a photograph's view on the Earth: the tripod on the ground there, or the free camera at altM over the ellipsoid — facing
     // heading [°], pitched [°], through a vertical field [°]; the craft flown left to fly on. Why not, or null)
-    viewAt: (lat: number, lon: number, o: { altM?: number; heading?: number; pitch?: number; fov?: number; tripod?: boolean } = {}) => {
-      const why = cameraAt("earth", lat, lon, {
+    // (body: another of ours — Jupiter's auroras, AM3 —; latitude and east longitude on its own axes)
+    viewAt: (
+      lat: number,
+      lon: number,
+      o: { altM?: number; heading?: number; pitch?: number; fov?: number; tripod?: boolean; body?: string } = {},
+    ) => {
+      const why = cameraAt(o.body ?? "earth", lat, lon, {
         ground: !!o.tripod,
         here: !o.tripod,
         altKm: o.altM !== undefined ? o.altM / 1e3 : undefined,

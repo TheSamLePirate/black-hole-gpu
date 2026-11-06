@@ -284,6 +284,7 @@ import {
 import type { Settings } from "./settings";
 import { secondsPerM, timeRate } from "./clock";
 import { encodeEXR, encodePNG16 } from "./exporters";
+import { ioFeet } from "./system/aurora-bodies";
 import { AU_M, C_MPS } from "./units";
 import { windFrom } from "./wind";
 import { weatherAt, weatherGpu, windFromAt, type WeatherState } from "./weather";
@@ -3970,14 +3971,34 @@ export class Renderer {
     // the setting's; AM1)
     const kpNow = kpFor(J2000_MS + daysOf(time) * 86400e3, s.aurora ?? 0, s.auroraLive !== false);
     this.auroraKp = kpNow;
-    const kp = near?.index === earthK ? Math.min(Math.max(kpNow.kp, 0), 9) : 0;
+    // (Jupiter near — AM3 —: its own activity, the setting's — not the Earth's live Kp —; Io's footprints north and south
+    // [rad] in Params.mars, which only Mars reads (aurora-bodies.ts ioFeet: auroraJupiter))
+    const jupNear = !!near && bodies[near.index]?.id === "jupiter";
+    const kp = near?.index === earthK ? Math.min(Math.max(kpNow.kp, 0), 9) : jupNear ? Math.min(Math.max(s.aurora ?? 0, 0), 9) : 0;
+    let jupD2 = 1;
+    if (jupNear && kp > 0) {
+      const io = toBodyFixed("jupiter", solarState("io", time).pos, time);
+      const J = solarState("jupiter", time).pos,
+        S = solarState("sun", time).pos;
+      const dAU = (Math.hypot(J[0] - S[0], J[1] - S[1], J[2] - S[2]) * M_METRES) / AU_M;
+      f.set(ioFeet(Math.atan2(io[1], io[0])), MARS_AT);
+      jupD2 = dAU * dAU;
+    }
     f[41 * 4 + 2] = kp;
     // (w: the clock + 1 024 × round(2 × the dark-adapted eye's gain) — AM2: the shared exposure stops at the eye's 1 lux floor
     // (EYE_ADAPTATION) and follows the moonlit ground; the auroras are seen against the sky, drawn dark under the Moon, by an
     // eye adapted to it: (I + I_eye)/(the sky's light) — 1 by day, ~100 at night, Moon or not —, the meter's light the frame
     // before (eyeIncident, eyeSkyLight); trace.wgsl auroraLight decodes it)
     const eyeGain = Math.min((this.eyeIncident + EYE_ADAPTATION) / Math.max(this.eyeSkyLight, NIGHT_ILLUMINANCE), 127);
-    f[41 * 4 + 3] = kp > 0 ? (((tSec % 900) + 900) % 900) + 1024 * Math.round(2 * eyeGain) : 0;
+    // (Jupiter: no clock — its auroras have none —; the larger of the eye's gain and its distance² [AU²] — the sunlight at 1 AU
+    // over its own, the exposure there being its own sunlight's —: in the sunlight their physical radiance, in its shadow the
+    // dark-adapted eye's, as on the Earth)
+    f[41 * 4 + 3] =
+      kp <= 0
+        ? 0
+        : jupNear
+          ? 1024 * Math.round(2 * Math.max(eyeGain, jupD2))
+          : (((tSec % 900) + 900) % 900) + 1024 * Math.round(2 * eyeGain);
     if (kp > 0) this.featureKey |= 16384;
     // Keep reference rendering for optical/scientific kernels and contact with the walking patch.
     // (the raster inspector draws its own patch and reads the cache itself; it does not need the tracer to be free of the
@@ -8352,8 +8373,22 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       const h = (near.distance / near.radius - 1) * 6051.8e3;
       return h >= 70e3 ? 1 : 0.035 ** Math.min((70e3 - h) / 23e3, 1);
     }
+    // (Jupiter — AM3 —: the camera in its shadow, the eye adapts to the dark — its night side, its auroras, its lightning —;
+    // the light falling there the night's floor, over the sunlight at Jupiter; the shadow's edge over 2 % of its radius)
+    if (near && bodies[near.index]?.id === "jupiter") {
+      const c = near.centre,
+        L = near.light;
+      const along = -(c[0] * L[0] + c[1] * L[1] + c[2] * L[2]);
+      const perp = Math.hypot(-c[0] - along * L[0], -c[1] - along * L[1], -c[2] - along * L[2]);
+      const lit = along >= 0 ? 1 : Math.min(Math.max((perp - 0.99) / 0.02, 0), 1);
+      const I = lit + NIGHT_ILLUMINANCE;
+      this.eyeIncident = I;
+      this.eyeSkyLight = I;
+      return lit >= 1 ? 1 : I + EYE_ADAPTATION;
+    }
     if (!near || bodies[near.index]?.id !== "earth") {
       this.eyeIncident = 1;
+      this.eyeSkyLight = 1;
       return 1;
     }
     const place = surface ?? patchGeodetic(near, WGS84_F);
