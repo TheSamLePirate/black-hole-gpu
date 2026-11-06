@@ -35,7 +35,7 @@ Unités) ; les chiffres ci-dessous sont ceux que mesure le jeu.
 | Moteurs | 2, des ailes, un train à roues, un bouclier | 6 en deux nacelles, des patins | 4, l'anneau (tout le vaisseau tourne) |
 | Facteur de charge limite | 9 g | 6 g | 1,5 g |
 | Batterie | 60 kWh | 120 kWh | 2 MWh |
-| Se pose · vole dans l'air | oui · oui (en avion dans l'air, F) | oui · non | non (refus expliqué) · non |
+| Se pose · vole dans l'air | oui · oui (en avion dans l'air, F) | oui · pas en avion (son mode de vol démarre en fusée ; `flies: true` dans le code, F le change donc) | non (refus expliqué) · non |
 | Son panneau au HUD | le HUD commun (Atmosphère, Espace, Approche) | DESCENTE | celui du vaisseau-mère, titré ENDURANCE |
 | Sa voix | la référence, vive | lourde et grave (moteur ×0,72) | profonde et lente (moteur ×0,48) |
 

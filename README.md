@@ -79,9 +79,18 @@ Guides per feature:
 - [`docs/ASSETS.md`](docs/ASSETS.md) — the assets, Git LFS and the repository's and the site's size.
 
 Testing and automating it:
+- [`docs/README.md`](docs/README.md) — **the map of every document** (French): what to read for which task, what each
+  doc is, which doc to update when the code changes.
 - [`docs/BH-API.md`](docs/BH-API.md) — `__bh`, the page's automation handle (and `__crew`'s).
 - [`docs/E2E.md`](docs/E2E.md) — the end-to-end tests and campaigns, the guide;
+  [`docs/E2E-VOLS.md`](docs/E2E-VOLS.md) — e2e tests that fly (placing a craft, time, waits, autopilots, gear, the
+  frequent failures and their causes, French);
   [`docs/E2E-CATALOGUE.md`](docs/E2E-CATALOGUE.md) — every e2e file, what it proves and its time.
+- [`docs/VOL-AVIONS.md`](docs/VOL-AVIONS.md), [`docs/VOL-VAISSEAUX.md`](docs/VOL-VAISSEAUX.md) — **learning to fly** the
+  aircraft (F-35, A320) and the spacecraft (Ranger, Lander, Endurance): a step-by-step course for a person at the
+  keyboard or an LLM through `__bh`, then the reference (models, controls, systems, limits) — French; illustrated
+  versions with diagrams and cockpit captures: [`docs/apprendre-avions.html`](docs/apprendre-avions.html),
+  [`docs/apprendre-vaisseaux.html`](docs/apprendre-vaisseaux.html).
 - [`docs/REMOTE-TESTS.md`](docs/REMOTE-TESTS.md), [`docs/IPAD-TESTS.md`](docs/IPAD-TESTS.md) — the tests run on
   the Mac mini and on a real iPad.
 

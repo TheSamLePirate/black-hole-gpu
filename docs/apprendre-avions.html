@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apprendre à voler — avions</title>
+<meta name="description" content="Le cours de pilotage des avions du jeu (F-35B, F-35C, A320) : notions, instruments, leçons pas à pas, au clavier et par __bh.">
+<style>
+:root{--bg:#f6f7f9;--fg:#15181d;--muted:#5b6370;--card:#fff;--line:#d9dde3;--accent:#1f6feb;--ok:#1a8f4c;--warn:#b7791f;--bad:#c62828;--hud:#18a957;--sky:#6fa8dc;--ground:#a0744a;--mag:#c2185b;--cyan:#0097a7;--code:#eef1f5;--radius:10px}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1216;--fg:#e6e9ee;--muted:#9aa4b2;--card:#171b21;--line:#2a313b;--accent:#58a6ff;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--hud:#3fd07a;--sky:#3d6f9e;--ground:#7a5634;--mag:#f06292;--cyan:#4dd0e1;--code:#1d232b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{display:grid;grid-template-columns:250px minmax(0,1fr);max-width:1240px;margin:0 auto;gap:32px;padding:0 16px}
+nav.toc{position:sticky;top:0;align-self:start;max-height:100vh;overflow:auto;padding:24px 0;font-size:14px}
+nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:3px 0}
+nav.toc a:hover{color:var(--accent)}
+nav.toc b{display:block;margin:14px 0 4px;color:var(--fg)}
+main{padding:24px 0 80px;min-width:0}
+h1{font-size:34px;line-height:1.2;margin:8px 0 6px}
+h2{font-size:24px;margin:56px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
+h3{font-size:18px;margin:24px 0 6px}
+p,li{max-width:76ch}
+.lead{font-size:18px;color:var(--muted);max-width:72ch}
+a{color:var(--accent)}
+code,kbd,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+code{background:var(--code);padding:1px 5px;border-radius:5px;font-size:.88em}
+pre{background:var(--code);padding:14px 16px;border-radius:var(--radius);overflow:auto;font-size:13px;line-height:1.5}
+kbd{display:inline-block;min-width:1.7em;text-align:center;padding:1px 6px;border:1px solid var(--line);border-bottom-width:3px;border-radius:6px;background:var(--card);font-size:.85em;font-weight:600}
+.k-az{font-size:.75em;color:var(--muted)}
+figure{margin:18px 0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px}
+figure img{width:100%;height:auto;border-radius:6px;display:block}
+figure svg{width:100%;height:auto;display:block}
+figcaption{font-size:13px;color:var(--muted);margin-top:8px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;background:var(--card);border-radius:var(--radius);overflow:hidden}
+th,td{border-bottom:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--code);font-weight:600}
+.box{border-left:4px solid var(--accent);background:var(--card);padding:10px 16px;border-radius:0 var(--radius) var(--radius) 0;margin:14px 0}
+.box.ok{border-color:var(--ok)}.box.warn{border-color:var(--warn)}.box.bad{border-color:var(--bad)}
+.box b:first-child{display:block;margin-bottom:2px}
+details{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:8px 14px;margin:12px 0}
+details summary{cursor:pointer;font-weight:600}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps li{counter-increment:s;position:relative;padding:6px 0 6px 40px}
+.steps li::before{content:counter(s);position:absolute;left:0;top:6px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:grid;place-items:center;font-size:14px}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;background:var(--code);color:var(--muted);margin-right:4px}
+svg text{font-family:system-ui,sans-serif;fill:var(--fg)}
+.sv-muted{fill:var(--muted)} .st-line{stroke:var(--fg)} .st-muted{stroke:var(--muted)}
+@media (max-width:860px){.wrap{grid-template-columns:1fr}nav.toc{position:static;max-height:none;padding:16px 0 0;border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc">
+  <b>Apprendre à voler</b>
+  <a href="#intro">Ce cours</a>
+  <a href="#methode">Pour un humain, pour un LLM</a>
+  <b>Les leçons</b>
+  <a href="#conventions">Les conventions</a>
+  <a href="#l0">0 · Monter à bord</a>
+  <a href="#l1">1 · Ce qui fait voler</a>
+  <a href="#l2">2 · Lire le casque</a>
+  <a href="#l3">3 · Décoller</a>
+  <a href="#l4">4 · Palier, virage, montée</a>
+  <a href="#l5">5 · Énergie et limites</a>
+  <a href="#l6">6 · Tour de piste, atterrir</a>
+  <a href="#l7">7 · L'approche ILS</a>
+  <a href="#l8">8 · STOVL et porte-avions</a>
+  <a href="#l9">9 · Naviguer</a>
+  <a href="#l10">10 · L'A320</a>
+  <a href="#l11">11 · L'école de vol</a>
+  <b>Aide-mémoire</b>
+  <a href="#clavier">Le clavier</a>
+  <a href="#chiffres">Les chiffres</a>
+  <a href="#pieges">Les pièges</a>
+  <b>Plus loin</b>
+  <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/VOL-AVIONS.md">VOL-AVIONS.md (la référence)</a>
+  <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/F35.fr.md">Le manuel du F-35</a>
+  <a href="apprendre-vaisseaux.html">Apprendre : vaisseaux</a>
+</nav>
+<main>
+
+<section id="intro">
+<span class="tag">Cours</span><span class="tag">F-35B · F-35C · A320</span><span class="tag">6 novembre 2026</span>
+<h1>Apprendre à voler en avion</h1>
+<p class="lead">Un cours progressif pour piloter les avions du jeu : ce qui fait voler un avion, comment lire le casque du F-35, puis une leçon par manœuvre — décoller, tenir un palier, virer, gérer l'énergie, faire un tour de piste, se poser, suivre un ILS, le stationnaire du F-35B, le porte-avions, l'A320. Chaque leçon donne les touches, les chiffres à tenir, les erreurs qui la font rater, et les mêmes gestes en code pour un LLM.</p>
+<figure><img src="img/showcase/f35-vic-provence.webp" alt="Un F-35 au-dessus de la Provence" loading="lazy"><figcaption>Le F-35 au-dessus de la Provence — capture du jeu (page de présentation).</figcaption></figure>
+<p>Le texte de référence, avec chaque source dans le code, est <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/VOL-AVIONS.md">VOL-AVIONS.md</a> : sa partie I est ce cours, sa partie II la référence des modèles de vol, des systèmes et des limites. Les chiffres viennent des leçons du jeu (<code>src/game/lessons.ts</code>) et des constantes du code.</p>
+</section>
+
+<section id="methode">
+<h2>Pour un humain, pour un LLM</h2>
+<div class="grid2">
+<div>
+<h3>Au clavier</h3>
+<p>Les touches sont des <b>positions physiques</b> : on les nomme comme sur un clavier QWERTY, et le clavier français (AZERTY) est entre parenthèses. <kbd>W</kbd> est la touche en haut à gauche des lettres, <kbd>Z</kbd> sur un clavier français. Toutes se réassignent (pause › Commandes).</p>
+<p>Une manette (Xbox, PlayStation) ou un HOTAS marchent aussi : stick gauche tangage et roulis, gâchettes la poussée, bumpers le palonnier.</p>
+</div>
+<div>
+<h3>Par <code>__bh</code></h3>
+<p>Un LLM pilote la page par <code>window.__bh</code> : il gèle la simulation, agit (maintiens, manette, manche), avance par pas de 1/30 s, lit l'état et vérifie. Toute une leçon tient dans un seul appel.</p>
+<figure>
+<svg viewBox="0 0 420 150" role="img" aria-label="La boucle lire, agir, avancer, vérifier">
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="currentColor" style="color:var(--accent)"/></marker></defs>
+<g font-size="13" text-anchor="middle">
+<rect x="10" y="50" width="90" height="44" rx="8" fill="var(--card)" stroke="var(--accent)"/><text x="55" y="70">lire</text><text x="55" y="86" class="sv-muted" font-size="10">geoNow, status</text>
+<rect x="115" y="50" width="90" height="44" rx="8" fill="var(--card)" stroke="var(--accent)"/><text x="160" y="70">agir</text><text x="160" y="86" class="sv-muted" font-size="10">apSet, throttle</text>
+<rect x="220" y="50" width="90" height="44" rx="8" fill="var(--card)" stroke="var(--accent)"/><text x="265" y="70">avancer</text><text x="265" y="86" class="sv-muted" font-size="10">step(1/30)</text>
+<rect x="325" y="50" width="85" height="44" rx="8" fill="var(--card)" stroke="var(--accent)"/><text x="367" y="70">vérifier</text><text x="367" y="86" class="sv-muted" font-size="10">seuils, panne</text>
+<path d="M100 72H113M205 72H218M310 72H323" stroke="var(--accent)" stroke-width="2" marker-end="url(#ar)" fill="none"/>
+<path d="M367 50C367 10 55 10 55 48" stroke="var(--accent)" stroke-width="2" fill="none" marker-end="url(#ar)"/>
+<text x="210" y="22" font-size="11" class="sv-muted">jusqu'à réussite, échec (airFlight.failure) ou plafond de pas</text>
+</g></svg>
+<figcaption>La boucle d'un LLM : tout dans un seul appel <code>app.js</code>, page gelée, pas fixes (<a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/E2E-VOLS.md">E2E-VOLS.md</a> §3).</figcaption>
+</figure>
+</div>
+</div>
+<details><summary>Le gabarit de lecture d'état (à coller dans la console)</summary>
+<pre>__bh.freeze(true);
+const c = __bh.camera, lire = () =&gt; ({
+  altMer: Math.round(c.geoNow().alt),                                      // m au-dessus de la mer
+  sol: Math.round(__bh.sys.heightOverGround("earth",
+        __bh.fleet.pose(__bh.fleet.active, __bh.time()).X, __bh.time())),  // m au-dessus du sol
+  vitesse: Math.round(c.airFlight.last?.speed ?? 0),                       // m/s, vitesse air
+  vz: +c.geoNow().vs.toFixed(1),                                           // m/s
+  inclinaison: Math.round((c.attitudeNow().bank ?? 0) * 57.3),              // °
+  poussée: +c.pilot.engineNow.toFixed(2), panne: c.airFlight.failure,
+});
+for (let i = 0; i &lt; 30 * 10; i++) __bh.step(1 / 30);                      // 10 s de vol
+lire();</pre></details>
+</section>
+
+<section id="conventions">
+<h2>Les conventions</h2>
+<table><tr><th>Sujet</th><th>Convention</th></tr>
+<tr><td>Latitude, longitude</td><td>degrés géodésiques WGS84, longitude est positive</td></tr>
+<tr><td>Caps</td><td>tous <b>vrais</b> (pas de déclinaison magnétique) ; en degrés dans les outils (<code>flyAt</code>) ; en <b>radians</b> dans <code>jetModes.hdg</code>, <code>attitudeNow()</code>, <code>geoNow().track</code></td></tr>
+<tr><td>Inclinaison, assiette</td><td>radians ; inclinaison <b>positive à droite</b>, assiette positive nez haut</td></tr>
+<tr><td>Vitesses</td><td><code>airFlight.last.speed</code>, <code>jetModes.spd</code> : vitesse vraie par rapport à l'air (m/s) ; <code>geoNow().gs</code> : vitesse sol. L'A320 parle en nœuds</td></tr>
+<tr><td>Altitudes</td><td>au-dessus de la mer ; hauteur sol : <code>__bh.sys.heightOverGround</code></td></tr>
+<tr><td>Le manche par code</td><td><code>c.pilotInput = (pad) =&gt; ({ ...c.__input(pad), pitch, roll, yaw, throttle })</code>, chaque champ dans [−1, 1] : pitch + cabrer, roll + droite, yaw + nez à droite ; throttle est un débit</td></tr>
+<tr><td>Les touches</td><td>tout ou rien : une touche = le manche <b>à fond</b> (S = 7 g). « Doucement » = <b>petites pressions</b>, ou <kbd>Verr. Maj</kbd> (précision : manche ×0,25, manette 0,15/s). Maintenir <kbd>⇧</kbd> fait aussi monter la manette</td></tr>
+<tr><td>Le manche et l'autopilote</td><td>les maintiens du jet laissent passer le manche : au lâcher, le nouveau cap ou la nouvelle altitude est tenu (lâcher le roulis reprend le cap du moment, ailes à plat). Pour voler à la main, couper l'AP avec <kbd>'</kbd> — <kbd>⌫</kbd> ne coupe pas les maintiens du jet</td></tr>
+<tr><td>Les sites</td><td>« Edwards Air Force Base », « Kennedy Space Center… », « Paris – Le Bourget » (tiret long), « Kourou », « Baikonur », « Tanegashima », « Woomera » — un morceau du nom suffit ; ou un code OACI dont la tuile est chargée</td></tr>
+</table>
+<div class="box warn"><b>Après un crash</b>En solo le jeu se met en <b>pause</b> et affiche l'écran de perte : « Reprendre avant la rentrée », « Continuer sans dégâts » (dégâts coupés), « Recommencer la scène ». Par code, un nouveau placement efface la panne mais ne ferme ni l'écran ni la pause : cliquer un de ses boutons (<code>.craft-lost button</code> — depuis la console, <code>document.querySelector(".craft-lost button").click()</code> suffit). Pour s'entraîner : <code>__bh.settings.damage = false</code>.</div>
+</section>
+
+<section id="l0">
+<h2>Leçon 0 — Monter à bord, choisir son aide</h2>
+<ol class="steps">
+<li>Hors vol, <kbd>Tab</kbd> maintenu ouvre la roue : <b>Voler en F-35</b>. En vol, Tab › Navigation › <b>Préparer un vol</b> : l'aérodrome, le départ (aligné, en finale à 15 km et 900 m, ou en croisière à 40 km et 6 000 m), l'heure, la météo, le carburant.</li>
+<li>Réglages › Jeu › F-35 › <b>Assistance</b> (par défaut Réaliste) : commencez en <b>Assisté</b> (gaz automatiques, incidence limitée à 20°, protection du sol), passez en <b>Réaliste</b> après la leçon 6.</li>
+<li><kbd>V</kbd> change de vue : le <b>cockpit</b> est la vue du pilote. <kbd>Échap</kbd> met en pause. <kbd>F6</kbd> appelle TARS.</li>
+<li><kbd>⇧</kbd><kbd>X</kbd> ramène toujours au vol stable : ailes à plat, légère montée, puis tout tenu ; toute touche de tangage ou de roulis l'annule. C'est le bouton « je suis perdu » (par code : <code>c.recoverStart()</code>).</li>
+</ol>
+<details><summary>Par <code>__bh</code></summary>
+<pre>__bh.settings.vessel = "f35";            // "a320" pour l'airliner ; f35Variant "B" | "C"
+for (let i = 0; i &lt; 5; i++) __bh.step(1 / 30);   // page gelée : le changement se fait au pas suivant
+__bh.fleet.active;                       // "f35" : l'avion est aligné sur la piste la plus proche
+__bh.game.lineUp("Edwards");             // ou une piste choisie (le bout face au vent)
+__bh.settings.f35Assist = "assisted";    // "manual" · "realistic" · "assisted" · "beginner"
+__bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();</pre></details>
+</section>
+
+<section id="l1">
+<h2>Leçon 1 — Ce qui fait voler un avion</h2>
+<figure>
+<svg viewBox="0 0 640 300" role="img" aria-label="Les quatre forces et l'incidence">
+<defs><marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0L10,5L0,10z" fill="context-stroke"/></marker></defs>
+<line x1="40" y1="160" x2="600" y2="160" class="st-muted" stroke-dasharray="6 5"/>
+<text x="600" y="178" font-size="12" class="sv-muted" text-anchor="end">trajectoire (le vecteur vitesse)</text>
+<g transform="translate(320 160) rotate(-8)">
+ <path d="M-120 0 C-80 -16 60 -18 120 -4 L130 0 L120 6 C60 12 -80 12 -120 0Z" fill="var(--card)" stroke="var(--fg)" stroke-width="2"/>
+ <path d="M-110 -2 L-140 -36 L-120 -36 L-90 -4Z" fill="var(--card)" stroke="var(--fg)" stroke-width="2"/>
+ <line x1="-150" y1="0" x2="190" y2="0" stroke="var(--accent)" stroke-dasharray="3 4"/>
+</g>
+<path d="M560 160 A110 110 0 0 0 557 131" fill="none" stroke="var(--fg)" stroke-width="1.5"/>
+<text x="566" y="150" font-size="14" font-weight="700">α</text>
+<text x="500" y="112" font-size="12" style="fill:var(--accent)">axe de l'avion</text>
+<path d="M320 160 V60" stroke="var(--ok)" stroke-width="4" marker-end="url(#a2)"/><text x="330" y="66" font-size="14" font-weight="700" style="fill:var(--ok)">portance</text>
+<path d="M320 160 V262" stroke="var(--bad)" stroke-width="4" marker-end="url(#a2)"/><text x="330" y="270" font-size="14" font-weight="700" style="fill:var(--bad)">poids</text>
+<path d="M452 140 L560 125" stroke="var(--accent)" stroke-width="4" marker-end="url(#a2)"/><text x="440" y="128" font-size="14" font-weight="700" style="fill:var(--accent)">poussée</text>
+<path d="M188 166 H80" stroke="var(--warn)" stroke-width="4" marker-end="url(#a2)"/><text x="84" y="190" font-size="14" font-weight="700" style="fill:var(--warn)">traînée</text>
+<text x="20" y="28" font-size="13" class="sv-muted">En palier stable : portance = poids, poussée = traînée. La portance croît comme v² × incidence.</text>
+</svg>
+<figcaption>Les quatre forces. L'<b>incidence α</b> est l'angle entre l'axe de l'avion (pointillé bleu) et sa trajectoire. Lent, il faut plus d'incidence pour porter le même poids — jusqu'au décrochage.</figcaption>
+</figure>
+<div class="grid2">
+<figure>
+<svg viewBox="0 0 320 260" role="img" aria-label="Les trois axes et leurs touches">
+<defs><marker id="a4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="context-stroke"/></marker></defs>
+<g transform="translate(160 118) scale(.85)">
+<path d="M0 -70 L14 0 L90 22 L90 32 L14 24 L8 62 L26 74 L26 82 L0 76 L-26 82 L-26 74 L-8 62 L-14 24 L-90 32 L-90 22 L-14 0Z" fill="var(--card)" stroke="var(--fg)" stroke-width="2"/>
+</g>
+<path d="M60 70 Q40 105 60 140" fill="none" stroke="var(--accent)" stroke-width="3" marker-end="url(#a4)"/>
+<path d="M260 140 Q280 105 260 70" fill="none" stroke="var(--accent)" stroke-width="3" marker-end="url(#a4)"/>
+<path d="M120 30 Q160 10 200 30" fill="none" stroke="var(--ok)" stroke-width="3" marker-end="url(#a4)"/>
+<path d="M240 190 L240 160" fill="none" stroke="var(--warn)" stroke-width="3" marker-end="url(#a4)"/>
+<path d="M240 196 L240 226" fill="none" stroke="var(--warn)" stroke-width="3" marker-end="url(#a4)"/>
+<g font-size="12" font-weight="700">
+<text x="8" y="60" style="fill:var(--accent)">roulis</text><text x="8" y="160" style="fill:var(--accent)">Q / E</text>
+<text x="160" y="16" text-anchor="middle" style="fill:var(--ok)">lacet A / D</text>
+<text x="200" y="250" style="fill:var(--warn)" text-anchor="start">tangage W / S</text>
+</g>
+<text x="8" y="232" font-size="10.5" class="sv-muted">AZERTY : roulis A / E · lacet Q / D</text><text x="8" y="248" font-size="10.5" class="sv-muted">tangage Z (piqué) / S (cabré)</text>
+</svg>
+<figcaption>Les trois axes vus de dessus. En loi normale, le manche ne commande pas une gouverne mais un <b>facteur de charge</b> : lâché, 1 g, l'avion garde sa trajectoire.</figcaption>
+</figure>
+<div>
+<h3>Six idées à retenir</h3>
+<ul>
+<li><b>Le nez n'est pas la trajectoire.</b> Le <b>vecteur vitesse</b> (le cercle à ailes du HUD) montre où va l'avion ; on pilote ce symbole.</li>
+<li><b>Le facteur de charge</b> (g) : 1 g en palier, 2 g dans un virage à 60° d'inclinaison. F-35 : +7 g / −3 g en loi normale, 4 g train sorti ; casse au-delà de 10,5 g tenus 0,25 s.</li>
+<li><b>Le décrochage</b> : l'aile du F-35 décroche vers 26° d'incidence ; le jeu borne l'incidence à 50° (loi normale) ou 20° (assisté).</li>
+<li><b>L'énergie</b> : vitesse et altitude s'échangent ; près du sol, <i>la vitesse, c'est la vie</i>.</li>
+<li><b>L'altitude affichée est au-dessus de la mer</b> ; la hauteur sol (radiosonde) s'affiche sous 1 500 m.</li>
+<li><b>U ne décolle pas un F-35 depuis une piste</b> : d'après le code, U y lance le décollage orbital des vaisseaux, qui refuse faute de poussée (près d'un porte-avions, U fait le décollage court ou la catapulte). On décolle à la main (leçon 3).</li>
+</ul>
+</div>
+</div>
+</section>
+
+<section id="l2">
+<h2>Leçon 2 — Lire le casque (HUD) du F-35</h2>
+<p>Le F-35 n'a pas de viseur tête haute : la symbologie est projetée dans le <b>casque</b> du pilote, en vert par défaut. Sous lui, l'<b>écran panoramique</b> tactile (PCD) porte les pages : carte tactique, moteur, carburant, train…</p>
+<figure>
+<svg viewBox="0 0 760 400" role="img" aria-label="Schéma annoté du casque">
+<rect x="140" y="20" width="480" height="360" rx="10" fill="#0b1a12"/>
+<g stroke="#3fd07a" fill="none" stroke-width="2">
+<line x1="170" y1="210" x2="330" y2="210"/><line x1="430" y1="210" x2="590" y2="210"/>
+<line x1="310" y1="150" x2="350" y2="150"/><line x1="410" y1="150" x2="450" y2="150"/>
+<line x1="310" y1="270" x2="350" y2="270" stroke-dasharray="7 5"/><line x1="410" y1="270" x2="450" y2="270" stroke-dasharray="7 5"/>
+<circle cx="380" cy="222" r="10"/><line x1="358" y1="222" x2="370" y2="222"/><line x1="390" y1="222" x2="402" y2="222"/><line x1="380" y1="212" x2="380" y2="204"/>
+<path d="M372 186 L380 178 L388 186"/>
+<rect x="320" y="34" width="120" height="24"/><line x1="320" y1="66" x2="440" y2="66"/>
+<rect x="180" y="198" width="64" height="24"/><rect x="510" y="198" width="72" height="24"/>
+<path d="M352 104 L362 114 M408 104 L398 114" stroke="#d29922"/>
+</g>
+<g fill="#3fd07a" font-size="13" font-family="ui-monospace,monospace">
+<text x="358" y="51">0 9 0</text><text x="194" y="215">180</text><text x="520" y="215">3000</text>
+<text x="176" y="244">M0.55 G1.0</text><text x="176" y="262">α 4°</text><text x="510" y="244">VS +0</text><text x="510" y="262">R 2950</text>
+<text x="312" y="88">ALT 3000 HDG 090</text>
+<text x="160" y="366">THR 72%</text><text x="530" y="366">FUEL 5420</text>
+<text x="296" y="155">5</text><text x="290" y="275">-5</text>
+</g>
+<g font-size="12" stroke="var(--muted)" stroke-width="1">
+<line x1="440" y1="46" x2="630" y2="46"/><line x1="440" y1="84" x2="630" y2="84"/>
+<line x1="400" y1="110" x2="630" y2="122"/><line x1="388" y1="182" x2="630" y2="170"/>
+<line x1="402" y1="226" x2="630" y2="230"/><line x1="582" y1="210" x2="630" y2="200"/>
+<line x1="180" y1="210" x2="130" y2="200"/><line x1="176" y1="250" x2="130" y2="250"/>
+<line x1="330" y1="270" x2="130" y2="300"/><line x1="160" y1="360" x2="130" y2="350"/>
+</g>
+<g font-size="12">
+<text x="636" y="50">bande de cap</text><text x="636" y="88">modes engagés</text><text x="636" y="126">chevrons GCAS</text>
+<text x="636" y="174">le nez (fixe)</text><text x="636" y="204">altitude (mer)</text><text x="636" y="234">vecteur vitesse :</text><text x="636" y="250">où va l'avion</text>
+<text x="126" y="204" text-anchor="end">vitesse (m/s)</text><text x="126" y="254" text-anchor="end">Mach, G, α</text>
+<text x="126" y="304" text-anchor="end">échelle de pente</text><text x="126" y="354" text-anchor="end">manette</text>
+</g>
+</svg>
+<figcaption>Schéma du casque (simplifié). Vitesse à gauche, altitude au-dessus de la mer à droite ; dessous : Mach, G (ambre au-delà de 5,6, rouge au-delà de 6,65), α (ambre au-delà de 35°), vitesse verticale, hauteur radar sous 1 500 m. Les modes engagés sous la bande de cap.</figcaption>
+</figure>
+<figure><img src="progress/f35/f5-cockpit.jpg" alt="Le cockpit du F-35 : le casque et l'écran panoramique" loading="lazy"><figcaption>Le cockpit du F-35 dans le jeu : la symbologie du casque, l'écran panoramique tactile, le manche et la manette, la verrière. Capture de la phase F5 (octobre 2026).</figcaption></figure>
+<figure><img src="progress/pcd/FINAL.jpg" alt="Les pages de l'écran panoramique" loading="lazy"><figcaption>L'écran panoramique (PCD) et le casque : les pages tactiles (carte tactique, moteur, carburant, train, avionique). Planche de PLAN-PCD-AAA (18 octobre 2026).</figcaption></figure>
+<details><summary>Lire le HUD par <code>__bh</code></summary>
+<pre>c.geoNow()        // { lat, lon, alt (m mer), gs (m/s), track (rad), vs (m/s) }
+c.airInfo()       // { speed (m/s), mach, alpha, beta (rad), nz (g), stalled, aoaWarn, gear, flaps, … } — pas d'AGL
+c.attitudeNow()   // { pitch, bank, heading } en radians
+c.jetModes        // maintiens : alt (m mer), hdg (rad), spd (m/s) ; null = coupé
+c.pilot.throttle, c.pilot.engineNow   // la manette et la poussée réelle (0…1)
+__bh.fleet.fuel.f35                   // kg</pre></details>
+</section>
+
+<section id="l3">
+<h2>Leçon 3 — Décoller</h2>
+<figure>
+<svg viewBox="0 0 640 210" role="img" aria-label="Profil de décollage">
+<line x1="30" y1="170" x2="610" y2="170" class="st-line" stroke-width="3"/>
+<path d="M60 168 L360 168 Q430 160 470 130 L600 60" fill="none" stroke="var(--accent)" stroke-width="3"/>
+<g font-size="12" text-anchor="middle">
+<circle cx="60" cy="168" r="5" fill="var(--accent)"/><text x="40" y="192" text-anchor="start">aligné, manette 0 = freins</text>
+<text x="180" y="150">Z plein gaz (⇧Z postcombustion)</text>
+<circle cx="360" cy="168" r="5" fill="var(--warn)"/><text x="360" y="192">≈ 70 m/s : S doucement</text>
+<text x="420" y="118">10–12°</text>
+<circle cx="490" cy="118" r="5" fill="var(--ok)"/><text x="530" y="140">vario positif : G (train)</text>
+<text x="560" y="48">montée 10–15°</text>
+</g></svg>
+<figcaption>Le décollage du F-35 : il accélère franchement (poussée/poids ≈ 0,59 à sec, ×1,47 avec la postcombustion) ; doc : décollage en 10,5 s.</figcaption></figure>
+<ol class="steps">
+<li>Aligné sur la piste. La manette à 0 freine toutes les roues.</li>
+<li><kbd>Z</kbd> <span class="k-az">(W)</span> plein gaz ; <kbd>⇧</kbd><kbd>Z</kbd> <span class="k-az">(⇧W)</span> la postcombustion si la piste est courte (elle s'allume au sol ; seuls les maintiens exigent d'être en l'air).</li>
+<li>Tenir l'axe au lacet <kbd>A</kbd>/<kbd>D</kbd> <span class="k-az">(Q/D)</span> par petites touches.</li>
+<li>Vers <b>70 m/s</b> (≈ 135 kt) : <kbd>S</kbd> par petites pressions (ou <kbd>Verr. Maj</kbd> puis <kbd>S</kbd>), viser <b>10 à 12°</b> d'assiette.</li>
+<li>Dès que ça monte : <kbd>G</kbd> rentre le train (8 s).</li>
+</ol>
+<div class="box ok"><b>Réussi quand</b>l'avion a quitté le sol (<code>!c.rolling &amp;&amp; !c.ourLanded</code>), vitesse verticale &gt; 5 m/s, ailes à plat, dans l'axe.</div>
+<div class="box bad"><b>Erreurs</b>Tirer trop tôt (l'avion se lève lent et retombe) · tirer trop fort (la queue touche) · oublier le train.</div>
+<details><summary>Par <code>__bh</code> (la forme du test <code>f35-flight-ops</code>)</summary>
+<pre>const c = __bh.camera;
+c.__input ??= c.pilotInput.bind(c);
+c.pilotInput = (pad) =&gt; { const i = c.__input(pad);           // le manche, tiré à 0,8 au-dessus de 67 m/s
+  return (c.rolling || c.ourLanded) &amp;&amp; (c.airFlight.last?.speed ?? 0) &gt; 67 ? { ...i, pitch: 0.8 } : i; };
+c.pilot.throttle = 1; c.jetToggle("ab");
+for (let i = 0; i &lt; 30 * 40 &amp;&amp; (c.rolling || c.ourLanded); i++) __bh.step(1 / 30);
+c.pilotInput = c.__input; c.gearDown = false;</pre></details>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b>La recette de cette leçon, telle quelle : décollage en <b>11 s</b>, puis vario +35 m/s, inclinaison 0°, train rentré.</div>
+<div class="grid2"><figure><img src="progress/apprendre/av-l3-aligne.jpg" alt="Aligné à Edwards, manette 0" loading="lazy"><figcaption>Aligné à Edwards, manette 0</figcaption></figure><figure><img src="progress/apprendre/av-l3-montee.jpg" alt="8 s après le décollage : vario +35 m/s, ailes à plat, train rentré — l'alarme « train rentré trop bas » sonne sous 300 m et 150 m/s : normale ici" loading="lazy"><figcaption>8 s après le décollage : vario +35 m/s, ailes à plat, train rentré — l'alarme « train rentré trop bas » sonne sous 300 m et 150 m/s : normale ici</figcaption></figure></div>
+</section>
+
+<section id="l4">
+<h2>Leçon 4 — Tenir un palier, virer, monter, descendre</h2>
+<p>Les étapes de la leçon « Premier vol » de l'école : palier à <b>200 m/s</b>, virage à <b>30°</b>, montée de <b>500 m</b>, puis à vous. En loi normale, l'avion <b>garde la trajectoire qu'on lui laisse</b> : on donne une petite impulsion, puis on lâche. <b>L'attitude d'abord, l'altitude suit.</b></p>
+<div class="grid2">
+<figure>
+<svg viewBox="0 0 320 250" role="img" aria-label="Le virage : la portance penchée">
+<defs><marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0L10,5L0,10z" fill="context-stroke"/></marker></defs>
+<g transform="translate(160 150) rotate(30)">
+<line x1="-110" y1="0" x2="110" y2="0" class="st-line" stroke-width="5"/><circle r="12" fill="var(--card)" class="st-line" stroke-width="2"/><line x1="0" y1="-12" x2="0" y2="-34" class="st-line" stroke-width="3"/>
+<path d="M0 0 V-115" stroke="var(--ok)" stroke-width="4" marker-end="url(#a3)"/></g>
+<path d="M160 150 V50" stroke="var(--ok)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#a3)"/>
+<path d="M160 150 H218" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#a3)"/>
+<path d="M160 150 V230" stroke="var(--bad)" stroke-width="3" marker-end="url(#a3)"/>
+<g font-size="12"><text x="232" y="64" style="fill:var(--ok)">portance</text><text x="96" y="70" class="sv-muted">part verticale</text><text x="222" y="146" style="fill:var(--accent)">fait virer</text><text x="168" y="240" style="fill:var(--bad)">poids</text><text x="20" y="24">inclinaison 30° : il faut 1,15 g</text></g>
+</svg>
+<figcaption>En virage, la portance est penchée : il en faut plus pour garder la hauteur — en loi normale, l'avion l'ajoute <b>de lui-même</b> manche lâché. Facteur de charge en palier : n = 1 / cos(inclinaison) — 1,15 g à 30°, 2 g à 60°.</figcaption></figure>
+<div>
+<table><tr><th>Geste</th><th>Au clavier</th><th>Chiffres</th></tr>
+<tr><td>Palier</td><td>vecteur vitesse sur l'horizon ; <kbd>⇧</kbd>/<kbd>Alt</kbd> la puissance</td><td>200 m/s</td></tr>
+<tr><td>Virage (AP coupé)</td><td><kbd>Q</kbd>/<kbd>E</kbd> <span class="k-az">(A/E)</span> par petites pressions, <b>lâcher vers 20°</b> (le roulis acquis emmène ~10° de plus : mesuré 29° → 41°), puis la loi tient l'inclinaison <b>et la pente</b> — ne pas toucher <kbd>S</kbd> ; sortir ~5° avant le cap</td><td>30° : ≈ 1,6°/s à 200 m/s (g·tan φ / V)</td></tr>
+<tr><td>Montée</td><td>puissance et nez haut</td><td>+500 m ; palier commencé à 1/10 du taux de montée avant</td></tr>
+<tr><td>Ralentir</td><td>puissance réduite, le nez monte peu à peu</td><td>160 m/s</td></tr>
+<tr><td>Autopilote</td><td><kbd>'</kbd> <span class="k-az">(ù)</span> altitude et cap ; <kbd>⇧</kbd><kbd>'</kbd> auto-manette</td><td>Maj/Alt : ±10 m/s par seconde</td></tr>
+</table>
+<div class="box ok"><b>Réussi quand</b>altitude ±30 m, cap ±2°, vitesse ±5 m/s pendant 10 s.</div>
+</div></div>
+<details><summary>Par <code>__bh</code> : les maintiens</summary>
+<pre>const c = __bh.camera;
+for (let i = 0; i &lt; 10; i++) __bh.step(1 / 30);          // en l'air, en mode avion : maintiens acceptés
+c.apSet({ ap: true, athr: true, alt: 3000, hdg: 90 * Math.PI / 180, spd: 200 });   // m mer, rad, m/s
+// apSet se rappelle sans risque ; jetToggle("ap") BASCULE (un second appel coupe tout)
+// écrire c.pilot.throttle pendant que l'auto-manette tient la désengage</pre></details>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b><code>apSet</code> : après 90 s, <b>3 000 m, 270°, 200 m/s</b> exactement. Le virage à la main vers 000° : altitude <b>2 999–3 000 m</b> sans toucher S ; touche de roulis tenue jusqu'à 29° → inclinaison finale 41° (d'où « lâcher vers 20° »).</div>
+<div class="grid2"><figure><img src="progress/apprendre/av-l4-palier-ap.jpg" alt="Sous AP et auto-manette : 3 000 m, 270°, 200 m/s" loading="lazy"><figcaption>Sous AP et auto-manette : 3 000 m, 270°, 200 m/s</figcaption></figure></div>
+</section>
+
+<section id="l5">
+<h2>Leçon 5 — L'énergie, l'incidence et les limites</h2>
+<figure>
+<svg viewBox="0 0 640 140" role="img" aria-label="Bandes d'incidence et de facteur de charge">
+<g font-size="12">
+<text x="10" y="24" font-weight="700">Incidence α (F-35)</text>
+<rect x="10" y="32" width="210" height="22" fill="var(--ok)" opacity=".85"/><rect x="220" y="32" width="160" height="22" fill="var(--warn)" opacity=".85"/><rect x="380" y="32" width="120" height="22" fill="var(--bad)" opacity=".85"/><rect x="500" y="32" width="130" height="22" fill="var(--line)"/>
+<text x="16" y="48" fill="#fff" style="fill:#fff">croisière, finesse</text><text x="226" y="48" style="fill:#fff">buffeting 18–32°</text><text x="386" y="48" style="fill:#fff">≥ 35° ambre</text><text x="506" y="48">50° : butée</text>
+<text x="10" y="84" font-weight="700">Facteur de charge</text>
+<rect x="10" y="92" width="300" height="22" fill="var(--ok)" opacity=".85"/><rect x="310" y="92" width="90" height="22" fill="var(--warn)" opacity=".85"/><rect x="400" y="92" width="100" height="22" fill="var(--bad)" opacity=".85"/><rect x="500" y="92" width="130" height="22" fill="var(--line)"/>
+<text x="16" y="108" style="fill:#fff">1 à 5,6 g</text><text x="316" y="108" style="fill:#fff">5,6 – 6,65</text><text x="406" y="108" style="fill:#fff">→ 7 g limite</text><text x="506" y="108">10,5 g : casse</text>
+</g></svg>
+<figcaption>Les seuils du casque : α ambre au-delà de 35°, G ambre au-delà de 5,6 et rouge au-delà de 6,65. Le corps du pilote : voile gris puis noir, perte de connaissance si le voile noir dure 1,5 s (~8 s inconscient) ; voile rouge sous −1,5 g.</figcaption></figure>
+<ul>
+<li>Le <b>chevron d'énergie</b> à côté du vecteur vitesse : au-dessus des ailes on gagne de la vitesse, en dessous on en perd.</li>
+<li>L'<b>Auto-GCAS</b> (train rentré, hors loi directe) tire à 5 g et remet les ailes à plat quand le sol arriverait : deux chevrons qui se referment, puis <code>AUTO GCAS — FLY UP</code>. L'<b>Auto-ACAS</b> évite un autre appareil.</li>
+<li>En <b>loi directe</b> (Réglages › Jeu › F-35 › Loi de pilotage), plus de protection : la vrille devient possible ; on en sort en lâchant tout ~10 s.</li>
+</ul>
+<figure><img src="progress/aviation/v2-f35-alpha50.jpg" alt="Le F-35 à 50 degrés d'incidence" loading="lazy"><figcaption>Le F-35 à 50° d'incidence, plein manche arrière en loi normale : il ne part pas. Capture de la phase V2 (octobre 2026).</figcaption></figure>
+</section>
+
+<section id="l6">
+<h2>Leçon 6 — Le tour de piste et l'atterrissage</h2>
+<figure>
+<svg viewBox="0 0 640 290" role="img" aria-label="Le tour de piste vu de dessus">
+<defs><marker id="a5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="var(--accent)"/></marker></defs>
+<rect x="250" y="210" width="300" height="18" fill="var(--line)" stroke="var(--fg)"/><text x="400" y="223" text-anchor="middle" font-size="11">piste — atterrissage →</text>
+<path d="M600 70 H190 A70 70 0 0 0 120 140 A70 70 0 0 0 190 219 H248" fill="none" stroke="var(--accent)" stroke-width="3" marker-end="url(#a5)"/>
+<path d="M420 70 H380" stroke="var(--accent)" stroke-width="3" marker-end="url(#a5)"/>
+<line x1="250" y1="200" x2="250" y2="80" class="st-muted" stroke-dasharray="3 4"/><line x1="190" y1="80" x2="250" y2="80" class="st-muted"/>
+<line x1="560" y1="78" x2="560" y2="206" class="st-muted" stroke-dasharray="4 4"/>
+<g font-size="12">
+<text x="260" y="56">vent arrière (tour à droite) : 300 m sol, 100 m/s, train sorti</text>
+<text x="566" y="146">1,8 km</text>
+<text x="196" y="98" class="sv-muted">3 km après le seuil</text>
+<text x="8" y="120">demi-tour</text><text x="8" y="136">r = 900 m</text><text x="8" y="152">≈ 49° à</text><text x="8" y="168">100 m/s</text>
+<text x="160" y="262">finale : pente 3°, volets, vitesse stable</text>
+<text x="250" y="246" class="sv-muted">seuil</text>
+</g></svg>
+<figcaption>Le tour de piste de l'école (vu de dessus) : vent arrière à 300 m au-dessus du terrain et 1,8 km à côté de la piste ; 3 km après le seuil, un <b>demi-tour continu de 900 m de rayon</b> vers l'axe en descendant vers 200 m — ≈ 49° d'inclinaison à 100 m/s, ≈ 36° à 80 m/s (ralentir avant ; l'autopilote, limité à 30°, ne le vole pas) ; finale sur la pente de 3°.</figcaption></figure>
+<figure>
+<svg viewBox="0 0 640 220" role="img" aria-label="Profil de finale et arrondi">
+<line x1="20" y1="180" x2="620" y2="180" class="st-line" stroke-width="2"/>
+<rect x="470" y="176" width="150" height="8" fill="var(--line)"/>
+<path d="M30 40 L470 180" stroke="var(--accent)" stroke-width="3" fill="none"/>
+<path d="M430 167 Q470 178 520 180" stroke="var(--warn)" stroke-width="3" fill="none"/>
+<g font-size="12"><text x="60" y="34">pente de 3° (le vecteur vitesse posé sur le point de visée)</text><text x="330" y="140" style="fill:var(--warn)">arrondi dès 14 m ↘</text><text x="610" y="205" text-anchor="end">toucher : 150–900 m après le seuil</text><text x="470" y="170" class="sv-muted" text-anchor="middle">seuil</text></g>
+</svg>
+<figcaption>La finale et l'arrondi. Vitesse d'approche (calcul) : ≈ 92 m/s pleins, ≈ 81 m/s à 16 t. Toucher : ≤ 3 m/s posé, ≤ 4,5 dur, au-delà écrasé.</figcaption></figure>
+<div class="grid2">
+<figure><img src="progress/aviation/p4a-final.jpg" alt="En finale : le casque, le vecteur vitesse sur la piste" loading="lazy"><figcaption>En finale : la piste, le vecteur vitesse posé sur le point de visée, la carte d'approche.</figcaption></figure>
+<figure><img src="progress/aviation/p4a-touchdown.jpg" alt="Le toucher" loading="lazy"><figcaption>Le toucher, train sorti. Planches de la phase P4a (octobre 2026).</figcaption></figure>
+</div>
+<div class="box bad"><b>Erreurs</b>Arrondir trop haut (l'avion flotte puis tombe) · plonger vers la piste (suivre la pente, le point de visée immobile) · laisser de la puissance à l'arrondi · lent et bas en finale (de la puissance d'abord).</div>
+</section>
+
+<section id="l7">
+<h2>Leçon 7 — L'approche ILS</h2>
+<figure>
+<svg viewBox="0 0 640 230" role="img" aria-label="Profil ILS">
+<line x1="20" y1="190" x2="620" y2="190" class="st-line" stroke-width="2"/><rect x="560" y="186" width="60" height="8" fill="var(--line)"/>
+<path d="M30 60 H120 L560 190" stroke="var(--accent)" stroke-width="3" fill="none"/>
+<g font-size="12" text-anchor="middle">
+<circle cx="70" cy="60" r="5" fill="var(--accent)"/><text x="70" y="48">IAF 18,5 km</text>
+<circle cx="120" cy="60" r="5" fill="var(--accent)"/><text x="230" y="58" text-anchor="start">← pente rejointe par en dessous</text>
+<circle cx="330" cy="122" r="5" fill="var(--warn)"/><text x="340" y="108" text-anchor="start">FAF 9,3 km : train, volets, stable</text>
+<circle cx="510" cy="176" r="5" fill="var(--bad)"/><text x="520" y="160" text-anchor="start">minimums 60 m</text>
+<text x="560" y="214">arrondi 14 m</text></g></svg>
+<figcaption>L'ILS : un alignement (localizer) et une pente de 3° (glideslope). Au HUD, les points de pente à droite, ceux d'alignement en bas, des losanges magenta, la phase (IAF, LOC, LOC GS, FLARE, ROLL, GA).</figcaption></figure>
+<p><b>Conditions</b> : un avion en l'air ; une piste nommée à toute distance, sinon la plus proche à moins de 150 km ; l'approche coupe l'autopilote en cours et vole elle-même jusqu'au point initial, l'alignement, la pente, l'arrondi ; elle refuse une pente qui rentre dans le relief.</p>
+<p><b>Au clavier</b> : Tab › Navigation › <b>Approche ILS</b> (la piste face au vent, ou une piste choisie dans la sous-roue). Toucher le manche ou la manette repasse en manuel. Stable aux minimums, on continue ; sinon <b>remise de gaz</b> droit devant.</p>
+<details><summary>Par <code>__bh</code></summary>
+<pre>const c = __bh.camera;
+c.ilsRunways("KEDW");   // les pistes possibles, celle face au vent marquée
+c.ilsStart("KEDW");     // toujours un message : "ILS approach: …" ou "ILS: …" (refus)
+// avancer jusqu'à c.ilsRun === null ; c.ilsLast = { rwy, score, notes, touch: { along, across, vs } }
+// réussi : 150 ≤ touch.along ≤ 900 m, |touch.across| &lt; 8 m, touch.vs &gt; -3 (vs est signé, négatif en descente)</pre></details>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b><code>ilsStart("KEDW")</code> depuis 12 km : <b>20/20</b>, toucher à 470 m du seuil, 0,6 m de l'axe, −0,8 m/s.</div>
+<div class="grid2"><figure><img src="progress/apprendre/av-l7-courte-finale.jpg" alt="Courte finale : alignement et pente capturés, le HUD ILS" loading="lazy"><figcaption>Courte finale : alignement et pente capturés, le HUD ILS</figcaption></figure><figure><img src="progress/apprendre/av-l7-pose.jpg" alt="Posé : « LANDING — A », 20/20" loading="lazy"><figcaption>Posé : « LANDING — A », 20/20</figcaption></figure></div>
+</section>
+
+<section id="l8">
+<h2>Leçon 8 — Le F-35B en stationnaire, le F-35C sur porte-avions</h2>
+<div class="grid2">
+<div>
+<h3>F-35B : STOVL</h3>
+<p><kbd>⇧</kbd><kbd>B</kbd> convertit en 6 s (trappes, soufflante, tuyère). Sous <b>65 m/s</b>, la loi de stationnaire : <b>le manche commande une vitesse sol</b>, <kbd>⇧</kbd>/<kbd>Alt</kbd> une vitesse verticale (±4 m/s), <b>lâché, l'avion tient son point</b>. Il tient en l'air sous ~<b>17,8 t</b> : brûler ~3 t de carburant avant un poser vertical.</p>
+<p><code>carrierSpawn</code> pose le navire 4 km devant <b>où que l'on soit</b> : se placer d'abord en mer. Sur un porte-avions : <kbd>F7</kbd> l'appontage vertical (à moins de 30 km), <kbd>U</kbd> le décollage court ou vertical.</p>
+</div>
+<div>
+<h3>F-35C : catapulte et brins</h3>
+<p><kbd>U</kbd> sur la catapulte (72 m/s en bout de course). <kbd>F7</kbd> l'appontage : pente 3,5° sur le <i>Ford</i>, le « ball » de l'officier d'appontage, un brin arrête l'avion en 100 m à 4,5 g au plus. Taux de chute admis au toucher : 8 m/s.</p>
+</div></div>
+<div class="grid2">
+<figure><img src="progress/f35/f4-stovl.jpg" alt="Le F-35B en stationnaire" loading="lazy"><figcaption>Le F-35B en STOVL : soufflante et trappes ouvertes, tuyère abaissée, stationnaire à Edwards (phase F4).</figcaption></figure>
+<figure><img src="progress/aviation/m3c-trap-ball.jpg" alt="L'appontage du F-35C" loading="lazy"><figcaption>F-35C en finale sur le porte-avions : le ball de l'officier d'appontage (phase M3c).</figcaption></figure>
+</div>
+<details><summary>Par <code>__bh</code></summary>
+<pre>c.carrierSpawn("ford"); c.carrierFinal("ford", 3500, 90);
+__bh.fleet.fuel.f35 = 1800;                       // assez léger pour le stationnaire
+c.deckLand("ford");      // F-35B ; puis c.deckLast = { dx, dz, sink, grade }
+// F-35C : __bh.settings.f35Variant = "C" (une image plus tard), c.catLaunch(0), c.trapLand("ford"), c.trapLast</pre></details>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b>La recette de cette leçon : en mer, le Ford 4 km devant, sa finale, 1 800 kg de carburant, les maintiens, <code>deckLand("ford")</code> (réessayé tant que la carte du pont charge) : posé à <b>0,5 m</b> du point, <b>1,2 m/s</b>, « OK ».</div>
+<figure><img src="progress/apprendre/av-l8-pont.jpg" alt="Le F-35B posé sur le Ford" loading="lazy"><figcaption>Le F-35B posé verticalement sur le pont du Ford.</figcaption></figure>
+</section>
+
+<section id="l9">
+<h2>Leçon 9 — Naviguer : le plan de vol et la NAV</h2>
+<p><kbd>⇧</kbd><kbd>O</kbd> ouvre le plan de vol sur la carte : un clic ajoute un point (sur un aérodrome, l'aérodrome), son altitude et sa vitesse ; le carburant à l'arrivée et le bingo. <kbd>⇧</kbd><kbd>M</kbd> engage la <b>NAV</b> : LNAV suit les branches, VNAV la montée et une descente à 3° ; la fin du plan passe la main à l'ILS. Autres modes (Tab › Navigation › Modes du pilote automatique) : orbite, hippodrome, <b>suivi de terrain</b> à 100, 150 ou 300 m, ravitaillement en vol.</p>
+<figure><img src="progress/f35/f8-plan-de-vol.jpg" alt="Le plan de vol du F-35" loading="lazy"><figcaption>Le plan de vol : édition sur la carte, LNAV/VNAV, la page TSD de l'écran panoramique, le bingo (phase F8).</figcaption></figure>
+</section>
+
+<section id="l10">
+<h2>Leçon 10 — L'A320 : du seuil de piste à l'atterrissage automatique</h2>
+<p>Ses commandes de vol électriques (loi normale Airbus) commandent <b>+2,5 / −1 g</b>, tiennent la trajectoire manche lâché, limitent l'inclinaison à 67° et l'assiette à +30°/−15°, et le protègent de l'incidence et de la survitesse. Tout est <b>lent</b> : 15°/s de roulis, des volets qui mettent ~30 s à sortir. Vitesses en <b>nœuds</b>, altitudes en <b>pieds</b>.</p>
+<figure><img src="progress/a320/a5-cockpit.jpg" alt="Le cockpit de l'A320" loading="lazy"><figcaption>Le poste de l'A320 : le cockpit de FlightGear (GPL v2) reconstruit, cliquable (phase A5).</figcaption></figure>
+<div class="grid2">
+<figure><img src="progress/a320/a8-fcu-ap.jpg" alt="Le FCU et le PFD de l'A320" loading="lazy"><figcaption>Le FCU (vitesse, cap, altitude, vitesse verticale) et le PFD avec ses modes (phase A8).</figcaption></figure>
+<figure><img src="progress/a320/a7-ecrans.jpg" alt="Les écrans de l'A320" loading="lazy"><figcaption>Les écrans : PFD, ND, ECAM, systèmes (phase A7).</figcaption></figure>
+</div>
+<figure>
+<svg viewBox="0 0 640 150" role="img" aria-label="Les crans du levier de poussée">
+<line x1="40" y1="70" x2="600" y2="70" class="st-line" stroke-width="6" stroke-linecap="round"/>
+<g font-size="12" text-anchor="middle">
+<line x1="40" y1="55" x2="40" y2="85" class="st-line" stroke-width="3"/><text x="40" y="104">ralenti 0</text>
+<line x1="376" y1="55" x2="376" y2="85" stroke="var(--accent)" stroke-width="3"/><text x="376" y="104" style="fill:var(--accent)">CL 0,6</text><text x="376" y="122" class="sv-muted">montée, A/THR</text>
+<rect x="477" y="55" width="28" height="30" fill="var(--warn)" opacity=".5"/><text x="491" y="104" style="fill:var(--warn)">FLX/MCT</text><text x="491" y="122" class="sv-muted">0,78–0,83</text>
+<rect x="572" y="55" width="28" height="30" fill="var(--bad)" opacity=".5"/><text x="586" y="104" style="fill:var(--bad)">TOGA</text><text x="586" y="122" class="sv-muted">≥ 0,95</text>
+<text x="200" y="40" class="sv-muted">l'A/THR travaille entre ralenti et CL</text></g></svg>
+<figcaption>Les crans du levier de poussée (<code>c.pilot.throttle</code>). On décolle en FLX ou TOGA, puis on ramène en CL à 1 500 ft : l'A/THR gère alors la vitesse.</figcaption></figure>
+<div class="grid2">
+<div><h3>Lire le FMA</h3><p>La bande du haut du PFD dit ce que fait l'automatisme : poussée (<code>MAN FLX</code>, <code>THR CLB</code>, <code>SPEED</code>, <code>IDLE</code>), vertical (<code>SRS</code>, <code>CLB</code>, <code>ALT*</code>, <code>ALT</code>, <code>G/S</code>, <code>LAND</code>, <code>FLARE</code>), latéral (<code>RWY</code>, <code>NAV</code>, <code>HDG</code>, <code>LOC</code>, <code>ROLL OUT</code>). Un mode <b>armé</b> s'écrit en cyan sur la seconde ligne, un mode <b>engagé</b> en vert sur la première. Lire le FMA après chaque action.</p></div>
+<div><h3>Les vitesses du FMGC</h3><p>V1 ≈ VR − 3 · <b>VR ≈ 135 kt</b> à la masse par défaut · V2 ≈ VR + 4 ; montée V2 + 10, puis 250 kt sous le FL100, puis ECON. À l'approche : green dot (≈ 2 × masse en t + 85 kt), S, F, puis <b>VAPP = VLS + ⅓ du vent de face</b> (5 à 15 kt de plus). Roulage : 30 kt en ligne droite, 10 kt en virage.</p></div>
+</div>
+<table><tr><th>Phase</th><th>Gestes</th><th>Chiffres</th></tr>
+<tr><td>Au poste</td><td>Préparer un vol › départ à la porte ; tablette › Au sol : services ; <kbd>Fin</kbd> : repoussage</td><td>frein de parc</td></tr>
+<tr><td>Préparation</td><td>démarrage <code>ready</code> ; <kbd>P</kbd> une fois au sol : CONF 1+F (P fait le tour 0 → 1 → 2 → 3 → FULL → 0)</td><td>CONF 1+F = becs 18°, volets 10°</td></tr>
+<tr><td>Décollage</td><td><kbd>Z</kbd> <span class="k-az">(W)</span> = TOGA, ou le levier au cran FLX ; axe au lacet</td><td>V1 ≈ VR − 3 · <b>VR ≈ 135 kt</b> (64,8 t) · V2 ≈ VR + 4</td></tr>
+<tr><td>Rotation</td><td>à VR, <kbd>S</kbd> doucement jusqu'à 15°</td><td>~3°/s</td></tr>
+<tr><td>Montée</td><td><kbd>G</kbd> train ; à 1 500 ft levier en CL (l'A/THR, déjà armé, devient actif) ; volets rentrés au levier du poste (<kbd>P</kbd> ne fait que monter)</td><td>—</td></tr>
+<tr><td>Autopilote</td><td><kbd>'</kbd> AP1 — <b>pas</b> <kbd>⇧</kbd><kbd>'</kbd> : l'A/THR est déjà armé et serait coupé</td><td>AP1 ≥ 5 s après le décollage et ≥ 100 ft</td></tr>
+<tr><td>Croisière</td><td>le FCU (cliquer le cockpit) ; <kbd>⇧</kbd><kbd>M</kbd> NAV</td><td>250 kt sous le FL100</td></tr>
+<tr><td>Approche</td><td>volets jusqu'à FULL, <kbd>G</kbd>, Tab › Navigation › Approche ILS</td><td>FULL : becs 27°, volets 35° (~30 s)</td></tr>
+<tr><td>Atterrissage</td><td>avec l'AP : LAND (400 ft), FLARE (50 ft), ROLL OUT ; ralenti</td><td>toucher &lt; 3 m/s</td></tr>
+<tr><td>Au sol</td><td><kbd>⇧</kbd><kbd>Z</kbd> inverseurs · <kbd>⇧</kbd><kbd>B</kbd> autofrein · <kbd>Fin</kbd> repoussage · frein de parc : la poignée du poste</td><td>autofrein LO 1,7 · MED 3,0 m/s²</td></tr>
+</table>
+<figure><img src="progress/a320/a4-lois.jpg" alt="Les lois de l'A320 mesurées" loading="lazy"><figcaption>Les lois Airbus mesurées dans le simulateur : roulis tenu, protection d'incidence et α floor, protection de grande vitesse (phase A4).</figcaption></figure>
+<div class="box warn"><b>Ce qui n'abîme pas l'A320</b>Les survitesses (VLE 284 kt, VFE + 4 kt, VMO) ne sont que des alarmes ECAM ; aucune masse maximale n'est vérifiée. Il n'y a pas encore de manuel du joueur de l'A320.</div>
+<details><summary>Par <code>__bh</code></summary>
+<pre>__bh.settings.vessel = "a320"; __bh.settings.a320Start = "ready";   // attendre __bh.fleet.active === "a320"
+__bh.game.lineUp("Paris – Le Bourget");                   // puis attendre de nouveau !!__bh.camera.a320Sys
+const c = __bh.camera;
+c.airFlight.cfg.flaps = 0.25;                              // levier / 4 (1 = FULL)
+c.a320Park = false; c.pilot.throttle = 1;                  // TOGA ; le manche à VR (pilotInput)
+// en l'air ≥ 5 s et ≥ 100 ft : c.a320ApKey("ap") ; l'A/THR est déjà armé ; le FMA : c.a320Fmgc.fma() ; FCU : c.a320Fmgc.altTurn(n), .hdgTurn(n), .spdTurn(n)
+c.ilsStart("LFPB");      // l'A320 passe la main à son FMGC : la suivre par c.a320App (c.ilsRun reste nul), la note dans c.ilsLast</pre></details>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b>Décollage TOGA en 28 s, <b>AP1</b> engagé (FMA : MAN TOGA · SRS · RWY TRK, A/THR armé) ; l'approche ILS du Bourget depuis 19 km : <b>20/20</b>, toucher à 786 m, 1,1 m de l'axe, −0,8 m/s.</div>
+<div class="grid2"><figure><img src="progress/apprendre/av-l10-a320-aligne.jpg" alt="L'A320 aligné au Bourget, le poste" loading="lazy"><figcaption>L'A320 aligné au Bourget, le poste</figcaption></figure><figure><img src="progress/apprendre/av-l10-a320-pose.jpg" alt="Posé par son FMGC : 20/20" loading="lazy"><figcaption>Posé par son FMGC : 20/20</figcaption></figure></div>
+</section>
+
+<section id="l11">
+<h2>Leçon 11 — S'entraîner avec l'école de vol</h2>
+<p>Tab maintenu › Leçons et défis › <b>École de vol</b> : dix-huit leçons — premier vol, tour de piste, atterrissage, approche ILS, cas I et le ball, patrouille, interception, canon, dix figures de voltige. <b>Démonstration</b> (TARS vole tout en commentant), <b>Guidé</b> (TARS, puis vous), <b>Essayer</b> (vous, l'instructeur annonce les écarts et rend un débriefing noté sur 20).</p>
+<figure><img src="progress/aviation/a4-school.jpg" alt="L'école de vol" loading="lazy"><figcaption>L'école de vol : chaque leçon son schéma, ses étapes chiffrées, ses erreurs courantes (phase A4).</figcaption></figure>
+<p><b>Progression conseillée</b> : leçons 1 à 4 en Assisté · l'école « Premier vol » puis « Tour de piste » en Essai · « Atterrissage » et « Approche ILS » · passer en Réaliste · le F-35B, le F-35C · l'A320.</p>
+<details><summary>Par <code>__bh</code></summary>
+<pre>__bh.flight.school.demo("landing");    // aussi guided(id), tryIt(id) ; id : first, circuit, landing, ils, case1, …
+__bh.flight.school.state();            // { step, steps, name, stepT, left, stalled, … } — à lire toutes les 2 s</pre></details>
+</section>
+
+<section id="clavier">
+<h2>Aide-mémoire — le clavier</h2>
+<figure>
+<svg viewBox="0 0 770 250" role="img" aria-label="Clavier AZERTY : les touches de vol">
+<g font-size="14" text-anchor="middle">
+<rect x="60" y="12" width="56" height="56" rx="7" fill="var(--accent)"/><text x="88.0" y="36" style="fill:#fff" font-weight="700">A</text><text x="88.0" y="54" font-size="10" style="fill:#fff">roulis ←</text>
+<rect x="122" y="12" width="56" height="56" rx="7" fill="var(--warn)"/><text x="150.0" y="36" style="fill:#fff" font-weight="700">Z</text><text x="150.0" y="54" font-size="10" style="fill:#fff">piqué</text>
+<rect x="184" y="12" width="56" height="56" rx="7" fill="var(--accent)"/><text x="212.0" y="36" style="fill:#fff" font-weight="700">E</text><text x="212.0" y="54" font-size="10" style="fill:#fff">roulis →</text>
+<rect x="246" y="12" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="274.0" y="36" class="sv-muted">R</text>
+<rect x="308" y="12" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="336.0" y="36" class="sv-muted">T</text>
+<rect x="370" y="12" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="398.0" y="36" class="sv-muted">Y</text>
+<rect x="432" y="12" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="460.0" y="36" font-weight="700">U</text><text x="460.0" y="54" font-size="10" class="sv-muted">(décollage)</text>
+<rect x="494" y="12" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="522.0" y="36" class="sv-muted">I</text>
+<rect x="556" y="12" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="584.0" y="36" font-weight="700">O</text><text x="584.0" y="54" font-size="10" class="sv-muted">⇧ plan</text>
+<rect x="618" y="12" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="646.0" y="36" font-weight="700">P</text><text x="646.0" y="54" font-size="10" class="sv-muted">volets</text>
+<rect x="76" y="76" width="56" height="56" rx="7" fill="var(--ok)"/><text x="104.0" y="100" style="fill:#fff" font-weight="700">Q</text><text x="104.0" y="118" font-size="10" style="fill:#fff">lacet ←</text>
+<rect x="138" y="76" width="56" height="56" rx="7" fill="var(--warn)"/><text x="166.0" y="100" style="fill:#fff" font-weight="700">S</text><text x="166.0" y="118" font-size="10" style="fill:#fff">cabré</text>
+<rect x="200" y="76" width="56" height="56" rx="7" fill="var(--ok)"/><text x="228.0" y="100" style="fill:#fff" font-weight="700">D</text><text x="228.0" y="118" font-size="10" style="fill:#fff">lacet →</text>
+<rect x="262" y="76" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="290.0" y="100" class="sv-muted">F</text>
+<rect x="324" y="76" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="352.0" y="100" font-weight="700">G</text><text x="352.0" y="118" font-size="10" class="sv-muted">train</text>
+<rect x="386" y="76" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="414.0" y="100" class="sv-muted">H</text>
+<rect x="448" y="76" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="476.0" y="100" class="sv-muted">J</text>
+<rect x="510" y="76" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="538.0" y="100" class="sv-muted">K</text>
+<rect x="572" y="76" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="600.0" y="100" class="sv-muted">L</text>
+<rect x="634" y="76" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="662.0" y="100" font-weight="700">M</text><text x="662.0" y="118" font-size="10" class="sv-muted">⇧ NAV</text>
+<rect x="696" y="76" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="724.0" y="100" font-weight="700">ù</text><text x="724.0" y="118" font-size="10" class="sv-muted">AP</text>
+<rect x="104" y="140" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="132.0" y="164" font-weight="700">W</text><text x="132.0" y="182" font-size="10" class="sv-muted">plein gaz</text>
+<rect x="166" y="140" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="194.0" y="164" font-weight="700">X</text><text x="194.0" y="182" font-size="10" class="sv-muted">coupé</text>
+<rect x="228" y="140" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="256.0" y="164" class="sv-muted">C</text>
+<rect x="290" y="140" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="318.0" y="164" font-weight="700">V</text><text x="318.0" y="182" font-size="10" class="sv-muted">vue</text>
+<rect x="352" y="140" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="380.0" y="164" font-weight="700">B</text><text x="380.0" y="182" font-size="10" class="sv-muted">⇧ STOVL</text>
+<rect x="414" y="140" width="56" height="56" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="442.0" y="164" class="sv-muted">N</text>
+<rect x="4" y="140" width="96" height="56" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="52.0" y="164" font-weight="700">⇧ Maj</text><text x="52.0" y="182" font-size="10" class="sv-muted">gaz +</text>
+<rect x="120" y="204" width="70" height="44" rx="7" fill="var(--card)" stroke="var(--accent)" stroke-width="1.5"/><text x="155" y="224" font-weight="700">Alt</text><text x="155" y="240" font-size="10" class="sv-muted">gaz −</text>
+<rect x="200" y="204" width="300" height="44" rx="7" fill="var(--card)" stroke="var(--line)"/><text x="350" y="231" class="sv-muted">Espace (pause · canon en combat)</text>
+</g></svg>
+<figcaption>Les touches de vol sur un clavier français (AZERTY). Le jeu les lit par position : sur un clavier QWERTY ce sont les mêmes touches physiques (W/S, A/D, Q/E, Z/X).</figcaption></figure>
+<table><tr><th>Avec ⇧ (Maj)</th><th>Quoi</th></tr>
+<tr><td><kbd>⇧</kbd><kbd>W</kbd> · <kbd>⇧</kbd><kbd>X</kbd></td><td>postcombustion (A320 : inverseurs) · retour au vol stable</td></tr>
+<tr><td><kbd>⇧</kbd><kbd>ù</kbd></td><td>auto-manette (A320 : A/THR)</td></tr>
+<tr><td><kbd>⇧</kbd><kbd>M</kbd> · <kbd>⇧</kbd><kbd>O</kbd></td><td>NAV (le plan de vol volé) · le panneau du plan de vol</td></tr>
+<tr><td><kbd>⇧</kbd><kbd>B</kbd> · <kbd>⇧</kbd><kbd>P</kbd></td><td>STOVL du F-35B (A320 : autofrein) · aérofrein</td></tr>
+<tr><td><kbd>Tab</kbd> · <kbd>F6</kbd> · <kbd>F7</kbd> · <kbd>Fin</kbd> · <kbd>⌫</kbd></td><td>la roue (maintenu) ou le verrou radar suivant (bref) · TARS · atterrissage automatique (porte-avions) · repoussage (A320) · tout relâcher</td></tr>
+</table>
+</section>
+
+<section id="chiffres">
+<h2>Aide-mémoire — les chiffres</h2>
+<table>
+<tr><th></th><th>F-35B</th><th>F-35C</th><th>A320</th></tr>
+<tr><td>Masse · carburant</td><td>20,9 t · 6 125 kg</td><td>24,9 t · 8 960 kg</td><td>64,8 t · 8 000 kg</td></tr>
+<tr><td>Poussée</td><td>120 kN sec, 176 kN PC</td><td>idem</td><td>2 × 120 kN</td></tr>
+<tr><td>Facteur de charge</td><td>+7 / −3 g (4 g train sorti)</td><td>idem</td><td>+2,5 / −1 g</td></tr>
+<tr><td>Rupture structurale</td><td>10,5 g</td><td>10,5 g</td><td>3,75 g</td></tr>
+<tr><td>Rotation au décollage</td><td>≈ 70 m/s</td><td>catapulte 72 m/s</td><td>VR ≈ 135 kt</td></tr>
+<tr><td>Approche</td><td>≈ 81–92 m/s, pente 3°</td><td>pente 3,5° (Ford)</td><td>selon la masse</td></tr>
+<tr><td>Toucher</td><td>≤ 3 posé · ≤ 4,5 dur</td><td>jusqu'à 8 m/s</td><td>≤ 3 posé · ≤ 4,5 dur</td></tr>
+<tr><td>Train</td><td colspan="3">8 s par sens ; aucune vitesse limite appliquée</td></tr>
+</table>
+</section>
+
+<section id="pieges">
+<h2>Aide-mémoire — les pièges</h2>
+<ul>
+<li><b>Un placement remet tout à zéro</b> : manette 0, autopilote coupé, réservoirs pleins, volets rentrés. Un jet placé en l'air à manette 0 plane jusqu'au sol : engager l'auto-manette.</li>
+<li><b><code>jetToggle</code> bascule</b> : un second appel coupe tout. Utiliser <code>apSet</code>.</li>
+<li><b>L'altitude est au-dessus de la mer</b> : la hauteur sol se lit à la radiosonde (ou <code>sys.heightOverGround</code>).</li>
+<li><b>Un crash met le jeu en pause</b> (écran « craft lost ») : un bouton de l'écran, ou un nouveau placement puis la fermeture de l'écran.</li>
+<li><b>Échap ouvre la pause</b> : ne pas s'en servir pour fermer un écran.</li>
+<li>Le détail, et les tests : <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/E2E-VOLS.md">E2E-VOLS.md</a> · la référence : <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/VOL-AVIONS.md">VOL-AVIONS.md</a>.</li>
+</ul>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b>Le crash volontaire : pause et écran de perte ; un nouveau placement efface la panne mais l'écran reste ; « Continuer sans dégâts » (vrai clic) relance le temps.</div>
+<div class="grid2"><figure><img src="progress/apprendre/av-crash-ecran.jpg" alt="L'écran de perte : « CRAFT LOST », le jeu en pause" loading="lazy"><figcaption>L'écran de perte : « CRAFT LOST », le jeu en pause</figcaption></figure></div>
+</section>
+
+</main>
+</div>
+</body>
+</html>

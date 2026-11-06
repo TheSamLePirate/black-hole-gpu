@@ -18,20 +18,37 @@ GM/c³; `src/system/solar.ts` `M_METRES`, `M_SECONDS` convert). Most game tools 
 and say so. "Home frame": our universe's frame, our wormhole's mouth at the origin. Unless said otherwise
 a function is synchronous.
 
+**Heights — which datum** (CLAUDE.md, "The Earth is WGS84"). Getting this wrong is a frequent cause of failed flight tests:
+
+| read | datum |
+|---|---|
+| `__bh.game.flyAt(…, aglM)`, `glideTo(…, altKm)`, `hoverOver(…, altKm)` | over the ground (relief loaded at the call; `hoverOver`: the gear's clearance) |
+| `__bh.game.orbit({ altKm, peKm, apKm })`, `near({ altKm })` | over the sphere of the body's equatorial radius |
+| `__bh.game.status().altKm`, `camera.geoNow().alt`, `camera.jetModes.alt`, `camera.jetFigures().h`, `apSet({ alt })` | the Earth: over the sea (geoid, h − N) |
+| `__bh.sys.geodetic().altM`, `airFlight.last.h` | over the ellipsoid |
+| `__bh.relief`, `__bh.sys.groundAt` | the ground over the ellipsoid |
+| `__bh.sys.heightOverGround(id, X, t)` | over the ground: **the AGL to use** |
+| `status().orbit.peKm/apKm`, `__bh.recorder` `alt` | geodetic heights over the surface / over the ground |
+
+**Before writing a flight test**, read [E2E-VOLS.md](E2E-VOLS.md) (placing a craft, time, waits, autopilots, gear, the
+frequent failures) and, for the physics, [VOL-AVIONS.md](VOL-AVIONS.md) / [VOL-VAISSEAUX.md](VOL-VAISSEAUX.md).
+
 **The live list.** `bun scripts/bh-api.ts` prints every member as the running page has it (path, kind,
 arity). `bun scripts/bh-api.ts --check` lists the members this page is missing. `tests/e2e/bh-api.e2e.test.ts`
 fails when one is missing: every member of `__bh`, and of its namespaces (`game`, `bench`, `iss`, `sky`,
 `gpu`, `hud`, `sys`, `pwa`, `tarsVoice`, `tars`, `mode`), has its own heading or table row here, under its full path.
 The big live objects (`settings`, `camera`, `renderer`, `sim`, `fleet`, `mission`, …) are documented by the
-members tests use; their source is their full reference.
+members tests use; their source is their full reference. "Used in" counts are file counts in `tests/` and `scripts/`
+(6 Nov 2026); regenerate with `git ls-files tests scripts | xargs grep -lE "game\.<m>\b" | wc -l`.
 
 **Contents**
 
 1. [The loop, scenes, settings and rendering](#the-loop-scenes-settings-and-rendering) — `freeze`, `step`,
-   `preset`, `settings`, `render`, `video`, `gpu`, `pwa`, `hud`, …
+   `preset`, `settings`, `render`, `video`, `gpu`, `pwa`, `hud`, …; the time controls compared; the
+   [readiness predicates](#readiness-predicates)
 2. [The game's tools — `__bh.game`](#the-games-tools--__bhgame) — status, orbit, land, glide, saves, warp, targets
 3. [The ship, its flight, the world](#the-ship-its-flight-the-world) — `camera` (the pilot, autopilots,
-   holds), `fleet`, `mission`, `sys`, `iss`, `sky`, the cockpit
+   holds, the jets' members), `fleet`, `mission`, `sys`, `iss`, `sky`, the cockpit
 4. [The aircraft's game and the network — `__bh.flight`, `__bh.net`](#the-aircrafts-game-and-the-network--__bhflight-__bhnet)
    — the F-35's pages (hub, route, challenges, missions, views, replay, flight school), the room
 5. [Sound, voices, TARS, the bench](#sound-voices-tars-the-bench)
@@ -51,13 +68,27 @@ for (let i = 0; i < 150; i++) __bh.step(1 / 30); // each call advances camera, s
 __bh.freeze(false);
 ```
 
-`freeze(true)` stops the loop's own `sim.step` (and the flight clock and the rain clock); the image still redraws. `step(dt)` is what moves time. Fix the calendar with `setDate` when a scene uses "now" (the station, the fleet). Grep `tests/e2e` for `__bh.freeze(true)` (about 33 occurrences) for more.
+`freeze(true)` stops the loop's own `sim.step` (and the flight clock and the rain clock); the image still redraws, and the tiles, the compiles, the network, the traffic and the weather keep going. `step(dt)` is what moves time. Fix the calendar with `setDate` when a scene uses "now" (the station, the fleet). `freeze(true)` appears in about 184 e2e files.
+
+**Time controls compared** (details: [E2E-VOLS.md](E2E-VOLS.md) §3).
+
+| call | what stops / moves | what keeps running |
+|---|---|---|
+| `__bh.freeze(true)` | the loop's `sim.step`: craft, autopilots, mission, character, clocks, replay tape; live sound muted | rendering, tile streaming, kernel compiles, network, traffic, weather |
+| `__bh.step(dt)` | advances the frame clock and `sim.step(dt)` once, then asks for a redraw (it draws nothing itself) | — **if the page is not frozen, the loop steps too: the flight is stepped twice** |
+| `__bh.game.pause(on)` | `settings.animate = !on`: scene time stops and `flyShip` returns at once (no autopilot, no vessel switch); `step` no longer advances the clock | rendering, compiles, the camera's look |
+| `__bh.game.warp(x)` | `timeSpeed` and `animate = true` (**it also un-pauses**); in thick air the flight caps it at ×4 every step; autopilots set their own ceilings | — |
+| `__bh.setTime(t)` | the raw clock [M]; the craft is **not** carried | — |
+| `__bh.game.setDate(iso)` / `jumpTo(t)` | the clock, the craft carried with the moving world (Gargantua-system scenes); clears the flight plan | — |
+| `__bh.setDate(ms)` | the calendar "now" read by the ISS, the fleet, the solar layout | the scene clock itself |
+
+The loop clamps its `dt` to 0.1 s: under 10 fps the flight runs slower than the wall clock.
 
 **Loading a scene.** Two routes:
 - By URL: `App.boot({ hash: "scene=game:artemis" })` (tests/e2e/lib/app.ts) navigates to `…?e2e=…#scene=game:artemis`. At start, `main.ts` reads `scene` from the hash and calls `applyPreset(scene)` when `presets[scene]` exists, skipping the title screen. A `#save=…` link wins over it.
 - In the page: `__bh.preset("Earth: the Blue Marble")`. It replaces the scene's settings with the defaults, then the preset's; the player's `pref` settings and the image's `carried` settings are kept (`SETTING_KIND` in `settings.ts`). An unknown name is not an error: it silently resets to the defaults.
 
-Scene names that exist: `__bh.scenes()` (about 80 keys of `__bh.presets`, e.g. `"Interstellar (no shifts)"`, `"Earth: docking to the ISS"`, `"Miller: the water world"`, `"game:artemis"`, `"game:interstellar"`). The `game:` ones are flight scenes.
+Scene names that exist: `__bh.scenes()` (96 keys on 6 Nov 2026 of `__bh.presets`, e.g. `"Interstellar (no shifts)"`, `"Earth: docking to the ISS"`, `"Miller: the water world"`, `"game:artemis"`, `"game:interstellar"`). The `game:` ones are flight scenes.
 
 ### `__bh.freeze(on: boolean)` → void
 
@@ -66,16 +97,18 @@ Stops (`true`) or resumes (`false`) the live loop's `sim.step`, and with it the 
 ```js
 (__bh.freeze(false), __bh.game.importSave(json, false), true)
 ```
-*Used in:* `tests/e2e/worlds.e2e.test.ts`, `tests/e2e/landing.e2e.test.ts`, `tests/e2e/dock-undock.e2e.test.ts` (about 33 occurrences of `freeze(true)` in `tests/e2e`).
+Returns its argument. A camera mount or a view written while frozen is applied at the next steps: step 3 frames (or unfreeze briefly) before shooting.
+
+*Used in:* `tests/e2e/worlds.e2e.test.ts`, `tests/e2e/landing.e2e.test.ts`, `tests/e2e/dock-undock.e2e.test.ts` (about 184 e2e files).
 
 ### `__bh.step(dt: number)` → number
 
-Advances the whole scene by `dt` seconds of wall time: the frame clock (`frameclock.ts`), `sim.step(dt)` (camera and ship and their autopilots, the mission, the clock if `animate` and `timeSpeed > 0`), the ship's render state, then a redraw is requested. Returns the scene time after the step [M]. `step(0)` runs the step with no time passing: used after a manual `sim.setTime` so the display catches up. Works frozen or not; the usual step is `1/30` s.
+Advances the whole scene by `dt` seconds of wall time: the frame clock (`frameclock.ts`), `sim.step(dt)` (camera and ship and their autopilots, the mission, the clock if `animate` and `timeSpeed > 0`), the ship's render state, then a redraw is requested. Returns the scene time after the step [M]. `step(0)` runs the step with no time passing: used after a manual `sim.setTime` so the display catches up. Works frozen or not, but **only frozen is it the only stepper** (unfrozen, the loop's own steps add to it); the usual step is `1/30` s. It does not render, and the tiles are requested by rendered frames, not by steps: a long stepped flight inside one call meets no new tile. With `settings.animate` false (paused), the clock does not advance.
 
 ```js
 (() => { for (let i = 0; i < 5; i++) { __bh.step(1 / 30); if (c.ourLanded || c.airFlight.failure) return true; } return false; })()
 ```
-*Used in:* `tests/e2e/worlds.e2e.test.ts`, `tests/e2e/callouts.e2e.test.ts`, `tests/e2e/wormhole-map.e2e.test.ts`.
+*Used in:* about 88 files, e.g. `tests/e2e/worlds.e2e.test.ts`, `tests/e2e/callouts.e2e.test.ts`, `tests/e2e/landing.e2e.test.ts`.
 
 ### `__bh.time()` → number
 
@@ -97,30 +130,30 @@ if (__bh.presets[name].time === undefined) __bh.setTime(0);
 
 ### `__bh.setDate(ms: number | null)` → void
 
-Fixes "now" for the scenes of the real time (the station, the fleet, the solar system's placement), as milliseconds since 1970. `null` frees it back to the wall clock. Call it before `preset` for a scene whose layout depends on the date.
+Fixes "now" for the scenes of the real time (the station, the fleet, the solar system's placement), as milliseconds since 1970. `null` frees it back to the wall clock. Call it before `preset` for a scene whose layout depends on the date. It does not move the scene's clock of a flight already placed: for that use `__bh.game.setDate` (which carries the craft) — `__bh.setDate` alone once left a game in 2067.
 
 ```js
 __bh.setDate(Date.UTC(2026, 9, 1, 12)); __bh.game.preset("Earth: docking to the ISS");
 ```
 *Used in:* `tests/e2e/dock-undock.e2e.test.ts`, `tests/e2e/rates.e2e.test.ts`, `tests/e2e/golden.e2e.test.ts` (restored with `setDate(null)`).
 
-### `__bh.touch()` → void
+### `__bh.touch()` → true
 
-Marks the scene changed so the next frame is drawn again. Direct assignments to `settings` bypass the routing that the panel uses (`main.ts`: a change says what it affects), so a test that sets a field directly calls `touch()` afterwards. Use `refresh()` instead when the change also needs the panels rebuilt.
+Marks the scene changed so the next frame is drawn again. Direct assignments to `settings` bypass the routing that the panel uses (`main.ts`: a change says what it affects), so a test that sets a field directly calls `touch()` afterwards. Use `refresh()` instead when the change also needs the panels rebuilt. Also call it before waiting on GPU frames: a converged, unchanged view submits no frame.
 
 ```js
 (__bh.settings.exposure = 0, __bh.touch(), 1)
 ```
-*Used in:* `tests/e2e/smoke.e2e.test.ts` (10 uses in `tests/`, 3 of them in smoke), `tests/e2e/photo-fps.e2e.test.ts`.
+*Used in:* about 178 files, e.g. `tests/e2e/smoke.e2e.test.ts`, `tests/e2e/photo-fps.e2e.test.ts`.
 
 ### `__bh.refresh()` → void
 
-Refreshes the settings panels (their values, the scene card, the quality line) and the buttons from `settings` (`refreshGui` in `main.ts`). Whether it also rebuilds the cockpit or the geometry is unclear: it does not do so in `refreshGui`. Call it after a change the panels must show, for instance the camera's attach point:
+`panel.refresh(); syncButtons()` (`main.ts` `refreshGui`): the settings panel's controls and the toolbar's buttons are redrawn from `settings`. Nothing else: the renderer and the cockpit read `settings` every frame anyway, and the panel's own change handlers are **not** run — so after writing `settings.shipMount` directly, call `__bh.camera.viewReset()` too (the look reset the panel would have done), then step a few frames and read the mount back:
 
 ```js
-(__bh.settings.shipMount = "cockpit", __bh.refresh(), true)
+(__bh.settings.shipMount = "cockpit", __bh.refresh(), __bh.camera.viewReset(), true)
 ```
-*Used in:* `tests/e2e/cockpit.e2e.test.ts`, `tests/e2e/hotas.e2e.test.ts`, `tests/e2e/audio-space.e2e.test.ts`, `tests/e2e/rain.e2e.test.ts`.
+*Used in:* about 49 files, e.g. `tests/e2e/cockpit.e2e.test.ts`, `tests/e2e/hotas.e2e.test.ts`, `tests/e2e/audio-space.e2e.test.ts`, `tests/e2e/rain.e2e.test.ts`.
 
 ### `__bh.preset(name: string)` → void
 
@@ -129,9 +162,11 @@ Loads a scene by its key in `__bh.presets` (the same as `#scene=…` at start, s
 ```js
 (__bh.setDate(Date.UTC(2026, 9, 1, 12)), __bh.preset("Earth: the Blue Marble"), __bh.touch(), 1)
 ```
-*Used in:* `tests/e2e/rates.e2e.test.ts`, `tests/e2e/ellipsoid.e2e.test.ts`, `tests/e2e/golden.e2e.test.ts`.
+`applyPreset` is synchronous: settings, pose, time, pilot and fleet are set on return (a look aimed at a body ends a frame later). The Earth's maps and tiles and the scene's kernels load afterwards: wait on the readiness predicates (see *Readiness predicates* below), not a fixed delay.
 
-### `__bh.presets` → object `Record<string, Preset>` (about 80 keys)
+*Used in:* about 23 files, e.g. `tests/e2e/rates.e2e.test.ts`, `tests/e2e/ellipsoid.e2e.test.ts`, `tests/e2e/golden.e2e.test.ts`.
+
+### `__bh.presets` → object `Record<string, Preset>` (96 keys on 6 Nov 2026)
 
 The built-in scenes. Each value is a partial `Settings` plus `time?`, `mission?`, `pose?` (a body view such as `"iss"`, `"earth"`, `"fleet"`, or `{ body, at:[lat,lon], altKm, look, … }`), and `issDistance?`. Tests add or override a scene by writing a key and then loading it with `preset`.
 
@@ -143,9 +178,9 @@ __bh.preset("WGS84 polar audit"); __bh.touch();
 
 ### `__bh.scenes()` → string[]
 
-The built-in scene names: `Object.keys(presets)`. Use it to loop over every scene No test or script calls it: `scripts/gallery.ts` reads `presets` itself.
+The built-in scene names: `Object.keys(presets)`. Use it to loop over every scene (`tests/e2e/lib/app.ts` does; `scripts/gallery.ts` reads `presets` itself).
 
-### `__bh.settings` → `Settings` (object, about 257 fields)
+### `__bh.settings` → `Settings` (object, 388 fields in `defaultSettings()` on 6 Nov 2026)
 
 The live settings of the view and the game: every field of `src/settings.ts` `Settings`, read and written directly (`__bh.settings.spin = 0.5`). Writes take effect on the next frame; after a write, call `__bh.touch()` (redraw) or `__bh.refresh()` (rebuild the panels and buttons). `preset` resets every field to `defaultSettings()` except the kept ones (see `__bh.preset`), so a field the scene does not set comes back at its default, not at its last value. Units and defaults of the most used fields:
 
@@ -180,7 +215,9 @@ The live settings of the view and the game: every field of `src/settings.ts` `Se
 | `anchor` | string | `"hole"`, `"wormhole"` | `"hole"` | what the camera orbits |
 | `whL` | number | M (< 0: our side) | -14 | camera position ℓ when orbiting the wormhole |
 | `ship` | boolean | | false | the spaceship carrying the camera |
-| `vessel` | string | `"ranger"`, `"lander"`, `"endurance"` | `"ranger"` | the craft flown |
+| `vessel` | string | `"ranger"`, `"lander"`, `"endurance"`, `"f35"`, `"a320"` | `"ranger"` | the craft wanted. Applied **at the next flight step with time running** (`switchVessel`, `controller/piloting.ts`): wait `__bh.fleet.active === "<id>"` before placing it. An aircraft chosen for the first time is lined up on the nearest runway (Edwards if none within 60 km), throttle 0 — a placement made before the switch lands is overwritten. A refused switch puts the setting back and says why through `__bh.camera.onPilotMessage` |
+| `f35Variant` | string | `"B"`, `"C"` | `"B"` | the F-35's variant (no F-35A) |
+| `crashSpeed` | number | m/s | 4.5 | touchdown sink rate: ≤ ⅔ landed, ≤ 1 hard, above crashed (F-35C: at least 8) |
 | `shipMount` | string | attach point (`ship.ts` MOUNTS: `"quarter"`, `"cockpit"`, `"cabin"`, `"dorsal"`, `"chase"`, `"dock"`…) | `"quarter"` | where the camera sits on the craft (`refresh()` after a change). Chosen as the game does (`main.ts setMount`: the look reset), set it with `__bh.camera.viewReset()` after: otherwise the look the scene turned (its `tilt`, its `look` onto a body) stays, and a chase view can leave the craft out of the image (`giant-entry.e2e.test.ts`) |
 | `shipLookYaw` | number | degrees | 0 | free look: the camera turned on its mount |
 | `navLights` | boolean | | false | the navigation lights |
@@ -219,17 +256,17 @@ The live settings of the view and the game: every field of `src/settings.ts` `Se
 | `haptics` | number | 0 … 1 | 0.6 | the controllers' vibrations |
 | `dynamicResolution` | boolean | | false | lower the render scale when the GPU misses its budget |
 
-Not in the table (see `Settings` in `src/settings.ts`, about 257 fields): the thin disk and jet parameters (`diskTemp`, `jetLorentz`…), the hot spot, the polarization, the wormhole's water, the HUD aids (`hud*`), the gear and the atmosphere's details, the TARS and sound details.
+Not in the table (see `Settings` in `src/settings.ts`, 388 fields): the thin disk and jet parameters (`diskTemp`, `jetLorentz`…), the hot spot, the polarization, the wormhole's water, the HUD aids (`hud*`), the gear and the atmosphere's details, the TARS and sound details.
 
 *Used in:* `tests/e2e/cockpit.e2e.test.ts`, `tests/e2e/audio-space.e2e.test.ts`, `tests/e2e/smoke.e2e.test.ts`, `tests/e2e/rates.e2e.test.ts` (`settings.target`, `settings.shipMount`, `settings.weather`, `settings.massSolar`, `settings.timeSpeed`, `settings.wind`, `settings.vessel`, `settings.voice`).
 
 ### `__bh.resize()` → void
 
-Re-reads the canvas size and resizes the renderer's targets to `pixelRatio` times the canvas, then redraws. With dynamic resolution on, the ratio is capped to the hardware tier's pixel budget, and the renderer's targets follow the current render scale. Call it after a change of `pixelRatio` or `uiScale`, or when the window's size changed in a test. No e2e test calls it directly.
+Re-reads the canvas size and resizes the renderer's targets to `pixelRatio` times the canvas, then redraws. With dynamic resolution on, the ratio is capped to the hardware tier's pixel budget, and the renderer's targets follow the current render scale. Call it after a change of `pixelRatio` or `uiScale`, or when the window's size changed in a test (about 10 e2e files do).
 
 ### `__bh.forceScale(x: number | null)` → void
 
-Holds the render scale for the image (0.25 … 1, values out of range are clamped), upscaled by the display; `null` releases it to the governor. No caller in `src/bench/`, `tests/` or `scripts/` was found. Calls `resize()` itself.
+Holds the render scale for the image (0.25 … 1, values out of range are clamped), upscaled by the display; `null` releases it to the governor and puts `renderScale` back to 1. Calls `resize()` itself. The way to sweep resolution in a measure (not `pixelRatio`). Used by 6 e2e files (`raster-motion`, `raster-flight`, `perf-ab`, `lowflight-governor`, `ghost`, `motion-quality`).
 
 ### `__bh.jitter` → object
 
@@ -374,9 +411,9 @@ end is `{ id, rwy, len, wind }`:
 Every paved runway of 900 m or more is listed (its runway tile in), the longest first. `auto` is the end taken when none is
 asked: the longest runway, into the wind.
 
-`ilsStart(field, { runway })` engages the approach on that end: « 13 », « RWY 05 », « 23L », or both ends « 05/23 » for that
-runway's end in use. It returns why not when the field has no such runway, or when the 3° slope runs into the relief
-(`glideClearance`, `game/ils.ts`). When the margin over the relief is thin, it says so. Each end of `ilsRunways` also
+`ilsStart(field, { runway, hold?, rwy?, base? })` engages the approach on that end: « 13 », « RWY 05 », « 23L », or both ends « 05/23 » for that
+runway's end in use. It **always returns a message**: on success `"ILS approach: <rwy>, N km"`; a refusal (`"ILS: …"`, `"… refused"`) when the field has no such runway, or when the 3° slope runs into the relief
+(`glideClearance`, `game/ils.ts`) — test the text, not null. On the A320 it hands the approach to its own FMGC (`a320Approach`; its fields in knots, feet, degrees). When the margin over the relief is thin, it says so. Each end of `ilsRunways` also
 carries `clearM`, the slope's least clearance [m].
 
 On the A320 the same call flies its FMGC (`camera.a320Approach`, `controller/a320ap.ts`), state in `camera.a320App`:
@@ -624,9 +661,30 @@ The loss's reason when the device is lost (null while it is up).
 
 *Used in:* `tests/e2e/gpu-recovery.e2e.test.ts`.
 
-### `__bh.renderer` → `Renderer` (class, about 340 members)
+### `__bh.renderer` → `Renderer` (class, several hundred members: `bun scripts/bh-api.ts` gives the live size)
 
-The renderer (`src/renderer.ts`). The members the tests read:
+The renderer (`src/renderer.ts`). The members the tests read. Many are TypeScript-`private` in the source but readable from the page (`featureKey`, `variants`, `lastPhase`, `lastDoneAt`, `earthMaps`, `hdLoading`, `hdMap`, `device`, `variantQueue`, `live`, `liveEyeHM`, `terrainRaster`, `terrainSurfaceCache`, `completedDurations`): a test may read them, a refactor may rename them.
+
+**Readiness — the members to wait on** (the composite waits are `App.settled`, `App.dataSettled`, `App.waitProgress` in `tests/e2e/lib/app.ts`; see *Readiness predicates* at the end of this section):
+
+| member | type | meaning |
+|---|---|---|
+| `tracerSettled` | getter boolean | **the scene's image is its own**: the first frame done, no "scene-tracer" or "pipelines" pill, the surface/scenery kernel compiled ahead ready, and the current key's realtime kernel compiled (or failed, or given up). The primary wait (`App.settled`). Covers the current kernel key only: moving the view can change the key (raster, bodies, runways, weather, eclipses, surface, scenery, auroras) and start a new compile |
+| `compilesPending` | getter number | kernels still queued or compiling (the variant queue + the general/quality/LUT compiles). Stays above 0 for a while after `tracerSettled` (probe, raster, LUT, aerial kernels follow); a compile hung past 60 s of visible time (or 3× the longest seen) stops being counted |
+| `compilingNow` | getter string[] | the kernels compiling now, as the pill names them — **localised labels**: test the length, not the text |
+| `featureKey` | number (private) | the scene's kernel key (bit field); `FEATURES_ALL = 16383` is the general family, also the value at start |
+| `variants` | Map (private) | key → `{ rt, q, env, lut, lutq, air, shade, …, failed?, rtGivenUp?, busy? }`; `!!r.variants.get(r.featureKey)?.rt` = the scene's realtime kernel compiled |
+| `kernelsSettled` | getter boolean | the current kernel with its realtime cascade (probe, aerial table) and the surface/scenery its key asks for — what a measure needs |
+| `lastPhase` | string (private) | the last frame's `"realtime" \| "converging" \| "converged" \| "offline"`. Near the Earth in the raster pipeline it stays `realtime` forever: never wait for `converged` there (use Photo mode for a converged still) |
+| `lastFrameDoneAt` / `lastDoneAt` | number | when the GPU last finished a frame [performance.now ms] (`lastDoneAt` is the private field 19 tests poll; same value) |
+| `earthTiles.pending` / `.finest` / `.orthoPending` / `.orthoFinest` / `.stamp` | number | relief tiles wanted and not in (national sources included); the finest level drawn; orthophoto tiles pending; their finest level; bumped when what the tracer draws changes. **`pending` reads 0 just after a jump, before the tiles are asked: require 3 s of calm** (`tests/e2e/lib/place.ts`) |
+| `hdLoadingName` | string \| null | the finer maps loading (`"name:mode"`), null none |
+| `autoExposureEV` (get/set), `autoEV`, `ev(s)`, `settleExposure()`, `exposureGap`, `meterSettled` | number / function / boolean | the auto exposure in use [EV] (settable), what the meter adds, the exposure in use; bring it to the meter, the gap left, within a tenth of a stop. `App.exposureSettled()` wraps them: call it before a frozen A/B (one side once came out 6 % darker) |
+| `lastGpuMs` | number | the last frame's GPU time [ms] |
+| `liteSkip` | number | bit mask of raster-material parts cut for an A/B: 1 water, 2 scenery shadows, 4 relief shadow, 8 surfaces, 16 mesh normal, 32 cloud shadows, 64 trees, 128 imagery, 256 moons' ground, 512 airless rocks, 1024 shadeLite alone, 2048 giants' towers, 4096 Mars dust devils, 8192 bodies' relief shadow map, 16384 contact shadows, 32768 sky/bounce (Q2), 65536 imagery footprint, 524288 H3, 1048576 H5, 2097152 craft shadow, 4194304 valleys' sky, 16777216 ground occlusion, 67108864 specular (`renderer.ts` above `liteSkip`) |
+| `bodyRasterNow` / `rasterLiteActive` / `realtimeBlockNow` | boolean / boolean / number | the body raster draws the near ground this frame; the raster's ground drawn by `shadeLite`; the realtime subsampling block (1 ray per block²) |
+
+The other members tests read:
 
 | member | type | meaning |
 |---|---|---|
@@ -636,7 +694,7 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `lost` | string \| null | why the device is lost, or null |
 | `generation` | number | the renderer's generation (see `gpu.generation`) |
 | `pipelineStatus` | object | the compile states: `general`, `quality`, `qualityError`, `lut`, `lutQuality` (`"pending"`, `"ready"`… ) |
-| `variantReady` | boolean | the scene's specialised tracer compiled (or none needed) |
+| `variantReady` | boolean | `featureKey === FEATURES_ALL` or the scene variant's `rt` compiled. **True at start, before anything compiled** (the key is then `FEATURES_ALL`): wait on `tracerSettled` for the scene's image |
 | `compileReport()` | object | every tracer compile of the session: `compiles` (`pipeline` — the entry, `(quality)`, `general …` —, `key`, `startedAt`, `seconds`, `ok`, `cached` under 5 s, `beforeFirstImage`), `count`, `cold`, `seconds`, `pending`, `firstFrameDoneAt` ([PLAN-LEAN-TRACER-KERNELS.md](PLAN-LEAN-TRACER-KERNELS.md)) |
 | `sceneCompileEta()` | number \| null | the seconds left before the scene's own tracer is in, from this session's compile pace (null: nothing learnt yet; 0: in) |
 | `sourceSpecialise` | boolean | each specialised pipeline made from a module specialised as source (default true; `globalThis.__kernelSpecialise = false` before load turns it off — `tests/e2e/kernel-equivalence.e2e.test.ts`) |
@@ -652,10 +710,10 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `prewarmEarthFlight(settings)` / `prewarmStop()` | function | the Earth's low flight compiled ahead (main.ts: the title open; never on e2e pages — call it yourself), and its queued compiles dropped |
 | `backgroundHold` | boolean | background compiles (the general kernel, a key's LUT and aerial table) held — set while the title screen holds the game |
 | `weatherBlock` | Float32Array | the weather near the camera's 24 params (the weight, the decks, the ground's height, the drift, the rain: `weatherParams`), as the tracer reads them (its offset in `paramsF` moves with the other blocks: read it here) |
-| `earthSettled` | boolean | the Earth's maps, terrain, requested surface pages and worldwide scenery are settled (failed requests use fallback) |
+| `earthSettled` | boolean | the Earth's relief tiles, requested surface pages and scenery not pending, the surface/scenery kernel not held, the wanted map tier in (failed requests use fallback). **The orthophotos are not part of it** (`earthTiles.orthoPending`; `App.dataSettled` includes them). `earthScenery.pending` stays true 600 ms after its data lands, `earthSurface.pending` 350 ms |
 | `earthSurface.stats()` | object | Regional Sentinel-2/WorldCover: `mode`, `supported`, `region`, `year`, `sourceResolutionM`, `format`, `loaded`, `pages`, `pending`, `inflight`, `failed`, `lastError`, `status`, `gpuBytes`, cumulative `uploadedBytes` and `uploadCpuMs`, `credit`. `settings.earthSurface`: `off`, `satellite`, `materials`; see [PLAN-TERRE-PHOTOREALISTE.md](PLAN-TERRE-PHOTOREALISTE.md). |
 | `earthSurface.colorView()` | GPUTextureView | a new view of the regional colour pages (a `2d-array`, one layer a page; the 1 × 1 placeholder without a region; viewed as `rgba8unorm-srgb` in the RGBA transcoding fallback). The fallback test reads its `label`; a view to bind in a test's own pass. |
-| `earthScenery.stats()` | object | Worldwide WorldCover forests and OpenStreetMap scenery: `mode`, `supported`, `status`, `pending`, `lat`, `lon`, `trees` (the procedural forest's trees), `surveyedTrees` (of them, placed and sized by the IGN's LiDAR canopy over France — I4, `settings.earthIgnRelief`, `src/system/ign-canopy.ts`), `surveyRequests` (its WMS-R requests), `surveyError` (a block's or a BD TOPO tile's failure: its trees the land cover's, its buildings OSM's, the scene not degraded), `bdtopoBuildings` (of the buildings, the IGN's BD TOPO's over France — I5, `src/system/bdtopo.ts`), `bdtopoTiles` (its z 15 tiles taken), `forestCells` (its grid's cells, one tree at most each), `forestCellM` (a cell's side [m]), `buildings`, `footprintEdges`, `roads`, `railways`, `waterways` (segment counts), `waterPolygons`, `pavedPolygons`, `bridges`, `bridgePiers`, `osmLayers` (feature counts and field names), `shadows`, `shadowReceiverRangeM`, `shadowRayRangeM`, `budgetLimited`, `gpuBytes`, `reach` (the detail's: 1, 1.5, 2), `retiringGpuBytes`, `coverPixels`, `rgbPixels`, `workerMs` (network included), `tileNetworkBytes` (all scenery responses), cumulative `uploadCpuMs`, `lastError`, `coverage`, `credit`, `sources`; `progress` (while it loads: the worker's step `{ step: "start" | "cover" | "osm" | "buildings" | "forest" | "pack", done?, of? }` — the BD TOPO's tiles in and wanted at `buildings` —, null once the scene is in; shown by the data meter). `settings.earthScenery`: `off`, `balanced`, `high`; `settings.earthSceneryShadows`: boolean. Data readiness does not imply shader readiness: wait for `variantReady` and completed frames before capturing. See [FORETS-BATIMENTS-WORLDWIDE.md](FORETS-BATIMENTS-WORLDWIDE.md). |
+| `earthScenery.stats()` | object | Worldwide WorldCover forests and OpenStreetMap scenery: `mode`, `supported`, `status`, `pending`, `lat`, `lon`, `trees` (the procedural forest's trees), `surveyedTrees` (of them, placed and sized by the IGN's LiDAR canopy over France — I4, `settings.earthIgnRelief`, `src/system/ign-canopy.ts`), `surveyRequests` (its WMS-R requests), `surveyError` (a block's or a BD TOPO tile's failure: its trees the land cover's, its buildings OSM's, the scene not degraded), `bdtopoBuildings` (of the buildings, the IGN's BD TOPO's over France — I5, `src/system/bdtopo.ts`), `bdtopoTiles` (its z 15 tiles taken), `forestCells` (its grid's cells, one tree at most each), `forestCellM` (a cell's side [m]), `buildings`, `footprintEdges`, `roads`, `railways`, `waterways` (segment counts), `waterPolygons`, `pavedPolygons`, `bridges`, `bridgePiers`, `osmLayers` (feature counts and field names), `shadows`, `shadowReceiverRangeM`, `shadowRayRangeM`, `budgetLimited`, `gpuBytes`, `reach` (the detail's: 1, 1.5, 2), `retiringGpuBytes`, `coverPixels`, `rgbPixels`, `workerMs` (network included), `tileNetworkBytes` (all scenery responses), cumulative `uploadCpuMs`, `lastError`, `coverage`, `credit`, `sources`; `progress` (while it loads: the worker's step `{ step: "start" | "cover" | "osm" | "buildings" | "forest" | "pack", done?, of? }` — the BD TOPO's tiles in and wanted at `buildings` —, null once the scene is in; shown by the data meter). `status`: `"ready"`, `"refreshing"` (data in, a new scene pending), `"loading"` (none yet), `"degraded"` (`lastError`), else the reason (`"off"`, `"orbit"`, …). `settings.earthScenery`: `off`, `balanced`, `high`; `settings.earthSceneryShadows`: boolean. Data readiness does not imply shader readiness: wait for `variantReady` and completed frames before capturing. See [FORETS-BATIMENTS-WORLDWIDE.md](FORETS-BATIMENTS-WORLDWIDE.md). |
 | `renderer.skyTable()` | Promise<Float32Array> | the clear sky's harmonics as the tracer reads them (`TABLE_SKY`, the sky ambient pass): its first vec4s the frame (up, east, north, the heights 0/2/5/10 km), then 9 rgb coefficients a height — a level ground's light is band 0 × 0.282095π + band 1's up term × 0.488603 × 2.094; `tests/e2e/twilight-sky.e2e.test.ts`. |
 | `renderer.aerosolOverride` / `aerosolSource` / `tlutAerosols` / `tlutWanted` / `msLutOn` / `tlutOn` | number \| null / string / number / number / boolean / boolean | (Q5) the air's tables: the day's aerosols forced (an optical depth at 550 nm; null: the real weather's, CAMS through Open-Meteo, else an ordinary day's 0.028), their source (`"cams"` or `"ordinary"`), the aerosols the tables in the tracer's table are for and those being built (over an ordinary day's), the multiple scattering's table and the transmittance's used (false: their stand-ins — a measure's A/B). *Used in:* `air-aerosols`, `air-ms`, `air-tlut`. |
 | `renderer.weatherGridOn` / `weatherGridEnabled` | boolean / boolean | (Q5 C5) the real weather's model on a grid about the camera in use (the layers' cover read at each point) and its switch (false: the camera's cover carried round it — a measure's A/B). *Used in:* `weather-grid`. |
@@ -754,9 +812,10 @@ The renderer (`src/renderer.ts`). The members the tests read:
 | `hdMap` | object (private) | a world's finer maps (`system/hd-maps.ts`): `name`, `mode` (`full`: the near or pinned world — colour and relief, its heights the CPU's ground; `relief`: the world looked at from afar, its heights alone, the coarse colour drawn, the CPU's ground untouched — PLAN-REFRACTION-HORIZONS H1b), `hasRelief`, `dem`, `color` (`width`, `height`, `format`, `mipLevelCount`) |
 | `hdGeneration` | number | each set of finer maps published counts one (H1b: the world, its mode, its relief swapped at once) |
 | `looked` | array | the worlds with measured heights the view looks at (main.ts `lookedBodiesNow`, 4 times a second): `{ map, dN, inView, nearView }` — `dN` its distance in its radii; the relief alone goes to the nearest in view past `reliefAt` (8 × `hdAt`'s reach, ~3° of field for the Moon from the Earth), kept while within half a field and twice the reach, freed 3 s after |
-| `earthMaps` | object (private) | the Earth's map set; `earthMaps.tier` (unclear: its type and meaning were not checked here) |
-| `prof` | GpuProfiler | the GPU profiler (`enabled`) |
-| `lastFrameDoneAt` | getter | when the GPU last finished a frame (performance.now ms) |
+| `earthMaps` | object (private) | the Earth's map set; `earthMaps.tier`: `"med" \| "high" \| null` (null: the placeholder before the maps load; `earthMaps.heights` is null then too) |
+| `prof` | GpuProfiler | the GPU profiler (`src/gpuprof.ts`): `enabled` (false), `supported` (needs `timestamp-query`), `every` (8: one frame in N profiled), `frames`, `frameMs` (the last profiled frame's GPU time summed over passes), `table()` → `{ label, ms, last, n }[]` (most expensive first), `reset()`, `traceMs()`. **On Apple, turning it on costs ~10 ms a frame and the passes' stamps overlap**: measure whole frames with it off (`gpu.frames().durationsMs`) |
+| `moonTiles` | object | the Moon's tiles: `pending`, `drawn`, `enabled`, `failed`, `imagery`, `world` |
+| `refrPublished` / `tlutPublished` | string / boolean | the refraction tables' air (`""` none) / the transmittance table published |
 
 Hooks set by the page (not read by tests): `onLost`, `onGpuError`, `onAssets`. `resize(w, h)` takes the pixel size of the image (the page calls it through `__bh.resize`).
 
@@ -774,12 +833,15 @@ The simulation's step, shared by the live loop, `__bh.step` and the video.
 | `mission` | `{ update(dt) }` \| null | the mission, stepped with the camera |
 | `setTime(t)` | method | sets the scene's time [M] (same as `__bh.setTime`) |
 | `step(dt)` | method | one step of `dt` s; returns whether the camera moved |
-| `applyRender(info)` | method | what the renderer draws of the flight; returns whether the image must be redone |
+| `applyRender(info \| null)` | method | what the renderer draws of the flight (null when nothing is flown); returns whether the image must be redone |
+| `airShakeGain` | number | the display shake's gain (set by `__bh.jitter.levers`) |
 
 ```js
 __bh.sim.setTime(c.nowTime()); __bh.step(0);
 ```
-*Used in:* `tests/e2e/wormhole-map.e2e.test.ts` (`sim.setTime`, then `step(0)` to refresh the display), `tests/e2e/smoke.e2e.test.ts` (`sim.time`).
+`step(dt)` advances `time` by the ship's own clock when a craft is flown (`camera.shipClock()`), else by `dt × timeRate`, only while `settings.animate` and the rate > 0.
+
+*Used in:* `sim.time` in about 34 files; `tests/e2e/wormhole-map.e2e.test.ts` (`sim.setTime`, then `step(0)` to refresh the display).
 
 ### `__bh.netLight` → `{ stats, reset }` (object, `src/ui/net-light.ts`)
 
@@ -803,7 +865,7 @@ The page's Service Worker (the offline cache, PLAN-MONDE M1). It is registered o
 
 ### `__bh.pwa.ready()` → Promise<boolean>
 
-Resolves to `true` once the worker controls the page (the cache's content is not checked here: unclear whether the shell is in it); `false` when the worker is not registered or failed.
+Resolves to `true` once the worker controls the page (on a first visit, after its `controllerchange`). The shell's warm-up (every resource fetched once more through the worker) only *starts* then, in idle time: it is not guaranteed in. `false`: not registered on this page (the dev server, an e2e page without `sw: true`) or the registration failed.
 
 ```js
 await __bh.pwa.ready()
@@ -845,6 +907,10 @@ The offline zones, once the worker is in (null before, or without one). A zone: 
 
 *Used in:* `tests/e2e/zones.e2e.test.ts`, `tests/e2e/offline-settings.e2e.test.ts`.
 
+### `__bh.pwa.talk(msg: object, timeoutMs = 3000)` → Promise<T \| null>
+
+A message posted to the Service Worker (the controller, else the active registration) over a `MessageChannel`: its first answer, or `null` with no worker or none within `timeoutMs`. `stats()` (`{ type: "stats" }`), `clearTiles()` (`"clear-tiles"`) and `setBudget()` (`"tile-budget"`, 30 s) are built on it (`src/pwa.ts`). No test calls it directly.
+
 ### `__bh.pwa.registration` → ServiceWorkerRegistration \| null
 
 The registration, or null when the page does not register the worker (see above).
@@ -881,7 +947,7 @@ const d0 = (await app.js("__bh.mapView()")).dist;
 
 ### `__bh.phase()` → `FlightPhase` \| null
 
-The flight's phase (`game/phase.ts`): `{ mode, control, stage, detail }`, e.g. `{ mode: "flight", control: "manual", stage: "orbit", detail: "" }`. Null when there is no phase yet.
+The flight's phase (`game/phase.ts`): `{ mode, control, stage, detail }`, e.g. `{ mode: "flight", control: "manual", stage: "orbit", detail: "" }`. Null when there is no phase yet. `mode`: `free \| cinematic \| offline \| landed \| docked \| flight`; `control`: `manual \| hold \| auto \| null`; `stage`: `ground \| air \| entry \| approach \| suborbital \| orbit \| escape \| docking \| kerr \| throat \| space \| null`; `detail`: the hold's or autopilot's name, or `""`.
 
 ```js
 __bh.phase().control === "hold"
@@ -890,7 +956,7 @@ __bh.phase().control === "hold"
 
 ### `__bh.relief(body: string, lat: number, lon: number)` → number
 
-The height of the ground above the body's mean radius, at a latitude and an east longitude in degrees, in metres (the relief the craft stands on; the Earth's comes from its streamed tiles, so it reads correctly once they are in). Used to wait for the ground before a landing. It is 0 for a body with no relief function.
+The ground's height [m] **over the body's figure** (the WGS84 ellipsoid on the Earth) at a geodetic latitude and an east longitude [°] — `groundRelief` (`system/our-surface.ts`). Only the Earth has a relief function: its global height map once the Earth's maps are in, refined by the terrain tiles loaded, runways graded, the sea at the geoid (`max(H, 0) + N`). **Every other body gives 0** (the Moon's and Mars's craters are drawn, not read here), and the Earth gives 0 until its maps' heights are in. Same value as `__bh.sys.groundAt` on the Earth. Used to wait for the ground before a landing.
 
 ```js
 await app.waitFor(`__bh.relief("earth", 34.905, -117.884) > 100`, 60_000); // Edwards
@@ -904,20 +970,58 @@ Points the free camera at a target (the camera panel's "Go to"): null when it we
 ```js
 __bh.goTo("earth")
 ```
-*Used in:* no e2e test; the camera panel calls it.
+*Used in:* the camera panel; about 5 e2e files (`iss-cameras`, `camera-smooth`, `camera-subject`, …).
+
+### Readiness predicates
+
+No single page-side "everything is ready" exists: the composites live in `tests/e2e/lib/app.ts`. Wait on these, never on
+a fixed delay (Sam, 2 Nov 2026: no silent 240 s / 600 s waits; fail on a stall, saying what is missing).
+
+| what | predicate | wrapped by |
+|---|---|---|
+| handle installed | `typeof __bh !== "undefined"` | `App.load` |
+| page started, first image | `__bh.renderer.firstFrameDoneAt > 0 && !document.querySelector("#loading:not(.done)")` | `App.load` (via `waitProgress`) |
+| a craft is flown | `__bh.camera.piloting` | the usual boot wait of flight tests (≈ 120 files) |
+| the right craft | `__bh.fleet.active === "f35"` after `__bh.settings.vessel = "f35"` (the switch happens at the next step with time running) | — |
+| the scene's own kernel | `__bh.renderer.tracerSettled` | `App.settled(ms = 180 000)`: then `compilesPending === 0` and `compilingNow` empty (60 s at most, what still compiles printed), then 3 frames. Run by `App.load` (120 s) and before every `App.shot` |
+| the kernel with its cascade (measures) | `__bh.renderer.kernelsSettled` | perf tests |
+| the place's data in | `tracerSettled && !compilesPending && !compilingNow.length && !earthTiles.pending && !earthTiles.orthoPending && scenery not loading/refreshing && !hdLoadingName` | `App.dataSettled()` |
+| progress, not time | the READY_PROBE fields (first frame, settled, compiling, relief, photos, failed, scenery, maps, horizons) — fails when nothing moved for 90 s (300 s while a kernel compiles), 15 min at most, logging what is missing every 10 s | `App.waitProgress(cond, label, o)` |
+| relief tiles to a level | `earthTiles.pending === 0 && earthTiles.finest >= N`, held **3 s** (pending reads 0 just after a jump) | `tests/e2e/lib/place.ts` `placeLow` |
+| network calm | `__bh.netLight.stats().state === "idle"` (nothing asked, nothing in flight; refreshed every 100 ms, workers included; `since.limited` counts 429s) | — |
+| exposure | `renderer.settleExposure()` then `exposureGap < 0.02` | `App.exposureSettled(5000)` |
+| GPU frames progressing | `completedFrames` grows / `lastFrameDoneAt` changes — call `__bh.touch()` first (a converged unchanged view submits nothing) | — |
+| on foot | `__bh.camera.character.active`; the strict scene check in `tests/e2e/lib/character-ready.ts` | `captureLoadedCharacter` |
+| sky | `await __bh.skyLoading` (resolves even when the sky failed) | — |
+
+Traps: `variantReady` is true at start (before any compile); `earthSettled` leaves out the orthophotos; `compilingNow`'s
+labels are translated; a page opened without `#scene=` (or a save, a mission link) sits on the title screen, which holds
+the game and its background compiles.
 
 ---
 
 ## The game's tools — `__bh.game`
 
-`__bh.game` is the `GameTools` instance (src/game/tools.ts) behind the F2 window. It places the Ranger (in orbit, on the ground, beside a body, at a state), sets the target, the clock and the warp, reads the status, manages saves and settings, and keeps the journal. Units: heights in km, angles in degrees, speeds in m/s, times in seconds of sim time, scene time `t` in M (geometric units: `M_SECONDS` seconds each). Placement and time calls are synchronous and return a note string unless stated; they need a scene with the game's world (`__bh.freeze(false)` or `__bh.freeze(true)` as the test needs), and Gargantua's planets need a Gargantua-system scene (`settings.system === "gargantua"`).
+`__bh.game` is the `GameTools` instance (src/game/tools.ts) behind the F2 window. It places **the flown craft** (`__bh.fleet.active`: the Ranger, the Lander, the Endurance, the F-35 or the A320 — switch the craft first, then place it), sets the target, the clock and the warp, reads the status, manages saves and settings, and keeps the journal. Units: heights in km, except `flyAt`'s `aglM` and `lineUp`'s `alongM` in metres; angles in degrees; speeds in m/s; times in seconds of sim time; scene time `t` in M (geometric units: `M_SECONDS` seconds each). Placement and time calls are synchronous and return a note string unless stated.
+
+**Every placement goes through `placeAt`** (tools.ts), which:
+- needs a scene with the wormhole on our side (`game:artemis`, `game:interstellar`…; `settings.wormhole`), else throws `our universe is reached through the wormhole: pick a Gargantua-system scene (game:interstellar)`; Gargantua's planets need `settings.system === "gargantua"`;
+- calls `camera.setPilot(true)`: **throttle 0, hold and autopilot off, the plan and nodes cleared**, the user's warp restored, gravity on;
+- calls `camera.newFlight()`: **tanks refilled, flaps cleared, the air model and the weather reset, the crash state cleared**, the gear decided at the first frame (down on the ground, up in the air) unless `camera.gearInit` is set, the spectator dropped, the A320's systems reset;
+- does **not** touch `__bh.freeze`, `settings.animate` (a paused game stays paused — after a crash, `__bh.game.pause(false)`), `settings.timeSpeed`, `settings.shipMount`, `settings.vessel`, the SAS.
+
+So set fuel, flaps, gear, throttle and autopilots **after** placing. Then `near`, `hoverOver` and `wormhole` engage the hover autopilot, `glideTo` the entry autopilot; `flyAt` raises the gear. Recipes and pitfalls: [E2E-VOLS.md](E2E-VOLS.md), [VOL-AVIONS.md](VOL-AVIONS.md), [VOL-VAISSEAUX.md](VOL-VAISSEAUX.md).
 
 ### `__bh.game` — class instance (GameTools)
 
 | member | type | meaning |
 |---|---|---|
-| `status()` | function → RangerStatus | the Ranger's state (see below) |
-| `orbit(body, o)` / `orbitOver` / `orbitTarget` | function | put the Ranger in orbit |
+| `status()` | function → RangerStatus | the flown craft's state (see below) |
+| `orbit(body, o)` / `orbitOver` / `orbitTarget` | function | put the craft in orbit |
+| `flyAt(lat, lon, aglM, hdg, speed)` | function | in the air over a place (aircraft and spacecraft) |
+| `lineUp(name?, alongM)` · `atStand(airport, ref?)` · `pushedBack()` · `parkAt(…)` · `walk(…)` | function | on a runway, at a gate (async), pushed back, parked exactly, on foot |
+| `placeAt(pose)` · `placings` | function / number | a raw pose; the placements made |
+| `soi()` · `bodies()` · `pilotState()` · `waveIn(s)` · `watch(st)` · `savedAt` | function / field | readouts |
 | `land(body, lat, lon)` / `hoverOver` / `near` / `wormhole` | function | put it on a ground, at rest over a place, beside a body, before a mouth |
 | `glideTo(site, …)` | function | on a runway's approach, the entry autopilot lands it |
 | `target(id)` · `targets()` | function | the target and the valid ids |
@@ -943,7 +1047,7 @@ const rep = await __bh.game.audit({ planner: false });
 ```
 *Used in:* none under tests/e2e or scripts.
 
-### `__bh.game.autosaveNow()` → unclear (the store's setJSON result)
+### `__bh.game.autosaveNow()` → boolean (stored or not; sets `savedAt` when stored)
 
 Writes the autosave slot now, from `snapshot("autosave")`. The game autosaves every `autosaveEvery` s (setting range 2–120, default 10; Settings › Game › Saved games).
 
@@ -1012,14 +1116,27 @@ __bh.game.exportSave("before TMI");
 ### `__bh.game.flyAt(lat, lon, aglM, headingDeg, speed, body = "earth")` → string
 
 The flown craft in the air over a place of one of our worlds (geodetic latitude, east longitude [°]), `aglM` metres
-**above its ground** (the relief there measured and the height set right — not above the sea), flying `headingDeg`
-[° true] at `speed` m/s through the air, level, by hand (the autopilot off), gear up. A challenge's or a lesson's start
-(the F-35's: docs/PLAN-F35.md F9). Returns `placeAt`'s note. Our worlds only (throws `flyAt: our worlds`).
+**above its ground** (not above the sea), flying `headingDeg` [° true] at `speed` m/s **relative to the turning ground**
+(the airspeed only without wind), level on the geocentric radial (≤ 0.19° off the geodetic vertical), by hand. A
+challenge's or a lesson's start (the F-35's: docs/PLAN-F35.md F9). Our worlds only (throws `flyAt: our worlds`).
+
+What it leaves (beyond `placeAt`'s resets above): **throttle 0, hold and autopilot off, the F-35's holds
+(`camera.jetModes`) as they were, the gear fully up at once** (`gearInit = true, gearDown = false, gearExt = 0`), not
+landed. An aircraft at throttle 0 glides down: engage its holds and autothrottle right after
+([E2E-VOLS.md](E2E-VOLS.md) §2).
+
+**The height is measured once, against the relief loaded at the call.** Before the fine tiles are in (or before the
+Earth's maps: over the bare ellipsoid), the craft can be put inside a mountain or a building, or hundreds of metres too
+high. For low flights: place, freeze, wait for the relief tiles to settle 3 s, place again, step 3 frames — that is
+`tests/e2e/lib/place.ts` `placeLow`. It flies **the craft flown now**: switch `settings.vessel` and wait for
+`__bh.fleet.active` first (an aircraft's first switch lines it up on a runway, which would overwrite this placement).
+
+Returns `` `<Body>: <aglM> m over <lat>°, <lon>°, heading <h>°, <speed> m/s` ``.
 
 ```js
 __bh.game.flyAt(45.85, 6.75, 2500, 110, 150);   // over the Alps, 2 500 m above the ground (school-demos.e2e.test.ts)
 ```
-*Used in:* about 46 files — `instructor.e2e.test.ts`, `school-demos.e2e.test.ts`, `gibraltar-shots.e2e.test.ts`, `carriers.e2e.test.ts`, `net-flight.e2e.test.ts`, `knowledge.e2e.test.ts`, …
+*Used in:* about 185 files — `instructor.e2e.test.ts`, `school-demos.e2e.test.ts`, `gibraltar-shots.e2e.test.ts`, `carriers.e2e.test.ts`, `net-flight.e2e.test.ts`, `knowledge.e2e.test.ts`, …
 
 ### `__bh.game.get(key)` → the setting's value
 
@@ -1032,7 +1149,9 @@ __bh.game.get("crashSpeed")
 
 ### `__bh.game.glideTo(site, distKm = 80, altKm = 25, speed = 750, o = {})` → string
 
-Places the Ranger on the approach of one of our worlds' sites, `distKm` km out on the runway's line (its final into the wind when the wind blows along it), `altKm` km up, flying at `speed` m/s; the entry autopilot's glide takes it from there. The first argument (the parameter is `name`) is matched by case-insensitive substring of a site's name (`SITES`); no match throws with the list. Our worlds only (Gargantua's throw). `o.acrossKm` (km, positive to the right of the line) and `o.headingDeg` (degrees, positive clockwise; course relative to the runway's). Sets `camera.entrySite` and the `entry` auto mode. Synchronous.
+Places the flown craft on the approach of one of our worlds' sites, `distKm` km out on the runway's line (the end in use, into the wind), `altKm` km **above the ground** under that point, flying at `speed` m/s relative to the turning ground; the entry autopilot's glide takes it from there. The first argument (the parameter is `name`) is matched by case-insensitive substring of a game site's name (`SITES`), then by `siteByName` (an airfield's code); no match throws with the list. Our worlds only (Gargantua's throw). `o.acrossKm` (km, positive to the right of the line) and `o.headingDeg` (degrees, positive clockwise; course relative to the runway's). Sets `camera.entrySite` and **engages the `entry` autopilot**; throttle 0, the gear lowered by the entry autopilot. Synchronous.
+
+Pitfalls: the default 80 km start is the reliable one — shorter starts come in low on energy and go around; the entry autopilot never adds thrust while gliding. A spacecraft's glide (Ranger), not an airliner's approach: for the F-35 and the A320 use `camera.ilsStart`.
 
 ```js
 __bh.game.glideTo("Edwards");                                   // defaults: 80 km out, 25 km up, 750 m/s
@@ -1053,13 +1172,13 @@ __bh.game.help().length
 
 ### `__bh.game.hover()` → void
 
-Private in the class, callable at runtime: re-engages the hover autopilot at rest where the Ranger is (`pilot.auto` "none", then "hover"). `hoverOver`, `near` and `wormhole` call it.
+Private in the class, callable at runtime: re-engages the hover autopilot at rest where the craft is (`pilot.auto` "none", then "hover"). `hoverOver`, `near` and `wormhole` call it.
 
 *Used in:* none directly.
 
 ### `__bh.game.hoverOver(body, lat, lon, altKm = 1.5)` → string
 
-Places the Ranger `altKm` km (default 1.5) above one of our solid bodies' ground at latitude / east longitude (degrees), at rest over it (carried by the planet's turning), and engages the hover autopilot. G lands it from there (a powered landing's last minutes). Our worlds only. Over a giant (Jupiter, Saturn): `altKm` is over its 1 bar level, negative under it — in its clouds (PLAN-PLANETES-AAA P11 D5); the hover holds the place there.
+Places the flown craft with its gear `altKm` km (default 1.5) clear of one of our solid bodies' ground at latitude / east longitude (degrees), along the geodetic normal, at rest over it (carried by the planet's turning), not landed, and engages the hover autopilot. F7 lands it from there (a powered landing's last minutes). Our worlds only (throws `hoverOver: our worlds`). Like every placement it **refills the tanks**: a heavy craft may then lack the thrust to hover — lower `fleet.fuel` after placing if the test needs it. Over a giant (Jupiter, Saturn): `altKm` is over its 1 bar level, negative under it — in its clouds (PLAN-PLANETES-AAA P11 D5); the hover holds the place there.
 
 ```js
 __bh.game.hoverOver("moon", 0.674, 23.473, 1.5);   // over Tranquility Base
@@ -1081,7 +1200,7 @@ Parses a save from its JSON text, stores it in a slot (unless `store` is false),
 
 ### `__bh.game.jumpTo(t)` → `{ date, planDropped }`
 
-Sets the scene's clock to `t` [M] and carries the ship with the world: on our side it keeps its orbit or its place over its body; by a mouth it stays against it; on Gargantua's side it keeps its place in the world's frame; landed, it stays where it stands. A plan made on the old clock (nodes, burns, an entry) is dropped and `planDropped` is true. Also journals the change.
+Sets the scene's clock to `t` [M] and carries the ship with the world — **only in a Gargantua-system scene, flying, not landed** (`settings.system === "gargantua"`): on our side under 100 km over a solid world it stays over the same ground at the same height; farther than 3 gluing radii from the mouth it moves with its body; by a mouth it stays against it; on Gargantua's side it keeps its place in the world's frame. Always: the flight computer cleared (`fcClear`), a running entry autopilot switched off, the carriers' courses shifted, a ground view carried. A plan made on the old clock is dropped and `planDropped` is true. Journals the change. Throws `not a time: <t>`.
 
 ```js
 __bh.game.jumpTo(__bh.game.now() + 1000);   // t in M: 1000 M later (`M_SECONDS` from src/units.ts, re-exported by src/system/solar.ts, gives the seconds per M)
@@ -1090,7 +1209,7 @@ __bh.game.jumpTo(__bh.game.now() + 1000);   // t in M: 1000 M later (`M_SECONDS`
 
 ### `__bh.game.land(body, lat = 0, lon = 0)` → string
 
-Puts the Ranger on the ground at latitude / east longitude (degrees). Our solid bodies, or Gargantua's worlds (`miller`, `mann`, `edmunds`: lat / lon on the world's frame, x away from Gargantua, z its pole; needs the Gargantua-system scene). `gargantua` has no ground and throws.
+Puts the flown craft on the ground at latitude / east longitude (degrees), on its gear as the relief under each leg has it (tilted on a slope), **its nose on the craft's current heading (90° when none)**, moved 70 m east while another craft is within 50 m. On the Earth, a point on a runway strip of `EARTH_RUNWAYS` is handed to `lineUp` (near an end: 60 m past the end in use). Our solid bodies, or Gargantua's worlds (`miller`, `mann`, `edmunds`: lat / lon on the world's frame, x away from Gargantua, z its pole; needs the Gargantua-system scene; set down at once: `camera.local.L.landed`, `camera.landed`, `camera.gearDown`). Gas giants throw `<Name>: no ground to land on`; `gargantua` too. Leaves it landed (`camera.ourLanded`), gear down at the first frame, throttle 0.
 
 ```js
 __bh.game.land("earth", 28.573, -80.649);            // KSC pad
@@ -1103,13 +1222,17 @@ __bh.game.land("mars", 18.44, -102.55);
 
 Lined up on a runway of the Earth, `alongM` metres past the threshold of the end in use (into the wind), its nose
 down the runway's axis as drawn (`sites.ts` `EARTH_RUNWAYS`, WGS84), at rest on its gear — a take-off's start. `name`
-is matched as `glideTo`'s (case-insensitive substring of a site's name; none matching throws with the list); omitted:
-the runway nearest the flown craft (Edwards when it is not near the Earth).
+(a string or a `Site`) goes through `siteByName`: an exact ICAO code or name, then a substring of the game's sites, then
+a world airfield **whose tile is already loaded** (runway ≥ 600 m); a match off the Earth counts as none; throws
+`` no runway "<name>" — <list>, or an airfield's code ``. Omitted: the nearest runway ≥ 1 200 m within 60 km of the
+craft, else the nearest of the game's Earth runways when within 20 000 km of the Earth's centre, else Edwards. A craft
+already parked there: 90 m further down until none is within 60 m. Leaves it landed, throttle 0. This is also what an
+aircraft's first vessel switch does by itself.
 
 ```js
 __bh.game.lineUp("Edwards");
 ```
-*Used in:* `f35-challenges.e2e.test.ts`, `f35-combat.e2e.test.ts`, `f35-flight-ops.e2e.test.ts`, `f35-hud.e2e.test.ts`, `ground-placement.e2e.test.ts`, `runway-placement.e2e.test.ts`.
+*Used in:* about 23 files, e.g. `f35-challenges.e2e.test.ts`, `f35-flight-ops.e2e.test.ts`, `ground-placement.e2e.test.ts`, `runway-placement.e2e.test.ts`.
 
 ### `__bh.game.lastAudit` → AuditReport | null
 
@@ -1164,7 +1287,7 @@ __bh.game.log.events.some((e) => /Landing · .* — [ABCDF] \(/.test(e.text))
 
 ### `__bh.game.near(body, o = {})` → string
 
-Places the Ranger beside a body at rest, targets it, and engages the hover autopilot. Ours: `o.altKm` (km above the surface; default two of its radii). Gargantua's: `o.rM` (M, its distance from the hole's centre; `"gargantua"` targets the hole).
+Places the flown craft beside a body at rest, targets it, and engages the hover autopilot. `o.altKm` [km] for every body except `"gargantua"`: over the sphere of its radius, default two radii, **at most 0.7 × its sphere of influence**; ours: on the sunlit side 35° round towards evening, nose on the body, at rest relative to its centre (not its turning ground); the Sun: on the Earth's side. Gargantua's planets: at rest in their turning frame. `o.rM` [M] only for `"gargantua"`: a static observer on its equator (default 12), the target `"hole"`.
 
 ```js
 __bh.game.near("moon", { altKm: 3 });
@@ -1182,7 +1305,7 @@ The scene's time now [M] (`ctx.time()`).
 
 ### `__bh.game.orbit(body, o = {})` → string
 
-Puts the Ranger in orbit around a body (ours, or Gargantua's side). Options (`OrbitPlacement` + `rM`):
+Puts the flown craft in orbit around a body (ours, or Gargantua's side). **Heights are over the sphere of the body's `radius`** (the Earth: its equatorial radius, 6 378.137 km), not geodetic: `altKm: 400` flies 400 km over the equator, ~421 km over the poles (`status().orbit` reads geodetic heights). Default height: clear of the air × 1.25 (10–100 km for airless bodies); Gargantua's planets 100 km. Throws `<Name>: that orbit (N km) leaves its sphere of influence (M km)`. Options (`OrbitPlacement` + `rM`):
 
 | field | unit | meaning |
 |---|---|---|
@@ -1195,7 +1318,7 @@ Puts the Ranger in orbit around a body (ours, or Gargantua's side). Options (`Or
 | `retrograde` | boolean | turning against the body's spin |
 | `rM` | M | Gargantua only: a Kerr circular orbit's radius (default 12) |
 
-If that body was the camera's target, the target moves to the Sun (for our bodies other than the Sun) or to the hole (Gargantua's). For the Sun itself the code passes `"hole"`, which is not a solar id (unclear whether that is intended: `src/game/tools.ts`, `orbit`). Throws for an unknown body (lists the ids) or a Gargantua planet outside the Gargantua-system scene.
+If that body was the camera's target, the target moves to the Sun (for our bodies other than the Sun) or to the hole (Gargantua's). For the Sun itself the target becomes `"hole"`: intended — in a Gargantua-system scene Gargantua, through the wormhole, is a valid target from our side. Throws for an unknown body (lists the ids) or a Gargantua planet outside the Gargantua-system scene.
 
 ```js
 __bh.game.orbit("earth", { altKm: 400, inc: 51.6 });
@@ -1229,7 +1352,7 @@ __bh.game.target("moon"); __bh.game.orbitTarget();
 At a stand of an Earth airfield (the A320's start at the gate — PLAN-A320 A14): the airport's ground network fetched
 from OpenStreetMap, the stand by its `ref` (none: of the named or gate stands, the nearest the airfield's middle), the
 aircraft on its ground there — its nose wheel on the stop, its nose on the stand's heading in, the parking brake set —,
-its route out to the runway in use made. Throws without an airfield, a ground network or a stand. Its line.
+its route out to the runway in use made (A320 only). Throws `no airfield "<x>"`, `<ICAO>: no ground network (OpenStreetMap unreachable, or none mapped)`, `<ICAO>: no stand mapped`. Returns `` `<site>: stand <ref>` ``. Needs the network (OSM): not for a test with tiles blocked.
 
 ### `__bh.game.pushedBack()` → string
 
@@ -1239,14 +1362,14 @@ taxiway, the parking brake set, its route out kept. Throws when not at a stand (
 ### `__bh.game.parkAt(body, lat, lon, heading, note?)` → string
 
 Parked on its gear at a geodetic latitude, east longitude [°] and heading [°] — exactly there: no runway's lining up,
-no moving aside from another craft (as `land` and `hoverOver` do). Used by the network to put our craft back where it
+no moving aside from another craft (as `land` and `lineUp` do). Used by the network to put our craft back where it
 was left after riding in another's (docs/PLAN-RESEAU.md R5). `note` replaces the journal's line.
 
 *Used in:* none under tests (`ui/netsession.ts`).
 
 ### `__bh.game.pause(on = true)` → "Paused" | "Running"
 
-Stops or resumes the scene's clock (sets `settings.animate`).
+Stops or resumes the scene's clock: `settings.animate = !on`, nothing else (not `__bh.freeze`). Paused, `flyShip` returns at once (no autopilot, no vessel switch) while rendering and compiles go on. A solo crash pauses the game this way (and shows the craft-lost screen): `pause(false)` before the next flight. `warp(x)` with `x > 0` also un-pauses.
 
 ```js
 __bh.game.pause(false);   // running
@@ -1270,6 +1393,10 @@ Where the frame's time goes. `o.gpu !== false` (the default) switches on the GPU
 | `cpu` | `[{ section, ms, worst }]` main-thread sections |
 | `loopCpu` | `{ n, p50, p95, p99, max }` the main loop's CPU time per iteration over the last 600 (~10 s) [ms]: the frame's CPU budget as a distribution (strategy analysis §8.3) |
 | `gpu` | `[{ pass, ms, last, frames }]` GPU passes |
+| `earthSurface`, `earthScenery` | their `stats()` |
+| `streaming` | `{ leadM, lookAheadSeconds, gazeM }` |
+| `character`, `grass` | `camera.character.state()`, `characterRenderer.stats()` |
+| `graphics` | `{ compiling, compilesPending, sceneCompileEtaS, adapter, integratedGpu }` — the tracer's compiles |
 
 ```js
 const p = __bh.game.perf(); [p.loopFps, p.worstLoopMs, p.tier]
@@ -1287,13 +1414,14 @@ __bh.game.pilotState()
 
 ### `__bh.game.placeAt(pose)` → string
 
-Puts the Ranger at a state, the restart of its flight there. `pose`: `{ frame, X, vel, fwd, up, landed?, note }`:
+Puts the flown craft at a state, the restart of its flight there (every placement tool ends here: see the section's head for what it resets). `pose`: `{ frame, X, vel, fwd, up, landed?, localLanded?, note }`:
 
 | field | meaning |
 |---|---|
 | `frame` | `"ours"` (the home frame; needs the wormhole scene), `"hole"` (Gargantua's Boyer–Lindquist map), `"mouth"` (by the far mouth, on Gargantua's side) |
-| `X`, `vel`, `fwd`, `up` | 3-vectors: position, velocity (ours: d/dt; hole: β along the ZAMO axes), forward and up directions (unclear: the units of `X` per frame; read `src/game/place.ts`, or take the vectors from `snapshot()`) |
-| `landed?` | `{ body, q }` when on a body |
+| `X`, `vel`, `fwd`, `up` | 3-vectors. `"ours"`: home frame [M] (our mouth at the origin), `vel` d/dt in units of c; `"hole"`: Boyer–Lindquist Cartesian [M], `vel` = β (fraction of c) on the ZAMO axes; `"mouth"`: the far mouth's rest axes (x at the hole, z towards its spin axis) [M] from its centre, `vel` β. `fwd`, `up`: the **craft's** nose and top (unit), converted through the mount. Speeds are built as `m/s ÷ C_MPS` |
+| `landed?` | `{ body, q [M, body axes], h? [m] }` when on a body (`h`: the origin's height over the ground) |
+| `localLanded?` | `{ body, xi }` on Gargantua's worlds |
 | `note` | a line for the journal and the toast (required) |
 
 Throws when the scene is not loaded: `"ours"` and `"mouth"` need the wormhole scene (`settings.wormhole`).
@@ -1310,10 +1438,10 @@ after to see whether a later one took its place.
 
 ### `__bh.game.preset(name)` → void
 
-Loads a scene by name (`"game:artemis"`, `"game:interstellar"`, `"Earth: docking to the ISS"`, …). The app applies the scene after the call (unclear whether it is complete on return; the tests wait with `await new Promise((r) => setTimeout(r, 3000))`). Journals `Scene: <name>`.
+Loads a scene by name (`"game:artemis"`, `"game:interstellar"`, `"Earth: docking to the ISS"`, …): `applyPreset`, synchronous — settings, pose, time, pilot and fleet are set on return (a look aimed at a body ends a frame later). The maps, tiles and kernels load afterwards: wait on the readiness predicates (old tests slept 3 s; don't copy that). Journals `Scene: <name>`. An unknown name silently gives the defaults.
 
 ```js
-__bh.game.preset("game:artemis"); await new Promise((r) => setTimeout(r, 3000));
+__bh.game.preset("game:artemis"); await app.settled();
 __bh.game.preset("Earth: docking to the ISS");
 ```
 *Used in:* `worlds.e2e.test.ts`, `dock-undock.e2e.test.ts`, `audio-space.e2e.test.ts`, `scripts/trace-ab.ts`, `tests/flight/scenarios/helpers.ts`. (`tars-eval.e2e.test.ts` calls the root `__bh.preset`, the same scene loader.)
@@ -1345,7 +1473,7 @@ __bh.game.save("before TMI");
 
 ### `__bh.game.savedAt` → number | null
 
-When the game was last saved or loaded in this page (`Date.now()` ms; null: not yet) — the pause menu's "last save" and
+When the game was last saved in this page — `save()` or `autosaveNow()`; `load()` does not set it (`Date.now()` ms; null: not yet) — the pause menu's "last save" and
 its question before going back to the title unsaved (docs/MENUS.md, E8).
 
 ```js
@@ -1377,14 +1505,14 @@ __bh.game.set("haptics", 0.6);
 
 ### `__bh.game.setDate(d)` → string
 
-Sets the scene's clock: `d` an ISO string (`"2067-06-01T12:00"` without `Z` is UTC) or a number [M]. Returns the new date (`"YYYY-MM-DD HH:MM"`). The bodies move; the ship keeps its place (via `jumpTo`).
+Sets the scene's clock: `d` an ISO string or a number [M]. A string gets a `Z` appended unless it ends with one (so `"2067-06-01T12:00"` is UTC, and an explicit offset like `+02:00` throws `not a date: …`). Returns the new date (`"YYYY-MM-DD HH:MM"`). The bodies move; the ship keeps its place as `jumpTo` says (Gargantua-system scenes, flying). **It drops a flight plan made on the old clock: set the date before planning.** For a daylight test pick the date (the e2e harness forces daylight unless the test sets one).
 
 ```js
 __bh.game.setDate("2026-01-01T12:00:00Z");
 __bh.game.setDate(new Date().toISOString());
 __bh.game.setDate("2067-06-01T10:30:00");
 ```
-*Used in:* `eclipses.e2e.test.ts`, `multiexposure.e2e.test.ts`, `rain.e2e.test.ts`, `metar.e2e.test.ts`, `tests/flight/scenarios/airports.ts`. (`dock-undock` and `audio-space` use the root `__bh.setDate`.)
+*Used in:* about 205 files, e.g. `eclipses.e2e.test.ts`, `multiexposure.e2e.test.ts`, `metar.e2e.test.ts`, `tests/flight/scenarios/airports.ts`. (`dock-undock` and `audio-space` use the root `__bh.setDate`.)
 
 ### `__bh.game.settings()` → object
 
@@ -1429,7 +1557,7 @@ __bh.game.soi().chain.map((c) => c.id)   // e.g. ["moon", "earth", "sun"]
 
 ### `__bh.game.status()` → RangerStatus
 
-The Ranger's state, the same figures as the Ranger tab. Units: km, m/s, s.
+The flown craft's state, the same figures as the craft's tab. Units: km, m/s, s.
 
 | field | type | meaning |
 |---|---|---|
@@ -1437,12 +1565,12 @@ The Ranger's state, the same figures as the Ranger tab. Units: km, m/s, s.
 | `soi`, `soiName` | string | the body of the sphere of influence (`"earth"`), its name |
 | `soiKm` | number | its radius from the body's centre [km] (∞ for the Sun) |
 | `status` | `"landed"` \| `"flight"` \| `"suborbital"` \| `"orbit"` \| `"escape"` \| `"hyperbolic"` \| `"throat"` \| `"plunge"` \| `"bound"` \| `"unbound"` | what the ship does |
-| `label` | string | its display label: `"LANDED"`, `"IN FLIGHT"`, `"SUBORBITAL"`, `"IN ORBIT"`, `"ESCAPING"`, `"HYPERBOLIC"`, `"IN THE THROAT"`, `"PLUNGING"`, `"KERR ORBIT"`, `"UNBOUND"` (translated in the UI) |
-| `altKm` | number | above the body's surface [km] (over the figure) |
-| `speed` | number | speed relative to the body [m/s] |
-| `vVert` | number | vertical speed [m/s] |
+| `label` | string | its label: `"LANDED"`, `"IN FLIGHT"`, `"SUBORBITAL"`, `"IN ORBIT"`, `"ESCAPING"`, `"HYPERBOLIC"`, `"IN THE THROAT"`, `"PLUNGING"`, `"KERR ORBIT"`, `"UNBOUND"` (constants, `STATUS_LABEL`), and `"Near the wormhole"` (translated) |
+| `altKm` | number | **the Earth: altitude over the sea** (the geoid, h − N — an altimeter's); other bodies: over their figure. **Never over the ground** (AGL: `__bh.sys.heightOverGround`) |
+| `speed` | number | speed relative to the body's centre [m/s] (inertial — not to its turning ground, not the airspeed) |
+| `vVert` | number | vertical speed along the geodetic normal [m/s] |
 | `orbit` | OrbitFigures \| null | null when landed; see below |
-| `target` | `{ id, name, distKm, rate, caKm, caIn }` \| null | distance [km], rate [m/s] (sign: unclear), closest approach [km] and its time [s] (`caKm`, `caIn`; NaN on Gargantua's side) |
+| `target` | `{ id, name, distKm, rate, caKm, caIn }` \| null | distance [km], range rate [m/s] (positive when the distance grows), closest approach [km] and its time [s] (`caKm`, `caIn`; NaN on Gargantua's side) |
 | `next` | `{ kind: "exit"\|"enter"\|"impact"\|"mouth", body, name, inS }` \| null | the next event on the free-fall path; `inS` in s |
 | `kerr` | `{ r, E, L }` \| null | Gargantua's side, far from the planets: r [M], energy, angular momentum |
 
@@ -1452,13 +1580,13 @@ The Ranger's state, the same figures as the Ranger tab. Units: km, m/s, s.
 const s = __bh.game.status();
 s.label                       // "IN ORBIT"
 s.orbit.peKm, s.orbit.apKm    // km
-s.altKm * 1000                // metres above ground
+s.altKm * 1000                // metres above the sea (Earth) — not above the ground
 ```
 *Used in:* `smoke.e2e.test.ts` (label), `time.e2e.test.ts` (soi, peKm, apKm, incDeg), `spectator.e2e.test.ts` (`soi`, `altKm`, `status`), `tars-agent-live.e2e.test.ts`, `tars-eval.e2e.test.ts`, `golden.e2e.test.ts`, `rates.e2e.test.ts`, `assist.e2e.test.ts` (`speed`), `assist-climb.e2e.test.ts` (`altKm`), `place.e2e.test.ts` (side, soi), `gpu-recovery.e2e.test.ts`, `a11y.e2e.test.ts`, `saves.e2e.test.ts`, `place-docked.e2e.test.ts`, `worlds.e2e.test.ts`, `scripts/ipad.ts`, `scripts/live-entry.ts`.
 
 ### `__bh.game.target(id)` → string
 
-Targets a body (ours: the solar ids; Gargantua's: `hole`, `miller`, `mann`, `edmunds`, `k2`), `"wormhole"`, or `"iss"` (in the `Target` type; unclear whether every scene accepts it). Throws `<name> is not in this universe`. Returns `"Target: <name>"`. Does not move the camera (`focus: false`).
+Targets anything `camera.availableTargets()` accepts — wider than `targets()`: on our side in a Gargantua-system scene with the wormhole, `"wormhole"`, our bodies, **`"iss"` when `settings.iss`**, the fleet's crafts, the network's, and `"hole"` + Gargantua's worlds; on Gargantua's side `"hole"`, `"star"` (with `sun`), `"barycentre"`, `"wormhole"`, its worlds, then ours. Throws `<name> is not in this universe`. Returns `"Target: <name>"`. Does not move the camera (`focus: false`); calls `refresh`.
 
 ```js
 __bh.game.target("iss");
@@ -1506,7 +1634,7 @@ Public. Journals the changes of the sphere of influence (`soi`) and of the statu
 
 ### `__bh.game.wormhole(side = "ours", dM?)` → string
 
-Places the Ranger before a mouth of the wormhole, `dM` [M] from the mouth's centre (default: the approach's stand-off), at rest, targets the mouth, engages the hover autopilot. `"ours"` (our side's mouth: the home frame's origin) or `"gargantua"`. Needs a scene with the wormhole (`settings.wormhole`).
+Places the flown craft before a mouth of the wormhole, `dM` [M] from the mouth's centre (default 4 × the throat's radius ρ), at rest, targets the mouth, engages the hover autopilot. `"ours"` (our side's mouth: the home frame's origin; on its sunlit side, nose on it) or `"gargantua"` (frame `"mouth"`, X = [−d, 0, 0]). Needs a scene with the wormhole (`settings.wormhole`).
 
 ```js
 __bh.game.wormhole("gargantua");
@@ -1515,7 +1643,16 @@ __bh.game.wormhole("ours");
 *Used in:* `tests/flight/scenarios/gargantua.ts`.
 
 ---
-Section counts: 48 `__bh.game.*` paths plus `__bh.game` itself.
+Section counts: 57 `__bh.game.*` members (with `walk`, below) plus `__bh.game` itself.
+
+### `__bh.game.walk(body, lat = 0, lon = 0)` → string
+
+The placement panel's On foot mode: `land(body, lat, lon)`, then `camera.character.disembark(body)` — the astronaut out
+beside the craft (third person). Latitude and longitude in degrees. Returns `land`'s note. A refused exit throws
+`the ship landed, but no walk from it: <why>` and leaves the craft landed. On Gargantua's worlds (`mann`, `miller`,
+`edmunds`), `land` sets the craft down at once (`camera.local.L.landed` and its own contact coordinates), so **⇧K** can
+step out with no physics step first; Miller allows walking on its sea's contact plane between the waves chosen by the
+placement (the waves stay visual); gas giants are refused.
 
 ---
 
@@ -1541,10 +1678,13 @@ The piloted vessel stays in place on the surface; `camera.piloting` can remain t
 | `move(forward, right, seconds=1, run=false)` | Camera-relative input −1…1, at most 10 real seconds; zero stops movement. |
 | `jump()` | Asks a jump, integrated with local gravity; Space invokes this only on foot. Made at once on the ground or within `COYOTE_S` (0.12 s) of walking off an edge; asked in the air, kept `JUMP_BUFFER_S` (0.15 s) and made on landing. In the air the velocity follows the input at `AIR_RESPONSE` (2.5/s) instead of `GROUND_RESPONSE` (14/s). |
 | `orbit(dx, dy)` / `zoom(delta)` | Camera orbit input and wheel distance; `yaw`, `pitch` radians, `distance` metres. |
-| `stop()` / `releaseInput()` | End exploration and release view, or only stop held inputs. TARS `character(stop)` stops movement rather than ending the explorer. |
+| `stop({ keepView? })` / `releaseInput()` | End exploration and release view (`keepView`: the walker's camera stays out as the spectator — the Free mode), or only stop held inputs. TARS `character(stop)` stops movement rather than ending the explorer. |
 | `state()` | `active`, `body`, `ours`, `positionM`, `speedMs` (along the ground: the gait's pace — a jump in place is 0), `verticalMs`, `grounded`, `heightM`, `accessDistanceM`, `airborneS` (time off the ground), `dipM` (the legs' give on landing, ≤ 0), `hull` (`{ distanceM, half }`: the landed vessel's box and the astronaut's distance to it; null when unknown), `cpuMs`, `groundPatch` readiness/grid/bytes/CPU, `error`. Infinity access distance serializes to null when no landed craft is reachable. Refusals are English, shown in French with a French interface. |
 | `vesselHull()` | The flown, landed vessel's box in the walk's metres (`centre`, `axes`, `half`), from its mesh with the gear out (`renderer.ship.hullBound`); the walk, the orbit camera and the exits keep out of it. Null when no vessel is landed on this body or its mesh is not loaded. |
 | `hullBounds` | `() => { lo, hi } \| null`: the vessel's box in its own frame (x left, y up, z nose) [m]; wired to `renderer.ship.hullBound(settings.vessel)` by the page. |
+| `active` / `body` / `q` | on foot now (the "on foot" wait, 18 files); the body walked; the body-fixed position [m] |
+| `place()` | `{ body, lat, lon, altM (geodetic, over the ellipsoid for ours; over the mean radius on Gargantua's worlds), aglM, radiusM, headingDeg, viewDeg, speedMs }` or null |
+| `accessDistance()` | [m] to the landed craft's door, Infinity when none on this body |
 | `snapshot()` / `restore(saved)` | Save/restore position, heading, orientation, camera distance and vertical velocity. |
 | `frame()` | Camera-relative origin/axes in metres and body-fixed position, speed, phase, `airborne`, `dip` and time for the renderer. |
 | `groundPatch` | Shared CPU/GPU Earth heightfield; `ready`, `size` (17 coarse, 65 refined), `stamp`, `values`, `cpuMs`. |
@@ -1560,13 +1700,13 @@ __bh.camera.character.state();
 
 ### `__bh.camera` → CameraController (the flight controller)
 
-The camera and the ship flown. About 480 members (src/controls.ts, plus src/controller/*.ts mixed in). Only the members tests
+The camera and the ship flown. About 736 members counted in the source on 6 Nov 2026 (215 in the class of src/controls.ts, the rest mixed in from src/controller/*.ts and src/camera/*.ts; `bun scripts/bh-api.ts` gives the live figure). Only the members tests
 use are tabled below; the rest are internal. Most functions are synchronous and read the live state, so call them after
 `__bh.freeze(true)` or `__bh.step(dt)` when a test needs a settled frame. Async (return a Promise): `missionPlan`, and `planOurs` (the planner's core, not tabled).
 
 | member | type | meaning |
 |---|---|---|
-| `piloting` | boolean | the Ranger is flown (on whenever the ship is). |
+| `piloting` | boolean | a craft is flown (any `fleet.active`: ranger, lander, endurance, f35, a320); set by `setPilot`. The boot wait of most flight e2e: `waitFor("__bh.camera.piloting")`. |
 | `pilot` | FlightComputer | the flight computer; see the table below. |
 | `hubInfo()` | → HubInfo \| null | the hub card: `mode`, `title`, `phase`, `rows: [label, value, severity?][]` (severity "warn" or "bad", optional), `next` (the prediction, "→ …", or null), `bar` (phase progress 0…1 or null), `graph`, `cue`, `say`. Cached 250 ms. |
 | `flightInfo()` | → FlightInfo | the HUD figures for this frame (a partial list: also `dv`, `accel`, `railsNote`, `rollAlign`, `precision`, `hub`, `plan`, `engine`, `planes`, and more, see src/controller/telemetry.ts): `region` ("hole" \| "throat"), `r, theta, phi` (BL, M), `ell, n` (throat), `speed` [c], `gamma`, `dtau`, `E, L, Q`, `spin`, `vr`, `rH, isco, photon` [M], `ergo`, `wantSpeed` [c], `throttle` (0…1), `sas`, `hold`, `auto`, `assist`, `director`, `omega`, `properTime`, `landed`, `landedOn`, `dirs` (camera coords), `ourAlt` [M], `ourVr`, `ourCa`, `targetDist`, `targetRate`, `target`, `ref`, `dock`, `dockPhase`, `links`, `vessel`, `assembly`, `mass` [kg], `map`, `surface`, `air`, `entry`. |
@@ -1579,8 +1719,9 @@ use are tabled below; the rest are internal. Most functions are synchronous and 
 | `weatherRealInfo` | RealInfo \| null | why the real weather is or is not in use (`why`, e.g. "out-of-range"). |
 | `docked` | boolean (getter) | the flown craft is held by the station (directly or through craft docked to it). |
 | `landed` | boolean | the camera stands on a star's surface (gravity on). |
-| `ourLanded` | `{body, q}` \| null | our side: resting on a body's ground (`q`: its coordinates). |
-| `gearDown` / `gearExt` | boolean / number 0…1 | landing gear commanded down, and its extension (8 s each way). |
+| `ourLanded` | `{ body, q, h?, deck? }` \| null | our side: resting on a body's ground (`q`: body-fixed coordinates; `deck: { pl, l, cat? }` on a carrier). |
+| `gearDown` / `gearExt` | boolean / number 0…1 | landing gear commanded down, and its extension (8 s each way; only `gearExt ≥ 1` carries the craft). Set at the flight's first frame from the state (down on the ground, up in the air) **unless `gearInit` is true**; driven by itself with `settings.autoGear` or the entry/land/takeoff autopilots (down below 600 m AGL and 250 m/s). Gear down at once: `c.gearDown = true; c.gearExt = 1; c.gearInit = true` (and `settings.autoGear = false` to keep it so). |
+| `gearInit` | boolean | keep the gear as written instead of the first-frame choice; reset by every placement (`newFlight`). |
 | `nowTime()` | → number | the sim time now [M] (the ship's time once it is set). |
 | `activePoseNow(evenOff?)` | → Pose & {t} \| null | the flown craft's place [M, c] and axes at `nowTime()`. |
 | `ourNav(cam)` | → nav \| null | our side's navigation state: `X` [M], `V` [c] (home frame), `t` [M], `ref` (reference body), `refPos`, `refVel`, `radial`. Needs `cameraFrame(settings)` as argument: from the page use `__bh.sys.nav()`. |
@@ -1614,7 +1755,7 @@ Flight computer: `__bh.camera.pilot` (src/pilot.ts, class FlightComputer). Membe
 | `pilot.fired` | object | what fired last step: `throttle`, `rcs`, `rcsSide`, `turn`, `yaw`, `at`, `force`, `torque`. |
 | `pilot.sas` | boolean | stability assist (default true). Toggled by a key or the cockpit's SAS control (`title.e2e.test.ts`, `cockpit.e2e.test.ts`). |
 | `pilot.hold` | Hold | an attitude hold: `"none"`, `"prograde"`, `"retrograde"`, `"radialOut"`, `"radialIn"`, `"normal"`, `"antinormal"`, `"target"`, `"antiTarget"`, `"maneuver"`. |
-| `pilot.auto` | Auto | the autopilot engaged: `"none"`, `"hover"`, `"circularize"`, `"approach"`, `"orbit"`, `"node"`, `"transfer"`, `"land"`, `"takeoff"`, `"dock"`, `"entry"`, `"burns"`. |
+| `pilot.auto` | Auto | the autopilot engaged: `"none"`, `"hover"`, `"circularize"`, `"approach"`, `"orbit"`, `"node"`, `"transfer"`, `"land"`, `"takeoff"`, `"dock"`, `"entry"`, `"burns"`, `"keep"` (station keeping). Autopilots chain (circularize → node, dock beyond 3 km → rendezvous) and a touchdown ends all but take-off: wait on the end state, not on `pilot.auto`. |
 | `pilot.setAuto(a)` | → void | toggles the autopilot `a`: when `a` is already engaged it goes to `"none"`. Clears the anchor. When not assisted, it also clears the hold; when it switches off (or is assisted) the throttle goes to 0. Examples: `__bh.camera.pilot.setAuto("takeoff")`, `__bh.camera.pilot.setAuto("dock")`, `tests/flight/scenarios/helpers.ts:41` (`auto = "none"` then `setAuto(auto)`). |
 | `pilot.setHold(h)` | → void | toggles the hold `h`: same hold → `"none"`. When not assisted and a hold is set, it clears the autopilot. Example: `__bh.camera.pilot.setHold("retrograde")`. |
 | `pilot.assist` | boolean | assisted: the autopilots compute their cue (`director`) but the pilot flies. Off: they fly (`assist.e2e.test.ts:21`, `:30`). |
@@ -1624,21 +1765,57 @@ Flight computer: `__bh.camera.pilot` (src/pilot.ts, class FlightComputer). Membe
 | `pilot.anchor` | V3 \| null | the position an autopilot holds (set when it engages). |
 
 Valid values, from src/pilot.ts: `Hold` = none, prograde, retrograde, radialOut, radialIn, normal, antinormal, target,
-antiTarget, maneuver. `Auto` = none, hover, circularize, approach, orbit, node, transfer, land, takeoff, dock, entry, burns.
+antiTarget, maneuver. `Auto` = none, hover, circularize, approach, orbit, node, transfer, land, takeoff, dock, entry, burns, keep.
 An unknown name is not checked: it is stored, and nothing flies it.
 
 *Used in:* `tests/e2e/smoke.e2e.test.ts:48`, `tests/e2e/hotas.e2e.test.ts:84`, `tests/e2e/assist.e2e.test.ts:21`,
 `tests/flight/scenarios/helpers.ts:41`, `tests/flight/scenarios/gargantua.ts:259`, `tests/flight/scenarios/missions.ts:25`,
 `tests/flight/scenarios/dock.ts:28`, `tests/flight/scenarios/orbit.ts:235`.
 
+#### The aircraft's members — `__bh.camera` for jets (F-35, A320)
+
+The members flight tests use most, beyond the tables above (file counts in tests/ and scripts/, 6 Nov 2026). How the
+aircraft fly: [VOL-AVIONS.md](VOL-AVIONS.md); recipes: [E2E-VOLS.md](E2E-VOLS.md).
+
+| member | files | signature | meaning, units, pitfalls |
+|---|---|---|---|
+| `jetToggle(what)` | 86 | `(what: "ap" \| "athr" \| "ab") → string` | **a toggle, not an engage**: `"ap"` engages the altitude and heading holds at the current altitude (rounded to 10 m) and heading — or lets both go if either is set; `"athr"` the autothrottle at the current airspeed — or lets it go; `"ab"` the afterburner (on: throttle 1, autothrottle off). Returns the message. **Refused (message only) until the jet flies in plane mode, in the air** — right after `flyAt` or `importSave` nothing engages: step a few frames first. Lets go formation, intercept and any `pilot.auto` first. On the A320 `"ap"`/`"athr"` go to its FMGC. Guard it: `if (c.jetModes.alt === null) c.jetToggle("ap")` |
+| `apSet(want)` | 3 | `({ alt?, hdg?, spd?, ap?, athr? }) → string` | MCP-style selectors, safe to call again: `alt` [m over the sea] 0–20 000, `hdg` [rad], `spd` [m/s airspeed] 30–700; a target given engages its system; VNAV off. Prefer it to toggles |
+| `jetModes` | 77 | field `{ alt, hdg, spd, ab, lnav?, vnav?, form?, icpt?, bankMax?, tf? }` | the F-35's holds: `alt` [m **over the sea**] (over the ground on Gargantua's worlds), `hdg` [rad, clockwise from true north], `spd` [m/s airspeed]; `null` = that hold off. Tests write targets once engaged (`c.jetModes.alt = 900`) |
+| `jetFigures()` | 9 | `() → { h, hdg, V } \| null` | what the holds read: `h` [m over the sea], `hdg` [rad], `V` airspeed [m/s]; null when not in the air. (Tests writing `c.last?.alt` read a member that does not exist: a no-op) |
+| `geoNow()` | 58 | `() → { lat, lon, alt, gs, track, vs } \| null` | WGS84 lat/lon [°], `alt` [m **over the sea**] (h − N), ground speed [m/s], `track` [rad], vertical speed [m/s]; null off the Earth. **Not AGL**: `__bh.sys.heightOverGround("earth", __bh.fleet.pose(__bh.fleet.active, t).X, t)` |
+| `airInfo()` | 6 | `() → { inAir, q [Pa], mach, alpha, beta [rad], nz [g], buffet, stalled, speed [m/s], h, g, gMax, gPeak, failure, rolling, mode, flaps, brake, gear, … }` | the air figures. **It has no `agl` field** (a test waiting on `airInfo().agl` waits for nothing) |
+| `attitudeNow()` | 28 | `() → { pitch, bank, heading, velBank? } \| {}` | [rad] over the ground below; bank right +; `{}` off a world |
+| `airFlight.last.speed` / `airFlight.failure` | 36 | | airspeed [m/s]; the loss reason (null fine). `airFlight.last.h` is the height over the ellipsoid, not AGL |
+| `flightModeNow()` | 3 | `() → "rocket" \| "plane" \| "sf"` | the flight mode in effect: the jets' holds need `"plane"` |
+| `rolling` | 5 | `{ body } \| null` | on the ground and rolling |
+| `pilotInput(pad)` | 4 | | the held keys read each frame; tests wrap it to inject stick (`f35-flight-ops`: pitch 0.8 above 67 m/s for a take-off) |
+| `onPilotMessage` | 8 | hook `(text) => void` | replace it to capture the pilot's messages (refusals included) |
+| `setLook(yaw, pitch)` / `viewReset()` / `outside` | 60 / 33 / 31 | | the look on the mount [°]; the view afresh (look offsets cleared, `outside` reset, then `setLook(0, 0)`) — call after writing `settings.shipMount`; the outside views' angles and distances |
+| `setFov(fov)` | 7 | `(fov: number [° vertical])` | **eased**: wait `Math.abs(__bh.settings.fov - F) < …` |
+| `ilsStart(name?, o?)` / `ilsRunways(field?)` / `ilsRun` / `ilsLast` / `ilsInfo()` | 5 / — / 6 / 5 / 4 | `ilsStart(name?, { hold?, rwy?, base?, runway? }) → string` | the ILS approach: always returns a message (success `"ILS approach: <rwy>, N km"`, refusals `"ILS: …"`); its run, its last grade `{ rwy, score, notes, touch? }`, the HUD figures. On the A320 it hands over to its own FMGC approach (fly ≥ 6 s live first: its AP engages 5 s after lift-off) |
+| `carrierSpawn(kind, o?)` / `carrierLand(kind, spot?)` / `carrierFinal(kind, d?, speed?)` / `carrierNow(t?)` / `carrierClear()` | 7 / 3 / 4 / 8 / 3 | `carrierSpawn(kind, { lat?, lon?, heading?, speed?, seed? }) → string`; `carrierFinal(kind, d = 1500 m, speed = 70 m/s)` | a carrier at sea (default 4 km ahead, into the wind); set down on its deck (poll until it answers `"On …"`: the deck map loads asynchronously); on its final; their poses; removed |
+| `deckLand` / `deckTakeoff` / `catLaunch(i)` / `trapLand` / `trapRun` / `trapLast` / `deckLast` | | | F-35B deck recovery and short take-off; F-35C catapult and wires; their runs and grades |
+| `tankerStart(o)` / `aar` | | | air-to-air refuelling (`{ near: true }`, `settings.f35AarMode`) |
+| `stovlToggle()` | | | the F-35B's hover mode (below 128 m/s, light enough) |
+| `combat`, `combatTrigger(what)`, `combatEnd()`, `radar`, `icpt`, `icptOn(name)`, `form`, `wing` | 30 / 5 / 6 / 18 / 5 / — / 4 / 5 | | a fight (`combat.world.targets`, `status: "run" \| "won" \| "lost"`); the triggers `"fire" \| "lock" \| "weapon" \| "cm"`; the radar (`tracks: Map` — read `.size`, `.has(id)`), the intercept, the formation, the wingmen |
+| `nav` / `mission` / `missionAbort()` | 5 / 7 / 4 | | the plane's flight plan; an **air** mission flown (not `__bh.mission`) |
+| `a320`, `a320Sys`, `a320Props`, `a320Park` | 6 / 5 / 6 / 6 | | the A320's FCS, systems, FlightGear property bag (`"systems/hydraulic/green-psi"`…), parking brake |
+| `entryRun` / `entrySite` | 10 / 8 | | the entry autopilot's run (`phase: "plan" \| "wait" \| "burn" \| "entry" \| "glide"`, `tBurn`, `dv`, `bank`…; read the approach from `entryRun.app`); where it comes down (set it before `setAuto("entry")`) |
+| `skyInfo()` | 11 | | the sky now: `sun.altDeg`, `sun.lightAltDeg`, `heightM`, `refraction`… (patched on the instance by main.ts) |
+| `viewController()` / `viewSettings()` | 11 / 4 | | the spectator's controller when one is out, else this one; the settings drawn |
+| `netOwn()` | 5 | `→ { p, v, fwd, up, right, h } \| null` | our craft as the network sends it (Earth-fixed m, m/s; `h` over the mean radius) |
+
 ### `__bh.fleet` → Fleet (src/fleet.ts)
 
-The craft (`ranger`, `lander`, `endurance`), their poses, their docking links and the propellant. Positions are in the
+The craft (`ranger`, `lander`, `endurance`, `f35`, `a320`), their poses, their docking links, the propellant and the aircraft's fuel. Positions are in the
 home frame [M], velocities in [c]; times in M.
 
 | member | type | meaning |
 |---|---|---|
-| `active` | VesselId (get/set) | the flown craft: `"ranger"`, `"lander"` or `"endurance"`. |
+| `active` | VesselId (get/set) | the flown craft: `"ranger"`, `"lander"`, `"endurance"`, `"f35"` or `"a320"` (the setter also sets the gear height). **The canonical wait after a switch** (≈ 212 files): `__bh.settings.vessel = "f35"`, then `waitFor('__bh.fleet.active === "f35"')` — the switch is made at the next flight step with time running; refused, `settings.vessel` is put back and the reason goes to `camera.onPilotMessage`. |
+| `fuel` | `Partial<Record<VesselId, number>>` | an aircraft's fuel left [kg]; absent = full (`VESSELS[id].fuelKg`). Refilled by every placement: set it after (`__bh.fleet.fuel.f35 = 5000`). |
+| `payload` | `Partial<Record<VesselId, number>>` | stores carried [kg] |
 | `free` | `Partial<Record<VesselId, FreeState>>` | the coasting craft: a Pose (`X` [M], `V` [c], `ax`, `w`) plus `t` [M] and `ref` (the body it coasts about). Example: `__bh.fleet.free.lander` (`orbit.ts:383`). |
 | `links` | DockLink[] | the docking links: `a`, `b` (craft, or "iss" for `a`), `pa`, `pb` (port indices), `c`, `ax`. `__bh.fleet?.links?.length` (`lab.ts:73`). |
 | `pose(id, t, fromStation?, exact?)` | → Pose \| null | a craft's pose at `t` [M] in the home frame. `exact` (default): integrates when near the body. Example: `__bh.fleet.pose("endurance", t)` (`dock.ts:69`). |
@@ -1678,7 +1855,7 @@ coarser as it grows (`step` doubles each time it fills). A new flight (reset in 
 
 | member | type | meaning |
 |---|---|---|
-| `samples` | RecSample[] | the record. Each: `t` [s, scene time], `alt` [m] (NaN about the hole), `speed` [m/s], `vz` [m/s], `g` [g], `q` [Pa], `mach`, `heat` [W/m²], `throttle` (0…1), `dv` [m/s, spent since the flight began], `fuel` (0…1 or null). |
+| `samples` | RecSample[] | the record. Each: `t` [s, scene time], `alt` [m above the body's ground, AGL] (NaN about the hole), the spacecraft's `dvLeft`, `dvPlan`, `battery`, `dockRange`, `speed` [m/s], `vz` [m/s], `g` [g], `q` [Pa], `mach`, `heat` [W/m²], `throttle` (0…1), `dv` [m/s, spent since the flight began], `fuel` (0…1 or null). |
 | `step` | number [s] | the least time between two samples. |
 | `window(seconds)` | → RecSample[] | the last `seconds` of the flight (`Infinity`: all). |
 | `csv()` | → string | the record as CSV, with a header, one row per sample, SI units. |
@@ -1688,15 +1865,16 @@ coarser as it grows (`step` doubles each time it fills). A new flight (reset in 
 
 ### `__bh.ourState(id, t)` → `{pos, vel, dtau}`
 
-A body's place and velocity in the home frame (our side) at time `t` [M]. `id` is a body name of Gargantua's system
-(`"sun"`, `"earth"`, `"moon"`, `"jupiter"`, …). `pos` in M, `vel` in c, `dtau` the body's clock rate. Synchronous.
+A body's place and velocity at time `t` [M]. `GARGANTUA_SYSTEM` holds both universes: our bodies (every solar id —
+`"sun"`, `"earth"`, `"moon"`, `"jupiter"`, …: the home frame, `dtau` 1) and Gargantua's own (`gargantua`, `miller`, `mann`,
+`mouth`, `k2`, `edmunds`: the hole's frame). An unknown id throws `no body <id>`. `pos` in M, `vel` in c, `dtau` the body's clock rate. Synchronous.
 It is `bodyState(GARGANTUA_SYSTEM, id, t)` (src/system/our-side.ts), the same as `__bh.sys.bodyState`.
 
 ```js
 // as missions.ts does, inside app.js(`…`)
 const t = __bh.game.now(), iss = __bh.iss.orbit(t), E = __bh.ourState("earth", t);
 ```
-*Used in:* `tests/flight/scenarios/missions.ts:32`.
+*Used in:* about 7 files, e.g. `tests/flight/scenarios/missions.ts:32`.
 
 ### `__bh.sys` (the system: the hole's frame, our side, the geodesy)
 
@@ -1723,7 +1901,9 @@ left, y up, z nose — [m], `stroke`, `share`, `wheel`, `brakes`, `steers`, `mu`
 ### `__bh.sys.heightOverGround(id, X, t)` → number
 
 A home-frame point's height over body `id`'s ground as drawn and flown [m] — the gear's own measure (the relief, the
-runways levelled, over the WGS84 ellipsoid on the Earth). Synchronous.
+runways levelled, over the WGS84 ellipsoid on the Earth; a carrier's deck under the point counts). Synchronous. **The
+way to read a craft's AGL**: `__bh.sys.heightOverGround("earth", __bh.fleet.pose(__bh.fleet.active, t).X, t)` with
+`t = __bh.time()` — the reference point's height, so subtract the gear height for the wheels (`__bh.sys.gears()`).
 
 ```js
 // a leg's height: the craft's place plus the leg's offset on its axes (ground-placement.e2e.test.ts)
@@ -1756,8 +1936,8 @@ surface (body-fixed metres), the unit `p` (the threshold's geodetic up), `along`
 
 ### `__bh.sys.geodetic()` → `{body, lat, lon, altM, radiusM} | null`
 
-Where the camera is over the body it is nearest, on our side: `lat`, `lon` in degrees, `altM` = height over the ellipsoid [m],
-`radiusM` = the body's radius [m]. Null about the hole, when the camera is not on our side, or when the nearest body is the Sun (no surface to measure). Synchronous.
+Where the camera is over the body it is nearest, on our side, at `sim.time`: `lat`, `lon` in degrees, `altM` = height over the ellipsoid [m],
+`radiusM` = the body's equatorial radius [m] (`subsolar` uses the view's time instead). Null about the hole, when the camera is not on our side, or when the nearest body is the Sun (no surface to measure). Synchronous.
 
 ```js
 const G = L ? null : __bh.sys.geodetic();   // tests/flight/scenarios/vertical.ts:49
@@ -1776,13 +1956,13 @@ The camera's place in the home frame [M] (our universe, the mouth at the origin)
 
 ### `__bh.sys.look(id)` → look direction
 
-Where the camera sees body `id` (CPU geodesics, retarded, aberrated): the `look` vector of `bodyLook`. (unclear: the frame of
-the returned vector, read `bodyLook` in src/ — camera coordinates is the likely one.)
+Where the camera sees body `id` (CPU geodesics, retarded, aberrated): the `look` vector of `bodyLook`, in camera
+coordinates (right, up, forward); on our side near the Earth, raised by refraction when `settings.refraction`.
 
 ### `__bh.sys.mouth(t?)` → `Mouth`
 
 The wormhole's mouth at time `t` [M] (default: the scene's time): `C` (its centre, BH frame, M), `ex`, `ey`, `ez` (the mouth's
-axes), `w` (its metric), `V` (the centre's coordinate velocity, c), `rGlue`, `lGlue`, `lFar` (in M and ℓ). Synchronous. Mostly for the frame conversions.
+axes), `w` (its metric), `V` (the centre's coordinate velocity, c), `omega` (dφ/dt, 0 static), `rGlue`, `lGlue`, `lFar` (in M and ℓ). The default `t` is the wormhole module's scene time (set once a frame and by `setTime`). Synchronous. Mostly for the frame conversions.
 
 ### `__bh.sys.nav()` → nav \| null
 
@@ -1809,8 +1989,10 @@ The planner's coast (`predictOurs`) from a state `X` [M], `V` [c] at time `t` [M
 ### `__bh.sys.setHolePose(settings, X, fwd, up?, vel?)` → void
 
 Writes a pose as a camera orbiting the hole: `X` is the position in the hole frame [M] (Cartesian), `fwd` and `up` unit vectors,
-`vel` the camera's 3-velocity [c]. The **first argument is the settings object** (`__bh.settings`), as the tests pass it
-(`tests/lowthrust-orbit.test.ts:24`, `tests/wormhole-flight.test.ts:23`). It writes into the settings; redraw with `__bh.touch()`.
+`vel` the camera's 3-velocity [c]. The **first argument is the settings object** (`__bh.settings`). It writes into the settings —
+`anchor = "hole"`, `distance`, `inclination` (clamped 0.2…179.8°), `azimuth`, `yaw`/`pitch`/`roll`, `velR/T/P` —; redraw with
+`__bh.touch()`. (`tests/lowthrust-orbit.test.ts:24` and `tests/wormhole-flight.test.ts:23` are `bun test` unit tests that import
+`src/camera` directly; no e2e calls it through `__bh`.)
 
 ### `__bh.sys.setHomePose(X, fwd, up?, vel?)` → void
 
@@ -1891,7 +2073,8 @@ and cached 6 h in the browser; a newer set replaces them. Synchronous.
 
 ### `__bh.iss.orbit(t)` → `{X, V} \| null`
 
-The station's place and velocity at time `t` [M] in the home frame, on the Earth's own axes at the Earth's centre: `X` [M], `V` [c].
+The station's place and velocity at time `t` [M] in the home frame: `X` [M] is the **absolute** home-frame position (the Earth's
+position plus SGP4's TEME turned by GMST onto the Earth's axes), `V` [c] the Earth's velocity plus the station's.
 Null when its orbit has decayed in the propagation. Synchronous.
 
 ```js
@@ -1970,9 +2153,11 @@ Null when nothing is hit within 8 m (or the cabin is not loaded). Synchronous.
 
 ### `__bh.cockpitControlAt(id)` → `[x, y] \| null`
 
-Where a cockpit control is in the view: the centre of its box, in NDC (−1…1, y up), or null when the control is not in the view.
+Where a cockpit control is in the view: the centre of its box, in NDC (−1…1, y up). Null only for an unknown id, before a first
+frame, or a control **behind the eye**; a control off-screen comes back with |x| or |y| > 1 — check the range before clicking.
 `id` is one of: `gear`, `flaps`, `airBrake`, `dimmer`, `night`, `navLights`, `strobe`, `landingLights`, `autoTakeoff`, `autoCirc`,
-`autoApproach`, `holdPrograde`, `holdRetrograde`, `holdTarget`, `assist`, `autoEntry`, `autoLand`, `sas`, `chrono`, `apOff`
+`autoApproach`, `holdPrograde`, `holdRetrograde`, `holdTarget`, `assist`, `autoEntry`, `autoLand`, `sas`, `chrono`, `apOff`,
+`rcsMode`, `masterCaution`
 (src/cockpit/controls.ts). Aim first with `__bh.camera.setLook(yaw, pitch)` (degrees).
 
 ```js
@@ -1983,8 +2168,8 @@ const n = __bh.cockpitControlAt("sas");   // then map NDC to CSS px, see tests/e
 
 ### `__bh.cockpitScreenPoint(slot, page)` → `[x, y] \| null`
 
-A point of the view (NDC, y up) on display `slot` (0…7), on its tab for `page`. The view is scanned; null when the display is not in view.
-`page` is one of the `PAGES`: `pfd`, `orbit`, `nav`, `systems`, `docking`, `plan`, `clocks`, `log`, `approach`, `landing`
+A point of the view (NDC, y up) on display `slot` (0…7), on its tab for `page`. The view is scanned (±0.95 NDC in steps of 0.012); null when the display is not in view.
+`page` is one of the `PAGES`: `pfd`, `orbit`, `nav`, `systems`, `docking`, `plan`, `clocks`, `log`, `approach`, `landing`, `ckl`, `eecom`
 (src/ui/cockpitscreens.ts).
 
 ```js
@@ -1995,7 +2180,7 @@ const n = await app.js(`__bh.cockpitScreenPoint(0, "orbit")`);   // tests/e2e/co
 
 The cabin's eight displays (canvas: 4 × 2 slots of 512 px, the PFD first). Its `pages` array holds each display's page (`PageId \| null`: null
 is its automatic page, `SLOT_PAGE`: pfd, orbit, nav, systems, docking, plan, clocks, log). Methods: `setPage(slot, page)`, `clickScreen(slot, u, v)`,
-`hoverScreen(slot, u, v)`, `pagesSetting()` (the setting's string), `message(text)`, `draw(d)`.
+`hoverScreen(slot, u, v)`, `actAt(slot, u, v)` (the action under a point, or null), `pagesSetting()` (the setting's string), `message(text)`, `draw(d)`; `glow` (Float32Array \| null: the displays' mean colours, which light the cabin).
 
 ```js
 __bh.cockpitScreens.pages[0]   // "orbit" after the test sets it (tests/e2e/cockpit.e2e.test.ts:131)
@@ -2094,6 +2279,7 @@ loaded on demand; in the solo game `net`, `session`, `match` and `voice` stay nu
 | member | what it is |
 |---|---|
 | `open()`, `closePanel()`, `isOpen` | the Network panel |
+| `openTab(tab)` | the panel opened on a tab: `"crew"`, `"fleet"`, `"results"`, `"match"`, `"voice"`, `"screens"` (7 test files) |
 | `loaded` | whether the network's code was loaded at all |
 | `setName(name, colour?)` | the player's name (24 characters at most) and colour, kept and sent to the room |
 | `create(name?, password?)` | creates a room and joins it as its pilot (Promise) |
@@ -2148,6 +2334,8 @@ when the sound is off.
 | `radio(on, staticLevel?)` | `(on: boolean, staticLevel = 0) => void` | the radio's squelch and hiss on the voice bus |
 | `alarm(id, on, kind?)` | `(id: string, on: boolean, kind?: "caution" \| "warning") => void` | a looping alarm, by id, until switched off (`kind` defaults to `"warning"`; off when the context is not running or the sound is off) |
 | `stopRobot()` | `() => void` | cuts TARS's own voice now |
+| `otherLevel` | number 0…1 | the other players' engine level (`net-time.e2e.test.ts`) |
+| `meter`, `duck`, `playSample`, `combatCue`, `boomAt`, `thunderAt` | | the meter, the ducking, one sample, a fight's cue, a sonic boom and a thunderclap placed in space (no test calls them) |
 
 ```js
 // the score's test: a key starts the audio, then the music bus is heard
@@ -2347,7 +2535,7 @@ turn's actions and `lastText` its answer (the tests and the panel read them).
 
 | member | type | meaning |
 |---|---|---|
-| `ask(q)` | `(q: string) => Promise<string \| null>` | a question: his answer (also said); `""` when stopped by `stop()`; `null` when the model failed, or when a newer question superseded this one (the caller then runs the offline path: unclear whether intended) |
+| `ask(q)` | `(q: string) => Promise<string \| null>` | a question: his answer (also said); `""` when stopped by `stop()`; `null` when the model failed, or when a newer question superseded this one (the caller then runs the offline path) |
 | `stop()` | `() => void` | aborts the turn running |
 | `busy` | `boolean` | a turn is running |
 | `last` | `Action[]` | the last turn's actions: `{ tool, args, ok, result }` |
@@ -2607,16 +2795,4 @@ relative to rotating ground. TARS `get_state.localMap` and telemetry group `map`
 source readiness, pan metres and last CPU draw time. `interface({mapZoom:18})` opens the local ground planisphere;
 `/mapzoom 18` is its positional command. See [corrections](CORRECTIONS-DETAILS-SOL-VOL.md).
 
-### `__bh.game.walk(body, lat = 0, lon = 0)` → string
-
-The placement panel's On foot mode: lands the current vessel, then disembarks next to it. Latitude and longitude
-are degrees. A refused exit throws while leaving the vessel landed. Uses the existing solid-ground/obstruction
-checks and the character controller. Retains the owner's recent placement implementation.
-
-### Placement au sol des mondes de Gargantua
-
-`__bh.game.land("mann", lat, lon)` (aussi `miller`, `edmunds`) initialise immédiatement
-`__bh.camera.local.L.landed` et les coordonnées propres de contact. **⇧K** peut sortir
-sans étape physique préalable. `__bh.game.walk(body, lat, lon)` pose le vaisseau puis sort.
-Miller autorise la marche sur son plan marin de contact, entre les vagues choisies par le placement.
-Les vagues restent visuelles ; les surfaces gazeuses restent refusées.
+(`__bh.game.walk` and the placement on Gargantua's worlds: see the game section.)

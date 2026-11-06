@@ -88,7 +88,7 @@ bun scripts/remote.ts logs <id> -f      # streams, fetches remote-results/<id>/,
   Chrome open at its close, when the user wants to see the end state.
 - Run `remote.ts run` with Bash `run_in_background: true` for anything over a minute (you are
   notified when it ends); put the estimated duration in the task's title (e.g. "e2e landing on the
-  mini (~4 min)"). A full e2e suite there: ~3.5 min.
+  mini (~4 min)"). A full e2e suite there is hours now (394 files; the 140 timed in `tests/e2e/durations.json` add up to ~3 h 10): run themes, not everything, unless asked.
 - The command is run by zsh in the copy: `VAR=1 cmd`, `&&` work as typed.
 - A whole flight live, orbit → runway: `bun scripts/live-entry.ts --site Bourget --inc 52` (~14 min; ends
   0 stopped on the runway). To instrument the page without touching the code: a script outside the

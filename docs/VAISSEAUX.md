@@ -34,7 +34,7 @@ figures below are the game's own measurements.
 | Engines | 2, wings, wheeled gear, heat shield | 6 in two pods, skids | 4, the ring (the whole craft turns) |
 | Load limit | 9 g | 6 g | 1.5 g |
 | Battery | 60 kWh | 120 kWh | 2 MWh |
-| Lands · flies in air | yes · yes (a plane in the air, F) | yes · no | no (refused, explained) · no |
+| Lands · flies in air | yes · yes (a plane in the air, F) | yes · not as a plane (its flight mode starts at rocket; `flies: true` in the code, so F still switches it) | no (refused, explained) · no |
 | Its HUD panel | the shared HUD (Atmosphere, Space, Approach) | DESCENT | the mothership's, titled ENDURANCE |
 | Its voice | the reference, lively | heavy and low (engine ×0.72) | deep and slow (engine ×0.48) |
 

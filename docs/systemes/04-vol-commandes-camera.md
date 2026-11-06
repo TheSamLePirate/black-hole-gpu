@@ -1,5 +1,11 @@
 # Commandes, caméra et vaisseaux
 
+> **Écarts connus (6 novembre 2026).** Cette fiche date du 2 octobre ; une partie a vieilli. Les écarts relevés en
+> relisant le code sont listés au §7 de [VOL-VAISSEAUX.md](../VOL-VAISSEAUX.md) et au §7 de
+> [VOL-AVIONS.md](../VOL-AVIONS.md) (vitesse de crash 4,5 m/s et non 12, atterrir = F7 et non G, tout relâcher =
+> Retour arrière et non Échap, lois d'atterrissage, rails, amarrage, portée du Lander, emplacement du code des nœuds).
+> Ces deux documents sont la référence à jour du vol.
+
 Ce système transforme les entrées du joueur (clavier, souris, manette, écran tactile) en mouvement de la caméra et des vaisseaux. Il pose la caméra du traceur de rayons (position, orientation et vitesse dans les réglages `Settings`) et la déplace selon le mode actif : autour d'une cible, en vol libre, sur trépied, en chute libre géodésique, en cinématique, ou à bord d'un vaisseau (Ranger, Lander, Endurance). Quand on pilote, **l'état du vaisseau, c'est la pose de la caméra**. Il est intégré en float64 sur le CPU, dans le repère Kerr près de Gargantua, dans le repère local d'une planète ou dans le repère « home » de notre système solaire. Les engins qu'on ne pilote pas suivent une orbite de Kepler ou restent amarrés (`fleet.ts`). Le système gère aussi les contacts (sol, ISS, autres engins, amarrage), les limites de la distorsion temporelle et les surcouches télescope et verrouillage de cible.
 
 Au cœur se trouve `CameraController` (`src/controls.ts`), que `Sim.step` (`src/sim.ts`) appelle à chaque image. Le rendu (`renderer.ts`, `ship.ts`) ne fait que lire le résultat : `cameraFrame(settings)` et `shipPose()`.
@@ -180,7 +186,7 @@ flowchart TD
   - **Rails** : moteur coupé, orbite stable (`stableOrbit` : liée, périapside au-dessus du sol et de 30 hauteurs d'échelle d'atmosphère, apoapside inférieure à 0,25 de la sphère d'influence) et pas supérieur à 2 % de la période. Dans ce cas, propagation de Kepler exacte (`keplerProp`) emportée avec le corps, comme la distorsion de KSP.
   - **Au sol** (`ourLanded`, coordonnées body-fixed) : le vaisseau est emporté par la rotation du corps. Il décolle si la poussée verticale dépasse le poids, ou commence à rouler si la poussée horizontale dépasse 2 % du poids.
   - **Roulage** (`rolling`) : maintenu au sol ; frottement de roulement 0,015, freinage 0,3 moteur au ralenti, adhérence latérale 0,6. Arrêt sous 5 cm/s.
-  - **Toucher** : sur les roues si le vaisseau est à moins de 25° de l'horizontale, à une vitesse horizontale entre 0,5 et 220 m/s, et à une vitesse verticale au plus égale à `TUNING.crashSpeed` (12 m/s par défaut). Sinon il se pose ou s'écrase (`crashed`, si `damage` est actif).
+  - **Toucher** : sur les roues si le vaisseau est à moins de 25° de l'horizontale, à une vitesse horizontale entre 0,5 et 220 m/s, et à une vitesse verticale au plus égale à `settings.crashSpeed` (**4,5 m/s par défaut** depuis le modèle de train à ressorts : ≤ 3 posé, ≤ 4,5 dur, au-delà écrasé — le 12 de `TUNING` est écrasé par le réglage ; voir [VOL-VAISSEAUX.md](../VOL-VAISSEAUX.md) §5.2). Sinon il se pose ou s'écrase (`crashed`, si `damage` est actif).
   - La vitesse est plafonnée à 0,999 c.
 - **Près de la bouche** : mouvement géodésique à vitesse constante. La poussée modifie γβ, selon `U = γv + a·dt` puis `v = U/√(1 + U²)`. De notre côté, la gravité newtonienne du système solaire (`ourGravity`) s'ajoute en *kick-drift-kick*, avec des sous-pas de 0,01·tDyn bornés par `subCap`. Si la distorsion dépasse ce que les sous-pas peuvent couvrir, l'horloge du vaisseau prend du retard sur la demande, et `shipClock` l'impose à la scène.
 - **Docké à la station** (`flyDocked`) : aucune intégration ; la pose est recopiée depuis `fleet.pose(active, t1, true)`, portée par l'ISS.

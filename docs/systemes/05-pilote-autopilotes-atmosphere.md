@@ -1,5 +1,11 @@
 # Pilote, autopilotes, moteurs, atterrissage et atmosphère
 
+> **Écarts connus (6 novembre 2026).** Cette fiche date du 2 octobre ; une partie a vieilli. Les écarts relevés en
+> relisant le code sont listés au §7 de [VOL-VAISSEAUX.md](../VOL-VAISSEAUX.md) et au §7 de
+> [VOL-AVIONS.md](../VOL-AVIONS.md) (vitesse de crash 4,5 m/s et non 12, atterrir = F7 et non G, tout relâcher =
+> Retour arrière et non Échap, lois d'atterrissage, rails, amarrage, portée du Lander, emplacement du code des nœuds).
+> Ces deux documents sont la référence à jour du vol.
+
 Ce système transforme les commandes du joueur (clavier, manette, écran tactile) et les consignes des
 autopilotes en deux grandeurs physiques par image : une **rotation** de la caméra, qui porte le vaisseau,
 et une **accélération propre** (en c²/M). Les intégrateurs de vol de `src/controls.ts` les consomment :
@@ -551,7 +557,7 @@ Il faut garder les constantes `BR`, `BO`, `BME`, `HR`, `HM` identiques des deux 
 | `autoWarp` | true | Une manœuvre (nœud, amarrage) règle elle-même la distorsion temporelle |
 | `turnRate`, `turnAccel` | 43 °/s, 92 °/s² | → `TUNING` (rad), multipliés par l'agilité de l'assemblage |
 | `rcsFraction` | 0,08 | Autorité des propulseurs de translation, en fraction du moteur principal |
-| `crashSpeed` | 12 m/s | Seuil de crash au contact |
+| `crashSpeed` | 4,5 m/s (le 12 de `game/tuning.ts` est écrasé par le réglage) | Seuil de crash au contact : ≤ ⅔ posé, ≤ 1 dur, au-delà écrasé |
 | `ballistic` | 900 kg/m² | Traînée balistique (vol non piloté ; feed-forward des autopilotes de sol) |
 | `damage` | true | Les limites de l'air détruisent le vaisseau (sinon : alarmes) |
 | `flightMode` | `"plane"` | `rocket`, `plane`, `sf` (touche F ; seuls les vaisseaux `flies`) |

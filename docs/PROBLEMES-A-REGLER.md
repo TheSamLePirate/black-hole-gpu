@@ -3,6 +3,40 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Le Lander posé ne décolle pas avec U (autopilote de décollage)
+
+- **Constaté en jeu le 6 novembre 2026** (sonde `probe-moon` de la session, e2e `apprendre-vaisseaux`, ce Mac) : le
+  Lander posé à Tranquillité (`__bh.game.land("moon", 0.674, 23.473)`), `launchGoal = { altKm: 100 }`,
+  `setAuto("takeoff")` : 600 s plus tard, toujours posé, `pilot.auto === "takeoff"`, manette et poussée à 0, aucun
+  message. Même chose après un stationnaire (8) demandé posé. Le Ranger, même place, même recette : décolle et monte
+  (98 km en 600 s). Le Lander placé en stationnaire à 300 m par `hoverOver` puis U : décolle et monte.
+- **Cause supposée** (lecture de `controller/lowthrust.ts`, branche du décollage) : la boucle de vitesse veut pointer
+  le nez vers la poussée demandée et coupe le moteur tant qu'il n'y est pas (rampe d'alignement) ; posé, le Lander ne
+  tourne pas — le Ranger a son cas particulier (« Airless, its 12° on the gear and the engine lift it at once »).
+- **Piste** : un départ vertical du Lander posé (poussée sur son axe de moteurs, comme le cas du Ranger), puis la loi
+  de montée ; un e2e qui le vérifie (`apprendre-vaisseaux`, leçon 10, avec le Lander).
+
+## Vol et tests : défauts relevés en lisant le code, non vérifiés en vol
+
+- **Constaté le 6 novembre 2026** par lecture du code (session de documentation : [VOL-AVIONS.md](VOL-AVIONS.md),
+  [VOL-VAISSEAUX.md](VOL-VAISSEAUX.md), [E2E-VOLS.md](E2E-VOLS.md) §9). Rien n'a été lancé : chaque point est à confirmer.
+- **Des e2e lisent des membres qui n'existent pas** (la ligne ne fait rien, le test passe sans vérifier) :
+  `c.jetModes.alt = c.last?.alt ?? …` dans 9 fichiers (`flight-quality`, `raster-motion`, `raster-flight`…) — `camera.last`
+  n'existe pas (voulu : `c.jetFigures()?.h`) ; `cockpit-flight.e2e.test.ts` l. 60 et 82 attend `airInfo().agl` (pas de tel
+  champ : l'étape « jusqu'à 3 km » court son plafond de 200 s) ; `coast-survey.e2e.test.ts:101` appelle
+  `__bh.sys.sunElevation?.()` (inexistant : toujours `null`).
+- **U ne décolle probablement pas un F-35** : sur une piste, U lance l'autopilote de décollage orbital
+  (`controller/lowthrust.ts`), qui refuse sous un rapport poussée/poids de 1,05 ; le F-35 sec est à ≈ 0,59.
+  [F35.md](F35.md) dit que U décolle automatiquement. Piste : un essai en vol, puis un décollage propre aux avions ou la
+  doc corrigée.
+- **Les grisés du HUD pour décoller et atterrir** (`src/ui/flighthud.ts`, vers la ligne 2274) dépendent d'un `else` qui
+  semble rattaché à la condition du maintien de station : ils ne s'appliqueraient qu'avec un appareil à moins de 5 km.
+- **Affichage TAT/SAT de l'A320** (`src/a320/du/data.ts`, vers la ligne 203) : une température en °C divisée par
+  `1 + 0,2 M²` ; la SAT affichée serait fausse en vitesse.
+- **Limites non appliquées** (choix ou oubli à trancher) : aucune vitesse de train, de volets ni VMO n'endommage un avion ;
+  aucune masse maximale de l'A320 ; la ZFW du MCDU ne change pas la masse ; le ralenti du F135 n'est pas lu (manette 0 =
+  poussée 0).
+
 ## La compilation du noyau de Jupiter proche : ~200 s à froid
 
 - **Constaté le 6 novembre 2026** (Sam : « 200 s pour Jupiter »), en écrivant l'e2e `aurora-jupiter` (AM3).

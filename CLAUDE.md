@@ -58,6 +58,38 @@ joueur (chargements, compilations, ce qui bloque l'image) et la façon de mesure
 - Lire ce document avant de travailler sur le rendu, le chargement ou la compilation : il dit ce qui existe déjà, qui
   consomme une sortie et comment mesurer le changement.
 
+### Documentation : la carte, les références, leur tenue
+
+**[docs/README.md](docs/README.md) est la carte de toute la documentation** : quoi lire selon la tâche, la nature de
+chaque document (manuel du joueur, référence du code, guide de test, plan, analyse datée, journal) et **quel document
+mettre à jour quand le code change** (son §3). La lire au début d'une session qui ne sait pas où chercher.
+
+- **Les références du code se tiennent vraies dans le même lot que le code** : [BH-API.md](docs/BH-API.md) (chaque
+  membre de `__bh`), [GRAPHICS-PIPELINE.md](docs/GRAPHICS-PIPELINE.md) (ci-dessus), [VOL-AVIONS.md](docs/VOL-AVIONS.md)
+  et [VOL-VAISSEAUX.md](docs/VOL-VAISSEAUX.md) (modèles de vol, commandes, autopilotes, systèmes, limites),
+  [E2E.md](docs/E2E.md), [E2E-VOLS.md](docs/E2E-VOLS.md) et [E2E-CATALOGUE.md](docs/E2E-CATALOGUE.md) (les tests).
+- **Les cours de pilotage se tiennent vrais avec le vol** : quand un modèle de vol, une commande ou une touche, un
+  autopilote, un mode, un système, une limite, le HUD/les instruments ou un outil de placement change, mettre à jour dans
+  le même lot la partie I (le cours) de [VOL-AVIONS.md](docs/VOL-AVIONS.md) ou de [VOL-VAISSEAUX.md](docs/VOL-VAISSEAUX.md),
+  sa page illustrée [apprendre-avions.html](docs/apprendre-avions.html) ou [apprendre-vaisseaux.html](docs/apprendre-vaisseaux.html)
+  (texte, captures de `docs/progress/apprendre/`), l'e2e qui vole ses recettes
+  ([apprendre-avions.e2e.test.ts](tests/e2e/apprendre-avions.e2e.test.ts),
+  [apprendre-vaisseaux.e2e.test.ts](tests/e2e/apprendre-vaisseaux.e2e.test.ts)) et le compte rendu
+  [apprendre-a-voler-examens.md](docs/progress/apprendre-a-voler-examens.md) (ce qui a été revérifié, ce qui reste
+  ouvert). Une recette modifiée se revole par son e2e avant d'être écrite comme vraie.
+- Un plan ou une analyse est daté : son état se lit en tête, et le code fait foi. Un écart constaté entre une doc et le
+  code se corrige dans la doc (ou se signale s'il sort du périmètre), sans réécrire l'historique.
+- Un nouveau document reçoit sa ligne dans la carte.
+
+### E2E : avant d'en lancer ou d'en écrire un
+
+Lire [E2E.md](docs/E2E.md), puis **[E2E-VOLS.md](docs/E2E-VOLS.md) pour tout test qui fait voler un appareil, attend
+des compilations ou des tuiles, ou joue avec le temps**. L'historique du projet (4 034 lancements analysés le
+6 novembre 2026) montre que les tests de vol échouent trois fois plus que ceux du rendu, le plus souvent pour les mêmes
+causes : appareil changé ou placé dans le mauvais ordre, `flyAt` sur un relief pas encore chargé, `jetToggle` qui
+bascule, manette laissée à 0, datum d'altitude confondu, crash qui met en pause, attente fixe ou silencieuse, sortie
+coupée par `tail`. Le tableau symptôme → cause → remède est au §7 de E2E-VOLS ; une leçon nouvelle s'y ajoute.
+
 ### Les 60 images/s sont une destination progressive
 
 **Viser 60 images réelles/s pour le profil principal décrit au §8, en conservant qualité, contenu, lisibilité et stabilité

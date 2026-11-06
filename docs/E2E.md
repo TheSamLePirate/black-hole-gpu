@@ -2,18 +2,23 @@
 
 For anyone — a developer or an LLM agent — who writes e2e tests for this game or runs campaigns of them.
 It is self-contained: read it, then [BH-API.md](BH-API.md) (the page's automation handle `__bh`), then
-[E2E-CATALOGUE.md](E2E-CATALOGUE.md) (what each existing test covers and how long it takes).
+[E2E-CATALOGUE.md](E2E-CATALOGUE.md) (what each existing test covers and how long it takes). **A test that flies a craft
+(aircraft or spacecraft), waits for compiles or tiles, or plays with time: read [E2E-VOLS.md](E2E-VOLS.md) first** — the
+recipes, the time controls, the waits, and the frequent failures found in 4 034 runs of the project's history (flight
+tests fail three times as often as rendering ones). The flight models: [VOL-AVIONS.md](VOL-AVIONS.md),
+[VOL-VAISSEAUX.md](VOL-VAISSEAUX.md).
 
 The game is a WebGPU app. Its e2e tests drive it in a **real Chrome over the DevTools protocol** (no
 Playwright, no dependency): a production server of the tree, real key/mouse/touch events, and page code
-evaluated through `__bh`. They run on **two Macs**: this one (headless) and **kerr-mini** (full screen).
+evaluated through `__bh`. They run on **two Macs**: this one (**in a visible window** since 4 Nov 2026 — Sam watches them)
+and **kerr-mini** (full screen); a third machine, kerr-pc, on demand.
 
 ---
 
 ## 1. In five commands
 
 ```bash
-bun run e2e smoke                       # one e2e file, here, headless (name, path or part of a name)
+bun run e2e smoke                       # one e2e file, here, in a window (name, path or part of a name)
 bun run e2e --remote landing gear       # two files on kerr-mini, full screen there; log streamed back
 bun run e2e --remote --detach golden    # queued on the mini, back at once with a job id
 bun run e2e --host kerr-pc smoke        # on the Windows PC (RTX 5070 Ti), full screen there (docs/REMOTE-TESTS.md)
@@ -23,7 +28,8 @@ bun run dashboard                       # the e2e dashboard, http://localhost:47
                                         #   its Monitor (#monitor, #monitor/wall): the lab live, heat and all
 ```
 
-`bun run e2e` with no name runs **all** e2e files (~20 min on the mini, ~70 files). `bun run e2e --list`
+`bun run e2e` with no name runs **all** e2e files: 394 tracked on 6 Nov 2026; the 140 with a measured median on the
+mini (`tests/e2e/durations.json`) already add up to ~3 h 10 there, the rest unmeasured — never run them all unless asked. `bun run e2e --list`
 lists them. Flags after the names go to `bun test` (`bun run e2e smoke -t "radial wheel"`).
 
 Plain `bun test` runs the unit tests only: every e2e file is `describe.skipIf(!E2E)`, and `bun run e2e`
@@ -36,8 +42,8 @@ sets `E2E=1`.
 | | this Mac (the main one) | kerr-mini (Mac mini M1, 8 GPU cores) |
 |---|---|---|
 | reached as | here | ssh alias `kerr-mini` (`bun scripts/remote.ts doctor` checks it) |
-| Chrome shows | **headless**, the test's own viewport | **full screen (kiosk)**, the page at the screen's size 1:1 — whoever sits at it sees a test is running |
-| set by | `~/.kerr-lab/config.json` `{"chrome": "headless"}` | `~/.kerr-lab/config.json` `{"chrome": "kiosk"}` |
+| Chrome shows | **a visible window** (`window`, Sam's choice of 4 Nov 2026: he watches the e2e live), the test's own viewport; it was headless before | **full screen (kiosk)**, the page at the screen's size 1:1 — whoever sits at it sees a test is running |
+| set by | `~/.kerr-lab/config.json` `{"chrome": "window"}` (`"headless"` is the code's default when there is no config) | `~/.kerr-lab/config.json` `{"chrome": "kiosk"}` |
 | use it for | quick checks, debugging a test, perf figures meant for this machine | suites, long flights, queues of jobs — while this Mac keeps working |
 
 A third machine, **kerr-pc** (Windows 11, RTX 5070 Ti, over Tailscale), takes the same commands with
@@ -66,13 +72,14 @@ Macs: one batch here, one there.
 How it shows, and how to override it:
 
 - **Full screen (kiosk, the mini): the page is the screen's own size at 1:1** (1920×1080 there), whatever
-  size the test asked — the user's choice: a test on the mini fills its screen. Headless (here) or in a
-  window: the size the test asked (1440×900 by default; some ask 1280×800, 640×400…). A test that resizes
+  size the test asked — the user's choice: a test on the mini fills its screen. In a window (here) or
+  headless: the size the test asked (1440×900 by default; some ask 1280×800, 640×400…). A test that resizes
   the page itself mid-run (`s5`, `hub-card`: narrow windows on purpose) still does. So a test must not
   depend on its boot size unless it sets it itself with `Emulation.setDeviceMetricsOverride`.
 - In kiosk the game's frame-rate meter is on (`__bh.settings.showFps = true` after each load, by
   `App.load`), so whoever watches the mini sees how each test runs. A test about that meter sets it itself.
-- `E2E_HEADED=1` forces full screen, `E2E_HEADED=0` headless (`remote.ts run --headless` sets 0).
+- `E2E_HEADED=1` forces full screen (kiosk), `E2E_HEADED=0` headless (`remote.ts run --headless` sets 0). A window is
+  to watch a test, not to measure one: its frames follow the display (120 Hz here, 50 Hz on the mini's screen).
 - `E2E_HOLD=<s>` keeps each Chrome open `<s>` seconds after its test, to see where it ended
 - On a Chrome one sees (the mini's full screen, a window — never headless) a banner in the page's lower left says
   what is being tried: the file, the test (its place, its title — the `-t` filter applied) and what the file proves
@@ -111,7 +118,10 @@ E2E=1 bun test tests/e2e/smoke.e2e.test.ts --timeout 600000   # the same as the 
 ```
 
 The run is in the foreground. For anything over a minute, an agent should start it in the background
-and wait to be notified, rather than block on it.
+and wait to be notified, rather than block on it. **Keep the whole output in a file and grep it**
+(`bun run e2e x > remote-results/x.log 2>&1`, then `grep -nE "\(fail\)|^ *[0-9]+ (pass|fail)|error:"`): never pipe it into
+`tail` — 677 runs of the history ended with no verdict that way. Prefer `bun run e2e` to a bare `E2E=1 bun test`: only
+the former records telemetry and reports (§4, *Every test is recorded*).
 
 ### On kerr-mini
 
@@ -156,7 +166,7 @@ It is a second DevTools client beside the test's: it reads the page, it does not
 
 ### Which Mac
 
-- A single quick file (< 1 min), or a test being written or debugged: **here**.
+- A single quick file (< 1 min), or a test being written or debugged: **here** (Sam watches it in its window).
 - A suite, several files, long flights (landing, golden, rates, assist-*), anything the user wants to
   watch: **the mini**.
 - A campaign: **both**. Split the files by duration ([E2E-CATALOGUE.md](E2E-CATALOGUE.md)), one half here
@@ -313,9 +323,10 @@ returns; the Monitor says so (*page held*).
    Judge a flight over several seeds (`__bh.setTime(t0 + k * 0.37)`), not one run.
 4. **Long flights in chunks.** A single page call that flies for minutes looks hung. Fly ~2 s of sim per
    call (60 steps), print progress from the Bun side, cap the wall time and the sim time.
-5. **Network off by default.** CelesTrak, the S3 terrain tiles and GIBS are blocked, so the app uses its
-   bundled data and runs are the same every day. Ask for `tiles: true` only when testing the tiles, and
-   expect the ground under an autopilot to change.
+5. **Network: choose.** By default CelesTrak, the S3 terrain tiles and GIBS are blocked (`tiles: false` blocks only
+   those; IGN, OSM and the other sources still load), so a **judged flight** stands on the same ground every day. A
+   test whose picture must show the real ground asks `tiles: true` (Sam: images loaded for any visual test — about 235
+   files do) and waits for the data (`app.dataSettled()`); the ground then changes under an autopilot while it loads.
 6. **Assert `app.cdp.errors`** at least once per file.
 7. **Clean up**: `app.close()` and `stopServer()` in `afterAll`, so the lock and the port are freed even
    when a test fails.
@@ -347,6 +358,11 @@ returns; the Monitor says so (*page held*).
 14. **No long silent waits.** Cap a wait at what the lab needs (everything in within ~20–60 s on the Macs; a kernel 90 s;
     a cold profile's first compile 180 s) and on a timeout throw with the state that explains it (where the camera is,
     what is pending, what compiles) — never 240 s then 600 s of nothing on the mini's screen.
+
+15. **Flying a craft: [E2E-VOLS.md](E2E-VOLS.md).** Switch the craft and wait `__bh.fleet.active` before placing; a
+    placement resets throttle, autopilot, tanks and flaps; `flyAt`'s height is measured once on the relief loaded
+    then (`tests/e2e/lib/place.ts` `placeLow`); `jetToggle` toggles and refuses until the jet flies in plane mode
+    (`apSet` is safe); a crash pauses the game; cockpit view + `refresh()` + `camera.viewReset()` after every placement.
 
 ### A watchdog for long real-time flights
 
@@ -447,6 +463,7 @@ Flight-lab campaigns follow the same pattern: `bun scripts/flightlab.ts run --sh
 | `Chrome did not start` / a test stuck at boot on the mini | the mini lost the internet (Chrome hangs at start without it). Tell the user |
 | `… is not clickable: div.x > …` | `app.hit` found another element on top: an overlay or a panel. The test caught a real bug, or it must close that panel first |
 | `waitFor(…): 10000 ms, last …` | the state never came. Read `last`. On the mini, the M1 may simply be slower |
+| a flight test failed (jet gliding at throttle 0, autopilot off, craft in a mountain, at Le Bourget, the Ranger flown, `body.paused` after a crash, wrong altitude datum…) | [E2E-VOLS.md](E2E-VOLS.md) §7: the symptom → cause → remedy table |
 | `unanswered after 300 s` | the page hung (an infinite loop in page code, a flight that never ends). Chunk long work (§4.4) |
 | behaviour contradicts the source with `E2E_URL` on the dev server | the Bun dev server served a stale bundle: restart it. Without `E2E_URL` each run builds its own production server, so this cannot happen |
 | `rsync failed` / ssh errors | the mini is asleep or off the network: `ssh kerr-mini true`, `remote.ts doctor`. Never bypass a host-key warning |
@@ -473,7 +490,7 @@ command line. The page is for people, the commands are for agents.
 |---|---|
 | **Monitor** (`#monitor`; `#monitor/wall`: full screen, no sidebar, for a screen left on) | every machine live, on one page. **Its heat** (docs/THERMAL.md): the thermal pressure (a red banner from Moderate up: figures measured now are doubtful), the GPU clock against its maximum, the GPU's activity, the temperatures, the power — and their charts over 15 min, 1 h or 6 h, the pressure as bands behind the GPU clock. **What it runs**: each e2e (live, above) — its file and test, a progress bar against the file's usual time (amber past it), the file's tests as steps (ended, running, to come), the craft's figures, its height, speed and frame rate over the test, its latest moments, *page held* / *no news* when it stalls, a picture of its page on demand (*Picture now*, *Auto*), *Report ▸*; each flight-lab campaign — its scenario, its passes and failures as steps, the latest sample, its height and speed as the dashboard saw it fly, pause/resume/skip/picture; the remote jobs (*Follow live*); the other `bun test` processes. **The last hours** (1–24 h): per machine the runs and jobs with their verdicts, every recorded e2e test (a colour per file; its top edge amber or red when it ran under Moderate or Heavy pressure; a click opens its report), the e2e running now, and the heat (pressure bands, the GPU clock) on the same axis |
 | **Overview** | both Macs live: each one's Chrome mode, its lock holder and waiters, live test Chromes (⚠ if more than one), the mini's jobs (**Follow live** attaches to one started elsewhere), flight-lab campaigns, orphans; the last runs, the pass rate, the files failing now and the ones flaky lately; *Doctor (mini)* |
-| **Run tests** | every e2e file by theme (the catalogue's), its last result, its history (passed / runs), its usual time; quick picks (smoke, failed last time, flaky lately, never run); **where** (this Mac headless, kerr-mini full screen), `--each`, `-t`, `UPDATE=1`, `--hold`; the estimated time; Launch |
+| **Run tests** | every e2e file by theme (the catalogue's), its last result, its history (passed / runs), its usual time; quick picks (smoke, failed last time, flaky lately, never run); **where** (this Mac as its config shows it — a window since 4 Nov 2026 —, kerr-mini full screen), `--each`, `-t`, `UPDATE=1`, `--hold`; the estimated time; Launch |
 | **Live** | a run as it goes: files and tests ticking, pass/fail counters, progress, the coloured log following; Cancel (the process group here, the job on the mini) |
 | **History** | every run on disk: the dashboard's (`remote-results/dash/<id>/`), the remote runner's jobs, the `--each` summaries, the flight-lab campaigns (their `report.html`); filters; a run's page: failures with their error blocks, per-file table, every test, its pictures, the log (search, errors only), **Run again** / **Rerun the failed files** |
 | **Test report** (a test's *Report ▸*, in a run or live) | **the machine's heat during the test** (its summary's `thermal`: the pressure's samples by level — a warning when it ran under Moderate or worse —, the GPU clock min, median and max and its share of the maximum, the hottest GPU and CPU, the GPU's power) and, while the machine's history still holds it (~6 h), its charts with the test marked; what it tests (its file's words, the catalogue), how long it took against its estimate (the median of its past runs), its frame rate (median, p5, min, and the chart), samples, moments, errors; **commanded against flown**: the assistants' corridors with the optimum and the flown track (each point in or out), the entry's commanded bank against the flown one, the approach's aimed slope against the flown one, the line against the runway's axis, the guidance's predicted miss, the docking's axis; the approach, rollout and docking charts; the hub's card each time it changed (its figures and their warning colours); the quality measures (q_…: loads, α swings, bank reversals, throttle chatter, time in the corridors, propellant, Δv); every telemetry chart; the events (filtered by kind); the pictures; the raw files. Charts: hover for every series' value, the crosshair follows on every chart of the same time axis, **drag across any chart (or the timeline) to zoom them all**, double-click for the whole flight, each series' min, max and last value in the legend, ⤢ enlarges. Also: **the timeline** (status, autopilot, hold, assisted, the hub's card and step, the entry's phase and profile, docking, warp, sphere of influence as coloured bands), **where it went** (the ground track, the height), **the machine** (frame rates, GPU time, worst loop, render scale, heap), and **every channel**: all ≈ 200 figures recorded, searchable by group, presets (attitude, air, controls, autopilot, entry, approach, orbit, machine, sound), each charted alone or up to six overlaid |

@@ -37,15 +37,23 @@ await $`cp -R gallery/. _site/docs/`;
 await $`cp docs/video/*.mp4 _site/docs/video/`;
 // (the French pages: how to play, the presentation; their images)
 await $`mkdir -p _site/docs/img && cp docs/comment-jouer.html docs/decouvrir.html _site/docs/ && cp -R docs/img/comment-jouer docs/img/marketing _site/docs/img/`;
+// (the flying courses — docs/apprendre-*.html, their text docs/VOL-AVIONS.md and VOL-VAISSEAUX.md; their images: img/assist, the
+// showcase's, and the progress sheets' below)
+await $`cp docs/apprendre-avions.html docs/apprendre-vaisseaux.html _site/docs/ && cp -R docs/img/assist _site/docs/img/`;
 // (the game's presentation — docs/kerr.html — and its pictures, the game's own: scripts/showcase-shots.ts)
 await $`cp docs/kerr.html _site/docs/ && cp -R docs/img/showcase _site/docs/img/`;
 // (and the progress sheets' captures they show — docs/progress/…, named by their path relative to docs/: each one
 // they point at copied there, not the whole folder's 500 images)
 {
-  const pages = await Promise.all(["docs/comment-jouer.html", "docs/decouvrir.html"].map((f) => Bun.file(f).text()));
+  const pages = await Promise.all(
+    ["docs/comment-jouer.html", "docs/decouvrir.html", "docs/apprendre-avions.html", "docs/apprendre-vaisseaux.html"].map((f) =>
+      Bun.file(f).text(),
+    ),
+  );
   const used = new Set(pages.flatMap((h) => [...h.matchAll(/(?:src|href|poster)="(progress\/[^"#?]+)"/g)].map((m) => m[1]!)));
   for (const rel of used) {
-    if (!(await Bun.file(`docs/${rel}`).exists())) throw new Error(`build-pages: docs/${rel} (shown by the French pages) is missing`);
+    if (!(await Bun.file(`docs/${rel}`).exists()))
+      throw new Error(`build-pages: docs/${rel} (shown by the French pages or the flying courses) is missing`);
     await $`mkdir -p ${`_site/docs/${rel.slice(0, rel.lastIndexOf("/"))}`} && cp ${`docs/${rel}`} ${`_site/docs/${rel}`}`;
   }
 }

@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apprendre à piloter — vaisseaux</title>
+<meta name="description" content="Le cours de pilotage des vaisseaux du jeu (Ranger, Lander, Endurance) : le vide, la sphère d'attitude, les orbites, le rendez-vous, la rentrée, l'atterrissage, au clavier et par __bh.">
+<style>
+:root{--bg:#f6f7f9;--fg:#15181d;--muted:#5b6370;--card:#fff;--line:#d9dde3;--accent:#1f6feb;--ok:#1a8f4c;--warn:#b7791f;--bad:#c62828;--hud:#18a957;--sky:#6fa8dc;--ground:#a0744a;--mag:#c2185b;--cyan:#0097a7;--code:#eef1f5;--radius:10px}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1216;--fg:#e6e9ee;--muted:#9aa4b2;--card:#171b21;--line:#2a313b;--accent:#58a6ff;--ok:#3fb950;--warn:#d29922;--bad:#f85149;--hud:#3fd07a;--sky:#3d6f9e;--ground:#7a5634;--mag:#f06292;--cyan:#4dd0e1;--code:#1d232b}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{display:grid;grid-template-columns:250px minmax(0,1fr);max-width:1240px;margin:0 auto;gap:32px;padding:0 16px}
+nav.toc{position:sticky;top:0;align-self:start;max-height:100vh;overflow:auto;padding:24px 0;font-size:14px}
+nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:3px 0}
+nav.toc a:hover{color:var(--accent)}
+nav.toc b{display:block;margin:14px 0 4px;color:var(--fg)}
+main{padding:24px 0 80px;min-width:0}
+h1{font-size:34px;line-height:1.2;margin:8px 0 6px}
+h2{font-size:24px;margin:56px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
+h3{font-size:18px;margin:24px 0 6px}
+p,li{max-width:76ch}
+.lead{font-size:18px;color:var(--muted);max-width:72ch}
+a{color:var(--accent)}
+code,kbd,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+code{background:var(--code);padding:1px 5px;border-radius:5px;font-size:.88em}
+pre{background:var(--code);padding:14px 16px;border-radius:var(--radius);overflow:auto;font-size:13px;line-height:1.5}
+kbd{display:inline-block;min-width:1.7em;text-align:center;padding:1px 6px;border:1px solid var(--line);border-bottom-width:3px;border-radius:6px;background:var(--card);font-size:.85em;font-weight:600}
+.k-az{font-size:.75em;color:var(--muted)}
+figure{margin:18px 0;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px}
+figure img{width:100%;height:auto;border-radius:6px;display:block}
+figure svg{width:100%;height:auto;display:block}
+figcaption{font-size:13px;color:var(--muted);margin-top:8px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px;background:var(--card);border-radius:var(--radius);overflow:hidden}
+th,td{border-bottom:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:var(--code);font-weight:600}
+.box{border-left:4px solid var(--accent);background:var(--card);padding:10px 16px;border-radius:0 var(--radius) var(--radius) 0;margin:14px 0}
+.box.ok{border-color:var(--ok)}.box.warn{border-color:var(--warn)}.box.bad{border-color:var(--bad)}
+.box b:first-child{display:block;margin-bottom:2px}
+details{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:8px 14px;margin:12px 0}
+details summary{cursor:pointer;font-weight:600}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps li{counter-increment:s;position:relative;padding:6px 0 6px 40px}
+.steps li::before{content:counter(s);position:absolute;left:0;top:6px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:grid;place-items:center;font-size:14px}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;background:var(--code);color:var(--muted);margin-right:4px}
+svg text{font-family:system-ui,sans-serif;fill:var(--fg)}
+.sv-muted{fill:var(--muted)} .st-line{stroke:var(--fg)} .st-muted{stroke:var(--muted)}
+@media (max-width:860px){.wrap{grid-template-columns:1fr}nav.toc{position:static;max-height:none;padding:16px 0 0;border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc">
+  <b>Apprendre à piloter</b>
+  <a href="#intro">Ce cours</a>
+  <a href="#methode">Pour un humain, pour un LLM</a>
+  <b>Les leçons</b>
+  <a href="#conventions">Les conventions</a>
+  <a href="#l0">0 · Monter à bord</a>
+  <a href="#l1">1 · Dans le vide</a>
+  <a href="#l2">2 · La sphère d'attitude</a>
+  <a href="#l3">3 · Monter, descendre</a>
+  <a href="#l4">4 · Circulariser, Hohmann</a>
+  <a href="#l5">5 · Changer de plan</a>
+  <a href="#l6">6 · Aller vers la Lune</a>
+  <a href="#l7">7 · Rendez-vous, amarrage</a>
+  <a href="#l8">8 · Rentrée et plané</a>
+  <a href="#l9">9 · Se poser sur la Lune</a>
+  <a href="#l10">10 · Décoller</a>
+  <a href="#l11">11 · Endurance, Gargantua</a>
+  <a href="#l12">12 · Les pannes</a>
+  <a href="#l13">13 · L'école spatiale</a>
+  <b>Aide-mémoire</b>
+  <a href="#autos">Les autopilotes</a>
+  <a href="#clavier">Le clavier</a>
+  <a href="#chiffres">Les chiffres</a>
+  <b>Plus loin</b>
+  <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/VOL-VAISSEAUX.md">VOL-VAISSEAUX.md (la référence)</a>
+  <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/VAISSEAUX.fr.md">Le manuel des vaisseaux</a>
+  <a href="apprendre-avions.html">Apprendre : avions</a>
+</nav>
+<main>
+
+<section id="intro">
+<span class="tag">Cours</span><span class="tag">Ranger · Lander · Endurance</span><span class="tag">6 novembre 2026</span>
+<h1>Apprendre à piloter un vaisseau</h1>
+<p class="lead">Un cours progressif pour piloter les vaisseaux du jeu : ce qui change dans le vide, la lecture de la sphère d'attitude et du HUD, puis une leçon par manœuvre — tenir une attitude, monter et descendre une orbite, circulariser, changer de plan, aller vers la Lune, le rendez-vous et l'amarrage, la rentrée et le plané, l'atterrissage sous moteur, le décollage, l'Endurance et Gargantua, les pannes. Chaque leçon donne les touches, les chiffres, les erreurs, et les mêmes gestes en code pour un LLM.</p>
+<figure><img src="img/showcase/ship-ranger-terminator.webp" alt="Le Ranger au-dessus de la Terre, à la ligne du jour et de la nuit" loading="lazy"><figcaption>Le Ranger en orbite, au terminateur — capture du jeu (page de présentation).</figcaption></figure>
+<p>Le texte de référence, avec chaque source dans le code, est <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/VOL-VAISSEAUX.md">VOL-VAISSEAUX.md</a> : sa partie I est ce cours, sa partie II la référence de la physique, des autopilotes, des systèmes et des limites. Les leçons suivent l'école spatiale du jeu (<code>src/game/spacecourse.ts</code>).</p>
+</section>
+
+<section id="methode">
+<h2>Pour un humain, pour un LLM</h2>
+<div class="grid2">
+<div><h3>Au clavier</h3><p>Les touches sont des <b>positions physiques</b> (noms QWERTY, AZERTY entre parenthèses) ; la disposition est celle de Kerbal Space Program. Les chiffres <kbd>1</kbd>…<kbd>0</kbd> se lisent par position (la rangée du haut d'un clavier AZERTY, sans Maj). Une manette ou un HOTAS « 6 DDL » marchent aussi.</p></div>
+<div><h3>Par <code>__bh</code></h3><p>Un LLM gèle la simulation, agit (maintiens, autopilotes, manette), avance par pas de 1/30 s ou accélère le temps, lit <code>__bh.game.status()</code> et vérifie. Deux règles évitent la moitié des échecs : <b><code>setHold</code> et <code>setAuto</code> basculent</b> (enclencher : <code>p.auto = "none"; p.setAuto(x)</code>), et <b>on attend l'état final</b>, pas <code>p.auto</code>, car les autopilotes s'enchaînent.</p></div>
+</div>
+<details><summary>Le gabarit de lecture d'état</summary>
+<pre>__bh.freeze(true);
+const c = __bh.camera, p = c.pilot, lire = () =&gt; {
+  const s = __bh.game.status();
+  return { statut: s.status, soi: s.soi, altKm: Math.round(s.altKm),
+    peKm: s.orbit &amp;&amp; Math.round(s.orbit.peKm), apKm: s.orbit &amp;&amp; Math.round(s.orbit.apKm),
+    incDeg: s.orbit &amp;&amp; +s.orbit.incDeg.toFixed(1), vitesse: Math.round(s.speed),
+    maintien: p.hold, auto: p.auto, manette: +p.throttle.toFixed(2),
+    dvDepense: Math.round(c.spent * 299792458), panne: c.airFlight.failure };
+};
+for (let i = 0; i &lt; 30 * 10; i++) __bh.step(1 / 30);
+lire();</pre></details>
+</section>
+
+<section id="conventions">
+<h2>Les conventions</h2>
+<table><tr><th>Sujet</th><th>Convention</th></tr>
+<tr><td>Le temps et <code>step</code></td><td><code>__bh.step(dt)</code> avance la scène de <b>dt × l'accélération</b> (à ×100, <code>step(1/30)</code> = 3,3 s ; une demi-orbite basse ≈ 830 pas). Page gelée, l'image et <code>requestAnimationFrame</code> continuent : <code>await new Promise((r) =&gt; requestAnimationFrame(r))</code> laisse répondre un worker. En pause, rien ne vole</td></tr>
+<tr><td>L'accélération</td><td><code>__bh.game.warp(x)</code> hors autopilote ; sous un autopilote, c'est lui qui la fixe (<code>autoWarp</code>). Touches <kbd>,</kbd> plus lent, <kbd>.</kbd> plus vite, <kbd>/</kbd> temps réel (<kbd>;</kbd> <kbd>:</kbd> <kbd>!</kbd> en AZERTY). ×4 au plus dans l'air</td></tr>
+<tr><td>Le manche et le RCS par code</td><td><code>c.pilotInput = (pad) =&gt; ({ ...c.__input(pad), pitch, yaw, roll, tx, ty, tz, throttle })</code> dans [−1, 1] (pitch + nez haut, roll + droite, tx droite, ty haut, tz avant) ; SAS <code>p.sas</code> ; récupération <code>c.spaceRecoverStart()</code></td></tr>
+<tr><td>Les touches</td><td>lues dans les vues de bord, cockpit compris ; ignorées en vue « cabine » et extérieure libre. <kbd>K</kbd> hors vol prend le vaisseau, en vol c'est le RCS. Ce que <kbd>⇧</kbd> ajoute à la manette <b>reste</b> : après ⇧X, ⇧8, ⇧9 hors autopilote, <kbd>X</kbd> coupe. <kbd>⇧</kbd><kbd>9</kbd> : W/S haut/bas, A/D gauche/droite, ⇧/Alt avant/arrière</td></tr>
+<tr><td>Les hauteurs</td><td><code>orbit({ altKm })</code> sur la sphère équatoriale ; <code>altKm</code> au-dessus de la mer (Terre) ; <code>peKm</code>/<code>apKm</code> géodésiques ; circulaire : <code>orbit.circular = { km, swingKm }</code></td></tr>
+<tr><td>Le moteur</td><td>les scènes du jeu volent au moteur Crew à 2 g ; la poussée retombe en ~0,4 s après la coupure (≈ 8 m/s de plus à 2 g) : couper un peu avant, lire quand <code>p.engineNow</code> &lt; 0,01</td></tr>
+<tr><td>La position, l'attitude</td><td><code>__bh.sys.geodetic()</code> → <code>{ lat, lon, altM }</code> ; <code>c.attitudeNow()</code> en radians ; <code>p.omega</code> = [x, y, z] rad/s</td></tr>
+<tr><td>Les sites</td><td>« Kennedy… », « Edwards… », « Kourou », « Baikonur », « Paris – Le Bourget », « Tanegashima », « Woomera » ; « Jezero crater », « Gale crater » ; « Tranquility Base » — un morceau du nom suffit pour <code>glideTo</code> ; <code>c.entrySite</code> veut l'objet : <code>__bh.sys.runways().find((r) =&gt; /Kennedy/.test(r.site.name)).site</code></td></tr>
+</table>
+<div class="box warn"><b>Après une perte</b>En solo le jeu se met en <b>pause</b> (écran de perte : reprendre, sans dégâts, recommencer). Par code : un nouveau placement efface la panne, puis un bouton de l'écran (<code>document.querySelector(".craft-lost button").click()</code>).</div>
+</section>
+
+<section id="l0">
+<h2>Leçon 0 — Monter à bord, choisir son aide</h2>
+<ol class="steps">
+<li><kbd>K</kbd> (ou, hors vol, <kbd>Tab</kbd> maintenu › <b>Piloter</b>) prend le Ranger ; <kbd>]</kbd> depuis le Ranger : le Lander, l'Endurance, puis le F-35 ; <kbd>[</kbd> : l'A320. <kbd>Espace</kbd> arrête le temps, <kbd>Échap</kbd> ouvre la pause.</li>
+<li>La roue › <b>Placer</b> : une orbite, un sol, un site. Les scènes de la galerie mettent un vaisseau en situation (« Amarrage à l'ISS », « l'Endurance à 800 km »).</li>
+<li>Réglages › Jeu › Engins spatiaux › <b>Assistance</b> : <b>Assisté</b> pour commencer (SAS toujours actif, dérive annulée près d'un vaisseau), puis Réaliste.</li>
+<li><kbd>⇧</kbd><kbd>X</kbd> <b>récupère</b> : rotation arrêtée ; au-dessus d'un sol, stationnaire ; en orbite, prograde tenu. <kbd>⇧</kbd><kbd>F4</kbd> : l'autopilote <b>vole</b>, ou il <b>assiste</b> (son directeur au HUD, vous pilotez) — la meilleure façon d'apprendre une manœuvre.</li>
+</ol>
+<figure><img src="progress/137_cockpit.jpg" alt="Le cockpit du Ranger" loading="lazy"><figcaption>Le cockpit du Ranger : la verrière, les écrans tactiles (PFD, ORB, NAV, SYS, DCK, PLN, CLK, LOG, APP, LDG, CKL, ECS), les commandes qui bougent avec le vol.</figcaption></figure>
+</section>
+
+<section id="l1">
+<h2>Leçon 1 — Dans le vide, rien ne freine</h2>
+<ul>
+<li><b>Pas d'air, pas de frottement</b> : une rotation lancée continue, une vitesse acquise reste. Le moteur <b>change la vitesse</b> (le Δv, en m/s) dans la direction du nez.</li>
+<li><b>Le SAS</b> (<kbd>T</kbd>) amortit les rotations et tient l'attitude manche lâché. Sans lui, seul un contre-manche arrête une rotation.</li>
+<li><b>Le RCS</b> translate sans tourner (<kbd>I</kbd>/<kbd>K</kbd> bas/haut, <kbd>J</kbd>/<kbd>L</kbd> gauche/droite, <kbd>H</kbd>/<kbd>N</kbd> avant/arrière) à 8 % de la poussée ; <kbd>⇧</kbd><kbd>9</kbd> fait des touches d'attitude des touches de translation.</li>
+<li><b>Les ordres de grandeur</b> (calcul) : Ranger 2 g au plus, Lander 1,5 g, Endurance 0,24 g. Le Δv embarqué (~0,29 c) ne limite pas un vol dans le Système solaire : ce sont la structure (9 g, 6 g, 1,5 g), la chaleur et le temps qui limitent.</li>
+</ul>
+<div class="box"><b>Exercice (école : « L'attitude et le RCS » ; en Réaliste — en Assisté le SAS ne se coupe pas)</b>SAS coupé, une impulsion de roulis : la rotation continue. <kbd>⇧</kbd><kbd>X</kbd> l'arrête. Tourner le nez de 90° puis <b>arrêter la rotation sous 0,5°/s</b>. Puis <kbd>⇧</kbd><kbd>9</kbd> et une poussée de 2 s vers le haut.</div>
+</section>
+
+<section id="l2">
+<h2>Leçon 2 — Lire la sphère d'attitude et le HUD Espace</h2>
+<div class="grid2">
+<figure>
+<svg viewBox="0 0 320 320" role="img" aria-label="La sphère d'attitude et ses marqueurs">
+<defs><clipPath id="ball"><circle cx="160" cy="160" r="130"/></clipPath></defs>
+<g clip-path="url(#ball)"><rect x="20" y="20" width="280" height="140" fill="var(--sky)"/><rect x="20" y="160" width="280" height="140" fill="var(--ground)"/>
+<path d="M30 160 H290" stroke="#fff" stroke-width="2"/><path d="M60 110 H260 M60 210 H260" stroke="#fff" stroke-opacity=".4"/></g>
+<circle cx="160" cy="160" r="130" fill="none" class="st-line" stroke-width="2"/>
+<g stroke="#ffd23f" stroke-width="3" fill="none"><circle cx="200" cy="120" r="10"/><path d="M186 120H176M214 120H224M200 110V102"/></g>
+<g stroke="#ffd23f" stroke-width="3" fill="none"><circle cx="110" cy="215" r="10"/><path d="M103 208L117 222M117 208L103 222"/></g>
+<g stroke="var(--cyan)" stroke-width="3" fill="none"><circle cx="230" cy="185" r="9"/><circle cx="230" cy="185" r="2" fill="var(--cyan)"/><circle cx="85" cy="140" r="9"/></g>
+<g fill="var(--mag)"><path d="M150 60 L162 80 L138 80Z"/><path d="M175 265 L187 245 L163 245Z" fill-opacity=".5"/></g>
+<g stroke="#ff8c3a" stroke-width="3" fill="none"><rect x="245" y="90" width="18" height="18" transform="rotate(45 254 99)"/></g>
+<path d="M140 160 H152 L160 168 L168 160 H180" stroke="#ffb03a" stroke-width="4" fill="none"/>
+</svg>
+<figcaption>La sphère (schéma) : bleu au-dessus de l'horizon, brun en dessous ; le repère orange au centre est le nez.</figcaption>
+</figure>
+<div>
+<table><tr><th>Marqueur</th><th>Ce que c'est</th><th>Touche</th></tr>
+<tr><td style="color:#d4a900">● prograde</td><td>la direction de la vitesse</td><td><kbd>1</kbd></td></tr>
+<tr><td style="color:#d4a900">⊗ rétrograde</td><td>à l'opposé</td><td><kbd>2</kbd></td></tr>
+<tr><td style="color:var(--cyan)">◎ radial ext. / int.</td><td>s'éloigner du corps / aller vers lui</td><td><kbd>3</kbd> / <kbd>4</kbd></td></tr>
+<tr><td style="color:var(--mag)">▲ normal / anti-normal</td><td>perpendiculaire au plan de l'orbite</td><td><kbd>5</kbd> / <kbd>6</kbd></td></tr>
+<tr><td style="color:#ff8c3a">◇ cible</td><td>vers la cible (<kbd>Tab</kbd> bref : cible suivante)</td><td><kbd>7</kbd></td></tr>
+<tr><td>nœud</td><td>la prochaine poussée planifiée</td><td>panneau</td></tr>
+</table>
+<p>Un maintien pointe le nez sur son marqueur (aligné à moins de 5°). <kbd>⌫</kbd> lâche tout. <kbd>R</kbd> aligne les ailes sur le plan de l'orbite.</p>
+</div></div>
+<figure>
+<svg viewBox="0 0 640 260" role="img" aria-label="Les directions sur l'orbite">
+<defs><marker id="b1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="context-stroke"/></marker></defs>
+<circle cx="200" cy="140" r="60" fill="var(--sky)" opacity=".7"/><text x="200" y="145" text-anchor="middle" font-size="13">Terre</text>
+<circle cx="200" cy="140" r="110" fill="none" class="st-muted" stroke-dasharray="5 5"/>
+<circle cx="310" cy="140" r="7" class="st-line" fill="var(--card)" stroke-width="2"/>
+<path d="M310 132 V50" stroke="#d4a900" stroke-width="3" marker-end="url(#b1)"/><text x="318" y="60" font-size="13" style="fill:#d4a900">prograde (le long de la vitesse)</text>
+<path d="M318 140 H410" stroke="var(--cyan)" stroke-width="3" marker-end="url(#b1)"/><text x="414" y="144" font-size="13" style="fill:var(--cyan)">radial extérieur</text>
+<circle cx="285" cy="175" r="9" fill="none" stroke="var(--mag)" stroke-width="2"/><circle cx="285" cy="175" r="3" fill="var(--mag)"/><text x="300" y="200" font-size="13" style="fill:var(--mag)">normal : vers vous, hors du plan</text>
+<text x="20" y="232" font-size="12" class="sv-muted">Vue de dessus. Prograde et rétrograde changent la taille de l'orbite ;</text><text x="20" y="250" font-size="12" class="sv-muted">radial la fait tourner ; normal change son plan.</text>
+</svg></figure>
+<div class="grid2">
+<figure><img src="img/comment-jouer/c_navball.webp" alt="La sphère d'attitude du Ranger" loading="lazy"><figcaption>La sphère d'attitude dans le jeu, entourée des boutons des maintiens.</figcaption></figure>
+<figure><img src="progress/162_hud_space.jpg" alt="Le HUD Espace" loading="lazy"><figcaption>Le HUD Espace : l'orbite (Ap, Pe, inclinaison, période), la cible, la prochaine poussée (compte à rebours, Δv, durée ; l'anneau vert à 2°, ambre à 10°).</figcaption></figure>
+</div>
+<details><summary>Par <code>__bh</code></summary>
+<pre>__bh.game.status()     // status, soi, altKm (Terre : au-dessus de la mer), speed (/ centre du corps),
+                       // orbit { peKm, apKm, incDeg, ecc, period, tPe, tAp, circular }, target { distKm, rate, caKm, caIn }
+__bh.camera.flightInfo()   // hold, auto, dirs (les directions des marqueurs), …
+__bh.game.pilotState()     // "SAS · hold prograde · auto none · throttle 0 % · …"</pre></details>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b>Rotation 0,075 rad/s arrêtée par <code>spaceRecoverStart()</code> (0,001 rad/s), puis le rétrograde tenu à <b>0,0°</b>.</div>
+<div class="grid2"><figure><img src="progress/apprendre/vx-l2-retrograde.jpg" alt="Rétrograde tenu après la récupération" loading="lazy"><figcaption>Rétrograde tenu après la récupération</figcaption></figure></div>
+</section>
+
+<section id="l3">
+<h2>Leçon 3 — Monter et descendre une orbite</h2>
+<figure>
+<svg viewBox="0 0 640 280" role="img" aria-label="Une poussée prograde à la périapside élève l'apoapside">
+<defs><marker id="b2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="context-stroke"/></marker></defs>
+<circle cx="250" cy="140" r="40" fill="var(--sky)" opacity=".7"/>
+<ellipse cx="290" cy="140" rx="140" ry="100" fill="none" class="st-muted" stroke-width="2"/>
+<ellipse cx="350" cy="140" rx="200" ry="118" fill="none" stroke="var(--accent)" stroke-width="3"/>
+<circle cx="150" cy="140" r="6" fill="var(--warn)"/><path d="M150 132 V70" stroke="var(--warn)" stroke-width="3" marker-end="url(#b2)"/>
+<g font-size="13"><text x="20" y="128">Pe : la poussée</text><text x="20" y="146">prograde ici…</text>
+<text x="432" y="128" class="sv-muted">Ap avant</text><text x="556" y="128" style="fill:var(--accent)">…l'Ap</text><text x="556" y="146" style="fill:var(--accent)">monte ici</text>
+<circle cx="430" cy="140" r="4" fill="var(--muted)"/><circle cx="550" cy="140" r="5" fill="var(--accent)"/></g>
+</svg>
+<figcaption>La règle d'or : <b>une poussée change l'orbite de l'autre côté</b>. Prograde à la périapside → l'apoapside monte ; rétrograde → elle descend. Une orbite plus haute est plus lente.</figcaption></figure>
+<div class="box"><b>Exercice (école : « Monter et descendre »)</b>En orbite basse : <kbd>1</kbd> (prograde), <kbd>⇧</kbd> maintenu, couper (<kbd>X</kbd>) <b>un peu avant</b> Ap = 600 km (la poussée retombe en ~0,4 s et ajoute ~8 m/s, ≈ 28 km d'apoapside). Puis <kbd>2</kbd> (rétrograde) jusqu'à <b>Ap &lt; 450 km</b>.</div>
+<details><summary>Par <code>__bh</code></summary>
+<pre>__bh.game.orbit("earth", { altKm: 400 });        // hauteurs sur la sphère du rayon équatorial
+p.hold = "none"; p.setHold("prograde");
+for (let i = 0; i &lt; 30 * 20; i++) __bh.step(1 / 30);
+p.throttle = 1;
+for (let i = 0; i &lt; 30 * 600 &amp;&amp; __bh.game.status().orbit.apKm &lt; 600 - 28; i++) __bh.step(1 / 30);
+p.throttle = 0;
+for (let i = 0; i &lt; 150 &amp;&amp; p.engineNow &gt; 0.01; i++) __bh.step(1 / 30);   // la poussée retombe
+// réussi : orbit.apKm à ±10 km de 600</pre></details>
+</section>
+
+<section id="l4">
+<h2>Leçon 4 — Circulariser et le transfert de Hohmann</h2>
+<figure>
+<svg viewBox="0 0 640 300" role="img" aria-label="Le transfert de Hohmann">
+<circle cx="320" cy="150" r="30" fill="var(--sky)" opacity=".7"/>
+<circle cx="320" cy="150" r="70" fill="none" class="st-muted" stroke-width="2"/>
+<circle cx="320" cy="150" r="130" fill="none" class="st-muted" stroke-width="2"/>
+<path d="M390 150 A100 95 0 0 0 190 150" fill="none" stroke="var(--accent)" stroke-width="3"/>
+<circle cx="390" cy="150" r="7" fill="var(--warn)"/><circle cx="190" cy="150" r="7" fill="var(--warn)"/>
+<g font-size="13"><text x="400" y="176">① poussée prograde :</text><text x="400" y="194">l'Ap monte à 800 km</text>
+<text x="20" y="140">② demi-orbite, puis</text><text x="20" y="158">poussée prograde à l'Ap :</text><text x="20" y="176">circulaire (touche 9)</text>
+<text x="330" y="94" class="sv-muted">orbite basse</text><text x="430" y="40" class="sv-muted">orbite visée</text></g>
+</svg>
+<figcaption>Le transfert de Hohmann : le moyen le plus économique d'aller d'une orbite circulaire à une autre — deux poussées prograde séparées d'une demi-orbite.</figcaption></figure>
+<p><kbd>9</kbd> ou le bouton <b>CIRC</b> : l'autopilote planifie la poussée à la prochaine apside, y vole (le temps accéléré) et ajuste ; il a fini sous 0,2 m/s d'écart (« Circular: A × B km »). Attention : <code>auto</code> devient <code>"node"</code> pendant la poussée.</p>
+<div class="grid2">
+<figure><img src="progress/169_circularize.jpg" alt="La circularisation" loading="lazy"><figcaption>CIRC : la poussée la moins chère, à la prochaine apside, puis l'ajustement.</figcaption></figure>
+<figure><img src="img/assist/c1-burn.jpg" alt="Une poussée assistée" loading="lazy"><figcaption>Une poussée en mode assisté (⇧F4) : le directeur montre où pointer et quelle manette.</figcaption></figure>
+</div>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b>L'apoapside montée à <b>600 km</b> pile (coupée 28 km avant) ; puis CIRC s'est terminé seul : <code>orbit.circular</code> = <b>587 ± 1 km</b> — alors que Pe/Ap (géodésiques) lisaient 588/608 km : la Terre est aplatie.</div>
+<div class="grid2"><figure><img src="progress/apprendre/vx-l4-circulaire.jpg" alt="Après CIRC : l'orbite circulaire" loading="lazy"><figcaption>Après CIRC : l'orbite circulaire</figcaption></figure></div>
+</section>
+
+<section id="l5">
+<h2>Leçon 5 — Changer de plan</h2>
+<figure>
+<svg viewBox="0 0 640 220" role="img" aria-label="Changement de plan au nœud">
+<ellipse cx="320" cy="110" rx="230" ry="50" fill="none" class="st-muted" stroke-width="2"/>
+<ellipse cx="320" cy="110" rx="230" ry="50" fill="none" stroke="var(--accent)" stroke-width="3" transform="rotate(-18 320 110)"/>
+<circle cx="320" cy="110" r="24" fill="var(--sky)" opacity=".7"/>
+<circle cx="90" cy="110" r="7" fill="var(--warn)"/><circle cx="550" cy="110" r="7" fill="var(--warn)"/>
+<g font-size="13"><text x="20" y="150">nœud : poussée</text><text x="20" y="168" style="fill:var(--mag)">normale (5) ou anti (6)</text><text x="480" y="150">nœud opposé</text></g>
+</svg>
+<figcaption>Un plan ne se change qu'<b>à un nœud</b>, là où les deux orbites se croisent. Au <b>nœud ascendant</b>, une poussée <b>normale augmente</b> l'inclinaison (anti-normale la diminue) ; au nœud descendant, l'inverse. L'inclinaison se mesure sur l'équateur de date du corps. C'est cher : Δv = 2 v sin(Δi/2) — 45° coûtent ~0,77 fois la vitesse orbitale (≈ 5,9 km/s à 400 km), plus qu'un aller vers la Lune.</figcaption></figure>
+<p><kbd>O</kbd> (l'ordinateur de vol) › onglet <b>ORBIT</b> › Inclinaison : 45° ; <b>PLAN</b>, puis <b>EXÉCUTER</b> — il choisit le nœud le plus éloigné du corps (le moins cher), attend, se tourne, pousse. Par code : <code>c.fcSetPlan(burns, note)</code> (<code>t</code> = le milieu de la poussée) puis <code>c.fcExecute()</code>.</p>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b>L'outil <code>plan_maneuver</code> (op <code>inclination</code>, 61,6°) depuis 51,6° : une poussée de <b>1 336,7 m/s</b> au nœud (2 v sin 5°), inclinaison finale <b>61,60°</b>.</div>
+<figure><img src="progress/apprendre/vx-l5-plan.jpg" alt="Après le changement de plan" loading="lazy"><figcaption>Après le changement de plan : l'orbite à 61,6°.</figcaption></figure>
+</section>
+
+<section id="l6">
+<h2>Leçon 6 — Aller vers la Lune, les planètes</h2>
+<p>On quitte la <b>sphère d'influence</b> de la Terre pour celle de la Lune : une poussée de départ au bon instant, une croisière accélérée, des corrections, une poussée de capture. Mesuré : depuis l'orbite basse, départ <b>3 089 m/s</b> (2 min 38 s), capture <b>804 m/s</b> (41 s), <b>3 893 m/s</b> prévus.</p>
+<ol class="steps">
+<li><kbd>O</kbd> : l'onglet <b>MISSION</b> de l'ordinateur de vol : la destination, l'arrivée (orbite, survol, retour libre), la hauteur ; <b>PLAN</b>.</li>
+<li><kbd>⇧</kbd><kbd>O</kbd> : le plan de mission — chaque poussée, son échéance, son Δv, le budget et la marge ; <b>EXÉCUTER</b>.</li>
+<li>Le temps : <kbd>,</kbd> <kbd>.</kbd> <kbd>/</kbd> (<kbd>;</kbd> <kbd>:</kbd> <kbd>!</kbd> en AZERTY) ; sous un autopilote, c'est lui qui règle l'accélération.</li>
+</ol>
+<figure><img src="progress/146_flight_computer.jpg" alt="L'ordinateur de vol" loading="lazy"><figcaption>L'ordinateur de vol sur la carte plein écran : les poussées planifiées, prévues, volées.</figcaption></figure>
+<details><summary>Par <code>__bh</code></summary>
+<pre>await __bh.camera.missionPlan({ target: "moon", arrival: "orbit", altKm: 100 });   // le plan vient d'un worker
+__bh.camera.missionCommit(); __bh.camera.fcExecute();
+// avancer par paquets de pas avec une image entre (le worker répond entre les images) ;
+// réussi : status().soi === "moon" &amp;&amp; status === "orbit". Ne pas changer la date après : le plan serait abandonné.</pre></details>
+</section>
+
+<section id="l7">
+<h2>Leçon 7 — Le rendez-vous et l'amarrage</h2>
+<figure>
+<svg viewBox="0 0 640 230" role="img" aria-label="Pousser vers la cible fait passer derrière">
+<defs><marker id="b3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="context-stroke"/></marker></defs>
+<path d="M40 150 Q320 60 600 150" fill="none" class="st-muted" stroke-width="2"/>
+<path d="M140 128 Q300 20 470 70" fill="none" stroke="var(--bad)" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#b3)"/>
+<circle cx="140" cy="128" r="7" fill="var(--accent)"/><circle cx="420" cy="104" r="8" fill="#ff8c3a"/>
+<g font-size="13"><text x="110" y="152">vous</text><text x="430" y="128" style="fill:#ff8c3a">la cible, devant</text>
+<text x="200" y="20" style="fill:var(--bad)">pousser vers elle : on monte… on ralentit… on passe derrière</text>
+<text x="40" y="196">Pour rattraper une cible devant soi, on <tspan font-weight="700">descend</tspan> un peu :</text><text x="40" y="214">une orbite plus basse est plus courte et plus rapide.</text></g>
+</svg>
+<figcaption>La mécanique orbitale de proximité est contre-intuitive : d'où le rendez-vous <b>planifié</b> (un transfert, puis l'approche).</figcaption></figure>
+<figure>
+<svg viewBox="0 0 640 170" role="img" aria-label="Le couloir d'amarrage">
+<path d="M600 85 L40 30 L40 140Z" fill="var(--accent)" opacity=".12"/>
+<line x1="40" y1="85" x2="600" y2="85" stroke="var(--accent)" stroke-width="2" stroke-dasharray="6 5"/>
+<rect x="600" y="65" width="26" height="40" fill="var(--card)" class="st-line" stroke-width="2"/><text x="613" y="124" text-anchor="middle" font-size="11">port</text>
+<g font-size="12" text-anchor="middle">
+<line x1="160" y1="40" x2="160" y2="130" stroke="var(--warn)" stroke-width="2"/><text x="160" y="152">WP1 · 220 m · 30 s</text>
+<line x1="470" y1="60" x2="470" y2="110" stroke="var(--warn)" stroke-width="2"/><text x="470" y="152">WP2 · 20 m · 20 s</text>
+<line x1="560" y1="72" x2="560" y2="98" stroke="var(--ok)" stroke-width="2"/><text x="555" y="58">10 m aligné</text>
+<text x="300" y="22">rapprochement : min(3 ; 0,08 + 0,012 × distance) m/s</text></g>
+</svg>
+<figcaption>Le couloir d'approche (schéma, pas à l'échelle) : les points d'attente WP1 et WP2, l'attente alignée à 10 m, puis la capture.</figcaption></figure>
+<table><tr><th>Capture si, au contact</th><th>Sinon</th></tr>
+<tr><td>écart latéral &lt; 0,3 m · angle des ports &lt; 10° · vitesse relative &lt; 0,5 m/s · rotation relative &lt; 3°/s</td><td>rebond (vitesse renvoyée à 0,3×), le message nomme le terme fautif</td></tr></table>
+<ul>
+<li><b>Se placer</b> : l'école « Le rendez-vous » met l'ISS 20 km devant (<code>__bh.flight.school.space("rendezvous", "try")</code>) ; la scène « Earth: docking to the ISS » place le Ranger à 60 m de son port.</li>
+<li><b>Au-delà de 3 km</b>, <code>setAuto("dock")</code> refuse : <code>__bh.game.target("iss"); c.rendezvousStart()</code>. Avant le contact : <code>c.dockInfo</code> (<code>lateral</code>, <code>angle</code>, <code>closing</code>, <code>spin</code>, de port à port).</li>
+<li><kbd>Tab</kbd> (bref) : la cible. <kbd>B</kbd> : à moins de <b>3 km</b>, l'autopilote d'amarrage ; au-delà, <b>tout le rendez-vous</b> planifié, volé, puis l'amarrage.</li>
+<li>À la main : le <b>COAS</b> (une croix sur l'axe de notre port, le port visé un cercle, vert sous 1°), <kbd>⇧</kbd><kbd>9</kbd> (RCS en translation), aligner, annuler la dérive, <b>0,1 m/s</b>.</li>
+<li><kbd>⇧</kbd><kbd>8</kbd> : maintien à poste (immobile par rapport à la cible, à moins de 5 km). Amarré, la manette ou le RCS <b>désamarrent</b>.</li>
+</ul>
+<div class="grid2">
+<figure><img src="progress/134_autodock.jpg" alt="L'amarrage automatique" loading="lazy"><figcaption>Les 200 derniers mètres de l'amarrage automatique à l'ISS : la carte, l'axe, le port.</figcaption></figure>
+<figure><img src="img/assist/c7-dock.jpg" alt="L'amarrage assisté" loading="lazy"><figcaption>L'amarrage assisté : le guide d'amarrage (portes, écart, rapprochement) et le directeur.</figcaption></figure>
+</div>
+<details><summary>Par <code>__bh</code></summary>
+<pre>__bh.setDate(Date.UTC(2026, 9, 1, 12)); __bh.game.preset("Earth: docking to the ISS");
+const c = __bh.camera; __bh.freeze(true);
+c.pilot.auto = "none"; c.pilot.setAuto("dock");
+for (let i = 0; i &lt; 30 * 600 &amp;&amp; !c.docked; i++) __bh.step(1 / 30);
+c.docked;    // true ; c.undock() pour repartir</pre></details>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b><code>setAuto("dock")</code> depuis la scène d'amarrage : WP2, capture, « Docked to the ISS · IDA-2 · 0.08 m/s ».</div>
+<div class="grid2"><figure><img src="progress/apprendre/vx-l7-amarre.jpg" alt="Amarré à l'ISS, IDA-2" loading="lazy"><figcaption>Amarré à l'ISS, IDA-2</figcaption></figure></div>
+</section>
+
+<section id="l8">
+<h2>Leçon 8 — Rentrer dans l'atmosphère, se poser en planant (Ranger)</h2>
+<figure>
+<svg viewBox="0 0 660 260" role="img" aria-label="Le couloir de rentrée">
+<path d="M20 230 Q320 205 620 230" fill="none" class="st-line" stroke-width="2"/>
+<path d="M20 120 Q320 92 620 120" fill="none" class="st-muted" stroke-dasharray="5 5"/><text x="560" y="112" font-size="11" class="sv-muted">haut de l'air</text>
+<path d="M40 40 Q200 100 330 215" fill="none" stroke="var(--bad)" stroke-width="2.5"/><text x="80" y="36" font-size="12" style="fill:var(--bad)">trop raide : charge et chaleur</text>
+<path d="M40 60 Q260 128 420 120 Q520 100 620 60" fill="none" stroke="var(--warn)" stroke-width="2.5"/><text x="470" y="60" font-size="12" style="fill:var(--warn)">trop plat : rebond</text>
+<path d="M40 50 Q260 120 400 160 Q500 190 560 214" fill="none" stroke="var(--ok)" stroke-width="3.5"/><text x="400" y="186" font-size="12" style="fill:var(--ok)">le couloir</text>
+<text x="20" y="250" font-size="11" class="sv-muted">bouclier d'abord, nez haut (40° Ranger, 65° Lander) ; inclinaison réglée toutes les 2 s ; charge &lt; 2,4 g (Ranger)</text>
+</svg>
+<figcaption>Le couloir de rentrée : entre la limite de charge et de chaleur (bouclier 1 950 K pour le Ranger) et le rebond.</figcaption></figure>
+<ol class="steps">
+<li>Abaisser la périapside dans l'air : rétrograde (<kbd>2</kbd>), pousser jusqu'à <b>Pe &lt; 60 km</b> (Terre).</li>
+<li><kbd>⇧</kbd><kbd>G</kbd> : rentrée et atterrissage — désorbitation vers le site (onglet ATTERRIR), rentrée guidée, plané, atterrissage. <kbd>Z</kbd> (plein gaz) remet les gaz en approche.</li>
+<li>Sous Mach 2,5, le Ranger est un <b>planeur</b> (finesse ~6) qui se pose comme la navette : <b>pente raide de 12,6°</b> (jusqu'à 19°) à 160 m/s vers un point de visée <b>≈ 3 km avant le seuil</b>, ressource vers 90 m sur une pente de 1,5° à 130 m/s, arrondi à 12 m, toucher <b>450 m après le seuil</b>. À la main : <kbd>⌫</kbd> relâche l'autopilote (ou <kbd>⇧</kbd><kbd>F4</kbd> pour suivre son directeur) ; le Ranger vole déjà en mode avion ; <kbd>G</kbd> train <b>avant 500 m</b>, toucher <b>&lt; 3 m/s</b>. Dans l'air, le temps ne s'accélère pas au-delà de ×4.</li>
+</ol>
+<div class="grid2">
+<figure><img src="img/assist/c3-entry.jpg" alt="La rentrée" loading="lazy"><figcaption>La rentrée assistée : le couloir, la charge, la chaleur, le directeur.</figcaption></figure>
+<figure><img src="img/assist/c4-final.jpg" alt="La finale du Ranger" loading="lazy"><figcaption>La finale du Ranger : la piste, la pente, le point de visée.</figcaption></figure>
+</div>
+<figure><img src="progress/145_entry_flown.jpg" alt="Une rentrée volée" loading="lazy"><figcaption>Une rentrée volée jusqu'au site : le planificateur, l'entrée guidée, le plané, l'atterrissage (courbes de la planche P6).</figcaption></figure>
+<div class="box bad"><b>Erreurs</b>Partir trop près ou trop bas (sous énergie : remise de gaz) — l'autopilote de rentrée ne remet jamais de poussée pendant le plané · oublier le train · rentrer avec l'Endurance (sans bouclier, elle brûle).</div>
+<details><summary>Par <code>__bh</code></summary>
+<pre>__bh.game.glideTo("Edwards");         // 80 km, 25 km de haut, 750 m/s, l'autopilote de rentrée engagé
+// depuis l'orbite : orbit(…), puis p.auto = "none"; p.setAuto("entry") ; attendre c.entryRun.phase !== "plan"
+// réussi : c.ourLanded, !c.airFlight.failure, journal "Touchdown … · X m/s down" avec X &lt; 3</pre></details>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b><code>glideTo("Edwards")</code> : rentrée, plané, toucher à <b>0,2 m/s</b>.</div>
+<div class="grid2"><figure><img src="progress/apprendre/vx-l8-pose.jpg" alt="Le Ranger posé à Edwards" loading="lazy"><figcaption>Le Ranger posé à Edwards</figcaption></figure></div>
+</section>
+
+<section id="l9">
+<h2>Leçon 9 — Se poser sous moteur sur la Lune (Lander)</h2>
+<figure>
+<svg viewBox="0 0 640 240" role="img" aria-label="La descente propulsée">
+<line x1="20" y1="210" x2="620" y2="210" class="st-line" stroke-width="2"/>
+<path d="M30 30 Q250 40 380 120 Q470 175 520 186 L540 186 L540 208" fill="none" stroke="var(--accent)" stroke-width="3"/>
+<g font-size="12">
+<circle cx="30" cy="30" r="5" fill="var(--accent)"/><text x="40" y="24">croisière (≤ ×1 000)</text>
+<circle cx="200" cy="50" r="5" fill="var(--warn)"/><text x="210" y="46">freinage</text>
+<circle cx="440" cy="160" r="5" fill="var(--warn)"/><text x="380" y="148">translation ≤ 25 m/s</text>
+<circle cx="540" cy="186" r="5" fill="var(--ok)"/><text x="548" y="172">porte 40 m</text>
+<text x="636" y="200" text-anchor="end">toucher 0,8 m/s</text>
+<text x="20" y="232" class="sv-muted">sous 5 km : le LPD (W A S D déplacent le point) · le panneau DESCENTE compte les secondes de stationnaire</text></g>
+</svg>
+<figcaption>La descente propulsée (notre côté) : croisière, poussée d'orbite de descente si besoin, freinage, translation, porte à 40 m, toucher à 0,8 m/s sur les 3 derniers mètres.</figcaption></figure>
+<p><kbd>8</kbd> stationnaire · <kbd>F7</kbd> descente et atterrissage · sous 5 km, W/S avancent ou reculent le point, A/D le décalent (par code : <code>c.lpdOrder = { fwd: 300, right: 0 }</code>, en mètres). Les secondes de stationnaire passent ambre sous 60 s, rouge sous 30 s (« posez-vous ou interrompez »). Verdict au toucher : ≤ 3 m/s posé, ≤ 4,5 dur, au-delà écrasé ; le Lander bascule au-delà d'environ 44° (calcul).</p>
+<div class="grid2">
+<figure><img src="progress/vaisseaux/X1d-lpd.jpg" alt="Le désignateur de point d'atterrissage" loading="lazy"><figcaption>Le LPD : une croix dans un cercle au sol, ambre une fois déplacée.</figcaption></figure>
+<figure><img src="img/assist/c5-descent.jpg" alt="La descente assistée" loading="lazy"><figcaption>La descente assistée : la portée de dérive, la vitesse verticale, la poussée d'arrêt.</figcaption></figure>
+</div>
+<figure><img src="progress/vaisseaux/X6-4-lander-cockpit.jpg" alt="Le cockpit du Lander" loading="lazy"><figcaption>La cabine du Lander, derrière ses hublots de nez.</figcaption></figure>
+<details><summary>Par <code>__bh</code></summary>
+<pre>__bh.settings.vessel = "lander";                      // attendre __bh.fleet.active === "lander"
+__bh.game.hoverOver("moon", 0.674, 23.473, 1.5);      // 1,5 km au-dessus de Tranquillité, stationnaire (réservoirs remplis)
+const c = __bh.camera; __bh.freeze(true);
+c.pilot.auto = "none"; c.pilot.setAuto("land");
+for (let i = 0; i &lt; 30 * 300 &amp;&amp; !c.ourLanded &amp;&amp; !c.airFlight.failure; i++) __bh.step(1 / 30);</pre></details>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b>Stationnaire, <code>setAuto("land")</code>, <code>lpdOrder = { fwd: 300 }</code> : toucher à <b>0,8 m/s</b>, à <b>300,2 m</b> du site.</div>
+<div class="grid2"><figure><img src="progress/apprendre/vx-l9-alunissage.jpg" alt="Le Lander posé à Tranquillité" loading="lazy"><figcaption>Le Lander posé à Tranquillité</figcaption></figure></div>
+</section>
+
+<section id="l10">
+<h2>Leçon 10 — Décoller vers l'orbite</h2>
+<figure>
+<svg viewBox="0 0 640 220" role="img" aria-label="Le virage gravitationnel">
+<line x1="20" y1="200" x2="620" y2="200" class="st-line" stroke-width="2"/>
+<path d="M60 200 V140 Q80 60 260 40 H600" fill="none" stroke="var(--accent)" stroke-width="3"/>
+<g font-size="12"><text x="70" y="170">vertical</text><text x="110" y="90">bascule (virage gravitationnel)</text><text x="420" y="32">orbite : circulariser</text>
+<text x="20" y="218" class="sv-muted">vitesse orbitale : ~7,7 km/s (Terre), ~1,6 km/s (Lune)</text></g>
+</svg>
+<figcaption>Sortir de l'air verticalement, puis basculer vers l'horizon pour prendre la vitesse orbitale. Mesuré : de Tranquillité vers 100 km, 2 042 m/s pour un minimum de 1 718 (note 19,1/20).</figcaption></figure>
+<p><kbd>U</kbd> : sans objectif, la montée vise 3 % du rayon (≈ 52 km sur la Lune) ; l'onglet LAUNCH de l'ordinateur de vol propose 200 km ; par code <code>c.launchGoal = { altKm: 100, incDeg: null }</code> avant <code>setAuto("takeoff")</code> (il reste d'un vol à l'autre). Puis la bascule et la circularisation (<code>takeoff</code> devient <code>circularize</code>, puis souvent <code>node</code>). Sur une piste avec de l'air, le Ranger roule, se cabre à 110 m/s et monte.</p>
+<div class="box bad"><b>Le Lander posé ne décolle pas avec U</b>Constaté en jeu le 6 novembre 2026 (poussée nulle, sans message) : un défaut noté. En vol (en stationnaire), U le fait monter ; le Ranger, lui, décolle du sol lunaire (vérifié en jeu).</div>
+<figure><img src="img/assist/c2-climb.jpg" alt="La montée vers l'orbite" loading="lazy"><figcaption>La montée vers l'orbite, assistée : le directeur, l'apoapside qui monte.</figcaption></figure>
+<div class="box ok"><b>Vérifié en jeu (e2e, 6 novembre 2026)</b>Le Ranger posé à Tranquillité, <code>launchGoal = 100 km</code>, U : orbite <b>100,0 ± 0,04 km</b>. Le Lander posé, lui, ne décolle pas (défaut constaté).</div>
+<div class="grid2"><figure><img src="progress/apprendre/vx-l10-orbite-lunaire.jpg" alt="Le Ranger en orbite lunaire de 100 km" loading="lazy"><figcaption>Le Ranger en orbite lunaire de 100 km</figcaption></figure></div>
+</section>
+
+<section id="l11">
+<h2>Leçon 11 — L'Endurance, l'anneau, Gargantua</h2>
+<ul>
+<li><b>L'Endurance</b> (900 t, 0,24 g, 1,5 g de limite) ne se pose pas, ne rentre pas. <kbd>⇧</kbd><kbd>[</kbd> <kbd>⇧</kbd><kbd>]</kbd> changent la rotation de l'anneau (1 g ≈ 5,5 tr/min). <kbd>B</kbd> s'amarre à elle même en vrille.</li>
+<li><b>Près de Gargantua</b>, le temps du vaisseau ralentit (dτ/dt au HUD, l'horloge de la Terre qui prend de l'avance) ; près de Miller, une heure à bord vaut sept ans sur Terre. <kbd>0</kbd> approche, <kbd>⇧</kbd><kbd>0</kbd> orbiter la cible.</li>
+<li><b>Le trou de ver</b> : dans la gorge, aucun autopilote ne vole.</li>
+</ul>
+<div class="grid2">
+<figure><img src="progress/vaisseaux/X5-1-roue.jpg" alt="La roue du vaisseau" loading="lazy"><figcaption>La roue (Tab maintenu) : SAS, maintiens, autopilotes, ordinateur de vol, systèmes, amarrage, flotte, navigation, école.</figcaption></figure>
+<figure><img src="img/showcase/ship-endurance-gargantua.webp" alt="L'Endurance près de Gargantua" loading="lazy"><figcaption>L'Endurance près de Gargantua — capture du jeu.</figcaption></figure>
+</div>
+</section>
+
+<section id="l12">
+<h2>Leçon 12 — Les pannes</h2>
+<p>Réglages › Jeu › Engins spatiaux › <b>Pannes</b> (aucune par défaut). Une panne allume l'<b>alarme principale</b> (<kbd>Entrée</kbd> l'acquitte) et sa <b>checklist</b> (page CKL, ou M › Systèmes) : moteur éteint (relance : une chance sur trois de rester à 50 %), propulseur RCS bloqué (isoler le quad), gyroscope, court-circuit, fuite d'O₂, épurateur ; batterie à plat : plus de RCS.</p>
+</section>
+
+<section id="l13">
+<h2>Leçon 13 — S'entraîner avec l'école spatiale</h2>
+<p>Tab maintenu › École et défis › <b>École de vol</b> : quinze leçons — l'attitude et le RCS · les maintiens · monter et descendre · circulariser et Hohmann · le changement de plan · le rendez-vous · l'amarrage à la main · la désorbitation · le plané · la descente lunaire · le décollage · l'amarrage à l'Endurance en vrille · l'assistance gravitationnelle · Gargantua · les urgences. <b>Guidé</b>, <b>Démonstration</b>, <b>Essai</b> ; une note sur 20.</p>
+<figure><img src="progress/vaisseaux/X9-1-ecole.jpg" alt="L'école spatiale" loading="lazy"><figcaption>L'école de vol spatial : chaque leçon sa mise en place et ses étapes.</figcaption></figure>
+<p><b>Progression conseillée</b> : leçon 1 en Réaliste (sans SAS), puis Assisté pour les leçons 2 à 6 · l'école 1 à 4 en Essai · le rendez-vous et l'amarrage (B d'abord, puis à la main) · la rentrée (⇧G, puis assistée) · la Lune avec le Lander · Réaliste · l'Endurance et Gargantua.</p>
+<details><summary>Par <code>__bh</code></summary>
+<pre>__bh.flight.school.space("hohmann", "try");   // ids : attitude, holds, orbit-basics, hohmann, plane, rendezvous, docking,
+                                              // entry, glide, lunar-descent, ascent, endurance-dock, slingshot, relativity, emergencies
+__bh.camera.spaceCourse;                      // l'étape, son temps, ses résultats (school.state() est l'école des avions)</pre></details>
+</section>
+
+<section id="autos">
+<h2>Aide-mémoire — les autopilotes et leurs enchaînements</h2>
+<figure>
+<svg viewBox="0 0 680 230" role="img" aria-label="Les enchaînements des autopilotes">
+<defs><marker id="b4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="var(--accent)"/></marker></defs>
+<g font-size="12" text-anchor="middle">
+<g fill="var(--card)" stroke="var(--accent)"><rect x="10" y="20" width="110" height="34" rx="8"/><rect x="170" y="20" width="110" height="34" rx="8"/><rect x="330" y="20" width="110" height="34" rx="8"/><rect x="490" y="20" width="110" height="34" rx="8"/>
+<rect x="10" y="100" width="110" height="34" rx="8"/><rect x="170" y="100" width="110" height="34" rx="8"/><rect x="330" y="100" width="110" height="34" rx="8"/>
+<rect x="10" y="180" width="110" height="34" rx="8"/><rect x="170" y="180" width="110" height="34" rx="8"/><rect x="330" y="180" width="110" height="34" rx="8"/><rect x="490" y="180" width="110" height="34" rx="8"/></g>
+<text x="65" y="42">takeoff (U)</text><text x="225" y="42">circularize (9)</text><text x="385" y="42">node</text><text x="545" y="42">none</text>
+<text x="65" y="122">approach (0)</text><text x="225" y="122">orbit / hover</text><text x="385" y="122">dock &gt; 3 km (B)</text>
+<text x="65" y="202">entry (⇧G)</text><text x="225" y="202">land (F7)</text><text x="385" y="202">toucher</text><text x="545" y="202">none</text>
+<path d="M120 37H168M280 37H328M440 37H488M120 117H168M440 117 Q470 117 470 80 Q470 54 440 48M120 197H168M280 197H328M440 197H488" stroke="var(--accent)" stroke-width="2" fill="none" marker-end="url(#b4)"/>
+<text x="600" y="110" class="sv-muted">rendez-vous :</text><text x="600" y="126" class="sv-muted">node → dock</text>
+</g></svg>
+<figcaption>Les autopilotes s'enchaînent : on attend l'état final (<code>status().status</code>, <code>docked</code>, <code>ourLanded</code>), pas <code>pilot.auto</code>. Un toucher termine tous les autopilotes sauf le décollage.</figcaption></figure>
+</section>
+
+<section id="clavier">
+<h2>Aide-mémoire — le clavier</h2>
+<table>
+<tr><th>Touche</th><th>Quoi</th></tr>
+<tr><td><kbd>W</kbd> <kbd>S</kbd> · <kbd>A</kbd> <kbd>D</kbd> · <kbd>Q</kbd> <kbd>E</kbd> <span class="k-az">(Z S · Q D · A E)</span></td><td>tangage (W pique) · lacet · roulis</td></tr>
+<tr><td><kbd>⇧</kbd> · <kbd>Alt</kbd> (↑ ↓) · <kbd>Z</kbd> <kbd>X</kbd> <span class="k-az">(W X)</span></td><td>manette + / − · plein gaz / coupé</td></tr>
+<tr><td><kbd>I</kbd> <kbd>K</kbd> · <kbd>J</kbd> <kbd>L</kbd> · <kbd>H</kbd> <kbd>N</kbd></td><td>RCS : bas/haut · gauche/droite · avant/arrière</td></tr>
+<tr><td><kbd>T</kbd> · <kbd>R</kbd> · <kbd>Verr. Maj</kbd></td><td>SAS · alignement du roulis · commandes fines</td></tr>
+<tr><td><kbd>1</kbd>…<kbd>7</kbd></td><td>maintiens : prograde, rétrograde, radial ±, normal ±, cible</td></tr>
+<tr><td><kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd> · <kbd>⇧</kbd><kbd>0</kbd></td><td>stationnaire, circulariser, approche · orbiter la cible</td></tr>
+<tr><td><kbd>B</kbd> · <kbd>F7</kbd> · <kbd>U</kbd> · <kbd>⇧</kbd><kbd>G</kbd></td><td>rendez-vous et amarrage · atterrir · décoller · rentrée et atterrissage</td></tr>
+<tr><td><kbd>⇧</kbd><kbd>8</kbd> · <kbd>⇧</kbd><kbd>9</kbd> · <kbd>⇧</kbd><kbd>F4</kbd> · <kbd>⇧</kbd><kbd>X</kbd></td><td>maintien à poste · RCS en translation · autopilote assisté · récupérer</td></tr>
+<tr><td><kbd>O</kbd> · <kbd>⇧</kbd><kbd>O</kbd> · <kbd>M</kbd></td><td>ordinateur de vol (MISSION) · plan de mission · carte</td></tr>
+<tr><td><kbd>G</kbd> · <kbd>F</kbd> · <kbd>P</kbd></td><td>train · mode de vol dans l'air · volets</td></tr>
+<tr><td><kbd>Tab</kbd> · <kbd>Entrée</kbd> · <kbd>⌫</kbd> · <kbd>[</kbd> <kbd>]</kbd></td><td>cible suivante (bref), roue (maintenu) · acquitter · tout relâcher · vaisseau</td></tr>
+</table>
+</section>
+
+<section id="chiffres">
+<h2>Aide-mémoire — les chiffres</h2>
+<table>
+<tr><th></th><th>Ranger</th><th>Lander</th><th>Endurance</th></tr>
+<tr><td>Masse</td><td>40 t</td><td>160 t</td><td>900 t</td></tr>
+<tr><td>Accélération max (calcul, Crew 2 g)</td><td>2 g</td><td>1,5 g</td><td>0,24 g</td></tr>
+<tr><td>Limite structurale</td><td>9 g</td><td>6 g</td><td>1,5 g</td></tr>
+<tr><td>Bouclier · coque</td><td>1 950 K · 1 150 K</td><td>2 300 K · 1 000 K</td><td>aucun · 700 K</td></tr>
+<tr><td>Train</td><td>tricycle</td><td>quatre pieds</td><td>aucun</td></tr>
+<tr><td>Toucher</td><td colspan="3">≤ 3 m/s posé · ≤ 4,5 dur · au-delà écrasé (réglage <code>crashSpeed</code>)</td></tr>
+<tr><td>Amarrage</td><td colspan="3">latéral &lt; 0,3 m · angle &lt; 10° · vitesse &lt; 0,5 m/s · rotation &lt; 3°/s</td></tr>
+<tr><td>Accélération du temps dans l'air</td><td colspan="3">×4 au plus</td></tr>
+</table>
+<p>Le détail, et les tests : <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/E2E-VOLS.md">E2E-VOLS.md</a> · la référence : <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/VOL-VAISSEAUX.md">VOL-VAISSEAUX.md</a> · le manuel : <a href="https://github.com/TheSamLePirate/black-hole-gpu/blob/main/docs/VAISSEAUX.fr.md">VAISSEAUX.fr.md</a>.</p>
+</section>
+
+</main>
+</div>
+</body>
+</html>
