@@ -163,8 +163,8 @@ verts) :
   schéma) ; trois états — réel, ancien, typique — dits sur l'étiquette « Vent solaire » avec ses valeurs. Observé (e2e) : le
   6 novembre 2026 à 05:40 UTC, 309 km/s, 2,3 cm⁻³, Bz −0,8 nT, Pd 0,4 nPa → nez à 13,2 R_E (au lieu de ~10).
 - **Restant** : la déformation des lignes par le vent solaire (compression côté jour, queue), les lignes ouvertes, les
-  particules (giration, rebond, dérive), les actions TARS ; les corps lointains (au-delà de la portée du corps proche) ; le
-  traçage en worker ; la mesure du coût.
+  actions TARS ; les corps lointains (au-delà de la portée du corps proche) ; le traçage en worker. **Les particules sont
+  abandonnées** (Sam, 6 novembre 2026 : « je veux pas de particules »).
 
 ## 1. Ce qu'on a aujourd'hui
 
@@ -257,7 +257,7 @@ Les grandeurs du schéma (ordres de grandeur, revues de Bagenal et al., à véri
 | **AM5** | **Les lunes** : Io (lueurs bleues des panaches, rouge aux limbes) et Europe (rouge de l'oxygène), en éclipse dans l'ombre de Jupiter ; Ganymède (ses deux ovales en UV, une faible lueur visible en éclipse) ; Callisto (candidat très faible). **Reprise d'Alex : § 7.6** | AM2 | moyen |
 | **AM6** | **Mars et Vénus** : aurores discrètes au-dessus des champs crustaux, diffuses et vertes dans les tempêtes solaires (Perseverance, 2024) ; la raie verte de Vénus après une éjection, diffuse sur tout le côté nuit (Gray et al. 2025). Un réglage « tempête solaire » commun. **Reprise d'Alex : § 7.6** | AM2 | faible |
 | **AM7** | **Le schéma des magnétosphères** : lignes de champ (L-shells), magnétopause et onde de choc (modèle de Shue pour la Terre, mis à l'échelle ailleurs), tore d'Io (aussi en lueur rouge réaliste), ceintures, particules animées (giration, rebond, dérive, au temps accéléré). Passe de lignes avec profondeur, réglage dans les Guides, actions TARS. **Reprise d'Alex : § 7.7** | AM0 | moyen (passe) |
-| **AM8** | Fausses couleurs « instrument » (UV de Hubble ou Juno, infrarouge de JWST, rayons X de Mercure) si Sam le décide (décision 1) | AM2–AM6 | faible |
+| **AM8** | ~~Fausses couleurs « instrument »~~ — **déplacé** (Sam, 6 novembre 2026) dans [PLAN-CAPTEURS-CAMERA-SECONDAIRE](PLAN-CAPTEURS-CAMERA-SECONDAIRE.md) S6 : les canaux UV (Hubble, Juno) et IR (JWST) de la caméra secondaire et de la seconde vision | AM2–AM6 | — |
 
 Pour chaque phase : tests unitaires des modèles, un e2e court par corps, en headless sur ce Mac. Les captures
 avant/après et les coûts sont montrés dans T3, puis une entrée dans `progress-to-destination.md` si la phase
