@@ -1,3 +1,6 @@
+// (first: the network counted from the first request — net-activity.ts)
+import "./net-install";
+import { NetLight } from "./ui/net-light";
 import { scopeRange } from "./ui/hud/symbology";
 import { TarsOrb, TINT } from "./ui/tars/orb";
 import { SystemsPage } from "./ui/systemspage";
@@ -7949,6 +7952,16 @@ async function main() {
     if (!(e as PageTransitionEvent).persisted) renderer.release();
   });
 
+  // (the network's light in the top-left corner — Settings › Render › Show the network —: green while requests are in flight,
+  // amber while data is asked and nothing downloads, red on failures; ui/net-light.ts)
+  const netLight = new NetLight(
+    () => {
+      const et = renderer.earthTiles,
+        mt = renderer.moonTiles;
+      return et.pending > 0 || et.orthoPending > 0 || (mt.active && mt.pending > 0) || renderer.earthScenery.pending;
+    },
+    () => settings.showNetwork,
+  );
   // the automation handle (devtools, tests, scripts): debug/bh.ts
   installBh({
     boot: () => bootReport(firstFrame ? firstFrameAt : null),
@@ -8111,6 +8124,7 @@ async function main() {
       hideBar: (on: boolean) => topBar.hide(on),
     },
     pwa,
+    netLight,
     // (an itinerary: its stops voyaged to in turn, through the wormhole where one lies beyond it; null: begun)
     tour: (stops: Target[], hold?: number) => startTour(stops, hold),
     touring: () => (tour ? { stop: tour.stops[Math.max(0, tour.i - 1)] ?? null, i: tour.i, of: tour.stops.length } : null),

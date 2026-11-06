@@ -307,6 +307,7 @@ export interface Settings {
   realtimeBudget: number; // GPU time per realtime frame the automatic subsampling aims for [ms]
   fpsCap: 0 | 30 | 60 | 120; // images rendered per second at most (0: as the display refreshes)
   showFps: boolean; // the frame rate shown in a corner (frames per second, the frame's time)
+  showNetwork: boolean; // the network's light in the top-left corner (ui/net-light.ts): downloading, stalled, failing, idle
   showLoading: boolean; // the data's loading shown under it while something loads: the relief's and the photographs' tiles, the scenery's step, a world's maps, the horizons' bake, what failed
   glassBlur: boolean; // the interface's panels blur the view behind them (the browser redoes it every frame)
   temporalReprojection: boolean; // realtime: the previous frames' image carried over by the camera's rotation
@@ -711,6 +712,7 @@ export function defaultSettings(): Settings {
     fpsCap: 0,
     showFps: false,
     showLoading: true,
+    showNetwork: true,
     glassBlur: false,
     temporalReprojection: true,
     sharpen: 0.3,
@@ -2124,6 +2126,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   fpsCap: "pref",
   showFps: "pref",
   showLoading: "pref",
+  showNetwork: "pref",
   glassBlur: "pref",
   temporalReprojection: "pref",
   sharpen: "pref",

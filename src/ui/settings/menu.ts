@@ -103,6 +103,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "motionDetail",
       "temporalReprojection",
       "showFps",
+      "showNetwork",
     ],
   },
   {

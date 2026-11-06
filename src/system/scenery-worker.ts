@@ -2,6 +2,7 @@
 import { type CarPlace, carsOn, PIECE_M, ROAD_TRAFFIC, TRAFFIC_MAX, TRAFFIC_REACH_M } from "./traffic";
 import { VectorTile, classifyRings } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
+import { installNetActivity } from "./net-activity";
 import type { Vec3 } from "../physics";
 import { earthDetail, toHalf } from "../terrain";
 import { forestFrame, forestVec4s, growForest } from "./forest";
@@ -118,6 +119,8 @@ const fetchCache = new Map<string, { status: number; headers: [string, string][]
 let fetchCacheBytes = 0;
 /** this worker's hits and misses (the scene's stats) */
 export const fetchCacheStats = { hits: 0, misses: 0, hitBytes: 0 };
+// (the network counted under the cache: its hits are no download — net-activity.ts)
+installNetActivity("scenery");
 const rawFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const req = new Request(input, init);

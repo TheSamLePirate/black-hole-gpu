@@ -780,6 +780,22 @@ __bh.sim.setTime(c.nowTime()); __bh.step(0);
 ```
 *Used in:* `tests/e2e/wormhole-map.e2e.test.ts` (`sim.setTime`, then `step(0)` to refresh the display), `tests/e2e/smoke.e2e.test.ts` (`sim.time`).
 
+### `__bh.netLight` → `{ stats, reset }` (object, `src/ui/net-light.ts`)
+
+The network's light in the screen's top-left corner (Settings › Render › Show the network): every request the page and its fetching workers (scenery, KTX2, surface) have in flight, counted by `src/system/net-activity.ts` (a `fetch` wrapper per scope, the workers' counts summed over the `bh-net` BroadcastChannel). Its element `[data-testid="net-light"]` carries `data-state` (`loading` green: requests in flight · `waiting` amber: data asked — relief or photo tiles queued, a scene building — and nothing in flight · `error` red: a failure or a 429/503 in the last 2.5 s · `idle` grey) and `data-inflight`.
+
+### `__bh.netLight.stats()` → `{ inflight, byKind, started, done, failed, aborted, limited, cached, bytes, failAt, limitAt, state, scopes, seconds, stallShare, since }`
+
+The counts now (`inflight`, `byKind` — `relief`, `photos`, `ign`, `scenery`, `weather`, `traffic`, `assets`, `other` by URL —, totals since the page's start; `cached`: answered by the Service Worker's caches, no download) and since the last `reset()`: `seconds` in each state, `stallShare` — of the time data was asked, the share with nothing in flight —, `since` `{ started, done, failed, limited, cached, mb }`.
+
+```js
+__bh.netLight.reset(); /* … a flight … */ __bh.netLight.stats().stallShare
+```
+
+### `__bh.netLight.reset()` → void
+
+Restarts the time in each state and the `since` counts.
+
 ### `__bh.pwa` → `Pwa` (object, `src/pwa.ts`)
 
 The page's Service Worker (the offline cache, PLAN-MONDE M1). It is registered only when the page allows it: not in the e2e tests unless `App.boot({ sw: true })` (adds `&sw=1`), not on the dev server's reload, not on the benchmark page (`#bench`). Entries below.

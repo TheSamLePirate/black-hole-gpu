@@ -10,6 +10,8 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // (200 m, 500 m, 1 km, 2 km) and aside (45°, 90° either way at 500 m and 1 km: `side`, their mean), the level the pixel's footprint there asks (up to z 17 over the IGN's France, 14 elsewhere)
 // against the finest drawn there: the levels missing — 0 the relief at its best, 1 a level short (twice too coarse)…
 //   AD_RWY: "LFTH:13" (field:runway) · AD_KM (12) · AD_EVERY (2000) · AD_BURST ("45-80": a shot every 600 ms then) · AD_OUT
+//   · AD_SW=1 (the Service Worker on, the players' path). The network's light shown in the shots; its counts in each sample
+//   (net) and over the flight by source in net.json
 // Output: remote-results/approach-detail/NN.jpg, series.json. Done when: the touchdown or 150 s, no GPU error.
 // Duration: ~3 min.
 const OUT = process.env.AD_OUT ?? "remote-results/approach-detail";
@@ -71,14 +73,19 @@ const AHEAD = `(() => {
   const deg = (v) => (Math.abs(v) > 1.6 ? v : (v * 180) / Math.PI);
   const scD = sc && sc.lat !== null ? Math.round(Math.hypot((deg(sc.lat) - g.lat) * 111320, (deg(sc.lon) - g.lon) * 111320 * Math.cos(g.lat * D))) : null;
   const scenery = sc ? { st: sc.status, step: sc.progress?.step ?? null, trees: sc.trees, dM: scD, ms: sc.workerMs, phases: sc.phases, net: sc.tileNetworkBytes, cache: sc.fetchCache ?? null } : null;
-  return { agl: Math.round(agl), pending: t.pending, ...out, phase: __bh.camera.ilsInfo()?.phase ?? null, cover, scenery };
+  // (the network's light: its state, the requests in flight by kind, since the flight began: the share of the time data was
+  // asked with nothing in flight, MB read, failures, 429s, cache hits)
+  const nl = __bh.netLight?.stats?.();
+  const net = nl ? { st: nl.state, inf: nl.inflight, k: nl.byKind, stall: nl.stallShare, s: nl.seconds, mb: nl.since.mb, n: nl.since.done, f: nl.since.failed, lim: nl.since.limited, c: nl.since.cached } : null;
+  return { agl: Math.round(agl), pending: t.pending, orthoPending: t.orthoPending, ...out, phase: __bh.camera.ilsInfo()?.phase ?? null, cover, scenery, net };
 })()`;
 
 test.skipIf(!E2E)(
   `T8: the finest relief ahead on the final — ${FIELD} ${RWY}, the F-35 from ${KM} km, cold`,
   async () => {
     mkdirSync(OUT, { recursive: true });
-    const app = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", tiles: true });
+    // (AD_SW=1: the Service Worker on — the players' path: its tile cache, its IGN gate)
+    const app = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", tiles: true, sw: process.env.AD_SW === "1" });
     const series: Record<string, unknown>[] = [];
     let gpuErrors = -1;
     try {
@@ -109,7 +116,10 @@ test.skipIf(!E2E)(
       // (the flight's start ready as a player's launch has it — its relief, scenery and kernels in, on their progress —: what
       // is seen coming in after is the streaming in flight)
       await app.dataSettled("the final's start");
-      await app.js(`new Promise((q) => { __bh.freeze(false); setTimeout(() => { __bh.camera.setLook(0, -4); q(1); }, 300); })`);
+      // (the network's light shown in the shots — hide-ui hides it — and its clock from the flight's start)
+      await app.js(
+        `new Promise((q) => { __bh.freeze(false); __bh.netLight.reset(); const l = document.querySelector(".net-light"); if (l) { l.style.display = "block"; l.style.width = l.style.height = "12px"; } setTimeout(() => { __bh.camera.setLook(0, -4); q(1); }, 300); })`,
+      );
       const said = await app.js<string>(`__bh.camera.ilsStart(${JSON.stringify(FIELD)}, { runway: ${JSON.stringify(RWY)} })`);
       console.log(`  ${said}`);
       const t0 = Date.now();
@@ -126,6 +136,9 @@ test.skipIf(!E2E)(
         await Bun.sleep(b1 && t >= b0! && t <= b1 ? 600 : EVERY);
       }
       gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
+      // (the network's whole flight: by source — requests, bytes, URLs asked again —, and the Service Worker's figures)
+      const netEnd = await app.js(`(async () => ({ net: __bh.netLight.stats(), sw: await __bh.pwa?.stats?.().catch(() => null) }))()`);
+      await Bun.write(`${OUT}/net.json`, JSON.stringify(netEnd, null, 1));
     } finally {
       await Bun.write(`${OUT}/series.json`, JSON.stringify(series, null, 1));
       await app.close();

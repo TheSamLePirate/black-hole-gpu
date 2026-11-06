@@ -1,4 +1,8 @@
 // WorldCover is categorical: lossless bytes, inflated off the frame loop and transferred once.
+import { installNetActivity } from "./net-activity";
+
+// (its downloads counted in the page's network indicator — net-activity.ts)
+installNetActivity("surface");
 export interface CoverRequest {
   id: number;
   url: string;

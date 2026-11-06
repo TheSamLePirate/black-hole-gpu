@@ -58,6 +58,7 @@ import { setDateNow } from "./util/now";
 import { advanceFrameClock } from "./frameclock";
 import type { FlightPhase } from "./game/phase";
 import type { Pwa } from "./pwa";
+import type { NetLight } from "./ui/net-light";
 import type { GameMode, ModeState } from "./game/modes";
 import { DeckPicker } from "./a320/deckpick";
 
@@ -158,6 +159,8 @@ export interface BhContext {
   viewAt(lat: number, lon: number, o?: { altM?: number; heading?: number; pitch?: number; fov?: number; tripod?: boolean }): string | null;
   /** the PWA (src/pwa.ts): the worker's state, the caches' figures */
   pwa: Pwa;
+  /** the network's light (ui/net-light.ts): its counts now, the time in each state since reset() */
+  netLight: Pick<NetLight, "stats" | "reset">;
   /** (Q6-ISS ISS4) the view through a live stream's camera on the station, or back to the view before; why not, or null */
   issCamera(id: IssCameraId | "back"): string | null;
   /** the game's mode (game/modes.ts, PLAN-MODES-AAA M1) */
@@ -698,6 +701,9 @@ export function installBh(c: BhContext) {
       issCameras: () => issCameraList(),
       /** the offline cache: ready(), stats(), clearTiles(), update(), waiting */
       pwa: c.pwa,
+      /** the network's light: stats() — in flight now by kind, requests, failures, 429s, MB, seconds in each state and the
+       *  share of the time data was asked with nothing in flight (stallShare) since reset() */
+      netLight: { stats: () => c.netLight.stats(), reset: () => c.netLight.reset() },
       /** the calendar's "now" for the scenes of the real time (the station, the fleet): fixed by tests */
       setDate: setDateNow,
       /** the ground's height above a body's mean radius at latitude, east longitude [°] — the relief the

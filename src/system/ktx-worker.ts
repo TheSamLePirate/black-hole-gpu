@@ -3,6 +3,10 @@
 // level, off the frame loop. Built on its own (server.ts, scripts/build-pages.ts) as ktx-worker.js.
 // @ts-expect-error (an Emscripten module, CommonJS, untyped)
 import BASIS from "../../vendor/basis/basis_transcoder.js";
+import { installNetActivity } from "./net-activity";
+
+// (its downloads counted in the page's network indicator — net-activity.ts)
+installNetActivity("ktx");
 
 export type KtxTarget = "bc7" | "astc" | "rgba";
 export interface KtxRequest {

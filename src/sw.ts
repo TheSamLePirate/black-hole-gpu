@@ -560,7 +560,8 @@ async function tile(request: Request): Promise<Response> {
   }
   const cache = await tileCache();
   const hit = await cache.match(request);
-  const fromCache = hit && (await serve(hit));
+  // (marked as the cache's too: the page's network light counts it as no download — net-activity.ts)
+  const fromCache = hit && (await serve(hit, ["x-kerr-cache", "lru"]));
   if (hit && fromCache) {
     serving(request.url, "lru");
     indexTouch({ url: request.url, t: Date.now(), size: Number(hit.headers.get("content-length")) || 0 });
@@ -583,13 +584,14 @@ async function tile(request: Request): Promise<Response> {
 }
 
 /** A range served as a 206 (its key's whole body as kept), `zone` marked. */
-function partial(body: ArrayBuffer, offset: number, zone: boolean): Response {
+function partial(body: ArrayBuffer, offset: number, zone: boolean, lru = false): Response {
   const headers = new Headers({
     "content-type": "application/octet-stream",
     "content-length": String(body.byteLength),
     "content-range": `bytes ${offset}-${offset + body.byteLength - 1}/*`,
   });
   if (zone) headers.set("x-kerr-zone", "1");
+  if (lru) headers.set("x-kerr-cache", "lru");
   return new Response(body, { status: 206, headers });
 }
 /** A byte range of an archive (the Cache API keeps no partial response: each range a whole one under rangeKey): a zone's,
@@ -606,7 +608,7 @@ async function rangeTile(request: Request, offset: number, length: number): Prom
   if (hit) {
     serving(key, "lru");
     void indexPut({ url: key, t: Date.now(), size: length });
-    return partial(await hit.arrayBuffer(), offset, false);
+    return partial(await hit.arrayBuffer(), offset, false, true);
   }
   serving(key, "network");
   const res = await fetch(request);

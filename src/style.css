@@ -606,6 +606,7 @@ body.hide-ui .gt-root,
 body.hide-ui #topbar,
 body.hide-ui .compile-meter,
 body.hide-ui .data-meter,
+body.hide-ui .net-light,
 body.hide-ui .tb-handle {
   display: none;
 }
@@ -2533,6 +2534,15 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .data-meter > .dm-failed::after { display: none; }
 @keyframes data-pulse { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { .data-meter > span::after { animation: none; } }
+/* the network's light (Settings › Render › Show the network, ui/net-light.ts): a small square in the top-left corner */
+.net-light {
+  position: fixed; top: 4px; left: 4px; width: 8px; height: 8px; z-index: var(--z-toast); pointer-events: none;
+  border-radius: 2px; background: #5a6470; box-shadow: 0 0 0 1px rgba(4, 8, 14, 0.7); opacity: 0.55;
+}
+.net-light[hidden] { display: none; }
+.net-light[data-state="loading"] { background: #3ddc84; opacity: 1; box-shadow: 0 0 0 1px rgba(4, 8, 14, 0.7), 0 0 5px rgba(61, 220, 132, 0.7); }
+.net-light[data-state="waiting"] { background: #ffb547; opacity: 1; }
+.net-light[data-state="error"] { background: #ff5a5a; opacity: 1; }
 .scenery-credit {
   position: fixed; right: 6px; bottom: max(3px, env(safe-area-inset-bottom)); z-index: 6;
   max-width: calc(100vw - 12px); padding: 3px 6px; border-radius: 3px;

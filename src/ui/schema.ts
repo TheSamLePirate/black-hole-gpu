@@ -2577,6 +2577,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "loading download tiles scenery buildings progress status data chargement téléchargement tuiles décor",
   },
   {
+    key: "showNetwork",
+    type: "toggle",
+    section: "render",
+    group: "Realtime",
+    label: "Show the network",
+    effect: "none",
+    help: "A small square in the top-left corner, live: green while the game downloads (the relief's and photographs' tiles, the scenery, the weather — it flashes at each answer in), amber while data is wanted and nothing downloads (a stall), red when a request failed or the server asked to slow down, grey when nothing is wanted.",
+    keywords: "network download light indicator tiles streaming réseau téléchargement voyant indicateur",
+  },
+  {
     key: "realtimeBudget",
     type: "number",
     section: "render",
