@@ -138,6 +138,8 @@ export function orthoWords(px: Uint8ClampedArray, fit: OrthoFit): Uint32Array {
 /** What the decode worker is asked: a Terrarium tile's heights, a relief tile's imagery, an orthophoto's colours */
 export type DecodeRequest =
   | { id: number; op: "terrarium"; blob: Blob }
+  /** (Mapterhorn's 512² WebP Terrarium tiles — the USA's 3DEP relief, earth-tiles.ts USA) its whole grid, 512² */
+  | { id: number; op: "terrarium512"; blob: Blob }
   | {
       id: number;
       op: "imagery";
@@ -162,6 +164,19 @@ export type DecodeReply = {
 /** The request's work, wherever it runs: the arrays it gives (to be handed over, not copied) */
 export async function decodeTile(q: DecodeRequest): Promise<{ heights?: Float32Array; words?: Uint32Array; delight?: DelightStats }> {
   if (q.op === "terrarium") return { heights: terrariumHeights(await pixels(q.blob)) };
+  if (q.op === "terrarium512") {
+    // (read whole at its size, no scaling: an interpolated Terrarium byte is a wrong height)
+    const img = await createImageBitmap(q.blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });
+    const side = img.width;
+    const cv = new OffscreenCanvas(side, side);
+    const ctx = cv.getContext("2d", { willReadFrequently: true })!;
+    ctx.drawImage(img, 0, 0);
+    img.close();
+    const px = ctx.getImageData(0, 0, side, side).data;
+    const h = new Float32Array(side * side);
+    for (let i = 0; i < h.length; i++) h[i] = px[4 * i]! * 256 + px[4 * i + 1]! + px[4 * i + 2]! / 256 - 32768;
+    return { heights: h };
+  }
   if (q.op === "ortho") {
     const px = await pixels(q.blob);
     const delight = q.delight ? delightTile(px, q.delight) : undefined;

@@ -597,7 +597,13 @@ Le joueur n'a pas besoin d'un panneau de détails techniques pour voler. En reva
 - **G — en partie** : profils et raies (`aurora-lines.ts`), ovales des géantes depuis leurs champs (`aurora-bodies.ts`),
   frontières (AM7) ; restent Juno UVS calibré et le champ externe ; l'UV/IR passe par la caméra secondaire
   ([PLAN-CAPTEURS-CAMERA-SECONDAIRE](PLAN-CAPTEURS-CAMERA-SECONDAIRE.md) S6).
-- **A, D, E, F, H, I, J — pas commencés.**
+- **D — premier lot fait** (USA contigus) : relief Mapterhorn (USGS 3DEP 1 m, z 16 en 512² → notre z 17 ; Longs Peak et
+  Whitney à 2 m près de leurs repères NAVD88) et imagerie des tuiles du National Map (NAIP, z ≤ 16, ≈ 2 m) derrière
+  l'interface des sources nationales (`earth-tiles.ts` USA). Observé (e2e `usa`, Yosemite) : pente 83° contre 77°, 1,9 m
+  contre 25 m, niveaux z 17 contre 14, Half Dome 2 693 m (2 694). NAIP 0,6 m par son serveur d'images : 9–50 s l'image —
+  pour les zones hors ligne seulement. Restent : l'ajustement des couleurs à EOX, le sol du décor sur ce relief, l'Alaska et
+  Hawaï, la NAIP 0,6 m dans les zones, le LiDAR classifié.
+- **A, E, F, H, I, J — pas commencés.**
 
 Les « apports attendus » sont des motivations, pas des gains visuels ou de performance mesurés. Les gros volumes scientifiques restent dans une chaîne d'assets et un stockage approprié ; ne pas importer des téraoctets dans Git.
 

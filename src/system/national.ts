@@ -17,7 +17,7 @@ export interface OrthoFit {
   chroma: readonly [number, number, number];
 }
 export interface NationalSource {
-  id: "ign" | "swisstopo";
+  id: "ign" | "swisstopo" | "usa";
   /** (Q7 G1/G2) its declarations in system/sources.ts — imagery, heights, surface… */
   declares: readonly string[];
   box: { west: number; east: number; south: number; north: number };

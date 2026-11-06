@@ -29,7 +29,7 @@
 import type { Vec3 } from "../physics";
 import { cartToGeodetic, geodeticDirAt, squashedScale, WGS84_A, WGS84_F } from "./ellipsoid";
 import { IGN_GATE_SW } from "./scenery-data";
-import { type NationalSource, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
+import { insideOutline, type NationalSource, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
 import { IGN_MNH } from "./ign-canopy";
 import type { DelightStats } from "./ortho-delight";
 import { type DecodeReply, type DecodeRequest, decodeTile, ORTHO_FIT, pixels as decodePixels } from "./tile-decode";
@@ -721,10 +721,81 @@ export const IGN: NationalSource = {
     ...(hlod && z <= HLOD_Z1 ? [ignHeightUrl(IGN_MNS_LIDAR, z, x, y, hlodSize(z)), ignHeightUrl(IGN_MNS_RGE, z, x, y, hlodSize(z))] : []),
   ],
 };
-/** the national sources, the more specific first (national.ts): swisstopo, then the IGN */
-export const NATIONAL: readonly NationalSource[] = [SWISSTOPO, IGN];
+// ---- the USA (RECHERCHE-DONNEES § 6, lot D; Sam, 6 Nov 2026 « la grosse partie données, USA et monde ») — the contiguous
+// states: their relief from Mapterhorn's tiles (512² WebP, Terrarium-encoded, its z 16 ≈ 1.2 m a pixel at 40° N from USGS 3DEP
+// 1 m: Longs Peak 4 344.5 m, Mt Whitney 4 419.2 m against their 4 346 and 4 421 m NAVD88 — orthometric, the sea's like the
+// others'), a z−1 tile's quarter for each of our 256² tiles (z 17 at most); their imagery from the National Map's cached tiles
+// (USGSImageryOnly, NAIP-based, z ≤ 16 ≈ 2 m; NAIP's 0.6 m only through its image server, 9–50 s an image: the offline zones'
+// later). Both CORS-open, public domain (USGS) and Mapterhorn's sources' credits. Outside its outline: nothing (the world's).
+export const MAPTERHORN_Z1 = 16;
+export const mapterhornUrl = (z: number, x: number, y: number) => `https://tiles.mapterhorn.com/${z}/${x}/${y}.webp`;
+export const usgsImageryUrl = (z: number, x: number, y: number) =>
+  `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/${z}/${y}/${x}`;
+/** the contiguous states' outline (lon, lat pairs; coarse, its coasts a little out to sea) */
+export const USA_OUTLINE = [
+  -124.8, 48.5, -123.3, 49.0, -95.15, 49.0, -94.8, 49.4, -89.6, 48.0, -84.8, 46.5, -82.4, 45.3, -82.5, 42.6, -83.1, 42.0, -78.9, 42.9,
+  -79.0, 43.3, -76.3, 44.2, -74.7, 45.0, -71.5, 45.0, -70.0, 46.7, -69.2, 47.45, -67.8, 47.1, -67.0, 45.0, -66.6, 44.6, -69.8, 41.2, -75.3,
+  35.0, -80.3, 31.8, -79.9, 25.1, -81.8, 24.3, -83.2, 25.3, -82.9, 29.1, -89.2, 28.8, -94.0, 29.2, -97.2, 25.8, -99.2, 26.5, -101.4, 29.8,
+  -104.0, 29.3, -104.4, 29.56, -105.0, 30.6, -105.6, 31.1, -106.2, 31.47, -106.5, 31.78, -108.2, 31.33, -111.1, 31.33, -114.8, 32.5, -117.2,
+  32.5, -120.6, 34.3, -124.5, 40.3, -124.8, 48.5,
+];
+/** the decoded 512² grids, the last few kept (four of our tiles share each) */
+const mapterhornFiles = new Map<string, Promise<Float32Array | null>>();
+const MAPTERHORN_KEPT = 24;
+function mapterhornFile(z: number, x: number, y: number, signal: AbortSignal): Promise<Float32Array | null> {
+  const url = mapterhornUrl(z, x, y);
+  let p = mapterhornFiles.get(url);
+  if (p) {
+    mapterhornFiles.delete(url);
+    mapterhornFiles.set(url, p);
+  } else {
+    p = fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) }).then(async (res) => {
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const h = (await decodeOff({ op: "terrarium512", blob: await res.blob() })).heights!;
+      return h.length === 4 * TILE * TILE ? h : null;
+    });
+    p.catch(() => mapterhornFiles.delete(url));
+    mapterhornFiles.set(url, p);
+    if (mapterhornFiles.size > MAPTERHORN_KEPT) mapterhornFiles.delete(mapterhornFiles.keys().next().value!);
+  }
+  if (signal.aborted) return Promise.reject(new DOMException("aborted", "AbortError"));
+  return p;
+}
+export const USA: NationalSource = {
+  id: "usa",
+  declares: ["usgs-imagery", "mapterhorn-3dep"],
+  box: { west: -125, east: -66.5, south: 24.2, north: 49.5 },
+  holds: (lat, lon) => insideOutline(lat, lon, USA_OUTLINE),
+  orthoUrl: usgsImageryUrl,
+  // (the IGN's fit for a start: its colours not yet fitted to EOX's — to do on a dozen places, as SWISS_FIT was)
+  fit: ORTHO_FIT,
+  heightsFrom: 12,
+  heightUrls: (z, x, y) => (z >= 1 && z - 1 <= MAPTERHORN_Z1 ? [mapterhornUrl(z - 1, x >> 1, y >> 1)] : []),
+  async heights(z, x, y, signal) {
+    if (z - 1 > MAPTERHORN_Z1) return null;
+    const g = await mapterhornFile(z - 1, x >> 1, y >> 1, signal);
+    if (!g) return null;
+    // (our tile: its quarter of the 512² grid, copied — the caller's own)
+    const ox = (x & 1) * TILE,
+      oy = (y & 1) * TILE;
+    const h = new Float32Array(TILE * TILE);
+    for (let j = 0; j < TILE; j++) h.set(g.subarray((oy + j) * 2 * TILE + ox, (oy + j) * 2 * TILE + ox + TILE), j * TILE);
+    for (let i = 0; i < h.length; i++) if (h[i]! < -500 || h[i]! > 9000) h[i] = Number.NaN;
+    return { h, over: null };
+  },
+};
+/** the national sources, the more specific first (national.ts): swisstopo, then the IGN, then the USA */
+export const NATIONAL: readonly NationalSource[] = [SWISSTOPO, IGN, USA];
 /** their boxes as one */
 export const NATIONAL_BOX = sourcesBox(NATIONAL);
+/** the boxes of the sources near a place [°] — theirs within 2° of it — as one (the tracer's, the orthophotos': not every
+ *  country's union — since the USA, California to Switzerland, the Atlantic inside it); null: none near */
+export function nationalBoxNear(lat: number, lon: number): NationalSource["box"] | null {
+  const near = NATIONAL.filter((s) => lat > s.box.south - 2 && lat < s.box.north + 2 && lon > s.box.west - 2 && lon < s.box.east + 2);
+  return near.length ? sourcesBox(near) : null;
+}
+const NO_BOX: NationalSource["box"] = { west: 0, east: 0, south: 0, north: 0 };
 
 /**
  * A tile's heights from its national source (I2, I7): its ground marked as a survey's (markFine), the global data's
@@ -888,6 +959,8 @@ export class EarthTiles {
   private hlodWas = true;
   /** the national source under the camera (I7: "ign", "swisstopo"; null none) — its credit shown while its tiles are */
   nationalAt: NationalSource["id"] | null = null;
+  /** the boxes of the national sources near the camera, as one (nationalBoxNear; null: none) — the tracer's */
+  nationalBox: NationalSource["box"] | null = null;
   /** the finest levels the offline zones hold with the camera at a place [°] (main.ts: offline only — system/zones.ts
    *  zoneLevelsAt —; null: online, or out of every zone, the automatic cache's chance): none finer asked there, each
    *  request would fail */
@@ -1237,8 +1310,9 @@ export class EarthTiles {
     if (zNeed < Z0) return this.clear();
     // (finer, the IGN's relief alone — in France, on: by the height over the ground, as the orthophotos —; else none)
     const latD = (g.lat * 180) / Math.PI,
-      lonD = (g.lon * 180) / Math.PI,
-      B = NATIONAL_BOX;
+      lonD = (g.lon * 180) / Math.PI;
+    this.nationalBox = nationalBoxNear(latD, lonD);
+    const B = this.nationalBox ?? NO_BOX;
     const inNational = latD > B.south - 0.1 && latD < B.north + 0.1 && lonD > B.west - 0.1 && lonD < B.east + 0.1;
     // (the source under the camera: its credit on screen — main.ts)
     this.nationalAt = sourceAt(NATIONAL, latD, lonD)?.id ?? null;
@@ -1850,7 +1924,7 @@ export class EarthTiles {
   private updateOrtho(alt: number, pixAngle: number, cosLat: number, gLonT: number, gSinLat: number, zMax: number) {
     const lat = (Math.asin(this.sinLat) * 180) / Math.PI,
       lon = (this.lon * 180) / Math.PI;
-    const B = NATIONAL_BOX;
+    const B = nationalBoxNear(lat, lon) ?? NO_BOX;
     if (!this.orthoOn || lat < B.south - 0.1 || lat > B.north + 0.1 || lon < B.west - 0.1 || lon > B.east + 0.1) {
       if (this.ortho.some((O) => O.want)) this.clearOrtho();
       return;
@@ -2179,7 +2253,7 @@ export class EarthTiles {
       f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, 1], 12 * k + 4);
     }
     // (the box the relief's levels take the IGN's imagery in — z 9 … 14: theirs a photograph there too —, and whether)
-    const B = NATIONAL_BOX,
+    const B = this.nationalBox ?? NO_BOX,
       rad = Math.PI / 180;
     f.set([B.west * rad, B.south * rad, B.east * rad, B.north * rad], 12 * ORTHO_LEVELS);
     f.set([this.orthoOn ? 1 : 0, 0, 0, 0], 12 * ORTHO_LEVELS + 4);

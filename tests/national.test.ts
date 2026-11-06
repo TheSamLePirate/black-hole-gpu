@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { IGN, NATIONAL, NATIONAL_BOX, ORTHO_FIT, orthoColour } from "../src/system/earth-tiles";
+import { IGN, NATIONAL, NATIONAL_BOX, nationalBoxNear, ORTHO_FIT, orthoColour, USA } from "../src/system/earth-tiles";
 import { inIgnBox } from "../src/system/ign-canopy";
 import {
   insideOutline,
@@ -120,7 +120,17 @@ test("the national sources: Switzerland swisstopo's though the IGN's box holds i
   // (their boxes as one: the tracer's)
   expect(NATIONAL_BOX).toEqual(sourcesBox(NATIONAL));
   expect(NATIONAL_BOX.east).toBe(SWISSTOPO.box.east);
-  expect(NATIONAL_BOX.west).toBe(IGN.box.west);
+  expect(NATIONAL_BOX.west).toBe(USA.box.west);
+  // (the tracer's box: the sources near the camera only — not California to Switzerland)
+  expect(nationalBoxNear(48.85, 2.35)?.west).toBe(IGN.box.west);
+  expect(nationalBoxNear(40, -105)?.east).toBe(USA.box.east);
+  expect(nationalBoxNear(30, -40)).toBeNull();
+  // (the USA: the contiguous states, not Canada nor Mexico)
+  expect(sourceAt(NATIONAL, 40.015, -105.27)?.id).toBe("usa"); // Boulder
+  expect(sourceAt(NATIONAL, 36.1, -112.11)?.id).toBe("usa"); // the Grand Canyon
+  expect(sourceAt(NATIONAL, 43.65, -79.38)).toBeNull(); // Toronto
+  expect(sourceAt(NATIONAL, 31.69, -106.42)).toBeNull(); // Ciudad Juárez
+  expect(sourceAt(NATIONAL, 49.28, -123.12)).toBeNull(); // Vancouver
   // (the scenery's IGN survey — its canopy, the BD TOPO — not asked over Switzerland)
   expect(inIgnBox(45.92, 6.87)).toBe(true);
   expect(inIgnBox(46.95, 7.45)).toBe(false);

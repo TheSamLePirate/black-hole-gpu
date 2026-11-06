@@ -8317,6 +8317,14 @@ async function main() {
     creditLink(t("free geodata"), "https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices"),
   );
   document.body.append(swissCredit);
+  // (the USA's — lot D —: the National Map's imagery, 3DEP's relief through Mapterhorn)
+  const usaCredit = Object.assign(document.createElement("div"), { className: "scenery-credit ortho-credit", hidden: true });
+  usaCredit.dataset.testid = "usa-credit";
+  usaCredit.append(
+    t("USGS The National Map — aerial photographs (NAIP), relief (3DEP) · "),
+    creditLink("Mapterhorn", "https://mapterhorn.com/attribution/"),
+  );
+  document.body.append(usaCredit);
   // (the day's aerosols — Q5 C3 —: CAMS's through Open-Meteo, credited while the air is drawn with them)
   const aerosolCredit = Object.assign(document.createElement("div"), { className: "scenery-credit aerosol-credit", hidden: true });
   aerosolCredit.dataset.testid = "aerosol-credit";
@@ -9000,10 +9008,12 @@ async function main() {
     if (overtureCredit.hidden !== hideOverture) overtureCredit.hidden = hideOverture;
     // (a national source's tiles drawn — orthophotos, its relief's finer levels —: the one under the camera credited)
     const nationalDrawn = renderer.earthTiles.orthoFinest > 0 || renderer.earthTiles.finest > ZG1;
-    const hideOrthoCredit = !nationalDrawn || renderer.earthTiles.nationalAt === "swisstopo";
+    const hideOrthoCredit = !nationalDrawn || renderer.earthTiles.nationalAt !== "ign";
     if (orthoCredit.hidden !== hideOrthoCredit) orthoCredit.hidden = hideOrthoCredit;
     const hideSwissCredit = !nationalDrawn || renderer.earthTiles.nationalAt !== "swisstopo";
     if (swissCredit.hidden !== hideSwissCredit) swissCredit.hidden = hideSwissCredit;
+    const hideUsaCredit = !nationalDrawn || renderer.earthTiles.nationalAt !== "usa";
+    if (usaCredit.hidden !== hideUsaCredit) usaCredit.hidden = hideUsaCredit;
     const hideAerosolCredit = renderer.aerosolSource !== "cams";
     if (aerosolCredit.hidden !== hideAerosolCredit) aerosolCredit.hidden = hideAerosolCredit;
     applyTuning(settings);

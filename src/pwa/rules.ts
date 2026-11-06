@@ -55,6 +55,10 @@ export function classify(url: string, scope: string, method = "GET", dirs: reado
   if (u.hostname === "wmts.geo.admin.ch" && u.pathname.startsWith("/1.0.0/ch.swisstopo.swissimage/")) return "tile";
   if (u.hostname === "3d.geo.admin.ch" && u.pathname.startsWith("/ch.swisstopo.terrain.3d/") && u.pathname.endsWith(".terrain"))
     return "tile";
+  // (the USA's — lot D —: the National Map's imagery tiles, Mapterhorn's relief tiles)
+  if (u.hostname === "basemap.nationalmap.gov" && u.pathname.startsWith("/arcgis/rest/services/USGSImageryOnly/MapServer/tile/"))
+    return "tile";
+  if (u.hostname === "tiles.mapterhorn.com") return "tile";
   if (u.hostname === "tiles.openfreemap.org" && u.pathname.startsWith("/planet/")) return "tile";
   // (Overture Maps' buildings — PLAN-BATIMENTS-AAA B7 —: its archive's byte ranges, each kept under a key of its own, and
   // its releases' listing — network first, kept for offline)
