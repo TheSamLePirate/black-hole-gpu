@@ -33,6 +33,7 @@ import {
   turbineOf,
 } from "./turbines";
 import { SwissGround } from "./national";
+import { MapterhornGround } from "./usa-ground";
 import {
   bdtopoTiles as bdtopoWanted,
   COVER_CELL,
@@ -305,12 +306,15 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   };
   // (over Switzerland, swisstopo's ground under the trees and the buildings — I7 —, its canopy none: the land cover's)
   const survey = surveyOf(q);
-  const land: IgnLand | SwissGround | null =
+  // (and over the USA, Mapterhorn's 3DEP ground — lot D —, the tracer's own there: the feet not on Terrarium's 10–30 m)
+  const land: IgnLand | SwissGround | MapterhornGround | null =
     survey === "ign"
       ? new IgnLand(fetchSurvey, q.swGate ? IGN_GATE_SW : undefined)
       : survey === "swisstopo"
         ? new SwissGround(fetchSurvey)
-        : null;
+        : survey === "usa"
+          ? new MapterhornGround(fetchSurvey)
+          : null;
   const landReady = land?.prepare(q.lat, q.lon, surveyReach(radius));
   await raster(false);
   if (q.satellite) await raster(true);

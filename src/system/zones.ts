@@ -8,6 +8,7 @@
 // them, the IGN's canopy and ground blocks and its BD TOPO's buildings, swisstopo's ground) for every scene the camera
 // anywhere within it asks. Not in a zone: the regional pilot, the map's tiles (OSM's policy forbids it — §9.4).
 
+import { mapterhornUrl, USA_GROUND_Z } from "./usa-ground";
 import {
   eoxUrl,
   dayUrl,
@@ -258,13 +259,13 @@ export function sceneryZoneChains(
   }
   // (the surveys: where a scene's centre is under one — the disc's points every few hundred metres asked)
   const step = Math.max(500, rc / 40);
-  const under = { ign: false, swisstopo: false, other: false };
+  const under = { ign: false, swisstopo: false, usa: false, other: false };
   for (let dy = -rc; dy <= rc; dy += step)
     for (let dx = -rc; dx <= rc; dx += step) {
       if (dx * dx + dy * dy > rc * rc) continue;
       const v = surveyOf({ lat: lat + dy / ky, lon: lon + dx / kx, ign });
       under[v ?? "other"] = true;
-      if (v === "swisstopo") under.other = true;
+      if (v === "swisstopo" || v === "usa") under.other = true;
     }
   const reach = surveyReach(box.radius),
     slack = 0.02 * rc + 100;
@@ -285,6 +286,17 @@ export function sceneryZoneChains(
       for (let x = Math.floor((lon - dLon - padLon + 180) / s0); x <= Math.floor((lon + dLon + padLon + 180) / s0); x++)
         if (meets(x * s0 - 180, y * s0 - 90, (x + 1) * s0 - 180, (y + 1) * s0 - 90, padLon, padLat))
           out.push([swissTerrainUrl(SWISS_GROUND_G, x, y)]);
+  }
+  // (the USA's ground under the scenery — lot D —: Mapterhorn's tiles of USA_GROUND_Z over the scenes' box and its reach)
+  if (under.usa) {
+    const z = USA_GROUND_Z,
+      nT = 2 ** z,
+      padLat = reach / 111_195,
+      padLon = reach / (111_195 * Math.max(Math.cos(edge * DEG), 0.12));
+    const tx = (lo: number) => Math.floor(((lo + 180) / 360) * nT),
+      ty = (la: number) => Math.floor(((1 - Math.asinh(Math.tan(la * DEG)) / Math.PI) / 2) * nT);
+    for (let y = ty(lat + dLat + padLat); y <= ty(lat - dLat - padLat); y++)
+      for (let x = tx(lon - dLon - padLon); x <= tx(lon + dLon + padLon); x++) out.push([mapterhornUrl(z, x, y)]);
   }
   // (Overture's buildings where a centre is not the BD TOPO's: its listing, its tiles near the centres — pseudo-URLs whose
   // byte ranges the Service Worker resolves and keeps)

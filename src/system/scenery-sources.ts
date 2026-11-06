@@ -4,6 +4,7 @@
 // offline zones' (system/zones.ts sceneryZoneChains) from these very functions: a zone holds a scene's sources only if both
 // ask the same URLs, to the character.
 
+import { inUsa } from "./usa-ground";
 import { BDTOPO_Z, bdtopoUrl } from "./bdtopo";
 import { OVERTURE_LIST, overtureZoneUrl } from "./pmtiles";
 import { tileUrl } from "./earth-tiles";
@@ -124,9 +125,9 @@ export const STACKS_M = 700;
  *  are in) */
 export const bdtopoTiles = (lat: number, lon: number, radius: number, reach: number) =>
   tilesWithin(BDTOPO_Z, lat, lon, radius).slice(0, Math.ceil(256 * reach * reach));
-/** whose survey a scene's centre is under: the IGN's, swisstopo's, none */
+/** whose survey a scene's centre is under: the IGN's, swisstopo's, the USA's (lot D: Mapterhorn's 3DEP ground), none */
 export const surveyOf = (q: { lat: number; lon: number; ign?: boolean }) =>
-  !q.ign ? null : inIgnBox(q.lat, q.lon) ? "ign" : SWISSTOPO.holds(q.lat, q.lon) ? "swisstopo" : null;
+  !q.ign ? null : inIgnBox(q.lat, q.lon) ? "ign" : SWISSTOPO.holds(q.lat, q.lon) ? "swisstopo" : inUsa(q.lat, q.lon) ? "usa" : null;
 /** the survey's reach round a scene's centre [m]: its forest's disc */
 export const surveyReach = (radius: number) => radius + 250;
 

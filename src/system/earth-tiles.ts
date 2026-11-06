@@ -30,6 +30,7 @@ import type { Vec3 } from "../physics";
 import { cartToGeodetic, geodeticDirAt, squashedScale, WGS84_A, WGS84_F } from "./ellipsoid";
 import { IGN_GATE_SW } from "./scenery-data";
 import { insideOutline, type NationalSource, SWISSTOPO, sourceAt, sourcesBox, tileSource } from "./national";
+import { MAPTERHORN_Z1, mapterhornUrl, USA_OUTLINE, usgsImageryUrl } from "./usa-ground";
 import { IGN_MNH } from "./ign-canopy";
 import type { DelightStats } from "./ortho-delight";
 import { type DecodeReply, type DecodeRequest, decodeTile, ORTHO_FIT, pixels as decodePixels } from "./tile-decode";
@@ -727,18 +728,6 @@ export const IGN: NationalSource = {
 // others'), a z−1 tile's quarter for each of our 256² tiles (z 17 at most); their imagery from the National Map's cached tiles
 // (USGSImageryOnly, NAIP-based, z ≤ 16 ≈ 2 m; NAIP's 0.6 m only through its image server, 9–50 s an image: the offline zones'
 // later). Both CORS-open, public domain (USGS) and Mapterhorn's sources' credits. Outside its outline: nothing (the world's).
-export const MAPTERHORN_Z1 = 16;
-export const mapterhornUrl = (z: number, x: number, y: number) => `https://tiles.mapterhorn.com/${z}/${x}/${y}.webp`;
-export const usgsImageryUrl = (z: number, x: number, y: number) =>
-  `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/${z}/${y}/${x}`;
-/** the contiguous states' outline (lon, lat pairs; coarse, its coasts a little out to sea) */
-export const USA_OUTLINE = [
-  -124.8, 48.5, -123.3, 49.0, -95.15, 49.0, -94.8, 49.4, -89.6, 48.0, -84.8, 46.5, -82.4, 45.3, -82.5, 42.6, -83.1, 42.0, -78.9, 42.9,
-  -79.0, 43.3, -76.3, 44.2, -74.7, 45.0, -71.5, 45.0, -70.0, 46.7, -69.2, 47.45, -67.8, 47.1, -67.0, 45.0, -66.6, 44.6, -69.8, 41.2, -75.3,
-  35.0, -80.3, 31.8, -79.9, 25.1, -81.8, 24.3, -83.2, 25.3, -82.9, 29.1, -89.2, 28.8, -94.0, 29.2, -97.2, 25.8, -99.2, 26.5, -101.4, 29.8,
-  -104.0, 29.3, -104.4, 29.56, -105.0, 30.6, -105.6, 31.1, -106.2, 31.47, -106.5, 31.78, -108.2, 31.33, -111.1, 31.33, -114.8, 32.5, -117.2,
-  32.5, -120.6, 34.3, -124.5, 40.3, -124.8, 48.5,
-];
 /** the decoded 512² grids, the last few kept (four of our tiles share each) */
 const mapterhornFiles = new Map<string, Promise<Float32Array | null>>();
 const MAPTERHORN_KEPT = 24;

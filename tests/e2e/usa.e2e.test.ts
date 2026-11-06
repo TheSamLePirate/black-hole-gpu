@@ -138,8 +138,8 @@ describe.skipIf(!E2E)("the USA's relief and imagery", () => {
     expect(off.res).toBeGreaterThan(20);
     expect(on.slope).toBeGreaterThan(1.2 * off.slope);
     expect(Math.abs(on.summit - JUNGFRAU.h)).toBeLessThan(15);
-    // (the scenery's feet: still on the global data's ground over the USA — its survey ground (SwissGround's like) is the next
-    // lot: not asked here)
+    // (the scenery's feet on Mapterhorn's 3DEP ground — usa-ground.ts MapterhornGround —, the tracer's own there)
+    expect(on.sceneryRequests).toBeGreaterThan(0);
     expect(off.credit).toBe(false);
     expect(app.cdp.errors).toEqual([]);
   }, 720_000);
