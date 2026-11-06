@@ -6016,6 +6016,14 @@ fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32, Ls: vec3f, Elum: f32) 
   let v = cross(AUR_MAG, u);
   // (the Sun's magnetic longitude: midnight its opposite)
   let sunML = atan2(dot(Ls, v), dot(Ls, u));
+  // (a ray whose way through the shell stays under 45° of magnetic latitude — five points along it — cannot meet the oval, which
+  // never comes below 56° even at Kp 9 (its diffuse band included): skipped — at mid latitudes, the sky's rays cost nothing)
+  var mMax = 0.0;
+  for (var j = 0u; j < 5u; j++) {
+    let pj = ro + rd * mix(ta, tb, f32(j) * 0.25);
+    mMax = max(mMax, abs(dot(normalize(vec3f(pj.xy, pj.z * EARTH_AB)), AUR_MAG)));
+  }
+  if (mMax < 0.7071) { return vec3f(0.0); }
   let grow = 1.0 + 0.1 * kp;
   let kR = 2.0 * pow(10.0, 0.24 * kp);
   // (the sheets: the main arc, the poleward one at 0.45 of it, the equatorward one at 0.5 from Kp 5)

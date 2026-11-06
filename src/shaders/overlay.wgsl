@@ -182,8 +182,9 @@ fn sphereSpan(o: vec3f, d: vec3f, R: f32) -> vec2f {
 
 @fragment
 fn fsMagVol(i: FullOut) -> @location(0) vec4f {
-  // (at the traced image's own size: each pixel its own ray's depth — no stairs along the planet's limb)
-  let uv = i.pos.xy / MG.img.xy;
+  // (at half the traced image's size — measured on the M1: +5.5 ms at its full size —, each texel the ray through its 2 × 2
+  // block's middle)
+  let uv = (2.0 * floor(i.pos.xy) + 1.0) / MG.img.xy;
   let ndc = vec2f(2.0 * uv.x - 1.0, 1.0 - 2.0 * uv.y);
   let d = normalize(MG.fwd.xyz + ndc.x * MG.right.w * MG.up.w * MG.right.xyz + ndc.y * MG.right.w * MG.up.xyz);
   let o = -MG.centre.xyz;
@@ -191,7 +192,7 @@ fn fsMagVol(i: FullOut) -> @location(0) vec4f {
   let W = u32(MG.img.x);
   // (the largest of a 2 × 2 block: a frame traced in a checkerboard — one pixel in two — leaves the other's depth stale; a
   // checkerboard showed through the layers)
-  let p = min(vec2u(i.pos.xy), vec2u(MG.img.xy) - 2u);
+  let p = min(2u * vec2u(i.pos.xy), vec2u(MG.img.xy) - 2u);
   let dm = max(max(moments[p.y * W + p.x].y, moments[p.y * W + p.x + 1u].y), max(moments[(p.y + 1u) * W + p.x].y, moments[(p.y + 1u) * W + p.x + 1u].y));
   let tMax = dm / MG.centre.w;
   // (a static interleaved-gradient jitter: no flicker)
@@ -206,7 +207,8 @@ fn fsMagVol(i: FullOut) -> @location(0) vec4f {
     let sp = sphereSpan(o, d, 3.0 * rs);
     let t1 = min(sp.y, tMax);
     if (t1 > sp.x) {
-      let N = 40u;
+      // (24 steps: the shells' light integrated exactly across each — a coarse step loses nothing but their curvature)
+      let N = 24u;
       let dt = (t1 - sp.x) / f32(N);
       let wm = 0.07 * r0;
       let ws = 0.05 * rs;
@@ -239,7 +241,7 @@ fn fsMagVol(i: FullOut) -> @location(0) vec4f {
     let sp = sphereSpan(o, d, Rb);
     let t1 = min(sp.y, tMax);
     if (t1 > sp.x) {
-      let N = 36u;
+      let N = 24u;
       let dt = (t1 - sp.x) / f32(N);
       let z = MG.dip.xyz;
       for (var k = 0u; k < N; k++) {

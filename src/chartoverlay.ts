@@ -101,9 +101,9 @@ export class ChartOverlay {
     imgH: number,
   ) {
     const d = this.device;
-    // (at the traced image's size: its depth read pixel for pixel)
-    const hw = Math.max(1, imgW),
-      hh = Math.max(1, imgH);
+    // (at half the traced image's size: each texel its 2 × 2 block's ray and depth)
+    const hw = Math.max(1, Math.ceil(imgW / 2)),
+      hh = Math.max(1, Math.ceil(imgH / 2));
     if (!this.magTex || this.magTex.width !== hw || this.magTex.height !== hh) {
       this.magTex?.destroy();
       this.magTex = d.createTexture({

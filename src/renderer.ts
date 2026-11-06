@@ -2652,7 +2652,16 @@ export class Renderer {
         });
     }
     this.magnetoLabels = [];
+    // (a label behind the planet — its line of sight through the body's sphere before it — left out)
+    const hidden = (a: Vec3) => {
+      const la = Math.hypot(a[0], a[1], a[2]);
+      const u: Vec3 = [a[0] / la, a[1] / la, a[2] / la];
+      const b = u[0] * C[0] + u[1] * C[1] + u[2] * C[2];
+      const h = b * b - (C[0] * C[0] + C[1] * C[1] + C[2] * C[2]) + 1;
+      return h > 0 && b - Math.sqrt(h) < la;
+    };
     for (const l of labels) {
+      if (hidden(l.at)) continue;
       const q = proj(l.at);
       if (q && Math.abs(q[0]!) < 0.95 && Math.abs(q[1]!) < 0.92)
         this.magnetoLabels.push({ x: q[0]!, y: q[1]!, text: l.text, colour: l.colour });
@@ -4169,7 +4178,16 @@ export class Renderer {
     // (Jupiter near — AM3 —: its own activity, the setting's — not the Earth's live Kp —; Io's footprints north and south
     // [rad] in Params.mars, which only Mars reads (aurora-bodies.ts ioFeet: auroraJupiter))
     const jupNear = !!near && bodies[near.index]?.id === "jupiter";
-    const kp = near?.index === earthK ? Math.min(Math.max(kpNow.kp, 0), 9) : jupNear ? Math.min(Math.max(s.aurora ?? 0, 0), 9) : 0;
+    // (none while the eye is adapted to more than 1 000 lux — a hundredth of full sunlight —: even a Kp 9 storm's curtains would
+    // be under 0.5 % of a white surface there; the kernel then leaves them out — the live Kp keeps them on near the present)
+    const auroraSeen = this.eyeIncident < 0.01;
+    const kp = !auroraSeen
+      ? 0
+      : near?.index === earthK
+        ? Math.min(Math.max(kpNow.kp, 0), 9)
+        : jupNear
+          ? Math.min(Math.max(s.aurora ?? 0, 0), 9)
+          : 0;
     let jupD2 = 1;
     if (jupNear && kp > 0) {
       const io = toBodyFixed("jupiter", solarState("io", time).pos, time);

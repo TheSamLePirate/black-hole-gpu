@@ -44,3 +44,14 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Piste** : un NaN ou une exposition qui part (le posemètre après la coupe), le chemin des géantes proches
   (`giantInside`, la tuile de turbulence) sur l'hémisphère sud ; relire la luminance du posemètre et les pixels NaN dans
   cette vue.
+
+## Le coût de l'aurore terrestre de près, la nuit : +4,6 ms sur le M1
+
+- **Mesuré le 6 novembre 2026** (e2e `aurora-cost` sur kerr-mini, Nominal, plein écran, ABAB, médiane de 24 lectures) :
+  Tromsø, Kp 4, de nuit, regard au sud : 36,2 → 40,8 ms (échelle de rendu 0,75 des deux côtés), ~+12 %. Depuis 400 km :
+  +2,1 ms (échelles différentes, à refaire). Le schéma de la magnétosphère : +2,3 ms à échelle 1,00 après passage à la
+  demi-résolution (≥ +5,5 ms avant). Jupiter : +0,5 ms.
+- **Déjà fait** : 16 évaluations par rayon au lieu de 40 ; aucun noyau d'aurore quand l'œil est adapté à plus de 1 000 lux ;
+  les rayons qui restent sous 45° de latitude magnétique sautés (gain de ces deux tris non mesuré).
+- **Piste** : le cache par direction d'Alex (§ 7.5 : une carte octaédrique marchée depuis l'œil, une bande par image, lue par
+  la composition) — au-delà de ~100 km sans parallaxe ; la marche à ¼ de résolution recomposée.
