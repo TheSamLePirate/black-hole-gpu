@@ -451,13 +451,23 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.retry.outputs.page_url }}
     steps:
+      # (Pages sometimes stalls in `syncing_files` — 2026-11-06: 10 min for a site its deploys usually sync in
+      # 30 s —: the deployment it cancels on its timeout tried once more, from the same artifact)
       - id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+        with:
+          timeout: 900000
+      - id: retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 1200000
       - name: The addresses
         env:
-          URL: ${{ steps.deployment.outputs.page_url }}
+          URL: ${{ steps.deployment.outputs.page_url || steps.retry.outputs.page_url }}
           PREVIEW: ${{ needs.site.outputs.preview }}
           INEPTIE: ${{ needs.site.outputs.ineptie }}
         run: |

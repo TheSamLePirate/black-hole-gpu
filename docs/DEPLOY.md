@@ -44,6 +44,9 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
   8 MB, a warning when they come to 20 MB together; the binaries Git tracks warn past 560 MB and fail past
   600 MB in all; the LFS objects warn past 800 MB. Its budgets are raised in that file, in the change that
   needs it.
+- **The Pages deployment tried twice**: Pages sometimes stalls in `syncing_files` (2026-11-06: 10 min, against
+  the usual 30 s for the same 881 MB); the `deploy` job's first try times out at 15 min, then a second one from
+  the same artifact gets 20 min.
 - **A pull request** runs the same checks (`verify`) and the build, and deploys nothing.
 
 ## The dedicated server
