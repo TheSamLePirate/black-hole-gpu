@@ -107,6 +107,11 @@ import mslAim120Url from "../assets/traffic/msl-aim120.bin";
 import mslAim9xUrl from "../assets/traffic/msl-aim9x.bin";
 import mslSamUrl from "../assets/traffic/msl-sam.bin";
 import mslJsmUrl from "../assets/traffic/msl-jsm.bin";
+import guTelUrl from "../assets/traffic/gu-tel.bin";
+import guTankUrl from "../assets/traffic/gu-tank.bin";
+import guTruckUrl from "../assets/traffic/gu-truck.bin";
+import guBunkerUrl from "../assets/traffic/gu-bunker.bin";
+import { GROUND_UNITS, type GroundUnitId } from "./game/ground-units";
 import { MISSILE_SHAPES, type MissileMeshId } from "./game/missile-models";
 import cargoHullUrl from "../assets/traffic/cargo-hull.jpg";
 import cargoBridgeUrl from "../assets/traffic/cargo-bridge.jpg";
@@ -146,7 +151,7 @@ export type GroundMeshId =
   | "gs-chock-right"
   | "gs-deice"
   | "gs-belt";
-export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId | AarMeshId | GroundMeshId | MissileMeshId;
+export type TrafficMeshId = AirlinerId | ShipTypeId | CarrierId | AarMeshId | GroundMeshId | MissileMeshId | GroundUnitId;
 /** A mesh the craft's pass draws: a craft's, an airliner's, a ship's. */
 export type ShipMeshId = VesselId | TrafficMeshId;
 const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
@@ -182,6 +187,10 @@ const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
   "msl-aim9x": mslAim9xUrl,
   "msl-sam": mslSamUrl,
   "msl-jsm": mslJsmUrl,
+  "gu-tel": guTelUrl,
+  "gu-tank": guTankUrl,
+  "gu-truck": guTruckUrl,
+  "gu-bunker": guBunkerUrl,
 };
 /** The traffic's colour maps, a layer each (ship.wgsl: the materials 40, 41, 44–46); the carriers' after them
  *  (80–86), added with the first carrier drawn. */
@@ -229,6 +238,8 @@ export interface ShipInstance {
    *  burning: the plume's level 0–1 and the air about it 0–1 (thinner, longer high up) */
   fins?: number[];
   motor?: { level: number; air: number };
+  /** a ground unit (src/game/ground-units.ts): its turret's yaw and its arm's pitch [rad], its rails' missiles left, burnt 0–1 */
+  ground?: { yaw: number; pitch: number; left: number; burnt: number };
 }
 
 export interface ShipView {
@@ -2077,6 +2088,10 @@ export class ShipRenderer {
       "msl-aim9x": 23,
       "msl-sam": 23,
       "msl-jsm": 23,
+      "gu-tel": 24,
+      "gu-tank": 24,
+      "gu-truck": 24,
+      "gu-bunker": 24,
     } as const;
     let jetSlot = 0;
     // (the missiles' records written — up to the last one's instance —, their motors burning)
@@ -2103,6 +2118,7 @@ export class ShipRenderer {
       mirror: boolean;
       fins?: number[];
       motor?: ShipInstance["motor"];
+      ground?: ShipInstance["ground"];
     }[] = this.flown ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place, mirror: !!sea?.flown }] : [];
     for (const o of v.others ?? [])
       if (list.length < MAX_INST && this.meshes[o.id])
@@ -2119,6 +2135,7 @@ export class ShipRenderer {
           mirror: !!sea && (o.mirror ?? sea.flown),
           fins: o.fins,
           motor: o.motor,
+          ground: o.ground,
         });
     // (the nearest carrier within 20 km: the map's second half)
     let big = -1;
@@ -2168,6 +2185,14 @@ export class ShipRenderer {
         this.instData.set([f[0] ?? 0, f[1] ?? 0, f[2] ?? 0, f[3] ?? 0, shape.hingeZ, shape.roll0, 0, 0], parts * INST_FLOATS);
         mslRecs = Math.max(mslRecs, i + 1);
         if (it.motor && it.motor.level > 0) motors.push({ R: it.R, t: it.t, shape, ...it.motor });
+      }
+      // (a ground unit: its turret's and arm's pose, its rails' missiles, its burning — ship.wgsl groundPos)
+      const unit = GROUND_UNITS[it.id as GroundUnitId];
+      if (unit) {
+        parts = MSL_AT + i;
+        const g = it.ground ?? { yaw: 0, pitch: unit.rest, left: unit.rails, burnt: 0 };
+        this.instData.set([g.yaw, g.pitch, g.left, g.burnt, unit.turretZ, unit.armY, unit.armZ, 0], parts * INST_FLOATS);
+        mslRecs = Math.max(mslRecs, i + 1);
       }
       // (in the shadow maps: the first half's — 1 —, the second's — 2 —; hidden behind the traced image — bit 0 —,
       // mirrored in the sea — bit 1)

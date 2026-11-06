@@ -53,6 +53,7 @@ export default {
   "Mission editor": "Éditeur de mission",
   SAM: "SAM",
   Truck: "Camion",
+  Tank: "Char",
   Bunker: "Bunker",
   Drone: "Drone",
   "Real flight": "Vol réel",

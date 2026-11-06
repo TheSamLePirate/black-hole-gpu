@@ -7732,6 +7732,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     /** a missile's fins' deflections [rad] and its motor (src/game/missile-models.ts) */
     fins?: number[];
     motor?: { level: number; air: number };
+    /** a ground unit's pose (src/game/ground-units.ts) */
+    ground?: { yaw: number; pitch: number; left: number; burnt: number };
   }[] = [];
   /** the scenery's exclusions: the sites' runways, the landscapes' viewpoints, the world's runways near (RD13) */
   private sceneryExclusions: SceneryExclusion[] = SCENERY_EXCLUSIONS;
@@ -7911,6 +7913,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
           mirror: o.mirror,
           fins: o.fins,
           motor: o.motor,
+          ground: o.ground,
         }))
     );
   }

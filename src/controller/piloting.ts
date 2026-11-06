@@ -641,7 +641,12 @@ function mountTarget(this: CameraController): MountPose {
   if (v === "target" || v === "missile") {
     // (the lens on the fight's focus from behind the craft, the horizon level; nothing to look at: behind the craft)
     const F = this.focusShip();
-    const eye: Vec3 = [0, 0.15 * V.viewDist + 2, -0.55 * V.viewDist];
+    // (the eye behind the craft, moved out to its side towards the target — under its belly for one below, off a wing for one
+    // abeam —: from above it, the line to a target on the ground ran through the craft itself, Sam)
+    const d = F ? Math.hypot(F.q[0], F.q[1]) : 0;
+    const off: Vec3 = d > 1 ? [F!.q[0] / d, F!.q[1] / d, 0] : [0, 1, 0];
+    const k = 0.5 * V.viewDist + 2;
+    const eye: Vec3 = F ? [off[0] * k, off[1] * k + 0.05 * V.viewDist, -0.55 * V.viewDist] : [0, 0.15 * V.viewDist + 2, -0.55 * V.viewDist];
     return F ? { eye, aim: F.q, up: F.up } : { eye, aim: lin(V.centre, 1, [0, 0, 1], 40) };
   }
   if (v === "director") return this.cineOut ?? { eye: lin(V.centre, 1, [0, 0.25 * V.viewDist, -V.viewDist], 1), aim: V.centre };

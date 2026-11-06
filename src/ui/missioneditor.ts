@@ -295,6 +295,7 @@ export class MissionEditor {
   private kindName(k: DraftUnit["kind"]): string {
     const n: Record<DraftUnit["kind"], string> = {
       sam: t("SAM"),
+      tank: t("Tank"),
       truck: t("Truck"),
       bunker: t("Bunker"),
       drone: t("Drone"),

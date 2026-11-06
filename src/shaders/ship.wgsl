@@ -451,10 +451,34 @@ fn finPos(v: VIn, ii: u32) -> vec3f {
   let h = vec3f(0.0, 0.0, inst[u32(inst[ii].flags.w + 0.5)].model[1].x);
   return h + rotAbout(v.pos - h, a.xyz, a.w);
 }
-/** A vertex where it is drawn, in its craft's frame (the F-35's parts posed; the Ranger's gear and sticks; a missile's fins). */
+// The war's ground units (scripts/build-ground-units.ts, src/game/ground-units.ts): the turret (material 75) turned about y at
+// z = turretZ; the arm or the gun (76) and the missiles on its rails (78) pitched about x at (armY, armZ), then turned with the
+// turret; rail k's missile (its k in uv.x) gone once fired — folded onto the arm's pivot. Their record: model[0] = (yaw, pitch,
+// missiles left, burnt), model[1] = (turretZ, armY, armZ).
+fn isTurret(m: f32) -> bool { return m > 74.5 && m < 78.5; }
+fn rotX(q: vec3f, t: f32) -> vec3f { return vec3f(q.x, q.y * cos(t) - q.z * sin(t), q.y * sin(t) + q.z * cos(t)); }
+fn rotY(q: vec3f, t: f32) -> vec3f { return vec3f(q.x * cos(t) + q.z * sin(t), q.y, -q.x * sin(t) + q.z * cos(t)); }
+fn groundPose(q: vec3f, v: VIn, ii: u32, isNormal: bool) -> vec3f {
+  let R = inst[u32(inst[ii].flags.w + 0.5)].model;
+  let tp = vec3f(0.0, 0.0, R[1].x);
+  let ap = vec3f(0.0, R[1].y, R[1].z);
+  var p = q;
+  // (the arm's pitch: + its front up — about x, the unit's left)
+  if (v.mat > 75.5) { p = select(ap + rotX(p - ap, -R[0].y), rotX(p, -R[0].y), isNormal); }
+  return select(tp + rotY(p - tp, R[0].x), rotY(p, R[0].x), isNormal);
+}
+fn groundPos(v: VIn, ii: u32) -> vec3f {
+  let R = inst[u32(inst[ii].flags.w + 0.5)].model;
+  // (a missile fired: its rail empty — the vertex folded onto the arm's pivot, nothing drawn)
+  if (v.mat > 77.5 && v.uv.x + 0.5 > R[0].z) { return vec3f(0.0, R[1].y, R[1].z); }
+  return groundPose(v.pos, v, ii, false);
+}
+/** A vertex where it is drawn, in its craft's frame (the F-35's parts posed; the Ranger's gear and sticks; a missile's fins; a
+ *  ground unit's turret and arm). */
 fn shipPos(v: VIn, ii: u32) -> vec3f {
   if (isJet(v.mat)) { return jetPos(v, ii); }
   if (isFin(v.mat) && inst[ii].flags.w > 0.5) { return finPos(v, ii); }
+  if (isTurret(v.mat) && inst[ii].flags.w > 0.5) { return groundPos(v, ii); }
   return stickPos(v);
 }
 fn jetAo(v: VIn) -> f32 { return select(v.ao, fract(v.ao), isJet(v.mat)); }
@@ -531,6 +555,7 @@ fn shipVertex(v: VIn, ii: u32) -> VOut {
     let a = finAxis(v, ii);
     nrm = rotAbout(v.nrm, a.xyz, a.w);
   }
+  if (isTurret(v.mat) && inst[ii].flags.w > 0.5) { nrm = groundPose(v.nrm, v, ii, true); }
   if (a320Bent(v)) { nrm = a320FlexN(pos, nrm, a320Tip(ii)); }
   let p = (M * vec4f(pos, 1.0)).xyz;
   o.p = p;
@@ -1129,6 +1154,20 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       coat = 0.35 * coat;
     }
     case 97u: { albedo = vec3f(0.015, 0.018, 0.022); metal = 0.0; rough = 0.04; coat = 1.0; }
+    // the ground units (scripts/build-ground-units.ts): their paint — a matte military finish, dust over it —, the turret and the
+    // arm the same; the tracks' and tyres' rubber; the 9M38s on the rails, white; the concrete
+    case 74u, 75u, 76u: {
+      let rg = in.uv.x;
+      let g = floor(rg / 256.0 + 1e-3);
+      albedo = pow(clamp(vec3f((rg - 256.0 * g) / 255.0, g / 255.0, in.uv.y), vec3f(0.0), vec3f(1.0)), vec3f(2.2));
+      albedo = mix(albedo, vec3f(0.36, 0.32, 0.25), 0.25 * grime);
+      metal = 0.05;
+      rough = 0.72 + 0.15 * grime;
+      coat = 0.0;
+    }
+    case 77u: { albedo = vec3f(0.035, 0.034, 0.032); metal = 0.0; rough = 0.9; coat = 0.0; }
+    case 78u: { albedo = vec3f(0.62, 0.64, 0.6); metal = 0.05; rough = 0.45; coat = 0.2 * coat; }
+    case 79u: { albedo = vec3f(0.42, 0.41, 0.38) * (0.85 + 0.3 * grime); metal = 0.0; rough = 0.92; coat = 0.0; }
     case 98u: { albedo = vec3f(0.09, 0.085, 0.08); metal = 0.85; rough = 0.55; coat = 0.0; }
     case 42u: { albedo = vec3f(0.03); metal = 0.0; rough = 0.08; coat = 0.0; }
     // the F-35's panoramic display: its picture's light through an LCD panel under an anti-reflective glass (an
@@ -1155,6 +1194,13 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     case 25u: { albedo = vec3f(0.25); metal = 0.0; rough = 0.8; coat = 0.0; }
     case 26u: { albedo = vec3f(0.62, 0.62, 0.6); metal = 0.3; rough = 0.5; coat = 0.2 * coat; }
     default: {}
+  }
+  // (a ground unit destroyed — its record's burnt, 0…1 over its first seconds —: charred, its paint gone to soot)
+  if (part >= 74u && part <= 79u && I.flags.w > 0.5) {
+    let burnt = inst[u32(I.flags.w + 0.5)].model[0].w;
+    albedo = mix(albedo, vec3f(0.025, 0.022, 0.02), 0.9 * burnt);
+    rough = mix(rough, 0.95, burnt);
+    metal = mix(metal, 0.0, burnt);
   }
   rough = clamp(rough * S.mat.z, 0.03, 1.0);
   let alpha = rough * rough;

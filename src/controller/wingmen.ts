@@ -641,7 +641,7 @@ function nearestHostile(c: CameraController, w: Wingman): number | null {
   let best: number | null = null,
     bd = Infinity;
   for (const q of CW.targets) {
-    if (!q.alive || q.friendly || q.peer !== undefined || q.site || q.kind === "truck" || q.kind === "bunker") continue;
+    if (!q.alive || q.friendly || q.peer !== undefined || q.site || q.kind === "truck" || q.kind === "tank" || q.kind === "bunker") continue;
     const d = Math.hypot(q.p[0] - P[0], q.p[1] - P[1], q.p[2] - P[2]) + (taken.has(q.id) ? 20_000 : 0);
     if (d < bd) (bd = d), (best = q.id);
   }

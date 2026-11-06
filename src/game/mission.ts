@@ -19,7 +19,7 @@ export interface Zone extends GeoPt {
   radius: number;
 }
 
-export type UnitKind = "carrier" | "drone" | "fighter" | "sam" | "truck" | "bunker" | "airliner" | "traffic" | "ship";
+export type UnitKind = "carrier" | "drone" | "fighter" | "sam" | "tank" | "truck" | "bunker" | "airliner" | "traffic" | "ship";
 
 export interface MissionUnit {
   id: string;

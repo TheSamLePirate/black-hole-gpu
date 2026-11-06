@@ -243,7 +243,7 @@ export async function completeMission(
     if (!start.loadout)
       start.loadout = units.some((u) => u.kind === "ship")
         ? "as"
-        : units.some((u) => u.kind === "sam" || u.kind === "truck" || u.kind === "bunker")
+        : units.some((u) => u.kind === "sam" || u.kind === "tank" || u.kind === "truck" || u.kind === "bunker")
           ? "ag"
           : "aa";
   }

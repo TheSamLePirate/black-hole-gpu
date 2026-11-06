@@ -24,7 +24,11 @@ import {
   type V3,
 } from "../game/combat";
 import { enu } from "../game/challenges";
+import { M_METRES } from "../units";
+import { earthView } from "./netcraft";
+import { enuAt } from "./traffic";
 import { airDensity, finCommand, MISSILE_MESH, MISSILE_SHAPES, missileAxes } from "../game/missile-models";
+import { GROUND_MESH, GROUND_UNITS, groundPose } from "../game/ground-units";
 import { proxyGone, proxyStep, worldIdOf } from "./fightproxy";
 import { type GunState, gunFunnel, gunSolution, SIGHT, trackAccel } from "../game/gunsight";
 import type { MatchRules } from "../game/match";
@@ -383,6 +387,39 @@ export function enuToCam(c: CameraController, Cm: (v: Vec3 | null) => Vec3 | nul
   };
 }
 
+/**
+ * (the fight on the globe — Sam, 6 Nov 2026: « le lance-missile glisse sur le sol… est-il bien au sol ? ») A point of the
+ * fight's flat frame — east, north of its anchor [m], up over the ellipsoid — placed where it is on the Earth (WGS84: its
+ * latitude and longitude the frame's — game/challenges.ts enu's inverse —, its height its own, or a ground unit's the relief
+ * drawn under it), from the flown craft on the camera's axes [m]; a direction of the frame turned into the axes at that
+ * place. The flat frame's vector taken in the craft's axes had put a unit 5 km off some 30 m from where it stood — the frames
+ * part by 0.36° 40 km from the anchor —, sliding as the craft flew, floating or sunk on the 250 m grid's ground.
+ */
+function globeMap(c: CameraController): {
+  pos: (p: V3, onGround?: boolean) => Vec3;
+  dir: (at: V3, v: V3) => Vec3;
+} | null {
+  const C = c.combat;
+  const E = C ? earthView(c) : null;
+  if (!C || !E) return null;
+  const a = C.def.anchor;
+  const ll = (p: V3) => [a.lat + p[1] / (D * R_EARTH), a.lon + p[0] / (D * R_EARTH * Math.cos(a.lat * D))] as const;
+  const toCam = (w: readonly number[]) => E.toCam(E.toHome([w[0]!, w[1]!, w[2]!]));
+  return {
+    pos: (p, onGround = false) => {
+      const [lat, lon] = ll(p);
+      const h = onGround ? groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) : p[2];
+      const X = bodyFixedOf("earth", lat, lon, h);
+      return toCam([X[0] * M_METRES - E.p0[0]!, X[1] * M_METRES - E.p0[1]!, X[2] * M_METRES - E.p0[2]!]);
+    },
+    dir: (at, v) => {
+      const [lat, lon] = ll(at);
+      const L = enuAt(lat, lon);
+      return toCam([0, 1, 2].map((k) => L.E[k]! * v[0] + L.N[k]! * v[1] + L.U[k]! * v[2]));
+    },
+  };
+}
+
 /** The camera's axes as a mapping of local vectors (telemetry's C). */
 function camMap(c: CameraController) {
   const cam = cameraFrame(c.s);
@@ -401,12 +438,15 @@ function combatShips(this: CameraController): {
   hidden: boolean;
   fins?: number[];
   motor?: { level: number; air: number };
+  ground?: { yaw: number; pitch: number; left: number; burnt: number };
 }[] {
   const C = this.combat;
   const P = C?.last;
   if (!C || !P) return [];
   const M = enuToCam(this, camMap(this));
   if (!M) return [];
+  // (each placed on the globe — globeMap —; the flat frame's mapping where the Earth's view is not there)
+  const G = globeMap(this);
   const pose: F35Pose = { ...restPose(), gear: 0, canopy: 0 };
   const out: {
     id: ShipMeshId;
@@ -416,6 +456,7 @@ function combatShips(this: CameraController): {
     hidden: boolean;
     fins?: number[];
     motor?: { level: number; air: number };
+    ground?: { yaw: number; pitch: number; left: number; burnt: number };
   }[] = [];
   for (const q of C.world.targets) {
     // (an outside craft taken in: its own drawing while alive — its wreck the fight's)
@@ -436,7 +477,13 @@ function combatShips(this: CameraController): {
         y = P.p[1] + r[1] * s;
       hidden = P.p[2] + r[2] * s < C.world.groundZ(x, y);
     }
-    out.push({ id: (q.mesh ?? "f35") as ShipMeshId, rel: M(r), axes: [M(left), M(u), M(f)], jet: pose, hidden });
+    out.push({
+      id: (q.mesh ?? "f35") as ShipMeshId,
+      rel: G ? G.pos(q.p) : M(r),
+      axes: G ? [G.dir(q.p, left), G.dir(q.p, u), G.dir(q.p, f)] : [M(left), M(u), M(f)],
+      jet: pose,
+      hidden,
+    });
     // (a tanker refuelling us: its hoses, its pods' lights, our probe — controller/aar.ts)
     if (this.aar?.tanker === q.id && q.alive && !hidden) out.unshift(...this.aarShips(P, M));
   }
@@ -471,14 +518,60 @@ function combatShips(this: CameraController): {
     const level = m.t < burn ? Math.min(1, m.t / 0.15) : 0;
     msl.push({
       id,
-      rel: M(r),
-      axes: [M(axes[0]), M(axes[1]), M(axes[2])],
+      rel: G ? G.pos(m.p) : M(r),
+      axes: G ? [G.dir(m.p, axes[0]), G.dir(m.p, axes[1]), G.dir(m.p, axes[2])] : [M(axes[0]), M(axes[1]), M(axes[2])],
       hidden,
       fins: m.fin,
       motor: level > 0 ? { level, air: rho / 1.225 } : undefined,
     });
   }
-  return [...out.slice(0, 16), ...msl];
+  // (the ground units within 25 km — the war mode's SAM launchers, tanks, trucks, bunkers —, the nearest sixteen: on the ground,
+  // their turret turned onto us while they engage, the launcher's arm raised, the missiles it has left on its rails, a wreck
+  // burnt out — game/ground-units.ts)
+  const gnd: typeof out = [];
+  const units = W.targets
+    .filter((q) => GROUND_MESH[q.kind] && !q.proxy && (q.alive || W.t - q.diedAt < 600))
+    .map((q) => ({ q, r: [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]] as V3 }))
+    .filter((e) => Math.hypot(...e.r) < 25_000)
+    .sort((a, b) => Math.hypot(...a.r) - Math.hypot(...b.r))
+    .slice(0, 16);
+  for (const { q, r } of units) {
+    const id = GROUND_MESH[q.kind]!;
+    const shape = GROUND_UNITS[id];
+    const f: V3 = [q.fwd[0], q.fwd[1], 0];
+    const fl = Math.hypot(f[0], f[1]) || 1;
+    const fwd: V3 = [f[0] / fl, f[1] / fl, 0];
+    const left: V3 = [-fwd[1], fwd[0], 0];
+    const d = Math.hypot(...r);
+    // (engaging: alive, within its reach — a SAM's, a tank's 4 km)
+    const reach = q.kind === "sam" ? MISSILES.sam.rMax : q.kind === "tank" ? 4000 : 0;
+    const threat: [number, number] | null = q.alive && d < reach ? [-r[0], -r[1]] : null;
+    const dt = q.gpose ? Math.max(W.t - q.gpose.at, 0) : 0;
+    const g = groundPose(
+      shape,
+      Math.atan2(fwd[0], fwd[1]),
+      threat,
+      q.gpose,
+      dt,
+      q.site?.missiles ?? shape.rails,
+      q.alive ? null : W.t - q.diedAt,
+    );
+    q.gpose = { yaw: g.yaw, pitch: g.pitch, at: W.t };
+    let hidden = false;
+    for (let s = 1; s < 16 && !hidden; s++) {
+      const k = s / 16;
+      hidden = P.p[2] + (r[2] + 2) * k < W.groundZ(P.p[0] + r[0] * k, P.p[1] + r[1] * k);
+    }
+    // (on the ground drawn — the relief's own height under it, on the globe)
+    gnd.push({
+      id,
+      rel: G ? G.pos(q.p, true) : M(r),
+      axes: G ? [G.dir(q.p, left), G.dir(q.p, [0, 0, 1]), G.dir(q.p, fwd)] : [M(left), M([0, 0, 1]), M(fwd)],
+      hidden,
+      ground: g,
+    });
+  }
+  return [...out.slice(0, 16), ...msl, ...gnd];
 }
 
 /**
@@ -660,6 +753,14 @@ function combatFocus(this: CameraController): { p: V3; kind: "missile" | "wreck"
     .filter((q) => q.wreck && (Number.isNaN(q.wreck.crashedAt) || W.t - q.wreck.crashedAt < 8))
     .sort((a, b) => b.diedAt - a.diedAt)[0];
   if (wreck) return { p: [...wreck.p] as V3, kind: "wreck", id: wreck.id };
+  // (our bomb falling: on what it is aimed at; a ground unit destroyed under 15 s ago: on its wreck — the war mode's)
+  const bomb = W.bombs.filter((b) => b.alive).at(-1);
+  if (bomb) {
+    const q = W.targets.find((x) => x.alive && Math.hypot(x.p[0] - bomb.aim[0], x.p[1] - bomb.aim[1]) < 30);
+    return { p: [...bomb.aim] as V3, kind: "wreck", id: q?.id ?? -1 };
+  }
+  const gone = W.targets.filter((q) => isGround(q) && !q.alive && W.t - q.diedAt < 15).sort((a, b) => b.diedAt - a.diedAt)[0];
+  if (gone) return { p: [...gone.p] as V3, kind: "wreck", id: gone.id };
   // (another player shot down — ui/netmatch.ts —: his craft falling, his crash less than 8 s ago)
   const fallen = W.targets.filter((q) => q.peer !== undefined && q.falling).sort((a, b) => b.diedAt - a.diedAt)[0];
   if (fallen) return { p: [...fallen.p] as V3, kind: "wreck", id: fallen.id };
@@ -672,20 +773,45 @@ function combatFocus(this: CameraController): { p: V3; kind: "missile" | "wreck"
 }
 
 /** The fight's focus on the flown craft's axes (x left, y top, z nose) [m] and the world's up there; null: none. */
+/** (the views on the fight read the craft's axes — shipAxesLocal —, which read the view's pose: its mount's place — mountTarget
+ *  —, which for these views reads them: a placing made with no pose drawn yet — a flyAt with the lens on the target — ran that
+ *  round for ever, the page's stack overflowed. The pose drawn last read instead, and a reentrant call none.) */
+let focusDepth = 0;
 function focusShip(this: CameraController): { q: Vec3; up: Vec3; size: number } | null {
-  const F = this.combatFocus();
-  const P = this.combat?.last;
-  const cam = cameraFrame(this.s);
-  const fr = this.sfFrame(cam);
+  if (focusDepth) return null;
+  focusDepth++;
+  try {
+    return focusShipOf(this);
+  } finally {
+    focusDepth--;
+  }
+}
+function focusShipOf(c: CameraController): { q: Vec3; up: Vec3; size: number } | null {
+  const self = c;
+  const F = self.combatFocus();
+  const P = self.combat?.last;
+  const cam = cameraFrame(self.s);
+  const fr = self.sfFrame(cam);
   if (!F || !P || !fr) return null;
   const d = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
-  const ax = this.shipAxesLocal(cam)
+  const ax = self
+    .shipAxesLocal(cam, self.drawnMatrix())
     .map((a) => fr.fromLocal(a))
     .map((a) => [d(a, fr.east), d(a, fr.north), d(a, fr.up)] as Vec3);
   const r: Vec3 = [F.p[0] - P.p[0], F.p[1] - P.p[1], F.p[2] - P.p[2]];
   // (how much of the world to frame about it [m]: a ship's length, an aircraft's span — with room)
-  const big = this.combat!.world.target(F.id)?.kind;
+  const tq = self.combat!.world.target(F.id);
+  const big = tq?.kind;
   const size = big === "ship" ? 300 : big === "airliner" ? 140 : 60;
+  // (on the globe where it is drawn — globeMap; a ground unit on the relief drawn —: the lens on the flat frame's place had
+  // framed the ground tens of metres beside it)
+  const G = globeMap(self);
+  if (G) {
+    const S = self.drawnMatrix();
+    const toShip = (v: Vec3): Vec3 => [0, 1, 2].map((i) => v[0] * S[0]![i]! + v[1] * S[1]![i]! + v[2] * S[2]![i]!) as Vec3;
+    const ground = (tq ? isGround(tq) && !!GROUND_MESH[tq.kind] : false) || (F.kind === "wreck" && !tq?.ai);
+    return { q: toShip(G.pos(F.p, ground)), up: toShip(G.dir(F.p, [0, 0, 1])), size };
+  }
   return { q: [d(r, ax[0]!), d(r, ax[1]!), d(r, ax[2]!)], up: [ax[0]![2], ax[1]![2], ax[2]![2]], size };
 }
 
@@ -695,23 +821,40 @@ function focusShip(this: CameraController): { q: Vec3; up: Vec3; size: number } 
  * as it was. Null: none fired, or ended long ago.
  */
 function missileShip(this: CameraController): { q: Vec3; fwd: Vec3; up: Vec3; alive: boolean } | null {
-  const C = this.combat;
+  if (focusDepth) return null;
+  focusDepth++;
+  try {
+    return missileShipOf(this);
+  } finally {
+    focusDepth--;
+  }
+}
+function missileShipOf(self: CameraController): { q: Vec3; fwd: Vec3; up: Vec3; alive: boolean } | null {
+  const C = self.combat;
   const P = C?.last;
   if (!C || !P) return null;
   const W = C.world;
   const m = W.missiles
     .filter((x) => x.owner === "blue" && !x.remote && (x.alive || (x.diedAt !== undefined && W.t - x.diedAt < 2.5)))
     .sort((a, b) => Number(b.alive) - Number(a.alive) || b.id - a.id)[0];
-  const cam = cameraFrame(this.s);
-  const fr = this.sfFrame(cam);
+  const cam = cameraFrame(self.s);
+  const fr = self.sfFrame(cam);
   if (!m || !fr) return null;
   const d = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
-  const ax = this.shipAxesLocal(cam)
+  const ax = self
+    .shipAxesLocal(cam, self.drawnMatrix())
     .map((a) => fr.fromLocal(a))
     .map((a) => [d(a, fr.east), d(a, fr.north), d(a, fr.up)] as Vec3);
   const on = (v: ArrayLike<number>): Vec3 => [d(v, ax[0]!), d(v, ax[1]!), d(v, ax[2]!)];
   const r: Vec3 = [m.p[0] - P.p[0], m.p[1] - P.p[1], m.p[2] - P.p[2]];
   const nose = missileAxes(m.v, m.lat)[2];
+  // (on the globe, as it is drawn — globeMap —: a vector on the camera's axes into the craft's, through the pose drawn last)
+  const G = globeMap(self);
+  if (G) {
+    const S = self.drawnMatrix();
+    const toShip = (c: Vec3): Vec3 => [0, 1, 2].map((i) => c[0] * S[0]![i]! + c[1] * S[1]![i]! + c[2] * S[2]![i]!) as Vec3;
+    return { q: toShip(G.pos(m.p)), fwd: toShip(G.dir(m.p, nose)), up: toShip(G.dir(m.p, [0, 0, 1])), alive: m.alive };
+  }
   return { q: on(r), fwd: on(nose), up: [ax[0]![2], ax[1]![2], ax[2]![2]], alive: m.alive };
 }
 

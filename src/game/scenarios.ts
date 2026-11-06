@@ -88,4 +88,37 @@ export const SCENARIOS: Scenario[] = [
     ],
     limit: 600,
   },
+  {
+    // (the war mode — Sam, 6 Nov 2026 —: the National Training Center's range at Fort Irwin, where armour trains: an armoured
+    // column on its road, two SA-11 batteries covering it — their launchers' turrets turning onto the jet, their missiles
+    // leaving the rails —, the trucks of its supply, two bunkers)
+    id: "war",
+    title: { fr: "Guerre : colonne blindée", en: "War: armoured column" },
+    brief: {
+      fr: "Une colonne de chars, ses camions et ses bunkers sur le champ de tir de Fort Irwin, sous la protection de deux batteries SA-11. Restez sous 150 m pour leur échapper, détruisez les lanceurs d'abord, puis la colonne aux JDAM.",
+      en: "A column of tanks, its trucks and bunkers on the Fort Irwin range, covered by two SA-11 batteries. Stay under 150 m to slip them, kill the launchers first, then the column with the JDAMs.",
+    },
+    anchor: { lat: 35.3, lon: -116.62 },
+    start: { e: -6000, n: -38_000, agl: 400, hdg: 10, speed: 230 },
+    loadout: "ag",
+    targets: [
+      { kind: "sam", at: [-2500, 3000, 0], hdg: 190, name: "SA-11 NORTH" },
+      { kind: "sam", at: [3200, -1500, 0], hdg: 220, name: "SA-11 EAST" },
+      ...[0, 1, 2, 3, 4, 5].map((k) => ({
+        kind: "tank" as const,
+        at: [-400 + 22 * k, -1200 + 60 * k, 0] as [number, number, number],
+        hdg: 20,
+        name: `TANK ${k + 1}`,
+      })),
+      ...[0, 1, 2, 3].map((k) => ({
+        kind: "truck" as const,
+        at: [-480 + 18 * k, -1500 - 45 * k, 0] as [number, number, number],
+        hdg: 20,
+        name: `TRUCK ${k + 1}`,
+      })),
+      { kind: "bunker", at: [900, 1800, 0], hdg: 180, name: "BUNKER 1" },
+      { kind: "bunker", at: [1100, 1650, 0], hdg: 180, name: "BUNKER 2" },
+    ],
+    limit: 900,
+  },
 ];

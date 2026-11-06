@@ -188,7 +188,7 @@ export const loadoutMass = (l: Loadout) =>
 
 // ------------------------------------------------------------------------------------ the world's things
 
-export type TargetKind = "drone" | "fighter" | "sam" | "truck" | "bunker" | "airliner" | "ship";
+export type TargetKind = "drone" | "fighter" | "sam" | "tank" | "truck" | "bunker" | "airliner" | "ship";
 
 export interface Target {
   id: number;
@@ -257,6 +257,8 @@ export interface Target {
   proxy?: string;
   /** a remote target's last placing [s of the world] (its smoothing) */
   syncAt?: number;
+  /** (drawn) a ground unit's turret and arm as they last were [rad], the world's time then (src/game/ground-units.ts) */
+  gpose?: { yaw: number; pitch: number; at: number };
 }
 
 export interface Missile {
@@ -367,6 +369,8 @@ const SPEC: Record<TargetKind, { hp: number; rcs: number; speed: number; gMax: n
   drone: { hp: 30, rcs: 0.5, speed: 120, gMax: 3, missiles: 0 },
   fighter: { hp: 100, rcs: 4, speed: 260, gMax: 7.5, missiles: 2 },
   sam: { hp: 150, rcs: 20, speed: 0, gMax: 0, missiles: 4 },
+  // (a main battle tank — the war mode —: its armour taking two of a JDAM's near misses)
+  tank: { hp: 120, rcs: 15, speed: 0, gMax: 0, missiles: 0 },
   truck: { hp: 40, rcs: 10, speed: 0, gMax: 0, missiles: 0 },
   bunker: { hp: 300, rcs: 50, speed: 0, gMax: 0, missiles: 0 },
   airliner: { hp: 80, rcs: 40, speed: 220, gMax: 1.4, missiles: 0 },
@@ -1128,7 +1132,8 @@ export class CombatWorld {
             kind: "sam",
             owner: "red",
             from: q.id,
-            p: add(q.p, [0, 0, 5]),
+            // (off its launcher's rails — game/ground-units.ts: the 9A310's arm, 3.4 m up)
+            p: add(q.p, [0, 0, 3.4]),
             v: mul(unit(add(unit(r), [0, 0, 0.6])), 60),
             t: 0,
             target: T.ref,
