@@ -125,6 +125,9 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
     HAS_SURFACE: has(4096),
     HAS_SCENERY: has(8192),
     HAS_AURORA: has(16384),
+    // (the other worlds' auroras — the giants', Mars's and Venus's: trace.wgsl auroraGiant, auroraRocky —: out of the Earth-raster
+    // profile, an Earth-only one — its kernels over their inlined-size budgets with them, tests/kernel-budget.test.ts)
+    AURORA_OTHERS: profile ? 0 : has(16384),
     HAS_TERRAIN_CACHE: ground ? has(FEATURE_TERRAIN_CACHE) : 0,
     HAS_TERRAIN_RASTER: ground && o.rasterHint ? has(FEATURE_TERRAIN_RASTER) : 0,
     // (the raster's companion: the traced kernels of the Earth-raster profile without the near ground's sub-pixel detail —

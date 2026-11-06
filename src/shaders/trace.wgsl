@@ -218,6 +218,7 @@ override HAS_SCENERY: bool = true;
 override HAS_SURFACE: bool = true;
 override HAS_WX: bool = true;     // the weather near the camera (P.wx: its haze, fog, layers — out of the kernel in fair weather)
 override HAS_AURORA: bool = true; // the auroras over the Earth (P.bary.zw, S2: out of the kernel when none asked)
+override AURORA_OTHERS: bool = true; // the giants', Mars's and Venus's auroras (AM3–AM6): out of the Earth-raster profile's kernels
 // the hole's and the mouth's metrics (O13): off in our universe from afar — the camera beyond the mouth's
 // Dneg region, the region under a pixel —, every ray straight through our bodies to our sky, the Kerr and
 // Dneg integrators out of the kernel (its registers)
@@ -12094,10 +12095,10 @@ fn earthLookCompose(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f
     o.col += aur * air.T * select(1.0 - alpha, 1.0, airHeight(ro) > 120e3);
   }
   // the giants' (AM3–AM4): above their cloud decks (their scale in bary.w)
-  if (HAS_AURORA && s.giant >= 5u && P.bary.z > 0.0) {
+  if (HAS_AURORA && AURORA_OTHERS && s.giant >= 5u && P.bary.z > 0.0) {
     o.col += auroraRocky(s.giant, ro, rd, select(3e38, tHit, tHit > 0.0), jit, Ls) * luminance(E) * air.T;
   }
-  if (HAS_AURORA && s.giant > 0u && s.giant < 5u && P.bary.z > 0.0) {
+  if (HAS_AURORA && AURORA_OTHERS && s.giant > 0u && s.giant < 5u && P.bary.z > 0.0) {
     let ab = select(select(1.0, SATURN_AB, s.giant == 2u), JUPITER_AB, s.giant == 1u);
     o.col += auroraGiant(s.giant, ro, rd, select(3e38, tHit, tHit > 0.0), jit, ab) * luminance(E) * air.T;
   }
