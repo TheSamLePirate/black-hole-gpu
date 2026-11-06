@@ -22,18 +22,19 @@ pixel sans mesure).
 
 ## 1. Lots
 
-**NU1 — la lumière des routes vue d'en haut (le dessin des villes la nuit).** Les routes d'OpenStreetMap (tuiles vectorielles
-OpenFreeMap, couche `transportation`, du même z que la tuile de relief, z 11–14) cuites dans le worker de décodage en un masque
-de 256² (largeur et éclat par classe : autoroute, nationale, primaire… de service ; voies ferrées et chemins exclus). La lumière
-VIIRS de la tuile redistribuée sur ce masque **à moyenne conservée** sur l'empreinte de VIIRS (~600 m : table de sommes) — un
-plancher de 15 % hors des rues (fenêtres, cours, parkings). Une texture de lumières par niveau fin (r8, la mise en page des
-fenêtres de relief), lue par `tileLightsAt` du plus fin au plus grossier. Seulement là où la tuile a des lumières (pas de requête
-sur la campagne ni la mer). Mesures : requêtes et octets par fenêtre, coût GPU de la lecture, rendu de Paris/NYC/Los Angeles
-d'un avion à 3 000 et 10 000 m.
-
-**NU2 — les lampadaires de loin.** Sur les pixels de route, une modulation en points (un lampadaire tous les ~30 m, une maille
-jittée en mètres locaux) à moyenne 1, active quand l'empreinte du pixel descend sous ~15 m, fondue au trait au-delà — les
-chapelets de points des photos d'avion. Teinte par quartier (sodium orangé / LED blanche), comme `streetLampTint` près.
+**NU1 + NU2 — la ville vue d'en haut : le fond de carte assombri et ses lampadaires** (décision de Sam, 6 novembre : « on part
+sur du AAA, pas sur du damier […] l'idée de prendre les routes et de dessiner des pointillés, c'est pas bon. Utilise les
+lampadaires et le fond de carte (assombri) »). Les rues d'OpenStreetMap (tuiles vectorielles OpenFreeMap, couche
+`transportation` ; z 12 et z 13 demandées, la z 14 tirée du quart de sa z 13 — 219 ko sur Paris contre 644 ko) cuites dans le
+worker de décodage (`src/system/night-roads.ts`) : la chaussée en lueur faible (le fond de carte assombri, chaque classe sa
+largeur) et **les lampadaires mêmes du décor proche** (`streetlamps.ts lampsAlong` : espacement par classe, quinconce sur les
+grandes rues), chacun une lumière fixe. La lumière VIIRS redistribuée sur ce motif **à moyenne conservée** sur son empreinte
+(~600 m, table de sommes), un plancher de 3 % entre les rues. Couches de lumières des niveaux z 12–14 dans la texture filtrée
+1024² (`IMG_ROADS0`, +3 couches, ≈ 17 Mo avec leurs mips ; une fenêtre 2048² à demi-résolution), lues par `tileLightsAt` du plus
+fin au plus grossier — aucune liaison nouvelle dans les noyaux. Requêtes seulement au crépuscule et la nuit autour de la caméra
+(Soleil sous 6°), les tuiles déjà là recuites quand la nuit tombe. Teinte : sodium orangé surtout, LED blanc chaud par un bruit
+doux de ~1,5 km, les plus brillantes plus blanches. **Abandonné** : les pointillés procéduraux dans le shader et la teinte par
+carrés de 600 m (un damier). Près de la caméra, le décor garde ses vrais lampadaires (têtes et flaques, Q8 L10).
 
 **NU3 — les voitures.** Sur autoroutes et nationales (une classe portée par le masque), des points mobiles blancs dans un sens,
 rouges dans l'autre, densité et vitesse plausibles, animés dans le shader (aucun objet CPU) ; près, les voitures du trafic
@@ -55,6 +56,6 @@ la même moyenne que le rendu final).
 
 ## 2. Ordre et preuves
 
-NU4/NU5 (le diagnostic en cours) → NU1 → NU2 → NU3 → NU6 → NU8 → NU7. Chaque lot : e2e `nyc-sunset` (NYC et Paris, de près et
+NU4 (fait : fenêtres à distance, 6d11d6b5) → NU1+NU2 (en cours) → NU3 → NU5 → NU6 → NU8 → NU7. Chaque lot : e2e `nyc-sunset` (NYC et Paris, de près et
 d'avion), planche avant/après face aux photographies, coût GPU mesuré sur kerr-mini, journal `progress-to-destination.md`,
 `docs/GRAPHICS-PIPELINE.md` si une texture ou une passe change.

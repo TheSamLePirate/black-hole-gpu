@@ -3,6 +3,7 @@
 // packed with the day — pure functions, the same in the decode worker (tile-decode-worker.ts) and, where there is none (the
 // tests), in the page. No allocation a pixel: the colours' loops write their tile's words straight.
 import type { OrthoFit } from "./national";
+import { roadLightByte, roadMask, spreadLights, tileMetresPerPixel } from "./night-roads";
 import { type DelightIn, type DelightStats, delightTile } from "./ortho-delight";
 
 /** a tile's side [px] (earth-tiles.ts TILE) */
@@ -112,12 +113,25 @@ export function terrariumHeights(px: Uint8ClampedArray): Float32Array {
  * EOX's finer tiles by theirs (`fine`), GIBS's as they are — and the night's lights (its pixels' luminance × alpha, a square
  * root, a floor of 0.07 where any) in alpha: the packed words the GPU takes (0: none).
  */
-export function imageryWords(day: Uint8ClampedArray, night: Uint8ClampedArray, fit: OrthoFit | null, fine: boolean): Uint32Array {
+export function imageryWords(
+  day: Uint8ClampedArray,
+  night: Uint8ClampedArray,
+  fit: OrthoFit | null,
+  fine: boolean,
+  roads: { mask: Float32Array | null; mpp: number } | null = null,
+): Uint32Array {
   const out = new Uint32Array(TILE * TILE);
   const tone = fit ? toneOf(fit) : null;
+  // (the street levels — night-roads.ts, z ROAD_Z0 … 14 —: VIIRS's light spread over their streets, in their own encoding)
+  let spread: Float32Array | null = null;
+  if (roads) {
+    const v = new Float32Array(TILE * TILE);
+    for (let i = 0; i < v.length; i++) v[i] = (night[4 * i]! * night[4 * i + 3]!) / (255 * 255);
+    spread = roads.mask ? spreadLights(v, roads.mask, roads.mpp) : v;
+  }
   for (let i = 0; i < out.length; i++) {
     const v = (night[4 * i]! * night[4 * i + 3]!) / (255 * 255);
-    const lights = v > 0 ? Math.round(255 * (0.07 + 0.93 * Math.min(1.06 * Math.sqrt(v), 1))) : 0;
+    const lights = spread ? roadLightByte(spread[i]!) : v > 0 ? Math.round(255 * (0.07 + 0.93 * Math.min(1.06 * Math.sqrt(v), 1))) : 0;
     const r = day[4 * i]!,
       g = day[4 * i + 1]!,
       b = day[4 * i + 2]!;
@@ -152,6 +166,8 @@ export type DecodeRequest =
       nightCrop: readonly [number, number, number] | null;
       fit: OrthoFit | null;
       fine: boolean;
+      /** (a street level's — night-roads.ts —: its tile, and OpenFreeMap's vector tile there, null if none came) */
+      roads?: { z: number; y: number; mvt: ArrayBuffer | null; sub: { k: number; x: number; y: number } } | null;
     }
   /** (L7b's prototype — ortho-delight.ts) `delight`: the canopy under it, its cast shadows lifted before its colours */
   | { id: number; op: "ortho"; blob: Blob; fit: OrthoFit; delight?: DelightIn };
@@ -186,5 +202,16 @@ export async function decodeTile(q: DecodeRequest): Promise<{ heights?: Float32A
     return { words: orthoWords(px, q.fit), ...(delight ? { delight } : {}) };
   }
   const [d, n] = await Promise.all([pixels(q.day, q.dayCrop), pixels(q.night, q.nightCrop)]);
-  return { words: imageryWords(d, n, q.fit, q.fine) };
+  let roads: { mask: Float32Array | null; mpp: number } | null = null;
+  if (q.roads) {
+    const mpp = tileMetresPerPixel(q.roads.z, q.roads.y);
+    let mask: Float32Array | null = null;
+    try {
+      mask = q.roads.mvt ? roadMask(q.roads.mvt, mpp, q.roads.sub) : null;
+    } catch {
+      /* (a tile that will not parse: VIIRS's light as it is) */
+    }
+    roads = { mask, mpp };
+  }
+  return { words: imageryWords(d, n, q.fit, q.fine, roads) };
 }

@@ -9797,15 +9797,20 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
       let mull=fract(along/1.5)<0.05 || v<0.1;
       *alb=select(*alb,vec3f(0.16,0.17,0.18),mull);
       WS_S=select(0.1,0.0,mull);
-      let hsh=hash3u(vec3u(id,u32(floorI),u32(floor(along/1.5)+512.0)));
+      // (an office's light by zones — a floor's 6 m of it lit or dark, its panes nearly all alike within —: the pattern a tower
+      // keeps seen from kilometres, where its 1.5 m panes are under a pixel and their mean made it a white block — One World
+      // Trade Center from Brooklyn, Sam, 6 Nov 2026)
       let lit=select(0.35,0.15,work);
-      if(!mull && u2f(hsh)<lit){WS_E=vec3f(0.95,0.92,0.85)*(0.04+0.06*u2f(pcg(hsh)))*near;}
-      // (beyond the detail: each pane lit or dark — its light over the pane, the same draw as near — while a pane spans a pixel
-      // and more; past that their mean glow. The mean alone, from the first metre a pixel on, made a lit tower a uniformly
-      // glowing box at night — Lower Manhattan from Brooklyn white and grey blocks, no window — Sam, 6 Nov 2026)
-      let paneW=smoothstep(1.0,2.0,min(1.5,hs)/foot);
-      let paneE=select(0.0,0.04+0.06*u2f(pcg(hsh)),u2f(hsh)<lit)*boxCover(fract(along/1.5)*1.5,0.075,1.5,foot)*boxCover(v*hs,0.1*hs,hs,foot);
-      WS_E+=vec3f(0.95,0.92,0.85)*mix(0.07*0.9*lit,paneE,paneW)*(1.0-near);
+      let zh=hash3u(vec3u(id,u32(floorI),u32(floor(along/6.0)+4096.0)));
+      let zoneLit=u2f(zh)<lit;
+      let zoneE=0.04+0.06*u2f(pcg(zh));
+      let hsh=hash3u(vec3u(id,u32(floorI),u32(floor(along/1.5)+512.0)));
+      if(!mull && zoneLit && u2f(hsh)<0.88){WS_E=vec3f(0.95,0.92,0.85)*zoneE*(0.8+0.4*u2f(pcg(hsh)))*near;}
+      // (beyond the detail: each zone lit or dark — the same draw as near, its floor's slab dark — while a zone spans a pixel and
+      // more; past that their mean glow)
+      let zoneW=smoothstep(1.0,2.0,min(6.0,hs)/foot);
+      let farE=select(0.0,zoneE*0.88,zoneLit)*boxCover(v*hs,0.1*hs,hs,foot);
+      WS_E+=vec3f(0.95,0.92,0.85)*mix(0.07*0.9*lit,farE,zoneW)*(1.0-near);
       return;
     }
     // (the material's own grain: dressed stone's courses, brick's tone, render's stains)
@@ -10691,7 +10696,9 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
   let lamp = max(lights - 0.07, 0.0) / 0.93;
   let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
-  col += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * cityCanyon(dot(-rd, gq), lamp) * luminance(E) / PI);
+  if (lamp > 0.0 && dark > 0.0) {
+    col += cityTint(gq, lamp) * (pow(lamp, 1.4) * P.earth.z * dark * cityCanyon(dot(-rd, gq), lamp) * luminance(E) / PI);
+  }
   // (the runways' lamps: a sunlit sky's worth by day — barely seen —, far over the night's ground)
   // (by day in a poor visibility — fog, rain: P.runways[17].y — at their brightest, as the tower sets them;
   // at night thousands of times the night's own light: each lamp a point that glows — the bloom's — from km out)
@@ -14173,6 +14180,19 @@ fn cityCanyon(cv: f32, lamp: f32) -> f32 {
   let c = clamp(abs(cv), 1e-3, 1.0);
   return max(1.0 / (1.0 + (0.3 + 1.5 * lamp) * sqrt(1.0 - c * c) / c), 0.03);
 }
+// a point of the town at gq (geodetic, unit) in metres east and north on the sphere (the lamps' tint's noise), good
+// to a metre or two in float32
+fn cityMetres(gq: vec3f) -> vec2f {
+  let la = asin(clamp(gq.z, -1.0, 1.0));
+  return vec2f(atan2(gq.y, gq.x) * cos(la), la) * EARTH_RM;
+}
+// (NU1) the lamps' tint seen from afar: sodium's orange for the most part, a warm white LED's in places — a smooth noise over
+// ~1.5 km, no quarters' squares (a checkerboard of orange and white over Paris) —, the brightest streets whiter
+fn cityTint(gq: vec3f, lamp: f32) -> vec3f {
+  let n = vnoise(vec3f(cityMetres(gq) / 1500.0, 3.7));
+  let led = smoothstep(0.55, 0.8, n) * 0.6 + 0.35 * smoothstep(1.0, 1.8, lamp);
+  return mix(vec3f(1.0, 0.5, 0.17), vec3f(1.0, 0.82, 0.6), clamp(led, 0.0, 1.0));
+}
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u,
         @builtin(local_invocation_index) li: u32, @builtin(workgroup_id) wid: vec3u) {
@@ -15622,7 +15642,10 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     }
   } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
   // (the map's mean beyond the streets drawn — past the scenery's reach, or before it is in —: seen at the street's angle)
-  if (!nearL) { lit *= cityCanyon(-dot(dirW, gq), lamp); }
+  if (!nearL && lit > 0.0) {
+    lit *= cityCanyon(-dot(dirW, gq), lamp);
+    litC = cityTint(gq, lamp);
+  }
   G += litAlb * litC * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
   // (Q8 L10: the streets' lamps on the buildings' walls by them — their pools' light where the wall stands, three tenths of the ground's (half lit the walls brighter than the street, +65 % to the night's mean):
   // a wall faces the lamp across the street, not under it; a lit town, at night, near)

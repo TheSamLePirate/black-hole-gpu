@@ -2070,3 +2070,22 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   (le compteur affiché n'est pas une mesure).
 - **Restant** : NU1 (le dessin des rues vu d'avion : les lumières lues à VIIRS z 8 seulement), NU2 lampadaires, NU3 voitures, halo
   du ciel, exposition de nuit, allées du Trocadéro encore trop blanches, tour Eiffel éteinte, la Seine pas chargée en 60 s.
+
+## 2026-11-06T09:38Z — La ville de nuit vue d'avion : le fond de carte assombri et ses lampadaires ; l'œil adapté à la ville ; les pistes sur leurs seuils
+
+- **Contribution** (§7.6/§7.16 préparer les données avant la frame — cuisson en worker, publication dans la texture existante ;
+  §19 vols de nuit) : NU1+NU2 (`src/system/night-roads.ts`) — les rues OpenStreetMap (tuiles vectorielles z 12–13, la z 14 tirée
+  de sa z 13) cuites en fond de carte assombri et en **lampadaires** (le modèle du décor proche, `lampsAlong`), la lumière VIIRS
+  redistribuée dessus à moyenne exacte par tuile, encodage logarithmique (un lampadaire jusqu'à ×100 sa moyenne), couches
+  `IMG_ROADS0` (z 12–14) de la texture 1024² lues par `tileLightsAt` ; demandées seulement au crépuscule et la nuit, recuites à la
+  tombée de la nuit ; teinte sodium/LED par un bruit doux. **Abandonnés** (Sam) : pointillés procéduraux, teinte en damier.
+  NU5 : la lumière de la ville autour de la caméra (`cityLampAt`, tuiles z 10) entre dans l'adaptation de l'œil. NU4 : les tours
+  de verre allumées par plateaux de 6 m. Pistes : cap et longueur tirés des deux seuils (`runwayAxis`) — Le Bourget publié 249°
+  pour 247,81° réel : l'ILS posait le F-35 à ~60 m de la piste dessinée — ; les 7 terrains du jeu recalés.
+- **Preuve** : **observé** — e2e `paris-night-flight` (F-35 à 900 m, virage de 120°, kerr-mini : altitude tenue 950–966 m,
+  planche `n1-vol-paris-900.jpg`), `nyc-sunset` (Paris900 en caméra libre, NYC de nuit avant/après adaptation, ce Mac),
+  `lebourget-night-ils` (approche ILS 25 de nuit, posé à 1 m de l'axe dessiné, 18,7/20 ; avant : à côté de la piste) ;
+  tests unitaires `night-roads`, pistes. **Mesuré hors jeu** : cuisson 5–19 ms par tuile (worker). **Non mesuré** : coût GPU,
+  octets réseau d'une fenêtre de nuit (tuiles vectorielles 219–337 ko sur Paris), +17 Mo de texture calculés.
+- **Restant** : voitures (NU3), halo du ciel (NU6), monuments (NU7), chargement (NU8), le rendu un peu doux en mouvement, la
+  lumière moyenne de la ville encore réglée à la main (`CITY_ADAPTATION`).

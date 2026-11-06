@@ -429,6 +429,9 @@ const NIGHT_ILLUMINANCE = 1e-7;
 const MOON_ILLUMINANCE = 2.5e-6;
 const EYE_ADAPTATION = 1e-5;
 const CITY_LIGHTS = 2e-5;
+/** (NU5) a lit town's heart's own light as the eye adapts to it, over the full sunlight's: ~3 lux of lamps and windows round
+ *  the camera (a city street's lit ground 0.6 cd/m², VIIRS's — CITY_LIGHTS —, its facades' windows over it) */
+const CITY_ADAPTATION = 3e-5;
 /** the twilight sky's light on a horizontal ground over the full sunlight's, by the Sun's height [°] (tabulated horizontal
  *  illuminance: 400 lux at sunset, 3.4 at the civil twilight's end, 0.008 at the nautical's, 0.0007 at the astronomical's) */
 const TWILIGHT: [number, number][] = [
@@ -8602,6 +8605,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    * reddened and dimmed low, none in its shadow — a quarter at least (twilight, night: 2
    * stops more; the cities show already, more and the stars fade, the ship's own lights blind).
    */
+  /** (NU1, a comparison) the streets' lights left out: the street levels keep VIIRS's light as it is */
+  nightRoadsOff = false;
   private earthSunlight(bodies: GpuBody[], near: ReturnType<typeof localPatch>, surface: ReturnType<typeof patchGeodetic> | null) {
     // (Mars in a dust storm — W6 —: the day a third as bright under it; the eye opens to it)
     if (near && bodies[near.index]?.id === "mars") {
@@ -8649,6 +8654,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     }
     const place = surface ?? patchGeodetic(near, WGS84_F);
     const mu = place.up.reduce((v, n, i) => v + n * near.light[i]!, 0);
+    // (NU1: at dusk and at night round the camera — the Sun under 6° there —, the street levels' imagery with their streets'
+    // lights: OpenFreeMap's vector tiles asked then only)
+    this.earthTiles.setNightRoads(mu < 0.1045 && !this.nightRoadsOff);
     // (and an eclipse: the Sun's disk the Moon leaves — the totality's twilight, ten stops down)
     const home = this.meterHome;
     const ecl = home ? sunShare(home, this.meterTime) : 1;
@@ -8661,13 +8669,21 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const md = this.moonDirEarth;
     const mz = md ? md[0] * place.normal[0] + md[1] * place.normal[1] + md[2] * place.normal[2] : -1;
     const moonI = MOON_ILLUMINANCE * this.moonLitShare ** 1.5 * Math.max(mz, 0);
-    const I = (Math.max(sun, sky) + moonI + NIGHT_ILLUMINANCE) * this.wxLight;
+    // (NU5: a town's own light — its lamps, its lit windows — round the camera, out to twice its height: what an eye, a camera
+    // in a lit city adapts to — the stars drowned, the facades not burnt white. The towers of Manhattan stood blown white under
+    // the eye's gain for a moonless countryside — Sam, 6 Nov 2026)
+    const hM = Math.max(place.h * EARTH_RM, 0);
+    const city = CITY_ADAPTATION * this.earthTiles.cityLampAt(place.lat, place.lon, Math.min(Math.max(2 * hM, 3000), 30000));
+    this.cityLight = city;
+    const I = (Math.max(sun, sky) + moonI + NIGHT_ILLUMINANCE) * this.wxLight + city;
     this.eyeIncident = I;
     this.eyeSkyLight = (Math.max(sun, sky) + NIGHT_ILLUMINANCE) * this.wxLight;
     return I + EYE_ADAPTATION;
   }
   /** the light falling at the camera over the full sunlight's (earthSunlight; 1 away from the Earth): the eye's Purkinje shift */
   private eyeIncident = 1;
+  /** (NU5) of it, the town's own light round the camera (0 away from a lit town) */
+  cityLight = 0;
   /** the same without the Moon: the light the sky is drawn by (its twilight, the night's floor — the moonlit sky stays dark), what
    *  the eye looking at the auroras adapts to (AM2) */
   private eyeSkyLight = 1;

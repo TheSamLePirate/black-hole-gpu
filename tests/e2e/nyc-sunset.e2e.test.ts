@@ -10,7 +10,9 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // at its farthest; the world in (60 s at most, what is missing said), frozen at the instant, the exposure settled.
 //   NYC_ONLY: the views whose name holds it; NYC_NIGHT=1: the same views at night (20:30 in New York, the Sun 30° down — the
 //   city's lights, Sam: « fais la même de nuit »), named <view>-night; NYC_REFS=1: the two photographs' views instead
-//   (docs/progress/usa/refs, Sam: « trouve une image référence »); NYC_CITY=paris: Paris at night (three views); NYC_SKIP=bit,…: each view again with that renderer.liteSkip.
+//   (docs/progress/usa/refs, Sam: « trouve une image référence »); NYC_CITY=paris: Paris at night (three views, two from an
+//   aircraft); NYC_CITY=paris900: an approach at 900 m turning round Paris, ahead and to the side; NYC_ROADS=0: the streets'
+//   lights (NU1) left out; NYC_SKIP=bit,…: each view again with that renderer.liteSkip.
 // Output: remote-results/nyc-sunset/<view>.png, views.json.
 // Done when: each view shot with the scenery ready and the source "usa", no console error.
 // Duration: ~1 min a view here.
@@ -39,7 +41,24 @@ const PARIS = [
   { name: "paris-seine", lat: 48.8636, lon: 2.3135, over: 12, pitch: 4, fov: 42, utc: "2026-11-07T19:30:00Z", aim: [48.8584, 2.2945] },
   { name: "paris-trocadero", lat: 48.8625, lon: 2.2868, over: 60, pitch: -3, fov: 50, utc: "2026-11-07T19:30:00Z", aim: [48.8584, 2.2945] },
   { name: "paris-cite", lat: 48.8488, lon: 2.3655, over: 220, pitch: -9, fov: 52, utc: "2026-11-07T19:30:00Z", aim: [48.853, 2.3499] },
+  // (from an aircraft — NU1, the streets' lights: the town's shape at night —: 3 000 m south of Paris, 10 000 m further out)
+  { name: "paris-air-3000", lat: 48.775, lon: 2.335, over: 3000, pitch: -24, fov: 55, utc: "2026-11-07T19:30:00Z", aim: [48.8566, 2.3522] },
+  { name: "paris-air-10000", lat: 48.62, lon: 2.36, over: 10000, pitch: -22, fov: 55, utc: "2026-11-07T19:30:00Z", aim: [48.8566, 2.3522] },
 ];
+// (NYC_CITY=paris900: an approach over Paris at 900 m at night, turning round its centre — a circle of 3 km —: at each of four
+// places the view ahead along the turn, then to its side, into the turn — Sam: « une approche au-dessus de Paris à 900 m,
+// virage et vues sur le côté »)
+const PC = [48.8566, 2.3522] as const;
+const PARIS900 = [200, 240, 280, 320].flatMap((b) => {
+  const lat = PC[0] + (3000 * Math.cos((b * Math.PI) / 180)) / 111200;
+  const lon = PC[1] + (3000 * Math.sin((b * Math.PI) / 180)) / (111200 * Math.cos((PC[0] * Math.PI) / 180));
+  // (flying anticlockwise round the centre: the tangent 90° left of the way out from it; the turn's inside to the left)
+  const ahead = (b - 90 + 360) % 360;
+  return [
+    { name: `p900-${b}-ahead`, lat, lon, over: 900, pitch: -14, hfov: 70, hdg: ahead, utc: "2026-11-07T19:30:00Z" },
+    { name: `p900-${b}-side`, lat, lon, over: 900, pitch: -28, hfov: 70, hdg: (ahead + 270) % 360, utc: "2026-11-07T19:30:00Z" },
+  ];
+});
 // (NYC_REFS=1: the two photographs of reference — docs/progress/usa/refs — their places, hours and fields, from the water)
 const REFS = [
   // (aboard the East River Ferry by Wallabout Bay, 4 Sep 2020 19:31 EDT — its EXIF: an iPhone 6s Plus at 29 mm equivalent, 63.7°
@@ -63,10 +82,13 @@ test.skipIf(!E2E)(
         `(() => { Object.assign(__bh.settings, ${EARTH_SETTINGS}, { ship: false, earthClouds: 0.35, motionBlur: 0, dof: false, detailReach: "veryFar", earthScenery: "high", earthOrtho: true, earthIgnRelief: true, earthOverture: true }); __bh.renderer.debugSkipShip = true; return 1; })()`,
       );
       await app.settled(120_000);
+      // (NYC_ROADS=0: the streets' lights left out — NU1's comparison)
+      if (process.env.NYC_ROADS === "0") await app.js(`(() => { __bh.renderer.nightRoadsOff = true; return 1; })()`);
       const night = !!process.env.NYC_NIGHT;
       const paris = process.env.NYC_CITY === "paris";
-      const views = (paris ? PARIS : process.env.NYC_REFS ? REFS : VIEWS).map((v) =>
-        night && !paris ? { ...v, name: `${v.name}-night`, utc: "2026-11-07T01:30:00Z" } : v,
+      const p900 = process.env.NYC_CITY === "paris900";
+      const views = (p900 ? PARIS900 : paris ? PARIS : process.env.NYC_REFS ? REFS : VIEWS).map((v) =>
+        night && !paris && !p900 ? { ...v, name: `${v.name}-night`, utc: "2026-11-07T01:30:00Z" } : v,
       );
       for (const v of views.filter((q) => !process.env.NYC_ONLY || q.name.includes(process.env.NYC_ONLY))) {
         const r = v as Partial<(typeof REFS)[number]> & (typeof VIEWS)[number];
@@ -126,11 +148,11 @@ test.skipIf(!E2E)(
           await app.js(`(() => { __bh.renderer.liteSkip = 0; return 1; })()`);
         }
         const info = await app.js<Record<string, unknown>>(`(() => { const sc = __bh.renderer.earthScenery.stats();
-          return { national: __bh.renderer.earthTiles.nationalAt, ortho: __bh.renderer.earthTiles.orthoFinest, scenery: sc.status, buildings: sc.buildings ?? null, pipeline: __bh.renderer.earthPipelineNow(__bh.settings) }; })()`);
+          return { national: __bh.renderer.earthTiles.nationalAt, ortho: __bh.renderer.earthTiles.orthoFinest, scenery: sc.status, buildings: sc.buildings ?? null, pipeline: __bh.renderer.earthPipelineNow(__bh.settings), city: __bh.renderer.cityLight }; })()`);
         out[v.name] = { heading: +heading.toFixed(1), why, world, ...info };
         console.log(`  ${v.name}: heading ${heading.toFixed(1)}°, ${world}, ${JSON.stringify(info)}`);
         expect(why).toBeNull();
-        expect(info.national).toBe(paris ? "ign" : "usa");
+        expect(info.national).toBe(paris || p900 ? "ign" : "usa");
       }
       await Bun.write(`${OUT}/views.json`, JSON.stringify(out, null, 1));
       expect(app.cdp.errors).toEqual([]);

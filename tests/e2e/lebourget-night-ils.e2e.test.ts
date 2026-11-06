@@ -1,0 +1,88 @@
+import { afterAll, expect, test } from "bun:test";
+import { mkdirSync } from "node:fs";
+import { fromRunway } from "../../src/game/ils";
+import { App, E2E, stopServer } from "./lib/app";
+import { EARTH_SETTINGS } from "./lib/plan-views";
+
+// A night approach on Paris-Le Bourget (LFPB), landed by the ILS's autopilot (Sam, 6 Nov 2026: « approche Le Bourget de nuit
+// pour atterrissage automatique ILS. Attends le chargement pour lancer »): the F-35 put on the final of the runway in use,
+// 14 km out on its 3° slope, gear down, 7 Nov 2026 19:30 UTC (20:30 in Paris); held still until every datum round it is in
+// (app.dataSettled: the relief, the photographs, the scenery, the kernels), then the approach engaged (camera.ilsStart) and
+// flown to the rollout — a shot every 3 s from the cockpit (the north of Paris at night below: the streets' lamps, NU1; the
+// runway's lights), the phases and the touchdown's grade logged.
+// Output: remote-results/lebourget-night-ils/NN.jpg, approach.json (LBN_OUT). LBN_RWY: an end (« 25 », « 21 »…).
+// Done when: the data in before the approach, the approach engaged, the rollout reached within 4 min on the drawn runway
+// (within 15 m of its axis), no console error.
+// Duration: ~4 min (the load included).
+const OUT = process.env.LBN_OUT ?? "remote-results/lebourget-night-ils";
+const FIELD = "LFPB";
+const KM = 14;
+afterAll(stopServer);
+
+test.skipIf(!E2E)(
+  "Le Bourget at night: the ILS's autopilot lands the F-35",
+  async () => {
+    mkdirSync(OUT, { recursive: true });
+    const app = await App.boot({ width: 1600, height: 900, hash: "scene=game:artemis", tiles: true });
+    const series: Record<string, unknown>[] = [];
+    try {
+      await app.js(
+        `(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${EARTH_SETTINGS}, { earthClouds: 0, f35Invulnerable: true, motionBlur: 0, dof: false, detailReach: "veryFar", earthScenery: "high" }); return 1; })()`,
+      );
+      await app.waitProgress(`__bh.fleet.active === "f35"`, "the F-35");
+      // (near the field: its runways' tile in, the end in use)
+      await app.js(
+        `(() => { __bh.game.setDate("2026-11-07T19:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.flyAt(48.9, 2.35, 900, 60, 120); __bh.freeze(true); return 1; })()`,
+      );
+      await app.waitProgress(`(__bh.camera.ilsRunways(${JSON.stringify(FIELD)})?.ends.length ?? 0) >= 2`, `${FIELD}'s runways`);
+      const ch = await app.js<{ auto: string; ends: { id: string; lat: number; lon: number; hdg: number; elev: number; len: number }[] }>(
+        `(() => { const c = __bh.camera.ilsRunways(${JSON.stringify(FIELD)}); return { auto: c.auto.id, ends: c.ends.map((e) => ({ id: e.id, lat: e.rwy.lat, lon: e.rwy.lon, hdg: e.rwy.hdg, elev: e.rwy.elev, len: Math.round(e.len) })) }; })()`,
+      );
+      const rwy = process.env.LBN_RWY ?? ch.auto;
+      const E = ch.ends.find((e) => e.id === rwy)!;
+      console.log(`  ${FIELD}: ${ch.ends.map((e) => `${e.id} ${e.len} m`).join(", ")} — flying ${rwy}`);
+      // (14 km out on its axis, on the 3° slope over the threshold — 300 m past it the aim —, gear down)
+      const p = fromRunway({ name: FIELD, lat: E.lat, lon: E.lon, hdg: E.hdg, elev: E.elev, len: E.len }, -KM * 1000, 0);
+      const h = Math.round((KM * 1000 + 300) * Math.tan((3 * Math.PI) / 180));
+      await app.js(`(() => { __bh.game.flyAt(${p.lat}, ${p.lon}, ${h}, ${E.hdg}, 95); __bh.camera.gearDown = true;
+        __bh.settings.shipMount = "cockpit"; __bh.freeze(true); return 1; })()`);
+      // (every datum in before the approach: waited while it keeps coming, what stalls said)
+      await app.dataSettled("Le Bourget's final");
+      await app.js(`(() => { __bh.freeze(false); __bh.camera.setLook(0, -4); return 1; })()`);
+      const said = await app.js<string>(`__bh.camera.ilsStart(${JSON.stringify(FIELD)}, { runway: ${JSON.stringify(rwy)} })`);
+      console.log(`  ${said}`);
+      const t0 = Date.now();
+      let phase: string | null = null;
+      let lastXte = Number.NaN;
+      for (let i = 0; Date.now() - t0 < 240_000; i++) {
+        const a = await app.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "jpeg", quality: 82 });
+        await Bun.write(`${OUT}/${String(i).padStart(2, "0")}.jpg`, Buffer.from(a.data, "base64"));
+        // (xte: the craft off the drawn runway's axis [m, right +] — the runway as the scenery draws it, sys.runways —: the ILS's
+        // runway and the drawn one the same; the first flight touched down ~60 m beside it)
+        const m = await app.js<Record<string, unknown>>(`(() => { const c = __bh.camera, g = c.geoNow(), I = c.ilsInfo(), D = Math.PI / 180;
+          const r = __bh.sys.runways().find((x) => x.site.icao === "LFPB"); let xte = null;
+          if (g && r) { const s = r.site, dn = (g.lat - s.lat) * 111132, de = (g.lon - s.lon) * 111320 * Math.cos(s.lat * D), h = s.rwy * D;
+            xte = Math.round(de * Math.cos(h) - dn * Math.sin(h)); }
+          return { phase: I?.phase ?? null, alt: g ? Math.round(g.alt) : null, gs: g ? Math.round(g.gs) : null, xte, city: +(__bh.renderer.cityLight * 1e5).toFixed(2),
+            pending: __bh.renderer.earthTiles.pending, fps: Math.round(__bh.renderer.fps ?? 0) }; })()`);
+        const t = +((Date.now() - t0) / 1000).toFixed(1);
+        series.push({ i, t, ...m });
+        console.log(`  ${t}s: ${JSON.stringify(m)}`);
+        phase = (m.phase as string | null) ?? phase;
+        if (m.xte !== null) lastXte = m.xte as number;
+        if (m.phase === "rollout" || m.phase === "done" || (m.gs as number) < 5) break;
+        await Bun.sleep(3000);
+      }
+      const last = await app.js<unknown>(`__bh.camera.ilsLast ?? null`);
+      console.log(`  touchdown: ${JSON.stringify(last)}`);
+      await Bun.write(`${OUT}/approach.json`, JSON.stringify({ rwy, said, series, last }, null, 1));
+      expect(["rollout", "done"]).toContain(phase ?? "none");
+      // (on the drawn runway: within 15 m of its axis at the end)
+      expect(Math.abs(lastXte)).toBeLessThan(15);
+      expect(app.cdp.errors).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  },
+  10 * 60_000,
+);

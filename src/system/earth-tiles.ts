@@ -33,6 +33,7 @@ import { insideOutline, type NationalSource, type OrthoFit, SWISSTOPO, sourceAt,
 import { USA_LUT } from "./usa-colour";
 import { MAPTERHORN_Z1, mapterhornUrl, USA_OUTLINE, usgsImageryUrl } from "./usa-ground";
 import { IGN_MNH } from "./ign-canopy";
+import { L_MAX, L_MIN, ROAD_MVT_Z1, ROAD_Z0 } from "./night-roads";
 import type { DelightStats } from "./ortho-delight";
 import { type DecodeReply, type DecodeRequest, decodeTile, ORTHO_FIT, pixels as decodePixels } from "./tile-decode";
 export { EOX_FIT, eoxColour, ORTHO_FIT, orthoColour } from "./tile-decode";
@@ -239,8 +240,15 @@ export const IMG_LAYER0 = ORTHO_LEVELS;
 /** the night's lights' first layer in the 1024² texture (T9c: GIBS's, z 6 … 8 — the finer levels' their parent's): alpha the
  *  lights, rgb the coverage (white where a tile came) */
 export const IMG_LIGHT0 = IMG_LAYER0 + (IMG_Z1 - Z0 + 1);
-/** the 1024² texture's layers: the orthophotos', every imagery level's (z 6 … 14), the lights' (z 6 … 8) */
-export const IMG_1K_LAYERS = IMG_LIGHT0 + (GIBS_Z1 - Z0 + 1);
+/** (NU5) the level whose lights tell the town round the camera (~150 m a pixel at 49°: VIIRS's enlarged — its encoding the
+ *  coarser levels' —, under ROAD_Z0) */
+const CITY_LIGHT_Z = 10;
+/** the street levels' lights' first layer in the 1024² texture (NU1 — night-roads.ts: z ROAD_Z0 … 14, VIIRS's light along
+ *  their streets; a 2048² window's at half its resolution): alpha the lights in their own encoding (roadLightByte), rgb the
+ *  coverage */
+export const IMG_ROADS0 = IMG_LIGHT0 + (GIBS_Z1 - Z0 + 1);
+/** the 1024² texture's layers: the orthophotos', every imagery level's (z 6 … 14), the lights' (z 6 … 8), the streets' (z 12 … 14) */
+export const IMG_1K_LAYERS = IMG_ROADS0 + (IMG_Z1 - ROAD_Z0 + 1);
 /** the 2048² texture's layers: z FINE_Z … 14, then the orthophotos' z 15 and z 16 at a far reach (T8e: from ORTHO_2K_LAYER0) */
 export const ORTHO_2K_LAYER0 = IMG_Z1 - FINE_Z + 1;
 export const IMG_2K_LAYERS = ORTHO_2K_LAYER0 + ORTHO_BIG_LEVELS;
@@ -295,6 +303,24 @@ fn tileImgAt(l: u32, p: vec2f, lod: f32) -> vec4f {
 // (T9c: the night's lights at uv — the tiles' place from their anchor, earthImagery's (dlon, −dM) —: the finest of z 6 … 8 there,
 // filtered from their layers)
 fn tileLightsAt(uv: vec2f) -> f32 {
+  // (NU1: the street levels' first — z 14 … ROAD_Z0, VIIRS's light along their streets —: their lamp back from its headroom,
+  // returned on the coarser levels' scale — 0.07 + 0.93 lamp, a street's above 1)
+  for (var k = 0u; k < ${IMG_Z1 - ROAD_Z0 + 1}u; k++) {
+    let l = ${IMG_Z1 - Z0}u - k;
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    let p = a.xy + uv * b.z;
+    if (min(min(p.x, p.y), min(b.x - p.x, b.y - p.y)) <= 2.0) { continue; }
+    let s = textureSampleLevel(orthoTex, orthoSamp, tileImgUv(l, p).xy, ${IMG_ROADS0}u + ${IMG_Z1}u - k - ${ROAD_Z0}u, 0.0);
+    // (its light back from the log encoding — night-roads.ts roadLightByte —, as the coarser levels' 0.07 + 0.93 · 1.06 √L)
+    if (s.r > 0.5) {
+      if (s.a <= 0.0) { return 0.0; }
+      let t = max(s.a / s.r - 0.07, 0.0) / 0.93;
+      let L = ${L_MIN} * (exp2(t * ${Math.log2(1 + L_MAX / L_MIN).toFixed(6)}) - 1.0);
+      return 0.07 + 0.93 * 1.06 * sqrt(L);
+    }
+  }
   for (var k = 0u; k < ${GIBS_Z1 - Z0 + 1}u; k++) {
     let l = ${GIBS_Z1 - Z0}u - k;
     let a = P.tileL[2u * l];
@@ -1624,7 +1650,7 @@ export class EarthTiles {
         const s = this.slotOf(L, x, y);
         if (gen !== this.gen || L.key[s] !== key) return;
         const signal = AbortSignal.timeout(TIMEOUT_MS);
-        const col = await imagery(L.z, ((x % L.n) + L.n) % L.n, y, signal, this.orthoOn ? src : null);
+        const col = await imagery(L.z, ((x % L.n) + L.n) % L.n, y, signal, this.orthoOn ? src : null, this.nightRoads);
         if (gen !== this.gen || L.key[s] !== key || !L.data[s]) return;
         if (col) this.put(L.z, x, y, L.data[s]!, col);
         else if (col === undefined) this.imageryLater(L, x, y, key, src, n + 1);
@@ -1634,6 +1660,76 @@ export class EarthTiles {
   }
   /** the relief tiles' imagery asked again after a failure (imageryLater), since the start */
   imageryRetries = 0;
+
+  /** (NU5) the night's lights of the z 10 tiles drawn — their imagery's alpha (VIIRS's, the coarser levels' encoding) —, the last
+   *  few kept: the town's light round the camera, which the eye adapts to (cityLampAt) */
+  private cityLights = new Map<string, Uint8Array>();
+  /**
+   * The town's light round a place (geodetic, radians): the mean of its lamps' level^1.4 (trace.wgsl's ground lights: 0 the
+   * dark countryside, 1 a city's heart) over `radiusM` round it, from the z 10 tiles drawn; 0 where none is in.
+   */
+  cityLampAt(lat: number, lon: number, radiusM = 3000): number {
+    const z = CITY_LIGHT_Z,
+      n = 2 ** z;
+    const fx = ((lon / TAU + 0.5) * n) % n,
+      fy = mercY(Math.sin(lat), n);
+    const mpp = (TAU * R * Math.cos(lat)) / n / TILE;
+    const r = Math.max(1, Math.round(radiusM / mpp));
+    let sum = 0,
+      cnt = 0;
+    for (let dy = -r; dy <= r; dy += Math.max(1, r >> 3))
+      for (let dx = -r; dx <= r; dx += Math.max(1, r >> 3)) {
+        const gx = Math.floor(fx * TILE) + dx,
+          gy = Math.floor(fy * TILE) + dy;
+        const tx = ((Math.floor(gx / TILE) % n) + n) % n,
+          ty = Math.floor(gy / TILE);
+        const a = this.cityLights.get(`${z}/${tx}/${ty}`);
+        if (!a) continue;
+        const v = a[(((gy % TILE) + TILE) % TILE) * TILE + (((gx % TILE) + TILE) % TILE)]! / 255;
+        const lamp = Math.max(v - 0.07, 0) / 0.93;
+        sum += lamp > 0 ? lamp ** 1.4 : 0;
+        cnt++;
+      }
+    return cnt ? sum / cnt : 0;
+  }
+
+  /** (NU1) the street levels' imagery taken with their streets' lights — the renderer's, at dusk and night round the camera:
+   *  OpenFreeMap's vector tiles asked then only —; turned on, the street levels' tiles drawn already asked again (roadsRefresh) */
+  nightRoads = false;
+  /** the street levels' tiles asked again for their streets since the start (NU1) */
+  roadsRefreshed = 0;
+  setNightRoads(on: boolean) {
+    if (on === this.nightRoads) return;
+    this.nightRoads = on;
+    if (on) this.roadsRefresh();
+  }
+  /** the street levels' tiles in their windows asked again with their streets — the nearest level first, a few at once —,
+   *  their heights kept, put again when their imagery comes */
+  private roadsRefresh() {
+    const gen = this.gen;
+    let k = 0;
+    for (let z = IMG_Z1; z >= ROAD_Z0; z--) {
+      const L = this.levels[z - Z0];
+      if (!L) continue;
+      for (let s = 0; s < L.key.length; s++) {
+        const key = L.key[s];
+        if (!key || !L.data[s]) continue;
+        const [, xs, ys] = key.split("/");
+        const x = Number(xs),
+          y = Number(ys);
+        const src = this.orthoOn ? tileSource(NATIONAL, L.n, x, y) : null;
+        setTimeout(async () => {
+          if (gen !== this.gen || L.key[s] !== key || !this.nightRoads) return;
+          const col = await imagery(L.z, x, y, AbortSignal.timeout(TIMEOUT_MS), src, true);
+          if (gen !== this.gen || L.key[s] !== key || !L.data[s] || !col) return;
+          this.roadsRefreshed++;
+          // (its window's own column: the key's x unwrapped as the window holds it)
+          const xw = [x, x - L.n, x + L.n].find((c) => inside(L.want, c, y));
+          if (xw !== undefined) this.put(L.z, xw, y, L.data[s]!, col);
+        }, 40 * k++);
+      }
+    }
+  }
 
   /** A tile loaded — into its window, or (ahead) into memory past it, drawn if its window has come to it meanwhile. */
   private async load(L: Level, x: number, y: number, ahead = false) {
@@ -1657,7 +1753,9 @@ export class EarthTiles {
     // (the tile's national source — its centre's: swisstopo's, the IGN's — or none)
     const src = tileSource(NATIONAL, L.n, xw, y);
     // (the relay removed once the imagery is in or given up: none left on the tile's signal)
-    const img = (L.z <= IMG_Z1 ? imagery(L.z, xw, y, imgCtl.signal, this.orthoOn ? src : null) : Promise.resolve(null)).finally(() => {
+    const img = (
+      L.z <= IMG_Z1 ? imagery(L.z, xw, y, imgCtl.signal, this.orthoOn ? src : null, this.nightRoads) : Promise.resolve(null)
+    ).finally(() => {
       clearTimeout(imgTimer);
       ctl.signal.removeEventListener("abort", relay);
     });
@@ -1774,6 +1872,14 @@ export class EarthTiles {
     if (old === this.keyOf(L, x, y) && inside(L.valid, x, y)) this.logChange(L.z, { x0: x, x1: x + 1, y0: y, y1: y + 1 }, null);
     L.key[s] = this.keyOf(L, x, y);
     L.data[s] = h;
+    // (NU5: the town's light kept from its z 10 tiles — their lights the coarser levels' encoding, VIIRS's enlarged)
+    if (z === CITY_LIGHT_Z && col) {
+      const a = new Uint8Array(TILE * TILE);
+      for (let i = 0; i < a.length; i++) a[i] = col[i]! >>> 24;
+      this.cityLights.delete(this.keyOf(L, x, y));
+      this.cityLights.set(this.keyOf(L, x, y), a);
+      if (this.cityLights.size > 48) this.cityLights.delete(this.cityLights.keys().next().value!);
+    }
     const hb = new Uint32Array(h.buffer, h.byteOffset, TILE * TILE);
     // (the heights alone where the imagery is filtered — T9c, r32uint —, with the packed imagery else)
     const per = this.filtered ? 1 : 2;
@@ -2233,6 +2339,36 @@ export class EarthTiles {
     this.orthoMips(ox, oy, layer, tex);
     // (T9c: the night's lights — GIBS's, z ≤ 8: their imagery's alpha — in their own layer, rgb the coverage; the relief's texture
     // holds the heights alone)
+    // (NU1: the street levels' lights — VIIRS's along their streets, the imagery's alpha — in their own layer of the 1024² texture,
+    // rgb the coverage; a 2048² window's at half its resolution, its 2 × 2 means)
+    if (L.z >= ROAD_Z0 && this.orthoTexture.width > 1) {
+      const ll = IMG_ROADS0 + (L.z - ROAD_Z0);
+      const tex1 = this.orthoTexture;
+      if (!big) {
+        const lights = new Uint32Array(TILE * TILE);
+        if (col) for (let i = 0; i < lights.length; i++) lights[i] = col[i] ? ((col[i]! & 0xff000000) | 0xffffff) >>> 0 : 0;
+        this.device.queue.writeTexture({ texture: tex1, origin: [ox, oy, ll] }, lights, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
+        this.orthoMips(ox, oy, ll, tex1);
+      } else {
+        const H = TILE >> 1;
+        const lights = new Uint32Array(H * H);
+        if (col)
+          for (let j = 0; j < H; j++)
+            for (let i = 0; i < H; i++) {
+              let a = 0,
+                n = 0;
+              for (const o of [0, 1, TILE, TILE + 1]) {
+                const w = col[2 * j * TILE + 2 * i + o]!;
+                if (w) {
+                  a += w >>> 24;
+                  n++;
+                }
+              }
+              lights[j * H + i] = n ? ((Math.round(a / n) << 24) | 0xffffff) >>> 0 : 0;
+            }
+        this.device.queue.writeTexture({ texture: tex1, origin: [ox >> 1, oy >> 1, ll] }, lights, { bytesPerRow: H * 4 }, [H, H, 1]);
+      }
+    }
     if (L.z <= GIBS_Z1 && !big) {
       const lights = new Uint32Array(TILE * TILE);
       if (col) for (let i = 0; i < lights.length; i++) lights[i] = col[i] ? ((col[i]! & 0xff000000) | 0xffffff) >>> 0 : 0;
@@ -2366,12 +2502,31 @@ function parentBlob(url: string): Promise<Blob> {
   }
   return p;
 }
+/** OpenFreeMap's vector tile at z/x/y (z ≤ 14) for its streets (NU1), null if it will not come in 15 s */
+export const roadsUrl = (z: number, x: number, y: number) => `https://tiles.openfreemap.org/planet/latest/${z}/${x}/${y}.pbf`;
+// (the vector tiles in, the last few kept — a z 13 one serves its four z 14 tiles —, never cancelled by one tile's abort)
+const roadFiles = new Map<string, Promise<ArrayBuffer | null>>();
+async function fetchRoads(z: number, x: number, y: number, signal: AbortSignal): Promise<ArrayBuffer | null> {
+  const url = roadsUrl(z, x, y);
+  let p = roadFiles.get(url);
+  if (!p) {
+    p = fetch(url, { signal: AbortSignal.timeout(15_000) })
+      .then((r) => (r.ok ? r.arrayBuffer() : null))
+      .catch(() => null);
+    roadFiles.set(url, p);
+    if (roadFiles.size > 24) roadFiles.delete(roadFiles.keys().next().value!);
+  }
+  const got = await Promise.race([p, new Promise<null>((ok) => signal.addEventListener("abort", () => ok(null), { once: true }))]);
+  // (a copy: the bytes handed to the worker are its own — the kept ones serve the other quarters)
+  return got ? got.slice(0) : null;
+}
 async function imagery(
   z: number,
   x: number,
   y: number,
   signal: AbortSignal,
   ortho: NationalSource | null = null,
+  roads = false,
 ): Promise<Uint32Array | null | undefined> {
   try {
     // (a file's bytes — the decoding the worker's —, a square of it to enlarge)
@@ -2410,7 +2565,13 @@ async function imagery(
         }
       return [await get(fine ? eoxUrl(z, x, y) : dayUrl(z, x, y)), null];
     };
-    const [[d, photo], n] = await Promise.all([day(), get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined)]);
+    // (NU1: a street level at night — the renderer's nightRoads —: OpenFreeMap's vector tile there, its streets the lights';
+    // none — refused, timed out —: VIIRS's light as it is, the tile not failed for it)
+    const street = z >= ROAD_Z0 && z <= IMG_Z1;
+    const rk = Math.max(z - ROAD_MVT_Z1, 0);
+    const sub = { k: rk, x: x - ((x >> rk) << rk), y: y - ((y >> rk) << rk) };
+    const mvt = street && roads ? fetchRoads(z - rk, x >> rk, y >> rk, signal) : Promise.resolve(null);
+    const [[d, photo], n, roadTile] = await Promise.all([day(), get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined), mvt]);
     // (decoded and brought into the Blue Marble's colours off the page's thread — tile-decode.ts imageryWords)
     const r = await decodeOff({
       op: "imagery",
@@ -2420,6 +2581,7 @@ async function imagery(
       nightCrop: n.crop,
       fit: photo?.fit ?? null,
       fine,
+      roads: street ? { z, y, mvt: roadTile, sub } : null,
     });
     return r.words ?? null;
   } catch {

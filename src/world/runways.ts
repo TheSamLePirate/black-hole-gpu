@@ -5,6 +5,8 @@
 // place, elevation, town, scheduled service, runways; each runway its two thresholds (exact over the ellipsoid, or
 // rebuilt from its number: `approx`), its true heading, length, width, surface, lights, its ends' names and elevations.
 
+import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
+
 export type FieldKind = "large" | "medium" | "small" | "seaplane" | "heliport";
 export type Surface = "paved" | "grass" | "dirt" | "water" | "snow" | "unknown";
 const KINDS: FieldKind[] = ["large", "medium", "small", "seaplane", "heliport"];
@@ -57,6 +59,28 @@ export function setRunwaysBase(url: string) {
 type Raw = [string, string, string, string, number, number, number, number, string, number, number[][], string[]];
 
 /** A tile's airfields from its JSON. */
+/**
+ * A runway's true heading [°] and length [m] from its two thresholds, on the WGS84 ellipsoid (the chord between them, its
+ * direction on the le end's north and east). OurAirports' published heading is off by a degree and more on some runways —
+ * Le Bourget's 07/25: 69.0° against its thresholds' 67.8° —, which put a far threshold rebuilt from it ~60 m to the side: the
+ * ILS's runway beside the one drawn, the F-35 landed in the grass (Sam, 6 Nov 2026). Null when the ends are too close to tell.
+ */
+export function runwayAxis(lat1: number, lon1: number, lat2: number, lon2: number): { hdg: number; len: number } | null {
+  const D = Math.PI / 180;
+  const a = geodeticToCart(WGS84_A, WGS84_F, lat1 * D, lon1 * D, 0),
+    b = geodeticToCart(WGS84_A, WGS84_F, lat2 * D, lon2 * D, 0);
+  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const len = Math.hypot(d[0]!, d[1]!, d[2]!);
+  if (!(len > 200)) return null;
+  const la = lat1 * D,
+    lo = lon1 * D;
+  const north = [-Math.sin(la) * Math.cos(lo), -Math.sin(la) * Math.sin(lo), Math.cos(la)];
+  const east = [-Math.sin(lo), Math.cos(lo), 0];
+  const dot = (u: number[], v: number[]) => u[0]! * v[0]! + u[1]! * v[1]! + u[2]! * v[2]!;
+  const hdg = Math.atan2(dot(d, east), dot(d, north)) / D;
+  return { hdg: ((hdg % 360) + 360) % 360, len };
+}
+
 export function decodeTile(json: { v: number; a: Raw[] }): Airfield[] {
   return json.a.map((r) => ({
     ident: r[0],
@@ -71,6 +95,8 @@ export function decodeTile(json: { v: number; a: Raw[] }): Airfield[] {
     scheduled: r[9] === 1,
     runways: r[10].map((w, k) => {
       const [le = "", he = ""] = (r[11][k] ?? "/").split("/");
+      // (its heading and length from its thresholds when it has both — runwayAxis —, the published ones else)
+      const ax = w[11] === 1 ? null : runwayAxis(w[0]! / 1e5, w[1]! / 1e5, w[2]! / 1e5, w[3]! / 1e5);
       return {
         le,
         he,
@@ -78,8 +104,8 @@ export function decodeTile(json: { v: number; a: Raw[] }): Airfield[] {
         lon1: w[1]! / 1e5,
         lat2: w[2]! / 1e5,
         lon2: w[3]! / 1e5,
-        hdg: w[4]! / 10,
-        len: w[5]!,
+        hdg: ax ? Math.round(ax.hdg * 100) / 100 : w[4]! / 10,
+        len: ax ? Math.round(ax.len) : w[5]!,
         wid: w[6]!,
         surface: SURFACES[w[7]!] ?? "unknown",
         lit: w[8] === 1,
