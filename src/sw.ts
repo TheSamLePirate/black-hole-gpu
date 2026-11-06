@@ -19,6 +19,8 @@
 import {
   classify,
   evictions,
+  GEOPF_AGE_MS,
+  geopfClass,
   isAppPage,
   isLegacyShell,
   isOwnShellCache,
@@ -515,27 +517,64 @@ const GEOPF_INFLIGHT = 10;
 let geopfNext = 0,
   geopfInflight = 0,
   geopfPausedTo = 0;
-async function geopfSlot() {
+/**
+ * (the network audit, 6 Nov 2026) The requests waiting for the budget, served in order — the ground's heights first (the
+ * relief seen near: the LiDAR HD's terrain, RGE ALTI), the orthophotos next, the rest after (the surfaces, the canopy, the BD
+ * TOPO, the zones) —, first come first served within a class; one the page gave up (its request's signal) dropped from the
+ * queue. They had polled every 15 ms, the first awake served: no order, no priority, the given-up ones still sent.
+ */
+const geopfWaiting: { p: number; seq: number; at: number; signal: AbortSignal | null; go: () => void; no: (e: unknown) => void }[] = [];
+let geopfSeq = 0;
+let geopfTimer: ReturnType<typeof setTimeout> | null = null;
+function geopfPump() {
   for (;;) {
+    for (let i = geopfWaiting.length - 1; i >= 0; i--)
+      if (geopfWaiting[i]!.signal?.aborted) geopfWaiting.splice(i, 1)[0]!.no(new DOMException("aborted", "AbortError"));
+    if (!geopfWaiting.length) return;
     const now = Date.now();
     const at = Math.max(now, geopfNext, geopfPausedTo);
-    if (at <= now && geopfInflight < GEOPF_INFLIGHT) {
-      geopfNext = now + 1000 / GEOPF_PER_S;
-      geopfInflight++;
+    // (at the rate's next turn — a request ending calls again when the in-flight are all out)
+    if (at > now || geopfInflight >= GEOPF_INFLIGHT) {
+      if (at > now && !geopfTimer)
+        geopfTimer = setTimeout(() => {
+          geopfTimer = null;
+          geopfPump();
+        }, at - now);
       return;
     }
-    await new Promise((done) => setTimeout(done, Math.max(at - now, 15)));
+    // (a class up every GEOPF_AGE_MS waited: the scenery's requests never starved by a flow of the relief's)
+    const rank = (w: (typeof geopfWaiting)[number]) => w.p - Math.floor((now - w.at) / GEOPF_AGE_MS);
+    let k = 0,
+      kr = rank(geopfWaiting[0]!);
+    for (let i = 1; i < geopfWaiting.length; i++) {
+      const a = geopfWaiting[i]!,
+        r = rank(a);
+      if (r < kr || (r === kr && a.seq < geopfWaiting[k]!.seq)) {
+        k = i;
+        kr = r;
+      }
+    }
+    geopfNext = now + 1000 / GEOPF_PER_S;
+    geopfInflight++;
+    geopfWaiting.splice(k, 1)[0]!.go();
   }
+}
+function geopfSlot(url: string, signal: AbortSignal | null): Promise<void> {
+  return new Promise((go, no) => {
+    geopfWaiting.push({ p: geopfClass(url), seq: geopfSeq++, at: Date.now(), signal, go, no });
+    geopfPump();
+  });
 }
 async function networkFetch(request: Request): Promise<Response> {
   if (!request.url.startsWith(GEOPF)) return fetch(request);
   for (let k = 0; ; k++) {
-    await geopfSlot();
+    await geopfSlot(request.url, request.signal ?? null);
     let res: Response;
     try {
       res = await fetch(request);
     } finally {
       geopfInflight--;
+      geopfPump();
     }
     if (res.status !== 429 || k >= 2) return res;
     const after = Number(res.headers.get("retry-after"));

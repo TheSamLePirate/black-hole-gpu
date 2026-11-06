@@ -213,3 +213,16 @@ export function ownsLegacyShell(urls: readonly string[], scope: string): boolean
   const origin = new URL(scope).origin;
   return urls.includes(scope) && urls.every((u) => !u.startsWith(`${origin}/`) || u.startsWith(scope));
 }
+
+/** (the network audit, 6 Nov 2026) a Géoplateforme request's class in the Service Worker's budget (sw.ts geopfPump): 0 the
+ *  ground's heights (the LiDAR HD's terrain, RGE ALTI — the relief seen near), 1 the orthophotos, the BD TOPO's buildings and
+ *  the canopy's height model, 2 the rest (the far silhouettes' surfaces, …) — a request waiting rising a class every
+ *  GEOPF_AGE_MS (sw.ts: none starved) */
+export const GEOPF_AGE_MS = 1500;
+export function geopfClass(url: string): number {
+  if (url.includes("/wms-r") && !/MNS|MNH/i.test(url) && /ELEVATION/i.test(url)) return 0;
+  // (the scenery near the craft: the orthophotos, the BD TOPO's buildings, the canopy's height model — its trees; left last,
+  // the canopy's survey waited 15–35 s behind the relief on a cold final, its trees late — kerr-mini A/B, 6 Nov 2026)
+  if (url.includes("ORTHOIMAGERY") || /BDTOPO/i.test(url) || /MNH/i.test(url)) return 1;
+  return 2;
+}

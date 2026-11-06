@@ -3,6 +3,7 @@ import { bdtopoUrl } from "../src/system/bdtopo";
 import { swissimageUrl, swissTerrainUrl } from "../src/system/national";
 import { orthoUrl } from "../src/system/earth-tiles";
 import {
+  geopfClass,
   classify,
   evictions,
   isAppPage,
@@ -136,4 +137,15 @@ test("regional surface pages are bounded tiles within their own scope", () => {
   );
   expect(classify("https://mapproxy.terrascope.be/mapproxy/service?REQUEST=GetCapabilities", base)).toBe("pass");
   expect(classify(`${base}test/earth-surface/v1/bourget/1-2-aabbccdd.ktx2`, base, "GET", ["earth-surface", "docs"])).toBe("pass");
+});
+
+test("the Géoplateforme's budget in the Service Worker: the ground's heights first, the orthophotos next, the rest after", () => {
+  const wms = (layer: string) => `https://data.geopf.fr/wms-r?SERVICE=WMS&REQUEST=GetMap&LAYERS=${layer}&FORMAT=image/x-bil;bits=32`;
+  expect(geopfClass(wms("IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G"))).toBe(0);
+  expect(geopfClass(wms("ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES"))).toBe(0);
+  expect(geopfClass("https://data.geopf.fr/wmts?SERVICE=WMTS&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&TILEMATRIX=17")).toBe(1);
+  expect(geopfClass(wms("IGNF_LIDAR-HD_MNS_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G"))).toBe(2);
+  expect(geopfClass(wms("ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES.MNS"))).toBe(2);
+  expect(geopfClass(wms("IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G"))).toBe(1);
+  expect(geopfClass("https://data.geopf.fr/tms/1.0.0/BDTOPO/15/16800/11900.pbf")).toBe(1);
 });

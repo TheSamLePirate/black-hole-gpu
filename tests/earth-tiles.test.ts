@@ -560,3 +560,28 @@ test("a window drawn before it is whole (T8i): the heights read near its edge, n
   expect(partial).toBeGreaterThan(5);
   expect(reads).toBeGreaterThan(1000);
 });
+
+test("the network audit: what is in flight for tiles the windows have left dropped, never thrown away on arrival", async () => {
+  // (the loads never answer here: every one stays in flight until dropped)
+  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const inflight = (t as unknown as { inflight: Map<string, AbortController> }).inflight;
+  const loadAt = (
+    t as unknown as { loadAt: Map<string, [{ want: { x0: number; x1: number; y0: number; y1: number } | null }, number, number]> }
+  ).loadAt;
+  t.update(camAt(45.9, 6.9, 2000), 2e-4);
+  expect(inflight.size).toBeGreaterThan(0);
+  const first = [...inflight.keys()];
+  // (30 km east, past the dropping's quarter second: the first place's loads gone from the fine levels)
+  await Bun.sleep(260);
+  t.update(camAt(45.9, 7.3, 2000), 2e-4);
+  expect(t.dropped.loads).toBeGreaterThan(0);
+  // (their loads ended — aborted — once their promises settle)
+  await Bun.sleep(5);
+  for (const k of first) if (!inflight.has(k)) expect(loadAt.has(k)).toBe(false);
+  // (what is still in flight within a tile of its window)
+  for (const [k] of inflight) {
+    const [L, x, y] = loadAt.get(k)!;
+    const w = L.want!;
+    expect(x >= w.x0 - 1 && x < w.x1 + 1 && y >= w.y0 - 1 && y < w.y1 + 1).toBe(true);
+  }
+});

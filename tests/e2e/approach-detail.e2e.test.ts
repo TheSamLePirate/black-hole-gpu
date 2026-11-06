@@ -77,7 +77,9 @@ const AHEAD = `(() => {
   // asked with nothing in flight, MB read, failures, 429s, cache hits)
   const nl = __bh.netLight?.stats?.();
   const net = nl ? { st: nl.state, inf: nl.inflight, k: nl.byKind, stall: nl.stallShare, s: nl.seconds, mb: nl.since.mb, n: nl.since.done, f: nl.since.failed, lim: nl.since.limited, c: nl.since.cached } : null;
-  return { agl: Math.round(agl), pending: t.pending, orthoPending: t.orthoPending, ...out, phase: __bh.camera.ilsInfo()?.phase ?? null, cover, scenery, net };
+  // (the loads dropped as their windows left them, the relief tiles' imagery asked again — the network audit)
+  const drop = t.dropped ? { ...t.dropped, imgRetry: t.imageryRetries } : null;
+  return { agl: Math.round(agl), pending: t.pending, orthoPending: t.orthoPending, drop, ...out, phase: __bh.camera.ilsInfo()?.phase ?? null, cover, scenery, net };
 })()`;
 
 test.skipIf(!E2E)(

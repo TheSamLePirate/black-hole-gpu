@@ -113,6 +113,10 @@ export const ORTHO_PARAM_VEC4S = 3 * ORTHO_LEVELS + 2;
 const ORTHO_INFLIGHT = 8;
 /** an orthophoto refused or timed out asked again this many times while in the window (2, 4, 8 s apart) */
 const ORTHO_RETRIES = 3;
+/** a relief tile's imagery refused or timed out asked again this many times while the tile is drawn (2, 4, 8 s apart) */
+const IMAGERY_RETRIES = 3;
+/** the abort's reason of a tile's imagery timed out (a failure, asked again — not the tile given up) */
+const IMAGERY_TIMEOUT = "imagery timeout";
 /** (L7b's prototype — ortho-delight.ts, settings.orthoDelight) the levels de-lit (z 17: 0.8 m, z 18: 0.4 m a pixel at 48°: a
  *  shadow's edge resolved), the canopy's margin round a tile [px] (a 40 m tree's shadow at 45° from z 18's 96 px — 38 m —
  *  away), its requests a second (the Géoplateforme's WMS-R: the relief's 20 and the survey's 12 beside), its tiles at once */
@@ -372,6 +376,9 @@ interface Level {
   data: (Float32Array | null)[];
   /** its imagery, held on the finest levels only (the ring's: kept past the window when it leaves it) */
   col: (Uint32Array | null)[];
+  /** the tile whose imagery its slot's texture holds ("" none): drawn again without any — its national heights over a first
+   *  imagery that failed —, the imagery asked again since kept (imageryLater) */
+  imgKey: string[];
   /** its tiles drawn from the sources before a switch, taken again — drawn until each is in from the new one */
   stale: boolean;
 }
@@ -807,10 +814,20 @@ export class EarthTiles {
   onResize: (() => void) | null = null;
   private levels: Level[] = [];
   private inflight = new Map<string, AbortController>();
+  /** (the network audit) each load's level and place in its window's coordinates, and the loads going into memory (ahead) */
+  private loadAt = new Map<string, [Level, number, number]>();
+  private aheadLoads = new Set<string>();
+  /** when the loads no longer wanted are looked for next [ms] (dropUnwanted) */
+  private dropAt = 0;
+  /** the loads dropped as their windows left them, the ones kept in memory instead (the network audit) */
+  dropped = { loads: 0, refines: 0, ortho: 0, kept: 0 };
   /** the tiles drawn from the global data while their national source's heights come (refine) */
   private refining = new Map<string, { ctl: AbortController; L: Level; x: number; y: number; surface: boolean }>();
   private nationalActive = 0;
-  private nationalQueue: { p: number; go: () => void }[] = [];
+  /** the national heights waiting for a slot: their tile, and their pass (0 the ground, 1 the far surface) — the nearest to the
+   *  loads' centre now served first (the network audit, 6 Nov 2026: their distance had been fixed when they queued, the craft
+   *  kilometres on since) */
+  private nationalQueue: { L: Level; x: number; y: number; pass: number; go: () => void }[] = [];
   private failures = new Map<string, { n: number; at: number }>();
   /** bumped at a switch of the sources: a load begun before it is dropped */
   private gen = 0;
@@ -881,6 +898,8 @@ export class EarthTiles {
   /** (the network audit, 6 Nov 2026) the orthophotos refused or timed out, asked again while in the window: their tries and
    *  when next (2, 4, 8 s) — a failure had left its tile on the coarser photographs for as long as it stayed in view */
   private orthoRetry = new Map<string, { n: number; at: number }>();
+  /** each orthophoto load's level and place in its window's coordinates (dropUnwanted) */
+  private orthoAt = new Map<string, [OrthoLevel, number, number]>();
   orthoLoaded = 0;
   /** (L7b's prototype, settings.orthoDelight) the orthophotos' cast shadows lifted on the levels from DELIGHT_Z; its tiles
    *  relit, left (by why), its worker's time, the last one's stats */
@@ -946,6 +965,7 @@ export class EarthTiles {
         key: new Array(n * n).fill(null),
         data: new Array(n * n).fill(null),
         col: new Array(n * n).fill(null),
+        imgKey: new Array(n * n).fill(""),
         stale: false,
       });
     }
@@ -1031,6 +1051,7 @@ export class EarthTiles {
       L.key = new Array(L.span * L.span).fill(null);
       L.data = new Array(L.span * L.span).fill(null);
       L.col = new Array(L.span * L.span).fill(null);
+      L.imgKey = new Array(L.span * L.span).fill("");
     }
     this.stamp++;
     this.logChange(-1, null, null);
@@ -1147,6 +1168,8 @@ export class EarthTiles {
   clear() {
     for (const c of this.inflight.values()) c.abort();
     this.inflight.clear();
+    this.loadAt.clear();
+    this.aheadLoads.clear();
     for (const r of this.refining.values()) r.ctl.abort();
     for (const L of this.levels) {
       L.want = null;
@@ -1158,6 +1181,7 @@ export class EarthTiles {
   private clearOrtho() {
     for (const c of this.orthoInflight.values()) c.abort();
     this.orthoInflight.clear();
+    this.orthoAt.clear();
     this.orthoRetry.clear();
     for (const O of this.ortho) {
       O.want = null;
@@ -1184,6 +1208,8 @@ export class EarthTiles {
       this.gen++;
       for (const c of this.inflight.values()) c.abort();
       this.inflight.clear();
+      this.loadAt.clear();
+      this.aheadLoads.clear();
       for (const r of this.refining.values()) r.ctl.abort();
       this.cache.clear();
       for (const L of this.levels) {
@@ -1273,7 +1299,48 @@ export class EarthTiles {
     const uy = mercY(this.prioritySinLat, 1) - mercY(this.sinLat, 1);
     const ul = Math.hypot(ux, uy);
     this.leadDir = ul > 1e-12 ? [ux / ul, uy / ul] : null;
+    this.dropUnwanted();
     this.request(cx0(this.priorityLon), this.prioritySinLat);
+  }
+
+  /**
+   * (the network audit, 6 Nov 2026) What is in flight for tiles the windows have left — their answers were thrown away on
+   * arrival (put draws only within the window), each holding a load's slot or a national one (the IGN's, the bottleneck —
+   * its rate's gate) up to 15–30 s —: dropped, a tile beyond its window by more than one tile; one within the halo's ring kept
+   * in memory instead, while it has room (a ring's level, a far reach). Four times a second.
+   */
+  private dropUnwanted() {
+    const now = performance.now();
+    if (now < this.dropAt) return;
+    this.dropAt = now + 250;
+    const near = (w: Rect | null, x: number, y: number, m: number) => !!w && x >= w.x0 - m && x < w.x1 + m && y >= w.y0 - m && y < w.y1 + m;
+    for (const [key, ctl] of this.inflight) {
+      const at = this.loadAt.get(key);
+      if (!at || this.aheadLoads.has(key)) continue;
+      const [L, x, y] = at;
+      if (near(L.want, x, y, 1)) continue;
+      if (this.ringLevel(L) && near(L.want, x, y, this.ring) && this.cache.size + this.aheadLoads.size < this.cacheTiles) {
+        this.aheadLoads.add(key);
+        this.dropped.kept++;
+        continue;
+      }
+      // (out of the map first: its load's catch sees it cleared — no failure counted, no retry)
+      this.inflight.delete(key);
+      ctl.abort();
+      this.dropped.loads++;
+    }
+    for (const [key, r] of this.refining) {
+      if (r.ctl.signal.aborted || near(r.L.want, r.x, r.y, 1) || this.cache.has(key) || this.aheadLoads.has(key)) continue;
+      r.ctl.abort();
+      this.dropped.refines++;
+    }
+    for (const [key, ctl] of this.orthoInflight) {
+      const at = this.orthoAt.get(key);
+      if (!at || near(at[0].want, at[1], at[2], 1)) continue;
+      this.orthoInflight.delete(key);
+      ctl.abort();
+      this.dropped.ortho++;
+    }
   }
 
   /**
@@ -1389,7 +1456,7 @@ export class EarthTiles {
     y: number,
     key: string,
     src: NationalSource,
-    img: Promise<Uint32Array | null>,
+    img: Promise<Uint32Array | null | undefined>,
     p: number,
     ground?: Float32Array,
   ): Promise<void> {
@@ -1400,7 +1467,7 @@ export class EarthTiles {
     const wanted = () => gen === this.gen && !ctl.signal.aborted && (L.key[this.slotOf(L, x, y)] === key || this.cache.has(key));
     let nextPass: Float32Array | null = null;
     if (this.nationalActive < MAX_NATIONAL) this.nationalActive++;
-    else await new Promise<void>((go) => this.nationalQueue.push({ p, go }));
+    else await new Promise<void>((go) => this.nationalQueue.push({ L, x, y, pass: Math.floor(p), go }));
     try {
       if (!wanted()) return;
       const timer = setTimeout(() => ctl.abort(), NATIONAL_TIMEOUT_MS);
@@ -1414,7 +1481,7 @@ export class EarthTiles {
       } finally {
         clearTimeout(timer);
       }
-      const col = await img.catch(() => null);
+      const col = (await img.catch(() => null)) ?? null;
       if (gen !== this.gen) return;
       if (L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, h, col);
       else if (this.cache.has(key)) this.keep(key, h, col);
@@ -1425,8 +1492,20 @@ export class EarthTiles {
       // (the slot handed to the nearest waiting)
       const q = this.nationalQueue;
       if (q.length) {
-        let k = 0;
-        for (let i = 1; i < q.length; i++) if (q[i]!.p < q[k]!.p) k = i;
+        // (the nearest to the loads' centre now — in its level's tiles, over their count —, the ground's pass before the far
+        // surface's)
+        const lonT = cx0(this.priorityLon);
+        const pr = (e: (typeof q)[number]) =>
+          e.pass + (Math.hypot(e.x + 0.5 - lonT * e.L.n, e.y + 0.5 - mercY(this.prioritySinLat, e.L.n)) + 1) / e.L.n;
+        let k = 0,
+          best = pr(q[0]!);
+        for (let i = 1; i < q.length; i++) {
+          const v = pr(q[i]!);
+          if (v < best) {
+            best = v;
+            k = i;
+          }
+        }
         q.splice(k, 1)[0]!.go();
       } else this.nationalActive--;
       if (this.refining.get(key)?.ctl === ctl) this.refining.delete(key);
@@ -1434,12 +1513,39 @@ export class EarthTiles {
     if (nextPass && gen === this.gen) await this.refine(L, x, y, key, src, img, 1 + p, nextPass);
   }
 
+  /**
+   * (the network audit, 6 Nov 2026) A tile's imagery refused or timed out, asked again while the tile is drawn — 2, 4, 8 s
+   * after —: it had stayed on the coarser level's colours for as long as it was in view. Put with the heights drawn then (the
+   * national ones, if in since).
+   */
+  private imageryLater(L: Level, x: number, y: number, key: string, src: NationalSource | null, n: number) {
+    if (n > IMAGERY_RETRIES) return;
+    this.imageryRetries++;
+    const gen = this.gen;
+    setTimeout(
+      async () => {
+        const s = this.slotOf(L, x, y);
+        if (gen !== this.gen || L.key[s] !== key) return;
+        const signal = AbortSignal.timeout(TIMEOUT_MS);
+        const col = await imagery(L.z, ((x % L.n) + L.n) % L.n, y, signal, this.orthoOn ? src : null);
+        if (gen !== this.gen || L.key[s] !== key || !L.data[s]) return;
+        if (col) this.put(L.z, x, y, L.data[s]!, col);
+        else if (col === undefined) this.imageryLater(L, x, y, key, src, n + 1);
+      },
+      2000 * 2 ** (n - 1),
+    );
+  }
+  /** the relief tiles' imagery asked again after a failure (imageryLater), since the start */
+  imageryRetries = 0;
+
   /** A tile loaded — into its window, or (ahead) into memory past it, drawn if its window has come to it meanwhile. */
   private async load(L: Level, x: number, y: number, ahead = false) {
     const key = this.keyOf(L, x, y);
     const gen = this.gen;
     const ctl = new AbortController();
     this.inflight.set(key, ctl);
+    this.loadAt.set(key, [L, x, y]);
+    if (ahead) this.aheadLoads.add(key);
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     let h: Float32Array | null = null;
     // (its imagery alongside, on the levels that have some: none if it will not come — the coarser level's
@@ -1447,7 +1553,8 @@ export class EarthTiles {
     // its own time limit, given up with the tile)
     const xw = ((x % L.n) + L.n) % L.n;
     const imgCtl = new AbortController();
-    const imgTimer = setTimeout(() => imgCtl.abort(), TIMEOUT_MS);
+    // (timed out: marked — a failure asked again, imageryLater —, not a tile given up)
+    const imgTimer = setTimeout(() => imgCtl.abort(IMAGERY_TIMEOUT), TIMEOUT_MS);
     const relay = () => imgCtl.abort();
     ctl.signal.addEventListener("abort", relay, { once: true });
     // (the tile's national source — its centre's: swisstopo's, the IGN's — or none)
@@ -1467,6 +1574,8 @@ export class EarthTiles {
       const heights = await terrarium(L.z, xw, y, ctl.signal);
       // (begun before a switch of the sources: the old source's — the slot waits for the new one's)
       if (gen !== this.gen) return;
+      // (its window gone past it meanwhile, within the halo: into memory — dropUnwanted)
+      ahead = this.aheadLoads.has(key);
       h = heights;
       this.loaded++;
       // (the national heights asked once the global data's are drawn — or kept —: refine finds the tile wanted)
@@ -1483,10 +1592,13 @@ export class EarthTiles {
         h = null;
       } else
         void img.then((col) => {
-          if (col && gen === this.gen && L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, heights, col);
+          if (gen !== this.gen || L.key[this.slotOf(L, x, y)] !== key) return;
+          if (col) this.put(L.z, x, y, heights, col);
+          else if (col === undefined) this.imageryLater(L, x, y, key, src, 1);
         });
     } catch (e) {
-      if (gen !== this.gen || !this.inflight.has(key)) return; // (cleared, or the sources switched)
+      // (cleared, the sources switched, or dropped as its window left it — and maybe asked again since: not this load's)
+      if (gen !== this.gen || this.inflight.get(key) !== ctl) return;
       const f = this.failures.get(key) ?? { n: 0, at: 0 };
       f.n++;
       f.at = performance.now() + 3000 * f.n;
@@ -1501,7 +1613,14 @@ export class EarthTiles {
       }
     } finally {
       clearTimeout(timer);
-      if (this.inflight.get(key) === ctl) this.inflight.delete(key);
+      if (this.inflight.get(key) === ctl) {
+        this.inflight.delete(key);
+        this.loadAt.delete(key);
+        this.aheadLoads.delete(key);
+      } else if (!this.inflight.has(key)) {
+        this.loadAt.delete(key);
+        this.aheadLoads.delete(key);
+      }
     }
     if (h) this.put(L.z, x, y, h);
     if (refineAfter) {
@@ -1571,7 +1690,12 @@ export class EarthTiles {
       } else texels[per * i] = hb[i]!;
       if (per === 2) texels[2 * i + 1] = col ? col[i]! : 0;
     }
-    this.putImagery(L, s, col);
+    // (the same tile again without imagery over its own: kept — the filtered path's separate texture)
+    const k = this.keyOf(L, x, y);
+    if (col || L.imgKey[s] !== k || !this.filtered) {
+      this.putImagery(L, s, col);
+      L.imgKey[s] = col ? k : "";
+    }
     const slot = this.layout.levels[L.z - Z0]!;
     this.device.queue.writeTexture(
       {
@@ -1807,6 +1931,7 @@ export class EarthTiles {
     const key = this.orthoKey(O, x, y);
     const ctl = new AbortController();
     this.orthoInflight.set(key, ctl);
+    this.orthoAt.set(key, [O, x, y]);
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     const xw = ((x % O.n) + O.n) % O.n;
     const src = tileSource(NATIONAL, O.n, xw, y);
@@ -1832,7 +1957,11 @@ export class EarthTiles {
     } finally {
       clearTimeout(timer);
     }
-    if (this.orthoInflight.get(key) !== ctl) return; // (cleared meanwhile)
+    if (this.orthoInflight.get(key) !== ctl) {
+      if (!this.orthoInflight.has(key)) this.orthoAt.delete(key);
+      return; // (cleared meanwhile, or its window gone — dropUnwanted)
+    }
+    this.orthoAt.delete(key);
     this.orthoInflight.delete(key);
     if (col) this.orthoLoaded++;
     if (failed && !none) {
@@ -2146,7 +2275,7 @@ async function imagery(
   y: number,
   signal: AbortSignal,
   ortho: NationalSource | null = null,
-): Promise<Uint32Array | null> {
+): Promise<Uint32Array | null | undefined> {
   try {
     // (a file's bytes — the decoding the worker's —, a square of it to enlarge)
     type Got = { blob: Blob; crop: [number, number, number] | null };
@@ -2197,7 +2326,12 @@ async function imagery(
     });
     return r.words ?? null;
   } catch {
-    return null;
+    // (given up with its tile: none; refused, timed out: undefined — asked again while the tile is drawn, imageryLater)
+    return signal.aborted &&
+      signal.reason !== IMAGERY_TIMEOUT &&
+      !(signal.reason instanceof DOMException && signal.reason.name === "TimeoutError")
+      ? null
+      : undefined;
   }
 }
 

@@ -115,6 +115,8 @@ const FETCH_CACHE_BYTES =
   ((globalThis.navigator as { deviceMemory?: number } | undefined)?.deviceMemory ?? 4) >= 8 ? 192 * 1024 * 1024 : 96 * 1024 * 1024;
 /** one answer at most this big kept */
 const FETCH_CACHE_ONE = 24 * 1024 * 1024;
+/** the BD TOPO's tiles loading at once in a scene (the Service Worker's budget orders them with the IGN's other requests) */
+const BDTOPO_RUNNERS = 6;
 const fetchCache = new Map<string, { status: number; headers: [string, string][]; body: ArrayBuffer }>();
 let fetchCacheBytes = 0;
 /** this worker's hits and misses (the scene's stats) */
@@ -710,15 +712,28 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     };
     // (their count said at once: the indicator's "buildings 0/N" before the first batch is in)
     tell({ step: "buildings", done: 0, of: want.length });
-    for (let k0 = 0; k0 < want.length; k0 += 4) {
-      // (enough: the nearest `limit` closer than every tile left)
-      if (out.length >= limit) {
-        out.sort((a, b) => a.d - b.d);
-        if (out[limit - 1]!.d < want[k0]!.d) break;
+    // (the network audit, 6 Nov 2026: BDTOPO_RUNNERS loads going on, each taking the next nearest tile as one ends — in
+    // batches of 4 each waited for its slowest, the first scene of a cold final 37 s in this step)
+    let next = 0,
+      done = 0,
+      enough = false;
+    const runner = async () => {
+      while (!enough && next < want.length) {
+        // (enough: the nearest `limit` closer than every tile left — looked at every 4 tiles)
+        if (out.length >= limit && next % 4 === 0) {
+          out.sort((a, b) => a.d - b.d);
+          if (out[limit - 1]!.d < want[next]!.d) {
+            enough = true;
+            break;
+          }
+        }
+        const w = want[next++]!;
+        await one(w.x, w.y);
+        done++;
+        tell({ step: "buildings", done, of: want.length });
       }
-      await Promise.all(want.slice(k0, k0 + 4).map((w) => one(w.x, w.y)));
-      tell({ step: "buildings", done: Math.min(k0 + 4, want.length), of: want.length });
-    }
+    };
+    await Promise.all(Array.from({ length: BDTOPO_RUNNERS }, runner));
     return { out, covered, tileCount };
   };
   const bdtopo = survey === "ign" ? bdtopoTiles() : null;
