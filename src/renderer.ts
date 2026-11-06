@@ -1,7 +1,7 @@
 import { holeFleet } from "./holefleet";
 import { issCamera, type IssCameraId } from "./system/iss-cameras";
 import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
-import { streamingLead, aheadFocus, gazeLead } from "./system/streaming-focus";
+import { aheadFocus, buildLead, gazeLead, groundSpeed, streamingLead } from "./system/streaming-focus";
 import { TerrainCache } from "./system/terrain-cache";
 import { EarthHorizons } from "./system/earth-horizons";
 import { EarthShore } from "./system/earth-shore";
@@ -3836,13 +3836,29 @@ export class Renderer {
       this.earthScenery.ign = s.earthIgnRelief;
       this.earthScenery.overture = s.earthOverture;
       this.earthScenery.lamps = s.earthStreetLamps;
+      // (T8m: its speed — a fast flight chains quick scenes)
+      this.earthScenery.speed = groundSpeed(eye, this.streamVelocity);
       this.earthScenery.update(
         eye,
         detail.scenery,
         s.earthSurface !== "off",
         s.earthTerrain,
         this.sceneryExclusions,
-        eye ? aheadFocus(eye, Math.hypot(...gazeS) > 0 ? gazeS : lead) : null,
+        // (T8m: moving, the scene centred where the craft will be when it is ready — the speed × the last build's time, at most
+        // 0.6 of its box's radius —: on a final at 95 m/s a 25–40 s scene came 2.4–3.8 km behind; slow or still, the view's lead)
+        eye
+          ? aheadFocus(
+              eye,
+              buildLead(
+                eye,
+                this.streamVelocity,
+                this.earthScenery.buildS(),
+                // (a full scene's centre 0.6 of its radius ahead at most — farther, mostly new ground: its sources fetched anew, a
+                // rebuild of 60 s on the final —; a quick one's 1.2: chained, each where the craft will be)
+                (this.earthScenery.fastFlight() ? 1.2 : 0.6) * this.earthScenery.nextRadius(),
+              ) ?? (Math.hypot(...gazeS) > 0 ? gazeS : lead),
+            )
+          : null,
         reach,
       );
       this.earthScenery.shadows = s.earthSceneryShadows;

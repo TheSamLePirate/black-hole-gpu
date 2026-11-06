@@ -41,3 +41,19 @@ test("the detail led where the view looks: ahead to the ground looked at, at mos
   expect(gazeLead(c, [-1, 0, 0], 300, 6000)).toEqual([0, 0, 0]);
   expect(len(gazeLead(c, [0.5, 0, Math.sqrt(0.75)], 300, 6000)) * WGS84_A).toBeCloseTo(6000, 3);
 });
+
+test("T8m: a scene's centre led by the speed × its build time along the track, capped; none when slow", async () => {
+  const { buildLead } = await import("../src/system/streaming-focus");
+  const { WGS84_A } = await import("../src/system/ellipsoid");
+  const c: [number, number, number] = [1, 0, 0];
+  const east: [number, number, number] = [0, 95, 0];
+  const l = buildLead(c, east, 30, 3600)!;
+  expect(Math.hypot(...l) * WGS84_A).toBeCloseTo(2850, 0);
+  expect(l[1]).toBeGreaterThan(0);
+  const fast = buildLead(c, [0, 250, 0], 30, 3600)!;
+  expect(Math.hypot(...fast) * WGS84_A).toBeCloseTo(3600, 0);
+  expect(buildLead(c, [0, 10, 0], 30, 3600)).toBeNull();
+  // (the vertical part left out: a climb leads along the ground only)
+  const climb = buildLead(c, [60, 95, 0], 30, 3600)!;
+  expect(Math.abs(climb[0]) * WGS84_A).toBeLessThan(1e-6);
+});

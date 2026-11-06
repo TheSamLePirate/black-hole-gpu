@@ -50,12 +50,28 @@ const AHEAD = `(() => {
     }
   }
   out.side = +(side / Math.max(sideN, 1)).toFixed(2);
+  // (T8m: the scene's box over the ground ahead and aside — 2 and 4 km ahead, 3 km at 45° and 2 km at 90° either way —: the
+  // share of those points inside its radius less 300 m, its trees there; and how far its centre is)
+  const scs = __bh.renderer.earthScenery?.stats?.();
+  let cover = null;
+  if (scs && scs.lat !== null) {
+    const dg = (v) => (Math.abs(v) > 1.6 ? v : (v * 180) / Math.PI);
+    const rad = (scs.mode === "high" ? 3000 : 2000) * (scs.reach ?? 1) - 300;
+    let inside = 0, n = 0;
+    for (const [b, dd] of [[0, 2000], [0, 4000], [-45, 3000], [45, 3000], [-90, 2000], [90, 2000]]) {
+      const az = (g.track ?? 0) + (b * Math.PI) / 180;
+      const la = g.lat + (dd * Math.cos(az)) / 111320, lo = g.lon + (dd * Math.sin(az)) / (111320 * Math.cos((g.lat * Math.PI) / 180));
+      const d = Math.hypot((dg(scs.lat) - la) * 111320, (dg(scs.lon) - lo) * 111320 * Math.cos((la * Math.PI) / 180));
+      n++; if (d < rad) inside++;
+    }
+    cover = +(inside / n).toFixed(2);
+  }
   // (the scenery — its trees on the hills: its state, its step, how many trees, its centre's distance)
   const sc = __bh.renderer.earthScenery?.stats?.();
   const deg = (v) => (Math.abs(v) > 1.6 ? v : (v * 180) / Math.PI);
   const scD = sc && sc.lat !== null ? Math.round(Math.hypot((deg(sc.lat) - g.lat) * 111320, (deg(sc.lon) - g.lon) * 111320 * Math.cos(g.lat * D))) : null;
-  const scenery = sc ? { st: sc.status, step: sc.progress?.step ?? null, trees: sc.trees, dM: scD } : null;
-  return { agl: Math.round(agl), pending: t.pending, ...out, phase: __bh.camera.ilsInfo()?.phase ?? null, scenery };
+  const scenery = sc ? { st: sc.status, step: sc.progress?.step ?? null, trees: sc.trees, dM: scD, ms: sc.workerMs, phases: sc.phases, net: sc.tileNetworkBytes, cache: sc.fetchCache ?? null } : null;
+  return { agl: Math.round(agl), pending: t.pending, ...out, phase: __bh.camera.ilsInfo()?.phase ?? null, cover, scenery };
 })()`;
 
 test.skipIf(!E2E)(

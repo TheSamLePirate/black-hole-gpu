@@ -14,6 +14,28 @@ export function streamingLead(c: Vec3, velocity: Vec3 | null): Vec3 {
 }
 export const aheadFocus = (c: Vec3, lead: Vec3): Vec3 => add(c, lead);
 
+/** (T8m) the speed over the ground [m/s] (the velocity's horizontal part at c; 0 none) */
+export function groundSpeed(c: Vec3 | null, velocity: Vec3 | null): number {
+  if (!c || !velocity) return 0;
+  const up = unit([c[0], c[1], c[2] / (1 - WGS84_F) ** 2]);
+  return len(sub(velocity, scale(up, dot(velocity, up))));
+}
+
+/**
+ * (T8m) Where a scene asked now will be wanted when it is ready: along the ground track, the speed × `buildS` (the last
+ * scene's preparation, with a margin) ahead, at most `maxM` (a share of its box's radius: the craft still inside it). Null
+ * when the craft is slow (under `minSpeed` m/s): the view's lead decides there. c, Earth-fixed [equatorial radii]; velocity,
+ * Earth-fixed [m/s].
+ */
+export function buildLead(c: Vec3, velocity: Vec3 | null, buildS: number, maxM: number, minSpeed = 25): Vec3 | null {
+  if (!velocity) return null;
+  const up = unit([c[0], c[1], c[2] / (1 - WGS84_F) ** 2]);
+  const horizontal = sub(velocity, scale(up, dot(velocity, up)));
+  const speed = len(horizontal);
+  if (speed < minSpeed) return null;
+  return scale(horizontal, Math.min(speed * buildS, maxM) / speed / WGS84_A);
+}
+
 /**
  * Where the detail is wanted ahead (the relief's finest windows, the scenery's box): the eye led along where the view
  * looks — its horizontal part —, out to the ground it looks at (the look down: the eye's height over it ÷ the angle's

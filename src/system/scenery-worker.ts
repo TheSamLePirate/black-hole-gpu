@@ -104,6 +104,50 @@ import {
   type SceneryReply,
 } from "./scenery-data";
 
+// ---- (T8m) the worker kept from one scene to the next (system/scenery.ts), and its network's answers with it: a scene rebuilt
+// as the craft flies on covers most of the last one's box and of its 15 km of infrastructure — its land cover's cells, its
+// vector tiles, BD TOPO's, Overture's archives' ranges, the canopy's survey —; each scene fetched its ~52 MB again (a
+// rebuild on a final at Toulon-Hyères: 27 s, 9 of them waiting for Overture's infrastructure tiles — 6 Nov 2026). The GET
+// answers kept (their range with them), the least recently used dropped past FETCH_CACHE_BYTES.
+// (192 MiB where the browser says 8 GB or more of memory, 96 MiB else — and where it says nothing, Safari's, an iPad's)
+const FETCH_CACHE_BYTES =
+  ((globalThis.navigator as { deviceMemory?: number } | undefined)?.deviceMemory ?? 4) >= 8 ? 192 * 1024 * 1024 : 96 * 1024 * 1024;
+/** one answer at most this big kept */
+const FETCH_CACHE_ONE = 24 * 1024 * 1024;
+const fetchCache = new Map<string, { status: number; headers: [string, string][]; body: ArrayBuffer }>();
+let fetchCacheBytes = 0;
+/** this worker's hits and misses (the scene's stats) */
+export const fetchCacheStats = { hits: 0, misses: 0, hitBytes: 0 };
+const rawFetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const req = new Request(input, init);
+  if (req.method !== "GET") return rawFetch(input, init);
+  const key = `${req.url}|${req.headers.get("range") ?? ""}`;
+  const hit = fetchCache.get(key);
+  if (hit) {
+    fetchCache.delete(key);
+    fetchCache.set(key, hit);
+    fetchCacheStats.hits++;
+    fetchCacheStats.hitBytes += hit.body.byteLength;
+    return new Response(hit.body.slice(0), { status: hit.status, headers: hit.headers });
+  }
+  fetchCacheStats.misses++;
+  const r = await rawFetch(input, init);
+  if (r.status !== 200 && r.status !== 206) return r;
+  const body = await r.arrayBuffer();
+  const headers = [...r.headers.entries()];
+  if (body.byteLength <= FETCH_CACHE_ONE) {
+    fetchCache.set(key, { status: r.status, headers, body: body.slice(0) });
+    fetchCacheBytes += body.byteLength;
+    for (const [k, v] of fetchCache) {
+      if (fetchCacheBytes <= FETCH_CACHE_BYTES) break;
+      fetchCache.delete(k);
+      fetchCacheBytes -= v.body.byteLength;
+    }
+  }
+  return new Response(body, { status: r.status, headers });
+}) as typeof fetch;
+
 /** the water polygons of a river's kind (OpenMapTiles' water class): drawn in a river's style, not a lake's */
 const RIVER_CLASSES = new Set(["river", "canal", "stream", "ditch", "drain"]);
 /** their colour — its blue under 0.05: trace.wgsl sceneryWaterAt tells a river by it */
@@ -1625,6 +1669,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     otherResponses: served.other,
     workerMs: performance.now() - started,
     phases,
+    fetchCache: { ...fetchCacheStats, bytes: fetchCacheBytes },
     errors: errors.slice(0, 12),
     budgetLimited,
   };

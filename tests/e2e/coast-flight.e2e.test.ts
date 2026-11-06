@@ -11,12 +11,14 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // (liteSkip 512: red the sea; what is not red is land) — and the relief's state: tiles pending, the finest level, the view's
 // quality (a fan of 384 rays over the ground ahead, each the level its footprint wants against the finest drawn there,
 // 2^(drawn − wanted), their mean: 1 = the relief at its best everywhere — tile-arrival's measure, from the craft's place).
-//   CF_SITES: lat,lon,heading,agl[,yaw];… (the five when unset) · CF_OUT · CF_EVERY · CF_FOR
+//   CF_SITES: lat,lon,heading,agl[,yaw];… (the five when unset) · CF_OUT · CF_EVERY · CF_FOR · CF_SPEED (150 m/s) · CF_READY=1 (the start's data waited for, frozen)
 // Output: remote-results/coast-flight/<site>-NN.png, -NN-w.png, series.json.
 // Done when: each site flown CF_FOR s with its shots and measures, no GPU error. Duration: ~1 min a site.
 const OUT = process.env.CF_OUT ?? "remote-results/coast-flight";
 const EVERY = Number(process.env.CF_EVERY ?? 2500);
 const FOR = Number(process.env.CF_FOR ?? 30);
+/** the speed put at [m/s] (CF_SPEED: a fast low flight — the scenery's box behind it) */
+const SPEED = Number(process.env.CF_SPEED ?? 150);
 // (flown along the coast, 1–2 km off it, the look turned towards it (yaw, degrees): its rocks, cliffs and islands in view at
 // 1–5 km while their tiles come)
 const SITES: { name: string; at: [number, number, number, number]; yaw: number }[] = process.env.CF_SITES
@@ -65,7 +67,23 @@ const QUALITY = `(() => {
     is += qi;
     if (d < 1500) { near += qi; nn++; }
   }
-  return { q: +(qs / qn).toFixed(3), worst: +worst.toFixed(3), ideal: +(is / qn).toFixed(3), near: nn ? +(near / nn).toFixed(3) : null, pending: t.pending, photos: t.orthoPending, finest: t.finest, agl: Math.round(H), lat: +g.lat.toFixed(4), lon: +g.lon.toFixed(4) };
+  // (T8m: the scene's box over the ground ahead and aside — 2 and 4 km ahead, 3 km at 45° and 2 km at 90° either way —: the
+  // share of those points inside its radius less 300 m, its trees there; and how far its centre is)
+  const scs = __bh.renderer.earthScenery?.stats?.();
+  let cover = null;
+  if (scs && scs.lat !== null) {
+    const dg = (v) => (Math.abs(v) > 1.6 ? v : (v * 180) / Math.PI);
+    const rad = (scs.mode === "high" ? 3000 : 2000) * (scs.reach ?? 1) - 300;
+    let inside = 0, n = 0;
+    for (const [b, dd] of [[0, 2000], [0, 4000], [-45, 3000], [45, 3000], [-90, 2000], [90, 2000]]) {
+      const az = (g.track ?? 0) + (b * Math.PI) / 180;
+      const la = g.lat + (dd * Math.cos(az)) / 111320, lo = g.lon + (dd * Math.sin(az)) / (111320 * Math.cos((g.lat * Math.PI) / 180));
+      const d = Math.hypot((dg(scs.lat) - la) * 111320, (dg(scs.lon) - lo) * 111320 * Math.cos((la * Math.PI) / 180));
+      n++; if (d < rad) inside++;
+    }
+    cover = +(inside / n).toFixed(2);
+  }
+  return { cover, trees: scs?.trees ?? 0, scSt: scs?.status ?? null, q: +(qs / qn).toFixed(3), worst: +worst.toFixed(3), ideal: +(is / qn).toFixed(3), near: nn ? +(near / nn).toFixed(3) : null, pending: t.pending, photos: t.orthoPending, finest: t.finest, agl: Math.round(H), lat: +g.lat.toFixed(4), lon: +g.lon.toFixed(4) };
 })()`;
 
 // (CF_PROBE=1: the tiles' raw heights over a fan ahead and to the left — 300 m to 2.5 km, the heading −80° … +20° —, each
@@ -116,7 +134,14 @@ test.skipIf(!E2E)(
         // (13 h solar there, the 5th of November)
         const utc = new Date(Date.UTC(2026, 10, 5) + (13 - lon / 15) * 3600e3).toISOString();
         await app.js(`(() => { __bh.freeze(false); __bh.game.setDate(${JSON.stringify(utc)}); __bh.game.set("weather", "fair");
-          __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, 150); __bh.settings.shipMount = "cockpit"; document.body.classList.add("hide-ui"); return 1; })()`);
+          __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${SPEED}); __bh.settings.shipMount = "cockpit"; document.body.classList.add("hide-ui"); return 1; })()`);
+        // (CF_READY=1: held where put until its relief, scenery and kernels are in — a launch's —: what follows is the streaming
+        // in flight alone)
+        if (process.env.CF_READY === "1") {
+          await app.js(`(__bh.freeze(true), 1)`);
+          await app.dataSettled(`${s.name}'s start`);
+          await app.js(`(__bh.freeze(false), 1)`);
+        }
         // (no autopilot — it turned every flight to the north-east: the jet as put, gently settling)
         await app.js(`new Promise((q) => setTimeout(() => { __bh.camera.setLook(${s.yaw}, -6); q(1); }, 600))`);
         const series: unknown[] = [];

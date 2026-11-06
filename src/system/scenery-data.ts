@@ -604,6 +604,8 @@ export interface SceneryReply {
   workerMs?: number;
   /** each step's end from the start [ms] (cover, osm, bdtopo, overture, forest, …): where the scene's time goes (T8) */
   phases?: Record<string, number>;
+  /** (T8m) the worker's network answers kept from scene to scene: its hits and misses so far, the bytes kept */
+  fetchCache?: { hits: number; misses: number; hitBytes: number; bytes: number };
   errors?: string[];
   budgetLimited?: boolean;
   error?: string;

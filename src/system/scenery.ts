@@ -48,6 +48,10 @@ export class EarthScenery {
   stamp = 0;
   readonly supported: boolean;
   private worker: Worker | null = null;
+  /** (T8m) the craft's speed over the ground [m/s] (the renderer's, each frame): a fast flight chains quick scenes */
+  speed = 0;
+  /** (T8m) the last full and quick scenes' preparation in the worker [ms] (0: none yet) */
+  private lastMs = { full: 0, quick: 0 };
   private data: SceneryReply | null = null;
   /** the bridges drawn (their decks the rays' kernel's: renderer — shade — not skipped while there are) */
   get bridgeCount() {
@@ -193,7 +197,7 @@ export class EarthScenery {
     const held = this.requestedCentre;
     if (held && this.requested.endsWith(`:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}`)) {
       const off = Math.hypot((held.lat - wanted.lat / D) * 111320, wrapLon(held.lon - wanted.lon / D) * 111320 * Math.cos(held.lat * D));
-      if (off < CENTRE_HOLD_M * reach) c = held;
+      if (off < CENTRE_HOLD_M * reach * (this.fastFlight() ? QUICK_SHARE : 1)) c = held;
     }
     const distance = (v: { lat: number; lon: number }) =>
       Math.hypot((c.lat - v.lat) * 111320, wrapLon(c.lon - v.lon) * 111320 * Math.cos(c.lat * D));
@@ -215,7 +219,9 @@ export class EarthScenery {
     const eyeToDrawn = this.data
       ? Math.hypot((this.data.lat - geo.lat / D) * 111320, wrapLon(this.data.lon - geo.lon / D) * 111320 * Math.cos(geo.lat))
       : Infinity;
-    const quick = eyeToDrawn > QUICK_COVER * sceneryBox(0, 0, mode, reach).radius && !this.applied.endsWith(":q");
+    // (T8m: or a flight too fast for a full scene — the craft out of its box's half before one is ready —: quick scenes one
+    // after the other, each centred where the craft will be — the renderer's lead —, until it slows down)
+    const quick = this.fastFlight() || (eyeToDrawn > QUICK_COVER * sceneryBox(0, 0, mode, reach).radius && !this.applied.endsWith(":q"));
     const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}${quick ? ":q" : ""}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
@@ -244,11 +250,11 @@ export class EarthScenery {
         }
         this.progress = null;
         this.busy = false;
-        // (drawn, or failed and waiting to be tried again: no longer waited for)
+        // (drawn, or failed and waiting to be tried again: no longer waited for — the worker kept for the next scene, its
+        // network's answers with it: T8m)
         this.wanted = false;
-        this.worker?.terminate();
-        this.worker = null;
         const r = e.data;
+        if (r.workerMs) this.lastMs[this.requested.endsWith(":q") ? "quick" : "full"] = r.workerMs;
         if (r.error || !r.buffer || r.buffer.byteLength > this.budget()) {
           this.lastError = r.error ?? "invalid scene size";
           this.failures++;
@@ -418,6 +424,21 @@ export class EarthScenery {
   get pending() {
     return this.busy || this.wanted || (!!this.data && performance.now() - this.started < 600);
   }
+  /** (T8m) how long a scene takes to be ready here [s]: the last one's preparation in the worker, a third more for the
+   *  request's throttle and the upload (35 s before any) — where a scene asked now is to be centred along the track */
+  buildS() {
+    const ms = this.fastFlight() ? this.lastMs.quick : this.lastMs.full || this.data?.workerMs;
+    return ms ? (ms / 1000) * 1.35 + 3 : this.fastFlight() ? 15 : 35;
+  }
+  /** (T8m) too fast for a full scene: the craft would cross half its box's radius while one is made (120 m/s at least) */
+  fastFlight() {
+    const full = this.lastMs.full ? (this.lastMs.full / 1000) * 1.35 + 3 : 35;
+    return this.speed > 120 && this.speed * full > 0.5 * sceneryBox(0, 0, this.mode, this.reach).radius;
+  }
+  /** (T8m) the box's radius the next scene will have [m] (a quick one's share in a fast flight) */
+  nextRadius() {
+    return sceneryBox(0, 0, this.mode, this.reach).radius * (this.fastFlight() ? QUICK_SHARE : 1);
+  }
   stats() {
     const d = this.data;
     return {
@@ -496,6 +517,7 @@ export class EarthScenery {
       rgbPixels: d?.rgbPixels ?? 0,
       workerMs: d?.workerMs ?? 0,
       phases: d?.phases ?? null,
+      fetchCache: d?.fetchCache ?? null,
       tileNetworkBytes: d?.networkBytes ?? 0,
       /** the scene's responses from an offline zone, and from elsewhere (I8a) */
       zoneResponses: d?.zoneResponses ?? 0,
