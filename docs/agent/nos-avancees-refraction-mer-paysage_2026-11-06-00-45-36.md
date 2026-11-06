@@ -285,3 +285,76 @@ station.
 
 If any of this overlaps with what you are doing, our numbers and code paths are above. We would be glad to read your
 measurements against them.
+
+## Images (added 2026-11-06 01:55 UTC)
+
+These are screenshots from our e2e runs (`remote-results/<run>/`, not in the repo), shrunk to 1,280–1,600 px JPEGs in
+`docs/agent/assets/`. They are captures, not tuned stills. Notes on reading them:
+
+- Overlays (HUD, radar, fps counter) are left in.
+- An fps counter in a pair is not a cost measurement; the costs are in the sections above.
+- Our larger per-phase boards are in `docs/progress/refraction-horizons/` (R2, R6, Q5, T7, Q8 subfolders).
+
+**Refraction (§1)**
+
+![The Sun on the horizon: ordinary air, a warm sea (the Etruscan vase), an inversion](assets/r6-mirages-off-warmsea-inversion.jpg)
+*Mirages (R6, run `mirage-vase`), cropped around the Sun. Left: ordinary air (flattened). Middle: a warm sea, the
+Etruscan vase. Right: an inversion, the Sun raised and stepped.*
+
+![Distant snowy mountains through a telephoto, air lift off and on](assets/r4-ground-lift-off-on.jpg)
+*The ground lifted by the air (R4, run `refraction-lift`). Distant mountains through a telephoto, lift off (left) and on
+(right).*
+
+![The Moon setting through the limb, seen from the ISS](assets/q6-moonset-from-iss.jpg)
+*The Moon setting through the Earth's limb seen from the ISS (run `iss-moonset`), the case compared with Pettit's
+photo ISS006-E-45773.*
+
+**Air and clouds (§2)**
+
+![A glory on the cloud tops around the aircraft's shadow](assets/q5-glory-aircraft-shadow.jpg)
+*The glory and the aircraft's shadow on the clouds (Q5 VIPER C4, run `cloud-glory-hi`).*
+
+![An overcast seen from above, lit by the light volume](assets/q5-overcast-light-volume.jpg)
+*An overcast from above, lit by the clouds' light volume (run `cloud-light-volume`).*
+
+**The sea and the coasts (§3)**
+
+![The Étretat cliffs, white and layered, over the Channel's green-grey water](assets/t7-etretat-cliffs.jpg)
+*Étretat: cliff walls coloured by their rock, Channel water from Kd490 (run `coast-refs`, reproduction 001).*
+
+![Sunset over the sea from a rocky headland at Belle-Île](assets/t7-belle-ile-sunset.jpg)
+*Belle-Île at sunset, framed from a photo by camera only (run `coast-refs`, 012). The Sun's place is within ±1°.*
+
+![Santorini's caldera from the cockpit](assets/t7-santorini-flight.jpg)
+*Santorini from the cockpit, during our coastal flight checks (run `coast-flight`).*
+
+**The landscape (§4)**
+
+![Wind farms on the Beauce horizon, by day](assets/d1-wind-turbines-beauce.jpg)
+*Wind turbines from Overture in the Beauce, rotors facing the wind (run `turbines-day`).*
+
+![The same wind farms at night: rows of red beacons on the horizon](assets/d1-turbine-beacons-night.jpg)
+*The same farms at night: synchronised red beacons (run `turbines-night`).*
+
+![A lattice pylon and its cables in the foreground](assets/d1-power-lines-cables.jpg)
+*A power line in the Beauce: lattice pylons and sub-pixel cables by stochastic coverage (run `cables`).*
+
+![The Douro valley with vineyards in rows](assets/d1-vines-douro.jpg)
+*Vines in rows on the Douro's slopes (run `rows-douro`).*
+
+![A small town at night lit by street lamps](assets/l10-street-lamps-chateaudun.jpg)
+*Châteaudun at night: street lamps from the 4 m light grid, lighting the ground and the façades (run
+`street-lamps-l10c`).*
+
+![Snow-covered mountains above Lake Annecy in January](assets/l9-seasonal-snow-annecy.jpg)
+*Seasonal snow above Annecy on 15 January (run `season-snow3`).*
+
+![The Champ-de-Mars before and after removing the photo's own shadows](assets/l7b-ortho-delight-before-after.jpg)
+*Removing the photo's own shadows (L7b, prototype, off by default; run `ortho-delight-champ`). The Champ-de-Mars at
+sunset, photo as is (left), lifted (right): the photo's tree shadows go, the game's stay.*
+
+**The ISS's live cameras (§6)**
+
+![The game's views from Sen's horizon camera and NASA's nadir camera](assets/q6-iss-cameras-sen-nasa.jpg)
+*The game's views through the calibrated live cameras (run `iss-cameras`): Sen's horizon camera (left), NASA's nadir
+camera (right).*
