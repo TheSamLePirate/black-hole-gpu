@@ -169,6 +169,7 @@ test("the USGS imagery's colours: its table per channel brings its typical groun
     for (let v = 1; v < 256; v++) expect(USA_FIT.lut![c * 256 + v]!).toBeGreaterThanOrEqual(USA_FIT.lut![c * 256 + v - 1]!);
   // (a USGS field's mid green — ~ (106, 112, 98) — darker and greener, as EOX's: ~ (69, 68, 39) on average)
   const [r, g, b] = orthoColour(106, 112, 98, USA_FIT);
+  expect(g).toBeGreaterThan(b);
   expect(r).toBeLessThan(95);
   expect(b).toBeLessThan(r);
   expect(orthoColour(250, 250, 250, USA_FIT)[1]).toBeGreaterThan(180);
