@@ -396,7 +396,7 @@ export function enuToCam(c: CameraController, Cm: (v: Vec3 | null) => Vec3 | nul
  * part by 0.36° 40 km from the anchor —, sliding as the craft flew, floating or sunk on the 250 m grid's ground.
  */
 function globeMap(c: CameraController): {
-  pos: (p: V3, onGround?: boolean) => Vec3;
+  pos: (p: V3, onGround?: boolean, lift?: number) => Vec3;
   dir: (at: V3, v: V3) => Vec3;
 } | null {
   const C = c.combat;
@@ -406,9 +406,9 @@ function globeMap(c: CameraController): {
   const ll = (p: V3) => [a.lat + p[1] / (D * R_EARTH), a.lon + p[0] / (D * R_EARTH * Math.cos(a.lat * D))] as const;
   const toCam = (w: readonly number[]) => E.toCam(E.toHome([w[0]!, w[1]!, w[2]!]));
   return {
-    pos: (p, onGround = false) => {
+    pos: (p, onGround = false, lift = 0) => {
       const [lat, lon] = ll(p);
-      const h = onGround ? groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) : p[2];
+      const h = (onGround ? groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) : p[2]) + lift;
       const X = bodyFixedOf("earth", lat, lon, h);
       return toCam([X[0] * M_METRES - E.p0[0]!, X[1] * M_METRES - E.p0[1]!, X[2] * M_METRES - E.p0[2]!]);
     },
@@ -418,6 +418,23 @@ function globeMap(c: CameraController): {
       return toCam([0, 1, 2].map((k) => L.E[k]! * v[0] + L.N[k]! * v[1] + L.U[k]! * v[2]));
     },
   };
+}
+
+/**
+ * A point of the fight where it is on the globe (globeMap), as east, north, up components [m] from the flown craft in the
+ * local axes there (sfFrame's) — the smoke's and the contrails' frame (controller/computer.ts); null: no Earth view (the flat
+ * frame's difference then).
+ */
+export function combatEnu(c: CameraController, p: V3, onGround = false, lift = 0): V3 | null {
+  const G = globeMap(c);
+  const cam = cameraFrame(c.s);
+  const fr = c.sfFrame(cam);
+  if (!G || !fr) return null;
+  const v = G.pos(p, onGround, lift);
+  const loc = [0, 1, 2].map((k) => cam.right[k]! * v[0] + cam.up[k]! * v[1] + cam.fwd[k]! * v[2]) as Vec3;
+  const w = fr.fromLocal(loc);
+  const d = (a: ArrayLike<number>, b: ArrayLike<number>) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+  return [d(w, fr.east), d(w, fr.north), d(w, fr.up)];
 }
 
 /** The camera's axes as a mapping of local vectors (telemetry's C). */
@@ -583,11 +600,41 @@ function combatShips(this: CameraController): {
 function combatGlares(this: CameraController): { rel: Vec3; r: number; rgb: Vec3 }[] {
   const C = this.combat;
   const P = C?.last;
-  if (!C || !P || !C.world.decoys.length) return [];
+  if (!C || !P) return [];
   const M = enuToCam(this, camMap(this));
   if (!M) return [];
+  const G = globeMap(this);
   const out: { rel: Vec3; r: number; rgb: Vec3; d: number }[] = [];
   const t = C.world.t;
+  // (a ground unit destroyed — the war mode —: its fireball, a white flash swelling to an orange ball in half a second, dark
+  // red as it lifts and cools over three; then the fire in its wreck, flickering, a minute — its smoke: controller/computer.ts)
+  for (const q of C.world.targets) {
+    if (q.alive || !GROUND_MESH[q.kind] || q.proxy) continue;
+    const age = t - q.diedAt;
+    if (!(age >= 0 && age < 60)) continue;
+    const r: V3 = [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]];
+    const d = Math.hypot(...r);
+    if (d > 30_000) continue;
+    const big = q.kind === "bunker" ? 2 : q.kind === "sam" ? 1.5 : 1;
+    if (age < 3.5) {
+      const k = Math.min(age / 0.08, 1) * (1 - Math.min(Math.max((age - 0.6) / 2.9, 0), 1));
+      const hot = Math.max(0, 1 - age / 0.5);
+      const rad = big * (4 + 14 * Math.min(age / 0.5, 1) + 4 * age);
+      const lift = 2 + 6 * age;
+      out.push({
+        rel: G ? G.pos(q.p, true, lift) : M([r[0], r[1], r[2] + lift]),
+        r: rad,
+        // (orange through most of it, white only at its first instants — at the first try's strength its whole disc burnt white)
+        rgb: [(16 + 24 * hot) * k, (6.5 + 14 * hot) * k, (1.6 + 8 * hot) * k],
+        d,
+      });
+    }
+    if (age > 0.4) {
+      const fl = 0.7 + 0.3 * Math.sin(29 * t + q.id) * Math.sin(17 * t + 2.1 * q.id);
+      const w = fl * Math.min((age - 0.4) / 0.5, 1) * (1 - Math.min(Math.max((age - 40) / 20, 0), 1));
+      out.push({ rel: G ? G.pos(q.p, true, 1.6) : M([r[0], r[1], r[2] + 1.6]), r: 1.6 * big, rgb: [14 * w, 6 * w, 1.6 * w], d });
+    }
+  }
   for (const q of C.world.decoys) {
     const r: V3 = [q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]];
     const d = Math.hypot(...r);
@@ -597,11 +644,11 @@ function combatGlares(this: CameraController): { rel: Vec3; r: number; rgb: Vec3
       if (k <= 0) continue;
       const fl = 0.8 + 0.2 * Math.sin(37 * t + q.id * 1.7) * Math.sin(23 * t + q.id);
       const w = k * fl;
-      out.push({ rel: M(r), r: 0.6, rgb: [26 * w, 20 * w, 11 * w], d });
+      out.push({ rel: G ? G.pos(q.p) : M(r), r: 0.6, rgb: [26 * w, 20 * w, 11 * w], d });
     } else if (q.t < 2) {
       const tw = 0.5 + 0.5 * Math.sin(53 * t + q.id * 2.3);
       const w = (1 - q.t / 2) * tw;
-      out.push({ rel: M(r), r: 0.3, rgb: [2.2 * w, 2.3 * w, 2.6 * w], d });
+      out.push({ rel: G ? G.pos(q.p) : M(r), r: 0.3, rgb: [2.2 * w, 2.3 * w, 2.6 * w], d });
     }
   }
   return out

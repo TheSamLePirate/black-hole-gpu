@@ -2142,6 +2142,26 @@ export class ShipRenderer {
     list.forEach((it, i) => {
       if (it.big && Math.hypot(...it.t) < 20_000 && (big < 0 || Math.hypot(...it.t) < Math.hypot(...list[big]!.t))) big = i;
     });
+    // (no carrier: the ground units looked at — those within 200 m of the one nearest the view's centre, within 4 km — the second half
+    // instead: their shadows on the ground they stand on, a few decimetres a texel — Sam, 6 Nov 2026: « ajoute les ombres »)
+    const group = new Set<number>();
+    if (big < 0) {
+      // (the one nearest the view's centre — the smallest angle off the camera's axis, in front —: the lens on a tank had the
+      // trucks nearer the eye in the map, the tank without its shadow)
+      let near = -1,
+        best = Infinity;
+      list.forEach((it, i) => {
+        const d = Math.hypot(...it.t);
+        if (!GROUND_UNITS[it.id as GroundUnitId] || d > 4000 || it.t[2] <= 0) return;
+        const off = Math.acos(Math.min(1, it.t[2] / d));
+        if (off < best) (best = off), (near = i);
+      });
+      if (near >= 0)
+        list.forEach((it, i) => {
+          if (GROUND_UNITS[it.id as GroundUnitId] && Math.hypot(...sub(it.t, list[near]!.t)) < 200) group.add(i);
+        });
+    }
+    const groupBalls: { c: V3; r: number }[] = [];
     // (the others' engines firing: their jets after the flown craft's — appendJets)
     const lit: { id: VesselId; R: M3; t: V3; thrust: NonNullable<ShipInstance["thrust"]>; exit: { p: V3; d: V3 } | null }[] = [];
     this.draws = [];
@@ -2196,7 +2216,7 @@ export class ShipRenderer {
       }
       // (in the shadow maps: the first half's — 1 —, the second's — 2 —; hidden behind the traced image — bit 0 —,
       // mirrored in the sea — bit 1)
-      const second = i === big;
+      const second = i === big || group.has(i);
       this.instData.set([kind[it.id], it.shadow ? 1 : second ? 2 : 0, (it.far ? 1 : 0) + (it.mirror ? 2 : 0), parts], i * INST_FLOATS + 16);
       this.draws.push({
         mesh: me,
@@ -2220,8 +2240,10 @@ export class ShipRenderer {
           }
         }
       const b = me.bound;
-      if (second)
+      if (second) {
         this.bound2 = { c: [dot(it.R[0]!, b.c) + it.t[0], dot(it.R[1]!, b.c) + it.t[1], dot(it.R[2]!, b.c) + it.t[2]], r: b.r * 1.02 };
+        if (group.has(i)) groupBalls.push(this.bound2);
+      }
       if (!it.shadow) return;
       const cc: V3 = [dot(it.R[0]!, b.c) + it.t[0], dot(it.R[1]!, b.c) + it.t[1], dot(it.R[2]!, b.c) + it.t[2]];
       if (!sc) (sc = cc), (sr = b.r);
@@ -2267,6 +2289,11 @@ export class ShipRenderer {
         MAX_INST * INST_FLOATS,
         jetSlot * MAX_PARTS * INST_FLOATS,
       );
+    // (the ground units' group: one sphere holding them all — their centre's mean, out to the farthest's edge)
+    if (groupBalls.length) {
+      const c = [0, 1, 2].map((k) => groupBalls.reduce((a, g) => a + g.c[k]!, 0) / groupBalls.length) as V3;
+      this.bound2 = { c, r: Math.max(...groupBalls.map((g) => Math.hypot(...sub(g.c, c)) + g.r)) * 1.02 };
+    }
     if (mslRecs)
       this.device.queue.writeBuffer(this.instBuf, MSL_AT * INST_FLOATS * 4, this.instData, MSL_AT * INST_FLOATS, mslRecs * INST_FLOATS);
     // (none in the shadow map: its sphere about the first, unused)

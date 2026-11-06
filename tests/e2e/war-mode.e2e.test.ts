@@ -6,8 +6,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // ground-units.ts, scripts/build-ground-units.ts): the "war" fight at Fort Irwin — two SA-11 batteries, an armoured column,
 // its trucks, two bunkers —; the F-35 put 9 km south of the north battery at 900 m, its autopilot and autothrottle set (apSet);
 // the lens on the launcher locked (mount "target"): its turret turning onto us, its arm raised, a missile leaving its rails,
-// one fewer left; then a tank locked, a JDAM dropped on it, its wreck burnt out. A shot each WM_EVERY ms and the units' poses.
-//   WM_EVERY (1500) · WM_OUT
+// one fewer left; then a tank locked, a JDAM dropped on it, its wreck burnt out; then close, low over the column, the lens on a
+// tank (its camouflage, its shadow). A shot each WM_EVERY ms and the units' poses.
+//   WM_EVERY (1500) · WM_DATE ("2026-06-20T15:00:00Z": 08:00 there, the Sun 30° up — the units' shadows long) · WM_OUT
 // Output: remote-results/war-mode/NN-*.jpg, series.json. Done when: the units drawn, the launcher's turret turned towards the
 // jet, a SAM fired from it, the tank destroyed and drawn burnt; no GPU error. Duration: ~3 min.
 const OUT = process.env.WM_OUT ?? "remote-results/war-mode";
@@ -47,7 +48,7 @@ test.skipIf(!E2E)(
     try {
       await app.waitProgress("__bh.camera.piloting", "the flight");
       await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, { lookProfile: "neutral", motionBlur: 0, dof: false, f35Invulnerable: true, f35EnemyMissiles: true });
-        __bh.game.setDate("2026-06-20T18:00:00Z"); __bh.game.set("weather", "fair"); return 1; })()`);
+        __bh.game.setDate("${process.env.WM_DATE ?? "2026-06-20T15:00:00Z"}"); __bh.game.set("weather", "fair"); return 1; })()`);
       await app.waitProgress(`__bh.fleet.active === "f35"`, "the F-35");
       await app.js(`(() => { __bh.flight.challenges.open(); return 1; })()`);
       await app.waitFor(`!!document.querySelector("[data-testid=chp-fight-war]")`, 10_000);
@@ -80,9 +81,28 @@ test.skipIf(!E2E)(
         const tank = W.targets.find((q) => q.kind === "tank" && q.alive); W.lock = tank.id; c.combat.weapon = "jdam";
         __bh.settings.shipMount = "target"; return [tank.name, c.combatTrigger("fire")].join(" · "); })()`);
       console.log(`  ${said}`);
-      for (let k = 0; k < 14; k++, i++) {
+      // (its fall waited for — the bomb 200 m over the ground, 40 s at most —, then the impact frame by frame: a shot each 500 ms
+      // for 10 s — the fireball, the fire, the smoke rising)
+      await app.waitFor(
+        `(() => { const W = __bh.camera.combat.world, b = W.bombs.find((x) => x.alive); return !b || b.p[2] - W.groundZ(b.p[0], b.p[1]) < 200; })()`,
+        40_000,
+      );
+      for (let k = 0; k < 20; k++, i++) {
         await shot("tank", i);
+        await Bun.sleep(500);
+      }
+      // (close: the jet low — 300 m, gear down (Sam), its autopilot and autothrottle set — 2 km south of the column, the lens on
+      // TANK 3: its tracks, its turret, its camouflage, its shadow on the ground)
+      const [lc, oc] = at(-330, -3200);
+      await app.js(`(() => { __bh.game.flyAt(${lc}, ${oc}, 300, 0, 110); __bh.camera.gearDown = true; __bh.freeze(false); return 1; })()`);
+      await Bun.sleep(600);
+      await app.js(`__bh.camera.apSet({ ap: true, athr: true, spd: 110 })`);
+      await app.js(
+        `(() => { const W = __bh.camera.combat.world; W.lock = W.targets.find((q) => q.name === "TANK 3").id; __bh.settings.shipMount = "target"; return 1; })()`,
+      );
+      for (let k = 0; k < 5; k++, i++) {
         await Bun.sleep(EVERY);
+        await shot("close", i);
       }
       gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
     } finally {

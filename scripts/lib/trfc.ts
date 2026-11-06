@@ -356,3 +356,68 @@ export function wheel(m: Mesh, c: V3, r: number, w: number, part: number, uv: [n
     (n) => [n[2], n[1], -n[0]],
   );
 }
+
+/**
+ * A closed solid between two rings of as many points (`bot`, `top`, in order round it — the same way): its sides quads, each
+ * its outward normal, and its two ends fans (convex) — a glacis, a turret's cheeks, any slab with sloped faces.
+ */
+export function solid(m: Mesh, bot: V3[], top: V3[], part: number, uv: [number, number]) {
+  const n = bot.length;
+  const c = mul(
+    [...bot, ...top].reduce((a, p) => add(a, p), [0, 0, 0] as V3),
+    1 / (2 * n),
+  );
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const q = [bot[i]!, bot[j]!, top[j]!, top[i]!];
+    let nn = unit(cross(sub(q[1]!, q[0]!), sub(q[3]!, q[0]!)));
+    if (dot(nn, sub(mul(add(add(q[0]!, q[1]!), add(q[2]!, q[3]!)), 0.25), c)) < 0) nn = mul(nn, -1);
+    quad(m, q, nn, part, uv);
+  }
+  for (const ring of [bot, top]) {
+    const rc = mul(
+      ring.reduce((a, p) => add(a, p), [0, 0, 0] as V3),
+      1 / n,
+    );
+    let nn = unit(cross(sub(ring[1]!, ring[0]!), sub(ring[2]!, ring[0]!)));
+    if (dot(nn, sub(rc, c)) < 0) nn = mul(nn, -1);
+    for (let i = 1; i + 1 < n; i++) {
+      const a = vert(m, ring[0]!, nn, part, uv),
+        b = vert(m, ring[i]!, nn, part, uv),
+        d = vert(m, ring[i + 1]!, nn, part, uv);
+      const a2 = vert(m, ring[0]!, mul(nn, -1), part, uv),
+        b2 = vert(m, ring[i]!, mul(nn, -1), part, uv),
+        d2 = vert(m, ring[i + 1]!, mul(nn, -1), part, uv);
+      m.idx.push(a, b, d, a2, d2, b2);
+    }
+  }
+}
+
+/** a profile in the y–z plane (a side view: [y, z] points, convex, in order) extruded across x from x0 to x1 */
+export function extrudeX(m: Mesh, prof: [number, number][], x0: number, x1: number, part: number, uv: [number, number]) {
+  solid(
+    m,
+    prof.map(([y, z]) => [x0, y, z] as V3),
+    prof.map(([y, z]) => [x1, y, z] as V3),
+    part,
+    uv,
+  );
+}
+
+/** a plan's outline (an [x, z] polygon, convex, in order) extruded up from y0 to y1, its top inset by `inset` [m] towards its centre */
+export function extrudeY(m: Mesh, plan: [number, number][], y0: number, y1: number, part: number, uv: [number, number], inset = 0) {
+  const cx = plan.reduce((a, p) => a + p[0], 0) / plan.length,
+    cz = plan.reduce((a, p) => a + p[1], 0) / plan.length;
+  const shrink = ([x, z]: [number, number]): V3 => {
+    const d = Math.hypot(x - cx, z - cz) || 1;
+    const k = Math.max(0, 1 - inset / d);
+    return [cx + (x - cx) * k, y1, cz + (z - cz) * k];
+  };
+  solid(
+    m,
+    plan.map(([x, z]) => [x, y0, z] as V3),
+    plan.map(shrink),
+    part,
+    uv,
+  );
+}

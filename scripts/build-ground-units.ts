@@ -10,7 +10,23 @@
 // gone once fired), 79 the concrete, 97 the glass. Their pivots in src/game/ground-units.ts (GROUND_UNITS).
 
 import { GROUND_UNITS, type GroundUnitId } from "../src/game/ground-units";
-import { box, flat, frustum, lathe, mark, type Mesh, mesh, ogive, plate, quad, transform, wheel, write } from "./lib/trfc";
+import {
+  box,
+  extrudeX,
+  extrudeY,
+  flat,
+  frustum,
+  lathe,
+  mark,
+  type Mesh,
+  mesh,
+  ogive,
+  plate,
+  quad,
+  transform,
+  wheel,
+  write,
+} from "./lib/trfc";
 
 const PAINT = 74,
   TURRET = 75,
@@ -112,77 +128,254 @@ function railMissile(m: Mesh, k: number, x: number, y: number, z0: number) {
   await write(id, m);
 }
 
-// ---- a main battle tank: 6.9 m of hull, its turret's dome, its 125 mm gun 5 m out
+// ---- a main battle tank (a generic modern one): 7 m of hull — its sloped glacis, its fenders and segmented skirts, its engine
+// deck's grilles —; seven road wheels a side, the drive sprocket aft, the idler forward, the return rollers, the track's runs;
+// its angular turret — its front cheeks, its bustle, the commander's and the gunner's sights, a machine gun, the smoke
+// dischargers, two antennas —; its 120 mm gun 5 m out, its thermal sleeve's bands and its bore evacuator
 {
   const id: GroundUnitId = "gu-tank";
   const U = GROUND_UNITS[id];
   const m = mesh();
-  track(m, 1.6, 6.9, 0.58, 0.9, 6, 0.36);
-  track(m, -1.6, 6.9, 0.58, 0.9, 6, 0.36);
-  frustum(m, [-1.4, 0.45, -3.45], [1.4, 1.55, 3.45], 0.1, PAINT, OLIVE);
-  // (the side skirts, the glacis' upper plate)
-  for (const x of [-1.9, 1.86]) box(m, [x, 0.62, -3.0], [x + 0.04, 1.15, 3.2], PAINT, OLIVE_DARK);
-  // (the turret: a flattened dome stood up about its pivot, the commander's cupola on it)
-  const t0 = mark(m);
-  lathe(
+  const TRACK = flat(34, 34, 31);
+  // (the running gear, either side: the track's lower and upper runs, its ends round the sprocket and the idler, the wheels)
+  for (const sx of [-1, 1]) {
+    const x = sx * 1.5,
+      w = 0.62;
+    box(m, [x - w / 2, 0, -3.15], [x + w / 2, 0.1, 3.0], RUBBER, TRACK);
+    box(m, [x - w / 2, 0.86, -3.2], [x + w / 2, 0.95, 3.05], RUBBER, TRACK);
+    extrudeX(
+      m,
+      [
+        [0.0, 3.0],
+        [0.1, 3.0],
+        [0.86, 3.05],
+        [0.95, 3.05],
+        [0.78, 3.42],
+        [0.42, 3.5],
+        [0.12, 3.2],
+      ],
+      x - w / 2,
+      x + w / 2,
+      RUBBER,
+      TRACK,
+    );
+    extrudeX(
+      m,
+      [
+        [0.0, -3.15],
+        [0.12, -3.38],
+        [0.5, -3.55],
+        [0.86, -3.45],
+        [0.95, -3.2],
+        [0.86, -3.2],
+        [0.1, -3.15],
+      ],
+      x - w / 2,
+      x + w / 2,
+      RUBBER,
+      TRACK,
+    );
+    const gx = x + sx * (w / 2 - 0.08);
+    for (let k = 0; k < 7; k++) wheel(m, [gx, 0.37, -2.55 + k * 0.82], 0.34, 0.16, RUBBER, flat(52, 56, 46), 16);
+    wheel(m, [gx, 0.52, -3.25], 0.3, 0.2, RUBBER, flat(44, 46, 40), 12);
+    wheel(m, [gx, 0.52, 3.15], 0.28, 0.2, RUBBER, flat(44, 46, 40), 12);
+    for (const z of [-1.6, 0.1, 1.8]) wheel(m, [gx, 0.84, z], 0.09, 0.12, RUBBER, flat(44, 46, 40), 8);
+  }
+  // (the hull, a side view extruded across: the belly, the sloped glacis to the nose, the deck, the rear plate)
+  extrudeX(
     m,
-    0,
-    0.78,
     [
-      [0, 1.2],
-      [0.4, 1.12],
-      [0.8, 0.86],
-      [1, 0.62],
+      [0.42, -3.35],
+      [0.42, 2.9],
+      [0.75, 3.55],
+      [1.18, 3.55],
+      [1.45, 2.55],
+      [1.45, -3.2],
+      [1.2, -3.5],
     ],
-    20,
-    TURRET,
+    -1.2,
+    1.2,
+    PAINT,
     OLIVE,
   );
-  standUp(m, t0, 1.55, U.turretZ);
-  const c0 = mark(m);
+  // (over the tracks: the sponsons and their fenders)
+  for (const sx of [-1, 1]) {
+    // (down to 0.9 m, over the track's upper run: the hull and its running gear one — a gap under them had shown the tracks apart,
+    // Sam)
+    extrudeX(
+      m,
+      [
+        [0.9, -3.45],
+        [0.9, 3.3],
+        [1.12, 3.5],
+        [1.45, 2.55],
+        [1.45, -3.2],
+      ],
+      sx * 1.18,
+      sx * 1.86,
+      PAINT,
+      OLIVE,
+    );
+    // (the skirts: six plates with their gaps, a little out)
+    for (let k = 0; k < 6; k++)
+      box(m, [sx * 1.87 - 0.02, 0.5, -3.0 + k * 1.03], [sx * 1.87 + 0.02, 1.02, -2.04 + k * 1.03], PAINT, OLIVE_DARK);
+  }
+  // (the engine deck's grilles aft, the driver's hatch forward)
+  for (const z of [-2.9, -2.35]) box(m, [-0.95, 1.45, z], [0.95, 1.48, z + 0.45], PAINT, flat(40, 44, 34));
+  box(m, [-0.35, 1.45, 2.0], [0.35, 1.5, 2.45], PAINT, OLIVE_DARK);
+  // (the turret, angular: its front cheeks sloping in to the gun, its sides, its bustle aft)
+  const tz = U.turretZ;
+  extrudeY(
+    m,
+    [
+      [-1.6, tz - 1.55],
+      [1.6, tz - 1.55],
+      [1.75, tz + 0.8],
+      [1.1, tz + 1.85],
+      [-1.1, tz + 1.85],
+      [-1.75, tz + 0.8],
+    ],
+    1.45,
+    2.25,
+    TURRET,
+    OLIVE,
+    0.12,
+  );
+  extrudeY(
+    m,
+    [
+      [-1.25, tz - 2.55],
+      [1.25, tz - 2.55],
+      [1.35, tz - 1.5],
+      [-1.35, tz - 1.5],
+    ],
+    1.55,
+    2.15,
+    TURRET,
+    OLIVE_DARK,
+    0.05,
+  );
+  // (the sights: the commander's panoramic one on its pedestal, the gunner's box; a machine gun on its ring; two antennas)
+  const s0 = mark(m);
   lathe(
     m,
     0,
-    0.3,
+    0.4,
     [
-      [0, 0.32],
-      [1, 0.26],
+      [0, 0.2],
+      [0.6, 0.2],
+      [0.62, 0.24],
+      [1, 0.22],
     ],
     12,
     TURRET,
     OLIVE_DARK,
   );
-  standUp(m, c0, 2.3, U.turretZ - 0.35);
+  standUp(m, s0, 2.25, tz - 0.4);
   transform(
     m,
-    c0,
-    (p) => [p[0] - 0.45, p[1], p[2]],
+    s0,
+    (p) => [p[0] + 0.7, p[1], p[2]],
     (n) => n,
   );
-  // (the gun: its mantlet, its barrel, the bore evacuator halfway, its muzzle)
-  box(m, [-0.38, U.armY - 0.28, U.armZ - 0.1], [0.38, U.armY + 0.28, U.armZ + 0.45], ARM, OLIVE_DARK);
-  const g0 = mark(m);
+  box(m, [-0.95, 2.25, tz + 0.75], [-0.45, 2.55, tz + 1.15], TURRET, OLIVE_DARK);
+  quad(
+    m,
+    [
+      [-0.92, 2.3, tz + 1.16],
+      [-0.48, 2.3, tz + 1.16],
+      [-0.48, 2.5, tz + 1.16],
+      [-0.92, 2.5, tz + 1.16],
+    ],
+    [0, 0, 1],
+    GLASS,
+    flat(20, 24, 28),
+  );
+  const mg = mark(m);
   lathe(
     m,
     0,
-    5.0,
+    1.1,
     [
-      [0, 0.11],
-      [0.45, 0.095],
-      [0.5, 0.13],
-      [0.62, 0.13],
-      [0.67, 0.09],
-      [0.98, 0.085],
-      [1, 0.1],
+      [0, 0.03],
+      [1, 0.025],
     ],
-    14,
-    ARM,
-    OLIVE_DARK,
+    8,
+    TURRET,
+    flat(30, 30, 30),
   );
   transform(
     m,
+    mg,
+    (p) => [p[0] - 0.3, p[1] + 2.42, p[2] + tz - 0.6],
+    (n) => n,
+  );
+  for (const x of [-0.9, 0.9]) {
+    const a0 = mark(m);
+    lathe(
+      m,
+      0,
+      2.2,
+      [
+        [0, 0.012],
+        [1, 0.006],
+      ],
+      6,
+      TURRET,
+      flat(30, 30, 30),
+    );
+    standUp(m, a0, 2.15, tz - 2.3);
+    transform(
+      m,
+      a0,
+      (p) => [p[0] + x, p[1], p[2]],
+      (n) => n,
+    );
+  }
+  // (the smoke dischargers: four tubes each side of the front, raised and splayed)
+  for (const sx of [-1, 1])
+    for (let k = 0; k < 4; k++) {
+      const d0 = mark(m);
+      lathe(
+        m,
+        0,
+        0.32,
+        [
+          [0, 0.045],
+          [1, 0.045],
+        ],
+        8,
+        TURRET,
+        OLIVE_DARK,
+      );
+      const yaw = sx * (0.5 + 0.12 * k),
+        pit = 0.45;
+      transform(
+        m,
+        d0,
+        (p) => {
+          const y = p[1] * Math.cos(pit) + p[2] * Math.sin(pit),
+            z = -p[1] * Math.sin(pit) + p[2] * Math.cos(pit);
+          return [
+            sx * (1.5 - 0.08 * k) + p[0] * Math.cos(yaw) + z * Math.sin(yaw),
+            2.05 + 0.03 * k + y,
+            tz + 0.9 - p[0] * Math.sin(yaw) + z * Math.cos(yaw),
+          ];
+        },
+        (n) => n,
+      );
+    }
+  // (the gun: its mantlet, its barrel — the thermal sleeve's bands, the bore evacuator, the muzzle's reference)
+  box(m, [-0.42, U.armY - 0.3, U.armZ - 0.2], [0.42, U.armY + 0.3, U.armZ + 0.4], ARM, OLIVE_DARK);
+  const g0 = mark(m);
+  const prof: [number, number][] = [[0, 0.13]];
+  for (let k = 0; k < 6; k++) prof.push([0.05 + k * 0.08, 0.115], [0.09 + k * 0.08, 0.108]);
+  prof.push([0.55, 0.108], [0.57, 0.14], [0.68, 0.14], [0.7, 0.1], [0.97, 0.095], [0.98, 0.11], [1, 0.11]);
+  lathe(m, 0, 5.1, prof, 16, ARM, OLIVE_DARK);
+  transform(
+    m,
     g0,
-    (p) => [p[0], U.armY + p[1], U.armZ + 0.4 + p[2]],
+    (p) => [p[0], U.armY + p[1], U.armZ + 0.35 + p[2]],
     (n) => n,
   );
   await write(id, m);

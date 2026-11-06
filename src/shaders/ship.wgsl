@@ -455,7 +455,9 @@ fn finPos(v: VIn, ii: u32) -> vec3f {
 // z = turretZ; the arm or the gun (76) and the missiles on its rails (78) pitched about x at (armY, armZ), then turned with the
 // turret; rail k's missile (its k in uv.x) gone once fired — folded onto the arm's pivot. Their record: model[0] = (yaw, pitch,
 // missiles left, burnt), model[1] = (turretZ, armY, armZ).
-fn isTurret(m: f32) -> bool { return m > 74.5 && m < 78.5; }
+// (75, 76, 78 alone — 77, the tracks' and tyres' rubber, stays with the hull: it had turned with the turret, the tracks askew
+// under it — Sam)
+fn isTurret(m: f32) -> bool { return (m > 74.5 && m < 76.5) || (m > 77.5 && m < 78.5); }
 fn rotX(q: vec3f, t: f32) -> vec3f { return vec3f(q.x, q.y * cos(t) - q.z * sin(t), q.y * sin(t) + q.z * cos(t)); }
 fn rotY(q: vec3f, t: f32) -> vec3f { return vec3f(q.x * cos(t) + q.z * sin(t), q.y, -q.x * sin(t) + q.z * cos(t)); }
 fn groundPose(q: vec3f, v: VIn, ii: u32, isNormal: bool) -> vec3f {
@@ -607,7 +609,8 @@ fn lightClip(p: vec3f) -> vec3f { return lightClipB(p, S.bound); }
 fn shadowVs(v: VIn, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
   // (the cockpit's glass lets the light in: out of the map)
   if (abs(v.mat - 71.0) < 0.5) { return vec4f(2.0, 2.0, 2.0, 1.0); }
-  let q = select(v.pos, jetPos(v, ii), isJet(v.mat));
+  // (posed as drawn: the F-35's parts, a missile's fins, a ground unit's turret and gun — their shadows turning with them)
+  let q = select(select(v.pos, jetPos(v, ii), isJet(v.mat)), shipPos(v, ii), (isFin(v.mat) || isTurret(v.mat)) && inst[ii].flags.w > 0.5);
   // (its half: the sphere holds the caster — none crosses into the other)
   let second = inst[ii].flags.y > 1.5;
   let c = lightClipB((inst[ii].model * vec4f(q, 1.0)).xyz, select(S.bound, S.bound2, second));
@@ -1160,7 +1163,16 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       let rg = in.uv.x;
       let g = floor(rg / 256.0 + 1e-3);
       albedo = pow(clamp(vec3f((rg - 256.0 * g) / 255.0, g / 255.0, in.uv.y), vec3f(0.0), vec3f(1.0)), vec3f(2.2));
-      albedo = mix(albedo, vec3f(0.36, 0.32, 0.25), 0.25 * grime);
+      // (the military greens camouflaged — three tones' blotches, their edges soft, on the posed part: the turret's pattern turns
+      // with it —; the dust over it all, more low down)
+      if (albedo.g > albedo.r * 1.02 && albedo.g > albedo.b * 1.25) {
+        let c1 = smoothstep(0.54, 0.6, vnoise(in.q * 0.42 + vec3f(3.1, 0.0, 1.7)));
+        let c2 = smoothstep(0.56, 0.62, vnoise(in.q * 0.5 + vec3f(11.3, 5.2, 7.9)));
+        albedo = mix(albedo, vec3f(0.032, 0.036, 0.022), c1);
+        albedo = mix(albedo, vec3f(0.13, 0.085, 0.045), c2 * (1.0 - c1));
+      }
+      let dust = clamp(1.2 - in.q.y * 0.5, 0.0, 1.0);
+      albedo = mix(albedo, vec3f(0.36, 0.32, 0.25), (0.15 + 0.25 * dust) * grime);
       metal = 0.05;
       rough = 0.72 + 0.15 * grime;
       coat = 0.0;

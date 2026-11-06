@@ -1,5 +1,7 @@
 // The CameraController — the flight computer's operations.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { combatEnu } from "./combat";
+import { GROUND_MESH } from "../game/ground-units";
 import { timeRate } from "../clock";
 import { cameraFrame } from "../camera";
 import type { Vec3 } from "../physics";
@@ -1480,8 +1482,10 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
     const [E, N, U] = [sf.east, sf.north, sf.up].map((v) => fr.fromLocal(sf.toLocal(v as Vec3))) as [Vec3, Vec3, Vec3];
     for (const m of CB.world.missiles) {
       if (!m.alive || m.t > MISSILES[m.kind].burn + 0.5) continue;
-      const r = [m.p[0] - P.p[0], m.p[1] - P.p[1], m.p[2] - P.p[2]];
-      if (Math.hypot(r[0]!, r[1]!, r[2]!) > 40_000) continue;
+      const r0 = [m.p[0] - P.p[0], m.p[1] - P.p[1], m.p[2] - P.p[2]];
+      if (Math.hypot(r0[0]!, r0[1]!, r0[2]!) > 40_000) continue;
+      // (on the globe where the missile is drawn — controller/combat.ts combatEnu —, else the flat frame's difference)
+      const r = combatEnu(this, m.p) ?? r0;
       const q = [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
       src.push({ key: `m${m.id}`, p: q, kind: 4, str: 1 });
     }
@@ -1496,11 +1500,46 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
     }
     // (an aircraft hit: its smoke, thicker the worse it is; destroyed, burning as it falls; crashed, a column of
     // smoke rising from where it hit for 45 s)
-    const at = (w: [number, number, number]): Vec3 => {
-      const r = [w[0] - P.p[0], w[1] - P.p[1], w[2] - P.p[2]];
+    const at = (w: [number, number, number], onGround = false, lift = 0): Vec3 => {
+      const r = combatEnu(this, w, onGround, lift) ?? [w[0] - P.p[0], w[1] - P.p[1], w[2] + lift - P.p[2]];
       return [0, 1, 2].map((k) => x[k]! + E[k]! * r[0]! + N[k]! * r[1]! + U[k]! * r[2]!) as Vec3;
     };
     for (const q of CB.world.targets) {
+      // (a ground unit — the war mode —: hit, smoking from its engine deck; destroyed, a column of black smoke rising from its
+      // wreck two minutes — its source climbing 5 m/s off the ground drawn, the wind leaning it)
+      if (GROUND_MESH[q.kind] && !q.proxy) {
+        const dead = q.alive ? null : CB.world.t - q.diedAt;
+        const dmg = CB.world.damageOf(q);
+        // (its explosion's debris and dust, its first 2.5 s: eight sources thrown out and up, slowing — their trails the plume's
+        // streaks)
+        if (dead !== null && dead < 2.5) {
+          const big = q.kind === "bunker" ? 1.8 : q.kind === "sam" ? 1.3 : 1;
+          const out = big * 22 * (1 - Math.exp(-dead / 0.5));
+          for (let k = 0; k < 8; k++) {
+            const a = (k / 8) * 2 * Math.PI + q.id;
+            const tilt = 0.5 + 0.35 * Math.sin(k * 2.7 + q.id);
+            const up = big * (2 + 30 * tilt * (1 - Math.exp(-dead / 0.7)) - 2.5 * dead * dead);
+            src.push({
+              key: `gx${q.id}:${k}`,
+              p: at(
+                [q.p[0] + Math.cos(a) * out * (1 - tilt * 0.5), q.p[1] + Math.sin(a) * out * (1 - tilt * 0.5), q.p[2]],
+                true,
+                Math.max(up, 0.5),
+              ),
+              kind: 4,
+              str: 1,
+            });
+          }
+        }
+        if (dead !== null ? dead < 120 : dmg > 0.2)
+          src.push({
+            key: `g${q.id}`,
+            p: at([q.p[0], q.p[1], q.p[2]], true, 3 + (dead !== null ? Math.min(dead * 5, 400) : 0)),
+            kind: 4,
+            str: dead !== null ? 1 : 0.3 + 0.6 * dmg,
+          });
+        continue;
+      }
       // (a ship hit: smoke from its decks; sunk, a column rising a minute from where it settles)
       if (q.kind === "ship") {
         const sunk = q.alive ? null : CB.world.t - q.diedAt;

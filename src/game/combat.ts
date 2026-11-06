@@ -760,7 +760,9 @@ export class CombatWorld {
       q.diedAt = this.t;
       ev.push({ kind: "kill", target: q.id, name: q.name, by });
       // (an aircraft: the hit's burst, then out of control to its crash — wreckStep; the ground's at once)
-      ev.push({ kind: "explode", p: [...q.p], size: q.ai ? 0.5 : q.kind === "bunker" || q.kind === "ship" ? 3 : 2 });
+      // (a ground unit's flash on the screen smaller — its fireball, its debris and its smoke drawn in 3D: controller/combat.ts
+      // combatGlares, controller/computer.ts)
+      ev.push({ kind: "explode", p: [...q.p], size: q.ai ? 0.5 : q.kind === "ship" ? 3 : q.kind === "bunker" ? 1.2 : 0.7 });
       if (q.ai) q.wreck = { spin: (this.rand() < 0.5 ? -1 : 1) * (1.2 + 2 * this.rand()), crashedAt: Number.NaN };
       if (this.lock === q.id) this.lock = null;
     }

@@ -21,7 +21,7 @@ export interface GroundUnitShape {
 
 export const GROUND_UNITS: Record<GroundUnitId, GroundUnitShape> = {
   "gu-tel": { turretZ: -0.5, armY: 2.45, armZ: -2.6, rest: 0, raised: 0.5, rails: 4 },
-  "gu-tank": { turretZ: -0.2, armY: 1.95, armZ: 0.75, rest: 0, raised: 0.12, rails: 0 },
+  "gu-tank": { turretZ: -0.3, armY: 1.9, armZ: 1.6, rest: 0, raised: 0.12, rails: 0 },
   "gu-truck": { turretZ: 0, armY: 0, armZ: 0, rest: 0, raised: 0, rails: 0 },
   "gu-bunker": { turretZ: 0, armY: 0, armZ: 0, rest: 0, raised: 0, rails: 0 },
 };
