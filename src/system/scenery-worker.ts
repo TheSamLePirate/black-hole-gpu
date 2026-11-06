@@ -154,6 +154,52 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   return new Response(body, { status: r.status, headers });
 }) as typeof fetch;
 
+// ---- (the scenery's loading, Sam, 6 Nov 2026: « les détails, buildings se chargent lentement » — each re-centring re-planned
+// every roof of its 32 000 buildings, 5–10 s of a 15–26 s scene, though two scenes in a row share three quarters of them)
+// The buildings' roofs planned once — roofs.ts planBuilding, its simple plan and its parts' — kept by the building's identity
+// (its first point, its rings' counts, its heights, its attributes, its party walls) relative to its first point: a next scene
+// takes them moved to its own frame (a translation: the frames of two scenes a few km apart turn by hundredths of a degree —
+// centimetres over a building).
+type PlanKey = string;
+const PLAN_CACHE_MAX = 80_000;
+const planCache = new Map<PlanKey, { one?: RoofPart[]; parts?: RoofPart[] }>();
+export const planCacheStats = { hits: 0, misses: 0 };
+/** a building's identity for its plans: its footprint's geodetic points (to 1e-7°, ~1 cm — the same whatever the scene's
+ *  frame: its local metres turn with it, two centimetres over a building between two scenes), its inputs */
+function planKey(input: RoofInput, geo: { lat: number; lon: number }[][]): PlanKey {
+  const rel = geo.map((r) => r.map((p) => `${Math.round(p.lat * 1e7)},${Math.round(p.lon * 1e7)}`).join(";")).join("|");
+  return `${rel}#${input.height.toFixed(2)}#${input.top ?? ""}#${input.roof ?? ""}#${input.storeys ?? ""}#${input.roofMat ?? ""}#${input.wallMat ?? ""}#${input.usage ?? ""}#${input.nature ?? ""}#${input.light ?? ""}#${input.hint ?? ""}#${JSON.stringify(input.region)}#${input.seed}#${(input.party ?? []).map((p) => (p ? 1 : 0)).join("")}`;
+}
+/** plans moved by (dx, dy): their rings, their planes (z = a x + b y + c: c − a dx − b dy) */
+function movePlans(plans: RoofPart[], dx: number, dy: number): RoofPart[] {
+  return plans.map((p) => ({
+    ...p,
+    rings: p.rings.map((r) => r.map(([x, y]) => [x + dx, y + dy] as Pt)),
+    planes: p.planes.map(([a, b, c]) => [a, b, c - a * dx - b * dy] as [number, number, number]),
+    blind: p.blind ? [...p.blind] : undefined,
+  }));
+}
+/** a building's plans — `maxParts` 1: its simple plan, else its parts' — from the cache, else planned and kept */
+function plansOf(input: RoofInput, maxParts: number, geo: { lat: number; lon: number }[][]): RoofPart[] {
+  const key = planKey(input, geo);
+  const which = maxParts === 1 ? "one" : "parts";
+  const [ax, ay] = input.rings[0]![0]!;
+  const hit = planCache.get(key);
+  if (hit?.[which]) {
+    planCacheStats.hits++;
+    planCache.delete(key);
+    planCache.set(key, hit);
+    return movePlans(hit[which]!, ax, ay);
+  }
+  planCacheStats.misses++;
+  const plans = planBuilding(input, maxParts);
+  const e = hit ?? {};
+  e[which] = movePlans(plans, -ax, -ay);
+  planCache.set(key, e);
+  if (planCache.size > PLAN_CACHE_MAX) planCache.delete(planCache.keys().next().value!);
+  return plans;
+}
+
 /** the water polygons of a river's kind (OpenMapTiles' water class): drawn in a river's style, not a lake's */
 const RIVER_CLASSES = new Set(["river", "canal", "stream", "ditch", "drain"]);
 /** their colour — its blue under 0.05: trace.wgsl sceneryWaterAt tells a river by it */
@@ -183,7 +229,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     overture: "forest",
     forest: "pack",
   };
+  const planHits0 = planCacheStats.hits,
+    planMisses0 = planCacheStats.misses;
   const phase = (name: string) => {
+    if (cancelled.has(q.id)) throw new Error("cancelled");
     phases[name] = Math.round(performance.now() - started);
     const n = next[name];
     if (n) tell({ step: n });
@@ -1189,6 +1238,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     v.geo.map((ring) => ring.slice(0, -1).map((at) => localPoint(frame, at.lat, at.lon, 0).slice(0, 2) as Pt)),
   );
   const party = partyEdges(local);
+  phase("party walls");
   // (the bytes before the buildings: the forest, the land cover's raster, the networks, the bridges)
   const bytesBefore = storedBytes;
   let meshBytes = 0,
@@ -1290,7 +1340,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         seed: s,
         hint: a.hint,
       };
-      const plans = planBuilding(input, 1);
+      const plans = plansOf(input, 1, v.geo);
       const bytes = leafBytes(plans);
       if (storedBytes + bytes > room4) {
         budgetLimited = true;
@@ -1302,6 +1352,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (!errors.length) errors.push(String(e).slice(0, 220));
     }
   }
+  phase("roofs");
   // (the detail — parts, triangles — by the nearer of the centre and the camera: the centre led along the view, up to a few
   // km ahead of the craft, the buildings under it had stayed boxes — at the Étoile looking ahead, the nearest 1.5 km)
   const eyeD = (lat: number, lon: number) =>
@@ -1318,7 +1369,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     try {
       const floor = b.base + v.low,
         bottom = b.base + v.low - 1;
-      const plans = near < BUILDING_PARTS_M ? planBuilding(b.input, 24) : b.plans;
+      const plans = near < BUILDING_PARTS_M ? plansOf(b.input, 24, v.geo) : b.plans;
       const bytes = leafBytes(plans);
       const mesh =
         near < BUILDING_MESH_M && meshBytes < meshBudget
@@ -1334,6 +1385,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     } catch (e) {
       if (!errors.length) errors.push(String(e).slice(0, 220));
     }
+  }
+  phase("detail");
+  // (the roofs taken from the previous scenes' — planCache —, their share in this one [%])
+  {
+    const h = planCacheStats.hits - planHits0,
+      m = planCacheStats.misses - planMisses0;
+    phases["roofs kept %"] = h + m ? Math.round((100 * h) / (h + m)) : 0;
   }
   // (the chimneys' brick, weathered; their count)
   const stackColour = wallColour(WallMaterial.Brick, region, 0.7);
@@ -1696,7 +1754,14 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     budgetLimited,
   };
 }
-g.onmessage = async (e: MessageEvent<SceneryRequest>) => {
+/** the scenes given up by the page (their ids): dropped at their next step, the worker and its caches kept */
+const cancelled = new Set<number>();
+g.onmessage = async (e: MessageEvent<SceneryRequest | { cancel: number }>) => {
+  if ("cancel" in e.data) {
+    cancelled.add(e.data.cancel);
+    if (cancelled.size > 64) cancelled.delete(cancelled.values().next().value!);
+    return;
+  }
   try {
     const r = await prepare(e.data);
     g.postMessage(r, [r.buffer!]);

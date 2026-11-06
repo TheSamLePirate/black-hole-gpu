@@ -52,7 +52,8 @@ test.skipIf(!E2E)(
         __bh.settings.shipMount = "cockpit"; __bh.freeze(true); return 1; })()`);
       // (every datum in before the approach: waited while it keeps coming, what stalls said)
       await app.dataSettled("Le Bourget's final");
-      await app.js(`(() => { __bh.freeze(false); __bh.camera.setLook(0, -4); return 1; })()`);
+      // (the network's light's seconds counted from here — the flight's —, not the load's)
+      await app.js(`(() => { __bh.freeze(false); __bh.netLight.reset(); __bh.camera.setLook(0, -4); return 1; })()`);
       const said = await app.js<string>(`__bh.camera.ilsStart(${JSON.stringify(FIELD)}, { runway: ${JSON.stringify(rwy)} })`);
       console.log(`  ${said}`);
       const t0 = Date.now();
@@ -88,8 +89,8 @@ test.skipIf(!E2E)(
       const fails = await app.js<[string, number][]>(
         `Object.entries(__bh.netLight.stats().failBy ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 12)`,
       );
-      const net = await app.js<Record<string, number>>(
-        `(() => { const s = __bh.netLight.stats(); return { started: s.started, done: s.done, failed: s.failed, limited: s.limited, cached: s.cached, mb: Math.round(s.bytes / 1e6) }; })()`,
+      const net = await app.js<Record<string, unknown>>(
+        `(() => { const s = __bh.netLight.stats(); return { started: s.started, done: s.done, failed: s.failed, limited: s.limited, cached: s.cached, mb: Math.round(s.bytes / 1e6), seconds: Object.fromEntries(Object.entries(s.seconds).map(([k, v]) => [k, Math.round(v)])) }; })()`,
       );
       console.log(`  network: ${JSON.stringify(net)} — failures ${JSON.stringify(fails)}`);
       const last = await app.js<unknown>(`__bh.camera.ilsLast ?? null`);

@@ -3,7 +3,7 @@ import type { Vec3 } from "../physics";
 import { forestKindTable, forestSeason } from "./forest";
 import { SceneryContact } from "./scenery-contact";
 import { swControls } from "./earth-tiles";
-import { sceneryBox } from "./scenery-sources";
+import { sceneryBox, sceneryChains } from "./scenery-sources";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
 import { geoidN } from "./geoid-grid";
 import {
@@ -207,8 +207,9 @@ export class EarthScenery {
       this.onContent?.();
     }
     if ((changed || (this.requestedCentre && distance(this.requestedCentre) > 8000 * reach)) && this.busy) {
-      this.worker?.terminate();
-      this.worker = null;
+      // (the scene under way given up — the worker told, which drops it at its next step —, the worker kept: its network's
+      // answers and its buildings' plans with it for the next scene; terminated, a flight's every re-centring lost them)
+      this.worker?.postMessage({ cancel: this.id });
       this.busy = false;
       this.requested = "";
       this.id++;
@@ -225,6 +226,9 @@ export class EarthScenery {
     const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}${quick ? ":q" : ""}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
+    // (in flight: the next scene's data fetched ahead — the network idle otherwise until the craft leaves the hold, or while the
+    // worker computes the scene under way)
+    if (this.data && this.prefetchOn) this.prefetchAhead(geo.lat / D, geo.lon / D, mode, satellite, reach);
     if (
       this.busy ||
       this.retiredBytes ||
@@ -354,6 +358,60 @@ export class EarthScenery {
     this.device.queue.writeBuffer(this.buffer, (this.forestAt + 7) * 16, forestKindTable(forestSeason(utcMs, this.data.lat)));
     this.revision++;
   }
+  /** (the scenery's loading, Sam, 6 Nov 2026: « le voyant net passe au gris » — a scene drawn, nothing asked until the craft
+   *  has flown out of its hold, ~30 s at an approach's speed, the network idle) the craft's track (two places 2 s apart at
+   *  least), the last centre prefetched */
+  private track: { lat: number; lon: number; t: number } | null = null;
+  private heading: [number, number] | null = null;
+  private prefetched = "";
+  /**
+   * The next scene's data fetched ahead: its centre where the craft will ask it — its hold's distance twice along its track —,
+   * every fetch of it (scenery-sources.ts sceneryChains: the land cover, the vector tiles, the relief, the surveys; Overture's
+   * byte ranges left to the scene) from the page, four at a time, into the browser's HTTP cache (OpenFreeMap's a day, the
+   * relief's and the land cover's alike) — the worker's own fetches then answered from it —, while the worker computes the
+   * scene under way: none computed here; in flight only (over 15 m/s), each new cell once, the older given up.
+   */
+  private prefetchAhead(lat: number, lon: number, mode: SceneryMode, satellite: boolean, reach: number) {
+    const now = performance.now();
+    if (!this.track || now - this.track.t > 2000) {
+      if (this.track) {
+        const de = wrapLon(lon - this.track.lon) * Math.cos(lat * D),
+          dn = lat - this.track.lat,
+          l = Math.hypot(de, dn);
+        this.heading = l > 1e-6 ? [de / l, dn / l] : this.heading;
+      }
+      this.track = { lat, lon, t: now };
+    }
+    if (this.speed < 15 || !this.heading) return;
+    const ahead = (2 * CENTRE_HOLD_M * reach) / 111320;
+    const c = sceneryCentre(lat + this.heading[1] * ahead, lon + (this.heading[0] * ahead) / Math.cos(lat * D));
+    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}`;
+    if (key === this.prefetched) return;
+    this.prefetched = key;
+    const gen = ++this.prefetchGen;
+    const urls = sceneryChains({ lat: c.lat, lon: c.lon, mode, satellite, reach, ign: this.ign, overture: this.overture })
+      .map((ch) => ch[0]!)
+      .filter((u) => !u.includes("overture") && !u.includes(".pmtiles"));
+    let k = 0;
+    const run = async () => {
+      while (k < urls.length && gen === this.prefetchGen && !this.disposed) {
+        const u = urls[k++]!;
+        try {
+          await (await fetch(u, { signal: AbortSignal.timeout(20_000) })).arrayBuffer();
+          this.prefetchedCount++;
+        } catch {
+          /* (a miss ahead: the scene asks it again) */
+        }
+      }
+    };
+    for (let i = 0; i < 4; i++) void run();
+  }
+  private prefetchGen = 0;
+  /** (off by default: measured on an approach to JFK, 670 MB against 280 without it — the worker's own fetches not answered
+   *  by the HTTP cache, the data asked twice —; kept for the streaming plan's measures — docs/ANALYSE-STREAMING) */
+  prefetchOn = false;
+  /** the fetches made ahead since the start (a scene's data the next one finds in the HTTP cache) */
+  prefetchedCount = 0;
   /** the wait before trying again after a failure [ms]: 30 s, doubled each time, 5 min at most (never given up) */
   private backoff() {
     return Math.min(300000, 30000 * 2 ** Math.max(0, this.failures - 1));
