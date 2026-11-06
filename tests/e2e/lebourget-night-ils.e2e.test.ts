@@ -15,7 +15,11 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 // (within 15 m of its axis), no console error.
 // Duration: ~4 min (the load included).
 const OUT = process.env.LBN_OUT ?? "remote-results/lebourget-night-ils";
-const FIELD = "LFPB";
+// (LBN_FIELD: another airfield — its ICAO —, LBN_NEAR « lat,lon » a place near it its runways' tile loads from)
+const FIELD = process.env.LBN_FIELD ?? "LFPB";
+// (LBN_UTC: the instant — night at the field: 20:30 local; Paris's 19:30 UTC by default, New York's 01:30 the next day)
+const UTC = process.env.LBN_UTC ?? "2026-11-07T19:30:00Z";
+const NEAR = (process.env.LBN_NEAR ?? "48.9,2.35").split(",").map(Number) as [number, number];
 const KM = 14;
 afterAll(stopServer);
 
@@ -32,7 +36,7 @@ test.skipIf(!E2E)(
       await app.waitProgress(`__bh.fleet.active === "f35"`, "the F-35");
       // (near the field: its runways' tile in, the end in use)
       await app.js(
-        `(() => { __bh.game.setDate("2026-11-07T19:30:00Z"); __bh.game.set("weather", "fair"); __bh.game.flyAt(48.9, 2.35, 900, 60, 120); __bh.freeze(true); return 1; })()`,
+        `(() => { __bh.game.setDate(${JSON.stringify(UTC)}); __bh.game.set("weather", "fair"); __bh.game.flyAt(${NEAR[0]}, ${NEAR[1]}, 900, 60, 120); __bh.freeze(true); return 1; })()`,
       );
       await app.waitProgress(`(__bh.camera.ilsRunways(${JSON.stringify(FIELD)})?.ends.length ?? 0) >= 2`, `${FIELD}'s runways`);
       const ch = await app.js<{ auto: string; ends: { id: string; lat: number; lon: number; hdg: number; elev: number; len: number }[] }>(
@@ -60,9 +64,12 @@ test.skipIf(!E2E)(
         // (xte: the craft off the drawn runway's axis [m, right +] — the runway as the scenery draws it, sys.runways —: the ILS's
         // runway and the drawn one the same; the first flight touched down ~60 m beside it)
         const m = await app.js<Record<string, unknown>>(`(() => { const c = __bh.camera, g = c.geoNow(), I = c.ilsInfo(), D = Math.PI / 180;
-          const r = __bh.sys.runways().find((x) => x.site.icao === "LFPB"); let xte = null;
-          if (g && r) { const s = r.site, dn = (g.lat - s.lat) * 111132, de = (g.lon - s.lon) * 111320 * Math.cos(s.lat * D), h = s.rwy * D;
-            xte = Math.round(de * Math.cos(h) - dn * Math.sin(h)); }
+          // (the field's runway drawn nearest the craft's line — the game's own or a world one —, its axis's distance)
+          let xte = null;
+          if (g) for (const r of __bh.sys.runways().filter((x) => x.site.icao === ${JSON.stringify(FIELD)} || x.world?.field === ${JSON.stringify(FIELD)})) {
+            const s = r.site, dn = (g.lat - s.lat) * 111132, de = (g.lon - s.lon) * 111320 * Math.cos(s.lat * D), h = s.rwy * D;
+            const x = Math.round(de * Math.cos(h) - dn * Math.sin(h));
+            if (xte === null || Math.abs(x) < Math.abs(xte)) xte = x; }
           return { phase: I?.phase ?? null, alt: g ? Math.round(g.alt) : null, gs: g ? Math.round(g.gs) : null, xte, city: +(__bh.renderer.cityLight * 1e5).toFixed(2),
             pending: __bh.renderer.earthTiles.pending, fps: Math.round(__bh.renderer.fps ?? 0) }; })()`);
         const t = +((Date.now() - t0) / 1000).toFixed(1);
