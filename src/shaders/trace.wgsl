@@ -55,7 +55,8 @@ struct Params {
   bodyCfg2: vec4f, // point-source scale: sub-pixel bodies drawn at the catalogue stars' flux scale (its ratio to the physical one); radiance of a magnitude −2 point spread over a pixel's glow, and its flux (highlight compression above them); index of our universe's first body (= count: none)
   path: vec4f,     // camera free-fall path: point count, tube radius per unit ray length, fate (1 horizon, 2 escape); the bodies listed (+0.5; 0: all — listedBody)
   bary: vec4f,     // Gargantua orbits the centre of mass: q = m/(M + m) (0: no), relative orbit Ω; the auroras (S2:
-                   // over the Earth — another scene's bodies never near it): their Kp (0: none), their clock [s, 0…900)
+                   // over the Earth — another scene's bodies never near it): their Kp (0: none), their clock [s, 0…900) + 1 024 × twice the dark-adapted
+                   // eye's gain (AM2)
   water: vec4f,    // cinematic liquid throat: on (0/1), ripple strength, reflectance at normal incidence F0, clock [s]
   water2: vec4f,   // splash where the camera went through: centre (rep unit vector), clock at the crossing
   water3: vec4f,   // glow of the liquid, a pixel's footprint on the throat [rad]; zw: the listed bodies' indices (listedBody)
@@ -5935,21 +5936,66 @@ fn skySeen(p: vec3f, Ls: vec3f) -> f32 {
   return mix(0.0004, 1.0, avg * avg);
 }
 
-// ---- The auroras (S2; PLAN-AURORES-MAGNETOSPHERES AM1): the oval of light round the geomagnetic poles — the dipole's north at
-// AUR_MAG, the one magnetic-fields.ts publishes (dipolePole: a test holds them equal) —, in magnetic local time: wider on the
-// night side than at noon (its colatitude 21° + 1.4 Kp at midnight, 12° + 0.49 Kp at noon, between them as ½(1 + cos) of the
-// angle from midnight — Alex's law, within Starkov 1994's 1.5–2° a Kp; the south 0.5° further), its midnight sector three times
-// its noon's; three arcs — the main one, a fainter one poleward, one equatorward from Kp 5 —, their offsets and folds growing with
-// the activity, drifting along the magnetic longitude, streaked by rays; the diffuse aurora's band 1.5° equatorward. Oxygen's
-// green 557.7 nm peaking at 110 km, its red 630 nm from 200 km up (the storms' crowns), nitrogen's blue N₂⁺ 427.8 nm at the
-// curtains' lower edge in a storm. Integrated along the ray through their shell (90 – 330 km): an emission [over the night
-// ground's light, per metre] — no scattering, the air's transmittance the caller's. Its samples jittered (`jit`).
+// ---- The auroras (S2; PLAN-AURORES-MAGNETOSPHERES AM1, AM2): the oval of light round the geomagnetic poles — the dipole's
+// north at AUR_MAG, the one magnetic-fields.ts publishes (dipolePole: a test holds them equal) —, in magnetic local time: wider
+// on the night side than at noon (its colatitude 21° + 1.4 Kp at midnight, 12° + 0.49 Kp at noon, between them as ½(1 + cos)
+// of the angle from midnight — Alex's law, within Starkov 1994's 1.5–2° a Kp; the south 0.5° further), its midnight sector
+// three times its noon's; three arcs — the main one, a fainter one poleward, one equatorward from Kp 5 —, their offsets and
+// folds growing with the activity, drifting along the magnetic longitude, streaked by rays; the diffuse aurora's band 1.5°
+// equatorward.
+// AM2 — in physical units: the arcs are thin slabs along the field (18, 13, 22 km wide), tilted as a dipole's lines are at 67°
+// (their foot 0.0019° poleward a km up), integrated over each step — x linear between two samples, the share of the step inside
+// the slab the path through it (no sheet of no thickness, Alex's § 7.5: seen from above, along the field, a ray hardly crossed
+// one and the oval showed only at the limb) —; their kR the column's, as a photometer looking up the arc reads it — the IBC
+// classes' (system/aurora-lines.ts arcKR: IBC II at Kp 3, III near Kp 7) —, spread over each line's 0.886σ + H km; the
+// diffuse band a volume, the same.
+// The lines — O 557.7 nm, O 630 nm from 150 km up, N₂⁺ 427.8 nm, N₂ 1P under the storms' curtains — in cd/m² per kR and
+// linear RGB from their wavelength (aurora-lines.ts lineRGB: AUR_*; a test holds them equal); turned into the scene's
+// radiance by the full sunlight's 100 000 lux (L = cd/m² × 10⁻⁵ × |E|). The eye: under ~3·10⁻³ cd/m² its colour fades to the
+// rods' grey-green (§ 7.3). 14 jittered samples and the shell's two ends (40 before). No scattering; the air's transmittance
+// the caller's. Seen by the eye adapted to the sky they stand on: the shared exposure stops at 1 lux (renderer EYE_ADAPTATION)
+// and follows the moonlit ground, the sky stays dark — the eye's gain (I + I_eye)/(the sky's light), the renderer's (bary.w):
+// 1 by day, ~100 at night.
 const AUR_MAG = vec3f(0.04776, -0.15297, 0.98708);
-fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32, Ls: vec3f) -> vec3f {
+const AUR_GREEN = vec3f(7.6476e-5, 2.4722e-4, 0.0);
+const AUR_RED = vec3f(2.0889e-4, 0.0, 1.3924e-5);
+const AUR_BLUE = vec3f(4.5916e-6, 0.0, 2.0414e-5);
+const AUR_PINK = vec3f(2.3956e-5, 0.0, 8.7896e-7);
+// a line's profile (1 at its peak): a Gaussian under it, an exponential over, none under the floor [km]
+fn aurProf(h: f32, peak: f32, s: f32, H: f32, fl: f32) -> f32 {
+  let d = h - peak;
+  return select(select(exp(-d * d / (s * s)), exp(-d / H), d > 0.0), 0.0, h < fl);
+}
+// the same over each line's column (0.886σ + H km): a column's kR per km of path at a height
+fn aurColumn(hk: f32, kp: f32) -> vec3f {
+  return AUR_GREEN * (aurProf(hk, 110.0, 7.0, 24.0, 80.0) / 30.2)
+    + AUR_RED * (0.15 * (1.0 + 0.25 * kp) * aurProf(hk, 240.0, 50.0, 90.0, 150.0) / 134.3)
+    + AUR_BLUE * (0.3 * aurProf(hk, 104.0, 6.0, 18.0, 80.0) / 23.3)
+    + AUR_PINK * (0.6 * clamp((kp - 3.0) / 4.0, 0.0, 1.0) * aurProf(hk, 96.0, 3.0, 7.0, 80.0) / 9.66);
+}
+struct AurPt { x: f32, ml: f32, night: f32, hk: f32 };
+fn aurPoint(p: vec3f, kp: f32, ts: f32, sunML: f32, u: vec3f, v: vec3f) -> AurPt {
+  var o: AurPt;
+  let q = normalize(vec3f(p.x, p.y, p.z * EARTH_AB));
+  o.hk = airHeight(p) * 1e-3;
+  let m = asin(clamp(dot(q, AUR_MAG), -1.0, 1.0)) * 57.29578;
+  o.ml = atan2(dot(q, v), dot(q, u));
+  // (its magnetic local time: 1 at midnight, 0 at noon)
+  o.night = 0.5 + 0.5 * cos(o.ml - sunML - 3.14159265);
+  let colat = mix(12.0 + 0.49 * kp, 21.0 + 1.4 * kp, o.night) + select(0.0, 0.5, m < 0.0);
+  let fold = (1.0 + 0.15 * kp) / 1.45 * (1.4 * sin(o.ml * 6.0 + ts * 0.012) + 0.8 * sin(o.ml * 15.0 - ts * 0.031) + 0.35 * sin(o.ml * 37.0 + ts * 0.07));
+  // (x: the point's foot poleward of the main arc [°] — the field's lines lean equatorward going up)
+  o.x = abs(m) + 0.0019 * (o.hk - 110.0) - (90.0 - colat + fold);
+  return o;
+}
+fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32, Ls: vec3f, Elum: f32) -> vec3f {
   let kp = P.bary.z;
-  let ts = P.bary.w;
-  let r1 = 1.0 + 90e3 / EARTH_RM;
-  let r2 = 1.0 + 330e3 / EARTH_RM;
+  // (bary.w: the clock + 1 024 × twice the dark-adapted eye's gain — renderer: (I + I_eye)/I)
+  let eyeQ = floor(P.bary.w / 1024.0);
+  let ts = P.bary.w - 1024.0 * eyeQ;
+  let eye = max(eyeQ * 0.5, 1.0);
+  let r1 = 1.0 + 80e3 / EARTH_RM;
+  let r2 = 1.0 + 450e3 / EARTH_RM;
   let b = dot(ro, rd);
   let c2 = dot(ro, ro);
   let off2 = c2 - b * b;
@@ -5971,43 +6017,59 @@ fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32, Ls: vec3f) -> vec3f {
   // (the Sun's magnetic longitude: midnight its opposite)
   let sunML = atan2(dot(Ls, v), dot(Ls, u));
   let grow = 1.0 + 0.1 * kp;
-  let foldK = (1.0 + 0.15 * kp) / 1.45;
-  let N = 40u;
+  let kR = 2.0 * pow(10.0, 0.24 * kp);
+  // (the sheets: the main arc, the poleward one at 0.45 of it, the equatorward one at 0.5 from Kp 5)
+  let offs = vec3f(0.0, 1.2 * grow, -1.6 * grow);
+  let gains = vec3f(1.0, 0.45, 0.5 * step(5.0, kp));
+  // (their half widths [°]: 18, 13 and 22 km wide — an arc's few to tens of km, its finer folds left out)
+  let halfW = vec3f(0.08, 0.06, 0.1) * grow;
+  let N = 14u;
   let dt = (tb - ta) / f32(N);
   var L = vec3f(0.0);
-  for (var i = 0u; i < N; i++) {
+  var tp = ta;
+  var a = aurPoint(ro + rd * ta, kp, ts, sunML, u, v);
+  for (var i = 0u; i <= N; i++) {
     cost(4u);
-    let t = ta + (f32(i) + jit) * dt;
-    let p = ro + rd * t;
-    let q = normalize(vec3f(p.x, p.y, p.z * EARTH_AB));
-    let hk = airHeight(p) * 1e-3;
-    let m = asin(clamp(dot(q, AUR_MAG), -1.0, 1.0)) * 57.29578;
-    let ml = atan2(dot(q, v), dot(q, u));
-    // (its magnetic local time: 1 at midnight, 0 at noon)
-    let night = 0.5 + 0.5 * cos(ml - sunML - 3.14159265);
-    let colat = mix(12.0 + 0.49 * kp, 21.0 + 1.4 * kp, night) + select(0.0, 0.5, m < 0.0);
-    let fold = foldK * (1.4 * sin(ml * 6.0 + ts * 0.012) + 0.8 * sin(ml * 15.0 - ts * 0.031) + 0.35 * sin(ml * 37.0 + ts * 0.07));
-    // (x: its distance poleward of the main arc [°])
-    let x = abs(m) - (90.0 - colat + fold);
-    let a1 = x - 1.2 * grow;
-    let a2 = x + 1.6 * grow;
-    let arcs = exp(-x * x / 0.08) + 0.45 * exp(-a1 * a1 / 0.05) + 0.5 * step(5.0, kp) * exp(-a2 * a2 / 0.12);
-    // (the diffuse aurora: a broad glow 1.5° equatorward, no rays)
-    let xd = x + 1.5;
-    let diffuse = 0.12 * exp(-xd * xd / 2.25);
-    // (the rays: vertical streaks along the arc, flickering slowly)
-    let ray = 0.45 + 0.55 * pow(0.5 + 0.5 * sin(ml * 410.0 + 3.0 * sin(ml * 53.0 + ts * 0.05) + ts * 0.4), 3.0);
-    let green = exp(-(hk - 110.0) * (hk - 110.0) / 260.0) + 0.25 * exp(-max(hk - 112.0, 0.0) / 40.0) * step(110.0, hk);
-    // (the red tops: faint in a quiet oval, the storms' crowns; the blue lower edge a storm's)
-    let red = exp(-(hk - 230.0) * (hk - 230.0) / 1500.0) * (0.006 + 0.008 * kp);
-    let blue = exp(-(hk - 97.0) * (hk - 97.0) / 50.0) * 0.35 * clamp((kp - 3.0) / 4.0, 0.0, 1.0);
-    // (the midnight sector three times the noon's)
-    let sector = mix(0.34, 1.0, night);
-    let curtain = arcs * ray + diffuse;
-    L += (vec3f(0.11, 1.0, 0.36) * green + vec3f(1.0, 0.1, 0.22) * red + vec3f(0.3, 0.22, 1.0) * blue * arcs) * curtain * sector;
+    let t = select(ta + (f32(i) + jit) * dt, tb, i == N);
+    let bp = aurPoint(ro + rd * t, kp, ts, sunML, u, v);
+    // the slabs met between the two samples: x varies linearly, the share of the step inside each slab's [−w/2, w/2] — the
+    // path through it —, the lines' emission at its middle (a column's kR spread over the line's 0.886σ + H)
+    let dk = (t - tp) * EARTH_RM * 1e-3;
+    for (var s = 0u; s < 3u; s++) {
+      let x0 = a.x - offs[s];
+      let x1 = bp.x - offs[s];
+      let hw = halfW[s];
+      let lo = max(min(x0, x1), -hw);
+      let hi = min(max(x0, x1), hw);
+      if (gains[s] > 0.0 && hi > lo) {
+        let span = abs(x1 - x0);
+        let flat = span < 1e-5;
+        let share = select((hi - lo) / span, 1.0, flat);
+        let f = select(clamp((0.5 * (lo + hi) - x0) / (x1 - x0), 0.0, 1.0), 0.5, flat);
+        let hk = mix(a.hk, bp.hk, f);
+        let ml = mix(a.ml, bp.ml, select(f, select(0.0, 1.0, f > 0.5), abs(bp.ml - a.ml) > 3.14159265));
+        let night = mix(a.night, bp.night, f);
+        // (the rays: vertical streaks along the arc, flickering slowly)
+        let ray = 0.45 + 0.55 * pow(0.5 + 0.5 * sin(ml * 410.0 + 3.0 * sin(ml * 53.0 + ts * 0.05) + ts * 0.4), 3.0);
+        L += aurColumn(hk, kp) * (kR * gains[s] * ray * share * dk * mix(0.34, 1.0, night));
+      }
+    }
+    // the diffuse band: a volume, its column's 0.25 of the arc's kR (a few kR, 2° wide: what shows the oval from above — the
+    // DMSP's and the station's views) over 0.886σ + H of green (30.2 km), of red (134.3 km)
+    if (i < N) {
+      let xd = bp.x + 1.5;
+      let w = 0.25 * kR * exp(-xd * xd / 4.0) * mix(0.34, 1.0, bp.night) * dt * EARTH_RM * 1e-3;
+      L += w * (AUR_GREEN * (aurProf(bp.hk, 110.0, 7.0, 24.0, 80.0) / 30.2)
+        + AUR_RED * (0.15 * (1.0 + 0.25 * kp) * aurProf(bp.hk, 240.0, 50.0, 90.0, 150.0) / 134.3));
+    }
+    a = bp;
+    tp = t;
   }
-  // (its strength: a quiet oval faint, a storm's bright — over the night ground's light, per metre of ray)
-  return L * dt * EARTH_RM * 8e-6 * (0.25 + 0.3 * kp) * EARTH_NIGHT.g;
+  // (the eye: its colour from ~3·10⁻³ cd/m², under it the rods' grey-green — the luminance kept)
+  let Y = luminance(L);
+  let rods = vec3f(0.766, 1.072, 0.970) * Y;
+  let c = smoothstep(-2.7, -1.5, log2(max(Y, 1e-12)) * 0.30103);
+  return mix(rods, L, c) * 1e-5 * Elum * eye;
 }
 
 // The air along ro + t rd, t in [0, tEnd): what it lets through (T), and the sunlight it scatters
@@ -9002,9 +9064,12 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   var skyClear = skyR;
   if (SEA_ON) {
     let b = P.sea[1].w;
-    // (near: the real sky mirrored — the light probe about the craft, its clouds)
+    // (near: the real sky mirrored — the light probe about the craft, its clouds —, no brighter than four times the clear sky
+    // the camera's own model gives there: the probe's night sky read ~40 times its ground — 4·10⁻⁶ against 10⁻⁷ at Tromsø, the
+    // main view's sky darker than the snow —, and the fjords shone as a saturated white band along the horizon, Moon or not
+    // (AM2's aurora e2e; the probe's night scale itself still to trace); a lit cloud stays within it)
     skyClear = skyR;
-    skyR = mix(skyR, probeRadiance(camAxes(fromBody(rUp))), b);
+    skyR = mix(skyR, min(probeRadiance(camAxes(fromBody(rUp))), 4.0 * skyR), b);
     // (the water's own colour, from the light into it: the open sea's dark blue, its scattering; over a shallow bed —
     // SEA_DEPTH, the tiles' bathymetry — the bed seen through it, the light down to it and back attenuated by the water's
     // absorption — clear coastal water's, the red gone in a few metres, the blue and green in tens —: sand turquoise,
@@ -11808,7 +11873,7 @@ fn earthLookCompose(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f
   if (HAS_WX && s.earth && P.wx[6].w > 0.0) { o.col += boltRadiance(ro, rd, tHit, E) * air.T * (1.0 - 0.7 * alpha); }
   // the auroras (S2): above the air and the clouds — from under them, hidden by a cloud; from above, before it
   if (HAS_AURORA && s.earth && P.bary.z > 0.0) {
-    let aur = auroraLight(ro, rd, select(3e38, tHit, tHit > 0.0), jit, Ls);
+    let aur = auroraLight(ro, rd, select(3e38, tHit, tHit > 0.0), jit, Ls, luminance(E));
     o.col += aur * air.T * select(1.0 - alpha, 1.0, airHeight(ro) > 120e3);
   }
   o.T = select(cloudsDirectT(alpha) * air.T, vec3f(0.0), tHit > 0.0);

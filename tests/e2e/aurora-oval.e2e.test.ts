@@ -4,11 +4,13 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // The Earth's auroras redone (PLAN-AURORES-MAGNETOSPHERES AM1): the oval in magnetic local time — wider on the night side than
 // at noon, its midnight sector brighter, its diffuse band, the blue N₂⁺ edge of a storm —, the dipole's pole the field module's.
-// Seen from 4 000 km over the Canadian Arctic at night (Kp 3, then 7 — the far Earth's path draws none yet: AM2), from 400 km
-// to the limb (Kp 5), then from the ground at Tromsø (Kp 4, looking south).
+// AM2: their light in kR → cd/m², thin slabs along the field, the eye adapted to the night sky. Seen from 4 000 km over the
+// Canadian prairies in the Earth's shadow (Kp 3, then 7: the oval's night side in front of the Earth, its noon side towards the
+// pole), from 400 km over Manitoba looking south across the oval (Kp 5), from 400 km looking north to the limb (Kp 5: the
+// oval beyond the pole), then from the ground at Tromsø (Kp 4, looking south).
 // The live Kp off (the setting's values). AO_OUT.
 // Output: remote-results/aurora-oval/*.png, stats.json. Done when: the aurora kernel in (featureKey 16384), each view shot, no
-// GPU error. Duration: ~2 min.
+// GPU error. Duration: ~2.5 min.
 const OUT = process.env.AO_OUT ?? "remote-results/aurora-oval";
 afterAll(stopServer);
 
@@ -36,10 +38,13 @@ test.skipIf(!E2E)(
     try {
       await app.waitProgress("__bh.camera.piloting", "the flight");
       await app.js(`(() => { __bh.game.setDate("2026-12-21T07:00:00Z"); __bh.game.set("weather", "fair"); return 1; })()`);
-      // (from 4 000 km over 75° N 95° W, looking down: the oval's night side over Canada, its noon side towards Siberia)
-      await view("space-kp3", 3, `__bh.viewAt(75, -95, { altM: 4_000_000, heading: 0, pitch: -89, fov: 70 })`);
+      // (from 4 000 km over 50° N 100° W, looking down, in the Earth's shadow — the camera sunlit, the eye adapts to the day and
+      // the night side's oval vanishes —: the midnight oval at 62–65° of magnetic latitude, 54–56° N, in front of the Earth)
+      await view("space-kp3", 3, `__bh.viewAt(50, -100, { altM: 4_000_000, heading: 0, pitch: -89, fov: 70 })`);
       await view("space-kp7", 7, `1`);
-      // (from 400 km — the station's height — over 62° N 100° W, looking north to the limb: the oval's curtains below the horizon)
+      // (from 400 km — the station's height — over 58° N 95° W, poleward of the oval, looking south: its curtains over the Earth)
+      await view("orbit-south-kp5", 5, `__bh.viewAt(58, -95, { altM: 400_000, heading: 180, pitch: -20, fov: 90 })`);
+      // (from 400 km over 62° N 100° W, looking north to the limb: the oval's far side beyond the pole)
       await view("orbit-kp5", 5, `__bh.viewAt(62, -100, { altM: 400_000, heading: 0, pitch: -12, fov: 90 })`);
       // (Tromsø at 23:00 local, looking south, 30° up: at Kp 4 the oval's midnight arc passes some 3° of magnetic latitude south of
       // it — 63.4° against its 66.7° —; looking north, none — the Lofoten's view in s2-views looks south too)

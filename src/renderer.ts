@@ -3972,7 +3972,12 @@ export class Renderer {
     this.auroraKp = kpNow;
     const kp = near?.index === earthK ? Math.min(Math.max(kpNow.kp, 0), 9) : 0;
     f[41 * 4 + 2] = kp;
-    f[41 * 4 + 3] = kp > 0 ? ((tSec % 900) + 900) % 900 : 0;
+    // (w: the clock + 1 024 × round(2 × the dark-adapted eye's gain) — AM2: the shared exposure stops at the eye's 1 lux floor
+    // (EYE_ADAPTATION) and follows the moonlit ground; the auroras are seen against the sky, drawn dark under the Moon, by an
+    // eye adapted to it: (I + I_eye)/(the sky's light) — 1 by day, ~100 at night, Moon or not —, the meter's light the frame
+    // before (eyeIncident, eyeSkyLight); trace.wgsl auroraLight decodes it)
+    const eyeGain = Math.min((this.eyeIncident + EYE_ADAPTATION) / Math.max(this.eyeSkyLight, NIGHT_ILLUMINANCE), 127);
+    f[41 * 4 + 3] = kp > 0 ? (((tSec % 900) + 900) % 900) + 1024 * Math.round(2 * eyeGain) : 0;
     if (kp > 0) this.featureKey |= 16384;
     // Keep reference rendering for optical/scientific kernels and contact with the walking patch.
     // (the raster inspector draws its own patch and reads the cache itself; it does not need the tracer to be free of the
@@ -8367,10 +8372,14 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const moonI = MOON_ILLUMINANCE * this.moonLitShare ** 1.5 * Math.max(mz, 0);
     const I = (Math.max(sun, sky) + moonI + NIGHT_ILLUMINANCE) * this.wxLight;
     this.eyeIncident = I;
+    this.eyeSkyLight = (Math.max(sun, sky) + NIGHT_ILLUMINANCE) * this.wxLight;
     return I + EYE_ADAPTATION;
   }
   /** the light falling at the camera over the full sunlight's (earthSunlight; 1 away from the Earth): the eye's Purkinje shift */
   private eyeIncident = 1;
+  /** the same without the Moon: the light the sky is drawn by (its twilight, the night's floor — the moonlit sky stays dark), what
+   *  the eye looking at the auroras adapts to (AM2) */
+  private eyeSkyLight = 1;
   /** the Moon on the Earth's axes and its lit share (the shader's earth3), for the meter's night */
   private moonDirEarth: [number, number, number] | null = null;
   private moonLitShare = 0;

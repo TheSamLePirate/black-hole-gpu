@@ -78,11 +78,32 @@ verts) :
   comme 0.
 - **Observé** (e2e `aurora-oval`) : les rideaux à Tromsø vers le sud et au limbe depuis 400 km.
 - **Restant :**
-  - trop brillant et saturé au ras de l'horizon : le gain d'ensemble n'est pas changé, son étalonnage (modèle de l'œil, van
-    Rhijn) relève d'AM2 ;
-  - rien depuis 4 000 km : le chemin de la Terre lointaine n'appelle pas l'aurore ;
+  - ~~trop brillant et saturé ; rien depuis 4 000 km~~ : réglé par le premier lot d'AM2 (ci-dessous). Le « rien depuis
+    4 000 km » n'était pas un chemin manquant : la caméra y était au soleil (œil adapté au jour) et au pôle de l'ovale ;
   - la carte OVATION, l'orage, STEVE, l'aurore pulsante ;
   - le pôle passé en uniforme (une fois la variation séculaire là).
+
+**AM2, premier lot (6 novembre 2026)** — l'émission en unités physiques, pour la Terre :
+- **Les raies, une seule source** : `src/system/aurora-lines.ts` (luminance par kR depuis l'énergie du photon et V(λ) de la
+  CIE, teintes depuis CIE 1931 → RVB linéaire) ; `trace.wgsl` AUR_* en est la copie, un test les tient égales. Écart avec
+  Alex : N₂⁺ 427,8 nm vaut 2,4·10⁻⁶ cd/m² par kR (V = 0,0097), pas 3,4·10⁻⁶.
+- **La brillance** : le kR de colonne de l'arc (la mesure des IBC) 2 × 10^(0,24 Kp) — IBC II à Kp 3, III vers Kp 7 —,
+  réparti sur 0,886σ + H km de chaque raie ; L = cd/m² × 10⁻⁵ × |E| (les 100 000 lux de la pleine lumière).
+- **Les arcs, des lames minces** le long du champ (18, 13, 22 km), inclinées comme les lignes d'un dipôle à 67°, intégrées
+  analytiquement sur chaque pas (14 échantillons + les deux bouts, contre 40). Les nappes d'épaisseur nulle d'Alex (§ 7.5),
+  essayées d'abord, ne se voyaient pas d'en haut : un rayon le long du champ ne les traverse presque pas (Sam : « jamais
+  devant la Terre »). La bande diffuse : 0,25 du kR de l'arc sur 2°, ce qui dessine l'ovale vu d'en haut.
+- **L'œil** : l'exposition commune s'arrête à 1 lux et suit le sol éclairé par la Lune ; l'aurore se voit sur le ciel,
+  dessiné sombre — gain (I + I_œil)/(lumière du ciel), le même éclairement que le posemètre (`eyeSkyLight`), 1 de jour,
+  ~100 de nuit ; sous ~3·10⁻³ cd/m², la couleur glisse vers le gris-vert des bâtonnets.
+- **Trouvé en route** : la bande blanche saturée des fjords la nuit (vue de Tromsø, Lune ou pas) venait de la mer qui
+  reflète la sonde de lumière du Ranger, dont le ciel de nuit vaut ~40 fois son sol ; reflet borné à 4 fois le ciel clair
+  du modèle de la caméra. L'échelle nocturne de la sonde elle-même reste à comprendre.
+- **Observé** (e2e `aurora-oval`, planche `docs/progress/aurora/am2-planche.jpg`) : Tromsø Kp 4, rideaux devant la Terre
+  depuis 400 km (Kp 5), l'ovale sur le Canada depuis 4 000 km dans l'ombre (Kp 3, 7).
+- **Restant** : la Terre au soleil vue depuis l'espace (l'œil adapté au jour n'y voit pas l'aurore de la face nuit) ; le
+  rendu « photo » ; le grain au limbe ; l'aurore générique par corps (AM0 → table, Jupiter en AM3) ; le cache par direction
+  et la mesure du coût (non mesuré : temps GPU des e2e seulement, bruités).
 
 ## 1. Ce qu'on a aujourd'hui
 
