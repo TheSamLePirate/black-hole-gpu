@@ -605,8 +605,6 @@ body.hide-ui #sky-card,
 body.hide-ui .gt-root,
 body.hide-ui #topbar,
 body.hide-ui .compile-meter,
-body.hide-ui .data-meter,
-body.hide-ui .net-light,
 body.hide-ui .tb-handle {
   display: none;
 }
@@ -2540,6 +2538,13 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
   border-radius: 2px; background: #5a6470; box-shadow: 0 0 0 1px rgba(4, 8, 14, 0.7); opacity: 0.55;
 }
 .net-light[hidden] { display: none; }
+/* the compiles' light beside it (main.ts compileLight): always shown — the shaders still to compile, grey 0 when none */
+.compile-light {
+  position: fixed; top: 2px; left: 16px; min-width: 12px; height: 12px; padding: 0 3px; box-sizing: border-box; z-index: var(--z-toast);
+  pointer-events: none; border-radius: 3px; background: #5a6470; box-shadow: 0 0 0 1px rgba(4, 8, 14, 0.7); opacity: 0.55;
+  font: 700 9px/12px var(--mono); color: #0b1016; text-align: center;
+}
+.compile-light:not([data-pending="0"]) { background: #4aa8ff; opacity: 1; box-shadow: 0 0 0 1px rgba(4, 8, 14, 0.7), 0 0 5px rgba(74, 168, 255, 0.7); }
 .net-light[data-state="loading"] { background: #3ddc84; opacity: 1; box-shadow: 0 0 0 1px rgba(4, 8, 14, 0.7), 0 0 5px rgba(61, 220, 132, 0.7); }
 .net-light[data-state="waiting"] { background: #ffb547; opacity: 1; }
 .net-light[data-state="error"] { background: #ff5a5a; opacity: 1; }

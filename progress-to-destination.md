@@ -2053,3 +2053,20 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   `max` de plus par nœud cuit, négligeable attendu, non chronométré). **Non vérifié** : la France et la Suisse avec la nouvelle
   borne (le cas côtier y était déjà couvert par le WMS-R en NaN ; aucune e2e côtière française relancée).
 - **Restant** : une nappe sombre du traceur au large, antérieure à ce lot (PROBLEMES-A-REGLER.md).
+
+## 2026-11-06T08:21Z — La ville de nuit, premier lot : fenêtres à distance, sol vu rasant, couleurs sous les lampes ; indicateurs de chargement et de compilation
+
+- **Contribution** (§19 expérience complète — la nuit et les vols de nuit ; §7 matériaux explicites partagés par les deux
+  pipelines) : plan `docs/PLAN-NUIT-URBAINE.md` (NU1–NU8). Les fenêtres des bâtiments dessinées une à une tant qu'une travée
+  couvre plus d'un pixel (`buildingLook` : filtre en boîte sur l'empreinte, moyenne conservée — la lueur moyenne étalée sur tout le
+  mur au-delà de 26 cm de pixel faisait des tours blanches ou grises uniformes la nuit) ; les flaques des lampadaires sur les murs
+  bornées au pied (`RB_ABOVE`) ; la lumière des villes vue rasante (`cityCanyon`) ; sous les lampes, la luminance des photos et un
+  tiers de leur teinte (×2 au plus, au lieu de ×4 par canal : pelouses vert fluo à Paris) ; des fenêtres de nuit aussi sur les
+  maillages sans feuille (U2). Indicateurs du coin haut-gauche toujours visibles, interface cachée comprise ; un indicateur de
+  compilation (nombre de compilations restantes) à côté de celui du réseau.
+- **Preuve** : **observé** (e2e `nyc-sunset` : New York de nuit et deux photographies de référence placées d'après leurs EXIF —
+  `docs/progress/usa/refs` —, Paris de nuit ; kerr-mini et ce Mac) — planche `docs/progress/nuit/n0-avant-apres.jpg`. Diagnostic
+  des tours par un agent (sondes par terme : aucune lumière sur les murs, la lueur moyenne seule). **Non mesuré** : coût GPU
+  (le compteur affiché n'est pas une mesure).
+- **Restant** : NU1 (le dessin des rues vu d'avion : les lumières lues à VIIRS z 8 seulement), NU2 lampadaires, NU3 voitures, halo
+  du ciel, exposition de nuit, allées du Trocadéro encore trop blanches, tour Eiffel éteinte, la Seine pas chargée en 60 s.

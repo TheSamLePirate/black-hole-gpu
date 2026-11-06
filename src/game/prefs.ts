@@ -8,6 +8,7 @@ import { store } from "../util/storage";
 
 const KEY = "kerr.prefs";
 const AUTO_KEY = "kerr.autosave";
+const NET_SHOWN_KEY = "kerr.prefs.netShown";
 
 /** The player's settings as kept (checked: a value of the wrong kind is left out). */
 export function readPrefs(): Partial<Settings> {
@@ -19,6 +20,13 @@ export function readPrefs(): Partial<Settings> {
   // (the jet HUD's old choice — its units with it, "aviation" or "metric" —: on; the units now one setting for
   // everything, metric unless imperial is chosen)
   if (kept.hudJet === "aviation" || kept.hudJet === "metric") kept.hudJet = "on";
+  // (the network's light and the data's loading in the top-left corner shown again once, whatever was kept: on by default, and
+  // to be seen — Sam, 6 Nov 2026 — ; turned off since, they stay off)
+  if (store.getJSON<boolean>(NET_SHOWN_KEY, false) !== true) {
+    kept.showNetwork = true;
+    kept.showLoading = true;
+    store.setJSON(NET_SHOWN_KEY, true);
+  }
   const out: Record<string, unknown> = {};
   for (const k of settingKeys("pref")) if (k in kept && typeof kept[k] === typeof d[k]) out[k] = kept[k];
   return out as Partial<Settings>;

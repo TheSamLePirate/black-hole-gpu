@@ -9617,6 +9617,8 @@ struct SurfaceImage { c: vec3f, w: f32, cover: u32 }
 // a building drawn by the raster, its material (shadeLite, rasterBuilding): its albedo, its normal (the Earth's axes), its
 // glass's mirror share, its windows' light at night, its ambient occlusion
 struct RasterBuilding { albedo: vec3f, normal: vec3f, s: f32, e: vec3f, ao: f32 };
+// (the point's height over the building's foot [m] — the last rasterBuilding's —: the street lamps' pools on a wall below)
+var<private> RB_ABOVE: f32 = 0.0;
 // BEGIN_WORLD_SCENERY
 var<private> SC_POINT:vec3f=vec3f(0.0);
 var<private> SC_DISTANCE:f32=1e9;
@@ -9769,11 +9771,14 @@ fn sceneryQuery(o:vec3f,d:vec3f,limit:f32,shadow:bool)->SceneryHit {
 // field — the telephoto keeps it farther; no shimmer), the lit windows kept beyond it as their mean glow. Q3: a blind wall — a
 // party wall, a cut inside the building (its kind 1.25) — has no window; a workplace's windows (bit 23) dark at night but its
 // shop floor's.
+// the share of a pixel's footprint f [m] centred at x that [a, b] covers (a box filter, one axis)
+fn boxCover(x:f32,a:f32,b:f32,f:f32)->f32 { return clamp((min(x+0.5*f,b)-max(x-0.5*f,a))/f,0.0,1.0); }
 fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,vec3f>) {
   let g=hit.geo;let head=scenery[g];let w=u32(scenery[g+2u].w);
   let roofMat=w&15u;let wallMat=(w>>4u)&15u;let storeys=max(1u,(w>>8u)&63u);
   let base=head.x+1.0;let eave=scenery[g+3u+u32(head.z)].w;
-  let near=1.0-smoothstep(0.12,0.26,hit.t*pixFoot());
+  let foot=max(hit.t*pixFoot(),1e-4);
+  let near=1.0-smoothstep(0.12,0.26,foot);
   let work=((w>>23u)&1u)==1u;let blindWall=hit.kind>1.1;
   let id=g;
   // (a wall's hit has its coordinate along it — a mansard's steep brisis is roof)
@@ -9795,8 +9800,12 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
       let hsh=hash3u(vec3u(id,u32(floorI),u32(floor(along/1.5)+512.0)));
       let lit=select(0.35,0.15,work);
       if(!mull && u2f(hsh)<lit){WS_E=vec3f(0.95,0.92,0.85)*(0.04+0.06*u2f(pcg(hsh)))*near;}
-      // (beyond the detail: the panes' mean glow)
-      WS_E+=vec3f(0.95,0.92,0.85)*(0.07*0.9*lit)*(1.0-near);
+      // (beyond the detail: each pane lit or dark — its light over the pane, the same draw as near — while a pane spans a pixel
+      // and more; past that their mean glow. The mean alone, from the first metre a pixel on, made a lit tower a uniformly
+      // glowing box at night — Lower Manhattan from Brooklyn white and grey blocks, no window — Sam, 6 Nov 2026)
+      let paneW=smoothstep(1.0,2.0,min(1.5,hs)/foot);
+      let paneE=select(0.0,0.04+0.06*u2f(pcg(hsh)),u2f(hsh)<lit)*boxCover(fract(along/1.5)*1.5,0.075,1.5,foot)*boxCover(v*hs,0.1*hs,hs,foot);
+      WS_E+=vec3f(0.95,0.92,0.85)*mix(0.07*0.9*lit,paneE,paneW)*(1.0-near);
       return;
     }
     // (the material's own grain: dressed stone's courses, brick's tone, render's stains)
@@ -9812,7 +9821,13 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
       let share=select(select(0.28,0.08,work),0.55,shop);
       if(p.z>base+0.5){
         *alb*=1.0-0.22*(1.0-near);
-        WS_E+=vec3f(1.0,0.8,0.52)*(0.0257*share)*(1.0-near);
+        // (each bay's window lit or dark — the same draw as near, its pane box-filtered over the pixel's footprint: the same mean
+        // — while a bay spans a pixel and more; past that the mean)
+        let hw=hash3u(vec3u(id,u32(floorI),u32(bay+512.0)));
+        let wuF=select(0.26,0.12,shop);
+        let cov=boxCover(u*bw,wuF*bw,(1.0-wuF)*bw,foot)*boxCover(v*hs,select(0.28,0.08,shop)*hs,select(0.86,0.82,shop)*hs,foot);
+        let cellE=select(0.0,(0.05+0.09*u2f(pcg(hw)))*cov,u2f(hw)<share);
+        WS_E+=vec3f(1.0,0.8,0.52)*mix(0.0257*share,cellE,smoothstep(1.0,2.0,min(bw,hs)/foot))*(1.0-near);
       }
       if(near<=0.0){return;}
       let wu=select(0.26,0.12,shop);let wv0=select(0.28,0.08,shop);let wv1=select(0.86,0.82,shop);
@@ -9975,6 +9990,7 @@ fn rasterBuilding(leaf:u32,dirW:vec3f,tM:f32,photo:vec3f)->RasterBuilding {
   WS_AO = 1.0;
   WS_E = vec3f(0.0);
   buildingLook(hit, pL, &alb, &nL);
+  RB_ABOVE = max(pL.z - (scenery[g].x + 1.0), 0.0);
   if (hit.aux.y < 0.0) { alb *= clamp(luminance(photo) / max(luminance(alb), 0.02), 0.6, 1.5); }
   return RasterBuilding(alb, normalize(sceneryGlobal(nL)), WS_S, WS_E, WS_AO);
 }
@@ -10675,7 +10691,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
   let lamp = max(lights - 0.07, 0.0) / 0.93;
   let dark = 1.0 - smoothstep(-0.12, 0.06, mu0);
-  col += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * luminance(E) / PI);
+  col += mix(vec3f(1.0, 0.55, 0.22), vec3f(1.0, 0.85, 0.6), lamp) * (pow(lamp, 1.4) * P.earth.z * dark * cityCanyon(dot(-rd, gq), lamp) * luminance(E) / PI);
   // (the runways' lamps: a sunlit sky's worth by day — barely seen —, far over the night's ground)
   // (by day in a poor visibility — fog, rain: P.runways[17].y — at their brightest, as the tower sets them;
   // at night thousands of times the night's own light: each lamp a point that glows — the bloom's — from km out)
@@ -14147,6 +14163,16 @@ const RWY_LAMPS_NIGHT = 0.4;
 // a lit town's ground beyond the streets drawn (the scenery's box): the night map's 500 m mean seen grazing — the streets hidden
 // by what stands along them, the trees and the roofs dark —, a share of it; whole it made a bright band at the horizon
 const CITY_WASH_FAR = 0.4;
+// The share of a town's night lights seen from a view's cosine cv to the vertical (the map's — VIIRS's — radiance is seen from
+// overhead): its streets between what stands along them, hidden more the lower the look and the taller the town — its lamp's
+// brightness as the buildings' height over the streets' width, 0.3 a suburb's, 1.8 a dense centre's —, averaged over the
+// streets' bearings: 1/(1 + (H/W)·tan θ), a few hundredths at least (the lit facades, the gaps). At a grazing look a lit
+// city's ground was a flat cream sheet up to its towers — off Brooklyn at 45 m, all the more while the scenery loaded (its
+// streets not yet drawn: the map's wash everywhere) — Sam, 6 Nov 2026
+fn cityCanyon(cv: f32, lamp: f32) -> f32 {
+  let c = clamp(abs(cv), 1e-3, 1.0);
+  return max(1.0 / (1.0 + (0.3 + 1.5 * lamp) * sqrt(1.0 - c * c) / c), 0.03);
+}
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id) lid: vec3u,
         @builtin(local_invocation_index) li: u32, @builtin(workgroup_id) wid: vec3u) {
@@ -15416,6 +15442,16 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // (a bridge's part — its deck's sides, its parapets, its piers —: stone, no windows)
     glass = select(0.0, 1.0, fw > 0.28 && fw < 0.72 && fz > 0.3 && fz < 0.82 && !terrainRasterBridgeMesh(centre));
     A = mix(A, vec3f(0.03) * P.earth2.z, glass);
+    // (their windows lit at night as buildingLook's — over a quarter of them, each its own warmth —, their mean once a pixel
+    // spans a bay: the towers away over the water had none — grey blocks under the night's ambient, the eye's gain on them —
+    // where a photograph from Brooklyn shows their lit windows — Sam, 6 Nov 2026)
+    if (!terrainRasterBridgeMesh(centre)) {
+      let nearW = 1.0 - smoothstep(0.6, 1.3, fpM);
+      let cell = vec3u(vec3i(i32(floor(dot(spL.xy, along) / 2.6) + 65536.0), i32(floor(spL.z / 3.1) + 4096.0), i32(block * 4096.0)));
+      let hsh = hash3u(cell);
+      let litW = select(0.0, 1.0, u2f(hsh) < 0.28) * glass * (0.05 + 0.09 * u2f(pcg(hsh)));
+      bldE = vec3f(1.0, 0.8, 0.52) * (litW * nearW + 0.0257 * 0.28 * (1.0 - nearW));
+    }
   }
   // (Q8 D1: a wind turbine — its tower, nacelle and blades: a white matte paint, no windows)
   if (terrainRasterTurbine(centre)) {
@@ -15548,7 +15584,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     let r = reflect(dirW, n);
     G += F * (sky / PI * 1.3 * bldAO + Eg * pow(max(dot(r, Li), 0.0), 600.0) * 40.0);
   }
-  if (leaf > 0u) { G += bldE * (luminance(E) / PI) * WINDOW_GLOW * (1.0 - smoothstep(-0.12, 0.06, mu0g)); }
+  if (leaf > 0u || mesh) { G += bldE * (luminance(E) / PI) * WINDOW_GLOW * (1.0 - smoothstep(-0.12, 0.06, mu0g)); }
   // (the wet ground's sheen: the sky mirrored by the water on it, by Fresnel — a wet runway seen ahead silvery —, the rings
   // breaking it)
   if (wetS > 0.0) {
@@ -15578,16 +15614,25 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (HAS_SCENERY && lit > 0.0 && lamp > 0.02 && (liteSkip() & 131072u) == 0u) {
     lit *= sceneryRoadLight(sv, tM, xyL);
     if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) {
-      litAlb = clamp(A / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(4.0));
+      // (the photograph's brightness under the lamps, a third of its hue: its lawns' and its trees' green, ×4 a channel, had lit
+      // the parks fluorescent green and the paths neon white — Paris at night, Sam, 6 Nov 2026)
+      let la = luminance(A);
+      litAlb = clamp(mix(vec3f(la), A, 0.33) / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(2.0));
       litC = streetLampTint(xyL);
     }
   } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
+  // (the map's mean beyond the streets drawn — past the scenery's reach, or before it is in —: seen at the street's angle)
+  if (!nearL) { lit *= cityCanyon(-dot(dirW, gq), lamp); }
   G += litAlb * litC * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
   // (Q8 L10: the streets' lamps on the buildings' walls by them — their pools' light where the wall stands, three tenths of the ground's (half lit the walls brighter than the street, +65 % to the night's mean):
   // a wall faces the lamp across the street, not under it; a lit town, at night, near)
   if (mesh && nearL && dark > 0.0 && lamp > 0.02) {
     let pl = sceneryLampLight(xyL);
-    let wall = 1.0 - smoothstep(0.6, 0.9, abs(dot(n, gq)));
+    // (a pool lights the wall's foot: the lamp's head ~8 m up, its light on the wall falling with the height over it — a tower
+    // lit whole by the pools at its foot stood white up to its top over Manhattan at night, brighter than its windows — Sam,
+    // 6 Nov 2026, against a photograph from Brooklyn)
+    let up = select(0.0, RB_ABOVE / 9.0, leaf > 0u);
+    let wall = (1.0 - smoothstep(0.6, 0.9, abs(dot(n, gq)))) / (1.0 + up * up * up);
     if (pl.y > 0.0 && wall > 0.0) {
       let fa = clamp(A / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(4.0));
       G += fa * streetLampTint(xyL) * (pow(lamp, 1.4) * P.earth.z * dark * 0.3 * STREET_POOL_GAIN * pl.x * pl.y * wall * luminance(E) / PI);

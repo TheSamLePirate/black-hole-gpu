@@ -8197,6 +8197,13 @@ async function main() {
   const compileText = document.createElement("span");
   compileMeter.append(TarsOrb.mark("solving", TINT.blue, 14), compileText);
   document.body.append(compileMeter);
+  // (the compiles' light beside the network's, always shown — Sam, 6 Nov 2026: « un indicateur de compilation, une couleur et
+  // le nombre de compilations restantes, toujours visible » —: grey 0 when none, blue with the count while shaders compile)
+  const compileLight = Object.assign(document.createElement("div"), { className: "compile-light", textContent: "0" });
+  compileLight.dataset.testid = "compile-light";
+  compileLight.dataset.pending = "0";
+  compileLight.setAttribute("aria-hidden", "true");
+  document.body.append(compileLight);
   // (the world's data coming in — Settings › Render › Show the data's loading —: under the compiles, one segment per source still
   // loading — the relief's tiles, the photographs', another world's, the scenery's step, a world's finer maps, the horizons'
   // bake —, what failed lately in amber; gone once all is in. data-state and data-* for the tests)
@@ -8413,6 +8420,10 @@ async function main() {
       const compiling = renderer.compilesPending;
       compileMeter.hidden = compiling === 0;
       compileMeter.dataset.pending = String(compiling);
+      if (compileLight.dataset.pending !== String(compiling)) {
+        compileLight.dataset.pending = String(compiling);
+        compileLight.textContent = String(compiling);
+      }
       // (which: the kernel and the features of its variant — the first one, the others counted)
       if (compiling) {
         const now = renderer.compilingNow;

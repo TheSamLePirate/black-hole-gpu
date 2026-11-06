@@ -562,7 +562,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-06T06:52:11Z sur `da4e75bd` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-06T08:25:51Z sur `56a55516` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **98 sites de création de pipeline** (67 rendu, 31 calcul, dont 38 asynchrones) et 35 `createShaderModule` dans 28 fichiers ; **34 programmes WGSL** (15 fichiers .wgsl, 19 chaînes dans le TypeScript) ; **60 libellés de passes** du profileur GPU (+ 9 sites à libellé dynamique).
 
@@ -670,7 +670,7 @@ _Généré le 2026-11-06T06:52:11Z sur `da4e75bd` (arbre de travail). Ne pas éd
 | `src/system/earth-horizons.ts:405` | compute async | `earth horizons staging` | `bake` |
 | `src/system/earth-maps.ts:254` | render | — | `vs`, `entry` |
 | `src/system/earth-shore.ts:102` | compute async | `earth shore staging` | `bake` |
-| `src/system/earth-tiles.ts:2172` | render | `imagery mips` | `vs`, `fs` |
+| `src/system/earth-tiles.ts:2174` | render | `imagery mips` | `vs`, `fs` |
 | `src/system/giant-tile.ts:244` | compute | `giant tile` | `e` |
 | `src/system/gtao.ts:118` | compute async | — | `gtao` |
 | `src/system/hd-maps.ts:300` | render | — | `vs`, `entry` |
@@ -688,8 +688,8 @@ _Généré le 2026-11-06T06:52:11Z sur `da4e75bd` (arbre de travail). Ne pas éd
 | `src/system/scenery-raster.ts:883` | render async | — | `shadowVs` |
 | `src/system/scenery-raster.ts:896` | render async | — | `boxShadowVs` |
 | `src/system/scenery-raster.ts:904` | render async | — | `meshShadowVs` |
-| `src/system/terrain-cache.ts:317` | compute async | — | `main` |
-| `src/system/terrain-cache.ts:318` | compute async | — | — |
+| `src/system/terrain-cache.ts:321` | compute async | — | `main` |
+| `src/system/terrain-cache.ts:322` | compute async | — | — |
 | `src/system/terrain-raster.ts:398` | render async | — | `terrainSunVs` |
 | `src/system/terrain-raster.ts:422` | render async | — | `terrainVs`, `terrainFs` |
 | `src/system/terrain-raster.ts:440` | render async | — | `terrainVs`, `ringFs` |
@@ -708,7 +708,7 @@ _Généré le 2026-11-06T06:52:11Z sur `da4e75bd` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 16541 | 15 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 16586 | 15 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2541 | 30 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass |
 | `src/shaders/post.wgsl` | 1269 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/shaders/display.wgsl` | 935 | vs (v), fs (f) |
@@ -735,13 +735,13 @@ _Généré le 2026-11-06T06:52:11Z sur `da4e75bd` (arbre de travail). Ne pas éd
 | `src/system/earth-maps.ts:175` | 43 | vs (v), face (f), lights (f), elev (f), downSrgb (f), downLin (f) |
 | `src/shaders/sky.wgsl` | 40 | decode (c), down (c) |
 | `src/crew/draw/earth.ts:45` | 38 | vs (v), fs (f) |
+| `src/system/terrain-cache.ts:146` | 36 | main (c) |
 | `src/system/earth-shore.ts:39` | 35 | bake (c) |
-| `src/system/terrain-cache.ts:146` | 32 | main (c) |
 | `src/system/warp-grid.ts:85` | 25 | main (c) |
 | `src/shaders/mips.wgsl` | 23 | vs (v), fs (f) |
 | `src/system/earth-tiles.ts:321` | 18 | vs (v), fs (f) |
 | `src/renderer.ts:7360` | 10 | main (c) |
-| `src/system/terrain-cache.ts:182` | 9 | main (c) |
+| `src/system/terrain-cache.ts:186` | 9 | main (c) |
 
 #### A.3 Libellés du profileur GPU (`gpuprof.ts`)
 
@@ -846,10 +846,10 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | compute pass | `src/system/bc-encode.ts:220` |
 | render pass | `src/system/day-clouds.ts:181` |
 | render pass | `src/system/earth-maps.ts:276` |
-| imagery mips | `src/system/earth-tiles.ts:2198` |
+| imagery mips | `src/system/earth-tiles.ts:2200` |
 | render pass | `src/system/hd-maps.ts:320` |
 | horizon mips | `src/system/horizon-maps.ts:767` |
-| terrain cache fade | `src/system/terrain-cache.ts:499` |
+| terrain cache fade | `src/system/terrain-cache.ts:503` |
 | warp grid | `src/system/warp-grid.ts:164` |
 | render pass | `src/ui/map3d/gpu.ts:503` |
 
@@ -857,16 +857,16 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 26.1 · shadeMark 0.3 · shadeLite 8.2 · shadeWater 6.0 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 41.9 · env 57.1 · aerial 0.7 | 175k |
-| `earth-raster-wx` | shade 30.8 · shadeMark 0.3 · shadeLite 8.2 · shadeWater 6.0 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 44.7 · env 57.1 · aerial 0.7 | 182k |
+| `earth-raster` | shade 26.1 · shadeMark 0.3 · shadeLite 8.3 · shadeWater 6.0 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 41.9 · env 57.2 · aerial 0.7 | 175k |
+| `earth-raster-wx` | shade 30.8 · shadeMark 0.3 · shadeLite 8.3 · shadeWater 6.0 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 44.7 · env 57.2 · aerial 0.7 | 183k |
 | `earth-trace` | main 65.0 · env 60.4 · aerial 0.6 | 126k |
 | `earth-photo` | main 66.8 | 67k |
 | `game-space` | main 53.0 · env 48.7 · aerial 0.6 | 102k |
-| `moon` | main 73.3 · env 48.7 · aerial 0.6 · shadeLite 24.9 | 147k |
-| `moons` | main 74.1 · env 48.7 · aerial 0.6 · shadeLite 25.0 | 148k |
+| `moon` | main 73.3 · env 48.7 · aerial 0.6 · shadeLite 24.9 | 148k |
+| `moons` | main 74.1 · env 48.7 · aerial 0.6 · shadeLite 25.1 | 149k |
 | `mars` | main 85.9 · env 48.7 · aerial 0.6 · shadeLite 37.7 | 173k |
 | `titan` | main 88.9 · env 48.7 · aerial 0.6 · shadeLite 42.8 | 181k |
-| `venus` | main 88.6 · env 48.7 · aerial 0.6 · shadeLite 43.4 | 181k |
+| `venus` | main 88.6 · env 48.7 · aerial 0.6 · shadeLite 43.5 | 181k |
 | `earth-only` | main 49.3 · env 42.8 · aerial 0.7 | 93k |
 | `kerr-jet` | main 31.3 · env 27.1 · lut 27.6 | 86k |
 | `eclipse` | main 45.2 · env 36.5 · aerial 0.6 | 82k |
