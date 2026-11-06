@@ -2036,3 +2036,20 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Suite** : une suite `plan-views` de référence au commit courant (coûts par passe), `kernel-compile` froid/chaud sur
   kerr-mini et kerr-pc, le coût des ≈55 pipelines synchrones du démarrage, un parcours « titre → Paris → `earthSettled` »
   chronométré par étape ; horodater `earthSettled`/`tracerSettled` et chronométrer les passes non couvertes.
+
+## 2026-11-06T07:18Z — Le sol de contact de la mer : Mapterhorn sans bathymétrie, la cuisson du relief raster bornée au niveau de la mer
+
+- **Contribution** (§7 « une responsabilité commune avant plusieurs lecteurs » : le monde possède le sol, le raster le lit ;
+  lot D/E des données) : la mer de Mapterhorn (exactement 0, sans bathymétrie) n'est plus un sol de relevé — trous comblés par
+  Terrarium, non marqués, comme le WMS-R de l'IGN en mer (`earth-tiles.ts` mapterhornHeights, `usa-ground.ts` pour le
+  décor) ; la cuisson du cache de relief du raster (`terrain-cache.ts`) soustrait la lecture du niveau grossier **au-dessus
+  du niveau de la mer**, comme `h` : la bathymétrie de Terrarium n'est plus rajoutée sous un texel de relevé en mer.
+- **Défauts corrigés** (Sam, Big Sur) : une nappe grise jusqu'à l'horizon (la mer de Mapterhorn marquée relevé), puis une
+  aiguille translucide au large, d'autant plus haute que la mer y est profonde et que seuls les niveaux grossiers sont là
+  (« un énorme pic pendant le chargement, puis un pic »). Cause isolée par e2e : présente en raster, absente sans le relief
+  national, absente du traceur ; le relief CPU (groundAt, tuiles par niveau) sans valeur aberrante.
+- **Preuve** : **observé** (sonde e2e, vol à 450 m au large de Big Sur, ce Mac, fenêtre visible) — l'aiguille disparaît
+  (planche `docs/progress/usa/d3-bigsur-needle.jpg`) ; `tests/hlod.test.ts` mis à jour. **Non mesuré** : coût (une lecture
+  `max` de plus par nœud cuit, négligeable attendu, non chronométré). **Non vérifié** : la France et la Suisse avec la nouvelle
+  borne (le cas côtier y était déjà couvert par le WMS-R en NaN ; aucune e2e côtière française relancée).
+- **Restant** : une nappe sombre du traceur au large, antérieure à ce lot (PROBLEMES-A-REGLER.md).

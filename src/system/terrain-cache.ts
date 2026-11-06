@@ -171,8 +171,12 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   // the bare ground of the windows z 14 and finer: the 9.5 and 38 m rings stood a forest's height over the ground drawn, the
   // hint's bracket missed it, the whole march redone (+10 % of the raster's shading low over the woods). Beyond those windows
   // the finest held is a far level itself: its overground kept, as drawn)
+  // (the footprint's reading, as h has it — over the sea's level: h is never under it. Taken as is, the coarse levels'
+  // bathymetry — Terrarium's, hundreds of metres down off Big Sur — was added back under one survey's texel at sea — a rock,
+  // a coastal pixel of Mapterhorn's —: a needle as high as the sea was deep, the higher the coarser the levels in, and the
+  // sea's whole width a shelf while Mapterhorn's sea was marked a survey's — Sam, 6 Nov 2026)
   let fine = earthH(q, 1.0, false);
-  if (fine.y < ${SURVEY_RES}) { h = max(h + fine.x - earthH(q, U.scale.y, false).x, 0.0); }
+  if (fine.y < ${SURVEY_RES}) { h = max(h + fine.x - max(earthH(q, U.scale.y, false).x, 0.0), 0.0); }
   outHeights[gid.y * ${TERRAIN_CACHE_N}u + gid.x] = h;
 }`;
 }

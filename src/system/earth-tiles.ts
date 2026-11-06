@@ -777,7 +777,9 @@ async function mapterhornHeights(z: number, x: number, y: number, signal: AbortS
       oy = (y & 1) * TILE;
     const h = new Float32Array(TILE * TILE);
     for (let j = 0; j < TILE; j++) h.set(g.subarray((oy + j) * 2 * TILE + ox, (oy + j) * 2 * TILE + ox + TILE), j * TILE);
-    for (let i = 0; i < h.length; i++) if (h[i]! < -500 || h[i]! > 9000) h[i] = Number.NaN;
+    // (its sea is exactly 0 — no bathymetry —: no data, as the IGN's WMS-R says at sea — the global data then fill it, unmarked;
+    // marked as a survey's ground, that 0 was land at sea level: a grey shelf out to the horizon off Big Sur — Sam, 6 Nov 2026)
+    for (let i = 0; i < h.length; i++) if (h[i]! === 0 || h[i]! < -500 || h[i]! > 9000) h[i] = Number.NaN;
     return { h, over: null };
   }
 }

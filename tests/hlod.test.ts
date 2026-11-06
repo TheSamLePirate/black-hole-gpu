@@ -104,7 +104,9 @@ test("the surface cache's bake over a survey: its tiles as the pixels read them,
   const { terrainCacheShader, SURVEY_RES } = await import("../src/system/terrain-cache");
   const bake = terrainCacheShader(await Bun.file(new URL("../src/shaders/trace.wgsl", import.meta.url)).text());
   expect(bake).toContain("let fine = earthH(q, 1.0, false);");
-  expect(bake).toContain(`if (fine.y < ${SURVEY_RES}) { h = max(h + fine.x - earthH(q, U.scale.y, false).x, 0.0); }`);
+  // (the footprint's reading over the sea's level, as h: the coarse bathymetry never added back under a survey's texel at sea —
+  // the needle off Big Sur, 6 Nov 2026)
+  expect(bake).toContain(`if (fine.y < ${SURVEY_RES}) { h = max(h + fine.x - max(earthH(q, U.scale.y, false).x, 0.0), 0.0); }`);
   // (a survey's resolution its texel's, under 20 m at the finest held; the global data's never under 25 m: France alone)
   expect(SURVEY_RES).toBeGreaterThan(13);
   expect(SURVEY_RES).toBeLessThan(25);

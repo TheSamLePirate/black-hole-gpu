@@ -104,6 +104,7 @@ export class MapterhornGround {
       ty = Math.max(0, Math.min(1, v - j));
     const at = (a: number, c: number) => g.h[(j + c) * n + i + a]!;
     const h = (at(0, 0) * (1 - tx) + at(1, 0) * tx) * (1 - ty) + (at(0, 1) * (1 - tx) + at(1, 1) * tx) * ty;
-    return h < -500 || h > 9000 ? Number.NaN : h;
+    // (the sea's exact 0 — Mapterhorn has no bathymetry —: none, as the tiles' — the scenery then takes the global ground there)
+    return h === 0 || h < -500 || h > 9000 ? Number.NaN : h;
   }
 }

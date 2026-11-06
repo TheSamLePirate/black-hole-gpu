@@ -10,6 +10,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // Duration: ~4 min here.
 // Done when: each place shot both ways, the source "usa", the means close, no lost craft, no console error.
 
+// (USL_ONLY: the places whose name holds it)
 const PLACES = [
   { name: "manhattan", fly: [40.69, -74.035, 650, 150, 25], date: "2026-06-15T22:30:00Z" },
   { name: "napa", fly: [38.36, -122.33, 500, 140, 330], date: "2026-06-15T19:00:00Z" },
@@ -67,7 +68,7 @@ describe.skipIf(!E2E)("American landscapes: city, countryside, coast", () => {
 
   test("Manhattan, Napa, Big Sur: the USA's imagery against EOX's alone — their colours matched", async () => {
     const report: Record<string, unknown> = {};
-    for (const p of PLACES) {
+    for (const p of PLACES.filter((q) => !process.env.USL_ONLY || q.name.includes(process.env.USL_ONLY))) {
       await app.js(`(() => { __bh.settings.earthOrtho = true; return 1; })()`);
       const a = await shoot(`${p.name}-ortho`, p.fly, p.date);
       const national = await app.js<string | null>(`__bh.renderer.earthTiles.nationalAt`);

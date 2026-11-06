@@ -65,3 +65,12 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Raccord** : l'œil n'est pas adapté à l'ombre de Saturne (`earthSunlight`) ; ses aurores sont calculées mais à leur
   radiance physique, donc invisibles de nuit. **Piste** : relever cette lumière (sonde de pixels) et la corriger, puis
   rendre l'adaptation à Saturne.
+
+## Le traceur (pipeline « trace ») au large de Big Sur : une nappe sombre plate jusqu'à l'horizon
+
+- **Constaté le 6 novembre 2026** (sonde e2e, vol à 450 m au large de Big Sur, cap 150°, `earthPipeline: "trace"`) : une nappe
+  plate et sombre au-dessus de la mer, à droite, jusqu'à l'horizon, avec un trait clair le long de la côte. **Elle est
+  identique avec le relief national coupé** (`earthIgnRelief: false`) : elle ne vient pas de Mapterhorn, elle précède le lot D.
+  Le raster (le pipeline par défaut) ne la montre pas.
+- **Piste** : la profondeur de la mer du traceur (`seaDepthAt`, niveaux z 8–10 de Terrarium) ou sa surface de mer lointaine ;
+  sonder les pixels de la nappe (distance, `gq`, profondeur lue).
