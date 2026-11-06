@@ -10,7 +10,7 @@ const edwards = SITES.find((s) => s.name.startsWith("Edwards"))!;
 test("a runway's chart: its fixes down the Ranger's profile, in order, each on it", () => {
   const p = procedureFor(edwards);
   expect(p.kind).toBe("runway");
-  expect(p.rwy).toBe(238);
+  expect(p.rwy).toBe(238.25);
   expect(p.fixes.map((f) => f.id)).toEqual(["IAF", "FAF", "PU", "DH", "TD"]);
   const fix = { go: LANDING.goNom, lb: 3000 };
   for (let i = 1; i < p.fixes.length; i++) {
