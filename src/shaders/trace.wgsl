@@ -6080,46 +6080,57 @@ fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32, Ls: vec3f, Elum: f32) 
   return mix(rods, L, c) * 1e-5 * Elum * eye;
 }
 
-// ---- Jupiter's auroras (PLAN-AURORES-MAGNETOSPHERES AM3): the main oval — the footprint of the lines from 25 R_J in JRM33 and
-// the CON2020 disc (AM0), tabulated about its own centre (system/aurora-bodies.ts: JUP_*, a test holds them equal) —, a slab
-// 1.2° wide (~1 500 km) integrated as the Earth's; the polar emissions inside it, a volume; Io's footprint — where its line
-// meets the cloud tops, at Io's System III longitude now (renderer: aurora-bodies.ts ioFeet, P.mars) — a spot 0.5° wide and its
-// tail eastward. Their lines H-α and H₂'s visible violet at 245 km over the 1 bar level (aurora-lines.ts: AUR_HA, AUR_H2),
-// in a shell 120–1 100 km; their kR Alex's starting values (§ 7.6: 80 kR × 1.1^activity, Io 3 × 80, the polar 60·√activity),
-// not measurements. In the scene's units by the sunlight at 1 AU (|E| × the distance² in AU²) when the eye is in the sunlight,
-// by the eye adapted to the dark in Jupiter's shadow — both relative to the exposure, which is the local sunlight's: the larger
-// of the two in bary.w.
-const JUP_OVAL_CN = vec3f(-0.32665, -0.00774, 0.94511);
-const JUP_OVAL_CS = vec3f(0.11517, -0.06530, -0.99120);
-const JUP_FN0 = 15.4180;
-const JUP_FNA1 = vec4f(-0.1237, -1.1906, 0.4959, -0.2066);
-const JUP_FNA2 = vec4f(-0.3058, 0.0288, 0.0608, -0.0131);
-const JUP_FNB1 = vec4f(0.9844, -3.3023, -0.5531, 0.4901);
-const JUP_FNB2 = vec4f(0.0350, -0.0667, 0.0608, 0.0376);
-const JUP_FS0 = 14.6483;
-const JUP_FSA1 = vec4f(-0.2468, 0.4713, 0.0391, -0.1362);
-const JUP_FSA2 = vec4f(0.0424, 0.0042, -0.0001, 0.0015);
-const JUP_FSB1 = vec4f(0.3114, -1.0805, 0.2553, 0.0307);
-const JUP_FSB2 = vec4f(0.0094, 0.0139, -0.0076, -0.0005);
+// ---- The giants' auroras (PLAN-AURORES-MAGNETOSPHERES AM3–AM4): Jupiter, Saturn, Uranus, Neptune. Each one's main oval — the
+// footprint of the field lines from its ovalL in its AM0 field (JRM33 + CON2020, Cassini 11, Q3, O8) — about its own centre,
+// a Fourier series in the angle there (system/aurora-bodies.ts giantsWgsl: <BODY>_OVAL, a test holds them equal); a slab
+// integrated as the Earth's (Uranus's two, ±3° — JWST, Tiranti et al. 2026); the polar emissions inside Jupiter's; Io's
+// footprint and its tail (renderer: aurora-bodies.ts ioFeet, P.mars). Lines H-α and H₂'s visible violet over the 1 bar level,
+// each body's heights; the kR Alex's starting values (§ 7.6: Jupiter 80, Saturn 12, Uranus 1.5, Neptune 0.8, × 1.1^activity),
+// not measurements. In the scene's units by the sunlight at 1 AU when the eye is in the sunlight, by the dark-adapted eye in
+// the planet's shadow (bary.w: the larger of the two scales, the renderer's).
+struct GiantOval { cn: vec3f, cs: vec3f, n0: f32, nA1: vec4f, nA2: vec4f, nB1: vec4f, nB2: vec4f, s0: f32, sA1: vec4f, sA2: vec4f, sB1: vec4f, sB2: vec4f };
+const JUP_OVAL = GiantOval(vec3f(-0.32665, -0.00774, 0.94511), vec3f(0.11517, -0.06530, -0.99120), 15.4180, vec4f(-0.1237, -1.1906, 0.4959, -0.2066), vec4f(-0.3058, 0.0288, 0.0608, -0.0131), vec4f(0.9844, -3.3023, -0.5531, 0.4901), vec4f(0.0350, -0.0667, 0.0608, 0.0376), 14.6483, vec4f(-0.2468, 0.4713, 0.0391, -0.1362), vec4f(0.0424, 0.0042, -0.0001, 0.0015), vec4f(0.3114, -1.0805, 0.2553, 0.0307), vec4f(0.0094, 0.0139, -0.0076, -0.0005));
+const SAT_OVAL = GiantOval(vec3f(-0.00000, -0.00000, 1.00000), vec3f(-0.00000, -0.00000, -1.00000), 12.1297, vec4f(0.0000, -0.0000, 0.0000, 0.0000), vec4f(0.0000, -0.0000, 0.0000, 0.0000), vec4f(-0.0000, -0.0000, 0.0000, 0.0000), vec4f(-0.0000, -0.0000, -0.0000, 0.0000), 13.4173, vec4f(0.0000, 0.0000, 0.0000, 0.0000), vec4f(0.0000, 0.0000, 0.0000, 0.0000), vec4f(0.0000, 0.0000, -0.0000, 0.0000), vec4f(0.0000, 0.0000, -0.0000, 0.0000));
+const URA_OVAL = GiantOval(vec3f(0.43589, -0.86436, 0.25075), vec3f(-0.51899, 0.58030, -0.62761), 25.3805, vec4f(-0.9739, 6.6197, 2.5662, -1.8272), vec4f(1.7186, -0.1627, -0.5232, 0.6885), vec4f(-1.7406, -10.7937, 0.5927, -3.0885), vec4f(-1.9820, 0.3501, -1.1869, -0.4628), 15.8784, vec4f(-0.0584, -0.1060, 0.1206, -0.2035), vec4f(0.0161, 0.0053, -0.0070, 0.0032), vec4f(0.1234, -2.0366, 0.0704, 0.0241), vec4f(-0.0309, 0.0245, -0.0028, -0.0005));
+const NEP_OVAL = GiantOval(vec3f(0.34442, -0.36913, 0.86320), vec3f(-0.12680, 0.80287, -0.58251), 18.8365, vec4f(-0.9940, 2.1147, -1.4722, 0.3515), vec4f(-0.5065, 0.1187, -0.0695, 0.0965), vec4f(-0.4903, 2.1009, 1.0004, 0.1361), vec4f(-0.1420, -0.1269, 0.0034, -0.0252), 10.5971, vec4f(0.1790, 4.7291, -0.0604, 1.5387), vec4f(-0.1048, 0.5393, -0.0865, 0.1939), vec4f(0.1835, -0.3169, -0.1786, -0.2153), vec4f(-0.1843, -0.1106, -0.1237, -0.0474));
+// each giant: its shell [km], its lines' peaks [km] (H-α, H₂) and scale heights, its slab's kR, half width [°], the second
+// sheet's offset (Uranus), the polar emissions' kR (Jupiter)
+struct GiantAur { r1: f32, r2: f32, pa: f32, ph: f32, ha: f32, hh: f32, s: f32, kR: f32, hw: f32, dual: f32, polar: f32 };
+fn giantAur(g: u32) -> GiantAur {
+  switch g {
+    case 2u: { return GiantAur(250.0, 2400.0, 600.0, 1100.0, 150.0, 200.0, 60.0, 12.0, 1.0, 0.0, 0.0); }
+    case 3u: { return GiantAur(200.0, 2000.0, 500.0, 900.0, 150.0, 200.0, 60.0, 1.5, 0.8, 3.0, 0.0); }
+    case 4u: { return GiantAur(200.0, 2000.0, 500.0, 900.0, 150.0, 200.0, 60.0, 0.8, 0.8, 0.0, 0.0); }
+    default: { return GiantAur(120.0, 1100.0, 245.0, 245.0, 120.0, 150.0, 30.0, 80.0, 0.6, 0.0, 60.0); }
+  }
+}
+fn giantOval(g: u32) -> GiantOval {
+  switch g {
+    case 2u: { return SAT_OVAL; }
+    case 3u: { return URA_OVAL; }
+    case 4u: { return NEP_OVAL; }
+    default: { return JUP_OVAL; }
+  }
+}
 const AUR_HA = vec3f(5.7634e-5, 0.0, 4.0134e-6);
 const AUR_H2 = vec3f(1.4116e-5, 0.0, 1.1619e-4);
-// the lines over a column [per kR, per km of path]: H-α 0.55 over 0.886·30 + 120 km, H₂ 0.45 over 0.886·30 + 150 km
-fn jupColumn(hk: f32) -> vec3f {
-  return AUR_HA * (0.55 * aurProf(hk, 245.0, 30.0, 120.0, 120.0) / 146.6) + AUR_H2 * (0.45 * aurProf(hk, 245.0, 30.0, 150.0, 120.0) / 176.6);
+// the lines over a column [per kR, per km of path]: H-α 0.55 over 0.886σ + H_α, H₂ 0.45 over 0.886σ + H_H₂
+fn giantColumn(hk: f32, a: GiantAur) -> vec3f {
+  let lo = max(a.r1, 0.0);
+  return AUR_HA * (0.55 * aurProf(hk, a.pa, a.s, a.ha, lo) / (0.886 * a.s + a.ha)) + AUR_H2 * (0.45 * aurProf(hk, a.ph, a.s, a.hh, lo) / (0.886 * a.s + a.hh));
 }
-// a direction's distance inside the main oval [°] (positive poleward of it): its radius about its centre, a Fourier series in
-// the angle there (aurora-bodies.ts ovalFourier — no table indexed in the loop: the Apple compile never ended)
-fn jupOvalX(q: vec3f) -> f32 {
-  let north = q.z > 0.0;
-  let c = select(JUP_OVAL_CS, JUP_OVAL_CN, north);
+// a direction's distance inside the main oval [°] (positive poleward of it)
+fn giantOvalX(q: vec3f, o: GiantOval) -> f32 {
+  let north = dot(q, o.cn) > dot(q, o.cs);
+  let c = select(o.cs, o.cn, north);
   let rf = select(vec3f(0.0, 0.0, 1.0), vec3f(1.0, 0.0, 0.0), abs(c.z) > 0.999);
   let e1 = normalize(cross(rf, c));
   let e2 = cross(c, e1);
   let th = atan2(dot(q, e2), dot(q, e1));
   let k1 = vec4f(1.0, 2.0, 3.0, 4.0) * th;
   let k2 = vec4f(5.0, 6.0, 7.0, 8.0) * th;
-  let rN = JUP_FN0 + dot(JUP_FNA1, cos(k1)) + dot(JUP_FNA2, cos(k2)) + dot(JUP_FNB1, sin(k1)) + dot(JUP_FNB2, sin(k2));
-  let rS = JUP_FS0 + dot(JUP_FSA1, cos(k1)) + dot(JUP_FSA2, cos(k2)) + dot(JUP_FSB1, sin(k1)) + dot(JUP_FSB2, sin(k2));
+  let rN = o.n0 + dot(o.nA1, cos(k1)) + dot(o.nA2, cos(k2)) + dot(o.nB1, sin(k1)) + dot(o.nB2, sin(k2));
+  let rS = o.s0 + dot(o.sA1, cos(k1)) + dot(o.sA2, cos(k2)) + dot(o.sB1, sin(k1)) + dot(o.sB2, sin(k2));
   return select(rS, rN, north) - acos(clamp(dot(q, c), -1.0, 1.0)) * 57.29578;
 }
 // Io's footprint now (the renderer's, from aurora-bodies.ts ioFeet: P.mars = north lat, lon, south lat, lon [rad])
@@ -6127,13 +6138,24 @@ fn jupIoFoot(north: bool) -> vec3f {
   let ll = select(P.mars.zw, P.mars.xy, north);
   return vec3f(cos(ll.x) * cos(ll.y), cos(ll.x) * sin(ll.y), sin(ll.x));
 }
-fn auroraJupiter(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> vec3f {
+// the share of a step inside the slab [−hw, hw] of x (x linear along it), and where in the step its middle is
+fn slabShare(x0: f32, x1: f32, hw: f32) -> vec2f {
+  let lo = max(min(x0, x1), -hw);
+  let hi = min(max(x0, x1), hw);
+  if (hi <= lo) { return vec2f(0.0, 0.5); }
+  let span = abs(x1 - x0);
+  if (span < 1e-5) { return vec2f(1.0, 0.5); }
+  return vec2f((hi - lo) / span, clamp((0.5 * (lo + hi) - x0) / (x1 - x0), 0.0, 1.0));
+}
+fn auroraGiant(g: u32, ro: vec3f, rd: vec3f, tEnd: f32, jit: f32, ab: f32) -> vec3f {
   let act = P.bary.z;
-  // (bary.w: 1 024 × twice the larger of the dark-adapted eye's gain and Jupiter's distance² [AU²] — the sunlight at 1 AU over
-  // its own —: the exposure there is its own sunlight's; no clock)
+  // (bary.w: 1 024 × twice the larger of the dark-adapted eye's gain and the giant's distance² [AU²] — the sunlight at 1 AU
+  // over its own —: the exposure there is its own sunlight's; no clock)
   let eye = max(floor(P.bary.w / 1024.0) * 0.5, 1.0);
-  let r1 = 1.0 + 120e3 / AIR.rm;
-  let r2 = 1.0 + 1100e3 / AIR.rm;
+  let A = giantAur(g);
+  let O = giantOval(g);
+  let r1 = 1.0 + A.r1 * 1e3 / AIR.rm;
+  let r2 = 1.0 + A.r2 * 1e3 / AIR.rm;
   let b = dot(ro, rd);
   let c2 = dot(ro, ro);
   let off2 = c2 - b * b;
@@ -6148,8 +6170,9 @@ fn auroraJupiter(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> vec3f {
     if (c2 < r1 * r1) { ta = max(ta, -b + sqi); } else if (-b - sqi > ta) { tb = min(tb, -b - sqi); }
   }
   if (tb <= ta) { return vec3f(0.0); }
-  let kR = 80.0 * pow(1.1, act);
-  let polar = 60.0 * sqrt(max(act, 0.0));
+  let kR = A.kR * pow(1.1, act);
+  let polar = A.polar * sqrt(max(act, 0.0));
+  let io = select(0.0, 1.0, g == 1u);
   let ioN = jupIoFoot(true);
   let ioS = jupIoFoot(false);
   let N = 14u;
@@ -6157,28 +6180,25 @@ fn auroraJupiter(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> vec3f {
   var L = vec3f(0.0);
   var tp = ta;
   var p0 = ro + rd * ta;
-  var q0 = normalize(vec3f(p0.xy, p0.z * JUPITER_AB));
-  var x0 = jupOvalX(q0);
+  var x0 = giantOvalX(normalize(vec3f(p0.xy, p0.z * ab)), O);
   var h0 = airHeight(p0) * 1e-3;
   for (var i = 0u; i <= N; i++) {
     cost(4u);
     let t = select(ta + (f32(i) + jit) * dt, tb, i == N);
     let p = ro + rd * t;
-    let q = normalize(vec3f(p.xy, p.z * JUPITER_AB));
-    let x1 = jupOvalX(q);
+    let q = normalize(vec3f(p.xy, p.z * ab));
+    let x1 = giantOvalX(q, O);
     let h1 = airHeight(p) * 1e-3;
     let dk = (t - tp) * AIR.rm * 1e-3;
-    // the main oval: a slab 1.2° wide, the share of the step inside it
-    let lo = max(min(x0, x1), -0.6);
-    let hiX = min(max(x0, x1), 0.6);
-    if (hiX > lo) {
-      let span = abs(x1 - x0);
-      let share = select((hiX - lo) / span, 1.0, span < 1e-5);
-      let f = select(clamp((0.5 * (lo + hiX) - x0) / (x1 - x0), 0.0, 1.0), 0.5, span < 1e-5);
-      L += jupColumn(mix(h0, h1, f)) * (kR * share * dk);
+    // the main oval: one slab (two at ±dual — Uranus's), the share of the step inside each
+    let s0 = slabShare(x0 - A.dual, x1 - A.dual, A.hw);
+    if (s0.x > 0.0) { L += giantColumn(mix(h0, h1, s0.y), A) * (kR * s0.x * dk); }
+    if (A.dual > 0.0) {
+      let s1 = slabShare(x0 + A.dual, x1 + A.dual, A.hw);
+      if (s1.x > 0.0) { L += giantColumn(mix(h0, h1, s1.y), A) * (kR * s1.x * dk); }
     }
     if (i < N) {
-      // the polar emissions: a volume poleward of the oval, flickering in patches
+      // the polar emissions: a volume poleward of the oval, flickering in patches (Jupiter's)
       let pz = polar * smoothstep(0.8, 3.0, x1) * (0.6 + 0.4 * sin(q.x * 40.0 + q.y * 31.0));
       // Io's spot and its tail: the angle from its foot, the tail along the latitude eastward over ~15°
       let foot = select(ioS, ioN, q.z > 0.0);
@@ -6188,8 +6208,8 @@ fn auroraJupiter(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> vec3f {
       let across = dot(q - foot, cross(foot, east)) * 57.29578;
       // (the tail's exponential on the clamped distance: exp(−along/5) of a far negative `along` overflowed, × step's 0 a NaN —
       // the screen black)
-      let io = 3.0 * 80.0 * exp(-d * d / 0.5) + 60.0 * step(0.0, along) * exp(-max(along, 0.0) / 5.0) * exp(-across * across / 0.18);
-      L += jupColumn(h1) * ((pz + io) * dt * AIR.rm * 1e-3);
+      let ioL = io * (3.0 * 80.0 * exp(-d * d / 0.5) + 60.0 * step(0.0, along) * exp(-max(along, 0.0) / 5.0) * exp(-across * across / 0.18));
+      L += giantColumn(h1, A) * ((pz + ioL) * dt * AIR.rm * 1e-3);
     }
     x0 = x1;
     h0 = h1;
@@ -11947,7 +11967,7 @@ fn earthClouds(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx:
 // earthLook's sky — the clouds before the ground and the air to it —, its ground, and the two composed: split so that a
 // ray that never meets the ground (keyLight's, towards the Sun) does not carry the ground's code — every call is a copy of
 // all it calls on D3D12 (docs/PLAN-LEAN-TRACER-KERNELS.md P5)
-struct EarthLookSky { air: EarthAir, alpha: f32, cl: vec3f, tc: f32, earth: bool, jup: bool };
+struct EarthLookSky { air: EarthAir, alpha: f32, cl: vec3f, tc: f32, earth: bool, giant: u32 };
 fn earthLookSky(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLookSky {
   let earth = isEarth(k) && earthOn();
   var cs: EarthClouds;
@@ -11982,7 +12002,10 @@ fn earthLookSky(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx
   } else {
     air = earthAir(ro, rd, select(3e38, tHit, tHit > 0.0), Ls, E, jit, select(3e38, ta, alpha > 0.0));
   }
-  return EarthLookSky(air, alpha, cl, tc, earth, u32(bodies[BV * k + 2u].z) == 8u);
+  // (the giant whose auroras are drawn — AM3–AM4 —: 1 Jupiter, 2 Saturn, 3 Uranus, 4 Neptune, 0 none — by its surface kind)
+  let sk = u32(bodies[BV * k + 2u].z);
+  let giant = select(select(select(select(0u, 4u, sk == 25u), 3u, sk == 24u), 2u, sk == 9u), 1u, sk == 8u);
+  return EarthLookSky(air, alpha, cl, tc, earth, giant);
 }
 // The clouds' transmittance for the direct light of what lies beyond them — the Sun's disc, the Moon's, the planets, the stars —
 // from their cover: (1 − α)³, the optical depth tripled. A disc is ~10⁵ times brighter than the cloud before it: the cover's
@@ -12005,9 +12028,10 @@ fn earthLookCompose(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f
     let aur = auroraLight(ro, rd, select(3e38, tHit, tHit > 0.0), jit, Ls, luminance(E));
     o.col += aur * air.T * select(1.0 - alpha, 1.0, airHeight(ro) > 120e3);
   }
-  // Jupiter's (AM3): above its cloud deck (its scale in bary.w)
-  if (HAS_AURORA && s.jup && P.bary.z > 0.0) {
-    o.col += auroraJupiter(ro, rd, select(3e38, tHit, tHit > 0.0), jit) * luminance(E) * air.T;
+  // the giants' (AM3–AM4): above their cloud decks (their scale in bary.w)
+  if (HAS_AURORA && s.giant > 0u && P.bary.z > 0.0) {
+    let ab = select(select(1.0, SATURN_AB, s.giant == 2u), JUPITER_AB, s.giant == 1u);
+    o.col += auroraGiant(s.giant, ro, rd, select(3e38, tHit, tHit > 0.0), jit, ab) * luminance(E) * air.T;
   }
   o.T = select(cloudsDirectT(alpha) * air.T, vec3f(0.0), tHit > 0.0);
   return o;

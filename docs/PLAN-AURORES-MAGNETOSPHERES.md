@@ -121,6 +121,20 @@ verts) :
   réglage commun pour l'instant) ; le grain et la saturation au limbe ; la vue sud parfois noire (problème connu, pas
   l'aurore) ; le coût non mesuré.
 
+**AM4, premier lot (6 novembre 2026)** — Saturne, Uranus, Neptune :
+- **Le même code que Jupiter** (`trace.wgsl` auroraGiant) : chaque géante son ovale (AM0 : Cassini 11 pour Saturne — centré
+  sur ses pôles, 12–13° — ; Q3 et O8 pour Uranus et Neptune, très décentrés ; série de Fourier, erreur ≤ 2° pour Uranus),
+  sa coquille, ses hauteurs de raies, son kR (Alex : 12, 1,5, 0,8 kR), les deux nappes d'Uranus à ±3° ; une structure de
+  constantes par corps, choisie une fois par rayon (`giantsWgsl`, tenu égal par un test).
+- **Observé** (e2e `aurora-giants`, kerr-mini) : Uranus et Neptune vus de leur ombre, le noyau d'aurore en place — et rien de
+  visible : ~1–3 kR de H-α et de H₂ font ~3·10⁻⁵ cd/m², sous 1 % du blanc même pour l'œil adapté. C'est juste : leurs
+  aurores sont en UV et en infrarouge ; les montrer relève du rendu « instrument » d'AM8 (décision 1 de Sam).
+- **Saturne** : l'œil adapté à son ombre révèle une lumière faible et fausse du traceur (croissants pixellisés, trous dans le
+  disque) — consigné dans `docs/PROBLEMES-A-REGLER.md` ; l'adaptation y est coupée, ses aurores restent à leur radiance
+  physique, donc non vues de nuit pour l'instant.
+- **Restant** : l'ovale de Saturne fixe par rapport au Soleil (minuit 16°, midi 13°), l'empreinte d'Encelade, l'activité
+  propre à chaque corps.
+
 **AM7, premier lot (6 novembre 2026)** — le schéma :
 - **Les lignes** : les coquilles L d'Alex (Terre 1,5–9, Jupiter 1,8–40, Saturne, Uranus, Neptune, Mercure, Ganymède), 8
   longitudes, tracées dans le vrai champ d'AM0 jusqu'à la figure, rééchantillonnées en 160 points (Catmull–Rom) avec

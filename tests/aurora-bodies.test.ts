@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { fourierRadius, ioFeet, jupiterOvals, jupiterWgsl, ovalFourier, ovalInside } from "../src/system/aurora-bodies";
+import { fourierRadius, GIANTS, giantOvals, giantsWgsl, ioFeet, jupiterOvals, ovalFourier, ovalInside } from "../src/system/aurora-bodies";
 
 // Jupiter's auroras (src/system/aurora-bodies.ts — PLAN-AURORES-MAGNETOSPHERES AM3): the ovals from AM0's field lines, their
 // Fourier form the shader evaluates, Io's footprints, and trace.wgsl's JUP_* constants the module's.
@@ -42,7 +42,27 @@ test("Io's footprints 45–85° of latitude north and south, whatever Io's longi
   }
 });
 
-test("trace.wgsl's JUP_* constants are jupiterWgsl()'s", async () => {
+test("trace.wgsl's <GIANT>_OVAL constants are giantsWgsl()'s", async () => {
   const src = await Bun.file("src/shaders/trace.wgsl").text();
-  for (const line of jupiterWgsl().split("\n")) expect(src).toContain(line);
+  for (const line of giantsWgsl().split("\n")) expect(src).toContain(line);
+});
+
+test("AM4: Saturn's ovals centred on its poles (its field axisymmetric), 10–16°; Uranus's and Neptune's off them; Fourier within 2.5°", () => {
+  const sat = giantOvals("saturn");
+  expect(Math.abs(sat.north.centre[2])).toBeGreaterThan(0.999);
+  for (const r of [...sat.north.radius, ...sat.south.radius]) {
+    expect(r).toBeGreaterThan(10);
+    expect(r).toBeLessThan(16);
+  }
+  for (const b of ["uranus", "neptune"] as const) {
+    const o = giantOvals(b);
+    expect(Math.abs(o.north.centre[2])).toBeLessThan(0.95);
+    for (const ov of [o.north, o.south]) {
+      const f = ovalFourier(ov);
+      ov.radius.forEach((r, i) => {
+        expect(Math.abs(fourierRadius(f, -Math.PI + ((i + 0.5) * 2 * Math.PI) / 36) - r)).toBeLessThan(2.5);
+      });
+    }
+  }
+  expect(GIANTS.length).toBe(4);
 });

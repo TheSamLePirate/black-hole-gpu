@@ -55,3 +55,13 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   les rayons qui restent sous 45° de latitude magnétique sautés (gain de ces deux tris non mesuré).
 - **Piste** : le cache par direction d'Alex (§ 7.5 : une carte octaédrique marchée depuis l'œil, une bande par image, lue par
   la composition) — au-delà de ~100 km sans parallaxe ; la marche à ¼ de résolution recomposée.
+
+## Saturne vue de son ombre, l'œil adapté : des artefacts partout
+
+- **Constaté le 6 novembre 2026** (AM4, e2e `aurora-giants` sur kerr-mini) : la caméra à un rayon au-dessus du côté nuit de
+  Saturne, dans son ombre, l'exposition adaptée au noir (comme pour Jupiter) : l'image se couvre de croissants pixellisés
+  dans tout le ciel et de trous dans le disque. À la lumière du jour, rien de tel : c'est une lumière faible et fausse du
+  traceur autour de Saturne (la lumière des anneaux sur la face nuit ? un bruit d'accumulation ?) que le gain révèle.
+- **Raccord** : l'œil n'est pas adapté à l'ombre de Saturne (`earthSunlight`) ; ses aurores sont calculées mais à leur
+  radiance physique, donc invisibles de nuit. **Piste** : relever cette lumière (sonde de pixels) et la corriger, puis
+  rendre l'adaptation à Saturne.

@@ -148,20 +148,32 @@ export function ioFeet(lonRad: number): [number, number, number, number] {
   return [n[0]!, n[1]!, s[0]!, s[1]!];
 }
 
-/** the WGSL constants (trace.wgsl JUP_*), for the source and its test */
-export function jupiterWgsl(): string {
-  const o = jupiterOvals();
+/** the giants whose auroras the shader draws (AM3–AM4), their WGSL prefixes */
+export const GIANTS = [
+  ["jupiter", "JUP"],
+  ["saturn", "SAT"],
+  ["uranus", "URA"],
+  ["neptune", "NEP"],
+] as const;
+
+/** a giant's main ovals north and south (traced from its ovalL, 72 field lines) */
+export function giantOvals(body: (typeof GIANTS)[number][0]): { north: PolarOval; south: PolarOval } {
+  if (body === "jupiter") return jupiterOvals();
+  const T = ovalTable(body, 72);
+  const ok = (a: ([number, number] | null)[]) => a.filter((p): p is [number, number] => !!p);
+  return { north: polarOval(ok(T.north)), south: polarOval(ok(T.south)) };
+}
+
+/** the WGSL constants (trace.wgsl <PREFIX>_OVAL: GiantOval), for the source and its test */
+export function giantsWgsl(): string {
   const v = (a: number[]) => `vec3f(${a.map((x) => x.toFixed(5)).join(", ")})`;
   const v4 = (a: number[]) => `vec4f(${a.map((x) => x.toFixed(4)).join(", ")})`;
-  const lines: string[] = [`const JUP_OVAL_CN = ${v(o.north.centre)};`, `const JUP_OVAL_CS = ${v(o.south.centre)};`];
-  for (const [h, ov] of [
-    ["N", o.north],
-    ["S", o.south],
-  ] as const) {
-    const f = ovalFourier(ov);
-    lines.push(`const JUP_F${h}0 = ${f.a0.toFixed(4)};`);
-    lines.push(`const JUP_F${h}A1 = ${v4(f.a.slice(0, 4))};`, `const JUP_F${h}A2 = ${v4(f.a.slice(4, 8))};`);
-    lines.push(`const JUP_F${h}B1 = ${v4(f.b.slice(0, 4))};`, `const JUP_F${h}B2 = ${v4(f.b.slice(4, 8))};`);
-  }
-  return lines.join("\n");
+  return GIANTS.map(([body, pre]) => {
+    const o = giantOvals(body);
+    const n = ovalFourier(o.north),
+      s = ovalFourier(o.south);
+    const half = (f: typeof n) =>
+      `${f.a0.toFixed(4)}, ${v4(f.a.slice(0, 4))}, ${v4(f.a.slice(4, 8))}, ${v4(f.b.slice(0, 4))}, ${v4(f.b.slice(4, 8))}`;
+    return `const ${pre}_OVAL = GiantOval(${v(o.north.centre)}, ${v(o.south.centre)}, ${half(n)}, ${half(s)});`;
+  }).join("\n");
 }

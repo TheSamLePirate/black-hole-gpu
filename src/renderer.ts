@@ -4177,7 +4177,10 @@ export class Renderer {
     this.auroraKp = kpNow;
     // (Jupiter near — AM3 —: its own activity, the setting's — not the Earth's live Kp —; Io's footprints north and south
     // [rad] in Params.mars, which only Mars reads (aurora-bodies.ts ioFeet: auroraJupiter))
-    const jupNear = !!near && bodies[near.index]?.id === "jupiter";
+    const nearIdG = near ? bodies[near.index]?.id : undefined;
+    const jupNear = nearIdG === "jupiter";
+    // (the giants with auroras — AM3–AM4 —: Jupiter, Saturn, Uranus, Neptune)
+    const giantNear = nearIdG === "jupiter" || nearIdG === "saturn" || nearIdG === "uranus" || nearIdG === "neptune";
     // (none while the eye is adapted to more than 1 000 lux — a hundredth of full sunlight —: even a Kp 9 storm's curtains would
     // be under 0.5 % of a white surface there; the kernel then leaves them out — the live Kp keeps them on near the present)
     const auroraSeen = this.eyeIncident < 0.01;
@@ -4185,16 +4188,18 @@ export class Renderer {
       ? 0
       : near?.index === earthK
         ? Math.min(Math.max(kpNow.kp, 0), 9)
-        : jupNear
+        : giantNear
           ? Math.min(Math.max(s.aurora ?? 0, 0), 9)
           : 0;
     let jupD2 = 1;
-    if (jupNear && kp > 0) {
-      const io = toBodyFixed("jupiter", solarState("io", time).pos, time);
-      const J = solarState("jupiter", time).pos,
+    if (giantNear && kp > 0) {
+      const J = solarState(nearIdG!, time).pos,
         S = solarState("sun", time).pos;
       const dAU = (Math.hypot(J[0] - S[0], J[1] - S[1], J[2] - S[2]) * M_METRES) / AU_M;
-      f.set(ioFeet(Math.atan2(io[1], io[0])), MARS_AT);
+      if (jupNear) {
+        const io = toBodyFixed("jupiter", solarState("io", time).pos, time);
+        f.set(ioFeet(Math.atan2(io[1], io[0])), MARS_AT);
+      }
       jupD2 = dAU * dAU;
     }
     f[41 * 4 + 2] = kp;
@@ -8588,9 +8593,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       const h = (near.distance / near.radius - 1) * 6051.8e3;
       return h >= 70e3 ? 1 : 0.035 ** Math.min((70e3 - h) / 23e3, 1);
     }
-    // (Jupiter — AM3 —: the camera in its shadow, the eye adapts to the dark — its night side, its auroras, its lightning —;
+    // (the giants — AM3–AM4 —: the camera in its shadow, the eye adapts to the dark — its night side, its auroras, its lightning —;
     // the light falling there the night's floor, over the sunlight at Jupiter; the shadow's edge over 2 % of its radius)
-    if (near && bodies[near.index]?.id === "jupiter") {
+    const gid = near ? bodies[near.index]?.id : undefined;
+    // (not Saturn: adapted to its shadow, the tracer's faint wrong light there — blocky crescents all over, holes in the disc —
+    // showed: docs/PROBLEMES-A-REGLER.md)
+    if (near && (gid === "jupiter" || gid === "uranus" || gid === "neptune")) {
       const c = near.centre,
         L = near.light;
       const along = -(c[0] * L[0] + c[1] * L[1] + c[2] * L[2]);
