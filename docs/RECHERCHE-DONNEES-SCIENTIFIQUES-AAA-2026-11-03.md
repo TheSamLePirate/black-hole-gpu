@@ -587,6 +587,18 @@ Le joueur n'a pas besoin d'un panneau de détails techniques pour voler. En reva
 | **I — Sols planétaires locaux** | SLDEM/LROC, HiRISE apparié, forme de petits corps | Vrais lieux détaillés et silhouettes justes | P6–P8/H et surfaces communes ; préserver les produits déjà intégrés |
 | **J — Physique temporelle** | SPK satellites, EOP, météo 3D, atmosphères, anneaux et OPAL | Cohérence du monde à sa date et à son canal | Simulation, éclairage, Q5, instruments et replay |
 
+**État d'intégration (6 novembre 2026)** :
+- **B — fait** (AM0, 09d723bc) : IGRF-14 2025.0 (degré 3, figé), JRM33 au degré 13 + CON2020, Cassini 11, Q3, O8, Mercure,
+  Ganymède dans `src/system/magnetic-fields.ts`, une seule source ; vecteurs de référence de `con2020` à 5 %, inclinaisons,
+  L = 4 à ±60°, pieds d'Io testés (`tests/magnetic-fields.test.ts`). Reste : le scénario déclaré au-delà de 2030, la
+  variation séculaire.
+- **C — en partie** : Kp NOAA au format 2026 (AM1, c06840d8) ; vent solaire propagé → magnétopause de Shue (6e684d19).
+  Restent GFZ/OMNI pour le passé, OVATION.
+- **G — en partie** : profils et raies (`aurora-lines.ts`), ovales des géantes depuis leurs champs (`aurora-bodies.ts`),
+  frontières (AM7) ; restent Juno UVS calibré et le champ externe ; l'UV/IR passe par la caméra secondaire
+  ([PLAN-CAPTEURS-CAMERA-SECONDAIRE](PLAN-CAPTEURS-CAMERA-SECONDAIRE.md) S6).
+- **A, D, E, F, H, I, J — pas commencés.**
+
 Les « apports attendus » sont des motivations, pas des gains visuels ou de performance mesurés. Les gros volumes scientifiques restent dans une chaîne d'assets et un stockage approprié ; ne pas importer des téraoctets dans Git.
 
 ### 14.2 Ce que je ferais d'abord selon le résultat recherché
