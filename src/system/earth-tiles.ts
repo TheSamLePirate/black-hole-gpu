@@ -761,7 +761,11 @@ export const USA: NationalSource = {
   fit: ORTHO_FIT,
   heightsFrom: 12,
   heightUrls: (z, x, y) => (z >= 1 && z - 1 <= MAPTERHORN_Z1 ? [mapterhornUrl(z - 1, x >> 1, y >> 1)] : []),
-  async heights(z, x, y, signal) {
+  heights: mapterhornHeights,
+};
+/** a tile's heights from Mapterhorn: its z−1 512² tile's quarter (null: none there — 404 —, the global data's) */
+async function mapterhornHeights(z: number, x: number, y: number, signal: AbortSignal) {
+  {
     if (z - 1 > MAPTERHORN_Z1) return null;
     const g = await mapterhornFile(z - 1, x >> 1, y >> 1, signal);
     if (!g) return null;
@@ -772,16 +776,37 @@ export const USA: NationalSource = {
     for (let j = 0; j < TILE; j++) h.set(g.subarray((oy + j) * 2 * TILE + ox, (oy + j) * 2 * TILE + ox + TILE), j * TILE);
     for (let i = 0; i < h.length; i++) if (h[i]! < -500 || h[i]! > 9000) h[i] = Number.NaN;
     return { h, over: null };
-  },
-};
-/** the national sources, the more specific first (national.ts): swisstopo, then the IGN, then the USA */
-export const NATIONAL: readonly NationalSource[] = [SWISSTOPO, IGN, USA];
+  }
+}
+// ---- the world's relief from Mapterhorn (RECHERCHE-DONNEES lot E; Sam, 6 Nov 2026): its national surveys — 151 sources,
+// 1 m or finer over Germany, Austria, Belgium, Denmark, Spain, Estonia, Finland, the Netherlands, Norway, Sweden, Poland,
+// Portugal, Romania, Slovenia, Slovakia, the United Kingdom, Luxembourg, Italy's regions, Japan (1–10 m), New Zealand —
+// relief only (the imagery stays the world's, EOX); where it has none, its 404 hands the tile to Terrarium. After the IGN,
+// swisstopo and the USA (the more specific first).
+const mapterhornRelief = (box: NationalSource["box"]): NationalSource => ({
+  id: "mapterhorn",
+  declares: ["mapterhorn-world"],
+  box,
+  holds: () => true,
+  orthoUrl: null,
+  fit: ORTHO_FIT,
+  heightsFrom: 12,
+  heightUrls: (z, x, y) => (z >= 1 && z - 1 <= MAPTERHORN_Z1 ? [mapterhornUrl(z - 1, x >> 1, y >> 1)] : []),
+  heights: mapterhornHeights,
+});
+export const MAPTERHORN_EUROPE = mapterhornRelief({ west: -11, east: 32, south: 35.5, north: 71.5 });
+export const MAPTERHORN_JAPAN = mapterhornRelief({ west: 122.5, east: 146, south: 24, north: 46 });
+export const MAPTERHORN_NZ = mapterhornRelief({ west: 166, east: 179, south: -47.5, north: -34 });
+/** the national sources, the more specific first (national.ts): swisstopo, the IGN, the USA, then Mapterhorn's world relief */
+export const NATIONAL: readonly NationalSource[] = [SWISSTOPO, IGN, USA, MAPTERHORN_EUROPE, MAPTERHORN_JAPAN, MAPTERHORN_NZ];
 /** their boxes as one */
 export const NATIONAL_BOX = sourcesBox(NATIONAL);
 /** the boxes of the sources near a place [°] — theirs within 2° of it — as one (the tracer's, the orthophotos': not every
  *  country's union — since the USA, California to Switzerland, the Atlantic inside it); null: none near */
-export function nationalBoxNear(lat: number, lon: number): NationalSource["box"] | null {
-  const near = NATIONAL.filter((s) => lat > s.box.south - 2 && lat < s.box.north + 2 && lon > s.box.west - 2 && lon < s.box.east + 2);
+export function nationalBoxNear(lat: number, lon: number, imagery = false): NationalSource["box"] | null {
+  const near = NATIONAL.filter(
+    (s) => (!imagery || !!s.orthoUrl) && lat > s.box.south - 2 && lat < s.box.north + 2 && lon > s.box.west - 2 && lon < s.box.east + 2,
+  );
   return near.length ? sourcesBox(near) : null;
 }
 const NO_BOX: NationalSource["box"] = { west: 0, east: 0, south: 0, north: 0 };
@@ -950,6 +975,8 @@ export class EarthTiles {
   nationalAt: NationalSource["id"] | null = null;
   /** the boxes of the national sources near the camera, as one (nationalBoxNear; null: none) — the tracer's */
   nationalBox: NationalSource["box"] | null = null;
+  /** the same, of the sources with orthophotos (the tracer's photographs' box) */
+  photoBox: NationalSource["box"] | null = null;
   /** the finest levels the offline zones hold with the camera at a place [°] (main.ts: offline only — system/zones.ts
    *  zoneLevelsAt —; null: online, or out of every zone, the automatic cache's chance): none finer asked there, each
    *  request would fail */
@@ -1301,6 +1328,8 @@ export class EarthTiles {
     const latD = (g.lat * 180) / Math.PI,
       lonD = (g.lon * 180) / Math.PI;
     this.nationalBox = nationalBoxNear(latD, lonD);
+    // (the tracer's: where the relief's levels' imagery is a photograph — the sources with orthophotos only)
+    this.photoBox = nationalBoxNear(latD, lonD, true);
     const B = this.nationalBox ?? NO_BOX;
     const inNational = latD > B.south - 0.1 && latD < B.north + 0.1 && lonD > B.west - 0.1 && lonD < B.east + 0.1;
     // (the source under the camera: its credit on screen — main.ts)
@@ -1913,7 +1942,7 @@ export class EarthTiles {
   private updateOrtho(alt: number, pixAngle: number, cosLat: number, gLonT: number, gSinLat: number, zMax: number) {
     const lat = (Math.asin(this.sinLat) * 180) / Math.PI,
       lon = (this.lon * 180) / Math.PI;
-    const B = nationalBoxNear(lat, lon) ?? NO_BOX;
+    const B = nationalBoxNear(lat, lon, true) ?? NO_BOX;
     if (!this.orthoOn || lat < B.south - 0.1 || lat > B.north + 0.1 || lon < B.west - 0.1 || lon > B.east + 0.1) {
       if (this.ortho.some((O) => O.want)) this.clearOrtho();
       return;
@@ -2000,10 +2029,10 @@ export class EarthTiles {
     const src = tileSource(NATIONAL, O.n, xw, y);
     let col: Uint32Array | null = null;
     let blob: Blob | null = null;
-    let none = !src;
+    let none = !src?.orthoUrl;
     let failed = false;
     try {
-      const res = src ? await fetch(src.orthoUrl(O.z, xw, y), { signal: ctl.signal }) : null;
+      const res = src?.orthoUrl ? await fetch(src.orthoUrl(O.z, xw, y), { signal: ctl.signal }) : null;
       if (!res) {
         // (no source: none)
       } else if (res.status === 404) none = true;
@@ -2242,7 +2271,7 @@ export class EarthTiles {
       f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, 1], 12 * k + 4);
     }
     // (the box the relief's levels take the IGN's imagery in — z 9 … 14: theirs a photograph there too —, and whether)
-    const B = this.nationalBox ?? NO_BOX,
+    const B = this.photoBox ?? NO_BOX,
       rad = Math.PI / 180;
     f.set([B.west * rad, B.south * rad, B.east * rad, B.north * rad], 12 * ORTHO_LEVELS);
     f.set([this.orthoOn ? 1 : 0, 0, 0, 0], 12 * ORTHO_LEVELS + 4);
@@ -2368,7 +2397,7 @@ async function imagery(
     const fine = z > GIBS_Z1;
     const night = nightOf(z, x, y);
     const day = async (): Promise<[Got, NationalSource | null]> => {
-      if (fine && ortho)
+      if (fine && ortho?.orthoUrl)
         try {
           return [await get(ortho.orthoUrl(z, x, y)), ortho];
         } catch {

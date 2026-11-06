@@ -4,6 +4,7 @@ export default {
     "© swisstopo — photographies aériennes, relief (SWISSIMAGE, swissALTI3D) · ",
   "USGS The National Map — aerial photographs (NAIP), relief (3DEP) · ":
     "USGS The National Map — photographies aériennes (NAIP), relief (3DEP) · ",
+  "Relief: national surveys through ": "Relief : relevés nationaux par ",
   "Aerosols: Copernicus Atmosphere Monitoring Service (CAMS) · ": "Aérosols : Copernicus Atmosphere Monitoring Service (CAMS) · ",
   "free geodata": "géodonnées libres",
   "© IGN — aerial photographs, relief, buildings (BD ORTHO, RGE ALTI, LiDAR HD, BD TOPO) · ":

@@ -8325,6 +8325,11 @@ async function main() {
     creditLink("Mapterhorn", "https://mapterhorn.com/attribution/"),
   );
   document.body.append(usaCredit);
+  // (the world's relief from Mapterhorn — lot E —: its national surveys, credited by its own page)
+  const mapterhornCredit = Object.assign(document.createElement("div"), { className: "scenery-credit ortho-credit", hidden: true });
+  mapterhornCredit.dataset.testid = "mapterhorn-credit";
+  mapterhornCredit.append(t("Relief: national surveys through "), creditLink("Mapterhorn", "https://mapterhorn.com/attribution/"));
+  document.body.append(mapterhornCredit);
   // (the day's aerosols — Q5 C3 —: CAMS's through Open-Meteo, credited while the air is drawn with them)
   const aerosolCredit = Object.assign(document.createElement("div"), { className: "scenery-credit aerosol-credit", hidden: true });
   aerosolCredit.dataset.testid = "aerosol-credit";
@@ -9014,6 +9019,8 @@ async function main() {
     if (swissCredit.hidden !== hideSwissCredit) swissCredit.hidden = hideSwissCredit;
     const hideUsaCredit = !nationalDrawn || renderer.earthTiles.nationalAt !== "usa";
     if (usaCredit.hidden !== hideUsaCredit) usaCredit.hidden = hideUsaCredit;
+    const hideMapterhornCredit = renderer.earthTiles.finest <= ZG1 || renderer.earthTiles.nationalAt !== "mapterhorn";
+    if (mapterhornCredit.hidden !== hideMapterhornCredit) mapterhornCredit.hidden = hideMapterhornCredit;
     const hideAerosolCredit = renderer.aerosolSource !== "cams";
     if (aerosolCredit.hidden !== hideAerosolCredit) aerosolCredit.hidden = hideAerosolCredit;
     applyTuning(settings);

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { IGN, NATIONAL, NATIONAL_BOX, nationalBoxNear, ORTHO_FIT, orthoColour, USA } from "../src/system/earth-tiles";
+import { IGN, NATIONAL, NATIONAL_BOX, nationalBoxNear, ORTHO_FIT, orthoColour, MAPTERHORN_EUROPE, USA } from "../src/system/earth-tiles";
 import { inIgnBox } from "../src/system/ign-canopy";
 import {
   insideOutline,
@@ -106,7 +106,15 @@ test("the national sources: Switzerland swisstopo's though the IGN's box holds i
   expect(sourceAt(NATIONAL, 47.14, 9.52)?.id).toBe("swisstopo"); // Vaduz
   expect(sourceAt(NATIONAL, 45.9237, 6.8694)?.id).toBe("ign"); // Chamonix
   expect(sourceAt(NATIONAL, 48.85, 2.35)?.id).toBe("ign"); // Paris
-  expect(sourceAt(NATIONAL, 52.37, 4.9)).toBeNull(); // Amsterdam
+  // (elsewhere in Europe, Japan, New Zealand: Mapterhorn's relief alone — lot E —, no orthophotos)
+  expect(sourceAt(NATIONAL, 52.37, 4.9)?.id).toBe("mapterhorn"); // Amsterdam
+  expect(sourceAt(NATIONAL, 52.37, 4.9)?.orthoUrl).toBeNull();
+  expect(sourceAt(NATIONAL, 35.36, 138.73)?.id).toBe("mapterhorn"); // Fuji
+  expect(sourceAt(NATIONAL, -43.6, 170.14)?.id).toBe("mapterhorn"); // Aoraki
+  expect(sourceAt(NATIONAL, -3.07, 37.35)).toBeNull(); // Kilimanjaro: the global data's
+  // (the photographs' box: the sources with orthophotos only — not all Europe)
+  expect(nationalBoxNear(52.37, 4.9, true)?.west).toBe(IGN.box.west);
+  expect(nationalBoxNear(60.0, 25.0, true)).toBeNull(); // Helsinki
   expect(insideOutline(46.95, 7.45, SWITZERLAND)).toBe(true);
   expect(insideOutline(47.75, 7.34, SWITZERLAND)).toBe(false); // Mulhouse
   expect(insideOutline(47.14, 9.52, LIECHTENSTEIN)).toBe(true);
@@ -119,10 +127,11 @@ test("the national sources: Switzerland swisstopo's though the IGN's box holds i
   expect(tileSource(NATIONAL, n, x, y)?.id).toBe("swisstopo");
   // (their boxes as one: the tracer's)
   expect(NATIONAL_BOX).toEqual(sourcesBox(NATIONAL));
-  expect(NATIONAL_BOX.east).toBe(SWISSTOPO.box.east);
+  expect(NATIONAL_BOX.east).toBe(179); // (New Zealand's Mapterhorn box)
   expect(NATIONAL_BOX.west).toBe(USA.box.west);
   // (the tracer's box: the sources near the camera only — not California to Switzerland)
-  expect(nationalBoxNear(48.85, 2.35)?.west).toBe(IGN.box.west);
+  expect(nationalBoxNear(48.85, 2.35, true)?.west).toBe(IGN.box.west);
+  expect(nationalBoxNear(48.85, 2.35)?.west).toBe(MAPTERHORN_EUROPE.box.west);
   expect(nationalBoxNear(40, -105)?.east).toBe(USA.box.east);
   expect(nationalBoxNear(30, -40)).toBeNull();
   // (the USA: the contiguous states, not Canada nor Mexico)

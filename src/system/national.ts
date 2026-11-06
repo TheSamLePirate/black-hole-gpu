@@ -17,13 +17,14 @@ export interface OrthoFit {
   chroma: readonly [number, number, number];
 }
 export interface NationalSource {
-  id: "ign" | "swisstopo" | "usa";
+  id: "ign" | "swisstopo" | "usa" | "mapterhorn";
   /** (Q7 G1/G2) its declarations in system/sources.ts — imagery, heights, surface… */
   declares: readonly string[];
   box: { west: number; east: number; south: number; north: number };
   /** whether a place [°] is its land */
   holds(lat: number, lon: number): boolean;
-  orthoUrl(z: number, x: number, y: number): string;
+  /** its orthophotos' tile (null: a relief-only source — Mapterhorn's world, lot E —: the imagery stays the world's) */
+  orthoUrl: ((z: number, x: number, y: number) => string) | null;
   fit: OrthoFit;
   /** the first level its heights take (coarser: the global data's) */
   heightsFrom: number;

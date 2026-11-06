@@ -604,7 +604,13 @@ Le joueur n'a pas besoin d'un panneau de détails techniques pour voler. En reva
   pour les zones hors ligne seulement. Le décor (arbres, bâtiments) posé sur ce même relief (`usa-ground.ts`
   MapterhornGround, z 14, comme SwissGround ; zones hors ligne comprises). Restent : l'ajustement des couleurs à EOX (le
   modèle à 4 paramètres ne suffit pas), l'Alaska et Hawaï, la NAIP 0,6 m dans les zones, le LiDAR classifié.
-- **A, E, F, H, I, J — pas commencés.**
+- **E — premier lot (relief)** : Mapterhorn (151 relevés nationaux, 1 m ou mieux sur l'Allemagne, l'Autriche, la
+  Belgique, le Danemark, l'Espagne, l'Estonie, la Finlande, les Pays-Bas, la Norvège, la Suède, la Pologne, le Portugal, la
+  Roumanie, la Slovénie, la Slovaquie, le Royaume-Uni, le Luxembourg, des régions d'Italie, le Japon, la Nouvelle-Zélande)
+  en sources « relief seul » (Europe, Japon, Nouvelle-Zélande ; leurs 404 rendus à Terrarium), l'imagerie restant mondiale.
+  Observé (e2e `mapterhorn-world`, Geiranger) : pente 68° contre 55°, z 17 contre 14, Dalsnibba 1 470 m (1 476). Restent :
+  le Canada (HRDEM 2 m) et l'Australie (5 m), l'imagerie fine hors France/Suisse/USA (aucune source libre mondiale).
+- **A, F, H, I, J — pas commencés.**
 
 Les « apports attendus » sont des motivations, pas des gains visuels ou de performance mesurés. Les gros volumes scientifiques restent dans une chaîne d'assets et un stockage approprié ; ne pas importer des téraoctets dans Git.
 

@@ -168,7 +168,7 @@ export function reliefChains(z: number, x: number, y: number, o: ZoneSources): Z
     if (surface.length) out.push(surface);
   } else out.push([terrarium]);
   if (z <= IMG_Z1) {
-    if (z > GIBS_Z1) out.push(o.ortho && src ? [src.orthoUrl(z, x, y), eoxUrl(z, x, y)] : [eoxUrl(z, x, y)]);
+    if (z > GIBS_Z1) out.push(o.ortho && src?.orthoUrl ? [src.orthoUrl(z, x, y), eoxUrl(z, x, y)] : [eoxUrl(z, x, y)]);
     else out.push([dayUrl(z, x, y)]);
     const night = nightOf(z, x, y);
     out.push([nightUrl(night.z, night.x, night.y)]);
@@ -180,7 +180,7 @@ export const reliefUrls = (z: number, x: number, y: number, o: ZoneSources): str
 /** an orthophotos' tile's URL (its national source's) */
 export function orthoUrls(z: number, x: number, y: number): string[] {
   const src = tileSource(NATIONAL, 2 ** z, x, y);
-  return src ? [src.orthoUrl(z, x, y)] : [];
+  return src?.orthoUrl ? [src.orthoUrl(z, x, y)] : [];
 }
 
 /** how far a scene's centre lies from the camera [m]: led where the view looks (renderer.ts: 0.6 of the scene's radius) or
