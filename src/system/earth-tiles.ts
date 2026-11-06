@@ -111,6 +111,8 @@ export const ORTHO_SPAN_BIG = 8;
 export const ORTHO_PARAM_VEC4S = 3 * ORTHO_LEVELS + 2;
 /** their loads at once (the Géoplateforme answers in 0.35–0.8 s), beside the relief's */
 const ORTHO_INFLIGHT = 8;
+/** an orthophoto refused or timed out asked again this many times while in the window (2, 4, 8 s apart) */
+const ORTHO_RETRIES = 3;
 /** (L7b's prototype — ortho-delight.ts, settings.orthoDelight) the levels de-lit (z 17: 0.8 m, z 18: 0.4 m a pixel at 48°: a
  *  shadow's edge resolved), the canopy's margin round a tile [px] (a 40 m tree's shadow at 45° from z 18's 96 px — 38 m —
  *  away), its requests a second (the Géoplateforme's WMS-R: the relief's 20 and the survey's 12 beside), its tiles at once */
@@ -471,14 +473,47 @@ export async function pixels(blob: Blob, crop?: [number, number, number]): Promi
   return px;
 }
 
-/** Terrarium's heights for a tile — beyond its z 15, its z 15 parent's square enlarged (bilinear) —, unmarked. */
+/** (the network audit, 6 Nov 2026) Terrarium's files decoded, shared: the z 15 parent of 4 or 16 finer tiles, a coast's tile
+ *  asked again for its holes — 60 % of its requests on a final at Toulon-Hyères were a URL asked before, each a round trip
+ *  and a PNG decode again. The last TERRARIUM_KEPT (256 KiB each), a failure forgotten; each caller's own abort raced. */
+const terrariumFiles = new Map<string, Promise<Float32Array>>();
+const TERRARIUM_KEPT = 48;
+export const terrariumShared = { hits: 0, misses: 0 };
+function terrariumFile(url: string, signal: AbortSignal): Promise<Float32Array> {
+  let p = terrariumFiles.get(url);
+  if (p) {
+    terrariumShared.hits++;
+    // (its recency refreshed)
+    terrariumFiles.delete(url);
+    terrariumFiles.set(url, p);
+  } else {
+    terrariumShared.misses++;
+    const ctl = AbortSignal.timeout(TIMEOUT_MS);
+    p = fetch(url, { signal: ctl }).then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const h = await res.blob().then(decode);
+      markFine(h, false);
+      return h;
+    });
+    p.catch(() => terrariumFiles.delete(url));
+    terrariumFiles.set(url, p);
+    if (terrariumFiles.size > TERRARIUM_KEPT) terrariumFiles.delete(terrariumFiles.keys().next().value!);
+  }
+  if (signal.aborted) return Promise.reject(new DOMException("aborted", "AbortError"));
+  let stop = () => {};
+  const aborted = new Promise<never>((_, no) => {
+    stop = () => no(new DOMException("aborted", "AbortError"));
+    signal.addEventListener("abort", stop, { once: true });
+  });
+  return Promise.race([p, aborted]).finally(() => signal.removeEventListener("abort", stop));
+}
+
+/** Terrarium's heights for a tile — beyond its z 15, its z 15 parent's square enlarged (bilinear) —, unmarked: a copy of the
+ *  shared file (terrariumFile), the caller's own. */
 async function terrarium(z: number, x: number, y: number, signal: AbortSignal): Promise<Float32Array> {
   const k = Math.max(z - 15, 0);
-  const res = await fetch(tileUrl(z - k, x >> k, y >> k), { signal });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const h = await res.blob().then(decode);
-  markFine(h, false);
-  if (!k) return h;
+  const h = await terrariumFile(tileUrl(z - k, x >> k, y >> k), signal);
+  if (!k) return h.slice();
   const side = TILE >> k,
     ox = (x - ((x >> k) << k)) * side,
     oy = (y - ((y >> k) << k)) * side;
@@ -843,6 +878,9 @@ export class EarthTiles {
   private ortho: OrthoLevel[] = [];
   private orthoInflight = new Map<string, AbortController>();
   private orthoNone = new Set<string>();
+  /** (the network audit, 6 Nov 2026) the orthophotos refused or timed out, asked again while in the window: their tries and
+   *  when next (2, 4, 8 s) — a failure had left its tile on the coarser photographs for as long as it stayed in view */
+  private orthoRetry = new Map<string, { n: number; at: number }>();
   orthoLoaded = 0;
   /** (L7b's prototype, settings.orthoDelight) the orthophotos' cast shadows lifted on the levels from DELIGHT_Z; its tiles
    *  relit, left (by why), its worker's time, the last one's stats */
@@ -1120,6 +1158,7 @@ export class EarthTiles {
   private clearOrtho() {
     for (const c of this.orthoInflight.values()) c.abort();
     this.orthoInflight.clear();
+    this.orthoRetry.clear();
     for (const O of this.ortho) {
       O.want = null;
       O.valid = null;
@@ -1732,15 +1771,23 @@ export class EarthTiles {
 
   /** The orthophotos' loads: the coarse levels first, each from the camera outwards, after the relief's. */
   private requestOrtho(lonT: number, sinLat: number) {
+    const now = performance.now();
+    let due = false;
+    for (const r of this.orthoRetry.values()) if (r.at <= now) due = true;
     for (const O of this.ortho) {
-      if (!O.want || same(O.valid, O.want)) continue;
+      if (!O.want || (same(O.valid, O.want) && !due)) continue;
       const cx = lonT * O.n,
         cy = mercY(sinLat, O.n);
       const todo: [number, number, number][] = [];
       for (let y = O.want.y0; y < O.want.y1; y++)
         for (let x = O.want.x0; x < O.want.x1; x++) {
           const key = this.orthoKey(O, x, y);
-          if (O.key[orthoSlot(O.span, x, y)] === key || this.orthoInflight.has(key)) continue;
+          if (this.orthoInflight.has(key)) continue;
+          // (in — or put empty after a failure, asked again when its retry is due)
+          if (O.key[orthoSlot(O.span, x, y)] === key) {
+            const r = due ? this.orthoRetry.get(key) : undefined;
+            if (!r || r.at > now) continue;
+          }
           // (one its source has not, or no national source's: none there at once — the coarser levels' imagery)
           if (this.orthoNone.has(key) || !tileSource(NATIONAL, O.n, x, y)) {
             this.putOrtho(O.z, x, y, null);
@@ -1766,6 +1813,7 @@ export class EarthTiles {
     let col: Uint32Array | null = null;
     let blob: Blob | null = null;
     let none = !src;
+    let failed = false;
     try {
       const res = src ? await fetch(src.orthoUrl(O.z, xw, y), { signal: ctl.signal }) : null;
       if (!res) {
@@ -1778,13 +1826,23 @@ export class EarthTiles {
         col = (await decodeOff({ op: "ortho", blob, fit: src!.fit })).words ?? null;
       }
     } catch {
-      // (refused, timed out — offline —: none there this time, asked again once the window comes back to it)
+      // (refused, timed out — offline —: none there this time, asked again in 2, 4, 8 s while in the window — orthoRetry —, then
+      // once the window comes back to it)
+      failed = true;
     } finally {
       clearTimeout(timer);
     }
     if (this.orthoInflight.get(key) !== ctl) return; // (cleared meanwhile)
     this.orthoInflight.delete(key);
     if (col) this.orthoLoaded++;
+    if (failed && !none) {
+      const r = this.orthoRetry.get(key) ?? { n: 0, at: 0 };
+      r.n++;
+      r.at = performance.now() + 2000 * 2 ** (r.n - 1);
+      if (r.n <= ORTHO_RETRIES) this.orthoRetry.set(key, r);
+      else this.orthoRetry.delete(key);
+      if (this.orthoRetry.size > 1024) this.orthoRetry.clear();
+    } else this.orthoRetry.delete(key);
     // (the IGN has none there: not asked again)
     if (none) this.orthoNone.add(key);
     if (this.orthoNone.size > 4096) this.orthoNone.clear();

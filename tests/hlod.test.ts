@@ -41,9 +41,10 @@ test("a slope's surface the ground itself: nothing added (the surface's top over
   expect(most).toBe(0);
 });
 
-test("over the sea, the overground from the water's surface: the bed's depth no mound, a ship's hull over it kept", () => {
+test("over the sea, no overground: the bed's depth no mound, nor the surface model's ramps — a ship's hull not relief either", () => {
   // (a coast's tile: the ground the bathymetry — 30 m under the sea —, the surface model the water a few decimetres about 0 m;
-  // one sample a ship's superstructure 12 m over the water)
+  // one sample a ship's superstructure 12 m over the water. Since T7 (6e4148c0, Sam, 5 Nov 2026) nothing over the sea: the
+  // LiDAR HD's surface interpolated over the water stood ramps of tens to hundreds of metres there — a ship is no relief)
   const n = 512;
   const ground = new Float32Array(T * T).fill(-30);
   const surface = new Float32Array(n * n);
@@ -51,7 +52,7 @@ test("over the sea, the overground from the water's surface: the bed's depth no 
   surface[100 * n + 101] = 12;
   addOverground(ground, surface, n);
   expect(ground[5 * T + 5]).toBe(-30);
-  expect(ground[50 * T + 50]).toBeCloseTo(-30 + 12, 3);
+  expect(ground[50 * T + 50]).toBe(-30);
 });
 
 test("a tile's second pass: the overground over the survey's own ground alone, never over the sea it filled from Terrarium", () => {

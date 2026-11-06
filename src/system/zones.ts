@@ -132,7 +132,9 @@ export function zoneTiles(
       ? { reliefZ1: Math.max(profile.reliefZ1, ZONE_CORE.reliefZ1), orthoZ1: Math.max(profile.orthoZ1, ZONE_CORE.orthoZ1) }
       : profile;
   for (let z = Z0; z <= Math.min(top.reliefZ1, relief ? Z1 : ZG1); z++) {
-    const span = z >= FINE_Z && z <= ZG1 ? fineSpan : SPAN;
+    // (the reach's span from FINE_Z up — the IGN's z 15–17 too since T8k, 6a3cd640: earth-tiles.ts levelSpan —; a zone kept
+    // to 4 there missed the tiles a far reach's 8-tile windows ask, flown offline)
+    const span = z >= FINE_Z ? fineSpan : SPAN;
     level(z, span + 1.5, reliefs, z > ZG1, z <= profile.reliefZ1 ? radius : coreR);
   }
   // (the orthophotos' z 15–16 in 8-tile windows at a far reach — earth-tiles.ts ORTHO_BIG_LEVELS, T8e —, 4-tile ones else)
