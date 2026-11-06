@@ -1657,6 +1657,9 @@ export default {
     "Le mouvement propre de l'air : un vent moyen qui forcit avec l'altitude (un courant-jet vers 11 km, rien au-dessus de 30 km), sa direction tournant avec le lieu et le jour ; la turbulence du modèle de Dryden ; de temps en temps une rafale. Le même vol, la même météo.",
   "Show the frame rate": "Afficher les FPS",
   "Show the data's loading": "Afficher le chargement des données",
+  "Life at sea": "La vie en mer",
+  "Where the AIS shows no ship within 40 km — offline, the open ocean, no relay key —, the sea lives on its own: cargo ships and tankers on the deep water, ferries, fishing and sailing boats near the coasts, ships at anchor off the shore, a warship now and then. The same for everyone in a room; their wakes, lights and radar echoes as real ships'.":
+    "Là où l'AIS ne montre aucun navire à moins de 40 km — hors ligne, en plein océan, sans clé du relais —, la mer vit d'elle-même : porte-conteneurs et pétroliers au large, ferries, pêcheurs et voiliers près des côtes, navires au mouillage, un bâtiment de guerre de temps en temps. La même pour tous dans un salon ; leurs sillages, feux et échos radar comme ceux des vrais navires.",
   "Show the network": "Afficher le réseau",
   "A small square in the top-left corner, live: green while the game downloads (the relief's and photographs' tiles, the scenery, the weather — it flashes at each answer in), amber while data is wanted and nothing downloads (a stall), red when a request failed or the server asked to slow down, grey when nothing is wanted.":
     "Un petit carré en haut à gauche, en temps réel : vert pendant que le jeu télécharge (les tuiles du relief et des photographies, le décor, la météo — il clignote à chaque réponse reçue), ambre quand des données sont attendues et que rien ne télécharge (un blocage), rouge quand une requête a échoué ou que le serveur a demandé de ralentir, gris quand rien n'est attendu.",

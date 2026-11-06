@@ -88,7 +88,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
     ],
   },
   { tab: "game", title: { fr: "Formation", en: "Formation" }, keys: ["wingmen", "formShape", "formSpacing", "formPos"] },
-  { tab: "game", title: { fr: "Trafic réel", en: "Live traffic" }, keys: ["traffic", "trafficDelay", "tcas"] },
+  { tab: "game", title: { fr: "Trafic réel", en: "Live traffic" }, keys: ["traffic", "trafficDelay", "seaLife", "tcas"] },
   { tab: "game", title: { fr: "Sauvegardes", en: "Saved games" }, keys: ["autosave", "autosaveEvery"] },
   // ---- graphics
   {

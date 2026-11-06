@@ -44,6 +44,8 @@ import nightUp from "../../assets/earth/night/up.jpg";
 import nightDn from "../../assets/earth/night/dn.jpg";
 import oceanMed from "../../assets/earth/ocean-med.jpg";
 import oceanHigh from "../../assets/earth/ocean-high.jpg";
+/** the oceans' mask (1 the sea), 4096 × 2048 equirectangular — the sea's own life's on the CPU too (game/seasim.ts) */
+export const OCEAN_MASK_URL = oceanMed;
 import reliefMed from "../../assets/earth/relief-med.bin";
 import reliefHigh from "../../assets/earth/relief-high.bin";
 import ktxMedRt from "../../assets/earth/ktx2/med-rt.ktx2";

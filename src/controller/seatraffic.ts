@@ -21,6 +21,7 @@ import type { Vec3 } from "../math/vec3";
 import type { CameraController } from "../controls";
 import { fleet } from "../fleet";
 import { geoidDeg } from "../system/geoid-grid";
+import { seaGen, simShips } from "../game/seasim";
 
 declare module "../controls" {
   interface CameraController {
@@ -114,17 +115,74 @@ function headingAt(hist: readonly Ship[], t: number, course: number): number {
   return a.hdg * D + wrap((b.hdg - a.hdg) * D) * f;
 }
 
-let cache: { at: number; list: SeaCraft[]; of: unknown } = { at: -1, list: [], of: null };
-/** The ships now (the setting's delay behind the real time): each one's place, velocity, axes. Cached a frame. */
+/**
+ * A ship placed: at (lat, lon) carried `e`, `n` metres east and north, its velocity (east, north) [m/s], its heading [rad]; its
+ * size; rolling, pitching and heaving in the sea (hs) — afloat at the geoid —; its axes and velocity fixed to the Earth.
+ */
+function craftAt(
+  q: { id: string; mmsi: number; name: string; dest: string; age: number },
+  Z: ReturnType<typeof shipSize>,
+  lat: number,
+  lon: number,
+  e: number,
+  n: number,
+  ve: number,
+  vn: number,
+  head: number,
+  hs: number,
+  td: number,
+): SeaCraft {
+  const sog = Math.hypot(ve, vn);
+  const m = shipMotion(Z.len, Z.beam, hs, td, q.mmsi);
+  // (afloat: the sea's surface at the geoid)
+  const P = placeOf(lat, lon, e, n, m.heave + geoidDeg(lat, lon));
+  const la = lat + n / (D * R_EQ),
+    lo = lon + e / (D * R_EQ * Math.cos(lat * D));
+  const L = enuAt(la, lo);
+  const h = [0, 1, 2].map((i) => L.E[i]! * Math.sin(head) + L.N[i]! * Math.cos(head));
+  const r0 = [0, 1, 2].map((i) => L.E[i]! * Math.cos(head) - L.N[i]! * Math.sin(head));
+  // (its pitch — its bow up + — about its beam, then its roll — to starboard + — about its length)
+  const cp = Math.cos(m.pitch),
+    sp = Math.sin(m.pitch);
+  const fwd1 = [0, 1, 2].map((i) => h[i]! * cp + L.U[i]! * sp);
+  const up1 = [0, 1, 2].map((i) => L.U[i]! * cp - h[i]! * sp);
+  const cr = Math.cos(m.roll),
+    sr = Math.sin(m.roll);
+  const right = [0, 1, 2].map((i) => r0[i]! * cr - up1[i]! * sr);
+  const up = [0, 1, 2].map((i) => up1[i]! * cr + r0[i]! * sr);
+  return {
+    id: q.id,
+    mmsi: q.mmsi,
+    name: q.name,
+    kind: Z.kind,
+    dest: q.dest,
+    mesh: Z.mesh,
+    len: Z.len,
+    beam: Z.beam,
+    p: P,
+    v: [0, 1, 2].map((i) => L.E[i]! * ve + L.N[i]! * vn),
+    fwd: fwd1,
+    up,
+    right,
+    sog,
+    age: q.age,
+  };
+}
+
+let cache: { at: number; list: SeaCraft[]; of: unknown; gen: number; where: string } = { at: -1, list: [], of: null, gen: -1, where: "" };
+/** The ships now (the setting's delay behind the real time): each one's place, velocity, axes — the AIS's, and where it sees
+ *  none within 40 km the sea's own life (game/seasim.ts). Cached a frame. */
 function seaNow(this: CameraController): SeaCraft[] {
   const F = this.traffic;
-  if (!F || !F.ships.size) return [];
   const now = this.trafficClock ? this.trafficClock() : (this.trafficT ?? Date.now() / 1000);
-  if (cache.at === now && cache.of === F) return cache.list;
+  // (kept a frame — the clock still, frozen: kept while the sea's floor and the place, to 0.01°, are the same)
+  const g0 = this.geoNow();
+  const where = g0 ? `${g0.lat.toFixed(2)},${g0.lon.toFixed(2)}` : "";
+  if (cache.at === now && cache.of === F && cache.gen === seaGen() && cache.where === where) return cache.list;
   const td = now - Math.max(0, this.s.trafficDelay ?? 0);
   const hs = this.seaHs ?? 1;
   const out: SeaCraft[] = [];
-  for (const T of F.ships.values()) {
+  for (const T of F?.ships.values() ?? []) {
     const s = T.s;
     if (!Number.isFinite(s.lat) || !T.hist.length) continue;
     // (sunk in a fight — controller/fightproxy.ts)
@@ -160,49 +218,49 @@ function seaNow(this: CameraController): SeaCraft[] {
     }
     const sog = Math.hypot(ve, vn);
     const head = still ? (s.hdg ?? s.cog) * D : headingAt(T.hist, td, sog > 0.5 ? Math.atan2(ve, vn) : course);
-    const m = shipMotion(Z.len, Z.beam, hs, td, s.mmsi);
-    // (afloat: the sea's surface at the geoid)
-    const P = placeOf(lat, lon, e, n, m.heave + geoidDeg(lat, lon));
-    const la = lat + n / (D * R_EQ),
-      lo = lon + e / (D * R_EQ * Math.cos(lat * D));
-    const L = enuAt(la, lo);
-    const h = [0, 1, 2].map((i) => L.E[i]! * Math.sin(head) + L.N[i]! * Math.cos(head));
-    const r0 = [0, 1, 2].map((i) => L.E[i]! * Math.cos(head) - L.N[i]! * Math.sin(head));
-    // (its pitch — its bow up + — about its beam, then its roll — to starboard + — about its length)
-    const cp = Math.cos(m.pitch),
-      sp = Math.sin(m.pitch);
-    const fwd1 = [0, 1, 2].map((i) => h[i]! * cp + L.U[i]! * sp);
-    const up1 = [0, 1, 2].map((i) => L.U[i]! * cp - h[i]! * sp);
-    const cr = Math.cos(m.roll),
-      sr = Math.sin(m.roll);
-    const right = [0, 1, 2].map((i) => r0[i]! * cr - up1[i]! * sr);
-    const up = [0, 1, 2].map((i) => up1[i]! * cr + r0[i]! * sr);
-    out.push({
-      id: String(s.mmsi),
-      mmsi: s.mmsi,
-      name: s.name,
-      kind: Z.kind,
-      dest: s.dest,
-      mesh: Z.mesh,
-      len: Z.len,
-      beam: Z.beam,
-      p: P,
-      v: [0, 1, 2].map((i) => L.E[i]! * ve + L.N[i]! * vn),
-      fwd: fwd1,
-      up,
-      right,
-      sog,
-      age: now - s.t,
-    });
+    out.push(
+      craftAt({ id: String(s.mmsi), mmsi: s.mmsi, name: s.name, dest: s.dest, age: now - s.t }, Z, lat, lon, e, n, ve, vn, head, hs, td),
+    );
   }
-  if (ways.size > 2 * F.ships.size + 50) for (const k of ways.keys()) if (!F.ships.has(k)) ways.delete(k);
-  cache = { at: now, list: out, of: F };
+  if (F && ways.size > 2 * F.ships.size + 50) for (const k of ways.keys()) if (!F.ships.has(k)) ways.delete(k);
+  // (the sea's own life — game/seasim.ts —: where the AIS has no ship within 40 km of us, a made-up traffic, the same for all)
+  const g = this.s.seaLife !== false ? this.geoNow() : null;
+  if (g && g.alt < 20_000) {
+    const near = out.some((c) => {
+      const up = unit(c.p);
+      const la = Math.asin(up[2]!) / D,
+        lo = Math.atan2(up[1]!, up[0]!) / D;
+      return Math.hypot((la - g.lat) * 111_320, (wrap((lo - g.lon) * D) / D) * 111_320 * Math.cos(g.lat * D)) < 40_000;
+    });
+    if (!near)
+      for (const q of simShips(g.lat, g.lon, td, 30_000)) {
+        if (this.seaTaken?.has(String(q.mmsi))) continue;
+        const Z = shipSize(q.type, q.len, q.beam);
+        const c = q.cog * D;
+        out.push(
+          craftAt(
+            { id: String(q.mmsi), mmsi: q.mmsi, name: q.name, dest: "", age: 0 },
+            Z,
+            q.lat,
+            q.lon,
+            0,
+            0,
+            q.sog * Math.sin(c),
+            q.sog * Math.cos(c),
+            q.hdg * D,
+            hs,
+            td,
+          ),
+        );
+      }
+  }
+  cache = { at: now, list: out, of: F, gen: seaGen(), where };
   return out;
 }
 
 /** A frame of the sea's traffic: its radar source (surface contacts, neutral, their AIS answering). */
 function seaStep(this: CameraController) {
-  if (!this.traffic?.ships.size) {
+  if (!this.traffic?.ships.size && !this.seaNow().length) {
     this.radarSources.delete("ais");
     return;
   }
@@ -246,7 +304,8 @@ function seaShips(
       .map((x) => ({ ...x, d: Math.hypot(x.c.p[0]! - pv[0], x.c.p[1]! - pv[1], x.c.p[2]! - pv[2]) }))
       .filter((x) => x.d < 20_000)
       .sort((a, b) => a.d - b.d)
-      .slice(0, 8)
+      // (the nearest twelve — the craft's pass draws forty: the fight's, the traffic's, the carriers' with them)
+      .slice(0, 12)
       .map(({ c, rel }) => {
         const M = SHIP_MESH[c.mesh];
         const kz = c.len / M.len,

@@ -267,6 +267,12 @@ pertinent.
 - **T4. Le trafic simulé et l'histoire.**
   - Là où rien n'est reçu (hors ligne, en plein océan, une autre date), un trafic plausible : les airways entre
     aéroports, les rails de navigation.
+    **Fait pour la mer le 6 novembre 2026** (`src/game/seasim.ts`, réglage « La vie en mer ») : là où l'AIS ne voit aucun
+    navire à 40 km, porte-conteneurs et pétroliers au large, ferries, pêcheurs et voiliers près des côtes, navires au
+    mouillage, un bâtiment de guerre parfois. Déterministe par cellule de 0,2°, la même mer pour tout un salon ; chaque
+    navire suit un circuit fermé (aller, demi-tour sur tribord, retour) vérifié en mer sur toute sa longueur. La
+    profondeur est remplacée par la distance à la terre, lue dans le masque des océans : la carte globale n'a pas de
+    bathymétrie. Les airways aériennes restent à faire.
   - **Les rejeux** : voler dans le trafic réel d'une journée passée. Les traces OpenSky sur 30 jours ; les dumps
     adsb.lol pour les jours anciens, préparés hors ligne pour une région et une heure.
 - **T5. Vivre avec le trafic.** Le trafic sur le radar (en neutre), des annonces de type contrôle (« trafic à

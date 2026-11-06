@@ -4653,6 +4653,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "traffic real aircraft airliners ships ais adsb opensky",
   },
   {
+    key: "seaLife",
+    type: "toggle",
+    section: "game",
+    group: "Traffic",
+    label: "Life at sea",
+    effect: "none",
+    help: "Where the AIS shows no ship within 40 km — offline, the open ocean, no relay key —, the sea lives on its own: cargo ships and tankers on the deep water, ferries, fishing and sailing boats near the coasts, ships at anchor off the shore, a warship now and then. The same for everyone in a room; their wakes, lights and radar echoes as real ships'.",
+    keywords: "sea ships boats fishing sailing cargo ferry life mer bateaux navires pêche voiliers",
+  },
+  {
     key: "seaFft",
     type: "toggle",
     section: "sky",

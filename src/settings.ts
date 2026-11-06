@@ -465,6 +465,7 @@ export interface Settings {
   formPos: number;
   wingmen: number; // the AI wingmen flying with the F-35 (controller/wingmen.ts): 0 to 3
   traffic: boolean; // the real air and sea traffic about the craft (traffic/feed.ts, the relay server/traffic.ts)
+  seaLife: boolean; // the sea's own life where the AIS shows no ship near (game/seasim.ts): cargo ships, tankers, ferries, fishing and sailing boats, at anchor
   seaFft: boolean; // the sea's waves by FFT (sea/fft-gpu.ts: three cascades, their foam and relief) — off: the twelve trains
   tcas: boolean; // the TCAS for every craft in the air (PLAN-RADAR-AAA RD4): the transponders about graded, TA and RA shown and said
   trafficDelay: number; // the real aircraft drawn this far behind the real time [s] (0: live, carried on from their last report; a minute: on their smoothed path)
@@ -858,6 +859,7 @@ export function defaultSettings(): Settings {
     formPos: 2,
     wingmen: 0,
     traffic: true,
+    seaLife: true,
     trafficDelay: 60,
     tcas: true,
     seaFft: true,
@@ -2272,6 +2274,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   formPos: "pref",
   wingmen: "pref",
   traffic: "pref",
+  seaLife: "pref",
   trafficDelay: "pref",
   tcas: "pref",
   seaFft: "pref",

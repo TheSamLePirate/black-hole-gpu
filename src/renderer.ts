@@ -1,4 +1,6 @@
 import { holeFleet } from "./holefleet";
+import { loadSeaMask } from "./game/seasim";
+import { OCEAN_MASK_URL } from "./system/earth-maps";
 import { issCamera, type IssCameraId } from "./system/iss-cameras";
 import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
 import { aheadFocus, buildLead, gazeLead, groundSpeed, streamingLead } from "./system/streaming-focus";
@@ -1937,6 +1939,18 @@ export class Renderer {
           );
           // (a tile that will not load — offline, refused: the map's heights there, as the ground had them)
           this.earthTiles.fallback = tileFallbackSampler(map, W, H);
+          // (the sea's own life — game/seasim.ts —: its ships where the water is deep enough for each — the oceans' mask's
+          // distance to the land: the map holds no bathymetry —, read once)
+          if (!this.seaMaskAsked) {
+            this.seaMaskAsked = true;
+            loadSeaMask(OCEAN_MASK_URL).then(
+              () => (this.seaMask = "ok"),
+              (e) => {
+                this.seaMask = String(e);
+                console.warn("the sea's mask:", e);
+              },
+            );
+          }
           // (the relief's ceiling round the camera: the map's highest in 1° cells)
           this.mapCells = new MapCells(map, W, H);
         }
@@ -7700,6 +7714,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     );
   }
 
+  /** the oceans' mask asked for the sea's own life (game/seasim.ts loadSeaMask) */
+  private seaMaskAsked = false;
+  /** its state: "" asked, "ok" in, else why not */
+  seaMask = "";
   /** a fight's aircraft (controller/combat.ts — sim.ts): each from the flown craft's origin on the camera's axes
    *  [m], its axes on them, its pose */
   combatOthers: {
