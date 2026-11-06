@@ -49,6 +49,24 @@ qu'on ne reprend pas. Le § 5 renvoie au § 7.
   destination. AM2 et les suivants touchent le rendu : ils se placent après les interfaces de l'air et de la
   profondeur, ou les lisent par des adaptateurs bornés.
 
+**Avancement du 6 novembre 2026 — AM0 fait** (`src/system/magnetic-fields.ts`, `tests/magnetic-fields.test.ts`, 8 tests
+verts) :
+- harmoniques de Schmidt à tout degré, CON2020 (forme analytique d'Edwards), modèles de Mercure, de la Terre (IGRF-14 2025.0
+  au degré 3), de Jupiter (JRM33 au degré 13 et CON2020), de Saturne (Cassini 11), d'Uranus (Q3), de Neptune (O8) et de
+  Ganymède ;
+- traçage RK4 arrêté sur **la vraie figure** (WGS84, ellipsoïdes à 1 bar), empreintes dans l'hémisphère du dipôle, table
+  de l'ovale, pôle du dipôle (la donnée qui remplacera `AUR_MAG`), magnétopause de Shue.
+- **Vérifié** : les tests du § 7.1 aux tolérances d'Alex. Une exception : l'ovale terrestre à L = 7 s'étale de 63,1 à
+  72,6° de latitude dipolaire centrée (moyenne 67,5°) au lieu de 64–70°. Le test porte sur l'étendue et la moyenne, avec
+  la raison écrite.
+- **Pas encore fait** :
+  - la variation séculaire d'IGRF (à reprendre du fichier NOAA/IAGA, pas de mémoire) ;
+  - le scénario d'époque au-delà de 2030 ;
+  - le champ crustal de Mars ;
+  - Ganymède dans le champ de Jupiter ;
+  - le traçage en worker (aucun lecteur ne l'appelle encore : il viendra avec AM1) ;
+  - les vecteurs de Hue et al. 2023 pour Io.
+
 ## 1. Ce qu'on a aujourd'hui
 
 - **Une seule aurore, celle de la Terre**, `auroraLight` (`src/shaders/trace.wgsl`, S2 du plan aviation) :
