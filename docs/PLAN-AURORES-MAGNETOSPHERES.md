@@ -135,6 +135,12 @@ verts) :
 - **Restant** : l'ovale de Saturne fixe par rapport au Soleil (minuit 16°, midi 13°), l'empreinte d'Encelade, l'activité
   propre à chaque corps.
 
+**AM6, premier lot (6 novembre 2026)** — Mars et Vénus (`trace.wgsl` auroraRocky) : la raie verte de l'oxygène en volume ;
+Mars, l'anneau au-dessus des champs crustaux (50° S, 180° E, rayon 14 + 4 sin(3az + 1) + 2 sin(7az)°, 0,15 kR × 1,6^activité)
+et, en tempête (activité ≥ 6), le vert diffuse de toute la face nuit (Persévérance, 2024) ; Vénus, uniforme après une
+éjection. L'œil adapté dans l'ombre de Mars. Observé (e2e `aurora-mars`, kerr-mini) : en tempête, l'anneau vert au limbe
+de la face nuit ; pas d'artefact révélé. Valeurs de départ d'Alex, pas des mesures.
+
 **AM7, premier lot (6 novembre 2026)** — le schéma :
 - **Les lignes** : les coquilles L d'Alex (Terre 1,5–9, Jupiter 1,8–40, Saturne, Uranus, Neptune, Mercure, Ganymède), 8
   longitudes, tracées dans le vrai champ d'AM0 jusqu'à la figure, rééchantillonnées en 160 points (Catmull–Rom) avec

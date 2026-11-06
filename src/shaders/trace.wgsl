@@ -6221,6 +6221,70 @@ fn auroraGiant(g: u32, ro: vec3f, rd: vec3f, tEnd: f32, jit: f32, ab: f32) -> ve
   return mix(rods, L, c) * 1e-5 * eye;
 }
 
+// ---- Mars's and Venus's auroras (PLAN-AURORES-MAGNETOSPHERES AM6): oxygen's green line 557.7 nm (AUR_GREEN), a volume
+// marched in their thin upper air. Mars: discrete aurora over its crustal fields — a ring about 50° S, 180° E, its radius
+// 14 + 4 sin(3 az + 1) + 2 sin(7 az)° (Alex's § 7.6), 0.15 kR × 1.6^activity — and, in a solar storm (activity ≥ 6), the
+// diffuse green over the whole night side seen by Perseverance (2024), 0.08 kR × 1.6^(activity − 6); peak 130 km. Venus: the
+// green line after a coronal mass ejection, uniform over the night side (Gray et al.), 0.05 kR × 1.6^(activity − 6) from
+// activity 6; peak 105 km. Starting values, not measurements; seen by the dark-adapted eye from their shadows (bary.w).
+fn auroraRocky(g: u32, ro: vec3f, rd: vec3f, tEnd: f32, jit: f32, Ls: vec3f) -> vec3f {
+  let act = P.bary.z;
+  let eye = max(floor(P.bary.w / 1024.0) * 0.5, 1.0);
+  let mars = g == 5u;
+  let pk = select(105.0, 130.0, mars);
+  let sg = select(8.0, 12.0, mars);
+  let H = select(20.0, 25.0, mars);
+  let col = 0.886 * sg + H;
+  let r1 = 1.0 + (pk - 2.5 * sg) * 1e3 / AIR.rm;
+  let r2 = 1.0 + (pk + 6.0 * H) * 1e3 / AIR.rm;
+  let b = dot(ro, rd);
+  let c2 = dot(ro, ro);
+  let off2 = c2 - b * b;
+  let h2 = r2 * r2 - off2;
+  if (h2 <= 0.0) { return vec3f(0.0); }
+  let sq = sqrt(h2);
+  var ta = max(-b - sq, 0.0);
+  var tb = min(-b + sq, tEnd);
+  let hi = r1 * r1 - off2;
+  if (hi > 0.0) {
+    let sqi = sqrt(hi);
+    if (c2 < r1 * r1) { ta = max(ta, -b + sqi); } else if (-b - sqi > ta) { tb = min(tb, -b - sqi); }
+  }
+  if (tb <= ta) { return vec3f(0.0); }
+  let storm = smoothstep(5.5, 6.5, act) * pow(1.6, max(act - 6.0, 0.0));
+  let kRd = select(0.05, 0.08, mars) * storm;
+  let kRp = select(0.0, 0.15 * pow(1.6, act), mars);
+  // (the crustal patch's centre: 50° S, 180° E, its frame)
+  let cc = vec3f(-0.6427876, 0.0, -0.7660444);
+  let e1 = normalize(cross(vec3f(0.0, 0.0, 1.0), cc));
+  let e2 = cross(cc, e1);
+  let N = 12u;
+  let dt = (tb - ta) / f32(N);
+  var L = 0.0;
+  for (var i = 0u; i < N; i++) {
+    cost(3u);
+    let p = ro + rd * (ta + (f32(i) + jit) * dt);
+    let q = normalize(p);
+    let hk = airHeight(p) * 1e-3;
+    let prof = aurProf(hk, pk, sg, H, 0.0) / col;
+    // (the night side only: the sun under the horizon there)
+    let night = smoothstep(0.05, -0.15, dot(q, Ls));
+    var kR = kRd * night;
+    if (kRp > 0.0) {
+      let az = atan2(dot(q, e2), dot(q, e1));
+      let rho = acos(clamp(dot(q, cc), -1.0, 1.0)) * 57.29578;
+      let ring = 14.0 + 4.0 * sin(3.0 * az + 1.0) + 2.0 * sin(7.0 * az);
+      let x = (rho - ring) / 1.6;
+      kR += kRp * exp(-x * x) * night;
+    }
+    L += kR * prof * dt * AIR.rm * 1e-3;
+  }
+  let Lc = AUR_GREEN * L;
+  let Y = luminance(Lc);
+  let c = smoothstep(-2.7, -1.5, log2(max(Y, 1e-12)) * 0.30103);
+  return mix(vec3f(0.766, 1.072, 0.970) * Y, Lc, c) * 1e-5 * eye;
+}
+
 // The air along ro + t rd, t in [0, tEnd): what it lets through (T), and the sunlight it scatters
 // towards ro (L; the sun along Ls, its irradiance E); up to tSplit too (Tc, Lc: a cloud there, seen
 // through the air before it only). jit: the samples' offset (0…1).
@@ -12004,7 +12068,8 @@ fn earthLookSky(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx
   }
   // (the giant whose auroras are drawn — AM3–AM4 —: 1 Jupiter, 2 Saturn, 3 Uranus, 4 Neptune, 0 none — by its surface kind)
   let sk = u32(bodies[BV * k + 2u].z);
-  let giant = select(select(select(select(0u, 4u, sk == 25u), 3u, sk == 24u), 2u, sk == 9u), 1u, sk == 8u);
+  // (and 5 Mars, 6 Venus — AM6 —: their oxygen green, auroraRocky)
+  let giant = select(select(select(select(select(select(0u, 6u, sk == 10u), 5u, sk == 6u), 4u, sk == 25u), 3u, sk == 24u), 2u, sk == 9u), 1u, sk == 8u);
   return EarthLookSky(air, alpha, cl, tc, earth, giant);
 }
 // The clouds' transmittance for the direct light of what lies beyond them — the Sun's disc, the Moon's, the planets, the stars —
@@ -12029,7 +12094,10 @@ fn earthLookCompose(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f
     o.col += aur * air.T * select(1.0 - alpha, 1.0, airHeight(ro) > 120e3);
   }
   // the giants' (AM3–AM4): above their cloud decks (their scale in bary.w)
-  if (HAS_AURORA && s.giant > 0u && P.bary.z > 0.0) {
+  if (HAS_AURORA && s.giant >= 5u && P.bary.z > 0.0) {
+    o.col += auroraRocky(s.giant, ro, rd, select(3e38, tHit, tHit > 0.0), jit, Ls) * luminance(E) * air.T;
+  }
+  if (HAS_AURORA && s.giant > 0u && s.giant < 5u && P.bary.z > 0.0) {
     let ab = select(select(1.0, SATURN_AB, s.giant == 2u), JUPITER_AB, s.giant == 1u);
     o.col += auroraGiant(s.giant, ro, rd, select(3e38, tHit, tHit > 0.0), jit, ab) * luminance(E) * air.T;
   }

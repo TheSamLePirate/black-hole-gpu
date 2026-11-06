@@ -4197,6 +4197,8 @@ export class Renderer {
     const jupNear = nearIdG === "jupiter";
     // (the giants with auroras — AM3–AM4 —: Jupiter, Saturn, Uranus, Neptune)
     const giantNear = nearIdG === "jupiter" || nearIdG === "saturn" || nearIdG === "uranus" || nearIdG === "neptune";
+    // (and Mars and Venus — AM6 —: the same scale, the setting's activity)
+    const rockyNear = nearIdG === "mars" || nearIdG === "venus";
     // (none while the eye is adapted to more than 1 000 lux — a hundredth of full sunlight —: even a Kp 9 storm's curtains would
     // be under 0.5 % of a white surface there; the kernel then leaves them out — the live Kp keeps them on near the present)
     const auroraSeen = this.eyeIncident < 0.01;
@@ -4204,11 +4206,11 @@ export class Renderer {
       ? 0
       : near?.index === earthK
         ? Math.min(Math.max(kpNow.kp, 0), 9)
-        : giantNear
+        : giantNear || rockyNear
           ? Math.min(Math.max(s.aurora ?? 0, 0), 9)
           : 0;
     let jupD2 = 1;
-    if (giantNear && kp > 0) {
+    if ((giantNear || rockyNear) && kp > 0) {
       const J = solarState(nearIdG!, time).pos,
         S = solarState("sun", time).pos;
       const dAU = (Math.hypot(J[0] - S[0], J[1] - S[1], J[2] - S[2]) * M_METRES) / AU_M;
@@ -4230,7 +4232,7 @@ export class Renderer {
     f[41 * 4 + 3] =
       kp <= 0
         ? 0
-        : jupNear
+        : giantNear || rockyNear
           ? 1024 * Math.round(2 * Math.max(eyeGain, jupD2))
           : (((tSec % 900) + 900) % 900) + 1024 * Math.round(2 * eyeGain);
     if (kp > 0) this.featureKey |= 16384;
@@ -8602,7 +8604,22 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    */
   private earthSunlight(bodies: GpuBody[], near: ReturnType<typeof localPatch>, surface: ReturnType<typeof patchGeodetic> | null) {
     // (Mars in a dust storm — W6 —: the day a third as bright under it; the eye opens to it)
-    if (near && bodies[near.index]?.id === "mars") return 1 - 0.55 * this.marsDustNow;
+    if (near && bodies[near.index]?.id === "mars") {
+      // (in its shadow — its night side, from orbit or on the ground —: the eye adapts to the dark, as at the giants — AM6, its
+      // auroras —; by day the dust storm's dimming as before)
+      const c = near.centre,
+        L = near.light;
+      const along = -(c[0] * L[0] + c[1] * L[1] + c[2] * L[2]);
+      const perp = Math.hypot(-c[0] - along * L[0], -c[1] - along * L[1], -c[2] - along * L[2]);
+      if (along < 0 && perp < 0.99) {
+        this.eyeIncident = NIGHT_ILLUMINANCE;
+        this.eyeSkyLight = NIGHT_ILLUMINANCE;
+        return NIGHT_ILLUMINANCE + EYE_ADAPTATION;
+      }
+      this.eyeIncident = 1;
+      this.eyeSkyLight = 1;
+      return 1 - 0.55 * this.marsDustNow;
+    }
     // (Venus under its cloud deck — 47 to 70 km, trace.wgsl AIR_SLAB —: ~3.5 % of the sunlight below it, all of it above, its
     // share through the slab between — the eye opens to the Veneras' day)
     if (near && bodies[near.index]?.id === "venus") {
