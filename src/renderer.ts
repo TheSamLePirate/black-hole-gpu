@@ -1,5 +1,7 @@
 import { holeFleet } from "./holefleet";
 import { loadSeaMask } from "./game/seasim";
+import { kpFor } from "./system/space-weather";
+import { J2000_MS } from "./system/timescale";
 import { OCEAN_MASK_URL } from "./system/earth-maps";
 import { issCamera, type IssCameraId } from "./system/iss-cameras";
 import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
@@ -3964,7 +3966,11 @@ export class Renderer {
     f[61 * 4 + 2] = this.marsDust(s, near, bodies, time); // (earth4.z)
     // the auroras (S2 — trace.wgsl auroraLight: bary.z, bary.w): their activity (a Kp index) and their curtains'
     // clock (the scene's seconds, over 900 s); the Earth near only — their code in the kernel then alone
-    const kp = near?.index === earthK ? Math.min(Math.max(Math.round(s.aurora ?? 0), 0), 9) : 0;
+    // (the live Kp — NOAA SWPC's, system/space-weather.ts — while the scene is within 3 h of now and the setting allows it; else
+    // the setting's; AM1)
+    const kpNow = kpFor(J2000_MS + daysOf(time) * 86400e3, s.aurora ?? 0, s.auroraLive !== false);
+    this.auroraKp = kpNow;
+    const kp = near?.index === earthK ? Math.min(Math.max(kpNow.kp, 0), 9) : 0;
     f[41 * 4 + 2] = kp;
     f[41 * 4 + 3] = kp > 0 ? ((tSec % 900) + 900) % 900 : 0;
     if (kp > 0) this.featureKey |= 16384;
@@ -7714,6 +7720,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     );
   }
 
+  /** the Kp the auroras are drawn with, and where it came from (system/space-weather.ts kpFor — AM1) */
+  auroraKp: { kp: number; source: "live" | "setting"; ageMin?: number } = { kp: 0, source: "setting" };
   /** the oceans' mask asked for the sea's own life (game/seasim.ts loadSeaMask) */
   private seaMaskAsked = false;
   /** its state: "" asked, "ok" in, else why not */

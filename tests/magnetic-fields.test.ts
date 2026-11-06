@@ -134,3 +134,13 @@ test("the magnetopause: the standoff at the subsolar point, flaring behind", () 
   expect(magnetopause(10, 0.58, 1)).toBeCloseTo(10, 6);
   expect(magnetopause(10, 0.58, 0)).toBeCloseTo(10 * 2 ** 0.58, 6);
 });
+
+test("the auroras' pole in the tracer (trace.wgsl AUR_MAG) is the field's (dipolePole) within 0.3°", async () => {
+  const src = await Bun.file("src/shaders/trace.wgsl").text();
+  const m = src.match(/const AUR_MAG = vec3f\(([-\d.e]+), ([-\d.e]+), ([-\d.e]+)\)/);
+  expect(m).not.toBeNull();
+  const a: V3 = [Number(m![1]), Number(m![2]), Number(m![3])];
+  const z = MAGNETOSPHERES.earth.model.dipoleNorth;
+  const ang = Math.acos(Math.min(1, (a[0] * z[0] + a[1] * z[1] + a[2] * z[2]) / mag(a))) / D;
+  expect(ang).toBeLessThan(0.3);
+});

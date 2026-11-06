@@ -67,6 +67,23 @@ verts) :
   - le traçage en worker (aucun lecteur ne l'appelle encore : il viendra avec AM1) ;
   - les vecteurs de Hue et al. 2023 pour Io.
 
+**AM1, premier lot (6 novembre)** :
+- **l'ovale en heure locale magnétique**, de la loi d'Alex : colatitude 21° + 1,4·Kp à minuit, 12° + 0,49·Kp à midi, sud
+  0,5° plus loin ;
+- **les arcs** : trois arcs qui s'écartent avec Kp, le secteur de minuit trois fois plus brillant que midi ;
+- **les bandes et les raies** : la bande diffuse 1,5° plus près de l'équateur, la bordure bleue de N₂⁺ dans les orages ;
+- **le pôle** : un test garde `AUR_MAG` égal au pôle d'AM0 ;
+- **le Kp réel de la NOAA** (`src/system/space-weather.ts`, réglage « Aurores de la vraie météo de l'espace », activé)
+  dans les 3 h de maintenant, avec un schéma validé : les objets de 2026 et l'ancienne table ; un Kp `null` n'est plus lu
+  comme 0.
+- **Observé** (e2e `aurora-oval`) : les rideaux à Tromsø vers le sud et au limbe depuis 400 km.
+- **Restant :**
+  - trop brillant et saturé au ras de l'horizon : le gain d'ensemble n'est pas changé, son étalonnage (modèle de l'œil, van
+    Rhijn) relève d'AM2 ;
+  - rien depuis 4 000 km : le chemin de la Terre lointaine n'appelle pas l'aurore ;
+  - la carte OVATION, l'orage, STEVE, l'aurore pulsante ;
+  - le pôle passé en uniforme (une fois la variation séculaire là).
+
 ## 1. Ce qu'on a aujourd'hui
 
 - **Une seule aurore, celle de la Terre**, `auroraLight` (`src/shaders/trace.wgsl`, S2 du plan aviation) :

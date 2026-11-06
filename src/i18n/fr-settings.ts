@@ -1657,6 +1657,9 @@ export default {
     "Le mouvement propre de l'air : un vent moyen qui forcit avec l'altitude (un courant-jet vers 11 km, rien au-dessus de 30 km), sa direction tournant avec le lieu et le jour ; la turbulence du modèle de Dryden ; de temps en temps une rafale. Le même vol, la même météo.",
   "Show the frame rate": "Afficher les FPS",
   "Show the data's loading": "Afficher le chargement des données",
+  "Auroras from the real space weather": "Aurores de la vraie météo de l'espace",
+  "While the scene's time is within three hours of now, the auroras follow the real space weather: NOAA's planetary K index, refreshed every 15 minutes. Offline, in the past or the future, or with this off: the Auroras setting's.":
+    "Tant que l'heure de la scène est à moins de trois heures de maintenant, les aurores suivent la vraie météo de l'espace : l'indice Kp planétaire de la NOAA, relu toutes les 15 minutes. Hors ligne, dans le passé ou le futur, ou ceci coupé : le réglage Aurores.",
   "Life at sea": "La vie en mer",
   "Where the AIS shows no ship within 40 km — offline, the open ocean, no relay key —, the sea lives on its own: cargo ships and tankers on the deep water, ferries, fishing and sailing boats near the coasts, ships at anchor off the shore, a warship now and then. The same for everyone in a room; their wakes, lights and radar echoes as real ships'.":
     "Là où l'AIS ne montre aucun navire à moins de 40 km — hors ligne, en plein océan, sans clé du relais —, la mer vit d'elle-même : porte-conteneurs et pétroliers au large, ferries, pêcheurs et voiliers près des côtes, navires au mouillage, un bâtiment de guerre de temps en temps. La même pour tous dans un salon ; leurs sillages, feux et échos radar comme ceux des vrais navires.",

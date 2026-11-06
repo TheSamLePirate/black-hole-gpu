@@ -2029,6 +2029,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "clouds cover weather clear sky earth eclipse",
   },
   {
+    key: "auroraLive",
+    type: "toggle",
+    section: "sky",
+    group: "The Earth",
+    label: "Auroras from the real space weather",
+    effect: "scene",
+    help: "While the scene's time is within three hours of now, the auroras follow the real space weather: NOAA's planetary K index, refreshed every 15 minutes. Offline, in the past or the future, or with this off: the Auroras setting's.",
+    keywords: "aurora kp noaa swpc space weather live real aurores météo de l'espace",
+  },
+  {
     key: "aurora",
     type: "number",
     section: "sky",

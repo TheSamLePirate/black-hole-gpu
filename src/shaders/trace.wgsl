@@ -5935,14 +5935,17 @@ fn skySeen(p: vec3f, Ls: vec3f) -> f32 {
   return mix(0.0004, 1.0, avg * avg);
 }
 
-// ---- The auroras (S2): the oval of light round the geomagnetic poles (the dipole's north at 80.8° N, 72.6° W), its
-// arcs at a magnetic latitude ~69° less 1.1° a Kp (64.6° at Kp 4, 59° in a great storm), folded and drifting along the magnetic longitude,
-// their curtains streaked by rays; oxygen's green line at 557.7 nm peaking at 110 km and fading above, its red line
-// at 630 nm from 200 km up (the storms' crowns). Integrated along the ray through their shell (90 – 330 km above
-// the ground): an emission [over the night ground's light, per metre] — no scattering, the air's own transmittance
-// applied by the caller. Its samples jittered (`jit`): the accumulation smooths their thin curtains.
+// ---- The auroras (S2; PLAN-AURORES-MAGNETOSPHERES AM1): the oval of light round the geomagnetic poles — the dipole's north at
+// AUR_MAG, the one magnetic-fields.ts publishes (dipolePole: a test holds them equal) —, in magnetic local time: wider on the
+// night side than at noon (its colatitude 21° + 1.4 Kp at midnight, 12° + 0.49 Kp at noon, between them as ½(1 + cos) of the
+// angle from midnight — Alex's law, within Starkov 1994's 1.5–2° a Kp; the south 0.5° further), its midnight sector three times
+// its noon's; three arcs — the main one, a fainter one poleward, one equatorward from Kp 5 —, their offsets and folds growing with
+// the activity, drifting along the magnetic longitude, streaked by rays; the diffuse aurora's band 1.5° equatorward. Oxygen's
+// green 557.7 nm peaking at 110 km, its red 630 nm from 200 km up (the storms' crowns), nitrogen's blue N₂⁺ 427.8 nm at the
+// curtains' lower edge in a storm. Integrated along the ray through their shell (90 – 330 km): an emission [over the night
+// ground's light, per metre] — no scattering, the air's transmittance the caller's. Its samples jittered (`jit`).
 const AUR_MAG = vec3f(0.04776, -0.15297, 0.98708);
-fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> vec3f {
+fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32, Ls: vec3f) -> vec3f {
   let kp = P.bary.z;
   let ts = P.bary.w;
   let r1 = 1.0 + 90e3 / EARTH_RM;
@@ -5965,7 +5968,10 @@ fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> vec3f {
   if (tb <= ta) { return vec3f(0.0); }
   let u = normalize(cross(vec3f(0.0, 0.0, 1.0), AUR_MAG));
   let v = cross(AUR_MAG, u);
-  let centre = 69.0 - 1.1 * kp;
+  // (the Sun's magnetic longitude: midnight its opposite)
+  let sunML = atan2(dot(Ls, v), dot(Ls, u));
+  let grow = 1.0 + 0.1 * kp;
+  let foldK = (1.0 + 0.15 * kp) / 1.45;
   let N = 40u;
   let dt = (tb - ta) / f32(N);
   var L = vec3f(0.0);
@@ -5977,17 +5983,28 @@ fn auroraLight(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> vec3f {
     let hk = airHeight(p) * 1e-3;
     let m = asin(clamp(dot(q, AUR_MAG), -1.0, 1.0)) * 57.29578;
     let ml = atan2(dot(q, v), dot(q, u));
-    // (the arcs: folded along the magnetic longitude, drifting — the main one, a fainter one poleward, one
-    // equatorward in a storm)
-    let fold = 1.4 * sin(ml * 6.0 + ts * 0.012) + 0.8 * sin(ml * 15.0 - ts * 0.031) + 0.35 * sin(ml * 37.0 + ts * 0.07);
-    let x = abs(m) - (centre + fold);
-    let arcs = exp(-x * x / 0.08) + 0.55 * exp(-(x - 1.1) * (x - 1.1) / 0.05) + 0.35 * clamp(kp / 6.0, 0.0, 1.0) * exp(-(x + 1.6) * (x + 1.6) / 0.12);
+    // (its magnetic local time: 1 at midnight, 0 at noon)
+    let night = 0.5 + 0.5 * cos(ml - sunML - 3.14159265);
+    let colat = mix(12.0 + 0.49 * kp, 21.0 + 1.4 * kp, night) + select(0.0, 0.5, m < 0.0);
+    let fold = foldK * (1.4 * sin(ml * 6.0 + ts * 0.012) + 0.8 * sin(ml * 15.0 - ts * 0.031) + 0.35 * sin(ml * 37.0 + ts * 0.07));
+    // (x: its distance poleward of the main arc [°])
+    let x = abs(m) - (90.0 - colat + fold);
+    let a1 = x - 1.2 * grow;
+    let a2 = x + 1.6 * grow;
+    let arcs = exp(-x * x / 0.08) + 0.45 * exp(-a1 * a1 / 0.05) + 0.5 * step(5.0, kp) * exp(-a2 * a2 / 0.12);
+    // (the diffuse aurora: a broad glow 1.5° equatorward, no rays)
+    let xd = x + 1.5;
+    let diffuse = 0.12 * exp(-xd * xd / 2.25);
     // (the rays: vertical streaks along the arc, flickering slowly)
     let ray = 0.45 + 0.55 * pow(0.5 + 0.5 * sin(ml * 410.0 + 3.0 * sin(ml * 53.0 + ts * 0.05) + ts * 0.4), 3.0);
     let green = exp(-(hk - 110.0) * (hk - 110.0) / 260.0) + 0.25 * exp(-max(hk - 112.0, 0.0) / 40.0) * step(110.0, hk);
-    // (the red tops: faint in a quiet oval, the storms' crowns)
+    // (the red tops: faint in a quiet oval, the storms' crowns; the blue lower edge a storm's)
     let red = exp(-(hk - 230.0) * (hk - 230.0) / 1500.0) * (0.006 + 0.008 * kp);
-    L += (vec3f(0.11, 1.0, 0.36) * green + vec3f(1.0, 0.1, 0.22) * red) * (arcs * ray);
+    let blue = exp(-(hk - 97.0) * (hk - 97.0) / 50.0) * 0.35 * clamp((kp - 3.0) / 4.0, 0.0, 1.0);
+    // (the midnight sector three times the noon's)
+    let sector = mix(0.34, 1.0, night);
+    let curtain = arcs * ray + diffuse;
+    L += (vec3f(0.11, 1.0, 0.36) * green + vec3f(1.0, 0.1, 0.22) * red + vec3f(0.3, 0.22, 1.0) * blue * arcs) * curtain * sector;
   }
   // (its strength: a quiet oval faint, a storm's bright — over the night ground's light, per metre of ray)
   return L * dt * EARTH_RM * 8e-6 * (0.25 + 0.3 * kp) * EARTH_NIGHT.g;
@@ -11781,7 +11798,7 @@ fn cloudsDirectT(alpha: f32) -> f32 {
   let t = clamp(1.0 - alpha, 0.0, 1.0);
   return t * t * t;
 }
-fn earthLookCompose(ro: vec3f, rd: vec3f, tHit: f32, E: vec3f, jit: f32, s: EarthLookSky, G: vec3f) -> EarthLook {
+fn earthLookCompose(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f32, s: EarthLookSky, G: vec3f) -> EarthLook {
   var o: EarthLook;
   let air = s.air;
   let alpha = s.alpha;
@@ -11791,7 +11808,7 @@ fn earthLookCompose(ro: vec3f, rd: vec3f, tHit: f32, E: vec3f, jit: f32, s: Eart
   if (HAS_WX && s.earth && P.wx[6].w > 0.0) { o.col += boltRadiance(ro, rd, tHit, E) * air.T * (1.0 - 0.7 * alpha); }
   // the auroras (S2): above the air and the clouds — from under them, hidden by a cloud; from above, before it
   if (HAS_AURORA && s.earth && P.bary.z > 0.0) {
-    let aur = auroraLight(ro, rd, select(3e38, tHit, tHit > 0.0), jit);
+    let aur = auroraLight(ro, rd, select(3e38, tHit, tHit > 0.0), jit, Ls);
     o.col += aur * air.T * select(1.0 - alpha, 1.0, airHeight(ro) > 120e3);
   }
   o.T = select(cloudsDirectT(alpha) * air.T, vec3f(0.0), tHit > 0.0);
@@ -11815,7 +11832,7 @@ fn earthLook(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx: v
       G = otherGround(k, airPhysicalNormal(q), airPhysicalDirection(rd), airPhysicalDirection(Ls), E, fp);
     }
   }
-  return earthLookCompose(ro, rd, tHit, E, jit, s, G);
+  return earthLookCompose(ro, rd, tHit, Ls, E, jit, s, G);
 }
 // earthLook for a world with air away from the camera (ourSegment): the Earth's own ground there only when the Earth is not
 // the body near the camera — that one is earthNear's, and ourSegment never meets it (bodyWhere 3): an Earth flight's
@@ -11835,11 +11852,11 @@ fn earthLookFar(k: u32, ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, gx
       G = otherGround(k, airPhysicalNormal(q), airPhysicalDirection(rd), airPhysicalDirection(Ls), E, fp);
     }
   }
-  return earthLookCompose(ro, rd, tHit, E, jit, s, G);
+  return earthLookCompose(ro, rd, tHit, Ls, E, jit, s, G);
 }
 // (a ray that never meets the ground: the sky's part alone)
 fn earthLookNoGround(k: u32, ro: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, gx: vec3f, gy: vec3f, fp0: f32, fpK: f32, jit: f32, volume: bool) -> EarthLook {
-  return earthLookCompose(ro, rd, -1.0, E, jit, earthLookSky(k, ro, rd, -1.0, Ls, E, gx, gy, fp0, fpK, jit, volume), vec3f(0.0));
+  return earthLookCompose(ro, rd, -1.0, Ls, E, jit, earthLookSky(k, ro, rd, -1.0, Ls, E, gx, gy, fp0, fpK, jit, volume), vec3f(0.0));
 }
 
 // The air's refraction (PLAN-CIEL C3): a ray from the camera that leaves the Earth's air comes out bent
