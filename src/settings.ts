@@ -1560,6 +1560,21 @@ export const presets: Record<string, Preset> = {
     time: T0 + 0.54 * DAY,
     pose: { body: "europa", at: [10, -136], look: "jupiter", off: [0, -10] },
   },
+  // Jupiter's auroras (PLAN-AURORES-MAGNETOSPHERES AM3), the e2e aurora-jupiter's first view: 7 149 km (0.1 R_J) over 45° N
+  // at its midnight, in its shadow — the eye adapted to the dark —, looking north across the main oval (JRM33 + CON2020), the
+  // polar glow inside it, Io's footprint on the left; activity 5. The date the test's: Jupiter turned until the oval's low side
+  // (−165° E, down to 54° N) faces midnight — the subsolar point at 15° E then (10:01:52 UTC)
+  "Jupiter: the auroras from its shadow": {
+    ...WORLD_VIEW,
+    ship: false,
+    target: "jupiter",
+    rotation: "free",
+    lookAt: false,
+    fov: 70,
+    aurora: 5,
+    time: (Date.UTC(2026, 11, 21, 10, 1, 52) - Date.UTC(2067, 0, 1)) / 1000 / M_SECONDS,
+    pose: { body: "jupiter", at: [45, -165], altKm: 7149.2, heading: 0, off: [0, -22] },
+  },
   // (Saturn's views in 2026 — a time of the game too —: its equinox in May 2025 past, the Sun ~7° under the rings' plane, their
   // south face lit; the camera on that side. In 2067, the game's start, the Sun grazes them — near the next equinox —, dark)
   "Saturn: the rings from above": {

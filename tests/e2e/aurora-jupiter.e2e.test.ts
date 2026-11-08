@@ -3,7 +3,8 @@ import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 
 // Jupiter's auroras (PLAN-AURORES-MAGNETOSPHERES AM3): the main oval from JRM33 + CON2020 (tabulated about its own centre), the
-// polar emissions inside it, Io's footprint and its tail; H-α and H₂'s violet at 245 km over the 1 bar level. Seen from Jupiter's
+// polar emissions inside it, Io's footprint and its tail; H-α and H₂'s violet at 245 km over the 1 bar level; then the scene
+// "Jupiter: the auroras from its shadow" (the first view as a gallery scene: scene.png, no interface). Seen from Jupiter's
 // shadow — the camera at its midnight (sys.subsolar), the eye adapted to the dark —: from 7 000 km over 45° N looking north
 // across the oval (activity 5, then 8; Jupiter turned so that the oval's low side faces midnight), from 14 000 km over 50° S
 // looking south, from 36 000 km over 30° S (the oval foreshortened at the limb). AJ_OUT.
@@ -60,6 +61,22 @@ test.skipIf(!E2E)(
       await view("south-act5", 5, -50, null, 0.2 * RJ, 180, -30);
       // (from 36 000 km over 30° S: the oval foreshortened at the limb)
       await view("south-far-act5", 5, -30, null, 0.5 * RJ, 180, -55);
+      // (the scene that shows them — "Jupiter: the auroras from its shadow", settings.ts —: the first view, its date and place
+      // its own; the kernel warm from the views; shot without the interface: the gallery's picture)
+      await app.js(`(() => { __bh.game.preset("Jupiter: the auroras from its shadow"); return 1; })()`);
+      await app.waitFor(`(__bh.renderer.featureKey & 16384) === 16384`, 60_000);
+      for (let k = 0; k < 60 && (await app.js<number>(`__bh.renderer.compilesPending`)) > 0; k++) await Bun.sleep(5000);
+      await app.waitFor(`__bh.renderer.compilesPending === 0`, 30_000);
+      await Bun.sleep(5000);
+      await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
+      await app.shot(`${OUT}/scene.png`);
+      await app.js(`(() => { document.body.classList.remove("hide-ui"); return 1; })()`);
+      stats.scene = await app.js(
+        `({ eye: __bh.renderer.eyeIncident, aurora: __bh.settings.aurora, ship: __bh.settings.ship, date: __bh.game.date?.(), fps: __bh.game.perf({ gpu: true }).renderFps })`,
+      );
+      console.log(`  scene: ${JSON.stringify(stats.scene)}`);
+      expect((stats.scene as { eye: number }).eye).toBeLessThan(1e-3);
+      expect((stats.scene as { aurora: number }).aurora).toBe(5);
       gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
     } finally {
       await Bun.write(`${OUT}/stats.json`, JSON.stringify(stats, null, 1));

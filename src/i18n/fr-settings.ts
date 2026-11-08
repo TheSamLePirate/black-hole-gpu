@@ -1295,6 +1295,9 @@ export default {
   "Jupiter from Europa": "Jupiter depuis Europe",
   "On Europa's young ice, Jupiter low in its sky, three-quarters lit.":
     "Sur la glace jeune d'Europe, Jupiter basse dans le ciel, éclairée aux trois quarts.",
+  "Jupiter's auroras": "Les aurores de Jupiter",
+  "7 000 km over its night side, in its shadow: the main oval's pink glow round the north pole, the polar emissions inside it, Io's footprint.":
+    "À 7 000 km au-dessus de sa face nuit, dans son ombre : la lueur rose de l'ovale principal autour du pôle nord, les émissions polaires à l'intérieur, l'empreinte d'Io.",
   "Saturn's rings": "Les anneaux de Saturne",
   "From above the lit face of the rings: their divisions, the planet's shadow across them, their shadow on its clouds.":
     "Au-dessus de la face éclairée des anneaux : leurs divisions, l'ombre de la planète sur eux, leur ombre sur ses nuages.",

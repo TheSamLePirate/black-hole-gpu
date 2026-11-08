@@ -2089,3 +2089,16 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   octets réseau d'une fenêtre de nuit (tuiles vectorielles 219–337 ko sur Paris), +17 Mo de texture calculés.
 - **Restant** : voitures (NU3), halo du ciel (NU6), monuments (NU7), chargement (NU8), le rendu un peu doux en mouvement, la
   lumière moyenne de la ville encore réglée à la main (`CITY_ADAPTATION`).
+
+## 2026-11-08T19:55Z — Une scène pour les aurores de Jupiter
+
+- **Contribution** (§19 l'expérience complète : un contenu existant rendu atteignable depuis la galerie et par TARS via
+  `game.preset`) : la scène `"Jupiter: the auroras from its shadow"` (`src/settings.ts`, fiche `src/ui/schema.ts`, français
+  `src/i18n/fr-settings.ts`, image `assets/scenes/jupiter-the-auroras-from-its-shadow.webp`, `src/ui/scene-thumbs.ts`
+  régénéré) — la première vue de l'e2e AM3 : caméra libre à 7 149 km au-dessus de 45° N, −165° E, le 21 décembre 2026
+  10:01:52 UTC (ce méridien à minuit), cap nord, 22° sous l'horizon, activité 5. Aucun code de rendu changé.
+- **Preuve** : **observé** — e2e `aurora-jupiter` (ce Mac, 160 s, réussi), nouvelle étape : la scène appliquée, noyau d'aurore
+  présent, œil dans l'ombre (eyeIncident 1e-7), `remote-results/aurora-jupiter/scene.png`. Test unitaire
+  (`tests/aurora-bodies.test.ts` : la caméra dans le cylindre d'ombre, point subsolaire à 15° E). **Non mesuré** : coût GPU (le
+  compteur affiché n'est pas une mesure).
+- **Restant** : la compilation du noyau proche de Jupiter (~200 s à froid) s'applique aussi à la scène.

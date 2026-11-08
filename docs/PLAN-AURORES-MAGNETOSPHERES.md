@@ -117,7 +117,11 @@ verts) :
 - **L'œil** : la caméra dans l'ombre de Jupiter adapte l'exposition (`earthSunlight` pour Jupiter) ; au soleil, la
   radiance physique (la distance² en UA). `__bh.viewAt(…, { body })` et `__bh.sys.subsolar(id)` pour placer la vue.
 - **Observé** (e2e `aurora-jupiter`) : l'ovale nord, l'émission polaire et le pied d'Io depuis 7 000 km dans l'ombre ;
-  l'ovale sud au limbe. **Restant** : Europe, Ganymède, Callisto ; les « dawn storms » ; l'activité propre à Jupiter (le
+  l'ovale sud au limbe.
+- **La scène** « Jupiter: the auroras from its shadow » (« Les aurores de Jupiter », galerie, groupe système solaire ;
+  8 novembre 2026) : la première vue de l'e2e en scène — 7 149 km au-dessus de 45° N, à minuit, l'ovale nord devant, activité 5,
+  au 21 décembre 2026 10:01:52 UTC (le côté bas de l'ovale, −165° E, à minuit), caméra libre. Test unitaire (dans l'ombre),
+  e2e `aurora-jupiter` (scene.png, l'image de la galerie). **Restant** : Europe, Ganymède, Callisto ; les « dawn storms » ; l'activité propre à Jupiter (le
   réglage commun pour l'instant) ; le grain et la saturation au limbe ; la vue sud parfois noire (problème connu, pas
   l'aurore) ; le coût non mesuré.
 

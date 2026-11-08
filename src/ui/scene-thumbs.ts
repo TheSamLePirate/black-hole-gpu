@@ -53,48 +53,49 @@ import t49 from "../../assets/scenes/mars-the-blue-sunset.webp";
 import t50 from "../../assets/scenes/jupiter-from-orbit.webp";
 import t51 from "../../assets/scenes/io-jupiter-in-the-sky.webp";
 import t52 from "../../assets/scenes/europa-jupiter-over-the-ice.webp";
-import t53 from "../../assets/scenes/saturn-the-rings-from-above.webp";
-import t54 from "../../assets/scenes/saturn-backlit.webp";
-import t55 from "../../assets/scenes/titan-the-orange-haze.webp";
-import t56 from "../../assets/scenes/uranus-from-orbit.webp";
-import t57 from "../../assets/scenes/neptune-from-orbit.webp";
-import t58 from "../../assets/scenes/pluto-the-heart.webp";
-import t59 from "../../assets/scenes/miller-the-water-world.webp";
-import t60 from "../../assets/scenes/miller-the-shallow-sea.webp";
-import t61 from "../../assets/scenes/mann-the-ice-world.webp";
-import t62 from "../../assets/scenes/mann-the-glaciers.webp";
-import t63 from "../../assets/scenes/edmunds-the-desert-world.webp";
-import t64 from "../../assets/scenes/edmunds-the-plains.webp";
-import t65 from "../../assets/scenes/miller-gargantua-over-the-sea.webp";
-import t66 from "../../assets/scenes/mann-gargantua-over-the-ice.webp";
-import t67 from "../../assets/scenes/edmunds-gargantua-at-dusk.webp";
-import t68 from "../../assets/scenes/game-interstellar.webp";
-import t69 from "../../assets/scenes/earth-docking-to-the-iss.webp";
-import t70 from "../../assets/scenes/earth-the-endurance-800-km-up.webp";
-import t71 from "../../assets/scenes/earth-the-lander-500-km-up.webp";
-import t72 from "../../assets/scenes/game-artemis.webp";
-import t73 from "../../assets/scenes/gargantua-system-departure-near-saturn.webp";
-import t74 from "../../assets/scenes/mission-through-the-wormhole-to-the-companion-star-automatic.webp";
-import t75 from "../../assets/scenes/wormhole-our-milky-way-from-gargantua-s-side.webp";
-import t76 from "../../assets/scenes/cinematic-the-liquid-wormhole.webp";
-import t77 from "../../assets/scenes/wormhole-long-throat-images-wrapped-around-it.webp";
-import t78 from "../../assets/scenes/wormhole-strong-lensing-w-0-43.webp";
-import t79 from "../../assets/scenes/the-mouth-before-gargantua-banking-flight.webp";
-import t80 from "../../assets/scenes/companion-star-close-up.webp";
-import t81 from "../../assets/scenes/the-star-passing-gargantua.webp";
-import t82 from "../../assets/scenes/gargantua-under-the-distant-galaxy.webp";
-import t83 from "../../assets/scenes/schwarzschild-no-spin-no-bz-jet.webp";
-import t84 from "../../assets/scenes/luminet-1979-bolometric.webp";
-import t85 from "../../assets/scenes/hot-disk-t-50-000-k-uv-bright-agn.webp";
-import t86 from "../../assets/scenes/eht-m87-at-230-ghz-20-as-beam.webp";
-import t87 from "../../assets/scenes/orbiting-hot-spot-flare-light-echoes.webp";
-import t88 from "../../assets/scenes/face-on-m87-like-hot-flow.webp";
-import t89 from "../../assets/scenes/jet-launch-blazar-like-i-20.webp";
-import t90 from "../../assets/scenes/jet-side-view.webp";
-import t91 from "../../assets/scenes/extreme-spin-a-0-998-edge-on.webp";
-import t92 from "../../assets/scenes/orbiting-at-r-8-aberration.webp";
-import t93 from "../../assets/scenes/falling-in-rain-frame.webp";
-import t94 from "../../assets/scenes/lensing-grid-shadow-guide.webp";
+import t53 from "../../assets/scenes/jupiter-the-auroras-from-its-shadow.webp";
+import t54 from "../../assets/scenes/saturn-the-rings-from-above.webp";
+import t55 from "../../assets/scenes/saturn-backlit.webp";
+import t56 from "../../assets/scenes/titan-the-orange-haze.webp";
+import t57 from "../../assets/scenes/uranus-from-orbit.webp";
+import t58 from "../../assets/scenes/neptune-from-orbit.webp";
+import t59 from "../../assets/scenes/pluto-the-heart.webp";
+import t60 from "../../assets/scenes/miller-the-water-world.webp";
+import t61 from "../../assets/scenes/miller-the-shallow-sea.webp";
+import t62 from "../../assets/scenes/mann-the-ice-world.webp";
+import t63 from "../../assets/scenes/mann-the-glaciers.webp";
+import t64 from "../../assets/scenes/edmunds-the-desert-world.webp";
+import t65 from "../../assets/scenes/edmunds-the-plains.webp";
+import t66 from "../../assets/scenes/miller-gargantua-over-the-sea.webp";
+import t67 from "../../assets/scenes/mann-gargantua-over-the-ice.webp";
+import t68 from "../../assets/scenes/edmunds-gargantua-at-dusk.webp";
+import t69 from "../../assets/scenes/game-interstellar.webp";
+import t70 from "../../assets/scenes/earth-docking-to-the-iss.webp";
+import t71 from "../../assets/scenes/earth-the-endurance-800-km-up.webp";
+import t72 from "../../assets/scenes/earth-the-lander-500-km-up.webp";
+import t73 from "../../assets/scenes/game-artemis.webp";
+import t74 from "../../assets/scenes/gargantua-system-departure-near-saturn.webp";
+import t75 from "../../assets/scenes/mission-through-the-wormhole-to-the-companion-star-automatic.webp";
+import t76 from "../../assets/scenes/wormhole-our-milky-way-from-gargantua-s-side.webp";
+import t77 from "../../assets/scenes/cinematic-the-liquid-wormhole.webp";
+import t78 from "../../assets/scenes/wormhole-long-throat-images-wrapped-around-it.webp";
+import t79 from "../../assets/scenes/wormhole-strong-lensing-w-0-43.webp";
+import t80 from "../../assets/scenes/the-mouth-before-gargantua-banking-flight.webp";
+import t81 from "../../assets/scenes/companion-star-close-up.webp";
+import t82 from "../../assets/scenes/the-star-passing-gargantua.webp";
+import t83 from "../../assets/scenes/gargantua-under-the-distant-galaxy.webp";
+import t84 from "../../assets/scenes/schwarzschild-no-spin-no-bz-jet.webp";
+import t85 from "../../assets/scenes/luminet-1979-bolometric.webp";
+import t86 from "../../assets/scenes/hot-disk-t-50-000-k-uv-bright-agn.webp";
+import t87 from "../../assets/scenes/eht-m87-at-230-ghz-20-as-beam.webp";
+import t88 from "../../assets/scenes/orbiting-hot-spot-flare-light-echoes.webp";
+import t89 from "../../assets/scenes/face-on-m87-like-hot-flow.webp";
+import t90 from "../../assets/scenes/jet-launch-blazar-like-i-20.webp";
+import t91 from "../../assets/scenes/jet-side-view.webp";
+import t92 from "../../assets/scenes/extreme-spin-a-0-998-edge-on.webp";
+import t93 from "../../assets/scenes/orbiting-at-r-8-aberration.webp";
+import t94 from "../../assets/scenes/falling-in-rain-frame.webp";
+import t95 from "../../assets/scenes/lensing-grid-shadow-guide.webp";
 
 export const SCENE_THUMBS: Record<string, string> = {
   "Kerr a=0.94, near edge-on": t0,
@@ -150,46 +151,47 @@ export const SCENE_THUMBS: Record<string, string> = {
   "Jupiter: from orbit": t50,
   "Io: Jupiter in the sky": t51,
   "Europa: Jupiter over the ice": t52,
-  "Saturn: the rings from above": t53,
-  "Saturn: backlit": t54,
-  "Titan: the orange haze": t55,
-  "Uranus: from orbit": t56,
-  "Neptune: from orbit": t57,
-  "Pluto: the heart": t58,
-  "Miller: the water world": t59,
-  "Miller: the shallow sea": t60,
-  "Mann: the ice world": t61,
-  "Mann: the glaciers": t62,
-  "Edmunds: the desert world": t63,
-  "Edmunds: the plains": t64,
-  "Miller: Gargantua over the sea": t65,
-  "Mann: Gargantua over the ice": t66,
-  "Edmunds: Gargantua at dusk": t67,
-  "game:interstellar": t68,
-  "Earth: docking to the ISS": t69,
-  "Earth: the Endurance, 800 km up": t70,
-  "Earth: the Lander, 500 km up": t71,
-  "game:artemis": t72,
-  "Gargantua system: departure near Saturn": t73,
-  "Mission: through the wormhole to the companion star (automatic flight)": t74,
-  "Wormhole: our Milky Way from Gargantua's side": t75,
-  "Cinematic: the liquid wormhole": t76,
-  "Wormhole: long throat (images wrapped around it)": t77,
-  "Wormhole: strong lensing (W = 0.43 ρ)": t78,
-  "The mouth before Gargantua (banking flight)": t79,
-  "Companion star close-up": t80,
-  "The star passing Gargantua": t81,
-  "Gargantua under the distant galaxy": t82,
-  "Schwarzschild (no spin → no BZ jet)": t83,
-  "Luminet 1979 (bolometric)": t84,
-  "Hot disk (T = 50 000 K, UV-bright AGN)": t85,
-  "EHT: M87* at 230 GHz (20 µas beam)": t86,
-  "Orbiting hot spot (flare, light echoes)": t87,
-  "Face-on (M87*-like hot flow)": t88,
-  "Jet launch (blazar-like, i=20°)": t89,
-  "Jet side view": t90,
-  "Extreme spin a=0.998, edge-on": t91,
-  "Orbiting at r=8 (aberration)": t92,
-  "Falling in (rain frame)": t93,
-  "Lensing grid + shadow guide": t94,
+  "Jupiter: the auroras from its shadow": t53,
+  "Saturn: the rings from above": t54,
+  "Saturn: backlit": t55,
+  "Titan: the orange haze": t56,
+  "Uranus: from orbit": t57,
+  "Neptune: from orbit": t58,
+  "Pluto: the heart": t59,
+  "Miller: the water world": t60,
+  "Miller: the shallow sea": t61,
+  "Mann: the ice world": t62,
+  "Mann: the glaciers": t63,
+  "Edmunds: the desert world": t64,
+  "Edmunds: the plains": t65,
+  "Miller: Gargantua over the sea": t66,
+  "Mann: Gargantua over the ice": t67,
+  "Edmunds: Gargantua at dusk": t68,
+  "game:interstellar": t69,
+  "Earth: docking to the ISS": t70,
+  "Earth: the Endurance, 800 km up": t71,
+  "Earth: the Lander, 500 km up": t72,
+  "game:artemis": t73,
+  "Gargantua system: departure near Saturn": t74,
+  "Mission: through the wormhole to the companion star (automatic flight)": t75,
+  "Wormhole: our Milky Way from Gargantua's side": t76,
+  "Cinematic: the liquid wormhole": t77,
+  "Wormhole: long throat (images wrapped around it)": t78,
+  "Wormhole: strong lensing (W = 0.43 ρ)": t79,
+  "The mouth before Gargantua (banking flight)": t80,
+  "Companion star close-up": t81,
+  "The star passing Gargantua": t82,
+  "Gargantua under the distant galaxy": t83,
+  "Schwarzschild (no spin → no BZ jet)": t84,
+  "Luminet 1979 (bolometric)": t85,
+  "Hot disk (T = 50 000 K, UV-bright AGN)": t86,
+  "EHT: M87* at 230 GHz (20 µas beam)": t87,
+  "Orbiting hot spot (flare, light echoes)": t88,
+  "Face-on (M87*-like hot flow)": t89,
+  "Jet launch (blazar-like, i=20°)": t90,
+  "Jet side view": t91,
+  "Extreme spin a=0.998, edge-on": t92,
+  "Orbiting at r=8 (aberration)": t93,
+  "Falling in (rain frame)": t94,
+  "Lensing grid + shadow guide": t95,
 };

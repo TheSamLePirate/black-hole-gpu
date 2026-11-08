@@ -125,6 +125,6 @@ test("the real ground's scenes: on the ground there, level, the nose towards the
 test("every world's scene has its gallery entry", async () => {
   const { PRESET_INFO } = await import("../src/ui/schema");
   const worlds = Object.keys(presets).filter((n) => typeof presets[n]!.pose === "object");
-  expect(worlds.length).toBe(17 + 27 + LANDSCAPES.length);
+  expect(worlds.length).toBe(17 + 28 + LANDSCAPES.length);
   for (const n of worlds) expect(PRESET_INFO[n]?.group).toBeDefined();
 });

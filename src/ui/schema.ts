@@ -5298,6 +5298,13 @@ export const PRESET_INFO: Record<string, { title?: string; description: string; 
     icon: "◍",
     group: "solar",
   },
+  "Jupiter: the auroras from its shadow": {
+    title: "Jupiter's auroras",
+    description:
+      "7 000 km over its night side, in its shadow: the main oval's pink glow round the north pole, the polar emissions inside it, Io's footprint.",
+    icon: "◠",
+    group: "solar",
+  },
   "Saturn: the rings from above": {
     title: "Saturn's rings",
     description: "From above the lit face of the rings: their divisions, the planet's shadow across them, their shadow on its clouds.",

@@ -66,3 +66,31 @@ test("AM4: Saturn's ovals centred on its poles (its field axisymmetric), 10–16
   }
   expect(GIANTS.length).toBe(4);
 });
+
+test("the scene “Jupiter: the auroras from its shadow”: 7 149 km over 45° N, in Jupiter's shadow, the oval's low side at midnight", async () => {
+  const { presets } = await import("../src/settings");
+  const { bodyView, ourState } = await import("../src/system/our-side");
+  const { toBodyFixed } = await import("../src/system/our-surface");
+  const { SOLAR_BODIES } = await import("../src/system/solar");
+  const p = presets["Jupiter: the auroras from its shadow"]!;
+  expect(p.aurora).toBe(5);
+  const t = p.time!;
+  const v = bodyView(t, p.pose as Parameters<typeof bodyView>[1]);
+  const J = ourState("jupiter", t).pos,
+    S = ourState("sun", t).pos;
+  const R = SOLAR_BODIES.find((b) => b.id === "jupiter")!.radius;
+  const s: [number, number, number] = [S[0] - J[0], S[1] - J[1], S[2] - J[2]];
+  const sl = Math.hypot(...s);
+  const r: [number, number, number] = [v.X[0] - J[0], v.X[1] - J[1], v.X[2] - J[2]];
+  const along = (r[0] * s[0] + r[1] * s[1] + r[2] * s[2]) / sl;
+  const off = Math.sqrt(Math.max(0, Math.hypot(...r) ** 2 - along ** 2));
+  // (behind Jupiter, within its shadow's cylinder — its umbra is 90 R_J long)
+  expect(along).toBeLessThan(0);
+  expect(off).toBeLessThan(0.95 * R);
+  // (0.1 R_J over the flattened cloud tops: 7 149 km; the cloud tops at 45° are ~3 % under the equatorial radius)
+  expect(Math.hypot(...r) / R).toBeGreaterThan(1.03);
+  expect(Math.hypot(...r) / R).toBeLessThan(1.1);
+  // (the subsolar point at 15° E: −165° E, the north oval's low side, faces midnight)
+  const q = toBodyFixed("jupiter", S, t);
+  expect(Math.abs((Math.atan2(q[1], q[0]) * 180) / Math.PI - 15)).toBeLessThan(0.5);
+});
