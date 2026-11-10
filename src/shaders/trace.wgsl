@@ -15970,6 +15970,14 @@ fn liteForwardG(px: vec2f) -> vec4f {
 // (PLAN-J1 J1-4) The forward ground's finishing (system/terrain-forward.ts forwardFinish): a pixel whose surface the forward
 // fragment shaded (G) given the air and the clouds before it — liteFinish, as shadeLite would, its ray and light found again.
 fn liteForwardFinish(gid: vec2u, G: vec3f) {
+  let centre = vec2f(gid) + 0.5;
+  var tM = terrainRasterHint(centre + liteJitter(gid));
+  if (tM <= 0.0) { tM = terrainRasterHint(centre); }
+  liteFinishAt(gid, G, tM);
+}
+// (a raster pixel's surface G at tM metres along its jittered ray — shadeLite's — given the air and the clouds before it: liteFinish
+// with its ray and light found again, as shadeLite found them)
+fn liteFinishAt(gid: vec2u, G: vec3f, tM: f32) {
   let k = u32(P.near1.w);
   let idx = gid.y * u32(P.res.x) + gid.x;
   let centre = vec2f(gid) + 0.5;
@@ -15980,8 +15988,6 @@ fn liteForwardFinish(gid: vec2u, G: vec3f) {
   FOOT_NEAR = 1.0;
   FOOT_FAR = 1.0;
   let pos = centre + liteJitter(gid);
-  var tM = terrainRasterHint(pos);
-  if (tM <= 0.0) { tM = terrainRasterHint(centre); }
   let ray = rasterRay(pos, k);
   let ab = squashOf(k);
   let tH = tM / ray.kM;
@@ -15989,6 +15995,19 @@ fn liteForwardFinish(gid: vec2u, G: vec3f) {
   let lt = nearLight(k);
   let Ls = normalize(squashed(toBody(lt.dir), ab));
   liteFinish(idx, centre, pos, G, ray.rd, tH, tM, Ls, lt.e, k, true, false);
+}
+// (moments.x of a pixel shadeLite shaded and left to shadeLiteFinish this frame — tracer-source.ts withLiteSplit —: its surface in
+// liteOut; below RASTER_WATER's range, above nothing else's)
+const RASTER_SPLIT = -9.5;
+// shadeLite's finishing pass (withLiteSplit): the air and the clouds before the surfaces it left in liteOut — read here where the
+// far field's LUT is bound (group 1, binding 2: the renderer binds liteOut there for this pass) —, its marked pixels alone
+@compute @workgroup_size(8, 8)
+fn shadeLiteFinish(@builtin(global_invocation_id) gid: vec3u) {
+  if (gid.x >= u32(P.res.x) || gid.y >= u32(P.res.y)) { return; }
+  let idx = gid.y * u32(P.res.x) + gid.x;
+  if (moments[idx].x != RASTER_SPLIT) { return; }
+  let g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
+  liteFinishAt(gid.xy, g.rgb, g.a);
 }
 // (the forward ground drew this frame — renderer.forwardGround: its finished pixels shadeLite's no more)
 const RASTER_FORWARD_FLAG = 4096u;
@@ -16137,7 +16156,12 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (liteSkip 33554432 — a measure —: the occlusion drawn instead of the surface, × 5: white a fifth of the sky hidden or more)
   if ((liteSkip() & 33554432u) != 0u) { G = vec3f(clamp((1.0 - rasterAO(centre)) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
   if ((liteSkip() & 8388608u) != 0u) { G = vec3f(clamp((1.0 - earthSkyOpen(gq, hG, atNg(at, gq))) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
+  // (the air and the clouds before the surface — liteFinish —: here, or — tracer-source.ts withLiteSplit — in their own pass,
+  // shadeLiteFinish: this kernel then writes its surface G and distance to liteOut, the pixel marked RASTER_SPLIT; out of this
+  // kernel, that code no longer weighs on it — ~16 ms of its 46 over a low forest, kerr-mini, 11 Nov 2026)
+  // BEGIN_LITE_OUT
   liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true, false);
+  // END_LITE_OUT
 }
 
 // The image while the scene's tracer compiles (renderer.skyFillOn — its main: two minutes on a Windows PC, the driver's

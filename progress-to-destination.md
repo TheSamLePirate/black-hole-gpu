@@ -2666,3 +2666,17 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Limites** : une vue (forêt basse) ; les autres coupes à la compilation (arbres, ombres, surfaces, détail, routes) ont donné
   110–120 ms — des mesures non valides (un autre noyau mesuré pendant la compilation, probablement), non retenues ; « lumière plate » 84 ms,
   anomalie non expliquée.
+
+## 2026-11-11T02:30Z — `shadeLite` découpé : l'air et les nuages dans leur propre passe (−2 ms sur la forêt, J0 ~−1 ms)
+
+- **Contribution** (stratégie §8 ; chemin des 60 images/s) : `shadeLite` n'appelle plus `liteFinish` — `tracer-source.ts`
+  `withLiteSplit` remplace sa fin : il écrit la radiance de surface et la distance dans `liteOut` (`rgba32float`, groupe 1 liaison 13,
+  mise en page propre `liteLayout`) et marque le pixel (`RASTER_SPLIT`) ; un nouveau point d'entrée `shadeLiteFinish` (0,8 k lignes
+  inlinées) met l'air et les nuages (`liteFinishAt`), `liteOut` lu à la place de la LUT ; les deux compilés et gardés par paire
+  (`liteWithFinish`), le mélange temporel avec la couleur précédente intact (`accum` non touché par `shadeLite`).
+- **Preuve** : **mesuré** sur kerr-mini — Toulon, forêt à 120 m : `earth lite` 46,0–46,5 → 40,2–41,7 ms + finition 3,0 ms (≈ −2 ms),
+  image identique à l'œil ; J0 : GPU p50 vol 61,5 ms (62,4 au passage précédent), vues figées 62,0/59,6 (62,3/62,6) ; e2e `sea-fft`
+  5/5, J0 2/2 ; `check-wgsl` 79/79 ; budgets de noyau réécrits (shadeLite 8,8 → 8,2 k lignes ; finition 0,8 k).
+- **Limites** : la coupe à la compilation `TUNE_LITE 2048` donnait 28 ms ; le découpage en donne 41 + 3 — l'écart n'est pas expliqué
+  (l'ancienne variante coupée ne faisait pas le travail de l'air ; ici il est fait, 3 ms, mais 10 ms restent inexpliqués). Gain J0 dans
+  l'écart habituel des passages (non établi au-delà).

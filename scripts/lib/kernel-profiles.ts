@@ -49,6 +49,7 @@ const RASTER_ENTRIES: TracerEntry[] = [
   "shade",
   "shadeMark",
   "shadeLite",
+  "shadeLiteFinish",
   "shadeWater",
   "shadeWaterOpen",
   "shadeStars",

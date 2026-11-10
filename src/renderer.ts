@@ -10,7 +10,7 @@ import { TerrainCache } from "./system/terrain-cache";
 import { EarthHorizons } from "./system/earth-horizons";
 import { EarthShore } from "./system/earth-shore";
 import { EH_HEADER_VEC4S, EH_NODE_VEC4S } from "./system/terrain-cache-layout";
-import { composeTracer } from "./system/tracer-source";
+import { composeTracer, LITE_OUT_BINDING, LITE_OUT_FORMAT } from "./system/tracer-source";
 import {
   FEATURES_ALL,
   FEATURE_RASTER_PRIMARY,
@@ -348,6 +348,7 @@ const VARIANT_ENTRY = {
   shade: "shade",
   shadeMark: "shadeMark",
   shadeLite: "shadeLite",
+  shadeLiteFinish: "shadeLiteFinish",
   shadeWater: "shadeWater",
   shadeWaterOpen: "shadeWaterOpen",
   shadeStars: "shadeStars",
@@ -676,6 +677,9 @@ interface Target {
   /** the image through the depth of field (made when it is first on) */
   dof: { tex: GPUTexture; buf: GPUBuffer; bind: GPUBindGroup; endTex: GPUTexture } | null;
   polAcc: GPUBuffer; // Σ Stokes Q, U per pixel
+  /** shadeLite's surfaces for its finishing pass (tracer-source.ts withLiteSplit) and their bind groups — made at the first lite pass */
+  liteOut?: GPUTexture;
+  liteBinds?: { lut: GPUTexture | null; lite: GPUBindGroup; finish: GPUBindGroup };
   /** the catalogue stars splatted by a realtime frame (R8: 3 × u32 fixed point per pixel; live view only) */
   stars: GPUBuffer;
   polGrid: GPUBuffer; // per tick cell Σ I, Q, U, n
@@ -1583,6 +1587,17 @@ export class Renderer {
     });
 
     this.mainLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutReadLayout] });
+    // (shadeLite's: its group 1 the LUT's with liteOut — tracer-source.ts withLiteSplit)
+    this.liteGroup1Layout = device.createBindGroupLayout({
+      label: "earth lite: group 1",
+      entries: [
+        { binding: 2, visibility: C, texture: { sampleType: "unfilterable-float" } },
+        { binding: 3, visibility: C, texture: { sampleType: "unfilterable-float" } },
+        ...this.aerialReadLayout(),
+        { binding: LITE_OUT_BINDING, visibility: C, storageTexture: { access: "write-only", format: LITE_OUT_FORMAT } },
+      ],
+    });
+    this.liteLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.liteGroup1Layout] });
     if (this.cloudWriteLayout)
       this.cloudsLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.cloudWriteLayout] });
     this.lutLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutWriteLayout] });
@@ -3023,6 +3038,7 @@ export class Renderer {
     this.dropClouds(t);
     t.lut?.tex.forEach((x) => x.destroy());
     t.temporal?.buf.destroy();
+    t.liteOut?.destroy();
   }
 
   /** the tiles the tracer reads (binding 28): the Moon's while they are drawn, else the Earth's */
@@ -5751,6 +5767,8 @@ export class Renderer {
       shadeMark: GPUComputePipeline | null;
       /** the raster's ground at every pixel, every frame (trace.wgsl shadeLite — TERRE-UNREAL U1) */
       shadeLite: GPUComputePipeline | null;
+      /** shadeLite's finishing pass — the air and the clouds before its surfaces (trace.wgsl shadeLiteFinish; withLiteSplit) */
+      shadeLiteFinish: GPUComputePipeline | null;
       /** the raster's water, split from shadeLite (trace.wgsl shadeWater — TERRE-UNREAL U2d) */
       shadeWater: GPUComputePipeline | null;
       /** the open sea's water — shadeWater compiled with WATER_OPEN: the coasts' and the inland water's code out, its pixels the
@@ -5811,6 +5829,7 @@ export class Renderer {
       | "shade"
       | "shadeMark"
       | "shadeLite"
+      | "shadeLiteFinish"
       | "shadeWater"
       | "shadeWaterOpen"
       | "shadeStars"
@@ -5830,6 +5849,7 @@ export class Renderer {
       shade: null,
       shadeMark: null,
       shadeLite: null,
+      shadeLiteFinish: null,
       shadeWater: null,
       shadeWaterOpen: null,
       shadeStars: null,
@@ -5859,6 +5879,7 @@ export class Renderer {
         shade: null,
         shadeMark: null,
         shadeLite: null,
+        shadeLiteFinish: null,
         shadeWater: null,
         shadeWaterOpen: null,
         shadeStars: null,
@@ -5956,6 +5977,69 @@ export class Renderer {
     if (this.rasterLite) return has("shadeLite") && has("shadeWater");
     return has("shade") && has("shadeMark");
   }
+  /** shadeLite with its finishing pass (withLiteSplit): the finishing pass compiled first, the pair kept together — a shadeLite
+   *  without its own would leave its pixels unfinished */
+  private async liteWithFinish(
+    slot: { shadeLiteFinish: GPUComputePipeline | null },
+    compile: (entry: "shadeLite" | "shadeLiteFinish") => Promise<GPUComputePipeline | null>,
+  ): Promise<GPUComputePipeline | null> {
+    const fin = slot.shadeLiteFinish ?? (await compile("shadeLiteFinish"));
+    slot.shadeLiteFinish = fin;
+    if (!fin) return null;
+    const lite = await compile("shadeLite");
+    if (lite) this.liteFinishOf.set(lite, fin);
+    return lite;
+  }
+  private liteFinishOf = new WeakMap<GPUComputePipeline, GPUComputePipeline>();
+  /** shadeLite's pipeline layout: the tracer's, its group 1 with liteOut (tracer-source.ts withLiteSplit) */
+  private liteLayout!: GPUPipelineLayout;
+  private liteGroup1Layout!: GPUBindGroupLayout;
+  /** shadeLite's group 1 for a target (the far field's LUT or its stand-ins, the aerial table, liteOut) and its finishing pass's
+   *  (liteOut read where the LUT is bound) */
+  private liteBinds(t: Target): { lite: GPUBindGroup; finish: GPUBindGroup } {
+    if (!t.liteOut || t.liteOut.width !== t.width || t.liteOut.height !== t.height) {
+      t.liteOut?.destroy();
+      t.liteOut = this.device.createTexture({
+        label: "earth lite: its surfaces (liteOut)",
+        size: [t.width, t.height],
+        format: LITE_OUT_FORMAT,
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+      });
+      t.liteBinds = undefined;
+    }
+    const lutKey = t.lut?.tex[0] ?? null;
+    if (!t.liteBinds || t.liteBinds.lut !== lutKey) {
+      this.liteStandIns ??= [
+        this.device.createTexture({ size: [1, 1], format: "rgba32float", usage: GPUTextureUsage.TEXTURE_BINDING }),
+        this.device.createTexture({ size: [1, 1], format: "r32float", usage: GPUTextureUsage.TEXTURE_BINDING }),
+      ];
+      const lt = t.lut ? t.lut.tex : this.liteStandIns;
+      t.liteBinds = {
+        lut: lutKey,
+        lite: this.device.createBindGroup({
+          label: "earth lite: group 1",
+          layout: this.liteGroup1Layout,
+          entries: [
+            { binding: 2, resource: lt[0]!.createView() },
+            { binding: 3, resource: lt[1]!.createView() },
+            ...this.aerialRead(),
+            { binding: LITE_OUT_BINDING, resource: t.liteOut.createView() },
+          ],
+        }),
+        finish: this.device.createBindGroup({
+          label: "earth lite: finishing's group 1",
+          layout: this.lutReadLayout,
+          entries: [
+            { binding: 2, resource: t.liteOut.createView() },
+            { binding: 3, resource: this.liteStandIns[1]!.createView() },
+            ...this.aerialRead(),
+          ],
+        }),
+      };
+    }
+    return t.liteBinds!;
+  }
+  private liteStandIns: GPUTexture[] | null = null;
   private kernelReady(key: number) {
     if (key === FEATURES_ALL || this.tracePipeline) return true;
     const v = this.variants.get(key);
@@ -5980,6 +6064,7 @@ export class Renderer {
         | "shade"
         | "shadeMark"
         | "shadeLite"
+        | "shadeLiteFinish"
         | "shadeWater"
         | "shadeWaterOpen"
         | "shadeStars"
@@ -6004,7 +6089,7 @@ export class Renderer {
     const rasterEarly = async () => {
       if (!R) return;
       if (this.rasterLite) {
-        if (!slot.shadeLite) slot.shadeLite = await compile("shadeLite");
+        if (!slot.shadeLite) slot.shadeLite = await this.liteWithFinish(slot, compile);
         if (!slot.shadeWater) slot.shadeWater = await compile("shadeWater");
         if (!slot.shadeMark) slot.shadeMark = await compile("shadeMark");
         if (!slot.shadeStars) slot.shadeStars = await compile("shadeStars");
@@ -6032,7 +6117,7 @@ export class Renderer {
       // (nothing to draw it until main — two minutes on a Windows PC, its driver's compile and DXC's, at every launch: the
       // browser's cache does not keep it there —: the material and the waiting sky first, seconds, an image meanwhile)
       else if (R && this.rasterLite && this.skyFillOn) {
-        if (!slot.shadeLite) slot.shadeLite = await compile("shadeLite");
+        if (!slot.shadeLite) slot.shadeLite = await this.liteWithFinish(slot, compile);
         if (!slot.skyFill) slot.skyFill = await compile("skyFill");
         // (its clouds — the cloud pass, seconds —: the waiting sky's, the ground's, and the Sun behind them)
         if (!slot.clouds && this.cloudPass) slot.clouds = await compile("clouds");
@@ -6149,6 +6234,7 @@ export class Renderer {
       | "shade"
       | "shadeMark"
       | "shadeLite"
+      | "shadeLiteFinish"
       | "shadeWater"
       | "shadeWaterOpen"
       | "shadeStars"
@@ -6160,7 +6246,7 @@ export class Renderer {
     // kind — P7 — only in the camera's kernels: elsewhere — a planet's probe, its key without it, on the camera's env —
     // left out of the comparison, and there a kernel for any near body covers a given one)
     const NEAR = 7 << NEAR_KIND_SHIFT;
-    const nearMatters = kind === "rt" || kind === "q" || kind === "discs" || kind === "shadeLite";
+    const nearMatters = kind === "rt" || kind === "q" || kind === "discs" || kind === "shadeLite" || kind === "shadeLiteFinish";
     const kq = key & ~NEAR;
     const nq = (key >> NEAR_KIND_SHIFT) & 7;
     // (a kernel that compiled out a bit the key needs does not cover it, whatever its own key says — strippedBits)
@@ -6218,6 +6304,7 @@ export class Renderer {
       | "shade"
       | "shadeMark"
       | "shadeLite"
+      | "shadeLiteFinish"
       | "shadeWater"
       | "shadeWaterOpen"
       | "shadeStars"
@@ -6279,6 +6366,7 @@ export class Renderer {
       | "shade"
       | "shadeMark"
       | "shadeLite"
+      | "shadeLiteFinish"
       | "shadeWater"
       | "shadeWaterOpen"
       | "shadeStars"
@@ -6316,21 +6404,23 @@ export class Renderer {
         layout:
           entryPoint === "clouds"
             ? this.cloudsLayout!
-            : entryPoint === "main" ||
-                entryPoint === "shade" ||
-                entryPoint === "shadeMark" ||
-                entryPoint === "shadeLite" ||
-                entryPoint === "shadeWater" ||
-                entryPoint === "shadeWaterOpen" ||
-                entryPoint === "shadeStars" ||
-                entryPoint === "skyFill" ||
-                entryPoint === "discs"
-              ? this.mainLayout
-              : entryPoint === "lut"
-                ? this.lutLayout
-                : entryPoint === "aerial"
-                  ? this.aerialLayout
-                  : this.tracePipeLayout,
+            : entryPoint === "shadeLite"
+              ? this.liteLayout
+              : entryPoint === "main" ||
+                  entryPoint === "shade" ||
+                  entryPoint === "shadeMark" ||
+                  entryPoint === "shadeLiteFinish" ||
+                  entryPoint === "shadeWater" ||
+                  entryPoint === "shadeWaterOpen" ||
+                  entryPoint === "shadeStars" ||
+                  entryPoint === "skyFill" ||
+                  entryPoint === "discs"
+                ? this.mainLayout
+                : entryPoint === "lut"
+                  ? this.lutLayout
+                  : entryPoint === "aerial"
+                    ? this.aerialLayout
+                    : this.tracePipeLayout,
         compute: {
           module,
           // (the sky's discs: main's own, its sky's layer and its ground compiled out — DISC_ONLY)
@@ -6993,7 +7083,7 @@ export class Renderer {
       const lp = enc.beginComputePass(this.prof.pass("body lite (raster)"));
       lp.setPipeline(lite);
       lp.setBindGroup(0, this.hintBindFor(t, hint));
-      lp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+      lp.setBindGroup(1, this.liteBinds(t).lite);
       lp.dispatchWorkgroups(Math.ceil(Math.ceil(t.width / bw) / 8), Math.ceil(Math.ceil(t.height / bh) / 8));
       if (mark) {
         lp.setPipeline(mark);
@@ -7014,12 +7104,23 @@ export class Renderer {
           this.forwardNow = false;
         }
       }
+      const lb = this.liteBinds(t);
       const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
       lp.setPipeline(lite);
       lp.setBindGroup(0, this.hintBindFor(t, hint));
-      lp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+      lp.setBindGroup(1, lb.lite);
       lp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
       lp.end();
+      // (its finishing pass — the air and the clouds before the surfaces it left in liteOut: tracer-source.ts withLiteSplit)
+      const fin = this.liteFinishOf.get(lite);
+      if (fin) {
+        const fp = enc.beginComputePass(this.prof.pass("earth lite: finishing"));
+        fp.setPipeline(fin);
+        fp.setBindGroup(0, this.hintBindFor(t, hint));
+        fp.setBindGroup(1, lb.finish);
+        fp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+        fp.end();
+      }
       const water = this.rasterWaterNow ? this.traceVariant("shadeWater") : null;
       // (the sea's surface between them — PLAN-MER-WEBGPU S2 —: the water's pass shades it at its exact point)
       if (water) this.encodeSeaSurface(enc, t);
@@ -10087,6 +10188,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       shade: t("the ground's rays"),
       shadeMark: t("the ground's rays"),
       shadeLite: t("the ground's material"),
+      shadeLiteFinish: t("the ground's material"),
       shadeWater: t("the water"),
       shadeStars: t("the stars"),
       discs: t("the sky's discs"),

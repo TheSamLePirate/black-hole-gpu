@@ -36,6 +36,7 @@ export type TracerEntry =
   | "shade"
   | "shadeMark"
   | "shadeLite"
+  | "shadeLiteFinish"
   | "shadeWater"
   | "shadeWaterOpen"
   | "shadeStars"
@@ -54,6 +55,7 @@ const REALTIME_GROUND: ReadonlySet<TracerEntry> = new Set([
   "shade",
   "shadeMark",
   "shadeLite",
+  "shadeLiteFinish",
   "shadeWater",
   "shadeWaterOpen",
   "shadeStars",
@@ -67,6 +69,7 @@ const MATERIAL: ReadonlySet<TracerEntry> = new Set([
   "shade",
   "shadeMark",
   "shadeLite",
+  "shadeLiteFinish",
   "shadeWater",
   "shadeWaterOpen",
   "shadeStars",
@@ -151,7 +154,8 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
     GROUND_DETAIL: profile && entry === "shade" && o.leftovers !== false ? 0 : 1,
     // (the camera's rays only: the probes — env — see the near body from elsewhere — P7)
     // (and the raster's material: the Earth's — NEAR_KIND 1 — or another world's — 3, trace.wgsl bodyLite —, the other compiled out)
-    NEAR_KIND: entry === "main" || entry === "discs" || entry === "shadeLite" ? (key >> NEAR_KIND_SHIFT) & 7 : 0,
+    NEAR_KIND:
+      entry === "main" || entry === "discs" || entry === "shadeLite" || entry === "shadeLiteFinish" ? (key >> NEAR_KIND_SHIFT) & 7 : 0,
     COST_VIEW: (key >> 16) & 15,
     ...(o.tune ?? {}),
     QUALITY_PIPELINE: quality ? 1 : 0,
