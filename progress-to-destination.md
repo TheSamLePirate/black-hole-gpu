@@ -2507,3 +2507,12 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   erreur GPU ; e2e `sea-fft` 5/5, J0 62,8 ms (60,7–61,2 aux passages précédents : dans l'écart observé, le coût de la cible non mesuré seul).
 - **Limites** : l'effet visuel (traînées des voitures) non concluant à 400 m — à juger plus bas, caméra immobile ; le flou de mouvement
   ne lit pas encore la cible ; la profondeur gardée et l'identité stable (le reste de J1-2) à faire ; `raster-motion` (banc) non lancé.
+
+## 2026-11-10T19:59Z — J1-2 : le mouvement des voitures éteint par défaut (régression visible)
+
+- **Constat** : au zoom sur l'autoroute de Toulon (champ 12°, caméra immobile, kerr-mini), les voitures laissent des traînées **plus
+  longues** avec le mouvement que sans ; des sauts de 145 px de moyenne apparaissent (les voitures qui rebouclent sur leur tronçon).
+  Le vecteur, ou son emploi par l'historique, est encore faux.
+- **Fait** : `sceneryRaster.motionOn` **éteint par défaut** — l'image du jeu redevient celle d'avant J1-2 ; le mécanisme reste (cible,
+  liaisons, lecture), à reprendre. Pistes : l'horloge d'avant (`pcam.w`) et la fréquence de mise à jour de l'uniforme du décor ; les
+  sauts de boucle à marquer « sans historique » (z 2) ; la pondération de l'historique pour un pixel en mouvement.

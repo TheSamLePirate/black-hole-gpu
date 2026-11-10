@@ -1113,8 +1113,9 @@ export class SceneryRaster {
     return true;
   }
 
-  /** the moving meshes' motion written (PLAN-J1 J1-2; an A/B lever: off, the history reprojects them as the scenery) */
-  motionOn = true;
+  /** the moving meshes' motion written (PLAN-J1 J1-2; an A/B lever). Off by default: on Toulon's motorway, still camera, the cars
+   *  left longer trails with it than without (10 Nov) — the vector, or its use by the history, still wrong; on only to work on it */
+  motionOn = false;
   /** the least projected radius of a tree drawn [px] (renderer.treeMinPx) — 2.5, not 1.2: the far crowns under 5 px across
    *  the orthophoto's green already, ~1.5–2.5 ms of an M1's frame over a city (TERRE-UNREAL U6) */
   minPx = 2.5;
