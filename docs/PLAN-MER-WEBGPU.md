@@ -157,3 +157,8 @@ de comparaison froid du matin. Reste de S6 : le M1 Max soutenu, les ablations J0
 Sur le **M1 Max** frais (un vol, [fiche](progress/j0/FICHE-m1max-2026-11-10-mer.md)) : 36,8 → **42,5 images/s**, intervalle p50 25,1 →
 **24,9 ms** (le palier 1 tenu en médiane, pas en p95 33,3 / p99 49,6), GPU p50 26,3 → 23,0 ms. Le vol soutenu (bridage) reste à revoler.
 
+**Le noyau de pleine mer sur la côte** : l'eau intérieure et la mer peu profonde déjà marquée par `shadeLite` quittées avant tout
+rayon (kerr-mini, deux passages) : côte à 500 m, sa passe reste à 1,6 ms et l'écart au noyau unique passe de +0,75 à +0,45 ms — dans
+le bruit ; ses pixels sont surtout de l'eau profonde près du rivage ou dans la portée du lavis, qui demandent la classification
+entière. Mer à 30 m : 66,35 contre 67,65 ms.
+

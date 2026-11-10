@@ -16079,6 +16079,9 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   let kind = floor(code + 1e-4);
   let water = clamp((code - kind) * 4.0, 0.0, 1.0);
   let calm = select(0.0, select(0.6, 0.92, kind > 1.5), kind > 0.5);
+  // (the open sea's kernel: the inland water and the shallow sea shadeLite already found — its bed's albedo, accum.w 2 — left at
+  // once, before any ray or read: on a coast its classification cost 1.5 ms for nothing to shade)
+  if (WATER_OPEN && (calm > 0.0 || accum[idx].w > 1.5)) { return; }
   let centre = vec2f(gid.xy) + 0.5;
   let pos = centre + liteJitter(gid.xy);
   // (the surface's distance: shadeLite's — the ground's at the jittered ray — or, where the sea's surface was drawn over it, the
