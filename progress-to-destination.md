@@ -2532,5 +2532,6 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   traînée, image proche de celle sans historique ; la copie relue (≈ 3 200 pixels de l'image d'avant). e2e `sea-fft` 5/5, J0 2/2
   (vol GPU p50 62,6 ms, 16 images/s — 60,7–62,8 aux passages précédents : dans l'écart observé ; la copie, ~9 Mo par image, non
   mesurée seule). `check-wgsl` 73/73, `tsc`.
-- **Limites** : vu caméra immobile seulement — caméra en mouvement et éoliennes non revues en image ; le flou de mouvement ne lit pas
+- **Caméra en mouvement** (ajout, 20:50Z) : zoom continu 12° → 9° pendant la capture, kerr-mini : avec le mouvement, voitures nettes et pleines ; sans, pâles et traînantes (`docs/progress/j1/j1-2-voitures-zoom-camera.jpg`), 0 erreur GPU.
+- **Limites** : éoliennes non revues en image ; le flou de mouvement ne lit pas
   encore la cible ; la profondeur gardée et l'identité stable (reste de J1-2) à faire ; banc `raster-motion` non lancé.
