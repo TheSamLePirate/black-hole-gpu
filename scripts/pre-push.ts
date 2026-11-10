@@ -53,11 +53,29 @@ interface Check {
   cmd: string[];
 }
 
+/** a check's time limit [s]: each takes 2–17 s; one hung 12 minutes asleep, without a child, on 10 Nov (check-repo-size,
+ * not reproduced by hand) — a hook that hangs in silence is worse than one that fails saying why */
+const LIMIT_S = Number(process.env.KERR_CHECK_LIMIT_S ?? 240);
+
 async function run(c: Check, cwd: string) {
   const t0 = performance.now();
-  const p = Bun.spawn(c.cmd, { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" } });
+  // (stdin closed: a check never reads the hook's pipe)
+  const p = Bun.spawn(c.cmd, {
+    cwd,
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" },
+  });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    p.kill();
+  }, LIMIT_S * 1000);
   const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
-  return { ...c, code, out: out + err, s: (performance.now() - t0) / 1000 };
+  clearTimeout(timer);
+  const note = timedOut ? `\n(stopped after ${LIMIT_S} s — hung; run it by hand: ${c.cmd.join(" ")})` : "";
+  return { ...c, code: timedOut ? 124 : code, out: out + err + note, s: (performance.now() - t0) / 1000 };
 }
 
 /** the checkout's own tools — never `bunx`: without node_modules it fetched a registry package named "tsc" (5.0.2, no

@@ -2302,3 +2302,6 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   d'optique dans la vue de mer.
 - **Suite** : les décisions de Sam (ordre mer/J1, bathymétrie, arbres sources des imposteurs) ; l'ablation de la passe
   `earth water` ; puis J1.
+- **Portillon avant push** : un `check-repo-size` s'est figé 12 minutes (endormi, sans processus fils ; 16 s à la main,
+  cause non établie). Chaque vérification a désormais une limite de 240 s (`KERR_CHECK_LIMIT_S`) et son entrée standard
+  fermée ; au-delà, elle est arrêtée et le push refusé en disant quoi relancer (testé avec une limite de 1 s).
