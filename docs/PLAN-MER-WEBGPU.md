@@ -154,4 +154,6 @@ p50 **65,4 / 64,2 → 60,9 / 60,7 ms**, 15,2–15,5 → 16,4 images/s ; `earth l
 (pleine mer), `sea fft` 1,6 → 2,1. La mer de la scène de référence coûte moins et montre plus (4 cascades, surface maillée, écume
 monde, ciel filtré). Chemin d'entrée inchangé à cache chaud (12,2 / 16,9 s) ; à froid, sources neuves, 33,3 / 60,8 s — sans point
 de comparaison froid du matin. Reste de S6 : le M1 Max soutenu, les ablations J0, le retrait des voies remplacées.
+Sur le **M1 Max** frais (un vol, [fiche](progress/j0/FICHE-m1max-2026-11-10-mer.md)) : 36,8 → **42,5 images/s**, intervalle p50 25,1 →
+**24,9 ms** (le palier 1 tenu en médiane, pas en p95 33,3 / p99 49,6), GPU p50 26,3 → 23,0 ms. Le vol soutenu (bridage) reste à revoler.
 

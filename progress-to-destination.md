@@ -2409,3 +2409,12 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   cache Metal chaud 12,2 / 16,9 s (matin 12,8 / 17) ; à froid, sources neuves, 33,3 / 60,8 s.
 - **Limites** : palier de 25 ms toujours loin (intervalle p50 60 ms) ; pas d'ablations ni de vol soutenu ce soir ; M1 Max non revolé ;
   aucun point froid du matin pour juger le chemin d'entrée à froid.
+
+## 2026-11-10T17:35Z — J0 sur M1 Max après la mer : le palier 1 tenu en médiane (frais)
+
+- **Contribution** (J0, palier 1 ; PLAN-MER-WEBGPU S6) : la scène de référence revolée sur le témoin du palier.
+- **Preuve** : **mesuré**, M1 Max frais (95,7 °C, Nominal → Moderate), fenêtre visible 1800 × 1169, commit `f0f24c9e`, un vol :
+  36,8 → **42,5 images/s**, intervalle p50 25,1 → **24,9 ms** (palier ≤ 25 ✓), p95 33,3 ✗, p99 49,6 ✗ ; GPU p50 26,3 → 23,0 ms ; CPU p95
+  6,4 → 5,8 ms (✗ ≤ 4). Fiche `docs/progress/j0/FICHE-m1max-2026-11-10-mer.md`.
+- **Limites** : frais seulement — le vol soutenu (le M1 Max bride en 2,5–4 min) non revolé ; régularité et CPU hors palier ; un seul
+  passage ; chemin d'entrée à froid non comparable (cache Metal vide ce soir, chaud ce matin).
