@@ -108,3 +108,44 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   Le raster (le pipeline par défaut) ne la montre pas.
 - **Piste** : la profondeur de la mer du traceur (`seaDepthAt`, niveaux z 8–10 de Terrarium) ou sa surface de mer lointaine ;
   sonder les pixels de la nappe (distance, `gq`, profondeur lue).
+
+## Les e2e « hors ligne » ne coupent pas le réseau du Service Worker
+
+- **Constaté le 10 novembre 2026** (ce Mac, copie de travail sur `fcddd376`), en cherchant pourquoi `zones-usa-night` échouait
+  (8 requêtes Overture comptées « réseau » pendant le vol hors ligne).
+- **Mesuré** par une sonde e2e jetable (`App.boot({ sw: true })`, puis `Network.emulateNetworkConditions { offline: true }`
+  sur la session de la page) : `navigator.onLine` vaut `false`, mais une tuile Terrarium jamais chargée, demandée par la
+  page, revient **200, 138 485 octets**, sans en-tête de zone ni de cache. Le Service Worker est une autre cible de Chrome :
+  la coupure posée sur la page ne s'applique pas à ses `fetch`.
+- **Effet** : `zones`, `zones-scenery`, `zones-usa-night`, `pwa` et `overture` coupent le réseau de cette façon. Leur compte
+  « servi par la zone / demandé au réseau » reste juste (il est tenu par le Service Worker), mais ils ne prouvent pas que
+  le jeu tient sans réseau : une donnée absente de la zone est servie par le réseau au lieu de manquer.
+- **Les 8 requêtes de `zones-usa-night`** : 43 des 45 plages `base.pmtiles` demandées au réseau sont les tuiles z 13 autour
+  de 2,54° S, 14,76° E — le point sous l'orbite de départ de la scène `game:artemis`, pas JFK (0 sur 45 autour de JFK ;
+  script jetable, `PmTiles.locate`). C'est la première scène du décor : ses requêtes ne sont pas annulées au saut
+  (`scenery-worker.ts:915-941`, aucun signal d'annulation par scène) et, le réseau marchant, elles durent assez pour tomber
+  dans la fenêtre comptée. La zone de JFK n'a pas de trou. Le test passe ou échoue selon l'instant.
+- **Corrigé dans le harnais le 10 novembre** (non commité) : `app.offline(on)` (`tests/e2e/lib/cdp.ts`, `app.ts`) coupe la page
+  et les cibles du Service Worker ; sonde : la tuile échoue hors ligne, avant et après un rechargement, et revient en ligne.
+  `zones-usa-night` l'utilise, liste les requêtes de la page qui échouent hors ligne et vérifie qu'aucune tuile de sol n'a
+  échoué au-dessus de la zone. **Restent à convertir** : `zones`, `zones-scenery`, `pwa`, `overture` (non relancés).
+- **Ce que le premier passage réellement hors ligne a montré** (`zones-usa-night`, ce Mac, `run-2026-11-10b.log` et `c.log`) :
+  - **Après une seule visite, le monde est noir hors ligne.** Les fichiers du jeu sont gardés à l'usage, et la première visite
+    les charge avant que le Service Worker tienne la page : au rechargement hors ligne, 24 cartes de planètes (`*-HASH.jpg`)
+    et `basis_transcoder.wasm` échouent, le décor reste « away-from-earth », aucune tuile n'est demandée. Avec une seconde
+    visite en ligne avant la coupure, la zone est dessinée (8 000 bâtiments, 135 réponses du décor par la zone, 0 hors zone,
+    0 tuile de sol en échec, 0 plage Overture au réseau).
+  - **Les pistes manquent hors ligne.** `runways/v1/t*.json` (servi par le jeu) n'est pas gardé : 445 échecs en une minute
+    sur 4 fichiers — demandé en boucle, sans recul. La piste de JFK n'est pas dessinée (capture `held.png`).
+  - **Des workers et modèles manquent** : `earth-surface-worker.js`, `terrain-mesh-worker.js`, `sailboat-HASH.bin`,
+    `trawler-HASH.bin` échouent hors ligne.
+  - **Du relief IGN demandé à JFK** : 36 grilles `wms-r` et 16 de couvert, autour de 2,44° E, 48,9° N (Le Bourget), pendant
+    le vol à New York. Origine non établie.
+  - Le test reste **rouge** sur son dernier critère (rien d'autre que la carte tactique demandé au réseau) : pistes, relief,
+    couvert. C'est l'état réel, pas un artefact.
+- **Piste** : mettre en cache à l'installation ce qu'il faut pour un premier rechargement hors ligne (cartes des corps,
+  transcodeur, workers, pistes), ou le dire au joueur ; un recul sur les pistes en échec ; chercher qui demande Le Bourget.
+- **Piste d'origine (faite pour le harnais)** : couper aussi la cible du Service Worker (`Target.setAutoAttach` puis la même commande sur sa session, ou
+  `Network.emulateNetworkConditions` au niveau du navigateur) dans `tests/e2e/lib/app.ts`, en une fonction `app.offline()` ;
+  puis compter dès le rechargement, et lire `earthTiles.failed`. Annuler les requêtes d'une scène dépassée (ST2). Ajouter la
+  leçon à [E2E.md](E2E.md) §7.

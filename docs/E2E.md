@@ -474,6 +474,7 @@ Flight-lab campaigns follow the same pattern: `bun scripts/flightlab.ts run --sh
 | `ssh kerr-mini screencapture` gives nothing | ssh is not the graphical session: grab the test Chrome's page over its DevTools port (§3, *Seeing the mini's screen*) |
 | a variable set here has no effect on a `--remote` run | only `E2E=1` is sent: put it inline in `remote.ts run -- VAR=… bun test …` (§3) |
 | two Chromes on one Mac in `lab-monitor` (⚠) | something launched Chrome without the lock (a new script: use `launch()` from tests/e2e/lib/cdp.ts or `chromeLock()`), or an orphan: `lab-monitor --sweep` |
+| an "offline" test passes although the zone lacks data; network requests still succeed offline | `Network.emulateNetworkConditions` on the page's session does not cut the Service Worker (another DevTools target — measured 10 Nov 2026). Use `app.offline(true)` (lib/cdp.ts: the page and its workers), again after each `app.load`; load the page once more online first, the worker in control, or the game's own files are not kept (PROBLEMES-A-REGLER) |
 
 ---
 

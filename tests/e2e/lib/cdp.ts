@@ -20,6 +20,14 @@ export interface Cdp {
   /** a DevTools event listened to (Page.screencastFrame, Runtime.consoleAPICalled, …): the listener's removal */
   on(method: string, fn: (params: Record<string, unknown>) => void): () => void;
   close(): void;
+  /**
+   * The network cut — or given back — for the page **and its Service Worker**. `Network.emulateNetworkConditions` on the
+   * page's session alone leaves the worker online (another DevTools target: measured 10 Nov 2026, a tile never loaded came
+   * back 200 through the worker, navigator.onLine false): an "offline" test then proved nothing of what the game does with
+   * no network. The worker's targets are held attached while offline (their emulation ends with their session); one started
+   * meanwhile — a reload — is cut at the next call: call it again after `load`. The count of workers cut.
+   */
+  offline(on: boolean): Promise<number>;
   /** Chrome asked to quit and given time to (its disk caches written — the shader cache of a kept profile), then closed */
   quit(): Promise<void>;
 }
@@ -149,6 +157,8 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
   void proc.exited.then((code) => failAll((gone ??= `Chrome exited (code ${code})`)));
   const errors: string[] = [];
   const listeners = new Map<string, Set<(params: Record<string, unknown>) => void>>();
+  /** the Service Worker's DevTools sessions held while the network is cut (offline) */
+  const workers = new Map<string, WebSocket>();
   ws.onmessage = (m) => {
     const d = JSON.parse(String(m.data));
     if (d.method) for (const fn of listeners.get(d.method) ?? []) fn(d.params);
@@ -218,6 +228,33 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
       listeners.get(method)!.add(fn);
       return () => listeners.get(method)?.delete(fn);
     },
+    offline: async (on: boolean) => {
+      const conditions = { offline: on, latency: 0, downloadThroughput: -1, uploadThroughput: -1 };
+      await send("Network.emulateNetworkConditions", conditions);
+      for (const w of workers.values()) w.close();
+      workers.clear();
+      if (!on) return 0;
+      const targets = await fetch(`http://127.0.0.1:${port}/json`)
+        .then((r) => r.json() as Promise<{ id: string; type: string; webSocketDebuggerUrl: string }[]>)
+        .catch(() => []);
+      for (const t of targets.filter((t) => t.type === "service_worker")) {
+        const w = new WebSocket(t.webSocketDebuggerUrl);
+        await new Promise((ok, no) => {
+          w.onopen = ok;
+          w.onerror = () => no(new Error("the Service Worker's DevTools target refused"));
+        });
+        const done = new Promise<void>((ok) => {
+          w.onmessage = (m) => {
+            if (JSON.parse(String(m.data)).id === 2) ok();
+          };
+        });
+        w.send(JSON.stringify({ id: 1, method: "Network.enable" }));
+        w.send(JSON.stringify({ id: 2, method: "Network.emulateNetworkConditions", params: conditions }));
+        await Promise.race([done, Bun.sleep(5000)]);
+        workers.set(t.id, w);
+      }
+      return workers.size;
+    },
     quit: async () => {
       // (Windows ends a Chrome with taskkill /F: its GPU disk cache never written — a kept profile's second launch met
       // none of its compiles. Browser.close on the browser's own endpoint, its exit awaited, then the usual close)
@@ -235,6 +272,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     close: () => close(),
   };
   function close() {
+    for (const w of workers.values()) w.close();
     if (HOLD) Bun.sleepSync(HOLD * 1000);
     gone ??= "closed";
     running.delete(port);

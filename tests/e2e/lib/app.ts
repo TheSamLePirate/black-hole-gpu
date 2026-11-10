@@ -332,6 +332,11 @@ export class App {
     await Bun.sleep(1500);
   }
 
+  /** The network cut (or given back) for the page and its Service Worker — lib/cdp.ts offline; again after a `load` offline. */
+  offline(on = true) {
+    return this.cdp.offline(on);
+  }
+
   close() {
     recorder.detach(this);
     this.cdp.close();
