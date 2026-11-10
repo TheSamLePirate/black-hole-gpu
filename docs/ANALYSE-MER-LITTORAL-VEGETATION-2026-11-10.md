@@ -258,7 +258,17 @@ Plans mis à jour dans le même lot : [PLAN-REFRACTION-HORIZONS](PLAN-REFRACTION
 [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) (§23), [PLAN-MONDE-VIVANT-AAA](PLAN-MONDE-VIVANT-AAA.md) (en tête : ses
 chantiers A et B renvoient ici), la [synthèse J0](progress/j0/README.md).
 
-## 8. Décisions pour Sam
+## 8. Décisions de Sam (10 novembre, soir)
+
+1. **La mer d'abord** : « d'abord la mer WebGPU parfaite » — les lots M1–M4 avant J1, sur la passe d'eau existante, puis la
+   surface déplacée (M5). Qualité AAA **et** performance : chaque lot est jugé à coût mesuré.
+2. **Bathymétrie (a)** : la profondeur Terrarium (déjà chargée, aujourd'hui ramenée à 0) et un profil de Dean d'après la
+   distance au rivage là où elle manque ; pas de levés côtiers pour l'instant.
+3. **Arbres des imposteurs générés procéduralement**, comme le fait BakedVoxelLighting.
+
+Les questions telles qu'elles étaient posées :
+
+## 8 bis. Questions posées
 
 1. **L'ordre** : la mer (M1–M4) avant J4 sur l'existant, et V1/L3 dans J1 — ou l'ordre de la stratégie inchangé (J1 sans
    eau, toute la mer en J4) ?

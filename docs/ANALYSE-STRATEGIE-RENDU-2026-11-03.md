@@ -1475,3 +1475,6 @@ Ce que cela change ici, en propositions (l'ordre attend Sam, analyse §8) :
 - **J4** garde la surface déplacée de la mer (M5) et la migration des lecteurs.
 - **Bibliothèques (§18)** : aucune ; deux projets MIT étudiés, techniques réécrites, rien copié.
 
+**Décisions de Sam (10 novembre, soir)** : la mer d'abord (M1–M4 sur la passe d'eau existante, avant J1, puis la surface
+déplacée M5), en qualité et en coût mesurés ; bathymétrie Terrarium + profil de Dean ; arbres des imposteurs générés
+procéduralement. J1 suit la mer.
