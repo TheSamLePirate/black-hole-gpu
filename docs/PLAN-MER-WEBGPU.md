@@ -186,3 +186,11 @@ argument d'`earthLook` (`false` pour la sonde) ne touche que les nuages (coupés
 « avec la sonde » à midi (S5). À trouver avant de rendre la sonde seule juge du reflet ; pistes : le chemin du ciel de `main` (noyau
 allégé du raster) contre celui d'`env`, le facteur d'un des deux sur la diffusion.
 
+**Correction (même soir) : le facteur ≈ π de la sonde n'est pas établi.** Un troisième passage (`probe-pi`, mêmes vues de jour, avec
+et sans la table aérienne, avec et sans sa pré-exposition) donne un rapport de **1,59** — la sonde inchangée (3,7·10⁻⁶), la valeur lue
+dans `accum` doublée d'un passage à l'autre ; les leviers de la table n'y changent rien. La mesure — `accum` divisé par son poids, au
+centre de l'image — n'est pas une radiance finale fiable du pixel (son poids, l'entrelacement des rayons, le motif du raster). Ce qui
+reste : la sonde est plus lumineuse que l'image de jour d'un facteur entre 1,6 et 3,2 selon le passage ; le plafond à 4 fois le ciel
+analytique la laisse passer. À reprendre avec une mesure sur l'historique linéaire (divisé par la pré-exposition) ou sur le ciel
+analytique au même point.
+

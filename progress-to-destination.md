@@ -2464,3 +2464,10 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   HUD −1,6, ombre de l'appareil −1,5, eau −0,5 ; sonde `night-probe` deux passages à 1 % près.
 - **Limites** : la dérive de la base (±1,6 ms) rend les petits postes incertains ; l'écart de l'appareil à recontrôler ; la cause du
   facteur de la sonde non trouvée.
+
+## 2026-11-10T19:07Z — Correction : le facteur ≈ π de la sonde n'est pas établi
+
+- L'entrée précédente annonçait une sonde ≈ π fois plus lumineuse que l'image de jour. Un troisième passage donne 1,59 : la valeur
+  lue dans `accum` a doublé d'un passage à l'autre, la sonde non ; la méthode (`accum` / poids au centre) n'est pas une radiance finale
+  fiable. Établi seulement : la sonde est plus lumineuse que l'image de jour (×1,6 à ×3,2 selon le passage). À remesurer autrement
+  (PLAN-MER-WEBGPU §4, dernière entrée).
