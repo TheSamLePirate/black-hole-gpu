@@ -181,6 +181,8 @@ import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } fr
 import { ChartOverlay } from "./chartoverlay";
 import overlayWGSL from "./shaders/overlay.wgsl" with { type: "text" };
 import { cameraFrame, gpuTheta, homePosition, type CameraFrame } from "./camera";
+import { type FrameDesc, nextFrameDesc } from "./frame-desc";
+import { frameNow } from "./frameclock";
 import { mouth, radius, setSceneTime } from "./wormhole";
 import {
   BODY_PLANET,
@@ -3798,9 +3800,9 @@ export class Renderer {
       const highAt = 1 + Math.PI / 2 / 2048 / pixelAngle;
       const have = this.earthWant;
       let want: EarthTier | null = have;
-      if (diskPx < 12) want = have && performance.now() - this.earthSeenAt > 5000 ? null : have;
+      if (diskPx < 12) want = have && this.frameMs() - this.earthSeenAt > 5000 ? null : have;
       else {
-        this.earthSeenAt = performance.now();
+        this.earthSeenAt = this.frameMs();
         if (dE < highAt) want = "high";
         else if (diskPx > 24 && (!have || dE > Math.max(3.5, 1.5 * highAt))) want = "med";
       }
@@ -3855,7 +3857,7 @@ export class Renderer {
       // reliefAt, 8 × hdAt's reach — ~3° of field for the Moon from the Earth —: its heights alone, the CPU's ground untouched;
       // kept while its disc stays within half a field of the image and nearer than twice the reach, freed 3 s after)
       const reliefAt = 1 + (8 * 1.3 * ((2 * Math.PI) / 4096)) / pixelAngle;
-      const now = performance.now();
+      const now = this.frameMs();
       const cur = this.hdMap;
       const keepRelief =
         cur.mode === "relief" && !!cur.name && this.looked.some((l) => l.map === cur.name && l.nearView && l.dN < 2 * reliefAt);
@@ -4147,7 +4149,7 @@ export class Renderer {
       // its colours without them —: a converged view drawn anew, at most every half second, once for all those
       // in. Not one still refining: restarted at each arrival, on a slow machine whose tiles stream for minutes it
       // never converged — the samples to come read the imagery anyway; a moving view shows them as it goes)
-      const now = performance.now();
+      const now = this.frameMs();
       if (t === this.live && this.earthTiles.imagery !== this.imagerySeen && now - this.imageryAt > 500 && this.lastPhase === "converged") {
         this.imagerySeen = this.earthTiles.imagery;
         this.imageryAt = now;
@@ -4541,7 +4543,7 @@ export class Renderer {
     // (the F-35's heat haze — display.wgsl haze —: its exhaust's column in the image, its radii, its strength,
     // a clock)
     // (the A320's: its two engines' columns)
-    const clock = (performance.now() / 1000) % 3600;
+    const clock = (this.frameMs() / 1000) % 3600;
     for (const k of [0, 1]) {
       const hz = target === this.live && s.ship && s.heatHaze ? this.ship.hazeView(k) : null;
       this.device.queue.writeBuffer(this.displayBuf, 192 + 32 * k, new Float32Array(hz ? [...hz, clock] : [0, 0, 0, 0, 0, 0, 0, 0]));
@@ -4617,7 +4619,7 @@ export class Renderer {
     // the scenery kept off them)
     {
       const g = cartToGeodetic(WGS84_A, WGS84_F, [c[0] * WGS84_A, c[1] * WGS84_A, c[2] * (1 - WGS84_F) * WGS84_A]);
-      if (worldRunwaysUpdate((g.lat * 180) / Math.PI, (g.lon * 180) / Math.PI, performance.now())) {
+      if (worldRunwaysUpdate((g.lat * 180) / Math.PI, (g.lon * 180) / Math.PI, this.frameMs())) {
         this.sceneryExclusions = [
           ...SCENERY_EXCLUSIONS,
           ...worldRunwaysNow().map((r) => ({
@@ -4671,7 +4673,7 @@ export class Renderer {
       });
       out.set(
         [
-          (performance.now() / 1000) % 600,
+          (this.frameMs() / 1000) % 600,
           1 - Math.min(Math.max((w.visibility - 3000) / 5000, 0), 1),
           des[0]! + 37 * des[1]!,
           des[2]! + 37 * des[3]!,
@@ -4680,7 +4682,7 @@ export class Renderer {
       );
     }
     // (the flashing lights' clock, runways near or not: the wind turbines' and pylons' obstruction lights too — Q8 D1)
-    if (!near.length) out[17 * 4] = (performance.now() / 1000) % 600;
+    if (!near.length) out[17 * 4] = (this.frameMs() / 1000) % 600;
     return out;
   }
 
@@ -5276,6 +5278,14 @@ export class Renderer {
   seaWaterOpenOn = true;
   /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */
   private seafftAt = -1;
+  /** the frame's frozen description (src/frame-desc.ts; PLAN-J1 J1-1): built at renderer.frame()'s start — its id, its real clock
+   *  read once, the flight's and the scene's clocks, the camera now and before */
+  frameDesc: FrameDesc | null = null;
+  /** the frame's real clock [ms]: the encoding's fades, freshness tests and animation clocks read this, one reading a frame (the
+   *  wall's clock outside a frame — a planet probe's submission before the first) */
+  private frameMs(): number {
+    return this.frameDesc?.realMs ?? performance.now();
+  }
   private seaHere: { U: number; to: number; lat: number; lon: number; weight: number; world?: "miller" | "titan" } | null = null;
 
   /**
@@ -5372,7 +5382,7 @@ export class Renderer {
     // (the light probe — traced about the camera — mirrored by the sea only while fresh: a probe left where the camera came from
     // mirrored that place's world — an orbit's Earth in the sea under a free camera at Hyères, 10 Nov —; stale, the sky's own
     // mirror at the sea's point)
-    const probeNear = !this.envReset && performance.now() - this.envAt < 1000 && (this.seaFft?.skyLevels ?? 0) > 0 ? 1 : 0;
+    const probeNear = !this.envReset && this.frameMs() - this.envAt < 1000 && (this.seaFft?.skyLevels ?? 0) > 0 ? 1 : 0;
     // (the world's foam — PLAN-MER-WEBGPU S4, sea/fft-gpu.ts FoamFrame —: the camera's cell on each level, the last frame's taken
     // into this frame's local axes across an anchor's jump; the pair the FFT writes this frame read by the tracer)
     // (its threshold from the spread of the Jacobian it reads — every cascade computed, not the two long ones': Miller's short
@@ -5460,7 +5470,7 @@ export class Renderer {
     }
     enc.copyBufferToBuffer(this.ship.shBuf, 0, this.bodyBuf, this.bodyData.byteLength, SH_BYTES);
     this.envReset = false;
-    this.envAt = performance.now();
+    this.envAt = this.frameMs();
     if (this.envSpread > 0) this.envSpread--;
     this.envPhase++;
   }
@@ -5477,7 +5487,7 @@ export class Renderer {
     if (!job) {
       // (not before the first image: the probe's params bring their own features key, whose kernel would
       // be compiled before the camera's)
-      if (!this.firstFrameDoneAt || s.system === "none" || this.probeBusy || performance.now() - this.probeAt < 2000) return;
+      if (!this.firstFrameDoneAt || s.system === "none" || this.probeBusy || this.frameMs() - this.probeAt < 2000) return;
       // (the camera in our universe: they light nothing it can see — Gargantua's planets are specks
       // through the mouth — and the target's figures are ours)
       const cam0 = cameraFrame(s);
@@ -5516,7 +5526,7 @@ export class Renderer {
     this.device.queue.submit([enc.finish()]);
     if (!last) return;
     this.probeJob = null;
-    this.probeAt = performance.now();
+    this.probeAt = this.frameMs();
     const { b, cam } = job;
     const logY = this.diskConstants(s).logY;
     this.probeStage.mapAsync(GPUMapMode.READ).then(
@@ -7132,7 +7142,7 @@ export class Renderer {
    *  settings.motionBlur × 1/30 s) over the time this frame's motion took — v·dt × T/dt: v·T at any frame rate, a hitch's long
    *  step smeared no longer —; at most 2 (a frame twice faster than the exposure). */
   private shutterShare(motionBlur: number) {
-    const now = performance.now();
+    const now = this.frameMs();
     const dt = now - this.shutterAt;
     this.shutterAt = now;
     if (!(dt > 0 && dt < 1000)) return motionBlur;
@@ -7229,7 +7239,7 @@ export class Renderer {
       // about the mean, cancels there; a frame's own difference took it for a turn, a few pixels in straight flight —
       // — in pixels a second: a frame's own pixels grow as the frames slow, the denser rays' then kept them denser)
       const past = this.fwdPast;
-      const now = performance.now();
+      const now = this.frameMs();
       past.push({ f: [...cam.fwd] as Vec3, at: now });
       if (past.length > 9) past.shift();
       const p0 = past[0]!;
@@ -7854,7 +7864,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
             cabin: lampsOf(s, this.cockpitGlow),
             pcd: s.vessel === "f35" ? this.pcdLook : null,
             a320Glass: s.vessel === "a320" && this.a320Deck ? this.a320Glass : null,
-            lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: performance.now() / 1000 },
+            lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: this.frameMs() / 1000 },
             glares: this.glaresNow(s),
             mount: this.shipPose ?? (s.shipMount as Mount),
             look: [s.shipLookYaw, s.shipLookPitch],
@@ -8238,7 +8248,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         mips: this.ship.specMips,
         shipShadow: this.characterViews.shadow,
         // (fresh: run within the last half second — the probe refreshes every frame or every fourth)
-        axes: this.ship.ready && performance.now() - this.envAt < 500 ? this.shipProbeAxes : null,
+        axes: this.ship.ready && this.frameMs() - this.envAt < 500 ? this.shipProbeAxes : null,
         shipBound: (s.ship || this.shipInView) && this.ship.ready ? this.ship.shadowBound : null,
       },
       {
@@ -8409,7 +8419,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : ([0, 0, 0] as Vec3);
     // (the flown craft's image under 500 m — higher, the waves have scattered it)
     const flown = h < 500 && groundRelief("earth", Xb) - sea < 0.5;
-    return { n, d: dot3(n, eye) - h, hs: this.seaHs, t: (performance.now() / 1000) % 3600, flown };
+    return { n, d: dot3(n, eye) - h, hs: this.seaHs, t: (this.frameMs() / 1000) % 3600, flown };
   }
 
   /** (decision 42) the near world's star's direction in the camera's axes (right, up, forward) — the craft's shadow map's light,
@@ -10932,6 +10942,16 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   frame(s: Settings, time: number, sceneChanged: boolean, timeChanged: boolean, displayChanged: boolean): FrameStats | null {
     if (this.lost) return null;
     if (this.busy) return null;
+    // (the frame's frozen description — PLAN-J1 J1-1 —: its clocks read once, its camera now and before)
+    {
+      const c = cameraFrame(s, time);
+      this.frameDesc = nextFrameDesc(this.frameDesc, {
+        realMs: performance.now(),
+        flightMs: frameNow(),
+        simTime: time,
+        camera: { right: c.right, up: c.up, fwd: c.fwd, tanHalf: Math.tan((s.fov * Math.PI) / 360) },
+      });
+    }
     if (s.earthTerrainRasterView === "off" && !s.earthTerrainRasterUse && s.earthPipeline !== "raster") this.terrainRaster?.suspend();
     else this.terrainRaster?.idle("waiting");
     // (polarization turned on or off: the live target remade with or without its buffer)

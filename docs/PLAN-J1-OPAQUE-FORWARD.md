@@ -1,6 +1,6 @@
 # PLAN-J1 — l'opaque terrestre en forward, domaine pilote
 
-**État (10 novembre 2026, soir)** : plan écrit, aucun lot commencé. Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J1,
+**État (10 novembre 2026, soir)** : plan écrit ; **J1-1 commencé** — `src/frame-desc.ts` (id, horloge réelle lue une fois, horloges du vol et de la scène, caméra actuelle et précédente ; testé), construit au début de `renderer.frame()` ; les 17 lectures d'horloge de l'encodage (fondus, fraîcheurs, horloges d'animation) le lisent (`performance.now()` dans `renderer.ts` : 48 → 33) ; J0 inchangé (kerr-mini 60,9 ms, 16,5 images/s). Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J1,
 §7.3–7.5 (contrats de frame et de surfaces), §20.5 étapes 2 à 4, §21.4 candidat B ; décision de Sam du 10 novembre : « J1 suit la
 mer » ([PLAN-MER-WEBGPU](PLAN-MER-WEBGPU.md) fait, S6 mesuré). Juge : la scène [J0](J0-CONTRAT.md) (Toulon-Hyères), sur kerr-mini
 (répartition) et sur le M1 Max (palier). Le code fait foi ; ce plan dit l'ordre et les preuves.

@@ -2418,3 +2418,14 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   6,4 → 5,8 ms (✗ ≤ 4). Fiche `docs/progress/j0/FICHE-m1max-2026-11-10-mer.md`.
 - **Limites** : frais seulement — le vol soutenu (le M1 Max bride en 2,5–4 min) non revolé ; régularité et CPU hors palier ; un seul
   passage ; chemin d'entrée à froid non comparable (cache Metal vide ce soir, chaud ce matin).
+
+## 2026-11-10T17:31Z — J1 commence : le plan, et la description de frame figée (premier lot)
+
+- **Contribution** (stratégie §15 J1, §7.3 ; PLAN-J1-OPAQUE-FORWARD) : le plan de J1 écrit depuis le code relevé (visibilité dont la
+  profondeur est jetée, `shadeLite` qui reconnaît ce que d'autres ont dessiné, pas d'identité ni de mouvement, l'appareil hors
+  historique, pas de description de frame) en lots J1-0 à J1-7 ; J1-1 commencé : `src/frame-desc.ts` — une description de frame
+  construite une fois par image (id, horloge réelle, horloges du vol et de la scène, caméra et caméra précédente) — que les 17
+  lectures d'horloge de l'encodage lisent désormais (une seule horloge par image pour les fondus, les fraîcheurs et les animations).
+- **Preuve** : tests `frame-desc` (3) ; `tsc`, biome ; e2e `sea-fft` 5/5 et J0 (kerr-mini) inchangé : GPU p50 60,9 ms, 16,5 images/s.
+- **Limites** : la caméra précédente n'a pas encore de lecteur (le mouvement de J1-2) ; les ~40 champs posés par `main.ts` et les
+  lectures de `Settings` pendant l'encodage ne sont pas migrés ; questions de J1-0 à Sam (outillage de layout, étendue du domaine pilote).
