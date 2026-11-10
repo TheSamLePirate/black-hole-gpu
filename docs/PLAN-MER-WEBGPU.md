@@ -1,6 +1,6 @@
 # PLAN-MER-WEBGPU — la mer au niveau de web-ocean, dans notre monde
 
-**État (10 novembre 2026, soir)** : S0, S1, S2 et S4 faits (mesurés, §4) ; S3 en partie (la mer peu profonde sort aussi de `shadeLite`, le SSR seulement près d'une terre, l'écume et les crêtes à contre-jour reprises) ; S5 en partie (la sonde tracée autour de la caméra au-dessus de la mer) ; Miller ombrée comme la Terre (§4) ; reste S3 (le look de l'écume à juger, les crêtes devant la terre), S5 (les mips de rugosité), S6. Demandes de Sam, le 10 au soir : « d'abord la mer WebGPU parfaite » ; « je veux
+**État (10 novembre 2026, soir)** : S0, S1, S2 et S4 faits (mesurés, §4) ; S3 en partie (la mer peu profonde sort aussi de `shadeLite`, le SSR seulement près d'une terre, l'écume et les crêtes à contre-jour reprises) ; S5 en partie (la sonde tracée autour de la caméra au-dessus de la mer ; son « défaut » de jour et de nuit **levé** : une erreur de mesure, la sonde égale l'image à 1–4 % de jour, §4) ; Miller ombrée comme la Terre (§4) ; reste S3 (le look de l'écume à juger, les crêtes devant la terre), S5 (les mips de rugosité), S6. Demandes de Sam, le 10 au soir : « d'abord la mer WebGPU parfaite » ; « je veux
 le même rendu que web-ocean, mais compatible avec le ciel, les reflets, les bateaux, les traînées d'avion » ; « qualité et
 performances AAA ». Origine : [analyse](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md) (lots M1–M5), stratégie §23. Ce plan
 passe avant J1 (décision de Sam).
@@ -193,6 +193,16 @@ centre de l'image — n'est pas une radiance finale fiable du pixel (son poids, 
 reste : la sonde est plus lumineuse que l'image de jour d'un facteur entre 1,6 et 3,2 selon le passage ; le plafond à 4 fois le ciel
 analytique la laisse passer. À reprendre avec une mesure sur l'historique linéaire (divisé par la pré-exposition) ou sur le ciel
 analytique au même point.
+
+**S5, le défaut de la sonde : levé (10 novembre, nuit).** Remesuré sur l'historique linéaire (le centre de `temporal`, divisé par sa
+pré-exposition) : les texels « u = v = 0,5 » lus jusqu'ici sont **les mêmes quelle que soit la vue** (cap 0°/site 40° et cap 90°/site
+20° : identiques) — la sonde est rangée sur les axes fixes du monde (`envX/Y/Z` = 1, 0, 0…), pas sur ceux de la caméra ; on comparait
+deux directions différentes. Lue dans la direction de la vue (`envUV` de `taPrev.fwd`, 5 × 5 texels) : **de jour, sonde / image =
+1,01–1,04** (quatre vues, avec et sans table aérienne et sa pré-exposition) ; au crépuscule près de l'horizon 1,14 ; de nuit 1,19
+(site 40°) et 1,36 (site 8° : les 5 × 5 texels, ~7°, moyennent un gradient raide près de l'horizon — non séparé). Le « × π » et le
+« 0,26–0,37 de nuit » étaient des artefacts de mesure (mauvais texel, `accum` non rafraîchi — sa lecture au centre restait la même
+d'une vue à l'autre). La sonde peut juger le reflet du ciel ; reste, si utile, un écart de 10–35 % au ras de l'horizon la nuit à
+mesurer plus finement (un texel, plusieurs sites). Sonde : `probe-hist` (scratchpad de session), kerr-mini, 0 erreur GPU.
 
 **S2, les crêtes devant la terre** (limite de S2 levée) : `seaFs` garde un fragment de la surface devant le sol quand le sol derrière
 est plus loin, se tient au-dessus de la borne des vagues (sa hauteur depuis celle de la caméra, la distance et la courbure), et que le

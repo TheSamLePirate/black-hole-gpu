@@ -2535,3 +2535,14 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Caméra en mouvement** (ajout, 20:50Z) : zoom continu 12° → 9° pendant la capture, kerr-mini : avec le mouvement, voitures nettes et pleines ; sans, pâles et traînantes (`docs/progress/j1/j1-2-voitures-zoom-camera.jpg`), 0 erreur GPU.
 - **Limites** : éoliennes non revues en image ; le flou de mouvement ne lit pas
   encore la cible ; la profondeur gardée et l'identité stable (reste de J1-2) à faire ; banc `raster-motion` non lancé.
+
+## 2026-11-10T21:10Z — PLAN-MER S5 : le « défaut » de la sonde était une erreur de mesure
+
+- **Contribution** (stratégie §7.4 lumière partagée ; PLAN-MER-WEBGPU S5) : la sonde de lumière, qui sert au reflet du ciel sur la mer
+  (couche 16 de la FFT) et à l'éclairage de l'appareil, était réputée 1,6–3,2 fois trop lumineuse de jour et 3–4 fois trop sombre de
+  nuit. Remesuré sur l'historique linéaire (`temporal` divisé par sa pré-exposition) : les texels lus jusqu'ici étaient les mêmes
+  quelle que soit la vue — la sonde est rangée sur les axes du monde, pas sur ceux de la caméra. Lue dans la direction de la vue :
+  **1,01–1,04 de jour** (4 vues), 1,14 au crépuscule, 1,19–1,36 de nuit (le plus fort au ras de l'horizon, 5 × 5 texels sur un gradient
+  raide). Aucun code changé : la sonde peut juger le reflet ; la piste « facteur π » est close. `docs/PLAN-MER-WEBGPU.md` §4.
+- **Preuve** : **mesuré** sur kerr-mini (sonde e2e `probe-hist`, 7 vues, 0 erreur GPU).
+- **Limites** : l'écart de 10–35 % au ras de l'horizon la nuit n'est pas séparé du lissage de la mesure (à refaire sur un texel).
