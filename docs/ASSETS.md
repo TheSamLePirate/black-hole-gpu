@@ -3,8 +3,8 @@
 The repository keeps the app's older binaries in plain Git and, since 13 October 2026, the ones rebuilt
 or added often in Git LFS (below). About 390 MB of binaries are tracked in Git and 130 MB in LFS at the
 head of main (`bun scripts/check-repo-size.ts` gives today's figures), and the site
-GitHub Pages serves is made of them: Pages' limit is 1 GB for the whole deployment, the root and the
-`/test/` preview together.
+GitHub Pages serves is made of them: Pages' limit is 1 GB for the whole deployment (the root alone since
+the previews left Pages on 2026-11-10, [DEPLOY.md](DEPLOY.md)).
 
 ## Where the packs come from
 
@@ -85,3 +85,8 @@ pointer, the object goes to GitHub's LFS store.
 When the site's 1 GB binds, the content-addressed packs can leave Pages: `manifest.json` stays in Git,
 and `scripts/build-pages.ts` fetches each file named there (checking its hash) into `_site/` from a
 release or a bucket. The hashes make the files immutable, so any static host or CDN can keep them.
+
+**Where (Sam, 10 November 2026, audit D13 — not decided yet, "in the coming days")**: on samlepirate.org, or as a
+GitHub release, or on Sam's other server running Portainer. The trigger is the Git budget, not only Pages': on
+10 November the tracked binaries come to 591.6 MB of the 600 MB that `check-repo-size` allows — the next asset lot
+that adds more than ≈ 8 MB fails the pre-push hook and the CI. Until then, a new heavy binary goes to Git LFS.

@@ -2201,3 +2201,23 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   l'origine `thesamlepirate.github.io` — tout dépôt Pages du compte partage cette origine) attendent Sam ; la licence
   du dépôt (QA-22) reste à faire valider. Les branches `test-kimi` et `Ineptie-Version` gardent l'ancienne règle de
   `pages.yml` tant qu'elles ne reprennent pas `main`. Ensuite : J0 sur la scène de Toulon-Hyères.
+
+## 2026-11-10T09:40Z — Les previews hors de l'origine des joueurs (vague 0.7 terminée) ; l'orientation de Sam sur les binaires
+
+- **Contribution** (§19 l'expérience complète : les clés des joueurs ; [priorités de l'audit](docs/audit-2026-11-10/09-priorites-todo.md)
+  0.7 et 0.4) : décision de Sam — une preview ne doit pas pouvoir lire les clés des joueurs. Une preview sur Pages
+  partage l'origine `thesamlepirate.github.io` (celle de tout site Pages du compte) : aucun cloisonnement possible
+  dans le code. Donc : `/test/` et `/ineptie/` retirées de Pages (`pages.yml` : branches vidées, workflow sur `main`
+  seul), l'environnement `github-pages` limité à `main` (règles `test-kimi` et `Ineptie-Version` supprimées via l'API :
+  leurs anciennes copies du workflow ne peuvent plus déployer), et dans chaque dossier retiré un worker et une page de
+  fermeture (`pwa/retired-preview/`) pour les navigateurs qui avaient installé la preview. Une preview ne reviendra que
+  sur une autre origine. Binaires (D13) : Sam penche pour samlepirate.org, une release GitHub ou son autre serveur
+  Portainer, choix dans les prochains jours ([ASSETS.md](docs/ASSETS.md)).
+- **Preuve** : **observé** — Chrome sans tête, sonde de session : un « ancien » worker de preview installé sous
+  `/test/` est remplacé par `pwa/retired-preview/sw.js` à sa mise à jour : 0 enregistrement restant, son cache
+  `kerr-shell:/test/:…` supprimé, `kerr-shell:/:main` et le cache des tuiles gardés ; la page de fermeture retire
+  `test/kerr.openrouter.key` et `test/kerr.deepgram.key`, garde `kerr.openrouter.key` (la racine) et les réglages, puis
+  renvoie à la racine. Règles de l'environnement relues après coup : `main` seul. **Non vérifié** : le prochain
+  déploiement Pages lui-même (la copie partielle de `main-src` dans le job `site`) ; un navigateur dont l'ancien worker
+  est encore actif sert une dernière fois la page en cache avant la mise à jour.
+- **Suite** : J0.

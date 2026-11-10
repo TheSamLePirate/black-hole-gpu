@@ -14,16 +14,24 @@ on:
   push:
     # (GitHub reads these before any env: the preview branch is named here too — keep it equal to
     # env.PREVIEW_BRANCH; to retire the preview, remove it here and empty PREVIEW_BRANCH)
-    branches: [main, test-kimi, Ineptie-Version]
+    # (since 2026-11-10 main only: the previews left the site's origin — see env below)
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 env:
   # the preview: its branch (empty, or a branch that does not exist: none — everything below inert)
-  # and the site's directory it is served from
-  PREVIEW_BRANCH: test-kimi
+  # and the site's directory it is served from.
+  # RETIRED on 2026-11-10 (audit QA-04, Sam: a preview must not be able to read the players' keys): a preview
+  # served under this site shares its origin, thesamlepirate.github.io — and so does every Pages site of the
+  # account —, and its code can read the root's localStorage, the OpenRouter and Deepgram keys with it. Both
+  # branches emptied; their directories keep only pwa/retired-preview (a worker that unregisters the old one, a
+  # page that removes the keys typed into the preview). A preview comes back only on ANOTHER origin (a subdomain of
+  # samlepirate.org, another account) — never by naming its branch here again. The github-pages environment
+  # deploys from main alone.
+  PREVIEW_BRANCH: ""
   PREVIEW_PATH: test
-  INEPTIE_BRANCH: Ineptie-Version
+  INEPTIE_BRANCH: ""
   INEPTIE_PATH: ineptie
 
 # (each job asks for what it needs: no write token where branch code runs)
@@ -356,6 +364,14 @@ jobs:
       ineptie: ${{ steps.assemble.outputs.ineptie == 'yes' && env.INEPTIE_PATH || '' }}
       main: ${{ needs.snapshot.outputs.main }}
     steps:
+      # (the retired previews' closing files, from main's exact revision)
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.snapshot.outputs.main }}
+          path: main-src
+          sparse-checkout: pwa/retired-preview
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: site-main
@@ -433,6 +449,13 @@ jobs:
             preview=no
             size=$(size_mb)
           fi
+          # (a retired preview's directory: the worker and page that close it in browsers that knew it — QA-04)
+          for retired in "$PREVIEW_PATH" "$INEPTIE_PATH"; do
+            if [ -n "$retired" ] && [ ! -e "_site/$retired" ]; then
+              mkdir -p "_site/$retired"
+              cp main-src/pwa/retired-preview/sw.js main-src/pwa/retired-preview/index.html "_site/$retired/"
+            fi
+          done
           echo "site: $size MB (test: $preview, ineptie: $ineptie)" | tee -a "$GITHUB_STEP_SUMMARY"
           if [ "$size" -gt 900 ]; then
             echo "::error title=Site size::the site comes to $size MB, over 900 MB of Pages' 1 GB limit (docs/ASSETS.md)"

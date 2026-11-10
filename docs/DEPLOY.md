@@ -1,12 +1,12 @@
 # Deployment — GitHub Pages and the dedicated server
 
 The site also runs on the dedicated server (https://samlepirate.org), beside GitHub Pages: the same
-site as main builds it (main at the root; the preview, `test-kimi`, is on GitHub Pages only, under
-`/test/`), served by nginx in a container.
+site as main builds it, served by nginx in a container. (The previews `/test/` and `/ineptie/` were retired from
+Pages on 2026-11-10: below.)
 Nothing calls into the server — it fetches its updates itself.
 
 ```
-push main / test-kimi ─► pages.yml: snapshot (both heads) ─► main ∥ preview (each verified, built) ─► site (assembled)
+push main             ─► pages.yml: snapshot (both heads) ─► main ∥ preview (each verified, built) ─► site (assembled)
                          ─► deploy (GitHub Pages)
 push main             ─► pages.yml "server": that artifact, /test/ removed, in deploy/Dockerfile (nginx)
                            → ghcr.io/thesamlepirate/black-hole-gpu:<main sha⁷>-<run>.<attempt>
@@ -16,20 +16,22 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
 
 ## The Pages site (`.github/workflows/pages.yml`)
 
-- **`Ineptie-Version` at `/ineptie/`**: published beside main and `/test/`, with
-  `KERR_SUBPATH=ineptie` to isolate its storage. All three publishing branches carry the same Pages
-  workflow and share its deployment concurrency group. The `ineptie` job verifies and builds the exact
-  snapshotted revision. Since 2026-11-10 (audit QA-04) it no longer gates main: a failed verification, or a
-  site over 900 MB with it, leaves `/ineptie/` out (a warning on the run) and the site deploys with main — as
-  for `/test/`. (A run started by a push to `Ineptie-Version` or `test-kimi` uses that branch's copy of the
-  workflow: those branches take this rule when they merge main.) Shared hashed binaries use main's copy as for
-  `/test/`. Both previews are omitted from the dedicated server image. The `github-pages` environment permits
-  all three branches.
-- **The previews share the production's origin** (`thesamlepirate.github.io`): `KERR_SUBPATH` separates their
-  storage keys, not their access — a preview's code can read the root's `localStorage`, the players' OpenRouter
-  and Deepgram keys included (audit QA-04, open). Any repository's Pages under the same account is that same
-  origin: the fix is another host for the previews (a subdomain of samlepirate.org, or another account), or no
-  previews on Pages — Sam's decision, with the binaries' hosting (audit D13).
+- **No preview on this origin any more** (2026-11-10, audit QA-04 — Sam: a preview must not be able to read the
+  players' keys). `/test/` (`test-kimi`) and `/ineptie/` (`Ineptie-Version`) were served on the production's origin,
+  `thesamlepirate.github.io` — the origin of every Pages site of the account —, where their code could read the
+  root's `localStorage`, the OpenRouter and Deepgram keys with it (`KERR_SUBPATH` separated the keys' names, not
+  their access). Now: `PREVIEW_BRANCH` and `INEPTIE_BRANCH` are empty (the jobs `preview` and `ineptie` inert), the
+  workflow runs on pushes to main only, and the `github-pages` environment deploys from main alone (its branch policy:
+  `main`; `test-kimi` and `Ineptie-Version` removed — their own old copies of the workflow can no longer deploy).
+  Each retired directory keeps two files, `pwa/retired-preview/` copied by `site`: a `sw.js` that a browser which
+  once installed the preview's worker fetches at its next update check — it takes over, deletes that scope's own shell
+  caches (never the site's tiles or zones), unregisters and sends its pages to the root — and an `index.html` that
+  does the same and removes the keys a player typed into the preview (`<dir>/kerr.*.key`). Checked in headless
+  Chrome on 2026-11-10 (an old worker replaced: unregistered, its cache gone, main's caches and keys kept). Limit: a
+  browser still running the old worker serves the preview's cached page once more before the update lands.
+  **A preview comes back only on another origin** (a subdomain of samlepirate.org, another account), never by
+  naming its branch in `pages.yml` again. The machinery below (side-by-side verification, binaries left to main's
+  copy) stays for that day.
 
 - **Both revisions side by side**: a `snapshot` job reads the heads of main and of the preview branch, then the
   jobs `main` and `preview` verify and build each exact revision in parallel — types, `bunx biome ci .`,

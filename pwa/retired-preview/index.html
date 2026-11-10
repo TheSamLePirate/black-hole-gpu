@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Preview retirée</title>
+<style>body{font:15px system-ui,sans-serif;background:#05070b;color:#d8dee9;display:grid;place-items:center;min-height:100vh;margin:0}a{color:#8fbcff}</style>
+</head>
+<body>
+<p>Cette preview n'est plus publiée ici. <a href="../">Le jeu</a> · This preview is no longer published here.</p>
+<script>
+// A retired preview (audit 2026-11-10, QA-04): its worker unregistered, the keys a player typed into it — stored
+// under its prefix, "<dir>/kerr.*.key" (src/util/storage.ts) — removed, then the site's root.
+(async () => {
+  const dir = location.pathname.replace(/\/(index\.html)?$/, "").split("/").pop();
+  try {
+    for (const r of (await navigator.serviceWorker?.getRegistrations()) ?? [])
+      if (new URL(r.scope).pathname === new URL("./", location.href).pathname) await r.unregister();
+  } catch {}
+  try {
+    for (const k of Object.keys(localStorage)) if (dir && k.startsWith(`${dir}/`) && /\.key$/.test(k)) localStorage.removeItem(k);
+  } catch {}
+  location.replace("../");
+})();
+</script>
+</body>
+</html>
