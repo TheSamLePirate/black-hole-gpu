@@ -157,6 +157,16 @@ que fait `shadeLite`, un « visibility buffer ») reste la voie efficace ; le fo
 16 px et plus (un maillage d'ombrage plus grossier que celui de la visibilité), ou pour les maillages à grands triangles (bâtiments,
 appareil : J1-5). Le pilote reste éteint (`forwardGround`).
 
+**J1-4, orientation proposée à Sam (11 novembre, nuit) — à décider.** Trois mesures de la nuit (kerr-mini, Toulon, forêt à 120 m) :
+(1) le forward du sol coûte +13,6 ms (le fragment ~4× le calcul sur le maillage fin) ; (2) `shadeLite` payait ~16 ms de *présence*
+de l'air et des nuages : sortis dans `shadeLiteFinish` (fait, b82fd8b2), 46 → 41 + 3 ms ; (3) il est au bord d'une falaise
+d'occupation : les surfaces, le spéculaire ou le détail retirés à la compilation, chacun −11 à −12,5 ms. Proposition : pour le sol
+dense, garder la **visibilité suivie d'un ombrage en calcul** (un « visibility buffer ») et le séparer en deux noyaux — **matériau**
+(albédo, normales, et par cas : émission des bâtiments / feux de piste / transmission des arbres, verre, humidité, classe, route,
+lumières de nuit ; 3 à 4 `rgba32float` empaquetés par cas) puis **éclairage** (soleil et ombres, ciel, rebond, spéculaire, pluie,
+lumières) —, `shadeLiteFinish` après ; le forward réservé aux grands triangles (J1-5 : bâtiments, appareil). À décider : cette
+orientation à la place du « forward du terrain » de J1-4, avant d'écrire le découpage matériau/éclairage.
+
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster
 prend la fermeture de ses racines dans le traceur **composé et spécialisé** (`wgsl-library.ts`), et déclare les ressources listées à
