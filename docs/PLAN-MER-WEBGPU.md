@@ -194,6 +194,12 @@ reste : la sonde est plus lumineuse que l'image de jour d'un facteur entre 1,6 e
 analytique la laisse passer. À reprendre avec une mesure sur l'historique linéaire (divisé par la pré-exposition) ou sur le ciel
 analytique au même point.
 
+**S2, les crêtes vues d'une plage proche (la limite levée, 10 novembre, nuit)** : la caméra à 3 m au-dessus de la mer, 150 m de la
+plage de l'Almanarre (Giens), force 5 : `seaCrestsOverLand` allumé ou éteint, la ligne de la plage identique — aucune crête sur le
+sable. La première tentative a montré un **bloc noir de 120–165 m sur la mer** devant la plage : une tuile z 17 du LiDAR HD
+entièrement interpolée sur l'eau (0 à 204 m, sans trou) passait sans contrôle quand les niveaux plus grossiers n'étaient pas encore là
+pour la juger — corrigé dans `earth-tiles.ts` (`coarseUnknown` : RGE ALTI demandé), planche `docs/progress/mer/almanarre-lidar-avant-apres.jpg`.
+
 **S5, le défaut de la sonde : levé (10 novembre, nuit).** Remesuré sur l'historique linéaire (le centre de `temporal`, divisé par sa
 pré-exposition) : les texels « u = v = 0,5 » lus jusqu'ici sont **les mêmes quelle que soit la vue** (cap 0°/site 40° et cap 90°/site
 20° : identiques) — la sonde est rangée sur les axes fixes du monde (`envX/Y/Z` = 1, 0, 0…), pas sur ceux de la caméra ; on comparait

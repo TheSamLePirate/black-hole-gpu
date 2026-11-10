@@ -2546,3 +2546,19 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   raide). Aucun code changé : la sonde peut juger le reflet ; la piste « facteur π » est close. `docs/PLAN-MER-WEBGPU.md` §4.
 - **Preuve** : **mesuré** sur kerr-mini (sonde e2e `probe-hist`, 7 vues, 0 erreur GPU).
 - **Limites** : l'écart de 10–35 % au ras de l'horizon la nuit n'est pas séparé du lissage de la mesure (à refaire sur un texel).
+
+## 2026-11-10T22:10Z — Relief IGN : un faux plateau de 120–165 m sur la mer à Giens corrigé ; crêtes vues d'une plage vérifiées
+
+- **Contribution** (stratégie §7 « le monde possède les supports et révisions du sol » ; zone J0 Toulon-Hyères ; PLAN-MER S2) : en
+  vérifiant les crêtes depuis la plage de l'Almanarre, un bloc noir de 120–165 m de haut est apparu sur la mer — et dans le **sol de
+  contact** (`sys.groundAt`), pas seulement à l'image. Cause : la Géoplateforme renvoie pour le LiDAR HD sur l'eau du « sans donnée »
+  rééchantillonné et un bruit positif (jusqu'à 204 m, relevé sur le WMS-R) ; en z 16 la tuile a des trous, RGE ALTI est demandé et la
+  corrige ; en z 17 elle n'en a aucun et n'est contrôlée que si les niveaux grossiers la jugent suspecte — quand ils ne sont pas encore
+  là (cellules NaN), elle passait. `ignGround` demande désormais RGE ALTI aussi quand les niveaux grossiers ne peuvent pas juger
+  (`coarseUnknown`, moins d'un quart des cellules connues). Fichiers : `src/system/earth-tiles.ts`, `tests/ign-lidar-sea.test.ts`.
+- **Preuve** : **observé/relu** sur kerr-mini : avant, sol de contact à 170–214 m sur l'ellipsoïde (mer 48,6) sur ~600 × 500 m ; après,
+  48,6 partout, le rivage du tombolo à 6,1254° E (0,2 m) ; planche `docs/progress/mer/almanarre-lidar-avant-apres.jpg`. Test unitaire.
+  Crêtes (S2) : depuis 3 m, 150 m de la plage, `seaCrestsOverLand` allumé/éteint, ligne de plage identique.
+- **Limites** : des requêtes RGE ALTI en plus au chargement quand les niveaux grossiers manquent (non comptées) ; les tuiles déjà en
+  cache disque/zone hors ligne d'avant la correction ne sont pas revues ; les pins vus de près sont presque noirs et en dents de scie
+  (look des arbres, lot V2), non traité ici.

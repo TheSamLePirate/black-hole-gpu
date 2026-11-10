@@ -675,6 +675,13 @@ export function lidarSuspect(h: Float32Array, coarse: Float32Array): boolean {
   return false;
 }
 
+/** the coarser levels cannot judge a LiDAR tile: under a quarter of their cells known (lidarSuspect's) */
+export function coarseUnknown(coarse: Float32Array): boolean {
+  let known = 0;
+  for (const c of coarse) if (!Number.isNaN(c)) known++;
+  return known < coarse.length / 4;
+}
+
 /**
  * A tile's ground over France (I2): the LiDAR HD's terrain from IGN_LIDAR_Z on, RGE ALTI under it and where the LiDAR has
  * none (NaN where the IGN has none at all — the sea, the countries round); up to HLOD_Z1 with `hlod`, its overground (I6:
@@ -698,7 +705,10 @@ async function ignGround(
     // z 16 tile where RGE ALTI has the sea at 0, drawn as a black box hundreds of metres high over the water while the finest
     // levels came, the coast-flight e2e, Sam, 5 Nov 2026 —: a tile whose LiDAR stands 40 m off the coarser levels anywhere,
     // or has holes, is checked against RGE ALTI, which is taken wherever the two part by more than LIDAR_TRUST_M)
-    const suspect = !!h && !!coarse && lidarSuspect(h, coarse);
+    // (and a tile the coarser levels cannot judge — not in yet when it came, or none there: their cells NaN — checked too: a z 17
+    // tile wholly interpolated over the sea west of Giens — 0 to 204 m, no hole — passed unchecked, a black block 120–165 m high
+    // over the water by the Almanarre's beach, the sea's crests probe, 10 Nov 2026)
+    const suspect = !!h && (!coarse || coarseUnknown(coarse) || lidarSuspect(h, coarse));
     if (!h || suspect || h.some((e) => Number.isNaN(e))) {
       const r = await ignGrid(IGN_RGEALTI, z, x, y, signal);
       if (!h) h = r;

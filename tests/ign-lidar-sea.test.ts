@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { lidarSuspect, overground } from "../src/system/earth-tiles";
+import { coarseUnknown, lidarSuspect, overground } from "../src/system/earth-tiles";
 
 // The LiDAR HD's terrain interpolated over the sea (the Calanques, 5 Nov 2026 — a ramp of 76 to 274 m across a z 16 tile where
 // RGE ALTI has the sea at 0): a tile standing 40 m off the coarser levels is suspect (ignGround then takes RGE ALTI wherever
@@ -14,6 +14,14 @@ test("a LiDAR ramp over a coarse sea: suspect; the same land as the coarse level
   const land = new Float32Array(T * T).fill(120);
   expect(lidarSuspect(land, new Float32Array(256).fill(110))).toBeFalse();
   expect(lidarSuspect(land, new Float32Array(256).fill(Number.NaN))).toBeFalse();
+});
+
+test("coarser levels that cannot judge (Giens, 10 Nov 2026 — a z 17 tile wholly interpolated over the sea, no hole): unknown", () => {
+  expect(coarseUnknown(new Float32Array(256).fill(Number.NaN))).toBeTrue();
+  const few = new Float32Array(256).fill(Number.NaN);
+  few.fill(0, 0, 40);
+  expect(coarseUnknown(few)).toBeTrue();
+  expect(coarseUnknown(new Float32Array(256).fill(0))).toBeFalse();
 });
 
 test("no overground over the sea: a surface ramp over a ground at 0 adds nothing; over land it stays", () => {
