@@ -2680,3 +2680,17 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Limites** : la coupe à la compilation `TUNE_LITE 2048` donnait 28 ms ; le découpage en donne 41 + 3 — l'écart n'est pas expliqué
   (l'ancienne variante coupée ne faisait pas le travail de l'air ; ici il est fait, 3 ms, mais 10 ms restent inexpliqués). Gain J0 dans
   l'écart habituel des passages (non établi au-delà).
+
+## 2026-11-11T03:10Z — Mesure : `shadeLite` est au bord d'une falaise d'occupation (~12 ms sur 41 au-dessus d'une forêt)
+
+- **Constat** (kerr-mini, Toulon, forêt à 120 m, code découpé de b82fd8b2 : `earth lite` ~40–41 ms) : coupées **à la compilation**,
+  trois familles situées dans des régions différentes du noyau donnent chacune le même saut — les surfaces régionales (8) **−11 ms**,
+  le spéculaire (67108864) **−11,5 ms**, les scans de détail (2147483648) **−12,5 ms** — ; les arbres −4,2, les ombres du décor −2,3, les
+  routes de la carte −3,0. Coupées à l'exécution, elles ne gagnent que 0–2 ms. Le noyau est juste au-dessus d'un seuil (registres —
+  déversement — ou cache d'instructions du GPU Apple) : en retirer un bloc moyen n'importe où le fait passer dessous, ~30 %.
+- **Essayé sans effet** : avancer avant `liteSun` les scalaires lus tard (lumières de nuit, empreinte, imagerie, classe de surface,
+  route) — 40,0 ms contre 40,2–41,7 : dans le bruit, annulé.
+- **Prochaine étape proposée** : séparer `shadeLite` en un noyau de **matériau** (albédo, normale, drapeaux, scalaires de la route, de la
+  piste, du bâtiment) et un noyau d'**éclairage** (soleil et ombres, ciel, rebond, spéculaire, pluie, lumières), un petit tampon par
+  pixel entre les deux (2–3 `rgba32float`) — le schéma différé, la séparation matériau/lumière de la stratégie §7.4 ; à mesurer sur
+  la forêt et sur J0. Aucune image changée par ces mesures.
