@@ -112,6 +112,14 @@ Ce qu'on en tire pour J1-3/J1-4 :
   `csmTex`, `sunShadowMap`, `tsmTex`, `shipShadowMap`, `earthCube`, `earthNight`, `noiseTex`, `terrainDist`) ; le fragment pilote
   les lira par un groupe de liaisons « lumière du sol » commun au traceur — une seule autorité des liaisons (webgpu-utils, J1-0).
 
+**Le coût de compilation mesuré (J1-4, premier risque — 10 novembre, nuit)** : `bun scripts/ground-compile-cost.ts 4` (ce Mac,
+M1 Max, Chrome sans interface, commit bdfd2696 ; chaque tour une compilation à froid — l'entrée renommée et une branche vivante sur un
+nonce, sans quoi le cache du pilote répond en ~45 ms) : le noyau `shadeLite` du profil J0 **1,26–1,32 s**, la fermeture « surface seule »
+(sans `liteFinish` ni `liteWater`, 134 k caractères contre 173 k) **1,10–1,17 s** (−13 %). Un fragment forward portant la surface coûte
+donc à froid l'ordre de `shadeLite` ; tant que `shadeLite` reste compilé pour le hors-domaine (jusqu'à J1-7), la transition ajoute
+~1,1 s de compilation à froid — à placer hors du chemin bloquant (compilation anticipée, §8 de la stratégie). Mesure d'un module de
+calcul ; un fragment (étage, liaisons) reste à mesurer.
+
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster
 prend la fermeture de ses racines dans le traceur **composé et spécialisé** (`wgsl-library.ts`), et déclare les ressources listées à

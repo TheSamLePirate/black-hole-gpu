@@ -2600,3 +2600,13 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Limites** : aucun pipeline de rendu ne les emploie encore (J1-4 : le fragment forward, la renumérotation de ses liaisons à l'étage
   fragment, le coût de compilation à mesurer) ; les déclarations multi-lignes (`const` sur plusieurs lignes) ne sont pas prises par la
   fermeture — aucune dans ces familles.
+
+## 2026-11-10T23:35Z — J1-4 : le coût de compilation de la surface forward mesuré
+
+- **Contribution** (PLAN-J1 J1-4, premier risque ; stratégie §8 compilation) : `scripts/ground-compile-cost.ts` compile à froid,
+  alternés, le noyau `shadeLite` du profil J0 et la fermeture « surface seule » (`wgsl-library.ts`, sans l'air/nuages ni l'eau).
+- **Preuve** : **mesuré** sur ce Mac (M1 Max, Chrome sans interface, 4 tours) : `shadeLite` 1,26–1,32 s, surface 1,10–1,17 s (−13 %).
+  Piège relevé : un nonce en commentaire ou un simple renommage laisse le cache du pilote répondre (~45 ms) ; une branche vivante sur
+  un nonce force la compilation.
+- **Limites** : module de calcul, pas encore l'étage fragment ; une seule machine ; la transition (shadeLite + fragment) ajouterait
+  ~1,1 s à froid, à anticiper hors du chemin bloquant.
