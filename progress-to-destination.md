@@ -2397,3 +2397,15 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Limites** : la côte paie 1,5 ms la classification du noyau de pleine mer sans rien à y ombrer ; le ciel filtré et les deux
   allègements (éclairement du ciel, traînées) non mesurés seuls ; la compilation d'un noyau de plus (en arrière-plan, après l'image)
   non chronométrée ; non mesuré sur M1 Max ni J0.
+
+## 2026-11-10T17:15Z — J0 après la mer WebGPU : 65 → 61 ms sur kerr-mini
+
+- **Correction** : l'entrée précédente est datée « 18:10Z » par erreur ; elle a été écrite vers 17:00Z.
+- **Contribution** (PLAN-MER-WEBGPU S6, J0) : la scène de référence revolée après les lots de la mer — elle coûte moins et montre plus.
+  Fiche nouvelle `docs/progress/j0/FICHE-kerr-mini-2026-11-10-mer.md` (vol seul, deux passages) ; celle du matin marquée périmée
+  pour le vol, ses ablations gardées.
+- **Preuve** : **mesuré**, kerr-mini à 1 278 MHz stables, commit `510bb87f` : GPU p50 65,4 / 64,2 → **60,9 / 60,7 ms**, 15,2–15,5 →
+  16,4 images/s ; `earth lite` 17,5 → 12,1 ms, `earth water` 12,7 → 12,4 + 2,1 (pleine mer), `sea fft` 1,6 → 2,1. Chemin d'entrée à
+  cache Metal chaud 12,2 / 16,9 s (matin 12,8 / 17) ; à froid, sources neuves, 33,3 / 60,8 s.
+- **Limites** : palier de 25 ms toujours loin (intervalle p50 60 ms) ; pas d'ablations ni de vol soutenu ce soir ; M1 Max non revolé ;
+  aucun point froid du matin pour juger le chemin d'entrée à froid.

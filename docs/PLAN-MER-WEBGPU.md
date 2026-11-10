@@ -149,3 +149,9 @@ recompile pas : un coût d'exécution), sans le Fresnel moyenné −8,8, sans le
 - Mesuré pour rien : couper les ombres du relief sur la pleine mer (sans terre à 8 km) ; exiger « aucune terre à 8 km » pour le
   noyau de pleine mer le laissait sans pixel dans toutes les vues de Hyères.
 
+**S6, la scène J0 après la mer** (kerr-mini, vol seul, deux passages, [fiche](progress/j0/FICHE-kerr-mini-2026-11-10-mer.md)) : GPU
+p50 **65,4 / 64,2 → 60,9 / 60,7 ms**, 15,2–15,5 → 16,4 images/s ; `earth lite` 17,5 → 12,1, `earth water` 12,7 → 12,4 + 2,1
+(pleine mer), `sea fft` 1,6 → 2,1. La mer de la scène de référence coûte moins et montre plus (4 cascades, surface maillée, écume
+monde, ciel filtré). Chemin d'entrée inchangé à cache chaud (12,2 / 16,9 s) ; à froid, sources neuves, 33,3 / 60,8 s — sans point
+de comparaison froid du matin. Reste de S6 : le M1 Max soutenu, les ablations J0, le retrait des voies remplacées.
+

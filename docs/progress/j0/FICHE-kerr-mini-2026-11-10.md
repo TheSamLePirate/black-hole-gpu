@@ -1,5 +1,8 @@
 # J0 — fiche kerr-mini, 2026-11-10
 
+> **Périmée pour le vol** (le commit a changé : la mer WebGPU) — voir [la fiche du soir](FICHE-kerr-mini-2026-11-10-mer.md). Ses ablations
+> restent la dernière mesure.
+
 Scène `toulon-hyeres-v1` ([contrat](../../J0-CONTRAT.md)) · commit `5aeec7b0` · sortie 1920×1080 · lancé 2026-11-10T10:15:51.867Z · source `docs/progress/j0/j0-kerr-mini-2026-11-10.json` (écrite par `scripts/j0-fiche.ts`).
 Navigateur : Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36. Adaptateur : `"apple"`.
 Réglages effectifs (profil du joueur) : `{"quality":"game","dynamicResolution":true,"earthPipeline":"raster","earthScenery":"high","earthSurface":"satellite","detailReach":"veryFar","lookProfile":"auto","realtimeSubsampling":"auto","earthRasterShading":"auto","fpsCap":0,"motionBlur":0,"dof":false}`.

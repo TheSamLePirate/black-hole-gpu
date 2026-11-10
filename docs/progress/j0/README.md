@@ -3,7 +3,7 @@
 Scène `toulon-hyeres-v1` ([contrat](../../J0-CONTRAT.md)), code du jeu à `5aeec7b0`, e2e
 `tests/e2e/j0-reference.e2e.test.ts` du même lot. Sortie 1920 × 1080, profil du joueur tel que livré (qualité « game »,
 résolution dynamique, échelle tenue à 0,75, décor « high », portée « veryFar »), Chrome 157, profil neuf à chaque
-lancement. Fiches : [M1 Max](FICHE-m1max-2026-11-10.md), [kerr-mini](FICHE-kerr-mini-2026-11-10.md) ; données brutes
+lancement. Fiches : [M1 Max](FICHE-m1max-2026-11-10.md), [kerr-mini](FICHE-kerr-mini-2026-11-10.md) (le vol périmé par [celle du soir, après la mer WebGPU](FICHE-kerr-mini-2026-11-10-mer.md) : GPU p50 65 → 61 ms) ; données brutes
 `j0-<machine>-2026-11-10.json` (le premier passage du M1 Max, mesuré déjà bridé et avec un défaut de démarrage des
 ablations corrigé depuis, gardé dans `j0-m1max-2026-11-10-passage1.json`).
 
