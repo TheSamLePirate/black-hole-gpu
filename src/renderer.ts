@@ -420,6 +420,8 @@ const SKY_EVERY = 3;
 const RASTER_STARS_FLAG = 512;
 /** the catalogue's stars at most (trace.wgsl shadeStars: a thread a star — 119 614 HYG/Hipparcos) */
 const STARS_MAX = 120_000;
+/** the frames the open sea's kernel keeps running after the last open sea seen (its stamp read back every SEA_PROBE_FRAMES) */
+const SEA_OPEN_UNSEEN_FRAMES = 60;
 /** P.seafft[0].x when the open sea's kernel runs (renderer encodeLite, trace.wgsl shadeWater) */
 const SEA_OPEN_FLAG = new Float32Array([2]);
 /** the sky's discs drawn at most (renderer.skyDiscs, discRects; trace.wgsl main's layers) */
@@ -2901,7 +2903,8 @@ export class Renderer {
     const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC }); // Σ l², depth
     const sceneDepth = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE }); // the occlusion depth
     // (words past the image: the sky's discs' rectangles — trace.wgsl main's layers z ≥ 1, renderer discRects —, then the frame
-    // the raster's sea was last drawn — its last word: trace.wgsl shadeWater, renderer seaProbe)
+    // the raster's open sea was last seen — the last word but one — and its sea drawn — its last word: trace.wgsl shadeWater, renderer
+    // seaProbe)
     const stamps = d.createBuffer({
       size: (px + 4 * SKY_DISCS_MAX + 12 + 4) * 4,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
@@ -6851,8 +6854,14 @@ export class Renderer {
         wp.end();
         // (the open sea's pixels by their own lighter kernel — PLAN-MER-WEBGPU S3 —, the FFT's waves on: P.seafft[0].x 2 written over
         // the frame's parameters before their submission — shadeWater leaves them those pixels)
+        // (and some open sea seen lately — shadeWater's stamp, read back: a coast without any paid its classification, 1.5 ms)
         const open =
-          this.seaWaterOpenOn && this.seafftAt >= 0 && this.paramsF[this.seafftAt]! > 0.5 ? this.traceVariant("shadeWaterOpen") : null;
+          this.seaWaterOpenOn &&
+          this.seafftAt >= 0 &&
+          this.paramsF[this.seafftAt]! > 0.5 &&
+          this.frameStamp - this.seaOpenSeenStamp <= SEA_OPEN_UNSEEN_FRAMES
+            ? this.traceVariant("shadeWaterOpen")
+            : null;
         if (open) {
           this.device.queue.writeBuffer(this.paramBuf, this.seafftAt * 4, SEA_OPEN_FLAG);
           const op = enc.beginComputePass(this.prof.pass("earth water open (raster)"));
@@ -9193,8 +9202,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private seaProbeFor(enc: GPUCommandEncoder): GPUBuffer | null {
     const t = this.live;
     if (!t || !this.rasterWaterNow || this.seaProbeBusy || this.frameStamp - this.seaProbeAt < SEA_PROBE_FRAMES) return null;
-    this.seaProbe ??= this.device.createBuffer({ size: 4, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-    enc.copyBufferToBuffer(t.stamps, t.stamps.size - 4, this.seaProbe, 0, 4);
+    this.seaProbe ??= this.device.createBuffer({ size: 8, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    // (the last two words: the frame some open sea was last seen — shadeWater —, the frame some sea was)
+    enc.copyBufferToBuffer(t.stamps, t.stamps.size - 8, this.seaProbe, 0, 8);
     this.seaProbeAt = this.frameStamp;
     return this.seaProbe;
   }
@@ -9203,6 +9213,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private seaProbeAt = 0;
   /** the frame the raster last drew some sea (shadeWater's stamp, read back) */
   private seaSeenStamp = 0;
+  /** the frame the raster last saw some open sea (shadeWater's stamp, read back): the open kernel only while some is seen */
+  private seaOpenSeenStamp = 0;
 
   /** `traced`: the frame traced the scene (the first image: the first such frame completed) */
   private submit(enc: GPUCommandEncoder, done: (ms: number) => void, traced = true) {
@@ -9218,9 +9230,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       probe
         .mapAsync(GPUMapMode.READ)
         .then(() => {
-          const v = new Uint32Array(probe.getMappedRange())[0]!;
+          const w = new Uint32Array(probe.getMappedRange());
+          const open = w[0]!,
+            v = w[1]!;
           probe.unmap();
           if (v > 0) this.seaSeenStamp = Math.max(this.seaSeenStamp, v);
+          if (open > 0) this.seaOpenSeenStamp = Math.max(this.seaOpenSeenStamp, open);
         })
         .catch(() => {})
         .finally(() => (this.seaProbeBusy = false));

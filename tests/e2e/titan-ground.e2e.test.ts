@@ -28,14 +28,19 @@ describe.skipIf(!E2E)("P8: Titan's ground", () => {
     app?.close();
     stopServer();
   });
-  // (the tracer and the raster compiled, Titan's finer map in, then a few frames)
-  const settle = () =>
-    app.js(`(async () => { const r = __bh.renderer, t0 = performance.now();
-      for (let i = 0; i < 4; i++) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
-      while ((!r.kernelsSettled || r.compilesPending > 0 || r.compilingNow.length > 0 || r.hdMap.name !== "titan" || r.moonTiles.pending > 0) && performance.now() - t0 < 600000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
-      const t1 = performance.now();
-      while (performance.now() - t1 < 6000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
-      return 1; })()`);
+  // (the tracer and the raster compiled, Titan's finer map in, then a few frames — polled, not one evaluation: a single call waiting
+  // up to 600 s outlived DevTools' 300 s and failed as "the page hung" while Titan's kernels were still compiling, 10 Nov; the frames
+  // kept coming by the poll's touch; what is still missing said if it stalls)
+  const settle = async (cond = `r.hdMap.name === "titan" && !r.moonTiles.pending`) => {
+    await app.waitProgress(
+      `(__bh.touch(), (() => { const r = __bh.renderer; return r.kernelsSettled && !r.compilesPending && !r.compilingNow.length && ${cond}; })())`,
+      "Titan's kernels and maps",
+      { compileStallMs: 300_000, maxMs: 600_000 },
+    );
+    await app.js(
+      `(async () => { const t1 = performance.now(); while (performance.now() - t1 < 6000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 1; })()`,
+    );
+  };
   const shot = async (name: string) => {
     await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
     await app.shot(`${OUT}/${name}.png`);
@@ -81,9 +86,7 @@ describe.skipIf(!E2E)("P8: Titan's ground", () => {
 
   test("the disc from 6 000 km: the haze lit by its many scatterings", async () => {
     await app.js(`(() => { __bh.game.preset("Titan: the orange haze"); ${HOLD} return 1; })()`);
-    await app.js(
-      `(async () => { const r = __bh.renderer, t0 = performance.now(); while ((!r.kernelsSettled || r.compilesPending > 0) && performance.now() - t0 < 600000) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } for (let i = 0; i < 60; i++) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); } return 1; })()`,
-    );
+    await settle("true");
     const st = await state();
     console.log(`  orbit: ${JSON.stringify(st)}`);
     await shot("orbit");

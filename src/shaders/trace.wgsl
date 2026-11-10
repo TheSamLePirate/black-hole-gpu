@@ -16136,6 +16136,9 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   // (the open sea's pixels — no bed known within 60 m, no shore within the wash's reach, not inland — the open kernel's when it
   // runs this frame (P.seafft[0].x 2, renderer encodeLite): each kernel leaves the other's)
   let openSea = calm <= 0.0 && !(dw.y > 0.0 && dw.x < 60.0) && SEA_SHORE <= 0.0 && accum[idx].w < 1.5;
+  // (some open sea in view: its stamp in the stamps' last word but one — renderer seaOpenSeenStamp: the open kernel dispatched only
+  // while some is seen; a coast without any paid its classification for nothing)
+  if (openSea) { stamps[arrayLength(&stamps) - 2u] = P.frame.x; }
   if (WATER_OPEN && !openSea) { return; }
   if (!WATER_OPEN && openSea && P.seafft[0].x > 1.5) { return; }
   var n = rasterNormal(centre, terrainRasterHint(centre), k);

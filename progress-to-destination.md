@@ -2444,3 +2444,13 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   e2e `coast-loading` et `sea-fft` (6/6), `check-wgsl` 73/73, `tsc`, tests (73 pass).
 - **Limites** : dans les vues de Hyères Terrarium porte déjà la profondeur — l'effet de Dean n'y est pas visible ; à juger sur une
   côte sans données (hors de France) ; la cuisson des quatre niveaux non chronométrée seule.
+
+## 2026-11-10T18:30Z — Titan sans faux « page figée », M1 Max soutenu, le noyau de pleine mer conditionnel
+
+- **Contribution** : (1) `titan-ground` fiable — ses attentes de compilation tenaient dans une seule évaluation de 600 s, coupée par
+  DevTools à 300 s (« the page hung? ») : sondées par `waitProgress`, 3/3 en 83 + 7 + 7 s au lieu de 253–300 s ; la leçon dans E2E.md §7.
+  (2) J0 complet sur le M1 Max (PLAN-MER-WEBGPU S6) : vol frais 40,9 images/s, soutenu 24,9 → 31,4 images/s (≈ +9 % par MHz ; bridage
+  moindre ce soir) ; ablations faussées par le bridage. (3) Le noyau de pleine mer envoyé seulement s'il y en a en vue (tampon relu).
+- **Preuve** : **mesuré** — e2e `titan-ground` 3/3 sur kerr-mini ; fiche `FICHE-m1max-2026-11-10-mer-complet.md` ; kerr-mini : côte
+  neutre (68,5 / 68,35 ms), mer à 30 m −2,75 ms. `check-wgsl` 73/73, `tsc`.
+- **Limites** : le soutenu du matin et du soir à des fréquences différentes ; ablations à refaire sur kerr-mini avec le code du soir.

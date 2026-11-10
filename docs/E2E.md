@@ -470,7 +470,7 @@ Flight-lab campaigns follow the same pattern: `bun scripts/flightlab.ts run --sh
 | `… is not clickable: div.x > …` | `app.hit` found another element on top: an overlay or a panel. The test caught a real bug, or it must close that panel first |
 | `waitFor(…): 10000 ms, last …` | the state never came. Read `last`. On the mini, the M1 may simply be slower |
 | a flight test failed (jet gliding at throttle 0, autopilot off, craft in a mountain, at Le Bourget, the Ranger flown, `body.paused` after a crash, wrong altitude datum…) | [E2E-VOLS.md](E2E-VOLS.md) §7: the symptom → cause → remedy table |
-| `unanswered after 300 s` | the page hung (an infinite loop in page code, a flight that never ends). Chunk long work (§4.4) |
+| `unanswered after 300 s` | the page hung (an infinite loop in page code, a flight that never ends) — **or one evaluation waited longer than 300 s on purpose**: a `while (!r.kernelsSettled …)` loop inside a single `app.js` outlives the DevTools call while the kernels are still compiling (titan-ground, 10 Nov 2026: "the page hung?" on a 600 s wait for Titan's compiles). Chunk long work (§4.4); wait for compiles with `app.waitProgress("(__bh.touch(), <cond>)", label, { compileStallMs, maxMs })` — polled, the frames kept coming by the touch, what is missing said |
 | behaviour contradicts the source with `E2E_URL` on the dev server | the Bun dev server served a stale bundle: restart it. Without `E2E_URL` each run builds its own production server, so this cannot happen |
 | `rsync failed` / ssh errors | the mini is asleep or off the network: `ssh kerr-mini true`, `remote.ts doctor`. Never bypass a host-key warning |
 | `no graphical session` on the mini | nobody is logged in at its screen. Ask the user (or `--headless` if they agree) |

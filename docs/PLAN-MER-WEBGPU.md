@@ -171,3 +171,9 @@ change pas (moyennes à 1 %). **Au passage, un défaut corrigé** : la mer près
 dans une vue) — le turquoise des hauts-fonds s'ouvrait sur chaque point blanc de l'orthophoto (vagues, reflets, bateaux du jour de la
 prise de vue) ; l'albédo du fond lu sur huit empreintes : 0 point, couleur moyenne inchangée.
 
+**Le noyau de pleine mer seulement s'il y en a** : chaque noyau de l'eau tamponne « pleine mer vue » (avant-dernier mot de `stamps`,
+relu avec celui de la mer) ; le noyau de pleine mer n'est envoyé que si l'on en a vu dans les 60 dernières images — le noyau entier
+la traite sinon, et la signale. Côte à 500 m (un peu de pleine mer au large : le noyau reste envoyé) 68,5 contre 68,35 ms, neutre ;
+mer à 30 m 67,3 contre 70,05. **M1 Max, séance complète** ([fiche](progress/j0/FICHE-m1max-2026-11-10-mer-complet.md)) : vol soutenu
+24,9 → 31,4 images/s (≈ +9 % par MHz, le bridage du soir moindre) ; ses ablations faussées par le bridage (jusqu'à 389 MHz).
+
