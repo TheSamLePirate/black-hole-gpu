@@ -2494,3 +2494,16 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   paramètres qu'avant, par construction et à l'image.
 - **Limites** : les autres structures (terrain raster, mer, sonde, nuages…) gardent leurs offsets à la main ; le domaine pilote de J1
   pris par défaut (la portée du patch), révisable par Sam.
+
+## 2026-11-10T19:55Z — J1-2 commence : le mouvement des objets mobiles dans la visibilité
+
+- **Contribution** (stratégie §7.4 « mouvement : vecteur pour objets/déformations », PLAN-J1 J1-2) : la passe de visibilité du raster a
+  une seconde cible, `terrain raster motion` (rgba16float) : les maillages mobiles du décor (voitures et leurs feux, pales des
+  éoliennes) y écrivent leur mouvement sur l'image depuis l'image d'avant — leur point à l'horloge d'alors, par la caméra d'alors
+  (l'uniforme du décor porte la caméra précédente, valide tant que l'origine du décor ne change pas) ; `temporal` et `taau` reprojettent
+  ces pixels par lui (les autres par la caméra et la profondeur, exacts pour le rigide). Levier `sceneryRaster.motionOn`. Fichiers :
+  `src/system/scenery-raster.ts`, `terrain-raster.ts`, `src/shaders/post.wgsl`, `src/renderer.ts`.
+- **Preuve** : relecture sur kerr-mini — ~900–1 000 pixels en mouvement de 4–7 px par image sur Toulon (0 sans le levier), aucune
+  erreur GPU ; e2e `sea-fft` 5/5, J0 62,8 ms (60,7–61,2 aux passages précédents : dans l'écart observé, le coût de la cible non mesuré seul).
+- **Limites** : l'effet visuel (traînées des voitures) non concluant à 400 m — à juger plus bas, caméra immobile ; le flou de mouvement
+  ne lit pas encore la cible ; la profondeur gardée et l'identité stable (le reste de J1-2) à faire ; `raster-motion` (banc) non lancé.

@@ -698,6 +698,8 @@ The other members tests read:
 | `seaSurfaceDrawn` | boolean | the sea's surface was drawn this frame (under 3 km over the sea, the FFT's waves on, the raster's visibility drawn) |
 | `seaFftActive` | number (private) | the FFT's cascades computed this frame (1–4, the coarsest first: the finest left out when the nearest sea's pixel covers them) |
 | `terrainRaster.seaStats` | `{ nodes, frames, reason }` | the sea surface's last draw: its quadtree's nodes, frames drawn, `"drawn"` / `"compiling"` / `"no visibility"` / `"off"` / `"failed: …"` |
+| `terrainRaster.motionTexture()` | GPUTexture \| null | the moving meshes' motion of the last Earth visibility pass (PLAN-J1 J1-2: `rgba16float`, xy [px of the internal image] since the frame before, z 1 where given; read by `temporal` and `taau`); null when that pass did not run (copied from by the probes) |
+| `sceneryRaster.motionOn` | boolean (read/write) | the scenery's moving meshes — cars, turbines' blades — write their motion (PLAN-J1 J1-2; default true); false: none, the history reprojects them as still scenery — an A/B's switch |
 | `seaOverride` | `SeaState \| null` (read/write) | a sea state imposed instead of the marine model's (`{ wind: { hs, tp, to }, swell: { hs, tp, to } }`, metres, seconds, radians towards): a measure's fixed sea |
 | `completedFrames` | number | GPU submissions finished |
 | `gpuErrors` | number | uncaptured GPU errors so far (0 expected) |

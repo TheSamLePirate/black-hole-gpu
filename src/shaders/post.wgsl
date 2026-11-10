@@ -623,6 +623,15 @@ fn historyAt(uv: vec2f, size: vec2f) -> vec3f {
 // The ground's albedo history (RASTER_DETAIL: r its luminance, g its coverage — 0 the sky's, a tree's), read as historyAt
 // reads the colour's — the same Catmull–Rom, so blurred alike — and written beside it each frame
 @group(0) @binding(28) var albPrev: texture_2d<f32>;
+// (PLAN-J1 J1-2: the raster's moving meshes' motion since the frame before [px of the internal image] — xy, z 1 where given —; a
+// 1 × 1 stand-in when no raster: none)
+@group(0) @binding(49) var motionTex: texture_2d<f32>;
+// a moving mesh's motion at an internal pixel (z 1), or none
+fn meshMotion(ip: vec2i) -> vec4f {
+  let md = textureDimensions(motionTex);
+  if (md.x < 2u || ip.x < 0 || ip.y < 0 || u32(ip.x) >= md.x || u32(ip.y) >= md.y) { return vec4f(0.0); }
+  return textureLoad(motionTex, ip, 0);
+}
 @group(0) @binding(29) var albOut: texture_storage_2d<rgba16float, write>;
 fn albHistAt(uv: vec2f, size: vec2f) -> vec2f {
   let sp = uv * size;
@@ -792,9 +801,14 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     }
   }
   let carried = byGround && TA.drift.w < 0.0;
-  if ((zf > 1e-3 && !ground) || carried) {
+  // (a moving mesh's pixel — a car, a blade: its history where its own point was, by its motion, not where the ground's was)
+  let mv = meshMotion(vec2i(gid.xy));
+  // (the raster's own image only — an offline render's target is another size)
+  let moved = mv.z > 0.5 && all(textureDimensions(motionTex) == size);
+  if ((zf > 1e-3 && !ground) || carried || moved) {
     var uv = prevUv(d);
     if (carried) { uv = (vec2f(gid.xy) + 0.5) / vec2f(size); }
+    if (moved) { uv = (vec2f(gid.xy) + 0.5 - mv.xy) / vec2f(size); }
     // (the history from under the cockpit's mask — mask.wgsl −1: not traced since it came on, the cabin there — is
     // stale: a fast roll carries the world out from behind the frame onto it; this frame's rays alone there)
     let up = vec2u(clamp(uv * vec2f(size), vec2f(0.0), vec2f(size) - 1.0));
@@ -1220,7 +1234,12 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
   let ground = TA.drift.w != 0.0 && depth < abs(TA.drift.w) && TA.cc.w < 0.5;
   let carried = TA.drift.w < 0.0 && ground;
   var uv = vec2f(-1.0);
-  if (carried) {
+  // (a moving mesh's pixel: by its motion — the internal image's, scaled to this one)
+  let md = vec2f(textureDimensions(motionTex));
+  let mv = meshMotion(vec2i(o * md / vec2f(size)));
+  if (mv.z > 0.5) {
+    uv = (o - mv.xy * vec2f(size) / md) / vec2f(size);
+  } else if (carried) {
     uv = uvO;
   } else if (!ground) {
     let d = reprojDir(pixelDir(o, size), depth);

@@ -14,6 +14,11 @@ const TERRAIN_CACHE_SUN_C1 = 3;
 /** The visibility target: r the ground's distance [m], g the scenery's instance drawn nearest (system/scenery-raster.ts),
  *  b the nearest surface's distance [m] (the ground's, or the instance's proxy in front of it). */
 export const TERRAIN_RASTER_FORMAT: GPUTextureFormat = "rgba32float";
+/** the visibility pass's second target: the moving meshes' motion on the image since the frame before [px] (xy), z 1 where given
+ *  (PLAN-J1 J1-2 — the temporal passes reproject those pixels by it, the rest by the camera and the depth) */
+export const TERRAIN_RASTER_MOTION_FORMAT: GPUTextureFormat = "rgba16float";
+/** the pipelines that draw no motion: the second target declared, not written */
+export const NO_MOTION: GPUColorTargetState = { format: TERRAIN_RASTER_MOTION_FORMAT, writeMask: 0 };
 import { geoidLibrary, terrainHeightLibrary, type TerrainCacheSources } from "./terrain-cache";
 import { TERRAIN_RASTER_MAX_PIXELS, TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 import { rasterGroundCode } from "./terrain-raster-hint";
@@ -454,6 +459,8 @@ interface RingState {
 
 interface Attachments {
   distance: GPUTexture;
+  /** the moving meshes' motion (TERRAIN_RASTER_MOTION_FORMAT; PLAN-J1 J1-2): the Earth's visibility pass only */
+  motion: GPUTexture;
   depth: GPUTexture;
   width: number;
   height: number;
@@ -596,7 +603,7 @@ export class TerrainRaster {
           entryPoint: "terrainVs",
           buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }],
         },
-        fragment: { module: this.module, entryPoint: "terrainFs", targets: [{ format: TERRAIN_RASTER_FORMAT }] },
+        fragment: { module: this.module, entryPoint: "terrainFs", targets: [{ format: TERRAIN_RASTER_FORMAT }, NO_MOTION] },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       })
@@ -614,7 +621,7 @@ export class TerrainRaster {
           entryPoint: "terrainVs",
           buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }],
         },
-        fragment: { module: this.module, entryPoint: "ringFs", targets: [{ format: TERRAIN_RASTER_FORMAT }] },
+        fragment: { module: this.module, entryPoint: "ringFs", targets: [{ format: TERRAIN_RASTER_FORMAT }, NO_MOTION] },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       })
@@ -670,6 +677,7 @@ export class TerrainRaster {
     const release = () => {
       if (!this.retired.delete(old)) return;
       old.distance.destroy();
+      old.motion.destroy();
       old.depth.destroy();
     };
     void this.device.queue.onSubmittedWorkDone().then(release, release);
@@ -870,13 +878,20 @@ export class TerrainRaster {
       // (copied from by renderer.rasterColumn — a diagnostic)
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
     });
+    const motion = this.device.createTexture({
+      label: "terrain raster motion",
+      size: [width, height],
+      format: TERRAIN_RASTER_MOTION_FORMAT,
+      // (copied from by a diagnostic — the probes read the motion back)
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+    });
     const depth = this.device.createTexture({
       label: "terrain raster reversed-Z",
       size: [width, height],
       format: "depth32float",
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
-    this.attachments = { distance, depth, width, height };
+    this.attachments = { distance, motion, depth, width, height };
     if (old) this.retire(old);
     return true;
   }
@@ -987,7 +1002,10 @@ export class TerrainRaster {
     const a = this.attachments!;
     const pass = enc.beginRenderPass(
       profile("terrain raster visibility", {
-        colorAttachments: [{ view: a.distance.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+        colorAttachments: [
+          { view: a.distance.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] },
+          { view: a.motion.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] },
+        ],
         depthStencilAttachment: { view: a.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
       }),
     );
@@ -1252,6 +1270,11 @@ export class TerrainRaster {
   distanceTexture(): GPUTexture | null {
     return this.active && !this.error ? (this.attachments?.distance ?? null) : null;
   }
+  /** the moving meshes' motion of the last Earth visibility pass (PLAN-J1 J1-2); null when it did not run — another world's body
+   *  raster leaves the target as it was */
+  motionTexture(): GPUTexture | null {
+    return this.active && !this.error && this.reason === "pilot" ? (this.attachments?.motion ?? null) : null;
+  }
 
   /** The inspector's overlay over the final image, after the patch was drawn this frame. */
   encodeInspector(
@@ -1329,6 +1352,7 @@ export class TerrainRaster {
     this.rings = [];
     for (const a of [...this.retired, ...(this.attachments ? [this.attachments] : [])]) {
       a.distance.destroy();
+      a.motion.destroy();
       a.depth.destroy();
     }
     this.retired.clear();

@@ -694,6 +694,9 @@ interface Target {
     albOk: boolean;
     buf: GPUBuffer;
     binds: GPUBindGroup[];
+    /** the motion texture its binds read (PLAN-J1 J1-2: the raster's, or the 1 × 1 stand-in), and how they are made again */
+    motion: GPUTexture;
+    mkBinds: (motion: GPUTexture) => GPUBindGroup[];
     idx: number;
     valid: boolean;
     pre: number;
@@ -5289,6 +5292,34 @@ export class Renderer {
   seaCrestsOverLand = true;
   /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */
   private seafftAt = -1;
+  /** the moving meshes' motion the temporal passes read (PLAN-J1 J1-2): the raster's visibility pass's, else a 1 × 1 zero */
+  private motionTexNow(): GPUTexture {
+    return (
+      this.terrainRaster?.motionTexture() ??
+      (this.motionStandIn ??= this.device.createTexture({
+        label: "motion stand-in",
+        size: [1, 1],
+        format: "rgba16float",
+        usage: GPUTextureUsage.TEXTURE_BINDING,
+      }))
+    );
+  }
+  private motionStandIn: GPUTexture | null = null;
+  /** a motion texture's number (the TAAU's bind groups' key) */
+  private motionGen(m: GPUTexture): number {
+    let n = this.motionIds.get(m);
+    if (n === undefined) this.motionIds.set(m, (n = ++this.motionIdNext));
+    return n;
+  }
+  private motionIds = new WeakMap<GPUTexture, number>();
+  private motionIdNext = 0;
+  /** the temporal pass's bind groups made again when the motion texture changed (a resize, the raster off or on) */
+  private refreshTemporalMotion(ta: NonNullable<Target["temporal"]>) {
+    const m = this.motionTexNow();
+    if (m === ta.motion) return;
+    ta.motion = m;
+    ta.binds = ta.mkBinds(m);
+  }
   /** the frame's frozen description (src/frame-desc.ts; PLAN-J1 J1-1): built at renderer.frame()'s start — its id, its real clock
    *  read once, the flight's and the scene's clocks, the camera now and before */
   frameDesc: FrameDesc | null = null;
@@ -7195,25 +7226,29 @@ export class Renderer {
       const buf = d.createBuffer({ size: 208, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       const hdr0 = t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 });
       // (bind k: reads history k, writes history 1 − k)
-      const binds = [0, 1].map((k) =>
-        d.createBindGroup({
-          layout: this.postTemporal.getBindGroupLayout(0),
-          entries: [
-            { binding: 0, resource: hdr0 },
-            { binding: 1, resource: this.clampSampler },
-            { binding: 2, resource: hist[1 - k]!.createView() },
-            { binding: 3, resource: hist[k]!.createView() },
-            { binding: 4, resource: { buffer: t.accum } },
-            { binding: 5, resource: { buffer: t.resolveBuf } },
-            { binding: 6, resource: { buffer: t.stamps } },
-            { binding: 11, resource: { buffer: t.moments } },
-            { binding: 21, resource: { buffer: buf } },
-            { binding: 23, resource: { buffer: t.stars } },
-            { binding: 28, resource: alb[k]!.createView() },
-            { binding: 29, resource: alb[1 - k]!.createView() },
-          ],
-        }),
-      );
+      const mkBinds = (motion: GPUTexture) =>
+        [0, 1].map((k) =>
+          d.createBindGroup({
+            layout: this.postTemporal.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: hdr0 },
+              { binding: 1, resource: this.clampSampler },
+              { binding: 2, resource: hist[1 - k]!.createView() },
+              { binding: 3, resource: hist[k]!.createView() },
+              { binding: 4, resource: { buffer: t.accum } },
+              { binding: 5, resource: { buffer: t.resolveBuf } },
+              { binding: 6, resource: { buffer: t.stamps } },
+              { binding: 11, resource: { buffer: t.moments } },
+              { binding: 21, resource: { buffer: buf } },
+              { binding: 23, resource: { buffer: t.stars } },
+              { binding: 28, resource: alb[k]!.createView() },
+              { binding: 29, resource: alb[1 - k]!.createView() },
+              { binding: 49, resource: motion.createView() },
+            ],
+          }),
+        );
+      const motion = this.motionTexNow();
+      const binds = mkBinds(motion);
       const starBinds = hist.map((h) =>
         d.createBindGroup({
           layout: this.postStars.getBindGroupLayout(0),
@@ -7224,7 +7259,22 @@ export class Renderer {
           ],
         }),
       );
-      t.temporal = { hist, alb, albOk: false, buf, binds, idx: 0, valid: false, pre: 1, held: false, moving: false, from: 0, starBinds };
+      t.temporal = {
+        hist,
+        alb,
+        albOk: false,
+        buf,
+        binds,
+        motion,
+        mkBinds,
+        idx: 0,
+        valid: false,
+        pre: 1,
+        held: false,
+        moving: false,
+        from: 0,
+        starBinds,
+      };
       this.carryHistory(enc, t.temporal);
     }
     const ta = t.temporal;
@@ -7452,6 +7502,7 @@ export class Renderer {
         this.rasterDetailNow && ta.albOk ? 1 : 0,
       ]),
     );
+    this.refreshTemporalMotion(ta);
     const pass = enc.beginComputePass(this.prof.pass("temporal"));
     pass.setPipeline(this.postTemporal);
     pass.setBindGroup(0, ta.binds[ta.idx]!);
@@ -7540,7 +7591,8 @@ export class Renderer {
     }
     const u = t.taau;
     const ta = t.temporal!;
-    const key = `${u.idx}:${ta.idx}`;
+    const motion = this.motionTexNow();
+    const key = `${u.idx}:${ta.idx}:${this.motionGen(motion)}`;
     let bind = u.binds.get(key);
     if (!bind) {
       bind = d.createBindGroup({
@@ -7557,8 +7609,11 @@ export class Renderer {
           { binding: 25, resource: ta.hist[ta.idx]!.createView() },
           { binding: 26, resource: u.out.createView() },
           { binding: 27, resource: { buffer: u.buf } },
+          { binding: 49, resource: motion.createView() },
         ],
       });
+      // (a new motion texture: the bind groups made for the old ones dropped)
+      for (const k of u.binds.keys()) if (!k.endsWith(`:${this.motionGen(motion)}`)) u.binds.delete(k);
       u.binds.set(key, bind);
     }
     const scale = t.width / W;
@@ -7699,6 +7754,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     k[49] = Math.max(0, 1 - (this.sampleIndex + 1) / passes); // (0 on the last: no step when it ends)
     new Uint32Array(k.buffer)[50] = ta.from;
     this.device.queue.writeBuffer(ta.buf, 0, k);
+    this.refreshTemporalMotion(ta);
     const pass = enc.beginComputePass(this.prof.pass("temporal"));
     pass.setPipeline(this.postTemporal);
     pass.setBindGroup(0, ta.binds[ta.idx]!);

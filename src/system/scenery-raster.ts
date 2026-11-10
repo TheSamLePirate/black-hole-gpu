@@ -12,7 +12,7 @@
 import { CABLE_WIDTH_M } from "./pylons";
 import { LAMP_POLE_M } from "./streetlamps";
 import { TURBINE_FACING } from "./turbines";
-import { TERRAIN_RASTER_FORMAT } from "./terrain-raster";
+import { NO_MOTION, TERRAIN_RASTER_FORMAT, TERRAIN_RASTER_MOTION_FORMAT } from "./terrain-raster";
 import { TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 import { RASTER_CODE, RASTER_CODE_SCALE } from "./terrain-raster-hint";
 
@@ -207,7 +207,9 @@ struct U {
 // the scenery's frame (P.scenery): its east, north, up axes on the Earth's, the camera in it [m] (w: the near proxies' reach [m])
 // (lift — R4b, contract C0-3 —: the air's lift of a point at a distance d [m] from the camera, (x + y d) d² fitted to the tracer's
 // table over 4–60 km — renderer.ts sceneryLift —, z the fade's angle [rad], w 1 on)
-struct S { east: vec4f, north: vec4f, up: vec4f, cam: vec4f, lift: vec4f, misc: vec4f };
+// (pcam, pr, pu, pf: the frame before's camera — its place on the scenery's local axes, the clock then (w); its axes and fields
+// (w: tan of the half fields, pf.w 1 when valid) — for the moving meshes' motion, PLAN-J1 J1-2)
+struct S { east: vec4f, north: vec4f, up: vec4f, cam: vec4f, lift: vec4f, misc: vec4f, pcam: vec4f, pr: vec4f, pu: vec4f, pf: vec4f };
 @group(0) @binding(1) var<uniform> sc: S;
 // the Sun's view for the trees' and buildings' shadow map (encodeShadow): right, up, towards the Sun in the scenery's frame —
 // each w its half-extent [m] —, the map's centre (w: 1 drawn)
@@ -260,6 +262,18 @@ fn treeOf(k: u32, hd: ForestHead) -> Tree {
   return o;
 }
 // a scenery-frame point, camera-relative on the raster's axes (right, up, forward)
+// a point in the frame before's camera's axes (view's, with that camera: the moving meshes' motion — PLAN-J1 J1-2)
+fn viewPrev(p: vec3f) -> vec3f {
+  var rel = p - sc.pcam.xyz;
+  if (sc.lift.w > 0.5) {
+    let d = length(rel);
+    let L = (sc.lift.x + sc.lift.y * d) * d * d;
+    let a = L / max(d, 1.0);
+    rel.z += L * smoothstep(0.5 * sc.lift.z, sc.lift.z, a);
+  }
+  let e = sc.east.xyz * rel.x + sc.north.xyz * rel.y + sc.up.xyz * rel.z;
+  return vec3f(dot(e, sc.pr.xyz), dot(e, sc.pu.xyz), dot(e, sc.pf.xyz));
+}
 fn view(p: vec3f) -> vec3f {
   var rel = p - sc.cam.xyz;
   // (R4b: seen where the air shows it — lifted along the frame's up by Λ(d), faded in under 0.1′; the projection's alone —
@@ -506,7 +520,9 @@ fn stripCorner(hi: vec4f, k: vec3f) -> vec4f {
 // The near buildings' triangles (roof-mesh.ts: their walls up to their roofs, their roofs' faces): the exact solid the
 // tracer's kernel tests, drawn from the Sun into the shadow map — their shadows their own shapes, gables and slopes, not
 // boxes along the frame's axes.
-fn meshVertex(vi: u32) -> vec3f {
+fn meshVertex(vi: u32) -> vec3f { return meshVertexAt(vi, sc.north.w); }
+// (a mesh's vertex at the game's clock tc — the cars' and the blades' places then)
+fn meshVertexAt(vi: u32, tc: f32) -> vec3f {
   let t = u32(scenery[3].z) * 4u + vi;
   let f = u32(scenery[3].x) * 4u + bitcast<u32>(scenery[t / 4u][t % 4u]) * 3u;
   var p = vec3f(scenery[f / 4u][f % 4u], scenery[(f + 1u) / 4u][(f + 1u) % 4u], scenery[(f + 2u) / 4u][(f + 2u) % 4u]);
@@ -526,7 +542,7 @@ fn meshVertex(vi: u32) -> vec3f {
       let en = scenery[r + 1u];
       let D = en.xyz - st.xyz;
       let L = max(length(D.xy), 1.0);
-      let s = fract(en.w + sc.north.w * st.w / L);
+      let s = fract(en.w + tc * st.w / L);
       let d = normalize(vec3f(D.xy, 0.0) + vec3f(1e-6, 0.0, 0.0));
       p = st.xyz + D * s + d * p.x + vec3f(-d.y, d.x, 0.0) * p.y + vec3f(0.0, 0.0, p.z);
     }
@@ -535,7 +551,7 @@ fn meshVertex(vi: u32) -> vec3f {
       if (hi == 0xfffe0000u) {
         let h = scenery[r];
         let ax = scenery[r + 1u];
-        let a = sc.north.w * h.w + ax.w;
+        let a = tc * h.w + ax.w;
         let q = p - h.xyz;
         let k = ax.xyz;
         p = h.xyz + q * cos(a) + cross(k, q) * sin(a) + k * dot(k, q) * (1.0 - cos(a));
@@ -556,7 +572,9 @@ fn meshVertex(vi: u32) -> vec3f {
 // written — after their boxes, before nothing —, the pixel's distance in r and b as the ground's, a 3: trace.wgsl shadeLite
 // draws them with its material, not the kernel shade's rays
 // (bridge: a bridge's part's triangle — past the buildings' in the mesh —, coded bridgeMesh — terrainRasterBridgeMesh)
-struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) @interpolate(flat) bridge: f32, @location(2) @interpolate(flat) leaf: f32, @location(3) pyl: vec4f };
+struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) @interpolate(flat) bridge: f32, @location(2) @interpolate(flat) leaf: f32, @location(3) pyl: vec4f, @location(4) mot: vec3f };
+// (the mesh pass's outputs: its visibility, and its motion — the moving meshes' [px] since the frame before, z 1 where given)
+struct MO { @location(0) vis: vec4f, @location(1) mot: vec4f };
 // a building triangle's leaf (packScenery: after the triangles, its record's offset from geomOffset) + 1; 0 a bridge's
 fn meshTag(tri: u32) -> u32 {
   let t = u32(scenery[3].z) * 4u + u32(scenery[2].w) * 3u + tri;
@@ -641,10 +659,29 @@ fn meshLeaf(tri: u32) -> f32 {
   }
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
+  // (PLAN-J1 J1-2: the moving meshes — the cars and their lamps, the turbines' blades — their motion on the image since the frame
+  // before [px], unjittered: their point then — the clock then — through the camera then; the rest still on the scenery: none —
+  // the history reprojects it by the camera and the depth)
+  o.mot = vec3f(0.0);
+  let moving = fam == 0xfff90000u || fam == 0xfff80000u || fam == 0xfff70000u || fam == 0xfffe0000u || fam == 0xfffd0000u || fam == 0xfffa0000u;
+  if (moving && sc.pf.w > 0.5 && v.z > 0.1) {
+    let vp = viewPrev(meshVertexAt(vi, sc.pcam.w));
+    if (vp.z > 0.1) {
+      let n0 = vec2f(v.x / (u.right.w * v.z), v.y / (u.up.w * v.z));
+      let n1 = vec2f(vp.x / (sc.pr.w * vp.z), vp.y / (sc.pu.w * vp.z));
+      o.mot = vec3f((n0 - n1) * 0.5 * vec2f(u.image.x, -u.image.y), 1.0);
+    }
+  }
   return o;
 }
 // (g: the building's leaf + 1 — shadeLite's material finds its walls and roof there —; 0 a bridge's part)
-@fragment fn meshFs(v: MV) -> @location(0) vec4f {
+@fragment fn meshFs(v: MV) -> MO {
+  var o: MO;
+  o.vis = meshShade(v);
+  o.mot = vec4f(v.mot, 0.0);
+  return o;
+}
+fn meshShade(v: MV) -> vec4f {
   let d = length(v.p);
   // (Q8 D1: a pylon's lattice — its legs at its faces' edges, a girt every 4 m, an X in each bay, members ~0.3 m — its gaps open
   // while a member spans a pixel or more; past that its silhouette whole, no shimmer)
@@ -760,7 +797,7 @@ export class SceneryRaster {
     this.module = device.createShaderModule({ label: "scenery raster", code: sceneryRasterShader(forestModuleOf(traceSource)) });
     const S = GPUBufferUsage.STORAGE;
     this.frameU = device.createBuffer({ size: TERRAIN_RASTER_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.sceneryU = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.sceneryU = device.createBuffer({ size: 160, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws = device.createBuffer({
       size: (LISTS + 7) * 16,
       usage: S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
@@ -824,7 +861,7 @@ export class SceneryRaster {
           fragment: {
             module: this.module,
             entryPoint: "proxyFs",
-            targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.GREEN | GPUColorWrite.BLUE }],
+            targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.GREEN | GPUColorWrite.BLUE }, NO_MOTION],
           },
           primitive: { topology: "triangle-list", cullMode: "none" },
           depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
@@ -838,7 +875,7 @@ export class SceneryRaster {
         fragment: {
           module: this.module,
           entryPoint: "boxFs",
-          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }],
+          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }, NO_MOTION],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater" },
@@ -851,7 +888,7 @@ export class SceneryRaster {
         fragment: {
           module: this.module,
           entryPoint: "bridgeMarkFs",
-          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }],
+          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }, NO_MOTION],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater" },
@@ -861,7 +898,11 @@ export class SceneryRaster {
       .createRenderPipelineAsync({
         layout: drawPipeLayout,
         vertex: { module: this.module, entryPoint: "boxSolidVs" },
-        fragment: { module: this.module, entryPoint: "meshFs", targets: [{ format: TERRAIN_RASTER_FORMAT }] },
+        fragment: {
+          module: this.module,
+          entryPoint: "meshFs",
+          targets: [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }],
+        },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       })
@@ -871,7 +912,11 @@ export class SceneryRaster {
       .createRenderPipelineAsync({
         layout: drawPipeLayout,
         vertex: { module: this.module, entryPoint: "meshVs" },
-        fragment: { module: this.module, entryPoint: "meshFs", targets: [{ format: TERRAIN_RASTER_FORMAT }] },
+        fragment: {
+          module: this.module,
+          entryPoint: "meshFs",
+          targets: [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }],
+        },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       })
@@ -911,7 +956,9 @@ export class SceneryRaster {
   }
 
   private lod: SceneryRasterLod = SCENERY_RASTER_LOD;
-  private sceneryOut = new Float32Array(24);
+  private sceneryOut = new Float32Array(40);
+  /** the frame before's camera for the moving meshes' motion (PLAN-J1 J1-2): its place on the scenery's axes, its clock, its axes */
+  private prevCam: { frame: Float32Array; cam: [number, number, number]; axes: number[]; clock: number } | null = null;
   /** (R4b) the air's lift for the scenery's projection: (x + y d) d² [m], z the fade's angle, w 1 on — renderer.ts sceneryLift */
   lift = new Float32Array(4);
   /** the proxies' detail (a switch for comparisons — renderer.sceneryRasterLod) */
@@ -1014,6 +1061,30 @@ export class SceneryRaster {
     this.sceneryOut[20] = this.frame % 4096;
     // (up.w — unread here too —: the turbines' heads' turn from their built facing to the weather's wind, anticlockwise [rad])
     this.sceneryOut[11] = (-(this.windFrom - TURBINE_FACING) * Math.PI) / 180;
+    // (the frame before's camera — PLAN-J1 J1-2, the moving meshes' motion —: valid while the scenery's axes are the same and the
+    // camera has not jumped — a new origin, a teleport: no motion that frame, the history's own reprojection)
+    {
+      const so = this.sceneryOut;
+      const cur = {
+        cam: [so[12]!, so[13]!, so[14]!] as [number, number, number],
+        axes: [...so.subarray(0, 3), ...so.subarray(4, 7), ...so.subarray(8, 11)],
+        frame: Float32Array.from((frame as Float32Array).subarray(12, 24)),
+        clock: this.clock,
+      };
+      const p = this.prevCam;
+      const valid =
+        this.motionOn &&
+        !!p &&
+        p.axes.every((v, i) => Math.abs(v - cur.axes[i]!) < 1e-7) &&
+        Math.hypot(cur.cam[0] - p.cam[0], cur.cam[1] - p.cam[1], cur.cam[2] - p.cam[2]) < 2000;
+      if (p && valid) {
+        so.set([...p.cam, p.clock], 24);
+        so.set(p.frame.subarray(0, 4), 28);
+        so.set(p.frame.subarray(4, 8), 32);
+        so.set([p.frame[8]!, p.frame[9]!, p.frame[10]!, 1], 36);
+      } else so.fill(0, 24, 40);
+      this.prevCam = cur;
+    }
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
@@ -1042,6 +1113,8 @@ export class SceneryRaster {
     return true;
   }
 
+  /** the moving meshes' motion written (PLAN-J1 J1-2; an A/B lever: off, the history reprojects them as the scenery) */
+  motionOn = true;
   /** the least projected radius of a tree drawn [px] (renderer.treeMinPx) — 2.5, not 1.2: the far crowns under 5 px across
    *  the orthophoto's green already, ~1.5–2.5 ms of an M1's frame over a city (TERRE-UNREAL U6) */
   minPx = 2.5;
