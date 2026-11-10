@@ -273,12 +273,18 @@ export function withOrthoImagery(trace: string, supported: boolean): string {
   const marker = /\/\/ BEGIN_ORTHO_IMAGERY[\s\S]*?\/\/ END_ORTHO_IMAGERY/;
   if (!marker.test(trace)) throw new Error("earth-tiles: missing orthophotos stub");
   if (!supported) return trace;
-  return trace.replace(
-    marker,
-    `
-@group(0) @binding(${ORTHO_BINDINGS[0]}) var orthoTex: texture_2d_array<f32>;
-@group(0) @binding(${ORTHO_BINDINGS[1]}) var orthoSamp: sampler;
-@group(0) @binding(${ORTHO_BINDINGS[2]}) var imgTex2k: texture_2d_array<f32>;
+  return trace.replace(marker, () => orthoImageryWgsl(0, ORTHO_BINDINGS));
+}
+/**
+ * The imagery's reader as a WGSL module (PLAN-J1 J1-3: the ground's material library — one source for the tracer and a raster
+ * fragment): its textures and sampler declared at `group` / `bindings` (the tracer's: group 0, ORTHO_BINDINGS), then `orthoAt`,
+ * `orthoGrad`, `tileImgUv`, `tileImgAt`, `tileLightsAt`, `tileImgGrad`. Reads the parameters' `P.tileL` (struct Params).
+ */
+export function orthoImageryWgsl(group: number, bindings: readonly [number, number, number]): string {
+  return `
+@group(${group}) @binding(${bindings[0]}) var orthoTex: texture_2d_array<f32>;
+@group(${group}) @binding(${bindings[1]}) var orthoSamp: sampler;
+@group(${group}) @binding(${bindings[2]}) var imgTex2k: texture_2d_array<f32>;
 fn orthoAt(k: u32, side: f32, uv: vec2f, lod: f32) -> vec4f {
   // (an 8-tile window — T8e, z 15–16 at a far reach —: the 2048² texture's last layers)
   if (side > ${ORTHO_CLIP}.5) { return textureSampleLevel(imgTex2k, orthoSamp, uv, ${ORTHO_2K_LAYER0}u + k, min(lod, ${ORTHO_MIPS - 1}.0)); }
@@ -338,8 +344,7 @@ fn tileImgGrad(l: u32, p: vec2f, gx: vec2f, gy: vec2f) -> vec4f {
   if (u.z > ${ORTHO_CLIP}.5) { return textureSampleGrad(imgTex2k, orthoSamp, u.xy, l - ${FINE_Z - Z0}u, gx / u.z, gy / u.z); }
   return textureSampleGrad(orthoTex, orthoSamp, u.xy, ${IMG_LAYER0}u + l, gx / u.z, gy / u.z);
 }
-`,
-  );
+`;
 }
 /** the mips' pass: a tile's region of a mip drawn from the one above — the sRGB decoded, the coverage-premultiplied colour and
  *  the coverage averaged in linear light, encoded again. A render pass, not a compute one: a texture with storage usage

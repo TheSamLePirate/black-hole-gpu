@@ -2575,3 +2575,13 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Preuve** : **vérifié statiquement** (script, sortie dans le plan). Aucun code de rendu changé.
 - **Limites** : le comptage est par nom de ressource dans les fonctions atteintes (une branche morte par spécialisation peut y être
   comptée : majorant) ; la compilation d'un tel module raster non mesurée ; J1-3 lui-même (le module partagé) reste à faire.
+
+## 2026-11-10T22:55Z — J1-3 : la première famille du sol en module partagé (l'imagerie)
+
+- **Contribution** (PLAN-J1 J1-3, bibliothèque de matériaux) : le lecteur de l'imagerie (`orthoAt`, `orthoGrad`, `tileImgAt`,
+  `tileImgGrad`, `tileLightsAt` et ses textures) devient `orthoImageryWgsl(groupe, liaisons)` dans `src/system/earth-tiles.ts` : le
+  traceur l'injecte avec ses liaisons d'aujourd'hui (groupe 0, 44–46), un fragment raster pourra l'inclure à son groupe — une source.
+- **Preuve** : **vérifié statiquement** — le WGSL du traceur composé est identique octet pour octet (970 959 caractères) ; tests
+  `ortho` (le module aux deux groupes) et `kernel-budget` (63) ; `tsc`, biome.
+- **Limites** : `earthImageryAniso` et les fonctions de placement (`imageryUv`, `tileCoord`, `tilePlace`) restent dans `trace.wgsl` ;
+  le ciel et le soleil à suivre ; aucun pipeline raster ne l'inclut encore (J1-4).

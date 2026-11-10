@@ -5,6 +5,7 @@ import {
   ORTHO_BINDINGS,
   ORTHO_FIT,
   orthoColour,
+  orthoImageryWgsl,
   orthoUrl,
   tileLayout,
   withOrthoImagery,
@@ -42,6 +43,14 @@ test("the orthophotos out of the relief's texture (T9a: their own filtered textu
   expect(on).toContain("fn tileImgAt(l: u32, p: vec2f, lod: f32) -> vec4f {");
   expect(on).toContain("fn tileImgGrad(l: u32, p: vec2f, gx: vec2f, gy: vec2f) -> vec4f {");
   expect(() => withOrthoImagery("nothing", true)).toThrow();
+  // (PLAN-J1 J1-3: the same module for another pipeline — a raster fragment's group and bindings —, the tracer's its own)
+  expect(on).toContain(orthoImageryWgsl(0, ORTHO_BINDINGS));
+  const raster = orthoImageryWgsl(1, [0, 1, 2]);
+  expect(raster).toContain("@group(1) @binding(0) var orthoTex: texture_2d_array<f32>;");
+  expect(raster).toContain("@group(1) @binding(2) var imgTex2k: texture_2d_array<f32>;");
+  expect(raster.replace(/@group\(1\) @binding\(\d\)/g, "")).toBe(
+    orthoImageryWgsl(0, ORTHO_BINDINGS).replace(/@group\(0\) @binding\(\d+\)/g, ""),
+  );
   expect(orthoUrl(17, 66391, 45092)).toContain(
     "LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX=17&TILEROW=45092&TILECOL=66391",
   );
