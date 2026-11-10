@@ -2262,4 +2262,6 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   implicite de GitHub lit toute la chaîne. La page de fermeture n'était donc pas publiée (`/test/sw.js` servait encore
   l'ancien worker), samlepirate.org n'a rien reçu.
 - **Correctif** : `deploy` et `server` testent `needs.site.result == 'success'` sous `!cancelled()` (`pages.yml`) ;
-  [DEPLOY.md](docs/DEPLOY.md). **À vérifier** sur le run de ce commit : `deploy` exécuté, `/test/sw.js` = le coupe-circuit.
+  [DEPLOY.md](docs/DEPLOY.md). **Vérifié** : run de `ed609b00` (le run de `188ae13b`, en attente, a été remplacé par lui) —
+  `deploy` et `server` réussis ; `thesamlepirate.github.io/black-hole-gpu/test/sw.js` et `/ineptie/sw.js` servent le
+  coupe-circuit, `/test/` la page « Cette preview n'est plus publiée ici ».
