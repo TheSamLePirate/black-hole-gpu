@@ -218,6 +218,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (each request its own time — FETCH_MS —, not one deadline from the scene's start: the ground's Terrarium tiles asked
   // late, under a survey's block that failed, failed at once past it, "signal timed out", the scene degraded and built again)
   const started = performance.now();
+  // (the scene given up — the page's cancel —: its fetches in flight aborted, the later ones refused at once, not sent; they had
+  // gone on to their end and their retries — a first scene's IGN survey at Le Bourget still asked during a flight at JFK, its
+  // Overture under the starting orbit: zones-usa-night, 10 Nov 2026; ANALYSE-STREAMING ST2)
+  const gone = new AbortController();
+  aborts.set(q.id, gone);
+  if (cancelled.has(q.id)) gone.abort();
+  const live = (s: AbortSignal) => AbortSignal.any([gone.signal, s]);
   // (where the time goes — each step's end from the start [ms]: the scene's stats, T8)
   const phases: Record<string, number> = {};
   // (and the step under way told as it goes — the loading status in the interface: what the scenery waits for)
@@ -259,7 +266,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   };
   const errors: string[] = [];
   const fetchCount = async (url: string, within: AbortSignal = AbortSignal.timeout(FETCH_MS)) => {
-    const r = await fetch(url, { signal: within });
+    const r = await fetch(url, { signal: live(within) });
     count(r);
     if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
     const b = await r.arrayBuffer();
@@ -344,7 +351,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   }
   // (over France, the IGN's survey — I4 —: its canopy and its ground over the forest's disc, fetched beside the land cover
   // within its own time — the blocks late past it left to the land cover —, the scene's sources not held back by it)
-  const surveyed = AbortSignal.timeout(45_000);
+  const surveyed = live(AbortSignal.timeout(45_000));
   const fetchSurvey = async (url: string) => {
     const r = await fetch(url, { signal: surveyed });
     count(r);
@@ -794,7 +801,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // and Google's, their roofs' shapes, heights, colours and materials where mapped — a z 14 tile 0.5–1.6 MB, so within
   // OVERTURE_REACH_M alone; OSM's own buildings kept beyond, and where an Overture tile failed
   const fetchRanged = async (url: string, init: RequestInit) => {
-    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(FETCH_MS) });
+    const r = await fetch(url, { ...init, signal: live(AbortSignal.timeout(FETCH_MS)) });
     count(r);
     networkBytes += Number(r.headers.get("content-length")) || 0;
     return r;
@@ -805,7 +812,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     let tileCount = 0;
     let pm: PmTiles | null = null;
     try {
-      const list = await fetch(OVERTURE_LIST, { signal: AbortSignal.timeout(FETCH_MS) });
+      const list = await fetch(OVERTURE_LIST, { signal: live(AbortSignal.timeout(FETCH_MS)) });
       count(list);
       if (!list.ok) throw new Error(`HTTP ${list.status}: ${OVERTURE_LIST}`);
       // (the latest release whose archive answers: the bucket keeps three, the one a zone holds among them)
@@ -914,7 +921,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // read at the end: the scene not held for them — 21.6 s at Allaines from 60 m when they were asked last, 5 Nov 2026)
   const infraTiles = (async () => {
     try {
-      const list = await fetch(OVERTURE_LIST, { signal: AbortSignal.timeout(FETCH_MS) });
+      const list = await fetch(OVERTURE_LIST, { signal: live(AbortSignal.timeout(FETCH_MS)) });
       count(list);
       if (!list.ok) return null;
       let pm: PmTiles | null = null;
@@ -1754,11 +1761,14 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     budgetLimited,
   };
 }
-/** the scenes given up by the page (their ids): dropped at their next step, the worker and its caches kept */
+/** the scenes given up by the page (their ids): dropped at their next step, their fetches aborted, the worker and its caches kept */
 const cancelled = new Set<number>();
+/** the scenes under way, their fetches' abort */
+const aborts = new Map<number, AbortController>();
 g.onmessage = async (e: MessageEvent<SceneryRequest | { cancel: number }>) => {
   if ("cancel" in e.data) {
     cancelled.add(e.data.cancel);
+    aborts.get(e.data.cancel)?.abort();
     if (cancelled.size > 64) cancelled.delete(cancelled.values().next().value!);
     return;
   }
@@ -1767,5 +1777,7 @@ g.onmessage = async (e: MessageEvent<SceneryRequest | { cancel: number }>) => {
     g.postMessage(r, [r.buffer!]);
   } catch (e0) {
     g.postMessage({ id: e.data.id, lat: e.data.lat, lon: e.data.lon, error: String(e0).slice(0, 240) });
+  } finally {
+    aborts.delete(e.data.id);
   }
 };

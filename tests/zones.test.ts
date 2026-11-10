@@ -11,6 +11,7 @@ import {
   ignHeightUrl,
   nightUrl,
   orthoUrl,
+  roadsUrl,
   TILE_REACH,
   tileUrl,
 } from "../src/system/earth-tiles";
@@ -20,9 +21,12 @@ import { EarthScenery } from "../src/system/scenery";
 import { DETAIL_REACH, type SceneryRequest } from "../src/system/scenery-data";
 import { sceneryChains } from "../src/system/scenery-sources";
 import { aheadFocus, gazeLead, streamingLead } from "../src/system/streaming-focus";
+import { tileKey } from "../src/world/runways";
 import {
   reliefChains,
   reliefUrls,
+  RUNWAYS_PATH,
+  runwayZoneChains,
   sceneryZoneChains,
   ZONE_CORE,
   ZONE_PROFILES,
@@ -258,8 +262,10 @@ test("a zone's scenery: every fetch of every scene the game asks with the camera
     expect(missing).toEqual([]);
     for (const k of kinds) expect([...wanted].some((u) => u.includes(k))).toBe(true);
     // (the zone not much more than its scenes: every source's tiles within a few of theirs)
-    const extra = [...urls].filter((u) => !wanted.has(u) && /terrascope|openfreemap|BDTOPO|MNH/.test(u)).length;
-    const theirs = [...wanted].filter((u) => /terrascope|openfreemap|BDTOPO|MNH/.test(u)).length;
+    // (the scenery's own sources — OpenFreeMap's z 14: the relief's z 12–13 street tiles, NU1, are the tiles' —)
+    const own = /terrascope|openfreemap\.org\/planet\/latest\/14\/|BDTOPO|MNH/;
+    const extra = [...urls].filter((u) => !wanted.has(u) && own.test(u)).length;
+    const theirs = [...wanted].filter((u) => own.test(u)).length;
     expect(extra).toBeLessThan(0.6 * theirs);
   }
   // (its kinds told apart in the caches' figures, its size counted)
@@ -271,8 +277,8 @@ test("a zone's scenery: every fetch of every scene the game asks with the camera
   const more = zoneEstimate(sl) - zoneEstimate(bare0);
   expect(more).toBeGreaterThan(150e6);
   expect(more).toBeLessThan(600e6);
-  // (a scene's Terrarium met first as the relief's last fallback — under the IGN's grids, maybe never asked — kept as its
-  // own chain all the same)
+  // (a scene's Terrarium its own chain — and no longer anywhere a fallback: the relief's own its own chain too since the game
+  // draws every tile from it first, 6 Nov 2026)
   const first = new Set(sl.map((c) => c[0]!));
   const fallbacks = new Set(sl.flatMap((c) => c.slice(1)));
   const sceneDem = sceneryZoneChains(49.116, -1.09, 2000, { mode: "high", satellite: true, reach: DETAIL_REACH.veryFar }, true)
@@ -280,10 +286,12 @@ test("a zone's scenery: every fetch of every scene the game asks with the camera
     .filter((u) => u.includes("terrarium/"));
   expect(sceneDem.length).toBeGreaterThan(0);
   for (const u of sceneDem) expect(first.has(u)).toBe(true);
-  expect(sceneDem.some((u) => fallbacks.has(u))).toBe(true);
+  expect(sceneDem.some((u) => fallbacks.has(u))).toBe(false);
+  expect([...fallbacks].some((u) => u.includes("terrarium/"))).toBe(false);
   // (the scenery off, or not asked: none of its sources)
   const bare = zoneUrls(49.116, -1.09, 2000, ZONE_PROFILES.low, { ortho: true, relief: true, hlod: false, scenery: null });
-  expect(bare.some((u) => /terrascope|openfreemap|BDTOPO|MNH/.test(u))).toBe(false);
+  // (the relief's z 12–13 street tiles — NU1, the night's lights — are the tiles', not the scenery's)
+  expect(bare.some((u) => /terrascope|openfreemap\.org\/planet\/latest\/14\/|BDTOPO|MNH/.test(u))).toBe(false);
   // (the IGN's relief off: its survey's and buildings' left out, as the worker leaves them)
   const noIgn = zoneUrls(49.116, -1.09, 2000, ZONE_PROFILES.low, { ...sources("balanced", 1), relief: false });
   expect(noIgn.some((u) => /BDTOPO|MNH/.test(u))).toBe(false);
@@ -348,17 +356,21 @@ test("a tile's chains: the next link asked only where the one before falls short
   const n16 = 2 ** 16,
     x = Math.floor(((6.87 + 180) / 360) * n16),
     y = Math.floor(((1 - Math.asinh(Math.tan(45.92 * D)) / Math.PI) / 2) * n16);
-  // (the LiDAR, RGE ALTI in its holes, Terrarium in theirs)
+  // (the LiDAR, RGE ALTI in its holes; Terrarium its own chain — the game draws every tile from it first)
   expect(reliefChains(16, x, y, o)).toEqual([
-    [ignHeightUrl(IGN_LIDAR, 16, x, y), ignHeightUrl(IGN_RGEALTI, 16, x, y), tileUrl(15, x >> 1, y >> 1)],
+    [ignHeightUrl(IGN_LIDAR, 16, x, y), ignHeightUrl(IGN_RGEALTI, 16, x, y)],
+    [tileUrl(15, x >> 1, y >> 1)],
   ]);
   // (a z 12: its ground's chain, its surface's — the LiDAR's, RGE ALTI's past a fiftieth of holes —, the orthophoto over
   // EOX's, the lights)
   const c12 = reliefChains(12, x >> 4, y >> 4, o);
   expect(c12[0]![0]).toBe(ignHeightUrl(IGN_RGEALTI, 12, x >> 4, y >> 4));
-  expect(c12[1]![0]).toBe(ignHeightUrl(IGN_MNS_LIDAR, 12, x >> 4, y >> 4, 512));
-  expect(c12[2]).toEqual([orthoUrl(12, x >> 4, y >> 4), eoxUrl(12, x >> 4, y >> 4)]);
-  expect(c12[3]).toEqual([nightUrl(8, x >> 8, y >> 8)]);
+  expect(c12[1]).toEqual([tileUrl(12, x >> 4, y >> 4)]);
+  expect(c12[2]![0]).toBe(ignHeightUrl(IGN_MNS_LIDAR, 12, x >> 4, y >> 4, 512));
+  expect(c12[3]).toEqual([orthoUrl(12, x >> 4, y >> 4), eoxUrl(12, x >> 4, y >> 4)]);
+  expect(c12[4]).toEqual([nightUrl(8, x >> 8, y >> 8)]);
+  // (NU1: the streets' lights at night — OpenFreeMap's vector tile of the same z, to z 13)
+  expect(c12[5]).toEqual([roadsUrl(12, x >> 4, y >> 4)]);
   // (Switzerland's meshes each their own: one or two wanted together, Terrarium beside)
   const xs = Math.floor(((7.9625 + 180) / 360) * 4096),
     ys = Math.floor(((1 - Math.asinh(Math.tan(46.5367 * D)) / Math.PI) / 2) * 4096);
@@ -376,4 +388,24 @@ test("a zone's download time: the WMS-R's grids 5 a second, the rest 35 chains a
   expect(zoneDuration(wms)).toBeCloseTo(10);
   expect(zoneDuration(rest)).toBeCloseTo(10);
   expect(zoneDuration([...wms, ...rest, ...rest])).toBeCloseTo(20);
+});
+
+test("a zone's runways: the index and the 5° tiles round it within the ILS's 150 km — the files the game asks (world/runways.ts)", async () => {
+  // (JFK's final: its own tile, and the neighbours 150 km reaches — west of 75° W, the east past 70° W not)
+  const lat = 40.6595,
+    lon = -73.836;
+  const chains = runwayZoneChains(lat, lon, 1000);
+  expect(chains[0]).toEqual([`${RUNWAYS_PATH}index.json`]);
+  const urls = chains.slice(1).map((c) => c[0]!);
+  expect(urls).toContain(`${RUNWAYS_PATH}t${tileKey(lat, lon)}.json`);
+  expect(urls).toContain(`${RUNWAYS_PATH}t8_-16.json`);
+  expect(urls).not.toContain(`${RUNWAYS_PATH}t8_-14.json`);
+  // (each a file the build serves, or a key the index lacks — a 404 kept as none)
+  const index = (await Bun.file("assets/runways/v1/index.json").json()) as { tiles: Record<string, unknown> };
+  expect(urls.filter((u) => index.tiles[u.slice(RUNWAYS_PATH.length + 1, -5)]).length).toBeGreaterThan(0);
+  // (in every zone, whatever its sources: the airfields, the ILS offline)
+  const all = zoneChains(lat, lon, 1000, ZONE_PROFILES.low, { ortho: false, relief: false, hlod: false }).flat();
+  expect(all).toContain(`${RUNWAYS_PATH}index.json`);
+  expect(all).toContain(`${RUNWAYS_PATH}t${tileKey(lat, lon)}.json`);
+  expect(tileKind(`https://example.org/${RUNWAYS_PATH}t8_-15.json`)).toBe("runways");
 });

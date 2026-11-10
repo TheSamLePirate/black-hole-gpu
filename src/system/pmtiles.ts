@@ -22,9 +22,12 @@ export function overtureReleases(xml: string): string[] {
 export const OVERTURE_Z = 14;
 /** a zone's pseudo-URL for an Overture tile (sw.ts zoneFetch resolves it: its directories' and its bytes' ranges kept) */
 export const overtureZoneUrl = (x: number, y: number) => `kerr-overture:${OVERTURE_Z}/${x}/${y}`;
-export function parseOvertureZoneUrl(url: string): { z: number; x: number; y: number } | null {
-  const m = /^kerr-overture:(\d+)\/(\d+)\/(\d+)$/.exec(url);
-  return m ? { z: Number(m[1]), x: Number(m[2]), y: Number(m[3]) } : null;
+/** (a zone's) the same for Overture's base theme — its infrastructure: the wind turbines, the pylons and their lines read by the
+ *  scenery's worker, turbines.ts, at z 13 —: its own archive, base.pmtiles */
+export const overtureBaseZoneUrl = (z: number, x: number, y: number) => `kerr-overture-base:${z}/${((x % 2 ** z) + 2 ** z) % 2 ** z}/${y}`;
+export function parseOvertureZoneUrl(url: string): { z: number; x: number; y: number; theme: "buildings" | "base" } | null {
+  const m = /^kerr-overture(-base)?:(\d+)\/(\d+)\/(\d+)$/.exec(url);
+  return m ? { z: Number(m[2]), x: Number(m[3]), y: Number(m[4]), theme: m[1] ? "base" : "buildings" } : null;
 }
 /** the Service Worker's key for a range of a URL (the Cache API keeps no partial response: each range a whole one of its
  *  own) — never fetched as such */

@@ -129,12 +129,27 @@ let clock = 0;
 /** a tile arrived: the maps redraw */
 export const runwaysEvents = { onLoad: (_key: string) => {} };
 
+/** a fetch that failed (offline, the network down): not asked again before RETRY_MS — the maps ask every frame; offline, 445
+ *  requests in a minute on four files (zones-usa-night, 10 Nov 2026) */
+const RETRY_MS = 30_000;
+const failedAt = new Map<string, number>();
+const resting = (key: string) => {
+  const t = failedAt.get(key);
+  return t !== undefined && performance.now() - t < RETRY_MS;
+};
+
 async function getIndex() {
   if (index) return index;
+  // (failed: none for now, asked again after a while — it had stayed empty for the session)
+  if (resting("index")) return null;
   indexP ??= fetch(`${base}index.json`)
     .then((r) => (r.ok ? r.json() : null))
     .then((j: { tiles: Record<string, [number, number]> } | null) => (index = j?.tiles ?? {}))
-    .catch(() => (index = {}));
+    .catch(() => {
+      failedAt.set("index", performance.now());
+      indexP = null;
+      return null;
+    });
   return indexP;
 }
 
@@ -146,7 +161,7 @@ export async function loadTile(key: string): Promise<Airfield[]> {
     return t.fields;
   }
   const I = await getIndex();
-  if (!I?.[key]) return [];
+  if (!I?.[key] || resting(key)) return [];
   let p = pending.get(key);
   if (!p) {
     p = fetch(`${base}t${key}.json`)
@@ -166,6 +181,7 @@ export async function loadTile(key: string): Promise<Airfield[]> {
       })
       .catch(() => {
         pending.delete(key);
+        failedAt.set(key, performance.now());
         return [];
       });
     pending.set(key, p);

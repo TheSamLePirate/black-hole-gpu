@@ -12,6 +12,7 @@ import {
   type ZoneProfileId,
   type ZoneSources,
   ZONE_PROFILES,
+  ZONE_SCHEMA,
   zoneChains,
   zoneDuration,
   zoneEstimate,
@@ -132,6 +133,8 @@ export function createZones(o: {
       if (zone.state === "ready") {
         zone.updated = Date.now();
         zone.fresh = false;
+        // (its sources' version: what this download followed — system/zones.ts ZONE_SCHEMA)
+        zone.schema = ZONE_SCHEMA;
       }
       await save(zone);
       active = null;

@@ -5,6 +5,7 @@ import {
   OVERTURE_LIST,
   overtureReleases,
   overtureUrl,
+  overtureBaseZoneUrl,
   overtureZoneUrl,
   parseDirectory,
   parseOvertureZoneUrl,
@@ -124,7 +125,9 @@ describe("Overture", () => {
     expect(parseRange("bytes=10-136")).toEqual({ offset: 10, length: 127 });
     expect(parseRange("bytes=10-")).toBeNull();
     expect(rangeKey("https://h/a.pmtiles", 10, 127)).toBe("https://h/a.pmtiles?kerr-range=10-136");
-    expect(parseOvertureZoneUrl(overtureZoneUrl(8504, 5833))).toEqual({ z: 14, x: 8504, y: 5833 });
+    expect(parseOvertureZoneUrl(overtureZoneUrl(8504, 5833))).toEqual({ z: 14, x: 8504, y: 5833, theme: "buildings" });
+    // (its base theme's — the infrastructure: turbines, pylons —, z 13)
+    expect(parseOvertureZoneUrl(overtureBaseZoneUrl(13, 4252, 2916))).toEqual({ z: 13, x: 4252, y: 2916, theme: "base" });
     expect(classify(overtureUrl("2026-10-21.0"), "https://kerr.example/")).toBe("tile");
     expect(classify(OVERTURE_LIST, "https://kerr.example/")).toBe("tile");
     expect(tileKind(rangeKey(overtureUrl("2026-10-21.0"), 0, 127))).toBe("overture");

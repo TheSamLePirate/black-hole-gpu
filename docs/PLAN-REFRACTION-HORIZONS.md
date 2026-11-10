@@ -4,8 +4,17 @@ Date : **2 novembre 2026**, relu sur `main` à `824b3a5c`, puis confronté au ch
 [CHALLENGE-PLAN-REFRACTION-HORIZONS.md](CHALLENGE-PLAN-REFRACTION-HORIZONS.md) (§3.9) et à
 [CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md](CHALLENGE-ANALYSE-TERRE-UNREAL-2026-11-02.md) (§3.10) ;
 [PLAN-IMAGE-VIPER11.md](PLAN-IMAGE-VIPER11.md) y est fusionné (décision 28). Statut : **lancé le 2 novembre, exécuté en
-continu (décision 33) ; relu le 5 novembre à `e98ff1b0`**. L'état phase par phase est au **§0.2**, le reste réordonné au
-**§8.0** ; il rejoint la destination WebGPU AAA ([analyse stratégique](ANALYSE-STRATEGIE-RENDU-2026-11-03.md), §20 et §21).
+continu (décision 33) ; relu le 5 novembre à `e98ff1b0`, puis le 10 novembre à `3af17f8d` après
+l'[audit total](audit-2026-11-10/README.md)**. L'état phase par phase est au **§0.2**, ce que l'audit change au **§0.3**,
+le reste réordonné au **§8.0** ; il rejoint la destination WebGPU AAA
+([analyse stratégique](ANALYSE-STRATEGIE-RENDU-2026-11-03.md), §20 à §22).
+
+- **Où en est le plan (10 novembre)** : depuis le 5, T7 a reçu deux lots (la terre en mer au chargement, les « mauvais
+  reliefs » des Calanques) et T8 cinq (T8k à T8o : relief fin au bord des collines, fondu de 800 ms, worker du décor
+  gardé, voyant du réseau, audit du téléchargement). Aucune phase Q, H ou R n'a bougé ; **C0 n'est toujours pas relu,
+  le budget de Q1 toujours pas fixé, J0 toujours pas lancé.** La suite du chargement passe au
+  [plan du chargement du monde](PLAN-CHARGEMENT-MONDE.md) (CM0–CM9) et à l'[analyse du streaming](ANALYSE-STREAMING-2026-11-06.md)
+  (ST0–ST10).
 
 - **Où en est le plan (5 novembre)** : T et R presque entiers ; H fait sauf H1c (bloqué : où héberger les DEM) ; Q
   largement entamé (Q2, Q3, Q5, Q6, Q8 avancés ; Q1 et Q4 incomplets ; Q9 examiné). **Contrats C0 jamais relus par
@@ -98,8 +107,8 @@ Source : les fiches `docs/progress/refraction-horizons/*.md` lues jusqu'à leur 
 | T4 | en partie | Le rejet local de l'historique temporel ; le contact des arbres, des pistes et des bâtiments pendant le fondu |
 | T5, T257 | faits | T257 : des facettes lointaines encore visibles de près ; un CDLOD (« T11 ») est suggéré |
 | T6 | fait (+0,2 à 0,8 ms) | Les deux régimes de Chamonix (48 ou 59 ms) à expliquer |
-| T7 | en partie (7 lots) | Le turquoise des hauts-fonds : il faut une bathymétrie côtière (HOMONIM, Litto3D), deux essais rejetés. Les marées. La répétition des vagues de 1 024 m. LEAN, le déphasage et le fondu du SSR du plan. L'écume, allumée, coûte 0,2 à 0,8 ms contre < 0,1 visé |
-| T8 | **clos** (3 novembre) | Validité par tuile, `put` sur le fil principal, boucle CPU au p95 ≈ 4,6 ms (cible 4) |
+| T7 | en partie (9 lots ; le 8ᵉ et le 9ᵉ le 5 novembre : la terre en mer pendant le chargement à Toulon-Hyères, les plaques du maillage lointain sur la mer aux Calanques) | Le turquoise des hauts-fonds : il faut une bathymétrie côtière (HOMONIM, Litto3D), deux essais rejetés. Les marées. La répétition des vagues de 1 024 m. LEAN, le déphasage et le fondu du SSR du plan. L'écume, allumée, coûte 0,2 à 0,8 ms contre < 0,1 visé |
+| T8 | clos le 3 novembre, **rouvert** les 5 et 6 (T8k–T8o : fenêtres fines au bord des collines, fondu de 800 ms, worker du décor gardé et son cache, voyant du réseau, abandon des tuiles sorties de leur fenêtre, file IGN ordonnée) | Validité par tuile, `put` sur le fil principal, boucle CPU au p95 ≈ 4,6 ms (cible 4) — **repris par CM8 et CM9** du [plan du chargement](PLAN-CHARGEMENT-MONDE.md) (ST9) ; les causes de lenteur trouvées par l'audit (relief IGN en float32, portillon du service worker, trous définitifs, départ à froid) : CM0–CM4 |
 | T9 | fait (a, b, c ; matériau −1,2 ms) | Le reste de C0-4 ; le scintillement en vol non mesuré ; H5 en texture filtrée |
 | H1, H1b, H4 | faits | H1b : le décodage du DEM dans un worker (à-coup de 59 à 79 ms) |
 | H1c | **bloqué** | Où héberger les DEM LOLA (dépôt à 565 Mo sur 600) |
@@ -128,6 +137,30 @@ Châteaudun 53,6 ms ; Beauce à 30 m 65–67 ms ; virage dans les nuages 52 ms ;
 tenu par aucune vue de vol chargée**, à part les Alpes de Q6u. Sur M1 Max (le palier de 40 images/s, la cible finale de
 60 au §8 de l'analyse stratégique), aucune mesure récente n'existe. Seules la décision 42, Q6f et Q6-ISS disent compter
 les images terminées.
+
+## 0.3 Ce que l'audit du 10 novembre change pour ce plan
+
+Source : [synthèse de l'audit](audit-2026-11-10/README.md), [rendu](audit-2026-11-10/02-rendu-pipeline.md),
+[plans](audit-2026-11-10/07-plans-reste-a-faire.md), [priorités](audit-2026-11-10/09-priorites-todo.md). Ce sont des
+constats et des recommandations ; les décisions restent à Sam.
+
+- **Ce plan est le principal producteur de lecteurs à migrer.** Depuis le 3 novembre, `trace.wgsl` et `renderer.ts` ont
+  pris +3 923 / −784 lignes, surtout par ses lots Q, T7 et la nuit urbaine. L'audit recommande de **geler les nouveaux
+  lecteurs de `shadeLite` et de `trace.wgsl` jusqu'à J0**, sauf correctif ; sinon chaque ajout porte sa condition de
+  retrait (priorités §2).
+- **Ses décisions en attente bloquent J0** : relire C0 (D4), fixer le budget en vol de Q1 (D5), réconcilier C0-8
+  (25 et 40 ms « confirmés ») avec la cible de 60 images/s, et C0-2 (`rgba32uint`) avec le code (`rgba32float`) (GP-04,
+  PL). Le palier recommandé : nommer 40 ms sur kerr-mini « palier 1 », mesurer M1 Max, fixer le suivant sur cette mesure
+  (D3).
+- **Le groupe 2 du §8.0 (attribuer le coût de la frame) devient la mesure 1.2 de l'audit** : la frame répartie par poste,
+  par ablation sur images terminées, sur la scène de référence de J0. Sans elle, Q1 (P3, P5, P6, I1, paliers I4) reste à
+  l'aveugle (GP-09).
+- **Les options coupées** (L2a, L2b, L4, L7b, B5, Q6t, VIPER C2 et C3) : une condition de retrait ou la suppression
+  (D7, D8 ; GP-17). En mode « auto », `shade` et `shadeMark` sont dispatchés même quand `shadeLite` prend tout (GP-07).
+- **T8 et le chargement** : le reste passe aux plans CM et ST (ligne T8 du §0.2). L'audit ajoute que les mesures de T8
+  (« vue à 90 % en 8 s ») ont été faites **sans service worker**, donc hors du chemin de production (CM0).
+- **Le groupe 5 du §8.0 (richesse)** — T7 bathymétrie, H5, H1c, R5, Q4, Q8 B2, Q6-ISS, R6a-terrain — est la vague 6 de
+  l'audit : après J0 et les fondations, au budget fixé.
 
 ---
 

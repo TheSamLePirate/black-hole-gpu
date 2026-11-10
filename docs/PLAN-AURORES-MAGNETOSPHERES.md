@@ -2,9 +2,30 @@
 
 Écrit le 3 novembre 2026, à la demande de Sam (« les aurores et magnétosphères, c'est une bonne idée à intégrer »).
 L'idée vient du prochain chantier d'Alex (`vr-solar-system/docs/agent/puffs-bilan-qualite-aurores_2026-11-03-18-27-52.md`).
-**Rien n'est commencé chez nous.** Les cinq décisions sont prises (Sam, 3 novembre : § 6). Les sources
-des chiffres sont listées à la fin. Les chiffres marqués « ~ » sont des ordres de grandeur tirés des revues, à
-vérifier sur la source au moment de coder.
+Les cinq décisions sont prises (Sam, 3 novembre : § 6). Les sources des chiffres sont listées à la fin. Les chiffres
+marqués « ~ » sont des ordres de grandeur tirés des revues, à vérifier sur la source au moment de coder.
+
+**État au 10 novembre 2026** (relu sur `main` à `3af17f8d` ; le code fait foi). La mention « rien n'est commencé chez
+nous », vraie le 5 novembre, est fausse depuis le 6 (audit du 10 novembre, PL-02) ; le détail de chaque lot est plus bas,
+dans les paragraphes « Avancement » et « premier lot ».
+
+| Phase | État | Commits | Ce qui reste |
+|---|---|---|---|
+| AM0 | fait | `09d723bc` | variation séculaire d'IGRF, scénario d'époque après 2030, champ crustal de Mars, Ganymède dans le champ de Jupiter, traçage en worker, vecteurs de Hue et al. pour Io |
+| AM1 | premier lot | `c06840d8`, `8377b33e` | OVATION, cycle d'orage, STEVE, aurore pulsante ; pôle uniforme avec la variation séculaire |
+| AM2 | premier lot (la Terre en unités physiques) ; coût mesuré et réduit | `a1e34357`, `d1d04859` | la coquille générique commune à tous les corps ; Tromsø de nuit +4,6 ms (cache par direction, `PROBLEMES-A-REGLER`) ; l'émission vit dans `trace.wgsl`, pas encore dans le modèle d'air commun (§ 4) |
+| AM3 | premier lot (Jupiter : ovale principal, pied d'Io) ; une scène de galerie | `c9d2be90`, `29d4e5e3` | empreintes d'Europe, de Ganymède et de Callisto, « dawn storms » ; le noyau proche de Jupiter compile ~200 s à froid (audit GP-20) |
+| AM4 | premier lot (Saturne, Uranus, Neptune) | `dbb8739d` | l'ovale de Saturne fixe par rapport au Soleil, Encelade ; l'adaptation de l'œil à l'ombre de Saturne coupée (lumière fausse du traceur) |
+| AM5 | **non commencé** | — | les lunes (Io, Europe, Ganymède, Callisto) |
+| AM6 | premier lot (Mars, Vénus) | `5c74fcf5` | le réglage « tempête solaire » commun ; valeurs de départ d'Alex, pas des mesures |
+| AM7 | deux lots + le vent solaire réel | `2667345b`, `309fc8c6`, `6e684d19` | déformation des lignes par le vent, lignes ouvertes, actions TARS, corps lointains, traçage en worker ; coût des couches non mesuré ; **particules abandonnées** (Sam, 6 novembre) |
+| AM8 | **déplacé** vers [PLAN-CAPTEURS-CAMERA-SECONDAIRE](PLAN-CAPTEURS-CAMERA-SECONDAIRE.md) S6 | `5e889cac` | — |
+
+**L'ordre après l'audit du 10 novembre** ([priorités](audit-2026-11-10/09-priorites-todo.md), vague 6) : ce qui reste ici
+est de la richesse. Le rendu (AM5, les compléments d'AM1 à AM4, AM6) passe après J0 et les fondations de la destination,
+au budget que J0 fixera ; l'audit recommande de **geler les nouveaux lecteurs de `shadeLite` et de `trace.wgsl` jusqu'à
+J0** (décision de Sam en attente). Restent faisables à tout moment, sans toucher au rendu : les parties données (variation
+séculaire, scénario d'époque, OVATION, traçage en worker), CPU et testées.
 
 **Mise à jour du 4 novembre** : Alex a réalisé l'essentiel de ce chantier dans vr-solar-system en une soirée (sessions
 6a à 6a sexies, `origin/master` `dd54164`). Il en a tiré :

@@ -1357,6 +1357,7 @@ e2e ni benchmark lancé ; les chiffres cités viennent des fiches.
 
 - Ce document, le journal `progress-to-destination.md` et l'ajout à `CLAUDE.md` du 3 novembre **ne sont pas commités** :
   ils n'existent que dans cette copie de travail. Les autres machines, worktrees et sessions n'y ont pas accès.
+  *(10 novembre : ce document et l'analyse du streaming sont suivis par git depuis `fcddd376`.)*
 - Le journal contient des entrées datées dans le futur (« 2026-11-06T00:15Z » à « 03:30Z », et du 5 novembre après 20 h
   UTC), alors que le dernier commit est de 19:29 UTC. Leur heure est probablement celle de Paris, ou erronée. À
   corriger par un ajout, sans réécrire ces entrées.
@@ -1378,3 +1379,55 @@ ensuite au budget, sur les interfaces de B quand elles existent.
 
 **Décision attendue de Sam** : le jalon retenu ; s'il retient A, la scène de vol de référence (la ville, l'heure, la
 météo) et le palier de cadence.
+
+## 22. Point du 10 novembre : l'audit total, deux plans, le jalon toujours ouvert
+
+Relu le 10 novembre sur `main` à `3af17f8d`, après l'[audit total](audit-2026-11-10/README.md) (huit rapports,
+230 constats) et ses deux plans, [le chargement du monde](PLAN-CHARGEMENT-MONDE.md) (CM0–CM9) et
+[le durcissement du réseau](PLAN-RESEAU-DURCISSEMENT.md) (RD0–RD7). Les chiffres cités viennent de l'audit et des fiches ;
+aucun n'est nouveau.
+
+### 22.1 Ce qui s'est passé depuis le §21
+
+- **Le candidat E (aurores) a été fait, et au-delà** : AM0 à AM4, AM6 et AM7 ont des lots commités du 6 au 8 novembre,
+  rendu compris, dans `trace.wgsl` ([plan aurores](PLAN-AURORES-MAGNETOSPHERES.md), état en tête).
+- **Une part du candidat D aussi** : T7 (deux lots), T8k–T8o, la nuit urbaine NU1, NU2, NU4, NU5
+  ([plan](PLAN-NUIT-URBAINE.md)), les pistes sur leurs seuils.
+- **Le chargement a reçu son analyse** ([ANALYSE-STREAMING](ANALYSE-STREAMING-2026-11-06.md), ST0–ST10) : le décor
+  (assemblage d'une scène entière par un worker unique) plus que le réseau. ST1 (les nouvelles données dans les zones
+  hors ligne) était écrit, non commité ; il est vérifié et commité avec ce point (journal du 10 novembre).
+- **Aucun lot de fondation ni de bascule, aucun jalon J0–J5.** `trace.wgsl` et `renderer.ts` : +3 923 / −784 lignes
+  depuis le 3 novembre. Le risque du §20.9 (« roadmap purement déclarative ») est constaté par l'audit (verdict 1).
+
+### 22.2 Ce que l'audit ajoute au choix
+
+- **La cadence n'est pas pilotée** : en vol terrestre, aucun gouverneur n'agit sur le poste qui coûte (GP-06) ; aucune
+  mesure récente sur M1 Max ; la répartition de la frame par passe inconnue sur Apple (GP-09) ; aucune régression de
+  performance détectée automatiquement (QA-12).
+- **Trois propriétés de la simulation sans propriétaire** : le sol de contact installé par le renderer (AR-01), le temps
+  sans politique d'onglet masqué ni de reprise (AR-02), `Settings` à 388 clés mêlant préférences, scène, état et pose
+  (AR-07). C'est le §19.12.
+- **Les tuiles ont des causes propres**, que ST ne traite pas : relief IGN en float32 brut, portillon de la
+  Géoplateforme à 25 requêtes/s en production, trous définitifs à 4,9 km, départ à froid ; et les mesures passaient sans
+  service worker (CM0).
+- **La livraison est fragile** : CI verte à 31,5 % sur 200 lancements ; binaires à 591,6 Mo sur 600, site à 881 Mo sur
+  900 (QA-01, QA-03).
+
+### 22.3 Les candidats, mis à jour
+
+| Candidat | Contenu | Coût | Statut au 10 novembre |
+|---|---|---|---|
+| **V0 — ne rien perdre, pouvoir livrer** | Vague 0 de l'audit : commits en attente, hook avant push (`biome ci`, `tsc`, `check-wgsl`), décision sur l'hébergement des binaires (D13), fichiers jetables rangés, crédit de l'A320 | heures | préalable ; ST1 fait par ce point |
+| **A — J0** | Inchangé (§21.4) : contrat d'acceptation, scène de référence et sa fiche sur M1 Max et kerr-mini, frame répartie par poste, propriétaires de temps, sol, vue et image | 2–3 jours | **recommandé, attend Sam depuis le 5 novembre** |
+| **F — Les tuiles (CM0–CM3)** | La plainte de Sam du 10 novembre : mesurer le chemin réel (service worker, liaison bridée), plus de trou définitif, portillon séparé par service, préchargement du départ | 1–2 jours pour CM0–CM3 | nouveau ; indépendant de A, sans contrat de rendu touché |
+| **B — J1** | Inchangé : l'opaque terrestre forward sur le domaine pilote, remplaçant `shadeLite` sur ce domaine | 2–4 semaines | après A |
+| **C, D** | Perf sur le chemin actuel ; richesse T/Q/H/R, aurores, nuit urbaine | variable | **après A**, au budget (vague 6) |
+
+**Recommandation (inchangée sur le fond, précisée par l'audit)** : V0 d'abord (heures), puis **A (J0) et F (CM0–CM3)
+en parallèle** — A mesure la frame, F mesure et répare le chemin des tuiles ; ils ne touchent pas les mêmes fichiers —,
+puis **B (J1)**. Jusqu'à J0, geler les nouveaux lecteurs de `shadeLite` et de `trace.wgsl`, sauf correctif.
+
+**Décisions attendues de Sam** ([priorités §2](audit-2026-11-10/09-priorites-todo.md)) : le jalon (D1) ; la scène de vol
+de référence (D2, recommandée : décollage puis virage sur une ville IGN, Paris ou Le Bourget, cockpit, heure et météo
+fixées) ; le palier de cadence (D3 : 40 ms sur kerr-mini « palier 1 », puis M1 Max mesuré) ; le gel ; où héberger les
+binaires (D13).

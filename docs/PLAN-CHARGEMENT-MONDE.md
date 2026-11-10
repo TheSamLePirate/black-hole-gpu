@@ -67,7 +67,7 @@ Ordre conseillé : CM0, puis CM1, CM2 et CM3 (petits, indépendants), puis CM4, 
 | **CM8 — validité par tuile** | Un niveau dessiné tuile par tuile, plus par rectangle plein. C'est ST9. Touche le shader et le cache du relief : à faire sur l'interface de surface de la destination (§7.4), pas avant. | ST-07 | M–L | Tuiles arrivées et non dessinées : 0 |
 | **CM9 — calcul IGN hors du fil principal** | Les relevés et assemblages de grilles en worker. C'est ST9. | ST-09 | M | 95ᵉ centile de la boucle de page pendant une rafale de relief |
 | **Décor** | ST3 + ST6 (cellules et cache cuit), puis ST5, ST4, ST7, ST8, ST10, dans l'ordre de l'analyse du 6 novembre. Deux petits correctifs avant : worker gardé au saut, recul court après un échec. | ST-12, ST-13, ST-14 | L | Ceux de l'analyse du 6 novembre |
-| **Zones** | Commiter ST1 (écrit, dans la copie de travail depuis le 6 novembre) ; ne plus se fier à `navigator.onLine` ; un 404 ne s'épingle pas dans une zone | ST-18 | S | e2e `zones-usa-night` vert, suivi par git |
+| **Zones** | ~~Commiter ST1~~ (**fait le 10 novembre**, avec les pistes dans les zones et l'annulation des requêtes d'une scène abandonnée ; `zones-usa-night` vert sur ce Mac) ; ne plus se fier à `navigator.onLine` ; un 404 ne s'épingle pas dans une zone ; les fichiers du jeu gardés pour un premier passage hors ligne (modèles, workers, cartes des corps) | ST-18 | S | e2e `zones-usa-night` vert, suivi par git |
 | **Mémoire** | Budget commun des tuiles (≈ 1 Go calculé en `veryFar`, jamais rendu) : réglage joueur et éviction | ST-19 | M | Mémoire des tuiles bornée et affichée |
 
 ## 5. Ce que ce plan ne fait pas

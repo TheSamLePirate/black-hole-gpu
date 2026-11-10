@@ -36,7 +36,17 @@ import {
   tileKind,
 } from "./pwa/rules";
 import { decodeRelief, encodeRelief, isReliefGrid, RELIEF_CODEC } from "./pwa/relief-codec";
-import { OVERTURE_LIST, overtureReleases, overtureUrl, parseOvertureZoneUrl, parseRange, PmTiles, rangeKey } from "./system/pmtiles";
+import {
+  OVERTURE_BUCKET,
+  OVERTURE_LIST,
+  overtureReleases,
+  overtureUrl,
+  parseOvertureZoneUrl,
+  parseRange,
+  PmTiles,
+  rangeKey,
+} from "./system/pmtiles";
+import { overtureBaseUrl } from "./system/turbines";
 
 declare const self: ServiceWorkerGlobalScope;
 /** the build this worker belongs to (the build script substitutes it; dev: the time the worker was built) */
@@ -220,7 +230,7 @@ function serving(url: string, from: "zone" | "lru" | "network") {
   (servedKinds[tileKind(url)] ??= { zone: 0, lru: 0, network: 0 })[from]++;
   if (from === "network") {
     servedNetwork.push(url.slice(0, 240));
-    if (servedNetwork.length > 12) servedNetwork.shift();
+    if (servedNetwork.length > 64) servedNetwork.shift();
   }
 }
 /** the network's zones' requests to the Géoplateforme's WMS-R spaced (its 40 a second shared with the game's: 8 here) */
@@ -317,13 +327,14 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
       }
     }
   };
-  /** Overture's archive this batch reads (the release the scenery's worker would: the listing's latest that answers) */
-  let archive: Promise<PmTiles | null> | null = null;
-  const overture = () =>
-    (archive ??= (async () => {
+  /** Overture's archives this batch reads — its buildings', its base theme's (the infrastructure: turbines, pylons) — the release
+   *  the scenery's worker would: the listing's latest that answers */
+  const archives: Partial<Record<"buildings" | "base", Promise<PmTiles | null>>> = {};
+  const overture = (theme: "buildings" | "base" = "buildings") =>
+    (archives[theme] ??= (async () => {
       const list = await listing(new Request(OVERTURE_LIST)).then((r) => r.text());
       for (const r of overtureReleases(list)) {
-        const p = new PmTiles(overtureUrl(r), keepRange);
+        const p = new PmTiles(theme === "base" ? overtureBaseUrl(OVERTURE_BUCKET, r) : overtureUrl(r), keepRange);
         try {
           await p.header();
           return p;
@@ -339,7 +350,7 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
     const ov = parseOvertureZoneUrl(url);
     if (ov)
       try {
-        const p = await overture();
+        const p = await overture(ov.theme);
         if (!p) return null;
         const b = await p.tile(ov.z, ov.x, ov.y);
         return b ? (b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer) : "none";

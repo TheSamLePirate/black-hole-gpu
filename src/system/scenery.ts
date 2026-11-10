@@ -408,7 +408,7 @@ export class EarthScenery {
   }
   private prefetchGen = 0;
   /** (off by default: measured on an approach to JFK, 670 MB against 280 without it — the worker's own fetches not answered
-   *  by the HTTP cache, the data asked twice —; kept for the streaming plan's measures — docs/ANALYSE-STREAMING) */
+   *  by the HTTP cache, the data asked twice —; kept for the streaming plan's measures — docs/ANALYSE-STREAMING-2026-11-06.md) */
   prefetchOn = false;
   /** the fetches made ahead since the start (a scene's data the next one finds in the HTTP cache) */
   prefetchedCount = 0;

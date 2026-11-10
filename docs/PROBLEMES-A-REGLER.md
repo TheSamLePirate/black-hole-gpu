@@ -135,13 +135,20 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
     et `basis_transcoder.wasm` échouent, le décor reste « away-from-earth », aucune tuile n'est demandée. Avec une seconde
     visite en ligne avant la coupure, la zone est dessinée (8 000 bâtiments, 135 réponses du décor par la zone, 0 hors zone,
     0 tuile de sol en échec, 0 plage Overture au réseau).
-  - **Les pistes manquent hors ligne.** `runways/v1/t*.json` (servi par le jeu) n'est pas gardé : 445 échecs en une minute
+  - ~~**Les pistes manquent hors ligne.**~~ *Réglé le 10 novembre (lot ST1, commit de ce jour) : les zones gardent
+    l'index et les tuiles de 5° des pistes à 150 km (`runwayZoneChains`) ; une tuile en échec n'est redemandée qu'après
+    30 s (`world/runways.ts`). Revérifié : `zones-usa-night`, la piste 13R dessinée hors ligne.* `runways/v1/t*.json` (servi par le jeu) n'est pas gardé : 445 échecs en une minute
     sur 4 fichiers — demandé en boucle, sans recul. La piste de JFK n'est pas dessinée (capture `held.png`).
-  - **Des workers et modèles manquent** : `earth-surface-worker.js`, `terrain-mesh-worker.js`, `sailboat-HASH.bin`,
+  - **Des workers et modèles manquent** (toujours ouvert ; depuis le 10 novembre, un modèle d'appareil en échec réseau
+    est signalé par un avertissement et redemandé après 30 s au lieu de rester « en chargement » toute la session —
+    `ship.ts` ; il n'est toujours pas gardé hors ligne) : `earth-surface-worker.js`, `terrain-mesh-worker.js`, `sailboat-HASH.bin`,
     `trawler-HASH.bin` échouent hors ligne.
-  - **Du relief IGN demandé à JFK** : 36 grilles `wms-r` et 16 de couvert, autour de 2,44° E, 48,9° N (Le Bourget), pendant
+  - ~~**Du relief IGN demandé à JFK**~~ *Réglé le 10 novembre : c'était la première scène du décor, au lieu de départ
+    du F-35 (Le Bourget), dont le relevé IGN continuait ses requêtes et ses relances après l'annulation. Chaque scène a
+    désormais son `AbortController`, déclenché par l'annulation (`scenery-worker.ts`). Revérifié : `zones-usa-night`,
+    0 requête au réseau pendant le vol.* Constat d'origine : 36 grilles `wms-r` et 16 de couvert, autour de 2,44° E, 48,9° N (Le Bourget), pendant
     le vol à New York. Origine non établie.
-  - Le test reste **rouge** sur son dernier critère (rien d'autre que la carte tactique demandé au réseau) : pistes, relief,
+  - *(10 novembre, après les correctifs : `zones-usa-night` **vert** sur ce Mac, `run-2026-11-10e.log`.)* Le test restait **rouge** sur son dernier critère (rien d'autre que la carte tactique demandé au réseau) : pistes, relief,
     couvert. C'est l'état réel, pas un artefact.
 - **Piste** : mettre en cache à l'installation ce qu'il faut pour un premier rechargement hors ligne (cartes des corps,
   transcodeur, workers, pistes), ou le dire au joueur ; un recul sur les pistes en échec ; chercher qui demande Le Bourget.

@@ -124,6 +124,7 @@ export function tileKind(
   | "canopy"
   | "relief"
   | "relief512"
+  | "mapterhorn"
   | "mesh"
   | "terrarium"
   | "osm"
@@ -137,6 +138,8 @@ export function tileKind(
   if (url.includes("LIDAR-HD_MNH")) return "canopy";
   if (url.includes("image/x-bil")) return url.includes("WIDTH=512") ? "relief512" : "relief";
   if (url.includes("tiles.openfreemap.org")) return "osm";
+  // (Mapterhorn's heights — the USA's 3DEP, the world's surveys: lot D/E —, told apart from the imagery)
+  if (url.includes("tiles.mapterhorn.com")) return "mapterhorn";
   if (url.includes("/BDTOPO/")) return "buildings";
   // (its releases' listing apart: network first, asked again by every scene online)
   if (url.includes("overturemaps-extras")) return url.includes("list-type=") ? "overture-list" : "overture";
@@ -168,6 +171,8 @@ export interface ZoneRecord {
   /** its chains asked and failed after every try (left out: asked again with "resume") */
   failed: number;
   state: "downloading" | "paused" | "ready";
+  /** the sources' version its last whole download followed (system/zones.ts ZONE_SCHEMA; none: 1, before 6 Nov 2026) */
+  schema?: number;
   /** the next chain to ask (their list rebuilt from the record: system/zones.ts zoneChains) */
   cursor: number;
   /** the sources its URLs followed (earth-tiles.ts orthoOn, reliefOn, hlodOn; the fine windows' side) */
@@ -177,7 +182,7 @@ export interface ZoneRecord {
     hlod: boolean;
     span?: number;
     /** the world scenery's (system/zones.ts ZoneSources: absent in a zone of before — none) */
-    scenery?: { mode: "off" | "balanced" | "high"; satellite: boolean; reach: number } | null;
+    scenery?: { mode: "off" | "balanced" | "high"; satellite: boolean; reach: number; overture?: boolean } | null;
   };
   created: number;
   /** its last download's end [ms since 1970] (an update's: the sources' vintage then) */

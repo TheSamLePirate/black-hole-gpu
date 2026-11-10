@@ -52,6 +52,20 @@ export async function terrarium512(bytes: ArrayBuffer): Promise<{ side: number; 
   return { side, h };
 }
 
+/** the z USA_GROUND_Z tiles of Mapterhorn's ground a scene asks round its centre within `reach` [m] (MapterhornGround's — and
+ *  scenery-sources.ts sceneryChains', the zones' spec) */
+export function mapterhornGroundTiles(lat: number, lon: number, reach: number): [number, number][] {
+  const z = USA_GROUND_Z;
+  const dLat = reach / 111_195,
+    dLon = reach / (111_195 * Math.cos(lat * D));
+  const x0 = Math.floor(tileX(lon - dLon, z)),
+    x1 = Math.floor(tileX(lon + dLon, z)),
+    y0 = Math.floor(tileY(lat + dLat, z)),
+    y1 = Math.floor(tileY(lat - dLat, z));
+  const tiles: [number, number][] = [];
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) tiles.push([x, y]);
+  return tiles;
+}
 /** the scenery's ground over the USA (scenery-worker.ts: as SwissGround) — the tiles of USA_GROUND_Z within `reach` metres */
 export class MapterhornGround {
   private grids = new Map<string, { side: number; h: Float32Array } | null>();
@@ -60,14 +74,7 @@ export class MapterhornGround {
   constructor(private fetchBytes: (url: string) => Promise<ArrayBuffer>) {}
   async prepare(lat: number, lon: number, reach: number) {
     const z = USA_GROUND_Z;
-    const dLat = reach / 111_195,
-      dLon = reach / (111_195 * Math.cos(lat * D));
-    const x0 = Math.floor(tileX(lon - dLon, z)),
-      x1 = Math.floor(tileX(lon + dLon, z)),
-      y0 = Math.floor(tileY(lat + dLat, z)),
-      y1 = Math.floor(tileY(lat - dLat, z));
-    const tiles: [number, number][] = [];
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) tiles.push([x, y]);
+    const tiles = mapterhornGroundTiles(lat, lon, reach);
     let next = 0;
     const run = async () => {
       while (next < tiles.length) {

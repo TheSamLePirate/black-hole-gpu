@@ -13,7 +13,7 @@ import { POIS } from "../../game/pois";
 import { lang, type Text, tr } from "../../i18n";
 import type { Pwa, PwaStats } from "../../pwa";
 import type { ZoneRecord } from "../../pwa/rules";
-import type { ZoneProfileId } from "../../system/zones";
+import { type ZoneProfileId, ZONE_SCHEMA } from "../../system/zones";
 import { el, h } from "../kit";
 import { MapView, type ToScreen } from "../mapview";
 import type { MenuAction } from "../menu/actions";
@@ -70,6 +70,7 @@ const T = {
   paused: { fr: "en pause · {0} %", en: "paused · {0} %" },
   failed: { fr: "{0} tuiles en échec", en: "{0} tiles failed" },
   ready: { fr: "{0} · {1}", en: "{0} · {1}" },
+  outdated: { fr: "nouvelles données : à mettre à jour", en: "new data: update it" },
   zoneHelp: {
     fr: "{0}, {1} autour de {2}.\n{3} tuiles, {4}. {5}",
     en: "{0}, {1} around {2}.\n{3} tiles, {4}. {5}",
@@ -440,7 +441,12 @@ export class OfflineTab {
   /** A zone's state in a few words, its bar while it downloads. */
   private zoneValue(z: ZoneRecord): Node[] {
     const pct = percent(z);
-    if (z.state === "ready") return [el("b", "", fill(tr(T.ready), fmtBytes(z.bytes), fmtDate(z.updated ?? z.created)))];
+    if (z.state === "ready") {
+      const out: Node[] = [el("b", "", fill(tr(T.ready), fmtBytes(z.bytes), fmtDate(z.updated ?? z.created)))];
+      // (downloaded under an older set of sources: its Update fetches the data added since — system/zones.ts ZONE_SCHEMA)
+      if ((z.schema ?? 1) < ZONE_SCHEMA) out.push(el("span", "zone-outdated", ` · ${tr(T.outdated)}`));
+      return out;
+    }
     if (z.state === "paused")
       return this.bar(
         pct,

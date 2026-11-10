@@ -4,9 +4,10 @@
 // offline zones' (system/zones.ts sceneryZoneChains) from these very functions: a zone holds a scene's sources only if both
 // ask the same URLs, to the character.
 
-import { inUsa } from "./usa-ground";
+import { inUsa, mapterhornGroundTiles, mapterhornUrl, USA_GROUND_Z } from "./usa-ground";
 import { BDTOPO_Z, bdtopoUrl } from "./bdtopo";
-import { OVERTURE_LIST, overtureZoneUrl } from "./pmtiles";
+import { OVERTURE_LIST, overtureBaseZoneUrl, overtureZoneUrl } from "./pmtiles";
+import { TURBINE_REACH_M, TURBINE_Z } from "./turbines";
 import { tileUrl } from "./earth-tiles";
 import { inIgnBox, surveyChains, tilesWithin } from "./ign-canopy";
 import { SWISSTOPO, SWISS_GROUND_G, swissGroundTiles, swissTerrainUrl } from "./national";
@@ -152,10 +153,17 @@ export function sceneryChains(q: SceneryAsk): string[][] {
     for (const t of bdtopoTiles(q.lat, q.lon, radius, q.reach)) out.push([bdtopoUrl(t.x, t.y)]);
   } else if (survey === "swisstopo")
     for (const [x, y] of swissGroundTiles(q.lat, q.lon, surveyReach(radius))) out.push([swissTerrainUrl(SWISS_GROUND_G, x, y)]);
+  // (the USA's: Mapterhorn's 3DEP ground under the trees and the buildings — usa-ground.ts MapterhornGround)
+  else if (survey === "usa")
+    for (const [x, y] of mapterhornGroundTiles(q.lat, q.lon, surveyReach(radius))) out.push([mapterhornUrl(USA_GROUND_Z, x, y)]);
   // (Overture's: its releases' listing, then each tile near the centre — the Service Worker resolves its byte ranges)
   if (q.overture && survey !== "ign") {
     out.push([OVERTURE_LIST]);
     for (const t of osmTiles(q.lat, q.lon, bounds, q.reach).tiles) if (t.d <= OVERTURE_REACH_M) out.push([overtureZoneUrl(t.x, t.y)]);
   }
+  // (Overture's infrastructure — turbines, pylons and their lines: scenery-worker.ts infraTiles, its base theme at z 13 — every
+  // scene asks within the turbines' reach)
+  out.push([OVERTURE_LIST]);
+  for (const t of tilesWithin(TURBINE_Z, q.lat, q.lon, TURBINE_REACH_M)) out.push([overtureBaseZoneUrl(TURBINE_Z, t.x, t.y)]);
   return out;
 }

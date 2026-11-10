@@ -23,6 +23,7 @@ import {
   ORTHO_SPAN_BIG,
   ORTHO_Z0,
   ORTHO_Z1,
+  roadsUrl,
   SPAN,
   tileUrl,
   Z0,
@@ -34,7 +35,10 @@ import { BDTOPO_Z, bdtopoUrl } from "./bdtopo";
 import { blockChains, blockSides, CANOPY_NEAR, CANOPY_Z, tilesWithin } from "./ign-canopy";
 import { SWISS_GROUND_G, swissTerrainUrl, tileSource } from "./national";
 import { D as DEG, type SceneryMode } from "./scenery-data";
-import { OVERTURE_LIST, OVERTURE_Z, overtureZoneUrl } from "./pmtiles";
+import { OVERTURE_LIST, OVERTURE_Z, overtureBaseZoneUrl, overtureZoneUrl } from "./pmtiles";
+import { ROAD_MVT_Z1, ROAD_Z0 } from "./night-roads";
+import { TURBINE_REACH_M, TURBINE_Z } from "./turbines";
+import { tilesAround as runwayTilesAround } from "../world/runways";
 import {
   COVER_CELL,
   coverUrl,
@@ -146,6 +150,31 @@ export function zoneTiles(
   return { relief: reliefs, ortho };
 }
 
+/**
+ * The zones' set of sources, its version: a zone downloaded under an older one lacks the data added since — kept "ready" (what
+ * it holds still serves), told "to update" in Settings › Offline (its Update fetches what it lacks). 1: before 6 Nov 2026;
+ * 2: Terrarium its own chain under the national reliefs (the game draws every tile from it first), the night's street tiles
+ * (NU1), Overture's infrastructure (turbines, pylons), the USA's and the world's Mapterhorn relief, the USGS's imagery to z 16,
+ * the world's runways round the zone.
+ */
+export const ZONE_SCHEMA = 2;
+
+/** the world's runways' files as the game asks them (world/runways.ts: relative to the page — the Service Worker's scope) */
+export const RUNWAYS_PATH = "runways/v1/";
+/** how far round a zone the runways' tiles are held [m]: the ILS's search (controller/ils.ts, 150 km), the METAR's nearest
+ *  station (metar.ts, 150 km) — the 3D runways' 25 km and the sites' within it */
+export const RUNWAYS_REACH_M = 150_000;
+/**
+ * A zone's runways (PLAN-RADAR-AAA RD10: OurAirports' 5° × 5° tiles): the index, then each tile within RUNWAYS_REACH_M of the
+ * disc — a key the index lacks answers a 404, kept as none. Offline they had failed — the tiles' own cache emptied, no zone
+ * holding them —, the runway undrawn, the ILS without a field (zones-usa-night, 10 Nov 2026).
+ */
+export function runwayZoneChains(lat: number, lon: number, radius: number): ZoneChain[] {
+  const out: ZoneChain[] = [[`${RUNWAYS_PATH}index.json`]];
+  for (const k of runwayTilesAround(lat, lon, radius + RUNWAYS_REACH_M)) out.push([`${RUNWAYS_PATH}t${k}.json`]);
+  return out;
+}
+
 /** A relief's tile's chains (earth-tiles.ts load): its heights — its national source's, their fallbacks, the global data's
  *  under them (Terrarium, its z 15 parent past it) —, the overground's surface and its fallback; to IMG_Z1 its imagery (the
  *  source's orthophotos, EOX's under them; GIBS's) and its night's lights (their z 8 parent) */
@@ -161,10 +190,14 @@ export function reliefChains(z: number, x: number, y: number, o: ZoneSources): Z
     out.push([terrarium]);
   } else if (o.relief && src && z >= src.heightsFrom) {
     const urls = src.heightUrls(z, x, y, o.hlod);
-    // (the surface's — the overground's, at 512² below z 13 — its own chain; the ground's ending on Terrarium)
+    // (the surface's — the overground's, at 512² below z 13 — its own chain; the ground's its own, Terrarium its own too: the game
+    // draws every tile from Terrarium first and refines it after — earth-tiles.ts load —, a zone that held Terrarium only where
+    // the survey fell short failed its tiles offline under the IGN, the USA, Mapterhorn; and a Mapterhorn tile's sea, its zeros,
+    // is filled from it — a WebP the zone cannot read for holes. The streaming analysis, 6 Nov 2026)
     const surface = urls.filter((u) => u.includes("_MNS") || u.includes(".MNS"));
     const ground = urls.filter((u) => !surface.includes(u));
-    out.push([...ground, terrarium]);
+    if (ground.length) out.push(ground);
+    out.push([terrarium]);
     if (surface.length) out.push(surface);
   } else out.push([terrarium]);
   if (z <= IMG_Z1) {
@@ -172,6 +205,12 @@ export function reliefChains(z: number, x: number, y: number, o: ZoneSources): Z
     else out.push([dayUrl(z, x, y)]);
     const night = nightOf(z, x, y);
     out.push([nightUrl(night.z, night.x, night.y)]);
+    // (NU1: the street levels' lights — OpenFreeMap's vector tile, z 13 at most, a z 14 tile's its parent's — for the zone's
+    // nights too)
+    if (z >= ROAD_Z0) {
+      const rk = Math.max(z - ROAD_MVT_Z1, 0);
+      out.push([roadsUrl(z - rk, x >> rk, y >> rk)]);
+    }
   }
   return out;
 }
@@ -305,6 +344,11 @@ export function sceneryZoneChains(
     out.push([OVERTURE_LIST]);
     for (const t of tilesWithin(OVERTURE_Z, lat, lon, rc + OVERTURE_REACH_M + slack)) out.push([overtureZoneUrl(t.x, t.y)]);
   }
+  // (Overture's infrastructure — the wind turbines, the pylons and their lines: scenery-worker.ts infraTiles, its base theme at
+  // z 13 —, every scene asks it within the turbines' reach of its centre, 15 km: some 80 tiles of ~3.7 km round a small zone,
+  // a few MB — the pylons' 5 km alone left the farther ones to the network, 79 requests on a flight at JFK; its listing too)
+  out.push([OVERTURE_LIST]);
+  for (const t of tilesWithin(TURBINE_Z, lat, lon, rc + TURBINE_REACH_M + slack)) out.push([overtureBaseZoneUrl(TURBINE_Z, t.x, t.y)]);
   return out;
 }
 
@@ -329,6 +373,8 @@ export function zoneChains(lat: number, lon: number, radius: number, profile: Zo
   for (const [kind, z, x, y] of tiles) for (const chain of kind === "r" ? reliefChains(z, x, y, o) : [orthoUrls(z, x, y)]) add(chain);
   // (the world scenery's after the ground's)
   if (o.scenery) for (const chain of sceneryZoneChains(lat, lon, radius, o.scenery, o.relief)) add(chain);
+  // (the runways' round it — the airfields, the ILS —, whatever the sources)
+  for (const chain of runwayZoneChains(lat, lon, radius)) add(chain);
   return out;
 }
 /** a zone's URLs, every link of every chain, once each */
@@ -401,10 +447,21 @@ const sizeOf = (u: string) =>
               ? 171_000
               : 64_000
             : u.includes("openfreemap")
-              ? 73_000
+              ? // (the night's street tiles at z 12–13 — NU1 —: 219 and 337 kB over Paris, 6 Nov 2026; the scenery's z 14 smaller)
+                /\/planet\/latest\/1[23]\//.test(u)
+                ? 250_000
+                : 73_000
               : u.includes("/BDTOPO/")
                 ? 135_000
-                : 18_000;
+                : // (Mapterhorn's 512² WebP heights — not measured in bulk, an estimate —; Overture's infrastructure tile, same)
+                  u.includes("mapterhorn")
+                  ? 200_000
+                  : u.includes("kerr-overture-base")
+                    ? 60_000
+                    : // (a runways' tile: 8.5 kB on average, 184 kB at most — t6_-20, the eastern USA —, the index 15 kB)
+                      u.startsWith(RUNWAYS_PATH)
+                      ? 60_000
+                      : 18_000;
 /** a zone's size before it is fetched [bytes]: its chains' first links, a tenth of the fallbacks after them (the sea, a
  *  survey's gap) */
 export function zoneEstimate(chains: readonly ZoneChain[]): number {

@@ -2131,3 +2131,32 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   M1 Max ; les plans CM et RD sont des propositions.
 - **Suite :** les décisions de Sam (jalon, scène de référence, palier de cadence — priorités §2), puis J0 et la mesure
   du chemin réel des tuiles (CM0).
+
+## 2026-11-10T09:10Z — Les zones hors ligne complètes (ST1) et les plans réconciliés avec l'audit
+
+- **Contribution** (§7.6 et §7.19 : données prêtes, couverture gardée jusqu'au remplacement ; §19 l'expérience complète
+  hors ligne ; vague 0.2 de l'[audit](docs/audit-2026-11-10/09-priorites-todo.md)) : le lot ST1 de
+  l'[analyse du streaming](docs/ANALYSE-STREAMING-2026-11-06.md), écrit le 6 novembre, terminé et commité. Les zones
+  gardent ce que le jeu demande vraiment : Terrarium dans sa propre chaîne sous les reliefs nationaux, les rues de nuit z 12–13,
+  l'infrastructure Overture à 15 km, le sol 3DEP des USA, et maintenant **les pistes du monde à 150 km** (`runwayZoneChains`) ;
+  `ZONE_SCHEMA` 2 signale « à mettre à jour » une zone plus ancienne. Deux défauts trouvés par le premier vrai passage hors
+  ligne, corrigés à la source : une **scène du décor annulée abandonne ses requêtes en vol** (`AbortController` par scène,
+  `scenery-worker.ts` — un morceau de ST2 ; la première scène, au Bourget, lisait encore son relevé IGN pendant un vol à JFK)
+  et les pistes en échec ne sont plus redemandées à chaque image (recul de 30 s, `world/runways.ts`). Un modèle d'appareil en
+  échec réseau est redemandé après 30 s au lieu de rester « en chargement » (`ship.ts`).
+- **Documents** : en-têtes et états réconciliés avec l'audit — [plan aurores](docs/PLAN-AURORES-MAGNETOSPHERES.md) (état
+  par phase, l'ordre après J0), [plan T/Q/H/R](docs/PLAN-REFRACTION-HORIZONS.md) (§0.2 T7/T8, §0.3 ce que l'audit change),
+  [analyse stratégique §22](docs/ANALYSE-STRATEGIE-RENDU-2026-11-03.md) (candidats au jalon mis à jour : V0, J0 et CM0–CM3 en
+  parallèle, puis J1), [plan du chargement](docs/PLAN-CHARGEMENT-MONDE.md), `PROBLEMES-A-REGLER`, `GRAPHICS-PIPELINE`,
+  `E2E-CATALOGUE`.
+- **Preuve** : **observé et mesuré** — e2e `zones-usa-night` **vert** sur ce Mac (fenêtre visible, `remote-results/zones-usa-night/run-2026-11-10e.log`,
+  captures `held.png`, `flown.png`) : zone de 1 km sur la finale 13R de JFK, 4 508 chaînes, 234 Mo en 120 s, 0 échec ;
+  réseau coupé pour la page et son Service Worker, hors ligne : 8 000 bâtiments, 135 réponses du décor par la zone et 0 hors
+  zone, 0 tuile de sol en échec au-dessus de la zone, **0 requête au réseau pendant le vol** (le matin : pistes 135, relief
+  36, couvert 16), piste 13R dessinée. Tests unitaires : zones, pmtiles, PWA, pistes, décor (58 verts, dont un nouveau
+  sur les pistes des zones) ; `tsc` 0 erreur. **Non mesuré** : coût GPU ou de cadence (aucun, ce lot ne touche pas la frame) ;
+  le passage dans la PWA installée de Sam (l'e2e reproduit le même chemin dans le profil Chrome des e2e).
+- **Restant** : hors ligne après une seule visite, les fichiers du jeu jamais chargés manquent encore (modèles du trafic,
+  `terrain-mesh-worker.js`, cartes des corps) ; l'imagerie GIBS grossière hors du disque est redemandée en boucle hors ligne
+  (≈ 320 échecs par minute) ; `zones`, `zones-scenery`, `pwa`, `overture` à convertir à `app.offline`. Le prochain jalon attend
+  les décisions D1–D3 de Sam (analyse stratégique §22.3).

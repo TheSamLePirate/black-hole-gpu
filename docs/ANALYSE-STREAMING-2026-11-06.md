@@ -57,7 +57,7 @@ kerr-mini). Le code fait foi. Références : [ANALYSE-STRATEGIE-RENDU §7.6, §7
 | Sol sous les arbres et bâtiments | IGN (MNH, LiDAR, RGE), swisstopo, **Mapterhorn z 14 (USA)** | relevé + 250 m | oui (USA aussi désormais dans `sceneryChains`) |
 | Forêt | WorldCover + MNH (France) | boîte | — (calculée) |
 | Lampadaires, voitures | dérivés des rues OSM z 14 | 1,5 km, 3 km | via OSM z 14 |
-| Pylônes, lignes, éoliennes | Overture `base.pmtiles` z 13 | 5 km, 15 km | **depuis ST1, dans le rayon des pylônes (5 km)** |
+| Pylônes, lignes, éoliennes | Overture `base.pmtiles` z 13 | 5 km, 15 km | **depuis ST1, dans le rayon des éoliennes (15 km, `TURBINE_REACH_M`)** |
 
 ### 1.3 Les autres chargements
 
@@ -222,6 +222,15 @@ GPU du cache de relief et des horizons, compilations des noyaux.
   - `ZONE_SCHEMA` 2 : une zone d'avant est signalée « à mettre à jour ».
   - `sceneryChains` inclut désormais le sol USA et l'infrastructure.
   - e2e `zones-usa-night` : la zone JFK téléchargée, puis volée de nuit hors ligne à travers la PWA.
+- **Complément du 10 novembre** (commité avec ST1) : les pistes du monde dans les zones (index et tuiles de 5° à 150 km),
+  un recul de 30 s sur une tuile de pistes en échec ; l'annulation d'une scène du décor abandonne aussi ses requêtes en vol
+  (un `AbortController` par scène — un morceau de ST2 : la première scène, au lieu de départ, lisait encore le relevé IGN du
+  Bourget pendant le vol à JFK) ; un modèle d'appareil en échec réseau redemandé après 30 s. La coupure de l'e2e atteint le
+  Service Worker (`app.offline`, `3af17f8d`). **Mesuré** (`zones-usa-night`, ce Mac) : zone de 1 km, 4 508 chaînes, 234 Mo en
+  120 s, 0 échec ; hors ligne, 8 000 bâtiments, 135 réponses du décor par la zone, 0 hors zone, 0 tuile de sol en échec,
+  **0 requête au réseau** pendant le vol (contre pistes 135, relief 36, couvert 16 le matin). Reste hors de la zone : les
+  fichiers du jeu jamais chargés avant la coupure (modèles du trafic, `terrain-mesh-worker.js`), l'imagerie et les lumières
+  GIBS des niveaux grossiers hors du disque (redemandées hors ligne : 183 et 141 échecs en une minute).
 
 ## 7. Plan par lots
 

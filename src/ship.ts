@@ -1054,7 +1054,15 @@ export class ShipRenderer {
       this.loadingMesh.add(id);
       (isTraffic(id) ? this.loadTraffic(id) : this.loadVessel(id)).then(
         () => this.onLoaded?.(),
-        (e) => console.error(`${isTraffic(id) ? id : VESSELS[id].name}:`, e),
+        (e) => {
+          const name = isTraffic(id) ? id : VESSELS[id].name;
+          // (the network's failure — offline, a file the Service Worker never kept —: the craft not drawn for now, asked
+          // again after a while; it had stayed "loading" for the session, never asked again — zones-usa-night, 10 Nov 2026)
+          if (e instanceof TypeError) {
+            console.warn(`${name}: not loaded (${e.message}) — asked again in 30 s`);
+            setTimeout(() => this.loadingMesh.delete(id), 30_000);
+          } else console.error(`${name}:`, e);
+        },
       );
     }
     return false;
