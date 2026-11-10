@@ -1441,3 +1441,11 @@ binaires (D13).
 | D3 | **Palier de cadence : 25 ms sur M1 Max** (40 images/s sur le profil principal) | Le palier de J0 ; la cible finale reste 60 images/s (§8). Le palier de la décision 26 (40 ms sur kerr-mini) n'est plus le palier nommé ; kerr-mini reste mesuré comme second témoin |
 | Gel | **Oui** : aucun nouveau lecteur de `shadeLite` ni de `trace.wgsl` jusqu'à J0, sauf correctif | AM5 et les compléments d'aurores, la nuit urbaine (NU3, NU6, NU7), la richesse T/Q/H/R attendent J0 |
 
+**Suite (10 novembre, après-midi)** : la vague 0 est faite sauf l'hébergement des binaires (orientation de Sam :
+samlepirate.org, une release GitHub ou son autre serveur Portainer). **J0 est écrit et mesuré** —
+[contrat](J0-CONTRAT.md), [premières mesures](progress/j0/README.md) — mais pas atteint : ses seuils et l'état thermique
+qui juge le palier attendent Sam. Mesuré : sur la scène de Toulon-Hyères, le M1 Max frais est à 25,1 ms en médiane
+(p95 34, p99 50), soutenu à 41,5 ms (son GPU bride à 30–60 % en 3 minutes) ; kerr-mini à 60 ms. Sur kerr-mini, le sol et
+l'eau (`shadeLite`, `earth water`) font ≈ 53 ms de 65 : le domaine de J1 est bien le poste dominant ; l'appareil, que les
+horodatages chargeaient de 37–49 ms, n'en coûte que 0,3.
+

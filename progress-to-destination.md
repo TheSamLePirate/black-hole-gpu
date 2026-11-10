@@ -2221,3 +2221,34 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   déploiement Pages lui-même (la copie partielle de `main-src` dans le job `site`) ; un navigateur dont l'ancien worker
   est encore actif sert une dernière fois la page en cache avant la mise à jour.
 - **Suite** : J0.
+
+## 2026-11-10T10:29Z — J0 : le contrat d'acceptation, la scène de référence de Toulon-Hyères, ses premières mesures
+
+- **Contribution** (§15 J0, §8 contrat de performance, §19.13 parcours, §22.4 D2–D3 ; audit 1.1 et 1.2) : le jalon qui
+  bloquait tout le reste a son contrat, sa scène et ses mesures. [docs/J0-CONTRAT.md](docs/J0-CONTRAT.md) : profil
+  (1920 × 1080, profil du joueur tel que livré), palier 1 = 25 ms sur M1 Max avec des seuils proposés (p50 et p95 ≤ 25,
+  p99 ≤ 37,5, CPU p95 ≤ 4), la scène `toulon-hyeres-v1` (F-35, cockpit, Rade d'Hyères, 500 m, 140 m/s, virage à droite
+  sur la côte, 10 juillet 15:30 UTC), les mesures et leur sens (images nouvelles, pas rAF ; GP-09), la répartition par
+  ablation, les propriétaires désignés (sol de contact au monde, temps à la simulation, vue, image), les contrats §19
+  relevés dès J0. Implémentation : `tests/e2e/lib/j0-scene.ts` (une source), `tests/e2e/j0-reference.e2e.test.ts`
+  (chemin d'entrée à froid, vol mesuré, 7 ablations sur le même instantané, vol soutenu, thermique et mémoire),
+  `scripts/j0-fiche.ts` (la fiche depuis `j0.json`, ⚠ quand la fréquence GPU rend une ablation incomparable),
+  `tests/j0-intervals.test.ts`.
+- **Preuve : mesuré** — e2e 3/3 réussis, deux passages sur ce Mac (fenêtre visible) et deux sur kerr-mini (plein écran),
+  aucune erreur GPU ; [synthèse](docs/progress/j0/README.md), fiches et JSON dans `docs/progress/j0/`.
+  - M1 Max frais : 36,8 images/s, p50 **25,1 ms**, p95 34,2, p99 50,3, CPU p95 6,4. Soutenu : 24,9 images/s, p50 41,5 —
+    **le GPU de ce MacBook Pro bride à 30–60 % de sa fréquence en 2,5–4 min de jeu** (97–99 °C), puis oscille. kerr-mini
+    (M1, fréquence stable) : 15,2 images/s, p50 60 ms, GPU 65 ms, frais comme soutenu.
+  - Répartition (kerr-mini) : nuages −5,8 ms, décor −3,8, HUD −1,4, ombre de l'appareil −0,7, appareil entier −0,3,
+    matériau de l'eau 0 ; **le reste ≈ 53 ms est le sol et l'eau** (`earth lite` 17,5 + `earth water` 12,7 ms en passes de
+    calcul). Les 37–49 ms que les horodatages donnaient à `ship: …`/`display` ne sont que du chevauchement (GP-09 confirmé).
+  - Chemin d'entrée à froid : image pilotable 11 s (M1 Max) / 17–22 s (mini) ; relief fin 61–73 s / pas calme en 90 s ;
+    détail complet 64–88 s / 127–142 s. **En vol, les tuiles en attente montent sans redescendre** (→ 192 et 258 en 70 s).
+- **Documents** : contrat (nouveau, dans la carte `docs/README.md`), GRAPHICS-PIPELINE §8.2, §8.4 (mesures datées), §9
+  (deux constats), priorités de l'audit (1.1, 1.2), stratégie §22.4 (suite), E2E-CATALOGUE.
+- **Limites** : J0 n'est **pas atteint** — les seuils et l'état thermique qui juge le palier (frais ou soutenu) attendent
+  Sam. Non mesuré : présentation à l'écran, latence commande → image, âge des instruments, caches chauds, écran titre,
+  kerr-pc, qualité d'image. Le passage 2 du M1 Max a gardé le HUD éteint après l'ablation « affichages » (corrigé avant le
+  passage 2 du mini). Aucun gain de performance n'est revendiqué : rien du rendu n'a changé.
+- **Suite** : validation de Sam ; une ablation de la passe `earth water (raster)` (12,7 ms, que `liteSkip` 1 ne coupe pas) ;
+  CM0 sur cette scène (le chargement qui ne suit pas) ; puis J1 jugé ici.

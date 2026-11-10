@@ -475,6 +475,7 @@ nouvelle version** (`sw.ts:190`) : à mesurer (selon les en-têtes HTTP de l'hé
 | Arrivée des tuiles et du décor | e2e `tile-arrival` (rejeu à latence fixe), `approach-detail`, `plan-views` (`PV_M0B=1`) ; `__bh.netLight.stats()` |
 | Mémoire GPU | `#vram` ou `#bench` (`bench.vram()`), `stats()` des modules, e2e `tile-memory` |
 | Machine en état de mesurer | `bun scripts/thermal.ts --all`, `bun scripts/lab-monitor.ts` |
+| **La scène de référence J0** (cadence, régularité, répartition par poste) | e2e `j0-reference` → `scripts/j0-fiche.ts` ([J0-CONTRAT.md](J0-CONTRAT.md) ; ~10 min, GPU, tuiles) : vol réel de 70 s, ablations par poste, vol soutenu, fréquence GPU relevée |
 | Vue d'ensemble | Kerr Bench `bun scripts/bench.ts` (±20 % sur les scènes lourdes : pas pour un A/B de noyau) |
 
 ### 8.3 Protocole
@@ -504,6 +505,19 @@ kerr-mini, 1920×1080, échelle 0,75, `5cdd71fc` (2/11, avant R3/T6/T7/Q5), suit
 Q3 ; Q6u (Tarifa, `docs/progress/refraction-horizons/Q6/q6u-i4-mini.json`) : `taau` 3,4–3,8 ms, `trace` 3,4–6,2 ms selon
 l'échelle. **Une mesure de référence actuelle reste à faire** (une suite `plan-views` sur kerr-mini, §10).
 
+**J0, scène `toulon-hyeres-v1`, 10 novembre 2026, code `5aeec7b0`** ([fiches](progress/j0/README.md), mesuré). Vol réel
+de 70 s, 1920 × 1080, échelle 0,75, profil du joueur. Passes de calcul, moyenne sur la seconde moitié du vol :
+
+| Machine (GPU par image) | `earth lite (raster)` | `earth water (raster)` | `clouds (half)` | `taau` | `terrain from the Sun` | `earth horizons` | `sea fft` | `temporal` | `trace` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| kerr-mini, 1 278 MHz (65 ms) | 17,5 | 12,7 | 5,1 | 3,3 | 2,3 | 1,6 | 1,6 | 1,6 | 1,3 |
+| M1 Max frais, 1 296 → 1 197 MHz (26 ms) | 7,2 | 4,7 | 2,3 | 1,0 | 0,9 | 1,7 | 0,4 | 0,5 | 1,1 |
+
+Par ablation sur images terminées (kerr-mini, fréquence stable) : nuages −5,8 ms, décor −3,8, HUD et panneaux −1,4,
+ombre de l'appareil −0,7, appareil et cockpit entiers (`debugSkipShip`) −0,3, matériau de l'eau dans `shadeLite` 0,0.
+**Les passes `ship: …` et `display` (37–49 ms par horodatage) ne coûtent donc presque rien** : GP-09 confirmé par
+ablation. Le M1 Max bride sa fréquence GPU en jeu prolongé (389–1 296 MHz) : ses ablations ne se comparent pas.
+
 ---
 
 ## 9. Angles morts et anomalies relevées
@@ -519,9 +533,17 @@ l'échelle. **Une mesure de référence actuelle reste à faire** (une suite `pl
 4. Présentation et latence entrée → photon ; images en vol (`inFlight` privé).
 5. Étapes répétées du parcours : `loading.stage()` écrase l'entrée d'un même identifiant et `bootMark` ne note qu'une
    fois ; un second `scene-tracer` (voyage, changement de mode) est perdu ; `earthSettled` et `tracerSettled` n'ont pas
-   d'horodatage ; aucune marque « image pilotable », « couverture utile », « détail complet » (§8.3 de la stratégie).
+   d'horodatage ; aucune marque « image pilotable », « couverture utile », « détail complet » (§8.3 de la stratégie) dans
+   le jeu — l'e2e `j0-reference` les chronomètre de l'extérieur depuis le 10 novembre (ses fiches, `progress/j0/`).
 6. Le profileur : 64 libellés au plus par frame (au-delà, ignorés en silence) ; un même libellé est additionné
    (`temporal` ×2) ; le bench ne garde que les 10 passes les plus chères.
+
+**Constatées en mesurant (J0, 10 novembre, [fiches](progress/j0/README.md))** :
+
+- **Le chargement ne suit pas le vol de référence** : à 140 m/s et 500 m, portée « veryFar », les tuiles de relief en
+  attente montent de 20 → 192 (M1 Max) et 37 → 258 (kerr-mini) en 70 s sans redescendre. Cause non établie (plan CM).
+- **Le M1 Max (MacBook Pro) bride son GPU en jeu prolongé** : 100 % de la fréquence au démarrage, 30–60 % après 2,5 à
+  4 min (97–99 °C), puis oscillation ; la même scène coûte 25, 41 ou ≈ 83 ms selon l'instant.
 
 **Anomalies relevées en lisant le code (non reproduites, à vérifier)** :
 
@@ -571,7 +593,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-06T09:21:14Z sur `6d11d6b5` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-10T10:29:11Z sur `5aeec7b0` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **98 sites de création de pipeline** (67 rendu, 31 calcul, dont 38 asynchrones) et 35 `createShaderModule` dans 28 fichiers ; **34 programmes WGSL** (15 fichiers .wgsl, 19 chaînes dans le TypeScript) ; **60 libellés de passes** du profileur GPU (+ 9 sites à libellé dynamique).
 
@@ -679,7 +701,7 @@ _Généré le 2026-11-06T09:21:14Z sur `6d11d6b5` (arbre de travail). Ne pas éd
 | `src/system/earth-horizons.ts:405` | compute async | `earth horizons staging` | `bake` |
 | `src/system/earth-maps.ts:254` | render | — | `vs`, `entry` |
 | `src/system/earth-shore.ts:102` | compute async | `earth shore staging` | `bake` |
-| `src/system/earth-tiles.ts:2280` | render | `imagery mips` | `vs`, `fs` |
+| `src/system/earth-tiles.ts:2283` | render | `imagery mips` | `vs`, `fs` |
 | `src/system/giant-tile.ts:244` | compute | `giant tile` | `e` |
 | `src/system/gtao.ts:118` | compute async | — | `gtao` |
 | `src/system/hd-maps.ts:300` | render | — | `vs`, `entry` |
@@ -803,14 +825,14 @@ _Généré le 2026-11-06T09:21:14Z sur `6d11d6b5` (arbre de travail). Ne pas éd
 | `ground occlusion` | `src/renderer.ts:10448` | 1 |
 | `trees' shadow map` | `src/renderer.ts:10453` | 1 |
 | `horizon bake` | `src/renderer.ts:10700` | 1 |
-| `ship probe: mips` | `src/ship.ts:1814` | 1 |
-| `ship probe: GGX` | `src/ship.ts:1826` | 1 |
-| `ship probe: SH` | `src/ship.ts:1833` | 1 |
-| `ship: shadow map` | `src/ship.ts:2714` | 1 |
-| `ship: shading (MSAA)` | `src/ship.ts:2732` | 1 |
-| `ship: own mask` | `src/ship.ts:2968` | 1 |
-| `ship: hull distance` | `src/ship.ts:2998` | 1 |
-| `ship: thrusters and plasma` | `src/ship.ts:3016` | 1 |
+| `ship probe: mips` | `src/ship.ts:1822` | 1 |
+| `ship probe: GGX` | `src/ship.ts:1834` | 1 |
+| `ship probe: SH` | `src/ship.ts:1841` | 1 |
+| `ship: shadow map` | `src/ship.ts:2722` | 1 |
+| `ship: shading (MSAA)` | `src/ship.ts:2740` | 1 |
+| `ship: own mask` | `src/ship.ts:2976` | 1 |
+| `ship: hull distance` | `src/ship.ts:3006` | 1 |
+| `ship: thrusters and plasma` | `src/ship.ts:3024` | 1 |
 | `terrain raster visibility` | `src/system/terrain-raster.ts:669` | 1 |
 | `body raster visibility` | `src/system/terrain-raster.ts:717` | 1 |
 | `terrain from the Sun` | `src/system/terrain-raster.ts:856` | 1 |
@@ -847,7 +869,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/noise3d.ts:124` |
 | compute pass | `src/renderer.ts:7378` |
 | compute pass | `src/renderer.ts:11356` |
-| render pass | `src/ship.ts:3090` |
+| render pass | `src/ship.ts:3098` |
 | compute pass | `src/sky.ts:166` |
 | station: shadow map | `src/station.ts:274` |
 | station | `src/station.ts:304` |
@@ -855,7 +877,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | compute pass | `src/system/bc-encode.ts:220` |
 | render pass | `src/system/day-clouds.ts:181` |
 | render pass | `src/system/earth-maps.ts:276` |
-| imagery mips | `src/system/earth-tiles.ts:2306` |
+| imagery mips | `src/system/earth-tiles.ts:2309` |
 | render pass | `src/system/hd-maps.ts:320` |
 | horizon mips | `src/system/horizon-maps.ts:767` |
 | terrain cache fade | `src/system/terrain-cache.ts:503` |
