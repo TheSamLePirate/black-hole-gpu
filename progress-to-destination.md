@@ -2102,3 +2102,32 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   (`tests/aurora-bodies.test.ts` : la caméra dans le cylindre d'ombre, point subsolaire à 15° E). **Non mesuré** : coût GPU (le
   compteur affiché n'est pas une mesure).
 - **Restant** : la compilation du noyau proche de Jupiter (~200 s à froid) s'applique aussi à la scène.
+
+## 2026-11-10T08:17Z — Audit total du dépôt et deux plans (session documentaire)
+
+- **Contribution à la destination :** §20.5 étape 1 et §20.8 (savoir où en est la convergence, préparer J0) ; §7.6 et
+  §7.19 (chargement) ; §19.3, §19.4, §19.12 (propriétaires du temps, du sol de contact, de l'état). Documentation
+  seulement : aucune responsabilité n'est livrée par cette session.
+- **Réalisé :**
+  - [docs/audit-2026-11-10/](docs/audit-2026-11-10/README.md) : une synthèse, huit rapports par domaine (chargement du
+    monde, rendu, architecture, réseau, TARS et audio, vol et interface, plans et reste à faire, tests et CI ;
+    230 constats avec fichier, ligne, gravité et niveau de preuve) et
+    [les priorités](docs/audit-2026-11-10/09-priorites-todo.md).
+  - [docs/PLAN-CHARGEMENT-MONDE.md](docs/PLAN-CHARGEMENT-MONDE.md) (CM0–CM9) : les causes de lenteur des tuiles que le
+    plan ST0–ST10 ne contient pas (octets du relief IGN, portillon du service worker, trous définitifs, départ à froid).
+  - [docs/PLAN-RESEAU-DURCISSEMENT.md](docs/PLAN-RESEAU-DURCISSEMENT.md) (RD0–RD7).
+  - La carte [docs/README.md](docs/README.md) : trois lignes ajoutées.
+- **Constats pour la destination :** depuis le 3 novembre, aucun lot de fondation ni de bascule, aucun jalon J0–J5 ;
+  `trace.wgsl` et `renderer.ts` ont pris +3 923 / −784 lignes (`git log --numstat --since=2026-11-03`). Le sol de
+  contact est installé par le renderer (`src/renderer.ts:1945`). En vol terrestre, aucun gouverneur n'agit sur le
+  matériau (`src/main.ts:8892`). ST1 est écrit mais non commité ; ST2–ST10 ne sont pas commencés.
+- **Preuves :** lecture du code par huit audits en lecture seule ; les constats mis en tête de la synthèse relus dans
+  le code. Lancé : `tsc` (0 erreur), Biome (107 avertissements), `pipeline-inventory --check` (passe),
+  `kernel-budget` (passe), `bh-api --check`, `check-repo-size`. **Aucun e2e, aucun benchmark, aucune mesure
+  nouvelle ; aucun défaut reproduit en jeu.** Les chiffres de cadence et de volume cités viennent des fiches du projet,
+  avec leur date.
+- **Limites / transitions restantes :** aucun code modifié ; rien de commité par cette session (l'audit, les deux
+  plans, la référence stratégique et le lot ST1 ne sont que dans la copie de travail) ; pas de mesure récente sur
+  M1 Max ; les plans CM et RD sont des propositions.
+- **Suite :** les décisions de Sam (jalon, scène de référence, palier de cadence — priorités §2), puis J0 et la mesure
+  du chemin réel des tuiles (CM0).

@@ -28,7 +28,7 @@ audit est un constat daté. En cas de désaccord, vérifier dans le code et corr
 | Campagne d'autopilotes | [FLIGHTLAB.md](FLIGHTLAB.md) | [CAMPAGNE-AUTOPILOTES-2026-10-07.md](CAMPAGNE-AUTOPILOTES-2026-10-07.md) |
 | Toucher à la Terre, au relief, aux tuiles | [systemes/03-univers-ephemerides.md](systemes/03-univers-ephemerides.md), CLAUDE.md « The Earth is WGS84 » | [ANALYSE-IGN-LIDAR.md](ANALYSE-IGN-LIDAR.md), [DATA-SOURCES-MONDE.md](DATA-SOURCES-MONDE.md), [FORETS-BATIMENTS-WORLDWIDE.md](FORETS-BATIMENTS-WORLDWIDE.md) |
 | Toucher à TARS | [TARS.md](TARS.md), [systemes/10-tars-agent.md](systemes/10-tars-agent.md) | [PLAN-TARS-AGENT.md](PLAN-TARS-AGENT.md) |
-| Savoir ce qui est cassé | [PROBLEMES-A-REGLER.md](PROBLEMES-A-REGLER.md) (à jour), [ERRORS-TO-FIX.md](ERRORS-TO-FIX.md) (18 oct.) | les sections « Pièges et limites » de `systemes/`, « Limites » de VOL-AVIONS / VOL-VAISSEAUX |
+| Savoir ce qui est cassé | [PROBLEMES-A-REGLER.md](PROBLEMES-A-REGLER.md) (à jour), [l'audit du 10 nov.](audit-2026-11-10/README.md) (230 constats par domaine, à reproduire avant correction), [ERRORS-TO-FIX.md](ERRORS-TO-FIX.md) (18 oct.) | les sections « Pièges et limites » de `systemes/`, « Limites » de VOL-AVIONS / VOL-VAISSEAUX |
 | Déployer | [DEPLOY.md](DEPLOY.md) | [ASSETS.md](ASSETS.md) |
 | Échanger avec le projet d'Alex | CLAUDE.md « Projet parallèle », [agent/](agent/) | [UNITY-SOLAR-SYSTEM.md](UNITY-SOLAR-SYSTEM.md) |
 
@@ -125,6 +125,9 @@ implémentation). Abandonné : PLAN-ELECTRON (pas de fichier). Les autres sont t
 | [progress/](progress/) | Une planche de captures par phase de plan (`progress/<plan>/`) |
 | [progress/apprendre-a-voler-examens.md](progress/apprendre-a-voler-examens.md) | Les examens des cours de pilotage par des LLM élèves : la méthode (à refaire quand un cours change), les résultats, ce qui reste ouvert |
 | [PROBLEMES-A-REGLER.md](PROBLEMES-A-REGLER.md), [ERRORS-TO-FIX.md](ERRORS-TO-FIX.md), [CORRECTIONS-DETAILS-SOL-VOL.md](CORRECTIONS-DETAILS-SOL-VOL.md), [BUG-IAU-RATE-LIBRATION.md](BUG-IAU-RATE-LIBRATION.md) | Problèmes ouverts et corrigés |
+| [audit-2026-11-10/](audit-2026-11-10/README.md) | **Audit total du 10 novembre 2026** : la synthèse, huit rapports par domaine (chargement, rendu, architecture, réseau, TARS, vol, plans, tests) et [les priorités](audit-2026-11-10/09-priorites-todo.md) ; constat daté, rien reproduit en jeu |
+| [ANALYSE-STREAMING-2026-11-06.md](ANALYSE-STREAMING-2026-11-06.md), [PLAN-CHARGEMENT-MONDE.md](PLAN-CHARGEMENT-MONDE.md) | Le chargement du monde : l'analyse et le plan ST0–ST10 (décor) ; le plan CM0–CM9 (tuiles), proposé le 10 nov., rien d'implémenté |
+| [PLAN-RESEAU-DURCISSEMENT.md](PLAN-RESEAU-DURCISSEMENT.md) | Durcir le réseau (RD0–RD7) : validation, droits, reprise, serveur ; proposé le 10 nov., rien d'implémenté |
 | `AUDIT-*.md`, `REVIEW-*.md`, [MERGE-PERF-RENDER.md](MERGE-PERF-RENDER.md) | Audits et revues datés |
 | [E2E-CAMPAIGN-2026-10-13.md](E2E-CAMPAIGN-2026-10-13.md), [CAMPAGNE-AUTOPILOTES-2026-10-07.md](CAMPAGNE-AUTOPILOTES-2026-10-07.md) | Comptes rendus de campagnes |
 | [agent/](agent/) | Notes pour le Claude d'Alex (`<sujet>_<AAAA-MM-JJ-HH-MM-SS>.md`, UTC) |
