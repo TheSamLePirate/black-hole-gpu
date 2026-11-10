@@ -1,0 +1,718 @@
+{
+ "scene": {
+  "id": "toulon-hyeres-v1",
+  "start": [
+   43.06,
+   6.32,
+   500,
+   270,
+   140
+  ],
+  "date": "2026-07-10T15:30:00Z",
+  "weather": "fair",
+  "earthClouds": 0.5,
+  "turnAtS": 25,
+  "turnTo": 340,
+  "flightS": 70
+ },
+ "machine": "kerr-mini",
+ "output": "1920×1080",
+ "startedAt": "2026-11-10T18:53:47.296Z",
+ "thermalBefore": {
+  "host": "mini-de-olivier.home",
+  "at": "2026-11-10T18:53:46.704Z",
+  "ageS": 0.6,
+  "pressure": "Nominal",
+  "pressureSource": "powermetrics",
+  "state": "nominal",
+  "gpuMHz": 0,
+  "gpuMaxMHz": 1278,
+  "gpuOfMaxPct": 0,
+  "gpuBusyPct": 0,
+  "gpuTempC": null,
+  "cpuTempC": 68.7,
+  "gpuW": 0,
+  "sysW": 13.6,
+  "feed": true
+ },
+ "wayIn": {
+  "firstImage": 13,
+  "craft": 13.3,
+  "pilotableImage": 17.4,
+  "reliefIn": 94.5,
+  "fullDetail": 97.5,
+  "relief": {
+   "ok": true,
+   "finest": 17,
+   "pending": 0
+  },
+  "scenery": true,
+  "note": "seconds since App.boot began; boot on game:artemis then the craft placed (not the title's path)"
+ },
+ "settings": {
+  "quality": "game",
+  "dynamicResolution": true,
+  "earthPipeline": "raster",
+  "earthScenery": "high",
+  "earthSurface": "satellite",
+  "detailReach": "veryFar",
+  "lookProfile": "auto",
+  "realtimeSubsampling": "auto",
+  "earthRasterShading": "auto",
+  "fpsCap": 0,
+  "motionBlur": 0,
+  "dof": false
+ },
+ "adapter": {
+  "compiling": [],
+  "compilesPending": 0,
+  "sceneCompileEtaS": null,
+  "adapter": "apple",
+  "integratedGpu": null
+ },
+ "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+ "ablations": [
+  {
+   "key": "base",
+   "label": "référence",
+   "images": 316,
+   "imagesPerS": 15.8,
+   "p50": 60,
+   "p95": 80.6,
+   "p99": 81,
+   "max": 119.4,
+   "over33": 315,
+   "over33ms": 19979,
+   "gpuP50": 63.9,
+   "gpuP95": 69.9,
+   "loopCpuP95": 10.6,
+   "gpuMHz": [
+    1278,
+    1278
+   ],
+   "pressure": [
+    "Nominal",
+    "Nominal"
+   ],
+   "compilingSeen": 0,
+   "tilesPendingMax": 107,
+   "top": [
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 45.387,
+     "n": 49
+    },
+    {
+     "pass": "display",
+     "ms": 45.347,
+     "n": 49
+    },
+    {
+     "pass": "ship: thrusters and plasma",
+     "ms": 37.528,
+     "n": 49
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 30.43,
+     "n": 20
+    },
+    {
+     "pass": "ship: own mask",
+     "ms": 29.576,
+     "n": 49
+    },
+    {
+     "pass": "earth water (raster)",
+     "ms": 18.615,
+     "n": 49
+    },
+    {
+     "pass": "sea surface",
+     "ms": 17.418,
+     "n": 49
+    },
+    {
+     "pass": "earth lite (raster)",
+     "ms": 8.031,
+     "n": 49
+    },
+    {
+     "pass": "clouds (half)",
+     "ms": 5.513,
+     "n": 49
+    },
+    {
+     "pass": "taau",
+     "ms": 3.333,
+     "n": 49
+    }
+   ],
+   "gpuErrors": 0
+  },
+  {
+   "key": "clouds",
+   "label": "sans nuages",
+   "images": 354,
+   "imagesPerS": 17.7,
+   "p50": 59.9,
+   "p95": 79.1,
+   "p99": 80.1,
+   "max": 80.7,
+   "over33": 351,
+   "over33ms": 19937,
+   "gpuP50": 56.1,
+   "gpuP95": 61.8,
+   "loopCpuP95": 9.9,
+   "gpuMHz": [
+    1278,
+    1278
+   ],
+   "pressure": [
+    "Nominal",
+    "Nominal"
+   ],
+   "compilingSeen": 0,
+   "tilesPendingMax": 0,
+   "top": [
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 42.061,
+     "n": 54
+    },
+    {
+     "pass": "display",
+     "ms": 41.693,
+     "n": 54
+    },
+    {
+     "pass": "ship: own mask",
+     "ms": 33.398,
+     "n": 54
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 29.154,
+     "n": 19
+    },
+    {
+     "pass": "ship: thrusters and plasma",
+     "ms": 18.461,
+     "n": 54
+    },
+    {
+     "pass": "earth water (raster)",
+     "ms": 18.316,
+     "n": 54
+    },
+    {
+     "pass": "sea surface",
+     "ms": 12.711,
+     "n": 54
+    },
+    {
+     "pass": "earth lite (raster)",
+     "ms": 7.901,
+     "n": 54
+    },
+    {
+     "pass": "taau",
+     "ms": 3.304,
+     "n": 54
+    },
+    {
+     "pass": "terrain raster visibility",
+     "ms": 2.265,
+     "n": 54
+    }
+   ],
+   "gpuErrors": 0
+  },
+  {
+   "key": "scenery",
+   "label": "sans décor (bâtiments, arbres)",
+   "images": 335,
+   "imagesPerS": 16.7,
+   "p50": 60,
+   "p95": 80.6,
+   "p99": 81,
+   "max": 100,
+   "over33": 331,
+   "over33ms": 19897,
+   "gpuP50": 59.7,
+   "gpuP95": 65.7,
+   "loopCpuP95": 9.4,
+   "gpuMHz": [
+    1278,
+    1278
+   ],
+   "pressure": [
+    "Nominal",
+    "Nominal"
+   ],
+   "compilingSeen": 0,
+   "tilesPendingMax": 0,
+   "top": [
+    {
+     "pass": "display",
+     "ms": 46.297,
+     "n": 52
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 46.227,
+     "n": 52
+    },
+    {
+     "pass": "ship: thrusters and plasma",
+     "ms": 36.18,
+     "n": 52
+    },
+    {
+     "pass": "ship: own mask",
+     "ms": 30.425,
+     "n": 52
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 28.328,
+     "n": 20
+    },
+    {
+     "pass": "earth water (raster)",
+     "ms": 18.302,
+     "n": 52
+    },
+    {
+     "pass": "sea surface",
+     "ms": 16.954,
+     "n": 52
+    },
+    {
+     "pass": "earth lite (raster)",
+     "ms": 7.349,
+     "n": 52
+    },
+    {
+     "pass": "clouds (half)",
+     "ms": 5.869,
+     "n": 52
+    },
+    {
+     "pass": "terrain raster visibility",
+     "ms": 4.362,
+     "n": 52
+    }
+   ],
+   "gpuErrors": 0
+  },
+  {
+   "key": "water",
+   "label": "sans matériau de l'eau",
+   "images": 325,
+   "imagesPerS": 16.2,
+   "p50": 60,
+   "p95": 80.1,
+   "p99": 81,
+   "max": 100.2,
+   "over33": 324,
+   "over33ms": 19979,
+   "gpuP50": 61.8,
+   "gpuP95": 67.2,
+   "loopCpuP95": 9.6,
+   "gpuMHz": [
+    1278,
+    1278
+   ],
+   "pressure": [
+    "Nominal",
+    "Nominal"
+   ],
+   "compilingSeen": 0,
+   "tilesPendingMax": 0,
+   "top": [
+    {
+     "pass": "display",
+     "ms": 48.212,
+     "n": 50
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 47.74,
+     "n": 50
+    },
+    {
+     "pass": "ship: thrusters and plasma",
+     "ms": 38.881,
+     "n": 50
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 34.317,
+     "n": 18
+    },
+    {
+     "pass": "ship: own mask",
+     "ms": 26.858,
+     "n": 50
+    },
+    {
+     "pass": "earth water (raster)",
+     "ms": 18.451,
+     "n": 50
+    },
+    {
+     "pass": "sea surface",
+     "ms": 17.342,
+     "n": 50
+    },
+    {
+     "pass": "earth lite (raster)",
+     "ms": 7.884,
+     "n": 50
+    },
+    {
+     "pass": "clouds (half)",
+     "ms": 5.629,
+     "n": 50
+    },
+    {
+     "pass": "taau",
+     "ms": 3.282,
+     "n": 50
+    }
+   ],
+   "gpuErrors": 0
+  },
+  {
+   "key": "displays",
+   "label": "sans HUD ni écrans d'interface",
+   "images": 328,
+   "imagesPerS": 16.4,
+   "p50": 60,
+   "p95": 80.1,
+   "p99": 100.9,
+   "max": 120,
+   "over33": 327,
+   "over33ms": 19959,
+   "gpuP50": 60.7,
+   "gpuP95": 65.9,
+   "loopCpuP95": 9.1,
+   "gpuMHz": [
+    1278,
+    1278
+   ],
+   "pressure": [
+    "Nominal",
+    "Nominal"
+   ],
+   "compilingSeen": 0,
+   "tilesPendingMax": 0,
+   "top": [
+    {
+     "pass": "display",
+     "ms": 48.111,
+     "n": 52
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 47.526,
+     "n": 52
+    },
+    {
+     "pass": "ship: thrusters and plasma",
+     "ms": 33.083,
+     "n": 52
+    },
+    {
+     "pass": "ship: own mask",
+     "ms": 30.881,
+     "n": 52
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 29.647,
+     "n": 22
+    },
+    {
+     "pass": "earth water (raster)",
+     "ms": 18.401,
+     "n": 52
+    },
+    {
+     "pass": "sea surface",
+     "ms": 17.141,
+     "n": 52
+    },
+    {
+     "pass": "earth lite (raster)",
+     "ms": 7.916,
+     "n": 52
+    },
+    {
+     "pass": "clouds (half)",
+     "ms": 5.465,
+     "n": 52
+    },
+    {
+     "pass": "taau",
+     "ms": 3.267,
+     "n": 52
+    }
+   ],
+   "gpuErrors": 0
+  },
+  {
+   "key": "ship",
+   "label": "sans dessin de l'appareil (debugSkipShip ; son masque reste)",
+   "images": 341,
+   "imagesPerS": 17,
+   "p50": 60,
+   "p95": 79.9,
+   "p99": 80.6,
+   "max": 100,
+   "over33": 340,
+   "over33ms": 19958,
+   "gpuP50": 58.6,
+   "gpuP95": 63.1,
+   "loopCpuP95": 9.2,
+   "gpuMHz": [
+    1278,
+    1278
+   ],
+   "pressure": [
+    "Nominal",
+    "Nominal"
+   ],
+   "compilingSeen": 0,
+   "tilesPendingMax": 0,
+   "top": [
+    {
+     "pass": "display",
+     "ms": 49.139,
+     "n": 54
+    },
+    {
+     "pass": "earth water (raster)",
+     "ms": 20.906,
+     "n": 54
+    },
+    {
+     "pass": "sea surface",
+     "ms": 17.509,
+     "n": 54
+    },
+    {
+     "pass": "earth lite (raster)",
+     "ms": 8.739,
+     "n": 54
+    },
+    {
+     "pass": "clouds (half)",
+     "ms": 5.304,
+     "n": 54
+    },
+    {
+     "pass": "taau",
+     "ms": 3.348,
+     "n": 54
+    },
+    {
+     "pass": "terrain raster visibility",
+     "ms": 2.369,
+     "n": 54
+    },
+    {
+     "pass": "sea fft",
+     "ms": 2.209,
+     "n": 54
+    },
+    {
+     "pass": "terrain from the Sun",
+     "ms": 1.735,
+     "n": 17
+    },
+    {
+     "pass": "earth horizons",
+     "ms": 1.66,
+     "n": 14
+    }
+   ],
+   "gpuErrors": 0
+  },
+  {
+   "key": "shipShadow",
+   "label": "sans carte d'ombre de l'appareil",
+   "images": 328,
+   "imagesPerS": 16.4,
+   "p50": 60,
+   "p95": 80.1,
+   "p99": 81,
+   "max": 120,
+   "over33": 326,
+   "over33ms": 19939,
+   "gpuP50": 60.8,
+   "gpuP95": 66.5,
+   "loopCpuP95": 9.5,
+   "gpuMHz": [
+    1278,
+    1278
+   ],
+   "pressure": [
+    "Nominal",
+    "Nominal"
+   ],
+   "compilingSeen": 0,
+   "tilesPendingMax": 0,
+   "top": [
+    {
+     "pass": "display",
+     "ms": 49.523,
+     "n": 52
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 48.618,
+     "n": 52
+    },
+    {
+     "pass": "ship: thrusters and plasma",
+     "ms": 40.933,
+     "n": 52
+    },
+    {
+     "pass": "ship: own mask",
+     "ms": 37.685,
+     "n": 52
+    },
+    {
+     "pass": "earth water (raster)",
+     "ms": 18.37,
+     "n": 52
+    },
+    {
+     "pass": "sea surface",
+     "ms": 17.163,
+     "n": 52
+    },
+    {
+     "pass": "earth lite (raster)",
+     "ms": 7.875,
+     "n": 52
+    },
+    {
+     "pass": "clouds (half)",
+     "ms": 5.455,
+     "n": 52
+    },
+    {
+     "pass": "taau",
+     "ms": 3.284,
+     "n": 52
+    },
+    {
+     "pass": "sea fft",
+     "ms": 2.25,
+     "n": 52
+    }
+   ],
+   "gpuErrors": 0
+  },
+  {
+   "key": "base",
+   "label": "référence",
+   "images": 329,
+   "imagesPerS": 16.5,
+   "p50": 60,
+   "p95": 79.9,
+   "p99": 80.7,
+   "max": 120.1,
+   "over33": 328,
+   "over33ms": 19919,
+   "gpuP50": 60.7,
+   "gpuP95": 65.4,
+   "loopCpuP95": 9.6,
+   "gpuMHz": [
+    1278,
+    1278
+   ],
+   "pressure": [
+    "Nominal",
+    "Nominal"
+   ],
+   "compilingSeen": 0,
+   "tilesPendingMax": 0,
+   "top": [
+    {
+     "pass": "display",
+     "ms": 43.337,
+     "n": 50
+    },
+    {
+     "pass": "ship: shading (MSAA)",
+     "ms": 43.186,
+     "n": 50
+    },
+    {
+     "pass": "ship: thrusters and plasma",
+     "ms": 32.253,
+     "n": 50
+    },
+    {
+     "pass": "ship: own mask",
+     "ms": 30.126,
+     "n": 50
+    },
+    {
+     "pass": "ship: shadow map",
+     "ms": 27.461,
+     "n": 22
+    },
+    {
+     "pass": "earth water (raster)",
+     "ms": 18.437,
+     "n": 50
+    },
+    {
+     "pass": "sea surface",
+     "ms": 17.261,
+     "n": 50
+    },
+    {
+     "pass": "earth lite (raster)",
+     "ms": 7.989,
+     "n": 50
+    },
+    {
+     "pass": "clouds (half)",
+     "ms": 5.574,
+     "n": 50
+    },
+    {
+     "pass": "taau",
+     "ms": 3.256,
+     "n": 50
+    }
+   ],
+   "gpuErrors": 0
+  }
+ ],
+ "thermalAfter": {
+  "host": "mini-de-olivier.home",
+  "at": "2026-11-10T19:02:42.284Z",
+  "ageS": 3.8,
+  "pressure": "Nominal",
+  "pressureSource": "powermetrics",
+  "state": "nominal",
+  "gpuMHz": 1278,
+  "gpuMaxMHz": 1278,
+  "gpuOfMaxPct": 100,
+  "gpuBusyPct": 99.9,
+  "gpuTempC": null,
+  "cpuTempC": 85.8,
+  "gpuW": 5.7,
+  "sysW": 27,
+  "feed": true
+ },
+ "finishedAt": "2026-11-10T19:02:46.078Z"
+}

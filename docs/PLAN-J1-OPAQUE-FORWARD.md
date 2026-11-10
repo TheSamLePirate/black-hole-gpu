@@ -25,7 +25,7 @@ complètes par image).
 | Mouvement | aucun tampon ; `temporal`/`taau` (`post.wgsl`) reprojettent par la **caméra seule** + la distance (`moments.y`) | les objets mobiles (l'appareil, les voitures) n'ont pas de mouvement |
 | L'appareil | `ship.ts` « ship: shading (MSAA) » **après** `encodeTemporal`, composé par l'affichage | hors couleur de scène et hors historique |
 | Description de frame | `renderer.frame(viewSettings, time, …)` + **~40 champs** du renderer posés par `main.ts` ; `writeParams` dérive la caméra, `Math.random()`, ~48 `performance.now()` dans `renderer.ts` | aucune description figée ; l'encodage lit réglages et horloges |
-| Coût (J0, kerr-mini, soir) | `earth lite` 12,1 ms (après la sortie de l'eau), image 60,8 ms | domaine de J1 : `earth lite` (l'eau relève de J4) |
+| Coût (J0, kerr-mini, soir) | `earth lite` 12,1 ms (après la sortie de l'eau), image 60,8 ms ; ablations ([fiche](progress/j0/FICHE-kerr-mini-2026-11-10-mer-ablations.md)) : nuages −6,2, appareil −3,7 (à recontrôler), décor −2,6, HUD −1,6, ombre de l'appareil −1,5, matériau de l'eau −0,5 ms | domaine de J1 : `earth lite` (l'eau relève de J4) |
 
 ## 3. Les lots
 

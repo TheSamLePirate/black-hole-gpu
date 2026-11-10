@@ -2454,3 +2454,13 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Preuve** : **mesuré** — e2e `titan-ground` 3/3 sur kerr-mini ; fiche `FICHE-m1max-2026-11-10-mer-complet.md` ; kerr-mini : côte
   neutre (68,5 / 68,35 ms), mer à 30 m −2,75 ms. `check-wgsl` 73/73, `tsc`.
 - **Limites** : le soutenu du matin et du soir à des fréquences différentes ; ablations à refaire sur kerr-mini avec le code du soir.
+
+## 2026-11-10T19:03Z — J0 : la répartition par poste après la mer, la sonde mesurée
+
+- **Contribution** (J0 / J1 : où gagner ; PLAN-MER-WEBGPU S5) : les ablations de J0 refaites sur kerr-mini avec le code du soir (fiche
+  `FICHE-kerr-mini-2026-11-10-mer-ablations.md`) ; le défaut de la sonde de lumière mesuré pour la première fois (de jour sa radiance
+  ≈ π fois celle de l'image dans le même axe, de nuit ~0,3) et consigné, ouvert.
+- **Preuve** : **mesuré** (kerr-mini, 1 278 MHz) : contre une base de 62,3 ms (dérive 3,2 ms) — nuages −6,2, appareil −3,7, décor −2,6,
+  HUD −1,6, ombre de l'appareil −1,5, eau −0,5 ; sonde `night-probe` deux passages à 1 % près.
+- **Limites** : la dérive de la base (±1,6 ms) rend les petits postes incertains ; l'écart de l'appareil à recontrôler ; la cause du
+  facteur de la sonde non trouvée.
