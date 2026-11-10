@@ -2652,3 +2652,17 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   (hypothèse : les quads 2×2 aux bords des triangles, non mesurée seule). La visibilité suivie d'un calcul reste la voie efficace pour le
   sol dense ; un forward n'y paierait qu'avec un maillage d'ombrage plus grossier ou pour les grands triangles (bâtiments, appareil —
   J1-5). **Décision de Sam** sur l'orientation de J1-4 ; le pilote reste éteint.
+
+## 2026-11-11T01:40Z — Mesure : `shadeLite` paie ~16 ms de « présence » de l'air et des nuages sur une forêt basse
+
+- **Contribution** (stratégie §8 performance ; J0 / chemin des 60 images/s) : sur Toulon à 120 m au-dessus d'une forêt (kerr-mini,
+  1440×810), `earth lite (raster)` coûte ~46 ms. Coupées **à l'exécution** (`liteSkip`), aucune famille n'en retire plus de 2 ms (arbres,
+  ombres, surfaces, imagerie, AO, spéculaire, air et nuages : 0–2 ms) ; seul l'arrêt du noyau au début (1024) le ramène à 4 ms. Coupés
+  **à la compilation** (`renderer.tune`, `TUNE_LITE` 2048 : l'air et les nuages devant la surface retirés du noyau), deux fois :
+  **46,5 → 28,2 ms (−18 ms)**. ~16 ms sont donc le coût de la présence de ce code dans le noyau (registres, occupation), non son travail.
+  `sceneryTreeLite` fait 30 % du code inliné, `liteSurface` 50 % (`wgsl-inline-size`).
+- **Suite** (en cours) : sortir `liteFinish` de `shadeLite` — le noyau écrit la radiance de surface, une passe `shadeLiteFinish` (la
+  finition du forward de J1-4, déjà écrite) met l'air et les nuages. Gain attendu à mesurer (le travail de l'air reste, ~2–5 ms).
+- **Limites** : une vue (forêt basse) ; les autres coupes à la compilation (arbres, ombres, surfaces, détail, routes) ont donné
+  110–120 ms — des mesures non valides (un autre noyau mesuré pendant la compilation, probablement), non retenues ; « lumière plate » 84 ms,
+  anomalie non expliquée.
