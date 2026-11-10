@@ -1454,3 +1454,24 @@ jugement sur l'état thermique soutenu sont validés : **J0 est atteint** ([cont
 lui, ne l'est pas (soutenu : 41,5 ms au p50). Le gel des nouveaux lecteurs de `shadeLite` et `trace.wgsl` tombe avec J0 ;
 J1 se juge sur cette scène.
 
+## 23. Mer, littoral, végétation : l'analyse de web-ocean et BakedVoxelLighting (10 novembre, soir)
+
+Demandée par Sam ; [l'analyse complète](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md). **Mesuré** sur kerr-mini : une vue de
+mer coûte 85–93 ms à notre jeu, 32,5 ms à web-ocean (6 cascades, surface déplacée, LEAN complet, écume en cartes monde),
+pour une qualité nettement moindre chez nous. BakedVoxelLighting apporte un littoral physique (champ de houle réfractée,
+jet de rive, sable mouillé) et une végétation continue (tuiles de couvert fondues dans le sol, imposteurs ré-éclairables à
+couverture conservée), sur une carte fixe de 4 km.
+
+Ce que cela change ici, en propositions (l'ordre attend Sam, analyse §8) :
+
+- **§7.7 se précise** : forêt *moyenne* = imposteurs ré-éclairables hémi-octaédriques à profondeur fiable ; forêt *lointaine*
+  = tuiles de canopée par classe, fondues dans le matériau du sol avec leur moyenne exacte ; eau *proche* = surface déplacée,
+  *moyenne* = moments de pente filtrés (LEAN complet), *lointaine* = rugosité et écume moyennes.
+- **J1** : le nouvel opaque reçoit dès sa naissance les lectures de couvert (V1) et de sable mouillé (L3), plutôt que de les
+  ajouter à `shadeLite`.
+- **Avant J4** : le contrat de données de la mer (M1–M3 : cascades, moments, écume monde) et le cube du ciel (M4) sur la passe
+  d'eau existante — un changement de contrat, pas un nouveau lecteur de `shadeLite` ; le champ de houle côtier (L1) comme
+  produit de tuile du monde.
+- **J4** garde la surface déplacée de la mer (M5) et la migration des lecteurs.
+- **Bibliothèques (§18)** : aucune ; deux projets MIT étudiés, techniques réécrites, rien copié.
+

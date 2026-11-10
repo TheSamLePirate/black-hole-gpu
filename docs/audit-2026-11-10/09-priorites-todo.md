@@ -118,7 +118,8 @@ Réseau RD3 à RD6 (droits, état repris, liaison, monde commun) ; TARS allégé
 du prompt) ; écouteurs et promesses (AR-17, AR-18) ; manette et école de l'A320 (FX-07) ; unités et traductions en dur
 (FX-17, FX-18) ; mise à jour du service worker (QA-16) ; CSP (QA-18) ; catalogue des e2e (QA-11) ; puis la richesse
 des plans ouverts (aurores AM5, nuit urbaine, planètes P10, aviation, A320 A15–A19, capteurs), chacune sur les
-interfaces de la vague 4.
+interfaces de la vague 4. Pour la mer, le littoral et la végétation, l'ordre et les lots sont précisés par
+[l'analyse du 10 novembre](../ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md) (M1–M5, L1–L4, V1–V6).
 
 ## 4. Ce qu'il ne faut pas faire
 

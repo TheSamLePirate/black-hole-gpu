@@ -519,6 +519,11 @@ ombre de l'appareil −0,7, dessin de l'appareil sauté (`debugSkipShip`, son ma
 **Les passes `ship: …` et `display` (37–49 ms par horodatage) ne coûtent donc presque rien** : GP-09 confirmé par
 ablation. Le M1 Max bride sa fréquence GPU en jeu prolongé (389–1 296 MHz) : ses ablations ne se comparent pas.
 
+**Une vue de mer, 10 novembre 2026, code `4c222776`** (mesuré, kerr-mini à 1 278 MHz, 1920 × 1080, échelle 0,75, caméra libre
+au large de Hyères, Soleil bas ; sonde `sea-compare`, [analyse](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md) §2.3) : image
+entière **93,2 ms** au p50 à 30 m vers le Soleil, **85,0 ms** à 2,4 m en vue rasante — contre 32,5 ms pour web-ocean (mer FFT
+6 cascades, ciel, nuages, MSAA 4×, pleine résolution) sur la même machine. Non réparti par passe.
+
 ---
 
 ## 9. Angles morts et anomalies relevées

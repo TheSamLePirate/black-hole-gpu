@@ -3,6 +3,12 @@
 Branche de départ : `codex/earth-photorealistic` (personnage AAA, herbe GPU, fusion `ground-fixes`).
 Suivi d’exécution : [progress/on-foot-aaa.md](progress/on-foot-aaa.md) (un lot par chantier livré).
 
+> **État au 10 novembre 2026** : plan daté, jugé périmé et contradictoire par l'audit
+> ([07-plans-reste-a-faire](audit-2026-11-10/07-plans-reste-a-faire.md)). Ses chantiers **A (arbres et forêts)** et
+> **B (eau)** sont repris par [l'analyse de web-ocean et BakedVoxelLighting](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md)
+> et [PLAN-REFRACTION-HORIZONS](PLAN-REFRACTION-HORIZONS.md) §0.4 ; sa décision « arbres entièrement tracés, aucun maillage
+> rastérisé » ne tient plus (stratégie §7.7 : géométrie ou imposteurs à profondeur fiable). Le reste est historique.
+
 ## Décisions prises (12 octobre 2026)
 
 | Sujet | Décision |

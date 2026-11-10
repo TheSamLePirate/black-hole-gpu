@@ -2280,3 +2280,25 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   refusé le push à raison. Réinstallé (`bun install --frozen-lockfile`, TypeScript 5.9.3) ; `scripts/pre-push.ts` appelle
   désormais `node_modules/.bin/{biome,tsc}` et refuse avec un message clair s'ils manquent — jamais de code téléchargé dans
   un hook.
+
+## 2026-11-10T13:17Z — Mer, littoral, végétation : l'analyse de web-ocean et BakedVoxelLighting
+
+- **Contribution** (§7.7 représentations par distance, §7.4–7.8 contrats, §19.11 qualité de la végétation et de l'eau,
+  jalons J1 et J4) : demandée par Sam, l'étude complète de deux projets MIT —
+  [web-ocean](https://github.com/Noniv/web-ocean) (mer FFT WebGPU) et
+  [BakedVoxelLighting](https://github.com/SamG-Coder/BakedVoxelLighting) (littoral physique, végétation, éclairage cuit) —
+  et ce que nous en reprenons : [docs/ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md](docs/ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md).
+  Lots proposés : M1–M5 (mer : contrat de la FFT, LEAN complet, écume en cartes monde, cube du ciel, surface déplacée en
+  J4), L1–L4 (littoral : champ de houle côtier par tuile, lame de rive, sable mouillé, bathymétrie), V1–V6 (végétation :
+  tuiles de couvert et de canopée, imposteurs hémi-octaédriques, horizons de canopée, fondus, vent, transmission). Plans mis
+  à jour : PLAN-REFRACTION-HORIZONS §0.4 et ses lignes T7, Q4, Q8 ; stratégie §23 ; PLAN-MONDE-VIVANT-AAA (en tête) ;
+  GRAPHICS-PIPELINE §8.4 ; vague 6 de l'audit ; carte de la doc. Corrigé : la synthèse J0 donnait l'eau au domaine de J1.
+- **Preuve** : lecture complète des deux dépôts (clones en lecture seule ; BakedVoxelLighting lu par un agent, références
+  vérifiées par échantillon) ; **mesuré** : web-ocean 10–13 ms par image sur ce M1 Max (≈ 1 100 MHz, puis bridé) et
+  32,5 ms sur kerr-mini ; **notre jeu dans les mêmes vues de mer 93,2 et 85,0 ms sur kerr-mini** (p50, échelle 0,75),
+  captures dans `docs/progress/mer-vegetation/`. Non mesuré : BakedVoxelLighting (non lancé), tout gain des lots proposés.
+- **Limites** : aucune ligne de code changée dans le jeu ; aucune dépendance ajoutée ; les coûts « visés » sont des
+  objectifs. Observé en passant, à vérifier : des étoiles visibles avec le Soleil au ras de l'horizon, une traînée bleue
+  d'optique dans la vue de mer.
+- **Suite** : les décisions de Sam (ordre mer/J1, bathymétrie, arbres sources des imposteurs) ; l'ablation de la passe
+  `earth water` ; puis J1.

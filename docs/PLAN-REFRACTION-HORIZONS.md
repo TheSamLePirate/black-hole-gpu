@@ -107,7 +107,7 @@ Source : les fiches `docs/progress/refraction-horizons/*.md` lues jusqu'à leur 
 | T4 | en partie | Le rejet local de l'historique temporel ; le contact des arbres, des pistes et des bâtiments pendant le fondu |
 | T5, T257 | faits | T257 : des facettes lointaines encore visibles de près ; un CDLOD (« T11 ») est suggéré |
 | T6 | fait (+0,2 à 0,8 ms) | Les deux régimes de Chamonix (48 ou 59 ms) à expliquer |
-| T7 | en partie (9 lots ; le 8ᵉ et le 9ᵉ le 5 novembre : la terre en mer pendant le chargement à Toulon-Hyères, les plaques du maillage lointain sur la mer aux Calanques) | Le turquoise des hauts-fonds : il faut une bathymétrie côtière (HOMONIM, Litto3D), deux essais rejetés. Les marées. La répétition des vagues de 1 024 m. LEAN, le déphasage et le fondu du SSR du plan. L'écume, allumée, coûte 0,2 à 0,8 ms contre < 0,1 visé |
+| T7 | en partie (9 lots ; le 8ᵉ et le 9ᵉ le 5 novembre : la terre en mer pendant le chargement à Toulon-Hyères, les plaques du maillage lointain sur la mer aux Calanques) | Le turquoise des hauts-fonds : il faut une bathymétrie côtière (HOMONIM, Litto3D), deux essais rejetés. Les marées. La répétition des vagues de 1 024 m. LEAN, le déphasage et le fondu du SSR du plan. L'écume, allumée, coûte 0,2 à 0,8 ms contre < 0,1 visé. **Précisé le 10 nov. (§0.4) : lots M1–M4 (mer) et L1–L4 (littoral)** |
 | T8 | clos le 3 novembre, **rouvert** les 5 et 6 (T8k–T8o : fenêtres fines au bord des collines, fondu de 800 ms, worker du décor gardé et son cache, voyant du réseau, abandon des tuiles sorties de leur fenêtre, file IGN ordonnée) | Validité par tuile, `put` sur le fil principal, boucle CPU au p95 ≈ 4,6 ms (cible 4) — **repris par CM8 et CM9** du [plan du chargement](PLAN-CHARGEMENT-MONDE.md) (ST9) ; les causes de lenteur trouvées par l'audit (relief IGN en float32, portillon du service worker, trous définitifs, départ à froid) : CM0–CM4 |
 | T9 | fait (a, b, c ; matériau −1,2 ms) | Le reste de C0-4 ; le scintillement en vol non mesuré ; H5 en texture filtrée |
 | H1, H1b, H4 | faits | H1b : le décodage du DEM dans un worker (à-coup de 59 à 79 ms) |
@@ -123,12 +123,12 @@ Source : les fiches `docs/progress/refraction-horizons/*.md` lues jusqu'à leur 
 | Q1 | en partie | P2 et les ponts faits (image 53–58 → 44–45 ms) ; P1 écarté. **P3, P5, P6, P7, P12, I1 et I4 (paliers) non faits ; budget en vol jamais fixé** (décision 16) |
 | Q2 | fait (−0,35 ms à Chamonix) | C9 (`wxVeil`) ; les captures à trois Soleils |
 | Q3 | B1, B4 faits (+0,3 à 1 ms) | B3, A1 |
-| Q4 | S1 fait (actif) ; scintillement figé < 1 % | L2a GTAO et L2b coupés (invisibles, halos, damier) ; **L4 coupé, à juger** ; L5, F1, F2, F4, C4 non faits |
+| Q4 | S1 fait (actif) ; scintillement figé < 1 % | L2a GTAO et L2b coupés (invisibles, halos, damier) ; **L4 coupé, à juger** ; L5, F1, F2, F4, C4 non faits. **10 nov. (§0.4) : F2 par tuiles de couvert et de canopée, L2b par horizons de canopée** |
 | Q5 | C1, C2, C3, C5, C6, C7, C10, C11 (premier lot), VIPER C1 et C4, P8 faits | VIPER C2 et C3 coupés après mesure ; la confiance de C5 ; **orage : passe des nuages ~25 ms sur M1** |
 | Q6 | I2 (TAAU en mouvement), I3, I4 (échelle 75 %), I6 A1–A3, I7, I8 faits | I5 sans besoin établi ; A4 en option ; **Q6t : porte de la décision 40** |
 | Q6-ISS | ISS0, ISS1, ISS3 faits ; ISS2, ISS4, ISS5 en partie | La capture dense nadir et amarrage (6 novembre) ; l'attitude réelle de la station ; les plans serrés |
 | Q7 | L8 (+1,7 ms sur M1), B4, L9, G1/G2 faits | **L7b coupé, go/no-go final** ; L7a ; L9 sans observations ; G1/G2 non lus par les lecteurs |
-| Q8 | L10, D1 (9 paliers), C8 faits | **B5 coupé** (+1–2 ms, presque invisible) ; B2, F3 ; le coût de D1 non mesuré |
+| Q8 | L10, D1 (9 paliers), C8 faits | **B5 coupé** (+1–2 ms, presque invisible) ; B2, F3 ; le coût de D1 non mesuré. **10 nov. (§0.4) : F3 = imposteurs hémi-octaédriques jusqu'à ~20 km, après J1** |
 | Q9 | P9 et P10 examinés, non construits | P9 borné à ~1 ms de gain |
 
 **Cadence mesurée (kerr-mini, M1)** : cockpit dans l'orage en vol 58,9–60,2 ms (images terminées, décision 42) ; nuit à
@@ -161,6 +161,35 @@ constats et des recommandations ; les décisions restent à Sam.
   (« vue à 90 % en 8 s ») ont été faites **sans service worker**, donc hors du chemin de production (CM0).
 - **Le groupe 5 du §8.0 (richesse)** — T7 bathymétrie, H5, H1c, R5, Q4, Q8 B2, Q6-ISS, R6a-terrain — est la vague 6 de
   l'audit : après J0 et les fondations, au budget fixé.
+
+## 0.4 Ce que l'analyse de web-ocean et BakedVoxelLighting change (10 novembre, soir)
+
+Source : [ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md). J0 est atteint le
+même jour (gel levé). **Mesuré** sur kerr-mini : une vue de mer coûte 85–93 ms à notre jeu contre 32,5 ms à web-ocean, pour
+une qualité nettement moindre. Ce qui change ici (propositions, l'ordre attend Sam — analyse §8) :
+
+- **T7 (la mer)** — le reste se précise en quatre lots repris de web-ocean : **M1** le contrat de la FFT (4–5 cascades à
+  bandes disjointes jusqu'au décimètre ; déplacement + Jacobien, pentes, **moments avec le terme croisé**, mips) ; **M2** le
+  filtrage (covariance LEAN complète, variance de pente à l'écran, mip par empreinte **anisotrope**, reflet gaussien
+  anisotrope avec Smith) — il remplace « LEAN, le déphasage » du §0.2 ; **M3** l'écume en **cartes monde** toroïdales
+  centrées sur la caméra (fin de la répétition de 1 024 m dans l'écume) ; **M4** un cube du ciel reconstruit une face par
+  image pour le reflet de la mer (fin de la sonde de nuit trop claire dans l'eau). La surface déplacée (M5) reste au J4 de
+  la stratégie. Avant tout : l'ablation de la passe `earth water`.
+- **T7 (le littoral)** — **L1** un champ de houle côtier par tuile publiée (phaseur réfracté par l'eikonale, levée,
+  déferlement, jet de rive de Stockdon), produit du monde ; **L2** lame de rive, front de déferlement et écume physique ;
+  **L3** le sable mouillé, lu par le sol ; **L4** la bathymétrie : la profondeur Terrarium que notre chaîne ramène à 0, un
+  profil de Dean d'après la distance au rivage là où elle manque, et — décision de Sam — Litto3D/HOMONIM.
+- **Q4** — **F2** devient concret : des **tuiles de couvert et de canopée** par classe (captures vues du dessus, mips à
+  couverture conservée, fondu `surface/moyenne` dans le matériau du sol) donnent la chaîne « canopée → arbres » sans saut de
+  couleur jusqu'à 10 km (V1) ; **L2b** est repris sur des **horizons de canopée** ajoutés à H5 (V3), plutôt qu'un scalaire ;
+  **F1** (vent) suit la règle « pied fixe, déformation précédente gardée » (V5) ; **L5** reçoit la transmission bornée et le
+  `min` des visibilités corrélées (V6).
+- **Q8** — **F3** (imposteurs) n'est plus « seulement si F2 ne couvre pas » : des imposteurs ré-éclairables
+  **hémi-octaédriques** (albédo, normale monde, transmission ; mips à couverture conservée) prolongent la forêt de 300 m à
+  ~20 km, au-delà des 6,25 km actuels (V2), après J1 et sur son contrat de profondeur. Ils demandent des arbres modélisés par
+  espèce (décision de Sam, analyse §8).
+- **Où écrire** : V1 et L3 sont des lectures du matériau du sol — à écrire dans l'opaque de J1, pas comme nouveaux lecteurs
+  de `shadeLite` ; M1–M4 changent le contrat de données de la mer, que la passe d'eau de J4 reprendra.
 
 ---
 

@@ -52,10 +52,12 @@ Trois enseignements :
 1. **Le dessin de l'appareil n'est pas le problème.** Les horodatages lui attribuent 37–49 ms (`ship: shading (MSAA)`,
    `ship: shadow map`, `display`…) ; sauté, il rend 0,25 ms (sa carte d'ombre seule 0,7). GP-09 confirmé : sur Apple, ne jamais lire une passe de rendu
    comme un coût.
-2. **Le domaine de J1 est la moitié de la frame** : `earth lite` + `earth water` ≈ 30 ms sur 65 sur kerr-mini (≈ 12 sur
-   26 sur le M1 Max frais). Le retrait du matériau de l'eau dans `shadeLite` (`liteSkip` 1) ne gagne rien : la passe
-   `earth water (raster)` (12,7 ms) tourne quand même — c'est elle, pas le matériau, qu'il faut juger (ablation à
-   ajouter).
+2. **Le sol et l'eau font la moitié de la frame** : `earth lite` + `earth water` ≈ 30 ms sur 65 sur kerr-mini (≈ 12 sur
+   26 sur le M1 Max frais). *Corrigé le 10 novembre au soir* : le domaine de J1 est le sol (`earth lite`, 17,5 ms) — la
+   stratégie (§15) le fait sans eau ; l'eau (`earth water`, 12,7 ms) relève de J4, et l'analyse de web-ocean propose d'en
+   reprendre le contrat de données avant ([ANALYSE-MER-LITTORAL-VEGETATION](../../ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md)).
+   Le retrait du matériau de l'eau dans `shadeLite` (`liteSkip` 1) ne gagne rien : la passe `earth water (raster)`
+   tourne quand même — c'est elle qu'il faut juger (ablation à ajouter).
 3. Les nuages (≈ 9 %) et le décor (≈ 6 %) sont les seuls autres postes qui comptent ; affichages, appareil et son ombre
    pèsent moins de 4 % du GPU mais ≈ 2 ms de CPU au p95 (référence 9,6 ms).
 
