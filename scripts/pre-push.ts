@@ -60,7 +60,16 @@ async function run(c: Check, cwd: string) {
   return { ...c, code, out: out + err, s: (performance.now() - t0) / 1000 };
 }
 
+/** the checkout's own tools — never `bunx`: without node_modules it fetched a registry package named "tsc" (5.0.2, no
+ * import attributes) and failed every push with parse errors (10 Nov) — and a pre-push hook must not run downloaded code */
+const BIN = (tool: string) => join(HOME, "node_modules", ".bin", tool);
+
 async function checkRevision(sha: string, base: string | undefined): Promise<boolean> {
+  for (const tool of ["biome", "tsc"])
+    if (!existsSync(BIN(tool))) {
+      console.log(`pre-push: ${BIN(tool)} missing — run \`bun install --frozen-lockfile\` in ${HOME}, then push again`);
+      return false;
+    }
   const short = sha.slice(0, 8);
   const dir = mkdtempSync(join(tmpdir(), `kerr-prepush-${short}-`));
   const wt = join(dir, "wt");
@@ -70,13 +79,13 @@ async function checkRevision(sha: string, base: string | undefined): Promise<boo
     symlinkSync(join(HOME, "node_modules"), join(wt, "node_modules"));
     console.log(`pre-push: ${short} checked out alone (${((performance.now() - t0) / 1000).toFixed(1)} s)`);
     // (Biome first: the cheapest and the most frequent red; then the three slow ones side by side)
-    const first = await run({ name: "biome ci", cmd: ["bunx", "biome", "ci", ".", "--colors=off", "--diagnostic-level=error"] }, wt);
+    const first = await run({ name: "biome ci", cmd: [BIN("biome"), "ci", ".", "--colors=off", "--diagnostic-level=error"] }, wt);
     const results = [first];
     if (first.code === 0) {
       const sizeArgs = base ? ["--base", base] : [];
       results.push(
         ...(await Promise.all([
-          run({ name: "tsc", cmd: ["bunx", "tsc", "--noEmit"] }, wt),
+          run({ name: "tsc", cmd: [BIN("tsc"), "--noEmit"] }, wt),
           run({ name: "check-wgsl", cmd: ["bun", "scripts/check-wgsl.ts"] }, wt),
           ...(existsSync(join(wt, "scripts/check-repo-size.ts"))
             ? [run({ name: "check-repo-size", cmd: ["bun", "scripts/check-repo-size.ts", ...sizeArgs] }, wt)]

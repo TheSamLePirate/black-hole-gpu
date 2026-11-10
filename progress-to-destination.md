@@ -2275,3 +2275,8 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Preuve** : documenté (décision) ; les mesures sont celles de l'entrée précédente.
 - **Suite** : l'analyse demandée par Sam de BakedVoxelLighting et web-ocean (mer, littoral, végétation), puis J1 jugé sur
   la scène de référence.
+- **Incident du push** : `node_modules` avait disparu de la copie partagée (cause inconnue, aucune installation en
+  cours) ; `bunx tsc` a alors téléchargé un paquet `tsc` 5.0.2 du registre, sans attributs d'import, et le portillon a
+  refusé le push à raison. Réinstallé (`bun install --frozen-lockfile`, TypeScript 5.9.3) ; `scripts/pre-push.ts` appelle
+  désormais `node_modules/.bin/{biome,tsc}` et refuse avec un message clair s'ils manquent — jamais de code téléchargé dans
+  un hook.
