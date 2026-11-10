@@ -10,6 +10,7 @@
 // says so and exits 0: nothing could be checked, nothing is known to be broken.
 import { Glob } from "bun";
 import { earthShoreShader } from "../src/system/earth-shore";
+import { wgslLibraryModule } from "../src/system/wgsl-library";
 import { withForest } from "../src/forest-shader";
 import { surfaceShader } from "../src/system/earth-surface";
 import { aerialShader } from "../src/system/aerial";
@@ -60,6 +61,29 @@ shaders["trace.wgsl without the aerial table, surface textures, scenery"] = aeri
 );
 shaders["the orthophotos' mips (system/earth-tiles.ts)"] = ORTHO_MIP_WGSL;
 shaders["the shore's distances' bake (system/earth-shore.ts)"] = earthShoreShader();
+// (PLAN-J1 J1-3: the ground's families taken from the full tracer as stand-alone modules — what the forward ground fragment of
+// J1-4 starts from: each compiles alone, its closure whole)
+{
+  const full = tracerSource();
+  const entry = (body: string) => `@compute @workgroup_size(1) fn groundFamily() { ${body} }`;
+  shaders["J1-3 ground library: the sky (liteSky)"] = wgslLibraryModule(
+    full,
+    ["liteSky"],
+    entry("_ = liteSky(vec3f(0.0, 0.0, 1.0), 10.0, vec3f(1.0), vec3f(0.0, 0.0, 1.0), 1.0);"),
+  );
+  shaders["J1-3 ground library: the imagery (earthImageryAniso)"] = wgslLibraryModule(
+    full,
+    ["earthImageryAniso"],
+    entry("_ = earthImageryAniso(vec3f(0.0, 0.0, 1.0), vec3f(1e-6, 0.0, 0.0), vec3f(0.0, 1e-6, 0.0));"),
+  );
+  shaders["J1-3 ground library: the sun (liteSun)"] = wgslLibraryModule(
+    full,
+    ["liteSun"],
+    entry(
+      "_ = liteSun(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 0.0, 1.0), 10.0, vec3f(0.0, 0.0, 1.0), vec3f(0.0, 0.0, 1.0), vec3f(1.0), vec3f(1e-6, 0.0, 0.0), vec3f(0.0, 1e-6, 0.0), vec3f(0.0, 0.0, 1.0), 100.0, vec3f(0.0, 0.0, 1.0), false);",
+    ),
+  );
+}
 // (the mountains' warp's grid pass: the tracer's noise taken from its source)
 shaders["the warp grid's pass (system/warp-grid.ts)"] = warpShader(shaders["trace.wgsl"]!);
 // (each reference scene's pipelines as the renderer makes their modules: specialised as source, their dead branches and the

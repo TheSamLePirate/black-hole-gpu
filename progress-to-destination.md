@@ -2585,3 +2585,18 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   `ortho` (le module aux deux groupes) et `kernel-budget` (63) ; `tsc`, biome.
 - **Limites** : `earthImageryAniso` et les fonctions de placement (`imageryUv`, `tileCoord`, `tilePlace`) restent dans `trace.wgsl` ;
   le ciel et le soleil à suivre ; aucun pipeline raster ne l'inclut encore (J1-4).
+
+## 2026-11-10T23:15Z — J1-3 : la bibliothèque du sol tirée du traceur (une source, trois familles compilées seules)
+
+- **Contribution** (stratégie §7.4 « matériaux explicites », PLAN-J1 J1-3) : `src/system/wgsl-library.ts` — `wgslClosure` (les
+  fonctions qu'une racine atteint, les constantes/overrides/variables privées et structures qu'elles lisent, les ressources liées du
+  traceur qu'elles emploient) et `wgslLibraryModule` (un module autonome). Généralise le mécanisme que seul le cache de relief avait
+  (`terrainHeightLibrary`, réécrit dessus). Voie retenue (plan §4 ter) : `trace.wgsl` reste l'unique source, un pipeline raster en tire
+  sa fermeture ; rien n'est déplacé.
+- **Preuve** : **vérifié statiquement et compilé** — les shaders du cache de relief et du raster identiques octet pour octet avant/après
+  (130 703 caractères) ; les familles ciel (`liteSky` : 8 fonctions, `P` + `bodies`), imagerie (`earthImageryAniso` : 8, + `orthoTex`,
+  `orthoSamp`, `imgTex2k`) et soleil (`liteSun` : 43, 13 ressources) compilent seules dans Chrome (`check-wgsl` 76/76) ; test
+  `wgsl-library` ; `tsc`, biome.
+- **Limites** : aucun pipeline de rendu ne les emploie encore (J1-4 : le fragment forward, la renumérotation de ses liaisons à l'étage
+  fragment, le coût de compilation à mesurer) ; les déclarations multi-lignes (`const` sur plusieurs lignes) ne sont pas prises par la
+  fermeture — aucune dans ces familles.

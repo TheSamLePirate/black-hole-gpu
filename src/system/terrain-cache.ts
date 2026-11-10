@@ -1,6 +1,7 @@
 import { TABLE_TERRAIN, TABLE_TERRAIN_PREV } from "../gpu-tables";
 import type { TileChange } from "./earth-tiles";
 import { wgslFunction } from "./warp-grid";
+import { wgslClosure } from "./wgsl-library";
 import { earthHorizonReader } from "./earth-horizons";
 import {
   TERRAIN_CACHE_HEADER,
@@ -80,39 +81,17 @@ ${earthHorizonReader()}`,
  * Default: natural terrain for caching. The raster variant enables the original runway grading.
  */
 export function terrainHeightLibrary(trace: string, runways = false, group = 0): string {
-  const functions = new Map<string, string>();
-  for (const [, name] of trace.matchAll(/^fn (\w+)\(/gm)) functions.set(name!, wgslFunction(trace, name!));
-  functions.set("earthWarp", "fn earthWarp(q: vec3f) -> vec3f { return earthWarpExact(q); }");
-  // (the heights' place on the tiles: the anchored one — the bake sets each node's, terrainCacheShader)
-  functions.set(
-    "tileHeightCoord",
-    "var<private> TILE_GQ: vec3f;\nfn tileHeightCoord(q: vec3f) -> vec2f { if (TILE_AT_ON && all(q == TILE_GQ)) { return TILE_AT; } return tilePlace(q); }",
-  );
-  const selected = new Map<string, string>();
-  const add = (name: string) => {
-    if (name === "cost" || selected.has(name)) return;
-    const body = functions.get(name);
-    if (!body) throw new Error(`terrain-cache: missing ${name}`);
-    selected.set(name, body);
-    for (const [, callee] of body.matchAll(/\b(\w+)\s*\(/g)) if (functions.has(callee!)) add(callee!);
-  };
-  add("earthHeightExactG");
-  const declarations = new Map<string, string>();
+  // (PLAN-J1 J1-3: the closure taken by wgsl-library.ts — the same one the raster's ground will take its own from)
+  const replace = new Map([
+    ["earthWarp", "fn earthWarp(q: vec3f) -> vec3f { return earthWarpExact(q); }"],
+    // (the heights' place on the tiles: the anchored one — the bake sets each node's, terrainCacheShader)
+    [
+      "tileHeightCoord",
+      "var<private> TILE_GQ: vec3f;\nfn tileHeightCoord(q: vec3f) -> vec2f { if (TILE_AT_ON && all(q == TILE_GQ)) { return TILE_AT; } return tilePlace(q); }",
+    ],
+  ]);
   // (and the private variables they read — tileCoord's anchor, set by the bake for each node)
-  for (const [line, name] of trace.matchAll(/^(?:const|override|var<private>)\s+(\w+)\b[^;]*;/gm)) declarations.set(name!, line!);
-  let source = [...selected.values()].join("\n");
-  const constants = new Map<string, string>();
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const [name, declaration] of declarations) {
-      if (!constants.has(name) && new RegExp(`\\b${name}\\b`).test(source)) {
-        constants.set(name, declaration);
-        source += `\n${declaration}`;
-        grew = true;
-      }
-    }
-  }
+  const { functions: selected, declarations: constants } = wgslClosure(trace, ["earthHeightExactG"], replace);
   const params = /struct Params\s*\{[\s\S]*?\};/.exec(trace)?.[0];
   if (!params) throw new Error("terrain-cache: missing Params");
   constants.set("HAS_RWY", `override HAS_RWY: bool = ${runways};`);
