@@ -1,6 +1,6 @@
 # PLAN-MER-WEBGPU — la mer au niveau de web-ocean, dans notre monde
 
-**État (10 novembre 2026, soir)** : S0, S1, S2 et S4 faits (mesurés, §4) ; S5 commencé (la sonde du vaisseau n'est plus reflétée loin de lui) ; S3, S6 à faire. Demandes de Sam, le 10 au soir : « d'abord la mer WebGPU parfaite » ; « je veux
+**État (10 novembre 2026, soir)** : S0, S1, S2 et S4 faits (mesurés, §4) ; S3 en partie (la mer peu profonde sort aussi de `shadeLite`, le SSR seulement près d'une terre, l'écume et les crêtes à contre-jour reprises) ; S5 en partie (la sonde tracée autour de la caméra au-dessus de la mer) ; reste S3 (le look de l'écume à juger, les crêtes devant la terre), S5 (les mips de rugosité), S6. Demandes de Sam, le 10 au soir : « d'abord la mer WebGPU parfaite » ; « je veux
 le même rendu que web-ocean, mais compatible avec le ciel, les reflets, les bateaux, les traînées d'avion » ; « qualité et
 performances AAA ». Origine : [analyse](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md) (lots M1–M5), stratégie §23. Ce plan
 passe avant J1 (décision de Sam).
@@ -94,4 +94,20 @@ mer et la sonde corrigée, le saut de qualité est net (captures `remote-results
 jusqu'à l'horizon, moutonnements ; au couchant à 2,4 m le reflet du Soleil se brise en paillettes sur les formes des vagues.
 Reste pour S3 : l'écume en taches douces et un peu beige (ni stries ni dentelle de bulles comme web-ocean), la lumière à travers
 les crêtes.
+
+**S5, la sonde autour de la caméra** (A/B `seaProbeOn`, deux passages chacun, mêmes réglages qu'en S4) : en caméra libre au-dessus
+de la mer, la sonde de lumière — celle du vaisseau, tracée autour de la caméra — est tracée aussi, et la mer la reflète tant
+qu'elle est fraîche (moins d'1 s ; `P.seafft[6].z`) ; sinon le ciel analytique et le miroir des nuages. Coût dans le bruit :
+midi 67,9 / 71,3 → 73,0 / 70,7 ms, mer à 30 m 70,5 / 70,4 → 69,8 / 69,6, côte à 500 m 81,2 / 80,1 → 81,5 / 79,6. Au couchant la
+mer reflète enfin le ciel orangé au premier plan (elle y était presque noire) ; à midi elle est plus grise, le ciel bas réel
+étant brumeux (captures `remote-results/20261110-153942-sea-s5/`).
+
+**S3, la mer peu profonde quitte aussi `shadeLite`** (A/B `liteSkip` 2³⁰ = les deux sorties coupées, deux passages chacun) : un pixel
+tout d'eau de mer dont le fond est connu (< 60 m) ne lit plus que l'imagerie — son albédo dans `accum` (`w` = 2), éclairé dans
+`shadeWater` par son Soleil et son ciel : il ne sert qu'à décider si la photographie voit un fond (le turquoise de `seaShade`) —, ni
+matériau, ni ombres, ni ciel. Côte à 500 m **84,4 / 84,4 → 71,8 / 69,9 ms** (`earth lite` 24,8 → 10,9) ; mer à 30 m 97,6 / 96,5 →
+72,9 / 70,7 (la sortie de S2) ; rivage (surtout la terre) 61,1 / 62,7 → 63,5 / 62,1, inchangé. L'image de la côte est la même
+(turquoise des hauts-fonds présent, couleur moyenne à 0,2 % ; `remote-results/20261110-154613-sea-shallow/`). Avec ces mesures,
+le SSR coupé hors de 8 km d'une terre (`seaAllAround`, une lecture du masque), la transmission des crêtes fines à contre-jour,
+l'écume éclairée par un ciel désaturé et les bulles sous elle — non mesurés séparément (pas de levier pour le SSR toujours).
 

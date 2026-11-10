@@ -5265,6 +5265,8 @@ export class Renderer {
   /** the sea's waves' anchor: the local vertical their axes are taken at (seaParams) */
   private seaAnchor: number[] | null = null;
   /** the wind and the place the sea's waves are drawn for this frame (seaParams; null: no sea near) */
+  /** PLAN-MER-WEBGPU S5: over the sea, the light probe traced about a free camera too — the sky the sea mirrors (A/B lever) */
+  seaProbeOn = true;
   private seaHere: { U: number; to: number; lat: number; lon: number; weight: number; world?: "miller" | "titan" } | null = null;
 
   /**
@@ -5353,11 +5355,10 @@ export class Renderer {
     // a single kilometre's anchor would jump each cascade's pattern as the camera crossed it)
     const off = CASCADES.flatMap((L) => [((this.seaU0 % L) + L) % L, ((this.seaC0 % L) + L) % L]);
     out.set(off, 16);
-    // (the light probe — the ship's, traced about it — mirrored by the sea only where it was traced about the camera: aboard,
-    // on foot; a spectator off the ship by more than ~2 km, a free camera far from it, mirrored the ship's world — an orbit's
-    // Earth in the sea under a free camera at Hyères, 10 Nov —: the sky's own mirror there, at the sea's point)
-    const shipD = this.shipPlace?.dist ?? Infinity;
-    const probeNear = s.ship || this.character?.active ? 1 : Math.min(Math.max((2000 - shipD) / 1500, 0), 1);
+    // (the light probe — traced about the camera — mirrored by the sea only while fresh: a probe left where the camera came from
+    // mirrored that place's world — an orbit's Earth in the sea under a free camera at Hyères, 10 Nov —; stale, the sky's own
+    // mirror at the sea's point)
+    const probeNear = !this.envReset && performance.now() - this.envAt < 1000 ? 1 : 0;
     // (the world's foam — PLAN-MER-WEBGPU S4, sea/fft-gpu.ts FoamFrame —: the camera's cell on each level, the last frame's taken
     // into this frame's local axes across an anchor's jump; the pair the FFT writes this frame read by the tracer)
     {
@@ -5398,8 +5399,10 @@ export class Renderer {
 
   /** The light probe around the camera (after the frame's params are written), then its mips and SH. */
   private dispatchEnv(enc: GPUCommandEncoder, t: Target, s: Settings) {
-    // (on foot, the probe round the camera lights the astronaut and the grass: the ship's light, the same world)
-    if (!s.ship && !this.craftsShown && !this.character?.active) {
+    // (on foot, the probe round the camera lights the astronaut and the grass: the ship's light, the same world; over the sea it is
+    // the sky the sea mirrors — PLAN-MER-WEBGPU S5: a free camera's sea mirrored the probe left where the camera came from, an
+    // orbit's Earth off Hyères, 10 Nov)
+    if (!s.ship && !this.craftsShown && !this.character?.active && !(this.seaProbeOn && this.seaHere && this.seaHere.weight > 0)) {
       this.envReset = true; // stale by the time the ship comes back
       return;
     }

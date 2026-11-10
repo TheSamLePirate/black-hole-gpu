@@ -2344,3 +2344,22 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Preuve** : **mesuré** sur kerr-mini (A/B) : +1 à +1,5 ms ; captures avec une mer imposée (`seaOverride`) : le rendu se
   rapproche nettement de web-ocean (PLAN-MER-WEBGPU §4). `check-wgsl` 71/71, `tsc`.
 - **Limites** : l'écume a encore l'aspect de taches douces (S3) ; non mesuré sur M1 Max ; `sea-fft` corrigé non relancé.
+
+## 2026-11-10T14:53Z — La mer WebGPU : les hauts-fonds hors de `shadeLite` (−12 à −14 ms à la côte), le ciel reflété autour de la caméra
+
+- **Contribution** (PLAN-MER-WEBGPU S3, S5 ; stratégie §8 performance, §23) : la côte rejoint la pleine mer — un pixel tout
+  d'eau de mer peu profonde quitte `shadeLite` après la seule lecture de l'imagerie (son albédo, éclairé dans `shadeWater`) ; le
+  SSR seulement à moins de 8 km d'une terre (`seaAllAround`, une lecture du masque de mer) ; au-dessus de la mer, la sonde de
+  lumière est tracée autour d'une caméra libre aussi (`seaProbeOn`) et la mer la reflète tant qu'elle est fraîche — le vrai ciel
+  et ses nuages, au lieu du ciel d'une sonde laissée ailleurs ; crêtes fines transmettant la lumière à contre-jour ; écume
+  éclairée par un ciel désaturé, bulles sous elle. Fichiers : `src/shaders/trace.wgsl` (`liteWater`/`shadeLite`, `shadeWater`,
+  `seaShade`, `seaAllAround`), `src/renderer.ts` (`dispatchEnv`, `seaFftParams`).
+- **Preuve** : **mesuré** sur kerr-mini, A/B dans le même navigateur, deux passages (PLAN-MER-WEBGPU §4) : côte à 500 m
+  **84,4 / 84,4 → 71,8 / 69,9 ms** (`earth lite` 24,8 → 10,9), même image (couleur moyenne à 0,2 %, turquoise présent) ; mer à
+  30 m 97,6 / 96,5 → 72,9 / 70,7 ; rivage inchangé ; la sonde : coût dans le bruit (midi, 30 m, côte), le couchant reflété
+  orangé au premier plan au lieu de noir. `check-wgsl` 71/71, `tsc`, tests des budgets, du spectre, des nœuds, des rivages et de
+  l'eau (81 pass). Captures `remote-results/20261110-153942-sea-s5/`, `remote-results/20261110-154613-sea-shallow/`.
+- **Limites** : la passe d'eau reste ~31–38 ms ; le SSR conditionnel, les crêtes et l'écume ne sont pas mesurés séparément ;
+  l'écume garde un aspect de taches à juger contre web-ocean ; les crêtes devant la terre ne sont pas dessinées ; non mesuré sur
+  M1 Max ni sur la scène J0 ; e2e `sea-fft` corrigé non relancé. Prochaine étape : la passe d'eau (sonde → retrait du miroir des
+  nuages proche et de `skyMirror`), puis S6.

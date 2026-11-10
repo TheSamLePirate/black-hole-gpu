@@ -138,15 +138,15 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | C15 | `trace (discs)` | `renderer.ts:6492` | trace `main` + `DISC_ONLY` | raster, astres à l'écran | → `accum`… dans leurs rectangles | M |
 | C16 | `stars (raster)` | `renderer.ts:6500` | trace `shadeStars`, un fil par étoile (≤120 000) | raster, étoiles splattées | → `t.stars` | R |
 | C17 | `earth shade (raster)` | `renderer.ts:6512` | trace `shade` (+ `shadeMark`) | raster et **pas `liteAll`** : ponts, arbres < 80 m, boîtes marquées | → `accum`… pour les restes | M |
-| C18 | `earth lite (raster)` / `body lite (raster)` | `encodeLite` | trace `shadeLite` ; Terre : un fil par pixel, chaque frame ; **l'eau classée d'abord (`liteWater`) : la pleine mer profonde sort aussitôt** (S2, 10 nov. ; `liteSkip` 2³⁰ l'A/B) | `shadeLite` compilé | → `accum`, `moments`, `stamps` | M |
+| C18 | `earth lite (raster)` / `body lite (raster)` | `encodeLite` | trace `shadeLite` ; Terre : un fil par pixel, chaque frame ; **l'eau classée d'abord (`liteWater`) : la pleine mer profonde sort aussitôt ; la mer peu profonde aussi, après la seule lecture de l'imagerie (son albédo dans `accum`, `w` = 2)** (S2 et S3, 10 nov. ; `liteSkip` 2³⁰ l'A/B des deux) | `shadeLite` compilé | → `accum`, `moments`, `stamps` | M |
 | C18b | `sea surface` (rendu) puis `sea surface resolve` (calcul) | `encodeSeaSurface` → `TerrainRaster.encodeSea` | `terrain-raster.ts` `seaVs`/`seaFs` (CDLOD de `sea/surface-nodes.ts`, 16² quads par nœud, 200–900 nœuds) et `seaResolve` | Terre, sous 3 km au-dessus de la mer, FFT prête, `seaSurfaceOn` (PLAN-MER-WEBGPU S2) | lit `moments` (pixels de pleine mer), la visibilité, la FFT → cible r32float + profondeur propres → `moments.y` (la distance de la surface déplacée) → `shadeWater` | W |
-| C19 | `earth water (raster)` | `encodeLite` | trace `shadeWater`, pleine résolution ; la distance de la surface lue dans `moments.y` (celle de `sea surface` où elle est dessinée) | Terre, noyau prêt | → `accum`… + mot « mer vue » → sonde de mer | W |
+| C19 | `earth water (raster)` | `encodeLite` | trace `shadeWater`, pleine résolution ; la distance de la surface lue dans `moments.y` (celle de `sea surface` où elle est dessinée) ; l'albédo du fond laissé par `shadeLite` (`accum.w` = 2) éclairé ici ; le SSR seulement à moins de 8 km d'une terre (`seaAllAround`, une lecture du masque de mer) | Terre, noyau prêt | → `accum`… + mot « mer vue » → sonde de mer | W |
 
 ### D. Sonde de lumière du vaisseau (`dispatchEnv`, `renderer.ts:5251`)
 
 | # | Libellé | Programme | Quand | Lit → écrit | Fam. |
 |---|---|---|---|---|---|
-| D1 | `ship probe: trace` | trace `env`, 1 texel sur k×k de 256×128 | vaisseau, engins ou marcheur affichés ; toutes les `envEvery` frames (≥ 2 en raster) | → `ship.envBuf` | S |
+| D1 | `ship probe: trace` | trace `env`, 1 texel sur k×k de 256×128 | vaisseau, engins ou marcheur affichés, **ou mer en vue** (`seaHere`, `seaProbeOn` — PLAN-MER-WEBGPU S5 : le ciel que la mer reflète, tracé autour de la caméra) ; toutes les `envEvery` frames (≥ 2 en raster) | → `ship.envBuf` | S |
 | D2 | `ship probe: mips`, `ship probe: GGX`, `ship probe: SH` | `ship.wgsl` envCopy/envDown, envGGX, envSH | sauté une fois sur deux à k = 4 | → `envRaw`, `envSpec`, SH → `TABLE_SH` | S |
 
 ### E. Reconstruction, composites, optique (`encodePost`, `renderer.ts:7514`)

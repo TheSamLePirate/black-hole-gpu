@@ -6602,6 +6602,17 @@ fn earthFootOn(q: vec3f, rd: vec3f, g: vec3f, fp: f32, ns: vec3f) -> vec3f {
 // The equirectangular relief map at q (its footprint's axes fx, fy): the slopes over the footprint
 // (−∂h/∂east, −∂h/∂south, as 0.5 + 0.5·slope: central differences of the heights at its mip level), the
 // oceans, the height [m]
+// The sea's share all about a point (unit q), within radiusM: the relief map's sea mask (b) at the mip whose texel covers that
+// disc — one read. 1: no land within reach (PLAN-MER-WEBGPU S3: the sea's screen-space reflections skipped there — nothing of the
+// raster's world to mirror over the open sea; 9 ms of the water's pass on kerr-mini).
+fn seaAllAround(q: vec3f, radiusM: f32) -> f32 {
+  let lon = atan2(q.y, q.x);
+  let lat = asin(clamp(q.z, -1.0, 1.0));
+  let dim = vec2f(textureDimensions(earthElev));
+  let texelM = TAU * EARTH_RM * max(cos(lat), 0.05) / dim.x;
+  let lod = max(log2(2.0 * radiusM / texelM) + 0.5, 0.0);
+  return textureSampleLevel(earthElev, bgSamp, vec2f(0.5 + lon / TAU, 0.5 - lat / PI), lod).b;
+}
 fn earthRelief(q: vec3f, fx: vec3f, fy: vec3f) -> vec4f {
   let lon = atan2(q.y, q.x);
   let lat = asin(clamp(q.z, -1.0, 1.0));
@@ -9395,7 +9406,8 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   // (near, in the raster's image: the world itself mirrored — seaSSR, the cliffs, the coast, the trees, the mountains with
   // their parallax —, along a facet drawn from the unresolved slopes' distribution — the frames' history sums their lobe:
   // sharp on a calm sea, smeared into long streaks under the wind)
-  if (SEA_ON && RASTER_SHADE && (TUNE_GSKIP & 4096u) == 0u) {
+  // (none over the open sea — no land within the reflections' 8 km: seaAllAround)
+  if (SEA_ON && RASTER_SHADE && (TUNE_GSKIP & 4096u) == 0u && seaAllAround(normalize(q), 8000.0) < 0.995) {
     let r1 = max(RNDV.x, 1e-4);
     let r2 = RNDV.y;
     let g = sqrt(-2.0 * log(r1)) * vec2f(cos(TAU * r2), sin(TAU * r2));
@@ -9452,7 +9464,11 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   if (tailU >= 0.0 && P.seafft[0].z > 0.0) {
     let back = pow(clamp(dot(V, -Ls) * 0.5 + 0.5, 0.0, 1.0), 4.0);
     let lift = clamp(crestH / (2.0 * P.seafft[0].z), 0.0, 1.0);
-    sea += vec3f(0.01, 0.07, 0.06) * Eg * max(dot(normal, Ls), 0.0) * back * lift * (1.0 - Fv);
+    // (PLAN-MER-WEBGPU S3, after web-ocean: through the crest's thin upper part only — its face turned from the Sun — the light
+    // transmitted, the near crests' glow, fading with the distance as their thickness goes under the pixel)
+    let thinC = pow(clamp(0.5 - 0.5 * dot(n, Ls), 0.0, 1.0), 2.0);
+    let nearC = exp(-length(SEA_D) / 800.0);
+    sea += vec3f(0.01, 0.07, 0.06) * Eg * max(dot(normal, Ls), 0.0) * back * lift * (1.0 - Fv) * (0.5 + 2.5 * thinC * nearC);
   }
   // (the foam lit as a diffuse white of reflectance 0.6, by the sun and the sky; near, in patches over
   // ~8 m — on the same anchor —, their mean the cover)
@@ -9495,7 +9511,19 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
       }
     }
   }
-  let foam = 0.6 / PI * (Eg * nl + sky);
+  // (the foam: a diffuse white of ~0.8 among its bubbles — lit by the whole sky, its colour mostly lost in the many scatterings
+  // (desaturated), and by the Sun half-shadowed by its own lumpy surface; the water under it brightened by the submerged bubbles —
+  // PLAN-MER-WEBGPU S3, after web-ocean)
+  let skyD = mix(sky, vec3f(luminance(sky)), 0.8);
+  var foam = 0.8 / PI * (Eg * nl * 0.6 + skyD * 1.1);
+  if (SEA_ON) {
+    let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
+    let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
+    let bub = noise01(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 29), vec3f(u / 0.35, c / 0.35, 0.0));
+    foam *= mix(1.0, 0.85 + 0.3 * bub, smoothstep(1.0, 0.3, footM));
+    let Eb = Eg * max(dot(normal, Ls), 0.0) + sky;
+    sea += Eb * vec3f(0.02, 0.075, 0.085) / PI * clamp(W * 1.5, 0.0, 1.0) * 0.5 * (1.0 - Fv);
+  }
   // (a debug view of the wakes: their foam red, their ruffle green, their bubbles blue — TUNE_GSKIP 32768)
   if ((TUNE_GSKIP & 32768u) != 0u) { return vec3f(wk.foam, wk.rough * 10.0, wk.bub) * luminance(Eg) / PI; }
   return mix(sea, foam, W);
@@ -15425,8 +15453,23 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     let nW = select(gq, tn, dot(tn, tn) > 0.5);
     wat = liteWater(gq, fx, fy, hG, fp * EARTH_RM, nW, dirW0, tM, lvl0);
     // (liteSkip 1073741824 — an A/B —: the open sea's ground read anyway, as before PLAN-MER-WEBGPU S2)
-    if (wat.w > 0.5 && P.sea[1].w >= 0.999 && rasterWaterOn() && (liteSkip() & 1536u) == 0u && (liteSkip() & 1073741824u) == 0u) {
+    let early = P.sea[1].w >= 0.999 && rasterWaterOn() && (liteSkip() & 1536u) == 0u && (liteSkip() & 1073741824u) == 0u;
+    if (wat.w > 0.5 && early) {
       accum[idx] = vec4f(0.0, 0.0, 0.0, 1.0);
+      moments[idx] = vec2f(RASTER_WATER - wat.z - 0.25 * wat.x, tM / EARTH_RM * bodyRadius(k));
+      stamps[idx] = P.frame.x;
+      return;
+    }
+    // (the shallow sea, all water: shadeWater reads of the ground under it its albedo alone — whether the photograph sees a bed,
+    // seaShade's turquoise —, lit there by its own Sun and sky: the imagery read, its material, shadows and sky never — the
+    // coast's view at 500 m spent shadeLite's long path on its whole bay, S3; accum.w 2: an albedo, not a colour)
+    if (wat.x >= 0.999 && wat.y <= 0.0 && early) {
+      let d0 = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
+      TILE_AT_ON = anchored;
+      let im = earthImageryAniso(gq, fx, fy);
+      TILE_AT_ON = false;
+      let A0 = mix(mix(d0.rgb, im.c.rgb, im.w), im.c.rgb, im.o) * P.earth2.z;
+      accum[idx] = vec4f(A0, 2.0);
       moments[idx] = vec2f(RASTER_WATER - wat.z - 0.25 * wat.x, tM / EARTH_RM * bodyRadius(k));
       stamps[idx] = P.frame.x;
       return;
@@ -15971,10 +16014,14 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   var n = rasterNormal(centre, terrainRasterHint(centre), k);
   if (dot(n, n) < 0.5) { n = gq; }
   let dirW = toBody(ray.look);
-  let Eg = liteSun(q, gq, hG, Ls, Lp, E * sunThrough(hG, dot(gq, Lp)), fx, fy, dirW, tM, n, false);
+  // (liteSkip 4096 — a measure, as shadeLite's —: the Sun's light plain, its shadows not read)
+  var Eg = E * sunThrough(hG, dot(gq, Lp));
+  if ((liteSkip() & 4096u) == 0u) { Eg = liteSun(q, gq, hG, Ls, Lp, Eg, fx, fy, dirW, tM, n, false); }
   var sky = liteSky(q, hG, E, Ls, dot(gq, Lp));
   if ((liteSkip() & 4194304u) == 0u) { sky *= earthSkyOpen(gq, hG, n); }
   var G = accum[idx].rgb;
+  // (shadeLite's shallow sea: the bed's albedo, lit here)
+  if (accum[idx].w > 1.5) { G *= (Eg * max(dot(gq, Ls), 0.0) + sky) / PI; }
   let footSea = sqrt(length(fx) * length(fy)) * EARTH_RM;
   SEA_ON = P.sea[1].w > 0.0;
   SEA_D = dirW * tM;
