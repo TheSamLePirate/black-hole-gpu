@@ -95,3 +95,14 @@ __pycache__/
 
 # the Moon's relief tiles built locally (server/moon-build.ts — the server builds its own)
 data/
+
+# a session's throwaway files (audit 2026-11-10, QA-25 / AR-23): screenshots and transcripts left at the root, and
+# the probes — tests/e2e/zz-*.e2e.test.ts, scripts/zz-* — kept out of git, tsc, Biome and `bun run e2e` (by name only).
+# A probe that becomes a real test is renamed without its zz- prefix.
+/*.png
+/*.jpg
+/*.jsonl
+/.jsonl
+/pi-session-*.html
+tests/e2e/zz-*
+scripts/zz-*

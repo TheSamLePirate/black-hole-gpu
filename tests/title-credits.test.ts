@@ -22,7 +22,7 @@ test("each credit taken from an asset's README: its author and its licence are i
       checked.push(c.readme);
     }
   // (every README of a model or of the sky's and the worlds' data cited)
-  for (const r of ["ranger", "lander", "endurance", "f35", "character", "iss", "sky", "earth", "earth-surface", "planets-hd"])
+  for (const r of ["ranger", "lander", "endurance", "f35", "a320", "character", "iss", "sky", "earth", "earth-surface", "planets-hd"])
     expect(checked).toContain(`assets/${r}/README.md`);
 });
 

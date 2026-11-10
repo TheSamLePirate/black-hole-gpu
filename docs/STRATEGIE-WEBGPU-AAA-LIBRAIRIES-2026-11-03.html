@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebGPU AAA — stratégie et bibliothèques</title>
+<style>
+html,body{background:transparent;margin:0}
+body{color:var(--foreground);font-family:var(--font-sans);line-height:1.5}
+#wgpu-report{background:transparent;width:100%;min-width:0}
+#wgpu-report *{box-sizing:border-box}
+#wgpu-report [hidden]{display:none!important}
+#wgpu-report h2,#wgpu-report h3{font-weight:500;margin:16px 0 8px}
+#wgpu-report p{margin:8px 0 12px}
+#wgpu-report .muted{color:var(--muted-foreground)}
+#wgpu-report .small{font-size:12px}
+#wgpu-report a{color:var(--foreground);text-underline-offset:3px;overflow-wrap:anywhere}
+#wgpu-report code{font-family:var(--font-mono);overflow-wrap:anywhere}
+#wgpu-report button,#wgpu-report select{font:inherit;color:var(--foreground)}
+#wgpu-report button{cursor:var(--cursor-interaction,pointer)}
+#wgpu-report .tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 16px;border-bottom:1px solid var(--border);padding-bottom:10px}
+#wgpu-report .tab{background:transparent;border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;min-height:40px}
+#wgpu-report .tab[aria-selected="true"]{background:var(--primary);color:var(--primary-foreground);border-color:transparent}
+#wgpu-report .detail{background:var(--card);color:var(--card-foreground);padding:16px;border-radius:var(--radius);margin:12px 0 16px}
+#wgpu-report .detail h3{margin-top:0}
+#wgpu-report .detail p:last-child{margin-bottom:0}
+#wgpu-report .line{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+#wgpu-report .pill{font-size:12px;background:var(--secondary);color:var(--secondary-foreground);padding:3px 8px;border-radius:var(--radius)}
+#wgpu-report .lib-table{width:100%;border-collapse:collapse;table-layout:fixed}
+#wgpu-report .lib-table th{text-align:left;font-weight:500;color:var(--muted-foreground);padding:8px;border-bottom:1px solid var(--border)}
+#wgpu-report .lib-table td{padding:9px 8px;vertical-align:top;border-bottom:1px solid var(--border);overflow-wrap:anywhere}
+#wgpu-report .lib-table th:first-child{width:34%}
+#wgpu-report .lib-table th:nth-child(2){width:34%}
+#wgpu-report .lib-table .lib-button{border:0;padding:3px 0;background:transparent;text-align:left;text-decoration:underline;text-underline-offset:4px;max-width:100%}
+#wgpu-report .lib-table tr[data-selected="true"]{background:var(--secondary);color:var(--secondary-foreground)}
+#wgpu-report .lib-table tr[data-selected="true"] button{color:inherit;font-weight:500}
+#wgpu-report .flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0 16px;list-style:none;padding:0;counter-reset:flow}
+#wgpu-report .flow li{min-width:0;position:relative;counter-increment:flow}
+#wgpu-report .flow button{display:flex;flex-direction:column;gap:8px;width:100%;height:100%;padding:12px;text-align:left;background:transparent;border:1px solid var(--border);border-radius:var(--radius)}
+#wgpu-report .flow button::before{content:counter(flow,decimal-leading-zero);color:var(--muted-foreground);font-variant-numeric:tabular-nums}
+#wgpu-report .flow button[aria-pressed="true"]{background:var(--secondary);color:var(--secondary-foreground);border-color:var(--ring)}
+#wgpu-report .flow button small{font-size:12px;color:inherit}
+#wgpu-report .sequence{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+#wgpu-report .sequence>div{padding:8px 0;border-top:1px solid var(--border);min-width:0}
+#wgpu-report .sequence strong{font-weight:500;display:block}
+#wgpu-report .sequence span{display:block;color:var(--muted-foreground);font-size:12px}
+#wgpu-report .split{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+#wgpu-report .split ul{padding-left:18px;margin:8px 0}
+#wgpu-report .split li{margin:6px 0}
+#wgpu-report .effect-chain{list-style:none;padding:0;margin:16px 0;display:grid;gap:0}
+#wgpu-report .effect-chain li{display:grid;grid-template-columns:40px 1fr;gap:12px;min-height:67px}
+#wgpu-report .effect-chain .number{position:relative;font-variant-numeric:tabular-nums;padding-top:8px;color:var(--muted-foreground)}
+#wgpu-report .effect-chain li:not(:last-child) .number::after{content:"";position:absolute;top:34px;bottom:5px;left:10px;width:1px;background:var(--border)}
+#wgpu-report .effect-chain .stage{padding:8px 0 12px;border-top:1px solid var(--border)}
+#wgpu-report .effect-chain strong{font-weight:500}
+#wgpu-report .effect-chain p{margin:3px 0 0;color:var(--muted-foreground)}
+#wgpu-report .budget-chart{display:block;width:100%;height:128px;overflow:visible}
+#wgpu-report .budget-chart text{fill:var(--foreground);font:12px var(--font-sans);font-variant-numeric:tabular-nums}
+#wgpu-report .budget-key{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;margin:12px 0 16px}
+#wgpu-report .budget-row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--border)}
+#wgpu-report .budget-row span:last-child{font-variant-numeric:tabular-nums;white-space:nowrap}
+#wgpu-report .milestones{list-style:none;margin:12px 0;padding:0}
+#wgpu-report .milestones li{display:grid;grid-template-columns:36px 1fr;gap:12px;padding:12px 0;border-top:1px solid var(--border)}
+#wgpu-report .milestones .tag{color:var(--muted-foreground);font-variant-numeric:tabular-nums}
+#wgpu-report .milestones p{margin:3px 0 0}
+#wgpu-report .sources{display:flex;gap:8px 16px;flex-wrap:wrap;margin-top:12px}
+#wgpu-report .footer{margin-top:20px;padding-top:12px;border-top:1px solid var(--border)}
+@media(max-width:520px){
+ #wgpu-report .tabs{gap:6px}
+ #wgpu-report .tab{padding:8px 10px}
+ #wgpu-report .flow{grid-template-columns:1fr 1fr}
+ #wgpu-report .sequence{grid-template-columns:1fr}
+ #wgpu-report .split,#wgpu-report .budget-key{grid-template-columns:1fr;gap:0}
+ #wgpu-report .lib-table th,#wgpu-report .lib-table td{padding:8px 5px}
+ #wgpu-report .lib-table th:first-child{width:35%}
+ #wgpu-report .lib-table th:nth-child(2){width:32%}
+}
+@media(pointer:coarse){#wgpu-report .tab,#wgpu-report .lib-button{min-height:44px}}
+</style>
+</head>
+<body>
+<main id="wgpu-report" data-initial-panel="libraries">
+<p class="small muted">WebGPU retenu · 3 novembre 2026 · analyse statique et sources officielles</p>
+<nav class="tabs" role="tablist" aria-label="Explorer la stratégie de rendu">
+ <button class="tab" type="button" id="tab-libraries" role="tab" aria-controls="panel-libraries" aria-selected="true" data-panel="libraries">Bibliothèques</button>
+ <button class="tab" type="button" id="tab-architecture" role="tab" aria-controls="panel-architecture" aria-selected="false" data-panel="architecture">Refonte AAA</button>
+ <button class="tab" type="button" id="tab-effect" role="tab" aria-controls="panel-effect" aria-selected="false" data-panel="effect">Effect</button>
+ <button class="tab" type="button" id="tab-delivery" role="tab" aria-controls="panel-delivery" aria-selected="false" data-panel="delivery">Budget & jalons</button>
+</nav>
+
+<section id="panel-libraries" role="tabpanel" aria-labelledby="tab-libraries">
+ <h2>Trois responsabilités à mieux outiller</h2>
+ <p>Préparer la géométrie, fiabiliser les contrats CPU/WGSL et coordonner le streaming. Le rendu AAA exige aussi de produire les matériaux, les données et les effets cohérents.</p>
+ <div id="lib-detail" class="detail" aria-live="polite"></div>
+ <table class="lib-table">
+  <caption class="small muted" style="text-align:left;margin-bottom:8px">Sélectionner une bibliothèque pour examiner son intérêt et ses limites.</caption>
+  <thead><tr><th scope="col">Bibliothèque</th><th scope="col">Responsabilité</th><th scope="col">Décision proposée</th></tr></thead>
+  <tbody id="lib-body"></tbody>
+ </table>
+ <p class="small muted">Recommandations, sans installation ni gain mesuré. Choisir une seule autorité pour les layouts GPU. Les versions observées au registre sont documentées dans le Markdown (§18.8).</p>
+</section>
+
+<section id="panel-architecture" role="tabpanel" aria-labelledby="tab-architecture" hidden>
+ <h2>Une frame cohérente, du monde à l’écran</h2>
+ <p>Garder simulation, géodésie WGS84 et phénomènes physiques. Reconstruire les contrats de rendu, la résidence et les historiques autour d’un socle raster forward.</p>
+ <h3>En amont de la frame</h3>
+ <div class="sequence" role="img" aria-label="Sources vers préparation, puis pages résidentes">
+  <div><strong>1 · Sources</strong><span>Imagerie, relief, vecteurs, modèles</span></div>
+  <div><strong>2 · Préparation</strong><span>LOD, matériaux, mips, compression</span></div>
+  <div><strong>3 · Résidence</strong><span>Pages versionnées, quotas d’upload</span></div>
+ </div>
+ <h3>Dans la frame · sélectionner une étape</h3>
+ <ol class="flow" aria-label="Ordre du nouveau pipeline proposé">
+  <li><button type="button" data-stage="visibility" aria-pressed="true">Visibilité<small>Terrain, objets, LOD</small></button></li>
+  <li><button type="button" data-stage="surface" aria-pressed="false">Surfaces<small>Matériaux, profondeur, identité</small></button></li>
+  <li><button type="button" data-stage="light" aria-pressed="false">Lumière & volumes<small>Ombres, eau, air, nuages</small></button></li>
+  <li><button type="button" data-stage="temporal" aria-pressed="false">Temporel & sortie<small>Mouvements, confiance, exposition</small></button></li>
+ </ol>
+ <div id="stage-detail" class="detail" aria-live="polite"></div>
+ <div class="split">
+  <div><h3>Qualité à produire</h3><ul><li>Façades identifiées, matériaux et microdétail filtrés.</li><li>Contacts et silhouettes stables du sol à l’orbite.</li><li>Eau, air et nuages limités par les surfaces finales.</li><li>Éclairage commun au monde, à l’appareil et au cockpit.</li></ul></div>
+  <div><h3>Discipline de production</h3><ul><li>Budgets de contenu, résidence et publications.</li><li>Instanciation et culling selon le coût total.</li><li>Compilations anticipées, aucune attente bloquante en vol.</li><li>Invalidations temporelles locales et transitions contrôlées.</li></ul></div>
+ </div>
+ <p class="small muted">Le transport relativiste reste spécialisé. Un deferred complet, du clustered lighting ou un Hi-Z deviennent utiles quand le coût de la scène les justifie. Aucun de ces noms ne constitue à lui seul une exigence AAA.</p>
+</section>
+
+<section id="panel-effect" role="tabpanel" aria-labelledby="tab-effect" hidden>
+ <h2>Effect au coordinateur du monde</h2>
+ <p>Un pilote ciblé peut clarifier les cycles de vie et contenir les arrivées de travail. Le renderer consomme un état prêt et figé à chaque frame.</p>
+ <ol class="effect-chain" aria-label="Cycle de vie proposé d’une demande de données">
+  <li><span class="number">01</span><div class="stage"><strong>Demande géographique · génération</strong><p>Priorité et couverture décidées par le projet ; pages partagées conservées.</p></div></li>
+  <li><span class="number">02</span><div class="stage"><strong>Cache → quota fournisseur → réseau</strong><p>Concurrence bornée, retries adaptés au type d’erreur, signal d’annulation.</p></div></li>
+  <li><span class="number">03</span><div class="stage"><strong>Décodage et préparation en workers</strong><p>Calcul sur d’autres cœurs ; tâches périmées ignorées ou arrêtées via leur protocole.</p></div></li>
+  <li><span class="number">04</span><div class="stage"><strong>File de publication bornée en octets</strong><p>Ralentir l’amont si les données prêtes s’accumulent ; budget d’upload propre.</p></div></li>
+  <li><span class="number">05</span><div class="stage"><strong>Publication cohérente → frame</strong><p>Version, couverture et ressources compatibles ; réponse partielle utile admise.</p></div></li>
+  <li><span class="number">06</span><div class="stage"><strong>Retrait après le dernier usage GPU</strong><p>Annuler la demande ne libère pas une ressource encore en vol.</p></div></li>
+ </ol>
+ <div class="split">
+  <div><h3>Ce qu’Effect apporte</h3><ul><li>Erreurs et services typés.</li><li>Concurrence, ressources et interruption structurées.</li><li>Queues, retries et traces de demandes.</li></ul></div>
+  <div><h3>Ce que le projet doit définir</h3><ul><li>Priorités, résidence, générations et budgets.</li><li>Adaptateurs fetch, workers et fin d’usage GPU.</li><li>Préparation des données et coût des shaders.</li></ul></div>
+ </div>
+ <div class="detail"><p><strong>Décision proposée :</strong> pilote au streaming pendant J2. Pas de fibers par arbre ou draw, ni migration générale préalable. Le projet possède déjà <code>AsyncResource</code> et <code>CompileQueue</code> : l’intégration doit simplifier leur rôle.</p></div>
+ <p class="small muted">La documentation actuelle concerne Effect 4 ; les anciennes recettes v3 doivent être distinguées. Bun, bundle et allocations restent à vérifier ultérieurement.</p>
+ <div class="sources small"><a href="https://effect.website/docs/v4/onboarding" target="_blank" rel="noopener noreferrer">Documentation Effect 4</a><a href="https://effect.website/" target="_blank" rel="noopener noreferrer">Projet Effect</a></div>
+</section>
+
+<section id="panel-delivery" role="tabpanel" aria-labelledby="tab-delivery" hidden>
+ <h2>Une enveloppe de conception pour 60 images réelles/s</h2>
+ <p>Profil principal proposé : sortie 1920 × 1080 sur M1 Max. Qualité en mouvement et régularité sont des conditions conjointes de livraison.</p>
+ <figure style="margin:16px 0">
+  <figcaption>Budget GPU proposé · <strong style="font-weight:500">13 ms + 3,67 ms de marge</strong></figcaption>
+  <svg id="budget-chart" class="budget-chart" role="img" aria-labelledby="budget-title budget-desc"><title id="budget-title">Allocation proposée du budget de frame à 60 Hz</title><desc id="budget-desc">Six familles totalisent treize millisecondes. Marge nominale de trois virgule soixante-sept millisecondes jusqu’à seize virgule soixante-sept. Cette répartition est prescriptive et n’est pas mesurée.</desc></svg>
+ </figure>
+ <div class="budget-key" aria-label="Détail des enveloppes GPU proposées">
+  <div class="budget-row"><span>1 · Terrain / visibilité / publication</span><span>2,0 ms</span></div>
+  <div class="budget-row"><span>2 · Opaques / éclairage</span><span>4,0 ms</span></div>
+  <div class="budget-row"><span>3 · Eau / reflets</span><span>1,0 ms</span></div>
+  <div class="budget-row"><span>4 · Air / nuages</span><span>2,5 ms</span></div>
+  <div class="budget-row"><span>5 · Reconstruction / sortie</span><span>2,0 ms</span></div>
+  <div class="budget-row"><span>6 · Ombres / sondes / fond amorti</span><span>1,5 ms</span></div>
+ </div>
+ <p class="small muted">Enveloppes non mesurées : ni prédiction, ni résultat atteint. CPU, pointes, file GPU, mémoire et présentation restent des contraintes distinctes. Une complétion GPU n’est pas une preuve de présentation.</p>
+ <h3>Avancer par scènes complètes</h3>
+ <ol class="milestones">
+  <li><span class="tag">J0</span><div>Contrat produit et scènes de référence<p class="small muted">Appareils, qualité en mouvement, contenu attendu et états de cache définis.</p></div></li>
+  <li><span class="tag">J1</span><div>Opaque vertical : terrain + bâtiments + appareil<p class="small muted">Contrats CPU/GPU, profondeur, identité, poses précédentes. Choix unique du helper de layouts.</p></div></li>
+  <li><span class="tag">J2</span><div>Imagerie filtrable et reconstruction<p class="small muted">Mips, gouttières, gradients, désocclusion et publication versionnée. Pilote Effect possible.</p></div></li>
+  <li><span class="tag">J3</span><div>Matériaux, lumière et cockpit cohérents<p class="small muted">Assets préparés, ombres et air communs. meshoptimizer dans la chaîne de géométrie.</p></div></li>
+  <li><span class="tag">J4</span><div>Eau, volumes et végétation lointaine<p class="small muted">Scènes de côte et de météo lourde dans leurs budgets explicites.</p></div></li>
+  <li><span class="tag">J5</span><div>Généralisation puis retrait des chemins redondants<p class="small muted">Autres corps, marche, transitions, HDR/SDR et exports.</p></div></li>
+ </ol>
+ <p><strong style="font-weight:500">À chaque jalon :</strong> coût à qualité comparable, qualité à coût comparable et comportement des transitions. Une amélioration de 25 % depuis 49 ms laisse environ 37 ms ; elle ne valide pas le 60.</p>
+ <div class="sources small"><a href="https://www.w3.org/TR/webgpu/" target="_blank" rel="noopener noreferrer">Spécification WebGPU</a><a href="https://developer.apple.com/documentation/metal/tailor-your-apps-for-apple-gpus-and-tile-based-deferred-rendering" target="_blank" rel="noopener noreferrer">Architecture Apple GPU</a><a href="https://gpuopen.com/manuals/fidelityfx_sdk/techniques/super-resolution-temporal/" target="_blank" rel="noopener noreferrer">Contrats temporels FSR 2</a></div>
+</section>
+<footer class="footer small muted">Recherche documentaire et lecture du code, avec résultats historiques conservés à leur contexte. Aucun code du jeu modifié, aucune dépendance installée, aucun test, e2e ou benchmark exécuté. Les schémas représentent une architecture proposée.</footer>
+</main>
+<script>
+(()=>{
+ 'use strict';
+ const root=document.getElementById('wgpu-report');
+ const byId=id=>root.querySelector('#'+id);
+ const libraries=[
+  {id:'meshoptimizer',name:'meshoptimizer',scope:'Géométrie / LOD',decision:'Prioritaire',version:'1.3.0 · MIT',need:'Optimiser les maillages préparés, les indices, la localité, les LOD et la compression avant leur utilisation en jeu.',where:'Chaîne d’assets ; workers pour géométrie générée seulement si le bilan le justifie. Le format binaire du projet peut rester spécifique.',limit:'Préserver identités, coutures et contraintes des pistes. La simplification n’est pas gratuite, et aucun gain sur les assets actuels n’a été mesuré.',source:'https://github.com/zeux/meshoptimizer'},
+  {id:'webgpu-utils',name:'webgpu-utils',scope:'Contrats CPU/WGSL',decision:'Premier candidat',version:'2.1.1 · MIT',need:'Extraire les définitions WGSL et construire des vues de données et layouts cohérents avec les buffers CPU.',where:'Au build ou à l’initialisation du nouveau renderer. Réutiliser ensuite buffers et vues ; garder l’encodage direct là où il est nécessaire.',limit:'Ne fournit ni graphe de passes, ni résidence. Choisir entre cette approche WGSL et TypeGPU avant de multiplier les contrats.',source:'https://github.com/greggman/webgpu-utils'},
+  {id:'typegpu',name:'TypeGPU',scope:'Schémas GPU typés',decision:'Alternative à comparer',version:'0.12.9 · MIT',need:'Partager des schémas typés avec WebGPU, avec génération possible de WGSL et intégration partielle au code brut.',where:'Un petit contrat de J1 pour décider de l’autorité des layouts. Modules nouveaux plutôt qu’une conversion du traceur entier.',limit:'Outillage Bun, diagnostics générés et coût de compilation à vérifier. Ne pas installer deux autorités concurrentes pour les mêmes structures.',source:'https://docs.swmansion.com/TypeGPU/integration/webgpu-interoperability/'},
+  {id:'effect',name:'Effect',scope:'Streaming asynchrone',decision:'Pilote ciblé',version:'4.1.2 · MIT',need:'Structurer erreurs, concurrence, ressources, retries et backpressure pour les demandes de monde et leur publication.',where:'Coordinateur de streaming hors boucle de frame, avec adaptateurs vers fetch, workers et services existants. Pilote proposé à J2.',limit:'Ne réduit pas le shading, ne crée pas de parallélisme CPU et ne rend pas un buffer en vol libérable. Adoption conditionnée à une simplification réelle.',source:'https://effect.website/docs/v4/onboarding'},
+  {id:'gltf',name:'glTF Transform',scope:'Assets glTF / GLB',decision:'Tooling en amont',version:'CLI 4.5.1 · MIT',need:'Inspecter et préparer les assets glTF : déduplication, transformations, simplification et compression adaptées à chaque scène.',where:'En amont des convertisseurs du projet, pour les sources glTF/GLB. Le monde géographique reste dans sa propre chaîne.',limit:'Le Ranger actuel part d’un OBJ avec textures UV incompatibles : ce défaut de source doit être réparé. Compatibilité CLI/Sharp avec Bun à vérifier.',source:'https://gltf-transform.dev/cli'},
+  {id:'earcut',name:'Mapbox Earcut',scope:'Triangulation',decision:'Remplacement local',version:'3.2.4 · ISC',need:'Évaluer un remplacement éprouvé de la triangulation locale des bâtiments, dont le code prévoit un repli en éventail.',where:'Worker de géométrie, avec nettoyage des contours, conservation des identifiants et contrôle des sorties.',limit:'Ne garantit pas toute entrée arbitraire et ne remplace pas une triangulation contrainte universelle pour les pistes et le terrain.',source:'https://github.com/mapbox/earcut'},
+  {id:'reflect',name:'wgsl_reflect',scope:'Inspection WGSL',decision:'Option ciblée',version:'1.6.0 · MIT',need:'Inspecter structures, bindings et offsets des noyaux existants pour des outils de génération ou de diagnostic.',where:'Outillage de développement ou génération au build, si le helper retenu ne couvre pas déjà ce besoin.',limit:'Éviter de doubler les parseurs. La réflexion n’est ni le compilateur des navigateurs ni une preuve d’équivalence de shaders.',source:'https://github.com/brendan-duncan/wgsl_reflect'},
+  {id:'inspector',name:'WebGPU Inspector',scope:'Diagnostic',decision:'Outil de développement',version:'Hors bundle produit',need:'Inspecter commandes, ressources et shaders lorsque les futurs diagnostics GPU le nécessitent.',where:'Environnement de développement ; ne pas embarquer cette fonction dans le runtime du jeu.',limit:'Une capture diagnostique peut modifier les conditions d’exécution. Les coûts de livraison devront être distingués de ces observations.',source:'https://github.com/brendan-duncan/webgpu_inspector'},
+  {id:'basis',name:'Basis / KTX2',scope:'Textures compressées',decision:'Déjà présent',version:'vendor/basis · acquis',need:'Étendre une capacité existante : compression, mips et transcodage des textures vers les formats GPU adaptés.',where:'vendor/basis, worker de transcodage et scripts/build-ktx2.ts sont déjà dans le projet.',limit:'Produire les bons canaux et leur colorimétrie reste nécessaire. Ne pas encoder lourdement chaque page dynamique sur son chemin urgent.',source:'https://github.com/KhronosGroup/KTX-Software'}
+ ];
+ const stageDetails={
+  visibility:['Visibilité et résidence','Un seul propriétaire pour sélectionner LOD et objets, puis publier une couverture cohérente. Terrain et objets utilisent le même repère local ; géodésie et contacts restent WGS84. Instanciation, indirect et occlusion sont introduits selon le coût réel.'],
+  surface:['Une surface finale explicite','Le forward évalue les matériaux avec gradients, mips et filtrage. Profondeur finale, identité d’objet/matériau et poses précédentes cessent d’être des approximations sémantiques du traceur. Les cibles auxiliaires restent minimales.'],
+  light:['Lumière commune, volumes bornés','Soleil, ombres, sondes et exposition partagent un état cohérent. Eau, air et nuages lisent la profondeur finale ; caches et résolutions ont leurs budgets propres. Les volumes ne recalculent pas toute la scène opaque.'],
+  temporal:['Reconstruire avec une confiance correcte','Mouvements et historique respectent origine flottante, désocclusions, changements de LOD et arrivées de pages. Stabiliser le TAA avant l’upscaling avancé ; reconstruire une couleur complète puis gérer HDR/SDR et exports.']
+ };
+ const make=(tag,text)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;return e};
+ function chooseLibrary(id){
+  const lib=libraries.find(l=>l.id===id)||libraries[0];
+  const detail=byId('lib-detail');detail.replaceChildren();
+  const heading=make('div');heading.className='line';heading.append(make('h3',lib.name));
+  const version=make('span',lib.version);version.className='pill';heading.append(version);detail.append(heading);
+  [['Intérêt',lib.need],['Intégration',lib.where],['Limites',lib.limit]].forEach(([label,value])=>{const p=make('p');const strong=make('strong',label+' : ');strong.style.fontWeight='500';p.append(strong,document.createTextNode(value));detail.append(p)});
+  const a=make('a','Source officielle');a.href=lib.source;a.target='_blank';a.rel='noopener noreferrer';a.className='small';detail.append(a);
+  byId('lib-body').querySelectorAll('tr').forEach(row=>{const selected=row.dataset.lib===lib.id;row.dataset.selected=String(selected);row.querySelector('button').setAttribute('aria-pressed',String(selected))});
+ }
+ libraries.forEach(lib=>{
+  const tr=make('tr');tr.dataset.lib=lib.id;
+  const cell=make('td'),button=make('button',lib.name);button.type='button';button.className='lib-button';button.setAttribute('aria-pressed','false');button.setAttribute('aria-controls','lib-detail');button.addEventListener('click',()=>chooseLibrary(lib.id));cell.append(button);tr.append(cell,make('td',lib.scope),make('td',lib.decision));byId('lib-body').append(tr);
+ });
+ function chooseStage(id){
+  const [title,description]=stageDetails[id]||stageDetails.visibility;
+  const box=byId('stage-detail');box.replaceChildren(make('h3',title),make('p',description));
+  root.querySelectorAll('[data-stage]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.stage===id)));
+ }
+ root.querySelectorAll('[data-stage]').forEach(b=>b.addEventListener('click',()=>chooseStage(b.dataset.stage)));
+ const tabs=[...root.querySelectorAll('[role="tab"]')];
+ function choosePanel(name){
+  if(!tabs.some(b=>b.dataset.panel===name))name='libraries';
+  tabs.forEach(b=>{const active=b.dataset.panel===name;b.setAttribute('aria-selected',String(active));byId(b.getAttribute('aria-controls')).hidden=!active});
+  if(name==='delivery')requestAnimationFrame(drawBudget);
+ }
+ tabs.forEach((button,index)=>{
+  button.addEventListener('click',()=>choosePanel(button.dataset.panel));
+  button.addEventListener('keydown',e=>{let next;if(e.key==='ArrowRight')next=(index+1)%tabs.length;if(e.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;if(e.key==='Home')next=0;if(e.key==='End')next=tabs.length-1;if(next!==undefined){e.preventDefault();tabs[next].focus();choosePanel(tabs[next].dataset.panel)}});
+ });
+ const chart=byId('budget-chart'),ns='http://www.w3.org/2000/svg';
+ function svg(tag,attrs,text){const e=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([key,value])=>e.setAttribute(key,String(value)));if(text!==undefined)e.textContent=text;chart.append(e);return e}
+ function drawBudget(){
+  if(byId('panel-delivery').hidden)return;
+  const width=chart.getBoundingClientRect().width;if(width<1)return;
+  chart.querySelectorAll(':scope > :not(title):not(desc)').forEach(e=>e.remove());chart.setAttribute('viewBox','0 0 '+width+' 128');
+  const left=6,right=width-6,range=right-left,total=1000/60,parts=[2,4,1,2.5,2,1.5],x=v=>left+range*v/total;
+  svg('rect',{x:left,y:42,width:range,height:28,fill:'var(--secondary)'});
+  let at=0;parts.forEach((v,index)=>{svg('rect',{x:x(at),y:42,width:Math.max(0,range*v/total-2),height:28,fill:'var(--chart-1)'});svg('text',{x:x(at+v/2),y:36,'text-anchor':'middle'},String(index+1));at+=v});
+  svg('text',{x:left,y:17,'text-anchor':'start'},'Conception : 13 ms');
+  svg('text',{x:right,y:17,'text-anchor':'end'},'Marge : 3,67 ms');
+  svg('line',{x1:left,y1:80,x2:right,y2:80,stroke:'var(--border)','stroke-width':1});
+  [0,8,total].forEach((v,i)=>{const px=x(v);svg('line',{x1:px,y1:77,x2:px,y2:84,stroke:'var(--border)','stroke-width':1});svg('text',{x:px,y:100,'text-anchor':i===0?'start':i===2?'end':'middle'},i===2?'16,67':String(v))});
+  svg('text',{x:(left+right)/2,y:124,'text-anchor':'middle',class:'axis-title','data-axis':'x'},'Budget par frame (ms)');
+ }
+ chooseLibrary('meshoptimizer');chooseStage('visibility');choosePanel(root.dataset.initialPanel);
+ if(typeof ResizeObserver!=='undefined')new ResizeObserver(drawBudget).observe(chart);
+})();
+</script>
+</body>
+</html>

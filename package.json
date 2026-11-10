@@ -21,6 +21,8 @@
     "format": "biome format --write .",
     "check": "biome ci . && tsc --noEmit && bun scripts/check-wgsl.ts",
     "check:forest": "bun scripts/check-forest.ts",
+    "check:push": "bun scripts/pre-push.ts --rev HEAD",
+    "hooks": "git config core.hooksPath \"$(git rev-parse --show-toplevel)/.githooks\"",
     "check:size": "bun scripts/check-repo-size.ts --base origin/main",
     "e2e": "bun scripts/e2e.ts",
     "remote": "bun scripts/remote.ts",

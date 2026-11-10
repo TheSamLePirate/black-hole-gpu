@@ -19,9 +19,17 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
 - **`Ineptie-Version` at `/ineptie/`**: published beside main and `/test/`, with
   `KERR_SUBPATH=ineptie` to isolate its storage. All three publishing branches carry the same Pages
   workflow and share its deployment concurrency group. The `ineptie` job verifies and builds the exact
-  snapshotted revision; a failure stops deployment, preserving the published site. Shared hashed binaries
-  use main's copy as for `/test/`; the complete site must stay within the 900 MB budget. Both previews
-  are omitted from the dedicated server image. The `github-pages` environment permits all three branches.
+  snapshotted revision. Since 2026-11-10 (audit QA-04) it no longer gates main: a failed verification, or a
+  site over 900 MB with it, leaves `/ineptie/` out (a warning on the run) and the site deploys with main — as
+  for `/test/`. (A run started by a push to `Ineptie-Version` or `test-kimi` uses that branch's copy of the
+  workflow: those branches take this rule when they merge main.) Shared hashed binaries use main's copy as for
+  `/test/`. Both previews are omitted from the dedicated server image. The `github-pages` environment permits
+  all three branches.
+- **The previews share the production's origin** (`thesamlepirate.github.io`): `KERR_SUBPATH` separates their
+  storage keys, not their access — a preview's code can read the root's `localStorage`, the players' OpenRouter
+  and Deepgram keys included (audit QA-04, open). Any repository's Pages under the same account is that same
+  origin: the fix is another host for the previews (a subdomain of samlepirate.org, or another account), or no
+  previews on Pages — Sam's decision, with the binaries' hosting (audit D13).
 
 - **Both revisions side by side**: a `snapshot` job reads the heads of main and of the preview branch, then the
   jobs `main` and `preview` verify and build each exact revision in parallel — types, `bunx biome ci .`,
@@ -38,8 +46,15 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
   revisions 9.5 min (23 one after the other).
 - **Under Pages' 1 GB**: the preview's hashed binaries that main has byte for byte (textures, meshes, maps; none
   precached) are left to main's copy, the preview's top-level code pointing at them as `../x`; one named any
-  other way, in a subdirectory (`crew/`, `docs/`) or nowhere, is kept. Past 800 MB a warning; past 900 MB the
-  preview is left out, and main alone past 900 MB fails before deploying ([ASSETS.md](ASSETS.md)).
+  other way, in a subdirectory (`crew/`, `docs/`) or nowhere, is kept. Past 800 MB a warning; past 900 MB
+  `/ineptie/` then `/test/` are left out, and main alone past 900 MB fails before deploying ([ASSETS.md](ASSETS.md)).
+- **Before a push** (since 2026-11-10, audit QA-01): the versioned hook `.githooks/pre-push` (installed once per
+  checkout by `bun run hooks`: `core.hooksPath`, absolute, so every worktree runs it) keeps Git LFS's upload, then
+  runs `scripts/pre-push.ts` on the exact revision pushed — checked out alone in a temporary worktree, never the
+  shared working tree — : `biome ci`, then `tsc`, `check-wgsl` and `check-repo-size` side by side. ≈ 25 s on the
+  M1 Max (measured 2026-11-10: 24.1 s on `f7e87ab5`). A failure refuses the push with each failing check's whole
+  output. `bun run check:push` runs it on HEAD; `KERR_SKIP_CHECKS=1 git push` skips it in an emergency (the CI
+  still judges). The unit tests stay with the CI.
 - **The binaries' guard** (`scripts/check-repo-size.ts`): each binary blob a commit adds or rewrites fails past
   8 MB, a warning when they come to 20 MB together; the binaries Git tracks warn past 560 MB and fail past
   600 MB in all; the LFS objects warn past 800 MB. Its budgets are raised in that file, in the change that

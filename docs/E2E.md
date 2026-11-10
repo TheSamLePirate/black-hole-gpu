@@ -405,6 +405,12 @@ try {
 } finally { app.close(); stopServer(); }
 ```
 
+A probe written as an e2e file is named `tests/e2e/zz-<what>.e2e.test.ts` (since 2026-11-10, audit QA-25): git
+ignores it, so do `tsc` and Biome, and `bun run e2e` runs it only by its name (`bun run e2e zz-<what>`) — never with
+"all" nor by a partial name without `zz-`. A probe that becomes a real test drops its `zz-` prefix and is committed.
+Screenshots and transcripts left at the root (`/*.png`, `/*.jpg`, `/*.jsonl`) are ignored too: keep the ones worth
+keeping under `docs/progress/` or `remote-results/`.
+
 On the mini: `scp probe.ts kerr-mini:/tmp/ && bun scripts/remote.ts run -- bun /tmp/probe.ts` (its imports
 resolve against the job's copy when they are written `process.cwd()`-relative; see REMOTE-TESTS.md).
 

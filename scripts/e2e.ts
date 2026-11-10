@@ -26,6 +26,8 @@ const DIR = "tests/e2e";
 const files = readdirSync(DIR)
   .filter((f) => f.endsWith(".e2e.test.ts"))
   .sort();
+// (a session's probe — zz-*, ignored by git: never run with "all" nor by a partial name, only named — QA-25)
+const isProbe = (f: string) => f.startsWith("zz-");
 
 const argv = process.argv.slice(2);
 if (argv.includes("--list")) {
@@ -66,7 +68,7 @@ if (remoteArgs.length && !remote) {
 const chosen: string[] = [];
 for (const n of names) {
   const exact = files.filter((f) => `${DIR}/${f}` === n || f === n || f === `${n}.e2e.test.ts`);
-  const hits = exact.length ? exact : files.filter((f) => f.includes(n));
+  const hits = exact.length ? exact : files.filter((f) => f.includes(n) && (!isProbe(f) || n.includes("zz-")));
   if (!hits.length) {
     console.error(`e2e: no e2e file matches "${n}" (bun run e2e --list)`);
     process.exit(2);
@@ -74,7 +76,7 @@ for (const n of names) {
   for (const h of hits) if (!chosen.includes(`${DIR}/${h}`)) chosen.push(`${DIR}/${h}`);
 }
 
-const targets = chosen.length ? chosen : files.map((f) => `${DIR}/${f}`);
+const targets = chosen.length ? chosen : files.filter((f) => !isProbe(f)).map((f) => `${DIR}/${f}`);
 console.error(
   `e2e: ${chosen.length || "all"} file${chosen.length === 1 ? "" : "s"}${each ? ", one process each" : ""}${remote ? ` on ${host ?? process.env.KERR_REMOTE ?? "kerr-mini"}` : ""}: ${chosen.map((c) => c.slice(DIR.length + 1)).join(" ") || DIR}`,
 );
@@ -83,7 +85,7 @@ if (remote) {
   // (on the mini, this same script: --each's summary is written there and brought back with the artifacts)
   const there = each
     ? ["bun", "scripts/e2e.ts", "--each", ...chosen, ...testArgs]
-    : ["bun", "test", ...PRELOAD, ...(chosen.length ? chosen : [DIR]), "--timeout", "600000", ...testArgs];
+    : ["bun", "test", ...PRELOAD, ...targets, "--timeout", "600000", ...testArgs];
   const p = Bun.spawn(
     ["bun", "scripts/remote.ts", ...(host ? ["--host", host] : []), "run", ...remoteArgs, "--", `E2E=1 ${shellJoin(there)}`],
     {
@@ -94,7 +96,7 @@ if (remote) {
 }
 
 if (!each) {
-  const p = Bun.spawn(["bun", "test", ...PRELOAD, ...(chosen.length ? chosen : [DIR]), "--timeout", "600000", ...testArgs], {
+  const p = Bun.spawn(["bun", "test", ...PRELOAD, ...targets, "--timeout", "600000", ...testArgs], {
     stdio: ["inherit", "inherit", "inherit"],
     env: { ...process.env, E2E: "1", E2E_REPORT_ROOT: reportRoot() },
   });

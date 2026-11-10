@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comprendre la refonte WebGPU</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--foreground); font-family: var(--font-sans, system-ui); font-size: 14px; line-height: 1.5; }
+button, select { font: inherit; }
+button { color: inherit; }
+h2 { font-size: 20px; margin: 22px 0 8px; letter-spacing: -.025em; }
+h3 { font-size: 15px; margin: 0 0 6px; }
+p { margin: 6px 0 12px; }
+.muted { color: var(--muted-foreground); }
+.intro { max-width: 590px; padding-right: 25px; }
+.intro strong { color: var(--foreground); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 0 16px; border-bottom: 1px solid var(--border); }
+.tabs button, .choices button { border: 1px solid var(--border); border-radius: var(--radius, 8px); background: transparent; padding: 8px 12px; }
+.tabs button[aria-selected=true], .choices button[aria-pressed=true] { background: var(--secondary); border-color: var(--ring); }
+[hidden] { display: none !important; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; margin: 10px 0 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { width: 9px; height: 9px; display: inline-block; border-radius: 2px; background: var(--chart-1); }
+.swatch.adapt { background: var(--chart-2); }
+.swatch.new { background: var(--chart-3); }
+.layer-label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted-foreground); margin-bottom: 7px; }
+.nodes { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.nodes.two { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.nodes.one { grid-template-columns: minmax(0,1fr); }
+.node { text-align: left; background: color-mix(in srgb,var(--chart-1) 7%,transparent); border: 1px solid var(--border); border-radius: var(--radius, 8px); padding: 12px; min-width: 0; position: relative; }
+.node[data-kind=adapt] { background: color-mix(in srgb,var(--chart-2) 7%,transparent); }
+.node[data-kind=new] { background: color-mix(in srgb,var(--chart-3) 7%,transparent); }
+.node[aria-pressed=true] { outline: 2px solid var(--ring); outline-offset: 2px; }
+.node strong { display: block; font-size: 14px; }
+.node small { display: block; margin-top: 4px; font-size: 12px; color: var(--muted-foreground); }
+.arrow { text-align: center; height: 30px; line-height: 30px; color: var(--muted-foreground); }
+.detail { margin: 18px 0 10px; padding: 15px 16px; background: var(--card); border-radius: var(--radius, 8px); min-height: 112px; }
+.detail p { margin-bottom: 0; }
+.micro { font-size: 12px; color: var(--muted-foreground); }
+.choices { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+.flow { display: grid; gap: 0; }
+.flow-row { display: grid; grid-template-columns: 32px 1fr; align-items: stretch; gap: 10px; }
+.rail { display: flex; flex-direction: column; align-items: center; color: var(--muted-foreground); font-size: 12px; }
+.rail span { display: grid; place-items: center; width: 27px; height: 27px; border: 1px solid var(--border); border-radius: 50%; margin: 10px 0 0; }
+.rail:after { content: ''; display: block; flex: 1; width: 1px; background: var(--border); min-height: 12px; }
+.flow-row:last-child .rail:after { display: none; }
+.step { width: 100%; margin: 4px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius, 8px); background: transparent; text-align: left; }
+.step strong { display: block; }
+.step small { color: var(--muted-foreground); font-size: 12px; }
+.step[aria-pressed=true] { background: var(--secondary); border-color: var(--ring); }
+.surface-diagram { width: 100%; height: 238px; display: block; }
+.surface-diagram text { fill: var(--foreground); font-family: inherit; font-size: 12px; }
+.surface-diagram .land { fill: color-mix(in srgb,var(--chart-1) 12%,transparent); stroke: var(--chart-1); stroke-width: 2; }
+.surface-diagram .tree { fill: color-mix(in srgb,var(--chart-1) 40%,transparent); stroke: var(--chart-1); stroke-width: 1.5; }
+.surface-diagram .proxy { fill: color-mix(in srgb,var(--chart-2) 8%,transparent); stroke: var(--chart-2); stroke-width: 1.5; stroke-dasharray: 5 5; }
+.surface-diagram .ray { stroke: var(--foreground); stroke-width: 1.5; }
+.surface-diagram .point { fill: var(--chart-3); }
+.contract { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px 20px; margin: 15px 0; }
+.contract div { border-top: 1px solid var(--border); padding: 9px 0; }
+.contract strong { display: block; }
+.contract small { color: var(--muted-foreground); }
+.milestones { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin: 16px 0; }
+.milestones button { border: 1px solid var(--border); border-radius: var(--radius, 8px); background: transparent; padding: 12px; text-align: left; }
+.milestones button[aria-pressed=true] { background: var(--secondary); border-color: var(--ring); }
+.milestones b { display: block; font-size: 12px; color: var(--muted-foreground); margin-bottom: 5px; }
+.gate { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
+.measure-chart { display: block; width: 100%; height: 335px; }
+.measure-chart text { font-family: inherit; fill: var(--foreground); font-size: 12px; }
+.compare { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13px; }
+.compare td, .compare th { text-align: left; padding: 10px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.compare th { font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+.source { font-size: 11px; color: var(--muted-foreground); margin: 12px 0; overflow-wrap: anywhere; }
+a { color: var(--primary); }
+.footer { margin: 20px 0 4px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted-foreground); }
+@media(max-width:500px) { .nodes { grid-template-columns: 1fr; } .nodes.two { grid-template-columns: 1fr; } .milestones { grid-template-columns: repeat(2,minmax(0,1fr)); } .contract { grid-template-columns: 1fr; gap: 0; } .tabs { gap: 5px; } .tabs button { padding: 8px; font-size: 12px; } .compare { font-size: 12px; } }
+</style>
+</head>
+<body>
+<main id="webgpu-refonte">
+  <p class="intro"><strong>Garder la simulation. Refaire la frontière du rendu.</strong><br><span class="muted">Un renderer principal pour le vol et les surfaces ; un transport spécialisé pour Kerr. Architecture proposée, aucun code de rendu modifié.</span></p>
+  <nav class="tabs" role="tablist" aria-label="Comprendre la refonte">
+    <button type="button" role="tab" id="tab-architecture" aria-controls="architecture" aria-selected="true">Architecture</button>
+    <button type="button" role="tab" id="tab-frame" aria-controls="frame" aria-selected="false">Une image</button>
+    <button type="button" role="tab" id="tab-surface" aria-controls="surface" aria-selected="false">La surface</button>
+    <button type="button" role="tab" id="tab-migration" aria-controls="migration" aria-selected="false">Migration</button>
+    <button type="button" role="tab" id="tab-evidence" aria-controls="evidence" aria-selected="false">Les mesures</button>
+    <button type="button" role="tab" id="tab-engines" aria-controls="engines" aria-selected="false">Les moteurs</button>
+  </nav>
+
+  <section id="architecture" role="tabpanel" aria-labelledby="tab-architecture">
+    <h2>Les modèles restent. Les responsabilités changent.</h2>
+    <div class="legend"><span><i class="swatch"></i>Existant à conserver</span><span><i class="swatch adapt"></i>Existant à adapter</span><span><i class="swatch new"></i>Contrat à construire</span></div>
+    <div class="layer-label">L’état du monde</div>
+    <div class="nodes">
+      <button type="button" class="node" data-node="simulation" aria-pressed="false"><strong>Simulation</strong><small>Vol · orbites · temps · TARS</small></button>
+      <button type="button" class="node" data-node="geography" aria-pressed="false"><strong>Sources du monde</strong><small>WGS84 · IGN · tuiles · assets</small></button>
+      <button type="button" class="node" data-node="models" aria-pressed="false"><strong>Modèles physiques</strong><small>Mer · météo · Kerr · nuages</small></button>
+    </div>
+    <div class="arrow" aria-hidden="true">↓</div>
+    <div class="nodes two">
+      <button type="button" class="node" data-kind="new" data-node="snapshot" aria-pressed="true"><strong>Description de frame</strong><small>Caméra, origines, temps, exposition</small></button>
+      <button type="button" class="node" data-kind="adapt" data-node="pages" aria-pressed="false"><strong>Monde prêt à dessiner</strong><small>Pages résidentes, LOD, générations</small></button>
+    </div>
+    <div class="arrow" aria-hidden="true">↓</div>
+    <div class="layer-label">Choisir le transport selon le domaine physique</div>
+    <div class="nodes two">
+      <button type="button" class="node" data-kind="adapt" data-node="straight" aria-pressed="false"><strong>Surfaces + volumes</strong><small>Vol terrestre · sol · planètes</small></button>
+      <button type="button" class="node" data-kind="adapt" data-node="curved" aria-pressed="false"><strong>Transport relativiste</strong><small>Kerr · Dneg · objets finis</small></button>
+    </div>
+    <div class="arrow" aria-hidden="true">↓</div>
+    <div class="nodes two">
+      <button type="button" class="node" data-kind="new" data-node="history" aria-pressed="false"><strong>Image et confiance</strong><small>Surface finale · mouvement · historique</small></button>
+      <button type="button" class="node" data-kind="adapt" data-node="output" aria-pressed="false"><strong>Sortie commune</strong><small>Couleur · HDR · exports · HUD</small></button>
+    </div>
+    <div id="architecture-detail" class="detail" aria-live="polite"></div>
+    <p class="micro">Sélectionner un bloc pour voir ce qu’il garde, ce qu’il change et le problème qu’il résout. Les deux transports ne sont pas exécutés intégralement en permanence.</p>
+  </section>
+
+  <section id="frame" role="tabpanel" aria-labelledby="tab-frame" hidden>
+    <h2>La même scène, des coûts séparés</h2>
+    <div class="choices" role="group" aria-label="Domaine de rendu">
+      <button type="button" data-scene="earth" aria-pressed="true">Vol sur Terre</button>
+      <button type="button" data-scene="moon" aria-pressed="false">Lune</button>
+      <button type="button" data-scene="giant" aria-pressed="false">Dans une géante</button>
+      <button type="button" data-scene="kerr" aria-pressed="false">Près de Kerr</button>
+    </div>
+    <div id="frame-flow" class="flow" aria-label="Ordre logique des opérations"></div>
+    <div id="frame-detail" class="detail" aria-live="polite"></div>
+    <p class="micro">Dépendances logiques, pas une obligation de créer une passe GPU par bloc. Les passes compatibles peuvent être fusionnées.</p>
+  </section>
+
+  <section id="surface" role="tabpanel" aria-labelledby="tab-surface" hidden>
+    <h2>Le premier chantier : savoir ce que le pixel voit</h2>
+    <p class="muted">Un proxy sert à trouver un candidat. Il ne donne pas toujours la surface visible.</p>
+    <div class="choices" role="group" aria-label="Profondeur utilisée">
+      <button type="button" data-depth="proxy" aria-pressed="true">Profondeur du proxy</button>
+      <button type="button" data-depth="final" aria-pressed="false">Profondeur finale</button>
+    </div>
+    <svg class="surface-diagram" viewBox="0 0 660 238" role="img" aria-labelledby="surface-title surface-desc">
+      <title id="surface-title">Rayon passant dans le proxy d’un arbre mais à côté du feuillage</title>
+      <desc id="surface-desc">Schéma conceptuel. Le proxy intersecte le rayon avant le vrai terrain visible derrière. La profondeur finale permet de reconstruire le terrain et de rejeter l’historique correctement.</desc>
+      <defs><mask id="leaf-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="660" height="238"><rect width="660" height="238" fill="white"/><path d="M310 128 L410 144" stroke="black" stroke-width="13"/></mask></defs>
+      <path class="land" d="M30 191 L270 191 L620 132 L620 218 L30 218 Z"/>
+      <path class="tree" mask="url(#leaf-gap)" d="M350 177 L350 142 L324 142 L340 116 L319 116 L345 77 L334 77 L360 38 L386 77 L375 77 L402 116 L381 116 L397 142 L370 142 L370 174 Z"/>
+      <path class="proxy" d="M302 171 L302 28 L414 28 L414 171 Z"/>
+      <line class="ray" x1="45" y1="86" x2="481" y2="155"/>
+      <circle cx="45" cy="86" r="5" fill="var(--foreground)"/>
+      <text x="27" y="66">Caméra</text>
+      <text x="426" y="38">Proxy de sélection</text>
+      <text x="478" y="200">Terrain visible</text>
+      <circle id="surface-point" class="point" cx="302" cy="127" r="7"/>
+      <text id="surface-label" x="156" y="158">Profondeur trop proche</text>
+    </svg>
+    <p class="micro">Schéma illustratif, sans données mesurées. Le feuillage dessiné représente une silhouette trouée ou sculptée.</p>
+    <div id="surface-detail" class="detail" aria-live="polite"></div>
+    <div class="contract">
+      <div><strong>Profondeur finale</strong><small>Ombres de contact, occlusion, limites des volumes.</small></div>
+      <div><strong>Identité + génération</strong><small>Distinguer le même objet d’une nouvelle tuile.</small></div>
+      <div><strong>Position précédente</strong><small>Reprojeter le terrain et les objets mobiles.</small></div>
+      <div><strong>Validité + réactivité</strong><small>Rejeter ce qui a changé, préserver ce qui est stable.</small></div>
+    </div>
+    <p class="micro">Ce sont des sorties logiques. Elles peuvent être compactées ou reconstruites ; un gros G-buffer n’est pas imposé.</p>
+  </section>
+
+  <section id="migration" role="tabpanel" aria-labelledby="tab-migration" hidden>
+    <h2>Remplacer une tranche complète, puis élargir</h2>
+    <p class="muted">Tous ces jalons sont proposés. Aucun n’a été exécuté pendant cette analyse.</p>
+    <div id="milestones" class="milestones" role="group" aria-label="Jalons de migration"></div>
+    <div id="migration-detail" class="detail" aria-live="polite"></div>
+    <div class="nodes two">
+      <div class="node"><strong>Patrimoine préservé</strong><small>Simulation · pilotage · TARS · données · modèles physiques · missions · réseau</small></div>
+      <div class="node" data-kind="new"><strong>Preuve recherchée</strong><small>Une scène complète, nette en mouvement et dans son budget</small></div>
+    </div>
+    <p class="micro">Après parité dans un domaine, figer l’ancien chemin. Éviter deux renderers terrestres enrichis indéfiniment.</p>
+  </section>
+
+  <section id="evidence" role="tabpanel" aria-labelledby="tab-evidence" hidden>
+    <h2>L’écart est structurel sur les vues difficiles</h2>
+    <div class="legend"><span><i class="swatch"></i>Médiane</span><span><i class="swatch adapt"></i>95ᵉ centile</span><span>┊ Référence de budget : 16 ms</span></div>
+    <svg id="measure-chart" class="measure-chart" role="img" aria-label="Durées de complétion archivées, médiane et 95e centile, six scènes du run M0b"></svg>
+    <p class="source">Source : M0b, 2 novembre 2026, kerr-mini M1, commit 5cdd71fc, tour 1. Canvas 1920 × 1080 ; échelle 0,75 pour les poses terrestres basses et 1 pour l’orbite. Le vol est une séquence distincte de 120 s.</p>
+    <p class="muted">Durées de complétion côté application, profileur désactivé : ce graphique ne mesure pas la présentation à l’écran. Il précède T6 et T257 ; il décrit cette archive, pas la performance actuelle exacte.</p>
+    <div class="detail"><h3>Trois nombres à ne pas confondre</h3><p><strong>rAF</strong> : cadence de la boucle du navigateur.<br><strong>Complétion</strong> : fin du travail soumis par le moteur.<br><strong>Passes GPU</strong> : coûts attribués, parfois chevauchants.</p></div>
+    <p class="micro">Le résumé Q2 à ~50 fps compte les rAF. Il ne contredit pas à lui seul une durée de frame relevée autour de 46 ms pendant la sonde.</p>
+  </section>
+
+  <section id="engines" role="tabpanel" aria-labelledby="tab-engines" hidden>
+    <h2>Choisir le produit avant le moteur</h2>
+    <table class="compare">
+      <thead><tr><th>Priorité</th><th>Choix privilégié</th><th>Travail qui reste</th></tr></thead>
+      <tbody>
+        <tr><td>Navigateur autonome, PWA et systèmes actuels</td><td>Refonte WebGPU bornée</td><td>Contrats, renderer et contenu à entretenir</td></tr>
+        <tr><td>Application native Mac/PC et outillage</td><td>Unity URP</td><td>Portage du simulateur et rendu planétaire spécialisé</td></tr>
+        <tr><td>PC haut de gamme, production visuelle</td><td>Unreal</td><td>Portage, données, Kerr et intégration</td></tr>
+      </tbody>
+    </table>
+    <div class="detail"><h3>Les limites importantes pour ce projet</h3><p><strong>Unity WebGPU 6.6 :</strong> officiellement supporté avec URP, sans HDRP WebGPU.<br><strong>Unreal sur M1/M1 Max :</strong> Lumen logiciel et TSR disponibles ; Nanite/VSM demandent M2+ dans la documentation consultée.<br><strong>Kerr :</strong> les géodésiques et objets finis restent spécifiques dans tous les moteurs.</p></div>
+    <p class="micro">Appréciations d’architecture. Aucun A/B entre moteurs n’a été réalisé. Les liens officiels et les conditions de décision sont dans le document d’analyse.</p>
+  </section>
+  <p class="footer">Analyse du 3 novembre 2026 · Aucun test, e2e, benchmark ou lancement du jeu. Les schémas décrivent une proposition ; les chiffres proviennent uniquement d’archives.</p>
+</main>
+<script>
+(() => {
+  const root = document.getElementById('webgpu-refonte');
+  const architecture = {
+    simulation: ['Conserver la simulation comme autorité', 'La physique et le pilotage restent en float64. Le renderer reçoit un état figé de la frame ; il ne devient pas propriétaire des missions, du temps ou des commandes de TARS.'],
+    geography: ['Conserver les sources, clarifier leurs rôles', 'WGS84, géoïde, IGN et tuiles restent les références. Il faut distinguer sol, sursol, eau, photographie et ombres déjà présentes, pour éviter les doubles volumes et les doubles éclairages.'],
+    models: ['Réutiliser les modèles utiles', 'Garder la FFT de mer, les densités de nuages, la météo, les vents et Kerr. Changer leur échantillonnage et leurs échanges de données ne demande pas de réécrire leur physique.'],
+    snapshot: ['Une description de frame immuable', 'Poses actuelle et précédente, origines, temps, jitter, exposition et qualité effective : toutes les passes lisent la même description. Un recentrage du monde ne doit pas devenir un mouvement apparent.'],
+    pages: ['Des données prêtes à dessiner', 'Séparer hauteurs précises et couleurs filtrables. Les workers préparent les pages ; le renderer publie des générations cohérentes dans un budget de transferts. Une page nouvelle invalide seulement la zone concernée.'],
+    straight: ['Construire le renderer du vol', 'Terrain, bâtiments et appareils produisent des surfaces cohérentes. Eau, air et nuages ont des budgets et des contrats distincts. Le matériau du sol n’importe pas les fonctions de Kerr.'],
+    curved: ['Conserver un vrai transport relativiste', 'Les rayons courbes restent l’autorité lorsque leur effet compte. Les objets à distance finie ne peuvent pas être remplacés sans erreur par une simple image de fond lentillée.'],
+    history: ['Reconstruire avec une confiance justifiée', 'Profondeur finale, identité, génération et mouvement indiquent si le pixel précédent est réutilisable. Les nuages gardent un historique lié au vent ; la scène reçoit une reconstruction finale cohérente.'],
+    output: ['Une image complète pour tous les consommateurs', 'Radiance linéaire et pré-exposition communes, puis optique et couleur. L’export déclare ses couches. Le cockpit garde sa lisibilité et le HUD reste à la résolution de sortie.']
+  };
+  const showDetail = (id, data) => {
+    const box = root.querySelector('#' + id);
+    box.replaceChildren();
+    const h = document.createElement('h3'); h.textContent = data[0];
+    const p = document.createElement('p'); p.textContent = data[1];
+    box.append(h,p);
+  };
+  root.querySelectorAll('[data-node]').forEach(button => button.addEventListener('click', () => {
+    root.querySelectorAll('[data-node]').forEach(x => x.setAttribute('aria-pressed', String(x === button)));
+    showDetail('architecture-detail', architecture[button.dataset.node]);
+  }));
+  showDetail('architecture-detail', architecture.snapshot);
+
+  const scenes = {
+    earth: [
+      ['Publier les pages et sélectionner le LOD', 'Tuiles, terrain, décor et casters', 'Conserver les caches et maillages utiles. Publier les données cohérentes avec leurs générations et limiter le travail d’intégration par frame.'],
+      ['Éclairer les surfaces opaques', 'Terrain + bâtiments + appareils', 'Une surface finale, des matériaux identifiés et un état de lumière commun. Choisir forward léger ou visibilité + shading selon le coût complet sur le GPU cible.'],
+      ['Traiter l’eau et les volumes', 'FFT · air · nuages · caches de lumière', 'L’eau garde sa surface et son fond. Les nuages sont bornés par les opaques et disposent de mouvements et d’un historique propres.'],
+      ['Composer puis reconstruire', 'Segments de profondeur, vitrage, confiance', 'Les couches sont composées dans leur ordre physique. Le temporel rejette les désocclusions et le contenu modifié ; l’échelle interne peut évoluer sans pulse de flou.'],
+      ['Afficher et exporter', 'Optique · exposition · couleur · HUD', 'La sortie consomme une image complète définie. Les instruments et le HUD gardent une résolution lisible ; les exports indiquent leurs couches.']
+    ],
+    moon: [
+      ['Publier le relief lunaire', 'DEM et détails, versions et LOD', 'Réutiliser les sources et fonctions de relief. Les grilles sont sélectionnées par erreur projetée et leurs transitions restent cohérentes.'],
+      ['Éclairer les surfaces opaques', 'Sol · appareils · ombres multi-échelles', 'Les ombres fines ne doivent pas exiger une longue marche complète pour chaque pixel. Les cartes d’horizon restent des estimations tant que leurs erreurs ne sont pas bornées.'],
+      ['Composer le ciel astronomique', 'Astres et occultations', 'Aucun volume d’atmosphère terrestre n’est importé dans cette frame. Les directions apparentes et les éclipses gardent leurs modèles propres.'],
+      ['Reconstruire et afficher', 'Surface finale, mouvement et exposition', 'Même contrat de validité que pour les autres opaques, avec des matériaux et une lumière propres au corps.']
+    ],
+    giant: [
+      ['Préparer le milieu', 'Pression · gravité · vent · couches', 'Les modèles des géantes restent distincts de ceux du relief. La densité est indépendante de la méthode qui va la dessiner.'],
+      ['Évaluer le volume à budget propre', 'Occupation, pas selon empreinte, lumière en cache', 'Sauter le vide, réutiliser la lumière et adapter les échantillons à l’échelle. Conserver les variantes stochastiques utiles déjà démontrées.'],
+      ['Reprojeter le milieu avec son vent', 'Transmission · radiance · intervalle', 'Une profondeur opaque ne décrit pas tout le nuage. Son mouvement, sa confiance et son intervalle doivent être transportés séparément.'],
+      ['Composer les appareils et afficher', 'Atmosphère à la bonne distance', 'Un appareil entre deux couches ne peut pas être placé correctement par une unique profondeur moyenne de tout le volume.']
+    ],
+    kerr: [
+      ['Décrire caméra et scène relativistes', 'Repères, métrique, fréquences et objets', 'Les unités et les repères du transport spécialisé sont conservés. Le choix du chemin dépend des phénomènes et de leur erreur projetée.'],
+      ['Transporter les rayons courbes', 'Kerr · Dneg · objets à distance finie', 'Le transport spécialisé détermine visibilité, occultations et images multiples. Le ray tracing matériel de triangles ne remplace pas l’intégration des géodésiques.'],
+      ['Échantillonner et converger', 'Budget interactif ou ordonnanceur photo', 'L’échantillonnage interactif accepte un compromis explicite. La référence convergée vérifie un modèle, elle ne prouve pas automatiquement une fidélité photographique.'],
+      ['Composer et produire la sortie', 'Pré-exposition et couches explicites', 'La sortie couleur peut être commune, avec un adaptateur qui respecte le transport. Un fond lentillé seul ne remplace pas toute la scène.']
+    ]
+  };
+  function selectScene(key) {
+    const flow = root.querySelector('#frame-flow'); flow.replaceChildren();
+    scenes[key].forEach((s,i) => {
+      const row = document.createElement('div'); row.className = 'flow-row';
+      const rail = document.createElement('div'); rail.className = 'rail';
+      const number = document.createElement('span'); number.textContent = String(i+1); rail.append(number);
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'step'; button.setAttribute('aria-pressed', String(i === 0));
+      const title = document.createElement('strong'); title.textContent = s[0];
+      const sub = document.createElement('small'); sub.textContent = s[1]; button.append(title,sub);
+      button.addEventListener('click', () => {
+        flow.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === button)));
+        showDetail('frame-detail', [s[0],s[2]]);
+      }); row.append(rail,button); flow.append(row);
+    });
+    showDetail('frame-detail', [scenes[key][0][0], scenes[key][0][2]]);
+  }
+  root.querySelectorAll('[data-scene]').forEach(button => button.addEventListener('click', () => {
+    root.querySelectorAll('[data-scene]').forEach(x => x.setAttribute('aria-pressed', String(x === button)));
+    selectScene(button.dataset.scene);
+  })); selectScene('earth');
+
+  const depthText = {
+    proxy: ['Le pixel peut sembler plus proche qu’il ne l’est', 'Si le rayon manque le feuillage dans le proxy, l’image montre le terrain. Réutiliser la profondeur du proxy pour le contact, l’occlusion ou la reprojection fait alors travailler ces effets sur une autre surface.'],
+    final: ['Tous les consommateurs savent quelle surface a gagné', 'Après résolution de la silhouette, la profondeur finale correspond au terrain réellement affiché. Identité, génération et position précédente permettent de décider si l’historique reste valable.']
+  };
+  root.querySelectorAll('[data-depth]').forEach(button => button.addEventListener('click', () => {
+    const final = button.dataset.depth === 'final';
+    root.querySelectorAll('[data-depth]').forEach(x => x.setAttribute('aria-pressed', String(x === button)));
+    const point = root.querySelector('#surface-point'); point.setAttribute('cx', final ? '481' : '302'); point.setAttribute('cy', final ? '155' : '127');
+    const label = root.querySelector('#surface-label'); label.textContent = final ? 'Surface affichée' : 'Profondeur trop proche'; label.setAttribute('x',final ? '450':'156'); label.setAttribute('y',final ? '115':'158');
+    showDetail('surface-detail',depthText[button.dataset.depth]);
+  })); showDetail('surface-detail',depthText.proxy);
+
+  const milestones = [
+    ['J0','Fixer la cible','Définir cadence, sortie et netteté minimale en mouvement. Références synthétiques sans réseau et vues géographiques réelles.', 'Sortie : contrat produit et critères d’acceptation.'],
+    ['J1','Une scène opaque','Terrain + bâtiments + un appareil. Réutiliser maillages et cache ; construire les contrats de surface et de frame.', 'Sortie : visibilité, identité et mouvement cohérents ; première image indépendante de Kerr.'],
+    ['J2','Imagerie et temporel','Séparer couleurs et hauteurs, filtrer les mips correctement, rejeter les désocclusions et les pages modifiées.', 'Décision : gain global ou saut visuel significatif démontré. Sinon réexaminer le choix natif.'],
+    ['J3','Lumière et cockpit','Partager lumière, ombres et distances. Préserver les instruments. Ajouter des matériaux identifiés.', 'Sortie : une scène complète crédible avec une lumière cohérente.'],
+    ['J4','Eau et volumes','Adapter les lecteurs des modèles existants. Donner leurs budgets aux nuages, à l’eau et à la végétation lointaine.', 'Sortie : côte et météo lourde viables, pas uniquement ciel clair.'],
+    ['J5','Généraliser','Étendre aux corps droits, à la marche, aux transitions et aux exports. Garder le transport spécialisé.', 'Sortie : un renderer produit principal par domaine ; retirer les doublons devenus inutiles.']
+  ];
+  function selectMilestone(i) {
+    root.querySelectorAll('[data-milestone]').forEach(x => x.setAttribute('aria-pressed', String(Number(x.dataset.milestone) === i)));
+    showDetail('migration-detail',[milestones[i][0] + ' · ' + milestones[i][1],milestones[i][2]]);
+    const p = document.createElement('p'); p.className = 'gate'; p.textContent = milestones[i][3]; root.querySelector('#migration-detail').append(p);
+  }
+  milestones.forEach((m,i) => {
+    const button = document.createElement('button'); button.type='button'; button.dataset.milestone=String(i);
+    const n=document.createElement('b');n.textContent=m[0]; const label=document.createElement('span');label.textContent=m[1];button.append(n,label);
+    button.addEventListener('click',()=>selectMilestone(i)); root.querySelector('#milestones').append(button);
+  });selectMilestone(1);
+
+  const data = [
+    ['Paris bas',32.9,37.6], ['Chamonix, bas Soleil',49.2,52.9], ['Biarritz, coucher',49.1,55.0],
+    ['Côte à 6 km',44.1,48.5], ['Chamonix, vol',30.1,37.2], ['Terre en orbite',15.2,16.3]
+  ];
+  const ns='http://www.w3.org/2000/svg';
+  function element(name,attrs,text) {const x=document.createElementNS(ns,name);Object.entries(attrs).forEach(([k,v])=>x.setAttribute(k,String(v)));if(text!==undefined)x.textContent=text;return x;}
+  function drawChart() {
+    const svg=root.querySelector('#measure-chart'); if(svg.closest('[hidden]')) return;
+    const width=Math.max(280,svg.getBoundingClientRect().width), height=335;
+    svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.replaceChildren();
+    svg.append(element('title',{},'M0b, tour 1 : durées de complétion archivées en millisecondes'));
+    const left=width<440?125:165,right=42,top=24,bottom=42,plot=width-left-right;
+    const domain=Math.ceil(Math.max(16,...data.map(d=>d[2]))/10)*10;
+    const x=v=>left+plot*v/domain;
+    [0,20,40,60].filter(t=>t<=domain).forEach(t=>{
+      svg.append(element('line',{x1:x(t),x2:x(t),y1:top-8,y2:height-bottom,stroke:'var(--border)'}));
+      svg.append(element('text',{x:x(t),y:height-bottom+22,'text-anchor':'middle'},String(t)));
+    });
+    svg.append(element('line',{x1:x(16),x2:x(16),y1:top-8,y2:height-bottom,stroke:'var(--foreground)','stroke-dasharray':'3 4',opacity:.7}));
+    svg.append(element('text',{x:left+plot/2,y:height-2,'text-anchor':'middle'},'Durée de complétion (ms)'));
+    data.forEach((d,i)=>{
+      const y=top+i*43;
+      const name=width<440?d[0].replace(', bas Soleil',' (bas)').replace(', coucher',''):d[0];
+      svg.append(element('text',{x:left-10,y:y+17,'text-anchor':'end'},name));
+      const bar=element('rect',{x:left,y:y+4,width:x(d[1])-left,height:19,fill:'var(--chart-1)',rx:2});
+      bar.append(element('title',{},`${d[0]} : médiane ${d[1]} ms ; p95 ${d[2]} ms`));svg.append(bar);
+      svg.append(element('line',{x1:x(d[1]),x2:x(d[2]),y1:y+14,y2:y+14,stroke:'var(--chart-2)','stroke-width':2}));
+      svg.append(element('line',{x1:x(d[2]),x2:x(d[2]),y1:y+8,y2:y+20,stroke:'var(--chart-2)','stroke-width':2}));
+      svg.append(element('text',{x:x(d[1])+3,y:y+36},d[1].toFixed(1).replace('.',',')));
+    });
+  }
+  const tabs=[...root.querySelectorAll('[role=tab]')];
+  function selectTab(button) {
+    tabs.forEach(x=>{const active=x===button;x.setAttribute('aria-selected',String(active));root.querySelector('#'+x.getAttribute('aria-controls')).hidden=!active;});
+    if(button.id==='tab-evidence')requestAnimationFrame(drawChart);
+  }
+  tabs.forEach((button,i)=>{
+    button.addEventListener('click',()=>selectTab(button));
+    button.addEventListener('keydown',event=>{if(event.key==='ArrowRight'||event.key==='ArrowLeft'){event.preventDefault();const n=(i+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[n].focus();selectTab(tabs[n]);}});
+  });
+  new ResizeObserver(drawChart).observe(root.querySelector('#measure-chart'));
+})();
+</script>
+</body>
+</html>

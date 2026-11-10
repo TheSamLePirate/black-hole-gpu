@@ -89,6 +89,25 @@ export const CREDITS: CreditSection[] = [
         readme: "assets/f35/README.md",
       },
       {
+        // (GPL v2: the model, its cockpit, its displays, its sounds, its systems' tables and Nasal ported — the derived
+        // files and their build scripts listed in the README, which is the source form's index — audit QA-22)
+        what: {
+          fr: "A320 — l'A320-family de FlightGear : modèle, poste, écrans, sons, systèmes",
+          en: "A320 — FlightGear's A320-family: model, flight deck, displays, sounds, systems",
+        },
+        who: "Josh Davidson, Jonathan Redpath, merspieler, Matthew Maring, Thorsten Herrmann, Semir Gebran (after Immersive Design Group)",
+        licence: "GNU GPL v2",
+        url: "https://github.com/legoboyvdlp/A320-family",
+        readme: "assets/a320/README.md",
+      },
+      {
+        what: { fr: "La police des écrans de l'A320 (ECAM)", en: "The A320's display font (ECAM)" },
+        who: "FlyByWire Simulations",
+        licence: "GNU GPL v3",
+        url: "https://github.com/flybywiresim",
+        readme: "assets/a320/README.md",
+      },
+      {
         what: { fr: "L'astronaute", en: "The astronaut" },
         who: "false-earth, Ming-Jyun Hung",
         licence: "CGTrader licence",

@@ -2171,3 +2171,33 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Preuve** : documenté. Aucune mesure.
 - **Suite** : la vague 0 (hook avant push, hébergement des binaires D13, fichiers jetables, crédit de l'A320, previews) ;
   puis J0 sur la scène de Toulon-Hyères, mesurée sur M1 Max et kerr-mini.
+
+## 2026-11-10T09:30Z — Vague 0 de l'audit : pouvoir livrer sans rougir la CI, rien de jetable publié, l'A320 crédité
+
+- **Contribution** (stratégie §22.4 décision D1 : la vague 0 d'abord ; §20.5 étape « V0 — ne rien perdre, pouvoir
+  livrer » ; [priorités de l'audit](docs/audit-2026-11-10/09-priorites-todo.md) 0.1, 0.3, 0.5, 0.6, moitié de 0.7) :
+  - **0.3 — un portillon avant push** (QA-01 : la CI de `main` verte à 31,5 %, 36 rouges d'affilée sur du format) :
+    `.githooks/pre-push` garde l'envoi LFS puis lance `scripts/pre-push.ts` sur **la révision exacte poussée**,
+    extraite seule dans un worktree temporaire (LFS en pointeurs, `node_modules` prêté) — jamais la copie de travail
+    partagée, qu'une autre session peut avoir laissée à moitié. `biome ci` d'abord, puis `tsc`, `check-wgsl` et
+    `check-repo-size` côte à côte ; la sortie entière de chaque échec. Installé par `bun run hooks` (`core.hooksPath`
+    absolu : tous les worktrees le prennent) ; `bun run check:push` à la main ; `KERR_SKIP_CHECKS=1` en urgence.
+  - **0.5 — les jetables** (QA-25, AR-23) : captures et transcriptions de la racine, sondes `tests/e2e/zz-*` et
+    `scripts/zz-*` ignorées par git (donc par Biome), exclues de `tsc` et de `bun run e2e` sauf nommées. Rien effacé.
+  - **0.6 — l'A320 crédité** (QA-22) : l'A320-family de FlightGear (GPL v2) et la police ECAM de FlyByWire (GPL v3)
+    dans `src/ui/title/credits.ts` → `CREDITS.md`, vérifiés contre `assets/a320/README.md` par `title-credits`.
+  - **0.7, moitié** (QA-04) : `/ineptie/` ne bloque plus le déploiement de `main` (`pages.yml` : échec ou dépassement
+    des 900 Mo → laissée de côté avec un avertissement, comme `/test/`).
+  - **0.1** : les deux pages HTML du 3 novembre (`REFONTE-WEBGPU`, `STRATEGIE-WEBGPU-AAA-LIBRAIRIES`) commitées.
+  - Docs : [DEPLOY.md](docs/DEPLOY.md) (le portillon, la preview non bloquante, l'origine partagée), [E2E.md](docs/E2E.md)
+    §5 (la convention `zz-`), priorités de l'audit (colonne « État »).
+- **Preuve** : **observé et mesuré** — `bun run check:push` sur `f7e87ab5` : réussi en 24,1 s (worktree 5,9 s, Biome
+  1,7 s, `tsc` 16,5 s, `check-wgsl` 71/71 shaders, `check-repo-size` 591,6 Mo) ; un commit sonde mal formaté
+  (`git commit-tree`, jamais poussé) refusé en 6,7 s avec le diff de Biome ; l'entrée du hook (stdin de git) refuse ce
+  même commit (code 1). Tests : `pre-push` (2), `title-credits` (3) verts ; `tsc` 0 erreur ; `bun run e2e --list`
+  ne propose plus aucune sonde. `pages.yml` relu et parsé (YAML) ; **non exécuté** : son effet ne se verra qu'au
+  prochain échec de `Ineptie-Version`. Aucun e2e, aucune mesure de rendu (ce lot ne touche pas la frame).
+- **Restant** : 0.4 (où vont les binaires, D13 : 591,6 Mo sur 600) et l'autre moitié de 0.7 (previews hors de
+  l'origine `thesamlepirate.github.io` — tout dépôt Pages du compte partage cette origine) attendent Sam ; la licence
+  du dépôt (QA-22) reste à faire valider. Les branches `test-kimi` et `Ineptie-Version` gardent l'ancienne règle de
+  `pages.yml` tant qu'elles ne reprennent pas `main`. Ensuite : J0 sur la scène de Toulon-Hyères.

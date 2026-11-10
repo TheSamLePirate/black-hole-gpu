@@ -3,7 +3,7 @@
 Everything in this folder is derived from **FlightGear's A320-family** (<https://github.com/legoboyvdlp/A320-family>,
 branch `dev`, revision `fec1ecba767c8fffd145337b27012e89c01e3ade`), © 2025 Josh Davidson, Jonathan Redpath, merspieler,
 Matthew Maring, Thorsten Herrmann, Semir Gebran (its `README.copyright.md`; its model after Immersive Design Group's:
-`Docs/THANKS.md`), licensed under the **GNU General Public License, version 2** (`LICENSE`, here). These derived files
+`Docs/THANKS.md`), licensed under the **GNU General Public License, version 2** (GNU GPL v2: `LICENSE`, here). These derived files
 are distributed under the same licence.
 
 | File | From | Made by |
@@ -38,5 +38,5 @@ Binary (little endian, gzip): see the header of `scripts/build-a320.py` ("A320" 
 ## The displays' font
 
 `fonts/ECAMFontRegular.ttf`, `fonts/ECAMFontBold100em.ttf`: the ECAM font of **FlyByWire Simulations** (as FlightGear's
-A320-family ships it in `Fonts/`), licensed under the **GNU General Public License, version 3** (`fonts/LICENSE-GPL-3.0.txt`); unchanged. The
+A320-family ships it in `Fonts/`), licensed under the **GNU General Public License, version 3** (GNU GPL v3: `fonts/LICENSE-GPL-3.0.txt`); unchanged. The
 FlightGear set's other cockpit fonts (Honeywell MCDU, Airbus7Seg, AirbusRMP) carry no licence and are not used.

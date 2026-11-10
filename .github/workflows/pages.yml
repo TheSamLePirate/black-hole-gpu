@@ -337,7 +337,7 @@ jobs:
       - name: Report a failed preview
         if: steps.verify.outcome != 'success'
         run: |
-          msg="$INEPTIE_BRANCH (${{ needs.snapshot.outputs.ineptie }}) failed its verification: deployment is stopped to preserve the published site"
+          msg="$INEPTIE_BRANCH (${{ needs.snapshot.outputs.ineptie }}) failed its verification: the site deploys without it, /$INEPTIE_PATH/ removed"
           echo "::warning title=Preview not deployed::$msg"
           echo "> [!WARNING]" >> "$GITHUB_STEP_SUMMARY"
           echo "> $msg" >> "$GITHUB_STEP_SUMMARY"
@@ -345,7 +345,9 @@ jobs:
   # The builds assembled: main at the root, both previews beside it.
   site:
     needs: [snapshot, main, preview, ineptie]
-    if: always() && needs.main.result == 'success' && (needs.snapshot.outputs.ineptie == 'absent' || needs.ineptie.outputs.ok == 'yes')
+    # (main alone decides: a preview that fails its verification, or does not fit, is left out — never main's
+    # deployment stopped by a side branch: audit 2026-11-10, QA-04)
+    if: always() && needs.main.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -414,8 +416,13 @@ jobs:
           size_mb() { echo $(( $(du -sb _site | cut -f1) / 1000000 )); }
           size=$(size_mb)
           if [ "$size" -gt 900 ] && [ "$ineptie" = yes ]; then
-            echo "::error title=Ineptie not deployed::the site with /$INEPTIE_PATH/ comes to $size MB (over the 900 MB budget)"
-            exit 1
+            msg="the site with /$INEPTIE_PATH/ comes to $size MB (over 900 MB of Pages' 1 GB): deployed without it"
+            echo "::warning title=Ineptie not deployed::$msg"
+            echo "> [!WARNING]" >> "$GITHUB_STEP_SUMMARY"
+            echo "> $msg" >> "$GITHUB_STEP_SUMMARY"
+            rm -rf "_site/$INEPTIE_PATH"
+            ineptie=no
+            size=$(size_mb)
           fi
           if [ "$size" -gt 900 ] && [ "$preview" = yes ]; then
             msg="the site with /$PREVIEW_PATH/ comes to $size MB (over 900 MB of Pages' 1 GB): deployed with main alone"

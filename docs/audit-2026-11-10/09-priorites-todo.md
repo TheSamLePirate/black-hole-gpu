@@ -3,7 +3,8 @@
 Ce fichier ordonne le travail qui sort de l'audit ([synthèse](README.md)). Il ne remplace pas le reste à faire
 consolidé de tous les plans, qui est au §6 de [07-plans-reste-a-faire.md](07-plans-reste-a-faire.md).
 
-**Rien ici n'est fait.** Les tailles sont grossières : S (moins d'un jour), M (quelques jours), L (une à deux
+**État au 10 novembre, 09:30 UTC** : la vague 0 est faite sauf ses deux décisions (0.4 l'hébergement des binaires,
+0.7 l'origine des previews) — voir la colonne « État » ; le reste n'est pas commencé. Les tailles sont grossières : S (moins d'un jour), M (quelques jours), L (une à deux
 semaines), XL (plus). Aucun gain n'est promis : chaque lot porte la mesure qui le jugera.
 
 ## 1. La règle de tri
@@ -41,15 +42,15 @@ lecteurs de `shadeLite` et `trace.wgsl` jusqu'à J0, sauf correctif. La ligne 0.
 
 ### Vague 0 — aujourd'hui : ne rien perdre, pouvoir livrer
 
-| # | Travail | Constats | Taille |
-|---|---|---|---|
-| 0.1 | Commiter la référence stratégique, l'analyse du streaming, les deux pages HTML, cet audit et les deux plans | QA-24, AR-22, PL-40 | S |
-| 0.2 | Commiter le lot ST1 (12 fichiers, dans la copie de travail depuis le 6 novembre) après ses tests et son e2e `zones-usa-night` | ST-18, PL-41 | S |
-| 0.3 | Un hook avant push : `biome ci`, `tsc`, `check-wgsl`. La CI ne doit plus rougir sur du format. | QA-01 | S |
-| 0.4 | Taille du dépôt et du site : décider où vont les binaires avant le prochain ajout | QA-03, D13 | S + décision |
-| 0.5 | Ignorer ou ranger les fichiers jetables (30 Mo, 36 sondes `zz-*`) | QA-25, AR-23 | S |
-| 0.6 | Crédit de l'A320 dans `CREDITS.md` et `credits.ts` | QA-22 | S |
-| 0.7 | Previews de branches hors de l'origine de la production, ou clés hors `localStorage` partagé | QA-04 | S–M |
+| # | Travail | Constats | Taille | État |
+|---|---|---|---|---|
+| 0.1 | Commiter la référence stratégique, l'analyse du streaming, les deux pages HTML, cet audit et les deux plans | QA-24, AR-22, PL-40 | S | fait (`fcddd376` ; les deux pages HTML avec la vague 0) |
+| 0.2 | Commiter le lot ST1 (12 fichiers, dans la copie de travail depuis le 6 novembre) après ses tests et son e2e `zones-usa-night` | ST-18, PL-41 | S | fait (`5be997b9`) |
+| 0.3 | Un hook avant push : `biome ci`, `tsc`, `check-wgsl`. La CI ne doit plus rougir sur du format. | QA-01 | S | fait : `.githooks/pre-push` + `scripts/pre-push.ts`, sur la révision exacte poussée (worktree temporaire), + `check-repo-size` ; ≈ 25 s ; [DEPLOY.md](../DEPLOY.md) |
+| 0.4 | Taille du dépôt et du site : décider où vont les binaires avant le prochain ajout | QA-03, D13 | S + décision | **décision de Sam attendue** (591,6 Mo sur 600, remesuré le 10 nov.) |
+| 0.5 | Ignorer ou ranger les fichiers jetables (30 Mo, 36 sondes `zz-*`) | QA-25, AR-23 | S | fait : ignorés par git (donc Biome), exclus de `tsc` et de `bun run e2e` sauf par leur nom ; rien d'effacé ; [E2E.md](../E2E.md) §5 |
+| 0.6 | Crédit de l'A320 dans `CREDITS.md` et `credits.ts` | QA-22 | S | fait : A320-family (GPL v2) et police ECAM (GPL v3), vérifiés contre `assets/a320/README.md` par `title-credits` ; la licence du dépôt reste à trancher |
+| 0.7 | Previews de branches hors de l'origine de la production, ou clés hors `localStorage` partagé | QA-04 | S–M | moitié : `/ineptie/` ne bloque plus `main` (`pages.yml`) ; **l'origine partagée attend Sam** (tout dépôt Pages du compte = même origine) |
 
 ### Vague 1 — cette semaine : J0 et la mesure
 
