@@ -2331,3 +2331,16 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Limites** : l'image n'est pas encore celle de web-ocean — S3 (son ombrage), S4 (l'écume en cartes monde), la suite de S5,
   et un flou fort au premier plan à établir ; les crêtes devant la terre ne sont pas dessinées ; les mesures de S2 ont été
   faites avec des vagues minuscules (`wind: 0`). Non mesuré : M1 Max, la scène J0 complète.
+
+## 2026-11-10T14:23Z — La mer WebGPU : S4, l'écume attachée au monde ; S1–S2 poussés
+
+- **Contribution** (PLAN-MER-WEBGPU S4) : l'écume vit sur la mer, plus dans les tuiles de la FFT qui se répétaient : deux cartes
+  monde (128 m et 1 024 m autour de la caméra, toroïdales, dans les couches 12–15 de la texture de la FFT — aucune liaison de plus
+  au traceur), nourries par le repli de toute la surface, qui vieillissent, dérivent sous le vent et gardent la fraîcheur des
+  crêtes ; lues par `seaWavesFft` sur l'empreinte du pixel ; l'écume par cascade au-delà. Interrupteur `seaFoamWorldOn`.
+  Poussé avant : S1–S2 (`22b97bd9`), après les e2e `sea-fft`, `miller-sea`, `titan-ground` (11/11 sur kerr-mini).
+- **Correctif d'e2e** (remarque de Sam) : `sea-fft` volait bas au-dessus de la mer sans sortir le train — le GCAS ou
+  l'autopilote faisait remonter l'avion ; train sorti et `apSet` à l'altitude de placement (E2E-VOLS §5.4).
+- **Preuve** : **mesuré** sur kerr-mini (A/B) : +1 à +1,5 ms ; captures avec une mer imposée (`seaOverride`) : le rendu se
+  rapproche nettement de web-ocean (PLAN-MER-WEBGPU §4). `check-wgsl` 71/71, `tsc`.
+- **Limites** : l'écume a encore l'aspect de taches douces (S3) ; non mesuré sur M1 Max ; `sea-fft` corrigé non relancé.

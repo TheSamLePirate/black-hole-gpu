@@ -61,7 +61,7 @@ import { dot as dot3 } from "./math/vec3";
 import { sphericalFrame } from "./wormhole";
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import seafftWGSL from "./shaders/seafft.wgsl" with { type: "text" };
-import { SEA_TEXTURE_LIMIT, SeaFft } from "./sea/fft-gpu";
+import { FOAM_SIZES, type FoamFrame, SEA_TEXTURE_LIMIT, SeaFft } from "./sea/fft-gpu";
 import { SEA_GRID, SEA_LEAF, SEA_MAX_NODES, SEA_RANGE, seaNodes } from "./sea/surface-nodes";
 import {
   CASCADES,
@@ -999,6 +999,8 @@ export class Renderer {
   private seaFftActive = 4;
   /** the sea's surface as a mesh (PLAN-MER-WEBGPU S2): on (an A/B's switch), its frame this frame (seaParams; null: none) */
   seaSurfaceOn = true;
+  /** the world's foam (PLAN-MER-WEBGPU S4): on; off — an A/B —, the cascades' own foam as before */
+  seaFoamWorldOn = true;
   private seaSurf: {
     tuC: number[];
     tcC: number[];
@@ -1016,6 +1018,10 @@ export class Renderer {
   } | null = null;
   private seaSurfNodes = new Float32Array(SEA_MAX_NODES * 4);
   private seaSurfU = new Float32Array(44);
+  /** the camera on the sea's local axes [m] (seaParams), the world foam's frame (seaFftParams) and its last cells */
+  private seaCamLocal: [number, number] = [0, 0];
+  private seaFoamFrame: FoamFrame | null = null;
+  private seaFoamLast: { cells: [number, number, number, number]; u0: number; c0: number } | null = null;
   /** the sea FFT's last parameters (seaFftParams: the cascades' offsets, the count computed) */
   private seaFftLast: Float32Array | null = null;
   /** the sea's anchor this frame [m, float64]: its whole kilometres along the waves' axes, and the camera's height [m] */
@@ -5147,6 +5153,7 @@ export class Renderer {
     this.seaU0 = u0;
     this.seaC0 = c0;
     this.seaAltM = altKm * 1000;
+    this.seaCamLocal = [uc - u0, cc - c0];
     // (the sea's surface — PLAN-MER-WEBGPU S2 —: the camera's frame for its mesh — its tangent axes, up, height over the sea, the
     // Earth's radius there, its place on the anchored axes — and the view's axis in it)
     {
@@ -5243,6 +5250,7 @@ export class Renderer {
     this.seaU0 = u0;
     this.seaC0 = c0;
     this.seaAltM = Math.max(r - mR, 0);
+    this.seaCamLocal = [uc - u0, cc - c0];
     // (the trains — the waves without the FFT —: a shallow chop, the long ones slowed by the depth)
     const budget = 0.5 * (0.003 + 0.00512 * U) * 0.5;
     SEA_WAVES.forEach((w, i) => {
@@ -5350,7 +5358,38 @@ export class Renderer {
     // Earth in the sea under a free camera at Hyères, 10 Nov —: the sky's own mirror there, at the sea's point)
     const shipD = this.shipPlace?.dist ?? Infinity;
     const probeNear = s.ship || this.character?.active ? 1 : Math.min(Math.max((2000 - shipD) / 1500, 0), 1);
-    out.set([active, offUC, probeNear, 0], 24);
+    // (the world's foam — PLAN-MER-WEBGPU S4, sea/fft-gpu.ts FoamFrame —: the camera's cell on each level, the last frame's taken
+    // into this frame's local axes across an anchor's jump; the pair the FFT writes this frame read by the tracer)
+    {
+      const camL = [this.seaCamLocal[0], this.seaCamLocal[1]];
+      const ts = FOAM_SIZES.map((L) => L / 256);
+      const cells = [
+        Math.floor(camL[0]! / ts[0]!),
+        Math.floor(camL[1]! / ts[0]!),
+        Math.floor(camL[0]! / ts[1]!),
+        Math.floor(camL[1]! / ts[1]!),
+      ] as [number, number, number, number];
+      const p0 = this.seaFoamLast;
+      const du = this.seaU0 - (p0?.u0 ?? this.seaU0),
+        dc = this.seaC0 - (p0?.c0 ?? this.seaC0);
+      const prev = (
+        p0
+          ? [p0.cells[0] - du / ts[0]!, p0.cells[1] - dc / ts[0]!, p0.cells[2] - du / ts[1]!, p0.cells[3] - dc / ts[1]!]
+          : [1e6, 1e6, 1e6, 1e6]
+      ) as [number, number, number, number];
+      if (frame) this.seaFoamLast = { cells, u0: this.seaU0, c0: this.seaC0 };
+      this.seaFoamFrame = {
+        cam: camL as [number, number],
+        cells,
+        prev,
+        offsets: off,
+        Jt: 1 + sJ * normalQuantile(W),
+        sJ,
+        drift: [0.035 * H.U, 0],
+        decay: 0.2,
+      };
+    }
+    out.set([active, offUC, probeNear, this.seaFoamWorldOn ? this.seaFft.foamParity : -1], 24);
     if (frame) this.seaFftLast = out;
     // (the foam each cascade makes — sea/fft-gpu.ts: where its own Jacobian falls under the level of Monahan's cover)
     this.seaFoamJ = st.slopeC.map((v) => 1 + this.seaLambda * Math.sqrt(v) * normalQuantile(W));
@@ -6345,7 +6384,16 @@ export class Renderer {
     this.cameraKey = this.featureKey;
     // (the sea's FFT waves of this frame first: the tracer samples them)
     if (this.seaFftDue && this.seaFft) {
-      this.seaFft.encode(enc, this.seaFftT, this.seaLambda, this.prof.pass("sea fft"), this.seaFoamJ, this.seaPhys, this.seaFftActive);
+      this.seaFft.encode(
+        enc,
+        this.seaFftT,
+        this.seaLambda,
+        this.prof.pass("sea fft"),
+        this.seaFoamJ,
+        this.seaPhys,
+        this.seaFftActive,
+        this.seaFoamWorldOn ? this.seaFoamFrame : null,
+      );
       this.seaFftDue = false;
     }
     // (the far field's LUT first: every realtime frame, once an epoch while a still view refines —

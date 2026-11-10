@@ -27,7 +27,10 @@ describe.skipIf(!E2E)("the sea by FFT", () => {
       __bh.settings.shipMount = "chase";
       return 1; })()`);
     await Bun.sleep(1200);
-    await app.js(`(() => { const c = __bh.camera; c.jetToggle("ap"); c.jetToggle("athr"); return 1; })()`);
+    // (low over the sea: the gear down — else the GCAS or the autopilot climbs away, E2E-VOLS §5.4 —, the autopilot holding the
+    // height it was put at and the autothrottle its speed)
+    await app.js(`(() => { const c = __bh.camera; __bh.settings.autoGear = false; c.gearDown = true; c.gearExt = 1; c.gearInit = true;
+      c.apSet({ ap: true, athr: true, alt: Math.round(c.geoNow()?.alt ?? ${o.alt}), spd: 140 }); return 1; })()`);
     await Bun.sleep(3000);
     // (held still: the image converged — the waves under a jet at 140 m/s smear otherwise)
     await app.js(`(__bh.freeze(true), 1)`);
@@ -59,7 +62,9 @@ describe.skipIf(!E2E)("the sea by FFT", () => {
       __bh.settings.shipMount = "chase";
       return 1; })()`);
     await Bun.sleep(1200);
-    await app.js(`(() => { const c = __bh.camera; c.jetToggle("ap"); c.jetToggle("athr"); return 1; })()`);
+    await app.js(
+      `(() => { const c = __bh.camera; c.apSet({ ap: true, athr: true, alt: Math.round(c.geoNow()?.alt ?? 1500), spd: 150 }); return 1; })()`,
+    );
     // (a few seconds: the relief's tiles in — the Alps seen as ever before the sea is judged)
     await Bun.sleep(6000);
     await app.js(`(__bh.freeze(true), 1)`);

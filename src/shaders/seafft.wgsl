@@ -20,6 +20,19 @@ struct FftParams {
   // the water: its gravity [m/s²], its depth [m] (0: deep — the Earth's sea; Miller's knee-deep: sea/spectrum.ts dispersion);
   // the frame's time step [s]
   w: vec4f,
+  // the world's foam (PLAN-MER-WEBGPU S4, foamWorld): the camera's cell on each level (x, y level 0; z, w level 1) — integers on
+  // the sea's local axes —, the last frame's (the history valid where both windows overlap)
+  fc: vec4f,
+  fp: vec4f,
+  // each cascade's anchor's offset (u, c), two a vec4 (renderer seaFftParams)
+  fo0: vec4f,
+  fo1: vec4f,
+  // the camera on the sea's local axes [m]; the whitecaps' Jacobian threshold and spread
+  fx: vec4f,
+  // the foam's drift [m/s] (along the wind, across), its decay [1/s], the layer written this frame (0, 1)
+  fy: vec4f,
+  // the cascades computed, unused ×3
+  fz: vec4f,
 };
 
 @group(0) @binding(0) var<uniform> F: FftParams;
@@ -157,4 +170,54 @@ fn mip(@builtin(global_invocation_id) id: vec3u) {
   let s = textureLoad(srcTex, p, id.z, 0) + textureLoad(srcTex, p + vec2i(1, 0), id.z, 0) + textureLoad(srcTex, p + vec2i(0, 1), id.z, 0) +
     textureLoad(srcTex, p + vec2i(1, 1), id.z, 0);
   textureStore(outTex, vec2u(id.xy), id.z, s * 0.25);
+}
+
+// The world's foam (PLAN-MER-WEBGPU S4, after web-ocean): two maps of 256² on the sea's local axes, 128 m and 1 024 m across —
+// both divide the sea's kilometre anchor: a texel's world cell is the same whatever anchor the camera has —, addressed as a torus
+// (texel i holds the world cell ≡ i mod 256 nearest the camera: a repeat sampler reads it as it is), each with two layers written
+// in turn (3C + 2·parity + level: a frame writes one pair — its view, foamOut — and reads the other — foamPrev). Each frame, each texel: the foam left there — the last frame's map, read where the
+// foam drifted from (semi-Lagrangian, downwind) — decayed; the foam made now where the whole surface folds (the Jacobian of every
+// cascade computed, under the whitecaps' threshold) laid over it; and how fresh it is (a crest breaking now: dense, opaque).
+// (the levels' sides [m], the maps' side [texels])
+const FOAM_SIZE = vec2f(128.0, 1024.0);
+const FOAM_N: i32 = 256;
+@group(0) @binding(6) var foamOut: texture_storage_2d_array<rgba16float, write>;
+@group(0) @binding(7) var foamPrev: texture_2d_array<f32>;
+@group(0) @binding(8) var foamFft: texture_2d_array<f32>;
+@group(0) @binding(9) var foamSamp: sampler;
+fn wrapCell(i: i32, lo: i32) -> i32 { return lo + (((i - lo) % FOAM_N) + FOAM_N) % FOAM_N; }
+fn foamUv(x: vec2f, c: u32) -> vec2f {
+  let o = select(F.fo1, F.fo0, c < 2u);
+  return (x + select(o.zw, o.xy, (c & 1u) == 0u)) / F.L[c];
+}
+@compute @workgroup_size(8, 8, 1)
+fn foamWorld(@builtin(global_invocation_id) id: vec3u) {
+  let lvl = id.z;
+  let ts = FOAM_SIZE[lvl] / f32(FOAM_N);
+  let cam = vec2i(select(F.fc.xy, F.fc.zw, lvl == 1u));
+  let prv = vec2i(select(F.fp.xy, F.fp.zw, lvl == 1u));
+  let lo = cam - vec2i(FOAM_N / 2);
+  let g = vec2i(wrapCell(i32(id.x), lo.x), wrapCell(i32(id.y), lo.y));
+  let plo = prv - vec2i(FOAM_N / 2);
+  let inPrev = all(g >= plo) && all(g < plo + vec2i(FOAM_N));
+  // (the cell's centre on the sea's local axes [m])
+  let x = (vec2f(g) + 0.5) * ts;
+  // (the whole surface's fold: each cascade's Jacobian less one, summed — at the mip the texel's size resolves)
+  var J = 1.0;
+  for (var c = 0u; c < u32(F.fz.x + 0.5); c++) {
+    let lod = log2(max(ts * 256.0 / F.L[c], 1.0));
+    if (lod < 7.5) { J += textureSampleLevel(foamFft, foamSamp, foamUv(x, c), i32(3u * c), lod).w - 1.0; }
+  }
+  let dt = F.w.z;
+  var prev = vec4f(0.0);
+  if (inPrev) {
+    // (where the foam here drifted from: back along the wind, in the torus's own texels)
+    let back = (vec2f(id.xy) + 0.5 - F.fy.xy * dt / ts) / f32(FOAM_N);
+    prev = textureSampleLevel(foamPrev, foamSamp, back, i32(lvl), 0.0);
+  }
+  let inject = clamp((F.fx.z - J) / max(0.5 * F.fx.w, 1e-3), 0.0, 1.0);
+  var f = max(prev.r * exp(-dt * F.fy.z), inject);
+  f = min(f + inject * dt * 0.6, 1.6);
+  let fresh = max(prev.g * exp(-dt * 1.6), inject);
+  textureStore(foamOut, id.xy, lvl, vec4f(f, fresh, J, 1.0));
 }

@@ -1,6 +1,6 @@
 # PLAN-MER-WEBGPU — la mer au niveau de web-ocean, dans notre monde
 
-**État (10 novembre 2026, soir)** : S0, S1 et S2 faits (mesurés, §4) ; S5 commencé (la sonde du vaisseau n'est plus reflétée loin de lui) ; S3, S4, S6 à faire. Demandes de Sam, le 10 au soir : « d'abord la mer WebGPU parfaite » ; « je veux
+**État (10 novembre 2026, soir)** : S0, S1, S2 et S4 faits (mesurés, §4) ; S5 commencé (la sonde du vaisseau n'est plus reflétée loin de lui) ; S3, S6 à faire. Demandes de Sam, le 10 au soir : « d'abord la mer WebGPU parfaite » ; « je veux
 le même rendu que web-ocean, mais compatible avec le ciel, les reflets, les bateaux, les traînées d'avion » ; « qualité et
 performances AAA ». Origine : [analyse](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md) (lots M1–M5), stratégie §23. Ce plan
 passe avant J1 (décision de Sam).
@@ -85,3 +85,13 @@ l'effet visuel n'est pas encore jugé) — les prochaines sondes fixent l'état 
 **Constats de qualité** (captures `remote-results/sea-check/`) : en caméra libre loin du vaisseau, la mer reflétait la sonde du
 vaisseau (un Ranger en orbite) — corrigé (S5, `P.seafft[6].z`) ; un flou fort au premier plan (profondeur de champ d'un
 préréglage ?, TAAU à 0,75) — à établir ; une bande sombre et un halo bleu à l'horizon.
+
+**S4, l'écume monde** (A/B `seaFoamWorldOn`, mer imposée : mer du vent 1,0 m / 5,5 s, houle 1,2 m / 10 s ; profondeur de champ
+coupée) : 30 m 73,0 → 74,7 ms, midi 72,9 → 74,2 : **+1 à +1,5 ms**. Deux cartes de 256² dans les couches 12–15 de la texture de
+la FFT (aucune liaison de plus au traceur) : 128 m et 1 024 m autour de la caméra, toroïdales, injection par le Jacobien de toutes
+les cascades calculées, décroissance (5 s), dérive sous le vent (3,5 % de U), fraîcheur des crêtes. Visuellement, avec une vraie
+mer et la sonde corrigée, le saut de qualité est net (captures `remote-results/sea-check/s4/`) : mer bleue à midi, vagues nettes
+jusqu'à l'horizon, moutonnements ; au couchant à 2,4 m le reflet du Soleil se brise en paillettes sur les formes des vagues.
+Reste pour S3 : l'écume en taches douces et un peu beige (ni stries ni dentelle de bulles comme web-ocean), la lumière à travers
+les crêtes.
+

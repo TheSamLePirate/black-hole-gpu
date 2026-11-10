@@ -10,6 +10,23 @@ import { CASCADES, EARTH_SEA, SEA_N, type SeaCascades, type SeaPhysics } from ".
 const N = SEA_N;
 const C: number = CASCADES.length;
 export const SEA_LEVELS = Math.log2(N) + 1;
+/** the world foam's first layer in the texture array (after the cascades' three each: 3C + 2·parity + level) */
+export const FOAM_BASE = 3 * C;
+/** the world foam's levels' sides [m] (seafft.wgsl FOAM_SIZE: both divide the sea's kilometre anchor) */
+export const FOAM_SIZES = [128, 1024] as const;
+
+/** The world foam's state for a frame (renderer seaFftParams): the camera on the sea's local axes [m], its cell on each level and
+ *  the last frame's (in this frame's local axes), the cascades' offsets, the whitecaps' threshold and spread, the drift. */
+export interface FoamFrame {
+  cam: [number, number];
+  cells: [number, number, number, number];
+  prev: [number, number, number, number];
+  offsets: number[];
+  Jt: number;
+  sJ: number;
+  drift: [number, number];
+  decay: number;
+}
 /** the device's sampled textures a stage the tracer needs to take the sea's (the surface's 18 and one) */
 export const SEA_TEXTURE_LIMIT = 19;
 
@@ -30,8 +47,18 @@ export class SeaFft {
   private h0: GPUBuffer;
   private fld: GPUBuffer;
   private foam: GPUBuffer;
-  private pipes: Record<"spectrum" | "rows" | "cols" | "assemble" | "mip", GPUComputePipeline>;
-  private binds: { spectrum: GPUBindGroup; rows: GPUBindGroup; cols: GPUBindGroup; assemble: GPUBindGroup; mips: GPUBindGroup[] };
+  private pipes: Record<"spectrum" | "rows" | "cols" | "assemble" | "mip" | "foamWorld", GPUComputePipeline>;
+  private binds: {
+    spectrum: GPUBindGroup;
+    rows: GPUBindGroup;
+    cols: GPUBindGroup;
+    assemble: GPUBindGroup;
+    mips: GPUBindGroup[];
+    foam: GPUBindGroup[];
+  };
+  private foamSampler: GPUSampler;
+  /** the world foam's layer pair the next frame writes (0, 1: PLAN-MER-WEBGPU S4) — the tracer reads it after */
+  foamParity = 0;
   /** whether a spectrum is there to animate */
   ready = false;
   /** what the spectrum holds: the height's and the slopes' variance over all cascades */
@@ -53,19 +80,34 @@ export class SeaFft {
   ) {
     const d = device;
     this.texture = d.createTexture({
-      size: [N, N, 3 * C],
+      // (the cascades' three layers each, then the world's foam: two levels × two layers written in turn — PLAN-MER-WEBGPU S4)
+      size: [N, N, 3 * C + 4],
       format: "rgba16float",
       mipLevelCount: SEA_LEVELS,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
     });
-    this.uniform = d.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.uniform = d.createBuffer({ size: 11 * 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.foam = d.createBuffer({ size: C * N * N * 4, usage: GPUBufferUsage.STORAGE });
     this.h0 = d.createBuffer({ size: C * N * N * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.fld = d.createBuffer({ size: C * 4 * N * N * 8, usage: GPUBufferUsage.STORAGE });
     const module = d.createShaderModule({ code, label: "seafft" });
+    this.foamSampler = d.createSampler({
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+      addressModeU: "repeat",
+      addressModeV: "repeat",
+    });
     const pipe = (entryPoint: string) =>
       d.createComputePipeline({ layout: "auto", compute: { module, entryPoint }, label: `seafft ${entryPoint}` });
-    this.pipes = { spectrum: pipe("spectrum"), rows: pipe("rows"), cols: pipe("cols"), assemble: pipe("assemble"), mip: pipe("mip") };
+    this.pipes = {
+      spectrum: pipe("spectrum"),
+      rows: pipe("rows"),
+      cols: pipe("cols"),
+      assemble: pipe("assemble"),
+      mip: pipe("mip"),
+      foamWorld: pipe("foamWorld"),
+    };
     const bg = (p: GPUComputePipeline, entries: { binding: number; resource: GPUBindingResource }[]) =>
       d.createBindGroup({ layout: p.getBindGroupLayout(0), entries });
     const level = (l: number, dim: "2d-array" = "2d-array") =>
@@ -84,6 +126,34 @@ export class SeaFft {
         { binding: 3, resource: level(0) },
         { binding: 5, resource: { buffer: this.foam } },
       ]),
+      // (the world's foam, each parity: its pair written, the other read, the cascades' layers sampled)
+      foam: [0, 1].map((w) =>
+        bg(this.pipes.foamWorld, [
+          { binding: 0, resource: { buffer: this.uniform } },
+          {
+            binding: 6,
+            resource: this.texture.createView({
+              dimension: "2d-array",
+              baseMipLevel: 0,
+              mipLevelCount: 1,
+              baseArrayLayer: FOAM_BASE + 2 * w,
+              arrayLayerCount: 2,
+            }),
+          },
+          {
+            binding: 7,
+            resource: this.texture.createView({
+              dimension: "2d-array",
+              baseMipLevel: 0,
+              mipLevelCount: 1,
+              baseArrayLayer: FOAM_BASE + 2 * (1 - w),
+              arrayLayerCount: 2,
+            }),
+          },
+          { binding: 8, resource: this.texture.createView({ dimension: "2d-array", baseArrayLayer: 0, arrayLayerCount: 3 * C }) },
+          { binding: 9, resource: this.foamSampler },
+        ]),
+      ),
       mips: Array.from({ length: SEA_LEVELS - 1 }, (_, i) =>
         bg(this.pipes.mip, [
           { binding: 3, resource: level(i + 1) },
@@ -125,6 +195,7 @@ export class SeaFft {
     foamJ = [-9, -9, -9, -9],
     phys: SeaPhysics = EARTH_SEA,
     active = C,
+    foam: FoamFrame | null = null,
   ) {
     if (!this.ready) return;
     this.runs++;
@@ -147,6 +218,15 @@ export class SeaFft {
         Number.isFinite(phys.depth) ? phys.depth : 0,
         dt,
         0,
+        ...(foam ? foam.cells : [0, 0, 0, 0]),
+        ...(foam ? foam.prev : [1e6, 1e6, 1e6, 1e6]),
+        ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => foam?.offsets[i] ?? 0),
+        ...(foam ? [foam.cam[0], foam.cam[1], foam.Jt, foam.sJ] : [0, 0, -9, 1]),
+        ...(foam ? [foam.drift[0], foam.drift[1], foam.decay, this.foamParity] : [0, 0, 1, 0]),
+        Math.min(Math.max(Math.round(active), 1), C),
+        0,
+        0,
+        0,
       ]),
     );
     const A = Math.min(Math.max(Math.round(active), 1), C);
@@ -164,12 +244,19 @@ export class SeaFft {
     p.setPipeline(this.pipes.assemble);
     p.setBindGroup(0, this.binds.assemble);
     p.dispatchWorkgroups(N / 8, N / 8, A);
+    // (the world's foam, then its pair's mips with the cascades')
+    if (foam) {
+      p.setPipeline(this.pipes.foamWorld);
+      p.setBindGroup(0, this.binds.foam[this.foamParity]!);
+      p.dispatchWorkgroups(N / 8, N / 8, 2);
+    }
     p.setPipeline(this.pipes.mip);
     for (let l = 1; l < SEA_LEVELS; l++) {
       const w = Math.max(1, N >> l);
       p.setBindGroup(0, this.binds.mips[l - 1]!);
-      p.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(w / 8), 3 * A);
+      p.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(w / 8), foam ? 3 * C + 4 : 3 * A);
     }
+    if (foam) this.foamParity = 1 - this.foamParity;
     p.end();
   }
 

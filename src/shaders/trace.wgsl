@@ -8820,7 +8820,8 @@ fn smithBeckmann(c: f32, m2: f32) -> f32 {
 // (foam: the FFT's surface's Jacobian there — 1 the flat sea, under ~0.5 folding —; h its height [m])
 // (res: the foam lying on the surface — the FFT's, left by the crests that broke: 0 none, 1 a white sheet)
 // (vx: the resolved slopes' covariance along × across the wind — LEAN's cross term: 0 for the trains)
-struct SeaWaves { n: vec3f, vu: f32, vc: f32, m: f32, foam: f32, h: f32, res: f32, vx: f32 };
+// (fresh: the world foam's freshness — a crest breaking now: dense, opaque —, PLAN-MER-WEBGPU S4)
+struct SeaWaves { n: vec3f, vu: f32, vc: f32, m: f32, foam: f32, h: f32, res: f32, vx: f32, fresh: f32 };
 // The resolved waves at the point SEA_D: twelve trains (P.sea), their slopes summed where the pixel
 // resolves them (longer than ~4 footprints, faded from 6 to 2), their variance kept where it does not.
 // Crossing trains alone draw a lattice: their crests bent (the point displaced ±10 m over ~128 m), their
@@ -9057,6 +9058,28 @@ fn seaTap(uv: vec2f, c: u32, layer: u32, lod: f32) -> vec4f {
   }
   return textureSampleLevel(seaFft, seaSamp, uv, i32(3u * c + layer), lod);
 }
+// The world's foam at x on the sea's local axes (PLAN-MER-WEBGPU S4; sea/fft-gpu.ts, seafft.wgsl foamWorld): its two maps — 128 m
+// and 1 024 m about the camera, the layer pair written this frame (P.seafft[6].w) —, each faded out towards its window's edge, the
+// finer over the coarser: (the foam lying, how fresh it is). 0 beyond the coarser's window.
+fn seaFoamWorld(x: vec2f, foot: f32) -> vec2f {
+  if (P.seafft[6].w < -0.5) { return vec2f(0.0); }
+  let d = abs(x - P.sea[2].xy);
+  let cheb = max(d.x, d.y);
+  let w0 = 1.0 - smoothstep(0.30 * 128.0, 0.45 * 128.0, cheb);
+  let w1 = 1.0 - smoothstep(0.30 * 1024.0, 0.45 * 1024.0, cheb);
+  if (w1 <= 0.0) { return vec2f(0.0); }
+  let base = 12u + 2u * u32(P.seafft[6].w + 0.5);
+  var v = array<vec2f, 2>(vec2f(0.0), vec2f(0.0));
+  for (var l = 0u; l < 2u; l++) {
+    let size = select(128.0, 1024.0, l == 1u);
+    if (dot(SEA_GX, SEA_GX) + dot(SEA_GY, SEA_GY) > 0.0) {
+      v[l] = textureSampleGrad(seaFft, seaSamp, x / size, i32(base + l), SEA_GX / size, SEA_GY / size).xy;
+    } else {
+      v[l] = textureSampleLevel(seaFft, seaSamp, x / size, i32(base + l), max(log2(foot * 256.0 / size), 0.0)).xy;
+    }
+  }
+  return mix(v[1], v[0], w0) * w1;
+}
 fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
   var o: SeaWaves;
   o.m = P.sea[1].w;
@@ -9106,6 +9129,11 @@ fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
       o.res = max(o.res, f * select(0.7, 1.0, i == 0u));
     }
   }
+  // (the world's foam, attached to the sea and drifting — PLAN-MER-WEBGPU S4 —; beyond its maps, the cascades' own)
+  let wf = seaFoamWorld(x, foot);
+  let wIn = select(1.0 - smoothstep(0.30 * 1024.0, 0.45 * 1024.0, max(abs(x - P.sea[2].xy).x, abs(x - P.sea[2].xy).y)), 0.0, P.seafft[6].w < -0.5);
+  o.res = mix(o.res, wf.x * 0.8, wIn);
+  o.fresh = wf.y;
   o.n = normalize(q - (su * tu + sc * tc) * o.m);
   o.vu *= o.m * o.m;
   o.vc *= o.m * o.m;
@@ -9223,6 +9251,8 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
       // (the lace where a pixel resolves its cells — under ~1 m —, its mean beyond: no grain)
       let fine = smoothstep(1.2, 0.4, footM);
       lying = (smoothstep(1.0 - thin, 1.15 - 0.6 * thin, lace) * thin * fine + sw.res * 0.45 * (1.0 - fine)) * (1.0 - calm);
+      // (a crest breaking now — the world foam's freshness, S4 —: a dense, nearly opaque core, its edge broken by the lace)
+      crest = max(crest, smoothstep(0.35, 0.9, sw.fresh) * mix(0.75, smoothstep(0.25, 0.6, lace + 0.25), fine) * 0.95 * (1.0 - calm));
       crestH = sw.h;
     } else {
       sw = seaWaves(normal, tu, P.sea[1].xyz, footM);
