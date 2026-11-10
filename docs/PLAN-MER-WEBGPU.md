@@ -194,3 +194,10 @@ reste : la sonde est plus lumineuse que l'image de jour d'un facteur entre 1,6 e
 analytique la laisse passer. À reprendre avec une mesure sur l'historique linéaire (divisé par la pré-exposition) ou sur le ciel
 analytique au même point.
 
+**S2, les crêtes devant la terre** (limite de S2 levée) : `seaFs` garde un fragment de la surface devant le sol quand le sol derrière
+est plus loin, se tient au-dessus de la borne des vagues (sa hauteur depuis celle de la caméra, la distance et la courbure), et que le
+point de la crête est en mer selon les distances au rivage (le masque des niveaux 3 à 6, 6 à 390 m) — ni plage, ni polder, ni champ
+bas. A/B `seaCrestsOverLand` (kerr-mini) : devant les falaises sud de Porquerolles à 3 m et 1,7 km, coût 68,9 contre 69,1 ms, la ligne
+de la mer au pied de l'île à peine changée (des crêtes de 1 m à cette distance), aucun débordement vu ; la vue « plage basse » visée ne
+montrait pas la plage — le cas d'une plage proche reste à voir.
+

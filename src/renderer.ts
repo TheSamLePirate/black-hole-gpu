@@ -5279,6 +5279,8 @@ export class Renderer {
   /** PLAN-MER-WEBGPU S3: the open sea's pixels shaded by their own kernel — shadeWater compiled without the coasts' and the inland
    *  water's code (trace.wgsl WATER_OPEN) — once it is compiled (A/B lever) */
   seaWaterOpenOn = true;
+  /** PLAN-MER-WEBGPU S2: the sea's crests drawn before the land behind them where it stands over the waves (A/B lever) */
+  seaCrestsOverLand = true;
   /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */
   private seafftAt = -1;
   /** the frame's frozen description (src/frame-desc.ts; PLAN-J1 J1-1): built at renderer.frame()'s start — its id, its real clock
@@ -6796,7 +6798,8 @@ export class Renderer {
     u.set([...S.tuC, S.weight, ...S.tcC, 0, ...S.up, hc, ...S.tu, S.Re, ...S.tc, 0, S.cam[0]!, S.cam[1]!, 0, 0, ...S.map], 0);
     u.set([F[4]!, F[5]!, F[6]!, F[7]!], 28);
     u.set([F[16]!, F[17]!, F[18]!, F[19]!, F[20]!, F[21]!, F[22]!, F[23]!], 32);
-    u.set([F[24]!, SEA_GRID, SEA_RANGE * SEA_LEAF, 0], 40);
+    // (w: the waves' bound [m] — a crest drawn before the land only where the land behind stands over it, seaFs)
+    u.set([F[24]!, SEA_GRID, SEA_RANGE * SEA_LEAF, this.seaCrestsOverLand ? amp : 1e9], 40);
     this.seaSurfaceDrawn = this.terrainRaster.encodeSea(enc, {
       uniform: u,
       nodes: r.data,

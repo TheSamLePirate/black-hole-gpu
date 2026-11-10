@@ -2471,3 +2471,14 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   lue dans `accum` a doublé d'un passage à l'autre, la sonde non ; la méthode (`accum` / poids au centre) n'est pas une radiance finale
   fiable. Établi seulement : la sonde est plus lumineuse que l'image de jour (×1,6 à ×3,2 selon le passage). À remesurer autrement
   (PLAN-MER-WEBGPU §4, dernière entrée).
+
+## 2026-11-10T19:18Z — La mer WebGPU : les crêtes devant la terre (limite de S2 levée)
+
+- **Contribution** (PLAN-MER-WEBGPU S2 ; stratégie §7.4 « l'eau a sa propre surface ») : la surface maillée de la mer garde ses crêtes
+  devant le sol plus haut que la borne des vagues, là où leur propre point est en mer selon les distances au rivage d'aujourd'hui —
+  une seule source pour le masque terre/mer (la cuisson par inondation de sauts), lue aussi par le raster. Fichiers :
+  `src/system/terrain-raster.ts` (`seaFs`, `seaShoreR`), `src/renderer.ts` (`seaCrestsOverLand`, la borne des vagues).
+- **Preuve** : **mesuré** sur kerr-mini (A/B) : coût dans le bruit (68,9 / 69,1 ms) ; **observé** : devant Porquerolles, changement
+  à peine visible à 1,7 km, aucun débordement ; e2e `sea-fft`, `coast-loading` 6/6 ; `check-wgsl`, `tsc`.
+- **Limites** : le cas d'une plage proche à basse hauteur non vu (la vue visée la manquait) ; l'effet se juge mieux plus près des
+  falaises et par houle forte.

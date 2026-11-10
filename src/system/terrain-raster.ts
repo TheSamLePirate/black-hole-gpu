@@ -1,4 +1,5 @@
-import { TABLE_LIFT, TABLE_TERRAIN, TABLE_TERRAIN_PREV } from "../gpu-tables";
+import { TABLE_LIFT, TABLE_SHORE, TABLE_TERRAIN, TABLE_TERRAIN_PREV } from "../gpu-tables";
+import { SHORE_HEADER_VEC4S, SHORE_NODE_VEC4S } from "./earth-shore-layout";
 import { LIFT_DMAX, LIFT_HMAX, LIFT_ND, LIFT_NH } from "./refraction-lift-layout";
 import { TERRAIN_CACHE_HEADER, TERRAIN_CACHE_N, TERRAIN_CACHE_NODE_VEC4S, TERRAIN_CACHE_RING_LAST } from "./terrain-cache-layout";
 
@@ -33,8 +34,9 @@ import type { TerrainWindow } from "./terrain-cache-layout";
  * its own distance target, its own depth (its crests hide its troughs). A fragment is kept on the open sea's pixels shadeLite
  * found (moments.x, kind 0: the coast's line shadeLite's, at the pixel) and on the sky's (a crest over the sea's horizon); never
  * on the cockpit's. Then seaResolve writes its distance into moments.y — the surface's distance the water's pass reads —, a
- * crest over the sky marked the sea's. Not yet: a crest before the land behind it (a coarse mask would leak the sea over low
- * coasts and polders) — S2 limits, PLAN-MER-WEBGPU.
+ * crest over the sky marked the sea's. A crest before the land behind it — a cliff, a hill over a bay — kept where its own point is
+ * the sea's by the shore's distances (system/earth-shore.ts: 6 to 390 m nodes, from the cache's own heights) and the land behind
+ * stands over the waves' bound: no sea over a beach, a polder or a low field (PLAN-MER-WEBGPU S2's limit, lifted 10 Nov).
  */
 const SEA_SURFACE_WGSL = `
 struct SeaS {
@@ -47,7 +49,7 @@ struct SeaS {
   cam: vec4f, map: vec4f,
   // the cascades' periods [m]; each cascade's anchor's offset (u, c), two a vec4
   L: vec4f, off0: vec4f, off1: vec4f,
-  // the cascades computed, the grid's quads a side, a level 0 node's range [m], unused
+  // the cascades computed, the grid's quads a side, a level 0 node's range [m], the waves' bound [m]
   misc: vec4f,
 };
 @group(1) @binding(40) var<uniform> sea: SeaS;
@@ -57,7 +59,33 @@ struct SeaS {
 @group(1) @binding(44) var<storage, read> seaMom: array<vec2f>;
 @group(1) @binding(45) var seaImage: texture_2d<f32>;
 @group(1) @binding(46) var<storage, read_write> seaMomOut: array<vec2f>;
-struct SeaV { @builtin(position) clip: vec4f, @location(0) p: vec3f };
+struct SeaV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) pb: vec3f };
+// The shore's distance at a geodetic normal g [m] (trace.wgsl seaShoreDist's: the tracer's table, the finest level holding g); 1e5
+// where none does
+fn seaShoreR(g: vec3f) -> f32 {
+  for (var s = 0u; s < ${SHORE_HEADER_VEC4S / 2}u; s++) {
+    let r = table[${TABLE_SHORE}u + 2u * s];
+    let q = table[${TABLE_SHORE}u + 2u * s + 1u];
+    if (q.z < 0.5) { continue; }
+    let dl = atan2(-g.x * r.y + g.y * r.x, g.x * r.x + g.y * r.y);
+    let sz = clamp(g.z, -1.0, 1.0);
+    let uv = vec2f(dl, asin(clamp(sz * r.w - sqrt(max(1.0 - sz * sz, 0.0)) * r.z, -1.0, 1.0))) * q.x;
+    if (min(uv.x, uv.y) < 1.0 || max(uv.x, uv.y) >= 255.0) { continue; }
+    let i = vec2u(floor(uv));
+    let f = fract(uv);
+    let base = ${TABLE_SHORE}u + ${SHORE_HEADER_VEC4S}u + s * ${SHORE_NODE_VEC4S}u;
+    let n00 = i.y * 257u + i.x;
+    let n10 = n00 + 1u;
+    let n01 = n00 + 257u;
+    let n11 = n01 + 1u;
+    let a = table[base + n00 / 4u][n00 % 4u];
+    let b = table[base + n10 / 4u][n10 % 4u];
+    let c = table[base + n01 / 4u][n01 % 4u];
+    let d = table[base + n11 / 4u][n11 % 4u];
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+  }
+  return 1e5;
+}
 fn seaUvC(x: vec2f, c: u32) -> vec2f {
   let o = select(sea.off1, sea.off0, c < 2u);
   return (x + select(o.zw, o.xy, (c & 1u) == 0u)) / sea.L[c];
@@ -93,6 +121,7 @@ fn seaUvC(x: vec2f, c: u32) -> vec2f {
   // (R4b: lifted where the air shows it, as the ground)
   p += sea.upC.xyz * liftNearM(length(p), 0.0);
   var v: SeaV;
+  v.pb = p;
   v.p = vec3f(dot(p, u.right.xyz), dot(p, u.up.xyz), dot(p, u.forward.xyz));
   v.clip = vec4f(v.p.x / u.right.w + u.output.z * v.p.z, v.p.y / u.up.w + u.output.w * v.p.z, u.forward.w, v.p.z);
   return v;
@@ -108,8 +137,19 @@ fn seaUvC(x: vec2f, c: u32) -> vec2f {
   let vis = textureLoad(distanceImage, ip, 0);
   let isSea = mk < -5.0 && mk >= -5.2501;
   let sky = vis.r <= 0.0 && vis.b <= 0.0;
-  if (!isSea && !sky) { discard; }
-  return vec4f(length(v.p), 0.0, 0.0, 0.0);
+  let ds = length(v.p);
+  if (!isSea && !sky) {
+    // (a crest before the land: the ground behind it farther, standing over the waves' bound — its height from the camera's, its
+    // distance, the curve —, and the crest's own point the sea's by the shore's distances — a beach, a polder, a field: land)
+    let dg = vis.r;
+    if (!(dg > ds + 1.0)) { discard; }
+    let O = sea.upC.xyz * (sea.tu.w + sea.upC.w);
+    let hG = length(normalize(v.pb) * dg + O) - sea.tu.w;
+    if (!(hG > sea.misc.w)) { discard; }
+    let x = seaShoreR(normalize(v.pb + O));
+    if (!(x > 3.0 && x < 9e4)) { discard; }
+  }
+  return vec4f(ds, 0.0, 0.0, 0.0);
 }
 // The surface's distance into moments.y (shadeLite's convention: metres over mPerM — u.image.z), a crest over the sky marked the
 // open sea's whole; the rest left as it is.
