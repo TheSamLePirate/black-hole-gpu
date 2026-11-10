@@ -50,7 +50,7 @@ test.skipIf(!E2E)(
         // (VA_BOOST: the bending multiplied — the table's second vec4's w — a probe that the path runs)
         if (on && process.env.VA_BOOST)
           await app.js(
-            `(() => { const r = __bh.renderer; r.device.queue.writeBuffer(r.bodyBuf, (2606527 + 1) * 16, new Float32Array([-0.004, 0.009, 512, ${Number(process.env.VA_BOOST)}])); __bh.touch(); return 1; })()`,
+            `(() => { const r = __bh.renderer; r.device.queue.writeBuffer(r.bodyBuf, (2639557 + 1) * 16, new Float32Array([-0.004, 0.009, 512, ${Number(process.env.VA_BOOST)}])); __bh.touch(); return 1; })()`,
           );
         await app.settled(120_000);
         await frames(90);

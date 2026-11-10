@@ -162,3 +162,12 @@ rayon (kerr-mini, deux passages) : côte à 500 m, sa passe reste à 1,6 ms et l
 le bruit ; ses pixels sont surtout de l'eau profonde près du rivage ou dans la portée du lavis, qui demandent la classification
 entière. Mer à 30 m : 66,35 contre 67,65 ms.
 
+**L4, la bathymétrie (option a de Sam : Terrarium + profil de Dean)** (10 novembre au soir) : la distance au rivage cuite par
+**inondation de sauts** sur toute la fenêtre des niveaux 3 à 6 du cache de relief (6,1 à 390 m, jusqu'à ±50 km ; avant : une recherche
+à 4 nœuds, ~100 m de portée), testée contre la recherche exacte (≥ 97 % des nœuds exacts, un nœud au pire) ; `seaDepthAt` prend le
+**profil d'équilibre de Dean** h = 0,1·x^(2/3) là où les tuiles n'ont pas de profondeur (confiance 0,85 ; `liteSkip` 2³¹ l'A/B). Coût
+dans le bruit (plage, côte, rivage : ±1,5 ms entre passages). Dans les vues de Hyères, Terrarium porte déjà la profondeur : l'image ne
+change pas (moyennes à 1 %). **Au passage, un défaut corrigé** : la mer près de l'Almanarre était piquée de points verts (~950 pixels
+dans une vue) — le turquoise des hauts-fonds s'ouvrait sur chaque point blanc de l'orthophoto (vagues, reflets, bateaux du jour de la
+prise de vue) ; l'albédo du fond lu sur huit empreintes : 0 point, couleur moyenne inchangée.
+

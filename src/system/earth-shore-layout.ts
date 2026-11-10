@@ -2,8 +2,9 @@
 // here — the table's sizes for gpu-tables.ts.
 import { TERRAIN_CACHE_N } from "./terrain-cache-layout";
 
-/** the relief cache's levels the distances are baked on: 6.1 m and 24 m nodes */
-export const SHORE_LEVELS = [3, 4] as const;
+/** the relief cache's levels the distances are baked on: 6.1, 24, 97 and 390 m nodes (±780 m to ±50 km — Dean's profile reaches
+ *  kilometres out, PLAN-MER-WEBGPU L4) */
+export const SHORE_LEVELS = [3, 4, 5, 6] as const;
 /** a level's header: its window's reference (cos, sin lon0, sin, cos lat0), then nodes a radian, spacing [m], published, level */
 export const SHORE_HEADER_VEC4S = 2 * SHORE_LEVELS.length;
 /** a level's nodes, four a vec4 */

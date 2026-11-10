@@ -447,11 +447,11 @@ const WATER_H = 2160u;
 // the shore's distances on the relief cache's levels 3 and 4 (gpu-tables.ts TABLE_SHORE, system/earth-shore.ts): each level's
 // header (its window's reference; nodes a radian, spacing, published, level), then its nodes four a vec4
 const SHORE_OFF = 2522777u;
-const SHORE_HEADER_VEC4S = 4u;
+const SHORE_HEADER_VEC4S = 8u;
 const SHORE_NODE_VEC4S = 16513u;
 // the layered air's refraction tables (gpu-tables.ts TABLE_REFR, system/refraction-gpu.ts): a header (1 when in), then floats —
 // B_haut's log (128 heights × 128 elevations, both on √ grids), B_limbe (4 096 tangent heights on a √ grid), N every 500 m
-const REFR_OFF = 2555807u;
+const REFR_OFF = 2588837u;
 const REFR_HAUT = 4u;
 const REFR_LIMB = 16388u;
 const REFR_NN = 20484u;
@@ -5828,7 +5828,7 @@ fn sunThrough(h: f32, mu: f32) -> vec3f {
 }
 // The table's optical depth [rgb] from a height h [m] towards mu (Bruneton's (x_mu, x_r), bilinear; under the horizon the
 // horizon's ray): system/earth-air.ts lutThrough its twin, its header's w the top's radius over the ground's
-const TLUT_OFF = 2560989u;
+const TLUT_OFF = 2594019u;
 fn tlutTau(h: f32, mu0: f32) -> vec3f {
   let rt = bodies[TLUT_OFF].w;
   // (over the air's top: the ray taken where it enters the air — none met, nothing lost)
@@ -6505,7 +6505,7 @@ fn wxAt(q: vec3f, cell: f32) -> vec3f { return (q * EARTH_RM - P.wx[4].yzw) * (1
 // cells and two finer octaves (clouds 0.5–3 km across), thresholded at its cover
 // (Q5 C5) the real weather's model on a grid about the camera (system/weather-grid.ts; gpu-tables.ts TABLE_WXGRID): layer i's
 // cover at q — the class it comes from read there, bilinear; −1: no grid, the layer's own cover everywhere
-const WXGRID_OFF = 2578399u;
+const WXGRID_OFF = 2611429u;
 fn wxGridCover(q: vec3f, i: u32) -> f32 {
   let hd = bodies[WXGRID_OFF + 1u];
   let cls = hd[1u + i];
@@ -7999,19 +7999,27 @@ fn seaDepthAt(q: vec3f, foot: f32) -> vec2f {
       if (rem < 1e-3) { break; }
     }
   }
+  // (no depth in the tiles — the shallows of a beach the global grid's coarse sea leaves out —: Dean's equilibrium profile from the
+  // distance to the shore, h = 0.1 x^(2/3) [m] (Dean 1991; PLAN-MER-WEBGPU L4, Sam's option a — Terrarium and Dean, nothing more
+  // downloaded), at a lesser confidence; the shore's distances from the relief cache's levels 3 to 6 — seaShoreDist)
+  // (liteSkip 2³¹ — an A/B —: without it)
+  if (wsum < 0.05 && (liteSkip() & 2147483648u) == 0u) {
+    let x = seaShoreDist(q);
+    if (x > 0.0 && x < 9e4) { return vec2f(max(0.1 * pow(x, 2.0 / 3.0), 0.3), 0.85); }
+  }
   if (wsum < 0.05) { return vec2f(1e4, 0.0); }
   return vec2f(acc / wsum, smoothstep(0.05, 0.6, wsum));
 }
 // The geoid's height N over the ellipsoid [m] at a geodetic direction g (system/geoid.ts geoidN: the same map, read
 // the same way): the mean sea's surface, and what the heights above the sea are raised by. 0 until the map is in.
 // The distance to the shore at a geodetic normal g [m] (system/earth-shore.ts: the nearest land node — over 0.6 m above the sea —
-// within 4 nodes of the relief cache's levels 3 and 4, 6.1 and 24 m apart), bilinear; 1e4 where no level holds g
+// over the windows of the relief cache's levels 3 to 6, 6.1 to 390 m apart — a jump flood, earth-shore.ts), bilinear; 1e5 where no level holds g
 fn shoreNode(s: u32, i: vec2u) -> f32 {
   let n = i.y * 257u + i.x;
   return bodies[SHORE_OFF + SHORE_HEADER_VEC4S + s * SHORE_NODE_VEC4S + n / 4u][n % 4u];
 }
 fn seaShoreDist(g: vec3f) -> f32 {
-  for (var s = 0u; s < 2u; s++) {
+  for (var s = 0u; s < SHORE_HEADER_VEC4S / 2u; s++) {
     let r = bodies[SHORE_OFF + 2u * s];
     let p = bodies[SHORE_OFF + 2u * s + 1u];
     if (p.z < 0.5) { continue; }
@@ -8023,7 +8031,7 @@ fn seaShoreDist(g: vec3f) -> f32 {
     let f = fract(uv);
     return mix(mix(shoreNode(s, i), shoreNode(s, i + vec2u(1u, 0u)), f.x), mix(shoreNode(s, i + vec2u(0u, 1u)), shoreNode(s, i + vec2u(1u, 1u)), f.x), f.y);
   }
-  return 1e4;
+  return 1e5;
 }
 fn geoidNode(x: u32, y: u32) -> f32 {
   let n = y * GEOID_W + x;
@@ -11500,7 +11508,7 @@ fn wxLightTau(p: vec3f, i: u32, Ls: vec3f, rnd: f32, n: u32) -> f32 {
 // optical depth from CLV_START_M (180 m) on towards the Sun — every layer, the clouds' shadow map past 7.7 km —, computed once a
 // frame (cloudLightVolume): the cloud pass's samples march their own first 180 m (the edges' silver lining) and read the rest
 // here, one trilinear read for six densities. Its frame the same in both: the point under the camera snapped to its texels.
-const CLV_OFF = 2578427u;
+const CLV_OFF = 2611457u;
 const CLV_N = 64u;
 const CLV_NZ = 24u;
 const CLV_HALF_M = 48000.0;
@@ -12448,7 +12456,7 @@ fn refrBend(h: f32, mu: f32) -> f32 {
 // elevation in the horizon's band the true one its ray leaves at — traced through its turning points on the CPU, three colours
 // (the green read: one direction a ray) —, −10 where it ends in the sea. A sky pixel looks where its ray truly goes: a body seen
 // twice (the Sun's Etruscan vase over a warm sea), the sea's line lowered or raised.
-const MIR_OFF = 2606076u;
+const MIR_OFF = 2639106u;
 const MIR_N = 256u;
 fn mirAt(n: u32) -> f32 { return bodies[MIR_OFF + 1u + n / 4u][n % 4u]; }
 // (its head: 1 on, 2 on with the green's direction only for the colours — renderer.mirageOneColour, an A/B's —, 0 off)
@@ -12470,7 +12478,7 @@ fn mirageTrue(e: f32, c: u32) -> f32 {
 // for the eye, Λ [m] by the slant distance (quadratic to 3 200 km, 128) and the point's height over the sea (quadratic to 9 km,
 // 8), faded in under 0.1′; a point P seen at P + Λ up. The same numbers for the tracer's march (R4a) and the rasters'
 // projection (R4b); never the shadow maps, the cache's bake, the CPU.
-const LIFT_OFF = 2606269u;
+const LIFT_OFF = 2639299u;
 const LIFT_ND = 128u;
 const LIFT_NH = 8u;
 fn liftF(n: u32) -> f32 { return bodies[LIFT_OFF + 2u + n / 4u][n % 4u]; }
@@ -12498,7 +12506,7 @@ fn refrLiftM(d: f32, hP: f32) -> f32 {
 // integral, ln B tabled quadratically to the profile's top); under the critical height the ray trapped (Venus ~31 km). A look
 // from above the profile's top whose straight ray grazes the limb ahead: the direction beyond turned towards the body by B — the
 // Sun behind it seen as an arc on its limb (the aureole of a transit); its colours by the gases' dispersion (REFR_DR/DB)
-const PREFR_OFF = 2606527u;
+const PREFR_OFF = 2639557u;
 const PREFR_GL = 512u;
 var<private> PREFR_TRAPPED: bool = false;
 fn prefrF(i: u32) -> f32 { return bodies[PREFR_OFF + 2u + i / 4u][i % 4u]; }
@@ -15557,10 +15565,11 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // seaShade's turquoise —, lit there by its own Sun and sky: the imagery read, its material, shadows and sky never — the
     // coast's view at 500 m spent shadeLite's long path on its whole bay, S3; accum.w 2: an albedo, not a colour)
     if (wat.x >= 0.999 && wat.y <= 0.0 && early) {
-      let d0 = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
-      TILE_AT_ON = anchored;
-      let im = earthImageryAniso(gq, fx, fy);
-      TILE_AT_ON = false;
+      // (over eight footprints: the photograph's own waves, glints and boats — 20 cm a pixel — are points; a bed seen through the
+      // water spreads over tens of metres. At the pixel's own footprint each white point opened the turquoise alone: the sea
+      // speckled green off the Almanarre, 10 Nov)
+      let d0 = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx * 8.0), eCube(fy * 8.0));
+      let im = earthImageryAniso(gq, fx * 8.0, fy * 8.0);
       let A0 = mix(mix(d0.rgb, im.c.rgb, im.w), im.c.rgb, im.o) * P.earth2.z;
       accum[idx] = vec4f(A0, 2.0);
       moments[idx] = vec2f(RASTER_WATER - wat.z - 0.25 * wat.x, tM / EARTH_RM * bodyRadius(k));

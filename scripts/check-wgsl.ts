@@ -9,6 +9,7 @@
 // Exit 1 on a compile error. Without a WebGPU adapter (a machine with neither GPU nor SwiftShader) it
 // says so and exits 0: nothing could be checked, nothing is known to be broken.
 import { Glob } from "bun";
+import { earthShoreShader } from "../src/system/earth-shore";
 import { withForest } from "../src/forest-shader";
 import { surfaceShader } from "../src/system/earth-surface";
 import { aerialShader } from "../src/system/aerial";
@@ -58,6 +59,7 @@ shaders["trace.wgsl without the aerial table, surface textures, scenery"] = aeri
   false,
 );
 shaders["the orthophotos' mips (system/earth-tiles.ts)"] = ORTHO_MIP_WGSL;
+shaders["the shore's distances' bake (system/earth-shore.ts)"] = earthShoreShader();
 // (the mountains' warp's grid pass: the tracer's noise taken from its source)
 shaders["the warp grid's pass (system/warp-grid.ts)"] = warpShader(shaders["trace.wgsl"]!);
 // (each reference scene's pipelines as the renderer makes their modules: specialised as source, their dead branches and the

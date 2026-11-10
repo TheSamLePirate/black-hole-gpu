@@ -2429,3 +2429,18 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Preuve** : tests `frame-desc` (3) ; `tsc`, biome ; e2e `sea-fft` 5/5 et J0 (kerr-mini) inchangé : GPU p50 60,9 ms, 16,5 images/s.
 - **Limites** : la caméra précédente n'a pas encore de lecteur (le mouvement de J1-2) ; les ~40 champs posés par `main.ts` et les
   lectures de `Settings` pendant l'encodage ne sont pas migrés ; questions de J1-0 à Sam (outillage de layout, étendue du domaine pilote).
+
+## 2026-11-10T18:14Z — La mer WebGPU : la bathymétrie de Dean (L4), le rivage par inondation de sauts, la mer sans points verts
+
+- **Correction d'heure** : l'entrée « 17:35Z » (J0 sur M1 Max) a été écrite vers 17:25Z.
+- **Contribution** (PLAN-MER-WEBGPU L4, option a de Sam ; stratégie §7.6 « données prêtes avant la frame ») : la distance au rivage
+  devient un produit du monde à grande portée — cuite par inondation de sauts sur toute la fenêtre des niveaux 3 à 6 du cache de relief
+  (jusqu'à ±50 km ; avant ~100 m) — et nourrit le profil d'équilibre de Dean là où les tuiles n'ont pas de profondeur ; un défaut de T7
+  corrigé : le turquoise des hauts-fonds s'ouvrait sur chaque point blanc de l'orthophoto (points verts sur la mer). Fichiers :
+  `src/system/earth-shore.ts`, `earth-shore-layout.ts`, `src/shaders/trace.wgsl` (`seaDepthAt`, `seaShoreDist`, offsets des
+  tables), `scripts/check-wgsl.ts` (la cuisson compilée), `tests/earth-shore.test.ts`.
+- **Preuve** : **testé** (l'inondation sur le CPU contre la recherche exacte : ≥ 97 % exacts) ; **mesuré** sur kerr-mini : coût dans le
+  bruit ; points verts ~950 → 0 dans la vue de l'Almanarre, couleur moyenne inchangée (planche `docs/progress/mer-webgpu/almanarre-points-avant-apres.jpg`) ;
+  e2e `coast-loading` et `sea-fft` (6/6), `check-wgsl` 73/73, `tsc`, tests (73 pass).
+- **Limites** : dans les vues de Hyères Terrarium porte déjà la profondeur — l'effet de Dean n'y est pas visible ; à juger sur une
+  côte sans données (hors de France) ; la cuisson des quatre niveaux non chronométrée seule.
