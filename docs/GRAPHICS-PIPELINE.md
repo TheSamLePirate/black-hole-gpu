@@ -380,10 +380,13 @@ strict.** Aucune mesure récente de la Terre sur kerr-mini après P11 et le ciel
 | Proxy D3D12 (Tint + DXC sur ce Mac) | ce Mac | Terre raster `main` 265 → 34,5 → 20 s ; **3,4× trop optimiste** face à kerr-pc | 27–28/10, BASELINE | estimé |
 | Noyau proche de Jupiter, froid | ce Mac | `main` **203 s** (219 s avec aurore) + `env` ≈ 60 s | 6/11, `docs/PROBLEMES-A-REGLER.md` | mesuré, actuel |
 | Spécialisation du source (CPU, worker) | ce Mac | 14 variantes : 1,3 s, ≤ 174 ms chacune | 3/11, T8b | mesuré |
+| `shadeLite` seul (profil J0 `earth-raster-wx`), froid / la fermeture « surface seule » de J1-4 | ce Mac (M1 Max, Chrome sans interface) | **1,26–1,32 s / 1,10–1,17 s** (4 tours) | 10/11, `scripts/ground-compile-cost.ts`, commit bdfd2696 | mesuré, actuel |
 | Pipelines hors traceur (vaisseau, personnage, raster, post…) | — | **jamais mesurés** | — | angle mort |
 
 Outils : `compileReport()` (traceur seulement), e2e `kernel-compile` (`KC_COLD=1` vide le cache Metal, kerr-mini), proxy
 `d3d12-compile-proxy.ts` / `d3d12-ab.ts` (CPU), §8.
+**Piège (10/11)** : pour un temps « à froid » sans vider le cache, un commentaire-nonce ou un simple renommage de l'entrée ne suffit
+pas — le cache du pilote répond en ~45 ms ; il faut une branche vivante sur un nonce (`ground-compile-cost.ts`).
 
 ---
 
