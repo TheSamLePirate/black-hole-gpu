@@ -106,7 +106,7 @@ deux ablations ne se comparent qu'à fréquence égale.
 | Décor | `earthScenery: "off"` (bâtiments, arbres) |
 | Eau | `liteSkip` 1 (le matériau de l'eau dans `shadeLite`) |
 | Affichages | HUD et panneaux de l'interface masqués |
-| Appareil et cockpit | `renderer.debugSkipShip` (l'appareil, son cockpit et ses écrans ne sont pas dessinés) |
+| Dessin de l'appareil | `renderer.debugSkipShip` : son dessin (cockpit, écrans, coque) sauté ; le masque du cockpit reste, l'image y garde un cockpit ancien et le sol n'y est pas ombré — le coût du dessin, pas celui de la surface qu'il cache |
 | Ombre de l'appareil | `ship.debugSkip` « shadow » (sa carte d'ombre seule) |
 
 **Sur quelle machine.** Le M1 Max ne tient pas sa fréquence GPU : en jeu prolongé elle oscille entre 389 et 1 296 MHz

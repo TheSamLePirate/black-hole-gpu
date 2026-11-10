@@ -514,7 +514,8 @@ de 70 s, 1920 × 1080, échelle 0,75, profil du joueur. Passes de calcul, moyenn
 | M1 Max frais, 1 296 → 1 197 MHz (26 ms) | 7,2 | 4,7 | 2,3 | 1,0 | 0,9 | 1,7 | 0,4 | 0,5 | 1,1 |
 
 Par ablation sur images terminées (kerr-mini, fréquence stable) : nuages −5,8 ms, décor −3,8, HUD et panneaux −1,4,
-ombre de l'appareil −0,7, appareil et cockpit entiers (`debugSkipShip`) −0,3, matériau de l'eau dans `shadeLite` 0,0.
+ombre de l'appareil −0,7, dessin de l'appareil sauté (`debugSkipShip`, son masque gardé) −0,25, matériau de l'eau dans
+`shadeLite` 0,0.
 **Les passes `ship: …` et `display` (37–49 ms par horodatage) ne coûtent donc presque rien** : GP-09 confirmé par
 ablation. Le M1 Max bride sa fréquence GPU en jeu prolongé (389–1 296 MHz) : ses ablations ne se comparent pas.
 

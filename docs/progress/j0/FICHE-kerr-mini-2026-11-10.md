@@ -112,10 +112,11 @@ Référence moyenne des deux vols de base : p50 60.4 ms, p95 80.8 ms (dérive en
 | 2 | sans décor (bâtiments, arbres) | 16.3 | +1.2 | 61.5 | -3.8 | 60 | -0.4 | 80.4 | -0.4 | 8.5 | 1278→1278 | 0 |
 | 3 | sans matériau de l'eau | 15.2 | +0.1 | 65.2 | -0.0 | 60.1 | -0.3 | 80.5 | -0.3 | 9.6 | 1278→1278 | 0 |
 | 4 | sans HUD ni écrans d'interface | 15.3 | +0.2 | 63.9 | -1.4 | 60.1 | -0.3 | 81 | +0.2 | 8.4 | 1278→1278 | 0 |
-| 5 | sans appareil ni cockpit (debugSkipShip) | 15.3 | +0.2 | 65 | -0.3 | 60.1 | -0.3 | 80.5 | -0.3 | 8.8 | 1278→1278 | 0 |
+| 5 | sans appareil ni cockpit (debugSkipShip) ¹ | 15.3 | +0.2 | 65 | -0.3 | 60.1 | -0.3 | 80.5 | -0.3 | 8.8 | 1278→1278 | 0 |
 | 6 | sans carte d'ombre de l'appareil | 15.4 | +0.3 | 64.6 | -0.7 | 60.1 | -0.3 | 80.8 | -0.0 | 9.5 | 1278→1278 | 0 |
 | 7 | référence | 15.2 |  | 64.8 |  | 60.2 |  | 80.9 |  | 9.4 | 1278→1278 | 0 |
 
+¹ `debugSkipShip` saute le dessin de l'appareil mais garde le masque du cockpit : l'image y garde un cockpit ancien et le sol n'y est pas ombré — le coût du dessin, pas celui de la surface qu'il cache.
 
 Un Δ négatif en temps (positif en images/s) est ce que le poste coûte dans cette scène ; les postes ne s'additionnent pas (contrat §5). Sur un écran à 50 Hz (kerr-mini), l'intervalle se quantifie par pas de 20 ms : y lire ΔGPU et Δ images/s plutôt que Δp50.
 

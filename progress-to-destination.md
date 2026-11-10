@@ -2239,9 +2239,11 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   - M1 Max frais : 36,8 images/s, p50 **25,1 ms**, p95 34,2, p99 50,3, CPU p95 6,4. Soutenu : 24,9 images/s, p50 41,5 —
     **le GPU de ce MacBook Pro bride à 30–60 % de sa fréquence en 2,5–4 min de jeu** (97–99 °C), puis oscille. kerr-mini
     (M1, fréquence stable) : 15,2 images/s, p50 60 ms, GPU 65 ms, frais comme soutenu.
-  - Répartition (kerr-mini) : nuages −5,8 ms, décor −3,8, HUD −1,4, ombre de l'appareil −0,7, appareil entier −0,3,
+  - Répartition (kerr-mini) : nuages −5,8 ms, décor −3,8, HUD −1,4, ombre de l'appareil −0,7, dessin de l'appareil −0,25 (masque gardé),
     matériau de l'eau 0 ; **le reste ≈ 53 ms est le sol et l'eau** (`earth lite` 17,5 + `earth water` 12,7 ms en passes de
     calcul). Les 37–49 ms que les horodatages donnaient à `ship: …`/`display` ne sont que du chevauchement (GP-09 confirmé).
+    (`debugSkipShip` saute le dessin mais garde le masque du cockpit : l'image y garde un cockpit ancien, sol non ombré —
+    vérifié par une sonde ; l'ablation borne le dessin, pas la surface cachée.)
   - Chemin d'entrée à froid : image pilotable 11 s (M1 Max) / 17–22 s (mini) ; relief fin 61–73 s / pas calme en 90 s ;
     détail complet 64–88 s / 127–142 s. **En vol, les tuiles en attente montent sans redescendre** (→ 192 et 258 en 70 s).
 - **Documents** : contrat (nouveau, dans la carte `docs/README.md`), GRAPHICS-PIPELINE §8.2, §8.4 (mesures datées), §9

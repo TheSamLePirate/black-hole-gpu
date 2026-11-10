@@ -46,9 +46,10 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
       hudEdge: false, hudAoA: false, hudEnergy: false, hudDirector: false, hudPath: false, hudFuture: false, hudImpact: false, hudRunway: false });
       document.body.classList.add("hide-ui");`,
   },
-  // (the craft and its cockpit not drawn at all — renderer.debugSkipShip —, then only the craft's shadow map: the timestamps put
+  // (the craft not drawn — renderer.debugSkipShip: its draw skipped; the cockpit mask stays, so the image keeps an older
+  // frame's cockpit there and the ground under it is still not shaded — the draw's cost, not the area's —, then only its shadow map: the timestamps put
   // "ship: shading (MSAA)" and "ship: shadow map" at 18–23 ms in the first run, but render passes overlap on Apple — GP-09)
-  ship: { label: "sans appareil ni cockpit (debugSkipShip)", set: `__bh.renderer.debugSkipShip = true;` },
+  ship: { label: "sans dessin de l'appareil (debugSkipShip ; son masque reste)", set: `__bh.renderer.debugSkipShip = true;` },
   shipShadow: { label: "sans carte d'ombre de l'appareil", set: `__bh.renderer.ship.debugSkip.add("shadow");` },
 };
 const ORDER = ["base", "clouds", "scenery", "water", "displays", "ship", "shipShadow", "base"];

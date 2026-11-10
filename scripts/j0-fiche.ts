@@ -180,10 +180,14 @@ if (j.ablations?.length) {
   j.ablations.forEach((x, i) => {
     const d = (v: number, b: number, sign = 1) => (x.key === "base" ? "" : `${v - b >= 0 ? "+" : ""}${((v - b) * sign).toFixed(1)}`);
     p(
-      `| ${i} | ${x.label} | ${x.imagesPerS} | ${d(x.imagesPerS, bIps)} | ${x.gpuP50} | ${d(x.gpuP50, bGpu)} | ${x.p50} | ${d(x.p50, b50)} | ${x.p95} | ${d(x.p95, b95)} | ${x.loopCpuP95 ?? "—"} | ${x.gpuMHz ? x.gpuMHz.join("→") : "—"}${apart(x) ? " ⚠" : ""} | ${x.compilingSeen ?? "—"} |`,
+      `| ${i} | ${x.label}${x.key === "ship" ? " ¹" : ""} | ${x.imagesPerS} | ${d(x.imagesPerS, bIps)} | ${x.gpuP50} | ${d(x.gpuP50, bGpu)} | ${x.p50} | ${d(x.p50, b50)} | ${x.p95} | ${d(x.p95, b95)} | ${x.loopCpuP95 ?? "—"} | ${x.gpuMHz ? x.gpuMHz.join("→") : "—"}${apart(x) ? " ⚠" : ""} | ${x.compilingSeen ?? "—"} |`,
     );
   });
   p();
+  if (j.ablations.some((x) => x.key === "ship"))
+    p(
+      "¹ `debugSkipShip` saute le dessin de l'appareil mais garde le masque du cockpit : l'image y garde un cockpit ancien et le sol n'y est pas ombré — le coût du dessin, pas celui de la surface qu'il cache.",
+    );
   if (spread > 1.1 || comparable < j.ablations.length - base.length)
     p(
       `**⚠ Fréquence GPU instable** (bases de ${baseMhz.map((m) => Math.round(m)).join(" et ")} MHz) : les lignes marquées ⚠ mesurent la fréquence, pas le poste — ${comparable} ablation(s) comparable(s) sur ${j.ablations.length - base.length}. La répartition par poste se lit sur une machine à fréquence stable.`,

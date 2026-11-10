@@ -35,8 +35,11 @@ du palier sont une proposition non validée ; ce document ne déclare aucun pali
 | décor (bâtiments, arbres) | **−3,8 ms** | +1,2 | −1,1 |
 | HUD et panneaux | −1,4 ms | +0,2 | −1,2 |
 | ombre de l'appareil | −0,7 ms | +0,3 | −0,1 |
-| appareil et cockpit (`debugSkipShip`) | −0,3 ms | +0,2 | −0,8 |
+| dessin de l'appareil (`debugSkipShip`)¹ | −0,25 ms | +0,2 | −0,8 |
 | matériau de l'eau dans `shadeLite` | 0,0 ms | +0,1 | 0,0 |
+
+¹ Le dessin sauté, le masque du cockpit reste : l'image garde là un cockpit ancien, plus sombre, et le sol n'y est pas
+ombré (vérifié par une sonde sur ce Mac). L'ablation borne le coût du dessin, pas celui de la surface qu'il cache.
 
 Dérive entre les deux bases : 0,9 ms. **Ces six postes ensemble ≈ 12 ms ; le reste — ≈ 53 ms — est le sol et l'eau**, que
 les passes de calcul horodatées (attribuables sur Apple) chiffrent : `earth lite (raster)` 17,5 ms, `earth water (raster)`
@@ -45,8 +48,8 @@ les passes de calcul horodatées (attribuables sur Apple) chiffrent : `earth lit
 
 Trois enseignements :
 
-1. **L'appareil n'est pas le problème.** Les horodatages lui attribuent 37–49 ms (`ship: shading (MSAA)`, `ship: shadow
-   map`, `display`…) ; retiré entièrement, il rend 0,3 ms. GP-09 confirmé : sur Apple, ne jamais lire une passe de rendu
+1. **Le dessin de l'appareil n'est pas le problème.** Les horodatages lui attribuent 37–49 ms (`ship: shading (MSAA)`,
+   `ship: shadow map`, `display`…) ; sauté, il rend 0,25 ms (sa carte d'ombre seule 0,7). GP-09 confirmé : sur Apple, ne jamais lire une passe de rendu
    comme un coût.
 2. **Le domaine de J1 est la moitié de la frame** : `earth lite` + `earth water` ≈ 30 ms sur 65 sur kerr-mini (≈ 12 sur
    26 sur le M1 Max frais). Le retrait du matériau de l'eau dans `shadeLite` (`liteSkip` 1) ne gagne rien : la passe
