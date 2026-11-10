@@ -345,6 +345,7 @@ const VARIANT_ENTRY = {
   shadeMark: "shadeMark",
   shadeLite: "shadeLite",
   shadeWater: "shadeWater",
+  shadeWaterOpen: "shadeWaterOpen",
   shadeStars: "shadeStars",
   discs: "discs",
   clouds: "clouds",
@@ -417,6 +418,8 @@ const SKY_EVERY = 3;
 const RASTER_STARS_FLAG = 512;
 /** the catalogue's stars at most (trace.wgsl shadeStars: a thread a star — 119 614 HYG/Hipparcos) */
 const STARS_MAX = 120_000;
+/** P.seafft[0].x when the open sea's kernel runs (renderer encodeLite, trace.wgsl shadeWater) */
+const SEA_OPEN_FLAG = new Float32Array([2]);
 /** the sky's discs drawn at most (renderer.skyDiscs, discRects; trace.wgsl main's layers) */
 const SKY_DISCS_MAX = 4;
 /** the light meter's period [frames] (encodePost) */
@@ -4221,6 +4224,7 @@ export class Renderer {
       this.seaFftParams(!o.probe, time, tSec, s, (2 * Math.tan((s.fov * Math.PI) / 360)) / Math.max(t.height, 1)),
       wat + WAKE_VEC4S * 4,
     );
+    if (!o.probe) this.seafftAt = wat + WAKE_VEC4S * 4;
     // (the nearest carrier's sphere in the ship's shadow map: its shadow on the sea — Params.seafft[3])
     const sb2 = !o.probe && this.ship.ready && near?.index === earthK ? this.ship.shadowBound2 : null;
     if (sb2) f.set([sb2.c[0], sb2.c[1], sb2.c[2], sb2.r], wat + WAKE_VEC4S * 4 + 12);
@@ -5267,6 +5271,11 @@ export class Renderer {
   /** the wind and the place the sea's waves are drawn for this frame (seaParams; null: no sea near) */
   /** PLAN-MER-WEBGPU S5: over the sea, the light probe traced about a free camera too — the sky the sea mirrors (A/B lever) */
   seaProbeOn = true;
+  /** PLAN-MER-WEBGPU S3: the open sea's pixels shaded by their own kernel — shadeWater compiled without the coasts' and the inland
+   *  water's code (trace.wgsl WATER_OPEN) — once it is compiled (A/B lever) */
+  seaWaterOpenOn = true;
+  /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */
+  private seafftAt = -1;
   private seaHere: { U: number; to: number; lat: number; lon: number; weight: number; world?: "miller" | "titan" } | null = null;
 
   /**
@@ -5325,6 +5334,8 @@ export class Renderer {
       cmC = 0.003 + 0.00192 * H.U;
     // (w: the dominant system's peak period [s] — the surf's bands, trace.wgsl seaShade)
     const tp = state.swell.hs > state.wind.hs ? state.swell.tp : state.wind.tp;
+    // (x: 1 the FFT's waves; 2 — written over by encodeLite when the open sea's kernel runs this frame, PLAN-MER-WEBGPU S3 —: shadeWater
+    // leaves it the open sea's pixels)
     out.set([1, this.seaLambda, Math.sqrt(st.height), tp], 0);
     out.set(CASCADES, 4);
     // (the cascades computed — PLAN-MER-WEBGPU S1 —: the nearest sea's pixel, under the camera, covers footMin metres; a cascade
@@ -5361,7 +5372,7 @@ export class Renderer {
     // (the light probe — traced about the camera — mirrored by the sea only while fresh: a probe left where the camera came from
     // mirrored that place's world — an orbit's Earth in the sea under a free camera at Hyères, 10 Nov —; stale, the sky's own
     // mirror at the sea's point)
-    const probeNear = !this.envReset && performance.now() - this.envAt < 1000 ? 1 : 0;
+    const probeNear = !this.envReset && performance.now() - this.envAt < 1000 && (this.seaFft?.skyLevels ?? 0) > 0 ? 1 : 0;
     // (the world's foam — PLAN-MER-WEBGPU S4, sea/fft-gpu.ts FoamFrame —: the camera's cell on each level, the last frame's taken
     // into this frame's local axes across an anchor's jump; the pair the FFT writes this frame read by the tracer)
     // (its threshold from the spread of the Jacobian it reads — every cascade computed, not the two long ones': Miller's short
@@ -5442,7 +5453,11 @@ export class Renderer {
     pass.dispatchWorkgroups(32 / k, 16 / k);
     pass.end();
     // (its filtering: every other frame when it changes slowly)
-    if (k !== 4 || this.envPhase % 2 === 0) this.ship.encodeEnv(enc);
+    if (k !== 4 || this.envPhase % 2 === 0) {
+      this.ship.encodeEnv(enc);
+      // (the sea's mirrored sky — PLAN-MER-WEBGPU S5 —: the probe's GGX levels, into the sea's texture array)
+      if (this.seaFft && this.seaHere && this.seaHere.weight > 0) this.seaFft.takeSky(enc, this.ship.envSpecTexture);
+    }
     enc.copyBufferToBuffer(this.ship.shBuf, 0, this.bodyBuf, this.bodyData.byteLength, SH_BYTES);
     this.envReset = false;
     this.envAt = performance.now();
@@ -5564,6 +5579,9 @@ export class Renderer {
       shadeLite: GPUComputePipeline | null;
       /** the raster's water, split from shadeLite (trace.wgsl shadeWater — TERRE-UNREAL U2d) */
       shadeWater: GPUComputePipeline | null;
+      /** the open sea's water — shadeWater compiled with WATER_OPEN: the coasts' and the inland water's code out, its pixels the
+       *  open sea's (PLAN-MER-WEBGPU S3: a lighter kernel, the Apple GPU's registers) */
+      shadeWaterOpen: GPUComputePipeline | null;
       /** the catalogue's stars over the raster's sky (trace.wgsl shadeStars — TERRE-UNREAL U8) */
       shadeStars: GPUComputePipeline | null;
       /** the sky's discs' own kernel (trace.wgsl main, DISC_ONLY — TERRE-UNREAL U9) */
@@ -5620,6 +5638,7 @@ export class Renderer {
       | "shadeMark"
       | "shadeLite"
       | "shadeWater"
+      | "shadeWaterOpen"
       | "shadeStars"
       | "discs"
       | "clouds"
@@ -5638,6 +5657,7 @@ export class Renderer {
       shadeMark: null,
       shadeLite: null,
       shadeWater: null,
+      shadeWaterOpen: null,
       shadeStars: null,
       discs: null,
       clouds: null,
@@ -5666,6 +5686,7 @@ export class Renderer {
         shadeMark: null,
         shadeLite: null,
         shadeWater: null,
+        shadeWaterOpen: null,
         shadeStars: null,
         discs: null,
         clouds: null,
@@ -5694,7 +5715,7 @@ export class Renderer {
         (shadeOk &&
           ((this.shadeWanted && !v.shade) ||
             !v.shadeMark ||
-            (this.rasterLite && (!v.shadeLite || !v.shadeWater)) ||
+            (this.rasterLite && (!v.shadeLite || !v.shadeWater || (this.seaWaterOpenOn && !v.shadeWaterOpen))) ||
             (this.cloudPass && !v.clouds))))
     )
       this.realtimeCascade(key, v);
@@ -5716,6 +5737,7 @@ export class Renderer {
       kind !== "shadeMark" &&
       kind !== "shadeLite" &&
       kind !== "shadeWater" &&
+      kind !== "shadeWaterOpen" &&
       kind !== "shadeStars" &&
       kind !== "discs" &&
       kind !== "clouds"
@@ -5785,6 +5807,7 @@ export class Renderer {
         | "shadeMark"
         | "shadeLite"
         | "shadeWater"
+        | "shadeWaterOpen"
         | "shadeStars"
         | "discs"
         | "clouds"
@@ -5823,6 +5846,8 @@ export class Renderer {
       if (!R || !this.rasterLite) return;
       if (!slot.shade && this.shadeWanted) slot.shade = await compile("shade");
       if (!slot.discs && this.discsKernel) slot.discs = await compile("discs");
+      // (the open sea's water — PLAN-MER-WEBGPU S3 —: shadeWater shades every pixel meanwhile)
+      if (!slot.shadeWaterOpen && this.seaWaterOpenOn) slot.shadeWaterOpen = await compile("shadeWaterOpen");
     };
     const run = async () => {
       // (the raster's first kernels before the tracer only when something already draws this key's trace — the general
@@ -5951,6 +5976,7 @@ export class Renderer {
       | "shadeMark"
       | "shadeLite"
       | "shadeWater"
+      | "shadeWaterOpen"
       | "shadeStars"
       | "discs"
       | "clouds"
@@ -6019,6 +6045,7 @@ export class Renderer {
       | "shadeMark"
       | "shadeLite"
       | "shadeWater"
+      | "shadeWaterOpen"
       | "shadeStars"
       | "discs"
       | "clouds"
@@ -6079,6 +6106,7 @@ export class Renderer {
       | "shadeMark"
       | "shadeLite"
       | "shadeWater"
+      | "shadeWaterOpen"
       | "shadeStars"
       | "discs"
       | "clouds"
@@ -6119,6 +6147,7 @@ export class Renderer {
                 entryPoint === "shadeMark" ||
                 entryPoint === "shadeLite" ||
                 entryPoint === "shadeWater" ||
+                entryPoint === "shadeWaterOpen" ||
                 entryPoint === "shadeStars" ||
                 entryPoint === "skyFill" ||
                 entryPoint === "discs"
@@ -6810,6 +6839,19 @@ export class Renderer {
         wp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
         wp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
         wp.end();
+        // (the open sea's pixels by their own lighter kernel — PLAN-MER-WEBGPU S3 —, the FFT's waves on: P.seafft[0].x 2 written over
+        // the frame's parameters before their submission — shadeWater leaves them those pixels)
+        const open =
+          this.seaWaterOpenOn && this.seafftAt >= 0 && this.paramsF[this.seafftAt]! > 0.5 ? this.traceVariant("shadeWaterOpen") : null;
+        if (open) {
+          this.device.queue.writeBuffer(this.paramBuf, this.seafftAt * 4, SEA_OPEN_FLAG);
+          const op = enc.beginComputePass(this.prof.pass("earth water open (raster)"));
+          op.setPipeline(open);
+          op.setBindGroup(0, this.hintBindFor(t, hint));
+          op.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+          op.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+          op.end();
+        }
       }
     }
   }

@@ -692,6 +692,7 @@ The other members tests read:
 | `seaSurfaceOn` | boolean (read/write) | the sea's surface drawn as a displaced mesh (PLAN-MER-WEBGPU S2; default true); false: the flat sea, as before — an A/B's switch |
 | `seaFoamWorldOn` | boolean (read/write) | the sea's foam kept in two world maps about the camera (PLAN-MER-WEBGPU S4; default true); false: the per-cascade foam alone — an A/B's switch |
 | `seaProbeOn` | boolean (read/write) | over the Earth's sea, the light probe traced about a free camera too — the sky the sea mirrors (PLAN-MER-WEBGPU S5; default true); false: traced only with a craft, a ship or a walker shown, the sea mirroring the analytic sky elsewhere — an A/B's switch |
+| `seaWaterOpenOn` | boolean (read/write) | the open sea's pixels shaded by their own kernel — `shadeWater` compiled with `WATER_OPEN` (`shadeWaterOpen`: the coasts' and the inland water's code out), once compiled (PLAN-MER-WEBGPU S3; default true); false: `shadeWater` alone — an A/B's switch |
 | `seaSurfaceDrawn` | boolean | the sea's surface was drawn this frame (under 3 km over the sea, the FFT's waves on, the raster's visibility drawn) |
 | `seaFftActive` | number (private) | the FFT's cascades computed this frame (1–4, the coarsest first: the finest left out when the nearest sea's pixel covers them) |
 | `terrainRaster.seaStats` | `{ nodes, frames, reason }` | the sea surface's last draw: its quadtree's nodes, frames drawn, `"drawn"` / `"compiling"` / `"no visibility"` / `"off"` / `"failed: …"` |

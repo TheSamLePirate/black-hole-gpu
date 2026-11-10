@@ -285,6 +285,10 @@ override TUNE_SKIP: u32 = 0u;
 // ground's march, its scenery, its sea, its shading — the discs' rays never meet the ground the raster draws (left to it,
 // its pixels skipped by the raster's hint) —: the kernel's registers, the Apple GPU's limit, those of the sky's rays)
 override DISC_ONLY: bool = false;
+// (PLAN-MER-WEBGPU S3: shadeWater compiled for the open sea's pixels alone — renderer shadeWaterOpen —: the coasts' and the inland
+// water's code out — the shallow bed, the surf, the wash, the rivers, the falls —, a lighter kernel: the
+// Apple GPU's registers, every block of shadeWater's ~6–9 ms of the sea's view on kerr-mini)
+override WATER_OPEN: bool = false;
 // (1: the wormhole's steps on our side merged into straight pieces for ourSegment while the ray holds straight to a
 // quarter of its pixel; 0: each step's chord on its own, as before)
 override TUNE_MERGE: u32 = 1u;
@@ -5466,6 +5470,16 @@ fn skyIrradiance(h: f32, n: vec3f) -> vec3f {
   }
   return max(irr, vec3f(0.0));
 }
+// The clear sky's light on the flat at the sea's level (skyIrradiance(h ≤ the table's lowest, its up): the three harmonics a
+// vertical normal reads — the sea's normal within a degree of the camera's place's up over a view's sea; the nine and two
+// altitudes per pixel were most of the sea mirror's cost, PLAN-MER-WEBGPU S3)
+fn skyIrradianceSeaUp() -> vec3f {
+  if (bodies[SKY_OFF].w < 0.5) { return vec3f(-1.0); }
+  let c0 = bodies[SKY_OFF + 4u].xyz;
+  let c2 = bodies[SKY_OFF + 6u].xyz;
+  let c6 = bodies[SKY_OFF + 10u].xyz;
+  return max(PI * 0.282095 * c0 + 2.0943951 * 0.488603 * c2 + 0.7853982 * 0.630784 * c6, vec3f(0.0));
+}
 // The clear sky's radiance at the sea's level towards d (a unit direction over the horizon), from skyAmbient's 8 × 8 grid —
 // the azimuth in eighths, the elevation's sine in squares (denser at the horizon, its bright band) —, bilinear; −1: off.
 // The sea's mirror: the harmonics hold the light a surface receives, not the horizon's band a grazing mirror shows.
@@ -9126,6 +9140,8 @@ fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
   var sc = 0.0;
   var J = 1.0;
   var h = 0.0;
+  // (within the world foam's window its maps stand for the cascades' own foam: their streaks' taps not read there)
+  let wIn = select(1.0 - smoothstep(0.30 * 1024.0, 0.45 * 1024.0, max(abs(x - P.sea[2].xy).x, abs(x - P.sea[2].xy).y)), 0.0, P.seafft[6].w < -0.5);
   for (var i = 0u; i < nC; i++) {
     let lod = max(log2(foot * 256.0 / P.seafft[1][i]), 0.0);
     let uv = seaUv(x, i);
@@ -9145,7 +9161,7 @@ fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
     }
     // (the foam the long cascades' crests left — sea/fft-gpu.ts —, drawn out upwind of where it was made: the crest runs on
     // downwind, its foam stays behind in streaks along the wind — three taps back along it)
-    if (i < 2u) {
+    if (i < 2u && wIn < 0.999) {
       let st = max(2.0, 1.5 * foot);
       var f = 0.5 * pr.x;
       for (var k = 1; k < 3; k++) {
@@ -9156,7 +9172,6 @@ fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
   }
   // (the world's foam, attached to the sea and drifting — PLAN-MER-WEBGPU S4 —; beyond its maps, the cascades' own)
   let wf = seaFoamWorld(x, foot);
-  let wIn = select(1.0 - smoothstep(0.30 * 1024.0, 0.45 * 1024.0, max(abs(x - P.sea[2].xy).x, abs(x - P.sea[2].xy).y)), 0.0, P.seafft[6].w < -0.5);
   o.res = mix(o.res, wf.x * 0.8, wIn);
   o.fresh = wf.y;
   o.n = normalize(q - (su * tu + sc * tc) * o.m);
@@ -9228,6 +9243,19 @@ fn seaWaterOf(k: f32) -> mat2x3f {
   let Kd = K0 + vec3f(0.15, 0.7, 1.1 + 0.4 * sed) * (max(k, 0.016) - 0.02);
   let bbp = 0.05 * max(k - 0.016, 0.0) * sed * vec3f(0.946, 1.014, 1.087);
   return mat2x3f(Kd, min((vec3f(0.004, 0.017, 0.040) * K0 + bbp) / Kd, vec3f(0.25)));
+}
+// The sky the sea mirrors (PLAN-MER-WEBGPU S5, the analysis's M4): the light probe's GGX levels — the ship's envSpec, roughness =
+// level / 5 — copied into the sea's texture array (sea/fft-gpu.ts takeSky, layer SEA_SKY_LAYER, its top half), read at the slopes'
+// roughness alpha in the probe's equirectangular mapping (probeRadiance's); the rows held off the half's edges — the repeat
+// sampler would reach the other half. d: the body's axes.
+const SEA_SKY_LAYER = 16u;
+fn seaSkyRadiance(d: vec3f, alpha: f32) -> vec3f {
+  let c = camAxes(fromBody(d));
+  let u = atan2(c.x, c.z) / TAU + 0.5;
+  let lod = clamp(alpha * 5.0, 0.0, 5.0);
+  let rows = 256.0 / exp2(ceil(lod));
+  let v = clamp(acos(clamp(c.y, -1.0, 1.0)) / PI * 0.5, 0.5 / rows, 0.5 - 0.5 / rows);
+  return textureSampleLevel(seaFft, seaSamp, vec2f(u, v), i32(SEA_SKY_LAYER), lod).rgb;
 }
 fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32, calm: f32, mirror: vec4f) -> vec3f {
   // (another world's: q its surface's own normal — Miller's giant wave's slope under the chop)
@@ -9377,7 +9405,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   // the colour of the sky's light here: under the weather's decks their grey, the clear sky's shape kept)
   let clearM = skyMirror(rUp);
   if (clearM.x >= 0.0 && !SEA_ALIEN && (TUNE_GSKIP & 512u) == 0u) {
-    let clearE = skyIrradiance(0.0, normal);
+    let clearE = skyIrradianceSeaUp();
     skyR = clearM * clamp(sky / max(clearE, vec3f(1e-30)), vec3f(0.0), vec3f(2.0));
   }
   var water = under;
@@ -9390,9 +9418,12 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     // (AM2's aurora e2e; the probe's night scale itself still to trace); a lit cloud stays within it)
     skyClear = skyR;
     // (the probe only where it was traced about the camera — P.seafft[6].z, renderer seaFftParams)
-    skyR = mix(skyR, min(probeRadiance(camAxes(fromBody(rUp))), 4.0 * skyR), b * P.seafft[6].z);
+    // (filtered by the slopes the pixel does not resolve — their roughness, the probe's GGX level: a rough sea mirrors a blurred
+    // sky, a calm one a sharp one — S5)
+    let alphaR = sqrt(su2 + sc2);
+    skyR = mix(skyR, min(seaSkyRadiance(rUp, alphaR), 4.0 * skyR), b * P.seafft[6].z);
     // (another world's sky: its own light probe — the lensed disk, Gargantua, the sky about the craft —, else its harmonics)
-    if (SEA_ALIEN) { skyR = select(nearE(fromBody(rUp)) / PI, probeRadiance(camAxes(fromBody(rUp))), P.near3.w < 1.5); }
+    if (SEA_ALIEN) { skyR = select(nearE(fromBody(rUp)) / PI, seaSkyRadiance(rUp, alphaR), P.near3.w < 1.5); }
     skyClear = select(skyClear, skyR, SEA_ALIEN);
     // (the water's own colour, from the light into it: the open sea's dark blue, its scattering; over a shallow bed —
     // SEA_DEPTH, the tiles' bathymetry — the bed seen through it, the light down to it and back attenuated by the water's
@@ -9404,7 +9435,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     let wq = seaWaterOf(SEA_KD);
     let deep = Ein * wq[1] / PI;
     water = mix(under, deep, b);
-    if (SEA_DEPTH_W > 0.0 && SEA_DEPTH < 60.0 && (TUNE_GSKIP & 1024u) == 0u) {
+    if (!WATER_OPEN && SEA_DEPTH_W > 0.0 && SEA_DEPTH < 60.0 && (TUNE_GSKIP & 1024u) == 0u) {
       let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
       let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
       let anchor = vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 17);
@@ -9525,7 +9556,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     // crests white bands running in at the shallow water's celerity √(g d): on a beach of slope s, a crest reaches the
     // shore from depth d in 2√d / (s √g) — the bands follow the depth's contours, spaced as the period has them, the
     // foam trailing seaward of each front, broken along it; the inner surf, the swash a lasting white)
-    if (SEA_DEPTH_W > 0.0 && !SEA_ALIEN && (TUNE_GSKIP & 1024u) == 0u) {
+    if (!WATER_OPEN && SEA_DEPTH_W > 0.0 && !SEA_ALIEN && (TUNE_GSKIP & 1024u) == 0u) {
       let Hs = select(0.021 * U * U, 4.0 * P.seafft[0].z, P.seafft[0].x > 0.5);
       let Tp = select(0.73 * U + 2.0, P.seafft[0].w, P.seafft[0].w > 0.5);
       let dB = 1.3 * Hs + 0.25;
@@ -16073,36 +16104,13 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   let fp = pixFoot() * tH;
   let fx = earthFoot(q, rd, squashed(toBody(P.camRight.xyz), ab), fp);
   let fy = earthFoot(q, rd, squashed(toBody(P.camUp.xyz), ab), fp);
-  var n = rasterNormal(centre, terrainRasterHint(centre), k);
-  if (dot(n, n) < 0.5) { n = gq; }
   let dirW = toBody(ray.look);
-  // (liteSkip 4096 — a measure, as shadeLite's —: the Sun's light plain, its shadows not read)
-  var Eg = E * sunThrough(hG, dot(gq, Lp));
-  if ((liteSkip() & 4096u) == 0u) { Eg = liteSun(q, gq, hG, Ls, Lp, Eg, fx, fy, dirW, tM, n, false); }
-  var sky = liteSky(q, hG, E, Ls, dot(gq, Lp));
-  if ((liteSkip() & 4194304u) == 0u) { sky *= earthSkyOpen(gq, hG, n); }
-  var G = accum[idx].rgb;
-  // (shadeLite's shallow sea: the bed's albedo, lit here)
-  if (accum[idx].w > 1.5) { G *= (Eg * max(dot(gq, Ls), 0.0) + sky) / PI; }
   let footSea = sqrt(length(fx) * length(fy)) * EARTH_RM;
   SEA_ON = P.sea[1].w > 0.0;
   SEA_D = dirW * tM;
   let dw = select(seaDepthAt(gq, footSea), vec2f(1e4, 0.0), calm > 0.0);
   SEA_DEPTH = dw.x;
   SEA_DEPTH_W = dw.y;
-  SEA_KD = select(seaKd490(gq), 0.0, calm > 0.0);
-  // (the relief round the point, read at one call site — four copies of it were 71 % of this kernel —: a river's slope for its
-  // falls, four reads ±ds east and north)
-  var east = vec3f(-gq.y, gq.x, 0.0);
-  east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-12);
-  let north = cross(gq, east);
-  let fallOn = calm > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5;
-  let ds = max(25.0, 2.0 * footSea);
-  var hs = array<f32, 4>(0.0, 0.0, 0.0, 0.0);
-  for (var i = 0u; i < select(0u, 4u, fallOn); i++) {
-    let a = f32(i) * 1.5707963;
-    hs[i] = earthHeightStepG(normalize(gq + (east * cos(a) + north * sin(a)) * (ds / EARTH_RM)), ds);
-  }
   // (the sea's shore: the distance to the nearest land baked on the relief cache's levels — system/earth-shore.ts, one read —;
   // the wash within ~12 m of it, wider as the pixel grows; the sea near alone. liteSkip 536870912: off — the relief's own walk
   // round each pixel cost 1.7–3.2 ms on kerr-mini)
@@ -16113,12 +16121,40 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
     // distances, baked from the same nodes, call it land — no wash there: a white band along the plate the mesh had)
     SEA_SHORE *= 1.0 - smoothstep(0.3, 0.6, hG);
   }
+  // (the open sea's pixels — no bed known within 60 m, no shore within the wash's reach, not inland — the open kernel's when it
+  // runs this frame (P.seafft[0].x 2, renderer encodeLite): each kernel leaves the other's)
+  let openSea = calm <= 0.0 && !(dw.y > 0.0 && dw.x < 60.0) && SEA_SHORE <= 0.0 && accum[idx].w < 1.5;
+  if (WATER_OPEN && !openSea) { return; }
+  if (!WATER_OPEN && openSea && P.seafft[0].x > 1.5) { return; }
+  var n = rasterNormal(centre, terrainRasterHint(centre), k);
+  if (dot(n, n) < 0.5) { n = gq; }
+  // (liteSkip 4096 — a measure, as shadeLite's —: the Sun's light plain, its shadows not read)
+  var Eg = E * sunThrough(hG, dot(gq, Lp));
+  if ((liteSkip() & 4096u) == 0u) { Eg = liteSun(q, gq, hG, Ls, Lp, Eg, fx, fy, dirW, tM, n, false); }
+  var sky = liteSky(q, hG, E, Ls, dot(gq, Lp));
+  if ((liteSkip() & 4194304u) == 0u) { sky *= earthSkyOpen(gq, hG, n); }
+  var G = accum[idx].rgb;
+  // (shadeLite's shallow sea: the bed's albedo, lit here)
+  if (accum[idx].w > 1.5) { G *= (Eg * max(dot(gq, Ls), 0.0) + sky) / PI; }
+  SEA_KD = select(seaKd490(gq), 0.0, calm > 0.0);
+  // (the relief round the point, read at one call site — four copies of it were 71 % of this kernel —: a river's slope for its
+  // falls, four reads ±ds east and north)
+  var east = vec3f(-gq.y, gq.x, 0.0);
+  east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-12);
+  let north = cross(gq, east);
+  let fallOn = !WATER_OPEN && calm > 0.0 && HAS_SCENERY && P.scenery[0].w > 0.5;
+  let ds = max(25.0, 2.0 * footSea);
+  var hs = array<f32, 4>(0.0, 0.0, 0.0, 0.0);
+  for (var i = 0u; i < select(0u, 4u, fallOn); i++) {
+    let a = f32(i) * 1.5707963;
+    hs[i] = earthHeightStepG(normalize(gq + (east * cos(a) + north * sin(a)) * (ds / EARTH_RM)), ds);
+  }
   RNDV = blueDraws(vec2u(centre), P.frame.x);
   RND = RNDV.z;
   RASTER_SHADE = true;
   // (the sea's style, or the inland water's — a river's, a lake's: not the sea's calmed)
   var wcol: vec3f;
-  if (calm > 0.0) { wcol = inlandWater(q, -rd, Ls, Eg, sky, footSea, kind > 1.5); }
+  if (!WATER_OPEN && calm > 0.0) { wcol = inlandWater(q, -rd, Ls, Eg, sky, footSea, kind > 1.5); }
   else {
     // (the pixel's footprint on the sea's axes [m]: the cascades filtered over its ellipse — seaTap)
     SEA_GX = vec2f(dot(fx, P.sea[0].xyz), dot(fx, P.sea[1].xyz)) * EARTH_RM;
@@ -16128,7 +16164,7 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
     SEA_GY = vec2f(0.0);
     // (the shore's wash: where the probe found land within metres — a cliff's foot, a beach's edge —, the waves' white breaking
     // on it, in patches drifting with the clock, as much as the waves are high; here, not in seaShade — every kernel's copy)
-    if (SEA_SHORE > 0.0) {
+    if (!WATER_OPEN && SEA_SHORE > 0.0) {
       let Hw = select(0.021 * P.sea[0].w * P.sea[0].w, 4.0 * P.seafft[0].z, P.seafft[0].x > 0.5);
       let wu = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
       let wc = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;

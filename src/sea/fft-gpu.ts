@@ -12,6 +12,9 @@ const C: number = CASCADES.length;
 export const SEA_LEVELS = Math.log2(N) + 1;
 /** the world foam's first layer in the texture array (after the cascades' three each: 3C + 2·parity + level) */
 export const FOAM_BASE = 3 * C;
+/** the sky the sea mirrors (PLAN-MER-WEBGPU S5, the analysis's M4): the light probe about the camera, GGX-filtered by roughness —
+ *  the ship's envSpec, 256 × 128, roughness = level / 5 —, copied into this layer's top half at each of its levels (takeSky) */
+export const SKY_LAYER = 3 * C + 4;
 /** the world foam's levels' sides [m] (seafft.wgsl FOAM_SIZE: both divide the sea's kilometre anchor) */
 export const FOAM_SIZES = [128, 1024] as const;
 
@@ -80,11 +83,12 @@ export class SeaFft {
   ) {
     const d = device;
     this.texture = d.createTexture({
-      // (the cascades' three layers each, then the world's foam: two levels × two layers written in turn — PLAN-MER-WEBGPU S4)
-      size: [N, N, 3 * C + 4],
+      // (the cascades' three layers each, then the world's foam: two levels × two layers written in turn — PLAN-MER-WEBGPU S4 —,
+      // then the sky the sea mirrors — S5)
+      size: [N, N, 3 * C + 5],
       format: "rgba16float",
       mipLevelCount: SEA_LEVELS,
-      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST,
     });
     this.uniform = d.createBuffer({ size: 11 * 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.foam = d.createBuffer({ size: C * N * N * 4, usage: GPUBufferUsage.STORAGE });
@@ -162,6 +166,20 @@ export class SeaFft {
       ),
     };
   }
+
+  /** The sky the sea mirrors, from a probe's roughness levels (`src`: 2 : 1, rgba16float, level l at roughness l / 5 — the ship's
+   *  envSpec) into the sky layer's top half, level by level; its own mips past them left as they are (read no coarser). */
+  takeSky(enc: GPUCommandEncoder, src: GPUTexture) {
+    const levels = Math.min(src.mipLevelCount, SEA_LEVELS);
+    for (let l = 0; l < levels; l++) {
+      const w = Math.max(1, src.width >> l),
+        h = Math.max(1, src.height >> l);
+      enc.copyTextureToTexture({ texture: src, mipLevel: l }, { texture: this.texture, mipLevel: l, origin: [0, 0, SKY_LAYER] }, [w, h, 1]);
+    }
+    this.skyLevels = levels;
+  }
+  /** the sky layer's levels written (0: none yet) */
+  skyLevels = 0;
 
   /** A new sea: its cascades' amplitudes uploaded. */
   setSpectrum(s: SeaCascades) {

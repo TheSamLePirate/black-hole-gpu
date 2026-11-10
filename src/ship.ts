@@ -685,6 +685,10 @@ export class ShipRenderer {
   /** the ship's bounding sphere in the camera frame and the projection's half-extents (the scissor) */
   private onScreen: { c: V3; r: number; tx: number; ty: number; corners: V3[] } | null = null;
   /** the probe's GGX pre-filtered radiance (mip = roughness · (specMips − 1)): the walking astronaut's reflections */
+  /** the probe's GGX levels (roughness = level / 5): the sea's mirrored sky copies them (sea/fft-gpu.ts takeSky) */
+  get envSpecTexture() {
+    return this.envSpec;
+  }
   get envSpecView() {
     return this.envSpec.createView();
   }
@@ -756,7 +760,8 @@ export class ShipRenderer {
       size: (ENV_W * ENV_H + 2) * 16,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     });
-    const envUsage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING;
+    // (COPY_SRC: the sea's mirrored sky takes the GGX levels — sea/fft-gpu.ts takeSky)
+    const envUsage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC;
     this.envRaw = d.createTexture({ size: [ENV_W, ENV_H], format: "rgba16float", mipLevelCount: RAW_MIPS, usage: envUsage });
     this.envSpec = d.createTexture({ size: [ENV_W, ENV_H], format: "rgba16float", mipLevelCount: SPEC_MIPS, usage: envUsage });
     for (let l = 0; l < SPEC_MIPS; l++) {

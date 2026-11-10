@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { PROFILES, profileConstants, tracerSource } from "../scripts/lib/kernel-profiles";
 import { InlineModel } from "../scripts/lib/wgsl-inline";
+import { tracerEntryPoint } from "../src/system/tracer-kernels";
 
 // The tracer's kernels once every call is inlined (what D3D12 compiles: its compile time follows this size, about
 // linearly — docs/progress/kernels/BASELINE.md), per reference scene, under a budget: a change that copies a large
@@ -20,7 +21,7 @@ const src = tracerSource();
 const sizes = PROFILES.flatMap((p) =>
   p.entries.map((entry) => {
     const m = new InlineModel(src, profileConstants(p, entry));
-    return { id: `${p.id} ${entry}`, inlined: m.size(entry === "discs" ? "main" : entry).inlined };
+    return { id: `${p.id} ${entry}`, inlined: m.size(tracerEntryPoint(entry)).inlined };
   }),
 );
 

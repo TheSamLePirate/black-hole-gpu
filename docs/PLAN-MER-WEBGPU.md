@@ -132,3 +132,20 @@ l'écume éclairée par un ciel désaturé et les bulles sous elle — non mesur
 - **Titan** : la sonde au-dessus de la mer limitée à la Terre (`seaHere.world`) ; `titan-ground` reste aux limites de 300 s de
   ses attentes (un cas échoue d'un passage à l'autre, en compilation), à reprendre hors de ce plan.
 
+**S3, la passe d'eau : où vont ses ~35 ms** (ablations sur kerr-mini, 10 novembre au soir, avec des témoins intercalés — la base
+dérive de 1 à 3 ms au fil d'un passage) : à 30 m, base 68,8 ms ; sans `skyMirror` −4,4, sans les ombres du Soleil −8,8 (ce bit ne
+recompile pas : un coût d'exécution), sans le Fresnel moyenné −8,8, sans les hauts-fonds −8,9 (absents de la vue : un coût de
+**présence** — le noyau est limité par ses registres sur Apple, tout bloc retiré passe un seuil d'occupation) ; les ombres une à une
+(nuages, scènerie, relief, horizons, appareil) 0 à 1,4 ms chacune ; le miroir des nuages ~0. D'où :
+- **le noyau de la pleine mer** (`shadeWaterOpen` : `shadeWater` compilé avec `WATER_OPEN`, sans le code des côtes et de l'eau
+  intérieure ; chaque pixel classé tôt — fond connu à 60 m, rivage à portée du lavis, eau intérieure — et laissé à l'autre noyau ;
+  `P.seafft[0].x` = 2 écrit sur les paramètres de l'image quand il tourne ; A/B `seaWaterOpenOn`) : mer à 30 m **67,0 → 64,25 ms**,
+  midi **65,8 → 62,85**, côte à 500 m 64,25 → 65,0 (sa classification seule, 1,5 ms, sans pleine mer à ombrer). Images identiques.
+- **le ciel reflété filtré par la rugosité** (S5, M4 de l'analyse) : les niveaux GGX de la sonde dans la texture de la FFT (couche
+  16, `takeSky` ; aucune liaison de plus), lus au niveau de la rugosité de l'eau au lieu de la sonde brute : le lointain sans
+  pétillement, le reflet flou comme la mer est rugueuse ; non mesuré seul (dans la base des mesures ci-dessus).
+- `skyIrradiance` à 9 harmoniques × 2 altitudes par pixel remplacé, pour le miroir du ciel, par ses 3 termes verticaux au niveau
+  de la mer ; les traînées d'écume des cascades non lues dans la fenêtre de l'écume monde ; non mesurés seuls.
+- Mesuré pour rien : couper les ombres du relief sur la pleine mer (sans terre à 8 km) ; exiger « aucune terre à 8 km » pour le
+  noyau de pleine mer le laissait sans pixel dans toutes les vues de Hyères.
+

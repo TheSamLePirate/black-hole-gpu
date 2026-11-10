@@ -45,7 +45,17 @@ const NEAR_TITAN = 5 << NEAR_KIND_SHIFT;
 const NEAR_VENUS = 6 << NEAR_KIND_SHIFT;
 const NEAR_NONE = 4 << NEAR_KIND_SHIFT;
 const NEAR_MOONS = 7 << NEAR_KIND_SHIFT;
-const RASTER_ENTRIES: TracerEntry[] = ["shade", "shadeMark", "shadeLite", "shadeWater", "shadeStars", "discs", "clouds", "skyFill"];
+const RASTER_ENTRIES: TracerEntry[] = [
+  "shade",
+  "shadeMark",
+  "shadeLite",
+  "shadeWater",
+  "shadeWaterOpen",
+  "shadeStars",
+  "discs",
+  "clouds",
+  "skyFill",
+];
 
 // (the game's universe — game:artemis — has Gargantua and the wormhole in it: their bits, 512, 64 and 32, stay on in every
 // scene of it, the Earth's flight included — measured, kerr-mini, docs/progress/kernels/mac-mini-baseline.json)

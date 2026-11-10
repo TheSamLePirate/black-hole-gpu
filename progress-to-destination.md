@@ -2380,3 +2380,20 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Limites** : le SSR ne reflète que le ciel à l'écran (le reflet du disque tombe sous le Ranger dans les vues du test) ; le
   coût de la mer de Miller face à l'ancien ombrage non mesuré (l'ancien était en NaN) ; `titan-ground` aux limites de 300 s de
   ses attentes (un cas échoue selon le passage) ; non mesuré sur M1 Max.
+
+## 2026-11-10T18:10Z — La mer WebGPU : un noyau pour la pleine mer (−3 ms), le ciel reflété filtré par la rugosité
+
+- **Contribution** (PLAN-MER-WEBGPU S3, S5 ; stratégie §8 performance) : la passe d'eau décomposée par ablations avec témoins — son
+  coût est surtout celui d'un noyau limité par ses registres sur Apple (tout bloc retiré, même jamais exécuté, en ôte 6 à 9 ms) ;
+  d'où **`shadeWaterOpen`**, `shadeWater` compilé sans le code des côtes et de l'eau intérieure pour les pixels de pleine mer, chaque
+  noyau laissant à l'autre ses pixels ; et **le ciel reflété filtré par la rugosité** (M4 de l'analyse) : les niveaux GGX de la sonde
+  copiés dans la texture de la FFT (aucune liaison de plus), lus au niveau de la rugosité de l'eau. Fichiers : `src/shaders/trace.wgsl`,
+  `src/system/tracer-kernels.ts`, `src/renderer.ts`, `src/sea/fft-gpu.ts`, `src/ship.ts`, `scripts/lib/kernel-profiles.ts`,
+  `tests/sea-sky-layer.test.ts`, `tests/kernel-budget.test.ts` (l'entrée WGSL par `tracerEntryPoint`).
+- **Preuve** : **mesuré** sur kerr-mini, A/B `seaWaterOpenOn`, deux passages (PLAN-MER-WEBGPU §4) : mer à 30 m 67,0 → 64,25 ms, midi
+  65,8 → 62,85, côte à 500 m 64,25 → 65,0 ; images identiques (moyennes à 0,1–3 %). Le ciel filtré : **observé**, le lointain sans
+  pétillement au couchant. `check-wgsl` 72/72, `tsc`, tests (90 pass) ; budgets des noyaux réécrits (+1 à +2,5 %, la mer de Miller dans
+  `shadeNear` de chaque noyau, le nouveau noyau ~5,5 k lignes inlinées).
+- **Limites** : la côte paie 1,5 ms la classification du noyau de pleine mer sans rien à y ombrer ; le ciel filtré et les deux
+  allègements (éclairement du ciel, traînées) non mesurés seuls ; la compilation d'un noyau de plus (en arrière-plan, après l'image)
+  non chronométrée ; non mesuré sur M1 Max ni J0.

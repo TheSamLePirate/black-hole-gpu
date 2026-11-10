@@ -26,7 +26,8 @@ export const FEATURE_TERRAIN_RASTER = 1 << 30;
  */
 export const FEATURE_RASTER_PRIMARY = 1 << 29;
 
-/** the pipelines the renderer makes from trace.wgsl ("discs": main compiled with DISC_ONLY) */
+/** the pipelines the renderer makes from trace.wgsl ("discs": main compiled with DISC_ONLY; "shadeWaterOpen": shadeWater compiled
+ *  with WATER_OPEN — the open sea's pixels, the coasts' and the inland water's code out) */
 export type TracerEntry =
   | "main"
   | "env"
@@ -36,6 +37,7 @@ export type TracerEntry =
   | "shadeMark"
   | "shadeLite"
   | "shadeWater"
+  | "shadeWaterOpen"
   | "shadeStars"
   | "discs"
   | "clouds"
@@ -43,7 +45,7 @@ export type TracerEntry =
 
 /** the WGSL entry point a pipeline runs */
 export function tracerEntryPoint(entry: TracerEntry): string {
-  return entry === "discs" ? "main" : entry;
+  return entry === "discs" ? "main" : entry === "shadeWaterOpen" ? "shadeWater" : entry;
 }
 
 /** the realtime kernels that read the raster's distances and the terrain cache */
@@ -53,14 +55,23 @@ const REALTIME_GROUND: ReadonlySet<TracerEntry> = new Set([
   "shadeMark",
   "shadeLite",
   "shadeWater",
+  "shadeWaterOpen",
   "shadeStars",
   "clouds",
   "skyFill",
 ]);
 /** the raster's material kernels: the runways' code always in (their parameters say whether one is near) */
-const RASTER_RUNWAYS: ReadonlySet<TracerEntry> = new Set(["shade", "shadeMark", "shadeLite", "shadeWater"]);
+const RASTER_RUNWAYS: ReadonlySet<TracerEntry> = new Set(["shade", "shadeMark", "shadeLite", "shadeWater", "shadeWaterOpen"]);
 /** the raster's material kernels (the Earth-raster profile: the surface's and the scenery's code always in) */
-const MATERIAL: ReadonlySet<TracerEntry> = new Set(["shade", "shadeMark", "shadeLite", "shadeWater", "shadeStars", "clouds"]);
+const MATERIAL: ReadonlySet<TracerEntry> = new Set([
+  "shade",
+  "shadeMark",
+  "shadeLite",
+  "shadeWater",
+  "shadeWaterOpen",
+  "shadeStars",
+  "clouds",
+]);
 
 export interface TracerConstantsOptions {
   /** the refining (adaptive) pipeline */
@@ -108,6 +119,7 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
   const has = (bit: number) => fixed[bit] ?? ((key & bit) !== 0 ? 1 : 0);
   return {
     DISC_ONLY: entry === "discs" ? 1 : 0,
+    WATER_OPEN: entry === "shadeWaterOpen" ? 1 : 0,
     HAS_RADIO: has(1),
     HAS_POL: has(2),
     HAS_JET: has(4),

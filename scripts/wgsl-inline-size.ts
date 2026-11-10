@@ -5,7 +5,7 @@
 //   bun scripts/wgsl-inline-size.ts earth-raster main     one pipeline: its multipliers and heaviest call edges
 //   bun scripts/wgsl-inline-size.ts earth-raster main --stub earthNear,nearMarch   a "what if" (functions emptied)
 //   bun scripts/wgsl-inline-size.ts --json                machine-readable (tests/kernel-budget.test.ts)
-import type { TracerEntry } from "../src/system/tracer-kernels";
+import { type TracerEntry, tracerEntryPoint } from "../src/system/tracer-kernels";
 import { PROFILES, profileConstants, tracerSource } from "./lib/kernel-profiles";
 import { InlineModel } from "./lib/wgsl-inline";
 
@@ -30,7 +30,7 @@ if (profileId && entryId) {
   if (!p) throw new Error(`no profile ${profileId}: ${PROFILES.map((x) => x.id).join(", ")}`);
   const entry = entryId as TracerEntry;
   const m = new InlineModel(src, profileConstants(p, entry), stubs);
-  const wgslEntry = entry === "discs" ? "main" : entry;
+  const wgslEntry = tracerEntryPoint(entry as TracerEntry);
   const s = m.size(wgslEntry);
   console.log(`${p.label} — ${entry}${stubs.length ? ` (stubbed: ${stubs.join(", ")})` : ""}`);
   console.log(`  ${s.functions} functions, ${k(s.unique)} unique lines, ${k(s.inlined)} inlined`);
@@ -50,7 +50,7 @@ for (const p of PROFILES.filter((x) => !profileId || x.id === profileId)) {
   if (!json) console.log(`\n${p.label}  [key ${p.key}${p.quality ? ", quality" : ""}]`);
   for (const entry of p.entries) {
     const m = new InlineModel(src, profileConstants(p, entry), stubs);
-    const s = m.size(entry === "discs" ? "main" : entry);
+    const s = m.size(tracerEntryPoint(entry as TracerEntry));
     total += s.inlined;
     rows.push({ profile: p.id, entry, unique: s.unique, inlined: s.inlined });
     if (!json) console.log(`  ${entry.padEnd(11)} ${k(s.unique).padStart(6)} unique  ${k(s.inlined).padStart(7)} inlined`);
