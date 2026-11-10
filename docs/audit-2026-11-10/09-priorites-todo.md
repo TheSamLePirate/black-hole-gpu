@@ -20,6 +20,10 @@ semaines), XL (plus). Aucun gain n'est promis : chaque lot porte la mesure qui l
 
 Les 26 décisions en attente sont au §4 du [rapport 07](07-plans-reste-a-faire.md). Celles-ci bloquent le plus :
 
+**Prises par Sam le 10 novembre** ([stratégie §22.4](../ANALYSE-STRATEGIE-RENDU-2026-11-03.md)) : D1 la vague 0 d'abord,
+puis J0 ; D2 la scène de référence à Toulon-Hyères (la côte) ; D3 le palier à 25 ms sur M1 Max ; le gel des nouveaux
+lecteurs de `shadeLite` et `trace.wgsl` jusqu'à J0, sauf correctif. La ligne 0.2 (ST1) est faite (`5be997b9`).
+
 | # | Décision | Ma recommandation |
 |---|---|---|
 | D1 | Le prochain jalon | J0 d'abord (contrat d'acceptation, 2–3 jours), puis J1. C'est la recommandation du 5 novembre ; l'audit la confirme. |

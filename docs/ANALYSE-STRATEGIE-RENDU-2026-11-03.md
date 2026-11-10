@@ -1431,3 +1431,13 @@ puis **B (J1)**. Jusqu'à J0, geler les nouveaux lecteurs de `shadeLite` et de `
 de référence (D2, recommandée : décollage puis virage sur une ville IGN, Paris ou Le Bourget, cockpit, heure et météo
 fixées) ; le palier de cadence (D3 : 40 ms sur kerr-mini « palier 1 », puis M1 Max mesuré) ; le gel ; où héberger les
 binaires (D13).
+
+### 22.4 Décisions de Sam (10 novembre 2026)
+
+| # | Décision | Conséquence |
+|---|---|---|
+| D1 | **La vague 0 d'abord** ([priorités](audit-2026-11-10/09-priorites-todo.md) §3) : ne rien perdre, pouvoir livrer | Hook avant push (`biome ci`, `tsc`, `check-wgsl`), hébergement des binaires (D13, 591,6 Mo sur 600), fichiers jetables rangés, crédit de l'A320, previews hors de l'origine de production ; ST1 (0.2) fait le même jour. J0 ensuite |
+| D2 | **Scène de vol de référence : Toulon-Hyères, la côte** | Finale et virage sur la côte (mer, relief, IGN, décor) ; cockpit, heure et météo à fixer dans la fiche de J0 |
+| D3 | **Palier de cadence : 25 ms sur M1 Max** (40 images/s sur le profil principal) | Le palier de J0 ; la cible finale reste 60 images/s (§8). Le palier de la décision 26 (40 ms sur kerr-mini) n'est plus le palier nommé ; kerr-mini reste mesuré comme second témoin |
+| Gel | **Oui** : aucun nouveau lecteur de `shadeLite` ni de `trace.wgsl` jusqu'à J0, sauf correctif | AM5 et les compléments d'aurores, la nuit urbaine (NU3, NU6, NU7), la richesse T/Q/H/R attendent J0 |
+

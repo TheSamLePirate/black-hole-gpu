@@ -2160,3 +2160,14 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   `terrain-mesh-worker.js`, cartes des corps) ; l'imagerie GIBS grossière hors du disque est redemandée en boucle hors ligne
   (≈ 320 échecs par minute) ; `zones`, `zones-scenery`, `pwa`, `overture` à convertir à `app.offline`. Le prochain jalon attend
   les décisions D1–D3 de Sam (analyse stratégique §22.3).
+
+## 2026-11-10T09:20Z — Décisions de Sam sur le jalon
+
+- **Contribution** (§20.5 étape 1, §15 J0) : les décisions qui bloquaient J0 depuis le 5 novembre sont prises et écrites
+  ([stratégie §22.4](docs/ANALYSE-STRATEGIE-RENDU-2026-11-03.md), [priorités de l'audit §2](docs/audit-2026-11-10/09-priorites-todo.md)) :
+  la vague 0 de l'audit d'abord, puis J0 ; la scène de vol de référence à Toulon-Hyères (la côte) ; le palier de cadence à
+  25 ms sur M1 Max (la cible finale reste 60 images/s) ; le gel des nouveaux lecteurs de `shadeLite` et `trace.wgsl`
+  jusqu'à J0, sauf correctif.
+- **Preuve** : documenté. Aucune mesure.
+- **Suite** : la vague 0 (hook avant push, hébergement des binaires D13, fichiers jetables, crédit de l'A320, previews) ;
+  puis J0 sur la scène de Toulon-Hyères, mesurée sur M1 Max et kerr-mini.
