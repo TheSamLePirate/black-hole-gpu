@@ -2482,3 +2482,15 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   à peine visible à 1,7 km, aucun débordement ; e2e `sea-fft`, `coast-loading` 6/6 ; `check-wgsl`, `tsc`.
 - **Limites** : le cas d'une plage proche à basse hauteur non vu (la vue visée la manquait) ; l'effet se juge mieux plus près des
   falaises et par houle forte.
+
+## 2026-11-10T19:30Z — J1-0 : les paramètres du traceur écrits par noms, générés depuis le WGSL
+
+- **Contribution** (stratégie §18 « contrats et layouts CPU/WGSL », PLAN-J1 J1-0) : **webgpu-utils** adopté (2.1.1, MIT, dépendance de
+  développement seulement : le premier choix de CLAUDE.md, évalué §4 bis) ; `scripts/gen-layouts.ts` lit la structure `Params` de
+  `trace.wgsl` et écrit `src/gen/params-layout.ts` (offsets, étendues, indices de vec4) ; `writeParams` écrit par noms — ~94 positions
+  numériques et les sommes de vec4 tenues à la main retirées ; les tailles de blocs du renderer dérivées du WGSL (une seule autorité) ;
+  test (à jour, blocs des autres modules à la taille du WGSL) et contrôle dans le portillon avant push. Aucun poids dans le bundle.
+- **Preuve** : tests (81 pass), `tsc`, biome ; e2e `sea-fft` 5/5, `miller-sea` 3/3, J0 inchangé (kerr-mini 61,2 ms) — les mêmes
+  paramètres qu'avant, par construction et à l'image.
+- **Limites** : les autres structures (terrain raster, mer, sonde, nuages…) gardent leurs offsets à la main ; le domaine pilote de J1
+  pris par défaut (la portée du patch), révisable par Sam.

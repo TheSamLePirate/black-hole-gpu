@@ -105,6 +105,8 @@ async function checkRevision(sha: string, base: string | undefined): Promise<boo
         ...(await Promise.all([
           run({ name: "tsc", cmd: [BIN("tsc"), "--noEmit"] }, wt),
           run({ name: "check-wgsl", cmd: ["bun", "scripts/check-wgsl.ts"] }, wt),
+          // (the parameters' layout generated from the WGSL — PLAN-J1 J1-0 —: up to date with the struct)
+          run({ name: "gen-layouts", cmd: ["bun", "scripts/gen-layouts.ts", "--check"] }, wt),
           ...(existsSync(join(wt, "scripts/check-repo-size.ts"))
             ? [run({ name: "check-repo-size", cmd: ["bun", "scripts/check-repo-size.ts", ...sizeArgs] }, wt)]
             : []),
