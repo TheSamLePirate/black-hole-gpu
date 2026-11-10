@@ -2252,3 +2252,12 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   passage 2 du mini). Aucun gain de performance n'est revendiqué : rien du rendu n'a changé.
 - **Suite** : validation de Sam ; une ablation de la passe `earth water (raster)` (12,7 ms, que `liteSkip` 1 ne coupe pas) ;
   CM0 sur cette scène (le chargement qui ne suit pas) ; puis J1 jugé ici.
+
+## 2026-11-10T11:45Z — Correctif : le déploiement Pages sauté depuis le retrait des previews
+
+- **Constat (mesuré, `gh run view`)** : les runs 42791342827 et 42792793766 (vague 0, retrait des previews) sont verts mais
+  leurs jobs `deploy` et `server` ont été **sautés** : avec `preview` et `ineptie` désormais inertes, le `success()`
+  implicite de GitHub lit toute la chaîne. La page de fermeture n'était donc pas publiée (`/test/sw.js` servait encore
+  l'ancien worker), samlepirate.org n'a rien reçu.
+- **Correctif** : `deploy` et `server` testent `needs.site.result == 'success'` sous `!cancelled()` (`pages.yml`) ;
+  [DEPLOY.md](docs/DEPLOY.md). **À vérifier** sur le run de ce commit : `deploy` exécuté, `/test/sw.js` = le coupe-circuit.

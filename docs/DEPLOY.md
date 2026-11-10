@@ -29,6 +29,8 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
   does the same and removes the keys a player typed into the preview (`<dir>/kerr.*.key`). Checked in headless
   Chrome on 2026-11-10 (an old worker replaced: unregistered, its cache gone, main's caches and keys kept). Limit: a
   browser still running the old worker serves the preview's cached page once more before the update lands.
+  With the previews' jobs skipped, `deploy` and `server` test `needs.site.result` under `!cancelled()`: GitHub's implicit
+  `success()` reads the whole chain, and the two runs of 10 November that retired them deployed nothing (fixed the same day).
   **A preview comes back only on another origin** (a subdomain of samlepirate.org, another account), never by
   naming its branch in `pages.yml` again. The machinery below (side-by-side verification, binaries left to main's
   copy) stays for that day.

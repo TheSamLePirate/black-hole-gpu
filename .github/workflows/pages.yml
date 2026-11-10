@@ -473,7 +473,9 @@ jobs:
   # job is rejected before its first step: Settings → Environments → github-pages → deployment
   # branches — main and the preview branch; a retired branch's entry is inert)
   deploy:
-    if: github.event_name != 'pull_request'
+    # (!cancelled() and site's own result: a skipped ancestor — the retired previews' jobs, inert since 10 Nov — would
+    # otherwise skip this job too, the implicit success() reading the whole chain: two runs deployed nothing that day)
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && needs.site.result == 'success' }}
     needs: site
     runs-on: ubuntu-latest
     permissions:
@@ -512,7 +514,8 @@ jobs:
   # push — main unchanged — redeploys nothing (the branch named here as in `on.push`: env is not read in
   # a job's `if`)
   server:
-    if: github.event_name != 'pull_request' && github.ref != 'refs/heads/test-kimi' && github.ref != 'refs/heads/Ineptie-Version'
+    # (as deploy: site's own result, not the implicit success() of a chain with skipped previews)
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && needs.site.result == 'success' && github.ref != 'refs/heads/test-kimi' && github.ref != 'refs/heads/Ineptie-Version' }}
     needs: site
     runs-on: ubuntu-latest
     # (the deploy branch is also written by rooms.yml: one writer at a time)
