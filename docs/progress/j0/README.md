@@ -8,7 +8,8 @@ lancement. Fiches : [M1 Max](FICHE-m1max-2026-11-10.md), [kerr-mini](FICHE-kerr-
 ablations corrigé depuis, gardé dans `j0-m1max-2026-11-10-passage1.json`).
 
 **État de preuve : mesuré** — deux passages par machine, l'e2e réussi à chaque fois (3/3), aucune erreur GPU. Les seuils
-du palier sont une proposition non validée ; ce document ne déclare aucun palier atteint.
+du palier et son jugement sur l'état soutenu ont été validés par Sam le soir du 10 novembre (J0 atteint) ; le palier 1
+n'est pas atteint.
 
 ## Le palier (25 ms sur M1 Max) : pas atteint
 
@@ -19,7 +20,7 @@ du palier sont une proposition non validée ; ce document ne déclare aucun pali
 | M1 Max, passage 1, bridé | — | ≈ 82–85 (ablations) | — | — | ≈ 80 | ≈ 16 | 389 |
 | kerr-mini, frais | 15,2 | 60,1 | 80,8 | 100,1 | 65,4 | 9,4 | 1 278 |
 | kerr-mini, soutenu | 15,5 | 60,0 | 80,7 | 99,8 | 64,2 | 9,5 | 1 278 |
-| *palier 1 (proposition)* | *40* | *≤ 25* | *≤ 25* | *≤ 37,5* | — | *≤ 4* | — |
+| *palier 1 (validé)* | *40* | *≤ 25* | *≤ 25* | *≤ 37,5* | — | *≤ 4* | — |
 
 - **Frais, le M1 Max est au palier en médiane** (25,1 ms) mais pas en régularité (p95 34, p99 50) ni en CPU (p95 6,4).
 - **Soutenu, il en est loin** : ce MacBook Pro (secteur, mode économie coupé) passe de 100 % à 30–60 % de sa fréquence
@@ -84,6 +85,6 @@ mouvement (aucune comparaison d'image ici). Le passage 2 du M1 Max a gardé le H
 
 ## Suite proposée
 
-- Sam : valider les seuils du palier et **l'état thermique qui le juge** (frais ou soutenu) — contrat §2 et §11.
+- ~~Sam : valider les seuils et l'état thermique~~ — fait le 10 novembre au soir (soutenu).
 - Une ablation de la passe `earth water (raster)` et une de `earth lite` à taux réduit, pour borner le gain de J1.
 - Le chargement qui ne suit pas le vol : CM0 (le chemin réel des tuiles) avec cette scène.

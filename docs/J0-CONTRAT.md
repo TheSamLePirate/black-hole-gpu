@@ -2,8 +2,8 @@
 
 **Statut (10 novembre 2026)** : contrat **écrit** ; scène de référence **implémentée** (`tests/e2e/lib/j0-scene.ts`,
 `tests/e2e/j0-reference.e2e.test.ts`) ; fiches de mesure dans [progress/j0/](progress/j0/) (une par machine et par
-commit) — **premières mesures le 10 novembre** sur M1 Max et kerr-mini ([synthèse](progress/j0/README.md)). Les seuils
-marqués « proposition » attendent la validation de Sam ; **J0 n'est pas atteint** tant qu'il ne les a pas validés (§10). Le code fait foi ; ce document dit ce qu'on
+commit) — **premières mesures le 10 novembre** sur M1 Max et kerr-mini ([synthèse](progress/j0/README.md)). **Sam a validé
+le 10 novembre les seuils du §2 et le jugement sur l'état soutenu : J0 est atteint** (§10) ; le palier 1, lui, ne l'est pas. Le code fait foi ; ce document dit ce qu'on
 mesure, comment, et ce qui ferait passer le palier.
 
 Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J0, §8 (contrat de performance), §19.13–19.14
@@ -34,10 +34,10 @@ rapide. Il dit où part la frame (§5) et donne le témoin de J1 (l'opaque terre
 fréquence descend à 76–87 % du maximum pendant le vol mesuré, puis tombe à **30 % (389 MHz) au bout de 2,5 min** et y
 reste (pression « Trapping »). Le vol est donc mesuré **frais** (au sortir du chargement) et **soutenu** (le même vol
 rejoué après les ablations, la machine chaude), chacun avec sa fréquence GPU relevée. §8.3 demande de tenir le profil
-« dans un état thermique stabilisé » : **le palier se juge sur l'état soutenu** — *proposition, à valider par Sam*.
+« dans un état thermique stabilisé » : **le palier se juge sur l'état soutenu** — *décision de Sam, 10 novembre*.
 
 **Le palier 1 est atteint** quand, sur le vol de référence (§3), mesuré deux fois sur le M1 Max dans l'état soutenu,
-**les seuils suivants tiennent tous** — *proposition, à valider par Sam* (transposés de §8.3, qui les fixe pour
+**les seuils suivants tiennent tous** — *validés par Sam le 10 novembre* (transposés de §8.3, qui les fixe pour
 le profil 60 : p95 au budget, p99 à 1,5 fois) :
 
 - intervalle entre images nouvelles : **p50 ≤ 25 ms**, **p95 ≤ 25 ms**, **p99 ≤ 37,5 ms** ;
@@ -180,12 +180,14 @@ ce contrat est validé par Sam (seuils du §2, scène du §3) et que la fiche du
 même commit. Il débloque J1, jugé sur cette scène : l'opaque terrestre en forward remplace `shadeLite` dans son domaine
 (terrain et bâtiments), il ne s'y ajoute pas.
 
-## 11. Décisions ouvertes
+## 11. Décisions
 
-- Les seuils du palier 1 (§2) : proposition à valider.
+**Prises (Sam, 10 novembre)** : les seuils du palier 1 (§2) ; le palier se juge sur l'état thermique **soutenu** (sur ce
+M1 Max, l'écart avec l'état frais est d'un facteur ≈ 1,7 à 3 selon l'instant).
+
+**Ouvertes** :
+
 - D4–D5 : la relecture de [C0](progress/refraction-horizons/C0.md) et le budget de Q1, avec ce contrat et la première
   fiche sous les yeux.
-- **L'état thermique du palier** (§2) : frais ou soutenu. Sur ce M1 Max l'écart est d'un facteur ≈ 2,5 (fiche du
-  10 novembre) ; un palier jugé « frais » serait tenu deux minutes.
 - L'heure et la météo de la scène (§3) : choisies ici (soleil bas, nuages épars) ; Sam peut en fixer d'autres — ce
   serait `toulon-hyeres-v2`.

@@ -105,7 +105,7 @@ function flight(f: Flight, title: string) {
   p();
   p(`Thermique : au départ ${th(f.thermal?.start)} ; au milieu ${th(f.thermal?.mid)} ; à la fin ${th(f.thermal?.end)}.`);
   p();
-  p("| mesure | valeur | palier 1 (proposition) |");
+  p("| mesure | valeur | palier 1 (validé) |");
   p("|---|---:|---|");
   p(`| images nouvelles | ${a.images} (${a.imagesPerS}/s) | 40/s |`);
   p(`| intervalle p50 [ms] | ${ok(a.p50, PALIER.p50)} | ≤ ${PALIER.p50} |`);

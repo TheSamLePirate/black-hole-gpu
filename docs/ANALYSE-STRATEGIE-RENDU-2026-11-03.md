@@ -1449,3 +1449,8 @@ qui juge le palier attendent Sam. Mesuré : sur la scène de Toulon-Hyères, le 
 l'eau (`shadeLite`, `earth water`) font ≈ 53 ms de 65 : le domaine de J1 est bien le poste dominant ; le dessin de l'appareil, que les
 horodatages chargeaient de 37–49 ms, n'en coûte que 0,25.
 
+**Décision de Sam (10 novembre, soir)** : les seuils du palier 1 (p50 et p95 ≤ 25 ms, p99 ≤ 37,5 ms, CPU p95 ≤ 4 ms) et le
+jugement sur l'état thermique soutenu sont validés : **J0 est atteint** ([contrat](J0-CONTRAT.md) §10–11). Le palier 1,
+lui, ne l'est pas (soutenu : 41,5 ms au p50). Le gel des nouveaux lecteurs de `shadeLite` et `trace.wgsl` tombe avec J0 ;
+J1 se juge sur cette scène.
+

@@ -17,7 +17,7 @@ Réglages effectifs (profil du joueur) : `{"quality":"game","dynamicResolution":
 
 Thermique : au départ Nominal, GPU 1278 MHz (100 % du max), ? °C ; au milieu Nominal, GPU 1278 MHz (100 % du max), ? °C ; à la fin Nominal, GPU 1278 MHz (100 % du max), ? °C.
 
-| mesure | valeur | palier 1 (proposition) |
+| mesure | valeur | palier 1 (validé) |
 |---|---:|---|
 | images nouvelles | 1068 (15.2/s) | 40/s |
 | intervalle p50 [ms] | **60.1** ✗ | ≤ 25 |
@@ -59,7 +59,7 @@ Mémoire : avant Chrome 3189 Mo résidents, processus GPU 2606 Mo d'empreinte ; 
 
 Thermique : au départ Nominal, GPU 1278 MHz (100 % du max), ? °C ; au milieu Nominal, GPU 1278 MHz (100 % du max), ? °C ; à la fin Nominal, GPU 1278 MHz (100 % du max), ? °C.
 
-| mesure | valeur | palier 1 (proposition) |
+| mesure | valeur | palier 1 (validé) |
 |---|---:|---|
 | images nouvelles | 1088 (15.5/s) | 40/s |
 | intervalle p50 [ms] | **60** ✗ | ≤ 25 |

@@ -56,7 +56,7 @@ lecteurs de `shadeLite` et `trace.wgsl` jusqu'à J0, sauf correctif. La ligne 0.
 
 | # | Travail | Constats | Taille | État |
 |---|---|---|---|---|
-| 1.1 | **J0** : le contrat d'acceptation, la scène de référence, sa fiche (images terminées, médiane, 95ᵉ et 99ᵉ centiles, mémoire, thermique, qualité) sur M1 Max et kerr-mini | GP-09, PL (D1–D6) | M | écrit et mesuré le 10 nov. : [contrat](../J0-CONTRAT.md), [mesures](../progress/j0/README.md) ; seuils et état thermique du palier à valider par Sam |
+| 1.1 | **J0** : le contrat d'acceptation, la scène de référence, sa fiche (images terminées, médiane, 95ᵉ et 99ᵉ centiles, mémoire, thermique, qualité) sur M1 Max et kerr-mini | GP-09, PL (D1–D6) | M | écrit et mesuré le 10 nov. : [contrat](../J0-CONTRAT.md), [mesures](../progress/j0/README.md) ; seuils et état soutenu validés par Sam le soir même : **J0 atteint** (palier 1 non atteint) |
 | 1.2 | La frame répartie par poste, par ablation sur images terminées (sol, nuages, cockpit, affichage) | GP-09, GP-06 | M | fait sur kerr-mini (fréquence stable) : sol et eau ≈ 53 ms sur 65, nuages 5,8, décor 3,8, appareil < 1 ; le M1 Max bride (ablations non comparables) |
 | 1.3 | Un budget de performance automatisé : la scène de référence rejouée avec un seuil, à la main d'abord, en file ensuite | QA-12 | M | — |
 | 1.4 | CM0 : le chemin réel des tuiles mesuré (service worker, liaison bridée) | ST-21, ST-02 | S | — |

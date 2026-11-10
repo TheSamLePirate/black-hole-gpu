@@ -2265,3 +2265,13 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   [DEPLOY.md](docs/DEPLOY.md). **Vérifié** : run de `ed609b00` (le run de `188ae13b`, en attente, a été remplacé par lui) —
   `deploy` et `server` réussis ; `thesamlepirate.github.io/black-hole-gpu/test/sw.js` et `/ineptie/sw.js` servent le
   coupe-circuit, `/test/` la page « Cette preview n'est plus publiée ici ».
+
+## 2026-11-10T13:02Z — J0 atteint : Sam valide les seuils et l'état soutenu
+
+- **Contribution** (§15 J0, §22.4) : Sam valide les seuils du palier 1 (p50 et p95 ≤ 25 ms, p99 ≤ 37,5 ms, CPU p95 ≤ 4 ms)
+  et le jugement sur l'état thermique **soutenu**. Avec les fiches des deux machines au même commit, **J0 est atteint**
+  ([contrat](docs/J0-CONTRAT.md) §10–11) ; le gel des nouveaux lecteurs de `shadeLite` et `trace.wgsl` tombe. Le palier 1
+  n'est pas atteint (M1 Max soutenu 41,5 ms au p50).
+- **Preuve** : documenté (décision) ; les mesures sont celles de l'entrée précédente.
+- **Suite** : l'analyse demandée par Sam de BakedVoxelLighting et web-ocean (mer, littoral, végétation), puis J1 jugé sur
+  la scène de référence.
