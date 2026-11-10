@@ -2516,3 +2516,21 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Fait** : `sceneryRaster.motionOn` **éteint par défaut** — l'image du jeu redevient celle d'avant J1-2 ; le mécanisme reste (cible,
   liaisons, lecture), à reprendre. Pistes : l'horloge d'avant (`pcam.w`) et la fréquence de mise à jour de l'uniforme du décor ; les
   sauts de boucle à marquer « sans historique » (z 2) ; la pondération de l'historique pour un pixel en mouvement.
+
+## 2026-11-10T20:31Z — J1-2 : les traînées des voitures corrigées, le mouvement des objets mobiles allumé
+
+- **Contribution** (stratégie §7.4 « mouvement : vecteur pour objets/déformations », PLAN-J1 J1-2) : la cause des traînées trouvée
+  par ablation sur kerr-mini (sans `temporal`/`taau`, aucune traînée ; à toutes les cadences d'ombrage du raster, des traînées) :
+  avec la caméra immobile, l'historique du sol est « porté » au même pixel, **non borné** (α 0,1) — l'image d'une voiture qui vient de
+  partir y restait une dizaine d'images. Désormais le mouvement de l'image d'avant est copié en fin d'image (`renderer.keepMotion`,
+  texture `motion, the frame before`, liaison 50 de `temporal` et `taau`) : un pixel qu'un mobile couvrait et ne couvre plus repart
+  **sans historique** (désoccultation) ; une voiture que sa boucle ramène (saut > ¼ d'image) écrit z 2 : sans historique non plus.
+  `sceneryRaster.motionOn` **allumé par défaut**. Un premier essai copiait sur la soumission du rendu hors ligne (jamais en temps réel) :
+  relu (0 pixel dans la copie), déplacé sur la soumission de l'image temps réel. Fichiers : `src/shaders/post.wgsl`,
+  `src/renderer.ts`, `src/system/scenery-raster.ts`.
+- **Preuve** : **observé** sur kerr-mini (autoroute de Toulon, champ 12°, caméra immobile, horloge courante) : voitures nettes sans
+  traînée, image proche de celle sans historique ; la copie relue (≈ 3 200 pixels de l'image d'avant). e2e `sea-fft` 5/5, J0 2/2
+  (vol GPU p50 62,6 ms, 16 images/s — 60,7–62,8 aux passages précédents : dans l'écart observé ; la copie, ~9 Mo par image, non
+  mesurée seule). `check-wgsl` 73/73, `tsc`.
+- **Limites** : vu caméra immobile seulement — caméra en mouvement et éoliennes non revues en image ; le flou de mouvement ne lit pas
+  encore la cible ; la profondeur gardée et l'identité stable (reste de J1-2) à faire ; banc `raster-motion` non lancé.

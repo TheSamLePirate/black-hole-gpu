@@ -669,7 +669,9 @@ fn meshLeaf(tri: u32) -> f32 {
     if (vp.z > 0.1) {
       let n0 = vec2f(v.x / (u.right.w * v.z), v.y / (u.up.w * v.z));
       let n1 = vec2f(vp.x / (sc.pr.w * vp.z), vp.y / (sc.pu.w * vp.z));
-      o.mot = vec3f((n0 - n1) * 0.5 * vec2f(u.image.x, -u.image.y), 1.0);
+      let m = (n0 - n1) * 0.5 * vec2f(u.image.x, -u.image.y);
+      // (a car its loop's wrap took back — a jump over a quarter of the image —: no history at all, z 2)
+      o.mot = select(vec3f(m, 1.0), vec3f(0.0, 0.0, 2.0), length(m) > 0.25 * max(u.image.x, u.image.y));
     }
   }
   return o;
@@ -1113,9 +1115,10 @@ export class SceneryRaster {
     return true;
   }
 
-  /** the moving meshes' motion written (PLAN-J1 J1-2; an A/B lever). Off by default: on Toulon's motorway, still camera, the cars
-   *  left longer trails with it than without (10 Nov) — the vector, or its use by the history, still wrong; on only to work on it */
-  motionOn = false;
+  /** the moving meshes' motion written (PLAN-J1 J1-2; an A/B lever — off: the history reprojects them by the camera and the
+   *  depth, their trails as before). On since 10 Nov: with the frame before's motion (renderer keepMotion) the history drops
+   *  where a car was and no longer is — the trails gone on Toulon's motorway, still camera, kerr-mini */
+  motionOn = true;
   /** the least projected radius of a tree drawn [px] (renderer.treeMinPx) — 2.5, not 1.2: the far crowns under 5 px across
    *  the orthophoto's green already, ~1.5–2.5 ms of an M1's frame over a city (TERRE-UNREAL U6) */
   minPx = 2.5;

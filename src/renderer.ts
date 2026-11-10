@@ -694,9 +694,11 @@ interface Target {
     albOk: boolean;
     buf: GPUBuffer;
     binds: GPUBindGroup[];
-    /** the motion texture its binds read (PLAN-J1 J1-2: the raster's, or the 1 × 1 stand-in), and how they are made again */
+    /** the motion texture its binds read (PLAN-J1 J1-2: the raster's, or the 1 × 1 stand-in) and the frame before's, and how
+     *  they are made again */
     motion: GPUTexture;
-    mkBinds: (motion: GPUTexture) => GPUBindGroup[];
+    motionPrev: GPUTexture;
+    mkBinds: (motion: GPUTexture, prev: GPUTexture) => GPUBindGroup[];
     idx: number;
     valid: boolean;
     pre: number;
@@ -5316,9 +5318,35 @@ export class Renderer {
   /** the temporal pass's bind groups made again when the motion texture changed (a resize, the raster off or on) */
   private refreshTemporalMotion(ta: NonNullable<Target["temporal"]>) {
     const m = this.motionTexNow();
-    if (m === ta.motion) return;
+    const p = this.motionPrevNow();
+    if (m === ta.motion && p === ta.motionPrev) return;
     ta.motion = m;
-    ta.binds = ta.mkBinds(m);
+    ta.motionPrev = p;
+    ta.binds = ta.mkBinds(m, p);
+  }
+  /** the frame before's motion (PLAN-J1 J1-2: its disocclusions — where a moving mesh was and no longer is, no history): a copy
+   *  of the raster's at the frame's end, its size, while the motion is written; else the stand-in */
+  private motionPrevNow(): GPUTexture {
+    const m = this.terrainRaster?.motionTexture();
+    if (!m || !this.sceneryRaster?.motionOn) return this.motionTexNow();
+    if (!this.motionPrevTex || this.motionPrevTex.width !== m.width || this.motionPrevTex.height !== m.height) {
+      this.motionPrevTex?.destroy();
+      this.motionPrevTex = this.device.createTexture({
+        label: "motion, the frame before",
+        size: [m.width, m.height],
+        format: "rgba16float",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC, // (read back by the probes)
+      });
+    }
+    return this.motionPrevTex;
+  }
+  private motionPrevTex: GPUTexture | null = null;
+  /** the frame's motion kept for the next one's disocclusions — copied after the temporal passes read the frame before's */
+  private keepMotion(enc: GPUCommandEncoder) {
+    const m = this.terrainRaster?.motionTexture();
+    const p = this.motionPrevTex;
+    if (!m || !p || !this.sceneryRaster?.motionOn || p.width !== m.width || p.height !== m.height) return;
+    enc.copyTextureToTexture({ texture: m }, { texture: p }, [m.width, m.height]);
   }
   /** the frame's frozen description (src/frame-desc.ts; PLAN-J1 J1-1): built at renderer.frame()'s start — its id, its real clock
    *  read once, the flight's and the scene's clocks, the camera now and before */
@@ -7226,7 +7254,7 @@ export class Renderer {
       const buf = d.createBuffer({ size: 208, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       const hdr0 = t.hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 });
       // (bind k: reads history k, writes history 1 − k)
-      const mkBinds = (motion: GPUTexture) =>
+      const mkBinds = (motion: GPUTexture, prev: GPUTexture) =>
         [0, 1].map((k) =>
           d.createBindGroup({
             layout: this.postTemporal.getBindGroupLayout(0),
@@ -7244,11 +7272,13 @@ export class Renderer {
               { binding: 28, resource: alb[k]!.createView() },
               { binding: 29, resource: alb[1 - k]!.createView() },
               { binding: 49, resource: motion.createView() },
+              { binding: 50, resource: prev.createView() },
             ],
           }),
         );
       const motion = this.motionTexNow();
-      const binds = mkBinds(motion);
+      const motionPrev = this.motionPrevNow();
+      const binds = mkBinds(motion, motionPrev);
       const starBinds = hist.map((h) =>
         d.createBindGroup({
           layout: this.postStars.getBindGroupLayout(0),
@@ -7266,6 +7296,7 @@ export class Renderer {
         buf,
         binds,
         motion,
+        motionPrev,
         mkBinds,
         idx: 0,
         valid: false,
@@ -7592,7 +7623,9 @@ export class Renderer {
     const u = t.taau;
     const ta = t.temporal!;
     const motion = this.motionTexNow();
-    const key = `${u.idx}:${ta.idx}:${this.motionGen(motion)}`;
+    const motionPrev = this.motionPrevNow();
+    const gen = `${this.motionGen(motion)}.${this.motionGen(motionPrev)}`;
+    const key = `${u.idx}:${ta.idx}:${gen}`;
     let bind = u.binds.get(key);
     if (!bind) {
       bind = d.createBindGroup({
@@ -7610,10 +7643,11 @@ export class Renderer {
           { binding: 26, resource: u.out.createView() },
           { binding: 27, resource: { buffer: u.buf } },
           { binding: 49, resource: motion.createView() },
+          { binding: 50, resource: motionPrev.createView() },
         ],
       });
       // (a new motion texture: the bind groups made for the old ones dropped)
-      for (const k of u.binds.keys()) if (!k.endsWith(`:${this.motionGen(motion)}`)) u.binds.delete(k);
+      for (const k of u.binds.keys()) if (!k.endsWith(`:${gen}`)) u.binds.delete(k);
       u.binds.set(key, bind);
     }
     const scale = t.width / W;
@@ -11235,6 +11269,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the raster's shading rate this frame, when the governor chooses it — earthRasterShading "auto")
     const rate = this.rasterPrimaryOn && s.earthRasterShading === "auto" ? this.rasterRate : 0;
     const generation = this.timingGeneration;
+    this.keepMotion(enc);
     this.submit(
       enc,
       (ms) => {

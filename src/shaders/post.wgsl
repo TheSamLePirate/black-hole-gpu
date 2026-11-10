@@ -626,6 +626,14 @@ fn historyAt(uv: vec2f, size: vec2f) -> vec3f {
 // (PLAN-J1 J1-2: the raster's moving meshes' motion since the frame before [px of the internal image] — xy, z 1 where given —; a
 // 1 × 1 stand-in when no raster: none)
 @group(0) @binding(49) var motionTex: texture_2d<f32>;
+// (the frame before's motion — copied after its passes —: a pixel a moving mesh covered then and does not now is disoccluded —
+// the history there holds the car that left: none taken, the trail a car drew in the history before J1-2's own)
+@group(0) @binding(50) var motionPrevTex: texture_2d<f32>;
+fn meshMotionPrev(ip: vec2i) -> vec4f {
+  let md = textureDimensions(motionPrevTex);
+  if (md.x < 2u || ip.x < 0 || ip.y < 0 || u32(ip.x) >= md.x || u32(ip.y) >= md.y) { return vec4f(0.0); }
+  return textureLoad(motionPrevTex, ip, 0);
+}
 // a moving mesh's motion at an internal pixel (z 1), or none
 fn meshMotion(ip: vec2i) -> vec4f {
   let md = textureDimensions(motionTex);
@@ -814,7 +822,10 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     let up = vec2u(clamp(uv * vec2f(size), vec2f(0.0), vec2f(size) - 1.0));
     let mx = moments[up.y * W + up.x].x;
     let underCabin = mx < -0.5 && mx > -1.5;
-    if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0)) && !underCabin) {
+    // (where a moving mesh was the frame before and is not now: disoccluded, no history)
+    // (and a car its loop took back — z 2 —: none either)
+    let left = (!moved && all(textureDimensions(motionPrevTex) == size) && meshMotionPrev(vec2i(up)).z > 0.5) || mv.z > 1.5;
+    if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0)) && !underCabin && !left) {
       hist = historyAt(uv, vec2f(size)) * TA.k.x;
       // (the ground's detail: the history's colour is its pixels' albedo resampled — blurred as it is —, swapped for the
       // pixel's accumulated one: its jittered reads blended over a few frames (ALB_ALPHA), sharp and antialiased — the texture
@@ -1248,7 +1259,10 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
   var outc: vec3f;
   var nOut: f32;
   let nMax = 1.0 / max(TA.k.z, 1e-3) - 1.0;
-  if (TU.s.w > 0.5 && !underCabin && all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
+  // (where a moving mesh was the frame before and is not now: disoccluded, no history)
+  let pmd = vec2f(textureDimensions(motionPrevTex));
+  let left = (mv.z < 0.5 && meshMotionPrev(vec2i(uv * pmd)).z > 0.5) || mv.z > 1.5;
+  if (TU.s.w > 0.5 && !underCabin && !left && all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
     let hist = historyAt(uv, vec2f(size)) * TA.k.x;
     var nPrev = clamp(textureSampleLevel(addTex, samp, uv, 0.0).a, 0.0, nMax);
     // (clipped towards the native result's mean about it, within g of its standard deviations — Salvi, as the native pass
