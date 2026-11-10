@@ -1,22 +1,24 @@
 // The sea's waves by FFT (docs/PLAN-AVIATION-AAA.md, M1; Tessendorf; sea/fft-gpu.ts drives it): each frame, for
-// three cascades of 256 × 256 modes (periods 1024, 128, 16 m), the modes' amplitudes now from their initial ones
+// the cascades of 256 × 256 modes in use (sea/spectrum.ts CASCADES — four, not commensurable; the finest left out when the
+// nearest sea's pixels cover them whole: PLAN-MER-WEBGPU S1), the modes' amplitudes now from their initial ones
 // (h̃(k,t) = h̃₀(k) e^{iωt} + conj(h̃₀(−k)) e^{−iωt}, deep water ω = √(g k)), the fields they make — the height,
 // its horizontal displacement (the choppy crests: −i k/|k| λ h̃), its slopes, the displacement's derivatives (the
 // surface's Jacobian: where it folds, the crests break) — two real fields to a complex array; their inverse FFT
-// (rows, then columns: a radix-2 transform of 256 in a workgroup's memory); then, into a texture array, a cascade's
-// two layers — (Dx, height, Dz, Jacobian) and (slope x, slope z, their squares: the mips' second moments, the
-// unresolved slopes' variance) — and their mips. And the foam the breaking crests leave (N6b): a cascade's third layer, after
-// the six — where its surface folds past the whitecaps' threshold the foam made, then fading over seconds where it lies
-// (a persistent buffer: the patches and streaks left behind the crests, not only the crests breaking now).
+// (rows, then columns: a radix-2 transform of 256 in a workgroup's memory); then, into a texture array, a cascade's three
+// layers, 3c + j — (Dx, height, Dz, Jacobian); (slope x, slope z, their squares); (the foam lying, the foam made, the slopes'
+// product, 0) — and their mips: the mips' means are the slopes' first and second moments, their full covariance (LEAN,
+// the cross term with it — a swell crossing the wind's sea leans the glint). The foam the breaking crests leave (N6b): where a
+// cascade's surface folds past the whitecaps' threshold the foam made, then fading over seconds where it lies.
 
 struct FftParams {
   // time [s], choppiness λ, the cascades' count, N
   t: vec4f,
   // the cascades' periods [m]
   L: vec4f,
-  // the foam: each cascade's Jacobian threshold (renderer: the whitecaps' cover at this wind), the frame's time step [s]
+  // the foam: each cascade's Jacobian threshold (renderer: the whitecaps' cover at this wind)
   f: vec4f,
-  // the water: its gravity [m/s²], its depth [m] (0: deep — the Earth's sea; Miller's knee-deep: sea/spectrum.ts dispersion)
+  // the water: its gravity [m/s²], its depth [m] (0: deep — the Earth's sea; Miller's knee-deep: sea/spectrum.ts dispersion);
+  // the frame's time step [s]
   w: vec4f,
 };
 
@@ -118,9 +120,9 @@ fn cols(@builtin(local_invocation_id) l: vec3u, @builtin(workgroup_id) g: vec3u)
 // the foam lying on each cascade's surface (N² a cascade), kept from frame to frame
 @group(0) @binding(5) var<storage, read_write> foam: array<f32>;
 // (its life: a whitecap's foam thins out in a few seconds — the long cascade's, the big breakers', lasts longer)
-const FOAM_LIFE = vec3f(5.0, 3.0, 1.5);
+const FOAM_LIFE = vec4f(5.0, 3.0, 1.5, 0.8);
 
-// the fields into the texture: a cascade's (Dx, height, Dz, Jacobian) and (slope x, slope z, their squares)
+// the fields into the texture: a cascade's (Dx, height, Dz, Jacobian), (slope x, slope z, their squares), (foam, slopes' product)
 @compute @workgroup_size(8, 8, 1)
 fn assemble(@builtin(global_invocation_id) id: vec3u) {
   if (id.x >= N || id.y >= N) { return; }
@@ -132,17 +134,17 @@ fn assemble(@builtin(global_invocation_id) id: vec3u) {
   let C = fld[base + 2u * N * N + o];
   let D = fld[base + 3u * N * N + o];
   let J = (1.0 + C.y) * (1.0 + D.x) - D.y * D.y;
-  textureStore(outTex, vec2u(id.xy), 2u * c, vec4f(A.x, B.x, A.y, J));
-  textureStore(outTex, vec2u(id.xy), 2u * c + 1u, vec4f(B.y, C.x, B.y * B.y, C.x * C.x));
+  textureStore(outTex, vec2u(id.xy), 3u * c, vec4f(A.x, B.x, A.y, J));
+  textureStore(outTex, vec2u(id.xy), 3u * c + 1u, vec4f(B.y, C.x, B.y * B.y, C.x * C.x));
   // (the foam: made where it folds, faded where it lies; r what lies, g what breaks now)
   // (the band round the threshold a share of its distance below 1 — the cascade's own spread: a calm sea's long cascade
   // barely folds, a fixed band had it foaming everywhere)
   let below = max(1.0 - F.f[c], 0.0);
   let made = select(0.0, smoothstep(F.f[c] + 0.15 * below, F.f[c] - 0.35 * below, J), below > 1e-3);
   let fi = c * N * N + o;
-  let lying = max(foam[fi] * exp(-F.f.w / FOAM_LIFE[c]), made);
+  let lying = max(foam[fi] * exp(-F.w.z / FOAM_LIFE[c]), made);
   foam[fi] = lying;
-  textureStore(outTex, vec2u(id.xy), 2u * u32(F.t.z) + c, vec4f(lying, made, 0.0, 0.0));
+  textureStore(outTex, vec2u(id.xy), 3u * c + 2u, vec4f(lying, made, B.y * C.x, 0.0));
 }
 
 // a mip from the one above: the 2 × 2 mean (the slopes' squares' mean: their second moment)

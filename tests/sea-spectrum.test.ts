@@ -22,7 +22,7 @@ describe("the spectrum", () => {
     expect(S.h0.length).toBe(CASCADES.length);
     expect(S.h0[0]!.length).toBe(SEA_N * SEA_N * 4);
     // (no mode outside its cascade's band)
-    for (let c = 0; c < 3; c++) {
+    for (let c = 0; c < CASCADES.length; c++) {
       const L = CASCADES[c]!;
       let outside = 0;
       for (let j = 0; j < SEA_N; j++)

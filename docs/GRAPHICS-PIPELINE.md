@@ -116,7 +116,7 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 
 | # | Libellé | Code | Programme, taille | Quand | Lit → écrit (consommateur) | Fam. |
 |---|---|---|---|---|---|---|
-| C1 | `sea fft` | `fft-gpu.ts:103` | `seafft.wgsl` spectrum/rows/cols/assemble/mip | mer proche, `s.seaFft` ; coupé après 120 frames sans mer vue | → texture 256²×9 rgba16f + écume → traceur 33/34 | W |
+| C1 | `sea fft` | `fft-gpu.ts` `encode` | `seafft.wgsl` spectrum/rows/cols/assemble/mip | mer proche, `s.seaFft` ; coupé après 120 frames sans mer vue ; **4 cascades non commensurables (1 031 / 173 / 29 / 4,9 m), les plus fines non calculées quand l'empreinte du pixel de mer le plus proche les couvre** (PLAN-MER-WEBGPU S1, 10 nov.) | → texture 256²×12 rgba16f (3 couches par cascade : déplacement+J, pentes+carrés, écume+produit des pentes) → traceur 33/34, `sea surface` | W |
 | C2 | `far-field LUT` | `renderer.ts:6244` | trace `lut`/`lutq`, (W/8+2)×(H/8+2) | `lutOn` (pas de rayons courbes locaux : `LUT_BLOCKERS`) | → `t.lut` → `main` | V |
 | C3 | `terrain surface cache` ; `terrain cache fade` (non chronométrée) | `terrain-cache.ts:438–520` ; `renderer.ts:6265` | `terrainCacheShader(trace)` `main`, 33×33 groupes par niveau 257² | niveaux déplacés ou retouchés (coalescés 150–500 ms) | tuiles, `earthMaps.elev` → `TABLE_TERRAIN` (+ `_PREV` en fondu 800 ms) → maillages raster, traceur | V |
 | C4 | `earth horizons` | `earth-horizons.ts:417` | `bake`, une bande par frame (1,5 ms) | niveaux 4–6 du cache | → `TABLE_EARTH_HORIZON` → traceur | S |
@@ -138,8 +138,9 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | C15 | `trace (discs)` | `renderer.ts:6492` | trace `main` + `DISC_ONLY` | raster, astres à l'écran | → `accum`… dans leurs rectangles | M |
 | C16 | `stars (raster)` | `renderer.ts:6500` | trace `shadeStars`, un fil par étoile (≤120 000) | raster, étoiles splattées | → `t.stars` | R |
 | C17 | `earth shade (raster)` | `renderer.ts:6512` | trace `shade` (+ `shadeMark`) | raster et **pas `liteAll`** : ponts, arbres < 80 m, boîtes marquées | → `accum`… pour les restes | M |
-| C18 | `earth lite (raster)` / `body lite (raster)` | `encodeLite` `renderer.ts:6552` | trace `shadeLite` ; Terre : un fil par pixel, chaque frame | `shadeLite` compilé | → `accum`, `moments`, `stamps` | M |
-| C19 | `earth water (raster)` | `renderer.ts:6590` | trace `shadeWater`, pleine résolution | Terre, noyau prêt | → `accum`… + mot « mer vue » → sonde de mer | W |
+| C18 | `earth lite (raster)` / `body lite (raster)` | `encodeLite` | trace `shadeLite` ; Terre : un fil par pixel, chaque frame ; **l'eau classée d'abord (`liteWater`) : la pleine mer profonde sort aussitôt** (S2, 10 nov. ; `liteSkip` 2³⁰ l'A/B) | `shadeLite` compilé | → `accum`, `moments`, `stamps` | M |
+| C18b | `sea surface` (rendu) puis `sea surface resolve` (calcul) | `encodeSeaSurface` → `TerrainRaster.encodeSea` | `terrain-raster.ts` `seaVs`/`seaFs` (CDLOD de `sea/surface-nodes.ts`, 16² quads par nœud, 200–900 nœuds) et `seaResolve` | Terre, sous 3 km au-dessus de la mer, FFT prête, `seaSurfaceOn` (PLAN-MER-WEBGPU S2) | lit `moments` (pixels de pleine mer), la visibilité, la FFT → cible r32float + profondeur propres → `moments.y` (la distance de la surface déplacée) → `shadeWater` | W |
+| C19 | `earth water (raster)` | `encodeLite` | trace `shadeWater`, pleine résolution ; la distance de la surface lue dans `moments.y` (celle de `sea surface` où elle est dessinée) | Terre, noyau prêt | → `accum`… + mot « mer vue » → sonde de mer | W |
 
 ### D. Sonde de lumière du vaisseau (`dispatchEnv`, `renderer.ts:5251`)
 

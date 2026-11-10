@@ -1,12 +1,14 @@
 // The sea's waves by FFT on the GPU (docs/PLAN-AVIATION-AAA.md, M1; shaders/seafft.wgsl): the cascades' initial
 // amplitudes (sea/spectrum.ts) uploaded when the sea changes; each frame their modes now, their fields, the
-// inverse FFTs, the texture array the tracer samples (nine layers: a cascade's displacement-and-Jacobian, its
-// slopes-and-their-squares; after the six, each cascade's foam — N6b, kept from frame to frame) and its mips. A few tenths of a millisecond of the GPU.
+// inverse FFTs, the texture array the tracer samples (three layers a cascade, 3c + j: its displacement-and-Jacobian, its
+// slopes-and-their-squares, its foam and the slopes' product — seafft.wgsl) and its mips. Only the cascades in use: `active`,
+// the coarsest first (PLAN-MER-WEBGPU S1 — from the air the finest are averaged whole by the nearest sea's pixel: their
+// variance, known from the spectrum, stands for them). 1.6 ms on kerr-mini for three cascades (J0, 10 Nov 2026).
 
 import { CASCADES, EARTH_SEA, SEA_N, type SeaCascades, type SeaPhysics } from "./spectrum";
 
 const N = SEA_N;
-const C = CASCADES.length;
+const C: number = CASCADES.length;
 export const SEA_LEVELS = Math.log2(N) + 1;
 /** the device's sampled textures a stage the tracer needs to take the sea's (the surface's 18 and one) */
 export const SEA_TEXTURE_LIMIT = 19;
@@ -33,7 +35,17 @@ export class SeaFft {
   /** whether a spectrum is there to animate */
   ready = false;
   /** what the spectrum holds: the height's and the slopes' variance over all cascades */
-  stats = { height: 0, slopeX: 0, slopeZ: 0, slope01: 0, slopeC: [0, 0, 0] as number[] };
+  stats = {
+    height: 0,
+    slopeX: 0,
+    slopeZ: 0,
+    slope01: 0,
+    slopeC: [] as number[],
+    /** each cascade's slopes' variance along, across, and their covariance */
+    slopeXc: [] as number[],
+    slopeZc: [] as number[],
+    slopeXZc: [] as number[],
+  };
 
   constructor(
     private device: GPUDevice,
@@ -91,22 +103,28 @@ export class SeaFft {
       slopeZ: sum(s.slopeZ),
       slope01: s.slopeX[0]! + s.slopeZ[0]! + s.slopeX[1]! + s.slopeZ[1]!,
       slopeC: s.slopeX.map((x, c) => x + s.slopeZ[c]!),
+      slopeXc: [...s.slopeX],
+      slopeZc: [...s.slopeZ],
+      slopeXZc: [...s.slopeXZ],
     };
     this.ready = true;
   }
 
   /** A frame's waves at time `t` [s], choppiness `lambda`, into the texture array; `foamJ`: each cascade's Jacobian under
-   *  which its crests break into foam (none: no foam made). */
+   *  which its crests break into foam (none: no foam made); `active`: the cascades computed (the coarsest first). */
   /** (the frames' runs, the last clock: a test's view of it) */
   runs = 0;
   lastT = 0;
+  /** the cascades computed by the last frame (the coarsest first) */
+  active: number = C;
   encode(
     enc: GPUCommandEncoder,
     t: number,
     lambda: number,
     desc: GPUComputePassDescriptor = { label: "sea fft" },
-    foamJ = [-9, -9, -9],
+    foamJ = [-9, -9, -9, -9],
     phys: SeaPhysics = EARTH_SEA,
+    active = C,
   ) {
     if (!this.ready) return;
     this.runs++;
@@ -124,35 +142,33 @@ export class SeaFft {
         C,
         N,
         ...CASCADES,
-        0,
-        foamJ[0]!,
-        foamJ[1]!,
-        foamJ[2]!,
-        dt,
+        ...[0, 1, 2, 3].map((c) => foamJ[c] ?? -9),
         phys.g,
         Number.isFinite(phys.depth) ? phys.depth : 0,
-        0,
+        dt,
         0,
       ]),
     );
+    const A = Math.min(Math.max(Math.round(active), 1), C);
+    this.active = A;
     const p = enc.beginComputePass(desc);
     p.setPipeline(this.pipes.spectrum);
     p.setBindGroup(0, this.binds.spectrum);
-    p.dispatchWorkgroups(N / 8, N / 8, C);
+    p.dispatchWorkgroups(N / 8, N / 8, A);
     p.setPipeline(this.pipes.rows);
     p.setBindGroup(0, this.binds.rows);
-    p.dispatchWorkgroups(1, N, 4 * C);
+    p.dispatchWorkgroups(1, N, 4 * A);
     p.setPipeline(this.pipes.cols);
     p.setBindGroup(0, this.binds.cols);
-    p.dispatchWorkgroups(1, N, 4 * C);
+    p.dispatchWorkgroups(1, N, 4 * A);
     p.setPipeline(this.pipes.assemble);
     p.setBindGroup(0, this.binds.assemble);
-    p.dispatchWorkgroups(N / 8, N / 8, C);
+    p.dispatchWorkgroups(N / 8, N / 8, A);
     p.setPipeline(this.pipes.mip);
     for (let l = 1; l < SEA_LEVELS; l++) {
       const w = Math.max(1, N >> l);
       p.setBindGroup(0, this.binds.mips[l - 1]!);
-      p.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(w / 8), 3 * C);
+      p.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(w / 8), 3 * A);
     }
     p.end();
   }
@@ -161,9 +177,9 @@ export class SeaFft {
   async probe(): Promise<{ mean: number[]; std: number[]; min: number[]; max: number[] }[]> {
     const d = this.device;
     const bytes = N * 8;
-    const buf = d.createBuffer({ size: bytes * N * 2 * C, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const buf = d.createBuffer({ size: bytes * N * 3 * C, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     const enc = d.createCommandEncoder();
-    enc.copyTextureToBuffer({ texture: this.texture, mipLevel: 0 }, { buffer: buf, bytesPerRow: bytes, rowsPerImage: N }, [N, N, 2 * C]);
+    enc.copyTextureToBuffer({ texture: this.texture, mipLevel: 0 }, { buffer: buf, bytesPerRow: bytes, rowsPerImage: N }, [N, N, 3 * C]);
     d.queue.submit([enc.finish()]);
     await buf.mapAsync(GPUMapMode.READ);
     const u = new Uint16Array(buf.getMappedRange().slice(0));
@@ -176,7 +192,7 @@ export class SeaFft {
       return e === 0 ? s * 2 ** -14 * (f / 1024) : e === 31 ? (f ? Number.NaN : s * Infinity) : s * 2 ** (e - 15) * (1 + f / 1024);
     };
     const out = [];
-    for (let l = 0; l < 2 * C; l++) {
+    for (let l = 0; l < 3 * C; l++) {
       const sum = [0, 0, 0, 0],
         sq = [0, 0, 0, 0],
         mn = [Infinity, Infinity, Infinity, Infinity],

@@ -2305,3 +2305,29 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Portillon avant push** : un `check-repo-size` s'est figé 12 minutes (endormi, sans processus fils ; 16 s à la main,
   cause non établie). Chaque vérification a désormais une limite de 240 s (`KERR_CHECK_LIMIT_S`) et son entrée standard
   fermée ; au-delà, elle est arrêtée et le push refusé en disant quoi relancer (testé avec une limite de 1 s).
+
+## 2026-11-10T14:09Z — La mer WebGPU (PLAN-MER-WEBGPU) : S1 le contrat de la FFT, S2 la surface maillée, la pleine mer hors de shadeLite
+
+- **Contribution** (§7.7 l'eau proche et moyenne, §7.4 la surface finale, décision de Sam du 10 novembre « la mer d'abord » ;
+  [PLAN-MER-WEBGPU](docs/PLAN-MER-WEBGPU.md)) : la mer passe d'un plan ombré au pixel à une vraie surface, sur le modèle de
+  web-ocean et dans notre monde.
+  - **S1** : 4 cascades FFT **non commensurables** (1 031 / 173 / 29 / 4,9 m) et leur décalage d'ancrage en float64 (fin de la
+    répétition de la mer au kilomètre) ; le **terme croisé des pentes** (LEAN complet : reflet du Soleil gaussien à covariance
+    complète, Smith directionnel, lobe du SSR corrélé) ; l'échantillonnage **anisotrope** des cascades sur l'empreinte du
+    pixel (`textureSampleGrad`, anisotropie ×8) ; les cascades fines **non calculées** quand l'empreinte du pixel de mer le
+    plus proche les couvre, leur variance passée à la rugosité. `P.seafft` passe à 7 vec4.
+  - **La pleine mer hors de `shadeLite`** : la classification de l'eau (`liteWater`) lue en tête, la pleine mer profonde
+    quitte le noyau avant l'imagerie et l'éclairage du sol.
+  - **S2** : la surface maillée — un CDLOD fixé sur la mer (`sea/surface-nodes.ts`, testé), déplacé par les cascades, courbé
+    sur la Terre au niveau du géoïde, levé par la réfraction comme le sol ; dessiné par le module du terrain raster dans sa
+    cible, gardé sur les pixels de pleine mer et de ciel ; sa distance exacte reportée dans `moments.y`, lue par `shadeWater`
+    (inversion du déplacement en deux itérations).
+  - **S5 (début)** : la mer ne reflète plus la sonde du vaisseau quand la caméra en est loin (caméra libre) — le ciel calculé au
+    point et les nuages lointains à la place.
+- **Preuve** : **mesuré** sur kerr-mini, A/B dans le même navigateur (PLAN-MER-WEBGPU §4) : vue de mer à 30 m **96,1 → 68–71 ms**
+  (`earth lite` 35,5 → 10,3), à midi 88,7 → 68,3 ; côte à 500 m inchangée (hauts-fonds) ; la surface maillée de 0 à +4 ms.
+  Tests : spectre (Hs, bandes), nœuds du CDLOD (aucun recouvrement, réseau fixe, nœud fin sous la caméra) ; `check-wgsl`
+  71/71 ; budgets des noyaux relevés de 0,1 à 1,1 % (`tests/kernel-budget.json`).
+- **Limites** : l'image n'est pas encore celle de web-ocean — S3 (son ombrage), S4 (l'écume en cartes monde), la suite de S5,
+  et un flou fort au premier plan à établir ; les crêtes devant la terre ne sont pas dessinées ; les mesures de S2 ont été
+  faites avec des vagues minuscules (`wind: 0`). Non mesuré : M1 Max, la scène J0 complète.

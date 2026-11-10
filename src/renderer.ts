@@ -62,7 +62,9 @@ import { sphericalFrame } from "./wormhole";
 import traceWGSL from "./shaders/trace.wgsl" with { type: "text" };
 import seafftWGSL from "./shaders/seafft.wgsl" with { type: "text" };
 import { SEA_TEXTURE_LIMIT, SeaFft } from "./sea/fft-gpu";
+import { SEA_GRID, SEA_LEAF, SEA_MAX_NODES, SEA_RANGE, seaNodes } from "./sea/surface-nodes";
 import {
+  CASCADES,
   dispersion,
   EARTH_SEA,
   MILLER_SEA,
@@ -379,7 +381,7 @@ const BASE_PARAM_VEC4S = 69 + TILE_PARAM_VEC4S + RUNWAY_VEC4S + SEA_VEC4S + 1 + 
 /** the ships' wakes near the camera: a count, then eight ships, two each (trace.wgsl: Params.wake, seaWake) */
 const WAKE_VEC4S = 17;
 /** the sea's FFT waves (trace.wgsl: Params.seafft) */
-const SEAFFT_VEC4S = 4;
+const SEAFFT_VEC4S = 7;
 /** the mountains' warp's grids (trace.wgsl: Params.warp; system/warp-grid.ts) */
 const WARP_VEC4S = 4;
 /** our bodies a ray from the mouth's region may meet (trace.wgsl: Params.mouthList), after the warp's */
@@ -992,7 +994,34 @@ export class Renderer {
   /** the choppiness of the FFT's crests */
   private seaLambda = 0.9;
   /** each FFT cascade's Jacobian under which its crests leave foam (seaFftParams; sea/fft-gpu.ts) */
-  private seaFoamJ = [-9, -9, -9];
+  private seaFoamJ = [-9, -9, -9, -9];
+  /** the FFT's cascades computed this frame (the coarsest first: seaFftParams) */
+  private seaFftActive = 4;
+  /** the sea's surface as a mesh (PLAN-MER-WEBGPU S2): on (an A/B's switch), its frame this frame (seaParams; null: none) */
+  seaSurfaceOn = true;
+  private seaSurf: {
+    tuC: number[];
+    tcC: number[];
+    up: number[];
+    tu: number[];
+    tc: number[];
+    hc: number;
+    Re: number;
+    cam: number[];
+    abs: number[];
+    map: number[];
+    fwd: number[];
+    weight: number;
+    fov: number;
+  } | null = null;
+  private seaSurfNodes = new Float32Array(SEA_MAX_NODES * 4);
+  private seaSurfU = new Float32Array(44);
+  /** the sea FFT's last parameters (seaFftParams: the cascades' offsets, the count computed) */
+  private seaFftLast: Float32Array | null = null;
+  /** the sea's anchor this frame [m, float64]: its whole kilometres along the waves' axes, and the camera's height [m] */
+  private seaU0 = 0;
+  private seaC0 = 0;
+  private seaAltM = 0;
   /** the sea's significant height about the camera [m] (the ships' motion — controller/seatraffic.ts) */
   seaHs = 1;
   private earthWant: EarthTier | null = null;
@@ -1244,12 +1273,14 @@ export class Renderer {
     this.device = device;
     // (the sea's FFT waves: where the device takes their texture — sea/fft-gpu.ts)
     this.seaFft = device.limits.maxSampledTexturesPerShaderStage >= SEA_TEXTURE_LIMIT ? new SeaFft(device, src.seafft) : null;
+    // (anisotropic: the grazing sea's footprint is an ellipse many times longer than wide — PLAN-MER-WEBGPU S1, trace.wgsl seaTap)
     this.seaSampler = device.createSampler({
       magFilter: "linear",
       minFilter: "linear",
       mipmapFilter: "linear",
       addressModeU: "repeat",
       addressModeV: "repeat",
+      maxAnisotropy: 8,
     });
     this.context = context;
     this.sdrFormat = format;
@@ -4180,7 +4211,10 @@ export class Renderer {
       }
     }
     // the sea's FFT waves (Params.seafft): its spectrum renewed when the sea changes, its frame's waves due
-    f.set(this.seaFftParams(!o.probe, time, tSec, s), wat + WAKE_VEC4S * 4);
+    f.set(
+      this.seaFftParams(!o.probe, time, tSec, s, (2 * Math.tan((s.fov * Math.PI) / 360)) / Math.max(t.height, 1)),
+      wat + WAKE_VEC4S * 4,
+    );
     // (the nearest carrier's sphere in the ship's shadow map: its shadow on the sea — Params.seafft[3])
     const sb2 = !o.probe && this.ship.ready && near?.index === earthK ? this.ship.shadowBound2 : null;
     if (sb2) f.set([sb2.c[0], sb2.c[1], sb2.c[2], sb2.r], wat + WAKE_VEC4S * 4 + 12);
@@ -5076,6 +5110,7 @@ export class Renderer {
     // (a planet's probe — its camera at the planet's centre —: the frame's sea left as it is)
     if (probe) return out;
     this.seaHere = null;
+    this.seaSurf = null;
     // (Miller's sea — PLAN-PLANETES-AAA P2: knee-deep, under 1.3 g, its own wind)
     if (near && bodies[near.index]?.id === "miller") return this.millerSeaParams(near, out, tSec, s);
     // (Titan's seas of methane — P8: near one of them, its FFT's waves)
@@ -5109,6 +5144,45 @@ export class Renderer {
     const u0 = Math.round(uc / 1024) * 1024,
       c0 = Math.round(cc / 1024) * 1024;
     out.set([...tu, U, ...tc, weight, uc - u0, cc - c0, u0 / 256, c0 / 256], 0);
+    this.seaU0 = u0;
+    this.seaC0 = c0;
+    this.seaAltM = altKm * 1000;
+    // (the sea's surface — PLAN-MER-WEBGPU S2 —: the camera's frame for its mesh — its tangent axes, up, height over the sea, the
+    // Earth's radius there, its place on the anchored axes — and the view's axis in it)
+    {
+      const dot3 = (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+      const hc = altKm * 1000 - geoidN(surface.lat, surface.lon);
+      const k = dot3(tu, camUp);
+      let tuC = [tu[0]! - k * camUp[0]!, tu[1]! - k * camUp[1]!, tu[2]! - k * camUp[2]!];
+      const lt = Math.hypot(...tuC) || 1;
+      tuC = tuC.map((x) => x / lt);
+      const tcC = [
+        camUp[1]! * tuC[2]! - camUp[2]! * tuC[1]!,
+        camUp[2]! * tuC[0]! - camUp[0]! * tuC[2]!,
+        camUp[0]! * tuC[1]! - camUp[1]! * tuC[0]!,
+      ];
+      const e2 = WGS84_F * (2 - WGS84_F);
+      const sl = Math.sin(surface.lat);
+      const w2 = 1 - e2 * sl * sl;
+      const Re = Math.sqrt(((WGS84_A * (1 - e2)) / w2 ** 1.5) * (WGS84_A / Math.sqrt(w2)));
+      const cam = this.lastCam;
+      const fwdB = cam ? near.axes.map((ax) => ax[0]! * cam.fwd[0] + ax[1]! * cam.fwd[1] + ax[2]! * cam.fwd[2]) : [0, 0, -1];
+      this.seaSurf = {
+        tuC,
+        tcC,
+        up: [...camUp],
+        tu: [...tu],
+        tc: [...tc],
+        hc,
+        Re,
+        cam: [uc - u0, cc - c0],
+        abs: [uc, cc],
+        map: [dot3(tuC, tu), dot3(tcC, tu), dot3(tuC, tc), dot3(tcC, tc)],
+        fwd: [dot3(fwdB, tuC), dot3(fwdB, tcC), dot3(fwdB, camUp)],
+        weight,
+        fov: s.fov,
+      };
+    }
     // (the resolved range's share of the slopes' variance, among the trains below the peak)
     const lp = 0.83 * U * U;
     const cut = SEA_WAVES.map((w) => {
@@ -5166,6 +5240,9 @@ export class Renderer {
     const u0 = Math.round(uc / 1024) * 1024,
       c0 = Math.round(cc / 1024) * 1024;
     out.set([...tu, U, ...tc, weight, uc - u0, cc - c0, u0 / 256, c0 / 256], 0);
+    this.seaU0 = u0;
+    this.seaC0 = c0;
+    this.seaAltM = Math.max(r - mR, 0);
     // (the trains — the waves without the FFT —: a shallow chop, the long ones slowed by the depth)
     const budget = 0.5 * (0.003 + 0.00512 * U) * 0.5;
     SEA_WAVES.forEach((w, i) => {
@@ -5188,7 +5265,7 @@ export class Renderer {
    * frame the wind's way: the trains' and the wakes' axes), the waves at the clock now due before the tracer; the
    * Cox–Munk slopes' variance finer than the cascades (what they leave of it — a quarter at least: the capillaries).
    */
-  private seaFftParams(frame: boolean, time: number, tSec: number, s: Settings): Float32Array {
+  private seaFftParams(frame: boolean, time: number, tSec: number, s: Settings, pixelAngle = 1e-3): Float32Array {
     const out = new Float32Array(SEAFFT_VEC4S * 4);
     const H = this.seaHere;
     if (!this.seaFft || !s.seaFft || !H || H.weight <= 0) return out;
@@ -5239,12 +5316,42 @@ export class Renderer {
     // (w: the dominant system's peak period [s] — the surf's bands, trace.wgsl seaShade)
     const tp = state.swell.hs > state.wind.hs ? state.swell.tp : state.wind.tp;
     out.set([1, this.seaLambda, Math.sqrt(st.height), tp], 0);
-    out.set([1024, 128, 16, 256], 4);
+    out.set(CASCADES, 4);
+    // (the cascades computed — PLAN-MER-WEBGPU S1 —: the nearest sea's pixel, under the camera, covers footMin metres; a cascade
+    // it averages whole (its tile under two such pixels: its last mips, a uniform roughness) is not computed — its slopes'
+    // variance, the spectrum's, joins the tail below. From 500 m all four; from ~2 km the finest out; at cruise, two)
+    const footMin = Math.max(this.seaAltM, 1) * pixelAngle;
+    let active = CASCADES.length;
+    while (active > 1 && footMin > CASCADES[active - 1]! / 2) active--;
+    this.seaFftActive = active;
+    let offU = 0,
+      offC = 0,
+      offUC = 0;
+    for (let c = active; c < CASCADES.length; c++) {
+      offU += st.slopeXc[c] ?? 0;
+      offC += st.slopeZc[c] ?? 0;
+      offUC += st.slopeXZc[c] ?? 0;
+    }
     // (the whitecaps' threshold on the Jacobian: its spread from the long cascades' slopes — J ≈ 1 + λ k h —, the
     // level under which lies Monahan's cover at this wind)
     const sJ = this.seaLambda * Math.sqrt(st.slope01);
     const W = Math.min(Math.max(3.84e-6 * H.U ** 3.41, 1e-5), 0.1);
-    out.set([Math.max(cmU - st.slopeX, 0.25 * cmU), Math.max(cmC - st.slopeZ, 0.25 * cmC), 1 + sJ * normalQuantile(W), sJ], 8);
+    // (the slopes finer than the cascades computed: Cox–Munk's share they leave, plus the cascades left out — their variance)
+    out.set(
+      [Math.max(cmU - st.slopeX, 0.25 * cmU) + offU, Math.max(cmC - st.slopeZ, 0.25 * cmC) + offC, 1 + sJ * normalQuantile(W), sJ],
+      8,
+    );
+    // (each cascade's own anchor: the anchor's whole kilometres modulo its period, in float64 — the periods not commensurable,
+    // a single kilometre's anchor would jump each cascade's pattern as the camera crossed it)
+    const off = CASCADES.flatMap((L) => [((this.seaU0 % L) + L) % L, ((this.seaC0 % L) + L) % L]);
+    out.set(off, 16);
+    // (the light probe — the ship's, traced about it — mirrored by the sea only where it was traced about the camera: aboard,
+    // on foot; a spectator off the ship by more than ~2 km, a free camera far from it, mirrored the ship's world — an orbit's
+    // Earth in the sea under a free camera at Hyères, 10 Nov —: the sky's own mirror there, at the sea's point)
+    const shipD = this.shipPlace?.dist ?? Infinity;
+    const probeNear = s.ship || this.character?.active ? 1 : Math.min(Math.max((2000 - shipD) / 1500, 0), 1);
+    out.set([active, offUC, probeNear, 0], 24);
+    if (frame) this.seaFftLast = out;
     // (the foam each cascade makes — sea/fft-gpu.ts: where its own Jacobian falls under the level of Monahan's cover)
     this.seaFoamJ = st.slopeC.map((v) => 1 + this.seaLambda * Math.sqrt(v) * normalQuantile(W));
     return out;
@@ -6238,7 +6345,7 @@ export class Renderer {
     this.cameraKey = this.featureKey;
     // (the sea's FFT waves of this frame first: the tracer samples them)
     if (this.seaFftDue && this.seaFft) {
-      this.seaFft.encode(enc, this.seaFftT, this.seaLambda, this.prof.pass("sea fft"), this.seaFoamJ, this.seaPhys);
+      this.seaFft.encode(enc, this.seaFftT, this.seaLambda, this.prof.pass("sea fft"), this.seaFoamJ, this.seaPhys, this.seaFftActive);
       this.seaFftDue = false;
     }
     // (the far field's LUT first: every realtime frame, once an epoch while a still view refines —
@@ -6551,6 +6658,56 @@ export class Renderer {
     return true;
   }
 
+  /**
+   * The sea's surface as a mesh (PLAN-MER-WEBGPU S2): under 3 km over the sea, with the FFT's waves on, its quadtree's nodes about
+   * the camera (sea/surface-nodes.ts) drawn by the terrain raster's module into its own target, their distances into moments for
+   * shadeWater. Off, or nothing drawn: the flat sea, as before.
+   */
+  private encodeSeaSurface(enc: GPUCommandEncoder, t: Target) {
+    const S = this.seaSurf,
+      F = this.seaFftLast;
+    this.seaSurfaceDrawn = false;
+    if (!this.seaSurfaceOn || !S || !F || !this.seaFft?.ready || !this.terrainRaster || F[0]! < 0.5) return;
+    if (!(S.hc < 3000) || S.weight <= 0) return;
+    const st = this.seaFft.stats;
+    const amp = 4 * Math.sqrt(st.height) + 1;
+    const hc = Math.max(S.hc, 0.3);
+    const tanV = Math.tan((S.fov * Math.PI) / 360);
+    const half = Math.atan(tanV * Math.hypot(1, t.width / Math.max(t.height, 1)));
+    const maxDist = Math.min(Math.sqrt(2 * S.Re * (hc + amp)) + Math.sqrt(2 * S.Re * amp) + 2000, 200_000);
+    const r = seaNodes(
+      {
+        x: S.abs[0]!,
+        y: S.abs[1]!,
+        h: hc,
+        fwd: S.fwd as [number, number, number],
+        cosHalf: Math.cos(Math.min(half + 0.05, Math.PI / 2)),
+        maxDist,
+        radius: S.Re,
+        amp,
+      },
+      this.seaSurfNodes,
+    );
+    const u = this.seaSurfU;
+    u.set([...S.tuC, S.weight, ...S.tcC, 0, ...S.up, hc, ...S.tu, S.Re, ...S.tc, 0, S.cam[0]!, S.cam[1]!, 0, 0, ...S.map], 0);
+    u.set([F[4]!, F[5]!, F[6]!, F[7]!], 28);
+    u.set([F[16]!, F[17]!, F[18]!, F[19]!, F[20]!, F[21]!, F[22]!, F[23]!], 32);
+    u.set([F[24]!, SEA_GRID, SEA_RANGE * SEA_LEAF, 0], 40);
+    this.seaSurfaceDrawn = this.terrainRaster.encodeSea(enc, {
+      uniform: u,
+      nodes: r.data,
+      count: r.count,
+      grid: SEA_GRID,
+      fft: this.seaFft.texture,
+      sampler: this.seaSampler,
+      moments: t.moments,
+      profile: (label, d) => this.prof.pass(label, d),
+      computeProfile: (label) => this.prof.pass(label),
+    });
+  }
+  /** the sea's surface drawn this frame (encodeSeaSurface) */
+  seaSurfaceDrawn = false;
+
   /** the raster's material — shadeLite — and its water's pass, over the patch's pixels */
   private encodeLite(enc: GPUCommandEncoder, t: Target, hint: GPUTexture) {
     const lite = this.traceVariant("shadeLite");
@@ -6582,6 +6739,8 @@ export class Renderer {
       lp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
       lp.end();
       const water = this.rasterWaterNow ? this.traceVariant("shadeWater") : null;
+      // (the sea's surface between them — PLAN-MER-WEBGPU S2 —: the water's pass shades it at its exact point)
+      if (water) this.encodeSeaSurface(enc, t);
       if (water) {
         const wp = enc.beginComputePass(this.prof.pass("earth water (raster)"));
         wp.setPipeline(water);

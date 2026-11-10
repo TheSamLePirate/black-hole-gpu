@@ -26,6 +26,105 @@ import {
 import type { MeshReply, MeshRequest } from "./terrain-mesh-worker";
 import type { TerrainWindow } from "./terrain-cache-layout";
 
+/**
+ * The sea's surface (PLAN-MER-WEBGPU S2, after web-ocean): the FFT's waves as a mesh — sea/surface-nodes.ts's quadtree, a grid a
+ * node, its vertices displaced by the cascades (sea/fft-gpu.ts: each cascade's (Dx, height, Dz) at the mip its vertices' spacing
+ * resolves), laid on the Earth's curve under the camera at the sea's level, lifted by the air as the ground (R4b) — drawn into
+ * its own distance target, its own depth (its crests hide its troughs). A fragment is kept on the open sea's pixels shadeLite
+ * found (moments.x, kind 0: the coast's line shadeLite's, at the pixel) and on the sky's (a crest over the sea's horizon); never
+ * on the cockpit's. Then seaResolve writes its distance into moments.y — the surface's distance the water's pass reads —, a
+ * crest over the sky marked the sea's. Not yet: a crest before the land behind it (a coarse mask would leak the sea over low
+ * coasts and polders) — S2 limits, PLAN-MER-WEBGPU.
+ */
+const SEA_SURFACE_WGSL = `
+struct SeaS {
+  // the camera's tangent axes in the body's frame — the grid's x and y — (w: the waves' weight, renderer seaParams), up there
+  // (w: the camera's height over the sea [m])
+  tuC: vec4f, tcC: vec4f, upC: vec4f,
+  // the sea's anchored axes (the tracer's P.sea[0], [1]) (w: the Earth's radius there [m]; unused)
+  tu: vec4f, tc: vec4f,
+  // the camera on the anchored axes [m] (the tracer's P.sea[2].xy), unused; the 2 × 2 map of a tangent offset onto them
+  cam: vec4f, map: vec4f,
+  // the cascades' periods [m]; each cascade's anchor's offset (u, c), two a vec4
+  L: vec4f, off0: vec4f, off1: vec4f,
+  // the cascades computed, the grid's quads a side, a level 0 node's range [m], unused
+  misc: vec4f,
+};
+@group(1) @binding(40) var<uniform> sea: SeaS;
+@group(1) @binding(41) var seaTex: texture_2d_array<f32>;
+@group(1) @binding(42) var seaSmp: sampler;
+@group(1) @binding(43) var<storage, read> seaNodesIn: array<vec4f>;
+@group(1) @binding(44) var<storage, read> seaMom: array<vec2f>;
+@group(1) @binding(45) var seaImage: texture_2d<f32>;
+@group(1) @binding(46) var<storage, read_write> seaMomOut: array<vec2f>;
+struct SeaV { @builtin(position) clip: vec4f, @location(0) p: vec3f };
+fn seaUvC(x: vec2f, c: u32) -> vec2f {
+  let o = select(sea.off1, sea.off0, c < 2u);
+  return (x + select(o.zw, o.xy, (c & 1u) == 0u)) / sea.L[c];
+}
+@vertex fn seaVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> SeaV {
+  let node = seaNodesIn[ii];
+  let n = u32(sea.misc.y);
+  let g = vec2f(f32(vi % (n + 1u)), f32(vi / (n + 1u)));
+  let spacing = node.z / f32(n);
+  var xy = node.xy + g * spacing;
+  // (CDLOD: onto the next coarser level's vertices over the outer fifth of the node's range, measured from the camera in 3D)
+  let R = sea.misc.z * exp2(node.w);
+  let d3 = length(vec3f(xy, sea.upC.w));
+  let mk = clamp((d3 - 0.8 * R) / (0.2 * R), 0.0, 1.0);
+  xy -= fract(g * 0.5) * 2.0 * spacing * mk;
+  let eff = spacing * (1.0 + mk);
+  // (its place on the sea's anchored axes — the tracer's coordinates: the mesh and the shading at the same waves)
+  let xa = vec2f(sea.map.x * xy.x + sea.map.y * xy.y, sea.map.z * xy.x + sea.map.w * xy.y) + sea.cam.xy;
+  var disp = vec3f(0.0);
+  for (var c = 0u; c < u32(sea.misc.x + 0.5); c++) {
+    let lod = log2(max(eff * 256.0 / sea.L[c], 1.0)) + 0.5;
+    if (lod < 8.5) { disp += textureSampleLevel(seaTex, seaSmp, seaUvC(xa, c), i32(3u * c), lod).xyz; }
+  }
+  disp *= sea.tuC.w;
+  // (laid on the curve: the tangent offset bent down the sphere of the Earth's radius there — 2 R sin²(θ/2) —, the waves' height
+  // up and their drift along the sea's axes)
+  let hv = xy.x * sea.tuC.xyz + xy.y * sea.tcC.xyz + disp.x * sea.tu.xyz + disp.z * sea.tc.xyz;
+  let hd = length(hv);
+  let th = hd / sea.tu.w;
+  let sth = select(1.0, sin(th) / th, th > 1e-6);
+  let sh = sin(0.5 * th);
+  var p = hv * sth + sea.upC.xyz * (disp.y - sea.upC.w - 2.0 * sea.tu.w * sh * sh);
+  // (R4b: lifted where the air shows it, as the ground)
+  p += sea.upC.xyz * liftNearM(length(p), 0.0);
+  var v: SeaV;
+  v.p = vec3f(dot(p, u.right.xyz), dot(p, u.up.xyz), dot(p, u.forward.xyz));
+  v.clip = vec4f(v.p.x / u.right.w + u.output.z * v.p.z, v.p.y / u.up.w + u.output.w * v.p.z, u.forward.w, v.p.z);
+  return v;
+}
+@fragment fn seaFs(v: SeaV) -> @location(0) vec4f {
+  let ip = vec2i(floor(v.clip.xy));
+  let idx = u32(ip.y) * u32(u.image.x) + u32(ip.x);
+  let mk = seaMom[idx].x;
+  // (the cockpit's cabin: never)
+  if (mk < -0.5 && mk > -1.5) { discard; }
+  // (the open sea's pixels shadeLite found — kind 0, moments.x in [−5.25, −5): the surface whatever lies under it; the sky's —
+  // no ground drawn there —: a crest standing over the sea's horizon)
+  let vis = textureLoad(distanceImage, ip, 0);
+  let isSea = mk < -5.0 && mk >= -5.2501;
+  let sky = vis.r <= 0.0 && vis.b <= 0.0;
+  if (!isSea && !sky) { discard; }
+  return vec4f(length(v.p), 0.0, 0.0, 0.0);
+}
+// The surface's distance into moments.y (shadeLite's convention: metres over mPerM — u.image.z), a crest over the sky marked the
+// open sea's whole; the rest left as it is.
+@compute @workgroup_size(8, 8, 1)
+fn seaResolve(@builtin(global_invocation_id) id: vec3u) {
+  if (f32(id.x) >= u.image.x || f32(id.y) >= u.image.y) { return; }
+  let d = textureLoad(seaImage, vec2i(id.xy), 0).r;
+  if (d <= 0.0) { return; }
+  let idx = id.y * u32(u.image.x) + id.x;
+  let m = seaMomOut[idx];
+  let isSea = m.x < -5.0 && m.x >= -5.2501;
+  seaMomOut[idx] = vec2f(select(-5.25, m.x, isSea), d / u.image.z);
+}
+`;
+
 /** The pilot's geometry and inspector, deliberately separate from radiance and the reference tracer. */
 export function terrainRasterShader(trace: string): string {
   const library = terrainHeightLibrary(trace, true, 1);
@@ -278,6 +377,7 @@ fn pixelPoint(i: vec2i) -> vec3f {
   let color = select(vec3f(0.05,0.25,1), vec3f(1,0.1,0.05), error > 0.0);
   return vec4f(mix(vec3f(0.05,0.7,0.1), color, amount), 1);
 }
+${SEA_SURFACE_WGSL}
 `;
 }
 
@@ -350,6 +450,36 @@ export class TerrainRaster {
   private heightBind: GPUBindGroup | null = null;
   private attachments: Attachments | null = null;
   private retired = new Set<Attachments>();
+  // the sea's surface (PLAN-MER-WEBGPU S2): its pipelines, target (distance, depth), uniform, nodes and bind groups
+  private seaPipe: GPURenderPipeline | null | undefined;
+  private seaResolvePipe: GPUComputePipeline | null | undefined;
+  private seaTarget: { distance: GPUTexture; depth: GPUTexture; width: number; height: number } | null = null;
+  private seaUniform: GPUBuffer | null = null;
+  private seaNodeBuf: GPUBuffer | null = null;
+  private seaBinds: { key: unknown[]; draw0: GPUBindGroup; draw1: GPUBindGroup; res0: GPUBindGroup; res1: GPUBindGroup } | null = null;
+  private seaIndex: { grid: number; buf: GPUBuffer } | null = null;
+  /** a node's grid of quads as indices (its (grid + 1)² vertices from the vertex index — seaVs) */
+  private seaGridIndex(grid: number): GPUBuffer {
+    if (this.seaIndex?.grid === grid) return this.seaIndex.buf;
+    this.seaIndex?.buf.destroy();
+    const idx = new Uint16Array(grid * grid * 6);
+    let k = 0;
+    for (let j = 0; j < grid; j++)
+      for (let i = 0; i < grid; i++) {
+        const a = i + j * (grid + 1),
+          b = a + 1,
+          c = a + grid + 1,
+          d = c + 1;
+        idx.set([a, c, d, a, d, b], k);
+        k += 6;
+      }
+    const buf = this.device.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    this.device.queue.writeBuffer(buf, 0, idx);
+    this.seaIndex = { grid, buf };
+    return buf;
+  }
+  /** the sea's surface last drawn: its nodes, frames drawn */
+  seaStats = { nodes: 0, frames: 0, reason: "off" };
   private disposed = false;
   private error: string | null = null;
   private encodedFrames = 0;
@@ -530,6 +660,156 @@ export class TerrainRaster {
         );
     }
     return this.overlays.get(format);
+  }
+
+  /** The sea surface's pipelines, compiled once, asynchronously (null: failed — the flat sea stays). */
+  private seaPipelines(): boolean {
+    if (this.seaPipe === undefined) {
+      this.seaPipe = null;
+      this.seaResolvePipe = null;
+      void Promise.all([
+        this.device.createRenderPipelineAsync({
+          layout: "auto",
+          label: "sea surface",
+          vertex: { module: this.module, entryPoint: "seaVs" },
+          fragment: { module: this.module, entryPoint: "seaFs", targets: [{ format: "r32float" }] },
+          primitive: { topology: "triangle-list", cullMode: "none" },
+          depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+        }),
+        this.device.createComputePipelineAsync({
+          layout: "auto",
+          label: "sea surface resolve",
+          compute: { module: this.module, entryPoint: "seaResolve" },
+        }),
+      ]).then(
+        ([draw, res]) => {
+          if (this.disposed) return;
+          this.seaPipe = draw;
+          this.seaResolvePipe = res;
+        },
+        (e) => {
+          this.seaStats.reason = `failed: ${(e as Error).message ?? e}`;
+        },
+      );
+    }
+    return !!this.seaPipe && !!this.seaResolvePipe;
+  }
+
+  /**
+   * The sea's surface (PLAN-MER-WEBGPU S2), after shadeLite marked the water and before shadeWater shades it: the nodes drawn into
+   * the sea's own distance target against its own depth, then their distances into `moments` (seaResolve) where the surface is
+   * kept — the open sea's pixels, the sky's. The frame's uniform is the one encodeVisibility wrote this frame. False: nothing
+   * drawn (compiling, no visibility this frame, no nodes).
+   */
+  encodeSea(
+    enc: GPUCommandEncoder,
+    o: {
+      uniform: Float32Array<ArrayBuffer>;
+      nodes: Float32Array<ArrayBuffer>;
+      count: number;
+      grid: number;
+      fft: GPUTexture;
+      sampler: GPUSampler;
+      moments: GPUBuffer;
+      profile: (label: string, d: GPURenderPassDescriptor) => GPURenderPassDescriptor;
+      computeProfile: (label: string) => GPUComputePassDescriptor;
+    },
+  ): boolean {
+    if (!this.seaPipelines()) {
+      this.seaStats.reason = this.seaStats.reason.startsWith("failed") ? this.seaStats.reason : "compiling";
+      return false;
+    }
+    const a = this.attachments;
+    if (!a || !this.uniform || !this.table || !this.active || o.count <= 0) {
+      this.seaStats.reason = "no visibility";
+      return false;
+    }
+    const d = this.device;
+    if (!this.seaTarget || this.seaTarget.width !== a.width || this.seaTarget.height !== a.height) {
+      this.seaTarget?.distance.destroy();
+      this.seaTarget?.depth.destroy();
+      this.seaTarget = {
+        distance: d.createTexture({
+          label: "sea surface distance",
+          size: [a.width, a.height],
+          format: "r32float",
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        }),
+        depth: d.createTexture({
+          label: "sea surface depth",
+          size: [a.width, a.height],
+          format: "depth32float",
+          usage: GPUTextureUsage.RENDER_ATTACHMENT,
+        }),
+        width: a.width,
+        height: a.height,
+      };
+      this.seaBinds = null;
+    }
+    this.seaUniform ??= d.createBuffer({ size: o.uniform.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.seaNodeBuf ??= d.createBuffer({ size: o.nodes.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(this.seaUniform, 0, o.uniform);
+    d.queue.writeBuffer(this.seaNodeBuf, 0, o.nodes, 0, o.count * 4);
+    const key = [a.distance, this.table, o.fft, o.sampler, o.moments, this.seaTarget.distance];
+    if (!this.seaBinds || this.seaBinds.key.some((k, i) => k !== key[i])) {
+      const draw = this.seaPipe!,
+        res = this.seaResolvePipe!;
+      this.seaBinds = {
+        key,
+        draw0: d.createBindGroup({
+          layout: draw.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: { buffer: this.uniform } },
+            { binding: 1, resource: { buffer: this.table } },
+            { binding: 2, resource: a.distance.createView() },
+          ],
+        }),
+        draw1: d.createBindGroup({
+          layout: draw.getBindGroupLayout(1),
+          entries: [
+            { binding: 40, resource: { buffer: this.seaUniform } },
+            { binding: 41, resource: o.fft.createView({ dimension: "2d-array" }) },
+            { binding: 42, resource: o.sampler },
+            { binding: 43, resource: { buffer: this.seaNodeBuf } },
+            { binding: 44, resource: { buffer: o.moments } },
+          ],
+        }),
+        res0: d.createBindGroup({ layout: res.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: this.uniform } }] }),
+        res1: d.createBindGroup({
+          layout: res.getBindGroupLayout(1),
+          entries: [
+            { binding: 45, resource: this.seaTarget.distance.createView() },
+            { binding: 46, resource: { buffer: o.moments } },
+          ],
+        }),
+      };
+    }
+    const b = this.seaBinds;
+    const pass = enc.beginRenderPass(
+      o.profile("sea surface", {
+        colorAttachments: [{ view: this.seaTarget.distance.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+        depthStencilAttachment: {
+          view: this.seaTarget.depth.createView(),
+          depthClearValue: 0,
+          depthLoadOp: "clear",
+          depthStoreOp: "discard",
+        },
+      }),
+    );
+    pass.setPipeline(this.seaPipe!);
+    pass.setBindGroup(0, b.draw0);
+    pass.setBindGroup(1, b.draw1);
+    pass.setIndexBuffer(this.seaGridIndex(o.grid), "uint16");
+    pass.drawIndexed(o.grid * o.grid * 6, o.count);
+    pass.end();
+    const cp = enc.beginComputePass(o.computeProfile("sea surface resolve"));
+    cp.setPipeline(this.seaResolvePipe!);
+    cp.setBindGroup(0, b.res0);
+    cp.setBindGroup(1, b.res1);
+    cp.dispatchWorkgroups(Math.ceil(a.width / 8), Math.ceil(a.height / 8));
+    cp.end();
+    this.seaStats = { nodes: o.count, frames: this.seaStats.frames + 1, reason: "drawn" };
+    return true;
   }
 
   private resize(width: number, height: number): boolean {
@@ -1013,6 +1293,13 @@ export class TerrainRaster {
     }
     this.retired.clear();
     this.attachments = null;
+    this.seaTarget?.distance.destroy();
+    this.seaTarget?.depth.destroy();
+    this.seaTarget = null;
+    this.seaUniform?.destroy();
+    this.seaNodeBuf?.destroy();
+    this.seaIndex?.buf.destroy();
+    this.seaBinds = null;
     this.meshBind = null;
     this.table = null;
     this.heightBind = null;

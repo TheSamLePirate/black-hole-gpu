@@ -1,18 +1,22 @@
 // The sea's spectrum (docs/PLAN-AVIATION-AAA.md, M1; Tessendorf, "Simulating Ocean Water"): the wind's sea and the
 // swell (sea/marine.ts) each a JONSWAP spectrum — S(ω) = α g² ω⁻⁵ exp(−5/4 (ωp/ω)⁴) γ^exp(−(ω − ωp)²/(2σ²ωp²)),
 // α set so that 4√m₀ is its significant height — spread about its way (cos²ˢ(θ/2): broad for the wind's sea,
-// narrow for the swell), on deep water (ω² = g k); its random amplitudes on three cascades of 256 × 256 modes
-// (periods 1024, 128 and 16 m — whole fractions of the sea's kilometre anchor), each holding its band of
-// wavenumbers (no wave counted twice). Seeded: the same sea on every page of a room. Pure.
+// narrow for the swell), on deep water (ω² = g k); its random amplitudes on four cascades of 256 × 256 modes, each holding
+// its band of wavenumbers (no wave counted twice). Their periods are not commensurable (PLAN-MER-WEBGPU S1, after web-ocean):
+// with 1024, 128 and 16 m the whole sea repeated every kilometre, its pattern seen from the air and at grazing angles; each now
+// has its own anchor's offset (renderer: seaFftParams, in float64), so the sum never repeats. Seeded: the same sea on every
+// page of a room. Pure.
 
 export const SEA_N = 256;
-/** the cascades' periods [m] and the wavenumbers [rad/m] each holds: [lower, upper) */
-export const CASCADES = [1024, 128, 16] as const;
-export const BANDS: [number, number][] = [
-  [0, (2 * Math.PI * 6) / 128],
-  [(2 * Math.PI * 6) / 128, (2 * Math.PI * 6) / 16],
-  [(2 * Math.PI * 6) / 16, (Math.PI * SEA_N) / 16],
-];
+/** the cascades' periods [m] — ratios ~5.95, none a rational of a few (the sea's repeat gone): from the swell's kilometre to
+ *  the 2 cm ripples the finest resolves (its texel 1.9 cm) — Cox–Munk's tail finer (renderer: seaFftParams) */
+export const CASCADES = [1031.3, 173.27, 29.117, 4.8923] as const;
+/** each cascade's band [rad/m], [lower, upper): a cascade holds the wavelengths down to six of the next one's periods
+ *  (≥ 7 of its texels a wavelength), the finest down to its Nyquist's */
+export const BANDS: [number, number][] = CASCADES.map((L, c) => [
+  c === 0 ? 0 : (2 * Math.PI * 6) / L,
+  c < CASCADES.length - 1 ? (2 * Math.PI * 6) / CASCADES[c + 1]! : (Math.PI * SEA_N) / L,
+]);
 const G = 9.81;
 /** The water's physics: its gravity [m/s²] and depth [m] — the Earth's sea deep (ω² = g k); Miller's knee-deep, under 1.3 g
  *  (ω² = g k tanh(k d): the long waves held to √(g d) — PLAN-PLANETES-AAA P2). */
@@ -132,12 +136,14 @@ export interface SeaCascades {
   height: number[];
   slopeX: number[];
   slopeZ: number[];
+  /** the slopes' covariance (along × across) a cascade holds: a swell crossing the wind's sea leans the glint */
+  slopeXZ: number[];
 }
 
 export function seaCascades(systems: readonly SeaSystem[], seed = 1, phys: SeaPhysics = EARTH_SEA): SeaCascades {
   const N = SEA_N;
   const alphas = systems.map(alphaOf);
-  const out: SeaCascades = { h0: [], height: [], slopeX: [], slopeZ: [] };
+  const out: SeaCascades = { h0: [], height: [], slopeX: [], slopeZ: [], slopeXZ: [] };
   CASCADES.forEach((L, ci) => {
     const [lo, hi] = BANDS[ci]!;
     const dk = (2 * Math.PI) / L;
@@ -146,7 +152,8 @@ export function seaCascades(systems: readonly SeaSystem[], seed = 1, phys: SeaPh
     const amp = new Float32Array(N * N * 2);
     let vh = 0,
       vx = 0,
-      vz = 0;
+      vz = 0,
+      vxz = 0;
     for (let j = 0; j < N; j++)
       for (let i = 0; i < N; i++) {
         const u1 = Math.max(r(), 1e-12),
@@ -164,6 +171,7 @@ export function seaCascades(systems: readonly SeaSystem[], seed = 1, phys: SeaPh
         vh += S * dk * dk;
         vx += kx * kx * S * dk * dk;
         vz += kz * kz * S * dk * dk;
+        vxz += kx * kz * S * dk * dk;
       }
     const h0 = new Float32Array(N * N * 4);
     for (let j = 0; j < N; j++)
@@ -179,6 +187,7 @@ export function seaCascades(systems: readonly SeaSystem[], seed = 1, phys: SeaPh
     out.height.push(vh);
     out.slopeX.push(vx);
     out.slopeZ.push(vz);
+    out.slopeXZ.push(vxz);
   });
   return out;
 }

@@ -689,6 +689,11 @@ The other members tests read:
 | member | type | meaning |
 |---|---|---|
 | `firstFrameDoneAt` | number | performance.now ms when the first GPU frame finished (0 before) |
+| `seaSurfaceOn` | boolean (read/write) | the sea's surface drawn as a displaced mesh (PLAN-MER-WEBGPU S2; default true); false: the flat sea, as before — an A/B's switch |
+| `seaSurfaceDrawn` | boolean | the sea's surface was drawn this frame (under 3 km over the sea, the FFT's waves on, the raster's visibility drawn) |
+| `seaFftActive` | number (private) | the FFT's cascades computed this frame (1–4, the coarsest first: the finest left out when the nearest sea's pixel covers them) |
+| `terrainRaster.seaStats` | `{ nodes, frames, reason }` | the sea surface's last draw: its quadtree's nodes, frames drawn, `"drawn"` / `"compiling"` / `"no visibility"` / `"off"` / `"failed: …"` |
+| `seaOverride` | `SeaState \| null` (read/write) | a sea state imposed instead of the marine model's (`{ wind: { hs, tp, to }, swell: { hs, tp, to } }`, metres, seconds, radians towards): a measure's fixed sea |
 | `completedFrames` | number | GPU submissions finished |
 | `gpuErrors` | number | uncaptured GPU errors so far (0 expected) |
 | `lost` | string \| null | why the device is lost, or null |

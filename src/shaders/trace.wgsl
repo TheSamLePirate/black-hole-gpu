@@ -149,10 +149,13 @@ struct Params {
   // speed [m/s]
   wake: array<vec4f, 17>,
   // the sea's FFT waves (renderer: seaFftParams; sea/fft-gpu.ts; seaWavesFft): [0] on, choppiness, the height's
-  // standard deviation [m], unused; [1] the cascades' periods [m], N; [2] the slopes' variance finer than the
-  // cascades (along the wind, across it: Cox–Munk's share the cascades leave), unused ×2; [3] the nearest
-  // carrier's sphere in the ship's shadow map (shipShadow: its right half), w its radius (0: none)
-  seafft: array<vec4f, 4>,
+  // standard deviation [m], the dominant peak period [s]; [1] the four cascades' periods [m]; [2] the slopes' variance finer
+  // than the cascades computed (along the wind, across it: Cox–Munk's share, and the cascades left out), the whitecaps'
+  // Jacobian threshold and its spread; [3] the nearest carrier's sphere in the ship's shadow map (shipShadow: its right half),
+  // w its radius (0: none); [4], [5] each cascade's anchor's offset [m] (u, c), two a vec4; [6] the cascades computed (the
+  // coarsest first: PLAN-MER-WEBGPU S1), the left-out slopes' covariance (along × across), the light probe's nearness to the
+  // camera (1 aboard, on foot; 0 a free camera far from the ship: the sea mirrors the sky's own), unused
+  seafft: array<vec4f, 7>,
   // the mountains' warp precomputed (system/warp-grid.ts; earthWarp): [0] the reference — the camera's place —
   // (cos, sin of its longitude, sin, cos of its geodetic latitude); [1…3] each level's window: the reference's place
   // on it in nodes (u east, v north), nodes a radian, on (0/1)
@@ -928,6 +931,10 @@ var<private> FOOT_FAR: f32 = 1.0;
 // (the sea seen near: the point from the camera [m, the Earth's axes, unsquashed] — earthNear sets it)
 var<private> SEA_ON: bool = false;
 var<private> SEA_D: vec3f;
+// (the pixel's footprint on the sea along its axes [m]: the image's x and y steps there — shadeWater; zero: unknown, the
+// cascades' mips chosen from the isotropic footprint instead — PLAN-MER-WEBGPU S1)
+var<private> SEA_GX: vec2f = vec2f(0.0);
+var<private> SEA_GY: vec2f = vec2f(0.0);
 // the sea's depth under the point shaded [m] (earthGround: ETOPO's height, negative at sea)
 // (the sea's depth under the pixel [m] and how sure — earthGround: seaDepthAt, the near tiles' bathymetry; 0: deep assumed)
 var<private> SEA_DEPTH: f32 = 1e4;
@@ -8812,7 +8819,8 @@ fn smithBeckmann(c: f32, m2: f32) -> f32 {
 // the same sea, resolved where it can be.
 // (foam: the FFT's surface's Jacobian there — 1 the flat sea, under ~0.5 folding —; h its height [m])
 // (res: the foam lying on the surface — the FFT's, left by the crests that broke: 0 none, 1 a white sheet)
-struct SeaWaves { n: vec3f, vu: f32, vc: f32, m: f32, foam: f32, h: f32, res: f32 };
+// (vx: the resolved slopes' covariance along × across the wind — LEAN's cross term: 0 for the trains)
+struct SeaWaves { n: vec3f, vu: f32, vc: f32, m: f32, foam: f32, h: f32, res: f32, vx: f32 };
 // The resolved waves at the point SEA_D: twelve trains (P.sea), their slopes summed where the pixel
 // resolves them (longer than ~4 footprints, faded from 6 to 2), their variance kept where it does not.
 // Crossing trains alone draw a lattice: their crests bent (the point displaced ±10 m over ~128 m), their
@@ -9032,53 +9040,78 @@ fn seaWake(up: vec3f, footM: f32) -> SeaWake {
 // does not resolve (LEAN); where the surface folds (its Jacobian under ~0.5, the long cascades' summed) the crests
 // break white.
 // (seaWavesFft begin)
+// A cascade's coordinates for the point x on the sea's anchored axes [m]: its own anchor's offset added (P.seafft[4], [5]),
+// divided by its period.
+fn seaUv(x: vec2f, c: u32) -> vec2f {
+  let o = select(P.seafft[5], P.seafft[4], c < 2u);
+  let off = select(o.zw, o.xy, (c & 1u) == 0u);
+  return (x + off) / P.seafft[1][c];
+}
+// A cascade's layer at uv: filtered over the pixel's footprint — anisotropic along the sea where it is known (SEA_GX, SEA_GY:
+// the hardware's anisotropic filtering over the footprint's ellipse — the grazing sea's moiré was its isotropic mip chosen too
+// fine along the view), else at the isotropic footprint's mip.
+fn seaTap(uv: vec2f, c: u32, layer: u32, lod: f32) -> vec4f {
+  if (dot(SEA_GX, SEA_GX) + dot(SEA_GY, SEA_GY) > 0.0) {
+    let L = P.seafft[1][c];
+    return textureSampleGrad(seaFft, seaSamp, uv, i32(3u * c + layer), SEA_GX / L, SEA_GY / L);
+  }
+  return textureSampleLevel(seaFft, seaSamp, uv, i32(3u * c + layer), lod);
+}
 fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
   var o: SeaWaves;
   o.m = P.sea[1].w;
   var x = vec2f(dot(SEA_D, P.sea[0].xyz) + P.sea[2].x, dot(SEA_D, P.sea[1].xyz) + P.sea[2].y);
   let foot = max(footM, 1e-3);
-  var dsum = vec2f(0.0);
-  for (var i = 0u; i < 2u; i++) {
-    let L = P.seafft[1][i];
-    let lod = max(log2(foot * 256.0 / L), 0.0);
-    dsum += textureSampleLevel(seaFft, seaSamp, x / L, i32(2u * i), lod).xz;
+  let nC = min(u32(P.seafft[6].x + 0.5), 4u);
+  // (the point the choppy surface displaced here came from: the two long cascades' horizontal displacement taken back, twice —
+  // the fixed point x₀ = x − D(x₀): the surface's exact point drawn by the mesh, S2, its waves found under it)
+  let x0 = x;
+  for (var it = 0u; it < 2u; it++) {
+    var dsum = vec2f(0.0);
+    for (var i = 0u; i < min(nC, 2u); i++) {
+      let lod = max(log2(foot * 256.0 / P.seafft[1][i]), 0.0);
+      dsum += seaTap(seaUv(x, i), i, 0u, lod).xz;
+    }
+    x = x0 - dsum * o.m;
   }
-  x -= dsum * o.m;
   var su = 0.0;
   var sc = 0.0;
   var J = 1.0;
   var h = 0.0;
-  for (var i = 0u; i < 3u; i++) {
-    let L = P.seafft[1][i];
-    let lod = max(log2(foot * 256.0 / L), 0.0);
-    let s = textureSampleLevel(seaFft, seaSamp, x / L, i32(2u * i + 1u), lod);
+  for (var i = 0u; i < nC; i++) {
+    let lod = max(log2(foot * 256.0 / P.seafft[1][i]), 0.0);
+    let uv = seaUv(x, i);
+    let s = seaTap(uv, i, 1u, lod);
+    // (LEAN: the footprint's mean slope and its variance — the second moments' mean less the mean's square —, the cross term
+    // from the third layer's product)
+    let pr = seaTap(uv, i, 2u, lod);
     su += s.x;
     sc += s.y;
     o.vu += max(s.z - s.x * s.x, 0.0);
     o.vc += max(s.w - s.y * s.y, 0.0);
+    o.vx += pr.z - s.x * s.y;
     if (i < 2u) {
-      let d = textureSampleLevel(seaFft, seaSamp, x / L, i32(2u * i), lod);
+      let d = seaTap(uv, i, 0u, lod);
       J += d.w - 1.0;
       h += d.y;
+    }
+    // (the foam the long cascades' crests left — sea/fft-gpu.ts —, drawn out upwind of where it was made: the crest runs on
+    // downwind, its foam stays behind in streaks along the wind — three taps back along it)
+    if (i < 2u) {
+      let st = max(2.0, 1.5 * foot);
+      var f = 0.5 * pr.x;
+      for (var k = 1; k < 3; k++) {
+        f += array<f32, 3>(0.5, 0.3, 0.2)[k] * seaTap(seaUv(x - vec2f(st * f32(k * k + k), 0.0), i), i, 2u, lod).x;
+      }
+      o.res = max(o.res, f * select(0.7, 1.0, i == 0u));
     }
   }
   o.n = normalize(q - (su * tu + sc * tc) * o.m);
   o.vu *= o.m * o.m;
   o.vc *= o.m * o.m;
+  o.vx *= o.m * o.m;
   o.foam = 1.0 + (J - 1.0) * o.m;
   o.h = h * o.m;
-  // (the foam the two long cascades' crests left — sea/fft-gpu.ts, their third layers —, drawn out upwind of where it was
-  // made: the crest runs on downwind, its foam stays behind in streaks along the wind — three taps back along it)
-  for (var i = 0u; i < 2u; i++) {
-    let L = P.seafft[1][i];
-    let lod = max(log2(foot * 256.0 / L), 0.0);
-    let st = max(2.0, 1.5 * foot);
-    var f = 0.0;
-    for (var k = 0; k < 3; k++) {
-      f += array<f32, 3>(0.5, 0.3, 0.2)[k] * textureSampleLevel(seaFft, seaSamp, (x - vec2f(st * f32(k * k + k), 0.0)) / L, i32(6u + i), lod).x;
-    }
-    o.res = max(o.res, f * select(0.7, 1.0, i == 0u));
-  }
   o.res *= o.m;
   return o;
 }
@@ -9086,10 +9119,9 @@ fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves {
 fn seaHeightAt(d: vec3f, s: f32) -> f32 {
   let x = vec2f(dot(d, P.sea[0].xyz) + P.sea[2].x, dot(d, P.sea[1].xyz) + P.sea[2].y);
   var h = 0.0;
-  for (var i = 0u; i < 2u; i++) {
-    let L = P.seafft[1][i];
-    let lod = max(log2(max(s * 0.0015, 0.05) * 256.0 / L), 0.0);
-    h += textureSampleLevel(seaFft, seaSamp, x / L, i32(2u * i), lod).y;
+  for (var i = 0u; i < min(u32(P.seafft[6].x + 0.5), 2u); i++) {
+    let lod = max(log2(max(s * 0.0015, 0.05) * 256.0 / P.seafft[1][i]), 0.0);
+    h += textureSampleLevel(seaFft, seaSamp, seaUv(x, i), i32(3u * i), lod).y;
   }
   return h * P.sea[1].w;
 }
@@ -9154,6 +9186,8 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   var n = normal;
   var vu = 0.0;
   var vc = 0.0;
+  // (the resolved slopes' covariance along × across the wind: LEAN's cross term — a swell crossing the wind's sea)
+  var vx = 0.0;
   // (the share of Cox–Munk's variance in slopes finer than the resolved range: half)
   var fine = 1.0;
   var wk: SeaWake;
@@ -9196,6 +9230,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     n = normalize(mix(sw.n, normal, calm));
     vu = sw.vu * (1.0 - calm);
     vc = sw.vc * (1.0 - calm);
+    vx = sw.vx * (1.0 - calm);
     fine = 1.0 - 0.5 * b;
     // (the ships' wakes: their waves, their smoothed strips)
     wk = seaWake(normal, footM);
@@ -9204,6 +9239,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     fine *= sm;
     vu *= sm;
     vc *= sm;
+    vx *= sm;
     // (a craft's downwash: the water ruffled — its slopes' variance raised, the glint scattered, the lane darker)
     vu += wk.rough * b;
     vc += wk.rough * b;
@@ -9217,18 +9253,25 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   }
   var su2 = 0.00316 * U * fine + vu;
   var sc2 = (0.003 + 0.00192 * U) * fine + vc;
+  // (their covariance: the resolved cross term and the left-out cascades' — the tail's own is symmetric, Cox–Munk's)
+  var cuc = vx;
   if (tailU >= 0.0) {
     let b = P.sea[1].w;
     su2 = mix(0.00316 * U, tailU, b) * (1.0 - 0.6 * wk.calm * b) + vu;
     sc2 = mix(0.003 + 0.00192 * U, tailC, b) * (1.0 - 0.6 * wk.calm * b) + vc;
+    cuc += P.seafft[6].y * b;
   }
+  // (a covariance's determinant kept positive: |ρ| < 0.98)
+  cuc = clamp(cuc, -0.98 * sqrt(su2 * sc2), 0.98 * sqrt(su2 * sc2));
+  let det = max(su2 * sc2 - cuc * cuc, 1e-12);
   let tun = normalize(tu - n * dot(n, tu));
   let tcn = cross(n, tun);
   let H = normalize(Ls + V);
   let hz = max(dot(n, H), 1e-3);
   let hu = dot(tun, H) / hz;
   let hc = dot(tcn, H) / hz;
-  let D = exp(-0.5 * (hu * hu / su2 + hc * hc / sc2)) / (2.0 * PI * sqrt(su2 * sc2) * hz * hz * hz * hz);
+  // (the glint: the half-vector's slope under the slopes' full Gaussian — its covariance's ellipse leans with a crossing swell)
+  let D = exp(-0.5 * (hu * hu * sc2 - 2.0 * hu * hc * cuc + hc * hc * su2) / det) / (2.0 * PI * sqrt(det) * hz * hz * hz * hz);
   let nl = max(dot(n, Ls), 0.0);
   let nv = max(dot(n, V), 0.02);
   // (the masking along each direction: its slopes' variance there)
@@ -9236,8 +9279,8 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   let lc = dot(tcn, Ls);
   let vvu = dot(tun, V);
   let vvc = dot(tcn, V);
-  let m2l = 2.0 * (su2 * lu * lu + sc2 * lc * lc) / max(lu * lu + lc * lc, 1e-6);
-  let m2v = 2.0 * (su2 * vvu * vvu + sc2 * vvc * vvc) / max(vvu * vvu + vvc * vvc, 1e-6);
+  let m2l = 2.0 * (su2 * lu * lu + 2.0 * cuc * lu * lc + sc2 * lc * lc) / max(lu * lu + lc * lc, 1e-6);
+  let m2v = 2.0 * (su2 * vvu * vvu + 2.0 * cuc * vvu * vvc + sc2 * vvc * vvc) / max(vvu * vvu + vvc * vvc, 1e-6);
   let G = smithBeckmann(nl, m2l) * smithBeckmann(nv, m2v);
   let F = 0.02 + 0.98 * pow(1.0 - max(dot(V, H), 0.0), 5.0);
   var Fv = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
@@ -9283,7 +9326,8 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     // main view's sky darker than the snow —, and the fjords shone as a saturated white band along the horizon, Moon or not
     // (AM2's aurora e2e; the probe's night scale itself still to trace); a lit cloud stays within it)
     skyClear = skyR;
-    skyR = mix(skyR, min(probeRadiance(camAxes(fromBody(rUp))), 4.0 * skyR), b);
+    // (the probe only where it was traced about the camera — P.seafft[6].z, renderer seaFftParams)
+    skyR = mix(skyR, min(probeRadiance(camAxes(fromBody(rUp))), 4.0 * skyR), b * P.seafft[6].z);
     // (the water's own colour, from the light into it: the open sea's dark blue, its scattering; over a shallow bed —
     // SEA_DEPTH, the tiles' bathymetry — the bed seen through it, the light down to it and back attenuated by the water's
     // absorption — clear coastal water's, the red gone in a few metres, the blue and green in tens —: sand turquoise,
@@ -9325,7 +9369,11 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     let r1 = max(RNDV.x, 1e-4);
     let r2 = RNDV.y;
     let g = sqrt(-2.0 * log(r1)) * vec2f(cos(TAU * r2), sin(TAU * r2));
-    let nS = normalize(n - g.x * sqrt(su2) * tun - g.y * sqrt(sc2) * tcn);
+    // (a facet drawn from the slopes' full Gaussian: its covariance's Cholesky factor)
+    let ca = sqrt(su2);
+    let cb = cuc / max(ca, 1e-6);
+    let cc = sqrt(max(sc2 - cb * cb, 1e-8));
+    let nS = normalize(n - g.x * ca * tun - (g.x * cb + g.y * cc) * tcn);
     let rS = reflect(-V, nS);
     if (NEAR_DETAIL && dot(rS, normal) > 0.005) {
       let ssr = seaSSR(SEA_D, normalize(vec3f(rS.xy, rS.z * AIR.ab)));
@@ -9338,7 +9386,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   // found in the cloud pass's image, its clouds taken where they lie that far along the camera's ray; front to back over
   // the clear sky's mirror; the world's own mirror — seaSSR — first)
   if (SEA_ON && (TUNE_GSKIP & 16384u) == 0u) {
-    let wss = max(smoothstep(800.0, 4000.0, length(SEA_D)), 1.0 - P.sea[1].w) * (1.0 - ssrW);
+    let wss = max(max(smoothstep(800.0, 4000.0, length(SEA_D)), 1.0 - P.sea[1].w), 1.0 - P.seafft[6].z) * (1.0 - ssrW);
     let upq = normalize(q);
     let rq = normalize(vec3f(rUp.xy, rUp.z * AIR.ab));
     let sinE = max(dot(rq, upq), 0.02);
@@ -15194,6 +15242,64 @@ fn bodyLiteAir(gid: vec2u, k: u32) {
   stamps[idx] = P.frame.x;
 }
 
+// The water at a raster pixel (shadeLite; PLAN-MER-WEBGPU S2): the sea, a lake, a river — its cover sharp, the polygon's edge alone
+// softened; the sea's mask the relief map's over the sea's level, the fine bathymetry's under a surface at that level, OSM's by the
+// coasts. Read first thing, from the geometry alone (the point, its footprint, its height, the smooth normal), so that a pixel of
+// open deep sea leaves shadeLite before the ground's material is read for it — on a sea view shadeLite spent ~33 ms on kerr-mini
+// on pixels it then handed to shadeWater (S0, 10 Nov 2026). x the water's cover, y calm (0 the sea, 0.6 a river, 0.92 a lake),
+// z its kind (0 sea, 1 river, 2 lake), w 1 when the sea there is open and deep (no bed shows: shadeWater needs no ground under it).
+fn liteWater(gq: vec3f, fx: vec3f, fy: vec3f, hG: f32, fpM: f32, nW: vec3f, dirW: vec3f, tM: f32, lvl: f32) -> vec4f {
+    let rel0 = earthRelief(gq, fx, fy);
+  // (the point's height known to half a footprint: the ray jittered within its pixel, the distance read at its centre — at
+  // 10 km some 4–5 m —: the sea's tests at its level given that slack, or far off the sea mixed with the ground in grains, a
+  // darker speckled band beyond ~7 km facing a low Sun, the T7 sunset series)
+  var hW = max(hG - 0.5 * fpM, 0.0);
+  // (the mesh behind its data: a level baked before its tiles came — a change under the finer levels rebaked 10 s later (T4a),
+  // a coarse level's island smeared over kilometres — stands metres over a sea the data already have at its level: shown as
+  // land, plates out of the sea while the world loads (Toulon-Hyères, Porquerolles, the coast-loading e2e). The sea's tests
+  // read the lower of the mesh's height and the data's at the point — read only where the mesh is over the sea's level on a
+  // low coast of the global map, or where its mask has some sea within its kilometre: the cliffs — the Calanques' far rings,
+  // their 150–600 m nodes tying a 300 m cliff to the sea, stood plates out over it (the coast-flight e2e) —; inland nothing)
+  if (hW > 0.3 && (rel0.w < 50.0 || rel0.b > 0.02)) {
+    hW = min(hW, max(earthH(gq, max(fpM, 1.0), true).x - 0.5 * fpM, 0.0));
+  }
+  var sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hW));
+  // (the sea the relief map's coarse mask misses — its texels of kilometres call the sea by a coast land: the water there shaded
+  // as ground, black, a staircase across a gulf —: a surface at the sea's level over a bottom the fine bathymetry finds deeper
+  // than ~10 m — seaDepthAt, the windows z 10…8 —; a polder, a marsh at the sea's level, a few metres under it: land)
+  // (seaBed: a bed the bathymetry finds under a surface at the sea's level at all — the OSM's harbours, its bays drawn as lakes
+  // — Sydney's Port Jackson, the T7 survey —: the sea, not a lake's calm)
+  var seaBed = 0.0;
+  if (sea0 < 0.99 && hW < 0.3) {
+    let dz = seaDepthAt(gq, max(length(fx), length(fy)) * EARTH_RM);
+    seaBed = smoothstep(0.0, 0.25, dz.y) * (1.0 - smoothstep(0.1, 0.3, hW));
+    sea0 = max(sea0, smoothstep(6.0, 12.0, dz.x) * seaBed);
+    seaBed *= smoothstep(1.0, 3.0, dz.x);
+  }
+  var osm = vec2f(0.0);
+  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
+    let toW = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+    osm = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
+    // (water lies flat, and the sea at its level: a polygon's outline is a line on the map — over a cliff, a steep bank, the
+    // ground the relief raises over the sea within it, land; the T7 survey, Sam: the Calanques' faces striped with the sea)
+    // (under the sea's level — the mesh the bed's, a drowned ridge's slopes steep —: water whatever its slope; over it, flat
+    // ground alone — the T7 survey: Étretat's banks shown as white sand out of the sea)
+    let flat = max(smoothstep(0.82, 0.94, dot(nW, gq)), 1.0 - smoothstep(0.3, 1.5, hW));
+    osm.x = smoothstep(0.35, 0.65, osm.x) * flat * select(1.0, 1.0 - smoothstep(3.0, 8.0, hW), osm.y < 0.3);
+  }
+  let water = max(sea0, osm.x) * (1.0 - lvl);
+  let calm = osm.x * (1.0 - max(sea0, seaBed)) * osm.y;
+  let kind = select(0.0, select(1.0, 2.0, osm.y > 0.8), calm > 0.0);
+  // (open and deep: all water, the sea's, and no bed the bathymetry knows within 60 m — the shallows' turquoise reads the ground
+  // under the water, shadeLite's colour)
+  var deep = 0.0;
+  if (water >= 0.999 && calm <= 0.0) {
+    let dz = seaDepthAt(gq, max(length(fx), length(fy)) * EARTH_RM);
+    deep = select(1.0, 0.0, dz.y > 0.0 && dz.x < 60.0);
+  }
+  return vec4f(water, calm, kind, deep);
+}
+
 @compute @workgroup_size(8, 8)
 fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let W = u32(P.res.x);
@@ -15279,6 +15385,23 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (dot(nFoot, nFoot) < 0.5 || (liteSkip() & 65536u) != 0u) { nFoot = q; }
   let fx = earthFootOn(q, rd, squashed(toBody(P.camRight.xyz), ab), fp, nFoot);
   let fy = earthFootOn(q, rd, squashed(toBody(P.camUp.xyz), ab), fp, nFoot);
+  // (the water first — liteWater —: a pixel of open deep sea left to shadeWater at once, its ground's material never read; the
+  // sea's weight whole — under 15 km: over it shadeWater mixes the ground's colour in)
+  let meshW = terrainRasterMesh(centre);
+  var wat = vec4f(0.0);
+  if (!meshW && !isTree && (liteSkip() & 1u) == 0u) {
+    let dirW0 = toBody(ray.look);
+    let lvl0 = select(0.0, runwayGrade(gq).y, rwyCount() > 0u);
+    let nW = select(gq, tn, dot(tn, tn) > 0.5);
+    wat = liteWater(gq, fx, fy, hG, fp * EARTH_RM, nW, dirW0, tM, lvl0);
+    // (liteSkip 1073741824 — an A/B —: the open sea's ground read anyway, as before PLAN-MER-WEBGPU S2)
+    if (wat.w > 0.5 && P.sea[1].w >= 0.999 && rasterWaterOn() && (liteSkip() & 1536u) == 0u && (liteSkip() & 1073741824u) == 0u) {
+      accum[idx] = vec4f(0.0, 0.0, 0.0, 1.0);
+      moments[idx] = vec2f(RASTER_WATER - wat.z - 0.25 * wat.x, tM / EARTH_RM * bodyRadius(k));
+      stamps[idx] = P.frame.x;
+      return;
+    }
+  }
   // (the colour: the day's map, the tiles' imagery over it, the regional surface, the orthophotos over all)
   let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
   var img: TileImage;
@@ -15683,52 +15806,11 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
     // (by day the same light white — a medium-intensity flash, the same rhythm: against the daylight, a spark on the nacelle)
     G += vec3f(1.0) * (luminance(E) / PI) * 6.0 * (1.0 - dark) * on;
   }
-  // (the water — the sea, the lakes and rivers —: found here — its cover sharp, the polygon's edge alone softened; the sea's
-  // mask the relief map's over the sea's level, OSM's by the coasts —, drawn by shadeWater: this pixel's surface under it left
-  // to it in accum, its kind and cover in moments.x)
+  // (the water — liteWater, read at the start —: drawn by shadeWater, this pixel's surface under it left to it in accum, its kind
+  // and cover in moments.x)
   if (!mesh && !isTree && (liteSkip() & 1u) == 0u) {
-    let rel0 = earthRelief(gq, fx, fy);
-    // (the point's height known to half a footprint: the ray jittered within its pixel, the distance read at its centre — at
-    // 10 km some 4–5 m —: the sea's tests at its level given that slack, or far off the sea mixed with the ground in grains, a
-    // darker speckled band beyond ~7 km facing a low Sun, the T7 sunset series)
-    var hW = max(hG - 0.5 * fpM, 0.0);
-    // (the mesh behind its data: a level baked before its tiles came — a change under the finer levels rebaked 10 s later (T4a),
-    // a coarse level's island smeared over kilometres — stands metres over a sea the data already have at its level: shown as
-    // land, plates out of the sea while the world loads (Toulon-Hyères, Porquerolles, the coast-loading e2e). The sea's tests
-    // read the lower of the mesh's height and the data's at the point — read only where the mesh is over the sea's level on a
-    // low coast of the global map, or where its mask has some sea within its kilometre: the cliffs — the Calanques' far rings,
-    // their 150–600 m nodes tying a 300 m cliff to the sea, stood plates out over it (the coast-flight e2e) —; inland nothing)
-    if (hW > 0.3 && (rel0.w < 50.0 || rel0.b > 0.02)) {
-      hW = min(hW, max(earthH(gq, max(fpM, 1.0), true).x - 0.5 * fpM, 0.0));
-    }
-    var sea0 = smoothstep(0.35, 0.65, rel0.b) * (1.0 - smoothstep(0.5, 2.0, hW));
-    // (the sea the relief map's coarse mask misses — its texels of kilometres call the sea by a coast land: the water there shaded
-    // as ground, black, a staircase across a gulf —: a surface at the sea's level over a bottom the fine bathymetry finds deeper
-    // than ~10 m — seaDepthAt, the windows z 10…8 —; a polder, a marsh at the sea's level, a few metres under it: land)
-    // (seaBed: a bed the bathymetry finds under a surface at the sea's level at all — the OSM's harbours, its bays drawn as lakes
-    // — Sydney's Port Jackson, the T7 survey —: the sea, not a lake's calm)
-    var seaBed = 0.0;
-    if (sea0 < 0.99 && hW < 0.3) {
-      let dz = seaDepthAt(gq, max(length(fx), length(fy)) * EARTH_RM);
-      seaBed = smoothstep(0.0, 0.25, dz.y) * (1.0 - smoothstep(0.1, 0.3, hW));
-      sea0 = max(sea0, smoothstep(6.0, 12.0, dz.x) * seaBed);
-      seaBed *= smoothstep(1.0, 3.0, dz.x);
-    }
-    var osm = vec2f(0.0);
-    if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
-      let toW = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
-      osm = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
-      // (water lies flat, and the sea at its level: a polygon's outline is a line on the map — over a cliff, a steep bank, the
-      // ground the relief raises over the sea within it, land; the T7 survey, Sam: the Calanques' faces striped with the sea)
-      // (under the sea's level — the mesh the bed's, a drowned ridge's slopes steep —: water whatever its slope; over it, flat
-      // ground alone — the T7 survey: Étretat's banks shown as white sand out of the sea)
-      let flat = max(smoothstep(0.82, 0.94, dot(n, gq)), 1.0 - smoothstep(0.3, 1.5, hW));
-      osm.x = smoothstep(0.35, 0.65, osm.x) * flat * select(1.0, 1.0 - smoothstep(3.0, 8.0, hW), osm.y < 0.3);
-    }
-    // (an airfield levelled: land, even where the maps had water)
-    let water = max(sea0, osm.x) * (1.0 - lvl);
-    let calm = osm.x * (1.0 - max(sea0, seaBed)) * osm.y;
-    let kind = select(0.0, select(1.0, 2.0, osm.y > 0.8), calm > 0.0);
+    let water = wat.x;
+    let kind = wat.z;
     // (TUNE_LITE 512: the water's cover drawn by its kind — red the sea, green a river, blue a lake: a measure)
     if ((liteSkip() & 512u) != 0u) {
       let kc = select(select(vec3f(0.5, 0.0, 0.0), vec3f(0.0, 0.5, 0.0), kind > 0.5), vec3f(0.0, 0.0, 0.6), kind > 1.5);
@@ -15833,7 +15915,10 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   let calm = select(0.0, select(0.6, 0.92, kind > 1.5), kind > 0.5);
   let centre = vec2f(gid.xy) + 0.5;
   let pos = centre + liteJitter(gid.xy);
-  var tM = terrainRasterHint(pos);
+  // (the surface's distance: shadeLite's — the ground's at the jittered ray — or, where the sea's surface was drawn over it, the
+  // waves' own — the terrain raster's seaResolve, PLAN-MER-WEBGPU S2: moments.y, metres over bodyRadius's scale)
+  var tM = moments[idx].y / bodyRadius(k) * EARTH_RM;
+  if (tM <= 0.0) { tM = terrainRasterHint(pos); }
   if (tM <= 0.0) { tM = terrainRasterHint(centre); }
   let ray = rasterRay(pos, k);
   // (R6a-ciel: a ray the mirage's air turns back up before this sea — the tracer's sky there, main's)
@@ -15896,7 +15981,12 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   var wcol: vec3f;
   if (calm > 0.0) { wcol = inlandWater(q, -rd, Ls, Eg, sky, footSea, kind > 1.5); }
   else {
+    // (the pixel's footprint on the sea's axes [m]: the cascades filtered over its ellipse — seaTap)
+    SEA_GX = vec2f(dot(fx, P.sea[0].xyz), dot(fx, P.sea[1].xyz)) * EARTH_RM;
+    SEA_GY = vec2f(dot(fy, P.sea[0].xyz), dot(fy, P.sea[1].xyz)) * EARTH_RM;
     wcol = seaShade(q, -rd, Ls, Eg, sky, G, footSea, 0.0, vec4f(0.0));
+    SEA_GX = vec2f(0.0);
+    SEA_GY = vec2f(0.0);
     // (the shore's wash: where the probe found land within metres — a cliff's foot, a beach's edge —, the waves' white breaking
     // on it, in patches drifting with the clock, as much as the waves are high; here, not in seaShade — every kernel's copy)
     if (SEA_SHORE > 0.0) {
