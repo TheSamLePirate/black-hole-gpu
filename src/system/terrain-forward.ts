@@ -112,13 +112,19 @@ export class TerrainForward {
     return this.key === key && !!this.forward && !!this.finish;
   }
   /** Builds them for `key` from its specialised source (once; a newer key replaces an older build). */
-  async build(key: number, trace: string, vertex: GPUShaderModule, debug = false): Promise<void> {
+  async build(key: number, trace: string, vertex: GPUShaderModule, constants: Record<string, number>, debug = false): Promise<void> {
     if (this.building === key || this.key === key) return;
     this.building = key;
     try {
       const fwdCode = terrainForwardShader(trace, debug);
       const finCode = terrainForwardFinishShader(trace);
       const used = usedBindings(fwdCode, ["terrainVs", "forwardFs"]);
+      // (the key's constants — the specialised source keeps its overrides, their values given at the pipeline's creation, as the
+      // tracer's own pipelines are: without them HAS_TERRAIN_RASTER was false, every fragment turned away)
+      const own = (code: string) => {
+        const names = new Set([...code.matchAll(/^override\s+(\w+)/gm)].map((m) => m[1]!));
+        return Object.fromEntries(Object.entries(constants).filter(([k]) => names.has(k)));
+      };
       const d = this.device;
       const fm = d.createShaderModule({ code: fwdCode, label: "forward ground" });
       const xm = d.createShaderModule({ code: finCode, label: "forward ground: finishing" });
@@ -132,14 +138,14 @@ export class TerrainForward {
           entryPoint: "terrainVs",
           buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }],
         },
-        fragment: { module: fm, entryPoint: "forwardFs", targets: [{ format: TERRAIN_FORWARD_FORMAT }] },
+        fragment: { module: fm, entryPoint: "forwardFs", targets: [{ format: TERRAIN_FORWARD_FORMAT }], constants: own(fwdCode) },
         primitive: { topology: "triangle-list", cullMode: "none" },
       });
       const t1 = performance.now();
       const finish = await d.createComputePipelineAsync({
         label: "forward ground: finishing",
         layout: d.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutReadLayout] }),
-        compute: { module: xm, entryPoint: "forwardFinish" },
+        compute: { module: xm, entryPoint: "forwardFinish", constants: own(finCode) },
       });
       this.compileMs = { forward: t1 - t0, finish: performance.now() - t1 };
       if (this.building !== key) return;

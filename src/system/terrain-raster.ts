@@ -1003,6 +1003,9 @@ export class TerrainRaster {
       });
     }
     this.device.queue.writeBuffer(this.uniform, 0, frame);
+    // (PLAN-J1 J1-4: the frame the forward ground draws the patch with — its own copy: the uniform may be written again before it)
+    this.visibilityFrame = frame.slice();
+    this.visibilityCalls++;
     const a = this.attachments!;
     const pass = enc.beginRenderPass(
       profile("terrain raster visibility", {
@@ -1286,7 +1289,14 @@ export class TerrainRaster {
     target: GPUTexture,
     profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
   ): boolean {
-    if (!this.active || this.error || this.reason !== "pilot" || !this.uniform || !this.table || !this.index || !this.vertex) return false;
+    if (!this.active || this.error || this.reason !== "pilot" || !this.visibilityFrame || !this.table || !this.index || !this.vertex)
+      return false;
+    this.forwardUniform ??= this.device.createBuffer({
+      label: "forward ground: the visibility's frame",
+      size: TERRAIN_RASTER_UNIFORM_BYTES,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(this.forwardUniform, 0, this.visibilityFrame);
     if (this.forwardBind?.pipe !== pipe || this.forwardBind.table !== this.table)
       this.forwardBind = {
         pipe,
@@ -1294,11 +1304,38 @@ export class TerrainRaster {
         bind: this.device.createBindGroup({
           layout: pipe.getBindGroupLayout(0),
           entries: [
-            { binding: 0, resource: { buffer: this.uniform } },
+            { binding: 0, resource: { buffer: this.forwardUniform } },
             { binding: 1, resource: { buffer: this.table } },
           ],
         }),
       };
+    // (diagnostic — forwardProbe —: the visibility pipeline drawn again here, into its own targets, the state as the forward sees it)
+    if (this.forwardProbe && this.mesh && this.meshBind && this.heightBind && this.attachments) {
+      const { width: w, height: h } = this.attachments;
+      if (this.probeDist?.width !== w || this.probeDist.height !== h) {
+        this.probeDist = this.device.createTexture({
+          size: [w, h],
+          format: "rgba32float",
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+        });
+        this.probeMot = this.device.createTexture({ size: [w, h], format: "rgba16float", usage: GPUTextureUsage.RENDER_ATTACHMENT });
+        this.probeDepth = this.device.createTexture({ size: [w, h], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT });
+      }
+      const pp = enc.beginRenderPass({
+        colorAttachments: [
+          { view: this.probeDist.createView(), loadOp: "clear", storeOp: "store" },
+          { view: this.probeMot!.createView(), loadOp: "clear", storeOp: "store" },
+        ],
+        depthStencilAttachment: { view: this.probeDepth!.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
+      });
+      pp.setPipeline(this.mesh);
+      pp.setBindGroup(0, this.meshBind);
+      pp.setBindGroup(1, this.heightBind);
+      pp.setIndexBuffer(this.index, "uint32");
+      pp.setVertexBuffer(0, this.vertex);
+      pp.drawIndexed(this.indexCount);
+      pp.end();
+    }
     const pass = enc.beginRenderPass(
       profile("forward ground", {
         colorAttachments: [{ view: target.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
@@ -1316,6 +1353,15 @@ export class TerrainRaster {
     return true;
   }
   private forwardBind: { pipe: GPURenderPipeline; table: GPUBuffer; bind: GPUBindGroup } | null = null;
+  private forwardUniform: GPUBuffer | null = null;
+  /** diagnostic: the visibility pipeline drawn again at the forward's place (probeDist) */
+  forwardProbe = false;
+  probeDist: GPUTexture | null = null;
+  private probeMot: GPUTexture | null = null;
+  private probeDepth: GPUTexture | null = null;
+  /** the last visibility pass's frame (its uniform's contents) and how many passes were encoded (the probes') */
+  private visibilityFrame: Float32Array<ArrayBuffer> | null = null;
+  visibilityCalls = 0;
   /** the moving meshes' motion of the last Earth visibility pass (PLAN-J1 J1-2); null when it did not run — another world's body
    *  raster leaves the target as it was */
   motionTexture(): GPUTexture | null {

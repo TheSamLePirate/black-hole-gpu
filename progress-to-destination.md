@@ -2639,3 +2639,16 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Limites / suite** : trouver pourquoi le dessin ne produit pas de fragment (comparer l'uniforme du patch à l'instant du forward, un
   triangle de test, le même pipeline avec la cible de profondeur de la visibilité) ; puis A/B image et coût sur J0. GRAPHICS-PIPELINE
   (C17b), BH-API (`forwardGround`…).
+
+## 2026-11-11T00:45Z — J1-4 : le forward du sol fonctionne, mesuré +13,6 ms — une mesure qui oriente la suite
+
+- **Contribution** (PLAN-J1 J1-4 ; stratégie §7.4/§8) : la cause des « zéro fragment » trouvée par sondes successives (le rejeu du
+  pipeline de visibilité, le décompte des codes de maillage, les raisons des rejets) : les pipelines forward étaient créés sans les
+  `constants` de la clé — le source spécialisé garde ses `override` à leur défaut (`HAS_TERRAIN_RASTER` faux). Corrigé ; le forward a
+  aussi son propre uniforme (copie de la trame de la visibilité) et un diagnostic (`forwardDebug`, `TerrainRaster.forwardProbe`).
+- **Preuve** : **mesuré** sur kerr-mini (Toulon, 120 m sur le sol, 1440×810) : 285 500 pixels ombrés par le fragment, image identique à
+  l'œil, 0 erreur GPU ; `forward ground` 16,3 ms + finition 1,0 ms contre `earth lite` −3,7 ms : **+13,6 ms l'image**.
+- **Ce que ça dit** : sur le maillage fin du patch (~3 px par triangle), l'ombrage par fragment coûte ~4× le calcul par pixel
+  (hypothèse : les quads 2×2 aux bords des triangles, non mesurée seule). La visibilité suivie d'un calcul reste la voie efficace pour le
+  sol dense ; un forward n'y paierait qu'avec un maillage d'ombrage plus grossier ou pour les grands triangles (bâtiments, appareil —
+  J1-5). **Décision de Sam** sur l'orientation de J1-4 ; le pilote reste éteint.

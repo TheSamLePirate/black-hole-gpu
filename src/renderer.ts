@@ -5330,7 +5330,7 @@ export class Renderer {
       });
       // (every function kept — the relief library's vertex stage reads some shadeLite does not —: the page's specialiser)
       this.specialiser ??= new WgslSpecialiser(this.traceSource);
-      void f.build(key, this.specialiser.specialise(constants), this.terrainRaster.vertexModule, this.forwardDebug);
+      void f.build(key, this.specialiser.specialise(constants), this.terrainRaster.vertexModule, constants, this.forwardDebug);
     }
     return null;
   }

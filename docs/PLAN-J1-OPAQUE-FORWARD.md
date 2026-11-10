@@ -144,6 +144,19 @@ page du traceur (`mainLayout`), la couleur forward à la place de la LUT lointai
 fragment écrit** (relue : cible vide, même avec un remplissage constant en diagnostic : le dessin ne produit aucun fragment, données
 du patch et liaisons vérifiées) ; cause non trouvée. Laissé éteint ; `check-wgsl` 78/78, `kernel-budget` inchangé.
 
+**J1-4, le pilote fonctionne — et coûte (11 novembre, nuit).** La cause des « zéro fragment » : le source spécialisé garde ses 65
+`override` avec leur valeur par défaut, les vraies valeurs données à la création des pipelines (`constants`) — les deux pipelines
+forward étaient créés sans : `HAS_TERRAIN_RASTER` faux, chaque fragment écarté (raison 1, 434 000 fragments). Corrigé (les constantes
+de la clé, filtrées sur les `override` de chaque module). (La vue de 700 m n'avait d'ailleurs pas de patch à l'image : les anneaux
+seuls ; la sonde passe à 120 m.) **Mesuré sur kerr-mini** (Toulon, 120 m au-dessus du sol, regard −30°, 1440×810, commit 60f77332+) :
+285 500 pixels ombrés par le fragment, l'image identique à l'œil ; **`forward ground` 16,3 ms + finition 1,0 ms, `earth lite` 45,9 →
+42,2 ms : +13,6 ms l'image**. Par pixel, le fragment coûte ~4× le calcul. Hypothèse, non mesurée séparément : le patch fait ~131 000
+triangles pour ~427 000 pixels (~3 px par triangle) et le matériel ombre par quads 2×2 — l'ombrage forward d'un maillage aussi fin
+paie ses bords de triangles. **Conséquence pour J1-4 (à décider par Sam)** : pour le sol dense, la visibilité suivie d'un calcul (ce
+que fait `shadeLite`, un « visibility buffer ») reste la voie efficace ; le forward ne paierait qu'avec des triangles de l'ordre de
+16 px et plus (un maillage d'ombrage plus grossier que celui de la visibilité), ou pour les maillages à grands triangles (bâtiments,
+appareil : J1-5). Le pilote reste éteint (`forwardGround`).
+
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster
 prend la fermeture de ses racines dans le traceur **composé et spécialisé** (`wgsl-library.ts`), et déclare les ressources listées à
