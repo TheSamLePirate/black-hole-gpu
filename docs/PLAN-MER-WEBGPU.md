@@ -177,3 +177,12 @@ la traite sinon, et la signale. Côte à 500 m (un peu de pleine mer au large : 
 mer à 30 m 67,3 contre 70,05. **M1 Max, séance complète** ([fiche](progress/j0/FICHE-m1max-2026-11-10-mer-complet.md)) : vol soutenu
 24,9 → 31,4 images/s (≈ +9 % par MHz, le bridage du soir moindre) ; ses ablations faussées par le bridage (jusqu'à 389 MHz).
 
+**S5, le défaut de la sonde mesuré (ouvert)** (kerr-mini, sonde `night-probe`, deux passages identiques à 1 % près) : la radiance de
+la sonde dans l'axe de la vue (texels u = v = 0,5, `ship.envBuf`) contre celle de l'image au centre (`accum` / poids, radiance brute —
+la pré-exposition n'y est pas : 1 518 de jour, 1,3·10⁸ de nuit) : **de jour la sonde est 3,18–3,19 fois plus lumineuse** (≈ π), de nuit
+0,26 (vers le haut) à 0,31–0,37 (l'horizon). Écartés : aucun facteur π dans le noyau `env` ni dans `probeRadiance` ; le dernier
+argument d'`earthLook` (`false` pour la sonde) ne touche que les nuages (coupés ici). **Risque** : le reflet du ciel par la sonde
+(`seaSkyRadiance`) est plafonné à 4 fois le ciel analytique — un surplus de ~3 de jour passe ; c'est cohérent avec la mer plus pâle
+« avec la sonde » à midi (S5). À trouver avant de rendre la sonde seule juge du reflet ; pistes : le chemin du ciel de `main` (noyau
+allégé du raster) contre celui d'`env`, le facteur d'un des deux sur la diffusion.
+
