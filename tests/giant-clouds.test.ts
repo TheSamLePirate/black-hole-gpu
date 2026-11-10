@@ -37,7 +37,7 @@ test("the eyes and the storms are the shader's (giantEye, giantSigma); the flash
   expect(fnBody("giantFlashGlow")).toContain("let GF = vec4f(f, P.wx[6].w);");
   expect(fnBody("giantInside")).toContain("let GFT = giantTurn(P.wx[6].xyz, kv, cv, cz);");
   const renderer = readFileSync(new URL("../src/renderer.ts", import.meta.url), "utf8");
-  expect(renderer).toContain("f.set(giantFlash, (BASE_PARAM_VEC4S - WX_VEC4S + 6) * 4)");
+  expect(renderer).toContain("f.set(giantFlash, PARAMS.wx + 6 * 4)");
   expect(renderer).toContain("(time * 4.925490947e-6 * s.massSolar) % 4096");
 });
 

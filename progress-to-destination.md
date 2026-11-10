@@ -2610,3 +2610,17 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   un nonce force la compilation.
 - **Limites** : module de calcul, pas encore l'étage fragment ; une seule machine ; la transition (shadeLite + fragment) ajouterait
   ~1,1 s à froid, à anticiper hors du chemin bloquant.
+
+## 2026-11-11T00:20Z — J1-4 : la surface du sol en fonction (`liteSurface`), le coût inchangé
+
+- **Contribution** (PLAN-J1 J1-4, première étape) : le corps de `shadeLite` coupé en prologue (rayon et point depuis la visibilité,
+  l'eau et ses sorties), **`liteSurface`** (albédo, matériaux, soleil et ombres, ciel, rebond, lune, spéculaire, pluie, lumières → la
+  radiance de surface) et épilogue (eau, mesures, `liteFinish`). Ce que la surface lit de la visibilité passe par `RasterAttr` et des
+  accesseurs : en calcul, chaque lecture reste à sa place (la constante se replie) ; le fragment forward en donnera les champs.
+  Aussi : `tests/giant-clouds.test.ts` cherchait l'ancienne écriture positionnelle de J1-0 (`PARAMS.wx + 6 * 4` maintenant) — corrigé.
+- **Preuve** : `check-wgsl` 76/76, `kernel-budget` 63/63, suite unitaire sur kerr-mini 2 151 pass (5 dépassements de 5 s sous la charge
+  de J0, repassés ici 12/12) ; **mesuré** J0 seul sur kerr-mini : GPU p50 vol 62,4 ms, vue figée 62,3/62,6 (avant 62,6 ; 62,7/60,6) ;
+  e2e `sea-fft` 5/5. Un premier passage (attributs lus d'emblée) donnait 66 ms pendant la suite unitaire sur la même machine : la
+  mesure faussée, la variante remplacée par les accesseurs sans être remesurée seule.
+- **Limites** : rien ne dessine encore en forward ; prochaine étape : le pipeline du fragment (patch redessiné en profondeur égale,
+  profondeur gardée — reste de J1-2 —, groupe « lumière du sol »).

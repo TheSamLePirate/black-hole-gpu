@@ -15459,6 +15459,456 @@ fn liteWater(gq: vec3f, fx: vec3f, fy: vec3f, hG: f32, fpM: f32, nW: vec3f, dirW
   return vec4f(water, calm, kind, deep);
 }
 
+// (PLAN-J1 J1-4: what of the visibility a raster ground pixel's surface reads — its mesh, building's leaf, tag, the turbines', pylons'
+// and bridges' parts, the lamps, the smoothed geometric normal, the ambient occlusion —: shadeLite's from its pixel's visibility
+// (rasterAttrAt), the forward fragment's from its own vertices)
+struct RasterAttr {
+  // (vis: read from the visibility at px, each where the surface needs it — shadeLite: its reads as late as before, the fields
+  // unused; else the fields — the forward fragment's)
+  vis: bool,
+  px: vec2f,
+  k: u32,
+  ng: vec3f,
+  mesh: bool,
+  leaf: u32,
+  bridgeMesh: bool,
+  turbine: bool,
+  pylon: bool,
+  lamp: bool,
+  tag: f32,
+  ao: f32,
+};
+fn rasterAttrAt(centre: vec2f, k: u32) -> RasterAttr {
+  return RasterAttr(true, centre, k, vec3f(0.0), false, 0u, false, false, false, false, 0.0, 1.0);
+}
+fn atNg(a: RasterAttr, gq: vec3f) -> vec3f {
+  if (!a.vis) { return a.ng; }
+  var ng = gq;
+  if ((liteSkip() & 16u) == 0u) {
+    ng = rasterNormal(a.px, terrainRasterHint(a.px), a.k);
+    if (dot(ng, ng) < 0.5) { ng = gq; }
+  }
+  return ng;
+}
+fn atMesh(a: RasterAttr) -> bool { return select(a.mesh, terrainRasterMesh(a.px), a.vis); }
+fn atLeaf(a: RasterAttr) -> u32 { if (a.vis) { return select(0u, terrainRasterLeaf(a.px), HAS_SCENERY && (liteSkip() & 262144u) == 0u); } return a.leaf; }
+fn atBridgeMesh(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterBridgeMesh(a.px); } return a.bridgeMesh; }
+fn atTurbine(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterTurbine(a.px); } return a.turbine; }
+fn atPylon(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterPylon(a.px); } return a.pylon; }
+fn atLamp(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterLamp(a.px); } return a.lamp; }
+fn atTag(a: RasterAttr) -> f32 { if (a.vis) { return terrainRasterTag(a.px); } return a.tag; }
+fn atAO(a: RasterAttr) -> f32 { if (a.vis) { return select(rasterAO(a.px), 1.0, (liteSkip() & 16777216u) != 0u); } return a.ao; }
+// (PLAN-J1 J1-4) A raster ground pixel's surface radiance G — its colour (the day map, the tiles' imagery, the regional surface, the
+// orthophotos, snow, the map's roads, detail scans, cliffs' faces, runways, buildings, cars, turbines, pylons), its normal, the Sun's
+// light through its shadows, the sky's, the bounce, the moon, its specular, the wet, the night's lights — from its point and
+// footprint, the light, and its visibility's attributes: shadeLite's body once, the forward ground fragment's to be. Before the air
+// and the clouds in front of it (liteFinish) and the water over it (liteWater, shadeWater).
+fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, fp: f32, fx: vec3f, fy: vec3f, tn: vec3f, hG: f32,
+    Ls: vec3f, Lp: vec3f, Li: vec3f, E: vec3f, isTree: bool, anchored: bool, at: RasterAttr) -> vec3f {
+  // (the colour: the day's map, the tiles' imagery over it, the regional surface, the orthophotos over all)
+  let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
+  var img: TileImage;
+  IMG_LIGHTS = dot(gq, Lp) < 0.1;
+  // (T7 — a cliff's face: the photograph seen from above stretches its top's grass and its foot's shingle down a near-vertical
+  // wall — Étretat's chalk green, Bonifacio's limestone smeared, the reference photographs' —; the face's own colour shows in it
+  // only along its edge, seen obliquely: the imagery read again 2.5–7.5 m down the slope — the same call, a loop: one copy of it —,
+  // the sample most like rock — bright, least green — the wall's; a slope green all along kept; liteSkip 268435456: off)
+  let upF = select(1.0, dot(tn, gq), dot(tn, tn) > 0.5);
+  let faceW = select(0.0, smoothstep(0.62, 0.35, upF) * smoothstep(30.0, 10.0, fp * EARTH_RM), !isTree && (liteSkip() & 268435456u) == 0u);
+  let faceDir = (tn - gq * upF) / max(length(tn - gq * upF), 1e-6);
+  var faceC = vec3f(0.0);
+  var faceK = 0.0;
+  if ((liteSkip() & 128u) == 0u) {
+    // (the samples down the face read through a small round footprint — a metre: one tap a level —, not the pixel's stretched
+    // one: a wall filling the view at 4 anisotropic reads a pixel cost 60 ms)
+    let fs = 1.0 / EARTH_RM;
+    for (var i = 0; i <= select(0, 3, faceW > 0.0); i++) {
+      TILE_AT_ON = anchored && i == 0;
+      let t = earthImageryAniso(normalize(gq + faceDir * (2.5 * f32(i) * fs)), select(normalize(fx + vec3f(1e-12)) * fs, fx, i == 0), select(normalize(fy + vec3f(1e-12)) * fs, fy, i == 0));
+      TILE_AT_ON = false;
+      if (i == 0) { img = t; continue; }
+      let c = t.c.rgb * P.earth2.z;
+      let rock = luminance(c) * (1.0 - clamp(4.0 * (c.g - 0.5 * (c.r + c.b)) / max(luminance(c), 1e-3), 0.0, 1.0)) * select(0.0, 1.0, max(t.w, t.o) > 0.5);
+      if (rock > faceK) { faceK = rock; faceC = c; }
+    }
+  }
+  var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
+  var surface = SurfaceImage(vec3f(0.0), 0.0, 0u);
+  if ((liteSkip() & 8u) == 0u) { surface = surfaceImage(gq, fx, fy); }
+  A = mix(A, surface.c * P.earth2.z, surface.w);
+  A = mix(A, img.c.rgb * P.earth2.z, img.o);
+  if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, max(length(fx), length(fy)) * EARTH_RM), surface.w * (1.0 - img.o)); }
+  // (the normal: the ground's smooth one — its level's slopes at its nodes, interpolated: T5, no facets —, else the mesh's (a
+  // building's, a runway's graded ground), else the ellipsoid's; a tree's its own, its colour its look. The mesh's kept for the
+  // scenery's shadows — ng: the point lifted off its own triangles —, the smooth one lights)
+  var n = gq;
+  var ng = atNg(at, gq);
+  if ((liteSkip() & 16u) == 0u) {
+    n = tn;
+    if (dot(n, n) < 0.5) { n = ng; }
+  }
+  if (isTree) {
+    n = WS.xyz;
+    ng = n;
+    A = WS_A;
+  }
+  let mu0 = dot(gq, Li);
+  let mu0g = dot(gq, Lp);
+  let dirW = toBody(look);
+  let mesh = atMesh(at);
+  // (near, over a survey's relief — the IGN's —: its own slopes, read in its grid at the point's anchored place; the mesh's
+  // triangles are flat, their facets a metre each from a person's height, in bands)
+  let fpM = fp * EARTH_RM;
+  // (Q3 B4 — the map's roads, rails and grounds on the raster's ground as the traced ground paints them (earthGround), where no
+  // national photograph is — the Q6l survey: a road the traced ground showed in La Mancha, the raster's blurred photograph not;
+  // the water's left to its pass; liteSkip 134217728: off)
+  // (the same walk the streets' night lights read — once; by day only where a road is a pixel or more: a footprint under 12 m,
+  // 4 km at most — measured, the walk on every ground pixel +1.1 ms in La Mancha —; liteSkip's bit: neither, its cost measured)
+  // (Q7 L9: the season's snow, as the traced ground's — before the map's roads and the runways, cleared)
+  // (its share kept for the detail scans below: none under the snow, their material read from the ground beneath it)
+  let aBare = A;
+  var snowS = 0.0;
+  if (!mesh && !isTree) {
+    snowS = seasonSnow(gq, n, max(airHeight(ph) - geoidN(gq), 0.0), Ls, A / max(P.earth2.z, 1e-6), select(0u, surface.cover, surface.w > 0.0 || surface.cover > 0u));
+    A = mix(A, vec3f(0.82, 0.84, 0.88) * P.earth2.z, snowS);
+  }
+  var sv = ScenerySurface(vec3f(0.0), 0.0, 0.0);
+  if (HAS_SCENERY && !mesh && !isTree && (liteSkip() & 134217728u) == 0u) {
+    // (the exact walk near — its stripes, sleepers, edges' antialiasing — and at night — its kinds for the streets' lights —;
+    // the decals' one read beyond: the walk on every pixel under 12 m cost 0.66 ms in La Mancha)
+    // (under a national photograph the map's colour is not drawn — the walk was for nothing there: France whole —; at night
+    // still, for the streets' lights)
+    if (mu0g < 0.06 || (fpM < 0.3 && tM < 4000.0 && img.o < 0.99)) { sv = sceneryGround(dirW, tM, fpM); }
+    else if (fpM < 12.0 && tM < 4000.0 && img.o < 0.99) {
+      // (the scenery's local frame written out — sceneryLocal goes with the scenery's code, a kernel without it would not compile)
+      let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
+      let dc = sceneryDecal((P.scenery[3].xyz + dL * tM).xy, fpM, tM);
+      sv = ScenerySurface(dc.rgb, dc.w, 0.0);
+    }
+    // (Q8 D1: a vineyard's or an orchard's rows — in the decals alone, not the surfaces' tree the exact walk reads: their grid read
+    // for them near, where the rows are wider than the pixel, whatever path drew the ground's surface)
+    let dLc = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
+    let xyc = (P.scenery[3].xyz + dLc * tM).xy;
+    if (DECAL_ROW.x < 0.5 && fpM < 3.6 && tM < 2500.0 && img.o < 0.99) { _ = sceneryDecal(xyc, fpM, tM); }
+    if (DECAL_ROW.x > 0.5) { A *= mix(1.0, rowCrop(xyc + P.scenery[6].xy, DECAL_ROW.x, DECAL_ROW.y, fpM), DECAL_ROW.z); }
+  }
+  A = mix(A, sv.color, select(sv.cover, 0.0, sv.kind == 3.0 || sv.kind == 4.0) * (1.0 - img.o));
+  if (!mesh && !isTree && fpM < 10.0 && (liteSkip() & 16u) == 0u) {
+    TILE_AT_ON = anchored;
+    let sf = earthSlopeFine(gq, fpM);
+    TILE_AT_ON = false;
+    if (sf.z > 0.0) {
+      var east = vec3f(-gq.y, gq.x, 0.0);
+      east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
+      let nf = normalize(gq + sf.x * east + sf.y * cross(gq, east));
+      n = normalize(mix(n, nf, sf.z * smoothstep(10.0, 4.0, fpM)));
+    }
+  }
+  // (Q7 L8 / VIPER B3: the detail scans on the ground near — the photograph's albedo times the scan's ratio, its normal tilted —,
+  // where the scenery's frame is known and its scans are in; liteSkip 2147483648 none — an A/B)
+  if (DETAIL_BOUND && !mesh && !isTree && fpM < 300.0 && HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[6].z > 0.5 && (liteSkip() & 2147483648u) == 0u) {
+    let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
+    let xy = (P.scenery[3].xyz + dL * tM).xy + P.scenery[6].xy;
+    // (Q7 L8: the season's snow — seasonSnow — hides it: the material read from the bare ground's albedo, its contrast and tilt
+    // faded by the snow's share; a road's own, cleared)
+    let mat = detailMaterial(aBare, sv.kind == 1.0, select(0u, surface.cover, surface.w > 0.0 || surface.cover > 0u));
+    let bare = select(1.0 - snowS, 1.0, sv.kind == 1.0);
+    let dd = groundDetail(xy, fpM, vec2f(mat.x, mat.y * bare));
+    A *= dd.x;
+    // (a light tilt: a random one lowers the mean lighting — 0.6 darkened a meadow by 8 % with the ratio's clipping)
+    n = normalize(n + (P.scenery[0].xyz * dd.y + P.scenery[1].xyz * dd.z) * (0.3 * bare));
+  }
+  // (T7 — the cliff's face, its colour found below with the imagery: its strata over it)
+  if (faceW > 0.0) {
+    // (beds of ~1.7 m, each its own shade — a hash of its index —, blended over a third of a bed)
+    let hb = airHeight(ph) * 0.6;
+    let hh = fract(sin(vec2f(floor(hb), floor(hb) + 1.0) * 12.9898) * 43758.5453);
+    let bed = 0.82 + 0.3 * mix(hh.x, hh.y, smoothstep(0.65, 1.0, fract(hb)));
+    A = mix(A, faceC * bed, faceW * smoothstep(0.0, 0.04, faceK - 0.6 * luminance(A)));
+  }
+  // (a runway — its paving, markings and lamps, as the tracer's ground draws them: the material's, compiled in whether a
+  // runway is near or not — no other key, nothing compiled in flight —; the ground levelled under it the mesh's)
+  var rwyLamps = vec3f(0.0);
+  var lvl = 0.0;
+  var rwyPaved = 0.0;
+  var rwyAt = vec2f(0.0);
+  if (!mesh && !isTree && rwyCount() > 0u) {
+    let rp = runwayPave(dirW * tM, gq, q, rd, Ls, fx, fy, A, n);
+    A = rp.A;
+    n = rp.n;
+    rwyLamps = rp.lamps;
+    rwyPaved = rp.paved;
+    rwyAt = rp.at;
+    lvl = runwayGrade(gq).y;
+  }
+  // (liteSkip 4096: the Sun's and the sky's light plain — their transmittances and shadows not read: a measure)
+  let plainLight = (liteSkip() & 4096u) != 0u;
+  let Esun = E * sunThrough(hG, mu0);
+  var Eg = E;
+  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Li, Esun, fx, fy, dirW, tM, ng, mesh); }
+  // (Q3 — a building's own material: its leaf in the visibility — terrainRasterLeaf: its own triangles', its oriented box's —,
+  // its face found there — buildingFaceAt —, the traced pipeline's look on it — buildingLook, roofLook: its walls' material,
+  // storeys and bays, shops, balconies; its roof's tiles, slates, zinc, dormers; its windows lit at night —, its face's exact
+  // normal; liteSkip 262144 the old material)
+  let leaf = atLeaf(at);
+  var bldS = 0.0;
+  var bldE = vec3f(0.0);
+  var bldAO = 1.0;
+  if (leaf > 0u && P.scenery[0].w > 0.5) {
+    let rb = rasterBuilding(leaf, dirW, tM, A);
+    A = rb.albedo;
+    n = rb.normal;
+    bldS = rb.s;
+    bldE = rb.e;
+    bldAO = rb.ao;
+  }
+  // (a building's own triangles without its leaf — U2 —: its roof the orthophoto's — the photograph is the roof seen from
+  // above —, its walls stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —,
+  // the glass dark, the sky mirrored in it below)
+  var glass = 0.0;
+  // (a roof: the photograph's light and shade kept, its colour mostly let go — the orthophoto leans, a roof's place on it
+  // the street's or a tree's beside it: zinc and slate grey, a fifth of the photograph's hue)
+  if (mesh && leaf == 0u && dot(n, gq) >= 0.35) {
+    let l = luminance(A);
+    A = mix(vec3f(l), A, 0.2) * vec3f(0.97, 0.99, 1.04);
+    // (a bridge's deck: its stone and its roadway — the photograph under it is the river's: a speckled dark slab)
+    if (atBridgeMesh(at)) { A = vec3f(0.36, 0.34, 0.31) * P.earth2.z; }
+  }
+  if (mesh && leaf == 0u && dot(n, gq) < 0.35 && HAS_SCENERY && P.scenery[0].w > 0.5) {
+    let toB = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+    let spL = P.scenery[3].xyz + (dirW * tM) * toB;
+    let nL = n * toB;
+    let along = normalize(vec2f(-nL.y, nL.x) + vec2f(1e-6, 0.0));
+    let block = hash31(vec3f(floor(spL.xy / 25.0), 3.0));
+    A = vec3f(0.5, 0.46, 0.39) * (0.8 + 0.35 * block) * P.earth2.z;
+    let fw = fract(dot(spL.xy, along) / 2.6);
+    let fz = fract(spL.z / 3.1);
+    // (a bridge's part — its deck's sides, its parapets, its piers —: stone, no windows)
+    glass = select(0.0, 1.0, fw > 0.28 && fw < 0.72 && fz > 0.3 && fz < 0.82 && !atBridgeMesh(at));
+    A = mix(A, vec3f(0.03) * P.earth2.z, glass);
+    // (their windows lit at night as buildingLook's — over a quarter of them, each its own warmth —, their mean once a pixel
+    // spans a bay: the towers away over the water had none — grey blocks under the night's ambient, the eye's gain on them —
+    // where a photograph from Brooklyn shows their lit windows — Sam, 6 Nov 2026)
+    if (!atBridgeMesh(at)) {
+      let nearW = 1.0 - smoothstep(0.6, 1.3, fpM);
+      let cell = vec3u(vec3i(i32(floor(dot(spL.xy, along) / 2.6) + 65536.0), i32(floor(spL.z / 3.1) + 4096.0), i32(block * 4096.0)));
+      let hsh = hash3u(cell);
+      let litW = select(0.0, 1.0, u2f(hsh) < 0.28) * glass * (0.05 + 0.09 * u2f(pcg(hsh)));
+      bldE = vec3f(1.0, 0.8, 0.52) * (litW * nearW + 0.0257 * 0.28 * (1.0 - nearW));
+    }
+  }
+  // (Q8 D1: a wind turbine — its tower, nacelle and blades: a white matte paint, no windows)
+  if (atTurbine(at)) {
+    A = vec3f(0.7, 0.71, 0.72) * P.earth2.z;
+    glass = 0.0;
+    // (Q8 D1: a car — system/traffic.ts —: its paint one of eight by its index — white, silver, grey, black, red, blue, dark
+    // green, beige —, its lamps' glass dark by day)
+    let cg = atTag(at);
+    if (cg > 3.5 && cg < 4.99) {
+      let i = u32(fract(cg) * 8.0 + 0.5) % 8u;
+      var paint = array<vec3f, 8>(vec3f(0.75), vec3f(0.45), vec3f(0.2), vec3f(0.03), vec3f(0.45, 0.04, 0.03), vec3f(0.05, 0.1, 0.3), vec3f(0.05, 0.12, 0.07), vec3f(0.5, 0.45, 0.35));
+      A = paint[i] * P.earth2.z;
+    } else if (cg > 4.99) {
+      A = vec3f(0.08) * P.earth2.z;
+    }
+  }
+  // (a pylon: galvanised steel, weathered)
+  if (atPylon(at)) {
+    A = vec3f(0.33, 0.34, 0.35) * P.earth2.z;
+    glass = 0.0;
+  }
+  // (Q7 L9: the season's snow on what stands — the roofs facing up, the tops of the trees' crowns — as on the ground about
+  // them: the same line, the same season (seasonSnow, taken flat — the roof's own tilt the cover's); a crown holds less)
+  if ((mesh || leaf > 0u || isTree) && (TUNE_SC_SKIP & 1024u) == 0u) {
+    let up = dot(n, gq);
+    let sn = seasonSnow(gq, gq, max(airHeight(ph) - geoidN(gq), 0.0), Ls, vec3f(0.5), 0u);
+    let kU = select(smoothstep(0.5, 0.9, up), 0.6 * smoothstep(0.2, 0.8, up), isTree);
+    A = mix(A, vec3f(0.82, 0.84, 0.88) * select(P.earth2.z, 1.0, isTree), sn * kU);
+  }
+  // (the sky's light — on a slope, a share of it, and the ground's bounce round it — as earthGround's)
+  // (the rain — PLAN-PLUIE P4, as the tracer's ground —: the ground wet, darker, a sheen of the sky on it (below); on a
+  // runway's paving water lying in its hollows and the drops' rings spreading on it, near)
+  var wetS = 0.0;
+  var ripple = 0.0;
+  if (HAS_WX && WX_W > 0.0 && P.wx[5].x > 0.0 && !isTree) {
+    let wet = P.wx[5].x * WX_W;
+    var pud = 0.0;
+    if (rwyPaved > 0.0) {
+      let pn = vnoise(vec3f(rwyAt.x * 0.08, rwyAt.y * 0.2, 3.0)) * 0.6 + vnoise(vec3f(rwyAt.x * 0.31, rwyAt.y * 0.55, 7.0)) * 0.28
+        + vnoise(vec3f(rwyAt.x * 1.3, rwyAt.y * 1.7, 11.0)) * 0.12;
+      pud = smoothstep(0.7 - 0.06 * min(P.wx[5].y, 1.0), 0.8 - 0.06 * min(P.wx[5].y, 1.0), pn) * rwyPaved * wet;
+      let footM = max(length(fx), length(fy)) * EARTH_RM;
+      let near = smoothstep(0.1, 0.02, footM) * min(P.wx[5].y, 1.0);
+      if (near > 0.0) {
+        let cp = rwyAt / 0.3;
+        for (var dj = 0; dj < 2; dj++) {
+          for (var di = 0; di < 2; di++) {
+            let id = floor(cp) + vec2f(f32(di), f32(dj)) - vec2f(0.5);
+            let hh = vec2f(hash31(vec3f(id, 11.0)), hash31(vec3f(id, 23.0)));
+            let age = fract(P.wx[5].z * (0.9 + 0.5 * hh.x) + hh.y);
+            let ctr = (id + 0.5 + 0.5 * (vec2f(hash31(vec3f(id, 5.0)), hash31(vec3f(id, 7.0))) - 0.5)) * 0.3;
+            let d = length(rwyAt - ctr);
+            ripple += exp(-pow((d - age * 0.11) / 0.006, 2.0)) * (1.0 - age) * (1.0 - age);
+          }
+        }
+        ripple *= near * (0.35 + 0.65 * pud / max(wet, 1e-3));
+      }
+    }
+    // (a roof's slate and a wall's stone darker wet too, less than the soil — their pores fewer)
+    A *= mix(vec3f(1.0), vec3f(select(mix(0.58, 0.7, rwyPaved), 0.75, mesh)), wet);
+    A *= 1.0 - 0.35 * pud;
+    wetS = wet * select(mix(0.08, 0.3, rwyPaved), 0.12, mesh) + pud * 0.4;
+  }
+  var sky = E * 0.15;
+  if (!plainLight) { sky = liteSky(q, hG, E, Ls, mu0g); }
+  // (Q4 L2b: the valleys' sky hidden by the relief round them — H5's horizons in 8 directions, weighed by the clear sky's
+  // radiance in each; liteSkip 4194304: not read, a measure)
+  if (!plainLight && (liteSkip() & 4194304u) == 0u) { sky *= earthSkyOpen(gq, hG, ng); }
+  // (under the weather's decks: the blue sky hidden by their cover, their own grey light instead — what comes through them,
+  // and for a broken sky what their sunlit sides and bases send down —, as the tracer's ground)
+  let wg = wxNear(q);
+  // (the Moon's light under the decks: what they let through)
+  var moonVeil = 1.0;
+  if (HAS_WX && wg > 0.0) {
+    let vl = wxVeil(hG, wg, 3u);
+    let side = 0.5 * vl.x * (1.0 - vl.x);
+    sky = sky * vl.x + (Esun * max(mu0, 0.0) * skySeen(q, Ls) + sky) * (vl.y - vl.x + side);
+    moonVeil = vl.y;
+  }
+  // (a lightning flash — N5 —: its light on the ground for kilometres round)
+  if (HAS_WX && P.wx[6].w > 0.0) {
+    let f = flashAt();
+    sky += FLASH_TINT * luminance(E) * 0.05 * f.w * exp(-length(q * (1.0 + hG / EARTH_RM) - f.xyz) * EARTH_RM / 10000.0);
+  }
+  let up = dot(n, gq);
+  // (L6: the ground round sends back its own albedo's share — the day map's ~2 km mean)
+  let bounce = (Esun * max(mu0, 0.0) + sky) * groundAlbedoMean(gq) * 0.5 * (1.0 - up);
+  // (the moonlight — the tracer's ground's earthMoonlight: a moonlit landscape silvery —, through the decks)
+  // (Q2: the photograph's light kept by its Sun's — earthGround's photoRelightK —; a wall's stone, a runway's paving: ours whole)
+  let rk = max(photoRelightK(gq, Li, img.o), max(rwyPaved, select(0.0, 1.0, mesh && (dot(n, gq) < 0.35 || leaf > 0u))));
+  // (L1: the sky on the face by the frame's sky — skyOnFace —; a building's face its own share of it, bldAO)
+  // (Q4 L2a: the ground's ambient occlusion on the sky's and the bounce's light — never the Sun's —, worked out before this pass
+  // from the visibility's distances; liteSkip 16777216: not read, a measure)
+  let gao = atAO(at);
+  var G = A / PI * (Eg * photoNdl(gq, n, Li, rk) + (skyOnFace(sky, hG, n, gq) * bldAO + bounce) * gao + E * earthMoonlight(q, n, hG, mu0g) * moonVeil);
+  // (a tree: lit as windsockShade lights it — the Sun on its face, six tenths of the sky, not the ground's open sky and
+  // bounce: they lit the crowns yellow —, its crown's underside in its own shade (the carving's occlusion, left out here),
+  // the light through its thin edge against the Sun)
+  if (isTree) {
+    let ao = 0.5 + 0.5 * clamp(0.5 + 0.5 * dot(n, gq), 0.0, 1.0);
+    let rim = 1.0 - abs(dot(n, dirW));
+    G = A / PI * (Eg * max(dot(n, Li), 0.0) * sqrt(ao) + sky * 0.6 * ao)
+      + WS_T / PI * Eg * max(-dot(n, Li), 0.0) * rim * (0.3 + 0.7 * pow(max(dot(dirW, Li), 0.0), 4.0));
+  }
+  if (glass > 0.0) {
+    let F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(n, dirW)), 0.0, 1.0), 5.0);
+    G += glass * F * sky * 1.5 / PI;
+  }
+  // (Q4 L4: the known materials' specular — C0-11: a runway's paving, the regional surface's classes; an unknown ground stays
+  // matt —: GGX on a dielectric (F0 0.04), the roughness the material's, the Sun's own disc its floor; the diffuse lessened by the
+  // light the face mirrors — liteSkip 67108864: not, a measure)
+  if (!isTree && !mesh && (liteSkip() & 67108864u) == 0u) {
+    // (built-up 0.65, bare 0.8, snow and ice 0.35, grass and crops 0.9 — their sheen towards a low Sun, which a photograph cannot hold)
+    let cv = select(0u, surface.cover, surface.w > 0.5);
+    let rough = select(select(select(select(select(0.0, 0.9, cv == 30u || cv == 40u), 0.35, cv == 70u), 0.8, cv == 60u), 0.65, cv == 50u), 0.55, rwyPaved > 0.5);
+    if (rough > 0.0) {
+      // (Smith's visibility, height-correlated — Heitz —, Schlick's Fresnel on the half vector; Fv the face's mirror at the view)
+      let v = -dirW; let hv = normalize(Li + v); let nl = max(dot(n, Li), 0.0); let nv = max(dot(n, v), 1e-3); let nh = max(dot(n, hv), 0.0);
+      let a2 = pow(max(rough * rough, 0.0047), 2.0); let dd = nh * nh * (a2 - 1.0) + 1.0;
+      let vis = 0.5 / max(nl * sqrt(nv * nv * (1.0 - a2) + a2) + nv * sqrt(nl * nl * (1.0 - a2) + a2), 1e-5);
+      let Fv = 0.04 + 0.96 * pow(1.0 - nv, 5.0) * (1.0 - rough);
+      G = G * (1.0 - Fv) + Eg * (a2 / (PI * dd * dd) * vis * (0.04 + 0.96 * pow(1.0 - max(dot(v, hv), 0.0), 5.0)) * nl) + Fv * sky / PI;
+    }
+  }
+  // (a building's glass, its zinc: the sky mirrored at a grazing look and the Sun's glint — windsockShade's —; its windows lit
+  // at night)
+  if (bldS > 0.0) {
+    let c = clamp(-dot(dirW, n), 0.0, 1.0);
+    let F = bldS + (1.0 - bldS) * pow(1.0 - c, 5.0);
+    let r = reflect(dirW, n);
+    G += F * (sky / PI * 1.3 * bldAO + Eg * pow(max(dot(r, Li), 0.0), 600.0) * 40.0);
+  }
+  if (leaf > 0u || mesh) { G += bldE * (luminance(E) / PI) * WINDOW_GLOW * (1.0 - smoothstep(-0.12, 0.06, mu0g)); }
+  // (the wet ground's sheen: the sky mirrored by the water on it, by Fresnel — a wet runway seen ahead silvery —, the rings
+  // breaking it)
+  if (wetS > 0.0) {
+    let cv = clamp(dot(n, -dirW), 0.0, 1.0);
+    let F = (0.02 + 0.98 * pow(1.0 - cv, 5.0)) * wetS;
+    G = G * (1.0 - F) + F * sky * 1.1 / PI * (1.0 + 2.5 * ripple);
+    G += ripple * 0.35 * sky / PI;
+  }
+  // (the cities' lights at night: on the ground — the streets', the squares' —, not on a tree's crown nor on a building's walls
+  // and roofs, which their windows will light — Q3: the map's 500 m glow painted the crowns and the facades orange)
+  let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
+  let lamp = max(lights - 0.07, 0.0) / 0.93;
+  let dark = 1.0 - smoothstep(-0.12, 0.06, mu0g);
+  var lit = select(dark, 0.0, isTree || mesh);
+  // (near — the scenery's box —: the streets carry the light, their lamps along them — OpenStreetMap's roads at the point:
+  // ×3 on a road, ×0.15 off it, a quarter of a town's ground road: the quarter's light about the same, drawn along its
+  // streets, not the map's 500 m wash — the night only, a lit town only)
+  // (Q8 L10: near, the streets' light falls on the ground — the photograph's, the roads', the pavements' colours under it, its
+  // albedo against a town's mean 0.15 —, not a glow over it: an even cream where the lamps' pools lay, the ground unseen — Sam,
+  // 5 Nov; far, the map's glow as before)
+  var litAlb = vec3f(1.0);
+  var litC = mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp);
+  // (the point drawn in the scenery's frame — the streets' lamps' grid, their tint by quarter —)
+  let dLr = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
+  let xyL = (P.scenery[3].xyz + dLr * tM).xy;
+  let nearL = HAS_SCENERY && P.scenery[0].w > 0.5 && tM <= P.scenery[1].w && (liteSkip() & 131072u) == 0u;
+  if (HAS_SCENERY && lit > 0.0 && lamp > 0.02 && (liteSkip() & 131072u) == 0u) {
+    lit *= sceneryRoadLight(sv, tM, xyL);
+    if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) {
+      // (the photograph's brightness under the lamps, a third of its hue: its lawns' and its trees' green, ×4 a channel, had lit
+      // the parks fluorescent green and the paths neon white — Paris at night, Sam, 6 Nov 2026)
+      let la = luminance(A);
+      litAlb = clamp(mix(vec3f(la), A, 0.33) / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(2.0));
+      litC = streetLampTint(xyL);
+    }
+  } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
+  // (the map's mean beyond the streets drawn — past the scenery's reach, or before it is in —: seen at the street's angle)
+  if (!nearL && lit > 0.0) {
+    lit *= cityCanyon(-dot(dirW, gq), lamp);
+    litC = cityTint(gq, lamp);
+  }
+  G += litAlb * litC * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
+  // (Q8 L10: the streets' lamps on the buildings' walls by them — their pools' light where the wall stands, three tenths of the ground's (half lit the walls brighter than the street, +65 % to the night's mean):
+  // a wall faces the lamp across the street, not under it; a lit town, at night, near)
+  if (mesh && nearL && dark > 0.0 && lamp > 0.02) {
+    let pl = sceneryLampLight(xyL);
+    // (a pool lights the wall's foot: the lamp's head ~8 m up, its light on the wall falling with the height over it — a tower
+    // lit whole by the pools at its foot stood white up to its top over Manhattan at night, brighter than its windows — Sam,
+    // 6 Nov 2026, against a photograph from Brooklyn)
+    let up = select(0.0, RB_ABOVE / 9.0, leaf > 0u);
+    let wall = (1.0 - smoothstep(0.6, 0.9, abs(dot(n, gq)))) / (1.0 + up * up * up);
+    if (pl.y > 0.0 && wall > 0.0) {
+      let fa = clamp(A / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(4.0));
+      G += fa * streetLampTint(xyL) * (pow(lamp, 1.4) * P.earth.z * dark * 0.3 * STREET_POOL_GAIN * pl.x * pl.y * wall * luminance(E) / PI);
+    }
+  }
+  G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark);
+  // (Q8 D1: a car's lamps at night — its headlights warm white, its tail lights red)
+  {
+    let cg = atTag(at);
+    if (cg > 4.99 && cg < 6.5) {
+      let lampC = select(vec3f(1.0, 0.08, 0.04) * 0.4, vec3f(1.0, 0.92, 0.75), cg < 5.5);
+      G += lampC * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
+    }
+    // (Q8 L10: a street lamp's head — lit in a lit town (the night lights' map at it), warm white, as bright as a car's
+    // headlights' block)
+    if (cg > 6.5 && cg < 7.5 && lamp > 0.02) {
+      G += select(vec3f(1.0, 0.8, 0.55), streetLampTint(xyL) * 1.2, nearL) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
+    }
+  }
+  // (Q8 D1: a wind turbine's obstruction light — red at night, white by day, 40 flashes a minute, every farm in step)
+  if (atLamp(at)) {
+    let on = select(0.0, 1.0, fract(P.runways[17].x / 1.5) < 0.35);
+    // (a 2 kcd-class light, its block widened to a pixel and a half: its glow ~1 % of a runway lamp's per pixel: red, not burnt white)
+    G += vec3f(1.0, 0.06, 0.03) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark * on;
+    // (by day the same light white — a medium-intensity flash, the same rhythm: against the daylight, a spark on the nacelle)
+    G += vec3f(1.0) * (luminance(E) / PI) * 6.0 * (1.0 - dark) * on;
+  }
+  return G;
+}
 @compute @workgroup_size(8, 8)
 fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let W = u32(P.res.x);
@@ -15577,410 +16027,9 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       return;
     }
   }
-  // (the colour: the day's map, the tiles' imagery over it, the regional surface, the orthophotos over all)
-  let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
-  var img: TileImage;
-  IMG_LIGHTS = dot(gq, Lp) < 0.1;
-  // (T7 — a cliff's face: the photograph seen from above stretches its top's grass and its foot's shingle down a near-vertical
-  // wall — Étretat's chalk green, Bonifacio's limestone smeared, the reference photographs' —; the face's own colour shows in it
-  // only along its edge, seen obliquely: the imagery read again 2.5–7.5 m down the slope — the same call, a loop: one copy of it —,
-  // the sample most like rock — bright, least green — the wall's; a slope green all along kept; liteSkip 268435456: off)
-  let upF = select(1.0, dot(tn, gq), dot(tn, tn) > 0.5);
-  let faceW = select(0.0, smoothstep(0.62, 0.35, upF) * smoothstep(30.0, 10.0, fp * EARTH_RM), !isTree && (liteSkip() & 268435456u) == 0u);
-  let faceDir = (tn - gq * upF) / max(length(tn - gq * upF), 1e-6);
-  var faceC = vec3f(0.0);
-  var faceK = 0.0;
-  if ((liteSkip() & 128u) == 0u) {
-    // (the samples down the face read through a small round footprint — a metre: one tap a level —, not the pixel's stretched
-    // one: a wall filling the view at 4 anisotropic reads a pixel cost 60 ms)
-    let fs = 1.0 / EARTH_RM;
-    for (var i = 0; i <= select(0, 3, faceW > 0.0); i++) {
-      TILE_AT_ON = anchored && i == 0;
-      let t = earthImageryAniso(normalize(gq + faceDir * (2.5 * f32(i) * fs)), select(normalize(fx + vec3f(1e-12)) * fs, fx, i == 0), select(normalize(fy + vec3f(1e-12)) * fs, fy, i == 0));
-      TILE_AT_ON = false;
-      if (i == 0) { img = t; continue; }
-      let c = t.c.rgb * P.earth2.z;
-      let rock = luminance(c) * (1.0 - clamp(4.0 * (c.g - 0.5 * (c.r + c.b)) / max(luminance(c), 1e-3), 0.0, 1.0)) * select(0.0, 1.0, max(t.w, t.o) > 0.5);
-      if (rock > faceK) { faceK = rock; faceC = c; }
-    }
-  }
-  var A = mix(day.rgb, img.c.rgb, img.w) * P.earth2.z;
-  var surface = SurfaceImage(vec3f(0.0), 0.0, 0u);
-  if ((liteSkip() & 8u) == 0u) { surface = surfaceImage(gq, fx, fy); }
-  A = mix(A, surface.c * P.earth2.z, surface.w);
-  A = mix(A, img.c.rgb * P.earth2.z, img.o);
-  if (surface.w > 0.0) { A *= mix(vec3f(1.0), surfaceMaterial(gq, surface.cover, max(length(fx), length(fy)) * EARTH_RM), surface.w * (1.0 - img.o)); }
-  // (the normal: the ground's smooth one — its level's slopes at its nodes, interpolated: T5, no facets —, else the mesh's (a
-  // building's, a runway's graded ground), else the ellipsoid's; a tree's its own, its colour its look. The mesh's kept for the
-  // scenery's shadows — ng: the point lifted off its own triangles —, the smooth one lights)
-  var n = gq;
-  var ng = gq;
-  if ((liteSkip() & 16u) == 0u) {
-    ng = rasterNormal(centre, terrainRasterHint(centre), k);
-    if (dot(ng, ng) < 0.5) { ng = gq; }
-    n = tn;
-    if (dot(n, n) < 0.5) { n = ng; }
-  }
-  if (isTree) {
-    n = WS.xyz;
-    ng = n;
-    A = WS_A;
-  }
-  let mu0 = dot(gq, Li);
-  let mu0g = dot(gq, Lp);
-  let dirW = toBody(ray.look);
-  let mesh = terrainRasterMesh(centre);
-  // (near, over a survey's relief — the IGN's —: its own slopes, read in its grid at the point's anchored place; the mesh's
-  // triangles are flat, their facets a metre each from a person's height, in bands)
-  let fpM = fp * EARTH_RM;
-  // (Q3 B4 — the map's roads, rails and grounds on the raster's ground as the traced ground paints them (earthGround), where no
-  // national photograph is — the Q6l survey: a road the traced ground showed in La Mancha, the raster's blurred photograph not;
-  // the water's left to its pass; liteSkip 134217728: off)
-  // (the same walk the streets' night lights read — once; by day only where a road is a pixel or more: a footprint under 12 m,
-  // 4 km at most — measured, the walk on every ground pixel +1.1 ms in La Mancha —; liteSkip's bit: neither, its cost measured)
-  // (Q7 L9: the season's snow, as the traced ground's — before the map's roads and the runways, cleared)
-  // (its share kept for the detail scans below: none under the snow, their material read from the ground beneath it)
-  let aBare = A;
-  var snowS = 0.0;
-  if (!mesh && !isTree) {
-    snowS = seasonSnow(gq, n, max(airHeight(ph) - geoidN(gq), 0.0), Ls, A / max(P.earth2.z, 1e-6), select(0u, surface.cover, surface.w > 0.0 || surface.cover > 0u));
-    A = mix(A, vec3f(0.82, 0.84, 0.88) * P.earth2.z, snowS);
-  }
-  var sv = ScenerySurface(vec3f(0.0), 0.0, 0.0);
-  if (HAS_SCENERY && !mesh && !isTree && (liteSkip() & 134217728u) == 0u) {
-    // (the exact walk near — its stripes, sleepers, edges' antialiasing — and at night — its kinds for the streets' lights —;
-    // the decals' one read beyond: the walk on every pixel under 12 m cost 0.66 ms in La Mancha)
-    // (under a national photograph the map's colour is not drawn — the walk was for nothing there: France whole —; at night
-    // still, for the streets' lights)
-    if (mu0g < 0.06 || (fpM < 0.3 && tM < 4000.0 && img.o < 0.99)) { sv = sceneryGround(dirW, tM, fpM); }
-    else if (fpM < 12.0 && tM < 4000.0 && img.o < 0.99) {
-      // (the scenery's local frame written out — sceneryLocal goes with the scenery's code, a kernel without it would not compile)
-      let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
-      let dc = sceneryDecal((P.scenery[3].xyz + dL * tM).xy, fpM, tM);
-      sv = ScenerySurface(dc.rgb, dc.w, 0.0);
-    }
-    // (Q8 D1: a vineyard's or an orchard's rows — in the decals alone, not the surfaces' tree the exact walk reads: their grid read
-    // for them near, where the rows are wider than the pixel, whatever path drew the ground's surface)
-    let dLc = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
-    let xyc = (P.scenery[3].xyz + dLc * tM).xy;
-    if (DECAL_ROW.x < 0.5 && fpM < 3.6 && tM < 2500.0 && img.o < 0.99) { _ = sceneryDecal(xyc, fpM, tM); }
-    if (DECAL_ROW.x > 0.5) { A *= mix(1.0, rowCrop(xyc + P.scenery[6].xy, DECAL_ROW.x, DECAL_ROW.y, fpM), DECAL_ROW.z); }
-  }
-  A = mix(A, sv.color, select(sv.cover, 0.0, sv.kind == 3.0 || sv.kind == 4.0) * (1.0 - img.o));
-  if (!mesh && !isTree && fpM < 10.0 && (liteSkip() & 16u) == 0u) {
-    TILE_AT_ON = anchored;
-    let sf = earthSlopeFine(gq, fpM);
-    TILE_AT_ON = false;
-    if (sf.z > 0.0) {
-      var east = vec3f(-gq.y, gq.x, 0.0);
-      east = select(normalize(east), vec3f(0.0, 1.0, 0.0), dot(east, east) < 1e-10);
-      let nf = normalize(gq + sf.x * east + sf.y * cross(gq, east));
-      n = normalize(mix(n, nf, sf.z * smoothstep(10.0, 4.0, fpM)));
-    }
-  }
-  // (Q7 L8 / VIPER B3: the detail scans on the ground near — the photograph's albedo times the scan's ratio, its normal tilted —,
-  // where the scenery's frame is known and its scans are in; liteSkip 2147483648 none — an A/B)
-  if (DETAIL_BOUND && !mesh && !isTree && fpM < 300.0 && HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[6].z > 0.5 && (liteSkip() & 2147483648u) == 0u) {
-    let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
-    let xy = (P.scenery[3].xyz + dL * tM).xy + P.scenery[6].xy;
-    // (Q7 L8: the season's snow — seasonSnow — hides it: the material read from the bare ground's albedo, its contrast and tilt
-    // faded by the snow's share; a road's own, cleared)
-    let mat = detailMaterial(aBare, sv.kind == 1.0, select(0u, surface.cover, surface.w > 0.0 || surface.cover > 0u));
-    let bare = select(1.0 - snowS, 1.0, sv.kind == 1.0);
-    let dd = groundDetail(xy, fpM, vec2f(mat.x, mat.y * bare));
-    A *= dd.x;
-    // (a light tilt: a random one lowers the mean lighting — 0.6 darkened a meadow by 8 % with the ratio's clipping)
-    n = normalize(n + (P.scenery[0].xyz * dd.y + P.scenery[1].xyz * dd.z) * (0.3 * bare));
-  }
-  // (T7 — the cliff's face, its colour found below with the imagery: its strata over it)
-  if (faceW > 0.0) {
-    // (beds of ~1.7 m, each its own shade — a hash of its index —, blended over a third of a bed)
-    let hb = airHeight(ph) * 0.6;
-    let hh = fract(sin(vec2f(floor(hb), floor(hb) + 1.0) * 12.9898) * 43758.5453);
-    let bed = 0.82 + 0.3 * mix(hh.x, hh.y, smoothstep(0.65, 1.0, fract(hb)));
-    A = mix(A, faceC * bed, faceW * smoothstep(0.0, 0.04, faceK - 0.6 * luminance(A)));
-  }
-  // (a runway — its paving, markings and lamps, as the tracer's ground draws them: the material's, compiled in whether a
-  // runway is near or not — no other key, nothing compiled in flight —; the ground levelled under it the mesh's)
-  var rwyLamps = vec3f(0.0);
-  var lvl = 0.0;
-  var rwyPaved = 0.0;
-  var rwyAt = vec2f(0.0);
-  if (!mesh && !isTree && rwyCount() > 0u) {
-    let rp = runwayPave(dirW * tM, gq, q, rd, Ls, fx, fy, A, n);
-    A = rp.A;
-    n = rp.n;
-    rwyLamps = rp.lamps;
-    rwyPaved = rp.paved;
-    rwyAt = rp.at;
-    lvl = runwayGrade(gq).y;
-  }
-  // (liteSkip 4096: the Sun's and the sky's light plain — their transmittances and shadows not read: a measure)
-  let plainLight = (liteSkip() & 4096u) != 0u;
-  let Esun = E * sunThrough(hG, mu0);
-  var Eg = E;
-  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Li, Esun, fx, fy, dirW, tM, ng, mesh); }
-  // (Q3 — a building's own material: its leaf in the visibility — terrainRasterLeaf: its own triangles', its oriented box's —,
-  // its face found there — buildingFaceAt —, the traced pipeline's look on it — buildingLook, roofLook: its walls' material,
-  // storeys and bays, shops, balconies; its roof's tiles, slates, zinc, dormers; its windows lit at night —, its face's exact
-  // normal; liteSkip 262144 the old material)
-  let leaf = select(0u, terrainRasterLeaf(centre), HAS_SCENERY && (liteSkip() & 262144u) == 0u);
-  var bldS = 0.0;
-  var bldE = vec3f(0.0);
-  var bldAO = 1.0;
-  if (leaf > 0u && P.scenery[0].w > 0.5) {
-    let rb = rasterBuilding(leaf, dirW, tM, A);
-    A = rb.albedo;
-    n = rb.normal;
-    bldS = rb.s;
-    bldE = rb.e;
-    bldAO = rb.ao;
-  }
-  // (a building's own triangles without its leaf — U2 —: its roof the orthophoto's — the photograph is the roof seen from
-  // above —, its walls stone, a shade a block, with their windows — floors of 3.1 m, bays of 2.6 m on the scenery's frame —,
-  // the glass dark, the sky mirrored in it below)
-  var glass = 0.0;
-  // (a roof: the photograph's light and shade kept, its colour mostly let go — the orthophoto leans, a roof's place on it
-  // the street's or a tree's beside it: zinc and slate grey, a fifth of the photograph's hue)
-  if (mesh && leaf == 0u && dot(n, gq) >= 0.35) {
-    let l = luminance(A);
-    A = mix(vec3f(l), A, 0.2) * vec3f(0.97, 0.99, 1.04);
-    // (a bridge's deck: its stone and its roadway — the photograph under it is the river's: a speckled dark slab)
-    if (terrainRasterBridgeMesh(centre)) { A = vec3f(0.36, 0.34, 0.31) * P.earth2.z; }
-  }
-  if (mesh && leaf == 0u && dot(n, gq) < 0.35 && HAS_SCENERY && P.scenery[0].w > 0.5) {
-    let toB = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
-    let spL = P.scenery[3].xyz + (dirW * tM) * toB;
-    let nL = n * toB;
-    let along = normalize(vec2f(-nL.y, nL.x) + vec2f(1e-6, 0.0));
-    let block = hash31(vec3f(floor(spL.xy / 25.0), 3.0));
-    A = vec3f(0.5, 0.46, 0.39) * (0.8 + 0.35 * block) * P.earth2.z;
-    let fw = fract(dot(spL.xy, along) / 2.6);
-    let fz = fract(spL.z / 3.1);
-    // (a bridge's part — its deck's sides, its parapets, its piers —: stone, no windows)
-    glass = select(0.0, 1.0, fw > 0.28 && fw < 0.72 && fz > 0.3 && fz < 0.82 && !terrainRasterBridgeMesh(centre));
-    A = mix(A, vec3f(0.03) * P.earth2.z, glass);
-    // (their windows lit at night as buildingLook's — over a quarter of them, each its own warmth —, their mean once a pixel
-    // spans a bay: the towers away over the water had none — grey blocks under the night's ambient, the eye's gain on them —
-    // where a photograph from Brooklyn shows their lit windows — Sam, 6 Nov 2026)
-    if (!terrainRasterBridgeMesh(centre)) {
-      let nearW = 1.0 - smoothstep(0.6, 1.3, fpM);
-      let cell = vec3u(vec3i(i32(floor(dot(spL.xy, along) / 2.6) + 65536.0), i32(floor(spL.z / 3.1) + 4096.0), i32(block * 4096.0)));
-      let hsh = hash3u(cell);
-      let litW = select(0.0, 1.0, u2f(hsh) < 0.28) * glass * (0.05 + 0.09 * u2f(pcg(hsh)));
-      bldE = vec3f(1.0, 0.8, 0.52) * (litW * nearW + 0.0257 * 0.28 * (1.0 - nearW));
-    }
-  }
-  // (Q8 D1: a wind turbine — its tower, nacelle and blades: a white matte paint, no windows)
-  if (terrainRasterTurbine(centre)) {
-    A = vec3f(0.7, 0.71, 0.72) * P.earth2.z;
-    glass = 0.0;
-    // (Q8 D1: a car — system/traffic.ts —: its paint one of eight by its index — white, silver, grey, black, red, blue, dark
-    // green, beige —, its lamps' glass dark by day)
-    let cg = terrainRasterTag(centre);
-    if (cg > 3.5 && cg < 4.99) {
-      let i = u32(fract(cg) * 8.0 + 0.5) % 8u;
-      var paint = array<vec3f, 8>(vec3f(0.75), vec3f(0.45), vec3f(0.2), vec3f(0.03), vec3f(0.45, 0.04, 0.03), vec3f(0.05, 0.1, 0.3), vec3f(0.05, 0.12, 0.07), vec3f(0.5, 0.45, 0.35));
-      A = paint[i] * P.earth2.z;
-    } else if (cg > 4.99) {
-      A = vec3f(0.08) * P.earth2.z;
-    }
-  }
-  // (a pylon: galvanised steel, weathered)
-  if (terrainRasterPylon(centre)) {
-    A = vec3f(0.33, 0.34, 0.35) * P.earth2.z;
-    glass = 0.0;
-  }
-  // (Q7 L9: the season's snow on what stands — the roofs facing up, the tops of the trees' crowns — as on the ground about
-  // them: the same line, the same season (seasonSnow, taken flat — the roof's own tilt the cover's); a crown holds less)
-  if ((mesh || leaf > 0u || isTree) && (TUNE_SC_SKIP & 1024u) == 0u) {
-    let up = dot(n, gq);
-    let sn = seasonSnow(gq, gq, max(airHeight(ph) - geoidN(gq), 0.0), Ls, vec3f(0.5), 0u);
-    let kU = select(smoothstep(0.5, 0.9, up), 0.6 * smoothstep(0.2, 0.8, up), isTree);
-    A = mix(A, vec3f(0.82, 0.84, 0.88) * select(P.earth2.z, 1.0, isTree), sn * kU);
-  }
-  // (the sky's light — on a slope, a share of it, and the ground's bounce round it — as earthGround's)
-  // (the rain — PLAN-PLUIE P4, as the tracer's ground —: the ground wet, darker, a sheen of the sky on it (below); on a
-  // runway's paving water lying in its hollows and the drops' rings spreading on it, near)
-  var wetS = 0.0;
-  var ripple = 0.0;
-  if (HAS_WX && WX_W > 0.0 && P.wx[5].x > 0.0 && !isTree) {
-    let wet = P.wx[5].x * WX_W;
-    var pud = 0.0;
-    if (rwyPaved > 0.0) {
-      let pn = vnoise(vec3f(rwyAt.x * 0.08, rwyAt.y * 0.2, 3.0)) * 0.6 + vnoise(vec3f(rwyAt.x * 0.31, rwyAt.y * 0.55, 7.0)) * 0.28
-        + vnoise(vec3f(rwyAt.x * 1.3, rwyAt.y * 1.7, 11.0)) * 0.12;
-      pud = smoothstep(0.7 - 0.06 * min(P.wx[5].y, 1.0), 0.8 - 0.06 * min(P.wx[5].y, 1.0), pn) * rwyPaved * wet;
-      let footM = max(length(fx), length(fy)) * EARTH_RM;
-      let near = smoothstep(0.1, 0.02, footM) * min(P.wx[5].y, 1.0);
-      if (near > 0.0) {
-        let cp = rwyAt / 0.3;
-        for (var dj = 0; dj < 2; dj++) {
-          for (var di = 0; di < 2; di++) {
-            let id = floor(cp) + vec2f(f32(di), f32(dj)) - vec2f(0.5);
-            let hh = vec2f(hash31(vec3f(id, 11.0)), hash31(vec3f(id, 23.0)));
-            let age = fract(P.wx[5].z * (0.9 + 0.5 * hh.x) + hh.y);
-            let ctr = (id + 0.5 + 0.5 * (vec2f(hash31(vec3f(id, 5.0)), hash31(vec3f(id, 7.0))) - 0.5)) * 0.3;
-            let d = length(rwyAt - ctr);
-            ripple += exp(-pow((d - age * 0.11) / 0.006, 2.0)) * (1.0 - age) * (1.0 - age);
-          }
-        }
-        ripple *= near * (0.35 + 0.65 * pud / max(wet, 1e-3));
-      }
-    }
-    // (a roof's slate and a wall's stone darker wet too, less than the soil — their pores fewer)
-    A *= mix(vec3f(1.0), vec3f(select(mix(0.58, 0.7, rwyPaved), 0.75, mesh)), wet);
-    A *= 1.0 - 0.35 * pud;
-    wetS = wet * select(mix(0.08, 0.3, rwyPaved), 0.12, mesh) + pud * 0.4;
-  }
-  var sky = E * 0.15;
-  if (!plainLight) { sky = liteSky(q, hG, E, Ls, mu0g); }
-  // (Q4 L2b: the valleys' sky hidden by the relief round them — H5's horizons in 8 directions, weighed by the clear sky's
-  // radiance in each; liteSkip 4194304: not read, a measure)
-  if (!plainLight && (liteSkip() & 4194304u) == 0u) { sky *= earthSkyOpen(gq, hG, ng); }
-  // (under the weather's decks: the blue sky hidden by their cover, their own grey light instead — what comes through them,
-  // and for a broken sky what their sunlit sides and bases send down —, as the tracer's ground)
-  let wg = wxNear(q);
-  // (the Moon's light under the decks: what they let through)
-  var moonVeil = 1.0;
-  if (HAS_WX && wg > 0.0) {
-    let vl = wxVeil(hG, wg, 3u);
-    let side = 0.5 * vl.x * (1.0 - vl.x);
-    sky = sky * vl.x + (Esun * max(mu0, 0.0) * skySeen(q, Ls) + sky) * (vl.y - vl.x + side);
-    moonVeil = vl.y;
-  }
-  // (a lightning flash — N5 —: its light on the ground for kilometres round)
-  if (HAS_WX && P.wx[6].w > 0.0) {
-    let f = flashAt();
-    sky += FLASH_TINT * luminance(E) * 0.05 * f.w * exp(-length(q * (1.0 + hG / EARTH_RM) - f.xyz) * EARTH_RM / 10000.0);
-  }
-  let up = dot(n, gq);
-  // (L6: the ground round sends back its own albedo's share — the day map's ~2 km mean)
-  let bounce = (Esun * max(mu0, 0.0) + sky) * groundAlbedoMean(gq) * 0.5 * (1.0 - up);
-  // (the moonlight — the tracer's ground's earthMoonlight: a moonlit landscape silvery —, through the decks)
-  // (Q2: the photograph's light kept by its Sun's — earthGround's photoRelightK —; a wall's stone, a runway's paving: ours whole)
-  let rk = max(photoRelightK(gq, Li, img.o), max(rwyPaved, select(0.0, 1.0, mesh && (dot(n, gq) < 0.35 || leaf > 0u))));
-  // (L1: the sky on the face by the frame's sky — skyOnFace —; a building's face its own share of it, bldAO)
-  // (Q4 L2a: the ground's ambient occlusion on the sky's and the bounce's light — never the Sun's —, worked out before this pass
-  // from the visibility's distances; liteSkip 16777216: not read, a measure)
-  let gao = select(rasterAO(centre), 1.0, (liteSkip() & 16777216u) != 0u);
-  var G = A / PI * (Eg * photoNdl(gq, n, Li, rk) + (skyOnFace(sky, hG, n, gq) * bldAO + bounce) * gao + E * earthMoonlight(q, n, hG, mu0g) * moonVeil);
-  // (a tree: lit as windsockShade lights it — the Sun on its face, six tenths of the sky, not the ground's open sky and
-  // bounce: they lit the crowns yellow —, its crown's underside in its own shade (the carving's occlusion, left out here),
-  // the light through its thin edge against the Sun)
-  if (isTree) {
-    let ao = 0.5 + 0.5 * clamp(0.5 + 0.5 * dot(n, gq), 0.0, 1.0);
-    let rim = 1.0 - abs(dot(n, dirW));
-    G = A / PI * (Eg * max(dot(n, Li), 0.0) * sqrt(ao) + sky * 0.6 * ao)
-      + WS_T / PI * Eg * max(-dot(n, Li), 0.0) * rim * (0.3 + 0.7 * pow(max(dot(dirW, Li), 0.0), 4.0));
-  }
-  if (glass > 0.0) {
-    let F = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(n, dirW)), 0.0, 1.0), 5.0);
-    G += glass * F * sky * 1.5 / PI;
-  }
-  // (Q4 L4: the known materials' specular — C0-11: a runway's paving, the regional surface's classes; an unknown ground stays
-  // matt —: GGX on a dielectric (F0 0.04), the roughness the material's, the Sun's own disc its floor; the diffuse lessened by the
-  // light the face mirrors — liteSkip 67108864: not, a measure)
-  if (!isTree && !mesh && (liteSkip() & 67108864u) == 0u) {
-    // (built-up 0.65, bare 0.8, snow and ice 0.35, grass and crops 0.9 — their sheen towards a low Sun, which a photograph cannot hold)
-    let cv = select(0u, surface.cover, surface.w > 0.5);
-    let rough = select(select(select(select(select(0.0, 0.9, cv == 30u || cv == 40u), 0.35, cv == 70u), 0.8, cv == 60u), 0.65, cv == 50u), 0.55, rwyPaved > 0.5);
-    if (rough > 0.0) {
-      // (Smith's visibility, height-correlated — Heitz —, Schlick's Fresnel on the half vector; Fv the face's mirror at the view)
-      let v = -dirW; let hv = normalize(Li + v); let nl = max(dot(n, Li), 0.0); let nv = max(dot(n, v), 1e-3); let nh = max(dot(n, hv), 0.0);
-      let a2 = pow(max(rough * rough, 0.0047), 2.0); let dd = nh * nh * (a2 - 1.0) + 1.0;
-      let vis = 0.5 / max(nl * sqrt(nv * nv * (1.0 - a2) + a2) + nv * sqrt(nl * nl * (1.0 - a2) + a2), 1e-5);
-      let Fv = 0.04 + 0.96 * pow(1.0 - nv, 5.0) * (1.0 - rough);
-      G = G * (1.0 - Fv) + Eg * (a2 / (PI * dd * dd) * vis * (0.04 + 0.96 * pow(1.0 - max(dot(v, hv), 0.0), 5.0)) * nl) + Fv * sky / PI;
-    }
-  }
-  // (a building's glass, its zinc: the sky mirrored at a grazing look and the Sun's glint — windsockShade's —; its windows lit
-  // at night)
-  if (bldS > 0.0) {
-    let c = clamp(-dot(dirW, n), 0.0, 1.0);
-    let F = bldS + (1.0 - bldS) * pow(1.0 - c, 5.0);
-    let r = reflect(dirW, n);
-    G += F * (sky / PI * 1.3 * bldAO + Eg * pow(max(dot(r, Li), 0.0), 600.0) * 40.0);
-  }
-  if (leaf > 0u || mesh) { G += bldE * (luminance(E) / PI) * WINDOW_GLOW * (1.0 - smoothstep(-0.12, 0.06, mu0g)); }
-  // (the wet ground's sheen: the sky mirrored by the water on it, by Fresnel — a wet runway seen ahead silvery —, the rings
-  // breaking it)
-  if (wetS > 0.0) {
-    let cv = clamp(dot(n, -dirW), 0.0, 1.0);
-    let F = (0.02 + 0.98 * pow(1.0 - cv, 5.0)) * wetS;
-    G = G * (1.0 - F) + F * sky * 1.1 / PI * (1.0 + 2.5 * ripple);
-    G += ripple * 0.35 * sky / PI;
-  }
-  // (the cities' lights at night: on the ground — the streets', the squares' —, not on a tree's crown nor on a building's walls
-  // and roofs, which their windows will light — Q3: the map's 500 m glow painted the crowns and the facades orange)
-  let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
-  let lamp = max(lights - 0.07, 0.0) / 0.93;
-  let dark = 1.0 - smoothstep(-0.12, 0.06, mu0g);
-  var lit = select(dark, 0.0, isTree || mesh);
-  // (near — the scenery's box —: the streets carry the light, their lamps along them — OpenStreetMap's roads at the point:
-  // ×3 on a road, ×0.15 off it, a quarter of a town's ground road: the quarter's light about the same, drawn along its
-  // streets, not the map's 500 m wash — the night only, a lit town only)
-  // (Q8 L10: near, the streets' light falls on the ground — the photograph's, the roads', the pavements' colours under it, its
-  // albedo against a town's mean 0.15 —, not a glow over it: an even cream where the lamps' pools lay, the ground unseen — Sam,
-  // 5 Nov; far, the map's glow as before)
-  var litAlb = vec3f(1.0);
-  var litC = mix(vec3f(1.0, 0.48, 0.16), vec3f(1.0, 0.75, 0.45), lamp);
-  // (the point drawn in the scenery's frame — the streets' lamps' grid, their tint by quarter —)
-  let dLr = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
-  let xyL = (P.scenery[3].xyz + dLr * tM).xy;
-  let nearL = HAS_SCENERY && P.scenery[0].w > 0.5 && tM <= P.scenery[1].w && (liteSkip() & 131072u) == 0u;
-  if (HAS_SCENERY && lit > 0.0 && lamp > 0.02 && (liteSkip() & 131072u) == 0u) {
-    lit *= sceneryRoadLight(sv, tM, xyL);
-    if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) {
-      // (the photograph's brightness under the lamps, a third of its hue: its lawns' and its trees' green, ×4 a channel, had lit
-      // the parks fluorescent green and the paths neon white — Paris at night, Sam, 6 Nov 2026)
-      let la = luminance(A);
-      litAlb = clamp(mix(vec3f(la), A, 0.33) / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(2.0));
-      litC = streetLampTint(xyL);
-    }
-  } else if (lit > 0.0) { lit *= CITY_WASH_FAR; }
-  // (the map's mean beyond the streets drawn — past the scenery's reach, or before it is in —: seen at the street's angle)
-  if (!nearL && lit > 0.0) {
-    lit *= cityCanyon(-dot(dirW, gq), lamp);
-    litC = cityTint(gq, lamp);
-  }
-  G += litAlb * litC * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
-  // (Q8 L10: the streets' lamps on the buildings' walls by them — their pools' light where the wall stands, three tenths of the ground's (half lit the walls brighter than the street, +65 % to the night's mean):
-  // a wall faces the lamp across the street, not under it; a lit town, at night, near)
-  if (mesh && nearL && dark > 0.0 && lamp > 0.02) {
-    let pl = sceneryLampLight(xyL);
-    // (a pool lights the wall's foot: the lamp's head ~8 m up, its light on the wall falling with the height over it — a tower
-    // lit whole by the pools at its foot stood white up to its top over Manhattan at night, brighter than its windows — Sam,
-    // 6 Nov 2026, against a photograph from Brooklyn)
-    let up = select(0.0, RB_ABOVE / 9.0, leaf > 0u);
-    let wall = (1.0 - smoothstep(0.6, 0.9, abs(dot(n, gq)))) / (1.0 + up * up * up);
-    if (pl.y > 0.0 && wall > 0.0) {
-      let fa = clamp(A / (0.15 * max(P.earth2.z, 1e-6)), vec3f(0.0), vec3f(4.0));
-      G += fa * streetLampTint(xyL) * (pow(lamp, 1.4) * P.earth.z * dark * 0.3 * STREET_POOL_GAIN * pl.x * pl.y * wall * luminance(E) / PI);
-    }
-  }
-  G += rwyLamps * (luminance(E) / PI) * mix(mix(0.6, 8.0, P.runways[17].y), RWY_LAMPS_NIGHT, dark);
-  // (Q8 D1: a car's lamps at night — its headlights warm white, its tail lights red)
-  {
-    let cg = terrainRasterTag(centre);
-    if (cg > 4.99 && cg < 6.5) {
-      let lampC = select(vec3f(1.0, 0.08, 0.04) * 0.4, vec3f(1.0, 0.92, 0.75), cg < 5.5);
-      G += lampC * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
-    }
-    // (Q8 L10: a street lamp's head — lit in a lit town (the night lights' map at it), warm white, as bright as a car's
-    // headlights' block)
-    if (cg > 6.5 && cg < 7.5 && lamp > 0.02) {
-      G += select(vec3f(1.0, 0.8, 0.55), streetLampTint(xyL) * 1.2, nearL) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
-    }
-  }
-  // (Q8 D1: a wind turbine's obstruction light — red at night, white by day, 40 flashes a minute, every farm in step)
-  if (terrainRasterLamp(centre)) {
-    let on = select(0.0, 1.0, fract(P.runways[17].x / 1.5) < 0.35);
-    // (a 2 kcd-class light, its block widened to a pixel and a half: its glow ~1 % of a runway lamp's per pixel: red, not burnt white)
-    G += vec3f(1.0, 0.06, 0.03) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark * on;
-    // (by day the same light white — a medium-intensity flash, the same rhythm: against the daylight, a spark on the nacelle)
-    G += vec3f(1.0) * (luminance(E) / PI) * 6.0 * (1.0 - dark) * on;
-  }
+  let at = rasterAttrAt(centre, k);
+  var G = liteSurface(gq, q, ph, rd, ray.look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, isTree, anchored, at);
+  let mesh = meshW;
   // (the water — liteWater, read at the start —: drawn by shadeWater, this pixel's surface under it left to it in accum, its kind
   // and cover in moments.x)
   if (!mesh && !isTree && (liteSkip() & 1u) == 0u) {
@@ -16001,7 +16050,7 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   // (liteSkip 8388608 — a measure —: the valleys' sky lost drawn instead of the surface, × 5: white a fifth lost or more, black none)
   // (liteSkip 33554432 — a measure —: the occlusion drawn instead of the surface, × 5: white a fifth of the sky hidden or more)
   if ((liteSkip() & 33554432u) != 0u) { G = vec3f(clamp((1.0 - rasterAO(centre)) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
-  if ((liteSkip() & 8388608u) != 0u) { G = vec3f(clamp((1.0 - earthSkyOpen(gq, hG, ng)) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
+  if ((liteSkip() & 8388608u) != 0u) { G = vec3f(clamp((1.0 - earthSkyOpen(gq, hG, atNg(at, gq))) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
   liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true, false);
 }
 

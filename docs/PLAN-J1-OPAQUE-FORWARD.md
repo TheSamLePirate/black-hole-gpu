@@ -120,6 +120,16 @@ donc à froid l'ordre de `shadeLite` ; tant que `shadeLite` reste compilé pour 
 ~1,1 s de compilation à froid — à placer hors du chemin bloquant (compilation anticipée, §8 de la stratégie). Mesure d'un module de
 calcul ; un fragment (étage, liaisons) reste à mesurer.
 
+**J1-4, première étape : la surface en fonction (10 novembre, nuit)** : le corps de `shadeLite` coupé en trois — le prologue
+(le rayon et le point depuis la visibilité, l'eau et ses sorties anticipées), **`liteSurface(…, at: RasterAttr)`** (l'albédo, les
+matériaux, le soleil et ses ombres, le ciel, le rebond, la lune, le spéculaire, la pluie, les lumières de la nuit → la radiance de
+surface G), l'épilogue (l'eau sur la surface, les vues de mesure, `liteFinish`). Ce que la surface lit de la visibilité est réuni dans
+`RasterAttr` (maillage, feuille de bâtiment, étiquette, éolienne, pylône, pont, feu, normale lissée, AO) : pour `shadeLite` il ne
+porte que le pixel (`vis`) et chaque attribut est lu par un accesseur (`atLeaf`, `atAO`…) **là où la surface le lit, comme avant** —
+la constante se replie à la compilation : aucune lecture avancée, aucun registre de plus ; le fragment forward en donnera les champs.
+J0 seul sur kerr-mini : GPU p50 vol 62,4 ms, vue figée 62,3/62,6 (avant : 62,6 ; 62,7/60,6) — inchangé ; e2e `sea-fft` 5/5. Prochaine étape : le pipeline du fragment (le patch redessiné en profondeur égale sur la profondeur gardée de
+J1-2, les ressources de la surface à un groupe « lumière du sol », `wgslLibraryModule` sur `liteSurface`).
+
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster
 prend la fermeture de ses racines dans le traceur **composé et spécialisé** (`wgsl-library.ts`), et déclare les ressources listées à
