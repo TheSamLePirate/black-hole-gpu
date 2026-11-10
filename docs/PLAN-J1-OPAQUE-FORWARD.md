@@ -61,6 +61,26 @@ positions et hauteurs restent géodésiques (WGS84, géoïde aux frontières hab
 Plus de marqueurs sémantiques dans les valeurs de luminance pour les nouveaux lecteurs : ils demandent « surface opaque » ou « limite
 de volume » par ces sorties typées. Les anciens lecteurs gardent un adaptateur avec propriétaire et condition de retrait (§20.7).
 
+## 4 bis. L'outillage de layout : l'évaluation (J1-0, 10 novembre au soir)
+
+**Le besoin, mesuré dans notre code** : la structure `Params` du traceur (158 lignes de WGSL) est écrite par `writeParams` en
+**~116 écritures positionnelles** (`set(47, …)`, `f[61 * 4 + 2]`, `wat + WAKE_VEC4S * 4`…) ; agrandir `seafft` de 6 à 7 `vec4`
+(PLAN-MER-WEBGPU S1) demandait de recaler ces décalages à la main. Les nouveaux contrats de J1 (frame, surfaces, caméra précédente)
+en ajouteraient d'autres.
+
+**webgpu-utils** (documentation officielle et registre npm, lus le 10 novembre) : version 2.1.1 (2026-06-04), MIT, **aucune dépendance
+d'exécution** (son analyseur dérive de wgsl_reflect, en dépendance de développement), ESM. `makeShaderDataDefinitions(wgsl)` lit les
+structures **depuis le WGSL** — le WGSL reste l'autorité, comme le veut §18 — ; `makeStructuredView(def)` donne des vues typées par
+champ et `set({ … })` par nom. Non documentés : les constantes `override` (que `trace.wgsl` emploie partout), `f16`, la taille
+minifiée, le coût de `set()` par image. **TypeGPU** (0.12.10, MIT, trois dépendances d'exécution) déclare les structures en
+TypeScript et produit le WGSL : une seconde autorité pour nos layouts existants, donc pas le premier choix ici.
+
+**Proposition** : webgpu-utils **à la génération, pas à l'exécution** — un script Bun lit `trace.wgsl` et les autres sources, écrit
+un module TypeScript des offsets nommés (`PARAMS.seafft`, `PARAMS.earth4.y`…), un test vérifie qu'il est à jour (comme
+`pipeline-inventory --check`) ; aucun poids dans le bundle ni analyse au démarrage ; `writeParams` migre vers ces noms par familles.
+Premier contrat réel : `Params` (le plus fragile), puis ceux de J1-1/J1-2. **À décider par Sam** : l'adoption de cette dépendance
+de développement.
+
 ## 5. Risques et questions
 
 - **Le forward en fragment demande au pipeline raster les liaisons du sol** (imagerie, cascades, horizons, ciel) que le traceur porte
@@ -68,5 +88,5 @@ de volume » par ces sorties typées. Les anciens lecteurs gardent un adaptateur
   plan de liaisons propre au forward, pas une copie du groupe du traceur.
 - **Coût** : le forward ne promet pas de gain par principe (§7.4) ; J1-4 se juge par A/B de l'image entière sur J0. Le noyau
   `shadeLite` est limité par ses registres sur Apple (ablations de la mer) : un fragment plus court peut y gagner, à mesurer.
-- **Questions à Sam** : (1) l'outillage de layout — webgpu-utils comme premier choix (CLAUDE.md), TypeGPU seulement sur preuve ;
+- **Questions à Sam** : (1) l'outillage de layout — webgpu-utils comme premier choix (CLAUDE.md), employé à la génération (§4 bis) ;
   (2) l'étendue du domaine pilote — la portée du patch, ou d'abord une bande plus étroite (quelques km) pour un premier A/B.
