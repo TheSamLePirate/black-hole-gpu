@@ -5,7 +5,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // PLAN-PLANETES-AAA P2: Miller's sea — its wind's chop by FFT (sea/fft-gpu.ts), knee-deep under 1.3 g (sea/spectrum.ts
 // MILLER_SEA, renderer millerSeaParams), on the giant waves (trace.wgsl shadeNear): the FFT running for Miller, its waves
 // in the image (the water's detail — the luminance's steps between neighbours —, more with them than without), no GPU
-// error; shots 300 m and 40 m over the water and on foot, the time held then running.
+// error, the water neither black nor white (its lower corners' level); shots 300 m and 40 m over the water and on foot, the time held
+// then running.
 // Duration: ~4 min.
 // Done when: every view shot, the FFT's runs counted, the detail measured.
 
@@ -62,6 +63,17 @@ describe.skipIf(!E2E)("P2: Miller's sea", () => {
       const d = g.getImageData(0, 55, 160, 45).data; let s = 0; for (let k = 0; k < d.length; k += 4) s += d[k] + d[k + 1] + d[k + 2];
       return s / (d.length / 4) / 3; })()`);
   };
+  /** the water's own level: the mean luminance (0–255) of the lower corners — left and right of the craft, the sea alone. A black
+   *  sea (its waves NaN: Miller's under the 4.9 m cascade, 10 Nov 2026 — the tests passed on it) or a white one fails */
+  const seaLevel = async () => {
+    const { data } = await app.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "jpeg", quality: 60 });
+    return app.js<number>(`(async () => {
+      const i = await createImageBitmap(await (await fetch("data:image/jpeg;base64,${data}")).blob());
+      const c = new OffscreenCanvas(200, 100), g = c.getContext("2d"); g.drawImage(i, 0, 0, 200, 100);
+      let s = 0, n = 0;
+      for (const x0 of [0, 164]) { const d = g.getImageData(x0, 64, 36, 30).data; for (let k = 0; k < d.length; k += 4) { s += 0.2126 * d[k] + 0.7152 * d[k + 1] + 0.0722 * d[k + 2]; n++; } }
+      return +(s / n).toFixed(1); })()`);
+  };
   const shot = async (name: string) => {
     await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
     await app.shot(`${OUT}/${name}.png`);
@@ -75,6 +87,7 @@ describe.skipIf(!E2E)("P2: Miller's sea", () => {
       const st = await app.js<Record<string, unknown>>(`(() => { const r = __bh.renderer; return {
         world: r.seaHere?.world ?? null, runs: r.seaFft?.runs ?? -1, raster: r.bodyRasterNow, gpuErrors: r.gpuErrors }; })()`);
       const d = await detail();
+      const sea = await seaLevel();
       await shot(`${name}-held`);
       // (the clock running a few seconds: the waves move)
       await app.js(
@@ -82,8 +95,10 @@ describe.skipIf(!E2E)("P2: Miller's sea", () => {
       );
       await shot(`${name}-running`);
       const runs = await app.js<number>("__bh.renderer.seaFft?.runs ?? -1");
-      console.log(`  ${name}: ${JSON.stringify(st)}, detail ${d}, FFT runs ${st.runs} → ${runs}`);
+      console.log(`  ${name}: ${JSON.stringify(st)}, detail ${d}, sea level ${sea}, FFT runs ${st.runs} → ${runs}`);
       expect(st.world).toBe("miller");
+      expect(sea).toBeGreaterThan(6);
+      expect(sea).toBeLessThan(245);
       expect(runs).toBeGreaterThan(st.runs as number);
       expect(st.gpuErrors).toBe(0);
     }, 900_000);
@@ -121,8 +136,11 @@ describe.skipIf(!E2E)("P2: Miller's sea", () => {
     const st = await app.js<Record<string, unknown>>(
       `(() => ({ world: __bh.renderer.seaHere?.world ?? null, gpuErrors: __bh.renderer.gpuErrors, stats: __bh.renderer.seaFft?.stats, state: __bh.renderer.seaState, key: __bh.renderer.seaKey }))()`,
     );
-    console.log(`  foot: ${JSON.stringify(st)}, detail ${await detail()}`);
+    const sea = await seaLevel();
+    console.log(`  foot: ${JSON.stringify(st)}, detail ${await detail()}, sea level ${sea}`);
     expect(st.world).toBe("miller");
+    expect(sea).toBeGreaterThan(6);
+    expect(sea).toBeLessThan(245);
     expect(app.cdp.errors).toEqual([]);
   }, 900_000);
 });

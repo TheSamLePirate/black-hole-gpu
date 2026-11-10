@@ -65,7 +65,9 @@ fn spectrum(@builtin(global_invocation_id) id: vec3u) {
   // that on the CPU, in float64, the phases exact in float32 however far the scene's clock runs)
   let w0 = TAU / REPEAT;
   let g = select(G, F.w.x, F.w.x > 0.0);
-  let w = floor(sqrt(g * kl * select(1.0, tanh(kl * F.w.y), F.w.y > 0.0)) / w0 + 0.5) * w0 * F.t.x;
+  // (tanh's argument held under 15 — 1 to float32's precision there —: Apple's tanh is a ratio of exponentials, NaN past ~44 —
+  // Miller's 0.5 m under the 4.9 m cascade reached k d = 82 (PLAN-MER-WEBGPU S1), every wave NaN, its sea black)
+  let w = floor(sqrt(g * kl * select(1.0, tanh(min(kl * F.w.y, 15.0)), F.w.y > 0.0)) / w0 + 0.5) * w0 * F.t.x;
   let e = vec2f(cos(w), sin(w));
   let h = cmul(a.xy, e) + cmul(a.zw, vec2f(e.x, -e.y));
   let ih = vec2f(-h.y, h.x); // i·h

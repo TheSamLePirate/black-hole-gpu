@@ -2363,3 +2363,20 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   l'écume garde un aspect de taches à juger contre web-ocean ; les crêtes devant la terre ne sont pas dessinées ; non mesuré sur
   M1 Max ni sur la scène J0 ; e2e `sea-fft` corrigé non relancé. Prochaine étape : la passe d'eau (sonde → retrait du miroir des
   nuages proche et de `skyMirror`), puis S6.
+
+## 2026-11-10T16:07Z — La mer WebGPU : Miller a la mer de la Terre (et n'est plus noire), Gargantua reflété par l'image
+
+- **Contribution** (PLAN-MER-WEBGPU ; stratégie §7 « une responsabilité commune avant plusieurs lecteurs ») : un seul modèle de
+  mer pour la Terre et Miller — `shadeNear` appelle le `seaShade` de la Terre en mode `SEA_ALIEN` au lieu de son ombrage propre
+  (GGX scalaire) ; le ciel d'un monde à l'infini reflété depuis l'image (`seaSkySSR`, une projection, pas de marche) ; une
+  régression de S1 corrigée : `tanh(k d)` en NaN sur Apple pour la cascade de 4,9 m dans l'eau de Miller — sa mer était noire,
+  ses e2e verts ; `miller-sea` vérifie désormais le niveau de l'eau. L'écume : seuil de l'écume monde sur l'écart du Jacobien de
+  toutes les cascades lues, bande des crêtes à l'échelle de cet écart (toutes les mers) ; Miller à 30 % des moutons de Monahan.
+  La sonde au-dessus de la mer limitée à la Terre (Titan). Fichiers : `src/shaders/trace.wgsl`, `src/shaders/seafft.wgsl`,
+  `src/renderer.ts`, `tests/e2e/miller-sea.e2e.test.ts`.
+- **Preuve** : **observé** sur kerr-mini (`miller-sea`, 3/3, captures `remote-results/*-miller-sea6/`) : mer bleu-vert sombre,
+  stries d'écume rares, chemin de lumière ; **mesuré** : le SSR du ciel dans le bruit (61,5 / 60,9 contre 61,7 / 60,4 ms) ; la
+  coupure des ombres du relief sur la pleine mer mesurée sans gain et retirée. `check-wgsl` 71/71, `tsc`.
+- **Limites** : le SSR ne reflète que le ciel à l'écran (le reflet du disque tombe sous le Ranger dans les vues du test) ; le
+  coût de la mer de Miller face à l'ancien ombrage non mesuré (l'ancien était en NaN) ; `titan-ground` aux limites de 300 s de
+  ses attentes (un cas échoue selon le passage) ; non mesuré sur M1 Max.

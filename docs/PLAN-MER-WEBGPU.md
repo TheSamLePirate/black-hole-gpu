@@ -1,6 +1,6 @@
 # PLAN-MER-WEBGPU — la mer au niveau de web-ocean, dans notre monde
 
-**État (10 novembre 2026, soir)** : S0, S1, S2 et S4 faits (mesurés, §4) ; S3 en partie (la mer peu profonde sort aussi de `shadeLite`, le SSR seulement près d'une terre, l'écume et les crêtes à contre-jour reprises) ; S5 en partie (la sonde tracée autour de la caméra au-dessus de la mer) ; reste S3 (le look de l'écume à juger, les crêtes devant la terre), S5 (les mips de rugosité), S6. Demandes de Sam, le 10 au soir : « d'abord la mer WebGPU parfaite » ; « je veux
+**État (10 novembre 2026, soir)** : S0, S1, S2 et S4 faits (mesurés, §4) ; S3 en partie (la mer peu profonde sort aussi de `shadeLite`, le SSR seulement près d'une terre, l'écume et les crêtes à contre-jour reprises) ; S5 en partie (la sonde tracée autour de la caméra au-dessus de la mer) ; Miller ombrée comme la Terre (§4) ; reste S3 (le look de l'écume à juger, les crêtes devant la terre), S5 (les mips de rugosité), S6. Demandes de Sam, le 10 au soir : « d'abord la mer WebGPU parfaite » ; « je veux
 le même rendu que web-ocean, mais compatible avec le ciel, les reflets, les bateaux, les traînées d'avion » ; « qualité et
 performances AAA ». Origine : [analyse](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md) (lots M1–M5), stratégie §23. Ce plan
 passe avant J1 (décision de Sam).
@@ -110,4 +110,25 @@ matériau, ni ombres, ni ciel. Côte à 500 m **84,4 / 84,4 → 71,8 / 69,9 ms**
 (turquoise des hauts-fonds présent, couleur moyenne à 0,2 % ; `remote-results/20261110-154613-sea-shallow/`). Avec ces mesures,
 le SSR coupé hors de 8 km d'une terre (`seaAllAround`, une lecture du masque), la transmission des crêtes fines à contre-jour,
 l'écume éclairée par un ciel désaturé et les bulles sous elle — non mesurés séparément (pas de levier pour le SSR toujours).
+
+**Miller, la même mer** (demande de Sam, 10 novembre au soir ; e2e `miller-sea`, kerr-mini) :
+- **Régression trouvée et corrigée** : la mer de Miller était noire depuis S1 — la cascade de 4,9 m sous 0,5 m d'eau porte
+  `tanh(k d)` jusqu'à 82, NaN sur Apple (rapport d'exponentielles) ; toute la FFT de Miller en NaN, `bodyLite` le peint en noir.
+  L'argument est borné à 15. Le test passait sur une mer noire : il vérifie maintenant le niveau de l'eau (coins bas, 6–245).
+- **L'ombrage de la Terre** : `shadeNear` appelle `seaShade` (`SEA_ALIEN`) — mêmes cascades, LEAN à covariance complète, reflet
+  gaussien et Smith, Fresnel moyenné et inclinaison rasante, écume monde, crêtes à contre-jour ; ce qui n'existe que sur Terre
+  (ciel analytique, nuages, Kd490, masque des océans, rouleaux, SSR du monde) laissé de côté ; le ciel reflété par la sonde de
+  Miller ; le corps de l'eau celui de sa carte (fond pâle sous 0,5 m), avec ses caustiques ; la vague géante par-dessus.
+- **Gargantua dans la mer par l'image** (`seaSkySSR`, demande de Sam) : un ciel à l'infini sans marche — la direction réfléchie
+  (tirée des pentes, sommée par l'historique) projetée à l'écran, la couleur du ciel lue là. Coût dans le bruit : 61,5 / 60,9 ms
+  contre 61,7 / 60,4 sans (`liteSkip` 2³¹). Limite : il ne reflète que ce qui est à l'écran — dans les vues du test, le reflet du
+  disque tombe sous le Ranger ou le disque sort du cadre ; la sonde reste en dessous.
+- **L'écume** : deux corrections pour toutes les mers — le seuil de l'écume monde pris sur l'écart du Jacobien de toutes les
+  cascades qu'elle lit (pas des deux longues seules) et la bande des crêtes à l'échelle de cet écart (inchangée vers 0,15, la
+  Terre par force 5) — ; pour Miller seule, 30 % des moutons de Monahan et une écume qui s'efface deux fois plus vite (Sam :
+  « trop d'écume sur Miller »).
+- **Mesuré pour rien** : couper les cascades d'ombre du relief sur la pleine mer (sans terre à 8 km) — midi 68,1 / 71,1 contre
+  70,9 / 71,1, mer à 30 m 72,6 / 71,8 contre 71,3 / 70,6 : retiré.
+- **Titan** : la sonde au-dessus de la mer limitée à la Terre (`seaHere.world`) ; `titan-ground` reste aux limites de 300 s de
+  ses attentes (un cas échoue d'un passage à l'autre, en compilation), à reprendre hors de ce plan.
 

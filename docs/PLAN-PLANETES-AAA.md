@@ -83,6 +83,12 @@ par le projet d'Alex).
 - Maillage de mer raster, Fresnel, reflet du ciel de Gargantua (disque d'accrétion, lentille), écume par Jacobien
   gardée d'image en image, lumière à travers les crêtes.
 - Le traceur garde le lointain (orbite) avec la même mer filtrée.
+- **10 novembre 2026** (PLAN-MER-WEBGPU, demande de Sam : « la même mer sur Miller que sur Terre ») : la mer de Miller était
+  **noire** depuis les 4 cascades de S1 (`tanh(k d)` débordant en NaN sur Apple pour la cascade de 4,9 m sous 0,5 m d'eau —
+  corrigé dans `seafft.wgsl`), sans qu'aucun test ne le voie (`miller-sea` vérifie désormais le niveau de l'eau). Elle est
+  ombrée par le `seaShade` de la Terre (`SEA_ALIEN` : LEAN à covariance complète, reflet et masquage de Smith, Fresnel
+  moyenné, écume monde, crêtes à contre-jour ; son ciel par sa sonde, Gargantua par l'image elle-même — `seaSkySSR` —, le
+  corps de son eau et ses caustiques gardés), l'écume réduite pour son eau aux genoux (30 % des moutons de Monahan).
 
 ### P3 — Miller : la méga-vague — **fait**, [P3.md](progress/planetes-aaa/P3.md)
 - Nouveau modèle : un **mur solitaire** (profil soliton + lèvre qui déferle) qui remplace les `pow(sin, 40)`, ses

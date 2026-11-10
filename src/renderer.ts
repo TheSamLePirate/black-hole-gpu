@@ -5346,9 +5346,12 @@ export class Renderer {
     // level under which lies Monahan's cover at this wind)
     const sJ = this.seaLambda * Math.sqrt(st.slope01);
     const W = Math.min(Math.max(3.84e-6 * H.U ** 3.41, 1e-5), 0.1);
+    // (Miller's crests: its knee-deep chop held by the depth, its water near a mirror but for the giant waves — a third of the
+    // whitecaps the wind would raise on an ocean, their foam gone twice as fast; Sam, 10 Nov: "too much foam on Miller")
+    const WA = miller ? 0.3 * W : W;
     // (the slopes finer than the cascades computed: Cox–Munk's share they leave, plus the cascades left out — their variance)
     out.set(
-      [Math.max(cmU - st.slopeX, 0.25 * cmU) + offU, Math.max(cmC - st.slopeZ, 0.25 * cmC) + offC, 1 + sJ * normalQuantile(W), sJ],
+      [Math.max(cmU - st.slopeX, 0.25 * cmU) + offU, Math.max(cmC - st.slopeZ, 0.25 * cmC) + offC, 1 + sJ * normalQuantile(WA), sJ],
       8,
     );
     // (each cascade's own anchor: the anchor's whole kilometres modulo its period, in float64 — the periods not commensurable,
@@ -5361,6 +5364,9 @@ export class Renderer {
     const probeNear = !this.envReset && performance.now() - this.envAt < 1000 ? 1 : 0;
     // (the world's foam — PLAN-MER-WEBGPU S4, sea/fft-gpu.ts FoamFrame —: the camera's cell on each level, the last frame's taken
     // into this frame's local axes across an anchor's jump; the pair the FFT writes this frame read by the tracer)
+    // (its threshold from the spread of the Jacobian it reads — every cascade computed, not the two long ones': Miller's short
+    // cascades as steep as its long one, its whole sea under the two's threshold, white)
+    const sJw = this.seaLambda * Math.sqrt(st.slopeC.slice(0, active).reduce((a, b) => a + b, 0));
     {
       const camL = [this.seaCamLocal[0], this.seaCamLocal[1]];
       const ts = FOAM_SIZES.map((L) => L / 256);
@@ -5384,25 +5390,30 @@ export class Renderer {
         cells,
         prev,
         offsets: off,
-        Jt: 1 + sJ * normalQuantile(W),
-        sJ,
+        Jt: 1 + sJw * normalQuantile(WA),
+        sJ: sJw,
         drift: [0.035 * H.U, 0],
-        decay: 0.2,
+        decay: miller ? 0.4 : 0.2,
       };
     }
     out.set([active, offUC, probeNear, this.seaFoamWorldOn ? this.seaFft.foamParity : -1], 24);
     if (frame) this.seaFftLast = out;
     // (the foam each cascade makes — sea/fft-gpu.ts: where its own Jacobian falls under the level of Monahan's cover)
-    this.seaFoamJ = st.slopeC.map((v) => 1 + this.seaLambda * Math.sqrt(v) * normalQuantile(W));
+    this.seaFoamJ = st.slopeC.map((v) => 1 + this.seaLambda * Math.sqrt(v) * normalQuantile(WA));
     return out;
   }
 
   /** The light probe around the camera (after the frame's params are written), then its mips and SH. */
   private dispatchEnv(enc: GPUCommandEncoder, t: Target, s: Settings) {
-    // (on foot, the probe round the camera lights the astronaut and the grass: the ship's light, the same world; over the sea it is
-    // the sky the sea mirrors — PLAN-MER-WEBGPU S5: a free camera's sea mirrored the probe left where the camera came from, an
+    // (on foot, the probe round the camera lights the astronaut and the grass: the ship's light, the same world; over the Earth's sea
+    // it is the sky the sea mirrors — PLAN-MER-WEBGPU S5: a free camera's sea mirrored the probe left where the camera came from, an
     // orbit's Earth off Hyères, 10 Nov)
-    if (!s.ship && !this.craftsShown && !this.character?.active && !(this.seaProbeOn && this.seaHere && this.seaHere.weight > 0)) {
+    if (
+      !s.ship &&
+      !this.craftsShown &&
+      !this.character?.active &&
+      !(this.seaProbeOn && this.seaHere && this.seaHere.weight > 0 && !this.seaHere.world)
+    ) {
       this.envReset = true; // stale by the time the ship comes back
       return;
     }
