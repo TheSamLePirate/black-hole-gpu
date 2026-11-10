@@ -1,6 +1,6 @@
 # PLAN-J1 — l'opaque terrestre en forward, domaine pilote
 
-**État (10 novembre 2026, soir)** : plan écrit ; **J1-0 fait pour `Params`** — webgpu-utils 2.1.1 en dépendance de développement (premier choix de CLAUDE.md, évaluation §4 bis), `scripts/gen-layouts.ts` génère `src/gen/params-layout.ts` depuis la structure WGSL, `writeParams` écrit par noms (les ~116 positions et les sommes de `vec4` à la main retirées), test et portillon avant push ; J1-0 reste ouvert pour les contrats de J1-1/J1-2 ; domaine pilote : la portée du patch par défaut (révisable par Sam) ; **J1-2 commencé** — la visibilité a une seconde cible, le mouvement des maillages mobiles du décor (voitures, pales : leur point à l'horloge et par la caméra de l'image d'avant), lue par `temporal` et `taau` (le reste du décor et le sol reprojetés par la caméra et la profondeur, exacts pour le rigide) ; vérifié par relecture (~900–1 000 pixels en mouvement, 4–7 px par image, aucune erreur GPU) ; au zoom (champ 12°), caméra immobile, les voitures laissaient des traînées plus longues avec le mouvement que sans — **corrigé le soir même** : le mouvement de l'image d'avant (copié en fin d'image) donne les **désoccultations** (un pixel qu'un mobile couvrait et ne couvre plus repart sans historique — l'historique du sol tenu avec la caméra immobile n'est pas borné, α 0,1) et une voiture que sa boucle ramène (saut > ¼ d'image) est marquée z 2, sans historique ; observé sur kerr-mini : plus de traînées, l'image proche de celle sans historique ; **allumé par défaut** ; la profondeur gardée et l'identité restent ; **J1-1 commencé** — `src/frame-desc.ts` (id, horloge réelle lue une fois, horloges du vol et de la scène, caméra actuelle et précédente ; testé), construit au début de `renderer.frame()` ; les 17 lectures d'horloge de l'encodage (fondus, fraîcheurs, horloges d'animation) le lisent (`performance.now()` dans `renderer.ts` : 48 → 33) ; J0 inchangé (kerr-mini 60,9 ms, 16,5 images/s). Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J1,
+**État (10 novembre 2026, soir)** : plan écrit ; **J1-3 préparé** — l'inventaire de ce que l'ombrage du sol lit (§4 ter : la surface seule tient dans un fragment aux limites par défaut, `shadeLite` entier non) ; **J1-0 fait pour `Params`** — webgpu-utils 2.1.1 en dépendance de développement (premier choix de CLAUDE.md, évaluation §4 bis), `scripts/gen-layouts.ts` génère `src/gen/params-layout.ts` depuis la structure WGSL, `writeParams` écrit par noms (les ~116 positions et les sommes de `vec4` à la main retirées), test et portillon avant push ; J1-0 reste ouvert pour les contrats de J1-1/J1-2 ; domaine pilote : la portée du patch par défaut (révisable par Sam) ; **J1-2 commencé** — la visibilité a une seconde cible, le mouvement des maillages mobiles du décor (voitures, pales : leur point à l'horloge et par la caméra de l'image d'avant), lue par `temporal` et `taau` (le reste du décor et le sol reprojetés par la caméra et la profondeur, exacts pour le rigide) ; vérifié par relecture (~900–1 000 pixels en mouvement, 4–7 px par image, aucune erreur GPU) ; au zoom (champ 12°), caméra immobile, les voitures laissaient des traînées plus longues avec le mouvement que sans — **corrigé le soir même** : le mouvement de l'image d'avant (copié en fin d'image) donne les **désoccultations** (un pixel qu'un mobile couvrait et ne couvre plus repart sans historique — l'historique du sol tenu avec la caméra immobile n'est pas borné, α 0,1) et une voiture que sa boucle ramène (saut > ¼ d'image) est marquée z 2, sans historique ; observé sur kerr-mini : plus de traînées, l'image proche de celle sans historique ; **allumé par défaut** ; la profondeur gardée et l'identité restent ; **J1-1 commencé** — `src/frame-desc.ts` (id, horloge réelle lue une fois, horloges du vol et de la scène, caméra actuelle et précédente ; testé), construit au début de `renderer.frame()` ; les 17 lectures d'horloge de l'encodage (fondus, fraîcheurs, horloges d'animation) le lisent (`performance.now()` dans `renderer.ts` : 48 → 33) ; J0 inchangé (kerr-mini 60,9 ms, 16,5 images/s). Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J1,
 §7.3–7.5 (contrats de frame et de surfaces), §20.5 étapes 2 à 4, §21.4 candidat B ; décision de Sam du 10 novembre : « J1 suit la
 mer » ([PLAN-MER-WEBGPU](PLAN-MER-WEBGPU.md) fait, S6 mesuré). Juge : la scène [J0](J0-CONTRAT.md) (Toulon-Hyères), sur kerr-mini
 (répartition) et sur le M1 Max (palier). Le code fait foi ; ce plan dit l'ordre et les preuves.
@@ -80,6 +80,37 @@ un module TypeScript des offsets nommés (`PARAMS.seafft`, `PARAMS.earth4.y`…)
 `pipeline-inventory --check`) ; aucun poids dans le bundle ni analyse au démarrage ; `writeParams` migre vers ces noms par familles.
 Premier contrat réel : `Params` (le plus fragile), puis ceux de J1-1/J1-2. **À décider par Sam** : l'adoption de cette dépendance
 de développement.
+
+## 4 ter. Ce que l'ombrage du sol lit (J1-3, préalable à J1-4 — 10 novembre, nuit)
+
+`bun scripts/ground-shading-inventory.ts` (statique, depuis le WGSL composé ; profil J0 `earth-raster-wx`) : les ressources que
+`shadeLite` et les fonctions qu'il atteint lisent, par famille — ce qu'un fragment forward devrait recevoir pour ombrer le même sol.
+
+| famille | fonctions | textures | stockage (dont écriture) | échantillonneurs | uniformes |
+|---|---:|---:|---:|---:|---:|
+| imagerie (albédo) | 8 | 2 | 1 (0) | 1 | 1 |
+| soleil (ombres : nuages, cascades, horizons, décor, appareil) | 44 | 8 | 2 (0) | 2 | 1 |
+| lumière du ciel | 8 | 0 | 1 (0) | 0 | 1 |
+| air et nuages devant la surface, écriture | 50 | 7 | 4 (3) | 2 | 1 |
+| eau (hors mer ouverte) | 21 | 2 | 2 (0) | 1 | 1 |
+| `shadeLite` entier | 249 | **20** | 5 (3) | 5 | 1 |
+| **surface seule** (tout sauf `liteFinish`, `liteWater`) | 214 | **15** | 5 (3) | 4 | 1 |
+
+Ce qu'on en tire pour J1-3/J1-4 :
+
+- **`shadeLite` entier ne tient pas dans un fragment aux limites par défaut** (20 textures pour 16 par étage) ; **la surface seule,
+  si** : ses 15 textures comptent la cible de visibilité (`terrainDist`), qui devient les données propres du fragment (position,
+  normale, identité interpolées) — reste **14** ; ses 3 tampons écrits (`accum`, `moments`, `stamps`) deviennent les cibles de la passe ;
+  restent 2 tampons lus (`bodies`, `scenery`), 4 échantillonneurs, l'uniforme `P`. Donc le découpage du forward : **le fragment ombre
+  la surface** (imagerie, matériaux et détail, soleil et ombres, ciel, AO) et écrit la radiance de surface + la profondeur finale ;
+  **l'air et les nuages devant restent une passe de composition** par la profondeur finale (ce que fait `liteFinish`, sans le
+  re-marcher) ; l'eau reste à J4.
+- **Le coût de compilation** est le vrai risque : la surface atteint 214 fonctions — un module raster de cette taille rejoindrait la
+  cascade de compilation (PLAN-LEAN-TRACER-KERNELS) ; J1-3 doit en faire **un module partagé spécialisé** (les mêmes constantes
+  `override` que le noyau de `shadeLite`), pas une copie.
+- **L'ordre de J1-3** : sortir d'abord les familles sans écriture et sans marche (imagerie, ciel), puis le soleil (ses 8 textures :
+  `csmTex`, `sunShadowMap`, `tsmTex`, `shipShadowMap`, `earthCube`, `earthNight`, `noiseTex`, `terrainDist`) ; le fragment pilote
+  les lira par un groupe de liaisons « lumière du sol » commun au traceur — une seule autorité des liaisons (webgpu-utils, J1-0).
 
 ## 5. Risques et questions
 

@@ -2562,3 +2562,16 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Limites** : des requêtes RGE ALTI en plus au chargement quand les niveaux grossiers manquent (non comptées) ; les tuiles déjà en
   cache disque/zone hors ligne d'avant la correction ne sont pas revues ; les pins vus de près sont presque noirs et en dents de scie
   (look des arbres, lot V2), non traité ici.
+
+## 2026-11-10T22:40Z — J1-3 préparé : ce que l'ombrage du sol lit, et ce qu'un fragment forward peut porter
+
+- **Contribution** (stratégie §7.4 « socle raster forward, matériaux explicites », PLAN-J1 J1-3/J1-4) : `scripts/ground-shading-
+  inventory.ts` relève, depuis le WGSL composé (profil J0), les ressources que `shadeLite` lit par famille. `shadeLite` entier :
+  20 textures (au-delà des 16 d'un étage aux limites WebGPU par défaut) ; **la surface seule** (sans l'air et les nuages devant, ni
+  l'eau) : 14 textures une fois la cible de visibilité devenue les données du fragment, 2 tampons lus, 4 échantillonneurs — **elle tient**.
+  D'où le découpage écrit dans le plan (§4 ter) : le fragment forward ombre la surface et écrit radiance + profondeur finale ; l'air et
+  les nuages restent une composition par la profondeur ; l'eau à J4 ; le module partagé spécialisé (214 fonctions : la compilation est
+  le risque principal), l'imagerie et le ciel d'abord, puis le soleil.
+- **Preuve** : **vérifié statiquement** (script, sortie dans le plan). Aucun code de rendu changé.
+- **Limites** : le comptage est par nom de ressource dans les fonctions atteintes (une branche morte par spécialisation peut y être
+  comptée : majorant) ; la compilation d'un tel module raster non mesurée ; J1-3 lui-même (le module partagé) reste à faire.
