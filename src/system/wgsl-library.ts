@@ -62,14 +62,16 @@ export function wgslClosure(
   const candidates = new Map<string, string>();
   for (const [line, name] of src.matchAll(/^(?:const|override|var<private>)\s+(\w+)\b[^;]*;/gm)) candidates.set(name!, line!);
   const declarations = new Map<string, string>();
-  let text = [...functions.values()].join("\n");
+  // (names matched in the code alone: a comment's word — "the far ring's" — is no use of `ring`)
+  const code = (t: string) => t.replace(/\/\/[^\n]*/g, "");
+  let text = code([...functions.values()].join("\n"));
   let grew = true;
   while (grew) {
     grew = false;
     for (const [name, declaration] of candidates) {
       if (!declarations.has(name) && new RegExp(`\\b${name}\\b`).test(text)) {
         declarations.set(name, declaration);
-        text += `\n${declaration}`;
+        text += `\n${code(declaration)}`;
         grew = true;
       }
     }
@@ -85,7 +87,7 @@ export function wgslClosure(
       const s = wgslStruct(src, name);
       if (!s) continue;
       structs.set(name, s);
-      text += `\n${s}`;
+      text += `\n${code(s)}`;
       grew = true;
     }
   }

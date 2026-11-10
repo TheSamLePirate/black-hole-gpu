@@ -471,6 +471,10 @@ export class TerrainRaster {
   private mesh: GPURenderPipeline | null = null;
   private overlays = new Map<GPUTextureFormat, GPURenderPipeline | null>();
   private module: GPUShaderModule;
+  /** its module (PLAN-J1 J1-4: the forward ground's vertex stage — the visibility's very vertices) */
+  get vertexModule(): GPUShaderModule {
+    return this.module;
+  }
   private inspectLayout: GPUBindGroupLayout;
   private uniform: GPUBuffer | null = null;
   private index: GPUBuffer | null = null;
@@ -1270,6 +1274,48 @@ export class TerrainRaster {
   distanceTexture(): GPUTexture | null {
     return this.active && !this.error ? (this.attachments?.distance ?? null) : null;
   }
+  /**
+   * PLAN-J1 J1-4 — the forward ground (system/terrain-forward.ts): the patch drawn again by its pipeline into `target` (cleared),
+   * with this frame's visibility uniform and mesh; `binds` its groups 1 and 2 (the tracer's resources, the renderer's — null: not
+   * set). After the visibility pass, its distances read; false when that pass did not run for the Earth.
+   */
+  encodeForward(
+    enc: GPUCommandEncoder,
+    pipe: GPURenderPipeline,
+    binds: (GPUBindGroup | null)[],
+    target: GPUTexture,
+    profile: (label: string, descriptor: GPURenderPassDescriptor) => GPURenderPassDescriptor,
+  ): boolean {
+    if (!this.active || this.error || this.reason !== "pilot" || !this.uniform || !this.table || !this.index || !this.vertex) return false;
+    if (this.forwardBind?.pipe !== pipe || this.forwardBind.table !== this.table)
+      this.forwardBind = {
+        pipe,
+        table: this.table,
+        bind: this.device.createBindGroup({
+          layout: pipe.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: { buffer: this.uniform } },
+            { binding: 1, resource: { buffer: this.table } },
+          ],
+        }),
+      };
+    const pass = enc.beginRenderPass(
+      profile("forward ground", {
+        colorAttachments: [{ view: target.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+      }),
+    );
+    pass.setPipeline(pipe);
+    pass.setBindGroup(0, this.forwardBind.bind);
+    binds.forEach((b, i) => {
+      if (b) pass.setBindGroup(i + 1, b);
+    });
+    pass.setIndexBuffer(this.index, "uint32");
+    pass.setVertexBuffer(0, this.vertex);
+    pass.drawIndexed(this.indexCount);
+    pass.end();
+    return true;
+  }
+  private forwardBind: { pipe: GPURenderPipeline; table: GPUBuffer; bind: GPUBindGroup } | null = null;
   /** the moving meshes' motion of the last Earth visibility pass (PLAN-J1 J1-2); null when it did not run — another world's body
    *  raster leaves the target as it was */
   motionTexture(): GPUTexture | null {

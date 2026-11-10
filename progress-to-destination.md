@@ -2624,3 +2624,18 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   mesure faussée, la variante remplacée par les accesseurs sans être remesurée seule.
 - **Limites** : rien ne dessine encore en forward ; prochaine étape : le pipeline du fragment (patch redessiné en profondeur égale,
   profondeur gardée — reste de J1-2 —, groupe « lumière du sol »).
+
+## 2026-11-11T00:00Z — J1-4 : le pipeline forward du sol construit en pilote, éteint — pas encore fonctionnel
+
+- **Contribution** (PLAN-J1 J1-4 ; stratégie §7.4) : la chaîne forward existe derrière `renderer.forwardGround` (éteint) —
+  `liteForwardG` / `liteForwardFinish` (trace.wgsl), `system/terrain-forward.ts` (modules tirés du traceur spécialisé par
+  `wgsl-library.ts`, le fragment visible retenu par sa distance, l'étage de sommets du module de la visibilité, la finition sur la mise
+  en page du traceur sans texture de plus), `TerrainRaster.encodeForward`, `renderer.encodeForward`, `shadeLite` qui saute les pixels
+  finis (`RASTER_FORWARD_FLAG`). `wgsl-library` ignore désormais les commentaires (un mot de commentaire comptait pour une ressource).
+- **Preuve** : `check-wgsl` 78/78 (module forward et finition compilés pour J0) ; le pipeline de rendu accepté par Chrome (ce Mac,
+  1,2–1,7 s à froid) ; sur kerr-mini : pipelines construits, passes `forward ground` 0,85–1,3 ms et finition 0,13 ms, 0 erreur GPU ;
+  **aucun fragment écrit** (cible relue vide, même en diagnostic à remplissage constant) — non résolu. Défaut éteint : chemin par
+  défaut inchangé hors le test de saut dans `shadeLite` (non remesuré).
+- **Limites / suite** : trouver pourquoi le dessin ne produit pas de fragment (comparer l'uniforme du patch à l'instant du forward, un
+  triangle de test, le même pipeline avec la cible de profondeur de la visibilité) ; puis A/B image et coût sur J0. GRAPHICS-PIPELINE
+  (C17b), BH-API (`forwardGround`…).

@@ -130,6 +130,20 @@ la constante se replie à la compilation : aucune lecture avancée, aucun regist
 J0 seul sur kerr-mini : GPU p50 vol 62,4 ms, vue figée 62,3/62,6 (avant : 62,6 ; 62,7/60,6) — inchangé ; e2e `sea-fft` 5/5. Prochaine étape : le pipeline du fragment (le patch redessiné en profondeur égale sur la profondeur gardée de
 J1-2, les ressources de la surface à un groupe « lumière du sol », `wgslLibraryModule` sur `liteSurface`).
 
+**J1-4, deuxième étape : le pipeline forward en pilote (10–11 novembre, nuit) — pas encore fonctionnel.** Construit, derrière
+`renderer.forwardGround` (éteint) : `liteForwardG` (le prologue de `shadeLite` et `liteSurface` pour un pixel du patch, a = 0 — avec sa
+raison — là où `shadeLite` le garde : l'eau, un arbre ou un pont devant, la cabine, une mesure) ; `liteForwardFinish` (l'air et les
+nuages, `liteFinish`) ; `shadeLite` saute les pixels finis cette image (`RASTER_FORWARD_FLAG`, `stamps` et `RASTER_MARK`) ;
+`system/terrain-forward.ts` (`terrainForwardShader`, `terrainForwardFinishShader`, `TerrainForward`) — les modules tirés du traceur
+spécialisé pour la clé (le spécialiseur de la page, toutes fonctions gardées), le fragment visible seul retenu par sa distance (celle
+de la visibilité au pixel : ni profondeur gardée ni test d'égalité — la profondeur gardée de J1-2 n'est pas requise à ce stade),
+**l'étage de sommets pris au module même de la visibilité** (des sommets identiques par construction), la finition sur la mise en
+page du traceur (`mainLayout`), la couleur forward à la place de la LUT lointaine — aucune texture de plus demandée à l'appareil
+(+1 dépassait la limite que le renderer demande : la première mise en page refusée). Mesuré sur kerr-mini : pipelines construits
+(forward 0,1–1,9 s, finition 0,07–0,8 s), passes `forward ground` 0,85–1,3 ms et finition 0,13 ms, **0 erreur GPU — mais aucun
+fragment écrit** (relue : cible vide, même avec un remplissage constant en diagnostic : le dessin ne produit aucun fragment, données
+du patch et liaisons vérifiées) ; cause non trouvée. Laissé éteint ; `check-wgsl` 78/78, `kernel-budget` inchangé.
+
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster
 prend la fermeture de ses racines dans le traceur **composé et spécialisé** (`wgsl-library.ts`), et déclare les ressources listées à

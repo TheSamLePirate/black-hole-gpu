@@ -11,6 +11,7 @@
 import { Glob } from "bun";
 import { earthShoreShader } from "../src/system/earth-shore";
 import { wgslLibraryModule } from "../src/system/wgsl-library";
+import { terrainForwardFinishShader, terrainForwardShader } from "../src/system/terrain-forward";
 import { withForest } from "../src/forest-shader";
 import { surfaceShader } from "../src/system/earth-surface";
 import { aerialShader } from "../src/system/aerial";
@@ -76,6 +77,12 @@ shaders["the shore's distances' bake (system/earth-shore.ts)"] = earthShoreShade
     ["earthImageryAniso"],
     entry("_ = earthImageryAniso(vec3f(0.0, 0.0, 1.0), vec3f(1e-6, 0.0, 0.0), vec3f(0.0, 1e-6, 0.0));"),
   );
+  // (J1-4: the forward ground's module — the terrain raster's vertex stage and the closure of liteForwardG, from the tracer
+  // specialised as the J0 profile's shadeLite — every function kept)
+  const j0 = PROFILES.find((p) => p.id === "earth-raster-wx")!;
+  const j0Spec = specialiseWgsl(full, profileConstants(j0, "shadeLite"));
+  shaders["J1-4 forward ground (system/terrain-forward.ts)"] = terrainForwardShader(j0Spec);
+  shaders["J1-4 forward ground: finishing (system/terrain-forward.ts)"] = terrainForwardFinishShader(j0Spec);
   shaders["J1-3 ground library: the sun (liteSun)"] = wgslLibraryModule(
     full,
     ["liteSun"],
