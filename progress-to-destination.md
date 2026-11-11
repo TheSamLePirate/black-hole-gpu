@@ -2762,3 +2762,13 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Prochaine étape proposée** : un **Hi-Z** — la pyramide des profondeurs de la visibilité (une passe de mips, max de profondeur) —
   pour que la marche saute les régions vides (le ciel) : les mêmes impacts, bien moins de lectures. Aucun code changé dans cette
   entrée (les essais annulés).
+
+## 2026-11-11T07:50Z — Essai annulé : une pyramide Hi-Z pour la marche du reflet de la mer (plus lent)
+
+- **Essai** : la pyramide des surfaces les plus proches dans les mips de la cible de visibilité (`encodeHiZ`, 6 niveaux, le ciel +∞)
+  et, dans `seaSSR`, un saut exact de quatre pas quand le segment reste devant toutes les surfaces de sa boîte.
+- **Mesuré** (kerr-mini, vue de mer figée, 6 tours stables) : `earth water open` **32 ms contre 25,7** — plus lent : le test ajoute
+  une projection et quatre lectures à chaque pas et ne saute que rarement (les segments de quatre pas exponentiels dépassent vite
+  les 64 px du niveau le plus grossier), et le noyau s'alourdit. Annulé.
+- **Enseignement** : la marche exponentielle de 20 pas ne se prête pas au Hi-Z ; un vrai gain demanderait une marche en espace
+  écran (le parcours Hi-Z classique), à mesurer contre l'image actuelle — un changement d'algorithme, non fait.
