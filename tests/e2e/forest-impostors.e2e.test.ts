@@ -13,11 +13,11 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
     try {
       await app.js(`(() => { Object.assign(__bh.settings, { traffic: false, autosave: false, weather: "fair", earthClouds: 0.1, wind: 0 });
       __bh.game.setDate("2026-07-10T09:30:00Z"); return 1; })()`);
-    // (SETTING_BOOT="key=value": a setting fixed before any view — the tiles loaded with it)
-    if (process.env.SETTING_BOOT) {
-      const [k, v] = process.env.SETTING_BOOT.split("=");
-      await app.js(`(() => { __bh.settings.${k} = ${v}; return 1; })()`);
-    }
+      // (SETTING_BOOT="key=value": a setting fixed before any view — the tiles loaded with it)
+      if (process.env.SETTING_BOOT) {
+        const [k, v] = process.env.SETTING_BOOT.split("=");
+        await app.js(`(() => { __bh.settings.${k} = ${v}; return 1; })()`);
+      }
       // (IMPOSTOR_VIEW="lat,lon,alt,heading,pitch": that view alone, named "custom")
       const cv = process.env.IMPOSTOR_VIEW?.split(",").map(Number);
       const views: Record<string, string> = cv
@@ -40,7 +40,8 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
           `(() => ({ ready: !!__bh.renderer.treeImpostors?.ready, failed: __bh.renderer.treeImpostors?.failed ?? null, bakeMs: Math.round(__bh.renderer.treeImpostors?.bakeMs ?? 0), bound: !!__bh.renderer.treeImpostors, stage: __bh.renderer.treeImpostors?.stage, raster: !!__bh.renderer.sceneryRaster }))()`,
         );
         console.log(JSON.stringify({ name, impostors: info }));
-        if (!ready && !process.env.SETTING_BOOT && !process.env.SETTING_A_B) throw new Error(`the impostors not baked: ${JSON.stringify(info)}`);
+        if (!ready && !process.env.SETTING_BOOT && !process.env.SETTING_A_B)
+          throw new Error(`the impostors not baked: ${JSON.stringify(info)}`);
         await app.exposureSettled?.();
         const tuneAB = process.env.TUNE_A_B?.split(":");
         for (const [pass, on] of [
