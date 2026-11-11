@@ -3,10 +3,10 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
-## ~~Des rectangles turquoise sur l'eau peu profonde devant l'Almanarre~~ — réglé le même jour : les blocs JPEG de l'orthophoto (8 × 8 pixels, 1,6 m) sur l'eau calme, lus de près sous huit empreintes du pixel seulement, le seuil du turquoise les découpant ; l'albédo du fond lu sur 3,2 m au moins (`shadeLite`, eau peu profonde) ; planche `docs/progress/mer/turquoise-avant-apres.png`. (Les diagnostics « albédo nul » plus bas avaient été pris pendant la recompilation : faux.)
+## ~~Des rectangles turquoise sur l'eau peu profonde devant l'Almanarre~~ — réglé le même jour : les blocs JPEG de l'orthophoto (8 × 8 pixels, 1,6 m) sur l'eau calme, lus de près sous huit empreintes du pixel seulement, le seuil du turquoise les découpant ; l'albédo du fond lu sur 3,2 m au moins (`shadeLite`, eau peu profonde) ; planche `docs/progress/mer/turquoise-avant-apres.jpg`. (Les diagnostics « albédo nul » plus bas avaient été pris pendant la recompilation : faux.)
 
 **2026-11-11T08:50Z.** Observé (ce Mac, vue à 20 m au-dessus de l'eau devant la plage, regard −40° vers l'ouest ; planche
-`docs/progress/mer/turquoise-rectangles.png`, trois instants) : des taches turquoise rectangulaires, à bords en marches de 1–3 m, fixes,
+`docs/progress/mer/turquoise-rectangles.jpg`, trois instants) : des taches turquoise rectangulaires, à bords en marches de 1–3 m, fixes,
 sur l'eau de 0–0,3 m — le turquoise des hauts-fonds (l'albédo du fond lu par `shadeLite`, `accum` w = 2) ouvert par endroits seulement.
 Cause non cherchée ; pistes : les texels de la décision « fond visible » (l'orthophoto, ses huit empreintes) ou de la bathymétrie.
 **Repris (même jour)** : ce n'est pas le seuil de `seaShade` (`smoothstep(0,05, 0,12)` élargi à 0,03–0,2 : rectangles à peine
@@ -64,10 +64,10 @@ l'écume monde (`seaFoamWorldOn`), l'imagerie (`liteSkip` 128), les ombres du re
 l'écume des cascades (Jacobien, dentelle) ou le fond vu au creux des vagues sur un haut-fond plus mince que leur hauteur. Suite :
 `TUNE_GSKIP` des parts de `seaShade` une à une sur cette vue (les bits de la mer : 2048 Fresnel moyenné, …).
 
-## ~~Le trait de l'eau en escalier devant l'Almanarre, qui bouge à chaque recuisson~~ — réglé (niveau 2 du cache ajouté aux distances au rivage, même jour ; planche `docs/progress/mer/trait-de-cote-niveau2.png` : avant / après, même vue)
+## ~~Le trait de l'eau en escalier devant l'Almanarre, qui bouge à chaque recuisson~~ — réglé (niveau 2 du cache ajouté aux distances au rivage, même jour ; planche `docs/progress/mer/trait-de-cote-niveau2.jpg` : avant / après, même vue)
 
 **2026-11-11T06:20Z.** Observé (kerr-mini, `coast-swell` `SWELL_ABLATE=sand`, vue plongeante 25 m au-dessus de la plage de
-l'Almanarre, regard −38° vers l'ouest ; planche `docs/progress/mer/trait-de-cote-escalier.png`, sans / avec L3) : la limite entre
+l'Almanarre, regard −38° vers l'ouest ; planche `docs/progress/mer/trait-de-cote-escalier.jpg`, sans / avec L3) : la limite entre
 l'eau verte (profonde) et le fond de sable pâle est **en marches de ~30 m** et se déplace entre deux captures de la même vue — avec
 L3 comme sans. Ce n'est pas la surface maillée (elle refuse la plage basse : sol sous la borne des vagues, `seaFs`). Cause supposée :
 la classification de l'eau peu profonde — la profondeur de Dean et le lavis tirés des distances au rivage aux nœuds de 38 m (niveau
@@ -77,13 +77,13 @@ cette vue. Pistes : la distance au rivage d'un niveau plus fin (le niveau 2 du c
 pixel tirée du relief fin lui-même (la hauteur du sol sous l'eau) plutôt que des nœuds ; et un fondu sur quelques mètres au lieu du
 seuil.
 
-## ~~Des parois vertes à texture étirée au ras de l'eau, vues de la plage de l'Almanarre~~ — réglé le même jour : le LiDAR HD interpolé au-dessus de l'étang et de la plage (rampes jusqu'à 14,7 m, sous les seuils de 15 et 40 m) cède maintenant à RGE ALTI là où celui-ci dit niveau de la mer (`lidarYields`, `LIDAR_SEA_TRUST_M` 3 m, `earth-tiles.ts`) ; planche `docs/progress/mer/parois-tombolo-avant-apres.png`
+## ~~Des parois vertes à texture étirée au ras de l'eau, vues de la plage de l'Almanarre~~ — réglé le même jour : le LiDAR HD interpolé au-dessus de l'étang et de la plage (rampes jusqu'à 14,7 m, sous les seuils de 15 et 40 m) cède maintenant à RGE ALTI là où celui-ci dit niveau de la mer (`lidarYields`, `LIDAR_SEA_TRUST_M` 3 m, `earth-tiles.ts`) ; planche `docs/progress/mer/parois-tombolo-avant-apres.jpg`
 
 **2026-11-11T05:45Z.** Observé (kerr-mini et ce Mac, sonde `forest-impostors` `IMPOSTOR_VIEW=43.066,6.1262,8,80,-9`, et `coast-swell`
 vue `sand`) : à 8 m au-dessus de la plage de l'Almanarre, regard vers l'est, une paroi vert sombre de 10–15 m au loin (1–3 km) le long
 du rivage, sa texture étirée en traînées verticales, sur une frange blanche ; une forme isolée pareille plus au centre. **Identique
 avec les formes analytiques et avec les imposteurs** (`treeImpostorsOn`) : pas les arbres. Planche
-`docs/progress/mer/parois-vertes-tombolo.png` (en haut formes, en bas imposteurs). **Cause supposée** (non vérifiée) : les
+`docs/progress/mer/parois-vertes-tombolo.jpg` (en haut formes, en bas imposteurs). **Cause supposée** (non vérifiée) : les
 « silhouettes lointaines » — le MNS de l'IGN moins le sol ajouté aux hauteurs du relief aux niveaux z ≤ 13 (`earth-tiles.ts`,
 `earthIgnSilhouettes`) — font des pins du rivage un relief vertical, que l'orthophoto habille en l'étirant. **Écartée le même jour**
 (ce Mac, `forest-impostors` `SETTING_BOOT=earthIgnSilhouettes=false`, le réglage posé avant tout chargement) : les parois restent,

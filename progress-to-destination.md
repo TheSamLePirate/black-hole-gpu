@@ -2910,7 +2910,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **L3, la lame vue de haut** (kerr-mini, vue plongeante 25 m, A/B `shoreSwellAblate` 16 : 80,4 / 79,8 / 80,0 contre 80,4 / 80,3 /
   78,8 ms) : la lame ne se voit pas — la vue est dominée par une limite en escalier entre eau profonde et fond pâle, qui bouge à chaque
   recuisson (le défaut T7 connu, ses causes et pistes consignées dans PROBLEMES-A-REGLER, planche
-  `docs/progress/mer/trait-de-cote-escalier.png`). La preuve visuelle de L3 reste partielle (plaques sur le sable au premier plan).
+  `docs/progress/mer/trait-de-cote-escalier.jpg`). La preuve visuelle de L3 reste partielle (plaques sur le sable au premier plan).
 
 ## 2026-11-11T06:40Z — Le trait de l'eau sans escalier : le niveau 2 du cache dans les distances au rivage et le champ de houle
 
@@ -2918,7 +2918,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (+0,8 Mo ; les offsets des tables suivantes mis à jour dans `trace.wgsl`, vérifiés par `tests/gpu-tables.test.ts`).
 - **Observé** (kerr-mini, vue plongeante sur l'Almanarre, même cadrage) : la limite en marches de ~30 m entre eau profonde et fond
   pâle, qui bougeait à chaque recuisson, a disparu — l'eau peu profonde est continue (planche
-  `docs/progress/mer/trait-de-cote-niveau2.png`). Défaut T7 rayé dans PROBLEMES-A-REGLER.
+  `docs/progress/mer/trait-de-cote-niveau2.jpg`). Défaut T7 rayé dans PROBLEMES-A-REGLER.
 - **Mesuré** : la cuisson d'un niveau 1,2–1,8 ms l'image où elle tourne (`earth shore`) ; l'image entière dans le bruit (79,1 contre
   80,9 ms, 3e passage). Non mesuré : le vol (le niveau 2 se déplace plus souvent, chaque recuisson = 3 images de balayage).
 
@@ -2933,7 +2933,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Trouvé** (ce Mac, sondes locales) : vue des normales du raster — de vraies facettes ; niveaux 1 et 2 du cache — 617 et 435 nœuds à
   12–14,5 m en bandes le long du tombolo, là où les tuiles lisent 0–1,2 m. L'hypothèse de la surélévation lointaine (MNS) est contredite par
   l'A/B au démarrage ; le terme fautif de la cuisson (`terrain-cache.ts`) reste à isoler. Planche
-  `docs/progress/mer/parois-tombolo-normales.png`. Aucun code changé : il faut d'abord sortir les trois termes à un nœud fautif.
+  `docs/progress/mer/parois-tombolo-normales.jpg`. Aucun code changé : il faut d'abord sortir les trois termes à un nœud fautif.
 
 ## 2026-11-11T07:35Z — Parois vertes du tombolo réglées : le LiDAR interpolé sur l'eau cède à RGE ALTI au niveau de la mer
 
@@ -2943,7 +2943,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Fait** (`earth-tiles.ts`) : une tuile est aussi suspecte quand elle dépasse de 3 m des cellules grossières au niveau de la mer ; un
   texel LiDAR cède à RGE ALTI quand celui-ci est au niveau de la mer (≤ 0,5 m) et le LiDAR plus de 3 m au-dessus (`lidarYields`) ;
   une vraie dune, RGE ALTI la porte aussi. Test `tests/ign-lidar-sea.test.ts`.
-- **Vérifié** : mêmes points 14,7 → 0 m ; même vue, les parois disparues (planche `docs/progress/mer/parois-tombolo-avant-apres.png`).
+- **Vérifié** : mêmes points 14,7 → 0 m ; même vue, les parois disparues (planche `docs/progress/mer/parois-tombolo-avant-apres.jpg`).
   Non vérifié : d'autres côtes (un quai ou une digue que RGE ALTI aurait au niveau de la mer serait rabattu).
 
 ## 2026-11-11T07:50Z — L3 vérifié en image ; un dernier escalier au bord de l'eau consigné
@@ -2970,7 +2970,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Fait** (`renderer.ts` `seaFftParams`) : `sJ` sur la somme des pentes des cascades calculées (au moins l'ancienne).
 - **Vérifié** : la même vue à 0, 10 et 20 s sans puzzle (planche `docs/progress/mer/ecume-puzzle-avant-apres.jpg`) ; `sea-fft` sur
   kerr-mini passé (5/5) — les moutons de la force 5 et l'écume de la tempête toujours là (planche
-  `docs/progress/mer/ecume-sj-force5-tempete.png`). Non mesuré : la couverture d'écume comparée à Monahan ; le ciel de tempête montre des
+  `docs/progress/mer/ecume-sj-force5-tempete.jpg`). Non mesuré : la couverture d'écume comparée à Monahan ; le ciel de tempête montre des
   anneaux dans les nuages (antérieur, non examiné).
 
 ## 2026-11-11T09:40Z — Rectangles turquoise de l'Almanarre : recherche menée, non résolue
@@ -2996,7 +2996,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   compression JPEG de la BD ORTHO (8 × 8 pixels, 1,6 m) ; lu de près sur huit empreintes du pixel — moins d'un bloc —, le seuil du
   turquoise de `seaShade` les découpait en rectangles.
 - **Fait** (`shadeLite`, eau peu profonde) : l'albédo du fond lu sur au moins 3,2 m (deux blocs). Vérifié : la même vue sans
-  rectangles (planche `docs/progress/mer/turquoise-avant-apres.png`) ; 83/83 shaders. Non mesuré : le coût (une empreinte plus large,
+  rectangles (planche `docs/progress/mer/turquoise-avant-apres.jpg`) ; 83/83 shaders. Non mesuré : le coût (une empreinte plus large,
   le même nombre de lectures).
 - **Leçon de mesure** : les variantes `renderer.tune` du noyau de l'eau peuvent mettre plus de 25 s à compiler sur ce Mac ; un
   diagnostic se prend après 60 s, l'image vérifiée (pas le sol de repli).
