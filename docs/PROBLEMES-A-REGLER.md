@@ -287,8 +287,11 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
     rechargement en ligne, 3 requêtes Overture au réseau sur 99 (la liste des publications et deux plages) — peut-être les
     plages d'une scène abandonnée (annulées, jamais gardées) ; non établi. **Puis** : le centre de la scène fixé (l'appareil replacé
     gelé : 9 tuiles des deux côtés) — toujours 3 ; le Service Worker relève maintenant les plages coupées avant leur fin
-    (`pwa.stats().served.rangesCut`) — aucune. Restent l'éviction du cache ou une mise en cache asynchrone (`rangeTile`, sans
-    `waitUntil`) pas finie au rechargement ; non établi.
+    (`pwa.stats().served.rangesCut`) — aucune. Ni l'éviction (71 Mo sur 315). **Établi ensuite** : ces plages sont celles du
+    thème `base` d'Overture (éoliennes, pylônes jusqu'à 15 km, dont la sélection varie d'une visite à l'autre), compté avec les
+    bâtiments ; séparé (`pwa/rules.ts` : `overture-base`) — au rechargement les bâtiments viennent tous du cache (12, 0 au réseau),
+    hors ligne les 8 000 de la zone : **`overture` vert** (kerr-mini, 319 s). Reste noté : le thème `base` redemande au réseau 3
+    de ses ~90 plages à chaque visite.
   - `zones-scenery` : il attend la scène complète (`!quick`) avant de compter ; après le vol à 120 m/s, une scène rapide permise (le
     vol rapide de T8m). Relancé une fois (ce Mac) : **rouge avant le hors ligne** — le téléchargement de la zone (476 Mo) a pris
     1 175 s et laissé 23 liens en échec (réseau, IGN). Non relancé ensuite.

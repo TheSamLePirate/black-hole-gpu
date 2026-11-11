@@ -131,6 +131,8 @@ describe("Overture", () => {
     expect(classify(overtureUrl("2026-10-21.0"), "https://kerr.example/")).toBe("tile");
     expect(classify(OVERTURE_LIST, "https://kerr.example/")).toBe("tile");
     expect(tileKind(rangeKey(overtureUrl("2026-10-21.0"), 0, 127))).toBe("overture");
+    // (its base theme — the turbines, the pylons — apart)
+    expect(tileKind(rangeKey(overtureUrl("2026-10-21.0").replace("buildings.pmtiles", "base.pmtiles"), 0, 127))).toBe("overture-base");
   });
   test("its roofs' and facades' names as ours", () => {
     expect(overtureShape("skillion")).toBe("shed");

@@ -3147,3 +3147,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   avant le hors ligne (le téléchargement de 476 Mo, 1 175 s, 23 liens en échec réseau). `overture` : le centre de la scène fixé, et
   le Service Worker relève les plages coupées avant leur fin (`served.rangesCut`) — aucune ; ses 3 plages au réseau au rechargement
   restent inexpliquées. Consignés dans PROBLEMES-A-REGLER. BH-API (`pwa.stats`).
+
+## 2026-11-11T14:34Z — `overture` vert : ses plages au réseau étaient celles des éoliennes
+
+- Les 3 à 6 plages Overture redemandées au réseau au rechargement étaient celles du thème `base` (éoliennes, pylônes jusqu'à 15 km),
+  comptées avec les bâtiments ; séparées (`overture-base`, `pwa/rules.ts`, `tests/pmtiles.test.ts`). **Vérifié** (kerr-mini) :
+  `overture` vert — en ligne 8 000 bâtiments, au rechargement 12 plages du cache et 0 du réseau pour les bâtiments, hors ligne 8 000
+  bâtiments de la zone, 0 du réseau. Ni éviction (71 Mo / 315) ni plage coupée (`served.rangesCut` vide). Reste noté : le thème
+  `base` redemande quelques plages à chaque visite. Bilan des e2e hors ligne : `pwa`, `zones`, `overture` verts ; `zones-scenery`
+  rouge sur son téléchargement (réseau).

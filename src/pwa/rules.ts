@@ -130,6 +130,7 @@ export function tileKind(
   | "osm"
   | "buildings"
   | "overture"
+  | "overture-base"
   | "overture-list"
   | "cover"
   | "map"
@@ -142,7 +143,9 @@ export function tileKind(
   if (url.includes("tiles.mapterhorn.com")) return "mapterhorn";
   if (url.includes("/BDTOPO/")) return "buildings";
   // (its releases' listing apart: network first, asked again by every scene online)
-  if (url.includes("overturemaps-extras")) return url.includes("list-type=") ? "overture-list" : "overture";
+  // (its base theme — the wind turbines, the pylons: Q8 D1, up to 15 km — apart from its buildings)
+  if (url.includes("overturemaps-extras"))
+    return url.includes("list-type=") ? "overture-list" : url.includes("/base.pmtiles") ? "overture-base" : "overture";
   if (url.includes("mapproxy.terrascope.be")) return "cover";
   if (url.includes("tile.openstreetmap.org")) return "map";
   if (url.includes("/runways/")) return "runways";

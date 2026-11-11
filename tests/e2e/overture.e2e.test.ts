@@ -84,7 +84,8 @@ describe.skipIf(!E2E)("Overture Maps' buildings", () => {
       await Bun.sleep(3000);
       await app.shot(`${shots}/overture-munich-${label}.png`);
     }
-    return { s, credit, overture: kind(before, await served(), "overture") };
+    const after = await served();
+    return { s, credit, overture: kind(before, after, "overture"), base: kind(before, after, "overture-base") };
   };
 
   test("Munich's old town from Overture: online, from the cache, then offline from a zone", async () => {
@@ -99,7 +100,10 @@ describe.skipIf(!E2E)("Overture Maps' buildings", () => {
     await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 120_000);
     const cached = await arrive("cached");
-    console.log(`  the ranges again: ${JSON.stringify(cached.overture)}`);
+    console.log(`  the ranges again: buildings ${JSON.stringify(cached.overture)}, base theme ${JSON.stringify(cached.base)}`);
+    console.log(
+      `  the tiles' cache: ${JSON.stringify(await app.js("(async () => { const s = await __bh.pwa.stats(); return s && { tiles: s.tiles, mb: Math.round(s.tileBytes / 1e6), budgetMb: Math.round(s.tileBudget / 1e6) }; })()"))}`,
+    );
     console.log(
       `  the ranges cut before their end (not kept): ${JSON.stringify(((await app.js<{ served?: { rangesCut?: string[] } } | null>("__bh.pwa.stats()"))?.served?.rangesCut ?? []).map((u) => u.replace(/^.*tiles\//, "")))}`,
     );
