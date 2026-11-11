@@ -2921,3 +2921,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `docs/progress/mer/trait-de-cote-niveau2.png`). Défaut T7 rayé dans PROBLEMES-A-REGLER.
 - **Mesuré** : la cuisson d'un niveau 1,2–1,8 ms l'image où elle tourne (`earth shore`) ; l'image entière dans le bruit (79,1 contre
   80,9 ms, 3e passage). Non mesuré : le vol (le niveau 2 se déplace plus souvent, chaque recuisson = 3 images de balayage).
+
+## 2026-11-11T06:55Z — Parois vertes du tombolo : localisées dans le relief fin
+
+- **Observé** (ce Mac, `rasterColumn` dans la vue du défaut) : distance du patch constante à 231–233 m sur ~50 lignes — une paroi
+  verticale d'environ 14 m dans les hauteurs fines du cache, au bord du tombolo, le sol au niveau de la mer à son pied. Ni arbres ni
+  silhouettes (écartés plus tôt). La source fine qui l'apporte reste à identifier (PROBLEMES-A-REGLER). Aucun code changé.

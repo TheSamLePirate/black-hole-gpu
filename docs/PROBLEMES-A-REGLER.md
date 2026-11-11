@@ -31,6 +31,13 @@ silhouettes. Reste le relief lui-même (un relevé LiDAR interpolé sur l'eau ? 
 relevé des hauteurs par `earthTiles.heightAt` le long de l'éventail (relèvements 50–78°, 0,5–6 km) a rendu 0 partout, tombolo compris
 — la mesure elle-même est à revoir (tuiles pas encore là, ou mauvaise lecture). Piste suivante : la passe de visibilité seule
 (`__bh.renderer` distance/code au pixel de la paroi) pour savoir quelle surface la dessine.
+**Localisé (même jour, ce Mac, `__bh.renderer.rasterColumn` à 10, 20 et 42 % de la largeur, sonde locale)** : sur ~50 lignes la
+distance du patch le plus fin (niveau 0 des anneaux) reste à **231–233 m** — une paroi verticale du **relief** d'environ 14 m à
+~230 m de la caméra, le sol au niveau de la mer à son pied (le lavis du rivage y fait la frange blanche), puis le sol qui s'approche
+(distances décroissantes) en dessous ; au-dessus, la terre à 17–22 km. Ce n'est ni un arbre ni une silhouette lointaine : **les
+hauteurs fines du cache contiennent une marche de la hauteur des pins** (14 m) au bord du tombolo. Cause à trouver dans les sources
+fines (`earth-tiles.ts` : quel relevé fournit z ≥ 15 là — un MNS au lieu d'un MNT, ou une tuile interpolée sur l'eau comme le bloc
+noir de S2) ; la mesure `heightAt` à 0 partout est à reprendre avec le niveau des tuiles dessinées.
 
 ## Le Lander posé ne décolle pas avec U (autopilote de décollage)
 
