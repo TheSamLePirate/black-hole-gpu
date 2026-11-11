@@ -3156,3 +3156,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   bâtiments de la zone, 0 du réseau. Ni éviction (71 Mo / 315) ni plage coupée (`served.rangesCut` vide). Reste noté : le thème
   `base` redemande quelques plages à chaque visite. Bilan des e2e hors ligne : `pwa`, `zones`, `overture` verts ; `zones-scenery`
   rouge sur son téléchargement (réseau).
+
+## 2026-11-11T15:05Z — Décision de Sam : les limites des avions laissées telles quelles
+
+- Question posée (vitesses de train et de volets, VMO, masses maximales de l'A320, ZFW du MCDU) ; réponse : **laisser tel quel**.
+  Consigné dans PROBLEMES-A-REGLER et VOL-AVIONS partie II. Aucun code changé. `zones-scenery` relancé : son téléchargement de
+  476 Mo pas fini en 20 min (la Géoplateforme ralentie après la journée d'e2e, probablement) — à relancer seul un autre jour.

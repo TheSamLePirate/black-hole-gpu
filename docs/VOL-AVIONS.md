@@ -760,7 +760,7 @@ La loi avion exige le mode `"plane"`, **q > 300 Pa** et aucun maintien.
 ### 5.2 Ce qui n'est pas appliqué (alarmes seulement, ou rien)
 
 - Aucune vitesse de train, de volets ni VMO n'endommage un avion. L'A320 n'a que des alarmes ECAM (VLE 284 kt, VFE + 4 kt,
-  survitesse).
+  survitesse) — **choix de Sam (11 novembre 2026) : laissé ainsi**, comme les masses ci-dessous.
 - Aucune masse maximale (MTOW, MLW) vérifiée.
 - Le F-35 n'a pas de pannes de systèmes.
 

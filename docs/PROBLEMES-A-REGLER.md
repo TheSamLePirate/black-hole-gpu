@@ -164,7 +164,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   SAT) ; la TAT = T·(1 + 0,2 M²) en kelvins (`a320/du/data.ts` `airTemps`, test `a320-temps` : FL370 ISA M 0,78 → SAT −56,5 °C,
   TAT ≈ −30 °C). Non revu en jeu sur l'ECAM. Ce qui était constaté : (`src/a320/du/data.ts`, vers la ligne 203) : une température en °C divisée par
   `1 + 0,2 M²` ; la SAT affichée serait fausse en vitesse.
-- **Limites non appliquées** (choix ou oubli à trancher) : aucune vitesse de train, de volets ni VMO n'endommage un avion ;
+- **Limites non appliquées** — **décision de Sam (11 novembre 2026) : laisser tel quel** (ni alarme ni dégât ajoutés ; la doc le dit) : aucune vitesse de train, de volets ni VMO n'endommage un avion ;
   aucune masse maximale de l'A320 ; la ZFW du MCDU ne change pas la masse ; le ralenti du F135 n'est pas lu (manette 0 =
   poussée 0).
 
@@ -294,7 +294,8 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
     de ses ~90 plages à chaque visite.
   - `zones-scenery` : il attend la scène complète (`!quick`) avant de compter ; après le vol à 120 m/s, une scène rapide permise (le
     vol rapide de T8m). Relancé une fois (ce Mac) : **rouge avant le hors ligne** — le téléchargement de la zone (476 Mo) a pris
-    1 175 s et laissé 23 liens en échec (réseau, IGN). Non relancé ensuite.
+    1 175 s et laissé 23 liens en échec (réseau, IGN). Relancé : le téléchargement pas fini en 20 min (estimé 400 s) — la
+    Géoplateforme ralentie après une journée d'e2e IGN, probablement ; à relancer un autre jour, seul.
 - **Ce que le premier passage réellement hors ligne a montré** (`zones-usa-night`, ce Mac, `run-2026-11-10b.log` et `c.log`) :
   - **Après une seule visite, le monde est noir hors ligne.** Les fichiers du jeu sont gardés à l'usage, et la première visite
     les charge avant que le Service Worker tienne la page : au rechargement hors ligne, 24 cartes de planètes (`*-HASH.jpg`)
