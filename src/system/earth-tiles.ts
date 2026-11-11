@@ -665,6 +665,18 @@ export const drawnHeight = (h: Float32Array, i: number) => (h.length > TILE * TI
 /** how far the LiDAR HD's terrain may part from RGE ALTI's before RGE ALTI is taken [m] (both 1 m or finer over the land:
  *  apart by more only where the LiDAR's was interpolated — water, its coverage's edge — or at a cliff's very edge) */
 export const LIDAR_TRUST_M = 15;
+/** at the sea's level — RGE ALTI's, or the coarser levels', at or under SEA_LEVEL_M —, how far the LiDAR may stand over it [m]: an
+ *  interpolation across water there (the étang des Pesquiers, the Almanarre's beach: ramps of up to 14.7 m, under LIDAR_TRUST_M and
+ *  under the 40 m of lidarSuspect, drawn as walls of stretched imagery — PROBLEMES-A-REGLER, 11 Nov 2026); a real dune or quay
+ *  stands in RGE ALTI too */
+export const LIDAR_SEA_TRUST_M = 3;
+export const SEA_LEVEL_M = 0.5;
+/** whether the LiDAR's v is to give way to RGE ALTI's w (NaN: none) */
+export function lidarYields(v: number, w: number): boolean {
+  if (Number.isNaN(v)) return true;
+  if (Number.isNaN(w)) return false;
+  return Math.abs(v - w) > LIDAR_TRUST_M || (w <= SEA_LEVEL_M && v - w > LIDAR_SEA_TRUST_M);
+}
 /** A LiDAR tile (TILE²) that stands more than 40 m off the coarser levels at one of the 16 × 16 cells' centres (`coarse`, NaN
  *  unknown; the sea at 0): its interpolated stretches likely — RGE ALTI asked to check it (ignGround). */
 export function lidarSuspect(h: Float32Array, coarse: Float32Array): boolean {
@@ -676,6 +688,8 @@ export function lidarSuspect(h: Float32Array, coarse: Float32Array): boolean {
         v = h[(j * k + k / 2) * TILE + i * k + k / 2]!;
       if (Number.isNaN(c) || Number.isNaN(v)) continue;
       if (Math.abs(v - Math.max(c, 0)) > 40) return true;
+      // (over the coarser levels' sea: a few metres already — an interpolation across the water)
+      if (c <= SEA_LEVEL_M && v - Math.max(c, 0) > LIDAR_SEA_TRUST_M) return true;
     }
   return false;
 }
@@ -721,7 +735,7 @@ async function ignGround(
         for (let i = 0; i < h.length; i++) {
           const v = h[i]!,
             w = r[i]!;
-          if (Number.isNaN(v) || (!Number.isNaN(w) && Math.abs(v - w) > LIDAR_TRUST_M)) h[i] = w;
+          if (lidarYields(v, w)) h[i] = w;
         }
     }
     return h;

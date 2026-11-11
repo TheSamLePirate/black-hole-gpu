@@ -2934,3 +2934,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   12–14,5 m en bandes le long du tombolo, là où les tuiles lisent 0–1,2 m. L'hypothèse de la surélévation lointaine (MNS) est contredite par
   l'A/B au démarrage ; le terme fautif de la cuisson (`terrain-cache.ts`) reste à isoler. Planche
   `docs/progress/mer/parois-tombolo-normales.png`. Aucun code changé : il faut d'abord sortir les trois termes à un nœud fautif.
+
+## 2026-11-11T07:35Z — Parois vertes du tombolo réglées : le LiDAR interpolé sur l'eau cède à RGE ALTI au niveau de la mer
+
+- **Cause** (ce Mac, `heightAt` à 1 m) : les tuiles z 17 du LiDAR HD MNT portent 12–14,7 m en bandes sur l'étang des Pesquiers et la
+  plage de l'Almanarre — une interpolation sur l'eau —, sous les deux garde-fous de S2 (tuile suspecte à 40 m de l'écart aux niveaux
+  grossiers, texel remplacé à 15 m d'écart à RGE ALTI). Le raster en faisait des parois de 14 m à l'orthophoto étirée.
+- **Fait** (`earth-tiles.ts`) : une tuile est aussi suspecte quand elle dépasse de 3 m des cellules grossières au niveau de la mer ; un
+  texel LiDAR cède à RGE ALTI quand celui-ci est au niveau de la mer (≤ 0,5 m) et le LiDAR plus de 3 m au-dessus (`lidarYields`) ;
+  une vraie dune, RGE ALTI la porte aussi. Test `tests/ign-lidar-sea.test.ts`.
+- **Vérifié** : mêmes points 14,7 → 0 m ; même vue, les parois disparues (planche `docs/progress/mer/parois-tombolo-avant-apres.png`).
+  Non vérifié : d'autres côtes (un quai ou une digue que RGE ALTI aurait au niveau de la mer serait rabattu).

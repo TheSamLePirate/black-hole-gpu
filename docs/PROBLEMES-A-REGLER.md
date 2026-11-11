@@ -16,7 +16,7 @@ cette vue. Pistes : la distance au rivage d'un niveau plus fin (le niveau 2 du c
 pixel tirée du relief fin lui-même (la hauteur du sol sous l'eau) plutôt que des nœuds ; et un fondu sur quelques mètres au lieu du
 seuil.
 
-## Des parois vertes à texture étirée au ras de l'eau, vues de la plage de l'Almanarre
+## ~~Des parois vertes à texture étirée au ras de l'eau, vues de la plage de l'Almanarre~~ — réglé le même jour : le LiDAR HD interpolé au-dessus de l'étang et de la plage (rampes jusqu'à 14,7 m, sous les seuils de 15 et 40 m) cède maintenant à RGE ALTI là où celui-ci dit niveau de la mer (`lidarYields`, `LIDAR_SEA_TRUST_M` 3 m, `earth-tiles.ts`) ; planche `docs/progress/mer/parois-tombolo-avant-apres.png`
 
 **2026-11-11T05:45Z.** Observé (kerr-mini et ce Mac, sonde `forest-impostors` `IMPOSTOR_VIEW=43.066,6.1262,8,80,-9`, et `coast-swell`
 vue `sand`) : à 8 m au-dessus de la plage de l'Almanarre, regard vers l'est, une paroi vert sombre de 10–15 m au loin (1–3 km) le long
@@ -56,7 +56,8 @@ en bandes diagonales le long du tombolo (ex. 14,5 m à 43,0666 N 6,12883 E, vois
 `earthTiles.heightAt` lit 0–1,2 m (le relevé de la ligne précédente passait à côté des bandes). La marche naît donc **dans la cuisson
 du cache** (`terrain-cache.ts`, `h = exact + fin − max(grossier, 0)`). Une hypothèse — la surélévation d'un niveau lointain (la
 canopée du MNS, I6) gardée là où les fenêtres fines manquent — est **contredite** par l'A/B fait plus tôt : les parois restaient avec
-`earthIgnSilhouettes` coupé au démarrage (il atteint bien `earthTiles.hlodOn`, `renderer.ts`, et relance le chargement). Reste à
+`earthIgnSilhouettes` coupé au démarrage (il atteint bien `earthTiles.hlodOn`, `renderer.ts`, et relance le chargement). **Résolu ensuite** : `heightAt` à 1 m aux nœuds fautifs lisait 14,7 m — les tuiles z 17 elles-mêmes (le relevé de la ligne plus haut
+passait entre les bandes) ; le LiDAR HD MNT interpolé sur l'eau. Ce qui suit est l'état d'avant. Reste à
 savoir lequel des trois termes porte les 13 m : `earthHeightExactG` à l'empreinte du niveau, ou le relevé fin à 1 m (`earthH(q, 1)`)
 — le GPU lit peut-être un texel que la lecture CPU (`heightAt`) ne voit pas. Suite : une passe de diagnostic qui écrit les trois
 termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
