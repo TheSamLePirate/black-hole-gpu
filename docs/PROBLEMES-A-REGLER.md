@@ -43,6 +43,13 @@ source nationale « ign », niveau le plus fin z 17, `rem` 0 : les tuiles couvre
 −0,5 m dans l'étang — **aucune marche dans les sources**. La paroi naît après elles : dans la cuisson du cache de relief (le relevé
 fin ajouté au relief grossier, `terrain-cache.ts` — cf. son commentaire sur « une aiguille aussi haute que la mer était profonde ») ou
 dans le maillage raster (`terrain-raster.ts`). Suite : lire les nœuds du cache (niveaux 0–2) autour de 43,0669 N, 6,1288 E.
+**Encore resserré** (`renderer.terrainCacheLevel(k)`, niveaux 0–3, même ligne) : les nœuds du cache sont plats aussi (0 à 1,5 m) —
+pas de marche dans les hauteurs. Mais la fenêtre du **niveau 1** (2,4 m) s'arrête vers 6,129° E, ~250 m à l'est de la caméra : là
+où se tient la paroi (232 m) ; au-delà, la visibilité n'a plus de sol avant 17–22 km (l'étang des Pesquiers n'est pas dessiné). La
+paroi est donc **un raccord entre niveaux du maillage raster** (le bord du niveau 1 et l'anneau du niveau suivant au-dessus de l'eau :
+recouvrement, glissement des sommets — `MORPH_FULL`/`MORPH_BAND` —, ou l'anneau absent sur l'eau), dont la face verticale reçoit
+l'orthophoto étirée — pas une donnée de hauteur. Suite : `settings.earthTerrainRasterView` « depth »/« difference » sur cette vue,
+et les anneaux dessinés (`terrainRaster.ringsDrawn`) ; regarder si l'anneau du niveau 2 omet ses triangles sur l'eau.
 
 ## Le Lander posé ne décolle pas avec U (autopilote de décollage)
 
