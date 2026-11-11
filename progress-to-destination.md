@@ -3035,3 +3035,29 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   BH-API (`liftOff`), GRAPHICS-PIPELINE (C18), E2E-CATALOGUE, PROBLEMES-A-REGLER (rayé).
 - **Non vérifié** : le départ vertical du Lander sur un monde avec air (Mars) ; aucun coût de rendu mesuré (le correctif ne change
   aucune lecture). Suite proposée hors rendu : les e2e qui lisent des membres absents (PROBLEMES-A-REGLER, « Vol et tests »).
+
+## 2026-11-11T12:37Z — U décolle le F-35 d'une piste ; les e2e qui lisaient des membres absents vérifient pour de bon
+
+- **Destination** : §19 (l'expérience complète — une commande documentée qui marche, la même pour le clavier, le cockpit et
+  TARS) ; la fiabilité des preuves (des e2e qui vérifient ce qu'ils disent).
+- **Constaté en vol d'abord** (sonde locale, ce Mac) : U, F-35B ou C aligné à Edwards → « Autopilot: Take-off to orbit » puis « the
+  engine (0.6 g) cannot hold the weight on Earth » — rien ne bougeait. F35.md promettait le décollage automatique.
+- **Fait** (`controller/runwaytakeoff.ts`, nouveau ; branché dans `main.ts` `pilotAuto` après `deckTakeoff`, `piloting.ts`
+  `rwyStep`, l'outil `carrier › takeoff` de TARS) : plein gaz + PC, l'axe à la roue avant, rotation à 67 m/s, en l'air une
+  montée de ~8 m/s (assiette 8–20°, ailes à plat dans l'axe), train rentré en montée franche ; à 110 m/s et 100 m, les maintiens
+  (terrain + 1 500 m, cap de la piste, 210 m/s, PC coupée). Le manche, la manette tirée ou U l'arrêtent. **L'Auto-GCAS désarmé
+  pendant le décollage** (`gcas.ts`, comme le vrai) : deux essais l'avaient montré — les maintiens donnés au décollage (74 m/s)
+  cabraient à 55°, et le train rentré à 7 m, lent, déclenchait le GCAS (40°).
+- **Vérifié** : `apprendre-avions` **7/7** (81 s), dont la nouvelle leçon « 3 (U) » à la vraie touche : en l'air en 10,8 s,
+  assiette 20,1° au plus, l'axe à 0,3°, maintiens passés, aucun GCAS ; à 45 s 1 348 m, 201 m/s, +30 m/s. Capture
+  `docs/progress/apprendre/av-l3-u-montee.jpg`. Sondes : B et C, mêmes résultats.
+- **Les e2e aux membres absents** (PROBLEMES-A-REGLER, E2E-VOLS §9) : `c.last?.alt` → `c.jetFigures()?.h` (8 fichiers),
+  `airInfo().agl` → `sys.heightOverGround` (`cockpit-flight`, `ground-sunset`), `sys.sunElevation` / `renderer.sunElevationDeg`
+  → `camera.skyInfo().sun.altDeg` (`coast-survey`, `earth-horizons`, `sky-open`). Revolés : `cockpit-flight` 1/1 en 23 s (il
+  s'arrête enfin à 3 km), `runway-mesh` 1/1 (altitude tenue à 4,5–5,6 m). **Non relancés** : les six autres (rendu, longs ;
+  la ligne y tient maintenant l'altitude du moment au lieu de rien).
+- **Docs** : VOL-AVIONS (leçon 3, partie II, GCAS, tableau des touches, l'écart F35.md retiré), `apprendre-avions.html`,
+  F35.md, BH-API (`runwayTakeoff`, `rwyRun`), E2E-CATALOGUE, E2E-VOLS (§7, §9), examens, PROBLEMES-A-REGLER (deux points rayés).
+- **Limites** : la rotation et les maintiens ne dépendent pas de la masse ni du vent (67 m/s fixe) ; l'A320 n'a pas d'U (son
+  décollage passe par TOGA et son FMGC). Restent dans la même liste : les grisés du HUD, la TAT/SAT de l'A320, les limites
+  non appliquées (choix de Sam).

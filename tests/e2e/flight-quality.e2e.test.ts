@@ -79,7 +79,7 @@ describe.skipIf(!E2E)("the realtime image's quality in flight, against the conve
         await app.js(`(() => { __bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64 });
           ${PLACES[pl]} __bh.settings.shipMount = "cockpit"; ${CONFIGS[cf]}
           const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
-          c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; return 1; })()`);
+          c.jetModes.alt = c.jetFigures()?.h ?? c.jetModes.alt; return 1; })()`);
         await app.waitFor(`!!__bh.renderer.variantReady`, 180_000).catch(() => {});
         // (the ground's tiles in; then FRAMES frames flown)
         await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));

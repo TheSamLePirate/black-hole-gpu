@@ -50,6 +50,8 @@ describe.skipIf(!E2E)("a flight at the panel, by real clicks", () => {
   const fly = (until: string, maxS: number) =>
     app.js<{ t: number; agl: number }>(`(() => {
       const c = __bh.camera;
+      // (over the ground: airInfo() has no agl)
+      const agl = () => __bh.sys.heightOverGround("earth", __bh.fleet.pose(__bh.fleet.active, __bh.time()).X, __bh.time());
       __bh.freeze(true);
       let t = 0;
       for (; t < ${maxS}; t += 1 / 30) {
@@ -57,7 +59,7 @@ describe.skipIf(!E2E)("a flight at the panel, by real clicks", () => {
         if (${until} || c.airFlight.failure) break;
       }
       __bh.freeze(false);
-      return { t, agl: c.airInfo().agl ?? -1 };
+      return { t, agl: agl() };
     })()`);
 
   test("the glide onto Edwards flown at the panel: ENTRY, AP OFF, GEAR, FLAPS, ENTRY — landed on its wheels", async () => {
@@ -79,7 +81,7 @@ describe.skipIf(!E2E)("a flight at the panel, by real clicks", () => {
     await click("autoEntry", 38, -21);
     expect(await app.js<string>("__bh.camera.pilot.auto")).toBe("entry");
     // (flown down to 3 km over the ground)
-    const down = await fly("(c.airInfo().agl ?? 1e9) < 3000", 200);
+    const down = await fly("agl() < 3000", 200);
     expect(down.agl).toBeLessThan(3000);
     expect(await app.js<string | null>("__bh.camera.airFlight.failure ?? null")).toBeNull();
     // AP OFF: the pilot's; the gear lowered by hand, the flaps a detent

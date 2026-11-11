@@ -155,9 +155,7 @@ test.skipIf(!E2E || !EARTH_SKY_OPEN)(
         const c = Math.abs(1 - c0.ratio) < Math.abs(1 - c2.ratio) ? c0 : c2,
           noise = compare(shots.off2!, shots.off!);
         writeFileSync(`${OUT}/${v.name}-diff.png`, writePng(shots.on!.width, shots.on!.height, c.img));
-        const sun = await app.js<number>(
-          `(() => { const r = __bh.renderer; return r.sunElevationDeg ? +r.sunElevationDeg().toFixed(2) : -99; })()`,
-        );
+        const sun = await app.js<number>(`(() => +(__bh.camera.skyInfo?.()?.sun?.altDeg ?? -99).toFixed(2))()`);
         out[v.name] = {
           ready,
           ev,

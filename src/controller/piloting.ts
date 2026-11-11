@@ -992,6 +992,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.aeroStep(inp, dt);
   // (a short take-off from a deck: its throttle, its rotation — controller/deckland.ts)
   this.stoStep(inp, dt);
+  // (the F-35's automatic take-off from a runway: its throttle, its axis, its rotation — controller/runwaytakeoff.ts)
+  this.rwyStep(inp, dt);
   // (the F-35C's hook, the wires, the catapult — controller/trap.ts)
   this.trapFrame(dt);
   // (a carrier qualification: its passes counted, its next leg — controller/quals.ts)

@@ -78,6 +78,11 @@ export default {
   "Short take-off off — the stick": "Décollage court coupé — le manche",
   "Mother: airborne. Good launch.": "Mother : en vol. Beau décollage.",
   "Short take-off done — STOVL mode off": "Décollage terminé — mode STOVL coupé",
+  "Automatic take-off off": "Décollage automatique coupé",
+  "Automatic take-off off — the stick": "Décollage automatique coupé — le manche",
+  "Automatic take-off: full power, rotation at {0} m/s": "Décollage automatique : pleine puissance, rotation à {0} m/s",
+  "Automatic take-off off: not airborne after {0} s": "Décollage automatique coupé : pas en l'air après {0} s",
+  "Airborne — gear up, climbing to {0} m on {1}°, {2} m/s": "En l'air — train rentré, montée vers {0} m au cap {1}°, {2} m/s",
   Variant: "Variante",
   "The F-35B — short take-offs and vertical landings, its lift fan — or the F-35C, the carrier's: a larger wing, more fuel, a tailhook, launched by catapult and stopped by the wires. The tanks filled on a change.":
     "Le F-35B — décollages courts et atterrissages verticaux, sa soufflante — ou le F-35C, celui des porte-avions : une aile plus grande, plus de carburant, une crosse, lancé par catapulte et arrêté par les brins. Le plein est refait au changement.",

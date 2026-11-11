@@ -462,6 +462,8 @@ expect(r.log.some((l) => /Hard landing|collapsed|tipped/.test(l))).toBe(false);
 | Lecture d'altitude fausse | datum confondu (mer, ellipsoïde, sol, sphère) | tableau des hauteurs de [BH-API.md](BH-API.md) ; AGL = `sys.heightOverGround` |
 | `airInfo().agl` toujours `undefined` | ce champ n'existe pas | `sys.heightOverGround` |
 | `c.last?.alt` sans effet | `camera.last` n'existe pas | `c.jetFigures()?.h` |
+| Élévation du Soleil toujours `null` / −99 | `sys.sunElevation`, `renderer.sunElevationDeg` n'existent pas | `camera.skyInfo().sun.altDeg` (géométrique), `.lightAltDeg` (celle qui éclaire) |
+| U ne fait pas décoller le F-35 (avant le 11 nov.) | U lançait le décollage orbital | depuis : le décollage automatique sur piste ; dans un test, la vraie touche (`app.press("KeyU")`) |
 | Atterrissage dur ou train cassé à vitesse faible pendant une longue attente | le sol a changé sous l'appareil (tuiles arrivées) | sol chargé avant, tuiles bloquées pour un vol jugé |
 | Le stationnaire ne tient pas | `hoverOver` a rempli les réservoirs | baisser `fleet.fuel` après le placement |
 | Une vue réglée n'apparaît pas | réglée pendant le gel | quelques pas, relire la monture |
@@ -513,13 +515,12 @@ chacune doublée d'un test sans page qui juge la physique.
 
 ---
 
-## 9. Défauts connus dans les tests actuels (relevés le 6 nov., non corrigés)
+## 9. Défauts connus dans les tests actuels (relevés le 6 nov.)
 
-- `c.jetModes.alt = c.last?.alt ?? …` dans 9 fichiers (dont `flight-quality`, `raster-motion`, `raster-flight`) :
-  `camera.last` n'existe pas, la ligne ne fait rien.
-- `cockpit-flight.e2e.test.ts` (l. 60, 82) attend `airInfo().agl`, qui n'existe pas : l'étape « jusqu'à 3 km » court
-  son plafond de 200 s et passe sans rien vérifier.
-- `coast-survey.e2e.test.ts:101` appelle `__bh.sys.sunElevation?.()`, qui n'existe pas : toujours `null`.
+- ~~`c.jetModes.alt = c.last?.alt ?? …`, `airInfo().agl` (`cockpit-flight`), `__bh.sys.sunElevation?.()`
+  (`coast-survey`)~~ — corrigés le 11 nov. : `c.jetFigures()?.h`, `sys.heightOverGround`, `camera.skyInfo().sun.altDeg`
+  (aussi `renderer.sunElevationDeg`, absent, dans `earth-horizons` et `sky-open`) ; `cockpit-flight` revolé (23 s au lieu
+  du plafond de 200 s), `runway-mesh` (altitude tenue à 5 m près).
 - 8 fichiers `a320-*` : attente du texte « Compiling the ray tracer » 240 s, erreur avalée.
 - 94 attentes suivies de `.catch(() => {})` ; 275 attentes de 120 s ou plus ; 74 `Bun.sleep` de 5 s ou plus.
 - Entrées synthétiques depuis la page : `KeyboardEvent` (`gear`, `cockpit`), `.click()` (≈ 7 fichiers), Échap pour

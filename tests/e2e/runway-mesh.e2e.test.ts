@@ -63,7 +63,7 @@ test.skipIf(!E2E)(
           __bh.freeze(false); await frame(); await frame();
           c.gearDown = true; c.gearExt = 1; c.gearInit = true;
           if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
-          c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; c.jetModes.hdg = ${h}; c.jetModes.spd = 85;
+          c.jetModes.alt = c.jetFigures()?.h ?? c.jetModes.alt; c.jetModes.hdg = ${h}; c.jetModes.spd = 85;
           const s0 = performance.now(); while (performance.now() - s0 < 8000) await frame();
           const engaged = { ap: c.jetModes.alt !== null, athr: c.jetModes.spd !== null, throttle: +c.pilot.throttle.toFixed(2) };
           last = performance.now(); builds = R.terrainRasterStats.meshBuilds; const bs = builds, ah0 = R.terrainRasterStats.meshAhead, if0 = R.terrainRasterStats.meshInFrame;

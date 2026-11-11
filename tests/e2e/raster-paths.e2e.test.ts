@@ -24,7 +24,7 @@ test.skipIf(!E2E)(
         Object.assign(__bh.settings, { earthScenery: "high", detailReach: "veryFar", earthSceneryShadows: true, earthSurface: "satellite" });
         __bh.settings.earthPipeline = "raster"; __bh.game.set("realtimeSubsampling", 4); __bh.settings.temporalReprojection = false;
         const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
-        c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; return 1; })()`);
+        c.jetModes.alt = c.jetFigures()?.h ?? c.jetModes.alt; return 1; })()`);
       await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
       await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
         const t0 = performance.now(); let calm = 0;

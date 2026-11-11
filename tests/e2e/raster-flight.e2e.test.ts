@@ -234,7 +234,7 @@ describe.skipIf(!E2E || process.env.RASTER_BENCH !== "1")(
         await app.js(`(() => { __bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 0 });
         __bh.settings.shipMount = "cockpit"; ${PLACES[pl]} ${DETAIL} __bh.settings.earthPipeline = "trace";
         const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
-        c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; return 1; })()`);
+        c.jetModes.alt = c.jetFigures()?.h ?? c.jetModes.alt; return 1; })()`);
         // (the clock stopped a few frames after the craft is put there: every run sees the same view, however long the
         // ground's tiles and the kernels take)
         await app.js(

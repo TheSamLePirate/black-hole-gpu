@@ -3072,7 +3072,8 @@ async function main() {
     }
     // (the F-35B's take-off from a carrier's deck: a short one — controller/deckland.ts)
     if (a === "takeoff" && fleet.active === "f35") {
-      const said = camera.deckTakeoff();
+      // (off a deck, on the ground: the runway's automatic take-off — controller/runwaytakeoff.ts)
+      const said = camera.deckTakeoff() ?? camera.runwayTakeoff();
       if (said) return panel.toast(said);
     }
     if (a === "dock" && camera.docked)

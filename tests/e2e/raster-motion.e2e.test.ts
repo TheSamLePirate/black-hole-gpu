@@ -98,7 +98,7 @@ describe.skipIf(!E2E || process.env.RASTER_BENCH !== "1")("the raster's image in
         await app.js(`(() => { __bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64 });
           ${PLACES[pl]} __bh.settings.shipMount = "cockpit"; ${DETAIL} ${MODES[md]}
           const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
-          c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; return 1; })()`);
+          c.jetModes.alt = c.jetFigures()?.h ?? c.jetModes.alt; return 1; })()`);
         // (the clock stopped while the ground's tiles, the scenery and the kernels come in: every mode flies from the same place)
         await app.js(
           `(async () => { for (let i = 0; i < 10; i++) await new Promise((q) => requestAnimationFrame(q)); __bh.settings.animate = false; return 1; })()`,

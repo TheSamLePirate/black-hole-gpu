@@ -84,7 +84,7 @@ test.skipIf(!E2E || process.env.RASTER_BENCH !== "1")(
         __bh.settings.earthPipeline = "raster"; __bh.game.set("realtimeSubsampling", 4);
         ${process.env.RP_RATE ? `__bh.settings.earthRasterShading = ${JSON.stringify(process.env.RP_RATE)};` : ""}
         const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
-        c.jetModes.alt = c.last?.alt ?? c.jetModes.alt; __bh.freeze(true); return 1; })()`);
+        c.jetModes.alt = c.jetFigures()?.h ?? c.jetModes.alt; __bh.freeze(true); return 1; })()`);
       // (the flight held while the kernels compile and the tiles come — minutes on an M1: flown meanwhile, the autopilot let
       // the jet down onto the ground, its gear broken, the view a crash's)
       await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});

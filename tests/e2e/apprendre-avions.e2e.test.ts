@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 
 // Le cours de pilotage des avions (docs/VOL-AVIONS.md, partie I ; docs/apprendre-avions.html) volé en jeu, recette par
-// recette, tel qu'un LLM élève l'applique : le F-35B aligné à Edwards et son décollage (leçons 0 et 3), le palier sous
+// recette, tel qu'un LLM élève l'applique : le F-35B aligné à Edwards et son décollage (leçons 0 et 3), puis par la touche U, le palier sous
 // autopilote et auto-manette puis le virage à la main sans toucher S (leçon 4), l'approche ILS jugée sur son toucher
 // (leçon 7), le F-35B posé verticalement sur le Ford (leçon 8), l'A320 du Bourget — décollage TOGA, AP1, approche ILS par son FMGC (leçon 10) —, la reprise après un
 // crash (« Après un crash »). Chaque critère de réussite est celui du cours ; une capture à chaque état jugé.
@@ -75,6 +75,47 @@ describe.skipIf(!E2E)("apprendre à voler : les avions", () => {
     expect(s.vz).toBeGreaterThan(5);
     expect(Math.abs(s.bank)).toBeLessThan(5);
     expect(await app.js<boolean>(`__bh.camera.gearDown`)).toBe(false);
+  }, 120_000);
+
+  test("leçon 3 (U) : le décollage automatique du F-35B aligné à Edwards — la vraie touche U", async () => {
+    // (avant le 11 nov. 2026, U sur une piste lançait le décollage orbital, refusé : 0,6 g de poussée — PROBLEMES-A-REGLER)
+    await app.js(`(() => { __bh.game.lineUp("Edwards"); for (let i = 0; i < 10; i++) __bh.step(1 / 30);
+      const c = __bh.camera; window.__said = []; if (!c.__saidHook) { const prev = c.onPilotMessage;
+        c.onPilotMessage = (m) => { window.__said.push(String(m)); prev?.(m); }; c.__saidHook = 1; } return 1; })()`);
+    const hdg0 = (await state()).hdg;
+    await app.press("KeyU", "u");
+    await Bun.sleep(200);
+    const r = await app.js<{
+      off: number | null;
+      pitchMax: number;
+      hdgMax: number;
+      field: number;
+      modes: (number | boolean | null)[];
+      gear: boolean;
+      said: string[];
+    }>(`(() => {
+      const c = __bh.camera, field = c.geoNow().alt; let off = null, pitchMax = 0, hdgMax = 0;
+      for (let k = 0; k < 30 * 45; k++) { __bh.step(1 / 30); const a = c.attitudeNow();
+        if (off === null && !c.rolling && !c.ourLanded) off = k / 30;
+        if (off !== null) { pitchMax = Math.max(pitchMax, (a.pitch ?? 0) * 57.3);
+          hdgMax = Math.max(hdgMax, Math.abs(((((a.heading ?? 0) * 57.3) - ${hdg0} + 540) % 360) - 180)); } }
+      const m = c.jetModes;
+      return { off, pitchMax: +pitchMax.toFixed(1), hdgMax: +hdgMax.toFixed(1), field: Math.round(field),
+        modes: [m.alt && Math.round(m.alt), m.spd, m.ab], gear: c.gearDown, said: window.__said }; })()`);
+    const s = await state();
+    console.log("  U :", JSON.stringify(r), "après 45 s :", JSON.stringify(s));
+    await app.shot(`${DIR}/l3-u-montee.png`);
+    // (en l'air dans les 15 s ; jamais au-delà de 25° d'assiette ; l'axe à 5° près ; les maintiens passés — 1 500 m
+    // au-dessus du terrain, 210 m/s, postcombustion coupée — ; le train rentré ; aucun Auto-GCAS)
+    expect(r.off ?? 99).toBeLessThan(15);
+    expect(r.pitchMax).toBeLessThan(25);
+    expect(r.hdgMax).toBeLessThan(5);
+    expect(Math.abs(Number(r.modes[0]) - (r.field + 1500))).toBeLessThan(3);
+    expect(r.modes.slice(1)).toEqual([210, false]);
+    expect(r.gear).toBe(false);
+    expect(r.said.some((m) => /GCAS/.test(m))).toBe(false);
+    expect(s.fail).toBeNull();
+    expect(s.vz).toBeGreaterThan(5);
   }, 120_000);
 
   test("leçon 4 : 3 000 m, cap 270°, 200 m/s sous AP et auto-manette, puis un virage à 30° à la main vers 000°", async () => {

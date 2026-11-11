@@ -62,7 +62,9 @@ function gcasArmed(this: CameraController): boolean {
   const level = this.assistLevel();
   if (level === "manual" || this.s.f35Law === "direct") return false;
   if (!(this.s.f35AutoProtect ?? true) && level !== "assisted" && level !== "beginner") return false;
-  if (this.gearDown || this.form || this.ilsRun || this.trapRun || this.deckRun || this.stovl.on) return false;
+  // (a runway's automatic take-off — controller/runwaytakeoff.ts —: inhibited until its holds are handed over, as the real
+  // one is at the take-off — the gear up 7 m over the field, slow, it pulled the jet to 40°)
+  if (this.gearDown || this.form || this.ilsRun || this.trapRun || this.deckRun || this.rwyRun || this.stovl.on) return false;
   return this.flightModeNow() === "plane" && this.pilot.auto === "none";
 }
 

@@ -93,7 +93,9 @@ describe.skipIf(!E2E)("low flight at sunset: the ground's shading and colour", (
           while (done < 60) { __bh.touch(); await frame(); if (r.lastDoneAt !== last) { last = r.lastDoneAt; done++; gpu += r.lastGpuMs; } }
           for (let i = 0; i < 120; i++) await frame();
           return +(gpu / done).toFixed(2); })()`);
-        const agl = await app.js<number>(`Math.round(__bh.camera.last?.agl ?? __bh.game.geoNow?.()?.agl ?? -1)`).catch(() => -1);
+        const agl = await app
+          .js<number>(`Math.round(__bh.sys.heightOverGround("earth", __bh.fleet.pose(__bh.fleet.active, __bh.time()).X, __bh.time()))`)
+          .catch(() => -1);
         const sc = await app.js<Record<string, unknown> | null>(
           `(() => { const s = __bh.renderer.earthScenery?.stats?.(); const r = __bh.renderer.terrainRasterStats?.scenery; const f = __bh.renderer.earthScenery?.contact?.f; return s && { status: s.status, buildings: s.buildings, bridges: s.bridges, rasterError: r?.error ?? null, triangles: f ? [f[15], f[11]] : null }; })()`,
         );

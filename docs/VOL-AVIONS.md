@@ -204,9 +204,17 @@ c.gearDown = false;                                           // train rentré
 - Tirer trop tôt : l'avion se lève trop lent, son incidence monte, il retombe. Attendre la vitesse.
 - Tirer trop fort : la queue touche, ou l'avion part en cabré excessif ; 10–12°, pas plus.
 - Oublier le train : il traîne et le HUD le rappelle.
-- Compter sur U : loin d'un porte-avions, **U ne décolle pas le F-35** — d'après le code, il lance le décollage
-  *orbital* des vaisseaux, qui refuse faute de poussée (« the engine … cannot hold the weight » ; voir §4.1 de la
-  partie II ; non vérifié en vol). Près d'un porte-avions, U fait le décollage court ou la catapulte.
+
+**Ou bien U** (le décollage automatique, depuis le 11 novembre 2026) : aligné sur une piste, **U** met plein gaz et la
+postcombustion, tient l'axe à la roue avant, fait la rotation à **67 m/s**, puis en l'air tient une montée d'environ
+8 m/s (assiette 8 à 20°, ailes à plat dans l'axe), rentre le train ; passé **110 m/s et 100 m**, il rend la main aux
+maintiens — **1 500 m au-dessus du terrain**, le cap de la piste, **210 m/s** à l'auto-manette, postcombustion coupée —
+et le dit (« Airborne — gear up, climbing to … »). Le manche, la manette tirée ou U à nouveau l'arrêtent. L'Auto-GCAS
+reste désarmé pendant ce décollage (comme sur le vrai, au décollage). Par code : `app.press("KeyU")` (la vraie touche),
+ou `__bh.camera.runwayTakeoff()` (le même départ ; il rend un message, `null` hors du sol ou sans le F-35). Réussi
+quand `c.rwyRun === null`, `c.gearDown === false` et `c.jetModes.alt` ≈ terrain + 1 500. Vérifié en jeu (e2e
+`apprendre-avions`, 11 nov.) : en l'air en 10,8 s, assiette 20,1° au plus, l'axe à 0,3°, 1 348 m et 201 m/s à 45 s.
+Près d'un porte-avions, U fait le décollage court ou la catapulte.
 
 ## Leçon 4 — Tenir un palier, virer, monter, descendre
 
@@ -273,7 +281,7 @@ même ordre).
   (avec les dégâts actifs). Le **corps du pilote** : voile gris puis noir au-delà de sa tolérance, **perte de
   connaissance** si le voile noir dure 1,5 s (~8 s inconscient) ; voile rouge sous −1,5 g.
 - **Les protections** : l'**Auto-GCAS** tire à 5 g et remet les ailes à plat quand le sol arriverait (armé train
-  rentré, hors loi directe) ; l'**Auto-ACAS** évite un autre appareil.
+  rentré, hors loi directe et hors décollage automatique U) ; l'**Auto-ACAS** évite un autre appareil.
 - **Loi directe** (Réglages › Jeu › F-35 › Loi de pilotage) : plus de protection, la vrille devient possible ; on en
   sort en lâchant tout une dizaine de secondes.
 
@@ -628,7 +636,7 @@ la Terre. Un crash en solo met la partie en pause (§5.3).
 | Volets : F-35 0 → ½ → plein ; A320 0 → 1 → 2 → 3 → FULL | P |
 | Aérofrein | ⇧P |
 | Train (8 s par sens) | G |
-| Décollage · atterrissage automatiques (près d'un porte-avions : opérations de pont du B, catapulte et brins du C) | U · F7 |
+| Décollage · atterrissage automatiques (sur une piste : le décollage automatique ; près d'un porte-avions : opérations de pont du B, catapulte et brins du C) | U · F7 |
 | Tout relâcher | Retour arrière |
 
 Les touches de vol sont tout ou rien (±1). Manette de jeu du F-35 (`input/jetpad.ts`) : stick gauche tangage et roulis,
@@ -697,9 +705,11 @@ La loi avion exige le mode `"plane"`, **q > 300 Pa** et aucun maintien.
   des vaisseaux.)
 - **Pannes** : aucune panne électrique, hydraulique ou moteur pour le F-35 (`game/systems.ts` ne couvre que les
   vaisseaux) ; seulement le G-LOC et les dégâts de combat.
-- **U / F7** : sur une piste, U lance l'autopilote de **décollage orbital**, qui refuse sous un rapport poussée/poids de
-  1,05 ; le F-35 sec est à ≈ 0,59 → **U ne décolle pas un F-35** (lecture du code, non vérifié en vol ; [F35.md](F35.md)
-  dit le contraire). F7 loin d'un porte-avions : autopilote d'atterrissage avec un profil droit à 3°.
+- **U / F7** : sur une piste, U fait le **décollage automatique** du F-35 (`controller/runwaytakeoff.ts`, `RWY_TAKEOFF` :
+  roulage plein gaz + PC, axe à la roue avant, rotation à 67 m/s, montée à ~8 m/s, maintiens à 110 m/s et 100 m —
+  terrain + 1 500 m, cap de la piste, 210 m/s, PC coupée —, GCAS désarmé pendant `rwyRun`) ; avant le 11 novembre 2026
+  il lançait le décollage orbital, refusé (poussée/poids 0,59 < 1,05). Sur un pont : le décollage court ou la
+  catapulte (`deckTakeoff`). F7 loin d'un porte-avions : autopilote d'atterrissage avec un profil droit à 3°.
 
 ### 4.2 A320
 
@@ -802,6 +812,5 @@ Références : [BH-API.md](BH-API.md) (section « The aircraft's members »), re
 |---|---|---|
 | [systemes/04](systemes/04-vol-commandes-camera.md) | vitesse de crash 12 m/s ; roulage sans le modèle de train à ressorts | 4,5 m/s ; jambes ressort-amortisseur (`gear.ts`) |
 | [aviation/en/f35.md](aviation/en/f35.md) | train limité à 250 kt | aucune limite appliquée |
-| [F35.md](F35.md) | U décolle automatiquement | U = décollage orbital, refusé sous poussée/poids 1,05 (F-35 ≈ 0,59) — à vérifier en vol |
 | [aviation/](aviation/en/f35.md) | — | aucune page A320 (prévue au plan A18) ; `basics`, `emergencies`, `ils` décrivent le F-35 ou un avion générique |
 | [PLAN-A320.md](PLAN-A320.md) | corde moyenne 4,19 m | 7,68 m |

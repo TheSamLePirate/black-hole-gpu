@@ -140,12 +140,18 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 
 - **Constaté le 6 novembre 2026** par lecture du code (session de documentation : [VOL-AVIONS.md](VOL-AVIONS.md),
   [VOL-VAISSEAUX.md](VOL-VAISSEAUX.md), [E2E-VOLS.md](E2E-VOLS.md) §9). Rien n'a été lancé : chaque point est à confirmer.
-- **Des e2e lisent des membres qui n'existent pas** (la ligne ne fait rien, le test passe sans vérifier) :
+- ~~**Des e2e lisent des membres qui n'existent pas**~~ — réglé le 11 novembre 2026 : `c.jetFigures()?.h` dans les 8
+  fichiers, l'AGL par `__bh.sys.heightOverGround` (`cockpit-flight`, `ground-sunset`), l'élévation du Soleil par
+  `__bh.camera.skyInfo().sun.altDeg` (`coast-survey`, et `earth-horizons`, `sky-open` qui lisaient
+  `renderer.sunElevationDeg`, absent aussi) ; revolés : `cockpit-flight` (23 s, il s'arrête à 3 km), `runway-mesh`
+  (altitude tenue à 4,5–5,6 m près). Ce qui était constaté :
   `c.jetModes.alt = c.last?.alt ?? …` dans 9 fichiers (`flight-quality`, `raster-motion`, `raster-flight`…) — `camera.last`
   n'existe pas (voulu : `c.jetFigures()?.h`) ; `cockpit-flight.e2e.test.ts` l. 60 et 82 attend `airInfo().agl` (pas de tel
   champ : l'étape « jusqu'à 3 km » court son plafond de 200 s) ; `coast-survey.e2e.test.ts:101` appelle
   `__bh.sys.sunElevation?.()` (inexistant : toujours `null`).
-- **U ne décolle probablement pas un F-35** : sur une piste, U lance l'autopilote de décollage orbital
+- ~~**U ne décolle probablement pas un F-35**~~ — confirmé en vol puis réglé le 11 novembre 2026 : le décollage
+  automatique sur piste (`controller/runwaytakeoff.ts`) ; e2e `apprendre-avions` (la vraie touche U, 7/7). Ce qui était
+  constaté : sur une piste, U lance l'autopilote de décollage orbital
   (`controller/lowthrust.ts`), qui refuse sous un rapport poussée/poids de 1,05 ; le F-35 sec est à ≈ 0,59.
   [F35.md](F35.md) dit que U décolle automatiquement. Piste : un essai en vol, puis un décollage propre aux avions ou la
   doc corrigée.
