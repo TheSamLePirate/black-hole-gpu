@@ -124,7 +124,10 @@ describe.skipIf(!E2E)("an offline zone", () => {
     // (the game paused — held, a frozen view is still drawn as a moving one, in the governor's blocks —: the view refining,
     // its detail measured until two in a row agree — a slow GPU's shading sweeps the frame for seconds)
     await app.js(`(__bh.game.pause(true), 1)`);
-    await app.waitFor(`__bh.renderer.lastPhase !== "realtime"`, 20_000).catch(() => {});
+    // (in the photo mode: outside it a still raster view is held in its realtime frames (renderer.rasterHold), its jitter going
+    // on, never converged — the detail measured there swung 3.7 … 8.4 from one run to the next, the same tiles drawn)
+    expect(await app.js<string | null>(`__bh.mode.set("photo")`)).toBeNull();
+    await app.waitFor(`__bh.renderer.lastPhase === "converged"`, 120_000).catch(() => {});
     await Bun.sleep(2000);
     let detail = await groundDetail();
     for (let k = 0, t0 = Date.now(); k < 20 && Date.now() - t0 < 40_000; k++) {
@@ -148,8 +151,9 @@ describe.skipIf(!E2E)("an offline zone", () => {
     console.log(
       `  ${label}: ${JSON.stringify(look)} · ${JSON.stringify(await app.js(`(() => { const r = __bh.renderer; return { paused: document.body.classList.contains("paused"), frozen: __bh.frozen?.() ?? null, compiling: r.compilingNow, settled: r.tracerSettled, pending: r.earthTiles.pending, spp: r.sppNow ?? null }; })()`))}`,
     );
-    // (a still raster view keeps its realtime frames — renderer.rasterHold, the raster pipeline —: refined, traced, only without it)
-    if (!(await app.js<boolean>(`__bh.renderer.rasterHold`))) expect(look.phase).not.toBe("realtime");
+    // (the photo mode left: the ship's view, the time to run again)
+    await app.js(`(__bh.mode.set("ship"), 1)`);
+    expect(look.phase).toBe("converged");
     expect(look.pipe).toBe("raster");
     await app.js(
       `(() => { Object.assign(__bh.settings, { earthRasterShading: "auto", dynamicResolution: true, earthRasterScale: 0.75, motionBlur: 0.5 }); __bh.game.pause(false); return 1; })()`,

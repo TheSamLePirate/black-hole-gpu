@@ -26,6 +26,8 @@ export interface PwaStats {
     network: number;
     kinds?: Record<string, { zone: number; lru: number; network: number }>;
     recent?: string[];
+    /** the archives' ranges cut before their end — the asker gone —, not kept (the last 32) */
+    rangesCut?: string[];
   };
 }
 

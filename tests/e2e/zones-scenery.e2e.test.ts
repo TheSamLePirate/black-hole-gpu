@@ -124,7 +124,8 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
       return { alt: g.alt, ground: __bh.sys.groundAt(g.lat, g.lon) }; })()`);
     await until("t.orthoPending === 0 && t.pending === 0", "the orthophotos");
     // (the scene where the cockpit looks: its trees and buildings drawn)
-    await until(`s.status === "ready" && s.trees > 0 && s.buildings > 0`, "the scenery", 180_000);
+    // (the full scene, not the quick first one of an arrival — T8m: its box 0.35 of the reach's —: the counts compared online and offline)
+    await until(`s.status === "ready" && !s.quick && s.trees > 0 && s.buildings > 0`, "the scenery", 180_000);
     expect(at.alt - at.ground).toBeGreaterThan(350);
     expect(at.alt - at.ground).toBeLessThan(500);
     const held = await scene();
@@ -156,6 +157,7 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
       return { agl: g.alt - __bh.sys.groundAt(g.lat, g.lon), gs: g.gs }; })()`);
     expect(flown.agl).toBeGreaterThan(250);
     await app.js(`(__bh.freeze(true), 1)`);
+    // (a quick scene allowed here: flown at 120 m/s — the auto-throttle a little over —, the scenery chains quick ones, T8m)
     await until(`s.status === "ready" && s.trees > 0`, "the scenery after the flight", 180_000);
     return { held, after: await scene(), flown };
   };

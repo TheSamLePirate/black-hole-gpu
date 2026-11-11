@@ -3135,3 +3135,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   échouent (le point sous l'orbite de départ de la scène, des niveaux larges de GIBS) et le détail du sol regardé y est 3,7 contre
   8,2 en ligne, cause non établie ; `overture` — 3 requêtes au réseau sur 99 au rechargement en ligne. `zones-scenery` non relancé.
 - **Docs** : E2E.md §7 (deux lignes), BH-API (`quick`), PROBLEMES-A-REGLER.
+
+## 2026-11-11T14:22Z — `zones` vert hors ligne : la mesure du détail prise en mode photo
+
+- **Destination** : la fiabilité des preuves du hors ligne (§19).
+- **Trouvé** : le « détail » du sol (gradient de luminance d'une capture) qui manquait hors ligne dans `zones` était pris en phase
+  realtime — hors du mode photo la vue raster ne converge pas (`renderer.rasterHold`) — et allait de 3,7 à 8,4 d'un passage à
+  l'autre, les mêmes tuiles dessinées. **Fait** : mesuré en mode photo, convergé (comme `rain` ce matin). **Vérifié** : `zones` vert
+  (ce Mac) — en ligne 6,03, hors ligne 6,26 ; en vol hors ligne 553 tuiles de la zone, 0 du réseau.
+- `zones-scenery` attend la scène complète avant de compter (une scène rapide permise après le vol à 120 m/s, T8m) ; relancé : rouge
+  avant le hors ligne (le téléchargement de 476 Mo, 1 175 s, 23 liens en échec réseau). `overture` : le centre de la scène fixé, et
+  le Service Worker relève les plages coupées avant leur fin (`served.rangesCut`) — aucune ; ses 3 plages au réseau au rechargement
+  restent inexpliquées. Consignés dans PROBLEMES-A-REGLER. BH-API (`pwa.stats`).

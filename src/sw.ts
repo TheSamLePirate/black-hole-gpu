@@ -225,6 +225,8 @@ self.addEventListener("message", (ev) => {
 const served = { zone: 0, lru: 0, network: 0 };
 const servedKinds: Record<string, { zone: number; lru: number; network: number }> = {};
 const servedNetwork: string[] = [];
+/** the archives' ranges cut before their end (not kept: asked again later) — the last ones */
+const rangesCut: string[] = [];
 function serving(url: string, from: "zone" | "lru" | "network") {
   served[from]++;
   (servedKinds[tileKind(url)] ??= { zone: 0, lru: 0, network: 0 })[from]++;
@@ -474,7 +476,7 @@ async function stats() {
     zoneTiles: zoned.length,
     zoneBytes,
     kinds,
-    served: { ...served, kinds: structuredClone(servedKinds), recent: [...servedNetwork] },
+    served: { ...served, kinds: structuredClone(servedKinds), recent: [...servedNetwork], rangesCut: [...rangesCut] },
   };
 }
 async function clearTiles() {
@@ -661,9 +663,18 @@ async function rangeTile(request: Request, offset: number, length: number): Prom
     return partial(await hit.arrayBuffer(), offset, false, true);
   }
   serving(key, "network");
-  const res = await fetch(request);
-  if (res.status !== 206) return res;
-  const body = await res.arrayBuffer();
+  let body: ArrayBuffer;
+  let res: Response;
+  try {
+    res = await fetch(request);
+    if (res.status !== 206) return res;
+    body = await res.arrayBuffer();
+  } catch (e) {
+    // (cut before its end — the asker gone, a scene given up —: not kept; said in the stats, the tests' diagnosis)
+    rangesCut.push(key.slice(0, 240));
+    if (rangesCut.length > 32) rangesCut.shift();
+    throw e;
+  }
   if (body.byteLength === length) {
     void (async () => {
       await cache.put(key, new Response(body.slice(0), { status: 200, headers: { "content-length": String(length) } }));

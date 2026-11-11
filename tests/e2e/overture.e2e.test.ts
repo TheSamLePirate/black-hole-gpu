@@ -60,7 +60,11 @@ describe.skipIf(!E2E)("Overture Maps' buildings", () => {
       `(() => { __bh.freeze(false); __bh.game.flyAt(${ZONE.lat - 0.004}, ${ZONE.lon + 0.006}, 260, 315, 100); __bh.settings.shipMount = "chase"; return 1; })()`,
     );
     await Bun.sleep(1500);
-    await app.js(`(__bh.freeze(true), 1)`);
+    // (frozen, then placed again at the very place: the scene's centre the same online and reloaded — flown 1.5 s at the frames'
+    // pace, the craft stood a little apart each time, the scene's tiles not the same: 9 online, 8 reloaded, ranges asked anew)
+    await app.js(
+      `(() => { __bh.freeze(true); __bh.game.flyAt(${ZONE.lat - 0.004}, ${ZONE.lon + 0.006}, 260, 315, 100); __bh.settings.shipMount = "chase"; return 1; })()`,
+    );
     await app
       .waitFor(
         // (the full scene, not the quick first one — its box 0.35 of the reach's, its buildings 980 at most: QUICK_SHARE)
@@ -97,7 +101,10 @@ describe.skipIf(!E2E)("Overture Maps' buildings", () => {
     const cached = await arrive("cached");
     console.log(`  the ranges again: ${JSON.stringify(cached.overture)}`);
     console.log(
-      `  the network's last asks: ${JSON.stringify((await app.js<{ served?: { recent?: unknown } } | null>("__bh.pwa.stats()"))?.served?.recent ?? null).slice(0, 1500)}`,
+      `  the ranges cut before their end (not kept): ${JSON.stringify(((await app.js<{ served?: { rangesCut?: string[] } } | null>("__bh.pwa.stats()"))?.served?.rangesCut ?? []).map((u) => u.replace(/^.*tiles\//, "")))}`,
+    );
+    console.log(
+      `  the network's last Overture asks: ${JSON.stringify(((await app.js<{ served?: { recent?: string[] } } | null>("__bh.pwa.stats()"))?.served?.recent ?? []).filter((u) => u.includes("overturemaps")).map((u) => u.replace(/^.*tiles\//, "")))}`,
     );
     expect(cached.s.overtureBuildings).toBeGreaterThan(0.9 * online.s.overtureBuildings);
     expect(cached.overture.lru).toBeGreaterThan(0);

@@ -275,17 +275,23 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   - Le **serveur de développement** des e2e servait un `precache.json` vide (la production liste ses workers et son WASM) : au
     rechargement hors ligne, ni `earth-surface-worker.js` ni `terrain-mesh-worker.js` — le relief jamais demandé (0 tuile). Il sert
     maintenant la même liste que la production (`server.ts`) ; c'était la cause des « workers manquants » plus bas, propre au banc.
-  - `zones` **rouge, sur le vrai hors ligne** : en vol tout vient de la zone (553 tuiles, 0 du réseau, 0 échec), mais au rechargement
-    68 tuiles échouent — le point sous l'orbite de départ de `game:artemis` (Terrarium et Sentinel-2 z 12 vers 2,5° E, 14,6° S,
-    hors zone : attendu) et des niveaux larges de GIBS (BlueMarble, lumières de nuit z 6–8) — et le détail du sol regardé y est
-    de 3,7 contre 8,2 en ligne (le test veut 60 %). Cause du détail non établie (les niveaux z 6–12 de Chamonix sont dans la zone).
+  - `zones` **vert** (ce Mac) : en vol tout vient de la zone (553 tuiles, 0 du réseau, 0 échec) ; au rechargement 53–68 tuiles hors
+    zone échouent — le point sous l'orbite de départ de `game:artemis` (Terrarium et Sentinel-2 z 12 vers 2,5° E, 14,6° S) et des
+    niveaux larges de GIBS : attendu, sans effet sur la vallée. Le « détail » qui manquait (3,7 contre 8,2) **était la mesure** :
+    prise en phase realtime (hors du mode photo la vue raster ne converge pas — `renderer.rasterHold`), elle allait de 3,7 à 8,4
+    d'un passage à l'autre, les mêmes tuiles dessinées ; mesurée en mode photo, convergée : 6,03 en ligne, 6,26 hors ligne.
   - `overture` : en ligne, 980 bâtiments au lieu de 8 000 — **le test lisait la scène rapide** (T8m, 3 nov. : à 140 m/s il était
     en « vol rapide », ses scènes rapides seules, 8 000 × 0,35² = 980) ; il vole maintenant à 100 m/s et attend `!quick`
     (`earthScenery.stats().quick`, nouveau) : 8 000 bâtiments, comme le 24 octobre (données d'Overture identiques entre ses
     publications 2026-09-23.1 et 2026-10-21.0 : 21 568 bâtiments sur les 9 tuiles). Encore **rouge** plus loin : au
     rechargement en ligne, 3 requêtes Overture au réseau sur 99 (la liste des publications et deux plages) — peut-être les
-    plages d'une scène abandonnée (annulées, jamais gardées) ; non établi.
-  - `zones-scenery` : non relancé.
+    plages d'une scène abandonnée (annulées, jamais gardées) ; non établi. **Puis** : le centre de la scène fixé (l'appareil replacé
+    gelé : 9 tuiles des deux côtés) — toujours 3 ; le Service Worker relève maintenant les plages coupées avant leur fin
+    (`pwa.stats().served.rangesCut`) — aucune. Restent l'éviction du cache ou une mise en cache asynchrone (`rangeTile`, sans
+    `waitUntil`) pas finie au rechargement ; non établi.
+  - `zones-scenery` : il attend la scène complète (`!quick`) avant de compter ; après le vol à 120 m/s, une scène rapide permise (le
+    vol rapide de T8m). Relancé une fois (ce Mac) : **rouge avant le hors ligne** — le téléchargement de la zone (476 Mo) a pris
+    1 175 s et laissé 23 liens en échec (réseau, IGN). Non relancé ensuite.
 - **Ce que le premier passage réellement hors ligne a montré** (`zones-usa-night`, ce Mac, `run-2026-11-10b.log` et `c.log`) :
   - **Après une seule visite, le monde est noir hors ligne.** Les fichiers du jeu sont gardés à l'usage, et la première visite
     les charge avant que le Service Worker tienne la page : au rechargement hors ligne, 24 cartes de planètes (`*-HASH.jpg`)
