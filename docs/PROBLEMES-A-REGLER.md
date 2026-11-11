@@ -3,6 +3,19 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Le trait de l'eau en escalier devant l'Almanarre, qui bouge à chaque recuisson
+
+**2026-11-11T06:20Z.** Observé (kerr-mini, `coast-swell` `SWELL_ABLATE=sand`, vue plongeante 25 m au-dessus de la plage de
+l'Almanarre, regard −38° vers l'ouest ; planche `docs/progress/mer/trait-de-cote-escalier.png`, sans / avec L3) : la limite entre
+l'eau verte (profonde) et le fond de sable pâle est **en marches de ~30 m** et se déplace entre deux captures de la même vue — avec
+L3 comme sans. Ce n'est pas la surface maillée (elle refuse la plage basse : sol sous la borne des vagues, `seaFs`). Cause supposée :
+la classification de l'eau peu profonde — la profondeur de Dean et le lavis tirés des distances au rivage aux nœuds de 38 m (niveau
+3 du cache), dont l'iso-ligne suit les cellules des nœuds de terre, recuites quand les tuiles arrivent (au plus toutes les 2 s depuis
+L1). C'est le « trait de côte en dents de scie qui change au recuit » de l'analyse du 10 novembre (§3). Il cache la lame de L3 dans
+cette vue. Pistes : la distance au rivage d'un niveau plus fin (le niveau 2 du cache, 9,6 m) près de la caméra ; ou la profondeur du
+pixel tirée du relief fin lui-même (la hauteur du sol sous l'eau) plutôt que des nœuds ; et un fondu sur quelques mètres au lieu du
+seuil.
+
 ## Des parois vertes à texture étirée au ras de l'eau, vues de la plage de l'Almanarre
 
 **2026-11-11T05:45Z.** Observé (kerr-mini et ce Mac, sonde `forest-impostors` `IMPOSTOR_VIEW=43.066,6.1262,8,80,-9`, et `coast-swell`

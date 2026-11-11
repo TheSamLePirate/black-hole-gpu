@@ -2902,3 +2902,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `docs/progress/vegetation/canopee-v1-*.{png,jpg}`. L'intensité est à régler et à faire juger par Sam ; 83/83 shaders, budget des
   noyaux, 0 erreur GPU.
 - **Reste** : V3 (horizons de la canopée), V2e (ombres, contre-jour, vent), la houle hors du noyau de l'eau (J4).
+
+## 2026-11-11T06:25Z — Vérifications : parois vertes et trait de côte (causes écartées, défauts consignés)
+
+- **Parois vertes du tombolo** : ni les silhouettes IGN (A/B posé au démarrage, sonde `forest-impostors` `SETTING_BOOT`), ni les arbres
+  (présentes sans décor dessiné). Relevé des hauteurs par `heightAt` non concluant (0 partout). Consigné (PROBLEMES-A-REGLER).
+- **L3, la lame vue de haut** (kerr-mini, vue plongeante 25 m, A/B `shoreSwellAblate` 16 : 80,4 / 79,8 / 80,0 contre 80,4 / 80,3 /
+  78,8 ms) : la lame ne se voit pas — la vue est dominée par une limite en escalier entre eau profonde et fond pâle, qui bouge à chaque
+  recuisson (le défaut T7 connu, ses causes et pistes consignées dans PROBLEMES-A-REGLER, planche
+  `docs/progress/mer/trait-de-cote-escalier.png`). La preuve visuelle de L3 reste partielle (plaques sur le sable au premier plan).

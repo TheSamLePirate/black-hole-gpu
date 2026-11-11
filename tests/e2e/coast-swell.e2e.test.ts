@@ -23,7 +23,7 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         beach: `__bh.viewAt(43.062, 6.1225, { altM: 25, heading: 95, pitch: -10, fov: 55 })`,
         low: `__bh.viewAt(43.058, 6.119, { altM: 6, heading: 80, pitch: -3, fov: 55 })`,
         // (L3: over the tombolo's beach, looking south-west along it — the wet band and the swash)
-        sand: `__bh.viewAt(43.066, 6.1262, { altM: 8, heading: 80, pitch: -9, fov: 55 })`,
+        sand: `__bh.viewAt(43.066, 6.1262, { altM: 25, heading: 262, pitch: -38, fov: 55 })`,
       };
       for (const [name, v] of Object.entries(views).filter(
         ([n]) => !process.env.SWELL_VIEWS || process.env.SWELL_VIEWS.split(",").includes(n),
