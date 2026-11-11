@@ -2721,4 +2721,5 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   déjà (décor en cours d'assemblage, campagne à Villacoublay ; non examiné) ; `check-wgsl` 80/80, budgets réécrits.
 - **Limites** : le saut de ~12 ms de la falaise n'est pas atteint (−2,6 ms ici) ; ~37 Mo écrits et relus par image pour
   l'enregistrement (non mesuré seul) ; un appareil à moins de 37 textures garde `shadeLite` entier ; pluie et lumières de nuit
-  transitent par l'enregistrement — la nuit A/B identique, la pluie non revue.
+  transitent par l'enregistrement — la nuit A/B identique ; la pluie non revue à l'image : l'e2e `rain` échoue (« paused… » : la vue
+  en pause n'atteint pas `converged` en 150 s) **à l'identique sur b82fd8b2** (A/B `ab-commit`) — un échec antérieur, non examiné.

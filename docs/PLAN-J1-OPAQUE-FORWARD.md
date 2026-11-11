@@ -166,6 +166,9 @@ dense, garder la **visibilité suivie d'un ombrage en calcul** (un « visibility
 lumières de nuit ; 3 à 4 `rgba32float` empaquetés par cas) puis **éclairage** (soleil et ombres, ciel, rebond, spéculaire, pluie,
 lumières) —, `shadeLiteFinish` après ; le forward réservé aux grands triangles (J1-5 : bâtiments, appareil). À décider : cette
 orientation à la place du « forward du terrain » de J1-4, avant d'écrire le découpage matériau/éclairage.
+**Fait le 11 novembre au matin (cd34f394), comme optimisation du chemin actuel** — la séparation matériau/éclairage sur tous les
+pixels (`withLiteDeferred`) : forêt 42,1 → 39,5 ms, **J0 60,0 ms** (61,5) ; le forward reste en pilote éteint ; l'orientation de
+J1-4 reste à confirmer par Sam.
 
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster
