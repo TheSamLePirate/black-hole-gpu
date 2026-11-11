@@ -121,7 +121,7 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | C3 | `terrain surface cache` ; `terrain cache fade` (non chronométrée) | `terrain-cache.ts:438–520` ; `renderer.ts:6265` | `terrainCacheShader(trace)` `main`, 33×33 groupes par niveau 257² | niveaux déplacés ou retouchés (coalescés 150–500 ms) | tuiles, `earthMaps.elev` → `TABLE_TERRAIN` (+ `_PREV` en fondu 800 ms) → maillages raster, traceur | V |
 | C4 | `earth horizons` | `earth-horizons.ts:417` | `bake`, une bande par frame (1,5 ms) | niveaux 4–6 du cache | → `TABLE_EARTH_HORIZON` → traceur | S |
 | C5 | `earth shore` | `earth-shore.ts` `bake`, `startField`, `sweeps` | `seeds`, `flood` ×9 (pas 128 … 1, puis 1), `finish` — distance au rivage sur toute la fenêtre par inondation de sauts, en mètres vrais (cos φ d'est en ouest depuis le 11 nov.) (PLAN-MER-WEBGPU L4) ; puis, avec une houle (L1, `earth-swell.ts`) : `swellInit` (profondeur de Dean, k(h), bords : phase du niveau plus grossier ou onde plane du large), `swellSweep` ×48 en tuiles 16² (16 par image, 3 images), `swellFinish` (φ, gain) | niveaux 3 à 6 (nœuds 38, 153, 611, 2 446 m ; ±4,9 à ±314 km — « 6,1 à 390 m » écrit avant était faux), un niveau à la fois, le plus grossier d'abord, quand sa fenêtre, ses hauteurs ou la clé de la houle (direction 5°, période 0,5 s, ancre) changent ; `shoreWash`, `shoreSwellOn` | → `TABLE_SHORE` → traceur (lavis ; profil de Dean, `seaDepthAt`) ; → `TABLE_SWELL` → traceur (`seaSwellAt` : crêtes réfractées, déferlement, lavis cadencé, `seaShade`) | W |
-| — | (hors image) `tree impostor bake`, `tree impostor down` | `vegetation/tree-impostors.ts` `TreeImpostors.run` | rendu `vs`/`fs` des 12 arbres de `vegetation/tree-model.ts` (64 vues chacun, 128² par vue), puis `down` 2 × 2 dans le niveau 0 et chaque mip (5) | une fois, au premier dessin de la forêt (`sceneryRaster` créé) ; 523 ms sur kerr-mini, 211 ms sur le M1 Max (sonde `forest-impostors`, 11 nov., commit de ce lot) | → `tree impostors` : rgba8 512² × 24 couches (albédo 0–11, surface 12–23), 5 mips, ~33 Mo → traceur groupe 0 binding 50 (`impTex`, si ≥ 38 textures) → `sceneryTreeLite` (C18 `earth lite`) au-delà de 200 m (PLAN-VEGETATION-V2 V2c) | — |
+| — | (hors image) `tree impostor bake`, `tree impostor down` | `vegetation/tree-impostors.ts` `TreeImpostors.run` | rendu `vs`/`fs` des 12 arbres de `vegetation/tree-model.ts` (64 vues chacun, 128² par vue), puis `tree canopy bake` (`vsTop` : 2 tuiles de canopée de 64 m vues du dessus, V1), puis `down` 2 × 2 dans le niveau 0 et chaque mip (10) | une fois, au premier dessin de la forêt (`sceneryRaster` créé) ; 523 ms sur kerr-mini, 211 ms sur le M1 Max (sonde `forest-impostors`, 11 nov., commit de ce lot) | → `tree impostors` : rgba8 512² × 28 couches (albédo 0–11, surface 12–23, canopée 24–27), 10 mips, ~39 Mo → traceur groupe 0 binding 50 (`impTex`, si ≥ 38 textures) → `sceneryTreeLite` (C18 `earth lite`) au-delà de 200 m (PLAN-VEGETATION-V2 V2c) et `canopyTile` (matériau du sol, forêt au-delà de 1,5 km, V1) | — |
 | C6a | `scenery raster cull` | `scenery-raster.ts:967` | cull, clampDraws, cullBoxes, clampBoxes | décor présent, raster primaire | BVH du décor, `sunU` → `draws` indirects + `lists` | V |
 | C6b | `terrain raster visibility` | `terrain-raster.ts:600` (`encodeTerrainRasterVisibility` `renderer.ts:10290`) | **rendu** : patch `terrainVs/Fs`, anneaux `ringFs`, proxies d'arbres, boîtes, maillages de bâtiments ; **seconde cible `terrain raster motion`** (`rgba16float`, PLAN-J1 J1-2, 10 nov.) : le mouvement sur l'image depuis l'image précédente des maillages mobiles du décor (voitures, pales — leur point à l'horloge et par la caméra d'avant, `meshVs`), z 1 où donné, z 2 une voiture ramenée par sa boucle (saut > ¼ d'image : sans historique) ; effacée à 0, lue par `temporal` et `taau` ; **copiée en fin d'image** (copie non chronométrée avant la soumission, `renderer.keepMotion`, ~9 Mo à 1440×810, seulement si `sceneryRaster.motionOn`) dans `motion, the frame before` (même taille, lue à l'image suivante : désoccultations) | raster primaire, fenêtre du cache prête, ≤ 4,19 Mpx | maillages, `TABLE_TERRAIN`, décor → **distance rgba32f W×H** (r sol, g id d'instance, b surface la plus proche, a code·2¹⁸ + normale) + profondeur | V |
 | C6c | `terrain from the Sun` | `terrain-raster.ts:802` ; `renderer.ts:9804` | rendu profondeur `terrainSunVs`, bâtiments `boxShadowVs/meshShadowVs` | Soleil tourné > 5e-5 rad, centres ou cuissons changés ; sinon gardée | → `sunDepth` (2 cascades 2048², ±1,5 / ±10 km) + `TABLE_SUN` → traceur 37 | S |
@@ -607,9 +607,9 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-11T04:04:07Z sur `0b08005c` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-11T04:58:39Z sur `710b7500` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
-**105 sites de création de pipeline** (70 rendu, 35 calcul, dont 45 asynchrones) et 40 `createShaderModule` dans 30 fichiers ; **41 programmes WGSL** (15 fichiers .wgsl, 26 chaînes dans le TypeScript) ; **65 libellés de passes** du profileur GPU (+ 12 sites à libellé dynamique).
+**106 sites de création de pipeline** (71 rendu, 35 calcul, dont 46 asynchrones) et 40 `createShaderModule` dans 30 fichiers ; **41 programmes WGSL** (15 fichiers .wgsl, 26 chaînes dans le TypeScript) ; **65 libellés de passes** du profileur GPU (+ 12 sites à libellé dynamique).
 
 #### A.1 Sites de création de pipeline, par fichier
 
@@ -624,6 +624,7 @@ _Généré le 2026-11-11T04:04:07Z sur `0b08005c` (arbre de travail). Ne pas éd
 | `src/chartoverlay.ts` | 4 | 0 | 1 | 0 |
 | `src/system/body-raster.ts` | 3 | 1 | 1 | 4 |
 | `src/station.ts` | 3 | 0 | 1 | 0 |
+| `src/vegetation/tree-impostors.ts` | 2 | 1 | 2 | 3 |
 | `src/crew/sys3d/gpu.ts` | 2 | 0 | 1 | 0 |
 | `src/endurance.ts` | 2 | 0 | 1 | 0 |
 | `src/mipgen.ts` | 2 | 0 | 1 | 1 |
@@ -632,7 +633,6 @@ _Généré le 2026-11-11T04:04:07Z sur `0b08005c` (arbre de travail). Ne pas éd
 | `src/system/horizon-maps.ts` | 0 | 2 | 1 | 0 |
 | `src/system/terrain-cache.ts` | 0 | 2 | 2 | 2 |
 | `src/system/terrain-forward.ts` | 1 | 1 | 2 | 2 |
-| `src/vegetation/tree-impostors.ts` | 1 | 1 | 2 | 2 |
 | `src/crew/draw/earth.ts` | 1 | 0 | 1 | 0 |
 | `src/noise3d.ts` | 1 | 0 | 1 | 0 |
 | `src/sea/fft-gpu.ts` | 0 | 1 | 1 | 0 |
@@ -753,8 +753,9 @@ _Généré le 2026-11-11T04:04:07Z sur `0b08005c` (arbre de travail). Ne pas éd
 | `src/ui/map3d/gpu.ts:190` | render | `map: lines` | `lineVs`, `lineFs` |
 | `src/ui/map3d/gpu.ts:198` | render | `map: planisphere` | `planiVs`, `planiFs` |
 | `src/ui/map3d/gpu.ts:206` | render | `map: marks` | `markVs`, `markFs` |
-| `src/vegetation/tree-impostors.ts:280` | render async | `tree impostor bake` | `vs`, `fs` |
-| `src/vegetation/tree-impostors.ts:297` | compute async | `tree impostor down` | `down` |
+| `src/vegetation/tree-impostors.ts:329` | render async | `tree impostor bake` | `vs`, `fs` |
+| `src/vegetation/tree-impostors.ts:346` | compute async | `tree impostor down` | `down` |
+| `src/vegetation/tree-impostors.ts:457` | render async | `tree canopy bake` | `vsTop`, `fs` |
 
 </details>
 
@@ -762,7 +763,7 @@ _Généré le 2026-11-11T04:04:07Z sur `0b08005c` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 17385 | 17 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 17429 | 17 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2541 | 30 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass |
 | `src/shaders/post.wgsl` | 1302 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/shaders/display.wgsl` | 935 | vs (v), fs (f) |
@@ -782,12 +783,12 @@ _Généré le 2026-11-11T04:04:07Z sur `0b08005c` (arbre de travail). Ne pas éd
 | `src/system/terrain-raster.ts:46` | 126 | seaVs (v), seaFs (f), seaResolve (c) |
 | `src/crew/sys3d/gpu.ts:9` | 101 | vl (v), fl (f), vd (v), fd (f) |
 | `src/system/body-raster.ts:103` | 91 | bodyHeights (c), bodyVs (v), bodySunVs (v), bodyCloudVs (v), bodyCloudFs (f), bodyFs (f) |
+| `src/vegetation/tree-impostors.ts:60` | 83 | vs (v), vsTop (v), fs (f) |
 | `src/system/earth-horizons.ts:83` | 76 | bake (c) |
 | `src/system/day-clouds.ts:58` | 74 | vs (v), cover (f), down (f) |
 | `src/shaders/mask.wgsl` | 73 | cell (c), main (c) |
 | `src/noise3d.ts:24` | 71 | vs (v), fs (f) |
 | `src/system/gtao.ts:34` | 67 | gtao (c) |
-| `src/vegetation/tree-impostors.ts:49` | 67 | vs (v), fs (f) |
 | `src/system/earth-shore.ts:100` | 64 | seeds (c), flood (c), finish (c) |
 | `src/system/hd-maps.ts:122` | 52 | vs (v), copy (f), fromSeas (f), fromDem (f), fromHeight (f), downSrgb (f), downLin (f), downDem (f) |
 | `src/system/earth-maps.ts:175` | 43 | vs (v), face (f), lights (f), elev (f), downSrgb (f), downLin (f) |
@@ -797,7 +798,7 @@ _Généré le 2026-11-11T04:04:07Z sur `0b08005c` (arbre de travail). Ne pas éd
 | `src/system/warp-grid.ts:85` | 25 | main (c) |
 | `src/shaders/mips.wgsl` | 23 | vs (v), fs (f) |
 | `src/system/earth-tiles.ts:352` | 18 | vs (v), fs (f) |
-| `src/vegetation/tree-impostors.ts:117` | 17 | down (c) |
+| `src/vegetation/tree-impostors.ts:144` | 17 | down (c) |
 | `src/system/terrain-forward.ts:34` | 15 | forwardFs (f) |
 | `src/renderer.ts:8131` | 10 | main (c) |
 | `src/system/terrain-cache.ts:165` | 9 | main (c) |
@@ -923,23 +924,24 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/system/terrain-raster.ts:1324` |
 | warp grid | `src/system/warp-grid.ts:164` |
 | render pass | `src/ui/map3d/gpu.ts:503` |
-| tree impostor down | `src/vegetation/tree-impostors.ts:312` |
-| render pass | `src/vegetation/tree-impostors.ts:343` |
+| tree impostor down | `src/vegetation/tree-impostors.ts:361` |
+| render pass | `src/vegetation/tree-impostors.ts:394` |
+| render pass | `src/vegetation/tree-impostors.ts:533` |
 
 #### A.4 Noyaux du traceur : taille inlinée par profil (`scripts/wgsl-inline-size.ts`)
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 26.5 · shadeMark 0.3 · shadeLite 6.8 · shadeLiteFinish 0.8 · shadeLiteLight 2.4 · shadeWater 6.3 · shadeWaterOpen 5.6 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 42.2 · env 58.2 · aerial 0.7 | 184k |
-| `earth-raster-wx` | shade 31.3 · shadeMark 0.3 · shadeLite 6.8 · shadeLiteFinish 0.8 · shadeLiteLight 2.4 · shadeWater 6.3 · shadeWaterOpen 5.6 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 45.1 · env 58.2 · aerial 0.7 | 192k |
+| `earth-raster` | shade 26.5 · shadeMark 0.3 · shadeLite 7.0 · shadeLiteFinish 0.8 · shadeLiteLight 2.4 · shadeWater 6.3 · shadeWaterOpen 5.6 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 42.2 · env 58.2 · aerial 0.7 | 184k |
+| `earth-raster-wx` | shade 31.3 · shadeMark 0.3 · shadeLite 7.0 · shadeLiteFinish 0.8 · shadeLiteLight 2.4 · shadeWater 6.3 · shadeWaterOpen 5.6 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 45.1 · env 58.2 · aerial 0.7 | 192k |
 | `earth-trace` | main 65.4 · env 61.4 · aerial 0.6 | 127k |
 | `earth-photo` | main 67.2 | 67k |
 | `game-space` | main 53.7 · env 49.7 · aerial 0.6 | 104k |
-| `moon` | main 75.4 · env 49.7 · aerial 0.6 · shadeLite 25.2 | 151k |
-| `moons` | main 76.3 · env 49.7 · aerial 0.6 · shadeLite 25.4 | 152k |
-| `mars` | main 87.0 · env 49.7 · aerial 0.6 · shadeLite 37.0 | 174k |
-| `titan` | main 90.0 · env 49.7 · aerial 0.6 · shadeLite 42.1 | 183k |
-| `venus` | main 89.7 · env 49.7 · aerial 0.6 · shadeLite 42.7 | 183k |
+| `moon` | main 75.4 · env 49.7 · aerial 0.6 · shadeLite 25.3 | 151k |
+| `moons` | main 76.3 · env 49.7 · aerial 0.6 · shadeLite 25.5 | 152k |
+| `mars` | main 87.0 · env 49.7 · aerial 0.6 · shadeLite 37.1 | 174k |
+| `titan` | main 90.0 · env 49.7 · aerial 0.6 · shadeLite 42.2 | 183k |
+| `venus` | main 89.7 · env 49.7 · aerial 0.6 · shadeLite 42.9 | 183k |
 | `earth-only` | main 49.7 · env 43.5 · aerial 0.7 | 94k |
 | `kerr-jet` | main 31.7 · env 27.5 · lut 28.0 | 87k |
 | `eclipse` | main 45.6 · env 37.2 · aerial 0.6 | 83k |

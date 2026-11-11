@@ -10530,6 +10530,7 @@ const IMPOSTOR_NEAR_M = 1e9;
 fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tree: ForestHit, rnd: f32) -> ImpHit {
   return ImpHit(-1.0, vec3f(0.0), 0.0, false);
 }
+fn canopyTile(xy: vec2f, fpM: f32, t: i32) -> vec4f { return vec4f(1.0, 0.0, 0.0, 0.0); }
 // END_IMPOSTOR
 // (a far tree read from its impostor: the distance along the ray [m] (−1: between its leaves), its normal in the scenery's frame,
 // its leaves' shade, leaf or bark)
@@ -15807,6 +15808,20 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     A *= dd.x;
     // (a light tilt: a random one lowers the mean lighting — 0.6 darkened a meadow by 8 % with the ratio's clipping)
     n = normalize(n + (P.scenery[0].xyz * dd.y + P.scenery[1].xyz * dd.z) * (0.3 * bare));
+  }
+  // (V1 — PLAN-VEGETATION-V2: the far forest's canopy — WorldCover's trees, mangroves — where its trees are no longer drawn, beyond
+  // ~1.5–4 km: the canopy's tile of modelled trees seen from above — the crowns' shade over its mean, their rounded tops' normals for
+  // the Sun —, conifers above 1 100 m or 55°; the photograph's mean kept)
+  if (IMPOSTOR_BOUND && HAS_SCENERY && !mesh && !isTree && P.scenery[0].w > 0.5 && P.scenery[6].w > 0.5 && tM > 1500.0) {
+    let cv = select(0u, surface.cover, surface.w > 0.0 || surface.cover > 0u);
+    if (cv == 10u || cv == 95u) {
+      let far = smoothstep(1500.0, 4000.0, tM);
+      let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
+      let xy = (P.scenery[3].xyz + dL * tM).xy + P.scenery[6].xy;
+      let c = canopyTile(xy, fpM, select(0, 1, hG > 1100.0 || abs(gq.z) > 0.82));
+      A *= mix(1.0, c.x, far);
+      n = normalize(n + (P.scenery[0].xyz * c.y + P.scenery[1].xyz * c.z) * (0.6 * far));
+    }
   }
   // (T7 — the cliff's face, its colour found below with the imagery: its strata over it)
   if (faceW > 0.0) {

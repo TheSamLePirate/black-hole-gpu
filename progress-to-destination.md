@@ -2888,3 +2888,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   identiques avec et sans imposteurs — cause supposée : les silhouettes lointaines du MNS. Non corrigé (hors de ce lot).
 - **Limites** : la lame est cadencée par l'horloge et la période, pas par la phase du champ (inexistante sur la terre) ; la marée
   n'existe pas ; pas de séchage dans le temps (BVL : exp(−t/5 s)).
+
+## 2026-11-11T06:05Z — V1, premier lot : la forêt lointaine éclairée par des tuiles de canopée
+
+- **Fait** (PLAN-VEGETATION-V2, analyse V1) : deux tuiles de canopée de 64 m cuites du dessus à partir des arbres modélisés de V2a,
+  sur la grille et les tailles de la forêt (feuillus + pins ; conifères), raccordables, 10 mips jusqu'à la moyenne, rangées dans
+  l'atlas des imposteurs (28 couches, ~39 Mo, aucune liaison de plus) ; le matériau du sol (`liteMaterial`) les lit sur le couvert
+  WorldCover arbres/mangroves au-delà de 1,5–4 km : facteur d'albédo sur la moyenne de la tuile, normale inclinée par les sommets
+  des houppiers (le Soleil les modèle). Gaté par `P.scenery[6].w` (imposteurs prêts, `treeImpostorsOn`).
+- **Mesuré** (kerr-mini, `forest-impostors`, Maures) : coût dans le bruit en vue à 500 m (54,1 / 55,1 / 54,7 contre 55,7 / 54,7 /
+  55,3 ms), ~+0,6 ms sur la canopée à 150 m (59,1 / 57,5 / 58,4 contre 57,5 / 57,2 / 57,6) ; **l'effet d'image est faible** —
+  luminance +1,3 %, 3 % des pixels changent — : l'orthophoto porte déjà la texture des houppiers et ses ombres ; planches
+  `docs/progress/vegetation/canopee-v1-*.{png,jpg}`. L'intensité est à régler et à faire juger par Sam ; 83/83 shaders, budget des
+  noyaux, 0 erreur GPU.
+- **Reste** : V3 (horizons de la canopée), V2e (ombres, contre-jour, vent), la houle hors du noyau de l'eau (J4).

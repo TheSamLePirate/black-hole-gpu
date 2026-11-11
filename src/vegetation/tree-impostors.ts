@@ -15,7 +15,7 @@
 // (rows top-down); its depth b: 0.5 + 0.5 × (the point's offset towards the eye) / half-size.
 
 import { ForestKind, KIND_SHAPES } from "../system/forest";
-import { TREE_ASPECTS, TREE_MODEL_KINDS, type TreeMesh, treeModel } from "./tree-model";
+import { TREE_ASPECTS, TREE_MODEL_KINDS, type TreeMesh, treeModel, treeRng } from "./tree-model";
 
 export const IMPOSTOR_VIEWS = 8;
 export const IMPOSTOR_VIEW_PX = 64;
@@ -23,6 +23,17 @@ export const IMPOSTOR_SIZE = IMPOSTOR_VIEWS * IMPOSTOR_VIEW_PX;
 /** the layers: two a kind (wide, slender), in TREE_MODEL_KINDS's order */
 export const IMPOSTOR_LAYERS = TREE_MODEL_KINDS.length * 2;
 export const IMPOSTOR_MIPS = 5;
+/** the array's mips: the impostors' views read down to 4 texels (IMPOSTOR_MIPS), the canopy's tiles down to their mean (1 texel) */
+export const IMPOSTOR_TEX_MIPS = 10;
+/** (V1) the canopy's tiles after the impostors' 24 layers: their albedo's terms then their surface's — 0 the broadleaves' and pines'
+ *  (the Mediterranean's, the lowlands'), 1 the conifers' (the mountains', the north's) */
+export const CANOPY_TILES = 2;
+export const CANOPY_LAYER = 2 * IMPOSTOR_LAYERS;
+/** a tile's side [m] (512 texels: 12.5 cm), its trees on a jittered grid of 9 × 9 (7.1 m: the forest's cells) */
+export const CANOPY_TILE_M = 64;
+export const CANOPY_GRID = 9;
+/** the layers in all */
+export const IMPOSTOR_ARRAY_LAYERS = 2 * IMPOSTOR_LAYERS + 2 * CANOPY_TILES;
 
 /** a view's direction (from the tree to the eye) — the reader's — for its cell (column, row) */
 export function impostorViewDir(col: number, row: number): [number, number, number] {
@@ -72,6 +83,22 @@ fn viewDir(v: u32) -> vec3f {
   o.n = nrm;
   o.a = attr;
   o.depth = z / B.half;
+  return o;
+}
+// (V1 — the canopy's tile: a tree's model at its place, scale and turn — an instance's —, seen from straight above, orthographic over
+// the tile's 64 m, drawn again a tile away on every side: the tile wraps; its depth the height — the higher, the nearer)
+struct TopIn { @location(3) at: vec4f, @location(4) scale: vec2f };
+@vertex fn vsTop(@location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) attr: vec4f, t: TopIn) -> VOut {
+  let c = cos(t.at.z);
+  let sn = sin(t.at.z);
+  let p = vec3f(pos.x * c - pos.y * sn, pos.x * sn + pos.y * c, pos.z) * vec3f(t.scale.x, t.scale.x, t.scale.y);
+  let w = p + vec3f(t.at.xy, 0.0);
+  var o: VOut;
+  o.pos = vec4f(w.x / ${CANOPY_TILE_M}.0 * 2.0 - 1.0, 1.0 - w.y / ${CANOPY_TILE_M}.0 * 2.0, 1.0 - w.z / 40.0, 1.0);
+  let nn = vec3f(nrm.x * c - nrm.y * sn, nrm.x * sn + nrm.y * c, nrm.z) / vec3f(t.scale.x, t.scale.x, t.scale.y);
+  o.n = normalize(nn);
+  o.a = attr;
+  o.depth = w.z / 20.0 - 1.0;
   return o;
 }
 fn hash2(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453); }
@@ -174,6 +201,24 @@ const IMPOSTOR_BOUND = true;
 const IMPOSTOR_NEAR_M = ${IMPOSTOR_NEAR_M.toFixed(1)};
 const IMP_ASPECT = array<f32, ${IMPOSTOR_LAYERS}>(${arr(aspects)});
 const IMP_HALF = array<f32, ${IMPOSTOR_LAYERS}>(${arr(halves)});
+const CANOPY_LAYER = ${CANOPY_LAYER};
+// (V1 — the canopy's tile at a world point xy [m], tile t (0 broadleaves and pines, 1 conifers), for a footprint fpM [m]: x the
+// albedo's factor — the leaves' shade where the crowns cover, the shaded ground between them, over the tile's mean —, yz the
+// normal's tilt east and north — the crowns' rounded tops —, w its weight (faded as the footprint passes the tile's mean texel)
+fn canopyTile(xy: vec2f, fpM: f32, t: i32) -> vec4f {
+  let uv = xy / ${CANOPY_TILE_M}.0;
+  let lod = log2(max(fpM * ${IMPOSTOR_SIZE}.0 / ${CANOPY_TILE_M}.0, 1.0));
+  let w = 1.0 - smoothstep(${IMPOSTOR_TEX_MIPS - 2}.0, ${IMPOSTOR_TEX_MIPS - 1}.0, lod);
+  if (w <= 0.0) { return vec4f(1.0, 0.0, 0.0, 0.0); }
+  let A = textureSampleLevel(impTex, detailSamp, uv, CANOPY_LAYER + t, lod);
+  let S = textureSampleLevel(impTex, detailSamp, uv, CANOPY_LAYER + ${CANOPY_TILES} + t, lod);
+  let M = textureSampleLevel(impTex, detailSamp, vec2f(0.5), CANOPY_LAYER + t, ${IMPOSTOR_TEX_MIPS - 1}.0);
+  let lum = mix(0.3, mix(0.55, 1.15, A.r), A.a);
+  let mean = mix(0.3, mix(0.55, 1.15, M.r), M.a);
+  let e = S.rg * 2.0 - 1.0;
+  // (the crowns' normal — octahedral, upper hemisphere —, its tilt weighed by the cover)
+  return vec4f(mix(1.0, lum / mean, w), e * A.a * w, w);
+}
 fn impViewDir(c: vec2f) -> vec3f {
   let u = (c.x + 0.5) / ${IMPOSTOR_VIEWS}.0 * 2.0 - 1.0;
   let w = (c.y + 0.5) / ${IMPOSTOR_VIEWS}.0 * 2.0 - 1.0;
@@ -254,9 +299,9 @@ export class TreeImpostors {
   constructor(private device: GPUDevice) {
     this.texture = device.createTexture({
       label: "tree impostors",
-      size: [IMPOSTOR_SIZE, IMPOSTOR_SIZE, 2 * IMPOSTOR_LAYERS],
+      size: [IMPOSTOR_SIZE, IMPOSTOR_SIZE, IMPOSTOR_ARRAY_LAYERS],
       format: "rgba8unorm",
-      mipLevelCount: IMPOSTOR_MIPS,
+      mipLevelCount: IMPOSTOR_TEX_MIPS,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
     });
   }
@@ -332,6 +377,7 @@ export class TreeImpostors {
       tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1, baseMipLevel: mip, mipLevelCount: 1 });
     let layer = 0;
     this.models = [];
+    const meshes: { vp: GPUBuffer; vn: GPUBuffer; va: GPUBuffer; ib: GPUBuffer; count: number; kind: number; aspect: number }[] = [];
     for (const kind of TREE_MODEL_KINDS) {
       for (const aspect of TREE_ASPECTS[kind]!) {
         this.stage = `models ${layer}`;
@@ -343,6 +389,7 @@ export class TreeImpostors {
           vn = upload(m.nrm, V),
           va = upload(m.attr, V),
           ib = upload(m.index, GPUBufferUsage.INDEX);
+        meshes.push({ vp, vn, va, ib, count: m.index.length, kind, aspect });
         const enc = d.createCommandEncoder({ label: "tree impostor bake" });
         const pass = enc.beginRenderPass({
           colorAttachments: [
@@ -371,12 +418,15 @@ export class TreeImpostors {
           [rtS, layer + IMPOSTOR_LAYERS],
         ] as const) {
           down(enc, src.createView(), level(at, 0), IMPOSTOR_SIZE);
-          for (let mip = 1; mip < IMPOSTOR_MIPS; mip++) down(enc, level(at, mip - 1), level(at, mip), IMPOSTOR_SIZE >> mip);
+          for (let mip = 1; mip < IMPOSTOR_TEX_MIPS; mip++) down(enc, level(at, mip - 1), level(at, mip), IMPOSTOR_SIZE >> mip);
         }
         d.queue.submit([enc.finish()]);
         layer++;
       }
     }
+    // (V1 — the canopy's tiles, from the same models)
+    this.stage = "canopy";
+    await this.bakeCanopy(meshes, module, rtA, rtS, depth, upload, down, level);
     await d.queue.onSubmittedWorkDone();
     for (const b of buffers) b.destroy();
     rtA.destroy();
@@ -386,6 +436,131 @@ export class TreeImpostors {
     this.bakeMs = performance.now() - t0;
     this.ready = true;
     this.stage = "ready";
+  }
+
+  /**
+   * (V1) The canopy's tiles: a forest of the models on a jittered 9 × 9 grid over 64 m (the forest's 7 m cells, 85 % of them a tree),
+   * their kinds, heights and crowns drawn as the forest draws them, seen from above, wrapping; into CANOPY_LAYER (albedo's terms)
+   * and CANOPY_LAYER + CANOPY_TILES (surface), with their mips — the last a texel of 4 m.
+   */
+  private async bakeCanopy(
+    meshes: { vp: GPUBuffer; vn: GPUBuffer; va: GPUBuffer; ib: GPUBuffer; count: number; kind: number; aspect: number }[],
+    module: GPUShaderModule,
+    rtA: GPUTexture,
+    rtS: GPUTexture,
+    depth: GPUTexture,
+    upload: (data: Float32Array<ArrayBuffer>, usage: number) => GPUBuffer,
+    down: (enc: GPUCommandEncoder, src: GPUTextureView, dst: GPUTextureView, size: number) => void,
+    level: (layer: number, mip: number) => GPUTextureView,
+  ) {
+    const d = this.device;
+    const pipe = await d.createRenderPipelineAsync({
+      label: "tree canopy bake",
+      layout: "auto",
+      vertex: {
+        module,
+        entryPoint: "vsTop",
+        buffers: [
+          { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] },
+          { arrayStride: 12, attributes: [{ shaderLocation: 1, offset: 0, format: "float32x3" }] },
+          { arrayStride: 16, attributes: [{ shaderLocation: 2, offset: 0, format: "float32x4" }] },
+          {
+            arrayStride: 24,
+            stepMode: "instance",
+            attributes: [
+              { shaderLocation: 3, offset: 0, format: "float32x4" },
+              { shaderLocation: 4, offset: 16, format: "float32x2" },
+            ],
+          },
+        ],
+      },
+      fragment: { module, entryPoint: "fs", targets: [{ format: "rgba8unorm" }, { format: "rgba8unorm" }] },
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" },
+    });
+    // (a uniform a model: the leaf mask's kind)
+    const groups = meshes.map((m) => {
+      const u = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      d.queue.writeBuffer(u, 0, new Float32Array([0, m.kind, 1, 0]));
+      return { u, g: d.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: u } }] }) };
+    });
+    const heights: Record<number, [number, number]> = {
+      [ForestKind.broadleaf]: [12, 24],
+      [ForestKind.pine]: [10, 20],
+      [ForestKind.conifer]: [14, 30],
+    };
+    const mixes: [number, number][][] = [
+      [
+        [ForestKind.broadleaf, 0.6],
+        [ForestKind.pine, 0.4],
+      ],
+      [
+        [ForestKind.conifer, 0.9],
+        [ForestKind.pine, 0.1],
+      ],
+    ];
+    const cell = CANOPY_TILE_M / CANOPY_GRID;
+    for (let tile = 0; tile < CANOPY_TILES; tile++) {
+      const rnd = treeRng(4099 + tile * 7);
+      const per = new Map<number, number[]>();
+      for (let j = 0; j < CANOPY_GRID; j++)
+        for (let i = 0; i < CANOPY_GRID; i++) {
+          if (rnd() > 0.85) continue;
+          let pick = rnd();
+          let kind = mixes[tile]![0]![0];
+          for (const [k, w] of mixes[tile]!) {
+            if (pick < w) {
+              kind = k;
+              break;
+            }
+            pick -= w;
+          }
+          const [lo, hi] = heights[kind]!;
+          const H = lo + (hi - lo) * rnd();
+          const r = cell * (0.3 + 0.17 * rnd());
+          const a = TREE_ASPECTS[kind]!;
+          const v = Math.abs(Math.log(r / H / a[1]!)) < Math.abs(Math.log(r / H / a[0]!)) ? 1 : 0;
+          const mi = meshes.findIndex((m) => m.kind === kind && m.aspect === a[v]);
+          const x = (i + 0.12 + 0.76 * rnd()) * cell,
+            y = (j + 0.12 + 0.76 * rnd()) * cell,
+            rot = rnd() * Math.PI * 2;
+          const list = per.get(mi) ?? [];
+          for (let oy = -1; oy <= 1; oy++)
+            for (let ox = -1; ox <= 1; ox++) list.push(x + ox * CANOPY_TILE_M, y + oy * CANOPY_TILE_M, rot, 0, r / a[v]!, H);
+          per.set(mi, list);
+        }
+      const enc = d.createCommandEncoder({ label: "tree canopy bake" });
+      const pass = enc.beginRenderPass({
+        colorAttachments: [
+          { view: rtA.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] },
+          { view: rtS.createView(), loadOp: "clear", storeOp: "store", clearValue: [0.5, 0.5, 0, 0] },
+        ],
+        depthStencilAttachment: { view: depth.createView(), depthLoadOp: "clear", depthStoreOp: "discard", depthClearValue: 1 },
+      });
+      pass.setPipeline(pipe);
+      for (const [mi, list] of per) {
+        const m = meshes[mi]!;
+        const inst = upload(new Float32Array(list), GPUBufferUsage.VERTEX);
+        pass.setBindGroup(0, groups[mi]!.g);
+        pass.setVertexBuffer(0, m.vp);
+        pass.setVertexBuffer(1, m.vn);
+        pass.setVertexBuffer(2, m.va);
+        pass.setVertexBuffer(3, inst);
+        pass.setIndexBuffer(m.ib, "uint32");
+        pass.drawIndexed(m.count, list.length / 6);
+      }
+      pass.end();
+      for (const [src, at] of [
+        [rtA, CANOPY_LAYER + tile],
+        [rtS, CANOPY_LAYER + CANOPY_TILES + tile],
+      ] as const) {
+        down(enc, src.createView(), level(at, 0), IMPOSTOR_SIZE);
+        for (let mip = 1; mip < IMPOSTOR_TEX_MIPS; mip++) down(enc, level(at, mip - 1), level(at, mip), IMPOSTOR_SIZE >> mip);
+      }
+      d.queue.submit([enc.finish()]);
+    }
+    await d.queue.onSubmittedWorkDone();
+    for (const g of groups) g.u.destroy();
   }
 
   /**
@@ -411,7 +586,7 @@ export class TreeImpostors {
       return out;
     };
     const A = await read(layer);
-    const S = await read(layer + IMPOSTOR_LAYERS);
+    const S = await read(layer >= CANOPY_LAYER ? layer + CANOPY_TILES : layer + IMPOSTOR_LAYERS);
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = IMPOSTOR_SIZE;
     const ctx = canvas.getContext("2d")!;

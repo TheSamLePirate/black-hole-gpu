@@ -11,7 +11,8 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
   async () => {
     const app = await App.boot({ width: 1280, height: 720, hash: "scene=game:artemis" });
     try {
-      for (let layer = 0; layer < 12; layer++) {
+      // (the twelve impostors, then the canopy's two tiles — V1 —: layers 24 and 25)
+      for (const layer of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 24, 25]) {
         const r = await app.js<{ png: string; bakeMs: number; models: { kind: number; aspect: number; leaves: number; tris: number }[] }>(
           `__bh.renderer.treeImpostorPreview(${layer})`,
         );
