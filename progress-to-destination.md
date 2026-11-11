@@ -3202,3 +3202,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   vallée : 447 tuiles de sol de la zone, 0 du réseau, 0 échec. Après le traitement de `LayerNotDefined` et le téléchargement hors du
   cache HTTP (e370e728). Un seul passage vert — les 502 de l'IGN restent possibles (la zone les nomme alors, et une reprise les
   redemande). Bilan des e2e hors ligne de la journée : `pwa`, `zones`, `overture`, `zones-scenery` verts.
+
+## 2026-11-11T19:41Z — `overture` revérifié sur deux machines : la scène rechargée n'est pas centrée au même point
+
+- Second passage (ce Mac) : au rechargement 2 plages de bâtiments au réseau (12 du cache). Relevé : la scène en ligne centrée à
+  48,14500 N, 11,56242 E, la rechargée à 48,13500 N, 11,57515 E — 1,4 km, l'avance du flux le long de la trajectoire prise à un
+  autre moment : une tuile ou deux pas les mêmes. Le test tolère maintenant 3 plages au réseau au rechargement (le cache en gardant
+  au moins trois fois plus) ; hors ligne, toutes de la zone (14, 0 du réseau). **Vert** ici (213 s) et sur kerr-mini (le passage
+  précédent, 0 au réseau).
