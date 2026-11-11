@@ -3162,3 +3162,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Question posée (vitesses de train et de volets, VMO, masses maximales de l'A320, ZFW du MCDU) ; réponse : **laisser tel quel**.
   Consigné dans PROBLEMES-A-REGLER et VOL-AVIONS partie II. Aucun code changé. `zones-scenery` relancé : son téléchargement de
   476 Mo pas fini en 20 min (la Géoplateforme ralentie après la journée d'e2e, probablement) — à relancer seul un autre jour.
+
+## 2026-11-11T16:41Z — Zones hors ligne : un lot lent ne fige plus le téléchargement ; l'estimation recalée
+
+- **Destination** : §19 (le jeu hors ligne, des zones qui se téléchargent jusqu'au bout et une durée annoncée vraie).
+- **Établi** (`zones-scenery` instrumenté sur kerr-mini : progression toutes les 30 s, temps d'attente du jeu / temps des lots) : un
+  lot sans réponse en 120 s mettait le téléchargement en pause pour de bon (le joueur le voyait arrêté à 3 456 / 8 620) ; une reprise
+  d'une zone finie recomptait ses liens deux fois ; l'estimation (400 s) ignorait que toutes les requêtes de la Géoplateforme passent
+  par un même débit : 5 267 chaînes à ~4,6 par seconde, ~1 170 s mesurées.
+- **Fait** (`pwa-zones.ts`, `system/zones.ts`, `sw.ts`) : le lot muet redemandé à la fin, la pause après trois de suite ; une reprise
+  depuis le début remet ses comptes à zéro ; `zoneDuration` recalée (Géoplateforme 4,6/s, le reste 35/s) ; le relevé de zone garde
+  `waitMs`, `batchMs` et ses chaînes en échec avec leur erreur (`failedUrls`). **Vérifié** : `tests/pwa-zones.test.ts` (3 tests, dont
+  l'ancien comportement qui échoue), `tests/zones.test.ts` ; `zones-scenery` télécharge maintenant sa zone jusqu'au bout (8 605 liens en
+  1 192 s). **Encore rouge** : 13 chaînes WMS-R de l'IGN en échec, même après reprise, que curl obtient — leur erreur est relevée,
+  relance en cours. E2E-CATALOGUE (`zones`, `zones-scenery` ajoutés), BH-API, PROBLEMES.

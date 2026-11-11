@@ -12,7 +12,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // 1.8 km up the valley at 450 m over its floor: the scenes asked anew as it goes, the Service Worker's figures by kind
 // (pwa/rules.ts tileKind: the scenery worker's fetches, out of the page's sight) and the page's own — none from the network.
 // (E2E_SHOTS=<dir>: zones-scenery-online, zones-scenery-offline — the cockpit over the valley, held still.)
-// Duration: ~9 min on kerr-mini (the download ~6 of them).
+// Duration: ~25 min on kerr-mini (the download ~20 of them, 11 Nov 2026: the Géoplateforme's chains ~4.6 a second).
 // Done when: the zone ready, the offline scenes' trees and buildings drawn from it, no tile of any kind from the network,
 // the zone dropped.
 
@@ -176,11 +176,40 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
     const id = await app.js<string | null>(`__bh.pwa.zones.add(${JSON.stringify(ZONE)})`);
     expect(id).toBeTruthy();
     const t0 = Date.now();
-    await app.waitFor(
-      `(async () => { const z = (await __bh.pwa.zones.list()).find((z) => z.id === ${JSON.stringify(id)}); return z && (z.state === "ready" || (z.state === "paused" && z.cursor >= z.total)); })()`,
-      1_200_000,
-    );
-    const z = await zone();
+    // (its progress said every 30 s — never a silent wait —; 30 minutes at most (its download ~20 on kerr-mini, 11 Nov 2026:
+    // the Géoplateforme's 5 267 chains at ~4.6 a second — system/zones.ts zoneDuration), what is missing said)
+    for (let k = 0; ; k++) {
+      const p = await app.js<{
+        state: string;
+        cursor: number;
+        total: number;
+        done: number;
+        failed: number;
+        bytes: number;
+        busy?: boolean;
+      } | null>(
+        `(async () => { const z = (await __bh.pwa.zones.list()).find((z) => z.id === ${JSON.stringify(id)}); return z && { state: z.state, cursor: z.cursor, total: z.total, done: z.done, failed: z.failed, bytes: z.bytes, waitS: Math.round((z.waitMs ?? 0) / 1000), batchS: Math.round((z.batchMs ?? 0) / 1000), pending: __bh.renderer.earthTiles.pending, orthoPending: __bh.renderer.earthTiles.orthoPending }; })()`,
+      );
+      if (p && (p.state === "ready" || (p.state === "paused" && p.cursor >= p.total))) break;
+      if (Date.now() - t0 > 1_800_000) throw new Error(`the zone not in after 30 min: ${JSON.stringify(p)}`);
+      if (k % 6 === 0) console.log(`  [${((Date.now() - t0) / 1000).toFixed(0)} s] the zone: ${JSON.stringify(p)}`);
+      await Bun.sleep(5000);
+    }
+    let z = await zone();
+    // (some of the IGN's LiDAR grids answer an error at times — 6 of 8 620 chains, 11 Nov 2026 —: the zone stands paused with
+    // them, as for a player, and a resume asks them again — once here, five minutes at most: its chains gone over from the start,
+    // those in only marked)
+    if (z?.failed) {
+      console.log(`  ${z.failed} failed, resumed: ${JSON.stringify((z as { failedUrls?: string[] }).failedUrls ?? [])}`);
+      await app.js(`__bh.pwa.zones.resume(${JSON.stringify(id)})`);
+      await app
+        .waitFor(
+          `(async () => { const z = (await __bh.pwa.zones.list()).find((z) => z.id === ${JSON.stringify(id)}); return z && z.state !== "downloading"; })()`,
+          300_000,
+        )
+        .catch(() => {});
+      z = await zone();
+    }
     const kept = await app.js<{ zoneTiles: number; zoneBytes: number; kinds?: Record<string, { zone: number; zoneBytes: number }> }>(
       `__bh.pwa.stats()`,
     );
@@ -193,6 +222,7 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
         .map(([k, v]) => `${k} ${v.zone} (${(v.zoneBytes / v.zone / 1e3).toFixed(0)} kB)`)
         .join(", ")}`,
     );
+    if (z?.failed) console.log(`  failed: ${JSON.stringify((z as { failedUrls?: string[] }).failedUrls ?? [])}`);
     expect(z?.failed).toBe(0);
     for (const k of SCENERY_KINDS) expect(kept.kinds?.[k]?.zone ?? 0).toBeGreaterThan(0);
     // (only the zone's then: the tiles' own cache emptied, the network cut, the page loaded again)

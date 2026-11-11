@@ -173,6 +173,11 @@ export interface ZoneRecord {
   none: number;
   /** its chains asked and failed after every try (left out: asked again with "resume") */
   failed: number;
+  /** those chains (8 at most): the last try's error and the URL — what failed and why, said */
+  failedUrls?: string[];
+  /** this download's time [ms] waiting while the game's own tiles loaded (busy), and in its batches — where the time went */
+  waitMs?: number;
+  batchMs?: number;
   state: "downloading" | "paused" | "ready";
   /** the sources' version its last whole download followed (system/zones.ts ZONE_SCHEMA; none: 1, before 6 Nov 2026) */
   schema?: number;

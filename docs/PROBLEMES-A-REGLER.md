@@ -294,8 +294,13 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
     de ses ~90 plages à chaque visite.
   - `zones-scenery` : il attend la scène complète (`!quick`) avant de compter ; après le vol à 120 m/s, une scène rapide permise (le
     vol rapide de T8m). Relancé une fois (ce Mac) : **rouge avant le hors ligne** — le téléchargement de la zone (476 Mo) a pris
-    1 175 s et laissé 23 liens en échec (réseau, IGN). Relancé : le téléchargement pas fini en 20 min (estimé 400 s) — la
-    Géoplateforme ralentie après une journée d'e2e IGN, probablement ; à relancer un autre jour, seul.
+    1 175 s et laissé 23 liens en échec (réseau, IGN). **Puis établi** (relances instrumentées sur kerr-mini) : (1) un lot sans
+    réponse en 120 s mettait le téléchargement **en pause pour de bon** (3 456 / 8 620) — réglé (`pwa-zones.ts` : le lot redemandé à
+    la fin, pause seulement après trois de suite ; `tests/pwa-zones.test.ts`) ; (2) une reprise comptait ses liens deux fois —
+    réglé ; (3) l'estimation disait 400 s pour ~1 170 mesurées — recalée (`zoneDuration` : les chaînes de la Géoplateforme ~4,6
+    par seconde) ; le temps passe dans les lots (l'attente du jeu : 2 à 30 s). Reste : 6 à 13 chaînes en échec à chaque passage,
+    même après une reprise — des grilles WMS-R de l'IGN (LiDAR MNT/MNH, puis RGE ALTI HIGHRES z 11 au bord de la Suisse) que
+    curl obtient en 0,5 s ; leur erreur est maintenant relevée (`failedUrls` : l'erreur et l'URL), en cours.
 - **Ce que le premier passage réellement hors ligne a montré** (`zones-usa-night`, ce Mac, `run-2026-11-10b.log` et `c.log`) :
   - **Après une seule visite, le monde est noir hors ligne.** Les fichiers du jeu sont gardés à l'usage, et la première visite
     les charge avant que le Service Worker tienne la page : au rechargement hors ligne, 24 cartes de planètes (`*-HASH.jpg`)

@@ -469,11 +469,12 @@ export function zoneEstimate(chains: readonly ZoneChain[]): number {
   for (const c of chains) for (let i = 0; i < c.length; i++) bytes += sizeOf(c[i]!) * (i ? 0.1 : 1);
   return bytes;
 }
-/** a zone's download time before it is fetched [s]: the WMS-R's grids ~5 a second (sw.ts gentle spaces them 8 a second,
- *  their answers slower: 2 987 in 588 s on kerr-mini, 2026-10-24), the other tiles ~35 chains a second (4 190 chains in
- *  2 min, 2026-10-23) — the two at once */
+/** a zone's download time before it is fetched [s]: the Géoplateforme's chains — its WMS-R grids, its WMTS orthophotos, its
+ *  BD TOPO, its canopy: one budget in sw.ts (GEOPF_PER_S, GEOPF_INFLIGHT) — ~4.6 a second (5 267 of them in ~1 140 s on kerr-mini,
+ *  2026-11-11, Chamonix's airport-profile zone with its scenery: it was said 400 s, from the WMS-R's alone at 5 a second), the
+ *  other tiles ~35 chains a second (4 190 chains in 2 min, 2026-10-23) — the two at once */
 export function zoneDuration(chains: readonly ZoneChain[]): number {
-  let wms = 0;
-  for (const c of chains) if (c[0]!.includes("wms-r")) wms++;
-  return Math.max((chains.length - wms) / 35, wms / 5);
+  let geopf = 0;
+  for (const c of chains) if (c[0]!.includes("data.geopf.fr")) geopf++;
+  return Math.max((chains.length - geopf) / 35, geopf / 4.6);
 }

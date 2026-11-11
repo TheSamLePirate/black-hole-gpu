@@ -300,7 +300,8 @@ async function serve(kept: Response, mark?: [string, string]): Promise<Response 
 async function zoneFetch(id: string, chains: string[][], fresh = false) {
   zonesHeld = Promise.resolve(true);
   const cache = await caches.open(ZONE_CACHE);
-  const out = { done: 0, bytes: 0, none: 0, failed: [] as string[][] };
+  const out = { done: 0, bytes: 0, none: 0, failed: [] as string[][], why: [] as string[] };
+  const lastError = new Map<string, string>();
   /** a range of an archive into this zone (its key's record marked this zone's too): its bytes */
   const keepRange = async (url: string, offset: number, length: number): Promise<Uint8Array> => {
     const key = rangeKey(url, offset, length);
@@ -398,7 +399,8 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
         await storePut(ZONE_TILES, { url, zones, size } satisfies ZoneTile);
         out.bytes += size;
         return body;
-      } catch {
+      } catch (e) {
+        lastError.set(url, String(e).slice(0, 120));
         await new Promise((done) => setTimeout(done, 1000 * 2 ** attempt));
       }
     }
@@ -416,6 +418,8 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
       const r = await link(url);
       if (r === null) {
         out.failed.push(chain);
+        // (why, said: the last try's error — the page keeps a few in the zone's record)
+        if (out.why.length < 8) out.why.push(`${lastError.get(url) ?? "?"} — ${url.slice(0, 200)}`);
         return;
       }
       if (r === "none") {

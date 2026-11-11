@@ -92,23 +92,37 @@ export function createZones(o: {
       active = id;
       const urls = chainsOf(zone);
       const failed: ZoneChain[] = [];
+      let silent = 0;
       zone.state = "downloading";
       zone.total = urls.length;
       await save(zone);
       while (zone.cursor < urls.length && !paused.has(id)) {
         // (the game's own tiles first)
+        const w0 = Date.now();
         while (o.busy() && !paused.has(id)) await new Promise((r) => setTimeout(r, 1000));
+        zone.waitMs = (zone.waitMs ?? 0) + (Date.now() - w0);
         if (paused.has(id)) break;
         const batch = urls.slice(zone.cursor, zone.cursor + BATCH);
-        const r = await o.talk<{ done: number; bytes: number; none: number; failed: ZoneChain[] }>(
+        const b0 = Date.now();
+        const r = await o.talk<{ done: number; bytes: number; none: number; failed: ZoneChain[]; why?: string[] }>(
           { type: "zone-fetch", id, chains: batch, fresh: !!zone.fresh },
           BATCH_MS,
         );
+        zone.batchMs = (zone.batchMs ?? 0) + (Date.now() - b0);
         if (!r) {
-          // (no worker, or a batch that never answered: given up for now, resumed later)
-          paused.add(id);
-          break;
+          // (a batch that never answered in its time — the IGN's grids slow at times: one took more than 120 s on kerr-mini,
+          // 11 Nov 2026, and the download stood paused for good at 3 456 of 8 620 —: its chains asked again at the end, the
+          // next batch on; three in a row — no worker —: given up for now, resumed later)
+          if (++silent >= 3) {
+            paused.add(id);
+            break;
+          }
+          failed.push(...batch);
+          zone.cursor += batch.length;
+          await save(zone);
+          continue;
         }
+        silent = 0;
         zone.cursor += batch.length;
         zone.done += r.done;
         zone.bytes += r.bytes;
@@ -118,7 +132,7 @@ export function createZones(o: {
       }
       // (the failed asked once more at the end; those still failing counted, asked again on a resume)
       if (zone.cursor >= urls.length && failed.length && !paused.has(id)) {
-        const r = await o.talk<{ done: number; bytes: number; none: number; failed: ZoneChain[] }>(
+        const r = await o.talk<{ done: number; bytes: number; none: number; failed: ZoneChain[]; why?: string[] }>(
           { type: "zone-fetch", id, chains: failed, fresh: !!zone.fresh },
           BATCH_MS * Math.ceil(failed.length / BATCH),
         );
@@ -127,6 +141,11 @@ export function createZones(o: {
           zone.bytes += r.bytes;
           zone.none += r.none;
           zone.failed = r.failed.length;
+          zone.failedUrls = r.why?.length ? r.why : r.failed.slice(0, 8).map((c) => String(c[0] ?? "").slice(0, 240));
+        } else {
+          // (no answer to the last try either: all still counted failed — asked again on a resume —, never "ready" without them)
+          zone.failed = failed.length;
+          zone.failedUrls = failed.slice(0, 8).map((c) => String(c[0] ?? "").slice(0, 240));
         }
       }
       zone.state = paused.has(id) ? "paused" : zone.failed ? "paused" : "ready";
@@ -198,8 +217,16 @@ export function createZones(o: {
       paused.delete(id);
       const z = await get(id);
       if (!z) return;
-      // (a finished zone's failed: its list asked again from the start — the tiles in only marked)
-      await save({ ...z, state: "downloading", cursor: z.state === "ready" || z.cursor >= z.total ? 0 : z.cursor, failed: 0 });
+      // (a finished zone's failed: its list asked again from the start — the tiles in only marked, counted again: its tally from
+      // nothing, else its links counted twice)
+      const again = z.state === "ready" || z.cursor >= z.total;
+      await save({
+        ...z,
+        state: "downloading",
+        cursor: again ? 0 : z.cursor,
+        ...(again ? { done: 0, bytes: 0, none: 0, waitMs: 0, batchMs: 0 } : {}),
+        failed: 0,
+      });
       if (!queue.includes(id)) queue.push(id);
       void run();
     },
@@ -210,7 +237,19 @@ export function createZones(o: {
       const z = await get(id);
       if (!z) return;
       // (from the start, its figures counted anew: the sources' now — the settings', the fine windows' side)
-      await save({ ...z, state: "downloading", cursor: 0, done: 0, bytes: 0, none: 0, failed: 0, fresh: true, sources: o.sources() });
+      await save({
+        ...z,
+        state: "downloading",
+        cursor: 0,
+        done: 0,
+        bytes: 0,
+        none: 0,
+        failed: 0,
+        waitMs: 0,
+        batchMs: 0,
+        fresh: true,
+        sources: o.sources(),
+      });
       if (!queue.includes(id)) queue.push(id);
       void run();
     },

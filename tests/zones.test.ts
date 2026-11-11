@@ -381,13 +381,14 @@ test("a tile's chains: the next link asked only where the one before falls short
   expect(cs).toContainEqual([tileUrl(12, xs, ys)]);
 });
 
-test("a zone's download time: the WMS-R's grids 5 a second, the rest 35 chains a second, the two at once", () => {
+test("a zone's download time: the Géoplateforme's chains 4.6 a second (its WMS-R and WMTS alike), the rest 35, the two at once", () => {
   expect(zoneDuration([])).toBe(0);
-  const wms = Array.from({ length: 50 }, () => ["https://data.geopf.fr/wms-r?REQUEST=GetMap"]);
+  const wms = Array.from({ length: 23 }, () => ["https://data.geopf.fr/wms-r?REQUEST=GetMap"]);
+  const wmts = Array.from({ length: 23 }, () => ["https://data.geopf.fr/wmts?REQUEST=GetTile"]);
   const rest = Array.from({ length: 350 }, () => ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/14/1/2.png"]);
-  expect(zoneDuration(wms)).toBeCloseTo(10);
+  expect(zoneDuration([...wms, ...wmts])).toBeCloseTo(10);
   expect(zoneDuration(rest)).toBeCloseTo(10);
-  expect(zoneDuration([...wms, ...rest, ...rest])).toBeCloseTo(20);
+  expect(zoneDuration([...wms, ...wmts, ...rest, ...rest])).toBeCloseTo(20);
 });
 
 test("a zone's runways: the index and the 5° tiles round it within the ILS's 150 km — the files the game asks (world/runways.ts)", async () => {
