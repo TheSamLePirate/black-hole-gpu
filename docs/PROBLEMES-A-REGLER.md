@@ -123,7 +123,7 @@ savoir lequel des trois termes porte les 13 m : `earthHeightExactG` à l'emprein
 — le GPU lit peut-être un texel que la lecture CPU (`heightAt`) ne voit pas. Suite : une passe de diagnostic qui écrit les trois
 termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 
-## Le Lander posé ne décolle pas avec U (autopilote de décollage)
+## ~~Le Lander posé ne décolle pas avec U (autopilote de décollage)~~ — réglé le 11 novembre 2026 : sur ses jambes, un départ vertical sur sa poussée vectorée, à plat sur son cap, jusqu'à 200 m, puis la loi de montée (`controller/lowthrust.ts` `ourSurfaceWant`, `camera.liftOff`) ; e2e `apprendre-vaisseaux` leçon 10 avec le Lander : +10 m en 3 s, orbite 100,0 ± 0,04 km (9/9)
 
 - **Constaté en jeu le 6 novembre 2026** (sonde `probe-moon` de la session, e2e `apprendre-vaisseaux`, ce Mac) : le
   Lander posé à Tranquillité (`__bh.game.land("moon", 0.674, 23.473)`), `launchGoal = { altKm: 100 }`,

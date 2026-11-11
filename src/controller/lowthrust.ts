@@ -679,6 +679,7 @@ function ourSurfaceWant(
   const ff = lin(lin(g.acc, 1, dragAccel(id, nav.X, nav.V, nav.t), 1), -1, g.acc, 0);
   const gv = groundVelocity(id, nav.X, nav.t);
   if (P.auto === "land") {
+    this.liftOff = null;
     if (this.ourLanded) {
       P.setAuto("land");
       this.onPilotMessage?.(tf("Landed on {0}", name));
@@ -735,6 +736,21 @@ function ourSurfaceWant(
     return out(lin(lin(gv, 1, east, along / C_MPS), 1, up, vz / C_MPS), lin(ff, kd, g.acc, -(1 - kd)));
   }
   this.takeoffRoll = false;
+  // (the Lander on its legs — no wings, no runway —: a vertical start on its vectored thrust, level on its heading
+  // as in its hover, up to LIFT_TOP_M, then the climb's law. Handed it at once, the law turned the nose to its burn
+  // and cut the engine till it got there — on its legs the craft never turns: it sat there, the throttle at 0)
+  const hm = h * M_METRES;
+  if (fleet.active !== "ranger" && (this.ourLanded || (this.liftOff && hm < LIFT_TOP_M))) {
+    this.liftOff ??= this.levelHeading(up);
+    const nose = unitV(lin(this.liftOff, 1, up, -dot3(this.liftOff, up)));
+    // (gently off the legs, faster with the height)
+    const vz = Math.min(4 + 0.25 * hm, 40);
+    return {
+      ...out(lin(gv, 1, up, vz / C_MPS), ff),
+      att: { nose: unitV(nav.toRep(nose)), up: unitV(nav.toRep(up)), vectored: true },
+    };
+  }
+  this.liftOff = null;
   // (inertial east speed: the ground already gives its turning at lift-off)
   const vGroundE = dot3(sub3(gv, nav.refVel), east);
   const { vUp, vEastAir, f } = climbCmd(id, thr, this.dragPerMass(), d0, vGroundE, r, h, dot3(vi, east));
@@ -897,6 +913,8 @@ export const LPD = { below: 5000, rate: 0.05, minRate: 5, minReach: 250 };
 
 /** Below this over a ground [m], the hover holds a place on it (carried by its turning), level. */
 const HOVER_LOW = 20e3;
+/** the Lander's vertical start (ourSurfaceWant): its height before the climb's law, m */
+const LIFT_TOP_M = 200;
 
 /**
  * The heading a craft levelled now keeps (home frame, horizontal, unit): its nose's over the ground, plus

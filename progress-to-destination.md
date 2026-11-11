@@ -3013,3 +3013,25 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `lastPhase` n'atteint jamais « converged » — le test échouait avant et après les travaux du 10–11 novembre.
 - **Fait** (`tests/e2e/rain.e2e.test.ts`) : la comparaison en pause faite dans le mode photo (`__bh.mode.set("photo")`), refermé avant
   de relancer le temps. **Vérifié** : 2/2 sur ce Mac (174 s). Test seulement ; aucun code du jeu changé.
+
+## 2026-11-11T12:24Z — Le Lander posé décolle avec U ; une erreur WebGPU du sol des mondes raster corrigée
+
+- **Destination** : §19 (l'expérience complète : un autopilote qui marche depuis chaque état de départ, accessible à TARS par la
+  même action `setAuto("takeoff")`) ; §7 (une ressource liée selon la mise en page de son pipeline). Choix de Sam : « le Lander
+  d'abord ».
+- **Cause** : la loi de montée tournait d'abord le nez vers la poussée et coupait le moteur tant qu'il n'y était pas (rampe
+  d'alignement de `pilot.ts`) ; posé sur ses jambes, le Lander ne tourne pas : il restait au sol, poussée nulle, sans message.
+- **Fait** (`controller/lowthrust.ts` `ourSurfaceWant`, `controls.ts` `liftOff`) : posé (ou plus bas que 200 m après un tel départ),
+  le Lander monte à la verticale sur sa poussée vectorée — le chemin déjà utilisé par son stationnaire et sa fin d'alunissage —, à plat
+  sur son cap, 4 m/s puis plus vite avec la hauteur (40 m/s au plus) ; à 200 m, la loi de montée habituelle. Le Ranger garde ses cas.
+- **Trouvé par l'e2e et corrigé** (`renderer.ts` `encodeLite`) : sur la Lune, le `shadeMark` (mise en page `mainLayout`) était lancé
+  dans la passe `body lite (raster)` avec le groupe 1 du matériau de `shadeLite` encore lié — une erreur WebGPU et une passe invalide à
+  chaque image à cadence > 1 (régression du 11 nov., découpe différée de `shadeLite`) ; le groupe 1 de la LUT relié avant lui.
+- **Vérifié** (ce Mac, fenêtre visible) : `apprendre-vaisseaux` **9/9** en 84 s, 0 erreur WebGPU (avant le correctif : 7/9, les deux
+  leçons 10 tombées sur ces erreurs, les vols eux réussis) ; le Lander posé à Tranquillité : +10 m en 3 s, orbite 100,0 ± 0,04 km
+  (Pe 100,1 / Ap 101,0, note 20/20) ; le Ranger 100,0 ± 0,04 km. Sonde locale : départ à la verticale, bascule à ~200 m (≈ 3 s de
+  poussée réduite), apoapside 100 km en 75 s, orbite en ≈ 14 min simulées. Capture `docs/progress/apprendre/vx-l10-lander-orbite-lunaire.jpg`.
+- **Docs** : VOL-VAISSEAUX (leçon 10, tableau vérifié, référence `takeoff`), `apprendre-vaisseaux.html`, compte rendu des examens,
+  BH-API (`liftOff`), GRAPHICS-PIPELINE (C18), E2E-CATALOGUE, PROBLEMES-A-REGLER (rayé).
+- **Non vérifié** : le départ vertical du Lander sur un monde avec air (Mars) ; aucun coût de rendu mesuré (le correctif ne change
+  aucune lecture). Suite proposée hors rendu : les e2e qui lisent des membres absents (PROBLEMES-A-REGLER, « Vol et tests »).

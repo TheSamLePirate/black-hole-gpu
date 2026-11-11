@@ -58,9 +58,15 @@ fenêtre visible) et `tests/e2e/apprendre-vaisseaux.e2e.test.ts` (kerr-mini, ple
 - l'inclinaison qui dépasse d'environ 12° après le relâcher ;
 - l'alarme train rentré, normale juste après le décollage ;
 - le jugement d'une orbite circulaire par `orbit.circular`, et non par Ap − Pe (la Terre est aplatie) ;
-- un **défaut du jeu** : le Lander posé ne décolle pas avec U (noté dans PROBLEMES-A-REGLER).
+- un **défaut du jeu** : le Lander posé ne décolle pas avec U (noté dans PROBLEMES-A-REGLER) — **réglé le 11 novembre 2026** :
+  départ vertical sur sa poussée vectorée jusqu'à 200 m ; revolé par l'e2e (leçon 10 : le Lander posé puis le Ranger, 9/9).
 
 Captures : `docs/progress/apprendre/`, et dans les pages.
+
+**Revérifié le 11 novembre 2026** (ce Mac, fenêtre visible) : `apprendre-vaisseaux` **9/9** en 84 s — les huit recettes comme le
+6 novembre, plus le décollage lunaire du **Lander posé** (+10 m en 3 s, orbite 100,0 ± 0,04 km, note 20/20). Le premier passage avait
+trouvé une **erreur WebGPU** à chaque image sur la Lune (le groupe 1 du matériau laissé lié au `shadeMark` du sol des mondes
+raster, régression du jour), corrigée dans le même lot.
 
 **Ce qui reste ouvert** :
 - Le vol entièrement à la main par script : il faut écrire un régulateur, et le cours ne donne pas les gains.

@@ -7257,7 +7257,9 @@ export class Renderer {
       lp.setBindGroup(1, this.liteDeferred ? this.liteBinds(t).mat! : this.liteBinds(t).lite);
       lp.dispatchWorkgroups(Math.ceil(Math.ceil(t.width / bw) / 8), Math.ceil(Math.ceil(t.height / bh) / 8));
       if (mark) {
+        // (shadeMark's layout is main's — its group 1 the LUT's: shadeLite's, the material's record or liteOut, does not match)
         lp.setPipeline(mark);
+        lp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
         lp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
       }
       lp.end();

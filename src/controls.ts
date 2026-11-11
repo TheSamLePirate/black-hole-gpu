@@ -1313,6 +1313,8 @@ export class CameraController {
   onBelly = false;
   /** the take-off's run on the wheels and its first climb away (lowthrust.ts — the Ranger in the air) */
   takeoffRoll = false;
+  /** the Lander's vertical start from its legs (lowthrust.ts): the heading it keeps, level, on its vectored thrust */
+  liftOff: [number, number, number] | null = null;
   /** the gear's turn of the craft over the last frame, for the pilot's rates (motion.ts) */
   gearDw: [number, number, number] | null = null;
   /** on its own gear at the frame's start: the craft's whole turn integrated within the flight's

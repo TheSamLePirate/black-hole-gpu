@@ -374,12 +374,14 @@ Puis la bascule et la circularisation.
 Sur une piste avec de l'air, le Ranger roule, se cabre à 110 m/s et monte. Le compte rendu donne une note sur 20
 (le rendement : 20/20 dès 85 %).
 
-**Le Lander posé ne décolle pas avec U** (constaté en jeu le 6 novembre 2026 : l'autopilote de décollage reste
-engagé, poussée nulle, sans message — ni depuis le stationnaire 8 posé) : un défaut noté dans
-[PROBLEMES-A-REGLER.md](PROBLEMES-A-REGLER.md). En vol (par exemple placé en stationnaire par `hoverOver`), U le fait
-monter normalement. Le **Ranger** décolle du sol lunaire (vérifié en jeu, e2e `apprendre-vaisseaux`).
+**Le Lander posé décolle à la verticale** : sur ses jambes, il monte d'abord sur sa poussée vectorée, à plat sur son
+cap (comme en stationnaire), à 4 m/s puis plus vite avec la hauteur (40 m/s au plus) ; à **200 m**, la loi de montée
+prend la main — le nez bascule vers la poussée en quelques secondes, puis la montée et la bascule comme ailleurs. Jusqu'au
+11 novembre 2026, il restait posé, poussée nulle (la loi voulait d'abord tourner le nez, ce qu'un appareil posé ne fait
+pas). Vérifié en jeu le 11 novembre (e2e `apprendre-vaisseaux`, leçon 10) : le Lander comme le Ranger, de Tranquillité,
+atteignent l'orbite de 100 km.
 
-**Par `__bh`** (le Ranger) : `__bh.game.land("moon", 0.674, 23.473)` ; `c.launchGoal = { altKm: 100, incDeg: null }` ;
+**Par `__bh`** (le Lander ou le Ranger) : `__bh.game.land("moon", 0.674, 23.473)` ; `c.launchGoal = { altKm: 100, incDeg: null }` ;
 `p.auto = "none"; p.setAuto("takeoff")` ; réussi quand `status().status === "orbit"` et `orbit.circular.km` ≈ 100 (le
 test de l'école : périapside > 80 km) — le décollage devient `circularize` puis souvent `node`.
 
@@ -435,7 +437,7 @@ Les recettes de ce cours ont été volées telles quelles par l'e2e `tests/e2e/a
 | 7 — amarrage à l'ISS | capturé à IDA-2, 0,08 m/s |
 | 8 — rentrée et plané du Ranger | posé à Edwards, 0,2 m/s |
 | 9 — le Lander à Tranquillité, LPD +300 m | posé à 0,8 m/s, à 300,2 m du site |
-| 10 — décollage lunaire (Ranger) | orbite de 100,0 ± 0,04 km ; le Lander posé, lui, ne décolle pas (défaut constaté) |
+| 10 — décollage lunaire (Lander posé, puis Ranger) | Lander : +10 m en 3 s, orbite 100,0 ± 0,04 km (Pe 100,1 / Ap 101,0, note 20/20) ; Ranger : 100,0 ± 0,04 km (11 nov. 2026) |
 
 Non vérifiés en jeu : l'aller vers la Lune planifié, l'amarrage à la main, la finale à la main, l'Endurance et
 Gargantua, les pannes.
@@ -694,7 +696,8 @@ Détails utiles :
   40 m → **toucher à 0,8 m/s** sur les 3 derniers mètres. Désignateur de point d'atterrissage sous 5 km (le stick déplace
   le point). Mondes de Gargantua : descente `−max(min(√(2·0,5·(thr−g)·h), h/60 s, 0,02 c), 1,5 m/s)`.
 - **takeoff** (notre côté) : sommet `R + max(18 H, 0,03 R, altKm)`, montée dans l'air (traînée < 30 % de la poussée,
-  q ≤ 35 kPa), virage gravitationnel ; Ranger sur piste : roule, rotation à 110 m/s à 12°. Fini hors de l'air, à la
+  q ≤ 35 kPa), virage gravitationnel ; Ranger sur piste : roule, rotation à 110 m/s à 12° ; Lander posé : départ vertical
+  sur sa poussée vectorée, à plat sur son cap, jusqu'à 200 m (`LIFT_TOP_M`, `camera.liftOff`), puis la loi de montée. Fini hors de l'air, à la
   hauteur, vitesse horizontale ≥ 99,5 % de la circulaire.
 - **dock** : phases « TO THE AXIS » (30–200 m sur l'axe), contournement, « APPROACH » (rapprochement
   `min(3, 0,08 + 0,012·along)` m/s), points d'attente 220 m (30 s) et 20 m (20 s), « HOLD 10 m » (latéral < 0,1 m,

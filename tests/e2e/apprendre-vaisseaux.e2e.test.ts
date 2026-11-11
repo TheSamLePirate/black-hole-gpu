@@ -6,10 +6,10 @@ import { App, E2E, stopServer } from "./lib/app";
 // recette par recette, tel qu'un LLM élève l'applique : une rotation arrêtée puis le rétrograde tenu (leçons 1–2),
 // l'apoapside montée à 600 km en coupant avant la consigne (leçon 3), la circularisation (leçon 4), l'amarrage à l'ISS
 // (leçon 7), le changement de plan de 10° (leçon 5), la rentrée et le plané du Ranger jusqu'à Edwards (leçon 8), l'alunissage du Lander avec le point déplacé
-// de 300 m (leçon 9), le décollage lunaire vers 100 km (leçon 10). Chaque critère de réussite est celui du cours ; une
+// de 300 m (leçon 9), le décollage lunaire vers 100 km du Lander posé puis du Ranger (leçon 10). Chaque critère de réussite est celui du cours ; une
 // capture à chaque état jugé.
 // Duration: ~5–8 min (les orbites et la remontée lunaire en pas fixes, le temps accéléré par les autopilotes).
-// Done when: le Ranger remonté en orbite lunaire.
+// Done when: le Lander puis le Ranger remontés en orbite lunaire.
 
 const DIR = "remote-results/apprendre/vaisseaux";
 mkdirSync(DIR, { recursive: true });
@@ -195,8 +195,32 @@ describe.skipIf(!E2E)("apprendre à piloter : les vaisseaux", () => {
     expect(r.moved ?? 1e9).toBeLessThan(450);
   }, 240_000);
 
-  test("leçon 10 : le décollage lunaire du Ranger vers une orbite de 100 km (launchGoal posé avant U)", async () => {
-    // (le Ranger, comme l'école : posé, le Lander ne décolle pas avec U — constaté le 6 nov. 2026, PROBLEMES-A-REGLER)
+  test("leçon 10 : le décollage lunaire du Lander posé vers une orbite de 100 km (launchGoal posé avant U)", async () => {
+    // (posé, il partait jadis sans poussée — le 6 nov. 2026, PROBLEMES-A-REGLER — : son départ vertical sur sa poussée
+    // vectorée jusqu'à 200 m, puis la loi de montée ; vérifié qu'il quitte le sol dans les 3 s)
+    const r = await app.js<{ active: string; landed: boolean; liftedM: number | null }>(`(() => { const c = __bh.camera;
+      __bh.settings.vessel = "lander"; for (let i = 0; i < 5; i++) __bh.step(1 / 30);
+      __bh.game.land("moon", 0.674, 23.473); for (let i = 0; i < 30; i++) __bh.step(1 / 30);
+      const landed = !!c.ourLanded, h0 = __bh.game.status().altKm;
+      c.launchGoal = { altKm: 100, incDeg: null }; c.pilot.auto = "none"; c.pilot.setAuto("takeoff");
+      for (let i = 0; i < 90; i++) __bh.step(1 / 30);
+      return { active: __bh.fleet.active, landed, liftedM: Math.round((__bh.game.status().altKm - h0) * 1000) }; })()`);
+    console.log("  départ du Lander :", JSON.stringify(r));
+    expect(r.active).toBe("lander");
+    expect(r.landed).toBe(true);
+    expect(r.liftedM ?? 0).toBeGreaterThan(3);
+    const done = await fly(`__bh.game.status().status === "orbit" && p.auto === "none"`, 60);
+    const o = await orbit();
+    console.log("  remontée du Lander :", JSON.stringify(o));
+    await view();
+    await app.shot(`${DIR}/l10-lander-orbite-lunaire.png`);
+    expect(done).toBe(true);
+    expect(o.soi).toBe("moon");
+    expect(o.peKm).toBeGreaterThan(80);
+    expect(app.cdp.errors).toEqual([]);
+  }, 400_000);
+
+  test("leçon 10 (Ranger) : le décollage lunaire du Ranger vers une orbite de 100 km", async () => {
     await app.js(`(() => { const c = __bh.camera; __bh.settings.vessel = "ranger"; for (let i = 0; i < 5; i++) __bh.step(1 / 30);
       __bh.game.land("moon", 0.674, 23.473); for (let i = 0; i < 10; i++) __bh.step(1 / 30);
       c.launchGoal = { altKm: 100, incDeg: null }; c.pilot.auto = "none"; c.pilot.setAuto("takeoff"); return 1; })()`);
