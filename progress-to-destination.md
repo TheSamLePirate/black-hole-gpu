@@ -2952,3 +2952,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   la bande de sable mouillé change le long du bord, côté terre (différence des images, planche `docs/progress/mer/l3-lame-plage.jpg`).
 - **Consigné** (PROBLEMES-A-REGLER) : la limite terre/mer de `shadeLite` sur la plage est en marches d'environ 1 m (avec et sans L3) —
   le trait de côte en dents de scie de l'analyse, côté terre ; non corrigé.
+
+## 2026-11-11T08:20Z — L3 : la lame rendue continue ; le puzzle d'écume des hauts-fonds plats consigné
+
+- **Fait** (`liteMaterial`) : la phase de la lame de rive par un cosinus au lieu de `fract` (un saut à chaque période dessinait des
+  films aux bords nets), son bord adouci sur 0,15 m de hauteur, le film moins miroir (0,4).
+- **Trouvé et consigné** (PROBLEMES-A-REGLER) : sur l'eau très peu profonde devant l'Almanarre (0–0,3 m), un puzzle de plaques pâles
+  et sombres à bords en marches qui bouge — dépend des vagues FFT seules (onze causes écartées une à une). Non corrigé ; un essai sur
+  l'écume intérieure du déferlement n'y changeait rien, annulé.

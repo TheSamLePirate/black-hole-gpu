@@ -15976,13 +15976,16 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
       if (wetBand > 0.0) {
         // (the swash's edge: up to the run-up as the wave arrives, down to a third of it — its phase the clock's, shifted along the
         // shore by a slow noise: not the whole beach at once)
+        // (continuous in time and along the shore — a cosine of the phase, not its fractional part: fract's jump drew a jigsaw of
+        // hard-edged films over a flat beach, 11 Nov 2026 —; the film's edge soft over 0.15 m of height: a beach a few
+        // centimetres over the sea's level does not flip whole between water and sand)
         let turns = select(P.time.x * P.near5.w / T, bodies[SWELL_OFF].w, fieldOn);
         let sh = vnoise(vec3f(gq * (EARTH_RM / 90.0)));
-        let s = fract(turns + 0.6 * sh);
-        let edge = R * (0.3 + 0.7 * exp(-s * 3.5));
-        let film = smoothstep(edge + 0.05, edge - 0.05, hG);
-        A *= mix(1.0, 0.62, wetBand) * mix(1.0, 0.8, film);
-        wetS = max(wetS, mix(0.18 * wetBand, 0.55, film));
+        let up = pow(0.5 + 0.5 * cos(TAU * (turns + 0.6 * sh)), 3.0);
+        let edge = R * (0.3 + 0.7 * up);
+        let film = smoothstep(edge + 0.15, edge - 0.15, hG) * 0.8;
+        A *= mix(1.0, 0.62, wetBand) * mix(1.0, 0.85, film);
+        wetS = max(wetS, mix(0.18 * wetBand, 0.4, film));
       }
     }
   }

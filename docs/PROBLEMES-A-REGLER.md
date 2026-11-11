@@ -14,6 +14,15 @@ de `sceneryWaterAt`). Le pas — celui des texels z 17 (~0,9 m) ou des nœuds du
 C'est le « trait de côte en dents de scie » de l'analyse (§3), côté terre. Piste : la décision mer/terre par une hauteur filtrée sur
 quelques mètres, et un fondu au lieu du seuil.
 
+**Repris le même jour (ce Mac, sonde locale, 20 m au-dessus de l'eau devant la plage, regard vers l'ouest)** : ce n'est pas le bord
+de la terre — c'est **un puzzle de plaques pâles et sombres à bords en marches sur toute l'eau très peu profonde** (0–0,3 m : relevé à
+1 m, `heightAt`), **qui bouge avec le temps**. Écartés un à un : L3 (lame rendue continue — un vrai saut de `fract`, corrigé —, sans
+effet sur le puzzle), le lavis du rivage (`shoreWash`), la surface maillée (`seaSurfaceOn`), le champ de houle (`shoreSwellOn`),
+l'écume monde (`seaFoamWorldOn`), l'imagerie (`liteSkip` 128), les ombres du relief et des nuages (`liteSkip` 4, 32), les nuages, et
+**tout le déferlement compilé hors** (`TUNE_GSKIP` 1024). **Il disparaît sans les vagues FFT** (`settings.seaFft` false). Suspects :
+l'écume des cascades (Jacobien, dentelle) ou le fond vu au creux des vagues sur un haut-fond plus mince que leur hauteur. Suite :
+`TUNE_GSKIP` des parts de `seaShade` une à une sur cette vue (les bits de la mer : 2048 Fresnel moyenné, …).
+
 ## ~~Le trait de l'eau en escalier devant l'Almanarre, qui bouge à chaque recuisson~~ — réglé (niveau 2 du cache ajouté aux distances au rivage, même jour ; planche `docs/progress/mer/trait-de-cote-niveau2.png` : avant / après, même vue)
 
 **2026-11-11T06:20Z.** Observé (kerr-mini, `coast-swell` `SWELL_ABLATE=sand`, vue plongeante 25 m au-dessus de la plage de
