@@ -254,3 +254,14 @@ les hauts-fonds en S3) et ~1,3 ms de travail. Essayé sans gain et annulé : cal
 lieu de l'échantillon du champ) et relire le champ dans la zone de déferlement — deux sites de lecture, noyau plus gros, pas plus
 rapide. **Le remède** : sortir la houle du noyau de l'eau — une passe propre qui écrit par pixel la pente des crêtes et la phase,
 lue d'une seule lecture —, c'est-à-dire la passe d'eau de J4 (stratégie §7.5) ; la cible ≤ +0,5 ms n'est pas tenue avant.
+
+**La passe de houle, son plan (J4, écrit le 11 novembre)** : (1) une passe de calcul `sea swell` avant `earth water`, sur les seuls
+pixels d'eau de la visibilité (`moments.x` marqués mer, ou la surface maillée), qui évalue `seaSwellAt`, la pente des crêtes (en 2
+composantes du repère est/nord), la phase `swS`, le gain et le drapeau « tenu » et les écrit dans une cible `rgba16float` à la taille de
+l'image ; (2) les noyaux de l'eau la lisent d'une lecture — `textureLoad`, aucun filtrage — à la place de la fonction et de ses
+lectures de table, la fonction retirée de leur source (le gain de présence mesuré, ~1 ms) ; (3) **la liaison** : les noyaux de l'eau
+partagent aujourd'hui le groupe 1 des tables (LUT, perspective) avec tous les noyaux ; y ajouter une texture la compterait partout
+(au-delà de 38 sur les appareils qui en ont juste assez) — il faut donc une disposition de groupe 1 propre à l'eau (lecture des
+tables + la cible de houle), donc des variantes de pipeline de l'eau à leur propre disposition, comme `shadeLite` a la sienne
+(`liteLayout`). Preuve attendue : la sonde `coast-swell` `SWELL_ABLATE=presence` — l'écart allumé / compilé hors ramené sous
++0,5 ms —, les mêmes images.
