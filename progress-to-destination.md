@@ -2988,3 +2988,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   basse 62,5 / 61,3 / 59,0 — identique à avant. La présence vient du reste du code de la houle dans le noyau de l'eau (crêtes,
   déferlement), pas de la lecture du champ. **Annulé** (aucun gain mesuré : pas de module de plus). Leçon consignée dans
   PLAN-MER-WEBGPU §5 : la passe séparée ne paiera qu'en sortant aussi ce calcul, ou avec l'allègement de la passe d'eau (J4).
+
+## 2026-11-11T11:00Z — Les rectangles turquoise devant l'Almanarre réglés : les blocs JPEG de l'orthophoto
+
+- **Cause** (ce Mac ; un diagnostic compilé pour de bon — 60 s d'attente : les précédents, pris pendant la recompilation du noyau de
+  l'eau, montraient un albédo nul, faux) : l'albédo du fond lu sous l'eau (l'orthophoto seule, `im.o` = 1) portait les blocs de
+  compression JPEG de la BD ORTHO (8 × 8 pixels, 1,6 m) ; lu de près sur huit empreintes du pixel — moins d'un bloc —, le seuil du
+  turquoise de `seaShade` les découpait en rectangles.
+- **Fait** (`shadeLite`, eau peu profonde) : l'albédo du fond lu sur au moins 3,2 m (deux blocs). Vérifié : la même vue sans
+  rectangles (planche `docs/progress/mer/turquoise-avant-apres.png`) ; 83/83 shaders. Non mesuré : le coût (une empreinte plus large,
+  le même nombre de lectures).
+- **Leçon de mesure** : les variantes `renderer.tune` du noyau de l'eau peuvent mettre plus de 25 s à compiler sur ce Mac ; un
+  diagnostic se prend après 60 s, l'image vérifiée (pas le sol de repli).

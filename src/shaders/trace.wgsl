@@ -16528,8 +16528,11 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       // (over eight footprints: the photograph's own waves, glints and boats — 20 cm a pixel — are points; a bed seen through the
       // water spreads over tens of metres. At the pixel's own footprint each white point opened the turquoise alone: the sea
       // speckled green off the Almanarre, 10 Nov)
-      let d0 = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx * 8.0), eCube(fy * 8.0));
-      let im = earthImageryAniso(gq, fx * 8.0, fy * 8.0);
+      // (and over 3.2 m at least: the photograph's JPEG blocks — 8 × 8 pixels, 1.6 m at 20 cm — differ a little in their tint over
+      // calm water; seen near, eight footprints fell inside one, the turquoise's gate cut them out as rectangles, 11 Nov 2026)
+      let wide = max(8.0, 3.2 / max(max(length(fx), length(fy)) * EARTH_RM, 1e-4));
+      let d0 = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx * wide), eCube(fy * wide));
+      let im = earthImageryAniso(gq, fx * wide, fy * wide);
       let A0 = mix(mix(d0.rgb, im.c.rgb, im.w), im.c.rgb, im.o) * P.earth2.z;
       accum[idx] = vec4f(A0, 2.0);
       moments[idx] = vec2f(RASTER_WATER - wat.z - 0.25 * wat.x, tM / EARTH_RM * bodyRadius(k));
