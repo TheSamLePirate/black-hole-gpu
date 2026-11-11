@@ -380,12 +380,22 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await gentle(url);
-        const res = await fetch(url);
+        // (past the browser's HTTP cache: the zone keeps its own copy; and a gateway's 502 kept there would be served again on every
+        // try — suspected, 11 Nov 2026: the same 17 tiles failed for 12 minutes of resumes while the IGN answered them at once)
+        const res = await fetch(url, { cache: "no-store" });
         // (none there — out at sea, abroad —, though the IGN's WMTS answers a 404 now and then for a tile it has: asked
         // once more before the chain's next link, or nothing, is taken)
         if (res.status === 404) {
           if (attempt === 0) throw new Error("HTTP 404");
           // (kept too: offline, the game told there is none — as the network tells it — not left asking the network)
+          await cache.put(url, new Response(null, { status: 404, headers: { "x-kerr-none": "1" } }));
+          const zones = t?.zones.includes(id) ? t.zones : [...(t?.zones ?? []), id];
+          await storePut(ZONE_TILES, { url, zones, size: 0 } satisfies ZoneTile);
+          return "none";
+        }
+        // (the WMS-R's 400 for a tile out of a layer's coverage — `LayerNotDefined`, the LiDAR HD's gaps, said every time —: none
+        // there, as a 404 — the chain's next link taken —; a zone kept those 17 chains failed for good, 11 Nov 2026)
+        if (res.status === 400 && (await res.clone().text()).includes("LayerNotDefined")) {
           await cache.put(url, new Response(null, { status: 404, headers: { "x-kerr-none": "1" } }));
           const zones = t?.zones.includes(id) ? t.zones : [...(t?.zones ?? []), id];
           await storePut(ZONE_TILES, { url, zones, size: 0 } satisfies ZoneTile);

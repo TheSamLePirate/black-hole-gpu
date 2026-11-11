@@ -3184,3 +3184,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   de la minute de sa passerelle. Cinq essais espacés jusqu'à 16 s : pire (les lots dépassaient leurs 120 s, 54 échecs) — retirés ;
   gardés : trois essais, une pause de 30 s avant la dernière demande des échecs (`RETRY_PAUSE_MS`), l'erreur relevée. Le test
   `zones-scenery` reprend la zone (90 s de calme, 12 minutes au plus) comme un joueur ; relance en cours. PROBLEMES-A-REGLER.
+
+## 2026-11-11T19:09Z — Les trous du LiDAR HD : « LayerNotDefined » lu comme « rien ici »
+
+- **Trouvé** (`zones-scenery`, erreurs relevées) : le WMS-R de l'IGN répond **400 `LayerNotDefined`** pour une tuile hors de la
+  couverture du LiDAR HD — chaque fois, ce n'est pas son débit. La zone le prenait pour un échec à réessayer (17 chaînes perdues,
+  jamais leur repli RGE ALTI) ; le jeu le redemandait quatre fois. **Fait** : lu comme une absence (le Service Worker garde un 404, le
+  lien suivant de la chaîne est pris ; `earth-tiles.ts ignGrid` rend null aussitôt). **Vérifié** (kerr-mini) : 90 tuiles « sans donnée »,
+  le relief gardé 1 854 → 1 920 grilles. Restent 17 replis RGE ALTI HIGHRES en 502 pendant 12 minutes de reprises que l'IGN sert à
+  l'instant hors du test — soupçon : le 502 gardé par le cache HTTP du navigateur ; le téléchargement d'une zone le contourne
+  maintenant (`cache: "no-store"`), relance en cours.

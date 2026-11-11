@@ -581,6 +581,9 @@ async function ignGrid(layer: string, z: number, x: number, y: number, signal: A
   // four after: a tile left to Terrarium for it would show a seam)
   await ignGate.take();
   let res = await fetch(ignHeightUrl(layer, z, x, y, size), { signal });
+  // (a 400 that says the layer has no coverage there — `LayerNotDefined`, the LiDAR HD's gaps —: none, at once; not asked four times)
+  const outOfLayer = async (r: Response) => r.status === 400 && (await r.clone().text()).includes("LayerNotDefined");
+  if (await outOfLayer(res)) return null;
   const refused = (r: Response) => r.status === 400 || r.status === 429 || r.status >= 500;
   for (let attempt = 1; refused(res) && attempt < 4; attempt++) {
     await new Promise((done) => setTimeout(done, 1000 * 2 ** (attempt - 1)));
