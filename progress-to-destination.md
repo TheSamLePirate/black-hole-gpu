@@ -2847,3 +2847,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Reste de V2c** : les quads d'imposteur dans la passe de visibilité (aujourd'hui l'octaèdre ; un trou entre les feuilles montre
   le sol et non l'arbre derrière), le mélange de deux vues voisines ; puis V2d (au-delà de 6,25 km, où le gain sera le plus visible)
   et V2e. Non mesuré : J0, un vol (pivotement des couronnes en virage).
+
+## 2026-11-11T04:30Z — Arbres V2c terminé : les vues voisines des imposteurs mêlées
+
+- **Fait** : `sceneryTreeImpostor` tire, par pixel et par image, l'une des quatre vues hémi-octaédriques autour de la direction de l'œil
+  selon leurs poids bilinéaires ; l'historique temporel les mêle — plus de saut de vue quand l'œil tourne autour d'un arbre, deux
+  lectures comme avant. Les octaèdres de la visibilité gardés (raisonné dans PLAN-VEGETATION-V2 : l'imposteur tient dans l'enveloppe
+  qu'ils circonscrivent ; la distance finale est celle de l'imposteur).
+- **Mesuré** (M1 Max, sonde `forest-impostors`, trois passages) : vue à 500 m imposteurs 20,1 / 20,2 / 20,5 ms contre formes
+  21,1 / 20,7 / 21,7 ; luminance moyenne 74,0 → 74,1 ; la vue canopée tournait bridée (≈ 70 ms des deux côtés : écart dans le bruit).
+  Pas de vol en virage enregistré (le pivotement n'est pas jugé en mouvement).

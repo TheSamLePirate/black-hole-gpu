@@ -150,7 +150,7 @@ export const IMPOSTOR_NEAR_M = 200;
 /**
  * The tracer's reader (PLAN-VEGETATION-V2 V2c): the array — the albedo's terms in layers 0–11, the surface's in 12–23, mip-mapped —
  * and sceneryTreeImpostor, a far tree of shadeLite read from its impostor: the layer of its kind at the nearer proportion, scaled
- * to its cell's crown and height; the view whose direction is nearest the eye's (in the tree's own, scaled frame); the ray met with
+ * to its cell's crown and height; one of the four views about the eye's direction (in the tree's own, scaled frame), drawn by their weights; the ray met with
  * that view's plane; its texel's coverage taken as a probability (`rnd`: the far forest keeps its mean cover, the history averages
  * it), its depth along the view, its normal, the leaves' shade. Bound where the device takes one more sampled texture.
  */
@@ -199,7 +199,11 @@ fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tre
   let eye = normalize(-dc);
   let z = max(eye.z, 0.0);
   let pp = eye.xy / (abs(eye.x) + abs(eye.y) + z);
-  let cell = clamp(floor((vec2f(pp.x + pp.y, pp.x - pp.y) * 0.5 + 0.5) * ${IMPOSTOR_VIEWS}.0), vec2f(0.0), vec2f(${IMPOSTOR_VIEWS - 1}.0));
+  // (the four views about the eye's direction, one drawn by their bilinear weights — a pixel's own, the frame's: the history blends
+  // them, no view's jump as the eye turns round the tree, two reads as for one)
+  let cf = (vec2f(pp.x + pp.y, pp.x - pp.y) * 0.5 + 0.5) * ${IMPOSTOR_VIEWS}.0 - 0.5;
+  let pick = vec2f(fract(rnd * 13.17 + 0.21), fract(rnd * 29.71 + 0.57));
+  let cell = clamp(floor(cf) + select(vec2f(0.0), vec2f(1.0), pick < fract(cf)), vec2f(0.0), vec2f(${IMPOSTOR_VIEWS - 1}.0));
   let vv = impViewDir(cell);
   var right = cross(vec3f(0.0, 0.0, 1.0), vv);
   right = select(normalize(right), vec3f(1.0, 0.0, 0.0), dot(right, right) < 1e-8);
