@@ -50,6 +50,14 @@ paroi est donc **un raccord entre niveaux du maillage raster** (le bord du nivea
 recouvrement, glissement des sommets — `MORPH_FULL`/`MORPH_BAND` —, ou l'anneau absent sur l'eau), dont la face verticale reçoit
 l'orthophoto étirée — pas une donnée de hauteur. Suite : `settings.earthTerrainRasterView` « depth »/« difference » sur cette vue,
 et les anneaux dessinés (`terrainRaster.ringsDrawn`) ; regarder si l'anneau du niveau 2 omet ses triangles sur l'eau.
+**Corrigé du dernier point, trouvé (même jour)** : la vue des normales du raster (`earthTerrainRasterView` « normals ») montre de
+**vraies facettes** — crêtes en dents, une pyramide —, et les niveaux 1 et 2 du cache **contiennent 617 et 435 nœuds à 12–14,5 m**
+en bandes diagonales le long du tombolo (ex. 14,5 m à 43,0666 N 6,12883 E, voisins 0,5 m ; 14,7 m à 43,07688 N 6,12471 E), là où
+`earthTiles.heightAt` lit 0–1,2 m (le relevé de la ligne précédente passait à côté des bandes). La marche naît donc **dans la cuisson
+du cache** (`terrain-cache.ts`, `h = exact + fin − max(grossier, 0)`) ; cause probable, que décrit son propre commentaire : là où les
+fenêtres fines (z ≥ 14) ne couvrent pas encore, « le plus fin tenu est un niveau lointain : sa surélévation gardée » — la canopée
+des pins (~13 m, le MNS du niveau z ≤ 13, I6) prise comme relief. Suite : sortir les trois termes à un nœud fautif (une passe de
+diagnostic), et ne garder la surélévation lointaine que pour les nœuds dont l'empreinte est celle d'un niveau lointain.
 
 ## Le Lander posé ne décolle pas avec U (autopilote de décollage)
 

@@ -2927,3 +2927,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Observé** (ce Mac, `rasterColumn` dans la vue du défaut) : distance du patch constante à 231–233 m sur ~50 lignes — une paroi
   verticale d'environ 14 m dans les hauteurs fines du cache, au bord du tombolo, le sol au niveau de la mer à son pied. Ni arbres ni
   silhouettes (écartés plus tôt). La source fine qui l'apporte reste à identifier (PROBLEMES-A-REGLER). Aucun code changé.
+
+## 2026-11-11T07:15Z — Parois vertes du tombolo : la marche est dans la cuisson du cache de relief
+
+- **Trouvé** (ce Mac, sondes locales) : vue des normales du raster — de vraies facettes ; niveaux 1 et 2 du cache — 617 et 435 nœuds à
+  12–14,5 m en bandes le long du tombolo, là où les tuiles lisent 0–1,2 m. Cause probable : la surélévation d'un niveau lointain (la
+  canopée du MNS, ~13 m) gardée comme relief par la cuisson du cache là où les fenêtres fines manquent (`terrain-cache.ts`). Planche
+  `docs/progress/mer/parois-tombolo-normales.png`. Aucun code changé : la correction (ne garder la surélévation que pour les nœuds à
+  empreinte lointaine) demande d'abord de sortir les trois termes à un nœud fautif.
