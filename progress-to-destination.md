@@ -2979,3 +2979,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   couleur de l'eau de `seaShade`, pas dans un sol mal classé, ni l'écume, ni les reflets, ni les ombres, ni Kd490, ni l'ouverture du
   ciel, ni le partage des noyaux, ni la houle, ni les navires. Aucun code changé ; piège de mesure noté (les variantes `renderer.tune`
   du noyau de l'eau mettent parfois plus de 25 s à se compiler sur ce Mac).
+
+## 2026-11-11T10:20Z — Houle : la variante « cartes » de la passe séparée essayée, sans gain, annulée
+
+- **Essayé** : le champ évalué une fois par image sur deux cartes de 256² autour de la caméra (couches de plus de la texture de la mer,
+  aucune liaison de plus), le pixel relisant ses grandeurs lentes et reconstruisant la phase par l'onde plane locale ; 84/84 shaders.
+- **Mesuré** (kerr-mini, `coast-swell` `presence`, trois passages) : plage 72,3 / 71,7 / 68,8 ms (allumé / éteint / compilé hors), vue
+  basse 62,5 / 61,3 / 59,0 — identique à avant. La présence vient du reste du code de la houle dans le noyau de l'eau (crêtes,
+  déferlement), pas de la lecture du champ. **Annulé** (aucun gain mesuré : pas de module de plus). Leçon consignée dans
+  PLAN-MER-WEBGPU §5 : la passe séparée ne paiera qu'en sortant aussi ce calcul, ou avec l'allègement de la passe d'eau (J4).

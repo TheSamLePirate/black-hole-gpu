@@ -265,3 +265,12 @@ partagent aujourd'hui le groupe 1 des tables (LUT, perspective) avec tous les no
 tables + la cible de houle), donc des variantes de pipeline de l'eau à leur propre disposition, comme `shadeLite` a la sienne
 (`liteLayout`). Preuve attendue : la sonde `coast-swell` `SWELL_ABLATE=presence` — l'écart allumé / compilé hors ramené sous
 +0,5 ms —, les mêmes images.
+
+**Essayé le 11 novembre, sans gain, annulé — une variante sans nouvelle liaison** : le champ évalué une fois par image sur deux cartes
+de 256² autour de la caméra (1 024 et 4 096 m), dans quatre couches de plus de la texture de la mer (comme l'écume monde), le pixel
+relisant la direction, k, le gain et le phaseur résiduel (la phase reconstruite par l'onde plane locale) — `seaSwellAt` hors des
+noyaux de l'eau. Mesuré (kerr-mini, `presence`, trois passages) : plage allumé / éteint / compilé hors 72,3 / 71,7 / 68,8 ms, vue basse
+62,5 / 61,3 / 59,0 — **comme avant** (71,7 / 70,3 / 69,1 ; 61,7 / 60,4 / 59,7). **Leçon** : la présence ne vient pas de la lecture du
+champ, mais du reste du code de la houle dans le noyau de l'eau (les crêtes, le déferlement, la lame) — la pression sur les registres
+d'un noyau déjà au bord ; la passe séparée ne paiera qu'en sortant ce calcul-là aussi (une pente et une écume par pixel écrites à part),
+ou avec l'allègement général de la passe d'eau (J4).
