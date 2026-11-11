@@ -2960,3 +2960,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Trouvé et consigné** (PROBLEMES-A-REGLER) : sur l'eau très peu profonde devant l'Almanarre (0–0,3 m), un puzzle de plaques pâles
   et sombres à bords en marches qui bouge — dépend des vagues FFT seules (onze causes écartées une à une). Non corrigé ; un essai sur
   l'écume intérieure du déferlement n'y changeait rien, annulé.
+
+## 2026-11-11T08:45Z — Le puzzle d'écume des eaux basses réglé : le seuil des moutons sur toutes les cascades calculées
+
+- **Cause** (ce Mac, sondes locales : une constante de mesure temporaire a isolé l'écume des crêtes, puis retirée) : la largeur de la
+  bande du seuil des moutons sur le Jacobien (`sJ`) ne comptait que les pentes des deux cascades longues ; bas sur l'eau la cascade de
+  4,9 m est calculée aussi, ses plis — un écart plusieurs fois plus grand — passaient sous le seuil sur la moitié de la mer : un puzzle
+  d'écume aux bords en marches, à l'échelle de sa tuile, même sans vent (vue à 20 m devant l'Almanarre).
+- **Fait** (`renderer.ts` `seaFftParams`) : `sJ` sur la somme des pentes des cascades calculées (au moins l'ancienne).
+- **Vérifié** : la même vue à 0, 10 et 20 s sans puzzle (planche `docs/progress/mer/ecume-puzzle-avant-apres.jpg`) ; `sea-fft` sur
+  kerr-mini passé (5/5) — les moutons de la force 5 et l'écume de la tempête toujours là (planche
+  `docs/progress/mer/ecume-sj-force5-tempete.png`). Non mesuré : la couverture d'écume comparée à Monahan ; le ciel de tempête montre des
+  anneaux dans les nuages (antérieur, non examiné).

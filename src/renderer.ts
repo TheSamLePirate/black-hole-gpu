@@ -5645,9 +5645,13 @@ export class Renderer {
       offC += st.slopeZc[c] ?? 0;
       offUC += st.slopeXZc[c] ?? 0;
     }
-    // (the whitecaps' threshold on the Jacobian: its spread from the long cascades' slopes — J ≈ 1 + λ k h —, the
-    // level under which lies Monahan's cover at this wind)
-    const sJ = this.seaLambda * Math.sqrt(st.slope01);
+    // (the whitecaps' threshold on the Jacobian: its spread from the slopes — J ≈ 1 + λ k h — of the cascades computed, the level
+    // under which lies Monahan's cover at this wind. The two long cascades' alone it was: low over the water, the finest computed
+    // too, its folds — a spread several times theirs — fell under the threshold over half the sea, a jigsaw of foam at the 4.9 m
+    // tile's scale in front of the Almanarre with no wind, 11 Nov 2026)
+    let slopeOn = 0;
+    for (let c = 0; c < active; c++) slopeOn += (st.slopeXc[c] ?? 0) + (st.slopeZc[c] ?? 0);
+    const sJ = this.seaLambda * Math.sqrt(Math.max(slopeOn, st.slope01));
     const W = Math.min(Math.max(3.84e-6 * H.U ** 3.41, 1e-5), 0.1);
     // (Miller's crests: its knee-deep chop held by the depth, its water near a mirror but for the giant waves — a third of the
     // whitecaps the wind would raise on an ocean, their foam gone twice as fast; Sam, 10 Nov: "too much foam on Miller")
