@@ -9,6 +9,11 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 `docs/progress/mer/turquoise-rectangles.png`, trois instants) : des taches turquoise rectangulaires, à bords en marches de 1–3 m, fixes,
 sur l'eau de 0–0,3 m — le turquoise des hauts-fonds (l'albédo du fond lu par `shadeLite`, `accum` w = 2) ouvert par endroits seulement.
 Cause non cherchée ; pistes : les texels de la décision « fond visible » (l'orthophoto, ses huit empreintes) ou de la bathymétrie.
+**Repris (même jour)** : ce n'est pas le seuil de `seaShade` (`smoothstep(0,05, 0,12)` élargi à 0,03–0,2 : rectangles à peine
+adoucis — essai annulé) ; **c'est l'albédo lu sous l'eau qui est en blocs** (`shadeLite`, eau peu profonde : `earthImageryAniso` à 8
+empreintes, `accum` w = 2). L'orthophoto y est filtrée par le matériel (`orthoGrad`) ; les blocs viennent donc vraisemblablement du
+repli sur l'imagerie des tuiles du relief (`tileImgAt`, des entiers lus texel à texel) là où la couverture de l'orthophoto manque à ce
+niveau, ou du bord de ses fenêtres (`smoothstep(2, 48, d)`). Suite : sortir `im.o` (la part de l'orthophoto) sur cette vue.
 
 ## ~~Le bord de l'eau sur la plage en marches d'environ 1 m~~ — réglé le même jour : c'était l'écume des crêtes (le seuil du Jacobien) — sa bande comptait les pentes des deux cascades longues seules ; bas sur l'eau, la plus fine calculée aussi pliait la surface sous le seuil sur la moitié de la mer (`renderer.ts` `seaFftParams` : la largeur sur les cascades calculées) ; planche `docs/progress/mer/ecume-puzzle-avant-apres.jpg`
 
