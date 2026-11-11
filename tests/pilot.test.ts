@@ -65,6 +65,40 @@ test("attitude hold turns the nose onto prograde and stops there", () => {
   expect(Math.hypot(...fc.omega)).toBeLessThan(1e-3);
 });
 
+test("the Endurance's ring keeps turning under a hold: the nose on prograde, the ship turning about it", () => {
+  // (before 11 Nov 2026 a hold set the roll's rate to 0 and the ring braked at its thrusters' rate)
+  const S = shipToCamera("chase").S;
+  let right: Vec3 = [1, 0, 0],
+    up: Vec3 = [0, 1, 0],
+    fwd: Vec3 = [0, 0, 1];
+  const beta: Vec3 = [0.3, -0.2, -0.1];
+  const fc = new FlightComputer();
+  fc.setHold("prograde");
+  const spin = (4 * 2 * Math.PI) / 60;
+  fc.omega = [0, 0, spin];
+  const dt = 1 / 60;
+  const lin = (v: Vec3, k: number, w: Vec3, m: number): Vec3 => [v[0] * k + w[0] * m, v[1] * k + w[1] * m, v[2] * k + w[2] * m];
+  const cross = (p: Vec3, q: Vec3): Vec3 => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+  const dot = (p: Vec3, q: Vec3) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  for (let i = 0; i < 60 * 30; i++) {
+    const out = fc.step(
+      { dt, right, up, fwd, beta, S, thrust: 0.01, tauRate: 1, radialOut: [1, 0, 0], target: null, spinHold: spin, spinAcc: 0.01 },
+      NONE,
+    );
+    const A = lin(lin(right, out.rot[0], up, out.rot[1]), 1, fwd, out.rot[2]);
+    const ang = Math.hypot(...A);
+    if (ang > 0) {
+      const k = lin(A, 1 / ang, A, 0);
+      const rod = (v: Vec3) => lin(lin(v, Math.cos(ang), cross(k, v), Math.sin(ang)), 1, k, dot(k, v) * (1 - Math.cos(ang)));
+      [right, up, fwd] = [rod(right), rod(up), rod(fwd)];
+    }
+  }
+  const nose = lin(lin(right, S[0][2], up, S[1][2]), 1, fwd, S[2][2]);
+  const pro = lin(beta, 1 / Math.hypot(...beta), beta, 0);
+  expect((Math.acos(Math.min(1, dot(nose, pro))) * 180) / Math.PI).toBeLessThan(1);
+  expect(fc.omega[2] / spin).toBeCloseTo(1, 2);
+});
+
 test("manual keys: rates follow the stick with SAS, the engine follows the throttle", () => {
   const fc = new FlightComputer();
   const S = shipToCamera("quarter").S;

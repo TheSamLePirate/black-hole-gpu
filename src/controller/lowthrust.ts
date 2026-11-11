@@ -2403,6 +2403,9 @@ function autopilotWant(this: CameraController, cam: ReturnType<typeof cameraFram
   }
   if (P.auto === "circularize") {
     if (cam.region !== "hole") return say(tf("Circularize: only around the black hole"));
+    // (within a planet's sphere — Miller's, Mann's, Edmunds' —: around that planet, in its own frame (planet.ts localCircWant);
+    // it once flew the Kerr circle round the hole from there — braking without end, the periapsis 7 600 km under Miller's ground)
+    if (this.local && !this.local.L.landed) return this.localCircWant(cam, say);
     const c = this.circularWant(cam);
     return typeof c === "string" ? say(c) : c;
   }

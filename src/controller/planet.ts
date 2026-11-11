@@ -21,7 +21,9 @@ import {
   type PlanetFrame,
 } from "../landing";
 import { C_MPS, G0 } from "../units";
-import { dot as dot3 } from "../math/vec3";
+import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
+import { unitV } from "./util";
+import { frameRate } from "../game/place";
 
 import type { CameraController } from "../controls";
 
@@ -176,7 +178,56 @@ function surfaceWant(
   return { beta, ff: localToZamo([-free[0], -free[1], -free[2]]) };
 }
 
+/**
+ * The circularization around the planet the craft is near (its frame — this.local): the circle at the distance it is engaged at,
+ * in the planet's orbit's plane the craft flies, its speed √(m/d) about the planet less the frame's turn
+ * (game/place.ts frameRate, as game.orbit places a circle) —; the distance closed over a few turns; done on the circle. (Flown in the hole's frame, the planet's speed — a large
+ * part of c — added to it as a Galilean sum came out 12 % fast: an orbit of 2 944 × 10 993 km for a circle.)
+ */
+function localCircWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, say: (t: string) => null) {
+  const P = this.pilot;
+  const lf = this.local;
+  if (!lf || cam.region !== "hole") return say("Circularize: get into the planet's sphere of influence first");
+  const { F, L } = lf;
+  const name = BODY_NAMES[F.id as Body] ?? F.id;
+  const d = Math.hypot(...L.xi);
+  const up: Vec3 = [L.xi[0] / d, L.xi[1] / d, L.xi[2] / d];
+  // (the distance kept: where it was engaged, clear of the ground and its air)
+  if (!P.anchor) P.anchor = [Math.max(d, 1.02 * F.R), 1, 0];
+  const d0 = P.anchor[0]!;
+  // (the frame turns about z at its proper rate — game/place.ts frameRate, as the orbit's placement: n·ut, the take-off's,
+  // leaves out the metric's stretch near Gargantua —: the craft's motion about the planet, in the frame that does not)
+  const W = frameRate(F);
+  const wIn: Vec3 = [L.w[0] - W * L.xi[1], L.w[1] + W * L.xi[0], L.w[2]];
+  let nrm = cross(L.xi, wIn);
+  if (Math.hypot(...nrm) < 1e-12 * d * Math.max(Math.hypot(...wIn), 1e-30)) nrm = [0, 0, 1];
+  nrm = unitV(nrm);
+  const tdir = unitV(cross(nrm, up));
+  const vc = Math.sqrt(F.m / d);
+  const w0 = vc / d;
+  const vr = Math.max(-0.15 * vc, Math.min(0.15 * vc, -(d - d0) * w0 * 0.3));
+  const wantIn = lin(tdir, vc, up, vr);
+  // (back in the turning frame)
+  const want: Vec3 = [wantIn[0] + W * L.xi[1], wantIn[1] - W * L.xi[0], wantIn[2]];
+  if (Math.abs(d - d0) < 0.01 * d0 && Math.hypot(...sub3(L.w, want)) < 0.002 * vc) {
+    P.setAuto("none");
+    this.onPilotMessage?.(`In orbit around ${name}`);
+    return null;
+  }
+  const X = blToCartesian(cam.r, cam.theta, cam.phi);
+  const gW = toGlobal(F, { xi: L.xi, w: want, landed: false });
+  const beta = zamoBeta(X, gW.V, this.s.spin);
+  const free = localAccel(F, L.xi, want, [0, 0, 0]);
+  return { beta, ff: localToZamo([-free[0], -free[1], -free[2]]) };
+}
+
+declare module "../controls" {
+  interface CameraController {
+    localCircWant: typeof localCircWant;
+  }
+}
+
 /** Puts these methods on the controller's prototype (controls.ts, once). */
 export function installPlanet(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { poseKeyNow, localFlight, surfaceInfo, surfaceWant });
+  Object.assign(C.prototype, { poseKeyNow, localFlight, surfaceInfo, surfaceWant, localCircWant });
 }

@@ -738,6 +738,9 @@ export class FlightComputer {
         const ra = Math.atan2(dot(cross(Y, up), Z), dot(Y, up));
         want[2] = Math.sign(ra) * Math.min(TUNING.turnRate, Math.sqrt(2 * 0.7 * TUNING.turnAccel * Math.abs(ra)), 3 * Math.abs(ra));
       }
+      // (the Endurance's ring held turning: the nose held, the ship turning about it at the ring's rate — a hold or an
+      // autopilot pointing the nose once set the roll to 0 and braked the ring)
+      if (c.spinHold) want[2] = c.spinHold;
       // (docking to a craft that turns: its turn flown ahead, the error only corrected about it)
       const ffr = this.auto === "dock" ? c.dock?.rate : undefined;
       if (ffr) for (let i = 0; i < 3; i++) want[i] = want[i]! + ffr[i]!;

@@ -674,7 +674,7 @@ dérive tenue à 1 km d'un appareil), `beginner` (comme assisté, vitesses ×0,5
 | Auto | Touche | Univers | Se termine → devient | Refus / abandon (message du pilote) |
 |---|---|---|---|---|
 | hover (« Hold position ») | 8 | les deux | jamais (un toucher le termine) | — |
-| circularize | 9 | notre côté : un nœud à l'apside puis un ajustement ; trou : cercle de Kerr | notre côté : **devient `node`**, puis ajustement fini (< 0,2 m/s) → none ; trou : jamais | « only around the black hole » ; « inside the photon orbit » |
+| circularize | 9 | notre côté : un nœud à l'apside puis un ajustement ; trou : cercle de Kerr ; **dans la sphère d'un monde de Gargantua** (Miller, Mann, Edmunds) : un cercle autour de lui, à la distance où il est engagé, dans son repère (`controller/planet.ts` `localCircWant`, depuis le 11 nov. 2026) | notre côté : **devient `node`**, puis ajustement fini (< 0,2 m/s) → none ; trou : jamais ; monde : sur le cercle (distance à 1 %, vitesse à 0,2 %) → none, « In orbit around … » | « only around the black hole » ; « inside the photon orbit » |
 | approach | 0 | les deux | arrivée → `orbit` (corps massif) ou `hover` | « select a body (Tab) » ; « Landed on … » |
 | orbit | ⇧0 | les deux | jamais (tient la hauteur où il a été enclenché) | « select a body with a mass » |
 | node | Exécuter (FC, hub) | les deux | dernier nœud → `then` (circularize, orbit, approach, dock) ou none | dans la gorge ; plan de l'autre univers |
@@ -837,8 +837,12 @@ fuite d'O₂ (stock vide en ~6 h), épurateur ; batterie à plat : ni RCS ni rou
 - Deux formules de Δv restant (`fcBudget` en rapidité × c, HUD en tanh) : identiques sous ~0,1 c.
 - **Les grisés du HUD pour décoller et atterrir** (réglé le 11 novembre 2026 ; ils dépendaient du mauvais `else`) :
   posé, atterrir et stationnaire grisés ; en l'air au-delà d'un demi-rayon du corps, décoller et atterrir grisés.
-- **Défauts probables (lecture, non vérifiés en vol)** : le maintien de rotation de l'anneau de l'Endurance est ignoré quand un maintien pointe le nez ; près d'un
-  monde de Gargantua, les maintiens et la circularisation se réfèrent au trou, pas au monde.
+- **La rotation de l'anneau sous un maintien** (réglé le 11 novembre 2026, `pilot.ts` ; `tests/pilot.test.ts`) : un maintien ou
+  un autopilote qui pointe le nez garde la rotation de l'anneau autour de lui (avant : le roulis visé à 0, l'anneau freiné).
+- **Les maintiens et CIRC près d'un monde de Gargantua** (vérifiés en vol le 11 novembre 2026, e2e `gargantua-circ`) : les
+  maintiens étaient déjà justes (prograde et radial pris par rapport à Miller : une poussée prograde de 20 s monte
+  l'apoapside de 2 000 à 3 623 km, le périapside gardé) ; **CIRC ne l'était pas** — il visait le cercle de Kerr autour du trou et
+  freinait sans fin (périapside à −7 600 km) ; réglé : 2 000 × 4 000 → 2 913 × 2 945 km, terminé de lui-même.
 
 ---
 

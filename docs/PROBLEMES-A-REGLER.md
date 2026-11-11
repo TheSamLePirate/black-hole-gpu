@@ -168,6 +168,16 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   aucune masse maximale de l'A320 ; la ZFW du MCDU ne change pas la masse ; le ralenti du F135 n'est pas lu (manette 0 =
   poussée 0).
 
+## Près des mondes de Gargantua : deux points vus en vérifiant CIRC (11 novembre 2026)
+
+- **`game.orbit("miller")` par défaut (100 km) place le Ranger dans l'air de Miller** : à ~10 km/s, sa coque y brûle en moins de
+  40 s (« the hull burnt through at 1151 K ») — la hauteur par défaut des planètes de Gargantua (BH-API : 100 km) est sous le haut
+  de l'air de Miller. Constaté par une sonde (ce Mac) ; non corrigé (choix : la hauteur par défaut au-dessus de l'air, comme de
+  notre côté « clear of the air × 1,25 »).
+- **Le décollage de Miller (`controller/planet.ts` `surfaceWant`) tourne le repère à n·ut**, quand le placement en orbite et la
+  circularisation prennent `frameRate(F)` (l'étirement de la métrique près de Gargantua compris) : la vitesse orbitale qu'il vise
+  peut être fausse de quelques pour cent. Lecture du code seulement ; non volé.
+
 ## La compilation du noyau de Jupiter proche : ~200 s à froid
 
 - **Constaté le 6 novembre 2026** (Sam : « 200 s pour Jupiter »), en écrivant l'e2e `aurora-jupiter` (AM3).

@@ -3083,3 +3083,22 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   comme ambiante en profitent. **Vérifié** : `tests/a320-temps.test.ts` (FL370 ISA, M 0,78 : SAT −56,5 °C, TAT −30 °C). **Non
   vérifié** en jeu sur la bande basse de l'ECAM.
 - **Docs** : VOL-AVIONS partie II, PROBLEMES-A-REGLER (rayé).
+
+## 2026-11-11T12:52Z — L'anneau de l'Endurance sous un maintien ; CIRC près des mondes de Gargantua
+
+- **Destination** : §19 (des autopilotes justes partout où le joueur peut les engager). Les deux derniers « défauts probables » de
+  VOL-VAISSEAUX, tranchés en vol ou par test.
+- **L'anneau de l'Endurance** (`pilot.ts`) : un maintien ou un autopilote qui pointe le nez mettait le roulis visé à 0 (ou à
+  l'alignement des ailes) et freinait l'anneau ; maintenant la rotation de l'anneau est gardée autour du nez. **Vérifié** :
+  `tests/pilot.test.ts` (prograde tenu à 1° près, 4 tr/min gardés ; sans le correctif, le test échoue : 0,974 de la rotation en 30 s).
+- **Près de Miller** (sonde puis e2e `gargantua-circ`, ce Mac) : les **maintiens étaient justes** (le soupçon de lecture était
+  faux : prograde 20 s → Ap 2 000 → 3 623 km, Pe gardé ; radial → apsides tournées). **CIRC ne l'était pas** : il visait le cercle de
+  Kerr autour du trou et freinait sans fin (Pe −7 600 km, plongée). Fait : `localCircWant` (`controller/planet.ts`) — le cercle autour
+  du monde à la distance où il est engagé, construit dans son repère tournant, le repère tourné à `frameRate(F)` comme le placement
+  en orbite (un premier essai par la loi ORBIT, dans le repère du trou, sortait 12 % trop vite : 2 944 × 10 993 km ; un second à
+  n·ut, 2 879 × 2 978) ; fin sur le cercle. **Résultat** : 2 000 × 4 000 → **2 913 × 2 945 km** (HUD : e 0,001), terminé seul,
+  « In orbit around Miller ». e2e 1/1 (≈ 40 s).
+- **Vus en route, notés dans PROBLEMES-A-REGLER** : `game.orbit("miller")` par défaut (100 km) place le Ranger dans l'air de Miller,
+  où il brûle ; le décollage de Miller tourne son repère à n·ut (lecture, non volé).
+- **Docs** : VOL-VAISSEAUX (tableau des autopilotes, défauts), E2E-CATALOGUE, PROBLEMES-A-REGLER. Non vérifié : CIRC près de Mann et
+  d'Edmunds (même code), un CIRC engagé très près de la limite de la sphère du monde.
