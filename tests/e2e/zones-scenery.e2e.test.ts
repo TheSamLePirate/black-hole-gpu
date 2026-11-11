@@ -12,7 +12,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // 1.8 km up the valley at 450 m over its floor: the scenes asked anew as it goes, the Service Worker's figures by kind
 // (pwa/rules.ts tileKind: the scenery worker's fetches, out of the page's sight) and the page's own — none from the network.
 // (E2E_SHOTS=<dir>: zones-scenery-online, zones-scenery-offline — the cockpit over the valley, held still.)
-// Duration: ~25 min on kerr-mini (the download ~20 of them, 11 Nov 2026: the Géoplateforme's chains ~4.6 a second).
+// Duration: ~25 min on kerr-mini (the download ~20 of them, 11 Nov 2026: the Géoplateforme's chains ~4.6 a second), up to ~50
+// with the resumes of chains the IGN refused under the load.
 // Done when: the zone ready, the offline scenes' trees and buildings drawn from it, no tile of any kind from the network,
 // the zone dropped.
 
@@ -196,11 +197,13 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
       await Bun.sleep(5000);
     }
     let z = await zone();
-    // (some of the IGN's LiDAR grids answer an error at times — 6 of 8 620 chains, 11 Nov 2026 —: the zone stands paused with
-    // them, as for a player, and a resume asks them again — once here, five minutes at most: its chains gone over from the start,
-    // those in only marked)
-    if (z?.failed) {
-      console.log(`  ${z.failed} failed, resumed: ${JSON.stringify((z as { failedUrls?: string[] }).failedUrls ?? [])}`);
+    // (some of the IGN's grids answer a 400 — over its rate — or a 502 under a zone's load — 6 to 32 of 8 620 chains, 11 Nov 2026 —:
+    // a tile its server took 64 s to make, past its gateway's minute; the same asked alone later all come: the zone stands paused
+    // with them, as for a player, who resumes it later; here resumed after 90 s of calm, again and again for 12 minutes at most)
+    const r0 = Date.now();
+    while (z?.failed && Date.now() - r0 < 720_000) {
+      console.log(`  ${z.failed} failed, resumed after 90 s: ${JSON.stringify((z as { failedUrls?: string[] }).failedUrls ?? [])}`);
+      await Bun.sleep(90_000);
       await app.js(`__bh.pwa.zones.resume(${JSON.stringify(id)})`);
       await app
         .waitFor(
@@ -210,6 +213,10 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
         .catch(() => {});
       z = await zone();
     }
+    if (z?.failed)
+      console.log(
+        `  still ${z.failed} failed after 12 minutes of resumes — the Géoplateforme's: ${JSON.stringify((z as { failedUrls?: string[] }).failedUrls ?? [])}`,
+      );
     const kept = await app.js<{ zoneTiles: number; zoneBytes: number; kinds?: Record<string, { zone: number; zoneBytes: number }> }>(
       `__bh.pwa.stats()`,
     );
@@ -303,5 +310,5 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
     await app.js(`__bh.pwa.zones.remove(${JSON.stringify(id)})`);
     await phase("Zone supprimée");
     expect((await app.js<{ zoneTiles: number }>(`__bh.pwa.stats()`)).zoneTiles).toBe(0);
-  }, 1_800_000);
+  }, 3_600_000);
 });

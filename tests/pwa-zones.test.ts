@@ -25,7 +25,7 @@ test("a batch that never answers: asked again at the end, the zone ready", async
     }
     return null;
   };
-  const Z = createZones({ talk, busy: () => false, sources: () => ({ ortho: true, relief: false, hlod: false }) });
+  const Z = createZones({ talk, busy: () => false, sources: () => ({ ortho: true, relief: false, hlod: false }), retryPauseMs: 0 });
   const est = Z.estimate({ lat: 45.92, lon: 6.87, radiusKm: 0.5, profile: "low" });
   expect(est.chains).toBeGreaterThan(128);
   const id = await Z.add({ name: "test", lat: 45.92, lon: 6.87, radiusKm: 0.5, profile: "low" });
@@ -51,7 +51,7 @@ test("three batches in a row with no answer: paused (no worker), resumed later",
     }
     return null;
   };
-  const Z = createZones({ talk, busy: () => false, sources: () => ({ ortho: true, relief: false, hlod: false }) });
+  const Z = createZones({ talk, busy: () => false, sources: () => ({ ortho: true, relief: false, hlod: false }), retryPauseMs: 0 });
   const id = await Z.add({ name: "test", lat: 45.92, lon: 6.87, radiusKm: 0.5, profile: "low" });
   for (let i = 0; i < 400 && zones.find((z) => z.id === id)?.state === "downloading"; i++) await Bun.sleep(5);
   const z = zones.find((z) => z.id === id)!;
@@ -79,7 +79,7 @@ test("a zone left with failed chains: paused; a resume asks them again — its t
     }
     return null;
   };
-  const Z = createZones({ talk, busy: () => false, sources: () => ({ ortho: true, relief: false, hlod: false }) });
+  const Z = createZones({ talk, busy: () => false, sources: () => ({ ortho: true, relief: false, hlod: false }), retryPauseMs: 0 });
   const est = Z.estimate({ lat: 45.92, lon: 6.87, radiusKm: 0.5, profile: "low" });
   const id = await Z.add({ name: "test", lat: 45.92, lon: 6.87, radiusKm: 0.5, profile: "low" });
   const settle = async () => {

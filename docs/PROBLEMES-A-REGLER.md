@@ -299,8 +299,12 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
     la fin, pause seulement après trois de suite ; `tests/pwa-zones.test.ts`) ; (2) une reprise comptait ses liens deux fois —
     réglé ; (3) l'estimation disait 400 s pour ~1 170 mesurées — recalée (`zoneDuration` : les chaînes de la Géoplateforme ~4,6
     par seconde) ; le temps passe dans les lots (l'attente du jeu : 2 à 30 s). Reste : 6 à 13 chaînes en échec à chaque passage,
-    même après une reprise — des grilles WMS-R de l'IGN (LiDAR MNT/MNH, puis RGE ALTI HIGHRES z 11 au bord de la Suisse) que
-    curl obtient en 0,5 s ; leur erreur est maintenant relevée (`failedUrls` : l'erreur et l'URL), en cours.
+    même après une reprise — des grilles WMS-R de l'IGN (LiDAR MNT/MNH, RGE ALTI HIGHRES z 11–12) : **HTTP 400** (au-delà de son
+    débit) et **HTTP 502** ; seules, plus tard, elles répondent en 0,2–0,8 s depuis ce Mac et kerr-mini, mais l'une a mis **64 s**
+    (`11/1068/733`) : le serveur de l'IGN dépasse par moments sa minute de passerelle sur certaines tuiles. Cinq essais espacés
+    jusqu'à 16 s ont été essayés et retirés (les lots passaient leurs 120 s : 54 échecs, 1 530 s) ; gardés : trois essais, une pause
+    de 30 s avant la dernière demande des échecs, l'erreur relevée. Le produit fait ce qu'il faut (la zone en pause, ses échecs
+    nommés, une reprise plus tard) ; le test reprend la zone 12 minutes au plus.
 - **Ce que le premier passage réellement hors ligne a montré** (`zones-usa-night`, ce Mac, `run-2026-11-10b.log` et `c.log`) :
   - **Après une seule visite, le monde est noir hors ligne.** Les fichiers du jeu sont gardés à l'usage, et la première visite
     les charge avant que le Service Worker tienne la page : au rechargement hors ligne, 24 cartes de planètes (`*-HASH.jpg`)

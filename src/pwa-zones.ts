@@ -51,6 +51,8 @@ export interface Zones {
 const BATCH = 64;
 /** a batch's answer within [ms] (a WMS-R grid 0.3–3 s, spaced 8 a second) */
 const BATCH_MS = 120_000;
+/** the pause before the failed chains are asked again at the end [ms] */
+export const RETRY_PAUSE_MS = 30_000;
 
 export function createZones(o: {
   talk: <T>(msg: object, timeoutMs?: number) => Promise<T | null>;
@@ -58,6 +60,8 @@ export function createZones(o: {
   busy: () => boolean;
   /** the sources the game's tiles follow now */
   sources: () => ZoneSources;
+  /** the pause before the failed are asked again (RETRY_PAUSE_MS; the tests' 0) */
+  retryPauseMs?: number;
 }): Zones {
   let active: string | null = null;
   const paused = new Set<string>();
@@ -130,8 +134,10 @@ export function createZones(o: {
         failed.push(...r.failed);
         await save(zone);
       }
-      // (the failed asked once more at the end; those still failing counted, asked again on a resume)
+      // (the failed asked once more at the end, after a pause — a source over its rate given the time to calm —; those still failing
+      // counted, asked again on a resume)
       if (zone.cursor >= urls.length && failed.length && !paused.has(id)) {
+        await new Promise((r) => setTimeout(r, o.retryPauseMs ?? RETRY_PAUSE_MS));
         const r = await o.talk<{ done: number; bytes: number; none: number; failed: ZoneChain[]; why?: string[] }>(
           { type: "zone-fetch", id, chains: failed, fresh: !!zone.fresh },
           BATCH_MS * Math.ceil(failed.length / BATCH),

@@ -3176,3 +3176,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   l'ancien comportement qui échoue), `tests/zones.test.ts` ; `zones-scenery` télécharge maintenant sa zone jusqu'au bout (8 605 liens en
   1 192 s). **Encore rouge** : 13 chaînes WMS-R de l'IGN en échec, même après reprise, que curl obtient — leur erreur est relevée,
   relance en cours. E2E-CATALOGUE (`zones`, `zones-scenery` ajoutés), BH-API, PROBLEMES.
+
+## 2026-11-11T18:03Z — Zones : ce qui échoue encore vient du serveur de l'IGN (400, 502 à 64 s)
+
+- Relevé (`failedUrls` porte maintenant l'erreur) : les 6 à 32 chaînes en échec sont des grilles WMS-R de l'IGN qui répondent 400
+  (au-delà de son débit) ou 502 sous la charge d'une zone ; seules, plus tard, elles viennent en < 1 s, mais une a mis 64 s — au-delà
+  de la minute de sa passerelle. Cinq essais espacés jusqu'à 16 s : pire (les lots dépassaient leurs 120 s, 54 échecs) — retirés ;
+  gardés : trois essais, une pause de 30 s avant la dernière demande des échecs (`RETRY_PAUSE_MS`), l'erreur relevée. Le test
+  `zones-scenery` reprend la zone (90 s de calme, 12 minutes au plus) comme un joueur ; relance en cours. PROBLEMES-A-REGLER.

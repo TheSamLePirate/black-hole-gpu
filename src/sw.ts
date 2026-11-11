@@ -374,6 +374,9 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
       out.bytes += t.size;
       return keptRaw;
     }
+    // (three tries, 1 … 4 s apart: the Géoplateforme under a zone's load answers a 400 — over its rate — or a 502 now and then; five
+    // tries, to 16 s, were tried (11 Nov 2026): the batches ran past their 120 s, 54 chains failed for 6 to 32, the download 1 530 s
+    // for 990 — the chains left are asked again at the end, after a pause, and on a resume)
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await gentle(url);
