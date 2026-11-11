@@ -14,6 +14,11 @@ adoucis — essai annulé) ; **c'est l'albédo lu sous l'eau qui est en blocs** 
 empreintes, `accum` w = 2). L'orthophoto y est filtrée par le matériel (`orthoGrad`) ; les blocs viennent donc vraisemblablement du
 repli sur l'imagerie des tuiles du relief (`tileImgAt`, des entiers lus texel à texel) là où la couverture de l'orthophoto manque à ce
 niveau, ou du bord de ses fenêtres (`smoothstep(2, 48, d)`). Suite : sortir `im.o` (la part de l'orthophoto) sur cette vue.
+**Corrigé du point précédent (même jour, diagnostic temporaire)** : sur ces pixels l'albédo de l'eau peu profonde est **nul** — ils ne
+passent pas par ce chemin (eau profonde au sens de la bathymétrie, sortie anticipée) : le turquoise n'y vient donc pas du fond vu. Et
+la règle LiDAR du jour (`LIDAR_SEA_TRUST_M`) n'y est pour rien (A/B : identique désactivée). Restent : des pixels classés terre
+(l'orthophoto de l'eau turquoise dessinée comme sol), ou la couleur de l'eau par région (Kd490) — à départager par `liteSkip` 1 (l'eau
+du raster) sur cette vue.
 
 ## ~~Le bord de l'eau sur la plage en marches d'environ 1 m~~ — réglé le même jour : c'était l'écume des crêtes (le seuil du Jacobien) — sa bande comptait les pentes des deux cascades longues seules ; bas sur l'eau, la plus fine calculée aussi pliait la surface sous le seuil sur la moitié de la mer (`renderer.ts` `seaFftParams` : la largeur sur les cascades calculées) ; planche `docs/progress/mer/ecume-puzzle-avant-apres.jpg`
 
