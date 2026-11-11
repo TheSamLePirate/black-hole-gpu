@@ -2694,3 +2694,13 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   piste, du bâtiment) et un noyau d'**éclairage** (soleil et ombres, ciel, rebond, spéculaire, pluie, lumières), un petit tampon par
   pixel entre les deux (2–3 `rgba32float`) — le schéma différé, la séparation matériau/lumière de la stratégie §7.4 ; à mesurer sur
   la forêt et sur J0. Aucune image changée par ces mesures.
+
+## 2026-11-11T03:50Z — Essai annulé : `shadeLite` partagé par catégorie de pixel (sol nu / ce qui se tient dessus)
+
+- **Essai** : deux variantes compilées (`LITE_PART` : le sol nu sans le code des arbres, bâtiments et maillages ; ce qui se tient dessus),
+  chacune sortant aussitôt sur les pixels de l'autre (`terrainRasterStanding`).
+- **Mesuré** (kerr-mini, forêt à 120 m) : sol nu 18–20 ms + debout 33 ms + finition 3 ms ≈ **54 ms contre 44** — pire. Sur une forêt les
+  deux catégories s'entremêlent pixel à pixel : chaque groupe SIMD porte les deux, chaque noyau tourne voies à moitié vides.
+- **Enseignement** : un découpage par catégorie ne paie qu'avec une **compaction** (listes de pixels par catégorie, dispatch indirect) —
+  un tampon de plus pour le traceur, déjà à sa limite de 8 ; le découpage matériau/éclairage (par étape, tous les pixels) n'a pas ce
+  défaut. Annulé ; le code reste à b82fd8b2 + journal.
