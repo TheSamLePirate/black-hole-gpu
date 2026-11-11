@@ -2827,3 +2827,23 @@ plans [PLAN-MER-WEBGPU §5](docs/PLAN-MER-WEBGPU.md), [PLAN-VEGETATION-V2](docs/
   avec les nouveaux groupes (`coast-swell`, aerial/low ; planche `docs/progress/mer/houle-l1-almanarre.jpg` remplacée) ; ce passage :
   250 m +1,2 / +0,9 ms, 6 m +0,8 / +0,6 ms (deux passages). Les crêtes se voient là où la houle sent le fond, plus au premier plan
   (profondeur connue des tuiles) ; la ligne de ressac de la plage, mince à 2,7 km.
+
+## 2026-11-11T04:15Z — Arbres V2c (en partie) : les arbres lointains ombrés depuis leurs imposteurs
+
+Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN-VEGETATION-V2.md) V2c.
+
+- **Fait** : l'atlas des imposteurs devient une texture de 24 couches à 5 mips (albédo / surface), liée au traceur (groupe 0, binding
+  50, `withTreeImpostors`, sur un appareil à ≥ 38 textures échantillonnées) et cuite au premier dessin de la forêt ;
+  `sceneryTreeLite` (le matériau raster, `earth lite`) lit, au-delà de 200 m (fondu tramé sur 100 m), l'imposteur de la sorte à la
+  proportion la plus proche, mis à l'échelle de la cellule : vue la plus proche, texel du plan, couverture prise comme probabilité
+  (pas d'éclaircissement au loin), profondeur et normale de l'arbre modélisé, couleur/saison/teinte par `forestLook`. Un feuillu nu
+  en hiver garde la forme analytique. A/B `treeImpostorsOn`.
+- **Mesuré** (kerr-mini, sonde `forest-impostors`, Maures, 1600×900, trois passages alternés, GPU p50) : vue à 500 m
+  **54,1 / 55,4 / 55,2 → 53,4 / 53,6 / 53,7 ms** (`earth lite (raster)` 13,7 → 13,0 : la lecture remplace les bruits de la forme
+  lointaine) ; canopée à 150 m 58,4 / 58,3 / 57,4 → 58,9 / 58,3 / 58,7 (bruit). M1 Max : 19,8 / 20,1 → 19,2 / 19,8 ; canopée +0,2.
+  Cuisson 523 ms (kerr-mini), 211 ms (M1 Max). Image : luminance moyenne à 1 % près, 3,5 % des pixels changent de plus de 10
+  niveaux — les houppiers éclairés d'un côté, ombrés de l'autre, à 500 m ils ne font que quelques pixels ; planche
+  `docs/progress/vegetation/imposteurs-v2c-maures.jpg`. 83/83 shaders, budget des noyaux, 0 erreur GPU.
+- **Reste de V2c** : les quads d'imposteur dans la passe de visibilité (aujourd'hui l'octaèdre ; un trou entre les feuilles montre
+  le sol et non l'arbre derrière), le mélange de deux vues voisines ; puis V2d (au-delà de 6,25 km, où le gain sera le plus visible)
+  et V2e. Non mesuré : J0, un vol (pivotement des couronnes en virage).

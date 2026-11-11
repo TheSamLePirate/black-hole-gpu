@@ -1,7 +1,8 @@
 # PLAN-VEGETATION-V2 — les arbres lointains en imposteurs ré-éclairables
 
-**État (11 novembre 2026)** : V2a et V2b faits (les arbres modélisés et leur cuisson en imposteurs, vérifiés sur planche) ; V2c–V2e
-à faire. Demande de Sam, 11 novembre : « commence Littoral L1/L2 et arbres V2 ». Décision du 10 novembre
+**État (11 novembre 2026)** : V2a et V2b faits (les arbres modélisés et leur cuisson en imposteurs, vérifiés sur planche) ; **V2c
+en partie** (l'ombrage des arbres lointains lu dans les imposteurs, mips ; les procurations de la visibilité restent des octaèdres) ;
+V2d, V2e à faire. Demande de Sam, 11 novembre : « commence Littoral L1/L2 et arbres V2 ». Décision du 10 novembre
 ([analyse §8](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md)) : les arbres sources **générés procéduralement**, comme le fait
 BakedVoxelLighting. Origine : analyse §5.1 V2 ; [PLAN-REFRACTION-HORIZONS](PLAN-REFRACTION-HORIZONS.md) Q8 F3 ; stratégie §7.7
 (la forêt de moyenne distance : des imposteurs à profondeur fiable).
@@ -23,7 +24,7 @@ BakedVoxelLighting. Origine : analyse §5.1 V2 ; [PLAN-REFRACTION-HORIZONS](PLAN
 |---|---|---|---|
 | **V2a** | **Les arbres modélisés** (`vegetation/tree-model.ts`) : par sorte et à deux proportions (jeune et large, grand et élancé — r/H tiré du rayon des cellules sur la gamme de hauteurs de la sorte), tronc, charpentières, branches et cartes de feuilles qui remplissent **l'enveloppe de la sorte** (l'ellipsoïde ou le cône que le traceur sculpte de près : l'imposteur loin et le houppier près au même endroit, de la même taille). Colonisation de l'espace allégée (touffes semées dans l'enveloppe, plutôt sur sa coquille, reliées au squelette par des branches arquées), rayons par le modèle des tuyaux ; conifère en verticilles, pin en parasol, palmier en palmes arquées, arbuste en plusieurs tiges, colonnaire en branches serrées. Déterministe | `tests/tree-model.test.ts` (déterminisme, feuilles dans l'enveloppe, hauteur) | **fait** |
 | **V2b** | **La cuisson hémi-octaédrique** (`vegetation/tree-impostors.ts`) : 8 × 8 vues sur l'hémisphère supérieur (du zénith à l'horizon : vu d'avion, pas l'azimut seul), 64² par vue, rendues à 128² puis moyennées 2 × 2 ; deux tableaux de textures de 12 couches (6 sortes × 2 proportions) : termes d'albédo (ombre des feuilles × profondeur dans le houppier, feuille/écorce, couverture) et surface (normale octaédrique dans le repère de l'arbre, profondeur le long de la vue). Aucun éclairage cuit : ré-éclairés au pixel | planche `docs/progress/vegetation/imposteurs-v2b-planche.jpg` ; sonde `tree-impostors` ; cuisson 71–332 ms (ce Mac) | **fait** |
-| V2c | **Les dessiner** : mips à couverture conservée (Castaño) ; les octaèdres lointains (300 m – 6,25 km) remplacés par des quads d'imposteur dans la passe de visibilité — leur profondeur par texel (canal de profondeur), l'identité de cellule comme aujourd'hui — ; `sceneryTreeLite` lit l'imposteur au pixel (vue → cellule, rayon → plan de l'imposteur → texel ; deux vues voisines mêlées) : couleur de la sorte, saison et teinte de la photo comme aujourd'hui, normale de l'imposteur pour le Soleil et le ciel ; fondu en trame complémentaire avec les houppiers proches | captures A/B (forêt de 300 m à 6 km, vue d'avion à 500 m et 3 km) ; ΔGPU sur J0 et une vue de forêt ; pas de couronne qui pivote en virage | à faire |
+| V2c | **Les dessiner** : **fait** — une texture de 24 couches (albédo 0–11, surface 12–23) à 5 mips liée au traceur (groupe 0, binding 50, si l'appareil prend 38 textures échantillonnées) ; `sceneryTreeLite` lit l'imposteur au-delà de 200 m (fondu tramé sur 100 m) : couche de la sorte à la proportion la plus proche, rayon dans le repère mis à l'échelle de la cellule, vue la plus proche, texel de son plan, **couverture prise comme une probabilité** (la forêt lointaine garde sa couverture moyenne ; l'historique la lisse — à la place de la mise à l'échelle de Castaño), profondeur et normale de l'imposteur, couleur de la sorte, saison et teinte de la photo par `forestLook` ; un feuillu nu en hiver garde la forme et ses rameaux ; cuisson au premier dessin de la forêt (523 ms sur kerr-mini, 211 ms sur ce Mac). **Reste** : les quads d'imposteur dans la passe de visibilité (aujourd'hui les octaèdres : l'imposteur n'est lu que dans l'enveloppe de la forme, et un trou entre ses feuilles montre le sol, pas l'arbre derrière) ; deux vues voisines mêlées (aujourd'hui la plus proche) | A/B `treeImpostorsOn`, sonde `forest-impostors` (Maures) : planche `docs/progress/vegetation/imposteurs-v2c-maures.jpg` ; kerr-mini GPU p50 vue à 500 m 54,1 / 55,4 / 55,2 → 53,4 / 53,6 / 53,7 ms (−0,7 à −1,8 : `earth lite` 13,7 → 13,0), canopée à 150 m 58,4 / 58,3 / 57,4 → 58,9 / 58,3 / 58,7 (bruit) ; luminance moyenne à 1 % près (pas de saut) | **en partie** |
 | V2d | **Au-delà de 6,25 km** jusqu'à ~20 km : un placement grossier (cellules agrégées, densité WorldCover/MNH) et des imposteurs de grappes ; la forêt en volume (but de Q4) | captures de 6 à 20 km ; mémoire et coût | à faire |
 | V2e | Ombres (carte des arbres), transmission à contre-jour bornée, vent figé loin / vivant près (V5), le contrat de profondeur de J1 | J1 | à faire |
 
@@ -35,11 +36,11 @@ BakedVoxelLighting. Origine : analyse §5.1 V2 ; [PLAN-REFRACTION-HORIZONS](PLAN
   (`impostorViewDir`, inverse `impostorCellOf`) ; repère de vue right = z × d normalisé (x si d est vertical), up = d × right ;
   centre (0, 0, 0,5), demi-taille √(rayon² + 0,25) ; texel (x, y) en haut à gauche ; profondeur 0,5 + 0,5 × (avance vers l'œil) /
   demi-taille.
-- **Rien d'éclairé** dans la cuisson ; aucune passe de l'image ne la lit encore (V2c) : coût d'image nul aujourd'hui, la cuisson se
-  fait à la demande (`renderer.treeImpostorPreview`).
+- **Rien d'éclairé** dans la cuisson ; lue par `sceneryTreeLite` (V2c) au-delà de `IMPOSTOR_NEAR_M` ; cuite au premier dessin de la
+  forêt, `P.scenery[6].w` = 1 une fois prête et `treeImpostorsOn`.
 
 ## 4. Limites connues de V2a/V2b
 
-Pas encore de mips (V2c) ; les modèles élancés n'occupent qu'une colonne étroite du cadre (le cadre est la sphère englobante) ; les
+Les modèles élancés n'occupent qu'une colonne étroite du cadre (le cadre est la sphère englobante) ; les
 palmes du palmier descendent sous le disque plat du traceur (≈ 4 % des sommets hors de l'enveloppe) ; le masque des feuilles est
 procédural (cinq folioles, ou des lames pour aiguilles et palmes), sans texture d'écorce.

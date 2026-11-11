@@ -10522,11 +10522,21 @@ fn sceneryDeckBefore(dW: vec3f, tMax: f32) -> bool {
   if (P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5) { return false; }
   return sceneryQuery(P.scenery[3].xyz, sceneryLocal(dW), tMax, false).kind >= 0.0;
 }
+// BEGIN_IMPOSTOR (vegetation/tree-impostors.ts withTreeImpostors supplies the trees' hemi-octahedral impostors — PLAN-VEGETATION-V2 V2c)
+const IMPOSTOR_BOUND = false;
+const IMPOSTOR_NEAR_M = 1e9;
+fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tree: ForestHit, rnd: f32) -> ImpHit {
+  return ImpHit(-1.0, vec3f(0.0), 0.0, false);
+}
+// END_IMPOSTOR
+// (a far tree read from its impostor: the distance along the ray [m] (−1: between its leaves), its normal in the scenery's frame,
+// its leaves' shade, leaf or bark)
+struct ImpHit { t: f32, n: vec3f, shade: f32, leaf: bool };
 // shadeLite's trees (TERRE-UNREAL U2): the raster's tree at a pixel (its id) tested alone along the physical direction dW —
 // its plain shape, the carving's sphere tracing left out (clumps in the normal stand for it, as worldScenery's far trees) —,
 // the grid walked from it on a miss (crowns overlap on the screen), before tMax [m]; its look as worldScenery's in WS, WS_A,
 // WS_T; the distance [m], −1 none
-fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32) -> f32 {
+fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32, rnd: f32) -> f32 {
   WS = vec4f(0.0);
   if (!HAS_SCENERY || P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5 || id == 0u) { return -1.0; }
   let F = u32(forestData(2u).x);
@@ -10547,6 +10557,24 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32) -> f32 {
     tree = forestQueryFrom(o, d, forestCandidateStart(o, d, ci, cj, hd), tMax, false, 0.0);
   }
   if (tree.kind == 0u || tree.t <= 0.0 || tree.t >= tMax) { return -1.0; }
+  // (V2c — far, in leaf: its hemi-octahedral impostor — its modelled branches and leaf clumps, their normals and their depth —
+  // instead of the plain shape and its noise; dithered in over IMPOSTOR_NEAR_M … + 100 m; a deciduous crown bare in winter keeps
+  // the shape and its twigs' cover)
+  let bareNow = forestData(F + 10u + 4u * tree.kind).w * forestData(F + 7u).z;
+  if (IMPOSTOR_BOUND && P.scenery[6].w > 0.5 && bareNow < 0.5 && tree.t > IMPOSTOR_NEAR_M + 100.0 * fract(rnd * 7.31)) {
+    let ih = sceneryTreeImpostor(o, d, ci, cj, hd, tree, rnd);
+    if (ih.t <= 0.0 || ih.t >= tMax) { return -1.0; }
+    var th = tree;
+    th.part = select(1u, 0u, ih.leaf);
+    let pi = o + d * ih.t;
+    SC_POINT = pi;
+    SC_DISTANCE = ih.t;
+    let lk = forestLook(th, ih.n, pi, sceneryColourAt(tree.base.xy));
+    WS_T = lk.through;
+    WS = vec4f(normalize(sceneryGlobal(ih.n)), 1.0);
+    WS_A = lk.albedo * select(1.0, mix(0.55, 1.15, ih.shade), ih.leaf);
+    return ih.t;
+  }
   let p = o + d * tree.t;
   SC_POINT = p;
   SC_DISTANCE = tree.t;
@@ -16393,7 +16421,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   var isTree = false;
   let treeId = terrainRasterId(centre);
   if (treeId != 0u && (liteSkip() & 64u) == 0u) {
-    let tt = sceneryTreeLite(normalize(toBody(ray.look)), treeId, tM);
+    // (a per-pixel draw, the frame's — the jittered position's interleaved gradient noise —: the impostors' coverage, their fade)
+    let tt = sceneryTreeLite(normalize(toBody(ray.look)), treeId, tM, fract(52.9829189 * fract(dot(pos + f32(P.frame.x % 64u) * 5.588238, vec2f(0.06711056, 0.00583715)))));
     if (tt > 0.0) {
       tM = tt;
       isTree = true;

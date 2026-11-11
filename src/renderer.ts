@@ -9,7 +9,7 @@ import { aheadFocus, buildLead, gazeLead, groundSpeed, streamingLead } from "./s
 import { TerrainCache } from "./system/terrain-cache";
 import { EarthHorizons } from "./system/earth-horizons";
 import { EarthShore, type SwellInput } from "./system/earth-shore";
-import { TreeImpostors } from "./vegetation/tree-impostors";
+import { IMPOSTOR_BINDING, IMPOSTOR_TEXTURE_LIMIT, TreeImpostors } from "./vegetation/tree-impostors";
 import { EH_HEADER_VEC4S, EH_NODE_VEC4S } from "./system/terrain-cache-layout";
 import {
   composeTracer,
@@ -1378,6 +1378,9 @@ export class Renderer {
       this.detail = new DetailScans(device);
       this.detail.load();
     }
+    // (V2c — the trees' impostors: bound where the device takes one more sampled texture than the deferred ground's light kernel;
+    // their texture made now, empty, baked when the forest is first drawn)
+    if (device.limits.maxSampledTexturesPerShaderStage >= IMPOSTOR_TEXTURE_LIMIT) this.treeImpostors = new TreeImpostors(device);
     this.gtaoBound = device.limits.maxSampledTexturesPerShaderStage >= GTAO_TEXTURE_LIMIT;
     if (this.gtaoBound) {
       this.gtao = new Gtao(device);
@@ -1495,6 +1498,16 @@ export class Renderer {
                 texture: { sampleType: "float", viewDimension: "2d-array" } as GPUTextureBindingLayout,
               },
               { binding: DETAIL_SAMPLER_BINDING, visibility: C, sampler: { type: "filtering" } as GPUSamplerBindingLayout },
+            ]
+          : []),
+        // (the trees' impostors — PLAN-VEGETATION-V2 V2c)
+        ...(device.limits.maxSampledTexturesPerShaderStage >= IMPOSTOR_TEXTURE_LIMIT
+          ? [
+              {
+                binding: IMPOSTOR_BINDING,
+                visibility: C,
+                texture: { sampleType: "float", viewDimension: "2d-array" } as GPUTextureBindingLayout,
+              },
             ]
           : []),
         ...(device.limits.maxSampledTexturesPerShaderStage >= GTAO_TEXTURE_LIMIT
@@ -2453,6 +2466,7 @@ export class Renderer {
             GTAO_TEXTURE_LIMIT,
             DETAIL_TEXTURE_LIMIT,
             LITE_DEFERRED_TEXTURE_LIMIT,
+            IMPOSTOR_TEXTURE_LIMIT,
           ),
           adapter.limits.maxSampledTexturesPerShaderStage,
           // (a test's cap — the page's hash gpuTextures=N —: a device with fewer, its features' stand-ins drawn)
@@ -3162,6 +3176,9 @@ export class Renderer {
             { binding: DETAIL_BINDING, resource: this.detail!.texture.createView({ dimension: "2d-array" }) },
             { binding: DETAIL_SAMPLER_BINDING, resource: this.detailSampler },
           ]
+        : []),
+      ...(this.treeImpostors
+        ? [{ binding: IMPOSTOR_BINDING, resource: this.treeImpostors.texture.createView({ dimension: "2d-array" }) }]
         : []),
       ...(this.orthoRead
         ? [
@@ -4275,6 +4292,9 @@ export class Renderer {
     f.set(this.earthSurface.params(), PARAMS.surface);
     // (Q7 L8: the detail scans drawn when asked and in)
     this.earthScenery.detailOn = s.earthDetail && !!this.detail?.ready;
+    // (V2c: the impostors baked the first time the forest is drawn; drawn once ready — treeImpostorsOn the A/B)
+    if (this.treeImpostors && this.sceneryRaster && !this.treeImpostors.ready) void this.treeImpostors.bake();
+    this.earthScenery.impostorsOn = this.treeImpostorsOn && !!this.treeImpostors?.ready;
     f.set(this.earthScenery.params(), PARAMS.scenery);
     if (!o.probe && this.character?.active && this.character.body === "earth")
       this.character.groundPatch.build(this.character.q, this.character.up(), (q) => this.character!.rawHeight(q), this.earthTiles.stamp);
@@ -5529,8 +5549,10 @@ export class Renderer {
   /** (L1) an A/B's ablations of the field's reading (1 no crests on the normal, 2 no groups, 4 not in the open sea's kernel, 8 no
    *  surf nor wash from it): runtime branches — what they cost to run, not to hold in the kernel */
   shoreSwellAblate = 0;
-  /** (V2b) the trees' hemi-octahedral impostors — baked on the first ask; not drawn yet (V2c) */
+  /** (V2b/V2c) the trees' hemi-octahedral impostors — bound where the device has room, baked when the forest is first drawn */
   treeImpostors: TreeImpostors | null = null;
+  /** (V2c) the far trees read from their impostors (an A/B: false, their plain shapes, as before) */
+  treeImpostorsOn = true;
   /** (V2b) a layer of the trees' impostors as a lit PNG data URL (an e2e's shot; bakes them first) */
   async treeImpostorPreview(layer: number): Promise<{ png: string; bakeMs: number; models: TreeImpostors["models"] }> {
     this.treeImpostors ??= new TreeImpostors(this.device);

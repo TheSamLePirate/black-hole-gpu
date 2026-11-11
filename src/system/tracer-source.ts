@@ -19,6 +19,7 @@ import { HORIZON_TEXTURE_LIMIT, withHorizonMaps } from "./horizon-maps";
 import { ORTHO_TEXTURE_LIMIT, withOrthoImagery } from "./earth-tiles";
 import { GTAO_TEXTURE_LIMIT, withGtao } from "./gtao";
 import { DETAIL_TEXTURE_LIMIT, withDetailScans } from "./detail-scans";
+import { IMPOSTOR_TEXTURE_LIMIT, withTreeImpostors } from "../vegetation/tree-impostors";
 
 /** what of the device decides the tracer's optional parts */
 export interface TracerLimits {
@@ -39,27 +40,30 @@ export function composeTracer(trace: string, forest: string, limits: TracerLimit
           sceneryShader(
             surfaceShader(
               withOrthoImagery(
-                withDetailScans(
-                  withGtao(
-                    withHorizonMaps(
-                      withTreeShadow(
-                        withCloudShadow(
-                          withCloudPass(
-                            withSunShadow(
-                              withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
-                              tex >= SUN_SHADOW_TEXTURE_LIMIT,
+                withTreeImpostors(
+                  withDetailScans(
+                    withGtao(
+                      withHorizonMaps(
+                        withTreeShadow(
+                          withCloudShadow(
+                            withCloudPass(
+                              withSunShadow(
+                                withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
+                                tex >= SUN_SHADOW_TEXTURE_LIMIT,
+                              ),
+                              tex >= CLOUD_PASS_TEXTURE_LIMIT,
                             ),
-                            tex >= CLOUD_PASS_TEXTURE_LIMIT,
+                            tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
                           ),
-                          tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
+                          tex >= TREE_SHADOW_TEXTURE_LIMIT,
                         ),
-                        tex >= TREE_SHADOW_TEXTURE_LIMIT,
+                        tex >= HORIZON_TEXTURE_LIMIT,
                       ),
-                      tex >= HORIZON_TEXTURE_LIMIT,
+                      tex >= GTAO_TEXTURE_LIMIT,
                     ),
-                    tex >= GTAO_TEXTURE_LIMIT,
+                    tex >= DETAIL_TEXTURE_LIMIT,
                   ),
-                  tex >= DETAIL_TEXTURE_LIMIT,
+                  tex >= IMPOSTOR_TEXTURE_LIMIT,
                 ),
                 tex >= ORTHO_TEXTURE_LIMIT,
               ),

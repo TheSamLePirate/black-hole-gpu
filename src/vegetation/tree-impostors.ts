@@ -14,6 +14,7 @@
 // half-size the bounding sphere's radius √(radius² + 0.25); a view's texel (x, y) ∈ [0, 64)² at right × (2x/64 − 1) + up × (1 − 2y/64)
 // (rows top-down); its depth b: 0.5 + 0.5 × (the point's offset towards the eye) / half-size.
 
+import { ForestKind, KIND_SHAPES } from "../system/forest";
 import { TREE_ASPECTS, TREE_MODEL_KINDS, type TreeMesh, treeModel } from "./tree-model";
 
 export const IMPOSTOR_VIEWS = 8;
@@ -131,22 +132,137 @@ fn down(@builtin(global_invocation_id) g: vec3u) {
 }
 `;
 
+/** the frame's radius about the axis a kind's model is photographed in (canonical; the leaves stay within its envelope grown by a
+ *  quarter — a palm's fronds droop further: 0.45) — the bake's and the reader's (trace: IMP_HALF) */
+export function impostorFrameRadius(kind: number, aspect: number): number {
+  return KIND_SHAPES[kind]!.width * aspect * (kind === ForestKind.palm ? 1.45 : 1.25) + 0.01;
+}
+/** a layer's frame half-size: the bounding sphere about (0, 0, 0.5) */
+export const impostorHalf = (kind: number, aspect: number) => Math.hypot(impostorFrameRadius(kind, aspect), 0.5);
+
+/** sampled textures per stage with the impostors bound: the deferred light kernel's 37 and theirs (one array) */
+export const IMPOSTOR_TEXTURE_LIMIT = 38;
+/** their binding in the tracer's group 0 */
+export const IMPOSTOR_BINDING = 50;
+/** the trees nearer than this [m] keep their carved crowns (dithered over the next 100 m into the impostors) */
+export const IMPOSTOR_NEAR_M = 200;
+
 /**
- * The impostors' bake and textures: the twelve models rendered once on the device — on the first ask (V2c draws them; until then
- * they are made for the preview alone: `__bh.renderer` has no frame cost from them).
+ * The tracer's reader (PLAN-VEGETATION-V2 V2c): the array — the albedo's terms in layers 0–11, the surface's in 12–23, mip-mapped —
+ * and sceneryTreeImpostor, a far tree of shadeLite read from its impostor: the layer of its kind at the nearer proportion, scaled
+ * to its cell's crown and height; the view whose direction is nearest the eye's (in the tree's own, scaled frame); the ray met with
+ * that view's plane; its texel's coverage taken as a probability (`rnd`: the far forest keeps its mean cover, the history averages
+ * it), its depth along the view, its normal, the leaves' shade. Bound where the device takes one more sampled texture.
+ */
+export function withTreeImpostors(trace: string, supported: boolean): string {
+  const marker = /\/\/ BEGIN_IMPOSTOR[\s\S]*?\/\/ END_IMPOSTOR/;
+  if (!marker.test(trace)) throw new Error("tree impostors: missing tracer stub");
+  if (!supported) return trace;
+  const aspects: number[] = [];
+  const halves: number[] = [];
+  for (const kind of TREE_MODEL_KINDS)
+    for (const a of TREE_ASPECTS[kind]!) {
+      aspects.push(a);
+      halves.push(impostorHalf(kind, a));
+    }
+  const arr = (v: number[]) => v.map((x) => x.toFixed(5)).join(", ");
+  return trace.replace(
+    marker,
+    `
+@group(0) @binding(${IMPOSTOR_BINDING}) var impTex: texture_2d_array<f32>;
+const IMPOSTOR_BOUND = true;
+const IMPOSTOR_NEAR_M = ${IMPOSTOR_NEAR_M.toFixed(1)};
+const IMP_ASPECT = array<f32, ${IMPOSTOR_LAYERS}>(${arr(aspects)});
+const IMP_HALF = array<f32, ${IMPOSTOR_LAYERS}>(${arr(halves)});
+fn impViewDir(c: vec2f) -> vec3f {
+  let u = (c.x + 0.5) / ${IMPOSTOR_VIEWS}.0 * 2.0 - 1.0;
+  let w = (c.y + 0.5) / ${IMPOSTOR_VIEWS}.0 * 2.0 - 1.0;
+  let p = vec2f(u + w, u - w) * 0.5;
+  return normalize(vec3f(p, max(1.0 - abs(p.x) - abs(p.y), 0.0)));
+}
+fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tree: ForestHit, rnd: f32) -> ImpHit {
+  let none = ImpHit(-1.0, vec3f(0.0), 0.0, false);
+  if (tree.kind == 0u || tree.kind > ${TREE_MODEL_KINDS.length}u) { return none; }
+  // (the cell's crown radius, forestCandidate's draw)
+  let gi = u32(((hd.i0 + ci) % hd.columns + hd.columns) % hd.columns);
+  let gj = bitcast<u32>(hd.j0 + cj);
+  let r = hd.cell * (0.3 + 0.17 * forestUnit(forestHash(gi, gj, 3u)));
+  let H = tree.height;
+  let b = (tree.kind - 1u) * 2u;
+  let ratio = r / H;
+  let L = b + select(0u, 1u, abs(log(ratio / IMP_ASPECT[b + 1u])) < abs(log(ratio / IMP_ASPECT[b])));
+  let sx = r / IMP_ASPECT[L];
+  let half = IMP_HALF[L];
+  // (the ray in the tree's canonical frame — height 1 —: the same parameter t, metres along d)
+  let oc = vec3f((o.xy - tree.base.xy) / sx, (o.z - tree.base.z) / H);
+  let dc = vec3f(d.xy / sx, d.z / H);
+  let eye = normalize(-dc);
+  let z = max(eye.z, 0.0);
+  let pp = eye.xy / (abs(eye.x) + abs(eye.y) + z);
+  let cell = clamp(floor((vec2f(pp.x + pp.y, pp.x - pp.y) * 0.5 + 0.5) * ${IMPOSTOR_VIEWS}.0), vec2f(0.0), vec2f(${IMPOSTOR_VIEWS - 1}.0));
+  let vv = impViewDir(cell);
+  var right = cross(vec3f(0.0, 0.0, 1.0), vv);
+  right = select(normalize(right), vec3f(1.0, 0.0, 0.0), dot(right, right) < 1e-8);
+  let up = cross(vv, right);
+  let den = dot(dc, vv);
+  if (abs(den) < 1e-6) { return none; }
+  let C = vec3f(0.0, 0.0, 0.5);
+  let tc = dot(C - oc, vv) / den;
+  let q = oc + dc * tc - C;
+  let uv = vec2f(dot(q, right), dot(q, up)) / half;
+  if (max(abs(uv.x), abs(uv.y)) > 1.0) { return none; }
+  // (the mip: the pixel's footprint over a texel — 64 across the frame's 2 half × the larger scale)
+  let footM = max(tc, 1.0) * 2.0 * P.cam.w / P.res.y;
+  let texM = 2.0 * half * max(sx, H) / ${IMPOSTOR_VIEW_PX}.0;
+  let lod = clamp(log2(max(footM / texM, 1e-3)), 0.0, ${IMPOSTOR_MIPS - 1}.0);
+  // (held inside the view's own cell: the filter never reaches the next view)
+  let inset = 0.5 * exp2(ceil(lod)) / ${IMPOSTOR_VIEW_PX}.0;
+  let a = (cell + clamp(vec2f(uv.x * 0.5 + 0.5, 0.5 - 0.5 * uv.y), vec2f(inset), vec2f(1.0 - inset))) / ${IMPOSTOR_VIEWS}.0;
+  let A = textureSampleLevel(impTex, detailSamp, a, i32(L), lod);
+  if (A.a <= rnd) { return none; }
+  let S = textureSampleLevel(impTex, detailSamp, a, i32(L + ${IMPOSTOR_LAYERS}u), lod);
+  // (the depth along the view, towards the eye; t: back along the ray by it)
+  let zoff = (S.b - 0.5) * 2.0 * half;
+  let t = tc - zoff / max(dot(-dc, vv), 1e-4);
+  var e = S.rg * 2.0 - 1.0;
+  var nc = vec3f(e, 1.0 - abs(e.x) - abs(e.y));
+  if (nc.z < 0.0) { nc = vec3f((1.0 - abs(e.yx)) * select(vec2f(-1.0), vec2f(1.0), e >= vec2f(0.0)), nc.z); }
+  let n = normalize(vec3f(nc.xy / sx, nc.z / H));
+  return ImpHit(t, n, A.r, A.g > 0.5);
+}`,
+  );
+}
+
+/**
+ * The impostors' bake and texture: one array — the albedo's terms in layers 0–11, the surface's in 12–23, five mips —, made at once
+ * (bound from the start, empty), the twelve models baked into it on the first ask; `ready` once they are (P.scenery[6].w).
  */
 export class TreeImpostors {
-  albedo: GPUTexture | null = null;
-  surface: GPUTexture | null = null;
+  readonly texture: GPUTexture;
+  ready = false;
+  failed: string | null = null;
+  /** where the bake is: idle, pipelines, models (n), ready */
+  stage = "idle";
   bakeMs = 0;
   models: { kind: number; aspect: number; leaves: number; tris: number; radius: number }[] = [];
   private baking: Promise<void> | null = null;
 
-  constructor(private device: GPUDevice) {}
+  constructor(private device: GPUDevice) {
+    this.texture = device.createTexture({
+      label: "tree impostors",
+      size: [IMPOSTOR_SIZE, IMPOSTOR_SIZE, 2 * IMPOSTOR_LAYERS],
+      format: "rgba8unorm",
+      mipLevelCount: IMPOSTOR_MIPS,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+    });
+  }
 
   /** Bakes them (once). */
   bake(): Promise<void> {
-    this.baking ??= this.run();
+    this.baking ??= this.run().catch((e) => {
+      this.failed = String(e);
+      console.warn("tree impostors: not baked —", e);
+    });
     return this.baking;
   }
 
@@ -154,15 +270,12 @@ export class TreeImpostors {
     const d = this.device;
     const t0 = performance.now();
     const big = IMPOSTOR_SIZE * 2;
-    const usage = GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC;
-    const mk = (label: string) =>
-      d.createTexture({ label, size: [IMPOSTOR_SIZE, IMPOSTOR_SIZE, IMPOSTOR_LAYERS], format: "rgba8unorm", usage, mipLevelCount: 1 });
-    const albedo = mk("tree impostors: albedo");
-    const surface = mk("tree impostors: surface");
+    const tex = this.texture;
     const rtUsage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
     const rtA = d.createTexture({ label: "tree impostor bake A", size: [big, big], format: "rgba8unorm", usage: rtUsage });
     const rtS = d.createTexture({ label: "tree impostor bake S", size: [big, big], format: "rgba8unorm", usage: rtUsage });
     const depth = d.createTexture({ size: [big, big], format: "depth24plus", usage: GPUTextureUsage.RENDER_ATTACHMENT });
+    this.stage = "pipelines";
     const module = d.createShaderModule({ code: BAKE_WGSL, label: "tree impostor bake" });
     const pipe = await d.createRenderPipelineAsync({
       label: "tree impostor bake",
@@ -195,14 +308,32 @@ export class TreeImpostors {
       buffers.push(b);
       return b;
     };
+    const down = (enc: GPUCommandEncoder, src: GPUTextureView, dst: GPUTextureView, size: number) => {
+      const cp = enc.beginComputePass({ label: "tree impostor down" });
+      cp.setPipeline(downPipe);
+      cp.setBindGroup(
+        0,
+        d.createBindGroup({
+          layout: downPipe.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: src },
+            { binding: 1, resource: dst },
+          ],
+        }),
+      );
+      cp.dispatchWorkgroups(Math.ceil(size / 8), Math.ceil(size / 8));
+      cp.end();
+    };
+    const level = (layer: number, mip: number) =>
+      tex.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1, baseMipLevel: mip, mipLevelCount: 1 });
     let layer = 0;
     this.models = [];
     for (const kind of TREE_MODEL_KINDS) {
       for (const aspect of TREE_ASPECTS[kind]!) {
+        this.stage = `models ${layer}`;
         const m: TreeMesh = treeModel(kind, aspect, 1);
         this.models.push({ kind, aspect, leaves: m.leaves, tris: m.index.length / 3, radius: m.radius });
-        const half = Math.sqrt(m.radius * m.radius + 0.25);
-        d.queue.writeBuffer(uni, 0, new Float32Array([m.radius, kind, half, 0]));
+        d.queue.writeBuffer(uni, 0, new Float32Array([m.radius, kind, impostorHalf(kind, aspect), 0]));
         const V = GPUBufferUsage.VERTEX;
         const vp = upload(m.pos, V),
           vn = upload(m.nrm, V),
@@ -230,26 +361,14 @@ export class TreeImpostors {
           pass.drawIndexed(m.index.length, 1, 0, 0, v);
         }
         pass.end();
-        // (down 2 × 2 into the layer)
-        const cp = enc.beginComputePass({ label: "tree impostor down" });
-        cp.setPipeline(downPipe);
-        for (const [src, dst] of [
-          [rtA, albedo],
-          [rtS, surface],
+        // (down 2 × 2 into the layer's first level, then each mip from the one above — the views stay in their cells: 64 … 4)
+        for (const [src, at] of [
+          [rtA, layer],
+          [rtS, layer + IMPOSTOR_LAYERS],
         ] as const) {
-          cp.setBindGroup(
-            0,
-            d.createBindGroup({
-              layout: downPipe.getBindGroupLayout(0),
-              entries: [
-                { binding: 0, resource: src.createView() },
-                { binding: 1, resource: dst.createView({ dimension: "2d", baseArrayLayer: layer, arrayLayerCount: 1 }) },
-              ],
-            }),
-          );
-          cp.dispatchWorkgroups(IMPOSTOR_SIZE / 8, IMPOSTOR_SIZE / 8);
+          down(enc, src.createView(), level(at, 0), IMPOSTOR_SIZE);
+          for (let mip = 1; mip < IMPOSTOR_MIPS; mip++) down(enc, level(at, mip - 1), level(at, mip), IMPOSTOR_SIZE >> mip);
         }
-        cp.end();
         d.queue.submit([enc.finish()]);
         layer++;
       }
@@ -260,9 +379,9 @@ export class TreeImpostors {
     rtS.destroy();
     depth.destroy();
     uni.destroy();
-    this.albedo = albedo;
-    this.surface = surface;
     this.bakeMs = performance.now() - t0;
+    this.ready = true;
+    this.stage = "ready";
   }
 
   /**
@@ -272,11 +391,11 @@ export class TreeImpostors {
   async preview(layer: number, sun: [number, number, number] = [0.55, -0.45, 0.7]): Promise<string> {
     await this.bake();
     const d = this.device;
-    const read = async (tex: GPUTexture) => {
+    const read = async (at: number) => {
       const bpr = IMPOSTOR_SIZE * 4;
       const buf = d.createBuffer({ size: bpr * IMPOSTOR_SIZE, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
       const enc = d.createCommandEncoder();
-      enc.copyTextureToBuffer({ texture: tex, origin: [0, 0, layer] }, { buffer: buf, bytesPerRow: bpr }, [
+      enc.copyTextureToBuffer({ texture: this.texture, origin: [0, 0, at] }, { buffer: buf, bytesPerRow: bpr }, [
         IMPOSTOR_SIZE,
         IMPOSTOR_SIZE,
         1,
@@ -287,8 +406,8 @@ export class TreeImpostors {
       buf.destroy();
       return out;
     };
-    const A = await read(this.albedo!);
-    const S = await read(this.surface!);
+    const A = await read(layer);
+    const S = await read(layer + IMPOSTOR_LAYERS);
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = IMPOSTOR_SIZE;
     const ctx = canvas.getContext("2d")!;

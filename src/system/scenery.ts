@@ -25,7 +25,7 @@ export function sceneryShader(code: string, supported: boolean) {
     ? code
     : code.replace(
         /\/\/ BEGIN_WORLD_SCENERY[\s\S]*?\/\/ END_WORLD_SCENERY/,
-        "fn sceneryImage(q:vec3f)->SurfaceImage{return SurfaceImage(vec3f(0.0),0.0,0u);}\nfn worldScenery(d:vec3f,t:f32,r:f32)->f32{return t;}\nfn sceneryShadow(l:vec3f,n:vec3f)->f32{return 1.0;}\nfn sceneryMirror(r:vec3f,l:vec3f,e:vec3f,s:vec3f)->vec4f{return vec4f(0.0,0.0,0.0,-1.0);}\nstruct ScenerySurface {color:vec3f,cover:f32,kind:f32};\nfn scenerySurface(f:f32)->ScenerySurface{return ScenerySurface(vec3f(0.0),0.0,0.0);}\nfn sceneryWaterAt(p:vec3f,f:f32,d:f32)->vec2f{return vec2f(0.0);}\nfn sceneryTreeLite(d:vec3f,i:u32,t:f32)->f32{return -1.0;}\nfn sceneryDeckBefore(d:vec3f,t:f32)->bool{return false;}\nfn rasterBuilding(l:u32,d:vec3f,t:f32,a:vec3f)->RasterBuilding{return RasterBuilding(a,vec3f(0.0,0.0,1.0),0.0,vec3f(0.0),1.0);}\nfn sceneryRoadLight(r:ScenerySurface,t:f32,x:vec2f)->f32{return CITY_WASH_FAR;}\nfn sceneryLampLight(x:vec2f)->vec2f{return vec2f(0.0);}\nconst STREET_POOL_GAIN=4.0;\nfn sceneryGround(d:vec3f,t:f32,f:f32)->ScenerySurface{return ScenerySurface(vec3f(0.0),0.0,0.0);}\nfn sceneryDecal(x:vec2f,f:f32,d:f32)->vec4f{return vec4f(0.0);}",
+        "fn sceneryImage(q:vec3f)->SurfaceImage{return SurfaceImage(vec3f(0.0),0.0,0u);}\nfn worldScenery(d:vec3f,t:f32,r:f32)->f32{return t;}\nfn sceneryShadow(l:vec3f,n:vec3f)->f32{return 1.0;}\nfn sceneryMirror(r:vec3f,l:vec3f,e:vec3f,s:vec3f)->vec4f{return vec4f(0.0,0.0,0.0,-1.0);}\nstruct ScenerySurface {color:vec3f,cover:f32,kind:f32};\nfn scenerySurface(f:f32)->ScenerySurface{return ScenerySurface(vec3f(0.0),0.0,0.0);}\nfn sceneryWaterAt(p:vec3f,f:f32,d:f32)->vec2f{return vec2f(0.0);}\nfn sceneryTreeLite(d:vec3f,i:u32,t:f32,r:f32)->f32{return -1.0;}\nfn sceneryDeckBefore(d:vec3f,t:f32)->bool{return false;}\nfn rasterBuilding(l:u32,d:vec3f,t:f32,a:vec3f)->RasterBuilding{return RasterBuilding(a,vec3f(0.0,0.0,1.0),0.0,vec3f(0.0),1.0);}\nfn sceneryRoadLight(r:ScenerySurface,t:f32,x:vec2f)->f32{return CITY_WASH_FAR;}\nfn sceneryLampLight(x:vec2f)->vec2f{return vec2f(0.0);}\nconst STREET_POOL_GAIN=4.0;\nfn sceneryGround(d:vec3f,t:f32,f:f32)->ScenerySurface{return ScenerySurface(vec3f(0.0),0.0,0.0);}\nfn sceneryDecal(x:vec2f,f:f32,d:f32)->vec4f{return vec4f(0.0);}",
       );
 }
 
@@ -459,11 +459,13 @@ export class EarthScenery {
     o[24] = dO[0];
     o[25] = dO[1];
     o[26] = this.detailOn ? 1 : 0;
-    o[27] = 0;
+    o[27] = this.impostorsOn ? 1 : 0;
     return o;
   }
   /** (Q7 L8) the ground's detail scans drawn (settings.earthDetail, their texture in) */
   detailOn = false;
+  /** (PLAN-VEGETATION-V2 V2c) the far trees read from their impostors (baked, renderer.treeImpostorsOn): P.scenery[6].w */
+  impostorsOn = false;
   /** the scene's buildings Overture Maps' (B7: credited while drawn) */
   get overtureBuildings() {
     return this.data?.overtureBuildings ?? 0;
