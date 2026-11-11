@@ -3,6 +3,17 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Le bord de l'eau sur la plage en marches d'environ 1 m
+
+**2026-11-11T07:50Z.** Observé (kerr-mini, `coast-swell` `SWELL_ABLATE=sand`, 20 m au-dessus de la plage de l'Almanarre, regard −40°
+vers l'ouest ; planche `docs/progress/mer/l3-lame-plage.jpg` : sans L3, avec, et leur différence) : la limite entre l'eau (reflets)
+et le sable est en marches d'environ 1 m (~20 px à 40 m), avec et sans L3. Pas la limite eau profonde / fond pâle (réglée par le
+niveau 2) : celle de la terre et de la mer dans `shadeLite` (`sea0` du masque grossier × la hauteur du maillage `hW`, les polygones OSM
+de `sceneryWaterAt`). Le pas — celui des texels z 17 (~0,9 m) ou des nœuds du patch (1,2 m) — désigne la hauteur lue : à vérifier si
+`hW` vient d'un mélange LiDAR / RGE ALTI texel par texel (`lidarYields` les mêle depuis ce jour au niveau de la mer) ou du maillage.
+C'est le « trait de côte en dents de scie » de l'analyse (§3), côté terre. Piste : la décision mer/terre par une hauteur filtrée sur
+quelques mètres, et un fondu au lieu du seuil.
+
 ## ~~Le trait de l'eau en escalier devant l'Almanarre, qui bouge à chaque recuisson~~ — réglé (niveau 2 du cache ajouté aux distances au rivage, même jour ; planche `docs/progress/mer/trait-de-cote-niveau2.png` : avant / après, même vue)
 
 **2026-11-11T06:20Z.** Observé (kerr-mini, `coast-swell` `SWELL_ABLATE=sand`, vue plongeante 25 m au-dessus de la plage de

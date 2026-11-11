@@ -2945,3 +2945,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   une vraie dune, RGE ALTI la porte aussi. Test `tests/ign-lidar-sea.test.ts`.
 - **Vérifié** : mêmes points 14,7 → 0 m ; même vue, les parois disparues (planche `docs/progress/mer/parois-tombolo-avant-apres.png`).
   Non vérifié : d'autres côtes (un quai ou une digue que RGE ALTI aurait au niveau de la mer serait rabattu).
+
+## 2026-11-11T07:50Z — L3 vérifié en image ; un dernier escalier au bord de l'eau consigné
+
+- **Vérifié** (kerr-mini, vue plongeante sur la plage de l'Almanarre, A/B `shoreSwellAblate` 16, 79,4 / 79,1 contre 78,9 / 78,8 ms) :
+  la bande de sable mouillé change le long du bord, côté terre (différence des images, planche `docs/progress/mer/l3-lame-plage.jpg`).
+- **Consigné** (PROBLEMES-A-REGLER) : la limite terre/mer de `shadeLite` sur la plage est en marches d'environ 1 m (avec et sans L3) —
+  le trait de côte en dents de scie de l'analyse, côté terre ; non corrigé.
