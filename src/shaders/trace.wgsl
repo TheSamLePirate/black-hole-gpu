@@ -15503,8 +15503,30 @@ fn atAO(a: RasterAttr) -> f32 { if (a.vis) { return select(rasterAO(a.px), 1.0, 
 // light through its shadows, the sky's, the bounce, the moon, its specular, the wet, the night's lights — from its point and
 // footprint, the light, and its visibility's attributes: shadeLite's body once, the forward ground fragment's to be. Before the air
 // and the clouds in front of it (liteFinish) and the water over it (liteWater, shadeWater).
-fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, fp: f32, fx: vec3f, fy: vec3f, tn: vec3f, hG: f32,
-    Ls: vec3f, Lp: vec3f, Li: vec3f, E: vec3f, isTree: bool, anchored: bool, at: RasterAttr) -> vec3f {
+// (the raster ground's surface in two steps — its material, then its light —: liteSurface their composition; the material's
+// record the light reads, a pixel's whole (one step a kernel each: shadeLite's registers' edge, the journal of 11 Nov 2026))
+struct LiteMat {
+  A: vec3f,
+  n: vec3f,
+  ng: vec3f,
+  bldE: vec3f,
+  rwyLamps: vec3f,
+  glass: f32,
+  bldS: f32,
+  bldAO: f32,
+  wetS: f32,
+  ripple: f32,
+  imgO: f32,
+  rwyPaved: f32,
+  roadCover: f32,
+  roadKind: f32,
+  lights: f32,
+  cover: u32,
+};
+// (its material: the colour — the day's map, the imagery, the surface, the orthophotos, snow, the map's roads, slopes, detail scans,
+// the cliffs' faces, runways, buildings, meshes, cars, turbines, pylons, the rain's wet — and its normals, the rest the light reads)
+fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, fp: f32, fx: vec3f, fy: vec3f, tn: vec3f, hG: f32,
+    Ls: vec3f, Lp: vec3f, Li: vec3f, E: vec3f, isTree: bool, anchored: bool, at: RasterAttr) -> LiteMat {
   // (the colour: the day's map, the tiles' imagery over it, the regional surface, the orthophotos over all)
   let day = textureSampleGrad(earthCube, bgSamp, eCube(gq), eCube(fx), eCube(fy));
   var img: TileImage;
@@ -15641,11 +15663,6 @@ fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, 
     rwyAt = rp.at;
     lvl = runwayGrade(gq).y;
   }
-  // (liteSkip 4096: the Sun's and the sky's light plain — their transmittances and shadows not read: a measure)
-  let plainLight = (liteSkip() & 4096u) != 0u;
-  let Esun = E * sunThrough(hG, mu0);
-  var Eg = E;
-  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Li, Esun, fx, fy, dirW, tM, ng, mesh); }
   // (Q3 — a building's own material: its leaf in the visibility — terrainRasterLeaf: its own triangles', its oriented box's —,
   // its face found there — buildingFaceAt —, the traced pipeline's look on it — buildingLook, roofLook: its walls' material,
   // storeys and bays, shops, balconies; its roof's tiles, slates, zinc, dormers; its windows lit at night —, its face's exact
@@ -15759,6 +15776,33 @@ fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, 
     A *= 1.0 - 0.35 * pud;
     wetS = wet * select(mix(0.08, 0.3, rwyPaved), 0.12, mesh) + pud * 0.4;
   }
+  return LiteMat(A, n, ng, bldE, rwyLamps, glass, bldS, bldAO, wetS, ripple, img.o, rwyPaved, sv.cover, sv.kind,
+    mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w), select(0u, surface.cover, surface.w > 0.5));
+}
+// (its light: the Sun's through its shadows, the sky's, the bounce, the moon, the specular, the wet's sheen, the night's lights)
+fn liteLight(gq: vec3f, q: vec3f, tM: f32, fx: vec3f, fy: vec3f, hG: f32, look: vec3f, Ls: vec3f, Lp: vec3f, Li: vec3f, E: vec3f,
+    isTree: bool, at: RasterAttr, m: LiteMat) -> vec3f {
+  let A = m.A;
+  let n = m.n;
+  let ng = m.ng;
+  let bldE = m.bldE;
+  let rwyLamps = m.rwyLamps;
+  let glass = m.glass;
+  let bldS = m.bldS;
+  let bldAO = m.bldAO;
+  let wetS = m.wetS;
+  let ripple = m.ripple;
+  let rwyPaved = m.rwyPaved;
+  let mu0 = dot(gq, Li);
+  let mu0g = dot(gq, Lp);
+  let dirW = toBody(look);
+  let mesh = atMesh(at);
+  let leaf = atLeaf(at);
+  // (liteSkip 4096: the Sun's and the sky's light plain — their transmittances and shadows not read: a measure)
+  let plainLight = (liteSkip() & 4096u) != 0u;
+  let Esun = E * sunThrough(hG, mu0);
+  var Eg = E;
+  if (!plainLight) { Eg = liteSun(q, gq, hG, Ls, Li, Esun, fx, fy, dirW, tM, ng, mesh); }
   var sky = E * 0.15;
   if (!plainLight) { sky = liteSky(q, hG, E, Ls, mu0g); }
   // (Q4 L2b: the valleys' sky hidden by the relief round them — H5's horizons in 8 directions, weighed by the clear sky's
@@ -15785,7 +15829,7 @@ fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, 
   let bounce = (Esun * max(mu0, 0.0) + sky) * groundAlbedoMean(gq) * 0.5 * (1.0 - up);
   // (the moonlight — the tracer's ground's earthMoonlight: a moonlit landscape silvery —, through the decks)
   // (Q2: the photograph's light kept by its Sun's — earthGround's photoRelightK —; a wall's stone, a runway's paving: ours whole)
-  let rk = max(photoRelightK(gq, Li, img.o), max(rwyPaved, select(0.0, 1.0, mesh && (dot(n, gq) < 0.35 || leaf > 0u))));
+  let rk = max(photoRelightK(gq, Li, m.imgO), max(rwyPaved, select(0.0, 1.0, mesh && (dot(n, gq) < 0.35 || leaf > 0u))));
   // (L1: the sky on the face by the frame's sky — skyOnFace —; a building's face its own share of it, bldAO)
   // (Q4 L2a: the ground's ambient occlusion on the sky's and the bounce's light — never the Sun's —, worked out before this pass
   // from the visibility's distances; liteSkip 16777216: not read, a measure)
@@ -15809,7 +15853,7 @@ fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, 
   // light the face mirrors — liteSkip 67108864: not, a measure)
   if (!isTree && !mesh && (liteSkip() & 67108864u) == 0u) {
     // (built-up 0.65, bare 0.8, snow and ice 0.35, grass and crops 0.9 — their sheen towards a low Sun, which a photograph cannot hold)
-    let cv = select(0u, surface.cover, surface.w > 0.5);
+    let cv = m.cover;
     let rough = select(select(select(select(select(0.0, 0.9, cv == 30u || cv == 40u), 0.35, cv == 70u), 0.8, cv == 60u), 0.65, cv == 50u), 0.55, rwyPaved > 0.5);
     if (rough > 0.0) {
       // (Smith's visibility, height-correlated — Heitz —, Schlick's Fresnel on the half vector; Fv the face's mirror at the view)
@@ -15839,7 +15883,7 @@ fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, 
   }
   // (the cities' lights at night: on the ground — the streets', the squares' —, not on a tree's crown nor on a building's walls
   // and roofs, which their windows will light — Q3: the map's 500 m glow painted the crowns and the facades orange)
-  let lights = mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w);
+  let lights = m.lights;
   let lamp = max(lights - 0.07, 0.0) / 0.93;
   let dark = 1.0 - smoothstep(-0.12, 0.06, mu0g);
   var lit = select(dark, 0.0, isTree || mesh);
@@ -15856,7 +15900,7 @@ fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, 
   let xyL = (P.scenery[3].xyz + dLr * tM).xy;
   let nearL = HAS_SCENERY && P.scenery[0].w > 0.5 && tM <= P.scenery[1].w && (liteSkip() & 131072u) == 0u;
   if (HAS_SCENERY && lit > 0.0 && lamp > 0.02 && (liteSkip() & 131072u) == 0u) {
-    lit *= sceneryRoadLight(sv, tM, xyL);
+    lit *= sceneryRoadLight(ScenerySurface(vec3f(0.0), m.roadCover, m.roadKind), tM, xyL);
     if (P.scenery[0].w > 0.5 && tM <= P.scenery[1].w) {
       // (the photograph's brightness under the lamps, a third of its hue: its lawns' and its trees' green, ×4 a channel, had lit
       // the parks fluorescent green and the paths neon white — Paris at night, Sam, 6 Nov 2026)
@@ -15908,6 +15952,11 @@ fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, 
     G += vec3f(1.0) * (luminance(E) / PI) * 6.0 * (1.0 - dark) * on;
   }
   return G;
+}
+fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, fp: f32, fx: vec3f, fy: vec3f, tn: vec3f, hG: f32,
+    Ls: vec3f, Lp: vec3f, Li: vec3f, E: vec3f, isTree: bool, anchored: bool, at: RasterAttr) -> vec3f {
+  let m = liteMaterial(gq, q, ph, rd, look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, isTree, anchored, at);
+  return liteLight(gq, q, tM, fx, fy, hG, look, Ls, Lp, Li, E, isTree, at, m);
 }
 // (PLAN-J1 J1-4) The forward ground's fragment's surface (system/terrain-forward.ts): a patch pixel's radiance G as shadeLite's
 // prologue and liteSurface find it — the same ray, jitter, point, light and footprint —, a = 1; a = 0 where shadeLite keeps the pixel
@@ -16012,6 +16061,148 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gid: vec3u) {
 // (the forward ground drew this frame — renderer.forwardGround: its finished pixels shadeLite's no more)
 const RASTER_FORWARD_FLAG = 4096u;
 fn rasterForwardOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_FORWARD_FLAG) != 0u; }
+// (a raster pixel's surface G given its last touches — the water over it (liteWater's wat), the measures' views — and its finish:
+// shadeLite's, or shadeLiteLight's when its material and its light are two kernels — tracer-source.ts withLiteDeferred)
+fn liteEpilogue(gid: vec2u, idx: u32, centre: vec2f, pos: vec2f, G0: vec3f, rd: vec3f, tH: f32, tM: f32, Ls: vec3f, E: vec3f, k: u32,
+    mesh: bool, isTree: bool, wat: vec4f, gq: vec3f, hG: f32, at: RasterAttr) {
+  var G = G0;
+  // (the water — liteWater, read at the start —: drawn by shadeWater, this pixel's surface under it left to it in accum, its kind
+  // and cover in moments.x)
+  if (!mesh && !isTree && (liteSkip() & 1u) == 0u) {
+    let water = wat.x;
+    let kind = wat.z;
+    // (TUNE_LITE 512: the water's cover drawn by its kind — red the sea, green a river, blue a lake: a measure)
+    if ((liteSkip() & 512u) != 0u) {
+      let kc = select(select(vec3f(0.5, 0.0, 0.0), vec3f(0.0, 0.5, 0.0), kind > 0.5), vec3f(0.0, 0.0, 0.6), kind > 1.5);
+      G = mix(G, kc * luminance(E), water);
+    } else if (water > 0.0 && rasterWaterOn()) {
+      accum[idx] = vec4f(G, 1.0);
+      moments[idx] = vec2f(RASTER_WATER - kind - 0.25 * water, tM / EARTH_RM * bodyRadius(k));
+      stamps[idx] = P.frame.x;
+      return;
+    }
+  }
+  if ((liteSkip() & 8192u) != 0u) { G = liteShadowDebug(E); }
+  // (liteSkip 8388608 — a measure —: the valleys' sky lost drawn instead of the surface, × 5: white a fifth lost or more, black none)
+  // (liteSkip 33554432 — a measure —: the occlusion drawn instead of the surface, × 5: white a fifth of the sky hidden or more)
+  if ((liteSkip() & 33554432u) != 0u) { G = vec3f(clamp((1.0 - rasterAO(centre)) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
+  if ((liteSkip() & 8388608u) != 0u) { G = vec3f(clamp((1.0 - earthSkyOpen(gq, hG, atNg(at, gq))) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
+  // (the air and the clouds before the surface — liteFinish —: here, or — tracer-source.ts withLiteSplit — in their own pass,
+  // shadeLiteFinish: this kernel then writes its surface G and distance to liteOut, the pixel marked RASTER_SPLIT; out of this
+  // kernel, that code no longer weighs on it — ~16 ms of its 46 over a low forest, kerr-mini, 11 Nov 2026)
+  // BEGIN_LITE_OUT
+  liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true, false);
+  // END_LITE_OUT
+}
+// (shadeLite deferred — withLiteDeferred —: its material kernel writes the light's record here, a pixel's four texels; moments.x
+// RASTER_MAT for shadeLiteLight, which reads them back where they are bound for it — matIn)
+const RASTER_MAT = -11.5;
+@group(1) @binding(14) var matOut0: texture_storage_2d<rgba32float, write>;
+@group(1) @binding(15) var matOut1: texture_storage_2d<rgba32float, write>;
+@group(1) @binding(16) var matOut2: texture_storage_2d<rgba32float, write>;
+@group(1) @binding(17) var matOut3: texture_storage_2d<rgba32float, write>;
+@group(1) @binding(18) var matIn0: texture_2d<f32>;
+@group(1) @binding(19) var matIn1: texture_2d<f32>;
+@group(1) @binding(20) var matIn2: texture_2d<f32>;
+@group(1) @binding(21) var matIn3: texture_2d<f32>;
+fn octEncode(n: vec3f) -> vec2f {
+  let p = n.xy / max(abs(n.x) + abs(n.y) + abs(n.z), 1e-20);
+  return select(p, (1.0 - abs(p.yx)) * select(vec2f(-1.0), vec2f(1.0), p >= vec2f(0.0)), n.z < 0.0);
+}
+fn octDecode(e: vec2f) -> vec3f {
+  var n = vec3f(e, 1.0 - abs(e.x) - abs(e.y));
+  if (n.z < 0.0) { n = vec3f((1.0 - abs(n.yx)) * select(vec2f(-1.0), vec2f(1.0), n.xy >= vec2f(0.0)), n.z); }
+  return normalize(n);
+}
+// (the record: A and the distance; the normal, the flags — a tree, glass, the surface's class, the road's kind —, the night's lights;
+// the one emission a pixel has — a tree's transmission, a building's windows, a runway's lamps — and the orthophoto's share; a
+// building's glass and its sky's share, else the runway's paving and the road's cover; the wet, the rain's rings)
+fn liteMatStore(px: vec2u, m: LiteMat, tM: f32, isTree: bool, bo: bool) {
+  let flags = select(0u, 1u, isTree) | select(0u, 2u, m.glass > 0.5) | (min(m.cover, 255u) << 2u) | (u32(clamp(m.roadKind, 0.0, 7.0)) << 10u);
+  let extra = select(select(m.rwyLamps, m.bldE, bo), WS_T, isTree);
+  textureStore(matOut0, vec2i(px), vec4f(m.A, tM));
+  textureStore(matOut1, vec2i(px), vec4f(octEncode(m.n), f32(flags), m.lights));
+  textureStore(matOut2, vec2i(px), vec4f(extra, m.imgO));
+  textureStore(matOut3, vec2i(px), vec4f(select(m.rwyPaved, m.bldS, bo), select(m.roadCover, m.bldAO, bo), m.wetS, m.ripple));
+}
+// The deferred raster ground's light (withLiteDeferred): a pixel shadeLite left with its material's record — its ray, point, light
+// and footprint found again as shadeLite found them, its water read again —, lit (liteLight), its last touches and its finish
+// (liteEpilogue: its surface to liteOut for shadeLiteFinish)
+@compute @workgroup_size(8, 8)
+fn shadeLiteLight(@builtin(global_invocation_id) gid: vec3u) {
+  let W = u32(P.res.x);
+  if (gid.x >= W || gid.y >= u32(P.res.y)) { return; }
+  let idx = gid.y * W + gid.x;
+  if (moments[idx].x != RASTER_MAT) { return; }
+  let k = u32(P.near1.w);
+  let centre = vec2f(gid.xy) + 0.5;
+  let p0 = textureLoad(matIn0, vec2i(gid.xy), 0);
+  let p1 = textureLoad(matIn1, vec2i(gid.xy), 0);
+  let p2 = textureLoad(matIn2, vec2i(gid.xy), 0);
+  let p3 = textureLoad(matIn3, vec2i(gid.xy), 0);
+  let tM = p0.w;
+  setAir(k);
+  WX_W = select(0.0, P.wx[0].x, HAS_WX && earthOn());
+  WX_Q = normalize(nearCam());
+  FOOT = 1.0;
+  FOOT_NEAR = 1.0;
+  FOOT_FAR = 1.0;
+  let pos = centre + liteJitter(gid.xy);
+  let ray = rasterRay(pos, k);
+  let ab = squashOf(k);
+  let rd = ray.rd;
+  let tH = tM / ray.kM;
+  let ph = rasterPoint(ray, tM);
+  let q = normalize(ph);
+  GEO_H = geoH(ph);
+  let gq = geoQ(q);
+  let anchored = tM < TILE_ANCHOR_M && P.nearCam1.w > 0.5 && P.tiles.w > 0.5;
+  if (anchored) { TILE_AT = tileAnchor(P.nearCam1.xyz + ray.rd * tH); }
+  let hG = max(airHeight(ph) - geoidN(gq), 0.0);
+  let lt = nearLight(k);
+  let Ls = normalize(squashed(toBody(lt.dir), ab));
+  let Lp = normalize(toBody(lt.dir));
+  let Li = incidentSun(Lp);
+  let E = lt.e;
+  let fp = pixFoot() * tH;
+  var tn = vec3f(0.0);
+  if ((liteSkip() & 16u) == 0u || (liteSkip() & 65536u) == 0u) { tn = terrainRasterNormal(centre); }
+  var nFoot = tn;
+  if (dot(nFoot, nFoot) < 0.5 || (liteSkip() & 65536u) != 0u) { nFoot = q; }
+  let fx = earthFootOn(q, rd, squashed(toBody(P.camRight.xyz), ab), fp, nFoot);
+  let fy = earthFootOn(q, rd, squashed(toBody(P.camUp.xyz), ab), fp, nFoot);
+  let at = rasterAttrAt(centre, k);
+  let flags = u32(p1.z);
+  let isTree = (flags & 1u) != 0u;
+  let mesh = atMesh(at);
+  let bo = !isTree && (mesh || atLeaf(at) > 0u);
+  var m: LiteMat;
+  m.A = p0.xyz;
+  m.n = octDecode(p1.xy);
+  m.ng = select(atNg(at, gq), m.n, isTree);
+  if (isTree) { WS_T = p2.xyz; }
+  m.bldE = select(vec3f(0.0), p2.xyz, bo);
+  m.rwyLamps = select(vec3f(0.0), p2.xyz, !bo && !isTree);
+  m.glass = f32((flags >> 1u) & 1u);
+  m.bldS = select(0.0, p3.x, bo);
+  m.rwyPaved = select(p3.x, 0.0, bo || isTree);
+  m.bldAO = select(1.0, p3.y, bo);
+  m.roadCover = select(p3.y, 0.0, bo || isTree);
+  m.wetS = p3.z;
+  m.ripple = p3.w;
+  m.imgO = p2.w;
+  m.lights = p1.w;
+  m.cover = (flags >> 2u) & 255u;
+  m.roadKind = f32((flags >> 10u) & 7u);
+  let G = liteLight(gq, q, tM, fx, fy, hG, ray.look, Ls, Lp, Li, E, isTree, at, m);
+  var wat = vec4f(0.0);
+  if (!mesh && !isTree && (liteSkip() & 1u) == 0u) {
+    let lvl0 = select(0.0, runwayGrade(gq).y, rwyCount() > 0u);
+    let nW = select(gq, tn, dot(tn, tn) > 0.5);
+    wat = liteWater(gq, fx, fy, hG, fp * EARTH_RM, nW, toBody(ray.look), tM, lvl0);
+  }
+  liteEpilogue(gid.xy, idx, centre, pos, G, rd, tH, tM, Ls, E, k, mesh, isTree, wat, gq, hG, at);
+}
 @compute @workgroup_size(8, 8)
 fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   let W = u32(P.res.x);
@@ -16132,36 +16323,11 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
       return;
     }
   }
+  // BEGIN_LITE_SURFACE
   let at = rasterAttrAt(centre, k);
-  var G = liteSurface(gq, q, ph, rd, ray.look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, isTree, anchored, at);
-  let mesh = meshW;
-  // (the water — liteWater, read at the start —: drawn by shadeWater, this pixel's surface under it left to it in accum, its kind
-  // and cover in moments.x)
-  if (!mesh && !isTree && (liteSkip() & 1u) == 0u) {
-    let water = wat.x;
-    let kind = wat.z;
-    // (TUNE_LITE 512: the water's cover drawn by its kind — red the sea, green a river, blue a lake: a measure)
-    if ((liteSkip() & 512u) != 0u) {
-      let kc = select(select(vec3f(0.5, 0.0, 0.0), vec3f(0.0, 0.5, 0.0), kind > 0.5), vec3f(0.0, 0.0, 0.6), kind > 1.5);
-      G = mix(G, kc * luminance(E), water);
-    } else if (water > 0.0 && rasterWaterOn()) {
-      accum[idx] = vec4f(G, 1.0);
-      moments[idx] = vec2f(RASTER_WATER - kind - 0.25 * water, tM / EARTH_RM * bodyRadius(k));
-      stamps[idx] = P.frame.x;
-      return;
-    }
-  }
-  if ((liteSkip() & 8192u) != 0u) { G = liteShadowDebug(E); }
-  // (liteSkip 8388608 — a measure —: the valleys' sky lost drawn instead of the surface, × 5: white a fifth lost or more, black none)
-  // (liteSkip 33554432 — a measure —: the occlusion drawn instead of the surface, × 5: white a fifth of the sky hidden or more)
-  if ((liteSkip() & 33554432u) != 0u) { G = vec3f(clamp((1.0 - rasterAO(centre)) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
-  if ((liteSkip() & 8388608u) != 0u) { G = vec3f(clamp((1.0 - earthSkyOpen(gq, hG, atNg(at, gq))) * 5.0, 0.0, 1.0)) * luminance(E) * 0.25; }
-  // (the air and the clouds before the surface — liteFinish —: here, or — tracer-source.ts withLiteSplit — in their own pass,
-  // shadeLiteFinish: this kernel then writes its surface G and distance to liteOut, the pixel marked RASTER_SPLIT; out of this
-  // kernel, that code no longer weighs on it — ~16 ms of its 46 over a low forest, kerr-mini, 11 Nov 2026)
-  // BEGIN_LITE_OUT
-  liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, true, false);
-  // END_LITE_OUT
+  let G = liteSurface(gq, q, ph, rd, ray.look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, isTree, anchored, at);
+  liteEpilogue(gid.xy, idx, centre, pos, G, rd, tH, tM, Ls, E, k, meshW, isTree, wat, gq, hG, at);
+  // END_LITE_SURFACE
 }
 
 // The image while the scene's tracer compiles (renderer.skyFillOn — its main: two minutes on a Windows PC, the driver's

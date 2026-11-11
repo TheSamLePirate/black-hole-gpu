@@ -32,44 +32,47 @@ export const FULL_TRACER_LIMITS: TracerLimits = { maxSampledTexturesPerShaderSta
 /** The tracer's source for a device: trace.wgsl and forest.wgsl composed as Renderer.create() composes them. */
 export function composeTracer(trace: string, forest: string, limits: TracerLimits): string {
   const tex = limits.maxSampledTexturesPerShaderStage;
-  return withLiteSplit(
-    aerialShader(
-      seaShader(
-        sceneryShader(
-          surfaceShader(
-            withOrthoImagery(
-              withDetailScans(
-                withGtao(
-                  withHorizonMaps(
-                    withTreeShadow(
-                      withCloudShadow(
-                        withCloudPass(
-                          withSunShadow(
-                            withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
-                            tex >= SUN_SHADOW_TEXTURE_LIMIT,
+  return withLiteDeferred(
+    withLiteSplit(
+      aerialShader(
+        seaShader(
+          sceneryShader(
+            surfaceShader(
+              withOrthoImagery(
+                withDetailScans(
+                  withGtao(
+                    withHorizonMaps(
+                      withTreeShadow(
+                        withCloudShadow(
+                          withCloudPass(
+                            withSunShadow(
+                              withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
+                              tex >= SUN_SHADOW_TEXTURE_LIMIT,
+                            ),
+                            tex >= CLOUD_PASS_TEXTURE_LIMIT,
                           ),
-                          tex >= CLOUD_PASS_TEXTURE_LIMIT,
+                          tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
                         ),
-                        tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
+                        tex >= TREE_SHADOW_TEXTURE_LIMIT,
                       ),
-                      tex >= TREE_SHADOW_TEXTURE_LIMIT,
+                      tex >= HORIZON_TEXTURE_LIMIT,
                     ),
-                    tex >= HORIZON_TEXTURE_LIMIT,
+                    tex >= GTAO_TEXTURE_LIMIT,
                   ),
-                  tex >= GTAO_TEXTURE_LIMIT,
+                  tex >= DETAIL_TEXTURE_LIMIT,
                 ),
-                tex >= DETAIL_TEXTURE_LIMIT,
+                tex >= ORTHO_TEXTURE_LIMIT,
               ),
-              tex >= ORTHO_TEXTURE_LIMIT,
+              tex >= SURFACE_TEXTURE_LIMIT,
             ),
-            tex >= SURFACE_TEXTURE_LIMIT,
+            limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
           ),
-          limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
+          tex >= SEA_TEXTURE_LIMIT,
         ),
-        tex >= SEA_TEXTURE_LIMIT,
+        tex >= AERIAL_TEXTURE_LIMIT,
       ),
-      tex >= AERIAL_TEXTURE_LIMIT,
     ),
+    tex >= LITE_DEFERRED_TEXTURE_LIMIT,
   );
 }
 
@@ -92,4 +95,29 @@ ${trace.replace(
   () => `moments[idx] = vec2f(RASTER_SPLIT, tM / EARTH_RM * bodyRadius(k));
   textureStore(liteOut, vec2i(gid.xy), vec4f(G, tM));`,
 )}`;
+}
+
+/** Sampled textures per stage for the deferred raster ground's light kernel: the tracer's 33 (DETAIL_TEXTURE_LIMIT) and the
+ *  material's record's four (trace.wgsl matIn0…3) */
+export const LITE_DEFERRED_TEXTURE_LIMIT = 37;
+/** the material's record's bindings in group 1: written by shadeLite (storage), read by shadeLiteLight (sampled) */
+export const LITE_MAT_OUT = [14, 15, 16, 17] as const;
+export const LITE_MAT_IN = [18, 19, 20, 21] as const;
+/**
+ * shadeLite deferred (journal 11 Nov 2026: the kernel on its registers' edge — any of the surfaces, the specular or the detail
+ * compiled out, −11 to −12.5 ms over a forest): its material and its light two kernels — shadeLite ends writing the material's
+ * record (liteMaterial → liteMatStore, the pixel marked RASTER_MAT), shadeLiteLight reads it back, lights it (liteLight) and
+ * finishes as shadeLite did (liteEpilogue). Where the device takes the record's four more textures; shadeLite whole otherwise.
+ */
+export function withLiteDeferred(trace: string, supported: boolean): string {
+  const marker = /\/\/ BEGIN_LITE_SURFACE[\s\S]*?\/\/ END_LITE_SURFACE/;
+  if (!marker.test(trace)) throw new Error("tracer-source: missing shadeLite's surface marker");
+  if (!supported) return trace;
+  return trace.replace(
+    marker,
+    () => `let at = rasterAttrAt(centre, k);
+  liteMatStore(gid.xy, liteMaterial(gq, q, ph, rd, ray.look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, isTree, anchored, at), tM, isTree,
+    !isTree && (meshW || atLeaf(at) > 0u));
+  moments[idx] = vec2f(RASTER_MAT, tM / EARTH_RM * bodyRadius(k));`,
+  );
 }

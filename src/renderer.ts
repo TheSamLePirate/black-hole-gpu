@@ -10,7 +10,14 @@ import { TerrainCache } from "./system/terrain-cache";
 import { EarthHorizons } from "./system/earth-horizons";
 import { EarthShore } from "./system/earth-shore";
 import { EH_HEADER_VEC4S, EH_NODE_VEC4S } from "./system/terrain-cache-layout";
-import { composeTracer, LITE_OUT_BINDING, LITE_OUT_FORMAT } from "./system/tracer-source";
+import {
+  composeTracer,
+  LITE_DEFERRED_TEXTURE_LIMIT,
+  LITE_MAT_IN,
+  LITE_MAT_OUT,
+  LITE_OUT_BINDING,
+  LITE_OUT_FORMAT,
+} from "./system/tracer-source";
 import {
   FEATURES_ALL,
   FEATURE_RASTER_PRIMARY,
@@ -349,6 +356,7 @@ const VARIANT_ENTRY = {
   shadeMark: "shadeMark",
   shadeLite: "shadeLite",
   shadeLiteFinish: "shadeLiteFinish",
+  shadeLiteLight: "shadeLiteLight",
   shadeWater: "shadeWater",
   shadeWaterOpen: "shadeWaterOpen",
   shadeStars: "shadeStars",
@@ -679,7 +687,9 @@ interface Target {
   polAcc: GPUBuffer; // Σ Stokes Q, U per pixel
   /** shadeLite's surfaces for its finishing pass (tracer-source.ts withLiteSplit) and their bind groups — made at the first lite pass */
   liteOut?: GPUTexture;
-  liteBinds?: { lut: GPUTexture | null; lite: GPUBindGroup; finish: GPUBindGroup };
+  liteBinds?: { lut: GPUTexture | null; lite: GPUBindGroup; finish: GPUBindGroup; mat?: GPUBindGroup; light?: GPUBindGroup };
+  /** the deferred ground's material record (trace.wgsl matOut/matIn — withLiteDeferred) */
+  liteMat?: GPUTexture[];
   /** the catalogue stars splatted by a realtime frame (R8: 3 × u32 fixed point per pixel; live view only) */
   stars: GPUBuffer;
   polGrid: GPUBuffer; // per tick cell Σ I, Q, U, n
@@ -1598,6 +1608,37 @@ export class Renderer {
       ],
     });
     this.liteLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.liteGroup1Layout] });
+    // (deferred — withLiteDeferred, the device taking the record's four textures more —: the material's kernel writes it, the
+    // light's reads it and writes liteOut)
+    this.liteDeferred = device.limits.maxSampledTexturesPerShaderStage >= LITE_DEFERRED_TEXTURE_LIMIT;
+    if (this.liteDeferred) {
+      const lutAerial: GPUBindGroupLayoutEntry[] = [
+        { binding: 2, visibility: C, texture: { sampleType: "unfilterable-float" } },
+        { binding: 3, visibility: C, texture: { sampleType: "unfilterable-float" } },
+        ...this.aerialReadLayout(),
+      ];
+      this.liteMatGroup1Layout = device.createBindGroupLayout({
+        label: "earth lite (deferred): material's group 1",
+        entries: [
+          ...lutAerial,
+          ...LITE_MAT_OUT.map((b) => ({
+            binding: b,
+            visibility: C,
+            storageTexture: { access: "write-only" as const, format: "rgba32float" as const },
+          })),
+        ],
+      });
+      this.liteLightGroup1Layout = device.createBindGroupLayout({
+        label: "earth lite (deferred): light's group 1",
+        entries: [
+          ...lutAerial,
+          ...LITE_MAT_IN.map((b) => ({ binding: b, visibility: C, texture: { sampleType: "unfilterable-float" as const } })),
+          { binding: LITE_OUT_BINDING, visibility: C, storageTexture: { access: "write-only", format: LITE_OUT_FORMAT } },
+        ],
+      });
+      this.liteMatLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.liteMatGroup1Layout] });
+      this.liteLightLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.liteLightGroup1Layout] });
+    }
     if (this.cloudWriteLayout)
       this.cloudsLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.cloudWriteLayout] });
     this.lutLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.lutWriteLayout] });
@@ -2401,6 +2442,7 @@ export class Renderer {
             ORTHO_TEXTURE_LIMIT,
             GTAO_TEXTURE_LIMIT,
             DETAIL_TEXTURE_LIMIT,
+            LITE_DEFERRED_TEXTURE_LIMIT,
           ),
           adapter.limits.maxSampledTexturesPerShaderStage,
           // (a test's cap — the page's hash gpuTextures=N —: a device with fewer, its features' stand-ins drawn)
@@ -3039,6 +3081,7 @@ export class Renderer {
     t.lut?.tex.forEach((x) => x.destroy());
     t.temporal?.buf.destroy();
     t.liteOut?.destroy();
+    for (const m of t.liteMat ?? []) m.destroy();
   }
 
   /** the tiles the tracer reads (binding 28): the Moon's while they are drawn, else the Earth's */
@@ -5769,6 +5812,8 @@ export class Renderer {
       shadeLite: GPUComputePipeline | null;
       /** shadeLite's finishing pass — the air and the clouds before its surfaces (trace.wgsl shadeLiteFinish; withLiteSplit) */
       shadeLiteFinish: GPUComputePipeline | null;
+      /** shadeLite deferred's light kernel (trace.wgsl shadeLiteLight; tracer-source.ts withLiteDeferred) */
+      shadeLiteLight: GPUComputePipeline | null;
       /** the raster's water, split from shadeLite (trace.wgsl shadeWater — TERRE-UNREAL U2d) */
       shadeWater: GPUComputePipeline | null;
       /** the open sea's water — shadeWater compiled with WATER_OPEN: the coasts' and the inland water's code out, its pixels the
@@ -5830,6 +5875,7 @@ export class Renderer {
       | "shadeMark"
       | "shadeLite"
       | "shadeLiteFinish"
+      | "shadeLiteLight"
       | "shadeWater"
       | "shadeWaterOpen"
       | "shadeStars"
@@ -5850,6 +5896,7 @@ export class Renderer {
       shadeMark: null,
       shadeLite: null,
       shadeLiteFinish: null,
+      shadeLiteLight: null,
       shadeWater: null,
       shadeWaterOpen: null,
       shadeStars: null,
@@ -5880,6 +5927,7 @@ export class Renderer {
         shadeMark: null,
         shadeLite: null,
         shadeLiteFinish: null,
+        shadeLiteLight: null,
         shadeWater: null,
         shadeWaterOpen: null,
         shadeStars: null,
@@ -5980,23 +6028,36 @@ export class Renderer {
   /** shadeLite with its finishing pass (withLiteSplit): the finishing pass compiled first, the pair kept together — a shadeLite
    *  without its own would leave its pixels unfinished */
   private async liteWithFinish(
-    slot: { shadeLiteFinish: GPUComputePipeline | null },
-    compile: (entry: "shadeLite" | "shadeLiteFinish") => Promise<GPUComputePipeline | null>,
+    slot: { shadeLiteFinish: GPUComputePipeline | null; shadeLiteLight: GPUComputePipeline | null },
+    compile: (entry: "shadeLite" | "shadeLiteFinish" | "shadeLiteLight") => Promise<GPUComputePipeline | null>,
   ): Promise<GPUComputePipeline | null> {
     const fin = slot.shadeLiteFinish ?? (await compile("shadeLiteFinish"));
     slot.shadeLiteFinish = fin;
     if (!fin) return null;
+    // (deferred — tracer-source.ts withLiteDeferred —: its light's kernel too, before the material's is used)
+    let light: GPUComputePipeline | null = null;
+    if (this.liteDeferred) {
+      light = slot.shadeLiteLight ?? (await compile("shadeLiteLight"));
+      slot.shadeLiteLight = light;
+      if (!light) return null;
+    }
     const lite = await compile("shadeLite");
-    if (lite) this.liteFinishOf.set(lite, fin);
+    if (lite) this.liteFinishOf.set(lite, { finish: fin, light });
     return lite;
   }
-  private liteFinishOf = new WeakMap<GPUComputePipeline, GPUComputePipeline>();
+  private liteFinishOf = new WeakMap<GPUComputePipeline, { finish: GPUComputePipeline; light: GPUComputePipeline | null }>();
+  /** shadeLite's material and light in two kernels (tracer-source.ts withLiteDeferred): the device takes the record's textures */
+  private liteDeferred = false;
+  private liteMatLayout!: GPUPipelineLayout;
+  private liteMatGroup1Layout!: GPUBindGroupLayout;
+  private liteLightLayout!: GPUPipelineLayout;
+  private liteLightGroup1Layout!: GPUBindGroupLayout;
   /** shadeLite's pipeline layout: the tracer's, its group 1 with liteOut (tracer-source.ts withLiteSplit) */
   private liteLayout!: GPUPipelineLayout;
   private liteGroup1Layout!: GPUBindGroupLayout;
   /** shadeLite's group 1 for a target (the far field's LUT or its stand-ins, the aerial table, liteOut) and its finishing pass's
    *  (liteOut read where the LUT is bound) */
-  private liteBinds(t: Target): { lite: GPUBindGroup; finish: GPUBindGroup } {
+  private liteBinds(t: Target): { lite: GPUBindGroup; finish: GPUBindGroup; mat?: GPUBindGroup; light?: GPUBindGroup } {
     if (!t.liteOut || t.liteOut.width !== t.width || t.liteOut.height !== t.height) {
       t.liteOut?.destroy();
       t.liteOut = this.device.createTexture({
@@ -6005,6 +6066,17 @@ export class Renderer {
         format: LITE_OUT_FORMAT,
         usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
       });
+      for (const m of t.liteMat ?? []) m.destroy();
+      t.liteMat = this.liteDeferred
+        ? LITE_MAT_OUT.map((_, i) =>
+            this.device.createTexture({
+              label: `earth lite: material record ${i}`,
+              size: [t.width, t.height],
+              format: "rgba32float",
+              usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+            }),
+          )
+        : undefined;
       t.liteBinds = undefined;
     }
     const lutKey = t.lut?.tex[0] ?? null;
@@ -6026,6 +6098,31 @@ export class Renderer {
             { binding: LITE_OUT_BINDING, resource: t.liteOut.createView() },
           ],
         }),
+        ...(this.liteDeferred && t.liteMat
+          ? {
+              mat: this.device.createBindGroup({
+                label: "earth lite (deferred): material's group 1",
+                layout: this.liteMatGroup1Layout,
+                entries: [
+                  { binding: 2, resource: lt[0]!.createView() },
+                  { binding: 3, resource: lt[1]!.createView() },
+                  ...this.aerialRead(),
+                  ...LITE_MAT_OUT.map((b, i) => ({ binding: b, resource: t.liteMat![i]!.createView() })),
+                ],
+              }),
+              light: this.device.createBindGroup({
+                label: "earth lite (deferred): light's group 1",
+                layout: this.liteLightGroup1Layout,
+                entries: [
+                  { binding: 2, resource: lt[0]!.createView() },
+                  { binding: 3, resource: lt[1]!.createView() },
+                  ...this.aerialRead(),
+                  ...LITE_MAT_IN.map((b, i) => ({ binding: b, resource: t.liteMat![i]!.createView() })),
+                  { binding: LITE_OUT_BINDING, resource: t.liteOut!.createView() },
+                ],
+              }),
+            }
+          : {}),
         finish: this.device.createBindGroup({
           label: "earth lite: finishing's group 1",
           layout: this.lutReadLayout,
@@ -6065,6 +6162,7 @@ export class Renderer {
         | "shadeMark"
         | "shadeLite"
         | "shadeLiteFinish"
+        | "shadeLiteLight"
         | "shadeWater"
         | "shadeWaterOpen"
         | "shadeStars"
@@ -6235,6 +6333,7 @@ export class Renderer {
       | "shadeMark"
       | "shadeLite"
       | "shadeLiteFinish"
+      | "shadeLiteLight"
       | "shadeWater"
       | "shadeWaterOpen"
       | "shadeStars"
@@ -6305,6 +6404,7 @@ export class Renderer {
       | "shadeMark"
       | "shadeLite"
       | "shadeLiteFinish"
+      | "shadeLiteLight"
       | "shadeWater"
       | "shadeWaterOpen"
       | "shadeStars"
@@ -6367,6 +6467,7 @@ export class Renderer {
       | "shadeMark"
       | "shadeLite"
       | "shadeLiteFinish"
+      | "shadeLiteLight"
       | "shadeWater"
       | "shadeWaterOpen"
       | "shadeStars"
@@ -6405,22 +6506,26 @@ export class Renderer {
           entryPoint === "clouds"
             ? this.cloudsLayout!
             : entryPoint === "shadeLite"
-              ? this.liteLayout
-              : entryPoint === "main" ||
-                  entryPoint === "shade" ||
-                  entryPoint === "shadeMark" ||
-                  entryPoint === "shadeLiteFinish" ||
-                  entryPoint === "shadeWater" ||
-                  entryPoint === "shadeWaterOpen" ||
-                  entryPoint === "shadeStars" ||
-                  entryPoint === "skyFill" ||
-                  entryPoint === "discs"
-                ? this.mainLayout
-                : entryPoint === "lut"
-                  ? this.lutLayout
-                  : entryPoint === "aerial"
-                    ? this.aerialLayout
-                    : this.tracePipeLayout,
+              ? this.liteDeferred
+                ? this.liteMatLayout
+                : this.liteLayout
+              : entryPoint === "shadeLiteLight"
+                ? this.liteLightLayout
+                : entryPoint === "main" ||
+                    entryPoint === "shade" ||
+                    entryPoint === "shadeMark" ||
+                    entryPoint === "shadeLiteFinish" ||
+                    entryPoint === "shadeWater" ||
+                    entryPoint === "shadeWaterOpen" ||
+                    entryPoint === "shadeStars" ||
+                    entryPoint === "skyFill" ||
+                    entryPoint === "discs"
+                  ? this.mainLayout
+                  : entryPoint === "lut"
+                    ? this.lutLayout
+                    : entryPoint === "aerial"
+                      ? this.aerialLayout
+                      : this.tracePipeLayout,
         compute: {
           module,
           // (the sky's discs: main's own, its sky's layer and its ground compiled out — DISC_ONLY)
@@ -7083,7 +7188,7 @@ export class Renderer {
       const lp = enc.beginComputePass(this.prof.pass("body lite (raster)"));
       lp.setPipeline(lite);
       lp.setBindGroup(0, this.hintBindFor(t, hint));
-      lp.setBindGroup(1, this.liteBinds(t).lite);
+      lp.setBindGroup(1, this.liteDeferred ? this.liteBinds(t).mat! : this.liteBinds(t).lite);
       lp.dispatchWorkgroups(Math.ceil(Math.ceil(t.width / bw) / 8), Math.ceil(Math.ceil(t.height / bh) / 8));
       if (mark) {
         lp.setPipeline(mark);
@@ -7108,11 +7213,21 @@ export class Renderer {
       const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
       lp.setPipeline(lite);
       lp.setBindGroup(0, this.hintBindFor(t, hint));
-      lp.setBindGroup(1, lb.lite);
+      lp.setBindGroup(1, this.liteDeferred ? lb.mat! : lb.lite);
       lp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
       lp.end();
+      const pair = this.liteFinishOf.get(lite);
+      // (deferred — withLiteDeferred —: the light's kernel over the material's record)
+      if (pair?.light) {
+        const gp = enc.beginComputePass(this.prof.pass("earth lite: light"));
+        gp.setPipeline(pair.light);
+        gp.setBindGroup(0, this.hintBindFor(t, hint));
+        gp.setBindGroup(1, lb.light!);
+        gp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+        gp.end();
+      }
       // (its finishing pass — the air and the clouds before the surfaces it left in liteOut: tracer-source.ts withLiteSplit)
-      const fin = this.liteFinishOf.get(lite);
+      const fin = pair?.finish;
       if (fin) {
         const fp = enc.beginComputePass(this.prof.pass("earth lite: finishing"));
         fp.setPipeline(fin);
@@ -10189,6 +10304,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       shadeMark: t("the ground's rays"),
       shadeLite: t("the ground's material"),
       shadeLiteFinish: t("the ground's material"),
+      shadeLiteLight: t("the ground's material"),
       shadeWater: t("the water"),
       shadeStars: t("the stars"),
       discs: t("the sky's discs"),

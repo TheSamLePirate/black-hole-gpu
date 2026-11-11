@@ -2704,3 +2704,21 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - **Enseignement** : un découpage par catégorie ne paie qu'avec une **compaction** (listes de pixels par catégorie, dispatch indirect) —
   un tampon de plus pour le traceur, déjà à sa limite de 8 ; le découpage matériau/éclairage (par étape, tous les pixels) n'a pas ce
   défaut. Annulé ; le code reste à b82fd8b2 + journal.
+
+## 2026-11-11T04:40Z — `shadeLite` différé : matériau et éclairage en deux noyaux — J0 60,0 ms
+
+- **Contribution** (stratégie §7.4 matériau/lumière, §8 ; chemin des 60 images/s) : l'ombrage du sol raster en deux étapes sur tous les
+  pixels. `liteSurface` = `liteLight(liteMaterial(…))` (une source ; `liteSun` après les derniers blocs de matériau, dont il ne dépend
+  pas) ; `tracer-source.ts` `withLiteDeferred` (là où l'appareil prend 37 textures par étage — demandées au démarrage) : `shadeLite`
+  ne fait plus que le matériau et écrit un enregistrement de 16 flottants (4 `rgba32float`, `liteMatStore` : albédo, distance, normale
+  oct, drapeaux, lumières de nuit, l'émission unique — transmission d'arbre / fenêtres / feux de piste —, part d'orthophoto, deux
+  scalaires partagés bâtiment/sol, humidité, ondes), le pixel marqué `RASTER_MAT` ; `shadeLiteLight` relit, retrouve rayon, point,
+  lumière, empreinte et l'eau, éclaire et finit (`liteEpilogue`, partagé avec `shadeLite` entier) ; puis `shadeLiteFinish` (l'air).
+  `shadeLite` 8,2 → 6,7 k lignes inlinées ; l'éclairage 2,4 k.
+- **Preuve** : **mesuré** sur kerr-mini — forêt de Toulon à 120 m : matériau 18,1 + éclairage 18,4 + finition 3,0 = **39,5 ms** (42,1
+  avant ; 46,5 avant la finition séparée), image identique à l'œil ; **J0 : GPU p50 vol 60,0 ms** (61,5 ; 62,4), vues figées 60,1/58,2 ;
+  e2e `sea-fft` 5/5, J0 2/2 ; nuit sur Paris à 300 m (A/B `ab-commit` contre b82fd8b2) : identique — cette vue presque noire l'était
+  déjà (décor en cours d'assemblage, campagne à Villacoublay ; non examiné) ; `check-wgsl` 80/80, budgets réécrits.
+- **Limites** : le saut de ~12 ms de la falaise n'est pas atteint (−2,6 ms ici) ; ~37 Mo écrits et relus par image pour
+  l'enregistrement (non mesuré seul) ; un appareil à moins de 37 textures garde `shadeLite` entier ; pluie et lumières de nuit
+  transitent par l'enregistrement — la nuit A/B identique, la pluie non revue.
