@@ -269,7 +269,23 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 - **Corrigé dans le harnais le 10 novembre** (non commité) : `app.offline(on)` (`tests/e2e/lib/cdp.ts`, `app.ts`) coupe la page
   et les cibles du Service Worker ; sonde : la tuile échoue hors ligne, avant et après un rechargement, et revient en ligne.
   `zones-usa-night` l'utilise, liste les requêtes de la page qui échouent hors ligne et vérifie qu'aucune tuile de sol n'a
-  échoué au-dessus de la zone. **Restent à convertir** : `zones`, `zones-scenery`, `pwa`, `overture` (non relancés).
+  échoué au-dessus de la zone. ~~**Restent à convertir**~~ — convertis le 11 novembre (`zones`, `zones-scenery`, `pwa`,
+  `overture` : `app.offline`, recoupé après chaque `load`). Relancés, ce Mac et kerr-mini :
+  - `pwa` **2/2**.
+  - Le **serveur de développement** des e2e servait un `precache.json` vide (la production liste ses workers et son WASM) : au
+    rechargement hors ligne, ni `earth-surface-worker.js` ni `terrain-mesh-worker.js` — le relief jamais demandé (0 tuile). Il sert
+    maintenant la même liste que la production (`server.ts`) ; c'était la cause des « workers manquants » plus bas, propre au banc.
+  - `zones` **rouge, sur le vrai hors ligne** : en vol tout vient de la zone (553 tuiles, 0 du réseau, 0 échec), mais au rechargement
+    68 tuiles échouent — le point sous l'orbite de départ de `game:artemis` (Terrarium et Sentinel-2 z 12 vers 2,5° E, 14,6° S,
+    hors zone : attendu) et des niveaux larges de GIBS (BlueMarble, lumières de nuit z 6–8) — et le détail du sol regardé y est
+    de 3,7 contre 8,2 en ligne (le test veut 60 %). Cause du détail non établie (les niveaux z 6–12 de Chamonix sont dans la zone).
+  - `overture` : en ligne, 980 bâtiments au lieu de 8 000 — **le test lisait la scène rapide** (T8m, 3 nov. : à 140 m/s il était
+    en « vol rapide », ses scènes rapides seules, 8 000 × 0,35² = 980) ; il vole maintenant à 100 m/s et attend `!quick`
+    (`earthScenery.stats().quick`, nouveau) : 8 000 bâtiments, comme le 24 octobre (données d'Overture identiques entre ses
+    publications 2026-09-23.1 et 2026-10-21.0 : 21 568 bâtiments sur les 9 tuiles). Encore **rouge** plus loin : au
+    rechargement en ligne, 3 requêtes Overture au réseau sur 99 (la liste des publications et deux plages) — peut-être les
+    plages d'une scène abandonnée (annulées, jamais gardées) ; non établi.
+  - `zones-scenery` : non relancé.
 - **Ce que le premier passage réellement hors ligne a montré** (`zones-usa-night`, ce Mac, `run-2026-11-10b.log` et `c.log`) :
   - **Après une seule visite, le monde est noir hors ligne.** Les fichiers du jeu sont gardés à l'usage, et la première visite
     les charge avant que le Service Worker tienne la page : au rechargement hors ligne, 24 cartes de planètes (`*-HASH.jpg`)

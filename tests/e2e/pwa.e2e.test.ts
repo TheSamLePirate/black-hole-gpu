@@ -41,16 +41,18 @@ describe.skipIf(!E2E)("the PWA: the app from its cache, offline", () => {
   }, 180_000);
 
   test("offline: the page reloads from its cache and the scene plays", async () => {
-    await app.cdp.send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    // (the page and its Service Worker cut — lib/cdp.ts offline: the page's alone left the worker's fetches on the network)
+    await app.offline(true);
     try {
       await app.load("scene=Earth: the Blue Marble");
+      await app.offline(true);
       await app.waitFor("__bh.camera.piloting", 90_000);
       expect(await app.js<boolean>("!!navigator.serviceWorker.controller")).toBe(true);
       const t0 = await app.js<number>("__bh.sim.time");
       await Bun.sleep(1500);
       expect(await app.js<number>("__bh.sim.time")).toBeGreaterThan(t0);
     } finally {
-      await app.cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+      await app.offline(false);
     }
   }, 180_000);
 });

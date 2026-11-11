@@ -62,9 +62,7 @@ describe.skipIf(!E2E)("an offline zone", () => {
     await app.js(PROGRESS);
   }, 300_000);
   afterAll(async () => {
-    await app?.cdp
-      .send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
-      .catch(() => {});
+    await app?.offline(false).catch(() => {});
     app?.close();
     stopServer();
   });
@@ -225,8 +223,11 @@ describe.skipIf(!E2E)("an offline zone", () => {
           try { const r = await f(input, init); if (tile) { if (r.headers.get("x-kerr-zone") === "1") window.__tiles.zone++; else { window.__tiles.other++; if (window.__tiles.others.length < 8) window.__tiles.others.push(r.status + " " + url.slice(0, 240)); } } return r; }
           catch (e) { if (tile) { window.__tiles.failed++; if (window.__tiles.others.length < 8) window.__tiles.others.push("failed " + url.slice(0, 150)); } throw e; } }; })();`,
     });
-    await app.cdp.send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    // (the page and its Service Worker cut — lib/cdp.ts offline: the page's alone left the worker's fetches on the network)
+    await app.offline(true);
     await app.load("scene=game:artemis");
+    // (again after the load: its new worker targets)
+    await app.offline(true);
     // (the scene's settings again — the vessel is the scene's, not a preference kept)
     await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 120_000);
@@ -275,13 +276,17 @@ describe.skipIf(!E2E)("an offline zone", () => {
       )}); const b = await r.blob(); const i = await createImageBitmap(b); return r.status + " " + r.headers.get("x-kerr-zone") + " " + b.type + " " + b.size + " B " + i.width + "×" + i.height; } catch (e) { return "error " + e; } })()`,
     );
     console.log(`  offline, drawn: ${JSON.stringify(drawn)}; a zone's orthophoto decoded: ${decode}`);
+    // (what the worker last asked the network — failed offline —: the tiles the zone lacked)
+    console.log(
+      `  offline, the network's last asks: ${JSON.stringify((await app.js<{ served?: { recent?: unknown } } | null>("__bh.pwa.stats()"))?.served?.recent ?? null).slice(0, 1500)}`,
+    );
     console.log(
       `  offline, loaded again and flown up the valley: ${seen.zone} tiles from the zone, ${seen.other} from elsewhere, ${seen.failed} failed, ${seen.finer} of them orthophotos finer than the profile's (z > ${ORTHO_Z1}: the core's)${seen.others.length ? ` (${seen.others.join(" · ")})` : ""}; at the end ${ground.d.toFixed(2)} km from the centre (out of the core): ground pending ${ground.pending} (orthophotos ${ground.ortho}), levels to z ${ground.finest}, orthophotos to z ${ground.orthoFinest}, ${ground.pipe}, pitch ${f1.pitch.toFixed(1)}°`,
     );
     await phase(
       `Hors ligne : ${seen.zone} tuiles de la zone (dont ${seen.finer} du cœur, z 18), ${net} du réseau — sol complet : ${ground.pending === 0 ? "oui" : "non"}`,
     );
-    await app.cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    await app.offline(false);
     expect(seen.zone).toBeGreaterThan(100);
     // (the zone's imagery drawn, not only loaded: the ground as detailed as online)
     expect(at.look.detail).toBeGreaterThan(0.6 * online.look.detail);

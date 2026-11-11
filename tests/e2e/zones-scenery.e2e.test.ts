@@ -83,9 +83,7 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
     await app.js(PROGRESS);
   }, 300_000);
   afterAll(async () => {
-    await app?.cdp
-      .send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
-      .catch(() => {});
+    await app?.offline(false).catch(() => {});
     app?.close();
     stopServer();
   });
@@ -209,8 +207,11 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
           try { const r = await f(input, init); if (tile) { if (r.headers.get("x-kerr-zone") === "1") window.__tiles.zone++; else { window.__tiles.other++; if (window.__tiles.others.length < 8) window.__tiles.others.push(r.status + " " + url.slice(0, 240)); } } return r; }
           catch (e) { if (tile) { window.__tiles.failed++; if (window.__tiles.others.length < 8) window.__tiles.others.push("failed " + url.slice(0, 150)); } throw e; } }; })();`,
     });
-    await app.cdp.send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    // (the page and its Service Worker cut — lib/cdp.ts offline: the page's alone left the worker's fetches on the network)
+    await app.offline(true);
     await app.load("scene=game:artemis");
+    // (again after the load: its new worker targets)
+    await app.offline(true);
     await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 120_000);
     await app.js(PROGRESS);
@@ -244,7 +245,7 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
       `  the page's ground: ${page.zone} tiles from the zone, ${page.other} from elsewhere, ${page.failed} failed, ${page.finer} orthophotos finer than the profile's${page.others.length ? ` (${page.others.join(" · ")})` : ""}`,
     );
     if (s1.recent?.length) console.log(`  the network's last: ${s1.recent.join(" · ")}`);
-    await app.cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    await app.offline(false);
     await phase(
       `Hors ligne : ${offline.held.trees} arbres, ${offline.held.buildings} bâtiments — ${Object.values(zoned).reduce((a, b) => a + b, 0)} tuiles de la zone, ${Object.entries(
         net,

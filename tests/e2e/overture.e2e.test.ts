@@ -38,9 +38,7 @@ describe.skipIf(!E2E)("Overture Maps' buildings", () => {
     await app.waitFor("!!__bh.pwa.zones", 30_000);
   }, 300_000);
   afterAll(async () => {
-    await app?.cdp
-      .send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 })
-      .catch(() => {});
+    await app?.offline(false).catch(() => {});
     app?.close();
     stopServer();
   });
@@ -57,14 +55,16 @@ describe.skipIf(!E2E)("Overture Maps' buildings", () => {
     await app.js(`(() => { __bh.game.setDate("2026-07-10T09:00:00Z"); return 1; })()`);
     await Bun.sleep(1000);
     const before = await served();
+    // (100 m/s: under the scenery's fast flight — 120 m/s and more, T8m —, whose quick scenes alone hold 980 buildings at most)
     await app.js(
-      `(() => { __bh.freeze(false); __bh.game.flyAt(${ZONE.lat - 0.004}, ${ZONE.lon + 0.006}, 260, 315, 140); __bh.settings.shipMount = "chase"; return 1; })()`,
+      `(() => { __bh.freeze(false); __bh.game.flyAt(${ZONE.lat - 0.004}, ${ZONE.lon + 0.006}, 260, 315, 100); __bh.settings.shipMount = "chase"; return 1; })()`,
     );
     await Bun.sleep(1500);
     await app.js(`(__bh.freeze(true), 1)`);
     await app
       .waitFor(
-        `(() => { const s = __bh.renderer.earthScenery.stats(); return !s.pending && s.status === "ready" && s.overtureBuildings > 0; })()`,
+        // (the full scene, not the quick first one — its box 0.35 of the reach's, its buildings 980 at most: QUICK_SHARE)
+        `(() => { const s = __bh.renderer.earthScenery.stats(); return !s.pending && !s.quick && s.status === "ready" && s.overtureBuildings > 0; })()`,
         240_000,
       )
       .catch(async () => console.log(`  (${label}: no Overture building after 240 s — ${JSON.stringify(await scene())})`));
@@ -96,6 +96,9 @@ describe.skipIf(!E2E)("Overture Maps' buildings", () => {
     await app.waitFor(`__bh.fleet.active === "f35"`, 120_000);
     const cached = await arrive("cached");
     console.log(`  the ranges again: ${JSON.stringify(cached.overture)}`);
+    console.log(
+      `  the network's last asks: ${JSON.stringify((await app.js<{ served?: { recent?: unknown } } | null>("__bh.pwa.stats()"))?.served?.recent ?? null).slice(0, 1500)}`,
+    );
     expect(cached.s.overtureBuildings).toBeGreaterThan(0.9 * online.s.overtureBuildings);
     expect(cached.overture.lru).toBeGreaterThan(0);
     expect(cached.overture.network).toBe(0);
@@ -117,8 +120,11 @@ describe.skipIf(!E2E)("Overture Maps' buildings", () => {
     expect(kept.kinds?.overture?.zone ?? 0).toBeGreaterThan(3);
     // (offline: the tiles' cache emptied, the network cut, the page loaded again)
     await app.js(`__bh.pwa.clearTiles()`);
-    await app.cdp.send("Network.emulateNetworkConditions", { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    // (the page and its Service Worker cut — lib/cdp.ts offline: the page's alone left the worker's fetches on the network)
+    await app.offline(true);
     await app.load("scene=game:artemis");
+    // (again after the load: its new worker targets)
+    await app.offline(true);
     await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 120_000);
     const offline = await arrive("offline");
@@ -127,7 +133,7 @@ describe.skipIf(!E2E)("Overture Maps' buildings", () => {
     console.log(
       `  offline, the network's by kind: ${JSON.stringify(Object.fromEntries(Object.entries(after.kinds ?? {}).filter(([, v]) => v.network)))}; its last: ${JSON.stringify((after as { recent?: string[] }).recent ?? [])}`,
     );
-    await app.cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    await app.offline(false);
     expect(offline.s.overtureBuildings).toBeGreaterThan(0.9 * online.s.overtureBuildings);
     expect(offline.overture.zone).toBeGreaterThan(0);
     expect(offline.overture.network).toBe(0);

@@ -518,6 +518,9 @@ export class EarthScenery {
             : this.reason,
       pending: this.pending,
       progress: this.progress,
+      /** (T8m) the scene drawn is a quick first one — its box QUICK_SHARE of the reach's, its budgets as much squared —, the full
+       *  one to follow: a test counting the buildings waits for `!quick` */
+      quick: this.applied.endsWith(":q"),
       budgetLimited: d?.budgetLimited ?? false,
       lat: d?.lat ?? null,
       lon: d?.lon ?? null,

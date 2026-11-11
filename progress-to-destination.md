@@ -3103,7 +3103,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Docs** : VOL-VAISSEAUX (tableau des autopilotes, défauts), E2E-CATALOGUE, PROBLEMES-A-REGLER. Non vérifié : CIRC près de Mann et
   d'Edmunds (même code), un CIRC engagé très près de la limite de la sphère du monde.
 
-## 2026-11-11T13:13Z — Les mondes de Gargantua : décoller, l'orbite par défaut
+## 2026-11-11T13:06Z — Les mondes de Gargantua : décoller, l'orbite par défaut
 
 - **Destination** : §19 (les parcours complets : se poser sur un monde de Gargantua et en repartir par U).
 - **Constaté en vol** (sondes, ce Mac) : U sur la glace de Mann — le Ranger restait posé, manette à 0 (la loi voulait d'abord tourner
@@ -3119,3 +3119,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Docs** : VOL-VAISSEAUX (tableau des autopilotes, défauts réglés), BH-API (`orbit`, `liftOff`), E2E-CATALOGUE, PROBLEMES (rayé).
 - **Non vérifié** : U depuis la mer de Miller (l'appareil à flot) et depuis Edmunds ; le Lander côté Gargantua (la sonde est restée
   sur le Ranger : le changement d'appareil n'y a pas pris).
+
+## 2026-11-11T13:36Z — Les e2e hors ligne coupent vraiment le réseau ; ce qu'ils montrent
+
+- **Destination** : §19 (le jeu hors ligne et ses zones, des preuves qui disent vrai) ; la suite des points ouverts de
+  PROBLEMES-A-REGLER (« les e2e hors ligne ne coupent pas le réseau du Service Worker »).
+- **Fait** : `zones`, `zones-scenery`, `pwa`, `overture` coupent par `app.offline` (la page et son Service Worker), recoupé après
+  chaque `load` ; le serveur de développement sert le même `precache.json` que la production (ses workers et son WASM — vide, le
+  rechargement hors ligne n'avait ni le worker de la surface ni celui du maillage : le relief jamais demandé) ; `earthScenery.stats()`
+  dit `quick` (la scène rapide de T8m) ; `overture` vole à 100 m/s (sous le vol rapide) et attend la scène complète.
+- **Vérifié** (ce Mac, kerr-mini) : `pwa` 2/2 ; `overture` en ligne 8 000 bâtiments (au lieu de 980 : le test lisait la scène
+  rapide ; données Overture identiques entre les publications de septembre et d'octobre, comptées par script) ; `zones` : en vol
+  hors ligne, 553 tuiles de la zone, 0 du réseau, 0 échec.
+- **Encore rouges, sur le vrai hors ligne** (consignés dans PROBLEMES-A-REGLER) : `zones` — au rechargement 68 tuiles hors zone
+  échouent (le point sous l'orbite de départ de la scène, des niveaux larges de GIBS) et le détail du sol regardé y est 3,7 contre
+  8,2 en ligne, cause non établie ; `overture` — 3 requêtes au réseau sur 99 au rechargement en ligne. `zones-scenery` non relancé.
+- **Docs** : E2E.md §7 (deux lignes), BH-API (`quick`), PROBLEMES-A-REGLER.

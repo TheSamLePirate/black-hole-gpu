@@ -172,7 +172,7 @@ const server = Bun.serve({
     },
     // the build's version (the benchmark's report names it); the pages build writes the same file
     "/version.json": async () => Response.json({ sha: (await Bun.$`git rev-parse --short HEAD`.nothrow().text()).trim() || "dev" }),
-    // the Service Worker (src/sw.ts), the manifest and the icons (pwa/), the precache list (none in dev)
+    // the Service Worker (src/sw.ts), the manifest and the icons (pwa/), the precache list
     "/sw.js": async () => {
       const r = await Bun.build({
         entrypoints: ["./src/sw.ts"],
@@ -191,7 +191,24 @@ const server = Bun.serve({
       const f = req.params.file.replace(/[^\w.-]/g, "");
       return new Response(Bun.file(`pwa/icons/${f}`));
     },
-    "/precache.json": () => Response.json([]),
+    // (the precache list: the workers and the WASM this server builds at the top level, as the pages build lists its top-level
+    // js and wasm — the page and its bundle are warmed by the page itself (src/pwa.ts warmShell), a worker's script is not: an
+    // empty list left the e2e's offline reload with no earth-surface or terrain-mesh worker, the ground never asked for)
+    "/precache.json": () =>
+      Response.json([
+        "plan-worker.js",
+        "mirage-worker.js",
+        "intro-worker.js",
+        "net.js",
+        "audio-worklet.js",
+        "ktx-worker.js",
+        "earth-surface-worker.js",
+        "wgsl-specialise-worker.js",
+        "tile-decode-worker.js",
+        "terrain-mesh-worker.js",
+        "scenery-worker.js",
+        "basis_transcoder.wasm",
+      ]),
     // (the OAuth callback of "Sign in with OpenRouter" — PLAN-TARS T6)
     "/openrouter.html": () => new Response(Bun.file("pwa/openrouter.html"), { headers: { "content-type": "text/html; charset=utf-8" } }),
     "/basis_transcoder.wasm": () =>
