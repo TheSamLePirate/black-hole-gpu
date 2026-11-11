@@ -3194,3 +3194,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le relief gardé 1 854 → 1 920 grilles. Restent 17 replis RGE ALTI HIGHRES en 502 pendant 12 minutes de reprises que l'IGN sert à
   l'instant hors du test — soupçon : le 502 gardé par le cache HTTP du navigateur ; le téléchargement d'une zone le contourne
   maintenant (`cache: "no-store"`), relance en cours.
+
+## 2026-11-11T19:32Z — `zones-scenery` vert : la zone de Chamonix avec son décor, tenue hors ligne
+
+- **Vérifié** (kerr-mini, 1 007 s) : la zone (profil aéroport, décor du monde) téléchargée en 851 s, 8 610 liens, 0 échec ; le réseau
+  coupé (page et Service Worker), la page rechargée : 313 596 arbres et 8 000 bâtiments de la zone, 0 d'ailleurs ; le vol dans la
+  vallée : 447 tuiles de sol de la zone, 0 du réseau, 0 échec. Après le traitement de `LayerNotDefined` et le téléchargement hors du
+  cache HTTP (e370e728). Un seul passage vert — les 502 de l'IGN restent possibles (la zone les nomme alors, et une reprise les
+  redemande). Bilan des e2e hors ligne de la journée : `pwa`, `zones`, `overture`, `zones-scenery` verts.

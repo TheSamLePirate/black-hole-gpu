@@ -304,7 +304,11 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
     (`11/1068/733`) : le serveur de l'IGN dépasse par moments sa minute de passerelle sur certaines tuiles. Cinq essais espacés
     jusqu'à 16 s ont été essayés et retirés (les lots passaient leurs 120 s : 54 échecs, 1 530 s) ; gardés : trois essais, une pause
     de 30 s avant la dernière demande des échecs, l'erreur relevée. Le produit fait ce qu'il faut (la zone en pause, ses échecs
-    nommés, une reprise plus tard) ; le test reprend la zone 12 minutes au plus.
+    nommés, une reprise plus tard) ; le test reprend la zone 12 minutes au plus. **Puis réglé** : le 400 `LayerNotDefined` (hors de la
+    couverture du LiDAR HD) lu comme une absence (le repli RGE ALTI pris), et le téléchargement hors du cache HTTP du navigateur
+    (soupçon : un 502 de passerelle gardé là, resservi à chaque reprise) — **`zones-scenery` vert** (kerr-mini, 1 007 s : la zone en
+    851 s, 0 échec ; hors ligne 313 596 arbres, 8 000 bâtiments, 447 tuiles de sol, tout de la zone, 0 du réseau). Un seul passage
+    vert : à revoir sur d'autres.
 - **Ce que le premier passage réellement hors ligne a montré** (`zones-usa-night`, ce Mac, `run-2026-11-10b.log` et `c.log`) :
   - **Après une seule visite, le monde est noir hors ligne.** Les fichiers du jeu sont gardés à l'usage, et la première visite
     les charge avant que le Service Worker tienne la page : au rechargement hors ligne, 24 cartes de planètes (`*-HASH.jpg`)

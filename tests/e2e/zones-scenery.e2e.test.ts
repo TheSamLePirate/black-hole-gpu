@@ -12,7 +12,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // 1.8 km up the valley at 450 m over its floor: the scenes asked anew as it goes, the Service Worker's figures by kind
 // (pwa/rules.ts tileKind: the scenery worker's fetches, out of the page's sight) and the page's own — none from the network.
 // (E2E_SHOTS=<dir>: zones-scenery-online, zones-scenery-offline — the cockpit over the valley, held still.)
-// Duration: ~25 min on kerr-mini (the download ~20 of them, 11 Nov 2026: the Géoplateforme's chains ~4.6 a second), up to ~50
+// Duration: ~17 min on kerr-mini (the download ~14 of them, 11 Nov 2026: the Géoplateforme's chains ~5 a second), up to ~50
 // with the resumes of chains the IGN refused under the load.
 // Done when: the zone ready, the offline scenes' trees and buildings drawn from it, no tile of any kind from the network,
 // the zone dropped.
