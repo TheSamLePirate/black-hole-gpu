@@ -23,6 +23,12 @@ du raster) sur cette vue.
 (4·10³⁰) et la même distance (11–15 m) : le même noyau, l'eau. Le turquoise naît donc dans l'ombrage de l'eau, pas d'un sol mal classé.
 L'essai suivant (la vue de débogage des sillages, `TUNE_GSKIP` 32768) a été pris pendant la recompilation : non concluant. Reste à
 couper une à une, une fois compilées, les sources de couleur de `seaShade` (sillages et bulles, Kd490, ciel reflété, SSR).
+**Coupées une à une, compilées (ce Mac, 20 s d'attente chacune)** : sillages et bulles (vue de débogage `TUNE_GSKIP` 32768 : noire —
+aucun), SSR (4096), ciel reflété (512), nuages reflétés (16384), ombres du Soleil (`liteSkip` 4096), ombres de contact (16384),
+ombre de l'appareil (2097152) : **les rectangles restent à chaque fois**. Le diagnostic « albédo du fond nul » plus haut a pu être pris
+pendant une recompilation (comme celui des sillages) : **suspect principal, à revérifier compilé** — la classification de l'eau peu
+profonde dans `shadeLite` (`liteWater` : `wat.x ≥ 0,999` et `wat.y ≤ 0` → l'albédo de l'imagerie dans `accum`, w = 2, qui ouvre le
+turquoise de `seaShade`), décidée par cellules (profondeur, masque) — d'où des rectangles.
 
 ## ~~Le bord de l'eau sur la plage en marches d'environ 1 m~~ — réglé le même jour : c'était l'écume des crêtes (le seuil du Jacobien) — sa bande comptait les pentes des deux cascades longues seules ; bas sur l'eau, la plus fine calculée aussi pliait la surface sous le seuil sur la moitié de la mer (`renderer.ts` `seaFftParams` : la largeur sur les cascades calculées) ; planche `docs/progress/mer/ecume-puzzle-avant-apres.jpg`
 
