@@ -38,6 +38,11 @@ distance du patch le plus fin (niveau 0 des anneaux) reste à **231–233 m** �
 hauteurs fines du cache contiennent une marche de la hauteur des pins** (14 m) au bord du tombolo. Cause à trouver dans les sources
 fines (`earth-tiles.ts` : quel relevé fournit z ≥ 15 là — un MNS au lieu d'un MNT, ou une tuile interpolée sur l'eau comme le bloc
 noir de S2) ; la mesure `heightAt` à 0 partout est à reprendre avec le niveau des tuiles dessinées.
+**Resserré (même jour)** : `earthTiles.heightAt(q, 1 m, drawn)` le long de 43,0669° N, de 6,124 à 6,134° E (tous les ~16 m, la
+source nationale « ign », niveau le plus fin z 17, `rem` 0 : les tuiles couvrent) : **0 à 1,2 m** sur la plage et le tombolo,
+−0,5 m dans l'étang — **aucune marche dans les sources**. La paroi naît après elles : dans la cuisson du cache de relief (le relevé
+fin ajouté au relief grossier, `terrain-cache.ts` — cf. son commentaire sur « une aiguille aussi haute que la mer était profonde ») ou
+dans le maillage raster (`terrain-raster.ts`). Suite : lire les nœuds du cache (niveaux 0–2) autour de 43,0669 N, 6,1288 E.
 
 ## Le Lander posé ne décolle pas avec U (autopilote de décollage)
 
