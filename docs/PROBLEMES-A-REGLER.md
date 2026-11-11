@@ -3,6 +3,13 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Des rectangles turquoise sur l'eau peu profonde devant l'Almanarre
+
+**2026-11-11T08:50Z.** Observé (ce Mac, vue à 20 m au-dessus de l'eau devant la plage, regard −40° vers l'ouest ; planche
+`docs/progress/mer/turquoise-rectangles.png`, trois instants) : des taches turquoise rectangulaires, à bords en marches de 1–3 m, fixes,
+sur l'eau de 0–0,3 m — le turquoise des hauts-fonds (l'albédo du fond lu par `shadeLite`, `accum` w = 2) ouvert par endroits seulement.
+Cause non cherchée ; pistes : les texels de la décision « fond visible » (l'orthophoto, ses huit empreintes) ou de la bathymétrie.
+
 ## ~~Le bord de l'eau sur la plage en marches d'environ 1 m~~ — réglé le même jour : c'était l'écume des crêtes (le seuil du Jacobien) — sa bande comptait les pentes des deux cascades longues seules ; bas sur l'eau, la plus fine calculée aussi pliait la surface sous le seuil sur la moitié de la mer (`renderer.ts` `seaFftParams` : la largeur sur les cascades calculées) ; planche `docs/progress/mer/ecume-puzzle-avant-apres.jpg`
 
 **2026-11-11T07:50Z.** Observé (kerr-mini, `coast-swell` `SWELL_ABLATE=sand`, 20 m au-dessus de la plage de l'Almanarre, regard −40°
