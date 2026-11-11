@@ -2813,3 +2813,17 @@ plans [PLAN-MER-WEBGPU §5](docs/PLAN-MER-WEBGPU.md), [PLAN-VEGETATION-V2](docs/
 - **Non fait / limites** : la profondeur du champ est Dean seul (les tuiles ne sont pas lues dans la cuisson) ; le niveau le plus fin a
   des nœuds de 38 m ; le sable mouillé et la lame sur la terre (L3) vont avec J1 ; V2c (dessin, mips à couverture conservée), V2d
   (au-delà de 6,25 km), V2e restent ; aucune mesure J0 de ce lot ; M1 Max non mesuré.
+
+## 2026-11-11T03:45Z — Houle côtière : les groupes de vagues sans bruit de gradient (≈ +0,9 ms au lieu de +1,5–2)
+
+- **Mesuré** (kerr-mini, sonde `coast-swell` `SWELL_ABLATE=fine`, trois passages alternés par vue, GPU p50) : avec le bruit de
+  gradient pour les groupes, le champ coûtait **+2,0 ms** sur la vue de plage (sans groupes −0,9, sans déferlement −0,6, sans crêtes
+  −0,5 : à ±0,7 près). Les groupes sont maintenant une enveloppe analytique — sept vagues portées par la phase (en eau peu profonde la
+  vitesse des groupes est celle des crêtes), ondulées le long des crêtes sur ~5 longueurs d'onde, deux sinus et une horloge lente dans
+  l'en-tête du champ (`SWELL_HEADER_VEC4S` 10) — : plage **65,7 → 66,6 ms (+0,9)**, vue basse **60,2 → 61,1 (+0,9)**, vue à 250 m dans
+  le bruit (passage 3 : 79,3 → 78,1). Toujours au-dessus de la cible ≤ +0,5 ms de l'analyse ; les ablations restantes sont sous le bruit
+  d'un passage (±0,5) — il faudrait une vue figée par passe pour séparer lecture, crêtes et déferlement.
+- **Vérifié** : tests (`earth-swell`, `gpu-tables`, budget des noyaux), 83/83 shaders, sonde passée (0 erreur GPU). Captures refaites
+  avec les nouveaux groupes (`coast-swell`, aerial/low ; planche `docs/progress/mer/houle-l1-almanarre.jpg` remplacée) ; ce passage :
+  250 m +1,2 / +0,9 ms, 6 m +0,8 / +0,6 ms (deux passages). Les crêtes se voient là où la houle sent le fond, plus au premier plan
+  (profondeur connue des tuiles) ; la ligne de ressac de la plage, mince à 2,7 km.
