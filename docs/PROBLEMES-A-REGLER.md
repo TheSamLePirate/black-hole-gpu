@@ -11,8 +11,13 @@ du rivage, sa texture étirée en traînées verticales, sur une frange blanche 
 avec les formes analytiques et avec les imposteurs** (`treeImpostorsOn`) : pas les arbres. Planche
 `docs/progress/mer/parois-vertes-tombolo.png` (en haut formes, en bas imposteurs). **Cause supposée** (non vérifiée) : les
 « silhouettes lointaines » — le MNS de l'IGN moins le sol ajouté aux hauteurs du relief aux niveaux z ≤ 13 (`earth-tiles.ts`,
-`earthIgnSilhouettes`) — font des pins du rivage un relief vertical, que l'orthophoto habille en l'étirant. Piste : A/B
-`earthIgnSilhouettes` sur cette vue ; si c'est elle, la borner aux vues hautes ou habiller ses faces raides d'une couleur de canopée.
+`earthIgnSilhouettes`) — font des pins du rivage un relief vertical, que l'orthophoto habille en l'étirant. **Écartée le même jour**
+(ce Mac, `forest-impostors` `SETTING_BOOT=earthIgnSilhouettes=false`, le réglage posé avant tout chargement) : les parois restent,
+identiques ; elles restent aussi **sans aucun arbre dessiné** (`raster: false`, le décor pas encore là) — ni les arbres ni les
+silhouettes. Reste le relief lui-même (un relevé LiDAR interpolé sur l'eau ? cf. le bloc noir de S2) ou une autre surface ; un
+relevé des hauteurs par `earthTiles.heightAt` le long de l'éventail (relèvements 50–78°, 0,5–6 km) a rendu 0 partout, tombolo compris
+— la mesure elle-même est à revoir (tuiles pas encore là, ou mauvaise lecture). Piste suivante : la passe de visibilité seule
+(`__bh.renderer` distance/code au pixel de la paroi) pour savoir quelle surface la dessine.
 
 ## Le Lander posé ne décolle pas avec U (autopilote de décollage)
 
