@@ -292,5 +292,5 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   moyennes de la ville 0,099 / 0,066 / 0,094 / 0,089 contre 0,100 / 0,066 / 0,099 / 0,068 : les mêmes. La planche du 6 a été faite
   sur ce Mac (sortie HDR) ; kerr-mini (SDR) rend la nuit 3 à 4 fois plus sombre en capture — un écart de machine, pas du code.
   (Le banc `ab-commit` ne charge pas le paquet de décor de ce test : « scenery pack », les deux côtés.)
-- **Pluie** : l'e2e `rain` (« paused, the rain holds… ») échoue aussi avant et après le 11 (la vue en pause n'atteint pas
+- ~~**Pluie**~~ (réglé le 11 novembre, 2db276ba : la comparaison en pause faite en mode photo — 2/2) : l'e2e `rain` (« paused, the rain holds… ») échoue aussi avant et après le 11 (la vue en pause n'atteint pas
   `converged` en 150 s) — même démarche.
