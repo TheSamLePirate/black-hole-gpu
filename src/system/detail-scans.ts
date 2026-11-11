@@ -16,6 +16,9 @@ import soilUrl from "../../assets/detail/soil.ktx2";
 /** sampled textures per stage with the scans' (the occlusion's 32 and one), their binding */
 export const DETAIL_TEXTURE_LIMIT = 33;
 export const DETAIL_BINDING = 49;
+/** its own sampler — linear between its mips: one read a level pair, not two blended by hand (noiseSamp, which it shared, is
+ *  nearest between them) — the detail scans weighed 7.6 ms of the raster material's 18 over a forest, kerr-mini, 11 Nov 2026 */
+export const DETAIL_SAMPLER_BINDING = 27;
 /** the materials, in the array's order (shadeLite's detailMaterial) */
 export const DETAIL_MATERIALS = ["grass", "soil", "gravel", "rock", "asphalt"] as const;
 const URLS: Record<(typeof DETAIL_MATERIALS)[number], string> = {
@@ -41,12 +44,11 @@ export function withDetailScans(trace: string, supported: boolean): string {
     marker,
     `
 @group(0) @binding(${DETAIL_BINDING}) var detailTex: texture_2d_array<f32>;
+@group(0) @binding(${DETAIL_SAMPLER_BINDING}) var detailSamp: sampler;
 const DETAIL_BOUND = true;
+// (its sampler linear between the mips: the two levels about lod blended by the hardware — as they were by hand, one read)
 fn detailRead(uv: vec2f, layer: i32, lod: f32) -> vec4f {
-  let l0 = clamp(floor(lod), 0.0, ${LEVELS - 1}.0);
-  let a = textureSampleLevel(detailTex, noiseSamp, uv, layer, l0);
-  let b = textureSampleLevel(detailTex, noiseSamp, uv, layer, min(l0 + 1.0, ${LEVELS - 1}.0));
-  return mix(a, b, clamp(lod - l0, 0.0, 1.0));
+  return textureSampleLevel(detailTex, detailSamp, uv, layer, clamp(lod, 0.0, ${LEVELS - 1}.0));
 }`,
   );
 }

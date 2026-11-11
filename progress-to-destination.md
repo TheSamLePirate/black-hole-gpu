@@ -2723,3 +2723,14 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   l'enregistrement (non mesuré seul) ; un appareil à moins de 37 textures garde `shadeLite` entier ; pluie et lumières de nuit
   transitent par l'enregistrement — la nuit A/B identique ; la pluie non revue à l'image : l'e2e `rain` échoue (« paused… » : la vue
   en pause n'atteint pas `converged` en 150 s) **à l'identique sur b82fd8b2** (A/B `ab-commit`) — un échec antérieur, non examiné.
+
+## 2026-11-11T05:10Z — Le différé mesuré par famille ; le détail pèse par sa présence (sampler propre : sans gain)
+
+- **Mesuré** (kerr-mini, forêt, coupes à la compilation sur le code différé — matériau / éclairage, ms) : base ~17,8 / 18,6 ; scans de
+  détail retirés **10,1 / 14,3** (−7,6 / −4,3) ; ombres du décor 18,3 / 16,0 ; surfaces 16,9 / 18,7 ; spéculaire 17,6 / 18,5 (plus au
+  bord : l'éclairage seul n'est plus sur la falaise pour lui).
+- **Essayé** : un sampler propre aux scans de détail, linéaire entre les mips (`detail-scans.ts`, liaison 27 du groupe 0) — une lecture
+  au lieu de deux mélangées à la main, le même résultat : matériau 17,8–18,1 ms (18,0–18,2) — **sans gain mesurable** ; gardé (moins
+  d'instructions, image dans le bruit 1,5 % RMSE). Le coût du détail est sa présence (registres), non ses lectures.
+- **Suite** : alléger `groundDetail` en registres (la cassure de répétition de l'échelle fine : 13 hachages et deux lectures), ou le
+  sortir dans une étape à part ; les ombres du décor pour l'éclairage.

@@ -55,7 +55,7 @@ import { CLOUD_PASS_BINDINGS, CLOUD_PASS_FLAG, CLOUD_PASS_TEXTURE_LIMIT } from "
 import { Lightning } from "./system/lightning";
 import { TREE_SHADOW_BINDING, TREE_SHADOW_TEXTURE_LIMIT } from "./system/tree-shadow";
 import { GTAO_BINDING, GTAO_TEXTURE_LIMIT, Gtao } from "./system/gtao";
-import { DETAIL_BINDING, DETAIL_TEXTURE_LIMIT, DetailScans } from "./system/detail-scans";
+import { DETAIL_BINDING, DETAIL_SAMPLER_BINDING, DETAIL_TEXTURE_LIMIT, DetailScans } from "./system/detail-scans";
 import { CLV_TEX_H, CLV_TEX_W } from "./system/cloud-light-layout";
 import type { MirageKind } from "./system/mirage";
 import { type MirageGuess, mirageFromWeather } from "./system/refraction-weather";
@@ -1493,6 +1493,7 @@ export class Renderer {
                 visibility: C,
                 texture: { sampleType: "float", viewDimension: "2d-array" } as GPUTextureBindingLayout,
               },
+              { binding: DETAIL_SAMPLER_BINDING, visibility: C, sampler: { type: "filtering" } as GPUSamplerBindingLayout },
             ]
           : []),
         ...(device.limits.maxSampledTexturesPerShaderStage >= GTAO_TEXTURE_LIMIT
@@ -1543,6 +1544,14 @@ export class Renderer {
     // (the disk's turbulence: a tiling noise baked once)
     this.noise3d = bakeNoise3d(device);
     this.giantTile = { state: "none", ms: 0, gpuMs: 0 };
+    // (the detail scans' — linear between their mips: system/detail-scans.ts detailRead, one read a level pair)
+    this.detailSampler = device.createSampler({
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear",
+      addressModeU: "repeat",
+      addressModeV: "repeat",
+    });
     this.noiseSampler = device.createSampler({
       magFilter: "linear",
       minFilter: "linear",
@@ -3147,7 +3156,12 @@ export class Renderer {
       ...(this.cloudShadow ? [{ binding: CLOUD_SHADOW_BINDING, resource: ((csm && this.csmTex) || this.csmDummy!).createView() }] : []),
       ...(this.treeShadow ? [{ binding: TREE_SHADOW_BINDING, resource: this.tsmTex!.createView({ dimension: "2d-array" }) }] : []),
       ...(this.gtaoBound ? [{ binding: GTAO_BINDING, resource: (t.ao ?? this.gtaoDummy!).createView() }] : []),
-      ...(this.detailBound ? [{ binding: DETAIL_BINDING, resource: this.detail!.texture.createView({ dimension: "2d-array" }) }] : []),
+      ...(this.detailBound
+        ? [
+            { binding: DETAIL_BINDING, resource: this.detail!.texture.createView({ dimension: "2d-array" }) },
+            { binding: DETAIL_SAMPLER_BINDING, resource: this.detailSampler },
+          ]
+        : []),
       ...(this.orthoRead
         ? [
             {
@@ -6137,6 +6151,7 @@ export class Renderer {
     return t.liteBinds!;
   }
   private liteStandIns: GPUTexture[] | null = null;
+  private detailSampler!: GPUSampler;
   private kernelReady(key: number) {
     if (key === FEATURES_ALL || this.tracePipeline) return true;
     const v = this.variants.get(key);
