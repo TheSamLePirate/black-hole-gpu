@@ -449,17 +449,17 @@ const WATER_H = 2160u;
 // the shore's distances on the relief cache's levels 3 and 4 (gpu-tables.ts TABLE_SHORE, system/earth-shore.ts): each level's
 // header (its window's reference; nodes a radian, spacing, published, level), then its nodes four a vec4
 const SHORE_OFF = 2522777u;
-const SHORE_HEADER_VEC4S = 8u;
+const SHORE_HEADER_VEC4S = 10u;
 const SHORE_NODE_VEC4S = 16513u;
 // the coastal swell field on the same levels (gpu-tables.ts TABLE_SWELL, system/earth-swell.ts — L1): its header ([0] on, period,
 // Hs, the clock's turns; [1] the groups' clock, a turn every 7 waves; then each level's window as the distances' header has it), then
 // each level's nodes two a vec4 — (φ, gain)
-const SWELL_OFF = 2639687u;
-const SWELL_HEADER_VEC4S = 10u;
+const SWELL_OFF = 2656202u;
+const SWELL_HEADER_VEC4S = 12u;
 const SWELL_NODE_VEC4S = 33025u;
 // the layered air's refraction tables (gpu-tables.ts TABLE_REFR, system/refraction-gpu.ts): a header (1 when in), then floats —
 // B_haut's log (128 heights × 128 elevations, both on √ grids), B_limbe (4 096 tangent heights on a √ grid), N every 500 m
-const REFR_OFF = 2588837u;
+const REFR_OFF = 2605352u;
 const REFR_HAUT = 4u;
 const REFR_LIMB = 16388u;
 const REFR_NN = 20484u;
@@ -5839,7 +5839,7 @@ fn sunThrough(h: f32, mu: f32) -> vec3f {
 }
 // The table's optical depth [rgb] from a height h [m] towards mu (Bruneton's (x_mu, x_r), bilinear; under the horizon the
 // horizon's ray): system/earth-air.ts lutThrough its twin, its header's w the top's radius over the ground's
-const TLUT_OFF = 2594019u;
+const TLUT_OFF = 2610534u;
 fn tlutTau(h: f32, mu0: f32) -> vec3f {
   let rt = bodies[TLUT_OFF].w;
   // (over the air's top: the ray taken where it enters the air — none met, nothing lost)
@@ -6516,7 +6516,7 @@ fn wxAt(q: vec3f, cell: f32) -> vec3f { return (q * EARTH_RM - P.wx[4].yzw) * (1
 // cells and two finer octaves (clouds 0.5–3 km across), thresholded at its cover
 // (Q5 C5) the real weather's model on a grid about the camera (system/weather-grid.ts; gpu-tables.ts TABLE_WXGRID): layer i's
 // cover at q — the class it comes from read there, bilinear; −1: no grid, the layer's own cover everywhere
-const WXGRID_OFF = 2611429u;
+const WXGRID_OFF = 2627944u;
 fn wxGridCover(q: vec3f, i: u32) -> f32 {
   let hd = bodies[WXGRID_OFF + 1u];
   let cls = hd[1u + i];
@@ -11677,7 +11677,7 @@ fn wxLightTau(p: vec3f, i: u32, Ls: vec3f, rnd: f32, n: u32) -> f32 {
 // optical depth from CLV_START_M (180 m) on towards the Sun — every layer, the clouds' shadow map past 7.7 km —, computed once a
 // frame (cloudLightVolume): the cloud pass's samples march their own first 180 m (the edges' silver lining) and read the rest
 // here, one trilinear read for six densities. Its frame the same in both: the point under the camera snapped to its texels.
-const CLV_OFF = 2611457u;
+const CLV_OFF = 2627972u;
 const CLV_N = 64u;
 const CLV_NZ = 24u;
 const CLV_HALF_M = 48000.0;
@@ -12625,7 +12625,7 @@ fn refrBend(h: f32, mu: f32) -> f32 {
 // elevation in the horizon's band the true one its ray leaves at — traced through its turning points on the CPU, three colours
 // (the green read: one direction a ray) —, −10 where it ends in the sea. A sky pixel looks where its ray truly goes: a body seen
 // twice (the Sun's Etruscan vase over a warm sea), the sea's line lowered or raised.
-const MIR_OFF = 2639106u;
+const MIR_OFF = 2655621u;
 const MIR_N = 256u;
 fn mirAt(n: u32) -> f32 { return bodies[MIR_OFF + 1u + n / 4u][n % 4u]; }
 // (its head: 1 on, 2 on with the green's direction only for the colours — renderer.mirageOneColour, an A/B's —, 0 off)
@@ -12647,7 +12647,7 @@ fn mirageTrue(e: f32, c: u32) -> f32 {
 // for the eye, Λ [m] by the slant distance (quadratic to 3 200 km, 128) and the point's height over the sea (quadratic to 9 km,
 // 8), faded in under 0.1′; a point P seen at P + Λ up. The same numbers for the tracer's march (R4a) and the rasters'
 // projection (R4b); never the shadow maps, the cache's bake, the CPU.
-const LIFT_OFF = 2639299u;
+const LIFT_OFF = 2655814u;
 const LIFT_ND = 128u;
 const LIFT_NH = 8u;
 fn liftF(n: u32) -> f32 { return bodies[LIFT_OFF + 2u + n / 4u][n % 4u]; }
@@ -12675,7 +12675,7 @@ fn refrLiftM(d: f32, hP: f32) -> f32 {
 // integral, ln B tabled quadratically to the profile's top); under the critical height the ray trapped (Venus ~31 km). A look
 // from above the profile's top whose straight ray grazes the limb ahead: the direction beyond turned towards the body by B — the
 // Sun behind it seen as an arc on its limb (the aureole of a transit); its colours by the gases' dispersion (REFR_DR/DB)
-const PREFR_OFF = 2639557u;
+const PREFR_OFF = 2656072u;
 const PREFR_GL = 512u;
 var<private> PREFR_TRAPPED: bool = false;
 fn prefrF(i: u32) -> f32 { return bodies[PREFR_OFF + 2u + i / 4u][i % 4u]; }

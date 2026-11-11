@@ -2911,3 +2911,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   78,8 ms) : la lame ne se voit pas — la vue est dominée par une limite en escalier entre eau profonde et fond pâle, qui bouge à chaque
   recuisson (le défaut T7 connu, ses causes et pistes consignées dans PROBLEMES-A-REGLER, planche
   `docs/progress/mer/trait-de-cote-escalier.png`). La preuve visuelle de L3 reste partielle (plaques sur le sable au premier plan).
+
+## 2026-11-11T06:40Z — Le trait de l'eau sans escalier : le niveau 2 du cache dans les distances au rivage et le champ de houle
+
+- **Fait** : `SHORE_LEVELS` 2–6 (nœuds 9,6 m près de la caméra, ±1,2 km) ; les tables du rivage et de la houle grandissent d'un niveau
+  (+0,8 Mo ; les offsets des tables suivantes mis à jour dans `trace.wgsl`, vérifiés par `tests/gpu-tables.test.ts`).
+- **Observé** (kerr-mini, vue plongeante sur l'Almanarre, même cadrage) : la limite en marches de ~30 m entre eau profonde et fond
+  pâle, qui bougeait à chaque recuisson, a disparu — l'eau peu profonde est continue (planche
+  `docs/progress/mer/trait-de-cote-niveau2.png`). Défaut T7 rayé dans PROBLEMES-A-REGLER.
+- **Mesuré** : la cuisson d'un niveau 1,2–1,8 ms l'image où elle tourne (`earth shore`) ; l'image entière dans le bruit (79,1 contre
+  80,9 ms, 3e passage). Non mesuré : le vol (le niveau 2 se déplace plus souvent, chaque recuisson = 3 images de balayage).

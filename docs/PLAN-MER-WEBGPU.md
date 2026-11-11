@@ -224,6 +224,10 @@ Demande de Sam, 11 novembre : « commence Littoral L1/L2 ». Décisions déjà p
 la bathymétrie par Terrarium + profil de Dean, rien de plus téléchargé. Référence de technique : le littoral de BakedVoxelLighting
 (analyse §4.1), réécrit sur nos contrats — un produit du **monde** sur les fenêtres du cache de relief, lu par l'eau.
 
+**Ajouté le même jour** : le niveau 2 du cache (nœuds de 9,6 m, ±1,2 km) aux distances et au champ — le trait de l'eau peu profonde
+devant une plage suivait en marches de ~30 m les cellules du niveau 3 et bougeait à chaque recuisson ; il est continu (planche
+`docs/progress/mer/trait-de-cote-niveau2.png`), le déferlement près de la caméra lit des nœuds 4 fois plus fins.
+
 **Correction d'un chiffre répété ici et dans le code** : les niveaux 3 à 6 du cache ont des nœuds de **38, 153, 611 et 2 446 m**
 (`TERRAIN_CACHE_ROUNDS` 2²⁰ … 2¹⁴ ; fenêtres de ±4,9, ±19,6, ±78 et ±314 km), pas « 6,1 à 390 m ». Et la grille est
 équirectangulaire : ses nœuds sont cos φ plus proches d'est en ouest (0,73 à 43° N). Les distances au rivage comptaient les deux
