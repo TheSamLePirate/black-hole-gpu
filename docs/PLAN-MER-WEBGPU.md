@@ -273,4 +273,6 @@ noyaux de l'eau. Mesuré (kerr-mini, `presence`, trois passages) : plage allumé
 62,5 / 61,3 / 59,0 — **comme avant** (71,7 / 70,3 / 69,1 ; 61,7 / 60,4 / 59,7). **Leçon** : la présence ne vient pas de la lecture du
 champ, mais du reste du code de la houle dans le noyau de l'eau (les crêtes, le déferlement, la lame) — la pression sur les registres
 d'un noyau déjà au bord ; la passe séparée ne paiera qu'en sortant ce calcul-là aussi (une pente et une écume par pixel écrites à part),
-ou avec l'allègement général de la passe d'eau (J4).
+ou avec l'allègement général de la passe d'eau (J4). **Même jour, aussi sans gain** : retirer l'ancien déferlement par la profondeur
+(le repli du champ) — plage allumé / compilé hors 72,5 / 69,1 ms, vue basse 61,6 / 59,3 — ; annulé, l'A/B `shoreSwellOn` garde son
+sens.
