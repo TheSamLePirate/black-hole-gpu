@@ -240,4 +240,13 @@ le cache s'arrête au niveau de la mer ; lire les tuiles dans la cuisson est la 
 de déferlement d'une plage (h < 2 m, < 90 m du bord) tient en deux ou trois nœuds, la phase y est interpolée linéairement (exacte pour
 une onde plane) et la profondeur du pixel reste celle de `seaDepthAt` ; une seule houle (la dominante), pas de diffraction ni de
 courant ; la houle de la FFT n'est ni tournée ni levée près du bord, le champ s'y ajoute (kh < 1,2) ; le lavis reste sur les pixels de
-mer (la lame sur le sable est L3). Coût de la cuisson : à mesurer (passe `earth shore`, trois images par niveau à chaque recuisson).
+mer (la lame sur le sable est L3). Coût de la cuisson : ~0,8 ms l'image où elle tourne (passe `earth shore`), trois images par
+niveau, au plus une recuisson toutes les 2 s par niveau pour de nouvelles tuiles.
+
+**Coût de la lecture, mesuré (11 nov., kerr-mini, sonde `coast-swell` `SWELL_ABLATE=presence`, trois passages)** : champ allumé /
+éteint à l'exécution / lecture compilée hors du noyau (`TUNE_SWELL` 0) — plage 71,7 / 70,3 / 69,1 ms, vue basse 61,7 / 60,4 /
+59,7 : **+2,0 à +2,6 ms en tout, dont ~0,7–1,2 ms de simple présence** (la pression sur les registres du noyau de l'eau, comme pour
+les hauts-fonds en S3) et ~1,3 ms de travail. Essayé sans gain et annulé : calculer la pente des crêtes aussitôt (un vec3 gardé au
+lieu de l'échantillon du champ) et relire le champ dans la zone de déferlement — deux sites de lecture, noyau plus gros, pas plus
+rapide. **Le remède** : sortir la houle du noyau de l'eau — une passe propre qui écrit par pixel la pente des crêtes et la phase,
+lue d'une seule lecture —, c'est-à-dire la passe d'eau de J4 (stratégie §7.5) ; la cible ≤ +0,5 ms n'est pas tenue avant.

@@ -2857,3 +2857,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Mesuré** (M1 Max, sonde `forest-impostors`, trois passages) : vue à 500 m imposteurs 20,1 / 20,2 / 20,5 ms contre formes
   21,1 / 20,7 / 21,7 ; luminance moyenne 74,0 → 74,1 ; la vue canopée tournait bridée (≈ 70 ms des deux côtés : écart dans le bruit).
   Pas de vol en virage enregistré (le pivotement n'est pas jugé en mouvement).
+
+## 2026-11-11T04:55Z — Houle côtière : le coût réel mesuré (présence comprise) ; V2d revu sur preuve
+
+- **Mesuré** (kerr-mini, `coast-swell` `SWELL_ABLATE=presence`, trois passages) : champ allumé / éteint / lecture compilée hors du
+  noyau (`TUNE_SWELL` 0, nouvelle constante de mesure) — plage 71,7 / 70,3 / 69,1 ms, vue basse 61,7 / 60,4 / 59,7. Le champ coûte
+  donc **+2,0 à +2,6 ms** face à « pas de code », dont **~1 ms de présence** (registres du noyau de l'eau) — l'A/B « éteint » de
+  l'entrée précédente (+0,9) ne comptait pas cette part. Corrigé dans PLAN-MER-WEBGPU §5.
+- **Essayé, annulé** : la pente des crêtes calculée aussitôt en un vec3 et le champ relu dans la zone de déferlement (pour libérer
+  les registres) — plage 72,5 contre 68,3 ms compilé hors, vue basse 61,6 contre 59,5 : pas mieux, deux sites de lecture.
+- **Conclusion** : le remède est structurel — la houle hors du noyau de l'eau, dans sa propre passe (la passe d'eau de J4, stratégie
+  §7.5). La cible ≤ +0,5 ms de l'analyse n'est pas tenue d'ici là ; le champ reste allumé (gain d'image net, planche
+  `docs/progress/mer/houle-l1-almanarre.jpg`), coupable par `shoreSwellOn`.
+- **V2d revu** (PLAN-VEGETATION-V2) : au-delà de 6,25 km, les arbres un à un sont sous le pixel — le tri les écarte déjà sous ≈ 1,2 px
+  de rayon (~7,5 km pour un arbre de 15 m en 1080p) ; la forêt lointaine relève de V1/V3 (tuiles de couvert, horizons de la canopée)
+  dans le matériau du sol de J1. Aucun code pour V2d.

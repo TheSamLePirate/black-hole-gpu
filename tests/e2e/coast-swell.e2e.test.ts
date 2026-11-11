@@ -49,15 +49,17 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         await app.exposureSettled?.();
         // (SWELL_ABLATE=1: the field's runtime ablations instead — renderer.shoreSwellAblate —, alternated, two passes, no shots)
         const runs: (readonly [number, boolean, number])[] = process.env.SWELL_ABLATE
-          ? process.env.SWELL_ABLATE === "fine"
-            ? [1, 2, 3].flatMap((p) => [
-                [p, true, 0] as const,
-                [p, true, 1] as const,
-                [p, true, 2] as const,
-                [p, true, 8] as const,
-                [p, false, 0] as const,
-              ])
-            : [1, 2, 3].flatMap((p) => [[p, false, 0] as const, [p, true, 0] as const, [p, true, 15] as const])
+          ? process.env.SWELL_ABLATE === "presence"
+            ? [1, 2, 3].flatMap((p) => [[p, true, 0] as const, [p, false, 0] as const, [p, true, -1] as const])
+            : process.env.SWELL_ABLATE === "fine"
+              ? [1, 2, 3].flatMap((p) => [
+                  [p, true, 0] as const,
+                  [p, true, 1] as const,
+                  [p, true, 2] as const,
+                  [p, true, 8] as const,
+                  [p, false, 0] as const,
+                ])
+              : [1, 2, 3].flatMap((p) => [[p, false, 0] as const, [p, true, 0] as const, [p, true, 15] as const])
           : [
               [1, true, 0],
               [1, false, 0],
@@ -65,8 +67,12 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
               [2, false, 0],
             ];
         for (const [pass, on, ablate] of runs) {
-          await app.js(`(() => { __bh.renderer.shoreSwellOn = ${on}; __bh.renderer.shoreSwellAblate = ${ablate}; return 1; })()`);
+          // (ablate −1: the reading compiled out — TUNE_SWELL 0, a kernel of its own, its compile awaited)
+          await app.js(
+            `(() => { __bh.renderer.shoreSwellOn = ${on}; __bh.renderer.shoreSwellAblate = ${Math.max(ablate, 0)}; __bh.renderer.tune = ${ablate < 0 ? "{ TUNE_SWELL: 0 }" : "{}"}; return 1; })()`,
+          );
           await Bun.sleep(2500);
+          if (process.env.SWELL_ABLATE === "presence") await app.dataSettled(`swell ${name} kernel`, { maxMs: 120_000 }).catch(() => {});
           const r = await app.js<{ gpu: number[] }>(`(async () => {
           const R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q)); const gpu = []; let last = R.completedFrames; const t0 = performance.now();
           while (performance.now() - t0 < 6000) { __bh.touch(); await f(); if (R.completedFrames !== last) { last = R.completedFrames; gpu.push(+R.lastGpuMs.toFixed(2)); } }

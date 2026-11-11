@@ -336,6 +336,8 @@ override TUNE_BODY_REJECT: u32 = 1u;
 // near materials (snow, rock), 8 the fine noise's colour and light, 16 the clouds' and the weather's shadows, 32 the
 // tiles' imagery, 64 the surface textures, 128 the sea's shading, 256 the scenery's surfaces)
 override TUNE_GSKIP: u32 = 0u;
+// (0: the coastal swell field's reading compiled out of the water's kernels — a measure of what its presence costs, PLAN-MER-WEBGPU L2)
+override TUNE_SWELL: u32 = 1u;
 // (the scenery's parts left out, to measure them — tests/e2e/raster-shade-ablation: 1 the camera ray's buildings, 2 the trees'
 // look, 4 the OSM surfaces under the ground; 8 the buildings' raster boxes ignored — every ray its BVH, as before)
 override TUNE_SC_SKIP: u32 = 0u;
@@ -9368,7 +9370,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   // (nor where the bed is known deeper than the swell feels — kh over ~1.8 at the deep k: Dean's profile, the field's, is the bed
   // only where the tiles know none — a Terrarium sea 80 m deep 2 km off Hyères is no shoal)
   let swDeep = SEA_DEPTH_W > 0.3 && SEA_DEPTH * swK0 > 1.8;
-  if (SEA_ON && !SEA_ALIEN && calm <= 0.0 && (swBits & 1u) != 0u && !(WATER_OPEN && (swBits & 8u) != 0u) && !swDeep && footM * swK0 < 0.35 * TAU) {
+  if (TUNE_SWELL != 0u && SEA_ON && !SEA_ALIEN && calm <= 0.0 && (swBits & 1u) != 0u && !(WATER_OPEN && (swBits & 8u) != 0u) && !swDeep && footM * swK0 < 0.35 * TAU) {
     swl = seaSwellAt(normal);
     if (swl.w > 0.0) {
       // (where the pixel is in its wave: 0 on a crest, rising seaward of it — (ωt − φ)/2π)
