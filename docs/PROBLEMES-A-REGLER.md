@@ -156,3 +156,17 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   `Network.emulateNetworkConditions` au niveau du navigateur) dans `tests/e2e/lib/app.ts`, en une fonction `app.offline()` ;
   puis compter dès le rechargement, et lire `earthTiles.failed`. Annuler les requêtes d'une scène dépassée (ST2). Ajouter la
   leçon à [E2E.md](E2E.md) §7.
+
+## Paris de nuit vu du cockpit : la ville presque noire (300 m et 900 m)
+
+- **Constaté le 11 novembre 2026** (kerr-mini) : e2e `night-views` (`NV_ONLY=300m` : 48,86° N 2,15° E, cap 95°, 300 m, nuit sans
+  lune) — image presque noire, luminance moyenne 0,010, le décor « en cours d'assemblage » au moment de la photo ; e2e
+  `paris-night-flight` (900 m) — de face quelques points, de côté en virage des rues orange pâles ; la planche du 6 novembre
+  (`docs/progress/nuit/n1-paris-900-vues.jpg`, df9c782e) montrait les rues vives. **Antérieur aux travaux du 11** : A/B
+  `ab-commit` contre 7fd26201 (début de session) — identique (0,0102 contre 0,0103, RMSE 0,5 %).
+- **Cause** : non cherchée. La planche du 6 a peut-être été faite autrement (caméra libre, exposition) ; ou une régression entre le
+  6 et le 10 (exposition de nuit, lumières de la carte, décor).
+- **Piste** : rejouer `paris-night-flight` sur df9c782e (A/B `ab-commit`), puis bissection si l'écart se confirme ; comparer
+  l'exposition choisie (`renderer` exposure) des deux côtés.
+- **Pluie** : l'e2e `rain` (« paused, the rain holds… ») échoue aussi avant et après le 11 (la vue en pause n'atteint pas
+  `converged` en 150 s) — même démarche.
