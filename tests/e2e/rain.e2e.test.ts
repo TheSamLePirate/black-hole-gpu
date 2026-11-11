@@ -63,8 +63,11 @@ describe.skipIf(!E2E)("the rain", () => {
     await app.js(
       `(__bh.game.pause(true), document.body.classList.add("hide-ui"), document.querySelectorAll("canvas.fl-hud").forEach((c) => (c.style.visibility = "hidden")), true)`,
     );
-    // (the image refining while the time holds: compared once it has)
+    // (the image refining while the time holds: compared once it has — in the photo mode: outside it the raster's realtime view is
+    // held (main.ts renderer.rasterHold), its jitter going on paused, never "converged" — the test failed so from 10 Nov 2026)
     // (32 samples: 6 s here, 90 s on the mini — 0.4 a second at its 1920×1080, the scenery traced)
+    expect(await app.js<string | null>(`__bh.mode.set("photo")`)).toBeNull();
+    await app.js(`(document.body.classList.add("hide-ui"), true)`);
     await app.waitFor(`__bh.renderer.lastPhase === "converged"`, 150_000);
     await Bun.sleep(500);
     const c0 = await app.js<number>("__bh.renderer.rainClock");
@@ -73,8 +76,8 @@ describe.skipIf(!E2E)("the rain", () => {
     const b = await clip();
     expect(await app.js<number>("__bh.renderer.rainClock")).toBe(c0);
     expect(b === a).toBe(true);
-    // (the time running: its clock goes on with the frames')
-    await app.js("(__bh.game.pause(false), true)");
+    // (the time running: its clock goes on with the frames' — the photo mode left)
+    await app.js(`(__bh.mode.set("ship"), __bh.game.pause(false), true)`);
     await Bun.sleep(1000);
     expect(await app.js<number>("__bh.renderer.rainClock")).toBeGreaterThan(c0 + 0.5);
   }, 200_000);

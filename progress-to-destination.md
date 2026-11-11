@@ -3006,3 +3006,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Question posée (la houle côtière et J4, l'intensité de V1) ; réponses : **rien de plus sur le rendu pour l'instant** (la passe de
   houle et J4 attendent, l'orientation de J1-4 non tranchée) ; **V1 gardé tel quel**. Consigné dans PLAN-MER-WEBGPU §5 et
   PLAN-VEGETATION-V2. Aucun code changé dans cette entrée.
+
+## 2026-11-11T11:45Z — L'e2e `rain` repasse (comparaison en pause faite en mode photo)
+
+- **Cause** : hors du mode photo, `main.ts` tient la vue raster en temps réel (`renderer.rasterHold`) ; en pause, son jitter continue et
+  `lastPhase` n'atteint jamais « converged » — le test échouait avant et après les travaux du 10–11 novembre.
+- **Fait** (`tests/e2e/rain.e2e.test.ts`) : la comparaison en pause faite dans le mode photo (`__bh.mode.set("photo")`), refermé avant
+  de relancer le temps. **Vérifié** : 2/2 sur ce Mac (174 s). Test seulement ; aucun code du jeu changé.
