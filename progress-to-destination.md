@@ -3062,7 +3062,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   décollage passe par TOGA et son FMGC). Restent dans la même liste : les grisés du HUD, la TAT/SAT de l'A320, les limites
   non appliquées (choix de Sam).
 
-## 2026-11-11T12:50Z — Les grisés du HUD pour décoller et atterrir rétablis
+## 2026-11-11T12:39Z — Les grisés du HUD pour décoller et atterrir rétablis
 
 - **Destination** : §19 (la lisibilité des commandes : un bouton grisé dit pourquoi il ne s'applique pas).
 - **Cause** (lecture confirmée par l'historique) : le commit X1a (998da6ac, maintien de station) a inséré sa ligne entre
@@ -3073,3 +3073,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   demi-rayon : l'atterrissage part de l'orbite) ; posé — atterrir et stationnaire grisés « On the ground », décoller actif ;
   stationnaire à 300 m — actifs. Non vérifié : loin de tout corps (logique simple, non volée).
 - **Docs** : VOL-VAISSEAUX partie II, PROBLEMES-A-REGLER (rayé).
+
+## 2026-11-11T12:41Z — La TAT/SAT de l'A320 corrigée
+
+- **Destination** : §19 (des instruments justes). `air.T` du modèle de vol est la température **statique** (la vitesse du son
+  en dépend) : l'ECAM l'affichait comme TAT, et sa SAT était cette valeur en °C divisée par 1 + 0,2 M² (au sol : la même ; en
+  croisière, une SAT trop chaude d'un dixième et une TAT trop froide de ~26 °C).
+- **Fait** : `airTemps` (`a320/du/data.ts`) — SAT = T − 273,15, TAT = T·(1 + 0,2 M²) − 273,15 ; les pages du SD qui lisent la SAT
+  comme ambiante en profitent. **Vérifié** : `tests/a320-temps.test.ts` (FL370 ISA, M 0,78 : SAT −56,5 °C, TAT −30 °C). **Non
+  vérifié** en jeu sur la bande basse de l'ECAM.
+- **Docs** : VOL-AVIONS partie II, PROBLEMES-A-REGLER (rayé).

@@ -159,6 +159,13 @@ const VS1G_60 = [150.81, 124.84, 117.97, 110.94, 109.1, 106.01];
 export const vs1g = (mass: number, conf: number) => VS1G_60[Math.min(Math.max(conf, 0), 5)]! * Math.sqrt(mass / 60000);
 
 /** The displays' data now; null away from the Earth. */
+
+/** The SAT and TAT shown [°C]: the air's static temperature [K], and the probe's total one at that Mach — the
+ *  stagnation's rise T·(1 + 0.2 M²), its recovery taken whole. */
+export function airTemps(staticK: number, mach: number): { sat: number; tat: number } {
+  return { sat: staticK - 273.15, tat: staticK * (1 + 0.2 * mach * mach) - 273.15 };
+}
+
 export function duData(c: CameraController, s: Settings, deck: Props, date: Date): DuData | null {
   const cam = cameraFrame(s);
   const nav = c.ourNav(cam);
@@ -200,8 +207,9 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
   const lim = alphaLimits(mach, conf.slats, conf.flaps);
   const vamax = vs1 * 1.0;
   const vaprot = vs1 * Math.sqrt(lim.max / Math.max(lim.prot, 1));
-  const tat = (L?.air.T ?? 288.15) - 273.15;
-  const sat = tat / (1 + 0.2 * mach * mach);
+  // (the air's static temperature, the SAT; the probe's total one, the TAT, warmed by the flight's stagnation — in kelvins:
+  // before 11 Nov 2026 the static one was shown as the TAT and divided, in °C, by 1 + 0.2 M² for the SAT)
+  const { sat, tat } = airTemps(L?.air.T ?? 288.15, mach);
   const e = F?.engines;
   const eng = (k: 0 | 1): DuEngine => ({
     running: e ? e[k].running : true,

@@ -160,7 +160,9 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   actif ; en l'air loin de tout sol (au-delà d'un demi-rayon) : décoller et atterrir grisés ; vérifié par une sonde (orbite
   à 505 km, posé, stationnaire à 300 m). Ce qui était constaté : (`src/ui/flighthud.ts`, vers la ligne 2274) dépendent d'un `else` qui
   semble rattaché à la condition du maintien de station : ils ne s'appliqueraient qu'avec un appareil à moins de 5 km.
-- **Affichage TAT/SAT de l'A320** (`src/a320/du/data.ts`, vers la ligne 203) : une température en °C divisée par
+- ~~**Affichage TAT/SAT de l'A320**~~ — confirmé et corrigé le 11 novembre 2026 : `air.T` est la température statique (la
+  SAT) ; la TAT = T·(1 + 0,2 M²) en kelvins (`a320/du/data.ts` `airTemps`, test `a320-temps` : FL370 ISA M 0,78 → SAT −56,5 °C,
+  TAT ≈ −30 °C). Non revu en jeu sur l'ECAM. Ce qui était constaté : (`src/a320/du/data.ts`, vers la ligne 203) : une température en °C divisée par
   `1 + 0,2 M²` ; la SAT affichée serait fausse en vitesse.
 - **Limites non appliquées** (choix ou oubli à trancher) : aucune vitesse de train, de volets ni VMO n'endommage un avion ;
   aucune masse maximale de l'A320 ; la ZFW du MCDU ne change pas la masse ; le ralenti du F135 n'est pas lu (manette 0 =

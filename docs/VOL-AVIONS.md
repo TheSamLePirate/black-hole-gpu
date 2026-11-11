@@ -777,7 +777,8 @@ La loi avion exige le mode `"plane"`, **q > 300 Pa** et aucun maintien.
 Ralenti du F135 inutilisé ; `airCtx` en retard d'une image ; moments aérodynamiques appliqués une fois par image ;
 décalages locaux plats (permis pour les distances) ; le « haut » du vent est radial, pas la normale géodésique ; le F-35C
 reprend le maillage, le train et le crochet du B ; toutes les « IAS » de l'A320 sont des EAS (densité du niveau de la
-mer) ; affichage TAT/SAT de l'A320 probablement faux (`a320/du/data.ts` vers la ligne 203 : une valeur en °C divisée) ;
+mer) ; affichage TAT/SAT de l'A320 (corrigé le 11 novembre 2026 : SAT = l'air statique, TAT = T·(1 + 0,2 M²) en kelvins —
+`airTemps`, `tests/a320-temps.test.ts` ; avant, la statique affichée comme TAT et divisée en °C pour la SAT) ;
 commentaire de la loi alternée (« roll direct ») contredit par le code ; le plan A320 donne une corde moyenne de 4,19 m,
 le code 7,68 m.
 
