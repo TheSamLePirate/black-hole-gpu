@@ -3210,3 +3210,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   autre moment : une tuile ou deux pas les mêmes. Le test tolère maintenant 3 plages au réseau au rechargement (le cache en gardant
   au moins trois fois plus) ; hors ligne, toutes de la zone (14, 0 du réseau). **Vert** ici (213 s) et sur kerr-mini (le passage
   précédent, 0 au réseau).
+
+## 2026-11-11T20:04Z — Les e2e hors ligne revérifiés : deux passages verts chacun
+
+- `zones-scenery` (kerr-mini) second passage vert : la zone en 1 076 s, 0 échec ; hors ligne arbres, bâtiments, 466 tuiles de sol
+  de la zone, 0 du réseau. `zones` (ce Mac) second passage vert : détail 6,17 en ligne, 6,34 hors ligne ; 553 tuiles de la zone,
+  0 du réseau. `overture` vert sur les deux Mac. `pwa` vert. Aucun code changé dans cette entrée.
