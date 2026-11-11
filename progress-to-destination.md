@@ -2931,7 +2931,6 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 ## 2026-11-11T07:15Z — Parois vertes du tombolo : la marche est dans la cuisson du cache de relief
 
 - **Trouvé** (ce Mac, sondes locales) : vue des normales du raster — de vraies facettes ; niveaux 1 et 2 du cache — 617 et 435 nœuds à
-  12–14,5 m en bandes le long du tombolo, là où les tuiles lisent 0–1,2 m. Cause probable : la surélévation d'un niveau lointain (la
-  canopée du MNS, ~13 m) gardée comme relief par la cuisson du cache là où les fenêtres fines manquent (`terrain-cache.ts`). Planche
-  `docs/progress/mer/parois-tombolo-normales.png`. Aucun code changé : la correction (ne garder la surélévation que pour les nœuds à
-  empreinte lointaine) demande d'abord de sortir les trois termes à un nœud fautif.
+  12–14,5 m en bandes le long du tombolo, là où les tuiles lisent 0–1,2 m. L'hypothèse de la surélévation lointaine (MNS) est contredite par
+  l'A/B au démarrage ; le terme fautif de la cuisson (`terrain-cache.ts`) reste à isoler. Planche
+  `docs/progress/mer/parois-tombolo-normales.png`. Aucun code changé : il faut d'abord sortir les trois termes à un nœud fautif.

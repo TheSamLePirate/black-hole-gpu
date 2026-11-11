@@ -54,10 +54,12 @@ et les anneaux dessinés (`terrainRaster.ringsDrawn`) ; regarder si l'anneau du 
 **vraies facettes** — crêtes en dents, une pyramide —, et les niveaux 1 et 2 du cache **contiennent 617 et 435 nœuds à 12–14,5 m**
 en bandes diagonales le long du tombolo (ex. 14,5 m à 43,0666 N 6,12883 E, voisins 0,5 m ; 14,7 m à 43,07688 N 6,12471 E), là où
 `earthTiles.heightAt` lit 0–1,2 m (le relevé de la ligne précédente passait à côté des bandes). La marche naît donc **dans la cuisson
-du cache** (`terrain-cache.ts`, `h = exact + fin − max(grossier, 0)`) ; cause probable, que décrit son propre commentaire : là où les
-fenêtres fines (z ≥ 14) ne couvrent pas encore, « le plus fin tenu est un niveau lointain : sa surélévation gardée » — la canopée
-des pins (~13 m, le MNS du niveau z ≤ 13, I6) prise comme relief. Suite : sortir les trois termes à un nœud fautif (une passe de
-diagnostic), et ne garder la surélévation lointaine que pour les nœuds dont l'empreinte est celle d'un niveau lointain.
+du cache** (`terrain-cache.ts`, `h = exact + fin − max(grossier, 0)`). Une hypothèse — la surélévation d'un niveau lointain (la
+canopée du MNS, I6) gardée là où les fenêtres fines manquent — est **contredite** par l'A/B fait plus tôt : les parois restaient avec
+`earthIgnSilhouettes` coupé au démarrage (il atteint bien `earthTiles.hlodOn`, `renderer.ts`, et relance le chargement). Reste à
+savoir lequel des trois termes porte les 13 m : `earthHeightExactG` à l'empreinte du niveau, ou le relevé fin à 1 m (`earthH(q, 1)`)
+— le GPU lit peut-être un texel que la lecture CPU (`heightAt`) ne voit pas. Suite : une passe de diagnostic qui écrit les trois
+termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 
 ## Le Lander posé ne décolle pas avec U (autopilote de décollage)
 
