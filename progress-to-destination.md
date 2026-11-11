@@ -2748,3 +2748,17 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   faudra une mesure par passe sur vue figée pour l'eau (comme la forêt pour `shadeLite`).
 - **Pistes** (non faites) : l'anisotropie de l'échantillonneur de la mer (8, choisie contre le moiré rasant : un compromis de qualité
   à décider) ; les deux lectures de traînée d'écume par cascade longue ; une seule passe lisant les cascades pour la surface et l'eau.
+
+## 2026-11-11T07:15Z — La mer ouverte mesurée sur vue figée : le reflet d'écran (SSR) pèse ~7 ms sur 26
+
+- **Mesuré** (kerr-mini, sonde `sea-passes` : au large de Toulon, 548 m, regard −6° vers le sud-ouest, mer de force 4, 1440×810) :
+  `earth water open (raster)` **25,7 ms**, `sea surface` 8 ms, `earth water (raster)` 3,6–6 ms, `sea fft` 2,3 ms. Coupes à la
+  compilation (`TUNE_GSKIP`) du noyau de mer ouverte : **sans SSR 19,0 ms** (−7), sans nuages reflétés 23,8 (−1,6), sans ciel clair
+  reflété 23,6 (−1,9). Anisotropie de la mer 8 → 4 : 24,7 ms (−1) — gain trop faible face au moiré rasant qu'elle combat : non retenu.
+- **Pourquoi le SSR reste** : le critère « pleine mer » (pas de fond à 60 m, pas de rivage au ressac) laisse des pixels à quelques
+  centaines de mètres d'une côte — J0 la longe — où le SSR reflète la terre ; le couper changerait l'image. Son coût est du travail
+  (20 pas + 4 de bissection sur la profondeur de la visibilité, les rayons vers le ciel parcourant l'écran entier) ; une borne par
+  l'altitude n'aide pas les vues rasantes.
+- **Prochaine étape proposée** : un **Hi-Z** — la pyramide des profondeurs de la visibilité (une passe de mips, max de profondeur) —
+  pour que la marche saute les régions vides (le ciel) : les mêmes impacts, bien moins de lectures. Aucun code changé dans cette
+  entrée (les essais annulés).
