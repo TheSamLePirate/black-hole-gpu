@@ -255,6 +255,9 @@ lieu de l'échantillon du champ) et relire le champ dans la zone de déferlement
 rapide. **Le remède** : sortir la houle du noyau de l'eau — une passe propre qui écrit par pixel la pente des crêtes et la phase,
 lue d'une seule lecture —, c'est-à-dire la passe d'eau de J4 (stratégie §7.5) ; la cible ≤ +0,5 ms n'est pas tenue avant.
 
+**Décision de Sam (11 novembre)** : rien de plus sur le rendu pour l'instant — la houle reste à +2,0–2,6 ms sur une côte, la passe
+séparée attend J4 (après J1, l'orientation de J1-4 non tranchée).
+
 **La passe de houle, son plan (J4, écrit le 11 novembre)** : (1) une passe de calcul `sea swell` avant `earth water`, sur les seuls
 pixels d'eau de la visibilité (`moments.x` marqués mer, ou la surface maillée), qui évalue `seaSwellAt`, la pente des crêtes (en 2
 composantes du repère est/nord), la phase `swS`, le gain et le drapeau « tenu » et les écrit dans une cible `rgba16float` à la taille de

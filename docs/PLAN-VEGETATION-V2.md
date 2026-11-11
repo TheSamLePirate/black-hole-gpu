@@ -1,5 +1,8 @@
 # PLAN-VEGETATION-V2 — les arbres lointains en imposteurs ré-éclairables
 
+**Décision de Sam (11 novembre)** : V1 gardé tel quel (effet discret accepté) ; rien de plus sur le rendu pour l'instant — V2e et V3
+attendent.
+
 **État (11 novembre 2026)** : V2a et V2b faits (les arbres modélisés et leur cuisson en imposteurs, vérifiés sur planche) ; **V2c
 fait** (l'ombrage des arbres lointains lu dans les imposteurs, mips, vues mêlées) ;
 V2d revu (au-delà de 6,25 km les arbres sont sous le pixel : V1/V3 avec J1), V2e à faire. Demande de Sam, 11 novembre : « commence Littoral L1/L2 et arbres V2 ». Décision du 10 novembre

@@ -3000,3 +3000,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le même nombre de lectures).
 - **Leçon de mesure** : les variantes `renderer.tune` du noyau de l'eau peuvent mettre plus de 25 s à compiler sur ce Mac ; un
   diagnostic se prend après 60 s, l'image vérifiée (pas le sol de repli).
+
+## 2026-11-11T11:20Z — Décisions de Sam : rendu en pause, V1 gardé tel quel
+
+- Question posée (la houle côtière et J4, l'intensité de V1) ; réponses : **rien de plus sur le rendu pour l'instant** (la passe de
+  houle et J4 attendent, l'orientation de J1-4 non tranchée) ; **V1 gardé tel quel**. Consigné dans PLAN-MER-WEBGPU §5 et
+  PLAN-VEGETATION-V2. Aucun code changé dans cette entrée.
