@@ -13,10 +13,14 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
     try {
       await app.js(`(() => { Object.assign(__bh.settings, { traffic: false, autosave: false, weather: "fair", earthClouds: 0.1, wind: 0 });
       __bh.game.setDate("2026-07-10T09:30:00Z"); return 1; })()`);
-      const views: Record<string, string> = {
-        aerial: `__bh.viewAt(43.17, 6.22, { altM: 500, heading: 35, pitch: -14, fov: 55 })`,
-        canopy: `__bh.viewAt(43.19, 6.25, { altM: 150, heading: 60, pitch: -8, fov: 55 })`,
-      };
+      // (IMPOSTOR_VIEW="lat,lon,alt,heading,pitch": that view alone, named "custom")
+      const cv = process.env.IMPOSTOR_VIEW?.split(",").map(Number);
+      const views: Record<string, string> = cv
+        ? { custom: `__bh.viewAt(${cv[0]}, ${cv[1]}, { altM: ${cv[2]}, heading: ${cv[3]}, pitch: ${cv[4]}, fov: 55 })` }
+        : {
+            aerial: `__bh.viewAt(43.17, 6.22, { altM: 500, heading: 35, pitch: -14, fov: 55 })`,
+            canopy: `__bh.viewAt(43.19, 6.25, { altM: 150, heading: 60, pitch: -8, fov: 55 })`,
+          };
       for (const [name, v] of Object.entries(views)) {
         const why = await app.js(`(() => { const r = ${v}; return r ?? null; })()`);
         if (why) throw new Error(`viewAt ${name}: ${why}`);
@@ -33,6 +37,7 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         console.log(JSON.stringify({ name, impostors: info }));
         if (!ready) throw new Error(`the impostors not baked: ${JSON.stringify(info)}`);
         await app.exposureSettled?.();
+        const tuneAB = process.env.TUNE_A_B?.split(":");
         for (const [pass, on] of [
           [1, true],
           [1, false],
@@ -41,7 +46,12 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
           [3, true],
           [3, false],
         ] as const) {
-          await app.js(`(() => { __bh.renderer.treeImpostorsOn = ${on}; return 1; })()`);
+          // (TUNE_A_B="KEY:value": the A/B that tuning instead — a kernel compiled without a part, the impostors on —, its compile awaited)
+          if (tuneAB) {
+            await app.js(`(() => { __bh.renderer.tune = ${on ? "{}" : `{ ${tuneAB[0]}: ${Number(tuneAB[1])} }`}; return 1; })()`);
+            await Bun.sleep(2500);
+            await app.dataSettled(`forest ${name} kernel`, { maxMs: 120_000 }).catch(() => {});
+          } else await app.js(`(() => { __bh.renderer.treeImpostorsOn = ${on}; return 1; })()`);
           await Bun.sleep(2500);
           const r = await app.js<{ gpu: number[] }>(`(async () => {
           const R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q)); const gpu = []; let last = R.completedFrames; const t0 = performance.now();
@@ -62,7 +72,7 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
               passes,
             }),
           );
-          if (pass === 1) {
+          if (pass === 1 && !tuneAB) {
             await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
             await app.shot(`${OUT}/${name}-${on ? "impostors" : "shapes"}.png`);
             await app.js(`(() => { document.body.classList.remove("hide-ui"); return 1; })()`);

@@ -3,6 +3,17 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Des parois vertes à texture étirée au ras de l'eau, vues de la plage de l'Almanarre
+
+**2026-11-11T05:45Z.** Observé (kerr-mini et ce Mac, sonde `forest-impostors` `IMPOSTOR_VIEW=43.066,6.1262,8,80,-9`, et `coast-swell`
+vue `sand`) : à 8 m au-dessus de la plage de l'Almanarre, regard vers l'est, une paroi vert sombre de 10–15 m au loin (1–3 km) le long
+du rivage, sa texture étirée en traînées verticales, sur une frange blanche ; une forme isolée pareille plus au centre. **Identique
+avec les formes analytiques et avec les imposteurs** (`treeImpostorsOn`) : pas les arbres. Planche
+`docs/progress/mer/parois-vertes-tombolo.png` (en haut formes, en bas imposteurs). **Cause supposée** (non vérifiée) : les
+« silhouettes lointaines » — le MNS de l'IGN moins le sol ajouté aux hauteurs du relief aux niveaux z ≤ 13 (`earth-tiles.ts`,
+`earthIgnSilhouettes`) — font des pins du rivage un relief vertical, que l'orthophoto habille en l'étirant. Piste : A/B
+`earthIgnSilhouettes` sur cette vue ; si c'est elle, la borner aux vues hautes ou habiller ses faces raides d'une couleur de canopée.
+
 ## Le Lander posé ne décolle pas avec U (autopilote de décollage)
 
 - **Constaté en jeu le 6 novembre 2026** (sonde `probe-moon` de la session, e2e `apprendre-vaisseaux`, ce Mac) : le

@@ -22,6 +22,8 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         aerial: `__bh.viewAt(43.062, 6.095, { altM: 250, heading: 95, pitch: -16, fov: 55 })`,
         beach: `__bh.viewAt(43.062, 6.1225, { altM: 25, heading: 95, pitch: -10, fov: 55 })`,
         low: `__bh.viewAt(43.058, 6.119, { altM: 6, heading: 80, pitch: -3, fov: 55 })`,
+        // (L3: over the tombolo's beach, looking south-west along it — the wet band and the swash)
+        sand: `__bh.viewAt(43.066, 6.1262, { altM: 8, heading: 80, pitch: -9, fov: 55 })`,
       };
       for (const [name, v] of Object.entries(views).filter(
         ([n]) => !process.env.SWELL_VIEWS || process.env.SWELL_VIEWS.split(",").includes(n),
@@ -51,15 +53,17 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         const runs: (readonly [number, boolean, number])[] = process.env.SWELL_ABLATE
           ? process.env.SWELL_ABLATE === "presence"
             ? [1, 2, 3].flatMap((p) => [[p, true, 0] as const, [p, false, 0] as const, [p, true, -1] as const])
-            : process.env.SWELL_ABLATE === "fine"
-              ? [1, 2, 3].flatMap((p) => [
-                  [p, true, 0] as const,
-                  [p, true, 1] as const,
-                  [p, true, 2] as const,
-                  [p, true, 8] as const,
-                  [p, false, 0] as const,
-                ])
-              : [1, 2, 3].flatMap((p) => [[p, false, 0] as const, [p, true, 0] as const, [p, true, 15] as const])
+            : process.env.SWELL_ABLATE === "sand"
+              ? [1, 2, 3].flatMap((p) => [[p, true, 0] as const, [p, true, 16] as const])
+              : process.env.SWELL_ABLATE === "fine"
+                ? [1, 2, 3].flatMap((p) => [
+                    [p, true, 0] as const,
+                    [p, true, 1] as const,
+                    [p, true, 2] as const,
+                    [p, true, 8] as const,
+                    [p, false, 0] as const,
+                  ])
+                : [1, 2, 3].flatMap((p) => [[p, false, 0] as const, [p, true, 0] as const, [p, true, 15] as const])
           : [
               [1, true, 0],
               [1, false, 0],
@@ -94,7 +98,8 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
             }),
           );
           await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
-          if (pass === 1 && !process.env.SWELL_ABLATE) await app.shot(`${OUT}/${name}-${on ? "field" : "nofield"}.png`);
+          if ((pass === 1 && !process.env.SWELL_ABLATE) || (pass === 2 && process.env.SWELL_ABLATE === "sand"))
+            await app.shot(`${OUT}/${name}-${on ? "field" : "nofield"}${ablate ? `-a${ablate}` : ""}.png`);
           await app.js(`(() => { document.body.classList.remove("hide-ui"); return 1; })()`);
         }
         await app.js(`(() => { __bh.renderer.shoreSwellOn = true; __bh.renderer.shoreSwellAblate = 0; return 1; })()`);

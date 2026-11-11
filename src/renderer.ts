@@ -5547,7 +5547,7 @@ export class Renderer {
   /** (L1) the coastal swell field baked and read (an A/B: off, the surf's old bands by the depth alone) */
   shoreSwellOn = true;
   /** (L1) an A/B's ablations of the field's reading (1 no crests on the normal, 2 no groups, 4 not in the open sea's kernel, 8 no
-   *  surf nor wash from it): runtime branches — what they cost to run, not to hold in the kernel */
+   *  surf nor wash from it, 16 no wet band on the shore — L3): runtime branches — what they cost to run, not to hold in the kernel */
   shoreSwellAblate = 0;
   /** (V2b/V2c) the trees' hemi-octahedral impostors — bound where the device has room, baked when the forest is first drawn */
   treeImpostors: TreeImpostors | null = null;

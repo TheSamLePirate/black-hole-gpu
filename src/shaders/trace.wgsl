@@ -15944,6 +15944,33 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     A *= 1.0 - 0.35 * pud;
     wetS = wet * select(mix(0.08, 0.3, rwyPaved), 0.12, mesh) + pud * 0.4;
   }
+  // (L3 — the shore's wet band and the swash on it, PLAN-MER-WEBGPU §5: the ground next to the sea — the shore's distances positive
+  // on land only within a node of a sea node — and under the waves' run-up (Stockdon 2006 for a beach of slope ~0.08: R2 ≈ 0.078
+  // √(Hs L0), the sea's state the swell field's, else the FFT's): darker and glossy, the sand wet; under the swash's edge — run up as
+  // each wave's period comes round, drained back — a film of water, a mirror; above, drying out over half a metre)
+  let seaOn = bodies[SWELL_OFF].x > 0.5 || P.seafft[0].x > 0.5;
+  // (the field's word's 32: none — renderer.shoreSwellAblate 16, an A/B)
+  if (TUNE_SWELL != 0u && seaOn && !isTree && !mesh && hG < 3.0 && earthOn() && (u32(bodies[SWELL_OFF].x + 0.5) & 32u) == 0u) {
+    let sd = seaShoreDist(gq);
+    if (sd > 0.0 && sd < 1e4) {
+      let fieldOn = bodies[SWELL_OFF].x > 0.5;
+      let Hs = select(4.0 * P.seafft[0].z, bodies[SWELL_OFF].z, fieldOn);
+      let T = max(select(P.seafft[0].w, bodies[SWELL_OFF].y, fieldOn), 2.0);
+      let R = 0.078 * sqrt(max(Hs, 0.0) * 1.56 * T * T);
+      let wetBand = smoothstep(R + 0.5, R, hG);
+      if (wetBand > 0.0) {
+        // (the swash's edge: up to the run-up as the wave arrives, down to a third of it — its phase the clock's, shifted along the
+        // shore by a slow noise: not the whole beach at once)
+        let turns = select(P.time.x * P.near5.w / T, bodies[SWELL_OFF].w, fieldOn);
+        let sh = vnoise(vec3f(gq * (EARTH_RM / 90.0)));
+        let s = fract(turns + 0.6 * sh);
+        let edge = R * (0.3 + 0.7 * exp(-s * 3.5));
+        let film = smoothstep(edge + 0.05, edge - 0.05, hG);
+        A *= mix(1.0, 0.62, wetBand) * mix(1.0, 0.8, film);
+        wetS = max(wetS, mix(0.18 * wetBand, 0.55, film));
+      }
+    }
+  }
   return LiteMat(A, n, ng, bldE, rwyLamps, glass, bldS, bldAO, wetS, ripple, img.o, rwyPaved, sv.cover, sv.kind,
     mix(textureSampleGrad(earthNight, bgSamp, eCube(gq), eCube(fx), eCube(fy)).r, img.c.a, img.w), select(0u, surface.cover, surface.w > 0.5));
 }

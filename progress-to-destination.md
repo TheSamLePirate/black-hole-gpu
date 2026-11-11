@@ -2872,3 +2872,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **V2d revu** (PLAN-VEGETATION-V2) : au-delà de 6,25 km, les arbres un à un sont sous le pixel — le tri les écarte déjà sous ≈ 1,2 px
   de rayon (~7,5 km pour un arbre de 15 m en 1080p) ; la forêt lointaine relève de V1/V3 (tuiles de couvert, horizons de la canopée)
   dans le matériau du sol de J1. Aucun code pour V2d.
+
+## 2026-11-11T05:50Z — Littoral L3 : le sable mouillé et la lame de rive sur la terre
+
+- **Fait** (`trace.wgsl` `liteMaterial`, le noyau matériau du découpage matériau/éclairage — l'orientation proposée pour J1-4, déjà en
+  place : L3 n'attend donc pas J1) : la terre au contact de la mer (distances au rivage positives sur la terre à moins d'un nœud de la
+  mer), sous la hauteur de jet de rive de Stockdon (R2 ≈ 0,078 √(Hs L0), l'état de mer du champ, sinon de la FFT), assombrie et
+  brillante ; sous le bord de la lame — qui monte à chaque période et redescend au tiers, déphasée le long du rivage —, un film d'eau
+  miroir ; séchage sur 0,5 m au-dessus. A/B `shoreSwellAblate` 16 ; compilé hors avec `TUNE_SWELL` 0.
+- **Mesuré** (kerr-mini) : présence **nulle** dans le noyau matériau (Maures, `TUNE_A_B=TUNE_SWELL:0` : 54,2 / 54,1 / 53,9 contre
+  54,4 / 54,5 / 53,4 ms ; canopée 57,1–57,4 des deux côtés) ; sur la plage 71,8 / 73,9 / 73,1 contre 74,8 / 74,3 / 73,5 (bruit).
+  Image : planche `docs/progress/mer/l3-sable-mouille.jpg` — le sable du premier plan change par plaques (le film au rythme de la
+  houle) ; un cadrage plus parlant de la lame reste à faire (vue plongeante sur le bord de l'eau).
+- **Trouvé au passage, consigné** (PROBLEMES-A-REGLER) : des parois vertes à texture étirée au ras de l'eau le long du tombolo,
+  identiques avec et sans imposteurs — cause supposée : les silhouettes lointaines du MNS. Non corrigé (hors de ce lot).
+- **Limites** : la lame est cadencée par l'horloge et la période, pas par la phase du champ (inexistante sur la terre) ; la marée
+  n'existe pas ; pas de séchage dans le temps (BVL : exp(−t/5 s)).
