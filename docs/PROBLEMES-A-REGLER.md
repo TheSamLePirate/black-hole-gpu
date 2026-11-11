@@ -19,6 +19,10 @@ passent pas par ce chemin (eau profonde au sens de la bathymétrie, sortie antic
 la règle LiDAR du jour (`LIDAR_SEA_TRUST_M`) n'y est pour rien (A/B : identique désactivée). Restent : des pixels classés terre
 (l'orthophoto de l'eau turquoise dessinée comme sol), ou la couleur de l'eau par région (Kd490) — à départager par `liteSkip` 1 (l'eau
 du raster) sur cette vue.
+**Encore (même jour)** : `rasterColumn` à 30 % de la largeur — les lignes des rectangles et l'eau autour portent **la même marque**
+(4·10³⁰) et la même distance (11–15 m) : le même noyau, l'eau. Le turquoise naît donc dans l'ombrage de l'eau, pas d'un sol mal classé.
+L'essai suivant (la vue de débogage des sillages, `TUNE_GSKIP` 32768) a été pris pendant la recompilation : non concluant. Reste à
+couper une à une, une fois compilées, les sources de couleur de `seaShade` (sillages et bulles, Kd490, ciel reflété, SSR).
 
 ## ~~Le bord de l'eau sur la plage en marches d'environ 1 m~~ — réglé le même jour : c'était l'écume des crêtes (le seuil du Jacobien) — sa bande comptait les pentes des deux cascades longues seules ; bas sur l'eau, la plus fine calculée aussi pliait la surface sous le seuil sur la moitié de la mer (`renderer.ts` `seaFftParams` : la largeur sur les cascades calculées) ; planche `docs/progress/mer/ecume-puzzle-avant-apres.jpg`
 
