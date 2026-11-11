@@ -2734,3 +2734,17 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   d'instructions, image dans le bruit 1,5 % RMSE). Le coût du détail est sa présence (registres), non ses lectures.
 - **Suite** : alléger `groundDetail` en registres (la cassure de répétition de l'échelle fine : 13 hachages et deux lectures), ou le
   sortir dans une étape à part ; les ombres du décor pour l'éclairage.
+
+## 2026-11-11T06:30Z — J0 : la mer mesurée par partie ; les vagues FFT pèsent ~5–6 ms
+
+- **Outil** : le test J0 prend `J0_ORDER` (les ablations d'un passage) et quatre ablations de la mer — `seaSurface` (mer plate),
+  `seaFft` (sans les vagues FFT : les douze trains), `seaProbe`, `seaFoam` —, remises à leur valeur à chaque départ (un premier
+  passage sans cette remise les cumulait : lu à tort comme −9 ms).
+- **Mesuré** (kerr-mini, `J0_PHASES=ablate`, bases 59,8 → 57,0 ms au fil du passage) : sans FFT **53,1 ms** (−5 à −7) ; mer plate 58,1 ;
+  sans écume du monde 57,0 ; sans sonde 58,9 — seule la FFT pèse nettement. Le calcul des cascades (4 × 256² à 500 m) est ~2 ms ; le
+  reste est l'ombrage qui les lit (14 à 26 lectures anisotropes ×8 par pixel d'eau).
+- **Essayé sans gain mesurable** : l'inversion du déplacement en lectures isotropes (4 lectures anisotropes de moins) — bases 59,4 /
+  57,8 / 57,1 contre 59,8 … 57,0 : dans la dérive du passage, annulé. Le bruit des ablations J0 (±1,5 ms) cache les petits gains : il
+  faudra une mesure par passe sur vue figée pour l'eau (comme la forêt pour `shadeLite`).
+- **Pistes** (non faites) : l'anisotropie de l'échantillonneur de la mer (8, choisie contre le moiré rasant : un compromis de qualité
+  à décider) ; les deux lectures de traînée d'écume par cascade longue ; une seule passe lisant les cascades pour la surface et l'eau.
