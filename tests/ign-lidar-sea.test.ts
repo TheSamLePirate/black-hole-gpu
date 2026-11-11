@@ -35,7 +35,7 @@ test("no overground over the sea: a surface ramp over a ground at 0 adds nothing
 
 test("a low LiDAR ramp across water (the étang des Pesquiers, 11 Nov 2026 — up to 14.7 m, under 15 and 40 m): suspect, and yields to RGE ALTI's sea; a dune stays", () => {
   // (a tile whose half over the coarse sea's cells stands 14.7 m up)
-  const ramp = new Float32Array(T * T).map((_, i) => ((i % T) > T / 2 ? 14.7 : 0.8));
+  const ramp = new Float32Array(T * T).map((_, i) => (i % T > T / 2 ? 14.7 : 0.8));
   expect(lidarSuspect(ramp, new Float32Array(256).fill(0))).toBeTrue();
   // (a dune: RGE ALTI has it too — the LiDAR kept; the same height over RGE ALTI's sea — given way; within a few metres: kept)
   expect(lidarYields(12, 11)).toBeFalse();
