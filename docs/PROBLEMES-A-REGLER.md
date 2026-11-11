@@ -29,6 +29,12 @@ ombre de l'appareil (2097152) : **les rectangles restent à chaque fois**. Le di
 pendant une recompilation (comme celui des sillages) : **suspect principal, à revérifier compilé** — la classification de l'eau peu
 profonde dans `shadeLite` (`liteWater` : `wat.x ≥ 0,999` et `wat.y ≤ 0` → l'albédo de l'imagerie dans `accum`, w = 2, qui ouvre le
 turquoise de `seaShade`), décidée par cellules (profondeur, masque) — d'où des rectangles.
+**Revérifié compilé (25 s d'attente) : faux** — l'albédo du fond est nul sur toute la vue, aucun pixel n'y passe par l'eau peu
+profonde ; et la couleur finale de `seaShade` remplacée par un diagnostic fait disparaître les rectangles : **ils naissent dans
+`seaShade`**. Écartés encore, compilés : la lumière à travers les crêtes (S3), le champ de houle entier (`TUNE_SWELL` 0), le partage
+entre noyau de pleine mer et noyau côtier (`seaWaterOpenOn` false). Restent dans `seaShade` : la couleur de l'eau par région (Kd490,
+`seaWaterOf`), l'écume (`W` : moutons de Monahan en taches, dentelle couchée), le Fresnel moyenné (`TUNE_GSKIP` 2048), le reflet du
+Soleil. Les rectangles sont fixes sur plusieurs minutes et d'un vert d'eau clair (54, 108, 85 contre 21, 36, 39 autour).
 
 ## ~~Le bord de l'eau sur la plage en marches d'environ 1 m~~ — réglé le même jour : c'était l'écume des crêtes (le seuil du Jacobien) — sa bande comptait les pentes des deux cascades longues seules ; bas sur l'eau, la plus fine calculée aussi pliait la surface sous le seuil sur la moitié de la mer (`renderer.ts` `seaFftParams` : la largeur sur les cascades calculées) ; planche `docs/progress/mer/ecume-puzzle-avant-apres.jpg`
 
