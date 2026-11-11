@@ -10,6 +10,11 @@
 // says so and exits 0: nothing could be checked, nothing is known to be broken.
 import { Glob } from "bun";
 import { earthShoreShader } from "../src/system/earth-shore";
+import { SWELL_NODE_VEC4S } from "../src/system/earth-shore-layout";
+import { earthSwellShader } from "../src/system/earth-swell";
+import { BAKE_WGSL as TREE_BAKE_WGSL, DOWN_WGSL as TREE_DOWN_WGSL } from "../src/vegetation/tree-impostors";
+import { TERRAIN_CACHE_N } from "../src/system/terrain-cache-layout";
+import { WGS84_A } from "../src/system/ellipsoid";
 import { wgslLibraryModule } from "../src/system/wgsl-library";
 import { terrainForwardFinishShader, terrainForwardShader } from "../src/system/terrain-forward";
 import { withForest } from "../src/forest-shader";
@@ -62,6 +67,9 @@ shaders["trace.wgsl without the aerial table, surface textures, scenery"] = aeri
 );
 shaders["the orthophotos' mips (system/earth-tiles.ts)"] = ORTHO_MIP_WGSL;
 shaders["the shore's distances' bake (system/earth-shore.ts)"] = earthShoreShader();
+shaders["the coastal swell field's bake (system/earth-swell.ts, L1)"] = earthSwellShader(TERRAIN_CACHE_N, WGS84_A, SWELL_NODE_VEC4S);
+shaders["the trees' impostors' bake (vegetation/tree-impostors.ts, V2b)"] = TREE_BAKE_WGSL;
+shaders["the trees' impostors' 2 × 2 down (vegetation/tree-impostors.ts, V2b)"] = TREE_DOWN_WGSL;
 // (PLAN-J1 J1-3: the ground's families taken from the full tracer as stand-alone modules — what the forward ground fragment of
 // J1-4 starts from: each compiles alone, its closure whole)
 {

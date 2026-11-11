@@ -8,7 +8,8 @@ import { worldRunwaysNow, worldRunwaysUpdate } from "./world/runways3d";
 import { aheadFocus, buildLead, gazeLead, groundSpeed, streamingLead } from "./system/streaming-focus";
 import { TerrainCache } from "./system/terrain-cache";
 import { EarthHorizons } from "./system/earth-horizons";
-import { EarthShore } from "./system/earth-shore";
+import { EarthShore, type SwellInput } from "./system/earth-shore";
+import { TreeImpostors } from "./vegetation/tree-impostors";
 import { EH_HEADER_VEC4S, EH_NODE_VEC4S } from "./system/terrain-cache-layout";
 import {
   composeTracer,
@@ -5523,6 +5524,28 @@ export class Renderer {
   private frameMs(): number {
     return this.frameDesc?.realMs ?? performance.now();
   }
+  /** (L1) the coastal swell field baked and read (an A/B: off, the surf's old bands by the depth alone) */
+  shoreSwellOn = true;
+  /** (L1) an A/B's ablations of the field's reading (1 no crests on the normal, 2 no groups, 4 not in the open sea's kernel, 8 no
+   *  surf nor wash from it): runtime branches — what they cost to run, not to hold in the kernel */
+  shoreSwellAblate = 0;
+  /** (V2b) the trees' hemi-octahedral impostors — baked on the first ask; not drawn yet (V2c) */
+  treeImpostors: TreeImpostors | null = null;
+  /** (V2b) a layer of the trees' impostors as a lit PNG data URL (an e2e's shot; bakes them first) */
+  async treeImpostorPreview(layer: number): Promise<{ png: string; bakeMs: number; models: TreeImpostors["models"] }> {
+    this.treeImpostors ??= new TreeImpostors(this.device);
+    const png = await this.treeImpostors.preview(layer);
+    return { png, bakeMs: this.treeImpostors.bakeMs, models: this.treeImpostors.models };
+  }
+  /** (L1) the swell the coast's field is baked for: the sea's dominant system — its way, period —, the sea's whole height, the
+   *  waves' clock; none off the Earth's sea or without its waves */
+  private shoreSwell(): SwellInput | null {
+    const st = this.seaState;
+    const H = this.seaHere;
+    if (!this.shoreSwellOn || !st || !H || H.world || this.seaFftActive <= 0 || !this.seaFft) return null;
+    const sys = st.swell.hs > st.wind.hs ? st.swell : st.wind;
+    return { to: sys.to, tp: sys.tp, hs: this.seaHs, timeS: this.seaFftT, ablate: this.shoreSwellAblate };
+  }
   private seaHere: { U: number; to: number; lat: number; lon: number; weight: number; world?: "miller" | "titan" } | null = null;
 
   /**
@@ -6889,6 +6912,8 @@ export class Renderer {
         (lv) => cache.levelWindow(lv),
         (lv) => cache.levelGeneration(lv),
         () => this.prof.pass("earth shore", { label: "earth shore" }),
+        this.shoreSwell(),
+        this.frameMs(),
       );
       // (realtime: nothing rejected — a bake is the same ground, its window moved or its heights refined by new tiles, and
       // the temporal pass's clamp takes the change; rejecting the history there threw it away for the eight frames of the

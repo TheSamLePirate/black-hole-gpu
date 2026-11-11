@@ -449,6 +449,12 @@ const WATER_H = 2160u;
 const SHORE_OFF = 2522777u;
 const SHORE_HEADER_VEC4S = 8u;
 const SHORE_NODE_VEC4S = 16513u;
+// the coastal swell field on the same levels (gpu-tables.ts TABLE_SWELL, system/earth-swell.ts — L1): its header ([0] on, period,
+// Hs, the clock's turns; [1] the groups' clock, a turn every 7 waves; then each level's window as the distances' header has it), then
+// each level's nodes two a vec4 — (φ, gain)
+const SWELL_OFF = 2639687u;
+const SWELL_HEADER_VEC4S = 10u;
+const SWELL_NODE_VEC4S = 33025u;
 // the layered air's refraction tables (gpu-tables.ts TABLE_REFR, system/refraction-gpu.ts): a header (1 when in), then floats —
 // B_haut's log (128 heights × 128 elevations, both on √ grids), B_limbe (4 096 tangent heights on a √ grid), N every 500 m
 const REFR_OFF = 2588837u;
@@ -947,6 +953,9 @@ var<private> SEA_DEPTH_W: f32 = 0.0;
 var<private> SEA_KD: f32 = 0.0;
 // (the shore's nearness to the sea's point — 1 land within ~8 m, 0.5 within ~20 m, 0 none: shadeWater's probe; the wash's foam)
 var<private> SEA_SHORE: f32 = 0.0;
+// (where the sea's point is in the coastal swell's wave — 0 on a crest, towards 1 seaward of it —, −1 where the field has none:
+// seaShade's, for the wash's timing)
+var<private> SEA_SWELL_S: f32 = -1.0;
 // (another world's sea shaded as the Earth's — Miller's, PLAN-MER-WEBGPU: shadeNear —: the Earth's sky model, clouds, Kd490, ocean
 // mask, surf and SSR left out of seaShade; its sky mirrored from the world's light probe; its water's body the world's own — under,
 // Miller's knee-deep water over its bed as its map has it —, with the bed's caustics)
@@ -8033,6 +8042,60 @@ fn seaShoreDist(g: vec3f) -> f32 {
   }
   return 1e5;
 }
+// The coastal swell at a geodetic normal g (system/earth-swell.ts, L1): its phase φ [rad] — the crests where φ − ωt is a whole
+// turn, travelling up its gradient —, its height's gain over the offshore swell (the shoaling's, the crests' turning's), the share
+// of the pixel's nodes the swell reaches (0: none — no level holds g, or a lagoon, the lee, land), its way (the Earth's axes,
+// tangent) and |∇φ| [rad/m] (0 where a node about it has none). The finest level holding g alone: a coarser one does not know
+// its capes.
+struct SeaSwell { ph: f32, gain: f32, w: f32, dir: vec3f, k: f32, held: f32 };
+fn swellNode(s: u32, n: u32) -> vec2f {
+  let v = bodies[SWELL_OFF + SWELL_HEADER_VEC4S + s * SWELL_NODE_VEC4S + n / 2u];
+  return select(v.xy, v.zw, (n & 1u) == 1u);
+}
+fn seaSwellAt(g: vec3f) -> SeaSwell {
+  var o = SeaSwell(0.0, 0.0, 0.0, vec3f(0.0), 0.0, 0.0);
+  if (bodies[SWELL_OFF].x < 0.5) { return o; }
+  for (var s = 0u; s < (SWELL_HEADER_VEC4S - 2u) / 2u; s++) {
+    let r = bodies[SWELL_OFF + 2u + 2u * s];
+    let p = bodies[SWELL_OFF + 3u + 2u * s];
+    if (p.z < 0.5) { continue; }
+    let dl = atan2(-g.x * r.y + g.y * r.x, g.x * r.x + g.y * r.y);
+    let sz = clamp(g.z, -1.0, 1.0);
+    let cl = sqrt(max(1.0 - sz * sz, 0.0));
+    let uv = vec2f(dl, asin(clamp(sz * r.w - cl * r.z, -1.0, 1.0))) * p.x;
+    if (min(uv.x, uv.y) < 1.0 || max(uv.x, uv.y) >= 255.0) { continue; }
+    let i = vec2u(floor(uv));
+    let f = fract(uv);
+    // (held: the field knows this point — what it says goes, "no swell" too: a lagoon, the lee)
+    o.held = 1.0;
+    let n0 = i.y * 257u + i.x;
+    let a = swellNode(s, n0);
+    let b = swellNode(s, n0 + 1u);
+    let c = swellNode(s, n0 + 257u);
+    let d = swellNode(s, n0 + 258u);
+    let wb = vec4f((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y);
+    let reach = vec4f(select(0.0, 1.0, a.y >= 0.0), select(0.0, 1.0, b.y >= 0.0), select(0.0, 1.0, c.y >= 0.0), select(0.0, 1.0, d.y >= 0.0));
+    let w = dot(wb, reach);
+    o.gain = dot(wb, max(vec4f(a.y, b.y, c.y, d.y), vec4f(0.0)));
+    if (w < 1e-3) { return o; }
+    // (the phase over the reached nodes alone, relative to the first reached: no large sums)
+    let p0 = select(select(select(d.x, c.x, reach.z > 0.5), b.x, reach.y > 0.5), a.x, reach.x > 0.5);
+    o.ph = p0 + dot(wb * reach, vec4f(a.x, b.x, c.x, d.x) - p0) / w;
+    o.w = w;
+    if (min(reach.x, min(reach.y, min(reach.z, reach.w))) > 0.5) {
+      let du = mix(b.x - a.x, d.x - c.x, f.y);
+      let dv = mix(c.x - a.x, d.x - b.x, f.x);
+      var e = vec3f(-g.y, g.x, 0.0);
+      e = select(normalize(e), vec3f(0.0, 1.0, 0.0), dot(e, e) < 1e-12);
+      let nth = cross(g, e);
+      let gv = e * (du / max(p.y * cl, 1e-3)) + nth * (dv / p.y);
+      o.k = length(gv);
+      o.dir = gv / max(o.k, 1e-9);
+    }
+    return o;
+  }
+  return o;
+}
 fn geoidNode(x: u32, y: u32) -> f32 {
   let n = y * GEOID_W + x;
   return bodies[GEOID_OFF + n / 4u][n % 4u];
@@ -9290,6 +9353,32 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   var lying = 0.0;
   // (the surface's Jacobian — where it converges, the bed's caustics under shallow water)
   var jac = 1.0;
+  // (L2: the coastal swell near the shore — the field's refracted crests, system/earth-swell.ts —, read once: their slopes on the
+  // surface where the swell feels the bed, their breaking in the surf below, the wash timed by them — SEA_SWELL_S)
+  var swl = SeaSwell(0.0, 0.0, 0.0, vec3f(0.0), 0.0, 0.0);
+  var swS = 0.0;
+  SEA_SWELL_S = -1.0;
+  // (both water kernels — the open sea's too: the crests come in from kilometres out, across the split between them —, where a
+  // pixel can hold a deep swell's crest)
+  let swT = max(bodies[SWELL_OFF].y, 1.0);
+  let swK0 = (TAU / swT) * (TAU / swT) / 9.81;
+  // (the header's word: 1 on; an A/B's ablations — renderer.shoreSwellAblate —: 2 no crests on the normal, 4 no groups, 8 not read
+  // by the open sea's kernel, 16 no surf nor wash from it)
+  let swBits = u32(bodies[SWELL_OFF].x + 0.5);
+  // (nor where the bed is known deeper than the swell feels — kh over ~1.8 at the deep k: Dean's profile, the field's, is the bed
+  // only where the tiles know none — a Terrarium sea 80 m deep 2 km off Hyères is no shoal)
+  let swDeep = SEA_DEPTH_W > 0.3 && SEA_DEPTH * swK0 > 1.8;
+  if (SEA_ON && !SEA_ALIEN && calm <= 0.0 && (swBits & 1u) != 0u && !(WATER_OPEN && (swBits & 8u) != 0u) && !swDeep && footM * swK0 < 0.35 * TAU) {
+    swl = seaSwellAt(normal);
+    if (swl.w > 0.0) {
+      // (where the pixel is in its wave: 0 on a crest, rising seaward of it — (ωt − φ)/2π)
+      swS = fract(bodies[SWELL_OFF].w - swl.ph / TAU);
+      SEA_SWELL_S = swS;
+    } else if (swl.held > 0.5) {
+      // (the field holds the point and no swell reaches it: the wash of a lagoon's, a lee's shore — between crests, always)
+      SEA_SWELL_S = 0.85;
+    }
+  }
   if (SEA_ON) {
     // (near: the flight's own wind — the waves and the glint as the pilot feels it —, the trains drawn)
     let b = P.sea[1].w;
@@ -9342,6 +9431,33 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     // (a craft's downwash: the water ruffled — its slopes' variance raised, the glint scattered, the lane darker)
     vu += wk.rough * b;
     vc += wk.rough * b;
+    // (the field's crests come into the shallows — where the swell feels the bed, its wave number over the deep one's (k/k0 =
+    // 1/tanh kh: 1.13 at kh 1.4): the FFT's swell, offshore's, neither turned nor raised there —, their height the shoaled one
+    // held under the breaking's limit at the field's own depth (kh = atanh(k0/k)), in groups — a slow noise along and across,
+    // drifting with the clock —, their slope along their way; a crest peaked as it nears breaking (its second harmonic);
+    // resolved where a wavelength spans a few footprints)
+    if (swl.k > 0.0 && (swBits & 2u) == 0u) {
+      // (the depth: the field's own — kh = atanh(k0/k) —, the tiles' where they know a deeper bed)
+      let hf0 = atanh(min(swK0 / swl.k, 0.999)) / swl.k;
+      let hf = select(hf0, max(hf0, SEA_DEPTH), SEA_DEPTH_W > 0.3);
+      let Hl = min(bodies[SWELL_OFF].z * swl.gain, 0.6 * hf);
+      let shallow = smoothstep(1.8, 0.9, swK0 * hf);
+      let res = smoothstep(0.35, 0.1, footM * swl.k / TAU);
+      let a0 = 0.5 * Hl * shallow * res * swl.w * b;
+      if (a0 > 1e-3) {
+        // (in groups of seven waves riding with the crests — in the shallows the groups' speed is the crests' —, waved along them
+        // over some five wavelengths: two sines where a gradient noise cost ~0.9 ms on kerr-mini's beach view)
+        var grp = 0.0;
+        if ((swBits & 4u) == 0u) {
+          let along = dot(SEA_D, cross(normal, swl.dir)) * swl.k / TAU;
+          grp = sin(TAU * (bodies[SWELL_OFF + 1u].x - swl.ph / (7.0 * TAU)) + 1.7 * sin(along / 5.0 * TAU));
+        }
+        let a = a0 * (0.72 + 0.45 * grp);
+        let th = TAU * swS;
+        let peak = 0.35 * smoothstep(0.3, 0.55, Hl / hf);
+        n = normalize(n - swl.dir * (a * swl.k * (sin(th) + peak * sin(2.0 * th))));
+      }
+    }
   }
   // (a lake's wind: the fetch's — a few hundred metres to kilometres — keeps its waves a ripple; cat's paws
   // over it, a breath of wind here and not there — the open sea, calm 0, without its noise; no lakes without
@@ -9568,7 +9684,29 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
       let Hs = select(0.021 * U * U, 4.0 * P.seafft[0].z, P.seafft[0].x > 0.5);
       let Tp = select(0.73 * U + 2.0, P.seafft[0].w, P.seafft[0].w > 0.5);
       let dB = 1.3 * Hs + 0.25;
-      if (SEA_DEPTH < dB && Hs > 0.05) {
+      if (swl.held > 0.5 && (swBits & 16u) == 0u) {
+        // (L2 — the field's surf: where the shoaled height reaches ~0.4–0.6 of the depth (Hs's; a single wave's 0.78) the
+        // crests break, the front's white trailing seaward of each, broken along it; deeper in, the height held at that limit,
+        // the bores' foam lasting; none in a lagoon or the lee — the field reaches none —, more on a point's shoals)
+        let h = max(SEA_DEPTH, 0.05);
+        let Hl = bodies[SWELL_OFF].z * swl.gain;
+        let ratio = Hl / h;
+        let qb = smoothstep(0.35, 0.6, ratio) * swl.w;
+        if (qb > 0.0 && Hl > 0.05) {
+          let tclock = P.time.x * P.near5.w;
+          let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
+          let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
+          let anchor = vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 19);
+          let brk = noise01(anchor, vec3f(u, c, tclock * 0.08) / 7.0);
+          let front = exp(-swS * 5.0) * clamp(0.35 + 0.9 * brk, 0.0, 1.0);
+          let inner = smoothstep(0.6, 0.95, ratio) * clamp(0.45 + 0.8 * brk, 0.0, 1.0) * (0.55 + 0.45 * exp(-swS * 2.5));
+          // (resolved where a wavelength — the field's, else the shallow water's T √(g h) — spans a few footprints, its mean beyond)
+          let L = select(bodies[SWELL_OFF].y * sqrt(9.81 * h), TAU / swl.k, swl.k > 0.0);
+          let res = smoothstep(0.5, 0.15, footM / max(L, 1.0));
+          let surf = max(mix(0.3, front, res), inner) * qb * min(Hl / 0.3, 1.0);
+          W = max(W, surf * P.sea[1].w * smoothstep(0.6, 1.0, SEA_DEPTH_W) * (1.0 - calm));
+        }
+      } else if (SEA_DEPTH < dB && Hs > 0.05) {
         let tclock = P.time.x * P.near5.w;
         let u = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
         let c = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
@@ -16508,7 +16646,10 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
       let Hw = select(0.021 * P.sea[0].w * P.sea[0].w, 4.0 * P.seafft[0].z, P.seafft[0].x > 0.5);
       let wu = dot(SEA_D, P.sea[0].xyz) + P.sea[2].x;
       let wc = dot(SEA_D, P.sea[1].xyz) + P.sea[2].y;
-      let wash = noise01(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 23), vec3f(wu / 4.0, wc / 4.0, P.time.x * P.near5.w * 0.15));
+      var wash = noise01(vec3i(i32(P.sea[2].z) * 32, i32(P.sea[2].w) * 32, 23), vec3f(wu / 4.0, wc / 4.0, P.time.x * P.near5.w * 0.15));
+      // (L2: the coastal swell's — the wash run up as each crest reaches the shore, its white draining back down the beach until
+      // the next; the patches broken by the same noise)
+      if (SEA_SWELL_S >= 0.0) { wash = (0.25 + 0.75 * exp(-SEA_SWELL_S * 3.5)) * (0.55 + 0.6 * wash); }
       let wW = SEA_SHORE * clamp(Hw / 0.6, 0.15, 1.0) * smoothstep(0.35, 0.75, wash) * P.sea[1].w;
       wcol = mix(wcol, 0.6 / PI * (Eg * max(dot(gq, Ls), 0.0) + sky), wW);
     }
@@ -16521,6 +16662,7 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   RASTER_SHADE = false;
   SEA_ON = false;
   SEA_SHORE = 0.0;
+  SEA_SWELL_S = -1.0;
   // (falling water — a cascade, a rapid — on the inland water alone (the sea does not fall): where its ground falls steeply —
   // the relief's own heights over ±25 m or two footprints, smooth: the mesh's facets' normals drew white triangles over a gorge
   // and its banks, and over ±8 m the relief's noise under a river — SRTM's, its voids — streaked a river white —, white water, aerated, in streaks drawn down the slope and running down it with the clock, lit as foam;

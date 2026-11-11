@@ -10,3 +10,15 @@ export const SHORE_HEADER_VEC4S = 2 * SHORE_LEVELS.length;
 /** a level's nodes, four a vec4 */
 export const SHORE_NODE_VEC4S = Math.ceil((TERRAIN_CACHE_N * TERRAIN_CACHE_N) / 4);
 export const SHORE_VEC4S = SHORE_HEADER_VEC4S + SHORE_LEVELS.length * SHORE_NODE_VEC4S;
+
+// L1 — the coastal swell field (system/earth-swell.ts; trace.wgsl seaSwellAt): on the same levels and windows as the distances,
+// each node's swell phase φ [rad] — the eikonal's |∇φ| = k(h) from the offshore swell, refracted round the capes — and its height
+// gain (shoaling × refraction), two floats a node; after the distances' region, last in the table (gpu-tables.ts TABLE_SWELL).
+/** the field's header: [0] on, period [s], Hs [m], the swell's clock (ωt/2π, fractional); [1] the groups' clock (ωt/2π / 7,
+ *  fractional); then each level's window (its own: the
+ *  field is published after its bake's last sweep, frames after the distances) as the distances' header has it — reference, then
+ *  nodes a radian, spacing [m], published, level */
+export const SWELL_HEADER_VEC4S = 2 + 2 * SHORE_LEVELS.length;
+/** a level's nodes, two a vec4: (φ, gain) — gain −1 where no swell reaches (land, a lagoon, the lee past 90°) */
+export const SWELL_NODE_VEC4S = Math.ceil((TERRAIN_CACHE_N * TERRAIN_CACHE_N) / 2);
+export const SWELL_VEC4S = SWELL_HEADER_VEC4S + SHORE_LEVELS.length * SWELL_NODE_VEC4S;

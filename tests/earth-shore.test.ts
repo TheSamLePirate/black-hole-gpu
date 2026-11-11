@@ -46,3 +46,19 @@ test("the jump flood matches the exact search on an irregular coast (within a no
 test("the levels are the cache's", () => {
   for (const l of SHORE_LEVELS) expect(l).toBeLessThan(TERRAIN_CACHE_LEVELS);
 });
+
+test("the distances on the equirectangular grid: east–west nodes cos φ closer (L1 — 27 % too long at 43° N before)", () => {
+  const n = 48;
+  const land = (x: number, y: number) => (Math.hypot(x - 20, y - 24) < 4 || x > 44 ? 10 : 0);
+  const cx = (j: number) => Math.cos(0.75 + j * 1e-4);
+  const jfa = shoreDistancesJfa(land, n, 38, cx);
+  let worst = 0;
+  for (let y = 0; y < n; y += 3)
+    for (let x = 0; x < n; x += 3) {
+      const e = shoreDistance(land, x, y, 38, n, cx);
+      worst = Math.max(worst, Math.abs(jfa[y * n + x]! - e) / Math.max(e, 38));
+    }
+  expect(worst).toBeLessThan(0.05);
+  // (a node 11 east of the island's rim: 11 × 38 × cos φ, not 11 × 38)
+  expect(shoreDistance(land, 34, 24, 38, n, cx)).toBeCloseTo(11 * 38 * cx(24), 0);
+});

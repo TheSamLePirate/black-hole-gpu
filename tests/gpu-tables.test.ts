@@ -39,6 +39,8 @@ import {
   WATER_VEC4S,
   TABLE_SHORE,
   SHORE_VEC4S,
+  TABLE_SWELL,
+  SWELL_VEC4S,
   TABLE_REFR,
   TABLE_TLUT,
   TABLE_CLV,
@@ -56,7 +58,7 @@ import {
   REFR_VEC4S,
 } from "../src/gpu-tables";
 import { GEOID_H, GEOID_W } from "../src/system/geoid-grid";
-import { SHORE_HEADER_VEC4S, SHORE_NODE_VEC4S } from "../src/system/earth-shore-layout";
+import { SHORE_HEADER_VEC4S, SHORE_NODE_VEC4S, SWELL_HEADER_VEC4S, SWELL_NODE_VEC4S } from "../src/system/earth-shore-layout";
 import { GIANT_WINDS } from "../src/system/giant-winds";
 import { GIANT_TOPS_TABLE } from "../src/system/giant-tops";
 import { TERRAIN_CACHE_VEC4S } from "../src/system/terrain-cache-layout";
@@ -80,6 +82,9 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(constU("SHORE_NODE_VEC4S")).toBe(SHORE_NODE_VEC4S);
   expect(constU("REFR_OFF")).toBe(TABLE_REFR);
   expect(TABLE_REFR).toBe(TABLE_SHORE + SHORE_VEC4S);
+  expect(constU("SWELL_OFF")).toBe(TABLE_SWELL);
+  expect(constU("SWELL_HEADER_VEC4S")).toBe(SWELL_HEADER_VEC4S);
+  expect(constU("SWELL_NODE_VEC4S")).toBe(SWELL_NODE_VEC4S);
   expect(TABLE_TLUT).toBe(TABLE_REFR + REFR_VEC4S);
   expect(constU("TLUT_OFF")).toBe(TABLE_TLUT);
   expect(TABLE_WXGRID).toBe(TABLE_TLUT + TLUT_VEC4S);
@@ -92,7 +97,8 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
   expect(constU("LIFT_OFF")).toBe(TABLE_LIFT);
   expect(TABLE_PREFR).toBe(TABLE_LIFT + LIFT_VEC4S);
   expect(constU("PREFR_OFF")).toBe(TABLE_PREFR);
-  expect(TABLE_VEC4S).toBe(TABLE_PREFR + PREFR_VEC4S);
+  expect(TABLE_SWELL).toBe(TABLE_PREFR + PREFR_VEC4S);
+  expect(TABLE_VEC4S).toBe(TABLE_SWELL + SWELL_VEC4S);
   expect(constU("SH_BASE")).toBe(TABLE_SH);
   expect(constU("LUT_OFF")).toBe(TABLE_LUT);
   expect(constU("PATH_OFF")).toBe(TABLE_PATH);
@@ -130,7 +136,8 @@ test("the tables' offsets: the renderer's and the shader's the same", () => {
       CLV_VEC4S +
       MIRAGE_VEC4S +
       LIFT_VEC4S +
-      PREFR_VEC4S,
+      PREFR_VEC4S +
+      SWELL_VEC4S,
   );
   expect(constU("GEOID_OFF")).toBe(TABLE_GEOID);
   expect(constU("ORTHO_OFF")).toBe(TABLE_ORTHO);

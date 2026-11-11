@@ -10,7 +10,7 @@ import { EARTH_HORIZON_VEC4S, TERRAIN_CACHE_LEVELS, TERRAIN_CACHE_NODE_VEC4S, TE
 import { GEOID_H, GEOID_W } from "./system/geoid-grid";
 import { ORTHO_PARAM_VEC4S } from "./system/earth-tiles";
 import { WATER_VEC4S } from "./system/water-kd-grid";
-import { SHORE_VEC4S } from "./system/earth-shore-layout";
+import { SHORE_VEC4S, SWELL_VEC4S } from "./system/earth-shore-layout";
 import { REFR_VEC4S } from "./system/refraction-gpu";
 import { TLUT_VEC4S } from "./system/earth-air-layout";
 import { WXGRID_VEC4S } from "./system/weather-grid-layout";
@@ -117,4 +117,8 @@ export { LIFT_VEC4S };
 /** (R5) the near body's limb-bending table — Venus's, Titan's air (system/refraction-planets.ts; trace.wgsl planetBend) */
 export const TABLE_PREFR = TABLE_LIFT + LIFT_VEC4S;
 export { PREFR_VEC4S };
-export const TABLE_VEC4S = TABLE_PREFR + PREFR_VEC4S;
+/** (L1) the coastal swell field on the shore's levels: its phase and height gain a node (system/earth-swell.ts; trace.wgsl
+ *  seaSwellAt) — last in the table, no offset moved */
+export const TABLE_SWELL = TABLE_PREFR + PREFR_VEC4S;
+export { SWELL_VEC4S };
+export const TABLE_VEC4S = TABLE_SWELL + SWELL_VEC4S;

@@ -2772,3 +2772,44 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
   les 64 px du niveau le plus grossier), et le noyau s'alourdit. Annulé.
 - **Enseignement** : la marche exponentielle de 20 pas ne se prête pas au Hi-Z ; un vrai gain demanderait une marche en espace
   écran (le parcours Hi-Z classique), à mesurer contre l'image actuelle — un changement d'algorithme, non fait.
+
+## 2026-11-11T03:30Z — Littoral L1/L2 : le champ de houle côtier ; arbres V2a/V2b : modèles procéduraux et imposteurs cuits
+
+Demande de Sam : « commence Littoral L1/L2 et arbres V2 » ([analyse §5.1, §5.3](docs/ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md) ;
+plans [PLAN-MER-WEBGPU §5](docs/PLAN-MER-WEBGPU.md), [PLAN-VEGETATION-V2](docs/PLAN-VEGETATION-V2.md)). Stratégie §7.5 (l'eau) et §7.7
+(la forêt de moyenne distance), un produit du **monde** lu par l'eau.
+
+- **L1 — le champ de houle** (`src/system/earth-swell.ts`, cuit par `EarthShore` après les distances, table `TABLE_SWELL` en fin de
+  `bodyBuf`, +2,1 Mo) : sur les niveaux 3–6 du cache de relief, la phase de la houle dominante par l'eikonale |∇φ| = k(h) (dispersion de
+  Fenton & McKee, profondeur de Dean tirée de la distance), schéma de Godunov amont en tuiles 16² sur GPU (48 envois sur 3 images),
+  bords d'un niveau pris dans la phase du niveau plus grossier, onde plane du large sur le plus grossier ; gain = levée √(cg₀/cg) ×
+  rotation des crêtes. Clé : direction 5°, période 0,5 s, ancre. Un niveau à la fois, le plus grossier d'abord ; **les recuissons pour
+  de nouvelles tuiles limitées à une toutes les 2 s par niveau** (avant : les distances étaient recuites presque à chaque image pendant
+  les minutes d'arrivée des tuiles, ~0,8 ms la cuisson).
+- **Au passage, deux corrections** : les niveaux de rivage ont des nœuds de 38 à 2 446 m (pas « 6,1 à 390 m » comme écrit dans le code
+  et les docs) ; la grille est équirectangulaire et les distances au rivage comptaient l'est-ouest comme le nord-sud (27 % trop longues
+  d'est en ouest à 43° N) — mesurées maintenant en mètres vrais.
+- **L2 — lu par l'eau** (`seaSwellAt`, `seaShade`, les deux noyaux de l'eau) : crêtes réfractées sur la normale là où la houle sent le
+  fond (la profondeur connue des tuiles prime sur Dean : pas de hauts-fonds fictifs au large), en groupes, pointues près du
+  déferlement ; déferlement quand Hs·gain atteint 0,35–0,6 h, front qui traîne vers le large, bores ; lavis cadencé par l'arrivée des
+  crêtes ; **là où le champ est publié, il décide** (une lagune, l'ombre d'un cap : pas de ressac — avant, des bandes de ressac dans
+  l'étang des Pesquiers). A/B `shoreSwellOn`, ablations `shoreSwellAblate`.
+- **Vérifié** : tests unitaires (`tests/earth-swell.test.ts` : dispersion, Godunov exact pour une onde plane, crêtes tournées vers la
+  normale d'une plage, lagune non atteinte, ombre d'une île ; distances anisotropes ; offsets des tables) ; 83/83 shaders compilés
+  (`check-wgsl`) ; budget des noyaux ; sonde `coast-swell` sur kerr-mini (Almanarre, houle imposée 1,6 m / 10 s du sud-ouest) : les
+  quatre niveaux publiés (trois avec leurs bords pris au niveau plus grossier), 0 erreur GPU ; planche
+  `docs/progress/mer/houle-l1-almanarre.jpg` — de longues crêtes de houle qui viennent vers la plage où il n'y avait rien ; le coin à
+  bords droits de la vue basse (le partage entre noyau côtier et noyau de pleine mer, déjà là avant) disparaît.
+- **Mesuré** (kerr-mini, 1600×900, trois passages alternés, GPU p50) : vue à 250 m +0,7 ms ; vue de plage à 25 m **+1,5 ms** ; vue
+  basse à 6 m ~0. La lecture seule (toutes ablations) ≈ +0,2 ms : le reste est le travail des crêtes et du déferlement. Au-dessus de la
+  cible de l'analyse (≤ +0,5 ms sur une côte) : une ablation fine (groupes, crêtes, ressac) est en cours pour décider quoi alléger.
+- **V2a — les arbres modélisés** (`src/vegetation/tree-model.ts`) : 6 sortes × 2 proportions, tronc, branches (colonisation de
+  l'espace allégée, modèle des tuyaux), cartes de feuilles en touffes **dans l'enveloppe de la sorte** (l'ellipsoïde ou le cône que le
+  traceur sculpte de près) ; conifère en verticilles, pin en parasol, palmier en palmes ; 236 à ~10 000 triangles, < 10 ms chacun ;
+  `tests/tree-model.test.ts`.
+- **V2b — les imposteurs cuits** (`src/vegetation/tree-impostors.ts`) : 8 × 8 vues hémi-octaédriques (du zénith à l'horizon), 64²
+  par vue rendues à 2× ; albédo/couverture et normale/profondeur, 12 couches, ~25 Mo ; cuisson 71–332 ms sur ce Mac ; **aucune passe
+  de l'image ne les lit encore** (V2c) : pas de coût d'image. Planche `docs/progress/vegetation/imposteurs-v2b-planche.jpg`.
+- **Non fait / limites** : la profondeur du champ est Dean seul (les tuiles ne sont pas lues dans la cuisson) ; le niveau le plus fin a
+  des nœuds de 38 m ; le sable mouillé et la lame sur la terre (L3) vont avec J1 ; V2c (dessin, mips à couverture conservée), V2d
+  (au-delà de 6,25 km), V2e restent ; aucune mesure J0 de ce lot ; M1 Max non mesuré.

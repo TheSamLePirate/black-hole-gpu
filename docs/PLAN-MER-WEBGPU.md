@@ -217,3 +217,27 @@ bas. A/B `seaCrestsOverLand` (kerr-mini) : devant les falaises sud de Porqueroll
 de la mer au pied de l'île à peine changée (des crêtes de 1 m à cette distance), aucun débordement vu ; la vue « plage basse » visée ne
 montrait pas la plage — le cas d'une plage proche reste à voir.
 
+
+## 5. Le littoral : L1–L3 (lancé le 11 novembre)
+
+Demande de Sam, 11 novembre : « commence Littoral L1/L2 ». Décisions déjà prises le 10 ([analyse §8](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md)) :
+la bathymétrie par Terrarium + profil de Dean, rien de plus téléchargé. Référence de technique : le littoral de BakedVoxelLighting
+(analyse §4.1), réécrit sur nos contrats — un produit du **monde** sur les fenêtres du cache de relief, lu par l'eau.
+
+**Correction d'un chiffre répété ici et dans le code** : les niveaux 3 à 6 du cache ont des nœuds de **38, 153, 611 et 2 446 m**
+(`TERRAIN_CACHE_ROUNDS` 2²⁰ … 2¹⁴ ; fenêtres de ±4,9, ±19,6, ±78 et ±314 km), pas « 6,1 à 390 m ». Et la grille est
+équirectangulaire : ses nœuds sont cos φ plus proches d'est en ouest (0,73 à 43° N). Les distances au rivage comptaient les deux
+directions pareil (27 % trop longues d'est en ouest à Hyères) ; corrigé avec L1 (inondation et distance mesurées en mètres vrais).
+
+| Lot | Contenu | Preuve | État |
+|---|---|---|---|
+| **L1** | **Le champ de houle côtier** (`system/earth-swell.ts`, cuit par `EarthShore` à la suite des distances, table `TABLE_SWELL` en fin de `bodyBuf`) : sur chaque niveau de rivage, la phase φ de la houle dominante — eikonale \|∇φ\| = k(h), k par la dispersion de Fenton & McKee à sa période sur la profondeur de Dean, résolue sur GPU par un schéma de Godunov amont en tuiles de 16² (16 passes locales, 48 envois sur 3 images) — depuis l'onde plane du large sur les bords amont du niveau le plus grossier, les bords d'un niveau plus fin pris dans la phase du niveau au-dessus ; le gain de hauteur : levée √(cg₀/cg) × rotation des crêtes √max(cos(direction locale, direction du large), 0) (Kr d'un fond à isobathes droites près d'une plage ; rien dans l'ombre au-delà de 90°). Clé : direction (5°), période (0,5 s), ancre ; un niveau à la fois, le plus grossier d'abord | tests CPU du schéma (`tests/earth-swell.test.ts` : onde plane exacte au large, crêtes tournées vers la normale d'une plage, lagune non atteinte, ombre d'une île) ; sonde `coast-swell` (Almanarre) | **fait** (11 nov.) |
+| **L2** | **Le déferlement lu dans le champ** (`seaShade`, `seaSwellAt`) : crêtes réfractées sur la normale de l'eau là où la houle sent le fond (kh < ~1,2), hauteur levée bornée à 0,6 h, crête pointue près du déferlement ; déferlement où Hs·gain atteint 0,35–0,6 h, front blanc qui traîne vers le large derrière chaque crête, bores saturés plus près ; lavis de rive cadencé par l'arrivée des crêtes (`SEA_SWELL_S`) ; l'ancien chemin (bandes par la profondeur seule) là où le champ n'est pas | sonde `coast-swell` (A/B `shoreSwellOn`) : captures et coût | **fait** (11 nov., à juger sur image) |
+| L3 | Le sable mouillé et la lame de rive **sur la terre** (le matériau du sol lit le même champ : bande humide sous la limite du jet de rive, séchage) | matériau du sol de J1 | à faire avec J1 |
+
+**Limites de L1/L2, connues** : la profondeur du champ est le profil de Dean tiré de la distance (pas les hauts-fonds de Terrarium :
+le cache s'arrête au niveau de la mer ; lire les tuiles dans la cuisson est la suite) ; les nœuds du plus fin niveau font 38 m — la zone
+de déferlement d'une plage (h < 2 m, < 90 m du bord) tient en deux ou trois nœuds, la phase y est interpolée linéairement (exacte pour
+une onde plane) et la profondeur du pixel reste celle de `seaDepthAt` ; une seule houle (la dominante), pas de diffraction ni de
+courant ; la houle de la FFT n'est ni tournée ni levée près du bord, le champ s'y ajoute (kh < 1,2) ; le lavis reste sur les pixels de
+mer (la lame sur le sable est L3). Coût de la cuisson : à mesurer (passe `earth shore`, trois images par niveau à chaque recuisson).
