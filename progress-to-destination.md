@@ -2972,3 +2972,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   kerr-mini passé (5/5) — les moutons de la force 5 et l'écume de la tempête toujours là (planche
   `docs/progress/mer/ecume-sj-force5-tempete.png`). Non mesuré : la couverture d'écume comparée à Monahan ; le ciel de tempête montre des
   anneaux dans les nuages (antérieur, non examiné).
+
+## 2026-11-11T09:40Z — Rectangles turquoise de l'Almanarre : recherche menée, non résolue
+
+- Douze sources de couleur, d'ombre et de classification écartées une à une, compilées (PROBLEMES-A-REGLER) : le défaut naît dans la
+  couleur de l'eau de `seaShade`, pas dans un sol mal classé, ni l'écume, ni les reflets, ni les ombres, ni Kd490, ni l'ouverture du
+  ciel, ni le partage des noyaux, ni la houle, ni les navires. Aucun code changé ; piège de mesure noté (les variantes `renderer.tune`
+  du noyau de l'eau mettent parfois plus de 25 s à se compiler sur ce Mac).

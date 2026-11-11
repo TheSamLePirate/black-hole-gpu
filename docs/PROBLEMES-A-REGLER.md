@@ -40,7 +40,9 @@ Soleil. Les rectangles sont fixes sur plusieurs minutes et d'un vert d'eau clair
 **Suspect restant** : les bulles des sillages — `water = mix(water, Ein · (0,02, 0,075, 0,085) / π, wk.bub …)`, exactement ce
 turquoise —, des bandes de sillage fixes (un navire à l'arrêt ? des enregistrements anciens de `renderer.seaWakes`). Les deux vues de
 débogage des sillages ont été prises **avant la fin de la recompilation** du noyau de l'eau (le sol de repli à l'écran, malgré 20–25 s
-d'attente) : à refaire en attendant le noyau (`renderer.variants`), et lire `renderer.seaWakes` sur cette vue.
+d'attente) : à refaire en attendant le noyau (`renderer.variants`), et lire `renderer.seaWakes` sur cette vue. **Lu** : `seaWakes` vide —
+pas de navire ; reste le souffle d'un appareil (`seaWake`, hors navires) ou le fond peu profond de `seaShade` (le seuil sur
+`luminance(under)` : `under` mesuré nul en moyenne, à revérifier pixel à pixel sur un rectangle). Recherche close pour cette session.
 
 ## ~~Le bord de l'eau sur la plage en marches d'environ 1 m~~ — réglé le même jour : c'était l'écume des crêtes (le seuil du Jacobien) — sa bande comptait les pentes des deux cascades longues seules ; bas sur l'eau, la plus fine calculée aussi pliait la surface sous le seuil sur la moitié de la mer (`renderer.ts` `seaFftParams` : la largeur sur les cascades calculées) ; planche `docs/progress/mer/ecume-puzzle-avant-apres.jpg`
 
