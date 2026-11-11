@@ -155,7 +155,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   (`controller/lowthrust.ts`), qui refuse sous un rapport poussée/poids de 1,05 ; le F-35 sec est à ≈ 0,59.
   [F35.md](F35.md) dit que U décolle automatiquement. Piste : un essai en vol, puis un décollage propre aux avions ou la
   doc corrigée.
-- **Les grisés du HUD pour décoller et atterrir** (`src/ui/flighthud.ts`, vers la ligne 2274) dépendent d'un `else` qui
+- ~~**Les grisés du HUD pour décoller et atterrir**~~ — confirmé et réglé le 11 novembre 2026 : la ligne du maintien de station
+  (X1a, 998da6ac) s'était glissée entre `if (i.landed)` et son `else` ; rétabli — posé : atterrir et stationnaire grisés, décoller
+  actif ; en l'air loin de tout sol (au-delà d'un demi-rayon) : décoller et atterrir grisés ; vérifié par une sonde (orbite
+  à 505 km, posé, stationnaire à 300 m). Ce qui était constaté : (`src/ui/flighthud.ts`, vers la ligne 2274) dépendent d'un `else` qui
   semble rattaché à la condition du maintien de station : ils ne s'appliqueraient qu'avec un appareil à moins de 5 km.
 - **Affichage TAT/SAT de l'A320** (`src/a320/du/data.ts`, vers la ligne 203) : une température en °C divisée par
   `1 + 0,2 M²` ; la SAT affichée serait fausse en vitesse.

@@ -3061,3 +3061,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites** : la rotation et les maintiens ne dépendent pas de la masse ni du vent (67 m/s fixe) ; l'A320 n'a pas d'U (son
   décollage passe par TOGA et son FMGC). Restent dans la même liste : les grisés du HUD, la TAT/SAT de l'A320, les limites
   non appliquées (choix de Sam).
+
+## 2026-11-11T12:50Z — Les grisés du HUD pour décoller et atterrir rétablis
+
+- **Destination** : §19 (la lisibilité des commandes : un bouton grisé dit pourquoi il ne s'applique pas).
+- **Cause** (lecture confirmée par l'historique) : le commit X1a (998da6ac, maintien de station) a inséré sa ligne entre
+  `if (i.landed)` et son `else` dans `ui/flighthud.ts` ; depuis, décoller et atterrir n'étaient grisés qu'avec un appareil à moins de
+  5 km — et décoller l'était alors même posé.
+- **Fait** : l'`else` rattaché à `i.landed` ; décoller reste actif en l'air près d'un sol (le stationnaire → U monte, vérifié ce jour
+  avec le Lander). **Vérifié** par une sonde locale (Lander) : orbite à 505 km — les deux actifs (la surface est lue jusqu'à un
+  demi-rayon : l'atterrissage part de l'orbite) ; posé — atterrir et stationnaire grisés « On the ground », décoller actif ;
+  stationnaire à 300 m — actifs. Non vérifié : loin de tout corps (logique simple, non volée).
+- **Docs** : VOL-VAISSEAUX partie II, PROBLEMES-A-REGLER (rayé).

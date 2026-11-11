@@ -2271,13 +2271,16 @@ export class FlightHud {
       if (!i.dirs.prograde)
         for (const k of ["prograde", "retrograde", "radialOut", "radialIn", "normal", "antinormal"])
           why[k] = i.landed ? t("On the ground") : t("No orbit here");
+      // (in the air near a ground — a hover — the take-off still climbs to orbit; far from any ground, neither it nor the
+      // landing applies. The station keeping's line once sat between this `if` and its `else`: both were dimmed only
+      // with a craft within 5 km — and the take-off then even on the ground)
       if (i.landed) why.hover = why.circularize = why.land = t("On the ground");
+      else if (!nearGround) {
+        why.takeoff = t("Not on the ground");
+        why.land = t("No ground near");
+      }
       // (station keeping: a craft or the station within 5 km — docked, its key backs off first)
       if (!i.links.length && (!i.dock || i.dock.range > 5000)) why.keep = t("No craft within 5 km");
-      else {
-        why.takeoff = t("Not on the ground");
-        if (!nearGround) why.land = t("No ground near");
-      }
       for (const [id, b] of this.buttons) {
         if (!b.classList.contains("fl-rb")) continue;
         const r = why[id];

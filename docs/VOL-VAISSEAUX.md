@@ -835,9 +835,9 @@ fuite d'O₂ (stock vide en ~6 h), épurateur ; batterie à plat : ni RCS ni rou
   toute l'aérodynamique.
 - Pas de décalage gravitationnel solaire dans τ de notre côté.
 - Deux formules de Δv restant (`fcBudget` en rapidité × c, HUD en tanh) : identiques sous ~0,1 c.
-- **Défauts probables (lecture, non vérifiés en vol)** : les grisés du HUD pour décoller et atterrir
-  (`ui/flighthud.ts` vers la ligne 2274) dépendent du mauvais `else` (ils ne s'appliquent qu'avec un appareil à moins
-  de 5 km) ; le maintien de rotation de l'anneau de l'Endurance est ignoré quand un maintien pointe le nez ; près d'un
+- **Les grisés du HUD pour décoller et atterrir** (réglé le 11 novembre 2026 ; ils dépendaient du mauvais `else`) :
+  posé, atterrir et stationnaire grisés ; en l'air au-delà d'un demi-rayon du corps, décoller et atterrir grisés.
+- **Défauts probables (lecture, non vérifiés en vol)** : le maintien de rotation de l'anneau de l'Endurance est ignoré quand un maintien pointe le nez ; près d'un
   monde de Gargantua, les maintiens et la circularisation se réfèrent au trou, pas au monde.
 
 ---
