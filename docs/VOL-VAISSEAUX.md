@@ -680,7 +680,7 @@ dérive tenue à 1 km d'un appareil), `beginner` (comme assisté, vitesses ×0,5
 | node | Exécuter (FC, hub) | les deux | dernier nœud → `then` (circularize, orbit, approach, dock) ou none | dans la gorge ; plan de l'autre univers |
 | transfer | Exécuter | trou seulement (moteur Crew) | → circularize / orbit / approach | pas de plan ; réservoir vide |
 | land | F7 | les deux + mondes de Gargantua | toucher → none (« Landed on … ») | pas de sol ; appareil sans train ; poussée < 1,05 × poids |
-| takeoff | U | les deux | orbite atteinte → circularize (notre côté) / orbit (Gargantua) | comme land |
+| takeoff | U | les deux | orbite atteinte → circularize (les deux ; Gargantua : depuis le 11 nov. 2026 — départ vertical en poussée vectorée jusqu'à 200 m, montée au-dessus de l'air, puis CIRC à l'apogée de la montée) | comme land |
 | dock | B | notre côté ; Endurance près du trou | capture → none ; au-delà de 3 km : rendez-vous planifié → `node` → `dock` | Δv ≥ 10 km/s ; cible hors de portée |
 | keep (maintien de station) | ⇧8 | notre côté | jamais | au-delà de 5 km (abandon au-delà de 10 km) ; amarré : désamarre et recule de 30 m |
 | entry | ⇧G (`glideTo`) | les deux | plané → toucher → none ; Lander → `land` ; sans site, sous le Mach de passation → none | pas de bouclier (Endurance) ; ni air ni sol ; pas de site en orbite ; pas de désorbitation trouvée |
@@ -843,6 +843,10 @@ fuite d'O₂ (stock vide en ~6 h), épurateur ; batterie à plat : ni RCS ni rou
   maintiens étaient déjà justes (prograde et radial pris par rapport à Miller : une poussée prograde de 20 s monte
   l'apoapside de 2 000 à 3 623 km, le périapside gardé) ; **CIRC ne l'était pas** — il visait le cercle de Kerr autour du trou et
   freinait sans fin (périapside à −7 600 km) ; réglé : 2 000 × 4 000 → 2 913 × 2 945 km, terminé de lui-même.
+- **Le décollage d'un monde de Gargantua** (réglé le 11 novembre 2026, même e2e) : posé, l'appareil ne quittait pas le sol (la
+  loi voulait d'abord tourner le nez) ; et la montée qui suivait, jamais volée, visait 0,3 rayon de Hill à des km/s (une
+  hyperbole une fois décollé). Maintenant : départ vertical, montée au-dessus de l'air, CIRC — U sur la glace de Mann : orbite
+  277 × 304 km, « In orbit around Mann », CIRC fini en 4 min. Le placement `game.orbit` par défaut y est au-dessus de l'air.
 
 ---
 

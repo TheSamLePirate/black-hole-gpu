@@ -168,7 +168,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   aucune masse maximale de l'A320 ; la ZFW du MCDU ne change pas la masse ; le ralenti du F135 n'est pas lu (manette 0 =
   poussée 0).
 
-## Près des mondes de Gargantua : deux points vus en vérifiant CIRC (11 novembre 2026)
+## ~~Près des mondes de Gargantua : deux points vus en vérifiant CIRC (11 novembre 2026)~~ — réglés le même jour : la hauteur par défaut au-dessus de l'air (`game/place.ts`, Miller 200 km, une minute sans dommage) ; le décollage (`controller/planet.ts`) tourne à `frameRate(F)`, part à la verticale et finit par CIRC — il ne quittait d'ailleurs pas le sol (constaté en vol) ; e2e `gargantua-circ`
 
 - **`game.orbit("miller")` par défaut (100 km) place le Ranger dans l'air de Miller** : à ~10 km/s, sa coque y brûle en moins de
   40 s (« the hull burnt through at 1151 K ») — la hauteur par défaut des planètes de Gargantua (BH-API : 100 km) est sous le haut

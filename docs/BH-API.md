@@ -1324,7 +1324,7 @@ The scene's time now [M] (`ctx.time()`).
 
 ### `__bh.game.orbit(body, o = {})` → string
 
-Puts the flown craft in orbit around a body (ours, or Gargantua's side). **Heights are over the sphere of the body's `radius`** (the Earth: its equatorial radius, 6 378.137 km), not geodetic: `altKm: 400` flies 400 km over the equator, ~421 km over the poles (`status().orbit` reads geodetic heights). Default height: clear of the air × 1.25 (10–100 km for airless bodies); Gargantua's planets 100 km. Throws `<Name>: that orbit (N km) leaves its sphere of influence (M km)`. Options (`OrbitPlacement` + `rM`):
+Puts the flown craft in orbit around a body (ours, or Gargantua's side). **Heights are over the sphere of the body's `radius`** (the Earth: its equatorial radius, 6 378.137 km), not geodetic: `altKm: 400` flies 400 km over the equator, ~421 km over the poles (`status().orbit` reads geodetic heights). Default height: clear of the air × 1.25 (10–100 km for airless bodies); Gargantua's planets clear of their air (where it thins to nothing, `aero.ts airTop`: Miller 200 km, Mann 170, Edmunds 190 — 100 km before 11 Nov 2026, inside Miller's air: the Ranger burnt). Throws `<Name>: that orbit (N km) leaves its sphere of influence (M km)`. Options (`OrbitPlacement` + `rM`):
 
 | field | unit | meaning |
 |---|---|---|
@@ -1739,7 +1739,7 @@ use are tabled below; the rest are internal. Most functions are synchronous and 
 | `docked` | boolean (getter) | the flown craft is held by the station (directly or through craft docked to it). |
 | `landed` | boolean | the camera stands on a star's surface (gravity on). |
 | `ourLanded` | `{ body, q, h?, deck? }` \| null | our side: resting on a body's ground (`q`: body-fixed coordinates; `deck: { pl, l, cat? }` on a carrier). |
-| `liftOff` | [x, y, z] \| null | the Lander's vertical start from its legs under the take-off autopilot (`controller/lowthrust.ts` `ourSurfaceWant`): the level heading it keeps (home frame) while it climbs on its vectored thrust, up to 200 m over its gear (`LIFT_TOP_M`) — then `null` and the climb's law. Read-only for tests (`!!c.liftOff`: still in the vertical start). |
+| `liftOff` | [x, y, z] \| null | the Lander's vertical start from its legs under the take-off autopilot (`controller/lowthrust.ts` `ourSurfaceWant`): the level heading it keeps (home frame) while it climbs on its vectored thrust, up to 200 m over its gear (`LIFT_TOP_M`) — then `null` and the climb's law. By Gargantua (`controller/planet.ts` `surfaceWant`, any craft on a world's ground): the same start, the heading in the hole's local axes. Read-only for tests (`!!c.liftOff`: still in the vertical start). |
 | `gearDown` / `gearExt` | boolean / number 0…1 | landing gear commanded down, and its extension (8 s each way; only `gearExt ≥ 1` carries the craft). Set at the flight's first frame from the state (down on the ground, up in the air) **unless `gearInit` is true**; driven by itself with `settings.autoGear` or the entry/land/takeoff autopilots (down below 600 m AGL and 250 m/s). Gear down at once: `c.gearDown = true; c.gearExt = 1; c.gearInit = true` (and `settings.autoGear = false` to keep it so). |
 | `gearInit` | boolean | keep the gear as written instead of the first-frame choice; reset by every placement (`newFlight`). |
 | `nowTime()` | → number | the sim time now [M] (the ship's time once it is set). |

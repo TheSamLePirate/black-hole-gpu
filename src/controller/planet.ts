@@ -5,6 +5,7 @@ import type { Vec3 } from "../physics";
 import { SYSTEM_BODIES, type SystemBody } from "../settings";
 import { availableBodies, bodyCentre, BODY_NAMES, type Body, bodyHill } from "../targeting";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
+import { type Atmosphere, airTop } from "../aero";
 import {
   airDensity,
   betaToCoord,
@@ -26,6 +27,7 @@ import { unitV } from "./util";
 import { frameRate } from "../game/place";
 
 import type { CameraController } from "../controls";
+import type { Want } from "../pilot";
 
 declare module "../controls" {
   interface CameraController {
@@ -114,11 +116,7 @@ function surfaceInfo(this: CameraController) {
  * circular speed of the turning frame; then the orbit autopilot. The goal velocity (local) is carried
  * to the ZAMO's terms; the feed-forward holds the ship against what gravity and the frame do.
  */
-function surfaceWant(
-  this: CameraController,
-  cam: ReturnType<typeof cameraFrame>,
-  say: (t: string) => null,
-): { beta: Vec3; ff: Vec3 } | null {
+function surfaceWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, say: (t: string) => null): Want | null {
   const P = this.pilot;
   const lf = this.local;
   const what = P.auto === "land" ? "Landing" : "Take-off";
@@ -148,25 +146,53 @@ function surfaceWant(
     const vd = -Math.max(Math.min(Math.sqrt(2 * 0.5 * (thr - g) * Math.max(h, 0)), Math.max(h, 0) / minute, 0.02), 1.5 / c);
     want = [up[0] * vd, up[1] * vd, up[2] * vd];
   } else {
-    // up to the orbit the orbit autopilot would keep (0.3 of the Hill radius), turning prograde
-    const hill = bodyHill(this.s, F.id as Body, this.nowTime());
-    const d0 = Math.max(0.3 * hill, 1.2 * F.R);
-    const f = Math.min(Math.max((d - F.R) / (d0 - F.R), 0), 1);
+    // (on the ground, then up to 200 m: a vertical start on the vectored thrust, level on the heading it stood on — as the
+    // Lander's on our side (lowthrust.ts ourSurfaceWant): handed the climb's law at once, the nose was to turn up first and the
+    // engine waited for it — on the ground the craft never turns: the Ranger and the Lander sat on Mann's ice, the throttle 0)
+    const hm = h * F.mPerM;
+    if (L.landed || (this.liftOff && hm < 200)) {
+      const upZ = unitV(localToZamo(up));
+      if (!this.liftOff) {
+        const n0 = this.shipAxesLocal(cam)[2];
+        const lv = lin(n0, 1, upZ, -dot3(n0, upZ));
+        this.liftOff = Math.hypot(...lv) > 1e-6 ? unitV(lv) : unitV(lin([1, 0, 0], 1, upZ, -upZ[0]));
+      }
+      const nose = unitV(lin(this.liftOff, 1, upZ, -dot3(this.liftOff, upZ)));
+      const vz = Math.min(4 + 0.25 * Math.max(hm, 0), 40) / c;
+      const w: Vec3 = [up[0] * vz, up[1] * vz, up[2] * vz];
+      const X = blToCartesian(cam.r, cam.theta, cam.phi);
+      const gW = toGlobal(F, { xi: L.xi, w, landed: false });
+      const free = localAccel(F, L.xi, w, [0, 0, 0]);
+      return {
+        beta: zamoBeta(X, gW.V, this.s.spin),
+        ff: localToZamo([-free[0], -free[1], -free[2]]),
+        att: { nose, up: upZ, vectored: true },
+      };
+    }
+    this.liftOff = null;
+    // up to a low orbit clear of the air (or the launch's goal), turning east as it climbs — then CIRC on that circle (localCircWant).
+    // (It aimed at 0.3 of the Hill radius, climbing at kilometres a second: never flown — the craft never left the ground —, it
+    // went off on a hyperbola once it did)
+    const atm = GARGANTUA_SYSTEM.bodies.find((q) => q.id === F.id)?.surface?.atmosphere as Atmosphere | null | undefined;
+    const airKm = atm ? Math.max(100, Math.ceil(airTop(atm) / 1e4) * 10) : 50;
+    const ht = (Math.max(this.launchGoal.altKm ?? 0, airKm) * 1e3) / F.mPerM;
+    const f = Math.min(Math.max(h / ht, 0), 1);
     let east: Vec3 = [-up[1], up[0], 0];
     const el = Math.hypot(...east);
     east = el > 1e-6 ? [east[0] / el, east[1] / el, 0] : [0, 1, 0];
-    const vc = Math.sqrt(F.m / d) - F.n * F.ut * d; // circular, in the turning frame
-    // (a climb of about three minutes to the orbit's height at most — a Cinema engine could go far
-    // faster)
-    const minute = 60 / (4.925490947e-6 * this.s.massSolar); // [M]
-    const vUp = Math.min(Math.sqrt((thr - g) * (d0 - F.R)) * 0.5, (d0 - F.R) / (3 * minute), 0.02) * (1 - f) + 0.2 / c;
-    const vE = vc * Math.sqrt(f);
-    if (f > 0.95 && Math.abs((L.w[0] * east[0] + L.w[1] * east[1] + L.w[2] * east[2]) / vc - 1) < 0.1) {
-      P.auto = "none";
-      P.setAuto("orbit");
-      this.onPilotMessage?.(`In orbit around ${name}`);
+    if (f > 0.95) {
+      // (high enough: the circle there by CIRC — where the climb coasts to, d + v²/2g, already clear of the air: held to the goal's
+      // own, or to the distance at the hand-over with the craft still rising, the trim took more than 20 minutes)
+      const vv = Math.max(dot3(L.w, up), 0);
+      P.setAuto("circularize");
+      P.anchor = [d + (vv * vv) / (2 * g), 1, 0];
       return null;
     }
+    // (the climb: a vertical speed gravity brings to rest at the goal — 0.9 of √(2 g Δh), 2 m/s at least —; the speed along, the
+    // circle's at the goal, given as the craft climbs; in the turning frame: less the frame's own turn, frameRate)
+    const vUp = Math.max(0.9 * Math.sqrt(2 * g * Math.max(ht - h, 0)), 2 / c);
+    const vci = Math.sqrt(F.m / (F.R + ht));
+    const vE = vci * Math.sqrt(f) - frameRate(F) * d;
     want = [up[0] * vUp + east[0] * vE, up[1] * vUp + east[1] * vE, up[2] * vUp + east[2] * vE];
   }
   // to the ZAMO's terms at the ship
@@ -209,7 +235,9 @@ function localCircWant(this: CameraController, cam: ReturnType<typeof cameraFram
   const wantIn = lin(tdir, vc, up, vr);
   // (back in the turning frame)
   const want: Vec3 = [wantIn[0] + W * L.xi[1], wantIn[1] - W * L.xi[0], wantIn[2]];
-  if (Math.abs(d - d0) < 0.01 * d0 && Math.hypot(...sub3(L.w, want)) < 0.002 * vc) {
+  // (done on the circle: the velocity within 0.2 % of its — the shape —; the height within 3 % of the one aimed at — the climb's
+  // hand-over left it 1 % above, closed at 0.3 of the orbit's rate: more than 20 minutes for nothing the orbit shows)
+  if (Math.abs(d - d0) < 0.03 * d0 && Math.hypot(...sub3(L.w, want)) < 0.002 * vc) {
     P.setAuto("none");
     this.onPilotMessage?.(`In orbit around ${name}`);
     return null;

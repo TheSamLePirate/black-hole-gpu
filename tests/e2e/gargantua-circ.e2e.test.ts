@@ -7,7 +7,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // turned (the periapsis down, the apoapsis up as much). Then an orbit of 2 000 × 4 000 km and CIRC: before 11 Nov 2026 it flew
 // the Kerr circle round the hole and braked without end (periapsis 7 600 km under the ground); now a circle about Miller,
 // ended by itself.
-// Duration: ~1 min. Done when: CIRC ended near Miller, its orbit's apsides within 2 % of each other.
+// Then the default orbit about Miller (clear of its air) and U from Mann's ice up to its orbit.
+// Duration: ~1.5 min. Done when: CIRC ended near Miller (apsides within 2 %), the default orbit flown a minute, Mann's take-off in orbit.
 const DIR = "remote-results/gargantua-circ";
 mkdirSync(DIR, { recursive: true });
 afterAll(stopServer);
@@ -68,6 +69,49 @@ test.skipIf(!E2E)(
       expect(c.fail).toBeNull();
       expect(c.pe!).toBeGreaterThan(2000);
       expect((c.ap! - c.pe!) / ((c.ap! + c.pe!) / 2)).toBeLessThan(0.02);
+      // (the default orbit about Miller: clear of its air — at 100 km, inside it, the Ranger burnt in 40 s)
+      const def = await app.js<{ alt: number; fail: string | null; soi: string }>(`(() => { __bh.game.orbit("miller");
+      for (let i = 0; i < 30 * 60; i++) __bh.step(1 / 30);
+      return { alt: Math.round(__bh.game.status().altKm), fail: __bh.camera.airFlight?.failure ?? null, soi: __bh.game.status().soi }; })()`);
+      console.log("  default orbit :", JSON.stringify(def));
+      expect(def.soi).toBe("miller");
+      expect(def.fail).toBeNull();
+      expect(def.alt).toBeGreaterThan(190);
+      // (U from Mann's ice: up to the orbit, then the orbit held)
+      await app.js(`(() => { __bh.settings.target = "mann"; __bh.game.land("mann", 10, 20); for (let i = 0; i < 30; i++) __bh.step(1 / 30);
+      const c = __bh.camera; window.__said = []; if (!c.__saidHook) { const prev = c.onPilotMessage;
+        c.onPilotMessage = (m) => { window.__said.push(String(m)); prev?.(m); }; c.__saidHook = 1; }
+      c.pilot.auto = "none"; c.pilot.setAuto("takeoff"); return 1; })()`);
+      let up = false;
+      for (let k = 0; k < 40 && !up; k++)
+        up = await app.js<boolean>(
+          `(() => { const p = __bh.camera.pilot; for (let i = 0; i < 30 * 60; i++) { __bh.step(1 / 30); if (p.auto !== "takeoff") return true; } return false; })()`,
+        );
+      // (then CIRC on the goal's circle, until it ends — a minute of the sim a step)
+      let circMin = 0;
+      for (; circMin < 20; circMin++)
+        if (
+          await app.js<boolean>(
+            `(() => { const p = __bh.camera.pilot; for (let i = 0; i < 30 * 60; i++) { __bh.step(1 / 30); if (p.auto === "none") return true; } return false; })()`,
+          )
+        )
+          break;
+      console.log(`  Mann: CIRC ended after ${circMin + 1} min`);
+      const m = await st();
+      const said = await app.js<string[]>("window.__said");
+      console.log("  Mann take-off :", JSON.stringify(m), JSON.stringify(said), await app.js("__bh.camera.pilot.auto"));
+      await app.js(
+        `(__bh.settings.shipMount = "chase", __bh.refresh(), __bh.camera.viewReset(), (() => { for (let i = 0; i < 3; i++) __bh.step(1 / 30); })(), true)`,
+      );
+      await Bun.sleep(1500);
+      await app.shot(`${DIR}/orbit-mann.png`);
+      expect(up).toBe(true);
+      expect(m.soi).toBe("mann");
+      expect(m.fail).toBeNull();
+      expect(m.status).toBe("orbit");
+      expect(m.pe!).toBeGreaterThan(100);
+      expect(m.ap! - m.pe!).toBeLessThan(60);
+      expect(circMin).toBeLessThan(20);
       expect(app.cdp.errors).toEqual([]);
     } finally {
       app.close();

@@ -360,7 +360,10 @@ export function theirOrbitPose(p: OrbitPlacement & { rM?: number }, t: number, s
   }
   const def = sysBody(GARGANTUA_SYSTEM, p.body);
   const F = planetFrame(p.body, t, spin, massSolar);
-  const alt = p.altKm ?? 100;
+  // (by default clear of its air — where it thins to nothing (aero.ts airTop): Miller's 197 km, 200 —; at 100 km, inside Miller's,
+  // the Ranger's hull burnt through in 40 s)
+  const atm = GARGANTUA_SYSTEM.bodies.find((q) => q.id === p.body)?.surface?.atmosphere as Atmosphere | null | undefined;
+  const alt = p.altKm ?? (atm ? Math.max(100, Math.ceil(airTop(atm) / 1e4) * 10) : 100);
   const rp = F.R + ((p.peKm ?? alt) * 1e3) / mPerM;
   const ra = F.R + ((p.apKm ?? p.peKm ?? alt) * 1e3) / mPerM;
   const inc = p.retrograde ? 180 - (p.inc ?? 0) : (p.inc ?? 0);

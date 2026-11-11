@@ -3102,3 +3102,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   où il brûle ; le décollage de Miller tourne son repère à n·ut (lecture, non volé).
 - **Docs** : VOL-VAISSEAUX (tableau des autopilotes, défauts), E2E-CATALOGUE, PROBLEMES-A-REGLER. Non vérifié : CIRC près de Mann et
   d'Edmunds (même code), un CIRC engagé très près de la limite de la sphère du monde.
+
+## 2026-11-11T13:13Z — Les mondes de Gargantua : décoller, l'orbite par défaut
+
+- **Destination** : §19 (les parcours complets : se poser sur un monde de Gargantua et en repartir par U).
+- **Constaté en vol** (sondes, ce Mac) : U sur la glace de Mann — le Ranger restait posé, manette à 0 (la loi voulait d'abord tourner
+  le nez, comme le Lander chez nous ce matin) ; une fois décollé, la montée d'origine (jamais volée) visait 0,3 rayon de Hill à des km/s
+  et partait en hyperbole. `game.orbit("miller")` par défaut (100 km) : dans l'air de Miller, le Ranger y brûlait en 40 s.
+- **Fait** (`controller/planet.ts` `surfaceWant`, `game/place.ts`) : départ vertical en poussée vectorée jusqu'à 200 m ; montée
+  au-dessus de l'air (ou `launchGoal`) — une vitesse verticale que la gravité éteint au but, la vitesse le long donnée en montant, le
+  repère tourné à `frameRate(F)` — puis CIRC (`localCircWant`) au sommet prévu de la montée ; CIRC finit sur la forme du cercle (vitesse
+  à 0,2 %, hauteur à 3 %). Orbite par défaut des planètes de Gargantua au-dessus de leur air (Miller 200 km).
+- **Vérifié** : e2e `gargantua-circ` 1/1 (28 s) — U sur Mann : orbite **277 × 304 km**, « In orbit around Mann », CIRC fini en 4 min ;
+  orbite par défaut de Miller à 200 km, une minute sans dommage ; CIRC de Miller et les maintiens inchangés. Capture
+  `remote-results/gargantua-circ/orbit-mann.png`.
+- **Docs** : VOL-VAISSEAUX (tableau des autopilotes, défauts réglés), BH-API (`orbit`, `liftOff`), E2E-CATALOGUE, PROBLEMES (rayé).
+- **Non vérifié** : U depuis la mer de Miller (l'appareil à flot) et depuis Edmunds ; le Lander côté Gargantua (la sonde est restée
+  sur le Ranger : le changement d'appareil n'y a pas pris).
