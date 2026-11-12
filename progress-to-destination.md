@@ -3372,7 +3372,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   de Sam demandée** (options au plan §8).
 - **Non vérifié** : autres lieux, kerr-mini, vols en mouvement ; scène de décor du départ et voyage G (CM3) non faits.
 
-## 2026-11-12T04:10Z — J1-2 : la passe de visibilité écrit l'identité et garde sa profondeur
+## 2026-11-12T03:39Z — J1-2 : la passe de visibilité écrit l'identité et garde sa profondeur
 
 - **Contribution** (stratégie §7.4, PLAN-J1 J1-2) : les sorties de surface du contrat, écrites par la passe elle-même — troisième cible
   `terrain raster identity` (`r32uint`, objet 20 bits | génération 12 bits : les proxies d'arbres et les maillages de bâtiments
