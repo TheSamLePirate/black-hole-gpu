@@ -340,8 +340,15 @@ tours (vert), la passe 2,1–2,3 ms. Planche `docs/progress/j1/j1-5-batiments-fo
 **Puis Marseille (Vieux-Port, 30 m au-dessus de l'eau)** : à 140 m/s le décor reste en scènes rapides (`fastFlight` : un appareil gelé
 à plus de 120 m/s compte comme rapide — c'était aussi Times Square) ; à 90 m/s, la scène complète dessinée, **les quais restent sous
 des arbres, presque aucun bâtiment** (217 pixels) — un défaut du décor, pas du forward (PROBLEMES-A-REGLER, 12 nov.). Le pilote y fait
-ce qu'il fait ailleurs (110 / 217 pixels, écart sous la dérive, passe ~2 ms). **La vue de façades proches attend ce défaut du décor.**
-Planche `docs/progress/j1/j1-5-batiments-forward-marseille.jpg`.
+ce qu'il fait ailleurs (110 / 217 pixels, écart sous la dérive, passe ~2 ms). Planche `docs/progress/j1/j1-5-batiments-forward-marseille.jpg`. **Cause** : la scène centrée ~3,7 km devant l'appareil (l'avance par
+sa vitesse ; gelé, il n'y arrive pas), ses bâtiments plafonnés à 32 000. **Les façades proches, enfin** (appareil gelé à 10 m/s, la scène
+centrée sur lui ; kerr-mini, e482082b) : 129 390 des 135 338 pixels de bâtiment pris par le fragment ; **de jour aucune différence
+visible** (écart allumé/éteint 0,69 contre une dérive de 0,66 sur 255 ; normales d'accord sur les façades) ; **de nuit un écart réel mais
+faible** (1,88 contre 0,62 : l'éclairage des façades et le bord des fenêtres, visible seulement ×8) ; **la passe 5,3 ms** quand les
+bâtiments emplissent la vue (`earth lite` −0,5 ms seulement). Planche `docs/progress/j1/j1-5-batiments-forward-marseille-proche.jpg`.
+**Conclusion des mesures** : ni de loin ni de près le forward n'apporte de gain visible au matériau Q3 actuel, et il coûte de +1,3 ms
+(J0) à +5 ms (une ville emplissant la vue) — la recommandation devient **(a), le retirer**, sauf si Sam veut le garder pour un futur
+matériau qui profiterait des dérivées matérielles.
 
 **J1-7, `rigidMotionOn` — gardé éteint, avec son propriétaire et sa condition de retrait (12 novembre).** Relevé : aucun lecteur ne lit
 le mouvement analytique du rigide (z −1) — `temporal`, `taau` et le flou de mouvement ne lisent la cible de mouvement que là où z > 0,5

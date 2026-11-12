@@ -107,7 +107,13 @@ test.skipIf(!E2E)(
         await app.js(
           `(() => { const r = __bh.renderer; window.__ev = r.autoExposureEV; const f = () => { if (window.__ev == null) return; r.autoExposureEV = window.__ev; requestAnimationFrame(f); }; requestAnimationFrame(f); return 1; })()`,
         );
-        const view: Record<string, unknown> = { placed, world };
+        // (what the scenery drew there — its buildings by source, its trees, the canopy survey: Marseille's quays stood under trees)
+        const scenery = await app.js<Record<string, unknown>>(`(() => { const s = __bh.renderer.earthScenery.stats();
+          const k = ["status", "quick", "lat", "lon", "trees", "surveyedTrees", "surveyRequests", "surveyError", "bdtopoBuildings", "bdtopoTiles",
+            "overtureBuildings", "overtureTiles", "buildings", "meshBuildings", "lastError"];
+          return Object.fromEntries(k.filter((x) => x in s).map((x) => [x, s[x]])); })()`);
+        console.log(`  ${v.name}: the scenery ${JSON.stringify(scenery)}`);
+        const view: Record<string, unknown> = { placed, world, scenery };
         // (the lever and debug view set, the pipeline awaited — built for the key and the view — then 60 frames timed, a shot)
         const side = async (tag: string, on: boolean, dbg: number) => {
           await app.js(

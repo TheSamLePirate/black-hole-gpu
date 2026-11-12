@@ -3627,3 +3627,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   sur le Vieux-Port de Marseille, la scène complète dessinée, **les quais sont couverts d'arbres, presque sans bâtiments** : défaut du
   décor (cause supposée : BD TOPO absent, le MNH plantant des arbres sur le bâti), PROBLEMES-A-REGLER ; planches Marseille et New York.
   Le pilote du forward y fait comme ailleurs ; la décision (a)/(b)/(c) reste à Sam, (b) sans vue valable tant que le décor n'est pas réglé.
+
+## 2026-11-12T10:59Z — Bâtiments en forward : les façades proches mesurées (Marseille) ; le défaut du décor expliqué dans l'e2e
+
+- **Façades proches** (Vieux-Port, 30 m, appareil gelé à 10 m/s pour centrer la scène ; kerr-mini, e482082b) : fragment 129 390 / 135 338
+  pixels de bâtiment ; jour **sans différence visible** (0,69 contre une dérive 0,66), nuit un écart faible (1,88 contre 0,62, visible ×8) ;
+  passe **5,3 ms** (bâtiments emplissant la vue), `earth lite` −0,5 ms. Planche `docs/progress/j1/j1-5-batiments-forward-marseille-proche.jpg`.
+  **Recommandation à Sam : (a) retirer le pilote.**
+- **Le décor sans bâtiments dans les e2e** : la scène centrée ~3,7 km devant un appareil gelé (l'avance par sa vitesse) et ses bâtiments
+  plafonnés à 32 000 ; à 10 m/s les quais dessinés. Question ouverte pour le jeu : le plafond laisse-t-il la canopée planter des arbres sur
+  les îlots coupés en ville dense (PROBLEMES-A-REGLER). e2e `buildings-forward` : `BF_PLACE` avec vitesse, stats du décor loggées.

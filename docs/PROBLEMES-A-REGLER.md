@@ -13,10 +13,15 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`scenery.ts` `fastFlight`, T8m — voulu en vol rapide) : la scène complète, celle des bâtiments, ne vient jamais (`quick` reste vrai
   plus de 3 min). Corrigé dans l'e2e (`BF_PLACE` à 90 m/s ; attente de `!quick`). **Mais à 90 m/s, la scène complète dessinée, les quais
   de Marseille restent sous les arbres.**
-- **Cause supposée, non vérifiée** : les bâtiments BD TOPO absents (requêtes IGN en échec ou refusées ?) et le modèle de hauteur de la
-  canopée IGN (MNH, I4 — il porte aussi la hauteur des bâtiments) qui plante alors des arbres où sont les immeubles. À vérifier :
-  `earthScenery.stats()` (bâtiments, arbres, sources, échecs) sur cette vue, les réponses BD TOPO du worker, le masque bâti du MNH.
-- **Conséquence** : la comparaison du forward des bâtiments sur des façades proches (PLAN-J1, piste (b)) n'a pas encore de vue valable.
+- **Relevé ensuite** (`earthScenery.stats()` loggé par l'e2e) : à 90 m/s cap 80°, **la scène est centrée à ~3,7 km devant l'appareil**
+  (5,414° E pour un appareil à 5,368° E : le décor centre sa scène où l'appareil sera — l'avance du renderer, vitesse × temps d'une
+  scène —, un appareil gelé n'y arrive jamais) et **ses bâtiments plafonnés à 32 000** (BD TOPO, 28 dalles), les 943 000 arbres de la
+  canopée IGN couvrant le reste — le Vieux-Port, au bord de la scène, sous les arbres. **Placé à 10 m/s** (gelé) : la scène centrée sur
+  lui (5,372° E), 32 000 bâtiments encore (plafond), **les façades des quais dessinées**. Donc dans ces e2e : l'avance du centre sur un
+  appareil gelé. **Reste une question pour le jeu** : en vol réel au-dessus d'une ville dense, le plafond de 32 000 bâtiments laisse-t-il
+  la canopée IGN planter des arbres sur les îlots coupés (les vues de Toulon et de Paris de la session J1-5 le suggèrent) — à mesurer
+  (`budgetLimited`, le masque bâti des arbres relevés).
+- **Conséquence** : pour une vue de façades, placer l'appareil lent (≤ 10 m/s) et attendre `!quick` (e2e `buildings-forward`, `BF_PLACE`).
 
 ## Des points blancs qui scintillent sur la mer et dans la brume de l'horizon (scène J0, Toulon-Hyères)
 
