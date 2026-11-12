@@ -51,7 +51,8 @@ test.skipIf(!E2E)(
         const ap = await app.js<{ ap: boolean; athr: boolean }>(`(async () => {
           __bh.freeze(false); const c = __bh.camera, frame = () => new Promise((q) => requestAnimationFrame(q));
           for (let i = 0; i < 90; i++) { await frame();
-            if (c.jetModes.alt === null) c.jetToggle("ap");
+            __bh.settings.autoGear = false; c.gearDown = true; c.gearExt = 1; c.gearInit = true;
+          if (c.jetModes.alt === null) c.jetToggle("ap");
             if (c.jetModes.spd === null) c.jetToggle("athr");
             if (c.jetModes.alt !== null && c.jetModes.spd !== null && i >= 10) break; }
           const g = c.geoNow(); if (g && c.jetModes.alt !== null) c.jetModes.alt = g.alt;
