@@ -10,9 +10,11 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   d'un pixel, régulièrement espacés**, dans la brume au ras de l'horizon et sur la mer lointaine — sur l'ablation sans HUD aussi ; planche
   `docs/progress/j0/points-blancs-mer-2026-11-12.jpg`. **Déjà là le 10 novembre** (fiche du soir, e00182a2 : la même rangée sur la mer
   au virage) : **pas une régression** des lots du 12 (rejet par identité, appareil dans la scène, export, retrait du pilote).
-- **Cause supposée, non vérifiée** : l'espacement régulier ressemble au motif d'ombrage clairsemé du raster (1 pixel sur 8 ou 16 ombré
-  frais à chaque image, le reste reconstruit) : un pixel frais bien plus clair que ses voisins reconstruits — un reflet du Soleil bas
-  sur l'eau, ou la brume — que la reconstruction et le temporel ne lissent pas ; le motif tourne à chaque image, d'où le scintillement.
+- **Cause supposée, non vérifiée** : l'espacement régulier ressemble au motif d'ombrage clairsemé **du noyau des rayons `shade`** (1 pixel
+  sur 8 ou 16 tracé frais à chaque image, le reste reconstruit) — celui de la mer lointaine et de la brume au-delà du patch raster, où
+  sont les points ; le sol raster lui-même est ombré à chaque pixel par `shadeLite` (relevé de la session J1-5 bâtiments, PLAN-J1) : un
+  pixel frais bien plus clair que ses voisins reconstruits — un reflet du Soleil bas sur l'eau, la brume — que la reconstruction et le
+  temporel ne lissent pas ; le motif tourne à chaque image, d'où le scintillement.
   Une première sonde (`tests/e2e/sea-sparkle-probe.e2e.test.ts`, E2E_PROBE=1) ne l'a pas mesuré : elle comptait le texte du HUD, puis
   son vol a cabré (train rentré : l'autopilote remonte — remarque de Sam) ; dans la couleur de scène exportée (`renderer.sceneColor`),
   presque aucun point sur la mer pendant ce vol-là — à refaire en vol tenu.
