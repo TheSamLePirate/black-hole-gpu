@@ -64,6 +64,11 @@ test.skipIf(!E2E)(
       for (const mount of ["cockpit", "chase"] as const) {
         for (const [k, on] of (has ? [false, true, true, false] : [false]).entries()) {
           await app.js(`(() => { __bh.renderer.identityReject = ${on}; return 1; })()`);
+          // (the totals since the boot — the pixels turned away, the publications drawn — before the side: its own counts after)
+          const total = `(async () => { const r = __bh.renderer; if (!r.identityRejects) return [0, 0, 0, 0];
+            const x = await r.identityRejects();
+            return [x.totalTemporal ?? 0, x.totalTaau ?? 0, r.identRepublished ?? 0, x.totalCutTemporal ?? 0]; })()`;
+          const t0 = await app.js<number[]>(total);
           await start(mount);
           // (the shot at the same simulated time each side: the same place)
           if (k < 2) await app.shot(`${OUT}/${mount}-${on ? "on" : "off"}.png`);
@@ -78,20 +83,48 @@ test.skipIf(!E2E)(
           const rej = await app.js<{
             temporal: number;
             taau: number;
+            republished: number;
           }>(`(async () => { const r = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q));
             if (!r.identityRejects) return { temporal: -1, taau: -1 }; let a = 0, b = 0;
             for (let i = 0; i < 10; i++) { await f(); const x = await r.identityRejects(); a += x.temporal; b += x.taau; }
-            return { temporal: Math.round(a / 10), taau: Math.round(b / 10) }; })()`);
+            return { temporal: Math.round(a / 10), taau: Math.round(b / 10), republished: r.identRepublished ?? -1 }; })()`);
           const tag = `${mount}-${on ? "on" : "off"}-${k}`;
+          // (Sam's piste (b), 12 Nov: the still scenery's silhouettes keep their history; only the mobile surfaces — the craft, the
+          // cars — and the frames a new publication of the scenery is drawn reject: the side's total, and per publication)
+          const t1 = await app.js<number[]>(total);
+          const side = { temporal: t1[0]! - t0[0]!, taau: t1[1]! - t0[1]!, publications: t1[2]! - t0[2]!, cut: t1[3]! - t0[3]! };
+          console.log(
+            `  ${tag}: over the side (~8 s), turned away ${side.temporal} px (temporal) / ${side.taau} (taau), the history's weight cut at ${side.cut} (temporal); ${side.publications} publications of the scenery drawn${side.publications ? ` — ${Math.round(side.cut / side.publications)} px cut each` : ""}`,
+          );
           // (the trees under the view: the identity's lower rows)
           const ids = await app.js<{ trees: number; read: number }>(`(async () => { let trees = 0, read = 0;
             for (let i = 0; i < 7; i++) { const s = await __bh.renderer.surfaceAt((i + 0.5) / 7, 0.8); if (s) { read++; if (s.kind === "tree") trees++; } }
             return { trees, read }; })()`);
-          out[tag] = { ...m, ...ids, rejects: rej, mount: await app.js<string>("__bh.settings.shipMount") };
+          out[tag] = { ...m, ...ids, rejects: rej, side, mount: await app.js<string>("__bh.settings.shipMount") };
           console.log(
-            `  ${tag}: GPU p50 ${m.gpu} ms over ${m.n} images; ${m.agl} m over the ground; trees ${ids.trees}/${ids.read} at 0.8; turned away by identity ${rej.temporal} px (temporal) / ${rej.taau} (taau) a frame; GPU errors ${m.errors}`,
+            `  ${tag}: GPU p50 ${m.gpu} ms over ${m.n} images; ${m.agl} m over the ground; trees ${ids.trees}/${ids.read} at 0.8; turned away by identity ${rej.temporal} px (temporal) / ${rej.taau} (taau) a frame (the scenery republished ${rej.republished} times since the boot); GPU errors ${m.errors}`,
           );
         }
+      }
+      // (a publication with nothing changed — the scenery's revision moved by hand, as a new season does —, the rejection on, flying:
+      // what it turns away is the silhouettes moved more than a pixel that frame alone — the cost of a republication —, 3 times)
+      if (has) {
+        await app.js(`(() => { __bh.renderer.identityReject = true; return 1; })()`);
+        const forced = await app.js<number[]>(`(async () => {
+          const r = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q)), out = [];
+          for (let k = 0; k < 3; k++) {
+            for (let i = 0; i < 20; i++) await f();
+            const x0 = await r.identityRejects(), n = r.identRepublished;
+            r.earthScenery.revision++;
+            for (let i = 0; i < 4; i++) await f();
+            const x1 = await r.identityRejects();
+            out.push(x1.totalTemporal - x0.totalTemporal + x1.totalCutTemporal - x0.totalCutTemporal, r.identRepublished - n);
+          }
+          return out; })()`);
+        console.log(
+          `  a publication with nothing changed, by hand: turned away or cut ${[0, 2, 4].map((i) => `${forced[i]} px (${forced[i + 1]} drawn)`).join(", ")}`,
+        );
+        await Bun.write(`${OUT}/forced.json`, JSON.stringify(forced));
       }
       await Bun.write(`${OUT}/results.json`, JSON.stringify(out, null, 1));
       if (has) {

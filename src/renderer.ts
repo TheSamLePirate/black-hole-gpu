@@ -5613,30 +5613,64 @@ export class Renderer {
   }
   /** PLAN-J1 (after J1-5) — the history's rejection by identity: a pixel whose surface's identity word (object | generation: the
    *  Earth's visibility's, the craft's) is nowhere in the 3 × 3 about where its history is taken, in the frame before's identity,
-   *  starts again without history (post.wgsl identityKept: temporal, taau). Off by default (12 Nov 2026): flying low over the
-   *  Maures it turned away 2 500–5 000 pixels a frame and softened the near forest — a rejected pixel starts again from a frame the
-   *  raster shades in part (1 in 8 or 16) and the TAAU upscales without its history —, no trail seen without it: Sam's to decide.
+   *  starts again without history (post.wgsl identityKept: temporal, taau). **Sam's piste (b), 12 Nov 2026, on by default**: only
+   *  the mobile surfaces (the craft, the cars — their motion z 1) are judged so; the still scenery's silhouettes, carried by the
+   *  camera and the depth, keep their history (judged too, first, they softened the near forest: 2 500–5 000 pixels a frame), except
+   *  the frame a new publication of the scenery is drawn (its generation changed — TA.pFwd.w): what appeared or vanished then has its
+   *  history's weight cut to a quarter (dropped, 30 m over the Maures, a publication turned away 75 000–113 000 pixels at once).
    *  Off: the stand-ins bound, the history as before, nothing copied */
-  identityReject = false;
-  /** the pixels whose history the identity alone turned away in the last frame (temporal, taau) — a diagnostic: read back */
-  async identityRejects(): Promise<{ temporal: number; taau: number }> {
-    const st = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  identityReject = true;
+  /** the pixels whose history the identity alone turned away in the last frame (temporal, taau), and since the boot (totals); those
+   *  whose history's weight a publication's change cut (cut…) — a diagnostic: read back */
+  async identityRejects(): Promise<{
+    temporal: number;
+    taau: number;
+    totalTemporal: number;
+    totalTaau: number;
+    cutTemporal: number;
+    cutTaau: number;
+    totalCutTemporal: number;
+    totalCutTaau: number;
+  }> {
+    const st = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     const enc = this.device.createCommandEncoder();
-    enc.copyBufferToBuffer(this.idRejectBuf(), 0, st, 0, 16);
+    enc.copyBufferToBuffer(this.idRejectBuf(), 0, st, 0, 32);
     this.device.queue.submit([enc.finish()]);
     await st.mapAsync(GPUMapMode.READ);
     const v = new Uint32Array(st.getMappedRange().slice(0));
     st.destroy();
-    return { temporal: v[0]!, taau: v[1]! };
+    return {
+      temporal: v[0]!,
+      taau: v[1]!,
+      totalTemporal: v[2]!,
+      totalTaau: v[3]!,
+      cutTemporal: v[4]!,
+      cutTaau: v[5]!,
+      totalCutTemporal: v[6]!,
+      totalCutTaau: v[7]!,
+    };
   }
   private idRejects: GPUBuffer | null = null;
   private idRejectBuf(): GPUBuffer {
     return (this.idRejects ??= this.device.createBuffer({
       label: "the history's rejections by identity",
-      size: 16,
+      size: 32,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     }));
   }
+  /** the scenery's generation the last temporal frame drew (−1: none yet) — republishedNow */
+  private identGenSeen = -1;
+  /** 1 the frame the visibility draws a new publication of the scenery (its generation changed since the temporal frame before),
+   *  with the rejection by identity on; else 0 (TA.pFwd.w) */
+  private republishedNow(): number {
+    const g = this.identSourceNow() ? (this.sceneryRaster?.generation ?? -1) % 4096 : -1;
+    const changed = g >= 0 && this.identGenSeen >= 0 && g !== this.identGenSeen;
+    this.identGenSeen = g;
+    if (changed) this.identRepublished++;
+    return changed ? 1 : 0;
+  }
+  /** the frames a new publication of the scenery was drawn with the rejection on (a diagnostic: identityRejects) */
+  identRepublished = 0;
   private identStandIn: GPUTexture | null = null;
   private identPrevTex: GPUTexture | null = null;
   /** the identity the history's rejection reads: the Earth's visibility's (its pass this frame), else none */
@@ -7773,7 +7807,9 @@ export class Renderer {
   private encodeTemporal(enc: GPUCommandEncoder, t: Target, s: Settings): boolean {
     const d = this.device;
     // (the rejections by identity counted afresh — identityRejects)
-    enc.clearBuffer(this.idRejectBuf());
+    // (this frame's counts — [0], [1], [4], [5] —; the totals since the boot kept)
+    enc.clearBuffer(this.idRejectBuf(), 0, 8);
+    enc.clearBuffer(this.idRejectBuf(), 16, 8);
     const retired = this.carryRetired;
     if (retired) {
       this.carryRetired = null;
@@ -8056,7 +8092,9 @@ export class Renderer {
         ...p.up,
         p.asp,
         ...p.fwd,
-        0,
+        // (w: a new publication of the scenery drawn this frame — its generation changed: the history's rejection by identity
+        // turns away what it brought or took, post.wgsl identityKept)
+        this.republishedNow(),
         // (the history's exposure to this frame's; on; a fresh pixel's least α, a pixel between rays' weight)
         pre / p.pre,
         1,

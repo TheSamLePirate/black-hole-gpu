@@ -647,24 +647,42 @@ fn meshMotion(ip: vec2i) -> vec4f {
 // visibility's, the craft's — and the frame before's — copied at its end; 1 × 1 stand-ins when off or without them)
 @group(0) @binding(51) var identTex: texture_2d<u32>;
 @group(0) @binding(52) var identPrevTex: texture_2d<u32>;
-// (the pixels whose history the identity alone turned away this frame — temporal [0], taau [1]: renderer.identityRejects())
-@group(0) @binding(53) var<storage, read_write> idRejects: array<atomic<u32>, 4>;
-// whether the history taken at `up` (the frame before's internal pixel) may hold this pixel's surface ip: its word in the 3 × 3 about
-// it in the frame before's identity (a silhouette's pixels, their jittered coverage, kept); not there — another object came, its
-// scenery republished (a new generation), the craft's mount changed —: none
-fn identityKept(ip: vec2i, up: vec2i) -> bool {
+// (the pixels whose history the identity alone turned away this frame — temporal [0], taau [1] — and since the boot — [2], [3] —;
+// whose history's weight it cut, a publication's — [4], [5]; since the boot [6], [7]: renderer.identityRejects())
+@group(0) @binding(53) var<storage, read_write> idRejects: array<atomic<u32>, 8>;
+// how much of the history taken at `up` (the frame before's internal pixel) this pixel's surface ip keeps — 1 all, 0 none —, the
+// identity judging only what the reprojection cannot hold (Sam, 12 Nov 2026, piste (b): the still scenery's silhouettes, carried by
+// the camera and the depth, keep theirs — all rejected, the near forest went soft):
+// · a mobile surface (`mobile`: the craft, a car — its motion z 1): its word in the 3 × 3 about `up` in the frame before's identity
+//   (a silhouette's jittered coverage kept), else none — another object came there, the craft's mount changed (its generation);
+// · the frame a new publication of the scenery is drawn (TA.pFwd.w 1: the generation changed): what appeared — an object where the
+//   3 × 3 held none — or vanished — nothing where it held only objects —: its weight cut to ID_REPUBLISHED, not dropped (dropped,
+//   flying 30 m over the Maures, a publication turned away 75 000–113 000 pixels at once, one or two a second, and one with nothing
+//   changed 5 000–12 000: pulses of a softer forest); an object still an object (renumbered: its word changed with the generation)
+//   keeps it all
+const ID_OBJECT = 0xfffffu;
+const ID_REPUBLISHED = 0.25;
+fn identityKept(ip: vec2i, up: vec2i, mobile: bool) -> f32 {
+  let republished = TA.pFwd.w > 0.5;
+  if (!mobile && !republished) { return 1.0; }
   let d = textureDimensions(identTex);
-  if (d.x < 2u || any(textureDimensions(identPrevTex) != d)) { return true; }
+  if (d.x < 2u || any(textureDimensions(identPrevTex) != d)) { return 1.0; }
   let hi = vec2i(d) - 1;
   let now = textureLoad(identTex, clamp(ip, vec2i(0), hi), 0).r;
   let c = clamp(up, vec2i(0), hi);
-  if (textureLoad(identPrevTex, c, 0).r == now) { return true; }
+  var anyObj = false;
+  var allObj = true;
   for (var j = -1; j <= 1; j++) {
     for (var i = -1; i <= 1; i++) {
-      if (textureLoad(identPrevTex, clamp(c + vec2i(i, j), vec2i(0), hi), 0).r == now) { return true; }
+      let p = textureLoad(identPrevTex, clamp(c + vec2i(i, j), vec2i(0), hi), 0).r;
+      if (p == now) { return 1.0; }
+      let o = (p & ID_OBJECT) != 0u;
+      anyObj = anyObj || o;
+      allObj = allObj && o;
     }
   }
-  return false;
+  if (mobile) { return 0.0; }
+  return select(1.0, ID_REPUBLISHED, select(allObj, !anyObj, (now & ID_OBJECT) != 0u));
 }
 @group(0) @binding(29) var albOut: texture_storage_2d<rgba16float, write>;
 fn albHistAt(uv: vec2f, size: vec2f) -> vec2f {
@@ -864,10 +882,18 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     // (where a moving mesh was the frame before and is not now: disoccluded, no history)
     // (and a car its loop took back — z 2 —: none either)
     let left = (!moved && all(textureDimensions(motionPrevTex) == size) && meshMotionPrev(vec2i(up)).z > 0.5) || mv.z > 1.5;
-    // (and a surface not there the frame before — its identity —: none)
-    let same = !all(textureDimensions(identTex) == size) || identityKept(vec2i(gid.xy), vec2i(up));
+    // (and a mobile surface not there the frame before, or one a new publication brought or took — its identity —: none)
+    let idW = select(1.0, identityKept(vec2i(gid.xy), vec2i(up), moved), all(textureDimensions(identTex) == size));
+    let same = idW > 0.0;
     let inside = all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0)) && !underCabin && !left;
-    if (inside && !same) { atomicAdd(&idRejects[0], 1u); }
+    if (inside && !same) {
+      atomicAdd(&idRejects[0], 1u);
+      atomicAdd(&idRejects[2], 1u);
+    }
+    if (inside && same && idW < 1.0) {
+      atomicAdd(&idRejects[4], 1u);
+      atomicAdd(&idRejects[6], 1u);
+    }
     if (inside && same) {
       hist = historyAt(uv, vec2f(size)) * TA.k.x;
       // (the ground's detail: the history's colour is its pixels' albedo resampled — blurred as it is —, swapped for the
@@ -948,7 +974,8 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
         aMin = mix(RASTER_FAR_ALPHA, aMin, smoothstep(0.3, 1.5, mv));
       }
       let nMax = 1.0 / max(aMin, 1e-3) - 1.0;
-      var nPrev = clamp(textureSampleLevel(addTex, samp, uv, 0.0).a, 0.0, nMax);
+      // (a publication's change — identityKept —: the history's weight cut)
+      var nPrev = clamp(textureSampleLevel(addTex, samp, uv, 0.0).a, 0.0, nMax) * idW;
       let w = select(TA.k.w, 1.0, fresh);
       if (carried) {
         // (the ground carried with the camera: its history exact — not clamped to this frame's range, which
@@ -1311,13 +1338,23 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
   // (where a moving mesh was the frame before and is not now: disoccluded, no history)
   let pmd = vec2f(textureDimensions(motionPrevTex));
   let left = (mv.z < 0.5 && meshMotionPrev(vec2i(uv * pmd)).z > 0.5) || mv.z > 1.5;
-  // (and a surface not there the frame before — its identity, at the internal pixels —: none)
-  let same = !all(textureDimensions(identTex) == rs) || identityKept(base, vec2i(uv * vec2f(rs)));
+  // (and a mobile surface not there the frame before, or one a new publication brought or took — its identity, at the internal
+  // pixels —: none)
+  let idW = select(1.0, identityKept(base, vec2i(uv * vec2f(rs)), mv.z > 0.5), all(textureDimensions(identTex) == rs));
+  let same = idW > 0.0;
   let inside = TU.s.w > 0.5 && !underCabin && !left && all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0));
-  if (inside && !same) { atomicAdd(&idRejects[1], 1u); }
+  if (inside && !same) {
+    atomicAdd(&idRejects[1], 1u);
+    atomicAdd(&idRejects[3], 1u);
+  }
+  if (inside && same && idW < 1.0) {
+    atomicAdd(&idRejects[5], 1u);
+    atomicAdd(&idRejects[7], 1u);
+  }
   if (inside && same) {
     let hist = historyAt(uv, vec2f(size)) * TA.k.x;
-    var nPrev = clamp(textureSampleLevel(addTex, samp, uv, 0.0).a, 0.0, nMax);
+    // (a publication's change — identityKept —: the history's weight cut)
+    var nPrev = clamp(textureSampleLevel(addTex, samp, uv, 0.0).a, 0.0, nMax) * idW;
     // (clipped towards the native result's mean about it, within g of its standard deviations — Salvi, as the native pass
     // does —: far outside it, a change, the history's weight cut)
     let h = rgbToYcocg(tmFwd(hist));
