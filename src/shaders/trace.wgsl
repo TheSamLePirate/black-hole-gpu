@@ -16176,72 +16176,6 @@ fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, 
   let m = liteMaterial(gq, q, ph, rd, look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, isTree, anchored, at);
   return liteLight(gq, q, tM, fx, fy, hG, look, Ls, Lp, Li, E, isTree, at, m);
 }
-// (PLAN-J1 J1-4) The forward ground's fragment's surface (system/terrain-forward.ts): a patch pixel's radiance G as shadeLite's
-// prologue and liteSurface find it — the same ray, jitter, point, light and footprint —, a = 1; a = 0 where shadeLite keeps the pixel
-// (not the Earth's ground, the cabin under it, water over it, a measure's view, a tree or a bridge before it): the finishing pass
-// then leaves it to shadeLite — r its reason: 1 not the Earth's raster, 2 the cabin, 3 not shadeLite's or a measure, 4 a bridge,
-// a tree or a mesh before it, 5 water. Its visibility's attributes read as shadeLite reads them (the same image, to begin with).
-fn liteForwardG(px: vec2f) -> vec4f {
-  if (!rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5) { return vec4f(1.0, 0.0, 0.0, 0.0); }
-  let k = u32(P.near1.w);
-  if (NEAR_KIND == 3u || NEAR_KIND == 7u) { return vec4f(1.0, 0.0, 0.0, 0.0); }
-  if (!isEarth(k) || !hasAir(k) || !earthOn()) { return vec4f(1.0, 0.0, 0.0, 0.0); }
-  let gid = vec2u(px);
-  let idx = gid.y * u32(P.res.x) + gid.x;
-  if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return vec4f(2.0, 0.0, 0.0, 0.0); }
-  let centre = vec2f(gid) + 0.5;
-  if (!rasterLiteTakes(centre, k) || (liteSkip() & 1024u) != 0u || (liteSkip() & 8192u) != 0u || (liteSkip() & 33554432u) != 0u || (liteSkip() & 8388608u) != 0u) { return vec4f(3.0, 0.0, 0.0, 0.0); }
-  if (terrainRasterBridge(centre) || terrainRasterId(centre) != 0u || terrainRasterMesh(centre)) { return vec4f(4.0, 0.0, 0.0, 0.0); }
-  setAir(k);
-  WX_W = select(0.0, P.wx[0].x, HAS_WX && earthOn());
-  WX_Q = normalize(nearCam());
-  FOOT = 1.0;
-  FOOT_NEAR = 1.0;
-  FOOT_FAR = 1.0;
-  let pos = centre + liteJitter(gid);
-  var tM = terrainRasterHint(pos);
-  if (tM <= 0.0) { tM = terrainRasterHint(centre); }
-  let ray = rasterRay(pos, k);
-  let ab = squashOf(k);
-  let rd = ray.rd;
-  let tH = tM / ray.kM;
-  let ph = rasterPoint(ray, tM);
-  let q = normalize(ph);
-  GEO_H = geoH(ph);
-  let gq = geoQ(q);
-  let anchored = tM < TILE_ANCHOR_M && P.nearCam1.w > 0.5 && P.tiles.w > 0.5;
-  if (anchored) { TILE_AT = tileAnchor(P.nearCam1.xyz + ray.rd * tH); }
-  let hG = max(airHeight(ph) - geoidN(gq), 0.0);
-  let lt = nearLight(k);
-  let Ls = normalize(squashed(toBody(lt.dir), ab));
-  let Lp = normalize(toBody(lt.dir));
-  let Li = incidentSun(Lp);
-  let E = lt.e;
-  let fp = pixFoot() * tH;
-  var tn = vec3f(0.0);
-  if ((liteSkip() & 16u) == 0u || (liteSkip() & 65536u) == 0u) { tn = terrainRasterNormal(centre); }
-  var nFoot = tn;
-  if (dot(nFoot, nFoot) < 0.5 || (liteSkip() & 65536u) != 0u) { nFoot = q; }
-  let fx = earthFootOn(q, rd, squashed(toBody(P.camRight.xyz), ab), fp, nFoot);
-  let fy = earthFootOn(q, rd, squashed(toBody(P.camUp.xyz), ab), fp, nFoot);
-  // (water over it — the sea's, a river's, a lake's —: shadeLite's, whatever its share)
-  if ((liteSkip() & 1u) == 0u) {
-    let lvl0 = select(0.0, runwayGrade(gq).y, rwyCount() > 0u);
-    let nW = select(gq, tn, dot(tn, tn) > 0.5);
-    let wat = liteWater(gq, fx, fy, hG, fp * EARTH_RM, nW, toBody(ray.look), tM, lvl0);
-    if (wat.w > 0.5 || wat.x > 0.0) { return vec4f(5.0, 0.0, 0.0, 0.0); }
-  }
-  let G = liteSurface(gq, q, ph, rd, ray.look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, false, anchored, rasterAttrAt(centre, k));
-  return vec4f(G, 1.0);
-}
-// (PLAN-J1 J1-4) The forward ground's finishing (system/terrain-forward.ts forwardFinish): a pixel whose surface the forward
-// fragment shaded (G) given the air and the clouds before it — liteFinish, as shadeLite would, its ray and light found again.
-fn liteForwardFinish(gid: vec2u, G: vec3f) {
-  let centre = vec2f(gid) + 0.5;
-  var tM = terrainRasterHint(centre + liteJitter(gid));
-  if (tM <= 0.0) { tM = terrainRasterHint(centre); }
-  liteFinishAt(gid, G, tM);
-}
 // (a raster pixel's surface G at tM metres along its jittered ray — shadeLite's — given the air and the clouds before it: liteFinish
 // with its ray and light found again, as shadeLite found them)
 fn liteFinishAt(gid: vec2u, G: vec3f, tM: f32) {
@@ -16276,9 +16210,6 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gid: vec3u) {
   let g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
   liteFinishAt(gid.xy, g.rgb, g.a);
 }
-// (the forward ground drew this frame — renderer.forwardGround: its finished pixels shadeLite's no more)
-const RASTER_FORWARD_FLAG = 4096u;
-fn rasterForwardOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_FORWARD_FLAG) != 0u; }
 // (a raster pixel's surface G given its last touches — the water over it (liteWater's wat), the measures' views — and its finish:
 // shadeLite's, or shadeLiteLight's when its material and its light are two kernels — tracer-source.ts withLiteDeferred)
 fn liteEpilogue(gid: vec2u, idx: u32, centre: vec2f, pos: vec2f, G0: vec3f, rd: vec3f, tH: f32, tM: f32, Ls: vec3f, E: vec3f, k: u32,
@@ -16446,8 +16377,6 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
   let centre = vec2f(gid.xy) + 0.5;
   if (!rasterLiteTakes(centre, k)) { return; }
-  // (PLAN-J1 J1-4: finished this frame by the forward ground — its surface the fragment's, its air the finishing pass's)
-  if (rasterForwardOn() && stamps[idx] == P.frame.x && moments[idx].x > 1e29) { return; }
   // (liteSkip 1024: the pass alone — its dispatch and what it takes —, a flat grey written: a measure)
   if ((liteSkip() & 1024u) != 0u) {
     accum[idx] = vec4f(0.1, 0.1, 0.1, 1.0);

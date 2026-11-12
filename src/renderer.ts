@@ -30,7 +30,6 @@ import {
   tracerEntryPoint,
 } from "./system/tracer-kernels";
 import { WgslSpecialiser } from "./system/wgsl-specialise";
-import { FORWARD_FINISH_TEX, TERRAIN_FORWARD_FORMAT, TerrainForward } from "./system/terrain-forward";
 import { RASTER_HINT_BINDING, RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_BINDING, SUN_SHADOW_TEXTURE_LIMIT } from "./system/terrain-raster-hint";
 import {
   TERRAIN_CACHE_LEVELS,
@@ -385,8 +384,6 @@ const RASTER_WATER_FLAG = 256;
 const RASTER_SHADE_LATE_FLAG = 1024;
 /** the parameters' raster bit for the trees near the camera taken by the rays' kernel (trace.wgsl RASTER_NEAR_TREES_FLAG) */
 const RASTER_NEAR_TREES_FLAG = 2048;
-/** the parameters' raster bit for the forward ground drawn this frame (trace.wgsl RASTER_FORWARD_FLAG; PLAN-J1 J1-4) */
-const RASTER_FORWARD_FLAG = 4096;
 /** within this the trees are the rays' kernel's (trace.wgsl RASTER_NEAR_TREES_M) [m] */
 const RASTER_NEAR_TREES_M = 80;
 /** the temporal pass's least weight of a fresh pixel with the raster's ground at every pixel (taParams[0]'s 1/16 otherwise) */
@@ -5419,97 +5416,6 @@ export class Renderer {
   /** PLAN-MER-WEBGPU S3: the open sea's pixels shaded by their own kernel — shadeWater compiled without the coasts' and the inland
    *  water's code (trace.wgsl WATER_OPEN) — once it is compiled (A/B lever) */
   seaWaterOpenOn = true;
-  /** PLAN-J1 J1-4 — the forward ground (system/terrain-forward.ts): the relief's patch shaded by a fragment (liteForwardG) and
-   *  finished by its own pass before shadeLite, which leaves it those pixels. A pilot, off by default: its pipelines built for the
-   *  scene's key when it is on (seconds, from the specialised source), the frame as before until they are in. */
-  forwardGround = false;
-  /** its fragment's rejections written instead of discarded (a 0.25, r the reason — trace.wgsl liteForwardG; 6 the distance, 7 no
-   *  visibility there —, g its distance, b the visibility's) — the probes' */
-  forwardDebug = false;
-  /** the forward ground drew this frame */
-  forwardNow = false;
-  private terrainForward: TerrainForward | null = null;
-  private forwardTex: GPUTexture | null = null;
-  private forwardLutDummy: GPUTexture | null = null;
-  private forwardBinds: { key: string; g1: GPUBindGroup; g2: GPUBindGroup | null; tex: GPUBindGroup } | null = null;
-  /** the forward ground's build state (its key, failure, compile times) — for the probes */
-  get forwardState() {
-    const f = this.terrainForward;
-    return f ? { key: f.key, failed: f.failed, compileMs: f.compileMs, used: Object.fromEntries(f.used) } : null;
-  }
-  /** its pipelines for the frame's key — built in the background when missing; null until they are */
-  private forwardReady(): TerrainForward | null {
-    if (!this.forwardGround || !this.terrainRaster || !this.rasterLite) return null;
-    const key = this.featureKey;
-    this.terrainForward ??= new TerrainForward(this.device, this.traceLayout, this.lutReadLayout);
-    const f = this.terrainForward;
-    if (f.ready(key)) return f;
-    if (!f.failed && this.traceVariant("shadeLite", key, false)) {
-      const constants = tracerConstants(key, "shadeLite", {
-        quality: false,
-        rasterHint: this.rasterHint,
-        tune: this.tunes.get((key >> 20) & 63),
-        companion: this.leanMain,
-        coarseProbe: this.coarseProbe,
-        leftovers: this.rasterLite && this.leanShade,
-        otherUniverse: !this.otherUniverseOut,
-      });
-      // (every function kept — the relief library's vertex stage reads some shadeLite does not —: the page's specialiser)
-      this.specialiser ??= new WgslSpecialiser(this.traceSource);
-      void f.build(key, this.specialiser.specialise(constants), this.terrainRaster.vertexModule, constants, this.forwardDebug);
-    }
-    return null;
-  }
-  /** The forward ground this frame (encodeLite, before shadeLite): the patch's fragments, then their finishing pass. */
-  private encodeForward(enc: GPUCommandEncoder, t: Target, hint: GPUTexture, f: TerrainForward): boolean {
-    const fwd = f.forward!;
-    const fin = f.finish!;
-    if (!this.forwardTex || this.forwardTex.width !== t.width || this.forwardTex.height !== t.height) {
-      this.forwardTex?.destroy();
-      this.forwardTex = this.device.createTexture({
-        label: "forward ground: colour",
-        size: [t.width, t.height],
-        format: TERRAIN_FORWARD_FORMAT,
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC, // (read back by the probes)
-      });
-      this.forwardBinds = null;
-    }
-    const key = `${f.key}|${t.width}x${t.height}|${this.motionGen(hint)}|${t === this.live ? 1 : 0}`;
-    if (this.forwardBinds?.key !== key) {
-      const want1 = new Set(f.used.get(1) ?? []);
-      const want2 = new Set(f.used.get(2) ?? []);
-      const g1 = this.device.createBindGroup({
-        label: "forward ground: the tracer's resources",
-        layout: fwd.getBindGroupLayout(1),
-        entries: this.traceEntries(t, this.ship.envBuf, hint).filter((e) => want1.has(e.binding)),
-      });
-      const e2 = this.aerialRead().filter((e) => want2.has(e.binding));
-      if (e2.length !== want2.size) throw new Error(`forward ground: group 2 bindings ${[...want2]} not all given`);
-      const g2 = want2.size ? this.device.createBindGroup({ layout: fwd.getBindGroupLayout(2), entries: e2 }) : null;
-      // (the finishing pass: the tracer's group 1 with the forward colour in the far field's LUT's place — liteFinish reads neither
-      // LUT — and its aerial table)
-      this.forwardLutDummy ??= this.device.createTexture({ size: [1, 1], format: "r32float", usage: GPUTextureUsage.TEXTURE_BINDING });
-      const tex = this.device.createBindGroup({
-        label: "forward ground: finishing's group 1",
-        layout: f.lutReadLayout,
-        entries: [
-          { binding: FORWARD_FINISH_TEX, resource: this.forwardTex.createView() },
-          { binding: 3, resource: this.forwardLutDummy.createView() },
-          ...this.aerialRead(),
-        ],
-      });
-      this.forwardBinds = { key, g1, g2, tex };
-    }
-    const b = this.forwardBinds;
-    if (!this.terrainRaster!.encodeForward(enc, fwd, [b.g1, b.g2], this.forwardTex, (l, d) => this.prof.pass(l, d))) return false;
-    const fp = enc.beginComputePass(this.prof.pass("forward ground: finishing"));
-    fp.setPipeline(fin);
-    fp.setBindGroup(0, this.hintBindFor(t, hint));
-    fp.setBindGroup(1, b.tex);
-    fp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
-    fp.end();
-    return true;
-  }
   /** PLAN-MER-WEBGPU S2: the sea's crests drawn before the land behind them where it stands over the waves (A/B lever) */
   seaCrestsOverLand = true;
   /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */
@@ -7194,12 +7100,8 @@ export class Renderer {
     this.rasterWaterNow = false;
     this.rasterShadeLate = false;
     this.nearTreesNow = false;
-    this.forwardNow = false;
     if (!quality && hint && this.rasterPrimaryOn && this.rasterLite && this.traceVariant("shadeLite")) {
       this.rasterLiteNow = true;
-      // (PLAN-J1 J1-4: the forward ground's pipelines in for this key — the Earth's raster, its ground the patch's —: drawn in
-      // encodeLite before shadeLite, which leaves it its finished pixels)
-      this.forwardNow = !this.bodyRasterNow && t === this.live && !!this.forwardReady();
       this.rasterShadeLate = shadeLate;
       // (its water's pass — shadeWater — once its kernel is there: shadeLite leaves it the water's pixels)
       // (not another world's: its water is bodyLite's — and the Earth's unseen sea would stop the FFT, seaFftParams)
@@ -7220,8 +7122,7 @@ export class Renderer {
         RASTER_LITE_FLAG +
         (this.rasterWaterNow ? RASTER_WATER_FLAG : 0) +
         (shadeLate ? RASTER_SHADE_LATE_FLAG : 0) +
-        (this.nearTreesNow ? RASTER_NEAR_TREES_FLAG : 0) +
-        (this.forwardNow ? RASTER_FORWARD_FLAG : 0);
+        (this.nearTreesNow ? RASTER_NEAR_TREES_FLAG : 0);
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
     }
     // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
@@ -7449,17 +7350,6 @@ export class Renderer {
       return;
     }
     if (lite) {
-      // (PLAN-J1 J1-4: the forward ground first — its finished pixels then left by shadeLite)
-      if (this.forwardNow) {
-        const f = this.forwardReady();
-        try {
-          if (!f || !this.encodeForward(enc, t, hint, f)) this.forwardNow = false;
-        } catch (e) {
-          console.warn("forward ground: off —", e);
-          this.forwardGround = false;
-          this.forwardNow = false;
-        }
-      }
       const lb = this.liteBinds(t);
       const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
       lp.setPipeline(lite);

@@ -3548,3 +3548,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   la sortie de J1 « première image sans dépendre des compilations Kerr » est tenue sur ce chemin ; la « seconde moitié » annoncée
   (réordonner la file) n'a pas lieu d'être. Le titre, lui, attend son `main`/`env` à froid (≈ 32 s, ciel d'attente) — hors de J1.
   GRAPHICS-PIPELINE §5.5 et PLAN-J1 corrigés. Preuve : relecture d'une mesure ; rien de relancé.
+
+## 2026-11-12T08:54Z — J1-7, premier retrait : le pilote du forward du sol (sans utilisateur depuis le différé)
+
+- **Contribution** (CLAUDE.md « supprimer ensuite options, buffers et compilations sans utilisateur » ; stratégie §20.7 ; PLAN-J1 J1-7) :
+  le différé confirmé par Sam pour le sol dense, le pilote `forwardGround` (J1-4, éteint, +13,6 ms mesurés le 11) est retiré —
+  `src/system/terrain-forward.ts` supprimé, `TerrainRaster.encodeForward` et sa sonde, les leviers `renderer.forwardGround/forwardNow/
+  forwardState/forwardDebug`, dans le traceur `liteForwardG`, `liteForwardFinish`, `RASTER_FORWARD_FLAG` et le test de `shadeLite` qui
+  sautait ses pixels ; `check-wgsl` 83 → 81 modules ; `trace.wgsl` 17 440 → 17 369 lignes ; annexe du pipeline régénérée avec les
+  tailles (`--write --sizes`). Gardés : `liteSurface`/`RasterAttr`, `liteFinishAt`, `wgsl-library.ts`.
+- **Vérifié** : tsc, biome, check-wgsl 81/81, `pipeline-inventory --check` ; `bun test --parallel` 2190/1 (l'appontage de `trap.test.ts`
+  sous la charge ; 9/9 seul) ; e2e `surface-id` sur kerr-mini (identité 49/49, profondeur, mouvement, 0 erreur GPU — la voie raster
+  dessine comme avant). **Non vérifié** : l'e2e `terrain-raster` (l'inspecteur sur la voie tracée) muet 30 min sur kerr-mini, annulé —
+  son seul passage précédent (3 nov.) avait aussi été coupé ; il ne passe pas par ce qui a été retiré. Image : inchangée attendue (le
+  bit n'était jamais posé), pas de planche.
+- **Reste de J1-7** : `rigidMotionOn` (éteint, sans lecteur), la fiche J0 nouvelle (kerr-mini + M1 Max) ; **reste de J1-5** : les
+  bâtiments en forward avec leur matériau (Q3).

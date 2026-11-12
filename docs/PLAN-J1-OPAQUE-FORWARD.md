@@ -269,6 +269,18 @@ titre a fini son `main`/`env` à 47,4 s — la page démarre sur lui ; J0 placé
 dépend pas des compilations Kerr de la Terre — la sortie de J1 est tenue pour ce chemin. (Une première lecture, le même jour, disait
 le sol attendre les noyaux du titre : faux, corrigé.) Reste hors de J1 : le titre lui-même attend son `main`/`env` à froid (≈ 32 s,
 le ciel d'attente devant).
+**J1-7, premier retrait (12 novembre) : le pilote du forward du sol.** Le différé confirmé par Sam pour le sol dense, le pilote
+`forwardGround` (J1-4, éteint depuis sa mesure du 11 : +13,6 ms) n'avait plus d'utilisateur : retirés `src/system/terrain-forward.ts`
+(`TerrainForward`, ses deux pipelines), `TerrainRaster.encodeForward` et sa sonde (`forwardProbe`, ses quatre cibles, la copie de
+l'uniforme de visibilité, `vertexModule`), `renderer.forwardGround` / `forwardNow` / `forwardState` / `forwardDebug` et
+`encodeForward`, dans le traceur `liteForwardG`, `liteForwardFinish`, `RASTER_FORWARD_FLAG` et le test de `shadeLite` qui sautait
+ses pixels (le bit 4096 des paramètres libre), les deux modules de `check-wgsl` (83 → 81). Gardés : `liteSurface`/`RasterAttr` et
+`liteFinishAt` (ceux de `shadeLite` et `shadeLiteFinish`), la bibliothèque `wgsl-library.ts` (le cache de relief l'emploie).
+`trace.wgsl` 17 440 → 17 369 lignes. **Ce qui reste de J1-7** : le tableau du §3 visait « `shadeLite` réduit à son hors-domaine » —
+caduc depuis le différé (le sol dense reste `shadeLite` matériau puis éclairage) ; restent le décodage `decodeSurface` (contrôle de
+l'e2e `surface-id`, chemin des corps sans identité : gardé, propriétaire J1-2), `rigidMotionOn` (éteint, sans lecteur : à retirer ou à
+brancher avec le format `rg16float`), et la fiche J0 nouvelle (kerr-mini + M1 Max). **Reste de J1-5** : les bâtiments en forward
+avec leur matériau (Q3) — seul l'appareil est fait.
 
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster

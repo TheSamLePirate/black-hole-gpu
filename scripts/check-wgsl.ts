@@ -16,7 +16,6 @@ import { BAKE_WGSL as TREE_BAKE_WGSL, DOWN_WGSL as TREE_DOWN_WGSL } from "../src
 import { TERRAIN_CACHE_N } from "../src/system/terrain-cache-layout";
 import { WGS84_A } from "../src/system/ellipsoid";
 import { wgslLibraryModule } from "../src/system/wgsl-library";
-import { terrainForwardFinishShader, terrainForwardShader } from "../src/system/terrain-forward";
 import { withForest } from "../src/forest-shader";
 import { surfaceShader } from "../src/system/earth-surface";
 import { aerialShader } from "../src/system/aerial";
@@ -85,12 +84,6 @@ shaders["the trees' impostors' 2 × 2 down (vegetation/tree-impostors.ts, V2b)"]
     ["earthImageryAniso"],
     entry("_ = earthImageryAniso(vec3f(0.0, 0.0, 1.0), vec3f(1e-6, 0.0, 0.0), vec3f(0.0, 1e-6, 0.0));"),
   );
-  // (J1-4: the forward ground's module — the terrain raster's vertex stage and the closure of liteForwardG, from the tracer
-  // specialised as the J0 profile's shadeLite — every function kept)
-  const j0 = PROFILES.find((p) => p.id === "earth-raster-wx")!;
-  const j0Spec = specialiseWgsl(full, profileConstants(j0, "shadeLite"));
-  shaders["J1-4 forward ground (system/terrain-forward.ts)"] = terrainForwardShader(j0Spec);
-  shaders["J1-4 forward ground: finishing (system/terrain-forward.ts)"] = terrainForwardFinishShader(j0Spec);
   shaders["J1-3 ground library: the sun (liteSun)"] = wgslLibraryModule(
     full,
     ["liteSun"],
