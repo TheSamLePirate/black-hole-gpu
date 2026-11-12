@@ -85,13 +85,18 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         await app.js(`(() => { document.body.classList.remove("hide-ui"); return 1; })()`);
         return b;
       };
+      // (WIND_AB=<renderer switch>: that switch on and off instead of the wind — treeShadowOn, sunShadowOn… —, the wind left on;
+      // a comparison of what makes a look, at the same view)
+      const ab = process.env.WIND_AB ?? "treeWindOn";
+      if (!/^[A-Za-z]+$/.test(ab)) throw new Error(`WIND_AB: a renderer switch's name, not ${ab}`);
       for (const pass of [1, 2])
         for (const on of [true, false]) {
-          await app.js(`(() => { __bh.renderer.treeWindOn = ${on}; return 1; })()`);
+          await app.js(`(() => { __bh.renderer.${ab} = ${on}; return 1; })()`);
           await Bun.sleep(2500);
-          const a = await shot(`${OUT}/p${pass}-${on ? "wind" : "still"}-a.png`);
+          const tag = ab === "treeWindOn" ? (on ? "wind" : "still") : `${ab}-${on ? "on" : "off"}`;
+          const a = await shot(`${OUT}/p${pass}-${tag}-a.png`);
           await Bun.sleep(500);
-          const b = await shot(`${OUT}/p${pass}-${on ? "wind" : "still"}-b.png`);
+          const b = await shot(`${OUT}/p${pass}-${tag}-b.png`);
           const r = await app.js<{ gpu: number[] }>(`(async () => {
             const R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q)); const gpu = []; let last = R.completedFrames; const t0 = performance.now();
             while (performance.now() - t0 < 6000) { __bh.touch(); await f(); if (R.completedFrames !== last) { last = R.completedFrames; gpu.push(+R.lastGpuMs.toFixed(2)); } }
@@ -103,7 +108,7 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
           console.log(
             JSON.stringify({
               pass,
-              wind: on,
+              [ab]: on,
               step: +diff(a, b).toFixed(2),
               images: s.length,
               gpuP50: s[Math.floor(s.length / 2)],

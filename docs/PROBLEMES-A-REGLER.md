@@ -192,8 +192,14 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   (`forest.wgsl` `forestShape`, pour le traceur, le raster et ses proxies), son jumeau CPU (`forest.ts` `shapeOf`, pour les contacts
   et `check-forest`), et les modèles des imposteurs (`tree-model.ts` `treeEnvelope`). Planche
   `docs/progress/vegetation/houppiers-elancement-chamonix.jpg`.
-- **Reste ouvert** : les bandes jaunes en diagonale entre les arbres sur cette pente (des rubans clairs, comme des marches du sol
-  vues de côté), présentes avant et après — non examinées.
+- **Reste ouvert — les bandes jaunes en diagonale entre les arbres** (avant et après). **Cause établie le 12 novembre 2026** (sonde
+  `forest-wind`, `WIND_AB=treeShadowOn`, même vue, ce Mac) : sans la carte d'ombre des arbres, plus de bandes. La pente regarde au
+  nord-ouest, le Soleil de 9 h 30 UTC vient de l'est-sud-est : incidence ≈ 74°, les ombres des houppiers très allongées, les trouées
+  en bandes. Et la carte dessine les **proxies circonscrits sans découpe** (`scenery-raster.ts` `shadowVs`, aucun fragment) :
+  l'octaèdre d'un houppier rond couvre vu du dessus ~1,9 × l'aire de son disque, la pyramide d'un cône 1,27 × — les ombres d'arbres
+  presque deux fois trop larges, opaques et à bords francs. **Correctif proposé, écrit puis mis de côté** (Sam, même jour : J1 d'abord,
+  sans changer l'image) : un `shadowFs` qui écarte les texels hors de la silhouette du houppier vue du Soleil (droite vers le Soleil
+  dans le repère unité de la sphère ou du cône), la profondeur restant celle du proxy ; à mesurer (`trees' shadow map`, image).
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid
 
