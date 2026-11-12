@@ -34,7 +34,16 @@ import { USA_LUT } from "./usa-colour";
 import { MAPTERHORN_Z1, mapterhornUrl, USA_OUTLINE, usgsImageryUrl } from "./usa-ground";
 import { IGN_MNH } from "./ign-canopy";
 import { ArrivalLog } from "./tile-arrivals";
-import { MipBatch, PagePublisher, PUB_BUDGET_MS, PUB_CATCHUP_AFTER_MS, PUB_CATCHUP_MS, type PageJob } from "./earth-pages";
+import {
+  FrameBudget,
+  MipBatch,
+  PagePublisher,
+  PUB_BUDGET_MS,
+  PUB_CATCHUP_AFTER_MS,
+  PUB_CATCHUP_MS,
+  type PageJob,
+  TILE_FRAME_IDLE_MS,
+} from "./earth-pages";
 import { L_MAX, L_MIN, ROAD_MVT_Z1, ROAD_Z0 } from "./night-roads";
 import type { DelightStats } from "./ortho-delight";
 import { type DecodeReply, type DecodeRequest, decodeTile, ORTHO_FIT, pixels as decodePixels } from "./tile-decode";
@@ -79,6 +88,8 @@ export const GIBS_Z1 = 8;
 const R = WGS84_A;
 const TAU = 2 * Math.PI;
 const MAX_INFLIGHT = 8;
+/** J2 (the peaks): the halo's look an image at most [ms] — its levels looked over a slice at a time (EarthTiles.haloScan) */
+const HALO_SLICE_MS = 0.5;
 const TIMEOUT_MS = 15000;
 /** the national sources' heights fetched at once (their own queue — EarthTiles.refine —: never the global data's slots) */
 const MAX_NATIONAL = 14;
@@ -980,6 +991,38 @@ export const CACHE_SLACK = 16;
 /** the loads a craft's ground may have in flight past the windows' MAX_INFLIGHT */
 export const ANCHOR_LOADS = 4;
 
+/** J2-0 … the tiles' work counted per image (EarthTiles.pubProbe, pubLog): see `pubProbe` */
+const PUB_KEYS = [
+  "bytes",
+  "writes",
+  "tiles",
+  "orthos",
+  "submits",
+  "mipPasses",
+  "putMs",
+  "mipMs",
+  "pubMs",
+  "waiting",
+  "keepMs",
+  "reqMs",
+  "haloMs",
+  "reqScanMs",
+  "reqLoadMs",
+  "reqOrthoMs",
+  "reqMaxMs",
+  "reqCalls",
+  "loads",
+  "refused",
+  "haloLooks",
+  "haloLoads",
+  "partMaxMs",
+  "tailMs",
+] as const;
+type PubCounts = Record<(typeof PUB_KEYS)[number], number>;
+function pubZero(): PubCounts {
+  return Object.fromEntries(PUB_KEYS.map((k) => [k, 0])) as PubCounts;
+}
+
 export class EarthTiles {
   texture: GPUTexture;
   /** the tiles' work on the page's thread (TILE_CPU): each kind's total and longest piece [ms], their count */
@@ -1112,37 +1155,8 @@ export class EarthTiles {
    * once an image) closes an image's counts into `pubLog` (4 096 images kept); `pubStats()` sums them up.
    */
   pubProbe = false;
-  private pubNow = {
-    bytes: 0,
-    writes: 0,
-    tiles: 0,
-    orthos: 0,
-    submits: 0,
-    mipPasses: 0,
-    putMs: 0,
-    mipMs: 0,
-    pubMs: 0,
-    waiting: 0,
-    keepMs: 0,
-    reqMs: 0,
-    haloMs: 0,
-  };
-  readonly pubLog: {
-    t: number;
-    bytes: number;
-    writes: number;
-    tiles: number;
-    orthos: number;
-    submits: number;
-    mipPasses: number;
-    putMs: number;
-    mipMs: number;
-    pubMs: number;
-    waiting: number;
-    keepMs: number;
-    reqMs: number;
-    haloMs: number;
-  }[] = [];
+  private pubNow = pubZero();
+  readonly pubLog: ({ t: number } & PubCounts)[] = [];
   private pubWrote(bytes: number) {
     if (!this.pubProbe) return;
     this.pubNow.bytes += bytes;
@@ -1150,44 +1164,20 @@ export class EarthTiles {
   }
   /** an image ends: its publication's counts logged (pubProbe on) */
   pubFrame() {
+    // (J2, the peaks: the tiles' budget of the next image opens here — the interval between two images' ends, what the next frame waits
+    // for: the arrivals' starts between them, then its publication and its update)
+    this.frame.begin(performance.now());
+    this.frameOpened = true;
     if (!this.pubProbe) return;
     this.pubLog.push({ t: performance.now(), ...this.pubNow });
     if (this.pubLog.length > 4096) this.pubLog.splice(0, this.pubLog.length - 4096);
-    this.pubNow = {
-      bytes: 0,
-      writes: 0,
-      tiles: 0,
-      orthos: 0,
-      submits: 0,
-      mipPasses: 0,
-      putMs: 0,
-      mipMs: 0,
-      pubMs: 0,
-      waiting: 0,
-      keepMs: 0,
-      reqMs: 0,
-      haloMs: 0,
-    };
+    this.pubNow = pubZero();
   }
   /** the logged images' publication: per image p50 / p95 / max of each count, the images with any, those over 2 ms of the page's
    *  time (J2-1's bound), the totals; from `since` [performance.now() ms] */
   pubStats(since = 0) {
     const rows = this.pubLog.filter((r) => r.t >= since);
-    const keys = [
-      "bytes",
-      "writes",
-      "tiles",
-      "orthos",
-      "submits",
-      "mipPasses",
-      "putMs",
-      "mipMs",
-      "pubMs",
-      "waiting",
-      "keepMs",
-      "reqMs",
-      "haloMs",
-    ] as const;
+    const keys = PUB_KEYS;
     const q = (v: number[], p: number) => {
       const s = [...v].sort((a, b) => a - b);
       return s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))]! : 0;
@@ -1546,7 +1536,10 @@ export class EarthTiles {
   setReach(r: { span: number; cache: number; ring: number }) {
     this.cacheTiles = r.cache;
     this.ring = r.ring;
-    while (this.cache.size > this.cacheTiles) this.cache.delete(this.cache.keys().next().value!);
+    while (this.cache.size > this.cacheTiles) {
+      this.cache.delete(this.cache.keys().next().value!);
+      this.cacheEpoch++;
+    }
     const span = Math.min(r.span, this.spanMax);
     if (span === this.span) return;
     this.clear();
@@ -1615,6 +1608,27 @@ export class EarthTiles {
 
   /** when the halo is looked over next [ms] (request) */
   private haloAt = 0;
+  /** J2 (the peaks — FICHE-J2-pointes): the halo's look under way — its levels looked over HALO_SLICE_MS at a time, in as many images
+   *  as it takes, the candidates gathered, their loads started once every level is looked over (the same order as in one go: by ring
+   *  past the windows' edges, the finer first in one, the nearest) — measured whole: 1.6–2.7 ms an image, four times a second */
+  private haloScan: { i: number; halo: [Level, number, number, number][]; lonT: number; sinLat: number } | null = null;
+  /** the halo's slice [ms] (HALO_SLICE_MS; the tests: Infinity — one request looks it all over) */
+  haloSliceMs = HALO_SLICE_MS;
+  /** each level's halo found whole in memory (its window, its ring, the cache's epoch and the sources' generation then): not looked
+   *  over again until one of them changes */
+  private haloWhole = new Map<Level, string>();
+  /** bumped at every tile dropped from the cache (haloWhole) */
+  private cacheEpoch = 0;
+  /**
+   * J2 (the peaks): the tiles' budget of the page's thread an image (earth-pages.ts FrameBudget — TILE_FRAME_MS): begun at the
+   * publication, spent by it, by the loads started (`startOk`/`started`: the anchors' first — the flown craft's ground —, then the
+   * windows' by their order — the camera's tile first —, the orthophotos', the halo's) and the halo's look; a start that does not fit
+   * waits for the next image (`requestLater` should none come).
+   */
+  readonly frame = new FrameBudget();
+  /** the image of the last request (FrameBudget.image): an arrival's asked again at most once an image (`requestSoon`) */
+  private reqImage = -1;
+  private reqTimer: ReturnType<typeof setTimeout> | null = null;
   /** the motion's direction on the tiles' plane (unit; null still): the halo led along it (update) */
   private leadDir: [number, number] | null = null;
   /**
@@ -1660,6 +1674,7 @@ export class EarthTiles {
     }
     all.sort((a, b) => b[1] - a[1]);
     for (let i = 0; i < all.length - to; i++) this.cache.delete(all[i]![0]);
+    this.cacheEpoch++;
     if (this.pubProbe) this.pubNow.keepMs += performance.now() - k0;
   }
 
@@ -1745,6 +1760,7 @@ export class EarthTiles {
       L.want = null;
       this.setValid(L, null);
     }
+    this.haloScan = null;
     this.clearOrtho();
   }
 
@@ -1784,6 +1800,7 @@ export class EarthTiles {
       this.aheadLoads.clear();
       for (const r of this.refining.values()) r.ctl.abort();
       this.cache.clear();
+      this.cacheEpoch++;
       this.standInKeys.clear();
       this.failures.clear();
       for (const L of this.levels) {
@@ -1949,13 +1966,53 @@ export class EarthTiles {
    * level at once; the windows whole, the halo round them into memory (ringLevel, TILE_REACH ring), while it has room.
    */
   private request(lonT: number, sinLat: number) {
-    if (!this.pubProbe) return this.requestNow(lonT, sinLat);
     const r0 = performance.now();
+    this.frame.tick(r0);
+    this.reqImage = this.frame.image;
+    // (J2, the peaks: no start would fit in what the image has left — its look over the windows not made either: at the next image)
+    if (!this.startOk()) return;
+    const s0 = this.frame.spent;
     try {
       this.requestNow(lonT, sinLat);
     } finally {
-      this.pubNow.reqMs += performance.now() - r0;
+      const ms = performance.now() - r0;
+      // (its own time — the windows looked over, the memory's tiles put — spent from the image's budget too; its starts and the halo's
+      // look are already)
+      this.frame.add(Math.max(ms - (this.frame.spent - s0), 0));
+      if (this.pubProbe) {
+        this.pubNow.reqMs += ms;
+        this.pubNow.reqCalls++;
+        if (ms > this.pubNow.reqMaxMs) this.pubNow.reqMaxMs = ms;
+      }
     }
+  }
+  /** J2 (the peaks): an arrival's request — at once if none ran in this image, else at the next one (the frame's `update` asks each
+   *  image; none coming — a still view converged —, a timer) */
+  private requestSoon() {
+    this.frame.tick(performance.now());
+    if (this.reqImage === this.frame.image) return this.requestLater();
+    this.request(cx0(this.priorityLon), this.prioritySinLat);
+  }
+  /** a request after TILE_FRAME_IDLE_MS unless one ran meanwhile (an image's `update`) — a start held for the budget, an arrival's */
+  private requestLater() {
+    if (this.reqTimer !== null) return;
+    const was = this.reqImage;
+    this.reqTimer = setTimeout(() => {
+      this.reqTimer = null;
+      if (this.reqImage === was) this.requestSoon();
+    }, TILE_FRAME_IDLE_MS + 2);
+  }
+  /** J2 (the peaks): may a load start now — within the image's budget (FrameBudget)? Not: the next ones wait (requestLater) */
+  private startOk(): boolean {
+    if (this.frame.mayStart(performance.now())) return true;
+    if (this.pubProbe) this.pubNow.refused++;
+    this.requestLater();
+    return false;
+  }
+  /** a load started at t0 [ms]: its cost spent from the image's budget */
+  private started(t0: number) {
+    this.frame.didStart(performance.now() - t0);
+    if (this.pubProbe) this.pubNow.loads++;
   }
   private requestNow(lonT: number, sinLat: number) {
     const now = performance.now();
@@ -1978,6 +2035,7 @@ export class EarthTiles {
           const kept = this.cache.get(key);
           if (kept) {
             this.cache.delete(key);
+            this.cacheEpoch++;
             this.put(L.z, x, y, kept.h, kept.col);
             continue;
           }
@@ -2001,11 +2059,22 @@ export class EarthTiles {
     // (3 Nov 2026, tile-arrival in replay at 1 s): the view at 90 % of the detail it wants in 8 s — 26–32 s one level after the
     // other (T8h), 15 s by ring alone (the IGN's relief then whole at 31 s, 8 here))
     todo.sort((a, b) => a[4] - b[4] || b[0].z - a[0].z || a[3] - b[3]);
+    const t1 = performance.now();
+    // (J2, the peaks: the look over the windows spent before the starts are judged)
+    this.frame.add(t1 - now);
+    if (this.pubProbe) this.pubNow.reqScanMs += t1 - now;
+    // (J2, the peaks: in that order under the image's budget — 8 at once measured 2.4–3.3 ms on the M1 Max, their fetch calls —, the
+    // rest at the next image)
     for (const [L, x, y] of todo) {
-      if (this.inflight.size >= MAX_INFLIGHT) break;
+      if (this.inflight.size >= MAX_INFLIGHT || !this.startOk()) break;
+      const s0 = performance.now();
       void this.load(L, x, y);
+      this.started(s0);
     }
+    const t2 = this.pubProbe ? performance.now() : 0;
+    if (this.pubProbe) this.pubNow.reqLoadMs += t2 - t1;
     this.requestOrtho(lonT, sinLat);
+    if (this.pubProbe) this.pubNow.reqOrthoMs += performance.now() - t2;
     // (the windows whole: the halo — every level's rings round its window, out to TILE_REACH's ring — loaded ahead into
     // memory, half the loads at most, while the memory has room: the tiles the windows enter as the craft goes on drawn at
     // once, and kept by the Service Worker for the next flight)
@@ -2013,48 +2082,76 @@ export class EarthTiles {
     // (nor while the windows' national heights are still coming: the halo's loads took their bandwidth — kerr-mini cold, the
     // IGN's far levels 118 s against 68 before it)
     for (const [key, r] of this.refining) if (r.L.key[this.slotOf(r.L, r.x, r.y)] === key) return;
-    // (its thousands of candidates looked over four times a second at most — up to sixteen loads a second, every frame else)
-    if (now < this.haloAt) return;
-    this.haloAt = now + 250;
+    // (its thousands of candidates looked over four times a second at most — up to sixteen loads a second, every frame else —; J2, the
+    // peaks: a slice an image, in an image with room for it)
+    if (!this.haloScan && now < this.haloAt) return;
+    if (this.frame.left(now) < Math.min(this.haloSliceMs, HALO_SLICE_MS)) return;
     const h0 = this.pubProbe ? performance.now() : 0;
     try {
-      this.requestHalo(now);
+      if (this.requestHalo(now)) this.haloAt = now + 250;
     } finally {
       if (this.pubProbe) this.pubNow.haloMs += performance.now() - h0;
     }
   }
-  /** the halo's loads (request): every level's rings round its window, nearest first, into memory */
-  private requestHalo(now: number) {
-    const lonT = cx0(this.priorityLon),
-      sinLat = this.prioritySinLat;
-    const halo: [Level, number, number, number][] = [];
+  /** the halo's loads (request): every level's rings round its window, nearest first, into memory — looked over a slice an image
+   *  (haloScan); true once its loads are started */
+  private requestHalo(now: number): boolean {
     const R = this.ring;
-    for (const L of this.levels) {
+    const scan = (this.haloScan ??= { i: 0, halo: [], lonT: cx0(this.priorityLon), sinLat: this.prioritySinLat });
+    if (this.pubProbe) this.pubNow.haloLooks++;
+    const t0 = performance.now();
+    while (scan.i < this.levels.length) {
+      // (a slice spent, levels left: the next image's)
+      if (performance.now() - t0 > this.haloSliceMs) {
+        this.frame.add(performance.now() - t0);
+        return false;
+      }
+      const L = this.levels[scan.i++]!;
       const w = L.want;
       if (!w || !this.ringLevel(L)) continue;
-      const cx = lonT * L.n,
-        cy = mercY(sinLat, L.n);
+      const sig = `${w.x0},${w.y0},${w.x1},${w.y1},${R},${this.cacheEpoch},${this.gen}`;
+      if (this.haloWhole.get(L) === sig) continue;
+      let whole = true;
+      const cx = scan.lonT * L.n,
+        cy = mercY(scan.sinLat, L.n);
       for (let y = Math.max(w.y0 - R, 0); y <= Math.min(w.y1 - 1 + R, L.n - 1); y++)
         for (let x = w.x0 - R; x <= w.x1 - 1 + R; x++) {
           if (inside(w, x, y)) continue;
           const key = this.keyOf(L, x, y);
-          if (this.cache.has(key) || this.inflight.has(key)) continue;
+          if (this.cache.has(key)) continue;
+          whole = false;
+          if (this.inflight.has(key)) continue;
           const f = this.failures.get(key);
           if (f && now < f.at) continue;
           // (its distance past its own window's edge — half its span off the lead point —: every level's first ring at once,
           // whatever its window's width; measured from the lead point, the fine levels' 8-tile windows put their rings behind
           // the coarse levels' and their next tiles came last — 5 Nov 2026)
-          halo.push([L, x, y, this.cost(L, x, y, cx, cy) - L.span / 2]);
+          scan.halo.push([L, x, y, this.cost(L, x, y, cx, cy) - L.span / 2]);
         }
+      if (whole) this.haloWhole.set(L, sig);
+      else this.haloWhole.delete(L);
     }
+    this.haloScan = null;
+    const halo = scan.halo;
     // (by ring past the windows' edges, the finer first in one — as the windows' own loads: the ground near the eye fills most
     // of the view —, then the nearest)
     const ringOf = (c: number) => Math.floor(Math.max(c, 0));
     halo.sort((a, b) => ringOf(a[3]) - ringOf(b[3]) || b[0].z - a[0].z || a[3] - b[3]);
+    this.frame.add(performance.now() - t0);
     for (const [L, x, y] of halo) {
-      if (this.inflight.size >= MAX_INFLIGHT / 2 || this.cache.size + this.inflight.size >= this.cacheTiles) return;
+      if (this.inflight.size >= MAX_INFLIGHT / 2 || this.cache.size + this.inflight.size >= this.cacheTiles) break;
+      // (looked over images ago: still past its window, within its ring, neither in nor on its way)
+      const w = L.want;
+      if (!w || inside(w, x, y) || x < w.x0 - R || x >= w.x1 + R || y < w.y0 - R || y >= w.y1 + R) continue;
+      const key = this.keyOf(L, x, y);
+      if (this.cache.has(key) || this.inflight.has(key)) continue;
+      if (!this.startOk()) break;
+      const s0 = performance.now();
       void this.load(L, x, y, true);
+      this.started(s0);
+      if (this.pubProbe) this.pubNow.haloLoads++;
     }
+    return true;
   }
 
   /**
@@ -2326,7 +2423,7 @@ export class EarthTiles {
       if (f.n === 1) this.failed++;
       // (asked again once it may be, for as long as its window wants it — the image converged, no frame asks: the tile would
       // wait for a move)
-      setTimeout(() => this.request(cx0(this.priorityLon), this.prioritySinLat), wait + 10);
+      setTimeout(() => this.requestSoon(), wait + 10);
       // (CM1, ST-03: never the global map's 4.9 km heights published as this level's — they hid the real coarser levels and were
       // the contacts' ground, for good —; its parent's real heights instead, enlarged, while it is asked again; no parent in:
       // none — the coarser levels draw there. Its national heights asked all the same — ST-04: a Terrarium down had kept the
@@ -2362,7 +2459,8 @@ export class EarthTiles {
       const p = this.anchorTiles.has(key) && !inside(L.want, x, y) ? -0.5 : (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) + 1) / L.n;
       void this.refine(L, x, y, key, refineAfter, img, p);
     }
-    this.request(cx0(this.priorityLon), this.prioritySinLat);
+    // (J2, the peaks: at most once an image — the frame's update asks too)
+    this.requestSoon();
   }
 
   /** each tile's highest height (worked out once) */
@@ -2436,13 +2534,38 @@ export class EarthTiles {
     const per = this.filtered ? 1 : 2;
     const page = `${L.z}/${s}`,
       now = performance.now();
-    this.pages.queue(page, L.z, x, y, "heights", per * TILE * TILE * 4, () => this.writeHeights(L, s, x, y, k, h, col), now);
+    this.pages.queue(
+      page,
+      L.z,
+      x,
+      y,
+      "heights",
+      per * TILE * TILE * 4,
+      () => this.timed(() => this.writeHeights(L, s, x, y, k, h, col)),
+      now,
+    );
     // (the same tile again without imagery over its own: kept — the filtered path's separate texture)
     if (col || L.imgKey[s] !== k || !this.filtered) {
       if (this.filtered && L.z <= IMG_Z1)
-        this.pages.queue(page, L.z, x, y, "imagery", 2 * TILE * TILE * 4, () => this.putImagery(L, s, col), now);
+        this.pages.queue(page, L.z, x, y, "imagery", 2 * TILE * TILE * 4, () => this.timed(() => this.putImagery(L, s, col)), now);
       L.imgKey[s] = col ? k : "";
     }
+  }
+  /** a page's part written, its time the longest of the image's (pubProbe: partMaxMs) */
+  private timed(run: () => void) {
+    if (!this.pubProbe) return run();
+    const t0 = performance.now();
+    run();
+    const ms = performance.now() - t0;
+    if (ms > this.pubNow.partMaxMs) this.pubNow.partMaxMs = ms;
+  }
+  /** J2 (the peaks): a buffer of n words kept from page to page — what a page writes is copied by writeTexture at the call (no
+   *  256 KiB garbage a part) */
+  private scratchOf = new Map<number, Uint32Array<ArrayBuffer>>();
+  private scratch(n: number): Uint32Array<ArrayBuffer> {
+    let b = this.scratchOf.get(n);
+    if (!b) this.scratchOf.set(n, (b = new Uint32Array(n)));
+    return b;
   }
   /** J2-1: a page's heights written to the GPU (publish), the slot's page now that tile's */
   private writeHeights(L: Level, s: number, x: number, y: number, k: string, h: Float32Array, col: Uint32Array | null) {
@@ -2455,15 +2578,20 @@ export class EarthTiles {
     const hb = new Uint32Array(h.buffer, h.byteOffset, TILE * TILE);
     // (the heights alone where the imagery is filtered — T9c, r32uint —, with the packed imagery else)
     const per = this.filtered ? 1 : 2;
-    const texels = new Uint32Array(per * TILE * TILE);
     // (an overground drawn on its ground — I6 —, the ground's source mark kept in the sum's last bit)
     const over = h.length > TILE * TILE ? h.subarray(TILE * TILE) : null;
-    for (let i = 0; i < hb.length; i++) {
-      if (over && over[i]! > 0) {
-        BITS[0] = h[i]! + over[i]!;
-        texels[per * i] = (BITS_U[0]! & ~1) | (hb[i]! & 1);
-      } else texels[per * i] = hb[i]!;
-      if (per === 2) texels[2 * i + 1] = col ? col[i]! : 0;
+    // (J2, the peaks: the heights' own bits written as they are when nothing is added to them — the same words, no 256 KiB copy a
+    // page —; else into a buffer kept from page to page: writeTexture copies its data at the call)
+    let texels = hb as Uint32Array<ArrayBuffer>;
+    if (over || per === 2) {
+      texels = this.scratch(per * TILE * TILE);
+      for (let i = 0; i < hb.length; i++) {
+        if (over && over[i]! > 0) {
+          BITS[0] = h[i]! + over[i]!;
+          texels[per * i] = (BITS_U[0]! & ~1) | (hb[i]! & 1);
+        } else texels[per * i] = hb[i]!;
+        if (per === 2) texels[2 * i + 1] = col ? col[i]! : 0;
+      }
     }
     const slot = this.layout.levels[L.z - Z0]!;
     this.device.queue.writeTexture(
@@ -2741,8 +2869,10 @@ export class EarthTiles {
         }
       todo.sort((a, b) => a[2] - b[2]);
       for (const [x, y] of todo) {
-        if (this.orthoInflight.size >= ORTHO_INFLIGHT) return;
+        if (this.orthoInflight.size >= ORTHO_INFLIGHT || !this.startOk()) return;
+        const s0 = performance.now();
         void this.loadOrtho(O, x, y);
+        this.started(s0);
       }
     }
   }
@@ -2801,7 +2931,7 @@ export class EarthTiles {
     this.putOrtho(O.z, x, y, col);
     // (L7b's prototype: shown as it came, then relit once the canopy under it is in — the same tile replaced)
     if (col && blob && this.delightOn && O.z >= DELIGHT_Z && src?.id === "ign") this.delightLater(O, x, y, blob, src.fit);
-    this.requestOrtho(cx0(this.priorityLon), this.prioritySinLat);
+    this.requestSoon();
   }
 
   /** (L7b's prototype) a tile's de-lighting queued, DELIGHT_INFLIGHT at a time, the newest first (the camera's) */
@@ -2884,7 +3014,16 @@ export class EarthTiles {
     O.key[s] = ok;
     if (col) this.arrivals.mark(ok, "put");
     // (J2-1: the page queued, written and published at an image's start — publish)
-    this.pages.queue(`o${k}/${s}`, z, x, y, "ortho", TILE * TILE * 4, () => this.writeOrtho(O, k, s, ok, col), performance.now());
+    this.pages.queue(
+      `o${k}/${s}`,
+      z,
+      x,
+      y,
+      "ortho",
+      TILE * TILE * 4,
+      () => this.timed(() => this.writeOrtho(O, k, s, ok, col)),
+      performance.now(),
+    );
   }
   /** J2-1: an orthophoto's page written to the GPU (publish) — its texels and its mips —, the slot's page now that tile's */
   private writeOrtho(O: OrthoLevel, k: number, s: number, ok: string, col: Uint32Array | null) {
@@ -2923,10 +3062,19 @@ export class EarthTiles {
    * and one submission; then the levels those pages belong to completed (their rectangles grown over the pages now published). A
    * page arrived during the image (a tile drawn from memory as the windows move) waits for the next one. Returns the pages written.
    */
+  /** the image's budget opened at the last image's end (pubFrame) and not yet by a publication */
+  private frameOpened = false;
+  /** the publication's tail [ms] — its levels completed, its mips encoded and submitted —, a running mean (publish) */
+  private pubTailMs = 0.2;
   publish(budgetMs?: number): number {
-    if (!this.pages.size && this.mips.empty) return 0;
     const p0 = performance.now();
-    const budget = budgetMs ?? (this.pages.oldest(p0) > PUB_CATCHUP_AFTER_MS ? PUB_CATCHUP_MS : PUB_BUDGET_MS);
+    // (J2, the peaks: the image's budget opened at the last one's end — pubFrame —, or here when none ended since — a converged image
+    // returns before it —; the publication takes what the starts since have left)
+    if (!this.frameOpened) this.frame.begin(p0);
+    this.frameOpened = false;
+    if (!this.pages.size && this.mips.empty) return 0;
+    const budget =
+      budgetMs ?? Math.min(this.pages.oldest(p0) > PUB_CATCHUP_AFTER_MS ? PUB_CATCHUP_MS : PUB_BUDGET_MS, Math.max(this.frame.left(p0), 0));
     const rank = (j: PageJob) => {
       const n = 2 ** j.z;
       let dx = j.x - Math.floor(cx0(this.lon) * n);
@@ -2934,7 +3082,10 @@ export class EarthTiles {
       const ring = Math.max(Math.abs(dx), Math.abs(j.y - Math.floor(mercY(this.sinLat, n))));
       return ring * 64 - j.z;
     };
-    const done = this.pages.drain(budget, rank, () => performance.now());
+    // (J2, the peaks: the publication's tail — the levels completed, the mips encoded and submitted — within its budget too: its
+    // pages written under what that tail leaves, its cost a running mean)
+    const done = this.pages.drain(Math.max(budget - this.pubTailMs, 0), rank, () => performance.now());
+    const tail0 = performance.now();
     if (done.length) {
       this.pages.version++;
       const levels = new Set<Level>(),
@@ -2952,8 +3103,12 @@ export class EarthTiles {
       for (const O of orthos) this.orthoComplete(O);
     }
     this.flushMips();
-    const ms = performance.now() - p0;
+    const p1 = performance.now();
+    this.pubTailMs = 0.8 * this.pubTailMs + 0.2 * (p1 - tail0);
+    if (this.pubProbe) this.pubNow.tailMs += p1 - tail0;
+    const ms = p1 - p0;
     cpuOf("put", p0);
+    this.frame.add(ms);
     if (this.pubProbe) {
       this.pubNow.putMs += ms;
       this.pubNow.pubMs += ms;
@@ -3040,8 +3195,9 @@ export class EarthTiles {
     const layer = big ? L.z - FINE_Z : IMG_LAYER0 + (L.z - Z0);
     const ox = (s % L.span) * TILE,
       oy = Math.floor(s / L.span) * TILE;
-    const px = new Uint32Array(TILE * TILE);
+    const px = this.scratch(TILE * TILE);
     if (col) for (let i = 0; i < px.length; i++) px[i] = col[i] ? (col[i]! | 0xff000000) >>> 0 : 0;
+    else px.fill(0);
     this.device.queue.writeTexture({ texture: tex, origin: [ox, oy, layer] }, px, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
     this.pubWrote(px.byteLength);
     this.orthoMips(ox, oy, layer, tex);
@@ -3053,35 +3209,37 @@ export class EarthTiles {
       const ll = IMG_ROADS0 + (L.z - ROAD_Z0);
       const tex1 = this.orthoTexture;
       if (!big) {
-        const lights = new Uint32Array(TILE * TILE);
+        const lights = this.scratch(TILE * TILE);
         if (col) for (let i = 0; i < lights.length; i++) lights[i] = col[i] ? ((col[i]! & 0xff000000) | 0xffffff) >>> 0 : 0;
+        else lights.fill(0);
         this.device.queue.writeTexture({ texture: tex1, origin: [ox, oy, ll] }, lights, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
         this.pubWrote(lights.byteLength);
         this.orthoMips(ox, oy, ll, tex1);
       } else {
         const H = TILE >> 1;
-        const lights = new Uint32Array(H * H);
+        const lights = this.scratch(H * H);
         if (col)
           for (let j = 0; j < H; j++)
             for (let i = 0; i < H; i++) {
-              let a = 0,
-                n = 0;
-              for (const o of [0, 1, TILE, TILE + 1]) {
-                const w = col[2 * j * TILE + 2 * i + o]!;
-                if (w) {
-                  a += w >>> 24;
-                  n++;
-                }
-              }
+              // (the 2 × 2 texels' lights averaged — unrolled: an array a texel was 16 384 allocated a page)
+              const b = 2 * j * TILE + 2 * i;
+              const w0 = col[b]!,
+                w1 = col[b + 1]!,
+                w2 = col[b + TILE]!,
+                w3 = col[b + TILE + 1]!;
+              const n = (w0 ? 1 : 0) + (w1 ? 1 : 0) + (w2 ? 1 : 0) + (w3 ? 1 : 0);
+              const a = (w0 ? w0 >>> 24 : 0) + (w1 ? w1 >>> 24 : 0) + (w2 ? w2 >>> 24 : 0) + (w3 ? w3 >>> 24 : 0);
               lights[j * H + i] = n ? ((Math.round(a / n) << 24) | 0xffffff) >>> 0 : 0;
             }
+        else lights.fill(0);
         this.device.queue.writeTexture({ texture: tex1, origin: [ox >> 1, oy >> 1, ll] }, lights, { bytesPerRow: H * 4 }, [H, H, 1]);
         this.pubWrote(lights.byteLength);
       }
     }
     if (L.z <= GIBS_Z1 && !big) {
-      const lights = new Uint32Array(TILE * TILE);
+      const lights = this.scratch(TILE * TILE);
       if (col) for (let i = 0; i < lights.length; i++) lights[i] = col[i] ? ((col[i]! & 0xff000000) | 0xffffff) >>> 0 : 0;
+      else lights.fill(0);
       const ll = IMG_LIGHT0 + (L.z - Z0);
       this.device.queue.writeTexture({ texture: tex, origin: [ox, oy, ll] }, lights, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
       this.pubWrote(lights.byteLength);
@@ -3358,8 +3516,12 @@ export class EarthTiles {
       const f = this.failures.get(k);
       // (a few loads past the windows' own limit: a craft's ground never waits for the view's tiles)
       if ((f && now < f.at) || this.inflight.size >= MAX_INFLIGHT + ANCHOR_LOADS) continue;
+      // (J2, the peaks: under the image's budget, before every other start of the image — setAnchors comes before update)
+      if (!this.startOk()) continue;
       this.contactStats.loads++;
+      const s0 = performance.now();
       void this.load(L, x, y, true);
+      this.started(s0);
     }
     this.contactStats.anchors = this.anchorPts.length;
     this.contactStats.tiles = tiles.size;

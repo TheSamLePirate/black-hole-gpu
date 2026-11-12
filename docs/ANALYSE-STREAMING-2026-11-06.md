@@ -258,7 +258,11 @@ ST8 → ST9 → ST10. ST4 et ST8 restent planifiés tant que les mesures n'en mo
 et ST9 (validité par tuile) sont repris par J2-1 (fait : `src/system/earth-pages.ts`, une soumission de mips par image, une page publiée
 par emplacement — [fiche J2-1](progress/j2/FICHE-J2-1-2026-11-12.md)) et J2-2 (fait : les hauteurs publiées avec leur page, le sol de
 contact tenu par le monde sous l'appareil quelle que soit la caméra — [fiche J2-2](progress/j2/FICHE-J2-2-2026-11-12.md) ; la pointe du
-fil principal restante est `request()`, §4 de la fiche) ; le décor reste à ce plan.*
+fil principal restante est `request()`, §4 de la fiche) ; le décor reste à ce plan. Lot « pointes » de J2 (même jour,
+[fiche](progress/j2/FICHE-J2-pointes-2026-11-12.md)) : le travail des tuiles sur le fil principal borné à 2 ms par image
+(`FrameBudget` : publication, démarrages de chargements dans leur ordre de priorité, regard du halo par tranches — pour le sol de la
+Terre, le critère de ST5 « pas de pic > 2 ms dû aux tuiles » approché, et une part de ST2, budget en ms sans ordonnanceur commun) ;
+les `fetch` des démarrages restent sur le fil principal (≈ 0,15 ms chacun).*
 
 ## 8. Risques et limites
 

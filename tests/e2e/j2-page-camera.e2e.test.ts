@@ -109,12 +109,14 @@ describe.skipIf(!E2E)("J2-1 step A: the tile under the camera while a fine level
   test.skipIf(!PHASES.includes("still"))(
     "still: the Gapeau's plain held, its scene colour for the A/B of J2-1",
     async () => {
-      // (J2-0's leak view: plaine du Gapeau, 300 m, heading 20°, 10:00 UTC; realtime, fixed settings — the same image every run)
+      // (J2-0's leak view: plaine du Gapeau, 300 m, heading 20°, 10:00 UTC; realtime, fixed settings — the same image every run.
+      // J2, the peaks (12 Nov 2026): the clock frozen as soon as the craft is placed — before, 40 images of free flight then frozen: the
+      // craft's place depended on those images' pace, and an A/B's sides froze 100 m apart (LFTH 2.9 against 3.0 km), two views compared)
       const go = `(async () => { __bh.freeze(false); __bh.game.quality("realtime");
       Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64, motionBlur: 0, lookProfile: "neutral" });
       __bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0);
-      __bh.game.flyAt(43.12, 6.13, 300, 20, 140); __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();
-      for (let i = 0; i < 40; i++) await new Promise((q) => requestAnimationFrame(q)); __bh.freeze(true); return 1; })()`;
+      __bh.game.flyAt(43.12, 6.13, 300, 20, 140); __bh.freeze(true); __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();
+      for (let i = 0; i < 40; i++) await new Promise((q) => requestAnimationFrame(q)); return 1; })()`;
       await app.js(go);
       await app.settled(180_000);
       await app.js(`(async () => { const t = __bh.renderer.earthTiles, f = () => new Promise((q) => requestAnimationFrame(q));
@@ -128,7 +130,9 @@ describe.skipIf(!E2E)("J2-1 step A: the tile under the camera while a fine level
       const held = await app.js(`(async () => { const R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q));
       const t0 = performance.now(), n0 = R.completedFrames ?? 0;
       while (performance.now() - t0 < 60000) { if (R.lastPhase === "converged" || (R.completedFrames ?? 0) - n0 >= 120) break; __bh.touch(); await f(); }
+      const g = __bh.camera.geoNow();
       return { phase: R.lastPhase, images: (R.completedFrames ?? 0) - n0, pending: R.earthTiles.pending, ortho: R.earthTiles.orthoPending,
+        at: g ? { lat: +g.lat.toFixed(6), lon: +g.lon.toFixed(6), alt: +g.alt.toFixed(2) } : null,
         cover: R.earthTiles.coverAt?.() ?? null, version: R.earthTiles.pages?.version ?? R.earthTiles.imagery }; })()`);
       console.log(`  still held: ${JSON.stringify(held)}`);
       const sc = await app.js<{ png: string; width: number; height: number; source: string; meanLum: number }>(scenePngJs);

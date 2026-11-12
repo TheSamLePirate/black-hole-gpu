@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { withGpuStubs } from "./lib/gpu-stubs";
-import { MipBatch, PagePublisher } from "../src/system/earth-pages";
-import { cameraOutX, cameraOutY, EarthTiles, TILE, Z0 } from "../src/system/earth-tiles";
+import { FrameBudget, MipBatch, PagePublisher, TILE_FRAME_IDLE_MS, TILE_START_WINDOW, TILE_STARVE_IMAGES } from "../src/system/earth-pages";
+import { cameraOutX, cameraOutY, EarthTiles, TILE, Z0, Z1 } from "../src/system/earth-tiles";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
 import type { Vec3 } from "../src/physics";
 
@@ -190,4 +190,123 @@ test("step A: a level's rectangle grows round the camera's tile — never a larg
   for (let y = w.y0; y < w.y1; y++) t.put(14, cx, y, new Float32Array(TILE * TILE).fill(100));
   t.publish(Number.POSITIVE_INFINITY);
   expect(t.coverAt().holes).not.toContain(14);
+});
+
+// J2 — the main thread's peaks (docs/progress/j2/FICHE-J2-pointes-*): the tiles' work an image held to its budget.
+
+test("the pages drained by their bytes: a larger one passed over for a smaller one after it, the nearest always first", () => {
+  const p = new PagePublisher();
+  const ran: string[] = [];
+  // (a relief page — heights and imagery, 768 KiB — near, an orthophoto — 256 KiB — farther)
+  p.queue("14/1", 14, 5, 5, "heights", 262144, () => ran.push("near-h"), 0);
+  p.queue("14/1", 14, 5, 5, "imagery", 524288, () => ran.push("near-i"), 0);
+  p.queue("14/2", 14, 6, 5, "heights", 262144, () => ran.push("mid-h"), 0);
+  p.queue("14/2", 14, 6, 5, "imagery", 524288, () => ran.push("mid-i"), 0);
+  p.queue("o0/3", 15, 9, 5, "ortho", 262144, () => ran.push("ortho"), 0);
+  // (1 ms a MiB: the relief pages 0.75 ms each, the orthophoto 0.25)
+  p.msPerMiB = 1;
+  expect(p.estOf({ slot: "", z: 0, x: 0, y: 0, at: 0, parts: new Map([["a", { bytes: 1048576, run() {} }]]) })).toBeCloseTo(1);
+  // (a clock that spends each page's estimate: 1.2 ms of budget — the near page; the mid one would pass it, passed over; the
+  // orthophoto after it fits)
+  let k = 0;
+  const steps = [0, 0, 0.75, 0.75, 0.75, 1];
+  const done = p.drain(
+    1.2,
+    (j) => j.x,
+    () => steps[Math.min(k++, steps.length - 1)]!,
+  );
+  expect(done.map((j) => j.slot)).toEqual(["14/1", "o0/3"]);
+  expect(ran).toEqual(["near-h", "near-i", "ortho"]);
+  // (the one passed over the first of the next image — at least one, whatever its cost)
+  expect(
+    p
+      .drain(
+        0,
+        (j) => j.x,
+        () => 0,
+      )
+      .map((j) => j.slot),
+  ).toEqual(["14/2"]);
+});
+
+test("the image's budget: the starts while they fit, the rest at the next image; one let go after images without; idle, a new one", () => {
+  const b = new FrameBudget(2);
+  b.begin(0);
+  b.est = 0.6;
+  b.estHi = 0.6;
+  let n = 0;
+  while (b.mayStart(1)) {
+    b.didStart(0.6);
+    n++;
+  }
+  // (0.6 a start in 2 ms less the margin — 1.7 —: two)
+  expect(n).toBe(2);
+  expect(b.refused).toBe(1);
+  // (the next image: a start again)
+  b.begin(16);
+  expect(b.mayStart(17)).toBe(true);
+  // (a publication that took the whole budget: none, image after image — then one let go)
+  const starved = new FrameBudget(2);
+  starved.est = 0.5;
+  starved.estHi = 0.5;
+  let let_go = -1;
+  for (let i = 0; i < 6 && let_go < 0; i++) {
+    starved.begin(16 * i);
+    starved.add(2);
+    if (starved.mayStart(16 * i + 1)) let_go = i;
+  }
+  expect(let_go).toBe(TILE_STARVE_IMAGES);
+  // (judged by the high estimate — the second dearest of the last TILE_START_WINDOW starts: a single slow one does not hold the loads,
+  // two do, until they leave the window)
+  const hi = new FrameBudget(2);
+  for (let i = 0; i < TILE_START_WINDOW; i++) hi.didStart(0.3);
+  hi.didStart(1.5);
+  // (not the 1.5: the mean, 0.54, at most)
+  expect(hi.estHi).toBeLessThan(0.6);
+  hi.didStart(0.9);
+  expect(hi.estHi).toBeCloseTo(0.9);
+  hi.begin(16);
+  hi.add(1.4);
+  expect(hi.mayStart(17)).toBe(false);
+  for (let i = 0; i < TILE_START_WINDOW; i++) hi.didStart(0.2);
+  // (the slow ones out of the window: back to the cheap starts — the mean, still settling, at most)
+  expect(hi.estHi).toBeLessThan(0.3);
+  expect(hi.estHi).toBeGreaterThanOrEqual(hi.est - 1e-9);
+  // (no image for a while — a still view, frames stopped —: a new budget at the next look)
+  const idle = new FrameBudget(2);
+  idle.begin(0);
+  idle.add(2);
+  expect(idle.mayStart(1)).toBe(false);
+  expect(idle.mayStart(TILE_FRAME_IDLE_MS + 1)).toBe(true);
+});
+
+test("the loads started under the image's budget: the camera's tile first, the others at the next images, none lost", () => {
+  const t = new EarthTiles(withGpuStubs(counting().dev));
+  const inflight = (t as unknown as { inflight: Map<string, unknown> }).inflight;
+  // (a budget nothing fits in: the starts refused TILE_STARVE_IMAGES images in a row, then one let go — the camera's own tile, the
+  // finest)
+  t.frame.limit = 1e-9;
+  const cam = camAt(43.1, 6.0, 300);
+  for (let i = 0; i < TILE_STARVE_IMAGES; i++) {
+    t.publish();
+    t.update(cam, 1e-3);
+    expect(inflight.size).toBe(0);
+  }
+  t.publish();
+  t.update(cam, 1e-3);
+  expect(inflight.size).toBe(1);
+  const [key] = [...inflight.keys()];
+  const [z, x, y] = key!.split("/").map(Number) as [number, number, number];
+  const n = 2 ** z;
+  const lon = 6.0 * deg,
+    lat = 43.1 * deg;
+  expect(x).toBe(Math.floor((lon / (2 * Math.PI) + 0.5) * n));
+  expect(Math.abs(y - Math.floor(((1 - Math.log(Math.tan(Math.PI / 4 + lat / 2)) / Math.PI) / 2) * n))).toBeLessThanOrEqual(1);
+  expect(z).toBeGreaterThanOrEqual(14);
+  expect(z).toBeLessThanOrEqual(Z1);
+  // (an ample budget: the rest of the loads go — eight in flight)
+  t.frame.limit = Number.POSITIVE_INFINITY;
+  t.publish();
+  t.update(cam, 1e-3);
+  expect(inflight.size).toBe(8);
 });

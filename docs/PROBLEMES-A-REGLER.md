@@ -43,6 +43,15 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`load` : `fetch`, imagerie, contrôleurs) — non séparés. Relancer `request()` au plus toutes les 16 ms n'a rien changé (essayé, retiré).
 - **Piste** : chronométrer séparément le balayage et les démarrages ; tenir par niveau les tuiles manquantes au lieu de les recalculer ;
   étaler les démarrages ; une page qui dépasse le budget reportée sauf rattrapage. Critère de J2-1 « aucune pointe > 2 ms » non tenu.
+- **Traité par le lot « pointes » de J2** (12 nov. 2026, [fiche](progress/j2/FICHE-J2-pointes-2026-11-12.md)) : la cause n'était pas le
+  balayage (≤ 0,4 ms en vol) mais **les démarrages groupés** (≈ 0,3 ms chacun, leurs `fetch` : 8 d'un coup 2,1–3,3 ms) et **le regard du
+  halo** (1,6–2,7 ms) ; au chargement, le balayage répété à chaque arrivée. Un budget des tuiles de 2 ms par image (publication +
+  démarrages + halo, ordre des priorités gardé, le reste à l'image suivante), le halo par tranches et mémorisé, une arrivée qui ne relance
+  `request()` qu'une fois par image, la publication estimée par octets avec sa queue, plus d'allocation par page. **Mesuré** (M1 Max, A/B
+  A B B A refroidi, vol J0) : travail des tuiles par image p95 1,5 → 1,2–1,3 ms, `request()` max 2,8–3,6 → 1,9–2,0 ms, images > 2 ms
+  37–40 → 5–7 par vol (dont la plupart à 2,1 ms, la résolution du chronomètre) ; au chargement `request()` 8,3–8,8 → 2,6–4,1 ms ; image
+  inchangée. **Reste ouvert** : 1 image par vol à 3,1–3,2 ms, dont 1,7–2,7 ms dans le simple enregistrement d'une arrivée (`put`, hors de
+  tout chemin coûteux : pause du ramasse-miettes probable, A en montre aussi) — critère non tenu strictement ; la mesure sur kerr-mini.
 
 ## « Posé sur un aérodrome » ne s'aligne plus sur sa piste au Bourget (e2e `ground-placement`)
 

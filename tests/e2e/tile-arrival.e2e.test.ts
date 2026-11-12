@@ -26,6 +26,8 @@ import { tileReplay } from "./lib/tile-replay";
 // CM1: TA_CUT_S=20 cuts the network (the page and its worker) for 20 s at the jump, then gives it back: the pass watched 30 s past
 // it, then counted — the windows' tiles that hold the global map's heights (the 4.9 km ETOPO: within 0.5 m of it at 16 points),
 // the stand-ins (their parent's heights while asked again), the tiles failed.
+// TA_PROBE=1: the tiles' publication and requests counted from the jump (earthTiles.pubProbe → pubStats in the summary); the image's
+// budget of the page's thread (earthTiles.frame — J2, the peaks) said in every summary.
 // Output: remote-results/tile-arrival/tile-arrival-<side><run>.json (AB_SIDE, AB_RUN: an A/B through scripts/ab-e2e.ts).
 // Done when: both passes watched until every level is drawn and nothing is pending (60 s a pass at most, what is missing
 // said), no GPU error.
@@ -36,6 +38,7 @@ const CAP_S = Number(process.env.TA_CAP_S ?? 60);
 const REPLAY = process.env.TA_REPLAY;
 const RECORD = process.env.TA_RECORD === "1";
 const DELAY_MS = Number(process.env.TA_DELAY_MS ?? 300);
+const PROBE = process.env.TA_PROBE === "1";
 const PLACES = {
   aubrac: { lat: 44.66, lon: 3.02, agl: 120, hdg: 150 },
   paris: { lat: 48.8566, lon: 2.3376, agl: 900, hdg: 60 },
@@ -71,7 +74,8 @@ test.skipIf(!E2E)(
           // (the link slowed once the game is up — its own files on the full one: what is measured is the tiles' arrival)
           const slowed = MBPS ? await app.cdp.throttle(MBPS) : 0;
           await app.js(`(() => { __bh.netLight.reset(); window.__taNet0 = __bh.netLight.stats(); __bh.renderer.earthTiles.arrivals.reset();
-            __bh.game.flyAt(${PLACE.lat}, ${PLACE.lon}, ${PLACE.agl}, ${PLACE.hdg}, 120); __bh.freeze(true); return 1; })()`);
+            __bh.game.flyAt(${PLACE.lat}, ${PLACE.lon}, ${PLACE.agl}, ${PLACE.hdg}, 120); __bh.freeze(true);
+            ${PROBE ? "__bh.renderer.earthTiles.pubProbe = true; window.__taT0 = performance.now();" : ""} return 1; })()`);
           const t0 = Date.now();
           if (CUT_S > 0) {
             await app.cdp.offline(true);
@@ -219,6 +223,12 @@ test.skipIf(!E2E)(
             net,
             gpuErrors: await app.js<number>(`__bh.renderer.gpuErrors`),
             replay: replay ? { ...replay.count, delayMs: DELAY_MS } : undefined,
+            // (J2, the peaks: the tiles' budget of the page's thread an image — the starts' cost, those held to the next image;
+            // TA_PROBE=1: the publication's and requests' counters from the jump, earthTiles.pubStats)
+            budget: await app.js(
+              `(() => { const f = __bh.renderer.earthTiles.frame; return f ? { est: +f.est.toFixed(3), estHi: +f.estHi.toFixed(3), refused: f.refusedAll, images: f.image } : null; })()`,
+            ),
+            pub: PROBE ? await app.js(`__bh.renderer.earthTiles.pubStats(window.__taT0 ?? 0)`) : undefined,
           };
           console.log(`  ${TAG} ${pass}: ${JSON.stringify(summary)}`);
           out[pass] = { summary, rows };

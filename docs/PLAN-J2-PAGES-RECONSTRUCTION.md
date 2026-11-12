@@ -1,6 +1,6 @@
 # PLAN-J2 — pages d'imagerie filtrables et reconstruction
 
-**État (12 novembre 2026) : plan validé par Sam (ses recommandations, §9) ; J2-0 fait — instruments et [fiche de référence](progress/j2/FICHE-J2-0-2026-11-12.md) ; J2-1 fait — table de pages, tuile de la caméra, mips groupés ([fiche J2-1](progress/j2/FICHE-J2-1-2026-11-12.md), §9 ter) ; J2-2 fait — le sol de contact au monde, quelle que soit la caméra ([fiche J2-2](progress/j2/FICHE-J2-2-2026-11-12.md), §9 quater) ; J2-3 à lancer.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
+**État (12 novembre 2026) : plan validé par Sam (ses recommandations, §9) ; J2-0 fait — instruments et [fiche de référence](progress/j2/FICHE-J2-0-2026-11-12.md) ; J2-1 fait — table de pages, tuile de la caméra, mips groupés ([fiche J2-1](progress/j2/FICHE-J2-1-2026-11-12.md), §9 ter) ; J2-2 fait — le sol de contact au monde, quelle que soit la caméra ([fiche J2-2](progress/j2/FICHE-J2-2-2026-11-12.md), §9 quater) ; le lot des pointes du fil principal fait — le travail des tuiles borné à 2 ms par image ([fiche](progress/j2/FICHE-J2-pointes-2026-11-12.md), §9 quinquies) ; J2-3 à lancer.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
 l'écrire (session de documentation). L'existant (§2) est relevé dans le code de `main` au 12 novembre (après `4d1201c0`, J1 terminé) ;
 **le code fait foi**, les lignes citées sont celles de ce jour. Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J2
 (« séparer hauteurs/couleurs, mips/gouttières, gradients, publication versionnée ; désocclusion et invalidations locales ; puis la
@@ -298,7 +298,24 @@ seulement quand la caméra le suit** (vue sur un appareil : poursuite, autour, t
 sur un avion de l'IA posé, avec le même e2e que pour le F-35 ; (2) **le seuil de 1 500 m est gardé** ; (3) **le lot des pointes du fil
 principal (`request()`, publication) est fait avant J2-3**. **(1) fait le même jour** : saut reproduit sur un A320 de l'IA garé
 (+0,10–0,13 m quand la caméra qui le suit passe à 3 km), puis l'appareil suivi par la caméra libre ancré à son tour (`subjectFocus`,
-chaque ancre menée par son id) — fiche J2-2 §3 bis. (3) : en cours dans une autre session.
+chaque ancre menée par son id) — fiche J2-2 §3 bis. (3) : fait le même jour, §9 quinquies.
+
+## 9 quinquies. Le lot des pointes du fil principal fait (12 novembre 2026)
+
+**La question 2 de J2-2** (décision (3) de Sam : avant J2-3) — le critère de J2-1 « aucune pointe du fil principal > 2 ms due aux
+tuiles » en vol J0, [fiche](progress/j2/FICHE-J2-pointes-2026-11-12.md). **Profil** (M1 Max) : la pointe de `request()` n'était pas le
+balayage (≤ 0,4 ms en vol) mais **les démarrages groupés** — un `load` ≈ 0,3 ms, ses `fetch` ; 8 d'un coup après un pas de fenêtre 2,1–3,3 ms
+— et **le regard du halo** (1,6–2,7 ms) ; au chargement, le balayage répété à chaque arrivée. **Fait** : un budget des tuiles de **2 ms du
+fil principal par image** (`FrameBudget`, `earthTiles.frame` : ouvert à la fin de chaque image, la publication prend ce que les démarrages
+d'entre deux images ont laissé) ; les démarrages sous ce budget dans leur ordre (l'appareil piloté, la tuile de la caméra, les fenêtres par
+anneau, les orthophotos, le halo), jugés sur un coût haut (le 2ᵉ plus cher des 8 derniers), le reste à l'image suivante, un au moins après
+3 images sans ; une arrivée qui ne relance `request()` qu'une fois par image ; le halo par tranches de 0,5 ms et mémorisé par niveau
+entier ; la publication estimée par octets, sa queue (`complete`, mips) dans son budget ; plus d'allocation par page (hauteurs écrites
+sans copie, tampons réutilisés). **Mesuré** (M1 Max, A/B A B B A refroidi avant chaque passage, kerr-mini hors réseau) : voir la fiche §3
+(vol J0), §4 (image figée inchangée à RMSE 0,003 ; couverture à froid `tile-arrival` en rejeu équivalente — une régression d'une variante
+intermédiaire, 5 × plus lente, trouvée et corrigée). **Écarts au plan** : le critère « aucune pointe > 2 ms » n'est **pas tenu
+strictement** (§3 de la fiche : des images à 2,1 ms à la résolution du chronomètre, et de rares pauses dans l'enregistrement d'une
+arrivée, hors des chemins bornés) ; la mesure n'est pas faite sur kerr-mini ; les `fetch` restent sur le fil principal.
 
 ## 10. Non vérifié
 

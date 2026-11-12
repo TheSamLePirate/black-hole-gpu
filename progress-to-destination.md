@@ -3803,3 +3803,31 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Vérifié** : tsc, biome, `tests/earth-contact.test.ts` 10/10 ; e2e `ai` vert (0 erreur GPU). **Non vérifié** : la version finale (avance
   par id) non revolée en e2e (machine en pression « Heavy », réservée au lot des pointes) ; un appareil suivi en mouvement (roulage,
   atterrissage) ; kerr-mini ; ΔGPU (rien de changé au GPU).
+
+## 2026-11-12T20:42Z — J2, les pointes du fil principal : le travail des tuiles borné à 2 ms par image
+
+- **Contribution** (stratégie §7.19, §8 — régularité du fil principal —, §15 J2 ; PLAN-J2 critère de J2-1 « aucune pointe > 2 ms due aux
+  tuiles », décision (3) de Sam ; ANALYSE-STREAMING ST5/ST2 pour le sol) : la pointe de `request()` venait des **démarrages groupés**
+  (≈ 0,3 ms chacun, leurs `fetch` : 8 d'un coup 2,1–3,3 ms) et du **regard du halo** (1,6–2,7 ms), pas du balayage (≤ 0,4 ms). Les tuiles ont
+  désormais **un budget de 2 ms du fil principal par image** (`FrameBudget`, `earthTiles.frame`, ouvert à la fin de chaque image) pour la
+  publication, les démarrages — dans leur ordre : l'appareil piloté, la tuile de la caméra, les fenêtres, les orthophotos, le halo ; le
+  reste à l'image suivante — et le regard du halo (par tranches de 0,5 ms, mémorisé par niveau entier) ; une arrivée ne relance `request()`
+  qu'une fois par image ; la publication estimée par octets avec sa queue ; plus d'allocation par page (mots écrits identiques).
+- **Changé** : `src/system/earth-pages.ts` (`FrameBudget`, vidange par octets) ; `src/system/earth-tiles.ts` (`startOk`/`started`,
+  `requestSoon`/`requestLater`, `haloScan`/`haloWhole`/`cacheEpoch`, `pubTailMs`, tampons réutilisés, compteurs `reqScanMs`…`tailMs`) ;
+  tests `earth-pages.test.ts` (+3), `lib/published-tiles.ts` ; e2e `j2-probes` (AB_SIDE, `kept`), `j2-page-camera` (phase `still` gelée dès
+  la pose, place écrite), `tile-arrival` (`TA_PROBE`, budget dans le résumé) ; fiche
+  [docs/progress/j2/FICHE-J2-pointes-2026-11-12.md](docs/progress/j2/FICHE-J2-pointes-2026-11-12.md) et `j2-pointes-m1max.json` ;
+  PLAN-J2 (§9 quinquies), GRAPHICS-PIPELINE (annexe régénérée), BH-API, E2E-CATALOGUE, E2E-VOLS §7 (trois leçons), PROBLEMES-A-REGLER,
+  ANALYSE-STREAMING, carte.
+- **Mesuré** (M1 Max, fenêtre visible ; A/B A B B A, chaque côté servi par son worktree, « Nominal » attendu avant chaque passage ;
+  A = 0cda5113) : vol J0, travail des tuiles par image **p95 1,5–1,6 → 1,1–1,2 ms, max 3,6–4,5 → 2,2–2,3 ms, images > 2 ms 29–48 → 3
+  par vol (~2 550 images), > 3 ms 2–4 → 0** ; `request()` max 2,6–2,8 → 1,8–1,9 ms ; au chargement 8,9–10,0 → 1,9–2,1 ms. **Image
+  inchangée** (A/B figé : A–B RMSE 0,0040–0,0043 dans A–A 0,0045, luminance à 0,04 %). **Couverture à froid inchangée** (`tile-arrival`
+  en rejeu : 90 % à 3,0–3,1 s contre 3,1–3,5 ; tout à 23,4 s contre 23,9–25,0) — une variante intermédiaire 5 × plus lente trouvée par ce
+  rejeu et corrigée. `gear` 3/3, `landing` 5/5.
+- **Vérifié** : tsc, biome, `bun test --parallel` 2 212 / 0, `pipeline-inventory --check` puis `--write` ; aucun shader changé.
+  **Non vérifié** : kerr-mini (hors réseau toute la session : la mesure principale y reste à faire) ; ΔGPU J0 (rien d'écrit au GPU ne
+  change) ; la couverture en réseau réel à froid ; Windows. **Limites** : le critère « aucune pointe > 2 ms » est tenu à 0,3 ms près
+  (0,1 % des images entre 2,1 et 2,3 ms) ; les `fetch` restent sur le fil principal ; l'enregistrement d'une arrivée hors budget.
+- **Suite** : la même mesure sur kerr-mini à son retour (avec le ΔGPU J0 de J2-2) ; J2-3 (des bords sans fuite).

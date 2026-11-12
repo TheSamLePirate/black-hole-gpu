@@ -476,6 +476,9 @@ expect(r.log.some((l) => /Hard landing|collapsed|tipped/.test(l))).toBe(false);
 | Aucune sortie, aucun verdict | sortie coupée par `tail`/`grep` | journal complet dans un fichier, puis `grep` |
 | Une variable sans effet sur `--remote` | seul `E2E=1` est transmis | `remote.ts run -- E2E=1 VAR=… bun test …` |
 | Erreur WGSL au chargement | shader modifié non vérifié | `bun scripts/check-wgsl.ts` avant l'e2e |
+| A/B d'image : A et B se reproduisent chacun mais diffèrent entre eux (RMSE A–B > A–A, luminance décalée) | la capture laissait l'appareil voler N images avant de le geler : la place atteinte dépend du rythme des images, différent d'un côté à l'autre (12 nov. 2026 : 100 m d'écart, LFTH 2,9 contre 3,0 km) | geler dès la pose (`flyAt` puis `freeze(true)` dans le même appel) et écrire la place de l'appareil avec l'image (`j2-page-camera` phase `still`) |
+| Passages d'un A/B qui échouent en plein vol (`__bh is not defined`) | une autre session édite `src/` dans le même checkout : le côté servi depuis l'arbre de travail se recharge à chaud | servir le côté B depuis un commit détaché de ses seuls fichiers (`AB_REV_B=<commit>` de `ab-commit.ts`) |
+| A/B de temps du fil principal sur le M1 Max sans verdict (GPU p50 25 → 40 ms dès le 2ᵉ passage) | la machine bride en « Heavy » pendant un vol et ne refroidit pas entre deux passages | attendre « Nominal » (`bun scripts/thermal.ts status`) avant chaque passage ; une attente « aucun autre e2e » par `pgrep -f "bun test tests/e2e"` ne doit pas tourner dans une boucle dont la commande contient ce motif (elle se trouve elle-même) |
 
 ---
 

@@ -33,13 +33,16 @@ import {
 //     to 0.625 and let go (forceScale) — every change of scale the flight makes or is given: the sharpness of every image (renderer.sharpProbe, the Laplacian's
 //     energy of the scene's colour through the canopy), the dips at each change of scale (scaleDips), each pause's moving image
 //     against its refined one; the frames' GPU time.
-// Motion blur off (the reconstruction's sharpness, not the shutter's). J2_OUT (remote-results/j2/<machine>), J2_MACHINE.
+// Motion blur off (the reconstruction's sharpness, not the shutter's). J2_OUT (remote-results/j2/<machine>; in an A/B of
+// scripts/ab-e2e.ts its <AB_SIDE><AB_RUN> under it), J2_MACHINE.
 // Not a pass/fail on the numbers: the fiche is written from j2.json (docs/progress/j2/). It fails on a GPU error, a craft not placed.
 // Duration: ~4 min for leak (2 views), ~3 min for flight, on kerr-mini (cold boot included).
 // Done when: each view's seams and leak read and its leak map written, the flight's stages, sharpness and publication logged, j2.json written, no GPU error.
 
 const MACHINE = process.env.J2_MACHINE ?? (await $`hostname -s`.quiet().text()).trim();
-const OUT = process.env.J2_OUT ?? `remote-results/j2/${MACHINE}`;
+// (an A/B by scripts/ab-e2e.ts — J2, the peaks —: each side's run apart, <out>/<AB_SIDE><AB_RUN>)
+const SIDE = process.env.AB_SIDE ? `${process.env.AB_SIDE}${process.env.AB_RUN ?? ""}` : "";
+const OUT = `${process.env.J2_OUT ?? `remote-results/j2/${MACHINE}`}${SIDE ? `/${SIDE}` : ""}`;
 const PHASES = (process.env.J2_PHASES ?? "leak,flight").split(",");
 const VIEWS = (process.env.J2_VIEWS ?? Object.keys(LEAK_VIEWS).join(",")).split(",");
 const W = 1920,
@@ -251,7 +254,7 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
           const done = R.completedFrames ?? 0;
           if (done !== last) { frames.push([+(t - t0).toFixed(2), done - last, +(R.lastGpuMs ?? 0).toFixed(2)]); last = done; }
           if (el >= nextSample) { nextSample += 0.5; const g = c.geoNow(), p = __bh.game.perf({ gpu: false });
-            samples.push({ t: +el.toFixed(2), scale: p.renderScale, phase: R.lastPhase, alt: Math.round(g?.alt ?? 0), hdg: Math.round(((g?.track ?? 0) * 180 / Math.PI + 360) % 360), tiles: R.earthTiles.pending, ortho: R.earthTiles.orthoPending }); }
+            samples.push({ t: +el.toFixed(2), scale: p.renderScale, phase: R.lastPhase, alt: Math.round(g?.alt ?? 0), hdg: Math.round(((g?.track ?? 0) * 180 / Math.PI + 360) % 360), tiles: R.earthTiles.pending, ortho: R.earthTiles.orthoPending, kept: R.earthTiles.kept }); }
           const [at, what] = plan[k];
           if (el < at) continue;
           k++;
