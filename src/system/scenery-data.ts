@@ -528,6 +528,9 @@ export interface SceneryRequest {
   quick?: number;
   /** the Service Worker controls the page: the Géoplateforme's budget its (sw.ts) — the survey's own gate opened */
   swGate?: boolean;
+  /** the survey's trees kept off the footprints of the buildings the cap left out too, not only the kept ones' (the
+   *  scenery's `clearCut`, off by default — PROBLEMES-A-REGLER, 12 Nov 2026) */
+  clearCut?: boolean;
 }
 /** the worker's progress through a scene, posted as it goes (the loading status's: ui — data meter): the last step ended,
  *  and in the buildings' step the BD TOPO's or Overture's tiles in and wanted */
@@ -550,6 +553,14 @@ export interface SceneryReply {
   surveyRequests?: number;
   /** a survey block's failure (its trees the land cover's) */
   surveyError?: string;
+  /** the buildings the cap left out (the nearest the centre kept), the farthest kept one's distance from the centre [m]
+   *  (0: none cut); with `clearCut`, the survey's tree candidates their footprints refused and the time their grid took [ms] */
+  cutBuildings?: number;
+  keptReachM?: number;
+  clearedTrees?: number;
+  cutHousesMs?: number;
+  /** the request's clearCut, as this scene was made */
+  clearCut?: boolean;
   /** of the buildings, the IGN's BD TOPO's over France (I5, bdtopo.ts); its tiles taken */
   bdtopoBuildings?: number;
   bdtopoTiles?: number;

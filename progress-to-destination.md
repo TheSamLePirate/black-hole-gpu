@@ -3858,3 +3858,34 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   réseau) ; pourquoi le M1 Max seul (une course : ordonnancement, ordre mémoire — plausible, non prouvé) ; une vue sans mer (inchangée par
   construction) ; le coût GPU du levier ; en vol ; Windows. **Le levier reste éteint** : décision de Sam (l'allumer, ou faire lire à la
   réflexion l'image précédente). Aucune image commitée (budget des binaires plein).
+
+## 2026-11-12T22:06Z — Villes couvertes d'arbres : confirmé en vol au-dessus de Paris, la cause dans le décor, correctif des arbres derrière un levier éteint
+
+- **Contribution** (stratégie §19 — l'expérience complète : une ville survolée doit rester une ville — ; §7 « préparer les données avant
+  la frame », une responsabilité par sortie : le décor décide ce qui pousse sur le bâti ; problème ouvert de PROBLEMES-A-REGLER, « Des
+  villes couvertes d'arbres ») : la question ouverte est tranchée par la mesure. **Oui** : le plafond du décor (32 000 bâtiments, les plus
+  proches du centre de la scène) laisse la canopée IGN (MNH, qui contient les toits) planter des arbres sur les îlots coupés — la moitié
+  des arbres d'une scène de Paris ; **et en vol réel l'appareil dépasse le centre de sa scène** et sort du disque des bâtiments gardés
+  (2,5 km) : l'est de Paris visible n'est plus qu'une forêt, sans un bâtiment.
+- **Cause** (`src/system/scenery-worker.ts`) : les arbres relevés ne sont refusés que dans les emprises des bâtiments gardés (`houses`,
+  construites après la troncature du plafond) ; la canopée met un arbre partout où elle dépasse 2 m, toits compris.
+- **Changé** : `scenery-worker.ts` (troncature commune `trim` qui compte `cutBuildings` et `keptReachM` ; avec `q.clearCut`, les emprises
+  coupées dans leur propre grille `cutHouses` refusées aux arbres, `clearedTrees`, `cutHousesMs`) ; `scenery-data.ts` (requête et réponse) ;
+  `scenery.ts` (`clearCut = false`, dans la clé de la scène ; stats) ; e2e sonde `tests/e2e/cut-buildings-trees.e2e.test.ts` ; données
+  `docs/progress/decor/cut-buildings-trees-2026-11-12.json` ; PROBLEMES-A-REGLER (l'entrée), BH-API (`earthScenery.clearCut`, les stats),
+  GRAPHICS-PIPELINE (étape 10 du parcours : le plafond, le levier, la mesure), E2E-CATALOGUE.
+- **Mesuré** (ce Mac M1 Max, fenêtre visible, thermique « Heavy » ; F-35 au protocole de J0, 300 m au-dessus de Passy, cap 95°) : 32 000
+  bâtiments gardés à 2,5 km du centre, **215 000–261 000 coupés** ; levier allumé à centre identique **1 366 347 → 680 567 arbres** (685 785
+  refusés) et 1 217 907 → 644 764 ; points « arbre » de la grille `surfaceAt` 245 → 87 et 230 → 83. **En vol réel** (60 s à 110 m/s) : la
+  scène centrée 3,2 km derrière l'appareil, **0 bâtiment et 672 points d'arbre dans la grille** (visibles : 0 bâtiment, 66 arbres) ; le même
+  vol levier allumé : 0 arbre, 0 bâtiment visibles (l'orthophoto à plat). Coût du levier : **+1,4–2,0 s de worker sur une scène de Paris
+  chaude de 22–23 s** (grille 0,27–0,75 s, forêt +0,9–1,3 s ; un échantillon par côté) ; GPU d'image inchangé dans le bruit, mémoire GPU
+  inchangée.
+- **Vérifié** : tsc, biome, `pipeline-inventory --check`, `bun test --parallel` 2 211 / 1 (l'échec, `tests/trap.test.ts` « the recovery on
+  the wires », 17 s sous la charge parallèle, repasse seul 9 / 0 ; sans lien avec le décor). **Non vérifié** :
+  kerr-mini (hors réseau) ; une autre ville (Marseille déjà vue dans les e2e J1-5, non remesurée) ; l'effet du levier dans une vue où le
+  disque gardé est visible au-delà de quelques points ; le coût sur un worker froid. **Limites** : la grille lit la passe de visibilité, le
+  panneau du cockpit en cache le bas (les points visibles comptés à part, masque fixe) ; le vol levier allumé a montré la scène rapide (la
+  complète pas encore là), pas exactement la scène du vol sans levier.
+- **Suite, décision de Sam** : allumer `clearCut` ou non ; et la cause de fond — le plafond gardé autour d'un centre que l'appareil dépasse
+  (garder par distance à la trajectoire/caméra, plafond des villes, scène plus rapide, avance selon le temps réel de construction).

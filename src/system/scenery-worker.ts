@@ -698,6 +698,20 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   };
   type Choice = { geo: { lat: number; lon: number }[][]; lat: number; lon: number; h: number; low: number; d: number; a: Attr };
   const choices: Choice[] = [];
+  // (the buildings the cap — `limit`, the nearest the centre kept — left out: counted; with q.clearCut their footprints kept
+  // for the survey's trees alone — its canopy holds them too: without, a cut block's roofs drew a wood —, PROBLEMES 12 Nov 2026)
+  const cut: Choice[] = [];
+  let cutBuildings = 0,
+    keptReachM = 0;
+  const trim = () => {
+    choices.sort((a, b) => a.d - b.d);
+    if (choices.length <= limit) return;
+    cutBuildings += choices.length - limit;
+    if (q.clearCut) for (let i = limit; i < choices.length; i++) cut.push(choices[i]!);
+    choices.length = limit;
+    keptReachM = Math.round(choices[limit - 1]!.d);
+    budgetLimited = true;
+  };
   const distance = (lat: number, lon: number) => Math.hypot((lat - q.lat) * 111320, wrapLon(lon - q.lon) * 111320 * Math.cos(q.lat * D));
   // ---- over France, the IGN's buildings (I5, bdtopo.ts): the BD TOPO's footprints and measured heights for OSM's, its z 15
   // tiles nearest first until the nearest `limit` buildings are in; OSM's kept only where a BD TOPO tile failed
@@ -1024,11 +1038,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           });
         }
       }
-      choices.sort((a, b) => a.d - b.d);
-      if (choices.length > limit) {
-        choices.length = limit;
-        budgetLimited = true;
-      }
+      trim();
     } catch (e) {
       errors.push(String(e).slice(0, 220));
     }
@@ -1043,11 +1053,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     // (one by one: Paris's tens of thousands would overflow a spread's arguments)
     for (const v of b.out) choices.push(v);
     for (const v of osmChoices) if (!b.covered.has(bdKey(v.lat, v.lon))) choices.push(v);
-    choices.sort((a, b) => a.d - b.d);
-    if (choices.length > limit) {
-      choices.length = limit;
-      budgetLimited = true;
-    }
+    trim();
     bdtopoBuildings = choices.filter((v) => b.covered.has(bdKey(v.lat, v.lon))).length;
   }
   let overtureBuildings = 0,
@@ -1060,11 +1066,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       `${Math.floor(((lon + 180) / 360) * 2 ** OVERTURE_Z)}/${Math.floor(((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * 2 ** OVERTURE_Z)}`;
     for (const v of o.out) choices.push(v);
     for (const v of osmChoices) if (!o.covered.has(z14(v.lat, v.lon))) choices.push(v);
-    choices.sort((a, b) => a.d - b.d);
-    if (choices.length > limit) {
-      choices.length = limit;
-      budgetLimited = true;
-    }
+    trim();
     overtureBuildings = choices.filter((v) => o.covered.has(z14(v.lat, v.lon))).length;
   }
   // Estimated bridge elevation is explicit: tile data provides layer, not surveyed deck/pier geometry.
@@ -1191,10 +1193,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // ---- the forests: at most one tree a cell of the world-fixed grid (forest.ts), decided here once —
   // the same tree at the same place whichever scenery holds it (the class, the roads, the ground at its foot)
   // (the survey's canopy holds the buildings too — its surface less its ground —: none of its trees in an OSM footprint)
-  const houses = new Map<number, Primitive[]>();
-  if (land) {
-    await landReady;
-    for (const v of choices) {
+  // (q.clearCut: the cap's cut ones too — their own grid, the trees they refuse counted —; the kept ones only, by default)
+  const houses = new Map<number, Primitive[]>(),
+    cutHouses = new Map<number, Primitive[]>();
+  const houseGrid = (into: Map<number, Primitive[]>, list: Choice[]) => {
+    for (const v of list) {
       const p = polygonPrimitive(
         v.geo.map((r) => r.map((at) => localPoint(frame, at.lat, at.lon, 0))),
         0,
@@ -1206,15 +1209,24 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       for (let y = Math.floor((p.min[1] - 2) / 32); y <= Math.floor((p.max[1] + 2) / 32); y++)
         for (let x = Math.floor((p.min[0] - 2) / 32); x <= Math.floor((p.max[0] + 2) / 32); x++) {
           const key = cellKey(x, y);
-          const cell = houses.get(key) ?? [];
+          const cell = into.get(key) ?? [];
           cell.push(p);
-          houses.set(key, cell);
+          into.set(key, cell);
         }
     }
+  };
+  let cutHousesMs = 0;
+  if (land) {
+    await landReady;
+    houseGrid(houses, choices);
+    const t0 = performance.now();
+    if (cut.length) houseGrid(cutHouses, cut);
+    cutHousesMs = Math.round(performance.now() - t0);
   }
-  const housedAt = (p: Vec3) =>
-    houses.size > 0 &&
-    (houses.get(cellKey(Math.floor(p[0] / 32), Math.floor(p[1] / 32)))?.some((v) => surfaceContains(p, v, 1.5)) ?? false);
+  const inGrid = (grid: Map<number, Primitive[]>, p: Vec3) =>
+    grid.size > 0 && (grid.get(cellKey(Math.floor(p[0] / 32), Math.floor(p[1] / 32)))?.some((v) => surfaceContains(p, v, 1.5)) ?? false);
+  let clearedTrees = 0;
+  const housedAt = (p: Vec3) => inGrid(houses, p) || (inGrid(cutHouses, p) && ++clearedTrees > 0);
   phase("before forest");
   const grown = await growForest(ff, {
     cover: (lat, lon) => {
@@ -1710,6 +1722,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     buffer,
     trees,
     surveyedTrees,
+    cutBuildings,
+    keptReachM,
+    clearedTrees,
+    cutHousesMs,
+    clearCut: q.clearCut === true,
     bdtopoBuildings,
     bdtopoTiles: bdtopoTileCount,
     overtureBuildings,

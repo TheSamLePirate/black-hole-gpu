@@ -62,6 +62,11 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 
 ## Des villes couvertes d'arbres, sans bâtiments proches, dans les e2e (Marseille, Toulon, Manhattan)
 
+**État (12 nov. 2026, soir)** : **confirmé en vol réel au-dessus de Paris** — les arbres de la canopée IGN couvrent les îlots dont le
+plafond du décor a coupé les bâtiments (la moitié des arbres de la scène) ; et en vol l'appareil sort du disque des bâtiments gardés :
+la ville visible devant lui n'est plus qu'une forêt. Cause dans le code, correctif des arbres derrière `earthScenery.clearCut`, **éteint**
+(décision de Sam) ; la cause de fond (le plafond gardé autour d'un centre que l'appareil dépasse) reste ouverte (fin de l'entrée).
+
 - **Observé** (12 nov. 2026, e2e `buildings-forward` sur kerr-mini, e482082b ; planches `docs/progress/j1/j1-5-batiments-forward-marseille.jpg`,
   `…-new-york.jpg`, `…-batiments-forward.jpg`) : le Vieux-Port de Marseille vu à 30 m au-dessus de l'eau — **les quais couverts d'arbres
   d'automne, presque aucun bâtiment** (217 pixels de bâtiment dans la vue, scène complète « all in ») ; la Darse de Toulon, des arbres
@@ -83,6 +88,42 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   îlots coupés sont plus loin, pas regardés ; **une requête de la canopée IGN refusée** (`surveyError` : HTTP 400 du WMS-R `data.geopf.fr`)
   — à examiner à part (quelle couche, quels paramètres).
 - **Conséquence** : pour une vue de façades, placer l'appareil lent (≤ 10 m/s) et attendre `!quick` (l'e2e `buildings-forward`, qui le faisait, est retiré avec son pilote le 12 nov. : `git show 081e4b17:tests/e2e/buildings-forward.e2e.test.ts`).
+- **La cause, dans le code** (`src/system/scenery-worker.ts`, 12 nov. soir) : le plafond garde les `limit` bâtiments (8 000 × portée² en
+  `high` : 32 000 à la portée `veryFar`, le défaut) **les plus proches du centre de la scène** (`choices`, triés par `d` puis tronqués ; les
+  dalles BD TOPO au-delà ne sont même pas chargées, OSM y tient lieu de candidat). Les arbres relevés (`growForest`, I4) poussent partout
+  où la canopée (MNH : la surface du LiDAR moins le sol — **toits compris**) dépasse 2 m, quelle que soit la classe du sol (sauf l'eau) ;
+  ils ne sont refusés que dans les emprises de `houses`, construites **après** la troncature : les seuls bâtiments gardés. Un îlot coupé
+  reçoit donc des arbres aussi hauts que ses immeubles. (Sans la canopée IGN — hors France, ou un bloc en échec —, la couverture du sol ne
+  met pas d'arbres sur le bâti : WorldCover 50 a une densité nulle.)
+- **Mesuré** (e2e `cut-buildings-trees`, E2E_PROBE=1, ce Mac M1 Max, fenêtre visible, thermique « Heavy » ; F-35 au protocole de J0,
+  300 m au-dessus de Passy, cap 95°, train sorti, autopilote et automanette tenus ; données
+  [docs/progress/decor/cut-buildings-trees-2026-11-12.json](progress/decor/cut-buildings-trees-2026-11-12.json), aucune image commitée) :
+  - **le plafond** : 32 000 bâtiments gardés (BD TOPO), **215 000 à 261 000 coupés**, les gardés à **2,5 km au plus du centre** ; la scène
+    porte 1,22–1,37 million d'arbres relevés.
+  - **les arbres sur le bâti coupé** : levier allumé, à centre identique, **1 366 347 → 680 567 arbres** (685 785 candidats refusés par les
+    emprises coupées) et 1 217 907 → 644 764 sur une autre scène : **la moitié des arbres de la scène de Paris sont sur des bâtiments
+    coupés**. Dans la grille 80 × 45 de `surfaceAt` (vue tenue, scène centrée devant l'appareil) : points « arbre » 245 → 87 et 230 → 83
+    (−64 %), devenus sol (et quelques bâtiments qu'ils cachaient) ; mais dans cette vue-là la plupart sont sous le panneau du cockpit : la
+    partie visible, dans le disque gardé, n'en change que 12 → 7 et 15 → 12.
+  - **en vol réel** (60 s à 110 m/s, la vue tenue ensuite telle quelle) : la scène dessinée est **centrée 3,2 km derrière l'appareil**
+    (demandée devant lui au départ, 36–68 s de construction à froid, l'appareil l'a dépassée ; la suivante en cours) — l'appareil, au-dessus
+    de la Bastille, est **hors du disque des bâtiments gardés (2,5 km)** : dans toute la grille, **0 bâtiment, 672 points d'arbre**
+    (1–2 km : 427 ; 2–3 km : 154) ; dans la partie visible, **0 bâtiment, 66 arbres, 103 sol** : l'est de Paris vu comme une forêt. Le même
+    vol levier allumé (la scène du vol, ici la rapide) : **0 arbre, 0 bâtiment, 169 sol** visibles — l'orthophoto à plat, plus de forêt, mais
+    toujours aucun bâtiment. Le vol à 90 m/s (α 13°, train sorti) ne montrait que le ciel : la vue regarde à −18° et vole à 110 m/s.
+  - **coût du levier** : la grille des emprises coupées 0,27–0,75 s dans le worker (40 000–261 000 emprises), la forêt +0,9–1,3 s (le test
+    de 1,3 million de candidats) : **+1,4–2,0 s sur une scène de Paris chaude de 22–23 s** (un échantillon par côté) ; la mémoire du GPU
+    inchangée (tampon de 64 Mio fixe) ; le temps GPU d'une image inchangé dans le bruit (16,8 / 17,3 / 17,0 ms ; 19,9 / 19,9 ms, thermique
+    « Heavy » : pas une mesure de gain).
+- **Correctif derrière un levier éteint** : `renderer.earthScenery.clearCut` (défaut `false`) — les emprises des bâtiments coupés gardées
+  à part (`cutHouses`) et refusées aux arbres comme celles des gardés ; partie de la clé de la scène (une bascule en refait une) ; stats
+  `cutBuildings`, `keptReachM` (toujours), `clearedTrees`, `cutHousesMs`, `clearCutDrawn` (BH-API). **Il ne rend pas les bâtiments** :
+  les îlots coupés deviennent l'orthophoto à plat.
+- **Reste ouvert, pour Sam** : (1) allumer `clearCut` (le sol à plat plutôt qu'une forêt, +1,4–2 s par scène de ville) ; (2) la cause de
+  fond — en vol l'appareil dépasse le centre de sa scène et sort de son disque de 2,5 km : garder les bâtiments par distance à la
+  trajectoire ou à la caméra (`q.eye`) plutôt qu'au centre, un plafond plus haut dans les villes, une scène plus rapide, ou une avance qui
+  tienne compte du temps réel de construction (36–68 s à froid à Paris, l'avance plafonnée à 3,6 km) ; non essayé. (3) La requête de
+  canopée refusée (HTTP 400) à Paris n'a pas reparu ; un délai dépassé (`TimeoutError`) sur un bloc à froid.
 
 ## Des points blancs qui scintillent sur la mer et dans la brume de l'horizon (scène J0, Toulon-Hyères)
 
