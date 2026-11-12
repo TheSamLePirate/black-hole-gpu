@@ -3233,3 +3233,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   22,3 / 22,3 ms (aucun coût mesurable) ; captures sans bord coupé. **Non vérifié** : un vol en mouvement (traînées dans l'historique en
   vol), le Mac mini, d'autres essences.
 - **Docs** : GRAPHICS-PIPELINE (C6b), BH-API (`treeWindOn`), E2E-CATALOGUE (sonde), PLAN-VEGETATION-V2 (V2e), PLAN-REFRACTION-HORIZONS (Q4).
+
+## 2026-11-12T00:47Z — V3 (l'horizon de la canopée) essayé et retiré
+
+- **Raisonné** : par H5 (nœuds ≥ 153 m), une canopée de 15 m à deux nœuds se voit sous 3° — invisible. **Essayé** à l'échelle de la grille
+  de la forêt (`forestSkyOpen` : la cellule du point et ses 8 voisines, la bande d'élévation de chaque houppier × sa part de l'horizon, le
+  ciel perdu en cos², avec l'occlusion d'écran par min). **Mesuré** (sonde `forest-impostors`, `TUNE_A_B="TUNE_TREE_SKY:0"`, Maures, ce
+  Mac) : à 40 m, luminance −1,8 %, 4,3 % des pixels plus sombres de ≥ 4 niveaux, `earth lite: light` +0,66 ms (GPU p50 +1,0) ; vue basse
+  −2,2 %, 6,3 % ; côte à côte invisible (comme L2b). **Retiré** (aucun code gardé) ; consigné dans PLAN-VEGETATION-V2 et
+  PLAN-REFRACTION-HORIZONS (Q4). La sonde `forest-impostors` prend maintenant ses captures en mode `TUNE_A_B` aussi.

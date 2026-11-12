@@ -123,7 +123,7 @@ Source : les fiches `docs/progress/refraction-horizons/*.md` lues jusqu'à leur 
 | Q1 | en partie | P2 et les ponts faits (image 53–58 → 44–45 ms) ; P1 écarté. **P3, P5, P6, P7, P12, I1 et I4 (paliers) non faits ; budget en vol jamais fixé** (décision 16) |
 | Q2 | fait (−0,35 ms à Chamonix) | C9 (`wxVeil`) ; les captures à trois Soleils |
 | Q3 | B1, B4 faits (+0,3 à 1 ms) | B3, A1 |
-| Q4 | S1 fait (actif) ; scintillement figé < 1 % ; **F1 (le vent proche) fait le 12 nov. (PLAN-VEGETATION-V2 V2e)** | L2a GTAO et L2b coupés (invisibles, halos, damier) ; **L4 coupé, à juger** ; L5, F2, F4, C4 non faits. **10 nov. (§0.4) : F2 par tuiles de couvert et de canopée, L2b par horizons de canopée** |
+| Q4 | S1 fait (actif) ; scintillement figé < 1 % ; **F1 (le vent proche) fait le 12 nov. (PLAN-VEGETATION-V2 V2e)** ; L2b repris en horizons de canopée (V3) **essayé et retiré le 12 nov.** : −2 % de luminance pour +0,66 ms | L2a GTAO et L2b coupés (invisibles, halos, damier) ; **L4 coupé, à juger** ; L5, F2, F4, C4 non faits. **10 nov. (§0.4) : F2 par tuiles de couvert et de canopée, L2b par horizons de canopée** |
 | Q5 | C1, C2, C3, C5, C6, C7, C10, C11 (premier lot), VIPER C1 et C4, P8 faits | VIPER C2 et C3 coupés après mesure ; la confiance de C5 ; **orage : passe des nuages ~25 ms sur M1** |
 | Q6 | I2 (TAAU en mouvement), I3, I4 (échelle 75 %), I6 A1–A3, I7, I8 faits | I5 sans besoin établi ; A4 en option ; **Q6t : porte de la décision 40** |
 | Q6-ISS | ISS0, ISS1, ISS3 faits ; ISS2, ISS4, ISS5 en partie | La capture dense nadir et amarrage (6 novembre) ; l'attitude réelle de la station ; les plans serrés |

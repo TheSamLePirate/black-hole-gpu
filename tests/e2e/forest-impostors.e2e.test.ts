@@ -83,9 +83,10 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
               passes,
             }),
           );
-          if (pass === 1 && !tuneAB) {
+          if (pass === 1) {
             await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
-            await app.shot(`${OUT}/${name}-${on ? "impostors" : "shapes"}.png`);
+            // (with TUNE_A_B: the tuning's own pair — "on" the kernel as shipped, "off" the part compiled out)
+            await app.shot(`${OUT}/${name}-${tuneAB ? (on ? "on" : "off") : on ? "impostors" : "shapes"}.png`);
             await app.js(`(() => { document.body.classList.remove("hide-ui"); return 1; })()`);
           }
         }
