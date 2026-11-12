@@ -3427,8 +3427,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   image plus tard) ; elle écrasait le regard que `setMount("cockpit")` venait de remettre devant. **Corrigé** : une visée en cours
   est abandonnée dès qu'une nouvelle visée, un `setMount` ou un `placeShip` la suit (`aimGen`).
 - **Vérifié** : e2e `title-departure` (ce Mac, Edwards, profil neuf) — au lever du voile `cockpit`, regard 0 / 0 (assertion ajoutée :
-  à moins de 5°), capture : le HUD centré, les écrans du PCD en bas ; tsc. **Non vérifié** : les scènes qui visent un astre (leur
-  visée part après leur propre placement, l'ordre inchangé — lu, non revolé). E2E-VOLS §7, E2E-CATALOGUE.
+  à moins de 5°), capture : le HUD centré, les écrans du PCD en bas ; tsc. **Vérifié ensuite** (ce Mac, sonde jetable) : les scènes qui
+  visent un astre visent toujours — « Blue Marble » la Terre au centre, « full Moon rising over the Andes » la Lune dans le cadre (regard
+  relevé de 3,3°), aucune erreur GPU. E2E-VOLS §7, E2E-CATALOGUE.
 
 ## 2026-11-12T05:02Z — J1-2 : le mouvement analytique du rigide (sol et décor immobile), prêt pour ses lecteurs
 
