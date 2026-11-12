@@ -83,6 +83,11 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   l'image oscille aussi d'une image à l'autre (0,1 ↔ 0,4), le mini est lisse. À chercher entre les deux machines : la cadence d'ombrage du
   gouverneur (`adaptRasterRate`, `rasterRate`), la cadence d'images (42 contre 17/s : la gigue), l'écran HDR et l'exposition de ce Mac ;
   outils : `renderer.sharpLog` (`points` par image) et `sceneStages()`.
+- **Vue tenue, M1 Max (même jour, après J2-0 : 113 points/s sur le M1 Max contre 0,23/s sur kerr-mini, déjà avant le temporel)** :
+  la sonde en vue tenue (`SP_HOLD=1`) les reproduit **avec les tuiles** (100–250 pixels isolés au-delà du blanc par image ; ~5 en vol),
+  **aucun sans tuiles** ; ni les étoiles (`starBrightness` 0) ni l'affinage (`targetSpp` 0) ne les ôtent. À tester en vue tenue avec
+  tuiles : le matériau de l'eau (`liteSkip` 1), le spéculaire (`liteSkip` 67108864), la gigue (`liteJitter`) — quand aucun autre e2e IGN
+  ne tourne.
 - **Piste (avant ces leviers)** : un spéculaire de la mer filtré à l'échelle du pixel (rugosité élargie par la variance des normales FFT sous le pixel —
   Toksvig/LEAN —, ou plafonnée au loin), ou une borne des lucioles dans le temporel sur l'eau ; relève de la passe d'eau
   (PLAN-MER-WEBGPU / J4) ; mesurer avec la sonde (`SP_SWITCHES`), la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`

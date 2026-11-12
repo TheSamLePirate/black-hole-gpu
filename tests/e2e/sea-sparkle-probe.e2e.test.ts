@@ -41,6 +41,11 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         const g = c.geoNow(); if (g && c.jetModes.alt !== null) { c.jetModes.alt = g.alt; c.jetModes.hdg = ${hdg} * Math.PI / 180; }
         c.jetModes.spd = ${v}; return { ap: c.jetModes.alt !== null, athr: c.jetModes.spd !== null }; })()`);
       if (!ap.ap || !ap.athr) throw new Error(`the autopilot ${ap.ap} / autothrottle ${ap.athr} not engaged`);
+      // (SP_HOLD=1: the view held — the clock frozen, the image refined: on the M1 Max the sparkles swarm then, J2-0 —, every side)
+      if (process.env.SP_HOLD === "1")
+        await app.js(
+          `(async () => { __bh.freeze(true); const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 120; i++) await f(); return 1; })()`,
+        );
       const sides = (process.env.SP_SWITCHES ?? "none,identityReject=false,shipInScene=false").split(",");
       const out: Record<string, number[]> = {};
       for (const side of sides) {
