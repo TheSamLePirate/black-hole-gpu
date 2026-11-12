@@ -21,6 +21,10 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   appareil gelé. **Reste une question pour le jeu** : en vol réel au-dessus d'une ville dense, le plafond de 32 000 bâtiments laisse-t-il
   la canopée IGN planter des arbres sur les îlots coupés (les vues de Toulon et de Paris de la session J1-5 le suggèrent) — à mesurer
   (`budgetLimited`, le masque bâti des arbres relevés).
+- **Paris, même jour** (Louvre et Tuileries, 60 m, appareil lent ; kerr-mini, e2e retiré depuis, `remote-results/20261112-120515-…`) :
+  les bâtiments proches dessinés, **le plafond atteint** (32 000 bâtiments BD TOPO, `budgetLimited` vrai, 1,34 million d'arbres) — les
+  îlots coupés sont plus loin, pas regardés ; **une requête de la canopée IGN refusée** (`surveyError` : HTTP 400 du WMS-R `data.geopf.fr`)
+  — à examiner à part (quelle couche, quels paramètres).
 - **Conséquence** : pour une vue de façades, placer l'appareil lent (≤ 10 m/s) et attendre `!quick` (l'e2e `buildings-forward`, qui le faisait, est retiré avec son pilote le 12 nov. : `git show 081e4b17:tests/e2e/buildings-forward.e2e.test.ts`).
 
 ## Des points blancs qui scintillent sur la mer et dans la brume de l'horizon (scène J0, Toulon-Hyères)
