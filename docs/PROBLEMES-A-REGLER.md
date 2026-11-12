@@ -121,6 +121,14 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   **aucun sans tuiles** ; ni les étoiles (`starBrightness` 0) ni l'affinage (`targetSpp` 0) ne les ôtent. À tester en vue tenue avec
   tuiles : le matériau de l'eau (`liteSkip` 1), le spéculaire (`liteSkip` 67108864), la gigue (`liteJitter`) — quand aucun autre e2e IGN
   ne tourne.
+- **Vue tenue avec tuiles, M1 Max, même jour (suite)** : vus agrandis, ce sont **des points blancs semés sur la mer sombre, comme des
+  étoiles**, dans la bande juste au-dessus du nez (≈ 70–80 % de la hauteur) ; **leurs lignes tombent toutes les ~10,7 px de l'export, soit
+  8 px internes** (échelle 0,75) — un motif de grille. **Exclus en vue tenue** (100–260 points/image de chaque côté) : le matériau de l'eau
+  (`liteSkip` 1), le spéculaire (`liteSkip` 67108864), l'ombrage à chaque pixel (`earthRasterShading` « every »), le sous-échantillonnage 1,
+  la mer plate (`seaSurfaceOn`), les crêtes devant la terre, la sonde du ciel de la mer (`seaProbeOn`), le noyau de la haute mer
+  (`seaWaterOpenOn`), les étoiles projetées (`starsSplat`), l'affinage (`targetSpp` 0), la luminosité des étoiles. **Suite** : chercher la
+  passe par la sonde d'étapes de J2-0 (`stageProbe`/`sceneStages`) et des coupes passe par passe (`trace`, `shade`, les nuages, l'air), et
+  ce qui a une période de 8 px internes (le bloc des rayons, la LUT du champ lointain — un rayon tous les 8 px —, la grille de gigue).
 - **Piste (avant ces leviers)** : un spéculaire de la mer filtré à l'échelle du pixel (rugosité élargie par la variance des normales FFT sous le pixel —
   Toksvig/LEAN —, ou plafonnée au loin), ou une borne des lucioles dans le temporel sur l'eau ; relève de la passe d'eau
   (PLAN-MER-WEBGPU / J4) ; mesurer avec la sonde (`SP_SWITCHES`), la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`
