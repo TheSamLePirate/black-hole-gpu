@@ -176,9 +176,14 @@ plus d'utilisateur. Ordre donné le même jour : **J1-2 et J1-1 d'abord** (ils a
 `src/system/surface-id.ts` (`packSurfaceId`, `decodeSurface` : la cible de visibilité telle qu'elle est dessinée — sol et son niveau,
 arbre, bâtiment, boîte, pont, éolienne, pylône, nuage, rien —, la génération étant la publication du décor `earthScenery.revision`) ;
 premier lecteur, `renderer.surfaceAt(x, y)` (diagnostic et sélection : relu de la cible, rien de dessiné ne change) ; e2e
-`surface-id` (Maures : ciel, 14 arbres, 20 sol sur une grille 7 × 7, le même mot relu). **Pas de cible `r32uint` ni de profondeur
-gardée encore** : leurs lecteurs qui changent l'image (le rejet de l'historique par identité, l'appareil composé par la profondeur —
-J1-5) les créeront ; l'adaptateur `decodeSurface` se retire quand la passe écrira le mot elle-même.
+`surface-id` (Maures : ciel, 14 arbres, 20 sol sur une grille 7 × 7, le même mot relu). **Puis, le même jour, les sorties
+elles-mêmes** : la passe de visibilité de la Terre écrit le mot dans sa troisième cible `r32uint` (`terrain raster identity` : proxies
+d'arbres et maillages de bâtiments, le sol 0, boîtes et marques laissées ; la génération par l'uniforme du décor `ident.x`) et **garde
+sa profondeur** (`depthStoreOp: "store"`) ; `surfaceAt` relit le mot de la passe et, sur demande, la profondeur ; e2e `surface-id` :
+49/49 points identiques au mot de l'adaptateur, profondeur d'un arbre ~2·10⁻⁴ (Z inversé), ciel 0, aucune erreur GPU. Leurs lecteurs
+qui changent l'image (rejet de l'historique par identité, appareil composé par la profondeur — J1-5) viendront ensuite ;
+`decodeSurface` reste le contrôle de l'e2e et le chemin des corps sans cette passe. Mouvement : `rgba16float` déjà en place (pas encore
+`rg16float` pour le rigide).
 
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster

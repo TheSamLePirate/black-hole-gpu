@@ -10790,21 +10790,51 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  ground (its level), tree, building, box, bridge, turbine, pylon, cloud, none —, its distances and the contract's word (object 20
    *  bits | the scenery's publication 12 bits). Read back from the visibility target as drawn (`xFrac`, `yFrac` ∈ [0, 1], from the
    *  top left); null without the raster's target. A diagnostic and the selection's reader: nothing drawn changes. */
-  async surfaceAt(xFrac: number, yFrac: number): Promise<(SurfaceAt & { x: number; y: number; generation: number }) | null> {
+  async surfaceAt(
+    xFrac: number,
+    yFrac: number,
+    withDepth = false,
+  ): Promise<(SurfaceAt & { x: number; y: number; generation: number; decodedId: number; depth: number | null }) | null> {
     const tex = this.terrainRaster?.distanceTexture();
     if (!tex) return null;
     const x = Math.min(Math.max(Math.round(xFrac * tex.width), 0), tex.width - 1);
     const y = Math.min(Math.max(Math.round(yFrac * tex.height), 0), tex.height - 1);
-    const buf = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    // (the visibility's texel, and — the Earth's pass — its identity word, written by the pass itself; with `withDepth` its kept
+    // depth too — a depth copy covers the whole texture (WebGPU), so only when asked)
+    const own = this.terrainRaster?.surfaceTextures() ?? null;
+    const buf = this.device.createBuffer({ size: 512, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     const enc = this.device.createCommandEncoder();
     enc.copyTextureToBuffer({ texture: tex, origin: [x, y] }, { buffer: buf, bytesPerRow: 256 }, [1, 1]);
+    if (own) enc.copyTextureToBuffer({ texture: own.identity, origin: [x, y] }, { buffer: buf, offset: 256, bytesPerRow: 256 }, [1, 1]);
+    const dw = own ? own.depth.width : 0,
+      dh = own ? own.depth.height : 0,
+      row = Math.ceil((dw * 4) / 256) * 256;
+    const dbuf =
+      own && withDepth ? this.device.createBuffer({ size: row * dh, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ }) : null;
+    if (own && dbuf) enc.copyTextureToBuffer({ texture: own.depth, aspect: "depth-only" }, { buffer: dbuf, bytesPerRow: row }, [dw, dh]);
     this.device.queue.submit([enc.finish()]);
-    await buf.mapAsync(GPUMapMode.READ);
-    const f = new Float32Array(buf.getMappedRange().slice(0));
+    await Promise.all([buf.mapAsync(GPUMapMode.READ), dbuf?.mapAsync(GPUMapMode.READ)]);
+    const raw = buf.getMappedRange().slice(0);
     buf.unmap();
     buf.destroy();
+    let depth: number | null = null;
+    if (dbuf) {
+      depth = new Float32Array(dbuf.getMappedRange())[(y * row) / 4 + x]!;
+      dbuf.unmap();
+      dbuf.destroy();
+    }
     const generation = this.earthScenery.revision;
-    return { ...decodeSurface(f, generation), x, y, generation };
+    const decoded = decodeSurface(new Float32Array(raw, 0, 4), generation);
+    return {
+      ...decoded,
+      // (the pass's own word where it has one; the adapter's otherwise)
+      id: own ? new Uint32Array(raw, 256, 1)[0]! : decoded.id,
+      decodedId: decoded.id,
+      depth,
+      x,
+      y,
+      generation,
+    };
   }
   async rasterColumn(
     xFrac = 0.5,
@@ -11204,6 +11234,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       }
       this.sceneryRaster.clock = this.rainClock % 3600;
       this.sceneryRaster.frame = this.frameStamp;
+      // (the instances' identity's generation: the scenery's publication — PLAN-J1 J1-2)
+      this.sceneryRaster.generation = this.earthScenery.revision;
       // (the turbines face the weather's surface wind at the scene — Q8 D1)
       const pl = this.earthScenery.place;
       if (pl) {

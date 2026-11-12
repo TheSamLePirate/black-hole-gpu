@@ -12,7 +12,7 @@
 import { CABLE_WIDTH_M } from "./pylons";
 import { LAMP_POLE_M } from "./streetlamps";
 import { TURBINE_FACING } from "./turbines";
-import { NO_MOTION, TERRAIN_RASTER_FORMAT, TERRAIN_RASTER_MOTION_FORMAT } from "./terrain-raster";
+import { NO_ID, NO_MOTION, TERRAIN_RASTER_FORMAT, TERRAIN_RASTER_ID_FORMAT, TERRAIN_RASTER_MOTION_FORMAT } from "./terrain-raster";
 import { TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 import { RASTER_CODE, RASTER_CODE_SCALE } from "./terrain-raster-hint";
 
@@ -209,7 +209,13 @@ struct U {
 // table over 4–60 km — renderer.ts sceneryLift —, z the fade's angle [rad], w 1 on)
 // (pcam, pr, pu, pf: the frame before's camera — its place on the scenery's local axes, the clock then (w); its axes and fields
 // (w: tan of the half fields, pf.w 1 when valid) — for the moving meshes' motion, PLAN-J1 J1-2)
-struct S { east: vec4f, north: vec4f, up: vec4f, cam: vec4f, lift: vec4f, misc: vec4f, pcam: vec4f, pr: vec4f, pu: vec4f, pf: vec4f };
+struct S { east: vec4f, north: vec4f, up: vec4f, cam: vec4f, lift: vec4f, misc: vec4f, pcam: vec4f, pr: vec4f, pu: vec4f, pf: vec4f, ident: vec4f };
+// The surface's identity word (PLAN-J1 J1-2, system/surface-id.ts packSurfaceId): an object (its 20 low bits) of the scenery's
+// publication (ident.x, its 12 low bits); 0 nothing
+fn surfaceId(object: f32) -> u32 {
+  let o = u32(round(max(object, 0.0)));
+  return select(0u, (o & 0xFFFFFu) | ((u32(sc.ident.x) & 0xFFFu) << 20u), o > 0u);
+}
 @group(0) @binding(1) var<uniform> sc: S;
 // the Sun's view for the trees' and buildings' shadow map (encodeShadow): right, up, towards the Sun in the scenery's frame —
 // each w its half-extent [m] —, the map's centre (w: 1 drawn)
@@ -451,6 +457,7 @@ fn sunClip(p: vec3f) -> vec4f {
   var o: MO;
   o.vis = vec4f(0.0, v.id, length(v.p), 0.0);
   o.mot = vec4f(v.mot, 0.0);
+  o.id = surfaceId(v.id);
   return o;
 }
 
@@ -597,7 +604,7 @@ fn meshVertexAt(vi: u32, tc: f32) -> vec3f {
 // (bridge: a bridge's part's triangle — past the buildings' in the mesh —, coded bridgeMesh — terrainRasterBridgeMesh)
 struct MV { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) @interpolate(flat) bridge: f32, @location(2) @interpolate(flat) leaf: f32, @location(3) pyl: vec4f, @location(4) mot: vec3f };
 // (the mesh pass's outputs: its visibility, and its motion — the moving meshes' [px] since the frame before, z 1 where given)
-struct MO { @location(0) vis: vec4f, @location(1) mot: vec4f };
+struct MO { @location(0) vis: vec4f, @location(1) mot: vec4f, @location(2) id: u32 };
 // a building triangle's leaf (packScenery: after the triangles, its record's offset from geomOffset) + 1; 0 a bridge's
 fn meshTag(tri: u32) -> u32 {
   let t = u32(scenery[3].z) * 4u + u32(scenery[2].w) * 3u + tri;
@@ -704,6 +711,8 @@ fn meshLeaf(tri: u32) -> f32 {
   var o: MO;
   o.vis = meshShade(v);
   o.mot = vec4f(v.mot, 0.0);
+  // (a building's own triangles — a bridge's — carry their leaf in g, as terrainRasterLeaf reads it; a turbine, a pylon none)
+  o.id = select(0u, surfaceId(o.vis.g), floor(o.vis.a / ${RASTER_CODE_SCALE}.0) >= ${RASTER_CODE.mesh}.0);
   return o;
 }
 fn meshShade(v: MV) -> vec4f {
@@ -824,7 +833,7 @@ export class SceneryRaster {
     this.module = device.createShaderModule({ label: "scenery raster", code: sceneryRasterShader(forestModuleOf(traceSource)) });
     const S = GPUBufferUsage.STORAGE;
     this.frameU = device.createBuffer({ size: TERRAIN_RASTER_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.sceneryU = device.createBuffer({ size: 160, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.sceneryU = device.createBuffer({ size: 176, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.draws = device.createBuffer({
       size: (LISTS + 7) * 16,
       usage: S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
@@ -854,7 +863,8 @@ export class SceneryRaster {
       label: "scenery raster draws",
       entries: [
         { binding: 0, visibility: Vx, buffer: { type: "uniform" } },
-        { binding: 1, visibility: Vx, buffer: { type: "uniform" } },
+        // (the fragments read it too: the identity's generation, ident.x — PLAN-J1 J1-2)
+        { binding: 1, visibility: Vx | GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
         { binding: 2, visibility: Vx, buffer: { type: "read-only-storage" } },
         { binding: 5, visibility: Vx, buffer: { type: "read-only-storage" } },
         { binding: 6, visibility: Vx, buffer: { type: "uniform" } },
@@ -892,6 +902,7 @@ export class SceneryRaster {
             targets: [
               { format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.GREEN | GPUColorWrite.BLUE },
               { format: TERRAIN_RASTER_MOTION_FORMAT },
+              { format: TERRAIN_RASTER_ID_FORMAT },
             ],
           },
           primitive: { topology: "triangle-list", cullMode: "none" },
@@ -906,7 +917,7 @@ export class SceneryRaster {
         fragment: {
           module: this.module,
           entryPoint: "boxFs",
-          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }, NO_MOTION],
+          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }, NO_MOTION, NO_ID],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater" },
@@ -919,7 +930,7 @@ export class SceneryRaster {
         fragment: {
           module: this.module,
           entryPoint: "bridgeMarkFs",
-          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }, NO_MOTION],
+          targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.ALPHA }, NO_MOTION, NO_ID],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater" },
@@ -932,7 +943,7 @@ export class SceneryRaster {
         fragment: {
           module: this.module,
           entryPoint: "meshFs",
-          targets: [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }],
+          targets: [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }, { format: TERRAIN_RASTER_ID_FORMAT }],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
@@ -946,7 +957,7 @@ export class SceneryRaster {
         fragment: {
           module: this.module,
           entryPoint: "meshFs",
-          targets: [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }],
+          targets: [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }, { format: TERRAIN_RASTER_ID_FORMAT }],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
@@ -987,7 +998,9 @@ export class SceneryRaster {
   }
 
   private lod: SceneryRasterLod = SCENERY_RASTER_LOD;
-  private sceneryOut = new Float32Array(40);
+  private sceneryOut = new Float32Array(44);
+  /** the scenery's publication the instances belong to (earthScenery.revision; PLAN-J1 J1-2): their identity's generation */
+  generation = 0;
   /** the frame before's camera for the moving meshes' motion (PLAN-J1 J1-2): its place on the scenery's axes, its clock, its axes */
   private prevCam: { frame: Float32Array; cam: [number, number, number]; axes: number[]; clock: number } | null = null;
   /** (R4b) the air's lift for the scenery's projection: (x + y d) d² [m], z the fade's angle, w 1 on — renderer.ts sceneryLift */
@@ -1120,6 +1133,8 @@ export class SceneryRaster {
       } else so.fill(0, 24, 40);
       this.prevCam = cur;
     }
+    // (ident.x: the identity's generation, its 12 low bits — PLAN-J1 J1-2)
+    this.sceneryOut[40] = this.generation % 4096;
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)

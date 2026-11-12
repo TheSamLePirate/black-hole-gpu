@@ -3371,3 +3371,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   pendant le titre coûte réseau et mémoire pour un joueur qui choisirait l'espace, l'attente du voile allonge l'entrée : **décision
   de Sam demandée** (options au plan §8).
 - **Non vérifié** : autres lieux, kerr-mini, vols en mouvement ; scène de décor du départ et voyage G (CM3) non faits.
+
+## 2026-11-12T04:10Z — J1-2 : la passe de visibilité écrit l'identité et garde sa profondeur
+
+- **Contribution** (stratégie §7.4, PLAN-J1 J1-2) : les sorties de surface du contrat, écrites par la passe elle-même — troisième cible
+  `terrain raster identity` (`r32uint`, objet 20 bits | génération 12 bits : les proxies d'arbres et les maillages de bâtiments
+  l'écrivent, le sol 0, les boîtes et marques la laissent ; la génération, la publication du décor, par l'uniforme `ident.x`, lu
+  maintenant aussi par l'étage fragment) ; **la profondeur `depth32float` gardée** (`depthStoreOp: "store"`). Premier lecteur :
+  `renderer.surfaceAt` (le mot de la passe ; la profondeur sur demande — une copie de profondeur couvre toute la texture en WebGPU :
+  une copie d'un texel invalidait l'encodeur, vu à l'e2e). Fichiers : `terrain-raster.ts`, `scenery-raster.ts`, `renderer.ts`.
+- **Vérifié** : check-wgsl 83/83 ; tsc ; `bun test` 2185 / 3 (trois vols longs sous la charge parallèle — Lander martien, guidage
+  d'entrée, tuiles qui ne chargent pas — qui passent seuls) ; e2e `surface-id` (ce Mac) : 49/49 points où le mot de la passe = celui
+  de l'adaptateur, profondeur d'un arbre ~2·10⁻⁴ (Z inversé), ciel 0, aucune erreur GPU ; **mesuré** (kerr-mini, A/B entrelacé A B B A
+  `ab-commit` a04de992, même e2e, mêmes grilles des deux côtés) : `terrain raster visibility` p50 4,00 / 3,98 → 4,08 / 4,12 ms,
+  **+0,11 ms** pour la cible et la profondeur. L'image n'est pas comparée en pixels (aucune sortie existante modifiée).
+- **Limites, suite** : leurs lecteurs qui changent l'image (rejet de l'historique par identité ; l'appareil composé par la profondeur,
+  J1-5) restent à faire ; le mouvement reste `rgba16float` (pas encore le rigide en `rg16float`) ; les corps (Lune, Mars) n'ont pas ces
+  sorties. GRAPHICS-PIPELINE (C6b), BH-API, PLAN-J1.

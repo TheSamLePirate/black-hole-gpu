@@ -19,6 +19,11 @@ export const TERRAIN_RASTER_FORMAT: GPUTextureFormat = "rgba32float";
 export const TERRAIN_RASTER_MOTION_FORMAT: GPUTextureFormat = "rgba16float";
 /** the pipelines that draw no motion: the second target declared, not written */
 export const NO_MOTION: GPUColorTargetState = { format: TERRAIN_RASTER_MOTION_FORMAT, writeMask: 0 };
+/** The surface's identity (PLAN-J1 J1-2, system/surface-id.ts): object 20 bits | generation 12 bits, 0 nothing — the Earth's
+ *  visibility pass's third target, beside the distance and the motion */
+export const TERRAIN_RASTER_ID_FORMAT: GPUTextureFormat = "r32uint";
+/** a pipeline of that pass that leaves the identity as it is (a mark: no object of its own) */
+export const NO_ID: GPUColorTargetState = { format: TERRAIN_RASTER_ID_FORMAT, writeMask: 0 };
 import { geoidLibrary, terrainHeightLibrary, type TerrainCacheSources } from "./terrain-cache";
 import { TERRAIN_RASTER_MAX_PIXELS, TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
 import { rasterGroundCode } from "./terrain-raster-hint";
@@ -375,15 +380,17 @@ struct Sun { right: vec4f, up: vec4f, toward: vec4f, centre: vec4f };
 }
 // (r: the ground's distance [m]; g: the scenery's instance drawn there — none here, the scenery's draw writes it alone, and
 // its proxy's distance over b; a: the patch's code, 1, and its smooth normal — T5)
-@fragment fn terrainFs(v: Vertex) -> @location(0) vec4f { let d = length(v.p); return vec4f(d, 0.0, d, rasterCode(1.0, v.n)); }
+// (the ground: no object — its identity 0, as its g; PLAN-J1 J1-2)
+struct GroundOut { @location(0) vis: vec4f, @location(2) id: u32 };
+@fragment fn terrainFs(v: Vertex) -> GroundOut { let d = length(v.p); return GroundOut(vec4f(d, 0.0, d, rasterCode(1.0, v.n)), 0u); }
 // A far ring: a coarser level's grid (its cells four times the next finer one's), its triangles under that finer one left out
 // of its mesh (system/terrain-raster.ts drawRing) — xy its nodes' place on the finer one's grid (×4 and this offset), z the
 // overlap kept along the finer one's edge [its nodes] —; w its mark's code in a (1 + its rank from the patch + 8 × its step,
 // how many levels coarser than the reference patch: the tracer's tolerance — trace.wgsl RHINT_TOL —; terrain-raster-hint.ts)
 @group(0) @binding(6) var<uniform> ring: vec4f;
-@fragment fn ringFs(v: Vertex) -> @location(0) vec4f {
+@fragment fn ringFs(v: Vertex) -> GroundOut {
   let d = length(v.p);
-  return vec4f(d, 0.0, d, rasterCode(ring.w, v.n));
+  return GroundOut(vec4f(d, 0.0, d, rasterCode(ring.w, v.n)), 0u);
 }
 
 @vertex fn screenVs(@builtin(vertex_index) k: u32) -> @builtin(position) vec4f {
@@ -461,6 +468,9 @@ interface Attachments {
   distance: GPUTexture;
   /** the moving meshes' motion (TERRAIN_RASTER_MOTION_FORMAT; PLAN-J1 J1-2): the Earth's visibility pass only */
   motion: GPUTexture;
+  /** the surface's identity (TERRAIN_RASTER_ID_FORMAT; PLAN-J1 J1-2): the Earth's visibility pass only */
+  identity: GPUTexture;
+  /** the visibility's reversed-Z depth, kept (stored) by the Earth's pass — the final depth's contract, J1-2 */
   depth: GPUTexture;
   width: number;
   height: number;
@@ -607,7 +617,11 @@ export class TerrainRaster {
           entryPoint: "terrainVs",
           buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }],
         },
-        fragment: { module: this.module, entryPoint: "terrainFs", targets: [{ format: TERRAIN_RASTER_FORMAT }, NO_MOTION] },
+        fragment: {
+          module: this.module,
+          entryPoint: "terrainFs",
+          targets: [{ format: TERRAIN_RASTER_FORMAT }, NO_MOTION, { format: TERRAIN_RASTER_ID_FORMAT }],
+        },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       })
@@ -625,7 +639,11 @@ export class TerrainRaster {
           entryPoint: "terrainVs",
           buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }],
         },
-        fragment: { module: this.module, entryPoint: "ringFs", targets: [{ format: TERRAIN_RASTER_FORMAT }, NO_MOTION] },
+        fragment: {
+          module: this.module,
+          entryPoint: "ringFs",
+          targets: [{ format: TERRAIN_RASTER_FORMAT }, NO_MOTION, { format: TERRAIN_RASTER_ID_FORMAT }],
+        },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       })
@@ -682,6 +700,7 @@ export class TerrainRaster {
       if (!this.retired.delete(old)) return;
       old.distance.destroy();
       old.motion.destroy();
+      old.identity.destroy();
       old.depth.destroy();
     };
     void this.device.queue.onSubmittedWorkDone().then(release, release);
@@ -889,13 +908,21 @@ export class TerrainRaster {
       // (copied from by a diagnostic — the probes read the motion back)
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
     });
+    const identity = this.device.createTexture({
+      label: "terrain raster identity",
+      size: [width, height],
+      format: TERRAIN_RASTER_ID_FORMAT,
+      // (read back by renderer.surfaceAt — the selection, a diagnostic)
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+    });
     const depth = this.device.createTexture({
       label: "terrain raster reversed-Z",
       size: [width, height],
       format: "depth32float",
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      // (kept by the Earth's pass — J1-2's final depth — and read back by renderer.surfaceAt)
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
     });
-    this.attachments = { distance, motion, depth, width, height };
+    this.attachments = { distance, motion, identity, depth, width, height };
     if (old) this.retire(old);
     return true;
   }
@@ -1012,8 +1039,10 @@ export class TerrainRaster {
         colorAttachments: [
           { view: a.distance.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] },
           { view: a.motion.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] },
+          { view: a.identity.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] },
         ],
-        depthStencilAttachment: { view: a.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
+        // (the final depth kept — PLAN-J1 J1-2 —: its readers to come, the selection's now)
+        depthStencilAttachment: { view: a.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "store" },
       }),
     );
     pass.setPipeline(this.mesh);
@@ -1277,6 +1306,11 @@ export class TerrainRaster {
   distanceTexture(): GPUTexture | null {
     return this.active && !this.error ? (this.attachments?.distance ?? null) : null;
   }
+  /** the Earth's visibility's identity and kept depth (PLAN-J1 J1-2) — null otherwise */
+  surfaceTextures(): { identity: GPUTexture; depth: GPUTexture } | null {
+    const a = this.active && !this.error ? this.attachments : null;
+    return a ? { identity: a.identity, depth: a.depth } : null;
+  }
   /**
    * PLAN-J1 J1-4 — the forward ground (system/terrain-forward.ts): the patch drawn again by its pipeline into `target` (cleared),
    * with this frame's visibility uniform and mesh; `binds` its groups 1 and 2 (the tracer's resources, the renderer's — null: not
@@ -1445,6 +1479,7 @@ export class TerrainRaster {
     for (const a of [...this.retired, ...(this.attachments ? [this.attachments] : [])]) {
       a.distance.destroy();
       a.motion.destroy();
+      a.identity.destroy();
       a.depth.destroy();
     }
     this.retired.clear();
