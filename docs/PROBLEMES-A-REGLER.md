@@ -3,6 +3,23 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Des points blancs qui scintillent sur la mer et dans la brume de l'horizon (scène J0, Toulon-Hyères)
+
+- **Observé** (Sam, 12 nov. 2026, e2e `j0-reference` sur ce Mac, fenêtre visible) : « plein de points blancs (pixels) qui apparaissent
+  et disparaissent, comme du bruit ». **Relevé** sur les captures de la séance (M1 Max, 9691ed31) : des **rangées de points blancs
+  d'un pixel, régulièrement espacés**, dans la brume au ras de l'horizon et sur la mer lointaine — sur l'ablation sans HUD aussi ; planche
+  `docs/progress/j0/points-blancs-mer-2026-11-12.jpg`. **Déjà là le 10 novembre** (fiche du soir, e00182a2 : la même rangée sur la mer
+  au virage) : **pas une régression** des lots du 12 (rejet par identité, appareil dans la scène, export, retrait du pilote).
+- **Cause supposée, non vérifiée** : l'espacement régulier ressemble au motif d'ombrage clairsemé du raster (1 pixel sur 8 ou 16 ombré
+  frais à chaque image, le reste reconstruit) : un pixel frais bien plus clair que ses voisins reconstruits — un reflet du Soleil bas
+  sur l'eau, ou la brume — que la reconstruction et le temporel ne lissent pas ; le motif tourne à chaque image, d'où le scintillement.
+  Une première sonde (`tests/e2e/sea-sparkle-probe.e2e.test.ts`, E2E_PROBE=1) ne l'a pas mesuré : elle comptait le texte du HUD, puis
+  son vol a cabré (train rentré : l'autopilote remonte — remarque de Sam) ; dans la couleur de scène exportée (`renderer.sceneColor`),
+  presque aucun point sur la mer pendant ce vol-là — à refaire en vol tenu.
+- **Piste** : la sonde corrigée (train sorti, vol tenu), la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`
+  ou le taux raster à 1 pour voir si le motif suit l'ombrage clairsemé ; puis la reconstruction (`liteReconstruct`) ou la plage du
+  temporel sur l'eau lointaine.
+
 ## ~~Des rectangles turquoise sur l'eau peu profonde devant l'Almanarre~~ — réglé le même jour : les blocs JPEG de l'orthophoto (8 × 8 pixels, 1,6 m) sur l'eau calme, lus de près sous huit empreintes du pixel seulement, le seuil du turquoise les découpant ; l'albédo du fond lu sur 3,2 m au moins (`shadeLite`, eau peu profonde) ; planche `docs/progress/mer/turquoise-avant-apres.jpg`. (Les diagnostics « albédo nul » plus bas avaient été pris pendant la recompilation : faux.)
 
 **2026-11-11T08:50Z.** Observé (ce Mac, vue à 20 m au-dessus de l'eau devant la plage, regard −40° vers l'ouest ; planche
