@@ -32,6 +32,7 @@ test.skipIf(!E2E)(
     const app = await App.boot({ width: 1280, height: 800, tiles: true, sw: SW, profile });
     const rows: Row[] = [];
     let summary: Record<string, unknown> = {};
+    let liftView: { mount: string; yaw: number; pitch: number } | null = null;
     try {
       if (SW) await app.js(`__bh.pwa?.ready() ?? false`);
       await app.waitFor(`!!document.querySelector("[data-testid=title-mode-plane]") && !!window.__bh?.renderer`, 60_000);
@@ -86,6 +87,12 @@ test.skipIf(!E2E)(
         if (liftAt === null && seen && (r.phase === "out" || r.phase === "gone")) {
           liftAt = s;
           await app.shot(`${OUT}/${TAG}-lift.png`).catch(() => undefined);
+          // (the view the player is given: the cockpit, looking ahead — 12 Nov 2026, it looked down onto the seat)
+          const view = await app.js<{ mount: string; yaw: number; pitch: number; vessel: string; active: string }>(
+            `(() => { const s = __bh.settings; return { mount: s.shipMount, yaw: s.shipLookYaw, pitch: s.shipLookPitch, vessel: s.vessel, active: __bh.fleet.active }; })()`,
+          );
+          console.log(`  ${TAG}: the view at the lift ${JSON.stringify(view)}`);
+          liftView = view;
         }
         if ((liftAt !== null && s > liftAt + 10) || s > 90) break;
         await Bun.sleep(250);
@@ -118,6 +125,10 @@ test.skipIf(!E2E)(
       rmSync(profile, { recursive: true, force: true });
     }
     expect(summary.liftS).not.toBeNull();
+    // (the player's first image: from the cockpit, looking ahead — not down onto the seat)
+    expect(liftView?.mount).toBe("cockpit");
+    expect(Math.abs(liftView?.pitch ?? 99)).toBeLessThan(5);
+    expect(Math.abs(liftView?.yaw ?? 99)).toBeLessThan(5);
     expect(summary.gpuErrors).toBe(0);
   },
   4 * 60_000,

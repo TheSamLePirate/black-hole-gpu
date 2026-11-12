@@ -3417,3 +3417,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   12,4 s : remplacé.
 - **Non vérifié** : scène de décor du départ (non faite), voyage G non mesuré, À pied non mesuré, aéroport du monde hors cache
   (aucun préchargement), coût pour le joueur qui choisit l'espace, kerr-mini.
+
+## 2026-11-12T04:06Z — Le premier regard d'un vol libre : devant, plus sur le siège
+
+- **Signalé par Sam** (« les derniers e2e en avion, la vue était sur le siège du cockpit ») : l'e2e `title-departure` suit le parcours du
+  joueur (titre › Par avion › Vol libre › Voler) ; au lever du voile, le cockpit du F-35 regardait droit vers le bas, sur le siège
+  éjectable (`shipLookPitch` −85, `shipLookYaw` 21,6). Caché avant CM3 par l'image noire de l'entrée. **Cause** (pile relevée par une
+  trace dans la page) : la scène chargée juste avant — le décor du titre — vise son astre de façon asynchrone (`main.ts` `aimAt`, une
+  image plus tard) ; elle écrasait le regard que `setMount("cockpit")` venait de remettre devant. **Corrigé** : une visée en cours
+  est abandonnée dès qu'une nouvelle visée, un `setMount` ou un `placeShip` la suit (`aimGen`).
+- **Vérifié** : e2e `title-departure` (ce Mac, Edwards, profil neuf) — au lever du voile `cockpit`, regard 0 / 0 (assertion ajoutée :
+  à moins de 5°), capture : le HUD centré, les écrans du PCD en bas ; tsc. **Non vérifié** : les scènes qui visent un astre (leur
+  visée part après leur propre placement, l'ordre inchangé — lu, non revolé). E2E-VOLS §7, E2E-CATALOGUE.

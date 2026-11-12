@@ -444,6 +444,7 @@ expect(r.log.some((l) => /Hard landing|collapsed|tipped/.test(l))).toBe(false);
 |---|---|---|
 | Le jet plane jusqu'au sol, manette à 0 | `flyAt` laisse la manette à 0 ; l'autothrottle n'a pas pris (refusé avant le premier pas en mode avion, ou basculé deux fois) | quelques pas après `flyAt`, puis `apSet({ ap: true, athr: true, … })` ; vérifier `jetModes.spd !== null` et `pilot.engineNow > 0` |
 | L'autopilote se coupe au second appel | `jetToggle` bascule | forme gardée ou `apSet` |
+| Au départ d'un vol (titre › Vol libre), le cockpit regarde le siège (`shipLookPitch` −85) | une scène chargée juste avant (le décor du titre) visait son astre une image plus tard (`main.ts` `aimAt`, asynchrone) et écrasait le regard remis devant par `setMount` | corrigé le 12 nov. 2026 : `aimAt` abandonnée dès qu'une nouvelle visée, un `setMount` ou un `placeShip` la suit (`aimGen`) ; `title-departure` vérifie le regard au lever du voile |
 | `jetToggle` sans effet | pas en mode avion (`flightModeNow() !== "plane"`), au sol, ou page en pause | `settings.flightMode = "plane"`, en l'air, quelques pas, `pause(false)` |
 | L'avion cabre et monte tout seul en vol bas | GCAS ou autopilote de remontée (train rentré) | train sorti (`gearDown/gearExt/gearInit`, `autoGear = false`) |
 | Avion dans une montagne, retourné, ou 2 000 m trop haut | `flyAt` sur le relief grossier | `placeLow` (placer, 3 s de tuiles calmes, replacer) |

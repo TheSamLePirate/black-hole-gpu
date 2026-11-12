@@ -1907,11 +1907,16 @@ async function main() {
    * are): a few frames of correction — the body's bearing and elevation in the image taken off the look
    * — then the scene's offset [yaw, pitch]° added (the ship keeps its attitude).
    */
+  // (the aims under way: a newer aim, a view chosen — setMount — or a craft placed — placeShip — makes them stale; 12 Nov 2026: a
+  // scene's aim, a frame late, turned the free flight's cockpit straight down onto the seat after the title had set it ahead)
+  let aimGen = 0;
   async function aimAt(id: string | null, off: [number, number]) {
+    const gen = ++aimGen;
     const deg = 180 / Math.PI;
     const dot = (a: number[], b: number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
     const frame = () => new Promise((r) => requestAnimationFrame(() => r(null)));
     await frame();
+    if (gen !== aimGen) return;
     // (the camera's frame and the body's place are computed, not rendered: no frame to wait for)
     for (let i = 0; id && i < 12; i++) {
       const cam = cameraFrame(settings);
@@ -3155,6 +3160,8 @@ async function main() {
     panel.toast(camera.pilot.rollAlign ? t("Roll alignment on — wings in the orbital plane") : t("Roll alignment off"));
   }
   function setMount(m: Mount) {
+    // (a scene's aim still under way: stale — the view chosen wins)
+    aimGen++;
     // (a view on the ship: the spectator back)
     if (camera.spectating) setSpectator(false);
     // (a view chosen starts afresh, looking ahead — the same one chosen again too: its reset)
@@ -6215,6 +6222,8 @@ async function main() {
    */
   function placeShip(f: () => string): string {
     atlasReady();
+    // (a scene's aim still under way: stale — the craft placed anew)
+    aimGen++;
     if (camera.character.active) camera.character.stop();
     // (the manoeuvre the instructor watched left behind: not judged — its debrief, if shown, closed)
     camera.instr = null;
