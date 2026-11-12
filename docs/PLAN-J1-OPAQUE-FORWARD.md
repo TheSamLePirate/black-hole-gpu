@@ -282,6 +282,15 @@ l'e2e `surface-id`, chemin des corps sans identité : gardé, propriétaire J1-2
 brancher avec le format `rg16float`) ; **la fiche J0 nouvelle faite le 12** ([M1 Max](progress/j0/FICHE-m1max-2026-11-12.md) : frais 43,9 images/s, p50 24,9 ms, p95 32,6 ; soutenu 33,4/s — [kerr-mini](progress/j0/FICHE-kerr-mini-2026-11-12.md) : GPU p50 59,5 ms, 16,8/s). **Reste de J1-5** : les bâtiments en forward
 avec leur matériau (Q3) — seul l'appareil est fait.
 
+**J1-7, `rigidMotionOn` — gardé éteint, avec son propriétaire et sa condition de retrait (12 novembre).** Relevé : aucun lecteur ne lit
+le mouvement analytique du rigide (z −1) — `temporal`, `taau` et le flou de mouvement ne lisent la cible de mouvement que là où z > 0,5
+(un maillage mobile, l'appareil) et reprojettent le rigide par la caméra et la profondeur, ce qui est exact pour lui ; ni J1-5 ni le
+rejet (b) n'en ont eu besoin. **Propriétaire** : J1-2 (`terrain-raster.ts` `buildGround(motion)`, `scenery-raster.ts` `rigidMotion`).
+**Coût** : nul éteint (mesuré, A/B) ; ~+0,8 ms allumé. **Condition de retrait** : sans lecteur à la fin de J2 (pages d'imagerie et
+reconstruction, désocclusion — le candidat naturel), retiré avec ses pipelines `terrainVsMot`/`terrainFsMot`/`ringFsMot` et les champs
+`pd/pr/pu/pf` de l'uniforme ; un lecteur venu, le format `rg16float` du contrat se tranche avec lui. Pas retiré aujourd'hui : la session
+des bâtiments en forward modifie les mêmes fichiers.
+
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster
 prend la fermeture de ses racines dans le traceur **composé et spécialisé** (`wgsl-library.ts`), et déclare les ressources listées à

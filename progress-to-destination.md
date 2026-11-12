@@ -3577,3 +3577,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   du raster ; PROBLEMES-A-REGLER, planche `docs/progress/j0/points-blancs-mer-2026-11-12.jpg`. Leçon (Sam) : en vol tenu à l'autopilote,
   le train sorti, sinon il remonte — la sonde et `identity-reject` corrigés (a6ab487c).
 - **Non fait** : la cause des points (sonde à refaire en vol tenu) ; `rigidMotionOn` ; les bâtiments en forward (session déléguée en cours).
+
+## 2026-11-12T10:02Z — Les points blancs de la mer mesurés ; `rigidMotionOn` gardé avec sa condition de retrait
+
+- **Points blancs** (Sam, séance J0) : sonde `sea-sparkle-probe` refaite au protocole de J0 (le train sorti — sinon l'autopilote remonte,
+  remarque de Sam ; deux premiers essais faux : le HUD compté, puis un vol cabré). Avec les tuiles, **dans la couleur de scène même**
+  (`sceneColor`), 0–20 pixels par image isolés et plus clairs que le blanc SDR sur la mer, quels que soient la sortie HDR et l'ombrage
+  clairsemé : l'ombrage de la mer (crénelage du spéculaire supposé) ; déjà là le 10 ; piste spéculaire filtré ou borne des lucioles
+  (J4). PROBLEMES-A-REGLER. Mesuré sur ce Mac ; la cause n'est pas prouvée.
+- **`rigidMotionOn`** (PLAN-J1 J1-7) : relevé sans lecteur (temporal, taau, flou de mouvement lisent z > 0,5 seulement) ; gardé éteint
+  (coût nul) avec son propriétaire (J1-2) et sa condition de retrait (sans lecteur à la fin de J2) — pas retiré aujourd'hui : la session
+  des bâtiments en forward modifie les mêmes fichiers. Documenté seulement.
