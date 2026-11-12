@@ -15,6 +15,7 @@ import { readPng } from "./lib/png";
 // read back, against the visibility's building pixels) and tinted (debug 2), the triangle's normal against shadeLite's (debug 1:
 // green within 25°, red off, blue none to compare — counted where the view differs from the "on" shot); the passes timed over 60
 // frames each side (earth lite, its light and finishing, buildings forward and its marking).
+// BF_PLACE: another view (lat,lon,height over the ground,heading,pitch).
 // Output: remote-results/buildings-forward/<view>-{off,on,off2,tint,normals}.png, buildings-forward.json (BF_OUT).
 // Done when: placed level over the relief in (lib/place.ts), the scenery whole (90 s at most, what is missing said), the forward
 // pipeline built (60 s at most, its failure said), every shot taken and compared, no GPU error.
@@ -84,7 +85,9 @@ test.skipIf(!E2E)(
         await app.js(
           `(() => { __bh.renderer.buildingsForward = false; __bh.renderer.buildingsForwardDebug = 0; __bh.game.setDate(${JSON.stringify(v.date)}); __bh.game.set("weather", "fair"); document.body.classList.add("hide-ui"); return 1; })()`,
         );
-        const placed = await placeLow(app, [43.1195, 5.9315, 45, 350, 140], -8);
+        // (BF_PLACE="lat,lon,height over the ground,heading,pitch": another view — façades near, e.g. Manhattan's avenues)
+        const P = (process.env.BF_PLACE ?? "43.1195,5.9315,45,350,-8").split(",").map(Number);
+        const placed = await placeLow(app, [P[0]!, P[1]!, P[2]!, P[3]!, 140], P[4]!);
         const world = await app
           .waitFor(
             `(() => { const r = __bh.renderer, sc = r.earthScenery.stats(); return r.earthTiles.pending === 0 && sc.status === "ready" && !sc.pending; })()`,

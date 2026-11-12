@@ -3612,3 +3612,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   l'image en mouvement.
 - **Suite, à décider par Sam** (PLAN-J1) : (a) le retirer à J1-7 ; (b) le restreindre aux grands triangles proches pour un second A/B ;
   (c) l'allumer pour le contrat malgré le coût. Laissé éteint (pas net, au-delà de ~+1 ms).
+
+## 2026-11-12T10:38Z — J1-5 bâtiments en forward : un essai de façades proches à New York (pas de bâtiment près)
+
+- e2e `buildings-forward` paramétré (`BF_PLACE`) ; Times Square à 60 m (kerr-mini, e482082b) : le décor n'a dessiné que la ligne des
+  tours au loin — **pas de façade proche** ; ce qui est mesuré confirme Toulon (fragment 21 563 / 22 813 pixels de bâtiment, écart
+  allumé/éteint sous la dérive, passe 2,1–2,3 ms). Planche `docs/progress/j1/j1-5-batiments-forward-new-york.jpg`. La décision (a)/(b)/(c)
+  reste à Sam ; la vue proche reste à trouver (pourquoi Manhattan n'a pas de bâtiments autour de Times Square : non examiné).

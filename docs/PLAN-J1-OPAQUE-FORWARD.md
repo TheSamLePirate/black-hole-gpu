@@ -331,6 +331,12 @@ forward) ; (b) le restreindre aux **grands triangles proches** — les bâtiment
 excluant les petits triangles lointains, cause probable du surcoût (non mesuré séparément) — pour un second A/B ; (c) l'allumer quand
 même pour le contrat (une surface finale par le forward), au coût mesuré. Recommandation : (b) seulement si un gain d'image est
 attendu des façades proches ; sinon (a).
+**Un essai de façades proches, même jour (New York)** — e2e `buildings-forward` avec `BF_PLACE` (nouveau : lat, lon, hauteur sur le sol,
+cap, assiette), Times Square à 60 m, cap 200° (kerr-mini, e482082b) : **aucun bâtiment près de l'appareil** — le décor (« all in »
+selon l'e2e) n'y a dessiné que la ligne des tours à quelques kilomètres ; la vue proche reste à trouver (le décor de Manhattan autour
+de Times Square non examiné). Ce qu'il montre confirme Toulon : 21 563 des 22 813 pixels de bâtiment pris par le fragment, l'écart
+allumé/éteint (0,54 jour, 0,51 nuit sur 255) sous la dérive entre deux captures éteintes (0,83, 0,63), les normales d'accord sur les
+tours (vert), la passe 2,1–2,3 ms. Planche `docs/progress/j1/j1-5-batiments-forward-new-york.jpg`.
 
 **J1-7, `rigidMotionOn` — gardé éteint, avec son propriétaire et sa condition de retrait (12 novembre).** Relevé : aucun lecteur ne lit
 le mouvement analytique du rigide (z −1) — `temporal`, `taau` et le flou de mouvement ne lisent la cible de mouvement que là où z > 0,5
