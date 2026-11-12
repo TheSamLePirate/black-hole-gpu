@@ -3785,3 +3785,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   attendu nul, rien de changé au GPU) ; `tile-arrival` ; les autres appareils au sol (seul le piloté est ancré) ; caméra libre éloignée ;
   Windows.
 - **Suite** : le ΔGPU J0 au retour du mini ; les pointes de `request()`/publication en lot à part ; J2-3. Questions à Sam dans la fiche §6.
+
+## 2026-11-12T16:25Z — J2-2 (suite) : l'appareil que suit la caméra a lui aussi son sol tenu par le monde
+
+- **Contribution** (stratégie §19.4 ; PLAN-J2 J2-2, décision de Sam du 12 nov. ~15:40 UTC) : le sol de contact d'un appareil **suivi par
+  la caméra libre** (trafic, ailier, autre joueur) ne dépend plus de la distance de la caméra — même responsabilité que pour l'appareil
+  piloté (`setAnchors`), sans copie ni écriture GPU. Décisions consignées (plan §9 quater, fiche, e332abc8) : 1 500 m gardé ; le lot des
+  pointes du fil principal avant J2-3 (fait par une autre session, en cours).
+- **Changé** : `main.ts` (`subjectFocus` : la cible de la caméra libre, un appareil autre que le piloté, une vue sur lui) ;
+  `renderer.ts` (`subjectFocus`, `anchorSubject`, ancres « ship » et « subject ») ; `earth-tiles.ts` `setAnchors` (chaque appareil mené le
+  long de son propre mouvement par son id, un saut n'apprend aucune vitesse) ; e2e `j2-contact-camera` phase `ai` ; test unitaire ;
+  fiche J2-2 §3 bis, plan, BH-API, GRAPHICS-PIPELINE, CAMERA, VOL-AVIONS §2.1, E2E-CATALOGUE.
+- **Mesuré** (M1 Max, e2e phase `ai` ; kerr-mini hors réseau) : **saut reproduit** comme Sam le demandait — A320 de l'IA garé sur le flanc
+  du Faron, caméra qui le suit à 59 m / 1,49 km / 2,99 km : non tenu, il monte de **+0,10 à +0,13 m** à 3 km (sol z 16) et redescend au
+  retour ; **tenu, constant** (421,111 m, z 17 sur 621/621 images à 3 km). En passant : un avion de l'IA non suivi, à 15 km de la caméra,
+  pose sur le z 13 — 2,19 m plus bas — (hors décision : consigné).
+- **Vérifié** : tsc, biome, `tests/earth-contact.test.ts` 10/10 ; e2e `ai` vert (0 erreur GPU). **Non vérifié** : la version finale (avance
+  par id) non revolée en e2e (machine en pression « Heavy », réservée au lot des pointes) ; un appareil suivi en mouvement (roulage,
+  atterrissage) ; kerr-mini ; ΔGPU (rien de changé au GPU).

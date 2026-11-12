@@ -928,6 +928,10 @@ export class Renderer {
    * (tiles, surface, scenery) and where the rays start is the camera's.
    */
   shipFocus: { body: string; c: Vec3; altKm: number } | null = null;
+  /** PLAN-J2 J2-2: the craft the free camera follows (main.ts subjectFocus) — its ground held as the flown craft's */
+  subjectFocus: { body: string; c: Vec3; altKm: number } | null = null;
+  /** its ground held (true); false: the flown craft's alone, as before (the e2e's comparison — j2-contact-camera, phase ai) */
+  anchorSubject = true;
   /**
    * CM3 (docs/PLAN-CHARGEMENT-MONDE.md): where a launch or a voyage will start, known before the craft is there (main.ts: the
    * title's free flight or walk, the voyage G's goal) — the Earth's place on its axes [equatorial radii], its height [km]: read
@@ -4249,13 +4253,20 @@ export class Renderer {
       this.earthTiles.hlodOn = s.earthIgnSilhouettes;
       // (PLAN-J2 J2-2: the ground under the flown craft held by the world whatever the camera — far behind it, ahead, free: its
       // contact level's tiles round it, the windows following the camera still; strategy §19.4)
-      const C = this.shipFocus;
-      if (t === this.live)
+      // (Sam, 12 Nov 2026: and the craft the free camera follows — each led along its own motion)
+      if (t === this.live) {
+        const held = s.earthTerrain && this.earthMaps.tier ? [this.shipFocus, this.anchorSubject ? this.subjectFocus : null] : [];
+        const R = solarBody("earth")!.radius;
         this.earthTiles.setAnchors(
-          s.earthTerrain && C?.body === "earth" && C.altKm < 60 && this.earthMaps.tier
-            ? [{ c: C.c, agl: heightOverGround("earth", C.c.map((x) => x * solarBody("earth")!.radius) as Vec3) }]
-            : [],
+          held
+            .filter((C): C is NonNullable<typeof C> => C?.body === "earth" && C.altKm < 60)
+            .map((C) => ({
+              c: C.c,
+              agl: heightOverGround("earth", C.c.map((x) => x * R) as Vec3),
+              id: C === this.shipFocus ? "ship" : "subject",
+            })),
         );
+      }
       this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0], eye ? eyeH : undefined);
       // the Moon's and Mars's relief tiles (P6, P7): round the camera while that world is the near body and its global map in
       const nearId = near ? bodies[near.index]?.id : undefined;

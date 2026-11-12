@@ -1020,13 +1020,12 @@ export class EarthTiles {
   private aheadLoads = new Set<string>();
   /** PLAN-J2 J2-2 — the crafts' ground (setAnchors): the tiles held round them (key → level, x, y), their heights (the same arrays
    *  as the windows' and the memory's; gen: the sources' generation they came from — an older one kept until replaced), the levels,
-   *  the crafts held, the flown craft's last place and motion [its level's tiles, /s] */
+   *  the crafts held, each craft's last place and motion by its id [its level's tiles, /s] */
   private anchorTiles = new Map<string, [Level, number, number]>();
   private anchorH = new Map<string, { h: Float32Array; gen: number }>();
   private anchorZs: number[] = [];
   private anchorPts: readonly { c: Vec3; agl: number }[] = [];
-  private anchorLast: { x: number; y: number; t: number; z: number } | null = null;
-  private anchorVel: [number, number] = [0, 0];
+  private anchorLast = new Map<string, { x: number; y: number; t: number; z: number; v: [number, number] }>();
   /** J2-2's counts: the crafts held, their tiles, those in, the loads asked for them alone, the contact samples taken from them */
   readonly contactStats = { anchors: 0, tiles: 0, held: 0, loads: 0, fromAnchor: 0 };
   /** when the loads no longer wanted are looked for next [ms] (dropUnwanted) */
@@ -3280,12 +3279,12 @@ export class EarthTiles {
    * kept as they arrive (put, keep, refine), loaded when no window wants them (`load` into memory, their national heights first in
    * the IGN's queue). The windows still follow the camera; only the contact reads these (groundAt).
    */
-  setAnchors(list: readonly { c: Vec3; agl: number }[]) {
+  setAnchors(list: readonly { c: Vec3; agl: number; id?: string }[]) {
     const now = performance.now();
     const tiles = new Map<string, [Level, number, number]>();
     const zs = new Set<number>();
-    let first = true;
-    for (const a of list.slice(0, ANCHOR_MAX)) {
+    const seen = new Set<string>();
+    for (const [i, a] of list.slice(0, ANCHOR_MAX).entries()) {
       if (!(a.agl < ANCHOR_AGL_M)) continue;
       const g = cartToGeodetic(1, WGS84_F, a.c);
       const z = this.contactLevel((g.lat * 180) / Math.PI, (g.lon * 180) / Math.PI);
@@ -3295,22 +3294,28 @@ export class EarthTiles {
       const fx = cx0(g.lon) * L.n,
         fy = mercY(Math.sin(g.lat), L.n);
       const pts: [number, number][] = [[fx, fy]];
-      // (the first — the flown craft —: led along its motion, measured from its last place)
-      if (first) {
-        const p = this.anchorLast;
+      // (each craft led along its motion, measured from its own last place — by its id: the flown craft's and the one the camera
+      // follows kept apart, a craft that comes or goes never lending its place to another's)
+      {
+        const id = a.id ?? `#${i}`;
+        seen.add(id);
+        const p = this.anchorLast.get(id);
         const dt = p && p.z === z ? (now - p.t) / 1000 : 0;
-        if (dt > 0.005 && dt < 1) {
-          let dx = fx - p!.x;
+        let v: [number, number] = p && p.z === z && dt < 1 ? p.v : [0, 0];
+        if (p && dt > 0.005 && dt < 1) {
+          let dx = fx - p.x;
           dx -= Math.round(dx / L.n) * L.n;
-          const k = Math.min(dt / 0.25, 1);
-          this.anchorVel = [
-            this.anchorVel[0] + (dx / dt - this.anchorVel[0]) * k,
-            this.anchorVel[1] + ((fy - p!.y) / dt - this.anchorVel[1]) * k,
-          ];
-        } else if (!p || p.z !== z || dt >= 1) this.anchorVel = [0, 0];
-        if (!p || dt > 0.005 || p.z !== z) this.anchorLast = { x: fx, y: fy, t: now, z };
-        let lx = this.anchorVel[0] * ANCHOR_LEAD_S,
-          ly = this.anchorVel[1] * ANCHOR_LEAD_S;
+          const dy = fy - p.y;
+          // (a jump — placed elsewhere —: no motion learnt from it)
+          if (Math.hypot(dx, dy) > ANCHOR_LEAD_TILES) v = [0, 0];
+          else {
+            const k = Math.min(dt / 0.25, 1);
+            v = [v[0] + (dx / dt - v[0]) * k, v[1] + (dy / dt - v[1]) * k];
+          }
+        }
+        if (!p || dt > 0.005 || p.z !== z) this.anchorLast.set(id, { x: fx, y: fy, t: now, z, v });
+        let lx = v[0] * ANCHOR_LEAD_S,
+          ly = v[1] * ANCHOR_LEAD_S;
         const l = Math.hypot(lx, ly);
         if (l > ANCHOR_LEAD_TILES) {
           lx *= ANCHOR_LEAD_TILES / l;
@@ -3318,8 +3323,7 @@ export class EarthTiles {
         }
         // (its path sampled every half tile: no tile skipped between)
         const n = Math.ceil(l / 0.5);
-        if (l > 0.05) for (let i = 1; i <= n; i++) pts.push([fx + (lx * i) / n, fy + (ly * i) / n]);
-        first = false;
+        if (l > 0.05) for (let j = 1; j <= n; j++) pts.push([fx + (lx * j) / n, fy + (ly * j) / n]);
       }
       for (const [px, py] of pts)
         for (let y = Math.floor(py - ANCHOR_MARGIN); y <= Math.floor(py + ANCHOR_MARGIN); y++)
@@ -3329,7 +3333,7 @@ export class EarthTiles {
             tiles.set(`${z}/${xw}/${y}`, [L, xw, y]);
           }
     }
-    if (!tiles.size) this.anchorLast = null;
+    for (const id of [...this.anchorLast.keys()]) if (!seen.has(id)) this.anchorLast.delete(id);
     this.anchorTiles = tiles;
     this.anchorZs = [...zs].sort((a, b) => b - a);
     this.anchorPts = list.length && tiles.size ? list.slice(0, ANCHOR_MAX) : [];

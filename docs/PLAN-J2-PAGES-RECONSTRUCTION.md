@@ -296,7 +296,9 @@ gardent le sol dessiné). **La question 2** (les pointes du fil principal) : loc
 **Décisions de Sam (12 novembre 2026, ~15:40 UTC)** sur les trois questions de la fiche J2-2 : (1) **ancrer aussi un autre appareil, mais
 seulement quand la caméra le suit** (vue sur un appareil : poursuite, autour, tour, à bord), et **seulement après avoir reproduit le saut**
 sur un avion de l'IA posé, avec le même e2e que pour le F-35 ; (2) **le seuil de 1 500 m est gardé** ; (3) **le lot des pointes du fil
-principal (`request()`, publication) est fait avant J2-3**.
+principal (`request()`, publication) est fait avant J2-3**. **(1) fait le même jour** : saut reproduit sur un A320 de l'IA garé
+(+0,10–0,13 m quand la caméra qui le suit passe à 3 km), puis l'appareil suivi par la caméra libre ancré à son tour (`subjectFocus`,
+chaque ancre menée par son id) — fiche J2-2 §3 bis. (3) : en cours dans une autre session.
 
 ## 10. Non vérifié
 

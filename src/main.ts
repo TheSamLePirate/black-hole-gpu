@@ -194,6 +194,7 @@ import {
   isOurBody,
   netTargets,
   onOurSide,
+  ourTarget,
   type Body,
 } from "./targeting";
 import { HidPads } from "./gamepad";
@@ -2982,6 +2983,23 @@ async function main() {
     const q = toBodyFixed(id, p.X, sim.time);
     const r = Math.hypot(...q);
     return { body: id, c: q.map((x) => x / b.radius) as [number, number, number], altKm: ((r - b.radius) * M_METRES) / 1e3 };
+  }
+
+  /** PLAN-J2 J2-2 (Sam, 12 Nov 2026): the craft the free camera follows — an airliner of the traffic, a ship, a wingman, another
+   *  player's, a craft of the fleet not flown — on the Earth, as shipFocus gives the flown one (the renderer holds its ground too);
+   *  null when the camera follows none. */
+  function subjectFocus() {
+    // (the free camera's own settings — the spectator's —: its target and its view about it, chosen in the camera panel)
+    const vc = camera.viewController();
+    const b = vc.s.target;
+    if (!camera.spectating || !isCraftLike(b) || b === "iss" || (isCraft(b as Body) && b === fleet.active)) return null;
+    if (!vc.subjectActive() && vc.s.subjectView !== "around") return null;
+    const X = ourTarget(vc.s, b as Body, sim.time).pos;
+    if (referenceBody(X, sim.time) !== "earth") return null;
+    const e = solarBody("earth")!;
+    const q = toBodyFixed("earth", X, sim.time);
+    const r = Math.hypot(...q);
+    return { body: "earth", c: q.map((x) => x / e.radius) as [number, number, number], altKm: ((r - e.radius) * M_METRES) / 1e3 };
   }
 
   /** The autopilots: flying, or assisting (the pilot flies, the HUD's director shows their commands). */
@@ -8641,6 +8659,7 @@ async function main() {
     // tiles, surface, scenery, their shadows — follows the camera whenever it is there; the streaming's lead, the
     // camera's own motion: renderer.ts)
     renderer.shipFocus = camera.piloting && !camera.character.active ? shipFocus() : null;
+    renderer.subjectFocus = subjectFocus();
     // (CM3: the departure while the title or the entry's veil holds it, or while a voyage goes there)
     if (departure?.by === "title" && !titleScreen.isOpen && !gameEntry.busy) departure = null;
     if (departure?.by === "voyage") {

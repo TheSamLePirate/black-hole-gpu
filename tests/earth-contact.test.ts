@@ -243,3 +243,48 @@ test("the sources switched: a craft's held tiles kept its ground until the new o
   expect(t.contactStats.loads).toBeGreaterThan(0);
   expect(t.groundAt(q, 0.05)).toEqual(before);
 });
+
+test("two crafts held — the flown one and the one the camera follows —: each led along its own motion, a jump teaching none", () => {
+  const t = new EarthTiles(fakeDevice());
+  const n = 2 ** Z1;
+  const xOf = (lon: number) => Math.floor(((lon + 180) / 360) * n);
+  const keys = () => [...(t as unknown as { anchorTiles: Map<string, unknown> }).anchorTiles.keys()].map((k) => k.split("/").map(Number));
+  const realNow = performance.now;
+  let now = 1000;
+  performance.now = () => now;
+  // (the flown craft still at 45.912° 6.868°; the followed airliner 5 km south, eastward at ~140 m/s)
+  const ship = { c: camAt(CRAFT[0], CRAFT[1], 1300), agl: 300, id: "ship" };
+  const subLon = (s: number) => CRAFT[1] + 0.0018 * s;
+  try {
+    for (let i = 0; i <= 20; i++) {
+      now = 1000 + i * 50;
+      t.setAnchors([ship, { c: camAt(CRAFT[0] - 0.045, subLon(i * 0.05), 1300), agl: 300, id: "subject" }]);
+    }
+    const yShip = Math.floor(((1 - Math.log(Math.tan(Math.PI / 4 + (CRAFT[0] * Math.PI) / 360)) / Math.PI) / 2) * n);
+    const shipXs = keys()
+      .filter((k) => k[2] === yShip)
+      .map((k) => k[1]!);
+    const subXs = keys()
+      .filter((k) => k[2] !== yShip)
+      .map((k) => k[1]!);
+    // (the flown craft: its own tile alone — still, no lead lent by the other)
+    expect(Math.max(...shipXs) - Math.min(...shipXs)).toBeLessThanOrEqual(1);
+    expect(Math.max(...shipXs)).toBeLessThanOrEqual(xOf(CRAFT[1]) + 1);
+    // (the followed one: its tiles ahead too)
+    expect(Math.max(...subXs)).toBeGreaterThan(xOf(subLon(1)));
+    // (placed 5 km away at once: no motion learnt from the jump — its own tile alone)
+    now += 50;
+    t.setAnchors([ship, { c: camAt(CRAFT[0] - 0.045, CRAFT[1] + 0.07, 1300), agl: 300, id: "subject" }]);
+    now += 50;
+    t.setAnchors([ship, { c: camAt(CRAFT[0] - 0.045, CRAFT[1] + 0.07, 1300), agl: 300, id: "subject" }]);
+    const sub2 = keys()
+      .filter((k) => k[2] !== yShip)
+      .map((k) => k[1]!);
+    expect(Math.max(...sub2) - Math.min(...sub2)).toBeLessThanOrEqual(1);
+    // (the camera follows none: the flown craft's alone, its place kept)
+    t.setAnchors([ship]);
+    expect(t.contactStats.anchors).toBe(1);
+  } finally {
+    performance.now = realNow;
+  }
+});

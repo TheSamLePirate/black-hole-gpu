@@ -65,7 +65,9 @@ and pick its view in the camera panel:
 | **Cockpit** | at its post — the cockpit, the bridge —, looking along its nose (drag turns the head) |
 | **Tower** | set down ahead of its way — on the ground, or in space moving with it —, turning to follow it, the lens drawn in on it; set down again ahead once it is past and far |
 
-Choosing one of these views stops the free camera following your own craft.
+Choosing one of these views stops the free camera following your own craft. The craft followed has its ground held by the world
+as your own has (PLAN-J2 J2-2, 12 Nov 2026): an airliner of the traffic parked or rolling, seen from 3 km, stands on the same ground as
+seen from 60 m (`earthTiles.setAnchors`, `renderer.subjectFocus`).
 
 ## Keys
 

@@ -196,7 +196,8 @@ par texture, mip et couche, un tracé par page), puis les rectangles des niveaux
 table dans `frameDesc.pages`. Une page arrivée pendant l'image attend la suivante.
 
 **Le sol de contact (PLAN-J2 J2-2, 12 nov.)** — hors GPU, dans la préparation de l'image vivante, juste avant
-`earthTiles.update()` : **`earthTiles.setAnchors([appareil piloté])`** — sous 1 500 m du sol, les tuiles du niveau de contact
+`earthTiles.update()` : **`earthTiles.setAnchors([appareil piloté, appareil suivi par la caméra libre])`** (le second depuis la
+décision de Sam du 12 nov. : seulement quand la caméra libre suit un appareil — `renderer.subjectFocus`) — sous 1 500 m du sol, les tuiles du niveau de contact
 (z 17 IGN dans les boîtes nationales, z 14 ailleurs : jamais le choix de la caméra ni de la qualité) autour de l'appareil et de
 là où il sera dans 3 s sont **tenues par le monde** : prises dans les emplacements des fenêtres ou le cache (mêmes tableaux, aucune
 copie), gardées à leur arrivée, chargées en mémoire quand aucune fenêtre ne les veut (≤ 4 chargements au-delà de la limite, hauteurs

@@ -17,6 +17,12 @@ import { J0_FIXED } from "./lib/j0-scene";
 //  - flight: the Beauce at 300 m, 140 m/s east (j2-page-camera's), autopilot + autothrottle + gear held (E2E-VOLS §5.4); the cockpit,
 //    outside 1.5 km behind, outside 1.5 km ahead looking back, the cockpit again, 12 s each: the contact's level under the craft each
 //    image, and (after) how far the drawn ground there is from it — what the craft would have stood on.
+//  - ai (Sam's decision, 12 Nov 2026: reproduce the jump on an AI airliner at rest before anchoring the craft the camera follows):
+//    an A320 of the traffic made up and parked on that same flank (`camera.traffic.planes`, on the ground: its height the ground's
+//    under it plus its wheels, each image — controller/traffic.ts restAt), our F-35 set down 15 km away (its own anchor far from
+//    it), the free camera following the airliner (spectator, target "trf:…", chase view) at ~60 m, 1.5 km, 3 km and ~60 m again,
+//    10 s each — each image: its height over the ellipsoid, the contact ground under it, the drawn level holding its tile, the
+//    contact's level and source, the camera's distance to it.
 // Run on both sides of J2-2 by scripts/ab-e2e.ts (AB_SIDE/AB_RUN name the results). Not a pass/fail on the ground: the difference is
 // the result (docs/progress/j2/FICHE-J2-2). It fails on a GPU error, a frozen page, the autopilot not engaged.
 // Duration: ~4 min a side on kerr-mini (cold boot, the tiles, 30 s of hold, 48 s of flight).
@@ -26,6 +32,16 @@ const MACHINE = process.env.J2_MACHINE ?? (await $`hostname -s`.quiet().text()).
 const SIDE = process.env.AB_SIDE ? `${process.env.AB_SIDE}${process.env.AB_RUN ?? ""}` : "";
 const OUT = process.env.J2_OUT ?? `remote-results/j2-contact-camera/${MACHINE}${SIDE ? `-ab/${SIDE}` : ""}`;
 const PHASES = (process.env.J2CC_PHASES ?? "ground,flight").split(",");
+/** the AI airliner's id, our F-35's place for the ai phase (15 km east-north-east of the flank: Solliès, its anchor far) */
+const AI_ID = "e2eai1";
+const AI_PLAYER = [43.18, 6.12] as const;
+/** the chase view's zooms about an A320 (2.4 × its 37.6 m length × zoom behind it): ~60 m, ~1.5 km, ~3 km */
+const AI_VIEWS = [
+  { name: "chase-60m", zoom: 0.66 },
+  { name: "chase-1500m", zoom: 16.6 },
+  { name: "chase-3000m", zoom: 33.2 },
+  { name: "chase-60m-again", zoom: 0.66 },
+];
 const W = 1920,
   H = 1080;
 /** Mont Faron's southern flank, over Toulon [°] (the craft set down there) */
@@ -252,6 +268,104 @@ describe.skipIf(!E2E)("J2-2: the craft's contact ground whatever the camera", ()
       c.jetModes.spd = ${spd}; return { ap: c.jetModes.alt !== null, athr: c.jetModes.spd !== null }; })()`);
       if (!ap.ap || !ap.athr) throw new Error(`the autopilot ${ap.ap} / autothrottle ${ap.athr} not engaged`);
       out.flight = await views(FLY_VIEWS, FLY_S, false, "flight");
+      out.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
+      expect(out.gpuErrors).toBe(0);
+    },
+    500_000,
+  );
+
+  test.skipIf(!PHASES.includes("ai"))(
+    "ai: an AI airliner at rest on the slope, the camera following it at 60 m, 1.5 km, 3 km — its ground each image",
+    async () => {
+      const [lat, lon] = GROUND;
+      // (our F-35 set down far from it; the airliner made up, parked on the flank — its reports' clock the page's: no age)
+      const setup = `(async () => { __bh.freeze(false); __bh.game.setDate("2026-07-10T11:00:00Z"); __bh.game.set("weather", "fair");
+      __bh.game.set("earthClouds", 0); const note = __bh.game.land("earth", ${AI_PLAYER[0]}, ${AI_PLAYER[1]}); ${cockpit}
+      const F = __bh.camera.traffic, now = Date.now() / 1000;
+      const p = { id: "${AI_ID}", cs: "E2EAI1", reg: "F-TEST", type: "A320", cat: "A3", lat: ${lat}, lon: ${lon}, alt: 0, gs: 0, trk: 90,
+        hdg: 90, vs: 0, roll: null, gnd: true, t: now, src: "adsb.lol" };
+      F.planes.set(p.id, { p, prev: null, hist: [p], heard: now });
+      for (let i = 0; i < 30; i++) await new Promise((q) => requestAnimationFrame(q));
+      // (as the camera panel's Chase tile does: the free camera's target and view, let go of our craft — camerapanel.ts)
+      __bh.spectate(true); const vc = __bh.camera.viewController();
+      __bh.settings.target = vc.s.target = "trf:${AI_ID}"; __bh.settings.subjectView = vc.s.subjectView = "chase";
+      __bh.camera.setSpectatorFollow(false); vc.subject.yaw = vc.subject.pitch = 0; vc.subject.zoom = ${AI_VIEWS[0]!.zoom};
+      for (let i = 0; i < 60; i++) await new Promise((q) => requestAnimationFrame(q));
+      const c = __bh.camera.trafficNow().find((x) => x.id === "${AI_ID}");
+      const t = __bh.renderer.earthTiles, k = Math.PI / 180;
+      const camKm = Math.hypot((t.lon / k - ${lon}) * Math.cos(${lat} * k), Math.asin(t.sinLat) / k - ${lat}) * k * 6371;
+      return { note, ai: c ? { alt: c.alt, gnd: c.gnd } : null, spectating: __bh.camera.spectating, target: vc.s.target,
+        view: vc.s.subjectView, active: vc.subjectActive(), camKm: +camKm.toFixed(2) }; })()`;
+      const s0 = await app.js<{ ai: unknown; spectating: boolean }>(setup);
+      console.log(`  ai setup: ${JSON.stringify(s0)}`);
+      if (!s0.ai) throw new Error("the made-up airliner is not in the traffic (camera.trafficNow)");
+      // (the free camera by the airliner — the tiles' reference within a kilometre of it —, not left by our craft)
+      if (!((s0 as { camKm?: number }).camKm! < 1)) throw new Error(`the camera is not following the airliner: ${JSON.stringify(s0)}`);
+      await app.settled(180_000);
+      const relief = await app.js<{ ok: boolean; finest: number; pending: number }>(`(async () => {
+      const t = __bh.renderer.earthTiles, frame = () => new Promise((q) => requestAnimationFrame(q));
+      const t0 = performance.now(); let calm = 0;
+      while (performance.now() - t0 < 60000) { const ok = t.pending === 0 && t.finest >= 14; calm = ok ? calm || performance.now() : 0;
+        if (calm && performance.now() - calm > 3000) break; await frame(); }
+      return { ok: calm > 0, finest: t.finest, pending: t.pending }; })()`);
+      console.log(`  Mont Faron relief (camera by the airliner): ${JSON.stringify(relief)}`);
+      out.aiPlaced = { setup: s0, relief };
+      const res: Record<string, unknown>[] = [];
+      // (twice: its ground not held — the flown craft's alone, as before Sam's decision —, then held — renderer.anchorSubject)
+      for (const anchored of [false, true]) {
+        await app.js(`(() => { __bh.renderer.anchorSubject = ${anchored}; return 1; })()`);
+        let ref: number | null = null;
+        for (const v of AI_VIEWS) {
+          await app.js(`(async () => { __bh.camera.viewController().subject.zoom = ${v.zoom};
+        for (let i = 0; i < 20; i++) await new Promise((q) => requestAnimationFrame(q)); return 1; })()`);
+          const rows: [number, number, number, number, number, number, number, number][] = [];
+          for (let k = 0; k < HOLD_S; k++) {
+            const r = await within(
+              app.js<{ rows: typeof rows }>(`(async () => {
+            const t = __bh.renderer.earthTiles, S = __bh.sys, frame = () => new Promise((q) => requestAnimationFrame(q));
+            const rows = []; const t0 = performance.now();
+            const dist = (a, b) => { const k = Math.PI / 180, x = (b.lon - a.lon) * k * Math.cos(a.lat * k), y = (b.lat - a.lat) * k; return Math.hypot(x, y) * 6371000; };
+            while (performance.now() - t0 < 1000) {
+              const now = await frame();
+              const c = __bh.camera.trafficNow().find((x) => x.id === "${AI_ID}"); if (!c) continue;
+              const v = t.coverAt({ lat: ${lat}, lon: ${lon} }), k = t.contactAt ? t.contactAt(${lat}, ${lon}) : null;
+              rows.push([+now.toFixed(1), +c.alt.toFixed(3), +S.groundAt(${lat}, ${lon}).toFixed(3), v.atZ, k ? k.z : -1,
+                k ? (k.src === "anchor" ? 1 : 0) : -1,
+                Math.round(dist({ lat: ${lat}, lon: ${lon} }, { lat: Math.asin(t.sinLat) * 180 / Math.PI, lon: t.lon * 180 / Math.PI })),
+                c.gnd ? 1 : 0]);
+            }
+            return { rows }; })()`),
+              20_000,
+              `${v.name} at ${k} s`,
+            );
+            rows.push(...r.rows);
+          }
+          await app.shot(`${OUT}/ai-${anchored ? "held" : "free"}-${v.name}.png`);
+          const alts = rows.map((r) => r[1]);
+          if (v.name === "chase-60m") ref = alts[alts.length - 1] ?? null;
+          const lv = (i: number) => {
+            const c: Record<string, number> = {};
+            for (const r of rows) c[String(r[i])] = (c[String(r[i])] ?? 0) + 1;
+            return c;
+          };
+          const sum = {
+            anchored,
+            view: v.name,
+            images: rows.length,
+            alt: { min: Math.min(...alts), max: Math.max(...alts) },
+            vsNear: ref === null ? null : +Math.max(...alts.map((a) => Math.abs(a - ref!))).toFixed(3),
+            drawnLevel: lv(3),
+            contactLevel: lv(4),
+            fromHeld: rows.filter((r) => r[5] === 1).length,
+            camDist: [Math.min(...rows.map((r) => r[6])), Math.max(...rows.map((r) => r[6]))],
+            onGround: rows.filter((r) => r[7] === 1).length,
+          };
+          console.log(`  ai ${anchored ? "held" : "free"} ${v.name}: ${JSON.stringify(sum)}`);
+          const t0 = rows[0]?.[0] ?? 0;
+          res.push({ ...sum, rows: rows.map((r) => [+(r[0] - t0).toFixed(0), ...r.slice(1)]) });
+        }
+      }
+      out.ai = res;
       out.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
       expect(out.gpuErrors).toBe(0);
     },
