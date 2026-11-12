@@ -3502,3 +3502,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   6 nov.) et l'analyse mer du 10 nov. (M5 faite par S2).
 - **Preuve** : documenté (décisions). Aucun code, test ni mesure dans ce lot.
 - **Suite** : L7b — le village et les mesures ; L4 — les photos de référence et le réglage des rugosités (après Q6, décision 30).
+
+## 2026-11-12T08:07Z — Le rejet de l'historique par identité selon la piste (b) de Sam : allumé par défaut
+
+- **Contribution** (stratégie §7.4 « identité → temporel (rejet) » ; PLAN-J1, le lecteur après J1-5) : l'identité a un premier lecteur
+  allumé dans le jeu, borné à ce que la reprojection ne tient pas — **les surfaces mobiles** (l'appareil, les voitures : mouvement z 1)
+  sans historique là où leur mot manque aux 3 × 3 de l'image d'avant ; **le décor immobile garde le sien**, sauf à l'image d'une **nouvelle
+  publication du décor** (génération changée : `renderer.republishedNow`, `TA.pFwd.w`) où ce qui apparaît ou disparaît a le poids de son
+  historique coupé au quart (`post.wgsl` `identityKept`, `ID_REPUBLISHED`). Commit 634d9cd1 ; compteurs `identityRejects()` (de l'image,
+  cumulés ; rejetés, coupés), `identRepublished` ; e2e `identity-reject` (totaux par côté, trois publications forcées à la main).
+- **Pourquoi coupé et non rejeté** (kerr-mini, poursuite à 27–42 m sur les Maures, première version) : une publication rejetait 75 000 à
+  113 000 pixels d'un coup (~10 % de l'image) une à deux fois par seconde, une publication sans changement 5 000–12 000 — des pulsations de
+  forêt molle, ce que Sam avait refusé.
+- **Mesuré** (kerr-mini) : à 97–150 m, mobiles ~0–270 pixels rejetés par image, ~30 000 pixels coupés par publication (6 à 9 en 8 s) ;
+  planche `docs/progress/j1/j1-rejet-identite-b.jpg` — **la forêt aussi nette avec que sans**, cockpit et poursuite. **ΔGPU sur J0**
+  (A/B A B B A contre 2d111b86) : vol 59,9 / 58,3 → 59,2 / 59,1 ms, prolongé 58,0 / 57,2 → 58,1 / 59,1 ms — dans le bruit ; par passe
+  `taau` +0,18 ms (3,48 → 3,67), `temporal` +0,02 ms.
+- **Vérifié** : check-wgsl 83/83, tsc, biome, `pipeline-inventory --check`. **Non vérifié** : l'image même d'une publication (aucune
+  capture ne tombe dessus) ; les voitures en vol (relu seulement) ; ce Mac en surchauffe ce matin (état « serious ») — toutes les mesures
+  sur kerr-mini. `bun test` complet non relancé (shader et renderer seulement).
+- **Suite** : J1-6 — l'export de la couleur complète de l'image vivante (`renderer.sceneColor`) et le chemin d'entrée de J0 à cache froid.

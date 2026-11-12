@@ -245,7 +245,9 @@ rejeté** (kerr-mini, e2e `identity-reject`, poursuite à 27–42 m au-dessus de
 la main) encore 5 000 à 12 000 — des pulsations de forêt molle. **Mesuré ensuite** (kerr-mini, même e2e, 97–150 m) : les surfaces
 mobiles ~0 à 270 pixels rejetés par image (l'appareil en poursuite), ~30 000 pixels au poids coupé par publication (6 à 9 publications
 en 8 s), 4 500–26 000 à une publication sans changement ; GPU p50 inchangé dans le bruit (cockpit 47,9 / 46,9 sans, 48,9 / 49,4 avec ;
-poursuite 56,1 / 55,8 sans, 56,8 / 56,1 avec). **Image** : planche `docs/progress/j1/j1-rejet-identite-b.jpg` — la forêt aussi nette
+poursuite 56,1 / 55,8 sans, 56,8 / 56,1 avec). **ΔGPU sur J0** (kerr-mini, 12 nov., A/B A B B A, `ab-commit` 2d111b86 — éteint —
+contre l'arbre allumé) : vol mesuré 59,9 / 58,3 → 59,2 / 59,1 ms (dans le bruit), vol prolongé 58,0 / 57,2 → 58,1 / 59,1 ms ; par
+passe, `taau` 3,48 → 3,67 ms (+0,18), `temporal` 1,70 → 1,72 ms. **Image** : planche `docs/progress/j1/j1-rejet-identite-b.jpg` — la forêt aussi nette
 avec que sans, en cockpit comme en poursuite (les deux vues de poursuite ne sont pas au même endroit : le vol rejoué diverge). Compteurs :
 `identityRejects()` (de l'image, cumulés, rejetés et coupés), `identRepublished`. Non vérifié : l'image même d'une publication (une
 capture ne tombe pas sur elle) ; les voitures en vol (relu seulement — leur mouvement z 1 les fait juger comme l'appareil).
