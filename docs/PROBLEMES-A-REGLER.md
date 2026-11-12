@@ -50,7 +50,13 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   font : ils naissent de l'ombrage de la mer, avant l'affichage. **Cause supposée** (non prouvée) : le crénelage du spéculaire —
   le reflet du Soleil bas (15:30 UTC, cap à l'ouest) sur des facettes de vague plus petites qu'un pixel, allumées une image et pas la
   suivante. Le motif en rangées régulières des captures reste à expliquer (la gigue du temporel ?).
-- **Piste** : un spéculaire de la mer filtré à l'échelle du pixel (rugosité élargie par la variance des normales FFT sous le pixel —
+- **Puis, leviers par leviers** (même jour, ce Mac, même sonde, côtés alternés avec l'état livré) : les pixels isolés au-delà du blanc
+  dans la couleur de scène **restent** (0–24 par image, l'état livré 0–22) avec le spéculaire du sol coupé (`liteSkip` 67108864), la mer
+  plate (`seaSurfaceOn` false), **le matériau de l'eau coupé** (`liteSkip` 1) — **l'hypothèse du spéculaire de la mer est donc fausse
+  ou incomplète**. Certains tombent au centre bas de l'image, sur le nez de l'appareil (ses reflets métalliques, dans la scène depuis
+  J1-5), d'autres sur la mer à droite. Peu nombreux pour « plein de points » : la mesure ne voit peut-être pas ce que Sam voit. **Cause
+  inconnue** ; à faire : une vidéo ou une rafale d'écran à l'instant où Sam les voit, et les points localisés (nez, mer, brume).
+- **Piste (avant ces leviers)** : un spéculaire de la mer filtré à l'échelle du pixel (rugosité élargie par la variance des normales FFT sous le pixel —
   Toksvig/LEAN —, ou plafonnée au loin), ou une borne des lucioles dans le temporel sur l'eau ; relève de la passe d'eau
   (PLAN-MER-WEBGPU / J4) ; mesurer avec la sonde (`SP_SWITCHES`), la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`
   ou le taux raster à 1 pour voir si le motif suit l'ombrage clairsemé ; puis la reconstruction (`liteReconstruct`) ou la plage du
