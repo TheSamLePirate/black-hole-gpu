@@ -9877,6 +9877,13 @@ fn seaSSR(D: vec3f, r: vec3f) -> vec4f {
       let idx = px.y * u32(P.res.x) + px.x;
       let mk = moments[idx].x;
       if (mk < 1e29 && !(mk < -2.5 && mk > -3.5)) { return vec4f(0.0); }
+      // (the water's own pixels — rasterMark's 4e30 —: this very pass writes them, other workgroups' threads, no order between
+      // their moments and their accum — the mark seen finished, accum still shadeLite's under-water value: the shallow sea's
+      // albedo (w 2), the bed's light. Its first steps ~10 m along the mirrored ray land a row or two up: on the M1 Max, the
+      // top row of each 8 × 8 workgroup read the one above, in another workgroup — white and cyan points 3 to 13 × the white
+      // on the sea, rows 8 px apart, 100–250 an image in a held view (PROBLEMES-A-REGLER, 12 Nov 2026). seaSsrSafe — a
+      // switch, off by default until Sam decides —: those pixels not read, the sea's mirror there the sky's)
+      if (seaSsrSafe() && mk > 3e30) { return vec4f(0.0); }
       let c = accum[idx];
       if (c.a <= 0.0) { return vec4f(0.0); }
       let uv = sh.xy / P.res.xy;
@@ -15128,6 +15135,10 @@ fn rasterShadeLate() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_SHAD
 const RASTER_NEAR_TREES_FLAG = 2048u;
 const RASTER_NEAR_TREES_M = 80.0;
 fn rasterNearTreesOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_NEAR_TREES_FLAG) != 0u; }
+// (renderer.seaSsrSafe, mouthList[1].y + 4096: the sea's screen-space mirror — seaSSR — not reading the water's pixels the water's
+// pass writes as it reads them)
+const RASTER_SSR_SAFE_FLAG = 4096u;
+fn seaSsrSafe() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_SSR_SAFE_FLAG) != 0u; }
 struct RasterRay { look: vec3f, rd: vec3f, kM: f32 };
 // the camera ray through an image point [px]: its look (the camera's frame), its unit direction in the squashed space, and
 // how many metres of the physical ray a unit of it is

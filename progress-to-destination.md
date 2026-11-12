@@ -3831,3 +3831,30 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   change) ; la couverture en réseau réel à froid ; Windows. **Limites** : le critère « aucune pointe > 2 ms » est tenu à 0,3 ms près
   (0,1 % des images entre 2,1 et 2,3 ms) ; les `fetch` restent sur le fil principal ; l'enregistrement d'une arrivée hors budget.
 - **Suite** : la même mesure sur kerr-mini à son retour (avec le ΔGPU J0 de J2-2) ; J2-3 (des bords sans fuite).
+
+## 2026-11-12T21:45Z — Points blancs de la mer : la cause trouvée (une course dans la réflexion écran), correctif derrière un levier éteint
+
+- **Contribution** (stratégie §8 — stabilité de l'image en mouvement et en vue tenue, qualité effective — ; §7 « une responsabilité
+  par sortie » : une passe ne lit pas ce qu'elle écrit ; problème ouvert de PROBLEMES-A-REGLER, J2-0 §6) : les points blancs et cyan qui
+  scintillent sur la mer de J0 (113/s sur le M1 Max) ont une cause établie. **La réflexion de la mer en espace écran (`seaSSR`, dans
+  `shadeWater`) lit `moments`/`accum` de pixels d'eau que la même passe écrit** (marque d'eau finie 4·10³⁰ acceptée ; autres groupes de
+  travail, sans ordre entre la marque et la couleur) : elle prend l'intermédiaire de `shadeLite` — l'albédo de la mer peu profonde
+  (`w` = 2), la lumière du fond — pour la radiance du monde reflété. Son premier pas (~10 m) touche la rangée au-dessus : **la rangée
+  haute de chaque groupe 8 × 8** (16 points sur 16 à `y mod 8` ∈ {0, 1}).
+- **Changé** : `src/shaders/trace.wgsl` (`seaSSR` : les marques d'eau refusées si `seaSsrSafe()` ; `RASTER_SSR_SAFE_FLAG` 4096) ;
+  `src/renderer.ts` (`seaSsrSafe = false`, le bit dans les drapeaux du raster) ; sonde `tests/e2e/sea-sparkle-probe.e2e.test.ts`
+  (côtés combinés par « + », coordonnées internes des points — `SP_WHAT` —, écart d'image au premier côté) ; PROBLEMES-A-REGLER
+  (l'entrée : état, cause, mesure, défaut de mesure), fiche J2-0 §6, BH-API (`seaSsrSafe`, la perte des bits bas de `liteSkip`),
+  GRAPHICS-PIPELINE (C19, annexe régénérée avec les tailles).
+- **Mesuré** (M1 Max, fenêtre visible, pression « Heavy », vue J0 tenue avec tuiles ; A B A B A) : points au-delà du blanc par relevé
+  **A 127–277 / B 0** (après 24–28 restes au premier relevé, gardés par le temporel) ; clignotants à l'écran A 118–394 / B 0 ; image hors
+  points : −0,2 à −0,3 % de luminance contre une dérive de la vue tenue de ≈ −1,1 % par côté. Bisection (une douzaine de séances de la
+  sonde) : sans air, lumière simple, imagerie, scans, décor → restent ; G de diagnostic → 0 ; eau réellement coupée → 0 ; réflexion écran
+  coupée → 0 ; marques d'eau refusées → 0.
+- **Défaut de mesure trouvé** : `renderer.liteSkip` passe par un float avec 2²⁶ ajouté quand `groundSpecular` est coupé (le défaut) : ses
+  bits 1, 2, 4 sont perdus — « `liteSkip` 1 » n'a jamais coupé l'eau, ce qui avait écarté la bonne piste. Signalé (PROBLEMES, BH-API), pas
+  corrigé.
+- **Vérifié** : `check-wgsl` 81/81, tsc, biome, `bun test --parallel` 2 212 / 0, `pipeline-inventory --check` puis `--write --sizes`. **Non vérifié** : kerr-mini (hors
+  réseau) ; pourquoi le M1 Max seul (une course : ordonnancement, ordre mémoire — plausible, non prouvé) ; une vue sans mer (inchangée par
+  construction) ; le coût GPU du levier ; en vol ; Windows. **Le levier reste éteint** : décision de Sam (l'allumer, ou faire lire à la
+  réflexion l'image précédente). Aucune image commitée (budget des binaires plein).

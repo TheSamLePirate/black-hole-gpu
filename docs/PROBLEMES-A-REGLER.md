@@ -86,6 +86,10 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 
 ## Des points blancs qui scintillent sur la mer et dans la brume de l'horizon (scène J0, Toulon-Hyères)
 
+**État (12 nov. 2026, soir)** : cause trouvée — la réflexion écran de la mer lit des pixels d'eau en cours d'écriture (fin de
+l'entrée) ; correctif derrière `renderer.seaSsrSafe`, éteint, en attente de la décision de Sam.
+
+
 - **Observé** (Sam, 12 nov. 2026, e2e `j0-reference` sur ce Mac, fenêtre visible) : « plein de points blancs (pixels) qui apparaissent
   et disparaissent, comme du bruit ». **Relevé** sur les captures de la séance (M1 Max, 9691ed31) : des **rangées de points blancs
   d'un pixel, régulièrement espacés**, dans la brume au ras de l'horizon et sur la mer lointaine — sur l'ablation sans HUD aussi ; planche
@@ -152,6 +156,31 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (PLAN-MER-WEBGPU / J4) ; mesurer avec la sonde (`SP_SWITCHES`), la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`
   ou le taux raster à 1 pour voir si le motif suit l'ombrage clairsemé ; puis la reconstruction (`liteReconstruct`) ou la plage du
   temporel sur l'eau lointaine.
+- **CAUSE TROUVÉE (12 nov. 2026, soir, M1 Max, vue J0 tenue, tuiles ; sonde `sea-sparkle-probe`) : la réflexion de la mer en
+  espace écran (`seaSSR`, dans `seaShade` de `shadeWater`) lit des pixels d'eau que la même passe est en train d'écrire.** Elle
+  accepte toute marque ≥ 10²⁹, donc celle d'une eau **finie** (`rasterMark(0, 1)` = 4·10³⁰) ; ces pixels sont écrits par d'autres
+  groupes de travail du même envoi, `moments` et `accum` sans ordre entre eux : la marque vue finie, `accum` encore l'intermédiaire
+  de `shadeLite` — l'**albédo** de la mer peu profonde (`w` = 2, turquoise), la lumière du fond —, lu comme la radiance du monde
+  reflété. Son premier pas n'est qu'à ~10 m le long du rayon réfléchi (≈ 2,2 km) : le pixel touché est une ou deux rangées au-dessus ;
+  pour la **rangée haute de chaque groupe 8 × 8**, c'est un autre groupe de travail. **Preuves** : sous 16 points sur 16, la rangée
+  interne `y mod 8` = 0 (ou 1 à l'arrondi de `surfaceAt`), les colonnes quelconques ; la réflexion écran coupée (bit de diagnostic
+  temporaire) → 0 point ; ne refuser que les marques d'eau (≥ 3·10³⁰) → 0 point, avec l'eau, son spéculaire et sa réflexion gardés.
+  **Pourquoi le M1 Max seulement** (non prouvé) : une course entre groupes de travail dépend de l'ordonnancement et de l'ordre des
+  mémoires du GPU (32 cœurs contre ceux de kerr-mini) ; elle explique aussi que tout changement de code autour en change l'issue.
+  Dans une vue tenue le temporel garde chaque point lu — d'où l'accumulation et le scintillement.
+- **Correctif derrière un levier éteint** : `renderer.seaSsrSafe` (bit raster 4096, `RASTER_SSR_SAFE_FLAG` ; trace.wgsl `seaSSR`) —
+  la réflexion ne lit plus les pixels d'eau (marque ≥ 3·10³⁰), le miroir y est celui du ciel. **Mesuré** (r12, A B A B A, M1 Max en
+  pression thermique « Heavy », même vol J0 tenu) : points au-delà du blanc par relevé **A 127–235 / B 28 puis 0 / A 128–277 / B 24 puis
+  0 / A 97–191** (les 24–28 du premier relevé : les points gardés par le temporel avant la bascule) ; clignotants à l'écran A 118–394 /
+  B 0 ; l'image (couleur de scène, points exclus) : la vue tenue dérive de ≈ −1,1 % de luminance par côté, et le levier s'en écarte de
+  −0,2 à −0,3 % (les points et leurs halos retirés). **Non mesuré** : une vue sans mer (inchangée par construction : `seaSSR` seul lit le
+  bit) ; le coût GPU (une comparaison par réflexion touchée) ; kerr-mini (hors réseau) ; en vol. **Décision de Sam** : allumer le levier
+  par défaut (et le retirer ensuite), ou corriger autrement (lire l'image de l'image précédente pour la réflexion écran).
+- **Défaut de mesure trouvé en chemin** : `renderer.liteSkip` arrive au noyau dans un float (`P.jet2.w`) avec, ajoutés, 2²⁶ quand
+  `groundSpecular` est coupé — **le défaut** — (et 2²⁹ si `shoreWash` est coupé) : les bits 1, 2 et 4 y sont **perdus** (pas de 8 du
+  float32 à 2²⁶). **`liteSkip` 1 n'a donc jamais coupé l'eau** dans les mesures ci-dessus (ni 2, ni 4 : les exclusions « eau »,
+  « 126 », « 9 », « 129 », « 8193 » de cette entrée ne valent que pour leurs bits ≥ 8) ; c'est ce qui a fait chercher la cause hors de
+  l'eau. À corriger (un mot entier, ou ces trois réglages hors du masque) ; BH-API le signale.
 
 ## ~~Des rectangles turquoise sur l'eau peu profonde devant l'Almanarre~~ — réglé le même jour : les blocs JPEG de l'orthophoto (8 × 8 pixels, 1,6 m) sur l'eau calme, lus de près sous huit empreintes du pixel seulement, le seuil du turquoise les découpant ; l'albédo du fond lu sur 3,2 m au moins (`shadeLite`, eau peu profonde) ; planche `docs/progress/mer/turquoise-avant-apres.jpg`. (Les diagnostics « albédo nul » plus bas avaient été pris pendant la recompilation : faux.)
 

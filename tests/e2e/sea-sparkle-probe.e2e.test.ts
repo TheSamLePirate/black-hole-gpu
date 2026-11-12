@@ -49,15 +49,20 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
       const sides = (process.env.SP_SWITCHES ?? "none,identityReject=false,shipInScene=false").split(",");
       const out: Record<string, number[]> = {};
       for (const side of sides) {
-        const [name, val] = side.split("=");
-        // (a renderer's switch, or a setting: settings.<name>=<value>; restored after the side)
-        const target = name!.startsWith("settings.") ? "__bh.settings" : "__bh.renderer";
-        const key = name!.replace(/^settings\./, "");
-        let before = "undefined";
-        if (name !== "none") {
-          if (!/^[A-Za-z]+$/.test(key) || !/^[A-Za-z0-9"]+$/.test(val!)) throw new Error(`SP_SWITCHES: ${side}`);
-          before = JSON.stringify(await app.js(`${target}.${key}`));
-          await app.js(`(() => { ${target}.${key} = ${val}; __bh.touch(); return 1; })()`);
+        // (a renderer's switch, or a setting: settings.<name>=<value>; several joined by « + »; restored after the side)
+        const parts =
+          side === "none"
+            ? []
+            : side.split("+").map((one) => {
+                const [name, val] = one.split("=");
+                const target = name!.startsWith("settings.") ? "__bh.settings" : "__bh.renderer";
+                const key = name!.replace(/^settings\./, "");
+                if (!/^[A-Za-z]+$/.test(key) || !/^[A-Za-z0-9"]+$/.test(val ?? "")) throw new Error(`SP_SWITCHES: ${side}`);
+                return { target, key, val: val!, before: "undefined" };
+              });
+        for (const s of parts) {
+          s.before = JSON.stringify(await app.js(`${s.target}.${s.key}`));
+          await app.js(`(() => { ${s.target}.${s.key} = ${s.val}; __bh.touch(); return 1; })()`);
         }
         await app.js(`new Promise((q) => { let n = 0; const f = () => (++n > 60 ? q(1) : requestAnimationFrame(f)); f(); })`);
         const counts: number[] = [];
@@ -79,9 +84,9 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
             }
             // (what the visibility drew under the first ones — surfaceAt —, their colour and its neighbours': what they are)
             const what = [];
-            for (let q = 0; q < Math.min(at.length, 8); q += 2) {
+            for (let q = 0; q < Math.min(at.length, Number(${JSON.stringify(process.env.SP_WHAT ?? "8")})); q += 2) {
               const x = at[q], y = at[q + 1], i = 4 * (y * W + x), sa = await __bh.renderer.surfaceAt((x + 0.5) / W, (y + 0.5) / H);
-              what.push({ x, y, rgb: [d[i], d[i + 1], d[i + 2]].map((v) => +(v * e).toFixed(2)), kind: sa?.kind, ground: sa && Math.round(sa.ground), nearest: sa && Math.round(sa.nearest), level: sa?.level });
+              what.push({ x, y, rgb: [d[i], d[i + 1], d[i + 2]].map((v) => +(v * e).toFixed(2)), kind: sa?.kind, ground: sa && Math.round(sa.ground), nearest: sa && Math.round(sa.nearest), level: sa?.level, ix: sa?.x, iy: sa?.y });
             }
             return { n, at, over, what }; })()`);
           if (k === 0) console.log(`    ${side}: what they are ${JSON.stringify(r.what)}`);
@@ -134,7 +139,29 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         );
         console.log(`  ${side}: pixels blinking white between two shown frames ${JSON.stringify(blinks)}`);
         console.log(`  ${side}: isolated white pixels on the sea per shot ${JSON.stringify(counts)}`);
-        if (name !== "none") await app.js(`(() => { ${target}.${key} = ${before}; __bh.touch(); return 1; })()`);
+        // (the image elsewhere: this side's scene colour against the first side's — the view held, the same pixels —, the mean
+        // |ΔL| over the mean L, the pixels over the SDR's white in either left out: the points; the whole image, and the sea's band)
+        const diff = await app.js<{ all: number; band: number; mean: number; kept: number }>(`(async () => {
+          const c = await __bh.renderer.sceneColor(__bh.settings), W = c.width, H = c.height, e = c.exposure, d = c.data;
+          const L = new Float32Array(W * H);
+          for (let i = 0; i < W * H; i++) L[i] = e * (0.2126 * d[4 * i] + 0.7152 * d[4 * i + 1] + 0.0722 * d[4 * i + 2]);
+          const R = window.__spRef; if (!R || R.length !== L.length) { window.__spRef = L; return { all: 0, band: 0, mean: 0, kept: 0 }; }
+          let da = 0, la = 0, db = 0, lb = 0, n = 0, m = 0;
+          const y0 = Math.floor(H * ${ROWS[0]}), y1 = Math.floor(H * ${ROWS[1]});
+          for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            const i = y * W + x, a = R[i], b = L[i];
+            if (!(a <= 1 && b <= 1)) continue;
+            n++; da += Math.abs(a - b); la += a;
+            if (y >= y0 && y < y1) { db += Math.abs(a - b); lb += a; }
+            m += b - a;
+          }
+          return { all: da / Math.max(la, 1e-9), band: db / Math.max(lb, 1e-9), mean: m / Math.max(la, 1e-9), kept: n / (W * H) };
+        })()`);
+        console.log(
+          `  ${side}: scene colour against the first side — |ΔL|/L whole ${diff.all.toFixed(4)}, sea band ${diff.band.toFixed(4)}, mean ΔL/L ${diff.mean.toFixed(4)}, pixels kept ${diff.kept.toFixed(3)}`,
+        );
+        out[`${side} diff`] = [diff.all, diff.band, diff.mean, diff.kept];
+        for (const s of parts) await app.js(`(() => { ${s.target}.${s.key} = ${s.before}; __bh.touch(); return 1; })()`);
       }
       await Bun.write(`${OUT}/results.json`, JSON.stringify(out, null, 1));
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);

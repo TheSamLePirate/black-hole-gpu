@@ -385,6 +385,9 @@ const RASTER_WATER_FLAG = 256;
 const RASTER_SHADE_LATE_FLAG = 1024;
 /** the parameters' raster bit for the trees near the camera taken by the rays' kernel (trace.wgsl RASTER_NEAR_TREES_FLAG) */
 const RASTER_NEAR_TREES_FLAG = 2048;
+/** the parameters' raster bit for the sea's screen-space mirror kept off the water's own pixels (trace.wgsl
+ *  RASTER_SSR_SAFE_FLAG — renderer.seaSsrSafe) */
+const RASTER_SSR_SAFE_FLAG = 4096;
 /** within this the trees are the rays' kernel's (trace.wgsl RASTER_NEAR_TREES_M) [m] */
 const RASTER_NEAR_TREES_M = 80;
 /** the temporal pass's least weight of a fresh pixel with the raster's ground at every pixel (taParams[0]'s 1/16 otherwise) */
@@ -7148,7 +7151,8 @@ export class Renderer {
         RASTER_LITE_FLAG +
         (this.rasterWaterNow ? RASTER_WATER_FLAG : 0) +
         (shadeLate ? RASTER_SHADE_LATE_FLAG : 0) +
-        (this.nearTreesNow ? RASTER_NEAR_TREES_FLAG : 0);
+        (this.nearTreesNow ? RASTER_NEAR_TREES_FLAG : 0) +
+        (this.seaSsrSafe ? RASTER_SSR_SAFE_FLAG : 0);
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
     }
     // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
@@ -10167,6 +10171,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  system/earth-shore.ts —, one read a near sea pixel; the waves' white within ~12 m of it): on — measured on kerr-mini,
    *  +0.2–0.8 ms of the water's pass over coastal views (T7.md); false: neither the bake nor the wash */
   shoreWash = true;
+  /** the sea's screen-space mirror (trace.wgsl seaSSR) kept off the water's own pixels — those the water's pass writes while it
+   *  reads them, other workgroups' threads, their mark and colour in no order: the shallow sea's albedo, the bed's light read
+   *  as the world's light — white and cyan points on the sea, the top row of each 8 × 8 workgroup (M1 Max, 12 Nov 2026,
+   *  PROBLEMES-A-REGLER). Off by default until Sam decides; on: the sea's mirror there the sky's */
+  seaSsrSafe = false;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
   private rasterEligibleNow = false;
   /** the clouds' transmittance map seen from the Sun (trace.wgsl cloudShadow — docs/PLAN-NUAGES-AAA.md N3; read by
