@@ -3472,3 +3472,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   n'est plus reflétée par les verres ; le flou de mouvement (éteint par défaut) peut mêler l'appareil au fond dans ses prises ; la
   photométrie compte l'appareil vu de dehors ; un `bun test --parallel` antérieur a eu 4 dépassements de 5 s sous la charge (vols lunaires,
   polynôme de réfraction ; 15/15 relancés seuls). **Suite** : le rejet de l'historique par identité.
+
+## 2026-11-12T06:24Z — Le rejet de l'historique par identité : construit, mesuré, laissé éteint (à décider par Sam)
+
+- **Contribution** (stratégie §7.4 « identité → temporel (rejet) » ; PLAN-J1, le lecteur suivant J1-5) : le premier lecteur de l'identité
+  dans l'historique existe et se mesure — `post.wgsl` `identityKept` dans `temporal` et `taau` (le mot du pixel cherché dans les 3 × 3 de
+  l'identité de l'image d'avant, copiée en fin d'image), levier `renderer.identityReject`, compteur `renderer.identityRejects()`, e2e
+  `identity-reject` (chaque côté le même instantané volé 4 s : même endroit).
+- **Mesuré** (ce Mac, le F-35 à 85–130 m au-dessus des Maures) : 2 500–5 000 pixels rejetés par image (temporal ; 4 900–9 200 TAAU),
+  0,2–0,5 % de l'image ; coût GPU dans le bruit du M1 Max chauffé. **Image** : `docs/progress/j1/j1-rejet-identite-foret.jpg` — **la forêt
+  proche plus molle avec le rejet** (poursuite ; cockpit presque identique), aucune traînée visible sans lui : un pixel rejeté repart d'une
+  frame que le raster n'ombre qu'en partie (1 sur 8 ou 16) et que la TAAU agrandit sans historique. **Donc éteint par défaut** ; éteint,
+  **coût nul** (kerr-mini, J0, A/B A B B A contre b4ef15c0 : 58,9 / 59,2 contre 58,8 / 58,9 ms). Pistes pour Sam (PLAN-J1 fin §4 ter) :
+  rejet doux (poids coupé), réservé aux générations et aux mobiles, ou seulement là où la frame est entièrement ombrée.
+- **Vérifié** : check-wgsl 83/83, tsc, `bun test --parallel` 2190/1 (le vol lunaire de `landing-flight` à 5,03 s sous la charge ; 7/7 seul).
+  **Non fait** : `rigidMotionOn` reste éteint (aucun lecteur ne l'emploie) ; pas d'A/B allumé sur kerr-mini ; les pistes non essayées.

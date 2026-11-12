@@ -727,6 +727,9 @@ interface Target {
      *  they are made again */
     motion: GPUTexture;
     motionPrev: GPUTexture;
+    /** the identity its binds read and the frame before's (PLAN-J1: the history's rejection by identity — stand-ins when off) */
+    ident: GPUTexture;
+    identPrev: GPUTexture;
     mkBinds: (motion: GPUTexture, prev: GPUTexture) => GPUBindGroup[];
     idx: number;
     valid: boolean;
@@ -5563,9 +5566,13 @@ export class Renderer {
   private refreshTemporalMotion(ta: NonNullable<Target["temporal"]>) {
     const m = this.motionTexNow();
     const p = this.motionPrevNow();
-    if (m === ta.motion && p === ta.motionPrev) return;
+    const i = this.identNow(),
+      ip = this.identPrevNow();
+    if (m === ta.motion && p === ta.motionPrev && i === ta.ident && ip === ta.identPrev) return;
     ta.motion = m;
     ta.motionPrev = p;
+    ta.ident = i;
+    ta.identPrev = ip;
     ta.binds = ta.mkBinds(m, p);
   }
   /** the frame before's motion (PLAN-J1 J1-2: its disocclusions — where a moving mesh was and no longer is, no history): a copy
@@ -5596,8 +5603,71 @@ export class Renderer {
   private keepMotion(enc: GPUCommandEncoder) {
     const m = this.motionSourceNow();
     const p = this.motionPrevTex;
-    if (!m || !p || p.width !== m.width || p.height !== m.height) return;
-    enc.copyTextureToTexture({ texture: m }, { texture: p }, [m.width, m.height]);
+    if (m && p && p.width === m.width && p.height === m.height)
+      enc.copyTextureToTexture({ texture: m }, { texture: p }, [m.width, m.height]);
+    // (the identity too — PLAN-J1, the history's rejection by identity)
+    const i = this.identSourceNow();
+    const ip = this.identPrevTex;
+    if (i && ip && ip.width === i.width && ip.height === i.height)
+      enc.copyTextureToTexture({ texture: i }, { texture: ip }, [i.width, i.height]);
+  }
+  /** PLAN-J1 (after J1-5) — the history's rejection by identity: a pixel whose surface's identity word (object | generation: the
+   *  Earth's visibility's, the craft's) is nowhere in the 3 × 3 about where its history is taken, in the frame before's identity,
+   *  starts again without history (post.wgsl identityKept: temporal, taau). Off by default (12 Nov 2026): flying low over the
+   *  Maures it turned away 2 500–5 000 pixels a frame and softened the near forest — a rejected pixel starts again from a frame the
+   *  raster shades in part (1 in 8 or 16) and the TAAU upscales without its history —, no trail seen without it: Sam's to decide.
+   *  Off: the stand-ins bound, the history as before, nothing copied */
+  identityReject = false;
+  /** the pixels whose history the identity alone turned away in the last frame (temporal, taau) — a diagnostic: read back */
+  async identityRejects(): Promise<{ temporal: number; taau: number }> {
+    const st = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.idRejectBuf(), 0, st, 0, 16);
+    this.device.queue.submit([enc.finish()]);
+    await st.mapAsync(GPUMapMode.READ);
+    const v = new Uint32Array(st.getMappedRange().slice(0));
+    st.destroy();
+    return { temporal: v[0]!, taau: v[1]! };
+  }
+  private idRejects: GPUBuffer | null = null;
+  private idRejectBuf(): GPUBuffer {
+    return (this.idRejects ??= this.device.createBuffer({
+      label: "the history's rejections by identity",
+      size: 16,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    }));
+  }
+  private identStandIn: GPUTexture | null = null;
+  private identPrevTex: GPUTexture | null = null;
+  /** the identity the history's rejection reads: the Earth's visibility's (its pass this frame), else none */
+  private identSourceNow(): GPUTexture | null {
+    return this.identityReject ? (this.terrainRaster?.surfaceTextures()?.identity ?? null) : null;
+  }
+  private identNow(): GPUTexture {
+    return (
+      this.identSourceNow() ??
+      (this.identStandIn ??= this.device.createTexture({
+        label: "identity stand-in",
+        size: [1, 1],
+        format: "r32uint",
+        usage: GPUTextureUsage.TEXTURE_BINDING,
+      }))
+    );
+  }
+  /** the frame before's identity: a copy of the visibility's at the frame's end (keepMotion), its size; else the stand-in */
+  private identPrevNow(): GPUTexture {
+    const i = this.identSourceNow();
+    if (!i) return this.identNow();
+    if (!this.identPrevTex || this.identPrevTex.width !== i.width || this.identPrevTex.height !== i.height) {
+      this.identPrevTex?.destroy();
+      this.identPrevTex = this.device.createTexture({
+        label: "identity, the frame before",
+        size: [i.width, i.height],
+        format: "r32uint",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+      });
+    }
+    return this.identPrevTex;
   }
   /** the frame's frozen description (src/frame-desc.ts; PLAN-J1 J1-1): built at renderer.frame()'s start — its id, its real clock
    *  read once, the flight's and the scene's clocks, the camera now and before */
@@ -7702,6 +7772,8 @@ export class Renderer {
 
   private encodeTemporal(enc: GPUCommandEncoder, t: Target, s: Settings): boolean {
     const d = this.device;
+    // (the rejections by identity counted afresh — identityRejects)
+    enc.clearBuffer(this.idRejectBuf());
     const retired = this.carryRetired;
     if (retired) {
       this.carryRetired = null;
@@ -7746,6 +7818,9 @@ export class Renderer {
               { binding: 29, resource: alb[1 - k]!.createView() },
               { binding: 49, resource: motion.createView() },
               { binding: 50, resource: prev.createView() },
+              { binding: 51, resource: this.identNow().createView() },
+              { binding: 52, resource: this.identPrevNow().createView() },
+              { binding: 53, resource: { buffer: this.idRejectBuf() } },
             ],
           }),
         );
@@ -7770,6 +7845,8 @@ export class Renderer {
         binds,
         motion,
         motionPrev,
+        ident: this.identNow(),
+        identPrev: this.identPrevNow(),
         mkBinds,
         idx: 0,
         valid: false,
@@ -8097,7 +8174,9 @@ export class Renderer {
     const ta = t.temporal!;
     const motion = this.motionTexNow();
     const motionPrev = this.motionPrevNow();
-    const gen = `${this.motionGen(motion)}.${this.motionGen(motionPrev)}`;
+    const ident = this.identNow(),
+      identPrev = this.identPrevNow();
+    const gen = `${this.motionGen(motion)}.${this.motionGen(motionPrev)}.${this.motionGen(ident)}.${this.motionGen(identPrev)}`;
     const key = `${u.idx}:${ta.idx}:${gen}`;
     let bind = u.binds.get(key);
     if (!bind) {
@@ -8117,6 +8196,9 @@ export class Renderer {
           { binding: 27, resource: { buffer: u.buf } },
           { binding: 49, resource: motion.createView() },
           { binding: 50, resource: motionPrev.createView() },
+          { binding: 51, resource: ident.createView() },
+          { binding: 52, resource: identPrev.createView() },
+          { binding: 53, resource: { buffer: this.idRejectBuf() } },
         ],
       });
       // (a new motion texture: the bind groups made for the old ones dropped)

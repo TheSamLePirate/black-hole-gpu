@@ -643,6 +643,29 @@ fn meshMotion(ip: vec2i) -> vec4f {
   if (md.x < 2u || ip.x < 0 || ip.y < 0 || u32(ip.x) >= md.x || u32(ip.y) >= md.y) { return vec4f(0.0); }
   return textureLoad(motionTex, ip, 0);
 }
+// (PLAN-J1, after J1-5 — the history's rejection by identity: the surface's word now — object 20 bits | generation 12; the Earth's
+// visibility's, the craft's — and the frame before's — copied at its end; 1 × 1 stand-ins when off or without them)
+@group(0) @binding(51) var identTex: texture_2d<u32>;
+@group(0) @binding(52) var identPrevTex: texture_2d<u32>;
+// (the pixels whose history the identity alone turned away this frame — temporal [0], taau [1]: renderer.identityRejects())
+@group(0) @binding(53) var<storage, read_write> idRejects: array<atomic<u32>, 4>;
+// whether the history taken at `up` (the frame before's internal pixel) may hold this pixel's surface ip: its word in the 3 × 3 about
+// it in the frame before's identity (a silhouette's pixels, their jittered coverage, kept); not there — another object came, its
+// scenery republished (a new generation), the craft's mount changed —: none
+fn identityKept(ip: vec2i, up: vec2i) -> bool {
+  let d = textureDimensions(identTex);
+  if (d.x < 2u || any(textureDimensions(identPrevTex) != d)) { return true; }
+  let hi = vec2i(d) - 1;
+  let now = textureLoad(identTex, clamp(ip, vec2i(0), hi), 0).r;
+  let c = clamp(up, vec2i(0), hi);
+  if (textureLoad(identPrevTex, c, 0).r == now) { return true; }
+  for (var j = -1; j <= 1; j++) {
+    for (var i = -1; i <= 1; i++) {
+      if (textureLoad(identPrevTex, clamp(c + vec2i(i, j), vec2i(0), hi), 0).r == now) { return true; }
+    }
+  }
+  return false;
+}
 @group(0) @binding(29) var albOut: texture_storage_2d<rgba16float, write>;
 fn albHistAt(uv: vec2f, size: vec2f) -> vec2f {
   let sp = uv * size;
@@ -841,7 +864,11 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     // (where a moving mesh was the frame before and is not now: disoccluded, no history)
     // (and a car its loop took back — z 2 —: none either)
     let left = (!moved && all(textureDimensions(motionPrevTex) == size) && meshMotionPrev(vec2i(up)).z > 0.5) || mv.z > 1.5;
-    if (all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0)) && !underCabin && !left) {
+    // (and a surface not there the frame before — its identity —: none)
+    let same = !all(textureDimensions(identTex) == size) || identityKept(vec2i(gid.xy), vec2i(up));
+    let inside = all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0)) && !underCabin && !left;
+    if (inside && !same) { atomicAdd(&idRejects[0], 1u); }
+    if (inside && same) {
       hist = historyAt(uv, vec2f(size)) * TA.k.x;
       // (the ground's detail: the history's colour is its pixels' albedo resampled — blurred as it is —, swapped for the
       // pixel's accumulated one: its jittered reads blended over a few frames (ALB_ALPHA), sharp and antialiased — the texture
@@ -1284,7 +1311,11 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
   // (where a moving mesh was the frame before and is not now: disoccluded, no history)
   let pmd = vec2f(textureDimensions(motionPrevTex));
   let left = (mv.z < 0.5 && meshMotionPrev(vec2i(uv * pmd)).z > 0.5) || mv.z > 1.5;
-  if (TU.s.w > 0.5 && !underCabin && !left && all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0))) {
+  // (and a surface not there the frame before — its identity, at the internal pixels —: none)
+  let same = !all(textureDimensions(identTex) == rs) || identityKept(base, vec2i(uv * vec2f(rs)));
+  let inside = TU.s.w > 0.5 && !underCabin && !left && all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0));
+  if (inside && !same) { atomicAdd(&idRejects[1], 1u); }
+  if (inside && same) {
     let hist = historyAt(uv, vec2f(size)) * TA.k.x;
     var nPrev = clamp(textureSampleLevel(addTex, samp, uv, 0.0).a, 0.0, nMax);
     // (clipped towards the native result's mean about it, within g of its standard deviations — Salvi, as the native pass
