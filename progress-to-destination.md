@@ -3672,3 +3672,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   documentation) ; la fuite entre pages, l'effet en vol des `invalidate()` globaux, l'empreinte du sol en pente, la fonction
   `texture-compression-bc` sur les machines du labo n'ont jamais été mesurés (§10 du plan).
 - **Suite** : la revue de Sam (l'ordre, le domaine, les dix questions) ; puis J2-0.
+
+## 2026-11-12T12:21Z — PLAN-J2 validé par Sam ; J2-0 lancé
+
+- **Décision** (stratégie §15 J2 ; PLAN-J2 §9) : Sam valide les dix recommandations du plan — l'ordre J2-0 → J2-8, la Terre proche,
+  fenêtres à 4, BC7 après J2-1, un seul historique long, plancher d'échelle 2/3, l'identité du sol page + génération, `rigidMotionOn` retiré
+  en J2-8 sans lecteur, ST5/ST9 absorbés pour le sol, pas d'Effect dans J2-1. **J2-0** (contrats et instruments : sondes de fuite, de
+  couture, netteté par image, compteurs de publication, localisation des points blancs, fiche de référence) lancé dans une session
+  déléguée. Preuve : documenté (décision) ; J2-0 en cours, rien de mesuré encore.

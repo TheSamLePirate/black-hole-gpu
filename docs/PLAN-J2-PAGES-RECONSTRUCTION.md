@@ -1,6 +1,6 @@
 # PLAN-J2 — pages d'imagerie filtrables et reconstruction
 
-**État (12 novembre 2026) : plan écrit, à valider par Sam.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
+**État (12 novembre 2026) : plan validé par Sam (ses recommandations, §9) ; J2-0 en cours.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
 l'écrire (session de documentation). L'existant (§2) est relevé dans le code de `main` au 12 novembre (après `4d1201c0`, J1 terminé) ;
 **le code fait foi**, les lignes citées sont celles de ce jour. Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J2
 (« séparer hauteurs/couleurs, mips/gouttières, gradients, publication versionnée ; désocclusion et invalidations locales ; puis la
@@ -221,6 +221,13 @@ J2 s'il n'a pas de lecteur, avec ses pipelines `terrainVsMot`/`terrainFsMot`/`ri
 9. **Le recouvrement avec le plan du streaming** (ST5 pour les mips, ST9 pour la validité par tuile) — *recommandation* : J2-1/J2-2 les
    absorbent pour le sol, ANALYSE-STREAMING le note ; le décor reste au plan ST.
 10. **Effect** — *recommandation* : pas dans J2-1 ; réexaminé avec ST2.
+
+**Décision de Sam (12 novembre 2026, ~12:21 UTC) : « Je valide les recommandations »** — les dix réponses ci-dessus valent décision :
+le plan et son ordre (J2-0 lancé le même jour) ; la Terre proche seulement ; les fenêtres d'imagerie gardées à 4 ; BC7 étudiée après
+J2-1 ; un seul historique long (J2-6) ; plancher d'échelle en vol 2/3 par axe (0,5 seulement avec sa preuve) ; l'identité du sol = page
++ génération dans le mot `r32uint` ; `rigidMotionOn` retiré en J2-8 si J2-5 n'en fait pas un lecteur mesuré ; J2-1/J2-2 absorbent ST5 et
+ST9 pour le sol ; pas d'Effect dans J2-1. Les contrats du §5 sont donc validés tels qu'écrits ; chaque lot qui change l'image garde sa
+preuve (planche avant/après, ΔGPU sur J0).
 
 ## 10. Non vérifié
 
