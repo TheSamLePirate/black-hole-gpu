@@ -3429,3 +3429,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Vérifié** : e2e `title-departure` (ce Mac, Edwards, profil neuf) — au lever du voile `cockpit`, regard 0 / 0 (assertion ajoutée :
   à moins de 5°), capture : le HUD centré, les écrans du PCD en bas ; tsc. **Non vérifié** : les scènes qui visent un astre (leur
   visée part après leur propre placement, l'ordre inchangé — lu, non revolé). E2E-VOLS §7, E2E-CATALOGUE.
+
+## 2026-11-12T05:02Z — J1-2 : le mouvement analytique du rigide (sol et décor immobile), prêt pour ses lecteurs
+
+- **Contribution** (stratégie §7.4, PLAN-J1 J1-2, la dernière sortie de surface) : le sol — sa caméra précédente passée par l'uniforme du
+  terrain (`pd` le pas de l'œil, calculé en float64 côté CPU depuis `terrainRasterEye`, `pr/pu/pf` les axes d'avant), ses propres
+  points d'entrée `terrainVsMot`/`terrainFsMot`/`ringFsMot` — et le décor immobile (proxies d'arbres, maillages fixes : `rigidMotion`
+  par la caméra d'avant `viewPrev`) écrivent leur mouvement sur l'image dans `terrain raster motion`, **z −1** : l'historique (`post.wgsl`)
+  ne lit xy que pour z > 0,5 — l'image ne change pas. **Éteint par défaut** (`renderer.rigidMotionOn`, sans lecteur encore ; les deux
+  pipelines du sol reconstruites quand il change). `surfaceAt` relit aussi le mouvement.
+- **Vérifié** : check-wgsl 83/83 ; tsc ; `bun test` 2190 / 0 ; e2e `surface-id` (ce Mac) : allumé, arbre immobile ~3·10⁻⁴ px caméra
+  fixe, 8–13 px sol et arbres caméra tournant de 0,3° par image (z −1) ; **mesuré** (kerr-mini, A/B A B B A contre 061ed0a3, jamais
+  allumé) : visibilité 4,09 contre 4,19 ms — **coût nul éteint**. **Leçon mesurée** : l'interpolant de mouvement des proxies et
+  maillages passé de `vec3` à `vec4` coûtait +0,23 ms à la passe ; et calculer l'argument d'un `select` (`meshVertexAt`) le paie même
+  rejeté. Allumé : ~+0,8 ms mesuré sur une version antérieure, non remesuré.
+- **Suite** : J1-5 (l'appareil dans la scène, décision de Sam du 12 nov.) et le rejet de l'historique par identité — premiers lecteurs
+  de l'identité, de la profondeur gardée et de ce mouvement.

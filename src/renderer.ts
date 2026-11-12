@@ -61,7 +61,7 @@ import { CLV_TEX_H, CLV_TEX_W } from "./system/cloud-light-layout";
 import type { MirageKind } from "./system/mirage";
 import { type MirageGuess, mirageFromWeather } from "./system/refraction-weather";
 import { CLOUD_SHADOW_BINDING, CLOUD_SHADOW_TEXTURE_LIMIT, CSM_HALF_M, CSM_N } from "./system/cloud-shadow";
-import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterFrame } from "./system/terrain-raster-frame";
+import { TERRAIN_RASTER_MAX_PIXELS, terrainRasterEye, terrainRasterFrame } from "./system/terrain-raster-frame";
 import { BodyRaster, reliefMax } from "./system/body-raster";
 import type { NetWalkerHome } from "./controller/netcraft";
 import { CharacterRenderer, type GrassView } from "./character-renderer";
@@ -191,7 +191,7 @@ import { ChartOverlay } from "./chartoverlay";
 import overlayWGSL from "./shaders/overlay.wgsl" with { type: "text" };
 import { cameraFrame, gpuTheta, homePosition, type CameraFrame } from "./camera";
 import { type FrameDesc, nextFrameDesc } from "./frame-desc";
-import { decodeSurface, type SurfaceAt } from "./system/surface-id";
+import { decodeSurface, halfs, type SurfaceAt } from "./system/surface-id";
 import { PARAMS, PARAMS_FLOATS, PARAMS_SIZE, PARAMS_V4 } from "./gen/params-layout";
 import { frameNow } from "./frameclock";
 import { mouth, radius, setSceneTime } from "./wormhole";
@@ -5552,6 +5552,12 @@ export class Renderer {
   /** the frame's frozen description (src/frame-desc.ts; PLAN-J1 J1-1): built at renderer.frame()'s start — its id, its real clock
    *  read once, the flight's and the scene's clocks, the camera now and before */
   frameDesc: FrameDesc | null = null;
+  /** PLAN-J1 J1-2: the rigid's analytic motion written in the visibility's motion target — the ground's and the still scenery's
+   *  (z −1: unread by the history today) —; off by default: +0.8 ms on kerr-mini for no reader yet — its readers (J1-5, the
+   *  history) turn it on */
+  rigidMotionOn = false;
+  /** the visibility's frame before (PLAN-J1 J1-2: the ground's analytic motion) — its eye in the body's axes [m] and its axes */
+  private groundPrev: { eye: [number, number, number]; axes: Float32Array; w: number; h: number } | null = null;
   /** the frame's real clock [ms]: the encoding's fades, freshness tests and animation clocks read this, one reading a frame (the
    *  wall's clock outside a frame — a planet probe's submission before the first) */
   private frameMs(): number {
@@ -10811,7 +10817,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     xFrac: number,
     yFrac: number,
     withDepth = false,
-  ): Promise<(SurfaceAt & { x: number; y: number; generation: number; decodedId: number; depth: number | null }) | null> {
+  ): Promise<
+    (SurfaceAt & { x: number; y: number; generation: number; decodedId: number; depth: number | null; motion: number[] | null }) | null
+  > {
     const tex = this.terrainRaster?.distanceTexture();
     if (!tex) return null;
     const x = Math.min(Math.max(Math.round(xFrac * tex.width), 0), tex.width - 1);
@@ -10819,10 +10827,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the visibility's texel, and — the Earth's pass — its identity word, written by the pass itself; with `withDepth` its kept
     // depth too — a depth copy covers the whole texture (WebGPU), so only when asked)
     const own = this.terrainRaster?.surfaceTextures() ?? null;
-    const buf = this.device.createBuffer({ size: 512, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const buf = this.device.createBuffer({ size: 768, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     const enc = this.device.createCommandEncoder();
     enc.copyTextureToBuffer({ texture: tex, origin: [x, y] }, { buffer: buf, bytesPerRow: 256 }, [1, 1]);
-    if (own) enc.copyTextureToBuffer({ texture: own.identity, origin: [x, y] }, { buffer: buf, offset: 256, bytesPerRow: 256 }, [1, 1]);
+    if (own) {
+      enc.copyTextureToBuffer({ texture: own.identity, origin: [x, y] }, { buffer: buf, offset: 256, bytesPerRow: 256 }, [1, 1]);
+      enc.copyTextureToBuffer({ texture: own.motion, origin: [x, y] }, { buffer: buf, offset: 512, bytesPerRow: 256 }, [1, 1]);
+    }
     const dw = own ? own.depth.width : 0,
       dh = own ? own.depth.height : 0,
       row = Math.ceil((dw * 4) / 256) * 256;
@@ -10848,6 +10859,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       id: own ? new Uint32Array(raw, 256, 1)[0]! : decoded.id,
       decodedId: decoded.id,
       depth,
+      // (the motion target's texel — rgba16float: xy [px] to the frame before, z 1 a moving mesh’s / 2 no history / −1 the rigid’s
+      // analytic motion, unread by the history)
+      motion: own ? halfs(new Uint16Array(raw, 512, 4)) : null,
       x,
       y,
       generation,
@@ -11037,6 +11051,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       const f = terrainRasterFrame(this.lastNear, this.lastCam, w, lv, target, { width: cv.width, height: cv.height }, "depth", s.fov, 1);
       f[30] = frame[30]!;
       f[31] = frame[31]!;
+      // (the frame before's view — the ground's analytic motion, PLAN-J1 J1-2 —: the patch's own)
+      f.set(frame.subarray(36, 52), 36);
       // (its nodes on the finer grid: so many times its own index — the two rounds' ratio, 4 or 2 —, less the finer
       // window's — longitudes unwrapped, so modulo the finer level's round)
       const round = TERRAIN_CACHE_ROUNDS[lv - 1]!;
@@ -11212,6 +11228,23 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       frame[30] = (2 * (halton(i, 2) - 0.5)) / target.width;
       frame[31] = (-2 * (halton(i, 3) - 0.5)) / target.height;
     }
+    // (PLAN-J1 J1-2: the frame before's view for the ground's analytic motion — the eye's step in the body's axes, float64 here,
+    // small in the uniform —; none after a jump over 2 km or a changed image)
+    {
+      const eye = terrainRasterEye(this.lastNear);
+      const q = this.groundPrev;
+      if (
+        this.rigidMotionOn &&
+        q &&
+        q.w === target.width &&
+        q.h === target.height &&
+        Math.hypot(eye[0] - q.eye[0], eye[1] - q.eye[1], eye[2] - q.eye[2]) < 2000
+      ) {
+        frame.set([eye[0] - q.eye[0], eye[1] - q.eye[1], eye[2] - q.eye[2], 1], 36);
+        frame.set(q.axes, 40);
+      }
+      this.groundPrev = { eye, axes: Float32Array.from(frame.subarray(12, 24)), w: target.width, h: target.height };
+    }
     // The world's trees as raster instances (docs/PLAN-RENDU-RASTER-AAA.md étape 1b): culled before the pass, drawn in it
     // after the ground; the tracer told whether they were (mouthList[1].z — trace.wgsl RASTER_SCENERY), else it walks the
     // forest's grid as before.
@@ -11251,8 +11284,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       }
       this.sceneryRaster.clock = this.rainClock % 3600;
       this.sceneryRaster.frame = this.frameStamp;
-      // (the instances' identity's generation: the scenery's publication — PLAN-J1 J1-2)
+      // (the instances' identity's generation: the scenery's publication — PLAN-J1 J1-2; their analytic motion, asked or not)
       this.sceneryRaster.generation = this.earthScenery.revision;
+      this.sceneryRaster.rigidMotion = this.rigidMotionOn;
       // (the turbines face the weather's surface wind at the scene — Q8 D1)
       const pl = this.earthScenery.place;
       if (pl) {
@@ -11279,6 +11313,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the patch's mesh for the window the cache moves to next, made ahead in a worker: no cut made in the frame)
     const runwayVec = this.paramsF.subarray(PARAMS.runways, PARAMS.sea);
     this.terrainRaster.prepare(level, this.terrainSurfaceCache?.upcomingWindow(level) ?? null, runwayVec);
+    this.terrainRaster.rigidMotion = this.rigidMotionOn;
     const drawn = this.terrainRaster.encodeVisibility(
       enc,
       {

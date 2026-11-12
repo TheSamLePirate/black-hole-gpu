@@ -186,8 +186,14 @@ d'arbres et maillages de bâtiments, le sol 0, boîtes et marques laissées ; la
 sa profondeur** (`depthStoreOp: "store"`) ; `surfaceAt` relit le mot de la passe et, sur demande, la profondeur ; e2e `surface-id` :
 49/49 points identiques au mot de l'adaptateur, profondeur d'un arbre ~2·10⁻⁴ (Z inversé), ciel 0, aucune erreur GPU. Leurs lecteurs
 qui changent l'image (rejet de l'historique par identité, appareil composé par la profondeur — J1-5) viendront ensuite ;
-`decodeSurface` reste le contrôle de l'e2e et le chemin des corps sans cette passe. Mouvement : `rgba16float` déjà en place (pas encore
-`rg16float` pour le rigide).
+`decodeSurface` reste le contrôle de l'e2e et le chemin des corps sans cette passe. **Le mouvement du rigide (même jour)** : le sol (sa caméra précédente
+par l'uniforme du terrain, le pas de l'œil en float64 côté CPU) et le décor immobile écrivent leur mouvement analytique dans la cible
+de mouvement (xy, **z −1** — l'historique lit xy seulement où z > 0,5 marque un maillage mobile : l'image ne change pas) ; e2e
+`surface-id` : arbre immobile ~3·10⁻⁴ px caméra fixe, 4–13 px caméra tournant de 0,3° par image ; **éteint par défaut**
+(`renderer.rigidMotionOn`, sans lecteur — J1-5 et le rejet de l'historique l'allumeront) : éteint, **coût nul** mesuré sur kerr-mini
+(A/B A B B A, 4,09 contre 4,19 ms) ; allumé ~+0,8 ms (mesuré sur une version antérieure). **Leçon** : passer l'interpolant de mouvement
+des proxies et maillages de `vec3` à `vec4` coûtait à lui seul +0,23 ms à la passe — le rigide est marqué z −1 dans un `vec3`. Le format
+reste `rgba16float` (`rg16float` du contrat à revoir avec les lecteurs).
 
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster

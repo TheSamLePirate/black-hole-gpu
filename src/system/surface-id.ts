@@ -74,3 +74,15 @@ export function decodeSurface(texel: ArrayLike<number>, generation: number): Sur
   }
   return { kind, ground, nearest, object, level, id: packSurfaceId(object, generation) };
 }
+
+/** Half floats (IEEE 754 binary16, as a rgba16float texel's) to numbers. */
+export function halfs(h: ArrayLike<number>): number[] {
+  return Array.from(h, (b) => {
+    const e = (b >> 10) & 31,
+      m = b & 1023,
+      sign = b & 0x8000 ? -1 : 1;
+    if (e === 0) return sign * m * 2 ** -24;
+    if (e === 31) return m ? Number.NaN : sign * Number.POSITIVE_INFINITY;
+    return sign * (1 + m / 1024) * 2 ** (e - 15);
+  });
+}

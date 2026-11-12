@@ -73,7 +73,46 @@ test.skipIf(!E2E)(
         expect(dTree.depth).toBeGreaterThan(0);
         expect(dSky.depth).toBe(0);
       }
-      // (the visibility pass's cost over 6 s — an A/B's measure)
+      // (the rigid's analytic motion — J1-2 —: z −1 at a still tree, ~0 with the camera still; then the camera turning 0.3° a
+      // frame: a few pixels — the history unchanged: it reads z > 0.5 only)
+      // (SID_MOTION=0: not checked — an A/B of the pass as shipped, never turned on)
+      if (
+        process.env.SID_MOTION !== "0" &&
+        own[0]!.decodedId !== undefined &&
+        (await app.js<boolean>("'rigidMotionOn' in __bh.renderer"))
+      ) {
+        // (asked: renderer.rigidMotionOn — off by default, no reader yet —, the ground's pipelines rebuilt: a second)
+        await app.js(`(() => { __bh.renderer.rigidMotionOn = true; return 1; })()`);
+        await app.js(
+          `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 90; i++) { __bh.touch(); await f(); } return 1; })()`,
+        );
+        const still = await app.js<{ motion: number[] }>(
+          `__bh.renderer.surfaceAt(${((k % 7) + 0.5) / 7}, ${(Math.floor(k / 7) + 0.5) / 7})`,
+        );
+        console.log(`  a still tree's motion, the camera still: ${JSON.stringify(still.motion)}`);
+        expect(still.motion[2]).toBe(-1);
+        expect(Math.hypot(still.motion[0]!, still.motion[1]!)).toBeLessThan(0.05);
+        const turning = await app.js<{ motion: number[]; kind: string }[]>(`(async () => {
+          let h = 60, on = true; const f = () => new Promise((q) => requestAnimationFrame(q));
+          (async () => { while (on) { h += 0.3; __bh.viewAt(43.19, 6.25, { altM: 450, heading: h, pitch: -8, fov: 55 }); await f(); } })();
+          for (let i = 0; i < 30; i++) await f();
+          const out = []; for (let i = 0; i < 7; i++) out.push(await __bh.renderer.surfaceAt((i + 0.5) / 7, 6.5 / 7));
+          on = false; return out; })()`);
+        const rigid = turning.filter((g) => g.motion[2] === -1);
+        console.log(
+          `  turning 0.3°/frame, the forest's row: ${turning.map((g) => `${g.kind[0]}:${Math.hypot(g.motion[0]!, g.motion[1]!).toFixed(2)}${g.motion[2] === -1 ? "r" : ""}`).join(" ")}`,
+        );
+        expect(rigid.length).toBeGreaterThan(0);
+        expect(rigid.every((g) => Math.hypot(g.motion[0]!, g.motion[1]!) > 0.5)).toBe(true);
+      }
+      // (the visibility pass's cost over 6 s — an A/B's measure —, as shipped: the rigid's motion off)
+      await app.js(`(() => { if ("rigidMotionOn" in __bh.renderer) __bh.renderer.rigidMotionOn = false; return 1; })()`);
+      // (the view as it was — the motion's check turned it: an A/B measures the same view both ways —, then its pipelines rebuilt
+      // without the motion: a few frames)
+      await app.js(`(() => __bh.viewAt(43.19, 6.25, { altM: 450, heading: 60, pitch: -8, fov: 55 }) ?? null)()`);
+      await app.js(
+        `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 90; i++) { __bh.touch(); await f(); } return 1; })()`,
+      );
       const vis = await app.js<
         number[]
       >(`(async () => { const R = __bh.renderer, out = [], f = () => new Promise((q) => requestAnimationFrame(q));

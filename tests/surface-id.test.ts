@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { decodeSurface, packSurfaceId, unpackSurfaceId } from "../src/system/surface-id";
+import { decodeSurface, halfs, packSurfaceId, unpackSurfaceId } from "../src/system/surface-id";
 import { RASTER_CODE, RASTER_CODE_SCALE } from "../src/system/terrain-raster-hint";
 
 // PLAN-J1 J1-2: the surface's identity at a pixel, read from the visibility target as it is drawn today.
@@ -31,4 +31,9 @@ test("each kind the visibility pass writes, decoded as the tracer reads it", () 
   expect(decodeSurface([0, 0, 0, RASTER_CODE.cloud * S], 9).kind).toBe("cloud");
   // (nothing drawn: the sky)
   expect(decodeSurface([0, 0, 0, 0], 9)).toMatchObject({ kind: "none", id: 0 });
+});
+
+test("half floats: a motion texel's", () => {
+  // (1, −2, 0.5, 0 — 0x3c00, 0xc000, 0x3800, 0)
+  expect(halfs([0x3c00, 0xc000, 0x3800, 0])).toEqual([1, -2, 0.5, 0]);
 });
