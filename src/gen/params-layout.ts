@@ -82,12 +82,12 @@ export const PARAMS = {
   wx: 552,
   surface: 584,
   scenery: 612,
-  walk: 640,
-  wake: 660,
-  seafft: 728,
-  warp: 756,
-  mouthList: 772,
-  mars: 780,
+  walk: 644,
+  wake: 664,
+  seafft: 732,
+  warp: 760,
+  mouthList: 776,
+  mars: 784,
 } as const;
 
 /** each field's span [floats]: to the next field — its padding included */
@@ -170,7 +170,7 @@ export const PARAMS_SIZE: Record<keyof typeof PARAMS, number> = {
   shade: 36,
   wx: 32,
   surface: 28,
-  scenery: 28,
+  scenery: 32,
   walk: 20,
   wake: 68,
   seafft: 28,
@@ -260,13 +260,13 @@ export const PARAMS_V4 = {
   wx: 138,
   surface: 146,
   scenery: 153,
-  walk: 160,
-  wake: 165,
-  seafft: 182,
-  warp: 189,
-  mouthList: 193,
-  mars: 195,
+  walk: 161,
+  wake: 166,
+  seafft: 183,
+  warp: 190,
+  mouthList: 194,
+  mars: 196,
 } as const;
 
 /** the struct's size [floats] */
-export const PARAMS_FLOATS = 784;
+export const PARAMS_FLOATS = 788;

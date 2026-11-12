@@ -460,12 +460,19 @@ export class EarthScenery {
     o[25] = dO[1];
     o[26] = this.detailOn ? 1 : 0;
     o[27] = this.impostorsOn ? 1 : 0;
+    // (V2e — F1: the wind the near trees sway in — towards on the frame's axes, strength, the clock; renderer.ts sets it)
+    o[28] = this.sway[0];
+    o[29] = this.sway[1];
+    o[30] = this.sway[2];
+    o[31] = this.sway[3];
     return o;
   }
   /** (Q7 L8) the ground's detail scans drawn (settings.earthDetail, their texture in) */
   detailOn = false;
   /** (PLAN-VEGETATION-V2 V2c) the far trees read from their impostors (baked, renderer.treeImpostorsOn): P.scenery[6].w */
   impostorsOn = false;
+  /** (V2e — F1) the wind the near trees sway in: towards east, north (unit), strength (0 calm … 2), the game's clock [s] */
+  sway: [number, number, number, number] = [0, 0, 0, 0];
   /** the scene's buildings Overture Maps' (B7: credited while drawn) */
   get overtureBuildings() {
     return this.data?.overtureBuildings ?? 0;

@@ -217,6 +217,9 @@ struct Sun { r: vec4f, u: vec4f, l: vec4f, c: vec4f };
 @group(0) @binding(6) var<uniform> sun: Sun;
 @group(0) @binding(2) var<storage, read> scenery: array<vec4f>;
 fn forestData(i: u32) -> vec4f { return scenery[i]; }
+// (V2e — F1: the wind the near trees sway in — misc.yzw: towards on the frame's axes, strength; the clock north.w — and the camera)
+fn forestWind() -> vec4f { return vec4f(sc.misc.y, sc.misc.z, sc.misc.w, sc.north.w); }
+fn forestEye() -> vec3f { return sc.cam.xyz; }
 ${forest}
 const CAP = ${SCENERY_RASTER_CAP}u;
 struct Draw { vertices: u32, instances: atomic<u32>, first: u32, base: u32 };
@@ -229,7 +232,7 @@ struct Draw { vertices: u32, instances: atomic<u32>, first: u32, base: u32 };
 
 // A cell's tree as forestCandidate shapes it, its plain crown unshrunk (the carving, the twigs, a far crown's shrinking
 // all lie within it); none where the cell has no tree.
-struct Tree { ok: bool, kind: u32, foot: vec3f, cone: bool, c: vec3f, r: vec3f, trunk: bool, trunkR: f32, trunkTop: f32 };
+struct Tree { ok: bool, kind: u32, foot: vec3f, cone: bool, c: vec3f, r: vec3f, trunk: bool, trunkR: f32, trunkTop: f32, height: f32, seed: f32 };
 fn treeOf(k: u32, hd: ForestHead) -> Tree {
   var o: Tree;
   o.ok = false;
@@ -246,6 +249,8 @@ fn treeOf(k: u32, hd: ForestHead) -> Tree {
   o.foot = vec3f(hd.C.x + hd.C.y * uu + hd.C.z * vv, hd.Dm.x + hd.Dm.y * uu + hd.Dm.z * vv, z);
   let kA = forestData(hd.F + 7u + 4u * kind); let kB = forestData(hd.F + 8u + 4u * kind); let kD = forestData(hd.F + 10u + 4u * kind);
   o.kind = kind;
+  o.height = height;
+  o.seed = forestUnit(forestHash(gi, gj, 4u));
   o.cone = kA.x > 0.5;
   if (o.cone) {
     o.c = o.foot + vec3f(0.0, 0.0, height);
@@ -370,7 +375,7 @@ fn clampBoxes() {
 }
 
 override LIST: u32 = 0u;
-struct V { @builtin(position) clip: vec4f, @location(0) @interpolate(flat) id: f32, @location(1) p: vec3f };
+struct V { @builtin(position) clip: vec4f, @location(0) @interpolate(flat) id: f32, @location(1) p: vec3f, @location(2) mot: vec3f };
 // a proxy's corner m (its part in w) about tree t, in the scenery's frame; w 1: none (a part this tree has not)
 fn proxyPoint(m: vec4f, t: Tree) -> vec4f {
   let part = u32(m.w);
@@ -421,15 +426,36 @@ fn sunClip(p: vec3f) -> vec4f {
     let lo = t.foot.z - 1.0;
     p = vec3f(t.foot.xy + m.xy * t.trunkR, lo + m.z * (t.trunkTop - lo));
   }
-  let v = view(p);
+  // (V2e — F1: the crown swayed by the wind as forest.wgsl's forestCandidate sways it — the shading's own —, its foot fixed; its
+  // motion since the frame before — the sway then, through the camera then — for the history, as the moving meshes'; the shadow
+  // map's proxies — shadowVs — left still)
+  let crown = part < 2u;
+  let sw = select(vec2f(0.0), forestSway(t.foot, t.height, t.seed), crown && !none);
+  let v = view(p + vec3f(sw, 0.0));
   // (the terrain's projection: infinite reversed-Z, its near plane)
   o.clip = select(vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z), vec4f(2.0, 2.0, 0.5, 1.0), none);
   o.id = f32(k + 1u);
   o.p = v;
+  o.mot = vec3f(0.0);
+  if (crown && !none && any(sw != vec2f(0.0)) && sc.pf.w > 0.5 && v.z > 0.1) {
+    let w = forestWind();
+    let swp = forestSwayAt(t.foot, t.height, t.seed, w, sc.pcam.xyz, sc.pcam.w);
+    let vp = viewPrev(p + vec3f(swp, 0.0));
+    if (vp.z > 0.1) {
+      let n0 = vec2f(v.x / (u.right.w * v.z), v.y / (u.up.w * v.z));
+      let n1 = vec2f(vp.x / (sc.pr.w * vp.z), vp.y / (sc.pu.w * vp.z));
+      o.mot = vec3f((n0 - n1) * 0.5 * vec2f(u.image.x, -u.image.y), 1.0);
+    }
+  }
   return o;
 }
 // (g the tree's id, b its proxy's distance — the ground's in r stays)
-@fragment fn proxyFs(v: V) -> @location(0) vec4f { return vec4f(0.0, v.id, length(v.p), 0.0); }
+@fragment fn proxyFs(v: V) -> MO {
+  var o: MO;
+  o.vis = vec4f(0.0, v.id, length(v.p), 0.0);
+  o.mot = vec4f(v.mot, 0.0);
+  return o;
+}
 
 // The buildings' boxes (a node of the scenery's BVH an instance: its leaves — a building each — drawn, its inner nodes at one
 // point): where one is before the ground and the trees, the pixel's alpha 2 — the tracer's kernel shade tests the buildings
@@ -776,6 +802,8 @@ export class SceneryRaster {
   frame = 0;
   /** (Q8 D1) where the surface wind blows from at the scenery [° from north] — the turbines face it */
   windFrom = TURBINE_FACING;
+  /** (V2e — F1) the wind the near trees sway in: towards east, north (unit), strength (0 calm … 2) — renderer.ts sets it */
+  sway: [number, number, number] = [0, 0, 0];
   private draws: GPUBuffer;
   private lists: GPUBuffer;
   private reset = new Uint32Array((LISTS + 7) * 4);
@@ -863,7 +891,11 @@ export class SceneryRaster {
           fragment: {
             module: this.module,
             entryPoint: "proxyFs",
-            targets: [{ format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.GREEN | GPUColorWrite.BLUE }, NO_MOTION],
+            // (V2e — F1: the swaying crowns' motion written — the ground's under them overwritten, depth tested)
+            targets: [
+              { format: TERRAIN_RASTER_FORMAT, writeMask: GPUColorWrite.GREEN | GPUColorWrite.BLUE },
+              { format: TERRAIN_RASTER_MOTION_FORMAT },
+            ],
           },
           primitive: { topology: "triangle-list", cullMode: "none" },
           depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
@@ -1061,6 +1093,10 @@ export class SceneryRaster {
     this.sceneryOut[7] = this.clock;
     // (misc.x: the frame's number — the conductors' coverage draw, a fresh one each frame — Q8 D1)
     this.sceneryOut[20] = this.frame % 4096;
+    // (V2e — F1: the wind the near trees sway in — towards on the frame's axes, its strength; forest.wgsl forestWind)
+    this.sceneryOut[21] = this.sway[0];
+    this.sceneryOut[22] = this.sway[1];
+    this.sceneryOut[23] = this.sway[2];
     // (up.w — unread here too —: the turbines' heads' turn from their built facing to the weather's wind, anticlockwise [rad])
     this.sceneryOut[11] = (-(this.windFrom - TURBINE_FACING) * Math.PI) / 180;
     // (the frame before's camera — PLAN-J1 J1-2, the moving meshes' motion —: valid while the scenery's axes are the same and the

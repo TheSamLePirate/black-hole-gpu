@@ -191,6 +191,9 @@ fn skin(v:SkinIn)->SkinV{
 // Same packed OSM/WorldCover BVH as the planet renderer: direct sunlight at each near-field fragment.
 @group(0) @binding(8) var<storage,read> nearScene:array<vec4f>;
 fn forestData(i:u32)->vec4f{return nearScene[i];}
+// (the near field's tree shadows still: no sway — forest.wgsl forestSway)
+fn forestWind()->vec4f{return vec4f(0.0);}
+fn forestEye()->vec3f{return vec3f(0.0);}
 // BEGIN_FOREST_MODULE (shaders/forest.wgsl set in at load, src/forest-shader.ts: this stub casts no tree's shadow)
 struct ForestHit { t: f32, n: vec3f, kind: u32, part: u32, base: vec3f, height: f32, seed: f32, ao: f32 };
 fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> ForestHit { return ForestHit(tMax, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0); }

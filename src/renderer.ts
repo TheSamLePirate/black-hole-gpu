@@ -5553,6 +5553,8 @@ export class Renderer {
   treeImpostors: TreeImpostors | null = null;
   /** (V2c) the far trees read from their impostors (an A/B: false, their plain shapes, as before) */
   treeImpostorsOn = true;
+  /** (V2e — F1) the near trees sway in the surface wind (forest.wgsl forestSway) — false: still, the A/B */
+  treeWindOn = true;
   /** (V2b) a layer of the trees' impostors as a lit PNG data URL (an e2e's shot; bakes them first) */
   async treeImpostorPreview(layer: number): Promise<{ png: string; bakeMs: number; models: TreeImpostors["models"] }> {
     this.treeImpostors ??= new TreeImpostors(this.device);
@@ -11180,12 +11182,16 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       this.sceneryRaster.frame = this.frameStamp;
       // (the turbines face the weather's surface wind at the scene — Q8 D1)
       const pl = this.earthScenery.place;
-      if (pl)
-        this.sceneryRaster.windFrom = windFromAt(
-          weatherAt(s, { body: "earth", ...pl }, daysOf(this.lastTime), this.weatherReal),
-          pl,
-          daysOf(this.lastTime),
-        );
+      if (pl) {
+        const w = weatherAt(s, { body: "earth", ...pl }, daysOf(this.lastTime), this.weatherReal);
+        this.sceneryRaster.windFrom = windFromAt(w, pl, daysOf(this.lastTime));
+        // (V2e — F1: the near trees sway in that wind — towards on the scenery's east and north, its strength from the surface
+        // wind, 8 m/s a fresh breeze; treeWindOn the A/B — forest.wgsl forestSway)
+        const from = (this.sceneryRaster.windFrom * Math.PI) / 180;
+        const k = this.treeWindOn ? Math.min(Math.max(w.wind.u10 / 8, 0), 2) : 0;
+        this.sceneryRaster.sway = [-Math.sin(from), -Math.cos(from), k];
+        this.earthScenery.sway = [-Math.sin(from), -Math.cos(from), k, this.sceneryRaster.clock];
+      }
       trees = this.sceneryRaster.encodeCull(
         enc,
         this.prof.pass("scenery raster cull"),

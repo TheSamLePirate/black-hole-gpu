@@ -3216,3 +3216,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - `zones-scenery` (kerr-mini) second passage vert : la zone en 1 076 s, 0 échec ; hors ligne arbres, bâtiments, 466 tuiles de sol
   de la zone, 0 du réseau. `zones` (ce Mac) second passage vert : détail 6,17 en ligne, 6,34 hors ligne ; 553 tuiles de la zone,
   0 du réseau. `overture` vert sur les deux Mac. `pwa` vert. Aucun code changé dans cette entrée.
+
+## 2026-11-12T00:35Z — V2e F1 : les arbres proches balancent dans le vent
+
+- **Destination** : §19 (le monde vit — Q4 F1, V5 de l'analyse) ; un seul lecteur du vent pour le traceur, l'imposteur et le raster.
+  Choix de Sam (12 nov.) : « V2e / V3 : forêt ».
+- **Relu d'abord** : les ombres des arbres (S1) et la transmission à contre-jour (`WS_T`) existaient ; restait le vent.
+- **Fait** : `forest.wgsl` `forestSwayAt` / `forestSway` (l'hôte donne `forestWind` et `forestEye`) — le houppier balancé autour de son pied
+  fixe : inclinaison levée par des rafales qui courent avec le vent, balancement au rythme de l'arbre, un peu de travers ; ≤ 2 % de la
+  hauteur, ≤ 0,5 m ; éteint de 300 à 500 m. Appliqué dans `forestCandidate` (traceur, houppiers sculptés de près), l'imposteur (l'arbre
+  entier), la passe des proxies (`proxyVs`) qui écrit leur mouvement (horloge et caméra d'avant) ; `P.scenery` passe à 8 vec4 (`[7]` : le
+  vent, l'horloge — layout régénéré) ; `renderer.treeWindOn` (l'A/B), la force tirée du vent de surface (`u10` / 8). La carte d'ombre
+  des arbres reste immobile (le vent figé loin).
+- **Vérifié** : 83/83 shaders (Chrome), tests forêt/décor/layout 40/40 ; sonde `forest-wind` (Maures, vent fort, ce Mac) : écart de
+  luminance entre deux images à 0,5 s sur la canopée 1,55 / 1,45 avec le vent contre 0,78 / 0,78 immobile ; GPU p50 21,2 / 22,6 contre
+  22,3 / 22,3 ms (aucun coût mesurable) ; captures sans bord coupé. **Non vérifié** : un vol en mouvement (traînées dans l'historique en
+  vol), le Mac mini, d'autres essences.
+- **Docs** : GRAPHICS-PIPELINE (C6b), BH-API (`treeWindOn`), E2E-CATALOGUE (sonde), PLAN-VEGETATION-V2 (V2e), PLAN-REFRACTION-HORIZONS (Q4).

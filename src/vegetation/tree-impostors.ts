@@ -238,8 +238,10 @@ fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tre
   let L = b + select(0u, 1u, abs(log(ratio / IMP_ASPECT[b + 1u])) < abs(log(ratio / IMP_ASPECT[b])));
   let sx = r / IMP_ASPECT[L];
   let half = IMP_HALF[L];
-  // (the ray in the tree's canonical frame — height 1 —: the same parameter t, metres along d)
-  let oc = vec3f((o.xy - tree.base.xy) / sx, (o.z - tree.base.z) / H);
+  // (the ray in the tree's canonical frame — height 1 —: the same parameter t, metres along d; the tree carried by the wind's
+  // sway as its crown near — V2e F1, forest.wgsl forestSway —: the whole of it, at this distance)
+  let sw = forestSway(tree.base, tree.height, tree.seed);
+  let oc = vec3f((o.xy - tree.base.xy - sw) / sx, (o.z - tree.base.z) / H);
   let dc = vec3f(d.xy / sx, d.z / H);
   let eye = normalize(-dc);
   let z = max(eye.z, 0.0);

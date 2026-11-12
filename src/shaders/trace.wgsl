@@ -141,8 +141,10 @@ struct Params {
   wx: array<vec4f, 8>,
   // regional Sentinel-2 / WorldCover: bounds and residency, page grid and gutter, materials and metre scale
   surface: array<vec4f, 7>,
-  // (Q7 L8: [6] the detail scans' world origin modulo 4 096 m (x east, y north), on (z), unused)
-  scenery: array<vec4f, 7>,
+  // (Q7 L8: [6] the detail scans' world origin modulo 4 096 m (x east, y north), on (z), the impostors on (w))
+  // (V2e — F1: [7] the wind the near trees sway in: towards x, y on the frame's axes (unit), its strength (0 calm … 2), the game's
+  // clock [s] — forest.wgsl forestSway)
+  scenery: array<vec4f, 8>,
   walk: array<vec4f,5>, // camera-relative shared walking heightfield, in the existing table buffer
   // the ships' wakes near the camera (renderer: wakeParams; seaWake): [0] their count; then two each — the ship
   // from the camera on the Earth's axes [m] and its length [m]; its bow's way (its length its beam [m]) and its
@@ -9971,6 +9973,9 @@ var<private> SC_SAMPLE:f32=0.0;
 // Worldwide scenery: one bounded storage buffer, stackless BVH; all distances are local metres.
 @group(0) @binding(32) var<storage, read> scenery: array<vec4f>;
 fn forestData(i:u32)->vec4f { return scenery[i]; }
+// (V2e — F1: the wind the near trees sway in — P.scenery[7]: towards (frame axes), strength, the game's clock — and the camera)
+fn forestWind()->vec4f { return P.scenery[7]; }
+fn forestEye()->vec3f { return P.scenery[3].xyz; }
 // BEGIN_FOREST_MODULE (shaders/forest.wgsl set in at load, src/forest-shader.ts: this stub draws no tree)
 struct ForestHit { t: f32, n: vec3f, kind: u32, part: u32, base: vec3f, height: f32, seed: f32, ao: f32 };
 fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> ForestHit { return ForestHit(tMax, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0); }

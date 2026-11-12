@@ -7,10 +7,35 @@
 // four candidate trees each, the first crossing exact. 8 × 8 blocks of dual cells keep the lowest ground
 // and highest crown they may meet: a ray above the canopy or below the ground skips them whole.
 
-// BEGIN_FOREST_STANDALONE (removed when included: the host declares the buffer and forestData)
+// BEGIN_FOREST_STANDALONE (removed when included: the host declares the buffer, forestData, forestWind and forestEye)
 @group(0) @binding(0) var<storage, read> forestStandalone: array<vec4f>;
 fn forestData(i: u32) -> vec4f { return forestStandalone[i]; }
+fn forestWind() -> vec4f { return vec4f(0.0); }
+fn forestEye() -> vec3f { return vec3f(0.0); }
 // END_FOREST_STANDALONE
+
+// (V2e — F1: the near trees' sway in the wind. The host gives forestWind() — the wind blowing towards (x, y on the frame's axes,
+// unit), its strength (0 calm, 1 a fresh breeze, 2 a gale), the game's clock [s] — and forestEye(), the camera in the frame [m].)
+// A crown carried downwind and back about its foot: a lean that the gusts raise — they travel downwind over the wood, ~16 m/s,
+// ~280 m apart —, a sway at the tree's own rate (slower the taller: 0.6 Hz at 4 m, 0.3 at 16), a little across; 2 % of its
+// height, half a metre at most; none past 300 m from the camera, gone by 500 — the far trees still, as their shadows.
+fn forestSwayAt(foot: vec3f, height: f32, seed: f32, w: vec4f, eye: vec3f, clock: f32) -> vec2f {
+  if (w.z <= 0.0) { return vec2f(0.0); }
+  let fade = 1.0 - smoothstep(300.0, 500.0, length(foot.xy - eye.xy));
+  if (fade <= 0.0) { return vec2f(0.0); }
+  let a = min(0.02 * height, 0.5) * min(w.z, 2.0) * fade;
+  let f = 0.6 / sqrt(max(height, 2.0) / 4.0);
+  let ph = 6.2831853 * (f * clock + seed);
+  let gust = 0.5 + 0.5 * sin(dot(foot.xy, w.xy) / 45.0 - 0.35 * clock + 6.2831853 * seed);
+  let along = a * (0.55 * gust + 0.45 * sin(ph));
+  let across = a * 0.25 * sin(1.37 * ph + 1.3);
+  return w.xy * along + vec2f(-w.y, w.x) * across;
+}
+// (the host's wind and clock now)
+fn forestSway(foot: vec3f, height: f32, seed: f32) -> vec2f {
+  let w = forestWind();
+  return forestSwayAt(foot, height, seed, w, forestEye(), w.w);
+}
 
 // a crossing: its distance [m], normal (frame), the tree's kind (0: none), the part (0 crown, 1 trunk),
 // the foot of its trunk (frame metres), its height [m], its own number in [0, 1), the light its own leaves
@@ -233,10 +258,10 @@ fn forestCandidate(o: vec3f, d: vec3f, i: i32, j: i32, detail: f32, hd: ForestHe
   let v = f32(j) + 0.12 + 0.76 * forestUnit(forestHash(gi, gj, 2u));
   let r = cell * (0.3 + 0.17 * forestUnit(forestHash(gi, gj, 3u)));
   let foot = vec3f(C.x + C.y * u + C.z * v, Dm.x + Dm.y * u + Dm.z * v, z);
-  // (the ray's nearest pass to the trunk's axis: farther than the crown, nothing)
+  // (the ray's nearest pass to the trunk's axis: farther than the crown — and its sway, half a metre at most —, nothing)
   let rel = foot.xy - o.xy; let dd = dot(d.xy, d.xy);
   let off = select(length(rel - d.xy * (dot(rel, d.xy) / dd)), length(rel), dd < 1e-10);
-  if (off > r + 0.5) { return none; }
+  if (off > r + 1.0) { return none; }
   let kA = forestData(F + 7u + 4u * kind); let kB = forestData(F + 8u + 4u * kind); let kD = forestData(F + 10u + 4u * kind);
   // (the ray started near the tree: the shapes' sums stay small however far the camera)
   let t0 = max(0.0, dot(foot - o, d) - r - height);
@@ -244,14 +269,15 @@ fn forestCandidate(o: vec3f, d: vec3f, i: i32, j: i32, detail: f32, hd: ForestHe
   // (a deciduous crown in winter: its twigs carved through, the sky behind them)
   let amp = (kD.x + 0.55 * kD.w * forestData(F + 7u).z) * r;
   let near = t0 + r + height < detail * (0.85 + 0.3 * forestUnit(forestHash(gi, gj, 8u)));
-  // the plain crown (far: shrunk by half the carving, its mean)
+  // the plain crown (far: shrunk by half the carving, its mean), swayed by the wind (its foot fixed)
   var crown = ForestCrown(kA.x > 0.5, vec3f(0.0), vec3f(0.0), amp, kD.y, kD.z);
   let shrink = select(0.5 * amp, 0.0, near || detail < 0.0);
+  let sway = vec3f(forestSway(foot, height, forestUnit(forestHash(gi, gj, 4u))), 0.0);
   if (crown.cone) {
-    crown.c = foot + vec3f(0.0, 0.0, height);
+    crown.c = foot + vec3f(0.0, 0.0, height) + sway;
     crown.r = vec3f(kA.z * r - shrink, height * (1.0 - kA.y), 0.0);
   } else {
-    crown.c = foot + vec3f(0.0, 0.0, kA.y * height);
+    crown.c = foot + vec3f(0.0, 0.0, kA.y * height) + sway;
     crown.r = vec3f(kA.z * r - shrink, kA.z * r - shrink, kA.w * height - shrink);
   }
   var h = select(forestEllipsoid(oo, d, crown.c, crown.r), forestCone(oo, d, crown.c, crown.r.x, crown.r.y), crown.cone);
