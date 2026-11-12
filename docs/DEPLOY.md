@@ -147,6 +147,15 @@ server serves them read-only at `https://stream.samlepirate.org/svc/v1/moon/lola
 `done`, `error`). Locally, `bun server/moon-build.ts --body mars --rows 91 99 --cols 133 141` builds a box (z 0 rows and
 columns) into the git-ignored `data/`, which the dev server serves at the same paths.
 
+## The server stuck on an old build
+
+Check `https://samlepirate.org/version.json` against the last `deploy:` commit (`git log -1 origin/deploy`). Portainer 2.9.3
+**stops a stack's auto-update for good after one failed poll** (its log: `job returned an error`, then `job cancelled, stopping`;
+the stack still shows "every 1m"). It happened on 2026-11-10 at 10:15 UTC (a transient error): samlepirate.org stayed on `cdf02ee`
+for two days, 168 commits behind, while CI, GHCR and the `deploy` branch were fine. Fix: on the `kerr` stack, *Pull and redeploy*
+and save its Git settings again (or restart the Portainer container) — done by Sam on 2026-11-12, the server back on `fe3d710` and
+its polls resumed. A browser may still hold the old build in the PWA's cache: reload twice.
+
 ## Rolling back
 
 Revert the last commit(s) on `deploy` (or push a commit naming an older tag): Portainer redeploys that
