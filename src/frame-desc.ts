@@ -33,6 +33,9 @@ export interface FrameDesc {
   /** the camera's whole frame as the tracer reads it (camera.ts cameraFrame at simTime: its place, ZAMO frame, velocity, region) —
    *  computed once a frame, the live image's one authority (writeParams, the light probe's schedule); shared, not copied: read only */
   view?: CameraFrame;
+  /** PLAN-J2 J2-1: the Earth's tile pages this image reads — the table's version once the image's publication is done
+   *  (EarthTiles.publish, at the frame's start), the pages still queued after it; set by the renderer after the description */
+  pages?: { version: number; waiting: number };
 }
 
 export interface FrameInput {

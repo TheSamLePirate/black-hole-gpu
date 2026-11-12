@@ -17,6 +17,18 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   l'appareil, `priorityLon`), pas forcément celle de la caméra ; une fenêtre partielle pendant un chargement pourrait donc exclure la
   tuile sous la caméra. Non observé en jeu ; à vérifier (un e2e qui force ce cas, puis la pile du GPU) — J2-1 (validité par tuile)
   touche cette règle.
+- **Vérifié en jeu** (12 nov. 2026, ~12 h 55 UTC, kerr-mini, e2e [`j2-page-camera`](../tests/e2e/j2-page-camera.e2e.test.ts), code be0ec185 ;
+  [fiche J2-1](progress/j2/FICHE-J2-1-2026-11-12.md) §1) : F-35 à 300 m sur la Beauce, 140 m/s, tuiles IGN chargées en vol, quatre vues de
+  15 s. **Aucun blocage** de la page (écart rAF max 59 ms, toutes les lectures répondues). **Mais le trou existe en jeu** : caméra
+  extérieure 1,5 km devant l'appareil, regard vers lui — 190 images sur 761 avec un niveau publié sans la tuile sous la caméra (z 15–17),
+  jusqu'à **1,5 s** avec le sol sous la caméra en **z 14** au lieu de 17 ; caméra 1,5 km derrière : 37 images, z 16 au lieu de 17
+  (≤ 0,12 s) ; cockpit vers l'avant : 0. Deux causes lues dans le code : (1) le rectangle d'un niveau incomplet grandi autour du centre
+  des chargements (devant la caméra) même s'il laisse la tuile de la caméra ; (2) une fenêtre menée vers le regard (jusqu'à ¾ de tuile
+  du bord) qui dérive de 0,8 tuile avant de se recentrer : regard en arrière sur un appareil qui avance, la caméra sort de sa propre
+  fenêtre (z 16, `camIn` faux). **Corrigé par J2-1** (règle de validité : le rectangle garde d'abord la tuile de la caméra ; la tuile de
+  la caméra chargée et publiée la première ; la fenêtre recentrée quand la caméra s'approche à 0,2 tuile de son bord) — effet mesuré
+  dans la fiche J2-1. **Reste ouvert** : la cause du blocage de la sonde (non reproduit en jeu) ; la tuile **sous l'appareil** quand la
+  caméra est loin (le sol de contact, §19.4 : la fenêtre suit la caméra — J2-2 / le monde).
 
 ## Des villes couvertes d'arbres, sans bâtiments proches, dans les e2e (Marseille, Toulon, Manhattan)
 

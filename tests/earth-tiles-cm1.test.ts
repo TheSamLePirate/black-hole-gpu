@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { withGpuStubs } from "./lib/gpu-stubs";
+import { published } from "./lib/published-tiles";
 import type { Vec3 } from "../src/physics";
 import { EarthTiles, enlarge, RETRY_MAX_MS, retryDelay, TILE, tileImagery } from "../src/system/earth-tiles";
 import { geodeticToCart, WGS84_F } from "../src/system/ellipsoid";
@@ -78,7 +79,7 @@ test("CM1: Terrarium refused — the finer tiles stand in from their parent's re
     if (m && Number(m[1]) >= 13) return Promise.reject(new TypeError("Failed to fetch"));
     return new Promise(() => {});
   }) as unknown as typeof fetch;
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   t.fallback = () => -999;
   const T = t as unknown as Inside;
   t.update(camAt(25, 10, 2), 1e-3);
@@ -124,7 +125,7 @@ test("CM1: a stand-in's own heights in at last — no longer a stand-in, its fai
       return refuse ? Promise.reject(new TypeError("Failed to fetch")) : Promise.resolve(new Response(new Blob([new Uint8Array(8)])));
     return new Promise(() => {});
   }) as unknown as typeof fetch;
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   const T = t as unknown as Inside;
   t.update(camAt(25, 10, 2), 1e-3);
   for (const [z, x, y] of t.wanted()) if (z < 13) t.put(z, x, y, new Float32Array(TILE * TILE).fill(500));
@@ -154,7 +155,7 @@ test("CM1: the night's lights refused — the day's imagery drawn alone, its lig
 
 test("CM3: the coarse relief ready for a first image once each level z ≤ 10 is drawn round the camera", () => {
   globalThis.fetch = (() => new Promise(() => {})) as unknown as typeof fetch;
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   expect(t.coarseReady()).toBe(false);
   t.update(camAt(25, 10, 2), 1e-3);
   expect(t.coarseReady()).toBe(false);

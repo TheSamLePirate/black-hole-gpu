@@ -1,6 +1,6 @@
 # PLAN-J2 — pages d'imagerie filtrables et reconstruction
 
-**État (12 novembre 2026) : plan validé par Sam (ses recommandations, §9) ; J2-0 fait — instruments et [fiche de référence](progress/j2/FICHE-J2-0-2026-11-12.md) ; J2-1 à lancer.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
+**État (12 novembre 2026) : plan validé par Sam (ses recommandations, §9) ; J2-0 fait — instruments et [fiche de référence](progress/j2/FICHE-J2-0-2026-11-12.md) ; J2-1 fait — table de pages, tuile de la caméra, mips groupés ([fiche J2-1](progress/j2/FICHE-J2-1-2026-11-12.md), §9 ter) ; J2-2 à lancer.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
 l'écrire (session de documentation). L'existant (§2) est relevé dans le code de `main` au 12 novembre (après `4d1201c0`, J1 terminé) ;
 **le code fait foi**, les lignes citées sont celles de ce jour. Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J2
 (« séparer hauteurs/couleurs, mips/gouttières, gradients, publication versionnée ; désocclusion et invalidations locales ; puis la
@@ -103,7 +103,7 @@ chargement met à jour [GRAPHICS-PIPELINE](GRAPHICS-PIPELINE.md) dans le même l
 | Lot | Contenu | Remplace / retire | Preuve |
 |---|---|---|---|
 | **J2-0** ✅ (12 nov.) | **Les contrats (§5) et les instruments** : sonde de **fuite** (un mode de diagnostic qui remplit l'extérieur valide de chaque fenêtre et les emplacements non publiés d'une couleur sentinelle, compte ses pixels en vue rasante aux bords de fenêtres et aux distances des mips 2–4) ; sonde de **couture** (bords de tuiles, C0-12) ; courbe de **netteté par image** (énergie du laplacien sur `sceneColor` contre la référence affinée, `motion-quality`) le long d'un vol avec arrêts et reprises (changements d'échelle) ; compteurs de **publication** (octets, soumissions, ms de `put*`/mips par image) ; localisation des points blancs avant/après la reconstruction | — | **fiche de référence J2** sur le code actuel (kerr-mini, M1 Max) : fuite, coutures, creux de netteté, coût de publication **chiffrés** ; revue de Sam |
-| **J2-1** | **La table de pages de l'imagerie, versionnée** : une **validité par tuile** (bits par niveau, C0-4 §5) et une **génération par page** (clé source + génération, §6) ; écritures et mips **regroupées dans un encodeur par image** sous un budget d'octets et de mips (ST5), publiées à l'image suivante seulement (bit allumé avec ses mips ; l'occupant précédent jamais lu une fois remplacé) ; la table figée dans `FrameDesc` pour l'image ; adressage et filtrage inchangés | la soumission par tuile et par couche (`orthoMips`) ; le rectangle par niveau **pour l'imagerie** ; le compteur global `imagery` | l'image en régime identique (A/B d'images figées en raster, ±1 %) ; `tile-arrival` : temps de couverture non dégradés ; aucune pointe de publication > 2 ms, CPU p95 de J0 ; ΔGPU J0 nul ; une seule soumission de mips par image (compteur) |
+| **J2-1** ✅ (12 nov.) | **La table de pages de l'imagerie, versionnée** : une **validité par tuile** (bits par niveau, C0-4 §5) et une **génération par page** (clé source + génération, §6) ; écritures et mips **regroupées dans un encodeur par image** sous un budget d'octets et de mips (ST5), publiées à l'image suivante seulement (bit allumé avec ses mips ; l'occupant précédent jamais lu une fois remplacé) ; la table figée dans `FrameDesc` pour l'image ; adressage et filtrage inchangés | la soumission par tuile et par couche (`orthoMips`) ; le rectangle par niveau **pour l'imagerie** ; le compteur global `imagery` | l'image en régime identique (A/B d'images figées en raster, ±1 %) ; `tile-arrival` : temps de couverture non dégradés ; aucune pointe de publication > 2 ms, CPU p95 de J0 ; ΔGPU J0 nul ; une seule soumission de mips par image (compteur) |
 | **J2-2** | **Les hauteurs dans la même publication** : validité par tuile (ST9), génération ; format inchangé (`r32uint`, lecture manuelle, la même sur le CPU) ; `changes` dérivé de la table ; le **sol de contact** (§19.4) ne change pas | le rectangle par niveau des hauteurs | `heightAt` CPU = GPU (tests unitaires) ; le contact et le train (tests, une recette de `apprendre-avions`) ; A/B d'images figées ; ΔGPU nul |
 | **J2-3** | **Des bords sans fuite** : le fondu de bord **à l'échelle de l'empreinte filtrée** (mip choisie × anisotropie) au lieu de 2–48 texels fixes ; la sélection des niveaux nettoyée (`duv`, `nf`, `TUNE_ANISO` réduit à ce qu'il fait) ; **gouttières** (copie des voisins par mip, comme `SURFACE_GUTTER`) **seulement si** J2-0 montre une fuite à l'intérieur d'une fenêtre | le fondu fixe ; le reliquat de `earthImageryAniso` | sonde de fuite à **0 pixel** ; coutures ≤ 0,25 px (C0-12, vol bas) ; planche rasante aux bords de fenêtres ; ΔGPU J0 |
 | **J2-4** | **L'invalidation locale** : le sol écrit dans l'identité **sa page et sa génération** (une plage réservée des objets ; aujourd'hui 0) ; le temporel coupe le poids de l'historique là où la page d'un pixel a changé (le mécanisme du rejet (b), `ID_REPUBLISHED`) ; les arrivées de tuiles et d'imagerie **cessent d'appeler `invalidate()`** | `earthTiles.onChange → invalidate()`, l'invalidation à l'arrivée d'imagerie (`renderer.ts:1817`, `:4291`) ; puis, si la mesure le permet, celles du décor et du pilote régional | séquence d'arrivées en vol : 0 invalidation globale, pop de luminance ≤ 3 % hors des pages changées (C0-12), aucune image ancienne qui traîne sur une page neuve ; planche ; ΔGPU J0 |
@@ -247,6 +247,28 @@ plan :
   image → la cible de J2-1 (une soumission par image, aucune pointe > 2 ms) est chiffrée ; le coût est l'écriture, pas les mips.
 - **Points blancs** : nés avant le temporel (image résolue), gardés par lui, étalés par la TAAU ; 113/s sur le M1 Max, 0,23/s sur le mini ;
   cause ouverte (PROBLEMES-A-REGLER).
+
+## 9 ter. J2-1 fait (12 novembre 2026)
+
+**Étape A** (recommandation 4 de la fiche J2-0) : le blocage de page de la première sonde **n'est pas reproduit en jeu** (e2e
+`j2-page-camera`, kerr-mini : quatre vues de 15 s en vol de chargement, aucune lecture sans réponse, écart rAF ≤ 80 ms), **mais le trou
+existe** : caméra 1,5 km devant l'appareil, 190 images sur 761 avec un niveau publié sans la tuile de la caméra, jusqu'à 1,5 s avec le sol
+sous elle en z 14 au lieu de z 17 ; deux causes — le rectangle d'un niveau incomplet grandi autour du centre des chargements, la fenêtre
+menée vers le regard dont la caméra sort. **La règle de validité de J2-1 couvre la caméra** (rectangle tenu d'abord autour de sa tuile,
+sa tuile chargée la première, fenêtre recentrée à 0,2 tuile du bord) : 0 image trouée après. **L'appareil** : quand la caméra est loin,
+sa tuile est hors des fenêtres fines (qui suivent la caméra) — le sol de contact relève du monde (§19.4) et de **J2-2**, pas de la
+qualité graphique : relevé, non traité.
+
+**J2-1** (`src/system/earth-pages.ts`, `EarthTiles.publish`, appelé au début de chaque image) : une page par emplacement (clé publiée,
+hauteurs publiées, génération 12 bits), écrite et publiée à une frontière d'image sous un budget du fil principal (1,5 ms ; 2 ms en
+rattrapage ; au moins une), la plus proche de la caméra d'abord ; **toutes les mips de l'image en une soumission** ; un rectangle ne
+grandit que sur des pages publiées ; `heightAt` lit les hauteurs publiées ; `imagery` = la version de la table ; `frameDesc.pages`. Mesuré
+(fiche J2-1) : **image inchangée** (A/B figé dans le bruit entre deux captures du même code, luminance à 0,03 %) ; vol J0 sur kerr-mini :
+soumissions de mips max 9 → **1**, images > 2 ms du fil principal 79 → **31**, publication dans l'image p95 1,7 / max 2,3 ms, octets
+max 6,75 → 2,0 Mio ; **ΔGPU J0 nul** (GPU p50 −0,3 ms, dans l'écart A–A de 0,4 ms ; A B B A). **Écarts au plan** : le GPU lit toujours un rectangle par niveau (dérivé de la table —
+format transitoire jusqu'aux bords par page, J2-3) ; « aucune pointe > 2 ms » pas encore tenu (le travail des arrivées hors de l'image :
+jusqu'à 5,7 ms) ; `tile-arrival` non relancé ; pas de file d'emplacements libres (inutile : une page est écrite avant toute soumission de
+l'image, ou hors du rectangle tant qu'elle n'est pas publiée).
 
 ## 10. Non vérifié
 

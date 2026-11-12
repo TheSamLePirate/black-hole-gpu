@@ -3712,3 +3712,32 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   géométrie ; le temps GPU des mips ; la cause des points blancs et de l'oscillation du M1 Max ; le M1 Max refroidi (pression modérée).
 - **Suite** : J2-1 (table de pages versionnée, mips groupés, une soumission par image, aucune pointe > 2 ms — chiffrés ici) ; J2-3 réduit
   (fuite nulle mesurée) ; les questions de la fiche à Sam.
+
+## 2026-11-12T13:35Z — J2-1 : la table de pages versionnée, la tuile de la caméra (étape A), les mips groupés par image
+
+- **Contribution** (stratégie §7.6, §7.19, §15 J2 ; PLAN-J2 J2-1 et son étape A ; C0-4 §5–6 ; ANALYSE-STREAMING ST5/ST9 pour le sol) : les
+  tuiles de la Terre ont une **publication versionnée** — une page par emplacement de fenêtre (clé publiée, hauteurs publiées, génération
+  12 bits), écrite et publiée **à une frontière d'image** sous un budget du fil principal, **toutes les mips d'une image en une soumission** ;
+  le rectangle qu'un niveau publie ne grandit que sur des pages publiées et **tient d'abord la tuile de la caméra**.
+- **Étape A** (le blocage de page de J2-0, vérifié en jeu par le nouvel e2e `j2-page-camera`, kerr-mini) : **pas de blocage** reproduit ; **un
+  trou réel** — caméra 1,5 km devant l'appareil : 190 images sur 761 avec le sol sous la caméra d'un niveau plus grossier, jusqu'à 1,5 s
+  en z 14 au lieu de z 17 (deux causes : le rectangle grandi autour du centre des chargements ; la fenêtre menée vers le regard dont la
+  caméra sort). Après J2-1 : **0 image** (règle de la caméra, sa tuile chargée la première, recentrage à 0,2 tuile du bord). La tuile **sous
+  l'appareil** quand la caméra est loin reste hors des fenêtres fines : relevé pour J2-2 / le monde (§19.4).
+- **Changé** : `src/system/earth-pages.ts` (nouveau : `PagePublisher`, `MipBatch`) ; `src/system/earth-tiles.ts` (`publish`, `writeHeights`,
+  `writeOrtho`, `flushMips`, `pubKey`/`pubData`/`pubGen`, `loadedRect`/`complete` par la caméra, `cameraOutX`/`Y`, `coverAt`, `heightAt` sur
+  les hauteurs publiées, `imagery` = version de la table) ; `renderer.ts` (`publish()` au début de `frame()`, `frameDesc.pages`) ;
+  `frame-desc.ts` ; tests `earth-pages.test.ts`, `lib/published-tiles.ts` (+ 4 fichiers de tests des tuiles) ; e2e `j2-page-camera` ;
+  fiche [docs/progress/j2/FICHE-J2-1-2026-11-12.md](docs/progress/j2/FICHE-J2-1-2026-11-12.md) et `j2-1-etape-a-kerr-mini.json` ; PLAN-J2
+  (§9 ter), GRAPHICS-PIPELINE (publication en tête de frame, §4.5, annexe régénérée), BH-API, E2E-CATALOGUE, PROBLEMES-A-REGLER,
+  ANALYSE-STREAMING (note), docs/README.
+- **Mesuré** (kerr-mini, nominal) : **image inchangée** — A/B figé A B B A (vue de fuite du Gapeau), RMSE A–B 0,027–0,041 contre A–A/B–B
+  0,027–0,036, luminance à 0,03 % ; **vol J0** (`j2-probes`, contre la fiche J2-0) : soumissions de mips max 9 → **1**, images > 2 ms du fil
+  principal 79 → **31**, publication dans l'image p95 1,7 / max 2,3 ms, octets max/image 6,75 → 2,0 Mio, total inchangé (433 contre 447 Mio) ;
+  **ΔGPU J0 nul** (A B B A : GPU p50 59,5 → 59,2 ms, dans l'écart A–A de 0,4 ms).
+- **Vérifié** : `bun test --parallel` 2 199 / 0 ; tsc ; biome ; `pipeline-inventory --check` puis `--write` ; e2e `j2-page-camera` (still,
+  flight), `j2-probes` (flight), A/B d'images et A/B J0 verts, 0 erreur GPU. Aucun shader changé (pas de check-wgsl requis). **Non vérifié** :
+  `tile-arrival` (temps de couverture à froid) ; le M1 Max ; la fuite en vol ; Windows/D3D12 ; « aucune pointe > 2 ms » **pas encore tenu**
+  (le travail des arrivées hors de l'image : jusqu'à 5,7 ms).
+- **Transitions** : le GPU lit toujours un rectangle par niveau, dérivé de la table (bords par page : J2-3) ; `changes` et le contact
+  restent à J2-2. **Suite** : J2-2 (hauteurs, contact, la tuile sous l'appareil), puis le travail des arrivées pour les pointes.

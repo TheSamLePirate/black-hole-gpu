@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { withGpuStubs } from "./lib/gpu-stubs";
+import { published } from "./lib/published-tiles";
 import type { Vec3 } from "../src/physics";
 import {
   EarthTiles,
@@ -57,24 +58,24 @@ function fill(t: EarthTiles) {
 }
 
 test("the levels wanted follow the camera's height", () => {
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   const pix = 1e-3;
   // (on the ground: every level, 4 × 4 tiles each)
   t.update(camAt(45.9, 6.87, 2), pix);
   expect(new Set(t.wanted().map((w) => w[0])).size).toBe(Z1 - Z0 + 1);
   expect(t.wanted().length).toBe(16 * (Z1 - Z0 + 1));
   // (from 400 km: none finer than the ground's footprint under the camera)
-  const t2 = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t2 = published(new EarthTiles(withGpuStubs(fakeDevice())));
   t2.update(camAt(45.9, 6.87, 400e3), pix);
   expect(Math.max(...t2.wanted().map((w) => w[0]))).toBeLessThanOrEqual(10);
   // (from the Moon's distance: none)
-  const t3 = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t3 = published(new EarthTiles(withGpuStubs(fakeDevice())));
   t3.update(dir(45.9, 6.87).map((c) => c * 60) as Vec3, pix);
   expect(t3.wanted().length).toBe(0);
 });
 
 test("the heights near the camera are the tiles', the global map's beyond them", () => {
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   const cam = camAt(45.9, 6.87, 2);
   t.update(cam, 1e-3);
   expect(t.pending).toBe(16 * (Z1 - Z0 + 1));
@@ -106,7 +107,7 @@ test("the heights near the camera are the tiles', the global map's beyond them",
 });
 
 test("a level moves with the camera: the part it keeps stays drawn", () => {
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   t.update(camAt(45.9, 6.87, 2), 1e-3);
   fill(t);
   // (2 km east: the finest window shifts a column; until its new tiles are in, what it keeps is drawn)
@@ -120,7 +121,7 @@ test("a level moves with the camera: the part it keeps stays drawn", () => {
 test("the sources switched (the IGN's relief, the orthophotos): the tiles drawn stay the ground until each is in again", () => {
   // (dropped at once, the ground fell to the global map's: at Chamonix the valley filled, a jet flying low in it
   // hundreds of metres in the ground — flung out by its gear, burnt)
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   const cam = camAt(45.912, 6.858, 2);
   t.update(cam, 1e-3);
   fill(t);
@@ -202,7 +203,7 @@ test("tiles that will not load keep the ground: a runway's the same, no terrace 
   const W = 720,
     H = 360;
   const map = new Int16Array(W * H).map((_, k) => 500 + (((k % W) * 37 + Math.floor(k / W) * 91) % 400));
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   t.fallback = tileFallbackSampler(map, W, H);
   const ground = earthHeightSampler(map, W, H, (q, foot) => t.heightAt(q, foot), runwayGrade);
   // (Edwards's runway 22, the craft rolling down it: the ground before any tile, then with every tile failed in)
@@ -267,13 +268,13 @@ test("the imagery: every level; EOX's colours brought into the Blue Marble's; fi
 });
 
 test("the windows led where the view looks: ahead by up to 1¼ tile of each level, the camera still inside", () => {
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   const c = camAt(36, -5.4, 400);
   t.update(c, 0.001);
   const still = new Map(t.wanted().map(([z, x, y]) => [`${z}/${x}/${y}`, z]));
   // (looking north, 6 km ahead)
   const north: Vec3 = [0, 0, 6000 / WGS84_A];
-  const t2 = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t2 = published(new EarthTiles(withGpuStubs(fakeDevice())));
   t2.update(c, 0.001, [0, 0, 0], north);
   const led = t2.wanted();
   const finest = Math.max(...led.map(([z]) => z));
@@ -289,7 +290,7 @@ test("the windows led where the view looks: ahead by up to 1¼ tile of each leve
 });
 
 test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn again from memory, the ring loaded ahead", () => {
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   let resized = 0;
   t.onResize = () => resized++;
   const cam = camAt(45.9, 6.87, 2);
@@ -358,7 +359,7 @@ test("the detail's reach on a device that cannot hold its texture: back to 4 til
     popErrorScope: () => Promise.resolve(made > 1 && made % 2 === 0 ? { message: "out of memory" } : null),
     queue: { writeTexture() {}, onSubmittedWorkDone: () => Promise.resolve() },
   } as unknown as GPUDevice;
-  const t = new EarthTiles(withGpuStubs(dev));
+  const t = published(new EarthTiles(withGpuStubs(dev)));
   let resized = 0;
   t.onResize = () => resized++;
   t.setReach(TILE_REACH.far);
@@ -435,7 +436,7 @@ test("T10: the 4-tile levels packed by quadrants — 6 layers of 2048² where th
   // (the tiles put in, read back through the tracer's params from the texture the writes made — every level's, each its
   // own, at both reaches; the memory and its peak while the two textures live)
   const { device, tex } = gpuDevice();
-  const t = new EarthTiles(withGpuStubs(device));
+  const t = published(new EarthTiles(withGpuStubs(device)));
   const cam = camAt(45.9, 6.87, 2);
   expect(t.textureBytes).toBe(1024 * 1024 * 12 * 8);
   for (const reach of [TILE_REACH.normal, TILE_REACH.veryFar]) {
@@ -481,7 +482,7 @@ test("T10: the 4-tile levels packed by quadrants — 6 layers of 2048² where th
 test("a drawn tile's heights put again — the IGN's over the Terrarium's — logged as a change of that tile alone", () => {
   // (the relief cache bakes again only where a change is logged: a refinement in place had logged nothing, the cache kept
   // the first heights — a city's SRTM — until a window moved)
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   t.update(camAt(48.87, 2.3, 300), 1e-3);
   fill(t);
   const before = t.changes.length;
@@ -501,21 +502,21 @@ test("T9c: the imagery filtered, the relief's texture holds its heights alone (r
     createTexture: (d: { size: number[]; format: string }) => (formats.push(d.format), { size: d.size, destroy() {} }),
     queue: { writeTexture() {}, onSubmittedWorkDone: () => Promise.resolve() },
   } as unknown as GPUDevice);
-  const t = new EarthTiles(dev, true);
+  const t = published(new EarthTiles(dev, true));
   expect(formats[0]).toBe("r32uint");
   expect(t.textureBytes).toBe(1024 * 1024 * 12 * 4);
   expect(t.peakBytes).toBe(1024 * 1024 * 12 * 4 + ORTHO_BYTES);
   t.setReach(TILE_REACH.veryFar);
   expect(t.textureBytes).toBe(2048 * 2048 * 9 * 4);
   expect(t.imagery2k.width).toBe(2048);
-  const plain = new EarthTiles(withGpuStubs(fakeDevice()));
+  const plain = published(new EarthTiles(withGpuStubs(fakeDevice())));
   expect(plain.textureBytes).toBe(1024 * 1024 * 12 * 8);
 });
 
 test("a window drawn before it is whole (T8i): the heights read near its edge, never a missing tile's slot", () => {
   // (reported by Sam, 4 Nov 2026: terrainAhead → gearHeight → heightAt → sampleLevel read a texel of the empty slot beside a
   // partial rectangle — a TypeError on null. Only the 3 × 3 tiles round the camera put in, every level)
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   t.update(camAt(45.9, 6.87, 2), 1e-3);
   const cx = (z: number) => Math.floor(((6.87 + 180) / 360) * 2 ** z);
   const cy = (z: number) => Math.floor((0.5 - Math.atanh(Math.sin(45.9 * deg)) / (2 * Math.PI)) * 2 ** z);
@@ -563,7 +564,7 @@ test("a window drawn before it is whole (T8i): the heights read near its edge, n
 
 test("the network audit: what is in flight for tiles the windows have left dropped, never thrown away on arrival", async () => {
   // (the loads never answer here: every one stays in flight until dropped)
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   const inflight = (t as unknown as { inflight: Map<string, AbortController> }).inflight;
   const loadAt = (
     t as unknown as { loadAt: Map<string, [{ want: { x0: number; x1: number; y0: number; y1: number } | null }, number, number]> }

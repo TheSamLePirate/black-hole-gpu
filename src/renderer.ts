@@ -11741,6 +11741,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         view: c,
       });
     }
+    // (J2-1: the Earth's tile pages in since the last image published before anything of this one is encoded — written to the GPU
+    // under the publication's budget, their mips made in one submission, the levels' rectangles grown over them —: the table this
+    // image reads, its version in the frame's description)
+    this.earthTiles.publish();
+    this.frameDesc.pages = { version: this.earthTiles.pages.version, waiting: this.earthTiles.pages.size };
     if (s.earthTerrainRasterView === "off" && !s.earthTerrainRasterUse && s.earthPipeline !== "raster") this.terrainRaster?.suspend();
     else this.terrainRaster?.idle("waiting");
     // (polarization turned on or off: the live target remade with or without its buffer)

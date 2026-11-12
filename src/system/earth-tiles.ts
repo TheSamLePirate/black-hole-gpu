@@ -34,6 +34,7 @@ import { USA_LUT } from "./usa-colour";
 import { MAPTERHORN_Z1, mapterhornUrl, USA_OUTLINE, usgsImageryUrl } from "./usa-ground";
 import { IGN_MNH } from "./ign-canopy";
 import { ArrivalLog } from "./tile-arrivals";
+import { MipBatch, PagePublisher, PUB_BUDGET_MS, PUB_CATCHUP_AFTER_MS, PUB_CATCHUP_MS, type PageJob } from "./earth-pages";
 import { L_MAX, L_MIN, ROAD_MVT_Z1, ROAD_Z0 } from "./night-roads";
 import type { DelightStats } from "./ortho-delight";
 import { type DecodeReply, type DecodeRequest, decodeTile, ORTHO_FIT, pixels as decodePixels } from "./tile-decode";
@@ -425,6 +426,12 @@ interface Level {
   imgKey: string[];
   /** its tiles drawn from the sources before a switch, taken again — drawn until each is in from the new one */
   stale: boolean;
+  /** J2-1, the page table: the tile each slot's page holds on the GPU (published: its texels and mips written — the level's
+   *  rectangle grows over it only then), the heights it was written from (the CPU's ground: heightAt reads what the GPU draws),
+   *  its generation (12 bits, bumped at each write of the slot) */
+  pubKey: (string | null)[];
+  pubData: (Float32Array | null)[];
+  pubGen: Uint16Array;
 }
 
 /** An orthophotos' level: its window (4 × 4 tiles), the tile in each slot (none: not in yet) — imagery alone. */
@@ -436,6 +443,9 @@ interface OrthoLevel {
   want: Rect | null;
   valid: Rect | null;
   key: (string | null)[];
+  /** J2-1: the tile each slot holds on the GPU (published), its generation */
+  pubKey: (string | null)[];
+  pubGen: Uint16Array;
 }
 
 /**
@@ -1046,9 +1056,15 @@ export class EarthTiles {
   /** heights of the global map (for a tile that will not load: terrain.ts, tileFallbackSampler) */
   fallback: ((q: Vec3) => number) | null = null;
   onChange: (() => void) | null = null;
-  /** bumped when a tile already drawn gets its imagery (its heights unchanged: not the stamp — the ground built
-   *  from them stays; the renderer redraws a still view for it, at most once in a while) */
-  imagery = 0;
+  /** J2-1: the pages' publication — the queue of pages in from the network, written and published once an image (publish) —, and
+   *  the mips of the pages written, made in one submission */
+  readonly pages = new PagePublisher();
+  private mips = new MipBatch<GPUTexture>();
+  /** the page table's version (PagePublisher.version: bumped at each publication that wrote a page — a tile already drawn getting
+   *  its imagery among them; the renderer redraws a still view for it, at most once in a while). Before J2-1 a counter of its own */
+  get imagery() {
+    return this.pages.version;
+  }
   /** tiles loaded, failed (for the readouts) */
   loaded = 0;
   failed = 0;
@@ -1059,11 +1075,13 @@ export class EarthTiles {
    * GPU between two images — `bytes` sent by `writeTexture` (heights, imagery, lights, orthophotos), `writes` those calls, `tiles`
    * the relief tiles put, `orthos` the orthophotos put, `submits` the queue submissions (the mips': one a tile and a layer —
    * `orthoMips`), `mipPasses` their render passes, `putMs` the page's time in `putTile`/`putOrtho` (the mips' encoding and
-   * submission in it), `mipMs` that of the mips alone [ms, CPU — their GPU time is not measured]. `pubFrame()` (the renderer,
+   * submission in it), `mipMs` that of the mips alone [ms, CPU — their GPU time is not measured]; since J2-1 the pages are written
+   * at the image's publication (`publish`): `pubMs` its time (in `putMs` too; an arrival's own bookkeeping the rest), `waiting` the
+   * pages still queued after it, `tiles`/`orthos` the pages written, `submits` one at most. `pubFrame()` (the renderer,
    * once an image) closes an image's counts into `pubLog` (4 096 images kept); `pubStats()` sums them up.
    */
   pubProbe = false;
-  private pubNow = { bytes: 0, writes: 0, tiles: 0, orthos: 0, submits: 0, mipPasses: 0, putMs: 0, mipMs: 0 };
+  private pubNow = { bytes: 0, writes: 0, tiles: 0, orthos: 0, submits: 0, mipPasses: 0, putMs: 0, mipMs: 0, pubMs: 0, waiting: 0 };
   readonly pubLog: {
     t: number;
     bytes: number;
@@ -1074,6 +1092,8 @@ export class EarthTiles {
     mipPasses: number;
     putMs: number;
     mipMs: number;
+    pubMs: number;
+    waiting: number;
   }[] = [];
   private pubWrote(bytes: number) {
     if (!this.pubProbe) return;
@@ -1085,13 +1105,13 @@ export class EarthTiles {
     if (!this.pubProbe) return;
     this.pubLog.push({ t: performance.now(), ...this.pubNow });
     if (this.pubLog.length > 4096) this.pubLog.splice(0, this.pubLog.length - 4096);
-    this.pubNow = { bytes: 0, writes: 0, tiles: 0, orthos: 0, submits: 0, mipPasses: 0, putMs: 0, mipMs: 0 };
+    this.pubNow = { bytes: 0, writes: 0, tiles: 0, orthos: 0, submits: 0, mipPasses: 0, putMs: 0, mipMs: 0, pubMs: 0, waiting: 0 };
   }
   /** the logged images' publication: per image p50 / p95 / max of each count, the images with any, those over 2 ms of the page's
    *  time (J2-1's bound), the totals; from `since` [performance.now() ms] */
   pubStats(since = 0) {
     const rows = this.pubLog.filter((r) => r.t >= since);
-    const keys = ["bytes", "writes", "tiles", "orthos", "submits", "mipPasses", "putMs", "mipMs"] as const;
+    const keys = ["bytes", "writes", "tiles", "orthos", "submits", "mipPasses", "putMs", "mipMs", "pubMs", "waiting"] as const;
     const q = (v: number[], p: number) => {
       const s = [...v].sort((a, b) => a - b);
       return s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))]! : 0;
@@ -1166,6 +1186,7 @@ export class EarthTiles {
             if (!L.want || L.z > IMG_Z1) continue;
             for (let s = 0; s < L.key.length; s++) {
               L.key[s] = null;
+              L.pubKey[s] = null;
               L.imgKey[s] = "";
               L.col[s] = null;
             }
@@ -1173,12 +1194,13 @@ export class EarthTiles {
           }
           for (const O of this.ortho) {
             O.key.fill(null);
+            O.pubKey.fill(null);
             O.valid = null;
           }
         }
         this.probe = null;
         this.stamp++;
-        this.imagery++;
+        this.pages.version++;
         this.onChange?.();
       }
       return { slots: 0, levels: 0 };
@@ -1194,10 +1216,12 @@ export class EarthTiles {
         this.probe.control = true;
         for (const p of this.publishedSlots()) this.paintSlot(p, word);
       }
-      this.imagery++;
+      this.pages.version++;
       this.onChange?.();
       return { slots: this.probe.slots.length, levels: -1 };
     }
+    // (J2-1: every page queued published first — the windows held as they are drawn)
+    this.publish(Number.POSITIVE_INFINITY);
     const slots: { tex: GPUTexture; ox: number; oy: number; layer: number }[] = [];
     let levels = 0;
     for (const L of this.levels) {
@@ -1214,6 +1238,7 @@ export class EarthTiles {
           if (inside(P, x, y)) continue;
           const s = this.slotOf(L, x, y);
           L.key[s] = null;
+          L.pubKey[s] = null;
           L.imgKey[s] = "";
           L.col[s] = null;
           slots.push({ tex, ox: (s % L.span) * TILE, oy: Math.floor(s / L.span) * TILE, layer });
@@ -1233,15 +1258,56 @@ export class EarthTiles {
           if (inside(P, x, y)) continue;
           const s = orthoSlot(O.span, x, y);
           O.key[s] = null;
+          O.pubKey[s] = null;
           slots.push({ tex, ox: (s % O.span) * TILE, oy: Math.floor(s / O.span) * TILE, layer });
         }
     }
     this.probe = { word, slots };
     for (const p of slots) this.paintSlot(p, word);
     this.stamp++;
-    this.imagery++;
+    this.pages.version++;
     this.onChange?.();
     return { slots: slots.length, levels };
+  }
+  /**
+   * PLAN-J2 (step A of J2-1) — what covers the ground under the camera, and under another point (`at`: latitude, longitude [°
+   * geodetic], the craft's): per level wanted, its z, whether its published rectangle holds the camera's tile (`cam`) and the
+   * point's (`at`), and the tiles published; `camZ`/`atZ` the finest level holding that tile, `finest` the finest published
+   * anywhere, `wantZ` the finest wanted — a level published (`valid`) without the camera's tile while a coarser one draws the ground
+   * under it is the case the leak probe's first version froze the page with (PROBLEMES-A-REGLER, 12 Nov 2026). A read, nothing changed.
+   */
+  coverAt(at?: { lat: number; lon: number }) {
+    const out = { camZ: 0, atZ: 0, finest: 0, wantZ: 0, holes: [] as number[], atHoles: [] as number[], levels: [] as unknown[] };
+    const tileOf = (n: number, lon: number, sinLat: number, r: { x0: number; x1: number }) => {
+      let x = Math.floor(cx0(lon) * n);
+      x -= Math.round((x - (r.x0 + r.x1) / 2) / n) * n;
+      return { x, y: Math.floor(mercY(sinLat, n)) };
+    };
+    const aLon = at ? (at.lon * Math.PI) / 180 : 0,
+      aSin = at ? Math.sin((at.lat * Math.PI) / 180) : 0;
+    for (const L of this.levels) {
+      if (!L.want) continue;
+      out.wantZ = L.z;
+      const v = L.valid;
+      const c = tileOf(L.n, this.lon, this.sinLat, L.want);
+      const p = at ? tileOf(L.n, aLon, aSin, L.want) : null;
+      const cam = inside(v, c.x, c.y),
+        atIn = p ? inside(v, p.x, p.y) : false;
+      if (v) out.finest = L.z;
+      if (cam) out.camZ = L.z;
+      if (atIn) out.atZ = L.z;
+      if (v && !cam) out.holes.push(L.z);
+      if (v && p && !atIn) out.atHoles.push(L.z);
+      out.levels.push({
+        z: L.z,
+        cam,
+        at: atIn,
+        tiles: v ? (v.x1 - v.x0) * (v.y1 - v.y0) : 0,
+        span: L.span,
+        camIn: inside(L.want, c.x, c.y),
+      });
+    }
+    return out;
   }
   /** the camera's tile at a level of n tiles, its x unwrapped near the rectangle r's (the leak probe's side to keep) */
   private cameraTile(n: number, r: { x0: number; x1: number }) {
@@ -1341,6 +1407,8 @@ export class EarthTiles {
         want: null,
         valid: null,
         key: new Array(ORTHO_SPAN ** 2).fill(null),
+        pubKey: new Array(ORTHO_SPAN ** 2).fill(null),
+        pubGen: new Uint16Array(ORTHO_SPAN ** 2),
       });
     for (let l = 0; l < LEVELS; l++) {
       const z = Z0 + l;
@@ -1356,6 +1424,9 @@ export class EarthTiles {
         col: new Array(n * n).fill(null),
         imgKey: new Array(n * n).fill(""),
         stale: false,
+        pubKey: new Array(n * n).fill(null),
+        pubData: new Array(n * n).fill(null),
+        pubGen: new Uint16Array(n * n),
       });
     }
   }
@@ -1432,6 +1503,8 @@ export class EarthTiles {
     for (const [k, O] of this.ortho.entries()) {
       O.span = big && k < ORTHO_BIG_LEVELS ? ORTHO_SPAN_BIG : ORTHO_SPAN;
       O.key = new Array(O.span ** 2).fill(null);
+      O.pubKey = new Array(O.span ** 2).fill(null);
+      O.pubGen = new Uint16Array(O.span ** 2);
       O.valid = null;
       O.want = null;
     }
@@ -1441,7 +1514,13 @@ export class EarthTiles {
       L.data = new Array(L.span * L.span).fill(null);
       L.col = new Array(L.span * L.span).fill(null);
       L.imgKey = new Array(L.span * L.span).fill("");
+      L.pubKey = new Array(L.span * L.span).fill(null);
+      L.pubData = new Array(L.span * L.span).fill(null);
+      L.pubGen = new Uint16Array(L.span * L.span);
     }
+    // (J2-1: the pages waiting and the mips gathered were for the textures just replaced)
+    this.pages.drop();
+    this.mips.clear();
     this.stamp++;
     this.logChange(-1, null, null);
     this.onResize?.();
@@ -1516,7 +1595,8 @@ export class EarthTiles {
       for (let y = L.want.y0; y < L.want.y1; y++)
         for (let x = L.want.x0; x < L.want.x1; x++) if (L.key[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) k++;
     }
-    return k;
+    // (J2-1: in, not yet published — queued for an image's publication)
+    return k + this.pages.count((j) => j.slot[0] !== "o");
   }
   /** the orthophotos' tiles wanted and not yet in */
   get orthoPending() {
@@ -1526,7 +1606,7 @@ export class EarthTiles {
       for (let y = O.want.y0; y < O.want.y1; y++)
         for (let x = O.want.x0; x < O.want.x1; x++) if (O.key[orthoSlot(O.span, x, y)] !== this.orthoKey(O, x, y)) k++;
     }
-    return k;
+    return k + this.pages.count((j) => j.slot[0] === "o");
   }
   /** the finest orthophotos' level drawn (0: none) */
   get orthoFinest() {
@@ -1620,15 +1700,24 @@ export class EarthTiles {
       this.failures.clear();
       for (const L of this.levels) {
         L.key.fill(null);
+        // (J2-1: the pages too — drawn until each is in again and published; those queued were the old sources')
+        L.pubKey.fill(null);
         L.stale = !!L.valid;
       }
+      // (the orthophotos' keys kept — clearOrtho —: their pages queued kept too, published as they were)
+      this.pages.drop((j) => j.slot[0] !== "o");
       this.clearOrtho();
     }
     // (L7b's prototype switched: the orthophotos alone taken again — relit, or as they come)
     if (this.delightOn !== this.delightWas) {
       this.delightWas = this.delightOn;
       this.delightQueue.length = 0;
-      for (const O of this.ortho) if (O.z >= DELIGHT_Z) O.key.fill(null);
+      for (const O of this.ortho)
+        if (O.z >= DELIGHT_Z) {
+          O.key.fill(null);
+          O.pubKey.fill(null);
+        }
+      this.pages.drop((j) => j.slot[0] === "o" && j.z >= DELIGHT_Z);
       this.clearOrtho();
     }
     if (!c) return this.clear();
@@ -1687,7 +1776,13 @@ export class EarthTiles {
       const x0 = Math.round(cx) - mid;
       const y0 = Math.min(Math.max(Math.round(cy) - mid, 0), L.n - L.span);
       let want = L.want;
-      if (!want || Math.abs(cx - (want.x0 + mid)) > 0.8 || (y0 !== want.y0 && Math.abs(cy - (want.y0 + mid)) > 0.8)) {
+      if (
+        !want ||
+        Math.abs(cx - (want.x0 + mid)) > 0.8 ||
+        (y0 !== want.y0 && Math.abs(cy - (want.y0 + mid)) > 0.8) ||
+        cameraOutX(want, cx0, L.n) ||
+        (y0 !== want.y0 && cameraOutY(want, cy0))
+      ) {
         want = { x0, y0, x1: x0 + L.span, y1: y0 + L.span };
       }
       if (!same(want, L.want)) {
@@ -1784,11 +1879,15 @@ export class EarthTiles {
           }
           const f = this.failures.get(key);
           if (f && now < f.at) continue;
-          // (its ring round the loads' centre's tile, in the level's tiles)
+          // (its ring round the loads' centre's tile, in the level's tiles — J2-1, step A: or round the camera's own, the nearer)
           let rx = x - Math.floor(cx);
           rx -= Math.round(rx / L.n) * L.n;
+          let qx = x - Math.floor(cx0(this.lon) * L.n);
+          qx -= Math.round(qx / L.n) * L.n;
+          const camRing = Math.max(Math.abs(qx), Math.abs(y - Math.floor(mercY(this.sinLat, L.n))));
           // (the national levels — z 15 … 17, small windows, the national heights' first step — whole in the first ring)
-          const ring = L.z > ZG1 ? 0 : Math.max(Math.abs(rx), Math.abs(y - Math.floor(cy)));
+          // (the camera's own tile before every other — its ring −1 —: the ground under the camera never waits for the one ahead)
+          const ring = camRing === 0 ? -1 : L.z > ZG1 ? 0 : Math.min(camRing, Math.max(Math.abs(rx), Math.abs(y - Math.floor(cy))));
           todo.push([L, x, y, this.cost(L, x, y, cx, cy), ring]);
         }
       }
@@ -2183,10 +2282,7 @@ export class EarthTiles {
     try {
       this.putTileNow(L, z, x, y, h, col);
     } finally {
-      if (this.pubProbe) {
-        this.pubNow.tiles++;
-        this.pubNow.putMs += performance.now() - p0;
-      }
+      if (this.pubProbe) this.pubNow.putMs += performance.now() - p0;
     }
   }
   private putTileNow(L: Level, z: number, x: number, y: number, h: Float32Array, col: Uint32Array | null) {
@@ -2200,11 +2296,6 @@ export class EarthTiles {
       this.keep(old, L.data[s]!, L.col[s] ?? null);
     if (old && old !== this.keyOf(L, x, y)) this.standInKeys.delete(old);
     L.col[s] = ringLevel ? (col ?? (old === this.keyOf(L, x, y) ? (L.col[s] ?? null) : null)) : null;
-    if (col && inside(L.valid, x, y) && L.key[s] === this.keyOf(L, x, y)) this.imagery++;
-    // (the same tile's heights again, drawn already — the IGN's over the Terrarium's, the far silhouettes' overground on its
-    // ground —: logged, the relief cache's rings over it baked again; only the rectangle's changes were, the cache kept the
-    // first heights — a city's SRTM, its blocks' tops — until a window moved)
-    if (old === this.keyOf(L, x, y) && inside(L.valid, x, y)) this.logChange(L.z, { x0: x, x1: x + 1, y0: y, y1: y + 1 }, null);
     L.key[s] = this.keyOf(L, x, y);
     L.data[s] = h;
     this.arrivals.mark(L.key[s]!, "put");
@@ -2216,6 +2307,26 @@ export class EarthTiles {
       this.cityLights.set(this.keyOf(L, x, y), a);
       if (this.cityLights.size > 48) this.cityLights.delete(this.cityLights.keys().next().value!);
     }
+    // (J2-1: the page queued — its heights, its imagery when it changes —, written to the GPU and published at an image's start,
+    // nearest the camera first, under the publication's budget: publish)
+    const k = this.keyOf(L, x, y);
+    const per = this.filtered ? 1 : 2;
+    const page = `${L.z}/${s}`,
+      now = performance.now();
+    this.pages.queue(page, L.z, x, y, "heights", per * TILE * TILE * 4, () => this.writeHeights(L, s, x, y, k, h, col), now);
+    // (the same tile again without imagery over its own: kept — the filtered path's separate texture)
+    if (col || L.imgKey[s] !== k || !this.filtered) {
+      if (this.filtered && L.z <= IMG_Z1)
+        this.pages.queue(page, L.z, x, y, "imagery", 2 * TILE * TILE * 4, () => this.putImagery(L, s, col), now);
+      L.imgKey[s] = col ? k : "";
+    }
+  }
+  /** J2-1: a page's heights written to the GPU (publish), the slot's page now that tile's */
+  private writeHeights(L: Level, s: number, x: number, y: number, k: string, h: Float32Array, col: Uint32Array | null) {
+    // (the same tile's heights again, drawn already — the IGN's over the Terrarium's, the far silhouettes' overground on its
+    // ground —: logged, the relief cache's rings over it baked again; only the rectangle's changes were, the cache kept the
+    // first heights — a city's SRTM, its blocks' tops — until a window moved)
+    if (L.pubKey[s] === k && inside(L.valid, x, y)) this.logChange(L.z, { x0: x, x1: x + 1, y0: y, y1: y + 1 }, null);
     const hb = new Uint32Array(h.buffer, h.byteOffset, TILE * TILE);
     // (the heights alone where the imagery is filtered — T9c, r32uint —, with the packed imagery else)
     const per = this.filtered ? 1 : 2;
@@ -2229,12 +2340,6 @@ export class EarthTiles {
       } else texels[per * i] = hb[i]!;
       if (per === 2) texels[2 * i + 1] = col ? col[i]! : 0;
     }
-    // (the same tile again without imagery over its own: kept — the filtered path's separate texture)
-    const k = this.keyOf(L, x, y);
-    if (col || L.imgKey[s] !== k || !this.filtered) {
-      this.putImagery(L, s, col);
-      L.imgKey[s] = col ? k : "";
-    }
     const slot = this.layout.levels[L.z - Z0]!;
     this.device.queue.writeTexture(
       {
@@ -2246,7 +2351,10 @@ export class EarthTiles {
       [TILE, TILE, 1],
     );
     this.pubWrote(texels.byteLength);
-    this.complete(L);
+    L.pubKey[s] = k;
+    L.pubData[s] = h;
+    L.pubGen[s] = (L.pubGen[s]! + 1) & 0xfff;
+    if (this.pubProbe) this.pubNow.tiles++;
   }
 
   /** The tiles each orthophotos' level's window wants (z, x, y). */
@@ -2274,9 +2382,10 @@ export class EarthTiles {
     const w = L.want;
     if (!w) return;
     let whole = true;
+    // (J2-1: its pages published — their texels and mips on the GPU —, not only in on the CPU)
     for (let y = w.y0; y < w.y1 && whole; y++)
       for (let x = w.x0; x < w.x1; x++)
-        if (L.key[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) {
+        if (L.pubKey[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) {
           whole = false;
           break;
         }
@@ -2287,7 +2396,12 @@ export class EarthTiles {
       if (!L.stale) {
         const r = this.loadedRect(L, w);
         const area = (q: Rect | null) => (q ? (q.x1 - q.x0) * (q.y1 - q.y0) : 0);
-        if (r && area(r) > area(L.valid)) this.setValid(L, r);
+        // (J2-1, step A: the camera's tile first — a rectangle holding it taken over one without it, even a smaller one; never a
+        // larger one that leaves it out)
+        const cam = this.cameraTile(L.n, w);
+        const rCam = inside(r, cam.x, cam.y),
+          vCam = inside(L.valid, cam.x, cam.y);
+        if (r && ((rCam && !vCam) || (area(r) > area(L.valid) && (rCam || !vCam)))) this.setValid(L, r);
       }
       return;
     }
@@ -2303,20 +2417,33 @@ export class EarthTiles {
     this.setValid(L, w);
   }
 
-  /** The largest rectangle of a window's tiles all in that holds the loads' centre's tile — the camera led along its motion
-   *  (priorityLon: the tiles come out from there), held within the window — (null: that tile not in). */
+  /** The largest rectangle of a window's pages all published that holds the camera's tile, and the loads' centre's (the camera led
+   *  along its motion: the tiles come out from there) when one does (J2-1, step A: the ground under the camera never left to a coarser
+   *  level for a larger rectangle elsewhere — measured in play, an outside view 1.5 km ahead of the craft: up to 1.5 s at z 14 under
+   *  the camera instead of z 17); the loads' centre's alone while the camera's tile is not published, held within the window — (null:
+   *  neither published). */
   private loadedRect(L: Level, w: Rect): Rect | null {
     const nx = w.x1 - w.x0,
       ny = w.y1 - w.y0;
-    let px = Math.floor(cx0(this.priorityLon) * L.n) - w.x0;
-    px -= Math.round((px - nx / 2) / L.n) * L.n;
-    const fx = Math.min(Math.max(px, 0), nx - 1);
-    const fy = Math.min(Math.max(Math.floor(mercY(this.prioritySinLat, L.n)) - w.y0, 0), ny - 1);
-    const ok = (i: number, j: number) => L.key[this.slotOf(L, w.x0 + i, w.y0 + j)] === this.keyOf(L, w.x0 + i, w.y0 + j);
+    const at = (lon: number, sinLat: number) => {
+      let px = Math.floor(cx0(lon) * L.n) - w.x0;
+      px -= Math.round((px - nx / 2) / L.n) * L.n;
+      return { i: px, j: Math.floor(mercY(sinLat, L.n)) - w.y0 };
+    };
+    const ok = (i: number, j: number) => L.pubKey[this.slotOf(L, w.x0 + i, w.y0 + j)] === this.keyOf(L, w.x0 + i, w.y0 + j);
+    const c = at(this.lon, this.sinLat);
+    const lead = at(this.priorityLon, this.prioritySinLat);
+    const ld = { i: Math.min(Math.max(lead.i, 0), nx - 1), j: Math.min(Math.max(lead.j, 0), ny - 1) };
+    const camIn = c.i >= 0 && c.i < nx && c.j >= 0 && c.j < ny && ok(c.i, c.j);
+    const f = camIn ? c : ld;
+    const fx = f.i,
+      fy = f.j;
     if (!ok(fx, fy)) return null;
-    // (every rectangle round the camera's tile — 8 × 8 tiles at most: a few thousand looks, at a tile's arrival)
+    // (every rectangle round that tile — 8 × 8 tiles at most: a few thousand looks, at a publication —; one holding the loads' centre
+    // too first)
     let best: Rect | null = null,
       most = 0;
+    const BOTH = 1 << 20;
     for (let j0 = fy; j0 >= 0 && ok(fx, j0); j0--)
       for (let j1 = fy; j1 < ny && ok(fx, j1); j1++)
         for (let i0 = fx; i0 >= 0; i0--) {
@@ -2324,10 +2451,10 @@ export class EarthTiles {
           for (let j = j0; j <= j1 && colOk; j++) colOk = ok(i0, j);
           if (!colOk) break;
           for (let i1 = fx; i1 < nx; i1++) {
-            let c = true;
-            for (let j = j0; j <= j1 && c; j++) c = ok(i1, j);
-            if (!c) break;
-            const a = (i1 - i0 + 1) * (j1 - j0 + 1);
+            let cc = true;
+            for (let j = j0; j <= j1 && cc; j++) cc = ok(i1, j);
+            if (!cc) break;
+            const a = (i1 - i0 + 1) * (j1 - j0 + 1) + (camIn && ld.i >= i0 && ld.i <= i1 && ld.j >= j0 && ld.j <= j1 ? BOTH : 0);
             if (a > most) {
               most = a;
               best = { x0: w.x0 + i0, y0: w.y0 + j0, x1: w.x0 + i1 + 1, y1: w.y0 + j1 + 1 };
@@ -2437,7 +2564,13 @@ export class EarthTiles {
         cy = cy0 + gy * k;
       const mid = span / 2;
       let want = O.want;
-      if (!want || Math.abs(cx - (want.x0 + mid)) > 0.8 || Math.abs(cy - (want.y0 + mid)) > 0.8) {
+      if (
+        !want ||
+        Math.abs(cx - (want.x0 + mid)) > 0.8 ||
+        Math.abs(cy - (want.y0 + mid)) > 0.8 ||
+        cameraOutX(want, cx0, O.n) ||
+        cameraOutY(want, cy0)
+      ) {
         const x0 = Math.round(cx) - mid,
           y0 = Math.min(Math.max(Math.round(cy) - mid, 0), O.n - span);
         want = { x0, y0, x1: x0 + span, y1: y0 + span };
@@ -2614,10 +2747,7 @@ export class EarthTiles {
     try {
       this.putOrthoNow(z, x, y, col);
     } finally {
-      if (this.pubProbe) {
-        this.pubNow.orthos++;
-        this.pubNow.putMs += performance.now() - p0;
-      }
+      if (this.pubProbe) this.pubNow.putMs += performance.now() - p0;
     }
   }
   private putOrthoNow(z: number, x: number, y: number, col: Uint32Array | null) {
@@ -2625,8 +2755,14 @@ export class EarthTiles {
     const O = this.ortho[k];
     if (!O || !inside(O.want, x, y)) return;
     const s = orthoSlot(O.span, x, y);
-    O.key[s] = this.orthoKey(O, x, y);
-    if (col) this.arrivals.mark(O.key[s]!, "put");
+    const ok = this.orthoKey(O, x, y);
+    O.key[s] = ok;
+    if (col) this.arrivals.mark(ok, "put");
+    // (J2-1: the page queued, written and published at an image's start — publish)
+    this.pages.queue(`o${k}/${s}`, z, x, y, "ortho", TILE * TILE * 4, () => this.writeOrtho(O, k, s, ok, col), performance.now());
+  }
+  /** J2-1: an orthophoto's page written to the GPU (publish) — its texels and its mips —, the slot's page now that tile's */
+  private writeOrtho(O: OrthoLevel, k: number, s: number, ok: string, col: Uint32Array | null) {
     const ox = (s % O.span) * TILE,
       oy = Math.floor(s / O.span) * TILE;
     // (an 8-tile window — T8e —: the 2048² texture's layer, after the relief levels')
@@ -2643,13 +2779,68 @@ export class EarthTiles {
       this.pubWrote(TILE * TILE * 4);
       this.orthoMips(ox, oy, layer, tex);
     }
-    if (col) this.imagery++;
-    this.orthoComplete(O);
+    O.pubKey[s] = ok;
+    O.pubGen[s] = (O.pubGen[s]! + 1) & 0xfff;
+    if (this.pubProbe) this.pubNow.orthos++;
   }
 
-  /** A tile's mips in the orthophotos' texture (its region at each level, from the level above: never its neighbour's). */
-  /** A tile's mips in an imagery texture (its region at each level, from the level above: never its neighbour's). */
+  /** A tile's mips in an imagery texture (its region at each level, from the level above: never its neighbour's) — J2-1: gathered,
+   *  made at the image's publication with every other page's, in one submission (flushMips) */
   private orthoMips(ox: number, oy: number, layer: number, tex: GPUTexture = this.orthoTexture) {
+    this.mips.add(tex, layer, ox, oy);
+  }
+
+  /**
+   * J2-1 — the image's publication (the renderer, at the start of each image, before anything of it is encoded; FrameDesc.pages):
+   * the pages queued since the last one written to the GPU, nearest the camera first (in their level's tiles, the finer first in a
+   * ring), until the budget of the page's thread is spent (PUB_BUDGET_MS, the next page only if it fits — its cost the mean of the last —, raised to PUB_CATCHUP_MS once a page has waited PUB_CATCHUP_AFTER_MS —
+   * a cold load's backlog —; all of them for the leak probe) — at least one; every mip of every page written made in one encoder
+   * and one submission; then the levels those pages belong to completed (their rectangles grown over the pages now published). A
+   * page arrived during the image (a tile drawn from memory as the windows move) waits for the next one. Returns the pages written.
+   */
+  publish(budgetMs?: number): number {
+    if (!this.pages.size && this.mips.empty) return 0;
+    const p0 = performance.now();
+    const budget = budgetMs ?? (this.pages.oldest(p0) > PUB_CATCHUP_AFTER_MS ? PUB_CATCHUP_MS : PUB_BUDGET_MS);
+    const rank = (j: PageJob) => {
+      const n = 2 ** j.z;
+      let dx = j.x - Math.floor(cx0(this.lon) * n);
+      dx -= Math.round(dx / n) * n;
+      const ring = Math.max(Math.abs(dx), Math.abs(j.y - Math.floor(mercY(this.sinLat, n))));
+      return ring * 64 - j.z;
+    };
+    const done = this.pages.drain(budget, rank, () => performance.now());
+    if (done.length) {
+      this.pages.version++;
+      const levels = new Set<Level>(),
+        orthos = new Set<OrthoLevel>();
+      for (const j of done) {
+        if (j.slot[0] === "o") {
+          const O = this.ortho[j.z - ORTHO_Z0];
+          if (O) orthos.add(O);
+        } else {
+          const L = this.levels[j.z - Z0];
+          if (L) levels.add(L);
+        }
+      }
+      for (const L of levels) this.complete(L);
+      for (const O of orthos) this.orthoComplete(O);
+    }
+    this.flushMips();
+    const ms = performance.now() - p0;
+    cpuOf("put", p0);
+    if (this.pubProbe) {
+      this.pubNow.putMs += ms;
+      this.pubNow.pubMs += ms;
+      this.pubNow.waiting = this.pages.size;
+    }
+    return done.length;
+  }
+
+  /** the mips gathered since the last publication made: one render pass a texture, a mip and a layer, a draw a page (its viewport),
+   *  each mip from the one above — the sRGB decoded, averaged in linear light, prémultiplied by the coverage —, one submission */
+  private flushMips() {
+    if (this.mips.empty) return;
     const d = this.device;
     if (!this.orthoMip) {
       const module = d.createShaderModule({ code: ORTHO_MIP_WGSL, label: "imagery mips" });
@@ -2671,36 +2862,45 @@ export class EarthTiles {
     const m = this.orthoMip;
     const m0 = this.pubProbe ? performance.now() : 0;
     const enc = d.createCommandEncoder({ label: "imagery mips" });
-    for (let i = 1; i < ORTHO_MIPS; i++) {
-      const n = TILE >> i;
-      const group = d.createBindGroup({
-        layout: m.pipeline.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: { buffer: m.uniform, offset: 256 * layer, size: 16 } },
-          { binding: 1, resource: tex.createView({ dimension: "2d-array", baseMipLevel: i - 1, mipLevelCount: 1 }) },
-        ],
-      });
-      const pass = enc.beginRenderPass({
-        colorAttachments: [
-          {
-            view: tex.createView({ dimension: "2d", baseMipLevel: i, mipLevelCount: 1, baseArrayLayer: layer, arrayLayerCount: 1 }),
-            loadOp: "load",
-            storeOp: "store",
-          },
-        ],
-        label: "imagery mips",
-      });
-      pass.setPipeline(m.pipeline);
-      pass.setBindGroup(0, group);
-      pass.setViewport(ox >> i, oy >> i, n, n, 0, 1);
-      pass.setScissorRect(ox >> i, oy >> i, n, n);
-      pass.draw(3);
-      pass.end();
+    let passes = 0;
+    for (const { tex, layers } of this.mips.take()) {
+      for (let i = 1; i < ORTHO_MIPS; i++) {
+        const n = TILE >> i;
+        const src = tex.createView({ dimension: "2d-array", baseMipLevel: i - 1, mipLevelCount: 1 });
+        for (const { layer, regions } of layers) {
+          const group = d.createBindGroup({
+            layout: m.pipeline.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: { buffer: m.uniform, offset: 256 * layer, size: 16 } },
+              { binding: 1, resource: src },
+            ],
+          });
+          const pass = enc.beginRenderPass({
+            colorAttachments: [
+              {
+                view: tex.createView({ dimension: "2d", baseMipLevel: i, mipLevelCount: 1, baseArrayLayer: layer, arrayLayerCount: 1 }),
+                loadOp: "load",
+                storeOp: "store",
+              },
+            ],
+            label: "imagery mips",
+          });
+          pass.setPipeline(m.pipeline);
+          pass.setBindGroup(0, group);
+          for (const r of regions) {
+            pass.setViewport(r.ox >> i, r.oy >> i, n, n, 0, 1);
+            pass.setScissorRect(r.ox >> i, r.oy >> i, n, n);
+            pass.draw(3);
+          }
+          pass.end();
+          passes++;
+        }
+      }
     }
     d.queue.submit([enc.finish()]);
     if (this.pubProbe) {
       this.pubNow.submits++;
-      this.pubNow.mipPasses += ORTHO_MIPS - 1;
+      this.pubNow.mipPasses += passes;
       this.pubNow.mipMs += performance.now() - m0;
     }
   }
@@ -2768,10 +2968,10 @@ export class EarthTiles {
     const w = O.want;
     if (!w) return;
     for (let y = w.y0; y < w.y1; y++)
-      for (let x = w.x0; x < w.x1; x++) if (O.key[orthoSlot(O.span, x, y)] !== this.orthoKey(O, x, y)) return;
+      for (let x = w.x0; x < w.x1; x++) if (O.pubKey[orthoSlot(O.span, x, y)] !== this.orthoKey(O, x, y)) return;
     if (!same(O.valid, w)) {
       O.valid = w;
-      this.imagery++;
+      this.pages.version++;
       for (let y = w.y0; y < w.y1; y++) for (let x = w.x0; x < w.x1; x++) this.arrivals.mark(this.orthoKey(O, x, y), "drawn");
     }
   }
@@ -2850,7 +3050,8 @@ export class EarthTiles {
           gy = v.y0 * TILE + Math.min(Math.max(j, 0), hTex - 1);
         const tx = Math.floor(gx / TILE),
           ty = Math.floor(gy / TILE);
-        const d = L.data[this.slotOf(L, tx, ty)],
+        // (J2-1: the heights the GPU draws — the page published —, not a newer tile's still queued: the contact is the ground drawn)
+        const d = L.pubData[this.slotOf(L, tx, ty)],
           k = (gy - ty * TILE) * TILE + (gx - tx * TILE);
         if (!d) return 0;
         return drawn ? drawnHeight(d, k) : d[k]!;
@@ -3016,6 +3217,20 @@ export function nightOf(z: number, x: number, y: number): { z: number; x: number
 
 /** the reference's longitude in turns from −½ (Mercator's x over the level's width) */
 const cx0 = (lon: number) => lon / TAU + 0.5;
+
+/** J2-1, step A: the camera (cx, cy [its level's tiles]) within CAMERA_EDGE of its window's edge or past it — the window recentred.
+ *  A window led ahead where the view looks keeps the camera up to ¾ of a tile from its edge, and drifts 0.8 of a tile before it
+ *  recentres: looking back on a moving craft the camera went past its own window's edge (measured in play: z 16, an outside view
+ *  ahead of the craft). In the common case — looking ahead — it never comes nearer than ¼ of a tile: never recentred by this. */
+export const CAMERA_EDGE = 0.2;
+export function cameraOutX(w: { x0: number; x1: number }, cx: number, n: number): boolean {
+  const x = cx - Math.round((cx - (w.x0 + w.x1) / 2) / n) * n;
+  return x < w.x0 + CAMERA_EDGE || x > w.x1 - CAMERA_EDGE;
+}
+/** (the same across: at the poles' edges the window stays clamped — the caller's) */
+export function cameraOutY(w: { y0: number; y1: number }, cy: number): boolean {
+  return cy < w.y0 + CAMERA_EDGE || cy > w.y1 - CAMERA_EDGE;
+}
 
 /** an orthophotos' tile's slot in its window (span × span: 4, or 8 — T8e) */
 export const orthoSlot = (span: number, x: number, y: number) => (((y % span) + span) % span) * span + (((x % span) + span) % span);

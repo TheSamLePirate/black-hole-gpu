@@ -254,6 +254,10 @@ Il est tenu dans GRAPHICS-PIPELINE (parcours joueur) et dans le journal.
 **Ordre conseillé** : ST0 → ST1 → ST2 (les gains les plus sûrs) → ST3 + ST6 ensemble (même clé de contenu) → ST5 → ST4 → ST7 →
 ST8 → ST9 → ST10. ST4 et ST8 restent planifiés tant que les mesures n'en montrent pas le besoin, comme demandé par Sam.
 
+*Note du 12 novembre 2026 (PLAN-J2, décision 9 de Sam) : pour le sol de la Terre, ST5 (mips d'imagerie regroupés, publication bornée)
+et ST9 (validité par tuile) sont repris par J2-1 (fait : `src/system/earth-pages.ts`, une soumission de mips par image, une page publiée
+par emplacement — [fiche J2-1](progress/j2/FICHE-J2-1-2026-11-12.md)) et J2-2 (les hauteurs) ; le décor reste à ce plan.*
+
 ## 8. Risques et limites
 
 - **Mémoire** : le cache cuit et le pool GPU s'ajoutent au LRU des tuiles. Il faut un budget commun (réglage joueur) et une

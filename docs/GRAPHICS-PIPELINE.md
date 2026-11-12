@@ -188,6 +188,13 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | F4 | fin du profileur, sonde de mer | `gpuprof.ts:86` ; `renderer.ts:8908` | frame profilée ; mer toutes les 15 frames | requêtes → lecture ; mot « mer » → `seaProbe` | Z |
 | F5 | `sharpness probe` (non chronométrée : hors profileur) | `src/frame-probes.ts` `SharpnessProbe` (calcul 16 × 16, réduction par groupe) | **PLAN-J2 J2-0 (12 nov.), diagnostic éteint par défaut** : `renderer.sharpProbe` ; image vivante dessinée (pas une image convergée qui revient sans soumettre) | `taau.out` où la TAAU a tourné, sinon `hdr` mip 0 (la source de `sceneColor`) → sommes partielles (storage f32, ≥ 4 096) → copie vers un anneau de 4 tampons lus (`mapAsync` après la soumission) → `renderer.sharpLog` (énergie du laplacien de la luminance × exposition compressée L/(1+L), dans `sharpBox`, l'échelle, la source, la phase) ; rien créé ni encodé éteint | Z |
 
+**Au début de `frame()`** (juste après la description de la frame, avant tout encodage) : **`earthTiles.publish()`** (PLAN-J2 J2-1,
+12 nov.) — les pages de tuiles arrivées depuis l'image précédente (`src/system/earth-pages.ts` : hauteurs, imagerie, lumières,
+orthophotos) écrites (`writeTexture`), la plus proche de la caméra d'abord, sous un budget du fil principal (1,5 ms, la page suivante seulement si son coût estimé y tient ; 2 ms quand une
+page attend depuis 750 ms ; au moins une), puis **toutes leurs mips dans un encodeur et une soumission** (`imagery mips` : une passe
+par texture, mip et couche, un tracé par page), puis les rectangles des niveaux agrandis sur les pages publiées ; la version de la
+table dans `frameDesc.pages`. Une page arrivée pendant l'image attend la suivante.
+
 Juste avant `keepMotion` : `earthTiles.pubFrame()` (J2-0 : clôt les compteurs de publication de l'image, rien sans
 `earthTiles.pubProbe`), puis F5 si demandé. Puis `submit()` (`renderer.ts:8919`) : **un `queue.submit`**, `onSubmittedWorkDone` alimente `lastGpuMs`, le bloc du
 traceur (`adaptBlock`) et le taux de shading raster (`adaptRasterRate`). Une frame **convergée et inchangée** revient sans
@@ -254,7 +261,8 @@ Horodatages (1 frame sur 8 + la bande convergente chronométrée), histogramme d
 
 ### 4.5 Soumissions hors frame
 
-Mips d'imagerie (une soumission **par tuile et par couche** arrivée, `orthoMips` ; comptées par image avec
+Mips d'imagerie (**depuis J2-1, 12 nov. : une soumission par image au plus**, faite par `earthTiles.publish()` au début de la frame
+— §3 F ; avant : une **par tuile et par couche** arrivée, `orthoMips` ; comptées par image avec
 `earthTiles.pubProbe` — octets, écritures, soumissions, passes de mips, ms du fil principal dans `putTile`/`putOrtho` : J2-0,
 `pubLog`/`pubStats()` ; leur temps GPU reste non mesuré. **Mesuré** (12 nov. 2026, vol J0 de 56 s, e2e `j2-probes`, code 22c69cc6 + J2-0,
 [fiche J2-0](progress/j2/FICHE-J2-0-2026-11-12.md) §5) : kerr-mini ~8 Mio/s, fil principal p50 0,2 / p95 2,9 / max 9,5 ms par image,
@@ -438,7 +446,7 @@ fini. Les marques entre crochets sont celles de `__bh.boot()` (`src/boot-timelin
 | 8 | Lancement d'un mode | voile d'entrée : attend le noyau de la scène (`scene-tracer`), ≤ 90 s (`ui/entry.ts:67`) ; arrêt de la pré-compilation | la clé de la scène choisie | voile 400 ms, HUD 600 ms | oui (≤ 90 s) | entrée en orbite 2,1 s (E10, e2e) ; vol libre depuis le titre (Edwards, profil neuf, ce Mac, CM3 12/11, `title-departure`) : voile levé à 2,2–2,6 s **sur une image noire** — cartes globales de la Terre et tuiles demandées seulement après, 1re tuile à 11,3 s ; **après CM3** : le voile attend aussi le sol du départ (cartes, chaque niveau z ≤ 10 dessiné autour de l'appareil ; ≤ 15 s, `__bh.entry.lastWait`) — levé à 3,3–3,7 s (Edwards), 3,5 s (Le Bourget), relief dessiné 29–50 %, plus d'image noire | `__bh.entry`, aucune marque dans `boot()` |
 | 9 | Arrivée près de la Terre | cartes globales med puis high ; **tuiles** relief z6–17 (8 en vol, décodées en worker) et imagerie, IGN (14 en vol ; SW : WMS-R 25/s et 10 en vol, WMTS/TMS 16 en vol sans débit depuis CM2 12/11 — avant, les orthophotos attendaient 5 s derrière les grilles ; les 429 viennent du seul WMS-R, `pwa.stats().served.geopf`), ortho (8) ; une tuile en échec : son parent agrandi en attendant, redemandée (2 s → 30 s, aussitôt au retour du réseau ; CM1 12/11 — plus la carte mondiale à 4,9 km) ; l'imagerie de jour publiée sans la nuit si celle-ci manque ou tarde de 3 s ; cuissons du cache ; raster créé (pipelines async) | si non pré-compilé : `shadeLite` → `skyFill` → `clouds` (secondes, **image du ciel d'attente**) → `main` → … ; raster du terrain et du décor | sol grossier 2–6 s, puis affiné | **non** (le ciel d'attente remplace `main`) | ILS LFTH froid : côtés complets 38 s, file vide 44 s ; vue à 90 % en 8,1 s (rejeu, ce Mac, T8j 3/11) ; Paris relief 57 s (kerr-mini, M0b 2/11) ; **Paris 900 m froid (ce Mac, CM0 12/11, `tile-arrival`)** : vue à 90 % en 4,9–6,1 s avec ou sans SW, mais avec le SW imagerie z 9–14 reçue p50 5 s (0,25 s sans), orthophotos dessinées 4–5 s (0,7 s), relief IGN 22–23 s (7–8 s) ; à 20 Mbit/s vue à 90 % en 21–22 s, z 11–14 jamais entiers en 60 s | `earthTiles.pending`, `renderer.earthSettled` (booléen) ; **par tuile** : `earthTiles.arrivals` (demandée → reçue → écrite → dessinée, par source ; CM0) |
 | 10 | Décor (forêts, bâtiments, routes) | worker du décor : WorldCover, OSM, BD TOPO/Overture, canopée IGN, forêt, BVH ; scène rapide (35 %) puis complète ; fondu 600 ms ; buffer ≤ 64 Mio | `shade` quand le décor entre (profil : déjà compilé) | arbres et bâtiments en fondu | non | scènes 24–33 s (kerr-mini, T8o 6/11) ; couverture 0,97 (T8m) | `earthScenery.stats()`, compteur de données |
-| 11 | Vol | re-cuissons du cache (≈16/s en vol bas, M0b), nouvelles tuiles (une soumission de mips par tuile), décor reconstruit 40–50 s, bandes des horizons ; gouverneurs (bloc, taux raster, échelle, palier) | clé en avance (`aheadKey`) ; rien de neuf sous le profil | — | non | vol de 2 min à Chamonix 30–32 ms médian, p95 37–40, max 72,6 (kerr-mini, M0b) | `game.perf()`, `gpu.frames()` |
+| 11 | Vol | re-cuissons du cache (≈16/s en vol bas, M0b), nouvelles tuiles (publiées au début de l'image sous budget, une soumission de mips par image — J2-1), décor reconstruit 40–50 s, bandes des horizons ; gouverneurs (bloc, taux raster, échelle, palier) | clé en avance (`aheadKey`) ; rien de neuf sous le profil | — | non | vol de 2 min à Chamonix 30–32 ms médian, p95 37–40, max 72,6 (kerr-mini, M0b) | `game.perf()`, `gpu.frames()` |
 | 12 | Voyage vers un autre corps | `NEAR_KIND` change → nouvelle clé ; cartes HD + tuiles Lune/Mars ; bake des horizons ; raster des corps | `main`/`env`/`shadeLite` du corps (Mars 86k, Lune 73k lignes) ; **Jupiter proche 203–219 s à froid** | l'ancienne clé couvre si possible | parfois | Lune prête 7,9 s, trou de ver 8,6 s (kerr-mini 27/10) | `compileReport()` ; aucun chrono de re-streaming |
 | 13 | Carte 3D, trace au sol | `MapGpu` : 6 pipelines sync à l'ouverture, même device | 6 sync | carte | court | non mesuré | aucun |
 | 14 | Photo / vue fixe | noyau de qualité `q` (`qualityCascade`), convergence par bandes | `main` Q, `lut` Q | image qui s'affine | non | photo `main` 67k lignes, non chronométré récemment | `compileReport()` |
@@ -622,7 +630,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-12T12:40:47Z sur `22c69cc6` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-12T13:24:17Z sur `463762ea` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **107 sites de création de pipeline** (70 rendu, 37 calcul, dont 46 asynchrones) et 39 `createShaderModule` dans 30 fichiers ; **39 programmes WGSL** (15 fichiers .wgsl, 24 chaînes dans le TypeScript) ; **65 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -698,7 +706,7 @@ _Généré le 2026-11-12T12:40:47Z sur `22c69cc6` (arbre de travail). Ne pas éd
 | `src/renderer.ts:10199` | compute async | `clouds` | `cloudShadow` |
 | `src/renderer.ts:10281` | compute async | `sky ambient write` | `cloudLightVolume` |
 | `src/renderer.ts:10363` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:12413` | compute async | — | `probe` |
+| `src/renderer.ts:12418` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:106` | compute | — | — |
 | `src/ship.ts:817` | compute | — | `vs` |
 | `src/ship.ts:837` | render | — | `fsJetGlass` |
@@ -737,7 +745,7 @@ _Généré le 2026-11-12T12:40:47Z sur `22c69cc6` (arbre de travail). Ne pas éd
 | `src/system/earth-maps.ts:254` | render | — | `vs`, `entry` |
 | `src/system/earth-shore.ts:245` | compute async | — | — |
 | `src/system/earth-shore.ts:272` | compute async | `earth shore bake` | — |
-| `src/system/earth-tiles.ts:2656` | render | `imagery mips` | `vs`, `fs` |
+| `src/system/earth-tiles.ts:2847` | render | `imagery mips` | `vs`, `fs` |
 | `src/system/giant-tile.ts:244` | compute | `giant tile` | `e` |
 | `src/system/gtao.ts:118` | compute async | — | `gtao` |
 | `src/system/hd-maps.ts:300` | render | — | `vs`, `entry` |
@@ -814,7 +822,7 @@ _Généré le 2026-11-12T12:40:47Z sur `22c69cc6` (arbre de travail). Ne pas éd
 | `src/system/terrain-cache.ts:125` | 36 | main (c) |
 | `src/system/warp-grid.ts:85` | 25 | main (c) |
 | `src/shaders/mips.wgsl` | 23 | vs (v), fs (f) |
-| `src/system/earth-tiles.ts:363` | 18 | vs (v), fs (f) |
+| `src/system/earth-tiles.ts:364` | 18 | vs (v), fs (f) |
 | `src/vegetation/tree-impostors.ts:144` | 17 | down (c) |
 | `src/renderer.ts:8288` | 10 | main (c) |
 | `src/system/terrain-cache.ts:165` | 9 | main (c) |
@@ -872,7 +880,7 @@ _Généré le 2026-11-12T12:40:47Z sur `22c69cc6` (arbre de travail). Ne pas éd
 | `scenery raster cull` | `src/renderer.ts:11468` | 1 |
 | `ground occlusion` | `src/renderer.ts:11509` | 1 |
 | `trees' shadow map` | `src/renderer.ts:11514` | 1 |
-| `horizon bake` | `src/renderer.ts:11772` | 1 |
+| `horizon bake` | `src/renderer.ts:11777` | 1 |
 | `ship probe: mips` | `src/ship.ts:1874` | 1 |
 | `ship probe: GGX` | `src/ship.ts:1886` | 1 |
 | `ship probe: SH` | `src/ship.ts:1893` | 1 |
@@ -922,7 +930,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/noise3d.ts:124` |
 | render pass | `src/renderer.ts:5461` |
 | compute pass | `src/renderer.ts:8303` |
-| compute pass | `src/renderer.ts:12432` |
+| compute pass | `src/renderer.ts:12437` |
 | render pass | `src/ship.ts:3197` |
 | render pass | `src/ship.ts:3210` |
 | render pass | `src/ship.ts:3270` |
@@ -933,7 +941,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | compute pass | `src/system/bc-encode.ts:220` |
 | render pass | `src/system/day-clouds.ts:181` |
 | render pass | `src/system/earth-maps.ts:276` |
-| imagery mips | `src/system/earth-tiles.ts:2683` |
+| imagery mips | `src/system/earth-tiles.ts:2878` |
 | render pass | `src/system/hd-maps.ts:320` |
 | horizon mips | `src/system/horizon-maps.ts:767` |
 | terrain cache fade | `src/system/terrain-cache.ts:482` |

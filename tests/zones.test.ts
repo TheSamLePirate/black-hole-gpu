@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { withGpuStubs } from "./lib/gpu-stubs";
+import { published } from "./lib/published-tiles";
 import type { Vec3 } from "../src/physics";
 import { tileKind, zoneRelease } from "../src/pwa/rules";
 import {
@@ -65,7 +66,7 @@ test("a zone's tiles: every one the game's windows want with the camera anywhere
   const key = (v: readonly number[]) => v.join("/");
   const relief = new Set(z.relief.map(key)),
     ortho = new Set(z.ortho.map(key));
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   t.setReach(TILE_REACH.veryFar);
   let wanted = 0;
   // (the camera at the centre, on the rim, half-way, low and higher; looking every way: its windows led up to their most)
@@ -126,7 +127,7 @@ test("a low flight at 400 m over the ground: the z 18 orthophotos it asks within
   // (flown straight across the zone every 45°, a sample every 25 m, 400 m over the ground — full screen, a pixel 0.4 or
   // 1 mrad —, looking every way: the windows led to their most, recentred as they go)
   const fly = (offline: boolean, pix: number, a: number, gazeA: number) => {
-    const t = new EarthTiles(withGpuStubs(fakeDevice()));
+    const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
     if (offline) t.held = (la, lo) => zoneLevelsAt([zone], la, lo);
     const got = { core18: 0, out18: 0, outside: [] as string[], inCore: [] as string[] };
     for (let s = -radius; s <= radius; s += 25) {
@@ -178,7 +179,7 @@ test("a zone's URLs: every one the loads ask in flight within it is in the zone'
     radius = 2000;
   // (the airfield's profile: down to the orthophotos' z 18 a flight at 400 m asks)
   const urls = new Set(zoneUrls(lat0, lon0, radius, ZONE_PROFILES.airport, { ortho: true, relief: true, hlod: true }));
-  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
   // (flown across the zone, the loads refused: each tile asked once — its first URLs —, the windows moving on)
   for (let k = 0; k <= 40; k++) {
     const [la, lo] = east(lat0, lon0, -radius + (2 * radius * k) / 40);
