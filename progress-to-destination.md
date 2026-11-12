@@ -3648,3 +3648,27 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Vérifié** : tsc, check-wgsl 81/81, `pipeline-inventory --check` et `--write --sizes`. **J1 terminé** ; la suite (J2) attend Sam ;
   restent consignés : `rigidMotionOn` (retiré à la fin de J2 sans lecteur), les points blancs de la mer (cause inconnue), le plafond de
   32 000 bâtiments en ville dense (question ouverte).
+
+## 2026-11-12T11:23Z — J2 en plan : pages d'imagerie filtrables et reconstruction (à valider par Sam)
+
+- **Contribution** (stratégie §15 J2, §7.6, §7.10, §7.18, §7.19 ; §20.5 étapes 3 et 5) : le jalon qui suit J1 a son plan,
+  [docs/PLAN-J2-PAGES-RECONSTRUCTION.md](docs/PLAN-J2-PAGES-RECONSTRUCTION.md), sur le modèle de PLAN-J1 — l'existant relevé dans le code
+  du jour (`earth-tiles.ts` après T9 : hauteurs `r32uint` séparées, imagerie `rgba8unorm`/sRGB par couche de fenêtre, mips par tuile, anisotropie
+  16 matérielle, **sans gouttières**, fondu de bord fixe 2–48 texels ; publication directe dans la texture vivante, une soumission de mips
+  par tuile, un rectangle valide par niveau ; `invalidate()` global à chaque changement de tuile ; `shade` à cadence 1/2–1/16 pour les restes
+  du raster, `temporal` + `taau` en deux historiques longs, l'échelle épinglée en vol raster et changée à chaque arrêt/reprise ; ce que J1
+  laisse : profondeur gardée, identité, mouvement, rejet (b), `sceneColor`) ; les lots **J2-0** (contrats et sondes : fuite, couture,
+  pulsation d'échelle, publication), **J2-1** (table de pages versionnée de l'imagerie, validité par tuile, mips groupés par image),
+  **J2-2** (hauteurs dans la même publication, format et contact inchangés), puis ceux qui changent l'image — **J2-3** (bords sans fuite),
+  **J2-4** (invalidation locale par l'identité page + génération du sol), **J2-5** (désocclusion par la profondeur de l'image d'avant),
+  **J2-6** (un seul historique, échelle variable sans pulsation, l'épingle retirée), **J2-7** (taux d'ombrage local, sur mesure), **J2-8**
+  (retraits, dont `rigidMotionOn` sans lecteur, et fiche de sortie) ; **J2-C** en option (BC7 des pages stables par `bc-encode.ts`) ; la
+  sortie de J2 traduite en mesures (motion-quality en virage, sonde de fuite à 0 pixel, creux de netteté ≤ 3 % aux changements d'échelle,
+  0 invalidation globale par une tuile, fiche J0 complète et chemin vers §8) ; contrats, bibliothèques, risques, dix questions à Sam.
+- **Relevé au passage** : deux diagnostics de la stratégie §5.3 sont périmés (« `earthImageryAniso` filtre à la main », « `taauOn = false` ») ;
+  le troisième tient (l'épingle `want = rasterTop()`, `main.ts:8957`). `earthImageryAniso` garde `duv`/`nf` calculés et inutilisés.
+- **Changé** : le plan (nouveau) ; sa ligne dans [docs/README.md](docs/README.md) (et J1 marqué terminé) ; l'en-tête de PLAN-J1 (J2 en plan).
+- **Preuve** : **documenté** (lecture du code et des fiches). **Non vérifié** : aucune mesure, test, e2e ni bench lancés (session de
+  documentation) ; la fuite entre pages, l'effet en vol des `invalidate()` globaux, l'empreinte du sol en pente, la fonction
+  `texture-compression-bc` sur les machines du labo n'ont jamais été mesurés (§10 du plan).
+- **Suite** : la revue de Sam (l'ordre, le domaine, les dix questions) ; puis J2-0.

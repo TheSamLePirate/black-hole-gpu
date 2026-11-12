@@ -1,0 +1,236 @@
+# PLAN-J2 — pages d'imagerie filtrables et reconstruction
+
+**État (12 novembre 2026) : plan écrit, à valider par Sam.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
+l'écrire (session de documentation). L'existant (§2) est relevé dans le code de `main` au 12 novembre (après `4d1201c0`, J1 terminé) ;
+**le code fait foi**, les lignes citées sont celles de ce jour. Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J2
+(« séparer hauteurs/couleurs, mips/gouttières, gradients, publication versionnée ; désocclusion et invalidations locales ; puis la
+variation de résolution sans pulsation récurrente »), §7.6 (pages de surface), §7.10 et §7.18 (reconstruction), §7.19 (publication),
+§20.5 étapes 3 et 5 ; [PLAN-J1](PLAN-J1-OPAQUE-FORWARD.md) (terminé le 12 novembre : ce qu'il laisse, §2.4) ; contrat
+[C0-4](progress/refraction-horizons/C0.md) (le stockage des tuiles) et C0-12 (erreur projetée admissible) ; Q6 du
+[plan T/Q/H/R](PLAN-REFRACTION-HORIZONS.md). Juge : la scène [J0](J0-CONTRAT.md) (Toulon-Hyères) sur kerr-mini (répartition, ΔGPU) et
+sur le M1 Max (palier 1 : 25 ms) ; fiches du 12 novembre : [kerr-mini](progress/j0/FICHE-kerr-mini-2026-11-12.md) (GPU p50 59,5 ms,
+16,8 images/s), [M1 Max](progress/j0/FICHE-m1max-2026-11-12.md) (frais 43,9 images/s, p50 24,9 ms, p95 32,6 ; soutenu 33,4/s).
+
+## 1. Ce que J2 doit livrer (stratégie §15)
+
+**Contenu** : les pages d'imagerie filtrables (hauteurs et couleurs séparées, mips, gouttières, gradients), leur **publication
+versionnée** ; la **désocclusion** et les **invalidations locales** dans la reconstruction ; puis la **variation de résolution sans
+pulsation récurrente**.
+
+**Sortie** : avantage démontré à qualité comparable et en virage ; absence de fuite entre pages ; pas de flou intermittent à chaque
+changement d'échelle (traduits en mesures au §4). **Critère de passage** : un coût de frame complet mesuré et un chemin crédible vers le
+contrat §8 ; la performance accompagnée de la qualité minimale en mouvement, aucune des deux ne remplaçant l'autre.
+
+**Ce que le code a déjà fait de J2** (à ne pas refaire, CLAUDE.md « une correction déjà intégrée ne doit pas redevenir une tâche ») :
+**T9a–T9c** (3 novembre, [fiche T9](progress/refraction-horizons/T9.md)) ont séparé hauteurs et couleurs, donné des mips par tuile et le
+filtrage matériel anisotrope à toute l'imagerie de la Terre (z 6–18), les lumières de nuit dans leurs couches — matériau raster −1,2 ms
+mesuré ; **Q6** (4 novembre) a allumé la TAAU en mouvement (`taauOn`, Tarifa 39,6 → 44,4 dB) ; **J1-2/J1-5** ont donné la profondeur
+gardée, l'identité, le mouvement des mobiles et le rejet (b). Deux diagnostics de la stratégie §5.3 sont donc **périmés** :
+« `earthImageryAniso` fait un filtrage manuel des couleurs empaquetées » (le filtrage est matériel depuis T9 ; seule la sélection des
+niveaux reste à la main, §2.1) et « `taauOn = false` » (allumé depuis Q6b). Le troisième tient toujours : `main.ts` épingle l'échelle
+en vol raster (§2.3). J2 part donc d'une imagerie déjà filtrable ; il lui reste **les bords, la publication, l'invalidation, la
+désocclusion et l'échelle**.
+
+## 2. L'existant (relevé du code, 12 novembre)
+
+### 2.1 Le relief et l'imagerie de la Terre : chargement, stockage, filtrage
+
+| Responsabilité | Aujourd'hui (fichier, fonction) | Écart au contrat (§7.6, C0-4) |
+|---|---|---|
+| Sources et niveaux | `src/system/earth-tiles.ts` (2 884 lignes), classe `EarthTiles` : relief Terrarium z 6–14 (+ IGN, swisstopo, Mapterhorn jusqu'à z 17 par `refine`), imagerie GIBS (≤ z 8), EOX (z 9–14), orthophotos IGN z 15–18 (`requestOrtho`) ; décodage en worker (`tile-decode-worker.ts`) | — |
+| Fenêtres | une fenêtre **toroïdale** par niveau (`SPAN` 4 tuiles, 8 aux portées lointaines pour z ≥ 11 : `TILE_REACH`, `levelSpan`), l'adresse `(coin + i) & masque` (`tileAt`, `trace.wgsl:7435`) ; les tuiles quittées écrasées par les entrantes | le contrat C0-4 §2 voulait **8 tuiles pour toute l'imagerie** ; T8e (orthos z 15–16 à 8 tuiles) **reste coupé** (décision 38 de Sam, `ORTHO_BIG_LEVELS = 0`) |
+| Hauteurs | texture `earth tiles` **`r32uint`** (les bits du float, la marque de relevé IGN dans le bit de poids faible : `markFine`) là où l'imagerie est filtrée — `rg32uint` (hauteurs + imagerie empaquetée) sur le talon des appareils sous 31 textures ; rangées par couches et quarts de couche (`tileLayout`, T10) ; ~144 Mio à la portée `veryFar` (GRAPHICS-PIPELINE §4.2) ; **pas de mips** ; lecture à la main (cubique B-spline ou monotone selon la pente, `TILE_STEEP`), la même sur le CPU (`heightAt`, `sampleLevel`) | séparées des couleurs : **fait** (T9c). `r32float` du contrat non retenu (le filtrage matériel d'un `r32float` demande la fonction optionnelle `float32-filterable` ; la lecture reste manuelle pour l'accord CPU/GPU) |
+| Couleurs | deux `texture_2d_array` **`rgba8unorm`** avec vue **`rgba8unorm-srgb`** (`earth-tiles.ts:1125`, `makeImagery2k:1165`) : la 1024² (19 couches : 4 d'orthos, 9 niveaux z 6–14, 3 de lumières de nuit z 6–8, 3 de lumières des rues z 12–14 ; ~106 Mo mips comprises, calculé : `ORTHO_BYTES`), la 2048² (z 11–14 aux portées lointaines ; ~89 Mo calculé ; bouchon 1 × 1 sinon) ; **une fenêtre = une couche entière**, l'adressage `repeat` fait l'enroulement du tore ; alpha = la couverture (0 : pas d'image) | — |
+| Compression | **aucune** pour ces pages (rgba8). Basis/KTX2 (`vendor/basis`, `ktx2.ts`, `ktx-worker.ts`, `scripts/build-ktx2.ts`) sert aux cubes de la Terre (`earth-maps.ts`) et au pilote régional (`earth-surface.ts`) ; l'encodeur GPU BC7/BC5 au chargement (`bc-encode.ts`) aux cartes HD (`hd-maps.ts`) | §18.6 : pages dynamiques non compressées d'abord, compression des pages stables « une possibilité » |
+| Mips | **par tuile**, 256² → 16² (`ORTHO_MIPS` 5), faites à l'arrivée par une passe de rendu (`orthoMips`, `earth-tiles.ts:2423`, `ORTHO_MIP_WGSL` : moyenne en lumière linéaire, prémultipliée par la couverture) — « les mips d'une tuile ne lisent jamais sa voisine » ; **une soumission GPU par tuile et par couche** (`queue.submit` dans `orthoMips` ; GRAPHICS-PIPELINE §4.5) | ANALYSE-STREAMING ST5 : « mips regroupés en un encodeur et une soumission par image » |
+| Gouttières | **aucune** dans les pages d'imagerie. À l'intérieur d'une fenêtre, le voisin filtré est le vrai voisin géographique (le tore est cohérent). **Au bord de la fenêtre**, le texel d'en face est l'autre bord du tore (ou l'ancien occupant d'un emplacement) : seul le **fondu de bord fixe** le couvre, `smoothstep(2, 48)` texels du niveau de base vers le bord du rectangle valide (`earthImagery`, `earthImageryAniso`) — C0-4 §3 le jugeait suffisant pour la mip 4 (« ≤ 16 px »), **sans compter l'anisotropie 16** qui allonge l'empreinte ; aucune mesure de fuite n'existe | §7.6 : « ne pas simplement activer l'anisotropie sur un atlas sans frontières propres » ; sortie de J2 « absence de fuite entre pages » |
+| Le pilote régional | `earth-surface.ts` (Sentinel-2 + WorldCover, **Le Bourget et Cévennes seulement** — pas Toulon) : pages KTX2 1024² **avec gouttières de 2 px** (`SURFACE_GUTTER`), 11 mips, arrivée par page (`loadedAt`), époque (`epoch`) | le seul système à pages avec gouttières du code ; modèle réutilisable |
+| Filtrage | échantillonneur `orthophotos` (`renderer.ts:1424`) : trilinéaire, **anisotropie 16**, `repeat` ; lecteurs WGSL générés par `orthoImageryWgsl` (`earth-tiles.ts`, aussi module de bibliothèque J1-3) : `orthoGrad`, `tileImgGrad` (**`textureSampleGrad`** par les gradients du pixel), `orthoAt`, `tileImgAt` (mip par l'empreinte) | — |
+| Sélection des niveaux | `earthImagery` (`trace.wgsl:7501`) et `earthImageryAniso` (`:7594`) : **boucle à la main** sur 4 niveaux d'orthos puis 9 niveaux du relief, poids par l'empreinte (`zf`) et par la distance au bord, la couverture comme poids, l'ortho par-dessus ; `TUNE_ANISO` (4) ne sert plus qu'à choisir le niveau par le petit axe de l'empreinte — `duv` et `nf` y sont **calculés et inutilisés** (reliquat d'avant T9) | 13 lectures possibles par pixel ; pas d'erreur visible relevée, coût non isolé |
+| Gradients | l'empreinte du pixel (`fx`, `fy` sur la sphère unité) vient du prologue de `shadeLite` (rayon gigué `liteJitter`, `trace.wgsl:15430`), projetée **sur le plan horizontal** (relevé J1-5 : `tn` est nul sur un bâtiment) ; convertie en gradients de texels par les dérivées de la longitude et de la latitude de Mercator | l'empreinte d'un sol en pente ou d'une façade : à vérifier (§9) |
+| Publication | à l'arrivée : `putTile` (`earth-tiles.ts:1968`) écrit les hauteurs, `putImagery` (`:2475`) et `putOrtho` (`:2395`) écrivent **directement dans la texture vivante** (`writeTexture`) et soumettent leurs mips ; un niveau n'est lu que dans son **rectangle valide** (`valid`, `setValid`), un rectangle par niveau (pas de validité par tuile : C0-4 §5 et ST9 non faits) ; `gen` (changement de sources) jette les réponses périmées | C0-4 §5–6 : validité par tuile publiée **avec** ses mips, clé source + génération ; §7.6 : « file de publication avec budget d'uploads par frame » |
+| Versions | `stamp` (le rectangle d'un niveau change), **`changes`** (`TileChange` : niveau, boîte lon/lat, séquence — `logChange`, `:1022`) lu par le **cache de relief** (`terrain-cache.ts` : il ne recuit que là où le changement se voit — une invalidation locale **existe déjà pour les hauteurs**) ; `imagery` (compteur global : une tuile reçoit son imagerie) ; `arrivals` (`ArrivalLog`, CM0 : demandée → reçue → écrite → dessinée) | aucune génération par page lisible par le renderer |
+| Invalidations | `earthTiles.onChange` → **`renderer.invalidate()` global** (`renderer.ts:1817`, `:2994` : `validFrom`, `epoch`, `sampleIndex` remis) ; une arrivée d'imagerie sur une vue convergée → `invalidate()` au plus toutes les 500 ms (`:4291`) ; le décor (`earthScenery.onChange/onContent`) et le pilote régional de même | §7.10 étape 5 : « aucun effacement global quand une petite page arrive » ; l'effet en vol (où le raster est ombré à chaque pixel) **non mesuré** |
+
+### 2.2 La reconstruction temps réel
+
+| Élément | Aujourd'hui | Note |
+|---|---|---|
+| Rayons tracés (`main`) | ciel, mer lointaine et brume au-delà du patch raster : un rayon par bloc (`BLOCKS` 1, 2, 3, 4, 6, 8 ; `adaptBlock`, `renderer.ts:11944`, au temps de frame mesuré) ; reconstruits par `gatherH` puis `resolve` (`post.wgsl:34`, `:177`) → `hdr` | J0 : bloc 16 relevé dans la fiche (unités de la fiche, à rapprocher de `BLOCKS` — non vérifié) |
+| Restes du raster (`shade`) | le noyau des rayons sur les pixels raster que `shadeLite` laisse (ponts, arbres à moins de 80 m, boîtes marquées) à une **cadence** de 1, 2, 4, 8 ou 16 (`rasterRate`, `RASTER_RATES_AUTO` `renderer.ts:355`, `adaptRasterRate` `:12033`), `shadeMark` marquant les pixels laissés pour `resolve` ; sauté (`liteAll`) quand rien ne le demande | « l'ombrage clairsemé 1/8–1/16 » de la stratégie, c'est lui (et `bodyLite` sur les autres corps, plafonné à 1/4) ; **le sol de la Terre est ombré à chaque pixel, chaque image** par `shadeLite` (matériau puis éclairage, `withLiteDeferred`) |
+| Temporel natif | `temporal` (`post.wgsl:777`) à la taille interne : reprojection par la caméra et la profondeur (`moments.y`, « closest depth » des pixels frais pour le tracé), clamp de voisinage YCoCg, mobiles par leur mouvement (z 1, z 2 sans historique), l'appareil (w 1) neuf à au moins la moitié de la frame, rejet (b) par identité ; historiques `temporal.hist[2]`, `alb[2]` rgba16f | `temporal` 1,73 ms (kerr-mini, J0 12 nov.) |
+| TAAU | `taau` (`post.wgsl:1272`) **à la taille de la toile** quand la cible vivante est plus petite qu'elle (`taauWanted`, `renderer.ts:8034–8070`) ; σ 0,5 px (0,7 sur l'eau), poids natif 0,02 ; historique `taau.hist[2]` à la taille de la toile | `taau` 3,69 ms (J0 12 nov.) ; **deux historiques longs empilés** (natif puis sortie) — ce que §7.18 demande d'éviter |
+| Échelle interne | `settings.earthRasterScale` 0,75 ; `main.ts` : en vol raster l'échelle est **épinglée** à `rasterTop()` (`:5526`, `:8957` : « chaque pas rééchantillonnait l'historique… une impulsion de flou toutes les quelques secondes ») ; caméra tenue 0,4 s → échelle 1 (affinage), mouvement 0,15 s → retour à 0,75 (`:8902–8920`) : **chaque arrêt et chaque reprise changent l'échelle** ; la résolution dynamique (`dynamicResolution`, profil « game ») ne baisse l'échelle que hors raster ou une fois la cadence raster au plus grossier (`rateDone`) | la sortie « pas de flou intermittent à chaque changement d'échelle » ; I4 de Q6 (« l'échelle n'est abaissée que si les scènes critiques le permettent ») ouvert |
+
+### 2.3 Ce que J1 laisse, que J2 peut lire
+
+- **La profondeur gardée** de la visibilité de la Terre (`depth32float` inversée, `depthStoreOp: "store"`, J1-2) — Terre proche seulement ;
+  `sceneDepth` (distance) dans tous les mondes. **Pas de profondeur de l'image d'avant** gardée (seuls l'identité et le mouvement sont
+  copiés en fin d'image : `keepMotion`, `renderer.ts:5509`).
+- **L'identité** `r32uint` (objet 20 bits | génération 12 bits, `surface-id.ts`) et **`identity, the frame before`** ; **le sol vaut 0** :
+  aucune page ni génération du sol n'y est écrite.
+- **Le mouvement** `rgba16float` des mobiles (z 1 ; z 2 sans historique ; l'appareil w 1) et `motion, the frame before` (désoccultations
+  des mobiles) ; **le mouvement analytique du rigide** derrière `renderer.rigidMotionOn` (`:5618`, éteint, sans lecteur, §8).
+- **Le rejet (b)** (`identityKept`, `post.wgsl:665`) : les mobiles rejetés, le décor immobile au poids coupé au quart à l'image d'une
+  nouvelle publication du décor (`republishedNow`, `renderer.ts:5571` ; `ID_REPUBLISHED`) — le mécanisme qu'une page de sol publiée
+  peut reprendre.
+- **`FrameDesc`** (`src/frame-desc.ts`) : la caméra actuelle et précédente, l'horloge de la frame — le lieu naturel d'une table de pages
+  figée pour l'image.
+- **L'export `renderer.sceneColor`** (radiance linéaire pré-exposée avant l'optique, `taau image` ou `hdr`) : l'instrument des mesures
+  de J2 (netteté, fuite, pulsation) sans la courbe d'affichage ni le HUD.
+
+### 2.4 Défauts connus, relevés sans les régler
+
+- **Les points blancs de la mer** ([PROBLEMES-A-REGLER](PROBLEMES-A-REGLER.md), 12 nov.) : 0–24 pixels isolés au-delà du blanc dans la
+  couleur de scène, **avec ou sans** l'ombrage clairsemé, le spéculaire du sol, la mer déplacée et le matériau de l'eau — cause inconnue ;
+  l'hypothèse « motif de `shade` » est écartée par la mesure. J2-0 peut les localiser (avant/après `temporal` et `taau`), pas les régler.
+- **Le plafond de 32 000 bâtiments** et la canopée IGN qui plante des arbres sur les îlots coupés (même fichier) : décor, hors J2 ;
+  la requête de canopée refusée (HTTP 400 WMS-R) aussi.
+- **ANALYSE-STREAMING** (6 nov.) : cause 5 (« un rectangle de validité par niveau… ni génération par cellule »), ST5 (mips par soumission),
+  ST9 (validité par tuile) — J2-1/J2-2 en reprennent la part imagerie et relief (§3) ; le décor (ST3–ST8) reste à son plan.
+- **Q6** : « aucune impulsion de flou aux changements de palier », I4 complet, l'articulation du temporel natif et de la TAAU (I2) —
+  J2-6 ; Q6t, I6–I8 hors J2.
+- **C0-4** : §5 (validité par tuile, publiée avec ses mips ; l'occupant précédent jamais effacé avant d'être prêt), §6 (clé source +
+  génération), les fenêtres d'imagerie à 8 tuiles, « mesurer le scintillement en vol » (T9, reste) — non faits.
+
+## 3. Les lots
+
+D'abord **les lots qui ne changent pas l'image en régime** (J2-0 à J2-2 : instruments, publication, hauteurs), puis **ceux qui la
+changent** (J2-3 à J2-7), chacun avec **une planche avant/après et un ΔGPU sur J0 sur kerr-mini** (A/B A B B A, `ab-commit`), le palier
+remesuré sur le M1 Max refroidi aux étapes (J2-1, J2-6, sortie). Chaque lot qui touche une passe, une cible, une table ou une étape de
+chargement met à jour [GRAPHICS-PIPELINE](GRAPHICS-PIPELINE.md) dans le même lot.
+
+| Lot | Contenu | Remplace / retire | Preuve |
+|---|---|---|---|
+| **J2-0** | **Les contrats (§5) et les instruments** : sonde de **fuite** (un mode de diagnostic qui remplit l'extérieur valide de chaque fenêtre et les emplacements non publiés d'une couleur sentinelle, compte ses pixels en vue rasante aux bords de fenêtres et aux distances des mips 2–4) ; sonde de **couture** (bords de tuiles, C0-12) ; courbe de **netteté par image** (énergie du laplacien sur `sceneColor` contre la référence affinée, `motion-quality`) le long d'un vol avec arrêts et reprises (changements d'échelle) ; compteurs de **publication** (octets, soumissions, ms de `put*`/mips par image) ; localisation des points blancs avant/après la reconstruction | — | **fiche de référence J2** sur le code actuel (kerr-mini, M1 Max) : fuite, coutures, creux de netteté, coût de publication **chiffrés** ; revue de Sam |
+| **J2-1** | **La table de pages de l'imagerie, versionnée** : une **validité par tuile** (bits par niveau, C0-4 §5) et une **génération par page** (clé source + génération, §6) ; écritures et mips **regroupées dans un encodeur par image** sous un budget d'octets et de mips (ST5), publiées à l'image suivante seulement (bit allumé avec ses mips ; l'occupant précédent jamais lu une fois remplacé) ; la table figée dans `FrameDesc` pour l'image ; adressage et filtrage inchangés | la soumission par tuile et par couche (`orthoMips`) ; le rectangle par niveau **pour l'imagerie** ; le compteur global `imagery` | l'image en régime identique (A/B d'images figées en raster, ±1 %) ; `tile-arrival` : temps de couverture non dégradés ; aucune pointe de publication > 2 ms, CPU p95 de J0 ; ΔGPU J0 nul ; une seule soumission de mips par image (compteur) |
+| **J2-2** | **Les hauteurs dans la même publication** : validité par tuile (ST9), génération ; format inchangé (`r32uint`, lecture manuelle, la même sur le CPU) ; `changes` dérivé de la table ; le **sol de contact** (§19.4) ne change pas | le rectangle par niveau des hauteurs | `heightAt` CPU = GPU (tests unitaires) ; le contact et le train (tests, une recette de `apprendre-avions`) ; A/B d'images figées ; ΔGPU nul |
+| **J2-3** | **Des bords sans fuite** : le fondu de bord **à l'échelle de l'empreinte filtrée** (mip choisie × anisotropie) au lieu de 2–48 texels fixes ; la sélection des niveaux nettoyée (`duv`, `nf`, `TUNE_ANISO` réduit à ce qu'il fait) ; **gouttières** (copie des voisins par mip, comme `SURFACE_GUTTER`) **seulement si** J2-0 montre une fuite à l'intérieur d'une fenêtre | le fondu fixe ; le reliquat de `earthImageryAniso` | sonde de fuite à **0 pixel** ; coutures ≤ 0,25 px (C0-12, vol bas) ; planche rasante aux bords de fenêtres ; ΔGPU J0 |
+| **J2-4** | **L'invalidation locale** : le sol écrit dans l'identité **sa page et sa génération** (une plage réservée des objets ; aujourd'hui 0) ; le temporel coupe le poids de l'historique là où la page d'un pixel a changé (le mécanisme du rejet (b), `ID_REPUBLISHED`) ; les arrivées de tuiles et d'imagerie **cessent d'appeler `invalidate()`** | `earthTiles.onChange → invalidate()`, l'invalidation à l'arrivée d'imagerie (`renderer.ts:1817`, `:4291`) ; puis, si la mesure le permet, celles du décor et du pilote régional | séquence d'arrivées en vol : 0 invalidation globale, pop de luminance ≤ 3 % hors des pages changées (C0-12), aucune image ancienne qui traîne sur une page neuve ; planche ; ΔGPU J0 |
+| **J2-5** | **La désocclusion** : la profondeur de l'image d'avant gardée (copiée en fin d'image comme l'identité) ; un test de désocclusion — la profondeur reprojetée comparée à celle de l'image d'avant au point d'historique — en plus du clamp 3 × 3 ; un pixel désoccluse repart de la frame (poids d'historique coupé) ; **le sort de `rigidMotionOn` tranché ici** (un lecteur réel — par exemple la géomorphose, §7.4 — ou son retrait en J2-8) | la reprojection sans test de profondeur pour le rigide | `ghost` et `motion-quality` en virage (silhouettes du relief sur le ciel, bâtiments, appareil) ; planche ; ΔGPU J0 |
+| **J2-6** | **Une reconstruction, l'échelle variable sans pulsation** : quand la TAAU tourne, le temporel natif sans historique long (ou fondu dans la TAAU : un seul historique, à la sortie, §7.18) ; l'échelle interne changée **par petits pas** sans rééchantillonner l'historique de sortie ; l'arrêt et la reprise sans saut d'échelle (l'affinage à la taille de la sortie) ; puis l'épingle `want = rasterTop()` retirée — la résolution dynamique gouverne aussi le raster, au plancher du profil (§8.1 : 2/3 par axe, 0,5 sur preuve) | l'épingle (`main.ts:8957`), le saut 0,75 ↔ 1 à l'arrêt, le double historique long | courbe de netteté le long du vol de J2-0 : **aucun creux > 3 %** à un changement d'échelle ; `motion-quality` en virage ; J0 : intervalle p95/p99 et ΔGPU ; planche (vol, arrêt, reprise) |
+| **J2-7** | **Le taux d'ombrage local** (§7.10 : « ajouter ensuite, si utile ») — **à décider sur mesure** : ce que `shade` (restes du raster) et `bodyLite` couvrent et coûtent sur J0 et sur la Lune ; s'ils sont faibles, cadence 1 et `adaptRasterRate` retiré ; sinon une cadence locale (mouvement écran, désocclusion, pixels neufs d'abord) au lieu d'un motif global | `adaptRasterRate` global (si la mesure le permet) | la mesure d'abord (pixels, ms) ; puis planche et ΔGPU |
+| **J2-8** | **Retraits et sortie** | `rigidMotionOn` et ses pipelines `terrainVsMot`/`terrainFsMot`/`ringFsMot`, les champs `pd/pr/pu/pf` de l'uniforme (s'il est resté sans lecteur) ; les chemins remplacés par J2-1…J2-7 ; les adaptateurs datés | **fiche J0 de sortie** (kerr-mini + M1 Max), les mesures de sortie du §4, GRAPHICS-PIPELINE, BH-API, progress-to-destination |
+| *J2-C* (option) | **La compression des pages stables** : une page résidente depuis N s encodée en BC7 sur le GPU (`bc-encode.ts`, déjà dans le code), sa mip comprise ; une page neuve reste rgba8 ; **aucune nouvelle dépendance** | une part de la mémoire de l'imagerie (~195 Mo rgba8 calculés aux portées lointaines) | mémoire mesurée ; PSNR des orthophotos contre rgba8 ; aucune pointe à l'encodage ; fonction `texture-compression-bc` présente sur les machines du labo — **à décider par Sam après J2-1** |
+
+**Le domaine** : la Terre proche (le patch raster et ses anneaux, l'imagerie z 6–18) et la reconstruction de l'image vivante. Hors J2 :
+les autres corps (`moon-tiles.ts`, planètes : J5), l'eau (J4), les nuages et leur historique propre (J4), le décor et son streaming (plan
+ST), le mode photo et les rendus hors ligne (ils gardent leur accumulation).
+
+## 4. La sortie de J2, en mesures
+
+| Sortie (stratégie §15) | Mesure | Seuil proposé (à valider) |
+|---|---|---|
+| **Avantage à qualité comparable, en virage** | `motion-quality` (vol figé pas à pas, `TURN` 30°) sur Toulon-Hyères et les Alpes : netteté (énergie du laplacien / référence) et PSNR **au premier instant** et après accumulation ; GPU de la même séquence | à GPU égal, netteté et PSNR au moins égaux à la fiche de référence J2-0 et meilleurs sur un des deux lieux ; **ou** à qualité égale (netteté ± 0,03, PSNR ± 0,5 dB), GPU plus bas |
+| **Absence de fuite entre pages** | sonde de fuite de J2-0 (couleur sentinelle hors validité) en vue rasante, bords de fenêtres et mips 2–4, anisotropie 16 ; coutures de tuiles | **0 pixel** sentinelle ; coutures ≤ 0,25 px et pop ≤ 3 % (C0-12, vol bas) |
+| **Pas de flou intermittent aux changements d'échelle** | netteté image par image le long d'un vol scripté avec arrêts, reprises et changements forcés d'échelle (`sceneColor`) | aucun creux > 3 % (le pop admissible de C0-12) à un changement ; aucun creux périodique |
+| **Invalidations locales** | séquence d'arrivées de tuiles en vol (cache froid, une seule campagne IGN à la fois) | 0 `invalidate()` global par une tuile ; pop ≤ 3 % hors des pages changées |
+| **Coût de frame complet** (critère de passage) | fiche J0 : GPU p50/p95, intervalle p50/p95/p99, CPU p95, mémoire, sur kerr-mini et le M1 Max (frais et soutenu) | publié avec la répartition par passe ; **le chemin vers §8 écrit** : la part « reconstruction et sortie » (enveloppe 2,0 ms ; aujourd'hui `taau` 3,7 + `temporal` 1,7 ms sur kerr-mini) et « publication » (dans les 2,0 ms de visibilité/terrain), ce que J2 en a gagné et ce qui reste |
+
+Le gain n'est pas le seul critère : un lot qui baisse le coût en floutant l'image, ou qui rend l'image plus nette au prix du palier, se
+déclare comme tel ; aucun pourcentage « AAA ».
+
+## 5. Les contrats (à valider)
+
+**Page** (§7.6) : l'unité de résidence de l'imagerie reste **la tuile Web Mercator 256²** dans sa fenêtre toroïdale (une couche par
+fenêtre, l'adressage `repeat` : le tore cohérent à l'intérieur). Une page porte : sa clé (source, z, x, y), sa **génération** (12 bits,
+bouclée), son état (demandée, écrite, publiée), sa couverture (alpha), ses mips. Les hauteurs gardent leur texture et leur lecture
+manuelle ; elles partagent la table (validité, génération), pas le format.
+
+**Mips** : par page, 256² → 16², moyennées en lumière linéaire et prémultipliées par la couverture (inchangé) ; au-delà, le niveau plus
+grossier de la pyramide. **Une page n'est publiée qu'avec toutes ses mips.**
+
+**Bords et gouttières** : à l'intérieur d'une fenêtre, pas de gouttière (le voisin filtré est le vrai). Au bord d'une fenêtre ou d'un
+emplacement non publié, **le poids de la page tombe à 0 avant que l'empreinte filtrée (mip × anisotropie) n'atteigne l'autre côté** :
+garantie mesurée par la sonde de fuite. Une gouttière (copie du voisin par mip) n'est ajoutée que si la mesure montre une fuite que le
+fondu ne couvre pas.
+
+**Publication versionnée** (§7.19) : les écritures du réseau vont dans un emplacement **non publié** ; la table publiée est figée par
+image (`FrameDesc`) ; une page passe à « publiée » à une frontière d'image, avec un budget d'octets et de mips par image ; l'ancien
+occupant n'est jamais lu une fois son bit éteint ; une réponse d'une génération périmée est jetée (comme `gen` aujourd'hui).
+
+**Invalidations locales** : un changement de page (arrivée, raffinement IGN sur Terrarium, nuit/jour, retrait) se voit **par pixel**
+via l'identité du sol (page + génération) ; le temporel en coupe le poids d'historique localement ; **aucun effacement global** pour une
+page. Restent globaux : le changement de corps, de monde, de portée (`setReach`, textures refaites), un saut de caméra.
+
+**Désocclusion** : un pixel dont l'historique pris à la position reprojetée ne montre pas la même surface (profondeur de l'image d'avant
+incompatible, ou identité absente pour un mobile — le rejet (b)) repart de la frame. La reprojection du rigide reste par la caméra et la
+profondeur, sauf si J2-5 montre un besoin du mouvement analytique.
+
+**Reconstruction** (§7.18) : **un seul historique long** pour l'opaque de l'image vivante (à la taille de la sortie quand la TAAU tourne) ;
+l'échelle interne, la gigue et la cadence d'ombrage publiées par image ; un changement d'échelle ne rééchantillonne pas l'historique de
+sortie.
+
+## 6. Bibliothèques (§18)
+
+- **Basis/KTX2** (présent : `vendor/basis`, `ktx2.ts`, `ktx-worker.ts`, `build-ktx2.ts`) : pour les assets **préparés hors ligne** ;
+  pas pour les pages dynamiques (§18.6 : pas d'encodeur coûteux sur le chemin urgent). Le chemin d'une page stable compressée au jeu
+  passe par **`bc-encode.ts`** (BC7 mode 6 sur le GPU, déjà employé par `hd-maps.ts`) : J2-C. **À vérifier** : la fonction
+  `texture-compression-bc` sur kerr-mini, le M1 Max et kerr-pc ; la qualité du mode 6 seul sur les orthophotos ; la copie d'une région
+  de mip dans un tableau BC7 (alignement 4 × 4 jusqu'à 16²) ; ASTC sur les appareils sans BC.
+- **webgpu-utils** (dépendance de développement depuis J1-0, `scripts/gen-layouts.ts`) : étendre le générateur aux nouvelles structures
+  (table de pages, uniforme du temporel `TA`) au lieu d'offsets à la main ; à vérifier : `post.wgsl` n'est pas encore couvert.
+- **Effect** (§18.3 situe son pilote « pendant J2 », au coordinateur de streaming) : **pas dans les premiers lots** — la publication de
+  J2-1 est un travail synchrone de la frame, pas une coordination asynchrone ; à réexaminer avec ST2 (`StreamScheduler`) si l'annulation,
+  les erreurs et la contre-pression de l'amont en bénéficient réellement.
+- **WebGPU Inspector** (outil de développement, hors bundle) : utile pour vérifier les mips et les bords d'une couche en J2-0 ; non installé.
+- Rien d'autre : ni SVT générique (§7.16 : un système paginé simple et déterministe d'abord), ni portage FSR2 dans J2 (§7.18 : chantier
+  identifié, pas un paquet ; il reprendrait ces contrats).
+
+## 7. Risques
+
+- **Compilation** : J2-3/J2-4 touchent `earthImagery*` et l'identité du sol, donc les noyaux `shadeLite`/`shadeLiteLight` (re-spécialisés,
+  cascade raster) : `kernel-budget` et `check-wgsl` à chaque lot, compilation à froid de l'entrée de J0 remesurée à la sortie (J1-6 :
+  sol à 9,2 s après le placement). Les passes `temporal`/`taau` sont petites ; J2-6 peut en changer la structure (une entrée de moins).
+- **Mémoire** : la profondeur de l'image d'avant (+~8 Mo à 1920 × 1080 en `r32float`, calculé) ; les emplacements où une page s'écrit
+  avant d'être publiée — **à concevoir en J2-1** : réserver quelques emplacements libres par couche plutôt que doubler une fenêtre ;
+  d'éventuelles gouttières ; en face, J2-C et le double historique retiré (J2-6 : deux `rgba16f` W × H de moins, ~16 Mo chacun
+  calculés).
+- **Réseau** : les sondes de chargement à froid (J2-0, J2-4) frappent la Géoplateforme : **une seule campagne IGN lourde à la fois** sur
+  les deux Mac (même adresse IP → 429), e2e de 1–2 min ciblés, tuiles bloquées quand la mesure ne porte pas sur elles.
+- **Mesure** : le M1 Max bride en quelques minutes (J0 : soutenu 33,4/s) — les A/B sur kerr-mini, le palier sur le M1 Max refroidi ; les
+  passes de rendu se chevauchent sur Apple (GP-09) : ΔGPU sur la frame entière, jamais une somme de passes.
+- **Sol de contact** : J2-2 touche la publication des hauteurs, donc `heightAt` et le train ; le contact appartient au monde (§19.4),
+  la qualité graphique ne doit pas le changer.
+
+## 8. Ce que J1 laisse à retirer pendant J2
+
+**`renderer.rigidMotionOn`** (`renderer.ts:5618`) : le mouvement analytique du sol et du décor immobile (z −1), éteint, **sans lecteur**
+(`temporal`, `taau` et le flou de mouvement ne lisent que z > 0,5) ; coût nul éteint, ~+0,8 ms allumé (version antérieure). Propriétaire
+J1-2 (`terrain-raster.ts` `buildGround(motion)`, `scenery-raster.ts` `rigidMotion`). **Condition** (PLAN-J1 J1-7) : retiré à la fin de
+J2 s'il n'a pas de lecteur, avec ses pipelines `terrainVsMot`/`terrainFsMot`/`ringFsMot` et les champs `pd/pr/pu/pf` ; un lecteur venu
+(J2-5), le format `rg16float` du contrat se tranche avec lui. Restent aussi, sans changement : `decodeSurface` (contrôle de l'e2e
+`surface-id`, chemin des corps sans identité ; propriétaire J1-2).
+
+## 9. Questions pour Sam
+
+1. **Ce plan et son ordre** (J2-0 → J2-8, les lots sans changement d'image d'abord) — *recommandation* : oui ; J2-0 tout de suite (il
+   chiffre la fuite et la pulsation sur le code actuel : une fuite nulle mesurée rendrait J2-3 très court).
+2. **Le domaine** : la Terre proche seulement (Lune et planètes à J5) — *recommandation* : oui.
+3. **Les fenêtres d'imagerie à 8 tuiles** (C0-4 §2 ; T8e coupé par la décision 38) — *recommandation* : **garder 4** dans J2 ; ne les
+   rouvrir qu'avec J2-C (la mémoire) et une vue qui en montre le gain.
+4. **La compression BC7 des pages stables** (J2-C) — *recommandation* : une étude mesurée **après J2-1**, pas avant ; pas de nouvelle
+   dépendance.
+5. **Un seul historique long** (J2-6 : le temporel natif court ou fondu dans la TAAU) — *recommandation* : oui, mesuré par `motion-quality`
+   et J0 ; c'est la condition pour faire varier l'échelle sans pulsation.
+6. **Le plancher d'échelle en vol** une fois l'épingle retirée — *recommandation* : 2/3 par axe dans le profil qualité (§8.1) ; 0,5
+   seulement avec sa preuve de qualité (désocclusion comprise).
+7. **L'identité du sol** = page + génération dans le mot `r32uint` existant (une plage d'objets réservée au sol) — *recommandation* : oui
+   (pas de nouvelle cible).
+8. **`rigidMotionOn`** — *recommandation* : le retirer en J2-8 si J2-5 n'en fait pas un lecteur mesuré.
+9. **Le recouvrement avec le plan du streaming** (ST5 pour les mips, ST9 pour la validité par tuile) — *recommandation* : J2-1/J2-2 les
+   absorbent pour le sol, ANALYSE-STREAMING le note ; le décor reste au plan ST.
+10. **Effect** — *recommandation* : pas dans J2-1 ; réexaminé avec ST2.
+
+## 10. Non vérifié
+
+- **Aucune mesure nouvelle** : les chiffres cités viennent des fiches J0 du 12 novembre, de la fiche T9 et de GRAPHICS-PIPELINE ; les
+  tailles mémoire « calculées » le sont depuis les constantes du code (`ORTHO_BYTES`, `IMG_2K_BYTES`), pas mesurées.
+- **La fuite entre pages n'a jamais été mesurée** : le fondu de 2–48 texels avec l'anisotropie 16 et les mips 2–4 peut suffire ou non.
+- **L'effet en vol des `invalidate()` globaux** (le sol raster étant ombré à chaque pixel, l'historique du temporel est-il perdu à chaque
+  tuile ?) : relu dans le code, non mesuré.
+- **L'empreinte du sol en pente** (projetée sur le plan horizontal dans le prologue de `shadeLite` ?) : relevée pour les bâtiments par
+  J1-5, à vérifier pour le relief.
+- **Le « bloc 16 » de la fiche J0** contre `BLOCKS` (1–8) dans `renderer.ts` : unités à rapprocher.
+- **La fonction `texture-compression-bc`** sur les machines du labo, et sa présence dans Chrome sur Apple Silicon.
+- Le coût de la boucle de sélection des niveaux (`earthImageryAniso`, jusqu'à 13 lectures par pixel) : non isolé.
