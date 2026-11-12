@@ -3242,3 +3242,8 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Mac) : à 40 m, luminance −1,8 %, 4,3 % des pixels plus sombres de ≥ 4 niveaux, `earth lite: light` +0,66 ms (GPU p50 +1,0) ; vue basse
   −2,2 %, 6,3 % ; côte à côte invisible (comme L2b). **Retiré** (aucun code gardé) ; consigné dans PLAN-VEGETATION-V2 et
   PLAN-REFRACTION-HORIZONS (Q4). La sonde `forest-impostors` prend maintenant ses captures en mode `TUNE_A_B` aussi.
+
+## 2026-11-12T00:50Z — V2e F1 mesuré sur kerr-mini
+
+- Sonde `forest-wind` (kerr-mini, plein écran) : GPU p50 57,7 / 57,3 ms avec le vent contre 56,9 / 57,4 immobile (+0,35 ms en moyenne,
+  dans le bruit) ; écart d'image à 0,5 s 1,87 contre 1,11 au second passage (le premier, 8,84, pris pendant un chargement). PLAN-VEGETATION-V2.
