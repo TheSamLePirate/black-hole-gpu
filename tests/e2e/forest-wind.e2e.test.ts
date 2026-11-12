@@ -18,8 +18,32 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
     try {
       await app.js(`(() => { Object.assign(__bh.settings, { traffic: false, autosave: false, weather: "fair", earthClouds: 0.1, wind: 3 });
         __bh.game.setDate("2026-07-10T09:30:00Z"); return 1; })()`);
-      const why = await app.js(`(() => __bh.viewAt(43.19, 6.25, { altM: 60, heading: 60, pitch: -10, fov: 50 }) ?? null)()`);
+      // (WIND_VIEW="lat,lon,alt,heading,pitch": another wood — the Alps' conifers…; WIND_FLY=1: the F-35 flown over it at 120 m/s
+      // on its autopilot, the cockpit's view — the sway seen moving, the history's trails —, the place's tiles loaded first)
+      const V = (process.env.WIND_VIEW ?? "43.19,6.25,60,60,-10").split(",").map(Number);
+      const fly = process.env.WIND_FLY === "1";
+      const why = await app.js(
+        `(() => __bh.viewAt(${V[0]}, ${V[1]}, { altM: ${V[2]}, heading: ${V[3]}, pitch: ${V[4]}, fov: 50 }) ?? null)()`,
+      );
       if (why) throw new Error(`viewAt: ${why}`);
+      // (WIND_AGL=1: the view's height over the ground there — viewAt's altM is over the ellipsoid —, read once its tiles are in)
+      if (process.env.WIND_AGL === "1") {
+        await app.dataSettled("the place's ground", { maxMs: 90_000 }).catch(() => {});
+        const g = await app.js<number>(`__bh.sys.groundAt(${V[0]}, ${V[1]})`);
+        console.log(`  the ground there: ${g.toFixed(0)} m; the view ${V[2]} m over it`);
+        await app.js(`(() => __bh.viewAt(${V[0]}, ${V[1]}, { altM: ${g + V[2]!}, heading: ${V[3]}, pitch: ${V[4]}, fov: 50 }) ?? null)()`);
+      }
+      if (fly) {
+        await app.dataSettled("forest (before the flight)", { maxMs: 90_000 }).catch(() => {});
+        await app.js(`(() => { __bh.settings.vessel = "f35"; for (let i = 0; i < 5; i++) __bh.step(1 / 30); return 1; })()`);
+        await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
+        await app.js(
+          `(() => { __bh.game.flyAt(${V[0]}, ${V[1]}, ${Math.max(V[2]!, 80)}, ${V[3]}, 120); __bh.settings.shipMount = "cockpit"; return 1; })()`,
+        );
+        await Bun.sleep(1500);
+        await app.js(`(() => { const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
+          c.jetModes.alt = c.jetFigures()?.h ?? c.jetModes.alt; c.jetModes.spd = 120; return 1; })()`);
+      }
       await app.dataSettled("forest", { maxMs: 90_000 }).catch((e) => console.log(`(not settled: ${String(e).slice(0, 160)})`));
       // (the tracer's kernels compiled for this view — a changed shader takes tens of seconds —: not its black first frames)
       await app.settled(180_000);

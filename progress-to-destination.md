@@ -3247,3 +3247,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 
 - Sonde `forest-wind` (kerr-mini, plein écran) : GPU p50 57,7 / 57,3 ms avec le vent contre 56,9 / 57,4 immobile (+0,35 ms en moyenne,
   dans le bruit) ; écart d'image à 0,5 s 1,87 contre 1,11 au second passage (le premier, 8,84, pris pendant un chargement). PLAN-VEGETATION-V2.
+
+## 2026-11-12T01:12Z — V2e F1 revérifié : conifères et vol
+
+- **Conifères** (kerr-mini, Chamonix, la vue 40 m au-dessus du sol — `WIND_AGL`, `viewAt` étant au-dessus de l'ellipsoïde) : écart d'image à
+  0,5 s 3,74 / 3,66 avec le vent contre 0,45 / 0,48 immobile ; GPU p50 49,4 / 48,7 contre 48,5 / 48,7 ms ; houppiers déplacés sans
+  cassure. **En vol** (ce Mac, F-35 à 120 m/s au-dessus des Maures, vent fort et turbulent) : aucune traînée visible sur les houppiers.
+  Sonde `forest-wind` : `WIND_VIEW`, `WIND_AGL`, `WIND_FLY`. Vu en passant, déjà là avec et sans vent : les houppiers proches très étirés vus
+  à 15° sur une pente raide (le champ proche sculpté) — non examiné.
