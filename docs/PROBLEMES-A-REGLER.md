@@ -178,6 +178,15 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   circularisation prennent `frameRate(F)` (l'étirement de la métrique près de Gargantua compris) : la vitesse orbitale qu'il vise
   peut être fausse de quelques pour cent. Lecture du code seulement ; non volé.
 
+## Les houppiers proches très étirés sur une pente raide (Chamonix)
+
+- **Constaté le 12 novembre 2026** (sonde `forest-wind`, kerr-mini, avec et sans vent : ce n'est pas le vent) : sur la pente boisée au-dessus
+  de Chamonix (45,912 N, 6,872 E), la vue 40 m au-dessus du sol, 15° vers le bas — les feuillus en « œufs » hauts et étroits, les
+  conifères en colonnes à étages, des bandes jaunes de sol au soleil entre eux. Capture
+  `remote-results/20261112-020906-forest-wind/artifacts/remote-results/forest-wind-alps5/p1-still-a.png`.
+- **Non examiné** : les proportions du champ proche sculpté (`forest.wgsl` : `kA.w` × hauteur pour la profondeur du houppier), la
+  perspective d'une vue à 40 m d'arbres de 20–30 m, ou les hauteurs du MNH sur la pente.
+
 ## La compilation du noyau de Jupiter proche : ~200 s à froid
 
 - **Constaté le 6 novembre 2026** (Sam : « 200 s pour Jupiter »), en écrivant l'e2e `aurora-jupiter` (AM3).
