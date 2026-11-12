@@ -48,7 +48,8 @@ BakedVoxelLighting. Origine : analyse §5.1 V2 ; [PLAN-REFRACTION-HORIZONS](PLAN
 jusqu'à 33 m) ; sur les grands arbres des Alpes, des feuillus en œufs quatre fois plus hauts que larges et des épicéas douze fois.
 Borné maintenant par sorte (`KIND_SHAPES.slender`), le sommet en place, le fût plus long (`forest.wgsl` `forestShape`, un lecteur
 pour le traceur et le raster ; `forest.ts` `shapeOf` ; les modèles des imposteurs par `treeEnvelope` aux deux proportions).
-Planche `docs/progress/vegetation/houppiers-elancement-chamonix.jpg`. Un houppier plus large que la demi-cellule (un hêtre isolé de
+Planche `docs/progress/vegetation/houppiers-elancement-chamonix.jpg` ; coût nul sur kerr-mini (A/B A B B A, sonde `forest-impostors` :
+vue à 500 m 51,55 → 51,35 ms, canopée 55,8 → 55,15). Un houppier plus large que la demi-cellule (un hêtre isolé de
 30 m : 12 m de diamètre) reste hors de portée de la grille — il demanderait des cellules plus grandes pour les grands arbres.
 
 Les modèles élancés n'occupent qu'une colonne étroite du cadre (le cadre est la sphère englobante) ; les

@@ -3283,7 +3283,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (sonde `forest-wind`, Chamonix 40 m au-dessus du sol, ce Mac contre la capture d'avant sur kerr-mini) : houppiers ronds sur de longs
   fûts, épicéas en cônes — planche `docs/progress/vegetation/houppiers-elancement-chamonix.jpg` ; Maures (sonde `forest-impostors`) :
   image inchangée à l'œil ; GPU p50 vue à 500 m 20,1–20,7 ms avec imposteurs (contre 19,7–20,1 une heure avant), canopée 22,7–24,9
-  (22,0–23,8) — dans la dérive de ce Mac, qui chauffe au fil des passages. **Non mesuré** sur kerr-mini après le correctif (deux essais
-  partis à 1 km au-dessus du sol, la vue mal posée — voir ci-dessus).
+  (22,0–23,8) : +0,1 à +1,8 ms, non départagé de la dérive de ce Mac (il chauffe au fil des passages, séries à une heure d'écart).
+  **Mesuré ensuite sur kerr-mini** (A/B entrelacé A B B A, `ab-commit` b9597692 contre 281cf149, sonde `forest-impostors`, avec
+  imposteurs, moyenne des GPU p50 sur 6 passages) : vue à 500 m 51,55 → 51,35 ms, canopée à 150 m 55,8 → 55,15 ms — **aucun coût**.
+  La vue de Chamonix n'a pas été reprise sur kerr-mini (deux essais partis à 1 km au-dessus du sol, la vue mal posée).
 - **Reste ouvert** : les bandes jaunes en diagonale entre les arbres sur la pente de Chamonix (avant et après) ; un houppier plus large
   que la demi-cellule (grand arbre isolé) demanderait des cellules plus grandes pour les grands arbres.
