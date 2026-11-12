@@ -959,7 +959,26 @@ export interface TileSample {
   res: number;
   /** the weight left to the global map (0: the tiles alone) */
   rem: number;
+  /** (J2-2) the finest level drawing there (0: none) and its weight — the contact's: groundAt */
+  z: number;
+  zw: number;
 }
+
+/** PLAN-J2 J2-2 — the ground under the crafts (strategy §19.4: the world owns the contact ground, not the camera): a craft this low
+ *  over the ground [m] has its contact level's tiles held round it (EarthTiles.setAnchors) */
+export const ANCHOR_AGL_M = 1500;
+/** the crafts held at most */
+export const ANCHOR_MAX = 4;
+/** round a craft, the tiles within this much of it [its level's tiles: 16 texels — 15 m at z 17 —, the cubic's 3 and a gear's span
+ *  within it; never past the windows round a camera aboard — recentred 0.2 tile from their edge], and those within it of its path
+ *  to where it will be in ANCHOR_LEAD_S (at most ANCHOR_LEAD_TILES ahead) */
+export const ANCHOR_MARGIN = 1 / 16;
+export const ANCHOR_LEAD_S = 3;
+export const ANCHOR_LEAD_TILES = 1.5;
+/** the tiles the memory's cache may hold past its size before the farthest are dropped, in one pass (EarthTiles.keep) */
+export const CACHE_SLACK = 16;
+/** the loads a craft's ground may have in flight past the windows' MAX_INFLIGHT */
+export const ANCHOR_LOADS = 4;
 
 export class EarthTiles {
   texture: GPUTexture;
@@ -988,7 +1007,7 @@ export class EarthTiles {
     return z >= FINE_Z ? this.span : SPAN;
   }
   /** the tiles kept past the windows — most recently used last — and how many (0: none) */
-  private cache = new Map<string, { h: Float32Array; col: Uint32Array | null }>();
+  private cache = new Map<string, { h: Float32Array; col: Uint32Array | null; z: number; x: number; y: number }>();
   private cacheTiles = 0;
   /** the finest levels whose next ring round the window is loaded ahead into the cache (0: none) */
   private ring = 0;
@@ -999,6 +1018,17 @@ export class EarthTiles {
   /** (the network audit) each load's level and place in its window's coordinates, and the loads going into memory (ahead) */
   private loadAt = new Map<string, [Level, number, number]>();
   private aheadLoads = new Set<string>();
+  /** PLAN-J2 J2-2 — the crafts' ground (setAnchors): the tiles held round them (key → level, x, y), their heights (the same arrays
+   *  as the windows' and the memory's; gen: the sources' generation they came from — an older one kept until replaced), the levels,
+   *  the crafts held, the flown craft's last place and motion [its level's tiles, /s] */
+  private anchorTiles = new Map<string, [Level, number, number]>();
+  private anchorH = new Map<string, { h: Float32Array; gen: number }>();
+  private anchorZs: number[] = [];
+  private anchorPts: readonly { c: Vec3; agl: number }[] = [];
+  private anchorLast: { x: number; y: number; t: number; z: number } | null = null;
+  private anchorVel: [number, number] = [0, 0];
+  /** J2-2's counts: the crafts held, their tiles, those in, the loads asked for them alone, the contact samples taken from them */
+  readonly contactStats = { anchors: 0, tiles: 0, held: 0, loads: 0, fromAnchor: 0 };
   /** when the loads no longer wanted are looked for next [ms] (dropUnwanted) */
   private dropAt = 0;
   /** the loads dropped as their windows left them, the ones kept in memory instead (the network audit) */
@@ -1077,11 +1107,27 @@ export class EarthTiles {
    * `orthoMips`), `mipPasses` their render passes, `putMs` the page's time in `putTile`/`putOrtho` (the mips' encoding and
    * submission in it), `mipMs` that of the mips alone [ms, CPU — their GPU time is not measured]; since J2-1 the pages are written
    * at the image's publication (`publish`): `pubMs` its time (in `putMs` too; an arrival's own bookkeeping the rest), `waiting` the
-   * pages still queued after it, `tiles`/`orthos` the pages written, `submits` one at most. `pubFrame()` (the renderer,
+   * pages still queued after it, `tiles`/`orthos` the pages written, `submits` one at most; since J2-2 `keepMs` the memory's cache
+   * trimmed (in `putMs` when an arrival's), `reqMs` the loads looked for (`request`: the windows' tiles, the memory's drawn — those
+   * puts in `putMs` too —, the halo), `haloMs` the halo's part (its rings' candidates, four times a second at most). `pubFrame()` (the renderer,
    * once an image) closes an image's counts into `pubLog` (4 096 images kept); `pubStats()` sums them up.
    */
   pubProbe = false;
-  private pubNow = { bytes: 0, writes: 0, tiles: 0, orthos: 0, submits: 0, mipPasses: 0, putMs: 0, mipMs: 0, pubMs: 0, waiting: 0 };
+  private pubNow = {
+    bytes: 0,
+    writes: 0,
+    tiles: 0,
+    orthos: 0,
+    submits: 0,
+    mipPasses: 0,
+    putMs: 0,
+    mipMs: 0,
+    pubMs: 0,
+    waiting: 0,
+    keepMs: 0,
+    reqMs: 0,
+    haloMs: 0,
+  };
   readonly pubLog: {
     t: number;
     bytes: number;
@@ -1094,6 +1140,9 @@ export class EarthTiles {
     mipMs: number;
     pubMs: number;
     waiting: number;
+    keepMs: number;
+    reqMs: number;
+    haloMs: number;
   }[] = [];
   private pubWrote(bytes: number) {
     if (!this.pubProbe) return;
@@ -1105,13 +1154,41 @@ export class EarthTiles {
     if (!this.pubProbe) return;
     this.pubLog.push({ t: performance.now(), ...this.pubNow });
     if (this.pubLog.length > 4096) this.pubLog.splice(0, this.pubLog.length - 4096);
-    this.pubNow = { bytes: 0, writes: 0, tiles: 0, orthos: 0, submits: 0, mipPasses: 0, putMs: 0, mipMs: 0, pubMs: 0, waiting: 0 };
+    this.pubNow = {
+      bytes: 0,
+      writes: 0,
+      tiles: 0,
+      orthos: 0,
+      submits: 0,
+      mipPasses: 0,
+      putMs: 0,
+      mipMs: 0,
+      pubMs: 0,
+      waiting: 0,
+      keepMs: 0,
+      reqMs: 0,
+      haloMs: 0,
+    };
   }
   /** the logged images' publication: per image p50 / p95 / max of each count, the images with any, those over 2 ms of the page's
    *  time (J2-1's bound), the totals; from `since` [performance.now() ms] */
   pubStats(since = 0) {
     const rows = this.pubLog.filter((r) => r.t >= since);
-    const keys = ["bytes", "writes", "tiles", "orthos", "submits", "mipPasses", "putMs", "mipMs", "pubMs", "waiting"] as const;
+    const keys = [
+      "bytes",
+      "writes",
+      "tiles",
+      "orthos",
+      "submits",
+      "mipPasses",
+      "putMs",
+      "mipMs",
+      "pubMs",
+      "waiting",
+      "keepMs",
+      "reqMs",
+      "haloMs",
+    ] as const;
     const q = (v: number[], p: number) => {
       const s = [...v].sort((a, b) => a - b);
       return s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))]! : 0;
@@ -1557,26 +1634,34 @@ export class EarthTiles {
 
   /** a tile kept past the windows (past cacheTiles, the farthest behind dropped — cost) */
   private keep(key: string, h: Float32Array, col: Uint32Array | null) {
+    this.anchorSeen(key, h);
     if (!this.cacheTiles) return;
     const was = this.cache.get(key);
     this.cache.delete(key);
-    this.cache.set(key, { h, col: col ?? was?.col ?? null });
-    if (this.cache.size <= this.cacheTiles) return;
+    const [z, x, y] = was ? [was.z, was.x, was.y] : (key.split("/").map(Number) as [number, number, number]);
+    this.cache.set(key, { h, col: col ?? was?.col ?? null, z, x, y });
+    // (J2-2, the main thread's peaks at the arrivals: the farthest dropped CACHE_SLACK at a time, in one pass over the cache — one
+    // by one, each a pass over its 320–640 keys parsed again, a window's shift had spent milliseconds in an image)
+    if (this.cache.size > this.cacheTiles + CACHE_SLACK) this.trimCache(this.cacheTiles);
+  }
+  /** the cache brought down to `to` tiles, the farthest from the loads' centre dropped (cost) — one pass */
+  private trimCache(to: number) {
+    const k0 = this.pubProbe ? performance.now() : 0;
     const lonT = cx0(this.priorityLon);
-    while (this.cache.size > this.cacheTiles) {
-      let worst = "",
-        most = -1;
-      for (const k of this.cache.keys()) {
-        const [z, x, y] = k.split("/").map(Number) as [number, number, number];
-        const L = this.levels[z - Z0];
-        const c = L ? this.cost(L, x, y, lonT * L.n, mercY(this.prioritySinLat, L.n)) : Infinity;
-        if (c > most) {
-          most = c;
-          worst = k;
-        }
+    const cy: number[] = [];
+    const all: [string, number][] = [];
+    for (const [k, e] of this.cache) {
+      const L = this.levels[e.z - Z0];
+      if (!L) {
+        all.push([k, Infinity]);
+        continue;
       }
-      this.cache.delete(worst);
+      cy[e.z] ??= mercY(this.prioritySinLat, L.n);
+      all.push([k, this.cost(L, e.x, e.y, lonT * L.n, cy[e.z]!)]);
     }
+    all.sort((a, b) => b[1] - a[1]);
+    for (let i = 0; i < all.length - to; i++) this.cache.delete(all[i]![0]);
+    if (this.pubProbe) this.pubNow.keepMs += performance.now() - k0;
   }
 
   /** the tiles kept in memory past the windows (the detail's reach: the left ones, the ring loaded ahead) */
@@ -1648,11 +1733,15 @@ export class EarthTiles {
 
   /** Drops every level (the Earth far, or the tiles switched off). */
   clear() {
-    for (const c of this.inflight.values()) c.abort();
-    this.inflight.clear();
-    this.loadAt.clear();
-    this.aheadLoads.clear();
-    for (const r of this.refining.values()) r.ctl.abort();
+    // (J2-2: the crafts' ground's loads kept — the camera far, the ground under a craft still its own)
+    for (const [k, c] of [...this.inflight]) {
+      if (this.anchorTiles.has(k)) continue;
+      c.abort();
+      this.inflight.delete(k);
+    }
+    for (const k of [...this.loadAt.keys()]) if (!this.anchorTiles.has(k)) this.loadAt.delete(k);
+    for (const k of [...this.aheadLoads]) if (!this.anchorTiles.has(k)) this.aheadLoads.delete(k);
+    for (const [k, r] of this.refining) if (!this.anchorTiles.has(k)) r.ctl.abort();
     for (const L of this.levels) {
       L.want = null;
       this.setValid(L, null);
@@ -1834,7 +1923,14 @@ export class EarthTiles {
       this.dropped.loads++;
     }
     for (const [key, r] of this.refining) {
-      if (r.ctl.signal.aborted || near(r.L.want, r.x, r.y, 1) || this.cache.has(key) || this.aheadLoads.has(key)) continue;
+      if (
+        r.ctl.signal.aborted ||
+        near(r.L.want, r.x, r.y, 1) ||
+        this.cache.has(key) ||
+        this.aheadLoads.has(key) ||
+        this.anchorTiles.has(key)
+      )
+        continue;
       r.ctl.abort();
       this.dropped.refines++;
     }
@@ -1854,6 +1950,15 @@ export class EarthTiles {
    * level at once; the windows whole, the halo round them into memory (ringLevel, TILE_REACH ring), while it has room.
    */
   private request(lonT: number, sinLat: number) {
+    if (!this.pubProbe) return this.requestNow(lonT, sinLat);
+    const r0 = performance.now();
+    try {
+      this.requestNow(lonT, sinLat);
+    } finally {
+      this.pubNow.reqMs += performance.now() - r0;
+    }
+  }
+  private requestNow(lonT: number, sinLat: number) {
     const now = performance.now();
     const todo: [Level, number, number, number, number][] = [];
     // (the levels holding stand-ins: looked over, their stand-ins asked again when due)
@@ -1912,6 +2017,17 @@ export class EarthTiles {
     // (its thousands of candidates looked over four times a second at most — up to sixteen loads a second, every frame else)
     if (now < this.haloAt) return;
     this.haloAt = now + 250;
+    const h0 = this.pubProbe ? performance.now() : 0;
+    try {
+      this.requestHalo(now);
+    } finally {
+      if (this.pubProbe) this.pubNow.haloMs += performance.now() - h0;
+    }
+  }
+  /** the halo's loads (request): every level's rings round its window, nearest first, into memory */
+  private requestHalo(now: number) {
+    const lonT = cx0(this.priorityLon),
+      sinLat = this.prioritySinLat;
     const halo: [Level, number, number, number][] = [];
     const R = this.ring;
     for (const L of this.levels) {
@@ -1977,7 +2093,8 @@ export class EarthTiles {
     const ctl = new AbortController();
     this.refining.get(key)?.ctl.abort();
     this.refining.set(key, { ctl, L, x, y, surface: !!ground });
-    const wanted = () => gen === this.gen && !ctl.signal.aborted && (L.key[this.slotOf(L, x, y)] === key || this.cache.has(key));
+    const wanted = () =>
+      gen === this.gen && !ctl.signal.aborted && (L.key[this.slotOf(L, x, y)] === key || this.cache.has(key) || this.anchorTiles.has(key));
     let nextPass: Float32Array | null = null;
     if (this.nationalActive < MAX_NATIONAL) this.nationalActive++;
     else await new Promise<void>((go) => this.nationalQueue.push({ L, x, y, pass: Math.floor(p), go }));
@@ -2004,6 +2121,8 @@ export class EarthTiles {
         // (its own heights now: no longer a stand-in)
         this.standInKeys.delete(key);
       }
+      // (J2-2: a craft's ground keeps them, whatever the windows)
+      this.anchorSeen(key, h);
       if (L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, h, col);
       else if (this.cache.has(key)) this.keep(key, h, col);
       if (!ground && surface && src.id === "ign") nextPass = h;
@@ -2172,8 +2291,9 @@ export class EarthTiles {
       this.arrivals.mark(key, "got");
       this.failures.delete(key);
       this.standInKeys.delete(key);
-      // (its window gone past it meanwhile, within the halo: into memory — dropUnwanted)
-      ahead = this.aheadLoads.has(key);
+      // (its window gone past it meanwhile, within the halo: into memory — dropUnwanted; a craft's ground's a window has come to
+      // meanwhile: drawn — J2-2)
+      ahead = this.aheadLoads.has(key) && !(this.anchorTiles.has(key) && inside(L.want, x, y));
       h = heights;
       this.loaded++;
       // (the national heights asked once the global data's are drawn — or kept —: refine finds the tile wanted)
@@ -2239,7 +2359,9 @@ export class EarthTiles {
     if (refineAfter) {
       const cx = cx0(this.priorityLon) * L.n,
         cy = mercY(this.prioritySinLat, L.n);
-      void this.refine(L, x, y, key, refineAfter, img, (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) + 1) / L.n);
+      // (J2-2: a craft's ground's national heights before every window's — the IGN's queue, pass −1)
+      const p = this.anchorTiles.has(key) && !inside(L.want, x, y) ? -0.5 : (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) + 1) / L.n;
+      void this.refine(L, x, y, key, refineAfter, img, p);
     }
     this.request(cx0(this.priorityLon), this.prioritySinLat);
   }
@@ -2267,6 +2389,8 @@ export class EarthTiles {
    *  its imagery (rgba8 packed; none: 0): kept and sent to the GPU while its window wants it. */
   put(z: number, x: number, y: number, h: Float32Array, col: Uint32Array | null = null) {
     const L = this.levels[z - Z0];
+    // (J2-2: a craft's ground keeps it, whatever the windows)
+    if (L && this.anchorTiles.size) this.anchorSeen(this.keyOf(L, x, y), h);
     if (!L || !inside(L.want, x, y)) return;
     const t0 = performance.now();
     try {
@@ -2326,7 +2450,9 @@ export class EarthTiles {
     // (the same tile's heights again, drawn already — the IGN's over the Terrarium's, the far silhouettes' overground on its
     // ground —: logged, the relief cache's rings over it baked again; only the rectangle's changes were, the cache kept the
     // first heights — a city's SRTM, its blocks' tops — until a window moved)
-    if (L.pubKey[s] === k && inside(L.valid, x, y)) this.logChange(L.z, { x0: x, x1: x + 1, y0: y, y1: y + 1 }, null);
+    // (J2-2: derived from the table — every page published within the drawn rectangle is a change of that tile: the same tile again,
+    // or a tile of the new sources over a stale one — L.stale, its key unpublished at the switch —, which the cache had kept)
+    if (inside(L.valid, x, y)) this.logChange(L.z, { x0: x, x1: x + 1, y0: y, y1: y + 1 }, null);
     const hb = new Uint32Array(h.buffer, h.byteOffset, TILE * TILE);
     // (the heights alone where the imagery is filtered — T9c, r32uint —, with the packed imagery else)
     const per = this.filtered ? 1 : 2;
@@ -3024,6 +3150,8 @@ export class EarthTiles {
     const sz = Math.min(Math.max(q[2], -0.999999), 0.999999);
     const dM = Math.atanh((sz - this.sinLat) / (1 - sz * this.sinLat));
     const zf = Math.log2((TAU * R * cosLat) / (TILE * Math.max(foot, 0.5)));
+    let zTop = 0,
+      zw = 0;
     for (let l = LEVELS - 1; l >= 0 && rem > 1e-4; l--) {
       const L = this.levels[l]!;
       const v = L.valid;
@@ -3057,13 +3185,213 @@ export class EarthTiles {
         return drawn ? drawnHeight(d, k) : d[k]!;
       };
       const hz = sampleLevel(at, px, py, zf - L.z, texel);
+      if (!zTop) {
+        zTop = L.z;
+        zw = w;
+      }
       h += rem * w * hz;
       // (the data's own resolution: a survey's its texel, the global data's no finer than SRTM's — the nearest texel's mark)
       const fine = isFine(at(Math.floor(px), Math.floor(py)));
       res += rem * w * Math.max(texel, fine ? TILE_RES_FINE : TILE_RES_MIN);
       rem *= 1 - w;
     }
-    return { h, res, rem };
+    return { h, res, rem, z: zTop, zw };
+  }
+
+  /**
+   * PLAN-J2 J2-2 — the contact ground under q (the crafts', their autopilots', heightOverGround's: renderer → earthHeightSampler):
+   * the ground drawn (heightAt — the CPU's = the GPU's, J2-1) wherever it holds the contact's level there in full; else, near a craft
+   * held (setAnchors), that level's own heights round it — the tiles the world keeps for it whatever the camera. Before J2-2 the
+   * ground under a craft followed the camera's windows: a camera 1.5 km off, the craft's tile out of the fine levels, its ground
+   * fell to a coarser level (z 15 for z 17 — metres on a hillside).
+   */
+  groundAt(q: Vec3, foot: number): TileSample {
+    const t = this.heightAt(q, foot);
+    // (the drawn ground holding the finest contact level there in full — the camera aboard, the common case —: it, nothing more
+    // sampled)
+    if (!this.anchorPts.length || t.z > this.anchorZs[0]! || (t.z === this.anchorZs[0] && t.zw >= 1 - 1e-6)) return t;
+    const a = contactOf(t, this.anchorAt(q, foot));
+    if (a !== t) this.contactStats.fromAnchor++;
+    return a;
+  }
+
+  /** the contact level's heights at q from the tiles held round the crafts (or published), at a footprint; null: not all in */
+  private anchorAt(q: Vec3, foot: number): TileSample | null {
+    const sz = Math.min(Math.max(q[2], -0.999999), 0.999999);
+    const cosLat = Math.sqrt(Math.max(1 - sz * sz, 1e-12));
+    const lon = Math.atan2(q[1], q[0]);
+    const zf = Math.log2((TAU * R * cosLat) / (TILE * Math.max(foot, 0.5)));
+    for (const z of this.anchorZs) {
+      // (a footprint coarser than the level: the drawn ground's own blend)
+      if (zf < z) continue;
+      const L = this.levels[z - Z0]!;
+      const S = L.n * TILE;
+      const gx = cx0(lon) * S,
+        gy = mercY(sz, L.n) * TILE;
+      // (the 6 × 6 texels the cubic reads, from x0 − 2: one or two tiles an axis)
+      const x0 = Math.floor(gx - 0.5) - 2,
+        y0 = Math.floor(gy - 0.5) - 2;
+      const tx0 = Math.floor(x0 / TILE),
+        ty0 = Math.floor(y0 / TILE);
+      const tx1 = Math.floor((x0 + 5) / TILE),
+        ty1 = Math.floor((y0 + 5) / TILE);
+      if (ty0 < 0 || ty1 >= L.n) continue;
+      const d: (Float32Array | null)[] = [];
+      for (let ty = ty0; ty <= ty1; ty++)
+        for (let tx = tx0; tx <= tx1; tx++) {
+          const key = `${z}/${((tx % L.n) + L.n) % L.n}/${ty}`;
+          const s = this.slotOf(L, tx, ty);
+          // (published — the GPU's —, else the world's held tile)
+          d.push(L.pubKey[s] === key ? (L.pubData[s] ?? null) : (this.anchorH.get(key)?.h ?? null));
+        }
+      if (d.some((v) => !v)) continue;
+      const wTiles = tx1 - tx0 + 1;
+      const at = (i: number, j: number) => {
+        const gi = i + tx0 * TILE,
+          gj = j + ty0 * TILE;
+        const tx = Math.floor(gi / TILE),
+          ty = Math.floor(gj / TILE);
+        return d[(ty - ty0) * wTiles + (tx - tx0)]![(gj - ty * TILE) * TILE + (gi - tx * TILE)]!;
+      };
+      const px = gx - tx0 * TILE,
+        py = gy - ty0 * TILE;
+      const texel = (TAU * R * cosLat) / S;
+      const h = sampleLevel(at, px, py, zf - z, texel);
+      const fine = isFine(at(Math.floor(px), Math.floor(py)));
+      return { h, res: Math.max(texel, fine ? TILE_RES_FINE : TILE_RES_MIN), rem: 0, z, zw: 1 };
+    }
+    return null;
+  }
+
+  /** the contact level at a place [°]: the finest the windows would hold there low over it — the IGN's (national sources') z 17 in
+   *  their boxes with their relief on (an offline zone's own at most), the global data's z 14 elsewhere. Not the camera's nor the
+   *  graphics' choice */
+  contactLevel(latD: number, lonD: number): number {
+    const B = nationalBoxNear(latD, lonD) ?? NO_BOX;
+    const inNational = latD > B.south - 0.1 && latD < B.north + 0.1 && lonD > B.west - 0.1 && lonD < B.east + 0.1;
+    if (!this.reliefOn || !inNational) return ZG1;
+    return Math.max(Math.min(Z1, this.held?.(latD, lonD)?.reliefZ1 ?? Z1), Z0);
+  }
+
+  /**
+   * PLAN-J2 J2-2 — the crafts whose ground the world holds (the renderer, each image: the flown craft; c on the Earth's axes [its
+   * equatorial radii], agl its height over the ground [m]): one under ANCHOR_AGL_M has its contact level's tiles round it — and
+   * round where it will be in ANCHOR_LEAD_S — held: taken from a window's slot or the memory when there (the same arrays: no copy),
+   * kept as they arrive (put, keep, refine), loaded when no window wants them (`load` into memory, their national heights first in
+   * the IGN's queue). The windows still follow the camera; only the contact reads these (groundAt).
+   */
+  setAnchors(list: readonly { c: Vec3; agl: number }[]) {
+    const now = performance.now();
+    const tiles = new Map<string, [Level, number, number]>();
+    const zs = new Set<number>();
+    let first = true;
+    for (const a of list.slice(0, ANCHOR_MAX)) {
+      if (!(a.agl < ANCHOR_AGL_M)) continue;
+      const g = cartToGeodetic(1, WGS84_F, a.c);
+      const z = this.contactLevel((g.lat * 180) / Math.PI, (g.lon * 180) / Math.PI);
+      const L = this.levels[z - Z0];
+      if (!L) continue;
+      zs.add(z);
+      const fx = cx0(g.lon) * L.n,
+        fy = mercY(Math.sin(g.lat), L.n);
+      const pts: [number, number][] = [[fx, fy]];
+      // (the first — the flown craft —: led along its motion, measured from its last place)
+      if (first) {
+        const p = this.anchorLast;
+        const dt = p && p.z === z ? (now - p.t) / 1000 : 0;
+        if (dt > 0.005 && dt < 1) {
+          let dx = fx - p!.x;
+          dx -= Math.round(dx / L.n) * L.n;
+          const k = Math.min(dt / 0.25, 1);
+          this.anchorVel = [
+            this.anchorVel[0] + (dx / dt - this.anchorVel[0]) * k,
+            this.anchorVel[1] + ((fy - p!.y) / dt - this.anchorVel[1]) * k,
+          ];
+        } else if (!p || p.z !== z || dt >= 1) this.anchorVel = [0, 0];
+        if (!p || dt > 0.005 || p.z !== z) this.anchorLast = { x: fx, y: fy, t: now, z };
+        let lx = this.anchorVel[0] * ANCHOR_LEAD_S,
+          ly = this.anchorVel[1] * ANCHOR_LEAD_S;
+        const l = Math.hypot(lx, ly);
+        if (l > ANCHOR_LEAD_TILES) {
+          lx *= ANCHOR_LEAD_TILES / l;
+          ly *= ANCHOR_LEAD_TILES / l;
+        }
+        // (its path sampled every half tile: no tile skipped between)
+        const n = Math.ceil(l / 0.5);
+        if (l > 0.05) for (let i = 1; i <= n; i++) pts.push([fx + (lx * i) / n, fy + (ly * i) / n]);
+        first = false;
+      }
+      for (const [px, py] of pts)
+        for (let y = Math.floor(py - ANCHOR_MARGIN); y <= Math.floor(py + ANCHOR_MARGIN); y++)
+          for (let x = Math.floor(px - ANCHOR_MARGIN); x <= Math.floor(px + ANCHOR_MARGIN); x++) {
+            if (y < 0 || y >= L.n) continue;
+            const xw = ((x % L.n) + L.n) % L.n;
+            tiles.set(`${z}/${xw}/${y}`, [L, xw, y]);
+          }
+    }
+    if (!tiles.size) this.anchorLast = null;
+    this.anchorTiles = tiles;
+    this.anchorZs = [...zs].sort((a, b) => b - a);
+    this.anchorPts = list.length && tiles.size ? list.slice(0, ANCHOR_MAX) : [];
+    for (const k of this.anchorH.keys()) if (!tiles.has(k)) this.anchorH.delete(k);
+    let held = 0;
+    for (const [k, [L, x, y]] of tiles) {
+      const e = this.anchorH.get(k);
+      if (e && e.gen === this.gen) {
+        held++;
+        continue;
+      }
+      // (in a window's slot — its newest heights, never a stand-in's — or in memory: the same array)
+      const s = this.slotOf(L, x, y);
+      const h = L.key[s] === k && L.data[s] && !this.standInKeys.has(k) ? L.data[s] : (this.cache.get(k)?.h ?? null);
+      if (h) {
+        this.anchorH.set(k, { h, gen: this.gen });
+        held++;
+        continue;
+      }
+      // (a window wants it: it loads it — kept as it arrives —; else loaded into memory, whatever the windows)
+      if (this.wantHas(L, x, y) || this.inflight.has(k)) continue;
+      const f = this.failures.get(k);
+      // (a few loads past the windows' own limit: a craft's ground never waits for the view's tiles)
+      if ((f && now < f.at) || this.inflight.size >= MAX_INFLIGHT + ANCHOR_LOADS) continue;
+      this.contactStats.loads++;
+      void this.load(L, x, y, true);
+    }
+    this.contactStats.anchors = this.anchorPts.length;
+    this.contactStats.tiles = tiles.size;
+    this.contactStats.held = held;
+  }
+  /** a level's window wants a tile (x wrapped or not) */
+  private wantHas(L: Level, x: number, y: number) {
+    return inside(L.want, x, y) || inside(L.want, x - L.n, y) || inside(L.want, x + L.n, y);
+  }
+  /** a tile's heights arriving (a load, a refine, the memory, a put): kept if a craft's ground wants them (never a stand-in's) */
+  private anchorSeen(key: string, h: Float32Array) {
+    if (this.anchorTiles.has(key) && !this.standInKeys.has(key)) this.anchorH.set(key, { h, gen: this.gen });
+  }
+
+  /**
+   * PLAN-J2 J2-2 — the contact under a place [°] (a read for the tests and the e2e, nothing changed): the tiles' height there above
+   * the sea [m] — before the detail, the runways' grading and the geoid (earthHeightSampler) —, the level it comes from, whether
+   * from the drawn ground or the world's held tiles, and the drawn ground's own finest level and weight there.
+   */
+  contactAt(latD: number, lonD: number) {
+    const la = (latD * Math.PI) / 180,
+      lo = (lonD * Math.PI) / 180;
+    const q: Vec3 = [Math.cos(la) * Math.cos(lo), Math.cos(la) * Math.sin(lo), Math.sin(la)];
+    const t = this.heightAt(q, 0.05);
+    const g = this.anchorPts.length ? contactOf(t, this.anchorAt(q, 0.05)) : t;
+    return {
+      h: g.h,
+      rem: g.rem,
+      z: g.z,
+      src: g === t ? "drawn" : "anchor",
+      drawnH: t.h,
+      drawnZ: t.z,
+      drawnW: t.zw,
+      contactZ: this.contactLevel(latD, lonD),
+      ...this.contactStats,
+    };
   }
 }
 
@@ -3256,6 +3584,12 @@ export function probePublished(
     else r.y1--;
   }
   return r;
+}
+
+/** J2-2: the contact from the drawn ground t and the crafts' held tiles a — the drawn wherever it holds a's level in full (the CPU's
+ *  ground the GPU's), a where it does not */
+export function contactOf(t: TileSample, a: TileSample | null): TileSample {
+  return !a || t.z > a.z || (t.z === a.z && t.zw >= 1 - 1e-6) ? t : a;
 }
 
 /** A level's weight towards its window's edges [px]: none within 2 px of it, full 48 px in. */

@@ -2095,7 +2095,9 @@ export class Renderer {
           setGroundRelief(
             "earth",
             // (the runways graded: the gear rolls on them — game/sites.ts)
-            earthHeightSampler(map, W, H, (q, foot) => this.earthTiles.heightAt(q, foot), runwayGrade),
+            // (J2-2: the contact ground — the drawn one wherever it holds the contact's level, the world's tiles held round the
+            // flown craft else: never the camera's choice — earth-tiles.ts groundAt, setAnchors)
+            earthHeightSampler(map, W, H, (q, foot) => this.earthTiles.groundAt(q, foot), runwayGrade),
           );
           // (a tile that will not load — offline, refused: the map's heights there, as the ground had them)
           this.earthTiles.fallback = tileFallbackSampler(map, W, H);
@@ -4245,6 +4247,15 @@ export class Renderer {
       this.earthTiles.reliefOn = s.earthIgnRelief;
       // (its far levels' overground — I6)
       this.earthTiles.hlodOn = s.earthIgnSilhouettes;
+      // (PLAN-J2 J2-2: the ground under the flown craft held by the world whatever the camera — far behind it, ahead, free: its
+      // contact level's tiles round it, the windows following the camera still; strategy §19.4)
+      const C = this.shipFocus;
+      if (t === this.live)
+        this.earthTiles.setAnchors(
+          s.earthTerrain && C?.body === "earth" && C.altKm < 60 && this.earthMaps.tier
+            ? [{ c: C.c, agl: heightOverGround("earth", C.c.map((x) => x * solarBody("earth")!.radius) as Vec3) }]
+            : [],
+        );
       this.earthTiles.update(focus, pixelAngle, lead, onEarth ? gazeT : [0, 0, 0], eye ? eyeH : undefined);
       // the Moon's and Mars's relief tiles (P6, P7): round the camera while that world is the near body and its global map in
       const nearId = near ? bodies[near.index]?.id : undefined;

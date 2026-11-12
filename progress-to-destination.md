@@ -3758,3 +3758,30 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Suite** : un lot de mise en place — lequel des serveurs de Sam et son URL, l'envoi et le téléchargement (manifeste à empreintes,
   `build-pages.ts`, les machines du labo), les familles qui sortent de Git en premier (faces de la Terre, planètes HD, porte-avions,
   ISS), le contrôle de taille adapté. D'ici là, un nouveau gros binaire va en Git LFS.
+
+## 2026-11-12T14:50Z — J2-2 : le sol de contact au monde, quelle que soit la caméra ; les pointes du fil principal localisées
+
+- **Contribution** (stratégie §19.4 — le monde possède le sol de contact —, §7.19, §15 J2 ; PLAN-J2 J2-2 ; ANALYSE-STREAMING ST9) : le sol
+  sous l'appareil (contact, train, AGL, autopilotes, Auto-GCAS) **ne dépend plus de la caméra ni de la qualité** : c'est le sol dessiné là
+  où il tient le **niveau de contact** (z 17 IGN dans les boîtes nationales, z 14 ailleurs), sinon les tuiles de ce niveau que **le monde
+  tient** autour de l'appareil piloté sous 1 500 m (`EarthTiles.setAnchors`/`groundAt`) — les mêmes tableaux que les fenêtres et le cache,
+  le même chargeur, aucune deuxième copie ; rien d'écrit au GPU. Caméra à bord : exactement le sol dessiné.
+- **Changé** : `src/system/earth-tiles.ts` (`groundAt`, `setAnchors`, `contactAt`, `contactLevel`, `contactStats`, `contactOf` ; `heightAt`
+  rend `z`/`zw` ; `changes` dérivé de la table ; cache taillé par paquets de 16 en une passe ; compteurs `keepMs`/`reqMs`/`haloMs`) ;
+  `renderer.ts` (ancre de l'appareil piloté avant `update`, contact par `groundAt`) ; tests `tests/earth-contact.test.ts` (9) ; e2e
+  `tests/e2e/j2-contact-camera.e2e.test.ts` ; fiche [docs/progress/j2/FICHE-J2-2-2026-11-12.md](docs/progress/j2/FICHE-J2-2-2026-11-12.md)
+  et `j2-2-contact-kerr-mini.json` ; PLAN-J2 (§9 quater), GRAPHICS-PIPELINE (annexe régénérée), BH-API, E2E-CATALOGUE, E2E-VOLS §7 (trois
+  leçons), VOL-AVIONS §2.1, PROBLEMES-A-REGLER, ANALYSE-STREAMING, carte.
+- **Mesuré** (A/B contre 72a16452, kerr-mini) : F-35B **posé** sur le flanc du Faron, caméra 1,5 puis 3 km puis revenue — avant, le sol
+  sous l'avion immobile suit la caméra (z 16 à 3 km ; au retour **+0,83 m**, train 0,35–1,63 m, l'avion soulevé de 0,56 m) ; **après,
+  constant au millimètre**, train 1,183–1,185 m. Vol Beauce, caméra 1,5 km devant : avant 37 % des images avec un contact plus grossier
+  (jusqu'à 2 m d'écart) ; **après z 17 sur 100 %** (kerr-mini ; refait sur le code final au M1 Max : 1 261/1 261, caméra mesurée à 1,45 km).
+  **Image inchangée** (A/B figé A B B A dans le bruit, luminance à 0,05 % — M1 Max). Question 2 (vol J0, kerr-mini) : le travail des
+  arrivées hors publication ≤ 0,5–1,7 ms ; restent **la publication** au-delà de son budget (≤ 3,2 ms en vol) et **`request()`**, jamais
+  compté avant (≤ 7 ms en vol, 14–20 ms au chargement, sans le halo) — localisé, non borné (un report à 16 ms essayé : sans effet, retiré).
+- **Vérifié** : tsc, biome, `bun test --parallel` 2 208 / 0, `pipeline-inventory --check` puis `--write` ; e2e `j2-contact-camera`,
+  `j2-probes`, `j2-page-camera` still, `gear` 3/3, `landing` 5/5, `ground-placement` 3/4 (l'échec identique sur 72a16452 : préexistant,
+  consigné), 0 erreur GPU. Aucun shader changé. **Non vérifié** : **ΔGPU J0** (kerr-mini hors réseau ≥ 40 min pendant les mesures finales ;
+  attendu nul, rien de changé au GPU) ; `tile-arrival` ; les autres appareils au sol (seul le piloté est ancré) ; caméra libre éloignée ;
+  Windows.
+- **Suite** : le ΔGPU J0 au retour du mini ; les pointes de `request()`/publication en lot à part ; J2-3. Questions à Sam dans la fiche §6.

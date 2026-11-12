@@ -577,6 +577,12 @@ x à gauche, y en haut, z vers le nez. L'attitude tourne par `pilot.omega` (comm
 | ILS, terrain du GCAS | au-dessus de la mer, contre l'`elev` de la piste et le relief − N |
 | **AGL** | `__bh.sys.heightOverGround("earth", fleet.pose(actif, t).X, t)` (`camera.airInfo()` n'a pas de champ `agl`) |
 
+**Le sol sous l'appareil** (contact, train, AGL, autopilotes, GCAS) est celui des tuiles de relief au **niveau de contact** —
+z 17 de l'IGN en France et dans les boîtes des sources nationales, z 14 ailleurs — **quelle que soit la caméra** (PLAN-J2 J2-2,
+12 nov. 2026) : sous 1 500 m du sol, le monde tient ces tuiles autour de l'appareil même quand la vue extérieure ou libre est loin
+(avant, la caméra à 1,5 km, le sol sous l'appareil pouvait tomber d'un ou deux niveaux, des mètres sur une pente). Quand la caméra
+est à bord, c'est exactement le sol dessiné. `__bh.renderer.earthTiles.contactAt(lat, lon)` dit d'où vient le sol sous un point.
+
 ### 2.2 Les forces (à chaque sous-pas, `motion.ts` `accAt`)
 
 - **Gravité** (`gravityHome`).

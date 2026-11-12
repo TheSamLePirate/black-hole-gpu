@@ -468,6 +468,9 @@ expect(r.log.some((l) => /Hard landing|collapsed|tipped/.test(l))).toBe(false);
 | U ne fait pas décoller le F-35 (avant le 11 nov.) | U lançait le décollage orbital | depuis : le décollage automatique sur piste ; dans un test, la vraie touche (`app.press("KeyU")`) |
 | Atterrissage dur ou train cassé à vitesse faible pendant une longue attente | le sol a changé sous l'appareil (tuiles arrivées) | sol chargé avant, tuiles bloquées pour un vol jugé |
 | Le stationnaire ne tient pas | `hoverOver` a rempli les réservoirs | baisser `fleet.fuel` après le placement |
+| Vue extérieure lointaine sans effet, appareil gelé (`freeze(true)`) | le gel arrête aussi le pas de la caméra (rig) : `camera.outside.dist` n'est pas appliqué | appareil **posé** (`game.land`) simulation en marche, ou en vol ; vérifier la distance (référence des tuiles `earthTiles.lon`/`sinLat` contre `geoNow()`) — J2-2, 12 nov. 2026 |
+| Vue « extérieur 1,5 km derrière » en vol à quelques mètres de l'appareil | la distance de la caméra extérieure derrière l'appareil n'est pas tenue en vol (4–23 m mesurés) ; devant (`yaw: 180`) elle l'est | mesurer la distance caméra–appareil dans l'e2e ; pour éloigner la caméra en vol, la mettre devant — `j2-contact-camera` |
+| `sys.geodetic()` pris pour la place de la caméra | en pilotage elle rend celle de l'appareil (`homePosition`) | la référence des tuiles (`earthTiles.lon`, `.sinLat`) suit la caméra sur la Terre |
 | Une vue réglée n'apparaît pas | réglée pendant le gel | quelques pas, relire la monture |
 | Le comportement contredit le code | bundle périmé du serveur de dev (`E2E_URL`), ou membre `__bh` non exporté dans `automation.ts` | e2e sans `E2E_URL` (serveur de production propre) ; vérifier l'export |
 | Aucune sortie, aucun verdict | sortie coupée par `tail`/`grep` | journal complet dans un fichier, puis `grep` |

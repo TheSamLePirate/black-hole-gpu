@@ -256,7 +256,9 @@ ST8 → ST9 → ST10. ST4 et ST8 restent planifiés tant que les mesures n'en mo
 
 *Note du 12 novembre 2026 (PLAN-J2, décision 9 de Sam) : pour le sol de la Terre, ST5 (mips d'imagerie regroupés, publication bornée)
 et ST9 (validité par tuile) sont repris par J2-1 (fait : `src/system/earth-pages.ts`, une soumission de mips par image, une page publiée
-par emplacement — [fiche J2-1](progress/j2/FICHE-J2-1-2026-11-12.md)) et J2-2 (les hauteurs) ; le décor reste à ce plan.*
+par emplacement — [fiche J2-1](progress/j2/FICHE-J2-1-2026-11-12.md)) et J2-2 (fait : les hauteurs publiées avec leur page, le sol de
+contact tenu par le monde sous l'appareil quelle que soit la caméra — [fiche J2-2](progress/j2/FICHE-J2-2-2026-11-12.md) ; la pointe du
+fil principal restante est `request()`, §4 de la fiche) ; le décor reste à ce plan.*
 
 ## 8. Risques et limites
 

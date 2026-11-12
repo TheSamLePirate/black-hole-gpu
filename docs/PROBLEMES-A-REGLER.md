@@ -27,8 +27,29 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   du bord) qui dérive de 0,8 tuile avant de se recentrer : regard en arrière sur un appareil qui avance, la caméra sort de sa propre
   fenêtre (z 16, `camIn` faux). **Corrigé par J2-1** (règle de validité : le rectangle garde d'abord la tuile de la caméra ; la tuile de
   la caméra chargée et publiée la première ; la fenêtre recentrée quand la caméra s'approche à 0,2 tuile de son bord) — effet mesuré
-  dans la fiche J2-1. **Reste ouvert** : la cause du blocage de la sonde (non reproduit en jeu) ; la tuile **sous l'appareil** quand la
-  caméra est loin (le sol de contact, §19.4 : la fenêtre suit la caméra — J2-2 / le monde).
+  dans la fiche J2-1. **Reste ouvert** : la cause du blocage de la sonde (non reproduit en jeu). ~~La tuile **sous l'appareil** quand la
+  caméra est loin (le sol de contact, §19.4 : la fenêtre suit la caméra — J2-2 / le monde)~~ — **réglé par J2-2** (12 nov. 2026 : le
+  monde tient les tuiles du niveau de contact sous l'appareil, `earthTiles.setAnchors`/`groundAt` ; appareil posé, caméra à 3 km puis
+  revenue : sol constant au millimètre contre +0,83 m et l'avion soulevé de 0,56 m avant — [fiche J2-2](progress/j2/FICHE-J2-2-2026-11-12.md)).
+
+## Des pointes de 2 à 20 ms du fil principal autour des tuiles : `request()` et la publication (relevé par J2-2)
+
+- **Mesuré** (12 nov. 2026, kerr-mini, vol J0 de `j2-probes`, compteurs `earthTiles.pubStats` `reqMs`/`haloMs`/`pubMs` — [fiche J2-2](progress/j2/FICHE-J2-2-2026-11-12.md)
+  §4) : **`request()`** (le balayage des chargements, appelé à chaque image et après chaque tuile arrivée) jusqu'à **7 ms** en vol (18
+  images sur 939 > 2 ms) et **14–20 ms** au chargement à froid, **sans le halo** (`haloMs` 0) ; **la publication** au-delà de son budget
+  quand elle écrit sa page « au moins une » ou rattrape (2,2–3,2 ms en vol ; une à 12,1 ms au chargement). Le travail des arrivées
+  lui-même est ≤ 0,5–1,7 ms.
+- **Cause supposée** : le balayage des fenêtres (clés de tuiles refaites et triées à chaque appel) ou les chargements qu'il démarre
+  (`load` : `fetch`, imagerie, contrôleurs) — non séparés. Relancer `request()` au plus toutes les 16 ms n'a rien changé (essayé, retiré).
+- **Piste** : chronométrer séparément le balayage et les démarrages ; tenir par niveau les tuiles manquantes au lieu de les recalculer ;
+  étaler les démarrages ; une page qui dépasse le budget reportée sauf rattrapage. Critère de J2-1 « aucune pointe > 2 ms » non tenu.
+
+## « Posé sur un aérodrome » ne s'aligne plus sur sa piste au Bourget (e2e `ground-placement`)
+
+- **Observé** (12 nov. 2026, kerr-mini) : `game.land("earth", 48.96, 2.44)` répond « landed at 48.96°, 2.44° » au lieu de « lined up
+  … » (Δcap 9,015°, décalage −936,86 m de l'axe) — **à l'identique sur 72a16452 et sur J2-2** (A/B `ab-commit`), donc antérieur à J2-2 ;
+  les trois autres cas de l'e2e (appareil garé à côté, F-35 et Ranger sur une piste et sur le flanc du Fuji, chaque jambe au sol) passent.
+- **Cause** : non cherchée (hors du lot J2-2) — le choix de l'aérodrome ou de sa piste en service par le placement (`game/place.ts`).
 
 ## Des villes couvertes d'arbres, sans bâtiments proches, dans les e2e (Marseille, Toulon, Manhattan)
 

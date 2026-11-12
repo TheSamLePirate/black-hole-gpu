@@ -1,0 +1,748 @@
+{
+ "machine": "kerr-mini",
+ "date": "2026-11-12",
+ "A": "72a16452 (J2-1)",
+ "B": "J2-2 (this commit; the ground/flight A/B ran with ANCHOR_MARGIN 1/4, since 1/16)",
+ "runs": {
+  "ground": "20261112-145717-j2-2-ground-ab",
+  "flight": "20261112-145316-j2-2-contact-ab",
+  "probes": "20261112-152018-j2-2-probes-final2"
+ },
+ "ground": {
+  "A1": {
+   "placed": {
+    "relief": {
+     "ok": true,
+     "finest": 17,
+     "pending": 0
+    },
+    "rest": {
+     "atRest": true,
+     "gs": 3.009866165819904e-8,
+     "lat": 43.14049810105239,
+     "lon": 5.942001853545998,
+     "alt": 369.178414623481,
+     "label": "LANDED"
+    }
+   },
+   "views": [
+    {
+     "view": "cockpit",
+     "images": 490,
+     "ground": {
+      "min": 417.177,
+      "max": 417.178,
+      "first": 417.177,
+      "last": 417.178
+     },
+     "vsCockpit": {
+      "maxAbs": 0.001,
+      "last": 0
+     },
+     "drawnLevel": {
+      "17": 490
+     },
+     "contactLevel": {
+      "-1": 490
+     },
+     "fromHeld": 0,
+     "drawnOff": null,
+     "camDist": [
+      0,
+      0
+     ],
+     "craftAlt": [
+      369.177,
+      369.179
+     ],
+     "craftAgl": [
+      1.184,
+      1.186
+     ],
+     "gsMax": 0
+    },
+    {
+     "view": "outside-behind-1500m",
+     "images": 408,
+     "ground": {
+      "min": 417.177,
+      "max": 417.178,
+      "first": 417.177,
+      "last": 417.178
+     },
+     "vsCockpit": {
+      "maxAbs": 0.001,
+      "last": 0
+     },
+     "drawnLevel": {
+      "17": 408
+     },
+     "contactLevel": {
+      "-1": 408
+     },
+     "fromHeld": 0,
+     "drawnOff": null,
+     "camDist": [
+      0,
+      0
+     ],
+     "craftAlt": [
+      369.177,
+      369.179
+     ],
+     "craftAgl": [
+      1.184,
+      1.185
+     ],
+     "gsMax": 0
+    },
+    {
+     "view": "outside-behind-3000m",
+     "images": 422,
+     "ground": {
+      "min": 417.227,
+      "max": 417.228,
+      "first": 417.227,
+      "last": 417.228
+     },
+     "vsCockpit": {
+      "maxAbs": 0.05,
+      "last": 0.05
+     },
+     "drawnLevel": {
+      "15": 6,
+      "16": 416
+     },
+     "contactLevel": {
+      "-1": 422
+     },
+     "fromHeld": 0,
+     "drawnOff": null,
+     "camDist": [
+      0,
+      0
+     ],
+     "craftAlt": [
+      369.177,
+      369.179
+     ],
+     "craftAgl": [
+      1.133,
+      1.136
+     ],
+     "gsMax": 0
+    },
+    {
+     "view": "cockpit-again",
+     "images": 392,
+     "ground": {
+      "min": 417.177,
+      "max": 418.012,
+      "first": 417.228,
+      "last": 417.177
+     },
+     "vsCockpit": {
+      "maxAbs": 0.834,
+      "last": -0.001
+     },
+     "drawnLevel": {
+      "14": 4,
+      "16": 18,
+      "17": 370
+     },
+     "contactLevel": {
+      "-1": 392
+     },
+     "fromHeld": 0,
+     "drawnOff": null,
+     "camDist": [
+      0,
+      0
+     ],
+     "craftAlt": [
+      369.108,
+      369.671
+     ],
+     "craftAgl": [
+      0.349,
+      1.627
+     ],
+     "gsMax": 0
+    }
+   ]
+  },
+  "B2": {
+   "placed": {
+    "relief": {
+     "ok": false,
+     "finest": 17,
+     "pending": 1
+    },
+    "rest": {
+     "atRest": true,
+     "gs": 2.1957037912919906e-8,
+     "lat": 43.14049810153451,
+     "lon": 5.942001860863892,
+     "alt": 369.17811659633935,
+     "label": "LANDED"
+    }
+   },
+   "views": [
+    {
+     "view": "cockpit",
+     "images": 424,
+     "ground": {
+      "min": 417.177,
+      "max": 417.178,
+      "first": 417.177,
+      "last": 417.177
+     },
+     "vsCockpit": {
+      "maxAbs": 0.001,
+      "last": 0
+     },
+     "drawnLevel": {
+      "17": 424
+     },
+     "contactLevel": {
+      "17": 424
+     },
+     "fromHeld": 0,
+     "drawnOff": {
+      "p50": 0,
+      "p95": 0,
+      "max": 0,
+      "over0_1m": 0
+     },
+     "camDist": [
+      0,
+      0
+     ],
+     "craftAlt": [
+      369.177,
+      369.179
+     ],
+     "craftAgl": [
+      1.183,
+      1.185
+     ],
+     "gsMax": 0
+    },
+    {
+     "view": "outside-behind-1500m",
+     "images": 398,
+     "ground": {
+      "min": 417.177,
+      "max": 417.178,
+      "first": 417.177,
+      "last": 417.178
+     },
+     "vsCockpit": {
+      "maxAbs": 0.001,
+      "last": 0.001
+     },
+     "drawnLevel": {
+      "17": 398
+     },
+     "contactLevel": {
+      "17": 398
+     },
+     "fromHeld": 0,
+     "drawnOff": {
+      "p50": 0,
+      "p95": 0,
+      "max": 0,
+      "over0_1m": 0
+     },
+     "camDist": [
+      0,
+      0
+     ],
+     "craftAlt": [
+      369.177,
+      369.179
+     ],
+     "craftAgl": [
+      1.183,
+      1.185
+     ],
+     "gsMax": 0
+    },
+    {
+     "view": "outside-behind-3000m",
+     "images": 414,
+     "ground": {
+      "min": 417.177,
+      "max": 417.178,
+      "first": 417.177,
+      "last": 417.177
+     },
+     "vsCockpit": {
+      "maxAbs": 0.001,
+      "last": 0
+     },
+     "drawnLevel": {
+      "15": 2,
+      "16": 412
+     },
+     "contactLevel": {
+      "17": 414
+     },
+     "fromHeld": 414,
+     "drawnOff": {
+      "p50": 0.05,
+      "p95": 0.05,
+      "max": 0.05,
+      "over0_1m": 0
+     },
+     "camDist": [
+      0,
+      0
+     ],
+     "craftAlt": [
+      369.177,
+      369.179
+     ],
+     "craftAgl": [
+      1.183,
+      1.185
+     ],
+     "gsMax": 0
+    },
+    {
+     "view": "cockpit-again",
+     "images": 401,
+     "ground": {
+      "min": 417.177,
+      "max": 417.178,
+      "first": 417.177,
+      "last": 417.177
+     },
+     "vsCockpit": {
+      "maxAbs": 0.001,
+      "last": 0
+     },
+     "drawnLevel": {
+      "15": 10,
+      "16": 6,
+      "17": 385
+     },
+     "contactLevel": {
+      "17": 401
+     },
+     "fromHeld": 16,
+     "drawnOff": {
+      "p50": 0,
+      "p95": 0,
+      "max": 0.05,
+      "over0_1m": 0
+     },
+     "camDist": [
+      0,
+      0
+     ],
+     "craftAlt": [
+      369.177,
+      369.179
+     ],
+     "craftAgl": [
+      1.183,
+      1.185
+     ],
+     "gsMax": 0
+    }
+   ]
+  }
+ },
+ "flight": {
+  "A1": [
+   {
+    "view": "cockpit",
+    "images": 605,
+    "ground": {
+     "min": 191.899,
+     "max": 202.13,
+     "first": 193.563,
+     "last": 196.23
+    },
+    "vsCockpit": null,
+    "drawnLevel": {
+     "17": 605
+    },
+    "contactLevel": {
+     "-1": 605
+    },
+    "fromHeld": 0,
+    "drawnOff": null,
+    "camDist": [
+     482,
+     488
+    ]
+   },
+   {
+    "view": "outside-behind-1500m",
+    "images": 583,
+    "ground": {
+     "min": 192.642,
+     "max": 199.997,
+     "first": 198.901,
+     "last": 194.868
+    },
+    "vsCockpit": null,
+    "drawnLevel": {
+     "17": 583
+    },
+    "contactLevel": {
+     "-1": 583
+    },
+    "fromHeld": 0,
+    "drawnOff": null,
+    "camDist": [
+     489,
+     490
+    ]
+   },
+   {
+    "view": "outside-ahead-1500m",
+    "images": 611,
+    "ground": {
+     "min": 193.543,
+     "max": 198.077,
+     "first": 195.29,
+     "last": 196.378
+    },
+    "vsCockpit": null,
+    "drawnLevel": {
+     "15": 8,
+     "16": 220,
+     "17": 383
+    },
+    "contactLevel": {
+     "-1": 611
+    },
+    "fromHeld": 0,
+    "drawnOff": null,
+    "camDist": [
+     490,
+     490
+    ]
+   },
+   {
+    "view": "cockpit-again",
+    "images": 611,
+    "ground": {
+     "min": 192.36,
+     "max": 197.946,
+     "first": 195.087,
+     "last": 196.576
+    },
+    "vsCockpit": null,
+    "drawnLevel": {
+     "16": 7,
+     "17": 604
+    },
+    "contactLevel": {
+     "-1": 611
+    },
+    "fromHeld": 0,
+    "drawnOff": null,
+    "camDist": [
+     490,
+     491
+    ]
+   }
+  ],
+  "B2": [
+   {
+    "view": "cockpit",
+    "images": 605,
+    "ground": {
+     "min": 191.898,
+     "max": 202.127,
+     "first": 193.697,
+     "last": 196.832
+    },
+    "vsCockpit": null,
+    "drawnLevel": {
+     "17": 605
+    },
+    "contactLevel": {
+     "17": 605
+    },
+    "fromHeld": 0,
+    "drawnOff": {
+     "p50": 0,
+     "p95": 0,
+     "max": 0,
+     "over0_1m": 0
+    },
+    "camDist": [
+     482,
+     489
+    ]
+   },
+   {
+    "view": "outside-behind-1500m",
+    "images": 579,
+    "ground": {
+     "min": 193.195,
+     "max": 199.994,
+     "first": 198.127,
+     "last": 194.353
+    },
+    "vsCockpit": null,
+    "drawnLevel": {
+     "17": 579
+    },
+    "contactLevel": {
+     "17": 579
+    },
+    "fromHeld": 10,
+    "drawnOff": {
+     "p50": 0,
+     "p95": 0,
+     "max": 0.004,
+     "over0_1m": 0
+    },
+    "camDist": [
+     489,
+     490
+    ]
+   },
+   {
+    "view": "outside-ahead-1500m",
+    "images": 606,
+    "ground": {
+     "min": 193.548,
+     "max": 197.989,
+     "first": 195.429,
+     "last": 194.976
+    },
+    "vsCockpit": null,
+    "drawnLevel": {
+     "15": 5,
+     "16": 223,
+     "17": 378
+    },
+    "contactLevel": {
+     "17": 606
+    },
+    "fromHeld": 337,
+    "drawnOff": {
+     "p50": 0,
+     "p95": 1.17,
+     "max": 2.042,
+     "over0_1m": 169
+    },
+    "camDist": [
+     491,
+     491
+    ]
+   },
+   {
+    "view": "cockpit-again",
+    "images": 608,
+    "ground": {
+     "min": 192.364,
+     "max": 197.945,
+     "first": 195.745,
+     "last": 197.693
+    },
+    "vsCockpit": null,
+    "drawnLevel": {
+     "16": 19,
+     "17": 589
+    },
+    "contactLevel": {
+     "17": 608
+    },
+    "fromHeld": 19,
+    "drawnOff": {
+     "p50": 0,
+     "p95": 0,
+     "max": 0.013,
+     "over0_1m": 0
+    },
+    "camDist": [
+     491,
+     491
+    ]
+   }
+  ]
+ },
+ "publication": {
+  "load": {
+   "images": 1162,
+   "withWrites": 656,
+   "over2ms": 106,
+   "maxSubmits": 1,
+   "per": {
+    "bytes": {
+     "p50": 524288,
+     "p95": 2097152,
+     "max": 3211264,
+     "total": 683540480
+    },
+    "writes": {
+     "p50": 2,
+     "p95": 9,
+     "max": 16,
+     "total": 3074
+    },
+    "tiles": {
+     "p50": 1,
+     "p95": 4,
+     "max": 9,
+     "total": 1345
+    },
+    "orthos": {
+     "p50": 0,
+     "p95": 0,
+     "max": 7,
+     "total": 74
+    },
+    "submits": {
+     "p50": 1,
+     "p95": 1,
+     "max": 1,
+     "total": 590
+    },
+    "mipPasses": {
+     "p50": 4,
+     "p95": 8,
+     "max": 24,
+     "total": 3060
+    },
+    "putMs": {
+     "p50": 0.5999999046325684,
+     "p95": 2.299999713897705,
+     "max": 12.199999809265137,
+     "total": 862.1000084877014
+    },
+    "mipMs": {
+     "p50": 0,
+     "p95": 0.20000028610229492,
+     "max": 0.5,
+     "total": 66.1999979019165
+    },
+    "pubMs": {
+     "p50": 0.5999999046325684,
+     "p95": 2.1999998092651367,
+     "max": 12.099999904632568,
+     "total": 842.3000049591064
+    },
+    "waiting": {
+     "p50": 0,
+     "p95": 57,
+     "max": 89,
+     "total": 7469
+    },
+    "keepMs": {
+     "p50": 0,
+     "p95": 0,
+     "max": 0,
+     "total": 0
+    },
+    "reqMs": {
+     "p50": 0,
+     "p95": 1.799999713897705,
+     "max": 14.200000286102295,
+     "total": 344.9999928474426
+    },
+    "haloMs": {
+     "p50": 0,
+     "p95": 0,
+     "max": 0,
+     "total": 0
+    }
+   }
+  },
+  "flight": {
+   "images": 939,
+   "withWrites": 602,
+   "over2ms": 16,
+   "maxSubmits": 1,
+   "per": {
+    "bytes": {
+     "p50": 262144,
+     "p95": 1441792,
+     "max": 2424832,
+     "total": 452329472
+    },
+    "writes": {
+     "p50": 1,
+     "p95": 6,
+     "max": 10,
+     "total": 1889
+    },
+    "tiles": {
+     "p50": 1,
+     "p95": 4,
+     "max": 6,
+     "total": 1059
+    },
+    "orthos": {
+     "p50": 0,
+     "p95": 2,
+     "max": 5,
+     "total": 357
+    },
+    "submits": {
+     "p50": 0,
+     "p95": 1,
+     "max": 1,
+     "total": 344
+    },
+    "mipPasses": {
+     "p50": 0,
+     "p95": 8,
+     "max": 12,
+     "total": 1792
+    },
+    "putMs": {
+     "p50": 0.40000009536743164,
+     "p95": 1.8000001907348633,
+     "max": 2.8000001907348633,
+     "total": 555.9999947547913
+    },
+    "mipMs": {
+     "p50": 0,
+     "p95": 0.19999980926513672,
+     "max": 0.5,
+     "total": 36.39999580383301
+    },
+    "pubMs": {
+     "p50": 0.40000009536743164,
+     "p95": 1.700000286102295,
+     "max": 2.700000286102295,
+     "total": 541.3999953269958
+    },
+    "waiting": {
+     "p50": 0,
+     "p95": 5,
+     "max": 26,
+     "total": 684
+    },
+    "keepMs": {
+     "p50": 0,
+     "p95": 0,
+     "max": 0,
+     "total": 0
+    },
+    "reqMs": {
+     "p50": 0,
+     "p95": 1.0999999046325684,
+     "max": 7,
+     "total": 189.29999923706055
+    },
+    "haloMs": {
+     "p50": 0,
+     "p95": 0,
+     "max": 0,
+     "total": 0
+    }
+   }
+  }
+ },
+ "note": "camDist in these runs is not the camera distance (the e2e then read the craft own place: 0, or its height mismatch ~490-685 m); corrected since (earthTiles reference). The camera distance is the view set: outside 1500 / 3000 m (screenshots)."
+}
