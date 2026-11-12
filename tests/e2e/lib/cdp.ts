@@ -28,6 +28,12 @@ export interface Cdp {
    * meanwhile — a reload — is cut at the next call: call it again after `load`. The count of workers cut.
    */
   offline(on: boolean): Promise<number>;
+  /**
+   * (CM0) A slower link for the page **and its Service Worker** — `mbps` down (and a quarter of it up), `latencyMs` added to
+   * each request —, or (null) the link as it is. Same targets as `offline`: call it again after a reload. The count of workers
+   * slowed.
+   */
+  throttle(mbps: number | null, latencyMs?: number): Promise<number>;
   /** Chrome asked to quit and given time to (its disk caches written — the shader cache of a kept profile), then closed */
   quit(): Promise<void>;
 }
@@ -228,33 +234,14 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
       listeners.get(method)!.add(fn);
       return () => listeners.get(method)?.delete(fn);
     },
-    offline: async (on: boolean) => {
-      const conditions = { offline: on, latency: 0, downloadThroughput: -1, uploadThroughput: -1 };
-      await send("Network.emulateNetworkConditions", conditions);
-      for (const w of workers.values()) w.close();
-      workers.clear();
-      if (!on) return 0;
-      const targets = await fetch(`http://127.0.0.1:${port}/json`)
-        .then((r) => r.json() as Promise<{ id: string; type: string; webSocketDebuggerUrl: string }[]>)
-        .catch(() => []);
-      for (const t of targets.filter((t) => t.type === "service_worker")) {
-        const w = new WebSocket(t.webSocketDebuggerUrl);
-        await new Promise((ok, no) => {
-          w.onopen = ok;
-          w.onerror = () => no(new Error("the Service Worker's DevTools target refused"));
-        });
-        const done = new Promise<void>((ok) => {
-          w.onmessage = (m) => {
-            if (JSON.parse(String(m.data)).id === 2) ok();
-          };
-        });
-        w.send(JSON.stringify({ id: 1, method: "Network.enable" }));
-        w.send(JSON.stringify({ id: 2, method: "Network.emulateNetworkConditions", params: conditions }));
-        await Promise.race([done, Bun.sleep(5000)]);
-        workers.set(t.id, w);
-      }
-      return workers.size;
-    },
+    offline: (on: boolean) => emulate({ offline: on, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }, on),
+    throttle: (mbps: number | null, latencyMs = 40) =>
+      emulate(
+        mbps === null
+          ? { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }
+          : { offline: false, latency: latencyMs, downloadThroughput: (mbps * 1e6) / 8, uploadThroughput: (mbps * 1e6) / 32 },
+        mbps !== null,
+      ),
     quit: async () => {
       // (Windows ends a Chrome with taskkill /F: its GPU disk cache never written — a kept profile's second launch met
       // none of its compiles. Browser.close on the browser's own endpoint, its exit awaited, then the usual close)
@@ -271,6 +258,33 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     },
     close: () => close(),
   };
+  /** network conditions on the page's session and every Service Worker's target (held attached while `hold`) */
+  async function emulate(conditions: object, hold: boolean): Promise<number> {
+    await send("Network.emulateNetworkConditions", conditions);
+    for (const w of workers.values()) w.close();
+    workers.clear();
+    if (!hold) return 0;
+    const targets = await fetch(`http://127.0.0.1:${port}/json`)
+      .then((r) => r.json() as Promise<{ id: string; type: string; webSocketDebuggerUrl: string }[]>)
+      .catch(() => []);
+    for (const t of targets.filter((t) => t.type === "service_worker")) {
+      const w = new WebSocket(t.webSocketDebuggerUrl);
+      await new Promise((ok, no) => {
+        w.onopen = ok;
+        w.onerror = () => no(new Error("the Service Worker's DevTools target refused"));
+      });
+      const done = new Promise<void>((ok) => {
+        w.onmessage = (m) => {
+          if (JSON.parse(String(m.data)).id === 2) ok();
+        };
+      });
+      w.send(JSON.stringify({ id: 1, method: "Network.enable" }));
+      w.send(JSON.stringify({ id: 2, method: "Network.emulateNetworkConditions", params: conditions }));
+      await Promise.race([done, Bun.sleep(5000)]);
+      workers.set(t.id, w);
+    }
+    return workers.size;
+  }
   function close() {
     for (const w of workers.values()) w.close();
     if (HOLD) Bun.sleepSync(HOLD * 1000);

@@ -17,6 +17,15 @@ import { tileReplay } from "./lib/tile-replay";
 // wanted) averaged —: when it reaches 90 % and 99 %, its mean over the first 30 s.
 // TA_REPLAY=<dir>: one pass, the Service Worker off, the tiles' hosts answered from <dir> after TA_DELAY_MS (300) —
 // TA_RECORD=1 fills <dir> first, at once (lib/tile-replay.ts: the missing ones fetched by Bun and kept): the loads' order A/B'd on the same answers, the network out.
+// CM0 (docs/PLAN-CHARGEMENT-MONDE.md): TA_PLACE — aubrac (default: 120 m), paris (900 m over the city, the IGN whole: relief,
+// overground, orthophotos), chamonix (300 m over the valley) —; TA_SW=0 the Service Worker off (the e2e's former path); TA_MBPS=20
+// the page and its worker on a 20 Mbit/s link (+40 ms, CDP — lib/cdp.ts throttle); TA_PASSES=cold (cold,warm by default). Each
+// pass also says, by source, the tiles' delays asked → in → written → drawn (median, 95th percentile: earthTiles.arrivals), the
+// requests, bytes and refusals the network light counted (by host and IGN layer), the worker's answers (cache or network),
+// what is still pending at the end, and keeps a screenshot (remote-results/tile-arrival/<tag>-<place>-<pass>.jpg).
+// CM1: TA_CUT_S=20 cuts the network (the page and its worker) for 20 s at the jump, then gives it back: the pass watched 30 s past
+// it, then counted — the windows' tiles that hold the global map's heights (the 4.9 km ETOPO: within 0.5 m of it at 16 points),
+// the stand-ins (their parent's heights while asked again), the tiles failed.
 // Output: remote-results/tile-arrival/tile-arrival-<side><run>.json (AB_SIDE, AB_RUN: an A/B through scripts/ab-e2e.ts).
 // Done when: both passes watched until every level is drawn and nothing is pending (60 s a pass at most, what is missing
 // said), no GPU error.
@@ -27,6 +36,18 @@ const CAP_S = Number(process.env.TA_CAP_S ?? 60);
 const REPLAY = process.env.TA_REPLAY;
 const RECORD = process.env.TA_RECORD === "1";
 const DELAY_MS = Number(process.env.TA_DELAY_MS ?? 300);
+const PLACES = {
+  aubrac: { lat: 44.66, lon: 3.02, agl: 120, hdg: 150 },
+  paris: { lat: 48.8566, lon: 2.3376, agl: 900, hdg: 60 },
+  chamonix: { lat: 45.9237, lon: 6.8694, agl: 300, hdg: 45 },
+} as const;
+const PLACE_NAME = (process.env.TA_PLACE ?? "aubrac") as keyof typeof PLACES;
+const PLACE = PLACES[PLACE_NAME] ?? PLACES.aubrac;
+const SW = process.env.TA_SW !== "0";
+const MBPS = process.env.TA_MBPS ? Number(process.env.TA_MBPS) : null;
+const PASSES = (process.env.TA_PASSES ?? "cold,warm").split(",");
+/** CM1: the network cut that long [s] right after the jump, then given back — the pass then watched 30 s past it at least */
+const CUT_S = Number(process.env.TA_CUT_S ?? 0);
 afterAll(stopServer);
 
 type Row = { s: number; pending: number; quality: number; levels: Record<string, [number, number, number, number, number]> };
@@ -38,17 +59,24 @@ test.skipIf(!E2E)(
     const profile = mkdtempSync(join(tmpdir(), "kerr-arrival-"));
     const out: Record<string, unknown> = { tag: TAG };
     try {
-      const passes = REPLAY ? [RECORD ? "record" : "replay"] : ["cold", "warm"];
+      const passes = REPLAY ? [RECORD ? "record" : "replay"] : PASSES;
       for (const pass of passes) {
-        const app = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", tiles: true, sw: !REPLAY, profile });
+        const app = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", tiles: true, sw: !REPLAY && SW, profile });
         const replay = REPLAY ? await tileReplay(app.cdp, REPLAY, RECORD ? "fill" : "replay", DELAY_MS) : null;
         try {
           await app.js(`__bh.pwa?.ready() ?? false`);
           await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${EARTH_SETTINGS}); return 1; })()`);
           await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
           await app.settled();
-          await app.js(`(() => { __bh.game.flyAt(44.66, 3.02, 120, 150, 120); __bh.freeze(true); return 1; })()`);
+          // (the link slowed once the game is up — its own files on the full one: what is measured is the tiles' arrival)
+          const slowed = MBPS ? await app.cdp.throttle(MBPS) : 0;
+          await app.js(`(() => { __bh.netLight.reset(); window.__taNet0 = __bh.netLight.stats(); __bh.renderer.earthTiles.arrivals.reset();
+            __bh.game.flyAt(${PLACE.lat}, ${PLACE.lon}, ${PLACE.agl}, ${PLACE.hdg}, 120); __bh.freeze(true); return 1; })()`);
           const t0 = Date.now();
+          if (CUT_S > 0) {
+            await app.cdp.offline(true);
+            setTimeout(() => void app.cdp.offline(false), CUT_S * 1000);
+          }
           const rows: Row[] = [];
           for (;;) {
             // (each level: its tiles in, its window's count, drawn (its valid rectangle its whole window), the IGN's share)
@@ -64,7 +92,7 @@ test.skipIf(!E2E)(
               // (the view's quality: a fan of rays over the ground the cockpit sees — 24 bearings across the view, 16 rows from the
               // horizon down, the eye 120 m up, heading 150° —, each the level its footprint wants (the finest window over it within
               // a level of its footprint, the tracer's blend) against the finest drawn there: 2^(drawn − wanted); their mean)
-              const R = 6378137, TAU = 2 * Math.PI, H = 120, head = (150 * Math.PI) / 180;
+              const R = 6378137, TAU = 2 * Math.PI, H = ${PLACE.agl}, head = (${PLACE.hdg} * Math.PI) / 180;
               const vf = ((__bh.settings.fov ?? 60) * Math.PI) / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * 1280 / 800);
               const pix = (2 * Math.tan(vf / 2)) / 800;
               const lat0 = Math.asin(t.sinLat), lon0 = t.lon;
@@ -92,7 +120,7 @@ test.skipIf(!E2E)(
             rows.push({ s, ...r });
             // (every level drawn and nothing pending — the IGN's share as it came: some of its tiles keep Terrarium's)
             const all = Object.values(r.levels).every((l) => l[3] === 1);
-            if ((s > 2 && r.pending === 0 && all) || s > CAP_S) break;
+            if ((s > Math.max(2, CUT_S > 0 ? CUT_S + 30 : 0) && r.pending === 0 && all) || s > CAP_S + CUT_S) break;
             await Bun.sleep(500);
           }
           const last = rows[rows.length - 1]!;
@@ -140,6 +168,32 @@ test.skipIf(!E2E)(
             ign.every((z) => !!row.levels[z] && row.levels[z]![1] === row.levels[z]![2] && row.levels[z]![3] === 1),
           )?.s;
           const served = await app.js(`__bh.pwa?.stats().then((x) => x?.served ?? null) ?? null`);
+          // (CM1: the windows' tiles holding the global map's heights — within 0.5 m of it at 16 points of each —, by level;
+          // the stand-ins, the failed)
+          const holes = await app.js<{ globalMap: Record<string, number>; underCamera: number; standIns: number; failed: number }>(`(() => {
+            const t = __bh.renderer.earthTiles, fb = t.fallback, TAU = 2 * Math.PI, out = {}; let under = 0;
+            const camX = (n) => Math.floor((t.lon / TAU + 0.5) * n), camY = (n) => Math.floor((0.5 - Math.atanh(t.sinLat) / TAU) * n);
+            for (const L of t.levels) { if (!L.want || !fb) continue; let k = 0;
+              for (let y = L.want.y0; y < L.want.y1; y++) for (let x = L.want.x0; x < L.want.x1; x++) {
+                const s = t.slotOf(L, x, y), d = L.data[s]; if (!d || L.key[s] !== t.keyOf(L, x, y)) continue; let same = 0;
+                for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) {
+                  const lat = Math.atan(Math.sinh((0.5 - (y + (j * 64 + 32) / 256) / L.n) * TAU)), lon = ((x + (i * 64 + 32) / 256) / L.n - 0.5) * TAU;
+                  const h = fb([Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)]);
+                  if (Math.abs(d[(j * 64 + 32) * 256 + i * 64 + 32] - h) < 0.5) same++; }
+                if (same === 16) { k++; if (((x % L.n) + L.n) % L.n === camX(L.n) && y === camY(L.n)) under++; } }
+              if (k) out['z' + L.z] = k; }
+            return { globalMap: out, underCamera: under, standIns: t.standIns ?? 0, failed: t.failed }; })()`);
+          // (CM0: by source, the tiles' delays from their request [ms]; the network's requests, bytes and refusals by host/layer)
+          const arrivals = await app.js<Record<string, unknown>>(`__bh.renderer.earthTiles.arrivals.stats()`);
+          // (since the jump: each source's [requests, MB, asked again], each refusal's count)
+          const net = await app.js<Record<string, unknown>>(`(() => { const s = __bh.netLight.stats(), b = window.__taNet0;
+            const by = {}, fails = {};
+            for (const [k, v] of Object.entries(s.bySource ?? {})) { const o = b.bySource?.[k] ?? [0, 0, 0];
+              if (v[0] - o[0] > 0) by[k] = [v[0] - o[0], +((v[1] - o[1]) / 1e6).toFixed(2), v[2] - o[2]]; }
+            for (const [k, v] of Object.entries(s.failBy ?? {})) if (v - (b.failBy?.[k] ?? 0) > 0) fails[k] = v - (b.failBy?.[k] ?? 0);
+            return { ...s.since, seconds: s.seconds, bySource: by, failBy: fails }; })()`);
+          await app.js(`(() => { __bh.freeze(false); return 1; })()`).catch(() => 0);
+          await app.shot(`${OUT}/${TAG}-${PLACE_NAME}-${pass}.jpg`).catch(() => undefined);
           const summary = {
             drawnAt,
             meanZ6to14: mean,
@@ -154,6 +208,15 @@ test.skipIf(!E2E)(
             capped: last.s > CAP_S,
             missing,
             served,
+            place: PLACE_NAME,
+            sw: !REPLAY && SW,
+            mbps: MBPS,
+            workersSlowed: slowed,
+            pendingEnd: last.pending,
+            cutS: CUT_S,
+            holes,
+            arrivals,
+            net,
             gpuErrors: await app.js<number>(`__bh.renderer.gpuErrors`),
             replay: replay ? { ...replay.count, delayMs: DELAY_MS } : undefined,
           };
@@ -161,6 +224,7 @@ test.skipIf(!E2E)(
           out[pass] = { summary, rows };
         } finally {
           await replay?.stop();
+          if (MBPS) await app.cdp.throttle(null).catch(() => 0);
           await app.quit();
         }
       }
@@ -168,7 +232,7 @@ test.skipIf(!E2E)(
       rmSync(profile, { recursive: true, force: true });
       writeFileSync(`${OUT}/tile-arrival-${TAG}.json`, JSON.stringify(out));
     }
-    for (const pass of REPLAY ? [RECORD ? "record" : "replay"] : ["cold", "warm"]) {
+    for (const pass of REPLAY ? [RECORD ? "record" : "replay"] : PASSES) {
       const s = (out[pass] as { summary: { gpuErrors: number } } | undefined)?.summary;
       expect(s?.gpuErrors ?? 1).toBe(0);
     }

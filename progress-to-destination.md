@@ -3308,3 +3308,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   inchangé) ; J0 non remesuré (aucun coût attendu : deux calculs de caméra en moins par image, non mesurés).
 - **Suite** : J1-2 — profondeur finale gardée et identité (`r32uint`, génération) avec leur premier lecteur ; J1-1 — les champs posés
   par `main.ts` regroupés dans la description.
+
+## 2026-11-12T03:03Z — CM0 : le chargement des tuiles mesuré sur le chemin du joueur
+
+- **Contribution** (stratégie §7.6 « préparer les données avant la frame », §19 parcours complets ; PLAN-CHARGEMENT-MONDE CM0,
+  constats ST-21 et ST-02 de l'audit du 10 nov.) : une mesure par tuile, au lieu d'un booléen « réglé » — base des lots CM1–CM5
+  et de l'ordonnanceur ST2.
+- **Changé** : `src/system/tile-arrivals.ts` (`ArrivalLog` : demandée, reçue, écrite, imagerie, hauteurs nationales, dessinée,
+  échecs — par source) ; `earth-tiles.ts` le renseigne (`earthTiles.arrivals`) ; `tests/e2e/lib/cdp.ts` `throttle()` (la page et
+  son Service Worker sur une liaison bridée) ; e2e `tile-arrival` : `TA_PLACE` (Paris 900 m, Chamonix), `TA_SW`, `TA_MBPS`,
+  `TA_CUT_S`, tableau par source, capture. Tests `tests/tile-arrivals.test.ts`.
+- **Mesuré** (ce Mac M1 Max, fenêtre visible, Paris 900 m froid, deux passes par condition) : vue à 90 % en 4,9–6,1 s avec ou
+  sans SW ; **avec le SW, l'imagerie z 9–14 arrive p50 5 s au lieu de 0,25 s, les orthophotos 4–5 s au lieu de 0,7 s, le relief
+  IGN 22–23 s au lieu de 7–8 s** (le portillon unique de la Géoplateforme, ST-02) ; à 20 Mbit/s vue à 90 % en 21–22 s (±2 %),
+  z 11–14 jamais entiers en 60 s. Détail : PLAN-CHARGEMENT-MONDE §8.
+- **Limites** : ±10 % non tenu sur la fibre (±12 % entre deux passes) ; vols de JFK et de Chamonix non passés ; aucune 429 vue
+  par la page (le SW en absorbe : à journaliser, CM2). Docs : plan, BH-API, E2E-CATALOGUE, GRAPHICS-PIPELINE §7, README.

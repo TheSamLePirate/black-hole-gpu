@@ -33,6 +33,7 @@ import { insideOutline, type NationalSource, type OrthoFit, SWISSTOPO, sourceAt,
 import { USA_LUT } from "./usa-colour";
 import { MAPTERHORN_Z1, mapterhornUrl, USA_OUTLINE, usgsImageryUrl } from "./usa-ground";
 import { IGN_MNH } from "./ign-canopy";
+import { ArrivalLog } from "./tile-arrivals";
 import { L_MAX, L_MIN, ROAD_MVT_Z1, ROAD_Z0 } from "./night-roads";
 import type { DelightStats } from "./ortho-delight";
 import { type DecodeReply, type DecodeRequest, decodeTile, ORTHO_FIT, pixels as decodePixels } from "./tile-decode";
@@ -1024,6 +1025,8 @@ export class EarthTiles {
   /** tiles loaded, failed (for the readouts) */
   loaded = 0;
   failed = 0;
+  /** CM0: each tile's arrival timed — asked, in, written, its imagery, its national heights, drawn — (tile-arrivals.ts) */
+  readonly arrivals = new ArrivalLog();
   /** the orthophotos (IGN, France — I1): wanted (settings.earthOrtho), their levels, their loads, the tiles they have
    *  not (404: out at sea, abroad — not asked again), loaded */
   orthoOn = true;
@@ -1314,6 +1317,7 @@ export class EarthTiles {
     if (same(L.valid, r)) return;
     this.logChange(L.z, L.valid, r);
     L.valid = r;
+    if (r) for (let y = r.y0; y < r.y1; y++) for (let x = r.x0; x < r.x1; x++) this.arrivals.mark(this.keyOf(L, x, y), "drawn");
     this.stamp++;
     this.onChange?.();
   }
@@ -1640,6 +1644,10 @@ export class EarthTiles {
       }
       const col = (await img.catch(() => null)) ?? null;
       if (gen !== this.gen) return;
+      if (!ground) {
+        this.arrivals.national(key, src.id);
+        this.arrivals.mark(key, "nat");
+      }
       if (L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, h, col);
       else if (this.cache.has(key)) this.keep(key, h, col);
       if (!ground && surface && src.id === "ign") nextPass = h;
@@ -1686,6 +1694,7 @@ export class EarthTiles {
         const signal = AbortSignal.timeout(TIMEOUT_MS);
         const col = await imagery(L.z, ((x % L.n) + L.n) % L.n, y, signal, this.orthoOn ? src : null, this.nightRoads);
         if (gen !== this.gen || L.key[s] !== key || !L.data[s]) return;
+        if (col) this.arrivals.mark(key, "img");
         if (col) this.put(L.z, x, y, L.data[s]!, col);
         else if (col === undefined) this.imageryLater(L, x, y, key, src, n + 1);
       },
@@ -1773,6 +1782,7 @@ export class EarthTiles {
     this.inflight.set(key, ctl);
     this.loadAt.set(key, [L, x, y]);
     if (ahead) this.aheadLoads.add(key);
+    this.arrivals.begin(key, "terrarium", ahead);
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     let h: Float32Array | null = null;
     // (its imagery alongside, on the levels that have some: none if it will not come — the coarser level's
@@ -1803,6 +1813,7 @@ export class EarthTiles {
       const heights = await terrarium(L.z, xw, y, ctl.signal);
       // (begun before a switch of the sources: the old source's — the slot waits for the new one's)
       if (gen !== this.gen) return;
+      this.arrivals.mark(key, "got");
       // (its window gone past it meanwhile, within the halo: into memory — dropUnwanted)
       ahead = this.aheadLoads.has(key);
       h = heights;
@@ -1822,12 +1833,14 @@ export class EarthTiles {
       } else
         void img.then((col) => {
           if (gen !== this.gen || L.key[this.slotOf(L, x, y)] !== key) return;
+          if (col) this.arrivals.mark(key, "img");
           if (col) this.put(L.z, x, y, heights, col);
           else if (col === undefined) this.imageryLater(L, x, y, key, src, 1);
         });
     } catch (e) {
       // (cleared, the sources switched, or dropped as its window left it — and maybe asked again since: not this load's)
       if (gen !== this.gen || this.inflight.get(key) !== ctl) return;
+      this.arrivals.fail(key);
       const f = this.failures.get(key) ?? { n: 0, at: 0 };
       f.n++;
       f.at = performance.now() + 3000 * f.n;
@@ -1906,6 +1919,7 @@ export class EarthTiles {
     if (old === this.keyOf(L, x, y) && inside(L.valid, x, y)) this.logChange(L.z, { x0: x, x1: x + 1, y0: y, y1: y + 1 }, null);
     L.key[s] = this.keyOf(L, x, y);
     L.data[s] = h;
+    this.arrivals.mark(L.key[s]!, "put");
     // (NU5: the town's light kept from its z 10 tiles — their lights the coarser levels' encoding, VIIRS's enlarged)
     if (z === CITY_LIGHT_Z && col) {
       const a = new Uint8Array(TILE * TILE);
@@ -2173,6 +2187,7 @@ export class EarthTiles {
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     const xw = ((x % O.n) + O.n) % O.n;
     const src = tileSource(NATIONAL, O.n, xw, y);
+    this.arrivals.begin(key, `ortho:${src?.id ?? "none"}`);
     let col: Uint32Array | null = null;
     let blob: Blob | null = null;
     let none = !src?.orthoUrl;
@@ -2187,11 +2202,13 @@ export class EarthTiles {
         // (decoded and brought into the Blue Marble's colours off the page's thread — tile-decode.ts orthoWords)
         blob = await res.blob();
         col = (await decodeOff({ op: "ortho", blob, fit: src!.fit })).words ?? null;
+        this.arrivals.mark(key, "got");
       }
     } catch {
       // (refused, timed out — offline —: none there this time, asked again in 2, 4, 8 s while in the window — orthoRetry —, then
       // once the window comes back to it)
       failed = true;
+      this.arrivals.fail(key);
     } finally {
       clearTimeout(timer);
     }
@@ -2287,6 +2304,7 @@ export class EarthTiles {
     if (!O || !inside(O.want, x, y)) return;
     const s = orthoSlot(O.span, x, y);
     O.key[s] = this.orthoKey(O, x, y);
+    if (col) this.arrivals.mark(O.key[s]!, "put");
     const ox = (s % O.span) * TILE,
       oy = Math.floor(s / O.span) * TILE;
     // (an 8-tile window — T8e —: the 2048² texture's layer, after the relief levels')
@@ -2421,6 +2439,7 @@ export class EarthTiles {
     if (!same(O.valid, w)) {
       O.valid = w;
       this.imagery++;
+      for (let y = w.y0; y < w.y1; y++) for (let x = w.x0; x < w.x1; x++) this.arrivals.mark(this.orthoKey(O, x, y), "drawn");
     }
   }
 

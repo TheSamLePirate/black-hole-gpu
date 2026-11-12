@@ -1,6 +1,7 @@
 # Plan — le chargement du monde : des tuiles qui arrivent vite et ne laissent pas de trou
 
-**État (10 novembre 2026) : plan proposé, rien d'implémenté.** Il vient de l'audit du 10 novembre
+**État (12 novembre 2026) : CM0 fait (mesure du chemin réel, §8) ; CM1–CM3 en cours (décision de Sam du 12 novembre :
+CM0 → CM1 → CM2 → CM3). Le reste proposé.** Proposé le 10 novembre. Il vient de l'audit du 10 novembre
 ([01-chargement-monde.md](audit-2026-11-10/01-chargement-monde.md), constats ST-01 à ST-21) et complète le plan
 ST0–ST10 de [ANALYSE-STREAMING-2026-11-06.md](ANALYSE-STREAMING-2026-11-06.md), qu'il ne remplace pas. Le code fait foi.
 Aucun gain n'est mesuré : chaque lot porte son critère et sa mesure, à faire avant de l'écrire comme acquis.
@@ -90,3 +91,37 @@ Ordre conseillé : CM0, puis CM1, CM2 et CM3 (petits, indépendants), puis CM4, 
 Chaque lot met à jour [GRAPHICS-PIPELINE.md](GRAPHICS-PIPELINE.md) §7 (parcours joueur), ce plan (état en tête), le
 journal [progress-to-destination.md](../progress-to-destination.md) et, pour un e2e nouveau,
 [E2E-CATALOGUE.md](E2E-CATALOGUE.md).
+
+## 8. État des lots
+
+### CM0 — mesurer le vrai chemin : fait (12 novembre 2026)
+
+- **Code.** `src/system/tile-arrivals.ts` (`ArrivalLog`) : chaque tuile horodatée — demandée, reçue (récupérée et décodée),
+  écrite au GPU, son imagerie, ses hauteurs nationales, dessinée (son niveau la couvre) — et ses échecs ; exposé par
+  `__bh.renderer.earthTiles.arrivals` (`stats()` par source, `list()`, `reset()` ; [BH-API](BH-API.md)). E2e `tile-arrival` :
+  `TA_PLACE` (Aubrac, Paris 900 m, Chamonix 300 m), `TA_SW=0|1`, `TA_MBPS` (liaison bridée pour la page **et** son Service
+  Worker, `cdp.throttle` dans `tests/e2e/lib/cdp.ts`), `TA_CUT_S` (coupure du réseau, pour CM1), tableau par source (délais,
+  octets, refus par hôte et par couche IGN) et une capture par passe. Tests : `tests/tile-arrivals.test.ts`.
+- **Mesuré** (ce Mac, MacBook Pro M1 Max, fenêtre visible ; 12 nov. 2026 02:48–03:00 UTC ; code `1b925312` + CM0 ; Paris, F-35
+  figé 900 m au-dessus du sol, cap 60°, passe froide sur un profil neuf ; deux passes par condition ; fichiers
+  `remote-results/tile-arrival/tile-arrival-base*.json`, non suivis par git) :
+
+| Condition | Vue à 90 % | Vue à 99 % | Qualité moyenne 30 s | z 6–14 entiers (moyenne) | Imagerie demandée → reçue p50 / p95 | Orthophotos demandées → dessinées p50 / p95 | Relief IGN (après Terrarium) p50 / p95 | Mo |
+|---|---|---|---|---|---|---|---|---|
+| sans Service Worker | 4,9 / 6,1 s | 5,9 / 7,2 s | 0,90 / 0,86 | 10,3 / 11,4 s | 0,24–0,27 / 0,57–0,66 s | 0,7–0,76 / 1,0 s | 7,2–8,4 / 14–19 s | 250 / 190 |
+| avec Service Worker | 4,9 / 5,8 s | 6,1 / 6,9 s | 0,91 / 0,89 | 10,5 / 11,0 s | **5,0–5,1 / 7,9–8,3 s** | **4,0–5,1 / 14–15 s** | **22,5–22,9 / 29–30 s** | 250 / 257 |
+| avec SW, 20 Mbit/s | 21,1 / 21,8 s | 31,2 / 30,9 s | 0,53 / 0,51 | z 11–14 jamais entiers en 60 s | 1,7 / 2,4 s | 1,1–1,4 / 2,1–2,3 s | 32,6–33,6 / 49–50 s | 120 / 120 |
+
+  Lecture : (1) **le Service Worker ne ralentit pas le relief Terrarium** (dessiné p50 0,28–0,31 s dans les deux cas) **mais
+  retarde toute la Géoplateforme** : imagerie des niveaux z 9–14 (WMTS) × 20, orthophotos × 6, relief IGN × 3 — c'est le
+  portillon unique de 25 requêtes/s et 10 en vol (ST-02), désormais mesuré. Le critère « vue à 90 % » ne le voit pas : il
+  compte les niveaux de relief, pas leur imagerie ni leurs hauteurs nationales. (2) **À 20 Mbit/s la liaison est saturée**
+  (≈ 120 Mo en 60 s ≈ 16 Mbit/s) : vue à 90 % en ≈ 21 s, z 11–14 jamais entiers en 60 s, 251 tuiles encore en attente —
+  le volume du relief IGN (CM4) est le premier levier sur une liaison lente. (3) Aucune réponse 429 vue par la page dans ces
+  passes (le SW en absorbe deux d'affilée : CM2 doit journaliser dans le SW). 83 réponses 502 de RGE ALTI dans une passe sans SW.
+- **Reproductibilité** : à 20 Mbit/s, ±2 % entre les deux passes (vue à 90 % 21,1 / 21,8 s) ; sur la fibre, ±12 % (4,9 / 6,1 s
+  sans SW) — le critère « ±10 % » du plan n'est **pas** tenu sur la fibre avec deux passes ; le réseau réel varie d'une minute à
+  l'autre. Le rejeu (`TA_REPLAY`) reste l'outil des A/B fins.
+- **Non fait** : les vols de JFK de nuit et de Chamonix en vol bas rapide (le plan en demandait trois) ; Aubrac non repassé ;
+  le temps passé dans le portillon du SW lui-même (CM2) ; la latence d'un succès de cache du SW (CM6).
+
