@@ -251,6 +251,22 @@ passe, `taau` 3,48 → 3,67 ms (+0,18), `temporal` 1,70 → 1,72 ms. **Image** :
 avec que sans, en cockpit comme en poursuite (les deux vues de poursuite ne sont pas au même endroit : le vol rejoué diverge). Compteurs :
 `identityRejects()` (de l'image, cumulés, rejetés et coupés), `identRepublished`. Non vérifié : l'image même d'une publication (une
 capture ne tombe pas sur elle) ; les voitures en vol (relu seulement — leur mouvement z 1 les fait juger comme l'appareil).
+**J1-6, première moitié (12 novembre) : l'export de la couleur complète de l'image vivante, et le chemin d'entrée de J0 mesuré à
+froid.** `renderer.sceneColor(settings)` relit, entre deux images, la radiance linéaire pré-exposée de la scène **telle que l'affichage
+la reçoit, avant l'optique** (bloom, reflets d'objectif, profondeur de champ, courbe d'affichage, HUD) : l'image de la TAAU (`taau
+image`, taille de la toile, COPY_SRC ajouté) là où elle a tourné, sinon `hdr` niveau 0 ; l'appareil dedans (J1-5 : ses pixels opaques ;
+ses bords et verres, composés par l'affichage, non) ; `exposure` (2^EV / pré-exposition) la met à l'échelle de l'affichage ;
+`sceneColorEXR` en fait un OpenEXR demi-flottant. **Vérifié** (kerr-mini, e2e `scene-color`, scène de J0 gelée, 1920 × 1080) : l'export
+fini partout, comparé à la capture affichée sur 48 × 27 blocs — corrélation de rang de Spearman **0,92 (cockpit), 0,93 (poursuite)**
+(l'écart : la courbe d'affichage, le bloom, le HUD) ; relu en 0,20–0,24 s ; EXR de 12 Mo ; planche
+`docs/progress/j1/j1-6-export-couleur.jpg`. **Le chemin d'entrée de J0 à froid** (e2e `kernel-compile`, nouveau cas `j0`, cache Metal
+vidé, profil neuf, kerr-mini) : la file de compilation est **sérielle** — le `main` (20,4 s) et l'`env` (11,4 s) de la scène du titre
+d'abord, puis les noyaux raster de la Terre (`shadeLiteFinish`, `shadeLiteLight`, `shadeLite` : 6,8 s) — **le sol à l'écran ~57 s
+après le chargement de la page**, avant le `main` Kerr de la Terre (17,5 s) et son `env` (10,6 s) ; tout prêt ~100 s (41
+compilations, 83 s) ; relancé (cache chaud) : sol à 1,2 s, tout prêt à 4,8 s. **Ce que J1-6 doit encore** : la première image de
+la Terre **ne dépend pas des noyaux Kerr de la Terre, mais de ceux du titre** (≈ 32 s à froid devant elle dans la même file) — la
+seconde moitié : à une entrée sur la Terre, compiler les noyaux raster du départ avant le `main`/`env` de la scène du titre (ou
+les en sortir), puis remesurer à froid.
 
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster

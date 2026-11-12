@@ -3522,3 +3522,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   capture ne tombe dessus) ; les voitures en vol (relu seulement) ; ce Mac en surchauffe ce matin (état « serious ») — toutes les mesures
   sur kerr-mini. `bun test` complet non relancé (shader et renderer seulement).
 - **Suite** : J1-6 — l'export de la couleur complète de l'image vivante (`renderer.sceneColor`) et le chemin d'entrée de J0 à cache froid.
+
+## 2026-11-12T08:15Z — J1-6, première moitié : l'export de la couleur complète de l'image vivante ; l'entrée de J0 mesurée à froid
+
+- **Contribution** (stratégie §15 J1 « un export de la couleur complète », sortie « première image sans dépendre des compilations Kerr » ;
+  PLAN-J1 J1-6) : la couleur de scène du contrat (§7.4 : radiance linéaire pré-exposée) a un lecteur hors de l'affichage —
+  `renderer.sceneColor(settings)` (Float32 RGBA, `exposure`, source) et `sceneColorEXR` : l'image vivante **avant l'optique**, relue
+  entre deux images (`taau image`, COPY_SRC ajouté, ou `hdr`) ; e2e `scene-color` ; le cas `j0` de l'e2e `kernel-compile`.
+- **Mesuré** (kerr-mini) : l'export fini partout, comparé bloc par bloc à la capture (Spearman 0,92 cockpit, 0,93 poursuite), relu en
+  0,20–0,24 s à 1920 × 1080 ; planche `docs/progress/j1/j1-6-export-couleur.jpg`. **Entrée de J0 à froid** (cache Metal vidé) : file
+  sérielle — `main` + `env` du titre (31,8 s) puis les noyaux raster de la Terre (6,8 s) : **sol à ~57 s**, avant le `main` Kerr de la
+  Terre (17,5 s) ; tout prêt ~100 s ; relance : sol 1,2 s, tout prêt 4,8 s (GRAPHICS-PIPELINE §5.5).
+- **Leçon e2e** : une monture choisie avec l'horloge gelée depuis le placement n'est pas appliquée, même après trois `step` — la vue
+  « cockpit » restait la poursuite (deux essais) ; la choisir horloge en marche, 40 images, puis geler.
+- **Vérifié** : tsc, biome, `pipeline-inventory --check` ; aucun shader changé. **Non vérifié** : un export en rendu hors ligne (il
+  garde `exportEXR`) ; les bords et verres de l'appareil n'y sont pas (composés par l'affichage).
+- **Suite** : J1-6, seconde moitié — à une entrée sur la Terre, les noyaux raster du départ avant le `main`/`env` du titre, puis
+  remesurer l'entrée à froid.

@@ -3,6 +3,7 @@ import { readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { App, E2E, stopServer } from "./lib/app";
+import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 
 // What a cold launch of each reference scene compiles, and how long until it is drawn (docs/PLAN-LEAN-TRACER-KERNELS.md,
 // P0): a fresh Chrome per case — its own profile, so the browser's shader cache is empty (the system's Metal cache is not:
@@ -24,6 +25,13 @@ const CASES: Record<string, { boot: string; set: string; tiles?: boolean }> = {
     set: `Object.assign(__bh.settings, { vessel: "f35", traffic: false, autosave: false, f35AutoProtect: true, f35Invulnerable: true });
       __bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0.1);
       __bh.settings.shipMount = "cockpit"; __bh.game.flyAt(36.08, -5.6, 700, 20, 240); __bh.settings.earthPipeline = "raster";`,
+  },
+  // (J0's scene — Toulon-Hyères, docs/J0-CONTRAT.md — as its e2e sets it: the way in to the reference scene, PLAN-J1 J1-6)
+  j0: {
+    boot: "scene=game:artemis",
+    tiles: true,
+    set: `Object.assign(__bh.settings, ${J0_FIXED}); __bh.game.setDate("${J0_SCENE.date}");
+      __bh.settings.shipMount = "cockpit"; __bh.game.flyAt(${J0_SCENE.start.slice(0, 5).join(", ")});`,
   },
   "earth-trace": {
     boot: "scene=game:artemis",

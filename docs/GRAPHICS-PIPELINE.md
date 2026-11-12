@@ -209,7 +209,7 @@ soumettre (`renderer.ts:10842`).
 | `identity, the frame before` (r32uint W×H) et `the history's rejections by identity` (32 o : rejets et poids coupés, de l'image et cumulés) | | copie de `terrain raster identity` en fin d'image (`keepMotion`) ; `temporal`/`taau` (compte) — **seulement si `renderer.identityReject`** (allumé par défaut depuis le 12 nov.) | temporal, taau ; `identityRejects()` |
 | `craft motion` (J1-5) | rgba16f W×H, effacée chaque image où elle sert | l'appareil (`composeSurface`) quand aucune visibilité de la Terre ne donne `terrain raster motion` (espace, autres mondes) | temporal, taau, motion blur ; copiée en fin d'image dans `motion, the frame before` |
 | vaisseau : `resolved` (+ stockage), **`ship: in the scene`** (rgba8 W×H, r), boîte **`ship: motion`** (rgba32f + depth32f, taille de la boîte) | | `encodeShip` / `encodeCompose` | display et bloom (`downShip`) : l'image sans les pixels déjà dans la scène (bords, verres) ; le masque : pluie, rayures, brume de chaleur, profondeur de champ, cartes (`overlay.wgsl` liaison 4) |
-| historiques `temporal.hist[2]`, `alb[2]` ; `taau.hist[2]`, `out` | rgba16f, W×H ; taille toile | temporal ; taau | temporal, taau, display |
+| historiques `temporal.hist[2]`, `alb[2]` ; `taau.hist[2]`, `out` | rgba16f, W×H ; taille toile | temporal ; taau | temporal, taau, display ; **`taau.out` (`taau image`, COPY_SRC) ou `hdr` niveau 0 : l'export de la couleur complète de l'image vivante, avant l'optique — `renderer.sceneColor` / `sceneColorEXR`, PLAN-J1 J1-6, relu entre deux images** |
 | `lut` | rgba32f + r32f, (W/8+2)×(H/8+2) | C2 | `main` |
 | nuages `cloudCur/cloud/cloudHist A/B` | rgba32f demi-résolution | C11, C12 | traceur, occlusion |
 | `ao` | r32f demi-résolution | C6d | traceur |
@@ -388,6 +388,7 @@ strict.** Aucune mesure récente de la Terre sur kerr-mini après P11 et le ciel
 | Noyau proche de Jupiter, froid | ce Mac | `main` **203 s** (219 s avec aurore) + `env` ≈ 60 s | 6/11, `docs/PROBLEMES-A-REGLER.md` | mesuré, actuel |
 | Spécialisation du source (CPU, worker) | ce Mac | 14 variantes : 1,3 s, ≤ 174 ms chacune | 3/11, T8b | mesuré |
 | `shadeLite` seul (profil J0 `earth-raster-wx`), froid / la fermeture « surface seule » de J1-4 | ce Mac (M1 Max, Chrome sans interface) | **1,26–1,32 s / 1,10–1,17 s** (4 tours) | 10/11, `scripts/ground-compile-cost.ts`, commit bdfd2696 | mesuré, actuel |
+| **Entrée de J0 à froid** (cache Metal vidé, profil neuf ; `kernel-compile` cas `j0`, boot sur `game:artemis`) / relance | kerr-mini | file **sérielle** (temps de page) : `main` du titre 15,6 → 36,0 s (20,4 s), `env` du titre → 47,4 s (11,4), puis les noyaux raster de la Terre (`shadeLiteFinish` 1,5, `shadeLiteLight` 2,1, `shadeLite` 3,2 s, fini à 57,0 s) — **le sol à l'écran ~57 s**, avant le `main` Kerr de la Terre (60,0 → 77,5 s, 17,5) et son `env` (→ 92,5 s) ; tout prêt ~100 s, 41 compilations, 83 s de compilation. Relance : sol 1,2 s, tout prêt 4,8 s. **Le sol attend le `main`/`env` du titre (≈ 32 s), pas ceux de la Terre** | 12/11, `remote-results/20261112-085652-kernel-compile`, arbre de f1cfa611 + export J1-6 | mesuré, actuel |
 | Pipelines hors traceur (vaisseau, personnage, raster, post…) | — | **jamais mesurés** | — | angle mort |
 
 Outils : `compileReport()` (traceur seulement), e2e `kernel-compile` (`KC_COLD=1` vide le cache Metal, kerr-mini), proxy

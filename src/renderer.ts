@@ -8193,7 +8193,8 @@ export class Renderer {
           label,
           size: [W, H],
           format: "rgba16float",
-          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+          // (COPY_SRC: the image read back — sceneColor, PLAN-J1 J1-6)
+          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
         });
       t.taau = {
         w: W,
@@ -12591,6 +12592,35 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const f = new Float32Array(half.length);
     for (let i = 0; i < half.length; i++) f[i] = halfToFloat(half[i]!);
     return encodePNG16(f, t.width, t.height);
+  }
+
+  /**
+   * PLAN-J1 J1-6 — the live image's complete colour, read back: the scene's pre-exposed linear radiance (rgba16float) as the display
+   * receives it, before the optics — the bloom, the lens flare, the depth of field, the tone mapping, the HUD — : the temporal
+   * upsampling's image where it ran this frame (`taau image`, the canvas's size), else the native one (`hdr`, its first level); the
+   * craft in it (J1-5: its opaque pixels — its edges and glass, composed by the display, not). Read between two frames (the last
+   * one's, whole); `exposure` brings it to the display's scale (2^EV / the pre-exposure: × it, a value of 1 a mid-grey's).
+   * Not for an offline render (exportEXR).
+   */
+  async sceneColor(s: Settings): Promise<{ width: number; height: number; exposure: number; source: string; data: Float32Array }> {
+    if (this.lost) throw new Error(this.lost);
+    const t = this.live;
+    if (!t) throw new Error("no live image");
+    const u = t.taau?.on ? t.taau : null;
+    const tex = u ? u.out : t.hdr;
+    const w = u ? u.w : t.width,
+      h = u ? u.h : t.height;
+    const half = new Uint16Array((await this.readTexture(tex, w, h, 8)).buffer);
+    const data = new Float32Array(half.length);
+    for (let i = 0; i < half.length; i++) data[i] = halfToFloat(half[i]!);
+    const ev = this.ev(s);
+    return { width: w, height: h, exposure: 2 ** ev / preExposure(ev), source: u ? "taau image" : "hdr", data };
+  }
+  /** The same as half-float OpenEXR, at the display's scale (× exposure): the live image's colour to keep (J1-6). */
+  async sceneColorEXR(s: Settings): Promise<Blob> {
+    const c = await this.sceneColor(s);
+    for (let i = 0; i < c.data.length; i++) if ((i & 3) !== 3) c.data[i]! *= c.exposure;
+    return encodeEXR(c.data, c.width, c.height);
   }
 
   /** Scene-referred linear radiance (× exposure) as half-float OpenEXR: no bloom, no tone mapping. */
