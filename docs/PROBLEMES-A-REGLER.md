@@ -18,7 +18,13 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   Une première sonde (`tests/e2e/sea-sparkle-probe.e2e.test.ts`, E2E_PROBE=1) ne l'a pas mesuré : elle comptait le texte du HUD, puis
   son vol a cabré (train rentré : l'autopilote remonte — remarque de Sam) ; dans la couleur de scène exportée (`renderer.sceneColor`),
   presque aucun point sur la mer pendant ce vol-là — à refaire en vol tenu.
-- **Piste** : la sonde corrigée (train sorti, vol tenu), la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`
+- **Sonde corrigée, même jour** (`sea-sparkle-probe`, protocole de J0 : placé horloge gelée, données attendues, autopilote, automanette
+  et train tenus — vol à 497–502 m ; **tuiles bloquées**, un e2e IGN tournant sur kerr-mini) : dans la couleur de scène
+  (`sceneColor`), **aucun** pixel isolé ni au-dessus du blanc SDR sur la mer et la brume ; à l'écran, quelques dizaines à centaines de
+  pixels qui changent entre deux images, en baisse avec le chargement, **sans écart** entre `earthRasterShading` « every » et auto, ni
+  entre la sortie HDR coupée et non : **pas reproduit sans tuiles**. À refaire avec les tuiles (l'imagerie de la mer, le relevé) quand
+  aucun autre e2e IGN ne tourne ; et demander à Sam l'instant et la vue où il les voit (vol frais, virage, ablation).
+- **Piste** : la sonde avec tuiles, la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`
   ou le taux raster à 1 pour voir si le motif suit l'ombrage clairsemé ; puis la reconstruction (`liteReconstruct`) ou la plage du
   temporel sur l'eau lointaine.
 
