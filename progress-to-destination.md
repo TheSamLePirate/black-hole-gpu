@@ -3680,3 +3680,35 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   en J2-8 sans lecteur, ST5/ST9 absorbés pour le sol, pas d'Effect dans J2-1. **J2-0** (contrats et instruments : sondes de fuite, de
   couture, netteté par image, compteurs de publication, localisation des points blancs, fiche de référence) lancé dans une session
   déléguée. Preuve : documenté (décision) ; J2-0 en cours, rien de mesuré encore.
+
+## 2026-11-12T12:45Z — J2-0 : les instruments de J2 et la fiche de référence (fuite, coutures, netteté, publication, points blancs)
+
+- **Contribution** (stratégie §15 J2, §7.6, §7.18, §7.19 ; PLAN-J2 J2-0) : les contrats de J2 ont leurs mesures, et le code d'avant J2 ses
+  chiffres. Instruments, **éteints par défaut, coût nul éteint** (aucun shader du traceur, aucune passe par défaut changés) :
+  `earthTiles.leakProbe` (sentinelle hors des rectangles publiés de chaque fenêtre d'imagerie, mips comprises ; A/B magenta/vert ; témoin
+  positif), `earthTiles.pubProbe`/`pubLog`/`pubStats` (octets, écritures, soumissions, passes de mips, ms du fil principal par image),
+  `renderer.sharpProbe`/`sharpLog` (nouveau `src/frame-probes.ts` : énergie du laplacien de la couleur de scène à chaque image, points
+  blancs comptés à part), `renderer.stageProbe`/`sceneStages()` (avant/après `temporal`, après `taau`), `renderer.invalidations` ; e2e
+  `j2-probes`, mesures `tests/e2e/lib/j2-probes.ts`, `scripts/j2-fiche.ts`, test unitaire `tests/j2-probes.test.ts`.
+- **Mesuré** ([fiche](docs/progress/j2/FICHE-J2-0-2026-11-12.md), planches et données dans `docs/progress/j2/`) :
+  - **fuite entre pages : 0 pixel imputable** sur deux vues rasantes (Gapeau 300 m, Arve 2 500 m ; kerr-mini) — au-delà de rel 0,5 : 6 et 0
+    contre un bruit de 11 et 0 ; les résidus regardés : une lumière ponctuelle, le bandeau d'alarme du cockpit ; témoin positif 0,67–0,71 Mpx ;
+  - **coutures** (distance) : p50 0 px, p95 0,9 / 0,2 px — non concluant pour C0-12 (la mesure ne sépare pas une couture d'une occultation) ;
+  - **échelle** : une pause **ne change pas** l'échelle en vol raster (`rasterHold` : §2.2 du plan corrigé) ; un changement **forcé** fait un
+    pic d'énergie de +118 % (0,75 → 0,625) et +44 % (retour) sur kerr-mini, retombé en ~0,3 s ;
+  - **invalidations** : en mouvement, une par image (`sceneChanged`), sans toucher l'historique du temporel (lu dans le code) — celle d'une
+    tuile ne coûte rien au vol (question §10 du plan) ;
+  - **publication** (vol J0, 56 s) : kerr-mini ~8 Mio/s, fil principal p95 2,9 / max 9,5 ms par image, 79 images sur 963 > 2 ms, ≤ 9
+    soumissions de mips dans une image ; M1 Max p95 1,3 / max 9,0 ms ; les mips ≤ 0,4 ms p95 (CPU) : le coût est l'écriture ;
+  - **points blancs de la mer** : nés **avant** la reconstruction (image résolue), gardés par le temporel, étalés par la TAAU ; 113/s dans
+    la vue sur le M1 Max, 0,23/s sur kerr-mini (même scène, même code) ; l'énergie de l'image oscille d'une image à l'autre sur le M1 Max
+    seulement.
+- **Défaut trouvé** : une première sonde qui retirait toujours la dernière rangée figeait la page 3 fois sur 4 (un niveau fin dont le
+  rectangle publié exclut la tuile de la caméra) — corrigé dans la sonde (la rangée la plus éloignée de la caméra : 3/3), consigné dans
+  PROBLEMES-A-REGLER comme risque du jeu (cause non prouvée).
+- **Vérifié** : tsc, biome, check-wgsl 81/81, `pipeline-inventory --check` puis `--write` ; `bun test --parallel` 2 193 / 0 ; e2e
+  `j2-probes` vert sur kerr-mini (fuite ×2, vol ×2) et le M1 Max (vol ×2), 0 erreur GPU. **Non vérifié** : un A/B d'images figées et un
+  ΔGPU J0 avec les instruments éteints (attendus nuls : branches de leviers seulement) ; la fuite en vol et en virage ; les coutures par la
+  géométrie ; le temps GPU des mips ; la cause des points blancs et de l'oscillation du M1 Max ; le M1 Max refroidi (pression modérée).
+- **Suite** : J2-1 (table de pages versionnée, mips groupés, une soumission par image, aucune pointe > 2 ms — chiffrés ici) ; J2-3 réduit
+  (fuite nulle mesurée) ; les questions de la fiche à Sam.

@@ -1,0 +1,345 @@
+{
+ "machine": "kerr-mini",
+ "output": "1920×1080",
+ "startedAt": "2026-11-12T12:23:58.400Z",
+ "thermalBefore": {
+  "host": "mini-de-olivier.home",
+  "at": "2026-11-12T12:23:53.750Z",
+  "ageS": 4.7,
+  "pressure": "Nominal",
+  "pressureSource": "powermetrics",
+  "state": "nominal",
+  "gpuMHz": 0,
+  "gpuMaxMHz": 1278,
+  "gpuOfMaxPct": 0,
+  "gpuBusyPct": 0,
+  "gpuTempC": null,
+  "cpuTempC": 76.6,
+  "gpuW": 0,
+  "sysW": 14.2,
+  "feed": true
+ },
+ "profile": {
+  "quality": "game",
+  "dynamicResolution": true,
+  "animate": true,
+  "targetSpp": 32,
+  "lookProfile": "auto",
+  "motionBlur": 0
+ },
+ "adapter": {
+  "compiling": [
+   "le matériau du sol"
+  ],
+  "compilesPending": 2,
+  "sceneCompileEtaS": null,
+  "adapter": "apple",
+  "integratedGpu": null
+ },
+ "leak": [
+  {
+   "view": "hyeres-low",
+   "what": "plaine du Gapeau vers les Maures, 300 m sol, cap 20°",
+   "placed": {
+    "relief": {
+     "ok": false,
+     "finest": 17,
+     "pending": 23
+    },
+    "mount": "cockpit"
+   },
+   "converged0": {
+    "ok": true,
+    "ms": 5357,
+    "phase": "realtime",
+    "images": 121
+   },
+   "seams": {
+    "W": 1440,
+    "H": 810,
+    "groundPx": 363637,
+    "pairs": 3359,
+    "continuous": 1654,
+    "silhouettes": 1705,
+    "p50": 0,
+    "p95": 0.894,
+    "p99": 1.686,
+    "max": 1.983,
+    "over0_25": 247,
+    "over1": 73
+   },
+   "held": {
+    "slots": 123,
+    "levels": 13
+   },
+   "convergedA": {
+    "ok": true,
+    "ms": 5356,
+    "phase": "realtime",
+    "images": 121
+   },
+   "readA": {
+    "width": 1920,
+    "height": 1080,
+    "source": "taau image",
+    "exposure": 16
+   },
+   "convergedB": {
+    "ok": true,
+    "ms": 5416,
+    "phase": "realtime",
+    "images": 121
+   },
+   "readB": {
+    "width": 1920,
+    "height": 1080,
+    "source": "taau image",
+    "exposure": 16
+   },
+   "convergedC": {
+    "ok": true,
+    "ms": 5427,
+    "phase": "realtime",
+    "images": 121
+   },
+   "readC": {
+    "width": 1920,
+    "height": 1080,
+    "source": "taau image",
+    "exposure": 16
+   },
+   "leak": {
+    "width": 1920,
+    "height": 1080,
+    "pixels": 2073600,
+    "leak": {
+     "over0_1": 50,
+     "over0_5": 6,
+     "over2": 4
+    },
+    "control": {
+     "over0_1": 109,
+     "over0_5": 11,
+     "over2": 0
+    },
+    "bright": 34,
+    "maxRel": 3.981,
+    "leakRowsByTenth": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     13,
+     8,
+     16,
+     13
+    ]
+   },
+   "convergedP": {
+    "ok": true,
+    "ms": 5332,
+    "phase": "realtime",
+    "images": 121
+   },
+   "readP": {
+    "width": 1920,
+    "height": 1080,
+    "source": "taau image",
+    "exposure": 16
+   },
+   "positive": {
+    "width": 1920,
+    "height": 1080,
+    "pixels": 2073600,
+    "leak": {
+     "over0_1": 730074,
+     "over0_5": 672938,
+     "over2": 648705
+    },
+    "control": {
+     "over0_1": 106,
+     "over0_5": 11,
+     "over2": 0
+    },
+    "bright": 40,
+    "maxRel": 135.85,
+    "leakRowsByTenth": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     164719,
+     204097,
+     188036,
+     115807,
+     57415
+    ]
+   },
+   "gpuErrors": 0
+  },
+  {
+   "view": "alps",
+   "what": "vallée de l'Arve vers l'est, 2 500 m sol, cap 110°",
+   "placed": {
+    "relief": {
+     "ok": true,
+     "finest": 15,
+     "pending": 0
+    },
+    "mount": "cockpit"
+   },
+   "converged0": {
+    "ok": true,
+    "ms": 5432,
+    "phase": "realtime",
+    "images": 121
+   },
+   "seams": {
+    "W": 1440,
+    "H": 810,
+    "groundPx": 525270,
+    "pairs": 3476,
+    "continuous": 1603,
+    "silhouettes": 1873,
+    "p50": 0,
+    "p95": 0.196,
+    "p99": 0.666,
+    "max": 1.575,
+    "over0_25": 70,
+    "over1": 8
+   },
+   "held": {
+    "slots": 102,
+    "levels": 10
+   },
+   "convergedA": {
+    "ok": true,
+    "ms": 5415,
+    "phase": "realtime",
+    "images": 121
+   },
+   "readA": {
+    "width": 1920,
+    "height": 1080,
+    "source": "taau image",
+    "exposure": 16
+   },
+   "convergedB": {
+    "ok": true,
+    "ms": 5453,
+    "phase": "realtime",
+    "images": 121
+   },
+   "readB": {
+    "width": 1920,
+    "height": 1080,
+    "source": "taau image",
+    "exposure": 16
+   },
+   "convergedC": {
+    "ok": true,
+    "ms": 5453,
+    "phase": "realtime",
+    "images": 121
+   },
+   "readC": {
+    "width": 1920,
+    "height": 1080,
+    "source": "taau image",
+    "exposure": 16
+   },
+   "leak": {
+    "width": 1920,
+    "height": 1080,
+    "pixels": 2073600,
+    "leak": {
+     "over0_1": 1,
+     "over0_5": 0,
+     "over2": 0
+    },
+    "control": {
+     "over0_1": 5,
+     "over0_5": 0,
+     "over2": 0
+    },
+    "bright": 9,
+    "maxRel": 0.102,
+    "leakRowsByTenth": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     0
+    ]
+   },
+   "convergedP": {
+    "ok": true,
+    "ms": 5360,
+    "phase": "realtime",
+    "images": 121
+   },
+   "readP": {
+    "width": 1920,
+    "height": 1080,
+    "source": "taau image",
+    "exposure": 16
+   },
+   "positive": {
+    "width": 1920,
+    "height": 1080,
+    "pixels": 2073600,
+    "leak": {
+     "over0_1": 718233,
+     "over0_5": 708872,
+     "over2": 534290
+    },
+    "control": {
+     "over0_1": 5,
+     "over0_5": 0,
+     "over2": 0
+    },
+    "bright": 9,
+    "maxRel": 58.476,
+    "leakRowsByTenth": [
+     0,
+     0,
+     0,
+     0,
+     1913,
+     119188,
+     207360,
+     203081,
+     114919,
+     71772
+    ]
+   },
+   "gpuErrors": 0
+  }
+ ],
+ "thermalAfter": {
+  "host": "mini-de-olivier.home",
+  "at": "2026-11-12T12:28:00.971Z",
+  "ageS": 3,
+  "pressure": "Nominal",
+  "pressureSource": "powermetrics",
+  "state": "nominal",
+  "gpuMHz": 1277,
+  "gpuMaxMHz": 1278,
+  "gpuOfMaxPct": 100,
+  "gpuBusyPct": 98.2,
+  "gpuTempC": null,
+  "cpuTempC": 84.5,
+  "gpuW": 5.8,
+  "sysW": 25.3,
+  "feed": true
+ },
+ "finishedAt": "2026-11-12T12:28:03.956Z"
+}

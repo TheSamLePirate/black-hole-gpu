@@ -1,4 +1,5 @@
 import { holeFleet } from "./holefleet";
+import { SharpnessProbe, type SharpRow } from "./frame-probes";
 import { loadSeaMask } from "./game/seasim";
 import { kpFor } from "./system/space-weather";
 import { J2000_MS } from "./system/timescale";
@@ -2991,7 +2992,10 @@ export class Renderer {
   }
 
   /** Scene changed: previous samples of the live view become stale. */
+  /** PLAN-J2 J2-0: the global invalidations since the start (each `invalidate()`; the sharpness probe's rows carry it) */
+  invalidations = 0;
   invalidate() {
+    this.invalidations++;
     this.frameTimes.length = 0;
     this.validFrom = this.frameStamp + 1;
     this.epoch = this.frameStamp + 1;
@@ -8012,6 +8016,18 @@ export class Renderer {
       ]),
     );
     this.refreshTemporalMotion(ta);
+    if (this.stageProbe) {
+      if (!this.stageShade || this.stageShade.width !== t.width || this.stageShade.height !== t.height) {
+        this.stageShade?.destroy();
+        this.stageShade = d.createTexture({
+          size: [t.width, t.height],
+          format: "rgba16float",
+          usage: GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC,
+          label: "stage probe: shade",
+        });
+      }
+      enc.copyTextureToTexture({ texture: t.hdr, mipLevel: 0 }, { texture: this.stageShade }, [t.width, t.height]);
+    }
     const pass = enc.beginComputePass(this.prof.pass("temporal"));
     pass.setPipeline(this.postTemporal);
     pass.setBindGroup(0, ta.binds[ta.idx]!);
@@ -8032,6 +8048,50 @@ export class Renderer {
    *  the display's Catmull–Rom in a turn — Tarifa 39.6 → 44.4 dB, sharpness 0.74 → 0.95 of the reference, ≈ +1.8 ms. (Off
    *  from 21 Oct: a flight in real time, its motion a frame unlike from one mode to another — PERF-2026-10-21.md.) */
   taauOn = true;
+  /**
+   * PLAN-J2 J2-0 — the image's sharpness, image by image (src/frame-probes.ts): on, each image drawn ends with the Laplacian's
+   * energy of the scene's colour in a box (`sharpBox`), logged in `sharpLog` with its scale and source. Off by default: nothing
+   * created, nothing encoded.
+   */
+  sharpProbe = false;
+  private sharp: SharpnessProbe | null = null;
+  get sharpLog(): SharpRow[] {
+    return this.sharp?.log ?? [];
+  }
+  get sharpSkipped(): number {
+    return this.sharp?.skipped ?? 0;
+  }
+  /** the box measured [fractions of the image: x0, y0, x1, y1] */
+  get sharpBox(): [number, number, number, number] {
+    return this.sharp?.box ?? [380 / 1600, 120 / 1000, 1220 / 1600, 700 / 1000];
+  }
+  set sharpBox(b: [number, number, number, number]) {
+    this.sharp ??= new SharpnessProbe(this.device);
+    this.sharp.box = b;
+  }
+  private encodeSharp(enc: GPUCommandEncoder, t: Target, s: Settings, phase: string) {
+    this.sharp ??= new SharpnessProbe(this.device);
+    const u = t.taau?.on ? t.taau : null;
+    const cv = this.context.canvas as HTMLCanvasElement;
+    const ev = this.ev(s);
+    this.sharp.encode(enc, u ? u.out : t.hdr, u ? u.w : t.width, u ? u.h : t.height, 2 ** ev / preExposure(ev), {
+      frame: this.frameStamp,
+      t: performance.now(),
+      scale: (u ? u.w : t.width) / Math.max(cv.width, 1),
+      renderScale: t.width / Math.max(cv.width, 1),
+      source: u ? "taau image" : "hdr",
+      phase,
+      invalidations: this.invalidations,
+    });
+  }
+  /**
+   * PLAN-J2 J2-0 — the reconstruction's stages kept for a read (the sea's white points: where they come from): on, each image the
+   * temporal pass runs on copies the native image entering it (`hdr` resolved — the shading, the rays —) aside; `sceneStages()`
+   * then reads that copy, the native history it made (`temporal`) and the temporal upsampling's image (`taau`), the same image's,
+   * in one submission. Off by default: no copy, no texture.
+   */
+  stageProbe = false;
+  private stageShade: GPUTexture | null = null;
   /** its samples' kernel σ [output px] (×scale: render px) */
   taauSigma = 0.5;
   /** its kernel σ on water [output px] (the raster's mark tells it — trace.wgsl rasterMark): the sea's glints far off filtered as
@@ -9839,6 +9899,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // the FFT's waves computed only while some sea is in view — seaFftParams)
     const probe = this.seaProbeFor(enc);
     this.device.queue.submit([enc.finish()]);
+    this.sharp?.flush();
     if (probe) {
       this.seaProbeBusy = true;
       probe
@@ -11883,6 +11944,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the raster's shading rate this frame, when the governor chooses it — earthRasterShading "auto")
     const rate = this.rasterPrimaryOn && s.earthRasterShading === "auto" ? this.rasterRate : 0;
     const generation = this.timingGeneration;
+    // (J2-0's instruments, off by default: the tiles' publication closed for this image, the image's sharpness)
+    this.earthTiles.pubFrame();
+    if (this.sharpProbe && t === this.live) this.encodeSharp(enc, t, s, phase);
     this.keepMotion(enc);
     this.submit(
       enc,
@@ -12506,6 +12570,44 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const ev = this.ev(s);
     return { width: w, height: h, exposure: 2 ** ev / preExposure(ev), source: u ? "taau image" : "hdr", data };
   }
+  /**
+   * PLAN-J2 J2-0 — the last image's reconstruction stages, read in one submission (stageProbe on, the temporal pass run): `shade`
+   * the native image entering the temporal pass (resolved: the shading, the rays), `temporal` the native history it made, `taau`
+   * the temporal upsampling's image (null where it did not run) — each its linear radiance (rgba, as sceneColor's) and size;
+   * `exposure` as sceneColor's. Null when no stage was kept.
+   */
+  async sceneStages(s: Settings): Promise<{ exposure: number; stages: Record<SceneStage, StageImage | null> } | null> {
+    const t = this.live;
+    const ta = t?.temporal;
+    if (!t || !ta || !this.stageShade || this.stageShade.width !== t.width || this.stageShade.height !== t.height) return null;
+    const u = t.taau?.on ? t.taau : null;
+    const list: [SceneStage, GPUTexture, number, number][] = [
+      ["shade", this.stageShade, t.width, t.height],
+      ["temporal", ta.hist[ta.idx]!, t.width, t.height],
+    ];
+    if (u) list.push(["taau", u.out, u.w, u.h]);
+    const enc = this.device.createCommandEncoder();
+    const bufs = list.map(([, tex, w, h]) => {
+      const bpr = Math.ceil((w * 8) / 256) * 256;
+      const buf = this.device.createBuffer({ size: bpr * h, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      enc.copyTextureToBuffer({ texture: tex, mipLevel: 0 }, { buffer: buf, bytesPerRow: bpr }, [w, h]);
+      return { buf, bpr, w, h };
+    });
+    this.device.queue.submit([enc.finish()]);
+    const stages: Record<SceneStage, StageImage | null> = { shade: null, temporal: null, taau: null };
+    for (const [i, b] of bufs.entries()) {
+      await b.buf.mapAsync(GPUMapMode.READ);
+      const src = new Uint16Array(b.buf.getMappedRange());
+      const data = new Float32Array(b.w * b.h * 4);
+      const row = b.bpr / 2;
+      for (let y = 0; y < b.h; y++) for (let x = 0; x < 4 * b.w; x++) data[y * 4 * b.w + x] = halfToFloat(src[y * row + x]!);
+      b.buf.unmap();
+      b.buf.destroy();
+      stages[list[i]![0]] = { width: b.w, height: b.h, data };
+    }
+    const ev = this.ev(s);
+    return { exposure: 2 ** ev / preExposure(ev), stages };
+  }
   /** The same as half-float OpenEXR, at the display's scale (× exposure): the live image's colour to keep (J1-6). */
   async sceneColorEXR(s: Settings): Promise<Blob> {
     const c = await this.sceneColor(s);
@@ -12526,6 +12628,14 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     for (let i = 0; i < half.length; i++) f[i] = halfToFloat(half[i]!) * k;
     return encodeEXR(f, t.width, t.height);
   }
+}
+
+/** PLAN-J2 J2-0: a reconstruction stage read back (Renderer.sceneStages) */
+export type SceneStage = "shade" | "temporal" | "taau";
+export interface StageImage {
+  width: number;
+  height: number;
+  data: Float32Array;
 }
 
 /**

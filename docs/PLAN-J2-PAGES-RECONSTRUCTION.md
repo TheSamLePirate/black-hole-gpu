@@ -1,6 +1,6 @@
 # PLAN-J2 — pages d'imagerie filtrables et reconstruction
 
-**État (12 novembre 2026) : plan validé par Sam (ses recommandations, §9) ; J2-0 en cours.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
+**État (12 novembre 2026) : plan validé par Sam (ses recommandations, §9) ; J2-0 fait — instruments et [fiche de référence](progress/j2/FICHE-J2-0-2026-11-12.md) ; J2-1 à lancer.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
 l'écrire (session de documentation). L'existant (§2) est relevé dans le code de `main` au 12 novembre (après `4d1201c0`, J1 terminé) ;
 **le code fait foi**, les lignes citées sont celles de ce jour. Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J2
 (« séparer hauteurs/couleurs, mips/gouttières, gradients, publication versionnée ; désocclusion et invalidations locales ; puis la
@@ -60,7 +60,7 @@ désocclusion et l'échelle**.
 | Restes du raster (`shade`) | le noyau des rayons sur les pixels raster que `shadeLite` laisse (ponts, arbres à moins de 80 m, boîtes marquées) à une **cadence** de 1, 2, 4, 8 ou 16 (`rasterRate`, `RASTER_RATES_AUTO` `renderer.ts:355`, `adaptRasterRate` `:12033`), `shadeMark` marquant les pixels laissés pour `resolve` ; sauté (`liteAll`) quand rien ne le demande | « l'ombrage clairsemé 1/8–1/16 » de la stratégie, c'est lui (et `bodyLite` sur les autres corps, plafonné à 1/4) ; **le sol de la Terre est ombré à chaque pixel, chaque image** par `shadeLite` (matériau puis éclairage, `withLiteDeferred`) |
 | Temporel natif | `temporal` (`post.wgsl:777`) à la taille interne : reprojection par la caméra et la profondeur (`moments.y`, « closest depth » des pixels frais pour le tracé), clamp de voisinage YCoCg, mobiles par leur mouvement (z 1, z 2 sans historique), l'appareil (w 1) neuf à au moins la moitié de la frame, rejet (b) par identité ; historiques `temporal.hist[2]`, `alb[2]` rgba16f | `temporal` 1,73 ms (kerr-mini, J0 12 nov.) |
 | TAAU | `taau` (`post.wgsl:1272`) **à la taille de la toile** quand la cible vivante est plus petite qu'elle (`taauWanted`, `renderer.ts:8034–8070`) ; σ 0,5 px (0,7 sur l'eau), poids natif 0,02 ; historique `taau.hist[2]` à la taille de la toile | `taau` 3,69 ms (J0 12 nov.) ; **deux historiques longs empilés** (natif puis sortie) — ce que §7.18 demande d'éviter |
-| Échelle interne | `settings.earthRasterScale` 0,75 ; `main.ts` : en vol raster l'échelle est **épinglée** à `rasterTop()` (`:5526`, `:8957` : « chaque pas rééchantillonnait l'historique… une impulsion de flou toutes les quelques secondes ») ; caméra tenue 0,4 s → échelle 1 (affinage), mouvement 0,15 s → retour à 0,75 (`:8902–8920`) : **chaque arrêt et chaque reprise changent l'échelle** ; la résolution dynamique (`dynamicResolution`, profil « game ») ne baisse l'échelle que hors raster ou une fois la cadence raster au plus grossier (`rateDone`) | la sortie « pas de flou intermittent à chaque changement d'échelle » ; I4 de Q6 (« l'échelle n'est abaissée que si les scènes critiques le permettent ») ouvert |
+| Échelle interne | `settings.earthRasterScale` 0,75 ; `main.ts` : en vol raster l'échelle est **épinglée** à `rasterTop()` (`:5526`, `:8957` : « chaque pas rééchantillonnait l'historique… une impulsion de flou toutes les quelques secondes ») ; caméra tenue 0,4 s → échelle 1 (affinage), mouvement 0,15 s → retour à 0,75 (`:8902–8920`) : chaque arrêt et chaque reprise changent l'échelle — **corrigé par la mesure de J2-0 : seulement en mode photo ou hors raster** ; en vol raster, une vue tenue reste en temps réel à 0,75 (`renderer.rasterHold`, vrai hors du mode photo ; `rasterScale` exige `!rasterHold`) ; la résolution dynamique (`dynamicResolution`, profil « game ») ne baisse l'échelle que hors raster ou une fois la cadence raster au plus grossier (`rateDone`) | la sortie « pas de flou intermittent à chaque changement d'échelle » ; I4 de Q6 (« l'échelle n'est abaissée que si les scènes critiques le permettent ») ouvert |
 
 ### 2.3 Ce que J1 laisse, que J2 peut lire
 
@@ -102,7 +102,7 @@ chargement met à jour [GRAPHICS-PIPELINE](GRAPHICS-PIPELINE.md) dans le même l
 
 | Lot | Contenu | Remplace / retire | Preuve |
 |---|---|---|---|
-| **J2-0** | **Les contrats (§5) et les instruments** : sonde de **fuite** (un mode de diagnostic qui remplit l'extérieur valide de chaque fenêtre et les emplacements non publiés d'une couleur sentinelle, compte ses pixels en vue rasante aux bords de fenêtres et aux distances des mips 2–4) ; sonde de **couture** (bords de tuiles, C0-12) ; courbe de **netteté par image** (énergie du laplacien sur `sceneColor` contre la référence affinée, `motion-quality`) le long d'un vol avec arrêts et reprises (changements d'échelle) ; compteurs de **publication** (octets, soumissions, ms de `put*`/mips par image) ; localisation des points blancs avant/après la reconstruction | — | **fiche de référence J2** sur le code actuel (kerr-mini, M1 Max) : fuite, coutures, creux de netteté, coût de publication **chiffrés** ; revue de Sam |
+| **J2-0** ✅ (12 nov.) | **Les contrats (§5) et les instruments** : sonde de **fuite** (un mode de diagnostic qui remplit l'extérieur valide de chaque fenêtre et les emplacements non publiés d'une couleur sentinelle, compte ses pixels en vue rasante aux bords de fenêtres et aux distances des mips 2–4) ; sonde de **couture** (bords de tuiles, C0-12) ; courbe de **netteté par image** (énergie du laplacien sur `sceneColor` contre la référence affinée, `motion-quality`) le long d'un vol avec arrêts et reprises (changements d'échelle) ; compteurs de **publication** (octets, soumissions, ms de `put*`/mips par image) ; localisation des points blancs avant/après la reconstruction | — | **fiche de référence J2** sur le code actuel (kerr-mini, M1 Max) : fuite, coutures, creux de netteté, coût de publication **chiffrés** ; revue de Sam |
 | **J2-1** | **La table de pages de l'imagerie, versionnée** : une **validité par tuile** (bits par niveau, C0-4 §5) et une **génération par page** (clé source + génération, §6) ; écritures et mips **regroupées dans un encodeur par image** sous un budget d'octets et de mips (ST5), publiées à l'image suivante seulement (bit allumé avec ses mips ; l'occupant précédent jamais lu une fois remplacé) ; la table figée dans `FrameDesc` pour l'image ; adressage et filtrage inchangés | la soumission par tuile et par couche (`orthoMips`) ; le rectangle par niveau **pour l'imagerie** ; le compteur global `imagery` | l'image en régime identique (A/B d'images figées en raster, ±1 %) ; `tile-arrival` : temps de couverture non dégradés ; aucune pointe de publication > 2 ms, CPU p95 de J0 ; ΔGPU J0 nul ; une seule soumission de mips par image (compteur) |
 | **J2-2** | **Les hauteurs dans la même publication** : validité par tuile (ST9), génération ; format inchangé (`r32uint`, lecture manuelle, la même sur le CPU) ; `changes` dérivé de la table ; le **sol de contact** (§19.4) ne change pas | le rectangle par niveau des hauteurs | `heightAt` CPU = GPU (tests unitaires) ; le contact et le train (tests, une recette de `apprendre-avions`) ; A/B d'images figées ; ΔGPU nul |
 | **J2-3** | **Des bords sans fuite** : le fondu de bord **à l'échelle de l'empreinte filtrée** (mip choisie × anisotropie) au lieu de 2–48 texels fixes ; la sélection des niveaux nettoyée (`duv`, `nf`, `TUNE_ANISO` réduit à ce qu'il fait) ; **gouttières** (copie des voisins par mip, comme `SURFACE_GUTTER`) **seulement si** J2-0 montre une fuite à l'intérieur d'une fenêtre | le fondu fixe ; le reliquat de `earthImageryAniso` | sonde de fuite à **0 pixel** ; coutures ≤ 0,25 px (C0-12, vol bas) ; planche rasante aux bords de fenêtres ; ΔGPU J0 |
@@ -229,13 +229,32 @@ J2-1 ; un seul historique long (J2-6) ; plancher d'échelle en vol 2/3 par axe (
 ST9 pour le sol ; pas d'Effect dans J2-1. Les contrats du §5 sont donc validés tels qu'écrits ; chaque lot qui change l'image garde sa
 preuve (planche avant/après, ΔGPU sur J0).
 
+## 9 bis. J2-0 fait (12 novembre 2026)
+
+Instruments (éteints par défaut, coût nul éteint ; BH-API, GRAPHICS-PIPELINE F5/E5) : `earthTiles.leakProbe` (+ `probePublished`, témoin
+positif `{ control: true }`), `earthTiles.pubProbe`/`pubLog`/`pubStats`, `renderer.sharpProbe`/`sharpLog` (`src/frame-probes.ts` : énergie
+du laplacien, points blancs comptés à part), `renderer.stageProbe`/`sceneStages()`, `renderer.invalidations` ; e2e `j2-probes`, mesures
+`tests/e2e/lib/j2-probes.ts`, `scripts/j2-fiche.ts`. Chiffres : [fiche J2-0](progress/j2/FICHE-J2-0-2026-11-12.md). Ce qu'ils changent au
+plan :
+
+- **Fuite** : 0 pixel imputable aux pages sur deux vues rasantes (témoin positif 0,67–0,71 Mpx) → **J2-3 se réduit** au nettoyage de la
+  sélection des niveaux et à la sonde sur plus de vues (vol, virage) ; les gouttières ne sont pas justifiées par la mesure.
+- **Échelle** : une pause ne change pas l'échelle en vol raster (§2.2 corrigé) ; un changement **forcé** fait un pic d'énergie de +44 à
+  +118 % (l'historique perdu) qui retombe en ~0,3 s → J2-6 garde son objet ; critère proposé : |écart| ≤ 3 % (creux **et** pic).
+- **Invalidations** : en mouvement `invalidate()` est appelé à chaque image et ne touche pas l'historique → l'invalidation d'une tuile ne
+  coûte rien au vol raster ; J2-4 porte sur les vues tenues/convergées et sur l'invalidation locale du sol (identité).
+- **Publication** : 8 % des images du vol au-delà de 2 ms du fil principal sur kerr-mini (max 9,5 ms), jusqu'à 9–11 soumissions de mips par
+  image → la cible de J2-1 (une soumission par image, aucune pointe > 2 ms) est chiffrée ; le coût est l'écriture, pas les mips.
+- **Points blancs** : nés avant le temporel (image résolue), gardés par lui, étalés par la TAAU ; 113/s sur le M1 Max, 0,23/s sur le mini ;
+  cause ouverte (PROBLEMES-A-REGLER).
+
 ## 10. Non vérifié
 
 - **Aucune mesure nouvelle** : les chiffres cités viennent des fiches J0 du 12 novembre, de la fiche T9 et de GRAPHICS-PIPELINE ; les
   tailles mémoire « calculées » le sont depuis les constantes du code (`ORTHO_BYTES`, `IMG_2K_BYTES`), pas mesurées.
-- **La fuite entre pages n'a jamais été mesurée** : le fondu de 2–48 texels avec l'anisotropie 16 et les mips 2–4 peut suffire ou non.
-- **L'effet en vol des `invalidate()` globaux** (le sol raster étant ombré à chaque pixel, l'historique du temporel est-il perdu à chaque
-  tuile ?) : relu dans le code, non mesuré.
+- ~~**La fuite entre pages n'a jamais été mesurée**~~ — mesurée par J2-0 : nulle sur deux vues tenues (fiche §2) ; en vol et en virage : non.
+- ~~**L'effet en vol des `invalidate()` globaux**~~ — J2-0 : appelé à chaque image en mouvement de toute façon, sans toucher l'historique
+  du temporel (compté : 1 467 / 1 469 images ; lu dans le code) ; non mesuré sur une vue convergée.
 - **L'empreinte du sol en pente** (projetée sur le plan horizontal dans le prologue de `shadeLite` ?) : relevée pour les bâtiments par
   J1-5, à vérifier pour le relief.
 - **Le « bloc 16 » de la fiche J0** contre `BLOCKS` (1–8) dans `renderer.ts` : unités à rapprocher.

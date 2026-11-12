@@ -1054,6 +1054,206 @@ export class EarthTiles {
   failed = 0;
   /** CM0: each tile's arrival timed — asked, in, written, its imagery, its national heights, drawn — (tile-arrivals.ts) */
   readonly arrivals = new ArrivalLog();
+  /**
+   * PLAN-J2 J2-0 — the publication's counters (off by default: nothing counted, nothing timed): what the arrivals write to the
+   * GPU between two images — `bytes` sent by `writeTexture` (heights, imagery, lights, orthophotos), `writes` those calls, `tiles`
+   * the relief tiles put, `orthos` the orthophotos put, `submits` the queue submissions (the mips': one a tile and a layer —
+   * `orthoMips`), `mipPasses` their render passes, `putMs` the page's time in `putTile`/`putOrtho` (the mips' encoding and
+   * submission in it), `mipMs` that of the mips alone [ms, CPU — their GPU time is not measured]. `pubFrame()` (the renderer,
+   * once an image) closes an image's counts into `pubLog` (4 096 images kept); `pubStats()` sums them up.
+   */
+  pubProbe = false;
+  private pubNow = { bytes: 0, writes: 0, tiles: 0, orthos: 0, submits: 0, mipPasses: 0, putMs: 0, mipMs: 0 };
+  readonly pubLog: {
+    t: number;
+    bytes: number;
+    writes: number;
+    tiles: number;
+    orthos: number;
+    submits: number;
+    mipPasses: number;
+    putMs: number;
+    mipMs: number;
+  }[] = [];
+  private pubWrote(bytes: number) {
+    if (!this.pubProbe) return;
+    this.pubNow.bytes += bytes;
+    this.pubNow.writes++;
+  }
+  /** an image ends: its publication's counts logged (pubProbe on) */
+  pubFrame() {
+    if (!this.pubProbe) return;
+    this.pubLog.push({ t: performance.now(), ...this.pubNow });
+    if (this.pubLog.length > 4096) this.pubLog.splice(0, this.pubLog.length - 4096);
+    this.pubNow = { bytes: 0, writes: 0, tiles: 0, orthos: 0, submits: 0, mipPasses: 0, putMs: 0, mipMs: 0 };
+  }
+  /** the logged images' publication: per image p50 / p95 / max of each count, the images with any, those over 2 ms of the page's
+   *  time (J2-1's bound), the totals; from `since` [performance.now() ms] */
+  pubStats(since = 0) {
+    const rows = this.pubLog.filter((r) => r.t >= since);
+    const keys = ["bytes", "writes", "tiles", "orthos", "submits", "mipPasses", "putMs", "mipMs"] as const;
+    const q = (v: number[], p: number) => {
+      const s = [...v].sort((a, b) => a - b);
+      return s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))]! : 0;
+    };
+    const per: Record<string, { p50: number; p95: number; max: number; total: number }> = {};
+    for (const k of keys) {
+      const v = rows.map((r) => r[k]);
+      per[k] = { p50: q(v, 0.5), p95: q(v, 0.95), max: q(v, 1), total: v.reduce((a, b) => a + b, 0) };
+    }
+    return {
+      images: rows.length,
+      withWrites: rows.filter((r) => r.writes > 0).length,
+      over2ms: rows.filter((r) => r.putMs > 2).length,
+      maxSubmits: per.submits!.max,
+      per,
+    };
+  }
+  /**
+   * PLAN-J2 J2-0 — the leak probe (a diagnostic, off by default; never in play): `leakProbe([r, g, b])` holds the windows as they
+   * are (no window moved, no tile asked, an arrival dropped — asked again once let go), keeps each imagery window published over
+   * its valid rectangle less one tile on an axis it spans whole, the one farther from the camera (`probePublished`: a toroidal window whole has its other edge past
+   * its edge — the sentinel needs a column of its own there), and fills every slot of the window outside it — the slots not
+   * published, the old occupants, the wrap — with the sentinel colour (8-bit sRGB, alpha 1), its mips made from it as a tile's
+   * are. A pixel of the image that shows the sentinel read past a published edge: the filtered footprint (mip × anisotropy 16)
+   * reached the other side before the edge's fade (2–48 texels) took the page's weight to 0. Called again with another colour:
+   * the same slots painted with it (an A/B of two sentinels — the leak is what changes). `null`: let go — the slots' tiles asked
+   * again (the memory cache, the network), the shrunk rectangles grown back as they come. The relief's heights share the levels'
+   * rectangles: while held, a level's ground beyond its shrunk rectangle is the next coarser one's (the CPU's — contacts — as the
+   * GPU's). `{ control: true }` on a later call: the positive control — the published slots painted too, the sentinel read
+   * directly wherever the imagery is (released, those levels are dropped and taken again). Returns the slots painted and the levels
+   * held.
+   */
+  private probe: { word: number; slots: { tex: GPUTexture; ox: number; oy: number; layer: number }[]; control?: boolean } | null = null;
+  /** the published slots of the imagery windows (the leak probe's positive control) */
+  private publishedSlots() {
+    const out: { tex: GPUTexture; ox: number; oy: number; layer: number }[] = [];
+    for (const L of this.levels) {
+      if (!L.valid || L.z > IMG_Z1 || !this.filtered) continue;
+      const big = L.span * TILE > ORTHO_CLIP;
+      const tex = big ? this.imagery2k : this.orthoTexture;
+      if (big && tex.width <= 1) continue;
+      const layer = big ? L.z - FINE_Z : IMG_LAYER0 + (L.z - Z0);
+      for (let y = L.valid.y0; y < L.valid.y1; y++)
+        for (let x = L.valid.x0; x < L.valid.x1; x++) {
+          const s = this.slotOf(L, x, y);
+          out.push({ tex, ox: (s % L.span) * TILE, oy: Math.floor(s / L.span) * TILE, layer });
+        }
+    }
+    for (const [k, O] of this.ortho.entries()) {
+      if (!O.valid || !this.filtered) continue;
+      const big = O.span > ORTHO_SPAN;
+      const tex = big ? this.imagery2k : this.orthoTexture;
+      if (tex.width <= 1) continue;
+      const layer = big ? ORTHO_2K_LAYER0 + k : k;
+      for (let y = O.valid.y0; y < O.valid.y1; y++)
+        for (let x = O.valid.x0; x < O.valid.x1; x++) {
+          const s = orthoSlot(O.span, x, y);
+          out.push({ tex, ox: (s % O.span) * TILE, oy: Math.floor(s / O.span) * TILE, layer });
+        }
+    }
+    return out;
+  }
+  get leakProbing() {
+    return !!this.probe;
+  }
+  leakProbe(colour: [number, number, number] | null, o: { control?: boolean } = {}): { slots: number; levels: number } {
+    if (!colour) {
+      if (this.probe) {
+        // (the positive control's levels: their published slots painted too — dropped whole, taken again)
+        if (this.probe.control) {
+          for (const L of this.levels) {
+            if (!L.want || L.z > IMG_Z1) continue;
+            for (let s = 0; s < L.key.length; s++) {
+              L.key[s] = null;
+              L.imgKey[s] = "";
+              L.col[s] = null;
+            }
+            this.setValid(L, null);
+          }
+          for (const O of this.ortho) {
+            O.key.fill(null);
+            O.valid = null;
+          }
+        }
+        this.probe = null;
+        this.stamp++;
+        this.imagery++;
+        this.onChange?.();
+      }
+      return { slots: 0, levels: 0 };
+    }
+    const word = ((colour[0] & 255) | ((colour[1] & 255) << 8) | ((colour[2] & 255) << 16) | (255 << 24)) >>> 0;
+    if (this.probe) {
+      this.probe.word = word;
+      for (const p of this.probe.slots) this.paintSlot(p, word);
+      // (the positive control — o.control —: every published slot of the imagery painted too, the sentinel then read directly
+      // everywhere the imagery is: what a leak of 100 % looks like, the probe's proof that its sentinel reaches the image; let go,
+      // those levels are dropped and taken again)
+      if (o.control && !this.probe.control) {
+        this.probe.control = true;
+        for (const p of this.publishedSlots()) this.paintSlot(p, word);
+      }
+      this.imagery++;
+      this.onChange?.();
+      return { slots: this.probe.slots.length, levels: -1 };
+    }
+    const slots: { tex: GPUTexture; ox: number; oy: number; layer: number }[] = [];
+    let levels = 0;
+    for (const L of this.levels) {
+      if (!L.want || !L.valid || L.z > IMG_Z1 || !this.filtered) continue;
+      const big = L.span * TILE > ORTHO_CLIP;
+      const tex = big ? this.imagery2k : this.orthoTexture;
+      if (big && tex.width <= 1) continue;
+      const layer = big ? L.z - FINE_Z : IMG_LAYER0 + (L.z - Z0);
+      const P = probePublished(L.valid, L.span, this.cameraTile(L.n, L.valid));
+      this.setValid(L, P);
+      levels++;
+      for (let y = L.want.y0; y < L.want.y1; y++)
+        for (let x = L.want.x0; x < L.want.x1; x++) {
+          if (inside(P, x, y)) continue;
+          const s = this.slotOf(L, x, y);
+          L.key[s] = null;
+          L.imgKey[s] = "";
+          L.col[s] = null;
+          slots.push({ tex, ox: (s % L.span) * TILE, oy: Math.floor(s / L.span) * TILE, layer });
+        }
+    }
+    for (const [k, O] of this.ortho.entries()) {
+      if (!O.want || !O.valid || !this.filtered) continue;
+      const big = O.span > ORTHO_SPAN;
+      const tex = big ? this.imagery2k : this.orthoTexture;
+      if (tex.width <= 1) continue;
+      const layer = big ? ORTHO_2K_LAYER0 + k : k;
+      const P = probePublished(O.valid, O.span, this.cameraTile(O.n, O.valid));
+      O.valid = P;
+      levels++;
+      for (let y = O.want.y0; y < O.want.y1; y++)
+        for (let x = O.want.x0; x < O.want.x1; x++) {
+          if (inside(P, x, y)) continue;
+          const s = orthoSlot(O.span, x, y);
+          O.key[s] = null;
+          slots.push({ tex, ox: (s % O.span) * TILE, oy: Math.floor(s / O.span) * TILE, layer });
+        }
+    }
+    this.probe = { word, slots };
+    for (const p of slots) this.paintSlot(p, word);
+    this.stamp++;
+    this.imagery++;
+    this.onChange?.();
+    return { slots: slots.length, levels };
+  }
+  /** the camera's tile at a level of n tiles, its x unwrapped near the rectangle r's (the leak probe's side to keep) */
+  private cameraTile(n: number, r: { x0: number; x1: number }) {
+    let x = Math.floor(cx0(this.lon) * n);
+    x -= Math.round((x - (r.x0 + r.x1) / 2) / n) * n;
+    return { x, y: Math.floor(mercY(this.sinLat, n)) };
+  }
+  private paintSlot(p: { tex: GPUTexture; ox: number; oy: number; layer: number }, word: number) {
+    const px = new Uint32Array(TILE * TILE).fill(word);
+    this.device.queue.writeTexture({ texture: p.tex, origin: [p.ox, p.oy, p.layer] }, px, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
+    this.orthoMips(p.ox, p.oy, p.layer, p.tex);
+  }
   /** the orthophotos (IGN, France — I1): wanted (settings.earthOrtho), their levels, their loads, the tiles they have
    *  not (404: out at sea, abroad — not asked again), loaded */
   orthoOn = true;
@@ -1399,6 +1599,8 @@ export class EarthTiles {
   private prioritySinLat = 0;
   update(c: Vec3 | null, pixAngle: number, lead: Vec3 = [0, 0, 0], gaze: Vec3 = [0, 0, 0], agl?: number) {
     swGateCheck();
+    // (J2-0: the leak probe holds the windows as they are — leakProbe)
+    if (this.probe) return;
     // (the orthophotos switched: the relief's tiles' imagery taken again — over France the IGN's or EOX's —, the tiles
     // kept past the windows dropped. The tiles drawn stay drawn until each is in again: dropped at once, the ground fell
     // back to the global map's — at Chamonix the valley filled, a jet flying 450 m over its floor hundreds of metres in
@@ -1975,6 +2177,19 @@ export class EarthTiles {
     }
   }
   private putTile(L: Level, z: number, x: number, y: number, h: Float32Array, col: Uint32Array | null) {
+    // (J2-0: the leak probe holds the windows — an arrival dropped, asked again once it lets go)
+    if (this.probe) return;
+    const p0 = this.pubProbe ? performance.now() : 0;
+    try {
+      this.putTileNow(L, z, x, y, h, col);
+    } finally {
+      if (this.pubProbe) {
+        this.pubNow.tiles++;
+        this.pubNow.putMs += performance.now() - p0;
+      }
+    }
+  }
+  private putTileNow(L: Level, z: number, x: number, y: number, h: Float32Array, col: Uint32Array | null) {
     const s = this.slotOf(L, x, y);
     // (the ring's levels: the tile the window leaves kept past it — walked back to, drawn from memory —, this one's
     // imagery held for when it leaves in turn)
@@ -2030,6 +2245,7 @@ export class EarthTiles {
       { bytesPerRow: TILE * 4 * per },
       [TILE, TILE, 1],
     );
+    this.pubWrote(texels.byteLength);
     this.complete(L);
   }
 
@@ -2393,6 +2609,18 @@ export class EarthTiles {
   /** An orthophoto's tile into its window's slot (its imagery; null: none there — the coarser levels'): its level's layer of
    *  the orthophotos' texture, its mips made from it alone (T9a) */
   private putOrtho(z: number, x: number, y: number, col: Uint32Array | null) {
+    if (this.probe) return;
+    const p0 = this.pubProbe ? performance.now() : 0;
+    try {
+      this.putOrthoNow(z, x, y, col);
+    } finally {
+      if (this.pubProbe) {
+        this.pubNow.orthos++;
+        this.pubNow.putMs += performance.now() - p0;
+      }
+    }
+  }
+  private putOrthoNow(z: number, x: number, y: number, col: Uint32Array | null) {
     const k = z - ORTHO_Z0;
     const O = this.ortho[k];
     if (!O || !inside(O.want, x, y)) return;
@@ -2412,6 +2640,7 @@ export class EarthTiles {
         { bytesPerRow: TILE * 4 },
         [TILE, TILE, 1],
       );
+      this.pubWrote(TILE * TILE * 4);
       this.orthoMips(ox, oy, layer, tex);
     }
     if (col) this.imagery++;
@@ -2440,6 +2669,7 @@ export class EarthTiles {
       this.orthoMip = { pipeline, uniform };
     }
     const m = this.orthoMip;
+    const m0 = this.pubProbe ? performance.now() : 0;
     const enc = d.createCommandEncoder({ label: "imagery mips" });
     for (let i = 1; i < ORTHO_MIPS; i++) {
       const n = TILE >> i;
@@ -2468,12 +2698,17 @@ export class EarthTiles {
       pass.end();
     }
     d.queue.submit([enc.finish()]);
+    if (this.pubProbe) {
+      this.pubNow.submits++;
+      this.pubNow.mipPasses += ORTHO_MIPS - 1;
+      this.pubNow.mipMs += performance.now() - m0;
+    }
   }
 
   /** A relief level's tile's imagery into its filtered texture (T9b): its window's layer — the 1024² texture's or the 2048²
    *  one's —, alpha its coverage (the night's lights stay in the relief texture's alpha), its mips; none: cleared */
   private putImagery(L: Level, s: number, col: Uint32Array | null) {
-    if (L.z > IMG_Z1 || !this.filtered) return;
+    if (L.z > IMG_Z1 || !this.filtered || this.probe) return;
     const big = L.span * TILE > ORTHO_CLIP;
     const tex = big ? this.imagery2k : this.orthoTexture;
     if (big && tex.width <= 1) return;
@@ -2483,6 +2718,7 @@ export class EarthTiles {
     const px = new Uint32Array(TILE * TILE);
     if (col) for (let i = 0; i < px.length; i++) px[i] = col[i] ? (col[i]! | 0xff000000) >>> 0 : 0;
     this.device.queue.writeTexture({ texture: tex, origin: [ox, oy, layer] }, px, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
+    this.pubWrote(px.byteLength);
     this.orthoMips(ox, oy, layer, tex);
     // (T9c: the night's lights — GIBS's, z ≤ 8: their imagery's alpha — in their own layer, rgb the coverage; the relief's texture
     // holds the heights alone)
@@ -2495,6 +2731,7 @@ export class EarthTiles {
         const lights = new Uint32Array(TILE * TILE);
         if (col) for (let i = 0; i < lights.length; i++) lights[i] = col[i] ? ((col[i]! & 0xff000000) | 0xffffff) >>> 0 : 0;
         this.device.queue.writeTexture({ texture: tex1, origin: [ox, oy, ll] }, lights, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
+        this.pubWrote(lights.byteLength);
         this.orthoMips(ox, oy, ll, tex1);
       } else {
         const H = TILE >> 1;
@@ -2514,6 +2751,7 @@ export class EarthTiles {
               lights[j * H + i] = n ? ((Math.round(a / n) << 24) | 0xffffff) >>> 0 : 0;
             }
         this.device.queue.writeTexture({ texture: tex1, origin: [ox >> 1, oy >> 1, ll] }, lights, { bytesPerRow: H * 4 }, [H, H, 1]);
+        this.pubWrote(lights.byteLength);
       }
     }
     if (L.z <= GIBS_Z1 && !big) {
@@ -2521,6 +2759,7 @@ export class EarthTiles {
       if (col) for (let i = 0; i < lights.length; i++) lights[i] = col[i] ? ((col[i]! & 0xff000000) | 0xffffff) >>> 0 : 0;
       const ll = IMG_LIGHT0 + (L.z - Z0);
       this.device.queue.writeTexture({ texture: tex, origin: [ox, oy, ll] }, lights, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
+      this.pubWrote(lights.byteLength);
       this.orthoMips(ox, oy, ll, tex);
     }
   }
@@ -2780,6 +3019,30 @@ const cx0 = (lon: number) => lon / TAU + 0.5;
 
 /** an orthophotos' tile's slot in its window (span × span: 4, or 8 — T8e) */
 export const orthoSlot = (span: number, x: number, y: number) => (((y % span) + span) % span) * span + (((x % span) + span) % span);
+/**
+ * PLAN-J2 J2-0, the leak probe (EarthTiles.leakProbe): the rectangle a window keeps published while the probe holds it — its valid
+ * one, less one tile on an axis it spans whole (the window toroidal: whole, the texel past one edge is the other edge's — the
+ * sentinel needs a column of slots of its own; one is enough, both edges meet it across the wrap). The tile taken off is the one
+ * farther from `at` (the camera's tile, in the window's coordinates): the windows are led ahead of the craft, the camera's tile can
+ * be the last row — taken off, the level no longer covered the ground under the camera. Tiles [x0, x1) × [y0, y1).
+ */
+export function probePublished(
+  valid: { x0: number; y0: number; x1: number; y1: number },
+  span: number,
+  at: { x: number; y: number } | null = null,
+): { x0: number; y0: number; x1: number; y1: number } {
+  const r = { ...valid };
+  if (valid.x1 - valid.x0 >= span) {
+    if (at && at.x - valid.x0 > valid.x1 - 1 - at.x) r.x0++;
+    else r.x1--;
+  }
+  if (valid.y1 - valid.y0 >= span) {
+    if (at && at.y - valid.y0 > valid.y1 - 1 - at.y) r.y0++;
+    else r.y1--;
+  }
+  return r;
+}
+
 /** A level's weight towards its window's edges [px]: none within 2 px of it, full 48 px in. */
 export function edge(px: number, py: number, w: number, h: number) {
   const d = Math.min(px, py, w - px, h - py);

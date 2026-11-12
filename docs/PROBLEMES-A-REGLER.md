@@ -3,6 +3,21 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## La page figée quand le rectangle publié d'un niveau du relief ne couvre plus la tuile de la caméra (relevé par la sonde de fuite de J2-0)
+
+- **Observé** (12 nov. 2026, ce Mac, Chrome sans tête, F-35 gelé à 300 m au-dessus de la plaine du Gapeau, cap 20° ; e2e de mise au
+  point, retiré) : la première version de `earthTiles.leakProbe` retirait toujours la **dernière** colonne et la **dernière** rangée
+  d'une fenêtre entière ; la page s'est figée 3 fois sur 4 (plus aucune réponse de DevTools, même `Debugger.enable`, en ~1 s), avec
+  ou sans la peinture de la sentinelle ; jamais avec seulement le rétrécissement, seulement l'effacement des clés, ou seulement le
+  relief ou les orthophotos (une fois chacun). Les fenêtres sont menées **devant** l'appareil : la rangée retirée pouvait être celle
+  de la caméra. En retirant la rangée/colonne **la plus éloignée de la caméra** (`probePublished(valid, span, at)`), 3 essais sur 3
+  sans blocage. **Cause non prouvée** : un niveau fin dont le rectangle publié exclut la tuile sous la caméra semble bloquer le fil
+  de la page ou le GPU (le fil ne répondant pas même au débogueur : une attente native — un GPU occupé — plutôt qu'une boucle JS).
+- **Pourquoi c'est à regarder hors de la sonde** : en jeu, `loadedRect` garde la tuile du **centre des chargements** (devant
+  l'appareil, `priorityLon`), pas forcément celle de la caméra ; une fenêtre partielle pendant un chargement pourrait donc exclure la
+  tuile sous la caméra. Non observé en jeu ; à vérifier (un e2e qui force ce cas, puis la pile du GPU) — J2-1 (validité par tuile)
+  touche cette règle.
+
 ## Des villes couvertes d'arbres, sans bâtiments proches, dans les e2e (Marseille, Toulon, Manhattan)
 
 - **Observé** (12 nov. 2026, e2e `buildings-forward` sur kerr-mini, e482082b ; planches `docs/progress/j1/j1-5-batiments-forward-marseille.jpg`,
@@ -60,6 +75,14 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   ou incomplète**. Certains tombent au centre bas de l'image, sur le nez de l'appareil (ses reflets métalliques, dans la scène depuis
   J1-5), d'autres sur la mer à droite. Peu nombreux pour « plein de points » : la mesure ne voit peut-être pas ce que Sam voit. **Cause
   inconnue** ; à faire : une vidéo ou une rafale d'écran à l'instant où Sam les voit, et les points localisés (nez, mer, brume).
+- **Localisés par J2-0** (12 nov., e2e `j2-probes`, vol J0 tenu ; [fiche](progress/j2/FICHE-J2-0-2026-11-12.md) §6, planche
+  `docs/progress/j2/j2-0-points-blancs-m1max-mini.jpg`) : **ils naissent avant la reconstruction** — déjà dans l'image résolue qui entre
+  dans `temporal` (2–8 au-delà du blanc sur la mer par lecture), le temporel les garde aux mêmes pixels, la TAAU les étale (6–22 pixels) ;
+  dans une vue tenue ils s'accumulent (des dizaines, **blancs et cyan**, sur la mer et le nez). **Selon la machine** : 113 par seconde
+  dans la vue sur le M1 Max (la moitié des images), 0,23 par seconde sur kerr-mini, même scène et même code ; sur le M1 Max l'énergie de
+  l'image oscille aussi d'une image à l'autre (0,1 ↔ 0,4), le mini est lisse. À chercher entre les deux machines : la cadence d'ombrage du
+  gouverneur (`adaptRasterRate`, `rasterRate`), la cadence d'images (42 contre 17/s : la gigue), l'écran HDR et l'exposition de ce Mac ;
+  outils : `renderer.sharpLog` (`points` par image) et `sceneStages()`.
 - **Piste (avant ces leviers)** : un spéculaire de la mer filtré à l'échelle du pixel (rugosité élargie par la variance des normales FFT sous le pixel —
   Toksvig/LEAN —, ou plafonnée au loin), ou une borne des lucioles dans le temporel sur l'eau ; relève de la passe d'eau
   (PLAN-MER-WEBGPU / J4) ; mesurer avec la sonde (`SP_SWITCHES`), la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`
