@@ -263,10 +263,12 @@ fini partout, comparé à la capture affichée sur 48 × 27 blocs — corrélati
 vidé, profil neuf, kerr-mini) : la file de compilation est **sérielle** — le `main` (20,4 s) et l'`env` (11,4 s) de la scène du titre
 d'abord, puis les noyaux raster de la Terre (`shadeLiteFinish`, `shadeLiteLight`, `shadeLite` : 6,8 s) — **le sol à l'écran ~57 s
 après le chargement de la page**, avant le `main` Kerr de la Terre (17,5 s) et son `env` (10,6 s) ; tout prêt ~100 s (41
-compilations, 83 s) ; relancé (cache chaud) : sol à 1,2 s, tout prêt à 4,8 s. **Ce que J1-6 doit encore** : la première image de
-la Terre **ne dépend pas des noyaux Kerr de la Terre, mais de ceux du titre** (≈ 32 s à froid devant elle dans la même file) — la
-seconde moitié : à une entrée sur la Terre, compiler les noyaux raster du départ avant le `main`/`env` de la scène du titre (ou
-les en sortir), puis remesurer à froid.
+compilations, 83 s) ; relancé (cache chaud) : sol à 1,2 s, tout prêt à 4,8 s. **Lu de près** (les débuts des compilations) : le
+titre a fini son `main`/`env` à 47,4 s — la page démarre sur lui ; J0 placé à ~48 s, **son sol paraît 9,2 s après** (~2 s de file, puis
+6,8 s de noyaux raster à froid), **avant le `main` et l'`env` Kerr de la Terre** (60,0 → 92,5 s) : la première image de la Terre ne
+dépend pas des compilations Kerr de la Terre — la sortie de J1 est tenue pour ce chemin. (Une première lecture, le même jour, disait
+le sol attendre les noyaux du titre : faux, corrigé.) Reste hors de J1 : le titre lui-même attend son `main`/`env` à froid (≈ 32 s,
+le ciel d'attente devant).
 
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster

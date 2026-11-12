@@ -3539,3 +3539,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   garde `exportEXR`) ; les bords et verres de l'appareil n'y sont pas (composés par l'affichage).
 - **Suite** : J1-6, seconde moitié — à une entrée sur la Terre, les noyaux raster du départ avant le `main`/`env` du titre, puis
   remesurer l'entrée à froid.
+
+## 2026-11-12T08:24Z — Correction : l'entrée de J0 à froid ne dépend pas des noyaux du titre
+
+- Relu sur les débuts des compilations (`startedAt`, `remote-results/20261112-085652-kernel-compile`) : le titre finit son `main`/`env`
+  à 47,4 s de page ; J0 est placé vers 48 s ; **son sol paraît 9,2 s après** (~2 s de file, 6,8 s de noyaux raster à froid), **avant le
+  `main`/`env` Kerr de la Terre** (60,0 → 92,5 s). L'entrée précédente (08:15Z) disait le sol attendre les noyaux du titre : faux. Donc
+  la sortie de J1 « première image sans dépendre des compilations Kerr » est tenue sur ce chemin ; la « seconde moitié » annoncée
+  (réordonner la file) n'a pas lieu d'être. Le titre, lui, attend son `main`/`env` à froid (≈ 32 s, ciel d'attente) — hors de J1.
+  GRAPHICS-PIPELINE §5.5 et PLAN-J1 corrigés. Preuve : relecture d'une mesure ; rien de relancé.
