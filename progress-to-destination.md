@@ -3338,3 +3338,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites, suite** : pas encore de cible `r32uint` ni de profondeur gardée — leurs lecteurs changent l'image (rejet de l'historique
   par identité ; appareil composé par la profondeur, J1-5) ; l'adaptateur `decodeSurface` se retire quand la passe écrira le mot.
   Objet sur 20 bits : la grille de la forêt (≤ ~872 000 cellules à la portée « high ») y tient, de justesse.
+
+## 2026-11-12T03:05Z — CM1 : plus de tuile de relief à la carte mondiale pour de bon
+
+- **Contribution** (stratégie §7.19 « couverture gardée jusqu'au remplacement cohérent », §19 ; PLAN-CHARGEMENT-MONDE CM1,
+  constats ST-03, ST-04, ST-05, ST-20) : une panne passagère ne laisse plus un faux sol à 4,9 km dans les niveaux fins — ni à
+  l'écran, ni sous l'appareil (le contact lisait ces tuiles).
+- **Changé** (`earth-tiles.ts`, `tile-decode.ts`) : la tuile en échec prend les hauteurs réelles de son parent agrandies
+  (`earthTiles.standIns`) et est redemandée (2 s → 30 s, aussitôt sur `online`), ses échecs effacés au succès ; relief
+  national demandé même sans Terrarium ; imagerie de jour publiée sans la nuit (refusée ou 3 s de retard) ; nuit z 8 partagée
+  sous délai ; rues de nuit en échec non gardées.
+- **Mesuré** (ce Mac, Paris 900 m, SW, réseau coupé 20 s au saut, `tile-arrival` `TA_CUT_S=20`) : tuiles des fenêtres à la carte
+  mondiale **373 → 0** (sous la caméra 8 → 0), toutes revenues ≈ 4 s après le retour du réseau. Sans coupure : aucun écart hors
+  de la dispersion des passes d'avant. Tests unitaires `tests/earth-tiles-cm1.test.ts` (5).
+- **Limites / non vérifié** : panne de Terrarium seul et de la nuit GIBS seule non reproduites en jeu (tests unitaires
+  seulement) ; contact au sol pendant une coupure non mesuré ; après la coupure le relief IGN repasse par le portillon du SW
+  (p50 71 s) — CM2.

@@ -1,6 +1,6 @@
 # Plan — le chargement du monde : des tuiles qui arrivent vite et ne laissent pas de trou
 
-**État (12 novembre 2026) : CM0 fait (mesure du chemin réel, §8) ; CM1–CM3 en cours (décision de Sam du 12 novembre :
+**État (12 novembre 2026) : CM0 et CM1 faits (§8) ; CM2–CM3 en cours (décision de Sam du 12 novembre :
 CM0 → CM1 → CM2 → CM3). Le reste proposé.** Proposé le 10 novembre. Il vient de l'audit du 10 novembre
 ([01-chargement-monde.md](audit-2026-11-10/01-chargement-monde.md), constats ST-01 à ST-21) et complète le plan
 ST0–ST10 de [ANALYSE-STREAMING-2026-11-06.md](ANALYSE-STREAMING-2026-11-06.md), qu'il ne remplace pas. Le code fait foi.
@@ -124,4 +124,34 @@ journal [progress-to-destination.md](../progress-to-destination.md) et, pour un 
   l'autre. Le rejeu (`TA_REPLAY`) reste l'outil des A/B fins.
 - **Non fait** : les vols de JFK de nuit et de Chamonix en vol bas rapide (le plan en demandait trois) ; Aubrac non repassé ;
   le temps passé dans le portillon du SW lui-même (CM2) ; la latence d'un succès de cache du SW (CM6).
+
+### CM1 — plus de trou définitif : fait (12 novembre 2026)
+
+- **Code** (`src/system/earth-tiles.ts`, `src/system/tile-decode.ts`) : (a) ST-03 — une tuile de relief en échec n'est plus
+  remplie par la carte mondiale ETOPO (4,9 km) publiée comme une tuile de son niveau : **son parent réel le plus proche
+  (dessiné ou gardé en mémoire, jusqu'à 7 niveaux au-dessus) agrandi la remplace** (`standInFor`, `enlarge`), marquée
+  « remplaçante » (`earthTiles.standIns`) ; sans parent, rien (les niveaux grossiers dessinent là). Elle est redemandée tant
+  que sa fenêtre la veut : 2, 4, 8, 16 puis toutes les 30 s (`retryDelay`), aussitôt sur l'événement `online` ; un succès
+  efface ses échecs (le compteur ne redescendait jamais). Une remplaçante n'est jamais gardée dans le cache mémoire.
+  (b) ST-04 — ses hauteurs nationales (IGN, swisstopo, Mapterhorn) sont demandées même si Terrarium a échoué, la remplaçante
+  comblant leurs trous ; une fois arrivées, la tuile n'est plus une remplaçante. (c) ST-05 — l'imagerie z 6–14 n'attend plus la
+  nuit GIBS : refusée, ou plus de 3 s après le jour, le jour est dessiné seul (lumières à 0) et l'imagerie redemandée (2, 4,
+  8 s) ; le parent z 8 partagé de la nuit a un délai (15 s) et n'est retiré que s'il est encore le sien. (d) ST-20 — les rues
+  de nuit (OpenFreeMap) en échec ne sont plus gardées en cache.
+- **Mesuré** (ce Mac, Paris 900 m, SW, passe froide, `TA_CUT_S=20` : réseau de la page et du SW coupé 20 s au saut) :
+
+| | Tuiles des fenêtres aux hauteurs de la carte mondiale | dont sous la caméra | Remplaçantes à la fin | Vue à 90 % | Tuiles Terrarium dessinées p50 |
+|---|---|---|---|---|---|
+| avant (`1b925312` + CM0) | **373** (z 6–17), jamais redemandées | **8** | — | 12,9 s (faussé : le repli compte comme dessiné) | 12,3 s |
+| après CM1 | **0** | **0** | 0 (toutes revenues) | 24,4 s (4,4 s après le retour du réseau) | 24,0 s (4 s après) |
+
+  Sans coupure (même conditions, SW) : vue à 90 % 5,1 s, imagerie p50 5,0 s, relief IGN p50 24 s — dans la dispersion des
+  passes d'avant (4,9–5,8 s ; 5,0–5,1 s ; 22,5–22,9 s). Tests : `tests/earth-tiles-cm1.test.ts` (délais, agrandissement,
+  Terrarium refusé → remplaçantes du parent jamais la carte mondiale, retour du réseau, succès qui efface, nuit refusée → jour
+  seul).
+- **Limites** : après la coupure, les hauteurs IGN des 448 tuiles repassent toutes par le portillon du SW (p50 71 s depuis le
+  saut, 74 encore en vol au plafond de 80 s) — CM2. Une remplaçante comble aussi les trous d'une grille nationale de bord de
+  couverture, gardés ensuite. Les lumières de la nuit d'une imagerie dessinée sans elles ne sont redemandées que trois fois.
+  Non vérifié en jeu : la panne de Terrarium seul (simulée en test unitaire), la nuit GIBS seule, le contact au sol pendant une
+  coupure (la remplaçante est la hauteur que `heightAt` lisait déjà au niveau parent).
 

@@ -162,7 +162,8 @@ export type DecodeRequest =
       op: "imagery";
       day: Blob;
       dayCrop: readonly [number, number, number] | null;
-      night: Blob;
+      /** (CM1: none — refused, late —: the lights 0) */
+      night: Blob | null;
       nightCrop: readonly [number, number, number] | null;
       fit: OrthoFit | null;
       fine: boolean;
@@ -201,7 +202,10 @@ export async function decodeTile(q: DecodeRequest): Promise<{ heights?: Float32A
     const delight = q.delight ? delightTile(px, q.delight) : undefined;
     return { words: orthoWords(px, q.fit), ...(delight ? { delight } : {}) };
   }
-  const [d, n] = await Promise.all([pixels(q.day, q.dayCrop), pixels(q.night, q.nightCrop)]);
+  const [d, n] = await Promise.all([
+    pixels(q.day, q.dayCrop),
+    q.night ? pixels(q.night, q.nightCrop) : Promise.resolve(new Uint8ClampedArray(4 * TILE * TILE)),
+  ]);
   let roads: { mask: Float32Array | null; mpp: number } | null = null;
   if (q.roads) {
     const mpp = tileMetresPerPixel(q.roads.z, q.roads.y);

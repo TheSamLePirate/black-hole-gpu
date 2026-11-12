@@ -121,6 +121,16 @@ const ORTHO_RETRIES = 3;
 const IMAGERY_RETRIES = 3;
 /** the abort's reason of a tile's imagery timed out (a failure, asked again — not the tile given up) */
 const IMAGERY_TIMEOUT = "imagery timeout";
+/** CM1: a relief tile that will not load asked again after RETRY_BASE_MS, doubling, RETRY_MAX_MS at most — while its window
+ *  wants it, for as long as it fails (it had been given the global map's heights after two failures, for good — ST-03) */
+export const RETRY_BASE_MS = 2000;
+export const RETRY_MAX_MS = 30000;
+export const retryDelay = (n: number) => Math.min(RETRY_BASE_MS * 2 ** Math.max(n - 1, 0), RETRY_MAX_MS);
+/** CM1: the day's imagery in, the night's lights waited for that much longer at most — then the day drawn alone (its lights
+ *  0), the lights asked again with the tile's imagery (ST-05: a stalled or refused GIBS night had held every tile's photograph) */
+const NIGHT_GRACE_MS = 3000;
+/** the imagery drawn without its night's lights (asked again: imageryLater) */
+const nightless = new WeakSet<Uint32Array>();
 /** (L7b's prototype — ortho-delight.ts, settings.orthoDelight) the levels de-lit (z 17: 0.8 m, z 18: 0.4 m a pixel at 48°: a
  *  shadow's edge resolved), the canopy's margin round a tile [px] (a 40 m tree's shadow at 45° from z 18's 96 px — 38 m —
  *  away), its requests a second (the Géoplateforme's WMS-R: the relief's 20 and the survey's 12 beside), its tiles at once */
@@ -555,6 +565,12 @@ async function terrarium(z: number, x: number, y: number, signal: AbortSignal): 
   const k = Math.max(z - 15, 0);
   const h = await terrariumFile(tileUrl(z - k, x >> k, y >> k), signal);
   if (!k) return h.slice();
+  return enlarge(h, k, x, y);
+}
+
+/** A tile's square of its ancestor k levels up (its heights, 256²: the first 256² of `h`), enlarged to a tile (bilinear),
+ *  unmarked (not a survey's) — Terrarium beyond its z 15, a stand-in from the parent's heights (CM1). k ≤ 7. */
+export function enlarge(h: Float32Array, k: number, x: number, y: number): Float32Array {
   const side = TILE >> k,
     ox = (x - ((x >> k) << k)) * side,
     oy = (y - ((y >> k) << k)) * side;
@@ -891,6 +907,7 @@ async function nationalHeights(
   hlod = false,
   ground?: Float32Array,
   coarse?: Float32Array,
+  fill?: Float32Array,
 ): Promise<Float32Array> {
   if (ground) {
     const r = await src.heights(z, x, y, signal, hlod, ground.subarray(0, TILE * TILE));
@@ -905,7 +922,11 @@ async function nationalHeights(
   const { h, over } = r;
   markFine(h, true);
   if (h.some((e) => Number.isNaN(e))) {
-    const t = await terrarium(z, x, y, signal);
+    // (CM1: Terrarium refused — the tile a stand-in —, its gaps the stand-in's heights: the national ones not lost for them)
+    const t = await terrarium(z, x, y, signal).catch((e) => {
+      if (fill && !signal.aborted) return fill;
+      throw e;
+    });
     for (let i = 0; i < h.length; i++) if (Number.isNaN(h[i]!)) h[i] = t[i]!;
   }
   if (!over) return h;
@@ -980,6 +1001,12 @@ export class EarthTiles {
    *  kilometres on since) */
   private nationalQueue: { L: Level; x: number; y: number; pass: number; go: () => void }[] = [];
   private failures = new Map<string, { n: number; at: number }>();
+  /** CM1: the tiles drawn from their parent's heights while their own are asked again (their load failed) */
+  private standInKeys = new Set<string>();
+  /** CM1: the tiles of the windows drawn from their parent's heights now (their own failed, asked again) */
+  get standIns() {
+    return this.standInKeys.size;
+  }
   /** bumped at a switch of the sources: a load begun before it is dropped */
   private gen = 0;
   /** the reference (the camera's place) [rad]: the levels' coordinates measured from it */
@@ -1090,6 +1117,11 @@ export class EarthTiles {
   ) {
     this.texture = this.makeTexture();
     this.imagery2k = this.makeImagery2k(1);
+    // (CM1: the network back — the failed tiles asked again at once, their count from zero)
+    globalThis.addEventListener?.("online", () => {
+      this.failures.clear();
+      this.request(cx0(this.priorityLon), this.prioritySinLat);
+    });
     this.orthoTexture = device.createTexture({
       size: filtered ? [ORTHO_CLIP, ORTHO_CLIP, IMG_1K_LAYERS] : [1, 1, IMG_1K_LAYERS],
       format: "rgba8unorm",
@@ -1370,6 +1402,8 @@ export class EarthTiles {
       this.aheadLoads.clear();
       for (const r of this.refining.values()) r.ctl.abort();
       this.cache.clear();
+      this.standInKeys.clear();
+      this.failures.clear();
       for (const L of this.levels) {
         L.key.fill(null);
         L.stale = !!L.valid;
@@ -1513,15 +1547,20 @@ export class EarthTiles {
   private request(lonT: number, sinLat: number) {
     const now = performance.now();
     const todo: [Level, number, number, number, number][] = [];
+    // (the levels holding stand-ins: looked over, their stand-ins asked again when due)
+    const standInZ = new Set<number>();
+    for (const k of this.standInKeys) standInZ.add(Number(k.slice(0, k.indexOf("/"))));
     for (const L of this.levels) {
       // (a window drawn whole: nothing to look for — not its tiles' keys made again each frame —, unless taken again)
-      if (!L.want || (same(L.valid, L.want) && !L.stale)) continue;
+      if (!L.want || (same(L.valid, L.want) && !L.stale && !standInZ.has(L.z))) continue;
       const cx = lonT * L.n,
         cy = mercY(sinLat, L.n);
       for (let y = L.want.y0; y < L.want.y1; y++) {
         for (let x = L.want.x0; x < L.want.x1; x++) {
           const key = this.keyOf(L, x, y);
-          if (L.key[this.slotOf(L, x, y)] === key || this.inflight.has(key)) continue;
+          if (this.inflight.has(key)) continue;
+          // (in — unless a stand-in, asked again when due, its national heights not on their way)
+          if (L.key[this.slotOf(L, x, y)] === key && (!this.standInKeys.has(key) || this.refining.has(key))) continue;
           // (kept past the window — walked back to, or loaded ahead —: drawn at once)
           const kept = this.cache.get(key);
           if (kept) {
@@ -1638,7 +1677,9 @@ export class EarthTiles {
       let h: Float32Array;
       try {
         const coarse = !ground && L.z >= IGN_LIDAR_Z ? this.coarseGrid(L.z, x, y) : undefined;
-        h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, !!ground, ground, coarse);
+        const s = this.slotOf(L, x, y);
+        const fill = this.standInKeys.has(key) && L.key[s] === key ? (L.data[s] ?? undefined) : undefined;
+        h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, !!ground, ground, coarse, fill);
       } finally {
         clearTimeout(timer);
       }
@@ -1647,6 +1688,8 @@ export class EarthTiles {
       if (!ground) {
         this.arrivals.national(key, src.id);
         this.arrivals.mark(key, "nat");
+        // (its own heights now: no longer a stand-in)
+        this.standInKeys.delete(key);
       }
       if (L.key[this.slotOf(L, x, y)] === key) this.put(L.z, x, y, h, col);
       else if (this.cache.has(key)) this.keep(key, h, col);
@@ -1696,7 +1739,7 @@ export class EarthTiles {
         if (gen !== this.gen || L.key[s] !== key || !L.data[s]) return;
         if (col) this.arrivals.mark(key, "img");
         if (col) this.put(L.z, x, y, L.data[s]!, col);
-        else if (col === undefined) this.imageryLater(L, x, y, key, src, n + 1);
+        if (col === undefined || (col && nightless.has(col))) this.imageryLater(L, x, y, key, src, n + 1);
       },
       2000 * 2 ** (n - 1),
     );
@@ -1814,6 +1857,8 @@ export class EarthTiles {
       // (begun before a switch of the sources: the old source's — the slot waits for the new one's)
       if (gen !== this.gen) return;
       this.arrivals.mark(key, "got");
+      this.failures.delete(key);
+      this.standInKeys.delete(key);
       // (its window gone past it meanwhile, within the halo: into memory — dropUnwanted)
       ahead = this.aheadLoads.has(key);
       h = heights;
@@ -1835,7 +1880,7 @@ export class EarthTiles {
           if (gen !== this.gen || L.key[this.slotOf(L, x, y)] !== key) return;
           if (col) this.arrivals.mark(key, "img");
           if (col) this.put(L.z, x, y, heights, col);
-          else if (col === undefined) this.imageryLater(L, x, y, key, src, 1);
+          if (col === undefined || (col && nightless.has(col))) this.imageryLater(L, x, y, key, src, 1);
         });
     } catch (e) {
       // (cleared, the sources switched, or dropped as its window left it — and maybe asked again since: not this load's)
@@ -1843,16 +1888,29 @@ export class EarthTiles {
       this.arrivals.fail(key);
       const f = this.failures.get(key) ?? { n: 0, at: 0 };
       f.n++;
-      f.at = performance.now() + 3000 * f.n;
+      const wait = retryDelay(f.n);
+      f.at = performance.now() + wait;
       this.failures.set(key, f);
-      // (asked again once it may be: the image converged, no frame asks — the tile would wait for a move)
-      if (f.n < 2) setTimeout(() => this.request(cx0(this.priorityLon), this.prioritySinLat), 3000 * f.n + 10);
-      // (twice failed: the global map's heights there, the level not held back)
-      if (f.n >= 2) {
-        h = this.fromFallback(L, x, y);
-        this.failed++;
-        if (f.n === 2) console.warn(`Terrain tile ${key} unavailable (${(e as Error).message}): the global map there`);
+      if (f.n === 1) this.failed++;
+      // (asked again once it may be, for as long as its window wants it — the image converged, no frame asks: the tile would
+      // wait for a move)
+      setTimeout(() => this.request(cx0(this.priorityLon), this.prioritySinLat), wait + 10);
+      // (CM1, ST-03: never the global map's 4.9 km heights published as this level's — they hid the real coarser levels and were
+      // the contacts' ground, for good —; its parent's real heights instead, enlarged, while it is asked again; no parent in:
+      // none — the coarser levels draw there. Its national heights asked all the same — ST-04: a Terrarium down had kept the
+      // IGN's, swisstopo's away —, the stand-in filling their gaps)
+      const inSlot = L.key[this.slotOf(L, x, y)] === key;
+      if (!ahead && (!inSlot || this.standInKeys.has(key))) {
+        if (!inSlot) {
+          h = this.standInFor(L, x, y);
+          if (h) {
+            this.standInKeys.add(key);
+            this.arrivals.standIn(key);
+          }
+        }
+        if ((h || inSlot) && national) refineAfter = national;
       }
+      if (f.n === 2) console.warn(`Terrain tile ${key} unavailable (${(e as Error).message}): its parent's heights there, asked again`);
     } finally {
       clearTimeout(timer);
       if (this.inflight.get(key) === ctl) {
@@ -1910,7 +1968,10 @@ export class EarthTiles {
     // imagery held for when it leaves in turn)
     const ringLevel = this.ringLevel(L);
     const old = L.key[s];
-    if (ringLevel && old && old !== this.keyOf(L, x, y) && L.data[s]) this.keep(old, L.data[s]!, L.col[s] ?? null);
+    // (a stand-in — CM1 — never kept: walked back to, its own heights are asked)
+    if (ringLevel && old && old !== this.keyOf(L, x, y) && L.data[s] && !this.standInKeys.has(old))
+      this.keep(old, L.data[s]!, L.col[s] ?? null);
+    if (old && old !== this.keyOf(L, x, y)) this.standInKeys.delete(old);
     L.col[s] = ringLevel ? (col ?? (old === this.keyOf(L, x, y) ? (L.col[s] ?? null) : null)) : null;
     if (col && inside(L.valid, x, y) && L.key[s] === this.keyOf(L, x, y)) this.imagery++;
     // (the same tile's heights again, drawn already — the IGN's over the Terrarium's, the far silhouettes' overground on its
@@ -2048,7 +2109,28 @@ export class EarthTiles {
     return best;
   }
 
-  private fromFallback(L: Level, x: number, y: number) {
+  /** CM1: a tile's stand-in — the nearest coarser level's tile over it that is in (drawn, or kept past its window), its square
+   *  enlarged (its bare ground), up to 7 levels up —; null if none is in. */
+  private standInFor(L: Level, x: number, y: number): Float32Array | null {
+    for (let k = 1; k <= 7 && L.z - k >= Z0; k++) {
+      const P = this.levels[L.z - k - Z0];
+      if (!P) break;
+      const px = Math.floor(x / 2 ** k),
+        py = y >> k;
+      const pk = this.keyOf(P, px, py),
+        s = this.slotOf(P, px, py);
+      const h = P.key[s] === pk && P.data[s] ? P.data[s]! : (this.cache.get(pk)?.h ?? null);
+      if (!h) continue;
+      // (its column within its parent's: the key's x wrapped)
+      const xw = ((x % L.n) + L.n) % L.n;
+      return enlarge(h, k, xw, y);
+    }
+    return null;
+  }
+
+  /** a tile from the global map's heights — no longer drawn for a tile that will not load (CM1: its parent's stand in); the
+   *  tests' reference ground */
+  fromFallback(L: Level, x: number, y: number) {
     const h = new Float32Array(TILE * TILE);
     if (!this.fallback) return h;
     for (let j = 0; j < TILE; j++) {
@@ -2546,11 +2628,14 @@ const parents = new Map<string, Promise<Blob>>();
 function parentBlob(url: string): Promise<Blob> {
   let p = parents.get(url);
   if (!p) {
-    p = fetch(url).then((r) => {
+    // (CM1, ST-05: under a time limit — a stalled request had stayed here, every tile under that parent timed out with it)
+    p = fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) }).then((r) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.blob();
     });
-    p.catch(() => parents.delete(url));
+    p.catch(() => {
+      if (parents.get(url) === p) parents.delete(url);
+    });
     parents.set(url, p);
     if (parents.size > 24) parents.delete(parents.keys().next().value!);
   }
@@ -2564,9 +2649,14 @@ async function fetchRoads(z: number, x: number, y: number, signal: AbortSignal):
   const url = roadsUrl(z, x, y);
   let p = roadFiles.get(url);
   if (!p) {
-    p = fetch(url, { signal: AbortSignal.timeout(15_000) })
+    const q: Promise<ArrayBuffer | null> = fetch(url, { signal: AbortSignal.timeout(15_000) })
       .then((r) => (r.ok ? r.arrayBuffer() : null))
       .catch(() => null);
+    // (CM1, ST-20: a failure not kept — the tile's streets asked again with its next imagery)
+    void q.then((b) => {
+      if (!b && roadFiles.get(url) === q) roadFiles.delete(url);
+    });
+    p = q;
     roadFiles.set(url, p);
     if (roadFiles.size > 24) roadFiles.delete(roadFiles.keys().next().value!);
   }
@@ -2625,18 +2715,31 @@ async function imagery(
     const rk = Math.max(z - ROAD_MVT_Z1, 0);
     const sub = { k: rk, x: x - ((x >> rk) << rk), y: y - ((y >> rk) << rk) };
     const mvt = street && roads ? fetchRoads(z - rk, x >> rk, y >> rk, signal) : Promise.resolve(null);
-    const [[d, photo], n, roadTile] = await Promise.all([day(), get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined), mvt]);
+    // (CM1, ST-05: the night's lights not needed for the day's photograph — refused, or later than NIGHT_GRACE_MS after the day:
+    // the day drawn alone, its lights asked again with the tile's imagery — nightless, imageryLater)
+    const nightP = get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined).catch((e) => {
+      if (signal.aborted) throw e;
+      return null;
+    });
+    // (given up with the tile before the day came: its rejection handled here)
+    nightP.catch(() => undefined);
+    const [[d, photo], roadTile] = await Promise.all([day(), mvt]);
+    let grace: ReturnType<typeof setTimeout> | undefined;
+    const n = await Promise.race([nightP, new Promise<null>((ok) => (grace = setTimeout(() => ok(null), NIGHT_GRACE_MS)))]).finally(() =>
+      clearTimeout(grace),
+    );
     // (decoded and brought into the Blue Marble's colours off the page's thread — tile-decode.ts imageryWords)
     const r = await decodeOff({
       op: "imagery",
       day: d.blob,
       dayCrop: d.crop,
-      night: n.blob,
-      nightCrop: n.crop,
+      night: n?.blob ?? null,
+      nightCrop: n?.crop ?? null,
       fit: photo?.fit ?? null,
       fine,
       roads: street ? { z, y, mvt: roadTile, sub } : null,
     });
+    if (r.words && !n) nightless.add(r.words);
     return r.words ?? null;
   } catch {
     // (given up with its tile: none; refused, timed out: undefined — asked again while the tile is drawn, imageryLater)
@@ -2647,6 +2750,9 @@ async function imagery(
       : undefined;
   }
 }
+
+/** a relief tile's imagery (z ≤ 14: the day's photograph, the night's lights in alpha) — exported for its tests */
+export const tileImagery = imagery;
 
 /** The night's lights for a tile: its own (to z 8), else its z 8 parent and the square of it the tile covers
  *  (x, y, side [px]: enlarged to the tile). */
