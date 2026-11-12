@@ -67,7 +67,7 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         for (let k = 0; k < 6; k++) {
           // (the scene's colour before the HUD and the optics — renderer.sceneColor, J1-6 —: a pixel over SP_RATIO × its 8
           // neighbours' mean luminance and over a mid-grey, under the horizon — the sea's rows, 50–85 % of the image)
-          const r = await app.js<{ n: number; at: number[]; over: number }>(`(async () => {
+          const r = await app.js<{ n: number; at: number[]; over: number; what: unknown[] }>(`(async () => {
             const c = await __bh.renderer.sceneColor(__bh.settings), W = c.width, H = c.height, e = c.exposure, d = c.data;
             const L = (x, y) => { const i = 4 * (y * W + x); return e * (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]); };
             let n = 0, over = 0; const at = [];
@@ -77,7 +77,14 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
               if (l > ${Number(process.env.SP_RATIO ?? 3)} * s / 8) { n++; if (at.length < 40) at.push(x, y); }
               if (l > 1 && l > 1.5 * s / 8) over++;
             }
-            return { n, at, over }; })()`);
+            // (what the visibility drew under the first ones — surfaceAt —, their colour and its neighbours': what they are)
+            const what = [];
+            for (let q = 0; q < Math.min(at.length, 8); q += 2) {
+              const x = at[q], y = at[q + 1], i = 4 * (y * W + x), sa = await __bh.renderer.surfaceAt((x + 0.5) / W, (y + 0.5) / H);
+              what.push({ x, y, rgb: [d[i], d[i + 1], d[i + 2]].map((v) => +(v * e).toFixed(2)), kind: sa?.kind, ground: sa && Math.round(sa.ground), nearest: sa && Math.round(sa.nearest), level: sa?.level });
+            }
+            return { n, at, over, what }; })()`);
+          if (k === 0) console.log(`    ${side}: what they are ${JSON.stringify(r.what)}`);
           counts.push(r.n);
           overs.push(r.over);
           // (and on the screen as shown — the display's composition, the canopy's glass, the bloom —: two shots a frame apart, the

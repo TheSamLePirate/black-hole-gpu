@@ -138,6 +138,15 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`seaWaterOpenOn`), les étoiles projetées (`starsSplat`), l'affinage (`targetSpp` 0), la luminosité des étoiles. **Suite** : chercher la
   passe par la sonde d'étapes de J2-0 (`stageProbe`/`sceneStages`) et des coupes passe par passe (`trace`, `shade`, les nuages, l'air), et
   ce qui a une période de 8 px internes (le bloc des rayons, la LUT du champ lointain — un rayon tous les 8 px —, la grille de gigue).
+- **Localisés (même jour, soir, M1 Max, vue tenue, tuiles)** : **`liteSkip` 1024 (l'ombrage de `shadeLite` remplacé par un gris) les
+  ôte tous (0 par image)** — ils naissent dans `shadeLite`. Sous chacun (`surfaceAt`), **la mer comme sol raster, à 2,0–2,3 km, au
+  niveau 3 des anneaux**, et la couleur un **blanc neutre de 3 à 13 fois le blanc** (une émission ou une saturation, pas un reflet teinté).
+  **Exclus en plus** : les groupes de `liteSkip` 126 (ombres du décor et du relief, surfaces, normale, ombres des nuages, arbres), 65664
+  (imagerie et son empreinte), 21004288 (contact, ciel et rebond, ciel des vallées, occlusion), 3670016 (H3, H5, ombre de l'appareil),
+  41943040 (bits restants), l'écume (`seaFoamWorldOn`), la FFT (`seaFft`), la frange du rivage (`shoreWash`), les lampadaires
+  (`earthStreetLamps`), les nuages (`earthClouds` 0). **À faire** : lire `shadeLite` sur ce cas — un pixel de mer à ~2 km au niveau 3,
+  sa valeur > 1 sans eau ni spéculaire —, en vidant ses termes un à un dans un noyau de diagnostic ; ce qui a une période de 8 px internes
+  (les lignes des points) ; pourquoi le M1 Max seulement (kerr-mini 0,23/s).
 - **Piste (avant ces leviers)** : un spéculaire de la mer filtré à l'échelle du pixel (rugosité élargie par la variance des normales FFT sous le pixel —
   Toksvig/LEAN —, ou plafonnée au loin), ou une borne des lucioles dans le temporel sur l'eau ; relève de la passe d'eau
   (PLAN-MER-WEBGPU / J4) ; mesurer avec la sonde (`SP_SWITCHES`), la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`
