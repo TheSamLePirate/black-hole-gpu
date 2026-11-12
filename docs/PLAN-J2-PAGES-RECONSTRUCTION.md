@@ -293,6 +293,11 @@ pas, seul son indépendance à la caméra) ; les ancres servent l'appareil pilot
 gardent le sol dessiné). **La question 2** (les pointes du fil principal) : localisée, non bornée — `request()` jusqu'à 7 ms en vol et
 14–20 ms au chargement, la publication au-delà de son budget (fiche §4, PROBLEMES-A-REGLER) ; le travail des arrivées ≤ 0,5–1,7 ms.
 
+**Décisions de Sam (12 novembre 2026, ~15:40 UTC)** sur les trois questions de la fiche J2-2 : (1) **ancrer aussi un autre appareil, mais
+seulement quand la caméra le suit** (vue sur un appareil : poursuite, autour, tour, à bord), et **seulement après avoir reproduit le saut**
+sur un avion de l'IA posé, avec le même e2e que pour le F-35 ; (2) **le seuil de 1 500 m est gardé** ; (3) **le lot des pointes du fil
+principal (`request()`, publication) est fait avant J2-3**.
+
 ## 10. Non vérifié
 
 - **Aucune mesure nouvelle** : les chiffres cités viennent des fiches J0 du 12 novembre, de la fiche T9 et de GRAPHICS-PIPELINE ; les
