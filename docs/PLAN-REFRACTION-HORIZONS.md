@@ -123,11 +123,11 @@ Source : les fiches `docs/progress/refraction-horizons/*.md` lues jusqu'à leur 
 | Q1 | en partie | P2 et les ponts faits (image 53–58 → 44–45 ms) ; P1 écarté. **P3, P5, P6, P7, P12, I1 et I4 (paliers) non faits ; budget en vol jamais fixé** (décision 16) |
 | Q2 | fait (−0,35 ms à Chamonix) | C9 (`wxVeil`) ; les captures à trois Soleils |
 | Q3 | B1, B4 faits (+0,3 à 1 ms) | B3, A1 |
-| Q4 | S1 fait (actif) ; scintillement figé < 1 % ; **F1 (le vent proche) fait le 12 nov. (PLAN-VEGETATION-V2 V2e)** ; L2b repris en horizons de canopée (V3) **essayé et retiré le 12 nov.** : −2 % de luminance pour +0,66 ms | L2a GTAO et L2b coupés (invisibles, halos, damier) ; **L4 coupé, à juger** ; L5, F2, F4, C4 non faits. **10 nov. (§0.4) : F2 par tuiles de couvert et de canopée, L2b par horizons de canopée** |
+| Q4 | S1 fait (actif) ; scintillement figé < 1 % ; **F1 (le vent proche) fait le 12 nov. (PLAN-VEGETATION-V2 V2e)** ; L2b repris en horizons de canopée (V3) **essayé et retiré le 12 nov.** : −2 % de luminance pour +0,66 ms | L2a GTAO et L2b coupés (invisibles, halos, damier) ; **L4 coupé ; jugé par Sam le 12 nov. (décision 43) : à régler — pistes, béton et neige seulement, rugosités sur photos de référence, végétation mate jusqu'à L5** ; L5, F2, F4, C4 non faits. **10 nov. (§0.4) : F2 par tuiles de couvert et de canopée, L2b par horizons de canopée** |
 | Q5 | C1, C2, C3, C5, C6, C7, C10, C11 (premier lot), VIPER C1 et C4, P8 faits | VIPER C2 et C3 coupés après mesure ; la confiance de C5 ; **orage : passe des nuages ~25 ms sur M1** |
 | Q6 | I2 (TAAU en mouvement), I3, I4 (échelle 75 %), I6 A1–A3, I7, I8 faits | I5 sans besoin établi ; A4 en option ; **Q6t : porte de la décision 40** |
 | Q6-ISS | ISS0, ISS1, ISS3 faits ; ISS2, ISS4, ISS5 en partie | La capture dense nadir et amarrage (6 novembre) ; l'attitude réelle de la station ; les plans serrés |
-| Q7 | L8 (+1,7 ms sur M1), B4, L9, G1/G2 faits | **L7b coupé, go/no-go final** ; L7a ; L9 sans observations ; G1/G2 non lus par les lecteurs |
+| Q7 | L8 (+1,7 ms sur M1), B4, L9, G1/G2 faits | **L7b coupé ; Sam, 12 nov. (décision 43) : finir l'étude** (un village, halo et bruit mesurés dans le jeu, coût d'image sur M1), puis go/no-go chiffré ; L7a ; L9 sans observations ; G1/G2 non lus par les lecteurs |
 | Q8 | L10, D1 (9 paliers), C8 faits | **B5 coupé** (+1–2 ms, presque invisible) ; B2, F3 ; le coût de D1 non mesuré. **10 nov. (§0.4) : F3 = imposteurs hémi-octaédriques jusqu'à ~20 km, après J1** |
 | Q9 | P9 et P10 examinés, non construits | P9 borné à ~1 ms de gain |
 
@@ -1495,6 +1495,14 @@ sur cette délégation :
     - **L7b : le prototype dans le jeu**, puis plusieurs zones et la prise au couchant pour le go/no-go final ;
     - **l'ordre de Q7/Q8** : le couvert bas près des pistes (VIPER B5), puis le trafic, les lignes HT et les éoliennes (D1),
       puis les scans de détail (L8), puis les lampadaires (L10).
+43. **Les décisions du 12 novembre** (Sam, sur les planches existantes : Q7/l7b-couchant-ras, l7b-jeu ; Q4/l4-cdg, l4-beauce) :
+    - **L7b : finir l'étude** avant le go/no-go — un village, le halo et le bruit mesurés dans le jeu, le coût d'image sur M1 ;
+      la teinte olive (k bleu < k rouge) et le saut visible quand la photo relevée remplace l'autre sont à traiter dans le même
+      temps. Reste coupé jusque-là ;
+    - **L4 : à régler, pas allumé tel quel** — garder le spéculaire sur les pistes, le béton (bâti) et la neige ; régler leurs
+      rugosités sur des photos de référence (Soleil bas, sol sec : le premier jet donnait au sec un lustre de sol mouillé) ;
+      la végétation (prairies, cultures) reste mate jusqu'au modèle végétal L5. Reste coupé jusqu'à ce réglage ; l'ordre de la
+      décision 30 (Q6 avant les effets qui scintillent) tient.
 
 ## 11. Questions ouvertes
 
@@ -1510,7 +1518,7 @@ sur cette délégation :
 2. **Fixer le budget en vol de Q1** et nommer le palier de cadence : la décision 26 (≤ 40 ms sur le mini, ≥ 40 i/s sur
    M1 Max) devient un palier intermédiaire de la cible de 60 i/s (analyse stratégique, §8 ; C0-8).
 3. **Confirmer ou retirer le pré-filtre SRTM** de T1, actif sans confirmation (décision 12).
-4. **Trancher les effets coupés** : L4 (le spéculaire), Q6t (les rayures, décision 40), L7b (go/no-go final), B5 (la
+4. **Trancher les effets coupés** : ~~L4~~ et ~~L7b~~ tranchés le 12 novembre (décision 43) ; restent Q6t (les rayures, décision 40), B5 (la
    suite du couvert bas).
 5. **H1c** : où héberger les DEM LOLA du pôle sud.
 6. **T7** : lancer ou non la bathymétrie côtière (HOMONIM, Litto3D) pour les hauts-fonds.

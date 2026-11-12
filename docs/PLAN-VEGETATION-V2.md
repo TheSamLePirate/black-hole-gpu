@@ -1,6 +1,6 @@
 # PLAN-VEGETATION-V2 — les arbres lointains en imposteurs ré-éclairables
 
-**V3 essayé et retiré le 12 novembre** (voir le tableau, V2d). **Décision de Sam (11 novembre)** : V1 gardé tel quel (effet discret accepté) ; rien de plus sur le rendu pour l'instant — V2e et V3
+**V3 essayé et retiré le 12 novembre** (voir le tableau, V2d). **Décision de Sam (11 novembre)** : V1 gardé tel quel (effet discret accepté) — **12 novembre**, revu sur la planche des Maures : « je vois pas les différences » ; rien de plus sur l'intensité de V1, il se rejuge quand il passera dans l'opaque de J1 ; rien de plus sur le rendu pour l'instant — V2e et V3
 attendent. **Puis (12 novembre) : « V2e / V3 : forêt »** — V2e F1 (le vent proche) fait le même jour ; V3 ensuite.
 
 **État (11 novembre 2026)** : V2a et V2b faits (les arbres modélisés et leur cuisson en imposteurs, vérifiés sur planche) ; **V2c

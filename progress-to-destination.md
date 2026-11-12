@@ -3487,3 +3487,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   rejet doux (poids coupé), réservé aux générations et aux mobiles, ou seulement là où la frame est entièrement ombrée.
 - **Vérifié** : check-wgsl 83/83, tsc, `bun test --parallel` 2190/1 (le vol lunaire de `landing-flight` à 5,03 s sous la charge ; 7/7 seul).
   **Non fait** : `rigidMotionOn` reste éteint (aucun lecteur ne l'emploie) ; pas d'A/B allumé sur kerr-mini ; les pistes non essayées.
+
+## 2026-11-12T06:48Z — Décisions de Sam sur quatre effets codés (L7b, L4, V1, écume S3)
+
+- **Contribution** (stratégie §20.7 « trancher et retirer » ; PLAN-REFRACTION-HORIZONS Q4/Q7, PLAN-VEGETATION-V2 V1, PLAN-MER-WEBGPU
+  S3) : quatre jugements en attente rendus sur les planches existantes (page de comparaison de la session de suivi, aucun test
+  relancé). **L7b** : finir l'étude (un village, halo et bruit dans le jeu, coût sur M1) avant le go/no-go ; reste coupé. **L4** : à
+  régler, pas allumé tel quel — pistes, béton et neige seulement, rugosités sur photos de référence (Soleil bas, sec), végétation
+  mate jusqu'à L5 ; reste coupé. **V1** : « je vois pas les différences » — confirme la décision du 11 (gardé tel quel), rien de
+  plus sur son intensité, rejugé dans l'opaque de J1. **Écume (S3)** : acceptée pour l'instant ; stries et bulles avec la passe
+  d'eau de J4.
+- **Changé** : PLAN-REFRACTION-HORIZONS (décision 43, tableau Q4/Q7, liste « ce qui attend Sam »), `docs/progress/refraction-horizons/Q4.md`
+  et `Q7.md`, PLAN-VEGETATION-V2 (en tête), PLAN-MER-WEBGPU (état). Corrigé aussi (c0630b57) : PLAN-NUIT-URBAINE (NU1+NU2 faits le
+  6 nov.) et l'analyse mer du 10 nov. (M5 faite par S2).
+- **Preuve** : documenté (décisions). Aucun code, test ni mesure dans ce lot.
+- **Suite** : L7b — le village et les mesures ; L4 — les photos de référence et le réglage des rugosités (après Q6, décision 30).
