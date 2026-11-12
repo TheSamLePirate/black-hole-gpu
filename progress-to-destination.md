@@ -3325,7 +3325,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites** : ±10 % non tenu sur la fibre (±12 % entre deux passes) ; vols de JFK et de Chamonix non passés ; aucune 429 vue
   par la page (le SW en absorbe : à journaliser, CM2). Docs : plan, BH-API, E2E-CATALOGUE, GRAPHICS-PIPELINE §7, README.
 
-## 2026-11-12T03:30Z — J1-2 : l'identité de surface et son premier lecteur (sans changer l'image)
+## 2026-11-12T03:04Z — J1-2 : l’identité de surface et son premier lecteur (sans changer l'image)
 
 - **Contribution** (stratégie §7.4, PLAN-J1 J1-2) : le mot d'identité du contrat (objet 20 bits | génération 12 bits ; 0 rien) écrit
   en code — `src/system/surface-id.ts` (`packSurfaceId`/`unpackSurfaceId`, `decodeSurface` : la cible de visibilité actuelle et ses
