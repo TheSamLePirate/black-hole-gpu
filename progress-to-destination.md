@@ -3255,3 +3255,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   cassure. **En vol** (ce Mac, F-35 à 120 m/s au-dessus des Maures, vent fort et turbulent) : aucune traînée visible sur les houppiers.
   Sonde `forest-wind` : `WIND_VIEW`, `WIND_AGL`, `WIND_FLY`. Vu en passant, déjà là avec et sans vent : les houppiers proches très étirés vus
   à 15° sur une pente raide (le champ proche sculpté) — non examiné.
+
+## 2026-11-12T01:25Z — CI rétablie : les tirages des imposteurs pris au bruit bleu
+
+- **Cause** : depuis V2c (11 nov., 812d5efe), le déploiement Pages échouait sur `tests/blue-noise.test.ts` — le fondu des imposteurs
+  (`sceneryTreeLite`) tirait `fract(rnd × 7,31)` d'un même tirage (un bruit de gradient entrelacé), le choix de vue et la couverture de
+  l'imposteur (`sceneryTreeImpostor`) aussi (`fract(rnd × 13,17 + 0,21)`…). Des tirages corrélés, ce que le test interdit depuis V6.
+- **Changé** : `shadeLite` passe `blueDraws(centre, frame)` entier — fondu (x), choix de vue (y, z), couverture (w) : quatre canaux
+  indépendants du bruit bleu ; signatures `rnd: vec4f` / `vec3f` dans `trace.wgsl`, `vegetation/tree-impostors.ts` et la souche de
+  `system/scenery.ts`.
+- **Vérifié** : `blue-noise` 3/3 ; check-wgsl 83/83 ; check-forest 2000/2000 ; `bun test --parallel` complet 2176 réussis, 0 échec ;
+  sonde `forest-impostors` (ce Mac, Maures) : imposteurs cuits et liés, aucune erreur GPU, captures sans défaut visible ; GPU p50 avec /
+  sans imposteurs 19,7–20,1 / 20,6–20,8 ms (vue aérienne), 22,0–23,8 / 21,9–25,5 ms (canopée, dernier passage perturbé). Annexe du
+  pipeline régénérée (`--write --sizes`). **Non comparé** à l'image d'avant le correctif (l'ancien tirage) ni mesuré sur kerr-mini.

@@ -225,7 +225,7 @@ fn impViewDir(c: vec2f) -> vec3f {
   let p = vec2f(u + w, u - w) * 0.5;
   return normalize(vec3f(p, max(1.0 - abs(p.x) - abs(p.y), 0.0)));
 }
-fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tree: ForestHit, rnd: f32) -> ImpHit {
+fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tree: ForestHit, rnd: vec3f) -> ImpHit {
   let none = ImpHit(-1.0, vec3f(0.0), 0.0, false);
   if (tree.kind == 0u || tree.kind > ${TREE_MODEL_KINDS.length}u) { return none; }
   // (the cell's crown radius, forestCandidate's draw)
@@ -249,7 +249,7 @@ fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tre
   // (the four views about the eye's direction, one drawn by their bilinear weights — a pixel's own, the frame's: the history blends
   // them, no view's jump as the eye turns round the tree, two reads as for one)
   let cf = (vec2f(pp.x + pp.y, pp.x - pp.y) * 0.5 + 0.5) * ${IMPOSTOR_VIEWS}.0 - 0.5;
-  let pick = vec2f(fract(rnd * 13.17 + 0.21), fract(rnd * 29.71 + 0.57));
+  let pick = rnd.xy;
   let cell = clamp(floor(cf) + select(vec2f(0.0), vec2f(1.0), pick < fract(cf)), vec2f(0.0), vec2f(${IMPOSTOR_VIEWS - 1}.0));
   let vv = impViewDir(cell);
   var right = cross(vec3f(0.0, 0.0, 1.0), vv);
@@ -270,7 +270,7 @@ fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tre
   let inset = 0.5 * exp2(ceil(lod)) / ${IMPOSTOR_VIEW_PX}.0;
   let a = (cell + clamp(vec2f(uv.x * 0.5 + 0.5, 0.5 - 0.5 * uv.y), vec2f(inset), vec2f(1.0 - inset))) / ${IMPOSTOR_VIEWS}.0;
   let A = textureSampleLevel(impTex, detailSamp, a, i32(L), lod);
-  if (A.a <= rnd) { return none; }
+  if (A.a <= rnd.z) { return none; }
   let S = textureSampleLevel(impTex, detailSamp, a, i32(L + ${IMPOSTOR_LAYERS}u), lod);
   // (the depth along the view, towards the eye; t: back along the ray by it)
   let zoff = (S.b - 0.5) * 2.0 * half;

@@ -10532,7 +10532,7 @@ fn sceneryDeckBefore(dW: vec3f, tMax: f32) -> bool {
 // BEGIN_IMPOSTOR (vegetation/tree-impostors.ts withTreeImpostors supplies the trees' hemi-octahedral impostors — PLAN-VEGETATION-V2 V2c)
 const IMPOSTOR_BOUND = false;
 const IMPOSTOR_NEAR_M = 1e9;
-fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tree: ForestHit, rnd: f32) -> ImpHit {
+fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tree: ForestHit, rnd: vec3f) -> ImpHit {
   return ImpHit(-1.0, vec3f(0.0), 0.0, false);
 }
 fn canopyTile(xy: vec2f, fpM: f32, t: i32) -> vec4f { return vec4f(1.0, 0.0, 0.0, 0.0); }
@@ -10544,7 +10544,7 @@ struct ImpHit { t: f32, n: vec3f, shade: f32, leaf: bool };
 // its plain shape, the carving's sphere tracing left out (clumps in the normal stand for it, as worldScenery's far trees) —,
 // the grid walked from it on a miss (crowns overlap on the screen), before tMax [m]; its look as worldScenery's in WS, WS_A,
 // WS_T; the distance [m], −1 none
-fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32, rnd: f32) -> f32 {
+fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32, rnd: vec4f) -> f32 {
   WS = vec4f(0.0);
   if (!HAS_SCENERY || P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5 || id == 0u) { return -1.0; }
   let F = u32(forestData(2u).x);
@@ -10569,8 +10569,8 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32, rnd: f32) -> f32 {
   // instead of the plain shape and its noise; dithered in over IMPOSTOR_NEAR_M … + 100 m; a deciduous crown bare in winter keeps
   // the shape and its twigs' cover)
   let bareNow = forestData(F + 10u + 4u * tree.kind).w * forestData(F + 7u).z;
-  if (IMPOSTOR_BOUND && P.scenery[6].w > 0.5 && bareNow < 0.5 && tree.t > IMPOSTOR_NEAR_M + 100.0 * fract(rnd * 7.31)) {
-    let ih = sceneryTreeImpostor(o, d, ci, cj, hd, tree, rnd);
+  if (IMPOSTOR_BOUND && P.scenery[6].w > 0.5 && bareNow < 0.5 && tree.t > IMPOSTOR_NEAR_M + 100.0 * rnd.x) {
+    let ih = sceneryTreeImpostor(o, d, ci, cj, hd, tree, rnd.yzw);
     if (ih.t <= 0.0 || ih.t >= tMax) { return -1.0; }
     var th = tree;
     th.part = select(1u, 0u, ih.leaf);
@@ -16473,8 +16473,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   var isTree = false;
   let treeId = terrainRasterId(centre);
   if (treeId != 0u && (liteSkip() & 64u) == 0u) {
-    // (a per-pixel draw, the frame's — the jittered position's interleaved gradient noise —: the impostors' coverage, their fade)
-    let tt = sceneryTreeLite(normalize(toBody(ray.look)), treeId, tM, fract(52.9829189 * fract(dot(pos + f32(P.frame.x % 64u) * 5.588238, vec2f(0.06711056, 0.00583715)))));
+    // (four per-pixel draws, the frame's — the blue noise's channels, independent —: the impostors' fade, their view's pick, their cover)
+    let tt = sceneryTreeLite(normalize(toBody(ray.look)), treeId, tM, blueDraws(vec2u(centre), P.frame.x));
     if (tt > 0.0) {
       tM = tt;
       isTree = true;

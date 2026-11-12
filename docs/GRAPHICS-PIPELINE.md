@@ -607,7 +607,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-12T00:35:53Z sur `9245a6c8` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-12T01:23:42Z sur `0f712f6e` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **106 sites de création de pipeline** (71 rendu, 35 calcul, dont 46 asynchrones) et 40 `createShaderModule` dans 30 fichiers ; **41 programmes WGSL** (15 fichiers .wgsl, 26 chaînes dans le TypeScript) ; **65 libellés de passes** du profileur GPU (+ 12 sites à libellé dynamique).
 
