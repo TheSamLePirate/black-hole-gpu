@@ -223,7 +223,7 @@ export class ChartOverlay {
     imgW: number,
     imgH: number,
     widthScale = 1,
-    ship: { view: GPUTextureView; rect: number[] } | null = null,
+    ship: { view: GPUTextureView; scene: GPUTextureView; rect: number[] } | null = null,
   ) {
     if (this.magData) this.encodeVolume(enc, out, format, outW, outH, view, moments, imgW, imgH);
     if (!this.count || !this.vbuf) return;
@@ -268,6 +268,8 @@ export class ChartOverlay {
           { binding: 1, resource: { buffer: moments } },
           { binding: 2, resource: this.tex.createView() },
           { binding: 3, resource: ship?.view ?? this.noShip.createView() },
+          // (PLAN-J1 J1-5: where the craft is in the scene — its image cleared there)
+          { binding: 4, resource: ship?.scene ?? this.noShip.createView() },
         ],
       }),
     );

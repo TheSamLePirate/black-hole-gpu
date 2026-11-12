@@ -28,7 +28,12 @@ import { sceneryReady } from "./lib/plan-views";
 // Done when: the way in timed, both flights measured, every ablation flown, the thermal state of each recorded, j0.json written, no GPU error.
 
 const MACHINE = process.env.J0_MACHINE ?? (await $`hostname -s`.quiet().text()).trim();
-const OUT = process.env.J0_OUT ?? `remote-results/j0/${MACHINE}`;
+// (an A/B's run — scripts/ab-e2e.ts: AB_RUN, AB_SIDE — its own directory, the four runs side by side)
+const OUT =
+  process.env.J0_OUT ??
+  (process.env.AB_RUN
+    ? `remote-results/j0/${MACHINE}-ab${process.env.AB_RUN}${process.env.AB_SIDE ?? ""}`
+    : `remote-results/j0/${MACHINE}`);
 const PHASES = (process.env.J0_PHASES ?? "flight,ablate,sustained").split(",");
 const ABLATE_S = Number(process.env.ABLATE_S ?? 20);
 const W = 1920,

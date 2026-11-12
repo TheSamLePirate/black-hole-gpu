@@ -947,15 +947,17 @@ export class TerrainRaster {
       label: "terrain raster motion",
       size: [width, height],
       format: TERRAIN_RASTER_MOTION_FORMAT,
-      // (copied from by a diagnostic — the probes read the motion back)
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+      // (copied from by a diagnostic — the probes read the motion back; written by the craft's composition — PLAN-J1 J1-5)
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING,
     });
     const identity = this.device.createTexture({
       label: "terrain raster identity",
       size: [width, height],
       format: TERRAIN_RASTER_ID_FORMAT,
-      // (read back by renderer.surfaceAt — the selection, a diagnostic)
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+      // (read back by renderer.surfaceAt — the selection, a diagnostic; written by the craft's composition — PLAN-J1 J1-5)
+      usage:
+        GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.STORAGE_BINDING,
     });
     const depth = this.device.createTexture({
       label: "terrain raster reversed-Z",

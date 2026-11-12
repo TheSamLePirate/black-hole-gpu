@@ -252,6 +252,16 @@ export interface ShipInstance {
   ground?: { yaw: number; pitch: number; left: number; burnt: number };
 }
 
+/** PLAN-J1 J1-5 — the scene the craft goes into before the history (ShipRenderer.encodeShip's last argument): the frame's number
+ *  (the poses' continuity), the scene's motion target (rgba16float, the image's size; null: none) and identity target (r32uint;
+ *  null), the stars splatted this frame (3 × u32 a pixel: removed under the hull) */
+export interface ShipCompose {
+  frame: number;
+  motion: GPUTexture | null;
+  identity: GPUTexture | null;
+  stars: GPUBuffer;
+}
+
 export interface ShipView {
   /** Camera translation near a walking observer needs a fresh map each frame. */
   forceShadow?: boolean;
@@ -429,8 +439,23 @@ interface ShipTargetRes {
   h: number;
   /** the ship over the whole image (premultiplied), only its box written: the display reads that box */
   resolved: GPUTexture;
-  /** the MSAA targets and their resolve, the size of the ship's box (rounded up by 128 px) */
-  box: { w: number; h: number; color: GPUTexture; depth: GPUTexture; small: GPUTexture } | null;
+  /** the MSAA targets and their resolve, the size of the ship's box (rounded up by 128 px); its motion pass's target and depth
+   *  (PLAN-J1 J1-5: single-sampled — the motion, the instance, the distance) */
+  box: {
+    w: number;
+    h: number;
+    color: GPUTexture;
+    depth: GPUTexture;
+    small: GPUTexture;
+    mot: GPUTexture;
+    motDepth: GPUTexture;
+    /** the composition's bind groups (their scene targets) */
+    compose?: { key: string; color: GPUBindGroup; surface: GPUBindGroup };
+  } | null;
+  /** (PLAN-J1 J1-5) where the craft went into the scene this frame (r 1), over the whole image — only its box written; the display
+   *  and the bloom composite the rest of its image (its edges, its glass); cleared once when the composition stops */
+  scene: GPUTexture;
+  sceneDirty: boolean;
   /** where the box was drawn in the image [x, y, w, h] */
   rect: [number, number, number, number];
   /** the thrusters' flames over the whole image at half resolution (the display adds them); something drawn in it */
@@ -1041,6 +1066,28 @@ export class ShipRenderer {
         primitive: { topology: "triangle-list" },
       }),
     };
+    // (PLAN-J1 J1-5: the craft into the scene — its motion pass and the composition —, compiled aside: until they are, the craft
+    // composited by the display as before)
+    this.prevPoseBuf = d.createBuffer({
+      label: "ship: the frame before's poses",
+      size: (4 + MAX_INST * 16) * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    this.composeBuf = d.createBuffer({ label: "ship: composition", size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    void Promise.all([
+      d.createRenderPipelineAsync({
+        layout: "auto",
+        vertex: { ...vertex, entryPoint: "motionVs" },
+        fragment: { module, entryPoint: "motionFs", targets: [{ format: "rgba32float" }] },
+        primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+      }),
+      d.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "composeColor" } }),
+      d.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "composeSurface" } }),
+    ]).then(
+      ([motion, color, surface]) => (this.composePipes = { motion, color, surface }),
+      (e) => console.error("ship: the composition's pipelines", e),
+    );
   }
 
   /** Downloads the Ranger's mesh (1 MB); the other craft's when first drawn (loadVessel). */
@@ -2194,6 +2241,16 @@ export class ShipRenderer {
     const lit: { id: VesselId; R: M3; t: V3; thrust: NonNullable<ShipInstance["thrust"]>; exit: { p: V3; d: V3 } | null }[] = [];
     this.draws = [];
     this.bound2 = null;
+    // (PLAN-J1 J1-5: each instance's key — its pose the frame before matched by it, its motion on the image from that)
+    const ranks = new Map<string, number>();
+    this.instKeys = list.map((it, i) => {
+      if (i === 0 && this.flown) return `flown:${it.id}:${inCabin ? "cabin" : "hull"}:${v.place ? "placed" : "mounted"}`;
+      const n = ranks.get(it.id) ?? 0;
+      ranks.set(it.id, n + 1);
+      return `${it.id}#${n}`;
+    });
+    const key0 = this.instKeys[0] ?? "";
+    if (key0 !== this.craftKey) (this.craftKey = key0), (this.craftGen = (this.craftGen + 1) & 0xfff);
     const corners: V3[] = [];
     // (the shadow map's sphere: about the flown craft and those near it)
     let sc: V3 | null = null,
@@ -2303,6 +2360,7 @@ export class ShipRenderer {
         this.deckMatsNow = mats;
         this.writeParts(mats, at, DECK_PARTS);
         this.instData.set([kind.a320, 1, v.place ? 1 : 0, at], nInst * INST_FLOATS + 16);
+        this.instKeys[nInst] = "deck";
         this.draws.push({ mesh: dm, shadow: true, inst: nInst++ });
         this.deckDrawn = true;
         this.device.queue.writeBuffer(this.instBuf, at * INST_FLOATS * 4, this.instData, at * INST_FLOATS, partCount(deck) * INST_FLOATS);
@@ -2611,7 +2669,14 @@ export class ShipRenderer {
       const resolved = this.device.createTexture({
         size: [hdr.width, hdr.height],
         format: "rgba16float",
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+        // (STORAGE: the composition writes it — PLAN-J1 J1-5)
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.STORAGE_BINDING,
+      });
+      const scene = this.device.createTexture({
+        label: "ship: in the scene",
+        size: [hdr.width, hdr.height],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
       });
       const plume = this.device.createTexture({
         size: [Math.ceil(hdr.width / 2), Math.ceil(hdr.height / 2)],
@@ -2628,7 +2693,19 @@ export class ShipRenderer {
         format: "r16float",
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
       });
-      res = { w: hdr.width, h: hdr.height, resolved, box: null, rect: [0, 0, 0, 0], plume, plumeDepth, plumeDirty: true, hullDist };
+      res = {
+        w: hdr.width,
+        h: hdr.height,
+        resolved,
+        scene,
+        sceneDirty: false,
+        box: null,
+        rect: [0, 0, 0, 0],
+        plume,
+        plumeDepth,
+        plumeDirty: true,
+        hullDist,
+      };
       this.targets.set(hdr, res);
     }
     return res;
@@ -2651,8 +2728,10 @@ export class ShipRenderer {
     v: ShipView,
     occluder?: { depth: GPUTexture; rect: [number, number, number, number] },
     sceneDepth?: GPUBuffer,
+    compose?: ShipCompose,
   ) {
     this.ownDrawn = false;
+    this.composed = false;
     if (!this.ready) return;
     // (none flown: only the others — the Ranger's mesh, always there, for the plumes' unused range)
     this.flown = !!v.vessel;
@@ -2678,7 +2757,10 @@ export class ShipRenderer {
       y0 = Math.min(Math.max(sc[1], 0), H - bh);
     if (!res.box || res.box.w !== bw || res.box.h !== bh) {
       const old = res.box;
-      if (old) this.device.queue.onSubmittedWorkDone().then(() => [old.color, old.depth, old.small].forEach((t) => t.destroy()));
+      if (old)
+        this.device.queue
+          .onSubmittedWorkDone()
+          .then(() => [old.color, old.depth, old.small, old.mot, old.motDepth].forEach((t) => t.destroy()));
       const d = this.device,
         size = [bw, bh];
       res.box = {
@@ -2691,7 +2773,19 @@ export class ShipRenderer {
           sampleCount: 4,
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
         }),
-        small: d.createTexture({ size, format: "rgba16float", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC }),
+        // (read by the composition — PLAN-J1 J1-5)
+        small: d.createTexture({
+          size,
+          format: "rgba16float",
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.TEXTURE_BINDING,
+        }),
+        mot: d.createTexture({
+          label: "ship: motion",
+          size,
+          format: "rgba32float",
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        }),
+        motDepth: d.createTexture({ size, format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT }),
       };
     }
     // (the box's ndc: centre and scale of the full image's ndc; y up, pixels down)
@@ -3106,11 +3200,172 @@ export class ShipRenderer {
         .end();
       res.plumeDirty = false;
     }
+    // (PLAN-J1 J1-5: into the scene — its opaque pixels in the scene's colour, motion, identity and depth —, the rest for the display;
+    // else its whole image for the display, as before)
+    if (compose && sceneDepth && this.composePipes) this.encodeCompose(enc, hdr, res, compose, v, sceneDepth);
+    else {
+      enc.copyTextureToTexture({ texture: b.small }, { texture: res.resolved, origin: [x0, y0] }, [bw, bh]);
+      if (res.sceneDirty) {
+        enc
+          .beginRenderPass({
+            colorAttachments: [{ view: res.scene.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+          })
+          .end();
+        res.sceneDirty = false;
+      }
+    }
+  }
+
+  /**
+   * PLAN-J1 J1-5 — the craft into the scene, before the history: its motion pass (outside it — from inside, the cockpit is under its
+   * own mask, the history never read there: no history, the nearest), then over its box the composition (ship.wgsl composeColor,
+   * composeSurface): where its image is opaque, its colour into `hdr`, its distance into the occlusion depth, its stars removed, its
+   * motion (w 1) and identity into the scene's targets; its image for the display without them (their alpha kept), the in-scene mask.
+   */
+  private encodeCompose(enc: GPUCommandEncoder, hdr: GPUTexture, res: ShipTargetRes, c: ShipCompose, v: ShipView, sceneDepth: GPUBuffer) {
+    const P = this.composePipes!;
+    const b = res.box!;
+    const [x0, y0, bw, bh] = res.rect;
+    const d = this.device;
+    const drawMotion = !v.inside;
+    this.writePrevPoses(c.frame);
+    if (drawMotion) {
+      this.motionBind ??= d.createBindGroup({
+        layout: P.motion.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: this.uniform } },
+          { binding: 12, resource: { buffer: this.instBuf } },
+          { binding: 30, resource: { buffer: this.prevPoseBuf } },
+        ],
+      });
+      const mp = enc.beginRenderPass(
+        this.pass("ship: motion", {
+          colorAttachments: [{ view: b.mot.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+          depthStencilAttachment: { view: b.motDepth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
+        }),
+      );
+      mp.setPipeline(P.motion);
+      mp.setBindGroup(0, this.motionBind);
+      for (const dr of this.draws) {
+        mp.setVertexBuffer(0, dr.mesh.vbuf);
+        mp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+        mp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, dr.inst);
+      }
+      mp.end();
+    }
+    const motion = c.motion && c.motion.width === res.w && c.motion.height === res.h ? c.motion : null;
+    const ident = c.identity && c.identity.width === res.w && c.identity.height === res.h ? c.identity : null;
+    const flags = (drawMotion ? 1 : 0) | (motion ? 2 : 0) | (ident ? 4 : 0);
+    d.queue.writeBuffer(this.composeBuf, 0, new Uint32Array([x0, y0, bw, bh, res.w, res.h, flags, this.craftGen]));
+    this.composeDummies ??= {
+      motion: d.createTexture({ size: [1, 1], format: "rgba16float", usage: GPUTextureUsage.STORAGE_BINDING }),
+      ident: d.createTexture({ size: [1, 1], format: "r32uint", usage: GPUTextureUsage.STORAGE_BINDING }),
+    };
+    const mt = motion ?? this.composeDummies.motion,
+      it = ident ?? this.composeDummies.ident;
+    const key = `${this.texId(hdr)}.${this.texId(mt)}.${this.texId(it)}.${this.bufId(sceneDepth)}.${this.bufId(c.stars)}`;
+    // (its image for the display whole, the in-scene mask cleared: the composition writes only where it goes into the scene)
     enc.copyTextureToTexture({ texture: b.small }, { texture: res.resolved, origin: [x0, y0] }, [bw, bh]);
+    enc
+      .beginRenderPass({
+        colorAttachments: [{ view: res.scene.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+      })
+      .end();
+    if (b.compose?.key !== key) {
+      const common = [
+        { binding: 31, resource: b.small.createView() },
+        { binding: 32, resource: b.mot.createView() },
+        { binding: 33, resource: { buffer: this.composeBuf } },
+      ];
+      b.compose = {
+        key,
+        color: d.createBindGroup({
+          layout: P.color.getBindGroupLayout(0),
+          entries: [
+            ...common,
+            { binding: 34, resource: hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }) },
+            { binding: 35, resource: res.resolved.createView() },
+            { binding: 36, resource: res.scene.createView() },
+            { binding: 37, resource: { buffer: sceneDepth } },
+            { binding: 38, resource: { buffer: c.stars } },
+            { binding: 39, resource: mt.createView() },
+          ],
+        }),
+        surface: d.createBindGroup({
+          layout: P.surface.getBindGroupLayout(0),
+          entries: [...common, { binding: 40, resource: it.createView() }],
+        }),
+      };
+    }
+    const cp = enc.beginComputePass(this.pass("ship: into the scene"));
+    cp.setPipeline(P.color);
+    cp.setBindGroup(0, b.compose.color);
+    cp.dispatchWorkgroups(Math.ceil(bw / 8), Math.ceil(bh / 8));
+    if (ident) {
+      cp.setPipeline(P.surface);
+      cp.setBindGroup(0, b.compose.surface);
+      cp.dispatchWorkgroups(Math.ceil(bw / 8), Math.ceil(bh / 8));
+    }
+    cp.end();
+    res.sceneDirty = true;
+    this.composed = true;
+  }
+
+  /** the frame before's poses for this frame's instances (matched by key; none when the last frame drew none), then this frame's
+   *  kept for the next */
+  private writePrevPoses(frame: number) {
+    const out = this.prevPoseData;
+    const n = Math.min(this.instKeys.length, MAX_INST);
+    const cont = this.poseFrame === frame - 1;
+    out.fill(0, 0, 4 + n * 16);
+    out.set(this.prevProj, 0);
+    for (let i = 0; i < n; i++) {
+      const m = cont ? this.prevModels.get(this.instKeys[i]!) : undefined;
+      if (m) out.set(m, 4 + i * 16);
+    }
+    this.device.queue.writeBuffer(this.prevPoseBuf, 0, out, 0, 4 + n * 16);
+    const next = new Map<string, Float32Array>();
+    for (let i = 0; i < n; i++) next.set(this.instKeys[i]!, this.instData.slice(i * INST_FLOATS, i * INST_FLOATS + 16));
+    this.prevModels = next;
+    if (this.lastCam) this.prevProj = [this.lastCam.tanX, this.lastCam.tanY];
+    this.poseFrame = frame;
+  }
+  private ids = new WeakMap<object, number>();
+  private idNext = 0;
+  private texId(t: GPUTexture) {
+    let n = this.ids.get(t);
+    if (n === undefined) this.ids.set(t, (n = ++this.idNext));
+    return n;
+  }
+  private bufId(b: GPUBuffer) {
+    return this.texId(b as unknown as GPUTexture);
   }
 
   /** the flown craft's own opaque parts drawn by the last encodeShip (its early returns: not) */
   ownDrawn = false;
+  /** (PLAN-J1 J1-5) the last encodeShip put the craft into the scene (its `compose`): the display and the bloom composite only its
+   *  edges and its glass, the scene's motion target has its pixels */
+  composed = false;
+  /** the composition's pipelines, once compiled (null: the display composites the whole craft, as before) */
+  private composePipes: { motion: GPURenderPipeline; color: GPUComputePipeline; surface: GPUComputePipeline } | null = null;
+  /** whether the composition can run (its pipelines compiled) */
+  get composeReady() {
+    return !!this.composePipes;
+  }
+  private composeBuf: GPUBuffer;
+  private prevPoseBuf: GPUBuffer;
+  private prevPoseData = new Float32Array(4 + MAX_INST * 16);
+  /** each instance's key this frame (writeUniform): the flown craft's by its vessel and mount, the others' by kind and rank */
+  private instKeys: string[] = [];
+  /** the frame before's craft → camera maps by key, its projection's half tangents, its frame's number */
+  private prevModels = new Map<string, Float32Array>();
+  private prevProj: [number, number] = [1, 1];
+  private poseFrame = -2;
+  /** the craft's generation (the identity's 12 bits — surface-id.ts craftSurfaceId): a new flown craft or mount, a new one */
+  craftGen = 0;
+  private craftKey = "";
+  private motionBind: GPUBindGroup | null = null;
+  private composeDummies: { motion: GPUTexture; ident: GPUTexture } | null = null;
   /** The flown craft's own opaque parts as the last frame drew them for this image (encodeShip's ownMask), or null. */
   ownMaskOf(hdr: GPUTexture) {
     const o = this.targets.get(hdr)?.own;
@@ -3128,10 +3383,11 @@ export class ShipRenderer {
     const r = this.targets.get(hdr);
     if (!r) return;
     r.resolved.destroy();
+    r.scene.destroy();
     r.plume.destroy();
     r.plumeDepth.destroy();
     r.hullDist.destroy();
-    if (r.box) [r.box.color, r.box.depth, r.box.small].forEach((t) => t.destroy());
+    if (r.box) [r.box.color, r.box.depth, r.box.small, r.box.mot, r.box.motDepth].forEach((t) => t.destroy());
     r.own?.tex.destroy();
     this.targets.delete(hdr);
   }

@@ -44,6 +44,17 @@ struct Display {
 @group(0) @binding(8) var bloomMips: texture_2d<f32>; // the bloom's levels (the flare's soft sources)
 @group(0) @binding(9) var<storage, read> flareM: array<vec4f>; // [0]: mean excess over white, its centroid (uv)
 @group(0) @binding(10) var lensDirt: texture_2d<f32>; // the lens's dust and smudges (black: none)
+// (PLAN-J1 J1-5) where the craft is in the scene's colour already (r 1 — ship.wgsl composeColor): drawn before the history, its image
+// cleared there — only its edges and its glass composited here —; what it hides (the rain, the scratches) read from both
+@group(0) @binding(11) var shipScene: texture_2d<f32>;
+
+// how much of the craft at uv is in the scene's colour already (0: none, or no craft)
+fn craftInScene(uv: vec2f) -> f32 {
+  if (D.lod.y < 0.5) { return 0.0; }
+  let q = uv * D.img.xy - D.ship.xy;
+  if (any(q < vec2f(0.0)) || any(q >= D.ship.zw)) { return 0.0; }
+  return textureSampleLevel(shipScene, samp, uv, 0.0).r;
+}
 
 const LUMA = vec3f(0.2126, 0.7152, 0.0722);
 
@@ -808,19 +819,22 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     // what is behind it, seen through it, shimmers; its eddies carried downstream (the hull is drawn over
     // it, sharp: only the background is bent); an airliner's two engines each their column
     let off = hazeOffset(uv, D.haze, D.hazeR) + hazeOffset(uv, D.haze2, D.hazeR2);
-    if (dot(off, off) > 1e-12) {
+    // (the hull in the scene's colour — PLAN-J1 J1-5 —: not bent, nor read from where it lies)
+    if (dot(off, off) > 1e-12 && craftInScene(uv) < 0.5 && craftInScene(clamp(uv + off, vec2f(0.0), vec2f(1.0))) < 0.5) {
       c = textureSampleLevel(hdr, samp, clamp(uv + off, vec2f(0.0), vec2f(1.0)), 0.0).rgb;
     }
   }
   if (D.lod.z > 0.5 && D.lod.x == 0.0) {
     // (the half-resolution blur where the circle of confusion is over a pixel or so)
     let dv = textureSampleLevel(dofImg, samp, uv, 0.0);
-    c = mix(c, dv.rgb, smoothstep(0.6, 2.0, dv.a));
+    // (the craft in the scene's colour kept sharp, as when it was composited after this — its depth is not the image's)
+    c = mix(c, dv.rgb, smoothstep(0.6, 2.0, dv.a) * (1.0 - craftInScene(uv)));
   }
   if (D.lod.y > 0.5) {
     // the Ranger over the traced image, within its box (the glare below still spills over its silhouette)
     let q = uv * D.img.xy - D.ship.xy;
     if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) {
+      // (where it is in the scene's colour already — PLAN-J1 J1-5 —: its image cleared, nothing over it here)
       let sp = select(textureLoad(ship, vec2i(uv * D.img.xy), 0), textureSampleLevel(ship, samp, uv, 0.0), up);
       c = min(sp.rgb, vec3f(60000.0)) + (1.0 - sp.a) * c;
     }
@@ -836,7 +850,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     let inCab = (u32(D.rain.z + 0.5) & 1u) != 0u;
     if (inCab && D.lod.y > 0.5) {
       let q = uv * D.img.xy - D.ship.xy;
-      if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { glass = 1.0 - clamp(textureSampleLevel(ship, samp, uv, 0.0).a, 0.0, 1.0); }
+      if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { glass = 1.0 - clamp(textureSampleLevel(ship, samp, uv, 0.0).a + craftInScene(uv), 0.0, 1.0); }
     }
     // (a drop sends on the sky's light above it as much as the scene's round it: brighter than a dark ground;
     // near a light — a runway's, the landing lights' — it shines with it: the bloom's glow there)
@@ -849,7 +863,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
     var shipA = 0.0;
     if (D.rainX.x > 0.0 && D.lod.y > 0.5) {
       let q = uv * D.img.xy - D.ship.xy;
-      if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { shipA = clamp(textureSampleLevel(ship, samp, uv, 0.0).a, 0.0, 1.0); }
+      if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { shipA = clamp(textureSampleLevel(ship, samp, uv, 0.0).a + craftInScene(uv), 0.0, 1.0); }
     }
     let rs = rainStreaks(uv, shipA);
     // (snow: white flakes lit by the sky and the scene round them — they scatter, no sheen)
@@ -872,7 +886,7 @@ fn fs(in: VSOut) -> @location(0) vec4f {
       var see = 1.0;
       if (D.lod.y > 0.5) {
         let q = uv * D.img.xy - D.ship.xy;
-        if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { see = 1.0 - clamp(textureSampleLevel(ship, samp, uv, 0.0).a, 0.0, 1.0); }
+        if (all(q >= vec2f(0.0)) && all(q < D.ship.zw)) { see = 1.0 - clamp(textureSampleLevel(ship, samp, uv, 0.0).a + craftInScene(uv), 0.0, 1.0); }
       }
       if (see > 0.0) { c += D.lensB.z * see * canopyScratches(in.pos.xy, uv) / max(D.size.z, 1e-30); }
     }

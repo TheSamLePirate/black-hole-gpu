@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { decodeSurface, halfs, packSurfaceId, unpackSurfaceId } from "../src/system/surface-id";
+import { craftInstanceOf, craftSurfaceId, decodeSurface, halfs, packSurfaceId, unpackSurfaceId } from "../src/system/surface-id";
 import { RASTER_CODE, RASTER_CODE_SCALE } from "../src/system/terrain-raster-hint";
 
 // PLAN-J1 J1-2: the surface's identity at a pixel, read from the visibility target as it is drawn today.
@@ -36,4 +36,15 @@ test("each kind the visibility pass writes, decoded as the tracer reads it", () 
 test("half floats: a motion texel's", () => {
   // (1, −2, 0.5, 0 — 0x3c00, 0xc000, 0x3800, 0)
   expect(halfs([0x3c00, 0xc000, 0x3800, 0])).toEqual([1, -2, 0.5, 0]);
+});
+
+test("PLAN-J1 J1-5: the craft's words at the top of the object space, the instance and generation read back", () => {
+  const w = craftSurfaceId(0, 7);
+  expect(unpackSurfaceId(w)).toEqual({ object: (1 << 20) - 1, generation: 7 });
+  expect(craftInstanceOf(w)).toBe(0);
+  expect(craftInstanceOf(craftSurfaceId(5, 4095))).toBe(5);
+  // (ship.wgsl composeSurface: 0xfffff − min(instance, 63) | generation << 20)
+  expect(craftSurfaceId(3, 2)).toBe(((0xfffff - 3) | (2 << 20)) >>> 0);
+  expect(craftInstanceOf(packSurfaceId(1234, 1))).toBeNull();
+  expect(craftInstanceOf(0)).toBeNull();
 });

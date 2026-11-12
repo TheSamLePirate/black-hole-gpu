@@ -2538,3 +2538,120 @@ fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4
   }
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), cover);
 }
+
+// ---------------------------------------------------------------------------------------------
+// PLAN-J1 J1-5 — the craft in the scene, before the history (ship.ts encodeShip's `compose`): its opaque pixels written into
+// the scene's colour (hdr) before the temporal passes, with their motion on the image since the frame before, their identity
+// and their distance (the occlusion depth); its antialiased edges and its glass over what lies behind stay the display's.
+// ---------------------------------------------------------------------------------------------
+
+// The frame before's craft → camera maps, by instance (ship.ts: matched by the craft's key; [3][3] 0 — none: a craft new this
+// frame, its pixels without history), and the projection's half tangents then (proj.xy)
+struct PrevPose { proj: vec4f, model: array<mat4x4f> };
+@group(0) @binding(30) var<storage, read> prevPose: PrevPose;
+
+struct MotV {
+  @builtin(position) @invariant clip: vec4f,
+  @location(0) p: vec3f, // camera frame C now
+  @location(1) q: vec3f, // the same point in the frame before's camera frame
+  @location(2) @interpolate(flat) k: vec2f, // the frame before known (1), the instance
+};
+// the opaque parts as the depth pre-pass draws them (depthVs: its cut-outs)
+@vertex
+fn motionVs(v: VIn, @builtin(instance_index) ii: u32) -> MotV {
+  var o: MotV;
+  let pos = shipPos(v, ii);
+  let p = (inst[ii].model * vec4f(pos, 1.0)).xyz;
+  let M = prevPose.model[ii];
+  o.p = p;
+  o.q = (M * vec4f(pos, 1.0)).xyz;
+  o.k = vec2f(M[3][3], f32(ii));
+  o.clip = project(p);
+  if (abs(v.mat - 71.0) < 0.5 || abs(v.mat - 122.0) < 0.5 || abs(v.mat - 133.0) < 0.5 || abs(v.mat - 134.0) < 0.5) {
+    o.clip = vec4f(2.0, 2.0, 2.0, 1.0);
+  }
+  return o;
+}
+// a point of C on the whole image [px] (the tracer's pinhole, unjittered), half tangents t
+fn imagePx(p: vec3f, t: vec2f) -> vec2f {
+  let ndc = vec2f(p.x / (p.z * t.x), p.y / (p.z * t.y));
+  return vec2f(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y) * S.img.xy;
+}
+// xy: its motion on the image since the frame before [px — now minus then, as post.wgsl's history reads it]; z: 1, or 2 none
+// (a craft new this frame, behind the camera then, or a jump of over a quarter of the image) + 4 × its instance; w: its
+// distance [M] (the occlusion depth's unit — S.img.z metres an M)
+@fragment
+fn motionFs(i: MotV) -> @location(0) vec4f {
+  let now = imagePx(i.p, S.proj.xy);
+  let then = imagePx(i.q, prevPose.proj.xy);
+  let mv = now - then;
+  let none = i.k.x < 0.5 || i.q.z <= 1e-3 || dot(mv, mv) > 0.0625 * S.img.x * S.img.x;
+  return vec4f(select(mv, vec2f(0.0), none), select(1.0, 2.0, none) + 4.0 * i.k.y, length(i.p) / max(S.img.z, 1e-30));
+}
+
+// The composition (over the craft's box, a thread a pixel; ship.ts copied its image for the display and cleared the in-scene mask
+// before): where its image is opaque — alpha 1, the motion pass's surface there —, its colour into the scene's, its distance into
+// the occlusion depth, the stars splatted there removed (they shone over the hull once composited after the history), its motion;
+// its image for the display cleared there — the display and the bloom composite only the rest, unchanged — and the in-scene mask
+// says where (what it hides — the rain, the scratches, the charts — read from both).
+struct Compose {
+  box: vec4u, // the box in the image [px]: x0, y0, w, h
+  img: vec4u, // the image's W, H; flags: 1 the motion pass drawn (else: inside — none, no history, nearest), 2 the scene's motion
+              // target, 4 its identity target; the craft's generation (12 bits)
+};
+@group(0) @binding(31) var cmpShip: texture_2d<f32>; // the box's image (premultiplied, × pre-exposure)
+@group(0) @binding(32) var cmpMot: texture_2d<f32>;  // the box's motion pass (motionFs)
+@group(0) @binding(33) var<uniform> CU: Compose;
+@group(0) @binding(34) var cmpHdr: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(35) var cmpOut: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(36) var cmpScene: texture_storage_2d<rgba8unorm, write>; // (r 1 where in the scene; cleared before)
+@group(0) @binding(37) var<storage, read_write> cmpDepth: array<f32>;
+@group(0) @binding(38) var<storage, read_write> cmpStars: array<u32>;
+@group(0) @binding(39) var cmpMotion: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(40) var cmpIdent: texture_storage_2d<r32uint, write>;
+
+// the motion pass's texel (or, from inside, the stand-in: no history, the nearest, the flown craft)
+fn composeMot(b: vec2u) -> vec4f {
+  if ((CU.img.z & 1u) == 0u) { return vec4f(0.0, 0.0, 2.0, 0.0); }
+  return textureLoad(cmpMot, b, 0);
+}
+// whether the box's pixel b goes into the scene: the image opaque and the motion pass's surface there
+fn composeIn(s: vec4f, m: vec4f) -> bool { return s.a > 0.999 && m.z > 0.5; }
+
+@compute @workgroup_size(8, 8)
+fn composeColor(@builtin(global_invocation_id) gid: vec3u) {
+  if (gid.x >= CU.box.z || gid.y >= CU.box.w) { return; }
+  let px = CU.box.xy + gid.xy;
+  if (px.x >= CU.img.x || px.y >= CU.img.y) { return; }
+  let s = textureLoad(cmpShip, gid.xy, 0);
+  if (s.a <= 0.999) { return; }
+  let m = composeMot(gid.xy);
+  if (!composeIn(s, m)) { return; }
+  textureStore(cmpOut, px, vec4f(0.0));
+  textureStore(cmpScene, px, vec4f(1.0, 0.0, 0.0, 0.0));
+  // (its colour as the resolve's: pre-exposed radiance, the variance unknown)
+  textureStore(cmpHdr, px, vec4f(min(s.rgb / s.a, vec3f(60000.0)), -1.0));
+  // (its motion — xy [px], z 1, or 2 none; w 1: the craft's — post.wgsl temporal, taau)
+  if ((CU.img.z & 2u) != 0u) { textureStore(cmpMotion, px, vec4f(m.xy, f32(u32(m.z + 0.5) & 3u), 1.0)); }
+  let idx = px.y * CU.img.x + px.x;
+  cmpDepth[idx] = min(cmpDepth[idx], m.w);
+  if (arrayLength(&cmpStars) >= 3u * (idx + 1u)) {
+    cmpStars[3u * idx] = 0u;
+    cmpStars[3u * idx + 1u] = 0u;
+    cmpStars[3u * idx + 2u] = 0u;
+  }
+}
+
+// the same pixels' identity (the object 2²⁰ − 1 − its instance, the craft's generation — surface-id.ts craftSurfaceId)
+@compute @workgroup_size(8, 8)
+fn composeSurface(@builtin(global_invocation_id) gid: vec3u) {
+  if (gid.x >= CU.box.z || gid.y >= CU.box.w) { return; }
+  let px = CU.box.xy + gid.xy;
+  if (px.x >= CU.img.x || px.y >= CU.img.y) { return; }
+  let s = textureLoad(cmpShip, gid.xy, 0);
+  if (s.a <= 0.999) { return; }
+  let m = composeMot(gid.xy);
+  if (!composeIn(s, m)) { return; }
+  let object = 0xfffffu - min(u32(m.z + 0.5) >> 2u, 63u);
+  textureStore(cmpIdent, px, vec4u(object | ((CU.img.w & 0xfffu) << 20u), 0u, 0u, 0u));
+}

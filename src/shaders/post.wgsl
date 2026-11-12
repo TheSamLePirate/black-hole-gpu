@@ -325,6 +325,7 @@ fn withShip(uv: vec2f) -> vec3f {
   if (all(px >= SR.xy) && all(px < SR.xy + SR.zw)) {
     // (the filter's texels kept within the box: beyond it the image is stale)
     let pc = clamp(px, SR.xy + 0.5, SR.xy + SR.zw - 0.5);
+    // (PLAN-J1 J1-5: where the craft is in the scene's colour already, its image cleared — nothing over it here)
     let sp = textureSampleLevel(shipTex, samp, pc / dim, 0.0);
     c = min(sp.rgb, vec3f(60000.0)) + (1.0 - sp.a) * c;
   }
@@ -626,6 +627,8 @@ fn historyAt(uv: vec2f, size: vec2f) -> vec3f {
 // (PLAN-J1 J1-2: the raster's moving meshes' motion since the frame before [px of the internal image] — xy, z 1 where given —; a
 // 1 × 1 stand-in when no raster: none)
 @group(0) @binding(49) var motionTex: texture_2d<f32>;
+// (PLAN-J1 J1-5) the least weight of this frame at the craft's pixels (w 1 in the motion): its image antialiased already (4× MSAA)
+const CRAFT_ALPHA = 0.5;
 // (the frame before's motion — copied after its passes —: a pixel a moving mesh covered then and does not now is disoccluded —
 // the history there holds the car that left: none taken, the trail a car drew in the history before J1-2's own)
 @group(0) @binding(50) var motionPrevTex: texture_2d<f32>;
@@ -694,14 +697,17 @@ fn prevUv(d: vec3f) -> vec2f {
 
 // The camera's motion blur: each pixel smeared along the way its point moved on the image since the
 // previous frame (reprojDir — the turn, the parallax, a near ground's move), over the shutter's share
-// of it (TA.mb.x); 2–12 taps along it, centred. The Ranger is drawn after it: sharp, as the camera
-// moves with it.
+// of it (TA.mb.x); 2–12 taps along it, centred. The craft (in the scene's colour since PLAN-J1 J1-5) by its own motion: sharp as
+// the camera moves with it.
 @compute @workgroup_size(8, 8)
 fn motionBlur(@builtin(global_invocation_id) gid: vec3u) {
   let size = textureDimensions(dst);
   if (gid.x >= size.x || gid.y >= size.y) { return; }
   let p = vec2f(gid.xy) + 0.5;
-  let uvp = prevUv(reprojDir(pixelDir(p, size), moments[gid.y * size.x + gid.x].y));
+  var uvp = prevUv(reprojDir(pixelDir(p, size), moments[gid.y * size.x + gid.x].y));
+  // (a moving mesh's pixel, the craft's — PLAN-J1 J1-5 —: by its own motion, not the ground's behind it)
+  let mv = meshMotion(vec2i(gid.xy));
+  if (mv.z > 0.5 && all(textureDimensions(motionTex) == size)) { uvp = (p - mv.xy) / vec2f(size); }
   let cur = textureLoad(src, vec2i(gid.xy), 0);
   if (uvp.x < 0.0) {
     textureStore(dst, gid.xy, cur);
@@ -731,8 +737,12 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   let size = textureDimensions(dst);
   if (gid.x >= size.x || gid.y >= size.y) { return; }
   let cur = textureLoad(src, vec2i(gid.xy), 0);
+  // (a moving mesh's motion here — z 1 by it, 2 none —; w 1: the craft's own pixel, drawn into the scene before this pass
+  // (PLAN-J1 J1-5 — ship.wgsl composeSurface): whole this frame, unjittered, its history by its own motion, no ground albedo)
+  let mv = meshMotion(vec2i(gid.xy));
+  let craft = mv.w > 0.5 && all(textureDimensions(motionTex) == size);
   // (RASTER_DETAIL — R.f.z —: this pixel's ground albedo, kept beside the history for the next frame — resampled as it is)
-  let aCur = select(0.0, rasterAlb(moments[gid.y * size.x + gid.x].x), R.f.z > 0.5 && R.f.y > 0.5);
+  let aCur = select(0.0, rasterAlb(moments[gid.y * size.x + gid.x].x), R.f.z > 0.5 && R.f.y > 0.5 && !craft);
   textureStore(albOut, gid.xy, vec4f(aCur, select(0.0, 1.0, aCur > 0.0), 0.0, 0.0));
   // (and its accumulated albedo, once the history gives one — below: written over the line above)
   var aAcc = aCur;
@@ -741,6 +751,12 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     return;
   }
   let W = size.x;
+  // (the camera held: the craft's pixels, and those it covered the frame before, this frame's own — the held history keeps
+  // where it was)
+  if (TA.k.y > 1.5 && (craft || (all(textureDimensions(motionPrevTex) == size) && meshMotionPrev(vec2i(gid.xy)).w > 0.5))) {
+    textureStore(dst, gid.xy, vec4f(cur.rgb, 1.0));
+    return;
+  }
   if (TA.k.y > 1.5) {
     // the camera held after moving: the history where it was (the same pixel); a pixel the refinement has
     // drawn since the hand-over began (mb.z) takes over by its samples against the history's weight,
@@ -769,7 +785,7 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
   // camera was: parallax; the far sky by the turn alone. A pixel reconstructed between rays takes the
   // nearest depth of the fresh samples around it — its own is a frame or more old (UE4's closest depth) —,
   // where a near body's ground is reprojected)
-  let isFresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w;
+  let isFresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w || craft;
   var depth = moments[gid.y * W + gid.x].y;
   // (a pixel of the raster's — shaded this frame, RASTER_MARK, or left and rebuilt, RASTER_STALE —: its depth is its own,
   // exact at every pixel, and its outline a pixel's; the block's scale is the traced rays')
@@ -808,9 +824,9 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       }
     }
   }
-  let carried = byGround && TA.drift.w < 0.0;
-  // (a moving mesh's pixel — a car, a blade: its history where its own point was, by its motion, not where the ground's was)
-  let mv = meshMotion(vec2i(gid.xy));
+  let carried = byGround && TA.drift.w < 0.0 && !craft;
+  // (a moving mesh's pixel — a car, a blade, the craft: its history where its own point was, by its motion, not where the ground's
+  // was — mv above)
   // (the raster's own image only — an offline render's target is another size)
   let moved = mv.z > 0.5 && all(textureDimensions(motionTex) == size);
   if ((zf > 1e-3 && !ground) || carried || moved) {
@@ -844,7 +860,7 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       // the range of the current frame around the pixel, at the block's scale (mean ± g σ, YCoCg of the
       // tone-mapped values; the fresh samples' alone, R2's suggestion, read the stamps nine times more for
       // +0.3 ms and nothing measurable)
-      let st = select(i32(max(block / 2u, 1u)), 1, rasterPx);
+      let st = select(i32(max(block / 2u, 1u)), 1, rasterPx || craft);
       let hi = vec2i(size) - 1;
       var m1 = vec3f(0.0);
       var m2 = vec3f(0.0);
@@ -888,7 +904,7 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       let h = rgbToYcocg(tmFwd(hist));
       let g = TA.fwd.w;
       // a ray landed on this pixel this frame, or it was reconstructed between rays
-      let fresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w;
+      let fresh = block <= 1u || stamps[gid.y * W + gid.x] >= R.u.w || craft;
       // (the history's accumulated weight, capped: α = w / (n + w) — a pixel's first samples count fully,
       // then less and less, down to 1 / (n_max + 1); between rays w is small: the history kept)
       // (the raster's ground — its least α RASTER_LITE_ALPHA, a third: the history antialiases, it does not carry the
@@ -897,6 +913,9 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
       // fields, every sub-pixel move of the view changing what a whole row shows — averaged over ~16 frames, not 3; moving
       // over 1.5 px a frame, the third again — docs/progress/HORIZON-FLICKER.md)
       var aMin = TA.k.z;
+      // (the craft — PLAN-J1 J1-5 —: its own antialiasing (4× MSAA), unjittered: the history steadies it, it adds no detail — its
+      // resampling each frame would soften it; this frame's half at least)
+      if (craft) { aMin = max(aMin, CRAFT_ALPHA); }
       if (rasterPx && aMin > RASTER_FAR_ALPHA && (u32(R.f.w) & 2u) != 0u) {
         let mv = length(uv * vec2f(size) - (vec2f(gid.xy) + 0.5));
         aMin = mix(RASTER_FAR_ALPHA, aMin, smoothstep(0.3, 1.5, mv));
@@ -1218,6 +1237,11 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
   let sg = select(TU.s.z, TU.s.y, water);
   let inv2s2 = 0.5 / (sg * sg);
   var dn = 3e38;
+  // (a moving mesh's pixel: by its motion — the internal image's, scaled to this one; w 1 the craft's — PLAN-J1 J1-5 —, drawn whole
+  // this frame and unjittered: its pixels about it this frame's samples, at their centres)
+  let md = vec2f(textureDimensions(motionTex));
+  let mv = meshMotion(vec2i(o * md / vec2f(size)));
+  let craft = mv.w > 0.5 && all(textureDimensions(motionTex) == rs);
   for (var j = -1; j <= 1; j++) {
     for (var i = -1; i <= 1; i++) {
       let q = clamp(base + vec2i(i, j), vec2i(0), hi);
@@ -1226,8 +1250,8 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
       m2 += n * n;
       let qi = u32(q.y) * W + u32(q.x);
       dn = min(dn, moments[qi].y);
-      if (stamps[qi] == TU.u.x) {
-        let pos = vec2f(q) + 0.5 + taauJitter(vec2u(q), moments[qi].x > 1e29);
+      if (stamps[qi] == TU.u.x || craft) {
+        let pos = vec2f(q) + 0.5 + select(taauJitter(vec2u(q), moments[qi].x > 1e29), vec2f(0.0), craft);
         let d = pos - c;
         let w = exp(-dot(d, d) * inv2s2);
         let s = textureLoad(src, q, 0).rgb;
@@ -1245,9 +1269,6 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
   let ground = TA.drift.w != 0.0 && depth < abs(TA.drift.w) && TA.cc.w < 0.5;
   let carried = TA.drift.w < 0.0 && ground;
   var uv = vec2f(-1.0);
-  // (a moving mesh's pixel: by its motion — the internal image's, scaled to this one)
-  let md = vec2f(textureDimensions(motionTex));
-  let mv = meshMotion(vec2i(o * md / vec2f(size)));
   if (mv.z > 0.5) {
     uv = (o - mv.xy * vec2f(size) / md) / vec2f(size);
   } else if (carried) {
@@ -1258,7 +1279,8 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
   }
   var outc: vec3f;
   var nOut: f32;
-  let nMax = 1.0 / max(TA.k.z, 1e-3) - 1.0;
+  // (the craft's pixels — PLAN-J1 J1-5 —: this frame's half at least, as the native pass)
+  let nMax = 1.0 / max(select(TA.k.z, max(TA.k.z, CRAFT_ALPHA), craft), 1e-3) - 1.0;
   // (where a moving mesh was the frame before and is not now: disoccluded, no history)
   let pmd = vec2f(textureDimensions(motionPrevTex));
   let left = (mv.z < 0.5 && meshMotionPrev(vec2i(uv * pmd)).z > 0.5) || mv.z > 1.5;

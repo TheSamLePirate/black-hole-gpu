@@ -3446,3 +3446,29 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   rejeté. Allumé : ~+0,8 ms mesuré sur une version antérieure, non remesuré.
 - **Suite** : J1-5 (l'appareil dans la scène, décision de Sam du 12 nov.) et le rejet de l'historique par identité — premiers lecteurs
   de l'identité, de la profondeur gardée et de ce mouvement.
+
+## 2026-11-12T05:59Z — J1-5 : l'appareil dans la scène avant le temporel, avec son mouvement et son identité
+
+- **Contribution** (stratégie §7.4 surfaces, §15 J1 ; PLAN-J1 J1-5 ; décision de Sam du 12 nov. « changer l'image ») : l'appareil n'est
+  plus une image collée par l'affichage après l'historique ; sur l'image vivante, ses pixels opaques entrent dans la couleur de scène
+  (`hdr`) avant `temporal`/`taau`, avec leur mouvement (w 1), leur identité (objet 2²⁰ − 1 − instance, génération `ship.craftGen`) et
+  leur distance dans `sceneDepth` — un seul opaque par pixel, le premier lecteur de la profondeur, du mouvement et de l'identité qui
+  change l'image.
+- **Changé** : `ship.wgsl` (`motionVs/motionFs`, `composeColor`, `composeSurface`), `ship.ts` (`encodeCompose`, `writePrevPoses` : la pose
+  d'avant par clé d'instance, `ShipCompose`, pipelines asynchrones), `renderer.ts` (`encodeShipNow`, `shipInScene`, `occlusion depth` avant
+  le temporel, cible `craft motion` hors Terre, motion blur sur le mouvement), `post.wgsl` (pixels de l'appareil : neufs, sans gigue ni
+  albédo du sol, `CRAFT_ALPHA` 0,5), `display.wgsl`/`overlay.wgsl` (masque `ship: in the scene`), `terrain-raster.ts` (cibles d'identité
+  et de mouvement en stockage), `surface-id.ts` (`craftSurfaceId`, `craftInstanceOf`), `surfaceAt().craft`. Le cockpit reste sans
+  historique (z 2 : sous son masque, écrans changeants), la passe de mouvement y est sautée. Composé par `sceneDepth` (tous les mondes),
+  pas par la profondeur gardée (Terre proche seulement) — raison dans PLAN-J1.
+- **Vérifié/mesuré** : check-wgsl 83/83, tsc, `bun test --parallel` 2191/0 ; e2e `craft-in-scene` (ce Mac, en virage de 30°) : poursuite
+  et cockpit, l'appareil relu comme tel (`craft` 0 ; z 1 w 1 derrière, mouvement 0,03–0,4 px ; z 2 dedans), planche
+  `docs/progress/j1/j1-5-appareil-dans-la-scene.jpg` — net, sans traînée ; un premier essai à 0,9 d'historique le ramollissait (−19 %) :
+  corrigé par `CRAFT_ALPHA`. **ΔGPU J0** (kerr-mini, A B B A contre fd3ba94c, thermique nominale) : 57,8 / 57,6 → 58,8 / 58,4 ms, **+0,9 ms**
+  (17,3 → 17,0 images/s) ; `ship: into the scene` 0,20 ms (0,47 dans une première version qui écrivait toute la boîte : A/B J0 +1,5 ms).
+  kerr-mini, poursuite : 71,2 → 71,1 ms (même run, deux instants). Remarque : `light meter` +0,8 ms par horodatage dans les deux A/B, non
+  expliqué (64 × 64 lectures inchangées) — sans doute un horodatage chevauché sur Apple (GP-09), non vérifié.
+- **Non vérifié / limites** : autres engins (Ranger dans l'espace, A320, trafic, engins au sol) par lecture du code seulement ; la station
+  n'est plus reflétée par les verres ; le flou de mouvement (éteint par défaut) peut mêler l'appareil au fond dans ses prises ; la
+  photométrie compte l'appareil vu de dehors ; un `bun test --parallel` antérieur a eu 4 dépassements de 5 s sous la charge (vols lunaires,
+  polynôme de réfraction ; 15/15 relancés seuls). **Suite** : le rejet de l'historique par identité.

@@ -37,6 +37,18 @@ export function unpackSurfaceId(id: number): { object: number; generation: numbe
   return { object: id & OBJECT_MASK, generation: (id >>> SURFACE_OBJECT_BITS) & GENERATION_MASK };
 }
 
+/** PLAN-J1 J1-5 — the craft drawn into the scene (ship.wgsl composeSurface): the top of the object space, 2²⁰ − 1 − its instance
+ *  (0 the flown one), of the craft's generation (ShipRenderer.craftGen: a new flown craft or mount, a new one) */
+export const CRAFT_OBJECTS = 64;
+export function craftSurfaceId(instance: number, generation: number): number {
+  return packSurfaceId(OBJECT_MASK - Math.min(Math.max(instance, 0), CRAFT_OBJECTS - 1), generation);
+}
+/** the craft's instance a word names, or null (another object, or nothing) */
+export function craftInstanceOf(id: number): number | null {
+  const object = id & OBJECT_MASK;
+  return id !== 0 && object > OBJECT_MASK - CRAFT_OBJECTS ? OBJECT_MASK - object : null;
+}
+
 const CODES: Record<number, SurfaceKind> = {
   [RASTER_CODE.turbine]: "turbine",
   [RASTER_CODE.pylon]: "pylon",

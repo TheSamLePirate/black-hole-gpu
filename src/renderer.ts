@@ -168,7 +168,17 @@ import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
-import { ENV_H, ownPose, ShipRenderer, type Reentry, type ShipInstance, type ShipMeshId, type ShipView, type Thrust } from "./ship";
+import {
+  ENV_H,
+  ownPose,
+  ShipRenderer,
+  type Reentry,
+  type ShipCompose,
+  type ShipInstance,
+  type ShipMeshId,
+  type ShipView,
+  type Thrust,
+} from "./ship";
 import type { VesselId } from "./vessels";
 import type { F35Pose } from "./f35/model";
 import { fleet } from "./fleet";
@@ -191,7 +201,7 @@ import { ChartOverlay } from "./chartoverlay";
 import overlayWGSL from "./shaders/overlay.wgsl" with { type: "text" };
 import { cameraFrame, gpuTheta, homePosition, type CameraFrame } from "./camera";
 import { type FrameDesc, nextFrameDesc } from "./frame-desc";
-import { decodeSurface, halfs, type SurfaceAt } from "./system/surface-id";
+import { craftInstanceOf, decodeSurface, halfs, type SurfaceAt } from "./system/surface-id";
 import { PARAMS, PARAMS_FLOATS, PARAMS_SIZE, PARAMS_V4 } from "./gen/params-layout";
 import { frameNow } from "./frameclock";
 import { mouth, radius, setSceneTime } from "./wormhole";
@@ -729,7 +739,7 @@ interface Target {
     starBinds: GPUBindGroup[];
   } | null;
   /** the camera's motion blur: its image and pass (on first use) — post.wgsl motionBlur */
-  blur: { tex: GPUTexture; bind: GPUBindGroup } | null;
+  blur: { tex: GPUTexture; bind: GPUBindGroup; motion: GPUTexture } | null;
   /**
    * the temporal upsampling (post.wgsl taau — live, rendered under the canvas): its history at the canvas's size (ping-
    * pong: idx the latest), the image the display shows, its uniform, bind groups (by history and the native one read),
@@ -2882,7 +2892,11 @@ export class Renderer {
     const shown = toCanvas ? css : this.offline ? this.displayView(t, cv.width, cv.height, true)[0] * css : css;
     const ship =
       (s.ship || this.craftsShown) && this.ship.ready
-        ? { view: this.ship.target(t.hdr).resolved.createView(), rect: this.ship.rectFor(t.hdr) }
+        ? {
+            view: this.ship.target(t.hdr).resolved.createView(),
+            scene: this.ship.target(t.hdr).scene.createView(),
+            rect: this.ship.rectFor(t.hdr),
+          }
         : null;
     this.chart.encode(
       enc,
@@ -3296,6 +3310,8 @@ export class Renderer {
             { binding: 8, resource: t.bloomTex.createView() },
             { binding: 9, resource: { buffer: t.flare.out } },
             { binding: 10, resource: this.lensDirt.createView() },
+            // (PLAN-J1 J1-5: where the craft is in the scene already — its image's rest composited here)
+            { binding: 11, resource: this.ship.target(t.hdr).scene.createView() },
           ],
         }),
       );
@@ -5499,6 +5515,7 @@ export class Renderer {
   private motionTexNow(): GPUTexture {
     return (
       this.terrainRaster?.motionTexture() ??
+      (this.craftMotionOn ? this.craftMotion : null) ??
       (this.motionStandIn ??= this.device.createTexture({
         label: "motion stand-in",
         size: [1, 1],
@@ -5508,6 +5525,32 @@ export class Renderer {
     );
   }
   private motionStandIn: GPUTexture | null = null;
+  /** PLAN-J1 J1-5 — the craft into the live image's scene before the history (ShipRenderer.encodeShip's compose): its opaque pixels
+   *  in the scene's colour with their motion (w 1) and identity; off, composited by the display after the history, as before */
+  shipInScene = true;
+  /** the craft's motion written this frame in the renderer's own target (no Earth visibility pass: space, the other worlds) */
+  private craftMotionOn = false;
+  private craftMotion: GPUTexture | null = null;
+  /** the renderer's own motion target for the craft (the image's size), cleared for this frame — where no visibility pass gives one */
+  private craftMotionTarget(enc: GPUCommandEncoder, t: Target): GPUTexture {
+    if (!this.craftMotion || this.craftMotion.width !== t.width || this.craftMotion.height !== t.height) {
+      const old = this.craftMotion;
+      if (old) this.device.queue.onSubmittedWorkDone().then(() => old.destroy());
+      this.craftMotion = this.device.createTexture({
+        label: "craft motion",
+        size: [t.width, t.height],
+        format: "rgba16float",
+        usage:
+          GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+    }
+    enc
+      .beginRenderPass({
+        colorAttachments: [{ view: this.craftMotion.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] }],
+      })
+      .end();
+    return this.craftMotion;
+  }
   /** a motion texture's number (the TAAU's bind groups' key) */
   private motionGen(m: GPUTexture): number {
     let n = this.motionIds.get(m);
@@ -5528,8 +5571,8 @@ export class Renderer {
   /** the frame before's motion (PLAN-J1 J1-2: its disocclusions — where a moving mesh was and no longer is, no history): a copy
    *  of the raster's at the frame's end, its size, while the motion is written; else the stand-in */
   private motionPrevNow(): GPUTexture {
-    const m = this.terrainRaster?.motionTexture();
-    if (!m || !this.sceneryRaster?.motionOn) return this.motionTexNow();
+    const m = this.motionSourceNow();
+    if (!m) return this.motionTexNow();
     if (!this.motionPrevTex || this.motionPrevTex.width !== m.width || this.motionPrevTex.height !== m.height) {
       this.motionPrevTex?.destroy();
       this.motionPrevTex = this.device.createTexture({
@@ -5543,10 +5586,17 @@ export class Renderer {
   }
   private motionPrevTex: GPUTexture | null = null;
   /** the frame's motion kept for the next one's disocclusions — copied after the temporal passes read the frame before's */
+  /** the motion target whose frame before is kept: the visibility's (its moving meshes' motion on — or the craft's in it), else the
+   *  renderer's own for the craft; none */
+  private motionSourceNow(): GPUTexture | null {
+    const m = this.terrainRaster?.motionTexture() ?? null;
+    if (m) return this.sceneryRaster?.motionOn || this.craftMotionOn ? m : null;
+    return this.craftMotionOn ? this.craftMotion : null;
+  }
   private keepMotion(enc: GPUCommandEncoder) {
-    const m = this.terrainRaster?.motionTexture();
+    const m = this.motionSourceNow();
     const p = this.motionPrevTex;
-    if (!m || !p || !this.sceneryRaster?.motionOn || p.width !== m.width || p.height !== m.height) return;
+    if (!m || !p || p.width !== m.width || p.height !== m.height) return;
     enc.copyTextureToTexture({ texture: m }, { texture: p }, [m.width, m.height]);
   }
   /** the frame's frozen description (src/frame-desc.ts; PLAN-J1 J1-1): built at renderer.frame()'s start — its id, its real clock
@@ -8109,6 +8159,7 @@ export class Renderer {
           { binding: 8, resource: t.bloomTex.createView() },
           { binding: 9, resource: { buffer: t.flare.out } },
           { binding: 10, resource: this.lensDirt.createView() },
+          { binding: 11, resource: this.ship.target(t.hdr).scene.createView() },
         ],
       });
       u.displayBinds.set(pipeline, b);
@@ -8228,12 +8279,17 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private encodeMotionBlur(enc: GPUCommandEncoder, t: Target) {
     const ta = t.temporal;
     if (!ta) return;
-    if (!t.blur) {
-      const tex = this.device.createTexture({
-        size: [t.width, t.height],
-        format: "rgba16float",
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
-      });
+    // (the moving meshes' and the craft's own motion read — PLAN-J1 J1-5: the craft in the scene, blurred by its motion, not the
+    // ground's behind it)
+    const motion = this.motionTexNow();
+    if (!t.blur || t.blur.motion !== motion) {
+      const tex =
+        t.blur?.tex ??
+        this.device.createTexture({
+          size: [t.width, t.height],
+          format: "rgba16float",
+          usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+        });
       const bind = this.device.createBindGroup({
         layout: this.postMotion.getBindGroupLayout(0),
         entries: [
@@ -8241,9 +8297,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
           { binding: 2, resource: tex.createView() },
           { binding: 11, resource: { buffer: t.moments } },
           { binding: 21, resource: { buffer: ta.buf } },
+          { binding: 49, resource: motion.createView() },
         ],
       });
-      t.blur = { tex, bind };
+      t.blur = { tex, bind, motion };
     }
     const pass = enc.beginComputePass(this.prof.pass("motion blur"));
     pass.setPipeline(this.postMotion);
@@ -8318,6 +8375,90 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     }
   }
 
+  /** The craft (ShipRenderer.encodeShip) for target t: `inScene` — PLAN-J1 J1-5 — into the live image's scene before the history,
+   *  with its motion and identity in the scene's targets (the Earth's visibility's, else the renderer's own motion target);
+   *  else composited by the display after it, as before. */
+  private encodeShipNow(enc: GPUCommandEncoder, t: Target, s: Settings, inScene: boolean) {
+    let compose: ShipCompose | undefined;
+    if (inScene) {
+      const own = this.terrainRaster?.surfaceTextures() ?? null;
+      const terrainMotion = this.terrainRaster?.motionTexture() ?? null;
+      const motion =
+        terrainMotion && terrainMotion.width === t.width && terrainMotion.height === t.height
+          ? terrainMotion
+          : this.craftMotionTarget(enc, t);
+      compose = { frame: this.frameStamp, motion, identity: own?.identity ?? null, stars: t.stars };
+    }
+    this.ship.encodeShip(
+      enc,
+      t.hdr,
+      {
+        vessel: s.ship || this.shipInView ? s.vessel : undefined,
+        place: !s.ship && this.shipInView ? this.shipPlace! : undefined,
+        others: this.shipOthers(s),
+        sea: this.shipSea(s),
+        lift: this.liftNow ? this.sceneryLiftNow : null,
+        keyDir: this.shipKeyDir(),
+        mPerM: 1476.625 * (s.massSolar || 1),
+        forceShadow: !!this.character?.active,
+        inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
+        // (the own mask only where the next frame's cockpit mask can use it: a realtime frame, no cost view, no
+        // depth of field)
+        ownMask:
+          this.cockpitMask &&
+          s.ship &&
+          (s.shipMount === "cockpit" || s.shipMount === "cabin") &&
+          t === this.live &&
+          this.taPhase === "realtime" &&
+          !this.costViewMode &&
+          !this.dofOn(s, t),
+        dash: this.cockpitDash ?? undefined,
+        controls: this.cockpitControls ?? undefined,
+        gear: this.shipGear ?? undefined,
+        jet: s.vessel === "f35" && this.jetPose ? { ...this.jetPose, ...this.jetForce } : null,
+        a320:
+          s.vessel === "a320" && this.a320Pose
+            ? { props: { ...this.a320Pose.props, ...this.a320Force }, spins: this.a320Pose.spins }
+            : null,
+        a320Deck: s.vessel === "a320" && this.a320Deck ? { ...this.a320Deck, ...this.a320Force } : null,
+        cabin: lampsOf(s, this.cockpitGlow),
+        pcd: s.vessel === "f35" ? this.pcdLook : null,
+        a320Glass: s.vessel === "a320" && this.a320Deck ? this.a320Glass : null,
+        lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: this.frameMs() / 1000 },
+        glares: this.glaresNow(s),
+        mount: this.shipPose ?? (s.shipMount as Mount),
+        look: [s.shipLookYaw, s.shipLookPitch],
+        fov: s.fov,
+        aspect: t.width / t.height,
+        albedo: s.shipAlbedo,
+        metal: s.shipMetal,
+        rough: s.shipRough,
+        light: s.shipLight,
+        coat: s.shipCoat,
+        scratches: this.lookCamera && !this.lens && s.ship && s.shipMount === "cockpit" && t === this.live ? this.canopyScratches : 0,
+        pre: preExposure(this.ev(s)),
+        plasma: this.shipPlasma,
+        reentry: this.shipReentry,
+        probeAxes: this.shipProbeAxes,
+        thrust: this.shipThrust,
+        glow: preExposure(this.ev(s)) / 2 ** this.ev(s),
+        contrails: this.shipContrails,
+      },
+      // (on foot: the astronaut and the grass before it hide the hull — else the station, before it in orbit)
+      this.characterRenderer.occluder ??
+        (this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined),
+      t.sceneDepth,
+      compose,
+    );
+    // (the own mask drawn this frame: the next realtime trace's cockpit mask — encodeCockpitMask)
+    if (t === this.live) this.ownMaskStamp = this.ship.ownDrawn ? this.frameStamp : -1;
+    // (where it was drawn: the display reads its image there, the bloom too)
+    const rect = new Float32Array(this.ship.rectFor(t.hdr));
+    this.device.queue.writeBuffer(this.displayBuf, 112, rect);
+    this.device.queue.writeBuffer(t.shipRect, 0, rect);
+    if (inScene) this.craftMotionOn = this.ship.composed;
+  }
+
   private encodePost(enc: GPUCommandEncoder, t: Target, s?: Settings) {
     // (the temporal upsampling's image shown only where its pass ran this frame — encodeTaau —; its history only if it ran the
     // last one too: a held camera's frames refine the native image alone, the history then a view ago)
@@ -8351,82 +8492,22 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // denoise right after the resolve; beam after the downsampling chain, before the bloom upsampling
       if (s && i === r0 && s.denoise && this.accumulated(t)) this.encodeDenoise(enc, t, s);
       const trace = s && i === r0 && t === this.live ? this.colTraceFrame(enc, t) : null;
+      // (the craft drawn: PLAN-J1 J1-5 — on the live image, into the scene before the history — with the occlusion depth it is
+      // tested and written against, made first —; elsewhere composited after it, as before)
+      const shipOn = !!s && i === r0 && (s.ship || this.craftsShown) && this.ship.ready && !this.debugSkipShip;
+      const inScene = shipOn && t === this.live && this.shipInScene && this.ship.composeReady;
+      if (s && i === r0 && t === this.live) this.craftMotionOn = false;
+      // the occlusion depth the raster passes below test against (Z-P1: fresh, not the stale pixels' own)
+      if (s && i === r0) this.encodeSceneDepth(enc, t);
+      if (s && inScene) this.encodeShipNow(enc, t, s, true);
       if (s && i === r0 && t === this.live && this.encodeTemporal(enc, t, s) && s.motionBlur > 0 && !this.costViewMode)
         this.encodeMotionBlur(enc, t);
       if (trace) trace(enc);
-      // the occlusion depth the raster passes below test against (Z-P1: fresh, not the stale pixels' own)
-      if (s && i === r0) this.encodeSceneDepth(enc, t);
-      // the space station, where it is on its orbit (before the Ranger: its glass reflects it)
+      // the space station, where it is on its orbit (before the Ranger: its glass reflects it — not the craft in the scene's)
       if (s && i === r0) this.encodeStation(enc, t, s);
       if (s && i === r0) this.encodeCharacter(enc, t, s);
-      if (s && i === r0 && (s.ship || this.craftsShown) && this.ship.ready && !this.debugSkipShip) {
-        this.ship.encodeShip(
-          enc,
-          t.hdr,
-          {
-            vessel: s.ship || this.shipInView ? s.vessel : undefined,
-            place: !s.ship && this.shipInView ? this.shipPlace! : undefined,
-            others: this.shipOthers(s),
-            sea: this.shipSea(s),
-            lift: this.liftNow ? this.sceneryLiftNow : null,
-            keyDir: this.shipKeyDir(),
-            mPerM: 1476.625 * (s.massSolar || 1),
-            forceShadow: !!this.character?.active,
-            inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
-            // (the own mask only where the next frame's cockpit mask can use it: a realtime frame, no cost view, no
-            // depth of field)
-            ownMask:
-              this.cockpitMask &&
-              s.ship &&
-              (s.shipMount === "cockpit" || s.shipMount === "cabin") &&
-              t === this.live &&
-              this.taPhase === "realtime" &&
-              !this.costViewMode &&
-              !this.dofOn(s, t),
-            dash: this.cockpitDash ?? undefined,
-            controls: this.cockpitControls ?? undefined,
-            gear: this.shipGear ?? undefined,
-            jet: s.vessel === "f35" && this.jetPose ? { ...this.jetPose, ...this.jetForce } : null,
-            a320:
-              s.vessel === "a320" && this.a320Pose
-                ? { props: { ...this.a320Pose.props, ...this.a320Force }, spins: this.a320Pose.spins }
-                : null,
-            a320Deck: s.vessel === "a320" && this.a320Deck ? { ...this.a320Deck, ...this.a320Force } : null,
-            cabin: lampsOf(s, this.cockpitGlow),
-            pcd: s.vessel === "f35" ? this.pcdLook : null,
-            a320Glass: s.vessel === "a320" && this.a320Deck ? this.a320Glass : null,
-            lamps: { navLights: s.navLights, strobeLights: s.strobeLights, landingLights: s.landingLights, t: this.frameMs() / 1000 },
-            glares: this.glaresNow(s),
-            mount: this.shipPose ?? (s.shipMount as Mount),
-            look: [s.shipLookYaw, s.shipLookPitch],
-            fov: s.fov,
-            aspect: t.width / t.height,
-            albedo: s.shipAlbedo,
-            metal: s.shipMetal,
-            rough: s.shipRough,
-            light: s.shipLight,
-            coat: s.shipCoat,
-            scratches: this.lookCamera && !this.lens && s.ship && s.shipMount === "cockpit" && t === this.live ? this.canopyScratches : 0,
-            pre: preExposure(this.ev(s)),
-            plasma: this.shipPlasma,
-            reentry: this.shipReentry,
-            probeAxes: this.shipProbeAxes,
-            thrust: this.shipThrust,
-            glow: preExposure(this.ev(s)) / 2 ** this.ev(s),
-            contrails: this.shipContrails,
-          },
-          // (on foot: the astronaut and the grass before it hide the hull — else the station, before it in orbit)
-          this.characterRenderer.occluder ??
-            (this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined),
-          t.sceneDepth,
-        );
-        // (the own mask drawn this frame: the next realtime trace's cockpit mask — encodeCockpitMask)
-        if (t === this.live) this.ownMaskStamp = this.ship.ownDrawn ? this.frameStamp : -1;
-        // (where it was drawn: the display reads its image there, the bloom too)
-        const rect = new Float32Array(this.ship.rectFor(t.hdr));
-        this.device.queue.writeBuffer(this.displayBuf, 112, rect);
-        this.device.queue.writeBuffer(t.shipRect, 0, rect);
-      } else if (i === r0) {
+      if (s && shipOn && !inScene) this.encodeShipNow(enc, t, s, false);
+      else if (i === r0 && !shipOn) {
         this.device.queue.writeBuffer(t.shipRect, 0, new Float32Array(4));
         if (t === this.live) this.ownMaskStamp = -1;
       }
@@ -10818,7 +10899,16 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     yFrac: number,
     withDepth = false,
   ): Promise<
-    (SurfaceAt & { x: number; y: number; generation: number; decodedId: number; depth: number | null; motion: number[] | null }) | null
+    | (SurfaceAt & {
+        x: number;
+        y: number;
+        generation: number;
+        decodedId: number;
+        depth: number | null;
+        motion: number[] | null;
+        craft: number | null;
+      })
+    | null
   > {
     const tex = this.terrainRaster?.distanceTexture();
     if (!tex) return null;
@@ -10862,6 +10952,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // (the motion target's texel — rgba16float: xy [px] to the frame before, z 1 a moving mesh’s / 2 no history / −1 the rigid’s
       // analytic motion, unread by the history)
       motion: own ? halfs(new Uint16Array(raw, 512, 4)) : null,
+      // (PLAN-J1 J1-5: the craft's instance where its word is the craft's — drawn into the scene; null otherwise)
+      craft: own ? craftInstanceOf(new Uint32Array(raw, 256, 1)[0]!) : null,
       x,
       y,
       generation,

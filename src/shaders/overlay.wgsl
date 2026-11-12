@@ -13,6 +13,7 @@ struct Overlay {
 @group(0) @binding(1) var<storage, read> moments: array<vec2f>; // Σ luminance², depth [M] per traced pixel
 @group(0) @binding(2) var lines: texture_2d<f32>;
 @group(0) @binding(3) var ship: texture_2d<f32>; // the Ranger, premultiplied (its alpha: what it hides)
+@group(0) @binding(4) var shipScene: texture_2d<f32>; // (PLAN-J1 J1-5) where it is in the scene, its image cleared (r 1)
 
 struct SegIn {
   @location(0) ends: vec4f, // x0, y0, x1, y1 in the image's NDC
@@ -126,7 +127,7 @@ fn fsComposite(i: FullOut) -> @location(0) vec4f {
     if (moments[p.y * W + p.x].y < 1e8) { discard; }
     // (and not over the Ranger, drawn over the traced image)
     let q = vec2f(p) - U.ship.xy;
-    if (U.ship.z > 0.0 && all(q >= vec2f(0.0)) && all(q < U.ship.zw)) { a *= 1.0 - clamp(textureLoad(ship, vec2i(p), 0).a, 0.0, 1.0); }
+    if (U.ship.z > 0.0 && all(q >= vec2f(0.0)) && all(q < U.ship.zw)) { a *= 1.0 - clamp(textureLoad(ship, vec2i(p), 0).a + textureLoad(shipScene, vec2i(p), 0).r, 0.0, 1.0); }
   }
   return vec4f(l.rgb, a);
 }
