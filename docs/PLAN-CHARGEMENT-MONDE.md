@@ -1,6 +1,6 @@
 # Plan — le chargement du monde : des tuiles qui arrivent vite et ne laissent pas de trou
 
-**État (12 novembre 2026) : CM0, CM1 et CM2 faits (§8) ; CM3 mesuré, non implémenté — **décision de Sam demandée** (§8) (décision de Sam du 12 novembre :
+**État (12 novembre 2026) : CM0, CM1 et CM2 faits (§8) ; CM3 mesuré, **option 1 + 3 validée par Sam le 12 novembre** (§8), implémentation en cours (décision de Sam du 12 novembre :
 CM0 → CM1 → CM2 → CM3). Le reste proposé.** Proposé le 10 novembre. Il vient de l'audit du 10 novembre
 ([01-chargement-monde.md](audit-2026-11-10/01-chargement-monde.md), constats ST-01 à ST-21) et complète le plan
 ST0–ST10 de [ANALYSE-STREAMING-2026-11-06.md](ANALYSE-STREAMING-2026-11-06.md), qu'il ne remplace pas. Le code fait foi.
@@ -181,7 +181,13 @@ journal [progress-to-destination.md](../progress-to-destination.md) et, pour un 
 - **Non vérifié** : Aubrac, Chamonix, kerr-mini, une approche en mouvement ; la charge côté IGN avec plusieurs joueurs ; une
   variante WMS-R à 6 en vol a été essayée (vue à 90 % 6,2–6,3 s, relief IGN 10,5–14,8 s) et écartée.
 
-### CM3 — précharger le départ : mesuré, non implémenté — décision de Sam demandée (12 novembre 2026)
+### CM3 — précharger le départ : mesuré, option 1 + 3 validée par Sam (12 novembre 2026)
+
+**Décision de Sam (12 novembre 2026) : « OK » pour la recommandation 1 + 3 borné** — le départ préchargé dès que le lieu est
+choisi au titre (et pour le voyage G), annulé si le joueur quitte le mode avion ou change de lieu ; le voile attend les cartes
+globales et le relief grossier, au plus 15 s. Coûts acceptés : un voile parfois plus long, du réseau pour un joueur qui choisirait
+ensuite l'espace.
+
 
 - **Mesuré** (nouvel e2e `tests/e2e/title-departure.e2e.test.ts` ; ce Mac, profil neuf, SW ; titre › Par avion › Vol libre,
   terrain par défaut Edwards, titre ouvert 8 s puis « Voler » ; deux passes) : le voile d'entrée se lève **2,2–2,6 s** après le

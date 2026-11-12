@@ -3388,3 +3388,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites, suite** : leurs lecteurs qui changent l'image (rejet de l'historique par identité ; l'appareil composé par la profondeur,
   J1-5) restent à faire ; le mouvement reste `rgba16float` (pas encore le rigide en `rg16float`) ; les corps (Lune, Mars) n'ont pas ces
   sorties. GRAPHICS-PIPELINE (C6b), BH-API, PLAN-J1.
+
+## 2026-11-12T03:48Z — Décisions de Sam : CM3 « OK » (préchargement + voile borné), J1-5 lancé (l'image peut changer)
+
+- **Contribution** (§15 J1, §19 parcours d'entrée ; PLAN-CHARGEMENT-MONDE CM3, PLAN-J1 J1-5) : deux décisions qui débloquent la suite.
+  (1) **CM3** : l'option 1 + 3 recommandée est validée — départ préchargé dès que le lieu est choisi au titre (et pour le voyage G),
+  annulé hors du mode avion ou au changement de lieu ; voile qui attend les cartes globales et le relief grossier, au plus 15 s ; coûts
+  acceptés (voile parfois plus long, réseau pour un joueur qui choisirait l'espace). (2) **J1** : J1-5 lancé — l'appareil dans la
+  scène avant le temporel, composé par la profondeur gardée, avec mouvement et identité ; les lecteurs qui changent l'image sont permis,
+  chacun prouvé par planche avant/après et ΔGPU sur J0.
+- **Preuve** : documenté (décision). Aucun code, test ni mesure dans cette entrée (session d'analyse du suivi). Consigné dans
+  PLAN-CHARGEMENT-MONDE (état, §8 CM3) et PLAN-J1 (§4 ter).

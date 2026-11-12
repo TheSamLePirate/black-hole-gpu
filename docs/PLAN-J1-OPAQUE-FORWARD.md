@@ -172,6 +172,10 @@ pixels (`withLiteDeferred`) : forêt 42,1 → 39,5 ms, **J0 60,0 ms** (61,5) ; l
 l'ombrage en calcul, matériau puis éclairage (`withLiteDeferred`), remplace le « forward du terrain » de J1-4 ; le forward est réservé
 aux maillages à grands triangles (J1-5 : bâtiments, appareil). Le pilote `forwardGround` reste éteint, à retirer à J1-7 s'il n'a
 plus d'utilisateur. Ordre donné le même jour : **J1-2 et J1-1 d'abord** (ils avancent sans changer l'image).
+**Décision de Sam (12 novembre 2026, plus tard) : J1-5 lancé, changer l'image est accepté** — l'appareil dessiné dans la scène
+(avant le temporel, composé par la profondeur gardée, avec son mouvement et son identité : net en virage), puis les lecteurs qui
+changent l'image (rejet de l'historique par identité). Chaque lot qui change l'image se prouve par une planche avant/après et un
+ΔGPU sur J0.
 **J1-2, l'identité (12 novembre)** : le mot du contrat (objet 20 bits | génération 12 bits, 0 rien) défini dans
 `src/system/surface-id.ts` (`packSurfaceId`, `decodeSurface` : la cible de visibilité telle qu'elle est dessinée — sol et son niveau,
 arbre, bâtiment, boîte, pont, éolienne, pylône, nuage, rien —, la génération étant la publication du décor `earthScenery.revision`) ;
