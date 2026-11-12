@@ -21,7 +21,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   appareil gelé. **Reste une question pour le jeu** : en vol réel au-dessus d'une ville dense, le plafond de 32 000 bâtiments laisse-t-il
   la canopée IGN planter des arbres sur les îlots coupés (les vues de Toulon et de Paris de la session J1-5 le suggèrent) — à mesurer
   (`budgetLimited`, le masque bâti des arbres relevés).
-- **Conséquence** : pour une vue de façades, placer l'appareil lent (≤ 10 m/s) et attendre `!quick` (e2e `buildings-forward`, `BF_PLACE`).
+- **Conséquence** : pour une vue de façades, placer l'appareil lent (≤ 10 m/s) et attendre `!quick` (l'e2e `buildings-forward`, qui le faisait, est retiré avec son pilote le 12 nov. : `git show 081e4b17:tests/e2e/buildings-forward.e2e.test.ts`).
 
 ## Des points blancs qui scintillent sur la mer et dans la brume de l'horizon (scène J0, Toulon-Hyères)
 

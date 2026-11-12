@@ -3637,3 +3637,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Le décor sans bâtiments dans les e2e** : la scène centrée ~3,7 km devant un appareil gelé (l'avance par sa vitesse) et ses bâtiments
   plafonnés à 32 000 ; à 10 m/s les quais dessinés. Question ouverte pour le jeu : le plafond laisse-t-il la canopée planter des arbres sur
   les îlots coupés en ville dense (PROBLEMES-A-REGLER). e2e `buildings-forward` : `BF_PLACE` avec vitesse, stats du décor loggées.
+
+## 2026-11-12T11:11Z — J1 terminé : le pilote des bâtiments en forward retiré (décision de Sam, (a))
+
+- **Contribution** (stratégie §15 J1 ; CLAUDE.md « un seul opaque principal », « supprimer options et compilations sans utilisateur ») :
+  mesuré sans gain visible (de loin, à Toulon ; de près, au Vieux-Port : jour identique, nuit écart faible) pour +1,3 ms sur J0 et
+  jusqu'à 5,3 ms en ville, le pilote est retiré — le code de e482082b annulé (`buildings-forward.ts`, leviers et passe du renderer,
+  `liteBuildingG`, modules de `check-wgsl` 84 → 81), son e2e retiré ; les bâtiments restent au différé (`shadeLite`). Leçons gardées dans
+  PLAN-J1 (fragment forward sans écriture ni `discard` sur Apple ; vues de façades à appareil lent).
+- **Vérifié** : tsc, check-wgsl 81/81, `pipeline-inventory --check` et `--write --sizes`. **J1 terminé** ; la suite (J2) attend Sam ;
+  restent consignés : `rigidMotionOn` (retiré à la fin de J2 sans lecteur), les points blancs de la mer (cause inconnue), le plafond de
+  32 000 bâtiments en ville dense (question ouverte).

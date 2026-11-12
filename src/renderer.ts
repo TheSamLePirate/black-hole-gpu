@@ -30,15 +30,7 @@ import {
   tracerEntryPoint,
 } from "./system/tracer-kernels";
 import { WgslSpecialiser } from "./system/wgsl-specialise";
-import { BUILDINGS_FORWARD_MASK, BuildingsForward } from "./system/buildings-forward";
-import {
-  RASTER_CODE,
-  RASTER_CODE_SCALE,
-  RASTER_HINT_BINDING,
-  RASTER_HINT_TEXTURE_LIMIT,
-  SUN_SHADOW_BINDING,
-  SUN_SHADOW_TEXTURE_LIMIT,
-} from "./system/terrain-raster-hint";
+import { RASTER_HINT_BINDING, RASTER_HINT_TEXTURE_LIMIT, SUN_SHADOW_BINDING, SUN_SHADOW_TEXTURE_LIMIT } from "./system/terrain-raster-hint";
 import {
   TERRAIN_CACHE_LEVELS,
   TERRAIN_CACHE_MAX_LAT,
@@ -392,8 +384,6 @@ const RASTER_WATER_FLAG = 256;
 const RASTER_SHADE_LATE_FLAG = 1024;
 /** the parameters' raster bit for the trees near the camera taken by the rays' kernel (trace.wgsl RASTER_NEAR_TREES_FLAG) */
 const RASTER_NEAR_TREES_FLAG = 2048;
-/** the parameters' raster bit for the buildings shaded forward this frame (trace.wgsl RASTER_FORWARD_FLAG; PLAN-J1 J1-5) */
-const RASTER_FORWARD_FLAG = 4096;
 /** within this the trees are the rays' kernel's (trace.wgsl RASTER_NEAR_TREES_M) [m] */
 const RASTER_NEAR_TREES_M = 80;
 /** the temporal pass's least weight of a fresh pixel with the raster's ground at every pixel (taParams[0]'s 1/16 otherwise) */
@@ -5426,176 +5416,6 @@ export class Renderer {
   /** PLAN-MER-WEBGPU S3: the open sea's pixels shaded by their own kernel — shadeWater compiled without the coasts' and the inland
    *  water's code (trace.wgsl WATER_OPEN) — once it is compiled (A/B lever) */
   seaWaterOpenOn = true;
-  /** PLAN-J1 J1-5 — the buildings shaded forward (system/buildings-forward.ts): their triangles drawn again after the visibility,
-   *  against its kept depth, their fragment shading the pixel (trace.wgsl liteBuildingG: shadeLite's building, material Q3, the
-   *  triangle's own point, normal and footprint) into liteOut — shadeLite leaves those pixels, shadeLiteFinish puts the air on.
-   *  Its pipeline built for the scene's key when it is on (seconds, off the frame), the frame as before until it is in. Off by
-   *  default until measured. */
-  buildingsForward = false;
-  /** its debug view (set before turning it on; its pipeline rebuilt): 1 the triangle's normal against shadeLite's (green within
-   *  25°, red off, blue none to compare), 2 its pixels magenta */
-  buildingsForwardDebug = 0;
-  /** the buildings were drawn forward this frame */
-  buildingsForwardNow = false;
-  private buildingsFwd: BuildingsForward | null = null;
-  private buildingsFwdBinds: {
-    key: string;
-    hb: GPUBindGroup;
-    g1: GPUBindGroup;
-    g2: GPUBindGroup | null;
-    mark: GPUBindGroup;
-    moments: GPUBuffer;
-    mask: GPUTexture;
-  } | null = null;
-  /** its mask (1 where its fragment shaded the pixel this frame: the marking pass's input) */
-  private buildingsFwdMask: GPUTexture | null = null;
-  /** how many pixels its fragment shaded at the last frame it drew (its mask read back; null: none drawn), and how many the
-   *  visibility drew as a building's own triangles or box (code mesh, a leaf) — the probes' */
-  async buildingsForwardPixels(): Promise<{ forward: number | null; buildings: number | null }> {
-    const read = async (tex: GPUTexture, bpp: number) => {
-      const row = Math.ceil((tex.width * bpp) / 256) * 256;
-      const buf = this.device.createBuffer({ size: row * tex.height, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-      const enc = this.device.createCommandEncoder();
-      enc.copyTextureToBuffer({ texture: tex }, { buffer: buf, bytesPerRow: row }, [tex.width, tex.height]);
-      this.device.queue.submit([enc.finish()]);
-      await buf.mapAsync(GPUMapMode.READ);
-      const a = buf.getMappedRange().slice(0);
-      buf.destroy();
-      return { a, row };
-    };
-    let forward: number | null = null;
-    let buildings: number | null = null;
-    const m = this.buildingsFwdMask;
-    if (m) {
-      const { a, row } = await read(m, 1);
-      const u = new Uint8Array(a);
-      forward = 0;
-      for (let y = 0; y < m.height; y++) for (let x = 0; x < m.width; x++) if (u[y * row + x]! > 127) forward++;
-    }
-    const d = this.terrainRaster?.distanceTexture();
-    if (d) {
-      const { a, row } = await read(d, 16);
-      const f = new Float32Array(a);
-      buildings = 0;
-      for (let y = 0; y < d.height; y++)
-        for (let x = 0; x < d.width; x++) {
-          const i = (y * row) / 4 + x * 4;
-          if (Math.floor(f[i + 3]! / RASTER_CODE_SCALE) === RASTER_CODE.mesh && f[i + 1]! > 0.5) buildings++;
-        }
-    }
-    return { forward, buildings };
-  }
-  /** its build state (key, failure, cold times, source size, bindings) — the probes' */
-  get buildingsForwardState() {
-    const f = this.buildingsFwd;
-    return f
-      ? { key: f.key, ready: !!f.pipe, failed: f.failed, compileMs: f.compileMs, codeKB: f.codeKB, used: Object.fromEntries(f.used) }
-      : null;
-  }
-  /** its pipeline for the frame's key — built in the background when missing; null until it is */
-  private buildingsForwardReady(): BuildingsForward | null {
-    if (!this.buildingsForward || !this.terrainRaster || !this.rasterLite || !this.sceneryRaster) return null;
-    const key = this.featureKey;
-    const id = `${key}:${this.buildingsForwardDebug}`;
-    this.buildingsFwd ??= new BuildingsForward(this.device);
-    const f = this.buildingsFwd;
-    if (f.ready(id)) return f;
-    if (!f.failed && this.traceVariant("shadeLite", key, false)) {
-      const constants = tracerConstants(key, "shadeLite", {
-        quality: false,
-        rasterHint: this.rasterHint,
-        tune: this.tunes.get((key >> 20) & 63),
-        companion: this.leanMain,
-        coarseProbe: this.coarseProbe,
-        leftovers: this.rasterLite && this.leanShade,
-        otherUniverse: !this.otherUniverseOut,
-      });
-      // (the source specialised for the key and pruned to liteBuildingG's reach — off the page's thread)
-      void f.build(
-        id,
-        this.specialiseCode(constants, "liteBuildingG"),
-        this.sceneryRaster.vertexModule,
-        constants,
-        this.buildingsForwardDebug,
-      );
-    }
-    return null;
-  }
-  /** The buildings forward this frame (encodeLite, before shadeLite): their fragments into liteOut, against the kept depth. */
-  private encodeBuildingsForward(enc: GPUCommandEncoder, t: Target, hint: GPUTexture, f: BuildingsForward): boolean {
-    const surf = this.terrainRaster?.surfaceTextures();
-    const out = t.liteOut;
-    if (!surf || !out || !f.pipe || !this.sceneryRaster) return false;
-    if (surf.depth.width !== out.width || surf.depth.height !== out.height || !f.mark) return false;
-    if (!this.buildingsFwdMask || this.buildingsFwdMask.width !== out.width || this.buildingsFwdMask.height !== out.height) {
-      this.buildingsFwdMask?.destroy();
-      this.buildingsFwdMask = this.device.createTexture({
-        label: "buildings forward: mask",
-        size: [out.width, out.height],
-        format: BUILDINGS_FORWARD_MASK,
-        // (read back by buildingsForwardPixels — a diagnostic)
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
-      });
-      this.buildingsFwdBinds = null;
-    }
-    const mask = this.buildingsFwdMask;
-    // (made again with the tracer's own group 0 — hintBindFor's, remade when its resources change — and the LUT's)
-    const hb = this.hintBindFor(t, hint);
-    const key = `${f.key}|${t.width}x${t.height}|${this.motionGen(hint)}|${t.lut?.tex[0] ? this.motionGen(t.lut.tex[0]) : 0}`;
-    const fb = this.buildingsFwdBinds;
-    if (fb?.key !== key || fb.hb !== hb || fb.moments !== t.moments || fb.mask !== mask) {
-      const want1 = new Set(f.used.get(0) ?? []);
-      const want2 = new Set(f.used.get(1) ?? []);
-      const g1 = this.device.createBindGroup({
-        label: "buildings forward: the tracer's group 0",
-        layout: f.pipe.getBindGroupLayout(1),
-        entries: this.traceEntries(t, this.ship.envBuf, hint).filter((e) => want1.has(e.binding)),
-      });
-      this.liteStandIns ??= [
-        this.device.createTexture({ size: [1, 1], format: "rgba32float", usage: GPUTextureUsage.TEXTURE_BINDING }),
-        this.device.createTexture({ size: [1, 1], format: "r32float", usage: GPUTextureUsage.TEXTURE_BINDING }),
-      ];
-      const lt = t.lut ? t.lut.tex : this.liteStandIns;
-      const e2 = [
-        { binding: 2, resource: lt[0]!.createView() },
-        { binding: 3, resource: lt[1]!.createView() },
-        ...this.aerialRead(),
-      ].filter((e) => want2.has(e.binding));
-      if (e2.length !== want2.size) throw new Error(`buildings forward: the tracer's group 1 bindings ${[...want2]} not all given`);
-      const g2 = want2.size ? this.device.createBindGroup({ layout: f.pipe.getBindGroupLayout(2), entries: e2 }) : null;
-      const mark = this.device.createBindGroup({
-        label: "buildings forward: marking",
-        layout: f.mark.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: mask.createView() },
-          { binding: 1, resource: { buffer: t.moments } },
-        ],
-      });
-      this.buildingsFwdBinds = { key, hb, g1, g2, mark, moments: t.moments, mask };
-    }
-    const b = this.buildingsFwdBinds!;
-    const pass = enc.beginRenderPass(
-      this.prof.pass("buildings forward", {
-        colorAttachments: [
-          { view: out.createView(), loadOp: "load", storeOp: "store" },
-          { view: mask.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] },
-        ],
-        depthStencilAttachment: { view: surf.depth.createView(), depthReadOnly: true },
-      }),
-    );
-    pass.setBindGroup(1, b.g1);
-    if (b.g2) pass.setBindGroup(2, b.g2);
-    const drawn = this.sceneryRaster.drawForward(pass, f.pipe);
-    pass.end();
-    if (!drawn) return false;
-    // (its pixels marked RASTER_SPLIT — shadeLite leaves them, shadeLiteFinish finishes them)
-    const mp = enc.beginComputePass(this.prof.pass("buildings forward: marking"));
-    mp.setPipeline(f.mark);
-    mp.setBindGroup(0, b.mark);
-    mp.dispatchWorkgroups(Math.ceil(out.width / 8), Math.ceil(out.height / 8));
-    mp.end();
-    return true;
-  }
   /** PLAN-MER-WEBGPU S2: the sea's crests drawn before the land behind them where it stands over the waves (A/B lever) */
   seaCrestsOverLand = true;
   /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */
@@ -6388,8 +6208,7 @@ export class Renderer {
         label: "earth lite: its surfaces (liteOut)",
         size: [t.width, t.height],
         format: LITE_OUT_FORMAT,
-        // (a render target too: the buildings' forward fragments write their surfaces there — PLAN-J1 J1-5)
-        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
       });
       for (const m of t.liteMat ?? []) m.destroy();
       t.liteMat = this.liteDeferred
@@ -7281,12 +7100,8 @@ export class Renderer {
     this.rasterWaterNow = false;
     this.rasterShadeLate = false;
     this.nearTreesNow = false;
-    this.buildingsForwardNow = false;
     if (!quality && hint && this.rasterPrimaryOn && this.rasterLite && this.traceVariant("shadeLite")) {
       this.rasterLiteNow = true;
-      // (PLAN-J1 J1-5: the buildings' forward pipeline in for this key — the Earth's raster —: drawn in encodeLite before
-      // shadeLite, which leaves it the pixels it marks)
-      this.buildingsForwardNow = !this.bodyRasterNow && t === this.live && !!this.buildingsForwardReady();
       this.rasterShadeLate = shadeLate;
       // (its water's pass — shadeWater — once its kernel is there: shadeLite leaves it the water's pixels)
       // (not another world's: its water is bodyLite's — and the Earth's unseen sea would stop the FFT, seaFftParams)
@@ -7307,8 +7122,7 @@ export class Renderer {
         RASTER_LITE_FLAG +
         (this.rasterWaterNow ? RASTER_WATER_FLAG : 0) +
         (shadeLate ? RASTER_SHADE_LATE_FLAG : 0) +
-        (this.nearTreesNow ? RASTER_NEAR_TREES_FLAG : 0) +
-        (this.buildingsForwardNow ? RASTER_FORWARD_FLAG : 0);
+        (this.nearTreesNow ? RASTER_NEAR_TREES_FLAG : 0);
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
     }
     // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
@@ -7537,17 +7351,6 @@ export class Renderer {
     }
     if (lite) {
       const lb = this.liteBinds(t);
-      // (PLAN-J1 J1-5: the buildings forward first — their pixels then left by shadeLite, finished by shadeLiteFinish)
-      if (this.buildingsForwardNow) {
-        const f = this.buildingsForwardReady();
-        try {
-          if (!f || !this.encodeBuildingsForward(enc, t, hint, f)) this.buildingsForwardNow = false;
-        } catch (e) {
-          console.warn("buildings forward: off —", e);
-          this.buildingsForward = false;
-          this.buildingsForwardNow = false;
-        }
-      }
       const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
       lp.setPipeline(lite);
       lp.setBindGroup(0, this.hintBindFor(t, hint));
