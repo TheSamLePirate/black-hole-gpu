@@ -282,6 +282,56 @@ l'e2e `surface-id`, chemin des corps sans identité : gardé, propriétaire J1-2
 brancher avec le format `rg16float`) ; **la fiche J0 nouvelle faite le 12** ([M1 Max](progress/j0/FICHE-m1max-2026-11-12.md) : frais 43,9 images/s, p50 24,9 ms, p95 32,6 ; soutenu 33,4/s — [kerr-mini](progress/j0/FICHE-kerr-mini-2026-11-12.md) : GPU p50 59,5 ms, 16,8/s). **Reste de J1-5** : les bâtiments en forward
 avec leur matériau (Q3) — seul l'appareil est fait.
 
+**J1-5, les bâtiments en forward : l'inventaire et le choix (12 novembre).** *Ce qu'un pixel de bâtiment lit aujourd'hui* : la
+visibilité le dessine (`scenery-raster.ts` `meshVs`/`meshFs` : code `mesh`, g la feuille + 1, identité r32uint ; les bâtiments lointains
+sans triangles en boîtes pleines, `boxSolidVs`), puis `shadeLite` l'ombre **à chaque pixel de l'image interne, chaque image** (un fil
+par pixel — la cadence 1/8 ou 1/16 est celle du noyau des rayons `shade`, pas du sol raster ; la TAAU agrandit ensuite) : prologue
+(rayon gigué `liteJitter`, distance lue au texel du point gigué, point, lumière, empreinte **sur le plan horizontal** — `tn` est nul sur
+un bâtiment —), `liteMaterial` (`rasterBuilding` : `buildingFaceAt` retrouve la face par les arêtes de la feuille, `buildingLook`/
+`roofLook` ; la normale de face exacte ; **la normale géométrique `ng` par les distances des voisins** — `rasterNormal`, nulle ou
+mêlée aux arêtes —, l'AO GTAO), `liteLight` (soleil, ombres, ciel, rebond, spéculaire, fenêtres), puis `liteFinish` (air, nuages :
+`shadeLiteFinish` par `liteOut`). Fermeture statique de la racine du fragment (`liteBuildingG`, profil J0 spécialisé) : **199
+fonctions, 16 textures** (`earthCube`, `earthNight`, `earthTiles`, `surfaceColour`, `surfaceCover`, `shipShadowMap`, `noiseTex`,
+`orthoTex`, `imgTex2k`, `terrainDist`, `sunShadowMap`, `csmTex`, `detailTex`, `gtaoTex`, `tsmTex`, `impTex`), 5 échantillonneurs,
+`P`, `bodies` et `scenery` en lecture — l'air et les nuages (`liteFinishAt` : 78 fonctions, 7 textures dont
+3 seulement en commun) n'y sont pas ; module de 115 ko. `rasterBuilding` seul : 15 fonctions, `P` et `scenery`.
+*Où le fragment s'insère — choix* : **un second dessin des triangles des bâtiments, après la passe de visibilité, sur sa profondeur
+gardée de J1-2 (`depthCompare: "equal"`, profondeur en lecture seule)**, pas dans la passe de visibilité elle-même : (1) l'ombrage
+lit la visibilité de l'image (voisins, AO GTAO calculée après elle, distance au point gigué) — impossible pendant qu'elle s'écrit ;
+(2) le test d'égalité ne laisse passer que le fragment visible : aucun fragment caché ombré (la visibilité dessine sol, arbres et
+boîtes avant les bâtiments, et les bâtiments entre eux sans tri) ; (3) les sommets sont ceux de la visibilité **par construction** —
+l'étage de sommets est le module et l'entrée mêmes (`meshVs`), son interface entière consommée par le fragment. La sortie : `liteOut`
+(G, distance) en cible de rendu et un masque `r8unorm` ; une petite passe de calcul (`buildings forward: marking`) marque ces pixels
+`RASTER_SPLIT` — `shadeLite` les laisse (`RASTER_FORWARD_FLAG`), `shadeLiteFinish` y met l'air et les nuages comme pour les siens :
+pas de passe de finition de plus, `accum`/`moments`/`stamps` écrits par le même code ; l'identité et le mouvement (J1-2) et le rejet (b)
+non touchés. **Leçon (mesurée)** : le fragment ne doit ni écrire en mémoire ni faire `discard` — avec le marquage écrit par le
+fragment dans `moments`, Metal passe le test de profondeur en tardif et chaque fragment caché de la ville est ombré (28 ms le jour,
+47 ms la nuit sur Paris, kerr-mini) ; sans écriture mais avec `discard`, encore 8 ms ; sans les deux, 3,1 ms. Un pixel non pris écrit
+masque 0 et une surface vide, que `shadeLite` réécrit pour tous les pixels qu'il finit. Les silhouettes restent à `shadeLite` : là où le texel du point gigué n'est pas ce bâtiment, le fragment se retire et le pixel
+garde son antialiasing par l'historique. Ce que le fragment change : le point sur le plan du triangle le long du rayon gigué (au lieu
+de la distance du texel voisin), la normale géométrique du triangle (dérivées matérielles de son point, au lieu des voisins),
+l'empreinte sur le plan du triangle (un mur, un toit) ; le matériau Q3 et la lumière sont le même code (`liteSurface`). Les boîtes
+lointaines, ponts, éoliennes, pylônes, voitures restent à `shadeLite`.
+**J1-5, les bâtiments en forward : construit, mesuré, laissé éteint — à décider par Sam (12 novembre).** Levier
+`renderer.buildingsForward` (éteint), `system/buildings-forward.ts`, trace.wgsl `liteBuildingG`, `scenery-raster.ts` `drawForward`,
+compteur `buildingsForwardPixels()`, vues de diagnostic `buildingsForwardDebug` ; e2e `buildings-forward` (kerr-mini, figé, l'exposition
+tenue, éteint / allumé / éteint). **Couverture** : 84 % des pixels de bâtiment pris par le fragment (Toulon : 9 860 sur 11 715 ; Paris
+6 400 sur 8 000 ; le reste : silhouettes, laissées à `shadeLite`). **Normale** : la normale du triangle d'accord (≤ 25°) avec celle de
+`shadeLite` sur les grandes faces, en désaccord sur les petits bâtiments lointains, là où la normale par les voisins est la moins sûre.
+**Image** : aucune différence visible — écart moyen allumé/éteint 0,54 (dérive éteint/éteint 0,63) le jour, 0,37 (0,41) la nuit,
+sur 255 ; planche `docs/progress/j1/j1-5-batiments-forward.jpg` (Toulon, jour et nuit, recadrages ×3 et différence ×8 : bords de
+bâtiments et de fenêtres seulement). **Coût** (passes sur 60 images) : Toulon `buildings forward` 2,5–2,6 ms + marquage 0,04 ms, dont
+~1,0 ms de redessin des sommets (les vues sans ombrage) ; Paris 3,1–3,4 ms ; `earth lite` sans gain mesurable (ses pixels de bâtiment
+~1 % de l'image, ~17 ns chacun) — par pixel le fragment coûte ~10× le calcul (petits triangles lointains : quads partiels ; registres).
+**ΔGPU sur J0** (kerr-mini, A/B A B B A contre 5d04b0c3, phase vol) : éteint, **coût nul** (A 59,4 / 59,1, B 58,8 / 59,2 ms) ; allumé,
+**+1,3 ms** (A 59,3 / 59,5, B 60,6 / 60,9 ms ; `buildings forward` 0,80 / 0,78 ms + marquage 0,09). **Pas net, au-delà de ~+1 ms :
+laissé éteint.** Compilation à froid du pipeline ~2,5 s sur kerr-mini (hors du chemin bloquant : l'image reste `shadeLite` jusque-là).
+**Question à Sam** : (a) garder le pilote éteint et le retirer à J1-7 (le sol et les bâtiments restent au différé, l'appareil seul en
+forward) ; (b) le restreindre aux **grands triangles proches** — les bâtiments maillés à moins de quelques centaines de mètres, en
+excluant les petits triangles lointains, cause probable du surcoût (non mesuré séparément) — pour un second A/B ; (c) l'allumer quand
+même pour le contrat (une surface finale par le forward), au coût mesuré. Recommandation : (b) seulement si un gain d'image est
+attendu des façades proches ; sinon (a).
+
 **J1-7, `rigidMotionOn` — gardé éteint, avec son propriétaire et sa condition de retrait (12 novembre).** Relevé : aucun lecteur ne lit
 le mouvement analytique du rigide (z −1) — `temporal`, `taau` et le flou de mouvement ne lisent la cible de mouvement que là où z > 0,5
 (un maillage mobile, l'appareil) et reprojettent le rigide par la caméra et la profondeur, ce qui est exact pour lui ; ni J1-5 ni le

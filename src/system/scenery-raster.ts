@@ -1223,6 +1223,37 @@ export class SceneryRaster {
     }
   }
 
+  /** its module (PLAN-J1 J1-5: the buildings' forward pipeline's vertex stage — the visibility's very vertices, meshVs) */
+  get vertexModule(): GPUShaderModule {
+    return this.module;
+  }
+  private forwardBind: { pipe: GPURenderPipeline; buf: GPUBuffer; bind: GPUBindGroup } | null = null;
+  /** PLAN-J1 J1-5 (system/buildings-forward.ts): the buildings' triangles drawn again by `pipe` — its vertex stage meshVs, its
+   *  group 0 this frame's uniforms and the scenery (the caller's groups set) — in a pass against the visibility's kept depth;
+   *  false when they were not drawn this frame */
+  drawForward(pass: GPURenderPassEncoder, pipe: GPURenderPipeline): boolean {
+    if (!this.active || !this.meshes3d || !this.meshPipe || !this.boxPipeMeshed || !this.boxMarkPipe || !this.sceneryBuf) return false;
+    if (this.debugSkip & 18) return false;
+    if (this.forwardBind?.pipe !== pipe || this.forwardBind.buf !== this.sceneryBuf)
+      this.forwardBind = {
+        pipe,
+        buf: this.sceneryBuf,
+        bind: this.device.createBindGroup({
+          label: "buildings forward: the scenery raster's",
+          layout: pipe.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: { buffer: this.frameU } },
+            { binding: 1, resource: { buffer: this.sceneryU } },
+            { binding: 2, resource: { buffer: this.sceneryBuf } },
+          ],
+        }),
+      };
+    pass.setPipeline(pipe);
+    pass.setBindGroup(0, this.forwardBind.bind);
+    pass.drawIndirect(this.draws, (LISTS + 3) * 16);
+    return true;
+  }
+
   /** The trees' and buildings' shadow map, seen from the Sun (after encodeCull, which culled its lists): false when not drawn. */
   encodeShadow(enc: GPUCommandEncoder, descriptor: GPURenderPassDescriptor["timestampWrites"]): boolean {
     if (!this.active || !this.sunOn || !this.drawBind || !this.shadowMap) return false;

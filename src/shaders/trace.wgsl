@@ -16176,6 +16176,87 @@ fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, 
   let m = liteMaterial(gq, q, ph, rd, look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, isTree, anchored, at);
   return liteLight(gq, q, tM, fx, fy, hG, look, Ls, Lp, Li, E, isTree, at, m);
 }
+// (PLAN-J1 J1-5) The buildings shaded forward (system/buildings-forward.ts, renderer.buildingsForward): drawn this frame — their
+// surface in liteOut, their pixels marked RASTER_SPLIT by the pass after them (its mask): shadeLite leaves them, shadeLiteFinish
+// puts the air on
+const RASTER_FORWARD_FLAG = 4096u;
+fn rasterForwardOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_FORWARD_FLAG) != 0u; }
+// A building's pixel shaded by its own triangle's fragment: pV its point in the raster's view axes (right, up, forward [m] — the
+// scenery raster's meshVs), nV its triangle's plane's normal there (the hardware's derivatives of pV), leaf its record + 1. As
+// shadeLite shades a building's pixel — the same jittered ray, light and material (liteSurface: rasterBuilding, buildingLook,
+// roofLook; Q3) —, but the point the ray's own on the triangle's plane, the geometric normal and the footprint the triangle's
+// (shadeLite: the neighbours' distances and the ground's flat plane). Returns (G, tM) — the pixel then marked RASTER_SPLIT for
+// shadeLiteFinish (the air, the clouds) by the marking pass, not here: no write to memory in the fragment, which would turn the
+// depth test late on Metal (every hidden fragment shaded: 28 ms over Paris, kerr-mini) —, or tM 0 where shadeLite keeps it, G.r its
+// reason: 1 not the Earth's raster ground, 3 not shadeLite's or a measure's view, 4 the jittered sample off this building (a
+// silhouette — shadeLite's ray there the ground's or the sky's: the edge antialiased by the history as before). (The cabin's mask:
+// the marking pass's.) dbg 1: G the normal's agreement with shadeLite's (green
+// within 25°, red off, blue none to compare), 2: the forward pixels tinted magenta.
+fn liteBuildingG(px: vec2f, pV: vec3f, nV: vec3f, leaf: u32, dbg: u32) -> vec4f {
+  if (!rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5 || !rasterForwardOn()) { return vec4f(1.0, 0.0, 0.0, 0.0); }
+  let k = u32(P.near1.w);
+  if (NEAR_KIND == 3u || NEAR_KIND == 7u) { return vec4f(1.0, 0.0, 0.0, 0.0); }
+  if (!isEarth(k) || !hasAir(k) || !earthOn()) { return vec4f(1.0, 0.0, 0.0, 0.0); }
+  let gid = vec2u(px);
+  let centre = vec2f(gid) + 0.5;
+  if (!rasterLiteTakes(centre, k) || (liteSkip() & 1024u) != 0u || (liteSkip() & 8192u) != 0u || (liteSkip() & 33554432u) != 0u ||
+      (liteSkip() & 8388608u) != 0u || (liteSkip() & 262144u) != 0u || P.scenery[0].w < 0.5) { return vec4f(3.0, 0.0, 0.0, 0.0); }
+  // (shadeLite's jittered ray — liteJitter — reads the visibility at its own texel: this building there, or the pixel is its)
+  let pos = centre + liteJitter(gid);
+  if (terrainRasterLeaf(pos) != leaf || terrainRasterHint(pos) <= 0.0) { return vec4f(4.0, 0.0, 0.0, 0.0); }
+  setAir(k);
+  WX_W = select(0.0, P.wx[0].x, HAS_WX && earthOn());
+  WX_Q = normalize(nearCam());
+  FOOT = 1.0;
+  FOOT_NEAR = 1.0;
+  FOOT_FAR = 1.0;
+  let ray = rasterRay(pos, k);
+  // (the triangle's plane on the body's axes, facing the camera; the point drawn — the pixel's centre, jittered with the raster
+  // when it is — and the jittered ray met on that plane: a grazing plane, or a meeting far off, the drawn distance)
+  let dirC = toBody(rasterRay(select(centre, pos, rasterHalton()), k).look);
+  let dC = length(pV);
+  var nB = toBody(P.camRight.xyz) * nV.x + toBody(P.camUp.xyz) * nV.y + toBody(P.camFwd.xyz) * nV.z;
+  nB = select(dirC * -1.0, normalize(nB), dot(nB, nB) > 1e-20);
+  nB = select(nB, -nB, dot(nB, dirC) > 0.0);
+  let dirJ = toBody(ray.look);
+  let den = dot(dirJ, nB);
+  var tM = dC;
+  if (den < -0.05) {
+    let tP = dC * dot(dirC, nB) / den;
+    if (tP > 0.0 && abs(tP - dC) < 0.02 * dC + 0.5) { tM = tP; }
+  }
+  let ab = squashOf(k);
+  let rd = ray.rd;
+  let tH = tM / ray.kM;
+  let ph = rasterPoint(ray, tM);
+  let q = normalize(ph);
+  GEO_H = geoH(ph);
+  let gq = geoQ(q);
+  let anchored = tM < TILE_ANCHOR_M && P.nearCam1.w > 0.5 && P.tiles.w > 0.5;
+  if (anchored) { TILE_AT = tileAnchor(P.nearCam1.xyz + ray.rd * tH); }
+  let hG = max(airHeight(ph) - geoidN(gq), 0.0);
+  let lt = nearLight(k);
+  let Ls = normalize(squashed(toBody(lt.dir), ab));
+  let Lp = normalize(toBody(lt.dir));
+  let Li = incidentSun(Lp);
+  let E = lt.e;
+  let fp = pixFoot() * tH;
+  // (the ground's smooth normal — shadeLite's tn: none on a building's pixel, read as it reads it)
+  var tn = vec3f(0.0);
+  if ((liteSkip() & 16u) == 0u || (liteSkip() & 65536u) == 0u) { tn = terrainRasterNormal(centre); }
+  // (the footprint on the triangle's own plane — a wall's, a roof's —, not the ground's flat one)
+  let fx = earthFootOn(q, rd, squashed(toBody(P.camRight.xyz), ab), fp, nB);
+  let fy = earthFootOn(q, rd, squashed(toBody(P.camUp.xyz), ab), fp, nB);
+  let at = RasterAttr(false, centre, k, nB, true, leaf, false, false, false, false, f32(leaf), atAO(rasterAttrAt(centre, k)));
+  var G = liteSurface(gq, q, ph, rd, ray.look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, false, anchored, at);
+  if (dbg == 1u) {
+    let nS = rasterNormal(centre, terrainRasterHint(centre), k);
+    let c = select(select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 1.0, 0.0), dot(nS, nB) > 0.9), vec3f(0.0, 0.0, 1.0), dot(nS, nS) < 0.5);
+    G = c * luminance(E) * 0.1;
+  }
+  if (dbg == 2u) { G = vec3f(1.0, 0.0, 1.0) * luminance(E) * 0.1; }
+  return vec4f(G, tM);
+}
 // (a raster pixel's surface G at tM metres along its jittered ray — shadeLite's — given the air and the clouds before it: liteFinish
 // with its ray and light found again, as shadeLite found them)
 fn liteFinishAt(gid: vec2u, G: vec3f, tM: f32) {
@@ -16377,6 +16458,8 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
   if (moments[idx].x < -0.5 && moments[idx].x > -1.5) { return; }
   let centre = vec2f(gid.xy) + 0.5;
   if (!rasterLiteTakes(centre, k)) { return; }
+  // (PLAN-J1 J1-5: a building's pixel its fragment shaded this frame — renderer.buildingsForward —, its surface in liteOut)
+  if (rasterForwardOn() && moments[idx].x == RASTER_SPLIT) { return; }
   // (liteSkip 1024: the pass alone — its dispatch and what it takes —, a flat grey written: a measure)
   if ((liteSkip() & 1024u) != 0u) {
     accum[idx] = vec4f(0.1, 0.1, 0.1, 1.0);

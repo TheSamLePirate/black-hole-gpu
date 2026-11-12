@@ -3588,3 +3588,27 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **`rigidMotionOn`** (PLAN-J1 J1-7) : relevé sans lecteur (temporal, taau, flou de mouvement lisent z > 0,5 seulement) ; gardé éteint
   (coût nul) avec son propriétaire (J1-2) et sa condition de retrait (sans lecteur à la fin de J2) — pas retiré aujourd'hui : la session
   des bâtiments en forward modifie les mêmes fichiers. Documenté seulement.
+
+## 2026-11-12T10:31Z — J1-5, les bâtiments en forward : pilote construit et mesuré, laissé éteint (décision à Sam)
+
+- **Contribution** (stratégie §7.4 « socle forward, matériaux explicites » ; PLAN-J1 J1-5, le reste après l'appareil) : les triangles
+  des bâtiments redessinés après la visibilité contre sa profondeur gardée (J1-2, `equal`), leur fragment ombrant le pixel avec le
+  matériau Q3 et la lumière de `shadeLite` (`liteSurface`) — point sur le plan du triangle le long du rayon gigué, normale géométrique
+  et empreinte par les dérivées matérielles — vers `liteOut` + un masque ; une passe de marquage pose `RASTER_SPLIT`, `shadeLite`
+  laisse ces pixels, `shadeLiteFinish` les finit. Levier `renderer.buildingsForward` (éteint), `src/system/buildings-forward.ts`,
+  trace.wgsl `liteBuildingG` / `RASTER_FORWARD_FLAG`, `SceneryRaster.drawForward`, `buildingsForwardPixels()`, e2e `buildings-forward`.
+  Inventaire et choix d'insertion écrits dans PLAN-J1 (fermeture : 199 fonctions, 16 textures, 115 ko).
+- **Mesuré** (kerr-mini) : 84 % des pixels de bâtiment pris (Toulon 9 860 / 11 715, Paris 6 400 / 8 000 ; les silhouettes restent à
+  `shadeLite`) ; **aucune différence d'image visible** (écart moyen allumé/éteint 0,54 contre dérive 0,63 le jour, 0,37 contre 0,41 la
+  nuit ; planche `docs/progress/j1/j1-5-batiments-forward.jpg`) ; passe 2,5–3,4 ms selon la vue, dont ~1 ms de redessin des sommets ;
+  `earth lite` sans gain mesurable. **ΔGPU J0** (A/B A B B A contre 5d04b0c3, phase vol) : éteint **nul** (59,4 / 59,1 → 58,8 / 59,2 ms) ;
+  allumé **+1,3 ms** (59,3 / 59,5 → 60,6 / 60,9 ; passe 0,8 ms + marquage 0,09). Pipeline ~2,5 s à froid, hors chemin bloquant.
+- **Leçon** (GRAPHICS-PIPELINE C17b) : un fragment qui écrit en mémoire (le marquage dans `moments`) ou fait `discard` perd le test de
+  profondeur précoce sur Metal — chaque fragment caché de la ville ombré : 28 ms, puis 8 ms avec `discard` seul, 3,1 ms sans les deux.
+- **Vérifié** : check-wgsl 84/84, tsc, biome, `pipeline-inventory --check` puis `--write --sizes` ; `bun test --parallel` 2157 pass /
+  34 fail sous la charge — les 17 fichiers en échec relancés seuls : tous passent (`earth-surface` avec un délai de 60 s : son contrôle
+  des paquets KTX2 dépasse 5 s, sans lien). **Non vérifié** : la vue de près sur des façades — les trois lieux essayés (l'Étoile, La
+  Défense, la Darse de Toulon) tombent sur des arbres au premier plan, les bâtiments comparés sont à 1–4 km ; le M1 Max (non mesuré) ;
+  l'image en mouvement.
+- **Suite, à décider par Sam** (PLAN-J1) : (a) le retirer à J1-7 ; (b) le restreindre aux grands triangles proches pour un second A/B ;
+  (c) l'allumer pour le contrat malgré le coût. Laissé éteint (pas net, au-delà de ~+1 ms).
