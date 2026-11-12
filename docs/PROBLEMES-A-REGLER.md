@@ -24,7 +24,15 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   pixels qui changent entre deux images, en baisse avec le chargement, **sans écart** entre `earthRasterShading` « every » et auto, ni
   entre la sortie HDR coupée et non : **pas reproduit sans tuiles**. À refaire avec les tuiles (l'imagerie de la mer, le relevé) quand
   aucun autre e2e IGN ne tourne ; et demander à Sam l'instant et la vue où il les voit (vol frais, virage, ablation).
-- **Piste** : la sonde avec tuiles, la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`
+- **Avec les tuiles, même jour** (ce Mac, vol tenu à 496–499 m, les côtés tel que livré / sortie HDR coupée / `earthRasterShading`
+  « every » / tel que livré) : **dans la couleur de scène même**, 0 à 20 pixels par image **isolés et plus clairs que le blanc SDR**
+  (plus d'1,5 fois leurs voisins) sur la mer et la brume, **dans les trois réglages** — ni la sortie HDR ni l'ombrage clairsemé ne les
+  font : ils naissent de l'ombrage de la mer, avant l'affichage. **Cause supposée** (non prouvée) : le crénelage du spéculaire —
+  le reflet du Soleil bas (15:30 UTC, cap à l'ouest) sur des facettes de vague plus petites qu'un pixel, allumées une image et pas la
+  suivante. Le motif en rangées régulières des captures reste à expliquer (la gigue du temporel ?).
+- **Piste** : un spéculaire de la mer filtré à l'échelle du pixel (rugosité élargie par la variance des normales FFT sous le pixel —
+  Toksvig/LEAN —, ou plafonnée au loin), ou une borne des lucioles dans le temporel sur l'eau ; relève de la passe d'eau
+  (PLAN-MER-WEBGPU / J4) ; mesurer avec la sonde (`SP_SWITCHES`), la couleur de scène et l'écran comparés aux mêmes instants ; `realtimeSubsampling`
   ou le taux raster à 1 pour voir si le motif suit l'ombrage clairsemé ; puis la reconstruction (`liteReconstruct`) ou la plage du
   temporel sur l'eau lointaine.
 
