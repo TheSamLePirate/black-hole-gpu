@@ -151,3 +151,15 @@ test("CM1: the night's lights refused — the day's imagery drawn alone, its lig
   expect(words![0]! >>> 24).toBe(0);
   expect(words![0]! & 0xffffff).toBeGreaterThan(0);
 });
+
+test("CM3: the coarse relief ready for a first image once each level z ≤ 10 is drawn round the camera", () => {
+  globalThis.fetch = (() => new Promise(() => {})) as unknown as typeof fetch;
+  const t = new EarthTiles(withGpuStubs(fakeDevice()));
+  expect(t.coarseReady()).toBe(false);
+  t.update(camAt(25, 10, 2), 1e-3);
+  expect(t.coarseReady()).toBe(false);
+  // (every coarse level's tiles in — the finer ones not)
+  for (const [z, x, y] of t.wanted()) if (z <= 10) t.put(z, x, y, new Float32Array(TILE * TILE).fill(300));
+  expect(t.coarseReady()).toBe(true);
+  expect(t.coarseReady(12)).toBe(false);
+});

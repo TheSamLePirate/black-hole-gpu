@@ -3399,3 +3399,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   chacun prouvé par planche avant/après et ΔGPU sur J0.
 - **Preuve** : documenté (décision). Aucun code, test ni mesure dans cette entrée (session d'analyse du suivi). Consigné dans
   PLAN-CHARGEMENT-MONDE (état, §8 CM3) et PLAN-J1 (§4 ter).
+
+## 2026-11-12T03:58Z — CM3 : le départ préchargé au titre et pour le voyage G ; le voile attend son sol (15 s au plus)
+
+- **Contribution** (stratégie §7.6 « préparer les données avant la frame », §19 parcours complet « titre → premier vol » ;
+  PLAN-CHARGEMENT-MONDE CM3, constat ST-15 ; décision de Sam du 12 nov. : option 1 + 3 bornée) : la première image d'un vol
+  lancé du titre n'est plus noire.
+- **Changé** : `ui/title/title.ts` dit le départ (`TitleDeps.depart` : terrain du Vol libre, lieu À pied sur la Terre ; retiré
+  ailleurs) ; `main.ts` le résout (WGS84 + géoïde) et le donne au renderer tant que le titre ou le voile sont là, et pose celui du
+  voyage G vers un but bas sur la Terre ; `renderer.ts` lit `shipFocus ?? departure` pour les cartes et les fenêtres de tuiles,
+  `departureReady()` ; `earth-tiles.ts` `coarseReady` ; `ui/entry.ts` attend le sol du départ (cartes + niveaux z ≤ 10 dessinés
+  autour de l'appareil), 15 s au plus, et le dit (`__bh.entry.lastWait`). E2e `title-departure` : `TD_FIELD`, l'aller-retour qui
+  retire le départ.
+- **Mesuré** (ce Mac, profil neuf, SW) : Edwards, voile levé 2,2–2,6 s sur du noir, 0 % de relief → 3,3–3,7 s, cartes `high`,
+  30–50 % (92–98 % 10 s après), 154–239 tuiles demandées avant le clic ; Le Bourget (IGN), 2,0 s sur du noir, rien 12 s après
+  (ancien code, worktree) → 3,5 s, 29 % (80 % 10 s après). Un premier critère (fenêtres z ≤ 10 entières) a tenu le voile jusqu'à
+  12,4 s : remplacé.
+- **Non vérifié** : scène de décor du départ (non faite), voyage G non mesuré, À pied non mesuré, aéroport du monde hors cache
+  (aucun préchargement), coût pour le joueur qui choisit l'espace, kerr-mini.

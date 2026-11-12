@@ -1,6 +1,6 @@
 # Plan — le chargement du monde : des tuiles qui arrivent vite et ne laissent pas de trou
 
-**État (12 novembre 2026) : CM0, CM1 et CM2 faits (§8) ; CM3 mesuré, **option 1 + 3 validée par Sam le 12 novembre** (§8), implémentation en cours (décision de Sam du 12 novembre :
+**État (12 novembre 2026) : CM0, CM1, CM2 et CM3 faits (§8 ; CM3 : option 1 + 3 bornée validée par Sam le 12 novembre) (décision de Sam du 12 novembre :
 CM0 → CM1 → CM2 → CM3). Le reste proposé.** Proposé le 10 novembre. Il vient de l'audit du 10 novembre
 ([01-chargement-monde.md](audit-2026-11-10/01-chargement-monde.md), constats ST-01 à ST-21) et complète le plan
 ST0–ST10 de [ANALYSE-STREAMING-2026-11-06.md](ANALYSE-STREAMING-2026-11-06.md), qu'il ne remplace pas. Le code fait foi.
@@ -181,7 +181,7 @@ journal [progress-to-destination.md](../progress-to-destination.md) et, pour un 
 - **Non vérifié** : Aubrac, Chamonix, kerr-mini, une approche en mouvement ; la charge côté IGN avec plusieurs joueurs ; une
   variante WMS-R à 6 en vol a été essayée (vue à 90 % 6,2–6,3 s, relief IGN 10,5–14,8 s) et écartée.
 
-### CM3 — précharger le départ : mesuré, option 1 + 3 validée par Sam (12 novembre 2026)
+### CM3 — précharger le départ : fait (12 novembre 2026, option 1 + 3 bornée validée par Sam)
 
 **Décision de Sam (12 novembre 2026) : « OK » pour la recommandation 1 + 3 borné** — le départ préchargé dès que le lieu est
 choisi au titre (et pour le voyage G), annulé si le joueur quitte le mode avion ou change de lieu ; le voile attend les cartes
@@ -189,23 +189,45 @@ globales et le relief grossier, au plus 15 s. Coûts acceptés : un voile parfoi
 ensuite l'espace.
 
 
-- **Mesuré** (nouvel e2e `tests/e2e/title-departure.e2e.test.ts` ; ce Mac, profil neuf, SW ; titre › Par avion › Vol libre,
+- **Mesuré avant** (nouvel e2e `tests/e2e/title-departure.e2e.test.ts` ; ce Mac, profil neuf, SW ; titre › Par avion › Vol libre,
   terrain par défaut Edwards, titre ouvert 8 s puis « Voler » ; deux passes) : le voile d'entrée se lève **2,2–2,6 s** après le
   clic (le noyau de la scène compile 0,8 s) ; **à la levée, aucune tuile de relief et pas même la Terre : l'image est noire**
   (capture `remote-results/title-departure/cm3basea-lift.png`) ; la première tuile est demandée **11,3 s** après le clic dans
   une passe, pas du tout dans les 12 s de l'autre. Cause lue : les tuiles attendent les cartes globales de la Terre
   (`renderer.ts` `requestEarthMaps`, palier `high` — `earthMaps.tier`), qui ne sont demandées qu'une fois la caméra au départ,
   et le voile n'attend que le noyau de la scène.
-- **Ce qui serait fait** : un « point de départ » donné au renderer (`renderer.departure`, lu là où `shipFocus` l'est pour les
-  cartes et les fenêtres de tuiles), posé dès que le lieu est connu. Deux moments possibles, chacun un compromis :
-  1. **pendant le titre**, dès que l'onglet Vol libre (ou un lieu) est ouvert : cartes globales `high` et fenêtres de tuiles
-     du terrain choisi téléchargées pendant que le joueur choisit (≈ 10 s gagnées sur la mesure) — **coût** : réseau et mémoire
-     GPU (cartes `high`, quelques centaines de Mo de tuiles à Paris, CM0) pour un joueur qui choisirait ensuite l'espace ;
-  2. **au clic** seulement (le joueur engagé, aucun coût perdu) : ≈ 0,4 s gagnée — négligeable ;
-  3. indépendamment, **le voile pourrait attendre** les cartes globales et le relief grossier (borné, par ex. 15 s) : plus d'image
-     noire, mais un voile plus long — changement visible.
-  Recommandation : 1 + 3 borné, le préchargement annulé si le joueur quitte le mode avion. **Non implémenté** en attendant ce
-  choix (et `renderer.ts` est en travaux par une autre session).
-- **Non fait** : la scène de décor du départ ; le voyage G (destination connue au départ : préchargement sans coût perdu — à
-  faire avec le même `renderer.departure`) ; un départ en France (IGN).
+- **Fait.** (1) **Le départ connu au titre** : `TitleScreen` dit son départ (`TitleDeps.depart`, `src/ui/title/title.ts`) dès
+  qu'un lieu est choisi — Par avion › Vol libre (son terrain et son départ : piste, finale, croisière ; aussi pendant le choix du
+  terrain), À pied sur la Terre (son lieu) —, le change avec le lieu, le retire sur un autre écran, un autre onglet, ou quand le
+  titre se ferme sans ce lancement. `main.ts` le résout (`siteByName`, géodésique WGS84, hauteur au-dessus de la mer + géoïde) et
+  le donne au renderer chaque image (`renderer.departure`) tant que le titre ou le voile d'entrée sont là ; le **voyage G** en pose
+  un aussi quand son but est bas au-dessus de la Terre (< 60 km), retiré à la fin du voyage. Le renderer le lit comme le foyer du
+  vaisseau quand il n'y en a pas (`shipFocus ?? departure`) : cartes globales `high`, fenêtres de tuiles autour du départ ; le
+  départ retiré, les fenêtres sont vidées et les cartes libérées comme avant (5 s sans la Terre à l'écran). (3) **Le voile
+  attend le sol du départ** (`src/ui/entry.ts`) : pour un lancement bas au-dessus de la Terre, après le noyau de la scène, il
+  attend les cartes globales et **chaque niveau de relief z ≤ 10 dessiné autour de l'appareil** (`renderer.departureReady()`,
+  `earthTiles.coarseReady(10)`), **au plus 15 s après le lancement** (`EARTH_WAIT_MS`) ; au-delà il se lève comme avant et le dit
+  (`__bh.entry.lastWait` `{ earth: "timeout" }`, `data-earth` du voile, un avertissement en console). L'écran de chargement dit
+  « Le sol du départ se charge ». Docs : [MENUS.md](MENUS.md), [BH-API](BH-API.md).
+- **Mesuré après** (même e2e, ce Mac, profil neuf, SW ; 12 nov. 03:40–03:58 UTC ; l'« avant » du Bourget passé dans un
+  worktree au commit `061ed0a3`, sans CM3) :
+
+| Départ | Code | Tuiles demandées avant le clic | Cartes à la levée | Voile levé (après le clic) | Relief dessiné à la levée | 10 s après | Attente du voile |
+|---|---|---|---|---|---|---|---|
+| Edwards | avant (2 passes) | 0 | aucune | 2,2–2,6 s | **0 %** (image noire) | 0–12 % | — |
+| Edwards | après, critère « fenêtres entières » (2 passes) | 293–359 | `high` | 4,4 / 12,9 s | 80 / 100 % | 100 % | ready |
+| Edwards | **après** (3 passes) | 154–239 | `high` | **3,3–3,7 s** | 30–50 % | 92–98 % | ready (2,6–3,1 s) |
+| Le Bourget (IGN) | avant (1 passe) | 0 | aucune | 2,0 s | **0 %** (image noire) | 0 % | — |
+| Le Bourget (IGN) | après, « fenêtres entières » (1 passe) | 402 | `high` | 2,8 s | 80 % | 100 % | ready |
+| Le Bourget (IGN) | **après** (1 passe) | 234 | `high` | **3,5 s** | 29 % | 80 % | ready (2,8 s) |
+
+  Lecture : la première image du vol n'est plus noire — les cartes de la Terre sont là et le relief grossier dessiné autour de
+  l'appareil ; le voile tient ≈ 1 s de plus. Le premier critère essayé (toutes les fenêtres z ≤ 10 entières) a tenu le voile
+  12,4 s dans une passe : remplacé par « chaque niveau z ≤ 10 dessiné autour de l'appareil ». Le préchargement commence quand les
+  cartes globales sont arrivées (1,6 à 6,4 s avant le clic selon les passes, titre ouvert 8 s). L'e2e vérifie aussi qu'en quittant
+  le Vol libre pour l'écran principal du titre, le départ et ses fenêtres tombent.
+- **Non fait / non vérifié** : la scène de décor du départ (le monde du décor suit la caméra seule) ; un voyage G mesuré ; le
+  départ d'un aéroport du monde pas encore en cache (`siteByName` ne le trouve pas : aucun préchargement) ; À pied mesuré ; le coût
+  pour un joueur qui choisit ensuite l'espace (cartes `high` et tuiles téléchargées pour rien) ; kerr-mini ; l'image à la levée
+  regarde l'habitacle (cadrage du vol libre), pas le sol — la mesure porte sur les fenêtres de relief.
 

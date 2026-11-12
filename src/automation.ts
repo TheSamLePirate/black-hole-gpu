@@ -71,7 +71,7 @@ export interface BhContext {
   /** the intro (src/intro/intro.ts): where it stands */
   intro(): unknown;
   /** the way into the game (ui/entry.ts, PLAN-TITRE-AAA E10): its veil up; a scene tracer's compile held `ms` */
-  entry: { readonly busy: boolean; compile(ms: number): boolean };
+  entry: { readonly busy: boolean; readonly lastWait: import("./ui/entry").EntryWait | null; compile(ms: number): boolean };
   /** the menus (PLAN-TITRE-AAA): which is up, on which screen — and opened by the tests */
   menu: {
     state(): { title: string | null; pause: string | null; settings: string | null; entry: boolean };

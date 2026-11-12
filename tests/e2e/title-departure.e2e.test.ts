@@ -9,7 +9,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // seconds (8: the player choosing), then Fly: every quarter second the entry's veil (its phase), the relief's windows drawn —
 // each level's drawn rectangle over its window, their mean over the levels wanted (the share of the view at the level it
 // wants) —, the finest level drawn, the tiles pending; when the first tile was asked against the click (negative: asked
-// before it — preloaded). Said: that share when the veil lifts (the first image of the flight) and 10 s later.
+// before it — preloaded). Said: that share when the veil lifts (the first image of the flight) and 10 s later. CM3: leaving the
+// free flight for the title's main screen must drop the departure and its relief windows (checked once, before the wait).
 // Output: remote-results/title-departure/title-departure-<side><run>.json, a screenshot at the lift.
 // Done when: the veil has lifted and 10 s more are watched (90 s at most from the click, what is missing said), no GPU error.
 // Duration: ~1.5–2 min (one cold launch, the tracer's compile).
@@ -17,9 +18,11 @@ const OUT = process.env.TD_OUT ?? "remote-results/title-departure";
 const TAG = `${process.env.AB_SIDE ?? "X"}${process.env.AB_RUN ?? "0"}`;
 const TITLE_S = Number(process.env.TD_TITLE_S ?? 8);
 const SW = process.env.TD_SW !== "0";
+/** the airfield chosen on the title by its list (a search: "LFPB", "bourget"…; none: the default, Edwards) */
+const FIELD = process.env.TD_FIELD ?? "";
 afterAll(stopServer);
 
-type Row = { s: number; phase: string; share: number; finest: number; pending: number; levels: number };
+type Row = { s: number; phase: string; maps: string | null; share: number; finest: number; pending: number; levels: number };
 
 test.skipIf(!E2E)(
   "CM3: the departure's relief drawn when the veil lifts on a free flight launched from the title",
@@ -38,10 +41,33 @@ test.skipIf(!E2E)(
       await Bun.sleep(400);
       await app.click("[data-testid=title-tab-free]");
       await app.waitFor(`document.querySelector(".tt-root [data-mode=plane]")?.dataset.tab === "free"`, 3000);
+      // (CM3: leaving the free flight drops the departure — the title's main screen, then back to By plane › Free flight)
+      await app.waitFor(`!!__bh.renderer.departure`, 10_000);
+      await app.press("Escape");
+      await app.waitFor(`__bh.menu.state().title === "title"`, 5000);
+      await Bun.sleep(300);
+      const dropped = await app.js<{ departure: boolean; windows: number }>(`(() => ({ departure: !!__bh.renderer.departure,
+        windows: __bh.renderer.earthTiles.levels.filter((L) => L.want).length }))()`);
+      if (dropped.departure || dropped.windows) throw new Error(`the departure kept after leaving By plane: ${JSON.stringify(dropped)}`);
+      await app.click("[data-testid=title-mode-plane]");
+      await app.waitFor(`document.querySelector(".tt-root [data-mode=plane]")?.dataset.tab === "free"`, 5000);
+      if (FIELD) {
+        await app.click("[data-testid=title-flight-field]");
+        await app.waitFor(`!!document.querySelector("[data-testid=title-field-search]")`, 5000);
+        await Bun.sleep(400);
+        await app.js(`(() => { const i = document.querySelector("[data-testid=title-field-search]"); i.value = ${JSON.stringify(FIELD)};
+          i.dispatchEvent(new Event("input")); return true; })()`);
+        const found = await app.js<string>(`document.querySelector(".tt-fields button")?.dataset.testid ?? ""`);
+        if (!found) throw new Error(`no airfield found for "${FIELD}"`);
+        await app.click(`[data-testid=${found}]`);
+        await app.waitFor(`!!document.querySelector(".tt-root [data-mode=plane]")`, 5000);
+      }
       // (the player choosing: the title open on the free flight)
       await Bun.sleep(TITLE_S * 1000);
-      const before = await app.js<{ asked: number; drawn: number }>(`(() => { const a = __bh.renderer.earthTiles.arrivals.list();
-        return { asked: a.length, drawn: a.filter((r) => r.drawn !== undefined).length }; })()`);
+      // (what the title's departure — CM3 — asked meanwhile: the tiles asked and drawn, the Earth's maps, the coarse relief)
+      const before = await app.js<Record<string, unknown>>(`(() => { const r = __bh.renderer, a = r.earthTiles.arrivals.list();
+        return { asked: a.length, drawn: a.filter((x) => x.drawn !== undefined).length, departure: !!r.departure,
+          maps: r.earthMaps?.tier ?? null, ready: r.departureReady?.() ?? null, field: document.querySelector("[data-testid=title-flight-field] b")?.textContent ?? "" }; })()`);
       await app.js(`(() => { window.__tdT0 = performance.now(); return 1; })()`);
       await app.click("[data-testid=title-flight-fly]");
       const t0 = Date.now();
@@ -53,7 +79,7 @@ test.skipIf(!E2E)(
           const area = (q) => (q ? (q.x1 - q.x0) * (q.y1 - q.y0) : 0);
           let sum = 0, n = 0;
           for (const L of t.levels) { if (!L.want) continue; n++; sum += Math.min(1, area(L.valid) / Math.max(area(L.want), 1)); }
-          return { phase: v ? v.dataset.phase ?? "?" : "gone", share: n ? +(sum / n).toFixed(3) : 0, finest: t.finest, pending: t.pending, levels: n }; })()`);
+          return { phase: v ? v.dataset.phase ?? "?" : "gone", maps: __bh.renderer.earthMaps?.tier ?? null, share: n ? +(sum / n).toFixed(3) : 0, finest: t.finest, pending: t.pending, levels: n }; })()`);
         const s = (Date.now() - t0) / 1000;
         rows.push({ s, ...r });
         if (r.phase !== "gone") seen = true;
@@ -75,9 +101,12 @@ test.skipIf(!E2E)(
         before,
         firstAskedS: first,
         liftS: liftAt === null ? null : +liftAt.toFixed(1),
+        // (CM3: what the veil waited for — the departure's ground "ready", "timeout" past 15 s, "none")
+        wait: await app.js(`__bh.entry.lastWait ?? null`),
         atLift: lift,
         after10: later,
         source: await app.js(`__bh.renderer.earthTiles.nationalAt`),
+        droppedOnLeave: true,
         arrivals: await app.js(`__bh.renderer.earthTiles.arrivals.stats()`),
         gpuErrors: await app.js<number>(`__bh.renderer.gpuErrors`),
       };

@@ -1334,6 +1334,18 @@ export class EarthTiles {
     for (const O of this.ortho) if (O.valid) z = O.z;
     return z;
   }
+  /** CM3: the coarse levels (z ≤ zMax) wanted round the camera — at least one — each drawn round it (its valid rectangle holds
+   *  the camera's tile: T8i draws a level out from there as its tiles come; its far edges may still come): the ground of a first
+   *  image (the entry's veil waits for it). Their whole windows had held a veil 12 s on a cold Edwards. */
+  coarseReady(zMax = 10): boolean {
+    let any = false;
+    for (const L of this.levels) {
+      if (L.z > zMax || !L.want) continue;
+      any = true;
+      if (!L.valid) return false;
+    }
+    return any;
+  }
   /** the finest level drawn */
   get finest() {
     let z = 0;

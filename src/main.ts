@@ -19,7 +19,8 @@ import type { FailureKind } from "./game/systems";
 import { holeFleet } from "./holefleet";
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
 import { planetFrame, toLocal } from "./landing";
-import { cartToGeodetic, flatteningOf, WGS84_A, WGS84_F } from "./system/ellipsoid";
+import { cartToGeodetic, flatteningOf, geodeticToCart, WGS84_A, WGS84_F } from "./system/ellipsoid";
+import { geoidN } from "./system/geoid";
 import { setSceneryContact } from "./system/scenery-contact";
 import { GIANT_LAYERS, GiantThunder, giantLevel, isGiant } from "./system/giant-clouds";
 import { airAt } from "./aero";
@@ -98,7 +99,7 @@ import { ControlsScreen } from "./ui/controls-screen";
 import { PadsScreen } from "./ui/pads-screen";
 import type { SceneGroup } from "./ui/schema";
 import type { TitleGame } from "./ui/title/activities";
-import { TitleScreen } from "./ui/title/title";
+import { type TitleDeparture, TitleScreen } from "./ui/title/title";
 import { MissionSelect } from "./ui/missions";
 import { PlacePanel } from "./ui/placepanel";
 import { MissionPlanPanel } from "./ui/missionplan";
@@ -484,12 +485,42 @@ async function main() {
   // the way into the game from the menus (ui/entry.ts, PLAN-TITRE-AAA E10): a fade to black, a scene loading
   // screen while its tracer compiles, the HUD's start
   const gameEntry = new GameEntry();
+  /**
+   * CM3 (docs/PLAN-CHARGEMENT-MONDE.md): where a launch or a voyage will start, known before the craft is there — the title's
+   * free flight (its airfield) or walk on the Earth, the voyage G's goal low over the Earth —: the renderer's departure each
+   * frame (its Earth maps and relief asked meanwhile); the title's dropped once the title and the entry's veil are gone (or on
+   * another screen), the voyage's once it is over.
+   */
+  let departure: { by: "title" | "voyage"; c: [number, number, number]; altKm: number } | null = null;
+  /** a place on the Earth [°], its height over the sea [m]: on the Earth's axes over its radius (shipFocus's frame) */
+  const earthDeparture = (lat: number, lon: number, hSea: number) => {
+    const b = solarBody("earth")!;
+    const h = hSea + geoidN(lat, lon);
+    const q = geodeticToCart(WGS84_A, WGS84_F, (lat * Math.PI) / 180, (lon * Math.PI) / 180, h);
+    const R = b.radius * M_METRES;
+    return { c: q.map((x) => x / R) as [number, number, number], altKm: h / 1e3 };
+  };
+  const titleDepart = (at: TitleDeparture | null) => {
+    if (!at) {
+      if (departure?.by === "title") departure = null;
+      return;
+    }
+    if ("field" in at) {
+      // (the airfield's site — a world airport not yet in the cache: none —, the craft's height by the start chosen)
+      const site = siteByName(at.field);
+      if (site?.body !== "earth") return void (departure = departure?.by === "title" ? null : departure);
+      const up = at.start === "cruise" ? 3000 : at.start === "final" ? 600 : 3;
+      departure = { by: "title", ...earthDeparture(site.lat, site.lon, (site.elev ?? 0) + up) };
+    } else departure = { by: "title", ...earthDeparture(at.lat, at.lon, 2) };
+  };
   const titleScreen = new TitleScreen({
     version: () => appVersion,
     hold: (on) => titleHold(on),
     waiting: (label) => splash.launching(label),
     current: () => titleCurrent(),
-    entry: (show, launch) => gameEntry.play(show, launch),
+    // (CM3: a launch low over the Earth waits for its ground too, 15 s at most — ui/entry.ts)
+    entry: (show, launch) => gameEntry.play(show, launch, () => renderer.departureReady()),
+    depart: titleDepart,
   });
   {
     const p = new URLSearchParams(location.hash.slice(1));
@@ -2325,6 +2356,19 @@ async function main() {
     const cine = cineNext;
     cineNext = null;
     C.onCut = () => camProbe.mark("cut");
+    // (CM3: a goal low over the Earth — its maps and relief asked from the voyage's start, the craft there when it ends)
+    {
+      const g0 = goal(sim.time);
+      const q = toBodyFixed("earth", g0.X, sim.time);
+      const R = solarBody("earth")!.radius;
+      const altKm = ((Math.hypot(...q) - R) * M_METRES) / 1e3;
+      departure =
+        referenceBody(g0.X, sim.time) === "earth" && altKm < 60
+          ? { by: "voyage", c: q.map((x) => x / R) as [number, number, number], altKm }
+          : departure?.by === "voyage"
+            ? null
+            : departure;
+    }
     if (cine && C.startCineVoyage(goal, finish, name, target, cine)) {
       touch();
       return null;
@@ -7973,6 +8017,10 @@ async function main() {
       get busy() {
         return gameEntry.busy;
       },
+      // (CM3: what the last entry waited for — the departure's ground — and how long)
+      get lastWait() {
+        return gameEntry.lastWait;
+      },
       compile: (ms: number) => {
         loading.stage("scene-tracer", t("Compiling the ray tracer for this scene"), { indeterminate: true, eta: ms / 1000 });
         setTimeout(() => loading.done("scene-tracer"), ms);
@@ -8584,6 +8632,13 @@ async function main() {
     // tiles, surface, scenery, their shadows — follows the camera whenever it is there; the streaming's lead, the
     // camera's own motion: renderer.ts)
     renderer.shipFocus = camera.piloting && !camera.character.active ? shipFocus() : null;
+    // (CM3: the departure while the title or the entry's veil holds it, or while a voyage goes there)
+    if (departure?.by === "title" && !titleScreen.isOpen && !gameEntry.busy) departure = null;
+    if (departure?.by === "voyage") {
+      const V = viewCamera();
+      if (!V.voyage && !V.cineVoyage && !V.travel) departure = null;
+    }
+    renderer.departure = departure ? { body: "earth", c: departure.c, altKm: departure.altKm } : null;
     // (the game's flight view — a craft flown, not on foot, not the photo mode —: the image's Camera profile when auto, Q6 I6)
     renderer.flightView = camera.piloting && !camera.character.active && gameMode() === "ship";
     const ridden = renderer.shipFocus?.body === "earth" && !camera.spectating ? camera.activePoseNow() : null;

@@ -917,6 +917,13 @@ export class Renderer {
    * (tiles, surface, scenery) and where the rays start is the camera's.
    */
   shipFocus: { body: string; c: Vec3; altKm: number } | null = null;
+  /**
+   * CM3 (docs/PLAN-CHARGEMENT-MONDE.md): where a launch or a voyage will start, known before the craft is there (main.ts: the
+   * title's free flight or walk, the voyage G's goal) — the Earth's place on its axes [equatorial radii], its height [km]: read
+   * as the ship's focus when there is none (the Earth's high maps, the relief's windows round it while the view is off the
+   * Earth's near patch). null: none.
+   */
+  departure: { body: "earth"; c: Vec3; altKm: number } | null = null;
   /** on foot: the view is the astronaut's — the ground and the scenery follow the view, not the vessel left on the ground */
   onFoot = false;
   /** the camera's velocity over the Earth's ground [m/s, on its axes] (the streaming's lead; null: off the Earth) */
@@ -3918,8 +3925,8 @@ export class Renderer {
         if (dE < highAt) want = "high";
         else if (diskPx > 24 && (!have || dE > Math.max(3.5, 1.5 * highAt))) want = "med";
       }
-      // (the ship by the Earth, the view away: its maps kept, the finer ones low over it)
-      const F = this.shipFocus;
+      // (the ship by the Earth, the view away: its maps kept, the finer ones low over it — or the departure, CM3)
+      const F = this.shipFocus ?? this.departure;
       if (F?.body === "earth") want = F.altKm < 2000 ? "high" : (want ?? "med");
       // (the tier's texture cap — plan §3.5: the live view only, exports keep their choice — and the
       // memory's: quality-policy.ts)
@@ -4183,8 +4190,10 @@ export class Renderer {
       const onEarth = s.earthTerrain && !!eye;
       // (the camera off the Earth's near patch, the ship low over it — never a spectator's: main.ts —: the tiles
       // kept round the ship, the ground under its gear; the camera's place wins whenever it is on the Earth)
-      const F = this.shipFocus;
-      const shipLow = s.earthTerrain && !this.onFoot && F?.body === "earth" && F.altKm < 60 && !!this.earthMaps.tier;
+      // (no ship: the departure's place — CM3: its relief asked before the craft is there)
+      const D = this.shipFocus ? null : this.departure;
+      const F = this.shipFocus ?? D;
+      const shipLow = s.earthTerrain && (!!D || !this.onFoot) && F?.body === "earth" && F.altKm < 60 && !!this.earthMaps.tier;
       const focus = onEarth ? eye : shipLow ? F!.c : null;
       // (the streaming's lead: the camera's own motion over the ground, whatever carries it — the live view's)
       if (t === this.live) this.streamVelocity = this.cameraGroundVelocity(eye);
@@ -6658,6 +6667,14 @@ export class Renderer {
    * that wants another key passes them (CompileQueue's second slot); dropped (prewarmStop) once the title closes. The
    * browser keeps what lands in its shader cache: the next sessions find it too (docs/PLAN-LEAN-TRACER-KERNELS.md P3).
    */
+  /** CM3: the Earth's departure drawn enough for a first image — the Earth's maps in, the relief's coarse levels (z ≤ 10) whole
+   *  round the craft —; null: no craft low over the Earth (nothing to wait for). The entry's veil waits for it, 15 s at most. */
+  departureReady(): boolean | null {
+    const F = this.shipFocus ?? this.departure;
+    if (F?.body !== "earth" || F.altKm > 60) return null;
+    return !!this.earthMaps.tier && this.earthTiles.coarseReady(10);
+  }
+
   prewarmEarthFlight(s: Settings) {
     if (!this.stableProfiles || !this.rasterHint || s.earthPipeline !== "raster" || this.lost) return;
     const key =

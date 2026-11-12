@@ -206,7 +206,14 @@ export interface TitleDeps {
   /** the way into the game (ui/entry.ts, E10): the launch under a fade to black, a scene loading screen, the HUD's
    *  start — none: at once */
   entry?(show: EntryShow, launch: () => void): Promise<void>;
+  /** CM3 (docs/PLAN-CHARGEMENT-MONDE.md): the place a launch would start from, as soon as the title knows it — By plane › Free
+   *  flight's airfield (and its start), On foot's place on the Earth —: the Earth's maps and its relief asked meanwhile; null
+   *  when none any more (another mode, another tab, the title closed without that launch) */
+  depart?(at: TitleDeparture | null): void;
 }
+
+/** CM3: a departure known on the title — an airfield (its code, the start chosen) or a place on the Earth [°] */
+export type TitleDeparture = { field: string; start: string } | { lat: number; lon: number };
 
 export class TitleScreen {
   private root: HTMLElement | null = null;
@@ -241,6 +248,8 @@ export class TitleScreen {
     document.body.append(this.root);
     // (a mode's screen opened alone — the pause's Change mode ›: its back closes the title, then goes back there)
     this.router = new MenuRouter(this.root, {
+      // (CM3: the departure follows the screen shown)
+      onShow: () => this.departNow(),
       onEmpty: () => {
         const back = this.onBack;
         this.onBack = null;
@@ -261,6 +270,9 @@ export class TitleScreen {
 
   close() {
     if (!this.root) return;
+    // (CM3: the departure dropped — unless the launch that closes the title starts there)
+    if (!this.keepDeparture) this.setDeparture(null);
+    this.keepDeparture = false;
     this.onBack = null;
     this.unLang?.();
     this.unLang = null;
@@ -273,6 +285,29 @@ export class TitleScreen {
     this.root = null;
     document.body.classList.remove("title-open");
     if (this.game) this.d.hold(false);
+  }
+
+  /** CM3: the departure said last (its key: said again only when it changes), kept through the launch that closes the title */
+  private departKey = "null";
+  private keepDeparture = false;
+  private setDeparture(at: TitleDeparture | null) {
+    const key = JSON.stringify(at);
+    if (key === this.departKey) return;
+    this.departKey = key;
+    this.d.depart?.(at);
+  }
+  /** CM3: the departure of the screen shown — By plane's free flight (its tab, its airfield picker), On foot on the Earth (its
+   *  screen, its place picker) —, none elsewhere */
+  private departNow() {
+    const s = this.router?.current ?? null;
+    if ((s === "mode:plane" && this.planeTab === "free") || s === "plane:field")
+      return this.setDeparture({ field: this.flightChoice.field, start: this.flightChoice.start });
+    const c = this.foot0;
+    if ((s === "mode:foot" || s === "foot:place") && c.world === "earth") {
+      const p = c.place.earth;
+      return this.setDeparture({ lat: p.lat, lon: p.lon });
+    }
+    this.setDeparture(null);
   }
 
   /** the screen shown (its router's: "title", "mode:ship", "plane:field"…), null when closed */
@@ -328,6 +363,8 @@ export class TitleScreen {
   private run(a: Activity, vessel: VesselChoice, atOnce = false) {
     const g = this.game!;
     this.started = true;
+    // (CM3: the free flight and the walk start where the departure is — kept for the entry's veil)
+    this.keepDeparture = a.id === "plane-flight" || a.id === "foot-walk";
     const go = () => {
       this.close();
       try {
@@ -602,6 +639,7 @@ export class TitleScreen {
     const changed = () => {
       keepFoot(c);
       show();
+      this.departNow();
     };
     const pick = <T>(xs: { id: T; label: Text }[], id: T) => tr(xs.find((x) => x.id === id)?.label ?? xs[0]!.label);
     const places = () => placesOf(c.world).map((x) => x.place);
@@ -665,6 +703,7 @@ export class TitleScreen {
       ]),
     );
     show();
+    queueMicrotask(() => this.departNow());
     return page;
   }
 
@@ -1094,6 +1133,8 @@ export class TitleScreen {
     const side = h("div", { class: "tt-list-side" });
     if (this.planeTab === "free") this.planeFree(side, show);
     else this.planeList(side, show);
+    // (CM3: the tab changed — its page built again —, the departure with it; after the build: the router's screen then shown)
+    queueMicrotask(() => this.departNow());
     page.append(
       this.crumb(tr(MODES.find((x) => x.id === "plane")!.title)),
       tabs,
@@ -1161,6 +1202,7 @@ export class TitleScreen {
     const changed = () => {
       keepFlight(c);
       show(tr(PLANE_TABS[0]!.label), tr(P.freeText), flightLine(c));
+      this.departNow();
     };
     const field = () => FIELDS.find((f) => f.id === c.field);
     side.append(
