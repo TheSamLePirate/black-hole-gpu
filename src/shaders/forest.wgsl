@@ -42,6 +42,36 @@ fn forestSway(foot: vec3f, height: f32, seed: f32) -> vec2f {
 // leave it (1 at the crown's skin, less in its hollows)
 struct ForestHit { t: f32, n: vec3f, kind: u32, part: u32, base: vec3f, height: f32, seed: f32, ao: f32 };
 
+// A tree's plain shape (forest.ts crownOf and trunkOf, its twin): its crown — a cone (apex, base radius and length) or an ellipsoid
+// (centre, radii) — and its trunk's top [m above the foot], before the far shrinking and the wind. The crown's slenderness bounded
+// by its kind's (FOREST_SLENDER: a cone's length over its base radius, an ellipsoid's half-height over its radius — forest.ts
+// KIND_SHAPES slender): the crown's radius is the cell's (7 m: 2.1–3.3 m), its height the tree's (the IGN's canopy model: 30 m
+// spruces in the Alps) — a tall tree keeps its kind's crown, its top where it was, on a longer bole (12 Nov 2026: eggs 4 × as tall
+// as wide, spindles 12 × over Chamonix); the trunk reaching a tenth into the crown at least.
+const FOREST_SLENDER = array<f32, 7>(1.0, 1.5, 6.0, 1.5, 1.5, 1.5, 5.0);
+struct ForestShape { cone: bool, c: vec3f, r: vec3f, trunkTop: f32 };
+fn forestShape(kind: u32, foot: vec3f, height: f32, r: f32, kA: vec4f, kB: vec4f, bare: f32) -> ForestShape {
+  var o: ForestShape;
+  o.cone = kA.x > 0.5;
+  let wide = kA.z * r;
+  var low = 0.0; var span = 0.0;
+  if (o.cone) {
+    let len = min(height * (1.0 - kA.y), FOREST_SLENDER[min(kind, 6u)] * wide);
+    o.c = foot + vec3f(0.0, 0.0, height);
+    o.r = vec3f(wide, len, 0.0);
+    low = height - len; span = len;
+  } else {
+    let half = min(kA.w * height, FOREST_SLENDER[min(kind, 6u)] * wide);
+    let mid = (kA.y + kA.w) * height - half;
+    o.c = foot + vec3f(0.0, 0.0, mid);
+    o.r = vec3f(wide, wide, half);
+    low = mid - half; span = 2.0 * half;
+  }
+  // (a bare crown shows its trunk running up into it)
+  o.trunkTop = mix(max(kB.x * height, low + 0.1 * span), 0.8 * height, bare);
+  return o;
+}
+
 fn forestPcg(v: u32) -> u32 {
   let s = v * 747796405u + 2891336453u;
   let w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
@@ -273,17 +303,13 @@ fn forestCandidate(o: vec3f, d: vec3f, i: i32, j: i32, detail: f32, hd: ForestHe
   var crown = ForestCrown(kA.x > 0.5, vec3f(0.0), vec3f(0.0), amp, kD.y, kD.z);
   let shrink = select(0.5 * amp, 0.0, near || detail < 0.0);
   let sway = vec3f(forestSway(foot, height, forestUnit(forestHash(gi, gj, 4u))), 0.0);
-  if (crown.cone) {
-    crown.c = foot + vec3f(0.0, 0.0, height) + sway;
-    crown.r = vec3f(kA.z * r - shrink, height * (1.0 - kA.y), 0.0);
-  } else {
-    crown.c = foot + vec3f(0.0, 0.0, kA.y * height) + sway;
-    crown.r = vec3f(kA.z * r - shrink, kA.z * r - shrink, kA.w * height - shrink);
-  }
-  var h = select(forestEllipsoid(oo, d, crown.c, crown.r), forestCone(oo, d, crown.c, crown.r.x, crown.r.y), crown.cone);
-  var part = 0u; var ao = 1.0;
   // (bare: a deciduous tree's winter, 0 … 1)
   let bare = kD.w * forestData(F + 7u).z;
+  let shape = forestShape(kind, foot, height, r, kA, kB, bare);
+  crown.c = shape.c + sway;
+  crown.r = select(shape.r - vec3f(shrink), vec3f(shape.r.x - shrink, shape.r.y, 0.0), crown.cone);
+  var h = select(forestEllipsoid(oo, d, crown.c, crown.r), forestCone(oo, d, crown.c, crown.r.x, crown.r.y), crown.cone);
+  var part = 0u; var ao = 1.0;
   let seed = forestUnit(forestHash(gi, gj, 4u));
   if (h.x > 0.0 && near && bare > 0.5) {
     let c = forestTwigs(oo, d, crown, h.x, seed);
@@ -305,7 +331,7 @@ fn forestCandidate(o: vec3f, d: vec3f, i: i32, j: i32, detail: f32, hd: ForestHe
   if (h.x > 0.0) { h.x += t0; }
   if (kB.x > 0.0) {
     // (a bare crown shows its trunk running up into it)
-    let tr = forestTrunk(oo, d, foot - vec3f(0.0, 0.0, 1.0), kB.y + kB.z * height, z + mix(kB.x, 0.8, bare) * height);
+    let tr = forestTrunk(oo, d, foot - vec3f(0.0, 0.0, 1.0), kB.y + kB.z * height, z + shape.trunkTop);
     if (tr.x > 0.0 && (h.x < 0.0 || tr.x + t0 < h.x)) { h = vec4f(tr.x + t0, tr.yzw); part = 1u; ao = 1.0; }
   }
   if (h.x <= 0.0) { return none; }

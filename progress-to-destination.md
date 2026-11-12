@@ -3268,3 +3268,22 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   sonde `forest-impostors` (ce Mac, Maures) : imposteurs cuits et liés, aucune erreur GPU, captures sans défaut visible ; GPU p50 avec /
   sans imposteurs 19,7–20,1 / 20,6–20,8 ms (vue aérienne), 22,0–23,8 / 21,9–25,5 ms (canopée, dernier passage perturbé). Annexe du
   pipeline régénérée (`--write --sizes`). **Non comparé** à l'image d'avant le correctif (l'ancien tirage) ni mesuré sur kerr-mini.
+
+## 2026-11-12T02:25Z — Forêt : l'élancement des houppiers borné par sorte (Chamonix)
+
+- **Contribution** (§19 : contenu et lisibilité du sol proche ; PLAN-VEGETATION-V2 §4 ; PROBLEMES-A-REGLER réglé) : le rayon d'un
+  houppier vient de la cellule de 7 m, sa hauteur du MNH ; sur les grands arbres des Alpes (25–33 m), les feuillus devenaient des œufs
+  4 × plus hauts que larges, les épicéas des colonnes 12 × plus longues. **Changé** : `KIND_SHAPES.slender` (demi-hauteur ≤ 1,5 rayon
+  pour un houppier rond, longueur ≤ 6 rayons de base pour un cône, 5 pour un fuseau), sommet en place, fût plus long entrant d'un
+  dixième dans le houppier ; **un seul lecteur WGSL** `forest.wgsl` `forestShape` (le traceur `forestCandidate` et le raster
+  `scenery-raster.ts` `treeOf`, qui avaient chacun leur copie), son jumeau CPU `forest.ts` `shapeOf` (`crownOf`, `trunkOf`, les contacts
+  et le diagnostic de `scenery-contact.ts`), les modèles des imposteurs par `tree-model.ts` `treeEnvelope`. Sonde `forest-wind` :
+  `WIND_AGL` relit le sol jusqu'à deux lectures stables (une tuile grossière a donné 2 306 m pour 1 361, la vue partie à 1 km).
+- **Vérifié** : `check-forest` 2000/2000 rayons CPU = GPU (écart max 12 mm) ; 83/83 shaders ; `bun test` complet 2176 / 0 ; **observé**
+  (sonde `forest-wind`, Chamonix 40 m au-dessus du sol, ce Mac contre la capture d'avant sur kerr-mini) : houppiers ronds sur de longs
+  fûts, épicéas en cônes — planche `docs/progress/vegetation/houppiers-elancement-chamonix.jpg` ; Maures (sonde `forest-impostors`) :
+  image inchangée à l'œil ; GPU p50 vue à 500 m 20,1–20,7 ms avec imposteurs (contre 19,7–20,1 une heure avant), canopée 22,7–24,9
+  (22,0–23,8) — dans la dérive de ce Mac, qui chauffe au fil des passages. **Non mesuré** sur kerr-mini après le correctif (deux essais
+  partis à 1 km au-dessus du sol, la vue mal posée — voir ci-dessus).
+- **Reste ouvert** : les bandes jaunes en diagonale entre les arbres sur la pente de Chamonix (avant et après) ; un houppier plus large
+  que la demi-cellule (grand arbre isolé) demanderait des cellules plus grandes pour les grands arbres.

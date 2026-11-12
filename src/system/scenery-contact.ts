@@ -2,7 +2,7 @@
 import type { Vec3 } from "../physics";
 import { dot, sub } from "../math/vec3";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
-import { crownOf, ForestKind, type ForestFrame, forestTreesNear, KIND_SHAPES, readForest, trunkOf } from "./forest";
+import { crownOf, ForestKind, type ForestFrame, forestTreesNear, readForest, shapeOf, trunkOf } from "./forest";
 import { D, SCENERY_GRID, sceneryFrame, wrapLon, type SceneryReply } from "./scenery-data";
 
 export class SceneryContact {
@@ -138,8 +138,7 @@ export class SceneryContact {
     for (const t of this.trees(p, range)) {
       if (lines.length >= maxSegments * 6) break;
       trees++;
-      const trunk = trunkOf(t),
-        k = KIND_SHAPES[t.kind]!;
+      const trunk = trunkOf(t);
       const ring = (z: number, r: number, cx = t.x, cy = t.y) => {
         for (let i = 0; i < 12; i++) {
           const a0 = (i * Math.PI) / 6,
@@ -159,9 +158,10 @@ export class SceneryContact {
         }
       }
       // the crown's outline: its widest ring, and its top
-      const r = k.width * t.radius;
-      ring(t.z + k.crown * t.height, r);
-      line([t.x, t.y, t.z + (k.cone ? k.crown * t.height : (k.crown - k.depth) * t.height)], [t.x, t.y, t.z + t.height]);
+      const sh = shapeOf(t);
+      const low = sh.cone ? sh.c[2] - sh.r[1] : sh.c[2] - sh.r[2];
+      ring(sh.cone ? low : sh.c[2], sh.r[0]);
+      line([t.x, t.y, low], [t.x, t.y, sh.cone ? sh.c[2] : sh.c[2] + sh.r[2]]);
     }
     for (const b of bases) {
       if (lines.length >= maxSegments * 6) break;

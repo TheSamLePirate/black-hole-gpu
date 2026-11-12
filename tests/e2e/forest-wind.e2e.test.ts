@@ -29,7 +29,16 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
       // (WIND_AGL=1: the view's height over the ground there — viewAt's altM is over the ellipsoid —, read once its tiles are in)
       if (process.env.WIND_AGL === "1") {
         await app.dataSettled("the place's ground", { maxMs: 90_000 }).catch(() => {});
-        const g = await app.js<number>(`__bh.sys.groundAt(${V[0]}, ${V[1]})`);
+        // (read again until two reads 3 s apart agree to a metre: a coarse tile first said 2 306 m where the ground is 1 361 —
+        // 12 Nov 2026 —, the view then a kilometre up; 60 s at most, then said)
+        let g = await app.js<number>(`__bh.sys.groundAt(${V[0]}, ${V[1]})`);
+        for (let t0 = Date.now(); ; ) {
+          await Bun.sleep(3000);
+          const g2 = await app.js<number>(`__bh.sys.groundAt(${V[0]}, ${V[1]})`);
+          if (Math.abs(g2 - g) < 1) break;
+          g = g2;
+          if (Date.now() - t0 > 60_000) throw new Error(`the ground under the view still moving after 60 s (${g.toFixed(0)} m)`);
+        }
         console.log(`  the ground there: ${g.toFixed(0)} m; the view ${V[2]} m over it`);
         await app.js(`(() => __bh.viewAt(${V[0]}, ${V[1]}, { altM: ${g + V[2]!}, heading: ${V[3]}, pitch: ${V[4]}, fov: 50 }) ?? null)()`);
       }

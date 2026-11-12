@@ -74,8 +74,9 @@ export function treeRng(seed: number): () => number {
 export function treeEnvelope(kind: ForestKind, aspect: number) {
   const k = KIND_SHAPES[kind]!;
   const R = k.width * aspect;
+  // (its slenderness bounded as the tracer's crown — forest.ts shapeOf: the top in place, the crown shorter)
   if (k.cone) {
-    const base = k.crown;
+    const base = Math.max(k.crown, 1 - k.slender * R);
     return {
       R,
       lo: base,
@@ -89,8 +90,8 @@ export function treeEnvelope(kind: ForestKind, aspect: number) {
       },
     };
   }
-  const c = k.crown,
-    d = k.depth;
+  const d = Math.min(k.depth, k.slender * R),
+    c = k.crown + k.depth - d;
   return {
     R,
     lo: Math.max(c - d, 0),

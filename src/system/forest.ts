@@ -61,6 +61,9 @@ export interface KindShape {
   tiers: number;
   /** its leaves fall in the autumn (outside the tropics): 1, 0 evergreen, between: some of them */
   deciduous: number;
+  /** the crown's slenderness at most — a cone's length over its base radius, an ellipsoid's half-height over its radius —: a tall
+   *  tree on its cell keeps its kind's crown, its top in place, on a longer bole (forest.wgsl FOREST_SLENDER, bit for bit) */
+  slender: number;
 }
 export const KIND_SHAPES: KindShape[] = [
   // (none)
@@ -79,6 +82,7 @@ export const KIND_SHAPES: KindShape[] = [
     grain: 1,
     tiers: 0,
     deciduous: 0,
+    slender: 1.0,
   },
   // broadleaf: an oak, a beech — a round crown on a short trunk
   {
@@ -96,6 +100,7 @@ export const KIND_SHAPES: KindShape[] = [
     grain: 1.4,
     tiers: 0,
     deciduous: 1,
+    slender: 1.5,
   },
   // conifer: a spruce, a fir — a cone from low on the trunk
   {
@@ -113,6 +118,7 @@ export const KIND_SHAPES: KindShape[] = [
     grain: 0.9,
     tiers: 1.1,
     deciduous: 0,
+    slender: 6.0,
   },
   // pine: a Scots or stone pine — a flat crown high on a bare trunk
   {
@@ -130,6 +136,7 @@ export const KIND_SHAPES: KindShape[] = [
     grain: 1.2,
     tiers: 0,
     deciduous: 0,
+    slender: 1.5,
   },
   // palm: a thin stem, a flat head of fronds
   {
@@ -147,6 +154,7 @@ export const KIND_SHAPES: KindShape[] = [
     grain: 0.8,
     tiers: 0,
     deciduous: 0,
+    slender: 1.5,
   },
   // shrub, mangrove: a low dome to the ground
   {
@@ -164,6 +172,7 @@ export const KIND_SHAPES: KindShape[] = [
     grain: 0.8,
     tiers: 0,
     deciduous: 0.4,
+    slender: 1.5,
   },
   // columnar: a poplar, a cypress — a narrow spindle
   {
@@ -181,6 +190,7 @@ export const KIND_SHAPES: KindShape[] = [
     grain: 0.9,
     tiers: 0,
     deciduous: 1,
+    slender: 5.0,
   },
 ];
 
@@ -334,9 +344,37 @@ export function forestTree(f: ForestFrame, word: number, i: number, j: number): 
   };
 }
 /** a tree's trunk: its radius and top [m] (radius 0: none) */
-export function trunkOf(t: ForestTree): { radius: number; top: number } {
+export function trunkOf(t: ForestTree, bare = 0): { radius: number; top: number } {
   const k = KIND_SHAPES[t.kind]!;
-  return k.trunk > 0 ? { radius: k.bark0 + k.barkH * t.height, top: t.z + k.trunk * t.height } : { radius: 0, top: t.z };
+  return k.trunk > 0 ? { radius: k.bark0 + k.barkH * t.height, top: t.z + shapeOf(t, bare).trunkTop } : { radius: 0, top: t.z };
+}
+/** A tree's plain shape (forest.wgsl forestShape, bit for bit): its crown — a cone's apex, base radius and length, or an
+ *  ellipsoid's centre and radii — its slenderness bounded by its kind's (`slender`: the crown's radius is the cell's, its height
+ *  the tree's — a tall tree keeps its kind's crown, its top in place, on a longer bole), and its trunk's top above the foot [m]
+ *  (a tenth into the crown at least; `bare`, the season's, 0 … 1: a bare crown's trunk to 0.8 of the height). */
+export function shapeOf(t: ForestTree, bare = 0): { cone: boolean; c: Vec3; r: Vec3; trunkTop: number } {
+  const k = KIND_SHAPES[t.kind]!;
+  const f = Math.fround;
+  const wide = f(k.width * t.radius);
+  const mix = (a: number, b: number, x: number) => a + (b - a) * x;
+  if (k.cone) {
+    const len = Math.min(f(t.height * (1 - k.crown)), f(k.slender * wide));
+    const low = t.height - len;
+    return {
+      cone: true,
+      c: [t.x, t.y, t.z + t.height],
+      r: [wide, len, 0],
+      trunkTop: mix(Math.max(k.trunk * t.height, low + 0.1 * len), 0.8 * t.height, bare),
+    };
+  }
+  const half = Math.min(f(k.depth * t.height), f(k.slender * wide));
+  const mid = (k.crown + k.depth) * t.height - half;
+  return {
+    cone: false,
+    c: [t.x, t.y, t.z + mid],
+    r: [wide, wide, half],
+    trunkTop: mix(Math.max(k.trunk * t.height, mid - half + 0.2 * half), 0.8 * t.height, bare),
+  };
 }
 /** A tree's crown as the tracer draws it plain: a cone (apex, base radius, height) or an ellipsoid (centre,
  *  radii) — near, the bound the leaves carve inwards; far, shrunk by half the carving (forest.wgsl), deeper
@@ -345,13 +383,10 @@ export function crownOf(t: ForestTree, near = false, bare = 0): { cone: boolean;
   const k = KIND_SHAPES[t.kind]!;
   // (the carving's depth: the leaves' clumps, and a deciduous crown's bareness in winter — forest.wgsl's amp)
   const shrink = near ? 0 : 0.5 * (k.clump + 0.55 * k.deciduous * bare) * t.radius;
-  return k.cone
-    ? { cone: true, c: [t.x, t.y, t.z + t.height], r: [k.width * t.radius - shrink, t.height * (1 - k.crown), 0] }
-    : {
-        cone: false,
-        c: [t.x, t.y, t.z + k.crown * t.height],
-        r: [k.width * t.radius - shrink, k.width * t.radius - shrink, k.depth * t.height - shrink],
-      };
+  const s = shapeOf(t, bare);
+  return s.cone
+    ? { cone: true, c: s.c, r: [s.r[0] - shrink, s.r[1], 0] }
+    : { cone: false, c: s.c, r: [s.r[0] - shrink, s.r[1] - shrink, s.r[2] - shrink] };
 }
 
 // ---- what grows where

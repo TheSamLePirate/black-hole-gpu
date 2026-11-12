@@ -251,18 +251,15 @@ fn treeOf(k: u32, hd: ForestHead) -> Tree {
   o.kind = kind;
   o.height = height;
   o.seed = forestUnit(forestHash(gi, gj, 4u));
-  o.cone = kA.x > 0.5;
-  if (o.cone) {
-    o.c = o.foot + vec3f(0.0, 0.0, height);
-    o.r = vec3f(kA.z * r, height * (1.0 - kA.y), 0.0);
-  } else {
-    o.c = o.foot + vec3f(0.0, 0.0, kA.y * height);
-    o.r = vec3f(kA.z * r, kA.z * r, kA.w * height);
-  }
+  // (its plain shape: forest.wgsl forestShape, the tracer's own)
   let bare = kD.w * forestData(hd.F + 7u).z;
+  let shape = forestShape(kind, o.foot, height, r, kA, kB, bare);
+  o.cone = shape.cone;
+  o.c = shape.c;
+  o.r = shape.r;
   o.trunk = kB.x > 0.0;
   o.trunkR = kB.y + kB.z * height;
-  o.trunkTop = z + mix(kB.x, 0.8, bare) * height;
+  o.trunkTop = z + shape.trunkTop;
   o.ok = true;
   return o;
 }

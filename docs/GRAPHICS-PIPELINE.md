@@ -607,7 +607,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-12T01:23:42Z sur `0f712f6e` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-12T02:22:54Z sur `b9597692` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **106 sites de création de pipeline** (71 rendu, 35 calcul, dont 46 asynchrones) et 40 `createShaderModule` dans 30 fichiers ; **41 programmes WGSL** (15 fichiers .wgsl, 26 chaînes dans le TypeScript) ; **65 libellés de passes** du profileur GPU (+ 12 sites à libellé dynamique).
 
@@ -724,18 +724,18 @@ _Généré le 2026-11-12T01:23:42Z sur `0f712f6e` (arbre de travail). Ne pas éd
 | `src/system/hd-maps.ts:300` | render | — | `vs`, `entry` |
 | `src/system/horizon-maps.ts:628` | compute | `horizon bake` | `bake` |
 | `src/system/horizon-maps.ts:629` | compute | `horizon mips` | `mip` |
-| `src/system/scenery-raster.ts:869` | compute async | — | `cull` |
-| `src/system/scenery-raster.ts:872` | compute async | — | `clampDraws` |
-| `src/system/scenery-raster.ts:875` | compute async | — | `cullBoxes` |
-| `src/system/scenery-raster.ts:878` | compute async | — | `clampBoxes` |
-| `src/system/scenery-raster.ts:882` | render async | — | `proxyVs`, `proxyFs` |
-| `src/system/scenery-raster.ts:906` | render async | — | `boxVs`, `boxFs` |
-| `src/system/scenery-raster.ts:919` | render async | — | `boxMarkVs`, `bridgeMarkFs` |
-| `src/system/scenery-raster.ts:932` | render async | — | `boxSolidVs`, `meshFs` |
-| `src/system/scenery-raster.ts:946` | render async | — | `meshVs`, `meshFs` |
-| `src/system/scenery-raster.ts:962` | render async | — | `shadowVs` |
-| `src/system/scenery-raster.ts:975` | render async | — | `boxShadowVs` |
-| `src/system/scenery-raster.ts:983` | render async | — | `meshShadowVs` |
+| `src/system/scenery-raster.ts:866` | compute async | — | `cull` |
+| `src/system/scenery-raster.ts:869` | compute async | — | `clampDraws` |
+| `src/system/scenery-raster.ts:872` | compute async | — | `cullBoxes` |
+| `src/system/scenery-raster.ts:875` | compute async | — | `clampBoxes` |
+| `src/system/scenery-raster.ts:879` | render async | — | `proxyVs`, `proxyFs` |
+| `src/system/scenery-raster.ts:903` | render async | — | `boxVs`, `boxFs` |
+| `src/system/scenery-raster.ts:916` | render async | — | `boxMarkVs`, `bridgeMarkFs` |
+| `src/system/scenery-raster.ts:929` | render async | — | `boxSolidVs`, `meshFs` |
+| `src/system/scenery-raster.ts:943` | render async | — | `meshVs`, `meshFs` |
+| `src/system/scenery-raster.ts:959` | render async | — | `shadowVs` |
+| `src/system/scenery-raster.ts:972` | render async | — | `boxShadowVs` |
+| `src/system/scenery-raster.ts:980` | render async | — | `meshShadowVs` |
 | `src/system/terrain-cache.ts:300` | compute async | — | `main` |
 | `src/system/terrain-cache.ts:301` | compute async | — | — |
 | `src/system/terrain-forward.ts:132` | render async | `forward ground` | `terrainVs`, `forwardFs` |
@@ -769,8 +769,8 @@ _Généré le 2026-11-12T01:23:42Z sur `0f712f6e` (arbre de travail). Ne pas éd
 | `src/shaders/display.wgsl` | 935 | vs (v), fs (f) |
 | `src/shaders/character.wgsl` | 702 | 22 entrées : avatarVs, shadowVs, fs, screenVs, groundShadow, skinVs, skinShadowVs, skinFs, grassLight, grassTrample, grassBlades, grassClamp, grassVs, grassFs, stonesGrow, stonesClamp, stoneVs, stoneFs, coverGrow, coverClamp, coverVs, coverFs |
 | `src/shaders/map.wgsl` | 616 | bodyVs (v), bodyFs (f), skyVs (v), skyFs (f), bodyDepthFs (f), lineVs (v), lineFs (f), planiVs (v), planiFs (f), markVs (v), markFs (f) |
-| `src/system/scenery-raster.ts:200` | 565 | 15 entrées : cull, cullBoxes, clampBoxes, shadowVs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs |
-| `src/shaders/forest.wgsl` | 381 |  |
+| `src/system/scenery-raster.ts:200` | 562 | 15 entrées : cull, cullBoxes, clampBoxes, shadowVs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs |
+| `src/shaders/forest.wgsl` | 407 |  |
 | `src/shaders/overlay.wgsl` | 278 | vsLine (v), fsLine (f), vsLineD (v), fsLineD (f), vsFull (v), fsComposite (f), fsMagVol (f), fsMagComp (f) |
 | `src/system/terrain-raster.ts:176` | 251 | terrainVs (v), terrainSunVs (v), terrainFs (f), ringFs (f), screenVs (v), inspectFs (f) |
 | `src/shaders/seafft.wgsl` | 226 | spectrum (c), rows (c), cols (c), assemble (c), mip (c), foamWorld (c) |
@@ -932,19 +932,19 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 26.6 · shadeMark 0.3 · shadeLite 7.0 · shadeLiteFinish 0.8 · shadeLiteLight 2.4 · shadeWater 6.3 · shadeWaterOpen 5.6 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 42.2 · env 58.2 · aerial 0.7 | 185k |
-| `earth-raster-wx` | shade 31.4 · shadeMark 0.3 · shadeLite 7.0 · shadeLiteFinish 0.8 · shadeLiteLight 2.4 · shadeWater 6.3 · shadeWaterOpen 5.6 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 45.1 · env 58.2 · aerial 0.7 | 192k |
-| `earth-trace` | main 65.6 · env 61.5 · aerial 0.6 | 128k |
-| `earth-photo` | main 67.4 | 67k |
-| `game-space` | main 53.8 · env 49.7 · aerial 0.6 | 104k |
+| `earth-raster` | shade 26.7 · shadeMark 0.3 · shadeLite 7.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.4 · shadeWater 6.3 · shadeWaterOpen 5.6 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 42.2 · env 58.2 · aerial 0.7 | 185k |
+| `earth-raster-wx` | shade 31.5 · shadeMark 0.3 · shadeLite 7.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.4 · shadeWater 6.3 · shadeWaterOpen 5.6 · shadeStars 0.3 · discs 29.8 · clouds 3.8 · skyFill 0.7 · main 45.1 · env 58.2 · aerial 0.7 | 192k |
+| `earth-trace` | main 65.7 · env 61.5 · aerial 0.6 | 128k |
+| `earth-photo` | main 67.5 | 68k |
+| `game-space` | main 53.9 · env 49.7 · aerial 0.6 | 104k |
 | `moon` | main 75.5 · env 49.7 · aerial 0.6 · shadeLite 25.4 | 151k |
-| `moons` | main 76.4 · env 49.7 · aerial 0.6 · shadeLite 25.5 | 152k |
-| `mars` | main 87.1 · env 49.7 · aerial 0.6 · shadeLite 37.2 | 175k |
-| `titan` | main 90.2 · env 49.7 · aerial 0.6 · shadeLite 42.4 | 183k |
-| `venus` | main 89.9 · env 49.7 · aerial 0.6 · shadeLite 43.0 | 183k |
-| `earth-only` | main 49.9 · env 43.5 · aerial 0.7 | 94k |
-| `kerr-jet` | main 31.7 · env 27.5 · lut 28.0 | 87k |
-| `eclipse` | main 45.7 · env 37.2 · aerial 0.6 | 84k |
-| `general` | main 150.3 · env 72.5 · lut 145.9 | 369k |
+| `moons` | main 76.4 · env 49.7 · aerial 0.6 · shadeLite 25.6 | 152k |
+| `mars` | main 87.2 · env 49.7 · aerial 0.6 · shadeLite 37.3 | 175k |
+| `titan` | main 90.3 · env 49.7 · aerial 0.6 · shadeLite 42.4 | 183k |
+| `venus` | main 90.0 · env 49.7 · aerial 0.6 · shadeLite 43.0 | 183k |
+| `earth-only` | main 50.0 · env 43.5 · aerial 0.7 | 94k |
+| `kerr-jet` | main 31.8 · env 27.5 · lut 28.0 | 87k |
+| `eclipse` | main 45.8 · env 37.2 · aerial 0.6 | 84k |
+| `general` | main 150.5 · env 72.5 · lut 146.1 | 369k |
 
 <!-- pipeline-inventory:end -->
