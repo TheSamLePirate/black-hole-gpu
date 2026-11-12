@@ -20,6 +20,9 @@ import {
   classify,
   evictions,
   GEOPF_AGE_MS,
+  type GeopfService,
+  geopfBudget,
+  geopfService,
   geopfClass,
   isAppPage,
   isLegacyShell,
@@ -493,7 +496,13 @@ async function stats() {
     zoneTiles: zoned.length,
     zoneBytes,
     kinds,
-    served: { ...served, kinds: structuredClone(servedKinds), recent: [...servedNetwork], rangesCut: [...rangesCut] },
+    served: {
+      ...served,
+      kinds: structuredClone(servedKinds),
+      recent: [...servedNetwork],
+      rangesCut: [...rangesCut],
+      geopf: structuredClone(geopfLog),
+    },
   };
 }
 async function clearTiles() {
@@ -537,15 +546,22 @@ async function networkFirst(request: Request, name: string): Promise<Response> {
   }
 }
 
-// ---- the Géoplateforme's one budget (data.geopf.fr: the relief's grids, the survey's, the BD TOPO, the orthophotos, the
-// zones'): every network request of the page and of its workers through it — GEOPF_PER_S a second, GEOPF_INFLIGHT at once —, a
-// 429 pausing them all (its Retry-After, else 1.5 s doubling) and the request asked again (twice at most); the cache's answers
-// never held. Four gates that knew nothing of each other had drawn 429s, the survey timed out, the scenes degraded.
+// ---- the Géoplateforme's budget (data.geopf.fr: the relief's grids, the survey's, the BD TOPO, the orthophotos, the zones'):
+// every network request of the page and of its workers through it — GEOPF_PER_S a second, GEOPF_INFLIGHT at once —, a 429
+// pausing them all (its Retry-After, else 1.5 s doubling) and the request asked again (twice at most); the cache's answers never
+// held. Four gates that knew nothing of each other had drawn 429s, the survey timed out, the scenes degraded.
+// (CM2, docs/PLAN-CHARGEMENT-MONDE.md §8: its WMTS — the orthophotos — and TMS — the BD TOPO — in a budget of their own,
+// GEOPF_TILES_INFLIGHT at once and no rate. Measured over Paris, cold, A/B interleaved: the imagery in 0.34 s instead of 5, the
+// IGN's relief in 8 s instead of 22, the view at 90 % unchanged (6.1 s against 5.8); the 429s came from the WMS-R alone — 6 to
+// 22 a pass, either way —, never from the WMTS or the TMS, even 16 at once. false: the one budget as before)
+const GEOPF_TILES_APART = true;
 const GEOPF = "https://data.geopf.fr/";
 const GEOPF_PER_S = 25;
 const GEOPF_INFLIGHT = 10;
+const GEOPF_TILES_INFLIGHT = 16;
 let geopfNext = 0,
   geopfInflight = 0,
+  geopfTilesInflight = 0,
   geopfPausedTo = 0;
 /**
  * (the network audit, 6 Nov 2026) The requests waiting for the budget, served in order — the ground's heights first (the
@@ -553,60 +569,122 @@ let geopfNext = 0,
  * TOPO, the zones) —, first come first served within a class; one the page gave up (its request's signal) dropped from the
  * queue. They had polled every 15 ms, the first awake served: no order, no priority, the given-up ones still sent.
  */
-const geopfWaiting: { p: number; seq: number; at: number; signal: AbortSignal | null; go: () => void; no: (e: unknown) => void }[] = [];
+const geopfWaiting: {
+  p: number;
+  seq: number;
+  at: number;
+  tiles: boolean;
+  signal: AbortSignal | null;
+  go: () => void;
+  no: (e: unknown) => void;
+}[] = [];
 let geopfSeq = 0;
 let geopfTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * (CM2, ST-02) The Géoplateforme's answers by service since this worker started — which one answers 429 (the budget's pause
+ * had been put on all of them, the cause never written down): requests sent, 429s, other refusals by status, the requests
+ * asked again after a 429, the 429s left to the page (three in a row), the wait in the budget before sending (total, longest
+ * [ms]), the most Géoplateforme requests in flight (both budgets) when one of its own was sent.
+ */
+type GeopfLog = {
+  sent: number;
+  limited: number;
+  refused: Record<string, number>;
+  retried: number;
+  gaveUp: number;
+  waitMs: number;
+  waitMax: number;
+  inflightMax: number;
+};
+const geopfLog: Partial<Record<GeopfService, GeopfLog>> = {};
+let geopfLogInflight = 0;
+const geopfLogOf = (url: string): GeopfLog =>
+  (geopfLog[geopfService(url)] ??= { sent: 0, limited: 0, refused: {}, retried: 0, gaveUp: 0, waitMs: 0, waitMax: 0, inflightMax: 0 });
 function geopfPump() {
   for (;;) {
     for (let i = geopfWaiting.length - 1; i >= 0; i--)
       if (geopfWaiting[i]!.signal?.aborted) geopfWaiting.splice(i, 1)[0]!.no(new DOMException("aborted", "AbortError"));
     if (!geopfWaiting.length) return;
     const now = Date.now();
-    const at = Math.max(now, geopfNext, geopfPausedTo);
-    // (at the rate's next turn — a request ending calls again when the in-flight are all out)
-    if (at > now || geopfInflight >= GEOPF_INFLIGHT) {
-      if (at > now && !geopfTimer)
+    // (each budget open or not: the rate's at its next turn with room in flight, the tiles' with room in flight; a 429's pause
+    // holds both — a request ending calls again)
+    const wake = (at: number) => {
+      if (!geopfTimer)
         geopfTimer = setTimeout(() => {
           geopfTimer = null;
           geopfPump();
         }, at - now);
-      return;
-    }
+    };
+    if (geopfPausedTo > now) return wake(geopfPausedTo);
+    const rateOpen = geopfNext <= now && geopfInflight < GEOPF_INFLIGHT;
+    const tilesOpen = geopfTilesInflight < GEOPF_TILES_INFLIGHT;
     // (a class up every GEOPF_AGE_MS waited: the scenery's requests never starved by a flow of the relief's)
     const rank = (w: (typeof geopfWaiting)[number]) => w.p - Math.floor((now - w.at) / GEOPF_AGE_MS);
-    let k = 0,
-      kr = rank(geopfWaiting[0]!);
-    for (let i = 1; i < geopfWaiting.length; i++) {
-      const a = geopfWaiting[i]!,
-        r = rank(a);
-      if (r < kr || (r === kr && a.seq < geopfWaiting[k]!.seq)) {
+    let k = -1,
+      kr = 0;
+    for (let i = 0; i < geopfWaiting.length; i++) {
+      const a = geopfWaiting[i]!;
+      if (!(a.tiles ? tilesOpen : rateOpen)) continue;
+      const r = rank(a);
+      if (k < 0 || r < kr || (r === kr && a.seq < geopfWaiting[k]!.seq)) {
         k = i;
         kr = r;
       }
     }
-    geopfNext = now + 1000 / GEOPF_PER_S;
-    geopfInflight++;
-    geopfWaiting.splice(k, 1)[0]!.go();
+    if (k < 0) {
+      // (none may go: the rate's next turn awaited if one of its requests waits for it — else a request ending calls again)
+      if (geopfNext > now && geopfInflight < GEOPF_INFLIGHT && geopfWaiting.some((w) => !w.tiles)) wake(geopfNext);
+      return;
+    }
+    const w = geopfWaiting.splice(k, 1)[0]!;
+    if (w.tiles) geopfTilesInflight++;
+    else {
+      geopfNext = now + 1000 / GEOPF_PER_S;
+      geopfInflight++;
+    }
+    w.go();
   }
 }
 function geopfSlot(url: string, signal: AbortSignal | null): Promise<void> {
   return new Promise((go, no) => {
-    geopfWaiting.push({ p: geopfClass(url), seq: geopfSeq++, at: Date.now(), signal, go, no });
+    geopfWaiting.push({
+      p: geopfClass(url),
+      seq: geopfSeq++,
+      at: Date.now(),
+      tiles: GEOPF_TILES_APART && geopfBudget(url) === "tiles",
+      signal,
+      go,
+      no,
+    });
     geopfPump();
   });
 }
 async function networkFetch(request: Request): Promise<Response> {
   if (!request.url.startsWith(GEOPF)) return fetch(request);
+  const log = geopfLogOf(request.url);
+  const tiles = GEOPF_TILES_APART && geopfBudget(request.url) === "tiles";
   for (let k = 0; ; k++) {
+    const t0 = Date.now();
     await geopfSlot(request.url, request.signal ?? null);
+    const waited = Date.now() - t0;
+    log.sent++;
+    log.waitMs += waited;
+    log.waitMax = Math.max(log.waitMax, waited);
+    log.inflightMax = Math.max(log.inflightMax, ++geopfLogInflight);
     let res: Response;
     try {
       res = await fetch(request);
     } finally {
-      geopfInflight--;
+      geopfLogInflight--;
+      if (tiles) geopfTilesInflight--;
+      else geopfInflight--;
       geopfPump();
     }
+    if (res.status === 429) log.limited++;
+    else if (!res.ok) log.refused[res.status] = (log.refused[res.status] ?? 0) + 1;
+    if (res.status === 429 && k >= 2) log.gaveUp++;
     if (res.status !== 429 || k >= 2) return res;
+    log.retried++;
     const after = Number(res.headers.get("retry-after"));
     geopfPausedTo = Math.max(geopfPausedTo, Date.now() + (Number.isFinite(after) && after > 0 ? after * 1000 : 1500 * 2 ** k));
   }

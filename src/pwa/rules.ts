@@ -236,6 +236,23 @@ export function ownsLegacyShell(urls: readonly string[], scope: string): boolean
  *  the canopy's height model, 2 the rest (the far silhouettes' surfaces, …) — a request waiting rising a class every
  *  GEOPF_AGE_MS (sw.ts: none starved) */
 export const GEOPF_AGE_MS = 1500;
+/** (CM2) a Géoplateforme request's service — its WMS-R (the grids: rate-limited, 40 a second documented), its WMTS (the
+ *  orthophotos), its TMS (the BD TOPO's vector tiles), else "other" — the Service Worker's journal of who answers 429 */
+export type GeopfService = "wms-r" | "wmts" | "tms" | "other";
+export function geopfService(url: string): GeopfService {
+  const path = url.replace(/^https?:\/\/[^/]+/, "");
+  if (path.startsWith("/wms-r")) return "wms-r";
+  if (path.startsWith("/wmts")) return "wmts";
+  if (path.startsWith("/tms")) return "tms";
+  return "other";
+}
+/** (CM2) the Service Worker's budget a Géoplateforme request takes: "rate" — its WMS-R (the documented limit) and the rest, a rate
+ *  and a concurrency —, "tiles" — its WMTS and TMS tiles (no usage limit documented): a concurrency alone. The 429s seen came
+ *  from the WMS-R alone (cold passes over Paris, 12 Nov 2026), the orthophotos having waited 5 s on average behind the grids. */
+export const geopfBudget = (url: string): "rate" | "tiles" => {
+  const s = geopfService(url);
+  return s === "wmts" || s === "tms" ? "tiles" : "rate";
+};
 export function geopfClass(url: string): number {
   if (url.includes("/wms-r") && !/MNS|MNH/i.test(url) && /ELEVATION/i.test(url)) return 0;
   // (the scenery near the craft: the orthophotos, the BD TOPO's buildings, the canopy's height model — its trees; left last,

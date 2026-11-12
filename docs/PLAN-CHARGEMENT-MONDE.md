@@ -1,6 +1,6 @@
 # Plan — le chargement du monde : des tuiles qui arrivent vite et ne laissent pas de trou
 
-**État (12 novembre 2026) : CM0 et CM1 faits (§8) ; CM2–CM3 en cours (décision de Sam du 12 novembre :
+**État (12 novembre 2026) : CM0, CM1 et CM2 faits (§8) ; CM3 mesuré, non implémenté — **décision de Sam demandée** (§8) (décision de Sam du 12 novembre :
 CM0 → CM1 → CM2 → CM3). Le reste proposé.** Proposé le 10 novembre. Il vient de l'audit du 10 novembre
 ([01-chargement-monde.md](audit-2026-11-10/01-chargement-monde.md), constats ST-01 à ST-21) et complète le plan
 ST0–ST10 de [ANALYSE-STREAMING-2026-11-06.md](ANALYSE-STREAMING-2026-11-06.md), qu'il ne remplace pas. Le code fait foi.
@@ -154,4 +154,52 @@ journal [progress-to-destination.md](../progress-to-destination.md) et, pour un 
   couverture, gardés ensuite. Les lumières de la nuit d'une imagerie dessinée sans elles ne sont redemandées que trois fois.
   Non vérifié en jeu : la panne de Terrarium seul (simulée en test unitaire), la nuit GIBS seule, le contact au sol pendant une
   coupure (la remplaçante est la hauteur que `heightAt` lisait déjà au niveau parent).
+
+### CM2 — le portillon de la Géoplateforme : fait (12 novembre 2026)
+
+- **Étape 1 — quel service répond 429.** Le Service Worker journalise ses réponses de la Géoplateforme par service
+  (`src/sw.ts` `geopfLog`, `src/pwa/rules.ts` `geopfService` ; `__bh.pwa.stats().served.geopf`, [BH-API](BH-API.md)) :
+  requêtes envoyées, 429, autres refus, reprises, attente dans le portillon. **Mesuré** (ce Mac, Paris 900 m froid, SW,
+  11 passes) : **les 429 viennent du seul WMS-R** (0 à 22 par passe, toutes absorbées par la reprise du SW, aucune rendue à
+  la page), **jamais du WMTS ni du TMS**, même à 16 en vol ; avec le portillon unique, les 336 orthophotos WMTS (imagerie des
+  niveaux z 9–14 et z 15–18) attendaient **4,8–5,3 s en moyenne** derrière les grilles (8,7 s au plus).
+- **Étape 2 — deux budgets** (`GEOPF_TILES_APART = true`, `geopfBudget`) : WMTS et TMS à part, 16 en vol sans débit ; WMS-R et
+  le reste gardent 25/s et 10 en vol ; la pause globale sur 429 gardée (elle vient du WMS-R). **Mesuré en A/B entrelacé**
+  (actuel, A, A, actuel, actuel, A ; mêmes conditions ; moyennes de 3 passes, extrêmes entre parenthèses) :
+
+| | Vue à 90 % | Niveaux z 6–14 entiers (moyenne) | Imagerie z 9–14 p50 | Orthophotos dessinées p50 | Relief IGN p50 | IGN z 15–17 entiers |
+|---|---|---|---|---|---|---|
+| sans SW (référence du plan, 2 passes) | 5,5 s (4,9–6,1) | 10,9 s | 0,25 s | 0,73 s | 7,8 s | 17,1 s (1 passe) |
+| portillon unique (avant) | 5,8 s (5,6–6,2) | 11,7 s (11,4–11,9) | 5,04 s | 3,1 s (2,6–3,7) | 22,4 s | 29,6 s |
+| **deux budgets (après)** | **6,1 s (5,5–6,6)** | 13,6 s (13,5–13,9) | **0,34 s** | **1,25 s (0,85–2,0)** | **7,8 s** | **16,0 s** (2 passes) |
+
+  Critère du plan : vue à 90 % proche du chemin sans SW — tenu (+0,3 s, dans la dispersion) ; imagerie, orthophotos et relief
+  IGN au niveau du chemin sans SW. « 0 réponse 429 » : non tenu, mais les 429 sont celles du WMS-R, présentes avant comme après.
+  **Effet secondaire mesuré** : les niveaux Terrarium z 6–14 sont entiers ≈ 2 s plus tard (le travail des grilles IGN et de
+  l'imagerie arrive plus tôt et les concurrence — supposé : fil principal, CM9 ; compression du SW, CM6). À 20 Mbit/s, rien ne
+  change (une passe : vue à 90 % 21,4 s contre 21,1–21,8) : la liaison est le goulot (CM4).
+- **Non vérifié** : Aubrac, Chamonix, kerr-mini, une approche en mouvement ; la charge côté IGN avec plusieurs joueurs ; une
+  variante WMS-R à 6 en vol a été essayée (vue à 90 % 6,2–6,3 s, relief IGN 10,5–14,8 s) et écartée.
+
+### CM3 — précharger le départ : mesuré, non implémenté — décision de Sam demandée (12 novembre 2026)
+
+- **Mesuré** (nouvel e2e `tests/e2e/title-departure.e2e.test.ts` ; ce Mac, profil neuf, SW ; titre › Par avion › Vol libre,
+  terrain par défaut Edwards, titre ouvert 8 s puis « Voler » ; deux passes) : le voile d'entrée se lève **2,2–2,6 s** après le
+  clic (le noyau de la scène compile 0,8 s) ; **à la levée, aucune tuile de relief et pas même la Terre : l'image est noire**
+  (capture `remote-results/title-departure/cm3basea-lift.png`) ; la première tuile est demandée **11,3 s** après le clic dans
+  une passe, pas du tout dans les 12 s de l'autre. Cause lue : les tuiles attendent les cartes globales de la Terre
+  (`renderer.ts` `requestEarthMaps`, palier `high` — `earthMaps.tier`), qui ne sont demandées qu'une fois la caméra au départ,
+  et le voile n'attend que le noyau de la scène.
+- **Ce qui serait fait** : un « point de départ » donné au renderer (`renderer.departure`, lu là où `shipFocus` l'est pour les
+  cartes et les fenêtres de tuiles), posé dès que le lieu est connu. Deux moments possibles, chacun un compromis :
+  1. **pendant le titre**, dès que l'onglet Vol libre (ou un lieu) est ouvert : cartes globales `high` et fenêtres de tuiles
+     du terrain choisi téléchargées pendant que le joueur choisit (≈ 10 s gagnées sur la mesure) — **coût** : réseau et mémoire
+     GPU (cartes `high`, quelques centaines de Mo de tuiles à Paris, CM0) pour un joueur qui choisirait ensuite l'espace ;
+  2. **au clic** seulement (le joueur engagé, aucun coût perdu) : ≈ 0,4 s gagnée — négligeable ;
+  3. indépendamment, **le voile pourrait attendre** les cartes globales et le relief grossier (borné, par ex. 15 s) : plus d'image
+     noire, mais un voile plus long — changement visible.
+  Recommandation : 1 + 3 borné, le préchargement annulé si le joueur quitte le mode avion. **Non implémenté** en attendant ce
+  choix (et `renderer.ts` est en travaux par une autre session).
+- **Non fait** : la scène de décor du départ ; le voyage G (destination connue au départ : préchargement sans coût perdu — à
+  faire avec le même `renderer.departure`) ; un départ en France (IGN).
 

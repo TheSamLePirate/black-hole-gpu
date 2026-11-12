@@ -3354,3 +3354,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites / non vérifié** : panne de Terrarium seul et de la nuit GIBS seule non reproduites en jeu (tests unitaires
   seulement) ; contact au sol pendant une coupure non mesuré ; après la coupure le relief IGN repasse par le portillon du SW
   (p50 71 s) — CM2.
+
+## 2026-11-12T03:38Z — CM2 : deux budgets pour la Géoplateforme dans le Service Worker ; CM3 mesuré
+
+- **Contribution** (stratégie §7.6, §8 « âge des informations critiques », §19 ; PLAN-CHARGEMENT-MONDE CM2 et CM3, constats
+  ST-02 et ST-15) : le chemin du joueur (avec SW) rejoint celui des e2e sans SW pour l'imagerie et le relief fin ; la première
+  image d'un vol lancé du titre est mesurée.
+- **CM2 changé** (`src/sw.ts`, `src/pwa/rules.ts`) : journal des réponses de la Géoplateforme par service
+  (`pwa.stats().served.geopf`) ; WMTS et TMS dans un budget à part (16 en vol, sans débit), WMS-R 25/s et 10 en vol, pause globale
+  sur 429 gardée. **Mesuré** (ce Mac, Paris 900 m froid, A/B entrelacé 3 + 3 passes) : les 429 viennent du seul WMS-R (0–22 par
+  passe, absorbées), jamais du WMTS/TMS ; imagerie z 9–14 p50 5,04 → 0,34 s, orthophotos 3,1 → 1,25 s, relief IGN 22,4 → 7,8 s,
+  IGN z 15–17 entiers 29,6 → 16,0 s ; vue à 90 % 5,8 → 6,1 s (dans la dispersion) ; niveaux z 6–14 entiers 11,7 → 13,6 s (effet
+  secondaire). À 20 Mbit/s : inchangé (liaison saturée).
+- **CM3 mesuré, non implémenté** : nouvel e2e `title-departure` (titre › Vol libre › Voler, Edwards, profil neuf) : voile levé
+  2,2–2,6 s après le clic **sur une image noire** (cartes globales de la Terre non chargées), 1re tuile à 11,3 s. Le préchargement
+  pendant le titre coûte réseau et mémoire pour un joueur qui choisirait l'espace, l'attente du voile allonge l'entrée : **décision
+  de Sam demandée** (options au plan §8).
+- **Non vérifié** : autres lieux, kerr-mini, vols en mouvement ; scène de décor du départ et voyage G (CM3) non faits.

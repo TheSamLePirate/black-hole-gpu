@@ -3,7 +3,9 @@ import { bdtopoUrl } from "../src/system/bdtopo";
 import { swissimageUrl, swissTerrainUrl } from "../src/system/national";
 import { orthoUrl } from "../src/system/earth-tiles";
 import {
+  geopfBudget,
   geopfClass,
+  geopfService,
   classify,
   evictions,
   isAppPage,
@@ -148,4 +150,16 @@ test("the Géoplateforme's budget in the Service Worker: the ground's heights fi
   expect(geopfClass(wms("ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES.MNS"))).toBe(2);
   expect(geopfClass(wms("IGNF_LIDAR-HD_MNH_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G"))).toBe(1);
   expect(geopfClass("https://data.geopf.fr/tms/1.0.0/BDTOPO/15/16800/11900.pbf")).toBe(1);
+});
+
+test("CM2: a Géoplateforme request's service — the WMS-R's grids, the WMTS's orthophotos, the TMS's BD TOPO", () => {
+  expect(geopfService("https://data.geopf.fr/wms-r?SERVICE=WMS&LAYERS=ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES")).toBe("wms-r");
+  expect(geopfService("https://data.geopf.fr/wmts?SERVICE=WMTS&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&TILEMATRIX=17")).toBe("wmts");
+  expect(geopfService("https://data.geopf.fr/tms/1.0.0/BDTOPO/15/16800/11900.pbf")).toBe("tms");
+  expect(geopfService("https://data.geopf.fr/geocodage/search?q=x")).toBe("other");
+  // (the grids under the rate, the tiles a concurrency alone)
+  expect(geopfBudget("https://data.geopf.fr/wms-r?SERVICE=WMS&LAYERS=IGNF_LIDAR-HD_MNT_ELEVATION")).toBe("rate");
+  expect(geopfBudget("https://data.geopf.fr/wmts?SERVICE=WMTS&LAYER=ORTHOIMAGERY.ORTHOPHOTOS")).toBe("tiles");
+  expect(geopfBudget("https://data.geopf.fr/tms/1.0.0/BDTOPO/15/16800/11900.pbf")).toBe("tiles");
+  expect(geopfBudget("https://data.geopf.fr/geocodage/search?q=x")).toBe("rate");
 });
