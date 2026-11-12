@@ -3741,3 +3741,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (le travail des arrivées hors de l'image : jusqu'à 5,7 ms).
 - **Transitions** : le GPU lit toujours un rectangle par niveau, dérivé de la table (bords par page : J2-3) ; `changes` et le contact
   restent à J2-2. **Suite** : J2-2 (hauteurs, contact, la tuile sous l'appareil), puis le travail des arrivées pour les pointes.
+
+## 2026-11-12T13:55Z — D13 tranché : les gros binaires iront sur le serveur de Sam
+
+- **Contribution** (stratégie §15 V0/D1, §19 « pouvoir livrer » ; audit 2026-11-10 D13, lot 0.4) : la décision qui bloquait le prochain
+  lot d'assets est prise — **les gros binaires seront servis par le serveur de Sam**, pas par une release GitHub ni par Git. Une release
+  a été écartée après analyse : ses téléchargements passent par un hôte de stockage de GitHub sans en-tête CORS, donc le jeu ne pourrait
+  pas les lire depuis samlepirate.org ; la CI devrait les recopier dans `_site/`, ce qui libère Git mais ni le site Pages (1 Go) ni
+  l'image Docker. Le serveur peut les servir au jeu lui-même.
+- **Changé** (documentation seulement) : [docs/ASSETS.md](docs/ASSETS.md) (§ « Later: a bucket » : décision, raison, ce qui reste à
+  construire, règle « un fichier publié n'est jamais remplacé ni supprimé ») ; [audit 09](docs/audit-2026-11-10/09-priorites-todo.md)
+  (état, D13, lot 0.4) ; [audit 07](docs/audit-2026-11-10/07-plans-reste-a-faire.md) (D13 / H1c) ;
+  [ANALYSE-STRATEGIE](docs/ANALYSE-STRATEGIE-RENDU-2026-11-03.md) (décisions attendues) ; [PLAN-REFRACTION-HORIZONS](docs/PLAN-REFRACTION-HORIZONS.md) (H1c).
+- **Preuve** : documenté. Mesuré ce jour par `check-repo-size` : **600,0 Mo de binaires suivis pour 600** (662,6 Mo en tout), LFS
+  231,8 Mo (464 fichiers). **Non vérifié** : le refus CORS d'une release n'a pas été essayé (sources communautaires) ; rien n'est construit.
+- **Suite** : un lot de mise en place — lequel des serveurs de Sam et son URL, l'envoi et le téléchargement (manifeste à empreintes,
+  `build-pages.ts`, les machines du labo), les familles qui sortent de Git en premier (faces de la Terre, planètes HD, porte-avions,
+  ISS), le contrôle de taille adapté. D'ici là, un nouveau gros binaire va en Git LFS.

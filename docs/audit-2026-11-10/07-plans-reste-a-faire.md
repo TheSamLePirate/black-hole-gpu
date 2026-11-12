@@ -273,7 +273,7 @@ Aucune des huit options du §21.2 n'a été tranchée ni retirée depuis le 5 no
 
 | # | Décision | Source |
 |---|---|---|
-| D13 | H1c : où héberger les DEM LOLA (dépôt à 565 Mo sur 600) | plan §0.2, §11 point 5 |
+| D13 | H1c : où héberger les DEM LOLA (dépôt à 565 Mo sur 600) — **décidé le 12 nov. : le serveur de Sam** ([ASSETS.md](../ASSETS.md)) | plan §0.2, §11 point 5 |
 | D14 | T7 : lancer la bathymétrie côtière (HOMONIM, Litto3D) | plan §11 point 6 |
 | D15 | G1/G2 : Copernicus GLO-30, orthos nationales retenues | plan §11 point 7 |
 | D16 | Terres sous le niveau de la mer (`max(H, 0) + N`), datum de swissALTI3D, avant le lot E | RECHERCHE-DONNEES l. 22–24 |

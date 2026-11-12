@@ -4,7 +4,7 @@ Ce fichier ordonne le travail qui sort de l'audit ([synthèse](README.md)). Il n
 consolidé de tous les plans, qui est au §6 de [07-plans-reste-a-faire.md](07-plans-reste-a-faire.md).
 
 **État au 10 novembre, 09:30 UTC** : la vague 0 est faite sauf 0.4 (l'hébergement des binaires : orientation de Sam, choix
-à venir) — voir la colonne « État » ; le reste n'est pas commencé. Les tailles sont grossières : S (moins d'un jour), M (quelques jours), L (une à deux
+à venir ; **décidé le 12 novembre : le serveur de Sam**, mise en place à faire) — voir la colonne « État » ; le reste n'est pas commencé. Les tailles sont grossières : S (moins d'un jour), M (quelques jours), L (une à deux
 semaines), XL (plus). Aucun gain n'est promis : chaque lot porte la mesure qui le jugera.
 
 ## 1. La règle de tri
@@ -36,7 +36,7 @@ lecteurs de `shadeLite` et `trace.wgsl` jusqu'à J0, sauf correctif. La ligne 0.
 | — | Niveau de défense du réseau : entre amis, ou salles publiques | À dire avant RD3 ([PLAN-RESEAU-DURCISSEMENT](../PLAN-RESEAU-DURCISSEMENT.md) §4). |
 | — | Licence du dépôt et crédit de l'A320 (GPL v2) | À faire valider par quelqu'un de compétent ; au minimum le crédit. |
 | D8, D7 | Les douze options coupées | Une condition de retrait écrite ou la suppression. |
-| D13 | Où héberger les gros binaires | Urgent : 591,6 Mo sur 600. |
+| D13 | Où héberger les gros binaires | Urgent : 591,6 Mo sur 600. **Décidé (Sam, 12 nov.) : sur son serveur**, pas en release GitHub ([ASSETS.md](../ASSETS.md)) ; 600,0 Mo sur 600 ce jour-là. |
 
 ## 3. La liste ordonnée
 
@@ -47,7 +47,7 @@ lecteurs de `shadeLite` et `trace.wgsl` jusqu'à J0, sauf correctif. La ligne 0.
 | 0.1 | Commiter la référence stratégique, l'analyse du streaming, les deux pages HTML, cet audit et les deux plans | QA-24, AR-22, PL-40 | S | fait (`fcddd376` ; les deux pages HTML avec la vague 0) |
 | 0.2 | Commiter le lot ST1 (12 fichiers, dans la copie de travail depuis le 6 novembre) après ses tests et son e2e `zones-usa-night` | ST-18, PL-41 | S | fait (`5be997b9`) |
 | 0.3 | Un hook avant push : `biome ci`, `tsc`, `check-wgsl`. La CI ne doit plus rougir sur du format. | QA-01 | S | fait : `.githooks/pre-push` + `scripts/pre-push.ts`, sur la révision exacte poussée (worktree temporaire), + `check-repo-size` ; ≈ 25 s ; [DEPLOY.md](../DEPLOY.md) |
-| 0.4 | Taille du dépôt et du site : décider où vont les binaires avant le prochain ajout | QA-03, D13 | S + décision | **orientation de Sam (10 nov.)** : samlepirate.org, une release GitHub ou son autre serveur Portainer ; choix « ces prochains jours » ([ASSETS.md](../ASSETS.md)) |
+| 0.4 | Taille du dépôt et du site : décider où vont les binaires avant le prochain ajout | QA-03, D13 | S + décision | **orientation de Sam (10 nov.)** : samlepirate.org, une release GitHub ou son autre serveur Portainer ; choix « ces prochains jours » ([ASSETS.md](../ASSETS.md)) ; **décidé le 12 nov. : le serveur de Sam** (une release GitHub écartée : pas de CORS) — la mise en place reste à faire |
 | 0.5 | Ignorer ou ranger les fichiers jetables (30 Mo, 36 sondes `zz-*`) | QA-25, AR-23 | S | fait : ignorés par git (donc Biome), exclus de `tsc` et de `bun run e2e` sauf par leur nom ; rien d'effacé ; [E2E.md](../E2E.md) §5 |
 | 0.6 | Crédit de l'A320 dans `CREDITS.md` et `credits.ts` | QA-22 | S | fait : A320-family (GPL v2) et police ECAM (GPL v3), vérifiés contre `assets/a320/README.md` par `title-credits` ; la licence du dépôt reste à trancher |
 | 0.7 | Previews de branches hors de l'origine de la production, ou clés hors `localStorage` partagé | QA-04 | S–M | fait (Sam : une preview ne doit pas pouvoir lire les clés) : `/test/` et `/ineptie/` retirées de l'origine de Pages, environnement `github-pages` limité à `main`, un worker et une page de fermeture (`pwa/retired-preview/`) vérifiés dans Chrome ; une preview ne revient que sur une autre origine ([DEPLOY.md](../DEPLOY.md)) |

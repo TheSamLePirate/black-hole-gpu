@@ -1739,7 +1739,8 @@ compilation) s'y ajoutent.
   d'éclairci, rien à midi ; lecture +0,4–0,8 ms (au-dessus de la cible), cuisson ~1,5 ms par image pendant 8–10 images par
   niveau. Au passage, les e2e de H3 et H5 tiennent l'exposition automatique au lieu de la couper (le ciel à son échelle
   physique : des étoiles en plein jour) — [progress/refraction-horizons/H5.md](progress/refraction-horizons/H5.md). H1c
-  (Shackleton) attend une décision de stockage : le dépôt est à 564 Mo de binaires pour 600.
+  (Shackleton) attend une décision de stockage : le dépôt est à 564 Mo de binaires pour 600. *(12 novembre : décidé — le
+  serveur de Sam, [ASSETS.md](ASSETS.md) ; H1c attend sa mise en place.)*
 - **4 et 5 novembre** (résumé ; le détail est dans chaque fiche) : **T7** en sept lots, avec la tournée de 16 côtes,
   l'eau par région, les parois et l'écume. **R1, R2, R3** faits ; **R4** fait et allumé (décision 42). **R5** et
   **R6a-ciel** faits, **R6b** validé, **R6a-terrain** estimé puis reporté. **Q4** : S1 actif, le scintillement figé ramené

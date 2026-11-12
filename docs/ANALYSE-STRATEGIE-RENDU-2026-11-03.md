@@ -1430,7 +1430,7 @@ puis **B (J1)**. Jusqu'à J0, geler les nouveaux lecteurs de `shadeLite` et de `
 **Décisions attendues de Sam** ([priorités §2](audit-2026-11-10/09-priorites-todo.md)) : le jalon (D1) ; la scène de vol
 de référence (D2, recommandée : décollage puis virage sur une ville IGN, Paris ou Le Bourget, cockpit, heure et météo
 fixées) ; le palier de cadence (D3 : 40 ms sur kerr-mini « palier 1 », puis M1 Max mesuré) ; le gel ; où héberger les
-binaires (D13).
+binaires (D13 — *décidé le 12 novembre : le serveur de Sam, [ASSETS.md](ASSETS.md)*).
 
 ### 22.4 Décisions de Sam (10 novembre 2026)
 

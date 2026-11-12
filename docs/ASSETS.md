@@ -86,7 +86,14 @@ When the site's 1 GB binds, the content-addressed packs can leave Pages: `manife
 and `scripts/build-pages.ts` fetches each file named there (checking its hash) into `_site/` from a
 release or a bucket. The hashes make the files immutable, so any static host or CDN can keep them.
 
-**Where (Sam, 10 November 2026, audit D13 — not decided yet, "in the coming days")**: on samlepirate.org, or as a
-GitHub release, or on Sam's other server running Portainer. The trigger is the Git budget, not only Pages': on
+**Where — decided (Sam, 12 November 2026, audit D13): on Sam's server**, not as a GitHub release. (On 10 November the
+options were samlepirate.org, a GitHub release, or Sam's other server running Portainer.) Why a release was set aside
+(analysis of 12 November): its downloads redirect to a GitHub storage host that sends no CORS header, so the game could not
+`fetch()` them from samlepirate.org — the CI would still have to copy them into `_site/`, freeing Git but neither the Pages
+site nor the Docker image; Sam's server can serve them to the game itself, same origin or with headers we set. **Not built
+yet**: which of Sam's servers and under which URL, how the CI and the lab machines (this Mac, kerr-mini, kerr-pc) upload and
+fetch them (the `manifest.json` above, hashes checked), and which families leave Git first, are for the lot that does it.
+The rule kept: a file once published is never replaced nor deleted (an older commit, an A/B between commits, still names
+it). The trigger is the Git budget, not only Pages': on
 10 November the tracked binaries come to 591.6 MB of the 600 MB that `check-repo-size` allows — the next asset lot
 that adds more than ≈ 8 MB fails the pre-push hook and the CI. Until then, a new heavy binary goes to Git LFS.
