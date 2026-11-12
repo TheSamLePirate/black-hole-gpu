@@ -3289,3 +3289,22 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   La vue de Chamonix n'a pas été reprise sur kerr-mini (deux essais partis à 1 km au-dessus du sol, la vue mal posée).
 - **Reste ouvert** : les bandes jaunes en diagonale entre les arbres sur la pente de Chamonix (avant et après) ; un houppier plus large
   que la demi-cellule (grand arbre isolé) demanderait des cellules plus grandes pour les grands arbres.
+
+## 2026-11-12T02:55Z — Décision : le différé confirmé pour le sol ; J1-1, l'horloge et la caméra de la frame
+
+- **Décision de Sam (12 nov.)** : « je confirme le différé pour le sol » — l'orientation de J1-4 est tranchée : pour le sol dense, la
+  visibilité suivie de l'ombrage en calcul, matériau puis éclairage (`withLiteDeferred`), à la place du forward du terrain ; le forward
+  pour les grands triangles (J1-5). Ordre : J1-2 et J1-1 d'abord (sans changer l'image) ; les tuiles CM0–CM3 menées en parallèle par
+  une session déléguée. Consigné dans PLAN-J1 (§4 ter, J1-4).
+- **J1-1** (stratégie §7.3) : 8 lectures d'horloge de l'encodage de plus passent par l'horloge de la frame (`frameMs()`) —
+  `performance.now()` dans `renderer.ts` 33 → 25, les restes étant des temps de compilation et des rappels de fin GPU (mesures murales
+  voulues) ; `FrameDesc.view` porte la caméra entière, calculée une fois au début de `frame()` : `writeParams` et la planification de
+  la sonde de lumière la lisent au lieu de la recalculer (une autorité de caméra pour l'image vivante ; les rendus hors ligne gardent
+  la leur, à leur instant). Fichiers : `src/frame-desc.ts`, `src/renderer.ts`, `tests/frame-desc.test.ts`, BH-API.
+- **Vérifié** : statiquement — hors trou de ver `cameraFrame` ne lit pas le temps (même caméra au bit près) ; dans un trou de ver, la
+  bouche lue à l'instant de la frame au lieu de l'horloge globale que `main.ts` vient de régler à la même valeur ; tsc ; `bun test`
+  2175 / 1 (l'échec : « the recovery on the wires », vol chaotique, passe seul 9/9 — écarté de la CI pour ça) ; e2e `wormhole-map`
+  3/3 (vol vivant à travers les deux recollements). **Non fait** : capture A/B de l'image vivante (`kernel-golden` rend hors ligne, chemin
+  inchangé) ; J0 non remesuré (aucun coût attendu : deux calculs de caméra en moins par image, non mesurés).
+- **Suite** : J1-2 — profondeur finale gardée et identité (`r32uint`, génération) avec leur premier lecteur ; J1-1 — les champs posés
+  par `main.ts` regroupés dans la description.

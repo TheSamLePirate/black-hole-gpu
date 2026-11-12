@@ -940,7 +940,7 @@ export class Renderer {
       this.eyeTrack = null;
       return null;
     }
-    const now = performance.now(),
+    const now = this.frameMs(),
       last = this.eyeTrack,
       v = this.streamVelocity ?? ([0, 0, 0] as Vec3);
     this.eyeTrack = { c: [...eye], at: now };
@@ -2735,7 +2735,7 @@ export class Renderer {
     // clock)
     const M = MAGNETOSPHERES[body];
     const zD = M.model.dipoleNorth;
-    const now = performance.now() / 1000;
+    const now = this.frameMs() / 1000;
     lines.forEach((f, idx) => {
       // (one longitude in two: the layers carry the shape, the lines the field's direction)
       if (idx % 2) return;
@@ -3503,7 +3503,10 @@ export class Renderer {
     const f = this.paramsF;
     const u = this.paramsU;
     this.featureKey = this.featuresOf(s) | ((this.costViewMode & 15) << 16) | (this.tuneKey << 20);
-    const cam = o.probe?.cam ?? cameraFrame(s);
+    // (the live frame's camera: the frame's description's — computed once at frame()'s start, PLAN-J1 J1-1 —; an offline job's,
+    // another instant's, its own)
+    const fd = this.frameDesc;
+    const cam = o.probe?.cam ?? (t === this.live && fd?.view && fd.simTime === time ? fd.view : cameraFrame(s));
     if (!o.probe) (this.lastCam = cam), (this.lastTime = time);
     // (none flown: a craft of the fleet near the camera brings the craft's pass and its light probe)
     if (!o.probe) this.craftsShown = !s.ship && (this.shipInView || this.shipOthers(s).some((q) => Math.hypot(...q.t) < 2e4));
@@ -5778,7 +5781,7 @@ export class Renderer {
       if (!this.firstFrameDoneAt || s.system === "none" || this.probeBusy || this.frameMs() - this.probeAt < 2000) return;
       // (the camera in our universe: they light nothing it can see — Gargantua's planets are specks
       // through the mouth — and the target's figures are ours)
-      const cam0 = cameraFrame(s);
+      const cam0 = this.frameDesc?.view && this.frameDesc.simTime === time ? this.frameDesc.view : cameraFrame(s);
       if (s.wormhole && cam0.region === "throat" && cam0.ell < 0) return;
       const list = sceneBodies(s, time).filter((b) => b.kind === BODY_PLANET && b.light < 0 && b.where !== 2);
       if (!list.length) return;
@@ -10572,7 +10575,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private sunSceneryFrame = new Float32Array(16);
   private sunRevision(L: number[], centres: number[][]): string {
     const builds = this.terrainSurfaceCache?.stats().builds ?? 0;
-    const now = performance.now();
+    const now = this.frameMs();
     if (builds !== this.sunBuilds && now - this.sunBuildsAt >= this.sunBakesEvery) {
       this.sunBuilds = builds;
       this.sunBuildsAt = now;
@@ -11466,6 +11469,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         flightMs: frameNow(),
         simTime: time,
         camera: { right: c.right, up: c.up, fwd: c.fwd, tanHalf: Math.tan((s.fov * Math.PI) / 360) },
+        view: c,
       });
     }
     if (s.earthTerrainRasterView === "off" && !s.earthTerrainRasterUse && s.earthPipeline !== "raster") this.terrainRaster?.suspend();
@@ -11479,7 +11483,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const cv = this.context.canvas as HTMLCanvasElement;
     if (cv.width < 1 || cv.height < 1) return null;
 
-    if ((sceneChanged && !this.evRedraw) || timeChanged) this.sceneAt = performance.now();
+    if ((sceneChanged && !this.evRedraw) || timeChanged) this.sceneAt = this.frameMs();
     this.evRedraw = false;
     if (sceneChanged) this.invalidate();
     this.configureOutput(s);
@@ -11503,8 +11507,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // weight faded in over 1.5 s from the bake's end — H3: the long shadows never pop in)
       const row = this.horizonMaps.tableRows(hzOn && this.hdMap.dem ? this.hdMap.name : null);
       if (row[0]! > 0) {
-        if (!this.horizonOnAt) this.horizonOnAt = performance.now();
-        row[0] = Math.min(1, (performance.now() - this.horizonOnAt) / 1500);
+        if (!this.horizonOnAt) this.horizonOnAt = this.frameMs();
+        row[0] = Math.min(1, (this.frameMs() - this.horizonOnAt) / 1500);
       } else this.horizonOnAt = 0;
       if (row.some((v, i) => v !== this.horizonRow[i])) {
         this.horizonRow = row;
@@ -11882,7 +11886,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    * lasts. The automatic block and the dynamic resolution leave these frames out (lastFrameDense).
    */
   private motionBlock(block: number, s: Settings): number {
-    const now = performance.now();
+    const now = this.frameMs();
     if (s.motionDetail === "off" || block < 3) {
       this.motionDenseOn = false;
       return block;
@@ -12034,7 +12038,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     };
     this.configureOutput(s);
     const cv = this.context.canvas as HTMLCanvasElement;
-    const now = performance.now();
+    const now = this.frameMs();
     const working = !job.paused && !job.done && !job.error;
     if (working) job.elapsed += (now - job.lastTick) / 1000;
     job.lastTick = now;

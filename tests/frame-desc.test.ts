@@ -35,3 +35,11 @@ test("a clock that went back (a reset): no negative step", () => {
   const f1 = nextFrameDesc(f0, { realMs: 1500, flightMs: 0, simTime: 0, camera: cam(1) });
   expect(f1.dtRealMs).toBe(0);
 });
+
+test("the camera's whole frame: carried as given (the live image's one authority), absent when not given", () => {
+  const view = { region: "hole" } as unknown as NonNullable<Parameters<typeof nextFrameDesc>[1]["view"]>;
+  const f0 = nextFrameDesc(null, { realMs: 0, flightMs: 0, simTime: 3, camera: cam(1), view });
+  expect(f0.view).toBe(view);
+  const f1 = nextFrameDesc(f0, { realMs: 16, flightMs: 16, simTime: 3.016, camera: cam(1) });
+  expect(f1.view).toBeUndefined();
+});

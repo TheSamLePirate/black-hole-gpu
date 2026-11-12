@@ -4,6 +4,7 @@
 // freshness tests, its animation clocks: one reading a frame, the same for every pass of it), the flight's clock (frameclock.ts —
 // stepped with the flight) and the scene's clock (sim.time). Pure.
 
+import type { CameraFrame } from "./camera";
 import type { Vec3 } from "./math/vec3";
 
 /** a camera as the frame sees it: its axes and its field */
@@ -29,6 +30,9 @@ export interface FrameDesc {
   camera: FrameCamera;
   /** the frame before's camera (null for the first) */
   prev: FrameCamera | null;
+  /** the camera's whole frame as the tracer reads it (camera.ts cameraFrame at simTime: its place, ZAMO frame, velocity, region) —
+   *  computed once a frame, the live image's one authority (writeParams, the light probe's schedule); shared, not copied: read only */
+  view?: CameraFrame;
 }
 
 export interface FrameInput {
@@ -36,6 +40,7 @@ export interface FrameInput {
   flightMs: number;
   simTime: number;
   camera: FrameCamera;
+  view?: CameraFrame;
 }
 
 /** The next frame's description from the last one and this frame's readings (copies: the frame's is not shared). */
@@ -49,5 +54,6 @@ export function nextFrameDesc(last: FrameDesc | null, input: FrameInput): FrameD
     simTime: input.simTime,
     camera: copy(input.camera),
     prev: last ? copy(last.camera) : null,
+    ...(input.view ? { view: input.view } : {}),
   };
 }
