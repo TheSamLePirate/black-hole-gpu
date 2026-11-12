@@ -279,7 +279,7 @@ ses pixels (le bit 4096 des paramètres libre), les deux modules de `check-wgsl`
 `trace.wgsl` 17 440 → 17 369 lignes. **Ce qui reste de J1-7** : le tableau du §3 visait « `shadeLite` réduit à son hors-domaine » —
 caduc depuis le différé (le sol dense reste `shadeLite` matériau puis éclairage) ; restent le décodage `decodeSurface` (contrôle de
 l'e2e `surface-id`, chemin des corps sans identité : gardé, propriétaire J1-2), `rigidMotionOn` (éteint, sans lecteur : à retirer ou à
-brancher avec le format `rg16float`), et la fiche J0 nouvelle (kerr-mini + M1 Max). **Reste de J1-5** : les bâtiments en forward
+brancher avec le format `rg16float`) ; **la fiche J0 nouvelle faite le 12** ([M1 Max](progress/j0/FICHE-m1max-2026-11-12.md) : frais 43,9 images/s, p50 24,9 ms, p95 32,6 ; soutenu 33,4/s — [kerr-mini](progress/j0/FICHE-kerr-mini-2026-11-12.md) : GPU p50 59,5 ms, 16,8/s). **Reste de J1-5** : les bâtiments en forward
 avec leur matériau (Q3) — seul l'appareil est fait.
 
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils

@@ -3,7 +3,7 @@
 Scène `toulon-hyeres-v1` ([contrat](../../J0-CONTRAT.md)), code du jeu à `5aeec7b0`, e2e
 `tests/e2e/j0-reference.e2e.test.ts` du même lot. Sortie 1920 × 1080, profil du joueur tel que livré (qualité « game »,
 résolution dynamique, échelle tenue à 0,75, décor « high », portée « veryFar »), Chrome 157, profil neuf à chaque
-lancement. Fiches : [M1 Max](FICHE-m1max-2026-11-10.md) (le vol frais périmé par [celle du soir](FICHE-m1max-2026-11-10-mer.md) : 36,8 → 42,5 images/s, intervalle p50 24,9 ms ; [séance complète du soir](FICHE-m1max-2026-11-10-mer-complet.md) : soutenu 24,9 → 31,4 images/s, ≈ +9 % par MHz), [kerr-mini](FICHE-kerr-mini-2026-11-10.md) (le vol périmé par [celle du soir, après la mer WebGPU](FICHE-kerr-mini-2026-11-10-mer.md) : GPU p50 65 → 61 ms) ; données brutes
+lancement. Fiches du 12 novembre (après J1-5, le rejet (b), J1-6, J1-7) : [M1 Max](FICHE-m1max-2026-11-12.md) (frais 43,9 images/s, p50 24,9 ms ; soutenu 33,4/s), [kerr-mini](FICHE-kerr-mini-2026-11-12.md) (GPU p50 59,5 ms, 16,8/s). Fiches : [M1 Max](FICHE-m1max-2026-11-10.md) (le vol frais périmé par [celle du soir](FICHE-m1max-2026-11-10-mer.md) : 36,8 → 42,5 images/s, intervalle p50 24,9 ms ; [séance complète du soir](FICHE-m1max-2026-11-10-mer-complet.md) : soutenu 24,9 → 31,4 images/s, ≈ +9 % par MHz), [kerr-mini](FICHE-kerr-mini-2026-11-10.md) (le vol périmé par [celle du soir, après la mer WebGPU](FICHE-kerr-mini-2026-11-10-mer.md) : GPU p50 65 → 61 ms) ; données brutes
 `j0-<machine>-2026-11-10.json` (le premier passage du M1 Max, mesuré déjà bridé et avec un défaut de démarrage des
 ablations corrigé depuis, gardé dans `j0-m1max-2026-11-10-passage1.json`).
 

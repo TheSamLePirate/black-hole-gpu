@@ -3564,3 +3564,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   bit n'était jamais posé), pas de planche.
 - **Reste de J1-7** : `rigidMotionOn` (éteint, sans lecteur), la fiche J0 nouvelle (kerr-mini + M1 Max) ; **reste de J1-5** : les
   bâtiments en forward avec leur matériau (Q3).
+
+## 2026-11-12T09:47Z — J1-7 : les fiches J0 nouvelles (M1 Max, kerr-mini) ; les points blancs de la mer relevés
+
+- **Contribution** (PLAN-J1 J1-7 « fiche J0 nouvelle (kerr-mini + M1 Max) » ; J0-CONTRAT) : la scène de référence remesurée après les lots
+  du jour. **M1 Max** (9691ed31, refroidi) : vol frais **43,9 images/s**, intervalle p50 24,9 ms, p95 32,6, p99 41,7, GPU p50 22,5 ms
+  (le 10 au soir : 40,9/s, 25,0 / 34 / 50, GPU 23,5 — pas un A/B : GPU à 1 296 MHz tout le vol cette fois) ; soutenu 33,4/s (Heavy).
+  **kerr-mini** (a6ab487c + le travail non commité de la session des bâtiments, levier éteint) : GPU p50 59,5 ms, 16,8/s ; ablations :
+  nuages −5,8, appareil −3,8, décor −3,7, HUD −2,4, ombre de l'appareil −1,7, eau −1,1 ms. Fiches `docs/progress/j0/FICHE-*-2026-11-12.md`.
+- **Relevé** (Sam, pendant la séance du M1 Max) : des points blancs qui scintillent sur la mer et dans la brume de l'horizon — des rangées
+  de pixels régulièrement espacés, **déjà sur la capture du 10** (e00182a2) : pas une régression ; cause supposée l'ombrage clairsemé
+  du raster ; PROBLEMES-A-REGLER, planche `docs/progress/j0/points-blancs-mer-2026-11-12.jpg`. Leçon (Sam) : en vol tenu à l'autopilote,
+  le train sorti, sinon il remonte — la sonde et `identity-reject` corrigés (a6ab487c).
+- **Non fait** : la cause des points (sonde à refaire en vol tenu) ; `rigidMotionOn` ; les bâtiments en forward (session déléguée en cours).
