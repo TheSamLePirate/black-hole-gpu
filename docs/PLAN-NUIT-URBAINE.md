@@ -1,5 +1,11 @@
 # Plan — la ville de nuit (vols de nuit, vues de ville)
 
+**État (12 novembre 2026, relu sur le journal ; le code fait foi)** : NU4 fait (6d11d6b5) ; **NU1 + NU2 faits le 6 novembre**
+(les rues OpenStreetMap cuites en fond de carte assombri et en lampadaires, `src/system/night-roads.ts` ; e2e `paris-night-flight`,
+`nyc-sunset`, `lebourget-night-ils` — coût GPU non mesuré) ; NU5 en partie (la lumière de la ville entre dans l'adaptation de l'œil,
+`cityLampAt` ; la moyenne encore réglée à la main, `CITY_ADAPTATION`) ; **NU3, NU6, NU7, NU8 non commencés**. Le plan était resté
+à « NU1+NU2 en cours » (§2) : corrigé.
+
 **Demande de Sam (6 novembre 2026)** : « règle le problème des vols de nuit : luminosité du sol, vitres illuminées, lumière des
 routes, voitures, lampadaires de loin (de haut surtout, c'est les formes caractéristiques des villes de nuit) ».
 
@@ -56,6 +62,6 @@ la même moyenne que le rendu final).
 
 ## 2. Ordre et preuves
 
-NU4 (fait : fenêtres à distance, 6d11d6b5) → NU1+NU2 (en cours) → NU3 → NU5 → NU6 → NU8 → NU7. Chaque lot : e2e `nyc-sunset` (NYC et Paris, de près et
+NU4 (fait : fenêtres à distance, 6d11d6b5) → NU1+NU2 (**faits le 6 novembre**, `night-roads.ts`, journal 2026-11-06T09:38Z) → NU3 → NU5 → NU6 → NU8 → NU7. Chaque lot : e2e `nyc-sunset` (NYC et Paris, de près et
 d'avion), planche avant/après face aux photographies, coût GPU mesuré sur kerr-mini, journal `progress-to-destination.md`,
 `docs/GRAPHICS-PIPELINE.md` si une texture ou une passe change.

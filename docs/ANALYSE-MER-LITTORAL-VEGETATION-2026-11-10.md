@@ -7,6 +7,12 @@ leurs performances à notre projet. Le code fait foi ; les deux projets ont ét�
 de leur outillage exécuté), web-ocean a aussi été **mesuré** sur nos deux machines. Aucune ligne de leur code n'est reprise
 à ce jour ; aucune dépendance n'est ajoutée.
 
+**Suite (relevé le 12 novembre ; l'analyse reste datée du 10)** : les reprises de la mer M1–M5 (§5.2) sont devenues les lots
+S0–S6 de [PLAN-MER-WEBGPU](PLAN-MER-WEBGPU.md), plus tôt que prévu ici : M1 → S1 (fait), **M5, la surface déplacée → S2, faite
+le 10 novembre** (CDLOD courbe, +4,3 ms à 2,4 m sur kerr-mini ; crêtes devant la terre ensuite) — et non à J4 comme l'écrivent le
+tableau §5.2 et le §7 —, M3 l'écume en cartes monde → S4 (fait), M2 l'ombrage → S3 (en partie : l'aspect de l'écume à juger
+par Sam), M4 la sonde/le cube du ciel → S5 (en partie). Ce qui reste à J4 : la houle côtière hors du noyau de l'eau (+2 à 2,6 ms).
+
 **Ce qui est mesuré** (10 novembre, 1920 × 1080) : web-ocean sur ce M1 Max et sur kerr-mini ; notre mer dans les mêmes vues
 sur kerr-mini (§2.3) : **2,6 à 2,8 fois plus chère, nettement moins belle**. **Ce qui ne l'est pas** : tout coût de BakedVoxelLighting (il ne publie aucun temps GPU de sa mer ni de
 son terrain, et n'a pas été lancé chez nous) ; tout gain des techniques proposées chez nous — ce sont des propositions,
