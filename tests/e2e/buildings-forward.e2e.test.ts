@@ -15,7 +15,7 @@ import { readPng } from "./lib/png";
 // read back, against the visibility's building pixels) and tinted (debug 2), the triangle's normal against shadeLite's (debug 1:
 // green within 25°, red off, blue none to compare — counted where the view differs from the "on" shot); the passes timed over 60
 // frames each side (earth lite, its light and finishing, buildings forward and its marking).
-// BF_PLACE: another view (lat,lon,height over the ground,heading,pitch).
+// BF_PLACE: another view (lat,lon,height over the ground,heading,pitch[,speed] — under 120 m/s for the city's whole scene).
 // Output: remote-results/buildings-forward/<view>-{off,on,off2,tint,normals}.png, buildings-forward.json (BF_OUT).
 // Done when: placed level over the relief in (lib/place.ts), the scenery whole (90 s at most, what is missing said), the forward
 // pipeline built (60 s at most, its failure said), every shot taken and compared, no GPU error.
@@ -85,18 +85,22 @@ test.skipIf(!E2E)(
         await app.js(
           `(() => { __bh.renderer.buildingsForward = false; __bh.renderer.buildingsForwardDebug = 0; __bh.game.setDate(${JSON.stringify(v.date)}); __bh.game.set("weather", "fair"); document.body.classList.add("hide-ui"); return 1; })()`,
         );
-        // (BF_PLACE="lat,lon,height over the ground,heading,pitch": another view — façades near, e.g. Manhattan's avenues)
+        // (BF_PLACE="lat,lon,height over the ground,heading,pitch[,speed]": another view — façades near; a speed under 120 m/s for the
+        // city's whole scene: over it the scenery chains quick scenes, a flight too fast for a full one — scenery.ts fastFlight —, the
+        // buildings near never drawn, a frozen craft at 140 m/s counted as fast — Marseille, Manhattan, 12 Nov)
         const P = (process.env.BF_PLACE ?? "43.1195,5.9315,45,350,-8").split(",").map(Number);
-        const placed = await placeLow(app, [P[0]!, P[1]!, P[2]!, P[3]!, 140], P[4]!);
+        const placed = await placeLow(app, [P[0]!, P[1]!, P[2]!, P[3]!, P[5] ?? 140], P[4]!);
         const world = await app
           .waitFor(
-            `(() => { const r = __bh.renderer, sc = r.earthScenery.stats(); return r.earthTiles.pending === 0 && sc.status === "ready" && !sc.pending; })()`,
+            `(() => { const r = __bh.renderer, sc = r.earthScenery.stats(); return r.earthTiles.pending === 0 && sc.status === "ready" && !sc.quick && !sc.pending; })()`,
+            // (the whole scene, not its quick first pass — the forests first, the buildings after: at the quick one the quays and
+            // the streets stood under trees, no building near — Marseille, Manhattan, 12 Nov)
             90_000,
           )
           .then(
             () => "all in",
             async () =>
-              `not all in after 90 s: ${JSON.stringify(await app.js(`(() => { const r = __bh.renderer, sc = r.earthScenery.stats(); return { tiles: r.earthTiles.pending, scenery: sc.status, pending: sc.pending }; })()`))}`,
+              `not all in after 90 s: ${JSON.stringify(await app.js(`(() => { const r = __bh.renderer, sc = r.earthScenery.stats(); return { tiles: r.earthTiles.pending, scenery: sc.status, quick: sc.quick, pending: sc.pending }; })()`))}`,
           );
         await app.settled(60_000);
         await app.exposureSettled();

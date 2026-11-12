@@ -337,6 +337,11 @@ selon l'e2e) n'y a dessiné que la ligne des tours à quelques kilomètres ; la 
 de Times Square non examiné). Ce qu'il montre confirme Toulon : 21 563 des 22 813 pixels de bâtiment pris par le fragment, l'écart
 allumé/éteint (0,54 jour, 0,51 nuit sur 255) sous la dérive entre deux captures éteintes (0,83, 0,63), les normales d'accord sur les
 tours (vert), la passe 2,1–2,3 ms. Planche `docs/progress/j1/j1-5-batiments-forward-new-york.jpg`.
+**Puis Marseille (Vieux-Port, 30 m au-dessus de l'eau)** : à 140 m/s le décor reste en scènes rapides (`fastFlight` : un appareil gelé
+à plus de 120 m/s compte comme rapide — c'était aussi Times Square) ; à 90 m/s, la scène complète dessinée, **les quais restent sous
+des arbres, presque aucun bâtiment** (217 pixels) — un défaut du décor, pas du forward (PROBLEMES-A-REGLER, 12 nov.). Le pilote y fait
+ce qu'il fait ailleurs (110 / 217 pixels, écart sous la dérive, passe ~2 ms). **La vue de façades proches attend ce défaut du décor.**
+Planche `docs/progress/j1/j1-5-batiments-forward-marseille.jpg`.
 
 **J1-7, `rigidMotionOn` — gardé éteint, avec son propriétaire et sa condition de retrait (12 novembre).** Relevé : aucun lecteur ne lit
 le mouvement analytique du rigide (z −1) — `temporal`, `taau` et le flou de mouvement ne lisent la cible de mouvement que là où z > 0,5

@@ -3619,3 +3619,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   tours au loin — **pas de façade proche** ; ce qui est mesuré confirme Toulon (fragment 21 563 / 22 813 pixels de bâtiment, écart
   allumé/éteint sous la dérive, passe 2,1–2,3 ms). Planche `docs/progress/j1/j1-5-batiments-forward-new-york.jpg`. La décision (a)/(b)/(c)
   reste à Sam ; la vue proche reste à trouver (pourquoi Manhattan n'a pas de bâtiments autour de Times Square : non examiné).
+
+## 2026-11-12T10:51Z — Les façades proches cherchées pour le forward des bâtiments : un défaut du décor trouvé
+
+- e2e `buildings-forward` : `BF_PLACE` prend la vitesse ; attente de la scène complète (`!quick`). Trouvé : un appareil gelé au-dessus de
+  120 m/s fait chaîner au décor des scènes rapides (`fastFlight`) — les bâtiments proches jamais dessinés (Times Square). À 90 m/s
+  sur le Vieux-Port de Marseille, la scène complète dessinée, **les quais sont couverts d'arbres, presque sans bâtiments** : défaut du
+  décor (cause supposée : BD TOPO absent, le MNH plantant des arbres sur le bâti), PROBLEMES-A-REGLER ; planches Marseille et New York.
+  Le pilote du forward y fait comme ailleurs ; la décision (a)/(b)/(c) reste à Sam, (b) sans vue valable tant que le décor n'est pas réglé.

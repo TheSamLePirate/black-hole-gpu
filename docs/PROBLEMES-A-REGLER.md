@@ -3,6 +3,21 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Des villes couvertes d'arbres, sans bâtiments proches, dans les e2e (Marseille, Toulon, Manhattan)
+
+- **Observé** (12 nov. 2026, e2e `buildings-forward` sur kerr-mini, e482082b ; planches `docs/progress/j1/j1-5-batiments-forward-marseille.jpg`,
+  `…-new-york.jpg`, `…-batiments-forward.jpg`) : le Vieux-Port de Marseille vu à 30 m au-dessus de l'eau — **les quais couverts d'arbres
+  d'automne, presque aucun bâtiment** (217 pixels de bâtiment dans la vue, scène complète « all in ») ; la Darse de Toulon, des arbres
+  sur la vieille ville au premier plan ; Times Square à 60 m, aucun bâtiment près de l'appareil, les tours seulement au loin.
+- **Une cause trouvée, dans l'e2e** : un appareil placé (et gelé) au-dessus de 120 m/s fait chaîner au décor des scènes rapides
+  (`scenery.ts` `fastFlight`, T8m — voulu en vol rapide) : la scène complète, celle des bâtiments, ne vient jamais (`quick` reste vrai
+  plus de 3 min). Corrigé dans l'e2e (`BF_PLACE` à 90 m/s ; attente de `!quick`). **Mais à 90 m/s, la scène complète dessinée, les quais
+  de Marseille restent sous les arbres.**
+- **Cause supposée, non vérifiée** : les bâtiments BD TOPO absents (requêtes IGN en échec ou refusées ?) et le modèle de hauteur de la
+  canopée IGN (MNH, I4 — il porte aussi la hauteur des bâtiments) qui plante alors des arbres où sont les immeubles. À vérifier :
+  `earthScenery.stats()` (bâtiments, arbres, sources, échecs) sur cette vue, les réponses BD TOPO du worker, le masque bâti du MNH.
+- **Conséquence** : la comparaison du forward des bâtiments sur des façades proches (PLAN-J1, piste (b)) n'a pas encore de vue valable.
+
 ## Des points blancs qui scintillent sur la mer et dans la brume de l'horizon (scène J0, Toulon-Hyères)
 
 - **Observé** (Sam, 12 nov. 2026, e2e `j0-reference` sur ce Mac, fenêtre visible) : « plein de points blancs (pixels) qui apparaissent
