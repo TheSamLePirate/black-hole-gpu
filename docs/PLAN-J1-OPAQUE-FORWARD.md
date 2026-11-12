@@ -172,6 +172,13 @@ pixels (`withLiteDeferred`) : forêt 42,1 → 39,5 ms, **J0 60,0 ms** (61,5) ; l
 l'ombrage en calcul, matériau puis éclairage (`withLiteDeferred`), remplace le « forward du terrain » de J1-4 ; le forward est réservé
 aux maillages à grands triangles (J1-5 : bâtiments, appareil). Le pilote `forwardGround` reste éteint, à retirer à J1-7 s'il n'a
 plus d'utilisateur. Ordre donné le même jour : **J1-2 et J1-1 d'abord** (ils avancent sans changer l'image).
+**J1-2, l'identité (12 novembre)** : le mot du contrat (objet 20 bits | génération 12 bits, 0 rien) défini dans
+`src/system/surface-id.ts` (`packSurfaceId`, `decodeSurface` : la cible de visibilité telle qu'elle est dessinée — sol et son niveau,
+arbre, bâtiment, boîte, pont, éolienne, pylône, nuage, rien —, la génération étant la publication du décor `earthScenery.revision`) ;
+premier lecteur, `renderer.surfaceAt(x, y)` (diagnostic et sélection : relu de la cible, rien de dessiné ne change) ; e2e
+`surface-id` (Maures : ciel, 14 arbres, 20 sol sur une grille 7 × 7, le même mot relu). **Pas de cible `r32uint` ni de profondeur
+gardée encore** : leurs lecteurs qui changent l'image (le rejet de l'historique par identité, l'appareil composé par la profondeur —
+J1-5) les créeront ; l'adaptateur `decodeSurface` se retire quand la passe écrira le mot elle-même.
 
 **La voie retenue pour J1-3 (10 novembre, nuit)** : ne pas déplacer les fonctions hors de `trace.wgsl` (32 tests et les outils
 de noyaux le lisent comme texte ; un déplacement multiplierait les sources), mais **en faire la bibliothèque** : un pipeline raster

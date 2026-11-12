@@ -3324,3 +3324,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   z 11–14 jamais entiers en 60 s. Détail : PLAN-CHARGEMENT-MONDE §8.
 - **Limites** : ±10 % non tenu sur la fibre (±12 % entre deux passes) ; vols de JFK et de Chamonix non passés ; aucune 429 vue
   par la page (le SW en absorbe : à journaliser, CM2). Docs : plan, BH-API, E2E-CATALOGUE, GRAPHICS-PIPELINE §7, README.
+
+## 2026-11-12T03:30Z — J1-2 : l'identité de surface et son premier lecteur (sans changer l'image)
+
+- **Contribution** (stratégie §7.4, PLAN-J1 J1-2) : le mot d'identité du contrat (objet 20 bits | génération 12 bits ; 0 rien) écrit
+  en code — `src/system/surface-id.ts` (`packSurfaceId`/`unpackSurfaceId`, `decodeSurface` : la cible de visibilité actuelle et ses
+  canaux à sens multiples traduits en une réponse typée : sol et son niveau, arbre, bâtiment, boîte, pont, éolienne, pylône, nuage,
+  rien ; la génération = la publication du décor `earthScenery.revision`) ; premier lecteur `renderer.surfaceAt(x, y)` (diagnostic,
+  sélection) relu de la cible telle qu'elle est dessinée. Aucune cible, passe ni shader ajoutés : l'image ne change pas.
+- **Vérifié** : tests `surface-id` (2/2 : le mot, chaque sorte écrite par la passe) ; tsc ; **observé** (e2e `surface-id`, ce Mac,
+  Maures à 450 m) : grille 7 × 7 — la rangée du haut tout ciel, 14 arbres, 20 sol ; un arbre relu donne le même mot, sa génération celle
+  du décor ; aucune erreur GPU. BH-API, E2E-CATALOGUE, PLAN-J1.
+- **Limites, suite** : pas encore de cible `r32uint` ni de profondeur gardée — leurs lecteurs changent l'image (rejet de l'historique
+  par identité ; appareil composé par la profondeur, J1-5) ; l'adaptateur `decodeSurface` se retire quand la passe écrira le mot.
+  Objet sur 20 bits : la grille de la forêt (≤ ~872 000 cellules à la portée « high ») y tient, de justesse.

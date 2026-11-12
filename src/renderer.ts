@@ -191,6 +191,7 @@ import { ChartOverlay } from "./chartoverlay";
 import overlayWGSL from "./shaders/overlay.wgsl" with { type: "text" };
 import { cameraFrame, gpuTheta, homePosition, type CameraFrame } from "./camera";
 import { type FrameDesc, nextFrameDesc } from "./frame-desc";
+import { decodeSurface, type SurfaceAt } from "./system/surface-id";
 import { PARAMS, PARAMS_FLOATS, PARAMS_SIZE, PARAMS_V4 } from "./gen/params-layout";
 import { frameNow } from "./frameclock";
 import { mouth, radius, setSceneTime } from "./wormhole";
@@ -10785,6 +10786,26 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    * each row's ground distance [m] (0: no triangle, the tracer's), its level step (0 the patch, 1 its first far ring …; −1
    * none) —, and the target's size.
    */
+  /** The surface's identity at a point of the image (PLAN-J1 J1-2, system/surface-id.ts): what the visibility pass drew there —
+   *  ground (its level), tree, building, box, bridge, turbine, pylon, cloud, none —, its distances and the contract's word (object 20
+   *  bits | the scenery's publication 12 bits). Read back from the visibility target as drawn (`xFrac`, `yFrac` ∈ [0, 1], from the
+   *  top left); null without the raster's target. A diagnostic and the selection's reader: nothing drawn changes. */
+  async surfaceAt(xFrac: number, yFrac: number): Promise<(SurfaceAt & { x: number; y: number; generation: number }) | null> {
+    const tex = this.terrainRaster?.distanceTexture();
+    if (!tex) return null;
+    const x = Math.min(Math.max(Math.round(xFrac * tex.width), 0), tex.width - 1);
+    const y = Math.min(Math.max(Math.round(yFrac * tex.height), 0), tex.height - 1);
+    const buf = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyTextureToBuffer({ texture: tex, origin: [x, y] }, { buffer: buf, bytesPerRow: 256 }, [1, 1]);
+    this.device.queue.submit([enc.finish()]);
+    await buf.mapAsync(GPUMapMode.READ);
+    const f = new Float32Array(buf.getMappedRange().slice(0));
+    buf.unmap();
+    buf.destroy();
+    const generation = this.earthScenery.revision;
+    return { ...decodeSurface(f, generation), x, y, generation };
+  }
   async rasterColumn(
     xFrac = 0.5,
   ): Promise<{ width: number; height: number; rows: { d: number; step: number; m?: number; age?: number }[] } | null> {
