@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 16:45 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:12 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -48,7 +48,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail ; **E3 non ouvert** (seule la présence du code pourrait rendre, ~0,4 ms mesurés par E2) |
-| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **mené selon les recommandations du plan** (consigne « continue » de Sam ; [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §10, ses 5 questions ouvertes) ; **J3-1 commencé : l'appareil éclairé par le Soleil incident du sol** (mesuré : direction exacte, éclairement ×193 à 19:15 UTC sur J0) ; **son air, sonde : la marche de l'appareil et la table du sol à 0,2 % — rien à changer** ; **la lumière du ciel, sonde : l'appareil +2–5 % sur le sol de jour, +10–12 % au coucher — les harmoniques de sa sonde en font +8–13 %, son ciel tracé est à −5…+9 % du sol (une décision d'image à présenter)** ; de J3-0 : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms), **la référence de ville sur Paris** (GPU p50 53,2 ms sur le mini ; le décor premier poste, −8,4 ms) |
+| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **mené selon les recommandations du plan** (consigne « continue » de Sam ; [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §10, ses 5 questions ouvertes) ; **J3-1 commencé : l'appareil éclairé par le Soleil incident du sol** (mesuré : direction exacte, éclairement ×193 à 19:15 UTC sur J0) ; **son air, sonde : la marche de l'appareil et la table du sol à 0,2 % — rien à changer** ; **la lumière du ciel, sonde : l'appareil +2–5 % sur le sol de jour, +10–12 % au coucher — les harmoniques de sa sonde en font +8–13 %, son ciel tracé est à −5…+9 % du sol (une décision d'image à présenter)** ; **J3-2 commencé : l'appareil et ses traînées à travers l'air de leur distance** (mesuré : vues 300 m / 3 km / 10 km, coût ≈ 0,2 ms au bruit) ; de J3-0 : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms), **la référence de ville sur Paris** (GPU p50 53,2 ms sur le mini ; le décor premier poste, −8,4 ms) |
 | Rendu (33d89754) | AR-07 (vague 4.3, décision de Sam relayée) : le renderer sur `ViewPose` | **fait** : `renderer.frame(viewPose, settings, …)` ; Paris et J0 volés sans erreur, `gpu-startup` sans nouvel échec |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
@@ -5360,4 +5360,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   factice, retiré après le fichier) ; **après** 3/3 ; unitaires audio 30/0 ; e2e `audio-space` et `tars-duck` 11/0 (ce Mac, fenêtre visible).
 - Limites : l'état « interrupted » essayé sur un contexte factice, pas sur un vrai Safari ; un `statechange` n'est pas écouté (la relance
   attend le geste ou le retour suivant) ; nœuds vivants et coût HRTF non mesurés ; le gain en GC non mesuré.
+
+## 2026-11-13T17:12Z — J3-2, premier pas : l'appareil à travers l'air de sa distance
+
+- Contribution : stratégie §15 J3 (« attribuer correctement l'air aux distances »), PLAN-J3 J3-2 ; une responsabilité commune : la table aérienne
+  du traceur, lue désormais par le sol et l'appareil.
+- Réalisé : `ship.wgsl` `shipAir` (liaisons 41–43 : `aerialTex`, son échantillonneur ; uniforme `air` ; portée et échelle en `sh[12]` écrites par
+  `trace.wgsl` `keyLight` dans `envBuf` + 7 et recopiées par `envSH`) appliqué à la coque et aux traînées (leur `exp(−d/120 km)` retiré), au-delà
+  de 50 m ; `ship.ts` `setAerial`, `ShipView.airOn` ; `renderer.ts` (la table liée, `shipAirAllowed`) ; e2e J0 phase `keyhaze`, ablation `shipAir`.
+  Docs : PLAN-J3 §10, GRAPHICS-PIPELINE E12a, BH-API, E2E-CATALOGUE.
+- Preuves : **mesuré** (kerr-mini) : écart avec / sans l'air au centre (p99) 10 / 33 / 59 à 300 m / 3 km / 10 km, A/A 1,3 (run `…-j3-keyhaze4`) ;
+  coût J0 0,25–0,7 ms puis ≈ 0,2 ms au bruit avec la coupure à 50 m (`…-j3-shipair-cost`, `-cost2`). **Observé** : à 10 km l'appareil prend la
+  brume du sol voisin (vues). `check-wgsl` 82/82, budget des noyaux 69/69, tsc (mes fichiers), biome. Trois runs de `keyhaze` ratés sur la mise en
+  place de la vue (montage « chase » sans distance, replacement de « around », moyenne diluée), montrés et corrigés.
+- Limites : panaches, feux, verrières sans air ; la part lunaire (nuit) ignorée ; la portée de la table vient de la sonde (une image ou deux de
+  retard, figée si la lumière principale s'éteint).
+- Suite : les feux et panaches ; puis J3-3 (les ombres reçues par l'appareil), selon l'ordre du plan.
 

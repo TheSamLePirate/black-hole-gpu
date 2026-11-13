@@ -271,6 +271,8 @@ export interface ShipView {
   /** (decision 42) the key light's direction in the camera's axes (the near world's star), null none: the craft's shadow map kept
    *  while it turns by under 0.3° against the craft */
   keyDir?: V3 | null;
+  /** (PLAN-J3 J3-2) the tracer's aerial table written this frame: the craft seen through the air of its distance (ship.wgsl shipAir) */
+  airOn?: boolean;
   /** (R4b) the air's lift of what is seen afar: (x + y d) d² [m], z the fade's angle, w 1 on — along sea.n; none without a sea */
   lift?: Float32Array | null;
   /** the craft flown (its mesh, its thrusters) */
@@ -395,7 +397,9 @@ const GLASS_AT = PCD_AT + 3 * 16;
  *  craft afar (S.lift — R4b) */
 const SHREF_AT = GLASS_AT + 2 * 16;
 const LIFT_AT = SHREF_AT + 2 * 16;
-const SHIP_UNIFORM_BYTES = LIFT_AT + 16;
+/** (PLAN-J3 J3-2) the craft's air: z 1 when the tracer's aerial table is written this frame */
+const AIR_AT = LIFT_AT + 16;
+const SHIP_UNIFORM_BYTES = AIR_AT + 16;
 const INST_FLOATS = 20;
 /** the posed aircraft's parts at most (the F-35's 119 — src/f35/model.ts —, the A320's 172 — src/a320/rig.ts), and how
  *  many aircraft drawn with their parts posed */
@@ -467,6 +471,7 @@ interface ShipTargetRes {
   sheathBind?: GPUBindGroup;
   /** the trails' bind group, with this target's traced depths */
   trailBind?: GPUBindGroup;
+  trailGen?: number;
   trailMoments?: GPUBuffer;
   /** the lamps' glare's bind group, with this target's traced depths */
   lampBind?: GPUBindGroup;
@@ -782,9 +787,9 @@ export class ShipRenderer {
     const d = device;
     // (the probe's texels, then its key light: trace.wgsl env; then the J3-1 probe — PLAN-J3: the key's air two ways — the march's
     // transmittance and the clouds', the table's and the height —, the sky's light on a level surface two ways — the ground's, the craft's —,
-    // the up direction on the probe's axes)
+    // the up direction on the probe's axes —; then the aerial table's reach for the craft's air — J3-2)
     this.envBuf = d.createBuffer({
-      size: (ENV_W * ENV_H + 7) * 16,
+      size: (ENV_W * ENV_H + 8) * 16,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     });
     // (COPY_SRC: the sea's mirrored sky takes the GGX levels — sea/fft-gpu.ts takeSky)
@@ -1732,6 +1737,26 @@ export class ShipRenderer {
   }
 
   private bindGen = 0;
+  /** (PLAN-J3 J3-2) the tracer's aerial table (renderer.ts aerialTex), read by the hull and the trails (ship.wgsl shipAir); set once */
+  private aerial: { a: GPUTexture; b: GPUTexture; samp: GPUSampler } | null = null;
+  setAerial(a: GPUTexture, b: GPUTexture, samp: GPUSampler) {
+    this.aerial = { a, b, samp };
+    // (bound with the rest once the craft is loaded — load(); again now if it is)
+    if (this.ready) this.bind();
+  }
+  private aerialEntries(): GPUBindGroupEntry[] {
+    const d = this.device;
+    const A = (this.aerial ??= (() => {
+      const t = () => d.createTexture({ size: [1, 1, 1], dimension: "3d", format: "rgba16float", usage: GPUTextureUsage.TEXTURE_BINDING });
+      return { a: t(), b: t(), samp: d.createSampler() };
+    })());
+    return [
+      { binding: 41, resource: A.a.createView() },
+      { binding: 42, resource: A.b.createView() },
+      { binding: 43, resource: A.samp },
+    ];
+  }
+
   private bind() {
     const d = this.device;
     const raw = (l: number) => this.envRaw.createView({ baseMipLevel: l, mipLevelCount: 1 });
@@ -1831,6 +1856,7 @@ export class ShipRenderer {
       },
       { binding: 27, resource: am.albedo.createView({ dimension: "2d-array" }) },
       { binding: 28, resource: am.normal.createView({ dimension: "2d-array" }) },
+      ...this.aerialEntries(),
     ];
     this.bindGen++;
 
@@ -2435,6 +2461,7 @@ export class ShipRenderer {
       new Float32Array(G ? [G.rain, G.clock, G.airspeed, G.frost, ...G.wipers, ...G.rates] : [0, 0, 0, 0, 0, 0, 0, 0]),
     );
     this.device.queue.writeBuffer(this.uniform, LIFT_AT, new Float32Array(sea && v.lift ? v.lift : [0, 0, 0, 0]));
+    this.device.queue.writeBuffer(this.uniform, AIR_AT, new Float32Array([0, 0, v.airOn ? 1 : 0, 0]));
     // (the flown craft's x and y axes in C — the columns of R —, else the camera's: S.shRefA/B, read by no shader since the map's
     // frame went back to the camera's, 5 Nov — its slots kept for the layout; to retire with the uniform's next reshuffle)
     this.device.queue.writeBuffer(
@@ -3156,7 +3183,7 @@ export class ShipRenderer {
         for (let i = 0; i < this.jetCount; i++) if (this.jetInside[i] === inside) pp.draw(36, 1, 0, i);
       }
       if (trails) {
-        if (!res.trailBind || res.trailMoments !== mb) {
+        if (!res.trailBind || res.trailMoments !== mb || res.trailGen !== this.bindGen) {
           res.trailBind = this.device.createBindGroup({
             layout: this.pipes.trail.getBindGroupLayout(0),
             entries: [
@@ -3164,9 +3191,11 @@ export class ShipRenderer {
               { binding: 1, resource: { buffer: this.shBuf } },
               { binding: 11, resource: { buffer: mb } },
               { binding: 19, resource: { buffer: this.trailBuf } },
+              ...this.aerialEntries(),
             ],
           });
           res.trailMoments = mb;
+          res.trailGen = this.bindGen;
         }
         pp.setPipeline(this.pipes.trail);
         pp.setBindGroup(0, res.trailBind);

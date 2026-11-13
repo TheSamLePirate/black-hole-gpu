@@ -17304,6 +17304,9 @@ fn keyLight() {
     // (PLAN-J3 J3-1, the probe: beside the march, the ground's model of the same Sun at the camera — the transmittance table,
     // sunThrough, its height and geodetic vertical as the clouds' light reads them —, written after the key (renderer.readShipKey).
     // Measured 13 Nov 2026 on J0, 15:30 to 19:15 UTC: the two within 0.2 % — the craft's march kept)
+    // (PLAN-J3 J3-2: the aerial table's reach from the camera — apFar — and the metres per unit, for the craft's air: ship.wgsl shipAir,
+    // through the probe's harmonics' buffer — envSH copies it to sh[12])
+    if (arrayLength(&envBuf) >= ENV_W * ENV_H + 8u) { envBuf[ENV_W * ENV_H + 7u] = vec4f(apFar(nearCam()), P.near4.w, 1.0, 0.0); }
     if (arrayLength(&envBuf) >= ENV_W * ENV_H + 7u) {
       envBuf[ENV_W * ENV_H + 2u] = vec4f(tMarch, csT);
       envBuf[ENV_W * ENV_H + 3u] = select(vec4f(-1.0), vec4f(sunThrough(airHeight(nearCam()), dot(geoQ(nearCam()), normalize(toBody(L)))), airHeight(nearCam())), isEarth(kn));

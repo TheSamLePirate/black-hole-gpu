@@ -184,3 +184,13 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   l'appareil — une décision d'image à présenter avec des vues, pas un réglage.
   **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
   ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.
+- **J3-2, premier pas — l'appareil à travers l'air de sa distance** (13 nov., ~17:12 UTC). La coque (`ship.wgsl` `fs`) et les traînées
+  (`trailFs`) lisent la table aérienne du traceur (`aerialTex`, la même que le sol : `shipAir`, c × T + L × alpha, au-delà de 50 m) ; sa
+  portée et l'échelle viennent de `keyLight` (`sh[12]`) ; les traînées perdent leur `exp(−d/120 km)` ad hoc. Interrupteur de comparaison
+  `renderer.shipAirAllowed`. **Mesuré** (kerr-mini, J0, `J0_PHASES=keyhaze`, vue « around » de côté, champ resserré) : écart avec / sans
+  (p99 du cadre central, 0–255) **10 à 300 m, 33 à 3 km, 59 à 10 km** ; A/A 1,3 — l'appareil lointain prend la brume du sol voisin (vues).
+  Coût sur J0 (ablation `shipAir`, cockpit) : 0,25–0,7 ms avant la coupure à 50 m, **≈ 0,2 ms après, au bruit**. **Non fait** : les
+  panaches, les feux et leurs halos, les verrières (`jetGlass`) sans air ; la nuit (la part lunaire de la table) ; l'air au-delà de la
+  table (au-dessus de l'air, une autre planète). Trois runs du test ont échoué sur la mise en place de la vue avant celui-ci (le montage
+  « chase » ignore la distance ; le passage à « around » replace la caméra ; la moyenne noyait l'appareil lointain).
+

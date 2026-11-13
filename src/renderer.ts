@@ -1856,6 +1856,8 @@ export class Renderer {
     this.tracePipeLayout = layout;
     this.characterRenderer = new CharacterRenderer(device);
     this.ship = new ShipRenderer(device, src.ship);
+    // (PLAN-J3 J3-2: the craft seen through the air of its distance — the tracer's aerial table, read by ship.wgsl shipAir)
+    this.ship.setAerial(this.aerialTex[0]!, this.aerialTex[1]!, this.aerialSampler);
     this.endurance = new EnduranceRenderer(device, src.endurance);
     this.station = new StationRenderer(device, src.station);
     this.station.onLoaded = () => this.invalidate();
@@ -7241,6 +7243,7 @@ export class Renderer {
     // (the clear sky's light — trace.wgsl skyAmbient — before every kernel that reads it: the ground's, the clouds')
     this.encodeSkyAmbient(enc, t);
     // (the aerial perspective's table before the rays that read it)
+    this.shipAirOn = !quality && !!this.aerialPipe && this.shipAirAllowed;
     if (!quality && this.aerialPipe) {
       const ap = enc.beginComputePass(this.prof.pass("aerial perspective"));
       ap.setPipeline(this.aerialPipe);
@@ -8732,6 +8735,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         sea: this.shipSea(s),
         lift: this.liftNow ? this.sceneryLiftNow : null,
         keyDir: this.shipKeyDir(),
+        // (J3-2: the aerial table written this frame — the realtime image, the camera in a world's air)
+        airOn: this.shipAirOn,
         mPerM: 1476.625 * (s.massSolar || 1),
         forceShadow: !!this.character?.active,
         inside: s.ship && (s.shipMount === "cockpit" || s.shipMount === "cabin"),
@@ -9370,6 +9375,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** (decision 42) the near world's star's direction in the camera's axes (right, up, forward) — the craft's shadow map's light,
    *  for its cache —; null: none near */
   shipKeyOff = false;
+  /** (PLAN-J3 J3-2) the craft seen through the air of its distance (ship.wgsl shipAir, the tracer's aerial table): this frame's, and the
+   *  switch (a comparison — default true) */
+  private shipAirOn = false;
+  shipAirAllowed = true;
   private shipKeyDir(): Vec3 | null {
     const n = this.lastNear,
       cam = this.lastCam;

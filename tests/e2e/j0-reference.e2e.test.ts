@@ -12,6 +12,7 @@ const J0_SCENE = process.env.J0_START
   ? { ...J0_SCENE_BASE, id: `${J0_SCENE_BASE.id}+start`, start: process.env.J0_START.split(",").map(Number) as typeof J0_SCENE_BASE.start }
   : J0_SCENE_BASE;
 const J0_FIXED = process.env.J0_FPSCAP ? J0_FIXED_BASE.replace(/\}\s*$/, `, fpsCap: ${Number(process.env.J0_FPSCAP)} }`) : J0_FIXED_BASE;
+import { readPng } from "./lib/png";
 import { sceneryReady } from "./lib/plan-views";
 
 // J0 — the reference flight scene measured (docs/J0-CONTRAT.md; strategy §15 J0, §22.4 D2 Toulon-Hyères, D3 25 ms on the M1
@@ -31,7 +32,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1), keyhaze (J3-2) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -81,6 +82,8 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // PROBLEMES-A-REGLER, 13 Nov 2026 — its kernel compiled before the flight)
   traced: { label: "pipeline tracé au lieu du raster", set: `__bh.game.set("earthPipeline", "trace");` },
   seaRefl: { label: "sans reflets de la mer (SSR, nuages reflétés : compilés hors)", set: `__bh.renderer.tune = { TUNE_GSKIP: 20480 };` },
+  // (PLAN-J3 J3-2: the craft seen through the air of its distance — ship.wgsl shipAir, two reads of the aerial table a craft pixel —: its cost)
+  shipAir: { label: "sans l'air sur l'appareil (J3-2)", set: `__bh.renderer.shipAirAllowed = false;` },
 };
 // (13 Nov 2026, Sam's decision 1: the water's two ablations in every fiche — its material, valid since liteSkip's bits are carried by
 // bitcast, and the sea's surface, the largest render pass, no owner measured before)
@@ -247,7 +250,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
    * scenery: a jump back to the start reloads them, and the first ablations of the first run measured that reload (10 images/s)
    * —; then the clock running, the autopilot and autothrottle engaged until they hold, gear down; 3 s settling */
   async function start(set: string) {
-    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear();
+    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear(); __bh.renderer.shipAirAllowed = true;
       Object.assign(__bh.renderer, { seaSurfaceOn: true, seaProbeOn: true, seaFoamWorldOn: true }); __bh.settings.seaFft = true;
       document.body.classList.remove("hide-ui"); Object.assign(__bh.settings, ${J0_FIXED}, ${hud}); __bh.settings.shipMount = "cockpit"; __bh.refresh();
       __bh.camera.viewReset(); ${set} return 1; })()`);
@@ -620,6 +623,67 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       await app.js(`(() => { __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`);
       for (const utc of times) expect(Math.abs(rows[utc]!.ratio! - rows[utc]!.ratioAgain!)).toBeLessThan(0.06 * rows[utc]!.ratio!);
       expect(["12:00", "15:30"].some((u) => Math.abs(rows[u]!.ratioClouds! - rows[u]!.ratio!) > 0.05 * rows[u]!.ratio!)).toBe(true);
+    },
+    900_000,
+  );
+
+  // (PLAN-J3 J3-2 — the air on the craft, J0_PHASES=keyhaze: the flown craft seen from aside (the "around" mount — "chase" keeps its own offset) at 300 m, 3 km and 10 km (the
+  // outside camera's distance; the field narrowed with it — the craft about the same size on the image), with its air (renderer
+  // shipAirAllowed: ship.wgsl shipAir, the tracer's aerial table) and without (as before J3-2); each shot's centre box compared: the 99th
+  // percentile of |on − off| [0–255]. Controls: off twice (the A/A); the change must grow with the distance — none to see at 300 m)
+  test.skipIf(!PHASES.includes("keyhaze"))(
+    "J3-2: the craft through the air of its distance — 300 m, 3 km, 10 km, with and without; A/A",
+    async () => {
+      await start("");
+      const fov0 = await app.js<number>("__bh.settings.fov");
+      const shot = async (name: string, dist: number, air: boolean) => {
+        const fov = (2 * Math.atan(28 / dist) * 180) / Math.PI;
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          __bh.renderer.shipAirAllowed = ${air};
+          Object.assign(__bh.settings, { shipMount: "around", fov: ${fov}, dof: false, motionBlur: 0, lookProfile: "neutral" });
+          Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: ${dist} }); __bh.refresh();
+          for (let i = 0; i < 90; i++) await f(); __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 40; i++) await f(); return 1; })()`);
+        const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+        const bytes = Buffer.from(x.data, "base64");
+        await Bun.write(`${OUT}/keyhaze-${name}.png`, bytes);
+        return readPng(new Uint8Array(bytes));
+      };
+      // (the centre box — a fifth of the image each way, where the outside camera holds the craft —: the 99th percentile of the pixels'
+      // |on − off| (the channels' mean): the craft a few hundred pixels of it far off, a mean over the box drowned it — run 2, 13 Nov)
+      const diff = (a: ReturnType<typeof readPng>, b: ReturnType<typeof readPng>) => {
+        const w = a.width,
+          h = a.height,
+          c = a.channels;
+        const v: number[] = [];
+        for (let y = Math.floor(0.4 * h); y < Math.floor(0.6 * h); y++)
+          for (let x0 = Math.floor(0.4 * w); x0 < Math.floor(0.6 * w); x0++) {
+            const i = (y * w + x0) * c;
+            v.push(
+              (Math.abs(a.data[i]! - b.data[i]!) + Math.abs(a.data[i + 1]! - b.data[i + 1]!) + Math.abs(a.data[i + 2]! - b.data[i + 2]!)) /
+                3,
+            );
+          }
+        v.sort((x, y) => x - y);
+        return +v[Math.floor(0.99 * (v.length - 1))]!.toFixed(2);
+      };
+      // (the mount set and held first: switched to "around", the camera starts before the craft and glides — run 2's first shot)
+      await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+        __bh.settings.shipMount = "around"; __bh.refresh(); for (let i = 0; i < 30; i++) await f();
+        Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 300 }); for (let i = 0; i < 150; i++) await f(); return 1; })()`);
+      const rows: Record<string, number> = {};
+      for (const dist of [300, 3000, 10000]) {
+        const off = await shot(`${dist}-off`, dist, false);
+        const on = await shot(`${dist}-on`, dist, true);
+        rows[`d${dist}`] = diff(on, off);
+        if (dist === 10000) rows.aa = diff(off, await shot(`${dist}-off2`, dist, false));
+      }
+      await app.js(
+        `(() => { __bh.renderer.shipAirAllowed = true; Object.assign(__bh.settings, { shipMount: "cockpit", fov: ${fov0} }); return 1; })()`,
+      );
+      console.log(`  J3-2 the craft's air: p99 |on − off| in the centre box (0–255): ${JSON.stringify(rows)}`);
+      out.keyhaze = rows;
+      expect(rows.d10000!).toBeGreaterThan(rows.d300!);
+      expect(rows.d10000!).toBeGreaterThan(3 * rows.aa!);
     },
     900_000,
   );

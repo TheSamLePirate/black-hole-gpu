@@ -105,6 +105,9 @@ struct Ship {
   // (R4b, contract C0-3) the air's lift of what is seen afar — the scenery's polynomial (renderer.ts sceneryLift): (x + y d) d²
   // [m] at a distance d [m], z the fade's angle [rad], w 1 on —, along the sea's up (sea.xyz)
   lift: vec4f,
+  // (PLAN-J3 J3-2) the air between the eye and the craft: z 1 when the tracer's aerial table is written this frame (its reach and the
+  // metres per unit in sh[12], from the probe's kernel)
+  air: vec4f,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance, 3 F-35), in the shadow
@@ -264,6 +267,8 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
   let key = envIn[n + 1u];
   shOut[10] = envIn[n];
   shOut[11] = key;
+  // (PLAN-J3 J3-2: the aerial table's reach and the metres per unit — trace.wgsl keyLight —, for shipAir; none where not written)
+  shOut[12] = select(vec4f(0.0), envIn[n + 7u], arrayLength(&envIn) >= n + 8u);
   if (key.w > 0.5) { shOut[9] = vec4f(normalize(envIn[n].xyz), 1.0); }
 }
 
@@ -275,6 +280,11 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
 @group(0) @binding(7) var shadowTex: texture_depth_2d;
 @group(0) @binding(8) var shadowSamp: sampler_comparison;
 @group(0) @binding(9) var<storage, read> jets: array<Jet>;
+// (PLAN-J3 J3-2) the tracer's aerial table (trace.wgsl aerial: rgb the light the air scatters towards the eye × pre-exposure; rgb what
+// it lets through), the image's AP_X × AP_Y columns, 32 slices from the eye out to S.air.x
+@group(0) @binding(41) var apA: texture_3d<f32>;
+@group(0) @binding(42) var apB: texture_3d<f32>;
+@group(0) @binding(43) var apSamp: sampler;
 @group(0) @binding(10) var scene: texture_2d<f32>; // the traced image the ship is drawn over (× pre-exposure)
 @group(0) @binding(11) var<storage, read> sceneDepth: array<f32>; // the traced occlusion depth [M] (post.wgsl occlusion)
 @group(0) @binding(12) var<storage, read> inst: array<Inst>;
@@ -1345,7 +1355,8 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       emit += S.lamp[3u * i + 1u].rgb * 0.5 * (1.0 - smoothstep(lp.w * 0.6, lp.w * 1.6, length(in.q - lp.xyz)));
     }
   }
-  let o = col * S.light.x + (dif * jl * ao * own + emit * 2.0) * S.jet.y;
+  // (J3-2: the air between it and the eye — nothing within a few metres, the haze of its distance on a far craft)
+  let o = shipAir(in.p, vec4f(col * S.light.x + (dif * jl * ao * own + emit * 2.0) * S.jet.y, 1.0)).rgb;
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), 1.0) * seaW;
 }
 
@@ -1808,8 +1819,6 @@ fn trailFs(in: TOut) -> @location(0) vec4f {
   let nz = vnoise(vec3f(in.s / sc, x * 1.7, in.kind * 7.3)) * 0.65 + vnoise(vec3f(in.s / (0.3 * sc), x * 4.1, 3.1)) * 0.35;
   let edge = smoothstep(0.0, 0.35, chord - 0.25 * (nz - 0.5));
   var tau = in.tau * chord * edge * (0.55 + 0.9 * nz);
-  // (the haze between: a far trail paler)
-  tau *= exp(-dist / 120000.0);
   // (a ribbon passing through the camera — a chase camera in its own trail — faded, not a wall)
   tau *= smoothstep(1.0, 6.0, dist);
   let a = 1.0 - exp(-tau);
@@ -1828,7 +1837,8 @@ fn trailFs(in: TOut) -> @location(0) vec4f {
   // (a tyre's smoke: a bluish grey — burnt rubber, a duller scatterer than ice or water)
   let alb = select(0.85, 0.72, in.kind > 7.5 && in.kind < 8.5);
   let L = (alb / PI) * (Ek * (0.35 + 0.65 * hg) + Ea);
-  return vec4f(L * S.light.x * a, a);
+  // (J3-2: the air between it and the eye — the haze of its distance, from the aerial table; was exp(−d / 120 km) on its opacity)
+  return shipAir(in.p, vec4f(L * S.light.x * a, a));
 }
 
 // ------------------------------------------------------------------------------------ the lamps' glare
@@ -2576,6 +2586,24 @@ fn motionVs(v: VIn, @builtin(instance_index) ii: u32) -> MotV {
 fn imagePx(p: vec3f, t: vec2f) -> vec2f {
   let ndc = vec2f(p.x / (p.z * t.x), p.y / (p.z * t.y));
   return vec2f(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y) * S.img.xy;
+}
+// (PLAN-J3 J3-2, the air attributed to each distance) a premultiplied colour at p [m, camera frame] seen through the air between it and
+// the eye — the aerial table at its place on the image and its distance (trace.wgsl apSliceZ: AP_T0 then exponential slices to
+// apFar, sh[12].x): c × T + L × alpha; as it was where no table is written (S.air.z 0) or no reach (sh[12].z 0)
+fn shipAir(p: vec3f, c: vec4f) -> vec4f {
+  let r = sh[12];
+  // (within 50 m — the cockpit, the hull about the eye —: the air's share under a thousandth, the table not read — its two reads a pixel
+  // over the cockpit's cost 0.25–0.7 ms on J0, kerr-mini, 13 Nov)
+  if (S.air.z < 0.5 || r.z < 0.5 || p.z <= 0.0 || dot(p, p) < 2500.0) { return c; }
+  let uv = clamp(imagePx(p, S.proj.xy) / S.img.xy, vec2f(0.0), vec2f(1.0));
+  let t = length(p) / max(r.y, 1.0);
+  let t0 = 5e-7;
+  let tf = max(r.x, 2.0 * t0);
+  let z = select(min(1.0 + log(t / t0) / log(tf / t0) * 30.0, 31.0), max(t, 0.0) / t0, t <= t0);
+  let uvw = vec3f(uv, (z + 0.5) / 32.0);
+  let a = textureSampleLevel(apA, apSamp, uvw, 0.0);
+  let b = textureSampleLevel(apB, apSamp, uvw, 0.0);
+  return vec4f(c.rgb * clamp(b.rgb, vec3f(0.0), vec3f(1.0)) + max(a.rgb, vec3f(0.0)) * c.a, c.a);
 }
 // xy: its motion on the image since the frame before [px — now minus then, as post.wgsl's history reads it]; z: 1, or 2 none
 // (a craft new this frame, behind the camera then, or a jump of over a quarter of the image) + 4 × its instance; w: its
