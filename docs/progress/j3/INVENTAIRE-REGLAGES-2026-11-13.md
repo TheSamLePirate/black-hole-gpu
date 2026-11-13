@@ -36,7 +36,7 @@ la réponse Film/ISS.
 3. Un point non tranché : un commentaire de `renderer.ts` (~8897) dit le mètre d'exposition lu sur une scène où « le Ranger est composé à
    l'affichage » ; `post.wgsl` dit l'appareil dans la couleur de la scène depuis J1-5 — que l'appareil entre ou non dans le mètre est à vérifier.
 
-## Mesure : l'exposition selon le cadrage (13 novembre 2026, ~15:05 UTC)
+## Mesure : l'exposition selon le cadrage (13 novembre 2026, ~15:00 UTC)
 
 J0 (`J0_PHASES=framing`, kerr-mini, `remote-results/…-j3-framing`) : la même scène, la même lumière, vue du cockpit, de derrière (`chase`) et de
 trois quarts (`quarter`) ; chaque monture posée l'horloge tournant, puis figée et l'exposition stabilisée ; `renderer.ev(settings)`.
