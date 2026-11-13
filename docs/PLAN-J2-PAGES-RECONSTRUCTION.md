@@ -395,7 +395,13 @@ Pour J2-4 : la voie 3 (un écrêtage à l'échelle du bruit) ne suffirait donc p
 voie plus simple encore — rendre au temporel tenu son α de vol (`RASTER_LITE_ALPHA`) quelques images après une publication de pages — le
 ferait en entier, mais globalement (une bouffée de bruit d'une seconde sur toute l'image tenue).
 
-*Recommandation* : **3 d'abord**, mesurée par la phase `trail` (la page neuve à > 90 % en 2–4 images, la convergence tenue C0-12 ≤ 1 %
+**Une quatrième voie, mesurée depuis** (sonde corrigée, §9 septies) : `singleHistory` (J2-6) fait déjà passer une page neuve à **72 % dès
+3 images** en vue tenue (contre ~0 aujourd'hui ; 82 % en mouvement à 3 images avec ou sans) — le critère « aucune image ancienne qui traîne
+sur une page neuve » presque tenu **sans identité ni invalidation locale**, neutre en vol, pour +0,13 point de bruit tenu. *Recommandation
+révisée* : allumer `singleHistory` (après son ΔGPU sur kerr-mini), puis remesurer `trail` ; ne coder l'identité du sol (voie 1) que si une
+lecture par page devient nécessaire. Les arrivées de tuiles pourront alors cesser d'appeler `invalidate()` (sans effet en raster, J2-0).
+
+*Recommandation (première, gardée)* : **3 d'abord**, mesurée par la phase `trail` (la page neuve à > 90 % en 2–4 images, la convergence tenue C0-12 ≤ 1 %
 gardée), puis 1 seulement si une lecture par page devient nécessaire (J2-5, la sélection, les diagnostics). **Question pour Sam.**
 
 ## 9 octies (a). J2-5, étape A : la référence avant la désocclusion (13 novembre 2026)

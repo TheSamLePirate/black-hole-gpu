@@ -4132,3 +4132,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `traceVariant("shadeLite")` dans `writeParams`, avant la clé de l'image : sans effet — corrigée (le matériau de l'image d'avant).
   **Non vérifié** : kerr-mini (ΔGPU J0) ; le démarrage à froid (`shadeMark` plus attendu).
 - **Changé** : `src/renderer.ts` ; GRAPHICS-PIPELINE (§ soumission), BH-API, PLAN-J2 §9 octies.
+
+## 2026-11-13T05:56Z — J2-4 : recommandation révisée (un seul historique d'abord) ; suite complète verte
+
+- **Contribution** (PLAN-J2 J2-4, étape B) : la mesure corrigée montre que `singleHistory` (J2-6) fait passer une page neuve à 72 % dès 3
+  images en vue tenue, sans identité ni invalidation locale — recommandation révisée pour la décision de Sam : l'allumer (après son ΔGPU
+  sur kerr-mini) puis remesurer `trail`, la voie 1 (identité du sol) seulement si une lecture par page devient nécessaire. PLAN-J2 §9 septies.
+- **Vérifié** : `bun test --parallel` **2 212 / 0** (après le correctif d48f31f0 ; le passage d'avant 2 209 / 3 : ce défaut-là et deux
+  délais sous la charge).
