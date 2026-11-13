@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:03 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:06 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5996,4 +5996,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   la seconde mission : aucun rôle entendu ; ce contrôle repassé sur l'ancien `netsession.ts`) ; **après** : les deux résultats (Ana, Ben), les
   deux rôles (endurance, ranger) entendus, les tableaux des pages non doublés ; `net-board` 3/3, `net-coop` 3/3.
 - Limites : l'état « abattus » d'un match en cours vient de sa feuille d'événements (le match lui-même est rejoué par le serveur) ; NET-19 non fait.
+
+## 2026-11-13T22:06Z — Jupiter noir : ni la table des corps, ni la variante du noyau
+
+- Réalisé : `aurora-jupiter` relève aussi `bodyData` et la variante du noyau. PROBLEMES complété.
+- Preuves : **mesuré** (kerr-mini) : tout fini, la même variante compilée dans les vues noire et normales. Suite : un lot de relectures des
+  textures GPU calculées depuis la caméra.
 

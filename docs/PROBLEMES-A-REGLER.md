@@ -624,6 +624,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   de l'image, dans la vue noire comme ailleurs. Le défaut est donc côté GPU : une table ou une texture calculée depuis la caméra et lue par
   tout pixel (candidats : la tuile des géantes proches `bakeGiantTile`, les tables du ciel ou de l'air de la géante, la sonde) — à relire
   par une passe qui compte les non-finis d'une texture (comme `readSeaSky`).
+- **Écarté aussi** (~22:06 UTC, runs `…-aurora-jupiter-bodies`, `…-aurora-jupiter-key`) : la table des corps (`bodyData`) sans non-fini ; **la même
+  variante du noyau** (clé 134234848, compilée, ni échec ni abandon) dans les vues noire et normales, le pipeline raster, pas de raster de
+  corps. Reste une donnée calculée sur le GPU depuis la position de la caméra (la tuile, l'air de la géante, la sonde) : un lot à part, avec
+  une relecture de texture par candidat.
 
 ## Le coût de l'aurore terrestre de près, la nuit : +4,6 ms sur le M1
 

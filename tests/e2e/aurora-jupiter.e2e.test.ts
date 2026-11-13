@@ -48,7 +48,12 @@ test.skipIf(!E2E)(
           // (the frame's parameters — renderer.paramsF — their non-finite slots: a per-frame value gone NaN would blank every pixel)
           const pf = r.paramsF; const badParams = [];
           if (pf) for (let i = 0; i < pf.length && badParams.length < 12; i++) if (!Number.isFinite(pf[i])) badParams.push(i);
-          return { eye: r.eyeIncident, ev: +r.ev(__bh.settings).toFixed(2), autoEV: +(r.autoEVDrawn ?? 0).toFixed(2), nonFinite: bad, badParams,
+          // (and the bodies' table the CPU writes — renderer.bodyData —: the same check)
+          const bd = r.bodyData; const badBodies = [];
+          if (bd) for (let i = 0; i < bd.length && badBodies.length < 12; i++) if (!Number.isFinite(bd[i])) badBodies.push(i);
+          return { eye: r.eyeIncident, ev: +r.ev(__bh.settings).toFixed(2), autoEV: +(r.autoEVDrawn ?? 0).toFixed(2), nonFinite: bad, badParams, badBodies,
+            key: r.featureKey >>> 0, settled: r.tracerSettled, kernel: (() => { const v = r.variants?.get(r.featureKey); return v ? { rt: !!v.rt, failed: !!v.failed, givenUp: !!v.rtGivenUp, shadeLite: !!v.shadeLite } : null; })(),
+            bodyRaster: r.bodyRasterNow ?? null, pipeline: r.earthPipelineNow?.(__bh.settings) ?? null,
             sceneMax: +max.toPrecision(3), sceneMean: +(sum / Math.max(n, 1)).toPrecision(3), source: c?.source ?? null,
             fps: __bh.game.perf({ gpu: true }).renderFps, gpuMs: __bh.game.perf({ gpu: true }).gpuFrameMs }; })()`,
       );
