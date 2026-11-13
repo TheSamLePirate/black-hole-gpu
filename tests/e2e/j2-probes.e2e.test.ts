@@ -8,6 +8,7 @@ import {
   keepSceneJs,
   leverDiffJs,
   SEAM_GEOM_JS,
+  SEAM_MAP_JS,
   LEAK_VIEWS,
   leakCompareJs,
   SEAM_JS,
@@ -41,7 +42,8 @@ import {
 //     images, the change's map (lib/j2-probes.ts leverDiffJs) and shots. J2_EDGE_FOOT=1: the lever on for the leak phase after it.
 //   seams — J2-3, the seams by the geometry (J2_PHASES=seams): at each view, frozen, T3's geomorphose on, off (the positive control:
 //     the levels' own heights), on again: the seams read by the view depth's inverse (lib/j2-probes.ts SEAM_GEOM_JS: pairs across two
-//     levels against pairs inside one) and by the distance (SEAM_JS, J2-0's); a shot of each.
+//     levels against pairs inside one) and by the distance (SEAM_JS, J2-0's); a shot and a map of each (SEAM_MAP_JS: the ranks in colour,
+//     the boundary pairs red over 0.25 px, green under). J2_HLOD=0: the IGN's overground off (its A/B).
 // Motion blur off (the reconstruction's sharpness, not the shutter's). J2_OUT (remote-results/j2/<machine>; in an A/B of
 // scripts/ab-e2e.ts its <AB_SIDE><AB_RUN> under it), J2_MACHINE.
 // Not a pass/fail on the numbers: the fiche is written from j2.json (docs/progress/j2/). It fails on a GPU error, a craft not placed.
@@ -53,6 +55,8 @@ const MACHINE = process.env.J2_MACHINE ?? (await $`hostname -s`.quiet().text()).
 const SIDE = process.env.AB_SIDE ? `${process.env.AB_SIDE}${process.env.AB_RUN ?? ""}` : "";
 const OUT = `${process.env.J2_OUT ?? `remote-results/j2/${MACHINE}`}${SIDE ? `/${SIDE}` : ""}`;
 const PHASES = (process.env.J2_PHASES ?? "leak,flight").split(",");
+// (J2-3, the seams' phase: J2_HLOD=0 the IGN's overground off — settings.earthIgnSilhouettes, I6 —: the seams' A/B of it)
+const HLOD_OFF = process.env.J2_HLOD === "0";
 const VIEWS = (process.env.J2_VIEWS ?? Object.keys(LEAK_VIEWS).join(",")).split(",");
 const W = 1920,
   H = 1080;
@@ -153,11 +157,11 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
         const [lat, lon, agl, hdg, spd] = view.at;
         const placed = await place(
           `__bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64, motionBlur: 0, lookProfile: "neutral" });
-          __bh.game.setDate("${view.date}"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0); __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${spd}); ${CLEAN}`,
+          __bh.game.setDate("${view.date}"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0); __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${spd}); ${CLEAN} ${HLOD_OFF ? "__bh.settings.earthIgnSilhouettes = false; __bh.refresh();" : ""}`,
           v,
         );
         await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
-        const row: Record<string, unknown> = { view: v, what: view.what, placed };
+        const row: Record<string, unknown> = { view: v, what: view.what, placed, overground: !HLOD_OFF };
         for (const [k, on] of [
           ["on", true],
           ["off", false],
@@ -167,6 +171,7 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
           row[`converged_${k}`] = await converged(`${v} morph ${k}`);
           row[`geom_${k}`] = await app.js(SEAM_GEOM_JS);
           row[`dist_${k}`] = await app.js(SEAM_JS);
+          await writeB64(`${OUT}/seams-${v}-map-${k}.png`, await app.js<string | null>(SEAM_MAP_JS));
           await app.shot(`${OUT}/seams-${v}-morph-${k}.png`);
           console.log(`  ${v} seams, morph ${k}: ${JSON.stringify(row[`geom_${k}`])}`);
         }

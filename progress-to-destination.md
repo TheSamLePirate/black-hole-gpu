@@ -3916,3 +3916,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `bun test` complet ; d'autres GPU que l'Apple ; le gain de couverture compté en pixels.
 - **Suite** : décision de Sam (allumer `edgeFoot` après le ΔGPU sur kerr-mini ; confirmer J2-3 réduit, sans gouttières) ; la marche de
   Hyères (A/B du sur-sol IGN) avant la sortie de J2 ; puis J2-4 (l'invalidation locale par l'identité du sol).
+
+## 2026-11-13T01:42Z — J2-3, suite : les « marches » de Hyères sont des crêtes, pas des coutures établies
+
+- **Contribution** (PLAN-J2 §4, coutures C0-12 ; fiche J2-3 §4) : la cause du résidu relevé une heure plus tôt cherchée par la mesure.
+  A/B du sur-sol IGN (`settings.earthIgnSilhouettes`, phase `seams` avec `J2_HLOD=0`) : **sans effet** (42,6 % des paires de bord au-delà de
+  0,25 px sans lui, 42 % avec). Carte de la sonde (`SEAM_MAP_JS`, nouvelle : rangs en couleur, paires de bord rouges/vertes) : les paires
+  rouges suivent **les crêtes des collines** (un rang fin qui cache un terrain plus loin d'un rang plus grossier : des bords d'occultation
+  sous le seuil de silhouette en vue rasante) ; le bord de fenêtre qui traverse la colline proche est **vert avec la géomorphose, rouge et
+  déchiqueté sans elle**. Conclusion : aucune couture établie à Hyères ; la sonde à affiner avant de chiffrer C0-12 là.
+- **Changé** : `tests/e2e/lib/j2-probes.ts` (`SEAM_MAP_JS`, ventilation `byPair` par rang/pas), `tests/e2e/j2-probes.e2e.test.ts`
+  (`J2_HLOD`, la carte écrite) ; fiche J2-3 §4–§5, PROBLEMES-A-REGLER (l'entrée barrée, ce qui reste), PLAN-J2 §9 sexies.
+- **Mesuré** : M1 Max, deux passages de la phase `seams` sur `hyeres-low` (1/0 chacun). **Non vérifié** : un filtre de silhouettes ; une
+  vue plongeante ; kerr-mini (hors réseau).

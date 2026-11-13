@@ -293,3 +293,42 @@ export const SEAM_GEOM_JS = `(async () => {
     seamStep: stats(seamJ), innerStep: stats(innerJ),
     byPair: Object.fromEntries(Object.entries(byPair).sort((p, q) => q[1].n - p[1].n).map(([k, v]) => [k, { n: v.n, share0_25: +(v.over0_25 / v.n).toFixed(3), mean: +(v.sum / v.n).toFixed(3) }])) };
 })()`;
+
+/**
+ * J2-3 — in the page: a map of the raster's ground levels (the visibility's code per pixel: hue by rank, darker by mesh step) with
+ * the pairs SEAM_GEOM_JS measures across two levels marked (red: a step over 0.25 px, green: under) — whether the boundaries are the
+ * windows' edges (lines) or islands of one level inside another (a coarser ring above the finer one). PNG (base64) at the target's size.
+ */
+export const SEAM_MAP_JS = `(async () => {
+  const R = __bh.renderer, tex = R.terrainRaster?.distanceTexture?.(), dev = R.device;
+  if (!tex) return null;
+  const W = tex.width, H = tex.height, bpr = Math.ceil(W * 16 / 256) * 256;
+  const buf = dev.createBuffer({ size: bpr * H, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+  const e = dev.createCommandEncoder(); e.copyTextureToBuffer({ texture: tex }, { buffer: buf, bytesPerRow: bpr }, [W, H]); dev.queue.submit([e.finish()]);
+  await buf.mapAsync(GPUMapMode.READ); const raw = new Float32Array(buf.getMappedRange().slice(0)); buf.unmap(); buf.destroy();
+  const st = bpr / 4, ty = Math.tan((__bh.settings.fov * Math.PI) / 360), tx = ty * W / H;
+  const lv = (x, y) => { const i = y * st + x * 4, c = Math.floor(raw[i + 3] / 262144); return c >= 1 && c <= 56 && raw[i + 1] <= 0 && raw[i] > 0 ? c : 0; };
+  const w = (x, y) => { const nx = ((x + 0.5) / W) * 2 - 1, ny = ((y + 0.5) / H) * 2 - 1; return Math.hypot(nx * tx, ny * ty, 1) / raw[y * st + x * 4]; };
+  const HUE = [[90, 90, 200], [60, 160, 200], [70, 170, 90], [190, 180, 60], [200, 120, 60], [160, 80, 170], [120, 120, 120], [200, 200, 200]];
+  const img = new Uint8ClampedArray(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = 4 * (y * W + x), c = lv(x, y);
+    if (!c) { img[i] = img[i + 1] = img[i + 2] = 20; img[i + 3] = 255; continue; }
+    const r = (c - 1) % 8, s = Math.floor((c - 1) / 8), k = 0.55 / (1 + 0.5 * s), h = HUE[r];
+    img[i] = h[0] * k; img[i + 1] = h[1] * k; img[i + 2] = h[2] * k; img[i + 3] = 255;
+  }
+  const mark = (x, y, red) => { for (let j = -1; j <= 1; j++) for (let k = -1; k <= 1; k++) { const xx = x + k, yy = y + j; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue; const i = 4 * (yy * W + xx); img[i] = red ? 255 : 40; img[i + 1] = red ? 40 : 230; img[i + 2] = 40; } };
+  for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) {
+    const m = lv(x, y); if (!m) continue;
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      const m1 = lv(x + dx, y + dy);
+      if (!m1 || m1 === m || lv(x - dx, y - dy) !== m || lv(x + 2 * dx, y + 2 * dy) !== m1) continue;
+      const wm = w(x - dx, y - dy), w0 = w(x, y), w1 = w(x + dx, y + dy), w2 = w(x + 2 * dx, y + 2 * dy);
+      const slope = Math.max(0.5 * (Math.abs(w0 - wm) + Math.abs(w2 - w1)), 1e-7 * w0);
+      if (Math.abs(w1 - w0) / slope > 3) continue;
+      mark(x, y, Math.abs((w1 - w0) - 0.5 * ((w0 - wm) + (w2 - w1))) / slope > 0.25);
+    }
+  }
+  const cv = new OffscreenCanvas(W, H); cv.getContext("2d").putImageData(new ImageData(img, W, H), 0, 0);
+  const b = new Uint8Array(await (await cv.convertToBlob({ type: "image/png" })).arrayBuffer());
+  let bin = ""; for (let i = 0; i < b.length; i += 32768) bin += String.fromCharCode(...b.subarray(i, i + 32768)); return btoa(bin); })()`;

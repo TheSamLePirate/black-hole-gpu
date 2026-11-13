@@ -330,10 +330,10 @@ profondeur de vue, affine sur un plan, paires entre deux niveaux contre paires d
 positif). **Mesuré** (M1 Max, kerr-mini hors réseau) : fuite levier allumé **0 pixel imputable** sur trois vues (témoins positifs
 0,68–0,74 Mpx) ; l'image ne change qu'en lignes le long des bords de fenêtres (le niveau fin rendu jusqu'à 36–40 texels plus près de son
 bord), écart moyen dans la dérive du témoin, aucune couture à l'œil ; GPU dans le bruit à Hyères, non conclu dans les Alpes (le Mac en
-pression thermique « Heavy »). **Coutures par la géométrie** : Alpes, C0-12 tenu (bords de niveaux comme l'intérieur) ; **Hyères, une marche
-résiduelle** aux bords de rangs 2|3, 3|4, 4|5 (29–42 % des paires > 0,25 px contre 7–18 % dans un niveau ; la géomorphose en retire la
-moitié), cause non établie (PROBLEMES-A-REGLER) — à régler avant la sortie de J2. **Reste** : le ΔGPU sur J0 (kerr-mini), la décision
-d'allumer le levier, la marche de Hyères ; les gouttières non faites (pas de fuite).
+pression thermique « Heavy »). **Coutures par la géométrie** : Alpes, C0-12 tenu (bords de niveaux comme l'intérieur) ; Hyères, des paires de bord
+au-delà de 0,25 px (29–42 %) que la carte de la sonde place **sur les crêtes** (bords d'occultation en vue rasante), le bord de fenêtre
+lui-même propre avec la géomorphose ; sur-sol IGN hors de cause (A/B) — la sonde à affiner (silhouettes) pour chiffrer C0-12 à Hyères
+avant la sortie de J2. **Reste** : le ΔGPU sur J0 (kerr-mini), la décision d'allumer le levier ; les gouttières non faites (pas de fuite).
 
 ## 10. Non vérifié
 
