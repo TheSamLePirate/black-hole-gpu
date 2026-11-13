@@ -5899,3 +5899,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : le reste de RD5 (garde de lien mort, contre-pression, gros
   messages hors du canal fiable — NET-14, NET-18, NET-19, NET-22, NET-23) non fait ; NET-10 (l'état dur repris) non fait.
 
+## 2026-11-14T09:40Z — Audit NET-10 (RD4, premier lot) : un arrivant apprend les amarrages et les passagers
+
+- Contribution : §19 (le jeu à plusieurs cohérent pour qui arrive en cours de route) ; audit 2026-11-10, NET-10.
+- Réalisé : `ui/netsession.ts` — à chaque arrivée (une place nouvelle ou passée à un autre appareil) ou retour d'un coupé, chacun redit son
+  propre état dur (`tellHardState`) : son amarrage (`dock`, son lien), sa place de passager (`board`, et `gone` si son appareil est cédé),
+  marqués `again` — l'hôte ne redit ni « amarré à votre … » ni « … est à bord ». NETWORK.md/.fr, E2E-CATALOGUE.
+- Preuves : **reproduit avant** (e2e `net-dock`, un troisième client — spectateur, lancé par le test — rejoint pendant l'amarrage de Ben : il
+  n'entend rien) ; **après** : il entend le `dock` de Ben vers Ana ; `net-dock` 6/6 ; `net-walk`, `net-crew`, `net-cut` 6/0 ; tests réseau verts.
+- Limites : les rôles co-op, le défi de salle, les scores et abattus (NETMATCH : sa feuille vient des événements) ne sont pas encore redits ;
+  un événement émis pendant une coupure reste perdu (pas de file) ; RD5 (lien mort, contre-pression, gros messages) non fait.
+

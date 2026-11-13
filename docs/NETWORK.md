@@ -36,6 +36,9 @@ loaded only then.
   server keeps us in the room's roster 30 s, marked `cut` — the others keep our track and their direct link; taken back on
   the same slot, our tracks and links are kept, not rebuilt (before 13 Nov 2026, audit NET-11: nothing left without the
   WebSocket, the others dropped us at once, and all tracks and links were cleared at the return). A « leave » said: gone at once. The others see « link cut » beside us in the Network panel, told when it comes and when we are back.
+  Someone joining, or back from a cut, is told each one's hard state again — a craft docked to another's, a passenger, a
+  craft handed over — (marked `again`: no « docked to you » said twice); before 13 Nov 2026 (audit NET-10) these were said
+  once, and a newcomer saw a docked craft free. Co-op roles, the room's challenge and scores are not yet told again.
 - A room holds 8 devices, 4 of them pilots. It is kept on the server until its owner deletes it; its clock
   runs on while nobody is in it.
 - **Settings › Network › Network menu** off: no trace of the network in the game.

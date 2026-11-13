@@ -451,6 +451,7 @@ export class NetSession {
       this.spaceTel.clear();
       this.orderAnswers.clear();
       this.slotDevice.clear();
+      this.slotCut.clear();
       this.rosterSeen = null;
       return;
     }
@@ -458,7 +459,8 @@ export class NetSession {
     // (on a roster changed only: nothing made per frame)
     if (net.room.members !== this.rosterSeen) {
       this.rosterSeen = net.room.members;
-      this.letGoOfLeavers(net.room.members, net.room.slot);
+      // (someone new, or back from a cut: our own hard state told again — NET-10)
+      if (this.letGoOfLeavers(net.room.members, net.room.slot)) this.tellHardState();
     }
     const c = this.d.camera;
     const now = performance.now() / 1000;
@@ -645,11 +647,13 @@ export class NetSession {
           // (his craft handed over — N3: gone, his last samples no craft any more; the one he boards flown again)
           if ((ev as unknown as { gone?: unknown }).gone === true) this.handed.add(from);
           this.handed.delete(e.to);
-          if (e.to === net.room?.slot) this.d.toast(tf("{0} is aboard", this.nameOf(from)));
+          if (e.to === net.room?.slot && !(ev as unknown as { again?: unknown }).again)
+            this.d.toast(tf("{0} is aboard", this.nameOf(from)));
         } else if (e.kind === "dock" && typeof e.to === "number") {
           const d = ev as unknown as { port: number; ownPort: number; c: Vec3; ax: [Vec3, Vec3, Vec3] };
           this.links.set(from, { host: e.to, port: d.port, ownPort: d.ownPort, c: d.c, ax: d.ax });
-          if (e.to === net.room?.slot) this.d.toast(tf("{0} docked to your {1}", this.nameOf(from), VESSELS[fleet.active].name));
+          if (e.to === net.room?.slot && !(ev as unknown as { again?: unknown }).again)
+            this.d.toast(tf("{0} docked to your {1}", this.nameOf(from), VESSELS[fleet.active].name));
         } else if (e.kind === "undock") {
           if (this.links.get(from)?.host === net.room?.slot) this.d.toast(tf("{0} undocked", this.nameOf(from)));
           this.links.delete(from);
@@ -1717,8 +1721,11 @@ export class NetSession {
 
   /** A player gone, or his slot another's now: what we kept of him by his slot let go — his telemetry, his craft handed
    *  over, his spacecraft's state, his answer to an order (audit NET-13: never let go before 13 Nov 2026). */
-  private letGoOfLeavers(members: readonly { slot: number; device: string }[], mine: number) {
+  private letGoOfLeavers(members: readonly { slot: number; device: string; cut?: boolean }[], mine: number): boolean {
     const here = new Map(members.map((m) => [m.slot, m.device]));
+    // (someone new — a slot not seen, or another device's now —, or back from a cut)
+    const fresh = members.some((m) => m.slot !== mine && !m.cut && (this.slotDevice.get(m.slot) !== m.device || this.slotCut.has(m.slot)));
+    this.slotCut = new Set(members.filter((m) => m.cut).map((m) => m.slot));
     const drop = (slot: number) => {
       this.tel.delete(slot);
       this.handed.delete(slot);
@@ -1729,6 +1736,25 @@ export class NetSession {
     for (const slot of [...this.tel.keys(), ...this.handed, ...this.spaceTel.keys(), ...this.orderAnswers.keys()])
       if (slot !== mine && !here.has(slot)) drop(slot);
     this.slotDevice = here;
+    return fresh;
+  }
+
+  /** the slots cut as last seen (their return: our hard state told again) */
+  private slotCut = new Set<number>();
+
+  /**
+   * Our own hard state told again — our craft docked to another's (its link), or our riding in another's (and our craft
+   * handed over) —, marked `again` (no « docked to you », no « aboard » said twice): told once when it happened, a newcomer
+   * or one back from a cut never knew it, and saw us free, absent, or our handed craft twice (audit NET-10).
+   */
+  private tellHardState() {
+    const net = this.net;
+    const me = net?.room?.slot;
+    if (!net || me === undefined) return;
+    const L = this.links.get(me);
+    if (L) net.event({ kind: "dock", to: L.host, port: L.port, ownPort: L.ownPort, c: L.c, ax: L.ax, again: true });
+    if (this.follow?.why === "passenger")
+      net.event({ kind: "board", to: this.follow.slot, ...(this.handedOver ? { gone: true } : {}), again: true });
   }
 
   /** those whose craft was handed over (N3): their last samples no craft — not drawn, not docked to, not struck */

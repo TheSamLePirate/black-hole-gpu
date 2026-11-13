@@ -39,6 +39,9 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
   leur lien direct ; repris à la même place, nos pistes et nos liens sont gardés, pas reconstruits (avant le 13 nov. 2026, audit
   NET-11 : plus rien ne partait sans le WebSocket, les autres nous lâchaient aussitôt, et tout était effacé au retour). Un
   « quitter » dit : parti aussitôt. Les autres voient « liaison coupée » à côté de nous dans le panneau Réseau, dit à la coupure et au retour.
+  Un arrivant, ou un coupé de retour, reçoit de chacun son état dur à nouveau — un appareil amarré à un autre, un passager, un
+  appareil cédé — (marqué `again` : pas de « amarré à vous » dit deux fois) ; avant le 13 nov. 2026 (audit NET-10) il n'était dit
+  qu'une fois, et un arrivant voyait libre un appareil amarré. Rôles co-op, défi de salle et scores ne sont pas encore redits.
 - Une salle accueille 8 appareils, dont 4 pilotes. Le serveur la garde jusqu'à ce que son propriétaire la
   supprime ; son horloge continue quand personne n'y est.
 - **Réglages › Réseau › Menu Réseau** désactivé : aucune trace du réseau dans le jeu.

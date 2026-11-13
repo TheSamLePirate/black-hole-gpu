@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { NetClient } from "../../src/net/client";
 import { App, E2E, stopServer } from "./lib/app";
 
 // PLAN-RESEAU R7: docking together — Ana flies the Endurance in a 400 km orbit, Ben a Ranger: put 3 m out on her
@@ -67,6 +68,28 @@ describe.skipIf(!E2E)("docking together", () => {
     await shot(a, "dock-a");
     await shot(b, "dock-b");
   }, 120_000);
+
+  test("a newcomer told of the docking (NET-10): a third pilot joining while Ben is docked learns it — not seeing him free", async () => {
+    const code = await a.js<string>(`__bh.net.net.room.code`);
+    const c = new NetClient({
+      url: new URL("/net", a.url).href.replace(/^http/, "ws"),
+      build: "bot",
+      id: { device: `dock-newcomer-${Date.now()}`, name: "Cy", colour: "#ffcc33" },
+    });
+    const docks: { from: number; to: unknown }[] = [];
+    c.on("event", (x: { from: number; ev: { kind: string; to?: unknown } }) => {
+      if (x.ev.kind === "dock") docks.push({ from: x.from, to: x.ev.to });
+    });
+    try {
+      await c.join(code, "spectator");
+      const t0 = Date.now();
+      while (!docks.length && Date.now() - t0 < 6000) await Bun.sleep(100);
+      console.log(`  the newcomer heard: ${JSON.stringify(docks)} (Ben at slot ${sb}, docked to ${sa})`);
+      expect(docks.some((d) => d.from === sb && d.to === sa)).toBe(true);
+    } finally {
+      c.close();
+    }
+  }, 30_000);
 
   test("Ana moved 1 km on: Ben goes with her; he undocks: pushed off", async () => {
     const d0 = await seen();
