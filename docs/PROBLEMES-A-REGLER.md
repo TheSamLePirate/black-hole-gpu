@@ -3,6 +3,27 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+
+## Le repli du raster vers le pipeline tracé ne s'arme plus sur la Terre (relevé le 13 novembre 2026, e2e `raster-governor`)
+
+**Constat (lu dans le code, 13 nov. ~14:40 UTC)** : le gouverneur (`src/game/governor.ts`, extrait de `main.ts` le 13) ne donne la Terre au
+pipeline tracé, pour la session, que si la cadence d'ombrage est à son plus grossier (`renderer.rasterRateCoarsest` : cadence ≥ 16), les blocs à
+8 ou plus, l'échelle à 0,5 (résolution dynamique) et l'image au-delà d'une fois et demie le budget pendant 12 s. Or :
+- **depuis J2-7** (décision de Sam, 13 nov. ; l'ancien chemin retiré au lot R1, a41711f4), la cadence de la Terre sous son matériau est fixée à 1
+  (elle ne réglait que les restes de `shade` : le matériau coûte autant à 16 qu'à 1) — `rasterRateCoarsest` n'est plus jamais vrai sur la Terre ;
+- **et avant cela**, sous le matériau, l'échelle est épinglée à celle du raster (`want = rasterTop()`) : la condition « échelle 0,5 » ne tenait
+  déjà pas, résolution dynamique active.
+
+L'e2e `raster-governor` (écrit le 23 oct., avant ces deux changements) l'a montré : « la cadence d'ombrage dans {2, 4, 8, 16} » faux (1), puis
+il attend la cadence 16 et le repli. **Le filet du GPU faible — le tracé si le raster ne tient pas — est donc dormant sur la Terre.**
+
+**Ce qui est à décider (Sam)** : (a) le rendre atteignable — `rasterRateCoarsest` vrai quand la cadence de la Terre est fixée par son matériau,
+l'épinglage de l'échelle compté comme son plancher —, mais alors il peut se déclencher sur kerr-mini pendant J0 (GPU p50 ~55 ms) et chez un
+joueur à GPU faible, la vue basculant au tracé (le contrôle de 6 s le rend si le tracé n'est pas plus rapide) ; (b) le retirer sur la Terre (le
+raster toujours, un plancher de qualité à la place). **Recommandation** : (a), après une mesure du tracé contre le raster sur kerr-mini dans J0
+(si le tracé n'y est pas plus rapide, le contrôle de 6 s ramène le raster aussitôt et (b) devient la conclusion). L'e2e : sa vérification de
+cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mise de côté jusqu'à la décision.
+
 ## La page figée quand le rectangle publié d'un niveau du relief ne couvre plus la tuile de la caméra (relevé par la sonde de fuite de J2-0)
 
 - **Observé** (12 nov. 2026, ce Mac, Chrome sans tête, F-35 gelé à 300 m au-dessus de la plaine du Gapeau, cap 20° ; e2e de mise au

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 14:12 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 14:47 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -67,7 +67,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
-**Attend Sam** : côté rendu, la validation de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) (5 questions ; ses mesures de J3-0 avancent avec les recommandations du plan — la ville d'abord) ; la borne du M1 Max fixée provisoirement à 30 (révisable). Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; l'onglet masqué (recommandation : en solo, pause dite sans rattrapage ; en salle, rien d'arrêté, « hors de vue » annoncé, resynchronisation dite) ; avant RD3, le niveau de défense du réseau.
+**Attend Sam** : côté rendu, **le repli du raster vers le tracé, dormant sur la Terre depuis J2-7** ([PROBLEMES-A-REGLER](docs/PROBLEMES-A-REGLER.md) : le rendre atteignable ou le retirer ; recommandation : atteignable, après une mesure tracé contre raster sur le mini) ; la validation de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) (5 questions ; ses mesures de J3-0 avancent avec les recommandations du plan — la ville d'abord) ; la borne du M1 Max fixée provisoirement à 30 (révisable). Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; l'onglet masqué (recommandation : en solo, pause dite sans rattrapage ; en salle, rien d'arrêté, « hors de vue » annoncé, resynchronisation dite) ; avant RD3, le niveau de défense du réseau.
 
 ## Journal
 
@@ -5008,3 +5008,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `main.ts`** rejoué : préexistant, signalé à la session du rendu. IGN sollicité par ces deux e2e, annoncé à la session du rendu (qui n'en
   lançait pas pendant ce temps). J0 à repasser par elle sur kerr-mini.
 - **4.8 : fait** — les quatre découpes d'AR-12 (l'état de session, la frame gardée, le gouverneur, les poses de l'appareil) et la persistance.
+
+## 2026-11-13T14:47Z — Le repli du raster vers le tracé, dormant sur la Terre : relevé, à décider ; `raster-governor` au contrat actuel
+
+- **Relevé** (l'e2e `raster-governor` de la session de l'audit, pendant l'extraction du gouverneur — ce n'était pas elle) : sous le matériau, la
+  cadence de la Terre est fixée à 1 (J2-7, son ancien chemin retiré au lot R1) et l'échelle épinglée ; le guet du gouverneur — cadence la plus
+  grossière, échelle 0,5, 12 s au-delà d'une fois et demie le budget — ne s'arme donc plus jamais sur la Terre : **le filet du GPU faible est
+  dormant**. Lu dans le code ; pas mesuré sur un GPU faible.
+- **Fait** : [PROBLEMES-A-REGLER](docs/PROBLEMES-A-REGLER.md) (les deux options, la recommandation : atteignable après une mesure tracé contre
+  raster sur kerr-mini) ; `raster-governor` — la cadence attendue 1 sous le matériau, sa partie « repli » derrière `RG_FALLBACK=1` jusqu'à la
+  décision ; sa ligne au catalogue (il y manquait, comme 170 autres e2e — un retard ancien, non traité ici).
+- **Non fait** : rien de changé au comportement du jeu (la décision est à Sam) ; l'e2e mis à jour pas encore rejoué (les e2e IGN de la session
+  de l'audit tournent sur ce Mac).
+

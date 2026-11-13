@@ -104,26 +104,32 @@ test.skipIf(!E2E)(
         `(() => { const g = __bh.camera.geoNow(); return { alt: g.alt, gs: g.gs }; })()`,
       );
       out.alps = { ...(await app.js<Record<string, unknown>>(STATE)), geo };
-      expect([2, 4, 8, 16]).toContain((out.alps as { raster: { rate: number } }).raster.rate);
+      // (the Earth's shading rate under its material — shadeLite at every pixel — fixed at 1 since PLAN-J2 J2-7, Sam's decision of
+      // 13 Nov 2026: the rate governed only shade's leftovers; 2…16 only before the material is compiled)
+      expect([1, 2, 4, 8, 16]).toContain((out.alps as { raster: { rate: number } }).raster.rate);
       // (where it was put, the clock stopped: not fallen)
       expect(geo.alt).toBeGreaterThan(2000);
       await app.shot("remote-results/rg-alps-raster.png");
 
-      // (the budget squeezed: the shading rate coarser to its floor, then the fallback to the traced pipeline, said)
-      await app.js(`(() => { __bh.settings.realtimeBudget = 8; return 1; })()`);
-      await until("__bh.renderer.terrainRasterStats.rate === 16", 90_000, "the automatic rate at one in sixteen");
-      await until("__bh.renderer.rasterFellBack", 90_000, "the fallback to the traced pipeline");
-      await until("!__bh.renderer.rasterPrimaryNow", 30_000, "the traced pipeline drawing");
-      await frames(60);
-      await app.shot("remote-results/rg-alps-fellback.png");
-      out.fellBack = await app.js(STATE);
-      // (the setting chosen again: the raster tried again; a wide budget: the rate finer again)
-      await app.js(`(() => { __bh.settings.realtimeBudget = 200; __bh.game.set("earthPipeline", "raster"); return 1; })()`);
-      expect(await app.js<boolean>("__bh.renderer.rasterFellBack")).toBe(false);
-      await until("__bh.renderer.rasterPrimaryNow", 120_000, "the raster back");
-      await until("__bh.renderer.terrainRasterStats.rate <= 4", 90_000, "the automatic rate finer again");
-      out.roomy = await app.js(STATE);
-      await app.js(`(() => { __bh.settings.realtimeBudget = 30; return 1; })()`);
+      // (the budget squeezed: the shading rate coarser to its floor, then the fallback to the traced pipeline, said — dormant on the
+      // Earth since J2-7 (the rate fixed at 1 under the material, the scale pinned): docs/PROBLEMES-A-REGLER.md « Le repli du raster vers
+      // le pipeline tracé ne s'arme plus », Sam's to decide; RG_FALLBACK=1 runs this part as it was written)
+      if (process.env.RG_FALLBACK === "1") {
+        await app.js(`(() => { __bh.settings.realtimeBudget = 8; return 1; })()`);
+        await until("__bh.renderer.terrainRasterStats.rate === 16", 90_000, "the automatic rate at one in sixteen");
+        await until("__bh.renderer.rasterFellBack", 90_000, "the fallback to the traced pipeline");
+        await until("!__bh.renderer.rasterPrimaryNow", 30_000, "the traced pipeline drawing");
+        await frames(60);
+        await app.shot("remote-results/rg-alps-fellback.png");
+        out.fellBack = await app.js(STATE);
+        // (the setting chosen again: the raster tried again; a wide budget: the rate finer again)
+        await app.js(`(() => { __bh.settings.realtimeBudget = 200; __bh.game.set("earthPipeline", "raster"); return 1; })()`);
+        expect(await app.js<boolean>("__bh.renderer.rasterFellBack")).toBe(false);
+        await until("__bh.renderer.rasterPrimaryNow", 120_000, "the raster back");
+        await until("__bh.renderer.terrainRasterStats.rate <= 4", 90_000, "the automatic rate finer again");
+        out.roomy = await app.js(STATE);
+        await app.js(`(() => { __bh.settings.realtimeBudget = 30; return 1; })()`);
+      } else out.fallback = "skipped — dormant on the Earth since J2-7 (PROBLEMES-A-REGLER)";
 
       // (the traced pipeline by the player's choice; a fixed rate)
       await app.js(`(() => { __bh.game.set("earthPipeline", "trace"); return 1; })()`);
