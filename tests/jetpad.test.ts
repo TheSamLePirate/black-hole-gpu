@@ -104,3 +104,37 @@ test("both bumpers held: the TDC — the right stick its slew, the head still, A
   expect(g.out.tdc).toBe(false);
   expect(g.out.gun).toBe(true);
 });
+
+test("the A320's layout (audit FX-07): the stick rolls, no gun, no cursor, no lock; A A/THR, X the autobrake, Y pushback, L3 the reversers, Menu the AP", () => {
+  const J = new JetPad();
+  const step = (p: PadState, secs: number) => {
+    let out = J.step(p, 1 / 60, "airliner");
+    const acts = [...out.actions];
+    for (let t = 1 / 60; t < secs; t += 1 / 60) {
+      out = J.step(p, 1 / 60, "airliner");
+      acts.push(...out.actions);
+    }
+    return { out, acts: acts.map((a) => a.action + (a.arg ? `:${a.arg}` : "")) };
+  };
+  // the stick right: the roll; A held: no gun
+  const r = step(pad({ lx: 0.7, held: [0] }), 0.2);
+  expect(r.out.roll).toBeCloseTo(0.7, 6);
+  expect(r.out.gun).toBe(false);
+  expect(r.acts).toEqual(["jetSystem:athr"]);
+  step(pad(), 0.1);
+  // both bumpers: no cursor (their rudders cancel)
+  const b = step(pad({ held: [4, 5] }), 0.3);
+  expect(b.out.tdc).toBe(false);
+  step(pad(), 0.1);
+  // X, Y, L3, ▶: the autobrake, pushback, the reversers, the speed brakes — no weapon, no lock
+  const acts: string[] = [];
+  for (const k of [2, 3, 10, 15]) {
+    acts.push(...step(pad({ held: [k] }), 0.1).acts, ...step(pad(), 0.1).acts);
+  }
+  expect(acts).toEqual(["jetSystem:stovl", "pushback", "jetSystem:ab", "airBrake"]);
+  // Menu tapped: the AP; held: the settings; View held long: the view (no padlock)
+  expect([...step(pad({ held: [9] }), 0.1).acts, ...step(pad(), 0.05).acts]).toEqual(["jetSystem:ap"]);
+  expect(step(pad({ held: [9] }), 0.6).acts).toEqual(["settings"]);
+  step(pad(), 0.05);
+  expect([...step(pad({ held: [8] }), 0.8).acts, ...step(pad(), 0.05).acts]).toEqual(["mount"]);
+});

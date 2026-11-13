@@ -19,6 +19,17 @@ export default {
   "View · Menu": "View · Menu",
   "Tap: the camera's view — hold: the head locked on the target · tap: the autopilot's holds — hold: the settings":
     "Appui : la vue de la caméra — maintenu : la tête verrouillée sur la cible · appui : les tenues du pilote automatique — maintenu : les réglages",
+  "The A320 on a controller (Xbox 360 · Xbox · PlayStation)": "L'A320 à la manette (Xbox 360 · Xbox · PlayStation)",
+  "Thrust levers up · down": "Manettes de poussée plus · moins",
+  "Reverse thrust (on the ground)": "Inverseurs de poussée (au sol)",
+  "A/THR": "A/THR",
+  "Acknowledge the master caution": "Acquitter l'alarme",
+  "Autobrake: OFF · LO · MED · MAX in turn": "Autofreinage : arrêt · LO · MED · MAX tour à tour",
+  "Pushback (on the ground)": "Repoussage (au sol)",
+  "D-pad ▲ ▼ ▶": "Croix ▲ ▼ ▶",
+  "Gear · flaps (a notch) · speed brakes": "Train · volets (un cran) · aérofreins",
+  "The camera's view · tap: the autopilot (AP1) — hold: the settings":
+    "La vue de la caméra · appui : le pilote automatique (AP1) — maintenu : les réglages",
   "A spacecraft on a controller (Ranger · Lander · Endurance)": "Un vaisseau à la manette (Ranger · Lander · Endurance)",
   "Pitch (back: nose up) · yaw — in RCS translation: up · down · left · right":
     "Tangage (tiré : nez en haut) · lacet — en translation RCS : haut · bas · gauche · droite",

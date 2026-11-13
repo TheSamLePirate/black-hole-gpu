@@ -10,7 +10,7 @@ Le jeu lit tous les périphériques branchés en même temps : une manette Xbox 
 | `src/input/devices.ts` | les instantanés des périphériques, les profils du joueur (`kerr.pads`), `PadControls` : la lecture de chaque image, les périphériques réclamés |
 | `src/input/profiles.ts` | les profils connus (douze modèles), le profil générique d'un appareil de vol inconnu, le modèle de la manette standard |
 | `src/input/haptics.ts` | les vibrations : le fond continu (`hapticMix`), les impulsions, l'envoi à chaque périphérique qui sait vibrer |
-| `src/input/jetpad.ts` | pur : la disposition de chasseur d'une manette standard pour le F-35 (sticks, tête, zoom, palonnier, appuis brefs et longs) |
+| `src/input/jetpad.ts` | pur : la disposition d'une manette standard pour les avions — de chasseur pour le F-35 (sticks, tête, zoom, palonnier, appuis brefs et longs), d'avion de ligne pour l'A320 (audit FX-07) |
 | `src/ui/pads-screen.ts` | l'écran « Manettes et HOTAS » : les périphériques en direct, l'affectation par détection, les réglages des axes, la calibration |
 | `src/gamepad.ts` | la manette standard (son mapping intégré : le vol, la caméra, les menus) ; elle laisse aux profils les périphériques réclamés |
 | `src/controller/piloting.ts` | `pilotInput` : le clavier, le tactile, la manette et les profils additionnés ; la reprise du levier |
@@ -82,6 +82,28 @@ pour cette manette (« personnalisée » dans l'écran des manettes) garde la pr
 - L'aide des commandes (?) a sa section « The F-35 on a controller ».
 
 ![Le stick droit poussé à droite : la tête tournée, le cockpit vu par-dessus l'épaule](progress/aviation/pad-head.jpg)
+
+## L'A320 à la manette
+
+Depuis le 13 novembre 2026 (audit FX-07), l'A320 a sa disposition, la même manette (`src/input/jetpad.ts`, `"airliner"`) :
+les sticks, les gâchettes, le palonnier, la tête et le zoom comme au F-35 ; ni canon, ni arme, ni verrouillage, ni curseur. Avant,
+il prenait la disposition générique, celle d'un vaisseau : le stick gauche en tangage et **lacet** (pas de roulis), les gâchettes
+hautes en roulis, X et Y les maintiens prograde et rétrograde que le clavier refuse à un avion. Les boutons passent par les
+actions du clavier et leurs gardes (les inverseurs au sol seulement, l'AP par le FCU de l'A320).
+
+| Commande | Effet |
+|---|---|
+| Stick gauche · stick droit · R3 | tangage et roulis · la tête · le zoom (comme au F-35) |
+| RT · LT | les manettes de poussée plus · moins (incrémental) |
+| LB · RB | palonnier gauche · droite (ensemble : rien de plus — pas de curseur) |
+| A | A/THR (l'auto-poussée) |
+| B | acquitter l'alarme |
+| X | l'autofreinage, à tour de rôle : arrêt, LO, MED, MAX (MAX au sol, pour le décollage interrompu) |
+| Y | le repoussage (au sol) |
+| L3 | les inverseurs de poussée (au sol) |
+| Croix | ▲ train · ▼ volets (un cran) · ▶ aérofreins |
+| View | la vue suivante |
+| Menu | appui bref : l'AP (AP1) · maintenu : les réglages |
 
 ## Le curseur de désignation (TDC)
 

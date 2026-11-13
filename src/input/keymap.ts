@@ -456,6 +456,23 @@ export const KEYMAP: KeySection[] = [
     ],
   },
   {
+    // (the A320's layout — input/jetpad.ts "airliner", audit FX-07)
+    title: "The A320 on a controller (Xbox 360 · Xbox · PlayStation)",
+    rows: [
+      { keys: "Left stick", text: "Pitch (back: nose up) · roll" },
+      { keys: "Right stick", text: "Turn the head: look where it points — back ahead when let go" },
+      { keys: "RT · LT  (R2 · L2)", text: "Thrust levers up · down" },
+      { keys: "LB · RB  (L1 · R1)", text: "Rudder left · right" },
+      { keys: "L3  (click the left stick)", text: "Reverse thrust (on the ground)" },
+      { keys: "A  (✕)", text: "A/THR" },
+      { keys: "B  (○)", text: "Acknowledge the master caution" },
+      { keys: "X  (□)", text: "Autobrake: OFF · LO · MED · MAX in turn" },
+      { keys: "Y  (△)", text: "Pushback (on the ground)" },
+      { keys: "D-pad ▲ ▼ ▶", text: "Gear · flaps (a notch) · speed brakes" },
+      { keys: "View · Menu", text: "The camera's view · tap: the autopilot (AP1) — hold: the settings" },
+    ],
+  },
+  {
     title: "A spacecraft on a controller (Ranger · Lander · Endurance)",
     rows: [
       { keys: "Left stick", text: "Pitch (back: nose up) · yaw — in RCS translation: up · down · left · right" },

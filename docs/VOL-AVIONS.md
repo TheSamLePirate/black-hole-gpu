@@ -654,7 +654,9 @@ la Terre. Un crash en solo met la partie en pause (§5.3).
 | Tout relâcher — la mission, le maintien, et sur un avion ses modes : approche (ILS, pont), course au décollage, formation, interception, orbite, suivi de terrain, ravitaillement, NAV, AP et A/THR (l'A320 par son FCU) ; ce qui est coupé est dit | Retour arrière |
 
 Les touches de vol sont tout ou rien (±1). Manette de jeu du F-35 (`input/jetpad.ts`) : stick gauche tangage et roulis,
-RT/LT manette, LB/RB palonnier, L3 postcombustion, croix train, volets, leurres, aérofrein. Levier HOTAS : absolu, cran
+RT/LT manette, LB/RB palonnier, L3 postcombustion, croix train, volets, leurres, aérofrein. Celle de l'A320 (la même, en
+avion de ligne — audit FX-07, 13 nov. 2026 ; [HOTAS.md](HOTAS.md)) : sticks, gâchettes et palonnier pareils, A A/THR, X
+l'autofreinage, Y le repoussage, L3 les inverseurs, Menu l'AP ; ni canon, ni arme, ni verrouillage. Levier HOTAS : absolu, cran
 de ralenti à 4 %, repris seulement quand il croise la valeur courante ; le bouger **désenclenche l'autothrottle** ; sous
 95 %, la postcombustion s'éteint.
 

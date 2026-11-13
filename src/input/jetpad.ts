@@ -11,6 +11,13 @@
 //   LB + RB held together   the designation cursor (TDC — input/tdc.ts): the right stick moves it (the head stays),
 //                           A designates under it (no gun then)
 //
+// The A320 on the same pad (an airliner's layout — audit FX-07: it had the general one, a spacecraft's, its stick yawing,
+// X and Y the orbital holds): the sticks, the bumpers' rudder, the triggers' thrust levers and the head the same; no gun,
+// no weapon, no lock, no cursor —
+//   A  A/THR   B  acknowledge   X  the autobrake (its setting in turn)   Y  pushback (on the ground)   L3  the reversers
+//   D-pad ▲ gear  ▼ flaps (a notch)  ▶ speed brakes   View  tap: the camera's view   Menu  tap: the autopilot · hold: the settings
+// — the keymap's actions, through the keys' own guards (the reversers on the ground only, the A320's FCU for the AP).
+//
 // Shaped for a fighter: the sticks' fine centre (their curve), the rudder eased in rather than banged, the head's
 // look a spring — where the stick points, back ahead as it is let go —, the zoom eased in and out.
 
@@ -73,6 +80,9 @@ const A = 0,
   LEFT = 14,
   RIGHT = 15;
 
+/** The layout: a fighter's (the F-35's) or an airliner's (the A320's). */
+export type JetPadKind = "fighter" | "airliner";
+
 /** Which buttons fire what on their press (tap-or-hold ones apart). */
 const ON_PRESS: Partial<Record<number, JetPadAction>> = {
   [B]: { action: "ack" },
@@ -83,11 +93,26 @@ const ON_PRESS: Partial<Record<number, JetPadAction>> = {
   [RIGHT]: { action: "airBrake" },
   [L3]: { action: "jetSystem", arg: "ab" },
 };
-/** Tap or hold: what each does. */
-const TAP_HOLD: Partial<Record<number, [JetPadAction, JetPadAction]>> = {
+/** Tap or hold: what each does (no hold: the tap's on release, however long). */
+const TAP_HOLD: Partial<Record<number, [JetPadAction, JetPadAction | null]>> = {
   [Y]: [{ action: "lock" }, { action: "intercept" }],
   [MENU]: [{ action: "jetSystem", arg: "ap" }, { action: "settings" }],
   [VIEW]: [{ action: "mount" }, { action: "combat", arg: "padlock" }],
+};
+/** The airliner's (the A320's): the jet's own keymap actions (controller/a320.ts, a320ap.ts behind them). */
+const AIRLINER_PRESS: Partial<Record<number, JetPadAction>> = {
+  [A]: { action: "jetSystem", arg: "athr" },
+  [B]: { action: "ack" },
+  [X]: { action: "jetSystem", arg: "stovl" },
+  [Y]: { action: "pushback" },
+  [UP]: { action: "gear" },
+  [DOWN]: { action: "flaps" },
+  [RIGHT]: { action: "airBrake" },
+  [L3]: { action: "jetSystem", arg: "ab" },
+};
+const AIRLINER_TAP_HOLD: Partial<Record<number, [JetPadAction, JetPadAction | null]>> = {
+  [MENU]: [{ action: "jetSystem", arg: "ap" }, { action: "settings" }],
+  [VIEW]: [{ action: "mount" }, null],
 };
 
 const ease = (cur: number, target: number, dt: number, tau: number) => cur + (target - cur) * (1 - Math.exp(-dt / tau));
@@ -111,13 +136,16 @@ export class JetPad {
     this.lookYaw = this.lookPitch = this.zoom = 0;
   }
 
-  step(p: PadState, dt: number): JetPadOut {
+  step(p: PadState, dt: number, kind: JetPadKind = "fighter"): JetPadOut {
     this.t += dt;
     const held = p.held ?? [];
     const on = (i: number) => !!held[i];
     const actions: JetPadAction[] = [];
-    // (both bumpers held: the TDC — their rudders cancel anyway; A then designates)
-    const tdc = on(LB) && on(RB);
+    const fighter = kind === "fighter";
+    const PRESS = fighter ? ON_PRESS : AIRLINER_PRESS;
+    const TH = fighter ? TAP_HOLD : AIRLINER_TAP_HOLD;
+    // (both bumpers held: the TDC — their rudders cancel anyway; A then designates — the fighter's alone)
+    const tdc = fighter && on(LB) && on(RB);
     if (tdc && on(A) && !this.prev[A]) actions.push({ action: "designate" });
     for (let i = 0; i < Math.max(held.length, 16); i++) {
       const now = on(i),
@@ -125,13 +153,13 @@ export class JetPad {
       if (now && !was) {
         this.since[i] = this.t;
         this.fired[i] = false;
-        const a = ON_PRESS[i];
+        const a = PRESS[i];
         if (a) actions.push(a);
       }
-      const th = TAP_HOLD[i];
+      const th = TH[i];
       if (th) {
         // (held long enough: the hold's, once; let go before it: the tap's)
-        if (now && !this.fired[i] && this.t - (this.since[i] ?? this.t) >= JETPAD.hold) {
+        if (th[1] && now && !this.fired[i] && this.t - (this.since[i] ?? this.t) >= JETPAD.hold) {
           this.fired[i] = true;
           actions.push(th[1]);
         }
@@ -163,7 +191,7 @@ export class JetPad {
       roll: p.move[1],
       yaw: this.rudder,
       throttle: p.move[2],
-      gun: on(A) && !tdc,
+      gun: fighter && on(A) && !tdc,
       tdc,
       tdcSlew: tdc ? [p.look[0], p.look[1]] : [0, 0],
       lookYaw: this.lookYaw,

@@ -85,6 +85,11 @@ loin d'un porte-avions engage l'approche ILS sur la piste la plus proche, **U** 
 VOL-VAISSEAUX, les deux pages) mis à jour ; **revolés** : `apprendre-avions` **7/7**, `apprendre-vaisseaux` **9/9** (ce Mac) ;
 e2e `modifier-keys` 2/2 et `aircraft-autokeys` 3/3.
 
+**Le 13 novembre 2026, plus tard** (audit FX-07) : **l'A320 à la manette** a sa disposition (avant : celle d'un vaisseau — pas de
+roulis au stick, X/Y les maintiens orbitaux) ; ce que la page du cours disait (« stick gauche tangage et roulis ») devient vrai pour lui.
+**Revérifié** par l'e2e `a320-pad` (1/1 : 15° d'inclinaison en 2 s, Menu « AP1 engaged ») et `jetpad` (F-35, 5/5) ; les recettes du
+cours, au clavier, inchangées et non revolées.
+
 **Ce qui reste ouvert** :
 - Le vol entièrement à la main par script : il faut écrire un régulateur, et le cours ne donne pas les gains.
 - L'amarrage manuel à 6 degrés de liberté.

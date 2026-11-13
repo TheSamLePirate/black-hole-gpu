@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:20 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:28 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -65,7 +65,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
-| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17 | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots : messages des avions, atterrissages, rapport de vol, cadre de piste du HUD (distances, vent et ses parts), ravitaillement et défis dans les unités du pilote — les messages spatiaux restent en SI ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite FX-07, QA-11 |
+| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07 | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots (messages, rapport de vol, cadre de piste dans les unités du pilote ; le spatial en SI) ; FX-07 : l'A320 à la manette (sa disposition d'avion de ligne) ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite QA-11 |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -6141,3 +6141,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   E2E-VOLS §7. **Le toucher dit deux fois dans la page** (une fois dans le contrôleur seul) : noté, non cherché. Restent en m/s, en impérial,
   les rubans de vitesse et d'altitude du Lander (HUD des vaisseaux : à trancher avec les messages spatiaux).
 - Suite : FX-07 (manette de l'A320 et école) ; QA-11 (catalogue des e2e) ; l'état 06 à refaire.
+
+## 2026-11-13T23:28Z — Audit FX-07 : l'A320 à la manette, une disposition d'avion de ligne
+
+- Contribution : §19 (toute l'expérience : chaque appareil pilotable avec chaque entrée ; les commandes par les mêmes actions et
+  gardes que le clavier) ; audit 2026-11-10, FX-07.
+- Réalisé : `src/input/jetpad.ts` a deux dispositions, `"fighter"` (le F-35, inchangée) et `"airliner"` (l'A320 : sticks, gâchettes,
+  palonnier, tête et zoom pareils ; A A/THR, B acquitter, X l'autofreinage, Y le repoussage, L3 les inverseurs, croix train/volets/aérofreins,
+  View la vue, Menu l'AP ou les réglages ; ni canon, ni arme, ni verrouillage, ni curseur) ; `controller/lens.ts` la donne à tout avion
+  (`isAircraft`) ; les boutons passent par les actions du clavier (inverseurs au sol seulement, l'AP par le FCU). L'aide des commandes
+  (section « The A320 on a controller », FR/EN), HOTAS.md, VOL-AVIONS, catalogue.
+- Preuves : **reproduit avant** (e2e `a320-pad`, manette simulée, l'A320 à 2 000 m au large de Toulon) : inclinaison 0° → 0° en 2 s de stick à
+  droite, X « Hold: Prograde », Y « Hold: Retrograde », Menu sans AP ; **après** : 0° → 15°, X « Autobrake LO », Y « Pushback: on the ground
+  only », Menu « AP1 engaged » — 1/1 ; `jetpad` (F-35) 5/5 ; `jetpad.test` 5/5 (la disposition de l'A320 ajoutée), keymap, gamepad,
+  spacepad, i18n, A320 verts ; tsc, Biome.
+- Limites : la disposition générique (« Pad ») garde ses X/Y prograde/rétrograde pour les vaisseaux, à qui ils servent ; aucun avion ne la
+  prend plus. Le cours illustré (`apprendre-avions.html`) ne parle pas de la manette : non touché. FX-08 (V et les vues propres à l'A320) :
+  non traité ici.
+- Suite : QA-11 (catalogue des e2e) ; FX-08 si Sam le veut dans ce lot d'audit.

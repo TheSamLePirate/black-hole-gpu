@@ -182,18 +182,19 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   const dragging = this.pointers.size > 0;
   const pad = this.scripted ? null : this.padFrame !== undefined ? this.padFrame : this.pad.poll();
   if (pad?.active) this.activity = performance.now();
-  // (the F-35 flown with a pad — its own fighter's layout, input/jetpad.ts —: its stick, its head, its zoom, its
-  // buttons; the pad's general ones left aside)
+  // (an aircraft flown with a pad — its own layout, input/jetpad.ts: the F-35's a fighter's, the A320's an airliner's
+  // (audit FX-07: before, the general one, a spacecraft's) —: its stick, its head, its zoom, its buttons; the pad's
+  // general ones left aside)
   const jetPadOn =
     !!pad &&
     !!pad.held &&
-    fleet.active === "f35" &&
+    isAircraft(fleet.active) &&
     this.piloting &&
     !this.spectator &&
     !this.character.active &&
     this.outsideView() !== "free" &&
     !this.padControls.flightOwned(pad.id);
-  this.jetPadOut = jetPadOn ? this.jetPad.step(pad!, dt) : null;
+  this.jetPadOut = jetPadOn ? this.jetPad.step(pad!, dt, fleet.active === "f35" ? "fighter" : "airliner") : null;
   if (!jetPadOn) this.jetPad.reset();
   // (a spacecraft flown with a pad — its own layout, input/spacepad.ts —: its sticks, its RCS's translation, its holds,
   // the wheel it opens and aims)
