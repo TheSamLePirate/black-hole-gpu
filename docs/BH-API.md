@@ -989,7 +989,7 @@ True when a new build is installed and waiting: a toast then asks the user to re
 
 ### `__bh.pwa.update()` → void
 
-Makes the waiting worker take over (`skip-waiting`); the page then reloads onto the new build. Does nothing when none waits.
+Makes the waiting worker take over (`skip-waiting`); the page then reloads onto the new build. Does nothing when none waits. The player's way to it: the notice shown when a new build waits (`[data-testid=pwa-update]`, its button `pwa-update-run` — « Recharger maintenant » —, « Plus tard » hides it until the next load; audit QA-16, 13 Nov 2026: before, only a toast said to reload, and a reload alone leaves the old worker in charge — `tests/e2e/pwa-update.e2e.test.ts`). The e2e's server makes a new build at each ask of `sw.js` under `KERR_SW_FRESH=1`.
 
 ### `__bh.hud` → object
 

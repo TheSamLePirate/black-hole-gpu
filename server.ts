@@ -186,7 +186,8 @@ const server = Bun.serve({
         entrypoints: ["./src/sw.ts"],
         target: "browser",
         minify: !dev,
-        define: { __BUILD__: JSON.stringify(dev ? `dev-${Date.now()}` : "local") },
+        // (a new build at each ask in development — and under KERR_SW_FRESH: the update e2e's « new version », audit QA-16)
+        define: { __BUILD__: JSON.stringify(dev || process.env.KERR_SW_FRESH ? `dev-${Date.now()}` : "local") },
       });
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), {
