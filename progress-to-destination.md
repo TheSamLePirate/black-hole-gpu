@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:43 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:50 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -64,6 +64,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
+| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17 | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 2 lots : les messages des avions, des atterrissages, du HUD (vent, dérive), du ravitaillement et des défis dans les unités du pilote — restent le rapport d'atterrissage et les messages spatiaux (SI) ; ensuite FX-07, QA-11 |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -6084,3 +6085,25 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le relais du serveur de dev), `pwa` 2/2 deux fois ; tests unitaires PWA 13/13. Non vérifié : le site de production (même code), les autres
   workers (ils chargent des tuiles, pas des fichiers du jeu). PROBLEMES, E2E-CATALOGUE, GRAPHICS-PIPELINE (étape 0 du parcours).
 
+## 2026-11-13T22:50Z — Audit FX-17 (second lot) : atterrissages, autopilotes, HUD et ravitaillement dans les unités du pilote
+
+- Contribution : §19 (lisibilité ; le métrique par défaut, l'impérial en option — les mêmes unités au HUD et dans les messages) ; audit
+  2026-11-10, FX-17.
+- Réalisé : `fVs` (vitesse verticale : « 0.8 m/s », « 153 ft/min ») et `fLen` (longueur courte) dans `src/ui/unitsys.ts` ; passés par
+  `unitsOf`/`unitsFor` : le toucher, l'atterrissage dur, sur le ventre, l'écrasement, le train cédé, « En l'air », le nuage gelé
+  (`controller/motion.ts`) ; l'entrée d'une figure (`aerobatics.ts`), la porte manquée (`challenge.ts`), le décollage automatique
+  (`runwaytakeoff.ts`), l'approche ILS de l'A320 (`a320ap.ts`), la remise de gaz (`computer.ts`), le retour base (`orders.ts`), l'interception et
+  le verrouillage (`copilot.ts`, `combat.ts`, `intercept.ts`), l'orbite, le suivi de terrain et le rendez-vous du jet (`jetmodes.ts`) ; le vent et
+  la dérive du HUD (`ui/hud/symbology.ts`), la position derrière le ravitailleur (`ui/netsession.ts`), l'entrée des figures du panneau des défis
+  (`ui/challengepanel.ts`) ; leurs clés sans unité et leurs traductions (`fr-main`, `fr-hud`, `fr-aero`, `fr-net`). En métrique, les textes
+  inchangés (mêmes arrondis).
+- Preuves : **avant**, les formats portaient « m/s » et « m » écrits en dur (`git show HEAD:src/controller/motion.ts` : « {1} m/s down, {2} m/s
+  along ») — reproduction statique, pas lancée ; **après** (`tests/units-messages.test.ts`, posé à Kennedy par l'autopilote d'atterrissage) :
+  impérial « Touchdown on Earth · 153 ft/min down, 0 kt along », métrique « 0.8 m/s down, 0 m/s along » ; i18n 5/5 ; 115 fichiers de tests
+  d'avions, de l'A320, du F-35, du radar, du porte-avions, des défis et 40 du HUD, du ravitaillement et du réseau verts, un par un ; tsc, Biome.
+  Non vérifié : aucun e2e (le HUD en impérial non regardé à l'écran).
+- Limites : restent en SI, **volontairement**, les messages spatiaux (Δv, poussée faible, amarrage, orbites en km — la convention de
+  l'astronautique ; à confirmer par Sam) et le FCU de l'A320 (en nœuds, comme l'avion) ; **à faire** : le rapport d'atterrissage
+  (`game/report.ts`, tout en SI par son propre formateur `metres`, vent de travers en m/s) et le cercle d'erreur du HUD (`circ. {0} ± {1} km`).
+  Correction : l'entrée du premier lot porte par erreur « 2026-11-14T15:40Z » ; elle date du 13 novembre vers 22:35 UTC (commit 4230804c).
+- Suite : le rapport d'atterrissage dans les unités du pilote ; puis FX-07 (manette de l'A320 et école) et QA-11 (catalogue des e2e).

@@ -8,6 +8,7 @@ import { gradeLanding } from "../game/report";
 import { advanceToMouth, driftToGlue } from "../system/wormhole-flight";
 import { BELLY, GEARS, gearForces, mulM3, tippedOver, touchdownVerdict, worldTensor, type GearOut } from "../gear";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import { inv3 } from "../pilot";
 import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose } from "../camera";
 import { TUNING } from "../game/tuning";
@@ -192,9 +193,14 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
       const bodyName = BODY_NAMES[F.id as Body];
       if (r.touchdown)
         this.onPilotMessage?.(
-          tf("Touchdown on {0} · {1} m/s down, {2} m/s along", t(bodyName), r.touchdown.vn.toFixed(1), r.touchdown.vh.toFixed(0)),
+          tf(
+            "Touchdown on {0} · {1} down, {2} along",
+            t(bodyName),
+            unitsOf(this.s.units).fVs(r.touchdown.vn),
+            unitsOf(this.s.units).fSpd(r.touchdown.vh),
+          ),
         );
-      if (r.airborne) this.onPilotMessage?.(tf("Airborne · {0} m/s", (Math.hypot(...L.w) * C_MPS).toFixed(0)));
+      if (r.airborne) this.onPilotMessage?.(tf("Airborne · {0}", unitsOf(this.s.units).fSpd(Math.hypot(...L.w) * C_MPS)));
       this.properTime += dtau;
       this.landed = L.landed || !!L.rolling;
       const F1 = planetFrame(F.id, t0 + simDt, a, s.massSolar);
@@ -214,7 +220,7 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
         this.crashed(`${VESSELS[fleet.active].name}: swept away by Miller's giant wave`);
       } else if (r.cloud) {
         // (Mann's frozen cloud struck in flight — P4)
-        this.onPilotMessage?.(tf("Struck a frozen cloud at {0} m/s", (r.impact ?? 0).toFixed(0)));
+        this.onPilotMessage?.(tf("Struck a frozen cloud at {0}", unitsOf(this.s.units).fSpd(r.impact ?? 0)));
         this.crashed(`${VESSELS[fleet.active].name}: struck one of Mann's frozen clouds at ${(r.impact ?? 0).toFixed(0)} m/s`);
       } else if (r.impact !== null && !was) {
         // (the Ranger rests on its belly: levelled on the ground, nose on the horizon)
@@ -690,7 +696,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       if (press <= 0 && vn >= 0) {
         this.rolling = null;
         this.rollSite = null;
-        this.onPilotMessage?.(tf("Airborne · {0} m/s", (Math.hypot(...vt) * C_MPS).toFixed(0)));
+        this.onPilotMessage?.(tf("Airborne · {0}", unitsOf(this.s.units).fSpd(Math.hypot(...vt) * C_MPS)));
       } else {
         X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
         vr = vt;
@@ -839,7 +845,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
         // (off the ground: a bounce says nothing — two seconds on the wheels first —, a lift-off its speed)
         const vt = sub3(V, groundVelocity(ground, X, t));
         const spd = Math.hypot(...vt) * C_MPS;
-        if (spd > 20 && (t - this.rollSince) * secM > 2) this.onPilotMessage?.(tf("Airborne · {0} m/s", spd.toFixed(0)));
+        if (spd > 20 && (t - this.rollSince) * secM > 2) this.onPilotMessage?.(tf("Airborne · {0}", unitsOf(this.s.units).fSpd(spd)));
         this.offGround = t;
         this.rolling = null;
         // (the rollout's runway kept: a tyre's skip back on the wheels — the same touchdown — steers on
@@ -868,14 +874,15 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     this.landed = true;
     const name = BODY_NAMES[ground as Body];
     const craft = VESSELS[fleet.active].name;
-    const v = touched.speed.toFixed(1);
+    const v = unitsOf(this.s.units).fVs(touched.speed);
+    const nameT = tf(name);
     if (touched.gear === "landed")
-      this.onPilotMessage?.(tf("Touchdown on {0} · {1} m/s down, {2} m/s along", name, v, touched.vh!.toFixed(0)));
-    else if (touched.gear === "hard") this.onPilotMessage?.(tf("Hard landing on {0} · {1} m/s down — the gear damaged", name, v));
+      this.onPilotMessage?.(tf("Touchdown on {0} · {1} down, {2} along", nameT, v, unitsOf(this.s.units).fSpd(touched.vh!)));
+    else if (touched.gear === "hard") this.onPilotMessage?.(tf("Hard landing on {0} · {1} down — the gear damaged", nameT, v));
     else if (touched.gear === "belly") {
       // (gear up: on the belly, sliding to a stop — the gear stays in, jammed)
       this.onBelly = true;
-      this.onPilotMessage?.(tf("Belly landing on {0} · {1} m/s down — gear up, the hull scraped", name, v));
+      this.onPilotMessage?.(tf("Belly landing on {0} · {1} down — gear up, the hull scraped", nameT, v));
     }
     if (touched.gear === "landed" || touched.gear === "hard" || touched.gear === "belly")
       this.reportLanding(name, touched.gear === "landed" ? "landed" : "hard", touched.speed, touched.vh ?? 0);
@@ -886,8 +893,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
         touched.gear === "tipped"
           ? tf("{0}: tipped over on {1}", craft, name)
           : touched.gear === "hull"
-            ? tf("{0}: crashed into {1} at {2} m/s, off its gear", craft, name, touched.speed.toFixed(0))
-            : tf("{0}: the gear collapsed on {1} at {2} m/s", craft, name, touched.speed.toFixed(0));
+            ? tf("{0}: crashed into {1} at {2}, off its gear", craft, nameT, unitsOf(this.s.units).fSpd(touched.speed))
+            : tf("{0}: the gear collapsed on {1} at {2}", craft, nameT, unitsOf(this.s.units).fSpd(touched.speed));
       this.onPilotMessage?.(why);
       this.crashed(why);
     }
@@ -903,7 +910,9 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     const name = BODY_NAMES[ground as Body];
     const v = touched.speed;
     if (touched.wheels && this.rolling) {
-      this.onPilotMessage?.(tf("Touchdown on {0} · {1} m/s down, {2} m/s along", tf(name), v.toFixed(1), touched.vh!.toFixed(0)));
+      this.onPilotMessage?.(
+        tf("Touchdown on {0} · {1} down, {2} along", tf(name), unitsOf(this.s.units).fVs(v), unitsOf(this.s.units).fSpd(touched.vh!)),
+      );
       this.reportLanding(name, "landed", v, touched.vh ?? 0);
     } else {
       const nav = this.ourNav(cameraFrame(s));

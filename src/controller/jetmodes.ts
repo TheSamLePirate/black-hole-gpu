@@ -10,6 +10,7 @@ import { altHoldGamma } from "../game/jet";
 import { MODES, orbitHeading, tankerTrack, tfGamma } from "../game/jetmodes";
 import type { Scenario } from "../game/scenarios";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import { fleet } from "../fleet";
 import { ground } from "./gcas";
@@ -66,7 +67,7 @@ function orbitStart(this: CameraController, o: { lat?: number; lon?: number; rad
   this.brk = null;
   this.orbitMode = { ...c, R, dir };
   holdsOn(this, f);
-  return tf("Orbit: {0} km, to the {1}", (R / 1000).toFixed(1), dir > 0 ? t("right") : t("left"));
+  return tf("Orbit: {0}, to the {1}", unitsOf(this.s.units).fDist(R), dir > 0 ? t("right") : t("left"));
 }
 
 /** The terrain following at `agl` [m] (null: off). What to say. */
@@ -81,7 +82,7 @@ function tfStart(this: CameraController, agl: number | null): string {
   if (!f) return t("Terrain following: in the air");
   this.tfAgl = agl;
   holdsOn(this, f);
-  return tf("Terrain following: {0} m over the ground", agl);
+  return tf("Terrain following: {0} over the ground", unitsOf(this.s.units).fAlt(agl));
 }
 
 /** the tanker's callsign */
@@ -209,7 +210,7 @@ function modesStep(this: CameraController, inp: PilotInput, f: { h: number; hdg:
         slotName: tf("Behind {0}'s {1} — observation", o.name, this.tankerSide === "left" ? t("left hose") : t("right hose")),
       };
       this.s.flightMode = "plane";
-      this.onPilotMessage?.(tf("Rendezvous: {0} · {1} km", o.name, (Math.hypot(...o.r) / 1000).toFixed(1)));
+      this.onPilotMessage?.(tf("Rendezvous: {0} · {1}", o.name, unitsOf(this.s.units).fDist(Math.hypot(...o.r))));
     }
   }
   const O = this.orbitMode;

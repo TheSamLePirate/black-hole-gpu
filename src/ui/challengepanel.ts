@@ -10,6 +10,7 @@ import { combatBests } from "../controller/combat";
 import { FIGURE_ORDER, FIGURES, type FigureId } from "../game/aerobatics";
 import { LOADOUTS } from "../game/combat";
 import { SCENARIOS, type Scenario } from "../game/scenarios";
+import { unitsFor } from "./unitsys";
 import { fleet } from "../fleet";
 import { CHALLENGES, type ChallengeDef } from "../game/challenges";
 import type { GameTools } from "../game/tools";
@@ -93,7 +94,8 @@ export class ChallengePanel {
         h(
           "span",
           "chp-par",
-          tf("entry {0} m/s · {1} m", F.entry.v, F.entry.agl) + (F.entry.law === "direct" ? ` · ${t("direct law")}` : ""),
+          tf("entry {0} · {1}", unitsFor(this.host.camera.s).fSpd(F.entry.v), unitsFor(this.host.camera.s).fAlt(F.entry.agl)) +
+            (F.entry.law === "direct" ? ` · ${t("direct law")}` : ""),
         ),
         h("span", "chp-best", AB[id] !== undefined ? `${AB[id]!.toFixed(1)}/20` : t("not flown")),
         button({ label: t("Watch"), testid: `chp-aero-demo-${id}`, onClick: () => this.figure(id, "demo") }),

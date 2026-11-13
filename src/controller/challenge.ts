@@ -20,6 +20,7 @@ import {
 } from "../game/challenges";
 import { SITES } from "../game/sites";
 import { t, tf, tr } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { store } from "../util/storage";
 import type { CameraController } from "../controls";
@@ -166,7 +167,7 @@ function challengeStep(this: CameraController, dt: number) {
           const ax = Math.abs(x.across) - G.w / 2,
             ay = Math.abs(x.up) - G.h / 2;
           const way = ax > ay ? (x.across > 0 ? t("right") : t("left")) : x.up > 0 ? t("high") : t("low");
-          C.say = tf("Gate {0} missed · {1} m {2} · +{3} s", C.next + 1, Math.round(Math.max(ax, ay)), way, MISS_PENALTY);
+          C.say = tf("Gate {0} missed · {1} {2} · +{3} s", C.next + 1, unitsOf(this.s.units).fAlt(Math.max(ax, ay)), way, MISS_PENALTY);
         }
         C.next++;
         if (C.next >= C.gates.length) finish(this, C.t + C.missed * MISS_PENALTY + C.over);

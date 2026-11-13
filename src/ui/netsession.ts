@@ -70,6 +70,7 @@ import { type Act, readCrewAck, sayOf } from "../net/crewcmd";
 import { lang } from "../i18n";
 import { sound } from "../audio/engine";
 import { roomCraft } from "../net/spacefleet";
+import { unitsFor } from "./unitsys";
 import {
   isSpaceOrder,
   orderAsk,
@@ -2070,14 +2071,14 @@ export class NetSession {
       vel,
       fwd: ax[2],
       up: ax[1],
-      note: tf("On {0}'s {1}, {2} m out", N.title, hp.name, Math.round(dist)),
+      note: tf("On {0}'s {1}, {2} out", N.title, hp.name, unitsFor(this.d.settings).fLen(dist)),
     });
     const c = this.d.camera;
     if (c.pilot.auto !== "none") c.pilot.setAuto(c.pilot.auto);
     c.pilot.auto = "none";
     c.pilot.throttle = 0;
     this.prev = null;
-    return tf("On {0}'s {1}, {2} m out", N.title, hp.name, Math.round(dist));
+    return tf("On {0}'s {1}, {2} out", N.title, hp.name, unitsFor(this.d.settings).fLen(dist));
   }
 
   /**

@@ -45,6 +45,7 @@ import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { frameNow } from "../frameclock";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 
 import { netFrame } from "./netcraft";
 import type { CameraController } from "../controls";
@@ -1001,15 +1002,15 @@ function goAround(this: CameraController, why: { what: "axis" | "high" | "low"; 
   R.gaN = (R.gaN ?? 0) + 1;
   R.gOuter = R.prof = R.trkInt = R.gRise = R.aglPrev = R.flareTau = R.spiral = R.side = undefined;
   R.turning = false;
-  const by = why ? Math.round(why.by) : 0;
+  const by = unitsOf(this.s.units).fAlt(why ? why.by : 0);
   this.onPilotMessage?.(
     !why
       ? t("Go-around: climbing out on the engines")
       : why.what === "axis"
-        ? tf("Go-around: {0} m off the axis at the minima", by)
+        ? tf("Go-around: {0} off the axis at the minima", by)
         : why.what === "high"
-          ? tf("Go-around: {0} m high at the minima", by)
-          : tf("Go-around: {0} m low at the minima", by),
+          ? tf("Go-around: {0} high at the minima", by)
+          : tf("Go-around: {0} low at the minima", by),
   );
   return true;
 }

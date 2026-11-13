@@ -21,6 +21,10 @@ export interface Units {
   fSpd: (v: number) => string;
   fAlt: (m: number) => string;
   fDist: (m: number, digits?: number) => string;
+  /** a vertical speed written out — "1.2 m/s", "240 ft/min" — (a sink rate at touchdown; audit FX-17) */
+  fVs: (v: number) => string;
+  /** a short length written out with its digits — "2.5 m", "8.2 ft" — (an offset, a miss; audit FX-17) */
+  fLen: (m: number, digits?: number) => string;
   /** a pressure [Pa], a temperature [K] written out: bar and kelvin with Celsius (a giant's air — P11 D5), psi and °F */
   fPress: (pa: number) => string;
   fTemp: (k: number) => string;
@@ -42,6 +46,8 @@ const METRIC: Units = {
   fSpd: (v) => `${Math.round(v)} m/s`,
   fAlt: (m) => `${Math.round(m)} m`,
   fDist: (m, d = 1) => `${(m / 1000).toFixed(d)} km`,
+  fVs: (v) => `${v.toFixed(1)} m/s`,
+  fLen: (m, d = 0) => `${m.toFixed(d)} m`,
   fPress: (pa) => `${sig3(pa / 1e5)} bar`,
   fTemp: (k) => `${Math.round(k)} K · ${Math.round(k - 273.15)} °C`,
 };
@@ -60,6 +66,8 @@ const IMPERIAL: Units = {
   fSpd: (v) => `${Math.round(v * 1.943844)} kt`,
   fAlt: (m) => `${Math.round(m / 0.3048)} ft`,
   fDist: (m, d = 1) => `${(m / 1852).toFixed(d)} NM`,
+  fVs: (v) => `${Math.round((v / 0.3048) * 60)} ft/min`,
+  fLen: (m, d = 0) => `${(m / 0.3048).toFixed(d)} ft`,
   fPress: (pa) => `${sig3(pa / 6894.757)} psi`,
   fTemp: (k) => `${Math.round(((k - 273.15) * 9) / 5 + 32)} °F`,
 };

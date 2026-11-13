@@ -11,6 +11,7 @@ import { vs1g } from "../a320/du/data";
 import { Fmgc, type FmgcIn, type FmgcOut } from "../a320/fmgc/fmgc";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import { fromRunway, ILS, ilsReading, type IlsRunway, onRunway, runwayId } from "../game/ils";
 import { gcCourse, gcDist } from "../game/flightplan";
 import { geoidDeg } from "../system/geoid";
@@ -254,7 +255,7 @@ function a320Approach(this: CameraController, W: IlsRunway): string {
   const o = onRunway(W, g);
   const altFt = Math.ceil(Math.max(W.elev * FT + 2000, legsGround(W) * FT + 1000) / 100) * 100;
   this.a320App = { rwy: W, leg: "entry", side: o.across >= 0 ? 1 : -1, altFt, safe: safeProfile(W), touch: null };
-  return tf("ILS approach: {0}, {1} km", `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`, Math.round(gcDist(g, W) / 1000));
+  return tf("ILS approach: {0}, {1}", `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`, unitsOf(this.s.units).fDist(gcDist(g, W), 0));
 }
 
 function a320ApproachOff(this: CameraController) {

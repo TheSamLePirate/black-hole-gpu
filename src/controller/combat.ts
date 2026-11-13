@@ -34,6 +34,7 @@ import { type GunState, gunFunnel, gunSolution, SIGHT, trackAccel } from "../gam
 import type { MatchRules } from "../game/match";
 import type { Scenario } from "../game/scenarios";
 import { t, tf, tr } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { store } from "../util/storage";
 import type { CameraController } from "../controls";
@@ -238,7 +239,7 @@ function combatTrigger(this: CameraController, what: "fire" | "lock" | "weapon" 
     const id = W.cycleLock(P);
     const q = W.target(id);
     return q
-      ? tf("Locked: {0} · {1} km", q.name, (Math.hypot(q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2]) / 1000).toFixed(1))
+      ? tf("Locked: {0} · {1}", q.name, unitsOf(this.s.units).fDist(Math.hypot(q.p[0] - P.p[0], q.p[1] - P.p[1], q.p[2] - P.p[2])))
       : t("Lock dropped");
   }
   if (what === "weapon") {

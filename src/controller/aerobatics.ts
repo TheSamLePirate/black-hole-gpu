@@ -288,7 +288,13 @@ function nextInBox(c: CameraController, A: AeroRun) {
   c.aeroStart(id, "judge");
   if (c.aero) {
     c.aero.seq = { ...seq, idx: seq.idx + 1 };
-    c.aero.say = tf("Figure {0}/{1}: {2} — entry: {3} m/s, level", seq.idx + 2, seq.ids.length, t(FIGURES[id].name), FIGURES[id].entry.v);
+    c.aero.say = tf(
+      "Figure {0}/{1}: {2} — entry: {3}, level",
+      seq.idx + 2,
+      seq.ids.length,
+      t(FIGURES[id].name),
+      unitsFor(c.s).fSpd(FIGURES[id].entry.v),
+    );
   }
 }
 

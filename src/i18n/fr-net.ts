@@ -202,7 +202,7 @@ export default {
   "{0} undocked": "{0} s'est désamarré",
   "No free port to dock to": "Aucun port libre où s'amarrer",
   "Docked to another's craft — UNDOCK first": "Amarré à l'engin d'un autre — DÉSAMARRER d'abord",
-  "On {0}'s {1}, {2} m out": "Sur {1} de {0}, à {2} m",
+  "On {0}'s {1}, {2} out": "Sur {1} de {0}, à {2}",
   // the room's warp (R6)
   "The room's clock is still being set — a moment": "L'horloge de la salle se règle encore — un instant",
   "paused by {0}": "en pause par {0}",

@@ -22,3 +22,31 @@ test("the jet's autopilot told in the pilot's units: metric m and m/s, imperial 
   expect(metric).toContain("3000 m");
   expect(metric).toContain("200 m/s");
 });
+
+test("a touchdown told in the pilot's units: imperial ft/min down and kt along, metric m/s", async () => {
+  const { overPlace } = await import("./helpers/flight");
+  const said: string[] = [];
+  for (const units of ["imperial", "metric"] as const) {
+    const { c, msgs, fly } = overPlace("earth", 28.6, -80.6, 1);
+    c.s.units = units;
+    fly(2);
+    c.pilot.auto = "none";
+    c.pilot.setAuto("land");
+    fly(240, () => !!c.ourLanded && c.pilot.auto === "none");
+    const td = msgs.find((m) => /Touchdown|Hard landing/.test(m)) ?? "";
+    console.log(`  ${units}: ${td}`);
+    said.push(td);
+    resetFlights();
+  }
+  expect(said[0]).toMatch(/Touchdown on Earth · \d+ ft\/min down, \d+ kt along/);
+  expect(said[0]).not.toMatch(/m\/s/);
+  expect(said[1]).toMatch(/Touchdown on Earth · [\d.]+ m\/s down, \d+ m\/s along/);
+});
+
+test("the lengths and sink rates written in each system", async () => {
+  const { unitsOf } = await import("../src/ui/unitsys");
+  expect(unitsOf("metric").fVs(1.23)).toBe("1.2 m/s");
+  expect(unitsOf("imperial").fVs(1.016)).toBe("200 ft/min");
+  expect(unitsOf("metric").fLen(2.5, 1)).toBe("2.5 m");
+  expect(unitsOf("imperial").fLen(3.048, 0)).toBe("10 ft");
+});

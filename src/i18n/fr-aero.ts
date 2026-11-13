@@ -17,7 +17,7 @@ export default {
   "The aerobatic box": "La boîte de voltige",
   "Five figures in a row — loop, aileron roll, Immelmann, split-S, barrel roll — each judged out of 20: out of 100 together.":
     "Cinq figures à la suite — looping, tonneau rapide, Immelmann, split-S, tonneau barriqué — chacune jugée sur 20 : sur 100 en tout.",
-  "entry {0} m/s · {1} m": "entrée {0} m/s · {1} m",
+  "entry {0} · {1}": "entrée {0} · {1}",
   "direct law": "loi directe",
   Watch: "Regarder",
   Loop: "Looping",

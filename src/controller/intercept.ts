@@ -8,6 +8,7 @@ import type { FormSlot } from "../game/formation";
 import type { FormCraft } from "../game/formation";
 import { type IcptOut, type IcptPhase, interceptStep } from "../game/intercept";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import type { CameraController } from "../controls";
 
@@ -54,7 +55,7 @@ function icptStart(this: CameraController): string {
   if (this.form) this.formOff();
   this.icpt = { id: T.id, name: T.name, phase: "run", seen: null, armed: false, last: null };
   this.s.flightMode = "plane";
-  return tf("Intercept: {0} · {1} km", T.name, (Math.hypot(...T.r) / 1000).toFixed(1));
+  return tf("Intercept: {0} · {1}", T.name, unitsOf(this.s.units).fDist(Math.hypot(...T.r)));
 }
 
 /** The target now, fixed to the Earth: its radar track's, or carried on from its last; null: lost. */

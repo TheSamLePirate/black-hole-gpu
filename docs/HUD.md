@@ -14,7 +14,8 @@ right from any mount); points (the future path, the runway, the docking gates) w
   outline, read on a bright sky.
 - **Units** (**Settings › Game › HUD aids › Units**, `ui/unitsys.ts`): metric by default (m, m/s, km),
   imperial as the option (ft, kt, NM, ft/min) — the same for the tapes, the radar, the lock, the gun's range,
-  the ILS's distance, the cockpit's displays.
+  the ILS's distance, the cockpit's displays, the runway's wind and the hover's DRIFT, and the pilot's messages
+  (touchdown, autopilots, intercept, go-around, refuelling — audit FX-17; the spacecraft's Δv and orbits stay SI).
 
 ## The three HUDs, and what each phase shows
 
@@ -233,7 +234,7 @@ the ring.
   the profile is the one the autopilot would fly from where the final began, frozen there — the PAPI, the
   gates, the aim and the glide's error work as under the autopilot, the card is the runway's; in a
   descent on the engines (below 5 km, slow, falling) the card is the descent's.
-- **The runway's wind** (PLAN-METEO W4): the runway box adds the surface wind — `WIND 070°/6–9 m/s` (the
+- **The runway's wind** (PLAN-METEO W4): the runway box adds the surface wind — `WIND 070°/6–9 m/s` (`… kt` in imperial; the
   gusts as a range) — and its parts on the runway landed, `HEAD 5 · CROSS ←3` (the arrow the way it
   pushes): green, amber for a tail wind or past 15 kt across, red past 25 kt across. The hand-flown final's
   card adds the same rows (surface wind, head or tail wind, cross wind marked past 15 and 25 kt). The

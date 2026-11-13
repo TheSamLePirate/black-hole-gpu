@@ -13,6 +13,7 @@ import { holdRadius, type Racetrack, racetrackHeading } from "../game/racetrack"
 import { wrapPi } from "../game/jet";
 import { SITES } from "../game/sites";
 import { t, tf, tr } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import type { CameraController } from "../controls";
 
@@ -164,7 +165,7 @@ function rtbStart(this: CameraController): string {
   this.nav.on = { l: false, v: false };
   this.routeChanged();
   this.navToggle("both");
-  return tf("RTB — {0}, {1} km, course {2}°", best.icao ?? best.name, Math.round(bd / 1000), Math.round(gcCourse(g, best) / D));
+  return tf("RTB — {0}, {1}, course {2}°", best.icao ?? best.name, unitsOf(this.s.units).fDist(bd, 0), Math.round(gcCourse(g, best) / D));
 }
 
 /**

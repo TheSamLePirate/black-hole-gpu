@@ -1608,9 +1608,17 @@ function drawRunway(
   if (wind) {
     const wy = y + ((rw.gRef !== null && rw.gam !== null ? 70 : 54) + (rw.papi !== null ? 16 : 0) - 16) * dpr;
     // (the gusts as a range — "6–9": the HUD's G reads as a 6)
-    const gust = wind.gust > 0.5 ? `–${Math.round(wind.u10 + wind.gust)}` : "";
+    // (in the pilot's units — kt with the imperial option; audit FX-17)
+    const U = unitsFor(F.s);
+    const gust = wind.gust > 0.5 ? `–${Math.round(U.spd(wind.u10 + wind.gust))}` : "";
     text(
-      tf("WIND {0}°/{1}{2} m/s", String(Math.round(wind.from) % 360 || 360).padStart(3, "0"), Math.round(wind.u10), gust),
+      tf(
+        "WIND {0}°/{1}{2} {3}",
+        String(Math.round(wind.from) % 360 || 360).padStart(3, "0"),
+        Math.round(U.spd(wind.u10)),
+        gust,
+        U.sys === "imperial" ? "kt" : "m/s",
+      ),
       x,
       wy,
       "rgba(214, 236, 255, 0.95)",
@@ -1697,6 +1705,7 @@ function drawHover(
   inside: (p: [number, number] | null, m?: number) => boolean,
 ) {
   const { ctx, dpr, W, H, i } = F;
+  const U = unitsFor(F.s);
   const A = i.air;
   // (a hover, a vertical descent: low and slow — not the glide to a runway)
   if (!(sf.alt < 3000) || (A && A.speed && A.speed > 160 && A.q > 20)) return;
@@ -1761,7 +1770,7 @@ function drawHover(
     ctx.fill();
   }
   text(
-    tf("DRIFT {0} m/s", sf.vHor.toFixed(sf.vHor < 10 ? 1 : 0)),
+    tf("DRIFT {0} {1}", U.spd(sf.vHor).toFixed(U.spd(sf.vHor) < 10 ? 1 : 0), U.sys === "imperial" ? "kt" : "m/s"),
     cx,
     cy + R0 + 18 * dpr,
     sf.vHor > 3 ? "#ffc85a" : "rgba(214, 236, 255, 0.9)",

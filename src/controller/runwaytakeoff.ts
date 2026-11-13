@@ -7,6 +7,7 @@
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import type { CameraController } from "../controls";
 
@@ -80,7 +81,7 @@ function runwayTakeoff(this: CameraController): string | null {
   this.rwyRun = { phase: "roll", t: 0, hdg: at.heading, field: g.alt };
   this.pilot.throttle = 1;
   if (!this.jetModes.ab) this.jetToggle("ab");
-  return tf("Automatic take-off: full power, rotation at {0} m/s", RWY_TAKEOFF.vRotate);
+  return tf("Automatic take-off: full power, rotation at {0}", unitsOf(this.s.units).fSpd(RWY_TAKEOFF.vRotate));
 }
 
 /** A frame of the run: its throttle and its stick on `inp`; the stick, or the throttle pulled, takes it back. */

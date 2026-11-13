@@ -125,7 +125,7 @@ function icptOn(this: CameraController, name: string): string {
   this.orbitMode = null;
   this.icpt = { id: a.id, name: a.name, phase: "run", seen: null, armed: false, last: null };
   this.s.flightMode = "plane";
-  return tf("Intercept: {0} · {1} km", a.name, (Math.hypot(...a.r) / 1000).toFixed(1));
+  return tf("Intercept: {0} · {1}", a.name, unitsOf(this.s.units).fDist(Math.hypot(...a.r)));
 }
 
 /** In formation on an aircraft by its name: a room player's wing, a real flight's (controller/traffic.ts), else
@@ -216,7 +216,7 @@ function lockOnName(this: CameraController, name?: string): string {
   R.lockOn(T.id);
   const W = this.combat?.world;
   if (W) W.lock = T.id.startsWith("cmb:") ? Number(T.id.slice(4)) : null;
-  return tf("Locked: {0} · {1} km", T.name, (Math.hypot(...T.r) / 1000).toFixed(1));
+  return tf("Locked: {0} · {1}", T.name, unitsOf(this.s.units).fDist(Math.hypot(...T.r)));
 }
 
 /** The radar's mode set (RWS, TWS, STT on the lock): what to say. */
