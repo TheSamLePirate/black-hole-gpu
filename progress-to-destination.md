@@ -5061,7 +5061,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   kerr-mini) ; et, sur le fond, la mer formée reste au bord de l'échec même seule (un passage « No grade ») : la tenue du pilote automatique
   à l'appontage par mer de 4,5 m est fragile à un écart d'un demi-degré au départ.
 
-## 2026-11-13T14:48Z — quals « mer formée » : la dichotomie exécutée — un effet cumulatif, pas un fichier
+## 2026-11-13T15:45Z — quals « mer formée » : la dichotomie exécutée — un effet cumulatif, pas un fichier
 
 - Hors du rendu, transmis à la session de l'audit (dont c'est le code). L'ordre d'exécution de bun relevé (rapport JUnit : quals 324ᵉ sur 434) ;
   dichotomie exécutée sur ce Mac : l'échec tient à **40 fichiers** (flight-quality … craftpanel, `bun test <ces 40> tests/quals.test.ts` le
