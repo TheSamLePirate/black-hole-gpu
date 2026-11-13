@@ -4046,3 +4046,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   §9 septies).
 - **Changé** : e2e `j2-probes` (`noiseJs` : le bruit d'une vue tenue, deux lectures à 8 images ; mesuré dans `trail`) ; PLAN-J2 ;
   `src/renderer.ts` un commentaire. **Non vérifié** : kerr-mini.
+
+## 2026-11-13T03:48Z — Correction : les mesures de traîne de J2-4 étaient fausses (la sonde ne repeignait pas les pages publiées) ; remesurées, et un seul historique accélère la page neuve en vue tenue
+
+- **Correction** (entrées de 03:5xZ à 05:0xZ de ce journal sur J2-4 étape A, J2-6 étape A en vue tenue et `heldFreshBox`) : témoin positif
+  allumé, `leakProbe(couleur)` ne repeignait que les emplacements non publiés — aucune page neuve à l'image (signature −0,262 → −0,265) ;
+  « 48 % à 66 images », « l'historique natif traîne », « `singleHistory` sans effet en vue tenue », « `heldFreshBox` sans effet » mesuraient
+  de la dérive. `src/system/earth-tiles.ts` corrigé (la nouvelle couleur repeint aussi les pages publiées).
+- **Remesuré** (M1 Max, `trail` `J2_STAGES=1`, 669 086 pixels changés) : vue tenue — l'image 60 % à 9 images, 82 % à 22, 96 % à 66 (traîne
+  ~0,5 s ; l'historique natif du sol porté à ~α 0,1) ; en mouvement 82 % à 3, 93 % à 10. **`singleHistory`** : vue tenue 72 % à 3, 86 % à 10,
+  92 % à 23 ; en mouvement 88 % à 3 ; bruit tenu 0,41 → 0,54 % (≤ 1 % C0-12). `heldFreshBox` (retiré) n'a pas été remesuré.
+- **Changé** : `earth-tiles.ts` (`leakProbe`), `j2-probes` (valeurs brutes par étage), PLAN-J2 §9 septies (encadré de correction) et
+  §9 octies (d), BH-API. **Non vérifié** : kerr-mini ; `singleHistory` en vol avec une mesure de netteté qui sépare le bruit.

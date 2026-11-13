@@ -1275,6 +1275,9 @@ export class EarthTiles {
     if (this.probe) {
       this.probe.word = word;
       for (const p of this.probe.slots) this.paintSlot(p, word);
+      // (the positive control already on: its published slots painted with the new colour too — a whole change of every page, the
+      // J2-4 step A arrival; before, they kept the first control colour and a repaint changed only the slots not published)
+      if (this.probe.control) for (const p of this.publishedSlots()) this.paintSlot(p, word);
       // (the positive control — o.control —: every published slot of the imagery painted too, the sentinel then read directly
       // everywhere the imagery is: what a leak of 100 % looks like, the probe's proof that its sentinel reaches the image; let go,
       // those levels are dropped and taken again)

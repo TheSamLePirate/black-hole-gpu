@@ -226,6 +226,8 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
           if (STAGES) {
             const z = await app.js<Record<string, number | null>>(stageSigJs("z"));
             const a = await app.js<Record<string, number | null>>(`globalThis.__j2sig.a`);
+            row[`stagesA_${mode}`] = a;
+            row[`stagesZ_${mode}`] = z;
             for (const r of reads) {
               const st = r.stages as Record<string, number | null> | undefined;
               if (!st) continue;

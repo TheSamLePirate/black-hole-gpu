@@ -336,6 +336,16 @@ pour les coutures est mesurée (phase `seams`). **Reste** : le ΔGPU sur J0 (ker
 
 ## 9 septies. J2-4, étape A : ce que fait aujourd'hui une page republiée (13 novembre 2026)
 
+> **Correction (même jour, ~05:10 UTC) — les mesures de traîne ci-dessous jusqu'à « Où traîne la page » étaient fausses** : une fois le
+> témoin positif allumé, `leakProbe(couleur)` ne repeignait que les emplacements **non publiés** — les pages publiées gardaient le vert, la
+> « page neuve » n'existait pas (signature magenta −0,262 avant, −0,265 après) ; les 48 % à 66 images, l'historique natif « qui traîne », les
+> A/B de `singleHistory` en vue tenue et de `heldFreshBox` mesuraient de la dérive. **La sonde corrigée** (`earthTiles.leakProbe` : témoin
+> allumé, une nouvelle couleur repeint aussi les pages publiées — 669 086 pixels changés) : **vue tenue** — l'entrée du temporel montre la
+> page dès la 2ᵉ image, l'historique natif suit à ~α 0,1 (le sol porté : 10 % à 2 images, 67 % à 16, 99,5 % à 66), l'image **60 % à 9
+> images, 82 % à 22, 96 % à 66** (une traîne d'**~0,5 s**) ; **en mouvement** — 82 % à 3 images, 93 % à 10. **Avec `singleHistory`**
+> (J2-6, §9 octies (d)) : vue tenue **72 % à 3 images, 86 % à 10, 92 % à 23** — la TAAU seule traîne encore un peu —, en mouvement 88 % à 3 ;
+> bruit d'une vue tenue (deux lectures à 8 images) **0,41 → 0,54 %** (C0-12 : ≤ 1 %). Le texte qui suit est gardé tel qu'écrit.
+
 Mesure avant tout code (e2e `j2-probes`, phase `trail`, M1 Max, `hyeres-low` ; kerr-mini hors réseau) : la sonde de fuite repeint **toutes
 les pages publiées** d'imagerie (vert, réglé, puis magenta d'un coup) — une arrivée contrôlée —, la couleur de scène relue 2 à 66 images
 après, sans `__bh.touch()` (un toucher est une scène changée : une invalidation globale). **Vue tenue** (horloge gelée, `rasterHeldAlpha`
@@ -422,8 +432,9 @@ les adaptateurs datés, la fiche J0 de sortie.
 **Fait** (`renderer.singleHistory`, **éteint** ; décision 5 de Sam) : quand la TAAU tourne, le temporel natif garde un historique **court**
 (son α minimal relevé à `singleNativeAlpha` = 0,5 ; le sol porté aussi, `TA.m2.w`) et la TAAU seule l'historique **long** (son α minimal
 celui qu'avait le natif, passé dans `TU.u.w` — avant, elle lisait le même `TA.k.z`). Aucune compilation nouvelle (81 / 81).
-**Mesuré** (M1 Max en pression « Heavy », un passage par côté) : vue tenue (`trail`) — les premières images un peu plus vite (13 % du chemin
-à 3 images contre 8 %), **identique à 66 images** (48 %) ; vol J0 (`flight`) — à l'arrêt, l'image en mouvement plus proche de l'affinée
+**Mesuré** (M1 Max en pression « Heavy », un passage par côté) : vue tenue (`trail`) — ~~les premières images un peu plus vite, identique
+à 66 images~~ (mesure fausse, §9 septies) ; **remesuré avec la sonde corrigée : la page neuve à 72 % dès 3 images contre ~0, 86 % à 10
+contre 60 %, le bruit tenu 0,41 → 0,54 %** ; vol J0 (`flight`) — à l'arrêt, l'image en mouvement plus proche de l'affinée
 (rapport 0,76–0,83 contre 0,30–0,65), mais au changement d'échelle forcé 0,75 → 0,625 un **pic plus fort** (+280 % contre +12 %) et au retour
 0,625 → 0,75 un pic moindre (+213 % contre +348 %) ; l'énergie du laplacien compte le bruit (un natif court en ajoute) : **rien de
 concluant**. Temps : 28,1 contre 32,9 ms GPU p50, la chauffe (second passage), pas le levier. **Reste** : J2-6 proprement dit (l'échelle
