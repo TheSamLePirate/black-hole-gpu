@@ -11,6 +11,7 @@ import {
   SEAM_MAP_JS,
   trailJs,
   trailSigJs,
+  stageSigJs,
   LEAK_VIEWS,
   leakCompareJs,
   SEAM_JS,
@@ -186,7 +187,17 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
                 if (c.jetModes.alt !== null && c.jetModes.spd !== null && i > 10) break; }
               globalThis.__j2gear = setInterval(() => { __bh.settings.autoGear = false; c.gearDown = true; c.gearExt = 1; c.gearInit = true; }, 16); return 1; })()`);
           row[`converged_${mode}`] = await converged(`${v} trail ${mode} green`);
+          // (the raster's shading rate — one pixel in so many shaded a frame, the others rebuilt: a change reaches a pixel at its next
+          // shading — adaptRasterRate's choice, by the device's load)
+          row[`rasterRate_${mode}`] = await app.js<number>(`__bh.renderer.rasterRate`);
           await app.js(keepSceneJs("a"));
+          // (J2_STAGES=1: the same way read at each stage of the reconstruction — where the change waits)
+          const STAGES = process.env.J2_STAGES === "1";
+          if (STAGES) {
+            await app.js(`(() => { __bh.renderer.stageProbe = true; return 1; })()`);
+            for (let i = 0; i < 3; i++) await app.js(`new Promise((q) => requestAnimationFrame(q))`);
+            await app.js(stageSigJs("a"));
+          }
           const inv0 = await app.js<number>(`__bh.renderer.invalidations`);
           const by0 = await app.js<Record<string, number>>(`({ ...__bh.renderer.invalidationsBy })`);
           // (magenta at once, then the reads: the frames counted by the renderer's completions)
@@ -199,10 +210,25 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
               [number, number]
             >(`(async () => { const R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q));
               let n = 0; while (R.completedFrames - globalThis.__j2f0 < ${k} && n++ < 600) await f(); await __bh.renderer.sceneColor(__bh.settings).then((c) => { globalThis.__j2.s${k} = c; }); return [R.completedFrames - globalThis.__j2f0, R.invalidations]; })()`);
-            reads.push({ k, at, invalidations: inv - inv0 });
+            reads.push({ k, at, invalidations: inv - inv0, ...(STAGES ? { stages: await app.js(stageSigJs(`s${k}`)) } : {}) });
           }
           await converged(`${v} trail ${mode} magenta`);
           await app.js(keepSceneJs("z"));
+          if (STAGES) {
+            const z = await app.js<Record<string, number | null>>(stageSigJs("z"));
+            const a = await app.js<Record<string, number | null>>(`globalThis.__j2sig.a`);
+            for (const r of reads) {
+              const st = r.stages as Record<string, number | null> | undefined;
+              if (!st) continue;
+              r.stageWay = Object.fromEntries(
+                Object.keys(st).map((k) => [
+                  k,
+                  st[k] == null || a[k] == null || z[k] == null ? null : +((st[k]! - a[k]!) / (z[k]! - a[k]! || 1)).toFixed(3),
+                ]),
+              );
+            }
+            await app.js(`(() => { __bh.renderer.stageProbe = false; return 1; })()`);
+          }
           for (const r of reads)
             Object.assign(r, await app.js(trailJs("a", `s${r.k}`, "z")), {
               sig: await app.js(trailSigJs("a", `s${r.k}`, "z")),

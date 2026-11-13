@@ -370,9 +370,15 @@ paramètres des tuiles (`P.tileL`, les fenêtres d'orthophotos) ni la table des 
 pixel, **sans écrêtage**, à α 0,1 (seul, une page neuve y passerait à 90 % en ~22 images) ; la TAAU garde ensuite **son propre historique
 long** (n jusqu'à 1/`rasterHeldAlpha` − 1 = 47), écrêté sur le résultat natif à g σ, et c'est elle que lit l'image (et `sceneColor`). **Corrigé
 le même jour par la mesure** : un historique unique (`singleHistory`, J2-6 étape A ci-dessous — le temporel natif court, la TAAU seule
-longue) ne change pas cette traîne (48 % à 66 images avec ou sans) ; elle n'est donc pas, ou pas seulement, le double historique : le
-chemin exact de la vue tenue (la passation à l'affinage, `encodeHandover`, ou la TAAU écrêtée sur un natif lui-même lent) reste **à
-établir** avant de choisir la voie de J2-4.
+longue) ne change pas cette traîne (48 % à 66 images avec ou sans) ; elle n'est donc pas, ou pas seulement, le double historique : **établi
+par étage** (même jour, `J2_STAGES=1` : la signature magenta relue à l'entrée du temporel, dans son historique et dans la TAAU) : en vue
+tenue raster la phase reste « realtime » (pas de passation à l'affinage), et **c'est l'historique natif qui traîne** — 6 % du chemin à 3
+images, 37 % à 66 —, la TAAU le suivant (11 %, 47 %) ; ni la cadence d'ombrage (1 ou 2 : 51 % contre 48 % à 66 images) ni le posemètre
+(exposition fixe) n'y sont pour quelque chose. Le mécanisme : vue tenue, α minimal `rasterHeldAlpha` (1/48) et une boîte d'écrêtage (g σ
+du voisinage) **élargie par le bruit de l'ombrage partiel** — la nouvelle page y tient, elle n'est que moyennée, plus lentement encore pour
+les pixels reconstruits (leur poids `TA.k.w`). Pour J2-4 : la voie 3 (un écrêtage à l'échelle du bruit) vise exactement ce point ; une
+voie plus simple encore — rendre au temporel tenu son α de vol (`RASTER_LITE_ALPHA`) quelques images après une publication de pages — le
+ferait en entier, mais globalement (une bouffée de bruit d'une seconde sur toute l'image tenue).
 
 *Recommandation* : **3 d'abord**, mesurée par la phase `trail` (la page neuve à > 90 % en 2–4 images, la convergence tenue C0-12 ≤ 1 %
 gardée), puis 1 seulement si une lecture par page devient nécessaire (J2-5, la sélection, les diagnostics). **Question pour Sam.**

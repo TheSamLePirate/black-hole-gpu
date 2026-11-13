@@ -404,3 +404,23 @@ export const trailSigJs = (a: string, b: string, z: string) => `(() => {
   if (!A || !B || !Z) return { error: "a read is missing" };
   const sa = sig(A), sb = sig(B), sz = sig(Z);
   return { sigA: +sa.toFixed(4), sigB: +sb.toFixed(4), sigZ: +sz.toFixed(4), way: +((sb - sa) / (sz - sa || 1)).toFixed(3) }; })()`;
+
+/**
+ * J2-4, step A, by stage — in the page: the reconstruction's stages now (renderer.sceneStages, stageProbe on: `shade` the image entering
+ * the temporal pass, `temporal` its history, `taau` the upsampling's) each reduced at once to its mean magenta signature (trailSigJs's
+ * measure: (R + B)/2 − G over the luminance, its pixels drawn and under twice the mid-grey) — kept as numbers under
+ * `globalThis.__j2sig[name]`, no image kept (three stages a read: ~70 MB otherwise). Returns them.
+ */
+export const stageSigJs = (name: string) => `(async () => {
+  const r = await __bh.renderer.sceneStages(__bh.settings);
+  if (!r) return null;
+  const e = r.exposure, out = {};
+  for (const [k, im] of Object.entries(r.stages)) {
+    if (!im) { out[k] = null; continue; }
+    const d = im.data; let s = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4) { const L = e * (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]); if (!(L > 0.005) || L > 2) continue;
+      s += e * (0.5 * (d[i] + d[i + 2]) - d[i + 1]) / L; n++; }
+    out[k] = s / Math.max(n, 1);
+  }
+  globalThis.__j2sig ??= {}; globalThis.__j2sig[${JSON.stringify(name)}] = out;
+  return out; })()`;

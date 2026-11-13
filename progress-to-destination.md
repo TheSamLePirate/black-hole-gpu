@@ -4026,3 +4026,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   §9 septies (corrigé) et §9 octies (d), BH-API, GRAPHICS-PIPELINE, E2E-CATALOGUE.
 - **Vérifié** : tsc, biome, `check-wgsl` 81/81, e2e `j2-probes` `trail` ×2 et `flight` ×2 (sans erreur GPU). **Non vérifié** : kerr-mini ;
   une mesure qui sépare netteté et bruit ; le reste de J2-6.
+
+## 2026-11-13T03:31Z — J2-4 : où traîne une page neuve en vue tenue, établi par étage
+
+- **Contribution** (PLAN-J2 J2-4, préalable à la décision de Sam) : la signature magenta d'une repeinte contrôlée relue à chaque étage
+  (`sceneStages` : entrée du temporel, son historique, la TAAU ; e2e `j2-probes` `trail` avec `J2_STAGES=1`) : en vue tenue raster,
+  **l'historique natif traîne** (6 % du chemin à 3 images, 37 % à 66), la TAAU le suit (11 %, 47 %) ; ni la cadence d'ombrage (A/B 1 contre 2 :
+  51 % contre 48 %) ni le posemètre (exposition fixe). Mécanisme : α tenu 1/48 et une boîte d'écrêtage élargie par le bruit de l'ombrage
+  partiel — la nouvelle page n'est que moyennée. PLAN-J2 §9 septies corrigé.
+- **Changé** : `tests/e2e/lib/j2-probes.ts` (`stageSigJs`), `tests/e2e/j2-probes.e2e.test.ts` (`J2_STAGES`, la cadence relevée) ; PLAN-J2.
+- **Mesuré** : M1 Max, trois passages de `trail` (1/0). **Non vérifié** : kerr-mini ; en vol (la sonde ne s'y prête pas).
