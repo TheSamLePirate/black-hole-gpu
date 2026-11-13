@@ -51,7 +51,8 @@ Estimation de l'agent (non mesurée) : à l'écran, ≈ ×0,65 sur les toits en 
   chaque partie (`:1495`).
 - **Raster et tracé diffèrent** : le raster recale l'albédo du toit sur l'orthophoto (× 0,6–1,5, `trace.wgsl:10402`), le tracé non ; la lumière
   ambiante diffère (`sky × 0,6 × AO` tracé ; `skyOnFace`, renvoi, Lune au raster) ; la pluie et la neige sur les bâtiments au raster seul ; les
-  bâtiments en boîtes reçoivent au raster le facteur de mouillé du sol (× 0,58) au lieu de celui des bâtiments (× 0,75, `:16030`) ;
+  bâtiments en boîtes recevaient au raster le facteur de mouillé du sol (× 0,58) au lieu de celui des bâtiments (× 0,75, `:16030`) —
+  **corrigé le 13 nov. (~17:35 UTC)**, vérifié statiquement seulement (compilation, budget des noyaux), aucune vue sous la pluie ;
   possiblement un GGX du sol en plus sur ces boîtes (`:16139`, **non vérifié**).
 
 ## Ce que J3-5 en fera (proposé)

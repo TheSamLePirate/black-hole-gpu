@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:32 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:35 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5454,4 +5454,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `tars-duck` 13/0 ; tsc, biome.
 - Limites : le premier morceau de Deepgram varie d'une demande à l'autre (0,7–2 s) ; des trous seraient possibles sur un réseau plus lent
   que la voix (aucun vu ; comptés) ; la voix robot anglaise et la voix système ne changent pas.
+
+## 2026-11-13T17:35Z — J3-5 : le mouillé des bâtiments en boîtes (un écart à son commentaire)
+
+- Réalisé : `trace.wgsl` `liteMaterial` — sous la pluie, les bâtiments dessinés en boîtes au raster (une feuille, le décor allumé) prennent le
+  facteur des bâtiments (× 0,75, brillance 0,12) au lieu de celui du sol (× 0,58 / 0,08), comme leur commentaire le disait (seuls les maillés
+  l'avaient). Trouvé par l'inventaire des matériaux (fiche mise à jour).
+- Preuves : **vérifié statiquement** (`check-wgsl` 82/82, budget des noyaux 69/69) ; **aucune vue sous la pluie** — l'effet n'est pas observé.
+- Suite : une vue de Paris sous la pluie avant / après, avec les vues de référence de J3-5.
 

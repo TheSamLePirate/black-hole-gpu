@@ -16026,10 +16026,12 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
         ripple *= near * (0.35 + 0.65 * pud / max(wet, 1e-3));
       }
     }
-    // (a roof's slate and a wall's stone darker wet too, less than the soil — their pores fewer)
-    A *= mix(vec3f(1.0), vec3f(select(mix(0.58, 0.7, rwyPaved), 0.75, mesh)), wet);
+    // (a roof's slate and a wall's stone darker wet too, less than the soil — their pores fewer; the buildings drawn as boxes too —
+    // a leaf, the scenery on —, not the meshes' alone: they had the soil's ×0.58, PLAN-J3 J3-5 inventory, 13 Nov 2026)
+    let bldWet = mesh || (leaf > 0u && P.scenery[0].w > 0.5);
+    A *= mix(vec3f(1.0), vec3f(select(mix(0.58, 0.7, rwyPaved), 0.75, bldWet)), wet);
     A *= 1.0 - 0.35 * pud;
-    wetS = wet * select(mix(0.08, 0.3, rwyPaved), 0.12, mesh) + pud * 0.4;
+    wetS = wet * select(mix(0.08, 0.3, rwyPaved), 0.12, bldWet) + pud * 0.4;
   }
   // (L3 — the shore's wet band and the swash on it, PLAN-MER-WEBGPU §5: the ground next to the sea — the shore's distances positive
   // on land only within a node of a sea node — and under the waves' run-up (Stockdon 2006 for a beach of slope ~0.08: R2 ≈ 0.078
