@@ -4286,3 +4286,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Non fait / suite** : IndexedDB et l'écriture hors frame (AR-05 : l'autosauvegarde reste synchrone toutes les 10 s, non mesurée) ;
   aucun plafond de nombre ni de taille ; pas d'écran pour relire un texte gardé à part. Prochains lots de 3.3 : « Reprendre » sur le
   bon instantané (FX-10), puis l'état des avions et des activités dans la sauvegarde (FX-09, AR-09).
+
+## 2026-11-13T08:07Z — J2 fermé par son chemin vers §8 ; l'ablation de l'eau réparée (−13 ms) ; sea surface −0,7 ms
+
+- **Contribution** (décisions de Sam du 13 : 1 — l'eau d'abord, ses préalables ; contre-analyse §2 et C2) : le tableau « chemin vers §8 » de la
+  contre-analyse vérifié contre les JSON des fiches et corrigé (chaque passe **par image** — × la part des images où elle tourne : ombres/sondes
+  0,6 ms sur le M1 Max, dans l'enveloppe ; eau 5,3 / 16,2 ms ; air et nuages 3,8 / 8,4 ms), tenu dans la fiche J0 de sortie. **`liteSkip`
+  réparé** : son mot passé par ses bits (`bitcast<u32>(P.jet2.w)`, `writeParams`) — il perdait ses bits bas sous le bit 26 levé par défaut ;
+  l'image par défaut inchangée (mot identique). **Mesuré** (kerr-mini, « Nominal ») : sans matériau de l'eau **−13,0 ms** (58,0 → 45,0 ;
+  intervalle p95 80 → 60,7), mer plate (`seaSurfaceOn`) **−0,7 ms** — le matériau est le poste, pas la surface ; l'ordre par défaut des
+  ablations de J0 prend `seaSurface`.
+- **Changé** : `src/renderer.ts`, `src/shaders/trace.wgsl`, `tests/e2e/j0-reference.e2e.test.ts` ; fiche J0 de sortie (« Le chemin vers §8 »),
+  la contre-analyse (§2 : la vérification), J0-CONTRAT, PLAN-J2. **Vérifié** : `check-wgsl` 81/81, tsc, `surface-id` 1/0 (identité 49/49),
+  j0 ablations 1/0. **Non fait encore** : l'essai de `fpsCap` 30/40 sur le M1 Max (suivant).

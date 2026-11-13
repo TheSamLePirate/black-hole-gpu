@@ -593,8 +593,10 @@ p95 80,1 ms, couverture utile à froid 56,3 s ; le M1 Max ne peut pas la donner 
 tenue passe par l'historique unique (72 % à 3 images ; les arrivées appellent encore `invalidate()`, sans effet en raster) ; *coût* — ΔGPU
 nul pour l'ensemble, les leviers nuls, `earthRateOne` −0,3 ms. **Retirés** : `rigidMotionOn` et ses pipelines, la désocclusion. **Laissés,
 avec leur raison** : l'échelle variable (l'épingle gardée, 2/3 coûte 2,1 dB), la voie 1 de J2-4 (l'identité du sol par page, non nécessaire
-à ce jour), J2-C (la compression BC7, à décider par Sam). **Chemin vers §8** : la part « reconstruction et sortie » reste `taau` 3,7 +
-`temporal` 1,8 ms sur kerr-mini (enveloppe 2,0) — J2 ne l'a pas réduite ; la publication tient dans ses 2 ms (p95 1,3).
+à ce jour), J2-C (la compression BC7, à décider par Sam). **Chemin vers §8** : écrit dans la [fiche J0 de sortie](progress/j0/FICHE-kerr-mini-2026-11-13-sortie.md) (« Le chemin vers §8 ») — par famille
+et par image, M1 Max et kerr-mini : l'eau 5,3 ms pour 1,0 (le premier poste), le non-attribué ≈ 7 ms, l'opaque 4,1 pour 4,0 (+ l'appareil), air
+et nuages 3,8 pour 2,5 ; dans l'enveloppe la reconstruction (2,1) et les ombres/sondes (0,6). J2 n'a pas réduit la reconstruction ; la
+publication tient dans ses 2 ms (p95 1,3). Suite décidée par Sam le 13 : l'eau étagée et la classification par tuiles avant J3.
 
 ## 9 terdecies. J2-C, l'étude (13 novembre 2026)
 

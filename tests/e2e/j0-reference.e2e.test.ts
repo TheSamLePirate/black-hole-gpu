@@ -44,6 +44,7 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   base: { label: "référence", set: "" },
   clouds: { label: "sans nuages", set: `__bh.game.set("earthClouds", 0);` },
   scenery: { label: "sans décor (bâtiments, arbres)", set: `__bh.settings.earthScenery = "off";` },
+  // (liteSkip 1: the water's material — valid since 13 Nov 2026, the word's bits carried by bitcast; before, lost under bit 26)
   water: { label: "sans matériau de l'eau", set: `__bh.renderer.liteSkip = 1;` },
   displays: {
     label: "sans HUD ni écrans d'interface",
@@ -73,7 +74,9 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   seaProbe: { label: "sans sonde au-dessus de la mer", set: `__bh.renderer.seaProbeOn = false;` },
   seaFoam: { label: "sans écume en carte du monde", set: `__bh.renderer.seaFoamWorldOn = false;` },
 };
-const ORDER = (process.env.J0_ORDER ?? "base,clouds,scenery,water,displays,ship,shipShadow,base").split(",");
+// (13 Nov 2026, Sam's decision 1: the water's two ablations in every fiche — its material, valid since liteSkip's bits are carried by
+// bitcast, and the sea's surface, the largest render pass, no owner measured before)
+const ORDER = (process.env.J0_ORDER ?? "base,clouds,scenery,water,seaSurface,displays,ship,shipShadow,base").split(",");
 
 const out: Record<string, unknown> = {
   scene: J0_SCENE,

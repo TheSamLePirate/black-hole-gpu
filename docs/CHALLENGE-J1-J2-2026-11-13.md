@@ -44,6 +44,12 @@ calcul s'attribuent par horodatage sur Apple (GRAPHICS-PIPELINE §8.3) ; l'envel
 | **Non attribué** (calculé) | — | **≈ 7** | **≈ 12** | GPU p50 moins les passes de calcul et, sur le mini, moins l'appareil et le HUD (ablations) : `sea surface`, `display`, masques ; sur le M1 Max l'appareil et le HUD y restent, faute d'ablation valable |
 | **Total mesuré** | 13,0 | **22,5** | **59,0** | `lastGpuMs` p50 |
 
+> **Vérifié par la session du rendu le 13 nov. (~09:40 UTC)** contre les JSON des fiches : les ordres de grandeur tiennent, trois lignes changent
+> une fois chaque passe ramenée **par image** (temps moyen × la part des images où elle tourne) et les passes oubliées comptées — **ombres,
+> sondes 0,6 ms** sur le M1 Max (les horizons tournent sur 10 images sur 204 : dans l'enveloppe), **eau 5,3 / 16,2 ms** (`earth water open` et
+> `sea fft` comptés), **air et nuages 3,8 / 8,4 ms** (perspective aérienne, historique et ombre des nuages). Le tableau tenu est dans la
+> [fiche J0 de sortie](progress/j0/FICHE-kerr-mini-2026-11-13-sortie.md), « Le chemin vers §8 ».
+
 Ce que ce tableau dit :
 
 - **Sur la machine cible, deux postes décident** : l'eau (≥ 4,3 ms pour 1,0) et le non-attribué (≈ 7 ms, plus que la marge

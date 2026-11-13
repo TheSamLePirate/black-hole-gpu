@@ -128,3 +128,32 @@ Référence moyenne des deux vols de base : p50 60.0 ms, p95 80.1 ms (dérive en
 
 Un Δ négatif en temps (positif en images/s) est ce que le poste coûte dans cette scène ; les postes ne s'additionnent pas (contrat §5). Sur un écran à 50 Hz (kerr-mini), l'intervalle se quantifie par pas de 20 ms : y lire ΔGPU et Δ images/s plutôt que Δp50.
 
+## Le chemin vers §8 (PLAN-J2 §4, sortie de J2) — où est le temps, par famille, par image
+
+Familles de la stratégie §8.2 (enveloppe prescriptive pour 60 Hz). Chaque passe **par image** = son temps moyen × la part des images où elle
+tourne (`n` / images mesurées : les horizons, l'ombre du relief, l'ombre des arbres, le posemètre ne tournent pas à chaque image). Les passes de
+calcul s'attribuent ; les passes de rendu (*) se chevauchent sur Apple (GP-09) : indicatives. Sources : cette fiche (kerr-mini, 5c420e09) et la
+[fiche M1 Max du 12](FICHE-m1max-2026-11-12.md) (vol frais, 1 296 MHz, 98–100 °C) ; recalcul depuis leurs JSON.
+
+| Famille (§8.2) | Enveloppe | M1 Max frais | kerr-mini | Ce qui est compté |
+|---|---:|---:|---:|---|
+| Visibilité, publication | 2,0 | 0,9 * | 2,9 * | `terrain raster visibility` (rendu) ; la publication des tuiles au fil principal p95 1,3 ms (mini) |
+| Opaque et éclairage (sol) | 4,0 | 4,1 | 10,9 | `earth lite` + `light` + `finishing` + `earth shade` ; **+ l'appareil** : −3,2 ms par ablation (mini), non mesurable sur le M1 Max |
+| **Eau** | **1,0** | **5,3** | **16,2** | `earth water` 4,3 / 12,7 + `earth water open` 0,5 / 1,4 + `sea fft` 0,5 / 2,0 + `earth shore` ; **par ablation (mini, 13 nov., `liteSkip` réparé) : sans matériau de l'eau −13,0 ms** (58,0 → 45,0 ; intervalle p95 80 → 60,7 ms) ; **`sea surface` (rendu, 19,7 * à l'horodatage) : −0,7 ms seulement par ablation** (mer plate) |
+| Air et nuages | 2,5 | 3,8 | 8,4 | `clouds (half)` + `trace` + `aerial perspective` + l'historique et l'ombre des nuages ; ablation des nuages −6,3 ms (mini) |
+| Reconstruction et sortie | 2,0 | 2,1 | 6,9 | `taau` + `temporal` + `resolve` + le bloom |
+| Ombres, sondes | 1,5 | 0,6 | 3,4 | l'ombre du relief (rendu, 32/204 images), les horizons (10/204), l'ombre des arbres, le posemètre, le cache de surface, la profondeur d'occlusion — **par image** |
+| **Non attribué** (calculé) | — | **≈ 7** | **≈ 10** | GPU p50 moins les passes de calcul ; sur le mini moins aussi l'appareil et le HUD (ablations −3,2, −1,1) : l'affichage, les masques, l'appareil (M1 Max) — **pas `sea surface`** (−0,7 ms par ablation) |
+| **Total mesuré** | 13,0 | **22,5** | **58,4** | `lastGpuMs` p50 |
+
+**Le chemin** (décisions de Sam du 13, stratégie §24) :
+1. **L'eau d'abord** (5,3 pour 1,0 sur le M1 Max) : l'eau étagée (surface → éclairage → reflets), puis la classification de l'écran par tuiles —
+   `earth water` et `earth water open` lancés plein écran sur une vue à moitié terrestre. Préalables **faits** (13 nov.) : l'ablation de l'eau
+   réparée (le mot `liteSkip` passé par ses bits) — **−13,0 ms** sur le mini — et une ablation `sea surface` — **−0,7 ms** : la mer déplacée
+   n'est pas le poste, le matériau l'est.
+2. **Le non-attribué** (≈ 7 ms sur le M1 Max, ≈ 10 sur le mini) : une matrice d'ablations qui couvre la frame, puis un démontage cumulé.
+3. **L'opaque** (4,1 pour 4,0, plus l'appareil) : la classification par tuiles (les noyaux du sol lancés là où il y a du sol).
+4. **Air et nuages** (3,8 pour 2,5) : J4.
+5. **Dans l'enveloppe** : la reconstruction (2,1 pour 2,0 — J2 ne l'a pas réduite) et les ombres/sondes (0,6 pour 1,5, par image).
+6. **Le palier se juge borné et soutenu** (décision 3) : le M1 Max bride (soutenu 29 ms) — l'essai de `fpsCap` 30 puis 40 d'abord. Le mini a
+   sa cible propre, 25 images/s régulières (40 ms) : ici 58,4 ms.

@@ -244,7 +244,8 @@ override TUNE_ANISO: u32 = 4u;
 override TUNE_LITE: u32 = 0u;
 // (TUNE_LITE's bits at run time too — renderer.liteSkip, P.jet2.w (unused there) —: a part of the raster's material cut
 // without compiling every kernel again, to measure it — TERRE-UNREAL U6)
-fn liteSkip() -> u32 { return TUNE_LITE | u32(max(P.jet2.w, 0.0) + 0.5); }
+// (P.jet2.w carries the word's bits, not its value — renderer writeParams: a float's value lost the low bits under bit 26)
+fn liteSkip() -> u32 { return TUNE_LITE | bitcast<u32>(P.jet2.w); }
 override TUNE_SHADOW_N: u32 = 48u;
 override TUNE_SHADOW_K: f32 = 1.18;
 // (the relief's shadow march's reach [m]: beyond it, the ground is taken as lit — a measure of what its far steps cost)

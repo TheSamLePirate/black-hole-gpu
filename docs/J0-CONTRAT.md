@@ -202,3 +202,7 @@ régulières** (§2) ; l'eau et le découpage des noyaux passent avant J3 ([stra
   fiche sous les yeux.
 - L'heure et la météo de la scène (§3) : choisies ici (soleil bas, nuages épars) ; Sam peut en fixer d'autres — ce
   serait `toulon-hyeres-v2`.
+
+**Ablations de l'eau réparées (13 novembre, session du rendu)** : `liteSkip` passe désormais par les bits de son mot (`bitcast`, il perdait ses
+bits bas sous un bit 26 levé par défaut) — l'ablation « sans matériau de l'eau » coupe enfin l'eau : **−13,0 ms** sur kerr-mini (58,0 → 45,0) ;
+l'ablation `seaSurface` (mer plate) entre dans l'ordre par défaut : −0,7 ms. Les ablations « eau » des fiches d'avant le 13 sont invalides.

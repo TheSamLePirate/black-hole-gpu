@@ -3594,13 +3594,12 @@ export class Renderer {
     set(PARAMS_V4.region, o.y0, o.y1, o.accumulate ? 1 : 0, Math.random());
     set(PARAMS_V4.misc, s.limbDarkening ? 1 : 0, s.diskEmission === "bolometric" ? 1 : 0, s.diskBrightness, s.diskTau);
     set(PARAMS_V4.jet, s.jet ? 1 : 0, Math.sqrt(1 - 1 / (s.jetLorentz * s.jetLorentz)), s.jetWidth, s.jetIntensity);
-    set(
-      16,
-      s.jetLength,
-      s.jetCutoff,
-      s.jetKnots,
-      this.liteSkip | (this.skyOpen ? 0 : 4194304) | (this.groundSpecular ? 0 : 67108864) | (this.shoreWash ? 0 : 536870912),
-    );
+    set(16, s.jetLength, s.jetCutoff, s.jetKnots, 0);
+    // (the raster material's cut parts — trace.wgsl liteSkip —: the word's bits as they are in the float, read by bitcast — as a
+    // float's value, over 2²⁴ its low bits were lost: « liteSkip 1 », J0's ablation of the water, cut nothing since the bits above
+    // 2²⁶ were set by default — PLAN-J2, J0-CONTRAT, 13 Nov 2026)
+    new Uint32Array(f.buffer, f.byteOffset, f.length)[16 * 4 + 3] =
+      (this.liteSkip | (this.skyOpen ? 0 : 4194304) | (this.groundSpecular ? 0 : 67108864) | (this.shoreWash ? 0 : 536870912)) >>> 0;
     // (Q5 VIPER C2: the clouds' march amortised — a texel in four a frame — while their history holds: a frame flag, not a
     // liteSkip bit — that word reaches the kernel through a float, its low bits lost under a bit 30)
     this.cloudAmortizedNow =
