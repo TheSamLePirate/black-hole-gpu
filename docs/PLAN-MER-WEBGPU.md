@@ -327,3 +327,9 @@ J0 neutre (57,15 → 56,9 ms) ; **sur la terre −1,15 ms** (50,45 → 49,3 ; `J
 tuiles depuis les noyaux du sol (`shadeLite`, sa lumière) leur coûtait **+0,8 ms** (deux A/B, même en n'écrivant qu'une fois), et
 oubliait les tuiles où seules les crêtes de `sea surface resolve` sont marquées.
 
+**Fin de l'eau étagée et du premier passage de la classification (13 nov., ~11:20 UTC)** — **E3 non ouvert** (règle 1) : E3 ne ferait que
+déplacer du travail (surface / éclairage), son seul gain possible est la présence du code dans le noyau ; E2 l'a mesurée à ~0,4 ms pour le code
+du SSR retiré du noyau. **Le lot 2 de la classification (le sol) non ouvert** : plafond mesuré sur une vue toute en mer 0,33 + 0,22 ms, moins le
+tri. Bilan de la phase sur kerr-mini, J0 : E1 −1,55, E2 −0,5, tuiles neutres sur J0 (−1,15 ms sur la terre). La suite : J3
+([PLAN-J3](PLAN-J3-LUMIERE-COCKPIT.md), à valider par Sam).
+

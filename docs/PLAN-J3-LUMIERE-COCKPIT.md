@@ -1,0 +1,129 @@
+# PLAN-J3 — lumière, ombres et cockpit cohérents
+
+**État (13 novembre 2026, ~11:30 UTC) : plan proposé, à valider par Sam.** Rien n'est commencé dans le code. Origine :
+[stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J3 (« raccorder un état lumineux partagé, cascades et profondeurs des objets ;
+préserver les instruments ; attribuer correctement l'air aux distances ; conserver les corrections de réfraction dans leur portée ; ajouter
+les matériaux de bâtiments identifiés, le détail de surface et les premiers assets préparés par une chaîne de production reproductible ») et
+§24 (décision 1 de Sam, 13 novembre : J3 après l'eau étagée et la classification par tuiles — faites ou closes le 13, [PLAN-MER-WEBGPU §6](PLAN-MER-WEBGPU.md)).
+**Sortie de J3** (§15) : *une scène complète de ville ou de montagne crédible de jour, sans réglage compensatoire propre à chaque cadrage.*
+L'existant (§2) est relevé dans le code de `main` au 13 novembre (après `a41711f4`) ; **le code fait foi**. Les trois règles de méthode
+(CLAUDE.md) s'appliquent : gain maximal écrit avant chaque lot de performance, ancien chemin retiré au lot de retrait suivant, toute sonde
+neuve passée par un témoin positif et un A/A nul.
+
+## 1. Ce que J3 doit livrer
+
+- **Un seul état lumineux** par image, possédé par une responsabilité et lu par tous : le sol (raster et traceur), l'appareil et son cockpit,
+  le décor, l'eau, les nuages. Aujourd'hui deux chemins (§2.1).
+- **Des ombres à un propriétaire par échelle**, sans recouvrement ni trou, que l'appareil reçoit aussi (§2.2).
+- **L'air attribué à chaque distance** : l'appareil, ses traînées et les objets lointains reçoivent l'air de leur distance, pas celui de la
+  caméra (§2.4).
+- **Les instruments préservés** : fraîcheur, lisibilité, coût borné (§2.3).
+- **La réfraction gardée dans sa portée** : géométrique (le déplacement des objets) et incidente (la lumière) explicites (§2.5).
+- **Les matériaux de bâtiments identifiés**, le détail de surface, et une **chaîne d'assets reproductible** pour les premiers modèles (§2.6, §2.7).
+
+## 2. L'existant (relevé du 13 novembre)
+
+### 2.1 La lumière : deux chemins
+- **Le sol** (`trace.wgsl`) : `shadeLiteLight` prend direction et éclairement de `nearLight(k)` (~4820), relève le Soleil par la réfraction
+  pour l'éclairage (`incidentSun`, ~4839, table `SUNI_OFF`), puis `liteLight` → `sunThrough`, `liteSun`, `liteSky` (`skyFlat` →
+  `skyIrradiance`, les harmoniques du noyau `skyAmbient`, C9), `earthSkyOpen`.
+- **L'appareil** (`ship.wgsl`) : son uniforme `S`, la sonde de lumière (`env` → `ship.envBuf` → `envSH`/`envGGX`), et la lumière clé de
+  `keyLight()` (`trace.wgsl` ~17272) — la direction **géométrique** de `nearLight`, pas `incidentSun` ; l'éclairement pris **au seul point de la
+  caméra** (transmittance `earthLookNoGround` × `cloudShadowAt(nearCam())` × `keyRelief`, une marche de 48 pas).
+- **Aucune structure d'état lumineux commune** : `P`, les tables de `bodies` (Soleil, ciel, Soleil incident), et `sh`/`envTex`/`S` de
+  l'appareil. Le ciel reflété par la mer reprend `envSpec` de l'appareil.
+
+### 2.2 Les ombres : neuf mécanismes
+Cascades du relief `sunDepth` (C6c, 2 × 2048², ±1,5 / ±10 km, bâtiments compris) ; horizons de la Terre (C4, au-delà) ; ombres de contact
+(`rasterContactShadow`, 4–24 m, écran) ; arbres et bâtiments `tsmTex` (C6e, ±900 m) ; nuages `csmTex` (C7, 384²) ; carte d'ombre de l'appareil
+(4096 × 2048, l'appareil et le porte-avions proche, cache « décision 42 ») ; GTAO (C6d) ; ombres tracées du décor proche (≤ 1,2–2 km) ; autres
+mondes (cascade 0). **L'appareil ne reçoit ni le relief, ni les arbres, ni les bâtiments** : un scalaire par image au point de la caméra. La
+stratégie demande un propriétaire par échelle sans recouvrement (§7, ~ligne 390) ; les cartes d'horizon ne sont pas validées (~ligne 173).
+
+### 2.3 Le cockpit et les instruments
+Masque du cockpit (B3, celui de l'image d'avant) ; l'appareil dans la scène (E12a : carte d'ombre, ombrage MSAA, masque propre, mouvement,
+`composeColor`/`composeSurface` vers `hdr` et `sceneDepth` avant le temporel). Écrans : canevas CPU copiés en textures (`ship.ts` ~2582–2655),
+rafraîchis depuis `main.ts` (`updateScreens` sur changement ; DU de l'A320 deux par image au plus ; PCD du F-35 toutes les ≥ 66 ms ou au
+toucher). Fraîcheur des instruments non mesurée en continu.
+
+### 2.4 L'air
+Table aérienne (C10, 96 × 54 × 32, tranches logarithmiques) lue par `liteFinish` et `earthLookSky` (`apRead`), `earthAir` marché sinon.
+**L'appareil ne reçoit aucun air** : ni transmittance ni diffusion dans `ship.wgsl`/`composeColor` (seul le relèvement R4b) ; ses pixels entrent
+dans `hdr` après l'air du sol. Les traînées : `exp(−d/120 000)` ad hoc (`ship.wgsl` ~1812). L'atténuation de la lumière clé : à la caméra,
+pas à la coque.
+
+### 2.5 La réfraction
+Courbure `refrBend` (tables R2, nulle au-dessus de 80 km) ; mirage R6a (bande d'horizon) ; relèvement du sol R4 (`refrLiftM`/`sceneryLiftM`,
+jamais dans les cartes d'ombre, le cache ni le CPU), le même pour le traceur (R4a), les rasters et l'appareil (R4b) ; Soleil incident R3
+(l'éclairage seul) ; autres mondes R5.
+
+### 2.6 Les matériaux de bâtiments et le détail de surface
+Toits (`roofs.ts` : tuiles, ardoise, zinc, béton, métal) et murs (pierre, meulière, béton, brique, enduit, bois, verre) de la BD TOPO et
+d'Overture, empaquetés par `buildingPacked` ; ombrés par `roofLook` et `liteMaterial` (`bldE` fenêtres de nuit, `bldS`, `bldAO`, verre).
+Détail : 5 scans CC0 (herbe, sol, gravier, roche, asphalte) à 3 échelles ; surface régionale Sentinel-2 + WorldCover (pilote) ; imposteurs
+d'arbres.
+
+### 2.7 Les assets
+KTX2 par basisu (`build-ktx2.ts`, `build-detail-scans.py`, `build-earth-surface.ts`) ; maillages en format binaire maison (`build-airliners.ts`
+GLB/OBJ → TRFC ; scripts Blender `build-f35.py`, `build-a320.py`, `build-iss.py` ; `build-ships`, `build-carriers`, `build-ranger`,
+`build-lander`, `build-cockpit`) ; **ni meshoptimizer, ni gltfpack, ni glTF Transform** ; sources hors dépôt (`ASSETS.md`). Bâtiments
+procéduraux depuis leurs emprises.
+
+## 3. Les lots proposés
+
+Chaque lot de performance écrit d'abord son gain maximal, lu dans une fiche ; chaque lot de qualité dit ce qu'il corrige, avec une image
+avant / après au même cadrage. ΔGPU sur J0 (kerr-mini) et sur la scène J3 (J3-0).
+
+| Lot | Contenu | Preuve | Taille |
+|---|---|---|---|
+| **J3-0** | **La scène J3 et ses instruments** : une scène de jour **ville** (Paris bas, déjà mesurée par `cut-buildings-trees`) ou **montagne** (les Alpes de `motion-quality`) en e2e de référence comme J0 ; l'inventaire des **réglages compensatoires** (exposition, relèvements, `CRAFT_ALPHA`, plafonds propres à un cadrage) ; deux sondes : la cohérence de luminance appareil / sol à cadrages fixes (un même objet gris vu sous des cadrages différents) et l'âge des instruments | fiche, témoins positif et A/A des sondes | M |
+| **J3-1** | **Un état lumineux unique** : un tampon écrit une fois par image (direction géométrique et incidente, éclairement direct au point demandé, harmoniques du ciel, transmittance des nuages), lu par le sol, l'appareil, le décor, l'eau ; `keyLight` de l'appareil sur le Soleil incident, comme le sol | images à cadrages fixes, sonde de J3-0, ΔGPU | M |
+| **J3-2** | **L'air de l'appareil et des traînées** : la table aérienne lue à la distance de la coque (`apRead`) dans `composeColor` ; les traînées à la même loi ; la lumière clé atténuée à la coque | images (l'appareil au loin, une patrouille), ΔGPU | S |
+| **J3-3** | **Les ombres, un propriétaire par échelle** : recouvrements et trous mesurés (contact, arbres/bâtiments, cascades, horizons) ; l'appareil reçoit l'ombre du relief et du décor (sa position lue dans les cartes existantes) ; la largeur des ombres d'arbres (PROBLEMES 436–449) | images (vallée au soleil bas, sous un hangar), ΔGPU | M |
+| **J3-4** | **Le cockpit et les instruments** : âge des écrans mesuré et borné, leur coût, l'exposition avec le cockpit en vue ; les lampes de cabine la nuit (décision en attente, AAA-PROGRESS) | sonde d'âge, images | S |
+| **J3-5** | **Les matériaux de bâtiments identifiés** : toits et murs vers des paramètres physiques (albédo, rugosité, métal, verre réfléchissant le ciel commun de J3-1), détail des façades | images de la scène J3 | M |
+| **J3-6** | **La chaîne d'assets reproductible** : meshoptimizer (et glTF Transform si les sources s'y prêtent) dans `scripts/` pour les maillages des appareils — LOD, localité, compression —, les sources et versions écrites dans `ASSETS.md` (§18 : documentation, licence, compatibilité Bun, taille) | build reproductible, tailles, image inchangée | M |
+| **J3-7** | **La réfraction dans sa portée** : géométrique et incidente nommées dans l'état lumineux ; chaque lecteur vérifié | tests unitaires, images | S |
+| **J3-R** | Retrait des anciens chemins des leviers allumés pendant J3 | suite, J0 | S |
+
+**Ordre recommandé** : J3-0 → J3-1 → J3-2 → J3-3 → J3-5 → J3-4 → J3-7 → J3-6 → J3-R (la lumière commune d'abord : tout le reste la lit).
+
+## 4. La sortie de J3, en mesures
+
+- La scène J3 (J3-0) aux cadrages fixes : aucune différence de réglage entre cadrages (l'inventaire de J3-0 vidé ou justifié) ; la sonde de
+  cohérence appareil / sol sous un seuil à fixer sur mesure (A/A et témoin positif d'abord).
+- Le coût complet sur kerr-mini et le M1 Max (borné et soutenu, J0-CONTRAT §2) : pas de régression de J0 au-delà du bruit sans un gain d'image
+  écrit ; le chemin vers §8 tenu par famille.
+- Les instruments : âge médian et 95ᵉ centile mesurés et bornés.
+
+## 5. Contrats à poser
+
+- **C-J3-1 (état lumineux)** : un tampon, son format, ses unités (W m⁻² sr⁻¹, directions dans le repère du corps), sa génération par image ;
+  ses lecteurs listés dans GRAPHICS-PIPELINE.
+- **C-J3-2 (ombres)** : une table des échelles et de leurs propriétaires, leurs portées et leurs fondus.
+- **C-J3-3 (air)** : la distance et le repère de chaque lecteur de la table aérienne.
+
+## 6. Bibliothèques (§18)
+
+meshoptimizer pour J3-6 (dans la chaîne d'assets, hors boucle d'image) ; glTF Transform seulement si les sources des appareils sont en glTF
+et que l'outillage fonctionne sous Bun ; rien d'autre. Ni l'un ni l'autre n'est installé aujourd'hui.
+
+## 7. Risques
+
+- La lumière commune touche tous les lecteurs : un lot d'images large à revoir (les cadrages fixes de J3-0 servent de garde-fou).
+- L'ombre reçue par l'appareil : un coût de lecture par pixel de l'appareil (borné par sa surface à l'écran).
+- L'air de l'appareil change son aspect au loin (attendu) et de près (doit rester nul à quelques mètres).
+- Le M1 Max mesure mal tant que `coreaudiod` le charge (J0-CONTRAT §2).
+
+## 8. Questions pour Sam
+
+1. **La scène J3** : ville (Paris bas) ou montagne (Alpes) — ou les deux, la ville d'abord ?
+2. **L'ordre** proposé (§3) : d'accord ?
+3. **L'ombre reçue par l'appareil** (J3-3) : la voulez-vous dans J3 (coût à mesurer), ou plus tard ?
+4. **La chaîne d'assets** (J3-6) : meshoptimizer adopté pour les appareils ?
+5. **L'exposition la nuit** (PROBLEMES : elle suit la lumière reçue par la caméra, la face nocturne reste noire) : dans J3 ou à part ?
+
+## 9. Non vérifié
+
+Le relevé du §2 vient d'une lecture du code (agent d'exploration, 13 novembre), pas de mesures ; les numéros de ligne sont ceux de ce jour.
+Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.

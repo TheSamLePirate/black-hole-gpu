@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 11:10 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 11:25 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -38,7 +38,8 @@ les preuves restent dans les entrées datées du journal, dessous.
 | M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
-indirects → J3 (lumière, cockpit).
+indirects → J3 (lumière, cockpit). **Au 13 nov. : l'eau étagée et la classification closes (E1, E2, tuiles de l'eau faits ; E3 et le lot 2 non
+ouverts, sous 1 ms) ; J3 au stade du plan.**
 
 **En cours**
 
@@ -46,7 +47,8 @@ indirects → J3 (lumière, cockpit).
 |---|---|---|
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
-| Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail (~2,2 ms, déplacé dans la finition) ; E3 à juger sur un plafond mesuré d'abord |
+| Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail ; **E3 non ouvert** (seule la présence du code pourrait rendre, ~0,4 ms mesurés par E2) |
+| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **plan proposé, attend Sam** ([PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) : deux chemins de lumière, l'appareil sans air ni ombre du relief ; lots J3-0…J3-R ; 5 questions) |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
 | Rendu (33d89754) | La borne de cadence du M1 Max | 30 images/s : bride (soutenu 27,8/s, 881 MHz) ; 40 images/s : **s'effondre dès le vol frais** (17,6/s, 389 MHz, « Trapping ») — **mais `coreaudiod` tourne à ~177 % de CPU sur ce Mac, hors du jeu** : les deux essais à refaire machine nettoyée ([J0-CONTRAT §2](docs/J0-CONTRAT.md)) |
@@ -4619,4 +4621,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   comparable : la suite `bun test` tournait en même temps sur le CPU du mini) ; `bun test` complet sur kerr-mini : 7 échecs, tous rejoués seuls ici sans échec (8 fichiers, 40/0) — 5 délais de 5 s et 2 assertions (qualifications du F-35C, géocodage) sous la charge du mini, qui faisait tourner J0 en même temps.
 - **Le lot 2 de la classification, non ouvert** (règle 1) : sur une vue toute en mer (`J0_START=42.95,6.25,500,180,140`, kerr-mini), la lumière
   du sol et sa finition lancées à vide coûtent 0,33 + 0,22 ms ; moins le tri (~0,2 ms), le lot rendrait moins de 0,4 ms.
+
+## 2026-11-13T11:25Z — L'eau étagée et la classification closes ; le plan de J3 proposé
+
+- **Contribution** (stratégie §15 J3, §24 décision 1 : J3 après l'eau et les tuiles). **E3 non ouvert** (règle 1 : il ne ferait que déplacer du
+  travail ; la présence du code, seul gain possible, mesurée ~0,4 ms par E2) ; le lot 2 des tuiles non ouvert (plafond 0,55 ms). Bilan sur
+  kerr-mini (J0) : E1 −1,55 ms, E2 −0,5, tuiles neutres sur J0, −1,15 ms sur la terre ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)).
+- **Réalisé** : [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) — l'existant relevé dans le code (deux chemins de lumière : le sol sur le Soleil
+  incident, l'appareil sur le géométrique et éclairé au seul point de la caméra ; neuf mécanismes d'ombre, l'appareil n'en reçoit aucun du relief
+  ni du décor ; l'appareil sans perspective aérienne ; la réfraction ; les matériaux ; la chaîne d'assets sans meshoptimizer), huit lots (J3-0
+  la scène et ses sondes … J3-6 la chaîne d'assets, J3-R le retrait), la sortie en mesures, trois contrats, cinq questions pour Sam. Carte de la
+  documentation mise à jour.
+- **Non vérifié** : le relevé est une lecture du code (agent d'exploration), aucune mesure ; rien de J3 n'est codé. **Suite** : la validation de
+  Sam ; la borne du M1 Max à refaire une fois `coreaudiod` relancé (Sam).
 
