@@ -123,6 +123,10 @@ export default {
   "Could not open the controller: {0}": "Impossible d'ouvrir la manette : {0}",
   "Mission stopped — you have the controls": "Mission arrêtée — vous avez les commandes",
   "Quick save — {0}": "Sauvegarde rapide — {0}",
+  "Already in the air: U takes off from a runway or a deck": "Déjà en l'air : U décolle d'une piste ou d'un pont",
+  "The A320 takes off by hand — brakes, TOGA, rotate at VR — or through its FMGC (the MCDU)":
+    "L'A320 décolle à la main — freins, TOGA, rotation à VR — ou par son FMGC (le MCDU)",
+  "Take-off: line up on a runway first": "Décollage : s'aligner d'abord sur une piste",
   "A save named “{0}” already exists — another name, or overwrite it": "Une sauvegarde « {0} » existe déjà — un autre nom, ou écrasez-la",
   "“{0}” is not resumed by a save — start it again": "« {0} » ne reprend pas avec une sauvegarde — relancez-la",
   "Saved without “{0}”: an activity under way is not resumed by a save":

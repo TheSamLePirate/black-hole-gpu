@@ -1,3 +1,4 @@
+import { frameNow } from "./frameclock";
 import type { TcasAdvisory } from "./radar/tcas";
 import type { MlsReading } from "./game/mls";
 import { JetPad, type JetPadOut } from "./input/jetpad";
@@ -895,6 +896,7 @@ export class CameraController {
   };
 
   onWheel = (e: WheelEvent) => {
+    this.wheelAt = frameNow();
     if (this.character.active) {
       e.preventDefault();
       if (this.enabled) this.character.zoom(e.deltaY);
@@ -1187,6 +1189,11 @@ export class CameraController {
   a320Park = false;
   readonly jetAthr = new Autothrottle();
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
+  /** the throttle's modifiers held (controller/piloting.ts modGate — audit FX-01): since when, and whether a chord
+   *  met them (a shortcut: not the throttle until let go) */
+  modGates: { up: { since: number; chord: boolean }; down: { since: number; chord: boolean } } | null = null;
+  /** the flight clock's time of the last wheel notch on the view [ms] (Alt and the wheel: the lens, not the throttle) */
+  wheelAt = Number.NEGATIVE_INFINITY;
   /** the jet's holds a load gives back (controller/craftsave.ts), taken up once the jet flies in the plane's law again —
    *  the placing's first frames would wipe them —, within `frames` frames or let go (null: none) */
   jetResume: { modes: Pick<import("./game/jet").JetModes, "alt" | "hdg" | "spd" | "ab" | "bankMax">; frames: number } | null = null;

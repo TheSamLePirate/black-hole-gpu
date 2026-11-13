@@ -111,6 +111,22 @@ export function effective(b: KeyBind): KeyBind {
 /** Every binding of the keymap, as the player set them. */
 export const effectiveBindings = () => BINDINGS.map(effective);
 
+/** The keys bound to a Shift shortcut while flying (⇧P, ⇧L, ⇧Z…), as the player set them: held with Shift, a shortcut —
+ *  not the throttle (audit FX-01). */
+export function shiftShortcutCodes(): Set<string> {
+  const out = new Set<string>();
+  for (const b of effectiveBindings())
+    if (b.shift === true && (b.layer === "flight" || b.layer === "system")) for (const c of b.code ?? []) out.add(c);
+  return out;
+}
+
+const MODIFIER_CODES = new Set(["ShiftLeft", "ShiftRight", "AltLeft", "AltRight", "ControlLeft", "ControlRight", "MetaLeft", "MetaRight"]);
+/** a modifier key (Shift, Alt, Ctrl, ⌘) */
+export const isModifierCode = (c: string) => MODIFIER_CODES.has(c);
+/** the flight's held keys (pitch, yaw, roll, translations, throttle), as the player set them */
+export const flightHeldCodes = () =>
+  new Set((Object.keys(HELD_DEFAULTS) as HeldAxis[]).filter((a) => !a.startsWith("cam") && a !== "tdc").map((a) => heldCode(a)));
+
 /** A held axis's key now. */
 export const heldCode = (a: HeldAxis) => overrides[`held:${a}`]?.code ?? HELD_DEFAULTS[a];
 

@@ -139,7 +139,7 @@ lire();</pre></details>
 <tr><td>Vitesses</td><td><code>airFlight.last.speed</code>, <code>jetModes.spd</code> : vitesse vraie par rapport à l'air (m/s) ; <code>geoNow().gs</code> : vitesse sol. L'A320 parle en nœuds</td></tr>
 <tr><td>Altitudes</td><td>au-dessus de la mer ; hauteur sol : <code>__bh.sys.heightOverGround</code></td></tr>
 <tr><td>Le manche par code</td><td><code>c.pilotInput = (pad) =&gt; ({ ...c.__input(pad), pitch, roll, yaw, throttle })</code>, chaque champ dans [−1, 1] : pitch + cabrer, roll + droite, yaw + nez à droite ; throttle est un débit</td></tr>
-<tr><td>Les touches</td><td>tout ou rien : une touche = le manche <b>à fond</b> (S = 7 g). « Doucement » = <b>petites pressions</b>, ou <kbd>Verr. Maj</kbd> (précision : manche ×0,25, manette 0,15/s). Maintenir <kbd>⇧</kbd> fait aussi monter la manette</td></tr>
+<tr><td>Les touches</td><td>tout ou rien : une touche = le manche <b>à fond</b> (S = 7 g). « Doucement » = <b>petites pressions</b>, ou <kbd>Verr. Maj</kbd> (précision : manche ×0,25, manette 0,15/s). Maintenir <kbd>⇧</kbd> seule (ou avec les touches de vol) fait monter la manette ; tenue pour un raccourci (<kbd>⇧</kbd><kbd>P</kbd>, <kbd>⇧</kbd><kbd>V</kbd>…) elle ne la touche pas</td></tr>
 <tr><td>Le manche et l'autopilote</td><td>les maintiens du jet laissent passer le manche : au lâcher, le nouveau cap ou la nouvelle altitude est tenu (lâcher le roulis reprend le cap du moment, ailes à plat). Pour voler à la main, couper l'AP avec <kbd>'</kbd> — <kbd>⌫</kbd> ne coupe pas les maintiens du jet</td></tr>
 <tr><td>Les sites</td><td>« Edwards Air Force Base », « Kennedy Space Center… », « Paris – Le Bourget » (tiret long), « Kourou », « Baikonur », « Tanegashima », « Woomera » — un morceau du nom suffit ; ou un code OACI dont la tuile est chargée</td></tr>
 </table>
@@ -558,7 +558,7 @@ __bh.flight.school.state();            // { step, steps, name, stepT, left, stal
 <tr><td><kbd>⇧</kbd><kbd>ù</kbd></td><td>auto-manette (A320 : A/THR)</td></tr>
 <tr><td><kbd>⇧</kbd><kbd>M</kbd> · <kbd>⇧</kbd><kbd>O</kbd></td><td>NAV (le plan de vol volé) · le panneau du plan de vol</td></tr>
 <tr><td><kbd>⇧</kbd><kbd>B</kbd> · <kbd>⇧</kbd><kbd>P</kbd></td><td>STOVL du F-35B (A320 : autofrein) · aérofrein</td></tr>
-<tr><td><kbd>Tab</kbd> · <kbd>F6</kbd> · <kbd>F7</kbd> · <kbd>Fin</kbd> · <kbd>⌫</kbd></td><td>la roue (maintenu) ou le verrou radar suivant (bref) · TARS · atterrissage automatique (porte-avions) · repoussage (A320) · tout relâcher</td></tr>
+<tr><td><kbd>Tab</kbd> · <kbd>F6</kbd> · <kbd>F7</kbd> · <kbd>Fin</kbd> · <kbd>⌫</kbd></td><td>la roue (maintenu) ou le verrou radar suivant (bref) · TARS · atterrissage automatique (porte-avions ; ailleurs l'approche ILS sur la piste la plus proche) · repoussage (A320) · tout relâcher</td></tr>
 </table>
 </section>
 

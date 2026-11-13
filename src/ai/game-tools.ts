@@ -88,7 +88,8 @@ export interface GameHost {
   report(): FlightReport | null;
   mission(): { active: boolean; phase: string | null; caption: string | null };
   scenes(): string[];
-  pilotAuto(a: Auto): void;
+  /** the autopilot asked for, as the keys ask it — what was said (an aircraft's take-off or landing: its own action's line) */
+  pilotAuto(a: Auto): string | void;
   pilotHold(h: Hold): void;
   autoWhy(a: Auto): string;
   setGear(down: boolean): void;
@@ -543,7 +544,9 @@ export function gameTools(h: GameHost): Tool[] {
     }
     const why = h.autoWhy(a);
     if (why) throw new Error(why);
-    if (camera.pilot.auto !== a) h.pilotAuto(a);
+    const said = camera.pilot.auto !== a ? h.pilotAuto(a) : undefined;
+    // (an aircraft's landing is the ILS, its take-off the runway's or the deck's: their own line)
+    if (camera.pilot.auto !== a && said) return said;
     return camera.pilot.auto === a ? `autopilot ${a} engaged` : `autopilot ${a} not engaged`;
   };
 

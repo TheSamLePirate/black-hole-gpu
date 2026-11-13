@@ -16,6 +16,7 @@
 //
 // N cycles the density: full · minimal (tapes, cockpit, mission bar) · clean (markers only).
 
+import { keyFor } from "../input/bindings";
 import { JetMap } from "./jetmap";
 import { isMobile } from "./mobile";
 import type { Settings, Target } from "../settings";
@@ -179,7 +180,7 @@ const AUTO_KEYS: [Auto, string, string][] = [
   ["circularize", "CIRC", "9"],
   ["approach", t("APPROACH"), "0"],
   ["orbit", t("ORBIT"), "⇧0"],
-  ["land", t("LAND"), "G"],
+  ["land", t("LAND"), "F7"],
   ["takeoff", t("TAKE OFF"), "U"],
   ["entry", t("ENTRY"), "⇧G"],
   ["dock", t("DOCK"), "B"],
@@ -537,7 +538,10 @@ export class FlightHud {
       const b = h("button", "fl-ms-auto") as HTMLButtonElement;
       b.innerHTML = `<svg viewBox="-12 -12 24 24">${svg[a] ?? ""}</svg><span>${label}</span>`;
       b.dataset.label = label;
-      b.dataset.tip = `${tips[a] ?? ""}${key ? ` (${key})` : ""}`;
+      // (the key as the player set it — input/bindings.ts —: the table's is the default; LAND said "G", the gear's, when
+      // F7 lands — audit FX-05)
+      const k = keyFor("auto", a) ?? key;
+      b.dataset.tip = `${tips[a] ?? ""}${k ? ` (${k})` : ""}`;
       b.onclick = () => this.act.auto(a);
       b.dataset.testid = `strip-${a}`;
       this.stripBtns.set(a, b);

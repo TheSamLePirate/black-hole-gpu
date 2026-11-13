@@ -55,7 +55,8 @@ import { t, tf } from "../i18n";
 import type { CameraController } from "../controls";
 import { a320Authority } from "../a320/aero";
 import { clamp, flareRef, fmtDur, normalize, smoothstep, spinAxis, unitV, wrapDeg, wrapYaw } from "./util";
-import { heldCode, type HeldAxis } from "../input/bindings";
+import { flightHeldCodes, heldCode, type HeldAxis, isModifierCode, shiftShortcutCodes } from "../input/bindings";
+import { frameNow } from "../frameclock";
 
 declare module "../controls" {
   interface CameraController {
@@ -156,6 +157,39 @@ function setPilot(this: CameraController, on: boolean) {
     const v = circularSpeed(cam.r, s.spin, true, cam.zamo);
     if (v !== null && cam.r > isco(s.spin)) [s.velR, s.velT, s.velP] = [0, 0, v];
   }
+}
+
+/** how long a throttle's modifier is held alone before it is the throttle [ms] (a shortcut's key comes within it) */
+const MOD_HOLD_MS = 100;
+
+/**
+ * A throttle key that is a modifier (Shift, Alt by default — or one the player bound so): the throttle once held
+ * MOD_HOLD_MS with no shortcut's key; a chord met while it is held — another key that is not one of the flight's, a key
+ * of a Shift shortcut, the wheel (Alt and the wheel: the lens) — keeps it out until it is let go. A throttle key that is
+ * no modifier is the throttle at once.
+ */
+function modGate(c: CameraController, which: "up" | "down", held: boolean): boolean {
+  const code = heldCode(which === "up" ? "throttleUp" : "throttleDown");
+  if (!isModifierCode(code)) return held;
+  const g = (c.modGates ??= { up: { since: Number.NaN, chord: false }, down: { since: Number.NaN, chord: false } })[which];
+  if (!held) {
+    g.since = Number.NaN;
+    g.chord = false;
+    return false;
+  }
+  const now = frameNow();
+  if (Number.isNaN(g.since)) g.since = now;
+  if (!g.chord) {
+    const flight = flightHeldCodes();
+    const shifted = which === "up" && code.startsWith("Shift") ? shiftShortcutCodes() : null;
+    for (const k of c.codes)
+      if (!isModifierCode(k) && (!flight.has(k) || shifted?.has(k))) {
+        g.chord = true;
+        break;
+      }
+    if (now - c.wheelAt < 400) g.chord = true;
+  }
+  return !g.chord && now - g.since >= MOD_HOLD_MS;
 }
 
 /**
@@ -877,9 +911,13 @@ function pilotInput(this: CameraController, pad: ReturnType<GamepadInput["poll"]
   // (Shift and Alt on either side while they are the defaults)
   // (the arrows: the throttle — the designation cursor's slew while it is held)
   const arrows = !this.tdc.on;
-  const up = h("throttleUp") || (heldCode("throttleUp") === "ShiftLeft" && k("ShiftRight")) || (arrows && this.keys.has("ArrowUp") ? 1 : 0);
-  const down =
-    h("throttleDown") || (heldCode("throttleDown") === "AltLeft" && k("AltRight")) || (arrows && this.keys.has("ArrowDown") ? 1 : 0);
+  // (Shift and Alt are also the modifiers of shortcuts — ⇧P, ⇧V, ⇧L, Alt and the wheel — audit FX-01: held for one, the
+  // throttle moved as well, an ILS let go, a dock left, the brakes released on the runway; a modifier is the throttle
+  // only held alone or with the flight's own keys, 0.1 s on, until it is let go — modGate)
+  const upMod = h("throttleUp") || (heldCode("throttleUp") === "ShiftLeft" && k("ShiftRight"));
+  const downMod = h("throttleDown") || (heldCode("throttleDown") === "AltLeft" && k("AltRight"));
+  const up = (modGate(this, "up", !!upMod) ? 1 : 0) || (arrows && this.keys.has("ArrowUp") ? 1 : 0);
+  const down = (modGate(this, "down", !!downMod) ? 1 : 0) || (arrows && this.keys.has("ArrowDown") ? 1 : 0);
   i.throttle = up - down;
   const t = this.touchInput;
   i.pitch = clamp(i.pitch + t.pitch, -1, 1);

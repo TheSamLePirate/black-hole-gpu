@@ -79,6 +79,12 @@ Revérifié par les e2e `resume-point` (2/2 : le point du Ranger refusé au F-35
 à 2 999 m pour 3 000) et `aircraft-save` (1/1 : carburant 2 499 kg, train sorti, volets ½, aérofrein, ALT 3 000 / A/T 160
 rendus par F9). Aucune recette du cours n'a changé : `apprendre-avions` et `apprendre-vaisseaux` non relancés.
 
+**Le 13 novembre 2026, suite** (audit 3.4, 3.5) : **Maj et Alt** ne sont la manette que tenues seules ou avec les touches
+de vol (au bout de 0,1 s) — tenues pour un raccourci (⇧P, ⇧V, ⇧L…, Alt et la molette) elles ne la touchent plus ; **F7**
+loin d'un porte-avions engage l'approche ILS sur la piste la plus proche, **U** en l'air est refusé et dit. Cours (VOL-AVIONS,
+VOL-VAISSEAUX, les deux pages) mis à jour ; **revolés** : `apprendre-avions` **7/7**, `apprendre-vaisseaux` **9/9** (ce Mac) ;
+e2e `modifier-keys` 2/2 et `aircraft-autokeys` 3/3.
+
 **Ce qui reste ouvert** :
 - Le vol entièrement à la main par script : il faut écrire un régulateur, et le cours ne donne pas les gains.
 - L'amarrage manuel à 6 degrés de liberté.

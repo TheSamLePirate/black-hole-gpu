@@ -64,7 +64,7 @@ remplaçant `c.pilotInput` (le manche) pour un geste précis (leçon 3).
 | Vitesses | `airFlight.last.speed` et `jetModes.spd` (`apSet({ spd })`) : **vitesse vraie par rapport à l'air**, m/s ; `geoNow().gs` : vitesse sol ; le casque l'affiche en m/s (en unités impériales il écrit « KCAS » mais montre la même vitesse vraie). L'A320 parle en nœuds et ses « IAS » sont des vitesses équivalentes |
 | Altitudes | `geoNow().alt`, `jetModes.alt`, `apSet({ alt })` : m **au-dessus de la mer** ; hauteur sol : `__bh.sys.heightOverGround` — celle du **point de référence** de l'avion, 1,08 m au-dessus des roues pour le F-35, 1,59 m pour l'A320 |
 | Le manche par code | `c.pilotInput = (pad) => ({ ...c.__input(pad), pitch, roll, yaw, throttle })` : chaque champ dans **[−1, 1]** ; `pitch` + = cabrer, `roll` + = à droite, `yaw` + = nez à droite ; `throttle` est un **débit** (+1 = la manette monte de 0,6/s) ; pour la fixer, écrire `c.pilot.throttle` |
-| Les touches | **tout ou rien** (±1) : une touche est un manche **à fond** (S = 7 g en l'air). « Doucement » veut dire **par petites pressions**, ou **Verr. Maj** (commandes de précision : le manche ×0,25 — 2,5 g au lieu de 7 —, la manette à 0,15/s). Maintenir **⇧** fait aussi monter la manette : un raccourci ⇧+touche la pousse un peu |
+| Les touches | **tout ou rien** (±1) : une touche est un manche **à fond** (S = 7 g en l'air). « Doucement » veut dire **par petites pressions**, ou **Verr. Maj** (commandes de précision : le manche ×0,25 — 2,5 g au lieu de 7 —, la manette à 0,15/s). Maintenir **⇧** seule (ou avec les touches de vol) fait monter la manette, au bout de 0,1 s ; tenue pour un raccourci (⇧P, ⇧V, ⇧L…), ou **Alt** avec la molette (la focale), elles **ne touchent pas** la manette jusqu'à ce qu'on les lâche (depuis le 13 nov. 2026 : avant, ⇧P au roulage relâchait les freins, ⇧V à quai désamarrait) |
 | Le temps | page gelée (`__bh.freeze(true)`), `__bh.step(1/30)` avance 1/30 s ; l'image continue d'être dessinée ; pour laisser passer une image dans un appel `async` : `await new Promise((r) => requestAnimationFrame(r))` |
 | Les sites | `lineUp`, `glideTo` reconnaissent les sites du jeu par un morceau de leur nom : « Edwards Air Force Base », « Kennedy Space Center, Shuttle Landing Facility », « Paris – Le Bourget » (tiret long), « Kourou », « Baikonur », « Tanegashima », « Woomera » ; les codes OACI des sites du jeu (KEDW, LFPB…) marchent toujours ; ceux des autres aérodromes une fois leur tuile chargée |
 
@@ -650,7 +650,7 @@ la Terre. Un crash en solo met la partie en pause (§5.3).
 | Volets : F-35 0 → ½ → plein ; A320 0 → 1 → 2 → 3 → FULL | P |
 | Aérofrein | ⇧P |
 | Train (8 s par sens) | G |
-| Décollage · atterrissage automatiques (sur une piste : le décollage automatique ; près d'un porte-avions : opérations de pont du B, catapulte et brins du C) | U · F7 |
+| Décollage · atterrissage automatiques (sur une piste : le décollage automatique ; près d'un porte-avions : opérations de pont du B, catapulte et brins du C ; ailleurs, F7 : l'approche ILS sur la piste la plus proche) | U · F7 |
 | Tout relâcher | Retour arrière |
 
 Les touches de vol sont tout ou rien (±1). Manette de jeu du F-35 (`input/jetpad.ts`) : stick gauche tangage et roulis,
@@ -723,7 +723,11 @@ La loi avion exige le mode `"plane"`, **q > 300 Pa** et aucun maintien.
   roulage plein gaz + PC, axe à la roue avant, rotation à 67 m/s, montée à ~8 m/s, maintiens à 110 m/s et 100 m —
   terrain + 1 500 m, cap de la piste, 210 m/s, PC coupée —, GCAS désarmé pendant `rwyRun`) ; avant le 11 novembre 2026
   il lançait le décollage orbital, refusé (poussée/poids 0,59 < 1,05). Sur un pont : le décollage court ou la
-  catapulte (`deckTakeoff`). F7 loin d'un porte-avions : autopilote d'atterrissage avec un profil droit à 3°.
+  catapulte (`deckTakeoff`). **Depuis le 13 novembre 2026** (audit FX-02, e2e `aircraft-autokeys`) : **F7** loin d'un
+  porte-avions engage l'**approche ILS** sur la piste la plus proche (150 km au plus, `ilsStart` — l'A320 par son FMGC),
+  ou dit pourquoi pas ; **U en l'air** est refusé et dit (« Déjà en l'air ») ; l'**A320** ne décolle pas par U (« à la
+  main ou par son FMGC »). Ni U ni F7 ne vont plus jamais à l'autopilote orbital des vaisseaux, qui refusait aussitôt et
+  **coupait la manette** — en vol (avant : F-35 et A320, manette 0,6 → 0). TARS passe par la même action.
 
 ### 4.2 A320
 

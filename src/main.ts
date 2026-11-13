@@ -3133,16 +3133,32 @@ async function main() {
     panel.toast(camera.pilot.hold === "none" ? t("Attitude hold off") : tf("Hold: {0}", HOLD_NAMES[h]));
   }
   function pilotAuto(a: Auto) {
-    // (the F-35B's landing near a carrier: on its deck — controller/deckland.ts)
-    if (a === "land" && fleet.active === "f35") {
-      const said = camera.deckLand();
-      if (said) return panel.toast(said);
-    }
-    // (the F-35B's take-off from a carrier's deck: a short one — controller/deckland.ts)
-    if (a === "takeoff" && fleet.active === "f35") {
-      // (off a deck, on the ground: the runway's automatic take-off — controller/runwaytakeoff.ts)
-      const said = camera.deckTakeoff() ?? camera.runwayTakeoff();
-      if (said) return panel.toast(said);
+    // (an aircraft's take-off and landing are its own — never the spacecraft's orbital autopilot, which refused at once
+    // and cut the throttle to 0 in flight: audit FX-02. A refusal is said, the throttle and the controls left as they are)
+    if (isAircraft(fleet.active) && (a === "land" || a === "takeoff")) {
+      if (a === "land") {
+        // (the F-35 near a carrier: its deck — controller/deckland.ts, trap.ts —; else, the F-35 and the A320: the ILS
+        // to the nearest runway — the A320 through its FMGC — controller/ils.ts)
+        const said = (fleet.active === "f35" ? camera.deckLand() : null) ?? camera.ilsStart();
+        panel.toast(said);
+        return said;
+      }
+      if (fleet.active === "f35") {
+        // (off a carrier's deck, or a runway's automatic take-off — controller/deckland.ts, runwaytakeoff.ts)
+        const said = camera.deckTakeoff() ?? camera.runwayTakeoff();
+        if (said) {
+          panel.toast(said);
+          return said;
+        }
+      }
+      const airborne = !camera.ourLanded && !camera.rolling;
+      const why = airborne
+        ? t("Already in the air: U takes off from a runway or a deck")
+        : fleet.active === "a320"
+          ? t("The A320 takes off by hand — brakes, TOGA, rotate at VR — or through its FMGC (the MCDU)")
+          : t("Take-off: line up on a runway first");
+      panel.toast(why);
+      return why;
     }
     if (a === "dock" && camera.docked)
       return panel.toast(camera.netDocked ? t("Docked to another's craft — UNDOCK first") : t("Docked to the ISS — UNDOCK first"));
