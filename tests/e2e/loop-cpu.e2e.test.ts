@@ -83,8 +83,6 @@ describe.skipIf(!E2E)("the frame loop's CPU time, by section", () => {
       return "ok"; })()`);
     expect(placed).toBe("ok");
     await window("F-35 low flight");
-    // (a picture as it is: app.shot waits for every compile)
-    const r = await app.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "png" }, 20);
-    await Bun.write(`${OUT}/f35.png`, Buffer.from(r.data, "base64"));
+    await app.snap(`${OUT}/f35.png`);
   }, 90_000);
 });

@@ -225,6 +225,7 @@ so order matters within a file. Keep a file under ~2 min. Split a longer one.
 | `app.mouse(type, x, y, o)` | raw `move` / `down` / `up` / `wheel` at CSS px (`button`, `deltaY`, `shift`) |
 | `app.touch(steps, stepMs)` | fingers: each step lists every finger's point; the first puts them down, the last lifts them |
 | `app.shot(file)` | a PNG of the page (write under `remote-results/` so remote runs bring it back) |
+| `app.snap(file)` | the page as it is now, no wait for the shaders nor the kernels beside them (shot() waits for every one): for a test about something else than the image — a toast, a panel, a mode — where a kernel pending minutes would stall it past its timeout (13 Nov 2026) |
 | `app.cdp.send(method, params, timeoutS?)` | any DevTools call (`Emulation.*`, `Network.*`, `Input.*` …) |
 | `app.cdp.errors` | the page's exceptions and console errors so far (assert it is `[]`, or filter what is expected) |
 | `app.close()` | Chrome ended, its profile removed, the lock released |

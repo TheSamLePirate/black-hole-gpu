@@ -49,7 +49,7 @@ describe.skipIf(!E2E)("TARS flies the aircraft's autopilot and the A320's flaps 
       const j = __bh.camera.jetModes; return { alt: j.alt, hdg: j.hdg, spd: j.spd }; })()`);
     console.log(`  said: ${JSON.stringify(r1)} · ${JSON.stringify(r2)}; holds ${JSON.stringify(m)}`);
     await app.js(`(__bh.refresh(), __bh.camera.viewReset?.(), true)`);
-    await app.shot(`${OUT}/f35-holds.png`);
+    await app.snap(`${OUT}/f35-holds.png`);
     expect(m.alt).toBe(2500);
     expect(m.spd).toBe(170);
     expect(Math.abs((m.hdg ?? 0) - Math.PI / 2)).toBeLessThan(1e-6);
@@ -68,7 +68,7 @@ describe.skipIf(!E2E)("TARS flies the aircraft's autopilot and the A320's flaps 
     const ap = await tool("jet_autopilot", { alt: 2500, spd: 140, ap: true });
     console.log(`  jet_autopilot: ${JSON.stringify(ap)}`);
     await app.js(`(__bh.refresh(), __bh.camera.viewReset?.(), true)`);
-    await app.shot(`${OUT}/a320-conf1.png`);
+    await app.snap(`${OUT}/a320-conf1.png`);
     expect(String(ap)).not.toMatch(/^no tool/);
     // (its FMGC's AP1 engaged, the FCU's selections in feet and knots — before: every ask toggled it, « AP off »)
     const fcu = await app.js<{ ap: boolean; alt: number; spd: number }>(`(() => {

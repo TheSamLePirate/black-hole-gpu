@@ -3937,6 +3937,10 @@ async function main() {
     camera.pilot.hold = "none";
     if (camera.pilot.auto !== "none") pilotAuto(camera.pilot.auto);
     if (camera.cinematic) camera.setCinematic(null);
+    // (an aircraft's own modes too — its approach, formation, intercept, NAV, AP and A/THR: the same promise on every craft —
+    // controller/release.ts, audit FX-06)
+    const let_ = camera.releaseAircraft();
+    if (let_.length) panel.toast(tf("You have the controls — {0} off", let_.join(", ")));
   };
   // the controls screen (ui/controls-screen.ts): from the pause menu, back to it
   /** where the keys' screen goes back to: the pause, or the player's settings when opened from them */

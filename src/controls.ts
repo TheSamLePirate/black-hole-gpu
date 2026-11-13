@@ -65,6 +65,7 @@ import type { RadarObject } from "./game/radar";
 import { type FormState, installFormation } from "./controller/formation";
 import { type IcptState, installIntercept } from "./controller/intercept";
 import { installOrders } from "./controller/orders";
+import { installRelease } from "./controller/release";
 import type { TrafficFeed } from "./traffic/feed";
 import { installWingmen, type RemoteWing, type WingState } from "./controller/wingmen";
 import { installTraffic } from "./controller/traffic";
@@ -1678,6 +1679,7 @@ export class CameraController {
 installRotation(CameraController);
 installLens(CameraController);
 installMotion(CameraController);
+installRelease(CameraController);
 installPiloting(CameraController);
 installComputer(CameraController);
 installFleet(CameraController);

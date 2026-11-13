@@ -556,4 +556,13 @@ export default {
   "{0}: working again": "{0} : fonctionne de nouveau",
   "A part of the game failed ({0}) — set aside, the image goes on; tried again every 5 s":
     "Une partie du jeu a échoué ({0}) — mise de côté, l'image continue ; nouvel essai toutes les 5 s",
+  "You have the controls — {0} off": "Vous avez les commandes — {0} coupés",
+  approach: "approche",
+  "deck approach": "approche du pont",
+  "take-off run": "course au décollage",
+  formation: "formation",
+  intercept: "interception",
+  "orbit, terrain following, refuelling": "orbite, suivi de terrain, ravitaillement",
+  NAV: "NAV",
+  "autopilot and autothrottle": "pilote automatique et automanette",
 } satisfies Record<string, string>;

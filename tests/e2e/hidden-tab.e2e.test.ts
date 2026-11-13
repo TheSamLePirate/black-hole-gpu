@@ -16,11 +16,6 @@ const show = async (app: App, id: string) => {
   await app.cdp.send("Target.closeTarget", { targetId: id });
   await app.waitFor(`document.visibilityState === "visible"`, 10_000);
 };
-/** a picture as it is (app.shot waits for every compile — a kernel beside the scene's pending minutes here) */
-const snap = async (app: App, file: string) => {
-  const r = await app.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "png" }, 20);
-  await Bun.write(file, Buffer.from(r.data, "base64"));
-};
 const said = (app: App, from: number) => app.js<string[]>(`__bh.game.log.events.slice(${from}).map((e) => e.text)`);
 
 describe.skipIf(!E2E)("the game out of view", () => {
@@ -69,7 +64,7 @@ describe.skipIf(!E2E)("the game out of view", () => {
     console.log(
       `  the pause menu up: ${r.pause}; its line: « ${r.away} »; scene time Δ ${(r.t - t0).toFixed(5)} M; autosaves (the page's visibility at each): ${JSON.stringify(r.saves)}; said: ${JSON.stringify(lines)}`,
     );
-    await snap(a, "remote-results/hidden-tab-solo.png");
+    await a.snap("remote-results/hidden-tab-solo.png");
     expect(r.pause).toBe(true);
     expect(r.away).toMatch(/\d+ s/);
     expect(r.saves).toContain("hidden");
@@ -111,7 +106,7 @@ describe.skipIf(!E2E)("the game out of view", () => {
     const toldA = await said(a, log0);
     const warpAway = await a.js<number>(`__bh.net.net.roomWarp()`);
     console.log(`  Ben out of view: the room's warp ${warpAway}; Ana told ${JSON.stringify(toldA)}`);
-    await snap(a, "remote-results/hidden-tab-room-ana.png");
+    await a.snap("remote-results/hidden-tab-room-ana.png");
     await Bun.sleep(3000);
     const logB = await b.js<number>(`__bh.game.log.events.length`);
     await show(b, id);
@@ -119,7 +114,7 @@ describe.skipIf(!E2E)("the game out of view", () => {
     const lagB = await b.js<number>(`__bh.net.session.lag`);
     const toldB = await said(b, logB);
     console.log(`  Ben back: his scene ${lagB.toFixed(2)} s off the room's; told ${JSON.stringify(toldB)}`);
-    await snap(b, "remote-results/hidden-tab-room-ben.png");
+    await b.snap("remote-results/hidden-tab-room-ben.png");
     await b.js(`(__bh.settings.animate = true, 1)`);
     expect(goesOn).toBe(true);
     expect(toldA.some((s) => /Ben/.test(s))).toBe(true);

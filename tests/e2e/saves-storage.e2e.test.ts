@@ -9,12 +9,6 @@ import { App, E2E, stopServer } from "./lib/app";
 // Done when: the moved saves listed, the refusal told and the old save intact, Overwrite and F5 taking. Duration: ~1 min.
 
 const OUT = "remote-results/saves-storage";
-/** a picture as it is — app.shot waits for every compile, and a kernel beside the scene's (the light probe) stood pending
- *  minutes on this Mac (13 Nov 2026): nothing here is about the image */
-const snap = async (app: App, file: string) => {
-  const r = await app.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "png" }, 20);
-  await Bun.write(file, Buffer.from(r.data, "base64"));
-};
 const state = (name: string) => Bun.file(`${import.meta.dir}/../hud/states/${name}.json`).json();
 
 describe.skipIf(!E2E)("saved games: one key per save, never replaced in silence", () => {
@@ -67,7 +61,7 @@ describe.skipIf(!E2E)("saved games: one key per save, never replaced in silence"
     console.log(`  name field: ${Math.round(field)} px`);
     expect(field).toBeGreaterThan(200);
     await Bun.sleep(400);
-    await snap(app, `${OUT}/1-name-taken.png`);
+    await app.snap(`${OUT}/1-name-taken.png`);
     expect(await app.js<string>(`localStorage.getItem("kerr.save:Orbit A")`)).toBe(before);
     // (still on the Save screen: its rows' Overwrite)
     const rows = await app.js<string[]>(
@@ -79,7 +73,7 @@ describe.skipIf(!E2E)("saved games: one key per save, never replaced in silence"
     await app.waitFor(`localStorage.getItem("kerr.save:Orbit A") !== ${JSON.stringify(before)}`, 5000);
     const after = await app.js<{ v: number; summary: string }>(`JSON.parse(localStorage.getItem("kerr.save:Orbit A"))`);
     console.log(`  overwritten: ${after.summary}`);
-    await snap(app, `${OUT}/2-overwritten.png`);
+    await app.snap(`${OUT}/2-overwritten.png`);
     await app.waitFor(`!!document.querySelector("[data-testid=pause-resume]")`, 5000);
     await app.click("[data-testid=pause-resume]");
     await app.waitFor(`!document.querySelector("[data-testid=pause]")`, 5000);

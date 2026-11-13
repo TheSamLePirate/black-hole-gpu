@@ -653,6 +653,16 @@ export class App {
     const r = await this.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "png" });
     await Bun.write(file, Buffer.from(r.data, "base64"));
   }
+
+  /**
+   * The page as it is now, no wait: shot() waits for the scene's shaders and every kernel beside them — right for a picture of the
+   * image; for a test about something else (a toast, a panel, a mode) a kernel pending minutes stalled it past its own timeout
+   * (13 Nov 2026: the light probe's, on this Mac). 20 s at most.
+   */
+  async snap(file: string) {
+    const r = await this.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "png" }, 20);
+    await Bun.write(file, Buffer.from(r.data, "base64"));
+  }
 }
 
 /** Stops the server the tests started. */

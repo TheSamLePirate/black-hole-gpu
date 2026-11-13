@@ -651,7 +651,7 @@ la Terre. Un crash en solo met la partie en pause (§5.3).
 | Aérofrein | ⇧P |
 | Train (8 s par sens) | G |
 | Décollage · atterrissage automatiques (sur une piste : le décollage automatique ; près d'un porte-avions : opérations de pont du B, catapulte et brins du C ; ailleurs, F7 : l'approche ILS sur la piste la plus proche) | U · F7 |
-| Tout relâcher | Retour arrière |
+| Tout relâcher — la mission, le maintien, et sur un avion ses modes : approche (ILS, pont), course au décollage, formation, interception, orbite, suivi de terrain, ravitaillement, NAV, AP et A/THR (l'A320 par son FCU) ; ce qui est coupé est dit | Retour arrière |
 
 Les touches de vol sont tout ou rien (±1). Manette de jeu du F-35 (`input/jetpad.ts`) : stick gauche tangage et roulis,
 RT/LT manette, LB/RB palonnier, L3 postcombustion, croix train, volets, leurres, aérofrein. Levier HOTAS : absolu, cran

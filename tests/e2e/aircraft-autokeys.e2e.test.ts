@@ -64,7 +64,7 @@ describe.skipIf(!E2E)("U and F7 on an aircraft: its own take-off and landing, ne
       expect(await place(vessel)).toBe(vessel);
       const u = await key("KeyU");
       console.log(`  ${vessel} U: ${JSON.stringify(u)}`);
-      await app.shot(`${OUT}/${vessel}-U.png`);
+      await app.snap(`${OUT}/${vessel}-U.png`);
       expect(u.thr).toBeGreaterThan(0.5);
       expect(u.auto).toBe("none");
       expect(u.said.join(" ")).not.toMatch(/cannot hold the weight/);
@@ -72,7 +72,7 @@ describe.skipIf(!E2E)("U and F7 on an aircraft: its own take-off and landing, ne
       expect(u.said.join(" ")).toMatch(/Already in the air|by hand/);
       const f7 = await key("F7");
       console.log(`  ${vessel} F7: ${JSON.stringify(f7)}`);
-      await app.shot(`${OUT}/${vessel}-F7.png`);
+      await app.snap(`${OUT}/${vessel}-F7.png`);
       expect(f7.said.join(" ")).not.toMatch(/cannot hold the weight/);
       expect(f7.ils).toBe(true);
       expect(f7.thr).toBeGreaterThan(0);

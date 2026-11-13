@@ -5119,3 +5119,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   reconnexion d'un même appareil qui reprend sa place), `net-inbound`, `net-server-defence`, `i18n` : 28/0. Non fait : un e2e à deux
   onglets du même Chrome (le message dans le panneau, vu à l'image).
 - **Docs :** NETWORK.md/.fr.md.
+
+## 2026-11-13T16:14Z — Audit FX-06 : « Tout relâcher » rend vraiment la main sur un avion ; l'ORBIT du F-35 non reproduit ; `app.snap`
+
+- **Reproduit avant (e2e `release-all`, une vraie touche Retour arrière, F-35 au-dessus de l'Atlantique) :** AP, A/THR et NAV engagés, la
+  touche : la NAV toujours engagée, l'AP tenant 9 000 m (sa NAV verticale), l'A/THR 240 m/s — et le jeu disant « In the air — by hand ».
+- **Réalisé :** `src/controller/release.ts` (`releaseAircraft`) — sur un avion, l'approche (ILS, pont), la course au décollage, la
+  formation, l'interception, l'orbite, le suivi de terrain, le ravitaillement, la NAV, l'AP et l'A/THR (l'A320 par son FCU) coupés, ce
+  qui l'est dit ; appelé par `releaseControls` — la touche, l'item de la pause et le `release` de TARS. Après : tout lâché, « You have
+  the controls — NAV, autopilot and autothrottle off » — 1/1. VOL-AVIONS (la ligne « Tout relâcher »).
+- **Au passage :** `app.snap(file)` (lib e2e) — la page telle quelle, sans attendre les noyaux : `aircraft-autokeys` et
+  `tars-aircraft-tools` dépassaient leurs 5 s dans `app.shot`, qui attendait un noyau voisin (« the light probe ») des minutes sur ce
+  Mac ; repassés 3/0 et 2/0 ; mes autres e2e (hidden-tab, saves-storage, loop-cpu) sur `snap` (E2E.md).
+- **Non reproduit, non corrigé :** le panneau ORBIT (« IMPACT EARTH ») sur un F-35 en vol, noté pendant 3.4 : en cockpit et en vue
+  extérieure, au-dessus de l'Atlantique, le HUD du F-35 n'en montre rien (sonde temporaire, capture regardée).
