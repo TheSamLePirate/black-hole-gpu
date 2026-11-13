@@ -230,3 +230,19 @@ describe("heard in formation, carried out", () => {
     expect(c.form).not.toBeNull();
   }, 120_000);
 });
+
+test("offline, words that are not those orders are not read as them (audit TA-08)", () => {
+  const tools = (q: string) => parseOrders(q).map((o) => `${o.tool} ${JSON.stringify(o.args)}`);
+  // (« annule » alone is no undo: « annule la mission » reloaded the save « Before TARS »)
+  expect(tools("annule la mission")).not.toContain('saves {"action":"undo"}');
+  expect(tools("annule ce que tu as fait")).toContain('saves {"action":"undo"}');
+  expect(tools("undo")).toContain('saves {"action":"undo"}');
+  // (a world is no entry site: « pose-nous sur la Lune » asked for an entry to a site called « lune »)
+  expect(tools("pose-nous sur la Lune")).toEqual(['autopilot {"mode":"land"}']);
+  expect(tools("pose-nous à Edwards")).toEqual(['autopilot {"mode":"entry","site":"edwards"}']);
+  // (a question about the pause is no order to pause)
+  expect(tools("pourquoi la pause ?")).toEqual([]);
+  expect(tools("pause")).toEqual(['time {"running":false}']);
+  // (the quick save, the same name each time: replaced, not refused the second time)
+  expect(tools("sauvegarde")).toEqual(['saves {"action":"save","name":"Quick save","replace":true}']);
+});

@@ -33,6 +33,28 @@ const MOUNT_WORDS: [RegExp, string][] = [
   [/\b(libre|free)\b/, "free"],
 ];
 
+/** the worlds' names (folded): a landing on one, not an entry to a site of that name */
+const WORLDS = new Set([
+  "lune",
+  "moon",
+  "mars",
+  "terre",
+  "earth",
+  "titan",
+  "venus",
+  "mercure",
+  "mercury",
+  "ceres",
+  "io",
+  "europe",
+  "europa",
+  "ganymede",
+  "callisto",
+  "miller",
+  "mann",
+  "edmunds",
+]);
+
 /** The calls an order asks for, in their order (empty: not an order). */
 export function parseOrders(text: string): Order[] {
   const q = fold(text);
@@ -40,8 +62,17 @@ export function parseOrders(text: string): Order[] {
   const add = (tool: string, args: Args = {}) => out.push({ tool, args });
 
   if (/\b(oublie tout|efface ta memoire|forget (it all|everything)|clear your memory)\b/.test(q)) add("memory", { action: "clear" });
-  if (/\b(annule|undo)\b/.test(q) && !/autopilot/.test(q)) add("saves", { action: "undo" });
-  if (/\b(sauvegarde|quick ?save|save the game|save game)\b/.test(q)) add("saves", { action: "save", name: "Quick save" });
+  // (a question is no order: « pourquoi la pause ? » paused the game — audit TA-08)
+  const asking = /\?\s*$/.test(text.trim()) || /^\s*(pourquoi|why|quand|when|comment|how|est ce|is it|what|qu est ce)\b/.test(q);
+  // (an undo said as one — « annule » alone is no undo: « annule la mission » reloaded the save « Before TARS »)
+  if (
+    /\b(undo|annule (ca|cela|ce que tu as fait|ta derniere action|tout ca|la teleportation|le chargement)|reviens en arriere|retour en arriere|go back|take it back)\b/.test(
+      q,
+    )
+  )
+    add("saves", { action: "undo" });
+  // (the quick save: the same name each time, replaced — a name taken is refused otherwise, game/save.ts)
+  if (/\b(sauvegarde|quick ?save|save the game|save game)\b/.test(q)) add("saves", { action: "save", name: "Quick save", replace: true });
 
   // (the target before what may use it)
   const tgt = after(q, /\b(vise|cible|target|pointe vers|aim at)\s+(la |le |l |les )?/);
@@ -62,7 +93,8 @@ export function parseOrders(text: string): Order[] {
     add("autopilot", { mode: "none" });
   else if (/\b(atterris|atterrir|pose[- ]?(nous|toi|le)|land( us)?|touch down)\b/.test(q)) {
     const site = after(q, /\b(a|au|sur|at|on)\s+(l |la |le )?(?=[a-z])/);
-    add("autopilot", site ? { mode: "entry", site } : { mode: "land" });
+    // (a world is no entry site — « pose-nous sur la Lune » asked for an entry to a site « lune »: the landing there)
+    add("autopilot", site && !WORLDS.has(site.split(" ")[0]!) ? { mode: "entry", site } : { mode: "land" });
   } else if (/\b(decolle|decollage|take ?off|lift ?off|launch)\b/.test(q)) {
     const km = /(\d+)\s*km/.exec(q);
     add("autopilot", { mode: "takeoff", ...(km ? { altKm: Number(km[1]) } : {}) });
@@ -82,7 +114,7 @@ export function parseOrders(text: string): Order[] {
   if (/\b(temps reel|real ?time)\b/.test(q)) add("time", { warp: 1 });
   else if (warp && /\b(temps|warp|acceler|time|fois)\b/.test(q))
     add("time", { warp: Math.min(1e6, Math.max(1, Number((warp[1] ?? warp[2])!.replace(/\s/g, "")))) });
-  if (/\b(pause|mets en pause|fige le temps)\b/.test(q)) add("time", { running: false });
+  if (!asking && /\b(pause|mets en pause|fige le temps)\b/.test(q)) add("time", { running: false });
   else if (/\b(reprends|relance le temps|resume|unpause)\b/.test(q)) add("time", { running: true });
 
   // the flight's orders (F2: the leader's — flight_lead)

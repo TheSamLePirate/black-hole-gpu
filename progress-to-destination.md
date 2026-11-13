@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:10 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:17 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -52,8 +52,10 @@ indirects → J3 (lumière, cockpit).
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
-| Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol (U/F7 des avions, Maj/Alt) | prochain |
-| Audit vagues 3–4 (1feb2f7f) | 3.6–3.7 TARS, 3.10, 4.2, 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
+| Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne |
+| Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | prochain |
+| Audit vagues 3–4 (1feb2f7f) | 3.10, 4.2, 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -4454,3 +4456,40 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Non vérifié** : le M1 Max (ses ΔGPU de vol ne valent pas, il bride) ; la sonde `zz-sea-compare` ; une comparaison au pixel près sur
   image gelée ; le PC Windows ; `bun test` complet (seuls les tests des noyaux). **Suite** : E2 (les reflets dans leur noyau), puis le retrait
   R1 le 14 ; la borne à 40 sur le M1 Max refroidi.
+
+## 2026-11-13T09:17Z — Audit 3.4 et 3.5 : U et F7 des avions, Maj et Alt (FX-01, FX-02, FX-05)
+
+- **Contribution** (stratégie §19.13 parcours complets, §19.12 mêmes actions métier pour clavier et TARS ; audit lignes 3.4,
+  3.5) : **U et F7 d'un avion sont les siens** — F7 loin d'un porte-avions engage l'approche ILS sur la piste la plus proche
+  (l'A320 par son FMGC), U en l'air est refusé et dit, l'A320 ne décolle pas par U (dit) ; plus jamais l'autopilote orbital,
+  qui refusait et **coupait la manette en vol** ; TARS passe par la même action et en reçoit la ligne. **Maj et Alt** ne sont
+  la manette que tenues seules ou avec les touches de vol, au bout de 0,1 s ; un accord (un raccourci ⇧, une touche hors vol,
+  la molette avec Alt) les neutralise jusqu'au relâchement (`modGate`, `shiftShortcutCodes`). Le bouton LAND du HUD annonce
+  F7 (tiré des réglages de touches) et non « G » (FX-05).
+- **Reproduit avant correction** : FX-02 par l'e2e `aircraft-autokeys` (U en l'air : F-35 et A320, manette 0,6 → 0,
+  « cannot hold the weight ») ; FX-01 par `tests/pilot-modifiers.test.ts` (⇧P, ⇧V, ⇧K, ⌥V : manette à 1 ou −1 dès la
+  première image).
+- **Vérifié** : `pilot-modifiers` 3/3 ; e2e (ce Mac, tuiles et IGN bloqués) `aircraft-autokeys` 3/3 (F7 : « KEDW approach:
+  cleared ILS 05R », 16 km), `modifier-keys` 2/2 en vraies touches (⇧P : aérofrein sorti, manette 0 ; Maj seule : 0,49 en
+  0,9 s) ; **le cours revolé** : `apprendre-avions` 7/7, `apprendre-vaisseaux` 9/9 ; `bun test --parallel` 2 247/1
+  (`wormhole-arrival`, sensible à la charge : 2/0 seul).
+- **Fichiers** : `src/main.ts` (`pilotAuto`), `src/ai/game-tools.ts` (`autoOn`), `src/controller/piloting.ts`, `src/controls.ts`,
+  `src/input/bindings.ts`, `src/ui/flighthud.ts`, `src/i18n/fr-main.ts` ; VOL-AVIONS, VOL-VAISSEAUX, F35.md, les deux pages du
+  cours, examens, catalogue.
+- **Non fait** : FX-06 (« tout relâcher ») ; le Lander n'abandonne pas après N s sans décoller (FX-03, son départ vertical
+  fait le 11) ; vu en passant : le panneau ORBIT s'affiche sur le F-35 en vol (« IMPACT EARTH T-26 s ») — signalé, non corrigé.
+
+## 2026-11-13T09:17Z — Audit 3.6 : TARS — tour coupé, suppression confirmée, pannes dites, faux ordres hors ligne (TA-01, TA-02, TA-05, TA-08)
+
+- **Contribution** (stratégie §19.12 TARS par les mêmes actions et validations ; audit ligne 3.6) : un tour coupé par une
+  nouvelle question est fini (ses ordres ne sont plus rejoués hors ligne) ; `saves delete` demande le oui du pilote
+  (`confirm: true`) ; la panne du modèle est dite par sa cause (clé, crédit, débit, service, réseau, délai —
+  `OpenRouter.lastFailure`, `failureLine`, FR/EN) ; hors ligne, « annule » seul n'est plus un retour en arrière, « pose-nous sur
+  la Lune » est un atterrissage, une question sur la pause ne met pas en pause, la sauvegarde rapide remplace la précédente.
+- **Reproduit avant correction** (tests unitaires, chacun écrit avant) : `tars-turns` (le tour coupé rendait `null`, lu
+  « le modèle a échoué »), `tars-tools` (supprimée aussitôt), `openrouter` (aucune cause pour 401, 402, 429, 503, réseau),
+  `orders` (« annule la mission » → undo, « Lune » → entrée, « pourquoi la pause ? » → pause).
+- **Vérifié** : TARS 47/0 (agent, outils, ordres, OpenRouter, tours). **Non vérifié** : en jeu avec la vraie clé (payant,
+  non demandé) ; TA-03/TA-10 (outils du pilote automatique et de l'A320) : ligne 3.7, à suivre.
+- **Fichiers** : `src/ai/tars-agent.ts`, `src/ai/openrouter.ts`, `src/ai/offline-orders.ts`, `src/ai/game-tools.ts` (`saves`),
+  `src/main.ts` (la cause dite après la réponse hors ligne) ; TARS.md.

@@ -140,3 +140,24 @@ test("TARS online: his prompt (the language, the settings, no invented figure); 
   expect(await tars.remark("liftoff", S, { honesty: 90, humour: 75 }, "en", 260_000)).toBeNull();
   expect(clean("[beeps] TARS: *fine*")).toBe("TARS: fine");
 });
+
+test("a refusal is told by its cause — the key, the credit, the rate, the network — not a silent null (audit TA-05)", async () => {
+  const at = (status: number) => async () => new Response("{}", { status });
+  const cases: [() => Promise<Response>, string][] = [
+    [at(401), "key"],
+    [at(402), "credit"],
+    [at(429), "rate"],
+    [at(503), "server"],
+    [
+      async () => {
+        throw new TypeError("Failed to fetch");
+      },
+      "network",
+    ],
+  ];
+  for (const [f, why] of cases) {
+    const or = new OpenRouter(() => "sk-test", f as never);
+    expect(await or.complete([{ role: "user", content: "hi" }], [])).toBeNull();
+    expect([why, or.lastFailure?.why]).toEqual([why, why]);
+  }
+});

@@ -8,7 +8,7 @@ import type { Personality, TarsState } from "../game/tars";
 import { Agent, actionLine, resultShort, type Action, type Tool } from "./agent";
 import { checkArgs } from "./tool-schema";
 import { summaryPrompt, type TarsMemory } from "./memory";
-import type { OpenRouter } from "./openrouter";
+import { failureLine, type OpenRouter } from "./openrouter";
 import { systemPrompt } from "./tars-online";
 import { parseOrders } from "./offline-orders";
 import type { Mode } from "./commands";
@@ -94,6 +94,8 @@ export class TarsAgent {
   /** the last turn's actions and answer (the tests, the panel) */
   last: Action[] = [];
   lastText: string | null = null;
+  /** the last turn's failure, said (null: none) — main.ts adds it to an offline answer */
+  failure: string | null = null;
 
   constructor(private d: TarsAgentDeps) {
     // (his tools as his mode allows: all when acting; reading, showing, proposing when proposing; reading and
@@ -159,14 +161,20 @@ export class TarsAgent {
       );
       this.last = r.actions;
       this.lastText = r.text;
-      // (stopped by a new question: that one answers)
+      // (stopped — by a new question, which answers, or by « stop » —: over, nothing to say; never null, which main.ts
+      // reads as « the model failed » and answers offline: the cut question's orders ran anyway — audit TA-01)
       if (r.cut === "stopped") {
         this.keep(q, "", r.actions);
-        return this.ctl === ctl ? "" : null;
+        return "";
       }
       // (a model copying a tool call's form into its words: the bracket dropped)
       if (r.text) r.text = r.text.replace(/^\s*\[(?:actions?|tools?)[^\]]*\]\s*/i, "").trim() || null;
-      const text = r.text ?? (r.actions.length ? (r.cut === "steps" ? doneWord(lang, "steps") : doneWord(lang, "time")) : null);
+      // (the model's failure by its cause — the key, the credit, the network —: said, not « it takes too long » — audit
+      // TA-05; with nothing done, null still: main.ts answers offline, then says why)
+      const F = this.d.or.lastFailure;
+      this.failure = !r.text && F ? failureLine(F.why, lang) : null;
+      const text =
+        r.text ?? (r.actions.length ? (this.failure ?? (r.cut === "steps" ? doneWord(lang, "steps") : doneWord(lang, "time"))) : null);
       if (text === null) return null;
       this.keep(q, text, r.actions);
       return text;

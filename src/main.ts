@@ -1576,6 +1576,9 @@ async function main() {
         text = orderReply(lang, done);
         tarsMemory.add({ at: Date.now(), user: q, tars: text, did: done.map((d) => `${d.tool} → ${d.ok ? "done" : d.error}`) });
       }
+      // (why the model did not answer — its key, its credit, the network —: said, the offline answer kept — audit TA-05)
+      const why = online() ? tarsAgent.failure : null;
+      if (why) text = text ? `${text} (${why})` : why.charAt(0).toUpperCase() + why.slice(1);
     }
     refreshGui();
     tarsPanel.answer(text ?? r.text);

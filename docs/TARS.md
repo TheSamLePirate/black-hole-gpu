@@ -144,7 +144,9 @@ Ce qui encadre ces répliques :
     - à chaque moment, plus un regard toutes les 2 min de vol ;
     - au plus une décision par 45 s et une remarque par 2 min.
   - **Le coût** : une phrase coûte ≈ 0,00015 $ (GLM : 0,15 / 0,50 $ le million de jetons ; Jev ne facture que l'entrée). Celui de la session est affiché dans le champ F6.
-  - **Une panne, hors ligne, un délai dépassé** (12 s) : il reprend ses phrases écrites.
+  - **Une panne, hors ligne, un délai dépassé** (12 s) : il reprend ses phrases écrites — **et dit pourquoi** (depuis le
+    13 nov. 2026, audit TA-05 : `OpenRouter.lastFailure`, `failureLine`) : la clé refusée (401/403), le crédit épuisé
+    (402), le débit (429), le service (5xx), le réseau, le délai ; avant, « ça prend trop de temps » ou rien.
 - **Réglages** : Remarques, Honnêteté (90 %), Humour (75 %), TARS par OpenRouter.
 
 ## TARS agent
@@ -182,7 +184,12 @@ Plan : [`PLAN-TARS-AGENT.md`](PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). L
   verdict du hub (une alarme). e2e `tests/e2e/tars-orbs.e2e.test.ts`, captures `docs/progress/tars-orbs/`.
 - **Il montre** : des graphes (les canaux de l'enregistreur en direct, ou ses propres séries), des fiches de chiffres, et les vrais écrans du jeu (la carte, la tablette, un écran du cockpit, le rapport de vol) ; trois cartes au plus sur la vue, fermées par leur ×.
 - **Ordres et propositions** : un ordre (« pose-nous », « vise Mars ») s'exécute sans confirmation ; « propose-moi un plan pour… » donne un plan chiffré, sans rien exécuter, avec ACCEPTER / REFUSER (ou « oui » / « non ») — accepté, il l'exécute.
-- **L'arrêter** : Échap, « stop », ou une nouvelle question.
+- **L'arrêter** : Échap, « stop », ou une nouvelle question — le tour coupé est fini : ses ordres ne sont **pas** rejoués
+  hors ligne (avant le 13 nov. 2026, audit TA-01 : « pose-nous à Edwards » coupé par « vise Mars » posait quand même à
+  Edwards). **Supprimer une sauvegarde** (`saves delete`) demande d'abord le oui du pilote (`confirm: true`), comme le second
+  appui du menu pause (TA-02). **Hors ligne**, « annule » seul n'est plus « reviens en arrière » (« annule la mission »
+  rechargeait « Before TARS »), « pose-nous sur la Lune » est un atterrissage et non une entrée vers un site « lune », une
+  question sur la pause ne met pas en pause (TA-08).
 - **Le filet** : avant ce qui ne se défait pas (charger, déplacer — `place_ship`, `atlas go`, `sky_events take` go/live, `character start`, `set_mode foot` —, changer la date, une scène), la partie est sauvegardée sous « Before TARS » ; « annule » y revient.
 - **Sa mémoire** : la conversation gardée d'une visite à l'autre, dans ce navigateur seulement (jamais dans une sauvegarde, les réglages, un export). 24 échanges mot pour mot, les plus vieux résumés par le modèle ; ses notes (votre nom, vos préférences). Dans le champ F6 : leur nombre et « effacer » ; ou « oublie tout ».
 - **Le modèle** : réglage « Modèle de TARS » — GLM-5.3 Flash par défaut (le moins cher), Claude Haiku 5.5, GPT-6 Luna, DeepSeek V4.1 Flash, Gemini 3.8 Flash, Claude Sonnet 5.5. Un vol vers la Lune mené par TARS a coûté 0,0012 $ avec GLM.

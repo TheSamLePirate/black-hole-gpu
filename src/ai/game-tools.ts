@@ -2489,11 +2489,12 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "saves",
       description:
-        "Saved games: save (a name; one taken is refused unless replace: true), load (a name; the current game saved first as 'Before TARS'), delete, undo: back to 'Before TARS' (the state before TARS's last teleport, load, date change or scene); export (a name, or the game now: downloaded as a file), import (json: a save's file text; loaded and kept), share (a link that opens the game as it is now), autosave (the autosave written now).",
+        "Saved games: save (a name; one taken is refused unless replace: true), delete (cannot be undone: ask the pilot first, then call it again with confirm: true), load (a name; the current game saved first as 'Before TARS'), delete, undo: back to 'Before TARS' (the state before TARS's last teleport, load, date change or scene); export (a name, or the game now: downloaded as a file), import (json: a save's file text; loaded and kept), share (a link that opens the game as it is now), autosave (the autosave written now).",
       params: {
         action: { type: "string", enum: ["save", "load", "delete", "undo", "export", "import", "share", "autosave"] },
         name: { type: "string" },
         replace: { type: "boolean" },
+        confirm: { type: "boolean" },
         json: { type: "string" },
       },
       required: ["action"],
@@ -2508,6 +2509,10 @@ export function gameTools(h: GameHost): Tool[] {
             return tools.load(name);
           case "delete":
             if (!name) throw new Error("delete needs a name");
+            // (cannot be undone: the pilot's yes first, as the pause menu's second press — audit TA-02: a wake-up's turn
+            // or a misheard order deleted a save at once)
+            if (a.confirm !== true)
+              return `not deleted: "${name}" cannot be brought back — ask the pilot, then call saves delete again with confirm: true`;
             return tools.deleteSave(name);
           case "export":
             tools.exportSave(name);

@@ -149,6 +149,25 @@ export type Answer =
   | { type: "score"; score: number; confidence: number };
 
 /** The calls, the session's cost. */
+/** why a call to OpenRouter failed */
+export type Failure = "key" | "credit" | "rate" | "server" | "network" | "timeout" | "refused";
+const failureOf = (status: number): Failure =>
+  status === 401 || status === 403 ? "key" : status === 402 ? "credit" : status === 429 ? "rate" : status >= 500 ? "server" : "refused";
+
+/** The failure said to the pilot, in his language. */
+export function failureLine(f: Failure, lang: "fr" | "en"): string {
+  const L: Record<Failure, [string, string]> = {
+    key: ["ma clé OpenRouter est refusée (Réglages › TARS)", "my OpenRouter key is refused (Settings › TARS)"],
+    credit: ["le crédit OpenRouter est épuisé", "the OpenRouter credit is spent"],
+    rate: ["OpenRouter me demande de ralentir — réessayez dans un instant", "OpenRouter asks me to slow down — try again in a moment"],
+    server: ["le service du modèle ne répond pas", "the model's service is down"],
+    network: ["pas de réseau jusqu'au modèle", "no network to the model"],
+    timeout: ["le modèle a mis trop de temps", "the model took too long"],
+    refused: ["le modèle a refusé la demande", "the model refused the request"],
+  };
+  return L[f][lang === "fr" ? 0 : 1];
+}
+
 export class OpenRouter {
   /** what the session has cost [USD], and the calls made */
   spent = 0;
@@ -158,6 +177,10 @@ export class OpenRouter {
   private noReasoning = true;
   /** Jev's model asked (the pinned one; its alias once refused) */
   decisionModel = DECISION_MODEL;
+
+  /** why the last call failed (null: it did not) — the key refused, the credit spent, the rate, the server, the network,
+   *  the time: said to the pilot, not swallowed (audit TA-05) */
+  lastFailure: { why: Failure; status?: number } | null = null;
 
   constructor(
     private key: () => string | null = () => openRouterKey.get(),
@@ -250,7 +273,11 @@ export class OpenRouter {
         r = await ask();
       }
       this.calls++;
-      if (!r.ok) return null;
+      if (!r.ok) {
+        this.lastFailure = { why: failureOf(r.status), status: r.status };
+        return null;
+      }
+      this.lastFailure = null;
       const j = (await r.json()) as {
         choices?: {
           message?: {
@@ -265,6 +292,8 @@ export class OpenRouter {
       if (!m) return null;
       return { content: m.content ?? null, tool_calls: m.tool_calls?.length ? m.tool_calls : undefined };
     } catch {
+      // (aborted by the pilot — a new question, « stop » —: no failure; the clock's: a timeout; else the network)
+      if (!o.signal?.aborted) this.lastFailure = { why: timeout.aborted ? "timeout" : "network" };
       return null;
     }
   }

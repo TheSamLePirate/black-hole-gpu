@@ -756,3 +756,24 @@ test("TARS reaches the rest of the game: the flight plan, the F-35's flights, th
   for (const p of ["observe", "multiexposure", "flighthub", "route", "challenges", "title"])
     expect(PANELS as readonly string[]).toContain(p);
 });
+
+test("saves delete: never at once — the pilot's yes asked for (confirm: true), as the pause menu's second press (audit TA-02)", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const calls: string[] = [];
+  const host = {
+    settings: {},
+    camera: { character: { state: () => ({}) } },
+    tools: { save: (n: string) => calls.push(`save ${n}`), deleteSave: (n: string) => calls.push(`delete ${n}`) },
+    changed: () => {},
+    log: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  const saves = tools.find((t) => t.name === "saves")!;
+  const first = await saves.run({ action: "delete", name: "Mars landing" }, signal);
+  // (before: deleted at once, nothing to take it back)
+  expect(calls).toEqual([]);
+  expect(JSON.stringify(first)).toMatch(/confirm/);
+  await saves.run({ action: "delete", name: "Mars landing", confirm: true }, signal);
+  expect(calls).toEqual(["delete Mars landing"]);
+});
