@@ -91,6 +91,9 @@ export function touchdown(msgs: string[]) {
 /** The state these flights leave shared: the flown craft, the reliefs a test set (the Moon's craters back). */
 export function resetFlights() {
   fleet.active = "ranger";
+  // (the crafts other tests left parked — fleet.free: the Endurance, the Lander… — not carried into the next file's flights: injected
+  // into the heavy-sea carrier qualification alone, they changed its grades — 13 Nov 2026; not that test's whole failure in the suite)
+  for (const k of Object.keys(fleet.free)) delete (fleet.free as Record<string, unknown>)[k];
   // (a fight's stores: their mass off the jet)
   fleet.payload.f35 = 0;
   for (const b of ["moon", "earth", "mars"]) setGroundHeights(b, null);
