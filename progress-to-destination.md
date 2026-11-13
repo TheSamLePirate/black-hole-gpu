@@ -3968,3 +3968,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Changé** : `tests/e2e/lib/j2-probes.ts` (`seamCrack`, `innerCrack`) ; fiche J2-3 §4–§5, PROBLEMES-A-REGLER, PLAN-J2 §9 sexies.
 - **Mesuré** : M1 Max, phase `seams` sur 3 vues, 3/0. **Non vérifié** : une vue plongeante sur la plaine du Gapeau (séparer crêtes et
   fissures) ; kerr-mini.
+
+## 2026-11-13T02:30Z — J2-3, coutures : C0-12 tenu sur les quatre vues (la vue plongeante tranche)
+
+- **Contribution** (PLAN-J2 §4, sortie « coutures ≤ 0,25 px ») : la plaine du Gapeau regardée 35° vers le bas (`hyeres-down`, vue nouvelle :
+  les mêmes bords de niveaux, sans crête contre un terrain plus loin) : fissure p95 **0,069 px**, 2,9 % des paires > 0,25 px contre 1,5 % à
+  l'intérieur, sans géomorphose 31 % ; carte nette. Le résidu de la vue rasante (p95 0,77 px) était celui des crêtes. **C0-12 tenu** : Alpes
+  0,004 px, vers La Crau 0,18 px, Gapeau plongeant 0,069 px. PROBLEMES-A-REGLER : l'entrée fermée.
+- **Changé** : `tests/e2e/lib/j2-probes.ts` (`LEAK_VIEWS` : `look`, vue `hyeres-down`), `tests/e2e/j2-probes.e2e.test.ts` (le regard
+  posé) ; fiche J2-3, PROBLEMES, PLAN-J2. **Mesuré** : M1 Max, 1/0. **Non vérifié** : kerr-mini ; la fuite et l'A/B du levier sur la vue
+  plongeante.

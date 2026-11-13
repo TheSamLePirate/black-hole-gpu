@@ -5,7 +5,10 @@
 
 /** the views of the leak and seam probes: low over the ground (grazing: each imagery level's window edge in the image, their
  *  coarser mips and the anisotropic filter's long footprints along it) — over France (the IGN's orthophotos z 15–18 and imagery) */
-export const LEAK_VIEWS: Record<string, { what: string; at: [number, number, number, number, number]; date: string }> = {
+export const LEAK_VIEWS: Record<
+  string,
+  { what: string; at: [number, number, number, number, number]; date: string; look?: [number, number] }
+> = {
   // (inland from Hyères, over the Gapeau's plain towards the Maures — J0's land: farms, vineyards, roads, villages; 300 m)
   "hyeres-low": {
     what: "plaine du Gapeau vers les Maures, 300 m sol, cap 20°",
@@ -14,6 +17,13 @@ export const LEAK_VIEWS: Record<string, { what: string; at: [number, number, num
   },
   // (motion-quality's Alps: the Arve's valley and the glaciers, 2 500 m over the sea's level the flyAt's ground)
   alps: { what: "vallée de l'Arve vers l'est, 2 500 m sol, cap 110°", at: [45.85, 6.75, 2500, 110, 140], date: "2026-07-10T11:00:00Z" },
+  // (J2-3, the seams: hyeres-low's place, the look 35° down — the levels' edges on the ground, no ridge against a farther one)
+  "hyeres-down": {
+    what: "plaine du Gapeau, 300 m sol, cap 20°, regard 35° vers le bas",
+    at: [43.12, 6.13, 300, 20, 140],
+    date: "2026-07-10T10:00:00Z",
+    look: [0, -35],
+  },
   // (J2-3: lower and across the tiles' axes — the footprints diagonal on the windows, their edges near: north of Hyères towards
   // La Crau and Toulon, 150 m)
   "hyeres-diag": {

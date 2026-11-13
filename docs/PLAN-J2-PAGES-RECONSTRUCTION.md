@@ -331,8 +331,8 @@ positif). **Mesuré** (M1 Max, kerr-mini hors réseau) : fuite levier allumé **
 0,68–0,74 Mpx) ; l'image ne change qu'en lignes le long des bords de fenêtres (le niveau fin rendu jusqu'à 36–40 texels plus près de son
 bord), écart moyen dans la dérive du témoin, aucune couture à l'œil ; GPU dans le bruit à Hyères, non conclu dans les Alpes (le Mac en
 pression thermique « Heavy »). **Coutures par la géométrie** (la fissure : les deux côtés prolongés, un pli continu compté 0) : **C0-12 tenu au p95**
-dans les Alpes (0,004 px) et à `hyeres-diag` (0,18 px) ; `hyeres-low` p95 0,77 px (11,9 % des paires > 0,25 px, intérieur 2,4 %), crêtes
-non séparées — à trancher (PROBLEMES-A-REGLER) avant la sortie de J2. **Reste** : le ΔGPU sur J0 (kerr-mini), la décision d'allumer le levier ; les gouttières non faites (pas de fuite).
+— Alpes 0,004 px, vers La Crau 0,18 px, plaine du Gapeau vue plongeante 0,069 px (sa vue rasante, 0,77 px : des crêtes) ; la sortie de J2
+pour les coutures est mesurée (phase `seams`). **Reste** : le ΔGPU sur J0 (kerr-mini), la décision d'allumer le levier ; les gouttières non faites (pas de fuite).
 
 ## 9 septies. J2-4, étape A : ce que fait aujourd'hui une page republiée (13 novembre 2026)
 

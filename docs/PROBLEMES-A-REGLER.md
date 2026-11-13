@@ -53,19 +53,15 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   inchangée. **Reste ouvert** : 1 image par vol à 3,1–3,2 ms, dont 1,7–2,7 ms dans le simple enregistrement d'une arrivée (`put`, hors de
   tout chemin coûteux : pause du ramasse-miettes probable, A en montre aussi) — critère non tenu strictement ; la mesure sur kerr-mini.
 
-## Une marche sous le pixel aux bords des niveaux du raster près de Hyères, géomorphose allumée (J2-3, 13 novembre 2026)
+## ~~Une marche sous le pixel aux bords des niveaux du raster près de Hyères~~ — pas une couture : des plis et des crêtes ; C0-12 tenu (J2-3, 13 novembre 2026)
 
-Mesurée par la géométrie (e2e `j2-probes`, phase `seams`, [fiche J2-3](progress/j2/FICHE-J2-3-2026-11-13.md) §4 ; M1 Max, vues tenues) :
-l'inverse de la profondeur de vue, affine sur un plan, de part et d'autre des bords de niveaux, **les crêtes écartées** (paires aux pentes
-comparables). Alpes : 1,5 % des paires de bord > 0,25 px (intérieur 3,2 %) — C0-12 tenu. **Plaine du Gapeau (300 m)** : 25 % (intérieur
-6,5 %), p50 0,06 px, p95 1,2 px ; par bord 2 | 3 17 %, 3 | 4 30 %, 4 | 5 35 % contre 5–12 % à l'intérieur de ces rangs ; la géomorphose en
-retire une moitié (sans elle 41–55 %). Pas de trou vu. Mais cette « marche » comptait aussi **les plis** (deux niveaux qui se
-rejoignent, leurs pentes cassées). **La fissure** (les deux côtés prolongés : croisés entre les deux pixels, 0) : Alpes p95 0,004 px,
-`hyeres-diag` p95 0,18 px — **C0-12 tenu** — ; **plaine du Gapeau p95 0,77 px, 11,9 % des paires > 0,25 px (intérieur 2,4 %)**, crêtes
-comprises (la carte en montre beaucoup ; la fissure ne les sépare pas). Écartés par le code : le sur-sol IGN (A/B), le pas des anneaux (une
-marque), leur recouvrement (= la géomorphose pleine), les diagonales, l'origine des hauteurs du niveau grossier (`f[3]` = celle que dessine
-l'anneau), la réfraction (millimétrique). **Reste** : séparer crêtes et fissures dans cette vue (une vue plongeante au même endroit) avant
-de conclure. Critère de sortie de J2 (§4 : coutures ≤ 0,25 px).
+La sonde géométrique des coutures (e2e `j2-probes`, phase `seams`, [fiche J2-3](progress/j2/FICHE-J2-3-2026-11-13.md) §4) comptait aux
+bords des niveaux des « marches » que la géomorphose ne retirait qu'à moitié. Ce qu'elles étaient : **des plis** (deux niveaux qui se
+rejoignent, leurs pentes cassées : la facette du grossier contre le relief du fin) et **des crêtes** (un rang fin qui cache un terrain plus
+loin, en vue rasante). La **fissure** (les deux côtés prolongés : croisés entre les deux pixels, la surface est entière) : p95 0,004 px
+(Alpes), 0,18 px (vers La Crau), et sur la plaine du Gapeau **regardée 35° vers le bas** (`hyeres-down`, les mêmes bords sans crête)
+**0,069 px**, 2,9 % des paires > 0,25 px contre 1,5 % à l'intérieur ; sans géomorphose 20–31 %. La même plaine en vue rasante (p95 0,77 px)
+mêle les crêtes. **C0-12 tenu.**
 
 ## « Posé sur un aérodrome » ne s'aligne plus sur sa piste au Bourget (e2e `ground-placement`)
 

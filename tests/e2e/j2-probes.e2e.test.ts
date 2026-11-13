@@ -45,7 +45,8 @@ import {
 //   seams — J2-3, the seams by the geometry (J2_PHASES=seams): at each view, frozen, T3's geomorphose on, off (the positive control:
 //     the levels' own heights), on again: the seams read by the view depth's inverse (lib/j2-probes.ts SEAM_GEOM_JS: pairs across two
 //     levels against pairs inside one) and by the distance (SEAM_JS, J2-0's); a shot and a map of each (SEAM_MAP_JS: the ranks in colour,
-//     the boundary pairs red over 0.25 px, green under). J2_HLOD=0: the IGN's overground off (its A/B).
+//     the boundary pairs red over 0.25 px, green under). J2_HLOD=0: the IGN's overground off (its A/B). C0-12's measure: `seamCrack`
+//     (a fold counts 0); a grazing view mixes ridges in — hyeres-down, the look 35° down, the same edges without them.
 //   trail — J2-4, step A (J2_PHASES=trail): how long a page republished takes to show — the leak probe's positive control (every
 //     published imagery page painted) as a controlled arrival: green settled, then magenta at once, the scene's colour read 1, 2, 4,
 //     8, 16, 32, 64 images after (lib/j2-probes.ts trailJs: the share of the repainted pixels past 90 % of the way — held only, the
@@ -239,7 +240,9 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
           v,
         );
         await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
-        const row: Record<string, unknown> = { view: v, what: view.what, placed, overground: !HLOD_OFF };
+        // (a view's look — hyeres-down —: set once placed, the camera on its mount)
+        if (view.look) await app.js(`(() => { __bh.camera.setLook(${view.look[0]}, ${view.look[1]}); __bh.touch(); return 1; })()`);
+        const row: Record<string, unknown> = { view: v, what: view.what, placed, overground: !HLOD_OFF, look: view.look ?? null };
         for (const [k, on] of [
           ["on", true],
           ["off", false],
