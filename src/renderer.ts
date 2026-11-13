@@ -9723,6 +9723,41 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return { dir: [f[0]!, f[1]!, f[2]!], rs: f[3]!, e: lum(4), on: f[7]! > 0.5, air };
   }
 
+  /** (PLAN-J3 J3-1) The sky's light on a level surface at the camera from the craft's probe, three ways: `exact` its texels integrated
+   *  over the hemisphere above (cos θ dω — the probe whole read back, 512 KB), `sh` its harmonics' (as the craft reads it), `ground` the
+   *  ground's clear sky (skyIrradiance); luminances. null off the Earth or before the probe wrote its up */
+  async readShipSky(): Promise<{ exact: number; sh: number; ground: number } | null> {
+    const n = ENV_W * ENV_H;
+    const size = (n + 7) * 16;
+    const st = this.device.createBuffer({ size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.ship.envBuf, 0, st, 0, size);
+    this.device.queue.submit([enc.finish()]);
+    await st.mapAsync(GPUMapMode.READ);
+    const f = new Float32Array(st.getMappedRange().slice(0));
+    st.unmap();
+    st.destroy();
+    const lum = (o: number) => 0.2126 * f[o]! + 0.7152 * f[o + 1]! + 0.0722 * f[o + 2]!;
+    const u = (n + 6) * 4;
+    if (!(f[u + 3]! > 0)) return null;
+    const up = [f[u]!, f[u + 1]!, f[u + 2]!];
+    // (the texels' directions as trace.wgsl env draws them — their centres: θ from the probe's y, φ about it)
+    let e = 0;
+    const dth = Math.PI / ENV_H;
+    const dph = (2 * Math.PI) / ENV_W;
+    for (let y = 0; y < ENV_H; y++) {
+      const th = (y + 0.5) * dth;
+      const st2 = Math.sin(th);
+      const ct = Math.cos(th);
+      for (let x = 0; x < ENV_W; x++) {
+        const ph = ((x + 0.5) / ENV_W - 0.5) * 2 * Math.PI;
+        const c = st2 * Math.sin(ph) * up[0]! + ct * up[1]! + st2 * Math.cos(ph) * up[2]!;
+        if (c > 0) e += lum((y * ENV_W + x) * 4) * c * st2;
+      }
+    }
+    return { exact: e * dth * dph, sh: lum((n + 5) * 4), ground: lum((n + 4) * 4) };
+  }
+
   /** Exposure in use [EV]: the setting, plus the meter's with auto exposure. */
   ev(s: Settings) {
     // (Q6-ISS ISS5: a live stream's camera holding its own exposure — Sen's: the day's, its night black —, unless measured Neutral)

@@ -157,6 +157,13 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   voit pas les nuages, par conception — ses nuages passent par d'autres facteurs). **Lecture** : de jour l'appareil reçoit ce que reçoit le
   sol à quelques % ; au coucher, 10–12 % de plus. **Causes possibles, non vérifiées** : les harmoniques d'ordre 2 de la sonde mêlent à « vers le
   haut » la lueur de l'horizon et le sol éclairé (la mer, son reflet) sous l'horizon abaissé de 500 m ; le ciel clair du sol n'a pas de
-  renvoi du sol. Prochain pas : séparer ces parts (la sonde sans le sol sous l'horizon) avant de toucher à l'un ou l'autre.
+  renvoi du sol.
+  **Les parts séparées** (13 nov., ~16:55 UTC, run `…-j3-keysky3`) : les texels de la sonde intégrés **exactement** sur l'hémisphère au-dessus
+  (`renderer.readShipSky`, cos θ dω, sans harmoniques) : appareil exact / sol **0,96 (12:00), 0,95 (15:30), 0,97 (18:30), 1,05–1,09 (19:05)**.
+  Donc **les harmoniques d'ordre 2 ajoutent 8 à 13 %** à ce que la sonde contient pour une surface tournée vers le haut (la part du dessous —
+  la mer, le sol — qui fuit dans « le haut ») ; le ciel tracé et le ciel clair du sol restent entre −5 % de jour et +9 % au coucher. A/A de la
+  sonde au coucher jusqu'à 4,8 % (le ciel change vite pendant qu'elle se dessine par parties). **Pas de changement fait** : corriger la fuite
+  des harmoniques (un fenêtrage des bandes, ou l'éclairement exact haut/bas de la sonde à côté des harmoniques) change l'aspect de tout
+  l'appareil — une décision d'image à présenter avec des vues, pas un réglage.
   **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
   ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.
