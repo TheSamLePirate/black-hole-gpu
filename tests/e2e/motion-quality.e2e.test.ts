@@ -17,7 +17,8 @@ import { readPng } from "./lib/png";
 // reference, in the view through the canopy (BOX): PSNR and the sharpness ratio (the
 // Laplacian's energy over the reference's — 1: as sharp; under: softer; over: noisier or aliased).
 // The HUD off; each mode's own reference, made at once after its still shot (the view exactly the same).
-// PLACES=tarifa-low,alps (strait: the sea); MODES (below) — e.g. spatial75q,taau75q,native100q; FRAMES (90), TURN (0: straight), STEADY (60 frames before), SPEED (140 m/s), STILL (30).
+// PLACES=tarifa-low,alps (strait: the sea); MODES (below) — e.g. spatial75q,taau75q,native100q, a renderer lever after "+" (EXTRAS:
+// taau75q+disocc — PLAN-J2 J2-5's disocclusion; off in the plain modes); FRAMES (90), TURN (0: straight), STEADY (60 frames before), SPEED (140 m/s), STILL (30).
 // Output: remote-results/motion-quality/<place>-<mode>[-still|-ref].png, motion-quality.json (MQ_OUT).
 // Done when: every place × mode measured (the tiles 120 s at most, the reference 90 s, what is missing said), no GPU error.
 // Duration: ~3 min a place × mode (its reference 90 s; the first one waits for the tiles).
@@ -59,6 +60,19 @@ const DETAIL = `Object.assign(__bh.settings, { earthScenery: "high", detailReach
 const CLEAN = `Object.assign(__bh.settings, { hudJet: "off", hudHorizon: false, hudHeading: false, hudBank: false, hudMarkers: false,
   hudEdge: false, hudAoA: false, hudEnergy: false, hudDirector: false, hudPath: false, hudFuture: false, hudImpact: false, hudRunway: false });`;
 const LOOK = Number(process.env.LOOK ?? 0);
+// (a mode's renderer levers after a "+" — `taau75q+disocc`: PLAN-J2 J2-5's disocclusion on —; every lever named here set off
+// otherwise, the same mode measured with and without in one run)
+const EXTRAS: Record<string, [string, string]> = {
+  disocc: ["__bh.renderer.disocclusionOn = true;", "__bh.renderer.disocclusionOn = false;"],
+  // (its positive control: a tolerance of −10 — nearly every moving pixel taken as uncovered, no history: the lever acts)
+  disoccall: ["__bh.renderer.disocclusionOn = true; __bh.renderer.disocclusionTol = -10;", "__bh.renderer.disocclusionTol = 0.03;"],
+};
+const modeExtras = (md: string) => {
+  const on = new Set(md.split("+").slice(1));
+  return Object.entries(EXTRAS)
+    .map(([k, [yes, no]]) => (on.has(k) ? yes : no))
+    .join(" ");
+};
 const places = (process.env.PLACES ?? "tarifa-low,alps").split(",");
 const modes = (process.env.MODES ?? "spatial75q,taau75q,native100q").split(",");
 const FRAMES = Number(process.env.FRAMES ?? 90);
@@ -159,7 +173,7 @@ describe.skipIf(!E2E)("Q6: the image in motion, the same motion for every mode",
         }
         await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(saves.get(pl))}, false);
           __bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64 });
-          __bh.settings.shipMount = "cockpit"; ${DETAIL} ${MODES[md]} ${CLEAN} return 1; })()`);
+          __bh.settings.shipMount = "cockpit"; ${DETAIL} ${MODES[md.split("+")[0]!]} ${CLEAN} ${modeExtras(md)} return 1; })()`);
         // (the aircraft steady: the save applied over a few frames, then the gear down, the autopilot holding its height and
         // heading, the autothrottle SPEED — engaged again until they hold: jetToggle refuses until the craft flies as a plane)
         const ap = await app.js<{ ap: boolean; athr: boolean; note: string }>(`(async () => {

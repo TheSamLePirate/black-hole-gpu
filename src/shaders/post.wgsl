@@ -722,6 +722,35 @@ fn reprojDir(d0: vec3f, depth: f32) -> vec3f {
   }
   return normalize(P + TA.drift.xyz);
 }
+// (PLAN-J2 J2-5, the disocclusion: the frame before's depths — its moments' y, copied at its end —, renderer.disocclusionOn)
+@group(0) @binding(54) var<storage, read> momPrev: array<vec2f>;
+// where a point now (its direction d0 and depth from this camera) was from the previous camera — not normalized: its distance
+// then (reprojDir's, the rigid near body's included)
+fn reprojPoint(d0: vec3f, depth: f32) -> vec3f {
+  let P = d0 * depth;
+  if (TA.cc.w > 0.5 && depth < abs(TA.drift.w)) {
+    let rel = P - TA.cc.xyz;
+    return TA.cc.xyz + TA.drift.xyz + vec3f(dot(rel, TA.m0.xyz), dot(rel, TA.m1.xyz), dot(rel, TA.m2.xyz));
+  }
+  return P + TA.drift.xyz;
+}
+// (J2-5) a pixel's point not seen by the frame before at its history's place uv: the four depths of the frame before about uv (its
+// internal image, rs × rs.y) all nearer than the point then by over TA.m1.w of it — something stood before it, now gone: a
+// silhouette's edge moved off it, the sky behind a ridge —; the sky now (depth ≥ 1e8) against ground then too. All four: a grazing
+// ground's depth changes by percents from pixel to pixel, one nearer neighbour is not an occluder. Off: TA.m0.w 0
+fn disoccluded(d0: vec3f, depth: f32, uv: vec2f, rs: vec2u) -> bool {
+  if (TA.m0.w < 0.5 || arrayLength(&momPrev) < rs.x * rs.y) { return false; }
+  let then = select(length(reprojPoint(d0, depth)), 3e38, depth >= 1e8);
+  let q = uv * vec2f(rs) - 0.5;
+  let q0 = vec2i(floor(q));
+  let hi = vec2i(rs) - 1;
+  for (var k = 0; k < 4; k++) {
+    let p = clamp(q0 + vec2i(k & 1, k >> 1), vec2i(0), hi);
+    let pd = momPrev[u32(p.y) * rs.x + u32(p.x)].y;
+    if (!(pd > 0.0) || pd >= then * (1.0 - TA.m1.w)) { return false; }
+  }
+  return true;
+}
 // the current camera's direction through a pixel (its centre + o [px])
 fn pixelDir(p: vec2f, size: vec2u) -> vec3f {
   let ndc = vec2f(2.0 * p.x / f32(size.x) - 1.0, 1.0 - 2.0 * p.y / f32(size.y));
@@ -884,7 +913,9 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
     let left = (!moved && all(textureDimensions(motionPrevTex) == size) && meshMotionPrev(vec2i(up)).z > 0.5) || mv.z > 1.5;
     // (and a mobile surface not there the frame before, or one a new publication brought or took — its identity —: none)
     let idW = select(1.0, identityKept(vec2i(gid.xy), vec2i(up), moved), all(textureDimensions(identTex) == size));
-    let same = idW > 0.0;
+    // (J2-5: a point the frame before did not see there — no history: this frame's alone)
+    let uncovered = !moved && !carried && disoccluded(d0, depth, uv, size);
+    let same = idW > 0.0 && !uncovered;
     let inside = all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0)) && !underCabin && !left;
     if (inside && !same) {
       atomicAdd(&idRejects[0], 1u);
@@ -1341,7 +1372,9 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
   // (and a mobile surface not there the frame before, or one a new publication brought or took — its identity, at the internal
   // pixels —: none)
   let idW = select(1.0, identityKept(base, vec2i(uv * vec2f(rs)), mv.z > 0.5), all(textureDimensions(identTex) == rs));
-  let same = idW > 0.0;
+  // (J2-5: a point the frame before did not see there — its history none)
+  let uncovered = mv.z < 0.5 && !carried && disoccluded(pixelDir(o, size), depth, uv, rs);
+  let same = idW > 0.0 && !uncovered;
   let inside = TU.s.w > 0.5 && !underCabin && !left && all(uv >= vec2f(0.0)) && all(uv <= vec2f(1.0));
   if (inside && !same) {
     atomicAdd(&idRejects[1], 1u);

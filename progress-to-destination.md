@@ -3985,3 +3985,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   virage de 30°, profil de J0 (TAAU 0,75), M1 Max : PSNR **41,6 dB** en mouvement, 42,2 dB à l'arrêt, netteté 0,93 / 0,92 ; la différence à
   la référence montre une frange claire le long de la crête sur le ciel (la traînée de silhouette visée) et le détail adouci partout.
 - **Changé** : PLAN-J2 §9 octies (a) (aucun code). **Non vérifié** : `ghost` ; kerr-mini ; les temps (M1 Max en pression « Heavy »).
+
+## 2026-11-13T03:00Z — J2-5 : la désocclusion faite (levier éteint) — aucun gain mesurable dans ces scènes ; rigidMotionOn sans lecteur
+
+- **Contribution** (PLAN-J2 J2-5 ; stratégie §7 « auxiliaires minimaux », §15 « avantage en virage ») : la profondeur de l'image d'avant gardée
+  et un test de désocclusion au point d'historique (`temporal`, `taau`), derrière `renderer.disocclusionOn` (éteint), mesurés.
+- **Changé** : `src/shaders/post.wgsl` (`momPrev` liaison 54, `reprojPoint`, `disoccluded`, appliqué dans `temporal` et `taau`) ;
+  `src/renderer.ts` (`disocclusionOn`, `disocclusionTol`, `momentsPrevOf`, la copie dans `keepMotion` levier allumé seulement, les
+  liaisons, `TA.m0.w`/`m1.w`) ; e2e `motion-quality` (leviers après « + » : `+disocc`, `+disoccall`) ; fiche
+  `docs/progress/j2/FICHE-J2-5-2026-11-13.md` ; PLAN-J2, BH-API, GRAPHICS-PIPELINE, E2E-CATALOGUE, carte.
+- **Mesuré** (M1 Max, « Heavy ») : témoin positif net (netteté en mouvement 0,91 → 0,94) ; à 3 % — Alpes en virage 46,7 contre 47,4 dB
+  (A B A), La Mancha 19,4 contre 19,0 dB et −5 % de pixels « fantômes » (vols non identiques) : **pas de gain** ; la frange de la crête n'est
+  pas une traîne (même levier allumé). **Piège** : le 1ᵉʳ mode d'une série `motion-quality` lit 5–7 dB plus bas (tuiles en attente dans
+  sa référence) — A B A.
+- **Vérifié** : `check-wgsl` 81/81, tsc, biome, e2e `motion-quality` ×4 et `ghost` ×2 (sans erreur GPU). **Non vérifié** : ΔGPU sur J0
+  (kerr-mini) ; une ville, des bâtiments proches ; `bun test` complet.
+- **Suite** : `rigidMotionOn` retiré en J2-8 (J2-5 n'en fait pas un lecteur — décision 8) ; la désocclusion reposée avec J2-6 (un seul
+  historique) ; J2-4/J2-6 attendent la décision de Sam sur la voie.
