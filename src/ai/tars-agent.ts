@@ -134,7 +134,12 @@ export class TarsAgent {
   }
 
   /** A question: his answer (said), or null — the model failed or there is no key: answer offline. */
-  async ask(q: string): Promise<string | null> {
+  /**
+   * A turn on the pilot's question — or, `wake`, of his own initiative (a reflex, a timed rule): then a few steps at most
+   * (WAKE_STEPS) and the hour's budget looked at before each (`left`: what is left of it [$], this turn's spending counted) —
+   * audit TA-06: a waking checked its budget once, at its start, then kept the pilot's 24 steps and spent past it.
+   */
+  async ask(q: string, o: { wake?: { left: () => number } } = {}): Promise<string | null> {
     this.stop();
     const ctl = new AbortController();
     this.ctl = ctl;
@@ -157,6 +162,7 @@ export class TarsAgent {
           // (an order — the words read as one offline — answered with no tool called: nothing was done; sent
           // back once to do it, rather than let him claim it)
           unacted: () => ((this.d.mode?.() ?? "act") === "act" && parseOrders(q).length ? UNACTED : null),
+          ...(o.wake ? { maxSteps: WAKE_STEPS, canContinue: () => o.wake!.left() > 0 } : {}),
         },
       );
       this.last = r.actions;
@@ -174,7 +180,7 @@ export class TarsAgent {
       const F = this.d.or.lastFailure;
       this.failure = !r.text && F ? failureLine(F.why, lang) : null;
       const text =
-        r.text ?? (r.actions.length ? (this.failure ?? (r.cut === "steps" ? doneWord(lang, "steps") : doneWord(lang, "time"))) : null);
+        r.text ?? (r.actions.length ? (this.failure ?? doneWord(lang, r.cut === "steps" || r.cut === "budget" ? r.cut : "time")) : null);
       if (text === null) return null;
       this.keep(q, text, r.actions);
       return text;
@@ -196,14 +202,21 @@ export class TarsAgent {
   }
 }
 
-const doneWord = (lang: "fr" | "en", why: "steps" | "time") =>
+/** a waking's steps at most (the pilot's question: agent.ts MAX_STEPS) */
+export const WAKE_STEPS = 6;
+
+const doneWord = (lang: "fr" | "en", why: "steps" | "time" | "budget") =>
   lang === "fr"
     ? why === "steps"
       ? "J'ai fait ce que j'ai pu, je m'arrête là."
-      : "Ça prend trop de temps, je m'arrête là."
+      : why === "budget"
+        ? "Mon budget de l'heure est dépensé, je m'arrête là."
+        : "Ça prend trop de temps, je m'arrête là."
     : why === "steps"
       ? "I've done what I could; stopping there."
-      : "That's taking too long; stopping there.";
+      : why === "budget"
+        ? "This hour's budget is spent; stopping there."
+        : "That's taking too long; stopping there.";
 
 /** Orders understood offline (offline-orders.ts) run by the same tools: what each did. */
 export async function runOrders(

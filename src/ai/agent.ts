@@ -45,8 +45,8 @@ export interface TurnResult {
   /** his words (null: the model failed — offline then) */
   text: string | null;
   actions: Action[];
-  /** why the turn ended early: "stopped", "steps", "time"; null: answered */
-  cut: "stopped" | "steps" | "time" | null;
+  /** why the turn ended early: "stopped", "steps", "time", "budget" (its `canContinue` said no); null: answered */
+  cut: "stopped" | "steps" | "time" | "budget" | null;
 }
 
 export const MAX_STEPS = 24;
@@ -89,6 +89,8 @@ export class Agent {
        *  once a turn (an order answered "done" with no tool called) */
       unacted?: (text: string) => string | null;
       maxSteps?: number;
+      /** looked at before each step after the first: false ends the turn ("budget") — a waking's budget (audit TA-06) */
+      canContinue?: () => boolean;
     } = {},
   ): Promise<TurnResult> {
     const signal = o.signal ?? new AbortController().signal;
@@ -103,6 +105,7 @@ export class Agent {
     for (let step = 0; step < maxSteps; step++) {
       if (signal.aborted) return { text: null, actions, cut: "stopped" };
       if (this.now() - t0 > MAX_TURN_MS) return { text: null, actions, cut: "time" };
+      if (step > 0 && o.canContinue && !o.canContinue()) return { text: null, actions, cut: "budget" };
       const r = await this.complete(messages, fns, signal);
       if (signal.aborted) return { text: null, actions, cut: "stopped" };
       if (!r) return { text: null, actions, cut: null };

@@ -5164,3 +5164,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   1 600 et 4 000), son coût compté.
 - **Preuves :** après : 600 puis 1 600, les arguments entiers — `openrouter`, `tars-agent`, `tars-turns`, `tars-tools`, `orders` verts.
   Non fait : la fréquence réelle de la coupure (non mesurée), un appel payant.
+
+## 2026-11-13T16:24Z — Audit TA-06 (le reste) : un réveil de TARS borné — six étapes, le budget revu avant chacune
+
+- **Reproduit avant (test `tars-turns`, un modèle qui appelle un outil à chaque étape, 0,01 $ l'étape, 0,035 $ de budget restant) :** le
+  réveil fait **24 étapes** — le budget n'était regardé qu'à son départ (`canWake`), puis il gardait le plafond d'une question du pilote.
+- **Réalisé :** `agent.ts` (`canContinue`, regardé avant chaque étape après la première ; fin « budget »), `tars-agent.ts` (`ask(q, { wake })` :
+  `WAKE_STEPS` = 6, le budget restant revu ; le mot de fin « budget dépensé »), `main.ts` (le réveil passe ce qui reste de l'heure, la
+  dépense du tour comptée une fois). Après : 4 étapes avec 0,035 $, 6 au plus avec du budget — 39 tests TARS verts. TARS.md.
+- **Non fait (TA-06) :** retirer aux réveils les outils d'écriture destructrice (une décision de produit).

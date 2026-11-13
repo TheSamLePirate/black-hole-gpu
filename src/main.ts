@@ -1399,7 +1399,12 @@ async function main() {
     const r = rules[0]!;
     const label = `⚡ ${rules.every((x) => x.reflex) ? tr({ fr: "Réflexe", en: "Reflex" }) : tr({ fr: "Réveil", en: "Waking" })} · ${e ? `${e.kind}${e.to ? ` → ${e.to}` : ""}` : r.on.kind}`;
     tarsPanel.exchange(wakeText(rules, e), label);
-    const a = await tarsAgent.ask(wakeText(rules, e));
+    // (a waking's few steps, the hour's budget looked at before each — this turn's spending counted: audit TA-06)
+    const spent0 = openRouter.spent,
+      hour0 = tarsBudget.lastHour();
+    const a = await tarsAgent.ask(wakeText(rules, e), {
+      wake: { left: () => settings.tarsBudget - hour0 - (openRouter.spent - spent0) },
+    });
     if (!a || a.trim() === "—" || a.trim() === "-") return tarsPanel.answer("—");
     tarsPanel.answer(a);
     voice.say({ text: a, speaker: "tars", priority: 3, ttl: 30_000 });
