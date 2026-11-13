@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:48 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:50 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5833,4 +5833,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   1/1 (chargée, illisible, absente — chacune dite) ; `saves-storage` 4/4.
 - Limites : le reste d'AR-17 — une convention `LIMIT(id)` pour la dette et la règle Biome des promesses flottantes à l'essai — non ouvert
   (une décision de convention pour tout le dépôt).
+
+## 2026-11-13T20:50Z — J3-7 : pas de couture d'éclairage au coucher (vue lointaine)
+
+- Preuves : **observé** (kerr-mini, J0 à 3 000 m vers l'ouest à 19:05, `…-waterincident-far`) : aucune couture au bord des anneaux du raster ;
+  la bascule incident / géométrique ne touche que des zones localisées. `earthGround` (géométrique) laissé tel quel. PLAN-J3 §10.
 

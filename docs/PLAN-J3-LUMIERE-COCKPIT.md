@@ -259,5 +259,7 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   photographique (`photoNdl`, `photoRelightK`), la mer (`seaShade`). À passer à l'incident (comme `liteLight`) : ces lecteurs ; à garder
   géométriques : l'air (`skySeen`, le ciel), l'éclipse (`sunSeen`), la neige (sa saison). **Non fait** : la rangée incidente n'est écrite qu'avec le
   raster de la Terre — le pipeline tracé ne la lit pas (le géométrique, sans écart) ; en raster, `earthGround` ne dessine que les pixels hors des
-  anneaux (le lointain) : l'effet à vérifier serait une couture d'éclairage au bord des anneaux au coucher, pas encore observée.
+  anneaux (le lointain) : l'effet à vérifier serait une couture d'éclairage au bord des anneaux au coucher. **Regardé** (~20:50 UTC, J0 à 3 000 m
+  vers l'ouest à 19:05, `…-waterincident-far`) : **aucune couture visible** ; la bascule incident / géométrique ne change que des zones
+  localisées (31 000 pixels sur 2,07 millions, le reflet du Soleil, l'appareil). `earthGround` laissé tel quel.
 
