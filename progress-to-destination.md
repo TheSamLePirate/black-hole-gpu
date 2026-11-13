@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 21:01 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 21:41 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5923,4 +5923,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le lien vidé ; tests réseau verts ; e2e `net-flight`, `net-cut`, `net-rooms` 12/0.
 - Limites : côté serveur, le retour de `send`/`publish` n'est pas encore traité ; NET-19 (canal non fiable pour `wng`/`cs`/`tel`, adressage des
   instruments) et NET-22 (retour au direct après reconnexion) non faits.
+
+## 2026-11-13T21:41Z — La borne provisoire du ciel reflété retirée (règle 2)
+
+- Réalisé : `trace.wgsl` `seaShade` — le reflet de la sonde par la mer sans la borne `4 × ciel clair` (a1e34357, provisoire depuis le 6 nov.) ;
+  le levier de mesure retiré ; `aurora-oval` prend `AO_TUNE` (un levier de mesure à chaque vue). PROBLEMES réglé.
+- Preuves : **observé** (kerr-mini) : la vue d'origine du défaut (Tromsø au sol, nuit d'hiver) sans la borne — aucune bande ; au crépuscule de J0
+  la mer identique (76,05 / 76,04). `check-wgsl` 82/82, budget des noyaux 69/69.
 

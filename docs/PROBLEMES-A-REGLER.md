@@ -567,7 +567,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   134 à 19 s) ; spécialiser le noyau des géantes (ce que la caméra proche n'utilise pas) ; compiler en avance dès que
   Jupiter devient la destination (G, l'Atlas, `near`) — ANALYSE-STRATEGIE §8 « anticiper les compilations ».
 
-## Le ciel de nuit de la sonde de lumière du Ranger, ~40 fois son sol
+## ~~Le ciel de nuit de la sonde de lumière du Ranger, ~40 fois son sol~~ — réglé le 13 novembre 2026 (~21:41 UTC) : la borne provisoire retirée
 
 - **Constaté le 6 novembre 2026** (AM2). La nuit à Tromsø, la mer des fjords dessinait une bande blanche saturée le long de
   l'horizon, avec ou sans Lune. La sonde relue : son ciel ~4·10⁻⁶, son sol ~10⁻⁷ (unités de la scène), alors que la vue
@@ -586,6 +586,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   de mesure `TUNE_SEA_NOCLAMP` ôte la borne) : **aucune bande blanche, avec ou sans la borne** ; 143 000 pixels diffèrent de plus de 6 entre
   les deux vues, sans A/A pour séparer la borne du scintillement des lumières et des étoiles. **Non conclu** : la vue d'origine (les fjords vers
   l'horizon, l'e2e des aurores AM2) reste à revoir avant de retirer la borne ; le levier reste (0 par défaut) jusque-là.
+- **Réglé** (~21:41 UTC) : la vue d'origine (`aurora-oval`, Tromsø au sol vers le sud, Kp 4 ; `AO_TUNE` passe un levier à chaque vue) **sans
+  la borne** : aucune bande blanche (le bas de l'image 31,3 contre 30,9 avec la borne, le ciel 9,0 / 9,0 ; runs `…-aurora-clamp`,
+  `…-aurora-noclamp5`) ; au crépuscule de J0, la mer 76,05 contre 76,04 (`…-seadusk-clamp`). La borne n'agissait plus nulle part depuis la mise
+  à l'échelle de la sonde (les sous-normaux des demi-flottants, ci-dessus) : **retirée de `seaShade`** avec son levier.
 
 ## L'aurore de la face nuit invisible quand la caméra est au soleil, dans l'espace
 

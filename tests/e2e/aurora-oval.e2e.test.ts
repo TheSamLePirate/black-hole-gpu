@@ -8,10 +8,19 @@ import { App, E2E, stopServer } from "./lib/app";
 // Canadian prairies in the Earth's shadow (Kp 3, then 7: the oval's night side in front of the Earth, its noon side towards the
 // pole), from 400 km over Manitoba looking south across the oval (Kp 5), from 400 km looking north to the limb (Kp 5: the
 // oval beyond the pole), then from the ground at Tromsø (Kp 4, looking south).
-// The live Kp off (the setting's values). AO_OUT.
+// The live Kp off (the setting's values). AO_OUT. AO_TUNE=NAME=value,…: a renderer.tune for every view (a measuring lever).
 // Output: remote-results/aurora-oval/*.png, stats.json. Done when: the aurora kernel in (featureKey 16384), each view shot, no
 // GPU error. Duration: ~2.5 min.
 const OUT = process.env.AO_OUT ?? "remote-results/aurora-oval";
+// (AO_TUNE=NAME=value,…: a measuring lever for every view — renderer.tune, e.g. TUNE_AIR_N=8)
+const AO_TUNE = JSON.stringify(
+  Object.fromEntries(
+    (process.env.AO_TUNE ?? "")
+      .split(",")
+      .filter((x) => x.includes("="))
+      .map((x) => [x.split("=")[0]!, Number(x.split("=")[1])]),
+  ),
+);
 afterAll(stopServer);
 
 test.skipIf(!E2E)(
@@ -22,7 +31,9 @@ test.skipIf(!E2E)(
     const stats: Record<string, unknown> = {};
     let gpuErrors = -1;
     const view = async (name: string, kp: number, js: string) => {
-      await app.js(`(() => { Object.assign(__bh.settings, { aurora: ${kp}, auroraLive: false }); ${js}; return 1; })()`);
+      await app.js(
+        `(() => { Object.assign(__bh.settings, { aurora: ${kp}, auroraLive: false }); __bh.renderer.tune = ${AO_TUNE}; ${js}; return 1; })()`,
+      );
       await app.waitFor(`(__bh.renderer.featureKey & 16384) === 16384`, 60_000);
       // (the kernel's variant asked a moment after the setting: the compiles waited for twice, across a pause)
       await app.waitFor(`__bh.renderer.compilesPending === 0`, 90_000);

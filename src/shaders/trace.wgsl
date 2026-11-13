@@ -263,8 +263,6 @@ override TUNE_SMOKE_STEP: f32 = 0.5;
 override TUNE_STEP_BODIES: u32 = 1u;
 // (the ground's march: a step's share of the clearance — 0.5, safe for slopes to ~60°; more: a measure)
 override TUNE_MARCH_K: f32 = 0.5;
-// (PROBLEMES, the night probe's sky — a measuring lever: 1 the sea's mirrored probe sky without its provisional bound of 4 × the clear sky)
-override TUNE_SEA_NOCLAMP: u32 = 0u;
 // (PLAN-J3 J3-5, a measuring lever: the tiles' and bricks' albedo scale in buildingLook — 1 as drawn)
 override TUNE_BLD_TILE: f32 = 1.0;
 override TUNE_BLD_BRICK: f32 = 1.0;
@@ -9587,8 +9585,9 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     // (filtered by the slopes the pixel does not resolve — their roughness, the probe's GGX level: a rough sea mirrors a blurred
     // sky, a calm one a sharp one — S5)
     let alphaR = sqrt(su2 + sc2);
-    // (TUNE_SEA_NOCLAMP 1, a measure: the probe's sky unbounded — PROBLEMES « le ciel de nuit de la sonde », its provisional bound)
-    skyR = mix(skyR, select(min(seaSkyRadiance(rUp, alphaR), 4.0 * skyR), seaSkyRadiance(rUp, alphaR), TUNE_SEA_NOCLAMP == 1u), b * P.seafft[6].z);
+    // (unbounded since 13 Nov 2026: the bound of 4 × the clear sky — a1e34357, Tromsø's white band at night — no longer acted, at night
+    // nor at dusk, once the probe was stored pre-exposed (the half floats' subnormals were its cause))
+    skyR = mix(skyR, seaSkyRadiance(rUp, alphaR), b * P.seafft[6].z);
     // (another world's sky: its own light probe — the lensed disk, Gargantua, the sky about the craft —, else its harmonics)
     if (SEA_ALIEN) { skyR = select(nearE(fromBody(rUp)) / PI, seaSkyRadiance(rUp, alphaR), P.near3.w < 1.5); }
     skyClear = select(skyClear, skyR, SEA_ALIEN);

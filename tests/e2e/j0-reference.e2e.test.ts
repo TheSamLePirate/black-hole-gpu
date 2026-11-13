@@ -1076,8 +1076,6 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         ["noSeaSurface", "__bh.renderer.seaSurfaceOn = false;", "__bh.renderer.seaSurfaceOn = true;"],
         ["noFft", "__bh.settings.seaFft = false; __bh.touch();", "__bh.settings.seaFft = true; __bh.touch();"],
         ["noFoamWorld", "__bh.renderer.seaFoamWorldOn = false;", "__bh.renderer.seaFoamWorldOn = true;"],
-        // (the provisional bound of the mirrored probe sky — 4 × the clear sky — taken off: PROBLEMES « le ciel de nuit de la sonde »)
-        ["noClamp", "__bh.renderer.tune = { TUNE_SEA_NOCLAMP: 1 };", "__bh.renderer.tune = {};"],
       ];
       for (const [name, set, reset] of cases) {
         await app.js(`(() => { ${set} __bh.refresh(); return 1; })()`);
@@ -1094,7 +1092,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       await app.js(
         `(() => { Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
       );
-      expect(cases.length).toBe(10);
+      expect(cases.length).toBe(9);
     },
     900_000,
   );
