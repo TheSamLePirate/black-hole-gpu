@@ -31,6 +31,8 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight (J3-1: the craft's key light against the incident Sun toward
+// sunset, ~3 min on kerr-mini).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
 // Duration: ~10 min here (cold boot ~1–2 min, two flights of 70 s, 7 ablation flights ~40 s each).
@@ -423,6 +425,79 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       console.log(`  J3-0 exposure by framing: ${JSON.stringify(out2)}`);
       await app.js(`(() => { Object.assign(__bh.settings, { shipMount: "cockpit", exposure: 0 }); return 1; })()`);
       expect(Math.abs(out2.positive - 1)).toBeLessThan(0.15);
+    },
+    600_000,
+  );
+
+  // (PLAN-J3 J3-1 — the craft lit by the ground's Sun, J0_PHASES=keylight: towards sunset the same flight (game.setDate carries the
+  // craft), the craft's key light read back from the GPU (renderer.readShipKey: its direction on the probe's axes, its irradiance) with
+  // the incident Sun on (the ground's and, since J3-1, the craft's) and off (the geometric for both — the craft's light before J3-1);
+  // the CPU's lift (renderer.incidentNow against the geometric) beside it. Controls (method rule 3): on read twice (the A/A, the
+  // direction's noise), the turn on → off read back as the CPU's lift (the positive: the probe sees the lift it is given))
+  test.skipIf(!PHASES.includes("keylight"))(
+    "J3-1: the craft's key light is the incident Sun towards sunset — its direction against the CPU's lift; A/A and positive",
+    async () => {
+      await start("");
+      const deg = (a: number[], b: number[]) => {
+        const d = a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+        return (Math.acos(Math.max(-1, Math.min(1, d / Math.hypot(...a) / Math.hypot(...b)))) * 180) / Math.PI;
+      };
+      const read = async (on: boolean) =>
+        app.js<{
+          dir: number[];
+          e: number;
+          on: boolean;
+          lift: number | null;
+        }>(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q));
+          const r = __bh.renderer; r.incidentSunOn = ${on}; __bh.freeze(false); __bh.refresh(); for (let i = 0; i < 30; i++) await f();
+          __bh.freeze(true); for (let i = 0; i < 10; i++) await f();
+          const k = await r.readShipKey(), n = r.lastNear, I = r.incidentNow;
+          let lift = null;
+          if (n && I) { const G = n.axes.map((a) => a[0] * n.light[0] + a[1] * n.light[1] + a[2] * n.light[2]);
+            const d = (G[0] * I[0] + G[1] * I[1] + G[2] * I[2]) / Math.hypot(...G) / Math.hypot(...I); lift = Math.acos(Math.min(1, d)) * 180 / Math.PI; }
+          return { dir: k.dir, e: k.e, on: k.on, lift }; })()`);
+      const rows: { utc: string; lift: number | null; onVsOff: number; aa: number; eOn: number; eOff: number }[] = [];
+      for (const utc of ["18:30", "18:50", "19:05", "19:15", "19:25"]) {
+        await app.js(`(() => { __bh.freeze(false); __bh.game.setDate("2026-07-10T${utc}:00Z"); __bh.refresh(); return 1; })()`);
+        const on = await read(true);
+        const onAgain = await read(true);
+        const off = await read(false);
+        rows.push({
+          utc,
+          lift: on.lift === null ? null : +on.lift.toFixed(4),
+          onVsOff: +deg(on.dir, off.dir).toFixed(4),
+          aa: +deg(on.dir, onAgain.dir).toFixed(4),
+          eOn: +on.e.toPrecision(4),
+          eOff: +off.e.toPrecision(4),
+        });
+        console.log(`  J3-1 key light ${utc} UTC: ${JSON.stringify(rows.at(-1))}`);
+        if (utc === "19:05") {
+          for (const on2 of [true, false]) {
+            await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.incidentSunOn = ${on2};
+              __bh.freeze(false); Object.assign(__bh.settings, { shipMount: "quarter", lookProfile: "neutral" }); __bh.refresh();
+              for (let i = 0; i < 60; i++) await f(); __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f(); return 1; })()`);
+            await app.cdp
+              .send("Page.captureScreenshot", { format: "png" })
+              .then((x) =>
+                Bun.write(
+                  `${OUT}/keylight-${utc.replace(":", "")}-${on2 ? "incident" : "geometric"}.png`,
+                  Buffer.from((x as { data: string }).data, "base64"),
+                ),
+              );
+          }
+          await app.js(
+            `(() => { __bh.renderer.incidentSunOn = true; Object.assign(__bh.settings, { shipMount: "cockpit" }); return 1; })()`,
+          );
+        }
+      }
+      out.keylight = rows;
+      await app.js(
+        `(() => { __bh.renderer.incidentSunOn = true; __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
+      );
+      // (the positive: where the CPU lifts the Sun by more than the A/A's noise, the craft's key turns by that lift)
+      const lifted = rows.filter((r) => r.lift !== null && r.lift > 0.1);
+      expect(lifted.length).toBeGreaterThan(0);
+      for (const r of lifted) expect(Math.abs(r.onVsOff - r.lift!)).toBeLessThan(Math.max(0.05, 3 * r.aa));
     },
     600_000,
   );

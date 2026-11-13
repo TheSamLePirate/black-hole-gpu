@@ -9373,7 +9373,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const n = this.lastNear,
       cam = this.lastCam;
     if (this.shipKeyOff || !n || !cam || !n.light) return null;
-    const L = n.light as Vec3;
+    // (PLAN-J3 J3-1: the key light is the incident Sun where it is written — trace.wgsl keyLight —; back from the Earth's axes
+    // to the camera's frame, so the map's key turns with the light the craft is lit by, its lift with the craft's height too)
+    const I = this.incidentNow;
+    const L = (I ? [0, 1, 2].map((c) => I[0] * n.axes[0][c]! + I[1] * n.axes[1][c]! + I[2] * n.axes[2][c]!) : n.light) as Vec3;
     return [dot3(L, cam.right), dot3(L, cam.up), dot3(L, cam.fwd)];
   }
 
@@ -9688,6 +9691,20 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     st.unmap();
     st.destroy();
     return 0.2126 * f[0]! + 0.7152 * f[1]! + 0.0722 * f[2]!;
+  }
+
+  /** The craft's key light now (ship.wgsl shOut[10..11], trace.wgsl keyLight): its direction on the probe's axes, the disc's angular
+   *  radius [rad], its irradiance's luminance and on (0/1) — read back (PLAN-J3 J3-1: the craft lit by the ground's Sun) */
+  async readShipKey(): Promise<{ dir: Vec3; rs: number; e: number; on: boolean }> {
+    const st = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.ship.shBuf, 160, st, 0, 32);
+    this.device.queue.submit([enc.finish()]);
+    await st.mapAsync(GPUMapMode.READ);
+    const f = new Float32Array(st.getMappedRange().slice(0));
+    st.unmap();
+    st.destroy();
+    return { dir: [f[0]!, f[1]!, f[2]!], rs: f[3]!, e: 0.2126 * f[4]! + 0.7152 * f[5]! + 0.0722 * f[6]!, on: f[7]! > 0.5 };
   }
 
   /** Exposure in use [EV]: the setting, plus the meter's with auto exposure. */

@@ -1,6 +1,6 @@
 # PLAN-J3 — lumière, ombres et cockpit cohérents
 
-**État (13 novembre 2026, ~11:30 UTC) : plan proposé, à valider par Sam.** Rien n'est commencé dans le code. Origine :
+**État (13 novembre 2026, ~16:05 UTC) : plan proposé, à valider par Sam ; mené selon ses recommandations (la ville d'abord, l'ordre du §3) sous la consigne « continue » de Sam — J3-0 mesuré en partie, J3-1 commencé (§10).** Les 5 questions du §8 restent ouvertes. Origine :
 [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J3 (« raccorder un état lumineux partagé, cascades et profondeurs des objets ;
 préserver les instruments ; attribuer correctement l'air aux distances ; conserver les corrections de réfraction dans leur portée ; ajouter
 les matériaux de bâtiments identifiés, le détail de surface et les premiers assets préparés par une chaîne de production reproductible ») et
@@ -127,3 +127,18 @@ et que l'outillage fonctionne sous Bun ; rien d'autre. Ni l'un ni l'autre n'est 
 
 Le relevé du §2 vient d'une lecture du code (agent d'exploration, 13 novembre), pas de mesures ; les numéros de ligne sont ceux de ce jour.
 Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
+
+## 10. Avancement
+
+- **J3-0** (13 nov.) : inventaire des réglages compensatoires, sonde de l'âge des instruments (témoins passés), référence de ville sur Paris,
+  exposition par cadrage (neutre : aucune dépendance au cadrage ; profil Caméra 0,06–0,12 EV par conception), l'appareil hors du mètre —
+  [docs/progress/j3/](progress/j3/).
+- **J3-1, premier pas — l'appareil éclairé par le Soleil du sol** (13 nov., ~16:05 UTC). La lumière principale de l'appareil (`trace.wgsl`
+  `keyLight`, lue par `ship.wgsl` : son éclairage direct, sa carte d'ombre) prend sur la Terre le **Soleil incident** (R3, la rangée
+  `TABLE_SUN + 5` que le sol lit) au lieu du géométrique ; la clé du cache de sa carte d'ombre (`renderer.ts` `shipKeyDir`) le même. Mesuré
+  (kerr-mini, J0 à 500 m, `J0_PHASES=keylight`, lecture GPU `renderer.readShipKey`) : de 18:30 à 19:25 UTC, la lumière de l'appareil tourne
+  exactement du relèvement du CPU (0,036 → 1,000°, écart ≤ 0,0002°, A/A ≤ 0,0002°) ; son éclairement ×1,00 (18:30), ×1,68 (19:05), **×193**
+  (19:15 : le sol encore éclairé, l'appareil presque éteint avant). À contre-jour (vue de trois quarts, 19:05) la différence ne se voit pas.
+  **Non mesuré** : ΔGPU (un texel, un fil par image : attendu nul, non vérifié), une vue de face au Soleil bas.
+  **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
+  ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.

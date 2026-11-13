@@ -17272,7 +17272,11 @@ fn keyRelief(kn: u32, L: vec3f) -> f32 {
 fn keyLight() {
   let kn = u32(P.near1.w);
   let lt = nearLight(kn);
-  let L = lt.dir;
+  // (PLAN-J3 J3-1, the shared light — 13 Nov 2026: the craft lit by the Sun the ground is lit by — the incident one, lifted by the
+  // air's refraction (R3, incidentSun: the Earth raster's row; the geometric where none is written) —, not the geometric: at a low Sun
+  // the ground lit while the craft's key light was under the horizon, or lit from half a degree lower; its share, its air and its
+  // direction all along it)
+  let L = select(lt.dir, fromBody(incidentSun(normalize(toBody(lt.dir)))), isEarth(kn));
   // (the star's angular radius: its irradiance factor is (R/D)²)
   let rs = asin(clamp(sqrt(max(bodies[BV * kn + 3u].y, 0.0)), 1e-5, 1.0));
   // Spherical worlds keep their camera-rest-frame coverage (including its aberration).

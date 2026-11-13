@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 14:44 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 16:08 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -48,7 +48,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail ; **E3 non ouvert** (seule la présence du code pourrait rendre, ~0,4 ms mesurés par E2) |
-| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **plan proposé, attend Sam** ([PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) : 5 questions) ; de J3-0, ce qui ne dépend pas d'elles : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms), **la référence de ville sur Paris** (GPU p50 53,2 ms sur le mini ; le décor premier poste, −8,4 ms) |
+| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **mené selon les recommandations du plan** (consigne « continue » de Sam ; [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §10, ses 5 questions ouvertes) ; **J3-1 commencé : l'appareil éclairé par le Soleil incident du sol** (mesuré : direction exacte, éclairement ×193 à 19:15 UTC sur J0) ; de J3-0 : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms), **la référence de ville sur Paris** (GPU p50 53,2 ms sur le mini ; le décor premier poste, −8,4 ms) |
 | Rendu (33d89754) | AR-07 (vague 4.3, décision de Sam relayée) : le renderer sur `ViewPose` | **fait** : `renderer.frame(viewPose, settings, …)` ; Paris et J0 volés sans erreur, `gpu-startup` sans nouvel échec |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
@@ -67,7 +67,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
-**Attend Sam** : côté rendu, **le repli du raster vers le tracé, dormant sur la Terre depuis J2-7** ([PROBLEMES-A-REGLER](docs/PROBLEMES-A-REGLER.md) : le rendre atteignable ou le retirer ; recommandation : atteignable, après une mesure tracé contre raster sur le mini) ; la validation de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) (5 questions ; ses mesures de J3-0 avancent avec les recommandations du plan — la ville d'abord) ; la borne du M1 Max fixée provisoirement à 30 (révisable). Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; l'onglet masqué (recommandation : en solo, pause dite sans rattrapage ; en salle, rien d'arrêté, « hors de vue » annoncé, resynchronisation dite) ; avant RD3, le niveau de défense du réseau.
+**Attend Sam** : côté rendu, **le repli du raster vers le tracé, dormant sur la Terre depuis J2-7** ([PROBLEMES-A-REGLER](docs/PROBLEMES-A-REGLER.md) : recommandation révisée (b), le retirer sur la Terre — le tracé mesuré 19,9 ms mais sans nuages ni mer ; en attendant, (b) de fait : il reste dormant, son code non retiré) ; la validation de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) (5 questions ; ses mesures de J3-0 avancent avec les recommandations du plan — la ville d'abord) ; la borne du M1 Max fixée provisoirement à 30 (révisable). Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; l'onglet masqué (recommandation : en solo, pause dite sans rattrapage ; en salle, rien d'arrêté, « hors de vue » annoncé, resynchronisation dite) ; avant RD3, le niveau de défense du réseau.
 
 ## Journal
 
@@ -5083,3 +5083,25 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Relevé au passage :** avec le montage du F-35 lui-même (ce que le jeu a), l'aide décale les équilibrages — la figure en haute incidence
   passe de 19,4 à 15/20 : l'aide devrait placer l'appareil, pas la caméra (prochaine étape, pas faite). La session du rendu, par sa propre
   dichotomie dans l'ordre JUnit, était arrivée aux 40 fichiers dont `craftpanel` est le dernier.
+
+## 2026-11-13T16:08Z — J3-1, premier pas : l'appareil éclairé par le Soleil du sol
+
+- Contribution : stratégie §15 J3 (« raccorder un état lumineux partagé »), [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) J3-1 ; la responsabilité
+  commune (CLAUDE.md) : une lumière pour le sol et l'appareil. Mené sous la consigne « continue » de Sam, selon les recommandations du plan
+  (ses 5 questions restent ouvertes) ; défauts retenus sans changement de comportement : le repli raster → tracé dormant ((b) de fait, code
+  non retiré), la borne du M1 Max à 30, E3 et le lot 2 de la classification fermés par la règle 1.
+- Réalisé : `trace.wgsl` `keyLight` — sur la Terre la direction de la lumière principale de l'appareil est le Soleil incident (`incidentSun`,
+  R3 : la rangée `TABLE_SUN + 5` que le sol lit ; le géométrique ailleurs ou sans rangée) : son direct, son air, sa part du disque, sa carte
+  d'ombre (`ship.wgsl` la lit de `shOut[9..11]`) ; `renderer.ts` `shipKeyDir` (la clé du cache de cette carte) le même ;
+  `renderer.readShipKey()` (lecture GPU de cette lumière) ; e2e J0 phase `keylight`. Docs : PLAN-J3 §10, GRAPHICS-PIPELINE D1, BH-API,
+  E2E-CATALOGUE.
+- Preuves : **mesuré** (kerr-mini, J0 à 500 m, 18:30 → 19:25 UTC, runs `20261113-170114-j3-keylight` et `-170308-j3-keylight2`) : la lumière de
+  l'appareil tourne du relèvement calculé par le CPU à ≤ 0,0002° près (0,036° à 1,000°) ; A/A ≤ 0,0002° (témoin négatif), le basculement
+  incident → géométrique relu comme le relèvement (témoin positif) ; éclairement incident / géométrique ×1,00 (18:30), ×1,05 (18:50), ×1,68
+  (19:05), **×193 (19:15)** — avant, au coucher, le sol éclairé et l'appareil presque éteint. Captures 19:05 (contre-jour, sans différence
+  visible) : dans `remote-results/20261113-170308-j3-keylight2/` (non commitées : les binaires suivis sont à 600 Mo, le budget de
+  `check-repo-size` — une capture de plus le dépasse ; à signaler à Sam). `check-wgsl` 82/82, `tsc`, biome, `pipeline-inventory --check`. **Non mesuré** : ΔGPU (un
+  fil par image), une vue face au Soleil bas.
+- Reste : l'état lumineux unique de C-J3-1 (un tampon par image, lu par le sol, l'appareil, le décor, l'eau), la sonde de cohérence appareil /
+  sol ; J3-2 ensuite.
+
