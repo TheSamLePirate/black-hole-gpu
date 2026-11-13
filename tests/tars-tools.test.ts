@@ -1032,3 +1032,25 @@ test("the tools in SI with their datum named — the carrier's speed, the traffi
   // the flight plan's altitudes said over the sea
   expect(tools.find((x) => x.name === "flight_plan")!.description).toMatch(/over the sea/);
 });
+
+test("his wingmen set the Lab's way; his gun's burst held in flight time, not the wall clock (TA-21)", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const sets: Record<string, unknown>[] = [];
+  const s = { wingmen: 0 };
+  const camera = { s, combat: { status: "run" }, gunTrigger: false, gunBurst: 0 };
+  const host = {
+    settings: s,
+    camera,
+    tools: {},
+    log: () => [],
+    setSettings: (v: Record<string, unknown>) => sets.push(v),
+  } as unknown as GameHost;
+  const tools = gameTools(host);
+  const run = (name: string, a: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(a, new AbortController().signal);
+  await run("flight_lead", { action: "wingmen", count: 2 });
+  expect(sets).toEqual([{ wingmen: 2 }]);
+  // a burst asked while the game is paused (no flight time passing): still to come, not spent on the wall clock
+  await run("weapons", { action: "gun", seconds: 0.2 });
+  await Bun.sleep(350);
+  expect(camera.gunBurst).toBeCloseTo(0.2, 3);
+});

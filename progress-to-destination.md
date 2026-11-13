@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5325,4 +5325,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   alors `assets/ephemeris/de440.bin` comme du JS et `tests/tars-tools.test.ts` tombait entier quand on le lançait seul (passant dans un lot
   de fichiers). Trouvé par bissection dans un worktree propre (807ff7f9 et b3a4f676 verts, 945e5b2b rouge) ; l'import de type mis en tête.
 - Limites : aucun e2e (sorties d'outils sans rendu) ; les modèles réels n'ont pas été rejoués sur les nouveaux champs.
+
+## 2026-11-13T19:45Z — Audit TA-21 : les ailiers de TARS posés par le Labo, sa rafale tenue en temps de vol ; le chargeur des éphémérides nommé
+
+- Contribution : §19 (une horloge du vol, les actions par le même chemin) ; audit 2026-11-10, TA-21 (P3).
+- Réalisé : `flight_lead wingmen` passe par `h.setSettings` (gardé, annulable — avant écrit à part) ; `weapons gun` pose `c.gunBurst`, la
+  durée de la rafale en temps de vol, dépensée par le pas du combat (`controller/combat.ts`) et remise à zéro à sa fin — avant un `setTimeout`
+  de l'horloge murale (la pause ne la tenait pas). `src/system/ephemeris-files.ts` : `with { type: "file" }` sur les deux imports `.bin`.
+- Preuves : **reproduit avant** (unitaire `tars-tools` « TA-21 » : aucun `setSettings`, la rafale de 0,2 s finie après 350 ms sans pas de
+  vol) ; **après** : vert. Le fichier `tars-tools.test.ts` retombait seul au chargement (`de440.bin` lu comme du JS) en ajoutant ce test : mon
+  remède de e40710f3 (l'import de type remonté) ne tenait pas, la cause est un comportement de Bun selon le contenu du fichier ; le chargeur
+  `file` nommé à la source le règle (28/28 deux fois). Vérifié : la page reçoit toujours `de440-….bin` (3,3 Mo) et `jup365-….bin` (sonde
+  e2e jetable, ce Mac) ; `bun build` de la page produit les mêmes ressources ; le worker du planificateur n'importe pas ce fichier. Chaque
+  fichier de tests TARS, équipage, combat, horloge du vol lancé seul vert ; tsc, biome.
+- Limites : aucun e2e de combat rejoué (la rafale par TARS en vol réel non essayée).
 

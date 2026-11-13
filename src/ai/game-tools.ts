@@ -1829,8 +1829,10 @@ export function gameTools(h: GameHost): Tool[] {
             })),
           };
         if (a.action === "wingmen") {
-          c.s.wingmen = Math.min(Math.max(Math.round(Number(a.count ?? 0)), 0), 3);
-          return `AI wingmen: ${c.s.wingmen}`;
+          // (the Lab's way: kept with the player's settings, in its history — audit TA-21: written beside it before)
+          const n = Math.min(Math.max(Math.round(Number(a.count ?? 0)), 0), 3);
+          h.setSettings({ wingmen: n });
+          return `AI wingmen: ${n}`;
         }
         if (!a.order) throw new Error("order needs an order");
         if (a.order === "shape" && !a.shape) throw new Error("shape needs a shape");
@@ -1935,10 +1937,8 @@ export function gameTools(h: GameHost): Tool[] {
           case "gun": {
             if (!live) return "No fight running: the weapons are live in a fight or a mission";
             const sec = Math.min(Math.max(Number(a.seconds ?? 1), 0.2), 3);
-            c.gunTrigger = true;
-            setTimeout(() => {
-              c.gunTrigger = false;
-            }, sec * 1000);
+            // (held for that much flight time — controller/combat.ts spends it —, not the wall clock: a pause holds it — TA-21)
+            c.gunBurst = sec;
             return `Guns — ${sec.toFixed(1)} s burst`;
           }
           case "countermeasures":

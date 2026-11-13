@@ -194,6 +194,7 @@ function combatStart(this: CameraController, def: Scenario, net: { host: boolean
 
 function combatEnd(this: CameraController) {
   this.combat = null;
+  this.gunBurst = 0;
   this.radarSources.delete("cmb");
   fleet.payload.f35 = 0;
 }
@@ -305,7 +306,9 @@ function combatStep(this: CameraController, dt: number) {
     ? optsOf(C.net.rules)
     : { infinite: s.f35InfiniteAmmo, invulnerable: s.f35Invulnerable, skill: s.f35AiSkill, enemyMissiles: s.f35EnemyMissiles };
   // (shot down in a match: no gun until flying again)
-  W.firing = C.downAt === null && (this.codes.has("Space") || this.gunTrigger || !!this.jetPadOut?.gun);
+  const burst = this.gunBurst > 0;
+  if (burst) this.gunBurst = Math.max(0, this.gunBurst - dt);
+  W.firing = C.downAt === null && (this.codes.has("Space") || this.gunTrigger || burst || !!this.jetPadOut?.gun);
   // (the free fight: the outside craft near, and the one locked, in the world as targets)
   proxyStep(this);
   const ev = W.step(dt, P);

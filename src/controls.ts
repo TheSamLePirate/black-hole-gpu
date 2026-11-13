@@ -1267,6 +1267,8 @@ export class CameraController {
   combat: CombatState | null = null;
   /** the gun's trigger held by another hand (a HOTAS's button, a touch) */
   gunTrigger = false;
+  /** a burst asked by TARS (weapons gun): the flight time left to fire [s] — spent by the fight's step */
+  gunBurst = 0;
   /** the F-35's pad layout (input/jetpad.ts): its state, its frame's output (null: not flown with it), a zoom's
    *  field to come back to; its actions (the page's) */
   readonly jetPad = new JetPad();
