@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 19:34 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 19:39 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5699,4 +5699,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `press_key`.
 - Preuves : unitaire `tars-tools` (la flotte d'un salon factice, distance en mètres) ; e2e `tars-room` (vrai salon, seul : flotte vide) 1/1.
 - Limites : la flotte à plusieurs pilotes non essayée en e2e (deux pages) ; TA-17 clos pour ce qui existe.
+
+## 2026-11-13T19:39Z — Les taches sur la mer : le contenu de la sonde près de l'horizon (confirmé)
+
+- Preuves : **observé** (kerr-mini, `…-seadusk7`) : la lecture sans flou laisse des bandes plus fines aux mêmes couleurs — la sonde elle-même
+  près de son horizon. PROBLEMES complété ; le levier de mesure `TUNE_SEA_DBG` 16 lit désormais au niveau 0.
+- Suite : le correctif dans le chantier de l'eau (la sonde au-dessus d'une marge sur l'horizon, le ciel clair dessous).
 

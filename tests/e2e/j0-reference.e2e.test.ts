@@ -1081,7 +1081,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         ["noFoam", "__bh.renderer.tune = { TUNE_SEA_DBG: 2 };", "__bh.renderer.tune = {};"],
         ["flatNormal", "__bh.renderer.tune = { TUNE_SEA_DBG: 4 };", "__bh.renderer.tune = {};"],
         ["noSkyLayer", "__bh.renderer.tune = { TUNE_SEA_DBG: 8 };", "__bh.renderer.tune = {};"],
-        ["skyLod2", "__bh.renderer.tune = { TUNE_SEA_DBG: 16 };", "__bh.renderer.tune = {};"],
+        ["skyLod0", "__bh.renderer.tune = { TUNE_SEA_DBG: 16 };", "__bh.renderer.tune = {};"],
       ];
       for (const [name, set, reset] of cases) {
         await app.js(`(() => { ${set} __bh.refresh(); return 1; })()`);

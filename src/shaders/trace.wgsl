@@ -264,7 +264,7 @@ override TUNE_STEP_BODIES: u32 = 1u;
 // (the ground's march: a step's share of the clearance — 0.5, safe for slopes to ~60°; more: a measure)
 override TUNE_MARCH_K: f32 = 0.5;
 // (PROBLEMES, the sea at dusk — a measuring lever in seaShade: 1 the slopes' variances nil, 2 no foam, 4 the normal flat, 8 the probe's
-// mirrored sky not read, 16 its level held at 2 at most)
+// mirrored sky not read, 16 its level held at 0 — no GGX blur)
 override TUNE_SEA_DBG: u32 = 0u;
 // (PLAN-J3 J3-5, a measuring lever: the tiles' and bricks' albedo scale in buildingLook — 1 as drawn)
 override TUNE_BLD_TILE: f32 = 1.0;
@@ -9364,7 +9364,7 @@ const SEA_SKY_LAYER = 16u;
 fn seaSkyRadiance(d: vec3f, alpha: f32) -> vec3f {
   let c = camAxes(fromBody(d));
   let u = atan2(c.x, c.z) / TAU + 0.5;
-  let lod = clamp(alpha * 5.0, 0.0, select(5.0, 2.0, (TUNE_SEA_DBG & 16u) != 0u));
+  let lod = clamp(alpha * 5.0, 0.0, select(5.0, 0.0, (TUNE_SEA_DBG & 16u) != 0u));
   let rows = 256.0 / exp2(ceil(lod));
   let v = clamp(acos(clamp(c.y, -1.0, 1.0)) / PI * 0.5, 0.5 / rows, 0.5 - 0.5 / rows);
   return textureSampleLevel(seaFft, seaSamp, vec2f(u, v), i32(SEA_SKY_LAYER), lod).rgb;
