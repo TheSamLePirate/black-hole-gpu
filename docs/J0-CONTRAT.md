@@ -68,7 +68,8 @@ machine débarrassée de cette charge.
 la borne à froid — 30 comme 40 — puis bride, **quelle que soit la borne**, vers 830–890 MHz : son GPU, ~23–25 ms par image à pleine fréquence,
 passe à ~31 ms une fois chaud. **Ce qu'il soutient sur J0 aujourd'hui : ~30 images/s** (28,8 borné à 30, 30,9 borné à 40). La borne ne suffit
 pas à l'empêcher de brider : il faudrait que le GPU tienne nettement sous le budget à fréquence bridée (~31 ms aujourd'hui, pour 33,3 à
-30 images/s). **La valeur de la borne reste à fixer par Sam** sur ce constat (recommandation : 30, le palier soutenu mesuré).
+30 images/s). **La borne est fixée provisoirement à 30 images/s sur le M1 Max** (13 novembre, « la valeur de la borne se fixe sur cet essai » :
+le palier soutenu mesuré ; `J0_FPSCAP=30` pour ses fiches) — **révisable par Sam**.
 
 **Le palier 1 est atteint** quand, sur le vol de référence (§3), mesuré deux fois sur le M1 Max dans l'état soutenu,
 **les seuils suivants tiennent tous** — *validés par Sam le 10 novembre* (transposés de §8.3, qui les fixe pour

@@ -9321,7 +9321,7 @@ async function main() {
       },
       simState,
     )!;
-    viewPose = viewPoseOf(drawn, {
+    const pose = viewPoseOf(drawn, {
       time: sim.time,
       width: canvas.width,
       height: canvas.height,
@@ -9329,17 +9329,13 @@ async function main() {
       frame: frameNo,
       fov: lensFov,
     });
+    viewPose = pose;
     const st = capped
       ? null
       : cpuProf.time("render (encode, submit)", () =>
-          renderer.frame(
-            // (the GoPro lens: the scene rendered rectilinear over a wider field, bent by the display — src/lens.ts)
-            lensFov !== undefined ? { ...drawn, fov: lensFov } : drawn,
-            sim.time,
-            changed,
-            sim.timeDirty,
-            displayChanged,
-          ),
+          // (AR-07, wave 4.3: the frame's frozen pose — the view's own settings, the GoPro lens's field when it is on (the scene
+          // rendered rectilinear over a wider field, bent by the display — src/lens.ts), the scene's time — and the preferences')
+          renderer.frame(pose, settings, changed, sim.timeDirty, displayChanged),
         );
     if (!firstFrame && renderer.firstFrameDoneAt > 0) {
       firstFrame = true;

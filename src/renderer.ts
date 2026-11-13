@@ -198,6 +198,16 @@ import starCatalogueUrl from "../assets/sky/stars.bin";
 import starLodUrl from "../assets/sky/starlod.bin";
 import lensDirtUrl from "../assets/lens/lensdirt.jpg";
 import { SkyTextureBuilder, loadPackedTexture, loadStarCatalogue, skyMatrix } from "./sky";
+import { VIEW_POSE_KEYS, type ViewPose } from "./game/view-pose";
+
+/** The settings a frame draws (AR-07): the view's own from its frozen pose, the rest — preferences, the scene — from `prefs`, through
+ *  the prototype (no copy of the ~390 keys an image; the frame's code never lists the settings' keys — startOffline's clone is not on
+ *  this path) */
+function drawnSettings(view: ViewPose, prefs: Settings): Settings {
+  const s = Object.create(prefs) as Record<string, unknown>;
+  for (const k of VIEW_POSE_KEYS) s[k] = view[k];
+  return s as unknown as Settings;
+}
 import { ChartOverlay } from "./chartoverlay";
 import overlayWGSL from "./shaders/overlay.wgsl" with { type: "text" };
 import { cameraFrame, gpuTheta, homePosition, type CameraFrame } from "./camera";
@@ -11957,7 +11967,14 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   gpuErrors = 0;
   onGpuError?: (message: string) => void;
 
-  frame(s: Settings, time: number, sceneChanged: boolean, timeChanged: boolean, displayChanged: boolean): FrameStats | null {
+  /**
+   * The frame (audit AR-07, wave 4.3 — Sam's choice of 13 Nov 2026: the renderer on ViewPose): its view from the frame's frozen pose
+   * (game/view-pose.ts — the view's own settings, the scene's time it is drawn at), the player's preferences and the scene's from
+   * `prefs`; no longer the mutable view settings whole (camera.viewSettings()): the view a reader of the pose saw is the one drawn.
+   */
+  frame(view: ViewPose, prefs: Settings, sceneChanged: boolean, timeChanged: boolean, displayChanged: boolean): FrameStats | null {
+    const s = drawnSettings(view, prefs);
+    const time = view.time;
     if (this.lost) return null;
     if (this.busy) return null;
     // (the frame's frozen description — PLAN-J1 J1-1 —: its clocks read once, its camera now and before)

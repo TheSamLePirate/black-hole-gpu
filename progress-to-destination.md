@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 13:52 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 14:12 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -48,10 +48,11 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail ; **E3 non ouvert** (seule la présence du code pourrait rendre, ~0,4 ms mesurés par E2) |
-| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **plan proposé, attend Sam** ([PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) : 5 questions) ; de J3-0, ce qui ne dépend pas d'elles : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms) |
+| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **plan proposé, attend Sam** ([PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) : 5 questions) ; de J3-0, ce qui ne dépend pas d'elles : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms), **la référence de ville sur Paris** (GPU p50 53,2 ms sur le mini ; le décor premier poste, −8,4 ms) |
+| Rendu (33d89754) | AR-07 (vague 4.3, décision de Sam relayée) : le renderer sur `ViewPose` | **fait** : `renderer.frame(viewPose, settings, …)` ; Paris et J0 volés sans erreur, `gpu-startup` sans nouvel échec |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
-| Rendu (33d89754) | La borne de cadence du M1 Max | **refaite, `coreaudiod` relancé** : à froid la borne tient (29,9 / 39,4 images/s) ; soutenu, le GPU bride vers 850 MHz quelle que soit la borne — **~30 images/s soutenues sur J0** (28,8 borné à 30, 30,9 à 40) ; la valeur de la borne à fixer par Sam (recommandation 30) ([J0-CONTRAT §2](docs/J0-CONTRAT.md)) |
+| Rendu (33d89754) | La borne de cadence du M1 Max | **refaite, `coreaudiod` relancé** : à froid la borne tient (29,9 / 39,4 images/s) ; soutenu, le GPU bride vers 850 MHz quelle que soit la borne — **~30 images/s soutenues sur J0** (28,8 borné à 30, 30,9 à 40) ; **borne fixée provisoirement à 30** (révisable par Sam) ([J0-CONTRAT §2](docs/J0-CONTRAT.md)) |
 | Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **fait le 13 nov.** (avancé d'un jour ; [PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
@@ -66,7 +67,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
-**Attend Sam** : côté rendu, la validation de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) (5 questions) et la valeur de la borne du M1 Max (mesurée : ~30 images/s soutenues). Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; l'onglet masqué (recommandation : en solo, pause dite sans rattrapage ; en salle, rien d'arrêté, « hors de vue » annoncé, resynchronisation dite) ; avant RD3, le niveau de défense du réseau.
+**Attend Sam** : côté rendu, la validation de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) (5 questions ; ses mesures de J3-0 avancent avec les recommandations du plan — la ville d'abord) ; la borne du M1 Max fixée provisoirement à 30 (révisable). Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; l'onglet masqué (recommandation : en solo, pause dite sans rattrapage ; en salle, rien d'arrêté, « hors de vue » annoncé, resynchronisation dite) ; avant RD3, le niveau de défense du réseau.
 
 ## Journal
 
@@ -4941,3 +4942,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   machine ; après : jamais). Les 59 fichiers qui volent par elle : **296 / 0**.
 - **Non fait :** la suite complète, seule à reproduire l'échec (35 min de CPU ici pendant les mesures de la session du rendu ; kerr-mini
   proposé par elle, mais la consigne de Sam le réserve à son accord). La bissection reste à faire.
+
+## 2026-11-13T14:12Z — AR-07 : le renderer sur `ViewPose` ; la borne du M1 Max fixée provisoirement ; la référence de ville de J3 (Paris)
+
+- **AR-07, côté rendu** (audit 4.3, décision de Sam relayée par la session des vagues 3–4 ; stratégie §19.12 « une responsabilité commune avant
+  plusieurs lecteurs ») : `renderer.frame(view: ViewPose, prefs: Settings, …)` — la vue (les clés `VIEW_POSE_KEYS`, l'objectif GoPro) et le
+  temps lus dans la pose figée de l'image, les préférences et la scène dans `settings` (par prototype : aucune copie des ~390 clés) ; `main.ts`
+  passe la pose qu'il fige déjà (8a69291c) au lieu de `camera.viewSettings()` entier. Le renderer n'écrit ni ne compare ses réglages (vérifié) ;
+  ses autres entrées (`startOffline`, `refractivity`, les sondes) prennent encore un `Settings`. **Vérifié** : `tsc`, Biome ; e2e `gpu-startup`
+  14 / 3 — **les 3 mêmes échecs sans AR-07** (une copie de travail à `main`, 14 / 3 : le faux renderer du test sans `prof.table`, deux attentes
+  de compilation de qualité) ; le vol de Paris et ses ablations sans erreur GPU. BH-API.
+- **La borne du M1 Max fixée provisoirement à 30 images/s** (J0-CONTRAT §2 : « la valeur se fixe sur cet essai » — le palier soutenu mesuré),
+  révisable par Sam. E3 et le lot 2 des tuiles restent fermés par la règle 1 (sous 1 ms).
+- **J3-0, la référence de ville** ([fiche](docs/progress/j3/FICHE-PARIS-2026-11-13.md) ; la recommandation du plan, « la ville d'abord », en
+  attendant la question 1 de Sam) : J0 parti de Passy à 300 m (kerr-mini) — GPU p50 **53,2 ms**, 18,7 images/s ; ablations : décor **−8,4 ms**,
+  nuages −5,6, eau (la Seine) −4,9, appareil −4,2, écrans −1,6. La tour Eiffel dessinée en colonne pleine (le cas de J3-5 / J3-6).
+- **Non vérifié** : le M1 Max ; l'image comparée avant / après AR-07 au pixel (le changement ne doit rien changer à l'image : mêmes valeurs lues).
+

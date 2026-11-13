@@ -97,7 +97,7 @@ The frame's two descriptions (`src/game/view-pose.ts`, 13 Nov 2026 — audit AR-
 `time` it is drawn at, the canvas `width`/`height`, the render `scale`, the loop's `frame` number (the GoPro lens's field in `fov`
 when it is on); `simState()` — the flight's accepted state at the end of the frame's steps: `time`, `frame`, `gen`
 (`camera.flightGen`), `held` (what held the step, as `held()`), `craft` (`id`, `X`, `V`, `ax` in the home frame, copied) or null.
-Null before the first frame. The renderer still reads the settings: moving it onto `ViewPose` is the render session's lot.
+Null before the first frame. **Since 13 Nov 2026 the renderer draws from it** (`renderer.frame(viewPose, settings, …)`: the view's own settings and the time from the frozen pose, the preferences and the scene's from `settings` — AR-07's render side); its other entry points (`startOffline`, `refractivity`, the probes) still take a `Settings`.
 *Used in:* `view-pose.e2e.test.ts`.
 
 ### `__bh.held()` → `"frozen"` | `"paused"` | `"gpu"` | `"render"` | `"replay"` | null

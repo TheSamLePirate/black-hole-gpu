@@ -456,7 +456,8 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
           let captured = null;
           renderer.writeParams = (_target, _settings, _time, params) => { captured = params; throw new Error("captured"); };
           let stats = null;
-          try { stats = renderer.frame(settings, 0, changed, false, false); }
+          // (AR-07: the frame's view from a frozen pose — this frame's, at time 0 —, the settings its preferences)
+          try { stats = renderer.frame(Object.freeze({ ...__bh.viewPose(), time: 0 }), settings, changed, false, false); }
           catch (error) { if (error.message !== "captured") throw error; }
           return { captured, stats };
         };
