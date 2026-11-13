@@ -192,8 +192,9 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   Coût sur J0 (ablation `shipAir`, cockpit) : 0,25–0,7 ms avant la coupure à 50 m, **≈ 0,2 ms après, au bruit**. **Puis (~17:16 UTC)** :
   les flammes (`plumeFs`) et le halo des feux (`lampFs`) atténués par la transmittance de leur distance (des émissions : pas de diffusion
   ajoutée) ; run `…-j3-keyhaze5` : mesures reproduites, aucune erreur WebGPU, postcombustion allumée — mais la vue (revenue de 10 km) ne
-  montre pas la flamme, et les feux n'ont pas été dessinés (de jour) : leur chemin non vérifié à l'exécution. **Non fait** : les verrières
-  (`jetGlass`) sans air ; la nuit (la part lunaire de la table) ; l'air au-delà de la
+  montre pas la flamme, et les feux n'ont pas été dessinés (de jour) : leur chemin non vérifié à l'exécution. **Puis (~18:01 UTC)** : les
+  verrières (`fsJetGlass`, couverture prémultipliée) aussi ; run `…-j3-keyhaze6` : 10 / 33 / 59, A/A 1,3, 0 erreur WebGPU (le pipeline
+  principal du verre lié ; ses modes 2 et 3 — verre plat de diagnostic, survol du poste de l'A320 — non dessinés). **Non fait** : la nuit (la part lunaire de la table) ; l'air au-delà de la
   table (au-dessus de l'air, une autre planète). Trois runs du test ont échoué sur la mise en place de la vue avant celui-ci (le montage
   « chase » ignore la distance ; le passage à « around » replace la caméra ; la moyenne noyait l'appareil lointain).
 - **J3-3, la mesure des ombres du sol par propriétaire** (13 nov., ~17:26 UTC ; ne dépend pas de la question 3 du §8). e2e J0 `J0_PHASES=shadows`

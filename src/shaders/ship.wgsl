@@ -2548,6 +2548,8 @@ fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4
     let l = fromProbe(sh[9].xyz);
     o += sh[11].rgb * (S.light.w * within * canopyScratchLight(in.q, normalize(in.qn), gd, gn, gv, l, qf)) * S.light.x;
   }
+  // (J3-2: a far canopy through the air of its distance, as its hull — nothing within 50 m: from the cockpit, none)
+  o = shipAir(in.p, vec4f(o, cover)).rgb;
   return vec4f(o / (1.0 + dot(o, vec3f(0.2126, 0.7152, 0.0722))), cover);
 }
 

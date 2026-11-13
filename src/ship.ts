@@ -2998,7 +2998,7 @@ export class ShipRenderer {
       const a320 = glassy.some((dr) => dr.mesh === this.meshes.a320);
       const main = a320 ? (this.a320GlassPipe ??= this.glassPipe!(0, true)) : this.pipes.jetGlass;
       if (!res.jetGlassBind || res.jetGlassGen !== this.bindGen || res.jetGlassHdr !== hdr || res.jetGlassPipe !== main) {
-        const keep = [0, 1, 2, 3, 12, 16, 22, 27];
+        const keep = [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43];
         res.jetGlassBind = this.device.createBindGroup({
           layout: main.getBindGroupLayout(0),
           entries: [...this.shipEntries!.filter((e) => keep.includes(e.binding)), { binding: 10, resource: hdr.createView() }],
@@ -3017,7 +3017,7 @@ export class ShipRenderer {
           ? this.device.createBindGroup({
               layout: gp.getBindGroupLayout(0),
               entries: [
-                ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27].includes(e.binding)),
+                ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43].includes(e.binding)),
                 { binding: 10, resource: hdr.createView() },
               ],
             })
@@ -3040,7 +3040,7 @@ export class ShipRenderer {
           g: this.device.createBindGroup({
             layout: gp.getBindGroupLayout(0),
             entries: [
-              ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27].includes(e.binding)),
+              ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43].includes(e.binding)),
               { binding: 10, resource: hdr.createView() },
             ],
           }),

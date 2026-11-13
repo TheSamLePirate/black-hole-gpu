@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:57 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:01 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5525,4 +5525,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   capteurs ; voyage de caméra et systèmes du vaisseau par `press_key` seulement.
 - Preuves : lu dans le code (recherche des domaines dans les 69 outils et la liste `SCREENS`). Aucun test.
 - Limites : les outils manquants ne sont pas ajoutés (TA-17 : « au fil des chantiers » ; hors des vagues 3–4) ; TA-04 (vague 6) non ouvert.
+
+## 2026-11-13T18:01Z — J3-2 : les verrières à travers l'air
+
+- Réalisé : `ship.wgsl` `fsJetGlass` par `shipAir` (couverture prémultipliée) ; `ship.ts` les groupes de liaison du verre (principal, modes 2 et 3)
+  avec la table aérienne. Docs : PLAN-J3 §10, GRAPHICS-PIPELINE E12a.
+- Preuves : run `…-j3-keyhaze6` (kerr-mini) : mesures reproduites, 0 erreur WebGPU ; `check-wgsl` 82/82. Non vérifié : les modes 2 et 3 du verre
+  (non dessinés), la verrière lointaine à l'image (trop petite pour la juger).
 
