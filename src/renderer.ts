@@ -660,8 +660,6 @@ interface Target {
   ao: GPUTexture | null;
   accum: GPUBuffer;
   moments: GPUBuffer;
-  /** PLAN-J2 J2-5: the frame before's moments (its depths), copied at its end — the live view's, while renderer.disocclusionOn */
-  momentsPrev?: GPUBuffer;
   /**
    * the occlusion depth the raster passes test against (one f32 [M] a pixel; post.wgsl occlusion, after the
    * temporal pass: fresh each frame — a stale pixel's own depth is the ground a trunk now covers)
@@ -733,8 +731,6 @@ interface Target {
     /** the identity its binds read and the frame before's (PLAN-J1: the history's rejection by identity — stand-ins when off) */
     ident: GPUTexture;
     identPrev: GPUTexture;
-    /** the frame before's moments its binds read (J2-5: the target's copy, or the stand-in) */
-    momPrev: GPUBuffer;
     mkBinds: (motion: GPUTexture, prev: GPUTexture) => GPUBindGroup[];
     idx: number;
     valid: boolean;
@@ -5515,26 +5511,17 @@ export class Renderer {
   private motionIds = new WeakMap<GPUTexture, number>();
   private motionIdNext = 0;
   /** the temporal pass's bind groups made again when the motion texture changed (a resize, the raster off or on) */
-  private refreshTemporalMotion(ta: NonNullable<Target["temporal"]>, t?: Target) {
+  private refreshTemporalMotion(ta: NonNullable<Target["temporal"]>) {
     const m = this.motionTexNow();
     const p = this.motionPrevNow();
     const i = this.identNow(),
       ip = this.identPrevNow();
-    // (J2-5: the frame before's moments — the disocclusion turned on or off, a resize)
-    const mp = t ? this.momentsPrevOf(t) : ta.momPrev;
-    if (m === ta.motion && p === ta.motionPrev && i === ta.ident && ip === ta.identPrev && mp === ta.momPrev) return;
+    if (m === ta.motion && p === ta.motionPrev && i === ta.ident && ip === ta.identPrev) return;
     ta.motion = m;
     ta.motionPrev = p;
     ta.ident = i;
     ta.identPrev = ip;
-    ta.momPrev = mp;
     ta.binds = ta.mkBinds(m, p);
-  }
-  private bufferIds = new WeakMap<GPUBuffer, number>();
-  private bufferGen(b: GPUBuffer): number {
-    let n = this.bufferIds.get(b);
-    if (n === undefined) this.bufferIds.set(b, (n = ++this.motionIdNext));
-    return n;
   }
   /** the frame before's motion (PLAN-J1 J1-2: its disocclusions — where a moving mesh was and no longer is, no history): a copy
    *  of the raster's at the frame's end, its size, while the motion is written; else the stand-in */
@@ -5561,10 +5548,7 @@ export class Renderer {
     if (m) return this.sceneryRaster?.motionOn || this.craftMotionOn ? m : null;
     return this.craftMotionOn ? this.craftMotion : null;
   }
-  private keepMotion(enc: GPUCommandEncoder, t?: Target) {
-    // (J2-5: the frame's depths for the next one's disocclusion — its moments, while on)
-    if (t && this.disocclusionOn && t === this.live && t.momentsPrev && t.momentsPrev.size === t.moments.size)
-      enc.copyBufferToBuffer(t.moments, 0, t.momentsPrev, 0, t.moments.size);
+  private keepMotion(enc: GPUCommandEncoder) {
     const m = this.motionSourceNow();
     const p = this.motionPrevTex;
     if (m && p && p.width === m.width && p.height === m.height)
@@ -5670,12 +5654,6 @@ export class Renderer {
   /** the frame's frozen description (src/frame-desc.ts; PLAN-J1 J1-1): built at renderer.frame()'s start — its id, its real clock
    *  read once, the flight's and the scene's clocks, the camera now and before */
   frameDesc: FrameDesc | null = null;
-  /** PLAN-J2 J2-5 — the disocclusion (post.wgsl disoccluded: temporal, taau): the frame before's depths kept (its moments copied at
-   *  its end), and a pixel whose point the frame before did not see at its history's place — the four depths about it all nearer
-   *  than the point then by over `disocclusionTol` of it: a silhouette moved off it, the sky behind a ridge — starts without history.
-   *  Off by default (Sam's decision with its measure) */
-  disocclusionOn = false;
-  disocclusionTol = 0.03;
   /** PLAN-J2 J2-6 — one long history (Sam's decision 5): while the temporal upsampling runs, the native temporal pass keeps a short
    *  one (its least α raised to `singleNativeAlpha`, the carried ground's too) and the upsampling the long one (its least α the one
    *  the native pass had — TU.u.w); off: both long. **On by default since 13 Nov 2026** (Sam's decision 5, its proofs made: J0's ΔGPU in
@@ -5697,25 +5675,7 @@ export class Renderer {
     this.taauLongAlpha = single ? a : 0;
     return single ? Math.max(a, this.singleNativeAlpha) : a;
   }
-  private momentsPrevStandIn: GPUBuffer | null = null;
-  /** the frame before's moments the temporal passes read: the target's own copy while the disocclusion is on (the live view),
-   *  else a stand-in of one word (post.wgsl disoccluded: none) */
-  private momentsPrevOf(t: Target): GPUBuffer {
-    if (this.disocclusionOn && t === this.live) {
-      if (!t.momentsPrev || t.momentsPrev.size !== t.moments.size)
-        t.momentsPrev = this.device.createBuffer({
-          label: "moments, the frame before",
-          size: t.moments.size,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        });
-      return t.momentsPrev;
-    }
-    return (this.momentsPrevStandIn ??= this.device.createBuffer({
-      label: "moments before: none",
-      size: 16,
-      usage: GPUBufferUsage.STORAGE,
-    }));
-  }
+
   /** the frame's real clock [ms]: the encoding's fades, freshness tests and animation clocks read this, one reading a frame (the
    *  wall's clock outside a frame — a planet probe's submission before the first) */
   private frameMs(): number {
@@ -7846,7 +7806,6 @@ export class Renderer {
               { binding: 51, resource: this.identNow().createView() },
               { binding: 52, resource: this.identPrevNow().createView() },
               { binding: 53, resource: { buffer: this.idRejectBuf() } },
-              { binding: 54, resource: { buffer: this.momentsPrevOf(t) } },
             ],
           }),
         );
@@ -7873,7 +7832,6 @@ export class Renderer {
         motionPrev,
         ident: this.identNow(),
         identPrev: this.identPrevNow(),
-        momPrev: this.momentsPrevOf(t),
         mkBinds,
         idx: 0,
         valid: false,
@@ -8108,19 +8066,8 @@ export class Renderer {
         ...(rigid ? near!.centre.map((c) => c * near!.radius) : [0, 0, 0]),
         rigid ? 1 : 0,
         // (its turn between the frames: an offset from its centre now → then, Σ a_prev[i] (a_now[i] · v))
-        // (w of the rows: m0.w J2-5's disocclusion on (1), m1.w its tolerance, m2.w J2-6's floor of the carried ground's α — 0 off)
-        ...turnRows.flatMap((r, k) => [
-          ...r,
-          k === 0
-            ? this.disocclusionOn && t === this.live
-              ? 1
-              : 0
-            : k === 1
-              ? this.disocclusionTol
-              : this.taauLongAlpha > 0
-                ? this.singleNativeAlpha
-                : 0,
-        ]),
+        // (w of the rows: m2.w J2-6's floor of the carried ground's α — 0 off; m0.w, m1.w unused — J2-5's disocclusion's, retired)
+        ...turnRows.flatMap((r, k) => [...r, k === 2 && this.taauLongAlpha > 0 ? this.singleNativeAlpha : 0]),
         // (the motion blur's shutter — over a frame of the usual length: a late frame's move, two or three times longer, smeared
         // the ground for that frame, a blur every second or so; w: the history's albedo beside it — RASTER_DETAIL)
         this.shutterShare(s.motionBlur),
@@ -8279,8 +8226,7 @@ export class Renderer {
     const motionPrev = this.motionPrevNow();
     const ident = this.identNow(),
       identPrev = this.identPrevNow();
-    const momPrev = this.momentsPrevOf(t);
-    const gen = `${this.motionGen(motion)}.${this.motionGen(motionPrev)}.${this.motionGen(ident)}.${this.motionGen(identPrev)}.${this.bufferGen(momPrev)}`;
+    const gen = `${this.motionGen(motion)}.${this.motionGen(motionPrev)}.${this.motionGen(ident)}.${this.motionGen(identPrev)}`;
     const key = `${u.idx}:${ta.idx}:${gen}`;
     let bind = u.binds.get(key);
     if (!bind) {
@@ -8303,7 +8249,6 @@ export class Renderer {
           { binding: 51, resource: ident.createView() },
           { binding: 52, resource: identPrev.createView() },
           { binding: 53, resource: { buffer: this.idRejectBuf() } },
-          { binding: 54, resource: { buffer: momPrev } },
         ],
       });
       // (a new motion texture: the bind groups made for the old ones dropped)
@@ -8451,7 +8396,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     k[49] = Math.max(0, 1 - (this.sampleIndex + 1) / passes); // (0 on the last: no step when it ends)
     new Uint32Array(k.buffer)[50] = ta.from;
     this.device.queue.writeBuffer(ta.buf, 0, k);
-    this.refreshTemporalMotion(ta, t);
+    this.refreshTemporalMotion(ta);
     const pass = enc.beginComputePass(this.prof.pass("temporal"));
     pass.setPipeline(this.postTemporal);
     pass.setBindGroup(0, ta.binds[ta.idx]!);
@@ -12059,7 +12004,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (J2-0's instruments, off by default: the tiles' publication closed for this image, the image's sharpness)
     this.earthTiles.pubFrame();
     if (this.sharpProbe && t === this.live) this.encodeSharp(enc, t, s, phase);
-    this.keepMotion(enc, t);
+    this.keepMotion(enc);
     this.submit(
       enc,
       (ms) => {

@@ -6,7 +6,7 @@ import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 
 // PLAN-J2 — the levers' GPU cost on J0's frozen view, interleaved fast against the machine's thermal drift (an estimate while kerr-mini
 // is away; not the plan's ΔGPU on J0 in flight). J0's scene (the F-35's cockpit, 500 m over the Rade d'Hyères), frozen and settled;
-// for each lever of LEVERS (J2DG_LEVERS: edgeFoot, singleHistory, earthRateOne, disocclusion) ROUNDS (J2DG_ROUNDS, 6) rounds of off, on —
+// for each lever of LEVERS (J2DG_LEVERS: edgeFoot, singleHistory, earthRateOne — the disocclusion measured here then retired, J2-8) ROUNDS (J2DG_ROUNDS, 6) rounds of off, on —
 // the order swapped every other round (A B B A …) —, each 20 images to settle then 60 measured (renderer.lastGpuMs, the passes of the
 // profiler); per lever the mean of the rounds' differences of their p50, its spread (the rounds' own), and the passes that moved.
 // J2DG_OUT (remote-results/j2-dgpu). The thermal state before and after.
@@ -19,7 +19,6 @@ const LEVERS: Record<string, [string, string]> = {
   edgeFoot: ["__bh.renderer.earthTiles.edgeFoot = true;", "__bh.renderer.earthTiles.edgeFoot = false;"],
   singleHistory: ["__bh.renderer.singleHistory = true;", "__bh.renderer.singleHistory = false;"],
   earthRateOne: ["__bh.renderer.earthRateOne = true;", "__bh.renderer.earthRateOne = false;"],
-  disocclusion: ["__bh.renderer.disocclusionOn = true;", "__bh.renderer.disocclusionOn = false;"],
 };
 const WANT = (process.env.J2DG_LEVERS ?? Object.keys(LEVERS).join(",")).split(",");
 afterAll(stopServer);

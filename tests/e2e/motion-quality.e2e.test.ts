@@ -19,7 +19,7 @@ import { readPng } from "./lib/png";
 // The HUD off; each mode's own reference, made at once after its still shot (the view exactly the same) — at the canvas's full scale
 // (settings.earthRasterScale 1 the while: before 13 Nov 2026 a raster reference was a held view at 0.75, scales compared wrongly).
 // PLACES=tarifa-low,alps (strait: the sea); MODES (below) — e.g. spatial75q,taau75q,native100q, a renderer lever after "+" (EXTRAS:
-// taau75q+disocc — PLAN-J2 J2-5's disocclusion; off in the plain modes); FRAMES (90), TURN (0: straight), STEADY (60 frames before), SPEED (140 m/s), STILL (30).
+// taau75q+single — PLAN-J2 J2-6's one long history; off in the plain modes); FRAMES (90), TURN (0: straight), STEADY (60 frames before), SPEED (140 m/s), STILL (30).
 // Output: remote-results/motion-quality/<place>-<mode>[-still|-ref].png, motion-quality.json (MQ_OUT).
 // Done when: every place × mode measured (the tiles 120 s at most, the reference 90 s, what is missing said), no GPU error.
 // Duration: ~3 min a place × mode (its reference 90 s; the first one waits for the tiles).
@@ -63,12 +63,9 @@ const DETAIL = `Object.assign(__bh.settings, { earthScenery: "high", detailReach
 const CLEAN = `Object.assign(__bh.settings, { hudJet: "off", hudHorizon: false, hudHeading: false, hudBank: false, hudMarkers: false,
   hudEdge: false, hudAoA: false, hudEnergy: false, hudDirector: false, hudPath: false, hudFuture: false, hudImpact: false, hudRunway: false });`;
 const LOOK = Number(process.env.LOOK ?? 0);
-// (a mode's renderer levers after a "+" — `taau75q+disocc`: PLAN-J2 J2-5's disocclusion on —; every lever named here set off
+// (a mode's renderer levers after a "+" — `taau75q+single`: PLAN-J2 J2-6's lever on —; every lever named here set off
 // otherwise, the same mode measured with and without in one run)
 const EXTRAS: Record<string, [string, string]> = {
-  disocc: ["__bh.renderer.disocclusionOn = true;", "__bh.renderer.disocclusionOn = false;"],
-  // (its positive control: a tolerance of −10 — nearly every moving pixel taken as uncovered, no history: the lever acts)
-  disoccall: ["__bh.renderer.disocclusionOn = true; __bh.renderer.disocclusionTol = -10;", "__bh.renderer.disocclusionTol = 0.03;"],
   // (PLAN-J2 J2-6: one long history — the native temporal pass's short while the upsampling runs)
   single: ["__bh.renderer.singleHistory = true;", "__bh.renderer.singleHistory = false;"],
   // (J2-6: a change of scale in flight — 0.625 forced 8 frames before the first instant's shot: between the two scales' own PSNR if

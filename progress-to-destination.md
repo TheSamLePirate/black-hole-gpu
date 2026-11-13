@@ -4195,3 +4195,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Changé** : `src/renderer.ts`, `src/system/earth-tiles.ts`, `src/system/scenery.ts`, `tests/earth-tiles.test.ts`,
   `tests/e2e/j0-reference.e2e.test.ts` (ablations : les leviers éteints) ; PLAN-J2 §9 decies/undecies, BH-API, GRAPHICS-PIPELINE, PROBLEMES,
   fiche J2-3.
+
+## 2026-11-13T07:15Z — J2-8 : la désocclusion retirée (décision de Sam)
+
+- **Contribution** (PLAN-J2 J2-8, §20 de la stratégie) : J2-5 mesurée sans gain pour +0,43 ms → retirée : `post.wgsl` (liaison 54 `momPrev`,
+  `reprojPoint`, `disoccluded`, leurs appels dans `temporal` et `taau`), `src/renderer.ts` (`disocclusionOn`, `disocclusionTol`,
+  `momentsPrevOf`, la copie de `keepMotion`, les liaisons, `TA.m0.w`/`m1.w`), les e2e (`motion-quality` `+disocc`, `j2-dgpu`,
+  `j0-reference`) ; BH-API, GRAPHICS-PIPELINE (+ annexe), PLAN-J2, fiche J2-5, E2E-CATALOGUE.
+- **Vérifié** : tsc, biome, `check-wgsl` 81/81, tests unitaires du renderer 5/0, e2e `surface-id` 1/0 (identité 49/49 ; un premier passage
+  échoué faute de décor en 60 s : la séance J0 tournait en même temps sur kerr-mini — deux charges IGN croisées, la règle enfreinte).
