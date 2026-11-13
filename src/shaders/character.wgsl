@@ -51,7 +51,9 @@ fn envUV(d:vec3f)->vec2f{return vec2f(atan2(d.x,d.z)/(2*PI)+.5,acos(clamp(d.y,-1
 // The surroundings reflected (GGX pre-filtered), else the sky estimate brighter above the horizon.
 fn envSpecular(r:vec3f,rough:f32)->vec3f{
  if(!probeOn()){return u.sky.xyz*(.2+1.8*smoothstep(-.05,.25,dot(r,u.up.xyz)));}
- return textureSampleLevel(envTex,envSamp,envUV(toProbe(r)),rough*u.probeY.w).rgb;
+ // (the probe's GGX levels stored × its scale — ship.wgsl envCopy, sh[22] —: back to radiance)
+ let k=select(1.,sh[22].x,arrayLength(&sh)>=23u&&sh[22].x>0.);
+ return textureSampleLevel(envTex,envSamp,envUV(toProbe(r)),rough*u.probeY.w).rgb/k;
 }
 // Split-sum environment BRDF, scale and bias (Karis 2014, analytic fit): F0·x + y.
 fn envAB(rough:f32,nv:f32)->vec2f{

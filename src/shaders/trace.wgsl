@@ -9368,7 +9368,9 @@ fn seaSkyRadiance(d: vec3f, alpha: f32) -> vec3f {
   let lod = clamp(alpha * 5.0, 0.0, select(5.0, 0.0, (TUNE_SEA_DBG & 16u) != 0u));
   let rows = 256.0 / exp2(ceil(lod));
   let v = clamp(acos(clamp(c.y, -1.0, 1.0)) / PI * 0.5, 0.5 / rows, 0.5 - 0.5 / rows);
-  return textureSampleLevel(seaFft, seaSamp, vec2f(u, v), i32(SEA_SKY_LAYER), lod).rgb;
+  // (the probe's GGX levels are stored × the pre-exposure — ship.wgsl envCopy —: back to radiance; the frame's own, the copy's within
+  // a few frames of it)
+  return textureSampleLevel(seaFft, seaSamp, vec2f(u, v), i32(SEA_SKY_LAYER), lod).rgb / apScale();
 }
 fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32, calm: f32, mirror: vec4f) -> vec3f {
   // (another world's: q its surface's own normal — Miller's giant wave's slope under the chop)
@@ -17361,6 +17363,9 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
   // (the planets' probes run this kernel into their own buffer, the probe's texels alone: no key)
   if (all(gid.xy == vec2u(0u)) && arrayLength(&envBuf) >= ENV_W * ENV_H + 2u) {
     if (key) { keyLight(); } else { envBuf[ENV_W * ENV_H + 1u] = vec4f(0.0); }
+    // (the scale the probe is stored at in its half-float textures — ship.wgsl envCopy —: the frame's pre-exposure, as the aerial
+    // table's; raw, a dusk's radiance ~2e-7 fell among the half floats' subnormals — the sea's mirrored sky in coloured steps, 13 Nov)
+    if (arrayLength(&envBuf) >= ENV_W * ENV_H + 9u) { envBuf[ENV_W * ENV_H + 8u] = vec4f(apScale(), 0.0, 0.0, 0.0); }
   }
   probeNoStar = key;
   // (envCfg.z: 1 every texel; 0 one of each 2×2 block, 2 one of each 4×4 — envCfg.y picks which)

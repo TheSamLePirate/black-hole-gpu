@@ -152,10 +152,19 @@ fn envUV(d: vec3f) -> vec2f {
 @group(0) @binding(4) var envSamp: sampler;
 @group(0) @binding(5) var<uniform> G: vec4f; // GGX level: roughness, source mip count, sample count, unused
 
+// the probe's storage scale (trace.wgsl env: envBuf + 8), 1 where none is written
+fn probeScaleIn() -> f32 {
+  let n = ENV_W * ENV_H;
+  if (arrayLength(&envIn) < n + 9u) { return 1.0; }
+  let k = envIn[n + 8u].x;
+  return select(1.0, k, k > 0.0);
+}
 @compute @workgroup_size(8, 8)
 fn envCopy(@builtin(global_invocation_id) gid: vec3u) {
   if (gid.x >= ENV_W || gid.y >= ENV_H) { return; }
-  textureStore(envOut, gid.xy, vec4f(envIn[gid.y * ENV_W + gid.x].rgb, 1.0));
+  // (× the probe's scale — the frame's pre-exposure, trace.wgsl env —: in a half float's range at any light; raw, a dusk's radiance fell
+  // among its subnormals, the colours in steps — its readers divide: envSpec, character.wgsl envSpecular, trace.wgsl seaSkyRadiance)
+  textureStore(envOut, gid.xy, vec4f(envIn[gid.y * ENV_W + gid.x].rgb * probeScaleIn(), 1.0));
 }
 
 // 2×2 average, solid-angle weighted (sin θ of the source rows)
@@ -281,6 +290,8 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
   shOut[11] = key;
   // (PLAN-J3 J3-2: the aerial table's reach and the metres per unit — trace.wgsl keyLight —, for shipAir; none where not written)
   shOut[12] = select(vec4f(0.0), envIn[n + 7u], arrayLength(&envIn) >= n + 8u);
+  // (the probe's storage scale, for its GGX levels' readers — envSpec)
+  shOut[22] = vec4f(probeScaleIn(), 0.0, 0.0, 0.0);
   if (key.w > 0.5) { shOut[9] = vec4f(normalize(envIn[n].xyz), 1.0); }
 }
 
@@ -326,6 +337,8 @@ fn envSH4(@builtin(local_invocation_id) lid: vec3u) {
   shOut[11] = key;
   // (PLAN-J3 J3-2: the aerial table's reach and the metres per unit — trace.wgsl keyLight —, for shipAir; none where not written)
   shOut[12] = select(vec4f(0.0), envIn[n + 7u], arrayLength(&envIn) >= n + 8u);
+  // (the probe's storage scale, for its GGX levels' readers — envSpec)
+  shOut[22] = vec4f(probeScaleIn(), 0.0, 0.0, 0.0);
   if (key.w > 0.5) { shOut[9] = vec4f(normalize(envIn[n].xyz), 1.0); }
 }
 
@@ -699,7 +712,9 @@ fn irradiance(n: vec3f) -> vec3f {
 }
 
 fn envSpec(d: vec3f, rough: f32) -> vec3f {
-  return textureSampleLevel(envTex, linSamp, envUV(toProbe(d)), rough * (S.mat.w - 1.0)).rgb;
+  // (stored × the probe's scale — envCopy —: back to radiance)
+  let k = select(1.0, sh[22].x, arrayLength(&sh) >= 23u && sh[22].x > 0.0);
+  return textureSampleLevel(envTex, linSamp, envUV(toProbe(d)), rough * (S.mat.w - 1.0)).rgb / k;
 }
 
 // split-sum environment BRDF scale and bias (Karis 2014, analytic fit): F0·x + y

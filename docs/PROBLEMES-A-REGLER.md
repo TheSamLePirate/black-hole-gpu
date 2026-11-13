@@ -28,7 +28,7 @@ cadence en retirant du contenu, ce que CLAUDE.md interdit. **Recommandation rév
 son plancher de qualité à régler) ; ou (a) seulement avec un critère d'image en plus de la vitesse. L'e2e : sa vérification de
 cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mise de côté jusqu'à la décision.
 
-## Des taches de couleur sur la mer au crépuscule (relevé le 13 novembre 2026, J0 phase `skyband4`) — **cause trouvée : la sonde en demi-flottants sous-normaux**
+## ~~Des taches de couleur sur la mer au crépuscule~~ — réglé le 13 novembre 2026 (~20:29 UTC) : la sonde en demi-flottants sous-normaux
 
 - **Observé** (kerr-mini, J0 Toulon-Hyères, 10 juillet 19:40 UTC — le Soleil couché —, vue de trois quarts arrière vers l'ouest, profil neutre,
   run `…-j3-skyband4b`, `skyband4-1940-*.png`) : de grandes taches roses, jaunes et vertes, aux bords nets, sur la mer et la côte sous le
@@ -70,6 +70,12 @@ cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mis
   `apScale`) : la sonde copiée dans `envRaw` × une échelle (la pré-exposition, ou une puissance de deux tirée de sa luminance), écrite à côté
   (`envBuf` + 7 .w → `sh[12].w`), et chaque lecteur d'`envSpec` divisant par elle — `ship.wgsl` `envSpec`, `character.wgsl` `envSpecular`,
   `trace.wgsl` `seaSkyRadiance`. Trois lecteurs, une échelle commune : un lot à part.
+- **Réglé** (~20:29 UTC) : `trace.wgsl` `env` écrit la pré-exposition de l'image dans `envBuf` + 8 ; `ship.wgsl` `envCopy` y multiplie la sonde ;
+  `envSH`/`envSH4` la recopient en `sh[22]` ; `envSpec` (`ship.wgsl`) et `envSpecular` (`character.wgsl`) divisent par `sh[22]`,
+  `seaSkyRadiance` par `apScale()`. **Vérifié** (kerr-mini) : la couche du ciel relue est une copie lisse de la sonde, à ~5·10⁻² au lieu de
+  ~2·10⁻⁷ (`…-probedump4`) ; à 19:40 les taches ont disparu et la coque de l'appareil reflète le ciel (elle était en silhouette noire :
+  ses reflets lisaient la même sonde) (`…-seadusk12`) ; de jour, les vues et l'exposition identiques (14,645 EV, `…-j3-framing-after` contre
+  `…-j3-framing`). **Non vérifié** : le marcheur la nuit ; le coût (aucun travail ajouté hors une multiplication par texel).
 
 ## ~~Le premier `renderer.tune` d'une session fige la sonde de lumière de l'appareil~~ — réglé le 13 novembre 2026 (~17:57 UTC) : la sonde de l'appareil gelée pendant la compilation de son noyau à chaque changement de clé
 

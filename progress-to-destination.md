@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:14 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:29 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5748,4 +5748,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   radiance brute (~2·10⁻⁷) sous le plus petit demi-flottant normal ; le bornage par la luminance testé sans effet (`…-seadusk11`).
 - Suite : un lot — la sonde stockée × une échelle (comme la table aérienne), ses trois lecteurs (`ship.wgsl`, `character.wgsl`,
   `seaSkyRadiance`) divisant ; vérifier aussi les reflets de l'appareil la nuit.
+
+## 2026-11-13T20:29Z — La sonde stockée hors des sous-normaux : la mer et l'appareil au crépuscule
+
+- Contribution : « préserver toute l'expérience » (CLAUDE.md) — le crépuscule et la nuit sans fausses couleurs ; une responsabilité commune
+  (l'échelle de la sonde) pour ses trois lecteurs.
+- Réalisé : `trace.wgsl` (`env` : l'échelle ; `seaSkyRadiance` ÷ `apScale()`), `ship.wgsl` (`envCopy` ×, `envSH`/`envSH4` → `sh[22]`,
+  `envSpec` ÷), `character.wgsl` (`envSpecular` ÷), `ship.ts` (`envBuf` + 9). Docs : PROBLEMES (réglé), GRAPHICS-PIPELINE D2.
+- Preuves : **observé / mesuré** (kerr-mini) : la couche du ciel relue lisse (~5·10⁻² au lieu de ~2·10⁻⁷) ; à 19:40 plus de taches, la coque
+  reflète le ciel ; de jour vues et exposition identiques (14,645 EV). `check-wgsl` 82/82, tsc, biome. **Non vérifié** : le marcheur la nuit.
+- Limites : le levier de mesure `TUNE_SEA_DBG` reste (0 par défaut) — à retirer au prochain lot de retrait (règle 2).
 
