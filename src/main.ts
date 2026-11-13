@@ -247,6 +247,7 @@ import { OutOfView } from "./game/out-of-view";
 import { FrameGuard } from "./game/frame";
 import { Persistence } from "./game/persistence";
 import { Session } from "./game/session";
+import { type SimState, simStateOf, type ViewPose, viewPoseOf } from "./game/view-pose";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
 import { ResumePoints } from "./game/resume-point";
 import { CraftLost } from "./ui/craftlost";
@@ -8254,6 +8255,8 @@ async function main() {
     mapView: () => flightHud.mapCamera(),
     freeze: (on: boolean) => (session.frozen = on),
     held: () => session.holder(),
+    viewPose: () => viewPose,
+    simState: () => simState,
     spectate: (on: boolean) => {
       setSpectator(on);
       return camera.spectating;
@@ -8562,6 +8565,10 @@ async function main() {
   );
   outOfView.watch(document);
   let lastStats: FrameStats | null = null;
+  /** the loop's frames; this frame's view pose and the flight's accepted state (game/view-pose.ts — audit AR-07) */
+  let frameNo = 0;
+  let viewPose: ViewPose | null = null;
+  let simState: SimState | null = null;
   /** a network step of the frame on its own: an exception caught, counted (`__bh.net.net.inbound.failed` with the
    *  events'), told once by its message (debug.ts caught) */
   // the frame's stages in their guards (game/frame.ts — audit AR-03, wave 4.8): a stage that throws said once (a toast, the
@@ -8971,17 +8978,41 @@ async function main() {
     }
     goproStrip();
     renderer.starMatrix = starMatrixNow();
+    // (the frame's two descriptions, made once and frozen — game/view-pose.ts, audit AR-07: the flight's accepted state and the
+    // view's pose; the renderer still reads the settings — the render session moves it onto viewPose —, __bh and the tests read these)
+    frameNo++;
+    const drawn = camera.viewSettings();
+    const lensFov = lensNow
+      ? goproRenderFov(canvas.width / Math.max(canvas.height * goproRowShare(canvas.width / Math.max(canvas.height, 1)), 1))
+      : undefined;
+    simState = frameGuard.run(
+      "the frame's state",
+      () => {
+        const P = camera.piloting ? cpuProf.time("frame state (view-pose.ts)", () => camera.activePoseNow()) : null;
+        return simStateOf({
+          time: sim.time,
+          frame: frameNo,
+          gen: camera.flightGen,
+          held: session.holder(),
+          craft: P ? { id: fleet.active, X: P.X, V: P.V, ax: P.ax } : null,
+        });
+      },
+      simState,
+    )!;
+    viewPose = viewPoseOf(drawn, {
+      time: sim.time,
+      width: canvas.width,
+      height: canvas.height,
+      scale: renderScale,
+      frame: frameNo,
+      fov: lensFov,
+    });
     const st = capped
       ? null
       : cpuProf.time("render (encode, submit)", () =>
           renderer.frame(
             // (the GoPro lens: the scene rendered rectilinear over a wider field, bent by the display — src/lens.ts)
-            lensNow
-              ? {
-                  ...camera.viewSettings(),
-                  fov: goproRenderFov(canvas.width / Math.max(canvas.height * goproRowShare(canvas.width / Math.max(canvas.height, 1)), 1)),
-                }
-              : camera.viewSettings(),
+            lensFov !== undefined ? { ...drawn, fov: lensFov } : drawn,
             sim.time,
             changed,
             sim.timeDirty,

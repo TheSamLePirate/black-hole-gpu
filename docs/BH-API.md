@@ -90,6 +90,16 @@ The loop clamps its `dt` to 0.1 s: under 10 fps the flight runs slower than the 
 
 Scene names that exist: `__bh.scenes()` (96 keys on 6 Nov 2026 of `__bh.presets`, e.g. `"Interstellar (no shifts)"`, `"Earth: docking to the ISS"`, `"Miller: the water world"`, `"game:artemis"`, `"game:interstellar"`). The `game:` ones are flight scenes.
 
+### `__bh.viewPose()` → `ViewPose` | null · `__bh.simState()` → `SimState` | null
+
+The frame's two descriptions (`src/game/view-pose.ts`, 13 Nov 2026 — audit AR-07, wave 4.3), made once each loop and frozen:
+`viewPose()` — the view's own settings (`VIEW_POSE_KEYS`: its place, look, lens, target — the spectator's own keys too), the scene's
+`time` it is drawn at, the canvas `width`/`height`, the render `scale`, the loop's `frame` number (the GoPro lens's field in `fov`
+when it is on); `simState()` — the flight's accepted state at the end of the frame's steps: `time`, `frame`, `gen`
+(`camera.flightGen`), `held` (what held the step, as `held()`), `craft` (`id`, `X`, `V`, `ax` in the home frame, copied) or null.
+Null before the first frame. The renderer still reads the settings: moving it onto `ViewPose` is the render session's lot.
+*Used in:* `view-pose.e2e.test.ts`.
+
 ### `__bh.held()` → `"frozen"` | `"paused"` | `"gpu"` | `"render"` | `"replay"` | null
 
 What holds the flight's own step this frame, the first of them (`src/game/session.ts`, 13 Nov 2026 — audit AR-02, AR-12): `freeze(true)`; a menu holding the game (the pause, the title, the missions — not in a network room); a GPU device made again (from its loss to the new renderer's first image); an offline render or a video; a replay. `null`: `sim.step` runs in the loop. One answer the loop itself asks (`session.runs`), where the same condition was copied four times.

@@ -62,7 +62,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lot 3 les étapes gardées de la frame (`frame.ts`, AR-03) ; suivants : les autres étapes avant le rendu, puis l'ordre §19.5 (AR-04) |
-| Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | en partie : le garde statique des réglages (AR-21) ; `SimState`/`ViewPose` (AR-07) touche `renderer.ts` : avec la session du rendu et l'accord de Sam |
+| Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait de ce côté** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` produits une fois par image et figés (AR-07, `view-pose.ts`) ; **à la session du rendu** : faire prendre `ViewPose` au renderer (choix de Sam) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -4853,3 +4853,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   passage a manqué l'attente « salle à ×0 » en 10 s, rejoué vert : aléa de charge, noté), `aircraft-save` 1/1, `fps-truth` 2/2.
 - **Limites :** les autres étapes avant le rendu (le ciel, les entrées du renderer, le replay, l'enregistrement) et celles d'après
   (instruments, HUD) ne sont pas encore gardées ; l'ordre §19.5 (instruments avant l'encodage, AR-04) reste à faire — lots suivants.
+
+## 2026-11-13T13:27Z — Audit 4.3 (AR-07, côté producteur — choix de Sam) : la pose de vue et l'état du vol, faits une fois par image et figés
+
+- **Contribution à la destination :** §19.12 et §7 (la vue possède sa pose finale ; la simulation son état et son temps acceptés —
+  une description par image, écrite par un seul propriétaire).
+- **Réalisé :** `src/game/view-pose.ts` — `ViewPose` (les réglages propres à la vue, `VIEW_POSE_KEYS`, désormais la seule liste : le
+  spectateur la lit aussi ; le temps de scène dessiné, le canevas, l'échelle, le numéro d'image ; le champ de l'objectif GoPro quand il
+  est mis) et `SimState` (temps accepté, image, génération du vol, ce qui le tient, l'engin piloté — place, vitesse, axes copiés). Dans la
+  boucle, faits une fois juste avant le rendu (l'état dans une étape gardée), figés ; `camera.viewSettings()` appelée une fois au lieu de
+  deux. `__bh.viewPose()` / `__bh.simState()` (BH-API). Le renderer n'est pas touché.
+- **Preuves :** unitaires `view-pose` 2/0 (les clés de la vue seules, figées, la pose d'avant inchangée quand les réglages bougent, les
+  vecteurs copiés) ; e2e `view-pose` 1/1 (image 430 → 490 en 0,5 s, la pose = les réglages de la vue et le temps de la scène, l'engin
+  piloté et sa génération, « paused » sous le menu) ; coût mesuré **0,01 ms par image** (pire 0,1). Non-régression : `frame-guard`,
+  `aircraft-save` verts.
+- **Pour la session du rendu (choix de Sam) :** faire prendre `ViewPose` (et `SimState` pour l'engin) à `renderer.frame` au lieu de
+  `Settings` entier ; la pose est déjà calculée là où le renderer est appelé (`main.ts`, juste avant `renderer.frame`).

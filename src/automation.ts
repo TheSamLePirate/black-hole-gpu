@@ -145,6 +145,10 @@ export interface BhContext {
   freeze(on: boolean): void;
   /** what holds the flight's step this frame (game/session.ts), null when it runs */
   held(): "frozen" | "paused" | "gpu" | "render" | "replay" | null;
+  /** this frame's view pose, frozen (game/view-pose.ts), null before the first frame */
+  viewPose(): import("./game/view-pose").ViewPose | null;
+  /** the flight's accepted state at this frame's end, frozen (game/view-pose.ts), null before the first frame */
+  simState(): import("./game/view-pose").SimState | null;
   /** Holds the render scale (0.25 … 1; null: the governor's again) — the benches, the tests */
   forceScale(x: number | null): void;
   /** the flight's jitter probe (src/jitter): its samples by frame and their analysis by cause */
@@ -684,6 +688,11 @@ export function installBh(c: BhContext) {
       /** what holds the flight's step this frame — "frozen" (freeze), "paused" (a menu), "gpu" (a device made again), "render",
        *  "replay" —, null when it runs (game/session.ts) */
       held: () => c.held(),
+      /** this frame's view pose — the view's own settings, the scene's time, the canvas, the scale, the frame's number —, frozen
+       *  (game/view-pose.ts, audit AR-07) */
+      viewPose: () => c.viewPose(),
+      /** the flight's accepted state at this frame's end — time, frame, generation, what held it, the craft flown —, frozen */
+      simState: () => c.simState(),
       /** holds the render scale (the image rendered at that share of the canvas, upscaled by the display); null: released */
       forceScale: (x: number | null) => c.forceScale(x),
       /** the flight's jitter probe (src/jitter, docs/progress/JITTER-VOL.md): start(max?), stop(), mark(label), samples(from?),

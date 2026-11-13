@@ -1,3 +1,4 @@
+import { VIEW_POSE_KEYS } from "../game/view-pose";
 import { planetFrame, toLocal } from "../landing";
 import { properBodyAxes } from "../system/local-patch";
 // The spectator: a free camera away from the ship — anywhere, to the planets, through the wormhole —
@@ -37,30 +38,8 @@ declare module "../controls" {
   }
 }
 
-/** The settings that are the view's own (its place, its look, its lens, its target): the rest follows the ship's. */
-const VIEW_KEYS = new Set<keyof Settings>([
-  "anchor",
-  "whL",
-  "distance",
-  "inclination",
-  "azimuth",
-  "yaw",
-  "pitch",
-  "roll",
-  "velR",
-  "velT",
-  "velP",
-  "motion",
-  "rotation",
-  "target",
-  "lookAt",
-  "telescope",
-  "fov",
-  "ship",
-  "shipMount",
-  "shipLookYaw",
-  "shipLookPitch",
-]);
+/** The settings that are the view's own: game/view-pose.ts's list (the one authority — the frame's ViewPose is made of them). */
+const VIEW_KEYS = new Set<keyof Settings>(VIEW_POSE_KEYS);
 
 /** Where the spectator starts: behind the ship and a little above it [m] (the view no jump: the ship ahead). */
 const BACK_M = 38,
