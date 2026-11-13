@@ -6713,21 +6713,22 @@ export class Renderer {
                 : this.liteLayout
               : entryPoint === "shadeLiteLight"
                 ? this.liteLightLayout
-                : entryPoint === "main" ||
-                    entryPoint === "shade" ||
-                    entryPoint === "shadeMark" ||
-                    entryPoint === "shadeLiteFinish" ||
-                    entryPoint === "shadeWater" ||
-                    entryPoint === "shadeWaterOpen" ||
-                    entryPoint === "shadeStars" ||
-                    entryPoint === "skyFill" ||
-                    entryPoint === "discs"
-                  ? this.mainLayout
-                  : entryPoint === "lut"
-                    ? this.lutLayout
-                    : entryPoint === "aerial"
-                      ? this.aerialLayout
-                      : this.tracePipeLayout,
+                : // (the water's — the staged water's first step —: shadeLite's layout, its surface to liteOut for the finishing pass)
+                  entryPoint === "shadeWater" || entryPoint === "shadeWaterOpen"
+                  ? this.liteLayout
+                  : entryPoint === "main" ||
+                      entryPoint === "shade" ||
+                      entryPoint === "shadeMark" ||
+                      entryPoint === "shadeLiteFinish" ||
+                      entryPoint === "shadeStars" ||
+                      entryPoint === "skyFill" ||
+                      entryPoint === "discs"
+                    ? this.mainLayout
+                    : entryPoint === "lut"
+                      ? this.lutLayout
+                      : entryPoint === "aerial"
+                        ? this.aerialLayout
+                        : this.tracePipeLayout,
         compute: {
           module,
           // (the sky's discs: main's own, its sky's layer and its ground compiled out — DISC_ONLY)
@@ -7435,14 +7436,15 @@ export class Renderer {
         fp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
         fp.end();
       }
-      const water = this.rasterWaterNow ? this.traceVariant("shadeWater") : null;
+      // (the water's needs its finishing pass — the staged water's first step: its pixels' air and clouds there —; none without it)
+      const water = this.rasterWaterNow && fin ? this.traceVariant("shadeWater") : null;
       // (the sea's surface between them — PLAN-MER-WEBGPU S2 —: the water's pass shades it at its exact point)
       if (water) this.encodeSeaSurface(enc, t);
       if (water) {
         const wp = enc.beginComputePass(this.prof.pass("earth water (raster)"));
         wp.setPipeline(water);
         wp.setBindGroup(0, this.hintBindFor(t, hint));
-        wp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+        wp.setBindGroup(1, lb.lite);
         wp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
         wp.end();
         // (the open sea's pixels by their own lighter kernel — PLAN-MER-WEBGPU S3 —, the FFT's waves on: P.seafft[0].x 2 written over
@@ -7460,10 +7462,19 @@ export class Renderer {
           const op = enc.beginComputePass(this.prof.pass("earth water open (raster)"));
           op.setPipeline(open);
           op.setBindGroup(0, this.hintBindFor(t, hint));
-          op.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
+          op.setBindGroup(1, lb.lite);
           op.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
           op.end();
         }
+        // (the water's air and clouds — the staged water's first step (CHALLENGE-J1-J2 idea 2, Sam's decision of 13 Nov 2026) —:
+        // the finishing pass again, over the pixels both water kernels left in liteOut, RASTER_SPLIT_WATER; the ground's finished
+        // before the water read them — seaSSR)
+        const wf = enc.beginComputePass(this.prof.pass("earth water: finishing"));
+        wf.setPipeline(fin!);
+        wf.setBindGroup(0, this.hintBindFor(t, hint));
+        wf.setBindGroup(1, lb.finish);
+        wf.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+        wf.end();
       }
     }
   }

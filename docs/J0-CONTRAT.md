@@ -44,6 +44,14 @@ palier. **À faire avant la prochaine fiche** : l'essai de la borne sur le M1 Ma
 régulières se lit de la même façon : intervalle p50 et p95 ≤ 40 ms, sans alternance 60 / 80 ms (le p99 et le CPU :
 seuils à transposer et à valider avec la première fiche bornée).
 
+**Premier essai de la borne (M1 Max, 13 novembre 2026 ~08:10–08:21 UTC, arbre de a371c946, `J0_FPSCAP=30`,
+`remote-results/j0/m1max-cap30`)** : **borné à 30 images/s, le M1 Max bride encore.** Le vol frais tient la borne (30,0 images/s,
+intervalle p50 33,3 / p95 42,1 ms, GPU p50 21,4 ms à 1 291 MHz, occupé ~87 %) ; après les ablations, le vol soutenu ne la tient plus :
+27,8 images/s, intervalle p95 **58,6 ms**, p99 82,9, GPU p50 29,4 ms — la pression **Heavy**, le GPU **881 MHz** (68 % de son maximum),
+occupé 93 %. 30 images/s laissent 33 ms par image à un GPU qui en prend 21 frais : la borne ne suffit pas à le garder hors du bridage
+sur ce vol. L'essai à 40 images/s, interrompu (ce Mac encore chaud, la mesure de l'eau étagée passant avant sur le mini), reste à faire
+— **non mesuré** ; si 30 bride, 40 bridera aussi, mais le chiffre se mesure. La valeur de la borne n'est pas fixée.
+
 **Le palier 1 est atteint** quand, sur le vol de référence (§3), mesuré deux fois sur le M1 Max dans l'état soutenu,
 **les seuils suivants tiennent tous** — *validés par Sam le 10 novembre* (transposés de §8.3, qui les fixe pour
 le profil 60 : p95 au budget, p99 à 1,5 fois) :

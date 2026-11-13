@@ -606,6 +606,24 @@ aux mips), relief 44–50 dB ; une couche 5,6 → 1,4 Mo (la texture 1024² 106 
 **Recommandation (à Sam)** : réalisable (pages stables, une par image sous le budget des tuiles), à faire seulement si une machine cible manque
 de mémoire.
 
+## 9 quattuordecies. Le lot de retrait R1 : les anciens chemins des leviers allumés par Sam — **daté : 14 novembre 2026**
+
+Règle de méthode 2 (décision de Sam, 13 novembre 2026, CLAUDE.md ; contre-analyse C6) : un levier allumé par décision de Sam perd son ancien
+chemin au lot de retrait suivant ; seuls les leviers de mesure restent. Le lot R1, **le 14 novembre 2026**, après l'étape 1 de l'eau étagée
+(mesurée), retire :
+
+| Levier (allumé le) | Ce qui part | Ce qui reste |
+|---|---|---|
+| `renderer.singleHistory` (13 nov., §9 undecies) | le levier, l'historique long natif séparé (le chemin `false`) ; l'ablation `singleHistory` de J0 | l'historique court natif, la TAAU longue (`TU.u.w`), le sol porté (`TA.m2.w`) |
+| `earthTiles.edgeFoot` (13 nov.) | le levier, `P.tiles.w` = 1 et sa branche dans `trace.wgsl` ; l'ablation `edgeFoot` de J0 | `P.tiles.w` = 2 |
+| `renderer.seaSsrSafe` (13 nov.) | le levier, le bit raster 4096 (`RASTER_SSR_SAFE_FLAG`) et le test `mk > 3e30` de `seaSSR` : **sans objet depuis l'eau étagée** (13 nov. : les pixels d'eau en cours d'écriture portent `RASTER_SPLIT_WATER`, écartés par le test général `mk < 1e29`) | — |
+| `earthScenery.clearCut` (13 nov.) | le levier et le chemin `false` (les coupés du plafond sans leur grille) | le relevé des coupés, toujours |
+| `renderer.earthRateOne` (13 nov.) | le levier et la cadence > 1 **de la Terre** ; l'ablation `earthRateOff` de J0 | la cadence des autres mondes (`bodyLite`, `shadeMark`) |
+| `renderer.rasterScaleFree` (éteint, non adopté) | le levier et sa condition dans `main.ts resize()` | — |
+
+Restent, leviers de mesure : les bits de `liteSkip`, `seaSurfaceOn`, `seaProbeOn`, `seaFoamWorldOn`, `renderer.tune`, `debugSkip*`. Preuve du lot :
+`tsc`, `check-wgsl`, `bun test`, J0 sur kerr-mini (ΔGPU nul attendu : les chemins retirés ne tournaient plus), `pipeline-inventory`.
+
 ## 10. Non vérifié
 
 - **Aucune mesure nouvelle** : les chiffres cités viennent des fiches J0 du 12 novembre, de la fiche T9 et de GRAPHICS-PIPELINE ; les

@@ -16206,7 +16206,7 @@ fn liteSurface(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32, 
 }
 // (a raster pixel's surface G at tM metres along its jittered ray — shadeLite's — given the air and the clouds before it: liteFinish
 // with its ray and light found again, as shadeLite found them)
-fn liteFinishAt(gid: vec2u, G: vec3f, tM: f32) {
+fn liteFinishAt(gid: vec2u, G: vec3f, tM: f32, blend: bool, water: bool) {
   let k = u32(P.near1.w);
   let idx = gid.y * u32(P.res.x) + gid.x;
   let centre = vec2f(gid) + 0.5;
@@ -16223,20 +16223,28 @@ fn liteFinishAt(gid: vec2u, G: vec3f, tM: f32) {
   GEO_H = geoH(rasterPoint(ray, tM));
   let lt = nearLight(k);
   let Ls = normalize(squashed(toBody(lt.dir), ab));
-  liteFinish(idx, centre, pos, G, ray.rd, tH, tM, Ls, lt.e, k, true, false);
+  liteFinish(idx, centre, pos, G, ray.rd, tH, tM, Ls, lt.e, k, blend, water);
 }
 // (moments.x of a pixel shadeLite shaded and left to shadeLiteFinish this frame — tracer-source.ts withLiteSplit —: its surface in
 // liteOut; below RASTER_WATER's range, above nothing else's)
 const RASTER_SPLIT = -9.5;
+// (moments.x of a pixel shadeWater shaded and left to the same finishing pass, run again after the water's — tracer-source.ts
+// withLiteSplit, the staged water's first step (CHALLENGE-J1-J2 idea 2, Sam's decision of 13 Nov 2026) —: RASTER_SPLIT_WATER, less
+// a half where its water covers over half the pixel (liteFinish's water mark); below RASTER_SPLIT, above RASTER_MAT)
+const RASTER_SPLIT_WATER = -10.25;
 // shadeLite's finishing pass (withLiteSplit): the air and the clouds before the surfaces it left in liteOut — read here where the
-// far field's LUT is bound (group 1, binding 2: the renderer binds liteOut there for this pass) —, its marked pixels alone
+// far field's LUT is bound (group 1, binding 2: the renderer binds liteOut there for this pass) —, its marked pixels alone. Run
+// twice a frame: after the ground — its RASTER_SPLIT pixels —, then after the water — shadeWater's, RASTER_SPLIT_WATER: not blended
+// with the history, its water's mark kept — each pass's pixels its own (the first finished before the water reads them: seaSSR)
 @compute @workgroup_size(8, 8)
 fn shadeLiteFinish(@builtin(global_invocation_id) gid: vec3u) {
   if (gid.x >= u32(P.res.x) || gid.y >= u32(P.res.y)) { return; }
   let idx = gid.y * u32(P.res.x) + gid.x;
-  if (moments[idx].x != RASTER_SPLIT) { return; }
+  let mk = moments[idx].x;
+  let wat = mk < RASTER_SPLIT_WATER + 0.1 && mk > RASTER_SPLIT_WATER - 0.6;
+  if (mk != RASTER_SPLIT && !wat) { return; }
   let g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
-  liteFinishAt(gid.xy, g.rgb, g.a);
+  liteFinishAt(gid.xy, g.rgb, g.a, !wat, wat && mk < RASTER_SPLIT_WATER - 0.25);
 }
 // (a raster pixel's surface G given its last touches — the water over it (liteWater's wat), the measures' views — and its finish:
 // shadeLite's, or shadeLiteLight's when its material and its light are two kernels — tracer-source.ts withLiteDeferred)
@@ -16738,7 +16746,12 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
       G = mix(G, white, steep * clamp(0.45 + 0.75 * streak, 0.0, 1.0));
     }
   }
+  // (the air and the clouds before the water — liteFinish —: in the finishing pass, run again after the water's — tracer-source.ts
+  // withLiteSplit, the staged water's first step: this kernel writes its surface G and distance to liteOut, the pixel marked
+  // RASTER_SPLIT_WATER —, out of this kernel as out of shadeLite's)
+  // BEGIN_WATER_OUT
   liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, false, water > 0.5);
+  // END_WATER_OUT
 }
 
 // The cloud pass (docs/PLAN-NUAGES-AAA.md N1): the clouds along each camera ray marched once a texel of half the image's

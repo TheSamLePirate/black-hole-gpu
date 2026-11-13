@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 08:58 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:10 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -34,7 +34,7 @@ les preuves restent dans les entrées datées du journal, dessous.
 
 | Machine | GPU p50 mesuré | Cible | Plus gros poste |
 |---|---:|---:|---|
-| kerr-mini | 58,4 ms (5c420e09, 13 nov.) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms |
+| kerr-mini | 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
 | M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
@@ -45,8 +45,9 @@ indirects → J3 (lumière, cockpit).
 | Session (T3) | Lot | État |
 |---|---|---|
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
-| Rendu (33d89754) | L'eau étagée — étape 1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **gain maximal lu dans la fiche : `earth water` 12,7 ms sur le mini (l'eau entière 16,2 ; −13,0 par ablation) — l'étape ne peut rendre plus que la part de `liteFinish` dans ce noyau** ; codée, J0 sur le mini en cours |
-| Rendu (33d89754) | La borne de cadence du M1 Max | 30 images/s : **bride encore** (soutenu 27,8/s, p95 58,6 ms, GPU 1291 → ~900 MHz, pression Heavy) ; 40 images/s à mesurer (ce Mac refroidi) |
+| Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
+| Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau | à faire |
+| Rendu (33d89754) | La borne de cadence du M1 Max | 30 images/s : **bride encore** (soutenu 27,8/s, p95 58,6 ms, GPU 881 MHz, pression Heavy — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; 40 images/s non mesuré (ce Mac chaud) |
 | Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **daté : 14 nov. 2026** ([PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
@@ -4425,3 +4426,31 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   s'expulsent, RD4) ; **le serveur de production se met à jour avec `main` (DEPLOY.md) : sans `X-Real-IP`, toutes les
   pages partageraient l'adresse du proxy et ses 10 salles par heure** — l'en-tête est posé par défaut par Nginx Proxy
   Manager, non vérifié en production par cette session.
+
+## 2026-11-13T09:10Z — L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` ; la borne de cadence à 30 sur le M1 Max ; les trois règles de méthode appliquées
+
+- **Contribution** (stratégie §24 décision 1 de Sam, §8 ; [PLAN-MER-WEBGPU §6](docs/PLAN-MER-WEBGPU.md)) : l'eau étagée, première étape —
+  le découpage que le sol a reçu (`withLiteSplit`) appliqué au noyau de l'eau. **Gain maximal écrit avant** (règle 1) : l'eau 16,2 ms par
+  image sur kerr-mini, `earth water` 12,7.
+- **Réalisé** : `shadeWater` (et `shadeWaterOpen`) écrit la radiance de sa surface et la distance dans `liteOut` et marque le pixel
+  `RASTER_SPLIT_WATER` (`trace.wgsl`, marqueur `BEGIN_WATER_OUT` remplacé par `tracer-source.ts withLiteSplit`) ; ses pipelines prennent la
+  mise en page `liteLayout` ; la passe de finition du sol (`shadeLiteFinish`, `liteFinishAt(…, blend, water)`) relancée après l'eau
+  (`earth water: finishing`, `renderer.encodeLite`). Le SSR ne lit plus les pixels d'eau pendant leur écriture (la course des points
+  blancs disparaît par construction). `shadeWater` 6,3 → 5,7 k lignes inlinées, `shadeWaterOpen` 5,6 → 4,9.
+- **Mesuré** (kerr-mini, A/B entrelacé A B B A sur J0, A = 22c3179a, B = l'arbre ; `remote-results/20261113-095521-j0-ab-watersplit`) :
+  GPU p50 **57,8 / 57,9 → 56,2 / 56,4 ms (−1,55 ms)**, p95 64,1 → 62,25 ; 17,25 → 17,75 images/s ; par passe `earth water` 12,48 → 10,62,
+  `open` 1,42 → 1,12, la finition 0,83 (l'eau en calcul −1,34 ms). Un run seul : l'eau par ablation 13,0 → 10,1 ms. Images en vol et en
+  virage semblables (vues). Statique : `tsc`, `check-wgsl` 81/81, `kernel-budget` + `tracer-kernels` 79/0, `pipeline-inventory --check`.
+- **La borne de cadence** (décision 3 de Sam ; [J0-CONTRAT §2](docs/J0-CONTRAT.md)) : borné à 30 images/s, le M1 Max **bride encore**
+  — frais 30,0/s, GPU 21,4 ms à 1 291 MHz ; soutenu 27,8/s, intervalle p95 58,6 ms, GPU 29,4 ms à 881 MHz, pression Heavy
+  (`remote-results/j0/m1max-cap30`, arbre de a371c946). 40 images/s **non mesuré** (interrompu, ce Mac chaud). `j0-reference` prend
+  `J0_FPSCAP`.
+- **Règles de méthode** (décision 2 de Sam) : le retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`,
+  `earthRateOne`, `rasterScaleFree`) **daté au 14 novembre 2026** ([PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) ;
+  les attentes de `j0-reference` plafonnées à 60 s sans progrès, dites toutes les 10 s (le `beforeAll` 600 → 420 s ; le relief par pas de
+  10 s ; `compileStallMs` 300 → 60 s).
+- **Fichiers** : `src/shaders/trace.wgsl`, `src/system/tracer-source.ts`, `src/renderer.ts`, `tests/e2e/j0-reference.e2e.test.ts` ;
+  PLAN-MER-WEBGPU §6, PLAN-J2 §9 quattuordecies, J0-CONTRAT §2, GRAPHICS-PIPELINE (C19, C19c, C19d, annexe), E2E-CATALOGUE, État courant.
+- **Non vérifié** : le M1 Max (ses ΔGPU de vol ne valent pas, il bride) ; la sonde `zz-sea-compare` ; une comparaison au pixel près sur
+  image gelée ; le PC Windows ; `bun test` complet (seuls les tests des noyaux). **Suite** : E2 (les reflets dans leur noyau), puis le retrait
+  R1 le 14 ; la borne à 40 sur le M1 Max refroidi.

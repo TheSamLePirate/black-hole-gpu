@@ -93,6 +93,15 @@ export const LITE_OUT_FORMAT: GPUTextureFormat = "rgba32float";
 export function withLiteSplit(trace: string): string {
   const marker = /\/\/ BEGIN_LITE_OUT[\s\S]*?\/\/ END_LITE_OUT/;
   if (!marker.test(trace)) throw new Error("tracer-source: missing shadeLite's output marker");
+  // (the staged water's first step — CHALLENGE-J1-J2 idea 2, Sam's decision of 13 Nov 2026 —: shadeWater's end too, its surface to
+  // liteOut, the pixel marked RASTER_SPLIT_WATER (less a half over half its pixel's water) for the finishing pass run after it)
+  const water = /\/\/ BEGIN_WATER_OUT[\s\S]*?\/\/ END_WATER_OUT/;
+  if (!water.test(trace)) throw new Error("tracer-source: missing shadeWater's output marker");
+  trace = trace.replace(
+    water,
+    () => `moments[idx] = vec2f(select(RASTER_SPLIT_WATER, RASTER_SPLIT_WATER - 0.5, water > 0.5), tM / EARTH_RM * bodyRadius(k));
+  textureStore(liteOut, vec2i(gid.xy), vec4f(G, tM));`,
+  );
   return `@group(1) @binding(${LITE_OUT_BINDING}) var liteOut: texture_storage_2d<${LITE_OUT_FORMAT}, write>;
 ${trace.replace(
   marker,

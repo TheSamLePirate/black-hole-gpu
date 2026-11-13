@@ -413,7 +413,7 @@ export class App {
 
   /** The place's data in — the relief's and the photographs' tiles, the scenery, a world's maps, the horizons' bake — and
    *  the shaders compiled, waited on their progress (`waitProgress`); what never came is said. */
-  async dataSettled(label = "the place's data", o: { stallMs?: number; maxMs?: number } = {}) {
+  async dataSettled(label = "the place's data", o: { stallMs?: number; compileStallMs?: number; maxMs?: number } = {}) {
     return this.waitProgress(
       `(() => { const r = __bh.renderer, t = r.earthTiles, sc = r.earthScenery?.stats?.(); return r.tracerSettled && !r.compilesPending && !(r.compilingNow ?? []).length && !t.pending && !t.orthoPending && !(sc && (sc.status === "loading" || sc.status === "refreshing")) && !r.hdLoadingName; })()`,
       label,

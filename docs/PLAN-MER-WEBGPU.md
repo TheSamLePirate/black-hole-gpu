@@ -279,3 +279,26 @@ d'un noyau déjà au bord ; la passe séparée ne paiera qu'en sortant ce calcul
 ou avec l'allègement général de la passe d'eau (J4). **Même jour, aussi sans gain** : retirer l'ancien déferlement par la profondeur
 (le repli du champ) — plage allumé / compilé hors 72,5 / 69,1 ms, vue basse 61,6 / 59,3 — ; annulé, l'A/B `shoreSwellOn` garde son
 sens.
+
+## 6. L'eau étagée (décision 1 de Sam, 13 novembre 2026)
+
+Origine : [contre-analyse](CHALLENGE-J1-J2-2026-11-13.md) idée 2, [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §24 décision 1 —
+l'eau étagée (surface → éclairage → reflets, le découpage que le sol a reçu) avant la classification de l'écran par tuiles, puis J3.
+**Gain maximal lu dans la fiche** ([J0 de sortie de J2](progress/j0/FICHE-kerr-mini-2026-11-13-sortie.md), règle de méthode 1) : l'eau
+coûte 16,2 ms par image sur kerr-mini, dont `earth water` 12,7 ; sans son matériau −13,0 ms — le lot entier ne peut rendre plus que
+~13 ms, chaque étape plus que la part du code qu'elle sort du noyau.
+
+| Étape | Ce qu'elle sort de `shadeWater` | État |
+|---|---|---|
+| **E1** | la fin : l'air et les nuages (`liteFinish`) — la surface écrite dans `liteOut`, le pixel marqué `RASTER_SPLIT_WATER`, la passe de finition du sol (`shadeLiteFinish`) relancée après l'eau (`earth water: finishing`) | **fait, mesuré** (13 nov.) |
+| E2 | les reflets : le SSR (`seaSSR`) et les nuages lointains reflétés — un enregistrement (direction réfléchie, poids `water·(1−W)·Fv`, reflet du ciel) lu par un noyau de reflets qui ajoute la différence | à faire |
+| E3 | la surface et l'éclairage : pentes, écume, profondeur d'un côté ; Soleil, ciel, corps de l'eau de l'autre | à faire, selon E2 |
+
+**E1, mesuré (A/B entrelacé A B B A sur J0, kerr-mini, 13 nov. ~08:55–09:05 UTC, A = 22c3179a, B = l'arbre ;
+`remote-results/20261113-095521-j0-ab-watersplit`)** : GPU p50 **57,8 / 57,9 → 56,2 / 56,4 ms (−1,55 ms)**, p95 64,1 → 62,25 ms ;
+17,25 → 17,75 images/s. Par passe (moyennes) : `earth water` 12,48 → 10,62 ms, `earth water open` 1,42 → 1,12, la nouvelle
+`earth water: finishing` 0,83 — l'eau en calcul 13,90 → 12,56 ms (−1,34). Un run seul (même arbre, `J0_ORDER=base,water,base`) : l'eau
+par ablation **13,0 → 10,1 ms** (55,0 / 54,8 avec, 44,9 sans — 45,0 ce matin : le reste n'a pas bougé). Les images en vol et en virage
+semblables (vues). Le SSR ne lit plus les pixels d'eau en cours d'écriture (marqués `RASTER_SPLIT_WATER`, écartés par le test général) :
+`seaSsrSafe` devient sans objet, retiré au lot R1 (PLAN-J2 §9 quattuordecies). **Non mesuré** : le M1 Max (bride : ses ΔGPU de vol ne
+valent pas) ; la sonde `zz-sea-compare` (vues de mer seules) ; une comparaison au pixel près sur image gelée.

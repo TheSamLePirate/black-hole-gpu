@@ -2,7 +2,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { $ } from "bun";
 import { App, E2E, stopServer } from "./lib/app";
-import { intervals, J0_FIXED, J0_SCENE } from "./lib/j0-scene";
+import { intervals, J0_FIXED as J0_FIXED_BASE, J0_SCENE } from "./lib/j0-scene";
+
+// (J0_FPSCAP: the frame rate bounded — settings.fpsCap, whole refreshes of the display — for the palier's judgement « borné et soutenu »,
+// Sam's decision of 13 Nov 2026, J0-CONTRAT §2; 0 or unset: as the profile has it)
+const J0_FIXED = process.env.J0_FPSCAP ? J0_FIXED_BASE.replace(/\}\s*$/, `, fpsCap: ${Number(process.env.J0_FPSCAP)} }`) : J0_FIXED_BASE;
 import { sceneryReady } from "./lib/plan-views";
 
 // J0 — the reference flight scene measured (docs/J0-CONTRAT.md; strategy §15 J0, §22.4 D2 Toulon-Hyères, D3 25 ms on the M1
@@ -174,21 +178,27 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
     const place = `__bh.game.setDate("${J0_SCENE.date}"); __bh.game.set("weather", "${J0_SCENE.weather}"); __bh.game.set("earthClouds", ${J0_SCENE.earthClouds});
       __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${spd}); __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();`;
     await app.js(`(() => { __bh.freeze(false); ${place} __bh.freeze(true); return 1; })()`);
-    await app.settled(180_000);
+    // (every wait on its progress, said every 10 s, failing after 60 s without any — Sam's rule, no silent wait of minutes)
+    await app.settled(60_000);
     way.pilotableImage = since();
-    // (the relief in: none pending for 3 s, a z 12 level at least — pending reads 0 just after a jump)
-    const relief = await app.js<{ ok: boolean; finest: number; pending: number }>(`(async () => {
-      const t = __bh.renderer.earthTiles, frame = () => new Promise((q) => requestAnimationFrame(q));
-      const t0 = performance.now(); let calm = 0;
-      while (performance.now() - t0 < 90000) {
-        const ok = t.pending === 0 && t.finest >= 12; calm = ok ? calm || performance.now() : 0;
-        if (calm && performance.now() - calm > 3000) break; __bh.touch(); await frame(); }
-      return { ok: calm > 0, finest: t.finest, pending: t.pending }; })()`);
+    // (the relief in: none pending for 3 s, a z 12 level at least — pending reads 0 just after a jump; 60 s at most, by 10 s
+    // steps each said)
+    let relief = { ok: false, finest: 0, pending: 0 };
+    for (let step = 0; step < 6 && !relief.ok; step++) {
+      relief = await app.js<{ ok: boolean; finest: number; pending: number }>(`(async () => {
+        const t = __bh.renderer.earthTiles, frame = () => new Promise((q) => requestAnimationFrame(q));
+        const t0 = performance.now(); let calm = 0;
+        while (performance.now() - t0 < 10000) {
+          const ok = t.pending === 0 && t.finest >= 12; calm = ok ? calm || performance.now() : 0;
+          if (calm && performance.now() - calm > 3000) return { ok: true, finest: t.finest, pending: t.pending }; __bh.touch(); await frame(); }
+        return { ok: false, finest: t.finest, pending: t.pending }; })()`);
+      if (!relief.ok) console.log(`  … J0: the relief, ${(step + 1) * 10} s — finest z ${relief.finest}, ${relief.pending} pending`);
+    }
     way.reliefIn = since() - 3;
-    if (!relief.ok) console.log(`  J0: the relief not in after 90 s (finest z ${relief.finest}, ${relief.pending} pending) — going on`);
+    if (!relief.ok) console.log(`  J0: the relief not in after 60 s (finest z ${relief.finest}, ${relief.pending} pending) — going on`);
     // (placed again on the relief now in, then everything whole: imagery, scenery, kernels)
     await app.js(`(() => { __bh.freeze(false); ${place} __bh.freeze(true); return 1; })()`);
-    await app.dataSettled("J0 Toulon-Hyères");
+    await app.dataSettled("J0 Toulon-Hyères", { stallMs: 60_000, compileStallMs: 60_000, maxMs: 240_000 });
     const sc = await sceneryReady(app, 60_000);
     if (!sc.ready) console.log(`  J0: the scenery not whole after 60 s (${sc.status})`);
     way.fullDetail = since();
@@ -208,7 +218,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       motionBlur: s.motionBlur, dof: s.dof }; })()`);
     out.adapter = await app.js(`__bh.game.perf({ gpu: false }).graphics`);
     out.userAgent = await app.js(`navigator.userAgent`);
-  }, 600_000);
+  }, 420_000);
 
   afterAll(async () => {
     out.thermalAfter = await thermal();
@@ -227,8 +237,8 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       Object.assign(__bh.renderer, { seaSurfaceOn: true, seaProbeOn: true, seaFoamWorldOn: true, singleHistory: true, earthRateOne: true }); __bh.settings.seaFft = true; __bh.renderer.earthTiles.edgeFoot = true;
       document.body.classList.remove("hide-ui"); Object.assign(__bh.settings, ${J0_FIXED}, ${hud}); __bh.settings.shipMount = "cockpit"; __bh.refresh();
       __bh.camera.viewReset(); ${set} return 1; })()`);
-    await app.settled(120_000);
-    await app.dataSettled("J0: the start's data after the snapshot", { maxMs: 120_000 });
+    await app.settled(60_000);
+    await app.dataSettled("J0: the start's data after the snapshot", { stallMs: 60_000, compileStallMs: 60_000, maxMs: 120_000 });
     const sc = await sceneryReady(app, 60_000);
     if (!sc.ready && !set.includes("earthScenery")) console.log(`  J0: the scenery not whole at the start (${sc.status})`);
     await app.js(`(() => { __bh.freeze(false); return 1; })()`);
