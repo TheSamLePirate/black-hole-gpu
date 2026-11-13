@@ -3044,7 +3044,25 @@ export function gameTools(h: GameHost): Tool[] {
       },
     },
   ];
-  return tools_;
+  return tools_.map(trusted);
+}
+
+/** the tools whose results carry text from outside the game (TA-11): players' names and real traffic (traffic), the
+ *  journal (get_log: toasts with names), OpenStreetMap's places (atlas, place_ship by query), shared missions (mission) */
+const OUTSIDE_TOOLS = new Set(["get_log", "traffic", "atlas", "place_ship", "mission"]);
+/** what cannot be undone or outlives the turn: refused in a turn that read outside text (agent.ts) */
+const GUARDED: Record<string, (a: Args) => boolean> = {
+  saves: (a) => a.action === "delete" || a.action === "load" || a.action === "import",
+  memory: () => true,
+  schedule: () => true,
+  cancel_schedule: () => true,
+  save_skill: () => true,
+  set_settings: (a) => ((a.changes as { key?: unknown }[] | undefined) ?? []).some((c) => /^tars/i.test(String(c.key))),
+};
+function trusted(t: Tool): Tool {
+  const outside = OUTSIDE_TOOLS.has(t.name);
+  const guarded = GUARDED[t.name];
+  return outside || guarded ? { ...t, ...(outside ? { outside } : {}), ...(guarded ? { guarded } : {}) } : t;
 }
 
 /** The hub's graph as a live card's source (the entry's corridor from the entry run when the hub has none). */
