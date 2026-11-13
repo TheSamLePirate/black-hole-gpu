@@ -376,6 +376,14 @@ touchent le même mécanisme** : à faire ensemble, ou J2-6 d'abord.
 *Recommandation* : **3 d'abord**, mesurée par la phase `trail` (la page neuve à > 90 % en 2–4 images, la convergence tenue C0-12 ≤ 1 %
 gardée), puis 1 seulement si une lecture par page devient nécessaire (J2-5, la sélection, les diagnostics). **Question pour Sam.**
 
+## 9 octies. J2-7 : ce qui est déjà chiffré, ce qui attend (13 novembre 2026)
+
+Le coût de `shade` (les restes du raster que le traceur reprend) est déjà dans la [fiche J0 kerr-mini du 12 nov.](progress/j0/FICHE-kerr-mini-2026-11-12.md) :
+`earth shade (raster)` **0,40 ms** ; le matériau du sol `earth lite` 5,4 ms (+ `light` 4,0, `finishing` 0,67). **Non relevés** : la part des
+pixels que `shade` reprend, la cadence d'ombrage que choisit `adaptRasterRate` en vol J0 (les échantillons du vol ne la portent pas), `bodyLite`
+sur la Lune. **Attend kerr-mini** : la cadence se règle sur la charge mesurée, et le M1 Max est en pression thermique « Heavy » depuis le
+12 nov. (même au repos) — une mesure ici dirait sa chauffe, pas le jeu.
+
 ## 10. Non vérifié
 
 - **Aucune mesure nouvelle** : les chiffres cités viennent des fiches J0 du 12 novembre, de la fiche T9 et de GRAPHICS-PIPELINE ; les
