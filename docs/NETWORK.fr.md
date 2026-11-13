@@ -42,6 +42,9 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
   Un arrivant, ou un coupé de retour, reçoit de chacun son état dur à nouveau — un appareil amarré à un autre, un passager, un
   appareil cédé — (marqué `again` : pas de « amarré à vous » dit deux fois) ; avant le 13 nov. 2026 (audit NET-10) il n'était dit
   qu'une fois, et un arrivant voyait libre un appareil amarré. Rôles co-op, défi de salle et scores ne sont pas encore redits.
+  Un lien à moitié mort — aucun pong depuis 6 s — est jugé mort, fermé et retenté (avant le 13 nov. 2026, audit NET-23 : « en
+  ligne » jusqu'à une erreur TCP) ; au-delà de 64 ko en attente sur le WebSocket, nos échantillons relayés sont sautés, pas
+  empilés (la règle des liens directs).
 - Une salle accueille 8 appareils, dont 4 pilotes. Le serveur la garde jusqu'à ce que son propriétaire la
   supprime ; son horloge continue quand personne n'y est.
 - **Réglages › Réseau › Menu Réseau** désactivé : aucune trace du réseau dans le jeu.

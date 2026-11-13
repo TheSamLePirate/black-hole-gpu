@@ -46,6 +46,11 @@ export interface NetOptions {
   ice?: RTCIceServer[];
 }
 
+/** no pong for this long: the link judged dead [ms] (the pings go every 2 s) — NET-23 */
+const DEAD_MS = 6000;
+/** a link with more than this queued: our relayed samples skipped [bytes] (the direct links': 64 000) — NET-23 */
+const PILED_BYTES = 64_000;
+
 export interface Room {
   code: string;
   name: string;
@@ -111,6 +116,8 @@ export class NetClient {
   private listeners = new Map<keyof Events, ((x: never) => void)[]>();
   private pingTimer: ReturnType<typeof setTimeout> | null = null;
   private retry = 0;
+  /** the last pong's time [ms] (0: none awaited) — the dead link's guard */
+  private pongAt = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
   private welcomed: Promise<void> | null = null;
@@ -268,6 +275,17 @@ export class NetClient {
   }
 
   private ping() {
+    // (no pong for DEAD_MS: the link judged dead — half-open, it would stay « online » until a TCP error, the samples piling
+    // up — closed, so tried again; audit NET-23)
+    const link = this.link;
+    if (link?.open && this.pongAt && this.now() - this.pongAt > DEAD_MS) {
+      this.pongAt = 0;
+      link.close();
+      // (its close event may come late on a dead link: lost at once)
+      if (this.link === link) this.lost("dead");
+      return;
+    }
+    if (!this.pongAt) this.pongAt = this.now();
     this.sendMsg({ type: "ping", c: this.now() });
     // (a burst at first — 30 exchanges, settling —, then every 2 s)
     const n = this.clock.count < 30 ? 100 : 2000;
@@ -315,11 +333,14 @@ export class NetClient {
         this.server = { v: m.v, build: m.build, f: Array.isArray(m.f) ? m.f.filter((x) => typeof x === "string").slice(0, 16) : [] };
         this.retry = 0;
         this.setStatus("online");
+        // (a new link: its own pongs awaited, not the last one's)
+        this.pongAt = 0;
         this.ping();
         this.welcome?.ok();
         this.welcome = null;
         return;
       case "pong":
+        this.pongAt = this.now();
         this.clock.onPong(m.c, m.s, this.now());
         return;
       case "roster":
@@ -568,11 +589,14 @@ export class NetClient {
     const reached = this.mesh?.send(buf) ?? new Set<number>();
     const others = this.room.members.filter((m) => m.slot !== this.room!.slot);
     if (reached.size) this.direct++;
-    if (this.link?.open && others.some((m) => !reached.has(m.slot))) {
+    // (relayed only if the link is not piled up — a sample late is a sample stale: skipped, as the direct links' 64 kB rule —
+    // NET-23)
+    const piled = (this.link?.buffered ?? 0) > PILED_BYTES;
+    if (this.link?.open && !piled && others.some((m) => !reached.has(m.slot))) {
       this.link.send(buf);
       this.relayed++;
       this.keptAt = this.now();
-    } else if (this.link?.open && this.now() - this.keptAt > 1000 && s.kind !== 4) {
+    } else if (this.link?.open && !piled && this.now() - this.keptAt > 1000 && s.kind !== 4) {
       // (all reached directly: the server kept up to date all the same — a second apart —, the world's, R7)
       new Uint8Array(buf)[0] = MSG_KEEP;
       this.link.send(buf);

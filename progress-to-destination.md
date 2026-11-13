@@ -5910,3 +5910,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : les rôles co-op, le défi de salle, les scores et abattus (NETMATCH : sa feuille vient des événements) ne sont pas encore redits ;
   un événement émis pendant une coupure reste perdu (pas de file) ; RD5 (lien mort, contre-pression, gros messages) non fait.
 
+## 2026-11-14T10:30Z — Audit NET-23 (RD5) : le lien mort reconnu, le lien engorgé soulagé
+
+- Contribution : §19 (le vol à plusieurs : état « en ligne » vrai, pas de latence qui gonfle) ; audit 2026-11-10, NET-23.
+- Réalisé : `net/client.ts` — garde du pong : aucun pong depuis 6 s (`DEAD_MS`, pings toutes les 2 s), le lien est jugé mort, fermé, la
+  reprise lancée (`lost("dead")`) ; l'horloge du pong remise à zéro à chaque accueil ; un échantillon relayé (et l'échantillon d'entretien)
+  sauté quand plus de 64 ko attendent sur le WebSocket (`PILED_BYTES`, la règle des liens directs) ; `net/transport.ts` — `buffered`
+  (`bufferedAmount`). NETWORK.md/.fr.
+- Preuves : **reproduit avant** — unitaires `net-rooms` « NET-23 » : un serveur qui ne répond plus aux pings laissait le client « online »
+  12 s (jusqu'au bout du test) ; un lien à 500 ko en attente recevait quand même l'échantillon (le premier « avant » de ce second test tombait
+  sur mon échantillon incomplet, refait sur l'ancien code) ; **après** : jugé mort à 6,1 s (online → offline), l'échantillon sauté puis envoyé
+  le lien vidé ; tests réseau verts ; e2e `net-flight`, `net-cut`, `net-rooms` 12/0.
+- Limites : côté serveur, le retour de `send`/`publish` n'est pas encore traité ; NET-19 (canal non fiable pour `wng`/`cs`/`tel`, adressage des
+  instruments) et NET-22 (retour au direct après reconnexion) non faits.
+

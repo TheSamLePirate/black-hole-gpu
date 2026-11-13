@@ -13,6 +13,8 @@ export interface Link {
   readonly open: boolean;
   /** bytes sent and received */
   readonly bytes: { up: number; down: number };
+  /** bytes queued, not yet on the wire (WebSocket.bufferedAmount): a link piled up (NET-23) */
+  readonly buffered?: number;
 }
 
 const size = (m: Payload) => (typeof m === "string" ? m.length : m.byteLength);
@@ -39,6 +41,10 @@ export class WsLink implements Link {
 
   get open() {
     return this.ws.readyState === WebSocket.OPEN;
+  }
+
+  get buffered() {
+    return this.ws.bufferedAmount;
   }
 
   send(m: Payload) {

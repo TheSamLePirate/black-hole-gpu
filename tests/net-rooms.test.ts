@@ -448,3 +448,93 @@ describe("a member cut, not gone (NET-11)", () => {
     }
   }, 30_000);
 });
+
+describe("a half-dead link (NET-23)", () => {
+  test("the server's pongs no longer coming: the link judged dead, closed, tried again — not « online » until a TCP error", async () => {
+    const db = `/tmp/kerr-rooms-net23-${process.pid}.sqlite`;
+    const r = createRooms({ db, build: "test" });
+    // (a server whose answers to pings can be stopped: its other messages pass)
+    let deaf = false;
+    const ws = {
+      ...r.websocket,
+      message: (sock: unknown, msg: string | Buffer) => {
+        if (deaf && typeof msg === "string" && msg.includes('"type":"ping"')) return;
+        return (r.websocket.message as (s: unknown, m: string | Buffer) => unknown)(sock, msg);
+      },
+    };
+    const srv = Bun.serve({ port: 0, fetch: (req, s) => r.upgrade(req, s as never), websocket: ws as never });
+    const a = new NetClient({
+      url: `ws://127.0.0.1:${srv.port}/`,
+      build: "test",
+      id: { device: "net23-a", name: "Ana", colour: "#ff8800" },
+    });
+    const seen: string[] = [];
+    a.on("status", (s: string) => seen.push(s));
+    try {
+      await a.create("Deaf", 0);
+      await until(() => a.clock.count >= 30, 6000);
+      deaf = true;
+      const t0 = Date.now();
+      await until(() => a.status !== "online", 12_000).catch(() => {});
+      const judged = a.status !== "online" ? Date.now() - t0 : -1;
+      console.log(`  pongs stopped: judged dead after ${judged} ms; statuses ${seen.slice(-4).join(" → ")}`);
+      expect(judged).toBeGreaterThan(0);
+      expect(judged).toBeLessThan(10_000);
+    } finally {
+      a.close();
+      r.close();
+      srv.stop(true);
+      await Bun.$`rm -f ${db} ${db}-wal ${db}-shm`.nothrow();
+    }
+  }, 30_000);
+
+  test("a link piled up: our relayed samples skipped, not stacked behind (the direct links' rule, 64 kB)", () => {
+    const sent: number[] = [];
+    const link = {
+      open: true,
+      bytes: { up: 0, down: 0 },
+      buffered: 500_000,
+      onmessage: null,
+      onopen: null,
+      onclose: null,
+      send: (m: ArrayBuffer | string) => void sent.push(typeof m === "string" ? m.length : m.byteLength),
+      close() {},
+    };
+    const c = new NetClient({
+      url: "ws://x/",
+      build: "test",
+      id: { device: "net23-b", name: "B", colour: "#fff" },
+      link: () => link as never,
+      p2p: false,
+    });
+    const C = c as unknown as { link: unknown; room: unknown };
+    C.link = link;
+    C.room = {
+      code: "X",
+      name: "x",
+      slot: 0,
+      role: "pilot",
+      clock: { t0: 0, h0: 0, warp: 1 },
+      members: [{ slot: 0 }, { slot: 1 }],
+      wants: {},
+    };
+    const s = {
+      frame: 0,
+      body: 0,
+      kind: 0,
+      flags: 0,
+      p: [0, 0, 0],
+      v: [0, 0, 0],
+      q: [0, 0, 0, 1],
+      w: [0, 0, 0],
+      a: [0, 0, 0],
+      vis: emptyVisual(),
+      t: 1,
+    };
+    c.sendCraft(s as never);
+    expect(sent).toEqual([]);
+    link.buffered = 0;
+    c.sendCraft(s as never);
+    expect(sent.length).toBe(1);
+  });
+});
