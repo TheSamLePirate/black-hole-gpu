@@ -62,7 +62,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** : lot 1 la persistance (`src/game/persistence.ts`), lot 2 qui tient le vol (`src/game/session.ts`, `__bh.held()`) ; la suite (la boucle d'image) est un gros déplacement : avec la session du rendu |
-| Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | à faire ; son premier lot touche `renderer.ts` (la pose de vue) : à faire avec la session du rendu |
+| Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | en partie : le garde statique des réglages (AR-21) ; `SimState`/`ViewPose` (AR-07) touche `renderer.ts` : avec la session du rendu et l'accord de Sam |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -4812,3 +4812,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   ramasse-miettes 105 / 65 → 53 / 61 ms, fil principal occupé 3 327 / 3 352 → 2 975 / 3 080 ms. Sous Bun : 0,26–0,29 → 0,19–0,20 ms par appel.
 - **Limites :** M1 Max chargé, profil échantillonné ; la cadence du cockpit n'est pas remesurée (le GPU y décide). Le reste du fil principal
   du cockpit est surtout l'encodage du rendu (`encodeShipNow`, renderer : pas à moi).
+
+## 2026-11-13T12:46Z — Audit 4.3 (AR-21) : le contrat de chaque réglage gardé statiquement
+
+- **Contribution à la destination :** §19.12 (des contrats tenables pour les réglages) — la part d'AR-21 qui ne touche pas au rendu.
+- **Réalisé :** `tests/settings-schema.test.ts` — chaque contrôle du schéma a son défaut, un nombre dans ses bornes, un choix parmi ses
+  options, un interrupteur booléen, une couleur #rrggbb ; chaque réglage a sa nature (`SETTING_KIND`). Le français reste vérifié par
+  `i18n.test.ts`. Témoin : un défaut hors bornes et un choix non offert injectés sont vus (2/2).
+- **État mesuré :** aucun écart aujourd'hui (372 contrôles, 388 réglages) — un garde contre la régression, pas une correction.
+- **Reste de 4.3 :** AR-07 (`SimState`, `ViewPose` ; le renderer prenant `ViewPose` plutôt que `Settings`) touche `renderer.ts` — réservé
+  à la session du rendu, attend Sam ; le tri produit / profil / laboratoire d'AR-21, une décision de produit (Sam).
