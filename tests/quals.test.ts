@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { addEphemeris } from "../src/system/de440";
 import { readDeck } from "../src/game/carrier";
 import { putDeck } from "../src/controller/carriers";
 import { type QualId, qualResult, utcHourAt } from "../src/game/quals";
@@ -11,6 +13,12 @@ import { resetFlights } from "./helpers/flight";
 // The carrier qualifications (docs/PLAN-AVIATION-AAA.md, M3; game/quals.ts, controller/quals.ts): four passes graded
 // by the LSO, flown by the autopilot — the F-35C off the catapult and back on the wires, by day, by night and in a
 // heavy sea; the F-35B's vertical recoveries by day —; the grade point average, qualified at 3.0 without a cut.
+
+// (flown with the game's ephemeris, DE440, as the game always has it: the process's, shared by every test file — loaded at the top of
+// multiexposure.test.ts, it changed these passes when that file came first, a heavy sea's pass graded 0 in the full suite, passing
+// alone — 13 Nov 2026; loaded here, the same flight whatever runs before)
+const de440 = readFileSync("assets/ephemeris/de440.bin");
+addEphemeris(de440.buffer.slice(de440.byteOffset, de440.byteOffset + de440.byteLength));
 
 afterEach(() => {
   resetFlights();

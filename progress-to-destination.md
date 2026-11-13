@@ -4979,3 +4979,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `aircraft-save` 1/1, `frame-guard` 2/2 ; le poste de l'A320 vu à Edwards (sonde temporaire : écrans, pose, poste, pare-brise présents,
   aucune étape en échec — capture `remote-results/a320-deck-craftfeed.png` ; Edwards choisi pour ne pas solliciter l'IGN).
 - **Reste de 4.8 :** le gouverneur de résolution (AR-12 piste 3, `governor.ts`) — les leviers du rendu : à la session du rendu.
+
+## 2026-11-13T14:23Z — `quals` (la mer formée) : la fuite trouvée — l'éphéméride DE440 chargée par un autre fichier de test
+
+- **Trouvé :** charger tous les fichiers de test sans exécuter leurs tests (`bun test -t` sur la seule qualification) change déjà son vol
+  (« No grade 1-wire, Fair 1-wire » seule → « No grade 2-wire, OK 2-wire ») : un effet de bord au chargement. **Dichotomie** sur les
+  432 autres fichiers (8 essais, ~40 s chacun) : `tests/multiexposure.test.ts`, qui charge au niveau du fichier l'éphéméride DE440
+  (`addEphemeris`, l. 104–105) — un état de tout le processus : la Lune et le Soleil de DE440 ou des modèles analytiques selon
+  qu'il passe avant ou non ; la qualification en dépend. **Les décisions mises sur `frameNow` à 4.2 n'y sont pour rien** (écartées
+  aussi par quatre essais, entrée précédente).
+- **Réalisé :** `tests/quals.test.ts` vole avec l'éphéméride du jeu (DE440, que le jeu a toujours) chargée par lui-même : le même vol
+  quoi qu'il passe avant. Seul : 5/0 ; tous les fichiers chargés : la mer formée identique (OK 2-wire, OK 1-wire, No grade 2-wire, OK
+  2-wire — 3,50, qualifié), 3/0.
+- **Non vérifié :** la suite complète exécutée (d'autres tests y tournent avant : un autre état partagé reste possible) — à la
+  prochaine suite complète de la session du rendu, ou sur kerr-mini avec l'accord de Sam.
