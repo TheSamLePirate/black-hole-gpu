@@ -1012,7 +1012,8 @@ fn temporal(@builtin(global_invocation_id) gid: vec3u) {
         // (the ground carried with the camera: its history exact — not clamped to this frame's range, which
         // follows the ridges one ray march finds this frame; refined over ~10 frames: steady. Every pixel
         // alike: the ones between rays, taking half as much, lagged the light a quarter behind — a checkerboard)
-        alpha = 0.1;
+        // (J2-6, one long history: the upsampling's — this pass's carried ground at TA.m2.w at least)
+        alpha = max(0.1, TA.m2.w);
         nOut = nPrev;
       } else {
         // (clipped towards the mean, not clamped per channel — Salvi —; far outside the range — a
@@ -1242,7 +1243,8 @@ fn cloudTemporal(@builtin(global_invocation_id) gid: vec3u) {
 // upOut: the image the display shows (the stars splatted over it).
 struct Taau {
   s: vec4f, // x: the native result's weight a frame, y: the samples' kernel σ on water [render px], z: elsewhere, w: the history valid (1)
-  u: vec4u, // x: this frame's stamp, y: the raster's jitter Halton's (1), z: the stars splatted this frame (1), w: unused
+  u: vec4u, // x: this frame's stamp, y: the raster's jitter Halton's (1), z: the stars splatted this frame (1), w: J2-6 — the
+            // upsampling's own least α (an f32's bits) when the native pass keeps a short history, 0 shared (TA.k.z)
 };
 @group(0) @binding(25) var lowTex: texture_2d<f32>;
 @group(0) @binding(26) var upOut: texture_storage_2d<rgba16float, write>;
@@ -1365,7 +1367,9 @@ fn taau(@builtin(global_invocation_id) gid: vec3u) {
   var outc: vec3f;
   var nOut: f32;
   // (the craft's pixels — PLAN-J1 J1-5 —: this frame's half at least, as the native pass)
-  let nMax = 1.0 / max(select(TA.k.z, max(TA.k.z, CRAFT_ALPHA), craft), 1e-3) - 1.0;
+  // (J2-6: the upsampling's own least α when the native pass keeps a short history — TU.u.w, its bits; 0: the native's, shared)
+  let aT = select(TA.k.z, bitcast<f32>(TU.u.w), TU.u.w != 0u);
+  let nMax = 1.0 / max(select(aT, max(aT, CRAFT_ALPHA), craft), 1e-3) - 1.0;
   // (where a moving mesh was the frame before and is not now: disoccluded, no history)
   let pmd = vec2f(textureDimensions(motionPrevTex));
   let left = (mv.z < 0.5 && meshMotionPrev(vec2i(uv * pmd)).z > 0.5) || mv.z > 1.5;

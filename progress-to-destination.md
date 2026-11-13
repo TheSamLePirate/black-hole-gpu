@@ -4013,3 +4013,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   e2e `surface-id` (la vérification rigide) ; BH-API, GRAPHICS-PIPELINE (C6b, annexe et tailles), PLAN-J1, PLAN-J2 §9 octies (c).
 - **Vérifié** : tsc, biome, `check-wgsl` 81/81, `pipeline-inventory --check`, e2e `surface-id` 1/0 (identité 49/49, visibilité p50
   1,33 ms sur le M1 Max). Aucun changement d'image (le levier était éteint). **Non vérifié** : kerr-mini ; `bun test` complet.
+
+## 2026-11-13T03:21Z — J2-6, étape A : un seul historique long derrière un levier — sans conclusion ; la traîne tenue n'est pas le double historique
+
+- **Contribution** (PLAN-J2 J2-6, décision 5 de Sam ; stratégie §7.18 « un seul historique, à la sortie ») : `renderer.singleHistory`
+  (éteint) — la TAAU porte seule l'historique long, le temporel natif un court (α ≥ 0,5). Mesuré (M1 Max « Heavy », un passage par côté) :
+  vue tenue identique à 66 images (48 %) ; vol J0 mitigé (image en mouvement plus proche de l'affinée à l'arrêt, 0,76–0,83 contre
+  0,30–0,65 ; pic au changement d'échelle 0,75 → 0,625 plus fort, +280 % contre +12 %, au retour moindre). **Rien de concluant** ; la note du
+  plan qui attribuait la traîne tenue au double historique est **corrigée** (le chemin de la vue tenue reste à établir).
+- **Changé** : `src/renderer.ts` (`singleHistory`, `singleNativeAlpha`, `nativeAlphaFor`, `TU.u.w`, `TA.m2.w`), `src/shaders/post.wgsl`
+  (le sol porté à `TA.m2.w` au moins ; la TAAU à son propre α) ; e2e `j2-probes` (`J2_EXTRA`), `motion-quality` (`+single`) ; PLAN-J2
+  §9 septies (corrigé) et §9 octies (d), BH-API, GRAPHICS-PIPELINE, E2E-CATALOGUE.
+- **Vérifié** : tsc, biome, `check-wgsl` 81/81, e2e `j2-probes` `trail` ×2 et `flight` ×2 (sans erreur GPU). **Non vérifié** : kerr-mini ;
+  une mesure qui sépare netteté et bruit ; le reste de J2-6.

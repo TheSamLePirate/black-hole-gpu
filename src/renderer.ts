@@ -5668,6 +5668,18 @@ export class Renderer {
    *  Off by default (Sam's decision with its measure) */
   disocclusionOn = false;
   disocclusionTol = 0.03;
+  /** PLAN-J2 J2-6 — one long history (Sam's decision 5): while the temporal upsampling runs, the native temporal pass keeps a short
+   *  one (its least α raised to `singleNativeAlpha`, the carried ground's too) and the upsampling the long one (its least α the one
+   *  the native pass had — TU.u.w); off: both long (the held view's page took > 1 s to show — J2-4, step A). Off by default */
+  singleHistory = false;
+  singleNativeAlpha = 0.5;
+  /** the upsampling's least α this frame when singleHistory splits them (0: theirs shared, TA.k.z) */
+  private taauLongAlpha = 0;
+  private nativeAlphaFor(t: Target, a: number): number {
+    const single = this.singleHistory && this.taauWanted(t);
+    this.taauLongAlpha = single ? a : 0;
+    return single ? Math.max(a, this.singleNativeAlpha) : a;
+  }
   private momentsPrevStandIn: GPUBuffer | null = null;
   /** the frame before's moments the temporal passes read: the target's own copy while the disocclusion is on (the live view),
    *  else a stand-in of one word (post.wgsl disoccluded: none) */
@@ -8065,7 +8077,12 @@ export class Renderer {
         // (held — the camera still, the clock stopped —: its least α down to rasterHeldAlpha, the history averaging ~1/α frames —
         // the jittered quarter-shading's noise floor, ~2 % a pixel frame to frame, converging instead: C0-12's ≤ 1 % frozen; any
         // move or tick gives the third back at once)
-        this.rasterLiteNow ? (held ? this.rasterHeldAlpha : Math.max(this.taParams[0], RASTER_LITE_ALPHA)) : this.taParams[0],
+        // (PLAN-J2 J2-6, one long history — singleHistory, the temporal upsampling running —: this pass's own short, its least α
+        // raised to singleNativeAlpha; the long one the upsampling's alone, its α the one this pass had — TU.u.w)
+        this.nativeAlphaFor(
+          t,
+          this.rasterLiteNow ? (held ? this.rasterHeldAlpha : Math.max(this.taParams[0], RASTER_LITE_ALPHA)) : this.taParams[0],
+        ),
         this.taParams[1],
         // (w: the ground's reach — negative: carried with it, the same pixel)
         ...move,
@@ -8077,7 +8094,16 @@ export class Renderer {
         // (w of the rows: J2-5's disocclusion — m0.w on, m1.w its tolerance —, m2.w unused)
         ...turnRows.flatMap((r, k) => [
           ...r,
-          k === 0 ? (this.disocclusionOn && t === this.live ? 1 : 0) : k === 1 ? this.disocclusionTol : 0,
+          // (m2.w: J2-6's floor of the carried ground's α — 0 off)
+          k === 0
+            ? this.disocclusionOn && t === this.live
+              ? 1
+              : 0
+            : k === 1
+              ? this.disocclusionTol
+              : this.taauLongAlpha > 0
+                ? this.singleNativeAlpha
+                : 0,
         ]),
         // (the motion blur's shutter — over a frame of the usual length: a late frame's move, two or three times longer, smeared
         // the ground for that frame, a blur every second or so; w: the history's albedo beside it — RASTER_DETAIL)
@@ -8271,7 +8297,9 @@ export class Renderer {
     const scale = t.width / W;
     const f = new Float32Array(8);
     f.set([this.taauNative, Math.max(this.taauSigmaWater * scale, 0.3), Math.max(this.taauSigma * scale, 0.3), u.valid ? 1 : 0]);
+    // (u.w: J2-6 — the upsampling's own least α, its float's bits, when the native pass keeps a short history; 0: TA.k.z, shared)
     new Uint32Array(f.buffer).set([this.frameStamp, this.rasterHaltonNow ? 1 : 0, stars ? 1 : 0, 0], 4);
+    if (this.taauLongAlpha > 0) f[7] = this.taauLongAlpha;
     d.queue.writeBuffer(u.buf, 0, f);
     const pass = enc.beginComputePass(this.prof.pass("taau"));
     pass.setPipeline(this.postTaau);

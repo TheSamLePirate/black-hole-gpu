@@ -118,9 +118,10 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
     stopServer();
   });
 
-  /** placed (the clock running: the cockpit mount applied — E2E-VOLS §7), then frozen; the relief in for 3 s; placed again on it */
+  /** placed (the clock running: the cockpit mount applied — E2E-VOLS §7), then frozen; the relief in for 3 s; placed again on it;
+   *  J2_EXTRA (JS) run with the placing — a renderer lever's side of an A/B (J2-6: `__bh.renderer.singleHistory = true;`) */
   async function place(set: string, label: string) {
-    const go = `(async () => { __bh.freeze(false); ${set} __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();
+    const go = `(async () => { __bh.freeze(false); ${set} ${process.env.J2_EXTRA ?? ""} __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();
       for (let i = 0; i < 40; i++) await new Promise((q) => requestAnimationFrame(q)); __bh.freeze(true); return __bh.settings.shipMount; })()`;
     await app.js(go);
     await app.settled(180_000);

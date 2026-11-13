@@ -368,10 +368,11 @@ paramètres des tuiles (`P.tileL`, les fenêtres d'orthophotos) ni la table des 
 
 **Où traîne la page (lu dans `post.wgsl`, 13 nov.)** : en vue tenue, le sol est « porté » (`TA.drift.w` < 0) — le temporel le prend au même
 pixel, **sans écrêtage**, à α 0,1 (seul, une page neuve y passerait à 90 % en ~22 images) ; la TAAU garde ensuite **son propre historique
-long** (n jusqu'à 1/`rasterHeldAlpha` − 1 = 47), écrêté sur le résultat natif à g σ, et c'est elle que lit l'image (et `sceneColor`). La
-traîne mesurée (48 % à 66 images) est donc celle de la **reconstruction tenue** — le double historique que J2-6 doit ramener à un seul —,
-pas celle des pages. La voie 3 se ferait dans le chemin « porté » (un écrêtage à l'échelle du bruit au lieu de rien) ; **J2-4 et J2-6
-touchent le même mécanisme** : à faire ensemble, ou J2-6 d'abord.
+long** (n jusqu'à 1/`rasterHeldAlpha` − 1 = 47), écrêté sur le résultat natif à g σ, et c'est elle que lit l'image (et `sceneColor`). **Corrigé
+le même jour par la mesure** : un historique unique (`singleHistory`, J2-6 étape A ci-dessous — le temporel natif court, la TAAU seule
+longue) ne change pas cette traîne (48 % à 66 images avec ou sans) ; elle n'est donc pas, ou pas seulement, le double historique : le
+chemin exact de la vue tenue (la passation à l'affinage, `encodeHandover`, ou la TAAU écrêtée sur un natif lui-même lent) reste **à
+établir** avant de choisir la voie de J2-4.
 
 *Recommandation* : **3 d'abord**, mesurée par la phase `trail` (la page neuve à > 90 % en 2–4 images, la convergence tenue C0-12 ≤ 1 %
 gardée), puis 1 seulement si une lecture par page devient nécessaire (J2-5, la sélection, les diagnostics). **Question pour Sam.**
@@ -404,6 +405,19 @@ mouvement, la cible de mouvement laissée aux maillages mobiles), les champs `pd
 `surface-id`. Vérifié : tsc, biome, `check-wgsl` 81/81, e2e `surface-id` 1/0 (identité de la passe = celle de l'adaptateur 49/49 ;
 visibilité p50 1,33 ms, M1 Max). Aucun changement d'image (le levier était éteint). Reste à J2-8 : les chemins remplacés par J2-1…J2-7,
 les adaptateurs datés, la fiche J0 de sortie.
+
+## 9 octies (d). J2-6, étape A : un seul historique long, derrière un levier — premières mesures sans conclusion (13 novembre 2026)
+
+**Fait** (`renderer.singleHistory`, **éteint** ; décision 5 de Sam) : quand la TAAU tourne, le temporel natif garde un historique **court**
+(son α minimal relevé à `singleNativeAlpha` = 0,5 ; le sol porté aussi, `TA.m2.w`) et la TAAU seule l'historique **long** (son α minimal
+celui qu'avait le natif, passé dans `TU.u.w` — avant, elle lisait le même `TA.k.z`). Aucune compilation nouvelle (81 / 81).
+**Mesuré** (M1 Max en pression « Heavy », un passage par côté) : vue tenue (`trail`) — les premières images un peu plus vite (13 % du chemin
+à 3 images contre 8 %), **identique à 66 images** (48 %) ; vol J0 (`flight`) — à l'arrêt, l'image en mouvement plus proche de l'affinée
+(rapport 0,76–0,83 contre 0,30–0,65), mais au changement d'échelle forcé 0,75 → 0,625 un **pic plus fort** (+280 % contre +12 %) et au retour
+0,625 → 0,75 un pic moindre (+213 % contre +348 %) ; l'énergie du laplacien compte le bruit (un natif court en ajoute) : **rien de
+concluant**. Temps : 28,1 contre 32,9 ms GPU p50, la chauffe (second passage), pas le levier. **Reste** : J2-6 proprement dit (l'échelle
+par petits pas sans rééchantillonner l'historique de sortie, l'arrêt et la reprise sans saut, l'épingle `want = rasterTop()` retirée) et
+une mesure qui sépare netteté et bruit (PSNR contre une référence à chaque événement), sur kerr-mini.
 
 ## 9 octies. J2-7 : ce qui est déjà chiffré, ce qui attend (13 novembre 2026)
 

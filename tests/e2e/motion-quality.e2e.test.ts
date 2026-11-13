@@ -66,6 +66,8 @@ const EXTRAS: Record<string, [string, string]> = {
   disocc: ["__bh.renderer.disocclusionOn = true;", "__bh.renderer.disocclusionOn = false;"],
   // (its positive control: a tolerance of −10 — nearly every moving pixel taken as uncovered, no history: the lever acts)
   disoccall: ["__bh.renderer.disocclusionOn = true; __bh.renderer.disocclusionTol = -10;", "__bh.renderer.disocclusionTol = 0.03;"],
+  // (PLAN-J2 J2-6: one long history — the native temporal pass's short while the upsampling runs)
+  single: ["__bh.renderer.singleHistory = true;", "__bh.renderer.singleHistory = false;"],
 };
 const modeExtras = (md: string) => {
   const on = new Set(md.split("+").slice(1));
