@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 12:20 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 12:16 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -4705,7 +4705,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   ses autres postes (lectures de layout, allocations par image, prédiction de trajectoire, sondes), non mesurés ici.
 - **Docs :** audit 09 (4.8), E2E-CATALOGUE.
 
-## 2026-11-13T12:20Z — La borne de cadence du M1 Max refaite, machine propre : ~30 images/s soutenues sur J0
+## 2026-11-13T12:16Z — La borne de cadence du M1 Max refaite, machine propre : ~30 images/s soutenues sur J0
 
 - **Contribution** (décision 3 de Sam, palier borné et soutenu ; [J0-CONTRAT §2](docs/J0-CONTRAT.md)). `coreaudiod` relancé (mot de passe de Sam,
   carte sécurisée ; le fichier effacé aussitôt) : de ~160–177 % à 0–4 % de CPU, resté bas pendant les essais.
