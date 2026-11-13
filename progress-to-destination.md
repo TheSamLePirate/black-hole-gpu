@@ -61,7 +61,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
-| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées de la frame (`frame.ts`, AR-03 : douze étapes, avant et après le rendu) ; suivant proposé : l'ordre §19.5 (AR-04), avec la session du rendu |
+| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 pour l'appareil (AR-04 : instruments et poses avant l'encodage, 6,5 → 0,0 ms d'âge) ; restent le gouverneur et les entrées du renderer (leviers du rendu) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait de ce côté** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` produits une fois par image et figés (AR-07, `view-pose.ts`) ; **à la session du rendu** : faire prendre `ViewPose` au renderer (choix de Sam) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
@@ -4884,3 +4884,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites :** restent hors garde le gouverneur de résolution (les leviers du rendu) et les écritures des entrées du renderer avant
   `renderer.frame`. L'ordre §19.5 (AR-04 : instruments et poses avant l'encodage, une image d'âge en moins) change l'ordre du travail
   GPU mesuré par la session du rendu : proposé, à faire avec elle.
+
+## 2026-11-13T13:37Z — Audit 4.8 (lot 5, accord de Sam « par petits lots ») : l'appareil prêt avant l'encodage de son image (AR-04, §19.5)
+
+- **Contribution à la destination :** §19.5 (simulation → données du vol figées → instruments critiques → vue finale → encodage) :
+  les instruments et les gouvernes dessinés avec l'image de leur boucle, pas de la précédente.
+- **Reproduit avant (e2e `instruments-age`, `renderer.frame` enrobé dans la page, en orbite, 3 s, ~360 encodages) :** l'horodatage du tableau
+  de bord (`renderer.cockpitDash.time`, posé avec les écrans, le train, les gouvernes du F-35 et de l'A320, les écrans de l'A320 et les
+  commandes) avait **6,5 ms** d'âge médian à l'encodage (90ᵉ : 8,2 ms ; l'écran à 8,3 ms) : la boucle d'avant.
+- **Réalisé :** le statut de l'appareil (`rangerStatus`, une fonction de `info`) et le bloc de ses poses et instruments (294 lignes, tels
+  quels) déplacés avant `renderer.frame`, dans une étape gardée (« les poses de l'appareil ») ; le HUD de vol (DOM, dessiné avec l'image),
+  les annonces et le son restent après. Aucune dépendance du bloc à une valeur d'après le rendu (vérifié : ni les statistiques du rendu,
+  ni la phase, ni le gouverneur).
+- **Preuves :** après : **0,0 ms** d'âge médian (90ᵉ : 0,1 ms) — 1/1. Non-régression : `f35-body` 2/2, `aircraft-save` 1/1, `frame-guard`
+  2/2, `hidden-tab` 2/2 ; le poste de l'A320 à Paris – Le Bourget vu à l'image (PFD, ND, ECAM, FCU à jour ; aucune étape en échec ; capture
+  `remote-results/a320-deck-ar04.png`).
+- **Coût GPU :** le même travail, dans un autre ordre (les écrans téléversés avant l'encodage au lieu d'après) : non mesuré ici ; à
+  surveiller par la session du rendu sur J0 (un vol sans cabine n'est pas concerné).
+- **Écart à signaler :** mes sondes A320 (trois, sur Paris – Le Bourget) bloquaient l'IGN par `Network.setBlockedURLs`, qui ne couvre pas
+  le Service Worker (cdp.ts le dit : `app.cdp.offline`) — la capture porte le crédit IGN et 528 tuiles de relief : l'IGN a pu être sollicité
+  pendant que la session du rendu en avait l'usage. Les e2e de ce lot en orbite ne touchent pas la Terre proche.
