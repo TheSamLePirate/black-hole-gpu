@@ -81,6 +81,7 @@ const ERRORS: Record<string, () => string> = {
   limit: () => t("Too many rooms: the server's, or those made from here this hour"),
   slow: () => t("Too many wrong passwords: wait half a minute"),
   replaced: () => t("The room was opened in another tab of this browser: this one left it"),
+  rejoin: () => t("Back online, but the room did not take us back (gone, full or its password changed): back to the solo game"),
 };
 const why = (e: unknown) => {
   const code = (e as { code?: string }).code;

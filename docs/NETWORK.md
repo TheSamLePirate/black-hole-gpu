@@ -29,7 +29,9 @@ loaded only then.
   screen; **Your rooms**: the rooms this device knows, joined again in a click, deleted by their owner.
 - **The room's link** (`#join=CODE`): the page opens straight into the game, the room joined.
 - **The badge** beside the target's card: the room's code, its members, the round trip; amber when the
-  link is lost (the game flies on, the link is tried again and the room taken back, the same slot).
+  link is lost (the game flies on, the link is tried again and the room taken back, the same slot). If the room no longer
+  takes us back — deleted, full, its password changed —, we leave it and it is said (« back to the solo game »); before
+  13 Nov 2026 the refusal was swallowed and the player flew on « in the room », alone (audit NET-12).
 - A room holds 8 devices, 4 of them pilots. It is kept on the server until its owner deletes it; its clock
   runs on while nobody is in it.
 - **Settings › Network › Network menu** off: no trace of the network in the game.

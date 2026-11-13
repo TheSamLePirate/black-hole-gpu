@@ -324,3 +324,40 @@ describe("the TURN relay's credentials", () => {
     srv.stop(true);
   });
 });
+
+describe("a reconnection refused (NET-12)", () => {
+  test("the room gone while the link was cut: back out of it, said — not flying on « in the room » alone", async () => {
+    // (a server of its own, on a port kept: stopped, then up again without the room — a room deleted, a server's data lost)
+    const dbA = `/tmp/kerr-rooms-net12a-${process.pid}.sqlite`;
+    const dbB = `/tmp/kerr-rooms-net12b-${process.pid}.sqlite`;
+    let r = createRooms({ db: dbA, build: "test" });
+    let srv = Bun.serve({ port: 0, fetch: (req, s) => r.upgrade(req, s as never), websocket: r.websocket });
+    const port = srv.port;
+    const u = `ws://127.0.0.1:${port}/`;
+    const a = new NetClient({ url: u, build: "test", id: { device: "net12-a", name: "Ana", colour: "#ff8800" } });
+    const b = new NetClient({ url: u, build: "test", id: { device: "net12-b", name: "Ben", colour: "#00ff88" } });
+    const errors: string[] = [];
+    b.on("error", (e: { code: string }) => errors.push(e.code));
+    const { code } = await a.create("Gone", 0);
+    await b.join(code);
+    a.close();
+    r.close();
+    srv.stop(true);
+    await until(() => b.status === "offline");
+    r = createRooms({ db: dbB, build: "test" });
+    srv = Bun.serve({ port, fetch: (req, s) => r.upgrade(req, s as never), websocket: r.websocket });
+    try {
+      // (its retries: 0.5 s, 1 s, 2 s… — the link back within a few seconds; then its rejoin refused: no such room)
+      await until(() => b.status !== "offline", 8000);
+      await Bun.sleep(400);
+      console.log(`  after the reconnection: status ${b.status}, room ${b.room?.code ?? "none"}, said ${JSON.stringify(errors)}`);
+      expect(b.room).toBeNull();
+      expect(errors.length).toBeGreaterThan(0);
+    } finally {
+      b.close();
+      r.close();
+      srv.stop(true);
+      await Bun.$`rm -f ${dbA} ${dbA}-wal ${dbA}-shm ${dbB} ${dbB}-wal ${dbB}-shm`.nothrow();
+    }
+  }, 20_000);
+});

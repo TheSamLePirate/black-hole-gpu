@@ -213,12 +213,32 @@ export class NetClient {
     // (the game flies on: a banner, and the link tried again — 0.5 s, 1 s, 2 s… 10 s)
     this.setStatus("offline");
     const wait = Math.min(10_000, 500 * 2 ** this.retry++);
-    this.retryTimer = setTimeout(() => {
-      this.connect()
-        // (the room taken back, the same slot: the device is the same)
-        .then(() => (this.room ? this.join(this.room.code, this.room.role, this.room.password) : null))
-        .catch(() => {});
-    }, wait);
+    this.retryTimer = setTimeout(() => this.takeBack(), wait);
+  }
+
+  /**
+   * The room taken back after a cut (the same slot: the device is the same). The server out of reach again: tried again
+   * later. The room refusing us — gone, full, its password changed, a newer page — : out of it, said; before 13 Nov 2026 the
+   * refusal was swallowed and the player flew on « in the room », alone and unaware (audit NET-12).
+   */
+  private takeBack() {
+    const r = this.room;
+    if (!r || this.closed) return;
+    this.connect()
+      .then(() => this.join(r.code, r.role, r.password))
+      .catch((e: Error & { code?: string }) => {
+        if (this.closed || this.room !== r) return;
+        if (!e.code || e.message === "offline" || e.message === "timeout") {
+          // (not reached: the link tried again, as before)
+          this.setStatus("offline");
+          const wait = Math.min(10_000, 500 * 2 ** this.retry++);
+          this.retryTimer = setTimeout(() => this.takeBack(), wait);
+          return;
+        }
+        this.setRoom(null);
+        this.setStatus("off");
+        this.emit("error", { code: "rejoin", msg: `The room could not be taken back (${e.code})` });
+      });
   }
 
   /** Leaves the room and closes the link. */

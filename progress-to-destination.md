@@ -5839,3 +5839,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **observé** (kerr-mini, J0 à 3 000 m vers l'ouest à 19:05, `…-waterincident-far`) : aucune couture au bord des anneaux du raster ;
   la bascule incident / géométrique ne touche que des zones localisées. `earthGround` (géométrique) laissé tel quel. PLAN-J3 §10.
 
+## 2026-11-14T06:30Z — Audit NET-12 (RD4, vague 6) : une reprise de salle refusée n'est plus avalée
+
+- Contribution : §19 (le jeu à plusieurs lisible et fiable) ; audit 2026-11-10, NET-12 (PLAN-RESEAU-DURCISSEMENT RD4). RD3 et RD6 attendent les
+  décisions de Sam (§4 : le niveau de défense ; ce qui est commun à la salle).
+- Réalisé : `net/client.ts` `takeBack()` — la salle reprise après une coupure ; le serveur encore injoignable : retenté comme avant ; la salle
+  qui nous refuse (supprimée, pleine, mot de passe changé, page trop vieille) : quittée, `error` « rejoin » émis, dit par le panneau
+  (FR/EN) — avant, `.catch(() => {})` : statut « en ligne », salle posée, rien de dit. `proto.ts` (`rejoin`), `ui/netpanel.ts`, NETWORK.md/.fr.
+- Preuves : **reproduit avant** (unitaire `net-rooms` « NET-12 » : un serveur arrêté puis relancé sans la salle — après la reprise, statut
+  « online », salle posée, rien de dit) ; **après** : statut « off », plus de salle, « rejoin » dit ; tests réseau tous verts (fichier par
+  fichier) ; e2e `net-rooms` 5/5.
+- Limites : le reste de RD4 (l'état servi à l'arrivée et à la reconnexion — amarrages, passagers, scores, rôles, match ; slots stables,
+  NET-13) n'est pas fait ; RD5 non ouvert.
+

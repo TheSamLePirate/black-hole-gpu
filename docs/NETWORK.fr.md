@@ -32,7 +32,8 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
 - **Le lien de la salle** (`#join=CODE`) : la page s'ouvre directement dans le jeu, la salle rejointe.
 - **Le badge** à côté de la carte de la cible : le code de la salle, ses membres, l'aller-retour ; ambre
   quand la liaison est perdue (le jeu continue, la liaison est retentée et la salle reprise, à la même
-  place).
+  place). Si la salle ne nous reprend plus — supprimée, pleine, son mot de passe changé —, on la quitte et c'est dit
+  (« retour au jeu solo ») ; avant le 13 nov. 2026 le refus était avalé et le joueur volait « en salle », seul (audit NET-12).
 - Une salle accueille 8 appareils, dont 4 pilotes. Le serveur la garde jusqu'à ce que son propriétaire la
   supprime ; son horloge continue quand personne n'y est.
 - **Réglages › Réseau › Menu Réseau** désactivé : aucune trace du réseau dans le jeu.

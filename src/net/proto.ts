@@ -102,7 +102,9 @@ export type ErrorCode =
   | "limit"
   | "slow"
   /** (the page's own, not the server's) the room taken by another tab of the same browser — the same device: this one left it */
-  | "replaced";
+  | "replaced"
+  /** (the page's own) the link back after a cut, the room refusing us — gone, full, its password changed: out of it (NET-12) */
+  | "rejoin";
 
 /** a reliable event relayed to the room (a shot, a hit, a spawn…; R1+ fill it in) */
 export interface NetEvent {

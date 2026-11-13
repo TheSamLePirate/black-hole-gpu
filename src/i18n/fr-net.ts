@@ -247,4 +247,6 @@ export default {
   "out of view": "hors de vue",
   "The room was opened in another tab of this browser: this one left it":
     "La salle a été ouverte dans un autre onglet de ce navigateur : celui-ci l'a quittée",
+  "Back online, but the room did not take us back (gone, full or its password changed): back to the solo game":
+    "La liaison est revenue, mais la salle ne nous a pas repris (supprimée, pleine ou son mot de passe changé) : retour au jeu solo",
 } satisfies Record<string, string>;
