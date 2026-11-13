@@ -235,3 +235,58 @@ test("his answer said as he writes it (TA-04): each whole sentence at once, the 
   expect(said2).not.toContain("J'ai visé Mars.");
   expect(said2).toEqual(["Je vise Mars maintenant."]);
 });
+
+test("his tools by context (TA-04): a group not sent explained, loaded by more_tools for the next step and the session; an aircraft's sent at once", async () => {
+  const mk = (name: string) => ({ name, description: name, params: {}, run: () => `${name} done` });
+  const tools = [mk("get_state"), mk("f35"), mk("observe"), mk("room")];
+  const sent: string[][] = [];
+  let plan: { name: string; args: string }[] = [];
+  const model = {
+    complete: async (_m: unknown, fns: { function: { name: string } }[]) => {
+      sent.push(fns.map((f) => f.function.name));
+      const next = plan.shift();
+      return next
+        ? { content: null, tool_calls: [{ id: `c${sent.length}`, type: "function", function: { name: next.name, arguments: next.args } }] }
+        : { content: "Fait." };
+    },
+    chat: async () => null,
+    spent: 0,
+  };
+  let data: MemoryData | null = null;
+  let ctx: ("aircraft" | "sky" | "world")[] = [];
+  const A = new TarsAgent({
+    or: model as never,
+    tools: () => tools as never,
+    memory: new TarsMemory({ get: () => data, set: (d: MemoryData) => void (data = d) } as never),
+    personality: () => ({ humour: 0.6, honesty: 0.9 }) as never,
+    lang: () => "en",
+    flight: () => ({}) as never,
+    say: () => {},
+    onAction: () => {},
+    onBusy: () => {},
+    context: () => ctx,
+  });
+  plan = [
+    { name: "f35", args: "{}" },
+    { name: "more_tools", args: '{"group":"aircraft"}' },
+    { name: "f35", args: "{}" },
+  ];
+  await A.ask("Prepare an F-35 flight.");
+  // first step: the groups' tools not sent
+  expect(sent[0]).toEqual(["get_state", "more_tools"]);
+  const [miss, load, ok] = A.last;
+  expect(miss!.ok).toBe(false);
+  expect(String(miss!.result)).toMatch(/more_tools.*aircraft/);
+  expect(load!.ok).toBe(true);
+  expect(ok!.ok).toBe(true);
+  // after more_tools: the aircraft's sent, in their own order — and still the next turn
+  expect(sent[2]).toEqual(["get_state", "f35", "more_tools"]);
+  sent.length = 0;
+  await A.ask("And now?");
+  expect(sent[0]).toEqual(["get_state", "f35", "more_tools"]);
+  // the game's context: on foot, the world's sent at once
+  ctx = ["world"];
+  sent.length = 0;
+  await A.ask("Where am I?");
+  expect(sent[0]).toEqual(["get_state", "f35", "room", "more_tools"]);
+});

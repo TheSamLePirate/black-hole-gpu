@@ -9,6 +9,7 @@ import { Agent, actionLine, resultShort, type Action, type Tool } from "./agent"
 import { checkArgs } from "./tool-schema";
 import { summaryPrompt, type TarsMemory } from "./memory";
 import { failureLine, type OpenRouter } from "./openrouter";
+import { groupOf, loadedTools, moreTools, type ToolGroup } from "./tool-groups";
 import { systemPrompt } from "./tars-online";
 import { parseOrders } from "./offline-orders";
 import type { Mode } from "./commands";
@@ -28,6 +29,8 @@ export interface TarsAgentDeps {
   onCall?(tool: string, args: Record<string, unknown>): void;
   /** his mode (C3): act, propose before acting, observe only */
   mode?(): Mode;
+  /** the tool groups the game's context asks now (an aircraft flown: "aircraft"; on foot: "world"; the photo mode: "sky") — TA-04 */
+  context?(): ToolGroup[];
   /** an action done, as it ends: what it came back with (short), whether it went, its full line, its tool */
   onAction(result: string, ok: boolean, full: string, tool: string): void;
   onBusy(busy: boolean): void;
@@ -71,7 +74,11 @@ const SHOWING = new Set([
 export function modeTools(tools: Tool[], mode: Mode): Tool[] {
   if (mode === "act") return tools;
   return tools.filter(
-    (t) => READ_TOOLS.has(t.name) || SHOWING.has(t.name) || (mode === "plan" && (t.name === "propose_plan" || t.name === "schedule")),
+    (t) =>
+      READ_TOOLS.has(t.name) ||
+      SHOWING.has(t.name) ||
+      t.name === "more_tools" ||
+      (mode === "plan" && (t.name === "propose_plan" || t.name === "schedule")),
   );
 }
 const MODE_PROMPT: Record<Mode, string> = {
@@ -89,6 +96,8 @@ const STOP = /^\s*(stop|halt|cancel|arr[eê]te|stoppe|annule (le|ce) tour|tais[-
 
 export class TarsAgent {
   private agent: Agent;
+  /** the tool groups sent this session (a group loaded stays: the tools' list, and the provider's cache of it, kept) — TA-04 */
+  readonly groups = new Set<ToolGroup>();
   private ctl: AbortController | null = null;
   busy = false;
   /** the last turn's actions and answer (the tests, the panel) */
@@ -100,9 +109,11 @@ export class TarsAgent {
   constructor(private d: TarsAgentDeps) {
     // (his tools as his mode allows: all when acting; reading, showing, proposing when proposing; reading and
     // showing when observing)
+    // (his tools by context: the groups loaded this session, and more_tools for the others — TA-04)
+    const more = moreTools(this.groups);
     this.agent = new Agent(
       (m, fns, signal, onText) => d.or.complete(m, fns, { signal, onText }),
-      () => modeTools(d.tools(), d.mode?.() ?? "act"),
+      () => modeTools([...loadedTools(d.tools(), this.groups), more], d.mode?.() ?? "act"),
     );
   }
 
@@ -175,6 +186,7 @@ export class TarsAgent {
   }
 
   async ask(q: string, o: { wake?: { left: () => number }; sentence?: (s: string) => void } = {}): Promise<string | null> {
+    for (const g of this.d.context?.() ?? []) this.groups.add(g);
     // (what the question before said as it came: forgotten — kept, the next answer was neither said as it came nor at its end)
     this.spoken = "";
     this.saidStep = -1;
@@ -203,6 +215,13 @@ export class TarsAgent {
           unacted: () => ((this.d.mode?.() ?? "act") === "act" && parseOrders(q).length ? UNACTED : null),
           // (a waking: a few steps, its budget looked at — TA-06 —, and nothing that cannot be undone — Sam, 13 Nov 2026)
           ...(o.wake ? { maxSteps: WAKE_STEPS, canContinue: () => o.wake!.left() > 0, outside: true } : {}),
+          // (a tool of a group not loaded: how to have it)
+          missing: (name: string) => {
+            const g = groupOf(name);
+            return g
+              ? `${name} is in your "${g}" tools, not loaded: call more_tools with group "${g}", then ${name} in your next step`
+              : null;
+          },
           // (his sentences said as they are written — audit TA-04: the first one 0.3–1.4 s before the whole answer)
           ...(o.sentence ? { onText: (soFar: string, step: number) => this.said(soFar, step, o.sentence!) } : {}),
         },

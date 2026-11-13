@@ -1169,6 +1169,15 @@ async function main() {
     or: openRouter,
     mode: () => tarsMode,
     tools: () => tarsTools,
+    // (his tools by context — TA-04: an aircraft flown its own, on foot the world's, the photo mode the sky's; the others by more_tools)
+    context: () => {
+      const m = gameMode();
+      return [
+        ...(isAircraft(settings.vessel) ? (["aircraft"] as const) : []),
+        ...(m === "foot" ? (["world"] as const) : []),
+        ...(m === "photo" ? (["sky"] as const) : []),
+      ];
+    },
     memory: tarsMemory,
     personality: () => tarsPersonality(),
     lang: () => lang,

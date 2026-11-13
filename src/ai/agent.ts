@@ -108,16 +108,26 @@ export class Agent {
       maxSteps?: number;
       /** looked at before each step after the first: false ends the turn ("budget") — a waking's budget (audit TA-06) */
       canContinue?: () => boolean;
-      /** no pilot speaking (a waking): what is guarded refused from the start, as after outside text (Sam, 13 Nov 2026) */
       /** a step's words as they are written (step: its index) — not on a step whose words may be sent back (`unacted`) */
       onText?: (soFar: string, step: number) => void;
+      /** no pilot speaking (a waking): what is guarded refused from the start, as after outside text (Sam, 13 Nov 2026) */
       outside?: boolean;
+      /** a tool asked for that is not in the list sent: how to have it (TA-04: a group not loaded — more_tools), or null */
+      missing?: (name: string) => string | null;
     } = {},
   ): Promise<TurnResult> {
     const signal = o.signal ?? new AbortController().signal;
-    const tools = this.tools();
-    const byName = new Map(tools.map((t) => [t.name, t]));
-    const fns = tools.map(toFunction);
+    // (the tools as they are now — read again at each step: a group loaded by more_tools comes with the next — TA-04)
+    let tools = this.tools();
+    let byName = new Map(tools.map((t) => [t.name, t]));
+    let fns = tools.map(toFunction);
+    const refresh = () => {
+      const now = this.tools();
+      if (now.length === tools.length && now.every((t, i) => t === tools[i])) return;
+      tools = now;
+      byName = new Map(tools.map((t) => [t.name, t]));
+      fns = tools.map(toFunction);
+    };
     const messages: AgentMessage[] = [...context, { role: "user", content: user }];
     const actions: Action[] = [];
     const t0 = this.now();
@@ -130,6 +140,7 @@ export class Agent {
       if (signal.aborted) return { text: null, actions, cut: "stopped" };
       if (this.now() - t0 > MAX_TURN_MS) return { text: null, actions, cut: "time" };
       if (step > 0 && o.canContinue && !o.canContinue()) return { text: null, actions, cut: "budget" };
+      if (step > 0) refresh();
       // (streamed — his words said as they come — unless these words may be sent back as « nothing done »: then not one said)
       const stream = o.onText && !(!actions.length && !nudged && o.unacted?.("·")) ? (t: string) => o.onText!(t, step) : undefined;
       const r = await this.complete(messages, fns, signal, stream);
@@ -158,7 +169,7 @@ export class Agent {
           o.onCall(c.function.name, args);
         }
         const t = byName.get(c.function.name);
-        const a = await this.call(t, c, signal, outside);
+        const a = await this.call(t, c, signal, outside, o.missing);
         actions.push(a);
         o.onAction?.(a);
         const marked = a.ok && t?.outside;
@@ -171,9 +182,15 @@ export class Agent {
     return { text: null, actions, cut: "steps" };
   }
 
-  private async call(t: Tool | undefined, c: ToolCall, signal: AbortSignal, outside = false): Promise<Action> {
+  private async call(
+    t: Tool | undefined,
+    c: ToolCall,
+    signal: AbortSignal,
+    outside = false,
+    missing?: (name: string) => string | null,
+  ): Promise<Action> {
     const name = c.function.name;
-    if (!t) return { tool: name, args: {}, ok: false, result: `no tool named ${name}` };
+    if (!t) return { tool: name, args: {}, ok: false, result: missing?.(name) ?? `no tool named ${name}` };
     const chk = checkArgs(t, c.function.arguments);
     if (!chk.ok) return { tool: name, args: {}, ok: false, result: chk.error };
     if (outside && t.guarded?.(chk.args)) return { tool: name, args: chk.args, ok: false, result: GUARD_REFUSAL };
