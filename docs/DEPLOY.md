@@ -70,9 +70,10 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
 
 ## The dedicated server
 
-- **`deploy/`** — the Dockerfile, the nginx configuration (hashed files cached a year, the page, the Security (audit QA-18, 13 Nov 2026): the page's scripts held by its own `<meta>` Content-Security-Policy in `index.html` (`script-src 'self' 'wasm-unsafe-eval'` and the hashes of its two head scripts — `tests/csp.test.ts` checks them; a change to either script needs its new hash), so on the Pages as here; nginx adds what a meta cannot — `frame-ancestors 'self'` —, `X-Content-Type-Options: nosniff` and `Referrer-Policy` in each location (an `add_header` there drops the server's). The dev server's own small inline beacon is refused by the policy (a console line in development only; its hot reload is a module, allowed).
+- **`deploy/`** — the Dockerfile, the nginx configuration (hashed files cached a year, the page, the
   Service Worker and the JSON files `no-cache`; the KTX2 and manifest types), the compose template
   and `render-compose.sh`, which fills in its two images (the site's, the room server's).
+  Security (audit QA-18, 13 Nov 2026): the page's scripts held by its own `<meta>` Content-Security-Policy in `index.html` (`script-src 'self' 'wasm-unsafe-eval'` and the hashes of its two head scripts — `tests/csp.test.ts` checks them; a change to either script needs its new hash), so on the Pages as here; nginx adds what a meta cannot — `frame-ancestors 'self'` —, `X-Content-Type-Options: nosniff` and `Referrer-Policy` in each location (an `add_header` there drops the server's). The dev server's own small inline beacon is refused by the policy (a console line in development only; its hot reload is a module, allowed).
 - **The `deploy` branch** — written by the CI only, one commit per deployment. It moves only once the
   image is pushed, and each image has its own tag: Portainer never redeploys before the image exists,
   and a new tag is always pulled.
