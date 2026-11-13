@@ -582,6 +582,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   brute en demi-flottants — à ~10⁻¹⁰ la nuit, mille fois sous le plus petit normal : le ciel reflété par la mer y était **nul** ; depuis la mise
   à l'échelle (PROBLEMES ci-dessus, réglé) il est lu. `probeNoStar` écarté (il ne retire que l'astre principal, pas le fond d'étoiles).
   **Reste** : revoir la nuit à Tromsø avec la mise à l'échelle pour décider si la borne `4 × ciel clair` sert encore.
+- **Revu** (~21:01 UTC, phase `seadusk` à Tromsø, `SEADUSK_DATE` 15 déc. 22:00, vue de trois quarts vers l'est, run `…-seadusk-tromso` ; un levier
+  de mesure `TUNE_SEA_NOCLAMP` ôte la borne) : **aucune bande blanche, avec ou sans la borne** ; 143 000 pixels diffèrent de plus de 6 entre
+  les deux vues, sans A/A pour séparer la borne du scintillement des lumières et des étoiles. **Non conclu** : la vue d'origine (les fjords vers
+  l'horizon, l'e2e des aurores AM2) reste à revoir avant de retirer la borne ; le levier reste (0 par défaut) jusque-là.
 
 ## L'aurore de la face nuit invisible quand la caméra est au soleil, dans l'espace
 

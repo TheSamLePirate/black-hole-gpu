@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:54 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 21:01 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5872,4 +5872,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `net-fleet` 6/0.
 - Limites : l'état servi à l'arrivée et à la reconnexion (amarrages, passagers, scores, rôles co-op, match — le cœur de RD4) reste à faire ;
   les droits hérités d'un écran d'équipage (NET-13, dernière phrase) dépendent de RD3 (décision de Sam).
+
+## 2026-11-13T21:01Z — La borne provisoire du ciel reflété la nuit : revue à Tromsø, non conclue
+
+- Réalisé : un levier de mesure `TUNE_SEA_NOCLAMP` (0 par défaut) ; `seadusk` paramétrée (`SEADUSK_DATE`, un cas `noClamp`).
+- Preuves : **observé** (kerr-mini, Tromsø, 15 déc. 22:00) : aucune bande blanche avec ou sans la borne ; sans A/A l'écart de pixels n'est pas
+  attribué. La vue d'origine (les fjords, AM2) reste à revoir avant tout retrait.
 
