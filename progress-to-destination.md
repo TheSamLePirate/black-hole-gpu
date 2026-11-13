@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:35 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:47 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5475,4 +5475,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   fenêtre visible, sonde déjà validée) : premier son 93 / 84 ms (avant ce lot 127–217 ; avant TA-22 508–559), +500 ms injectés → 569 ms ;
   appui bref invisible ; e2e `tars-ear` 3/3 (la phrase entendue, l'essai de l'oreille des réglages) ; tsc, biome.
 - Limites : le repli `ScriptProcessorNode` reste (worklet introuvable) ; l'« audio prêt » (≈ 78 ms) est maintenant surtout l'accès au micro.
+
+## 2026-11-13T17:47Z — J3-5 : le mouillé des bâtiments en boîtes, A/B sous la pluie à Paris
+
+- Réalisé : e2e J0 phase `wetbld` (la pluie, le sol mouillé d'emblée, la ville vue d'en haut, données et décor attendus, exposition tenue) ;
+  A/B `scripts/ab-commit.ts 19a0fc44` + `ab-e2e.ts`, A B B A sur kerr-mini.
+- Preuves : **mesuré** — un premier A/B invalide (côté A pris avant le chargement des bâtiments : la phase attend désormais le décor) ; le
+  second (`…-j3-wetbld-ab2`) : luminance moyenne A 78,75 / 78,29, B 79,26 / 78,22, à exposition égale — **pas d'écart au-delà du bruit**, vues
+  semblables. Le correctif ne touche que les bâtiments en boîtes ; ceux de ce cadre sont vraisemblablement maillés (non vérifié).
+- Limites : l'effet du correctif reste non observé ; un cadre de bâtiments en boîtes (hors des maillages, une ville Overture) le montrerait.
 

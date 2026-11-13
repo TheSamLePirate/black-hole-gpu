@@ -52,7 +52,9 @@ Estimation de l'agent (non mesurée) : à l'écran, ≈ ×0,65 sur les toits en 
 - **Raster et tracé diffèrent** : le raster recale l'albédo du toit sur l'orthophoto (× 0,6–1,5, `trace.wgsl:10402`), le tracé non ; la lumière
   ambiante diffère (`sky × 0,6 × AO` tracé ; `skyOnFace`, renvoi, Lune au raster) ; la pluie et la neige sur les bâtiments au raster seul ; les
   bâtiments en boîtes recevaient au raster le facteur de mouillé du sol (× 0,58) au lieu de celui des bâtiments (× 0,75, `:16030`) —
-  **corrigé le 13 nov. (~17:35 UTC)**, vérifié statiquement seulement (compilation, budget des noyaux), aucune vue sous la pluie ;
+  **corrigé le 13 nov.** ; A/B sous la pluie à Paris (~17:47 UTC, `…-j3-wetbld-ab2`, A B B A, 19a0fc44 contre le correctif, exposition égale) :
+  luminance moyenne A 78,75 / 78,29, B 79,26 / 78,22 — **aucun écart au-delà du bruit, vues semblables** : les bâtiments de ce cadre sont
+  vraisemblablement des maillages (qui avaient déjà × 0,75), le cas des boîtes non vu (non vérifié lesquels sont dessinés en boîtes) ;
   possiblement un GGX du sol en plus sur ces boîtes (`:16139`, **non vérifié**).
 
 ## Ce que J3-5 en fera (proposé)

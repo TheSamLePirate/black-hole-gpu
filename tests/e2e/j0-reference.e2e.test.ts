@@ -32,7 +32,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1), keyhaze (J3-2), shadows (J3-3) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld (J3-5) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -796,6 +796,53 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       expect(row.reliefPct + row.sceneryPct).toBeGreaterThan(0.5);
     },
     900_000,
+  );
+
+  // (PLAN-J3 J3-5 — the buildings wet, J0_PHASES=wetbld (J0_START over a town): the rain set, the ground wet at once (renderer.wetness 1 —
+  // it grows over ~200 s), the town seen from above aside, frozen, the exposure held; a shot (wetbld.png) and the centre's mean luminance —
+  // an A/B between two commits by scripts/ab-e2e.ts: the box buildings' wet factor, 13 Nov)
+  test.skipIf(!PHASES.includes("wetbld"))(
+    "J3-5: the town in the rain — wet ground and buildings, a shot for an A/B",
+    async () => {
+      await start("");
+      const fov0 = await app.js<number>("__bh.settings.fov");
+      await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+        __bh.game.set("weather", "rain"); __bh.settings.wind = 0; __bh.settings.shipMount = "around"; __bh.refresh();
+        for (let i = 0; i < 30; i++) await f();
+        Object.assign(__bh.camera.outside, { yaw: 30, pitch: 35, dist: 120 });
+        Object.assign(__bh.settings, { dof: false, motionBlur: 0, lookProfile: "neutral", dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1 });
+        for (let i = 0; i < 150; i++) { __bh.renderer.wetness = 1; await f(); }
+        __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 40; i++) { __bh.renderer.wetness = 1; await f(); } return 1; })()`);
+      // (the view's data and its buildings in before the shot — run 1 of the A/B, 13 Nov: side A shot with most of the town's
+      // buildings still loading, its mean luminance the scenery's, not the wet's; 90 s at most, said)
+      await app.dataSettled("J3-5: the town's data in the rain", { stallMs: 30_000, compileStallMs: 60_000, maxMs: 90_000 });
+      const sc = await sceneryReady(app, 60_000);
+      if (!sc.ready) console.log(`  J3-5: the scenery not whole at the shot (${sc.status})`);
+      await app.js(
+        `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 40; i++) { __bh.renderer.wetness = 1; await f(); } return 1; })()`,
+      );
+      const st = await app.js<{ wet: number; rain: number }>(`({ wet: __bh.renderer.wetness, rain: __bh.renderer.rain?.rain ?? -1 })`);
+      const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+      const bytes = Buffer.from(x.data, "base64");
+      await Bun.write(`${OUT}/wetbld.png`, bytes);
+      const img = readPng(new Uint8Array(bytes));
+      let t = 0,
+        n = 0;
+      for (let y = Math.floor(0.1 * img.height); y < Math.floor(0.9 * img.height); y++)
+        for (let x0 = 0; x0 < img.width; x0++) {
+          const i = (y * img.width + x0) * img.channels;
+          t += 0.2126 * img.data[i]! + 0.7152 * img.data[i + 1]! + 0.0722 * img.data[i + 2]!;
+          n++;
+        }
+      const row = { ...st, meanLum: +(t / n).toFixed(2), ev: await app.js<number>("+__bh.renderer.ev(__bh.settings).toFixed(3)") };
+      console.log(`  J3-5 the town wet: ${JSON.stringify(row)}`);
+      out.wetbld = row;
+      await app.js(
+        `(() => { __bh.game.set("weather", "${J0_SCENE.weather}"); Object.assign(__bh.settings, { shipMount: "cockpit", fov: ${fov0} }); __bh.freeze(false); return 1; })()`,
+      );
+      expect(st.rain).toBeGreaterThan(0);
+    },
+    600_000,
   );
 
   test.skipIf(!PHASES.includes("sustained"))(
