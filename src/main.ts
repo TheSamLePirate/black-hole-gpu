@@ -7644,6 +7644,8 @@ async function main() {
       panel.setValues(values);
       refreshGui();
     },
+    // (the room by its panel's own actions — TA-17)
+    net: netPanel,
     key: (a, arg) => keyActions[a]?.(new KeyboardEvent("keydown"), arg),
     applyScene: (name) => panel.applyScene(name),
     screenshot: () => savePNG(),

@@ -1074,3 +1074,58 @@ test("the docs say his tools as the code has them: their count, set_craft's craf
   const vessels = (craft.params!.vessel as unknown as { enum: string[] }).enum;
   for (const v of vessels) expect(craft.description).toContain(v);
 });
+
+test("the room through TARS (TA-17): its status, made, joined, left, beside a member and on his wing — the panel's own actions", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const calls: string[] = [];
+  let room: unknown = null;
+  const net = {
+    get net() {
+      return room ? { room } : null;
+    },
+    open: () => calls.push("open"),
+    create: async (name?: string) => {
+      calls.push(`create ${name ?? ""}`);
+      room = {
+        code: "K7Q2",
+        name: name || "Cooper's room",
+        slot: 0,
+        role: "pilot",
+        members: [
+          { slot: 0, name: "Cooper", role: "pilot", device: "d0", colour: "#fff" },
+          { slot: 2, name: "Brand", role: "pilot", device: "d2", colour: "#0f0", away: true },
+        ],
+      };
+    },
+    join: async (code: string, role?: string) => void calls.push(`join ${code} ${role}`),
+    leave: () => {
+      calls.push("leave");
+      room = null;
+    },
+    teleport: (slot: number) => calls.push(`beside ${slot}`),
+    formation: (slot: number, o?: { side?: string }) => calls.push(`wing ${slot} ${o?.side ?? ""}`),
+  };
+  const host = { settings: {}, camera: {}, tools: {}, log: () => [], net } as unknown as GameHost;
+  const tool = gameTools(host).find((t) => t.name === "room")!;
+  expect(tool).toBeDefined();
+  const run = (a: Record<string, unknown>) => tool.run(a, new AbortController().signal);
+  expect(await run({ action: "status" })).toEqual({ inRoom: false });
+  await run({ action: "create", name: "Wing" });
+  const st = (await run({ action: "status" })) as { code: string; members: Record<string, unknown>[] };
+  expect(st.code).toBe("K7Q2");
+  // (the members by name, role and away — never their device)
+  expect(st.members).toEqual([
+    { name: "Cooper", role: "pilot", you: true },
+    { name: "Brand", role: "pilot", away: true },
+  ]);
+  await run({ action: "beside", name: "brand" });
+  await run({ action: "formation", name: "Brand", side: "left" });
+  await expect(run({ action: "beside", name: "Murph" })).rejects.toThrow(/no member/i);
+  await run({ action: "leave" });
+  await run({ action: "join", code: "AB12", role: "spectator" });
+  expect(calls).toEqual(["create Wing", "beside 2", "wing 2 left", "leave", "join AB12 spectator"]);
+  // (the members' names are the room's, not the game's: outside data; joining a room asks the pilot's own words)
+  expect(tool.outside).toBe(true);
+  expect(tool.guarded?.({ action: "join" })).toBe(true);
+  expect(tool.guarded?.({ action: "status" })).toBe(false);
+});
