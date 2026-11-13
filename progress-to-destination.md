@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:17 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:27 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -54,8 +54,9 @@ indirects → J3 (lumière, cockpit).
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
 | Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne |
-| Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | prochain |
-| Audit vagues 3–4 (1feb2f7f) | 3.10, 4.2, 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
+| Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
+| Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | prochain |
+| Audit vagues 3–4 (1feb2f7f) | 4.2, 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -4493,3 +4494,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   non demandé) ; TA-03/TA-10 (outils du pilote automatique et de l'A320) : ligne 3.7, à suivre.
 - **Fichiers** : `src/ai/tars-agent.ts`, `src/ai/openrouter.ts`, `src/ai/offline-orders.ts`, `src/ai/game-tools.ts` (`saves`),
   `src/main.ts` (la cause dite après la réponse hors ligne) ; TARS.md.
+
+## 2026-11-13T09:27Z — Audit 3.7 : TARS pilote l'autopilote des avions et l'A320 par les actions de la console (TA-03, TA-10)
+
+- **Contribution** (stratégie §19.12 : TARS par les mêmes actions métier, états et validations que les autres entrées ; audit
+  ligne 3.7) : `src/controller/jet-ap-acts.ts` — les actions de l'autopilote d'un avion (sélecteurs, AP/A-THR, LNAV/VNAV) en
+  un seul endroit, employées par la console d'équipage (`ap.set`, `ap.engage`, `ap.nav`) et par le nouvel outil TARS
+  `jet_autopilot` ; les volets de `controls` passent par le levier (`setFlaps` : les cinq crans de l'A320, CONF dit) ; et un
+  défaut trouvé en vérifiant : **l'A320 dans `apSet`** — son AP jugé par les maintiens du F-35, toujours vides : chaque
+  demande basculait l'AP1 du FMGC (allumé, puis éteint), et les sélecteurs allaient là où l'A320 ne lit pas — désormais son FCU
+  (pieds, nœuds, cap, tirés en « sélectionné ») et son AP1/A-THR engagés ou coupés comme demandé (`a320FcuSet`).
+- **Reproduit avant correction** (tests unitaires) : `tars-tools` (aucun outil pour les sélecteurs ; `controls {flaps: 0.25}` →
+  0,5), `a320-apset` (l'AP demandé deux fois : éteint).
+- **Vérifié** : A320, équipage, TARS, i18n 187/0 ; e2e `tars-aircraft-tools` 2/2 (ce Mac) : le F-35 tient ALT 2 500 / HDG 090 /
+  SPD 170 réglés par TARS ; l'A320 en CONF 1 (« Flaps 1 »), puis FCU 8 200 ft / 272 kt et AP1 engagé.
+- **Fichiers** : `src/controller/jet-ap-acts.ts`, `src/controller/jet.ts`, `src/controller/a320ap.ts`, `src/ui/crew-exec.ts`,
+  `src/ai/game-tools.ts`, `src/main.ts` (`setFlaps`), `src/i18n/fr-a320.ts` ; TARS.md, catalogue.
+- **Non fait** : le MCDU, le FMGC complet (plan, approche gérée) et les pannes de l'A320 par TARS ; FX-06 (« tout relâcher »
+  par appareil) ; l'agent avec un vrai modèle n'a pas été rejoué (payant, non demandé).

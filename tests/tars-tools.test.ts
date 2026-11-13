@@ -777,3 +777,35 @@ test("saves delete: never at once — the pilot's yes asked for (confirm: true),
   await saves.run({ action: "delete", name: "Mars landing", confirm: true }, signal);
   expect(calls).toEqual(["delete Mars landing"]);
 });
+
+test("the aircraft's autopilot and the A320's flaps: TARS through the crew console's own actions (audit TA-03, TA-10)", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const calls: string[] = [];
+  const cfg: { flaps?: number } = {};
+  const host = {
+    settings: {},
+    camera: {
+      character: { state: () => ({}) },
+      pilot: { auto: "none" },
+      airFlight: { cfg },
+      apSet: (o: Record<string, unknown>) => (calls.push(`apSet ${JSON.stringify(o)}`), "ok"),
+      navSet: (o: Record<string, unknown>) => (calls.push(`navSet ${JSON.stringify(o)}`), "ok"),
+    },
+    tools: {},
+    setFlaps: (pos: number) => (calls.push(`flaps ${pos}`), `Flaps ${pos}`),
+    changed: () => {},
+    log: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host),
+    signal = new AbortController().signal;
+  const ap = tools.find((t) => t.name === "jet_autopilot");
+  // (before: no tool took the selectors — the crew console's ap.set, ap.engage, ap.nav had no TARS twin)
+  expect(ap).toBeDefined();
+  await ap!.run({ alt: 3000, hdgDeg: 90, spd: 160 }, signal);
+  await ap!.run({ ap: true, athr: true }, signal);
+  await ap!.run({ lnav: true }, signal);
+  expect(calls).toEqual([`apSet {"alt":3000,"hdg":${Math.PI / 2},"spd":160}`, 'apSet {"ap":true,"athr":true}', 'navSet {"l":true}']);
+  // (the A320's flaps: CONF 1 is 0.25 — before, rounded to 0.5 and written straight into the aerodynamics)
+  await tools.find((t) => t.name === "controls")!.run({ flaps: 0.25 }, signal);
+  expect(calls.at(-1)).toBe("flaps 0.25");
+});

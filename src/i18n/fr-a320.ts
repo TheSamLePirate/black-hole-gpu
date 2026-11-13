@@ -1,5 +1,8 @@
 // French for the A320 (docs/PLAN-A320.md: src/a320/, its cockpit, its avionics, its systems) — keyed by the English.
 export default {
+  "FCU altitude {0} ft": "FCU : altitude {0} ft",
+  "FCU heading {0}°": "FCU : cap {0}°",
+  "FCU speed {0} kt": "FCU : vitesse {0} kt",
   "The A320 (when another craft is flown): where it was left": "L'A320 (quand un autre engin est piloté) : là où on l'a laissé",
   "The Airbus A320-214: 65 t, an airliner for the Earth's air — chosen, it waits lined up on the nearest runway":
     "L'Airbus A320-214 : 65 t, un avion de ligne pour l'air de la Terre — choisi, il attend aligné sur la piste la plus proche",

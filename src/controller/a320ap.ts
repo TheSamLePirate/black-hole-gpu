@@ -26,6 +26,7 @@ declare module "../controls" {
     a320FmgcOut: FmgcOut | null;
     a320Ils: IlsRunway | null;
     a320ApKey(what: "ap" | "athr" | "nav"): string;
+    a320FcuSet(want: { alt?: number; hdg?: number; spd?: number; ap?: boolean; athr?: boolean }): string;
     a320App: A320App | null;
     a320Approach(W: IlsRunway): string;
     a320ApproachOff(): void;
@@ -150,8 +151,40 @@ function a320ApKey(this: CameraController, what: "ap" | "athr" | "nav"): string 
   return i && !i.onGround && F.ap1 === false && (i.ra ?? 1e9) < 100 ? t("AP1: 100 ft up, 5 s after the lift-off") : t("AP off");
 }
 
+/** The A320's autopilot as the crew console and TARS set it (controller/jet.ts apSet): the FCU's altitude (over the
+ *  sea [m] → feet, by hundreds), heading [rad → °], speed [m/s → kt] — each set and pulled (selected) —; AP1 and the
+ *  A/THR engaged or let go as asked, never toggled blindly. What is said. */
+function a320FcuSet(this: CameraController, want: { alt?: number; hdg?: number; spd?: number; ap?: boolean; athr?: boolean }): string {
+  const F = (this.a320Fmgc ??= new Fmgc());
+  const i = this.a320FmgcIn ?? undefined;
+  const said: string[] = [];
+  if (want.alt !== undefined) {
+    F.alt = Math.min(Math.max(Math.round(want.alt / 0.3048 / 100) * 100, 100), 49_000);
+    F.altPull(i);
+    said.push(tf("FCU altitude {0} ft", F.alt));
+  }
+  if (want.hdg !== undefined) {
+    F.hdgPull(i);
+    F.hdg = Math.round(((((want.hdg * 180) / Math.PI) % 360) + 360) % 360) || 360;
+    said.push(tf("FCU heading {0}°", String(F.hdg).padStart(3, "0")));
+  }
+  if (want.spd !== undefined) {
+    F.spdPull(i);
+    F.spd = Math.min(Math.max(Math.round(want.spd / 0.514444), 100), 399);
+    said.push(tf("FCU speed {0} kt", F.spd));
+  }
+  if (want.ap === true && !F.ap) said.push(this.a320ApKey("ap"));
+  if (want.ap === false && F.ap) {
+    F.apDisc();
+    said.push(t("AP off"));
+  }
+  if (want.athr === true && !F.athr) said.push(this.a320ApKey("athr"));
+  if (want.athr === false && F.athr) said.push(this.a320ApKey("athr"));
+  return said.join(" — ") || t("The autopilot as it was");
+}
+
 export function installA320Ap(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { a320FmgcStep, a320ApKey, a320Approach, a320ApproachOff });
+  Object.assign(C.prototype, { a320FmgcStep, a320ApKey, a320Approach, a320ApproachOff, a320FcuSet });
 }
 void CONF;
 

@@ -3173,6 +3173,24 @@ async function main() {
     camera.pilot.setAuto(a);
     panel.toast(camera.pilot.auto === "none" ? t("Autopilot off") : tf("Autopilot: {0}", AUTO_NAMES[a]));
   }
+  /** The flaps set to a position 0…1 — the A320's lever by its detents (0, 1, 2, 3, FULL: quarters, its CONF said), the
+   *  others' up, half, full —: TARS's and the crew console's way (audit TA-10). What is said. */
+  function setFlaps(pos: number): string {
+    const cfg = camera.airFlight.cfg;
+    let said: string;
+    if (fleet.active === "a320") {
+      const lever = Math.min(Math.max(Math.round(pos * 4), 0), 4);
+      cfg.flaps = lever / 4;
+      const ias = Math.sqrt((2 * (camera.airFlight.last?.out.q ?? 0)) / 1.225) * 1.9438;
+      said = tf("Flaps {0}", CONF[confOf(lever, ias, !!camera.rolling || !!camera.ourLanded)]!.name);
+    } else {
+      const v = pos < 0.25 ? 0 : pos < 0.75 ? 0.5 : 1;
+      cfg.flaps = v;
+      said = v === 0 ? t("Flaps up") : v === 0.5 ? t("Flaps half") : t("Flaps full");
+    }
+    panel.toast(said);
+    return said;
+  }
   /** The landing gear commanded (G, the cockpit's lever, a controller — PLAN-COCKPIT K4b): down or up, but
    *  not up on the ground, not at all on the belly; said when the setting or an autopilot holds it. */
   function setGear(down: boolean) {
@@ -7509,6 +7527,7 @@ async function main() {
     pilotHold,
     autoWhy: (a) => flightHud.autoWhy(a),
     setGear,
+    setFlaps,
     toggleAssist,
     releaseControls,
     setWarp,

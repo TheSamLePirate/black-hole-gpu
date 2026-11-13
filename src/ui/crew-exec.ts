@@ -4,6 +4,7 @@
 // a sender's pace, each order once, its arguments checked against the act's schema and again against the game
 // tool's — then done through the very functions TARS's tools are (called directly: no agent, no model), said in a
 // toast with who asked, and answered to every screen.
+import { apEngage, apNav, apSelect } from "../controller/jet-ap-acts";
 import type { NetClient } from "../net/client";
 import { ACTS, type Act, type CrewAck, CrewGate, type Family, readCrewCmd, sayOf } from "../net/crewcmd";
 import type { Args } from "../ai/tool-schema";
@@ -92,16 +93,10 @@ const RUN: Record<Act, Run> = {
   "nav.procedures": (_a, x) => x.tool("approach", { action: "procedures" }),
   "nav.target": (a, x) => x.tool("set_target", { name: nameOf(a, x) }),
   // (the aircraft's autopilot: its selectors, its modes, its approaches — never the afterburner or the throttle)
-  "ap.set": (a, x) =>
-    x.camera.apSet({
-      ...(a.alt !== undefined ? { alt: Number(a.alt) } : {}),
-      ...(a.hdgDeg !== undefined ? { hdg: (Number(a.hdgDeg) * Math.PI) / 180 } : {}),
-      ...(a.spd !== undefined ? { spd: Number(a.spd) } : {}),
-    }),
-  "ap.engage": (a, x) =>
-    x.camera.apSet({ ...(a.ap !== undefined ? { ap: !!a.ap } : {}), ...(a.athr !== undefined ? { athr: !!a.athr } : {}) }),
-  "ap.nav": (a, x) =>
-    x.camera.navSet({ ...(a.lnav !== undefined ? { l: !!a.lnav } : {}), ...(a.vnav !== undefined ? { v: !!a.vnav } : {}) }),
+  // (the same actions as TARS's jet_autopilot — controller/jet-ap-acts.ts)
+  "ap.set": (a, x) => apSelect(x.camera, a as never),
+  "ap.engage": (a, x) => apEngage(x.camera, a),
+  "ap.nav": (a, x) => apNav(x.camera, a),
   "ap.ils": (a, x) => x.tool("approach", { action: "ils", ...(a.field ? { field: a.field } : {}) }),
   "ap.ilsOff": (_a, x) => x.tool("approach", { action: "off" }),
   "ap.mode": (a, x) => {

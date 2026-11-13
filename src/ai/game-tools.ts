@@ -13,6 +13,7 @@
 // Every result is short, and carries what the game said (its toasts) since the call.
 
 import { ISS_CAMERA_IDS, type IssCameraId } from "../system/iss-cameras";
+import { apEngage, apNav, apSelect } from "../controller/jet-ap-acts";
 import { type Airfield, fieldByCode } from "../world/runways";
 import { runwaySitesNear, siteByName, worldSite } from "../world/fieldsite";
 import { KNOWLEDGE_PAGES, type KnowledgeLang, type KnowledgePage, readKnowledge, searchKnowledge } from "./knowledge";
@@ -93,6 +94,8 @@ export interface GameHost {
   pilotHold(h: Hold): void;
   autoWhy(a: Auto): string;
   setGear(down: boolean): void;
+  /** the flaps to a position 0…1 — the A320's by its detents (CONF 0, 1, 2, 3, FULL), the others' 0, ½, full —, said */
+  setFlaps(pos: number): string;
   toggleAssist(): void;
   releaseControls(): void;
   /** the warp [M/s of scene] through the hub's authority; real time's */
@@ -1140,7 +1143,9 @@ export function gameTools(h: GameHost): Tool[] {
           p.throttle = a.throttle as number;
         }
         if (a.gear !== undefined) h.setGear(a.gear as boolean);
-        if (a.flaps !== undefined) camera.airFlight.cfg.flaps = (a.flaps as number) < 0.25 ? 0 : (a.flaps as number) < 0.75 ? 0.5 : 1;
+        // (by the lever's own action: the A320's five detents, CONF said — audit TA-10: rounded to 0, ½, 1 and written
+        // straight into the aerodynamics, CONF 1 and 3 out of reach)
+        if (a.flaps !== undefined) h.setFlaps(a.flaps as number);
         if (a.airBrake !== undefined) camera.airBrake = a.airBrake ? 1 : 0;
         if (a.sas !== undefined && p.sas !== a.sas) h.key("sas");
         if (a.rollAlign !== undefined && p.rollAlign !== a.rollAlign) h.key("roll");
@@ -1968,6 +1973,28 @@ export function gameTools(h: GameHost): Tool[] {
         if (!a.id) throw new Error("guided/demo/try need a lesson's id (lesson list)");
         if (a.action === "guided") return S.guided(String(a.id));
         return a.action === "demo" ? S.demo(String(a.id)) : S.tryIt(String(a.id));
+      }),
+    },
+    {
+      name: "jet_autopilot",
+      description:
+        "The aircraft's autopilot (F-35, A320), as the cockpit's selectors and the crew console set it: alt (over the sea, m), hdgDeg (true heading, °), spd (through the air, m/s) — those given only —; ap and athr engaged (true) or let go (false); lnav and vnav: the flight plan's guidance. Never the throttle or the afterburner (controls, jet_mode). The A320 flies its own FMGC: for it the selectors are its FCU's.",
+      params: {
+        alt: { type: "number", minimum: -500, maximum: 20000 },
+        hdgDeg: { type: "number", minimum: 0, maximum: 360 },
+        spd: { type: "number", minimum: 0, maximum: 700 },
+        ap: { type: "boolean" },
+        athr: { type: "boolean" },
+        lnav: { type: "boolean" },
+        vnav: { type: "boolean" },
+      },
+      // (the crew console's ap.set, ap.engage, ap.nav — controller/jet-ap-acts.ts: one path, the same units)
+      run: act((a) => {
+        const said: string[] = [];
+        if (a.alt !== undefined || a.hdgDeg !== undefined || a.spd !== undefined) said.push(String(apSelect(camera, a as never) ?? ""));
+        if (a.ap !== undefined || a.athr !== undefined) said.push(String(apEngage(camera, a) ?? ""));
+        if (a.lnav !== undefined || a.vnav !== undefined) said.push(String(apNav(camera, a) ?? ""));
+        return said.filter(Boolean).join("; ") || "nothing asked";
       }),
     },
     {

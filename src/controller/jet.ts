@@ -66,6 +66,9 @@ function jetReady(c: CameraController) {
  * LNAV, as the stick does. Never the throttle, never the afterburner. What was done.
  */
 function apSet(this: CameraController, want: { alt?: number; hdg?: number; spd?: number; ap?: boolean; athr?: boolean }): string {
+  // (the A320's: its FCU and its FMGC's AP and A/THR, read as they are — controller/a320ap.ts; audit TA-03: judged by the
+  // F-35's holds, always empty here, every ask toggled its AP1)
+  if (fleet.active === "a320") return this.a320FcuSet(want);
   if (!jetReady(this)) return t("The jet's systems: in plane mode (F)");
   const m = this.jetModes;
   const N = this.nav;
