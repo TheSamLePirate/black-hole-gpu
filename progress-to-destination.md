@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:01 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:16 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5532,4 +5532,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   avec la table aérienne. Docs : PLAN-J3 §10, GRAPHICS-PIPELINE E12a.
 - Preuves : run `…-j3-keyhaze6` (kerr-mini) : mesures reproduites, 0 erreur WebGPU ; `check-wgsl` 82/82. Non vérifié : les modes 2 et 3 du verre
   (non dessinés), la verrière lointaine à l'image (trop petite pour la juger).
+
+## 2026-11-13T18:16Z — J3-5 : un essai d'albédo des bâtiments, sans effet à l'image en France
+
+- Réalisé : un levier d'essai (tuiles × 2,5, brique × 1,5 dans `buildingLook`) et une phase J0 `materials`, sur Lille vue d'en haut — puis
+  **retirés** (aucun effet, aucun utilisateur) ; le constat écrit dans l'inventaire des matériaux et PLAN-J3 §10.
+- Preuves : **mesuré** (kerr-mini, `…-j3-materials2`) : luminance moyenne 73,31 / 73,05 (essai) / 73,27, vues identiques. Le premier run a
+  échoué sur l'attente des données (l'appareil volant pendant l'attente : figé ensuite).
+- Lecture : de près au raster, les toits en France prennent la photo ; les tables d'albédo ne comptent qu'au tracé, au loin, à l'étranger.
+- Suite : les vues de référence de J3-5 là où les tables comptent (une ville étrangère, des murs à hauteur d'homme).
 

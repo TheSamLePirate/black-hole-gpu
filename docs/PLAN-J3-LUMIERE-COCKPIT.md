@@ -214,4 +214,7 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   spéculaire éteint au-delà de ~26 cm le pixel, les tuiles du nord (Y ≈ 0,10) et la brique (≈ 0,145) sombres face aux valeurs mesurées, le verre
   des murs-rideaux à F0 0,10 ; raster et tracé divergent (recalage photo, ambiante, mouillé). Proposé : vues de référence et témoin, albédos et
   métaux physiques, le reflet dans la sonde de J3-1, une fonction pour les deux chemins — **rien de fait**, chaque point à juger en A/B.
+  **Essai (~18:16 UTC)** : tuiles × 2,5 et brique × 1,5 sur Lille vue d'en haut — **aucun changement à l'image** (73,31 / 73,05 / 73,27) : de près au
+  raster, les toits viennent de l'orthophoto. Les tables ne comptent qu'où la photo ne colore pas (tracé, lointain, étranger) : les vues de
+  référence de J3-5 se feront là. Levier retiré.
 

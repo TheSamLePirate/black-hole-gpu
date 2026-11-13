@@ -57,9 +57,20 @@ Estimation de l'agent (non mesurée) : à l'écran, ≈ ×0,65 sur les toits en 
   vraisemblablement des maillages (qui avaient déjà × 0,75), le cas des boîtes non vu (non vérifié lesquels sont dessinés en boîtes) ;
   possiblement un GGX du sol en plus sur ces boîtes (`:16139`, **non vérifié**).
 
+## Un essai : ce que voit le joueur en France (13 nov., ~18:16 UTC)
+
+Un levier d'essai (non gardé) multipliait dans `buildingLook` l'albédo des tuiles (× 2,5) et de la brique (× 1,5) ; vue d'en haut de Lille
+(tuiles et briques), monde figé, exposition tenue, données et décor chargés (kerr-mini, `…-j3-materials2`) : luminance moyenne 73,31 telle
+qu'aujourd'hui, **73,05 avec l'essai**, 73,27 de nouveau — **les vues identiques au pixel près**. Les bâtiments vus là ne prennent pas leur
+couleur des tables : de près au raster, les toits viennent de l'orthophoto (bâtiments maillés, ou l'albédo recalé sur la photo) ; les murs
+comptent peu vus d'en haut. **Les albédos sombres des tables ne pèsent donc, en France, que là où la photo ne colore pas** : le rendu tracé,
+le lointain sans maillage, l'étranger (Overture, sans orthophoto nationale). Le levier et sa phase ont été retirés (aucun utilisateur).
+Non vérifié : une vue rasante (murs), une ville étrangère, quels bâtiments du cadre étaient maillés.
+
 ## Ce que J3-5 en fera (proposé)
 
-1. Des vues de référence (Paris au Soleil, une ville du nord à tuiles) et un témoin : un matériau de luminance connue posé dans la scène.
+1. Des vues de référence **là où les tables comptent** (une ville étrangère sans orthophoto, des murs vus à hauteur d'homme, le tracé) et un
+   témoin : un matériau de luminance connue posé dans la scène.
 2. Les albédos ramenés aux valeurs mesurées (tuiles du nord, brique, bois), un vrai métal (zinc, tôle : F0 coloré, diffus nul, une rugosité),
    le verre à F0 0,04, le reflet dans la sonde commune de J3-1 plutôt qu'une irradiance plate, sans extinction au loin (une rugosité qui croît
    avec l'empreinte du pixel plutôt qu'un F0 qui tombe à 0).
