@@ -12,6 +12,7 @@ import {
   trailJs,
   trailSigJs,
   stageSigJs,
+  noiseJs,
   LEAK_VIEWS,
   leakCompareJs,
   SEAM_JS,
@@ -191,6 +192,14 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
           // shading — adaptRasterRate's choice, by the device's load)
           row[`rasterRate_${mode}`] = await app.js<number>(`__bh.renderer.rasterRate`);
           await app.js(keepSceneJs("a"));
+          // (the held view's noise: the same settled view 8 images later, no touch)
+          if (mode === "held") {
+            await app.js(
+              `(async () => { const R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q)), n0 = R.completedFrames; let n = 0; while (R.completedFrames - n0 < 8 && n++ < 300) await f(); return 1; })()`,
+            );
+            await app.js(keepSceneJs("a8"));
+            row.noise_held = await app.js(noiseJs("a", "a8"));
+          }
           // (J2_STAGES=1: the same way read at each stage of the reconstruction — where the change waits)
           const STAGES = process.env.J2_STAGES === "1";
           if (STAGES) {

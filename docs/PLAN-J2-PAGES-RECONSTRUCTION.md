@@ -376,7 +376,12 @@ tenue raster la phase reste « realtime » (pas de passation à l'affinage), et 
 images, 37 % à 66 —, la TAAU le suivant (11 %, 47 %) ; ni la cadence d'ombrage (1 ou 2 : 51 % contre 48 % à 66 images) ni le posemètre
 (exposition fixe) n'y sont pour quelque chose. Le mécanisme : vue tenue, α minimal `rasterHeldAlpha` (1/48) et une boîte d'écrêtage (g σ
 du voisinage) **élargie par le bruit de l'ombrage partiel** — la nouvelle page y tient, elle n'est que moyennée, plus lentement encore pour
-les pixels reconstruits (leur poids `TA.k.w`). Pour J2-4 : la voie 3 (un écrêtage à l'échelle du bruit) vise exactement ce point ; une
+les pixels reconstruits (leur poids `TA.k.w`). **Essayé et retiré le même jour** : la boîte d'écrêtage
+prise sur les seuls échantillons frais à toute cadence partielle (levier `heldFreshBox`, A/B : 33,4 contre 33,6 % du chemin à 66 images pour
+l'historique natif, bruit tenu 0,41 → 0,48 %) — **sans effet**, et pour cause : `carryGround` étant vrai, le sol d'une vue tenue prend le
+chemin « porté » (α 0,1, **sans écrêtage**), que la boîte ne touche pas ; et ce chemin seul ferait 27 % à 3 images, pas 6–13 % : **le
+mécanisme exact reste ouvert** (l'entrée du temporel elle-même — l'ombrage partiel, les pixels reconstruits — à relire en valeurs brutes).
+Pour J2-4 : la voie 3 (un écrêtage à l'échelle du bruit) ne suffirait donc pas telle quelle ; une
 voie plus simple encore — rendre au temporel tenu son α de vol (`RASTER_LITE_ALPHA`) quelques images après une publication de pages — le
 ferait en entier, mais globalement (une bouffée de bruit d'une seconde sur toute l'image tenue).
 

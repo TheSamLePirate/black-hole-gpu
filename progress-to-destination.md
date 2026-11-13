@@ -4036,3 +4036,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   partiel — la nouvelle page n'est que moyennée. PLAN-J2 §9 septies corrigé.
 - **Changé** : `tests/e2e/lib/j2-probes.ts` (`stageSigJs`), `tests/e2e/j2-probes.e2e.test.ts` (`J2_STAGES`, la cadence relevée) ; PLAN-J2.
 - **Mesuré** : M1 Max, trois passages de `trail` (1/0). **Non vérifié** : kerr-mini ; en vol (la sonde ne s'y prête pas).
+
+## 2026-11-13T03:39Z — J2-4 : un écrêtage sur les échantillons frais essayé en vue tenue — sans effet, retiré
+
+- **Contribution** (PLAN-J2 J2-4, voie 3) : levier `heldFreshBox` (la boîte de l'historique prise sur les seuls échantillons frais à toute
+  cadence partielle) mesuré en A/B (`trail`, `J2_STAGES=1`, M1 Max) : historique natif 33,4 contre 33,6 % du chemin à 66 images, bruit tenu
+  0,41 → 0,48 % — **sans effet** ; **retiré** (aucune option sans gain). Raison lue dans le code : en vue tenue le sol est « porté »
+  (`carryGround`, α 0,1, sans écrêtage). Mais ce chemin seul irait plus vite que la traîne mesurée : le mécanisme reste ouvert (PLAN-J2
+  §9 septies).
+- **Changé** : e2e `j2-probes` (`noiseJs` : le bruit d'une vue tenue, deux lectures à 8 images ; mesuré dans `trail`) ; PLAN-J2 ;
+  `src/renderer.ts` un commentaire. **Non vérifié** : kerr-mini.

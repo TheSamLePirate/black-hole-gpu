@@ -424,3 +424,17 @@ export const stageSigJs = (name: string) => `(async () => {
   }
   globalThis.__j2sig ??= {}; globalThis.__j2sig[${JSON.stringify(name)}] = out;
   return out; })()`;
+
+/** J2-4 — in the page: the held view's noise, two kept reads of the same settled view apart: their mean |ΔL| / L over the pixels drawn
+ *  and under twice the mid-grey (C0-12: ≤ 1 % frozen), and the share over 2 % */
+export const noiseJs = (a: string, b: string) => `(() => {
+  const A = globalThis.__j2[${JSON.stringify(a)}], B = globalThis.__j2[${JSON.stringify(b)}];
+  if (!A || !B || A.width !== B.width || A.height !== B.height) return { error: "sizes differ or a read is missing" };
+  let s = 0, n = 0, over = 0;
+  for (let i = 0; i < A.data.length; i += 4) {
+    const la = A.exposure * (0.2126 * A.data[i] + 0.7152 * A.data[i + 1] + 0.0722 * A.data[i + 2]);
+    const lb = B.exposure * (0.2126 * B.data[i] + 0.7152 * B.data[i + 1] + 0.0722 * B.data[i + 2]);
+    if (!(la > 0.005) || la > 2 || lb > 2) continue;
+    const r = Math.abs(lb - la) / la; s += r; n++; if (r > 0.02) over++;
+  }
+  return { pixels: n, mean: +(s / Math.max(n, 1)).toFixed(5), over2: +(over / Math.max(n, 1)).toFixed(4) }; })()`;

@@ -8091,10 +8091,9 @@ export class Renderer {
         ...(rigid ? near!.centre.map((c) => c * near!.radius) : [0, 0, 0]),
         rigid ? 1 : 0,
         // (its turn between the frames: an offset from its centre now → then, Σ a_prev[i] (a_now[i] · v))
-        // (w of the rows: J2-5's disocclusion — m0.w on, m1.w its tolerance —, m2.w unused)
+        // (w of the rows: m0.w J2-5's disocclusion on (1), m1.w its tolerance, m2.w J2-6's floor of the carried ground's α — 0 off)
         ...turnRows.flatMap((r, k) => [
           ...r,
-          // (m2.w: J2-6's floor of the carried ground's α — 0 off)
           k === 0
             ? this.disocclusionOn && t === this.live
               ? 1
