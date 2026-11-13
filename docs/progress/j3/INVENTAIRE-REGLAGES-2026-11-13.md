@@ -33,7 +33,7 @@ la réponse Film/ISS.
 
 1. Fixer, avec Sam, ce qui compte comme « compensation » (le mélange de la médiane est un choix de rendu, pas une compensation).
 2. Mesurer, à cadrages fixes de la scène J3, l'effet de chacun des six premiers (la sonde de cohérence appareil / sol, témoins d'abord).
-3. ~~Un point non tranché : l'appareil entre-t-il dans le mètre d'exposition ?~~ — **mesuré (13 nov. ~15:08 UTC, kerr-mini, phase `framing`,
+3. ~~Un point non tranché : l'appareil entre-t-il dans le mètre d'exposition ?~~ — **mesuré (13 nov. ~15:05 UTC, kerr-mini, phase `framing`,
    `remote-results/…-j3-meter`)** : de trois quarts, l'appareil sur ~un tiers du champ, dessiné puis caché (`debugSkipShip`), profil Caméra
    (celui dont le mètre lit l'image) : **14,638 contre 14,639 EV** — l'appareil **n'entre pas** dans le mètre (sa scène est lue sans lui). La
    mesure par cadrage reproduite (chase +0,051, quarter +0,121 EV ; A/A 0,022 ; témoin +0,999).
