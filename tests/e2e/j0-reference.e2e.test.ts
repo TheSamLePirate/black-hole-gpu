@@ -31,8 +31,8 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight (J3-1: the craft's key light against the incident Sun toward
-// sunset, ~3 min on kerr-mini).
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair (J3-1: the craft's key light against the incident Sun toward
+// sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~6 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
 // Duration: ~10 min here (cold boot ~1–2 min, two flights of 70 s, 7 ablation flights ~40 s each).
@@ -500,6 +500,67 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       for (const r of lifted) expect(Math.abs(r.onVsOff - r.lift!)).toBeLessThan(Math.max(0.05, 3 * r.aa));
     },
     600_000,
+  );
+
+  // (PLAN-J3 J3-1 — the key light's air, J0_PHASES=keyair: the craft's key light through the air two ways at the camera — the march along
+  // its ray (earthLookNoGround, the one lighting the craft) and the ground's transmittance table (sunThrough) —, read back the same frame
+  // (readShipKey().air) from a high Sun to sunset: their ratio. Controls (method rule 3): the ratio read twice (the A/A — the march alone
+  // moves between reads, the craft flying on), and the march made coarse on purpose (TUNE_AIR_N 4 for 32, a kernel variant: compiled,
+  // then settled — after a first tune to warm, see below): the ratio must move. A lever lighting the craft by the table (TUNE_KEY_AIR),
+  // tried on 13 Nov, was the session's first tune — its readings stuck (below) — and, the two models within 0.2 %, removed)
+  test.skipIf(!PHASES.includes("keyair"))(
+    "J3-1: the key light's air — the march against the ground's table, high Sun to sunset; A/A and a coarse march",
+    async () => {
+      await start("");
+      type Air = { march: number; table: number; cloud: number; h: number } | null;
+      const tune = async (t: string) => {
+        await app.js(`(() => { __bh.renderer.tune = ${t}; return 1; })()`);
+        await app.settled(120_000);
+      };
+      const read = async (utc: string) =>
+        app.js<{ e: number; air: Air }>(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q));
+          __bh.freeze(false); __bh.game.setDate("2026-07-10T${utc}:00Z"); __bh.refresh(); for (let i = 0; i < 30; i++) await f();
+          __bh.freeze(true); for (let i = 0; i < 10; i++) await f();
+          const k = await __bh.renderer.readShipKey(); return { e: k.e, air: k.air }; })()`);
+      const p = (x: number | undefined) => (x === undefined ? null : +x.toPrecision(4));
+      const ratio = (a: { air: Air }) => (a.air ? a.air.march / a.air.table : Number.NaN);
+      const times = ["15:30", "18:30", "18:50", "19:05", "19:15"];
+      const rows: Record<string, Record<string, number | null>> = {};
+      for (const utc of times) {
+        const a = await read(utc);
+        const again = await read(utc);
+        rows[utc] = {
+          march: p(a.air?.march),
+          table: p(a.air?.table),
+          ratio: p(ratio(a)),
+          ratioAgain: p(ratio(again)),
+          cloud: p(a.air?.cloud),
+          h: p(a.air?.h),
+          e: p(a.e),
+        };
+      }
+      // (the first tune after the start leaves the craft's probe as it was — its readings those of the frame before, whatever the tune:
+      // seen twice on 13 Nov, the cause not found — PROBLEMES-A-REGLER —: a first tune taken to warm, its reading kept to say whether it moved)
+      await tune("{ TUNE_AIR_N: 8 }");
+      const warm = await read("19:05");
+      // (stuck: read at 19:05, its table not the 19:05 one — run 3 of 13 Nov: 0.0040, the 19:15 Sun's, for 0.0468)
+      const at1905 = rows["19:05"]!.table!;
+      const stuck = Math.abs((warm.air?.table ?? 0) - at1905) > 0.05 * at1905;
+      console.log(
+        `  J3-1 key air: the first tune's reading ${stuck ? "STUCK (not the 19:05 Sun's)" : "fresh"} — ${JSON.stringify(warm.air)}`,
+      );
+      out.keyairFirstTuneStuck = stuck;
+      await tune("{ TUNE_AIR_N: 4 }");
+      for (const utc of ["15:30", "19:05"]) rows[utc]!.ratioCoarse = p(ratio(await read(utc)));
+      await tune("{}");
+      for (const utc of times) console.log(`  J3-1 key air ${utc} UTC: ${JSON.stringify(rows[utc])}`);
+      out.keyair = rows;
+      await app.js(`(() => { __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`);
+      // (the A/A: the ratio read twice within 0.3 %; the positive: the coarse march moves it by more than 1 % somewhere)
+      for (const utc of times) expect(Math.abs(rows[utc]!.ratio! - rows[utc]!.ratioAgain!)).toBeLessThan(3e-3);
+      expect(["15:30", "19:05"].some((u) => Math.abs(rows[u]!.ratioCoarse! - rows[u]!.ratio!) > 0.01)).toBe(true);
+    },
+    900_000,
   );
 
   test.skipIf(!PHASES.includes("sustained"))(

@@ -140,11 +140,14 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   exactement du relèvement du CPU (0,036 → 1,000°, écart ≤ 0,0002°, A/A ≤ 0,0002°) ; son éclairement ×1,00 (18:30), ×1,68 (19:05), **×193**
   (19:15 : le sol encore éclairé, l'appareil presque éteint avant). À contre-jour (vue de trois quarts, 19:05) la différence ne se voit pas.
   **Non mesuré** : ΔGPU (un texel, un fil par image : attendu nul, non vérifié), une vue de face au Soleil bas.
-  **Divergence relevée, prochain pas** (lecture du code, non mesurée) : l'**éclairement** du Soleil suit encore deux modèles — le sol
-  `sunThrough(h, μ)` (la table de transmittance de Bruneton, Q5 C1 : la marche de Chapman en laissait passer 10–35 % de trop entre 1 et 10°),
-  l'appareil la marche de `earthLookNoGround` (48 pas le long du rayon vers le Soleil, nuages retirés quand la carte des nuages est lue).
-  À faire : une sonde (témoins de la règle 3) qui lit les deux au point de la caméra vers le coucher, puis l'appareil sur `sunThrough` si
-  l'écart le justifie (aussi moins cher : une lecture de table au lieu de 48 pas). Les 32 bits de `TUNE_GSKIP` sont pris : la sonde passe
-  par un autre levier.
+  **L'éclairement : un écart supposé, mesuré nul** (13 nov., ~16:40 UTC). À la lecture du code, le Soleil traversait l'air par deux modèles —
+  le sol `sunThrough(h, μ)` (la table de Bruneton), l'appareil la marche de `earthLookNoGround` le long de son rayon. Une sonde les écrit
+  côte à côte à chaque image (`keyLight` → `ship.envBuf` +2/+3, `renderer.readShipKey().air`), e2e J0 `J0_PHASES=keyair` (kerr-mini, J0 à
+  ~540 m, runs `…-j3-keyair`, `-keyair2`, `-keyair3`) : de 15:30 à 19:15 UTC (transmittance 0,80 → 0,004), **rapport marche / table 0,998
+  à 1,002**. Témoins (run 3) : le rapport relu à ≤ 0,1 % (A/A) ; la marche rendue grossière exprès (`TUNE_AIR_N` 4 pour 32) le porte à 1,039
+  (15:30) et 1,254 (19:05) (positif). **Rien à changer** : l'appareil garde sa marche (gain maximal nul — un fil par image —, écart de modèle
+  invisible). Un levier qui éclairait l'appareil par la table (`TUNE_KEY_AIR`) a été essayé puis retiré : il était le premier `tune` de la
+  session, dont les relevés restent à l'heure d'avant (défaut de l'outil trouvé par le témoin positif, [PROBLEMES](PROBLEMES-A-REGLER.md)),
+  et il n'avait plus d'utilité.
   **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
   ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.

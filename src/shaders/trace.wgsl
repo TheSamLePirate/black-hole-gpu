@@ -17299,9 +17299,16 @@ fn keyLight() {
     // dimming from the look along the ray with no cloud — CLOUDS_BUFFERED: none —; the map's shell beyond it)
     let csT = select(-1.0, cloudShadowAt(nearCam()), isEarth(kn) && (TUNE_GSKIP & 8192u) == 0u);
     if (csT >= 0.0) { CLOUDS_BUFFERED = EarthClouds(0.0, vec3f(0.0), -1.0, -1.0); }
-    let e = earthLookNoGround(kn, nearCam(), rd, rd, lt.e, g1, cross(rd, g1), 0.0, rs, 0.5, false);
+    let tMarch = earthLookNoGround(kn, nearCam(), rd, rd, lt.e, g1, cross(rd, g1), 0.0, rs, 0.5, false).T;
     CLOUDS_BUFFERED = EarthClouds(-1.0, vec3f(0.0), -1.0, -1.0);
-    E *= e.T * select(1.0, csT, csT >= 0.0);
+    // (PLAN-J3 J3-1, the probe: beside the march, the ground's model of the same Sun at the camera — the transmittance table,
+    // sunThrough, its height and geodetic vertical as the clouds' light reads them —, written after the key (renderer.readShipKey).
+    // Measured 13 Nov 2026 on J0, 15:30 to 19:15 UTC: the two within 0.2 % — the craft's march kept)
+    if (arrayLength(&envBuf) >= ENV_W * ENV_H + 4u) {
+      envBuf[ENV_W * ENV_H + 2u] = vec4f(tMarch, csT);
+      envBuf[ENV_W * ENV_H + 3u] = select(vec4f(-1.0), vec4f(sunThrough(airHeight(nearCam()), dot(geoQ(nearCam()), normalize(toBody(L)))), airHeight(nearCam())), isEarth(kn));
+    }
+    E *= tMarch * select(1.0, csT, csT >= 0.0);
     // (the Moon's shadow — a solar eclipse —: the Sun's share it leaves where the craft is; in totality none —
     // the hull lit by the dark sky's light alone)
     if (isEarth(kn) && P.eclipse.w > 0.0) { E *= sunSeen(nearCam(), rd); }

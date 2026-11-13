@@ -780,9 +780,10 @@ export class ShipRenderer {
     shipWGSL: string,
   ) {
     const d = device;
-    // (the probe's texels, then its key light: trace.wgsl env)
+    // (the probe's texels, then its key light: trace.wgsl env; then the key's air probe — PLAN-J3 J3-1: the march's transmittance and
+    // the clouds', the table's and the height)
     this.envBuf = d.createBuffer({
-      size: (ENV_W * ENV_H + 2) * 16,
+      size: (ENV_W * ENV_H + 4) * 16,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     });
     // (COPY_SRC: the sea's mirrored sky takes the GGX levels — sea/fft-gpu.ts takeSky)

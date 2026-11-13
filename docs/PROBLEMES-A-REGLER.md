@@ -28,6 +28,20 @@ cadence en retirant du contenu, ce que CLAUDE.md interdit. **Recommandation rév
 son plancher de qualité à régler) ; ou (a) seulement avec un critère d'image en plus de la vitesse. L'e2e : sa vérification de
 cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mise de côté jusqu'à la décision.
 
+## Le premier `renderer.tune` d'une session fige la sonde de lumière de l'appareil (relevé le 13 novembre 2026, PLAN-J3 J3-1)
+
+- **Observé** (kerr-mini, e2e J0 `J0_PHASES=keyair`, deux runs) : après le premier changement de `renderer.tune` depuis le départ — quelle
+  que soit la variante (`TUNE_KEY_AIR` 1, puis `TUNE_AIR_N` 4) —, la lumière de l'appareil et sa sonde relues (`renderer.readShipKey`) restent
+  **exactement** celles de l'image d'avant le changement, à toutes les heures lues ensuite, l'horloge tournant, `app.settled()` passé (la
+  compilation de la variante attendue, la sonde de lumière comprise) ; au changement **suivant**, elles repartent.
+- **Précisé** (troisième run, une variante de chauffe `TUNE_AIR_N` 8 lue à 19:05) : la sonde **tourne** (la hauteur de la caméra relue a
+  changé, 577,7 → 580,0 m), mais le **Soleil reste à l'heure d'avant** — la transmittance lue 0,0040 (celle de 19:15) pour 0,0468 attendue à
+  19:05 : après le premier `tune`, `game.setDate` n'est pas pris (ou les tables de lumière ne sont pas réécrites) jusqu'au changement suivant.
+- **Conséquence** : une ablation ou un A/B par `renderer.tune` qui serait le premier d'une session mesure, pour l'appareil (son éclairage, sa
+  sonde, le ciel que la mer reflète), l'état d'avant. La phase `keyair` passe par une variante de chauffe et dit si sa lecture était figée.
+- **Cause non trouvée** : la recherche de variante du renderer (`renderer.ts` ~6650, le noyau `env` couvert par les bits de la clé, sinon par
+  ses constantes) n'a pas été instrumentée. À faire : relever, après un premier `tune`, quel pipeline `env` est lancé (ou s'il l'est).
+
 ## La page figée quand le rectangle publié d'un niveau du relief ne couvre plus la tuile de la caméra (relevé par la sonde de fuite de J2-0)
 
 - **Observé** (12 nov. 2026, ce Mac, Chrome sans tête, F-35 gelé à 300 m au-dessus de la plaine du Gapeau, cap 20° ; e2e de mise au

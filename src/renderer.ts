@@ -171,6 +171,7 @@ import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
 import {
   ENV_H,
+  ENV_W,
   ownPose,
   ShipRenderer,
   type Reentry,
@@ -9694,17 +9695,29 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   }
 
   /** The craft's key light now (ship.wgsl shOut[10..11], trace.wgsl keyLight): its direction on the probe's axes, the disc's angular
-   *  radius [rad], its irradiance's luminance and on (0/1) — read back (PLAN-J3 J3-1: the craft lit by the ground's Sun) */
-  async readShipKey(): Promise<{ dir: Vec3; rs: number; e: number; on: boolean }> {
-    const st = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+   *  radius [rad], its irradiance's luminance and on (0/1) — read back (PLAN-J3 J3-1: the craft lit by the ground's Sun); `air`, its
+   *  probe on the Earth (the key's air two ways at the camera — envBuf after the key —): `march` the transmittance along its ray
+   *  (earthLookNoGround: the one lighting the craft), `table` the ground's (sunThrough), their luminances; `cloud` the clouds' share
+   *  (−1 none read), `h` the camera's air height [m]; null off the Earth or without air (the key's last value kept there) */
+  async readShipKey(): Promise<{
+    dir: Vec3;
+    rs: number;
+    e: number;
+    on: boolean;
+    air: { march: number; table: number; cloud: number; h: number } | null;
+  }> {
+    const st = this.device.createBuffer({ size: 64, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     const enc = this.device.createCommandEncoder();
     enc.copyBufferToBuffer(this.ship.shBuf, 160, st, 0, 32);
+    enc.copyBufferToBuffer(this.ship.envBuf, (ENV_W * ENV_H + 2) * 16, st, 32, 32);
     this.device.queue.submit([enc.finish()]);
     await st.mapAsync(GPUMapMode.READ);
     const f = new Float32Array(st.getMappedRange().slice(0));
     st.unmap();
     st.destroy();
-    return { dir: [f[0]!, f[1]!, f[2]!], rs: f[3]!, e: 0.2126 * f[4]! + 0.7152 * f[5]! + 0.0722 * f[6]!, on: f[7]! > 0.5 };
+    const lum = (o: number) => 0.2126 * f[o]! + 0.7152 * f[o + 1]! + 0.0722 * f[o + 2]!;
+    const air = f[15]! < 0 ? null : { march: lum(8), table: lum(12), cloud: f[11]!, h: f[15]! };
+    return { dir: [f[0]!, f[1]!, f[2]!], rs: f[3]!, e: lum(4), on: f[7]! > 0.5, air };
   }
 
   /** Exposure in use [EV]: the setting, plus the meter's with auto exposure. */
