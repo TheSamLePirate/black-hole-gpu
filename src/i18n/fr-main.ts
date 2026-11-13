@@ -551,4 +551,6 @@ export default {
   "time left": "restant",
   "This PC draws on its integrated graphics: Chrome on Windows does not pick the dedicated GPU by itself. For it — a faster image and much shorter shader compiles —: Windows Settings › System › Display › Graphics › Google Chrome › High performance, then restart Chrome.":
     "Ce PC dessine avec sa puce graphique intégrée : sous Windows, Chrome ne choisit pas seul la carte graphique dédiée. Pour l'utiliser — une image plus fluide et des compilations de shaders bien plus courtes — : Paramètres Windows › Système › Écran › Graphiques › Google Chrome › Performances élevées, puis redémarrez Chrome.",
+  "Under 10 images/s: the flight runs at {0} of real time": "Moins de 10 images/s : le vol avance à {0} du temps réel",
+  time: "temps",
 } satisfies Record<string, string>;

@@ -474,6 +474,14 @@ export class NetClient {
     this.sendMsg({ type: "warp", want, at: want < cur.warp ? h : undefined });
   }
 
+  /** Out of view, or back (src/game/out-of-view.ts — audit NET-14): the others told, our ask of the room's pace not
+   *  counted meanwhile. Only to a server that says it can ("presence" in its welcome's `f`); false when not told. */
+  presence(away: boolean): boolean {
+    if (!this.room || !this.server.f.includes("presence")) return false;
+    this.sendMsg({ type: "presence", away });
+    return true;
+  }
+
   /** the room's time at an instant of our clock (performance.now() [ms]: a frame's) [s] */
   roomAt(localMs: number): number {
     if (!this.room) return Number.NaN;

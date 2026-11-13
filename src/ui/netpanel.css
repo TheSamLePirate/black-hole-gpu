@@ -35,6 +35,7 @@ select.netp-in { flex: 0 0 auto; cursor: pointer; }
 .netp-coderow { display: flex; align-items: center; gap: 12px; }
 .netp-code { font: 700 30px/1.05 var(--mono); letter-spacing: 0.24em; color: var(--k-on); text-shadow: 0 0 14px rgba(111, 210, 255, 0.35); user-select: all; }
 .netp-chip { padding: 2px 7px; border: 1px solid var(--k-ctl-edge); border-radius: 999px; font: 600 10px/1.2 var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; font-style: normal; color: var(--k-dim); white-space: nowrap; }
+.netp-chip.netp-away { margin-left: 6px; border-color: var(--k-amber, #ffb35c); color: var(--k-amber, #ffb35c); }
 .netp-pace { display: flex; align-items: center; gap: 10px; padding-top: 6px; border-top: 1px solid var(--k-line); font: var(--k-font-value); color: var(--k-text); }
 .netp-pace b { color: var(--k-on); }
 .netp-offer { color: var(--k-amber); }

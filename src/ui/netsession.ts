@@ -50,6 +50,7 @@ import { zonalAccel } from "../system/geopotential";
 import { solarBody } from "../system/solar";
 import { vesselHulls } from "../system/collide";
 import { dockedFrame, isAircraft, type VesselId, VESSELS } from "../vessels";
+import { awayWords } from "../game/out-of-view";
 import type { NetPanel } from "./netpanel";
 import { formationLabel, formSlotFor } from "../controller/formation";
 import { orderOf } from "../game/orders";
@@ -1511,7 +1512,15 @@ export class NetSession {
     // the scene on the room's clock (as at this frame's instant: the step brought the scene to it)
     const e = this.d.sceneTime() - net.roomAt(Number(document.timeline.currentTime ?? performance.now()));
     this.lag = e;
-    if (Math.abs(e) > Math.max(30, 10 * W) && now - this.resyncAt > 5) {
+    if (this.back !== null) {
+      const awayS = this.back;
+      this.back = null;
+      if (Math.abs(e) > 0.25) {
+        this.resyncAt = now;
+        this.d.tools.setDate(tr / M_SECONDS);
+        this.d.toast(tf("Back in view after {0}: the scene set on the room's hour", awayWords(awayS)));
+      }
+    } else if (Math.abs(e) > Math.max(30, 10 * W) && now - this.resyncAt > 5) {
       this.resyncAt = now;
       this.d.tools.setDate(tr / M_SECONDS);
       this.d.toast(t("The scene set on the room's hour"));
@@ -1561,6 +1570,21 @@ export class NetSession {
 
   /** our scene's time less the room's, at the end of the frame's step [s] (R6) */
   lag = 0;
+
+  /** back in view after this long [s] (src/game/out-of-view.ts): at the next frame, our scene set on the room's hour, said */
+  private back: number | null = null;
+
+  /**
+   * The game out of view, or back (audit NET-14; Sam's choice of 13 Nov 2026 — in a room nothing stops): the room told
+   * (the others see it; our ask of its pace not counted meanwhile — server/rooms.ts); back, our scene set on the room's
+   * hour at the next frame and said — not eased at twice its pace for up to 30 s as after a stall.
+   */
+  outOfView(away: boolean, awayS: number) {
+    const net = this.net;
+    if (!net?.room) return;
+    net.presence(away);
+    if (!away) this.back = awayS;
+  }
 
   /** a faster warp another pilot asks for, offered to us (accepted: ours too) */
   offer: { warp: number; by: string[] } | null = null;

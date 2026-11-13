@@ -241,4 +241,8 @@ export default {
   "The light's own time": "Le temps de la lumière",
   "Ten times shorter: Mars in two minutes": "Dix fois plus court : Mars en deux minutes",
   "The ground live as aboard (the wormhole still cuts it)": "Le sol en direct comme à bord (le trou de ver coupe toujours)",
+  "Back in view after {0}: the scene set on the room's hour": "De retour après {0} : la scène est mise à l'heure de la salle",
+  "{0} is out of view — the room goes on": "{0} est hors de vue — la salle continue",
+  "{0} is back in view": "{0} est de retour",
+  "out of view": "hors de vue",
 } satisfies Record<string, string>;

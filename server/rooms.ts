@@ -44,6 +44,8 @@ export interface Peer {
   want: number;
   /** his craft's last sample (R7: left in the world when he goes) */
   last: Uint8Array | null;
+  /** out of view — his tab put aside (ClientMsg "presence"): his ask of the room's pace not counted meanwhile */
+  away?: boolean;
   /** his address (the proxy's X-Real-IP, else the socket's): the rooms he creates, his password guesses, counted by it */
   ip?: string;
   /** the JSON messages' bucket (RD2: a flood cut — tokens, refilled with time) */
@@ -72,7 +74,7 @@ interface Live {
 }
 
 /** what this server does beyond its protocol's version (the welcome's `f`): a newer page asks before it uses them */
-export const FEATURES = ["room-delay"];
+export const FEATURES = ["room-delay", "presence"];
 
 export interface RoomsOptions {
   /** the SQLite file (":memory:" in tests) */
@@ -229,16 +231,18 @@ export function createRooms(o: RoomsOptions) {
       colour: w.data.colour,
       role: w.data.role,
       device: publicId(w.data.device),
+      ...(w.data.away ? { away: true } : {}),
     }));
   const roster = (l: Live) => {
     const m: ServerMsg = { type: "roster", members: members(l) };
     for (const w of l.peers.values()) send(w, m);
   };
 
-  /** the warp each pilot asks for, by slot */
+  /** the warp each pilot asks for, by slot — not those out of view (NET-14: one who paused and put his tab aside held the
+   *  whole room paused; Sam's choice of 13 Nov 2026: in a room nothing stops for one out of view) */
   const wants = (l: Live): Record<number, number> => {
     const out: Record<number, number> = {};
-    for (const w of l.peers.values()) if (w.data.role === "pilot") out[w.data.slot] = w.data.want;
+    for (const w of l.peers.values()) if (w.data.role === "pilot" && !w.data.away) out[w.data.slot] = w.data.want;
     return out;
   };
   /**
@@ -403,6 +407,7 @@ export function createRooms(o: RoomsOptions) {
         P.role = m.role === "spectator" || m.role === "instruments" ? m.role : "pilot";
         // (a newcomer asks for the room's pace: his page takes it — his own ask comes after)
         P.want = l.rec.clock.warp;
+        P.away = false;
         P.slot = slot;
         P.room = code;
         l.peers.set(slot, ws);
@@ -426,6 +431,16 @@ export function createRooms(o: RoomsOptions) {
         if (!l || !Number.isFinite(w)) return;
         P.want = Math.max(0, Math.min(1e7, w));
         rewarp(l, true, Number(m.at));
+        return;
+      }
+      case "presence": {
+        if (!P.room) return;
+        const l = live.get(P.room);
+        const away = m.away === true;
+        if (!l || away === !!P.away) return;
+        P.away = away;
+        roster(l);
+        rewarp(l, true);
         return;
       }
       case "leave":

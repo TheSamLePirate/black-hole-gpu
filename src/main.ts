@@ -243,6 +243,7 @@ import { cpuProf } from "./perf";
 import { GOPRO, goproRenderFov, goproRowShare } from "./lens";
 import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
+import { OutOfView } from "./game/out-of-view";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
 import { ResumePoints } from "./game/resume-point";
 import { CraftLost } from "./ui/craftlost";
@@ -1371,7 +1372,10 @@ async function main() {
           });
       }
     }
-    for (const r of tarsTriggers.due(sim.time * 4.925490947e-6 * settings.massSolar))
+    // (no waking while the game is out of view or held by a pause of its own — audit TA-06: a timed rule woke him, tab
+    // forgotten, game paused, and spent with no player; a rule due meanwhile wakes him at the return)
+    const held = document.hidden || !!document.querySelector(".pz-root:not(.live)");
+    for (const r of held ? [] : tarsTriggers.due(sim.time * 4.925490947e-6 * settings.massSolar))
       if (!tarsWakeQueue.some((q) => q.rules.includes(r))) {
         // (fired as queued: not due again meanwhile)
         tarsTriggers.fired(r.id);
@@ -1382,7 +1386,7 @@ async function main() {
       tarsWakesOn() ? `${tarsBudget.lastHour().toFixed(3)} / ${settings.tarsBudget.toFixed(2)} $·h` : null,
       tarsBudget.why() === "budget",
     );
-    if (!tarsWakeQueue.length || !tarsWakesOn() || tarsAgent.busy || !tarsBudget.canWake()) return;
+    if (held || !tarsWakeQueue.length || !tarsWakesOn() || tarsAgent.busy || !tarsBudget.canWake()) return;
     const { rules, e } = tarsWakeQueue.shift()!;
     if (e) for (const r of rules) tarsTriggers.fired(r.id);
     tarsBudget.woke();
@@ -8488,6 +8492,14 @@ async function main() {
   let fpsAcc = 0;
   let fpsN = 0;
   let fps = 0;
+  /** the flight's time and the wall's, this meter's window, while it runs [s]; their rate; its windows under 0.9 in a row;
+   *  said, when [ms] */
+  let slowSim = 0;
+  let slowWall = 0;
+  let slowRate = 1;
+  let slowRun = 0;
+  let slowSaid = false;
+  let slowSaidAt = -1e9;
   let hudTimer = 0;
   let frozen = false;
   /** the ground's heights last seen (renderer.groundStamp) */
@@ -8497,6 +8509,45 @@ async function main() {
   /** the time played this visit — the game running, no menu over it [ms] (the pause's context) */
   let playedMs = 0;
   const menuPad = new MenuPad();
+  // the game out of view — the tab put aside, the window minimised (src/game/out-of-view.ts; audit AR-02, NET-14; Sam's
+  // choice of 13 Nov 2026): saved as it goes; alone, a flight paused and the pause saying how long at the return; in a
+  // room nothing stops — the others told, our scene on the room's hour at the return, said
+  const outOfView = new OutOfView(
+    {
+      inRoom: () => !!netPanel.net?.room,
+      playing: () =>
+        firstFrame &&
+        !startupFailed &&
+        !paused &&
+        !frozen &&
+        !titleScreen.isOpen &&
+        !renderer.offlineActive &&
+        !replay.active &&
+        !playerSettings.isOpen &&
+        !pauseMenu?.isOpen,
+      save: () => {
+        if (!benchPage) writePrefs(settings);
+        if (settings.autosave && firstFrame && !renderer.offlineActive && !replay.active) tools.autosaveNow();
+      },
+      pause: (why) => (pauseMenu ??= makePauseMenu()).open(why),
+      repause: (why) => {
+        panel.toast(why);
+        return !!pauseMenu?.setWhy(why);
+      },
+      presence: (away, s) => netSession.outOfView(away, s),
+    },
+    () => ({
+      away: tr({
+        fr: "Le jeu s'est mis en pause en passant hors de vue (onglet ou fenêtre masqués).",
+        en: "The game paused as it went out of view (its tab or window hidden).",
+      }),
+      back: tr({
+        fr: "En pause pendant {0} hors de vue : rien n'a avancé. Reprenez quand vous êtes prêt.",
+        en: "Paused for {0} out of view: nothing moved on. Resume when ready.",
+      }),
+    }),
+  );
+  outOfView.watch(document);
   let lastStats: FrameStats | null = null;
   let saveTimer = 0;
   let autosaveFailTold = false;
@@ -8554,6 +8605,11 @@ async function main() {
     // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
     if (!frozen && !paused && !replay.active && !simHeld) advanceFrameClock(dt * 1000);
     if (!paused && firstFrame) playedMs += dt * 1000;
+    // (the flight's time against the wall's while it runs — under 10 images/s the step's bound slows it: said, below)
+    if (!frozen && !paused && !renderer.offlineActive && !replay.active && !simHeld) {
+      slowSim += dt;
+      slowWall += wallDt;
+    }
     // (the rain's: only while the time runs — paused, the drops stand still)
     if (!frozen && !paused && settings.animate) renderer.rainClock += dt;
     // (the display's refresh: the median of the loop's last intervals — the frame budget is fitted to it)
@@ -8564,11 +8620,27 @@ async function main() {
     fpsAcc += wallDt;
     if (fpsAcc > 0.5) {
       fps = fpsN / fpsAcc;
+      // (under 10 images/s the flight runs slower than the wall's time — the step bounded at 0.1 s (audit AR-02, wave 4.2):
+      // said once it lasts 2 s — four meter windows in a row: a compile's single long frame is one, not said —, again once
+      // it has come back and a minute has passed; its rate on the frame-rate meter while it lasts)
+      slowRate = slowWall > 0.4 ? slowSim / slowWall : 1;
+      slowRun = slowRate < 0.9 ? slowRun + 1 : slowRate > 0.95 ? 0 : slowRun;
+      if (slowRun === 0) slowSaid = false;
+      if (slowRun >= 4 && !slowSaid && now - slowSaidAt > 60_000) {
+        slowSaid = true;
+        slowSaidAt = now;
+        panel.toast(tf("Under 10 images/s: the flight runs at {0} of real time", `${Math.round(slowRate * 100)} %`));
+      }
+      slowSim = slowWall = 0;
       fpsAcc = 0;
       fpsN = 0;
       // (the frame rate in its corner, when asked — Settings › Render › Show the frame rate)
       fpsMeter.hidden = !settings.showFps;
-      if (settings.showFps) fpsMeter.textContent = fps > 0 ? `${fps.toFixed(0)} fps · ${(1000 / fps).toFixed(1)} ms` : "— fps";
+      if (settings.showFps)
+        fpsMeter.textContent =
+          fps > 0
+            ? `${fps.toFixed(0)} fps · ${(1000 / fps).toFixed(1)} ms${slowRun > 0 ? ` · ${t("time")} ${Math.round(slowRate * 100)} %` : ""}`
+            : "— fps";
       const compiling = renderer.compilesPending;
       compileMeter.hidden = compiling === 0;
       compileMeter.dataset.pending = String(compiling);

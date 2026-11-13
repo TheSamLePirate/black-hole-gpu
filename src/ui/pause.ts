@@ -20,6 +20,7 @@ import type { ModeId } from "./title/activities";
 
 const T = {
   title: { fr: "Pause", en: "Paused" },
+  away: { fr: "Hors de vue", en: "Out of view" },
   goesOn: { fr: "Le jeu continue", en: "The game goes on" },
   goesOnText: {
     fr: "En salle {0}, l'horloge commune ne s'arrête pas.",
@@ -132,8 +133,13 @@ export class PauseMenu {
     return this.router?.current ?? null;
   }
 
-  open() {
+  /** why it was opened when not by the player — the game out of view (src/game/out-of-view.ts): its line in the context */
+  private why: string | null = null;
+
+  /** Opens the menu (`why`: a line saying why, when the game opened it itself — the tab put aside). */
+  open(why?: string) {
     if (this.root) return;
+    this.why = why ?? null;
     watchInput();
     this.ctx = this.d.context();
     this.live = !!this.ctx.room;
@@ -169,8 +175,17 @@ export class PauseMenu {
     });
   }
 
+  /** The line saying why it was opened changed (the return: how long the game was out of view); false when not up. */
+  setWhy(why: string): boolean {
+    if (!this.root) return false;
+    this.why = why;
+    this.fillContext();
+    return true;
+  }
+
   close() {
     if (!this.root) return;
+    this.why = null;
     // (its router emptied calls this again: the menu already gone by then)
     const root = this.root;
     this.root = this.ctxEl = null;
@@ -206,6 +221,8 @@ export class PauseMenu {
           el("span", "", fill(tr(T.goesOnText), c.room)),
         ),
       );
+    if (this.why)
+      kids.push(h("div", { class: "pz-live pz-away", "data-testid": "pause-away" }, el("b", "", tr(T.away)), el("span", "", this.why)));
     kids.push(el("p", "pz-where", c.line));
     if (c.mission)
       kids.push(

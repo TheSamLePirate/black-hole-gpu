@@ -60,7 +60,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
-| Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **partiel** : vol tenu pendant la reprise GPU, cadence vraie, 5 décisions de vol sur l'horloge du vol + garde ; **l'onglet masqué attend Sam** |
+| Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
@@ -4648,3 +4648,27 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   caméra), les plafonds d'histogramme, les lumières de cabine rapportées à l'affichage, l'écrêtage du ciel reflété par la mer, l'adaptation des
   villes. Aucune mesure ; rien de changé.
 
+## 2026-11-13T11:45Z — Audit 4.2 (partie 2) : le jeu hors de vue et le ralentissement dit (AR-02, NET-14, TA-06 ; choix de Sam du 13 nov. : « ok pour les recommandations »)
+
+- **Contribution à la destination :** §19.3 (une politique de temps : qui avance quand le jeu n'est pas à l'écran) et §19.8 (préserver
+  toute l'expérience : sauvegarde, salle, TARS). La politique en un seul endroit : `src/game/out-of-view.ts` (écoute `visibilitychange`).
+- **Réalisé :** en partant hors de vue, préférences et autosauvegarde écrites (une page masquée peut être jetée par le navigateur) ;
+  **seul**, un vol en cours mis en pause (le menu de pause, comme Échap) avec une ligne *Hors de vue* qui dit au retour combien de temps
+  (« En pause pendant 3 s hors de vue : rien n'a avancé ») — rien rattrapé ; **en salle** rien ne s'arrête : un message `presence`
+  (capacité `"presence"` du serveur), le serveur ne compte plus la demande d'allure de l'absent (`server/rooms.ts` `wants`), les autres
+  sont avertis (toast, pastille *hors de vue* dans le panneau Réseau) ; au retour sa scène est mise à l'heure de la salle à sa première image
+  et il en est averti (`NetSession.outOfView`). TARS : aucun réveil masqué ni en pause solo (TA-06). Sous 10 images/s (le pas borné à
+  0,1 s), le ralentissement du vol est dit après 2 s (toast, « temps NN % » au compteur d'images), une fois par minute au plus.
+- **Preuves (reproduites avant, revérifiées après, ce Mac, fenêtre visible, tuiles bloquées) :** e2e `hidden-tab` (page masquée par un
+  second onglet) — avant : pas de pause, rien dit ; en salle la salle **reste à ×0** tenue par Ben absent, Ana avertie de rien (rejoué
+  sur `HEAD` dans un worktree) ; après : pause au retour avec sa ligne, Δ temps de scène 0,00024 M, une autosauvegarde faite page masquée ;
+  en salle ×0 → ×1 pendant l'absence, « Ben est hors de vue — la salle continue », au retour Ben à −0,17 s de l'heure de la salle et averti
+  — 2/2. `fps-truth` — avant : à 5,6 images/s le vol avance à **55 %** de son allure sans un mot ; après : dit — 2/2. Unitaires :
+  `out-of-view` 5/0, `net-rooms` (présence côté serveur) 10/0, garde `flight-clock` (une lecture murale motivée de plus).
+- **Limites :** l'engin de l'absent reste immobile (le navigateur ne dessine rien pour une page masquée) : les autres le voient comme après
+  tout silence de ses échantillons, puis il disparaît après 10 s (inchangé). Un ancien serveur sans `"presence"` : rien n'est envoyé (comme
+  avant). Non vérifié : le comportement réel d'un onglet jeté par Safari/iOS, le serveur de production (déploiement suivant).
+  Sur ce Mac, une seconde page démarrée pendant qu'une première vole a mis plus de 4 min à compiler son traceur (coreaudiod ~150 % de CPU) :
+  l'e2e démarre ses deux pages d'abord.
+- **Docs :** NETWORK.md/.fr.md (Hors de vue, Une horloge), MENUS.md (la pause ouverte par le jeu), TARS.md (réveils), BH-API (`presence`,
+  `outOfView`, `lag`, autosauvegarde), E2E-CATALOGUE, audit 09 (4.2 fait).

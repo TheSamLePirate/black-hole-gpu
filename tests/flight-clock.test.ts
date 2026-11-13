@@ -26,6 +26,7 @@ const WALL: Record<string, { n: number; why: string }> = {
   "controller/formation.ts": { n: 1, why: "the network (a leader's samples and their grace)" },
   "controller/traffic.ts": { n: 2, why: "the network (the real traffic's reports, wall-dated)" },
   "game/tools.ts": { n: 2, why: "the world runways' cache (world/runways3d.ts, its own wall clock)" },
+  "game/out-of-view.ts": { n: 1, why: "the interface (how long the page was out of view — no frame runs meanwhile)" },
 };
 
 const walk = (dir: string): string[] =>

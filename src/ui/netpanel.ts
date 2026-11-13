@@ -94,6 +94,8 @@ export class NetPanel {
   net: Client | null = null;
   /** flying together this frame (ui/netsession.ts): the others placed, ours sent, the teleport */
   session: NetSession | null = null;
+  /** the others out of view, as last told (their changes said) */
+  private awaySeen = new Set<number>();
   /** the room's match (ui/netmatch.ts) */
   match: NetMatch | null = null;
   /** the players' voices (ui/netvoice.ts) */
@@ -165,6 +167,13 @@ export class NetPanel {
       const clash = members.some((m) => m.slot !== me && m.slot < (me ?? 0) && m.colour === this.id.colour);
       const free = NET_COLOURS.find((c) => !members.some((m) => m.slot !== me && m.colour === c));
       if (clash && free) this.setName(this.id.name, free);
+      // (another out of view — his tab put aside — or back: said; the room goes on without him meanwhile — NET-14)
+      for (const m of members) {
+        if (m.slot === me) continue;
+        if (m.away && !this.awaySeen.has(m.slot)) this.host.toast(tf("{0} is out of view — the room goes on", m.name));
+        else if (!m.away && this.awaySeen.has(m.slot)) this.host.toast(tf("{0} is back in view", m.name));
+      }
+      this.awaySeen = new Set(members.filter((m) => m.away && m.slot !== me).map((m) => m.slot));
       this.refresh();
     });
     net.on("room", () => this.refresh());
@@ -898,6 +907,11 @@ export class NetPanel {
       const who = h("div", "netp-who");
       const line = h("div", "netp-whoname");
       line.append(h("span", "", m.name || "—"), h("em", "netp-chip", ROLE_NAMES[m.role]?.() ?? m.role));
+      if (m.away) {
+        const away = h("em", "netp-chip netp-away", t("out of view"));
+        away.dataset.testid = `net-away-${m.slot}`;
+        line.append(away);
+      }
       const sub = h("div", "netp-whosub");
       sub.append(r);
       // (aboard another's craft — R5)

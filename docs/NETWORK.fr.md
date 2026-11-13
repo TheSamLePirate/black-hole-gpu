@@ -212,9 +212,19 @@ copilote et la passation du manche sont venus avec PLAN-VAISSEAUX N3 (plus bas, 
   pilotes la demandent — « ×100 demandé — on attend Ben » dans la barre du temps, « Ana demande ×100 —
   accélérez pour accepter » chez Ben (accélérer l'accepte) ; elle part alors au même instant pour tous. Une pause
   met la salle en pause (« en pause par Ana ») ; une salle vide continue à ×1.
+- **Hors de vue** (13 nov. 2026, audit NET-14 ; `src/game/out-of-view.ts`) : un pilote dont l'onglet est mis de côté
+  (ou la fenêtre réduite) n'arrête rien — l'horloge de la salle continue. Sa page le dit au serveur
+  (`{ type: "presence", away }`, capacité `"presence"` dans le `f` de l'accueil) ; les autres le voient (« Ben est hors
+  de vue — la salle continue », une pastille *hors de vue* à son nom dans le panneau Réseau) et sa demande d'allure ne
+  compte pas pendant ce temps — un pilote qui avait mis en pause puis s'est absenté ne tient plus la salle en pause.
+  À son retour, sa demande compte de nouveau, sa scène est mise à l'heure de la salle dès sa première image et il en
+  est averti (« De retour après 42 s : la scène est mise à l'heure de la salle »). Son propre engin est resté
+  immobile (le navigateur ne dessine aucune image d'une page masquée) : les autres le voient comme après tout
+  silence de ses échantillons.
 - **Une horloge** : chaque scène est tenue sur celle de la salle (recalée de la moitié au double du pas, remise
-  dessus d'un coup si un onglet a été mis de côté) ; les échantillons portent le temps de scène de leur émetteur
-  et sont lus à celui du lecteur — une horloge un peu décalée ne déplace personne.
+  dessus d'un coup si elle s'en est trop écartée — un à-coup —, ou au retour d'une absence hors de vue, en le
+  disant) ; les échantillons portent le temps de scène de leur émetteur et sont lus à celui du lecteur — une
+  horloge un peu décalée ne déplace personne.
 - **En orbite** : au-dessus de 100 km (ou hors de la sphère de la Terre), un engin est envoyé dans le repère
   inertiel du corps dont il est dans la sphère ; en roue libre (sans poussée), il est porté le long de son orbite
   (Kepler, plus les attractions autres que le centre du corps que son pilote mesure — l'aplatissement de la

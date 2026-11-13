@@ -29,6 +29,8 @@ export interface Member {
   role: Role;
   /** the device's id (stable across its visits: a reconnection takes its own slot back) */
   device: string;
+  /** out of view — his tab put aside (src/game/out-of-view.ts): still in the room, his ask of its pace not counted */
+  away?: boolean;
 }
 
 export interface RoomInfo {
@@ -56,7 +58,9 @@ export type ClientMsg =
   | { type: "ice"; id: number }
   /** the warp this pilot asks for (× real time; 0: paused) — the room runs at the slowest asked (R6); `at`: when
    *  he slowed to it himself [server's ms] — the room's slowdown dated then */
-  | { type: "warp"; want: number; at?: number };
+  | { type: "warp"; want: number; at?: number }
+  /** out of view, or back (the server's feature "presence"): the others told; his ask of the pace not counted meanwhile */
+  | { type: "presence"; away: boolean };
 
 // ---- the server → the page
 export type ServerMsg =

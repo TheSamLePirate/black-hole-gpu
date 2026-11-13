@@ -206,9 +206,17 @@ and the controls handed over came with PLAN-VAISSEAUX N3 (below, *Spacecraft tog
   for everyone (dated when its pilot slowed); a speed-up waits until every pilot asks for it — "×100 asked —
   waiting for Ben" in the time bar, "Ana asks for ×100 — warp up to accept" on Ben's (warping up accepts it);
   then it starts at one instant for all. A pause pauses the room ("paused by Ana"); an empty room runs on at ×1.
-- **One clock**: each scene is kept on the room's (eased from half to twice the pace, set on it at once if a tab
-  was put aside); the samples carry their sender's scene time and are read at the reader's — a clock a little off
-  misplaces nobody.
+- **Out of view** (13 Nov 2026, audit NET-14; `src/game/out-of-view.ts`): a pilot whose tab is put aside (or window
+  minimised) stops nothing — the room's clock goes on. His page tells the server (`{ type: "presence", away }`,
+  feature `"presence"` in the welcome's `f`); the others see it ("Ben is out of view — the room goes on", an
+  *out of view* chip by his name in the Network panel) and his ask of the pace is not counted meanwhile — a pilot
+  who had paused and left no more holds the room paused. Back, his ask counts again, his scene is set on the room's
+  hour at his first frame and he is told ("Back in view after 42 s: the scene set on the room's hour"). His own
+  craft stood still meanwhile (the browser draws no frame for a hidden page): the others see it as after any
+  silence of its samples.
+- **One clock**: each scene is kept on the room's (eased from half to twice the pace, set on it at once if it fell
+  far off — a stall —, or at the return from out of view, said); the samples carry their sender's scene time and are
+  read at the reader's — a clock a little off misplaces nobody.
 - **In orbit**: above 100 km (or out of the Earth's sphere) a craft is sent in the inertial frame of the body
   whose sphere it is in; coasting (no thrust) it is carried along its orbit (Kepler, plus the pulls besides the
   body's centre its pilot measures — the Earth's flattening, the Moon, the Sun —) between its samples, 1 to 30 a

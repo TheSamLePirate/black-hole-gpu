@@ -101,6 +101,35 @@ describe("the room server", () => {
     for (const x of [a, b, c, d]) x.close();
   });
 
+  test("out of view (NET-14): the others told; his ask of the pace not counted meanwhile — a paused pilot away no more holds the room", async () => {
+    const a = client("Ana");
+    const b = client("Ben");
+    const { code } = await a.create("Away", 0);
+    await b.join(code);
+    await until(() => a.clock.synced && b.clock.synced && a.room!.members.length === 2);
+    expect(a.server.f).toContain("presence");
+    // (Ben pauses: the room paused — the slowest ask)
+    b.warp(0);
+    await until(() => a.room!.clock.warp === 0);
+    // (Ben's tab put aside: the room goes on at Ana's pace, Ben marked out of view for all)
+    expect(b.presence(true)).toBe(true);
+    await until(() => a.room!.clock.warp === 1 && !!a.room!.members.find((m) => m.name === "Ben")?.away);
+    await until(() => !!b.room!.members.find((m) => m.name === "Ben")?.away);
+    // (back: his ask counts again — paused still, the room with him)
+    b.presence(false);
+    await until(() => a.room!.clock.warp === 0 && !a.room!.members.find((m) => m.name === "Ben")?.away);
+    // (out of view again, then gone and back: a new join is in view)
+    b.presence(true);
+    await until(() => a.room!.clock.warp === 1);
+    b.leave();
+    await until(() => a.room!.members.length === 1);
+    await b.join(code);
+    await until(() => a.room!.members.length === 2);
+    expect(a.room!.members.find((m) => m.name === "Ben")?.away).toBeUndefined();
+    a.close();
+    b.close();
+  });
+
   test("the persistent world (R7): a craft left where its pilot went, shown to the others; his again when he is back", async () => {
     const a = client("Ana", "dev-ana-world");
     const b = client("Ben", "dev-ben-world");
