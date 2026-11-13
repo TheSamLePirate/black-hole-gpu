@@ -4064,3 +4064,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Mesuré** (M1 Max, `motion-quality` Alpes virage 30°, A B A après une chauffe) : `singleHistory` en mouvement 46,9 contre 47,1 / 47,2 dB,
   à l'arrêt 48,3 contre 49,1 / 49,1 dB, netteté 0,92 contre 0,93. Avec la vue tenue (page neuve 3 × plus vite, bruit 0,41 → 0,54 %) :
   **un arbitrage pour Sam** (PLAN-J2 §9 octies (d)). Levier toujours éteint. **Non vérifié** : kerr-mini ; d'autres scènes.
+
+## 2026-11-13T04:07Z — J2-7, étape A : la cadence d'ombrage ne fait rien sur la Terre, beaucoup sur la Lune
+
+- **Contribution** (PLAN-J2 J2-7 « la mesure d'abord » ; stratégie §8) : e2e `j2-cover` (nouveau) — chaque pixel de la vue vivante compté par
+  sa marque, à la cadence choisie et à la cadence 1. **Terre** (J0 cockpit ; plaine du Gapeau 300 m, 44 % de terre) : `shade` **0 pixel**
+  (0,1 ms), aucun pixel laissé à la cadence 16 choisie, le matériau au même coût qu'à 1 (4,4 / 4,1 ms) — `shadeLite` ombre tout, la cadence ne
+  gouverne que `shade`, vide. **Lune** (Triesnecker 4 km) : `bodyLite` suit la cadence (4 : 61 % de pixels laissés) et coûte **3,7 contre
+  13,9 ms** à 1. Recommandation : `adaptRasterRate` retiré du chemin de la Terre (sans effet mesurable), gardé pour les corps.
+- **Changé** : `tests/e2e/j2-cover.e2e.test.ts` ; PLAN-J2 §9 octies (étape A), E2E-CATALOGUE. **Mesuré** : M1 Max « Heavy » (pixels
+  fiables, temps indicatifs), 1/0 deux fois. **Non vérifié** : kerr-mini ; les Alpes, une ville ; `shade` pendant une compilation.

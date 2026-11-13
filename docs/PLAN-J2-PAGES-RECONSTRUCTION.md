@@ -109,7 +109,7 @@ chargement met à jour [GRAPHICS-PIPELINE](GRAPHICS-PIPELINE.md) dans le même l
 | **J2-4** (étape A mesurée 13 nov.) | **L'invalidation locale** : le sol écrit dans l'identité **sa page et sa génération** (une plage réservée des objets ; aujourd'hui 0) ; le temporel coupe le poids de l'historique là où la page d'un pixel a changé (le mécanisme du rejet (b), `ID_REPUBLISHED`) ; les arrivées de tuiles et d'imagerie **cessent d'appeler `invalidate()`** | `earthTiles.onChange → invalidate()`, l'invalidation à l'arrivée d'imagerie (`renderer.ts:1817`, `:4291`) ; puis, si la mesure le permet, celles du décor et du pilote régional | séquence d'arrivées en vol : 0 invalidation globale, pop de luminance ≤ 3 % hors des pages changées (C0-12), aucune image ancienne qui traîne sur une page neuve ; planche ; ΔGPU J0 |
 | **J2-5** ✅ (13 nov. ; levier éteint, sans gain mesuré) | **La désocclusion** : la profondeur de l'image d'avant gardée (copiée en fin d'image comme l'identité) ; un test de désocclusion — la profondeur reprojetée comparée à celle de l'image d'avant au point d'historique — en plus du clamp 3 × 3 ; un pixel désoccluse repart de la frame (poids d'historique coupé) ; **le sort de `rigidMotionOn` tranché ici** (un lecteur réel — par exemple la géomorphose, §7.4 — ou son retrait en J2-8) | la reprojection sans test de profondeur pour le rigide | `ghost` et `motion-quality` en virage (silhouettes du relief sur le ciel, bâtiments, appareil) ; planche ; ΔGPU J0 |
 | **J2-6** | **Une reconstruction, l'échelle variable sans pulsation** : quand la TAAU tourne, le temporel natif sans historique long (ou fondu dans la TAAU : un seul historique, à la sortie, §7.18) ; l'échelle interne changée **par petits pas** sans rééchantillonner l'historique de sortie ; l'arrêt et la reprise sans saut d'échelle (l'affinage à la taille de la sortie) ; puis l'épingle `want = rasterTop()` retirée — la résolution dynamique gouverne aussi le raster, au plancher du profil (§8.1 : 2/3 par axe, 0,5 sur preuve) | l'épingle (`main.ts:8957`), le saut 0,75 ↔ 1 à l'arrêt, le double historique long | courbe de netteté le long du vol de J2-0 : **aucun creux > 3 %** à un changement d'échelle ; `motion-quality` en virage ; J0 : intervalle p95/p99 et ΔGPU ; planche (vol, arrêt, reprise) |
-| **J2-7** | **Le taux d'ombrage local** (§7.10 : « ajouter ensuite, si utile ») — **à décider sur mesure** : ce que `shade` (restes du raster) et `bodyLite` couvrent et coûtent sur J0 et sur la Lune ; s'ils sont faibles, cadence 1 et `adaptRasterRate` retiré ; sinon une cadence locale (mouvement écran, désocclusion, pixels neufs d'abord) au lieu d'un motif global | `adaptRasterRate` global (si la mesure le permet) | la mesure d'abord (pixels, ms) ; puis planche et ΔGPU |
+| **J2-7** (étape A mesurée 13 nov.) | **Le taux d'ombrage local** (§7.10 : « ajouter ensuite, si utile ») — **à décider sur mesure** : ce que `shade` (restes du raster) et `bodyLite` couvrent et coûtent sur J0 et sur la Lune ; s'ils sont faibles, cadence 1 et `adaptRasterRate` retiré ; sinon une cadence locale (mouvement écran, désocclusion, pixels neufs d'abord) au lieu d'un motif global | `adaptRasterRate` global (si la mesure le permet) | la mesure d'abord (pixels, ms) ; puis planche et ΔGPU |
 | **J2-8** (en cours : `rigidMotionOn` retiré le 13 nov.) | **Retraits et sortie** | `rigidMotionOn` et ses pipelines `terrainVsMot`/`terrainFsMot`/`ringFsMot`, les champs `pd/pr/pu/pf` de l'uniforme (s'il est resté sans lecteur) ; les chemins remplacés par J2-1…J2-7 ; les adaptateurs datés | **fiche J0 de sortie** (kerr-mini + M1 Max), les mesures de sortie du §4, GRAPHICS-PIPELINE, BH-API, progress-to-destination |
 | *J2-C* (option) | **La compression des pages stables** : une page résidente depuis N s encodée en BC7 sur le GPU (`bc-encode.ts`, déjà dans le code), sa mip comprise ; une page neuve reste rgba8 ; **aucune nouvelle dépendance** | une part de la mémoire de l'imagerie (~195 Mo rgba8 calculés aux portées lointaines) | mémoire mesurée ; PSNR des orthophotos contre rgba8 ; aucune pointe à l'encodage ; fonction `texture-compression-bc` présente sur les machines du labo — **à décider par Sam après J2-1** |
 
@@ -444,13 +444,27 @@ mesuré ; le pic au changement d'échelle non conclu. **Reste** : J2-6 propremen
 par petits pas sans rééchantillonner l'historique de sortie, l'arrêt et la reprise sans saut, l'épingle `want = rasterTop()` retirée) et
 une mesure qui sépare netteté et bruit (PSNR contre une référence à chaque événement), sur kerr-mini.
 
-## 9 octies. J2-7 : ce qui est déjà chiffré, ce qui attend (13 novembre 2026)
+## 9 octies. J2-7, étape A : ce que `shade` et `bodyLite` couvrent et coûtent (13 novembre 2026)
 
-Le coût de `shade` (les restes du raster que le traceur reprend) est déjà dans la [fiche J0 kerr-mini du 12 nov.](progress/j0/FICHE-kerr-mini-2026-11-12.md) :
-`earth shade (raster)` **0,40 ms** ; le matériau du sol `earth lite` 5,4 ms (+ `light` 4,0, `finishing` 0,67). **Non relevés** : la part des
-pixels que `shade` reprend, la cadence d'ombrage que choisit `adaptRasterRate` en vol J0 (les échantillons du vol ne la portent pas), `bodyLite`
-sur la Lune. **Attend kerr-mini** : la cadence se règle sur la charge mesurée, et le M1 Max est en pression thermique « Heavy » depuis le
-12 nov. (même au repos) — une mesure ici dirait sa chauffe, pas le jeu.
+e2e `j2-cover` (nouveau ; M1 Max en pression « Heavy » : les temps indicatifs, les **pixels** fiables) : les `moments` de la vue vivante
+relus, chaque pixel par sa marque — le matériau raster (`liteFinish`, 1e30 / 4e30 l'eau), le reste du traceur (`shade`, 1e30 × (1 +
+albédo)), un pixel laissé par l'ombrage partiel (−3…), le masque du cockpit, le tracé (le ciel) —, à la cadence choisie et à la cadence 1 :
+
+| Vue | Cadence choisie | Matériau | `shade` | Laissés | Tracés | Matériau : choisie / 1 |
+|---|---|---|---|---|---|---|
+| J0 (cockpit, rade d'Hyères) | 16 | 2,6 % terre + 38 % mer | **0** | 0 | 54 % | `earth lite` 1,8 / 1,8 ms (`earth water` 8,5 / 8,6) |
+| Plaine du Gapeau, 300 m | 16 | 44 % | **0** | 0 | 50 % | `earth lite` 4,4 / 4,1 ms, `light` 3,4 / 3,7 |
+| Lune, Triesnecker 4 km | 4 | 20 % (+ 61 % laissés) | **0** | 61 % | 19 % | `body lite` **3,7 / 13,9 ms** |
+
+- **Sur la Terre, la cadence d'ombrage ne fait rien** : le matériau terrestre (`shadeLite`) ombre chaque pixel quelle que soit
+  `rasterRate`, qui ne gouverne que `shade` — **0 pixel** sur ces vues (`earth shade (raster)` 0,1 ms : la passe tourne à vide).
+  `adaptRasterRate` y choisit 16 (le Mac chauffe) sans effet sur l'image ni sur le coût. Selon le plan (« s'ils sont faibles, cadence 1 et
+  `adaptRasterRate` retiré ») : **pour la Terre, la cadence 1 et le gouverneur retirés ne changeraient rien de mesurable** — un retrait de code.
+- **Sur la Lune, la cadence compte** : `bodyLite` la suit (`min(rate, 4)`) et coûte 3,7 fois moins à 4 qu'à 1 ; la reconstruction des
+  pixels laissés y fait l'image. **À garder** (ou une cadence locale, J2-7 suite).
+- **Recommandation** : retirer `adaptRasterRate` du chemin de la Terre (sa cadence ne s'applique qu'à `shade`, vide) et le garder pour les
+  corps (`bodyLite`) ; la passe `shade` gardée (elle prend les pixels que le matériau refuse — aucun ici, à vérifier sur la ville et les Alpes).
+  **Non mesuré** : kerr-mini ; les Alpes, une ville ; les pixels que `shade` prend pendant une compilation (`RASTER_SHADE_LATE`).
 
 ## 10. Non vérifié
 
