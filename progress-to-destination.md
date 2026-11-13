@@ -5802,3 +5802,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   console, le rechargement à chaud (un module) intact ; `connect-src`/`img-src` non restreints (une liste de sources fragile) ; les clés
   restent dans le `localStorage` (décision de Sam, TA-25).
 
+## 2026-11-14T05:20Z — Audit AR-18 (vague 6) : la fuite d'écouteurs des menus supposée — mesurée, absente
+
+- Contribution : §19 (stabilité sur une longue partie) ; audit 2026-11-10, AR-18 (« fuite supposée, à confirmer par un profil mémoire après
+  50 ouvertures de menu »).
+- Réalisé : e2e `menu-listeners` — la pause et ses réglages ouverts et fermés 50 fois (touches et clics réels), les écouteurs vivants, les
+  nœuds et le tas lus après un ramasse-miettes (CDP). Gardé comme garde (≤ 5 écouteurs, ≤ 50 nœuds). Aucun code du jeu changé.
+- Preuves : **sonde validée** (A/A : 924 → 924 écouteurs ; témoin positif : 20 écouteurs injectés, +20 lus) ; **mesuré** (ce Mac, fenêtre
+  visible) : après 50 ouvertures −1 écouteur, 0 nœud, +2,2 Mo de tas (dont ≈ 1 Mo de dérive à l'arrêt). Les écouteurs des menus sont sur leurs
+  éléments, libérés avec eux ; les globaux passent par `onEscape` et son retrait.
+- Limites : la console d'équipage (`crew/`, 57 posés / 0 retiré selon l'audit) non mesurée — une autre page, un salon nécessaire ; le tas
+  mesuré sur 50 cycles seulement.
+
