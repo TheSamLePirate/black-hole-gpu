@@ -186,7 +186,11 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   projection sans fenêtre = celle du GPU, 1,00 / 0,99), l'éclairement vers le haut sans fenêtre / Hann / Lanczos rapporté à l'exact :
   12:00 1,10 / 1,02 / 1,01 ; 15:30 1,08 / 1,14 / 1,11 ; 18:30 1,13 / **1,47** / 1,40 ; 19:05 1,06 / 1,15 / 1,14. **Le fenêtrage aggrave l'écart dès
   que le Soleil baisse** (il tire vers la moyenne de toute la sphère, la lueur de l'horizon comprise) : ce n'est pas le correctif. Restent :
-  plus de bandes (ordre 3, 16 coefficients) ou l'éclairement exact haut / bas de la sonde à côté des harmoniques — à mesurer de même.
+  plus de bandes ou l'éclairement exact haut / bas de la sonde à côté des harmoniques.
+  **La bande 4, mesurée** (~18:48 UTC, run `…-j3-keysky-band4` ; la bande 3 ne compte pas — A₃ = 0 —, A₄ = −π/24 ; base vérifiée orthonormée à
+  1e-4) : rapport à l'exact **1,027 (12:00), 1,027 (15:30), 1,042 (18:30), 1,017 (19:05)** contre 1,06–1,13 à l'ordre 2 — **70 à 80 % de l'écart
+  en moins**. Coût à prévoir : 9 coefficients de plus dans `shBuf` / `TABLE_SH`, 9 termes de plus par pixel de l'appareil (`irradiance`). **Non
+  fait** : c'est une décision d'image (l'appareil un peu moins éclairé par le ciel, surtout au coucher) — à présenter à Sam avec des vues.
   **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
   ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.
 - **J3-2, premier pas — l'appareil à travers l'air de sa distance** (13 nov., ~17:12 UTC). La coque (`ship.wgsl` `fs`) et les traînées

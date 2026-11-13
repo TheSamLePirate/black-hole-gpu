@@ -9751,6 +9751,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     shCpu: number;
     shHann: number;
     shLanczos: number;
+    shBand4: number;
   } | null> {
     const n = ENV_W * ENV_H;
     const size = (n + 7) * 16;
@@ -9788,6 +9789,23 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       ];
     };
     const coef = new Float64Array(9);
+    // (band 4 — the clamped cosine's next band, A₄ = −π/24; band 3's is zero —: 9 more, the real harmonics' usual constants)
+    const basis4 = (d: number[]) => {
+      const [x, y, z] = d as [number, number, number];
+      const z2 = z * z;
+      return [
+        2.503343 * x * y * (x * x - y * y),
+        -1.770131 * y * z * (3 * x * x - y * y),
+        0.946175 * x * y * (7 * z2 - 1),
+        -0.669047 * y * z * (7 * z2 - 3),
+        0.105786 * (35 * z2 * z2 - 30 * z2 + 3),
+        -0.669047 * x * z * (7 * z2 - 3),
+        0.473087 * (x * x - y * y) * (7 * z2 - 1),
+        -1.770131 * x * z * (x * x - 3 * y * y),
+        0.625836 * (x * x * (x * x - 3 * y * y) - y * y * (3 * x * x - y * y)),
+      ];
+    };
+    const coef4 = new Float64Array(9);
     for (let y = 0; y < ENV_H; y++) {
       const th = (y + 0.5) * dth;
       const st2 = Math.sin(th);
@@ -9800,9 +9818,14 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         if (c > 0) e += L * c * st2;
         const b = basis(d);
         for (let k = 0; k < 9; k++) coef[k] = coef[k]! + L * b[k]! * st2;
+        const b4 = basis4(d);
+        for (let k = 0; k < 9; k++) coef4[k] = coef4[k]! + L * b4[k]! * st2;
       }
     }
-    for (let k = 0; k < 9; k++) coef[k] = coef[k]! * dth * dph;
+    for (let k = 0; k < 9; k++) {
+      coef[k] = coef[k]! * dth * dph;
+      coef4[k] = coef4[k]! * dth * dph;
+    }
     const A = [Math.PI, 2.094395, 2.094395, 2.094395, 0.785398, 0.785398, 0.785398, 0.785398, 0.785398];
     const band = [0, 1, 1, 1, 2, 2, 2, 2, 2];
     const bu = basis(up);
@@ -9818,6 +9841,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       shCpu: irr(1, 1),
       shHann: irr(0.75, 0.25),
       shLanczos: irr(0.827, 0.413),
+      shBand4: Math.max(0, irr(1, 1) + (-Math.PI / 24) * coef4.reduce((t, c, k) => t + c * basis4(up)[k]!, 0)),
     };
   }
 

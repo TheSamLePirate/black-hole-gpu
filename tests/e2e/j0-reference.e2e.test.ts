@@ -577,7 +577,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
     async () => {
       await start("");
       type Air = { skyGround: number; skyCraft: number; h: number } | null;
-      type Sky = { exact: number; sh: number; ground: number; shCpu: number; shHann: number; shLanczos: number } | null;
+      type Sky = { exact: number; sh: number; ground: number; shCpu: number; shHann: number; shLanczos: number; shBand4: number } | null;
       const clouds = async (c: number) => {
         await app.js(`(() => { __bh.game.set("earthClouds", ${c}); __bh.refresh(); return 1; })()`);
         await app.settled(120_000);
@@ -609,6 +609,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
           hannOverExact: a.sky && a.sky.exact > 0 ? p(a.sky.shHann / a.sky.exact) : null,
           lanczosOverExact: a.sky && a.sky.exact > 0 ? p(a.sky.shLanczos / a.sky.exact) : null,
           plainOverExact: a.sky && a.sky.exact > 0 ? p(a.sky.shCpu / a.sky.exact) : null,
+          band4OverExact: a.sky && a.sky.exact > 0 ? p(a.sky.shBand4 / a.sky.exact) : null,
           h: p(a.air?.h),
         };
       }
