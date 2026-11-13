@@ -4526,7 +4526,13 @@ export class Renderer {
     // governor's, by the device's measured load — adaptRasterRate)
     // (another world's ground — bodyLite —: one pixel in 4 at the sparsest; at the Earth governor's 1 in 16 its rebuilt pixels
     // shimmered round a walker on kerr-mini — PLAN-PLANETES-AAA P5)
-    this.rasterRate = this.bodyRasterNow ? Math.min(this.rasterRateFor(s), 4) : this.rasterRateFor(s);
+    // (PLAN-J2 J2-7: on the Earth with its material — shadeLite shades every ground pixel whatever the rate; the rate governs only
+    // shade's leftovers, none counted on J0 nor over the Gapeau (e2e j2-cover) — the rate 1, adaptRasterRate's choice there changing
+    // nothing measured (the material's cost 4.4 at 16, 4.1 ms at 1); the governor kept for the bodies — bodyLite follows it, 3.7
+    // against 13.9 ms on the Moon — and until the material is compiled. earthRateOne: the switch back)
+    // (the material run at the frame before — rasterLiteNow: the variant's key not yet this frame's here)
+    const earthOne = this.earthRateOne && !this.bodyRasterNow && s.earthRasterShading === "auto" && this.rasterLite && this.rasterLiteNow;
+    this.rasterRate = this.bodyRasterNow ? Math.min(this.rasterRateFor(s), 4) : earthOne ? 1 : this.rasterRateFor(s);
     // (the cloud pass's bit — CLOUD_PASS_FLAG — set once it is drawn this frame: dispatchTrace, when the frame's key is whole)
     this.cloudPassDrawn = false;
     // (16 written 15: the rate's four bits — trace.wgsl rasterRate)
@@ -5671,6 +5677,9 @@ export class Renderer {
   /** PLAN-J2 J2-6 — one long history (Sam's decision 5): while the temporal upsampling runs, the native temporal pass keeps a short
    *  one (its least α raised to `singleNativeAlpha`, the carried ground's too) and the upsampling the long one (its least α the one
    *  the native pass had — TU.u.w); off: both long (the held view's page took > 1 s to show — J2-4, step A). Off by default */
+  /** PLAN-J2 J2-7 — the Earth's raster shading rate 1 while its material (shadeLite) runs, adaptRasterRate's choice not used there
+   *  (it governed only shade's leftovers: none on J0 nor over land — e2e j2-cover); off: the governor's rate as before */
+  earthRateOne = true;
   singleHistory = false;
   singleNativeAlpha = 0.5;
   /** PLAN-J2 J2-6 — the raster's scale in flight left to the dynamic resolution (main.ts: the pin `want = rasterTop()` lifted, its floor
@@ -12037,7 +12046,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const auto = s.realtimeSubsampling === "auto";
     const used = this.lastBlock;
     // (the raster's shading rate this frame, when the governor chooses it — earthRasterShading "auto")
-    const rate = this.rasterPrimaryOn && s.earthRasterShading === "auto" ? this.rasterRate : 0;
+    // (J2-7: the Earth's rate fixed at 1 under its material — no measure for the governor then)
+    const rate =
+      this.rasterPrimaryOn && s.earthRasterShading === "auto" && !(this.earthRateOne && this.rasterLiteNow && !this.bodyRasterNow)
+        ? this.rasterRate
+        : 0;
     const generation = this.timingGeneration;
     // (J2-0's instruments, off by default: the tiles' publication closed for this image, the image's sharpness)
     this.earthTiles.pubFrame();

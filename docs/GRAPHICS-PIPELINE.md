@@ -230,7 +230,9 @@ rejeu) inchangée. kerr-mini : non mesuré.
 
 Juste avant `keepMotion` : `earthTiles.pubFrame()` (J2-0 : clôt les compteurs de publication de l'image, rien sans
 `earthTiles.pubProbe`), puis F5 si demandé. Puis `submit()` (`renderer.ts:8919`) : **un `queue.submit`**, `onSubmittedWorkDone` alimente `lastGpuMs`, le bloc du
-traceur (`adaptBlock`) et le taux de shading raster (`adaptRasterRate`). Une frame **convergée et inchangée** revient sans
+traceur (`adaptBlock`) et le taux de shading raster (`adaptRasterRate` — **depuis J2-7, 13 nov., pour les corps seulement** : sur la Terre,
+le matériau `shadeLite` tournant, la cadence vaut 1, `renderer.earthRateOne` ; elle ne gouvernait que les restes de `shade`, 0 pixel mesuré —
+e2e `j2-cover`). Une frame **convergée et inchangée** revient sans
 soumettre (`renderer.ts:10842`).
 
 ---

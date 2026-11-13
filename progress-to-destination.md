@@ -4122,3 +4122,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   de même à l'arrêt ; changement 0,75 → 0,625 : 29,7 dB avec ou sans. **Retirés** : « −0,85 dB à l'arrêt » et « la pulsation de −0,56 dB
   supprimée » (artefacts de la référence). Bilan pour la décision de Sam : neutre en vol, page neuve 3 × plus vite en vue tenue, bruit tenu
   0,41 → 0,54 %. PLAN-J2 §9 octies (d)/(e), BH-API.
+
+## 2026-11-13T05:49Z — J2-7 : la cadence d'ombrage de la Terre fixée à 1 sous son matériau ; le gouverneur gardé pour les corps
+
+- **Contribution** (PLAN-J2 J2-7 ; stratégie §20 « supprimer les options sans effet ») : `renderer.earthRateOne` (allumé) — sur la Terre, le
+  matériau `shadeLite` tournant, la cadence 1 au lieu du choix d'`adaptRasterRate` (qui ne gouvernait que les restes de `shade`, 0 pixel
+  mesuré) ; le gouverneur ne mesure plus là ; gardé pour les corps (`bodyLite`) et pendant la compilation du matériau.
+- **Vérifié** : `j2-cover` (Terre à 1 avec les mêmes parts de pixels, Lune à 4), `surface-id` 1/0, tsc, biome. Une première version lisait
+  `traceVariant("shadeLite")` dans `writeParams`, avant la clé de l'image : sans effet — corrigée (le matériau de l'image d'avant).
+  **Non vérifié** : kerr-mini (ΔGPU J0) ; le démarrage à froid (`shadeMark` plus attendu).
+- **Changé** : `src/renderer.ts` ; GRAPHICS-PIPELINE (§ soumission), BH-API, PLAN-J2 §9 octies.
