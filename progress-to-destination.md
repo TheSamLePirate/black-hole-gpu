@@ -5757,5 +5757,5 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `envSpec` ÷), `character.wgsl` (`envSpecular` ÷), `ship.ts` (`envBuf` + 9). Docs : PROBLEMES (réglé), GRAPHICS-PIPELINE D2.
 - Preuves : **observé / mesuré** (kerr-mini) : la couche du ciel relue lisse (~5·10⁻² au lieu de ~2·10⁻⁷) ; à 19:40 plus de taches, la coque
   reflète le ciel ; de jour vues et exposition identiques (14,645 EV). `check-wgsl` 82/82, tsc, biome. **Non vérifié** : le marcheur la nuit.
-- Limites : le levier de mesure `TUNE_SEA_DBG` reste (0 par défaut) — à retirer au prochain lot de retrait (règle 2).
+- Limites : le levier de mesure `TUNE_SEA_DBG` retiré ensuite (~20:31 UTC), sans usage ; la phase `seadusk` gardée (9 cas).
 

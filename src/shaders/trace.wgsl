@@ -263,10 +263,6 @@ override TUNE_SMOKE_STEP: f32 = 0.5;
 override TUNE_STEP_BODIES: u32 = 1u;
 // (the ground's march: a step's share of the clearance — 0.5, safe for slopes to ~60°; more: a measure)
 override TUNE_MARCH_K: f32 = 0.5;
-// (PROBLEMES, the sea at dusk — a measuring lever in seaShade: 1 the slopes' variances nil, 2 no foam, 4 the normal flat, 8 the probe's
-// mirrored sky not read, 16 its level held at 0 — no GGX blur, 32 its
-// hold by luminance, not channel by channel)
-override TUNE_SEA_DBG: u32 = 0u;
 // (PLAN-J3 J3-5, a measuring lever: the tiles' and bricks' albedo scale in buildingLook — 1 as drawn)
 override TUNE_BLD_TILE: f32 = 1.0;
 override TUNE_BLD_BRICK: f32 = 1.0;
@@ -9365,7 +9361,7 @@ const SEA_SKY_LAYER = 16u;
 fn seaSkyRadiance(d: vec3f, alpha: f32) -> vec3f {
   let c = camAxes(fromBody(d));
   let u = atan2(c.x, c.z) / TAU + 0.5;
-  let lod = clamp(alpha * 5.0, 0.0, select(5.0, 0.0, (TUNE_SEA_DBG & 16u) != 0u));
+  let lod = clamp(alpha * 5.0, 0.0, 5.0);
   let rows = 256.0 / exp2(ceil(lod));
   let v = clamp(acos(clamp(c.y, -1.0, 1.0)) / PI * 0.5, 0.5 / rows, 0.5 - 0.5 / rows);
   // (the probe's GGX levels are stored × the pre-exposure — ship.wgsl envCopy —: back to radiance; the frame's own, the copy's within
@@ -9463,10 +9459,6 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     vu = sw.vu * (1.0 - calm);
     vc = sw.vc * (1.0 - calm);
     vx = sw.vx * (1.0 - calm);
-    // (PROBLEMES — the sea's colour blotches at dusk —, a measuring lever: 1 the slopes' variances nil, 2 no foam, 4 the normal flat)
-    if ((TUNE_SEA_DBG & 1u) != 0u) { vu = 0.0; vc = 0.0; vx = 0.0; }
-    if ((TUNE_SEA_DBG & 2u) != 0u) { crest = 0.0; lying = 0.0; }
-    if ((TUNE_SEA_DBG & 4u) != 0u) { n = normal; }
     fine = 1.0 - 0.5 * b;
     // (the ships' wakes: their waves, their smoothed strips)
     wk = seaWake(normal, footM);
@@ -9593,10 +9585,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     // (filtered by the slopes the pixel does not resolve — their roughness, the probe's GGX level: a rough sea mirrors a blurred
     // sky, a calm one a sharp one — S5)
     let alphaR = sqrt(su2 + sc2);
-    let seaSky = seaSkyRadiance(rUp, alphaR);
-    // (TUNE_SEA_DBG 32, a measure: the probe's sky held under 4 × the clear sky's luminance, its hue kept — not channel by channel)
-    let seaSkyHeld = select(min(seaSky, 4.0 * skyR), seaSky * min(1.0, 4.0 * luminance(skyR) / max(luminance(seaSky), 1e-30)), (TUNE_SEA_DBG & 32u) != 0u);
-    skyR = mix(skyR, seaSkyHeld, b * P.seafft[6].z * select(1.0, 0.0, (TUNE_SEA_DBG & 8u) != 0u));
+    skyR = mix(skyR, min(seaSkyRadiance(rUp, alphaR), 4.0 * skyR), b * P.seafft[6].z);
     // (another world's sky: its own light probe — the lensed disk, Gargantua, the sky about the craft —, else its harmonics)
     if (SEA_ALIEN) { skyR = select(nearE(fromBody(rUp)) / PI, seaSkyRadiance(rUp, alphaR), P.near3.w < 1.5); }
     skyClear = select(skyClear, skyR, SEA_ALIEN);
