@@ -4002,3 +4002,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (kerr-mini) ; une ville, des bâtiments proches ; `bun test` complet.
 - **Suite** : `rigidMotionOn` retiré en J2-8 (J2-5 n'en fait pas un lecteur — décision 8) ; la désocclusion reposée avec J2-6 (un seul
   historique) ; J2-4/J2-6 attendent la décision de Sam sur la voie.
+
+## 2026-11-13T03:07Z — J2-8, premier retrait : rigidMotionOn et ses pipelines (sans lecteur)
+
+- **Contribution** (stratégie §20 « supprimer ensuite options, buffers et compilations sans utilisateur » ; PLAN-J2 §8, décision 8 de
+  Sam) : J2-5 n'a pas fait du mouvement analytique du rigide un lecteur → retiré.
+- **Changé** : `src/renderer.ts` (`rigidMotionOn`, `groundPrev`, l'écriture des mots 36–51 du cadre) ; `src/system/terrain-raster.ts`
+  (`terrainVsMot`, `terrainFsMot`, `ringFsMot`, `VertexM`, `GroundOutM`, les champs `pd/pr/pu/pf`, `buildGround()` sans mouvement) ;
+  `src/system/terrain-raster-frame.ts` (`TERRAIN_RASTER_UNIFORM_BYTES` 13 → 9 vec4) ; `src/system/scenery-raster.ts` (`rigidMotion`) ;
+  e2e `surface-id` (la vérification rigide) ; BH-API, GRAPHICS-PIPELINE (C6b, annexe et tailles), PLAN-J1, PLAN-J2 §9 octies (c).
+- **Vérifié** : tsc, biome, `check-wgsl` 81/81, `pipeline-inventory --check`, e2e `surface-id` 1/0 (identité 49/49, visibilité p50
+  1,33 ms sur le M1 Max). Aucun changement d'image (le levier était éteint). **Non vérifié** : kerr-mini ; `bun test` complet.

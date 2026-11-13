@@ -13,9 +13,9 @@ import {
 
 export type TerrainRasterView = "off" | "depth" | "normals" | "difference";
 /** (a ninth vec4: the next coarser level's, its geomorphose — T3 —, set by the renderer's rings; 0: none) */
-/** the frame's uniform: 9 vec4s, then the frame before's view for the ground's analytic motion (PLAN-J1 J1-2: the eye's step
- *  from then to now in the body's axes — w 1 valid —, the right, up and forward then, each w its field's tangent) */
-export const TERRAIN_RASTER_UNIFORM_BYTES = 13 * 16;
+/** the frame's uniform: 9 vec4s (the frame before's view that followed — PLAN-J1 J1-2's analytic motion of the ground, never read —
+ *  retired with it, PLAN-J2 J2-8) */
+export const TERRAIN_RASTER_UNIFORM_BYTES = 9 * 16;
 /** the camera in the body's axes [m] (float64: the frame's eye, terrainRasterFrame's own) */
 export function terrainRasterEye(near: LocalPatch): Vec3 {
   return near.axes.map((a) => -dot(near.centre, a) * WGS84_A) as Vec3;

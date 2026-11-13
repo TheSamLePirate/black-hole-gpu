@@ -189,9 +189,7 @@ struct U {
   // the next coarser level drawn about this one (T3, its geomorphose): xy this grid's nodes' offset on it (× w), z its heights'
   // place in the table, w the two grids' ratio (2 or 4; 0: none — the last ring, the rings off)
   morph: vec4f,
-  // the frame before's view (PLAN-J1 J1-2, the ground's analytic motion): the eye's step from then to now in the body's axes (w 1:
-  // valid), its right, up, forward then (w: the fields' tangents, as right.w and up.w)
-  pd: vec4f, pr: vec4f, pu: vec4f, pf: vec4f,
+  // (the frame before's view that followed — PLAN-J1 J1-2's analytic motion of the ground — retired with it, PLAN-J2 J2-8)
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var<storage, read> table: array<vec4f>;
@@ -242,9 +240,6 @@ var<private> TP_H: f32;
 @group(0) @binding(2) var distanceImage: texture_2d<f32>;
 @group(0) @binding(3) var<storage, read> referenceDepth: array<f32>;
 struct Vertex { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) n: vec3f };
-// (PLAN-J1 J1-2: the ground with its analytic motion — terrainVsMot, terrainFsMot, ringFsMot: their own entries, the plain ones
-// left as they were — no interpolant more — while renderer.rigidMotionOn is off)
-struct VertexM { @builtin(position) clip: vec4f, @location(0) p: vec3f, @location(1) n: vec3f, @location(2) mot: vec3f };
 // (T5: a level's mark and its smooth normal in the target's a — an integer below 2²⁴, exact in its float: the mark's code
 // × 2¹⁸ — terrain-raster-hint.ts RASTER_CODE —, the normal's octahedron 2 × 9 bits, each 1…511 — 0: none)
 fn rasterCode(code: f32, n: vec3f) -> f32 {
@@ -374,24 +369,6 @@ fn terrainVertex(vertex: vec3f) -> Vertex {
   v.clip = vec4f(v.p.x / u.right.w + u.output.z * v.p.z, v.p.y / u.up.w + u.output.w * v.p.z, u.forward.w, v.p.z);
   return v;
 }
-// (PLAN-J1 J1-2) the ground with its analytic motion on the image since the frame before [px, unjittered] — the same point through
-// the camera then (the uniform's pd, pr, pu, pf) —, z −1: the rigid's, unread by the history — its own reprojection —
-@vertex fn terrainVsMot(@location(0) vertex: vec3f) -> VertexM {
-  let b = terrainVertex(vertex);
-  var v = VertexM(b.clip, b.p, b.n, vec3f(0.0));
-  if (u.pd.w > 0.5 && v.p.z > 0.1) {
-    // (the point back in the body's axes, camera-relative: the camera's axes orthonormal)
-    let p = u.right.xyz * v.p.x + u.up.xyz * v.p.y + u.forward.xyz * v.p.z;
-    let rel = p + u.pd.xyz;
-    let vp = vec3f(dot(rel, u.pr.xyz), dot(rel, u.pu.xyz), dot(rel, u.pf.xyz));
-    if (vp.z > 0.1) {
-      let n0 = vec2f(v.p.x / (u.right.w * v.p.z), v.p.y / (u.up.w * v.p.z));
-      let n1 = vec2f(vp.x / (u.pr.w * vp.z), vp.y / (u.pu.w * vp.z));
-      v.mot = vec3f((n0 - n1) * 0.5 * vec2f(u.image.x, -u.image.y), -1.0);
-    }
-  }
-  return v;
-}
 // The relief seen from the Sun (its shadow map — trace.wgsl sunShadowFar): an orthographic view along its direction,
 // right and up over half-widths [m], the depth the distance towards the Sun over twice its half-range, nearer the Sun less
 // — T6: a cascade's, its centre (xy, along right and up [m] from the camera: on its texels' grid, the shadows' edges still while
@@ -407,9 +384,7 @@ struct Sun { right: vec4f, up: vec4f, toward: vec4f, centre: vec4f };
 // its proxy's distance over b; a: the patch's code, 1, and its smooth normal — T5)
 // (the ground: no object — its identity 0, as its g; PLAN-J1 J1-2)
 struct GroundOut { @location(0) vis: vec4f, @location(2) id: u32 };
-struct GroundOutM { @location(0) vis: vec4f, @location(1) mot: vec4f, @location(2) id: u32 };
 @fragment fn terrainFs(v: Vertex) -> GroundOut { let d = length(v.p); return GroundOut(vec4f(d, 0.0, d, rasterCode(1.0, v.n)), 0u); }
-@fragment fn terrainFsMot(v: VertexM) -> GroundOutM { let d = length(v.p); return GroundOutM(vec4f(d, 0.0, d, rasterCode(1.0, v.n)), vec4f(v.mot, 0.0), 0u); }
 // A far ring: a coarser level's grid (its cells four times the next finer one's), its triangles under that finer one left out
 // of its mesh (system/terrain-raster.ts drawRing) — xy its nodes' place on the finer one's grid (×4 and this offset), z the
 // overlap kept along the finer one's edge [its nodes] —; w its mark's code in a (1 + its rank from the patch + 8 × its step,
@@ -418,10 +393,6 @@ struct GroundOutM { @location(0) vis: vec4f, @location(1) mot: vec4f, @location(
 @fragment fn ringFs(v: Vertex) -> GroundOut {
   let d = length(v.p);
   return GroundOut(vec4f(d, 0.0, d, rasterCode(ring.w, v.n)), 0u);
-}
-@fragment fn ringFsMot(v: VertexM) -> GroundOutM {
-  let d = length(v.p);
-  return GroundOutM(vec4f(d, 0.0, d, rasterCode(ring.w, v.n)), vec4f(v.mot, 0.0), 0u);
 }
 
 @vertex fn screenVs(@builtin(vertex_index) k: u32) -> @builtin(position) vec4f {
@@ -636,47 +607,35 @@ export class TerrainRaster {
         { binding: 3, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "read-only-storage" } },
       ],
     });
-    this.buildGround(false);
+    this.buildGround();
   }
 
-  /** whether the ground writes its analytic motion (PLAN-J1 J1-2 — renderer.rigidMotionOn): its pipelines rebuilt when it
-   *  changes — off, the motion target left alone where the ground is (+0.8 ms on kerr-mini written: no reader yet) */
-  rigidMotion = false;
-  private groundMotion = false;
-  private groundBuilding = false;
-  /** The ground's two pipelines — the patch's and the rings' —, writing its motion or not; swapped in whole once both are made,
-   *  their bind groups made again from the new layouts. */
-  private buildGround(motion: boolean): void {
+  /** The ground's two pipelines — the patch's and the rings' —; their bind groups made again from the new layouts. (PLAN-J1 J1-2's
+   *  analytic motion of the ground — its own entry points, a switch on the renderer — never had a reader: retired, PLAN-J2 J2-8.) */
+  private buildGround(): void {
     const d = this.device;
     const make = (entryPoint: string) =>
       d.createRenderPipelineAsync({
         layout: "auto",
         vertex: {
           module: this.module,
-          entryPoint: motion ? "terrainVsMot" : "terrainVs",
+          entryPoint: "terrainVs",
           buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }],
         },
         fragment: {
           module: this.module,
-          entryPoint: motion ? `${entryPoint}Mot` : entryPoint,
-          // (the ground’s analytic motion — z −1, unread by the history — written only when asked; PLAN-J1 J1-2)
-          targets: [
-            { format: TERRAIN_RASTER_FORMAT },
-            motion ? { format: TERRAIN_RASTER_MOTION_FORMAT } : NO_MOTION,
-            { format: TERRAIN_RASTER_ID_FORMAT },
-          ],
+          entryPoint,
+          // (the motion target left alone where the ground is: the moving meshes' alone write it)
+          targets: [{ format: TERRAIN_RASTER_FORMAT }, NO_MOTION, { format: TERRAIN_RASTER_ID_FORMAT }],
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       });
-    this.groundBuilding = true;
     Promise.all([make("terrainFs"), make("ringFs")]).then(
       ([mesh, ring]) => {
-        this.groundBuilding = false;
         if (this.disposed) return;
         this.mesh = mesh;
         this.ringPipe = ring;
-        this.groundMotion = motion;
         // (the bind groups from the new layouts: made again at the next draw)
         this.heightSources = null;
         this.table = null;
@@ -686,10 +645,7 @@ export class TerrainRaster {
           r.sources = null;
         }
       },
-      (e) => {
-        this.groundBuilding = false;
-        this.failed(e);
-      },
+      (e) => this.failed(e),
     );
   }
 
@@ -1071,7 +1027,6 @@ export class TerrainRaster {
     }
     this.device.queue.writeBuffer(this.uniform, 0, frame);
     // (the ground's analytic motion asked or no longer: its pipelines rebuilt — the old ones drawn meanwhile)
-    if (this.rigidMotion !== this.groundMotion && !this.groundBuilding) this.buildGround(this.rigidMotion);
     this.visibilityCalls++;
     const a = this.attachments!;
     const pass = enc.beginRenderPass(

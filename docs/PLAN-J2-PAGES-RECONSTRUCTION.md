@@ -110,7 +110,7 @@ chargement met à jour [GRAPHICS-PIPELINE](GRAPHICS-PIPELINE.md) dans le même l
 | **J2-5** ✅ (13 nov. ; levier éteint, sans gain mesuré) | **La désocclusion** : la profondeur de l'image d'avant gardée (copiée en fin d'image comme l'identité) ; un test de désocclusion — la profondeur reprojetée comparée à celle de l'image d'avant au point d'historique — en plus du clamp 3 × 3 ; un pixel désoccluse repart de la frame (poids d'historique coupé) ; **le sort de `rigidMotionOn` tranché ici** (un lecteur réel — par exemple la géomorphose, §7.4 — ou son retrait en J2-8) | la reprojection sans test de profondeur pour le rigide | `ghost` et `motion-quality` en virage (silhouettes du relief sur le ciel, bâtiments, appareil) ; planche ; ΔGPU J0 |
 | **J2-6** | **Une reconstruction, l'échelle variable sans pulsation** : quand la TAAU tourne, le temporel natif sans historique long (ou fondu dans la TAAU : un seul historique, à la sortie, §7.18) ; l'échelle interne changée **par petits pas** sans rééchantillonner l'historique de sortie ; l'arrêt et la reprise sans saut d'échelle (l'affinage à la taille de la sortie) ; puis l'épingle `want = rasterTop()` retirée — la résolution dynamique gouverne aussi le raster, au plancher du profil (§8.1 : 2/3 par axe, 0,5 sur preuve) | l'épingle (`main.ts:8957`), le saut 0,75 ↔ 1 à l'arrêt, le double historique long | courbe de netteté le long du vol de J2-0 : **aucun creux > 3 %** à un changement d'échelle ; `motion-quality` en virage ; J0 : intervalle p95/p99 et ΔGPU ; planche (vol, arrêt, reprise) |
 | **J2-7** | **Le taux d'ombrage local** (§7.10 : « ajouter ensuite, si utile ») — **à décider sur mesure** : ce que `shade` (restes du raster) et `bodyLite` couvrent et coûtent sur J0 et sur la Lune ; s'ils sont faibles, cadence 1 et `adaptRasterRate` retiré ; sinon une cadence locale (mouvement écran, désocclusion, pixels neufs d'abord) au lieu d'un motif global | `adaptRasterRate` global (si la mesure le permet) | la mesure d'abord (pixels, ms) ; puis planche et ΔGPU |
-| **J2-8** | **Retraits et sortie** | `rigidMotionOn` et ses pipelines `terrainVsMot`/`terrainFsMot`/`ringFsMot`, les champs `pd/pr/pu/pf` de l'uniforme (s'il est resté sans lecteur) ; les chemins remplacés par J2-1…J2-7 ; les adaptateurs datés | **fiche J0 de sortie** (kerr-mini + M1 Max), les mesures de sortie du §4, GRAPHICS-PIPELINE, BH-API, progress-to-destination |
+| **J2-8** (en cours : `rigidMotionOn` retiré le 13 nov.) | **Retraits et sortie** | `rigidMotionOn` et ses pipelines `terrainVsMot`/`terrainFsMot`/`ringFsMot`, les champs `pd/pr/pu/pf` de l'uniforme (s'il est resté sans lecteur) ; les chemins remplacés par J2-1…J2-7 ; les adaptateurs datés | **fiche J0 de sortie** (kerr-mini + M1 Max), les mesures de sortie du §4, GRAPHICS-PIPELINE, BH-API, progress-to-destination |
 | *J2-C* (option) | **La compression des pages stables** : une page résidente depuis N s encodée en BC7 sur le GPU (`bc-encode.ts`, déjà dans le code), sa mip comprise ; une page neuve reste rgba8 ; **aucune nouvelle dépendance** | une part de la mémoire de l'imagerie (~195 Mo rgba8 calculés aux portées lointaines) | mémoire mesurée ; PSNR des orthophotos contre rgba8 ; aucune pointe à l'encodage ; fonction `texture-compression-bc` présente sur les machines du labo — **à décider par Sam après J2-1** |
 
 **Le domaine** : la Terre proche (le patch raster et ses anneaux, l'imagerie z 6–18) et la reconstruction de l'image vivante. Hors J2 :
@@ -394,6 +394,16 @@ d'historique (3 %) repart sans historique (`temporal`, `taau`). Mesuré (M1 Max)
 Alpes en virage 46,7 contre 47,4 dB (A B A), La Mancha 19,4 contre 19,0 dB ; la frange de la crête est la même (le bord de silhouette de
 la TAAU, pas une traîne). **`rigidMotionOn` n'a pas de lecteur → retiré en J2-8** (décision 8). Piège : le 1ᵉʳ mode d'une série
 `motion-quality` lit 5–7 dB plus bas (tuiles en attente) — A B A.
+
+## 9 octies (c). J2-8, premier retrait : `rigidMotionOn` (13 novembre 2026)
+
+J2-5 n'en fait pas un lecteur (la désocclusion lit les profondeurs) → **retiré** (décision 8) : `renderer.rigidMotionOn` et `groundPrev`, les
+entrées `terrainVsMot`/`terrainFsMot`/`ringFsMot` et les structures `VertexM`/`GroundOutM` (`terrain-raster.ts` : `buildGround()` sans
+mouvement, la cible de mouvement laissée aux maillages mobiles), les champs `pd/pr/pu/pf` de l'uniforme du cadre (13 → 9 vec4 :
+`TERRAIN_RASTER_UNIFORM_BYTES`), `rigidMotion` du décor (`scenery-raster.ts`, `ident.y` plus écrit), la vérification « rigide » de l'e2e
+`surface-id`. Vérifié : tsc, biome, `check-wgsl` 81/81, e2e `surface-id` 1/0 (identité de la passe = celle de l'adaptateur 49/49 ;
+visibilité p50 1,33 ms, M1 Max). Aucun changement d'image (le levier était éteint). Reste à J2-8 : les chemins remplacés par J2-1…J2-7,
+les adaptateurs datés, la fiche J0 de sortie.
 
 ## 9 octies. J2-7 : ce qui est déjà chiffré, ce qui attend (13 novembre 2026)
 

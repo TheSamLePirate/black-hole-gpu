@@ -360,7 +360,8 @@ fragment caché ombré : 28 → 8 → 3,1 ms sur Paris) ; **pour une vue de faç
 de la stratégie est J2 (pages d'imagerie et reconstruction, §15), à ouvrir sur décision de Sam ; `rigidMotionOn` se retire à la fin de
 J2 s'il n'a pas de lecteur.
 
-**J1-7, `rigidMotionOn` — gardé éteint, avec son propriétaire et sa condition de retrait (12 novembre).** Relevé : aucun lecteur ne lit
+**J1-7, `rigidMotionOn` — gardé éteint, avec son propriétaire et sa condition de retrait (12 novembre)** — *retiré le 13 novembre par
+PLAN-J2 J2-8 (J2-5 n'en a pas fait un lecteur ; PLAN-J2 §9 octies (c)).* Relevé : aucun lecteur ne lit
 le mouvement analytique du rigide (z −1) — `temporal`, `taau` et le flou de mouvement ne lisent la cible de mouvement que là où z > 0,5
 (un maillage mobile, l'appareil) et reprojettent le rigide par la caméra et la profondeur, ce qui est exact pour lui ; ni J1-5 ni le
 rejet (b) n'en ont eu besoin. **Propriétaire** : J1-2 (`terrain-raster.ts` `buildGround(motion)`, `scenery-raster.ts` `rigidMotion`).

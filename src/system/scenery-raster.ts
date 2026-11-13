@@ -210,17 +210,6 @@ struct U {
 // (pcam, pr, pu, pf: the frame before's camera — its place on the scenery's local axes, the clock then (w); its axes and fields
 // (w: tan of the half fields, pf.w 1 when valid) — for the moving meshes' motion, PLAN-J1 J1-2)
 struct S { east: vec4f, north: vec4f, up: vec4f, cam: vec4f, lift: vec4f, misc: vec4f, pcam: vec4f, pr: vec4f, pu: vec4f, pf: vec4f, ident: vec4f };
-// (PLAN-J1 J1-2) a still point's motion on the image since the frame before [px, unjittered] — through the camera then —, in
-// the motion target's xy with z −1: the rigid's analytic motion, written for its readers to come; the history's passes
-// (post.wgsl) read xy only where z marks a moving mesh (> 0.5) — theirs still the camera's own reprojection: the image unchanged
-fn rigidMotion(p: vec3f, v: vec3f) -> vec3f {
-  if (sc.ident.y < 0.5 || sc.pf.w < 0.5 || v.z <= 0.1) { return vec3f(0.0); }
-  let vp = viewPrev(p);
-  if (vp.z <= 0.1) { return vec3f(0.0); }
-  let n0 = vec2f(v.x / (u.right.w * v.z), v.y / (u.up.w * v.z));
-  let n1 = vec2f(vp.x / (sc.pr.w * vp.z), vp.y / (sc.pu.w * vp.z));
-  return vec3f((n0 - n1) * 0.5 * vec2f(u.image.x, -u.image.y), -1.0);
-}
 // The surface's identity word (PLAN-J1 J1-2, system/surface-id.ts packSurfaceId): an object (its 20 low bits) of the scenery's
 // publication (ident.x, its 12 low bits); 0 nothing
 fn surfaceId(object: f32) -> u32 {
@@ -451,7 +440,6 @@ fn sunClip(p: vec3f) -> vec4f {
   o.id = f32(k + 1u);
   o.p = v;
   o.mot = vec3f(0.0);
-  if (!none && sc.ident.y > 0.5) { o.mot = rigidMotion(p, v); }
   if (crown && !none && any(sw != vec2f(0.0)) && sc.pf.w > 0.5 && v.z > 0.1) {
     let w = forestWind();
     let swp = forestSwayAt(t.foot, t.height, t.seed, w, sc.pcam.xyz, sc.pcam.w);
@@ -705,10 +693,9 @@ fn meshLeaf(tri: u32) -> f32 {
   // before [px], unjittered: their point then — the clock then — through the camera then; the rest still on the scenery: none —
   // the history reprojects it by the camera and the depth)
   let moving = fam == 0xfff90000u || fam == 0xfff80000u || fam == 0xfff70000u || fam == 0xfffe0000u || fam == 0xfffd0000u || fam == 0xfffa0000u;
-  // (the rest, still: its analytic motion — z −1 —, unread by the history)
+  // (the rest, still: no motion written — the history reprojects it by the camera and the depth; the rigid's analytic motion,
+  // never read, retired by PLAN-J2 J2-8)
   o.mot = vec3f(0.0);
-  // (asked only — ident.y —: no work for it otherwise; the still point, this vertex's own)
-  if (!moving && sc.ident.y > 0.5) { o.mot = rigidMotion(wp, v); }
   if (moving && sc.pf.w > 0.5 && v.z > 0.1) {
     let vp = viewPrev(meshVertexAt(vi, sc.pcam.w));
     if (vp.z > 0.1) {
@@ -1016,8 +1003,6 @@ export class SceneryRaster {
   private sceneryOut = new Float32Array(44);
   /** the scenery's publication the instances belong to (earthScenery.revision; PLAN-J1 J1-2): their identity's generation */
   generation = 0;
-  /** the still instances' analytic motion written (renderer.rigidMotionOn; PLAN-J1 J1-2) — ident.y */
-  rigidMotion = false;
   /** the frame before's camera for the moving meshes' motion (PLAN-J1 J1-2): its place on the scenery's axes, its clock, its axes */
   private prevCam: { frame: Float32Array; cam: [number, number, number]; axes: number[]; clock: number } | null = null;
   /** (R4b) the air's lift for the scenery's projection: (x + y d) d² [m], z the fade's angle, w 1 on — renderer.ts sceneryLift */
@@ -1152,7 +1137,6 @@ export class SceneryRaster {
     }
     // (ident.x: the identity's generation, its 12 low bits — PLAN-J1 J1-2)
     this.sceneryOut[40] = this.generation % 4096;
-    this.sceneryOut[41] = this.rigidMotion ? 1 : 0;
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
