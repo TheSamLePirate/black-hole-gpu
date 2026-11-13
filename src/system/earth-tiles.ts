@@ -1392,8 +1392,10 @@ export class EarthTiles {
   /** PLAN-J2 J2-3 — the imagery's levels faded at their published edge by the filtered footprint's reach (trace.wgsl edgeWeight:
    *  0 while the hardware's read — the pixel's footprint on the level, anisotropic to 16, its mip — can reach past the edge, 1
    *  EDGE_BAND texels beyond, as wide as the reach at least), not over a fixed 2–48 texels: the finer level drawn up to its edge.
-   *  The heights keep theirs (the CPU's reader the same — J2-2). The params' on-word 2 (P.tiles.w); off: 1, the fixed fade */
-  edgeFoot = false;
+   *  The heights keep theirs (the CPU's reader the same — J2-2). The params' on-word 2 (P.tiles.w); off: 1, the fixed fade. **On by
+   *  default since 13 Nov 2026** (PLAN-J2 J2-3 as validated; its proofs: leak 0 on four views, no seam, J0's ΔGPU in flight on kerr-mini
+   *  −0.03 ms — PLAN-J2 §9 decies) */
+  edgeFoot = true;
   /** the orthophotos (IGN, France — I1): wanted (settings.earthOrtho), their levels, their loads, the tiles they have
    *  not (404: out at sea, abroad — not asked again), loaded */
   orthoOn = true;

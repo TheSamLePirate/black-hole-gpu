@@ -4183,3 +4183,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   80,1 ms ; soutenu GPU p50 58,1 ms ; ablations : nuages −6,2, appareil −3,2, décor −2,3, HUD −1,6, ombre −0,3 ms (l'eau : non valable,
   `liteSkip`). **Fichiers** : `docs/progress/j0/FICHE-kerr-mini-2026-11-13.md`, `j0-kerr-mini-2026-11-13.json` (texte) ; README J0, PLAN-J2.
   Provisoire : à refaire après les décisions de Sam, et le M1 Max refroidi (il bride en vol).
+
+## 2026-11-13T07:05Z — Décision de Sam, « ok pour tes recommandations » : quatre leviers allumés
+
+- **Contribution** (PLAN-J2 §9 undecies ; stratégie §19 l'expérience complète) : allumés par défaut — `renderer.singleHistory` (J2-6, décision 5 ;
+  ΔGPU kerr-mini −0,04 ms), `earthTiles.edgeFoot` (J2-3 ; −0,03 ms), `renderer.seaSsrSafe` (les points blancs de la mer), `earthScenery.clearCut`
+  (les arbres sur les îlots coupés). Suite : la désocclusion retirée ; le couloir du plafond des bâtiments le long de la trajectoire ; la fiche J0
+  de sortie refaite.
+- **Vérifié** : tsc, biome, `bun test --parallel` 2 212 / 0 (`singleHistory` et `edgeFoot` allumés ; le test des paramètres des tuiles mis à
+  jour : le mot « allumé » vaut 2). **Non vérifié encore** : la séance J0 avec les quatre leviers (en cours sur kerr-mini avec les deux premiers).
+- **Changé** : `src/renderer.ts`, `src/system/earth-tiles.ts`, `src/system/scenery.ts`, `tests/earth-tiles.test.ts`,
+  `tests/e2e/j0-reference.e2e.test.ts` (ablations : les leviers éteints) ; PLAN-J2 §9 decies/undecies, BH-API, GRAPHICS-PIPELINE, PROBLEMES,
+  fiche J2-3.

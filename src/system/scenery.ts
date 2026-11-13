@@ -79,8 +79,9 @@ export class EarthScenery {
   /** (Q8 L10) the streets' lamps and their light's pools (settings.earthStreetLamps) */
   lamps = true;
   /** the IGN's surveyed trees kept off the footprints of the buildings the cap left out (its canopy holds their roofs: a
-   *  cut block drew a wood) — off by default, Sam's decision (PROBLEMES-A-REGLER, 12 Nov 2026); a change asks a new scene */
-  clearCut = false;
+   *  cut block drew a wood) — **on by default since 13 Nov 2026 (Sam: « ok pour tes recommandations »)**: Paris's trees on cut blocks
+   *  1 366 347 → 680 567, +1.4–2.0 s of a warm scene's worker (PROBLEMES-A-REGLER, 12 Nov 2026); a change asks a new scene */
+  clearCut = true;
   private started = 0;
   private attempted = -Infinity;
   private busy = false;

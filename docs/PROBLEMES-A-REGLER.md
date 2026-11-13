@@ -79,6 +79,10 @@ TAAU garde sous 75 % ») sont à relire avec ce biais.
 
 ## Des villes couvertes d'arbres, sans bâtiments proches, dans les e2e (Marseille, Toulon, Manhattan)
 
+> **13 novembre 2026 — décision de Sam (« ok pour tes recommandations »)** : `earthScenery.clearCut` **allumé par défaut** (les arbres refusés
+> aux îlots coupés) ; la cause de fond — le plafond gardé autour du seul centre de la scène — traitée par un couloir le long de la
+> trajectoire (PLAN-J2 §9 undecies, en cours).
+
 **État (12 nov. 2026, soir)** : **confirmé en vol réel au-dessus de Paris** — les arbres de la canopée IGN couvrent les îlots dont le
 plafond du décor a coupé les bâtiments (la moitié des arbres de la scène) ; et en vol l'appareil sort du disque des bâtiments gardés :
 la ville visible devant lui n'est plus qu'une forêt. Cause dans le code, correctif des arbres derrière `earthScenery.clearCut`, **éteint**
@@ -143,6 +147,9 @@ la ville visible devant lui n'est plus qu'une forêt. Cause dans le code, correc
   canopée refusée (HTTP 400) à Paris n'a pas reparu ; un délai dépassé (`TimeoutError`) sur un bloc à froid.
 
 ## Des points blancs qui scintillent sur la mer et dans la brume de l'horizon (scène J0, Toulon-Hyères)
+
+> **13 novembre 2026 — décision de Sam** : `renderer.seaSsrSafe` **allumé par défaut** (le miroir de la mer ne lit plus les pixels d'eau que
+> sa passe écrit).
 
 **État (12 nov. 2026, soir)** : cause trouvée — la réflexion écran de la mer lit des pixels d'eau en cours d'écriture (fin de
 l'entrée) ; correctif derrière `renderer.seaSsrSafe`, éteint, en attente de la décision de Sam.

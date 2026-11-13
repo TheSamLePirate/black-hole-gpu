@@ -5678,11 +5678,12 @@ export class Renderer {
   disocclusionTol = 0.03;
   /** PLAN-J2 J2-6 — one long history (Sam's decision 5): while the temporal upsampling runs, the native temporal pass keeps a short
    *  one (its least α raised to `singleNativeAlpha`, the carried ground's too) and the upsampling the long one (its least α the one
-   *  the native pass had — TU.u.w); off: both long (the held view's page took > 1 s to show — J2-4, step A). Off by default */
+   *  the native pass had — TU.u.w); off: both long. **On by default since 13 Nov 2026** (Sam's decision 5, its proofs made: J0's ΔGPU in
+   *  flight on kerr-mini −0.04 ms, a turn's PSNR neutral, the held view's new page 3 × faster, held noise 0.41 → 0.54 % — PLAN-J2 §9 decies) */
+  singleHistory = true;
   /** PLAN-J2 J2-7 — the Earth's raster shading rate 1 while its material (shadeLite) runs, adaptRasterRate's choice not used there
    *  (it governed only shade's leftovers: none on J0 nor over land — e2e j2-cover); off: the governor's rate as before */
   earthRateOne = true;
-  singleHistory = false;
   singleNativeAlpha = 0.5;
   /** PLAN-J2 J2-6 — the raster's scale in flight left to the dynamic resolution (main.ts: the pin `want = rasterTop()` lifted, its floor
    *  2/3 a side — Sam's decision 6). Off: measured, the governor of a throttled M1 Max takes it to 2/3 at once — the turn's PSNR 30.4
@@ -10265,8 +10266,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the sea's screen-space mirror (trace.wgsl seaSSR) kept off the water's own pixels — those the water's pass writes while it
    *  reads them, other workgroups' threads, their mark and colour in no order: the shallow sea's albedo, the bed's light read
    *  as the world's light — white and cyan points on the sea, the top row of each 8 × 8 workgroup (M1 Max, 12 Nov 2026,
-   *  PROBLEMES-A-REGLER). Off by default until Sam decides; on: the sea's mirror there the sky's */
-  seaSsrSafe = false;
+   *  PROBLEMES-A-REGLER). **On by default since 13 Nov 2026 (Sam: « ok pour tes recommandations »)**: the sea's mirror there the sky's
+   *  — the points 127–277 → 0, the image −0.2–0.3 % in a drift of 1.1 % (A B A B A, M1 Max) */
+  seaSsrSafe = true;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
   private rasterEligibleNow = false;
   /** the clouds' transmittance map seen from the Sun (trace.wgsl cloudShadow — docs/PLAN-NUAGES-AAA.md N3; read by

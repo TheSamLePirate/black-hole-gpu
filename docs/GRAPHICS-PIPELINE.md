@@ -280,14 +280,14 @@ soumettre (`renderer.ts:10842`).
   **Lecture de l'imagerie** (`earthImageryAniso`, `earthImagery` dans `trace.wgsl`, lues par `shadeLite`, `main` et la marche des crêtes) :
   par niveau, l'anisotropie du matériel jusqu'à 16 par les gradients de l'empreinte du pixel ; les niveaux pondérés par l'empreinte
   (`zf` ; `TUNE_ANISO` ne sert plus qu'à ce choix) et par la **distance au bord publié** : fondu fixe de 2 à 48 texels, ou **depuis J2-3
-  (13 nov., levier `earthTiles.edgeFoot`, ÉTEINT)** à l'échelle de la portée de la lecture filtrée (`edgeWeight` : ½ des deux axes de
+  (13 nov., levier `earthTiles.edgeFoot`, **allumé par défaut** depuis le même jour : ΔGPU kerr-mini −0,03 ms)** à l'échelle de la portée de la lecture filtrée (`edgeWeight` : ½ des deux axes de
   l'empreinte + 1,5 texel de la mip, puis `EDGE_BAND` = 12 texels au moins), porté par `P.tiles.w` = 2 sans compilation ; les hauteurs
   gardent le fondu fixe (même lecteur que le CPU). Mesuré (M1 Max, e2e `j2-probes` `J2_PHASES=edge`) : GPU dans le bruit, fuite toujours
   nulle — [fiche J2-3](progress/j2/FICHE-J2-3-2026-11-13.md).
   **Profondeurs de l'image d'avant** (J2-5, 13 nov., levier `renderer.disocclusionOn`, ÉTEINT) : `momentsPrev` (taille des `moments`, la
   cible vivante seule), copié en fin d'image (`keepMotion`) et lu en liaison 54 par `temporal` et `taau` (`disoccluded`) ; éteint, un mot
   de remplacement lié et aucune copie. Mesuré sans gain ([fiche J2-5](progress/j2/FICHE-J2-5-2026-11-13.md)).
-  **Un seul historique long** (J2-6 étape A, levier `renderer.singleHistory`, ÉTEINT) : `temporal` à α ≥ 0,5 (`TA.k.z`, le sol porté
+  **Un seul historique long** (J2-6, levier `renderer.singleHistory`, **allumé par défaut** depuis le 13 nov. : ΔGPU kerr-mini −0,04 ms) : `temporal` à α ≥ 0,5 (`TA.k.z`, le sol porté
   `TA.m2.w`), `taau` à l'α long (`TU.u.w`) ; aucune passe ni cible nouvelle. L'épingle de l'échelle du raster en vol se lève à part
   (`renderer.rasterScaleFree`, ÉTEINT : à 2/3, −2,1 dB en virage contre une référence à pleine échelle, pour ~8 % de GPU).
 - **Modules** : `TerrainRaster` (distance + profondeur W×H, `sunDepth` 4096×2048, maillages), `SceneryRaster` (indirects,
