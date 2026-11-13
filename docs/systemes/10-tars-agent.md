@@ -21,7 +21,7 @@ Rédigée le 2026-10-10 ; nombre d'outils et lignes des fichiers remis au code l
 | `src/ai/tool-schema.ts` | 101 | Le schéma d'un outil (un sous-ensemble de JSON Schema : chaîne et ses valeurs, nombre et ses bornes, booléen, objet, tableau) et `checkArgs`, qui vérifie les arguments avant d'agir |
 | `src/ai/agent.ts` | 196 | `Agent.turn` : la boucle d'un tour — les appels du modèle dans l'ordre, chaque résultat rendu par l'id de son appel, les bornes (24 pas, 40 min), l'arrêt |
 | `src/ai/tars-agent.ts` | 269 | `TarsAgent` : la consigne (caractère, langue, mode), l'état du vol et la mémoire avant la question, un tour à la fois, le garde-fou « rien fait », oui/non sur une proposition ; `modeTools` ; `runOrders` (hors ligne) |
-| `src/ai/game-tools.ts` | 3125 | Les **70 outils** sur l'interface `GameHost` (construite dans `main.ts`) ; le filet « Before TARS » ; `resolveBody`, `resolveSite` (noms FR / EN) |
+| `src/ai/game-tools.ts` | 3125 | Les **71 outils** sur l'interface `GameHost` (construite dans `main.ts`) ; le filet « Before TARS » ; `resolveBody`, `resolveSite` (noms FR / EN) |
 | `src/ai/settings-tools.ts` | 98 | Les réglages du schéma trouvés par les mots, une valeur vérifiée (bornes, choix, couleurs) |
 | `src/ai/telemetry.ts` | 293 | `telemetry(camera, groupes)` : tout ce que le cockpit et le hub savent, en chiffres ; `AttitudeSampler`, ses canaux échantillonnés pour ses graphes |
 | `src/ai/memory.ts` | 193 | `TarsMemory` : 24 échanges mot pour mot, un résumé écrit par le modèle, 40 notes ; `carry`, `clearTurns`, `compact`, `forget` |

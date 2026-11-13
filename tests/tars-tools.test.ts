@@ -1129,3 +1129,65 @@ test("the room through TARS (TA-17): its status, made, joined, left, beside a me
   expect(tool.guarded?.({ action: "join" })).toBe(true);
   expect(tool.guarded?.({ action: "status" })).toBe(false);
 });
+
+test("the offline zones through TARS (TA-17): listed, estimated, added at a place, paused, resumed, updated; removed only confirmed", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const calls: string[] = [];
+  const recs = [
+    {
+      id: "z1",
+      name: "Chamonix",
+      lat: 45.92,
+      lon: 6.87,
+      radiusKm: 10,
+      profile: "valley",
+      total: 400,
+      done: 100,
+      bytes: 52_000_000,
+      none: 0,
+      failed: 0,
+      state: "downloading",
+    },
+  ];
+  const zones = {
+    estimate: (o: { radiusKm: number; profile: string }) => (
+      calls.push(`estimate ${o.radiusKm} ${o.profile}`), { chains: 900, urls: 2000, bytes: 310e6, seconds: 600 }
+    ),
+    add: async (o: { name: string; lat: number; lon: number; radiusKm: number; profile: string }) => (
+      calls.push(`add ${o.name} ${o.lat} ${o.lon} ${o.radiusKm} ${o.profile}`), "z2"
+    ),
+    list: async () => recs,
+    pause: async (id: string) => void calls.push(`pause ${id}`),
+    resume: async (id: string) => void calls.push(`resume ${id}`),
+    update: async (id: string) => void calls.push(`update ${id}`),
+    remove: async (id: string) => void calls.push(`remove ${id}`),
+    active: "z1",
+    heldAt: () => null,
+    persisted: async () => true,
+  };
+  const host = { settings: {}, camera: {}, tools: {}, log: () => [], zones: () => zones } as unknown as GameHost;
+  const tool = gameTools(host).find((t) => t.name === "offline_zones")!;
+  expect(tool).toBeDefined();
+  const run = (a: Record<string, unknown>) => tool.run(a, new AbortController().signal);
+  const list = (await run({ action: "list" })) as { zones: Record<string, unknown>[] };
+  expect(list.zones[0]).toMatchObject({ id: "z1", name: "Chamonix", state: "downloading", donePct: 25, sizeMb: 52 });
+  const est = (await run({ action: "estimate", lat: 45.9, lon: 6.9, radiusKm: 30, profile: "overflight" })) as Record<string, unknown>;
+  expect(est).toMatchObject({ sizeMb: 310, minutes: 10 });
+  await run({ action: "add", name: "Alpes", lat: 45.9, lon: 6.9, radiusKm: 30, profile: "overflight" });
+  await run({ action: "pause", zone: "chamonix" });
+  await run({ action: "resume", zone: "z1" });
+  await run({ action: "update", zone: "Chamonix" });
+  // (dropping a zone deletes its tiles: the pilot asked first, then confirmed)
+  expect(String(await run({ action: "remove", zone: "Chamonix" }))).toMatch(/confirm/);
+  await run({ action: "remove", zone: "Chamonix", confirm: true });
+  expect(calls).toEqual(["estimate 30 overflight", "add Alpes 45.9 6.9 30 overflight", "pause z1", "resume z1", "update z1", "remove z1"]);
+  // (a download, a deletion: not on outside words nor at a waking)
+  expect(tool.guarded?.({ action: "add" })).toBe(true);
+  expect(tool.guarded?.({ action: "remove" })).toBe(true);
+  expect(tool.guarded?.({ action: "list" })).toBe(false);
+  // none here (no service worker: the dev page): said
+  const none = gameTools({ settings: {}, camera: {}, tools: {}, log: () => [], zones: () => null } as unknown as GameHost).find(
+    (t) => t.name === "offline_zones",
+  )!;
+  await expect(none.run({ action: "list" }, new AbortController().signal)).rejects.toThrow(/offline/i);
+});
