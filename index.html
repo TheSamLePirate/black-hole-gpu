@@ -4,6 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <!-- (the page's scripts only its own: its files, the two below by their hashes, WASM — a script slipped in cannot read the
+    players' keys; audit QA-18, 13 Nov 2026. A change to either script below: its hash here too — tests/csp.test.ts checks) -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="script-src 'self' 'wasm-unsafe-eval' 'sha256-1apsmKmDFeSLzB62saEfjNPMqN6F+tFKuqUkksIcNDA=' 'sha256-YWBWIwpaAGIVmmv3lFc8JexF/KoDRkVr5vQKtgKU8F8='; object-src 'none'; base-uri 'self'"
+    />
     <title>Kerr Black Hole — WebGPU GR ray tracer</title>
     <script>
       // (the main thread watched from the first byte — src/boot-timeline.ts reads it: the long tasks, and the

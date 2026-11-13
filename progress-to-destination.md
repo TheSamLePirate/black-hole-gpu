@@ -5786,3 +5786,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   performance), l'exposition avec le cockpit (aucune dépendance au cadrage au profil neutre) : rassemblés. Aucun code.
 - Reste : la borne de l'âge et les lampes de cabine la nuit — des décisions de Sam.
 
+## 2026-11-14T04:45Z — Audit QA-18 (vague 6) : les scripts de la page seulement les siens — CSP et en-têtes de sécurité
+
+- Contribution : §19 (les clés du joueur et sa session protégées) ; audit 2026-11-10, QA-18.
+- Réalisé : `index.html` — une CSP en `<meta>` (`script-src 'self' 'wasm-unsafe-eval'` + les empreintes de ses deux scripts de tête ;
+  `object-src 'none'`, `base-uri 'self'`), valable sur les Pages, le serveur et en e2e ; `tests/csp.test.ts` recalcule les empreintes (un
+  script changé sans la sienne casserait la production) ; `deploy/nginx.conf` — `X-Content-Type-Options`, `Referrer-Policy`,
+  `frame-ancestors 'self'` dans chaque `location`. Le reste de la politique (connexions, images) laissé ouvert : aucune source de tuiles
+  coupée. DEPLOY.md, E2E-CATALOGUE.
+- Preuves : **reproduit avant** (e2e `csp` : un script en ligne injecté s'exécutait) ; **après** : refusé (`script-src-elem`), les deux scripts
+  de tête exécutés ; e2e `csp`, `audio-space` (worklet), `tars-zones` (service worker), `tars-pcd`, `pwa-update` 14/0, aucun refus CSP dans
+  leurs journaux ; `bun build` garde les deux scripts octet pour octet (empreintes vérifiées sur la sortie) ; `nginx -t` dans `nginx:1.27-alpine`
+  et les en-têtes lus sur un conteneur de test.
+- Limites : en développement, la petite balise en ligne du serveur de Bun (`sendBeacon` à la sortie de la page) est refusée — une ligne en
+  console, le rechargement à chaud (un module) intact ; `connect-src`/`img-src` non restreints (une liste de sources fragile) ; les clés
+  restent dans le `localStorage` (décision de Sam, TA-25).
+
