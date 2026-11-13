@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 16:43 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 16:45 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5277,4 +5277,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : aucune image changée ; corriger la fuite des harmoniques (fenêtrage des bandes, ou l'éclairement exact haut/bas à côté) change
   l'aspect de tout l'appareil — à présenter à Sam avec des vues avant de le faire. L'écart restant (ciel tracé contre ciel clair) non expliqué.
 - Suite : des vues A/B de l'appareil avec un fenêtrage des harmoniques (essai, non adopté sans Sam) ; le contrat C-J3-1 sur les tables existantes.
+
+## 2026-11-13T16:45Z — J3-1 : le contrat C-J3-1 posé sur les tables existantes (documentation)
+
+- Contribution : PLAN-J3 §5 C-J3-1 (l'état lumineux d'une image, une responsabilité, ses lecteurs) ; CLAUDE.md « réutiliser » — pas de tampon neuf.
+- Réalisé : [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §5 — le tableau des parts de l'état lumineux telles qu'elles existent (Soleil géométrique,
+  Soleil incident `TABLE_SUN + 5`, cartes d'ombre, ciel clair `TABLE_SKY`, sonde de l'appareil `TABLE_SH`, sonde de cohérence) : où, écrites par,
+  repère et unités, lues par ; les garanties mesurées aujourd'hui (§10) et ce qui reste hors du contrat (ombres reçues par l'appareil — J3-3 —,
+  air entre l'appareil et la caméra — J3-2). Heure corrigée dans §10.
+- Preuves : **documenté**, relevé dans le code (`gpu-tables.ts`, `renderer.ts`, nombres d'appels comptés dans `trace.wgsl` / `ship.wgsl`) ;
+  rien de neuf mesuré dans ce lot.
+- Suite : J3-1 reste ouvert sur la fuite des harmoniques (une décision d'image) ; J3-2 (l'air sur l'appareil et ses traînées) selon l'ordre du plan.
 

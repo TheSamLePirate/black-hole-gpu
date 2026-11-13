@@ -100,6 +100,23 @@ avant / après au même cadrage. ΔGPU sur J0 (kerr-mini) et sur la scène J3 (J
 
 - **C-J3-1 (état lumineux)** : un tampon, son format, ses unités (W m⁻² sr⁻¹, directions dans le repère du corps), sa génération par image ;
   ses lecteurs listés dans GRAPHICS-PIPELINE.
+  **Posé sur l'existant (13 nov., état du code de `f368d402`)** — plutôt qu'un tampon neuf (CLAUDE.md : réutiliser ; un nouveau module remplace
+  une responsabilité nommée), l'état lumineux d'une image est l'ensemble de ces rangées de `bodyBuf` et de la sonde, écrites par le renderer
+  avant les noyaux qui les lisent, régénérées à chaque image où elles valent :
+
+  | Part | Où | Écrite par | Repère, unités | Lue par |
+  |---|---|---|---|---|
+  | Soleil géométrique (direction, éclairement du disque) | uniforme `P.near4`, sources de `bodies` ; `nearLight(k)` | renderer, chaque image | repère de la caméra ; l'échelle de la scène | 21 appels dans `trace.wgsl` (sol, ciel, eau, nuages, sonde) |
+  | **Soleil incident** (R3) | `TABLE_SUN + 5` (`SUNI_OFF`) ; `incidentSun(Lp)` | `renderer.ts` `incidentSun` → `encodeSunShadow`, chaque image du raster de la Terre (w 0 ailleurs) | axes du corps ; w 1 posé | le sol (`shadeLite*`), ses cartes d'ombre, **la lumière de l'appareil** (`keyLight`, J3-1) |
+  | Cartes d'ombre du Soleil (cascades, arbres et bâtiments, nuages) | `TABLE_SUN` 0–4, 6–7 ; `TABLE_TSM` ; `TABLE_CSM` + `csmTex` | renderer (`encodeSunShadow`, décor, nuages) | leurs repères propres, orientés par le Soleil incident | le sol ; l'appareil : les nuages seulement, au point de la caméra (`cloudShadowAt`) — J3-3 |
+  | Ciel clair (harmoniques d'ordre 2 à 4 altitudes, grille de la mer) | `TABLE_SKY` (`SKY_OFF`) ; `skyIrradiance`, `skyIrradianceSeaUp` | noyau `skyAmbient` → copie dans `bodyBuf` | axes de la Terre ; l'échelle de la scène | le sol (`liteSky`), la mer |
+  | Sonde de l'appareil (panorama tracé, ses harmoniques, sa lumière principale) | `ship.envBuf` → `envSH` → `shBuf` → `TABLE_SH` ; `shEnv`, `shIrradiance`, `nearE` | noyau `env` (1 texel sur k × k par image) puis `ship.wgsl` | axes de la sonde (`P.envX…Z`) | l'appareil (`ship.wgsl` : `sh[0..11]`) ; le traceur (`nearE`, 5 appels) ; le ciel que la mer reflète (`envSpec`) |
+  | Sonde de cohérence J3-1 | `ship.envBuf` +2…+6 | `keyLight` | — | `renderer.readShipKey`, `readShipSky` (mesure seulement) |
+
+  **Garanties mesurées** (J0, kerr-mini, 13 nov., §10) : la direction du Soleil de l'appareil = celle du sol (≤ 0,0002°) ; sa traversée de l'air
+  = celle du sol (≤ 0,2 %) ; la lumière du ciel sur une surface horizontale : sonde exacte à −5…+9 % du ciel clair du sol, ses harmoniques +8…13 %
+  au-dessus de la sonde exacte. **Hors du contrat aujourd'hui** : les ombres du relief, des arbres et des bâtiments sur l'appareil (J3-3), l'air
+  entre l'appareil et la caméra (J3-2).
 - **C-J3-2 (ombres)** : une table des échelles et de leurs propriétaires, leurs portées et leurs fondus.
 - **C-J3-3 (air)** : la distance et le repère de chaque lecteur de la table aérienne.
 
@@ -158,7 +175,7 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   sol à quelques % ; au coucher, 10–12 % de plus. **Causes possibles, non vérifiées** : les harmoniques d'ordre 2 de la sonde mêlent à « vers le
   haut » la lueur de l'horizon et le sol éclairé (la mer, son reflet) sous l'horizon abaissé de 500 m ; le ciel clair du sol n'a pas de
   renvoi du sol.
-  **Les parts séparées** (13 nov., ~16:55 UTC, run `…-j3-keysky3`) : les texels de la sonde intégrés **exactement** sur l'hémisphère au-dessus
+  **Les parts séparées** (13 nov., ~16:40 UTC, run `…-j3-keysky3`) : les texels de la sonde intégrés **exactement** sur l'hémisphère au-dessus
   (`renderer.readShipSky`, cos θ dω, sans harmoniques) : appareil exact / sol **0,96 (12:00), 0,95 (15:30), 0,97 (18:30), 1,05–1,09 (19:05)**.
   Donc **les harmoniques d'ordre 2 ajoutent 8 à 13 %** à ce que la sonde contient pour une surface tournée vers le haut (la part du dessous —
   la mer, le sol — qui fuit dans « le haut ») ; le ciel tracé et le ciel clair du sol restent entre −5 % de jour et +9 % au coucher. A/A de la
