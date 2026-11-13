@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:06 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:08 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6002,4 +6002,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : `aurora-jupiter` relève aussi `bodyData` et la variante du noyau. PROBLEMES complété.
 - Preuves : **mesuré** (kerr-mini) : tout fini, la même variante compilée dans les vues noire et normales. Suite : un lot de relectures des
   textures GPU calculées depuis la caméra.
+
+## 2026-11-13T22:08Z — Jupiter noir : ni la carte HD ni la tuile ; reste un calcul du noyau
+
+- Preuves : **mesuré** (kerr-mini) : carte HD et tuile identiques dans les vues noire et normales. Suite : un lot avec une sortie de
+  diagnostic du noyau. Le test `aurora-jupiter` relève désormais l'exposition, la couleur, les paramètres, les corps, la variante, la carte.
 

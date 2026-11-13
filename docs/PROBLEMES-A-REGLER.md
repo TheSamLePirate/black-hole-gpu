@@ -628,6 +628,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   variante du noyau** (clé 134234848, compilée, ni échec ni abandon) dans les vues noire et normales, le pipeline raster, pas de raster de
   corps. Reste une donnée calculée sur le GPU depuis la position de la caméra (la tuile, l'air de la géante, la sonde) : un lot à part, avec
   une relecture de texture par candidat.
+- **Écarté encore** (~22:08 UTC, run `…-aurora-jupiter-hd`) : la carte HD (« jupiter », complète) et la tuile (« done ») **les mêmes** dans les
+  vues noire et normales. Reste un calcul **dans le noyau**, commun à tous les pixels et fonction de la position de la caméra (la figure
+  aplatie de Jupiter vers 50° S, l'air ou le pont de nuages à la verticale de la caméra — `giantInsideOn`, `GI_FAR` —) devenu non fini :
+  prochain pas, une sortie de diagnostic du noyau (la valeur au pixel central, par étape) — un lot à part.
 
 ## Le coût de l'aurore terrestre de près, la nuit : +4,6 ms sur le M1
 

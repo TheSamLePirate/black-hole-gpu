@@ -53,7 +53,7 @@ test.skipIf(!E2E)(
           if (bd) for (let i = 0; i < bd.length && badBodies.length < 12; i++) if (!Number.isFinite(bd[i])) badBodies.push(i);
           return { eye: r.eyeIncident, ev: +r.ev(__bh.settings).toFixed(2), autoEV: +(r.autoEVDrawn ?? 0).toFixed(2), nonFinite: bad, badParams, badBodies,
             key: r.featureKey >>> 0, settled: r.tracerSettled, kernel: (() => { const v = r.variants?.get(r.featureKey); return v ? { rt: !!v.rt, failed: !!v.failed, givenUp: !!v.rtGivenUp, shadeLite: !!v.shadeLite } : null; })(),
-            bodyRaster: r.bodyRasterNow ?? null, pipeline: r.earthPipelineNow?.(__bh.settings) ?? null,
+            bodyRaster: r.bodyRasterNow ?? null, pipeline: r.earthPipelineNow?.(__bh.settings) ?? null, hd: r.hdMap ? { name: r.hdMap.name ?? null, mode: r.hdMap.mode ?? null, dem: !!r.hdMap.dem } : null, giantTile: r.giantTile?.state ?? null,
             sceneMax: +max.toPrecision(3), sceneMean: +(sum / Math.max(n, 1)).toPrecision(3), source: c?.source ?? null,
             fps: __bh.game.perf({ gpu: true }).renderFps, gpuMs: __bh.game.perf({ gpu: true }).gpuFrameMs }; })()`,
       );
