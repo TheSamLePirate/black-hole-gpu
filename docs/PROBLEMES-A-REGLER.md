@@ -637,6 +637,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   Le raster (le pipeline par défaut) ne la montre pas.
 - **Piste** : la profondeur de la mer du traceur (`seaDepthAt`, niveaux z 8–10 de Terrarium) ou sa surface de mer lointaine ;
   sonder les pixels de la nappe (distance, `gq`, profondeur lue).
+- **Regardé le 13 nov.** (~21:46 UTC, phase J0 `tracedview`, au large de Big Sur à 450 m cap 150°, 20:00 UTC, raster puis tracé ; run
+  `…-bigsur-traced`) : **non concluant** — l'appareil incliné, le ciel et les nuages occupent la vue, la mer à droite à peine visible. Une piste
+  nouvelle à vérifier : la sonde stockée en demi-flottants sous-normaux (réglée ce jour, ci-dessus) assombrissait le ciel reflété par la mer
+  du traceur aussi. À refaire en vol tenu, la mer à droite dans le cadre (une vue `around`).
 
 ## Les e2e « hors ligne » ne coupent pas le réseau du Service Worker
 

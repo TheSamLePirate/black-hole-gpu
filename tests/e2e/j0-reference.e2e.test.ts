@@ -32,7 +32,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4 (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4 (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -1201,6 +1201,32 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       expect(Math.abs(row.seaOn - row.seaOnAgain)).toBeLessThan(1);
     },
     600_000,
+  );
+
+  // (PROBLEMES — « le traceur au large de Big Sur : une nappe sombre » —, J0_PHASES=tracedview (J0_START off Big Sur, TRACED_DATE): the
+  // traced pipeline for the near Earth, the cockpit's view after the data are in, the exposure settled; a shot in the raster for the
+  // comparison)
+  test.skipIf(!PHASES.includes("tracedview"))(
+    "PROBLEMES: a view in the traced pipeline beside the raster's — the sea's far sheet looked at",
+    async () => {
+      await start("");
+      for (const pipe of ["raster", "trace"]) {
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          ${process.env.TRACED_DATE ? `__bh.game.setDate("${process.env.TRACED_DATE}");` : ""}
+          __bh.game.set("earthPipeline", "${pipe}"); Object.assign(__bh.settings, { shipMount: "cockpit", lookProfile: "neutral" }); __bh.refresh();
+          for (let i = 0; i < 60; i++) await f(); __bh.freeze(true); return 1; })()`);
+        await app.settled(180_000);
+        await app.js(
+          `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.settleExposure(); for (let i = 0; i < 60; i++) await f(); return 1; })()`,
+        );
+        const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+        await Bun.write(`${OUT}/tracedview-${pipe}.png`, Buffer.from(x.data, "base64"));
+        console.log(`  traced view: ${pipe} shot (${await app.js<string>("__bh.renderer.earthPipelineNow(__bh.settings)")})`);
+      }
+      await app.js(`(() => { __bh.game.set("earthPipeline", "raster"); __bh.freeze(false); return 1; })()`);
+      expect(true).toBe(true);
+    },
+    900_000,
   );
 
   test.skipIf(!PHASES.includes("sustained"))(
