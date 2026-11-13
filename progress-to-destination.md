@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 16:55 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 16:36 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -48,7 +48,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail ; **E3 non ouvert** (seule la présence du code pourrait rendre, ~0,4 ms mesurés par E2) |
-| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **mené selon les recommandations du plan** (consigne « continue » de Sam ; [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §10, ses 5 questions ouvertes) ; **J3-1 commencé : l'appareil éclairé par le Soleil incident du sol** (mesuré : direction exacte, éclairement ×193 à 19:15 UTC sur J0) ; **son air, sonde : la marche de l'appareil et la table du sol à 0,2 % — rien à changer** ; de J3-0 : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms), **la référence de ville sur Paris** (GPU p50 53,2 ms sur le mini ; le décor premier poste, −8,4 ms) |
+| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **mené selon les recommandations du plan** (consigne « continue » de Sam ; [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §10, ses 5 questions ouvertes) ; **J3-1 commencé : l'appareil éclairé par le Soleil incident du sol** (mesuré : direction exacte, éclairement ×193 à 19:15 UTC sur J0) ; **son air, sonde : la marche de l'appareil et la table du sol à 0,2 % — rien à changer** ; **la lumière du ciel, sonde : l'appareil +2–5 % sur le sol de jour, +10–12 % au coucher (causes à séparer)** ; de J3-0 : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms), **la référence de ville sur Paris** (GPU p50 53,2 ms sur le mini ; le décor premier poste, −8,4 ms) |
 | Rendu (33d89754) | AR-07 (vague 4.3, décision de Sam relayée) : le renderer sur `ViewPose` | **fait** : `renderer.frame(viewPose, settings, …)` ; Paris et J0 volés sans erreur, `gpu-startup` sans nouvel échec |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
@@ -5174,7 +5174,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   dépense du tour comptée une fois). Après : 4 étapes avec 0,035 $, 6 au plus avec du budget — 39 tests TARS verts. TARS.md.
 - **Non fait (TA-06) :** retirer aux réveils les outils d'écriture destructrice (une décision de produit).
 
-## 2026-11-13T16:55Z — J3-1 : l'air de la lumière de l'appareil — une sonde, deux modèles d'accord ; un défaut de l'outil `tune`
+## 2026-11-13T16:25Z — J3-1 : l'air de la lumière de l'appareil — une sonde, deux modèles d'accord ; un défaut de l'outil `tune`
 
 - Contribution : PLAN-J3 J3-1 (une lumière pour le sol et l'appareil), règle de méthode 3 (une sonde neuve passe ses témoins avant son chiffre).
 - Réalisé : `keyLight` (`trace.wgsl`) écrit après la lumière de l'appareil deux texels de sonde dans `ship.envBuf` (taille `ENV_W·ENV_H + 4`) :
@@ -5221,4 +5221,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   du pilote) ; **après** : aucun gardé, celui qui parle en une ligne, la question du pilote mot pour mot. Tests TARS 40/0, tsc et biome.
 - Limites : aucun e2e (mémoire sans rendu). Reste de l'audit TARS dans ce périmètre : TA-09 (réglages par `panel.setValue`), TA-11
   (contenu non maîtrisé marqué), TA-13 (duck de l'audio), TA-17 (outils manquants, au fil des chantiers).
+
+## 2026-11-13T16:36Z — J3-1 : la lumière du ciel de l'appareil contre celle du sol — mesurée
+
+- Contribution : PLAN-J3 J3-1 (un état lumineux lu par le sol et l'appareil) ; la sonde de cohérence appareil / sol de J3-0 pour sa part ciel.
+- Réalisé : `keyLight` écrit deux texels de plus (`ship.envBuf` `ENV_W·ENV_H + 6`) : la lumière du ciel sur une surface horizontale à la
+  caméra, celle du sol (`skyIrradiance`, le ciel clair) et celle de l'appareil (les harmoniques de sa sonde) ; `readShipKey().air.skyGround/
+  skyCraft` ; e2e J0 phase `keysky`. Docs : PLAN-J3 §10, GRAPHICS-PIPELINE D1, BH-API, E2E-CATALOGUE.
+- Preuves : **mesuré** (kerr-mini, J0, nuages ôtés, deux runs `20261113-…-j3-keysky*` concordants) : appareil / sol 1,05 (12:00), 1,02 (15:30),
+  1,10 (18:30), 1,12–1,14 (19:05) ; témoins : A/A ≤ 2,1 % (la sonde se dessine par parties ; le premier run a échoué sur une limite de 2 %, portée
+  à 4 % sur cette mesure), les nuages (0,9) le portent à 1,13 / 1,21, le sol inchangé. `check-wgsl` 82/82, tsc, biome. Non mesuré : l'ΔGPU (un fil).
+- Limites : les causes de l'écart au coucher ne sont pas séparées (hypothèses : les harmoniques d'ordre 2 mêlent la lueur de l'horizon et le
+  sol éclairé sous l'horizon abaissé ; le ciel clair du sol sans renvoi du sol) ; rien de l'image ne change dans ce lot.
+- Suite : séparer ces parts ; puis le contrat C-J3-1 sur les tables existantes.
 

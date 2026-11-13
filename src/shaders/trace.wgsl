@@ -17304,9 +17304,16 @@ fn keyLight() {
     // (PLAN-J3 J3-1, the probe: beside the march, the ground's model of the same Sun at the camera — the transmittance table,
     // sunThrough, its height and geodetic vertical as the clouds' light reads them —, written after the key (renderer.readShipKey).
     // Measured 13 Nov 2026 on J0, 15:30 to 19:15 UTC: the two within 0.2 % — the craft's march kept)
-    if (arrayLength(&envBuf) >= ENV_W * ENV_H + 4u) {
+    if (arrayLength(&envBuf) >= ENV_W * ENV_H + 6u) {
       envBuf[ENV_W * ENV_H + 2u] = vec4f(tMarch, csT);
       envBuf[ENV_W * ENV_H + 3u] = select(vec4f(-1.0), vec4f(sunThrough(airHeight(nearCam()), dot(geoQ(nearCam()), normalize(toBody(L)))), airHeight(nearCam())), isEarth(kn));
+      // (and the sky's light on a level surface at the camera, two ways: the ground's — skyAmbient's clear sky, skyIrradiance —, the
+      // craft's — its probe's harmonics, the sky as traced, clouds and all (the probe's axes: envX…Z) —; x < 0 none)
+      let upB = geoQ(nearCam());
+      let upW = fromBody(upB);
+      let upP = normalize(vec3f(dot(upW, P.envX.xyz), dot(upW, P.envY.xyz), dot(upW, P.envZ.xyz)));
+      envBuf[ENV_W * ENV_H + 4u] = select(vec4f(-1.0), vec4f(skyIrradiance(airHeight(nearCam()), upB), 0.0), isEarth(kn));
+      envBuf[ENV_W * ENV_H + 5u] = select(vec4f(-1.0), vec4f(shIrradiance(upP), 0.0), isEarth(kn));
     }
     E *= tMarch * select(1.0, csT, csT >= 0.0);
     // (the Moon's shadow — a solar eclipse —: the Sun's share it leaves where the craft is; in totality none —

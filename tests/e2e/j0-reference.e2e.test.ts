@@ -31,8 +31,8 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair (J3-1: the craft's key light against the incident Sun toward
-// sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~6 min).
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1: the craft's key light against the incident Sun toward
+// sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
 // Duration: ~10 min here (cold boot ~1–2 min, two flights of 70 s, 7 ablation flights ~40 s each).
@@ -559,6 +559,56 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       // (the A/A: the ratio read twice within 0.3 %; the positive: the coarse march moves it by more than 1 % somewhere)
       for (const utc of times) expect(Math.abs(rows[utc]!.ratio! - rows[utc]!.ratioAgain!)).toBeLessThan(3e-3);
       expect(["15:30", "19:05"].some((u) => Math.abs(rows[u]!.ratioCoarse! - rows[u]!.ratio!) > 0.01)).toBe(true);
+    },
+    900_000,
+  );
+
+  // (PLAN-J3 J3-1 — the sky's light, J0_PHASES=keysky: on a level surface at the camera, two ways read back the same frame (readShipKey().air)
+  // — the ground's (skyAmbient's clear sky, skyIrradiance) and the craft's (its probe's harmonics, the sky as traced) —, the sky cleared
+  // (earthClouds 0) from midday to sunset: their ratio. Controls (method rule 3): the ratio read twice (the A/A — the craft's probe drawn
+  // by parts over frames: 2.1 % apart at 19:05 in the first run, 13 Nov; 4 % allowed); a deck of clouds
+  // (earthClouds 0.9 — the craft's probe sees it, the ground's clear sky does not by design): the ratio must move)
+  test.skipIf(!PHASES.includes("keysky"))(
+    "J3-1: the sky's light on a level surface — the craft's probe against the ground's clear sky, midday to sunset; A/A and clouds",
+    async () => {
+      await start("");
+      type Air = { skyGround: number; skyCraft: number; h: number } | null;
+      const clouds = async (c: number) => {
+        await app.js(`(() => { __bh.game.set("earthClouds", ${c}); __bh.refresh(); return 1; })()`);
+        await app.settled(120_000);
+      };
+      const read = async (utc: string) =>
+        app.js<{ air: Air }>(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q));
+          __bh.freeze(false); __bh.game.setDate("2026-07-10T${utc}:00Z"); __bh.refresh(); for (let i = 0; i < 60; i++) await f();
+          __bh.freeze(true); for (let i = 0; i < 10; i++) await f();
+          const k = await __bh.renderer.readShipKey(); return { air: k.air }; })()`);
+      const p = (x: number | undefined) => (x === undefined ? null : +x.toPrecision(4));
+      const ratio = (a: { air: Air }) => (a.air && a.air.skyGround > 0 ? a.air.skyCraft / a.air.skyGround : Number.NaN);
+      const times = ["12:00", "15:30", "18:30", "19:05"];
+      const rows: Record<string, Record<string, number | null>> = {};
+      await clouds(0);
+      for (const utc of times) {
+        const a = await read(utc);
+        const again = await read(utc);
+        rows[utc] = {
+          ground: p(a.air?.skyGround),
+          craft: p(a.air?.skyCraft),
+          ratio: p(ratio(a)),
+          ratioAgain: p(ratio(again)),
+          h: p(a.air?.h),
+        };
+      }
+      await clouds(0.9);
+      for (const utc of ["12:00", "15:30"]) {
+        const a = await read(utc);
+        Object.assign(rows[utc]!, { groundClouds: p(a.air?.skyGround), craftClouds: p(a.air?.skyCraft), ratioClouds: p(ratio(a)) });
+      }
+      await clouds(J0_SCENE.earthClouds);
+      for (const utc of times) console.log(`  J3-1 key sky ${utc} UTC: ${JSON.stringify(rows[utc])}`);
+      out.keysky = rows;
+      await app.js(`(() => { __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`);
+      for (const utc of times) expect(Math.abs(rows[utc]!.ratio! - rows[utc]!.ratioAgain!)).toBeLessThan(0.04 * rows[utc]!.ratio!);
+      expect(["12:00", "15:30"].some((u) => Math.abs(rows[u]!.ratioClouds! - rows[u]!.ratio!) > 0.05 * rows[u]!.ratio!)).toBe(true);
     },
     900_000,
   );

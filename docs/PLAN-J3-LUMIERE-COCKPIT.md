@@ -140,7 +140,7 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   exactement du relèvement du CPU (0,036 → 1,000°, écart ≤ 0,0002°, A/A ≤ 0,0002°) ; son éclairement ×1,00 (18:30), ×1,68 (19:05), **×193**
   (19:15 : le sol encore éclairé, l'appareil presque éteint avant). À contre-jour (vue de trois quarts, 19:05) la différence ne se voit pas.
   **Non mesuré** : ΔGPU (un texel, un fil par image : attendu nul, non vérifié), une vue de face au Soleil bas.
-  **L'éclairement : un écart supposé, mesuré nul** (13 nov., ~16:40 UTC). À la lecture du code, le Soleil traversait l'air par deux modèles —
+  **L'éclairement : un écart supposé, mesuré nul** (13 nov., ~16:20 UTC). À la lecture du code, le Soleil traversait l'air par deux modèles —
   le sol `sunThrough(h, μ)` (la table de Bruneton), l'appareil la marche de `earthLookNoGround` le long de son rayon. Une sonde les écrit
   côte à côte à chaque image (`keyLight` → `ship.envBuf` +2/+3, `renderer.readShipKey().air`), e2e J0 `J0_PHASES=keyair` (kerr-mini, J0 à
   ~540 m, runs `…-j3-keyair`, `-keyair2`, `-keyair3`) : de 15:30 à 19:15 UTC (transmittance 0,80 → 0,004), **rapport marche / table 0,998
@@ -149,5 +149,14 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   invisible). Un levier qui éclairait l'appareil par la table (`TUNE_KEY_AIR`) a été essayé puis retiré : il était le premier `tune` de la
   session, dont les relevés restent à l'heure d'avant (défaut de l'outil trouvé par le témoin positif, [PROBLEMES](PROBLEMES-A-REGLER.md)),
   et il n'avait plus d'utilité.
+  **La lumière du ciel : mesurée, un écart au coucher** (13 nov., ~16:35 UTC). Même sonde (`ship.envBuf` +4/+5) : sur une surface horizontale
+  à la caméra, la lumière du ciel du sol (`skyIrradiance`, le ciel clair de `skyAmbient`) et celle de l'appareil (les harmoniques de sa sonde,
+  le ciel tracé) ; e2e J0 `J0_PHASES=keysky`, nuages ôtés (`earthClouds` 0), deux runs `…-j3-keysky`, `-keysky2` concordants. Rapport
+  appareil / sol : **1,05 (12:00), 1,02 (15:30), 1,10 (18:30), 1,12–1,14 (19:05)**. Témoins : relu deux fois, ≤ 2,1 % (A/A — la sonde se
+  dessine par parties) ; une couche de nuages (`earthClouds` 0,9) le porte à 1,13 / 1,21, le sol inchangé (positif : le ciel clair du sol ne
+  voit pas les nuages, par conception — ses nuages passent par d'autres facteurs). **Lecture** : de jour l'appareil reçoit ce que reçoit le
+  sol à quelques % ; au coucher, 10–12 % de plus. **Causes possibles, non vérifiées** : les harmoniques d'ordre 2 de la sonde mêlent à « vers le
+  haut » la lueur de l'horizon et le sol éclairé (la mer, son reflet) sous l'horizon abaissé de 500 m ; le ciel clair du sol n'a pas de
+  renvoi du sol. Prochain pas : séparer ces parts (la sonde sans le sol sous l'horizon) avant de toucher à l'un ou l'autre.
   **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
   ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.
