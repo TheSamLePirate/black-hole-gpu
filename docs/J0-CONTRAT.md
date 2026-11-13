@@ -49,8 +49,13 @@ seuils à transposer et à valider avec la première fiche bornée).
 intervalle p50 33,3 / p95 42,1 ms, GPU p50 21,4 ms à 1 291 MHz, occupé ~87 %) ; après les ablations, le vol soutenu ne la tient plus :
 27,8 images/s, intervalle p95 **58,6 ms**, p99 82,9, GPU p50 29,4 ms — la pression **Heavy**, le GPU **881 MHz** (68 % de son maximum),
 occupé 93 %. 30 images/s laissent 33 ms par image à un GPU qui en prend 21 frais : la borne ne suffit pas à le garder hors du bridage
-sur ce vol. L'essai à 40 images/s, interrompu (ce Mac encore chaud, la mesure de l'eau étagée passant avant sur le mini), reste à faire
-— **non mesuré** ; si 30 bride, 40 bridera aussi, mais le chiffre se mesure. La valeur de la borne n'est pas fixée.
+sur ce vol. **À 40 images/s (13 novembre ~11:00 UTC, arbre de 1aa2689d, `J0_FPSCAP=40`)** : le vol frais lui-même s'effondre — 17,6 images/s, GPU
+p50 67,7 ms, la première moitié 20,6 images/s, la seconde 13,5 ; le GPU **1 296 → 389 MHz**, la pression **« Trapping »** (au-delà de Heavy) ;
+run arrêté après le vol (les ablations et le vol soutenu n'auraient mesuré que le bridage). **Facteur de confusion relevé** : `coreaudiod`
+tournait à **~177 % de CPU**, et y tournait encore une fois le Chrome du test fermé — une charge propre à la machine, sans lien avec le jeu,
+qui chauffe le M1 Max (CPU 91,6 °C) ; présente ou non pendant l'essai à 30 : non relevé. **Les deux essais de la borne sont à refaire, la
+machine débarrassée de cette charge** (redémarrer `coreaudiod` demande les droits d'administrateur : à Sam). La valeur de la borne n'est pas
+fixée.
 
 **Le palier 1 est atteint** quand, sur le vol de référence (§3), mesuré deux fois sur le M1 Max dans l'état soutenu,
 **les seuils suivants tiennent tous** — *validés par Sam le 10 novembre* (transposés de §8.3, qui les fixe pour

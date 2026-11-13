@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 10:55 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 11:10 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -49,7 +49,7 @@ indirects → J3 (lumière, cockpit).
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail (~2,2 ms, déplacé dans la finition) ; E3 à juger sur un plafond mesuré d'abord |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) et des noyaux par classe | à cadrer (plafond à mesurer d'abord) |
-| Rendu (33d89754) | La borne de cadence du M1 Max | 30 images/s : **bride encore** (soutenu 27,8/s, p95 58,6 ms, GPU 881 MHz, pression Heavy — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; 40 images/s non mesuré (ce Mac chaud) |
+| Rendu (33d89754) | La borne de cadence du M1 Max | 30 images/s : bride (soutenu 27,8/s, 881 MHz) ; 40 images/s : **s'effondre dès le vol frais** (17,6/s, 389 MHz, « Trapping ») — **mais `coreaudiod` tourne à ~177 % de CPU sur ce Mac, hors du jeu** : les deux essais à refaire machine nettoyée ([J0-CONTRAT §2](docs/J0-CONTRAT.md)) |
 | Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **daté : 14 nov. 2026** ([PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
@@ -63,7 +63,7 @@ indirects → J3 (lumière, cockpit).
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
-**Attend Sam** : rien d'ouvert à ce jour côté rendu. Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; l'onglet masqué (recommandation : en solo, pause dite sans rattrapage ; en salle, rien d'arrêté, « hors de vue » annoncé, resynchronisation dite) ; avant RD3, le niveau de défense du réseau.
+**Attend Sam** : côté rendu, `coreaudiod` à ~177 % de CPU sur le M1 Max (hors du jeu, il fausse les essais de la borne) — le relancer demande les droits d'administrateur. Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; l'onglet masqué (recommandation : en solo, pause dite sans rattrapage ; en salle, rien d'arrêté, « hors de vue » annoncé, resynchronisation dite) ; avant RD3, le niveau de défense du réseau.
 
 ## Journal
 
@@ -4595,4 +4595,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Non vérifié** : le M1 Max ; d'autres vues (ville, montagne, rivière) ; le PC Windows (indirect sur D3D12) ; `bun test` complet. **Suite** :
   le lot 2 de la classification (le sol : la lumière et la finition lancées plein écran ; des noyaux par classe) à cadrer sur un plafond
   mesuré ; le retrait R1 le 14.
+
+## 2026-11-13T11:10Z — La borne de cadence à 40 sur le M1 Max : effondrement, et une charge étrangère au jeu relevée
+
+- **Contribution** (décision 3 de Sam, palier borné et soutenu ; [J0-CONTRAT §2](docs/J0-CONTRAT.md)).
+- **Mesuré** (M1 Max, `J0_FPSCAP=40`, arbre de 1aa2689d, `remote-results/j0/m1max-cap40`, run arrêté après le vol) : le vol frais 17,6 images/s,
+  GPU p50 67,7 ms (première moitié 20,6/s, seconde 13,5/s), GPU 1 296 → 389 MHz, pression « Trapping ».
+- **Facteur de confusion** : `coreaudiod` à ~177 % de CPU, encore après la fermeture du Chrome du test — une charge de la machine, pas du jeu ;
+  CPU 91,6 °C. Les essais de la borne (30 et 40) sont à refaire sans elle ; la relancer demande les droits d'administrateur (Sam).
+- **Non conclu** : la valeur de la borne ; la part du bridage due à cette charge.
 
