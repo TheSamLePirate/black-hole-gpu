@@ -367,6 +367,13 @@ paramètres des tuiles (`P.tileL`, les fenêtres d'orthophotos) ni la table des 
    moyenner. Générique (toutes les arrivées, le décor compris), peu de code, mais **hors du contrat** de la décision 7 et sans « où » ni
    « quoi » (pas d'instrument par page).
 
+**Où traîne la page (lu dans `post.wgsl`, 13 nov.)** : en vue tenue, le sol est « porté » (`TA.drift.w` < 0) — le temporel le prend au même
+pixel, **sans écrêtage**, à α 0,1 (seul, une page neuve y passerait à 90 % en ~22 images) ; la TAAU garde ensuite **son propre historique
+long** (n jusqu'à 1/`rasterHeldAlpha` − 1 = 47), écrêté sur le résultat natif à g σ, et c'est elle que lit l'image (et `sceneColor`). La
+traîne mesurée (48 % à 66 images) est donc celle de la **reconstruction tenue** — le double historique que J2-6 doit ramener à un seul —,
+pas celle des pages. La voie 3 se ferait dans le chemin « porté » (un écrêtage à l'échelle du bruit au lieu de rien) ; **J2-4 et J2-6
+touchent le même mécanisme** : à faire ensemble, ou J2-6 d'abord.
+
 *Recommandation* : **3 d'abord**, mesurée par la phase `trail` (la page neuve à > 90 % en 2–4 images, la convergence tenue C0-12 ≤ 1 %
 gardée), puis 1 seulement si une lecture par page devient nécessaire (J2-5, la sélection, les diagnostics). **Question pour Sam.**
 
