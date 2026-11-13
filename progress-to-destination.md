@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 12:16 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 13:52 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -48,7 +48,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail ; **E3 non ouvert** (seule la présence du code pourrait rendre, ~0,4 ms mesurés par E2) |
-| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **plan proposé, attend Sam** ([PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) : deux chemins de lumière, l'appareil sans air ni ombre du relief ; lots J3-0…J3-R ; 5 questions) |
+| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **plan proposé, attend Sam** ([PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) : 5 questions) ; de J3-0, ce qui ne dépend pas d'elles : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms) |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
 | Rendu (33d89754) | La borne de cadence du M1 Max | **refaite, `coreaudiod` relancé** : à froid la borne tient (29,9 / 39,4 images/s) ; soutenu, le GPU bride vers 850 MHz quelle que soit la borne — **~30 images/s soutenues sur J0** (28,8 borné à 30, 30,9 à 40) ; la valeur de la borne à fixer par Sam (recommandation 30) ([J0-CONTRAT §2](docs/J0-CONTRAT.md)) |
@@ -4912,4 +4912,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   fichiers que bun lance avant lui, ni leurs moitiés, ni `carrier`/`deckland`/`trap` ne le déclenchent : un état partagé du processus ou le temps,
   pas un fichier. Pistes (non vérifiées) transmises à la session de l'audit (le vol, AR-08 `frameNow` de ce matin) : caches de module réglés
   sur l'horloge de vol partagée (`gcas.ts ground()`), comparaisons `frameNow` ↔ `performance.now()`. Rien de modifié de ce côté.
+
+## 2026-11-13T13:52Z — J3-0 : la sonde de l'âge des instruments, ses témoins passés
+
+- **Contribution** (stratégie §15 J3 « préserver les instruments » ; CLAUDE.md : l'âge des informations critiques ; [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md)
+  J3-0 / J3-4 — la part qui ne dépend d'aucune des questions posées à Sam).
+- **Réalisé** : `ship.displayAges()` / `ship.displayAt` (`src/ship.ts` : l'instant du dernier envoi de chaque surface d'affichage) ; J0 relève
+  l'âge du PCD à chaque image de ses vols (`instrumentAge`) et prend une phase `agecheck` (règle 3). BH-API, catalogue,
+  [fiche](docs/progress/j3/SONDE-AGE-INSTRUMENTS-2026-11-13.md).
+- **Mesuré** (kerr-mini) : témoin positif — envois arrêtés 4 s → âge max 3 998 ms ; A/A — p95 57,0 / 56,7 ms ; le vol de J0 : PCD p50 18,4 ms,
+  p95 56,6, max 64,1. **Limite** : un écran inchangé n'est pas renvoyé (son âge n'est alors pas celui de l'information) ; la mesure du délai
+  donnée → affichage demanderait d'instrumenter `main.ts` (partagé) : non fait. Rien de changé à l'image.
 

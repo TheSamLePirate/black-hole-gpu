@@ -2595,9 +2595,22 @@ export class ShipRenderer {
     this.screenBound = this.vessel === "a320" && this.duTex ? "du" : "jet";
     return this.screenBound === "du" ? this.duTex! : this.jetScreenTexture();
   }
+  /** PLAN-J3 J3-0 — the instruments' age: each display surface's last upload [ms, performance.now()] — −1 never (displayAges) */
+  displayAt = { jet: -1, du: -1, screens: -1 };
+  /**
+   * The instruments' age now [ms]: the time since each display surface — the F-35's panoramic display (`jet`), the A320's displays'
+   * atlas (`du`), the other cabins' screens (`screens`) — was last uploaded; null never. A display whose picture does not change is
+   * not uploaded again: its age grows without its information being stale — in flight the F-35's moves all the time (heading, fuel,
+   * map), its age there the information's (PLAN-J3 J3-0, docs/progress/j3).
+   */
+  displayAges(now = performance.now()): { jet: number | null; du: number | null; screens: number | null } {
+    const age = (t: number) => (t < 0 ? null : Math.max(0, now - t));
+    return { jet: age(this.displayAt.jet), du: age(this.displayAt.du), screens: age(this.displayAt.screens) };
+  }
   /** The A320's displays' new pictures: each canvas into its cell [px], then the atlas's mips. */
   updateDu(parts: { src: OffscreenCanvas | HTMLCanvasElement; x: number; y: number; w: number; h: number }[]) {
     if (!parts.length) return;
+    this.displayAt.du = performance.now();
     const fresh = !this.duTex;
     const tex = (this.duTex ??= this.device.createTexture({
       size: [4096, 4096],
@@ -2631,6 +2644,7 @@ export class ShipRenderer {
   }
   /** The panoramic display's new picture: the parts of its canvas drawn (all of it: null) copied, then its mips. */
   updateJetScreen(src: OffscreenCanvas | HTMLCanvasElement, parts: PcdRect[] | null = null) {
+    this.displayAt.jet = performance.now();
     const tex = this.jetScreenTexture();
     for (const r of parts ?? [{ x: 0, y: 0, w: PCD_W, h: PCD_H }])
       this.device.queue.copyExternalImageToTexture(
@@ -2651,6 +2665,7 @@ export class ShipRenderer {
 
   /** The screens' new picture: a 2048 × 1024 canvas, then its mips. */
   updateScreens(src: HTMLCanvasElement | OffscreenCanvas) {
+    this.displayAt.screens = performance.now();
     const tex = this.screenTexture();
     this.device.queue.copyExternalImageToTexture({ source: src }, { texture: tex, mipLevel: 0 }, [2048, 1024]);
     this.mips().run(tex);

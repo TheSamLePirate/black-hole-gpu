@@ -81,6 +81,13 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
 // bitcast, and the sea's surface, the largest render pass, no owner measured before)
 const ORDER = (process.env.J0_ORDER ?? "base,clouds,scenery,water,seaSurface,displays,ship,shipShadow,base").split(",");
 
+/** PLAN-J3 J3-0 — the instruments' age over a flight's images [ms]: p50, p95, max (−1 — never uploaded — left out) */
+function ageStats(ages: number[]) {
+  const v = ages.filter((x) => x >= 0).sort((a, b) => a - b);
+  const q = (p: number) => +(v[Math.min(v.length - 1, Math.floor(p * v.length))] ?? 0).toFixed(1);
+  return { n: v.length, never: ages.length - v.length, p50: q(0.5), p95: q(0.95), max: +(v[v.length - 1] ?? 0).toFixed(1) };
+}
+
 const out: Record<string, unknown> = {
   scene: J0_SCENE,
   machine: MACHINE,
@@ -121,12 +128,14 @@ async function thermal() {
 const flyJs = (seconds: number, turn: boolean) => `(async () => {
   const r = __bh.renderer, c = __bh.camera, F = __bh.fleet, frame = () => new Promise((q) => requestAnimationFrame(q));
   r.prof.enabled = true; r.prof.every = 4; r.prof.reset();
-  const t0 = performance.now(), frames = [], samples = []; let last = r.completedFrames ?? 0, nextSample = 0, turned = false;
+  const t0 = performance.now(), frames = [], samples = [], ages = []; let last = r.completedFrames ?? 0, nextSample = 0, turned = false;
   const heap0 = performance.memory?.usedJSHeapSize ?? 0;
   while (true) {
     const t = await frame(); const el = (t - t0) / 1000; if (el > ${seconds}) break;
     const done = r.completedFrames ?? 0;
-    if (done !== last) { frames.push([+(t - t0).toFixed(2), done - last, +(r.lastGpuMs ?? 0).toFixed(2)]); last = done; }
+    if (done !== last) { frames.push([+(t - t0).toFixed(2), done - last, +(r.lastGpuMs ?? 0).toFixed(2)]); last = done;
+      // (PLAN-J3 J3-0: the craft's display's age at this image — the F-35's panoramic display since its last upload [ms])
+      const ag = r.ship?.displayAges?.(t).jet; ages.push(ag == null ? -1 : +ag.toFixed(1)); }
     if (${turn} && !turned && el >= ${J0_SCENE.turnAtS}) { c.jetModes.hdg = ${J0_SCENE.turnTo} * Math.PI / 180; turned = true; }
     if (el >= nextSample) {
       nextSample += 1;
@@ -139,12 +148,13 @@ const flyJs = (seconds: number, turn: boolean) => `(async () => {
   }
   const perf = __bh.game.perf({ gpu: false });
   const passes = r.prof.table().map((x) => ({ pass: x.label, ms: +x.ms.toFixed(3), n: x.n }));
-  return { frames, samples, passes, loopCpu: perf.loopCpu, cpu: perf.cpu, image: perf.image, pixelRatio: perf.pixelRatio, tier: perf.tier,
+  return { frames, samples, ages, passes, loopCpu: perf.loopCpu, cpu: perf.cpu, image: perf.image, pixelRatio: perf.pixelRatio, tier: perf.tier,
     budgetMs: perf.budgetMs, gpuErrors: r.gpuErrors, heap0MB: Math.round(heap0 / 1048576), flightFailure: c.airFlight?.failure ?? null,
     end: { lat: c.geoNow()?.lat, lon: c.geoNow()?.lon, hdg: ((c.geoNow()?.track ?? 0) * 180 / Math.PI + 360) % 360 } }; })()`;
 
 type Flown = {
   frames: [number, number, number][];
+  ages: number[];
   samples: Record<string, number>[];
   passes: { pass: string; ms: number }[];
   loopCpu: { n: number; p50: number; p95: number; p99: number; max: number };
@@ -277,6 +287,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
     const frames = [...a.frames, ...b.frames.map((f) => [f[0] + offset, f[1], f[2]] as [number, number, number])];
     out[tag] = {
       stats: { all: intervals(frames), firstHalf: intervals(a.frames), secondHalf: intervals(b.frames) },
+      instrumentAge: ageStats([...a.ages, ...b.ages]),
       thermal: { start: thermal0, mid: thermalMid, end: await thermal() },
       memory: { before: memoryBefore, after: await chromeMemory() },
       frames,
@@ -293,6 +304,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       failure: a.flightFailure ?? b.flightFailure,
     };
     console.log(`  J0 ${tag}: ${JSON.stringify((out[tag] as { stats: unknown }).stats)} — GPU ${thermal0.gpuMHz}→${thermalMid.gpuMHz} MHz`);
+    console.log(`  J0 ${tag} instruments' age: ${JSON.stringify((out[tag] as { instrumentAge: unknown }).instrumentAge)}`);
     expect(a.gpuErrors + b.gpuErrors).toBe(0);
     expect(a.flightFailure ?? b.flightFailure).toBeNull();
     expect(frames.length).toBeGreaterThan(J0_SCENE.flightS * 5);
@@ -334,6 +346,28 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       out.ablations = rows;
     },
     600_000,
+  );
+
+  // (PLAN-J3 J3-0, method rule 3 — the instruments' age probe's controls, J0_PHASES=agecheck: 10 s as it is (A), 4 s with the
+  // panoramic display's uploads stopped (the injected defect: its age must reach ≥ 3.5 s), 10 s as it is again (A′: the A/A, its p95
+  // like A's))
+  test.skipIf(!PHASES.includes("agecheck"))(
+    "the instruments' age probe: a positive control and an A/A",
+    async () => {
+      await start("");
+      const a = await app.js<Flown>(flyJs(10, false));
+      await app.js(`(() => { const s = __bh.renderer.ship; s.__upd = s.updateJetScreen; s.updateJetScreen = () => {}; return 1; })()`);
+      const blocked = await app.js<Flown>(flyJs(4, false));
+      await app.js(`(() => { const s = __bh.renderer.ship; s.updateJetScreen = s.__upd; delete s.updateJetScreen; return 1; })()`);
+      const b = await app.js<Flown>(flyJs(10, false));
+      const row = { a: ageStats(a.ages), blocked: ageStats(blocked.ages), aAgain: ageStats(b.ages) };
+      out.instrumentAgeCheck = row;
+      console.log(`  J0 instruments' age check: ${JSON.stringify(row)}`);
+      expect(row.blocked.max).toBeGreaterThan(3500);
+      expect(row.a.n).toBeGreaterThan(50);
+      expect(Math.abs(row.a.p95 - row.aAgain.p95)).toBeLessThan(Math.max(50, 0.5 * row.a.p95));
+    },
+    300_000,
   );
 
   test.skipIf(!PHASES.includes("sustained"))(
