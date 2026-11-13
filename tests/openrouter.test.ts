@@ -247,3 +247,41 @@ test("TARS's model retired by OpenRouter (TA-20): the default asked instead, for
   expect(await k.complete([], [])).toBeNull();
   expect(k.lastFailure?.why).toBe("key");
 });
+
+test("TARS's steps sent in one session (TA-04): its id the same on every call — the provider's cache kept warm —, the cached tokens counted; Claude marked for caching", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const f = async (_url: string, init: { body: string }) => {
+    bodies.push(JSON.parse(init.body));
+    return new Response(
+      JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: "ok" } }],
+        usage: { cost: 0.0005, prompt_tokens: 22777, prompt_tokens_details: { cached_tokens: 22720 } },
+      }),
+      { status: 200 },
+    );
+  };
+  let model = TEXT_MODEL as string;
+  const or = new OpenRouter(
+    () => "sk-or-v1-key",
+    f as never,
+    () => model,
+  );
+  await or.complete([{ role: "user", content: "a" }], []);
+  await or.complete([{ role: "user", content: "b" }], []);
+  await or.chat([{ role: "user", content: "c" }]);
+  const ids = bodies.map((b) => b.session_id);
+  expect(typeof ids[0]).toBe("string");
+  expect((ids[0] as string).length).toBeGreaterThan(8);
+  expect(new Set(ids).size).toBe(1);
+  expect(or.promptTokens).toBe(3 * 22777);
+  expect(or.cachedTokens).toBe(3 * 22720);
+  // (no cache marker for a model that caches by itself)
+  expect(bodies[0]!.cache_control).toBeUndefined();
+  model = "anthropic/claude-haiku-5.5";
+  await or.complete([{ role: "user", content: "d" }], []);
+  expect(bodies.at(-1)!.cache_control).toEqual({ type: "ephemeral" });
+  // another game (another OpenRouter): another session
+  const or2 = new OpenRouter(() => "sk-or-v1-key", f as never);
+  await or2.complete([], []);
+  expect(bodies.at(-1)!.session_id).not.toBe(ids[0]);
+});

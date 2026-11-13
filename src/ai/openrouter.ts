@@ -30,6 +30,9 @@ const VERIFIER = "kerr.openrouter.verifier";
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
+/** A call's usage as OpenRouter reports it: its cost, its input tokens and those read from the provider's cache. */
+type Usage = { cost?: number; prompt_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } };
+
 /** The key: this browser's (none: offline). */
 export const openRouterKey = {
   get(): string | null {
@@ -172,6 +175,13 @@ export class OpenRouter {
   /** what the session has cost [USD], and the calls made */
   spent = 0;
   calls = 0;
+  /** the input tokens sent, and those the provider read from its cache (audit TA-04: none before 13 Nov 2026) */
+  promptTokens = 0;
+  cachedTokens = 0;
+  /** this game's session with OpenRouter: its calls routed to the same provider, whose cache of the long prefix (his
+   *  prompt and 69 tools, ≈ 22 700 tokens) then serves every step — measured: 0 cached without it, 99.7 % with it, a GLM
+   *  step 0.0027 → 0.00047 $ (audit TA-04). Random: nothing of the player in it. */
+  readonly session = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `kerr-${Date.now()}-${Math.random()}`;
   /** the reasoning kept brief in the requests (dropped if refused): GLM-5.3-flash refuses it switched off
    *  ("mandatory", 400) — the brief kind costs it a third (measured 09/10/2026) */
   private noReasoning = true;
@@ -212,6 +222,18 @@ export class OpenRouter {
     return text.includes(model) && /not a valid model|no endpoints found|not found|does not exist|unknown model/i.test(text);
   }
 
+  /** What a call cost and how much of it came from the cache. */
+  private count(u: { cost?: number; prompt_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } } | undefined) {
+    this.spent += u?.cost ?? 0;
+    this.promptTokens += u?.prompt_tokens ?? 0;
+    this.cachedTokens += u?.prompt_tokens_details?.cached_tokens ?? 0;
+  }
+
+  /** The session and, for Claude (which caches only when asked), the mark that caches the long prefix. */
+  private caching(model: string) {
+    return { session_id: this.session, ...(model.startsWith("anthropic/") ? { cache_control: { type: "ephemeral" } } : {}) };
+  }
+
   /** The chosen model found retired: the default for the session, said once. */
   private retire(model: string) {
     if (this.gone.has(model)) return;
@@ -239,6 +261,7 @@ export class OpenRouter {
           headers: this.headers(k),
           body: JSON.stringify({
             model: this.model(),
+            ...this.caching(this.model()),
             messages,
             max_tokens: o.maxTokens ?? 160,
             temperature: o.temperature ?? 0.7,
@@ -264,8 +287,8 @@ export class OpenRouter {
       }
       this.calls++;
       if (!r.ok) return null;
-      const j = (await r.json()) as { choices?: { message?: { content?: string } }[]; usage?: { cost?: number } };
-      this.spent += j.usage?.cost ?? 0;
+      const j = (await r.json()) as { choices?: { message?: { content?: string } }[]; usage?: Usage };
+      this.count(j.usage);
       const text = j.choices?.[0]?.message?.content?.trim();
       return text ? text : null;
     } catch {
@@ -295,6 +318,7 @@ export class OpenRouter {
           headers: this.headers(k),
           body: JSON.stringify({
             model: o.model ?? this.model(),
+            ...this.caching(o.model ?? this.model()),
             messages,
             ...(tools.length ? { tools, tool_choice: "auto" } : {}),
             max_tokens: maxTokens,
@@ -332,10 +356,10 @@ export class OpenRouter {
             tool_calls?: { id: string; type?: "function"; function: { name: string; arguments: string } }[];
           };
         }[];
-        usage?: { cost?: number };
+        usage?: Usage;
       };
       let j = (await r.json()) as Reply;
-      this.spent += j.usage?.cost ?? 0;
+      this.count(j.usage);
       // (cut by the token limit — a tool call's arguments half written, « not valid JSON », the model trying again at the whole
       // context's price: asked again once, with room — audit TA-12, 13 Nov 2026)
       if (j.choices?.[0]?.finish_reason === "length") {
@@ -344,7 +368,7 @@ export class OpenRouter {
         this.calls++;
         if (r2.ok) {
           j = (await r2.json()) as Reply;
-          this.spent += j.usage?.cost ?? 0;
+          this.count(j.usage);
         }
       }
       const m = j.choices?.[0]?.message;

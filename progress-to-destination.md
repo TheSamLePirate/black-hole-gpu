@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit), TA-22 suite (voix Deepgram jouée à mesure : −3 à −5 s sur une ligne longue ; micro par worklet : premier son ~90 ms) ; décisions de Sam : réveils sans irréversible (fait), TA-25 et TA-23 laissés tels quels (documentés) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit), TA-22 suite (voix Deepgram jouée à mesure : −3 à −5 s sur une ligne longue ; micro par worklet : premier son ~90 ms) ; décisions de Sam : réveils sans irréversible (fait), TA-25 et TA-23 laissés tels quels (documentés) ; TA-04 lot 1 (cache du fournisseur : une étape −66 à −83 %) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5607,4 +5607,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **observé** (kerr-mini, trois runs) : les taches disparaissent sans le matériau de l'eau et sans les vagues FFT ; restent sans la
   sonde, les reflets, les nuages, le Kd490, la surface, l'écume. Rien de changé dans le code du rendu.
 - Suite : chercher dans `sea/fft-gpu.ts` et la lecture du tableau de textures de la mer (une couche lue pour une autre ?).
+
+## 2026-11-13T23:55Z — Audit TA-04 (lot 1, choix de Sam) : le cache du fournisseur servi à TARS — une étape −66 à −83 %
+
+- Contribution : §19 (TARS utilisable au long cours, son coût) ; audit 2026-11-10, TA-04 (vague 6, ouvert par Sam le 13 nov.).
+- **Gain maximal écrit avant** (règle 1, mesuré) : une étape envoie 69 outils (73 491 caractères) et la consigne (6 435), ≈ 22 777 jetons
+  d'entrée (GLM, compte du fournisseur), 0,0027 $ ; tout ce début est commun aux étapes et aux tours.
+- **Sonde et témoins** (vrais appels, clé de .env, GLM-5.3 Flash, script jetable) : sans `session_id`, 0 jeton en cache entre deux tours **et**
+  entre deux étapes d'un tour ; avec, 22 720 / 22 777 en cache. Témoin positif : les outils changés → 0 en cache, 0,0027 $ ; revenus → en
+  cache. A/A : deux tours pareils au même prix. (Un premier témoin, la fin de la consigne changée, n'en était pas un : le cache lit le début.)
+- Réalisé : `ai/openrouter.ts` — `session` (un identifiant aléatoire par partie) envoyé en `session_id` à chaque appel (`chat`, `complete`) ;
+  `cache_control: {type: "ephemeral"}` pour les modèles `anthropic/…` ; `promptTokens` / `cachedTokens` comptés. TARS.md.
+- Preuves : **reproduit avant** (unitaire `openrouter` « TA-04 » : aucun `session_id`) ; **mesuré après par la classe du jeu** : 22 720 / 22 777
+  en cache par tour, 0,00093 $ (contre 0,00275 ; le premier fournisseur mesuré : 0,00047), le témoin à 0 ; unitaires TARS verts ; e2e
+  `tars-agent` 12/0.
+- Limites : les outils par contexte (moins d'outils envoyés) et la voix en flux du texte final restent à faire ; la latence n'est pas mesurée ;
+  le prix lu en cache dépend du fournisseur routé.
 
