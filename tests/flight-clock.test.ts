@@ -28,6 +28,10 @@ const WALL: Record<string, { n: number; why: string }> = {
   "game/tools.ts": { n: 2, why: "the world runways' cache (world/runways3d.ts, its own wall clock)" },
   "game/out-of-view.ts": { n: 1, why: "the interface (how long the page was out of view — no frame runs meanwhile)" },
   "game/frame.ts": { n: 1, why: "the interface (a failing stage tried again every 5 s of the wall's time)" },
+  "game/craft-feed.ts": {
+    n: 7,
+    why: "the displays (the dashboard's stamp, the A320's display units' blink and refresh) and cost measurement (the PCD's read and upload) — moved from main.ts with the craft's poses, 13 Nov 2026",
+  },
 };
 
 const walk = (dir: string): string[] =>
