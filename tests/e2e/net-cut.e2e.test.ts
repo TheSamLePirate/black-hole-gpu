@@ -67,6 +67,13 @@ describe.skipIf(!E2E)("the server cut, the direct link flying on", () => {
     await a.waitFor(`__bh.net.net.status === "online" && !!__bh.net.net.room`, 30_000);
     const kept = await a.js<number>(`__bh.net.net.remotes.track(1)?.samples.length ?? 0`);
     console.log(`  taken back: the first page's track of the second, ${kept} samples at once`);
+    // (and straight back to the direct link — audit NET-22: before, relayed by the server ~30 s until the browser failed the
+    // old link —: its samples go direct, not relayed, within 3 s)
+    const [dd0, rr0] = await a.js<[number, number]>(`[__bh.net.net.direct, __bh.net.net.relayed]`);
+    await Bun.sleep(3000);
+    const [dd1, rr1] = await a.js<[number, number]>(`[__bh.net.net.direct, __bh.net.net.relayed]`);
+    console.log(`  3 s after: ${dd1 - dd0} sent direct, ${rr1 - rr0} relayed`);
+    expect(dd1 - dd0).toBeGreaterThan(0);
     expect(told).toBe(true);
     expect(sent).toBeGreaterThan(0);
     expect(heard).toBeGreaterThanOrEqual(Math.max(1, sent - 1));

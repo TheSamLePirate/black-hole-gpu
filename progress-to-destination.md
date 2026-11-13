@@ -5931,3 +5931,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **observé** (kerr-mini) : la vue d'origine du défaut (Tromsø au sol, nuit d'hiver) sans la borne — aucune bande ; au crépuscule de J0
   la mer identique (76,05 / 76,04). `check-wgsl` 82/82, budget des noyaux 69/69.
 
+## 2026-11-14T10:45Z — Audit NET-22 (RD5) : le retour au lien direct après une coupure — mesuré réglé sous la grâce
+
+- Constat de l'audit : après une reconnexion, les échantillons passaient par le serveur ~30 s (l'ancien lien direct gardé jusqu'à ce que le
+  navigateur le déclare `failed`). Depuis le lot NET-11 (le membre coupé gardé 30 s, le maillage gardé à la même place), une coupure courte ne
+  défait plus les liens.
+- Mesuré (e2e `net-cut` étendue, ce Mac, fenêtre visible) : dans les 3 s après la reprise, 3 échantillons envoyés en direct, 0 relayé. Aucun
+  code changé pour ce constat ; l'e2e le garde.
+- Limites : une coupure plus longue que la grâce (le membre retiré, les liens refaits) garde l'ancien chemin : la relance sur un canal `closed`
+  ou `disconnected` et l'ICE restart de la piste de l'audit ne sont pas faits.
+
