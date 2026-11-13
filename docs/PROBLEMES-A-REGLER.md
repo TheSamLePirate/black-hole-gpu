@@ -63,6 +63,13 @@ loin, en vue rasante). La **fissure** (les deux côtés prolongés : croisés en
 **0,069 px**, 2,9 % des paires > 0,25 px contre 1,5 % à l'intérieur ; sans géomorphose 20–31 %. La même plaine en vue rasante (p95 0,77 px)
 mêle les crêtes. **C0-12 tenu.**
 
+## La reconstruction (TAAU) ne restitue bien que l'échelle 0,75 (J2-6, 13 novembre 2026)
+
+`motion-quality`, Alpes, virage 30°, M1 Max : PSNR en mouvement contre la référence affinée — 0,625 : 37,8 ; 2/3 : 40,1 ; 0,70 : 43,5 ;
+0,72 : 45,3 ; **0,75 : 47,3** ; 0,80 : 43,4 dB. 0,80 a plus de pixels que 0,75 et perd 3,8 dB : un défaut propre aux rapports autres que 3/4
+(gigue du raster contre la grille de sortie ? noyau de la TAAU réglé à 0,75 — Q6d ?). Bloque l'échelle variable de J2-6 (l'épingle
+`want = rasterTop()` gardée, PLAN-J2 §9 octies (e)). Données : `remote-results/j2-6h`, `j2-6g`, `j2-6e`.
+
 ## « Posé sur un aérodrome » ne s'aligne plus sur sa piste au Bourget (e2e `ground-placement`)
 
 - **Observé** (12 nov. 2026, kerr-mini) : `game.land("earth", 48.96, 2.44)` répond « landed at 48.96°, 2.44° » au lieu de « lined up

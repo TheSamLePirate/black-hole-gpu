@@ -4099,3 +4099,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   0,75** (netteté 0,87 contre 0,93) pour 10 % de GPU. **L'épingle reste.** `singleHistory` et l'épingle découplés.
 - **Changé** : `src/main.ts`, `src/renderer.ts` (`rasterScaleFree`), `motion-quality` (`taau667q`) ; PLAN-J2 §9 octies (e), BH-API,
   GRAPHICS-PIPELINE. **Non vérifié** : kerr-mini (sa charge ; une autre scène) ; la cause des 6–8 dB sous 0,75.
+
+## 2026-11-13T04:49Z — J2-6 : la reconstruction ne restitue bien que l'échelle 0,75
+
+- **Mesuré** (`motion-quality` Alpes virage 30°, M1 Max ; extras `+s80/+s72/+s70` nouveaux) : PSNR en mouvement 0,625 : 37,8 ; 2/3 : 40,1 ;
+  0,70 : 43,5 ; 0,72 : 45,3 ; **0,75 : 47,3** ; 0,80 : 43,4 dB — non monotone : un défaut de la reconstruction aux rapports autres que 3/4,
+  pas un manque de pixels. Bloque l'échelle variable (épingle gardée). PROBLEMES-A-REGLER (nouvelle entrée), PLAN-J2 §9 octies (e).

@@ -467,6 +467,13 @@ tant qu'une échelle sous 0,75 ne garde pas l'image (la reconstruction elle-mêm
 charge n'est pas celle du Mac qui chauffe). Ce que J2-6 livre donc : l'historique unique (sans pulsation au changement d'échelle), pas
 encore l'échelle variable.
 
+**Pourquoi l'image perd sous 0,75 — un balayage d'échelles** (`motion-quality`, Alpes, virage 30°, `+s80/+s72/+s70`, M1 Max) : PSNR en
+mouvement **0,625 : 37,8 ; 2/3 : 40,1 ; 0,70 : 43,5 ; 0,72 : 45,3 ; 0,75 : 47,3 ; 0,80 : 43,4 dB**. La perte n'est **pas** celle des pixels
+(0,80 en a plus que 0,75 et perd 3,8 dB) : **la reconstruction ne restitue bien que le rapport 3/4** — un réglage ou un motif propre à ce
+rapport (la gigue de Halton du raster contre la grille de sortie, le noyau de la TAAU `taauSigma` réglé à 0,75 : Q6d) ; **à trouver avant
+toute échelle variable** (J2-6) et avant tout plancher (décision 6 : 2/3 ; 0,5 sur preuve). Un défaut de la reconstruction, non de
+l'échelle.
+
 ## 9 octies. J2-7, étape A : ce que `shade` et `bodyLite` couvrent et coûtent (13 novembre 2026)
 
 e2e `j2-cover` (nouveau ; M1 Max en pression « Heavy » : les temps indicatifs, les **pixels** fiables) : les `moments` de la vue vivante

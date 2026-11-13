@@ -73,6 +73,10 @@ const EXTRAS: Record<string, [string, string]> = {
   // (J2-6: a change of scale in flight — 0.625 forced 8 frames before the first instant's shot: between the two scales' own PSNR if
   // smooth, under both if it pulses)
   drop: ["globalThis.__mqDrop = 8;", "globalThis.__mqDrop = 0;"],
+  // (J2-6: the scale after the mode's own — where the image's loss under 0.75 begins)
+  s80: ["__bh.forceScale(0.8);", ""],
+  s72: ["__bh.forceScale(0.72);", ""],
+  s70: ["__bh.forceScale(0.7);", ""],
 };
 const modeExtras = (md: string) => {
   const on = new Set(md.split("+").slice(1));
