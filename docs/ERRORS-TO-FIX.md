@@ -5,7 +5,11 @@ et la correction proposée. Une entrée corrigée est retirée (ou marquée corr
 
 ---
 
-## E1 — `heightAt` : « Cannot read properties of undefined (reading 'NaN') » après chaque poussée
+## ~~E1 — `heightAt` : « Cannot read properties of undefined (reading 'NaN') » après chaque poussée~~ — corrigée, archivée
+
+> **Archivée le 13 novembre 2026** (audit 2026-11-10, FX-22) : corrigée depuis le 18 octobre (ci-dessous). Le corps qui suit est
+> l'analyse de l'époque, écrite au présent le 4 octobre ; il n'est plus vrai du code. Reste ouverte la **correction 3** (une défense
+> contre un état non fini dans `flyHome`, `controller/motion.ts`) : non faite, faute d'un cas qui la reproduise (FX-21).
 
 **Corrigée** (2026-10-18, branche `vaisseaux-aaa`, PLAN-VAISSEAUX X0) : la correction 1 était déjà en place
 (`pilot.ts` ramène le régime à 0 sous 10⁻⁶) ; la 2 est faite — `controller/motion.ts` `unitOf` met la poussée à

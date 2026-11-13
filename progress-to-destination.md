@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:46 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:50 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -66,7 +66,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
-| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14 (FX-15 déjà réglé le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite les autres FX hors vague (FX-11, FX-13 — un choix pour Sam —, FX-19 à 22) |
+| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite les autres FX hors vague (FX-13 et FX-20 : des choix pour Sam ; FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -6228,3 +6228,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : les configurations des appareils non pilotés ne sont pas dans la sauvegarde (seul l'appareil piloté l'est, `craftsave`) : après un
   chargement, chacun est retrouvé comme jamais piloté.
 - Suite : FX-11 (TAT/SAT de l'A320), FX-19 à FX-22 ; FX-13 (⇧M) attend un choix de Sam.
+
+## 2026-11-13T23:50Z — Audit FX-19 (la tendance de vitesse de l'A320) et FX-22 (ERRORS-TO-FIX) ; FX-11 déjà réglé
+
+- Contribution : §19 (des instruments justes à toute vitesse du temps : la flèche de tendance du PFD) ; audit 2026-11-10, FX-19, FX-22.
+- Réalisé : la tendance de vitesse de l'A320 (`src/a320/du/data.ts`) prise sur le temps de la scène (`c.time` × secondes par M : la
+  vitesse du temps comprise, arrêtée en pause) au lieu de `performance.now()` ; `tests/a320-trend.test.ts`. ERRORS-TO-FIX E1 archivée
+  (corrigée depuis le 18 oct. ; sa correction 3 reste ouverte, sans cas qui la reproduise).
+- Preuves : **reproduit avant** (le test rejoué sur la version commitée : l'A320 stabilisé, sa vitesse tombant de 3,15 kt/s, la flèche
+  disait −11,6 kt/s — 3,7 fois trop, le vol pas à pas plus vite que l'horloge murale) ; **après** −3,07 kt/s — 1/1 ; tests A320 verts ; tsc.
+  Les autres points de FX-22 étaient **déjà réglés** (les e2e lisent `agl()` défini, plus de `sunElevation` ni de `c.last` ; « U décolle »
+  vrai depuis 3ae30d6b ; VOL-AVIONS §4.1 revu au lot 3.4). **FX-11** (TAT/SAT) **déjà réglé** le 11 nov. (`airTemps`).
+- Limites : la fraîcheur des écrans (PFD 20 Hz, ISIS et écrans du Ranger 8–10 Hz, carte du hub 250 ms) n'est pas touchée : son coût est
+  à mesurer avant (règle 1) ; le cache de 250 ms du ND reste sur l'horloge murale (un rythme d'affichage, pas un calcul).
+- Suite : FX-13 (⇧M) et FX-20 (« Sans dégâts » porté) demandent un choix de Sam ; FX-21 (fonctions à moitié finies) est du travail de plan.

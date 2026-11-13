@@ -13,6 +13,7 @@ import { toBodyFixed } from "../../system/our-surface";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "../../system/ellipsoid";
 import { geoidN } from "../../system/geoid-grid";
 import { M_METRES } from "../../units";
+import { secondsPerM } from "../../clock";
 import { alphaLimits } from "../fbw";
 import { CONF, confOf } from "../pose";
 import type { Props } from "../rig";
@@ -196,8 +197,9 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
   const lever = Math.round((c.airFlight.cfg.flaps ?? 0) * 4);
   const ci = confOf(lever, ias, onGround);
   const conf = CONF[ci]!;
-  // (the speed's trend: its rate, smoothed — 10 s ahead)
-  const now = performance.now() / 1000;
+  // (the speed's trend: its rate, smoothed — 10 s ahead — over the flight's own time [s]: the scene's — audit FX-19: on the
+  // wall's clock before 13 Nov 2026, wrong under the time's warp and in a flight stepped faster than the wall)
+  const now = c.time * secondsPerM(s);
   const T = (trend.t ? Math.min(now - trend.t, 0.5) : 0) || 0;
   if (T > 0) trend.rate += ((ias - trend.ias) / T - trend.rate) * Math.min(T / 1.5, 1);
   trend.ias = ias;
