@@ -552,7 +552,9 @@ moyenne des deux moitiés, chacune concordante) : **`singleHistory` −0,04 ms**
 (recommandée pour les deux) ; la désocclusion **coûte 0,43 ms sans gain mesuré** — à garder éteinte, ou à retirer en J2-8 (recommandation) ;
 `earthRateOne` confirmé. **Les pointes du fil principal sur kerr-mini** (le lot des pointes n'y avait pas été mesuré) : publication en vol p95
 1,3 / max 2,1 ms, 4 images sur 975 au-delà de 2 ms, 1 soumission par image (J2-0 : p95 2,9 / max 9,5 ms, 79 sur 963) — fiche des pointes,
-complément.
+complément. **La fiche J0 de sortie, provisoire** (séance complète, kerr-mini, f6b4b20f) : [FICHE-kerr-mini-2026-11-13](progress/j0/FICHE-kerr-mini-2026-11-13.md)
+— GPU p50 59,0 ms, intervalle p95 80,1 ms, couverture utile à froid 56,8 s (le 12 : 77,3, non attribué) ; à refaire, et sur le M1 Max
+refroidi, après les décisions de Sam (`singleHistory`, `edgeFoot`, J2-4, le retrait de la désocclusion).
 
 ## 10. Non vérifié
 

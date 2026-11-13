@@ -4175,3 +4175,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Mesuré** (`j2-probes` `flight`, kerr-mini, « Nominal ») : la publication des tuiles en vol J0 p50 0,1 / p95 1,3 / max 2,1 ms, 4 images sur 975
   au-delà de 2 ms, 1 soumission de mips par image au plus ; au chargement p95 1,5 / max 2,9 ms. Contre J2-0 sur la même machine : p95 2,9 /
   max 9,5 ms, 79 sur 963, 9 soumissions. Fiche des pointes (complément), PLAN-J2 §9 decies.
+
+## 2026-11-13T07:00Z — J2-8 : la fiche J0 de sortie, provisoire (kerr-mini)
+
+- **Mesuré** (séance J0 complète, kerr-mini plein écran, « Nominal », f6b4b20f) : entrée à froid — première image 8,5 s, pilotable 12,5 s,
+  couverture utile **56,8 s** (le 12 : 77,3 ; non attribué, une seule entrée) ; vol frais 17/s, GPU p50 59,0 / p95 65,2 ms, intervalle p95
+  80,1 ms ; soutenu GPU p50 58,1 ms ; ablations : nuages −6,2, appareil −3,2, décor −2,3, HUD −1,6, ombre −0,3 ms (l'eau : non valable,
+  `liteSkip`). **Fichiers** : `docs/progress/j0/FICHE-kerr-mini-2026-11-13.md`, `j0-kerr-mini-2026-11-13.json` (texte) ; README J0, PLAN-J2.
+  Provisoire : à refaire après les décisions de Sam, et le M1 Max refroidi (il bride en vol).
