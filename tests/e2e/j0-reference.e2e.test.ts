@@ -1222,6 +1222,18 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
         await Bun.write(`${OUT}/tracedview-${pipe}.png`, Buffer.from(x.data, "base64"));
         console.log(`  traced view: ${pipe} shot (${await app.js<string>("__bh.renderer.earthPipelineNow(__bh.settings)")})`);
+        // (and aside — the around mount, either side, a little down: the sea in the frame whichever way it lies)
+        for (const yaw of [90, -90]) {
+          await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+            __bh.settings.shipMount = "around"; __bh.refresh(); for (let i = 0; i < 20; i++) await f();
+            Object.assign(__bh.camera.outside, { yaw: ${yaw}, pitch: 8, dist: 60 }); for (let i = 0; i < 90; i++) await f(); __bh.freeze(true); return 1; })()`);
+          await app.settled(180_000);
+          await app.js(
+            `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.settleExposure(); for (let i = 0; i < 45; i++) await f(); return 1; })()`,
+          );
+          const y = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+          await Bun.write(`${OUT}/tracedview-${pipe}-aside${yaw}.png`, Buffer.from(y.data, "base64"));
+        }
       }
       await app.js(`(() => { __bh.game.set("earthPipeline", "raster"); __bh.freeze(false); return 1; })()`);
       expect(true).toBe(true);

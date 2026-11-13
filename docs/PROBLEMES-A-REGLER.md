@@ -629,7 +629,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   radiance physique, donc invisibles de nuit. **Piste** : relever cette lumière (sonde de pixels) et la corriger, puis
   rendre l'adaptation à Saturne.
 
-## Le traceur (pipeline « trace ») au large de Big Sur : une nappe sombre plate jusqu'à l'horizon
+## ~~Le traceur (pipeline « trace ») au large de Big Sur : une nappe sombre plate jusqu'à l'horizon~~ — non reproduit le 13 novembre 2026
 
 - **Constaté le 6 novembre 2026** (sonde e2e, vol à 450 m au large de Big Sur, cap 150°, `earthPipeline: "trace"`) : une nappe
   plate et sombre au-dessus de la mer, à droite, jusqu'à l'horizon, avec un trait clair le long de la côte. **Elle est
@@ -641,6 +641,9 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   `…-bigsur-traced`) : **non concluant** — l'appareil incliné, le ciel et les nuages occupent la vue, la mer à droite à peine visible. Une piste
   nouvelle à vérifier : la sonde stockée en demi-flottants sous-normaux (réglée ce jour, ci-dessus) assombrissait le ciel reflété par la mer
   du traceur aussi. À refaire en vol tenu, la mer à droite dans le cadre (une vue `around`).
+- **Non reproduit** (~21:51 UTC, run `…-bigsur-traced2`, vues `around` des deux côtés, pipeline tracé) : la mer d'un bleu normal jusqu'à
+  l'horizon des deux côtés, la côte de Big Sur d'un côté — **aucune nappe sombre**. Cause probable (non prouvée : d'autres changements depuis
+  le 6 nov.) : le ciel reflété lu dans la sonde en demi-flottants sous-normaux, réglé ce jour. À rouvrir si revu.
 
 ## Les e2e « hors ligne » ne coupent pas le réseau du Service Worker
 

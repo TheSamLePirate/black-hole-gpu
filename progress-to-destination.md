@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 21:41 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 21:51 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5951,4 +5951,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   les trois, l'avion figé compris) ; **après** : « Ground, Orbit » ; tests réseau verts ; e2e `net-dock` 6/6 (l'Endurance laissée en orbite
   toujours là, Ben s'y amarre).
 - Limites : un avion repris par son pilote revient en vol à sa vitesse, là où il l'a laissé (la doc le dit) ; le poser d'office n'est pas fait.
+
+## 2026-11-13T21:51Z — La nappe sombre du traceur au large de Big Sur : non reproduite
+
+- Réalisé : phase J0 `tracedview` (raster puis tracé, vues de côté) ; PROBLEMES : l'entrée close comme non reproduite.
+- Preuves : **observé** (kerr-mini, `…-bigsur-traced2`) : la mer tracée normale jusqu'à l'horizon. Cause probable non prouvée (la sonde en
+  demi-flottants, réglée ce jour).
 
