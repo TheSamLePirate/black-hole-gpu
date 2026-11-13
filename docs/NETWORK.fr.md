@@ -43,6 +43,8 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
   appareil cédé — (marqué `again` : pas de « amarré à vous » dit deux fois) ; avant le 13 nov. 2026 (audit NET-10) il n'était dit
   qu'une fois, et un arrivant voyait libre un appareil amarré. De même son rôle co-op (et sa mission), sa part du défi de salle et ses derniers résultats (le tableau) — gardés une fois,
   pas redits.
+  L'instantané des instruments d'un pilote (jusqu'à 16 ko, 4 fois par seconde) ne va qu'aux écrans d'équipage — les autres
+  pilotes le décodaient pour le jeter (audit NET-19, 13 nov. 2026).
   Un lien à moitié mort — aucun pong depuis 6 s — est jugé mort, fermé et retenté (avant le 13 nov. 2026, audit NET-23 : « en
   ligne » jusqu'à une erreur TCP) ; au-delà de 64 ko en attente sur le WebSocket, nos échantillons relayés sont sautés, pas
   empilés (la règle des liens directs).

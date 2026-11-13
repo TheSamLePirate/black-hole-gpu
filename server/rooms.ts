@@ -581,6 +581,13 @@ export function createRooms(o: RoomsOptions) {
           const l = live.get(P.room);
           if (l) l.match = ev.kind === "match" ? { from: P.slot, ev } : undefined;
         }
+        // (a pilot's instruments snapshot — up to 16 kB, 4 a second —: to the crew screens alone, who read it; the other pilots
+        // decoded it to throw it away — audit NET-19)
+        if (ev.kind === "instruments") {
+          const l = live.get(P.room);
+          if (l) for (const w of l.peers.values()) if (w !== ws && w.data.role === "instruments") w.send(msg);
+          return;
+        }
         ws.publish(`room:${P.room}`, msg);
         return;
       }

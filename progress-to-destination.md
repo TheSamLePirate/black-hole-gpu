@@ -6023,3 +6023,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **observé** (kerr-mini, `…-aurora-saturn`) : la vue cohérente, sans les artefacts du 6 nov. ; un grain reste sur la moitié du disque
   peu éclairée (non sondé).
 
+## 2026-11-14T14:10Z — Audit NET-19 (RD5, l'adressage) : les instantanés d'instruments aux seuls écrans d'équipage
+
+- Contribution : §8 (le fil principal des pilotes déchargé) et §19 ; audit 2026-11-10, NET-19 (« l'instantané d'instruments est envoyé à tous
+  les pilotes, qui le décodent pour le jeter »).
+- Réalisé : `server/rooms.ts` — un événement `instruments` n'est relayé qu'aux membres de rôle « instruments » (la console d'équipage, seule à le
+  lire : `crew/model.ts`). NETWORK.md/.fr.
+- Preuves : **reproduit avant** (unitaire `net-rooms` « NET-19 » : l'autre pilote recevait les 3 instantanés) ; **après** : 0 à l'autre pilote,
+  3 à l'écran d'équipage, les autres événements toujours relayés ; tests réseau et équipage verts ; e2e `net-crew` 2/2, `crew-craft` 4/4.
+  `crew-craft` a échoué une fois avec le nouveau serveur (« l'atterrissage motorisé d'abord », la page bloquée 181 s sur ses shaders) puis passé
+  4/4 en relance — passé aussi sur l'ancien serveur : minutage, pas l'adressage. `crew-en` échoue (connexion Chrome perdue, 60 s) **aussi sur
+  l'ancien serveur** : un échec antérieur, non lié, non corrigé ici.
+- Limites : le second canal non fiable pour `wng`/`cs`/`tel` (le reste de NET-19) n'est pas fait ; côté serveur, le retour de `send` non traité.
+

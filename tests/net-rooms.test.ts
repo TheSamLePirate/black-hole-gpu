@@ -623,3 +623,40 @@ describe("a hard event said during a cut (NET-10)", () => {
     }
   }, 30_000);
 });
+
+describe("the instruments' snapshots addressed (NET-19)", () => {
+  test("a pilot's instruments snapshot goes to the crew screens only — not to the other pilots, who threw it away", async () => {
+    const db = `/tmp/kerr-rooms-net19-${process.pid}.sqlite`;
+    const r = createRooms({ db, build: "test" });
+    const srv = Bun.serve({ port: 0, fetch: (req, s) => r.upgrade(req, s as never), websocket: r.websocket });
+    const u = `ws://127.0.0.1:${srv.port}/`;
+    const mk = (device: string, name: string) =>
+      new NetClient({ url: u, build: "test", id: { device, name, colour: "#ff8800" }, p2p: false });
+    const a = mk("net19-a", "Ana");
+    const b = mk("net19-b", "Ben");
+    const c = mk("net19-c", "Crew");
+    const got = { b: 0, c: 0, bOther: 0 };
+    b.on("event", (x: { ev: { kind: string } }) => (x.ev.kind === "instruments" ? got.b++ : got.bOther++));
+    c.on("event", (x: { ev: { kind: string } }) => x.ev.kind === "instruments" && got.c++);
+    try {
+      const { code } = await a.create("Instr", 0);
+      await b.join(code);
+      await c.join(code, "instruments");
+      await until(() => a.room?.members.length === 3);
+      for (let i = 0; i < 3; i++) a.event({ kind: "instruments", data: "x".repeat(100) });
+      a.event({ kind: "result", r: {} });
+      await Bun.sleep(400);
+      console.log(`  instruments heard: the other pilot ${got.b}, the crew screen ${got.c}; other events to the pilot ${got.bOther}`);
+      expect(got.c).toBe(3);
+      expect(got.b).toBe(0);
+      expect(got.bOther).toBeGreaterThan(0);
+    } finally {
+      a.close();
+      b.close();
+      c.close();
+      r.close();
+      srv.stop(true);
+      await Bun.$`rm -f ${db} ${db}-wal ${db}-shm`.nothrow();
+    }
+  }, 20_000);
+});
