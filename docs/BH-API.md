@@ -1096,7 +1096,7 @@ const rep = await __bh.game.audit({ planner: false });
 
 ### `__bh.game.autosaveNow()` → boolean (stored or not; sets `savedAt` when stored)
 
-Writes the autosave slot now, from `snapshot("autosave")`. The game autosaves every `autosaveEvery` s (setting range 2–120, default 10; Settings › Game › Saved games), two seconds after a setting changed, and as the page goes or goes out of view (`src/game/out-of-view.ts`, since 13 Nov 2026 — never during an offline render or a replay). An autosave this version cannot read (a later version's) is first kept aside (`kerr.kept:autosave@<ms>`); false when the browser refuses — the game then says so once (a toast), not every ten seconds.
+Writes the autosave slot now, from `snapshot("autosave")`. The game autosaves every `autosaveEvery` s (setting range 2–120, default 10; Settings › Game › Saved games), after a setting changed (two seconds after the last write at the soonest), and as the page goes or goes out of view — one owner, `src/game/persistence.ts` (since 13 Nov 2026; never during an offline render or a replay, a setting changed meanwhile written after it). An autosave this version cannot read (a later version's) is first kept aside (`kerr.kept:autosave@<ms>`); false when the browser refuses — the game then says so once (a toast), not every ten seconds.
 
 ```js
 __bh.game.autosaveNow();

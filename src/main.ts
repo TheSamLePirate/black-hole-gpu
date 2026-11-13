@@ -244,6 +244,7 @@ import { GOPRO, goproRenderFov, goproRowShare } from "./lens";
 import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
 import { OutOfView } from "./game/out-of-view";
+import { Persistence } from "./game/persistence";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
 import { ResumePoints } from "./game/resume-point";
 import { CraftLost } from "./ui/craftlost";
@@ -5556,11 +5557,25 @@ async function main() {
   });
 
   // -------------------------------------------------------------------- saved state
-  // (the URL no longer carries the scene: the game saves itself in the browser — game/save.ts; a
-  // link is made on demand. Kept as a hook for what should save soon.)
-  let saveSoon = false;
+  // (the URL no longer carries the scene: the game saves itself in the browser — game/save.ts; a link is made on demand)
+  // the player's preferences and the autosave — when they are written: game/persistence.ts (audit AR-12, wave 4.8's first
+  // lot: out of the loop and of the page's handlers, one owner)
+  const persistence = new Persistence({
+    autosave: () => ({ on: settings.autosave, every: settings.autosaveEvery }),
+    autosaveNow: () => tools.autosaveNow(),
+    writePrefs: () => writePrefs(settings),
+    // (a benchmark's settings are not the player's)
+    ownPrefs: !benchPage,
+    started: () => firstFrame,
+    // (a render's or a replay's scene — its poses, its settings — not the flight's)
+    busy: () => renderer.offlineActive || replay.active,
+    // (refused — storage full or blocked —: said once, not every ten seconds; said again after one has taken)
+    refused: () => panel.toast(t("Autosave failed — the browser's storage is full or blocked; save by hand (Pause › Save) or export")),
+    time: (label, f) => cpuProf.time(label, f),
+  });
+  /** a setting changed: the player's own written, the game saved with them (two seconds apart at most) */
   function scheduleUrlSave() {
-    saveSoon = true;
+    persistence.changed();
   }
 
   // -------------------------------------------------------------------- sizing
@@ -8078,8 +8093,7 @@ async function main() {
     });
   });
   addEventListener("pagehide", (e) => {
-    if (!benchPage) writePrefs(settings);
-    if (settings.autosave && firstFrame) tools.autosaveNow();
+    persistence.leaving();
     gpuDiagnostics.flush();
     // (the GPU's memory — the Earth's maps are hundreds of MB — freed now, not when the old page is
     // collected: reloads in a row would stack them)
@@ -8525,10 +8539,7 @@ async function main() {
         !replay.active &&
         !playerSettings.isOpen &&
         !pauseMenu?.isOpen,
-      save: () => {
-        if (!benchPage) writePrefs(settings);
-        if (settings.autosave && firstFrame && !renderer.offlineActive && !replay.active) tools.autosaveNow();
-      },
+      save: () => persistence.leaving(),
       pause: (why) => (pauseMenu ??= makePauseMenu()).open(why),
       repause: (why) => {
         panel.toast(why);
@@ -8549,8 +8560,6 @@ async function main() {
   );
   outOfView.watch(document);
   let lastStats: FrameStats | null = null;
-  let saveTimer = 0;
-  let autosaveFailTold = false;
   /** a network step of the frame on its own: an exception caught, counted (`__bh.net.net.inbound.failed` with the
    *  events'), told once by its message (debug.ts caught) */
   const netGuard = (what: string, f: () => void) => {
@@ -9273,20 +9282,7 @@ async function main() {
     if (aerosolCredit.hidden !== hideAerosolCredit) aerosolCredit.hidden = hideAerosolCredit;
     applyTuning(settings);
     cpuProf.time("game tools window", () => toolsWin.tick());
-    saveTimer += dt;
-    // (a setting changed: the player's own kept two seconds on, the game saved with them)
-    const soon = saveSoon && saveTimer > 2;
-    // (a benchmark's settings are not the player's; a replay's poses not the flight's)
-    if (soon && !benchPage && !replay.active) writePrefs(settings);
-    if (settings.autosave && firstFrame && !renderer.offlineActive && !replay.active && (saveTimer > settings.autosaveEvery || soon)) {
-      saveTimer = 0;
-      // (refused — storage full or blocked —: said once, not every ten seconds; said again after one has taken)
-      const ok = cpuProf.time("autosave", () => tools.autosaveNow());
-      if (!ok && !autosaveFailTold)
-        panel.toast(t("Autosave failed — the browser's storage is full or blocked; save by hand (Pause › Save) or export"));
-      autosaveFailTold = !ok;
-    }
-    if (soon) saveSoon = false;
+    persistence.tick(dt);
     const hudVisible = (pil && !replay.active) || (camera.character.active && flightHud.mapView);
     if (flightHud.visible !== hudVisible) flightHud.show(hudVisible);
     syncMode(now);

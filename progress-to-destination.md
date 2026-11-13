@@ -61,7 +61,8 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
-| Audit vagues 3–4 (1feb2f7f) | 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
+| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** : lot 1 (le plus petit, choix de Sam) — la persistance dans `src/game/persistence.ts` ; suivant proposé : `session.ts` (qui avance : pause, figé, reprise GPU, hors de vue) |
+| Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | à faire ; son premier lot touche `renderer.ts` (la pose de vue) : à faire avec la session du rendu |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -4672,3 +4673,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   l'e2e démarre ses deux pages d'abord.
 - **Docs :** NETWORK.md/.fr.md (Hors de vue, Une horloge), MENUS.md (la pause ouverte par le jeu), TARS.md (réveils), BH-API (`presence`,
   `outOfView`, `lag`, autosauvegarde), E2E-CATALOGUE, audit 09 (4.2 fait).
+
+## 2026-11-13T12:02Z — Audit 4.8 (lot 1) : la persistance sortie de `main()` (AR-12 ; AR-05 en partie)
+
+- **Contribution à la destination :** §19.12 (des responsabilités nommées hors de la fonction unique) — le plus petit lot d'abord, choix de Sam.
+  Ce que le jeu garde de lui-même a un seul propriétaire, testable sans navigateur : `src/game/persistence.ts` (`Persistence` :
+  `tick(dt)` dans la boucle, `changed()` à un réglage changé, `leaving()` au `pagehide` et au passage hors de vue).
+- **Réalisé :** dans `main.ts`, `saveSoon`/`saveTimer`/`autosaveFailTold` et les trois copies des écritures (boucle, `pagehide`, hors de
+  vue) remplacés par le module (−26 / +22 lignes). Même comportement, sauf deux corrections voulues : en quittant la page pendant un rendu
+  ou un replay, son état n'est plus autosauvé (la boucle l'excluait déjà) ; un réglage changé pendant un rendu est écrit après lui, plus
+  perdu. Le délai d'un réglage changé, relu : écrit à l'image suivante, au plus tôt 2 s après la dernière écriture (un étalement, pas un
+  délai de 2 s — commentaires corrigés).
+- **Preuves :** unitaires `persistence` 5/0 (période, changement, rendu/replay, départ, refus dit une fois) ; e2e `saves-storage` 4/4
+  (dont le nouveau : un réglage changé écrit 0,2 s après avec une autosauvegarde, `pagehide` écrit aussitôt), `hidden-tab` solo 1/1
+  (autosauvegarde faite page masquée). Aucun gain de cadence revendiqué : le coût de l'autosauvegarde dans la frame (AR-05) n'est ni
+  mesuré ni déplacé ici.
+- **Limites :** l'autosauvegarde reste synchrone dans la frame (`structuredClone`, `JSON.stringify`, `localStorage`) ; la mesurer
+  (`cpuProf` « autosave ») avant de la sortir de la frame. Sur ce Mac, `app.shot` attendait des minutes un noyau voisin (« the light
+  probe ») : `saves-storage` prend ses captures telles quelles.
+- **Suite proposée (4.8) :** `session.ts` — l'état unique de qui avance (pause, figé, rendu, replay, reprise GPU, hors de vue : la
+  condition `!frozen && !paused && …` répétée quatre fois dans la boucle), petit lot dans la boucle, à annoncer à la session du rendu.
