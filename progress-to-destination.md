@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit), TA-22 suite (voix Deepgram jouée à mesure : −3 à −5 s sur une ligne longue ; micro par worklet : premier son ~90 ms) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit), TA-22 suite (voix Deepgram jouée à mesure : −3 à −5 s sur une ligne longue ; micro par worklet : premier son ~90 ms) ; décisions de Sam : réveils sans irréversible (fait), TA-25 et TA-23 laissés tels quels (documentés) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5492,4 +5492,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   relue du GPU reste à l'heure d'avant jusqu'au `tune` suivant ; `incidentNow` écarté (remis à zéro chaque image). Cause non trouvée.
 - Limites : touche toute mesure de la sonde ou de la lumière de l'appareil qui change l'heure après un premier `tune` ; les ablations de J0
   (sans changement d'heure) ne sont pas concernées.
+
+## 2026-11-13T23:20Z — Réveils de TARS sans irréversible (décision de Sam) ; TA-25 et TA-23 tranchés
+
+- Contribution : §19 (TARS sûr, agissant par les mêmes actions) ; audit 2026-11-10, TA-06 (reste), TA-11, TA-23, TA-25.
+- Décisions de Sam (13 nov. 2026, par question) : les réveils perdent l'irréversible ; pas d'option « oublier mes clés à la fermeture » ;
+  la voix française sans Deepgram reste la voix système (documentée), pas de robot français.
+- Réalisé : `ai/agent.ts` — option de tour `outside` (le tour marqué dès le départ) ; `ai/tars-agent.ts` — un réveil la passe : `saves`
+  delete/load/import, `memory`, `schedule`, `cancel_schedule`, `save_skill`, un réglage `tars…` refusés (le motif dit au modèle :
+  `GUARD_REFUSAL`). TARS.md : la règle, et les deux choix TA-25 / TA-23.
+- Preuves : **reproduit avant** (unitaire `tars-turns` : un réveil effaçait « Campaign ») ; **après** : refusé au réveil, fait quand le pilote le
+  demande. Tests TARS lancés fichier par fichier 47/0 ; tsc.
+- Limites : aucun e2e (règle d'outils sans rendu). L'audit TARS est clos dans ce périmètre, sauf TA-04 (vague 6) et TA-17 (au fil des chantiers).
 

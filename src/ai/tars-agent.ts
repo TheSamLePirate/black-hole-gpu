@@ -162,7 +162,8 @@ export class TarsAgent {
           // (an order — the words read as one offline — answered with no tool called: nothing was done; sent
           // back once to do it, rather than let him claim it)
           unacted: () => ((this.d.mode?.() ?? "act") === "act" && parseOrders(q).length ? UNACTED : null),
-          ...(o.wake ? { maxSteps: WAKE_STEPS, canContinue: () => o.wake!.left() > 0 } : {}),
+          // (a waking: a few steps, its budget looked at — TA-06 —, and nothing that cannot be undone — Sam, 13 Nov 2026)
+          ...(o.wake ? { maxSteps: WAKE_STEPS, canContinue: () => o.wake!.left() > 0, outside: true } : {}),
         },
       );
       this.last = r.actions;

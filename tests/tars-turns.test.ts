@@ -127,3 +127,56 @@ test("a waking in the memory (TA-16): a silent one not kept, the others as one l
   await A.ask("how much fuel?");
   expect(memory.turns.at(-1)!.user).toBe("how much fuel?");
 });
+
+test("a waking (no pilot speaking) cannot do what cannot be undone — Sam's decision of 13 Nov 2026 (TA-06, TA-11)", async () => {
+  let deleted = 0;
+  const tools = [
+    {
+      name: "saves",
+      description: "",
+      params: { action: { type: "string" as const }, name: { type: "string" as const }, confirm: { type: "boolean" as const } },
+      guarded: (a: Record<string, unknown>) => a.action === "delete",
+      run: () => (deleted++, "deleted"),
+    },
+  ];
+  let n = 0;
+  const deleting = {
+    complete: async () =>
+      n++ % 2 === 0
+        ? {
+            content: null,
+            tool_calls: [
+              {
+                id: `d${n}`,
+                type: "function",
+                function: { name: "saves", arguments: '{"action":"delete","name":"Campaign","confirm":true}' },
+              },
+            ],
+          }
+        : { content: "Fait." },
+    chat: async () => null,
+    spent: 0,
+  };
+  let data: MemoryData | null = null;
+  const memory = new TarsMemory({ get: () => data, set: (d: MemoryData) => void (data = d) } as never);
+  const A = new TarsAgent({
+    or: deleting as never,
+    tools: () => tools as never,
+    memory,
+    personality: () => ({ humour: 0.6, honesty: 0.9 }) as never,
+    lang: () => "fr",
+    flight: () => ({}) as never,
+    say: () => {},
+    onAction: () => {},
+    onBusy: () => {},
+  });
+  // woken by a rule: refused
+  await A.ask('[Woken by your rule "tidy" — every. No pilot is speaking: this is your own initiative.] Delete old saves.', {
+    wake: { left: () => 10 },
+  });
+  expect(deleted).toBe(0);
+  expect(A.last.find((a) => a.tool === "saves")?.ok).toBe(false);
+  // the pilot asking it himself: done
+  await A.ask("Supprime la sauvegarde Campaign, je confirme.");
+  expect(deleted).toBe(1);
+});
