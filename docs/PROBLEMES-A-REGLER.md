@@ -607,6 +607,13 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 - **Piste** : un NaN ou une exposition qui part (le posemètre après la coupe), le chemin des géantes proches
   (`giantInside`, la tuile de turbulence) sur l'hémisphère sud ; relire la luminance du posemètre et les pixels NaN dans
   cette vue.
+- **Reproduit et rétréci** (~21:57 UTC, e2e `aurora-jupiter` sur kerr-mini, runs `…-aurora-giants-now`, `…-aurora-jupiter-diag` ; le test
+  relève désormais l'exposition et la couleur de scène relue) : la vue `south-act5` (0,2 RJ au-dessus de 50° S, vers le sud) est **noire,
+  étoiles comprises**, deux runs sur deux — et le test passe (il ne vérifie pas l'image). La couleur de scène (`sceneColor`, l'image de la
+  reconstruction) : **exactement 0 partout** (max 0, moyenne 0), **aucune valeur non finie** ; l'exposition 32 EV comme dans les vues qui
+  marchent (`north-act5` max 0,15, `south-far-act5` à 0,5 RJ max 0,047). **Ni un NaN, ni l'exposition** : le traceur rend un noir absolu.
+  **Piste** : la caméra dans l'enveloppe du volume de la géante (PLAN-GEANTES-VOLUME, la hauteur tangente — V3) près de la surface au sud
+  (aplatissement 0,065 : à 50° S le rayon est plus court) — tout absorbé ; à vérifier en faisant varier l'altitude.
 
 ## Le coût de l'aurore terrestre de près, la nuit : +4,6 ms sur le M1
 

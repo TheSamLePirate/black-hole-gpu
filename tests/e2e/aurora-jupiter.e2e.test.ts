@@ -40,7 +40,14 @@ test.skipIf(!E2E)(
       await Bun.sleep(3000);
       await app.shot(`${OUT}/${name}.png`);
       stats[name] = await app.js(
-        `({ eye: __bh.renderer.eyeIncident, fps: __bh.game.perf({ gpu: true }).renderFps, gpuMs: __bh.game.perf({ gpu: true }).gpuFrameMs })`,
+        // (and the exposure in use, the scene's colour read back — non-finite values, its maximum and mean —: PROBLEMES « Jupiter vu de près
+        // depuis l'hémisphère sud : l'image parfois toute noire », its pistes NaN / an exposure gone)
+        `(async () => { const r = __bh.renderer; const c = await r.sceneColor(__bh.settings).catch(() => null); let bad = 0, max = 0, sum = 0, n = 0;
+          if (c) for (let i = 0; i < c.data.length; i += 4) { const v = 0.2126 * c.data[i] + 0.7152 * c.data[i + 1] + 0.0722 * c.data[i + 2];
+            if (!Number.isFinite(v)) bad++; else { max = Math.max(max, v); sum += v; n++; } }
+          return { eye: r.eyeIncident, ev: +r.ev(__bh.settings).toFixed(2), autoEV: +(r.autoEVDrawn ?? 0).toFixed(2), nonFinite: bad,
+            sceneMax: +max.toPrecision(3), sceneMean: +(sum / Math.max(n, 1)).toPrecision(3), source: c?.source ?? null,
+            fps: __bh.game.perf({ gpu: true }).renderFps, gpuMs: __bh.game.perf({ gpu: true }).gpuFrameMs }; })()`,
       );
       console.log(`  ${name}: ${JSON.stringify(stats[name])}`);
       expect((stats[name] as { eye: number }).eye).toBeLessThan(1e-3);

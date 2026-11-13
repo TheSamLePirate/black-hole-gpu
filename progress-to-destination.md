@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 21:51 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 21:57 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5968,4 +5968,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   son retour) ; **après** : `["undock"]`, la télémétrie non gardée ; tests réseau verts ; e2e `net-coop`, `net-board`, `net-cut` 6/0.
 - Limites : les rôles co-op, le défi de salle et les scores ne sont toujours pas redits à un arrivant (la feuille de score vient des
   événements) ; NET-19 non fait.
+
+## 2026-11-13T21:57Z — Jupiter noir depuis le sud : reproduit, rétréci (ni NaN ni exposition)
+
+- Réalisé : `aurora-jupiter` relève l'exposition et la couleur de scène (non finis, max, moyenne). PROBLEMES complété.
+- Preuves : **mesuré** (kerr-mini) : la vue du sud à 0,2 RJ exactement nulle, aucune valeur non finie, l'exposition comme ailleurs. Piste : le
+  volume de la géante autour de la caméra. Suite : faire varier l'altitude.
 
