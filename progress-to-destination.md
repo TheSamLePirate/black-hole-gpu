@@ -4338,3 +4338,34 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : documenté. Aucun code modifié, aucun test lancé.
 - Suite : chaque session tient ses lignes de la page à chaque lot.
 
+
+## 2026-11-13T08:27Z — Audit 3.3, suite : « Reprendre » sur le bon instantané (FX-10) et l'état de l'appareil dans la sauvegarde (FX-09, AR-09)
+
+- **Contribution** (stratégie §19.9 sauvegardes et reprise, §19.12 une responsabilité par donnée ; audit lignes 3.3, FX-09,
+  FX-10, AR-09) : **les points de reprise appartiennent au vol perdu** — `src/game/resume-point.ts` (`ResumePoints`) : le
+  numéro de vol `camera.flightGen` (+1 à chaque `newFlight` : scène, placement, chargement) et l'appareil ; l'instantané
+  d'avant l'entrée gardé au plus une fois par seconde (avant : à chaque image d'air mince au-dessus de 1 km/s) ; **un avion a
+  ses points** (toutes les 10 s de vol stable sous 2,5 g, les quatre derniers ; repris : le plus récent d'au moins 15 s) ;
+  pris **après le pas entier** (`sim.afterStep`) et non au milieu d'`airAfter` (un premier essai remettait le F-35 470 m
+  plus bas) ; l'écran dit « Reprendre N s plus tôt ». **L'état propre de l'appareil voyage avec la sauvegarde** —
+  `src/controller/craftsave.ts` (bloc `craft`, sa propre version, dans une sauvegarde v2 : un jeu plus ancien l'ignore) :
+  carburant et emports de chaque appareil, consommables et pannes des vaisseaux (`fleet.systems` : avant, le chargement
+  gardait ceux du vol précédent), train, volets, freins, aérofrein, poussée, maintiens du jet (repris par sa loi à la
+  première image en vol, `camera.jetResume` — sinon effacés par le placement), STOVL, peau ; **une activité en cours**
+  (mission, combat, défi, leçon) est nommée, pas sauvée : la sauvegarde et le chargement le disent (FR/EN).
+- **Reproduit avant correction** (e2e) : `resume-point` 0/2 — le F-35 placé après une entrée du Ranger se voyait proposer
+  « Reprendre avant la rentrée » (celle du Ranger), et n'avait aucun point à lui ; `aircraft-save` montre ce que donnait un
+  chargement (la même sauvegarde sans son bloc, ce qu'écrivait l'ancien code) : 6 125 kg, volets 0, aérofrein 0, maintiens
+  coupés au lieu de 2 499 kg, ½, 0,6, ALT 3 000 / A/T 160.
+- **Vérifié** : unitaires `resume-point` 4/0, `craftsave` 3/0, `save` (+1) ; e2e sur ce Mac (fenêtre visible, tuiles et IGN
+  bloqués, au large du Portugal) `resume-point` 2/2 (repris 15 s plus tôt à 2 999 m pour 3 000), `aircraft-save` 1/1,
+  `saves-storage` 3/3 ; `tsc`, Biome ; `bun test --parallel` 2 228 / 0 ; `bh-api --check` 194/194.
+- **Fichiers** : `src/game/resume-point.ts`, `src/controller/craftsave.ts`, `src/game/save.ts`, `src/game/tools.ts`, `src/sim.ts`
+  (`afterStep`), `src/controls.ts` (`flightGen`, `onAirborne`, `jetResume`), `src/controller/piloting.ts`, `src/controller/jet.ts`,
+  `src/ui/craftlost.ts`, `src/main.ts` (le bloc de l'écran de perte), `src/i18n/fr-main.ts` ; BH-API, VOL-AVIONS, VOL-VAISSEAUX,
+  `apprendre-avions.html`, examens du cours, E2E-CATALOGUE.
+- **Non fait / à décider** : l'A320 ne rend que son carburant (son sac de systèmes, FMGC, MCDU, pannes armées sont refaits) ;
+  formation, interception, ravitaillement, ILS, appontage en cours non repris ; **sauver l'état d'une mission ou d'un combat**
+  (unités, armes, chronologie) reste à décider par Sam (recommandation : non pour l'instant — chaque activité a son propre
+  « recommencer » ; le dire suffit) ; le message d'activité n'a pas été vu en jeu (vérifié par test unitaire seulement) ; le
+  coût de l'instantané toutes les 10 s (`cpuProf` « resume point ») non mesuré ; IndexedDB et autosauvegarde hors frame (AR-05).

@@ -164,6 +164,8 @@ function setPilot(this: CameraController, on: boolean) {
  * caches). Before, a second glide began as the first had ended — mid-approach, gear up, braking.
  */
 function newFlight(this: CameraController) {
+  this.flightGen++;
+  this.jetResume = null;
   this.metT0 = Number.NaN;
   this.gStrain.reset();
   this.character.stop();
@@ -1468,6 +1470,7 @@ function airAfter(this: CameraController, dtSec: number, acc: Vec3, dtPilot: num
   const L = this.airFlight.last;
   this.gStrain?.step(this.airFlight.inAir && L ? L.out.F[1] / (mp.mass * 9.80665) : 1, dtPilot);
   if (this.airFlight.failure && !was) this.onCraftLost?.(this.airFlight.failure);
+  else if (this.airFlight.inAir && !this.airFlight.failure) this.onAirborne?.(dtSec, this.airFlight.g);
 }
 
 /**

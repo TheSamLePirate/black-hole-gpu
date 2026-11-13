@@ -167,6 +167,8 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
     // (the refuelling kept: a moment out of the plane's law — a placing, the flight mode switched — and it takes up
     // again where it was, its rendezvous too; the ground or another autopilot let it go below)
     if (!this.form && (m.alt !== null || m.hdg !== null || m.spd !== null || m.ab)) this.jetModes = noJetModes();
+    // (holds a load gives back: kept a few frames for the plane's law, then let go)
+    if (this.jetResume && --this.jetResume.frames <= 0) this.jetResume = null;
     return none;
   }
   // (the throttle moved by another hand — full, cut, the lever, a hold of the computer's —: the autothrottle off)
@@ -184,7 +186,13 @@ function jetStep(this: CameraController, inp: PilotInput, dt: number): { gamma: 
     else if (this.aar && this.rolling && f) this.aarOff(t("Refuelling off — on the ground"));
     m.alt = m.hdg = m.spd = null;
     this.jetCws.thr = Number.NaN;
+    if (this.jetResume && --this.jetResume.frames <= 0) this.jetResume = null;
     return none;
+  }
+  // (the holds a load gave back, now that the jet flies in the plane's law, in the air, no other autopilot)
+  if (this.jetResume) {
+    Object.assign(m, this.jetResume.modes);
+    this.jetResume = null;
   }
   const cws = this.jetCws;
   // (a deck's recovery flown: its holds set — controller/deckland.ts)

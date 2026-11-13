@@ -244,6 +244,7 @@ import { GOPRO, goproRenderFov, goproRowShare } from "./lens";
 import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
+import { ResumePoints } from "./game/resume-point";
 import { CraftLost } from "./ui/craftlost";
 import { applyF35Variant } from "./f35/variant";
 import { FlightComputer } from "./ui/fc/computer";
@@ -7970,11 +7971,13 @@ async function main() {
         }),
     );
   }
-  // the air's limits (flightair.ts): a point kept as the craft enters the air, the craft lost past them
-  let entryPoint: GameSave | null = null;
-  events.on("airEntry", () => {
-    entryPoint = tools.snapshot("before the entry");
-  });
+  // the air's limits (flightair.ts): the points to resume from — the lost flight's own, its craft's (game/resume-point.ts;
+  // audit FX-10: a Ranger's entry was offered to an F-35 flown since, an aircraft had none) —, the craft lost past them
+  const resumePoints = new ResumePoints();
+  events.on("airEntry", () => resumePoints.onEntry(camera.flightGen, fleet.active));
+  camera.onAirborne = (dt, g) => resumePoints.onAir(camera.flightGen, fleet.active, dt, g);
+  // (taken once the step is whole — sim.ts afterStep —, not inside the flight's step)
+  sim.afterStep = () => resumePoints.settle(camera.flightGen, () => cpuProf.time("resume point", () => tools.snapshot("a moment ago")));
   events.on("craftLost", ({ why }) => {
     // (in a room: no pause, no going back in time — the others fly on —: said to them, set down again on the
     // nearest runway a few seconds later)
@@ -8000,15 +8003,19 @@ async function main() {
     }
     settings.animate = false;
     camera.onPilotMessage?.(why);
+    const point = resumePoints.pick(camera.flightGen, fleet.active);
     craftLost.show(why, {
-      resume: entryPoint
+      resume: point
         ? () => {
-            tools.load(entryPoint!, { quiet: true });
+            tools.load(point.save, { quiet: true });
             camera.airFlight.reset(fleet.active);
+            // (kept for the flight it begins: lost again, resumed from it again)
+            resumePoints.adopt(point, camera.flightGen);
             settings.animate = true;
             onSettingsChange(["animate"]);
           }
         : null,
+      resumeAgo: point?.kind === "recent" ? Math.max(1, Math.round(resumePoints.airTime - point.at)) : null,
       undamaged: () => {
         settings.damage = false;
         camera.airFlight.failure = null;

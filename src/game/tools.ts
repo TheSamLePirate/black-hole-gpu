@@ -59,6 +59,7 @@ import {
 } from "./place";
 import { autosave, downloadSave, parseSave, saveToHash, slots, type GameSave } from "./save";
 import { t, tf } from "../i18n";
+import { activityNow, captureCraft, restoreCraft } from "../controller/craftsave";
 import { gameLog } from "./log";
 import { runAudit, type AuditReport } from "./audit";
 import type { V3 } from "./orbit";
@@ -978,6 +979,9 @@ export class GameTools {
         : null,
       character: c.character.snapshot(),
       camera: { gravity: c.gravity && !c.piloting },
+      // (the craft's own: what the load's new flight would reset — controller/craftsave.ts; audit FX-09)
+      craft: captureCraft(c),
+      activity: activityNow(c),
     };
   }
 
@@ -1030,6 +1034,9 @@ export class GameTools {
       if (save.ship.view) c.holdMount(save.ship.view);
     }
     c.setOurLanded(save.ship.landed);
+    // (the craft as saved — its fuel, gear, flaps, brakes, engine, holds; the spacecraft's systems —, after the new
+    // flight and the placing that reset them; a save without it — before 13 Nov 2026 —: as before, tanks full)
+    if (save.craft) restoreCraft(c, save.craft);
     // (the entry's site: the save's, not the nearest pass's — a deorbit to Le Bourget reloaded to Baikonur;
     // none saved, none: the last flight's kept graded a Lander at Kennedy on its distance to Le Bourget)
     // (a save from before 2 Nov 2026 names Kourou's and Tanegashima's sites by their former names: their place's first word)
@@ -1057,6 +1064,8 @@ export class GameTools {
     this.ctx.scene?.set(save.scene ?? null);
     this.ctx.refresh();
     if (!o.quiet) this.log.add("save", `Loaded "${save.name}" — ${save.summary}`, save.time);
+    // (an activity under way when saved is not in the save: said, not resumed half)
+    if (save.activity && !o.quiet) this.ctx.toast(tf("“{0}” is not resumed by a save — start it again", save.activity.title));
     return save.summary;
   }
 
@@ -1069,6 +1078,8 @@ export class GameTools {
     if (put === "exists") throw new Error(tf("A save named “{0}” already exists — another name, or overwrite it", g.name));
     if (put === "refused") throw new Error(t("The browser refused to store it (storage full or private mode)"));
     this.savedAt = Date.now();
+    // (an activity under way is not in it: said now, not discovered at the load)
+    if (g.activity) this.ctx.toast(tf("Saved without “{0}”: an activity under way is not resumed by a save", g.activity.title));
     this.log.add("save", `Saved "${g.name}" — ${g.summary}`, g.time);
     return g.name;
   }

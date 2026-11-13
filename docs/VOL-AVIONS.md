@@ -69,8 +69,14 @@ remplaçant `c.pilotInput` (le manche) pour un geste précis (leçon 3).
 | Les sites | `lineUp`, `glideTo` reconnaissent les sites du jeu par un morceau de leur nom : « Edwards Air Force Base », « Kennedy Space Center, Shuttle Landing Facility », « Paris – Le Bourget » (tiret long), « Kourou », « Baikonur », « Tanegashima », « Woomera » ; les codes OACI des sites du jeu (KEDW, LFPB…) marchent toujours ; ceux des autres aérodromes une fois leur tuile chargée |
 
 **Après un crash** (taux de chute au-delà de 4,5 m/s, rupture, collision) : en solo **le jeu se met en pause** et
-affiche l'écran de perte — « **Reprendre avant la rentrée** » (s'il y a un instantané d'avant l'entrée), « **Continuer
-sans dégâts** » (le réglage `damage` coupé, le temps relancé), « **Recommencer la scène** ». Vérifié en jeu
+affiche l'écran de perte — « **Reprendre N s plus tôt** » (depuis le 13 nov. 2026 : un point gardé toutes les 10 s de
+vol stable sous 2,5 g, le plus récent d'au moins 15 s ; « Reprendre avant la rentrée » pour un vaisseau entré dans l'air ;
+seulement le vol et l'appareil perdus — un nouveau placement, une scène, un chargement les oublient ; e2e
+`resume-point`), « **Continuer sans dégâts** » (le réglage `damage` coupé, le temps relancé), « **Recommencer la scène** ».
+**F5 / F9** (sauvegarde et chargement rapides) rendent aussi l'état de l'avion : carburant, train, volets, aérofreins,
+poussée, maintiens ALT/HDG/A/T et postcombustion, STOVL (e2e `aircraft-save`) ; pas les systèmes de l'A320 (FMGC,
+MCDU, pannes armées), ni une formation, une interception, un ravitaillement, un ILS ou un appontage en cours ; une
+mission, un combat ou un défi en cours ne reprend pas — la sauvegarde et le chargement le disent. Vérifié en jeu
 (e2e `apprendre-avions`). Par code : un nouveau placement (`lineUp`, `flyAt`…) efface la panne
 (`airFlight.failure`) mais ne ferme **ni l'écran de perte ni la pause** : cliquer un de ses boutons
 (`.craft-lost button` — depuis la console, `document.querySelector(".craft-lost button").click()` suffit ; un

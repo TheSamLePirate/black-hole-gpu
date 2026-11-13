@@ -7,13 +7,16 @@ const T = {
   code: { fr: "TÉLÉMÉTRIE · SIGNAL PERDU", en: "TELEMETRY · SIGNAL LOST" },
   title: { fr: "VAISSEAU PERDU", en: "CRAFT LOST" },
   resume: { fr: "Reprendre avant la rentrée", en: "Resume before the entry" },
+  resumeAgo: { fr: "Reprendre {0} s plus tôt", en: "Resume {0} s earlier" },
   undamaged: { fr: "Continuer sans dégâts", en: "Go on without damage" },
   restart: { fr: "Recommencer la scène", en: "Restart the scene" },
 };
 
 export interface CraftLostActions {
-  /** back to the last point before the air (null: none kept) */
+  /** back to the last point before the air, or a recent one of the same flight (null: none kept) */
   resume: (() => void) | null;
+  /** the point a recent one: how long ago [s] (null: the entry's) */
+  resumeAgo?: number | null;
   /** on, the damage off */
   undamaged: () => void;
   /** the scene from its start */
@@ -55,7 +58,7 @@ export class CraftLost {
       };
       row.append(b);
     };
-    btn(tr(T.resume), a.resume, true);
+    btn(a.resumeAgo != null ? tr(T.resumeAgo).replace("{0}", String(a.resumeAgo)) : tr(T.resume), a.resume, true);
     btn(tr(T.undamaged), a.undamaged);
     btn(tr(T.restart), a.restart);
     box.append(code, h, p, row);

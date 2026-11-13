@@ -43,6 +43,10 @@ export class Simulation {
     private renderer: Renderer,
   ) {}
 
+  /** After each whole step — the loop's and __bh.step's —: what must see the step done, not half (main.ts: the points to
+   *  resume a lost craft from, game/resume-point.ts) */
+  afterStep: (() => void) | null = null;
+
   /** Sets the scene's time (a preset, a saved game, a date). */
   setTime(t: number) {
     this.time = t;
@@ -72,6 +76,7 @@ export class Simulation {
       this.lastFired = f.at;
       this.firedAt = this.play;
     }
+    this.afterStep?.();
     return moved;
   }
 

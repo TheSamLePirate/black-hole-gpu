@@ -884,6 +884,7 @@ The simulation's step, shared by the live loop, `__bh.step` and the video.
 | `mission` | `{ update(dt) }` \| null | the mission, stepped with the camera |
 | `setTime(t)` | method | sets the scene's time [M] (same as `__bh.setTime`) |
 | `step(dt)` | method | one step of `dt` s; returns whether the camera moved |
+| `afterStep` | `() => void` \| null | called at the end of every whole step (the loop's, `__bh.step`'s): main.ts takes the craft lost's resume points there, not inside the flight's step (game/resume-point.ts) |
 | `applyRender(info \| null)` | method | what the renderer draws of the flight (null when nothing is flown); returns whether the image must be redone |
 | `airShakeGain` | number | the display shake's gain (set by `__bh.jitter.levers`) |
 
@@ -1300,7 +1301,7 @@ Private bookkeeping of the journal: the last sphere of influence and status seen
 
 ### `__bh.game.load(g, o = {})` → string
 
-Restores a saved game: `g` is a slot's name, `"autosave"`, or a `GameSave` object (from `snapshot()`). Own preferences (budget, display, sound, aids) stay the player's; the scene, the ship, the fleet, the plan and the clock come from the save. `o.quiet` keeps it out of the journal. Returns the save's summary. Throws `no saved game "<g>"`.
+Restores a saved game: `g` is a slot's name, `"autosave"`, or a `GameSave` object (from `snapshot()`). Own preferences (budget, display, sound, aids) stay the player's; the scene, the ship, the fleet, the plan and the clock come from the save — and, since 13 Nov 2026, the craft's own state (`craft`: every craft's fuel and payload, the spacecraft's systems, the flown craft's gear, flaps, brakes, engine, jet holds — taken up by the jet's law at its first frame in the air, `camera.jetResume` —, STOVL, skin; controller/craftsave.ts). A save without `craft` (older) loads with full tanks and the gear by the height, as before. An activity named in the save (`activity`: a mission, a fight, a challenge, a lesson) is not resumed: a toast says so. `o.quiet` keeps it out of the journal and silent. Returns the save's summary. Throws `no saved game "<g>"`.
 
 ```js
 const save = __bh.game.snapshot("test");
@@ -1597,7 +1598,7 @@ Private in the class, callable at runtime: turns the Ranger on (`settings.ship =
 
 ### `__bh.game.snapshot(name = "autosave")` → GameSave
 
-A save object, not stored: `{ v: 2, name, savedAt, summary, scene, settings, time, ship: { piloting, sas, hold, auto, throttle, precision, speedMode, landed, spent, spentBy, properTime, tunnelEntry, entrySite, entryPlan }, fleet, plan, camera }`. Its `settings` are the scene's and what it carries (not the player's own). Pass it to `load()`.
+A save object, not stored: `{ v: 2, name, savedAt, summary, scene, settings, time, ship: { piloting, sas, hold, auto, throttle, precision, speedMode, landed, spent, spentBy, properTime, tunnelEntry, entrySite, entryPlan }, fleet, plan, camera, craft, activity }`. Its `settings` are the scene's and what it carries (not the player's own). `craft` (`{ v: 1, fuel, payload, systems?, gear: { down, ext }, flaps, brake, airBrake, engine, jet: { alt, hdg, spd, ab, bankMax? }, stovl?, skin? }`, controller/craftsave.ts) is the craft's own state; `activity` (`{ kind, title }` or null) the mission, fight, challenge or lesson under way — named, not saved. Pass it to `load()`.
 
 ```js
 __bh.game.snapshot("wx").settings.weather   // a scene setting, e.g. the weather
@@ -1783,6 +1784,9 @@ use are tabled below; the rest are internal. Most functions are synchronous and 
 | `liftOff` | [x, y, z] \| null | the Lander's vertical start from its legs under the take-off autopilot (`controller/lowthrust.ts` `ourSurfaceWant`): the level heading it keeps (home frame) while it climbs on its vectored thrust, up to 200 m over its gear (`LIFT_TOP_M`) — then `null` and the climb's law. By Gargantua (`controller/planet.ts` `surfaceWant`, any craft on a world's ground): the same start, the heading in the hole's local axes. Read-only for tests (`!!c.liftOff`: still in the vertical start). |
 | `gearDown` / `gearExt` | boolean / number 0…1 | landing gear commanded down, and its extension (8 s each way; only `gearExt ≥ 1` carries the craft). Set at the flight's first frame from the state (down on the ground, up in the air) **unless `gearInit` is true**; driven by itself with `settings.autoGear` or the entry/land/takeoff autopilots (down below 600 m AGL and 250 m/s). Gear down at once: `c.gearDown = true; c.gearExt = 1; c.gearInit = true` (and `settings.autoGear = false` to keep it so). |
 | `gearInit` | boolean | keep the gear as written instead of the first-frame choice; reset by every placement (`newFlight`). |
+| `flightGen` | number | the flight's number: +1 at every `newFlight` (a scene, a placement, a load) — what belongs to one flight is kept with it (the craft lost's resume points, game/resume-point.ts). |
+| `jetResume` | `{ modes, frames }` \| null | the jet's holds a load gives back (`alt`, `hdg`, `spd`, `ab`, `bankMax`), taken up at the first frame the jet flies in the plane's law in the air, or let go after `frames` frames; cleared by `newFlight`. |
+| `onAirEntry` / `onAirborne(dtSec, g)` / `onCraftLost(why)` | hooks | set by main.ts: thin air above 1 km/s (a resume point due before the entry), each frame in the air not lost (a recent point due every 10 s of steady flight), the craft lost (the loss screen; its Resume picks the lost flight's own point: « Resume before the entry », else « Resume N s earlier », the newest at least 15 s old). A test can raise `onCraftLost("why")` to show the screen. |
 | `nowTime()` | → number | the sim time now [M] (the ship's time once it is set). |
 | `activePoseNow(evenOff?)` | → Pose & {t} \| null | the flown craft's place [M, c] and axes at `nowTime()`. |
 | `ourNav(cam)` | → nav \| null | our side's navigation state: `X` [M], `V` [c] (home frame), `t` [M], `ref` (reference body), `refPos`, `refVel`, `radial`. Needs `cameraFrame(settings)` as argument: from the page use `__bh.sys.nav()`. |

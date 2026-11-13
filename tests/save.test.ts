@@ -161,3 +161,26 @@ test("a walker saved on foot travels with a save; a malformed one is left out, t
   expect(bad.character).toBeUndefined();
   expect(bad.ship).toEqual(g.ship);
 });
+
+test("the craft's own state and the activity under way travel with a save; a block that is not one is left out", () => {
+  const craft = {
+    v: 1 as const,
+    fuel: { f35: 2500 },
+    payload: {},
+    gear: { down: true, ext: 1 },
+    flaps: 0.5,
+    brake: 0,
+    airBrake: 0.6,
+    engine: 0.4,
+    jet: { alt: 3000, hdg: null, spd: 160, ab: false },
+  };
+  const g = { ...save(), craft, activity: { kind: "mission" as const, title: "Renegade" } };
+  const back = parseSave(JSON.stringify(g));
+  expect(back.craft).toEqual(craft);
+  expect(back.activity).toEqual({ kind: "mission", title: "Renegade" });
+  // (a later version's block, a foreign one: left out — the flight loads with its tanks full, as before)
+  const later = checkSave(JSON.parse(JSON.stringify({ ...g, craft: { ...craft, v: 2 } })));
+  expect(later.craft).toBeUndefined();
+  expect(later.ship).toEqual(g.ship);
+  expect(checkSave(JSON.parse(JSON.stringify({ ...g, activity: 7 }))).activity).toBeUndefined();
+});

@@ -16,6 +16,7 @@ import type { ManeuverNode } from "../maneuver";
 import type { Hold, Auto } from "../pilot";
 import type { DockLink, FreeState } from "../fleet";
 import { VESSEL_IDS, type VesselId } from "../vessels";
+import { checkCraft, type CraftSave, type SavedActivity } from "../controller/craftsave";
 
 /** The current version of a save. */
 export const SAVE_VERSION = 2;
@@ -69,6 +70,11 @@ export interface GameSave {
   plan: { nodes: ManeuverNode[]; note: string; mission: unknown; universe?: "ours" | "gargantua" } | null;
   /** the free camera (no ship): falling freely (older saves: none) */
   camera?: { gravity: boolean };
+  /** the craft's own state — the fuel, the gear, the flaps, the brakes, the engine, the jet's holds, the spacecraft's
+   *  systems (controller/craftsave.ts, its own version; saves before 13 Nov 2026: none — tanks full, gear by the height) */
+  craft?: CraftSave;
+  /** the activity under way when saved — a mission, a fight, a challenge, a lesson: named, not resumed (the load says so) */
+  activity?: SavedActivity | null;
 }
 
 // The browser's storage (audit 2026-11-10, AR-19): one key per save — an interrupted write, a later version's
@@ -308,6 +314,14 @@ export function checkSave(x: unknown): GameSave {
     caught("save", new Error("the fleet left out: not a fleet"));
     delete g.fleet;
   }
+  // (the craft's own state that is not one — a later version's, a foreign file's —: left out, told; the flight loads
+  // with its tanks full, as before 13 Nov 2026)
+  if (g.craft !== undefined && !checkCraft(g.craft)) {
+    caught("save", new Error("the craft's state left out: not one this version reads"));
+    delete g.craft;
+  }
+  const A = g.activity;
+  if (A != null && (typeof A !== "object" || typeof A.kind !== "string" || typeof A.title !== "string")) delete g.activity;
   return g;
 }
 

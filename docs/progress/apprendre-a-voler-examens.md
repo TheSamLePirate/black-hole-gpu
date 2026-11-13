@@ -73,6 +73,12 @@ automatique par U** du F-35B à Edwards (la vraie touche ; en l'air en 10,8 s, a
 maintiens passés, aucun GCAS). Avant, U sur une piste lançait le décollage orbital, refusé (confirmé en vol : « the
 engine (0.6 g) cannot hold the weight on Earth ») ; la leçon 3 du cours disait de ne pas compter sur U.
 
+**Le 13 novembre 2026** (audit 3.3, ce Mac) : le cours décrivait l'écran de perte et F5/F9 tels qu'ils étaient ; il dit
+maintenant « Reprendre N s plus tôt » (le vol et l'appareil perdus seulement) et ce que F5/F9 rendent d'un avion.
+Revérifié par les e2e `resume-point` (2/2 : le point du Ranger refusé au F-35 placé depuis ; le F-35 repris 15 s plus tôt,
+à 2 999 m pour 3 000) et `aircraft-save` (1/1 : carburant 2 499 kg, train sorti, volets ½, aérofrein, ALT 3 000 / A/T 160
+rendus par F9). Aucune recette du cours n'a changé : `apprendre-avions` et `apprendre-vaisseaux` non relancés.
+
 **Ce qui reste ouvert** :
 - Le vol entièrement à la main par script : il faut écrire un régulateur, et le cours ne donne pas les gains.
 - L'amarrage manuel à 6 degrés de liberté.

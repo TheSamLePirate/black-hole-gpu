@@ -376,6 +376,12 @@ export class CameraController {
   onAirEntry?: () => void;
   /** the craft lost to the air (heat, load): why */
   onCraftLost?: (why: string) => void;
+  /** a frame of flight in the air, the craft not lost: its flight seconds and its load [g] (game/resume-point.ts: a recent
+   *  point to resume from) */
+  onAirborne?: (dtSec: number, g: number) => void;
+  /** the flight's number: a new one at each newFlight (a scene, a placement, a load) — what belongs to a flight is kept
+   *  with it (game/resume-point.ts) */
+  flightGen = 0;
   /** the flight's end — a landing's, a docking's —: its figures graded (game/report.ts), for the HUD's card */
   /** the flight graded (null: the last report let go — a new flight) */
   onFlightReport?: (r: FlightReport | null) => void;
@@ -1181,6 +1187,9 @@ export class CameraController {
   a320Park = false;
   readonly jetAthr = new Autothrottle();
   jetCws = { pitch: false, roll: false, thr: Number.NaN };
+  /** the jet's holds a load gives back (controller/craftsave.ts), taken up once the jet flies in the plane's law again —
+   *  the placing's first frames would wipe them —, within `frames` frames or let go (null: none) */
+  jetResume: { modes: Pick<import("./game/jet").JetModes, "alt" | "hdg" | "spd" | "ab" | "bankMax">; frames: number } | null = null;
   /** a formation flown on another's craft (game/formation.ts — controller/formation.ts), null: none */
   form: FormState | null = null;
   /** the INTERCEPT autopilot on the radar's lock (controller/intercept.ts), null: none */
