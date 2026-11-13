@@ -5674,9 +5674,9 @@ export class Renderer {
   singleHistory = false;
   singleNativeAlpha = 0.5;
   /** PLAN-J2 J2-6 — the raster's scale in flight left to the dynamic resolution (main.ts: the pin `want = rasterTop()` lifted, its floor
-   *  2/3 a side — Sam's decision 6). Off: measured, the governor of a throttled M1 Max takes it to 2/3 at once — the turn's PSNR 40.1
-   *  against 46.7 dB at 0.75 (single history either way), sharpness 0.87 against 0.93, for 10 % of GPU: the image blurred for a frame
-   *  rate (CLAUDE.md) — kept off until a scale under 0.75 keeps the image */
+   *  2/3 a side — Sam's decision 6). Off: measured, the governor of a throttled M1 Max takes it to 2/3 at once — the turn's PSNR 30.4
+   *  against 32.5 dB at 0.75 against a full-scale reference (0.80: 34.3), for ~8 % of GPU: the image blurred for a frame rate
+   *  (CLAUDE.md) — kept off until a scale under 0.75 keeps the image */
   rasterScaleFree = false;
   /** the upsampling's least α this frame when singleHistory splits them (0: theirs shared, TA.k.z) */
   private taauLongAlpha = 0;

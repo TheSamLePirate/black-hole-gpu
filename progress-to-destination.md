@@ -4105,3 +4105,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Mesuré** (`motion-quality` Alpes virage 30°, M1 Max ; extras `+s80/+s72/+s70` nouveaux) : PSNR en mouvement 0,625 : 37,8 ; 2/3 : 40,1 ;
   0,70 : 43,5 ; 0,72 : 45,3 ; **0,75 : 47,3** ; 0,80 : 43,4 dB — non monotone : un défaut de la reconstruction aux rapports autres que 3/4,
   pas un manque de pixels. Bloque l'échelle variable (épingle gardée). PROBLEMES-A-REGLER (nouvelle entrée), PLAN-J2 §9 octies (e).
+
+## 2026-11-13T05:23Z — Correction : les comparaisons entre échelles de motion-quality étaient fausses (référence à 0,75) ; deux défauts d'outil corrigés
+
+- **Correction** (entrées de ~05:30–06:10Z : « 0,75 seul bien restitué », « −6,6 dB à 2/3 », « −8 dB à 0,625 ») : en raster sans résolution
+  dynamique, la référence de `motion-quality` était une vue tenue à `earthRasterScale` (0,75), jamais convergée ; et `__bh.forceScale` d'une
+  autre échelle que celle du raster recréait les cibles à chaque image. **Corrigés** : `tests/e2e/motion-quality.e2e.test.ts` (la référence à
+  l'échelle 1), `src/main.ts` `resize` (l'échelle forcée d'abord).
+- **Remesuré** (M1 Max, Alpes, virage 30°) : PSNR 2/3 30,4 ; 0,75 32,4–32,6 ; 0,80 34,3 dB — monotone, sans effet d'ordre. L'épingle de
+  l'échelle du raster **reste** (2/3 : −2,1 dB pour ~8 % de GPU). PROBLEMES (l'entrée fermée comme artefact), PLAN-J2 (encadré), BH-API,
+  GRAPHICS-PIPELINE, E2E-CATALOGUE. **Non vérifié** : kerr-mini ; les mesures Q6/I4 anciennes entre échelles à relire.

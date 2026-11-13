@@ -16,7 +16,8 @@ import { readPng } from "./lib/png";
 // refined at the canvas's full scale (every mode starts from the place's saved state: the same flight). Each against its
 // reference, in the view through the canopy (BOX): PSNR and the sharpness ratio (the
 // Laplacian's energy over the reference's — 1: as sharp; under: softer; over: noisier or aliased).
-// The HUD off; each mode's own reference, made at once after its still shot (the view exactly the same).
+// The HUD off; each mode's own reference, made at once after its still shot (the view exactly the same) — at the canvas's full scale
+// (settings.earthRasterScale 1 the while: before 13 Nov 2026 a raster reference was a held view at 0.75, scales compared wrongly).
 // PLACES=tarifa-low,alps (strait: the sea); MODES (below) — e.g. spatial75q,taau75q,native100q, a renderer lever after "+" (EXTRAS:
 // taau75q+disocc — PLAN-J2 J2-5's disocclusion; off in the plain modes); FRAMES (90), TURN (0: straight), STEADY (60 frames before), SPEED (140 m/s), STILL (30).
 // Output: remote-results/motion-quality/<place>-<mode>[-still|-ref].png, motion-quality.json (MQ_OUT).
@@ -77,6 +78,9 @@ const EXTRAS: Record<string, [string, string]> = {
   s80: ["__bh.forceScale(0.8);", ""],
   s72: ["__bh.forceScale(0.72);", ""],
   s70: ["__bh.forceScale(0.7);", ""],
+  // (the same with the raster's own scale set alike — settings.earthRasterScale, 0.75 by default)
+  r80: ["__bh.settings.earthRasterScale = 0.8; __bh.forceScale(0.8);", "__bh.settings.earthRasterScale = 0.75;"],
+  r667: ["__bh.settings.earthRasterScale = 2 / 3; __bh.forceScale(2 / 3);", ""],
 };
 const modeExtras = (md: string) => {
   const on = new Set(md.split("+").slice(1));
@@ -269,8 +273,11 @@ describe.skipIf(!E2E)("Q6: the image in motion, the same motion for every mode",
         // made once a place drifted from the later modes' views, a look easing, 50 px)
         const fRef = `${OUT}/${pl}-${md}-ref.png`;
         let converged = false;
+        // (the raster's own scale set to 1 the while — PLAN-J2 J2-6, 13 Nov 2026: in raster without the dynamic resolution the view's
+        // scale is settings.earthRasterScale's, 0.75 by default, and a held raster view never converges — the reference was a held
+        // image at 0.75: every scale but 0.75 measured low against it, 0.75 itself flattered)
         await app.js(
-          `(() => { __bh.forceScale(null); __bh.renderer.taauOn = false; __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`,
+          `(() => { globalThis.__mqRasterScale = __bh.settings.earthRasterScale; __bh.settings.earthRasterScale = 1; __bh.forceScale(null); __bh.renderer.taauOn = false; __bh.settings.targetSpp = 64; __bh.touch(); return 1; })()`,
         );
         for (let i = 0; i < 180 && !converged; i++) {
           await Bun.sleep(500);
@@ -294,7 +301,7 @@ describe.skipIf(!E2E)("Q6: the image in motion, the same motion for every mode",
         rows.push(row);
         console.log(JSON.stringify(row));
         await app.js(
-          `(() => { __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(null); __bh.freeze(false); document.body.classList.remove("hide-ui"); document.getElementById("overlay").style.visibility = ""; return 1; })()`,
+          `(() => { __bh.settings.earthRasterScale = globalThis.__mqRasterScale ?? 0.75; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(null); __bh.freeze(false); document.body.classList.remove("hide-ui"); document.getElementById("overlay").style.visibility = ""; return 1; })()`,
         );
         expect(row.gpuErrors).toBe(0);
       }, 600_000);

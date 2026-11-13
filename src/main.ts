@@ -5557,8 +5557,12 @@ async function main() {
       : null;
   function resize() {
     const rs = rasterScale();
-    if (rs !== null) renderScale = rs;
-    else if (!dynamicResolutionOn(settings) && forcedScale === null) renderScale = 1;
+    // (a forced scale — __bh.forceScale, a measure's — first: the raster's own taken over it, the frame loop forced it back and called
+    // resize again every frame — the targets made anew, the history lost at each, the image drawn at the raster's scale all along: every
+    // forced scale but 0.75 measured 4–10 dB low — PLAN-J2 J2-6, 13 Nov 2026)
+    if (forcedScale !== null) renderScale = forcedScale;
+    else if (rs !== null) renderScale = rs;
+    else if (!dynamicResolutionOn(settings)) renderScale = 1;
     // (with the dynamic resolution — the Game quality turns it on, any quality may —, the image within
     // the hardware tier's pixel budget, then its scale; without it the ratio asked for: the still image
     // is the point)
@@ -8911,7 +8915,7 @@ async function main() {
       resize();
     }
     const rs = rasterScale();
-    if (rs !== null && Math.abs(rs - renderScale) > 1e-3) {
+    if (forcedScale === null && rs !== null && Math.abs(rs - renderScale) > 1e-3) {
       gpuEma = 0;
       scaleHeld = 0;
       resize();
@@ -8960,8 +8964,8 @@ async function main() {
       // coarsest — the shading is its cost, not the pixels' count)
       const raster = rasterOn();
       // (PLAN-J2 J2-6 — renderer.rasterScaleFree, off: the raster's scale the governor's too, pinned no more, its floor 2/3 a side —
-      // Sam's decision 6. Measured against it: at 2/3 the turn's PSNR 40.1 against 46.7 dB at 0.75 for 10 % of GPU — the image blurred
-      // for a frame rate; the pin kept)
+      // Sam's decision 6. Measured against it: at 2/3 the turn's PSNR 30.4 against 32.5 dB at 0.75 — a full-scale reference — for
+      // ~8 % of GPU: the image blurred for a frame rate; the pin kept)
       const rasterFree = raster && renderer.rasterScaleFree && renderer.rasterLiteActive;
       const lower = Math.max(rasterFree ? 2 / 3 : 0.5, renderScale - 0.125),
         higher = Math.min(raster ? rasterTop() : 1, renderScale + 0.125);

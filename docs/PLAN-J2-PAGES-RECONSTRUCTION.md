@@ -446,6 +446,14 @@ une mesure qui sépare netteté et bruit (PSNR contre une référence à chaque 
 
 ## 9 octies (e). J2-6 : la « pulsation » d'un changement d'échelle, mesurée sans le laplacien (13 novembre 2026)
 
+> **Correction (même jour, ~06:20 UTC) — les comparaisons entre échelles par `motion-quality` étaient fausses** : en raster sans résolution
+> dynamique, la « référence affinée à pleine échelle » était une **vue tenue à `earthRasterScale` (0,75)**, jamais convergée — 0,75 flatté,
+> toute autre échelle pénalisée (d'où « 0,75 seul bien restitué », « −6,6 dB à 2/3 », « −8 dB à 0,625 ») ; et `__bh.forceScale` d'une autre
+> échelle que celle du raster faisait recréer les cibles à chaque image (`main.ts` `resize`, corrigé : l'échelle forcée d'abord). **Remesuré,
+> référence à pleine échelle** (`motion-quality` corrigé) : PSNR en virage **2/3 : 30,4 ; 0,75 : 32,4–32,6 ; 0,80 : 34,3 dB** (monotone ; plus
+> d'effet d'ordre). Les A/B **à échelle égale** (désocclusion, `singleHistory` à 0,75, `+drop` contre 0,625 constant) restent valides en
+> relatif, leurs valeurs absolues non. **L'épingle reste** : 2/3 coûte ~2,1 dB pour ~8 % de GPU. Le texte qui suit est gardé tel qu'écrit.
+
 e2e `j2-probes` phase `pulse` (nouvelle) : vue tenue (plaine du Gapeau), l'échelle forcée 0,75 → 0,625 puis retour (`forceScale`), la couleur de
 scène (sortie de la TAAU, taille du canevas) relue 1 à 64 images après et comparée à la vue réglée après le changement (écart moyen |ΔL| / L ;
 `devJs`), contre le bruit de la vue tenue. **Aucune pulsation** : l'écart part de celui des deux échelles (3,2 %), tombe à 2,2–2,5 % dès
