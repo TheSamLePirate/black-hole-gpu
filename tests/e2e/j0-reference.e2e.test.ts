@@ -1114,16 +1114,25 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
           __bh.game.setDate("2026-07-10T${utc}:00Z"); __bh.refresh(); for (let i = 0; i < 120; i++) await f(); __bh.freeze(true);
           for (let i = 0; i < 30; i++) await f(); return 1; })()`);
-        const p = await app.js<{ w: number; h: number; rgb: number[] }>("__bh.renderer.readShipProbe()");
-        const lum: number[] = [];
-        for (let i = 0; i < p.w * p.h; i++) lum.push(0.2126 * p.rgb[3 * i]! + 0.7152 * p.rgb[3 * i + 1]! + 0.0722 * p.rgb[3 * i + 2]!);
-        const sorted = [...lum].sort((a, b) => a - b);
-        const k = 1 / Math.max(sorted[Math.floor(0.99 * (sorted.length - 1))]!, 1e-30);
-        const out8 = new Uint8Array(p.w * p.h * 3);
-        const srgb = (x: number) => Math.round(255 * Math.min(1, x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055));
-        for (let i = 0; i < p.w * p.h * 3; i++) out8[i] = srgb(Math.max(0, p.rgb[i]! * k));
-        await Bun.write(`${OUT}/probe-${utc.replace(":", "")}.png`, writePng(p.w, p.h, out8));
-        console.log(`  probe dump ${utc}: written (scale 1/${(1 / k).toExponential(2)})`);
+        for (const [what, call] of [
+          ["probe", "__bh.renderer.readShipProbe()"],
+          ["seasky", "__bh.renderer.readSeaSky()"],
+        ] as const) {
+          const p = await app.js<{ w: number; h: number; rgb: number[] } | null>(call);
+          if (!p) {
+            console.log(`  probe dump ${utc}: ${what} none`);
+            continue;
+          }
+          const lum: number[] = [];
+          for (let i = 0; i < p.w * p.h; i++) lum.push(0.2126 * p.rgb[3 * i]! + 0.7152 * p.rgb[3 * i + 1]! + 0.0722 * p.rgb[3 * i + 2]!);
+          const sorted = lum.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+          const k = 1 / Math.max(sorted[Math.floor(0.99 * (sorted.length - 1))]!, 1e-30);
+          const out8 = new Uint8Array(p.w * p.h * 3);
+          const srgb = (x: number) => Math.round(255 * Math.min(1, x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055));
+          for (let i = 0; i < p.w * p.h * 3; i++) out8[i] = srgb(Math.max(0, Number.isFinite(p.rgb[i]!) ? p.rgb[i]! * k : 0));
+          await Bun.write(`${OUT}/${what}-${utc.replace(":", "")}.png`, writePng(p.w, p.h, out8));
+          console.log(`  probe dump ${utc}: ${what} written (scale 1/${(1 / k).toExponential(2)})`);
+        }
       }
       await app.js(`(() => { __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`);
       expect(true).toBe(true);

@@ -9845,6 +9845,33 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     };
   }
 
+  /** (PROBLEMES, the sea at dusk) the sky the sea mirrors as the tracer reads it — the FFT array's sky layer (sea/fft-gpu.ts SKY_LAYER 16,
+   *  takeSky: the probe's GGX levels in its top half), level 0, 256 × 256 —, read back: r, g, b per texel (half floats unpacked); null
+   *  without the sea FFT */
+  async readSeaSky(): Promise<{ w: number; h: number; rgb: number[] } | null> {
+    const fft = this.seaFft;
+    if (!fft) return null;
+    const N = fft.texture.width;
+    const bytesPerRow = N * 8;
+    const st = this.device.createBuffer({ size: bytesPerRow * N, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyTextureToBuffer({ texture: fft.texture, mipLevel: 0, origin: [0, 0, 16] }, { buffer: st, bytesPerRow }, [N, N, 1]);
+    this.device.queue.submit([enc.finish()]);
+    await st.mapAsync(GPUMapMode.READ);
+    const h = new Uint16Array(st.getMappedRange().slice(0));
+    st.unmap();
+    st.destroy();
+    const half = (u: number) => {
+      const e = (u >> 10) & 31,
+        m = u & 1023,
+        sg = u >> 15 ? -1 : 1;
+      return e === 0 ? sg * 2 ** -14 * (m / 1024) : e === 31 ? Number.NaN : sg * 2 ** (e - 15) * (1 + m / 1024);
+    };
+    const rgb: number[] = [];
+    for (let i = 0; i < N * N; i++) rgb.push(half(h[4 * i]!), half(h[4 * i + 1]!), half(h[4 * i + 2]!));
+    return { w: N, h: N, rgb };
+  }
+
   /** (PROBLEMES, the sea at dusk) the craft's light probe as it stands — 256 × 128 texels, rgb radiance on the probe's axes (row 0 its
    *  zenith, the equirectangular mapping of trace.wgsl env) —, read back for a look: Float32Array of r, g, b per texel */
   async readShipProbe(): Promise<{ w: number; h: number; rgb: number[] }> {

@@ -28,7 +28,7 @@ cadence en retirant du contenu, ce que CLAUDE.md interdit. **Recommandation rév
 son plancher de qualité à régler) ; ou (a) seulement avec un critère d'image en plus de la vitesse. L'e2e : sa vérification de
 cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mise de côté jusqu'à la décision.
 
-## Des taches de couleur sur la mer au crépuscule (relevé le 13 novembre 2026, J0 phase `skyband4`)
+## Des taches de couleur sur la mer au crépuscule (relevé le 13 novembre 2026, J0 phase `skyband4`) — **cause trouvée : la sonde en demi-flottants sous-normaux**
 
 - **Observé** (kerr-mini, J0 Toulon-Hyères, 10 juillet 19:40 UTC — le Soleil couché —, vue de trois quarts arrière vers l'ouest, profil neutre,
   run `…-j3-skyband4b`, `skyband4-1940-*.png`) : de grandes taches roses, jaunes et vertes, aux bords nets, sur la mer et la côte sous le
@@ -59,6 +59,17 @@ cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mis
   (`TUNE_SEA_DBG` 32 : borné par la luminance, la teinte gardée) ; **non testé** — trois runs bloqués au démarrage de J0 par le chargement de la
   forêt (240 s, « scenery forest » ; les services IGN et WorldCover répondaient ; une phase au même démarrage passait entre-temps : probablement
   la canopée IGN limitée par une autre campagne depuis la même adresse).
+- **Cause** (~20:14 UTC, run `…-probedump3` ; `renderer.readSeaSky()` relit la couche du ciel du tableau FFT) : à 19:40 cette couche est presque
+  **noire avec une bande saturée en paliers** (rouge, jaune, blanc, bleu), quand la sonde (`envBuf`, en f32) est lisse. La sonde est copiée en
+  **radiance brute, non pré-exposée**, dans des textures **rgba16float** (`envRaw` → `envSpec` → la couche FFT, `takeSky`) : au crépuscule la
+  radiance tombe vers 2·10⁻⁷ (l'échelle relevée), sous le plus petit demi-flottant normal (6·10⁻⁵) — dans les sous-normaux, quelques bits :
+  chaque canal en paliers différents (les fausses teintes), sous 6·10⁻⁸ zéro (le noir). Le bornage par la luminance (`TUNE_SEA_DBG` 32, run
+  `…-seadusk11`) ne changeait rien : la couleur est fausse dès la copie. **Touche aussi** (non vérifié à l'image) : les reflets de l'appareil
+  (`ship.wgsl` `envSpec`) et du marcheur (`character.wgsl` `envSpecular`), qui lisent la même `envSpec`, la nuit et au crépuscule.
+- **Correctif proposé** (comme la table aérienne, stockée × la pré-exposition pour « tenir dans un demi-flottant à tout EV » — `trace.wgsl`
+  `apScale`) : la sonde copiée dans `envRaw` × une échelle (la pré-exposition, ou une puissance de deux tirée de sa luminance), écrite à côté
+  (`envBuf` + 7 .w → `sh[12].w`), et chaque lecteur d'`envSpec` divisant par elle — `ship.wgsl` `envSpec`, `character.wgsl` `envSpecular`,
+  `trace.wgsl` `seaSkyRadiance`. Trois lecteurs, une échelle commune : un lot à part.
 
 ## ~~Le premier `renderer.tune` d'une session fige la sonde de lumière de l'appareil~~ — réglé le 13 novembre 2026 (~17:57 UTC) : la sonde de l'appareil gelée pendant la compilation de son noyau à chaque changement de clé
 

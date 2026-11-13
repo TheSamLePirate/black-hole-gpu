@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:02 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:14 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5740,4 +5740,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   coloré ») est retirée. **Non testé** : le bornage par la luminance — trois runs `seadusk` bloqués au démarrage par la forêt (240 s), sans
   rapport avec le code (une phase au même démarrage passait entre-temps).
 - Suite : relancer `seadusk` quand l'IGN répond (le cas `skyHoldLum`) ; si les taches partent, le correctif est ce bornage.
+
+## 2026-11-13T20:14Z — Les taches sur la mer au crépuscule : cause trouvée (la sonde en demi-flottants sous-normaux)
+
+- Réalisé : `renderer.readSeaSky()` (la couche du ciel du tableau FFT relue) ; la phase `probedump` écrit la sonde et cette couche.
+- Preuves : **observé** (kerr-mini, `…-probedump3`) : la sonde (f32) lisse, la couche (rgba16float) noire et en paliers saturés à 19:40 — la
+  radiance brute (~2·10⁻⁷) sous le plus petit demi-flottant normal ; le bornage par la luminance testé sans effet (`…-seadusk11`).
+- Suite : un lot — la sonde stockée × une échelle (comme la table aérienne), ses trois lecteurs (`ship.wgsl`, `character.wgsl`,
+  `seaSkyRadiance`) divisant ; vérifier aussi les reflets de l'appareil la nuit.
 
