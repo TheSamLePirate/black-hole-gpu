@@ -40,6 +40,10 @@ cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mis
   le chemin des vagues FFT** (`sea/fft-gpu.ts`, le tableau de textures de la mer et sa lecture dans `trace.wgsl`). Pistes non vérifiées : une
   couche du tableau lue pour une autre (les couleurs roses / jaunes / vertes ressemblent à des normales ou des dérivées lues comme une
   couleur), un niveau de détail au crépuscule.
+- **Écarté** (~19:16 UTC, lecture du code) : le ciel reflété dans la couche du ciel (`seaSkyRadiance`) — ses six niveaux sont écrits (`SPEC_MIPS`
+  6, `takeSky`), et la coupure de la sonde de la mer (qui l'éteint, `P.seafft[6].z`) laissait les taches. **Restent** : les pentes et leurs
+  variances (LEAN `vu`, `vc`, `vx` de `seaWavesFft`) qui règlent le reflet du Soleil bas — les taches sont sous le couchant —, et les traînées
+  d'écume (`o.res`). Prochain pas : un lot dans le code de la mer, chaque terme coupé à son tour (un levier de mesure dans `seaShade`).
 
 ## ~~Le premier `renderer.tune` d'une session fige la sonde de lumière de l'appareil~~ — réglé le 13 novembre 2026 (~17:57 UTC) : la sonde de l'appareil gelée pendant la compilation de son noyau à chaque changement de clé
 
