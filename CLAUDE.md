@@ -131,6 +131,14 @@ un changement non mesuré reste indiqué comme tel. Les budgets proposés dans l
 - **Préserver toute l'expérience.** Fraîcheur et lisibilité des instruments, réponse des commandes, confort caméra,
   transitions, météo, audio, reprise GPU, sauvegardes et captures font partie de la qualité. Les fonctions produit
   restent accessibles à TARS via les mêmes actions métier, états et validations que les autres entrées.
+- **Trois règles de méthode (décision de Sam, 13 novembre 2026 ; [contre-analyse](docs/CHALLENGE-J1-J2-2026-11-13.md) C1, C6, C7).**
+  (1) Avant d'ouvrir un lot de performance, écrire son gain maximal lu dans la fiche (« ce poste coûte X ms, je ne peux pas
+  rendre plus que X ») ; un lot plafonné sous 1 ms se justifie par la qualité ou l'expérience et le dit. (2) Un levier allumé par
+  décision de Sam perd son ancien chemin au lot de retrait suivant, daté dans le plan ; seuls les leviers de mesure restent.
+  (3) Une sonde ou un outil de mesure nouveau passe un témoin positif (il voit un défaut injecté) et un témoin négatif (A/A nul)
+  avant que son chiffre n'entre dans un plan ou une recommandation à Sam.
+- **Tenir la page « État courant »** en tête de [progress-to-destination.md](progress-to-destination.md) (décision de Sam,
+  13 novembre 2026) : un écran, mis à jour par chaque session à chaque lot (ses lignes seulement) ; les entrées datées restent dessous.
 - **Migrer par lots utiles dans le jeu existant.** Réutiliser géométrie, caches, matériaux et modèles déjà corrigés.
   Un nouveau module remplace une responsabilité nommée. Limiter les adaptateurs temporaires et définir leur retrait ;
   supprimer ensuite options, buffers et compilations sans utilisateur. Éviter deux opaques complets permanents pour

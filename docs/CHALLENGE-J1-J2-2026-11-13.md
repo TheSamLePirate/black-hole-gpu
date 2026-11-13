@@ -207,8 +207,10 @@ L'idée 4 (albédo à pleine taille) se pilote après le lot 4 : elle a besoin d
 ## 7. Décisions pour Sam
 
 **Décidé par Sam le 13 novembre 2026 (« oui ») : les points 1 à 4** — consignés dans CLAUDE.md, [J0-CONTRAT](J0-CONTRAT.md) §2 et §11,
-la [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §24 ; les vagues 3 et 4 de l'audit confiées à une seconde session. Les points 5
-et 6 restent ouverts.
+la [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §24 ; les vagues 3 et 4 de l'audit confiées à une seconde session. **Points 5
+et 6 décidés par Sam le 13 novembre 2026, plus tard dans la matinée (« ok pour tes recommandations », « oui »)** : les trois règles
+sont dans CLAUDE.md (« Pratiques à appliquer »), la page « état courant » en tête de [progress-to-destination.md](../progress-to-destination.md).
+J2-C (BC7) : « ne pas le faire maintenant » — étudiée, rangée.
 
 1. **L'eau et le découpage des noyaux avant J3** — recommandé : oui.
 2. **Le mini a-t-il une cible ?** 60 images/s à 1080p sur un M1 à 8 cœurs GPU demanderait de diviser la frame par 3,5 ; le §8.1

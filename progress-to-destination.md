@@ -25,6 +25,34 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 08:20 UTC)
+
+Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
+les preuves restent dans les entrées datées du journal, dessous.
+
+**Les chiffres de référence (scène J0, Toulon-Hyères, vol)** — [fiche J0 de sortie de J2](docs/progress/j0/FICHE-kerr-mini-2026-11-13-sortie.md) :
+
+| Machine | GPU p50 mesuré | Cible | Plus gros poste |
+|---|---:|---:|---|
+| kerr-mini | 58,4 ms (5c420e09, 13 nov.) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms |
+| M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
+
+**L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
+indirects → J3 (lumière, cockpit).
+
+**En cours**
+
+| Session (T3) | Lot | État |
+|---|---|---|
+| Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
+| Rendu (33d89754) | La borne de cadence du M1 Max (30 puis 40 images/s : bride-t-il encore ?) | à faire avant la prochaine fiche |
+| Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | lot 1 poussé (736b26a2, une clé par sauvegarde) ; FX-10 « Reprendre » en cours |
+| Audit vagues 3–4 (1feb2f7f) | 3.1–3.2 réseau, 3.4–3.7 vol/TARS, 3.10, 4.2, 4.3, 4.8 | à faire, dans cet ordre ([09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
+
+**Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
+
+**Attend Sam** : rien d'ouvert à ce jour. Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure.
+
 ## Journal
 
 ### 2026-11-03 05:14 UTC — Initialisation du suivi permanent
@@ -4299,3 +4327,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Changé** : `src/renderer.ts`, `src/shaders/trace.wgsl`, `tests/e2e/j0-reference.e2e.test.ts` ; fiche J0 de sortie (« Le chemin vers §8 »),
   la contre-analyse (§2 : la vérification), J0-CONTRAT, PLAN-J2. **Vérifié** : `check-wgsl` 81/81, tsc, `surface-id` 1/0 (identité 49/49),
   j0 ablations 1/0. **Non fait encore** : l'essai de `fpsCap` 30/40 sur le M1 Max (suivant).
+
+## 2026-11-13T08:20Z — Décisions de Sam : J2-C rangée, trois règles de méthode, la page « État courant »
+
+- Contribution à la destination : méthode et lisibilité du suivi (contre-analyse C1, C6, C7, C9) ; J2-C (PLAN-J2).
+- Réalisé (session d'analyse, documentation seule) : J2-C (BC7) marquée « ne pas le faire maintenant » dans PLAN-J2 ; les trois règles
+  (gain maximal écrit avant un lot, retrait daté de l'ancien chemin d'un levier allumé, deux témoins pour une sonde neuve) et la tenue de
+  la page « État courant » ajoutées à CLAUDE.md (« Pratiques à appliquer ») ; contre-analyse §7 : points 5 et 6 décidés ; la page
+  « État courant » créée en tête de ce journal à partir de la fiche J0 de sortie et des threads des deux sessions.
+- Preuves : documenté. Aucun code modifié, aucun test lancé.
+- Suite : chaque session tient ses lignes de la page à chaque lot.
+
