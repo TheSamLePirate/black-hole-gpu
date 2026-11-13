@@ -202,6 +202,16 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   ne tourne qu'environ une image sur 35 : ≈ 0,007 ms par image allumé.
   **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
   ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.
+  **La sonde de cohérence** (2026-11-13, ~23:58 UTC ; phase J0 `coherence`, le critère de sortie §4) : en une lecture par heure, ciel dégagé, les trois
+  écarts appareil / sol — la direction de la lumière clé (son tour quand le Soleil incident est coupé, contre le relèvement du CPU), l'air
+  (la marche sur la table du sol), le ciel sur une surface horizontale (la sonde intégrée exactement, et ses harmoniques, sur le ciel clair du
+  sol) ; bornes tirées des mesures du 13 : direction ≤ max(0,05°, 3 × A/A), air ≤ 0,5 % tant que la table passe 5 %, ciel exact 0,90–1,15,
+  harmoniques 0,90–1,30 ; témoins positifs : le Soleil incident coupé (l'écart de direction = le relèvement), une couche de nuages (le ciel de
+  l'appareil +6–7 %). **Elle a trouvé un défaut** : la sonde de l'appareil en retard après un saut d'horloge (le ciel d'avant gardé — au coucher,
+  1,2–1,8 fois le sol) — **réglé** (`probeSunJump`, [PROBLEMES](PROBLEMES-A-REGLER.md)) : 1,003–1,006 de 19:05 à 19:20. Run `…-j3-coh-final`
+  (kerr-mini) : direction ≤ 0,00004°, air 0,997–1,002 (à 19:20, 0,90 sur une table à 0,02 % : relevé, hors borne), ciel exact 0,957–1,10,
+  harmoniques 1,03–1,18. Comparaison par bandes de hauteur (`readShipSky().bandsProbe/bandsGround`) : de jour la sonde 0,85–1,00 du sol selon
+  la hauteur, la bande de l'horizon 1,17–1,38 au coucher.
 - **J3-2, premier pas — l'appareil à travers l'air de sa distance** (13 nov., ~17:12 UTC). La coque (`ship.wgsl` `fs`) et les traînées
   (`trailFs`) lisent la table aérienne du traceur (`aerialTex`, la même que le sol : `shipAir`, c × T + L × alpha, au-delà de 50 m) ; sa
   portée et l'échelle viennent de `keyLight` (`sh[12]`) ; les traînées perdent leur `exp(−d/120 km)` ad hoc. Interrupteur de comparaison

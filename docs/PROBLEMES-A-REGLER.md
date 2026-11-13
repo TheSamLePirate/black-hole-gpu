@@ -575,6 +575,19 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   sans changer l'image) : un `shadowFs` qui écarte les texels hors de la silhouette du houppier vue du Soleil (droite vers le Soleil
   dans le repère unité de la sphère ou du cône), la profondeur restant celle du proxy ; à mesurer (`trees' shadow map`, image).
 
+## ~~La lumière de l'appareil en retard après un saut d'horloge (le ciel d'avant gardé des minutes)~~ — réglé le 13 novembre 2026 (~23:58 UTC)
+
+- **Trouvé par la sonde de cohérence de J3** (phase J0 `coherence`, kerr-mini) : au coucher, l'heure avancée de 5 minutes à la fois, le ciel
+  que reçoit l'appareil valait **1,20 à 1,80 fois** celui du sol (19:05 → 19:20 UTC), et seulement 1,00–1,02 l'heure avancée de 15 minutes.
+- **Cause** : la sonde de l'appareil n'était réécrite entière (`envSpread`) que si son ciel changeait d'une demi-luminance ou si un astre
+  bougeait de 0,1 rad sur ses axes **inertiels** — où le Soleil ne bouge presque pas au coucher (c'est la Terre qui tourne). Sinon, une image de
+  fenêtre courte, puis la moyenne lente (jusqu'à 512 images, un texel sur seize toutes les quatre) : le ciel d'avant gardé des minutes. En
+  jeu : après le curseur du temps, un `setDate`, un saut de quelques minutes.
+- **Correctif** (`renderer.ts` `probeDrift`) : la sonde réécrite sur 4 images quand le Soleil tourne de plus de ¼° **sur les axes du corps
+  proche** depuis la dernière réécriture (au seuil d'un texel, 1,4°, un saut de 5 minutes sur deux passait encore). Levier de mesure
+  `probeSunJump`. **Mesuré** (même balayage) : 1,20 / 1,35 / 1,50 / 1,80 → **1,003 / 1,004 / 1,003 / 1,006** ; midi inchangé (0,957). Coût : au
+  temps réel, quatre images de sonde de plus par minute de jeu (non chronométré).
+
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 
 - **Constaté le 6 novembre 2026** (Sam : « 200 s pour Jupiter »), en écrivant l'e2e `aurora-jupiter` (AM3).

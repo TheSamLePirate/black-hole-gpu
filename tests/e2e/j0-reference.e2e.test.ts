@@ -32,8 +32,8 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4 (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
-// sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
+// sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min; coherence: the three gaps in one read per hour, ~5 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
 // Duration: ~10 min here (cold boot ~1–2 min, two flights of 70 s, 7 ablation flights ~40 s each).
@@ -629,6 +629,105 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       await app.js(`(() => { __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`);
       for (const utc of times) expect(Math.abs(rows[utc]!.ratio! - rows[utc]!.ratioAgain!)).toBeLessThan(0.06 * rows[utc]!.ratio!);
       expect(["12:00", "15:30"].some((u) => Math.abs(rows[u]!.ratioClouds! - rows[u]!.ratio!) > 0.05 * rows[u]!.ratio!)).toBe(true);
+    },
+    900_000,
+  );
+
+  // (PLAN-J3 J3-1 — the craft / ground coherence probe, J0_PHASES=coherence (the exit measure of PLAN-J3 §4): in one read per hour — midday,
+  // 18:30, 19:05, the sky cleared — the three gaps between the light the craft gets and the ground's: (1) the key's direction — its turn when
+  // the incident Sun is switched off against the CPU's lift (the refraction): 0 if the craft follows the ground's Sun —, (2) the key's air —
+  // the march along its ray over the ground's table —, (3) the sky on a level surface — the craft's probe integrated exactly, and its harmonics
+  // (what the hull reads), over the ground's clear sky. Bounds set on the 13 Nov measures (keylight, keyair, keysky: their A/A and controls):
+  // direction within max(0.05°, 3 × its A/A), air within 0.5 %, the exact sky within 0.90–1.15 (measured 0.95–1.09, A/A up to 4.8 %), the
+  // harmonics within 0.90–1.30 (measured +8–13 % over the exact — the band 4 question, Sam's). Positive controls: the incident Sun off (the
+  // direction gap = the lift where it is > 0.1°), a deck of clouds (the craft's sky moves, the ground's clear sky not))
+  test.skipIf(!PHASES.includes("coherence"))(
+    "J3-1: the craft / ground coherence probe — direction, air, sky in one read per hour; bounds from the measures, two positive controls",
+    async () => {
+      await start("");
+      const deg = (a: number[], b: number[]) => {
+        const d = a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
+        return (Math.acos(Math.max(-1, Math.min(1, d / Math.hypot(...a) / Math.hypot(...b)))) * 180) / Math.PI;
+      };
+      type K = {
+        dir: number[];
+        lift: number | null;
+        air: { march: number; table: number; skyGround: number; skyCraft: number } | null;
+        sky: { exact: number; ground: number; bandsProbe: number[]; bandsGround: number[]; gridE: number; shE0: number } | null;
+      };
+      const read = async (utc: string, incident: boolean) =>
+        app.js<K>(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); const r = __bh.renderer;
+          r.incidentSunOn = ${incident}; __bh.freeze(false); __bh.game.setDate("2026-07-10T${utc}:00Z"); __bh.refresh();
+          for (let i = 0; i < 60; i++) await f(); __bh.freeze(true); for (let i = 0; i < 10; i++) await f();
+          const k = await r.readShipKey(), sky = await r.readShipSky(), n = r.lastNear, I = r.incidentNow;
+          let lift = null;
+          if (n && I) { const G = n.axes.map((a) => a[0] * n.light[0] + a[1] * n.light[1] + a[2] * n.light[2]);
+            const d = (G[0] * I[0] + G[1] * I[1] + G[2] * I[2]) / Math.hypot(...G) / Math.hypot(...I); lift = Math.acos(Math.min(1, d)) * 180 / Math.PI; }
+          return { dir: k.dir, lift, air: k.air, sky: sky ? { exact: sky.exact, ground: sky.ground, bandsProbe: sky.bandsProbe, bandsGround: sky.bandsGround, gridE: sky.gridE, shE0: sky.shE0 } : null }; })()`);
+      const p = (x: number) => +x.toPrecision(4);
+      // (COH_OLD=1: the probe not written over when the Sun jumps — renderer.probeSunJump false —, as before 14 Nov: the A/B of that fix)
+      await app.js(
+        `(() => { __bh.renderer.probeSunJump = ${!process.env.COH_OLD}; __bh.game.set("earthClouds", 0); __bh.refresh(); return 1; })()`,
+      );
+      await app.settled(120_000);
+      const rows: Record<string, Record<string, number | null>> = {};
+      for (const utc of (process.env.COH_TIMES ?? "12:00,18:30,19:05,19:15").split(",")) {
+        const a = await read(utc, true);
+        const b = await read(utc, true);
+        const off = await read(utc, false);
+        const aa = deg(a.dir, b.dir);
+        const turn = deg(a.dir, off.dir);
+        rows[utc] = {
+          lift: a.lift === null ? null : p(a.lift),
+          dirGap: a.lift === null ? null : p(Math.abs(turn - a.lift)),
+          dirAA: p(aa),
+          // (the positive: with the incident Sun off, the craft's key is the geometric Sun — its gap to the ground's incident one, the lift)
+          dirGapOff: a.lift === null ? null : p(Math.abs(0 - a.lift)),
+          air: a.air ? p(a.air.march / a.air.table) : null,
+          airTable: a.air ? p(a.air.table) : null,
+          skyExact: a.sky && a.sky.ground > 0 ? p(a.sky.exact / a.sky.ground) : null,
+          skyHarmonics: a.air && a.air.skyGround > 0 ? p(a.air.skyCraft / a.air.skyGround) : null,
+          skyExactAgain: b.sky && b.sky.ground > 0 ? p(b.sky.exact / b.sky.ground) : null,
+          // (the two ways' own values — luminances, the scene's units —: which one leaves the other at sunset)
+          groundSky: a.sky ? p(a.sky.ground) : null,
+          craftSkyExact: a.sky ? p(a.sky.exact) : null,
+        };
+        // (radiance by radiance: the probe's elevation bands over the ground grid's — rows at 0.9°, 6.5°, 17.6°, 61.6° —, and the ground's
+        // irradiance two ways at the sea's level, its grid integrated and its harmonics: where the two ways part)
+        if (a.sky)
+          console.log(
+            `    ${utc} bands probe/ground (0.9° 6.5° 17.6° 61.6°): ${a.sky.bandsProbe.map((x, i) => p(x / a.sky!.bandsGround[i]!)).join(" ")}; ground E grid ${p(a.sky.gridE)} harmonics ${p(a.sky.shE0)} at h ${p(a.sky.ground)}`,
+          );
+        console.log(`  J3-1 coherence ${utc} UTC: ${JSON.stringify(rows[utc])}`);
+      }
+      // (the second positive: a deck of clouds — the craft's probe sees it, the ground's clear sky does not by design —: the harmonics' ratio moves)
+      await app.js(`(() => { __bh.renderer.incidentSunOn = true; __bh.game.set("earthClouds", 0.9); __bh.refresh(); return 1; })()`);
+      await app.settled(120_000);
+      const cl = await read("12:00", true);
+      rows["12:00"]!.skyHarmonicsClouds = cl.air && cl.air.skyGround > 0 ? p(cl.air.skyCraft / cl.air.skyGround) : null;
+      await app.js(
+        `(() => { __bh.renderer.incidentSunOn = true; __bh.game.set("earthClouds", ${J0_SCENE.earthClouds}); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
+      );
+      console.log(
+        `  J3-1 coherence, clouds 0.9 at 12:00: harmonics ${rows["12:00"]!.skyHarmonicsClouds} (clear ${rows["12:00"]!.skyHarmonics})`,
+      );
+      out.coherence = rows;
+      for (const [utc, r] of Object.entries(rows)) {
+        if (r.dirGap !== null) expect(r.dirGap!, `direction ${utc}`).toBeLessThan(Math.max(0.05, 3 * r.dirAA!));
+        // (the air's bound where the Sun still comes through — the table's transmittance over 5 % —: below, a ratio of two vanishing
+        // transmittances at the horizon's grazing — 0.87–0.90 at 19:20, the table 0.02 % —, reported only)
+        if (r.air !== null && r.airTable! > 0.05) expect(Math.abs(r.air! - 1), `air ${utc}`).toBeLessThan(0.005);
+        expect(r.skyExact!, `sky exact ${utc}`).toBeGreaterThan(0.9);
+        expect(r.skyExact!, `sky exact ${utc}`).toBeLessThan(1.15);
+        expect(r.skyHarmonics!, `sky harmonics ${utc}`).toBeGreaterThan(0.9);
+        expect(r.skyHarmonics!, `sky harmonics ${utc}`).toBeLessThan(1.3);
+      }
+      // (the positives seen: the incident Sun off breaks the direction bound where the lift shows; the clouds move the sky by > 5 %)
+      const lifted = Object.values(rows).filter((r) => typeof r.lift === "number" && r.lift > 0.1);
+      expect(lifted.length).toBeGreaterThan(0);
+      for (const r of lifted) expect(r.dirGapOff!).toBeGreaterThan(Math.max(0.05, 3 * r.dirAA!));
+      const c = rows["12:00"]!;
+      expect(Math.abs(c.skyHarmonicsClouds! - c.skyHarmonics!)).toBeGreaterThan(0.05 * c.skyHarmonics!);
     },
     900_000,
   );

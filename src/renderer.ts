@@ -843,6 +843,9 @@ function placeOnBody(near: { centre: Vec3; radius: number; axes: Vec3[] }, mPerM
 /** the airless moons whose ground is their own (trace.wgsl moonOwn — PLAN-PLANETES-AAA P8 A4): their kernel, NEAR_KIND 7 */
 const OWN_GROUND = new Set(["io", "europa", "ganymede", "enceladus"]);
 
+/** the Sun's turn on the near body's axes [rad] past which the craft's light probe is written over whole (renderer probeDrift) */
+const PROBE_SUN_JUMP = (0.25 * Math.PI) / 180;
+
 /** the near body's kind in the camera's key (NEAR_KIND — P7): 1 the Earth, 2 another world with air (Mars, the giants), 3 airless,
  *  5 Titan, 6 Venus, 7 the airless moons with a ground of their own (4: none near — the caller's) */
 function nearKindOf(nb: { id: string; kind: number; surface: number }): number {
@@ -931,6 +934,11 @@ export class Renderer {
   // the Ranger's light probe: what it saw last frame (unit vectors from the camera to what lights it,
   // world axes; its velocity; its place around the hole), to size its running mean
   private probeSeen: { side: string; things: Map<string, Vec3>; beta: Vec3; er: Vec3; time: number; sky: number } | null = null;
+  /** the Sun's direction (probe's axes) when the probe was last written over whole (probeDrift: a jump of the clock) */
+  private probeSunAt: Vec3 | null = null;
+  /** (a measuring lever) false: a jump of the Sun not written over (the probe stale for minutes after a 5-minute clock jump), as before
+   *  14 Nov 2026 */
+  probeSunJump = true;
   /** the camera's axes (right, up, forward) in the Ranger's probe's axes */
   private shipProbeAxes: [Vec3, Vec3, Vec3] = [
     [1, 0, 0],
@@ -9708,8 +9716,27 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // half a stop or more, written over in 4 frames; less, its running mean shortened to a few frames)
     const skyStops = Math.abs(Math.log2(sky / prev.sky));
     if (skyStops > 0.5) this.envSpread = 4;
-    const skyMoved = skyStops > 0.01 ? texel : 0;
+    // (the Sun moved over a quarter of a degree since the probe was last written over whole — the clock set, scrubbed, a jump of minutes —: written over
+    // again. A 5-minute jump moves it 1.25°: under the reset's 0.1 rad, one frame's short window, then the slow running mean — up to 512
+    // frames, a sixteenth of the texels every 4th — kept the sky of before for minutes: at sunset the craft's sky light 1.2 to 3 times the
+    // ground's (PLAN-J3 J3-1, the coherence probe, 14 Nov 2026))
     const angle = (a: Vec3, b: Vec3) => 2 * Math.asin(Math.min(1, 0.5 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])));
+    // (the Sun's direction on the near body's axes — what sets its height there: the body's turn sets the sunset, not the Sun's
+    // inertial direction, which the things above follow —; else the inertial one)
+    const n = this.lastNear;
+    const sun: Vec3 | undefined = n
+      ? (n.axes.map((a) => a[0] * n.light[0] + a[1] * n.light[1] + a[2] * n.light[2]) as Vec3)
+      : things.get("sun");
+    if (sun && this.probeSunJump) {
+      const at = this.probeSunAt;
+      // (a quarter of a degree: near the horizon the sky's light changes a lot for less than a texel — 1.25° moved, every other 5-minute
+      // jump missed at a texel's threshold, 14 Nov; at the real clock a minute of the game, four probe frames more)
+      if (!at || angle(sun, at) > PROBE_SUN_JUMP || this.envReset) {
+        if (at && !this.envReset) this.envSpread = 4;
+        this.probeSunAt = sun;
+      }
+    }
+    const skyMoved = skyStops > 0.01 ? texel : 0;
     // the probe's axes turning: the ZAMO's around the hole, the throat's with the orbiting mouth
     const turn = side === "hole" ? angle(er, prev.er) : side === "theirs" ? Math.abs(m.omega * (time - prev.time)) : 0;
     let moved = Math.hypot(cam.beta[0] - prev.beta[0], cam.beta[1] - prev.beta[1], cam.beta[2] - prev.beta[2]);
@@ -9778,6 +9805,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     shHann: number;
     shLanczos: number;
     shBand4: number;
+    bandsProbe: number[];
+    bandsGround: number[];
+    gridE: number;
+    shE0: number;
   } | null> {
     const n = ENV_W * ENV_H;
     const size = (n + 7) * 16;
@@ -9832,6 +9863,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       ];
     };
     const coef4 = new Float64Array(9);
+    const bandSum = [0, 0, 0, 0];
+    const bandW = [0, 0, 0, 0];
     for (let y = 0; y < ENV_H; y++) {
       const th = (y + 0.5) * dth;
       const st2 = Math.sin(th);
@@ -9842,6 +9875,14 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         const L = lum((y * ENV_W + x) * 4);
         const c = d[0]! * up[0]! + d[1]! * up[1]! + d[2]! * up[2]!;
         if (c > 0) e += L * c * st2;
+        // (the probe's radiance in the ground grid's elevation bands — skyAmbient's 8 × 8 grid: sin(elevation) = ((j + ½)/8)², rows 1, 3, 5, 7)
+        for (let b = 0; b < 4; b++) {
+          const zj = ((2 * b + 1 + 0.5) / 8) ** 2;
+          if (Math.abs(c - zj) < 0.03) {
+            bandSum[b] = bandSum[b]! + L * st2;
+            bandW[b] = bandW[b]! + st2;
+          }
+        }
         const b = basis(d);
         for (let k = 0; k < 9; k++) coef[k] = coef[k]! + L * b[k]! * st2;
         const b4 = basis4(d);
@@ -9868,7 +9909,32 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       shHann: irr(0.75, 0.25),
       shLanczos: irr(0.827, 0.413),
       shBand4: Math.max(0, irr(1, 1) + (-Math.PI / 24) * coef4.reduce((t, c, k) => t + c * basis4(up)[k]!, 0)),
+      ...(await this.skyBands(bandSum.map((x, b) => (bandW[b]! > 0 ? x / bandW[b]! : -1)))),
     };
+  }
+  /** (PLAN-J3 J3-1, the coherence probe) the ground's clear sky beside the craft's probe, radiance by radiance: skyAmbient's 8 × 8 grid at
+   *  the sea's level (TABLE_SKY + 40…) — its rows 1, 3, 5, 7 averaged over the azimuths (`bandsGround`) beside the probe's texels in the
+   *  same elevation bands (`bandsProbe`, given) —, the grid's own irradiance on a level surface, integrated without harmonics (`gridE`),
+   *  and the harmonics' at the sea's level (`shE0`); luminances, the scene's units */
+  private async skyBands(bandsProbe: number[]) {
+    const f = await this.skyTable();
+    const lum = (o: number) => 0.2126 * f[o]! + 0.7152 * f[o + 1]! + 0.0722 * f[o + 2]!;
+    const g = 40 * 4;
+    const bandsGround = [1, 3, 5, 7].map((j) => {
+      let t = 0;
+      for (let i = 0; i < 8; i++) t += lum(g + (j * 8 + i) * 4);
+      return t / 8;
+    });
+    // (the grid's rows: sin(elevation) = s², s = (j + ½)/8 — dω = 2s ds dφ, ds = 1/8, dφ = 2π/8)
+    let gridE = 0;
+    for (let j = 0; j < 8; j++) {
+      const sj = (j + 0.5) / 8;
+      for (let i = 0; i < 8; i++) gridE += lum(g + (j * 8 + i) * 4) * sj * sj * 2 * sj * (1 / 8) * ((2 * Math.PI) / 8);
+    }
+    // (the harmonics at the lowest level towards up: the three a vertical normal reads — skyIrradianceSeaUp)
+    const c = (k: number) => lum((4 + k) * 4);
+    const shE0 = Math.max(0, Math.PI * 0.282095 * c(0) + 2.0943951 * 0.488603 * c(2) + 0.7853982 * 0.630784 * c(6));
+    return { bandsProbe, bandsGround, gridE, shE0 };
   }
 
   /** (PROBLEMES, the sea at dusk) the sky the sea mirrors as the tracer reads it — the FFT array's sky layer (sea/fft-gpu.ts SKY_LAYER 16,
