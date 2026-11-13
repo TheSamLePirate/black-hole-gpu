@@ -14,7 +14,7 @@
 import { wormholeSampleAt } from "../../system/wormhole-predict";
 import type { Settings } from "../../settings";
 import { solarBody, solarState } from "../../system/solar";
-import { nodeDvHome, ourApsides, ourClosest, type OurPath } from "../../system/our-predict";
+import { nodeDvHome, ourApsides, type OurPath } from "../../system/our-predict";
 import { bodyCentre, BODY_NAMES, starCentre, type Body } from "../../targeting";
 import type { Target } from "../../settings";
 import { FONT, fmtDist, fmtDur, fmtDv, fmtLen, fmtShort, marker, MONO, niceStep, RED } from "../hudkit";
@@ -24,6 +24,7 @@ import {
   dateOf,
   isMapCraft,
   lineage,
+  ourClosestOnTrack,
   ourPos,
   ourScene,
   ourTrack,
@@ -495,8 +496,8 @@ export class Map3D {
       if (tp && sc.byId.has(i.target) && solarBody(i.target) && i.target !== i.ref && i.target !== "wormhole") {
         const m = memo(tp);
         const key = `ca:${i.target}:${plan?.nodeAt[0] ?? 0}`;
-        if (!m.has(key)) m.set(key, ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0));
-        const ca = m.get(key) as ReturnType<typeof ourClosest>;
+        if (!m.has(key)) m.set(key, ourClosestOnTrack(tp, i.target, plan?.nodeAt[0] ?? 0));
+        const ca = m.get(key) as ReturnType<typeof ourClosestOnTrack>;
         if (ca) out.push({ t: tp.times[ca.i]!, kind: "ca", label: tf("Closest approach · {0}", sc.byId.get(i.target)!.name) });
       }
       const e = this.extension(i);
@@ -2569,8 +2570,8 @@ export class Map3D {
       if (!memo) this.pathMemo.set(tp, (memo = new Map()));
       const key = `ca:${i.target}:${plan?.nodeAt[0] ?? 0}`;
       const caPred = (
-        memo.has(key) ? memo.get(key) : (memo.set(key, ourClosest(tp, i.target, plan?.nodeAt[0] ?? 0)), memo.get(key))
-      ) as ReturnType<typeof ourClosest>;
+        memo.has(key) ? memo.get(key) : (memo.set(key, ourClosestOnTrack(tp, i.target, plan?.nodeAt[0] ?? 0)), memo.get(key))
+      ) as ReturnType<typeof ourClosestOnTrack>;
       const caExt = ext ? this.extClosest(ext, i.target, true) : null;
       const useExt = !!caExt && (!caPred || caExt.d < caPred.d);
       const ca = useExt ? caExt : caPred;

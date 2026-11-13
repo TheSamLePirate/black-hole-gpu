@@ -17,6 +17,7 @@ import { OUR_COLOURS } from "../hudkit";
 import { issAxes, issOrbit, issTrack } from "../../system/iss";
 import { M_METRES, solarBody } from "../../system/solar";
 import { fleet } from "../../fleet";
+import { ephemerisVersion } from "../../system/de440";
 import { keplerProp } from "../../system/our-plan";
 import { ourState } from "../../system/our-side";
 import { VESSEL_IDS, VESSELS, type VesselId } from "../../vessels";
@@ -40,29 +41,68 @@ export function ourPos(id: string, t: number): V3 {
 const TRACK_STEP = 120 / M_SECONDS;
 
 /**
- * ourPos along a path's times: a world's exact every two minutes of the path and linear between — the
- * map draws hundreds of samples a path, a few paths a second; the space station and the craft, whose
- * orbits bend in minutes, exact at every sample.
+ * A world's places on a fixed lattice of instants (every TRACK_STEP of the scene's time, k·TRACK_STEP), kept across draws and
+ * across predictions (audit AR-05, 13 Nov 2026: the mini-map asked the ephemeris ~4 000 new instants a second — each new
+ * prediction's times start at "now" —, 6 of them used again the next second; the lattice's are the same from one path to the
+ * next). Dropped when the ephemeris changes (DE440 come in) or when it holds too many.
+ */
+const LATTICE_KEEP = 60_000;
+const lattice = new Map<string, Map<number, V3>>();
+let latticeSize = 0;
+let latticeVersion = -1;
+function latticePos(id: string, k: number): V3 {
+  if (latticeVersion !== ephemerisVersion || latticeSize > LATTICE_KEEP) {
+    latticeVersion = ephemerisVersion;
+    lattice.clear();
+    latticeSize = 0;
+  }
+  let m = lattice.get(id);
+  if (!m) lattice.set(id, (m = new Map()));
+  let q = m.get(k);
+  if (!q) {
+    q = ourPos(id, k * TRACK_STEP);
+    m.set(k, q);
+    latticeSize++;
+  }
+  return q;
+}
+
+/**
+ * ourPos along a path's times: a world's places on the lattice of instants two minutes apart, linear between (as exact as
+ * before — ~10 m —, and the same instants for every path drawn); the space station and the craft, whose orbits bend in
+ * minutes, exact at every sample.
  */
 export function ourTrack(id: string, times: number[]): V3[] {
   const n = times.length;
   if (isMapCraft(id) || n < 3) return times.map((t) => ourPos(id, t));
   const out: V3[] = new Array(n);
-  out[0] = ourPos(id, times[0]!);
-  let a = 0;
-  for (let j = 1; j < n; j++) {
-    if (j < n - 1 && times[j]! - times[a]! < TRACK_STEP) continue;
-    out[j] = ourPos(id, times[j]!);
-    const A = out[a]!,
-      B = out[j]!,
-      span = times[j]! - times[a]! || 1;
-    for (let k = a + 1; k < j; k++) {
-      const f = (times[k]! - times[a]!) / span;
-      out[k] = [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f];
+  for (let j = 0; j < n; j++) {
+    const u = times[j]! / TRACK_STEP;
+    const k = Math.floor(u),
+      f = u - k;
+    const A = latticePos(id, k);
+    if (f === 0) {
+      out[j] = A;
+      continue;
     }
-    a = j;
+    const B = latticePos(id, k + 1);
+    out[j] = [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, A[2] + (B[2] - A[2]) * f];
   }
   return out;
+}
+
+/** The closest approach of a path to a world (not a craft), its places on the lattice — the map's figure, within tens of metres;
+ *  the same instants as every other path's (audit AR-05: our-predict's ourClosest asked the ephemeris at each new path's times) */
+export function ourClosestOnTrack(p: { pts: V3[]; times: number[] }, id: string, from = 0): { d: number; i: number } | null {
+  const tr = ourTrack(id, p.times);
+  let best = { d: Infinity, i: -1 };
+  for (let i = from; i < p.pts.length; i++) {
+    const a = p.pts[i]!,
+      b = tr[i]!;
+    const d = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    if (d < best.d) best = { d, i };
+  }
+  return best.i >= 0 ? best : null;
 }
 import type { V3 } from "./camera";
 import { add, sub } from "../../math/vec3";

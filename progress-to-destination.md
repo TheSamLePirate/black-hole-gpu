@@ -4769,3 +4769,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   long du chemin (`ourTrack`, la Lune), le plus proche passage d'un corps qui n'est pas la référence, `extClosest`, `autoSpan` ; leviers
   proposés : des instants ancrés réutilisés d'un dessin à l'autre, ou d'autres états portés par le worker. Pas de mesure des à-coups en
   jeu après (la section du profileur est trop bruitée pour un écart de cette taille).
+
+## 2026-11-13T12:37Z — AR-05, la mini-carte : un treillis d'instants partagé (≈ −67 % cumulé sur son dessin)
+
+- **Contribution à la destination :** §8 (régularité : les à-coups de la carte en orbite), §7 (préparer une fois, relire ensuite).
+- **Réalisé :** `ourTrack` (`src/ui/map3d/scene.ts`) place les mondes le long d'un chemin sur un **treillis d'instants absolus**
+  (k · 2 min de temps de scène, linéaire entre — la même précision qu'avant, ~10 m), gardé d'un dessin et d'une trajectoire à l'autre
+  (60 000 places au plus, vidé quand l'éphéméride change) : avant, chaque nouvelle prédiction (4 par seconde) faisait redemander à
+  l'éphéméride des instants jamais revus. Le plus proche passage de la carte (`ourClosestOnTrack`, marques et analyse) lu sur ce treillis ;
+  `ourClosest` (our-predict) reste pour qui le voudrait exact. Les engins (station, flotte, joueurs) restent exacts à chaque point.
+- **Preuves :** unitaires `map-track-lattice` 3/0 (Lune et Terre à < 50 m de l'éphéméride pour des chemins partant n'importe où ; le plus
+  proche passage au même point, à < 50 m), `fleet` et `our-predict-refpos` verts. **A/B** (sonde temporaire, profil CPU de 6 s en orbite,
+  deux passes de chaque côté, l'ancien code remis le temps de la mesure) : dessin **256 / 273 → 107 / 103 ms**, éphéméride 167–177 → 27–28 ms,
+  trace 86–90 → 3–4 ms ; avec le lot précédent (`refPos`), **312–322 → 103–107 ms : ≈ −67 %**, soit ≈ 5,3 → 1,7 ms par dessin (dix par
+  seconde). À l'image (vue carte M, Artemis, avant = dbf1dbbf, après) : trajectoire, « Pe 383 km », « Closest approach 399 572 km in 2 h 06 min »
+  identiques ; captures `remote-results/map-lattice-{before,after}.png`.
+- **Limites :** M1 Max chargé, profil échantillonné (100 µs) : les ms sont relatives. Les à-coups en jeu ne sont pas remesurés par le
+  profileur de sections (trop bruité pour cet écart). Reste dans le dessin : `drawOurPaths` (~18 ms/6 s).
