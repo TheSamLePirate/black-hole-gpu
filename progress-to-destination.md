@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:00 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:03 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5980,4 +5980,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : `aurora-jupiter` `AJ_SWEEP=1` (cinq vues voisines). PROBLEMES complété.
 - Preuves : **mesuré** (kerr-mini) : nul au-dessus de 50° S à toute direction et hauteur balayées ; normal à 30° S et 50° N. Suite : les
   paramètres de l'image dans cette vue (un non-fini).
+
+## 2026-11-13T22:03Z — Jupiter noir : les paramètres de l'image sont finis — le défaut est côté GPU
+
+- Réalisé : `aurora-jupiter` relève les non-finis de `renderer.paramsF`. PROBLEMES complété.
+- Preuves : **mesuré** (kerr-mini) : aucun non-fini dans les paramètres. Suite : relire les tables et textures calculées depuis la caméra.
 

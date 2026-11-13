@@ -620,6 +620,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   vraisemblablement un paramètre par image calculé depuis la caméra qui devient non fini (rendu ensuite à 0 par un `max(…, 0)`), ou un
   chemin choisi par la caméra (la tuile de turbulence des géantes proches, `bakeGiantTile` ; `giantInsideOn`). Prochain pas : relire les
   paramètres de l'image (`P`) dans cette vue, chercher le non-fini.
+- **Paramètres relus** (~22:03 UTC, run `…-aurora-jupiter-params`, le test relève `renderer.paramsF`) : **aucun non-fini** dans les paramètres
+  de l'image, dans la vue noire comme ailleurs. Le défaut est donc côté GPU : une table ou une texture calculée depuis la caméra et lue par
+  tout pixel (candidats : la tuile des géantes proches `bakeGiantTile`, les tables du ciel ou de l'air de la géante, la sonde) — à relire
+  par une passe qui compte les non-finis d'une texture (comme `readSeaSky`).
 
 ## Le coût de l'aurore terrestre de près, la nuit : +4,6 ms sur le M1
 

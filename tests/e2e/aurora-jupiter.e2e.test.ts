@@ -45,7 +45,10 @@ test.skipIf(!E2E)(
         `(async () => { const r = __bh.renderer; const c = await r.sceneColor(__bh.settings).catch(() => null); let bad = 0, max = 0, sum = 0, n = 0;
           if (c) for (let i = 0; i < c.data.length; i += 4) { const v = 0.2126 * c.data[i] + 0.7152 * c.data[i + 1] + 0.0722 * c.data[i + 2];
             if (!Number.isFinite(v)) bad++; else { max = Math.max(max, v); sum += v; n++; } }
-          return { eye: r.eyeIncident, ev: +r.ev(__bh.settings).toFixed(2), autoEV: +(r.autoEVDrawn ?? 0).toFixed(2), nonFinite: bad,
+          // (the frame's parameters — renderer.paramsF — their non-finite slots: a per-frame value gone NaN would blank every pixel)
+          const pf = r.paramsF; const badParams = [];
+          if (pf) for (let i = 0; i < pf.length && badParams.length < 12; i++) if (!Number.isFinite(pf[i])) badParams.push(i);
+          return { eye: r.eyeIncident, ev: +r.ev(__bh.settings).toFixed(2), autoEV: +(r.autoEVDrawn ?? 0).toFixed(2), nonFinite: bad, badParams,
             sceneMax: +max.toPrecision(3), sceneMean: +(sum / Math.max(n, 1)).toPrecision(3), source: c?.source ?? null,
             fps: __bh.game.perf({ gpu: true }).renderFps, gpuMs: __bh.game.perf({ gpu: true }).gpuFrameMs }; })()`,
       );
