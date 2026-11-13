@@ -5021,7 +5021,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Non fait** : rien de changé au comportement du jeu (la décision est à Sam) ; l'e2e mis à jour pas encore rejoué (les e2e IGN de la session
   de l'audit tournent sur ce Mac).
 
-## 2026-11-13T15:05Z — Le gouverneur extrait (audit 4.8, b7f0294d) revérifié sur kerr-mini
+## 2026-11-13T14:50Z — Le gouverneur extrait (audit 4.8, b7f0294d) revérifié sur kerr-mini
 
 - `raster-governor` mis au contrat actuel (958ea3b1) : **1 / 0** (kerr-mini, cadence 1 aux Alpes sous le matériau, la partie repli mise de côté).
 - J0, vol de 70 s avec `src/game/governor.ts` (l'extraction stricte de la session de l'audit) : GPU p50 **56,5 ms**, p95 62,6, 17,7 images/s, 1 278 MHz
