@@ -640,7 +640,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   normales ; un test unitaire fige la symétrie (`tests/giant-clouds.test.ts`, 13/13). **Touchait aussi** (non vérifié à l'image) : les hauteurs
   des ponts et des brumes dans l'hémisphère sud des géantes (le facteur faux de 0 à 45° S), les chiffres du cockpit d'un appareil au sud.
 
-## Le coût de l'aurore terrestre de près, la nuit : +4,6 ms sur le M1
+## ~~Le coût de l'aurore terrestre de près, la nuit : +4,6 ms sur le M1~~ — mesuré nul le 13 novembre 2026
 
 - **Mesuré le 6 novembre 2026** (e2e `aurora-cost` sur kerr-mini, Nominal, plein écran, ABAB, médiane de 24 lectures) :
   Tromsø, Kp 4, de nuit, regard au sud : 36,2 → 40,8 ms (échelle de rendu 0,75 des deux côtés), ~+12 %. Depuis 400 km :
@@ -650,6 +650,11 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   les rayons qui restent sous 45° de latitude magnétique sautés (gain de ces deux tris non mesuré).
 - **Piste** : le cache par direction d'Alex (§ 7.5 : une carte octaédrique marchée depuis l'œil, une bande par image, lue par
   la composition) — au-delà de ~100 km sans parallaxe ; la marche à ¼ de résolution recomposée.
+- **Remesuré le 13 nov.** (~22:30 UTC, e2e `aurora-cost` sur kerr-mini, run `…-aurora-cost-now`) : **Tromsø Kp 4 de nuit 37,05 → 36,95 ms
+  (Δ −0,1, au bruit ; échelle 0,75 des deux côtés)**, l'aurore bien dessinée (vue relue) — le coût de l'aurore au sol a disparu (les tris
+  ajoutés depuis — moins d'évaluations, rien sous 45° de latitude magnétique, aucun noyau au-delà de 1 000 lux —, leur gain enfin mesuré). Jupiter
+  +0,4 ms. Depuis 400 km +1,7 ms et le schéma de la magnétosphère +3,35 ms : **échelles différentes entre les côtés** (0,88 / 1,00 et
+  0,88 / 0,80) — non lisibles, à refaire à échelle fixe. **Règle 1** : au sol, plus de gain à prendre ; pas de lot de performance.
 
 ## ~~Saturne vue de son ombre, l'œil adapté : des artefacts partout~~ — revue le 13 novembre 2026 (~22:20 UTC) : l'adaptation rendue
 

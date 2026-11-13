@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:20 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:30 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6035,4 +6035,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   4/4 en relance — passé aussi sur l'ancien serveur : minutage, pas l'adressage. `crew-en` échoue (connexion Chrome perdue, 60 s) **aussi sur
   l'ancien serveur** : un échec antérieur, non lié, non corrigé ici.
 - Limites : le second canal non fiable pour `wng`/`cs`/`tel` (le reste de NET-19) n'est pas fait ; côté serveur, le retour de `send` non traité.
+
+## 2026-11-13T22:30Z — Le coût de l'aurore au sol : mesuré nul (règle 1)
+
+- Preuves : **mesuré** (kerr-mini, `aurora-cost`) : Tromsø de nuit Δ −0,1 ms (était +4,6 ms le 6 nov.), l'aurore dessinée ; les vues d'orbite et
+  de la magnétosphère non lisibles (échelles différentes). PROBLEMES : l'entrée close ; à refaire à échelle fixe pour l'orbite.
 
