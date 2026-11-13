@@ -140,5 +140,11 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   exactement du relèvement du CPU (0,036 → 1,000°, écart ≤ 0,0002°, A/A ≤ 0,0002°) ; son éclairement ×1,00 (18:30), ×1,68 (19:05), **×193**
   (19:15 : le sol encore éclairé, l'appareil presque éteint avant). À contre-jour (vue de trois quarts, 19:05) la différence ne se voit pas.
   **Non mesuré** : ΔGPU (un texel, un fil par image : attendu nul, non vérifié), une vue de face au Soleil bas.
+  **Divergence relevée, prochain pas** (lecture du code, non mesurée) : l'**éclairement** du Soleil suit encore deux modèles — le sol
+  `sunThrough(h, μ)` (la table de transmittance de Bruneton, Q5 C1 : la marche de Chapman en laissait passer 10–35 % de trop entre 1 et 10°),
+  l'appareil la marche de `earthLookNoGround` (48 pas le long du rayon vers le Soleil, nuages retirés quand la carte des nuages est lue).
+  À faire : une sonde (témoins de la règle 3) qui lit les deux au point de la caméra vers le coucher, puis l'appareil sur `sunThrough` si
+  l'écart le justifie (aussi moins cher : une lecture de table au lieu de 48 pas). Les 32 bits de `TUNE_GSKIP` sont pris : la sonde passe
+  par un autre levier.
   **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
   ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.
