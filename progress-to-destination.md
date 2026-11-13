@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 14:47 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 14:44 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5009,7 +5009,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   lançait pas pendant ce temps). J0 à repasser par elle sur kerr-mini.
 - **4.8 : fait** — les quatre découpes d'AR-12 (l'état de session, la frame gardée, le gouverneur, les poses de l'appareil) et la persistance.
 
-## 2026-11-13T14:47Z — Le repli du raster vers le tracé, dormant sur la Terre : relevé, à décider ; `raster-governor` au contrat actuel
+## 2026-11-13T14:44Z — Le repli du raster vers le tracé, dormant sur la Terre : relevé, à décider ; `raster-governor` au contrat actuel
 
 - **Relevé** (l'e2e `raster-governor` de la session de l'audit, pendant l'extraction du gouverneur — ce n'était pas elle) : sous le matériau, la
   cadence de la Terre est fixée à 1 (J2-7, son ancien chemin retiré au lot R1) et l'échelle épinglée ; le guet du gouverneur — cadence la plus
