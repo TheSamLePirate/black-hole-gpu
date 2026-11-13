@@ -61,7 +61,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
-| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** : lot 1 (le plus petit, choix de Sam) — la persistance dans `src/game/persistence.ts` ; suivant proposé : `session.ts` (qui avance : pause, figé, reprise GPU, hors de vue) |
+| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** : lot 1 la persistance (`src/game/persistence.ts`), lot 2 qui tient le vol (`src/game/session.ts`, `__bh.held()`) ; la suite (la boucle d'image) est un gros déplacement : avec la session du rendu |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | à faire ; son premier lot touche `renderer.ts` (la pose de vue) : à faire avec la session du rendu |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
@@ -4716,3 +4716,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Lecture** : la borne ne retient pas le bridage ; le M1 Max soutient ~30 images/s sur J0 aujourd'hui. La valeur de la borne : à Sam
   (recommandation 30). **Non vérifié** : pourquoi `coreaudiod` s'était emballé (et s'il y retourne).
 
+## 2026-11-13T12:21Z — Audit 4.8 (lot 2) : qui tient le vol, une seule réponse (`src/game/session.ts` ; AR-02, AR-12)
+
+- **Contribution à la destination :** §19.3 (un état de session unique qui décide qui avance) et §19.12 (des responsabilités nommées).
+- **Réalisé :** `Session` porte `frozen` (`__bh.freeze`), `paused` (un menu), `gpuHeld` (de la perte du GPU à la première image du
+  nouveau renderer) et lit le rendu hors ligne et le replay ; `holder()` nomme ce qui tient le vol, `runs` remplace la condition
+  `!frozen && !paused && !renderer.offlineActive && !replay.active && !simHeld` recopiée à quatre endroits de la boucle (le pas du vol, le
+  réseau, la sonde de saccades), `moving` celle du mouvement montré (la pluie, le flou de mouvement). Les variables `paused`, `frozen`,
+  `simHeld` de `main()` disparaissent (34 lignes touchées, petites, aucun déplacement de bloc). `__bh.held()` (BH-API) : ce qui tient le
+  vol, pour les tests et TARS.
+- **Comportement inchangé, vérifié :** unitaires `session` 2/0 ; e2e `hidden-tab` 2/2 (et `__bh.held()` = « paused » au retour, null après
+  Échap), `gpu-recovery-hold` 1/1 (Δ 0,0000 M sur 0,51 s de reprise), `aircraft-save` 1/1 (`freeze`), `fps-truth` 2/2.
+- **Remarqué, non corrigé (non reproduit) :** l'horloge du vol (`advanceFrameClock`) avance pendant un rendu hors ligne ; l'enregistrement
+  du replay continue pendant la reprise GPU. Leurs conditions gardées telles quelles, notées dans `session.ts`.
+- **Suite :** la boucle d'image elle-même (`frame.ts`, AR-03/AR-04) est un gros déplacement dans la zone des leviers du rendu : à faire
+  avec la session du rendu et l'accord de Sam.

@@ -77,12 +77,15 @@ describe.skipIf(!E2E)("the game out of view", () => {
     const t1 = await a.js<number>("__bh.time()");
     await Bun.sleep(1000);
     expect(await a.js<number>("__bh.time()")).toBe(t1);
+    // (what holds the flight, as the loop asks it: the pause — game/session.ts)
+    expect(await a.js<string | null>("__bh.held()")).toBe("paused");
     // (resumed: Esc, the time runs again)
     await a.press("Escape");
     await a.waitFor(`!document.querySelector('[data-testid="pause"]')`, 5000);
     const t2 = await a.js<number>("__bh.time()");
     await Bun.sleep(800);
     expect(await a.js<number>("__bh.time()")).toBeGreaterThan(t2);
+    expect(await a.js<string | null>("__bh.held()")).toBeNull();
   }, 60_000);
 
   test("in a room: nothing stops; the others told; his pause not holding the room; back, on the room's hour and said", async () => {

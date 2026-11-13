@@ -90,6 +90,10 @@ The loop clamps its `dt` to 0.1 s: under 10 fps the flight runs slower than the 
 
 Scene names that exist: `__bh.scenes()` (96 keys on 6 Nov 2026 of `__bh.presets`, e.g. `"Interstellar (no shifts)"`, `"Earth: docking to the ISS"`, `"Miller: the water world"`, `"game:artemis"`, `"game:interstellar"`). The `game:` ones are flight scenes.
 
+### `__bh.held()` → `"frozen"` | `"paused"` | `"gpu"` | `"render"` | `"replay"` | null
+
+What holds the flight's own step this frame, the first of them (`src/game/session.ts`, 13 Nov 2026 — audit AR-02, AR-12): `freeze(true)`; a menu holding the game (the pause, the title, the missions — not in a network room); a GPU device made again (from its loss to the new renderer's first image); an offline render or a video; a replay. `null`: `sim.step` runs in the loop. One answer the loop itself asks (`session.runs`), where the same condition was copied four times.
+
 ### `__bh.freeze(on: boolean)` → void
 
 Stops (`true`) or resumes (`false`) the live loop's `sim.step`, and with it the flight clock and the rain clock, so that the simulation only moves when a test calls `__bh.step`. It does not stop redraws. It has no effect on an offline render or a video, which step on their own. Call `freeze(false)` before leaving the test: while frozen the loop never steps the simulation.

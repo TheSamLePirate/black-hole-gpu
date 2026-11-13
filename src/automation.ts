@@ -143,6 +143,8 @@ export interface BhContext {
   mapView(): { dist: number; yaw: number; pitch: number; focus: number[] } | null;
   /** Freezes the loop's own simulation (the automation steps it). */
   freeze(on: boolean): void;
+  /** what holds the flight's step this frame (game/session.ts), null when it runs */
+  held(): "frozen" | "paused" | "gpu" | "render" | "replay" | null;
   /** Holds the render scale (0.25 … 1; null: the governor's again) — the benches, the tests */
   forceScale(x: number | null): void;
   /** the flight's jitter probe (src/jitter): its samples by frame and their analysis by cause */
@@ -679,6 +681,9 @@ export function installBh(c: BhContext) {
       },
       /** Freezes the loop's own simulation; step(dt) then advances it (camera, mission, time) by dt. */
       freeze: (on: boolean) => c.freeze(on),
+      /** what holds the flight's step this frame — "frozen" (freeze), "paused" (a menu), "gpu" (a device made again), "render",
+       *  "replay" —, null when it runs (game/session.ts) */
+      held: () => c.held(),
       /** holds the render scale (the image rendered at that share of the canvas, upscaled by the display); null: released */
       forceScale: (x: number | null) => c.forceScale(x),
       /** the flight's jitter probe (src/jitter, docs/progress/JITTER-VOL.md): start(max?), stop(), mark(label), samples(from?),

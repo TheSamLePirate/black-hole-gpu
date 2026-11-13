@@ -245,6 +245,7 @@ import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
 import { OutOfView } from "./game/out-of-view";
 import { Persistence } from "./game/persistence";
+import { Session } from "./game/session";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
 import { ResumePoints } from "./game/resume-point";
 import { CraftLost } from "./ui/craftlost";
@@ -603,14 +604,16 @@ async function main() {
   // going on where it was (PLAN-MONDE M2); a third loss within a minute, or a device that will not come
   // back: the image frozen, a reload offered
   let recovering = false;
-  /** the flight held — its step, its clock — from a device's loss to the new renderer's first image (strategy §19.8; audit
-   *  AR-02: the flight ran on without an image, a landing or a crash possible unseen); still held if the recovery fails */
-  let simHeld = false;
+  // who holds the flight — an automation, a menu, the GPU's recovery, a render, a replay —: one answer the loop asks
+  // (game/session.ts; audit AR-02, AR-12 — wave 4.8's second lot). `gpuHeld`: from a device's loss to the new renderer's
+  // first image (strategy §19.8; AR-02: the flight ran on without an image, a landing or a crash possible unseen); still
+  // held if the recovery fails
+  const session = new Session({ rendering: () => renderer.offlineActive, replaying: () => replay.active });
   const losses: number[] = [];
   const recoverGpu = async (why: string) => {
     if (recovering) return;
     recovering = true;
-    simHeld = true;
+    session.gpuHeld = true;
     let saved = false;
     try {
       if (settings.autosave) saved = tools.autosaveNow();
@@ -659,7 +662,7 @@ async function main() {
       const firstFrame = () => {
         if (renderer.firstFrameDoneAt > 0 || renderer.lost) {
           loading.done("pipelines");
-          if (!renderer.lost) simHeld = false;
+          if (!renderer.lost) session.gpuHeld = false;
         } else requestAnimationFrame(firstFrame);
       };
       firstFrame();
@@ -3987,7 +3990,7 @@ async function main() {
     // (in a room the common clock does not stop: nothing held)
     hold: (on) => {
       if (netPanel.net?.room) return;
-      paused = on;
+      session.paused = on;
       touch();
     },
     toast: (s) => panel.toast(s),
@@ -4010,7 +4013,7 @@ async function main() {
     new PauseMenu({
       tools,
       hold: (on) => {
-        paused = on;
+        session.paused = on;
         touch();
       },
       engaged: () => mission.active || camera.pilot.hold !== "none" || camera.pilot.auto !== "none" || !!camera.cinematic,
@@ -5401,7 +5404,7 @@ async function main() {
       e.stopImmediatePropagation();
       return;
     }
-    if (e.key !== "Tab" || e.repeat || isTyping(e) || titleScreen?.isOpen || paused) return;
+    if (e.key !== "Tab" || e.repeat || isTyping(e) || titleScreen?.isOpen || session.paused) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     tabShift = e.shiftKey;
@@ -5916,7 +5919,7 @@ async function main() {
       const mode = guided ? "guided" : how ? "demo" : "try";
       // (a lesson begun from a paused game — the pause menu's, the instructor's Explain —: flown at once)
       if (pauseMenu?.isOpen) pauseMenu.close();
-      paused = false;
+      session.paused = false;
       camera.courseOff();
       // (the last lesson's autopilots let go: its carrier pass, its deck recovery, its figure, its intercept, its
       // formation, its holds — a new lesson begins clean)
@@ -6023,7 +6026,7 @@ async function main() {
     camera,
     toast: (s) => panel.toast(s),
     hold: (on) => {
-      paused = on;
+      session.paused = on;
       touch();
     },
     demo: (id) => lessonPlace(id, true),
@@ -8248,7 +8251,8 @@ async function main() {
     lastStats: () => lastStats,
     phase: () => phaseWatch.current,
     mapView: () => flightHud.mapCamera(),
-    freeze: (on: boolean) => (frozen = on),
+    freeze: (on: boolean) => (session.frozen = on),
+    held: () => session.holder(),
     spectate: (on: boolean) => {
       setSpectator(on);
       return camera.spectating;
@@ -8515,11 +8519,8 @@ async function main() {
   let slowSaid = false;
   let slowSaidAt = -1e9;
   let hudTimer = 0;
-  let frozen = false;
   /** the ground's heights last seen (renderer.groundStamp) */
   let groundSeen = "";
-  /** the pause menu (or the title screen) open: the simulation holds, the image refines */
-  let paused = false;
   /** the time played this visit — the game running, no menu over it [ms] (the pause's context) */
   let playedMs = 0;
   const menuPad = new MenuPad();
@@ -8532,8 +8533,8 @@ async function main() {
       playing: () =>
         firstFrame &&
         !startupFailed &&
-        !paused &&
-        !frozen &&
+        !session.paused &&
+        !session.frozen &&
         !titleScreen.isOpen &&
         !renderer.offlineActive &&
         !replay.active &&
@@ -8612,15 +8613,15 @@ async function main() {
     const wallDt = Math.max(0, (now - last) / 1000);
     const dt = Math.min(0.1, wallDt);
     // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
-    if (!frozen && !paused && !replay.active && !simHeld) advanceFrameClock(dt * 1000);
-    if (!paused && firstFrame) playedMs += dt * 1000;
+    if (!session.frozen && !session.paused && !session.gpuHeld && !replay.active) advanceFrameClock(dt * 1000);
+    if (!session.paused && firstFrame) playedMs += dt * 1000;
     // (the flight's time against the wall's while it runs — under 10 images/s the step's bound slows it: said, below)
-    if (!frozen && !paused && !renderer.offlineActive && !replay.active && !simHeld) {
+    if (session.runs) {
       slowSim += dt;
       slowWall += wallDt;
     }
     // (the rain's: only while the time runs — paused, the drops stand still)
-    if (!frozen && !paused && settings.animate) renderer.rainClock += dt;
+    if (session.moving && settings.animate) renderer.rainClock += dt;
     // (the display's refresh: the median of the loop's last intervals — the frame budget is fitted to it)
     loopIv.push(now - last);
     if (loopIv.length > 31) loopIv.shift();
@@ -8677,9 +8678,9 @@ async function main() {
     // (in a room the pause does not hold the game — its clock is the room's —: the pad moves in the menu all the
     // same, and the craft reads none of it meanwhile)
     const pauseUp = !!pauseMenu?.isOpen || playerSettings.isOpen;
-    if (paused || pauseUp) menuPad.tick(camera.pad.poll(), now, titleScreen.isOpen || pauseUp);
-    camera.padFrame = !paused && pauseUp ? null : undefined;
-    if (!frozen && !paused && !renderer.offlineActive && !replay.active && !simHeld) {
+    if (session.paused || pauseUp) menuPad.tick(camera.pad.poll(), now, titleScreen.isOpen || pauseUp);
+    camera.padFrame = !session.paused && pauseUp ? null : undefined;
+    if (session.runs) {
       // (the flight plan's guidance speaking: a waypoint passed, its end, the bingo)
       if (camera.nav.say) {
         panel.toast(camera.nav.say);
@@ -8867,7 +8868,7 @@ async function main() {
     if (replay.active && !renderer.offlineActive) {
       replay.frame(dt);
       changed = true;
-    } else if (!frozen && !paused && !renderer.offlineActive && settings.animate && camera.piloting && !camera.spectating) {
+    } else if (session.moving && !renderer.offlineActive && settings.animate && camera.piloting && !camera.spectating) {
       tape.tick(dt);
       const smp = camera.replaySample();
       if (smp) {
@@ -8971,7 +8972,7 @@ async function main() {
       }
     }
     if (jitterProbe.active) {
-      const stepped = !frozen && !paused && !renderer.offlineActive && !replay.active && !simHeld ? (jitterStep ?? dt) : 0;
+      const stepped = session.runs ? (jitterStep ?? dt) : 0;
       jitterClock += stepped;
       const b = basis(settings.yaw, settings.pitch, settings.roll);
       const S = camera.piloting ? camera.shipMatrix() : null;
@@ -9046,7 +9047,7 @@ async function main() {
           fwd: [...w.fwd] as [number, number, number],
           up: [...w.up] as [number, number, number],
           fov: camera.viewSettings().fov,
-          moving: !frozen && !paused,
+          moving: session.moving,
         });
       }
     }
@@ -9330,7 +9331,7 @@ async function main() {
     keyHints.update(
       settings.keyHints &&
         !camera.character.active &&
-        !paused &&
+        !session.paused &&
         !document.body.classList.contains("hide-ui") &&
         (!pil || flightHud.density < 2)
         ? phaseWatch.current
@@ -9509,7 +9510,7 @@ async function main() {
                 heat: num("controls/ice-protection/windowprobeheat-output") > 0.5 && ac >= 110,
                 onGround,
               },
-              settings.animate && !frozen ? dt : 0,
+              settings.animate && !session.frozen ? dt : 0,
             );
             renderer.a320Glass = {
               rain,
@@ -9857,7 +9858,7 @@ async function main() {
         // (a spectator far from the ship: its engines, its air out of earshot — two kilometres)
         audio.update(dt, {
           flying: !camera.spectating || (renderer.shipPlace?.dist ?? Infinity) < 2000,
-          live: settings.animate && !frozen,
+          live: settings.animate && !session.frozen,
           info,
           status,
           fired: camera.pilot.fired,
@@ -9880,7 +9881,7 @@ async function main() {
                 }
               : null,
           // (the rain heard where it falls — none held with the time)
-          rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !paused ? renderer.rain.rain : 0,
+          rain: renderer.rain && !renderer.rain.dust && settings.animate && session.moving ? renderer.rain.rain : 0,
         }),
       );
     } else {
@@ -9893,7 +9894,7 @@ async function main() {
         info: null,
         status: null,
         fired: camera.pilot.fired,
-        rain: renderer.rain && !renderer.rain.dust && settings.animate && !frozen && !paused ? renderer.rain.rain : 0,
+        rain: renderer.rain && !renderer.rain.dust && settings.animate && session.moving ? renderer.rain.rain : 0,
       });
     }
     // (the music — audio/music.ts —: every frame, whatever is flown or not: the flight's cue when it is known,
@@ -9969,7 +9970,7 @@ async function main() {
     // the missions (ui/missions.ts): from the title screen; back, the title again
     const missionSelect = new MissionSelect({
       launch: (scene) => {
-        paused = false;
+        session.paused = false;
         panel.applyScene(scene);
       },
       back: () => titleScreen.open(),
@@ -9978,7 +9979,7 @@ async function main() {
     const PREWARM_DELAY_MS = 8000;
     let prewarmAsk = 0;
     titleHold = (on) => {
-      paused = on;
+      session.paused = on;
       // (the background compiles — the general kernel, a key's LUT — wait while the title holds the game: the launch that
       // follows compiles its own scene, which they would slow — docs/PLAN-LEAN-TRACER-KERNELS.md P1)
       renderer.backgroundHold = on;
@@ -10116,7 +10117,7 @@ async function main() {
         ),
       spaceSchool: () => flightSchool(instrHost, { spaceFirst: true }),
       missions: () => {
-        paused = true; // (the scene behind held while one chooses)
+        session.paused = true; // (the scene behind held while one chooses)
         missionSelect.open();
       },
       scene: (name) => panel.applyScene(name),
