@@ -4751,3 +4751,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   l'autre), ou la prédiction qui garde les états des corps à ses pas. `helio()` est partagé avec la physique du vol : à faire avec ses tests,
   pas à la hâte. AR-05 : l'autosauvegarde fermée (mesurée), la mini-carte ouverte (cause établie), les lectures de mise en page de l'A320
   non mesurées.
+
+## 2026-11-13T12:31Z — AR-05, la mini-carte : la trajectoire prédite porte la place de son corps de référence (−12 à −20 % du dessin)
+
+- **Contribution à la destination :** §8 (régularité : moins de travail redondant sur le fil principal), §7 (une responsabilité : la
+  prédiction, dans le worker du planificateur, donne ce qu'elle a déjà calculé).
+- **Réalisé :** `OurPath.refPos` — la place du corps de référence à chaque point, que la prédiction a sous la main (sa traction vient de
+  la demander à l'éphéméride, au même instant : un accès au mémo) ; `ourApsides` et `ourClosest` (quand le corps est la référence du point)
+  la lisent au lieu de redemander l'éphéméride sur le fil principal à chaque nouvelle trajectoire (jusqu'à 4 par seconde). Absente sur les
+  chemins faits autrement (`patched.ts`) : on retombe sur l'éphéméride. La physique n'est pas touchée.
+- **Preuves :** unitaires `our-predict-refpos` 2/0 (la place portée égale `solarState` ; apsides et plus proche passage identiques avec
+  et sans), `our-plan`, `kepler` verts (15/0 en tout). **A/B mesuré** (sonde temporaire non commitée : profil CPU de 6 s en orbite,
+  Artemis, bundle non minifié, deux passes de chaque côté, l'ancien `our-predict.ts` remis le temps de la mesure) : dessin de la mini-carte
+  **312 / 322 ms → 285 / 252 ms** sur 6 s ; apsides 54–57 → 0,6–0,7 ms ; marques 112–127 → 66–69 ms ; éphéméride 219–231 → 163–184 ms. Un
+  premier profil (498 ms) d'un autre moment n'est pas retenu comme référence.
+- **Limites :** gain modeste — le dessin reste ~4–5 ms, dix fois par seconde, sur ce Mac chargé. Restent : la trace des autres corps le
+  long du chemin (`ourTrack`, la Lune), le plus proche passage d'un corps qui n'est pas la référence, `extClosest`, `autoSpan` ; leviers
+  proposés : des instants ancrés réutilisés d'un dessin à l'autre, ou d'autres états portés par le worker. Pas de mesure des à-coups en
+  jeu après (la section du profileur est trop bruitée pour un écart de cette taille).

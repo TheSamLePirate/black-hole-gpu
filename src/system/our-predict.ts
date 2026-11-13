@@ -28,6 +28,10 @@ export interface OurPath {
   times: number[];
   /** the body of the sphere of influence at each point */
   refs: string[];
+  /** that body's place at each point's time (the prediction has it at hand — its pull — where it runs, the planner's worker):
+   *  the map's apsides and closest approach read it instead of the ephemeris again on the main thread (audit AR-05: the HUD's
+   *  mini-map spent 8 ms a draw, 75 % of it there — 13 Nov 2026). Absent on paths made otherwise. */
+  refPos?: Vec3[];
   fate: "continues" | "impact" | "wormhole";
   /** the body hit (impact) */
   hit?: string;
@@ -133,12 +137,13 @@ export function predictOurs(
   o: { tMax?: number; maxSteps?: number; mouthR?: number; step?: number; accel?: number; drag?: number } = {},
 ): OurPath {
   const maxSteps = o.maxSteps ?? 2500;
-  const out: OurPath = { pts: [X0], vels: [V0], times: [t0], refs: [], fate: "continues", nodeAt: [] };
+  const out: OurPath = { pts: [X0], vels: [V0], times: [t0], refs: [], refPos: [], fate: "continues", nodeAt: [] };
   let X = X0,
     V = V0,
     t = t0;
   let ref = referenceBody(X, t);
   out.refs.push(ref);
+  out.refPos!.push(solarState(ref, t).pos);
   let set = bodiesNear(ref);
   const pending = [...nodes].sort((a, b) => a.t - b.t);
   // (the horizon: a turn and a tenth of the orbit around the reference body — or, unbound, on until
@@ -259,6 +264,8 @@ export function predictOurs(
     out.vels.push(V);
     out.times.push(t);
     out.refs.push(ref);
+    // (the ephemeris's states at t are its memo's: the pull just asked for them)
+    out.refPos!.push(solarState(ref, t).pos);
     if (g.hit) {
       out.fate = "impact";
       out.hit = g.hit;
@@ -283,7 +290,7 @@ export function ourApsides(p: OurPath, body: string) {
       continue;
     }
     started = true;
-    const d = Math.hypot(...sub(p.pts[i]!, solarState(body, p.times[i]!).pos));
+    const d = Math.hypot(...sub(p.pts[i]!, p.refPos?.[i] ?? solarState(body, p.times[i]!).pos));
     if (d < pe.d) pe = { d, i };
     if (d > ap.d) ap = { d, i };
   }
@@ -298,7 +305,8 @@ export function ourApsides(p: OurPath, body: string) {
 export function ourClosest(p: OurPath, body: string, from = 0) {
   let best = { d: Infinity, i: -1 };
   for (let i = from; i < p.pts.length; i++) {
-    const d = Math.hypot(...sub(p.pts[i]!, solarState(body, p.times[i]!).pos));
+    const at = p.refs[i] === body ? p.refPos?.[i] : undefined;
+    const d = Math.hypot(...sub(p.pts[i]!, at ?? solarState(body, p.times[i]!).pos));
     if (d < best.d) best = { d, i };
   }
   return best.i >= 0 ? best : null;
