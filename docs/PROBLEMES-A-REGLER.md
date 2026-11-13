@@ -53,14 +53,15 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   inchangée. **Reste ouvert** : 1 image par vol à 3,1–3,2 ms, dont 1,7–2,7 ms dans le simple enregistrement d'une arrivée (`put`, hors de
   tout chemin coûteux : pause du ramasse-miettes probable, A en montre aussi) — critère non tenu strictement ; la mesure sur kerr-mini.
 
-## ~~Une marche aux bords des niveaux du raster près de Hyères~~ — pas une couture établie : des crêtes (J2-3, 13 novembre 2026)
+## Une marche sous le pixel aux bords des niveaux du raster près de Hyères, géomorphose allumée (J2-3, 13 novembre 2026)
 
-La sonde géométrique des coutures (e2e `j2-probes`, phase `seams`, [fiche J2-3](progress/j2/FICHE-J2-3-2026-11-13.md) §4) comptait à
-Hyères 29–42 % de paires de bord au-delà de 0,25 px (même niveau : 7–18 % ; Alpes : 6 % contre 11 %). Sa carte (`SEAM_MAP_JS`) les place
-**sur les crêtes des collines** — un rang fin qui cache un terrain plus loin d'un rang plus grossier, des bords d'occultation sous le seuil
-de silhouette en vue rasante ; le bord de fenêtre qui traverse la colline proche est propre avec la géomorphose (vert) et déchiqueté sans
-elle. Le sur-sol IGN n'y change rien (A/B). **Reste** : la sonde à affiner (silhouettes par la normale, ou vue plongeante) pour chiffrer
-C0-12 sur Hyères — critère de sortie de J2.
+Mesurée par la géométrie (e2e `j2-probes`, phase `seams`, [fiche J2-3](progress/j2/FICHE-J2-3-2026-11-13.md) §4 ; M1 Max, vues tenues) :
+l'inverse de la profondeur de vue, affine sur un plan, de part et d'autre des bords de niveaux, **les crêtes écartées** (paires aux pentes
+comparables). Alpes : 1,5 % des paires de bord > 0,25 px (intérieur 3,2 %) — C0-12 tenu. **Plaine du Gapeau (300 m)** : 25 % (intérieur
+6,5 %), p50 0,06 px, p95 1,2 px ; par bord 2 | 3 17 %, 3 | 4 30 %, 4 | 5 35 % contre 5–12 % à l'intérieur de ces rangs ; la géomorphose en
+retire une moitié (sans elle 41–55 %). Pas de trou vu. **Cause non établie** — écartés : le sur-sol IGN (A/B), le pas des anneaux (une
+marque), leur recouvrement (= la géomorphose pleine), les diagonales. **Prochaine mesure** : les hauteurs du cache relues aux bords, la
+géomorphose appliquée (comme `zz-seamgap`) à Hyères. Critère de sortie de J2 (§4 : coutures ≤ 0,25 px).
 
 ## « Posé sur un aérodrome » ne s'aligne plus sur sa piste au Bourget (e2e `ground-placement`)
 

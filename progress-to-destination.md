@@ -3944,3 +3944,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Vérifié** : tsc, biome, e2e `j2-probes` `trail` 1/0 (quatre passages, M1 Max). **Non vérifié** : en vol ; kerr-mini (hors réseau).
 - **Suite** : J2-4 proprement dit — l'identité du sol = page + génération (décision 7 de Sam), la coupe locale de l'historique tenu, les
   arrivées qui cessent d'appeler `invalidate()`.
+
+## 2026-11-13T02:20Z — J2-3, coutures : la conclusion « des crêtes » corrigée — une marche réelle sous le pixel reste à Hyères
+
+- **Contribution** (PLAN-J2 §4, C0-12) : la sonde géométrique des coutures affinée, et une conclusion de 01:42Z **corrigée** par la mesure.
+  Le signe de la marche ne sépare pas crête et couture (le côté proche d'une crête rasante l'inverse — mesuré : 366 / 305 à Hyères). Un
+  filtre des pentes comparables (rapport ≤ 2) écarte les crêtes : Alpes 1,5 % des paires de bord > 0,25 px contre 3,2 % à l'intérieur
+  (**C0-12 tenu**) ; `hyeres-diag` 7,1 % contre 2,7 % ; **`hyeres-low` 25 % contre 6,5 %** (p50 0,06 px, p95 1,2 px ; aux bords de
+  rangs 2|3, 3|4, 4|5 : 17–35 % contre 5–12 % à l'intérieur de chaque rang ; sans géomorphose 41–55 %). Écartés par la lecture du code : le
+  pas des anneaux (une marque), leur recouvrement (= la géomorphose pleine, 8 nœuds fins), les diagonales. Cause non établie.
+- **Changé** : `tests/e2e/lib/j2-probes.ts` (`SEAM_GEOM_JS` : `signs`, `seamEven`/`innerEven`, `innerEvenByRank`, `byPair` avec
+  ses paires régulières) ; fiche J2-3 §4–§5, PROBLEMES-A-REGLER (rouverte), PLAN-J2 §9 sexies.
+- **Mesuré** : M1 Max, phase `seams` (3 vues, puis `hyeres-low` deux fois), 3/0 et 1/0. **Non vérifié** : les hauteurs du cache aux bords
+  à Hyères, géomorphose appliquée (la prochaine mesure) ; kerr-mini.

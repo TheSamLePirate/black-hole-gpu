@@ -245,7 +245,11 @@ export const gpuTimesJs = (n = 90) => `(async () => {
  * neighbour ground pixels with one more of the same level on each side, the pair's step against its two sides' mean step: `excess` =
  * |Δw_pair| / mean(|Δw_side|) − 1, in pixels of the surface's own slope (0: one plane; 1: a pixel's worth of jump) — a fold between
  * two facets of different slopes counts there too; `seamStep`/`innerStep` the step alone (the pair's change less its sides' mean
- * signed slope, over their mean magnitude: 0 on any continuous fold, s on a step of s pixels). Pairs across two
+ * signed slope, over their mean magnitude: 0 on any continuous fold, s on a step of s pixels); `signs` the steps over 0.25 px across
+ * two levels by their sign — the coarser side nearer or farther than its finer neighbour predicts: a ridge hiding a farther ground (an
+ * occlusion the threshold of 3 slopes lets through in a grazing view) was thought always "farther", but its near side's steep slope
+ * flips it: no separation (J2-3, measured) —; `seamEven`/`innerEven` the steps where the two sides' slopes are within a factor 2 (a
+ * grazing ridge left out, a seam on even ground kept). Pairs across two
  * levels (`seam`) against pairs inside one (`inner`, the control: the relief's own curvature and the depth's precision); steps over 3
  * counted apart (`silhouettes`: occlusion edges, a crack over ~2 px). A seam the geometry leaves shows as `seam` over `inner`;
  * renderer.rasterMorphOn off (T3's geomorphose) is the positive control — the levels' own heights, apart by up to metres.
@@ -260,7 +264,7 @@ export const SEAM_GEOM_JS = `(async () => {
   const st = bpr / 4, ty = Math.tan((__bh.settings.fov * Math.PI) / 360), tx = ty * W / H;
   const lv = (x, y) => { const i = y * st + x * 4, c = Math.floor(raw[i + 3] / 262144); return c >= 1 && c <= 56 && raw[i + 1] <= 0 && raw[i] > 0 ? c : 0; };
   const w = (x, y) => { const nx = ((x + 0.5) / W) * 2 - 1, ny = ((y + 0.5) / H) * 2 - 1; return Math.hypot(nx * tx, ny * ty, 1) / raw[y * st + x * 4]; };
-  const seam = [], inner = [], seamJ = [], innerJ = [], byPair = {}; let silSeam = 0, silInner = 0, groundPx = 0;
+  const seam = [], inner = [], seamJ = [], innerJ = [], byPair = {}, seamEven = [], innerEven = [], innerBy = {}; let silSeam = 0, silInner = 0, groundPx = 0, nearer = 0, farther = 0;
   for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) {
     const m = lv(x, y); if (!m) continue;
     groundPx++;
@@ -277,13 +281,26 @@ export const SEAM_GEOM_JS = `(async () => {
       (across ? seam : inner).push(Math.abs(r - 1));
       // (the step itself: the pair's change less the mean of its sides' signed slopes — 0 on a fold, a facet's kink, whatever the two
       // slopes; s on a step s —, over their mean magnitude: a jump in pixels of the surface's slope)
-      const J = Math.abs((w1 - w0) - 0.5 * ((w0 - wm) + (w2 - w1))) / slope;
+      const Js = ((w1 - w0) - 0.5 * ((w0 - wm) + (w2 - w1))) / slope;
+      const J = Math.abs(Js);
       (across ? seamJ : innerJ).push(J);
+      // (its sign, the coarser side's way: + nearer than its finer neighbour predicts, − farther — counted; it does not separate a
+      // ridge from a seam: a grazing ridge's steep near side flips it)
+      if (across && J > 0.25) { if ((m1 > m ? Js : -Js) > 0) nearer++; else farther++; }
+      // (the two sides' slopes comparable — within a factor 2 —: a ridge seen grazing has its near side almost along the ray, its depth
+      // steep there and flat beyond — left out —; a seam on even ground keeps its two sides alike)
+      const sa = Math.abs(w0 - wm), sb = Math.abs(w2 - w1);
+      const even = Math.max(sa, sb) <= 2 * Math.min(sa, sb);
+      if (even) (across ? seamEven : innerEven).push(J);
+      // (the control by level: inside each level, its even pairs' steps — a far level's own facets, a pixel or two wide in a grazing
+      // view, fold between the pixels as a seam would)
+      if (!across && even) { const c = "r" + ((m - 1) % 8); const b = (innerBy[c] ??= { n: 0, over: 0 }); b.n++; if (J > 0.25) b.over++; }
       // (by the two sides' codes — 1 + the rank from the patch + 8 × the mesh's step, terrain-raster-hint.ts rasterGroundCode —: which
       // boundary — two ranks, or two steps of one rank)
       if (across) {
         const c = (k) => "r" + ((k - 1) % 8) + "s" + Math.floor((k - 1) / 8), key = m < m1 ? c(m) + "|" + c(m1) : c(m1) + "|" + c(m);
-        const b = (byPair[key] ??= { n: 0, over0_25: 0, sum: 0 }); b.n++; b.sum += J; if (J > 0.25) b.over0_25++;
+        const b = (byPair[key] ??= { n: 0, over0_25: 0, sum: 0, even: 0, evenOver: 0 }); b.n++; b.sum += J; if (J > 0.25) b.over0_25++;
+        if (even) { b.even++; if (J > 0.25) b.evenOver++; }
       }
     }
   }
@@ -291,7 +308,11 @@ export const SEAM_GEOM_JS = `(async () => {
     return { n: v.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: q(1), over0_25: v.filter((t) => t > 0.25).length, share0_25: v.length ? +(v.filter((t) => t > 0.25).length / v.length).toFixed(4) : 0 }; };
   return { W, H, groundPx, morph: R.rasterMorphOn, seam: { ...stats(seam), silhouettes: silSeam }, inner: { ...stats(inner), silhouettes: silInner, sampled: "1/16" },
     seamStep: stats(seamJ), innerStep: stats(innerJ),
-    byPair: Object.fromEntries(Object.entries(byPair).sort((p, q) => q[1].n - p[1].n).map(([k, v]) => [k, { n: v.n, share0_25: +(v.over0_25 / v.n).toFixed(3), mean: +(v.sum / v.n).toFixed(3) }])) };
+    // (the steps over 0.25 px by their sign — no separation: a grazing ridge's steep near side flips it —; the steps where the two
+    // sides' slopes are alike, the seams on even ground against the same inside a level)
+    signs: { nearer, farther }, seamEven: stats(seamEven), innerEven: stats(innerEven),
+    innerEvenByRank: Object.fromEntries(Object.entries(innerBy).map(([k, v]) => [k, { n: v.n, share0_25: +(v.over / v.n).toFixed(3) }])),
+    byPair: Object.fromEntries(Object.entries(byPair).sort((p, q) => q[1].n - p[1].n).map(([k, v]) => [k, { n: v.n, share0_25: +(v.over0_25 / v.n).toFixed(3), mean: +(v.sum / v.n).toFixed(3), even: v.even, evenShare0_25: +(v.evenOver / Math.max(v.even, 1)).toFixed(3) }])) };
 })()`;
 
 /**
