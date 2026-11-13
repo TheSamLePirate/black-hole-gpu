@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 11:10 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 10:56 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -4596,7 +4596,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le lot 2 de la classification (le sol : la lumière et la finition lancées plein écran ; des noyaux par classe) à cadrer sur un plafond
   mesuré ; le retrait R1 le 14.
 
-## 2026-11-13T11:10Z — La borne de cadence à 40 sur le M1 Max : effondrement, et une charge étrangère au jeu relevée
+## 2026-11-13T10:56Z — La borne de cadence à 40 sur le M1 Max : effondrement, et une charge étrangère au jeu relevée
 
 - **Contribution** (décision 3 de Sam, palier borné et soutenu ; [J0-CONTRAT §2](docs/J0-CONTRAT.md)).
 - **Mesuré** (M1 Max, `J0_FPSCAP=40`, arbre de 1aa2689d, `remote-results/j0/m1max-cap40`, run arrêté après le vol) : le vol frais 17,6 images/s,
