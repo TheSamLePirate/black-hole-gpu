@@ -1107,26 +1107,29 @@ function reportLandingDue(this: CameraController) {
   }
   const S = recorder.samples;
   this.onFlightReport?.(
-    gradeLanding({
-      body,
-      site: onRunway ? rw!.name : site && padM !== null ? site.name : null,
-      verdict,
-      sink,
-      along,
-      runway: onRunway ? { across: rw!.across, along: rw!.along } : null,
-      padM,
-      // (nothing recorded — a save loaded just before —: no load to judge, not 0 g)
-      gMax: Math.max(this.airFlight.gPeak, ...S.map((x) => x.g)) || Number.NaN,
-      dv: this.spent * C_MPS,
-      flightS: S.length > 1 ? S[S.length - 1]!.t - S[0]!.t : Number.NaN,
-      // (the weather it landed in — the runway's surface wind, the visibility —: the marks widened by it)
-      weather:
-        rw?.wind && this.weatherNow
-          ? { cross: rw.wind.cross, head: rw.wind.head, gust: rw.wind.gust, vis: this.weatherNow.visibility }
-          : this.weatherNow
-            ? { cross: 0, head: 0, gust: this.weatherNow.wind.gust, vis: this.weatherNow.visibility }
-            : null,
-    }),
+    gradeLanding(
+      {
+        body,
+        site: onRunway ? rw!.name : site && padM !== null ? site.name : null,
+        verdict,
+        sink,
+        along,
+        runway: onRunway ? { across: rw!.across, along: rw!.along } : null,
+        padM,
+        // (nothing recorded — a save loaded just before —: no load to judge, not 0 g)
+        gMax: Math.max(this.airFlight.gPeak, ...S.map((x) => x.g)) || Number.NaN,
+        dv: this.spent * C_MPS,
+        flightS: S.length > 1 ? S[S.length - 1]!.t - S[0]!.t : Number.NaN,
+        // (the weather it landed in — the runway's surface wind, the visibility —: the marks widened by it)
+        weather:
+          rw?.wind && this.weatherNow
+            ? { cross: rw.wind.cross, head: rw.wind.head, gust: rw.wind.gust, vis: this.weatherNow.visibility }
+            : this.weatherNow
+              ? { cross: 0, head: 0, gust: this.weatherNow.wind.gust, vis: this.weatherNow.visibility }
+              : null,
+      },
+      unitsOf(this.s.units),
+    ),
   );
 }
 

@@ -64,3 +64,27 @@ test("the weather widens a landing's marks (W8): a gusty crosswind's 1.5 m/s and
   expect(weatherDifficulty({ cross: 0, head: -3, gust: 0, vis: 300 })).toBeCloseTo(0.3 + 0.4, 6);
   expect(weatherDifficulty(null)).toBe(0);
 });
+
+test("a landing's report in the pilot's units (audit FX-17): imperial ft/min, kt, ft; metric unchanged", async () => {
+  const { unitsOf } = await import("../src/ui/unitsys");
+  const w = { cross: 8, head: -3, gust: 5, vis: 3000 };
+  const imp = gradeLanding({ ...base, weather: w }, unitsOf("imperial"));
+  const v = (r: ReturnType<typeof gradeLanding>, l: string) => r.lines.find((x) => x.label === l)!.value;
+  console.log(`  imperial: ${imp.lines.map((l) => `${l.label} ${l.value}`).join(" | ")}`);
+  expect(v(imp, "Sink rate")).toBe("98 ft/min");
+  expect(v(imp, "Speed along")).toBe("156 kt");
+  expect(v(imp, "Off the axis")).toBe("3.3 ft");
+  expect(v(imp, "Past the threshold")).toBe("1476 ft");
+  expect(v(imp, "Weather")).toBe("cross 16 kt · tail 6 kt · gusts +10 · visibility 1.6 NM");
+  // (the spacecraft's Δv stays SI — the astronautics' convention)
+  expect(v(imp, "Δv spent")).toBe("103 m/s");
+  // (the same figures in metric, as before)
+  const met = gradeLanding({ ...base, weather: w });
+  expect(v(met, "Sink rate")).toBe("0.5 m/s");
+  expect(v(met, "Speed along")).toBe("80 m/s");
+  expect(v(met, "Off the axis")).toBe("1.0 m");
+  expect(v(met, "Past the threshold")).toBe("450 m");
+  expect(v(met, "Weather")).toBe("cross 8 m/s · tail 3 m/s · gusts +5 · visibility 3.0 km");
+  // (the grade the same whatever the units)
+  expect(imp.score).toBe(met.score);
+});

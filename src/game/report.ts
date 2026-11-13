@@ -4,6 +4,7 @@
 // capture), the HUD shows the card.
 
 import { t, tf } from "../i18n";
+import { type Units, unitsOf } from "../ui/unitsys";
 
 export interface LandingFigures {
   body: string;
@@ -66,6 +67,9 @@ const judge = (x: number, good: number, ok: number): Quality => (x <= good ? "go
 const dur = (s: number) =>
   !Number.isFinite(s) ? "—" : s < 120 ? `${s.toFixed(0)} s` : s < 7200 ? `${(s / 60).toFixed(0)} min` : `${(s / 3600).toFixed(1)} h`;
 const metres = (m: number) => (Math.abs(m) >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m.toFixed(m < 10 ? 1 : 0)} m`);
+/** a length in the pilot's units: metres and km, or feet and nautical miles past one (audit FX-17) */
+const lengthIn = (U: Units, m: number) =>
+  U.sys === "metric" ? metres(m) : Math.abs(m) >= 1852 ? U.fDist(m, 1) : U.fLen(m, Math.abs(m) < 3.048 ? 1 : 0);
 
 /**
  * How hard the weather made the landing (0 calm … 1): the cross wind past 3 m/s (all of it at 13 — 25 kt), the
@@ -83,7 +87,7 @@ export function weatherDifficulty(w: LandingFigures["weather"]): number {
  * most), the load beyond 2.5 g (−3 a g); a hard landing −6. The weather's marks wider (W8): the sink's by
  * 0.5 m/s and the axis's by 4 m at its hardest (weatherDifficulty), as a check pilot's are.
  */
-export function gradeLanding(f: LandingFigures): FlightReport {
+export function gradeLanding(f: LandingFigures, U: Units = unitsOf("metric")): FlightReport {
   const d = weatherDifficulty(f.weather);
   let s = 20;
   s -= Math.max(0, f.sink - 0.6 - 0.5 * d) * 4;
@@ -93,17 +97,18 @@ export function gradeLanding(f: LandingFigures): FlightReport {
   if (f.verdict === "hard") s -= 6;
   const score = Math.max(0, Math.min(20, s));
   const lines: FlightReport["lines"] = [
-    { label: t("Sink rate"), value: `${f.sink.toFixed(1)} m/s`, q: judge(f.sink, 1 + 0.5 * d, 2 + 0.5 * d) },
-    { label: t("Speed along"), value: `${f.along.toFixed(0)} m/s`, q: "good" },
+    // (in the pilot's units — the marks judged in SI; the Δv, a spacecraft's, stays SI)
+    { label: t("Sink rate"), value: U.fVs(f.sink), q: judge(f.sink, 1 + 0.5 * d, 2 + 0.5 * d) },
+    { label: t("Speed along"), value: U.fSpd(f.along), q: "good" },
   ];
   if (f.runway) {
     lines.push({
       label: t("Off the axis"),
-      value: metres(Math.abs(f.runway.across)),
+      value: lengthIn(U, Math.abs(f.runway.across)),
       q: judge(Math.abs(f.runway.across), 5 + 4 * d, 15 + 4 * d),
     });
-    lines.push({ label: t("Past the threshold"), value: metres(f.runway.along), q: "good" });
-  } else if (f.padM !== null) lines.push({ label: t("From the site"), value: metres(f.padM), q: judge(f.padM, 10, 100) });
+    lines.push({ label: t("Past the threshold"), value: lengthIn(U, f.runway.along), q: "good" });
+  } else if (f.padM !== null) lines.push({ label: t("From the site"), value: lengthIn(U, f.padM), q: judge(f.padM, 10, 100) });
   lines.push(
     {
       label: t("Greatest load"),
@@ -118,10 +123,10 @@ export function gradeLanding(f: LandingFigures): FlightReport {
   if (f.weather && (d > 0 || Math.abs(f.weather.cross) >= 1 || f.weather.vis < 8000)) {
     const w = f.weather;
     const parts = [
-      Math.abs(w.cross) >= 1 ? tf("cross {0} m/s", Math.abs(w.cross).toFixed(0)) : null,
-      w.head < -1 ? tf("tail {0} m/s", (-w.head).toFixed(0)) : null,
-      w.gust >= 1 ? tf("gusts +{0}", w.gust.toFixed(0)) : null,
-      w.vis < 8000 ? tf("visibility {0}", metres(w.vis)) : null,
+      Math.abs(w.cross) >= 1 ? tf("cross {0}", U.fSpd(Math.abs(w.cross))) : null,
+      w.head < -1 ? tf("tail {0}", U.fSpd(-w.head)) : null,
+      w.gust >= 1 ? tf("gusts +{0}", Math.round(U.spd(w.gust))) : null,
+      w.vis < 8000 ? tf("visibility {0}", lengthIn(U, w.vis)) : null,
     ].filter(Boolean);
     lines.push({ label: t("Weather"), value: parts.join(" · ") || t("calm"), q: d > 0.6 ? "bad" : d > 0.25 ? "ok" : "good" });
   }

@@ -185,7 +185,8 @@ untouched.
 - **The flight's report** (`game/report.ts`): at a landing (the gear's verdict) and at a docking (the
   capture), a card graded out of 20, A to F, each figure judged (good, fair, poor) — the sink, the axis or
   the site's distance, the load's peak, the gear; the closing rate, the ring off the axis, the ports'
-  axes, the turns apart; the Δv spent and the flight's length. It stays 20 s (✕ or Esc), and the journal
+  axes, the turns apart; the Δv spent and the flight's length. A landing's figures are written in the pilot's units
+  (ft/min, kt, ft and NM in imperial — audit FX-17; the marks judged in SI, the Δv and the docking's stay SI). It stays 20 s (✕ or Esc), and the journal
   keeps its line. A landing in weather (PLAN-METEO W8) has its marks widened as a check pilot's are — the
   sink's by up to 0.5 m/s, the axis's by 4 m, by how hard the cross wind, the gusts, a visibility under a
   mile and a tail wind made it (`weatherDifficulty`) — and a **Weather** line says what widened them
@@ -235,8 +236,8 @@ the ring.
   gates, the aim and the glide's error work as under the autopilot, the card is the runway's; in a
   descent on the engines (below 5 km, slow, falling) the card is the descent's.
 - **The runway's wind** (PLAN-METEO W4): the runway box adds the surface wind — `WIND 070°/6–9 m/s` (`… kt` in imperial; the
-  gusts as a range) — and its parts on the runway landed, `HEAD 5 · CROSS ←3` (the arrow the way it
-  pushes): green, amber for a tail wind or past 15 kt across, red past 25 kt across. The hand-flown final's
+  gusts as a range) — and its parts on the runway landed, `HEAD 5 · CROSS ←3` (in the wind's units; the arrow the way it
+  pushes; the box's distance to the threshold, offset and fixes' heights in m/km, or ft/NM in imperial — audit FX-17): green, amber for a tail wind or past 15 kt across, red past 25 kt across. The hand-flown final's
   card adds the same rows (surface wind, head or tail wind, cross wind marked past 15 and 25 kt). The
   runway named is the one landed into the wind (its far end — `RWY 04` for Edwards's 22 — when the wind
   blows down it; in fair weather the published end).

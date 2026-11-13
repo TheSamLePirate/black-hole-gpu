@@ -1432,6 +1432,10 @@ function drawRunway(
 ) {
   const { ctx, dpr, W, H } = F;
   const front = (q: { d: V3 }) => q.d[2] > 1e-3;
+  // (its lengths in the pilot's units — m and km, or ft and NM past one; audit FX-17)
+  const U = unitsFor(F.s);
+  const len = (m: number) =>
+    U.sys === "metric" ? (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`) : m >= 1852 ? U.fDist(m, 1) : U.fAlt(m);
   // the outline (its far end first: the near one may be behind the eye on the ground)
   if (rw.corners.every(front)) {
     const pts = rw.corners.map((q) => pr(q.d)!);
@@ -1497,7 +1501,7 @@ function drawRunway(
       1.5,
     );
     const name = f.id === "PU" ? t("PULL-UP") : f.id === "TD" ? t("TOUCHDOWN") : f.id;
-    const hh = f.h >= 1000 ? `${(f.h / 1000).toFixed(1)} km` : `${f.h} m`;
+    const hh = len(f.h);
     text(`${name} ${hh}`, p![0] + R + 5 * dpr, p![1], "#9fe8ff", 10, "left", true);
   }
   // the aim point
@@ -1519,11 +1523,8 @@ function drawRunway(
   }
   // the box: the runway, the distance to its threshold, the offset across the axis, the glide path
   const dist = Math.max(-rw.along, 0);
-  const km = dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`;
-  const off =
-    Math.abs(rw.across) < 15
-      ? t("ON AXIS")
-      : `${rw.across > 0 ? "R" : "L"} ${Math.abs(rw.across) >= 1000 ? `${(Math.abs(rw.across) / 1000).toFixed(1)} km` : `${Math.round(Math.abs(rw.across))} m`}`;
+  const km = len(dist);
+  const off = Math.abs(rw.across) < 15 ? t("ON AXIS") : `${rw.across > 0 ? "R" : "L"} ${len(Math.abs(rw.across))}`;
   if (F.compact) {
     if (rw.final && rw.agl < 60 && rw.agl > 1 && blinkOn()) text(t("FLARE"), W / 2, H / 2 - 70 * dpr, "#ffc85a", 16);
     return;
@@ -1609,7 +1610,6 @@ function drawRunway(
     const wy = y + ((rw.gRef !== null && rw.gam !== null ? 70 : 54) + (rw.papi !== null ? 16 : 0) - 16) * dpr;
     // (the gusts as a range — "6–9": the HUD's G reads as a 6)
     // (in the pilot's units — kt with the imperial option; audit FX-17)
-    const U = unitsFor(F.s);
     const gust = wind.gust > 0.5 ? `–${Math.round(U.spd(wind.u10 + wind.gust))}` : "";
     text(
       tf(
@@ -1627,9 +1627,10 @@ function drawRunway(
       true,
     );
     // (a tail wind amber; across, amber past 15 kt, red past 25 — the arrow the way it pushes)
-    const along = wind.head >= 0 ? tf("HEAD {0}", Math.round(wind.head)) : tf("TAIL {0}", Math.round(-wind.head));
+    // (its parts in the same units as the wind; the colours judged in m/s)
+    const along = wind.head >= 0 ? tf("HEAD {0}", Math.round(U.spd(wind.head))) : tf("TAIL {0}", Math.round(U.spd(-wind.head)));
     const ac = Math.abs(wind.cross);
-    const across = ac >= 0.5 ? ` · ${tf("CROSS {0}", `${wind.cross > 0 ? "←" : "→"}${Math.round(ac)}`)}` : "";
+    const across = ac >= 0.5 ? ` · ${tf("CROSS {0}", `${wind.cross > 0 ? "←" : "→"}${Math.round(U.spd(ac))}`)}` : "";
     text(
       `${along}${across}`,
       x,

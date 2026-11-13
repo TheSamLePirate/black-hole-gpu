@@ -104,7 +104,7 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | hub-card.e2e.test.ts | Hub card rows and trend arrows alike for every autopilot; short windows fold the long take-off card's graph away. | game:artemis, 1440×900 | 7 | — |
 | hub-graph.e2e.test.ts | The hub graph opened large by a real click, its pointer readout; Escape closes it and the autopilot keeps flying. | game:artemis, 1440×900 | 1 | — |
 | hub-warp.e2e.test.ts | The hub warp button in auto and assisted entry keeps the user's warp under changing guidance limits. | Earth: the Blue Marble, 1280×900 | 8 | — |
-| report.e2e.test.ts | Flight report graded A–F after a landing and a docking; the Lander is graded on its site; Escape closes it; a load closes it. | game:artemis, 1440×900 | 84 | — |
+| report.e2e.test.ts | Flight report graded A–F after a landing and a docking; the Lander, put down by its autopilot beside Kennedy, is graded on its site; its card in imperial writes ft/min and kt (FX-17); Escape closes it; a load closes it. **13 Nov 2026 (UTC): 3/4 — the Le Bourget final (state 06) goes around 1.7 km off the axis, since before 13 Nov (PROBLEMES).** | game:artemis, 1440×900 | 84 | — |
 | telemetry.e2e.test.ts | Telemetry recorder fills while flying, the TELEMETRY page draws curves, a curve chosen by click, CSV export. | game:artemis, 1440×900 | 2 | — |
 
 ### Map & UI

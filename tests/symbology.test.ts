@@ -94,3 +94,65 @@ test("no NaN in what is drawn, whatever the attitude", () => {
     expect(R.balanced()).toBe(true);
   }
 });
+
+test("the runway's box in the pilot's units (audit FX-17): imperial ft, NM and kt — its wind's parts too —, metric m, km and m/s", () => {
+  const rw = {
+    name: "TEST",
+    rwy: 15,
+    along: -5000,
+    across: 300,
+    agl: 300,
+    corners: [
+      { d: [-0.01, -0.05, 1] as V3, r: 1 },
+      { d: [0.01, -0.05, 1] as V3, r: 1 },
+      { d: [0.002, -0.02, 1] as V3, r: 1 },
+      { d: [-0.002, -0.02, 1] as V3, r: 1 },
+    ],
+    line: [],
+    aim: { d: [0, -0.03, 1] as V3, r: 1 },
+    gRef: null,
+    gam: null,
+    final: false,
+    papi: null,
+    gates: [],
+    fix: null,
+    manual: true,
+    speed: 70,
+    wind: { u10: 4, gust: 0, from: 200, head: 2, cross: 3 },
+    fixes: [{ id: "FAF", h: 600, d: [0, 0.01, 1] as V3, r: 1 }],
+    flareIn: null,
+    mls: { az: 0, el: null, azIn: false, elIn: false, dmeKm: 5 },
+  } as unknown as Parameters<typeof drawSymbology>[0]["runway"];
+  const said = (units: "metric" | "imperial") => {
+    const R = recorder();
+    drawSymbology({
+      ctx: R.ctx,
+      W,
+      H,
+      dpr: 1,
+      fov: 60,
+      s: { ...defaultSettings(), units, hudRunway: true },
+      outside: false,
+      density: 0,
+      top: 60,
+      runway: rw,
+      i: { S, dirs: dirsFor(0, 0) },
+    });
+    return R.texts.map((t) => t.text).join(" | ");
+  };
+  const imp = said("imperial");
+  const met = said("metric");
+  console.log(`  imperial: ${imp.match(/[^|]*(ft|NM|kt|HEAD|CROSS)[^|]*/g)?.join(" | ")}`);
+  console.log(`  metric: ${met.match(/[^|]*(\d m\b|km|m\/s|HEAD|CROSS)[^|]*/g)?.join(" | ")}`);
+  // (5 km to the threshold, 300 m across, a wind of 4 m/s — 2 along, 3 across)
+  expect(imp).toContain("2.7 NM");
+  expect(imp).toContain("FAF 1969 ft");
+  expect(imp).toContain("R 984 ft");
+  expect(imp).toContain("WIND 200°/8 kt");
+  expect(imp).toContain("HEAD 4 · CROSS ←6");
+  expect(met).toContain("5.0 km");
+  expect(met).toContain("FAF 600 m");
+  expect(met).toContain("R 300 m");
+  expect(met).toContain("WIND 200°/4 m/s");
+  expect(met).toContain("HEAD 2 · CROSS ←3");
+});

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:02 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:20 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -65,7 +65,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
-| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17 | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 2 lots : les messages des avions, des atterrissages, du HUD (vent, dérive), du ravitaillement et des défis dans les unités du pilote — restent le rapport d'atterrissage et les messages spatiaux (SI) ; ensuite FX-07, QA-11 |
+| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17 | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots : messages des avions, atterrissages, rapport de vol, cadre de piste du HUD (distances, vent et ses parts), ravitaillement et défis dans les unités du pilote — les messages spatiaux restent en SI ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite FX-07, QA-11 |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -6123,3 +6123,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (36 s pour rien dans ce voyage), puis la spécialisation du noyau des géantes. GRAPHICS-PIPELINE (parcours 12, table des compilations),
   BH-API, E2E-CATALOGUE, PROBLEMES.
 
+## 2026-11-13T23:20Z — Audit FX-17 (troisième lot) : le rapport de vol et le cadre de piste du HUD dans les unités du pilote
+
+- Contribution : §19 (lisibilité, les mêmes unités partout ; la fin d'un vol jugée dans les unités du pilote) ; audit 2026-11-10, FX-17.
+- Réalisé : `gradeLanding(f, U)` (`src/game/report.ts`) écrit la chute (ft/min), la vitesse le long (kt), l'axe, le seuil, la distance au site
+  et la visibilité (ft, NM au-delà d'un mille), le vent de travers et arrière (kt) ; les notes restent jugées en SI ; le Δv reste en m/s. Le
+  cadre de piste du HUD (`ui/hud/symbology.ts`) : distance au seuil, écart à l'axe, hauteurs des points de l'approche, et les parts du vent
+  (`HEAD`/`CROSS`, en m/s à côté d'un `WIND` passé en kt au lot 2). L'e2e `report` : le Lander posé par son autopilote près de Kennedy (au lieu
+  de l'état 09 de la galerie, périmé), une carte en impérial vérifiée, `beforeAll` borné (5 s par défaut : le test tombait avant d'ouvrir).
+- Preuves : **reproduit avant** : `report.test` en impérial « 0.5 m/s » (0/1) ; `symbology.test` rejoué sur la version commitée : « FAF 600 m ·
+  5.0 km · R 300 m », « HEAD 2 · CROSS ←3 » à côté de « WIND 200°/8 kt » ; **après** : « 98 ft/min », « 156 kt », « 3.3 ft », « cross 16 kt · tail
+  6 kt · gusts +10 · visibility 1.6 NM » ; « FAF 1969 ft · 2.7 NM · R 984 ft · HEAD 4 · CROSS ←6 » ; le métrique identique. **Observé** (e2e headed,
+  ce Mac) : la carte « SINK RATE 108 ft/min · SPEED ALONG 0 kt · cross 6 kt », le cadre « WIND 200°/8 kt » ; revenu en métrique, « 0.7 m/s ».
+  e2e `report` **3/4** ; 17 fichiers de tests voisins verts, i18n, tsc, Biome.
+- Limites : **le final de Le Bourget (état 06) remet les gaz** à 1,7 km de l'axe — **aussi avant** mes lots de sauvegarde (arbre à f84bee82 :
+  1713 m) ; cause supposée : les sites posés sur leurs seuils (fcfd8088, 2 nov.) et le sol WGS84/géoïde ; noté dans PROBLEMES, leçon dans
+  E2E-VOLS §7. **Le toucher dit deux fois dans la page** (une fois dans le contrôleur seul) : noté, non cherché. Restent en m/s, en impérial,
+  les rubans de vitesse et d'altitude du Lander (HUD des vaisseaux : à trancher avec les messages spatiaux).
+- Suite : FX-07 (manette de l'A320 et école) ; QA-11 (catalogue des e2e) ; l'état 06 à refaire.

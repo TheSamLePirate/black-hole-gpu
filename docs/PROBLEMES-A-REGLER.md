@@ -4,6 +4,25 @@ Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce q
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
 
+## Les états de la galerie du HUD périmés : le final de Le Bourget remet les gaz, le Lander tombe de 27 m (relevé le 13 novembre 2026, e2e `report`)
+
+**Constat (observé, e2e headed sur ce Mac, 13 nov. 22:50–23:20 UTC)** : `tests/hud/states/06-final.json` (7 oct. 2026) chargé, l'autopilote d'entrée
+du Ranger remet les gaz dès les premières secondes — « Go-around: 1718 m off the axis at the minima » — et ne se pose pas en 90 s ; **même chose
+avant les lots de sauvegarde du 13 nov.** (arbre de travail à f84bee82 : « 1713 m off the axis »). `09-lander-descent.json` (le Lander 0,6 m au-dessus
+de son contact) part à 27 m : 23 m/s, train cédé, pas de carte ; la protection du sol (X1b, 18 oct.) le mettait d'abord en stationnaire.
+**Cause supposée** : le sol passé au WGS84 et au géoïde (I0, 23 oct.), et les sites posés sur leurs vrais seuils le 2 nov. (fcfd8088 ; la
+même cause a déjà mis Le Bourget à 937 m de l'axe dans un autre e2e, E2E-VOLS §7) : l'état garde le site de son entrée et des positions d'avant.
+L'e2e `report` : le test du Lander et celui des unités portés sur l'autopilote d'atterrissage (Kennedy) — 3/4 ; **reste le final de Le
+Bourget**. `hub-graph` lit le même état 06 (son graphe seul : non touché). **Piste** : refaire l'état 06 en volant l'approche (`glideTo`, puis
+`snapshot` au final) — ou porter le test sur une approche volée. Les autres états de la galerie (`tests/hud/states/`) sont à revérifier.
+
+## Le toucher dit deux fois dans la page (relevé le 13 novembre 2026, e2e `report`)
+
+**Constat (observé)** : le Lander posé par son autopilote près de Kennedy, dans la page : le journal du jeu a deux lignes « Touchdown on Earth ·
+… » identiques avant « Landing · Earth — A » ; le même vol dans le contrôleur seul (`tests/helpers/flight.ts`, 1 km et 300 m) n'en dit qu'une.
+**Cause non cherchée** : deux chemins écrivent ce message (`fallStep` et `flyHome`, `controller/motion.ts`) ; le pas de la page en prend
+peut-être deux. **Piste** : compter les messages dans l'e2e, puis voir lequel des deux chemins parle.
+
 ## Le repli du raster vers le pipeline tracé ne s'arme plus sur la Terre (relevé le 13 novembre 2026, e2e `raster-governor`)
 
 **Constat (lu dans le code, 13 nov. ~14:40 UTC)** : le gouverneur (`src/game/governor.ts`, extrait de `main.ts` le 13) ne donne la Terre au
