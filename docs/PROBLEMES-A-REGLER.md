@@ -28,7 +28,15 @@ cadence en retirant du contenu, ce que CLAUDE.md interdit. **Recommandation rév
 son plancher de qualité à régler) ; ou (a) seulement avec un critère d'image en plus de la vitesse. L'e2e : sa vérification de
 cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mise de côté jusqu'à la décision.
 
-## Le premier `renderer.tune` d'une session fige la sonde de lumière de l'appareil (relevé le 13 novembre 2026, PLAN-J3 J3-1)
+## ~~Le premier `renderer.tune` d'une session fige la sonde de lumière de l'appareil~~ — réglé le 13 novembre 2026 (~17:57 UTC) : la sonde de l'appareil gelée pendant la compilation de son noyau à chaque changement de clé
+
+> **Cause et correctif** (phase J0 `tunestall`, kerr-mini) : `app.settled()` (`renderer.tracerSettled`) attend le noyau principal de la clé,
+> pas celui de la sonde (`env`). À un changement de clé — un `tune`, mais aussi **en jeu le bit du décor (8192) ou de la surface (4096) qui
+> s'allume en vol** —, `traceVariant("env")` rendait `null` tant que le noyau de la nouvelle clé compilait (des dizaines de secondes sur le
+> mini) et la sonde de l'appareil n'était pas lancée : son éclairage, sa lumière principale, le ciel que la mer reflète restaient ceux d'avant.
+> `renderer.ts` (sonde de l'appareil) : en attendant, **le dernier noyau `env` compilé**, si sa clé ne diffère que par ces bits (4096, 8192,
+> le réglage 20–25) — vérifié : après le premier `tune`, `envFound` faux, la lumière relue suit l'heure (0,0463 / 0,342). Reste : la sonde tourne
+> pendant ce temps sans les constantes du nouveau `tune` (une mesure de la sonde sous un `tune` attend toujours son noyau).
 
 - **Observé** (kerr-mini, e2e J0 `J0_PHASES=keyair`, deux runs) : après le premier changement de `renderer.tune` depuis le départ — quelle
   que soit la variante (`TUNE_KEY_AIR` 1, puis `TUNE_AIR_N` 4) —, la lumière de l'appareil et sa sonde relues (`renderer.readShipKey`) restent

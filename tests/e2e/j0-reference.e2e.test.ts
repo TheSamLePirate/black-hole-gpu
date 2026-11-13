@@ -858,7 +858,9 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
           __bh.game.setDate("2026-07-10T${utc}:00Z"); __bh.refresh(); for (let i = 0; i < 40; i++) await f();
           const k = await __bh.renderer.readShipKey(); const sky = __bh.camera.skyInfo?.();
           let date = null; try { date = String(__bh.game.date?.() ?? null); } catch (e) { date = "err " + e; }
-          return { utc: "${utc}", cpuSunAlt: sky?.sun?.altDeg ?? null, date, gpuTable: k.air ? +k.air.table.toPrecision(4) : null, tuneKey: JSON.stringify(__bh.renderer.tune) }; })()`);
+          return { utc: "${utc}", cpuSunAlt: sky?.sun?.altDeg ?? null, date, gpuTable: k.air ? +k.air.table.toPrecision(4) : null, tuneKey: JSON.stringify(__bh.renderer.tune),
+            envFound: !!__bh.renderer.traceVariant?.("env"), featureKey: __bh.renderer.featureKey >>> 0, tuneId: (__bh.renderer.featureKey >>> 20) & 63,
+            variants: [...__bh.renderer.variants.entries()].filter(([, v]) => v.env).map(([k]) => k >>> 0) }; })()`);
       const tune = async (t: string) => {
         await app.js(`(() => { __bh.renderer.tune = ${t}; return 1; })()`);
         await app.settled(120_000);

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:51 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:57 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5504,4 +5504,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **reproduit avant** (unitaire `tars-turns` : un réveil effaçait « Campaign ») ; **après** : refusé au réveil, fait quand le pilote le
   demande. Tests TARS lancés fichier par fichier 47/0 ; tsc.
 - Limites : aucun e2e (règle d'outils sans rendu). L'audit TARS est clos dans ce périmètre, sauf TA-04 (vague 6) et TA-17 (au fil des chantiers).
+
+## 2026-11-13T17:57Z — La sonde de l'appareil ne gèle plus pendant la compilation de son noyau
+
+- Contribution : « préserver toute l'expérience » (CLAUDE.md) — l'éclairage de l'appareil vivant pendant les compilations en vol ; et un outil
+  de mesure fiable (le défaut du premier `tune`, PROBLEMES, réglé).
+- Réalisé : `renderer.ts` — la sonde de l'appareil lance, tant que le noyau `env` de la clé courante compile, le dernier noyau `env` compilé si
+  sa clé ne diffère que par le décor (8192), la surface (4096) ou le réglage de mesure ; avant, elle n'était pas lancée (son éclairage, sa
+  lumière principale et le ciel reflété par la mer figés des dizaines de secondes sur le mini à chaque bit allumé en vol). Phase J0 `tunestall`
+  instrumentée (le noyau trouvé ou non, les clés). Docs : PROBLEMES (réglé), GRAPHICS-PIPELINE D1.
+- Preuves : **mesuré** (kerr-mini, `…-tunestall2` avant : `envFound` faux et la lumière figée à l'heure d'avant ; `…-tunestall3` après :
+  `envFound` faux, la lumière suit l'heure). tsc (mes fichiers), biome.
+- Limites : pendant ce temps la sonde tourne sans les constantes de la nouvelle clé (le décor non vu par elle, un `tune` non appliqué) ;
+  `tracerSettled` n'attend toujours pas le noyau `env` (non changé : il touche toutes les attentes des e2e).
 

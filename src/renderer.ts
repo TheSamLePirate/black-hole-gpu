@@ -5923,7 +5923,14 @@ export class Renderer {
     // (256 × 128 probe: everything after a reset, else one texel of each 2×2 or 4×4 block per run)
     if (this.envEvery > 1 && this.envTick++ % this.envEvery !== 0) return;
     const k = this.envStride;
-    const pipeline = this.traceVariant("env");
+    // (the key changed — the scenery's or the surface's bit switched on in flight, a measure's tune —: until its own probe kernel is
+    // compiled — tens of seconds on kerr-mini —, the last one drawing, if its key differs from this one only by those bits; before, the
+    // probe and the craft's key light stood frozen meanwhile — 13 Nov 2026, PROBLEMES « le premier renderer.tune »)
+    const own = this.traceVariant("env");
+    const SWAPPABLE = 4096 | 8192 | (63 << 20);
+    const kept = this.lastShipEnv;
+    const pipeline = own ?? (kept && (kept.key & ~SWAPPABLE) >>> 0 === (this.featureKey & ~SWAPPABLE) >>> 0 ? kept.pipe : null);
+    if (own) this.lastShipEnv = { key: this.featureKey, pipe: own };
     if (!pipeline) return; // (its epoch unmarked: the next frame tries again)
     const pass = enc.beginComputePass(this.prof.pass("ship probe: trace"));
     pass.setPipeline(pipeline);
@@ -6035,6 +6042,8 @@ export class Renderer {
   private cameraKey = FEATURES_ALL;
   /** the key compiled ahead of the camera's (its surface's or scenery's data asked for, not yet drawn); −1: none */
   private aheadKey = -1;
+  /** the ship probe's last own kernel and its key (drawn while the current key's compiles — the scenery's, the surface's, a tune's bits) */
+  private lastShipEnv: { key: number; pipe: GPUComputePipeline } | null = null;
   /** the tiles' imagery last seen (EarthTiles.imagery) and when [ms]: a still view redrawn for it */
   private imagerySeen = 0;
   private imageryAt = 0;
