@@ -196,4 +196,13 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   (`jetGlass`) sans air ; la nuit (la part lunaire de la table) ; l'air au-delà de la
   table (au-dessus de l'air, une autre planète). Trois runs du test ont échoué sur la mise en place de la vue avant celui-ci (le montage
   « chase » ignore la distance ; le passage à « around » replace la caméra ; la moyenne noyait l'appareil lointain).
+- **J3-3, la mesure des ombres du sol par propriétaire** (13 nov., ~17:26 UTC ; ne dépend pas de la question 3 du §8). e2e J0 `J0_PHASES=shadows`
+  (`J0_START` Paris, 18:00 UTC — Soleil ~20° —, monde figé, exposition tenue, raster ombré en entier), les ombres du Soleil au sol séparées par
+  `liteSkip` ; par blocs de 8 × 8 pixels. Deux runs concordants (`…-j3-shadows2`, `-shadows3`) : **cascades 10,6–11,1 % de l'image, carte des
+  arbres et bâtiments 13,5–13,6 %, les deux 8,4–8,5 %** (≈ 62 % de la carte déjà dans les cascades — les bâtiments y sont deux fois), le contact
+  +5,6–6,2 % ; **ombre comptée deux fois : 0,08–0,09 % des blocs, sous le bruit** (A/A 2,3–3,2 % — les arbres, les lueurs). Lecture : le produit
+  des deux ne se voit pas (ombres franches : 0 × 0) ; le recouvrement est du travail fait deux fois sous 550–750 m, pas une erreur d'image.
+  **Non mesuré** : ce que coûte la part bâtiments de la carte, ni si elle est plus nette que les cascades (1,5 m le texel) — à mesurer avant
+  d'y toucher (règle 1) ; les trous (une référence tracée manque) ; une vallée au Soleil bas (relief + horizons). Un premier run a échoué sur un
+  A/A par pixel (8 % de bruit) : mesure passée aux blocs.
 

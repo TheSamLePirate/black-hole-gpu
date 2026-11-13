@@ -32,7 +32,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1), keyhaze (J3-2) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1), keyhaze (J3-2), shadows (J3-3) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -695,6 +695,105 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       expect(rows.d10000!).toBeGreaterThan(rows.d300!);
       expect(rows.d10000!).toBeGreaterThan(3 * rows.aa!);
       expect(rows.gpuErrors).toBe(0);
+    },
+    900_000,
+  );
+
+  // (PLAN-J3 J3-3 — the shadows' owners, J0_PHASES=shadows (J0_START over a town: Paris for buildings and trees): the Sun lowered (18:00
+  // UTC), the world frozen, the exposure held (autoExposure off at the EV in use), the raster shaded whole (every pixel, scale 1); the
+  // ground's sun shadows taken apart by liteSkip's run-time bits — 4 the relief's cascades (the buildings in them too), 16384 the contact
+  // shadows (read only within the cascades' branch), 2 the trees' and buildings' map —: none, the cascades alone, cascades + contact, the
+  // scenery's map alone, all, all again (the A/A). Per 8 × 8 block (its mean luminance, the craft's centre box left out): shadowed by a source
+  // where its image is under 0.85 × none's; both — the overlap —; and among them, darker with all than the darker of the two alone by
+  // 15 % (a shadow counted twice). Shots keep each)
+  test.skipIf(!PHASES.includes("shadows"))(
+    "J3-3: the ground's sun shadows by owner — cascades, contact, the scenery's map; their overlap and double counting; A/A",
+    async () => {
+      await start("");
+      const fov0 = await app.js<number>("__bh.settings.fov");
+      await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+        __bh.game.setDate("2026-07-10T18:00:00Z"); __bh.settings.shipMount = "around"; __bh.refresh(); for (let i = 0; i < 30; i++) await f();
+        Object.assign(__bh.camera.outside, { yaw: 30, pitch: 35, dist: 120 });
+        Object.assign(__bh.settings, { dof: false, motionBlur: 0, lookProfile: "neutral", dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1 });
+        for (let i = 0; i < 150; i++) await f(); __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f();
+        const ev = __bh.renderer.ev(__bh.settings); Object.assign(__bh.settings, { autoExposure: false, exposure: ev }); return 1; })()`);
+      await app.dataSettled("J3-3: the town's data", { stallMs: 30_000, compileStallMs: 60_000, maxMs: 90_000 });
+      const shot = async (name: string, skip: number) => {
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.liteSkip = ${skip}; __bh.refresh();
+          for (let i = 0; i < 45; i++) await f(); return 1; })()`);
+        const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+        const bytes = Buffer.from(x.data, "base64");
+        await Bun.write(`${OUT}/shadows-${name}.png`, bytes);
+        return readPng(new Uint8Array(bytes));
+      };
+      const none = await shot("none", 2 | 4 | 16384);
+      const relief = await shot("cascades", 2 | 16384);
+      const reliefContact = await shot("cascades-contact", 2);
+      const scenery = await shot("scenery", 4 | 16384);
+      const all = await shot("all", 0);
+      const allAgain = await shot("all-again", 0);
+      await app.js(
+        `(() => { __bh.renderer.liteSkip = 0; Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit", fov: ${fov0} }); __bh.freeze(false); return 1; })()`,
+      );
+      // (8 × 8 blocks, their mean luminance: the pixels' own noise — the trees' texture, the stochastic shading — set 8 % of single
+      // pixels 10 % apart between two shots of the same frozen scene, run 1 of 13 Nov)
+      const B = 8;
+      const blocks = (p: typeof none) => {
+        const bw = Math.floor(p.width / B),
+          bh = Math.floor(p.height / B),
+          o = new Float64Array(bw * bh);
+        for (let by = 0; by < bh; by++)
+          for (let bx = 0; bx < bw; bx++) {
+            let t = 0;
+            for (let y = 0; y < B; y++)
+              for (let x0 = 0; x0 < B; x0++) {
+                const i = ((by * B + y) * p.width + bx * B + x0) * p.channels;
+                t += 0.2126 * p.data[i]! + 0.7152 * p.data[i + 1]! + 0.0722 * p.data[i + 2]!;
+              }
+            o[by * bw + bx] = t / (B * B) + 1;
+          }
+        return { o, bw, bh };
+      };
+      const [K0, Kr, Krc, Ks, Ka, Ka2] = [none, relief, reliefContact, scenery, all, allAgain].map(blocks);
+      const { bw, bh } = K0!;
+      const n = { px: 0, relief: 0, contact: 0, scenery: 0, overlap: 0, double: 0, aaOff: 0 };
+      for (let y = Math.floor(0.08 * bh); y < Math.floor(0.92 * bh); y++)
+        for (let x0 = 0; x0 < bw; x0++) {
+          if (x0 > 0.4 * bw && x0 < 0.6 * bw && y > 0.35 * bh && y < 0.65 * bh) continue;
+          const k = y * bw + x0;
+          const L0 = K0!.o[k]!,
+            Lr = Kr!.o[k]!,
+            Lrc = Krc!.o[k]!,
+            Ls = Ks!.o[k]!,
+            La = Ka!.o[k]!;
+          n.px++;
+          const r = Lr < 0.85 * L0,
+            sc = Ls < 0.85 * L0;
+          if (r) n.relief++;
+          if (Lrc < 0.85 * Lr) n.contact++;
+          if (sc) n.scenery++;
+          if ((r || Lrc < 0.85 * L0) && sc) {
+            n.overlap++;
+            if (La < 0.85 * Math.min(Lrc, Ls)) n.double++;
+          }
+          if (Math.abs(La - Ka2!.o[k]!) > 0.1 * La) n.aaOff++;
+        }
+      const pct = (k: number) => +((100 * k) / n.px).toFixed(3);
+      const row = {
+        px: n.px,
+        reliefPct: pct(n.relief),
+        contactPct: pct(n.contact),
+        sceneryPct: pct(n.scenery),
+        overlapPct: pct(n.overlap),
+        doublePct: pct(n.double),
+        doubleOfOverlapPct: n.overlap ? +((100 * n.double) / n.overlap).toFixed(2) : 0,
+        aaOffPct: pct(n.aaOff),
+      };
+      console.log(`  J3-3 the ground's sun shadows by owner: ${JSON.stringify(row)}`);
+      out.shadows = row;
+      // (the A/A's floor: 2.3 % of blocks 10 % apart in run 2 of 13 Nov — the trees', the glares' noise; a double count under it is not seen)
+      expect(row.aaOffPct).toBeLessThan(5);
+      expect(row.reliefPct + row.sceneryPct).toBeGreaterThan(0.5);
     },
     900_000,
   );
