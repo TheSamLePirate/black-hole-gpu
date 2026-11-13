@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:29 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:36 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5756,6 +5756,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : `trace.wgsl` (`env` : l'échelle ; `seaSkyRadiance` ÷ `apScale()`), `ship.wgsl` (`envCopy` ×, `envSH`/`envSH4` → `sh[22]`,
   `envSpec` ÷), `character.wgsl` (`envSpecular` ÷), `ship.ts` (`envBuf` + 9). Docs : PROBLEMES (réglé), GRAPHICS-PIPELINE D2.
 - Preuves : **observé / mesuré** (kerr-mini) : la couche du ciel relue lisse (~5·10⁻² au lieu de ~2·10⁻⁷) ; à 19:40 plus de taches, la coque
-  reflète le ciel ; de jour vues et exposition identiques (14,645 EV). `check-wgsl` 82/82, tsc, biome. **Non vérifié** : le marcheur la nuit.
+  reflète le ciel ; de jour vues et exposition identiques (14,645 EV). `check-wgsl` 82/82, tsc, biome ; le marcheur : `character-aaa` « the light on foot » (nuit comprise) passe (~20:36 UTC).
 - Limites : le levier de mesure `TUNE_SEA_DBG` retiré ensuite (~20:31 UTC), sans usage ; la phase `seadusk` gardée (9 cas).
+
+## 2026-11-14T04:05Z — Audit QA-16 (vague 6, choix de Sam) : une nouvelle version du jeu installé, proposée avec un bouton qui la lance
+
+- Contribution : §19 (reprise, mise à jour, l'expérience du jeu installé) ; audit 2026-11-10, QA-16.
+- Réalisé : `src/pwa.ts` — un bandeau quand une version attend (« Une nouvelle version du jeu est prête — Recharger maintenant / Plus
+  tard »), son bouton envoie `skip-waiting` (la page se recharge sur le nouveau build par `controllerchange`) ; le toast trompeur retiré
+  (FR/EN, `fr-pwa.ts`) ; `server.ts` — `KERR_SW_FRESH` : un build neuf à chaque demande de `sw.js`, pour l'e2e (comme le développement).
+  BH-API, E2E-CATALOGUE.
+- Preuves : **reproduit avant** (e2e `pwa-update`, ce Mac, fenêtre visible) : mise à jour trouvée, aucun bandeau ; **et la supposition de l'audit
+  confirmée** — un rechargement seul garde l'ancien build (même identifiant avant et après) et le nouveau en attente ; **après** 2/2 : le bouton
+  pressé met le nouveau build en place, plus aucun worker en attente ; capture du bandeau.
+- Limites : vérifié avec le serveur de test, pas sur les Pages ; plusieurs onglets ouverts non essayés (le bouton d'un onglet recharge les
+  autres par `controllerchange`, supposé).
 
