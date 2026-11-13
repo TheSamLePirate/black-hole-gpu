@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:48 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:57 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5584,4 +5584,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **mesuré** (kerr-mini, `…-j3-keysky-band4`) : rapport à l'exact 1,017–1,042 avec la bande 4, contre 1,056–1,134 à l'ordre 2 (contrôle
   CPU = GPU 0,99–1,00). Aucun rendu changé.
 - Suite : décision de Sam — la bande 4 dans la sonde de l'appareil (9 coefficients et termes de plus), à voir sur des vues.
+
+## 2026-11-13T18:57Z — J3-1 : la bande 4 dans le rendu de l'appareil, derrière un interrupteur ; une tache de couleur sur la mer relevée
+
+- Réalisé : `ship.wgsl` `envSH` (32 fils, bandes 0–2 et 4), `shBasis4`, `irradiance` avec la bande 4 si `S.air.w` ; `ship.ts` `skyBand4` (défaut
+  éteint), `shBuf` 24 vec4 ; phase J0 `skyband4`. Docs : PLAN-J3 §10, GRAPHICS-PIPELINE D2, BH-API, E2E-CATALOGUE, PROBLEMES (taches sur la mer
+  au crépuscule, une vue).
+- Preuves : **mesuré** (kerr-mini, `…-j3-skyband4c`) : de jour sans effet ; le ciel seul (19:40) l'appareil ≈ 8 % plus sombre — le témoin
+  positif, au pixel (26 000 pixels, ≈ 10 par canal). `check-wgsl` 82/82. Deux runs d'abord illisibles (silhouette, cadre trop grand), montrés.
+  **Non mesuré** : le coût de `envSH` modifié.
+- Suite : décision de Sam (bande 4 allumée ou non) ; la cause des taches sur la mer.
 

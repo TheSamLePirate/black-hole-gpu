@@ -28,6 +28,13 @@ cadence en retirant du contenu, ce que CLAUDE.md interdit. **Recommandation rév
 son plancher de qualité à régler) ; ou (a) seulement avec un critère d'image en plus de la vitesse. L'e2e : sa vérification de
 cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mise de côté jusqu'à la décision.
 
+## Des taches de couleur sur la mer au crépuscule (relevé le 13 novembre 2026, J0 phase `skyband4`)
+
+- **Observé** (kerr-mini, J0 Toulon-Hyères, 10 juillet 19:40 UTC — le Soleil couché —, vue de trois quarts arrière vers l'ouest, profil neutre,
+  run `…-j3-skyband4b`, `skyband4-1940-*.png`) : de grandes taches roses, jaunes et vertes, aux bords nets, sur la mer et la côte sous le
+  couchant. Une seule vue ; non reproduit ailleurs ; cause non cherchée (pistes : le ciel reflété par la mer — sonde ou SSR — au crépuscule,
+  la sonde de l'appareil qui le fournit).
+
 ## ~~Le premier `renderer.tune` d'une session fige la sonde de lumière de l'appareil~~ — réglé le 13 novembre 2026 (~17:57 UTC) : la sonde de l'appareil gelée pendant la compilation de son noyau à chaque changement de clé
 
 > **Cause et correctif** (phase J0 `tunestall`, kerr-mini) : `app.settled()` (`renderer.tracerSettled`) attend le noyau principal de la clé,

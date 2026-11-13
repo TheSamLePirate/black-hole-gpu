@@ -191,6 +191,13 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   1e-4) : rapport à l'exact **1,027 (12:00), 1,027 (15:30), 1,042 (18:30), 1,017 (19:05)** contre 1,06–1,13 à l'ordre 2 — **70 à 80 % de l'écart
   en moins**. Coût à prévoir : 9 coefficients de plus dans `shBuf` / `TABLE_SH`, 9 termes de plus par pixel de l'appareil (`irradiance`). **Non
   fait** : c'est une décision d'image (l'appareil un peu moins éclairé par le ciel, surtout au coucher) — à présenter à Sam avec des vues.
+  **Dans le rendu, derrière un interrupteur** (~18:57 UTC) : `ship.wgsl` `envSH` projette aussi la bande 4 (`sh[13..21]` ; 32 fils, 9 Ko de mémoire
+  de groupe), `irradiance` l'ajoute quand `renderer.ship.skyBand4` (uniforme `S.air.w` ; défaut éteint, aucune recompilation). Phase J0
+  `skyband4` (run `…-j3-skyband4c`, l'appareil vu d'en haut, exposition tenue) : de jour aucun effet (12:00 : 59,65 / 59,65) ; le Soleil couché
+  (19:40, le ciel seul) **l'appareil ≈ 8 % plus sombre** (26 000 pixels changés de ≈ 10 par canal ; la moyenne du cadre −0,14 seulement :
+  l'appareil petit). Deux runs d'abord sans effet lisible (vue de trois quarts arrière : une silhouette ; le cadre noyant l'appareil). **Décision
+  de Sam** : allumer la bande 4 (l'ancien chemin retiré ensuite) ou non. Coût de `envSH` non mesuré (deux fois moins de fils, deux fois plus
+  de coefficients).
   **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
   ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.
 - **J3-2, premier pas — l'appareil à travers l'air de sa distance** (13 nov., ~17:12 UTC). La coque (`ship.wgsl` `fs`) et les traînées

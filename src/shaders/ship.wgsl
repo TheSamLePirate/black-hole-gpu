@@ -106,7 +106,7 @@ struct Ship {
   // [m] at a distance d [m], z the fade's angle [rad], w 1 on —, along the sea's up (sea.xyz)
   lift: vec4f,
   // (PLAN-J3 J3-2) the air between the eye and the craft: z 1 when the tracer's aerial table is written this frame (its reach and the
-  // metres per unit in sh[12], from the probe's kernel)
+  // metres per unit in sh[12], from the probe's kernel); w 1: the sky's light with band 4 of the harmonics (J3-1, a comparison)
   air: vec4f,
 };
 
@@ -222,7 +222,8 @@ fn envGGX(@builtin(global_invocation_id) gid: vec3u) {
   textureStore(envOut, gid.xy, vec4f(acc / max(wsum, 1e-6), 1.0));
 }
 
-var<workgroup> shAcc: array<array<vec3f, 9>, 64>;
+// (PLAN-J3 J3-1: bands 0–2 and band 4 — 18 a thread; 32 threads: 9 KB of the 16 KB a group may hold)
+var<workgroup> shAcc: array<array<vec3f, 18>, 32>;
 
 fn shBasis(d: vec3f) -> array<f32, 9> {
   return array<f32, 9>(
@@ -231,12 +232,22 @@ fn shBasis(d: vec3f) -> array<f32, 9> {
     1.092548 * d.x * d.y, 1.092548 * d.y * d.z, 0.315392 * (3.0 * d.z * d.z - 1.0),
     1.092548 * d.x * d.z, 0.546274 * (d.x * d.x - d.y * d.y));
 }
+// (PLAN-J3 J3-1) the real harmonics' band 4 — the clamped cosine's next band (band 3's is zero): the order-2 harmonics lent the sky
+// 6–13 % too much on a level surface against the probe's exact integral, band 4 brings it to 2–4 % (J0, kerr-mini, 13 Nov)
+fn shBasis4(d: vec3f) -> array<f32, 9> {
+  let x = d.x; let y = d.y; let z = d.z; let z2 = z * z;
+  return array<f32, 9>(
+    2.503343 * x * y * (x * x - y * y), -1.770131 * y * z * (3.0 * x * x - y * y), 0.946175 * x * y * (7.0 * z2 - 1.0),
+    -0.669047 * y * z * (7.0 * z2 - 3.0), 0.105786 * (35.0 * z2 * z2 - 30.0 * z2 + 3.0), -0.669047 * x * z * (7.0 * z2 - 3.0),
+    0.473087 * (x * x - y * y) * (7.0 * z2 - 1.0), -1.770131 * x * z * (x * x - 3.0 * y * y),
+    0.625836 * (x * x * (x * x - 3.0 * y * y) - y * y * (3.0 * x * x - y * y)));
+}
 
-@compute @workgroup_size(64)
+@compute @workgroup_size(32)
 fn envSH(@builtin(local_invocation_id) lid: vec3u) {
-  var acc: array<vec3f, 9>;
+  var acc: array<vec3f, 18>;
   let n = ENV_W * ENV_H;
-  for (var i = lid.x; i < n; i += 64u) {
+  for (var i = lid.x; i < n; i += 32u) {
     let x = i % ENV_W;
     let y = i / ENV_W;
     let v = (f32(y) + 0.5) / f32(ENV_H);
@@ -245,15 +256,19 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
     let L = envIn[i].rgb * dw;
     let b = shBasis(d);
     for (var k = 0u; k < 9u; k++) { acc[k] += L * b[k]; }
+    let b4 = shBasis4(d);
+    for (var k = 0u; k < 9u; k++) { acc[9u + k] += L * b4[k]; }
   }
   shAcc[lid.x] = acc;
   workgroupBarrier();
   if (lid.x != 0u) { return; }
-  var tot: array<vec3f, 9>;
-  for (var t = 0u; t < 64u; t++) {
-    for (var k = 0u; k < 9u; k++) { tot[k] += shAcc[t][k]; }
+  var tot: array<vec3f, 18>;
+  for (var t = 0u; t < 32u; t++) {
+    for (var k = 0u; k < 18u; k++) { tot[k] += shAcc[t][k]; }
   }
   for (var k = 0u; k < 9u; k++) { shOut[k] = vec4f(tot[k], 0.0); }
+  // (PLAN-J3 J3-1: band 4 after the rest — sh[13..21] —, read by irradiance when S.air.w is on)
+  for (var k = 0u; k < 9u; k++) { shOut[13u + k] = vec4f(tot[9u + k], 0.0); }
   // dominant direction of the light (luminance of the L1 band) and how directional it is
   // (|L1| / L0 = √3 for a single distant source)
   let lum = vec3f(0.2126, 0.7152, 0.0722);
@@ -633,6 +648,11 @@ fn irradiance(n: vec3f) -> vec3f {
   let A = array<f32, 9>(PI, 2.094395, 2.094395, 2.094395, 0.785398, 0.785398, 0.785398, 0.785398, 0.785398);
   var e = vec3f(0.0);
   for (var k = 0u; k < 9u; k++) { e += A[k] * b[k] * sh[k].rgb; }
+  // (PLAN-J3 J3-1, band 4 — S.air.w on, a comparison until Sam judges: A₄ = −π/24)
+  if (S.air.w > 0.5 && arrayLength(&sh) >= 22u) {
+    let b4 = shBasis4(toProbe(n));
+    for (var k = 0u; k < 9u; k++) { e += -0.1308997 * b4[k] * sh[13u + k].rgb; }
+  }
   return max(e, vec3f(0.0));
 }
 

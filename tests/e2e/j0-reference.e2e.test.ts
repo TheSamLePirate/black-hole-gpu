@@ -32,7 +32,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld, cityview, materials (J3-5) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4 (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld, cityview, materials (J3-5) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -998,6 +998,58 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       for (const r of Object.values(rows)) expect(Math.abs(r.asDrawn! - r.asDrawnAgain!)).toBeLessThan(2);
     },
     900_000,
+  );
+
+  // (PLAN-J3 J3-1 — the sky's light on the craft with band 4 of its probe's harmonics, J0_PHASES=skyband4: the craft from above (around,
+  // 40° — its faces up, toward the sky; run 2's quarter view from behind saw a silhouette against the sunset) at
+  // noon and towards sunset, the exposure held; band 4 off (as drawn), on (renderer.ship.skyBand4 — ship.wgsl irradiance), off again (the
+  // A/A); shots and the centre box's mean luminance — views for Sam. 19:40: the Sun set, the craft lit by the sky alone — the positive
+  // control: there band 4 must show)
+  test.skipIf(!PHASES.includes("skyband4"))(
+    "J3-1: the craft's sky light with band 4 — noon and sunset, off / on / off; shots for Sam",
+    async () => {
+      await start("");
+      const rows: Record<string, Record<string, number>> = {};
+      for (const utc of ["12:00", "18:50", "19:40"]) {
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          __bh.game.setDate("2026-07-10T${utc}:00Z"); Object.assign(__bh.settings, { shipMount: "around", lookProfile: "neutral", dof: false, motionBlur: 0, autoExposure: true, exposure: 0 });
+          __bh.refresh(); for (let i = 0; i < 30; i++) await f(); Object.assign(__bh.camera.outside, { yaw: 160, pitch: 40, dist: 30 }); for (let i = 0; i < 90; i++) await f(); __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f();
+          const ev = __bh.renderer.ev(__bh.settings); Object.assign(__bh.settings, { autoExposure: false, exposure: ev }); return 1; })()`);
+        const row: Record<string, number> = {};
+        for (const [name, on] of [
+          ["off", false],
+          ["on", true],
+          ["offAgain", false],
+        ] as const) {
+          await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.ship.skyBand4 = ${on}; __bh.refresh();
+            for (let i = 0; i < 20; i++) await f(); return 1; })()`);
+          const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+          const bytes = Buffer.from(x.data, "base64");
+          await Bun.write(`${OUT}/skyband4-${utc.replace(":", "")}-${name}.png`, bytes);
+          const img = readPng(new Uint8Array(bytes));
+          let t = 0,
+            n = 0;
+          for (let y = Math.floor(0.3 * img.height); y < Math.floor(0.7 * img.height); y++)
+            for (let x0 = Math.floor(0.3 * img.width); x0 < Math.floor(0.7 * img.width); x0++) {
+              const i = (y * img.width + x0) * img.channels;
+              t += 0.2126 * img.data[i]! + 0.7152 * img.data[i + 1]! + 0.0722 * img.data[i + 2]!;
+              n++;
+            }
+          row[name] = +(t / n).toFixed(2);
+        }
+        rows[utc] = row;
+        console.log(`  J3-1 sky band 4 (${utc}): centre mean luminance ${JSON.stringify(row)}`);
+      }
+      out.skyband4 = rows;
+      await app.js(
+        `(() => { __bh.renderer.ship.skyBand4 = false; Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
+      );
+      for (const r of Object.values(rows)) expect(Math.abs(r.off! - r.offAgain!)).toBeLessThan(1);
+      console.log(
+        `  J3-1 sky band 4: the positive (19:40, the sky alone) on − off = ${(rows["19:40"]!.on! - rows["19:40"]!.off!).toFixed(2)}`,
+      );
+    },
+    600_000,
   );
 
   test.skipIf(!PHASES.includes("sustained"))(
