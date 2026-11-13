@@ -4115,3 +4115,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Remesuré** (M1 Max, Alpes, virage 30°) : PSNR 2/3 30,4 ; 0,75 32,4–32,6 ; 0,80 34,3 dB — monotone, sans effet d'ordre. L'épingle de
   l'échelle du raster **reste** (2/3 : −2,1 dB pour ~8 % de GPU). PROBLEMES (l'entrée fermée comme artefact), PLAN-J2 (encadré), BH-API,
   GRAPHICS-PIPELINE, E2E-CATALOGUE. **Non vérifié** : kerr-mini ; les mesures Q6/I4 anciennes entre échelles à relire.
+
+## 2026-11-13T05:37Z — J2-6 : singleHistory remesuré contre une référence à pleine échelle — neutre en vol
+
+- **Mesuré** (`motion-quality` corrigé, Alpes virage 30°, A B A, M1 Max) : `singleHistory` 32,6 contre 32,5 / 32,5 dB en mouvement (+0,1),
+  de même à l'arrêt ; changement 0,75 → 0,625 : 29,7 dB avec ou sans. **Retirés** : « −0,85 dB à l'arrêt » et « la pulsation de −0,56 dB
+  supprimée » (artefacts de la référence). Bilan pour la décision de Sam : neutre en vol, page neuve 3 × plus vite en vue tenue, bruit tenu
+  0,41 → 0,54 %. PLAN-J2 §9 octies (d)/(e), BH-API.

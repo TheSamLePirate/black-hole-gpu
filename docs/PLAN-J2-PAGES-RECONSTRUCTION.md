@@ -439,8 +439,9 @@ contre 60 %, le bruit tenu 0,41 → 0,54 %** ; `motion-quality` (Alpes, virage 3
 (rapport 0,76–0,83 contre 0,30–0,65), mais au changement d'échelle forcé 0,75 → 0,625 un **pic plus fort** (+280 % contre +12 %) et au retour
 0,625 → 0,75 un pic moindre (+213 % contre +348 %) ; l'énergie du laplacien compte le bruit (un natif court en ajoute) : **rien de
 concluant**. Temps : 28,1 contre 32,9 ms GPU p50, la chauffe (second passage), pas le levier. **À trancher par Sam** : allumer `singleHistory` — la
-page neuve en vue tenue trois fois plus vite, pour +0,13 point de bruit tenu (sous le 1 % de C0-12) et −0,85 dB à l'arrêt dans le virage
-mesuré ; le pic au changement d'échelle non conclu. **Reste** : J2-6 proprement dit (l'échelle
+page neuve en vue tenue trois fois plus vite, pour +0,13 point de bruit tenu (sous le 1 % de C0-12) ; en virage **neutre** (+0,1 dB contre
+une référence à pleine échelle — le « −0,85 dB » d'abord écrit était un artefact, §9 octies (e)) ; aucune pulsation mesurée au changement
+d'échelle, avec ou sans. *Recommandation* : l'allumer après son ΔGPU sur kerr-mini. **Reste** : J2-6 proprement dit (l'échelle
 par petits pas sans rééchantillonner l'historique de sortie, l'arrêt et la reprise sans saut, l'épingle `want = rasterTop()` retirée) et
 une mesure qui sépare netteté et bruit (PSNR contre une référence à chaque événement), sur kerr-mini.
 
@@ -452,7 +453,10 @@ une mesure qui sépare netteté et bruit (PSNR contre une référence à chaque 
 > échelle que celle du raster faisait recréer les cibles à chaque image (`main.ts` `resize`, corrigé : l'échelle forcée d'abord). **Remesuré,
 > référence à pleine échelle** (`motion-quality` corrigé) : PSNR en virage **2/3 : 30,4 ; 0,75 : 32,4–32,6 ; 0,80 : 34,3 dB** (monotone ; plus
 > d'effet d'ordre). Les A/B **à échelle égale** (désocclusion, `singleHistory` à 0,75, `+drop` contre 0,625 constant) restent valides en
-> relatif, leurs valeurs absolues non. **L'épingle reste** : 2/3 coûte ~2,1 dB pour ~8 % de GPU. Le texte qui suit est gardé tel qu'écrit.
+> relatif, leurs valeurs absolues non. **L'épingle reste** : 2/3 coûte ~2,1 dB pour ~8 % de GPU. **`singleHistory` remesuré** (référence
+> corrigée, A B A) : en virage 32,6 contre 32,5 / 32,5 dB (+0,1 dB, à l'arrêt de même) — **neutre** ; le « −0,85 dB à l'arrêt » était
+> l'artefact ; un changement 0,75 → 0,625 8 images avant la capture : 29,7 dB avec ou sans — la « pulsation supprimée par l'historique
+> unique » (−0,56 dB) l'était aussi. Le texte qui suit est gardé tel qu'écrit.
 
 e2e `j2-probes` phase `pulse` (nouvelle) : vue tenue (plaine du Gapeau), l'échelle forcée 0,75 → 0,625 puis retour (`forceScale`), la couleur de
 scène (sortie de la TAAU, taille du canevas) relue 1 à 64 images après et comparée à la vue réglée après le changement (écart moyen |ΔL| / L ;
