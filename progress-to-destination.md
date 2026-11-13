@@ -4169,3 +4169,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   retirer en J2-8, recommandé) ; `earthRateOne` confirmé.
 - **Changé** : PLAN-J2 §9 decies, fiches J2-3 et J2-5. Sources : `remote-results/2026-11-13T0628-ab-72a16452`,
   `remote-results/20261113-072810-j2-levers-j0`. **Non vérifié** : le M1 Max (il bride en vol) ; la fiche J0 de sortie (J2-8).
+
+## 2026-11-13T06:49Z — J2, les pointes mesurées sur kerr-mini : publication p95 1,3 / max 2,1 ms en vol
+
+- **Mesuré** (`j2-probes` `flight`, kerr-mini, « Nominal ») : la publication des tuiles en vol J0 p50 0,1 / p95 1,3 / max 2,1 ms, 4 images sur 975
+  au-delà de 2 ms, 1 soumission de mips par image au plus ; au chargement p95 1,5 / max 2,9 ms. Contre J2-0 sur la même machine : p95 2,9 /
+  max 9,5 ms, 79 sur 963, 9 soumissions. Fiche des pointes (complément), PLAN-J2 §9 decies.

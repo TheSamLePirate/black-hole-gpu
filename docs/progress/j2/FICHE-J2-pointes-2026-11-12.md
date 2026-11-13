@@ -169,3 +169,12 @@ session) ne départagent rien et ne sont pas repris.
   worker de décodage qui irait chercher et décoder lui-même) réduirait le total, pas seulement les pointes — un lot à part s'il le faut.
 - La mesure principale sur kerr-mini (plus lent ; J2-2 y voyait `request()` à 7 ms) à son retour, avec le ΔGPU J0 de J2-2.
 - J2-3 (des bords sans fuite).
+
+## Complément (13 novembre 2026, ~07:50 UTC) — kerr-mini revenu
+
+e2e `j2-probes` phase `flight` sur kerr-mini (l'arbre à fc844669, « Nominal ») — la publication des tuiles sur le fil principal, vol J0 de 56 s
+(975 images) : **p50 0,1 / p95 1,3 / max 2,1 ms, 4 images au-delà de 2 ms, au plus 1 soumission de mips par image** ; au chargement (903
+images) p95 1,5 / max 2,9 ms, 10 au-delà de 2 ms. Contre la fiche J2-0 sur la même machine et le même instrument (avant J2-1 et ce lot) :
+p95 2,9 / max 9,5 ms, 79 images sur 963 au-delà de 2 ms, jusqu'à 9 soumissions. Le passage « avant » lancé sur le mini le 12 nov.
+(`20261112-160905-pointes-avant`) n'a pas été rapatrié (le mini avait quitté le réseau). Le critère « aucune pointe > 2 ms » : tenu à 4
+images près en vol (0,4 %). Source : `remote-results/20261113-074622-j2-pointes-mini`.
