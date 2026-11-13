@@ -256,7 +256,8 @@ Decided (PLAN-VAISSEAUX N6): one room clock, no pace following the proper time �
   masses). (The mid-air collisions of the fights stay in the Earth's air.)
 - **The persistent world**: the room keeps each one's craft as he left it — parked where it stood, or on its
   orbit (carried on by Kepler): the others see it ("Ana (away)"), target it, dock to it. Back in the room,
-  **Back to my craft** (the room panel) puts you on it where it is now.
+  **Back to my craft** (the room panel) puts you on it where it is now. A craft left flying in the air is not shown to
+  the others (it would hang there frozen — audit NET-18, 13 Nov 2026); its pilot still gets it back.
 
 Measured on kerr-mini (`tests/e2e/net-dock`): Ben's Ranger drifting at 15 cm/s onto Ana's Endurance's fore hub:
 latched, held within a millimetre of where her craft carries him, seen on her hub (14.7 m from her centre);

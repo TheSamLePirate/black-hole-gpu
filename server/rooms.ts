@@ -26,6 +26,9 @@ import {
   type RoomInfo,
   type ServerMsg,
   decodeCraft,
+  F_GROUND,
+  F_PARKED,
+  FRAME_INERTIAL,
 } from "../src/net/proto";
 import { readEvent } from "../src/net/inbound";
 
@@ -204,10 +207,17 @@ export function createRooms(o: RoomsOptions) {
         l.rec.world[w.data.device]!.craft = Buffer.from(w.data.last).toString("base64");
   };
   /** the craft of those away (R7): to everyone in the room — and to a newcomer his own, as he left it */
+  /** a craft left in a state that holds without its pilot — landed, parked, or in orbit (carried on by Kepler) —; not one
+   *  flying in the air, which would hang there frozen (audit NET-18) */
+  const holds = (b64: string) => {
+    const s = decodeCraft(Buffer.from(b64, "base64"), true);
+    return !!s && (s.frame === FRAME_INERTIAL || (s.flags & (F_GROUND | F_PARKED)) !== 0);
+  };
   const world = (l: Live, joiner?: ServerWebSocket<Peer>) => {
     const here = new Set([...l.peers.values()].map((w) => w.data.device));
+    // (the others' world: their crafts left that hold — his own always given back to the one who returns, below)
     const away: AwayCraft[] = Object.entries(l.rec.world)
-      .filter(([d, e]) => !here.has(d) && e.craft)
+      .filter(([d, e]) => !here.has(d) && e.craft && holds(e.craft))
       .map(([device, e]) => ({ device: publicId(device), name: e.name, colour: e.colour, seen: e.seen, sample: e.craft! }));
     for (const w of l.peers.values())
       send(w, { type: "world", away, mine: w === joiner ? l.rec.world[w.data.device]?.craft : undefined });

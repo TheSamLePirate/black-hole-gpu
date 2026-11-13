@@ -268,7 +268,9 @@ date en salle.
   leurs masses). (Les collisions en vol des combats restent dans l'air terrestre.)
 - **Le monde persistant** : la salle garde l'engin de chacun tel qu'il l'a laissé — garé là où il était, ou
   sur son orbite (porté par Kepler) : les autres le voient (« Ana (absent) »), le ciblent, s'y amarrent. De
-  retour dans la salle, **Reprendre mon engin** (le panneau de la salle) vous remet dessus, là où il est.
+  retour dans la salle, **Reprendre mon engin** (le panneau de la salle) vous remet dessus, là où il est. Un engin
+  laissé en vol dans l'air n'est pas montré aux autres (il y resterait figé — audit NET-18, 13 nov. 2026) ; son pilote le
+  reprend toujours.
 
 Mesuré sur kerr-mini (`tests/e2e/net-dock`) : le Ranger de Ben dérivant à 15 cm/s sur le moyeu avant de
 l'Endurance d'Ana : accroché, tenu à moins d'un millimètre de là où son engin le porte, vu sur son moyeu (à

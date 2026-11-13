@@ -5941,3 +5941,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : une coupure plus longue que la grâce (le membre retiré, les liens refaits) garde l'ancien chemin : la relance sur un canal `closed`
   ou `disconnected` et l'ICE restart de la piste de l'audit ne sont pas faits.
 
+## 2026-11-14T11:20Z — Audit NET-18 (RD5) : un avion laissé en vol ne reste plus figé dans le monde des autres
+
+- Contribution : §19 (un monde commun cohérent) ; audit 2026-11-10, NET-18.
+- Réalisé : `server/rooms.ts` — `holds()` : le monde diffusé aux autres ne garde que les engins laissés dans un état qui tient sans pilote
+  (posé, garé, ou en orbite — repère inertiel, porté par Kepler) ; un engin laissé en vol dans l'air n'y est plus ; son pilote le reprend
+  toujours (`mine`). NETWORK.md/.fr.
+- Preuves : **reproduit avant** (unitaire `net-rooms` « NET-18 » : trois pilotes partis — en vol, posé, en orbite — ; le monde de Ben gardait
+  les trois, l'avion figé compris) ; **après** : « Ground, Orbit » ; tests réseau verts ; e2e `net-dock` 6/6 (l'Endurance laissée en orbite
+  toujours là, Ben s'y amarre).
+- Limites : un avion repris par son pilote revient en vol à sa vitesse, là où il l'a laissé (la doc le dit) ; le poser d'office n'est pas fait.
+

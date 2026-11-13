@@ -538,3 +538,53 @@ describe("a half-dead link (NET-23)", () => {
     expect(sent.length).toBe(1);
   });
 });
+
+describe("a craft left in the air (NET-18)", () => {
+  test("a pilot gone while flying in the air: his craft not left frozen there in the others' world; landed or in orbit, kept", async () => {
+    const db = `/tmp/kerr-rooms-net18-${process.pid}.sqlite`;
+    const r = createRooms({ db, build: "test" });
+    const srv = Bun.serve({ port: 0, fetch: (req, s) => r.upgrade(req, s as never), websocket: r.websocket });
+    const u = `ws://127.0.0.1:${srv.port}/`;
+    const mk = (device: string, name: string) =>
+      new NetClient({ url: u, build: "test", id: { device, name, colour: "#ff8800" }, p2p: false });
+    const sample = (frame: number, flags: number) => ({
+      frame,
+      body: 0,
+      kind: 3,
+      flags,
+      p: [6_400_000, 0, 0],
+      v: [0, 200, 0],
+      q: [0, 0, 0, 1],
+      w: [0, 0, 0],
+      a: [0, 0, 0],
+      vis: emptyVisual(),
+    });
+    const b = mk("net18-b", "Ben");
+    try {
+      const { code } = await b.create("Air", 0);
+      const leaveWith = async (device: string, name: string, frame: number, flags: number) => {
+        const p = mk(device, name);
+        await p.join(code);
+        await until(() => p.clock.synced, 4000);
+        for (let i = 0; i < 3; i++) {
+          p.sendCraft(sample(frame, flags) as never);
+          await Bun.sleep(60);
+        }
+        await Bun.sleep(150);
+        p.close();
+        await Bun.sleep(300);
+      };
+      await leaveWith("net18-air", "Air", 0, 0); // flying, the Earth's fixed frame, not on the ground
+      await leaveWith("net18-gnd", "Ground", 0, 1); // landed
+      await leaveWith("net18-orb", "Orbit", 1, 0); // in orbit (the inertial frame: carried on by Kepler)
+      const names = b.away.map((x) => x.name).sort();
+      console.log(`  the world's crafts left, as Ben sees them: ${names.join(", ")}`);
+      expect(names).toEqual(["Ground", "Orbit"]);
+      b.close();
+    } finally {
+      r.close();
+      srv.stop(true);
+      await Bun.$`rm -f ${db} ${db}-wal ${db}-shm`.nothrow();
+    }
+  }, 30_000);
+});
