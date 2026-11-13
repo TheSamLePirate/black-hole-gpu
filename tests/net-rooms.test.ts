@@ -588,3 +588,38 @@ describe("a craft left in the air (NET-18)", () => {
     }
   }, 30_000);
 });
+
+describe("a hard event said during a cut (NET-10)", () => {
+  test("an undock said while the link is down: sent once it is back — not lost; the soft ones (telemetry) not kept", async () => {
+    const db = `/tmp/kerr-rooms-net10-${process.pid}.sqlite`;
+    const r = createRooms({ db, build: "test" });
+    const srv = Bun.serve({ port: 0, fetch: (req, s) => r.upgrade(req, s as never), websocket: r.websocket });
+    const u = `ws://127.0.0.1:${srv.port}/`;
+    const mk = (device: string, name: string) =>
+      new NetClient({ url: u, build: "test", id: { device, name, colour: "#ff8800" }, p2p: false });
+    const a = mk("net10-a", "Ana");
+    const b = mk("net10-b", "Ben");
+    const heard: string[] = [];
+    a.on("event", (x: { from: number; ev: { kind: string } }) => heard.push(x.ev.kind));
+    try {
+      const { code } = await a.create("Hard", 0);
+      await b.join(code);
+      await until(() => a.room?.members.length === 2);
+      (b as unknown as { link: { close(): void } }).link.close();
+      await until(() => b.status !== "online", 3000);
+      b.event({ kind: "undock", to: 0 });
+      b.event({ kind: "tel", v: { alt: 1 } });
+      await until(() => b.status === "online" && !!b.room, 8000);
+      await Bun.sleep(400);
+      console.log(`  Ana heard after Ben's return: ${JSON.stringify(heard)}`);
+      expect(heard).toContain("undock");
+      expect(heard).not.toContain("tel");
+    } finally {
+      a.close();
+      b.close();
+      r.close();
+      srv.stop(true);
+      await Bun.$`rm -f ${db} ${db}-wal ${db}-shm`.nothrow();
+    }
+  }, 30_000);
+});

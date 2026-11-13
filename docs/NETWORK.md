@@ -42,6 +42,9 @@ loaded only then.
   A link half dead — no pong for 6 s — is judged dead, closed and tried again (before 13 Nov 2026, audit NET-23: « online »
   until a TCP error); with more than 64 kB queued on the WebSocket, our relayed samples are skipped, not stacked behind (the
   direct links' own rule).
+  A hard event said while the link is down (a docking, a boarding, a hit, a result…) is kept — 32 at most — and sent once
+  the room is taken back; a soft one (telemetry, wingmen, the datalink, the instruments — said again anyway) is not (before 13
+  Nov 2026, audit NET-10: lost).
 - A room holds 8 devices, 4 of them pilots. It is kept on the server until its owner deletes it; its clock
   runs on while nobody is in it.
 - **Settings › Network › Network menu** off: no trace of the network in the game.

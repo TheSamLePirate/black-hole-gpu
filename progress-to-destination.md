@@ -5958,3 +5958,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **observé** (kerr-mini, `…-bigsur-traced2`) : la mer tracée normale jusqu'à l'horizon. Cause probable non prouvée (la sonde en
   demi-flottants, réglée ce jour).
 
+## 2026-11-14T12:00Z — Audit NET-10 (RD4, second lot) : un événement dur dit pendant une coupure n'est plus perdu
+
+- Contribution : §19 (le jeu à plusieurs cohérent) ; audit 2026-11-10, NET-10 (« un événement émis pendant une coupure est perdu »).
+- Réalisé : `net/client.ts` — pendant une coupure, un événement dur (amarrage, montée à bord, coup, résultat, défi, ordre…) est gardé (32 au
+  plus, dans l'ordre) et envoyé après la reprise de la salle ; les mous (`tel`, `stel`, `wng`, `instruments`, `fml`, `cv`, `cs`, `msn`, `l16`,
+  `cm`, `radio` — redits ou périmés) ne le sont pas ; la file vidée en quittant la salle ou si elle refuse la reprise. NETWORK.md/.fr.
+- Preuves : **reproduit avant** (unitaire `net-rooms` « during a cut » : un `undock` dit pendant la coupure de Ben, Ana n'entendait rien après
+  son retour) ; **après** : `["undock"]`, la télémétrie non gardée ; tests réseau verts ; e2e `net-coop`, `net-board`, `net-cut` 6/0.
+- Limites : les rôles co-op, le défi de salle et les scores ne sont toujours pas redits à un arrivant (la feuille de score vient des
+  événements) ; NET-19 non fait.
+

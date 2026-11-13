@@ -46,6 +46,12 @@ export interface NetOptions {
   ice?: RTCIceServer[];
 }
 
+/** the events that are a state said again and again — telemetry, wingmen, the datalink, the instruments, the craft's state —, or
+ *  stale at once (countermeasures, a radio call): not kept through a cut (NET-10) */
+const SOFT_EVENTS = new Set(["tel", "stel", "wng", "instruments", "fml", "cv", "cs", "msn", "l16", "cm", "radio"]);
+/** hard events kept through a cut, at most */
+const HELD_MAX = 32;
+
 /** no pong for this long: the link judged dead [ms] (the pings go every 2 s) — NET-23 */
 const DEAD_MS = 6000;
 /** a link with more than this queued: our relayed samples skipped [bytes] (the direct links': 64 000) — NET-23 */
@@ -233,6 +239,7 @@ export class NetClient {
     if (!r || this.closed) return;
     this.connect()
       .then(() => this.join(r.code, r.role, r.password))
+      .then(() => this.sendHeld())
       .catch((e: Error & { code?: string }) => {
         if (this.closed || this.room !== r) return;
         if (!e.code || e.message === "offline" || e.message === "timeout") {
@@ -242,6 +249,7 @@ export class NetClient {
           this.retryTimer = setTimeout(() => this.takeBack(), wait);
           return;
         }
+        this.held = [];
         this.setRoom(null);
         this.setStatus("off");
         this.emit("error", { code: "rejoin", msg: `The room could not be taken back (${e.code})` });
@@ -251,6 +259,7 @@ export class NetClient {
   /** Leaves the room and closes the link. */
   close() {
     this.closed = true;
+    this.held = [];
     if (this.retryTimer) clearTimeout(this.retryTimer);
     if (this.room) this.sendMsg({ type: "leave" });
     this.setRoom(null);
@@ -524,10 +533,29 @@ export class NetClient {
       this.sent.lastOversize = String(ev.kind).slice(0, 24);
       return false;
     }
+    // (the link down — a cut —: a hard event — a docking, a boarding, a hit, a result… — kept and sent once the room is taken
+    // back, before 13 Nov 2026 lost; a soft one — a state said again and again — not kept: the next says it; audit NET-10)
+    if (!this.link?.open) {
+      if (SOFT_EVENTS.has(String(ev.kind))) return false;
+      this.held.push(json);
+      if (this.held.length > HELD_MAX) this.held.shift();
+      return true;
+    }
     this.sent.events++;
     this.sent.chars += json.length;
-    this.link?.send(json);
+    this.link.send(json);
     return true;
+  }
+
+  /** the hard events said while the link was down, in their order (sent once the room is taken back) */
+  private held: string[] = [];
+  private sendHeld() {
+    const h = this.held.splice(0);
+    for (const json of h) {
+      this.sent.events++;
+      this.sent.chars += json.length;
+      this.link?.send(json);
+    }
   }
 
   /** The warp we ask for (× real time; 0: paused): the room runs at its pilots' slowest (R6). A slowdown of ours is
