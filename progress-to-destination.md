@@ -4693,3 +4693,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   probe ») : `saves-storage` prend ses captures telles quelles.
 - **Suite proposée (4.8) :** `session.ts` — l'état unique de qui avance (pause, figé, rendu, replay, reprise GPU, hors de vue : la
   condition `!frozen && !paused && …` répétée quatre fois dans la boucle), petit lot dans la boucle, à annoncer à la session du rendu.
+
+## 2026-11-13T12:05Z — AR-05 (autosauvegarde) mesurée : sous 1 ms, gardée dans la frame (règle de méthode 1)
+
+- **Contribution à la destination :** §8 (le coût CPU de la frame, ses pics) — lire le plafond avant d'ouvrir un lot de performance.
+- **Mesure :** e2e `autosave-cost` (M1 Max, fenêtre visible, tuiles et IGN bloqués, 405b6b4e + ce test) : la sonde passe d'abord ses
+  témoins (règle 3) — A/A 0,30 / 0,30 ms (Δ médiane 0,00), +5 ms injectés lus +5,10. Puis 30 autosauvegardes par scène : **orbite**
+  (Artemis) 0,3 ms médiane, 0,5 p95, 1,0 au pire ; **F-35 à 3 000 m** 0,8 / 1,1 / 1,2 ms — l'instantané (`snapshot`) en fait l'essentiel ;
+  `JSON.stringify` et `localStorage.setItem` ≤ 0,1 ms ; 5 Ko. Résolution du minuteur de la page : 0,1 ms.
+- **Décision (règle 1) :** gain maximal ≈ 1 ms une fois toutes les 10 s : pas de lot pour la sortir de la frame ; AR-05 reste ouvert pour
+  ses autres postes (lectures de layout, allocations par image, prédiction de trajectoire, sondes), non mesurés ici.
+- **Docs :** audit 09 (4.8), E2E-CATALOGUE.
